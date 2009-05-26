@@ -115,9 +115,66 @@ int SS7Route::transmitMSU(const SS7Router* router, const SS7MSU& msu,
  * SS7Router
  */
 SS7Router::SS7Router(const NamedList& params)
-    : Mutex(true), m_changes(0)
+    : SignallingComponent(params.safe("SS7Router"),&params),
+      Mutex(true,"SS7Router"), m_changes(0)
 {
-    setName("ss7router");
+#ifdef DEBUG
+    if (debugAt(DebugAll)) {
+	String tmp;
+	params.dump(tmp,"\r\n  ",'\'',true);
+	Debug(this,DebugAll,"SS7Router::SS7Router(%p) [%p]%s",
+	    &params,this,tmp.c_str());
+    }
+#endif
+}
+
+bool SS7Router::initialize(const NamedList* config)
+{
+#ifdef DEBUG
+    String tmp;
+    if (config && debugAt(DebugAll))
+        config->dump(tmp,"\r\n  ",'\'',true);
+    Debug(this,DebugInfo,"SS7Router::initialize(%p) [%p]%s",config,this,tmp.c_str());
+#endif
+    if (config) {
+	debugLevel(config->getIntValue("debuglevel_router",
+	    config->getIntValue("debuglevel",-1)));
+	const String* param = config->getParam("management");
+	const char* name = "ss7snm";
+	if (param)
+	    name = param->c_str();
+	else
+	    param = config;
+	if (param->toBoolean(true)) {
+	    NamedPointer* ptr = YOBJECT(NamedPointer,param);
+	    NamedList* mConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
+	    NamedList params(name);
+	    params.addParam("basename",name);
+	    if (mConfig)
+		params.copyParams(*mConfig);
+	    else
+		mConfig = &params;
+	    attach(YSIGCREATE(SS7Management,&params));
+	}
+	param = config->getParam("maintenance");
+	name = "ss7mtn";
+	if (param)
+	    name = param->c_str();
+	else
+	    param = config;
+	if (param->toBoolean(true)) {
+	    NamedPointer* ptr = YOBJECT(NamedPointer,param);
+	    NamedList* mConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
+	    NamedList params(name);
+	    params.addParam("basename",name);
+	    if (mConfig)
+		params.copyParams(*mConfig);
+	    else
+		mConfig = &params;
+	    attach(YSIGCREATE(SS7Maintenance,&params));
+	}
+    }
+    return true;
 }
 
 bool SS7Router::operational(int sls) const
@@ -222,14 +279,6 @@ void SS7Router::detach(SS7Layer4* service)
 	Debug(this,DebugAll,"Detached service (%p,'%s') [%p]",service,name,this);
 	break;
     }
-}
-
-void* SS7Router::getObject(const String& name) const
-{
-    if (name == "SS7Router")
-	return (void*)this;
-    void* p = SS7L3User::getObject(name);
-    return p ? p : SS7Layer3::getObject(name);
 }
 
 int SS7Router::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)

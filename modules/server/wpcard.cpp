@@ -223,7 +223,7 @@ class WpInterface : public SignallingInterface
     friend class WpSigThread;
 public:
     // Create an instance of WpInterface or WpSpan
-    static void* create(const String& type, const NamedList& name);
+    static SignallingComponent* create(const String& type, const NamedList& name);
     WpInterface(const NamedList& params);
     virtual ~WpInterface();
     // Initialize interface. Return false on failure
@@ -727,26 +727,32 @@ bool WpSocket::updateLinkStatus()
  * WpInterface
  */
 // Create WpInterface or WpSpan
-void* WpInterface::create(const String& type, const NamedList& name)
+SignallingComponent* WpInterface::create(const String& type, const NamedList& name)
 {
     bool interface = false;
-    if (type == "sig")
+    if (type == "SignallingInterface")
 	interface = true;
-    else  if (type == "voice")
+    else if (type == "SignallingCircuitSpan")
 	;
     else
 	return 0;
 
     Configuration cfg(Engine::configFile("wpcard"));
-    cfg.load();
-    const char* sectName = name.getValue(type);
-    DDebug(&driver,DebugAll,"Factory trying to create %s='%s'",type.c_str(),sectName);
+    const char* sectName = name.getValue((interface ? "sig" : "voice"),name.getValue("basename",name));
     NamedList* config = cfg.getSection(sectName);
     if (!config) {
 	DDebug(&driver,DebugAll,"No section '%s' in configuration",c_safe(sectName));
 	return 0;
     }
 
+#ifdef DEBUG
+    if (driver.debugAt(DebugAll)) {
+	String tmp;
+	name.dump(tmp,"\r\n  ",'\'',true);
+	Debug(&driver,DebugAll,"WpInterface::create %s%s",
+	    (interface ? "interface" : "span"),tmp.c_str());
+    }
+#endif
     if (interface) {
 	WpInterface* iface = new WpInterface(name);
 	if (iface->init(*config,(NamedList&)name))
@@ -764,17 +770,17 @@ void* WpInterface::create(const String& type, const NamedList& name)
 }
 
 WpInterface::WpInterface(const NamedList& params)
-    : m_socket(this),
-    m_thread(0),
-    m_readOnly(false),
-    m_notify(0),
-    m_overRead(0),
-    m_sendReadOnly(false),
-    m_timerRxUnder(0),
-    m_repeatCapable(s_repeatCapable),
-    m_repeatMutex(true,"WpInterface::repeat")
+    : SignallingComponent(params),
+      m_socket(this),
+      m_thread(0),
+      m_readOnly(false),
+      m_notify(0),
+      m_overRead(0),
+      m_sendReadOnly(false),
+      m_timerRxUnder(0),
+      m_repeatCapable(s_repeatCapable),
+      m_repeatMutex(true,"WpInterface::repeat")
 {
-    setName(params.getValue("debugname","WpInterface"));
     DDebug(this,DebugAll,"WpInterface::WpInterface() [%p]",this);
 }
 
@@ -802,7 +808,7 @@ bool WpInterface::init(const NamedList& config, NamedList& params)
     int i = params.getIntValue("errormask",config.getIntValue("errormask",255));
     m_errorMask = ((i >= 0 && i < 256) ? i : 255);
 
-    int rx = params.getIntValue("rxunderruninterval");
+    int rx = params.getIntValue("rxunderrun");
     if (rx > 0)
 	m_timerRxUnder.interval(rx);
 
@@ -1373,6 +1379,7 @@ bool WpSpan::init(const NamedList& config, const NamedList& defaults, NamedList&
 	type = "E1";
     if (type == "E1") {
 	m_chans = 31;
+	m_increment = 32;
 	if (cics.null())
 	    cics = "1-15,17-31";
 	if (!m_samples)
@@ -1380,17 +1387,25 @@ bool WpSpan::init(const NamedList& config, const NamedList& defaults, NamedList&
     }
     else if (type == "T1") {
 	m_chans = 24;
+	m_increment = 24;
 	if (cics.null())
 	    cics = "1-23";
 	if (!m_samples)
 	    m_samples = 64;
+    }
+    else if (type == "BRI") {
+	m_chans = 3;
+	m_increment = 3;
+	if (cics.null())
+	    cics = "1-2";
+	if (!m_samples)
+	    m_samples = 80;
     }
     else {
 	Debug(m_group,DebugNote,"WpSpan('%s'). Invalid voice group type '%s' [%p]",
 	    id().safe(),type.safe(),this);
 	return false;
     }
-    params.setParam("chans",String(m_chans));
     // Other data
     m_swap = defaults.getBoolValue("bitswap",true);
     m_noData = defaults.getIntValue("idlevalue",0xff);

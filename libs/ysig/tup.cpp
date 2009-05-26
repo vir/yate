@@ -1,5 +1,5 @@
 /**
- * tcap.cpp
+ * tup.cpp
  * This file is part of the YATE Project http://YATE.null.ro 
  *
  * Yet Another Signalling Stack - implements the support for SS7, ISDN and PSTN
@@ -28,7 +28,8 @@
 using namespace TelEngine;
 
 SS7TUP::SS7TUP(const NamedList& params)
-    : SignallingCallControl(params,"tup.")
+    : SignallingComponent("SS7TUP",&params),
+      SignallingCallControl(params,"tup.")
 {
 }
 

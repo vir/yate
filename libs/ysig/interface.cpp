@@ -99,11 +99,9 @@ bool SignallingInterface::notify(Notification event)
 }
 
 
-YCLASSIMP(SignallingReceiver,SignallingComponent)
-
 SignallingReceiver::SignallingReceiver(const char* name)
     : SignallingComponent(name),
-      m_ifaceMutex(true), m_interface(0)
+      m_ifaceMutex(true,"SignallingReceiver::interface"), m_interface(0)
 {
 }
 
@@ -111,30 +109,36 @@ SignallingReceiver::~SignallingReceiver()
 {
     if (m_interface)
 	Debug(this,DebugGoOn,"Destroyed with interface (%p) attached",m_interface);
+    TelEngine::destruct(attach(0));
 }
 
-void SignallingReceiver::attach(SignallingInterface* iface)
+SignallingInterface* SignallingReceiver::attach(SignallingInterface* iface)
 {
     Lock lock(m_ifaceMutex);
     if (m_interface == iface)
-	return;
+	return 0;
     SignallingInterface* tmp = m_interface;
     m_interface = iface;
     lock.drop();
     if (tmp) {
-	const char* name = 0;
-	if (engine() && engine()->find(tmp)) {
-	    name = tmp->toString().safe();
+	if (tmp->receiver() == this) {
+	    Debug(this,DebugAll,"Detaching interface (%p,'%s') [%p]",
+		tmp,tmp->toString().safe(),this);
 	    tmp->attach(0);
 	}
-	Debug(this,DebugAll,"Detached interface (%p,'%s') [%p]",tmp,name,this);
+	else {
+	    Debug(this,DebugNote,"Interface (%p,'%s') was not attached to us [%p]",
+		tmp,tmp->toString().safe(),this);
+	    tmp = 0;
+	}
     }
     if (!iface)
-	return;
+	return tmp;
     Debug(this,DebugAll,"Attached interface (%p,'%s') [%p]",
 	iface,iface->toString().safe(),this);
     insert(iface);
     iface->attach(this);
+    return tmp;
 }
 
 bool SignallingReceiver::notify(SignallingInterface::Notification event)

@@ -110,7 +110,7 @@ public:
     inline bool fxs() const
 	{ return m_fxs; }
     bool ownsId(const String& rqId) const;
-    static void* create(const String& type, const NamedList& name);
+    static SignallingComponent* create(const String& type, const NamedList& name);
     static MGCPSpan* findNotify(const String& id);
     bool matchEndpoint(const MGCPEndpointId& ep);
     bool processEvent(MGCPTransaction* tr, MGCPMessage* mm);
@@ -251,7 +251,7 @@ static bool copyRename(NamedList& dest, const char* dname, const NamedList& src,
 }
 
 // Increment the number at the end of a name by an offset
-static bool increment(String& name, unsigned int offs)
+static bool tailIncrement(String& name, unsigned int offs)
 {
     Regexp r("\\([0-9]\\+\\)@");
     if (name.matches(r)) {
@@ -674,17 +674,21 @@ bool MGCPWrapper::nativeConnect(DataEndpoint* peer)
 
 
 // Called by the factory to create MGCP spans
-void* MGCPSpan::create(const String& type, const NamedList& name)
+SignallingComponent* MGCPSpan::create(const String& type, const NamedList& name)
 {
-    if (type != "voice")
+    if (type != "SignallingCircuitSpan")
 	return 0;
-    const String* spanName = name.getParam(type);
+    const String* spanName = name.getParam("voice");
+    if (!spanName)
+	spanName = &name;
     if (null(spanName) || !s_endpoint)
 	return 0;
     MGCPEpInfo* ep = s_endpoint->findAlias(*spanName);
-    if (!ep)
+    if (!ep) {
+	DDebug(&splugin,DebugAll,"No endpoint info for span '%s'",spanName->c_str());
 	return 0;
-    MGCPSpan* span = new MGCPSpan(name,spanName->c_str(),*ep);
+    }
+    MGCPSpan* span = new MGCPSpan(name,spanName->safe("MGCPSpan"),*ep);
     if (span->init(name))
 	return span;
     TelEngine::destruct(span);
@@ -761,6 +765,10 @@ bool MGCPSpan::init(const NamedList& params)
 {
     clearCircuits();
     const String* sect = params.getParam("voice");
+    if (!sect)
+	sect = params.getParam("basename");
+    if (!sect)
+	sect = &params;
     int cicStart = params.getIntValue("start");
     if ((cicStart < 0) || !sect)
 	return false;
@@ -776,6 +784,10 @@ bool MGCPSpan::init(const NamedList& params)
 
     if (!m_count)
 	return false;
+    m_increment = m_count;
+    // assume 31 circuits means E1
+    if (m_increment == 31)
+	m_increment = 32;
     m_circuits = new MGCPCircuit*[m_count];
     unsigned int i;
     for (i = 0; i < m_count; i++)
@@ -783,7 +795,7 @@ bool MGCPSpan::init(const NamedList& params)
     bool ok = true;
     for (i = 0; i < m_count; i++) {
 	String name = epId().id();
-	if (!increment(name,i)) {
+	if (!tailIncrement(name,i)) {
 	    Debug(m_group,DebugWarn,"MGCPSpan('%s'). Failed to increment name by %u. Rollback [%p]",
 		id().safe(),i,this);
 	    clearCircuits();
@@ -801,8 +813,6 @@ bool MGCPSpan::init(const NamedList& params)
 	}
 	circuit->ref();
     }
-    if (ok)
-	const_cast<NamedList&>(params).setParam("chans",String(m_count));
     return ok;
 }
 

@@ -336,31 +336,49 @@ void SS7Layer3::printRoutes()
 	Debug(this,DebugAll,"No %s [%p]",router?"routes":"destinations",this);
 }
 
+
 SS7MTP3::SS7MTP3(const NamedList& params)
-    : SignallingDumpable(SignallingDumper::Mtp3),
-      Mutex(true),
+    : SignallingComponent(params.safe("SS7MTP3"),&params),
+      SignallingDumpable(SignallingDumper::Mtp3),
+      Mutex(true,"SS7MTP3"),
       m_total(0), m_active(0)
 {
-    setName(params.getValue("debugname","mtp3"));
+#ifdef DEBUG
+    if (debugAt(DebugAll)) {
+	String tmp;
+	params.dump(tmp,"\r\n  ",'\'',true);
+	Debug(this,DebugAll,"SS7MTP3::SS7MTP3(%p) [%p]%s",
+	    &params,this,tmp.c_str());
+    }
+#endif
     // Set point code type for each network indicator
+    static const unsigned char ni[4] = { SS7MSU::International,
+	SS7MSU::SpareInternational, SS7MSU::National, SS7MSU::ReservedNational };
     String stype = params.getValue("netind2pctype");
-    ObjList* obj = stype.split(',',false);
     int level = DebugAll;
-    unsigned char ni[4] = {SS7MSU::International,SS7MSU::SpareInternational,
-	SS7MSU::National,SS7MSU::ReservedNational};
-    ObjList* o = obj->skipNull();
-    for (unsigned int i = 0; i < 4; i++) {
-	String* s = 0;
-	if (o) {
-	    s = static_cast<String*>(o->get());
-	    o = o->skipNext();
+    if (stype.find(',') >= 0) {
+	ObjList* obj = stype.split(',',false);
+	ObjList* o = obj->skipNull();
+	for (unsigned int i = 0; i < 4; i++) {
+	    String* s = 0;
+	    if (o) {
+		s = static_cast<String*>(o->get());
+		o = o->skipNext();
+	    }
+	    SS7PointCode::Type type = SS7PointCode::lookup(s?s->c_str():0);
+	    if (type == SS7PointCode::Other)
+		level = DebugNote;
+	    setType(type,ni[i]);
 	}
-	SS7PointCode::Type type = SS7PointCode::lookup(s?s->c_str():0);
+	TelEngine::destruct(obj);
+    }
+    else {
+	SS7PointCode::Type type = SS7PointCode::lookup(stype.c_str());
 	if (type == SS7PointCode::Other)
 	    level = DebugNote;
-	setType(type,ni[i]);
+	for (unsigned int i = 0; i < 4; i++)
+	    setType(type,ni[i]);
     }
-    TelEngine::destruct(obj);
     Debug(this,level,"Point code types are '%s' [%p]",stype.safe(),this);
 
     buildRoutes(params);
@@ -459,6 +477,53 @@ void SS7MTP3::detach(SS7Layer2* link)
 	countLinks();
 	return;
     }
+}
+
+// Configure and initialize MTP3 and its links
+bool SS7MTP3::initialize(const NamedList* config)
+{
+#ifdef DEBUG
+    String tmp;
+    if (config && debugAt(DebugAll))
+	config->dump(tmp,"\r\n  ",'\'',true);
+    Debug(this,DebugInfo,"SS7MTP3::initialize(%p) [%p]%s",config,this,tmp.c_str());
+#endif
+    if (config)
+	debugLevel(config->getIntValue("debuglevel_mtp3",
+	    config->getIntValue("debuglevel",-1)));
+    countLinks();
+    if (config && (0 == m_total)) {
+	unsigned int n = config->length();
+	for (unsigned int i = 0; i < n; i++) {
+	    NamedString* param = config->getParam(i);
+	    if (!(param && param->name() == "link"))
+		continue;
+	    NamedPointer* ptr = YOBJECT(NamedPointer,param);
+	    NamedList* linkConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
+	    NamedList params(param->c_str());
+	    params.addParam("basename",*param);
+	    if (linkConfig)
+		params.copyParams(*linkConfig);
+	    else
+		linkConfig = &params;
+	    SS7Layer2* link = YSIGCREATE(SS7Layer2,&params);
+	    if (!link)
+		continue;
+	    attach(link);
+	    if (!link->initialize(linkConfig)) {
+		detach(link);
+		TelEngine::destruct(link);
+	    }
+	}
+    }
+    if (engine() && !user()) {
+	NamedList params("ss7router");
+	if (config)
+	    static_cast<String&>(params) = config->getValue("router",params);
+	if (params.toBoolean(true))
+	    SS7Layer3::attach(YOBJECT(SS7Router,engine()->build("SS7Router",params,true)));
+    }
+    return 0 != m_total;
 }
 
 // Detach all links and user. Destroys the object, disposes the memory

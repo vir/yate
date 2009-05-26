@@ -735,7 +735,7 @@ ISDNQ931Call::ISDNQ931Call(ISDNQ931* controller, bool outgoing,
 	m_data.m_reason = "temporary-failure";
 	return;
     }
-    m_net = q931() && q931()->m_q921 && q931()->m_q921->network();
+    m_net = q931() && q931()->network();
     // Init timers
     q931()->setInterval(m_discTimer,305);
     q931()->setInterval(m_relTimer,308);
@@ -759,7 +759,7 @@ ISDNQ931Call::~ISDNQ931Call()
 // Set terminate flags and reason
 void ISDNQ931Call::setTerminate(bool destroy, const char* reason)
 {
-    Lock lock(m_callMutex);
+    Lock mylock(this);
     if (m_destroyed)
 	return;
     if (state() == CallAbort)
@@ -780,7 +780,7 @@ bool ISDNQ931Call::sendEvent(SignallingEvent* event)
 {
     if (!event)
 	return false;
-    Lock lock(m_callMutex);
+    Lock mylock(this);
     DDebug(q931(),DebugAll,"Call(%u,%u). sendEvent(%s) state=%s [%p]",
 	Q931_CALL_ID,event->name(),stateName(state()),this);
     if (m_terminate || state() == CallAbort) {
@@ -855,7 +855,7 @@ bool ISDNQ931Call::sendEvent(SignallingEvent* event)
 // Get events from reserved circuit when no call event
 SignallingEvent* ISDNQ931Call::getEvent(const Time& when)
 {
-    Lock lock(m_callMutex);
+    Lock mylock(this);
     // Check for last event or destroyed/aborting
     if (m_lastEvent || m_destroyed || state() == CallAbort)
 	return 0;
@@ -951,7 +951,7 @@ void* ISDNQ931Call::getObject(const String& name) const
 // Set termination flag. Send status if link is up
 void ISDNQ931Call::dataLinkState(bool up)
 {
-    Lock lock(m_callMutex);
+    Lock mylock(this);
     // Q.931 5.8.9. Terminate if not up and not in the active state
     if (!up) {
 	if (state() != ISDNQ931Call::Active)
@@ -1736,7 +1736,7 @@ bool ISDNQ931Call::sendSetupAck()
 
 SignallingEvent* ISDNQ931Call::releaseComplete(const char* reason, const char* diag)
 {
-    Lock lock(m_callMutex);
+    Lock mylock(this);
     if (m_destroyed)
 	return 0;
     if (reason)
@@ -1930,7 +1930,7 @@ ISDNQ931CallMonitor::~ISDNQ931CallMonitor()
 // Get an event from this monitor
 SignallingEvent* ISDNQ931CallMonitor::getEvent(const Time& when)
 {
-    Lock lock(m_callMutex);
+    Lock mylock(this);
     // Check for last event or aborting
     if (m_lastEvent || state() == CallAbort)
 	return 0;
@@ -1982,7 +1982,7 @@ SignallingEvent* ISDNQ931CallMonitor::getEvent(const Time& when)
 // Set termination flag
 void ISDNQ931CallMonitor::setTerminate(const char* reason)
 {
-    Lock lock(m_callMutex);
+    Lock mylock(this);
     if (state() == CallAbort)
 	changeState(Null);
     // Check terminate & destroy flags
@@ -2136,7 +2136,7 @@ SignallingEvent* ISDNQ931CallMonitor::processMsgInfo(ISDNQ931Message* msg)
 // Release monitor
 SignallingEvent* ISDNQ931CallMonitor::releaseComplete(const char* reason)
 {
-    Lock lock(m_callMutex);
+    Lock mylock(this);
     if (state() == Null)
 	return 0;
     if (reason)
@@ -2316,15 +2316,14 @@ TokenDict ISDNQ931::s_swType[] = {
 	{0,0}
 	};
 
-YCLASSIMP(ISDNQ931,ISDNLayer3)
-
 ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
-    : SignallingComponent(name),
+    : SignallingComponent(name,&params),
       SignallingCallControl(params,"isdn."),
       SignallingDumpable(SignallingDumper::Q931),
       ISDNLayer3(name),
     m_q921(0),
     m_q921Up(false),
+    m_networkHint(true),
     m_primaryRate(true),
     m_transferModeCircuit(true),
     m_callRef(1),
@@ -2348,9 +2347,18 @@ ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
     m_flagQ921Down(false),
     m_flagQ921Invalid(false)
 {
-    setName(params.getValue("debugname",name));
+#ifdef DEBUG
+    if (debugAt(DebugAll)) {
+	String tmp;
+	params.dump(tmp,"\r\n  ",'\'',true);
+	Debug(this,DebugAll,"ISDNQ931::ISDNQ931(%p,'%s') [%p]%s",
+	    &params,name,this,tmp.c_str());
+    }
+#endif
     m_parserData.m_dbg = this;
-    m_callRefLen = params.getIntValue("callreflen",2);
+    m_networkHint = params.getBoolValue("network",m_networkHint);
+    m_data.m_bri = !(m_primaryRate = params.getBoolValue("primary",m_primaryRate));
+    m_callRefLen = params.getIntValue("callreflen",m_primaryRate ? 2 : 1);
     if (m_callRefLen < 1 || m_callRefLen > 4)
 	m_callRefLen = 2;
     // Set mask. Bit 7 of the first byte of the message header it's used for initiator flag
@@ -2383,9 +2391,9 @@ ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
     setDebug(params.getBoolValue("print-messages",false),
 	params.getBoolValue("extended-debug",false));
     if (debugAt(DebugInfo)) {
-	String s;
+	String s(network() ? "NET" : "CPE");
 #ifdef DEBUG
-	s << "type=" << lookup(m_parserData.m_flags,s_swType,"Custom");
+	s << " type=" << lookup(m_parserData.m_flags,s_swType,"Custom");
 	String t;
 	for (TokenDict* p = s_flags; p->token; p++)
 	    if (m_parserData.flag(p->value))
@@ -2406,7 +2414,7 @@ ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
 	s << " segmentation=" << String::boolText(m_parserData.m_allowSegment);
 	s << " max-segments=" << (unsigned int)m_parserData.m_maxSegments;
 #else
-	s << "type=" << params.getValue("switchtype");
+	s << " type=" << params.getValue("switchtype");
 	s << " pri=" << String::boolText(m_primaryRate);
 	s << " format=" << m_format;
 	s << " channelsync=" << String::boolText(0 != m_syncGroupTimer.interval());
@@ -2423,8 +2431,52 @@ ISDNQ931::~ISDNQ931()
 	cleanup();
 	m_calls.clear();
     }
-    attach((ISDNLayer2*)0);
+    TelEngine::destruct(attach((ISDNLayer2*)0));
+    TelEngine::destruct(SignallingCallControl::attach(0));
     DDebug(this,DebugAll,"ISDN Call Controller destroyed [%p]",this);
+}
+
+// Initialize Q.931 and attach a layer 2
+bool ISDNQ931::initialize(const NamedList* config)
+{
+#ifdef DEBUG
+    String tmp;
+    if (config && debugAt(DebugAll))
+	config->dump(tmp,"\r\n  ",'\'',true);
+    Debug(this,DebugInfo,"ISDNQ931::initialize(%p) [%p]%s",config,this,tmp.c_str());
+#endif
+    if (config) {
+	debugLevel(config->getIntValue("debuglevel_q931",
+	    config->getIntValue("debuglevel",-1)));
+	setDebug(config->getBoolValue("print-messages",false),
+	    config->getBoolValue("extended-debug",false));
+    }
+    if (config && !layer2()) {
+	const String* name = config->getParam("sig");
+	if (!name)
+	    name = config;
+	if (!TelEngine::null(name)) {
+	    NamedPointer* ptr = YOBJECT(NamedPointer,name);
+	    NamedList* linkConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
+	    NamedList params(*name + "/Q921");
+	    params.addParam("basename",*name);
+	    params.addParam("primary",String::boolText(primaryRate()));
+	    params.addParam("network",String::boolText(network()));
+	    if (linkConfig)
+		params.copyParams(*linkConfig);
+	    else
+		linkConfig = &params;
+	    ISDNLayer2* l2 = YSIGCREATE(ISDNLayer2,&params);
+	    if (!l2) {
+		Debug(this,DebugWarn,"Could not create ISDN Layer 2 '%s' [%p]",name->c_str(),this);
+		return false;
+	    }
+	    attach(l2);
+	    if (!l2->initialize(linkConfig))
+		TelEngine::destruct(attach((ISDNLayer2*)0));
+	}
+    }
+    return 0 != layer2();
 }
 
 // Check if layer 2 may be up
@@ -2435,7 +2487,7 @@ bool ISDNQ931::q921Up() const
     if (m_q921Up)
 	return true;
     // Assume BRI NET is always up
-    return !primaryRate() && m_q921->network();
+    return !primaryRate() && network();
 }
 
 // Send a message to layer 2
@@ -2620,7 +2672,7 @@ void ISDNQ931::receiveData(const DataBlock& data, u_int8_t tei, ISDNLayer2* laye
 	}
 	// Check if it is a new incoming call
 	if (msg->initiator() && msg->type() == ISDNQ931Message::Setup) {
-	    if (!primaryRate() && m_cpeNumber && m_q921 && !m_q921->network()) {
+	    if (!primaryRate() && m_cpeNumber && !network()) {
 		// We are a BRI CPE with a number - check the called party field
 		ISDNQ931IE* ie = msg->getIE(ISDNQ931IE::CalledNo);
 		if (ie) {
@@ -2654,11 +2706,11 @@ void ISDNQ931::receiveData(const DataBlock& data, u_int8_t tei, ISDNLayer2* laye
 
 // Attach layer 2
 // Update some data from the attached object
-void ISDNQ931::attach(ISDNLayer2* q921)
+ISDNLayer2* ISDNQ931::attach(ISDNLayer2* q921)
 {
     Lock lock(l3Mutex());
     if (m_q921 == q921)
-	return;
+	return 0;
     cleanup(q921 ? "layer 2 attach" : "layer 2 detach");
     ISDNLayer2* tmp = m_q921;
     m_q921 = q921;
@@ -2704,20 +2756,25 @@ void ISDNQ931::attach(ISDNLayer2* q921)
     }
     lock.drop();
     if (tmp) {
-	const char* name = 0;
-	if (engine() && engine()->find(tmp)) {
-	    name = tmp->toString().safe();
+	if (tmp->layer3() == this) {
+	    Debug(this,DebugAll,"Detaching L2 (%p,'%s') [%p]",
+		tmp,tmp->toString().safe(),this);
 	    tmp->attach(0);
 	}
-	Debug(this,DebugAll,"Detached L2 (%p,'%s') [%p]",tmp,name,this);
+	else {
+	    Debug(this,DebugNote,"Layer 2 (%p,'%s') was not attached to us [%p]",
+		tmp,tmp->toString().safe(),this);
+	    tmp = 0;
+	}
     }
     if (!q921)
-	return;
+	return tmp;
     Debug(this,DebugAll,"Attached L2 '%s' (%p,'%s') [%p]",
 	(q921->network() ? "NET" : "CPE"),
 	q921,q921->toString().safe(),this);
     insert(q921);
     q921->attach(this);
+    return tmp;
 }
 
 // Make an outgoing call from a given message
@@ -3332,35 +3389,80 @@ bool ISDNQ931::sendRelease(bool release, u_int8_t callRefLen, u_int32_t callRef,
  * ISDNQ931Monitor
  */
 ISDNQ931Monitor::ISDNQ931Monitor(const NamedList& params, const char* name)
-    : SignallingCallControl(params,"isdn."),
-    ISDNLayer3(name),
-    m_q921Net(0),
-    m_q921Cpe(0),
-    m_cicNet(0),
-    m_cicCpe(0),
-    m_parserData(params),
-    m_printMsg(true),
-    m_extendedDebug(false)
+    : SignallingComponent(name,&params),
+      SignallingCallControl(params,"isdn."),
+      ISDNLayer3(name),
+      m_q921Net(0), m_q921Cpe(0), m_cicNet(0), m_cicCpe(0),
+      m_parserData(params),
+      m_printMsg(true), m_extendedDebug(false)
 {
-    setName(params.getValue("debugname",name));
+#ifdef DEBUG
+    if (debugAt(DebugAll)) {
+	String tmp;
+	params.dump(tmp,"\r\n  ",'\'',true);
+	Debug(this,DebugAll,"ISDNQ931Monitor::ISDNQ931Monitor(%p,'%s') [%p]%s",
+	    &params,name,this,tmp.c_str());
+    }
+#endif
     // Set parser data. Accept maximum data length
     m_parserData.m_maxMsgLen = 0xffffffff;
     m_parserData.m_dbg = this;
     // Debug
     setDebug(params.getBoolValue("print-messages",true),
 	params.getBoolValue("extended-debug",false));
-    Debug(this,DebugAll,"ISDN Monitor created [%p]",this);
 }
 
 ISDNQ931Monitor::~ISDNQ931Monitor()
 {
     terminateMonitor(0,0);
-    attach((ISDNQ921Passive*)0,true);
-    attach((ISDNQ921Passive*)0,false);
-    attach((SignallingCircuitGroup*)0,true);
-    attach((SignallingCircuitGroup*)0,false);
+    TelEngine::destruct(attach((ISDNQ921Passive*)0,true));
+    TelEngine::destruct(attach((ISDNQ921Passive*)0,false));
+    TelEngine::destruct(attach((SignallingCircuitGroup*)0,true));
+    TelEngine::destruct(attach((SignallingCircuitGroup*)0,false));
     m_calls.clear();
     DDebug(this,DebugAll,"ISDN Monitor destroyed [%p]",this);
+}
+
+// Initialize the monitor and attach both passive layer 2
+bool ISDNQ931Monitor::initialize(const NamedList* config)
+{
+#ifdef DEBUG
+    String tmp;
+    if (config && debugAt(DebugAll))
+	config->dump(tmp,"\r\n  ",'\'',true);
+    Debug(this,DebugInfo,"ISDNQ931Monitor::initialize(%p) [%p]%s",config,this,tmp.c_str());
+#endif
+    if (config) {
+	debugLevel(config->getIntValue("debuglevel_q931",
+	    config->getIntValue("debuglevel",-1)));
+	setDebug(config->getBoolValue("print-messages",false),
+	    config->getBoolValue("extended-debug",false));
+	for (int i = 0; i <= 1; i++) {
+	    bool net = (0 == i);
+	    if (net && m_q921Net)
+		continue;
+	    if (!net && m_q921Cpe)
+		continue;
+	    NamedString* name = config->getParam(net ? "sig-net" : "sig-cpe");
+	    if (name) {
+		NamedPointer* ptr = YOBJECT(NamedPointer,name);
+		NamedList* linkConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
+		NamedList params(name->c_str());
+		params.addParam("basename",*name);
+		if (linkConfig)
+		    params.copyParams(*linkConfig);
+		else
+		    linkConfig = &params;
+		ISDNQ921Passive* l2 = YSIGCREATE(ISDNQ921Passive,&params);
+		if (!l2)
+		    return false;
+		attach(l2,net);
+		if (!l2->initialize(linkConfig))
+		    TelEngine::destruct(attach((ISDNQ921Passive*)0,net));
+	    }
+	}
+    }
+    return m_q921Net && m_q921Cpe;
 }
 
 // Notification from layer 2 of data link set/release command or response
@@ -3446,64 +3548,64 @@ void ISDNQ931Monitor::receiveData(const DataBlock& data, u_int8_t tei, ISDNLayer
 }
 
 // Attach ISDN Q.921 pasive transport that monitors one side of the link
-void ISDNQ931Monitor::attach(ISDNQ921Passive* q921, bool net)
+ISDNQ921Passive* ISDNQ931Monitor::attach(ISDNQ921Passive* q921, bool net)
 {
     Lock lock(l3Mutex());
-    ISDNQ921Passive* which = net ? m_q921Net : m_q921Cpe;
+    // Yes, this is a reference to a pointer
+    ISDNQ921Passive*& which = net ? m_q921Net : m_q921Cpe;
+    // Make no change if same transport
     if (which == q921)
-	return;
+	return 0;
     terminateMonitor(0,q921 ? "layer 2 attach" : "layer 2 detach");
     ISDNQ921Passive* tmp = which;
-    if (net)
-	m_q921Net = q921;
-    else
-	m_q921Cpe = q921;
+    which = q921;
     lock.drop();
+    const char* type = net ? "NET" : "CPE";
     if (tmp) {
-	const char* name = 0;
-	if (engine() && engine()->find(tmp)) {
-	    name = tmp->toString().safe();
-	    static_cast<ISDNLayer2*>(tmp)->attach((ISDNLayer3*)0);
+	if (tmp->layer3() == this) {
+	    Debug(this,DebugAll,"Detaching L2 %s (%p,'%s') [%p]",
+		type,tmp,tmp->toString().safe(),this);
+	    static_cast<ISDNLayer2*>(tmp)->attach(0);
 	}
-	Debug(this,DebugAll,"Detached L2 %s (%p,'%s') [%p]",net?"NET":"CPE",tmp,name,this);
+	else {
+	    Debug(this,DebugNote,"Layer 2 %s (%p,'%s') was not attached to us [%p]",
+		type,tmp,tmp->toString().safe(),this);
+	    tmp = 0;
+	}
     }
     if (!q921)
-	return;
+	return tmp;
     Debug(this,DebugAll,"Attached L2 %s (%p,'%s') [%p]",
-	net?"NET":"CPE",q921,q921->toString().safe(),this);
+	type,q921,q921->toString().safe(),this);
     insert(q921);
     q921->ISDNLayer2::attach(this);
+    return tmp;
 }
 
 // Attach a circuit group to this call controller
-void ISDNQ931Monitor::attach(SignallingCircuitGroup* circuits, bool net)
+SignallingCircuitGroup* ISDNQ931Monitor::attach(SignallingCircuitGroup* circuits, bool net)
 {
     Lock lock(l3Mutex());
+    // Yes, this is a reference to a pointer
+    SignallingCircuitGroup*& which = net ? m_cicNet : m_cicCpe;
+    SignallingCircuitGroup* tmp = which;
     // Don't attach if it's the same object
-    SignallingCircuitGroup* tmp = net ? m_cicNet : m_cicCpe;
     if (tmp == circuits)
-	return;
+	return 0;
     terminateMonitor(0,circuits ? "circuit group attach" : "circuit group detach");
-    if (tmp && circuits)
+    if (tmp && circuits) {
 	Debug(this,DebugNote,
 	    "Attached circuit group (%p) '%s' while we already have one (%p) '%s'",
 	    circuits,circuits->debugName(),tmp,tmp->debugName());
-    else if (circuits && !tmp)
-	DDebug(this,DebugAll,"Circuit group (%p) '%s' attached",circuits,circuits->debugName());
-    else if (tmp && !circuits)
-	DDebug(this,DebugAll,"Circuit group (%p) '%s' detached",tmp,tmp->debugName());
-    if (net)
-	m_cicNet = circuits;
+    }
+#ifdef DEBUG
+    else if (circuits)
+	Debug(this,DebugAll,"Circuit group (%p) '%s' attached",circuits,circuits->debugName());
     else
-	m_cicCpe = circuits;
-}
-
-// Get a pointer to this call controller
-void* ISDNQ931Monitor::getObject(const String& name) const
-{
-    if (name == "ISDNQ931Monitor")
-	return (void*)this;
-    return SignallingComponent::getObject(name);
+	Debug(this,DebugAll,"Circuit group (%p) '%s' detached",tmp,tmp->debugName());
+#endif
+    which = circuits;
+    return tmp;
 }
 
 // Method called periodically to check timeouts

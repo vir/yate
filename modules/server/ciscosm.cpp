@@ -228,7 +228,7 @@ public:
     // Handle the data received from Rudp
     void handleData(DataBlock& data);
     // Send start stop messages
-    void initSesion();
+    void initSession();
     bool sendData(DataBlock& data, bool connectR = false);
     // Find a specific user
     bool insert(SessionUser* user);
@@ -275,6 +275,7 @@ protected:
 
 class SLT : public SS7Layer2, public SessionUser
 {
+    YCLASS(SLT,SS7Layer2)
 public:
     enum Messages {
 	Connect_R = 0x06,                                  // Connect Request message
@@ -417,7 +418,7 @@ public:
 	{return lookup((int)state, s_linkCongestion);}
     static inline const char* sprotocolError(protocolError state)
 	{return lookup((int)state, s_protocolError);}
-    static void* create(const String& type,const NamedList& params);
+    static SignallingComponent* create(const String& type,const NamedList& params);
 protected:
     unsigned int m_status;                                 // Layer status
     unsigned int m_lStatus;                                // Local layer status
@@ -559,10 +560,10 @@ bool RudpSocket::initialize(const NamedList& params)
 	m_sequence = 0;
     }
     m_cumAckTimer.interval(params,"rudp_cumulative",100,300,false);
-    m_nullTimer.interval(params,"rudp_nulltimer",1900,2000,false);
-    m_retransTimer.interval(params,"rudp_retransmissiontimer",400,600,false);
+    m_nullTimer.interval(params,"rudp_nulltimer",1500,2000,false);
+    m_retransTimer.interval(params,"rudp_retransmission",400,600,false);
     m_synTimer.interval(params,"rudp_syntimer",900,1000,false);
-    m_retransCounter = params.getIntValue("rudp_maxretransmission",2);
+    m_retransCounter = params.getIntValue("rudp_maxretrans",2);
     m_maxCumAck = params.getIntValue("rudp_maxcumulative",3);
     m_haveChecksum = params.getBoolValue("rudp_checksum",false);
     m_sendSyn = params.getBoolValue("rudp_sendsyn",false);
@@ -581,7 +582,7 @@ bool RudpSocket::initSocket(const NamedList& params)
 {
     m_socket = new Socket(AF_INET,SOCK_DGRAM);
     String rhost = params.getValue("remote_host");
-    unsigned int rport = params.getIntValue("remote_port");
+    unsigned int rport = params.getIntValue("remote_port",8060);
     if (!rhost || !rport) {
 	Debug(m_sm,DebugStub, "Unable to initialize socket, remote%s%s%s is missing",
 	    rhost ? "" : " host",
@@ -1192,7 +1193,7 @@ void SessionManager::notify(bool down)
 	informUser(false);
     } else {
 	changeState(Operational);
-	initSesion();
+	initSession();
 	informUser(true);
     }
 }
@@ -1215,7 +1216,7 @@ void SessionManager::handleData(DataBlock& data)
 }
 
 // Session Initialization send standby and active messages
-void SessionManager::initSesion()
+void SessionManager::initSession()
 {
     if (!m_socket)
 	return;
@@ -1264,8 +1265,10 @@ bool SessionManager::sendData(DataBlock& data, bool connectR)
     if (!m_socket || m_state != Operational)
 	return false;
     // Send Standby and Active messages if we have an connect request message and all users are down
-    if (connectR && m_upUsers == 0)
-	initSesion();
+    if (connectR && m_upUsers == 0) {
+	initSession();
+	DDebug(this,DebugAll,"Sending init delayed PDU data: %u bytes",data.length());
+    }
     m_socket->sendMSG(data);
     return true;
 }
@@ -1318,7 +1321,7 @@ void SessionManager::changeState(State newState)
     m_state = newState;
 }
 
-// As far as we know these messages should be send by us
+// As far as we know these messages should be sent by us
 void SessionManager::handleSmMessage(u_int32_t smMessageType)
 {
     switch (smMessageType) {
@@ -1463,7 +1466,7 @@ const TokenDict SLT::s_protocolError[] = {
 };
 
 SLT::SLT(const String& name, const NamedList& param)
-    : SessionUser(1),
+    : SignallingComponent(param.safe("CiscoSLT")), SessionUser(1),
       m_status(Unconfigured), m_lStatus(NormalAlignment), m_rStatus(OutOfAlignment),
       m_reqStatus(NormalAlignment), m_messageId(1), m_channelId(0), m_bearerId(0),
       m_confReqTimer(0), m_printMsg(false)
@@ -1476,7 +1479,7 @@ SLT::SLT(const String& name, const NamedList& param)
 	m_session->insert(this);
 	m_session->deref();
     }
-    m_confReqTimer.interval(param,"configuration",59,60,true);
+    m_confReqTimer.interval(param,"configuration",250,5000,true);
     m_printMsg = param.getBoolValue("printslt",false);
 }
 
@@ -1909,24 +1912,23 @@ bool SLT::operational() const
     return aligned();
 }
 
-void* SLT::create(const String& type, const NamedList& name)
+SignallingComponent* SLT::create(const String& type, const NamedList& name)
 {
-    if (type != "SS7l2")
+    if (type != "SS7Layer2")
 	return 0;
     Configuration cfg(Engine::configFile("ciscosm"));
-    const char* sectName = name.getValue("name");
+    const char* sectName = name.getValue("link",name);
     NamedList* layer = cfg.getSection(sectName);
     if (!layer)
 	return 0;
     String confSec = layer->getValue("session","default");
     NamedList* section = cfg.getSection(confSec);
     if (!section) {
-	Debug(DebugWarn,"Section '%s' does not exist in configuration",confSec.c_str());
+	Debug(DebugWarn,"Session '%s' does not exist in configuration",confSec.c_str());
 	return 0;
     }
     layer->copyParams(*section);
-    SLT* slt = new SLT(name,*layer);
-    return slt;
+    return new SLT(name,*layer);
 }
 
 /**

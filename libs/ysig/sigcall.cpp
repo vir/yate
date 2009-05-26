@@ -48,12 +48,12 @@ TokenDict SignallingCircuit::s_lockNames[] = {
  */
 SignallingCallControl::SignallingCallControl(const NamedList& params,
 	const char* msgPrefix)
-    : Mutex(true),
-    m_verifyEvent(false),
-    m_verifyTimer(0),
-    m_circuits(0),
-    m_strategy(SignallingCircuitGroup::Increment),
-    m_exiting(false)
+    : Mutex(true,"SignallingCallControl"),
+      m_verifyEvent(false),
+      m_verifyTimer(0),
+      m_circuits(0),
+      m_strategy(SignallingCircuitGroup::Increment),
+      m_exiting(false)
 {
     // Strategy
     const char* strategy = params.getValue("strategy","increment");
@@ -86,29 +86,31 @@ SignallingCallControl::~SignallingCallControl()
 }
 
 // Attach a signalling circuit group. Set its strategy
-void SignallingCallControl::attach(SignallingCircuitGroup* circuits)
+SignallingCircuitGroup* SignallingCallControl::attach(SignallingCircuitGroup* circuits)
 {
-    Lock lock(this);
+    Lock mylock(this);
     // Don't attach if it's the same object
     if (m_circuits == circuits)
-	return;
+	return 0;
     cleanup(circuits ? "circuit group attach" : "circuit group detach");
     if (m_circuits && circuits)
 	Debug(DebugNote,
-	    "SignallingCallControl. Replaced circuit group (%p) with (%p) [%p]",
+	    "SignallingCallControl. Replacing circuit group (%p) with (%p) [%p]",
 	    m_circuits,circuits,this);
+    SignallingCircuitGroup* tmp = m_circuits;
     m_circuits = circuits;
     if (m_circuits) {
 	Lock lock(m_circuits);
 	m_circuits->setStrategy(m_strategy);
     }
+    return tmp;
 }
 
 // Reserve a circuit from a given list in attached group
 bool SignallingCallControl::reserveCircuit(SignallingCircuit*& cic, const char* range,
 	int checkLock, const String* list, bool mandatory, bool reverseRestrict)
 {
-    Lock lock(this);
+    Lock mylock(this);
     releaseCircuit(cic);
     if (!m_circuits)
 	return false;
@@ -143,7 +145,7 @@ bool SignallingCallControl::releaseCircuit(SignallingCircuit*& cic, bool sync)
 
 bool SignallingCallControl::releaseCircuit(unsigned int code, bool sync)
 {
-    Lock lock(this);
+    Lock mylock(this);
     SignallingCircuit* cic = m_circuits ? m_circuits->find(code) : 0;
     if (!cic)
 	return false;
@@ -232,29 +234,29 @@ void SignallingCallControl::removeCall(SignallingCall* call, bool del)
  * SignallingCall
  */
 SignallingCall::SignallingCall(SignallingCallControl* controller, bool outgoing, bool signalOnly)
-    : m_callMutex(true),
+    : Mutex(true,"SignallingCall"),
     m_lastEvent(0),
     m_controller(controller),
     m_outgoing(outgoing),
     m_signalOnly(signalOnly),
-    m_inMsgMutex(true),
+    m_inMsgMutex(true,"SignallingCall::inMsg"),
     m_private(0)
 {
 }
 
 SignallingCall::~SignallingCall()
 {
-    m_callMutex.lock();
+    lock();
     m_inMsg.clear();
     if (m_controller)
 	m_controller->removeCall(this,false);
-    m_callMutex.unlock();
+    unlock();
 }
 
 // Event termination notification
 void SignallingCall::eventTerminated(SignallingEvent* event)
 {
-    Lock lock(m_callMutex);
+    Lock mylock(this);
     if (!m_lastEvent || !event || m_lastEvent != event)
 	return;
     XDebug(DebugAll,"SignallingCall. Event (%p,'%s') terminated [%p]",event,event->name(),this);
@@ -401,28 +403,22 @@ static TokenDict s_cicStatusDict[] = {
 
 SignallingCircuit::SignallingCircuit(Type type, unsigned int code,
 	SignallingCircuitGroup* group, SignallingCircuitSpan* span)
-    : m_mutex(true),
-    m_group(group),
-    m_span(span),
-    m_code(code),
-    m_type(type),
-    m_status(Disabled),
-    m_lock(0),
-    m_lastEvent(0)
+    : m_mutex(true,"SignallingCircuit::operations"),
+      m_group(group), m_span(span),
+      m_code(code), m_type(type),
+      m_status(Disabled),
+      m_lock(0), m_lastEvent(0)
 {
     XDebug(m_group,DebugAll,"SignallingCircuit::SignallingCircuit [%p]",this);
 }
 
 SignallingCircuit::SignallingCircuit(Type type, unsigned int code, Status status,
 	SignallingCircuitGroup* group, SignallingCircuitSpan* span)
-    : m_mutex(true),
-    m_group(group),
-    m_span(span),
-    m_code(code),
-    m_type(type),
-    m_status(status),
-    m_lock(0),
-    m_lastEvent(0)
+    : m_mutex(true,"SignallingCircuit::operations"),
+      m_group(group), m_span(span),
+      m_code(code), m_type(type),
+      m_status(status),
+      m_lock(0), m_lastEvent(0)
 {
     XDebug(m_group,DebugAll,"SignallingCircuit::SignallingCircuit [%p]",this);
 }
@@ -530,13 +526,12 @@ const char* SignallingCircuit::lookupStatus(int status)
 /**
  * SignallingCircuitRange
  */
-SignallingCircuitRange::SignallingCircuitRange(const String& rangeStr, const char* name,
-	int strategy)
+SignallingCircuitRange::SignallingCircuitRange(const String& rangeStr,
+	const char* name, int strategy)
     : String(name),
-    m_count(0),
-    m_last(0),
-    m_strategy(strategy),
-    m_used(0)
+      m_count(0), m_last(0),
+      m_strategy(strategy),
+      m_used(0)
 {
     add(rangeStr);
 }
@@ -607,13 +602,11 @@ TokenDict SignallingCircuitGroup::s_strategy[] = {
 	{0,0}
 	};
 
-YCLASSIMP(SignallingCircuitGroup,SignallingComponent)
-
 SignallingCircuitGroup::SignallingCircuitGroup(unsigned int base, int strategy, const char* name)
     : SignallingComponent(name),
-    Mutex(true),
-    m_range(String::empty(),name,strategy),
-    m_base(base)
+      Mutex(true,"SignallingCircuitGroup"),
+      m_range(String::empty(),name,strategy),
+      m_base(base)
 {
     setName(name);
     XDebug(this,DebugAll,"SignallingCircuitGroup::SignallingCircuitGroup() [%p]",this);
@@ -635,7 +628,7 @@ SignallingCircuit* SignallingCircuitGroup::find(unsigned int cic, bool local)
 	    return 0;
 	cic -= m_base;
     }
-    Lock lock(this);
+    Lock mylock(this);
     if (cic >= m_range.m_last)
 	return 0;
     ObjList* l = m_circuits.skipNull();
@@ -650,7 +643,7 @@ SignallingCircuit* SignallingCircuitGroup::find(unsigned int cic, bool local)
 // Find a range of circuits owned by this group
 SignallingCircuitRange* SignallingCircuitGroup::findRange(const char* name)
 {
-    Lock lock(this);
+    Lock mylock(this);
     ObjList* obj = m_ranges.find(name);
     return obj ? static_cast<SignallingCircuitRange*>(obj->get()) : 0;
 }
@@ -658,7 +651,7 @@ SignallingCircuitRange* SignallingCircuitGroup::findRange(const char* name)
 void SignallingCircuitGroup::getCicList(String& dest)
 {
     dest = "";
-    Lock lock(this);
+    Lock mylock(this);
     for (ObjList* l = m_circuits.skipNull(); l; l = l->skipNext()) {
 	SignallingCircuit* c = static_cast<SignallingCircuit*>(l->get());
 	dest.append(String(c->code()),",");
@@ -670,7 +663,7 @@ bool SignallingCircuitGroup::insert(SignallingCircuit* circuit)
 {
     if (!circuit)
 	return false;
-    Lock lock(this);
+    Lock mylock(this);
     if (m_circuits.find(circuit) || find(circuit->code(),true))
 	return false;
     circuit->m_group = this;
@@ -684,7 +677,7 @@ void SignallingCircuitGroup::remove(SignallingCircuit* circuit)
 {
     if (!circuit)
 	return;
-    Lock lock(this);
+    Lock mylock(this);
     if (!m_circuits.remove(circuit,false))
 	return;
     circuit->m_group = 0;
@@ -697,10 +690,32 @@ bool SignallingCircuitGroup::insertSpan(SignallingCircuitSpan* span)
 {
     if (!span)
 	return false;
-    Lock lock(this);
+    Lock mylock(this);
     if (!m_spans.find(span))
 	m_spans.append(span);
     return true;
+}
+
+SignallingCircuitSpan* SignallingCircuitGroup::buildSpan(const String& name, unsigned int start)
+{
+    // Local class used to pass the circuit group pointer to the span
+    class VoiceParams : public NamedList
+    {
+    public:
+	inline VoiceParams(const char* name, SignallingCircuitGroup* group)
+	    : NamedList(name), m_group(group)
+	    { }
+	virtual void* getObject(const String& name) const
+	    { return (name == "SignallingCircuitGroup") ? m_group : NamedList::getObject(name); }
+	SignallingCircuitGroup* m_group;
+    };
+
+    VoiceParams params(debugName(),this);
+    params << "/" << name;
+    params.addParam("voice",name);
+    if (start)
+	params.addParam("start",String(start));
+    return YSIGCREATE(SignallingCircuitSpan,&params);
 }
 
 // Build and insert a range from circuits belonging to a given span
@@ -711,14 +726,14 @@ void SignallingCircuitGroup::insertRange(SignallingCircuitSpan* span, const char
 	return;
     if (!name)
 	name = span->id();
-    Lock lock(this);
+    Lock mylock(this);
     String tmp;
     for (ObjList* o = m_circuits.skipNull(); o; o = o->skipNext()) {
 	SignallingCircuit* c = static_cast<SignallingCircuit*>(o->get());
 	if (span == c->span())
 	    tmp.append(String(c->code()),",");
     }
-    lock.drop();
+    mylock.drop();
     insertRange(tmp,name,strategy);
 }
 
@@ -726,7 +741,7 @@ void SignallingCircuitGroup::insertRange(SignallingCircuitSpan* span, const char
 void SignallingCircuitGroup::insertRange(const String& range, const char* name,
 	int strategy)
 {
-    Lock lock(this);
+    Lock mylock(this);
     if (findRange(name))
 	return;
     if (strategy < 0)
@@ -740,7 +755,7 @@ void SignallingCircuitGroup::removeSpan(SignallingCircuitSpan* span, bool delCic
 {
     if (!span)
 	return;
-    Lock lock(this);
+    Lock mylock(this);
     if (delCics)
 	removeSpanCircuits(span);
     m_spans.remove(span,delSpan);
@@ -751,7 +766,7 @@ void SignallingCircuitGroup::removeSpanCircuits(SignallingCircuitSpan* span)
 {
     if (!span)
 	return;
-    Lock lock(this);
+    Lock mylock(this);
     ListIterator iter(m_circuits);
     for (GenObject* obj = 0; (obj = iter.get());) {
 	SignallingCircuit* c = static_cast<SignallingCircuit*>(obj);
@@ -765,7 +780,7 @@ void SignallingCircuitGroup::removeSpanCircuits(SignallingCircuitSpan* span)
 // Get the status of a circuit given by its code
 SignallingCircuit::Status SignallingCircuitGroup::status(unsigned int cic)
 {
-    Lock lock(this);
+    Lock mylock(this);
     SignallingCircuit* circuit = find(cic);
     return circuit ? circuit->status() : SignallingCircuit::Missing;
 }
@@ -774,7 +789,7 @@ SignallingCircuit::Status SignallingCircuitGroup::status(unsigned int cic)
 bool SignallingCircuitGroup::status(unsigned int cic, SignallingCircuit::Status newStat,
 	bool sync)
 {
-    Lock lock(this);
+    Lock mylock(this);
     SignallingCircuit* circuit = find(cic);
     return circuit && circuit->status(newStat,sync);
 }
@@ -820,7 +835,7 @@ unsigned int SignallingCircuitGroup::advance(unsigned int n, int strategy,
 SignallingCircuit* SignallingCircuitGroup::reserve(int checkLock, int strategy,
 	SignallingCircuitRange* range)
 {
-    Lock lock(this);
+    Lock mylock(this);
     if (!range)
 	range = &m_range;
     if (range->m_last < 1)
@@ -875,7 +890,7 @@ SignallingCircuit* SignallingCircuitGroup::reserve(int checkLock, int strategy,
 	if (n == start)
 	    break;
     }
-    lock.drop();
+    mylock.drop();
     if (strategy & Fallback) {
 	if (strategy & OnlyEven) {
 	    Debug(this,DebugNote,"No even circuits available, falling back to odd [%p]",this);
@@ -894,7 +909,7 @@ SignallingCircuit* SignallingCircuitGroup::reserve(int checkLock, int strategy,
 SignallingCircuit* SignallingCircuitGroup::reserve(const String& list, bool mandatory,
 	int checkLock, int strategy, SignallingCircuitRange* range)
 {
-    Lock lock(this);
+    Lock mylock(this);
     if (!range)
 	range = &m_range;
     // Check if any of the given circuits are free
@@ -932,7 +947,7 @@ SignallingCircuit* SignallingCircuitGroup::reserve(const String& list, bool mand
 // Clear data
 void SignallingCircuitGroup::clearAll()
 {
-    Lock lock(this);
+    Lock mylock(this);
     // Remove spans and their circuits
     ListIterator iter(m_spans);
     for (GenObject* obj = 0; (obj = iter.get());)
@@ -953,8 +968,8 @@ void SignallingCircuitGroup::clearAll()
  * SignallingCircuitSpan
  */
 SignallingCircuitSpan::SignallingCircuitSpan(const char* id, SignallingCircuitGroup* group)
-    : m_group(group),
-    m_id(id)
+    : SignallingComponent(id),
+      m_group(group), m_increment(0), m_id(id)
 {
     if (m_group)
 	m_group->insertSpan(this);
@@ -1018,7 +1033,7 @@ inline u_int64_t getValidInt(const NamedList& params, const char* param, int def
 
 // Reserve the line's circuit
 AnalogLine::AnalogLine(AnalogLineGroup* grp, unsigned int cic, const NamedList& params)
-    : Mutex(true),
+    : Mutex(true,"AnalogLine"),
     m_type(Unknown),
     m_state(Idle),
     m_inband(false),
@@ -1095,7 +1110,7 @@ AnalogLine::~AnalogLine()
 // Remove old peer's peer. Set this line's peer
 void AnalogLine::setPeer(AnalogLine* line, bool sync)
 {
-    Lock lock(this);
+    Lock mylock(this);
     if (line == this) {
 	Debug(m_group,DebugNote,"%s: Attempt to set peer to itself [%p]",
 		address(),this);
@@ -1140,7 +1155,7 @@ void AnalogLine::resetEcho(bool train)
 // Connect the line's circuit. Reset line echo canceller
 bool AnalogLine::connect(bool sync)
 {
-    Lock lock(this);
+    Lock mylock(this);
     bool ok = m_circuit && m_circuit->connect();
     resetEcho(true);
     if (sync && ok && m_peer)
@@ -1151,7 +1166,7 @@ bool AnalogLine::connect(bool sync)
 // Disconnect the line's circuit. Reset line echo canceller
 bool AnalogLine::disconnect(bool sync)
 {
-    Lock lock(this);
+    Lock mylock(this);
     bool ok = m_circuit && m_circuit->disconnect();
     resetEcho(false);
     if (sync && ok && m_peer)
@@ -1162,7 +1177,7 @@ bool AnalogLine::disconnect(bool sync)
 // Send an event through this line
 bool AnalogLine::sendEvent(SignallingCircuitEvent::Type type, NamedList* params)
 {
-    Lock lock(this);
+    Lock mylock(this);
     if (state() == OutOfService)
 	return false;
     if (m_inband &&
@@ -1174,7 +1189,7 @@ bool AnalogLine::sendEvent(SignallingCircuitEvent::Type type, NamedList* params)
 // Get events from the line's circuit if not out of service
 AnalogLineEvent* AnalogLine::getEvent(const Time& when)
 {
-    Lock lock(this);
+    Lock mylock(this);
     if (state() == OutOfService) {
 	checkTimeouts(when);
 	return 0;
@@ -1201,7 +1216,7 @@ AnalogLineEvent* AnalogLine::getEvent(const Time& when)
 // Alternate get events from this line or peer
 AnalogLineEvent* AnalogLine::getMonitorEvent(const Time& when)
 {
-    Lock lock(this);
+    Lock mylock(this);
     m_getPeerEvent = !m_getPeerEvent;
     AnalogLineEvent* event = 0;
     if (m_getPeerEvent) {
@@ -1221,7 +1236,7 @@ AnalogLineEvent* AnalogLine::getMonitorEvent(const Time& when)
 // Change the line state if neither current or new state are OutOfService
 bool AnalogLine::changeState(State newState, bool sync)
 {
-    Lock lock(this);
+    Lock mylock(this);
     bool ok = false;
     while (true) {
 	if (m_state == newState || m_state == OutOfService || newState == OutOfService)
@@ -1244,7 +1259,7 @@ bool AnalogLine::changeState(State newState, bool sync)
 //  entering/exiting the OutOfService state
 bool AnalogLine::enable(bool ok, bool sync, bool connectNow)
 {
-    Lock lock(this);
+    Lock mylock(this);
     while (true) {
 	if (ok) {
 	    if (m_state != OutOfService)
@@ -1293,8 +1308,6 @@ void AnalogLine::destroyed()
  * AnalogLineGroup
  */
 
-YCLASSIMP(AnalogLineGroup,SignallingCircuitGroup)
-
 // Construct an analog line group owning single lines
 AnalogLineGroup::AnalogLineGroup(AnalogLine::Type type, const char* name, bool slave)
     : SignallingCircuitGroup(0,SignallingCircuitGroup::Increment,name),
@@ -1338,7 +1351,7 @@ bool AnalogLineGroup::appendLine(AnalogLine* line, bool destructOnFail)
 	    TelEngine::destruct(line);
 	return false;
     }
-    Lock lock(this);
+    Lock mylock(this);
     m_lines.append(line);
     DDebug(this,DebugAll,"Added line (%p) %s [%p]",line,line->address(),this);
     return true;
@@ -1347,7 +1360,7 @@ bool AnalogLineGroup::appendLine(AnalogLine* line, bool destructOnFail)
 // Remove a line from the list and destruct it
 void AnalogLineGroup::removeLine(unsigned int cic)
 {
-    Lock lock(this);
+    Lock mylock(this);
     AnalogLine* line = findLine(cic);
     if (!line)
 	return;
@@ -1360,7 +1373,7 @@ void AnalogLineGroup::removeLine(AnalogLine* line)
 {
     if (!line)
 	return;
-    Lock lock(this);
+    Lock mylock(this);
     if (m_lines.remove(line,false))
 	DDebug(this,DebugAll,"Removed line %p %s [%p]",line,line->address(),this);
 }
@@ -1368,7 +1381,7 @@ void AnalogLineGroup::removeLine(AnalogLine* line)
 // Find a line by its circuit
 AnalogLine* AnalogLineGroup::findLine(unsigned int cic)
 {
-    Lock lock(this);
+    Lock mylock(this);
     for (ObjList* o = m_lines.skipNull(); o; o = o->skipNext()) {
 	AnalogLine* line = static_cast<AnalogLine*>(o->get());
 	if (line->circuit() && line->circuit()->code() == cic)
@@ -1380,7 +1393,7 @@ AnalogLine* AnalogLineGroup::findLine(unsigned int cic)
 // Find a line by its address
 AnalogLine* AnalogLineGroup::findLine(const String& address)
 {
-    Lock lock(this);
+    Lock mylock(this);
     ObjList* tmp = m_lines.find(address);
     return tmp ? static_cast<AnalogLine*>(tmp->get()) : 0;
 }

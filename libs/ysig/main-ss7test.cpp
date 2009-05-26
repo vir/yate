@@ -52,7 +52,7 @@ int main()
     NamedList ifdefs("WpInterface");
     ifdefs.addParam("card","wanpipe1");
     ifdefs.addParam("device","w1g1");
-    SignallingInterface* iface = static_cast<SignallingInterface*>(SignallingFactory::build(ifdefs,&ifdefs));
+    SignallingInterface* iface = YSIGCREATE(SignallingInterface,&ifdefs);
     if (iface) {
 	link->SignallingReceiver::attach(iface);
 	iface->control(SignallingInterface::Enable);

@@ -381,7 +381,7 @@ public:
     // Process incoming data
     virtual bool process();
     // Called by the factory to create Zaptel interfaces or spans
-    static void* create(const String& type, const NamedList& name);
+    static SignallingComponent* create(const String& type, const NamedList& name);
 protected:
     // Check if received any data in the last interval. Notify receiver
     virtual void timerTick(const Time& when);
@@ -1483,18 +1483,15 @@ bool ZapDevice::ioctl(IoctlRequest request, void* param, int level)
  * ZapInterface
  */
 ZapInterface::ZapInterface(const NamedList& params)
-    : m_device(ZapDevice::DChan,this,0,0),
-    m_priority(Thread::Normal),
-    m_errorMask(255),
-    m_numbufs(16),
-    m_bufsize(1024),
-    m_buffer(0),
-    m_readOnly(false),
-    m_sendReadOnly(false),
-    m_notify(0),
-    m_timerRxUnder(0)
+    : SignallingComponent(params),
+      m_device(ZapDevice::DChan,this,0,0),
+      m_priority(Thread::Normal),
+      m_errorMask(255),
+      m_numbufs(16), m_bufsize(1024), m_buffer(0),
+      m_readOnly(false), m_sendReadOnly(false),
+      m_notify(0),
+      m_timerRxUnder(0)
 {
-    setName(params.getValue("debugname","ZapInterface"));
     m_buffer = new unsigned char[m_bufsize + ZAP_CRC_LEN];
     XDebug(this,DebugAll,"ZapInterface::ZapInterface() [%p]",this);
 }
@@ -1507,27 +1504,31 @@ ZapInterface::~ZapInterface()
 }
 
 // Called by the factory to create Zaptel interfaces or spans
-void* ZapInterface::create(const String& type, const NamedList& name)
+SignallingComponent* ZapInterface::create(const String& type, const NamedList& name)
 {
     bool circuit = true;
-    if (type == "sig")
+    if (type == "SignallingInterface")
 	circuit = false;
-    else  if (type == "voice")
+    else if (type == "SignallingCircuitSpan")
 	;
     else
 	return 0;
 
     Configuration cfg(Engine::configFile("zapcard"));
-    cfg.load();
-
-    const char* sectName = name.getValue(type);
-    DDebug(&plugin,DebugAll,"Factory trying to create %s='%s'",type.c_str(),sectName);
+    const char* sectName = name.getValue((circuit ? "voice" : "sig"),name.getValue("basename",name));
     NamedList* config = cfg.getSection(sectName);
     if (!config) {
 	DDebug(&plugin,DebugAll,"No section '%s' in configuration",c_safe(sectName));
 	return 0;
     }
-
+#ifdef DEBUG
+    if (plugin.debugAt(DebugAll)) {
+	String tmp;
+	name.dump(tmp,"\r\n  ",'\'',true);
+	Debug(&plugin,DebugAll,"ZapInterface::create %s%s",
+	    (circuit ? "span" : "interface"),tmp.c_str());
+    }
+#endif
     String sDevType = config->getValue("type");
     ZapDevice::Type devType = (ZapDevice::Type)lookup(sDevType,s_types,ZapDevice::E1);
 
@@ -1601,7 +1602,7 @@ bool ZapInterface::init(ZapDevice::Type type, unsigned int code, unsigned int ch
     m_device.channel(channel,code);
     m_readOnly = getBoolValue("readonly",config,defaults,params);
     m_priority = Thread::priority(config.getValue("priority",defaults.getValue("priority")));
-    int rx = params.getIntValue("rxunderruninterval");
+    int rx = params.getIntValue("rxunderrun");
     if (rx > 0)
 	m_timerRxUnder.interval(rx);
     int i = params.getIntValue("errormask",config.getIntValue("errormask",255));
@@ -1814,16 +1815,19 @@ bool ZapSpan::init(ZapDevice::Type type, unsigned int offset,
 	    if (!voice)
 		voice = "1-15.17-31";
 	    chans = 31;
+	    m_increment = 32;
 	    break;
 	case ZapDevice::T1:
 	    if (!voice)
 		voice = "1-23";
 	    chans = 24;
+	    m_increment = 24;
 	    break;
 	case ZapDevice::BRI:
 	    if (!voice)
 		voice = "1-2";
 	    chans = 3;
+	    m_increment = 3;
 	    break;
 	case ZapDevice::FXO:
 	case ZapDevice::FXS:
@@ -1848,8 +1852,7 @@ bool ZapSpan::init(ZapDevice::Type type, unsigned int offset,
     }
 
     if (!digital)
-	chans = count;
-    ((NamedList*)&params)->setParam("chans",String(chans));
+	m_increment = chans = count;
     unsigned int start = params.getIntValue("start",0);
 
     // Create and insert circuits

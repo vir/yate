@@ -1381,13 +1381,6 @@ void SS7MsgISUP::toString(String& dest, const SS7Label& label, bool params,
     dest << enclose;
 }
 
-void* SS7MsgISUP::getObject(const String& name) const
-{
-    if (name == "SS7MsgISUP")
-	return (void*)this;
-    return SignallingMessage::getObject(name);
-}
-
 
 /**
  * Helper functions used to transmit responses
@@ -1484,7 +1477,7 @@ SS7ISUPCall::~SS7ISUPCall()
 //  received by the controller
 void SS7ISUPCall::stopWaitSegment(bool discard)
 {
-    Lock lock(m_callMutex);
+    Lock mylock(this);
     if (!m_sgmMsg)
 	return;
     m_sgmRecvTimer.stop();
@@ -1508,7 +1501,7 @@ inline bool timeout(SS7ISUP* isup, SS7ISUPCall* call, SignallingTimer& timer,
 // Get an event from this call
 SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 {
-    Lock lock(m_callMutex);
+    Lock mylock(this);
     if (m_lastEvent || m_state == Released)
 	return 0;
     SS7MsgISUP* msg = 0;
@@ -1605,7 +1598,7 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 // Send an event to this call
 bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 {
-    Lock lock(m_callMutex);
+    Lock mylock(this);
     if (!event)
 	return false;
     if (m_terminate || m_state == Released) {
@@ -1690,7 +1683,7 @@ void* SS7ISUPCall::getObject(const String& name) const
 // On failure set the termination flag and release the new circuit if valid
 bool SS7ISUPCall::replaceCircuit(SignallingCircuit* circuit)
 {
-    Lock lock(m_callMutex);
+    Lock mylock(this);
     clearQueue();
     if (m_state > Setup || !circuit || !outgoing()) {
 	m_iamTimer.stop();
@@ -2015,31 +2008,38 @@ SS7ISUP* SS7ISUPCall::isup()
  * SS7ISUP
  */
 SS7ISUP::SS7ISUP(const NamedList& params)
-    : SignallingCallControl(params,"isup."),
-    m_cicLen(2),
-    m_type(SS7PointCode::Other),
-    m_defPoint(0),
-    m_remotePoint(0),
-    m_priossf(0),
-    m_sls(255),
-    m_earlyAcm(true),
-    m_inn(false),
-    m_l3LinkUp(false),
-    m_uptTimer(0),
-    m_userPartAvail(true),
-    m_uptCicCode(0),
-    m_rscTimer(0),
-    m_rscCic(0),
-    m_lockTimer(0),
-    m_lockNeed(true),
-    m_hwFailReq(false),
-    m_blockReq(false),
-    m_lockCicCode(0),
-    m_printMsg(false),
-    m_extendedDebug(false)
+    : SignallingComponent(params.safe("SS7ISUP"),&params),
+      SignallingCallControl(params,"isup."),
+      m_cicLen(2),
+      m_type(SS7PointCode::Other),
+      m_defPoint(0),
+      m_remotePoint(0),
+      m_priossf(0),
+      m_sls(255),
+      m_earlyAcm(true),
+      m_inn(false),
+      m_l3LinkUp(false),
+      m_uptTimer(0),
+      m_userPartAvail(true),
+      m_uptCicCode(0),
+      m_rscTimer(0),
+      m_rscCic(0),
+      m_lockTimer(0),
+      m_lockNeed(true),
+      m_hwFailReq(false),
+      m_blockReq(false),
+      m_lockCicCode(0),
+      m_printMsg(false),
+      m_extendedDebug(false)
 {
-    setName(params.getValue("debugname","isup"));
-
+#ifdef DEBUG
+    if (debugAt(DebugAll)) {
+	String tmp;
+	params.dump(tmp,"\r\n  ",'\'',true);
+	Debug(this,DebugAll,"SS7ISUP::SS7ISUP(%p) [%p]%s",
+	    &params,this,tmp.c_str());
+    }
+#endif
     const char* stype = params.getValue("pointcodetype");
     m_type = SS7PointCode::lookup(stype);
     if (m_type == SS7PointCode::Other) {
@@ -2087,8 +2087,8 @@ SS7ISUP::SS7ISUP(const NamedList& params)
     if (m_uptTimer.interval())
 	m_userPartAvail = false;
 
-    setDebug(params.getBoolValue("print-layer4PDU",m_printMsg),
-	params.getBoolValue("extended-debug",m_extendedDebug));
+    setDebug(params.getBoolValue("print-messages",false),
+	params.getBoolValue("extended-debug",false));
 
     if (debugAt(DebugInfo)) {
 	String s;
@@ -2117,13 +2117,37 @@ SS7ISUP::~SS7ISUP()
     Debug(this,DebugInfo,"ISUP Call Controller destroyed [%p]",this);
 }
 
+bool SS7ISUP::initialize(const NamedList* config)
+{
+#ifdef DEBUG
+    String tmp;
+    if (config && debugAt(DebugAll))
+	config->dump(tmp,"\r\n  ",'\'',true);
+    Debug(this,DebugInfo,"SS7ISUP::initialize(%p) [%p]%s",config,this,tmp.c_str());
+#endif
+    if (config) {
+	debugLevel(config->getIntValue("debuglevel_isup",
+	    config->getIntValue("debuglevel",-1)));
+	setDebug(config->getBoolValue("print-messages",false),
+	    config->getBoolValue("extended-debug",false));
+    }
+    if (engine() && !network()) {
+	NamedList params("ss7router");
+	if (config)
+	    static_cast<String&>(params) = config->getValue("router",params);
+	if (params.toBoolean(true))
+	    SS7Layer4::attach(YOBJECT(SS7Router,engine()->build("SS7Router",params,true)));
+    }
+    return SS7Layer4::initialize(config);
+}
+
 // Append a point code to the list of point codes serviced by this controller
 // Set default point code
 bool SS7ISUP::setPointCode(SS7PointCode* pc, bool def)
 {
     if (!(pc && pc->pack(m_type)))
 	return false;
-    Lock lock(this);
+    Lock mylock(this);
     // Force default if we are not having one or the list is empty
     def = def || !m_defPoint || !m_pointCodes.skipNull();
     // Force not default if the received point code is the same as the default one
@@ -2149,7 +2173,7 @@ bool SS7ISUP::setPointCode(SS7PointCode* pc, bool def)
 // Check if the given point code is serviced by this controller
 SS7PointCode* SS7ISUP::hasPointCode(const SS7PointCode& pc)
 {
-    Lock lock(this);
+    Lock mylock(this);
     for (ObjList* o = m_pointCodes.skipNull(); o; o = o->skipNext()) {
 	SS7PointCode* p = static_cast<SS7PointCode*>(o->get());
 	if (*p == pc)
@@ -2188,7 +2212,7 @@ SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
     SignallingCircuit* cic = 0;
     const char* range = msg->params().getValue("circuits");
     reason.clear();
-    Lock lock(this);
+    Lock mylock(this);
     // Check
     while (true) {
 	if (!m_defPoint) {
@@ -2223,7 +2247,7 @@ SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
 	if (!m_rscCic && m_rscTimer.interval())
 	    m_rscTimer.start();
 	// Drop lock and send the event
-	lock.drop();
+	mylock.drop();
 	event->sendEvent();
     }
     TelEngine::destruct(msg);
@@ -2296,14 +2320,6 @@ void SS7ISUP::cleanup(const char* reason)
     clearCalls();
 }
 
-// Get a pointer to this object or other data
-void* SS7ISUP::getObject(const String& name) const
-{
-    if (name == "SS7ISUP")
-	return (void*)this;
-    return SS7Layer4::getObject(name);
-}
-
 // Remove all links with other layers. Disposes the memory
 void SS7ISUP::destroyed()
 {
@@ -2317,7 +2333,7 @@ void SS7ISUP::destroyed()
 
 void SS7ISUP::timerTick(const Time& when)
 {
-    Lock lock(this);
+    Lock mylock(this);
     if (!(m_l3LinkUp && circuits()))
 	return;
 
@@ -2344,7 +2360,8 @@ void SS7ISUP::timerTick(const Time& when)
 	    if (!m_lockTimer.timeout(when.msec()))
 		return;
 	    Debug(this,DebugMild,"Circuit %sblocking timed out cic=%u map=%s",
-		m_blockReq?"":"un",m_lockCicCode,m_lockMap.c_str());
+		(m_blockReq ? "" : "un"),
+		m_lockCicCode,m_lockMap.c_str());
 	}
 	if (sendLocalLock(when.msec()))
 	    return;
@@ -2378,17 +2395,19 @@ void SS7ISUP::notify(SS7Layer3* link, int sls)
 {
     if (!link)
 	return;
-    Lock lock(this);
+    Lock mylock(this);
     m_l3LinkUp = link->operational(-1);
-    // Reset remote user part's availablity state if supported
+    // Reset remote user part's availability state if supported
     // Force UPT re-send
     if (m_uptTimer.interval() && !m_l3LinkUp) {
 	m_uptTimer.stop();
 	m_userPartAvail = false;
     }
     Debug(this,DebugInfo,
-	"L3 (%p,'%s') is %soperational sls=%d. Remote User Part is %savailable",link,
-	link->toString().safe(),m_l3LinkUp?"":"not ",sls,m_userPartAvail?"":"un");
+	"L3 (%p,'%s') is %soperational sls=%d. Remote User Part is %savailable",
+	link,link->toString().safe(),
+	(m_l3LinkUp ? "" : "not "),sls,
+	(m_userPartAvail ? "" : "un"));
 }
 
 SS7MSU* SS7ISUP::buildMSU(SS7MsgISUP::Type type, unsigned char sio,
@@ -2913,7 +2932,8 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	case SS7MsgISUP::CNF: // Confusion
 	    // TODO: check if this message was received in response to RSC, UBL, UBK, CGB, CGU
 	    Debug(this,DebugNote,"%s with cause='%s' diagnostic='%s'",msg->name(),
-		msg->params().getValue("CauseIndicators"),msg->params().getValue("CauseIndicators.diagnostic"));
+		msg->params().getValue("CauseIndicators"),
+		msg->params().getValue("CauseIndicators.diagnostic"));
 	    stopSGM = true;
 	    break;
 	case SS7MsgISUP::RLC: // Release Complete
@@ -3124,8 +3144,10 @@ bool SS7ISUP::blockCircuit(unsigned int cic, bool block, bool remote, bool hwFai
 	something = circuit->maintLock(block,remote,changed,changedState);
 
     if (something) {
-	Debug(this,DebugNote,"%slocked %s side of circuit %u. Current flags 0x%x",
-	    block?"B":"Unb",remote?"remote":"local",cic,circuit->locked(-1));
+	Debug(this,DebugNote,"%s %s side of circuit %u. Current flags 0x%x",
+	    (block ? "Blocked" : "Unblocked"),
+	    (remote ? "remote" : "local"),
+	    cic,circuit->locked(-1));
 	m_verifyEvent = true;
     }
     return true;
@@ -3133,7 +3155,7 @@ bool SS7ISUP::blockCircuit(unsigned int cic, bool block, bool remote, bool hwFai
 
 SS7ISUPCall* SS7ISUP::findCall(unsigned int cic)
 {
-    Lock lock(this);
+    Lock mylock(this);
     for (ObjList* o = m_calls.skipNull(); o; o = o->skipNext()) {
 	SS7ISUPCall* call = static_cast<SS7ISUPCall*>(o->get());
 	if (call->id() == cic)
@@ -3223,22 +3245,17 @@ bool SS7ISUP::sendLocalLock(u_int64_t when)
     SS7MsgISUP* msg = 0;
     m_lockMap.assign(d,lockRange);
     if (m_lockMap.length() > 1 || m_hwFailReq) {
-	if (m_blockReq)
-	    msg = new SS7MsgISUP(SS7MsgISUP::CGB,m_lockCicCode);
-	else
-	    msg = new SS7MsgISUP(SS7MsgISUP::CGU,m_lockCicCode);
-	if (m_hwFailReq)
-	    msg->params().addParam("GroupSupervisionTypeIndicator","hw-failure");
-	else
-	    msg->params().addParam("GroupSupervisionTypeIndicator","maintenance");
+	msg = new SS7MsgISUP((m_blockReq ? SS7MsgISUP::CGB : SS7MsgISUP::CGU),
+	    m_lockCicCode);
+	msg->params().addParam("GroupSupervisionTypeIndicator",
+	    (m_hwFailReq ? "hw-failure" : "maintenance"));
 	msg->params().addParam("RangeAndStatus",String(m_lockMap.length()));
 	msg->params().addParam("RangeAndStatus.map",m_lockMap);
     }
-    else
-	if (m_blockReq)
-	    msg = new SS7MsgISUP(SS7MsgISUP::BLK,m_lockCicCode);
-	else
-	    msg = new SS7MsgISUP(SS7MsgISUP::UBL,m_lockCicCode);
+    else {
+	msg = new SS7MsgISUP((m_blockReq ? SS7MsgISUP::BLK : SS7MsgISUP::UBL),
+	    m_lockCicCode);
+    }
     SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
     transmitMessage(msg,label,false);
     m_lockTimer.start(when);
@@ -3250,9 +3267,9 @@ bool SS7ISUP::sendLocalLock(u_int64_t when)
  * SS7BICC
  */
 SS7BICC::SS7BICC(const NamedList& params)
-    : SS7ISUP(params)
+    : SignallingComponent(params.safe("SS7BICC"),&params),
+      SS7ISUP(params)
 {
-    setName(params.getValue("debugname","bicc"));
     m_cicLen = 4;
     Debug(this,DebugInfo,"BICC Call Controller [%p]",this);
 }
@@ -3267,14 +3284,6 @@ SS7MSU* SS7BICC::createMSU(SS7MsgISUP::Type type, unsigned char ssf,
     const SS7Label& label, unsigned int cic, const NamedList* params) const
 {
     return buildMSU(type,SS7MSU::BICC | (ssf & 0xf0),label,cic,params);
-}
-
-// Get a pointer to this object or other data
-void* SS7BICC::getObject(const String& name) const
-{
-    if (name == "SS7BICC")
-	return (void*)this;
-    return SS7ISUP::getObject(name);
 }
 
 bool SS7BICC::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)

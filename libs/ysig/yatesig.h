@@ -128,12 +128,12 @@ class ISDNQ931;                          // ISDN Q.931 implementation on top of 
 class ISDNQ931Monitor;                   // ISDN Q.931 implementation on top of Q.921 of call controller monitor
 
 // Macro to create a factory that builds a component by class name
-#define YSIGFACTORY(clas,iface) \
+#define YSIGFACTORY(clas) \
 class clas ## Factory : public SignallingFactory \
 { \
 protected: \
-virtual void* create(const String& type, const NamedList& name) \
-    { return (type == #clas) ? static_cast<iface*>(new clas) : 0; } \
+virtual SignallingComponent* create(const String& type, const NamedList& name) \
+    { return (type == #clas) ? new clas : 0; } \
 }; \
 static clas ## Factory s_ ## clas ## Factory
 
@@ -142,10 +142,13 @@ static clas ## Factory s_ ## clas ## Factory
 class clas ## Factory : public SignallingFactory \
 { \
 protected: \
-virtual void* create(const String& type, const NamedList& name) \
+virtual SignallingComponent* create(const String& type, const NamedList& name) \
     { return clas::create(type,name); } \
 }; \
 static clas ## Factory s_ ## clas ## Factory
+
+// Macro to call the factory creation method and return the created component
+#define YSIGCREATE(type,name) (static_cast<type*>(SignallingFactory::buildInternal(#type,name)))
 
 /**
  * This class is a generic data dumper with libpcap compatibility
@@ -355,10 +358,8 @@ public:
      * @param time Optional timeout value. If non 0, the timer is started
      */
     inline SignallingTimer(u_int64_t interval, u_int64_t time = 0)
-	: m_interval(interval), m_timeout(0) {
-	    if (time)
-		start(time);
-	}
+	: m_interval(interval), m_timeout(0)
+	{ if (time) start(time); }
 
     /**
      * Set the timeout interval
@@ -378,17 +379,18 @@ public:
      * @param sec True if the interval value if given in seconds
      */
     inline void interval(const NamedList& params, const char* param,
-	unsigned int minVal, unsigned int defVal, bool allowDisable, bool sec = false) {
-	    m_interval = (u_int64_t)params.getIntValue(param,defVal);
-	    if (m_interval) {
-		if (m_interval < minVal)
-		    m_interval = minVal;
-	    }
-	    else if (!allowDisable)
+	unsigned int minVal, unsigned int defVal, bool allowDisable, bool sec = false)
+    {
+	m_interval = (u_int64_t)params.getIntValue(param,defVal);
+	if (m_interval) {
+	    if (m_interval < minVal)
 		m_interval = minVal;
-	    if (sec)
-		m_interval *= 1000;
 	}
+	else if (!allowDisable)
+	    m_interval = minVal;
+	if (sec)
+	    m_interval *= 1000;
+    }
 
     /**
      * Get the timeout interval
@@ -401,10 +403,8 @@ public:
      * Start the timer if enabled (interval is positive)
      * @param time Time to be added to the interval to set the timeout point
      */
-    inline void start(u_int64_t time = Time::msecNow()) {
-	    if (m_interval)
-		m_timeout = time + m_interval;
-	}
+    inline void start(u_int64_t time = Time::msecNow())
+	{ if (m_interval) m_timeout = time + m_interval; }
 
     /**
      * Stop the timer
@@ -445,7 +445,7 @@ public:
      */
     inline SignallingCounter(u_int32_t maxVal)
 	: m_max(maxVal), m_count(0)
-	{}
+	{ }
 
     /**
      * Set the maximum value for the counter
@@ -479,23 +479,25 @@ public:
      * Increment the counter's value if it can
      * @return False if the counter is full (reached the maximum value)
      */
-    inline bool inc() {
-	    if (full())
-		return false;
-	    m_count++;
-	    return true;
-	}
+    inline bool inc()
+    {
+	if (full())
+	    return false;
+	m_count++;
+	return true;
+    }
 
     /**
      * Decrement the counter's value if it can
      * @return False if the counter is empty (reached 0)
      */
-    inline bool dec() {
-	    if (empty())
-		return false;
-	    m_count--;
-	    return true;
-	}
+    inline bool dec()
+    {
+	if (empty())
+	    return false;
+	m_count--;
+	return true;
+    }
 
     /**
      * Check if the counter is empty (the value is 0)
@@ -525,8 +527,9 @@ class YSIG_API SignallingFactory : public GenObject
 public:
     /**
      * Constructor, adds the factory to the global list
+     * @param fallback True to add this factory at the end of the priority list
      */
-    SignallingFactory();
+    SignallingFactory(bool fallback = false);
 
     /**
      * Destructor, removes the factory from list
@@ -535,20 +538,28 @@ public:
 
     /**
      * Builds a component given its name and arbitrary parameters
+     * @param type The type of the component that should be returned
+     * @param name Name of the requested component and additional parameters
+     * @return Pointer to the created component, NULL on failure
+     */
+    static SignallingComponent* build(const String& type, const NamedList* name = 0);
+
+    /**
+     * This method is for internal use only and must not be called directly
      * @param type The name of the interface that should be returned
      * @param name Name of the requested component and additional parameters
-     * @return Pointer to the requested interface of the created component
+     * @return Raw pointer to the requested interface of the component, NULL on failure
      */
-    static void* build(const String& type, const NamedList* name = 0);
+    static void* buildInternal(const String& type, const NamedList* name);
 
 protected:
     /**
      * Creates a component given its name and arbitrary parameters
      * @param type The name of the interface that should be returned
      * @param name Name of the requested component and additional parameters
-     * @return Pointer to the requested interface of the created component
+     * @return Pointer to the created component
      */
-    virtual void* create(const String& type, const NamedList& name) = 0;
+    virtual SignallingComponent* create(const String& type, const NamedList& name) = 0;
 };
 
 /**
@@ -558,6 +569,7 @@ protected:
  */
 class YSIG_API SignallingComponent : public RefObject, public DebugEnabler
 {
+    YCLASS(SignallingComponent,RefObject)
     friend class SignallingEngine;
 public:
     /**
@@ -570,6 +582,13 @@ public:
      * @return A reference to the name by which the component is known to engine
      */
     virtual const String& toString() const;
+
+    /**
+     * Configure and initialize the component and any subcomponents it may have
+     * @param config Optional configuration parameters override
+     * @return True if the component was initialized properly
+     */
+    virtual bool initialize(const NamedList* config);
 
     /**
      * Query or modify component's settings or operational parameters
@@ -592,12 +611,21 @@ public:
     inline SignallingEngine* engine() const
 	{ return m_engine; }
 
+    /**
+     * Conditionally set the debug level of the component
+     * @param level Desired debug level, negative for no change
+     * @return Current debug level
+     */
+    inline int debugLevel(int level)
+	{ return (level >= 0) ? DebugEnabler::debugLevel(level) : DebugEnabler::debugLevel(); }
+
 protected:
     /**
      * Constructor with a default empty component name
      * @param name Name of this component
+     * @param params Optional pointer to creation parameters
      */
-    SignallingComponent(const char* name = 0);
+    SignallingComponent(const char* name = 0, const NamedList* params = 0);
 
     /**
      * This method is called to clean up and destroy the object after the
@@ -693,6 +721,24 @@ public:
     SignallingComponent* find(const String& name);
 
     /**
+     * Retrive a component by name and class, lock the list while searching for it
+     * @param name Name of the component to find, empty to find any of the type
+     * @param type Class or base class of the component to find, empty to match any
+     * @param start Component to start searching from, search all list if NULL
+     * @return Pointer to component found or NULL
+     */
+    SignallingComponent* find(const String& name, const String& type, const SignallingComponent* start = 0);
+
+    /**
+     * Retrive and reference an existing component, create by factory if not present
+     * @param type Class or base class of the component to find or create
+     * @param params Name of component to find or create and creation parameters
+     * @param init Set to true to initialize a newly created component
+     * @return Pointer to component found or created, NULL on failure
+     */
+    SignallingComponent* build(const String& type, const NamedList& params, bool init = false);
+
+    /**
      * Apply a control operation to all components in the engine
      * @param params The list of parameters to query or change
      * @return True if the control operation was executed by at least one component
@@ -746,13 +792,14 @@ public:
      *  destroy it and set the received pointer to 0
      * @param obj Reference to pointer (lvalue) to the object to remove and destroy
      */
-    template <class Obj> static inline void destruct(Obj*& obj) {
-	    if (!obj)
-		return;
-	    if (obj->engine())
-		obj->engine()->remove(obj);
-	    TelEngine::destruct(obj);
-	}
+    template <class Obj> static inline void destruct(Obj*& obj)
+    {
+	if (!obj)
+	    return;
+	if (obj->engine())
+	    obj->engine()->remove(obj);
+	TelEngine::destruct(obj);
+    }
 
 protected:
     /**
@@ -780,6 +827,7 @@ private:
  */
 class YSIG_API SignallingMessage : public RefObject
 {
+    YCLASS(SignallingMessage,RefObject)
 public:
     /**
      * Constructor
@@ -787,7 +835,7 @@ public:
      */
     inline SignallingMessage(const char* name = 0)
 	: m_params(name)
-	{}
+	{ }
 
     /**
      * Get the name of the message
@@ -851,13 +899,14 @@ public:
      * Check the verify event flag. Reset it if true is returned
      * @return True if the verify event flag is set
      */
-    inline bool verify() {
-	    Lock lock(this);
-	    if (!m_verifyEvent)
-		return false;
-	    m_verifyEvent = false;
-	    return true;
-	}
+    inline bool verify()
+    {
+	Lock lock(this);
+	if (!m_verifyEvent)
+	    return false;
+	m_verifyEvent = false;
+	return true;
+    }
 
     /**
      * Get the prefix used by this call controller when decoding message parameters or
@@ -887,8 +936,9 @@ public:
      * Cleanup controller before detaching the group or attaching a new one
      * This method is thread safe
      * @param circuits Pointer to the SignallingCircuitGroup to attach. 0 to detach and force a cleanup
+     * @return Pointer to the old group that was detached, NULL if none or no change
      */
-    void attach(SignallingCircuitGroup* circuits);
+    SignallingCircuitGroup* attach(SignallingCircuitGroup* circuits);
 
     /**
      * Reserve a circuit for later use. If the circuit list is 0, try to reserve a circuit from
@@ -932,7 +982,7 @@ public:
      * @param reason Cleanup reason
      */
     virtual void cleanup(const char* reason = "offline")
-	{}
+	{ }
 
     /**
      * Iterate through the call list to get an event
@@ -955,7 +1005,7 @@ public:
      * @param params The list of parameters to fill
      */
     virtual void buildVerifyEvent(NamedList& params)
-	{}
+	{ }
 
 protected:
     /**
@@ -1029,7 +1079,7 @@ private:
  * Interface of protocol independent phone call
  * @short Abstract single phone call
  */
-class YSIG_API SignallingCall : public RefObject
+class YSIG_API SignallingCall : public RefObject, public Mutex
 {
 public:
     /**
@@ -1122,15 +1172,11 @@ protected:
     /**
      * Clear incoming messages queue
      */
-    void clearQueue() {
-	    Lock lock(m_inMsgMutex);
-	    m_inMsg.clear();
-	}
-
-    /**
-     * Mutex used to lock call operations
-     */
-    Mutex m_callMutex;
+    void clearQueue()
+    {
+	Lock lock(m_inMsgMutex);
+	m_inMsg.clear();
+    }
 
     /**
      * Last event generated by this call. Used to serialize events
@@ -1329,6 +1375,7 @@ private:
  */
 class YSIG_API SignallingCircuit : public RefObject
 {
+    YCLASS(SignallingCircuit,RefObject)
     friend class SignallingCircuitGroup;
     friend class SignallingCircuitEvent;
 public:
@@ -1637,6 +1684,7 @@ private:
  */
 class YSIG_API SignallingCircuitRange : public String
 {
+    YCLASS(SignallingCircuitRange,String)
     friend class SignallingCircuitGroup;
 public:
     /**
@@ -1688,10 +1736,11 @@ public:
      * @param rangeStr String used to (re)build this range
      * @return False if the string has invalid format
      */
-    inline bool set(const String& rangeStr) {
-	    clear();
-	    return add(rangeStr);
-	}
+    inline bool set(const String& rangeStr)
+    {
+	clear();
+	return add(rangeStr);
+    }
 
     /**
      * Add codes to this range from a string
@@ -1730,10 +1779,11 @@ public:
     /**
      * Release memory
      */
-    virtual void destruct() {
-	    clear();
-	    String::destruct();
-	}
+    virtual void destruct()
+    {
+	clear();
+	String::destruct();
+    }
 
 protected:
     void updateLast();                   // Update last circuit code
@@ -1751,6 +1801,7 @@ protected:
  */
 class YSIG_API SignallingCircuitGroup : public SignallingComponent, public Mutex
 {
+    YCLASS(SignallingCircuitGroup,SignallingComponent)
     friend class SignallingCircuit;
     friend class SignallingCallControl;
     friend class SS7ISUP;
@@ -1786,14 +1837,7 @@ public:
     /**
      * Destructor
      */
-    ~SignallingCircuitGroup();
-
-    /**
-     * Get a pointer to this object or other data
-     * @param name Object name
-     * @return The requested pointer or 0 if not exists
-     */
-    virtual void* getObject(const String& name) const;
+    virtual ~SignallingCircuitGroup();
 
     /**
      * Get the number of circuits in this group
@@ -1854,6 +1898,14 @@ public:
      * @param circuit Pointer to the circuit to remove
      */
     void remove(SignallingCircuit* circuit);
+
+    /**
+     * Create a circuit span using the factory
+     * @param name Name of the span to create
+     * @param start Desired start of circuit codes in span
+     * @return Pointer to new circuit span or NULL on failure
+     */
+    SignallingCircuitSpan* buildSpan(const String& name, unsigned int start = 0);
 
     /**
      * Insert a circuit span in the group
@@ -1979,10 +2031,11 @@ protected:
     /**
      * Remove all spans and circuits. Release object
      */
-    virtual void destroyed() {
-	    clearAll();
-	    SignallingComponent::destroyed();
-	}
+    virtual void destroyed()
+    {
+	clearAll();
+	SignallingComponent::destroyed();
+    }
 
 private:
     unsigned int advance(unsigned int n, int strategy, SignallingCircuitRange& range);
@@ -1999,16 +2052,10 @@ private:
  * An interface to a span belonging to a circuit group
  * @short A span in a circuit group
  */
-class YSIG_API SignallingCircuitSpan : public GenObject
+class YSIG_API SignallingCircuitSpan : public SignallingComponent
 {
+    YCLASS(SignallingCircuitSpan,SignallingComponent)
 public:
-    /**
-     * Constructor
-     * @param id Optional span id
-     * @param group Optional circuit group owning the span's circuits
-     */
-    SignallingCircuitSpan(const char* id = 0, SignallingCircuitGroup* group = 0);
-
     /**
      * Destructor. Remove from group's queue
      */
@@ -2028,11 +2075,30 @@ public:
     inline const String& id() const
 	{ return m_id; }
 
+    /**
+     * Get the increment in circuit numbers caused by this span
+     * @return Circuit number increment for this span
+     */
+    inline unsigned int increment() const
+	{ return m_increment; }
+
 protected:
+    /**
+     * Constructor
+     * @param id Optional span id
+     * @param group Optional circuit group owning the span's circuits
+     */
+    SignallingCircuitSpan(const char* id = 0, SignallingCircuitGroup* group = 0);
+
     /**
      * The owner of this span
      */
     SignallingCircuitGroup* m_group;
+
+    /**
+     * The increment in channel code caused by this span
+     */
+    unsigned int m_increment;
 
 private:
     String m_id;                         // Span's id
@@ -2044,6 +2110,7 @@ private:
  */
 class YSIG_API SignallingInterface : virtual public SignallingComponent
 {
+    YCLASS(SignallingInterface,SignallingComponent)
     friend class SignallingReceiver;
 public:
     /**
@@ -2099,8 +2166,8 @@ public:
      * Constructor
      */
     inline SignallingInterface()
-	: m_recvMutex(true), m_receiver(0)
-	{}
+	: m_recvMutex(true,"SignallingInterface::recv"), m_receiver(0)
+	{ }
 
     /**
      * Destructor, stops and detaches the interface
@@ -2172,6 +2239,7 @@ private:
  */
 class YSIG_API SignallingReceiver : virtual public SignallingComponent
 {
+    YCLASS(SignallingReceiver,SignallingComponent)
     friend class SignallingInterface;
 public:
     /**
@@ -2186,17 +2254,11 @@ public:
     virtual ~SignallingReceiver();
 
     /**
-     * Get a pointer to this object or other data
-     * @param name Object name
-     * @return The requested pointer or 0 if not exists
-     */
-    virtual void* getObject(const String& name) const;
-
-    /**
      * Attach a hardware interface to the data link. Detach from the old one if valid
      * @param iface Pointer to interface to attach
+     * @return Pointer to old attached interface or NULL
      */
-    virtual void attach(SignallingInterface* iface);
+    virtual SignallingInterface* attach(SignallingInterface* iface);
 
     /**
      * Retrive the interface used by this receiver
@@ -2297,11 +2359,12 @@ public:
      * @param coding Optional coding standard. Defaults to CCITT if 0
      * @return Pointer to the requested dictionary or 0
      */
-    static inline const TokenDict* dict(unsigned int index, unsigned char coding = 0) {
-	    if (index > 4)
-		return 0;
-	    return (!coding ? s_dictCCITT[index] : 0);
-	}
+    static inline const TokenDict* dict(unsigned int index, unsigned char coding = 0)
+    {
+	if (index > 4)
+	    return 0;
+	return (!coding ? s_dictCCITT[index] : 0);
+    }
 
     /**
      * Check if a list's parameter (comma separated list of flags) has a given flag
@@ -2461,6 +2524,7 @@ private:
  */
 class YSIG_API AnalogLine : public RefObject, public Mutex
 {
+    YCLASS(AnalogLine,RefObject)
     friend class AnalogLineGroup;        // Reset group if destroyed before the line
 public:
     /**
@@ -2642,12 +2706,13 @@ public:
      * @param data The new private user data value of this line
      * @param sync True to synchronize (set data) with the peer
      */
-    inline void userdata(void* data, bool sync = true) {
-	    Lock lock(this);
-	    m_private = data;
-	    if (sync && m_peer)
-		m_peer->userdata(data,false);
-	}
+    inline void userdata(void* data, bool sync = true)
+    {
+	Lock lock(this);
+	m_private = data;
+	if (sync && m_peer)
+	    m_peer->userdata(data,false);
+    }
 
     /**
      * Get this line's address
@@ -2708,7 +2773,8 @@ public:
      * @return True on success
      */
     inline bool sendEvent(SignallingCircuitEvent::Type type, State newState,
-	NamedList* params = 0) {
+	NamedList* params = 0)
+    {
 	if (!sendEvent(type,params))
 	    return false;
 	changeState(newState,false);
@@ -2734,7 +2800,7 @@ public:
      * @param when Time to use as computing base for timeouts
      */
     virtual void checkTimeouts(const Time& when)
-	{}
+	{ }
 
     /**
      * Change the line state if neither current or new state are OutOfService
@@ -2811,18 +2877,17 @@ public:
      * @param event The signalling circuit event
      */
     AnalogLineEvent(AnalogLine* line, SignallingCircuitEvent* event)
-	: m_line(0), m_event(event) {
-	    if (line && line->ref())
-		m_line = line;
-	}
+	: m_line(0), m_event(event)
+	{ if (line && line->ref()) m_line = line; }
 
     /**
      * Destructor, dereferences any resources
      */
-    virtual ~AnalogLineEvent() {
-	    TelEngine::destruct(m_line);
-	    TelEngine::destruct(m_event);
-	}
+    virtual ~AnalogLineEvent()
+    {
+	TelEngine::destruct(m_line);
+	TelEngine::destruct(m_event);
+    }
 
     /**
      * Get the analog line that generated this event
@@ -2841,11 +2906,12 @@ public:
     /**
      * Disposes the memory
      */
-    virtual void destruct() {
-	    TelEngine::destruct(m_line);
-	    TelEngine::destruct(m_event);
-	    GenObject::destruct();
-	}
+    virtual void destruct()
+    {
+	TelEngine::destruct(m_line);
+	TelEngine::destruct(m_event);
+	GenObject::destruct();
+    }
 
 private:
     AnalogLine* m_line;
@@ -2859,6 +2925,7 @@ private:
  */
 class YSIG_API AnalogLineGroup : public SignallingCircuitGroup
 {
+    YCLASS(AnalogLineGroup,SignallingCircuitGroup)
 public:
     /**
      * Constructor. Construct an analog line group owning single lines
@@ -2880,13 +2947,6 @@ public:
      * Destructor
      */
     virtual ~AnalogLineGroup();
-
-    /**
-     * Get a pointer to this object or other data
-     * @param name Object name
-     * @return The requested pointer or 0 if not exists
-     */
-    virtual void* getObject(const String& name) const;
 
     /**
      * Get this group's type
@@ -3386,6 +3446,7 @@ YSIG_API String& operator<<(String& str, const SS7Label& label);
  */
 class YSIG_API SS7MSU : public DataBlock
 {
+    YCLASS(SS7MSU,DataBlock)
 public:
     /**
      * Service indicator values
@@ -3631,6 +3692,7 @@ public:
  */
 class YSIG_API SIGTransport : public SignallingComponent
 {
+    YCLASS(SIGTransport,SignallingComponent)
     friend class SIGTRAN;
 public:
     /**
@@ -3915,6 +3977,7 @@ private:
  */
 class YSIG_API SS7L2User : virtual public SignallingComponent
 {
+    YCLASS(SS7L2User,SignallingComponent)
     friend class SS7Layer2;
 public:
     /**
@@ -3953,6 +4016,7 @@ protected:
  */
 class YSIG_API SS7Layer2 : virtual public SignallingComponent
 {
+    YCLASS(SS7Layer2,SignallingComponent)
 public:
     /**
      * LSSU Status Indications
@@ -4070,31 +4134,33 @@ protected:
      * Constructor
      */
     inline SS7Layer2()
-	: m_l2userMutex(true), m_l2user(0), m_sls(-1)
-	{ setName("ss7l2"); }
+	: m_l2userMutex(true,"SS7Layer2::l2user"), m_l2user(0), m_sls(-1)
+	{ }
 
     /**
      * Push a received Message Signal Unit up the protocol stack
      * @param msu Message data, starting with Service Indicator Octet
      * @return True if message was successfully delivered to the user component
      */
-    inline bool receivedMSU(const SS7MSU& msu) {
-	    m_l2userMutex.lock();
-	    RefPointer<SS7L2User> tmp = m_l2user;
-	    m_l2userMutex.unlock();
-	    return tmp && tmp->receivedMSU(msu,this,m_sls);
-	}
+    inline bool receivedMSU(const SS7MSU& msu)
+    {
+	m_l2userMutex.lock();
+	RefPointer<SS7L2User> tmp = m_l2user;
+	m_l2userMutex.unlock();
+	return tmp && tmp->receivedMSU(msu,this,m_sls);
+    }
 
     /**
      * Notify out user part about a status change
      */
-    inline void notify() {
-	    m_l2userMutex.lock();
-	    RefPointer<SS7L2User> tmp = m_l2user;
-	    m_l2userMutex.unlock();
-	    if (tmp)
-		tmp->notify(this);
-	}
+    inline void notify()
+    {
+	m_l2userMutex.lock();
+	RefPointer<SS7L2User> tmp = m_l2user;
+	m_l2userMutex.unlock();
+	if (tmp)
+	    tmp->notify(this);
+    }
 
 private:
     Mutex m_l2userMutex;
@@ -4142,6 +4208,7 @@ protected:
  */
 class YSIG_API SS7Layer3 : virtual public SignallingComponent
 {
+    YCLASS(SS7Layer3,SignallingComponent)
     friend class SS7Router;              // Access the data members to build the routing table
 public:
     /**
@@ -4228,8 +4295,11 @@ protected:
      * @param type Default point code type
      */
     inline SS7Layer3(SS7PointCode::Type type = SS7PointCode::Other)
-	: m_l3userMutex(true), m_l3user(0), m_routeMutex(true)
-	{ setName("ss7l3"); setType(type); }
+	: SignallingComponent("SS7Layer3"),
+	  m_l3userMutex(true,"SS7Layer3::l3user"),
+	  m_l3user(0),
+	  m_routeMutex(true,"SS7Layer3::route")
+	{ setType(type); }
 
     /**
      * Push a received Message Signal Unit up the protocol stack
@@ -4238,24 +4308,26 @@ protected:
      * @param sls Signalling Link the MSU was received from
      * @return True if message was successfully delivered to the user component
      */
-    inline bool receivedMSU(const SS7MSU& msu, const SS7Label& label, int sls) {
-	    m_l3userMutex.lock();
-	    RefPointer<SS7L3User> tmp = m_l3user;
-	    m_l3userMutex.unlock();
-	    return tmp && tmp->receivedMSU(msu,label,this,sls);
-	}
+    inline bool receivedMSU(const SS7MSU& msu, const SS7Label& label, int sls)
+    {
+	m_l3userMutex.lock();
+	RefPointer<SS7L3User> tmp = m_l3user;
+	m_l3userMutex.unlock();
+	return tmp && tmp->receivedMSU(msu,label,this,sls);
+    }
 
     /**
      * Notify out user part about a status change
      * @param sls Signallink Link that generated the notification, -1 if none
      */
-    inline void notify(int sls = -1) {
-	    m_l3userMutex.lock();
-	    RefPointer<SS7L3User> tmp = m_l3user;
-	    m_l3userMutex.unlock();
-	    if (tmp)
-		tmp->notify(this,sls);
-	}
+    inline void notify(int sls = -1)
+    {
+	m_l3userMutex.lock();
+	RefPointer<SS7L3User> tmp = m_l3user;
+	m_l3userMutex.unlock();
+	if (tmp)
+	    tmp->notify(this,sls);
+    }
 
     /**
      * Default processing of a MTN (Maintenance MSU)
@@ -4351,12 +4423,13 @@ protected:
      * @param sls Signalling Link Selection, negative to choose best
      * @return Link the message was successfully queued to, negative for error
      */
-    inline int transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls = -1) {
-	    m_l3Mutex.lock();
-	    RefPointer<SS7Layer3> tmp = m_layer3;
-	    m_l3Mutex.unlock();
-	    return tmp ? tmp->transmitMSU(msu,label,sls) : -1;
-	}
+    inline int transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls = -1)
+    {
+	m_l3Mutex.lock();
+	RefPointer<SS7Layer3> tmp = m_layer3;
+	m_l3Mutex.unlock();
+	return tmp ? tmp->transmitMSU(msu,label,sls) : -1;
+    }
 
 private:
     Mutex m_l3Mutex;                     // Lock pointer use operations
@@ -4378,7 +4451,7 @@ public:
      * @param priority Optional value of the network priority
      */
     inline SS7Route(unsigned int packed, unsigned int priority = 0)
-	: Mutex(true),
+	: Mutex(true,"SS7Route"),
 	  m_packed(packed), m_priority(priority), m_changes(0)
 	{ m_networks.setDelete(false); }
 
@@ -4386,7 +4459,7 @@ public:
      * Destructor
      */
     virtual ~SS7Route()
-	{}
+	{ }
 
     /**
      * Attach a network to use for this destination or change its priority.
@@ -4429,12 +4502,20 @@ private:
  */
 class YSIG_API SS7Router : public SS7L3User, public SS7Layer3, public Mutex
 {
+    YCLASS2(SS7Router,SS7L3User,SS7Layer3)
 public:
     /**
      * Default constructor
      * @param params The list with the parameters
      */
     SS7Router(const NamedList& params);
+
+    /**
+     * Configure and initialize the router, maintenance and management
+     * @param config Optional configuration parameters override
+     * @return True if the router was initialized properly
+     */
+    virtual bool initialize(const NamedList* config);
 
     /**
      * Push a Message Signal Unit down the protocol stack
@@ -4475,13 +4556,6 @@ public:
      * @param service Pointer to service to detach
      */
     void detach(SS7Layer4* service);
-
-    /**
-     * Get a pointer to this object or other data
-     * @param name Object name
-     * @return The requested pointer or 0 if not exists
-     */
-    virtual void* getObject(const String& name) const;
 
 protected:
     /**
@@ -4546,6 +4620,7 @@ class YSIG_API SS7M3UA : public SS7Layer3, public SIGTRAN
  */
 class YSIG_API SS7MTP2 : public SS7Layer2, public SignallingReceiver, public SignallingDumpable, public Mutex
 {
+    YCLASS2(SS7MTP2,SS7Layer2,SignallingReceiver)
 public:
     /**
      * Types of error correction
@@ -4569,11 +4644,11 @@ public:
     virtual ~SS7MTP2();
 
     /**
-     * Get a pointer to this object or other data
-     * @param name Object name
-     * @return The requested pointer or 0 if not exists
+     * Configure and initialize MTP2 and its interface
+     * @param config Optional configuration parameters override
+     * @return True if MTP2 and the interface were initialized properly
      */
-    virtual void* getObject(const String& name) const;
+    virtual bool initialize(const NamedList* config);
 
     /**
      * Push a Message Signal Unit down the protocol stack
@@ -4628,11 +4703,12 @@ protected:
     /**
      * Remove all attachements. Disposes the memory
      */
-    virtual void destroyed() {
-	    SS7Layer2::attach(0);
-	    SignallingReceiver::attach(0);
-	    SignallingComponent::destroyed();
-	}
+    virtual void destroyed()
+    {
+	SS7Layer2::attach(0);
+	TelEngine::destruct(SignallingReceiver::attach(0));
+	SignallingComponent::destroyed();
+    }
 
     /**
      * Periodical timer tick used to perform alignment and housekeeping
@@ -4743,6 +4819,7 @@ private:
  */
 class YSIG_API SS7MTP3 : public SS7Layer3, public SS7L2User, public SignallingDumpable, public Mutex
 {
+    YCLASS(SS7MTP3,SS7Layer3)
 public:
     /**
      * Constructor
@@ -4754,6 +4831,13 @@ public:
      * Destructor
      */
     virtual ~SS7MTP3();
+
+    /**
+     * Configure and initialize the MTP3 and all its links
+     * @param config Optional configuration parameters override
+     * @return True if MTP3 and at least one link were initialized properly
+     */
+    virtual bool initialize(const NamedList* config);
 
     /**
      * Push a Message Signal Unit down the protocol stack
@@ -5013,6 +5097,7 @@ public:
  */
 class YSIG_API SS7MsgISUP : public SignallingMessage
 {
+    YCLASS(SS7MsgISUP,SignallingMessage)
     friend class SS7ISUPCall;
 public:
     /**
@@ -5189,13 +5274,13 @@ public:
      */
     inline SS7MsgISUP(Type type, unsigned int cic)
 	: SignallingMessage(lookup(type,"Unknown")), m_type(type), m_cic(cic)
-	{}
+	{ }
 
     /**
      * Destructor
      */
     virtual ~SS7MsgISUP()
-	{}
+	{ }
 
     /**
      * Get the type of this message
@@ -5221,13 +5306,6 @@ public:
      */
     void toString(String& dest, const SS7Label& label, bool params,
 	const void* raw = 0, unsigned int rawLen = 0) const;
-
-    /**
-     * Get a pointer to this object or other data
-     * @param name Object name
-     * @return The requested pointer or 0 if not exists
-     */
-    virtual void* getObject(const String& name) const;
 
     /**
      * Get the dictionary with the message names
@@ -5264,12 +5342,14 @@ private:
  */
 class YSIG_API SS7Management : public SS7Layer4
 {
+    YCLASS(SS7Management,SS7Layer4)
 public:
     /**
      * Constructor
      */
-    inline SS7Management()
-	{ setName("ss7snm"); }
+    inline SS7Management(const NamedList& params)
+	: SignallingComponent(params.safe("SS7Management"),&params)
+	{ }
 
 protected:
     /**
@@ -5297,12 +5377,14 @@ protected:
  */
 class YSIG_API SS7Maintenance : public SS7Layer4
 {
+    YCLASS(SS7Maintenance,SS7Layer4)
 public:
     /**
      * Constructor
      */
-    inline SS7Maintenance()
-	{ setName("ss7mtn"); }
+    inline SS7Maintenance(const NamedList& params)
+	: SignallingComponent(params.safe("SS7Maintenance"),&params)
+	{ }
 
 protected:
     /**
@@ -5393,12 +5475,13 @@ public:
      * @param gracefully True to send RLC on termination, false to destroy the call without notification
      * @param reason Termination reason
      */
-    inline void setTerminate(bool gracefully, const char* reason = 0) {
-	    Lock lock(m_callMutex);
-	    m_terminate = true;
-	    m_gracefully = gracefully;
-	    setReason(reason,0);
-	}
+    inline void setTerminate(bool gracefully, const char* reason = 0)
+    {
+	Lock lock(this);
+	m_terminate = true;
+	m_gracefully = gracefully;
+	setReason(reason,0);
+    }
 
     /**
      * Get a pointer to this object or other data
@@ -5503,6 +5586,7 @@ private:
  */
 class YSIG_API SS7ISUP : public SignallingCallControl, public SS7Layer4
 {
+    YCLASS(SS7ISUP,SS7Layer4)
     friend class SS7ISUPCall;
 public:
     /**
@@ -5515,6 +5599,13 @@ public:
      * Destructor
      */
     virtual ~SS7ISUP();
+
+    /**
+     * Configure and initialize the call controller and user part
+     * @param config Optional configuration parameters override
+     * @return True if ISUP was initialized properly
+     */
+    virtual bool initialize(const NamedList* config);
 
     /**
      * Get the length of the Circuit Identification Code for this user part
@@ -5563,10 +5654,8 @@ public:
      * @param printMsg Enable/disable message printing on output
      * @param extendedDebug Enable/disable hex data dump if print messages is enabled
      */
-    inline void setDebug(bool printMsg, bool extendedDebug) {
-	    m_printMsg = printMsg;
-	    m_extendedDebug = m_printMsg && extendedDebug;
-	}
+    inline void setDebug(bool printMsg, bool extendedDebug)
+	{ m_extendedDebug = ((m_printMsg = printMsg) && extendedDebug); }
 
     /**
      * Create a new MSU populated with type, routing label and space for fixed part
@@ -5607,13 +5696,6 @@ public:
      * @param reason Cleanup reason
      */
     virtual void cleanup(const char* reason = "offline");
-
-    /**
-     * Get a pointer to this object or other data
-     * @param name Object name
-     * @return The requested pointer or 0 if not exists
-     */
-    virtual void* getObject(const String& name) const;
 
     /**
      * Decode an ISUP message buffer to a list of parameters
@@ -5775,6 +5857,7 @@ private:
  */
 class YSIG_API SS7BICC : public SS7ISUP
 {
+    YCLASS(SS7BICC,SS7ISUP)
 public:
     /**
      * Constructor
@@ -5799,13 +5882,6 @@ public:
      */
     virtual SS7MSU* createMSU(SS7MsgISUP::Type type, unsigned char ssf,
 	const SS7Label& label, unsigned int cic, const NamedList* params = 0) const;
-
-    /**
-     * Get a pointer to this object or other data
-     * @param name Object name
-     * @return The requested pointer or 0 if not exists
-     */
-    virtual void* getObject(const String& name) const;
 
 protected:
     /**
@@ -5883,6 +5959,7 @@ protected:
  */
 class YSIG_API ISDNLayer2 : virtual public SignallingComponent
 {
+    YCLASS(ISDNLayer2,SignallingComponent)
     friend class ISDNQ921Management;
 public:
     /**
@@ -5899,6 +5976,12 @@ public:
      * Destructor
      */
     virtual ~ISDNLayer2();
+
+    /**
+     * Get the ISDN Layer 3 attached to this layer
+     */
+    inline ISDNLayer3* layer3() const
+	{ return m_layer3; }
 
     /**
      * Get the layer's state
@@ -6130,6 +6213,7 @@ private:
  */
 class YSIG_API ISDNLayer3 : virtual public SignallingComponent
 {
+    YCLASS(ISDNLayer3,SignallingComponent)
 public:
     /**
      * Implements Q.921 DL-ESTABLISH indication/confirmation primitive:
@@ -6141,7 +6225,7 @@ public:
      * @param layer2 Pointer to the notifier
      */
     virtual void multipleFrameEstablished(u_int8_t tei, bool confirm, bool timeout, ISDNLayer2* layer2)
-	{}
+	{ }
 
     /**
      * Implements Q.921 DL-RELEASE indication/confirmation primitive:
@@ -6153,7 +6237,7 @@ public:
      * @param layer2 Pointer to the notifier
      */
     virtual void multipleFrameReleased(u_int8_t tei, bool confirm, bool timeout, ISDNLayer2* layer2)
-	{}
+	{ }
 
     /**
      * Notification from layer 2 of data link set/release command or response
@@ -6167,7 +6251,7 @@ public:
      * @param layer2 Pointer to the notifier
      */
     virtual void dataLinkState(u_int8_t tei, bool cmd, bool value, ISDNLayer2* layer2)
-	{}
+	{ }
 
     /**
      * Notification from layer 2 of data link idle timeout
@@ -6175,7 +6259,7 @@ public:
      * @param layer2 Pointer to the notifier
      */
     virtual void idleTimeout(ISDNLayer2* layer2)
-	{}
+	{ }
 
     /**
      * Implements Q.921 DL-DATA and DL-UNIT DATA indication primitives
@@ -6189,16 +6273,10 @@ public:
     /**
      * Attach an ISDN Q.921 Layer 2
      * @param layer2 Pointer to the Q.921 Layer 2 to attach
+     * @return Pointer to the detached Layer 2 or NULL
      */
-    virtual void attach(ISDNLayer2* layer2)
-	{}
-
-    /**
-     * Detach an ISDN Q.921 Layer 2
-     * @param layer2 Pointer to the Q.921 Layer 2 to detach
-     */
-    virtual void detach(ISDNLayer2* layer2)
-	{}
+    virtual ISDNLayer2* attach(ISDNLayer2* layer2)
+	{ return 0; }
 
 protected:
     /**
@@ -6207,8 +6285,9 @@ protected:
      * @param name Name of this component
      */
     inline ISDNLayer3(const char* name = 0)
-	: SignallingComponent(name), m_layerMutex(true)
-	{}
+	: SignallingComponent(name),
+	  m_layerMutex(true,"ISDNLayer3::layer")
+	{ }
 
     /**
      * Retrieve the layer's mutex
@@ -6218,7 +6297,7 @@ protected:
 	{ return m_layerMutex; }
 
 private:
-    Mutex m_layerMutex;                  // Layer 2 operations mutex
+    Mutex m_layerMutex;                  // Layer 3 operations mutex
 };
 
 /**
@@ -6566,6 +6645,7 @@ private:
  */
 class YSIG_API ISDNQ921 : public ISDNLayer2, public SignallingReceiver, public SignallingDumpable
 {
+    YCLASS2(ISDNQ921,ISDNLayer2,SignallingReceiver)
     friend class ISDNQ921Management;
 public:
     /**
@@ -6582,6 +6662,13 @@ public:
      * Destructor
      */
     virtual ~ISDNQ921();
+
+    /**
+     * Configure and initialize Q.921 and its interface
+     * @param config Optional configuration parameters override
+     * @return True if Q.921 and the interface were initialized properly
+     */
+    virtual bool initialize(const NamedList* config);
 
     /**
      * Get the timeout of a data frame. After that, a higher layer may retransmit data
@@ -6628,31 +6715,23 @@ public:
     virtual void cleanup();
 
     /**
-     * Get a pointer to a data member or this layer
-     * @param name Object name
-     * @return The requested pointer or 0 if not exists
-     */
-    virtual void* getObject(const String& name) const;
-
-    /**
      * Set debug data of this layer
      * @param printFrames Enable/disable frame printing on output
      * @param extendedDebug Enable/disable hex data dump if print frames is enabled
      */
-    inline void setDebug(bool printFrames, bool extendedDebug) {
-	    m_printFrames = printFrames;
-	    m_extendedDebug = m_printFrames && extendedDebug;
-	}
+    inline void setDebug(bool printFrames, bool extendedDebug)
+	{ m_extendedDebug = ((m_printFrames = printFrames) && extendedDebug); }
 
 protected:
     /**
      * Detach links. Disposes memory
      */
-    virtual void destroyed() {
-	    ISDNLayer2::attach((ISDNLayer3*)0);
-	    SignallingReceiver::attach(0);
-	    SignallingComponent::destroyed();
-	}
+    virtual void destroyed()
+    {
+	ISDNLayer2::attach((ISDNLayer3*)0);
+	TelEngine::destruct(SignallingReceiver::attach(0));
+	SignallingComponent::destroyed();
+    }
 
     /**
      * Method called periodically to check timeouts
@@ -6781,6 +6860,7 @@ private:
  */
 class YSIG_API ISDNQ921Management : public ISDNLayer2, public ISDNLayer3, public SignallingReceiver, public SignallingDumpable
 {
+    YCLASS3(ISDNQ921Management,ISDNLayer2,ISDNLayer3,SignallingReceiver)
 public:
     /**
      * Constructor - initialize this Layer 2 and the component
@@ -6795,12 +6875,12 @@ public:
      */
     virtual ~ISDNQ921Management();
 
-
     /**
-     * Get an object from this management
-     * @return The requested object or 0
+     * Configure and initialize Q.921 Management and its children
+     * @param config Optional configuration parameters override
+     * @return True if Q.921 management was initialized properly
      */
-    virtual void* getObject(const String& name) const;
+    virtual bool initialize(const NamedList* config);
 
     /**
      * Set the engine for this management and all Layer 2 children
@@ -7003,6 +7083,7 @@ private:
  */
 class YSIG_API ISDNQ921Passive : public ISDNLayer2, public SignallingReceiver, public SignallingDumpable
 {
+    YCLASS2(ISDNQ921Passive,ISDNLayer2,SignallingReceiver)
 public:
     /**
      * Constructor
@@ -7025,31 +7106,30 @@ public:
     virtual void cleanup();
 
     /**
-     * Get a pointer to a data member or this layer
-     * @param name Object name
-     * @return The requested pointer or 0 if not exists
+     * Configure and initialize the passive Q.921 and its interface
+     * @param config Optional configuration parameters override
+     * @return True if Q.921 and the interface were initialized properly
      */
-    virtual void* getObject(const String& name) const;
+    virtual bool initialize(const NamedList* config);
 
     /**
      * Set debug data of this layer
      * @param printFrames Enable/disable frame printing on output
      * @param extendedDebug Enable/disable hex data dump if print frames is enabled
      */
-    inline void setDebug(bool printFrames, bool extendedDebug) {
-	    m_printFrames = printFrames;
-	    m_extendedDebug = m_printFrames && extendedDebug;
-	}
+    inline void setDebug(bool printFrames, bool extendedDebug)
+	{ m_extendedDebug = ((m_printFrames = printFrames) && extendedDebug); }
 
 protected:
     /**
      * Detach links. Disposes memory
      */
-    virtual void destroyed() {
-	    ISDNLayer2::attach(0);
-	    SignallingReceiver::attach(0);
-	    SignallingComponent::destroyed();
-	}
+    virtual void destroyed()
+    {
+	ISDNLayer2::attach(0);
+	TelEngine::destruct(SignallingReceiver::attach(0));
+	SignallingComponent::destroyed();
+    }
 
     /**
      * Method called periodically to check timeouts
@@ -7104,6 +7184,7 @@ private:
  */
 class YSIG_API ISDNIUA : public ISDNLayer2, public SIGTRAN
 {
+    YCLASS(ISDNIUA,ISDNLayer2)
 protected:
     /**
      * Constructor
@@ -7113,13 +7194,13 @@ protected:
      */
     inline ISDNIUA(const NamedList& params, const char* name = 0)
 	: ISDNLayer2(params,name)
-	{}
+	{ }
 
     /**
      * Destructor
      */
     virtual ~ISDNIUA()
-	{}
+	{ }
 };
 
 /**
@@ -7374,10 +7455,11 @@ public:
      * @return Pointer to the requested value or 0
      */
     inline const char* getIEValue(ISDNQ931IE::Type type, const char* param,
-	const char* defVal = 0) {
-	    ISDNQ931IE* ie = getIE(type);
-	    return (ie ? ie->getValue(param?param:ie->c_str(),defVal) : defVal);
-	}
+	const char* defVal = 0)
+    {
+	ISDNQ931IE* ie = getIE(type);
+	return (ie ? ie->getValue(param?param:ie->c_str(),defVal) : defVal);
+    }
 
     /**
      * Append an IE with a given parameter
@@ -7387,12 +7469,13 @@ public:
      * @return Pointer to the requested value or 0
      */
     inline ISDNQ931IE* appendIEValue(ISDNQ931IE::Type type, const char* param,
-	const char* value) {
-	    ISDNQ931IE* ie = new ISDNQ931IE(type);
-	    ie->addParam(param?param:ie->c_str(),value);
-	    appendSafe(ie);
-	    return ie;
-	}
+	const char* value)
+    {
+	ISDNQ931IE* ie = new ISDNQ931IE(type);
+	ie->addParam(param?param:ie->c_str(),value);
+	appendSafe(ie);
+	return ie;
+    }
 
     /**
      * Append an information element to this message
@@ -7572,7 +7655,7 @@ public:
      * Constructor
      */
    inline ISDNQ931State() : m_state(Null)
-	{}
+	{ }
 
     /**
      * Get the state
@@ -7935,6 +8018,7 @@ public:
  */
 class YSIG_API ISDNQ931 : public SignallingCallControl, public SignallingDumpable, public ISDNLayer3
 {
+    YCLASS(ISDNQ931,ISDNLayer3)
     friend class ISDNQ931Call;
 public:
     /**
@@ -8000,7 +8084,6 @@ public:
 	QSIG         = NoActiveOnConnect|NoDisplayIE|NoDisplayCharset
     };
 
-
     /**
      * Constructor
      * Initialize this object and the component
@@ -8016,6 +8099,13 @@ public:
     virtual ~ISDNQ931();
 
     /**
+     * Configure and initialize Q.931 and its layer 2
+     * @param config Optional configuration parameters override
+     * @return True if Q.931 and the layer 2 were initialized properly
+     */
+    virtual bool initialize(const NamedList* config);
+
+    /**
      * Get the layer 2 attached to this object
      * @return Pointer to the layer 2 attached to this object or 0 if none
      */
@@ -8028,6 +8118,13 @@ public:
      */
     inline bool primaryRate() const
 	{ return m_primaryRate; }
+
+    /**
+     * Chech if this call controller is at the NET or CPE side of the link
+     * @return True if we are NET, false if we are CPE
+     */
+    inline bool network() const
+	{ return m_q921 ? m_q921->network() : m_networkHint; }
 
     /**
      * Check if this call controller supports circuit switch or packet mode transfer
@@ -8119,8 +8216,9 @@ public:
      * Attach an ISDN Q.921 transport
      * This method is thread safe
      * @param q921 Pointer to the Q.921 transport to attach
+     * @return Pointer to the detached Layer 2 or NULL
      */
-    virtual void attach(ISDNLayer2* q921);
+    virtual ISDNLayer2* attach(ISDNLayer2* q921);
 
     /**
      * Create an outgoing call. Send a NewCall event with the given msg parameter
@@ -8147,12 +8245,11 @@ public:
      * @return The result of the operation (true if succesfully sent)
      */
     inline bool sendStatus(ISDNQ931Call* call, const char* cause, u_int8_t tei = 0,
-	const char* display = 0, const char* diagnostic = 0) {
-	    if (!call)
-		return false;
-	    return sendStatus(cause,call->callRefLen(),call->callRef(),tei,
-		call->outgoing(),call->state(),display,diagnostic);
-	}
+	const char* display = 0, const char* diagnostic = 0)
+    {
+	return call && sendStatus(cause,call->callRefLen(),call->callRef(),tei,
+	    call->outgoing(),call->state(),display,diagnostic);
+    }
 
     /**
      * Send a RELEASE or RELEASE COMPLETE message for a given call
@@ -8166,12 +8263,11 @@ public:
      * @return The result of the operation (true if succesfully sent)
      */
     inline bool sendRelease(ISDNQ931Call* call, bool release, const char* cause, u_int8_t tei = 0,
-	const char* diag = 0, const char* display = 0, const char* signal = 0) {
-	    if (!call)
-		return false;
-	    return sendRelease(release,call->callRefLen(),call->callRef(),tei,
-		call->outgoing(),cause,diag,display,signal);
-	}
+	const char* diag = 0, const char* display = 0, const char* signal = 0)
+    {
+	return call && sendRelease(release,call->callRefLen(),call->callRef(),tei,
+	    call->outgoing(),cause,diag,display,signal);
+    }
 
     /**
      * Set terminate to all calls
@@ -8194,22 +8290,13 @@ public:
     void manageTimeout();
 
     /**
-     * Get a pointer to this call controller
-     * @param name Object name. Must be ISDNQ931
-     * @return The requested pointer
-     */
-    virtual void* getObject(const String& name) const;
-
-    /**
      * Set debug data of this call controller
      * @param printMsg Enable/disable message printing on output
      * @param extendedDebug Enable/disable hex data dump if print messages is enabled
      */
-    inline void setDebug(bool printMsg, bool extendedDebug) {
-	    m_printMsg = printMsg;
-	    m_extendedDebug = m_printMsg && extendedDebug;
-	    m_parserData.m_extendedDebug = m_extendedDebug;
-	}
+    inline void setDebug(bool printMsg, bool extendedDebug)
+	{ m_parserData.m_extendedDebug = m_extendedDebug =
+	    ((m_printMsg = printMsg) && extendedDebug); }
 
     /**
      * The list of behaviour flag names
@@ -8225,11 +8312,12 @@ protected:
     /**
      * Detach links. Disposes memory
      */
-    virtual void destroyed() {
-	    attach(0);
-	    SignallingCallControl::attach(0);
-	    ISDNLayer3::destroyed();
-	}
+    virtual void destroyed()
+    {
+	TelEngine::destruct(attach(0));
+	TelEngine::destruct(SignallingCallControl::attach(0));
+	ISDNLayer3::destroyed();
+    }
 
     /**
      * Method called periodically to check timeouts
@@ -8364,6 +8452,7 @@ private:
     ISDNLayer2* m_q921;                  // The attached layer 2
     bool m_q921Up;                       // Layer 2 state
     // Protocol data
+    bool m_networkHint;                  // NET / CPE hint, layer 2 is authoritative
     bool m_primaryRate;                  // Primary/base rate support
     bool m_transferModeCircuit;          // Circuit switch/packet mode transfer
     u_int32_t m_callRef;                 // Current available call reference for outgoing calls
@@ -8408,6 +8497,7 @@ private:
  */
 class YSIG_API ISDNQ931Monitor : public SignallingCallControl, public ISDNLayer3
 {
+    YCLASS(ISDNQ931Monitor,ISDNLayer3)
     friend class ISDNQ931CallMonitor;
 public:
     /**
@@ -8423,6 +8513,13 @@ public:
      * Destroy all calls
      */
     virtual ~ISDNQ931Monitor();
+
+    /**
+     * Configure and initialize the Q.931 monitor and its interfaces
+     * @param config Optional configuration parameters override
+     * @return True if Q.931 monitor and both interfaces were initialized properly
+     */
+    virtual bool initialize(const NamedList* config);
 
     /**
      * Notification from layer 2 of data link set/release command or response
@@ -8455,34 +8552,35 @@ public:
      * This method is thread safe
      * @param q921 Pointer to the monitor to attach
      * @param net True if this is the network side of the data link, false for user (CPE) side
+     * @return Pointer to detached monitor or NULL
      */
-    virtual void attach(ISDNQ921Passive* q921, bool net);
+    virtual ISDNQ921Passive* attach(ISDNQ921Passive* q921, bool net);
 
     /**
      * Attach a circuit group to this call controller
      * This method is thread safe
      * @param circuits Pointer to the SignallingCircuitGroup to attach
      * @param net True if this group belongs to the network side of the data link, false for user (CPE) side
+     * @return Pointer to the old group that was detached, NULL if none or no change
      */
-    virtual void attach(SignallingCircuitGroup* circuits, bool net);
+    virtual SignallingCircuitGroup* attach(SignallingCircuitGroup* circuits, bool net);
 
     /**
-     * Get a pointer to this call controller
-     * @param name Object name. Must be ISDNQ931Monitor
-     * @return The requested pointer
+     * Get a pointer to the NET or CPE circuit group
+     * @param net True to get the network side circuits, false for user (CPE) side
+     * @return Pointer to the circuit group requested, NULL if none attached
      */
-    virtual void* getObject(const String& name) const;
+    inline ISDNQ921Passive* circuits(bool net) const
+	{ return net ? m_q921Net : m_q921Cpe; }
 
     /**
      * Set debug data of this call controller
      * @param printMsg Enable/disable message printing on output
      * @param extendedDebug Enable/disable hex data dump if print messages is enabled
      */
-    inline void setDebug(bool printMsg, bool extendedDebug) {
-	    m_printMsg = printMsg;
-	    m_extendedDebug = m_printMsg && extendedDebug;
-	    m_parserData.m_extendedDebug = m_extendedDebug;
-	}
+    inline void setDebug(bool printMsg, bool extendedDebug)
+	{ m_parserData.m_extendedDebug = m_extendedDebug =
+	    ((m_printMsg = printMsg) && extendedDebug); }
 
     /**
      * Terminate all monitors
@@ -8504,14 +8602,15 @@ protected:
     /**
      * Detach links. Disposes memory
      */
-    virtual void destroyed() {
-	    SignallingCallControl::attach(0);
-	    attach((ISDNQ921Passive*)0,true);
-	    attach((ISDNQ921Passive*)0,false);
-	    attach((SignallingCircuitGroup*)0,true);
-	    attach((SignallingCircuitGroup*)0,false);
-	    ISDNLayer3::destroyed();
-	}
+    virtual void destroyed()
+    {
+	TelEngine::destruct(SignallingCallControl::attach(0));
+	TelEngine::destruct(attach((ISDNQ921Passive*)0,true));
+	TelEngine::destruct(attach((ISDNQ921Passive*)0,false));
+	attach((SignallingCircuitGroup*)0,true);
+	attach((SignallingCircuitGroup*)0,false);
+	ISDNLayer3::destroyed();
+    }
 
     /**
      * Method called periodically to check timeouts

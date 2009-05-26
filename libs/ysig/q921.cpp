@@ -46,9 +46,17 @@ static const char* s_linkSideCpe = "CPE";
 #define Q921_TEI_BROADCAST   127         // TEI value for broadcast and management procedures
 #define Q921_SAPI_MANAGEMENT  63         // SAPI value for management procedures
 
-inline const char* linkSide(bool net)
+static inline const char* linkSide(bool net)
 {
     return net ? s_linkSideNet : s_linkSideCpe;
+}
+
+static inline void fixParams(NamedList& params, const NamedList& config)
+{
+    params.copyParams(config);
+    int rx = params.getIntValue("rxunderrun");
+    if ((rx > 0) && (rx < 2500))
+	params.setParam("rxunderrun","2500");
 }
 
 // Drop frame reasons
@@ -101,7 +109,7 @@ public:
 
 // Constructor. Set data members. Print them
 ISDNQ921::ISDNQ921(const NamedList& params, const char* name, ISDNQ921Management* mgmt, u_int8_t tei)
-    : SignallingComponent(name),
+    : SignallingComponent(name,&params),
       ISDNLayer2(params,name,tei),
       SignallingReceiver(name),
       SignallingDumpable(SignallingDumper::Q921,network()),
@@ -131,8 +139,6 @@ ISDNQ921::ISDNQ921(const NamedList& params, const char* name, ISDNQ921Management
 {
     if (mgmt && network())
 	autoRestart(false);
-    if (!mgmt)
-	setName(params.getValue("debugname",name));
     m_retransTimer.interval(params,"t200",1000,1000,false);
     m_idleTimer.interval(params,"t203",2000,10000,false);
     // Adjust idle timeout to data link side
@@ -145,6 +151,12 @@ ISDNQ921::ISDNQ921(const NamedList& params, const char* name, ISDNQ921Management
     if (debugAt(DebugInfo)) {
 	String tmp;
 #ifdef DEBUG
+	if (debugAt(DebugAll)) {
+	    params.dump(tmp,"\r\n  ",'\'',true);
+	    Debug(this,DebugAll,"ISDNQ921::ISDNQ921(%p,'%s',%p,%u) [%p]%s",
+		&params,name,mgmt,tei,this,tmp.c_str());
+	    tmp.clear();
+	}
 	tmp << " SAPI/TEI=" << (unsigned int)localSapi() << "/" << (unsigned int)localTei();
 	tmp << " auto-restart=" << String::boolText(autoRestart());
 	tmp << " max-user-data=" << (unsigned int)maxUserData();
@@ -164,13 +176,56 @@ ISDNQ921::~ISDNQ921()
 {
     Lock lock(l2Mutex());
     ISDNLayer2::attach((ISDNLayer3*)0);
-    SignallingReceiver::attach(0);
+    TelEngine::destruct(SignallingReceiver::attach(0));
     cleanup();
     DDebug(this,DebugAll,
 	"ISDN Data Link destroyed. Frames: sent=%u (failed=%u) recv=%u rejected=%u dropped=%u. HW errors=%u [%p]",
 	(unsigned int)m_txFrames,(unsigned int)m_txFailFrames,
 	(unsigned int)m_rxFrames,(unsigned int)m_rxRejectedFrames,
 	(unsigned int)m_rxDroppedFrames,(unsigned int)m_hwErrors,this);
+}
+
+// Initialize layer, attach interface if not managed
+bool ISDNQ921::initialize(const NamedList* config)
+{
+#ifdef DEBUG
+    String tmp;
+    if (config && debugAt(DebugAll))
+	config->dump(tmp,"\r\n  ",'\'',true);
+    Debug(this,DebugInfo,"ISDNQ921::initialize(%p) [%p]%s",config,this,tmp.c_str());
+#endif
+    if (config) {
+	debugLevel(config->getIntValue("debuglevel_q921",
+	    config->getIntValue("debuglevel",-1)));
+	setDebug(config->getBoolValue("print-frames",false),
+	    config->getBoolValue("extended-debug",false));
+    }
+    if (config && !m_management && !iface()) {
+	NamedString* name = config->getParam("sig");
+	if (!name)
+	    name = config->getParam("basename");
+	if (name) {
+	    NamedPointer* ptr = YOBJECT(NamedPointer,name);
+	    NamedList* ifConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
+	    NamedList params(*name + "/D");
+	    params.addParam("basename",*name);
+	    if (ifConfig)
+		fixParams(params,*ifConfig);
+	    else
+		ifConfig = &params;
+	    SignallingInterface* ifc = YSIGCREATE(SignallingInterface,&params);
+	    if (!ifc)
+		return false;
+	    SignallingReceiver::attach(ifc);
+	    if (ifc->initialize(ifConfig)) {
+		SignallingReceiver::control(SignallingInterface::Enable);
+		multipleFrame(0,true,false);
+	    }
+	    else
+		TelEngine::destruct(SignallingReceiver::attach(0));
+	}
+    }
+    return m_management || iface();
 }
 
 // Set or release 'multiple frame acknowledged' mode
@@ -255,8 +310,6 @@ void ISDNQ921::cleanup()
     reset();
     changeState(Released,"cleanup");
 }
-
-YCLASSIMP2(ISDNQ921,ISDNLayer2,SignallingReceiver)
 
 // Method called periodically to check timeouts
 // Re-sync with remote peer if necessary
@@ -766,7 +819,7 @@ bool ISDNQ921::acceptFrame(ISDNFrame* frame, bool& reject)
 	    !frame->command()) ||
 	    ((frame->type() == ISDNFrame::UA || frame->type() == ISDNFrame::DM) &&
 	    frame->command())) {
-	    Debug(this,DebugGoOn,
+	    Debug(this,DebugMild,
 		"Received '%s': The remote peer has the same data link side type",
 		frame->name());
 	    frame->m_error = ISDNFrame::ErrInvalidCR;
@@ -970,13 +1023,21 @@ void ISDNQ921::timer(bool start, bool t203, u_int64_t time)
  */
 // Constructor
 ISDNQ921Management::ISDNQ921Management(const NamedList& params, const char* name, bool net)
-    : ISDNLayer2(params,name),
+    : SignallingComponent(name,&params),
+      ISDNLayer2(params,name),
       SignallingReceiver(name),
       SignallingDumpable(SignallingDumper::Q921,network()),
       m_teiManTimer(0), m_teiTimer(0)
 {
-    String baseName = params.getValue("debugname",name);
-    setName(baseName);
+#ifdef DEBUG
+    if (debugAt(DebugAll)) {
+	String tmp;
+	params.dump(tmp,"\r\n  ",'\'',true);
+	Debug(this,DebugAll,"ISDNQ921Management::ISDNQ921Management(%p,'%s',%s) [%p]%s",
+	    &params,name,String::boolText(net),this,tmp.c_str());
+    }
+#endif
+    String baseName = toString();
     m_network = net;
     m_teiManTimer.interval(params,"t202",2500,2600,false);
     m_teiTimer.interval(params,"t201",1000,5000,false);
@@ -990,7 +1051,9 @@ ISDNQ921Management::ISDNQ921Management(const NamedList& params, const char* name
     for (int i = 0; i < 127; i++) {
 	if (network() || (i == 0)) {
 	    String qName = baseName;
-	    if (set0 || (i != 0))
+	    if (!network())
+		qName << "-CPE";
+	    else if (set0 || (i != 0))
 		qName << "-" << i;
 	    m_layer2[i] = new ISDNQ921(params,qName,this,i);
 	    m_layer2[i]->ISDNLayer2::attach(this);
@@ -1008,12 +1071,47 @@ ISDNQ921Management::~ISDNQ921Management()
 {
     Lock lock(l2Mutex());
     ISDNLayer2::attach((ISDNLayer3*)0);
-    SignallingReceiver::attach(0);
+    TelEngine::destruct(SignallingReceiver::attach(0));
     for (int i = 0; i < 127; i++)
 	TelEngine::destruct(m_layer2[i]);
 }
 
-YCLASSIMP3(ISDNQ921Management,ISDNLayer2,ISDNLayer3,SignallingReceiver)
+bool ISDNQ921Management::initialize(const NamedList* config)
+{
+#ifdef DEBUG
+    String tmp;
+    if (config && debugAt(DebugAll))
+	config->dump(tmp,"\r\n  ",'\'',true);
+    Debug(this,DebugInfo,"ISDNQ921Management::initialize(%p) [%p]%s",config,this,tmp.c_str());
+#endif
+    if (config)
+	debugLevel(config->getIntValue("debuglevel_q921mgmt",
+	    config->getIntValue("debuglevel",-1)));
+    if (config && !iface()) {
+	NamedString* name = config->getParam("sig");
+	if (!name)
+	    name = config->getParam("basename");
+	if (name) {
+	    NamedPointer* ptr = YOBJECT(NamedPointer,name);
+	    NamedList* ifConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
+	    NamedList params(*name + "/D");
+	    params.addParam("basename",*name);
+	    if (ifConfig)
+		fixParams(params,*ifConfig);
+	    else
+		ifConfig = &params;
+	    SignallingInterface* ifc = YSIGCREATE(SignallingInterface,&params);
+	    if (!ifc)
+		return false;
+	    SignallingReceiver::attach(ifc);
+	    if (ifc->initialize(ifConfig))
+		SignallingReceiver::control(SignallingInterface::Enable);
+	    else
+		TelEngine::destruct(SignallingReceiver::attach(0));
+	}
+    }
+    return 0 != iface();
+}
 
 void ISDNQ921Management::engine(SignallingEngine* eng)
 {
@@ -1387,7 +1485,8 @@ void ISDNQ921Management::processTeiVerify(u_int8_t ai, bool pf)
  */
 // Constructor. Set data members. Print them
 ISDNQ921Passive::ISDNQ921Passive(const NamedList& params, const char* name)
-    : ISDNLayer2(params,name),
+    : SignallingComponent(name,&params),
+      ISDNLayer2(params,name),
       SignallingReceiver(name),
       SignallingDumpable(SignallingDumper::Q921,network()),
       m_checkLinkSide(false),
@@ -1401,7 +1500,14 @@ ISDNQ921Passive::ISDNQ921Passive(const NamedList& params, const char* name)
       m_extendedDebug(false),
       m_errorReceive(false)
 {
-    setName(params.getValue("debugname",name));
+#ifdef DEBUG
+    if (debugAt(DebugAll)) {
+	String tmp;
+	params.dump(tmp,"\r\n  ",'\'',true);
+	Debug(this,DebugAll,"ISDNQ921Passive::ISDNQ921Passive(%p,'%s') [%p]%s",
+	    &params,name,this,tmp.c_str());
+    }
+#endif
     m_idleTimer.interval(params,"idletimeout",4000,30000,false);
     m_checkLinkSide = detectType();
     setDebug(params.getBoolValue("print-frames",false),
@@ -1421,12 +1527,53 @@ ISDNQ921Passive::~ISDNQ921Passive()
 {
     Lock lock(l2Mutex());
     ISDNLayer2::attach(0);
-    SignallingReceiver::attach(0);
+    TelEngine::destruct(SignallingReceiver::attach(0));
     cleanup();
     DDebug(this,DebugAll,
 	"ISDN Passive Data Link destroyed. Frames: recv=%u rejected=%u dropped=%u. HW errors=%u [%p]",
 	(unsigned int)m_rxFrames,(unsigned int)m_rxRejectedFrames,
 	(unsigned int)m_rxDroppedFrames,(unsigned int)m_hwErrors,this);
+}
+
+bool ISDNQ921Passive::initialize(const NamedList* config)
+{
+#ifdef DEBUG
+    String tmp;
+    if (config && debugAt(DebugAll))
+	config->dump(tmp,"\r\n  ",'\'',true);
+    Debug(this,DebugInfo,"ISDNQ921Passive::initialize(%p) [%p]%s",config,this,tmp.c_str());
+#endif
+    if (config) {
+	debugLevel(config->getIntValue("debuglevel_q921",
+	    config->getIntValue("debuglevel",-1)));
+	setDebug(config->getBoolValue("print-frames",false),
+	    config->getBoolValue("extended-debug",false));
+    }
+    if (config && !iface()) {
+	NamedString* name = config->getParam("sig");
+	if (!name)
+	    name = config->getParam("basename");
+	if (name) {
+	    NamedPointer* ptr = YOBJECT(NamedPointer,name);
+	    NamedList* ifConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
+	    NamedList params(*name + "/D");
+	    params.addParam("basename",*name);
+	    params.addParam("readonly",String::boolText(true));
+	    if (ifConfig)
+		fixParams(params,*ifConfig);
+	    else
+		ifConfig = &params;
+	    SignallingInterface* ifc = YSIGCREATE(SignallingInterface,&params);
+	    if (!ifc)
+		return false;
+	    SignallingReceiver::attach(ifc);
+	    if (ifc->initialize(ifConfig))
+		SignallingReceiver::control(SignallingInterface::Enable);
+	    else
+		TelEngine::destruct(SignallingReceiver::attach(0));
+	}
+    }
+    return 0 != iface();
 }
 
 // Reset data
@@ -1435,8 +1582,6 @@ void ISDNQ921Passive::cleanup()
     Lock lock(l2Mutex());
     m_idleTimer.start();
 }
-
-YCLASSIMP2(ISDNQ921Passive,ISDNLayer2,SignallingReceiver)
 
 // Called periodically by the engine to check timeouts
 // Check idle timer. Notify upper layer on timeout
@@ -1546,7 +1691,7 @@ bool ISDNQ921Passive::acceptFrame(ISDNFrame* frame, bool& cmd, bool& value)
 	    changeType();
 	}
 	else {
-	    Debug(this,DebugGoOn,
+	    Debug(this,DebugMild,
 		"Received '%s': The remote peer has the same data link side type",
 		frame->name());
 	    return dropFrame(frame,ISDNFrame::typeName(ISDNFrame::ErrInvalidCR));
@@ -1595,10 +1740,10 @@ TokenDict ISDNLayer2::m_states[] = {
 	};
 
 ISDNLayer2::ISDNLayer2(const NamedList& params, const char* name, u_int8_t tei)
-    : SignallingComponent(name),
+    : SignallingComponent(name,&params),
       m_layer3(0),
-      m_layerMutex(true),
-      m_layer3Mutex(true),
+      m_layerMutex(true,"ISDNLayer2::layer"),
+      m_layer3Mutex(true,"ISDNLayer2::layer3"),
       m_state(Released),
       m_network(false),
       m_detectType(false),
@@ -1643,16 +1788,14 @@ void ISDNLayer2::attach(ISDNLayer3* layer3)
     m_layer3 = layer3;
     lock.drop();
     if (tmp) {
-	const char* name = 0;
-	if (engine() && engine()->find(tmp)) {
-	    name = tmp->toString().safe();
+	if (engine() && engine()->find(tmp))
 	    tmp->attach(0);
-	}
-	DDebug(this,DebugAll,"Detached L3 (%p,'%s') [%p]",tmp,name,this);
+	Debug(this,DebugAll,"Detached L3 (%p,'%s') [%p]",
+	    tmp,tmp->toString().safe(),this);
     }
     if (!layer3)
 	return;
-    DDebug(this,DebugAll,"Attached L3 (%p,'%s') [%p]",layer3,layer3->toString().safe(),this);
+    Debug(this,DebugAll,"Attached L3 (%p,'%s') [%p]",layer3,layer3->toString().safe(),this);
     insert(layer3);
     layer3->attach(this);
 }

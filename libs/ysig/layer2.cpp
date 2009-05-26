@@ -188,18 +188,25 @@ ObjList* SS7Layer2::recoverMSU()
     return 0;
 }
 
-YCLASSIMP2(SS7MTP2,SS7Layer2,SignallingReceiver)
 
 SS7MTP2::SS7MTP2(const NamedList& params, unsigned int status)
-    : SignallingDumpable(SignallingDumper::Mtp2),
-      Mutex(true),
+    : SignallingComponent(params.safe("SS7MTP2"),&params),
+      SignallingDumpable(SignallingDumper::Mtp2),
+      Mutex(true,"SS7MTP2"),
       m_status(status), m_lStatus(OutOfService), m_rStatus(OutOfAlignment),
       m_interval(0), m_resend(0), m_abort(0), m_fillTime(0), m_congestion(false),
       m_bsn(127), m_fsn(127), m_bib(true), m_fib(true),
       m_lastFsn(128), m_lastBsn(127), m_lastBib(true), m_errors(0),
       m_resendMs(250), m_abortMs(5000), m_fillIntervalMs(20), m_fillLink(true)
 {
-    setName(params.getValue("debugname","mtp2"));
+#ifdef DEBUG
+    if (debugAt(DebugAll)) {
+	String tmp;
+	params.dump(tmp,"\r\n  ",'\'',true);
+	Debug(this,DebugAll,"SS7MTP2::SS7MTP2(%p,%s) [%p]%s",
+	    &params,statusName(true),this,tmp.c_str());
+    }
+#endif
     m_fillLink = params.getBoolValue("filllink",m_fillLink);
     setDumper(params.getValue("layer2dump"));
 }
@@ -242,6 +249,46 @@ bool SS7MTP2::aligned() const
 bool SS7MTP2::operational() const
 {
     return aligned() && !m_interval;
+}
+
+bool SS7MTP2::initialize(const NamedList* config)
+{
+#ifdef DEBUG
+    String tmp;
+    if (config && debugAt(DebugAll))
+	config->dump(tmp,"\r\n  ",'\'',true);
+    Debug(this,DebugInfo,"SS7MTP2::initialize(%p) [%p]%s",config,this,tmp.c_str());
+#endif
+    if (config)
+	debugLevel(config->getIntValue("debuglevel_mtp2",
+	    config->getIntValue("debuglevel",-1)));
+    if (config && !iface()) {
+	NamedString* name = config->getParam("sig");
+	if (!name)
+	    name = config->getParam("basename");
+	if (name) {
+	    NamedPointer* ptr = YOBJECT(NamedPointer,name);
+	    NamedList* ifConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
+	    NamedList params(name->c_str());
+	    params.addParam("basename",*name);
+	    params.addParam("protocol","ss7");
+	    if (ifConfig) {
+		params.copyParams(*ifConfig);
+		int rx = params.getIntValue("rxunderrun");
+		if ((rx > 0) && (rx < 25))
+		    params.setParam("rxunderrun","25");
+	    }
+	    else
+		ifConfig = &params;
+	    SignallingInterface* ifc = YSIGCREATE(SignallingInterface,&params);
+	    if (!ifc)
+		return false;
+	    SignallingReceiver::attach(ifc);
+	    if (!ifc->initialize(ifConfig))
+		TelEngine::destruct(SignallingReceiver::attach(0));
+	}
+    }
+    return iface() && control(Resume,const_cast<NamedList*>(config));
 }
 
 bool SS7MTP2::control(Operation oper, NamedList* params)

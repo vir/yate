@@ -1,0 +1,61 @@
+;[session]
+; Each such section configures parameters for talking to a Cisco Session Manager
+; The name of the section is referenced by session users
+; You can have a single session to each Cisco Session Manager
+; Most parameters are related to the RUDP protocol
+
+; rudp_sequence: int: Initial RUDP sequence number, 0-255
+;rudp_sequence=0
+
+; rudp_maxretrans: int: Maximum retransmissions until RUDP is disconnected
+;rudp_maxretrans=2
+
+; rudp_maxcumulative: int: Maximum number of segments in a cumulative ACK
+;rudp_maxcumulative=3
+
+; rudp_retransmission: int: RUDP retransmission interval in ms, 400+
+;rudp_retransmission=600
+
+; rudp_cumulative: int: RUDP cumulative ACK send timer in ms, 100+
+;rudp_cumulative=300
+
+; rudp_nulltimer: int: RUDP NULL transmission timer in ms, 1500+
+;rudp_nulltimer=2000
+
+; rudp_syntimer: int: RUDP SYN transmission timer in ms, 900+
+;rudp_syntimer=1000
+
+; rudp_checksum: bool: Attach RUDP checksums in sent packets
+;rudp_checksum=no
+
+; rudp_sendsyn: bool: Actively send RUDP SYN when connection is down
+;rudp_sendsyn=no
+
+; remote_host: ipaddr: IPv6 address of remote Cisco SM, mandatory
+;remote_host=
+
+; remote_port: int: Port for RUDP on remote Cisco SM
+;remote_port=8060
+
+; local_host: ipaddr: Address of local interface, zero address for kernel default
+;local_host=0.0.0.0
+
+; local_port: int: Local UDP port number for RUDP session
+;local_port=same as remote_port
+
+
+;[slt_name]
+; SLT sections create on demand SS7 Layer 2 transports (remote MTP2 links)
+; The name of the section is referenced as link= from a MTP3 configuration
+
+; session: string: Name of section describing the Cisco Session Manager to use
+;session=session
+
+; channel: int: Number of the channel inside the session, must match remote config
+;channel=0
+
+; configuration: int: Configuration request retransmission interval in ms, 250+
+;configuration=5000
+
+; printslt: bool: Display SLT communication for debugging purposes
+;printslt=no

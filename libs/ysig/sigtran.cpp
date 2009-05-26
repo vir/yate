@@ -52,7 +52,7 @@ const TokenDict* SIGTRAN::classNames()
 }
 
 SIGTRAN::SIGTRAN()
-    : m_trans(0)
+    : m_trans(0), m_transMutex(false,"SIGTRAN::transport")
 {
 }
 

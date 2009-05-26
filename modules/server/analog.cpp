@@ -31,9 +31,6 @@ namespace { // anonymous
 class ModuleLine;                        // Module's interface to an analog line or recorder
                                          // Manages the call setup detector and sends call setup info
 class ModuleGroup;                       // Module's interface to a group of lines
-class AnalogParams;                      // Named list containing creator data (pointers)
-                                         // Used to pass parameters to objects that need to obtain some
-                                         // pointers from the creator
 class AnalogChannel;                     // Channel associated with an analog line
 class AnalogCallRec;                     // Recorder call endpoint associated with an analog line monitor
 class AnalogDriver;                      // Analog driver
@@ -184,23 +181,6 @@ private:
     u_int64_t m_callEndedPlayTime;       // Time to play call ended prompt
     // Recorder group data
     ObjList m_endpoints;                 // Record data endpoints
-};
-
-// Named list containing creator data (pointers)
-// Used to pass parameters to objects that need to obtain some pointers
-class AnalogParams : public NamedList
-{
-public:
-    inline AnalogParams(const char* name, SignallingCircuitGroup* group)
-	: NamedList(name), m_cicGroup(group)
-	{}
-    virtual void* getObject(const String& name) const {
-	    if (name == "SignallingCircuitGroup")
-		return m_cicGroup;
-	    return NamedList::getObject(name);
-	}
-private:
-    SignallingCircuitGroup* m_cicGroup;
 };
 
 // Channel associated with an analog line
@@ -991,7 +971,7 @@ bool ModuleGroup::initialize(const NamedList& params, const NamedList& defaults,
     if (!m_init)
 	debugChain(&plugin);
 
-    int level = params.getIntValue("debuglevel",m_init ? debugLevel() : plugin.debugLevel());
+    int level = params.getIntValue("debuglevel",m_init ? DebugEnabler::debugLevel() : plugin.debugLevel());
     if (level >= 0) {
 	debugEnabled(0 != level);
 	debugLevel(level);
@@ -1306,26 +1286,17 @@ void ModuleGroup::buildGroup(ModuleGroup* group, ObjList& spanList, String& erro
 {
     if (!group)
 	return;
-    int start = 0;
+    unsigned int start = 0;
     for (ObjList* o = spanList.skipNull(); o; o = o->skipNext()) {
 	String* s = static_cast<String*>(o->get());
-	if (!s)
+	if (s->null())
 	    continue;
-	AnalogParams spanParams("voice",group);
-	String tmp;
-	tmp << group->debugName() << "/" << *s;
-	spanParams.addParam("debugname",tmp);
-	spanParams.addParam("voice",*s);
-	if (start)
-	    spanParams.addParam("start",String(start));
-	SignallingCircuitSpan* span = static_cast<SignallingCircuitSpan*>(
-	    SignallingFactory::build(spanParams,&spanParams));
+	SignallingCircuitSpan* span = buildSpan(*s,start);
 	if (!span) {
 	    error << "Failed to build span '" << *s << "'";
 	    break;
 	}
-	int chans = spanParams.getIntValue("chans");
-	start += chans;
+	start += span->increment();
     }
 }
 

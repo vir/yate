@@ -224,7 +224,7 @@ public:
     // Process incoming data
     virtual bool process();
     // Called by the factory to create TDM interfaces or spans
-    static void* create(const String& type, const NamedList& name);
+    static SignallingComponent* create(const String& type, const NamedList& name);
 protected:
     // Check if received any data in the last interval. Notify receiver
     virtual void timerTick(const Time& when);
@@ -1106,17 +1106,20 @@ bool TdmSpan::init(TdmDevice::Type type,
 	    if (!voice)
 		voice = "1-15.17-31";
 	    chans = 31;
+	    m_increment = 32;
 	    break;
 	case TdmDevice::T1:
 	    if (!voice)
 		voice = "1-23";
 	    chans = 24;
+	    m_increment = 24;
 	    break;
 	case TdmDevice::NET:
 	case TdmDevice::CPE:
 	    if (!voice)
 		voice = "1.2";
 	    chans = 3;
+	    m_increment = 3;
 	    break;
 	case TdmDevice::FXO:
 	case TdmDevice::FXS:
@@ -1142,12 +1145,11 @@ bool TdmSpan::init(TdmDevice::Type type,
     }
 
     if (!digital)
-	chans = count;
-    ((NamedList*)&params)->setParam("chans",String(chans));
+	m_increment = chans = count;
     unsigned int start = params.getIntValue("start",0);
     // Create and insert circuits
     unsigned int added = 0;
-    DDebug(m_group,DebugGoOn,
+    DDebug(m_group,DebugNote,
 	"TdmSpan('%s'). Creating circuits starting with %u [%p]",
 	id().safe(),start,this);
     for (unsigned int i = 0; i < count; i++) {
@@ -1166,7 +1168,7 @@ bool TdmSpan::init(TdmDevice::Type type,
 	    continue;
 	}
 	TelEngine::destruct(cic);
-	Debug(m_group,DebugGoOn,
+	Debug(m_group,DebugWarn,
 	    "TdmSpan('%s'). Duplicate circuit code=%u (channel=%u) [%p]",
 	    id().safe(),code,channel,this);
     }
@@ -1638,25 +1640,31 @@ bool TdmAnalogCircuit::process()
 }
 
 // Interface
-void* TdmInterface::create(const String& type, const NamedList& name)
+SignallingComponent* TdmInterface::create(const String& type, const NamedList& name)
 {
     bool circuit = true;
-    if (type == "sig")
+    if (type == "SignallingInterface")
 	circuit = false;
-    else  if (type == "voice")
+    else if (type == "SignallingCircuitSpan")
 	;
     else
 	return 0;
 
     Configuration cfg(Engine::configFile("tdmcard"));
-    cfg.load();
-
-    const char* sectName = name.getValue(type);
+    const char* sectName = name.getValue((circuit ? "voice" : "sig"),name.getValue("basename",name));
     NamedList* config = cfg.getSection(sectName);
     if (!config) {
-	DDebug(&plugin,DebugWarn,"No section '%s' in configuration",c_safe(sectName));
+	DDebug(&plugin,DebugAll,"No section '%s' in configuration",c_safe(sectName));
 	return 0;
     }
+#ifdef DEBUG
+    if (plugin.debugAt(DebugAll)) {
+	String tmp;
+	name.dump(tmp,"\r\n  ",'\'',true);
+	Debug(&plugin,DebugAll,"TdmInterface::create %s%s",
+	    (circuit ? "span" : "interface"),tmp.c_str());
+    }
+#endif
     NamedList dummy("general");
     NamedList* general = cfg.getSection("general");
     if (!general)
@@ -1717,18 +1725,15 @@ void* TdmInterface::create(const String& type, const NamedList& name)
 
 
 TdmInterface::TdmInterface(const NamedList& params)
-    : m_device(TdmDevice::DChan,this,0,0),
-    m_priority(Thread::Normal),
-    m_errorMask(255),
-    m_numbufs(16),
-    m_bufsize(1024),
-    m_buffer(0),
-    m_readOnly(false),
-    m_sendReadOnly(false),
-    m_notify(0),
-    m_timerRxUnder(0)
+    : SignallingComponent(params),
+      m_device(TdmDevice::DChan,this,0,0),
+      m_priority(Thread::Normal),
+      m_errorMask(255),
+      m_numbufs(16), m_bufsize(1024), m_buffer(0),
+      m_readOnly(false), m_sendReadOnly(false),
+      m_notify(0),
+      m_timerRxUnder(0)
 {
-    setName(params.getValue("debugname","TdmInterface"));
     m_buffer = new unsigned char[m_bufsize];
 }
 
@@ -1770,7 +1775,7 @@ bool TdmInterface::init(TdmDevice::Type type, unsigned int code, unsigned int ch
 {
     m_readOnly = getBoolValue("readonly",config,defaults,params);
     m_priority = Thread::priority(config.getValue("priority",defaults.getValue("priority")));
-    int rx = params.getIntValue("rxunderruninterval");
+    int rx = params.getIntValue("rxunderrun");
     if (rx > 0)
 	m_timerRxUnder.interval(rx);
     int i = params.getIntValue("errormask",config.getIntValue("errormask",255));

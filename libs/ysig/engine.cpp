@@ -52,12 +52,15 @@ private:
 using namespace TelEngine;
 
 static ObjList s_factories;
-static Mutex s_mutex(true);
+static Mutex s_mutex(true,"SignallingFactory");
 
-SignallingFactory::SignallingFactory()
+SignallingFactory::SignallingFactory(bool fallback)
 {
     s_mutex.lock();
-    s_factories.append(this)->setDelete(false);
+    if (!s_factories.find(this)) {
+	ObjList* l = fallback ? s_factories.append(this) : s_factories.insert(this);
+	l->setDelete(false);
+    }
     s_mutex.unlock();
 }
 
@@ -68,7 +71,7 @@ SignallingFactory::~SignallingFactory()
     s_mutex.unlock();
 }
 
-void* SignallingFactory::build(const String& type, const NamedList* name)
+SignallingComponent* SignallingFactory::build(const String& type, const NamedList* name)
 {
     if (type.null())
 	return 0;
@@ -80,29 +83,58 @@ void* SignallingFactory::build(const String& type, const NamedList* name)
 	SignallingFactory* f = static_cast<SignallingFactory*>(l->get());
 	if (!f)
 	    continue;
-	XDebug(DebugAll,"Attempting to create a %s %s using factory %p",
+	DDebug(DebugAll,"Attempting to create a '%s' %s using factory %p",
 	    name->c_str(),type.c_str(),f);
-	void* obj = f->create(type,*name);
+	SignallingComponent* obj = f->create(type,*name);
 	if (obj)
 	    return obj;
     }
     lock.drop();
+    DDebug(DebugInfo,"Factory creating default '%s' named '%s'",type.c_str(),name->c_str());
     // now build some objects we know about
-    if (type == "SignallingEngine")
-	return new SignallingEngine;
-    else if (type == "SS7MTP2")
+    if (type == "SS7MTP2")
 	return new SS7MTP2(*name);
     else if (type == "SS7MTP3")
 	return new SS7MTP3(*name);
     else if (type == "SS7Router")
 	return new SS7Router(*name);
-    else return 0;
+    else if (type == "SS7Management")
+	return new SS7Management(*name);
+    else if (type == "SS7Maintenance")
+	return new SS7Maintenance(*name);
+    else if (type == "ISDNQ921")
+	return new ISDNQ921(*name,*name);
+    else if (type == "ISDNQ931")
+	return new ISDNQ931(*name,*name);
+    else if (type == "ISDNQ931Monitor")
+	return new ISDNQ931Monitor(*name,*name);
+    Debug(DebugMild,"Factory could not create '%s' named '%s'",type.c_str(),name->c_str());
+    return 0;
+}
+
+void* SignallingFactory::buildInternal(const String& type, const NamedList* name)
+{
+    SignallingComponent* c = build(type,name);
+    if (!c)
+	return 0;
+    void* raw = c->getObject(type);
+    if (!raw)
+	Debug(DebugFail,"Built component %p could not be casted back to type '%s'",c,type.c_str());
+#ifdef DEBUG
+    else
+	Debug(DebugAll,"Built component %p type '%s' interface at %p",c,type.c_str(),raw);
+#endif
+    return raw;
 }
 
 
-SignallingComponent::SignallingComponent(const char* name)
+SignallingComponent::SignallingComponent(const char* name, const NamedList* params)
     : m_engine(0)
 {
+    if (params) {
+	name = params->getValue("debugname",name);
+	debugLevel(params->getIntValue("debuglevel",-1));
+    }
     DDebug(engine(),DebugAll,"Component '%s' created [%p]",name,this);
     setName(name);
 }
@@ -127,6 +159,11 @@ void SignallingComponent::destroyed()
 const String& SignallingComponent::toString() const
 {
     return m_name;
+}
+
+bool SignallingComponent::initialize(const NamedList* config)
+{
+    return true;
 }
 
 bool SignallingComponent::control(NamedList& params)
@@ -180,7 +217,7 @@ unsigned long SignallingComponent::tickSleep(unsigned long usec) const
 
 
 SignallingEngine::SignallingEngine(const char* name)
-    : Mutex(true),
+    : Mutex(true,"SignallingEngine"),
       m_thread(0), m_listChanged(true),
       m_usecSleep(DEF_TICK_SLEEP), m_tickSleep(0)
 {
@@ -195,33 +232,75 @@ SignallingEngine::~SignallingEngine()
 	stop();
     }
     lock();
+    unsigned int n = m_components.count();
+    if (n)
+	Debug(this,DebugNote,"Cleaning up %u components [%p]",n,this);
     m_components.clear();
     unlock();
 }
 
 SignallingComponent* SignallingEngine::find(const String& name)
 {
-    Lock lock(this);
+    Lock mylock(this);
     return static_cast<SignallingComponent*>(m_components[name]);
+}
+
+SignallingComponent* SignallingEngine::find(const String& name, const String& type, const SignallingComponent* start)
+{
+    Lock mylock(this);
+    ObjList* l = m_components.skipNull();
+    if (start) {
+	l = m_components.find(start);
+	if (!l)
+	    return 0;
+	l = l->skipNext();
+    }
+    for (; l; l = l->skipNext()) {
+	SignallingComponent* c = static_cast<SignallingComponent*>(l->get());
+	if ((name.null() || (c->toString() == name)) &&
+	    (type.null() || c->getObject(type)))
+	    return c;
+    }
+    return 0;
 }
 
 bool SignallingEngine::find(const SignallingComponent* component)
 {
     if (!component)
 	return false;
-    Lock lock(this);
+    Lock mylock(this);
     return m_components.find(component) != 0;
+}
+
+SignallingComponent* SignallingEngine::build(const String& type, const NamedList& params, bool init)
+{
+    Lock mylock(this);
+    SignallingComponent* c = find(params,type);
+    if (c && c->alive()) {
+	DDebug(this,DebugAll,"Engine returning existing component '%s' @%p [%p]",
+	    c->toString().c_str(),c,this);
+	return c;
+    }
+    c = SignallingFactory::build(type,&params);
+    XDebug(this,DebugAll,"Created component @%p [%p]",c,this);
+    insert(c);
+    if (init && c)
+	c->initialize(&params);
+    return c;
 }
 
 void SignallingEngine::insert(SignallingComponent* component)
 {
     if (!component)
 	return;
-    Lock lock(this);
+    Lock mylock(this);
     if (component->engine() == this)
 	return;
-    DDebug(this,DebugAll,"Engine inserting component '%s' @%p [%p]",
-	component->toString().c_str(),component,this);
+#ifdef DEBUG
+    const char* dupl = m_components.find(component->toString()) ? " (duplicate)" : "";
+    Debug(this,DebugAll,"Engine inserting component '%s'%s @%p [%p]",
+	component->toString().c_str(),dupl,component,this);
+#endif
     component->detach();
     component->m_engine = this;
     component->debugChain(this);
@@ -232,21 +311,21 @@ void SignallingEngine::remove(SignallingComponent* component)
 {
     if (!component)
 	return;
-    Lock lock(this);
+    Lock mylock(this);
     if (component->engine() != this)
 	return;
     DDebug(this,DebugAll,"Engine removing component @%p '%s' [%p]",
 	component,component->toString().c_str(),this);
+    m_components.remove(component,false);
     component->m_engine = 0;
     component->detach();
-    m_components.remove(component,false);
 }
 
 bool SignallingEngine::remove(const String& name)
 {
     if (name.null())
 	return false;
-    Lock lock(this);
+    Lock mylock(this);
     SignallingComponent* component = find(name);
     if (!component)
 	return false;
@@ -261,7 +340,7 @@ bool SignallingEngine::remove(const String& name)
 bool SignallingEngine::control(NamedList& params)
 {
     bool ok = false;
-    Lock lock(this);
+    Lock mylock(this);
     for (ObjList* l = m_components.skipNull(); l; l = l->skipNext())
 	ok = static_cast<SignallingComponent*>(l->get())->control(params) || ok;
     return ok;
@@ -269,7 +348,7 @@ bool SignallingEngine::control(NamedList& params)
 
 bool SignallingEngine::start(const char* name, Thread::Priority prio, unsigned long usec)
 {
-    Lock lock(this);
+    Lock mylock(this);
     if (m_thread)
 	return m_thread->running();
     // defaults and sanity checks

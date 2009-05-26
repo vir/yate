@@ -1,72 +1,87 @@
 ; This file keep signalling channel configuration
-; Each section (except for 'general' section) configure a link
-; For call controllers, the name of the section will be used to route outgoing calls
+; Each section (except for 'general' section) configure a call controller (trunk)
+;  or a signalling component
+; For call controllers (trunks), the name of the section will be used to route
+;  outgoing calls
 
 
 [general]
-; This section keep general settings for the signalling module:
-; - Default values for missing or invalid parameters in link sections
+; This section keep general or default settings for the signalling module:
 
-; debuglevel: string: Comma separated list of debug levels for module and SS7 components
-; Set to 0 to disable any debug message or -1 (or void) to left it unchanged
-; Keep in mind that all objects are chained in module, so any subsequent changes in
-;  module's debug level is propagated to the SS7 objects
-; The order is: Module, Signalling engine, SS7 router, SS7 management, SS7 maintenance
+; debuglevel: int: Debug level for the plugin
 ; This parameter is applied on reload
 ;debuglevel=
 
+; debuglevel_engine: int: Debug level for the signalling engine
+; This parameter is applied on reload
+;debuglevel_engine=
 
-;Example of an 'isdn-pri-net' link
-;[link1]
+; dtmfinband: boolean: Enable to try to send the DTMF data in band when an audio
+;  channel is available. If disabled or no audio channel available, the DTMF will
+;  be sent through the signalling channel if any
+;dtmfinband=no
 
-; type: string: Specify the link type 
+
+; Each section except [general] can have some common parameters
+
+; To disable the component without deleting the entire section.
+; The default is to enable the component
+; enable: bool: Allow creation of the component corresponding to the section
+;enable=yes
+
+; Debug name as reported in Yate logs, default is derived from component name
+; This parameter is used only when a component is created
+; debugname: string: Debug name of the created component
+;debugname=
+
+; Debug level to apply on creation or reload
+; debuglevel: int: Debug level of the component
+;debuglevel=
+
+
+; Example of an ISDN trunk
+;[trunk1]
+
+; type: keyword: Specify the trunk type 
 ; Allowed values:
-;  ss7-isup:      SS7 ISDN User Part over synchronous (HDLC) interface(s)
 ;  isdn-bri-net:  ISDN network side of a data link over basic rate HDLC interface(s)
 ;  isdn-bri-cpe:  ISDN CPE (user) side of a data link over basic rate HDLC interface(s)
 ;  isdn-pri-net:  ISDN network side of a data link over one or more primary HDLC interface(s)
 ;  isdn-pri-cpe:  ISDN CPE (user) side of a data link over one or more primary HDLC interface(s)
-;  isdn-pri-mon:  ISDN monitor of one or more primary HDLC interface(s)
 ; NOTE: isdn-pri-net and isdn-pri-cpe are identical, except for the side of the link
-;type=isdn-pri-net
-
-; enable: boolean: Enable or disable this call controller
-; yes:  Create this call controller. If already exists, apply settings (the settings
-;       that can be changed on reload are explicitely specified in place)
-; no:   Remove call controller if already created
-; Defaults to yes
-;enable=yes
-
-; sig: string: Specify the span(s) containing the signalling channel(s)
-; For example wanpipe1 or any other section specified in any of the telephony
-;   modules like wpcard or zapcard
-; Ignored if type is isdn-pri-mon
-;sig=wanpipe1
-
-; voice: string: Specify the span(s) containing the voice channel(s)
-; Multiple cards may be specified by simply separating them with a comma (',') character
-; Defaults to the span specified in the sig parameter
-; Ignored if type is isdn-pri-mon
-;voice=
+;type=
 
 ; switchtype: string: The switch type of this group
-; This parameter refers only to ISDN. It defines a set of flags modifying the
-;  call controller's behaviour
+; This parameter defines a set of flags modifying the call controller's behaviour
 ; Allowed values: euro-isdn-e1, euro-isdn-t1, national-isdn, dms100, lucent5e, att4ess, qsig, unknown
-; Defaults to unknown
-;switchtype=
+;switchtype=unknown
 
-; dtmfinband: boolean: Enable to try to send the DTMF data in band when an audio channel is available
-; If disabled or no audio channel available, the DTMF will be sent through the signalling channel if any
-; Defaults to disable
-;dtmfinband = disable
+; sig: string: Specify the span(s) containing the signalling channel (D)
+; For example wanpipe1 or any other section specified in any of the telephony
+;   modules like wpcard or zapcard
+;sig=
+
+; voice: string: Specify the span(s) containing the voice channels (B)
+; Multiple cards may be specified by simply separating them with a comma (',')
+;  character
+; Defaults to the trunk name if missing
+;voice=
+
+; number: string: Prefix of numbers we accept call setups for, empty to accept all
+; Only used by isdn-pri-cpe, makes sense when NET side is Point-to-Multipoint
+; Setups are ignored if called number is present but doesn't start with this prefix
+;number=
+
+; rxunderrun: int: Maximum interval in ms between two packets before we report
+;  an underrun condition, zero to disable or 2500+
+;rxunderrun=0
 
 ; strategy: string: The strategy used to allocate voice channels for outgoing calls
 ; Allowed values:
-;  - increment  Do an incremental search for an idle channel starting with the last allocated channel
-;  - decrement  Do an decremental search for an idle channel starting with the last allocated channel
-;  - lowest     Do an incremental search for an idle channel starting with the first channel in group
-;  - highest    Do an decremental search for an idle channel starting with the last channel in group
+;  - increment  Incremental search an idle channel starting with the last allocated channel
+;  - decrement  Decremental search an idle channel starting with the last allocated channel
+;  - lowest     Incremental search an idle channel starting with the first channel in group
+;  - highest    Decremental search an idle channel starting with the last channel in group
 ;  - random     Randomly choose an idle channel
 ; Defaults to increment
 ;strategy=increment
@@ -76,21 +91,20 @@
 ; Allowed values:
 ;    even           Allocate only even channels
 ;    odd            Allocate only odd channels
-;    even-fallback  Allocate even channels. Fallback to odd channels when no more even channels
-;    odd-fallback   Allocate odd channels. Fallback to even channels when no more odd channels
+;    even-fallback  Allocate even channels, fall back to odd channels
+;    odd-fallback   Allocate odd channels, fall back to even channels
 ;strategy-restrict=
 
 ; channelsync: integer: The interval (in seconds) at which the call controller
 ;  will try to re-sync idle channels
 ; The call controller will notify the other side of the link of idle channels
 ; Set to 0 to disable
-; Defaults to minimum value if missing or invalid
+; Defaults to minimum value (500s) if missing or invalid
 ;channelsync=1000
 
 ; numplan: string: Default numbering plan for outgoing calls
 ; Values: unknown, isdn, data, telex, national, private
 ; Defaults to unknown if missing or incorrect
-; This parameter refers only to ISDN
 ;numplan=unknown
 
 ; numtype: string:  Default number type for outgoing calls
@@ -108,78 +122,72 @@
 ; Defaults to user-provided if missing or incorrect
 ;screening=user-provided
 
-; earlyacm: boolean: Convert received early ACM user state into progress or ringing
-; Defaults to enable
-;earlyacm=enable
-
 ; format: string:  Default data format for outgoing calls. Values: alaw, mulaw, g721
 ; Defaults to alaw if missing or incorrect
 ; alaw is used commonly in Europe while mulaw is used commonly in US and Japan.
 ;format=alaw
 
-; number: string: Prefix of numbers we accept call setups for, empty to accept all
-; Only used in ISDN BRI CPE, makes sense when NET side is Point-to-Multipoint
-; Setups are ignored if called number is present but doesn't start with this prefix
-;number=
-
-; print-layer2PDU: boolean: Print layer 2 (Q.921) protocol data units to output
-; For ISDN this option is applied on reload
-; Defaults to no
-;print-layer2PDU=no
-
-; print-layer3PDU: boolean: Print layer 3 (Q.931) protocol data units to output
-; For ISDN this option is applied on reload
-; Defaults to no
-;print-layer3PDU=no
-
-; print-layer4PDU: boolean: Print layer 4 (SS7-ISUP) protocol data units to output
+; print-messages: boolean: Print decoded protocol data units to output
 ; This option is applied on reload
 ; Defaults to no
-;print-layer4PDU=no
+;print-messages=no
 
-; extended-debug: boolean: Print extented debug data (such as raw hex data) to output
-; For ISDN this parameter is used in conjuction with print-layer2PDU and print-layer3PDU and
-;   is ignored if it's pair is not enabled
-; For SS7 this parameter is used in conjuction with print-layer4PDU and
-;   is ignored if it's pair is not enabled
+; print-frames: boolean: Print decoded Layer 2 (Q.921) frames to output
+; This option is applied on reload
+; Defaults to no
+;print-frames=no
+
+; extended-debug: boolean: Print extended debug data (such as raw hex data) to output
 ; This option is applied on reload
 ; Defaults to no
 ;extended-debug=no
 
+; layer2dump: string: Filename to dump Q.921 packets to
+;layer2dump=
+
+; layer3dump: string: Filename to dump Q.931 packets to
+;layer3dump=
+
+
+; Example of an ISDN passive recorder
+;[recorder1]
+
+; type: keyword: Specify the trunk type 
+; Allowed values:
+;  isdn-pri-mon:  ISDN monitor of one or more primary HDLC interface(s)
+;type=isdn-pri-mon
+
 ; sig-net: string: Specify the span(s) containing the signalling channel(s) for the network side of the monitored link
 ; For example wanpipe1 or any other section specified in any of the telephony
 ;   modules like wpcard or zapcard
-; Ignored if type is not isdn-pri-mon
 ;sig-net=
 
 ; sig-cpe: string: Specify the span(s) containing the signalling channel(s) for the user side of the monitored link
 ; For example wanpipe1 or any other section specified in any of the telephony
 ;   modules like wpcard or zapcard
-; Ignored if type is not isdn-pri-mon
 ;sig-cpe=
 
 ; voice-net: string: Specify the span(s) containing the voice channel(s) for the network side of the monitored link
 ; Multiple cards may be specified by simply separating them with a comma (',') character
 ; Defaults to the span specified in the sig-net parameter
-; Ignored if type is not isdn-pri-mon
 ;voice-net=
 
 ; voice-cpe: string: Specify the span(s) containing the voice channel(s) for the user side of the monitored link
 ; Multiple cards may be specified by simply separating them with a comma (',') character
 ; Defaults to the span specified in the sig-cpe parameter
-; Ignored if type is not isdn-pri-mon
 ;voice-cpe=
 
 ; detect: boolean: Change the side of the link on each captured request for watched signalling span(s)
 ; If disabled and the side of the link is not correct, the monitor will not be notified on
 ;   data link state change. This may lead to malfunction
-; Defaults to enable
-; Ignored if type is not isdn-pri-mon
-;detect=enable
+;detect=yes
+
+; idletimeout: integer: HDLC data link idle timeout, should be 3 * T203
+; The minimum allowed value is 4000ms. Defaults to 30000 if missing or invalid
+;idletimeout=30000
 
 ; muxchanbuffer: integer: The buffer size for one channel of the audio multiplexer
 ; Defaults to 160 if 0 or missing
-; Ignored if type is not isdn-pri-mon
 ;muxchanbuffer=160
 
 ; idlevalue: integer: The value used by the audio multiplexer to fill missing data
@@ -189,21 +197,21 @@
 ; Ignored if type is not isdn-pri-mon
 ;idlevalue=255
 
-; idletimeout: integer: HDLC data link idle timeout, should be 3 * T203
-; The minimum allowed value is 4000. Defaults to 30000 if missing or invalid
-; Ignored if type is not isdn-pri-mon
-;idletimeout=30000
+; layer2dump-net: string: Filename to dump NET Q.921 packets to
+;layer2dump-net=
 
-; emergency: boolean: Emergency align SS7 MTP2 layer at startup
-; Defaults to no
-;emergency=yes
+; layer2dump-cpe: string: Filename to dump CPE Q.921 packets to
+;layer2dump-cpe=
 
-; rxunderruninterval: integer: The interval (in miliseconds) allowed between
-;  2 packets received on the signalling channel (required)
-; Minimum value is 5 for SS7 links and 3000 for ISDN links
-;rxunderruninterval=10
 
-; pointcodetype: string: SS7 point code type for ISUP (required)
+; Example of a SS7 ISUP trunk
+;[isup1]
+; type: keyword: Specify the trunk type 
+; Allowed values:
+;  ss7-isup:      SS7 ISDN User Part
+;type=ss7-isup
+
+; pointcodetype: string: SS7 point code type (required)
 ; Allowed values:
 ;  ITU    ITU-T Q.704
 ;  ANSI   ANSI T1.111.4
@@ -213,61 +221,142 @@
 ;  Japan5 5-bit SLS
 ;pointcodetype=
 
-; pointcode: string: Point code serviced by this link
-; The format is network-cluster-member
-; Parameter pointcode may be repeated to add more local point codes
-;pointcode=
-
 ; defaultpointcode: string: Default originating point code used for outgoing calls
+; If missing or invalid the first point code added to MTP3 is used
+; If no point codes are added no calls can be made (incoming or outgoing)
+;  through this trunk
 ; The format is network-cluster-member
-; If missing or invalid the first point code added is used
-; If no point codes are added no calls can be made (incoming or outgoing) through this link
 ;defaultpointcode=
 
-; remotepointcode: string: Default destination point code used for outgoing calls and maintenance messages
+; remotepointcode: string: Default destination point code used for outgoing
+;  calls and maintenance messages
 ; If missing or invalid, no maintenance message will be sent
 ; The format is network-cluster-member
 ;remotepointcode=
 
-; netind2pctype: string: Comma separated list of point code types used to map an incoming
-;  network indicator to a specific point code type
+; earlyacm: boolean: Convert received early ACM user state into progress or ringing
+;earlyacm=yes
+
+; voice: string: Specify the span(s) containing the voice channels (L1)
+; Multiple cards may be specified by simply separating them with a comma (',')
+;  character
+; Defaults to the trunk name if missing
+;voice=
+
+; strategy: string: The strategy used to allocate voice channels for outgoing calls
+; Allowed values:
+;  - increment  Incremental search an idle channel starting with the last allocated channel
+;  - decrement  Decremental search an idle channel starting with the last allocated channel
+;  - lowest     Incremental search an idle channel starting with the first channel in group
+;  - highest    Decremental search an idle channel starting with the last channel in group
+;  - random     Randomly choose an idle channel
+; Defaults to increment
+;strategy=increment
+
+; strategy-restrict: string: Define channel allocation restrictions and behaviour
+; This option is ignored when strategy is random
+; Allowed values:
+;    even           Allocate only even channels
+;    odd            Allocate only odd channels
+;    even-fallback  Allocate even channels, fall back to odd channels
+;    odd-fallback   Allocate odd channels, fall back to even channels
+;strategy-restrict=
+
+; channelsync: integer: The interval (in seconds) at which the call controller
+;  will try to re-sync idle channels
+; The call controller will notify the other side of the link of idle channels
+; Set to 0 to disable
+; Defaults to minimum value (60s) if missing or invalid
+;channelsync=1000
+
+; numplan: string: Default numbering plan for outgoing calls
+; Values: unknown, isdn, data, telex, national, private
+; Defaults to unknown if missing or incorrect
+;numplan=unknown
+
+; numtype: string:  Default number type for outgoing calls
+; Values: unknown,international,national,net-specific,subscriber,abbreviated,reserved
+; Defaults to unknown if missing or incorrect
+;numtype=unknown
+
+; presentation: string: Default number presentation for outgoing calls
+; Values: allowed, restricted, unavailable
+; Defaults to allowed if missing or incorrect
+;presentation=allowed
+
+; screening: string:  Default number screening for outgoing calls
+; Values: user-provided, user-provided-passed, user-provided-failed, network-provided
+; Defaults to user-provided if missing or incorrect
+;screening=user-provided
+
+; format: string:  Default data format for outgoing calls. Values: alaw, mulaw, g721
+; Defaults to alaw if missing or incorrect
+; alaw is used commonly in Europe while mulaw is used commonly in US and Japan.
+;format=alaw
+
+; print-messages: boolean: Print decoded protocol data units to output
+; This option is applied on reload
+; Defaults to no
+;print-messages=no
+
+; extended-debug: boolean: Print extended debug data (such as raw hex data) to output
+; This option is applied on reload
+; Defaults to no
+;extended-debug=no
+
+
+; Example of a SS7 MTP3 network (linkset)
+;[linkset1]
+; type: keyword: Specify the linkset type 
+; Allowed values:
+;  ss7-mtp3:      SS7 Message Transfer Part - Layer 3
+;type=ss7-mtp3
+
+; netind2pctype: string: Comma separated list of point code types used to map an
+;  incoming network indicator to a specific point code type
 ; This option is required and is used to configure a SS7 MTP3 network
-; The list must contain 4 values indicating the point code type for International,
-;  SpareInternational, National and ReservedNational network indicators
-; See the pointcodetype option for allowed values
-; NOTE: If an incoming packet comes with an unconfigured network indicator it will be dropped
+; The list must contain either a singe type or 4 values indicating the point
+;  code type for International, SpareInternational, National and ReservedNational
+;  network indicators
+; If only a single type is specified it will be used to configure all types of
+;  network indicators
+; See the ISUP pointcodetype option for allowed values
+; NOTE: An incoming packet with an unconfigured network indicator will be dropped
 ; Examples:
-;  netind2pctype=ITU,ITU,ITU,ITU
+;  netind2pctype=ITU
 ;  netind2pctype=ITU,ANSI,ITU,ITU
 ;  netind2pctype=ANSI8,ITU,ANSI,ITU
 ;netind2pctype=
 
-; route: string: Build a destination route for a SS7 MTP3 network
+; route: string: Build a destination route for the SS7 network
 ; The format of this option is pointcodetype,label,priority
 ; This parameter can be repeated to build multiple destination routes
 ; The network will notify the router about its destination(s) and priority
 ; Example: route=ITU,2-2-2,0
 ;route=
 
-; filllink: boolean: Configure MTP2 to request link fill (packet repeat) when sending
-;  FISU/LSSU packets
-; Defaults to yes
-;filllink=yes
-
-; debuglevel: string: Comma separated list of debug levels for link layers
-; Set to 0 to disable any debug message or -1 (or void) to left it unchanged
-; ss7-isup: Interface,Circuit group, MTP2, MTP3, ISUP
-; isdn-pri-net,isdn-pri-cpe: Interface,Circuit group, Q921, Q931
-;debuglevel=
-
-; layer2dump: string: Filename to dump Q.921 or MTP2 packets to (if applicable)
-;layer2dump=
-
-; layer3dump: string: Filename to dump Q.931 or MTP3 packets to (if applicable)
+; layer3dump: string: Filename to dump MTP3 packets to
 ;layer3dump=
 
-; layer2dump-net: string: Filename to dump NET Q.921 packets to (passive only)
-;layer2dump-net=
 
-; layer2dump-cpe: string: Filename to dump CPE Q.921 packets to (passive only)
-;layer2dump-cpe=
+
+; Example of a SS7 MTP2 link
+;[link1]
+; type: keyword: Specify the link type 
+; Allowed values:
+;  ss7-mtp2:      SS7 Message Transfer Part - Layer 2
+;type=ss7-mtp2
+
+; emergency: boolean: Emergency align SS7 MTP2 layer at startup
+;emergency=yes
+
+; filllink: boolean: Configure MTP2 to request link fill (packet repeat) when
+;  sending FISU or LSSU packets
+;filllink=yes
+
+; rxunderrun: int: Maximum interval in ms between two packets before we report
+;  an underrun condition, zero to disable or 25+
+;rxunderrun=0
+
+; layer2dump: string: Filename to dump MTP2 packets to
+;layer2dump=

@@ -13,6 +13,6 @@ else
     fi
 fi
 
-filter='s/FORMAT_CHECK(.*)//; s/[A-Z]*_API//'
+filter='s/FORMAT_CHECK(.*)//; s/[A-Z]*_API//; s/^.*YCLASS.*)$//'
 
 sed "$filter" "$f"

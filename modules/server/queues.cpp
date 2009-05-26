@@ -399,11 +399,12 @@ void CallsQueue::startACD()
     if (s_account.null() || s_queryAvail.null() || s_chanOutgoing.null())
 	return;
     u_int64_t when = 0;
-    if (m_time) {
+    if (m_rate) {
+	// apply minimum query interval policy
 	when = Time::now();
 	if (when < m_time)
 	    return;
-	m_time = m_rate ? when + m_rate : 0;
+	m_time = when + m_rate;
     }
 
     unsigned int marked = 0;

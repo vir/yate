@@ -2873,7 +2873,7 @@ MimeSdpBody* YateSIPConnection::createPasstroughSDP(Message& msg, bool update)
 		if (!param)
 		    continue;
 		tmp = param->name();
-		if (tmp.startSkip(sdpPrefix+rtp->suffix()+"_",false))
+		if (tmp.startSkip(sdpPrefix+rtp->suffix()+"_",false) && (tmp.find('_') < 0))
 		    rtp->parameter(tmp,*param,append);
 	    }
 	}

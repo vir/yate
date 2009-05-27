@@ -1162,6 +1162,19 @@ bool QtWindow::setSelect(const String& name, const String& item)
 	    else
 		w.progressBar()->setValue(w.progressBar()->maximum());
 	    return true;
+	case QtWidget::Tab:
+	    d = w.tab()->count() - 1;
+	    for (QString tmp = QtClient::setUtf8(item); d >= 0; d--) {
+		QWidget* wid = w.tab()->widget(d);
+		if (wid && wid->objectName() == tmp)
+		    break;
+	    }
+	    if (d >= 0 && d < w.tab()->count()) {
+		w.tab()->setCurrentIndex(d);
+		return true;
+	    }
+	    return false;
+
     }
     return false;
 }
@@ -1726,6 +1739,14 @@ bool QtWindow::getSelect(const String& name, String& item)
 	    return true;
 	case QtWidget::CustomTable:
 	    return w.customTable()->getSelect(item);
+	case QtWidget::Tab:
+	    {
+		item = "";
+		QWidget* wid = w.tab()->currentWidget();
+		if (wid)
+		    QtClient::getUtf8(item,wid->objectName());
+	    }
+	    return true;
     }
     return false;
 }
@@ -2281,6 +2302,11 @@ void QtWindow::doInit()
 	QtClient::connectObjects(lists[i],SIGNAL(currentRowChanged(int)),
 	    this,SLOT(selectionChanged()));
     }
+
+    // Connect tab widget signals
+    QList<QTabWidget*> tabs = qFindChildren<QTabWidget*>(this);
+    for (int i = 0; i < tabs.size(); i++)
+	QtClient::connectObjects(tabs[i],SIGNAL(currentChanged(int)),this,SLOT(selectionChanged()));
 
     // Process tables:
     // Insert a column and connect signals

@@ -5633,6 +5633,14 @@ public:
     bool setPointCode(SS7PointCode* pc, bool def);
 
     /**
+     * Append all point codes from a parameter list, use "pointcode" and
+     *  "defaultpointcode" parameters
+     * @param params List of parameters to take point codes from
+     * @return Count of point codes added
+     */
+    unsigned int setPointCode(const NamedList& params);
+
+    /**
      * Check if the given point code is serviced by this controller
      * @param pc The point code to check
      * @return SS7PointCode pointer or 0 if not found

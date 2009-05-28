@@ -2053,7 +2053,7 @@ SS7ISUP::SS7ISUP(const NamedList& params)
 
     const char* rpc = params.getValue("remotepointcode");
     m_remotePoint = new SS7PointCode(0,0,0);
-    if (!(m_remotePoint->assign(rpc) && m_remotePoint->pack(m_type))) {
+    if (!(m_remotePoint->assign(rpc,m_type) && m_remotePoint->pack(m_type))) {
 	Debug(this,DebugMild,"Invalid remotepointcode='%s'",rpc);
 	TelEngine::destruct(m_remotePoint);
     }
@@ -2080,7 +2080,7 @@ SS7ISUP::SS7ISUP(const NamedList& params)
 	m_callerCat = "ordinary";
 
     m_rscTimer.interval(params,"channelsync",60,1000,true,true);
-    m_lockTimer.interval(params,"channellock",5,10,false,true);
+    m_lockTimer.interval(params,"channellock",2500,10000,false,false);
 
     // Remote user part test
     m_uptTimer.interval(params,"userparttest",10,60,true,true);
@@ -2168,6 +2168,40 @@ bool SS7ISUP::setPointCode(SS7PointCode* pc, bool def)
 	    Debug(this,DebugAll,"Set default point code '%s'",tmp.safe());
     }
     return true;
+}
+
+// Add all point codes described in a parameter list
+unsigned int SS7ISUP::setPointCode(const NamedList& params)
+{
+    unsigned int count = 0;
+    unsigned int n = params.length();
+    bool hadDef = false;
+    for (unsigned int i= 0; i < n; i++) {
+	NamedString* ns = params.getParam(i);
+	if (!ns)
+	    continue;
+	bool defPc = false;
+	if (ns->name() == "defaultpointcode")
+	    defPc = true;
+	else if (ns->name() != "pointcode")
+	    continue;
+	SS7PointCode* pc = new SS7PointCode(0,0,0);
+	if (pc->assign(*ns,m_type) && setPointCode(pc,defPc && !hadDef)) {
+	    count++;
+	    if (defPc) {
+		if (hadDef)
+		    Debug(this,DebugMild,"Added point code '%s' as non-default",ns->safe());
+		else
+		    hadDef = true;
+	    }
+	}
+	else {
+	    Debug(this,DebugWarn,"Invalid '%s'='%s' in parameters '%s'",
+		ns->name().c_str(),ns->safe(),params.safe());
+	    TelEngine::destruct(pc);
+	}
+    }
+    return count;
 }
 
 // Check if the given point code is serviced by this controller

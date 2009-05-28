@@ -95,12 +95,21 @@
 ;    odd-fallback   Allocate odd channels, fall back to even channels
 ;strategy-restrict=
 
+; userparttest: integer: Remote user part test interval in seconds
+; Set to 0 to always assume the remote user part is available
+; Invalid values default to minimum (10s)
+;userparttest=60
+
 ; channelsync: integer: The interval (in seconds) at which the call controller
 ;  will try to re-sync idle channels
 ; The call controller will notify the other side of the link of idle channels
 ; Set to 0 to disable
-; Defaults to minimum value (500s) if missing or invalid
+; Invalid values default to minimum (60s)
 ;channelsync=1000
+
+; channellock: integer: Maximum time (in ms) spent trying to lock a remote channel
+; Invalid values default to minimum (2500ms)
+;channellock=10000
 
 ; numplan: string: Default numbering plan for outgoing calls
 ; Values: unknown, isdn, data, telex, national, private
@@ -221,17 +230,22 @@
 ;  Japan5 5-bit SLS
 ;pointcodetype=
 
-; defaultpointcode: string: Default originating point code used for outgoing calls
-; If missing or invalid the first point code added to MTP3 is used
+; pointcode: string: Local point code to accept as destination
 ; If no point codes are added no calls can be made (incoming or outgoing)
 ;  through this trunk
-; The format is network-cluster-member
+; The format is network-cluster-member or number
+;pointcode=
+
+; defaultpointcode: string: Default originating point code used for outgoing calls
+; It also acts as accepted point code (see pointcode)
+; Only one point code can be default
+; The format is network-cluster-member or number
 ;defaultpointcode=
 
 ; remotepointcode: string: Default destination point code used for outgoing
 ;  calls and maintenance messages
 ; If missing or invalid, no maintenance message will be sent
-; The format is network-cluster-member
+; The format is network-cluster-member or number
 ;remotepointcode=
 
 ; earlyacm: boolean: Convert received early ACM user state into progress or ringing

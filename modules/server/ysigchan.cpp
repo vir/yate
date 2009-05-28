@@ -318,9 +318,6 @@ protected:
     // Save circuits state
     // Return true if changed
     bool verifyController(const NamedList* params, bool save = true);
-    // Add point codes from a given configuration section
-    // @return The number of point codes added
-    unsigned int setPointCode(const NamedList& sect);
     inline SS7ISUP* isup()
 	{ return static_cast<SS7ISUP*>(m_controller); }
     bool m_bicc;
@@ -2104,10 +2101,10 @@ bool SigSS7Isup::create(NamedList& params, String& error)
     if (isup()) {
 	plugin.engine()->insert(isup());
 	isup()->initialize(&params);
-    }
-    if (!setPointCode(params)) {
-	error = "No point codes";
-	return false;
+	if (!isup()->setPointCode(params)) {
+	    error = "No point codes";
+	    return false;
+	}
     }
 
     // Start thread
@@ -2119,9 +2116,10 @@ bool SigSS7Isup::create(NamedList& params, String& error)
 
 bool SigSS7Isup::reload(NamedList& params)
 {
-    if (isup())
+    if (isup()) {
 	isup()->initialize(&params);
-    setPointCode(params);
+	isup()->setPointCode(params);
+    }
     return true;
 }
 
@@ -2237,44 +2235,6 @@ bool SigSS7Isup::verifyController(const NamedList* params, bool save)
     if (changed && save)
 	s_cfgData.save();
     return changed;
-}
-
-unsigned int SigSS7Isup::setPointCode(const NamedList& sect)
-{
-    if (!isup())
-	return 0;
-    unsigned int count = 0;
-    unsigned int n = sect.length();
-    NamedString* defPc = 0;
-    for (unsigned int i= 0; i < n; i++) {
-	NamedString* ns = sect.getParam(i);
-	if (!ns)
-	    continue;
-	if (ns->name() == "defaultpointcode") {
-	    defPc = ns;
-	    continue;
-	}
-	if (ns->name() != "pointcode")
-	    continue;
-	SS7PointCode* pc = new SS7PointCode(0,0,0);
-	if (pc->assign(*ns) && isup()->setPointCode(pc,false))
-	    count++;
-	else {
-	    Debug(&plugin,DebugNote,"Invalid %s=%s in section '%s'",
-		ns->name().c_str(),ns->safe(),sect.safe());
-	    TelEngine::destruct(pc);
-	}
-    }
-    if (defPc) {
-	SS7PointCode* pc = new SS7PointCode(0,0,0);
-	if (!(pc->assign(*defPc) && isup()->hasPointCode(*pc) &&
-	    isup()->setPointCode(pc,true))) {
-	    Debug(&plugin,DebugNote,"Invalid %s=%s in section '%s'",
-		defPc->name().c_str(),defPc->safe(),sect.safe());
-	    TelEngine::destruct(pc);
-	}
-    }
-    return count;
 }
 
 

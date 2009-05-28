@@ -284,7 +284,7 @@ bool SS7MTP2::initialize(const NamedList* config)
 	    if (!ifc)
 		return false;
 	    SignallingReceiver::attach(ifc);
-	    if (!ifc->initialize(ifConfig))
+	    if (!(ifc->initialize(ifConfig) && control((Operation)SignallingInterface::Enable,ifConfig)))
 		TelEngine::destruct(SignallingReceiver::attach(0));
 	}
     }
@@ -656,8 +656,8 @@ bool SS7MTP2::txPacket(const DataBlock& packet, bool repeat, SignallingInterface
 // Process incoming FISU
 void SS7MTP2::processFISU()
 {
-    if (!aligned())
-	transmitLSSU();
+    if (m_fillLink && !aligned())
+	m_fillTime = 0;
 }
 
 // Process incoming LSSU

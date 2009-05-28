@@ -1047,6 +1047,7 @@ bool WaveFileDriver::msgExecute(Message& msg, String& dest)
     }
     Message m("call.route");
     m.addParam("module",name());
+    m.addParam("cdrtrack",String::boolText(false));
     String callto(msg.getValue("direct"));
     if (callto.null()) {
 	const char *targ = msg.getValue("target");

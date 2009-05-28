@@ -2218,8 +2218,6 @@ void JBClientStream::processRunning(XMLElement* xml)
 	case JBEvent::IqDiscoInfoErr:
 	case JBEvent::IqDiscoItemsRes:
 	case JBEvent::IqDiscoItemsErr:
-	    dropXML(event->releaseXML());
-	    m_events.remove(event,true);
 	    return;
 	default:
 	    return;

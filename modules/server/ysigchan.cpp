@@ -600,7 +600,7 @@ const TokenDict SigFactory::s_compClass[] = {
 SignallingComponent* SigFactory::create(const String& type, const NamedList& name)
 {
     const NamedList* config = s_cfg.getSection(name);
-    Debug(&plugin,DebugStub,"SigFactory::create('%s','%s') config=%p",
+    DDebug(&plugin,DebugAll,"SigFactory::create('%s','%s') config=%p",
 	type.c_str(),name.c_str(),config);
     int compType = type.toInteger(s_compClass,-1);
     if (type < 0)
@@ -1372,7 +1372,7 @@ void SigDriver::handleEvent(SignallingEvent* event)
 		if (event->controller())
 		    break;
 	    default:
-		DDebug(this,DebugStub,
+		DDebug(this,DebugMild,
 		    "Received event (%p,'%s') without call. Controller: (%p)",
 		    event,event->name(),event->controller());
 		return;

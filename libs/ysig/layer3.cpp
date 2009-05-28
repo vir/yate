@@ -110,7 +110,7 @@ bool SS7Layer3::buildRoutes(const NamedList& params)
 		break;
 	    type = SS7PointCode::lookup(obj->get()->toString());
 	    obj = obj->skipNext();
-	    if (!(obj && pc->assign(obj->get()->toString())))
+	    if (!(obj && pc->assign(obj->get()->toString(),type)))
 		break;
 	    obj = obj->skipNext();
 	    if (obj)

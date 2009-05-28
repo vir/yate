@@ -41,10 +41,15 @@ TokenDict SS7PointCode::s_names[] = {
 
 // Assign data members from a given string of form 'network-cluster-member'
 // Return false if the string has incorrect format or individual elements are not in the range 0..255
-bool SS7PointCode::assign(const String& src)
+bool SS7PointCode::assign(const String& src, Type type)
 {
     if (src.null())
 	return false;
+    if (type != Other) {
+	unsigned int packed = src.toInteger();
+	if (packed)
+	    return unpack(type,packed);
+    }
     unsigned char params[3];
     unsigned int len = 0;
     ObjList* list = src.split('-',false);

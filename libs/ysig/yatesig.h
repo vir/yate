@@ -3122,9 +3122,10 @@ public:
     /**
      * Assign data members from a given string of form 'network-cluster-member'
      * @param src Source string
+     * @param type Type of the point code if numeric (packed) representation is used
      * @return False if the string has incorrect format or individual elements are not in the range 0..255
      */
-    bool assign(const String& src);
+    bool assign(const String& src, Type type = Other);
 
     /**
      * Assign data members from a packed memory block

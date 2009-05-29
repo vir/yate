@@ -4,7 +4,7 @@ ustr='Usage: yate-config [--cflags] [--includes] [--c-all]
                    [--ldflags] [--libs] [--ld-all] [--ld-nostrip] [--ld-strip]
 		   [--config] [--modules] [--share]
 		   [--helpdir] [--scripts] [--skins]
-		   [--version] [--release]'
+		   [--version] [--release] [--archlib] [--param=...]'
 if [ "$#" = 0 ]; then
     echo "$ustr"
     exit 0
@@ -70,6 +70,27 @@ while [ "$#" != 0 ]; do
 	    ;;
 	--scripts)
 	    echo "$shrdir/scripts"
+	    ;;
+	--archlib)
+	    echo "@ARCHLIB@"
+	    ;;
+	--param=QT4_VER)
+	    echo "@QT4_VER@"
+	    ;;
+	--param=QT4_MOC)
+	    echo "@QT4_MOC@"
+	    ;;
+	--param=QT4_INC)
+	    echo "@QT4_INC@"
+	    ;;
+	--param=QT4_LIB)
+	    echo "@QT4_LIB@"
+	    ;;
+	--param=QT4_INC_NET)
+	    echo "@QT4_INC_NET@"
+	    ;;
+	--param=QT4_LIB_NET)
+	    echo "@QT4_LIB_NET@"
 	    ;;
 	*)
 	    echo "I didn't understand: $1" >&2

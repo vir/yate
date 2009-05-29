@@ -62,10 +62,10 @@ void JGEngine::initialize(const NamedList& params)
     if (lvl != -1)
 	debugLevel(lvl);
 
-    int timeout = params.getIntValue("stanza_timeout",m_stanzaTimeout);
+    int timeout = params.getIntValue("stanza_timeout",(int)m_stanzaTimeout);
     m_stanzaTimeout = timeout > 10000 ? timeout : 10000;
 
-    int ping = params.getIntValue("ping_interval",m_pingInterval);
+    int ping = params.getIntValue("ping_interval",(int)m_pingInterval);
     if (ping == 0)
 	m_pingInterval = 0;
     else if (ping < 60000)
@@ -113,7 +113,7 @@ JGSession* JGEngine::call(const String& localJID, const String& remoteJID,
     // Create outgoing session
     bool hasStream = (0 != stream);
     if (hasStream) {
-	JGSession* session = new JGSession(this,stream,localJID,remoteJID,
+	JGSession* session = new JGSession1(this,stream,localJID,remoteJID,
 	    contents,extra,message,subject);
 	TelEngine::destruct(stream);
 	if (session->state() != JGSession::Destroy) {
@@ -181,6 +181,7 @@ bool JGEngine::accept(JBEvent* event, bool& processed, bool& insert)
     XMPPError::Type error = XMPPError::NoError;
     const char* errorText = 0;
     bool respond = true;
+    JGSession::Version ver = JGSession::VersionUnknown;
     String sid;
     Lock lock(this);
     switch (event->type()) {
@@ -194,10 +195,13 @@ bool JGEngine::accept(JBEvent* event, bool& processed, bool& insert)
 		Debug(this,DebugNote,"Received jingle event %s with no element or child",event->name());
 		return false;
 	    }
-	    // Jingle clients may send the session id as 'id' or 'sid'
-	    sid = child->getAttribute("sid");
-	    DDebug(this,DebugAll,"Accepting event=%s child=%s sid=%s",
-		event->name(),child->name(),sid.c_str());
+	    // Set version and session id
+	    if (XMPPUtils::hasXmlns(*child,XMPPNamespace::Jingle)) {
+		ver = JGSession::Version1;
+		sid = child->getAttribute("sid");
+	    }
+	    DDebug(this,DebugAll,"Accepting event=%s child=%s sid=%s version=%d",
+		event->name(),child->name(),sid.c_str(),ver);
 	    if (sid.null()) {
 		error = XMPPError::SBadRequest;
 		errorText = "Missing or empty session id";
@@ -213,13 +217,22 @@ bool JGEngine::accept(JBEvent* event, bool& processed, bool& insert)
 	    }
 	    // Check if this an incoming session request
 	    if (event->type() == JBEvent::IqJingleSet) {
-		const char* type = event->child()->getAttribute("type");
-		int action = lookup(type,JGSession::s_actions,JGSession::ActCount);
+		JGSession::Action action = JGSession::lookupAction(child->getAttribute("type"),ver);
 		if (action == JGSession::ActInitiate) {
-		    DDebug(this,DebugAll,"New incoming call from=%s to=%s sid=%s",
-			event->from().c_str(),event->to().c_str(),sid.c_str());
-		    if (event->ref())
-			m_sessions.append(new JGSession(this,event,sid));
+		    DDebug(this,DebugAll,"New incoming call from=%s to=%s sid=%s version=%d",
+			event->from().c_str(),event->to().c_str(),sid.c_str(),ver);
+		    if (!event->ref()) {
+			error = XMPPError::SInternal;
+			break;
+		    }
+		    switch (ver) {
+			case JGSession::Version1:
+			    m_sessions.append(new JGSession1(this,event,sid));
+			    break;
+			default:
+			    Debug(this,DebugStub,
+				"JGEngine::accept(): unhandled session version %d",ver);
+		    }
 		    processed = true;
 		    return true;
 		}

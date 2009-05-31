@@ -18,7 +18,7 @@ OBJS = transport.o session.o secure.o dejitter.o
 LOCALFLAGS =
 LOCALLIBS =
 COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
-LINK = $(CC) $(LDFLAGS)
+LINK = $(CXX) $(LDFLAGS)
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@

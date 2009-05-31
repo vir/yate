@@ -21,7 +21,7 @@ LIBD:= ../../$(LIBD_VER) ../../$(LIBD_DEV)
 LOCALFLAGS =
 LOCALLIBS =
 COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
-LINK = $(CC) $(LDFLAGS)
+LINK = $(CXX) $(LDFLAGS)
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@

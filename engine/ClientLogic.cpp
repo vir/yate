@@ -1907,8 +1907,32 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 
     if (!Client::self())
 	return false;
-
     int notif = ClientChannel::lookup(msg.getValue("notify"));
+    if (notif == ClientChannel::Destroyed) {
+	if (!Client::valid())
+	    return false;
+	String id = msg.getValue("id");
+	// Reset init transfer if destroyed
+	if (m_transferInitiated && m_transferInitiated == id)
+	    m_transferInitiated = "";
+	// Stop incoming ringer if there are no more incoming channels
+	if (ClientSound::started(Client::s_ringInName) && ClientDriver::self()) {
+	    ClientDriver::self()->lock();
+	    ObjList* o = ClientDriver::self()->channels().skipNull();
+	    for (; o; o = o->skipNext())
+		if ((static_cast<Channel*>(o->get()))->isOutgoing())
+		    break;
+	    ClientDriver::self()->unlock();
+	    if (!o)
+		Client::self()->ringer(true,false);
+	}
+	Client::self()->delOption(s_channelList,id);
+	enableCallActions(m_selectedChannel);
+	String status;
+	buildStatus(status,"Hung up",msg.getValue("address"),id,msg.getValue("reason"));
+	Client::self()->setStatusLocked(status);
+	return false;
+    }
     // Set some data from channel
     ClientChannel* chan = static_cast<ClientChannel*>(msg.userData());
     // We MUST have an ID
@@ -2001,26 +2025,6 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	    setStatus = false;
 	    p.setParam("status",outgoing ? "incoming" : "outgoing");
 	    break;
-	case ClientChannel::Destroyed:
-	    // Reset init transfer if destroyed
-	    if (m_transferInitiated && m_transferInitiated == CHANUPD_ID)
-		m_transferInitiated = "";
-	    // Stop incoming ringer if there are no more incoming channels
-	    if (ClientSound::started(Client::s_ringInName) && ClientDriver::self()) {
-		ClientDriver::self()->lock();
-		ObjList* o = ClientDriver::self()->channels().skipNull();
-		for (; o; o = o->skipNext())
-		    if ((static_cast<Channel*>(o->get()))->isOutgoing())
-			break;
-		ClientDriver::self()->unlock();
-		if (!o)
-		    Client::self()->ringer(true,false);
-	    }
-	    Client::self()->delOption(s_channelList,CHANUPD_ID);
-	    enableCallActions(m_selectedChannel);
-	    buildStatus(status,"Hung up",CHANUPD_ADDR,CHANUPD_ID,msg.getValue("reason"));
-	    Client::self()->setStatusLocked(status);
-	    return false;
 	case ClientChannel::Accepted:
 	    buildStatus(status,"Calling target",0,0);
 	    break;

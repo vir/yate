@@ -93,7 +93,7 @@ void JGEngine::initialize(const NamedList& params)
 }
 
 // Make an outgoing call
-JGSession* JGEngine::call(const String& localJID, const String& remoteJID,
+JGSession* JGEngine::call(JGSession::Version ver, const String& localJID, const String& remoteJID,
 	const ObjList& contents, XMLElement* extra, const char* message,
 	const char* subject)
 {
@@ -113,10 +113,19 @@ JGSession* JGEngine::call(const String& localJID, const String& remoteJID,
     // Create outgoing session
     bool hasStream = (0 != stream);
     if (hasStream) {
-	JGSession* session = new JGSession1(this,stream,localJID,remoteJID,
-	    contents,extra,message,subject);
+	JGSession* session = 0;
+	switch (ver) {
+	    case JGSession::Version1:
+		session = new JGSession1(this,stream,localJID,remoteJID,message);
+		break;
+	    case JGSession::Version0:
+		session = new JGSession0(this,stream,localJID,remoteJID,message);
+		break;
+	    case JGSession::VersionUnknown:
+		;
+	}
 	TelEngine::destruct(stream);
-	if (session->state() != JGSession::Destroy) {
+	if (session && session->initiate(contents,extra,subject)) {
 	    Lock lock(this);
 	    m_sessions.append(session);
 	    return (session && session->ref()) ? session : 0;
@@ -200,6 +209,10 @@ bool JGEngine::accept(JBEvent* event, bool& processed, bool& insert)
 		ver = JGSession::Version1;
 		sid = child->getAttribute("sid");
 	    }
+	    else if (XMPPUtils::hasXmlns(*child,XMPPNamespace::JingleSession)) {
+		ver = JGSession::Version0;
+		sid = child->getAttribute("id");
+	    }
 	    DDebug(this,DebugAll,"Accepting event=%s child=%s sid=%s version=%d",
 		event->name(),child->name(),sid.c_str(),ver);
 	    if (sid.null()) {
@@ -228,6 +241,9 @@ bool JGEngine::accept(JBEvent* event, bool& processed, bool& insert)
 		    switch (ver) {
 			case JGSession::Version1:
 			    m_sessions.append(new JGSession1(this,event,sid));
+			    break;
+			case JGSession::Version0:
+			    m_sessions.append(new JGSession0(this,event,sid));
 			    break;
 			default:
 			    Debug(this,DebugStub,
@@ -336,7 +352,17 @@ void JGEvent::init(JGSession* session)
 	m_session = session;
     if (m_element) {
 	m_id = m_element->getAttribute("id");
-	m_jingle = m_element->findFirstChild(XMLElement::Jingle);
+	if (m_session)
+	    switch (m_session->version()) {
+		case JGSession::Version1:
+		    m_jingle = m_element->findFirstChild(XMLElement::Jingle);
+		    break;
+		case JGSession::Version0:
+		    m_jingle = m_element->findFirstChild(XMLElement::Session);
+		    break;
+		case JGSession::VersionUnknown:
+		    ;
+	    }
     }
 }
 

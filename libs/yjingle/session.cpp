@@ -41,15 +41,82 @@ static void addJingleContents(XMLElement* xml, const ObjList& contents, bool min
     TelEngine::destruct(jingle);
 }
 
+// Utility: add session content(s) to an already created stanza's jingle child
+// This method is used by the version 0 of the session
+static void addJingleContents0(String& name, XMLElement* xml, const ObjList& contents, bool minimal,
+    bool addDesc, bool addTrans)
+{
+    if (!xml)
+	return;
+    XMLElement* jingle = xml->findFirstChild(XMLElement::Session);
+    if (!jingle)
+	return;
+    for (ObjList* o = contents.skipNull(); o; o = o->skipNext()) {
+	JGSessionContent* c = static_cast<JGSessionContent*>(o->get());
+	if (c->type() != JGSessionContent::RtpIceUdp)
+	    continue;
+	name = c->toString();
+	if (addDesc) {
+	    XMLElement* desc = XMPPUtils::createElement(XMLElement::Description,
+		XMPPNamespace::JingleAudio);
+	    for (ObjList* o = c->m_rtpMedia.skipNull(); o; o = o->skipNext()) {
+		JGRtpMedia* a = static_cast<JGRtpMedia*>(o->get());
+		desc->addChild(a->toXML());
+	    }
+	   JGRtpMedia* te = new JGRtpMedia("106","telephone-event","8000","","");
+	   desc->addChild(te->toXML());
+	   TelEngine::destruct(te);
+	   jingle->addChild(desc);
+	}
+	if (addTrans) {
+	    XMLElement* trans = XMPPUtils::createElement(XMLElement::Transport,
+		XMPPNamespace::JingleTransport);
+	    if (!minimal) {
+		for (ObjList* o = c->m_rtpLocalCandidates.skipNull(); o; o = o->skipNext()) {
+		    JGRtpCandidate* rc = static_cast<JGRtpCandidate*>(o->get());
+		    XMLElement* xml = new XMLElement(XMLElement::Candidate);
+		    xml->setAttribute("name","rtp");
+		    xml->setAttributeValid("generation",rc->m_generation);
+		    xml->setAttributeValid("address",rc->m_address);
+		    xml->setAttributeValid("port",rc->m_port);
+		    xml->setAttributeValid("network","0");
+		    xml->setAttributeValid("protocol",rc->m_protocol);
+		    xml->setAttribute("username",c->m_rtpLocalCandidates.m_ufrag);
+		    xml->setAttribute("password",c->m_rtpLocalCandidates.m_password);
+		    xml->setAttributeValid("type","local");
+		    xml->setAttributeValid("preference","1");
+		    trans->addChild(xml);
+		}
+	    }
+	    jingle->addChild(trans);
+	}
+    }
+    TelEngine::destruct(jingle);
+}
+
 // Utility: add xml element child to an already created stanza's jingle child
 static void addJingleChild(XMLElement* xml, XMLElement* child)
 {
     if (!(xml && child))
 	return;
     XMLElement* jingle = xml->findFirstChild(XMLElement::Jingle);
-    if (!jingle)
+    if (jingle)
+	jingle->addChild(child);
+    else
+	TelEngine::destruct(child);
+    TelEngine::destruct(jingle);
+}
+
+// Utility: add xml element child to an already created stanza's jingle child
+static void addJingleChild0(XMLElement* xml, XMLElement* child)
+{
+    if (!(xml && child))
 	return;
-    jingle->addChild(child);
+    XMLElement* jingle = xml->findFirstChild(XMLElement::Session);
+    if (jingle)
+	jingle->addChild(child);
+    else
+	TelEngine::destruct(child);
     TelEngine::destruct(jingle);
 }
 
@@ -338,7 +405,7 @@ JGRtpCandidate* JGRtpCandidates::findByComponent(unsigned int component)
     return 0;
 }
 
-// Generate a random password to be used with ICE-UDP transport
+// Generate a random password or username to be used with ICE-UDP transport
 // Maximum number of characters. The maxmimum value is 256.
 // The minimum value is 22 for password and 4 for username
 void JGRtpCandidates::generateIceToken(String& dest, bool pwd, unsigned int max)
@@ -355,6 +422,15 @@ void JGRtpCandidates::generateIceToken(String& dest, bool pwd, unsigned int max)
     while (dest.length() < max)
  	dest << (int)random();
     dest = dest.substr(0,max);
+}
+
+// Generate a random password or username to be used with old ICE-UDP transport
+void JGRtpCandidates::generateOldIceToken(String& dest)
+{
+    dest = "";
+    while (dest.length() < 16)
+ 	dest << (int)random();
+    dest = dest.substr(0,16);
 }
 
 
@@ -610,6 +686,12 @@ XMLElement* JGStreamHost::buildRsp(const char* jid)
  * JGSession
  */
 
+TokenDict JGSession::s_versions[] = {
+    {"0",  Version0},
+    {"1",  Version1},
+    {0,0}
+};
+
 TokenDict JGSession::s_states[] = {
     {"Idle",     Idle},
     {"Pending",  Pending},
@@ -631,6 +713,20 @@ TokenDict JGSession::s_reasons[] = {
     {"alternative-session",      ReasonAltSess},
     {"general-error",            ReasonUnknown},
     {"transferred",              ReasonTransfer},
+    {0,0}
+};
+
+TokenDict JGSession::s_actions0[] = {
+    {"accept",                ActAccept},
+    {"initiate",              ActInitiate},
+    {"terminate",             ActTerminate},
+    {"info",                  ActInfo},
+    {"transport-info",        ActTransportInfo},
+    {"transport-accept",      ActTransportAccept},
+    {"content-info",          ActContentInfo},
+    {"DTMF",                  ActDtmf},
+    {"ringing",               ActRinging},
+    {"mute",                  ActMute},
     {0,0}
 };
 
@@ -821,7 +917,7 @@ bool JGSession::sendDtmf(const char* dtmf, unsigned int msDuration, String* stan
     if (!(dtmf && *dtmf))
 	return false;
 
-    XMLElement* iq = createJingle(ActInfo);
+    XMLElement* iq = createJingle(version() != Version0 ? ActInfo : ActContentInfo);
     XMLElement* sess = iq->findFirstChild();
     if (!sess) {
 	TelEngine::destruct(iq);
@@ -1347,7 +1443,9 @@ const char* JGSession::lookupAction(int act, Version ver)
     switch (ver) {
 	case Version1:
 	    return lookup(act,s_actions1);
-	default:
+	case Version0:
+	    return lookup(act,s_actions0);
+	case VersionUnknown:
 	    ;
     }
     return 0;
@@ -1359,10 +1457,290 @@ JGSession::Action JGSession::lookupAction(const char* str, Version ver)
     switch (ver) {
 	case Version1:
 	    return (Action)lookup(str,s_actions1,ActCount);
-	default:
+	case Version0:
+	    return (Action)lookup(str,s_actions0,ActCount);
+	case VersionUnknown:
 	    ;
     }
     return ActCount;
+}
+
+
+/**
+ * JGSession0
+ */
+
+// Create an outgoing session
+JGSession0::JGSession0(JGEngine* engine, JBStream* stream,
+	const String& callerJID, const String& calledJID, const char* msg)
+    : JGSession(Version0,engine,stream,callerJID,calledJID,msg)
+{
+}
+ 
+// Create an incoming session
+JGSession0::JGSession0(JGEngine* engine, JBEvent* event, const String& id)
+    : JGSession(Version0,engine,event,id)
+{
+    m_sessContentName = m_localSid + "_content";
+}
+
+// Destructor
+JGSession0::~JGSession0()
+{
+}
+
+// Check if a given XML element is valid jingle one
+XMLElement* JGSession0::checkJingle(XMLElement* xml)
+{
+    if (xml && xml->type() == XMLElement::Session &&
+	XMPPUtils::hasXmlns(*xml,XMPPNamespace::JingleSession))
+	return xml;
+    return 0;
+}
+
+// Accept a Pending incoming session
+bool JGSession0::accept(const ObjList& contents, String* stanzaId)
+{
+    Lock lock(this);
+    if (outgoing() || state() != Pending)
+	return false;
+    XMLElement* xml = createJingle(ActAccept);
+    addJingleContents0(m_sessContentName,xml,contents,true,true,true);
+    if (!sendStanza(xml,stanzaId))
+	return false;
+    changeState(Active);
+    return true;
+}
+
+// Send a stanza with session content(s)
+bool JGSession0::sendContent(Action action, const ObjList& contents, String* stanzaId)
+{
+    Lock lock(this);
+    if (state() != Pending && state() != Active)
+	return false;
+    bool minimal = false;
+    bool addDesc = true;
+    bool addTrans = true;
+    switch (action) {
+	case ActTransportInfo:
+	    addDesc = false;
+	    break;
+	case ActTransportAccept:
+	    minimal = true;
+	    addDesc = false;
+	    addTrans = true;
+	    break;
+	default:
+	    return false;
+    };
+    // Make sure we dont't terminate the session on failure
+    String tmp;
+    if (!stanzaId) {
+	tmp = "Content" + String(Time::secNow());
+	stanzaId = &tmp;
+    }
+    XMLElement* xml = createJingle(action);
+    addJingleContents0(m_sessContentName,xml,contents,minimal,addDesc,addTrans);
+    return sendStanza(xml,stanzaId);
+}
+
+// Build and send the initial message on an outgoing session
+bool JGSession0::initiate(const ObjList& contents, XMLElement* extra, const char* subject)
+{
+    XMLElement* xml = createJingle(ActInitiate);
+    addJingleContents0(m_sessContentName,xml,contents,true,true,true);
+    addJingleChild0(xml,extra);
+    if (!null(subject))
+	addJingleChild0(xml,new XMLElement(XMLElement::Subject,0,subject));
+    if (sendStanza(xml)) {
+	changeState(Pending);
+	return true;
+    }
+    changeState(Destroy);
+    return false;
+}
+
+// Decode a valid jingle set event. Set the event's data on success
+JGEvent* JGSession0::decodeJingle(JBEvent* jbev)
+{
+    XMLElement* jingle = jbev->child();
+    if (!jingle) {
+	confirm(jbev->releaseXML(),XMPPError::SBadRequest);
+	return 0;
+    }
+
+    Action act = getAction(jingle);
+    if (act == ActCount) {
+	confirm(jbev->releaseXML(),XMPPError::SServiceUnavailable,
+	    "Unknown session action");
+	return 0;
+    }
+
+    // *** ActTerminate
+    if (act == ActTerminate) {
+	// Confirm here: this is a final event,
+	//  stanza won't be confirmed in getEvent()
+	m_recvTerminate = true;
+	const char* reason = 0;
+	const char* text = 0;
+	XMLElement* res = jingle->findFirstChild(XMLElement::Reason);
+	if (res) {
+	    XMLElement* tmp = res->findFirstChild();
+	    if (tmp && tmp->type() != XMLElement::Text)
+		reason = tmp->name();
+	    TelEngine::destruct(tmp);
+	    tmp = res->findFirstChild(XMLElement::Text);
+	    if (tmp)
+		text = tmp->getText();
+	    TelEngine::destruct(tmp);
+	    TelEngine::destruct(res);
+	}
+	JGEvent* ev = new JGEvent(JGEvent::Terminated,this,jbev->releaseXML(),reason,text);
+	ev->setAction(act);
+	ev->confirmElement();
+	return ev;
+    }
+
+    // *** ActContentInfo --> ActDtmf
+    if (act == ActContentInfo) {
+	// Check dtmf
+	// Expect more then 1 'dtmf' child
+	XMLElement* tmp = jingle->findFirstChild(XMLElement::Dtmf);
+	String text;
+	for (; tmp; tmp = jingle->findNextChild(tmp,XMLElement::Dtmf)) {
+	    String reason = tmp->getAttribute("action");
+	    if (reason == "button-up")
+		text << tmp->getAttribute("code");
+	}
+	if (text)
+	    return new JGEvent(ActDtmf,this,jbev->releaseXML(),0,text);
+	confirm(jbev->releaseXML(),XMPPError::SServiceUnavailable);
+	return 0;
+    }
+ 
+    // *** ActInfo
+    if (act == ActInfo) {
+        // Check info element
+	// Return ActInfo event to signal ping (XEP-0166 6.8)
+	XMLElement* child = jingle->findFirstChild();
+	if (!child)
+	    return new JGEvent(ActInfo,this,jbev->releaseXML());
+ 
+	JGEvent* event = 0;
+	Action a = ActCount;
+	XMPPNamespace::Type ns = XMPPNamespace::Count;
+	// Check namespace and build event
+	switch (child->type()) {
+	    case XMLElement::Ringing:
+		a = ActRinging;
+		ns = XMPPNamespace::JingleRtpInfoOld;
+		break;
+	    case XMLElement::Mute:
+		a = ActMute;
+		ns = XMPPNamespace::JingleRtpInfoOld;
+		break;
+	    default: ;
+	}
+	if (a != ActCount && XMPPUtils::hasXmlns(*child,ns))
+	    event = new JGEvent(a,this,jbev->releaseXML());
+	else
+	    confirm(jbev->releaseXML(),XMPPError::SFeatureNotImpl);
+        TelEngine::destruct(child);
+	return event;
+    }
+ 
+    if (act == ActTransportAccept) {
+	confirm(jbev->element());
+	return 0;
+    }
+
+    // Get transport
+    // Get media description
+    // Create event, update transport and media
+    XMLElement* media = 0;
+    XMLElement* trans = jingle;
+    JGSessionContent* c = 0;
+    JGEvent* event = 0;
+    while (true) {
+	c = new JGSessionContent(JGSessionContent::RtpIceUdp,m_sessContentName,
+	    JGSessionContent::SendBoth,JGSessionContent::CreatorInitiator);
+	c->m_rtpRemoteCandidates.m_type = JGRtpCandidates::RtpIceUdp;
+	// Build media
+	if (act == ActInitiate || act == ActAccept) {
+	    media = jingle->findFirstChild(XMLElement::Description);
+	    if (media && XMPPUtils::hasXmlns(*media,XMPPNamespace::JingleAudio)) {
+		c->m_rtpMedia.fromXML(media);
+		c->m_rtpMedia.m_media = JGRtpMediaList::Audio;
+	    }
+	    else
+		break;
+	}
+	// Build transport
+	trans = trans->findFirstChild(XMLElement::Transport);
+	if (trans && !XMPPUtils::hasXmlns(*trans,XMPPNamespace::JingleTransport)) {
+	    if (trans != jingle)
+		TelEngine::destruct(trans);
+	    else
+		trans = 0;
+	}
+	XMLElement* t = trans ? trans->findFirstChild(XMLElement::Candidate) : 0;
+	if (t) {
+	    JGRtpCandidate* cd = new JGRtpCandidate(m_localSid + "_transport");
+	    cd->m_component = "1";
+	    cd->m_generation = t->getAttribute("generation");
+	    cd->m_address = t->getAttribute("address");
+	    cd->m_port = t->getAttribute("port");
+	    cd->m_protocol = t->getAttribute("protocol");;
+	    cd->m_generation = t->getAttribute("generation");
+	    cd->m_type = t->getAttribute("type");
+	    c->m_rtpRemoteCandidates.m_ufrag = t->getAttribute("username");
+	    c->m_rtpRemoteCandidates.m_password = t->getAttribute("password");
+	    c->m_rtpRemoteCandidates.append(cd);
+	    TelEngine::destruct(t);
+	}
+	else if (act == ActTransportInfo)
+	    break;
+	// Don't set the event's element yet: this would invalidate the 'jingle' variable
+	event = new JGEvent(act,this,jbev->releaseXML());
+	event->m_contents.append(c);
+	break;
+    }
+    if (trans != jingle)
+	TelEngine::destruct(trans);
+    TelEngine::destruct(media);
+    if (!event) {
+	TelEngine::destruct(c);
+	confirm(jbev->releaseXML(),XMPPError::SServiceUnavailable);
+    }
+    return event;
+}
+
+// Create an 'iq' stanza with a 'jingle' child
+XMLElement* JGSession0::createJingle(Action action, XMLElement* element1,
+    XMLElement* element2, XMLElement* element3)
+{
+    XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqSet,m_localJID,m_remoteJID,0);
+    XMLElement* jingle = XMPPUtils::createElement(XMLElement::Session,
+	XMPPNamespace::JingleSession);
+    if (action < ActCount)
+	jingle->setAttribute("type",lookupAction(action,version()));
+    jingle->setAttribute("initiator",outgoing() ? m_localJID : m_remoteJID);
+    jingle->setAttribute("responder",outgoing() ? m_remoteJID : m_localJID);
+    jingle->setAttribute("id",m_sid);
+    jingle->addChild(element1);
+    jingle->addChild(element2);
+    jingle->addChild(element3);
+    iq->addChild(jingle);
+    return iq;
+}
+
+// Create a dtmf XML element
+XMLElement* JGSession0::createDtmf(const char* dtmf, unsigned int msDuration)
+{
+    XMLElement* xml = XMPPUtils::createElement(XMLElement::Dtmf,XMPPNamespace::DtmfOld);
+    xml->setAttribute("action","button-up");
+    xml->setAttribute("code",dtmf);
+    return xml;
 }
 
 
@@ -1372,20 +1750,9 @@ JGSession::Action JGSession::lookupAction(const char* str, Version ver)
 
 // Create an outgoing session
 JGSession1::JGSession1(JGEngine* engine, JBStream* stream,
-	const String& callerJID, const String& calledJID,
-	const ObjList& contents, XMLElement* extra, const char* msg,
-	const char* subject)
+	const String& callerJID, const String& calledJID, const char* msg)
     : JGSession(Version1,engine,stream,callerJID,calledJID,msg)
 {
-    XMLElement* xml = createJingle(ActInitiate);
-    addJingleContents(xml,contents,false,true,true,true);
-    addJingleChild(xml,extra);
-    if (!null(subject))
-	addJingleChild(xml,new XMLElement(XMLElement::Subject,0,subject));
-    if (sendStanza(xml))
-	changeState(Pending);
-    else
-	changeState(Destroy);
 }
  
 // Create an incoming session
@@ -1397,6 +1764,22 @@ JGSession1::JGSession1(JGEngine* engine, JBEvent* event, const String& id)
 // Destructor
 JGSession1::~JGSession1()
 {
+}
+
+// Build and send the initial message on an outgoing session
+bool JGSession1::initiate(const ObjList& contents, XMLElement* extra, const char* subject)
+{
+    XMLElement* xml = createJingle(ActInitiate);
+    addJingleContents(xml,contents,false,true,true,true);
+    addJingleChild(xml,extra);
+    if (!null(subject))
+	addJingleChild(xml,new XMLElement(XMLElement::Subject,0,subject));
+    if (sendStanza(xml)) {
+	changeState(Pending);
+	return true;
+    }
+    changeState(Destroy);
+    return false;
 }
 
 // Check if a given XML element is valid jingle one

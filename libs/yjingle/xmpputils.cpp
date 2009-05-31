@@ -88,6 +88,11 @@ TokenDict XMPPNamespace::s_value[] = {
     {"urn:xmpp:jingle:transports:bytestreams:0",           JingleTransportByteStreams},
     {"urn:xmpp:jingle:transfer:0",                         JingleTransfer},
     {"urn:xmpp:jingle:dtmf:0",                             Dtmf},
+    {"http://www.google.com/session",                      JingleSession},
+    {"http://www.google.com/session/phone",                JingleAudio},
+    {"http://www.google.com/transport/p2p",                JingleTransport},
+    {"urn:xmpp:jingle:apps:rtp:info",                      JingleRtpInfoOld},
+    {"http://jabber.org/protocol/jingle/info/dtmf",        DtmfOld},
     {"http://jabber.org/protocol/commands",                Command},
     {"http://www.google.com/xmpp/protocol/voice/v1",       CapVoiceV1},
     {0,0}

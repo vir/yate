@@ -84,17 +84,6 @@ inline bool checkValidXmlns(XMLElement* e, XMPPNamespace::Type ns,
     return false;
 }
 
-// Fix some element name conflicts: change type according to their namespace
-// Some elements may have the same name in different namespaces
-inline void fixXmlType(XMLElement* xml)
-{
-    if (!xml)
-	return;
-    if (xml->type() == XMLElement::Session &&
-	xml->hasAttribute("xmlns",s_ns[XMPPNamespace::Jingle]))
-	xml->changeType(XMLElement::Jingle);
-}
-
 #define DROP_AND_EXIT { dropXML(xml); return; }
 #define INVALIDXML_AND_EXIT(code,reason) { invalidStreamXML(xml,code,reason); return; }
 #define ERRORXML_AND_EXIT { errorStreamXML(xml); return; }
@@ -1352,8 +1341,6 @@ JBEvent* JBStream::getIqEvent(XMLElement* xml, int iqType, XMPPError::Type& erro
     }
     error = XMPPError::NoError;
     XMLElement* child = xml->findFirstChild();
-    if (child)
-	fixXmlType(child);
 
     // Request (type is set or get): check the child (MUST exists)
     // Result: check it only if it has a child
@@ -1367,6 +1354,10 @@ JBEvent* JBStream::getIqEvent(XMLElement* xml, int iqType, XMPPError::Type& erro
 	switch (child->type()) {
 	    case XMLElement::Jingle:
 		if (checkValidXmlns(child,XMPPNamespace::Jingle,error))
+		    IQEVENT_SET_REQ(JBEvent::IqJingleGet,JBEvent::IqJingleSet);
+		break;
+	    case XMLElement::Session:
+		if (checkValidXmlns(child,XMPPNamespace::JingleSession,error))
 		    IQEVENT_SET_REQ(JBEvent::IqJingleGet,JBEvent::IqJingleSet);
 		break;
 	    case XMLElement::Query:
@@ -1392,6 +1383,10 @@ JBEvent* JBStream::getIqEvent(XMLElement* xml, int iqType, XMPPError::Type& erro
 	switch (child->type()) {
 	    case XMLElement::Jingle:
 		if (XMPPUtils::hasXmlns(*child,XMPPNamespace::Jingle))
+		    IQEVENT_SET_RSP(JBEvent::IqJingleRes,JBEvent::IqJingleErr);
+		break;
+	    case XMLElement::Session:
+		if (XMPPUtils::hasXmlns(*child,XMPPNamespace::JingleSession))
 		    IQEVENT_SET_RSP(JBEvent::IqJingleRes,JBEvent::IqJingleErr);
 		break;
 	    case XMLElement::Query:

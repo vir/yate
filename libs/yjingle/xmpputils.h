@@ -212,6 +212,11 @@ public:
 	JingleTransportByteStreams,      // urn:xmpp:jingle:transports:bytestreams:0
 	JingleTransfer,                  // urn:xmpp:jingle:transfer:0
 	Dtmf,                            // urn:xmpp:jingle:dtmf:0
+	JingleSession,                   // http://www.google.com/session
+	JingleAudio,                     // http://www.google.com/session/phone
+	JingleTransport,                 // http://www.google.com/transport/p2p
+	JingleRtpInfoOld,                // urn:xmpp:jingle:apps:rtp:info
+	DtmfOld,                         // http://jabber.org/protocol/jingle/info/dtmf
 	Command,                         // http://jabber.org/protocol/command
 	CapVoiceV1,                      // http://www.google.com/xmpp/protocol/voice/v1
 	Count,

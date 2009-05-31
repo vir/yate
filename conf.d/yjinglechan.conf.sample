@@ -3,6 +3,12 @@
 [general]
 ; Global settings of Jabber and Jingle engines
 
+; jingleversion: integer: Jingle session version to use for outgoing calls
+; Defaults to the newest version if missing or invalid
+; Allowed values are 0 or 1
+; This parameter can be overridden when routing by an 'ojingleversion' parameter
+;jingleversion=
+
 ; secure_rtp: boolean: Offer SRTP when negotiating Jingle sessions
 ; Defaults to disable
 ;secure_rtp=disable
@@ -152,7 +158,7 @@
 default=false
 
 ; mulaw: bool: Companded-only G711 mu-law (PCMU/8000)
-mulaw=default
+mulaw=true
 
 ; alaw: bool: Companded-only G711 a-law (PCMU/8000)
 alaw=true

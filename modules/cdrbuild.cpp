@@ -467,6 +467,8 @@ bool CdrHandler::received(Message &msg)
 	    msg.c_str(),id.c_str());
     if ((type == CdrRinging) || (type == CdrAnswer)) {
 	id = msg.getValue("peerid");
+	if (id.null())
+	    id = msg.getValue("targetid");
 	if (id && (b = CdrBuilder::find(id))) {
 	    b->update(type,msg.msgTime().usec());
 	    b->emit();

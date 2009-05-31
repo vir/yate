@@ -153,6 +153,7 @@ class IVR
 		    $m->id = "";
 		    $m->SetParam("id",IVR::ChannelID());
 		    $m->SetParam("targetid",IVR::TargetID());
+		    $m->SetParam("cdrcreate",false);
 		    $m->Dispatch();
 		    break;
 		case "hangup":     // Hangup the entire IVR

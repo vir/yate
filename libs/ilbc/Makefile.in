@@ -6,7 +6,7 @@ AR  := ar
 SED := sed
 DEFS :=
 INCLUDES := -I@top_srcdir@
-CFLAGS := -O3 -funroll-loops -fomit-frame-pointer -fsigned-char @MODULE_CFLAGS@
+CFLAGS := @CFLAGS@ -O3 -funroll-loops -fomit-frame-pointer -fsigned-char @MODULE_CFLAGS@
 LDFLAGS:= @LDFLAGS@
 
 PROGS=

@@ -7,7 +7,7 @@ CXX  := @CXX@ -Wall
 AR  := ar
 DEFS :=
 INCLUDES := -I@top_srcdir@ -I../.. -I@srcdir@
-CFLAGS := -O2 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
+CFLAGS := @CFLAGS@ @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= @LDFLAGS@ -L../.. -lyate
 INCFILES := @top_srcdir@/yateclass.h @srcdir@/yatertp.h
 

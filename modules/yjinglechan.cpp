@@ -1320,7 +1320,7 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
     m_hangup(false), m_timeout(0), m_transferring(false), m_recvTransferStanza(0),
     m_dataFlags(0), m_ftStatus(FTNone), m_ftHostDirection(FTHostNone)
 {
-    NamedString* ver = msg.getParam("ojingleversion");
+    NamedString* ver = msg.getParam("ojingle_version");
     if (ver)
 	m_sessVersion = JGSession::lookupVersion(*ver);
     m_subject = msg.getValue("subject");
@@ -1530,7 +1530,7 @@ bool YJGConnection::route()
     m->addParam("calleruri",BUILD_XMPP_URI(m_remote));
     if (m_subject)
 	m->addParam("subject",m_subject);
-    m->addParam("jingleversion",JGSession::lookupVersion(m_sessVersion));
+    m->addParam("jingle_version",JGSession::lookupVersion(m_sessVersion));
     m_mutex.lock();
     // TODO: add remote ip/port
     // Fill file transfer data
@@ -4291,7 +4291,7 @@ void YJGDriver::initialize()
     s_userRoster = sect->getBoolValue("user.roster",false);
     s_useCrypto = sect->getBoolValue("secure_rtp",false);
     s_cryptoMandatory = s_useCrypto;
-    s_sessVersion = JGSession::lookupVersion(sect->getValue("jingleversion"),JGSession::Version1);
+    s_sessVersion = JGSession::lookupVersion(sect->getValue("jingle_version"),JGSession::Version1);
 
     // Init codecs in use. Check each codec in known codecs list against the configuration
     s_usedCodecs.clear();
@@ -4325,7 +4325,7 @@ void YJGDriver::initialize()
     if (debugAt(dbg)) {
 	String s;
 	s << " localip=" << s_localAddress ? s_localAddress.c_str() : "MISSING";
-	s << " jingleversion=" << JGSession::lookupVersion(s_sessVersion);
+	s << " jingle_version=" << JGSession::lookupVersion(s_sessVersion);
 	s << " singletone=" << String::boolText(m_singleTone);
 	s << " pending_timeout=" << s_pendingTimeout;
 	s << " anonymous_caller=" << s_anonymousCaller;

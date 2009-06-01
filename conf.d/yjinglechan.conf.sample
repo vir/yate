@@ -3,11 +3,11 @@
 [general]
 ; Global settings of Jabber and Jingle engines
 
-; jingleversion: integer: Jingle session version to use for outgoing calls
+; jingle_version: integer: Jingle session version to use for outgoing calls
 ; Defaults to the newest version if missing or invalid
 ; Allowed values are 0 or 1
-; This parameter can be overridden when routing by an 'ojingleversion' parameter
-;jingleversion=
+; This parameter can be overridden when routing by an 'ojingle_version' parameter
+;jingle_version=
 
 ; secure_rtp: boolean: Offer SRTP when negotiating Jingle sessions
 ; Defaults to disable

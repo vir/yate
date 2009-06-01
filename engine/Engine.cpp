@@ -1738,8 +1738,12 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 
     initUsrPath(s_usrpath,usrpath);
 
-    if (workdir)
-	::chdir(workdir);
+    if (workdir && ::chdir(workdir)) {
+	int err = errno;
+	::fprintf(stderr,"Could not change working directory to '%s': %s (%d)\n",
+	    workdir,::strerror(err),err);
+	return err;
+    }
 
     if (s_engineCheck && !s_engineCheck->check(s_cmds))
 	return s_haltcode;

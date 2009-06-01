@@ -183,7 +183,7 @@ void SocketAddr::assign(const struct sockaddr* addr, socklen_t len)
 #endif
 	}
     }
-    if (addr && (len >= sizeof(struct sockaddr))) {
+    if (addr && (len >= (socklen_t)sizeof(struct sockaddr))) {
 	void* tmp = ::malloc(len);
 	::memcpy(tmp,addr,len);
 	m_address = (struct sockaddr*)tmp;

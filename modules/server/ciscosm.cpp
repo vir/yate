@@ -682,7 +682,7 @@ void RudpSocket::retransData()
     ObjList* obj = m_msgList.skipNull();
     for (; obj; obj = obj->skipNext()) {
 	DataSequence* data = static_cast<DataSequence*>(obj->get());
-	if (data && Modulo256::between(data->sequence(),m_lastAck,m_sequence))
+	if (data && Modulo256::between(data->sequence(),m_lastAck,m_sequence)) {
 	    if (data->retransCounter() <= m_retransCounter) {
 		if (m_haveChecksum) {
 		    data->refreshAck(m_ackNum);
@@ -705,6 +705,7 @@ void RudpSocket::retransData()
 		mylock.drop();
 		reset();
 	    }
+	}
     }
 }
 

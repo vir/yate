@@ -166,6 +166,8 @@ typedef int HANDLE;
 #define IPTOS_LOWDELAY      0x10
 #define IPTOS_THROUGHPUT    0x08
 #define IPTOS_RELIABILITY   0x04
+#endif
+#ifndef IPTOS_MINCOST
 #define IPTOS_MINCOST       0x02
 #endif
 

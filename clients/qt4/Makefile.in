@@ -10,7 +10,7 @@ MOC := @QT4_MOC@
 DEFS:=
 
 INCLUDES:=-I. -I@srcdir@ -I@top_srcdir@ @QT4_INC@
-CXXFLAGS:=$(CXXFLAGS) @CFLAGS@ @MODULE_CPPFLAGS@ @INLINE_FLAGS@
+CXXFLAGS:=$(CXXFLAGS) @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= @LDFLAGS@ -L../.. -lyate
 INCFILES := @top_srcdir@/yateclass.h @top_srcdir@/yatecbase.h @srcdir@/qt4client.h
 

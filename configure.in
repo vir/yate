@@ -235,14 +235,16 @@ RESOLV_LIB=""
 AC_MSG_CHECKING([for resolver library])
 AC_LANG_SAVE
 AC_LANG_C
-AC_TRY_LINK([#include <netinet/in.h>
-#include <arpa/nameser.h>
-#include <resolv.h>],[res_init();],[HAVE_RESOLV=yes],[HAVE_RESOLV=no])
 SAVE_CFLAGS="$CFLAGS"
 CFLAGS="$CFLAGS -Wall -Werror $GCC_UNRESOLVED_SYMBOLS"
 AC_TRY_LINK([#include <netinet/in.h>
 #include <arpa/nameser.h>
+#include <resolv.h>],[res_init();],[HAVE_RESOLV=yes],[HAVE_RESOLV=no])
+if [[ "x$HAVE_RESOLV" != "xno" ]]; then
+AC_TRY_LINK([#include <netinet/in.h>
+#include <arpa/nameser.h>
 #include <resolv.h>],[unsigned char x[2]; res_query("",0,0,x,0);],[],[RESOLV_LIB=-lresolv])
+fi
 CFLAGS="$SAVE_CFLAGS"
 AC_LANG_RESTORE
 AC_MSG_RESULT([$HAVE_RESOLV $RESOLV_LIB])

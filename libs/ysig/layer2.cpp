@@ -394,7 +394,7 @@ void SS7MTP2::timerTick(const Time& when)
 		buf[0] = m_bib ? m_bsn | 0x80 : m_bsn;
 		Debug(this,DebugInfo,"Resending packet %p with FSN=%u [%p]",
 		    packet,buf[1] & 0x7f,this);
-		transmitPacket(*packet,false,SignallingInterface::SS7Msu);
+		txPacket(*packet,false,SignallingInterface::SS7Msu);
 		c++;
 	    }
 	    if (c) {
@@ -467,7 +467,7 @@ bool SS7MTP2::transmitMSU(const SS7MSU& msu)
 	m_queue.count(),this);
     bool ok = false;
     if (operational()) {
-	ok = transmitPacket(*packet,false,SignallingInterface::SS7Msu);
+	ok = txPacket(*packet,false,SignallingInterface::SS7Msu);
 	transmitFISU();
     }
     if (!m_abort)
@@ -715,7 +715,7 @@ bool SS7MTP2::transmitLSSU(unsigned int status)
     buf[1] = m_fib ? m_fsn | 0x80 : m_fsn;
     DataBlock packet(buf,buf[2]+3,false);
     XDebug(this,DebugAll,"Transmit LSSU with status %s",statusName(buf[3],true));
-    bool ok = transmitPacket(packet,repeat,SignallingInterface::SS7Lssu);
+    bool ok = txPacket(packet,repeat,SignallingInterface::SS7Lssu);
     m_fillTime = Time::now() + (1000 * m_fillIntervalMs);
     unlock();
     packet.clear(false);
@@ -732,7 +732,7 @@ bool SS7MTP2::transmitFISU()
     buf[0] = m_bib ? m_bsn | 0x80 : m_bsn;
     buf[1] = m_fib ? m_fsn | 0x80 : m_fsn;
     DataBlock packet(buf,3,false);
-    bool ok = transmitPacket(packet,m_fillLink,SignallingInterface::SS7Fisu);
+    bool ok = txPacket(packet,m_fillLink,SignallingInterface::SS7Fisu);
     m_fillTime = Time::now() + (1000 * m_fillIntervalMs);
     unlock();
     packet.clear(false);

@@ -196,22 +196,22 @@ Makefile: @srcdir@/Makefile.in $(MKDEPS)
 	cd .. && ./config.status
 
 lib%.so: %.o
-	$(LINK) -shared -o $@ $^
+	$(LINK) -shared -o $@ $^ @LIBS@
 
 server/%.yate: @srcdir@/server/%.cpp $(MKDEPS) $(INCFILES)
-	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS)
+	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS) @LIBS@
 
 client/%.yate: @srcdir@/client/%.cpp $(MKDEPS) $(INCFILES)
-	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS)
+	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS) @LIBS@
 
 qt4/%.yate: @srcdir@/qt4/%.cpp $(MKDEPS) $(INCFILES)
-	$(MODCOMP) -o $@ $(LOCALFLAGS) @QT4_INC@ -I@top_srcdir@/clients/qt4 $< $(LOCALLIBS) @QT4_LIB@
+	$(MODCOMP) -o $@ $(LOCALFLAGS) @QT4_INC@ -I@top_srcdir@/clients/qt4 $< $(LOCALLIBS) @QT4_LIB@ @LIBS@
 
 qt4/%.moc: @srcdir@/qt4/%.h $(MKDEPS) $(INCFILES)
 	mkdir -p qt4 && $(MOC) $(DEFS) $(INCLUDES) @QT4_INC@ -I@top_srcdir@/clients/qt4 -I@srcdir@/qt4 -o $@ $<
 
 %.yate: @srcdir@/%.cpp $(MKDEPS) $(INCFILES)
-	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS)
+	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS) @LIBS@
 
 # Take special care of the modules that depend on optional libs
 

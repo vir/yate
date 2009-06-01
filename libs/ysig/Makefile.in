@@ -64,13 +64,13 @@ Makefile: @srcdir@/Makefile.in ../../config.status
 	cd ../.. && ./config.status
 
 ../../$(LIBD_VER): $(OBJS)
-	$(LINK) -shared -o $@ -Wl,--soname=$(LIBD_VER) $^
+	$(LINK) -shared -o $@ -Wl,--soname=$(LIBD_VER) $^ @LIBS@
 
 ../../$(LIBD_DEV): ../../$(LIBD_VER)
 	cd ../.. && ln -sf $(LIBD_VER) $(LIBD_DEV)
 
 yate-%: @srcdir@/main-%.cpp $(MKDEPS) $(LIBS) ../../libyate.so $(INCFILES)
-	$(COMPILE) -o $@ $(LOCALFLAGS) $< $(LIBTHR) $(LDFLAGS) $(LOCALLIBS)
+	$(COMPILE) -o $@ $(LOCALFLAGS) $< $(LIBTHR) $(LDFLAGS) $(LOCALLIBS) @LIBS@
 
 $(LIBS): $(OBJS)
 	$(AR) rcs $@ $^

@@ -96,6 +96,7 @@ AC_CHECK_FUNCS([gettimeofday inet_ntoa memmove strerror], , [AC_MSG_ERROR([This 
 
 AC_CACHE_SAVE
 
+SAVE_LIBS="$LIBS"
 # Checks for required libraries.
 THREAD_LIB=""
 AC_CHECK_LIB([pthread], [pthread_mutexattr_settype], [THREAD_LIB="-lpthread"])
@@ -115,6 +116,8 @@ AC_CHECK_LIB([dl], [dlopen], , [AC_MSG_ERROR([This function is required.])])
 DLOPEN_LIB="-ldl"
 fi
 AC_SUBST(DLOPEN_LIB)
+# Restore the system libs
+LIBS="$SAVE_LIBS"
 
 MUTEX_HACK=""
 AC_MSG_CHECKING([for pthread_mutexattr_settype declaration])

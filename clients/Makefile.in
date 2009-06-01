@@ -132,7 +132,7 @@ Makefile: @srcdir@/Makefile.in $(MKDEPS)
 	cd .. && ./config.status
 
 yate-%: @srcdir@/main-%.cpp $(MKDEPS) ../libyate.so $(INCFILES)
-	$(COMPILE) -o $@ $(LOCALFLAGS) $< $(LIBTHR) $(LDFLAGS) $(LOCALLIBS)
+	$(COMPILE) -o $@ $(LOCALFLAGS) $< $(LIBTHR) $(LDFLAGS) $(LOCALLIBS) @LIBS@
 
 yate-qt4: $(QTCLIENT)
 yate-qt4: LDFLAGS := $(QTCLIENT) $(LDFLAGS)

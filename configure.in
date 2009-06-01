@@ -92,12 +92,17 @@ AC_HEADER_TIME
 # Checks for library functions.
 AC_FUNC_MALLOC
 AC_TYPE_SIGNAL
-AC_CHECK_FUNCS([gettimeofday inet_ntoa memmove regcomp strerror], , [AC_MSG_ERROR([This function is required.])])
+AC_CHECK_FUNCS([gettimeofday inet_ntoa memmove strerror], , [AC_MSG_ERROR([This function is required.])])
 
 AC_CACHE_SAVE
 
 # Checks for required libraries.
-AC_CHECK_LIB([pthread], [pthread_mutexattr_settype], , [AC_MSG_ERROR([This library is required.])])
+THREAD_LIB=""
+AC_CHECK_LIB([pthread], [pthread_mutexattr_settype], [THREAD_LIB="-lpthread"])
+if [[ "x$THREAD_LIB" = "x" ]]; then
+AC_CHECK_LIB([c], [pthread_mutexattr_settype], , [AC_MSG_ERROR([This function is required.])])
+fi
+AC_SUBST(THREAD_LIB)
 
 AC_MSG_CHECKING([for dlopen in default libs])
 AC_LANG_SAVE
@@ -106,7 +111,7 @@ AC_TRY_LINK([#include <dlfcn.h>],[dlopen("",0);],[have_dl=yes],[have_dl=no])
 AC_LANG_RESTORE
 AC_MSG_RESULT([$have_dl])
 if [[ "x$have_dl" != "xyes" ]]; then
-AC_CHECK_LIB([dl], [dlopen], , [AC_MSG_ERROR([This library is required.])])
+AC_CHECK_LIB([dl], [dlopen], , [AC_MSG_ERROR([This function is required.])])
 DLOPEN_LIB="-ldl"
 fi
 AC_SUBST(DLOPEN_LIB)
@@ -263,6 +268,7 @@ case "x$want_internalregex" in
 	;;
 esac
 AC_MSG_RESULT([$INTERNAL_REGEX])
+AC_CHECK_FUNCS([regcomp], , [INTERNAL_REGEX=yes])
 AC_SUBST(INTERNAL_REGEX)
 
 HAVE_PGSQL=no

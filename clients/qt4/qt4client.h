@@ -452,6 +452,8 @@ public slots:
     void chooseFileAccepted();
     // Choose file window was cancelled
     void chooseFileRejected();
+    // Text changed slot. Notify the client
+    void textChanged(const QString& text);
 
 private slots:
     void openUrl(const QString& link);

@@ -1898,6 +1898,17 @@ void QtWindow::chooseFileRejected()
     Client::self()->action(this,action,0);
 }
 
+// Text changed slot. Notify the client
+void QtWindow::textChanged(const QString& text)
+{
+    if (!sender())
+	return;
+    NamedList params("");
+    QtClient::getUtf8(params,"sender",sender()->objectName());
+    QtClient::getUtf8(params,"text",text);
+    Client::self()->action(this,"textchanged",&params);
+}
+
 void QtWindow::openUrl(const QString& link)
 {
     QDesktopServices::openUrl(QUrl(link));
@@ -2307,6 +2318,15 @@ void QtWindow::doInit()
     QList<QTabWidget*> tabs = qFindChildren<QTabWidget*>(this);
     for (int i = 0; i < tabs.size(); i++)
 	QtClient::connectObjects(tabs[i],SIGNAL(currentChanged(int)),this,SLOT(selectionChanged()));
+
+    // Connect line edit signals
+    QList<QLineEdit*> le = qFindChildren<QLineEdit*>(this);
+    for (int i = 0; i < le.size(); i++) {
+	QVariant var = le[i]->property("dynamicTextChangedNotify");
+	if (var.toBool())
+	    QtClient::connectObjects(le[i],SIGNAL(textChanged(const QString&)),this,
+		SLOT(textChanged(const QString&)));
+    }
 
     // Process tables:
     // Insert a column and connect signals

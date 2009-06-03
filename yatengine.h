@@ -437,9 +437,15 @@ public:
      */
     void clearFilter();
 
+protected:    
+    /**
+     * Remove the handler from its dispatcher, remove any installed filter.
+     * This method is called internally from destruct and the destructor
+     */
+    void cleanup();
+
 private:
     virtual bool receivedInternal(Message& msg);
-    void cleanup();
     void safeNow();
     unsigned m_priority;
     int m_unsafe;

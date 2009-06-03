@@ -90,9 +90,8 @@ AC_C_INLINE
 AC_HEADER_TIME
 
 # Checks for library functions.
-AC_FUNC_MALLOC
 AC_TYPE_SIGNAL
-AC_CHECK_FUNCS([gettimeofday inet_ntoa memmove strerror], , [AC_MSG_ERROR([This function is required.])])
+AC_CHECK_FUNCS([malloc gettimeofday inet_ntoa memmove strerror], , [AC_MSG_ERROR([This function is required.])])
 
 AC_CACHE_SAVE
 

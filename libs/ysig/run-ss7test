@@ -4,7 +4,7 @@
 
 exefile="yate-ss7test"
 if [ -x "$exefile" -a -x ../../run ]; then
-    cd ../..; exec ./run --executable "contrib/yss7/$exefile" "$@"
+    cd ../..; exec ./run --executable "libs/ysig/$exefile" "$@"
 else
     echo "Could not find '$exefile' executable or run script" >&2
 fi

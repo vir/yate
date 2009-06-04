@@ -778,6 +778,21 @@ if [[ "x$ac_cv_use_openssl" = "xyes" ]]; then
 	verssl="no"
     fi
     AC_MSG_RESULT([$verssl])
+elif [[ "x$ac_cv_use_openssl" != "xno" ]]; then
+    AC_MSG_CHECKING([for OpenSSL in $ac_cv_use_openssl])
+    verssl=no
+    if [[ -f "$ac_cv_use_openssl/include/openssl/opensslconf.h" ]]; then
+	verssl=`sed -n 's/^#define SHLIB_VERSION_NUMBER "\([0-9.]\+\)".*/\1/p' <$ac_cv_use_openssl/include/openssl/opensslv.h 2>/dev/null`
+	if [[ "x$verssl" != "x" ]]; then
+	    HAVE_OPENSSL=yes
+	    OPENSSL_VER="$verssl"
+	    OPENSSL_INC="-I$ac_cv_use_openssl/include"
+	    OPENSSL_LIB="-lssl -lcrypto"
+	else
+	    verssl=no
+	fi
+    fi
+    AC_MSG_RESULT([$verssl])
 fi
 AC_SUBST(HAVE_OPENSSL)
 AC_SUBST(OPENSSL_INC)

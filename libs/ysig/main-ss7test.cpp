@@ -28,11 +28,11 @@ int main()
     SS7PointCode scp(2,141,4);
     String s;
     s << "Point code " << scp.pack(SS7PointCode::ITU) << " is " << scp;
-    Output(s);
+    Output("%s",s.c_str());
     s.clear();
     scp.unpack(SS7PointCode::ITU,2114);
     s << "Point code " << scp.pack(SS7PointCode::ITU) << " is " << scp;
-    Output(s);
+    Output("%s",s.c_str());
     SignallingEngine* engine = new SignallingEngine;
     NamedList params("");
     SS7Router* router = new SS7Router(params);

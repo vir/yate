@@ -885,7 +885,7 @@ SLib* SLib::load(const char* file, bool local)
 #ifdef _WINDOWS
     Debug(DebugWarn,"LoadLibrary error %u in '%s'",::GetLastError(),file);
 #else
-    Debug(DebugWarn,dlerror());
+    Debug(DebugWarn,"%s",dlerror());
 #endif    
     return 0;
 }

@@ -150,7 +150,7 @@ XMLElement::XMLElement(const char* name, NamedList* attributes,
 	    NamedString* ns = attributes->getParam(i);
 	    if (!ns)
 		continue;
-	    m_element->SetAttribute(ns->name().c_str(),ns->c_str());
+	    m_element->SetAttribute(ns->name().safe(),ns->safe());
 	}
     }
     setType();
@@ -172,7 +172,7 @@ XMLElement::XMLElement(Type type, NamedList* attributes,
 	    NamedString* ns = attributes->getParam(i);
 	    if (!ns)
 		continue;
-	    m_element->SetAttribute(ns->name().c_str(),ns->c_str());
+	    m_element->SetAttribute(ns->name().safe(),ns->safe());
 	}
     }
 //    XDebug(DebugAll,"XMLElement::XMLElement(%s) [%p]",name(),this);

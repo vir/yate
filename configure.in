@@ -272,7 +272,9 @@ case "x$want_internalregex" in
 	;;
 esac
 AC_MSG_RESULT([$INTERNAL_REGEX])
+if [[ "x$INTERNAL_REGEX" != "xyes" ]]; then
 AC_CHECK_FUNCS([regcomp], , [INTERNAL_REGEX=yes])
+fi
 AC_SUBST(INTERNAL_REGEX)
 
 HAVE_PGSQL=no

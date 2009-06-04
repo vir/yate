@@ -59,6 +59,10 @@
 #ifndef bzero
 #define bzero(s, n)	memset ((s), 0, (n))
 #endif
+#ifndef _STRINGS_H_
+/* Prevent inclusion of strings.h as the mess above can cause syntax errors */
+#define _STRINGS_H_
+#endif
 #else
 #include <strings.h>
 #endif

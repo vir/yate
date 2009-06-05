@@ -549,8 +549,8 @@ bool OssHandler::received(Message &msg)
 
 bool StatusHandler::received(Message &msg)
 {
-    const char *sel = msg.getValue("module");
-    if (sel && ::strcmp(sel,"oss"))
+    const String* sel = msg.getParam("module");
+    if (sel && (*sel != "oss"))
 	return false;
     msg.retValue() << "name=oss,type=misc;osschan=" << (s_chan != 0 ) << "\r\n";
     return false;

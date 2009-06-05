@@ -26,7 +26,6 @@
 
 #include <sys/stat.h>
 #include <sys/ioctl.h>
-#include <string.h>
 #include <fcntl.h>
 
 #if defined(__linux__)
@@ -566,8 +565,8 @@ bool AlsaHandler::received(Message &msg)
 
 bool StatusHandler::received(Message &msg)
 {
-    const char *sel = msg.getValue("module");
-    if (sel && ::strcmp(sel,"alsa"))
+    const String* sel = msg.getParam("module");
+    if (sel && (*sel != "alsa"))
 	return false;
     msg.retValue() << "name=alsa,type=misc;alsachan=" << (s_chan != 0 ) << "\r\n";
     return false;

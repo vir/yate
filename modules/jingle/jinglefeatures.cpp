@@ -798,6 +798,31 @@ bool YJingleFeatures::handleXmppIqVCard(Message& msg, XMLElement& vcard,
 	    m->addParam("name",name);
 	TelEngine::destruct(n);
     }
+    // EMAIL
+    XMLElement* email = vcard.findFirstChild("EMAIL");
+    if (email) {
+	const char* em = email->getText();
+	if (!null(em))
+	    m->addParam("email",em);
+	TelEngine::destruct(email);
+    }
+    // Photo
+    XMLElement* photo = vcard.findFirstChild("PHOTO");
+    if (photo) {
+	XMLElement* type = photo->findFirstChild("TYPE");
+	XMLElement* binval = photo->findFirstChild("BINVAL");
+	if (type && binval) {
+	    const char* t = type->getText();
+	    const char* img = binval->getText();
+	    if (!(null(t) || null(img))) {
+		m->addParam("photo_format",t);
+		m->addParam("photo",img);
+	    }
+	}
+	TelEngine::destruct(type);
+	TelEngine::destruct(binval);
+	TelEngine::destruct(photo);
+    }
 
     Engine::enqueue(m);
     return true;

@@ -1052,6 +1052,7 @@ void ExtModReceiver::run()
 	Debug("ExtModule",DebugWarn,"Failed to set nonblocking mode, expect trouble [%p]",this);
     char buffer[MAX_INCOMING_LINE];
     int posinbuf = 0;
+    bool invalid = true;
     DDebug(DebugAll,"ExtModReceiver::run() entering loop [%p]",this);
     for (;;) {
 	use();
@@ -1065,6 +1066,9 @@ void ExtModReceiver::run()
 		Debug("ExtModule",DebugInfo,"Read EOF on %p [%p]",m_in,this);
 	    closeIn();
 	    flush();
+	    if (invalid)
+		Debug("ExtModule",DebugWarn,"Never got anything valid from '%s' '%s'",
+		m_script.c_str(),m_args.safe());
 	    if (m_chan && m_chan->running())
 		Thread::sleep(1);
 	    break;
@@ -1092,6 +1096,7 @@ void ExtModReceiver::run()
 	    if ((eoline > buffer) && (eoline[-1] == '\r'))
 		eoline[-1] = 0;
 	    if (buffer[0]) {
+		invalid = invalid && (buffer[0] != '%' || buffer[1] != '%');
 		use();
 		bool goOut = processLine(buffer);
 		if (unuse() || goOut)

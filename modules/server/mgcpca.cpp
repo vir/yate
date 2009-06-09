@@ -1294,8 +1294,13 @@ bool MGCPCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params
 	case SignallingCircuitEvent::Flash:
 	    return fxo() && sendRequest("L/hf");
 	case SignallingCircuitEvent::Dtmf:
-	    if (params)
-		return sendRequest("D/" + *params);
+	    if (params) {
+		const String* tone = params->getParam("tone");
+		if (!tone)
+		    tone = params;
+		if (!null(tone))
+		    return sendRequest("D/" + *tone);
+	    }
 	    break;
 	default:
 	    ;

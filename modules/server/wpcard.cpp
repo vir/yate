@@ -1406,6 +1406,8 @@ bool WpSpan::init(const NamedList& config, const NamedList& defaults, NamedList&
 	    id().safe(),type.safe(),this);
 	return false;
     }
+    m_increment = config.getIntValue("increment",m_increment);
+
     // Other data
     m_swap = defaults.getBoolValue("bitswap",true);
     m_noData = defaults.getIntValue("idlevalue",0xff);

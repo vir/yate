@@ -60,3 +60,9 @@
 
 ; offset: int: Offset of circuit code relative to start in span
 ;offset=0
+
+; increment: integer: How much will increment this span the circuit number in
+;  the group it belongs to
+; Defaults to 32 if chans is 30 or 31 (E1), 24 if chans is 23 (T1), number of
+;  circuits in all other cases
+;increment=

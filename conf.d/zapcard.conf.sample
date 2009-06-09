@@ -102,6 +102,11 @@
 ; If missing, will be computed from type (E1: 1-15.17-31, T1: 1-23, BRI: 1-2, FXO/FXS: 1)
 ;voicechans=1-15.17-31
 
+; increment: integer: How much will increment this span the circuit number in
+;  the group it belongs to
+; Defaults to 32 for E1, 24 for T1, 3 for BRI
+;increment=
+
 ; dtmfdetect: boolean: Set/reset DTMF detection on each zaptel channel used by
 ;  a circuit belonging to this span
 ; If enabled and DTMF detection is not supported by the zaptel driver it will be disabled

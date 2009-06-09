@@ -785,9 +785,17 @@ bool MGCPSpan::init(const NamedList& params)
     if (!m_count)
 	return false;
     m_increment = m_count;
-    // assume 31 circuits means E1
-    if (m_increment == 31)
-	m_increment = 32;
+    // assume 23 circuits means T1, 30 or 31 circuits means E1
+    switch (m_increment) {
+	case 23:
+	    m_increment = 24;
+	    break;
+	case 30:
+	case 31:
+	    m_increment = 32;
+	    break;
+    }
+    m_increment = config->getIntValue("increment",m_increment);
     m_circuits = new MGCPCircuit*[m_count];
     unsigned int i;
     for (i = 0; i < m_count; i++)

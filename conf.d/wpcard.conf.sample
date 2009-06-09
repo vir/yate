@@ -66,6 +66,11 @@
 ; Defaults to 0 if missing or invalid
 ;offset=
 
+; increment: integer: How much will increment this span the circuit number in
+;  the group it belongs to
+; Defaults to 32 for E1, 24 for T1
+;increment=
+
 ; samples: integer: Specify the number of data samples expected to be received
 ; It is used to create the buffer to read data from span. The total buffer will have the
 ;  number of bytes given by the number of samples multiplied by the number of voice

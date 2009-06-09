@@ -248,6 +248,10 @@
 ; The format is network-cluster-member or number
 ;remotepointcode=
 
+; lockgroup: boolean: Allow sending circuit group block/unblock requests
+; Normally the remote side must support circuit group operations
+;lockgroup=yes
+
 ; earlyacm: boolean: Convert received early ACM user state into progress or ringing
 ;earlyacm=yes
 

@@ -5850,6 +5850,7 @@ private:
     SignallingCircuit* m_rscCic;         // Circuit currently beeing reset
     // Blocking/unblocking circuits
     SignallingTimer m_lockTimer;         // Request timeout
+    bool m_lockGroup;                    // Allow sending requests for a group
     bool m_lockNeed;                     // Flag used to signal that there are circuits whose lock state changed
     bool m_hwFailReq;                    // HW failure/maintenance block/unblock sent
     bool m_blockReq;                     // Block/unblock req. sent

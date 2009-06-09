@@ -588,9 +588,9 @@ static unsigned char encodeRangeSt(const SS7ISUP* isup, SS7MSU& msu,
 	return 0;
     unsigned char data[34] = {1};
     // 1st octet is the range code (range - 1)
-    // Q.763 3.43 Sent range avlue must be in interval 1..255
+    // Q.763 3.43 Sent range value must be in interval 1..256
     unsigned int range = val->toInteger(0);
-    if (range < 2 || range > 256) {
+    if (range < 1 || range > 256) {
 	Debug(isup,DebugNote,"encodeRangeSt invalid range %s=%s",val->name().c_str(),val->safe());
 	return 0;
     }
@@ -2025,6 +2025,7 @@ SS7ISUP::SS7ISUP(const NamedList& params)
       m_rscTimer(0),
       m_rscCic(0),
       m_lockTimer(0),
+      m_lockGroup(true),
       m_lockNeed(true),
       m_hwFailReq(false),
       m_blockReq(false),
@@ -2061,6 +2062,7 @@ SS7ISUP::SS7ISUP(const NamedList& params)
     m_priossf |= SS7MSU::getPriority(params.getValue("priority"),SS7MSU::Regular);
     m_priossf |= SS7MSU::getNetIndicator(params.getValue("netindicator"),SS7MSU::National);
 
+    m_lockGroup = params.getBoolValue("lockgroup",m_lockGroup);
     m_earlyAcm = params.getBoolValue("earlyacm",m_earlyAcm);
     m_inn = params.getBoolValue("inn",m_inn);
     m_numPlan = params.getValue("numplan");
@@ -2105,6 +2107,7 @@ SS7ISUP::SS7ISUP(const NamedList& params)
 	s << " priority+SSF=" << (unsigned int)m_priossf;
 	s << " lockcircuits=" << params.getValue("lockcircuits");
 	s << " userpartavail=" << String::boolText(m_userPartAvail);
+	s << " lockgroup=" << String::boolText(m_lockGroup);
 	Debug(this,DebugInfo,"ISUP Call Controller %s [%p]",s.c_str(),this);
     }
 }
@@ -2130,6 +2133,8 @@ bool SS7ISUP::initialize(const NamedList* config)
 	    config->getIntValue("debuglevel",-1)));
 	setDebug(config->getBoolValue("print-messages",false),
 	    config->getBoolValue("extended-debug",false));
+	m_lockGroup = config->getBoolValue("lockgroup",m_lockGroup);
+	m_earlyAcm = config->getBoolValue("earlyacm",m_earlyAcm);
     }
     if (engine() && !network()) {
 	NamedList params("ss7router");
@@ -3019,11 +3024,11 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	case SS7MsgISUP::BLA: // Blocking Acknowledgement
 	    // Check for correct response: msg type, circuit code, maintenance request
 	    if (!m_lockNeed || msg->cic() != m_lockCicCode || m_lockMap.length() != 1 ||
-		(msg->type() == SS7MsgISUP::BLA) != m_blockReq || m_hwFailReq) {
+		(msg->type() == SS7MsgISUP::BLA) != m_blockReq) {
 		reason = "wrong-state-message";
 		break;
 	    }
-	    blockCircuit(msg->cic(),m_blockReq,false,false,true,false);
+	    blockCircuit(msg->cic(),m_blockReq,false,m_hwFailReq,true,false);
 	    sendLocalLock();
 	    break;
 	case SS7MsgISUP::CGA: // Circuit Group Blocking Acknowledgement
@@ -3237,6 +3242,9 @@ bool SS7ISUP::sendLocalLock(u_int64_t when)
     if (!m_lockNeed)
 	return false;
 
+    // If remote doesn't support group block/unblock just send BLK/UBL
+    if (!m_lockGroup)
+	o = 0;
     // Check if we can pick a range of circuits within the same span
     //  with the same operation to do
     // Q.763 3.43: range can be 2..256. Bit: 0-no indication 1-block/unblock.
@@ -3278,7 +3286,7 @@ bool SS7ISUP::sendLocalLock(u_int64_t when)
     //  to be sent for maintenance reason)
     SS7MsgISUP* msg = 0;
     m_lockMap.assign(d,lockRange);
-    if (m_lockMap.length() > 1 || m_hwFailReq) {
+    if (m_lockGroup && (m_lockMap.length() > 1 || m_hwFailReq)) {
 	msg = new SS7MsgISUP((m_blockReq ? SS7MsgISUP::CGB : SS7MsgISUP::CGU),
 	    m_lockCicCode);
 	msg->params().addParam("GroupSupervisionTypeIndicator",

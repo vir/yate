@@ -37,6 +37,8 @@ one_param()
 exec > yate-config.in < configure
 
 cat <<"EOF"
+#! /bin/sh
+
 ustr='Usage: yate-config [--cflags] [--includes] [--c-all]
                    [--ldflags] [--libs] [--ld-all] [--ld-nostrip] [--ld-strip]
 		   [--config] [--modules] [--share]

@@ -2724,7 +2724,8 @@ bool QtClient::getProperty(QObject* obj, const char* name, String& value)
 
 // Build a menu object from a list of parameters
 QMenu* QtClient::buildMenu(NamedList& params, const char* text, QObject* receiver,
-	 const char* triggerSlot, const char* toggleSlot, QWidget* parent)
+	 const char* triggerSlot, const char* toggleSlot, QWidget* parent,
+	 const char* aboutToShowSlot)
 {
     QMenu* menu = 0;
     for (unsigned int i = 0; i < params.length(); i++) {
@@ -2778,6 +2779,8 @@ QMenu* QtClient::buildMenu(NamedList& params, const char* text, QObject* receive
 	else
 	    QtClient::connectObjects(list[i],SIGNAL(triggered()),receiver,triggerSlot);
     }
+    if (!TelEngine::null(aboutToShowSlot))
+	QtClient::connectObjects(menu,SIGNAL(aboutToShow()),receiver,aboutToShowSlot);
 
     return menu;
 }

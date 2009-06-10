@@ -242,11 +242,13 @@ public:
      * @param receiver Object receiving menu actions
      * @param actionSlot The receiver's slot for menu signal triggered()
      * @param toggleSlot The receiver's slot for menu signal toggled()
+     * @param aboutToShowSlot The receiver's slot for menu signal aboutToShow()
      * @param parent Optional widget parent
      * @return QMenu pointer or 0 if failed to build it
      */
     static QMenu* buildMenu(NamedList& params, const char* text, QObject* receiver,
-	 const char* actionSlot, const char* toggleSlot, QWidget* parent = 0);
+	 const char* actionSlot, const char* toggleSlot, QWidget* parent = 0,
+	 const char* aboutToShowSlot = 0);
 
     /**
      * Wrapper for QObject::connect() used to put a debug mesage on failure

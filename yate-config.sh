@@ -7,8 +7,6 @@ fi
 
 exec > yate-config.in < configure
 
-shopt -u nocasematch
-
 cat <<"EOF"
 ustr='Usage: yate-config [--cflags] [--includes] [--c-all]
                    [--ldflags] [--libs] [--ld-all] [--ld-nostrip] [--ld-strip]

@@ -23,7 +23,7 @@ one_param()
 	    ;;
 	xPACKAGE_*|xECHO_*|xPATH_SEPARATOR|xCONFIGURE_FILES)
 	    ;;
-	xMUTEX_HACK|xTHREAD_KILL|xFDSIZE_HACK|xMUTEX_HACK)
+	xMUTEX_HACK|xTHREAD_KILL|xFDSIZE_HACK|xMODULE_*)
 	    ;;
 	x*_alias|x*_prefix|xprogram_*)
 	    ;;

@@ -1,5 +1,15 @@
 #! /bin/sh
 
+if [ ! -f configure ]; then
+    echo "Cannot find configure" >&2
+    exit 1
+fi
+
+exec > yate-config.in < configure
+
+shopt -u nocasematch
+
+cat <<"EOF"
 ustr='Usage: yate-config [--cflags] [--includes] [--c-all]
                    [--ldflags] [--libs] [--ld-all] [--ld-nostrip] [--ld-strip]
 		   [--config] [--modules] [--share]
@@ -74,24 +84,33 @@ while [ "$#" != 0 ]; do
 	--archlib)
 	    echo "@ARCHLIB@"
 	    ;;
-	--param=QT4_VER)
-	    echo "@QT4_VER@"
+EOF
+
+pos=__
+while read REPLY; do
+    case "x$pos$REPLY" in
+	x__ac_subst_vars=*)
+	    pos=""
 	    ;;
-	--param=QT4_MOC)
-	    echo "@QT4_MOC@"
+	x__*)
 	    ;;
-	--param=QT4_INC)
-	    echo "@QT4_INC@"
+	x*"'"*)
+	    pos=__
 	    ;;
-	--param=QT4_LIB)
-	    echo "@QT4_LIB@"
+	xPACKAGE_*|xECHO_*|xPATH_SEPARATOR|xCONFIGURE_FILES)
 	    ;;
-	--param=QT4_INC_NET)
-	    echo "@QT4_INC_NET@"
+	xMUTEX_HACK|xTHREAD_KILL|xFDSIZE_HACK|xMUTEX_HACK)
 	    ;;
-	--param=QT4_LIB_NET)
-	    echo "@QT4_LIB_NET@"
+	x*_alias|x*_prefix|xprogram_*)
 	    ;;
+	x[A-Z]*_*)
+	    echo "	--param=$REPLY)"
+	    echo "	    echo \"@$REPLY@\""
+	    echo "	    ;;"
+    esac
+done
+
+cat <<"EOF"
 	*)
 	    echo "I didn't understand: $1" >&2
 	    echo "$ustr" >&2
@@ -100,3 +119,4 @@ while [ "$#" != 0 ]; do
     esac
     shift
 done
+EOF

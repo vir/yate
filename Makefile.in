@@ -121,7 +121,7 @@ clean-apidocs: check-topdir
 distclean: check-topdir clean clean-config-files
 
 cvsclean: check-topdir clean clean-tables clean-apidocs clean-config-files
-	-rm -f configure
+	-rm -f configure yate-config.in
 
 .PHONY: engine libs modules clients test apidocs-build apidocs-kdoc apidocs-doxygen apidocs-everything check-topdir check-ldconfig windows
 engine: tables library libyate.so $(PROGS)
@@ -307,7 +307,7 @@ revision: check-topdir
 	$(COMPILE) -c $<
 
 @srcdir@/configure: @srcdir@/configure.in
-	cd @srcdir@ && autoconf
+	cd @srcdir@ && ./autogen.sh --silent
 
 config.status: @srcdir@/configure
 	./config.status --recheck

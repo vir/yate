@@ -5,6 +5,35 @@ if [ ! -f configure ]; then
     exit 1
 fi
 
+one_param()
+{
+    case "x$pos$1" in
+	x__ac_subst_vars="'"*"'")
+	    for p in $1; do
+		one_param "$p"
+	    done
+	    ;;
+	x__ac_subst_vars=*)
+	    pos=""
+	    ;;
+	x__*)
+	    ;;
+	x*"'"*)
+	    pos=__
+	    ;;
+	xPACKAGE_*|xECHO_*|xPATH_SEPARATOR|xCONFIGURE_FILES)
+	    ;;
+	xMUTEX_HACK|xTHREAD_KILL|xFDSIZE_HACK|xMUTEX_HACK)
+	    ;;
+	x*_alias|x*_prefix|xprogram_*)
+	    ;;
+	x[A-Z]*_*)
+	    echo "	--param=$1)"
+	    echo "	    echo \"@$1@\""
+	    echo "	    ;;"
+    esac
+}
+
 exec > yate-config.in < configure
 
 cat <<"EOF"
@@ -86,26 +115,7 @@ EOF
 
 pos=__
 while read REPLY; do
-    case "x$pos$REPLY" in
-	x__ac_subst_vars=*)
-	    pos=""
-	    ;;
-	x__*)
-	    ;;
-	x*"'"*)
-	    pos=__
-	    ;;
-	xPACKAGE_*|xECHO_*|xPATH_SEPARATOR|xCONFIGURE_FILES)
-	    ;;
-	xMUTEX_HACK|xTHREAD_KILL|xFDSIZE_HACK|xMUTEX_HACK)
-	    ;;
-	x*_alias|x*_prefix|xprogram_*)
-	    ;;
-	x[A-Z]*_*)
-	    echo "	--param=$REPLY)"
-	    echo "	    echo \"@$REPLY@\""
-	    echo "	    ;;"
-    esac
+    one_param "$REPLY"
 done
 
 cat <<"EOF"

@@ -2101,8 +2101,20 @@ void QtWindow::setVisible(bool visible)
     // Notify the client on window visibility changes
     bool changed = (m_visible != visible);
     m_visible = visible;
-    if (changed && Client::self())
-	Client::self()->toggle(this,"window_visible_changed",m_visible);
+    if (changed && Client::self()) {
+	QVariant var;
+	if (wndWidget())
+	    var = wndWidget()->property("dynamicUiActionVisibleChanged");
+	if (!var.toBool())
+	    Client::self()->toggle(this,"window_visible_changed",m_visible);
+	else {
+	    Message* m = new Message("ui.action");
+	    m->addParam("action","window_visible_changed");
+	    m->addParam("visible",String::boolText(m_visible));
+	    m->addParam("window",m_id);
+	    Engine::enqueue(m);
+	}
+    }
 }
 
 // Show the window

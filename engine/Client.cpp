@@ -2557,7 +2557,10 @@ void ClientChannel::destroyed()
 	if (s)
 	    s->setChannel(id(),false);
 	m_soundId = "";
+	lock.drop();
+	Lock lck(m_mutex);
 	setClientData();
+	lck.drop();
 	Channel::destroyed();
 	return;
     }

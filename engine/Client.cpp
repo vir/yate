@@ -2557,11 +2557,11 @@ void ClientChannel::destroyed()
 	if (s)
 	    s->setChannel(id(),false);
 	m_soundId = "";
+	setClientData();
 	Channel::destroyed();
 	return;
     }
     Lock lock(m_mutex);
-    setClientData();
     if (m_conference) {
 	// Drop old peer if conference
 	if (ClientDriver::s_dropConfPeer) {
@@ -2579,6 +2579,7 @@ void ClientChannel::destroyed()
 	drv->setActive();
     setMedia();
     update(Destroyed,false,false,"chan.hangup");
+    setClientData();
     lock.drop();
     Channel::destroyed();
 }
@@ -2911,6 +2912,7 @@ void ClientChannel::update(int notif, bool chan, bool updatePeer,
     if (chan)
 	m->userData(this);
     else {
+	m->userData(m_clientData);
 	m->addParam("id",id());
 	m->addParam("direction",isOutgoing() ? "incoming" : "outgoing");
 	if (m_address)

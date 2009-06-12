@@ -23,10 +23,11 @@ EINC := $(CINC) @top_srcdir@/yatengine.h
 PINC := $(EINC) @top_srcdir@/yatephone.h
 CLINC:= $(PINC) @top_srcdir@/yatecbase.h
 LIBS :=
-CLSOBJS := TelEngine.o ObjList.o HashList.o String.o DataBlock.o NamedList.o \
-	URI.o Mime.o Array.o Iterator.o YMD5.o YSHA1.o Base64.o Cipher.o \
-	Mutex.o Thread.o Socket.o
-ENGOBJS := Configuration.o Message.o Plugin.o Engine.o
+CLSOBJS := TelEngine.o ObjList.o HashList.o Mutex.o Thread.o Socket.o \
+	String.o DataBlock.o NamedList.o \
+	URI.o Mime.o Array.o Iterator.o \
+	YMD5.o YSHA1.o Base64.o Cipher.o
+ENGOBJS := Configuration.o Message.o Engine.o Plugin.o
 TELOBJS := DataFormat.o Channel.o
 CLIOBJS := Client.o ClientLogic.o
 

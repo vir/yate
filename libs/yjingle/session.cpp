@@ -396,7 +396,7 @@ void JGRtpCandidates::fromXML(XMLElement* element)
 // Find a candidate by its component value
 JGRtpCandidate* JGRtpCandidates::findByComponent(unsigned int component)
 {
-    String tmp = component;
+    String tmp(component);
     for (ObjList* o = skipNull(); o; o = o->skipNext()) {
 	JGRtpCandidate* c = static_cast<JGRtpCandidate*>(o->get());
 	if (c->m_component == tmp)

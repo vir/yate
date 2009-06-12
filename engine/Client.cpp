@@ -77,11 +77,11 @@ public:
 	const Window* parent);
     ClientThreadProxy(int func, const String& name, const String& item, bool start,
 	const NamedList* params, Window* wnd, Window* skip);
-    ClientThreadProxy(int func, const String& name, NamedList* params,
+    ClientThreadProxy(int func, const String& name, const NamedList* params,
 	Window* wnd, Window* skip);
-    ClientThreadProxy(int func, const String& name, NamedList* params,
+    ClientThreadProxy(int func, const String& name, const NamedList* params,
 	unsigned int uintVal, bool atStart, Window* wnd, Window* skip);
-    ClientThreadProxy(int func, void** addr, const String& name, const String& text, NamedList* params);
+    ClientThreadProxy(int func, void** addr, const String& name, const String& text, const NamedList* params);
     ClientThreadProxy(int func, const String& name, const String& text,
 	const String& item, const NamedList* params, Window* wnd, Window* skip);
     void process();
@@ -584,7 +584,7 @@ ClientThreadProxy::ClientThreadProxy(int func, const String& name, const String&
 {
 }
 
-ClientThreadProxy::ClientThreadProxy(int func, const String& name, NamedList* params,
+ClientThreadProxy::ClientThreadProxy(int func, const String& name, const NamedList* params,
 	Window* wnd, Window* skip)
     : m_func(func), m_rval(false),
       m_name(name), m_bool(false), m_rtext(0), m_rbool(0),
@@ -592,7 +592,7 @@ ClientThreadProxy::ClientThreadProxy(int func, const String& name, NamedList* pa
 {
 }
 
-ClientThreadProxy::ClientThreadProxy(int func, const String& name, NamedList* params,
+ClientThreadProxy::ClientThreadProxy(int func, const String& name, const NamedList* params,
 	unsigned int uintVal, bool atStart, Window* wnd, Window* skip)
     : m_func(func), m_rval(false),
       m_name(name), m_bool(atStart), m_rtext(0), m_rbool(0),
@@ -601,7 +601,7 @@ ClientThreadProxy::ClientThreadProxy(int func, const String& name, NamedList* pa
 }
 
 ClientThreadProxy::ClientThreadProxy(int func, void** addr, const String& name,
-    const String& text, NamedList* params)
+    const String& text, const NamedList* params)
     : m_func(func), m_rval(false),
       m_name(name), m_text(text), m_bool(false), m_rtext(0), m_rbool(0),
       m_wnd(0), m_skip(0), m_params(params), m_uint(0), m_pointer(addr)
@@ -710,10 +710,10 @@ void ClientThreadProxy::process()
 	    m_rval = client->closeWindow(m_name,m_bool);
 	    break;
 	case setParams:
-	    m_rval = client->setParams(const_cast<NamedList*>(m_params),m_wnd,m_skip);
+	    m_rval = client->setParams(m_params,m_wnd,m_skip);
 	    break;
 	case addLines:
-	    m_rval = client->addLines(m_name,const_cast<NamedList*>(m_params),m_uint,
+	    m_rval = client->addLines(m_name,m_params,m_uint,
 		m_bool,m_wnd,m_skip);
 	    break;
 	case createObject:
@@ -2162,13 +2162,13 @@ bool Client::buildOutgoingChannel(NamedList& params)
     Debug(ClientDriver::self(),DebugAll,"Client::buildOutgoingChannel() [%p]",this);
     // get the target of the call
     NamedString* target = params.getParam("target");
-    if (!target || target->null())
+    if (TelEngine::null(target))
 	return false;
     // Create the channel. Release driver's mutex as soon as possible
     if (!driverLockLoop())
 	return false;
-    ClientChannel* chan = new ClientChannel(target,params);
-    if (!(chan->ref() && chan->start(target,params)))
+    ClientChannel* chan = new ClientChannel(*target,params);
+    if (!(chan->ref() && chan->start(*target,params)))
 	TelEngine::destruct(chan);
     driverUnlock();
     if (!chan)

@@ -158,7 +158,7 @@ bool YSipSubscribeHandler::received(Message &msg)
     if (!getEventData(msg,event,evName,content))
 	return false;
     NamedString* contact = msg.getParam("sip_contact");
-    if (!(contact && *contact)) {
+    if (TelEngine::null(contact)) {
 	Debug(&s_module,DebugNote,"SUBSCRIBE with missing or empty contact");
 	msg.setParam("code","400");
 	return false;
@@ -176,7 +176,7 @@ bool YSipSubscribeHandler::received(Message &msg)
     expires = s_module.checkExpire(msg,expires);
     if (expires == -1)
 	return false;
-    String sExpires = expires;
+    String sExpires(expires);
 
     Message m("resource.subscribe");
     m.addParam("event",evName);
@@ -188,7 +188,7 @@ bool YSipSubscribeHandler::received(Message &msg)
 	m.addParam("operation","unsubscribe");
     m.addParam("subscriber",msg.getValue("username"));
 
-    String notifyTo = contact;
+    String notifyTo = *contact;
     static Regexp r("<\\([^>]\\+\\)>");
     if (notifyTo.matches(r))
 	notifyTo = notifyTo.matchString(1);

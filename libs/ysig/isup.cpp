@@ -2910,7 +2910,7 @@ void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 	    }
 	    circuit = 0;
 	}
-	String s = msg->cic();
+	String s(msg->cic());
 	if (reserveCircuit(circuit,0,flags,&s,true)) {
 	    call = new SS7ISUPCall(this,circuit,label.dpc(),label.opc(),false,sls);
 	    m_calls.append(call);

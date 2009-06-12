@@ -1542,7 +1542,7 @@ bool DefaultLogic::help(const String& name, Window* wnd)
 	rd = f.readData(const_cast<char*>(helpText.c_str()),len);
 	if (rd == (int)len) {
 	    Client::self()->setText("help_text",helpText,true,help);
-	    help->context(page);
+	    help->context(String(page));
 	    if (show)
 		Client::self()->setVisible("help",true);
 	    return true;
@@ -1852,7 +1852,7 @@ bool DefaultLogic::handleResourceNotify(Message& msg, bool& stopLogic)
 	contactUri = contactName + "/" + res;
     }
     else if (offline)
-	Client::self()->delTableRow(s_contactList,contact);
+	Client::self()->delTableRow(s_contactList,*contact);
 
     if (!offline) {
 	NamedList p("");

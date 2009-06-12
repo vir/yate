@@ -3280,7 +3280,7 @@ void ISDNQ931::sendRestart(u_int64_t time, bool retrans)
     else {
 	unsigned int count = circuits() ? circuits()->count() : 0;
 	for (m_lastRestart++; m_lastRestart <= count; m_lastRestart++) {
-	    String tmp = m_lastRestart;
+	    String tmp(m_lastRestart);
 	    if (reserveCircuit(m_restartCic,0,-1,&tmp,true))
 		break;
 	}
@@ -3290,7 +3290,7 @@ void ISDNQ931::sendRestart(u_int64_t time, bool retrans)
 	    return;
 	}
     }
-    String s = m_restartCic->code();
+    String s(m_restartCic->code());
     DDebug(this,DebugInfo,"%s restart for circuit(s) '%s'",
 	!retrans ? "Sending" : "Retransmitting",s.c_str());
     // Create the message
@@ -3621,7 +3621,7 @@ bool ISDNQ931Monitor::reserveCircuit(unsigned int code, bool netInit,
     Lock lock(l3Mutex());
     if (!(m_cicNet && m_cicCpe))
 	return false;
-    String cic = code;
+    String cic(code);
     if (netInit) {
 	*caller = m_cicNet->reserve(cic,true);
 	*called = m_cicCpe->reserve(cic,true);
@@ -5210,7 +5210,7 @@ ISDNQ931IE* Q931Parser::decodeChannelID(ISDNQ931IE* ie, const u_int8_t* data,
     u_int8_t idx = byNumber ? 8 : 9;
     String param;
     for (; crt < len; crt++) {
-	String tmp = (unsigned int)(data[crt] & s_ie_ieChannelID[idx].mask);
+	String tmp((unsigned int)(data[crt] & s_ie_ieChannelID[idx].mask));
 	param.append(tmp,",");
 	// Bit 7 is used to end channel numbers. See Q.931 Figure 4.18 Note 3
 	if (byNumber && Q931_EXT_FINAL(data[crt])) {

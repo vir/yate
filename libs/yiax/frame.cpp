@@ -606,7 +606,7 @@ TokenDict IAXFormat::videoData[] = {
 
 void IAXFormat::formatList(String& dest, u_int32_t formats, char sep)
 {
-    String s = sep;
+    String s(sep);
     u_int32_t i;
     for (i = 0; audioData[i].value; i++) {
 	if (0 == (audioData[i].value & formats))

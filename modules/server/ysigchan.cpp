@@ -2184,7 +2184,7 @@ bool SigSS7Isup::verifyController(const NamedList* params, bool save)
     // Save all remote lock flags (except for changed)
     for (ObjList* o = group->circuits().skipNull(); o; o = o->skipNext()) {
 	SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
-	String code = cic->code();
+	String code(cic->code());
 	bool saveCic = false;
 
 	// Param exists and remote state didn't changed: check local

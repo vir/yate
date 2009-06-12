@@ -1348,25 +1348,25 @@ public:
      * @param value Character to fill the string
      * @param repeat How many copies of the character to use
      */
-    String(char value, unsigned int repeat = 1);
+    explicit String(char value, unsigned int repeat = 1);
 
     /**
      * Creates a new initialized string from an integer.
      * @param value Value to convert to string
      */
-    String(int value);
+    explicit String(int value);
 
     /**
      * Creates a new initialized string from an unsigned int.
      * @param value Value to convert to string
      */
-    String(unsigned int value);
+    explicit String(unsigned int value);
 
     /**
      * Creates a new initialized string from a boolean.
      * @param value Value to convert to string
      */
-    String(bool value);
+    explicit String(bool value);
 
     /**
      * Copy constructor.
@@ -2542,7 +2542,7 @@ public:
      * Constructs a Time object from a timeval structure pointer
      * @param tv Pointer to the timeval structure
      */
-    inline Time(const struct timeval* tv)
+    inline explicit Time(const struct timeval* tv)
 	: m_time(fromTimeval(tv))
 	{ }
 
@@ -2550,7 +2550,7 @@ public:
      * Constructs a Time object from a timeval structure
      * @param tv Reference of the timeval structure
      */
-    inline Time(const struct timeval& tv)
+    inline explicit Time(const struct timeval& tv)
 	: m_time(fromTimeval(tv))
 	{ }
 

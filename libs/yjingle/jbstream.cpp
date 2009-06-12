@@ -898,8 +898,8 @@ void JBStream::processRegister(XMLElement* xml)
 		SETERR_BREAK(XMPPError::UndefinedCondition,"Unsupported method");
 	    // Send credential
 	    m_registerId = 2;
-	    String id = m_registerId;
-	    XMLElement* q = XMPPUtils::createRegisterQuery(0,0,id,m_local.node(),m_password);
+	    XMLElement* q = XMPPUtils::createRegisterQuery(0,0,
+		String(m_registerId),m_local.node(),m_password);
 	    sendStreamXML(q,state());
 	    break;
 	}
@@ -1583,7 +1583,7 @@ bool JBStream::startRegister()
     // or query register support
     XMLElement* xml = 0;
     m_registerId = m_remoteFeatures.get(XMPPNamespace::Register) ? 2 : 1;
-    String id = m_registerId;
+    String id(m_registerId);
     if (m_registerId == 2)
 	xml = XMPPUtils::createRegisterQuery(0,0,id,m_local.node(),m_password);
     else
@@ -1890,7 +1890,7 @@ JBStream::Error JBStream::sendPending()
 	    xml,xml->name(),lookupState(state()),this);
 	if (eout->id()) {
 	    JBEvent* ev = new JBEvent(JBEvent::WriteFail,this,
-		eout->release(),&(eout->id()));
+		eout->release(),eout->id());
 	    m_events.append(ev);
 	}
 	if (bye)

@@ -4873,7 +4873,7 @@ XMLElement* YJGDriver::getPresenceCommand(JabberID& from, JabberID& to,
     if (presence)
 	command->addChild(presence);
     // 'iq' stanza
-    String id = idCrt++;
+    String id(idCrt++);
     String domain;
     if (s_jabber->getServerIdentity(domain,false))
 	from.domain(domain);

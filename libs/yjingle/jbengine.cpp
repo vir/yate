@@ -186,7 +186,12 @@ void JBThread::runClient()
 	lookup(m_type,s_threadNames),m_client,this);
     switch (m_type) {
 	case StreamConnect:
-	    ((JBStream*)m_client)->connect();
+	    {
+	        // Keep the stream alive while connecting
+		RefPointer<JBStream> stream = static_cast<JBStream*>(m_client);
+		stream->connect();
+		stream = 0;
+	    }
 	    break;
 	case EngineProcess:
 	    while (true)

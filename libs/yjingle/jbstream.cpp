@@ -99,7 +99,6 @@ JBSocket::JBSocket(JBEngine* engine, JBStream* stream,
     m_streamMutex(true,"JBSocket::stream"),
     m_receiveMutex(true,"JBSocket::receive")
 {
-    m_address.host(address);
     m_address.port(port);
 }
 
@@ -116,8 +115,20 @@ bool JBSocket::connect(bool& terminated, const char* newAddr, int newPort)
 	m_address.port(newPort);
     lck1.drop();
     m_address.host(m_remoteDomain);
+    Thread::check(true);
+    if (!m_address.host()) {
+	m_error = "Resolver failure";
+	DDebug(m_engine,DebugWarn,"Stream. Failed to resolve '%s' [%p]",
+	    m_remoteDomain.safe(),m_stream);
+	terminate();
+	terminated = m_socket == 0;
+	return false;
+    }
+    DDebug(m_engine,DebugInfo,"Stream. Attempt to connect to '%s:%d' [%p]",
+	m_address.host().safe(),m_address.port(),m_stream);
     terminated = false;
-    bool res = m_socket->connect(m_address);
+    bool res = m_socket && m_socket->connect(m_address);
+    Thread::check(true);
     // Lock again to update data
     Lock2 lck2(m_streamMutex,m_receiveMutex);
     bool ok = false;
@@ -130,13 +141,14 @@ bool JBSocket::connect(bool& terminated, const char* newAddr, int newPort)
 	}
 	// Check connect result
 	if (!res) {
-	    m_error = ::strerror(m_socket->error());
+	    m_error = "";
+	    Thread::errorString(m_error,m_socket->error());
 	    if (m_error.null())
 		m_error = "Socket connect failure";
 	    Debug(m_engine,DebugWarn,
 		"Stream. Failed to connect socket to '%s:%d'. %d: '%s' [%p]",
 		m_address.host().c_str(),m_address.port(),
-		m_socket->error(),::strerror(m_socket->error()),m_stream);
+		m_socket->error(),m_error.c_str(),m_stream);
 	    break;
 	}
 	// Connected
@@ -341,9 +353,8 @@ void JBStream::connect()
 	return;
     }
     DDebug(m_engine,DebugInfo,
-	"Stream. Attempt to connect local=%s remote=%s addr=%s:%d count=%u [%p]",
-	m_local.safe(),m_remote.safe(),addr().host().safe(),addr().port(),
-	m_restart,this);
+	"Stream. Attempt to connect local=%s remote=%s count=%u [%p]",
+	m_local.safe(),m_remote.safe(),m_restart,this);
     // Check if we can restart. Destroy the stream if not auto restarting
     if (m_restart)
 	m_restart--;

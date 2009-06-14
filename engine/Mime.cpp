@@ -491,9 +491,22 @@ String* MimeBody::getUnfoldedLine(const char*& buf, int& len)
 		break;
 	    case '\0':
 		// Should not happen - but let's accept what we got
-		Debug(DebugMild,"Unexpected NUL character while unfolding lines");
 		*res << s;
 		goOut = true;
+		if (l <= 16) {
+		    // If there are maximum 16 NULs suppress the warning
+		    e = l;
+		    do {
+			++b;
+			--l;
+		    } while (l && !*b);
+		}
+		if (l)
+		    Debug(DebugMild,"Unexpected NUL character while unfolding lines");
+#ifdef DEBUG
+		else
+		    Debug(DebugInfo,"Dropped %d final NUL characters while unfolding lines",e);
+#endif
 		// End parsing
 		b += l;
 		l = 0;

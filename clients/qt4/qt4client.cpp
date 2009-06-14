@@ -2072,7 +2072,17 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 	    // Check if we should let the control process the key
 	    QVariant v = wid->property(prop + "Filter");
 	    bool ret = ((v.type() == QVariant::Bool) ? v.toBool() : false);
-	    Client::self()->action(this,action);
+	    QObject* obj = qFindChild<QObject*>(this,QtClient::setUtf8(action));
+	    bool trigger = true;
+	    if (obj) {
+		QtWidget w(this,action);
+		if (w.widget())
+		    trigger = w.widget()->isEnabled();
+		else if (w.type() == QtWidget::Action)
+		    trigger = w.action()->isEnabled();
+	    }
+	    if (trigger)
+		Client::self()->action(this,action);
 	    return ret;
 	}
     }

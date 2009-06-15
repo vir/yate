@@ -4051,7 +4051,7 @@ bool UserLoginHandler::received(Message& msg)
 	    stream = s_jabber->createClientStream(msg);
 	else
 	    msg.setParam("error","User already logged in");
-	ok = (0 != stream);
+	ok = (0 != stream) && stream->state() != JBStream::Destroy;
     }
     else if (stream) {
 	if (stream->state() == JBStream::Running) {

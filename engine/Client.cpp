@@ -2535,8 +2535,8 @@ bool ClientChannel::start(const String& target, const NamedList& params)
     }
     m->setParam(param,to);
     s->setParam("called",to);
-    m->copyParams(params,"line,protocol,account,caller,callername,domain");
-    s->copyParams(params,"line,protocol,account,caller,callername,domain");
+    m->copyParams(params,"line,protocol,account,caller,callername,domain,cdrwrite");
+    s->copyParams(params,"line,protocol,account,caller,callername,domain,cdrwrite");
     String* cs = params.getParam("chanstartup_parameters");
     if (!null(cs))
 	s->copyParams(params,*cs);

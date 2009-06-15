@@ -1039,11 +1039,20 @@ bool YJBClientPresence::accept(JBEvent* event, bool& processed, bool& insert)
 	    if (res) {
 		m->addParam("audio",String::boolText(capAudio));
 		ObjList* o = res->infoXml()->skipNull();
+		unsigned int n = 1;
+		if (res->show() != JIDResource::ShowNone) {
+		    const char* show = JIDResource::showText(res->show());
+		    if (!TelEngine::null(show)) {
+			m->setParam("message-prefix","jingle");
+			m->addParam("jingle." + String(n),"show");
+			m->addParam("jingle." + String(n) + ".",show);
+			n++;
+		    }
+		}
 		if (o || res->status()) {
 		    String prefix = "jingle";
-		    m->addParam("message-prefix",prefix);
+		    m->setParam("message-prefix",prefix);
 		    prefix << ".";
-		    unsigned int n = 1;
 		    // Set status: avoid some meaningful values
 		    if (res->status()) {
 			if (res->status() != "subscribed" &&
@@ -1051,9 +1060,9 @@ bool YJBClientPresence::accept(JBEvent* event, bool& processed, bool& insert)
 			    res->status() != "offline")
 			    m->setParam("status",res->status());
 			else {
-			    m->addParam(prefix + "1","status");
-			    m->addParam(prefix + "1.",res->status());
-			    n = 2;
+			    m->addParam(prefix + String(n),"status");
+			    m->addParam(prefix + String(n) + ".",res->status());
+			    n++;
 			}
 		    }
 		    for (; o; o = o->skipNext(), n++) {
@@ -3617,12 +3626,16 @@ bool ResNotifyHandler::received(Message& msg)
 	    JIDResource* res = stream->getResource();
 	    if (res && res->ref()) {
 		res->priority(msg.getIntValue("priority",res->priority()));
-		if (*status == "online")
-		    res->setPresence(true);
-		else if (*status == "offline")
-		    res->setPresence(false);
+		if (*status != "offline") {
+		    res->status("");
+		    if (*status == "online")
+			res->setPresence(true);
+		    else
+			res->status(*status);
+		    res->show(JIDResource::showType(msg.getValue("show")));
+		}
 		else
-		    res->status(*status);
+		    res->setPresence(false);
 		pres = JBPresence::createPresence(stream->local().bare(),to,
 		   res->available()?JBPresence::None:JBPresence::Unavailable);
 		res->addTo(pres,true);

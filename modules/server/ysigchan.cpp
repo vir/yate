@@ -1319,6 +1319,8 @@ void SigDriver::status(SigTrunk* trunk, String& retVal, const String& target)
 	    break;
 
 	SignallingCircuitRange range(target,0);
+	if (target == "*" || target == "all")
+	    range.add(ctrl->circuits()->base(),ctrl->circuits()->last());
 	for (unsigned int i = 0; i < range.count(); i++) {
 	    SignallingCircuit* cic = ctrl->circuits()->find(range[i]);
 	    if (!cic)

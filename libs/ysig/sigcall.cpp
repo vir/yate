@@ -548,13 +548,28 @@ bool SignallingCircuitRange::add(const String& rangeStr)
     return true;
 }
 
-// Add an array of circuit codes to this rangevoid 
+// Add an array of circuit codes to this range
 void SignallingCircuitRange::add(unsigned int* codes, unsigned int len)
 {
     if (!(codes && len))
 	return;
-    m_range.append(codes,len*sizeof(int));
+    m_range.append(codes,len*sizeof(unsigned int));
     m_count += len;
+    updateLast();
+}
+
+// Add a compact range of circuit codes to this range
+void SignallingCircuitRange::add(unsigned int first, unsigned int last)
+{
+    if (first > last)
+	return;
+    unsigned int count = last - first + 1;
+    DataBlock data(0,count*sizeof(unsigned int));
+    unsigned int* codes = (unsigned int*)data.data();
+    for (unsigned int i = 0; i < count; i++)
+	codes[i] = first+i;
+    m_range.append(data);
+    m_count += count;
     updateLast();
 }
 

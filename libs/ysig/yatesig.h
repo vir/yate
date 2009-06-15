@@ -1764,6 +1764,13 @@ public:
 	{ add(&code,1); }
 
     /**
+     * Add a compact range of circuit codes to this range
+     * @param first The first circuit code to add
+     * @param last Number of last circuit code
+     */
+    void add(unsigned int first, unsigned int last);
+
+    /**
      * Remove a circuit code from this range
      * @param code The circuit code to remove
      */

@@ -74,7 +74,7 @@
 
 using namespace TelEngine;
 
-static Mutex s_mutex(false,"Socket");
+static Mutex s_mutex(false,"SocketAddr");
 
 
 #ifdef _WINDOWS

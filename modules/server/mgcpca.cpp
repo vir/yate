@@ -116,10 +116,11 @@ public:
     bool processEvent(MGCPTransaction* tr, MGCPMessage* mm);
     bool processNotify(MGCPTransaction* tr, MGCPMessage* mm, const String& event, const String& requestId);
     bool processRestart(MGCPTransaction* tr, MGCPMessage* mm, const String& method);
+    bool processDelete(MGCPTransaction* tr, MGCPMessage* mm, const String& error);
 private:
     bool init(const NamedList& params);
     void clearCircuits();
-    MGCPCircuit* findCircuit(const String& epId, const String& rqId) const;
+    MGCPCircuit* findCircuit(const String& epId, const String& rqId = String::empty()) const;
     void operational(bool active);
     void operational(const SocketAddr& address);
     MGCPCircuit** m_circuits;
@@ -158,7 +159,8 @@ public:
 	{ return mySpan()->fxs(); }
     bool processEvent(MGCPTransaction* tr, MGCPMessage* mm);
     bool processNotify(const String& package, const String& event, const String& fullName);
-    void clearConn();
+    void processDelete(MGCPMessage* mm, const String& error);
+    void clearConn(bool force = false);
 private:
     MGCPMessage* message(const char* cmd);
     bool sendAsync(MGCPMessage* mm);
@@ -368,6 +370,29 @@ bool YMGCPEngine::processEvent(MGCPTransaction* trans, MGCPMessage* msg, void* d
 	    if (ok) {
 		trans->setResponse(200);
 		return true;
+	    }
+	}
+	else if (msg->name() == "DLCX") {
+	    const String* error = msg->params.getParam("e");
+	    Debug(this,DebugInfo,"DLCX '%s' from '%s'",
+		c_str(error),msg->endpointId().c_str());
+	    MGCPEndpointId id(msg->endpointId());
+	    if (id.valid()) {
+		if (!error)
+		    error = &String::empty();
+		s_mutex.lock();
+		ListIterator iter(s_spans);
+		while ((span = static_cast<MGCPSpan*>(iter.get()))) {
+		    if (span->matchEndpoint(id)) {
+			s_mutex.unlock();
+			if (span->processDelete(trans,msg,*error)) {
+			    trans->setResponse(200);
+			    return true;
+			}
+			s_mutex.lock();
+		    }
+		}
+		s_mutex.unlock();
 	    }
 	}
 	Debug(this,DebugMild,"Unhandled '%s' from '%s'",
@@ -863,6 +888,8 @@ bool MGCPSpan::matchEndpoint(const MGCPEndpointId& ep)
 	return true;
     if (ep.user() == "*")
 	return true;
+    if (findCircuit(ep.id()))
+	return true;
     String tmp = ep.user();
     Regexp r("^\\(.*\\)\\[\\([0-9]\\+\\)-\\([0-9]\\+\\)\\]$");
     if (!(tmp.matches(r) && m_epId.user().startsWith(tmp.matchString(1),false,true)))
@@ -891,17 +918,21 @@ MGCPCircuit* MGCPSpan::findCircuit(const String& epId, const String& rqId) const
 {
     if (!(m_count && m_circuits))
 	return 0;
-    int sep = epId.find('@');
-    if (sep <= 0)
+    if (epId.find('@') <= 0)
 	return 0;
-    String user = epId.substr(0,sep);
     bool localId = (rqId != "0") && !rqId.null();
     for (unsigned int i = 0; i < m_count; i++) {
 	MGCPCircuit* circuit = m_circuits[i];
 	if (!circuit)
 	    continue;
-	if (localId && (circuit->ntfyId() != rqId))
-	    continue;
+	if (localId) {
+	    if (circuit->ntfyId() != rqId)
+		continue;
+	}
+	else {
+	    if (circuit->epId() != epId)
+		continue;
+	}
 	return circuit;
     }
     return 0;
@@ -976,6 +1007,18 @@ bool MGCPSpan::processRestart(MGCPTransaction* tr, MGCPMessage* mm, const String
     else {
 	operational(false);
     }
+    return true;
+}
+
+// Process gateway-initiated connection deletion
+bool MGCPSpan::processDelete(MGCPTransaction* tr, MGCPMessage* mm, const String& error)
+{
+    DDebug(&splugin,DebugInfo,"MGCPSpan::processDelete(%p,%p,'%s') [%p]",
+	tr,mm,error.c_str(),this);
+    MGCPCircuit* circuit = findCircuit(mm->endpointId());
+    if (!circuit)
+	return false;
+    circuit->processDelete(mm,error);
     return true;
 }
 
@@ -1157,13 +1200,17 @@ bool MGCPCircuit::setupConn()
 }
 
 // Delete remote connection if any
-void MGCPCircuit::clearConn()
+void MGCPCircuit::clearConn(bool force)
 {
-    if (m_connId.null())
+    if (m_connId.null() && !force)
 	return;
     MGCPMessage* mm = message("DLCX");
-    mm->params.addParam("C",m_callId);
-    mm->params.addParam("I",m_connId);
+    if (m_connId) {
+	force = false;
+	mm->params.addParam("I",m_connId);
+    }
+    if (!force)
+	mm->params.addParam("C",m_callId);
     m_connId.clear();
     m_remoteIp.clear();
     m_remotePort = 0;
@@ -1360,10 +1407,41 @@ bool MGCPCircuit::processNotify(const String& package, const String& event, cons
     return false;
 }
 
+// We were forcibly disconnected by the gateway
+void MGCPCircuit::processDelete(MGCPMessage* mm, const String& error)
+{
+    if (m_connId)
+	Debug(&splugin,DebugWarn,"Gateway deleted connection '%s' on circuit %u [%p]",
+	    m_connId.c_str(),code(),this);
+    m_connId.clear();
+    m_remoteIp.clear();
+    m_remotePort = 0;
+    m_sdpSession = 0;
+    m_payloads = s_payloads;
+    unsigned int code = 0;
+    String tmp(error);
+    tmp >> code;
+    switch (code) {
+	case 901: // Endpoint taken out of service
+	case 904: // Manual intervention
+	    SignallingCircuit::status(Disabled);
+	    break;
+	case 900: // Malfunction
+	case 902: // Loss of connectivity
+	case 905: // Facility failure
+	    SignallingCircuit::status(Missing);
+	    break;
+	default:
+	    SignallingCircuit::status(Idle);
+    }
+    enqueueEvent(SignallingCircuitEvent::Alarm,error);
+}
+
 // Enqueue an event detected by this circuit
 bool MGCPCircuit::enqueueEvent(SignallingCircuitEvent::Type type, const char* name, const char* dtmf)
 {
-    DDebug(&splugin,DebugAll,"Enqueueing event %u '%s' '%s'",type,name,dtmf);
+    DDebug(&splugin,DebugAll,"Enqueueing event %u '%s' '%s' on %u [%p]",
+	type,name,dtmf,code(),this);
     SignallingCircuitEvent* ev = new SignallingCircuitEvent(this,type,name);
     if (dtmf)
 	ev->addParam("tone",dtmf);

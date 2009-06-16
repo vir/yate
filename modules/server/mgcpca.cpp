@@ -157,6 +157,8 @@ public:
 	{ return mySpan()->fxo(); }
     inline bool fxs()
 	{ return mySpan()->fxs(); }
+    inline void needClear()
+	{ m_needClear = true; }
     bool processEvent(MGCPTransaction* tr, MGCPMessage* mm);
     bool processNotify(const String& package, const String& event, const String& fullName);
     void processDelete(MGCPMessage* mm, const String& error);
@@ -190,6 +192,7 @@ private:
     int m_remotePort;
     int m_remotePayload;
     const char* m_payloads;
+    bool m_needClear;
     // Synchronous transaction data
     MGCPTransaction* m_tr;
     RefPointer<MGCPMessage> m_msg;
@@ -821,6 +824,7 @@ bool MGCPSpan::init(const NamedList& params)
 	    break;
     }
     m_increment = config->getIntValue("increment",m_increment);
+    bool clear = config->getBoolValue("clearconn",false);
     m_circuits = new MGCPCircuit*[m_count];
     unsigned int i;
     for (i = 0; i < m_count; i++)
@@ -845,6 +849,8 @@ bool MGCPSpan::init(const NamedList& params)
 	    break;
 	}
 	circuit->ref();
+	if (clear)
+	    circuit->needClear();
     }
     return ok;
 }
@@ -1028,7 +1034,7 @@ MGCPCircuit::MGCPCircuit(unsigned int code, MGCPSpan* span, const char* id)
       m_epId(id), m_statusReq(Missing),
       m_localPort(0), m_sdpSession(0), m_sdpVersion(0),
       m_remotePort(0), m_remotePayload(-1),
-      m_payloads(s_payloads), m_tr(0)
+      m_payloads(s_payloads), m_needClear(false), m_tr(0)
 {
     Debug(&splugin,DebugAll,"MGCPCircuit::MGCPCircuit(%u,%p,'%s') [%p]",
 	code,span,id,this);
@@ -1166,8 +1172,10 @@ bool MGCPCircuit::setupConn()
 	return false;
     if (m_connId.null())
 	m_connId = mm->params.getParam("i");
-    if (m_connId.null())
+    if (m_connId.null()) {
+	m_needClear = true;
 	return false;
+    }
     MimeSdpBody* sdp = static_cast<MimeSdpBody*>(mm->sdp[0]);
     if (sdp) {
 	m_remoteIp.clear();
@@ -1298,6 +1306,11 @@ bool MGCPCircuit::status(Status newStat, bool sync)
 		break;
 	    m_statusReq = SignallingCircuit::status();
 	    return false;
+	case Idle:
+	    if (m_needClear) {
+		m_needClear = false;
+		clearConn(true);
+	    }
 	default:
 	    m_payloads = s_payloads;
 	    cleanupRtp();
@@ -1392,6 +1405,10 @@ bool MGCPCircuit::processNotify(const String& package, const String& event, cons
 	else if (event &= "hu") {
 	    if (SignallingCircuit::status() == Connected)
 		status(Idle,false);
+	    if (m_needClear) {
+		m_needClear = false;
+		clearConn(true);
+	    }
 	    return enqueueEvent(SignallingCircuitEvent::OnHook,fullName);
 	}
 	else if (event &= "hf")

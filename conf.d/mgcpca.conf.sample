@@ -66,3 +66,6 @@
 ; Defaults to 32 if chans is 30 or 31 (E1), 24 if chans is 23 (T1), number of
 ;  circuits in all other cases
 ;increment=
+
+; clearconn: bool: Clear all connections of remote endpoints when initialized
+;clearconn=no

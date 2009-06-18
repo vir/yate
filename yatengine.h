@@ -717,10 +717,14 @@ bool UNLOAD_PLUGIN(bool unloadNow);
 #endif
 
 #define INIT_PLUGIN(pclass) static pclass __plugin
+#ifdef DISABLE_UNLOAD
+#define UNLOAD_PLUGIN(arg) static bool _unused_unload(bool arg)
+#else
 #ifdef _WINDOWS
 #define UNLOAD_PLUGIN(arg) extern "C" __declspec(dllexport) bool _unload(bool arg)
 #else
 #define UNLOAD_PLUGIN(arg) extern "C" bool _unload(bool arg)
+#endif
 #endif
 
 /**

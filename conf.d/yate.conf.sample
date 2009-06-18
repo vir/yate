@@ -63,6 +63,13 @@
 h323chan.yate=yes
 
 
+[nounload]
+; This section is used to prevent some modules from being unloaded from
+;  memory, although finalization will be attempted if possible.
+; Each line has to be of the form:
+;   modulename.yate=boolean
+
+
 [preload]
 ; Put a line in this section for each shared library that you want to load
 ;  before any Yate module

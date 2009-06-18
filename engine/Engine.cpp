@@ -220,11 +220,12 @@ class SLib : public String
 {
 public:
     virtual ~SLib();
-    static SLib* load(const char* file, bool local);
+    static SLib* load(const char* file, bool local, bool nounload);
     bool unload(bool doNow);
 private:
-    SLib(HMODULE handle, const char* file);
+    SLib(HMODULE handle, const char* file, bool nounload);
     HMODULE m_handle;
+    bool m_nounload;
 };
 
 class EngineSuperHandler : public MessageHandler
@@ -825,10 +826,11 @@ static int supervise(void)
 #endif /* _WINDOWS */
 
 
-SLib::SLib(HMODULE handle, const char* file)
-    : String(moduleBase(file)), m_handle(handle)
+SLib::SLib(HMODULE handle, const char* file, bool nounload)
+    : String(moduleBase(file)), m_handle(handle), m_nounload(nounload)
 {
-    DDebug(DebugAll,"SLib::SLib(%p,'%s') [%p]",handle,file,this);
+    DDebug(DebugAll,"SLib::SLib(%p,'%s',%s) [%p]",
+	handle,file,String::boolText(nounload),this);
     checkPoint();
 }
 
@@ -837,7 +839,7 @@ SLib::~SLib()
 #ifdef DEBUG
     Debugger debug("SLib::~SLib()"," [%p]",this);
 #endif
-    if (s_nounload) {
+    if (s_nounload || m_nounload) {
 #ifdef _WINDOWS
 	typedef void (WINAPI *pFini)(HINSTANCE,DWORD,LPVOID);
 	pFini fini = (pFini)GetProcAddress(m_handle,"_DllMainCRTStartup");
@@ -851,7 +853,7 @@ SLib::~SLib()
 	if (fini)
 	    fini();
 #endif
-	if (fini) {
+	if (fini || m_nounload) {
 	    checkPoint();
 	    return;
 	}
@@ -871,7 +873,7 @@ SLib::~SLib()
     checkPoint();
 }
 
-SLib* SLib::load(const char* file, bool local)
+SLib* SLib::load(const char* file, bool local, bool nounload)
 {
     DDebug(DebugAll,"SLib::load('%s')",file);
     int flags = RTLD_NOW;
@@ -881,7 +883,7 @@ SLib* SLib::load(const char* file, bool local)
 #endif
     HMODULE handle = ::dlopen(file,flags);
     if (handle)
-	return new SLib(handle,file);
+	return new SLib(handle,file,nounload);
 #ifdef _WINDOWS
     Debug(DebugWarn,"LoadLibrary error %u in '%s'",::GetLastError(),file);
 #else
@@ -893,6 +895,8 @@ SLib* SLib::load(const char* file, bool local)
 bool SLib::unload(bool unloadNow)
 {
     typedef bool (*pUnload)(bool);
+    if (m_nounload)
+	return false;
     pUnload unl = (pUnload)dlsym(m_handle,"_unload");
     return (unl != 0) && unl(unloadNow);
 }
@@ -1189,11 +1193,11 @@ bool Engine::Register(const Plugin* plugin, bool reg)
     return true;
 }
 
-bool Engine::loadPlugin(const char* file, bool local)
+bool Engine::loadPlugin(const char* file, bool local, bool nounload)
 {
     s_dynplugin = false;
     s_loadMode = Engine::LoadLate;
-    SLib *lib = SLib::load(file,local);
+    SLib *lib = SLib::load(file,local,nounload);
     s_dynplugin = true;
     if (lib) {
 	switch (s_loadMode) {
@@ -1244,7 +1248,8 @@ bool Engine::loadPluginDir(const String& relPath)
 	int n = ::strlen(entry.cFileName) - s_modsuffix.length();
 	if ((n > 0) && !::strcmp(entry.cFileName+n,s_modsuffix)) {
 	    if (s_cfg.getBoolValue("modules",entry.cFileName,defload))
-		loadPlugin(path + PATH_SEP + entry.cFileName);
+		loadPlugin(path + PATH_SEP + entry.cFileName,false,
+		    s_cfg.getBoolValue("nounload",entry.cFileName));
 	}
     } while (::FindNextFile(hf,&entry));
     ::FindClose(hf);
@@ -1261,7 +1266,8 @@ bool Engine::loadPluginDir(const String& relPath)
 	if ((n > 0) && !::strcmp(entry->d_name+n,s_modsuffix)) {
 	    if (s_cfg.getBoolValue("modules",entry->d_name,defload))
 		loadPlugin(path + PATH_SEP + entry->d_name,
-		    s_cfg.getBoolValue("localsym",entry->d_name,s_localsymbol));
+		    s_cfg.getBoolValue("localsym",entry->d_name,s_localsymbol),
+		    s_cfg.getBoolValue("nounload",entry->d_name));
 	}
     }
     ::closedir(dir);

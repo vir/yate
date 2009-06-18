@@ -41,6 +41,13 @@ extern int pthread_mutexattr_settype(pthread_mutexattr_t *__attr, int __kind) __
 }
 #endif
 
+#ifdef MUTEX_STATIC_UNSAFE
+#undef MUTEX_STATIC_UNSAFE
+#define MUTEX_STATIC_UNSAFE true
+#else
+#define MUTEX_STATIC_UNSAFE false
+#endif
+
 typedef pthread_mutex_t HMUTEX;
 
 #endif /* ! _WINDOWS */
@@ -89,13 +96,14 @@ private:
 
 using namespace TelEngine;
 
+HMUTEX GlobalMutex::s_mutex;
 static GlobalMutex s_global;
 static unsigned long s_maxwait = 0;
+static bool s_unsafe = MUTEX_STATIC_UNSAFE;
 
 volatile int MutexPrivate::s_count = 0;
 volatile int MutexPrivate::s_locks = 0;
 bool GlobalMutex::s_init = true;
-HMUTEX GlobalMutex::s_mutex;
 
 // WARNING!!!
 // No debug messages are allowed in mutexes since the debug output itself
@@ -125,6 +133,8 @@ GlobalMutex::GlobalMutex()
 void GlobalMutex::lock()
 {
     init();
+    if (s_unsafe)
+	return;
 #ifdef _WINDOWS
     ::WaitForSingleObject(s_mutex,INFINITE);
 #else
@@ -134,7 +144,8 @@ void GlobalMutex::lock()
 
 void GlobalMutex::unlock()
 {
-    init();
+    if (s_unsafe)
+	return;
 #ifdef _WINDOWS
     ::ReleaseMutex(s_mutex);
 #else
@@ -218,9 +229,11 @@ bool MutexPrivate::lock(long maxwait)
     else if (maxwait > 0) {
 	ms = (DWORD)(maxwait / 1000);
     }
-    rval = (::WaitForSingleObject(m_mutex,ms) == WAIT_OBJECT_0);
+    rval = s_unsafe || (::WaitForSingleObject(m_mutex,ms) == WAIT_OBJECT_0);
 #else
-    if (maxwait < 0)
+    if (s_unsafe)
+	rval = true;
+    else if (maxwait < 0)
 	rval = !::pthread_mutex_lock(&m_mutex);
     else if (!maxwait)
 	rval = !::pthread_mutex_trylock(&m_mutex);
@@ -284,10 +297,11 @@ void MutexPrivate::unlock()
 	    s_locks = 0;
 	    Debug(DebugFail,"MutexPrivate::locks() is %d [%p]",locks,this);
 	}
+	if (!s_unsafe)
 #ifdef _WINDOWS
-	::ReleaseMutex(m_mutex);
+	    ::ReleaseMutex(m_mutex);
 #else
-	::pthread_mutex_unlock(&m_mutex);
+	    ::pthread_mutex_unlock(&m_mutex);
 #endif
 	deref();
     }
@@ -371,6 +385,11 @@ int Mutex::count()
 int Mutex::locks()
 {
     return MutexPrivate::s_locks;
+}
+
+void Mutex::startUsingNow()
+{
+    s_unsafe = false;
 }
 
 void Mutex::wait(unsigned long maxwait)

@@ -1490,6 +1490,8 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
     const char* usrpath = 0;
     int debug_level = debugLevel();
 
+    Mutex::startUsingNow();
+
     const char* cfgfile = ::strrchr(argv[0],'/');
     if (!cfgfile)
 	cfgfile = ::strrchr(argv[0],'\\');

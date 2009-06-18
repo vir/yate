@@ -3648,6 +3648,14 @@ public:
      */
     static void wait(unsigned long maxwait);
 
+    /**
+     * Start actually using mutexes, for platforms where mutexes are not
+     *  usable in global object constructors.
+     * This method must be called at least once somewhere from main() but
+     *  before creating any threads and without holding any mutex locked.
+     */
+    static void startUsingNow();
+
 private:
     MutexPrivate* privDataCopy() const;
     MutexPrivate* m_private;

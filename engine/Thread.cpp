@@ -30,10 +30,18 @@ typedef unsigned long HTHREAD;
 #else
 #include <pthread.h>
 typedef pthread_t HTHREAD;
+#ifndef PTHREAD_EXPLICIT_SCHED
+#define PTHREAD_EXPLICIT_SCHED 0
+static int pthread_attr_setinheritsched(pthread_attr_t *,int) { return 0; }
+#endif
 #endif
 
 #ifndef PTHREAD_STACK_MIN
 #define PTHREAD_STACK_MIN 16384
+#else
+#ifndef PAGE_SIZE
+#define PAGE_SIZE 4096
+#endif
 #endif
 
 namespace TelEngine {
@@ -89,7 +97,7 @@ static DWORD getTls()
 	abort();
     return tls_index;
 }
-#else
+#else /* _WINDOWS */
 static pthread_key_t current_key;
 
 class ThreadPrivateKeyAlloc
@@ -105,7 +113,7 @@ public:
 };
 
 static ThreadPrivateKeyAlloc keyAllocator;
-#endif
+#endif /* _WINDOWS */
 
 static TokenDict s_prio[] = {
     { "lowest", Thread::Lowest },
@@ -163,7 +171,7 @@ ThreadPrivate* ThreadPrivate::create(Thread* t,const char* name,Thread::Priority
 	    Debug(DebugInfo,"Successfully set high thread priority %d",prio);
 #endif
     }
-#endif
+#endif /* _WINDOWS */
 
     for (int i=0; i<5; i++) {
 #ifdef _WINDOWS
@@ -191,14 +199,16 @@ ThreadPrivate* ThreadPrivate::create(Thread* t,const char* name,Thread::Priority
 	    if (pr != THREAD_PRIORITY_NORMAL)
 		::SetThreadPriority(reinterpret_cast<HANDLE>(t),pr);
 	}
-#else
+#else /* _WINDOWS */
 	e = ::pthread_create(&p->thread,&attr,startFunc,p);
+#ifdef PTHREAD_INHERIT_SCHED
 	if ((0 == i) && (EPERM == e) && (prio > Thread::Normal)) {
 	    Debug(DebugWarn,"Failed to create thread with priority %d, trying with inherited",prio);
 	    ::pthread_attr_setinheritsched(&attr,PTHREAD_INHERIT_SCHED);
 	    e = EAGAIN;
 	}
 #endif
+#endif /* _WINDOWS */
 	if (e != EAGAIN)
 	    break;
 	Thread::usleep(20);
@@ -288,7 +298,9 @@ void ThreadPrivate::run()
 #else
     ::pthread_setspecific(current_key,this);
     pthread_cleanup_push(cleanupFunc,this);
+#ifdef PTHREAD_CANCEL_ASYNCHRONOUS
     ::pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS,0);
+#endif
     ::pthread_detach(::pthread_self());
 #endif
 
@@ -327,10 +339,15 @@ bool ThreadPrivate::cancel(bool hard)
 		m_name,thread,this);
 	    ret = ::TerminateThread(reinterpret_cast<HANDLE>(thread),0) != 0;
 #else
+#ifdef PTHREAD_CANCEL_ASYNCHRONOUS
 	    Debug(critical ? DebugInfo : DebugWarn,"ThreadPrivate '%s' terminating pthread %p [%p]",
 		m_name,&thread,this);
 	    ret = !::pthread_cancel(thread);
+#else
+	    Debug(DebugGoOn,"ThreadPrivate '%s' cannot terminate %p on this platform [%p]",
+		m_name,&thread,this);
 #endif
+#endif /* _WINDOWS */
 	    if (ret) {
 		// hard cancel succeeded - object is unsafe to touch any more
 		Thread::msleep(1);

@@ -657,20 +657,22 @@ unsigned int XMPPUtils::decodeDateTimeSec(const String& time, unsigned int* frac
 	    hh = (unsigned int)(*list)[0]->toString().toInteger(-1,10);
 	    mm = (unsigned int)(*list)[1]->toString().toInteger(-1,10);
 	    ss = (unsigned int)(*list)[2]->toString().toInteger(-1,10);
-	    valid = (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59 && ss >= 0 && ss <= 59) ||
+	    valid = (hh <= 23 && mm <= 59 && ss <= 59) ||
 		(hh == 24 && mm == 0 && ss == 0);
 	}
 	TelEngine::destruct(list);
-	if (valid)
-	    DDebug(DebugAll,
-		"XMPPUtils::decodeDateTimeSec() decoded hour=%u minute=%u sec=%u from '%s'",
-		hh,mm,ss,time.c_str());
-	else {
+	if (!valid) {
 	    DDebug(DebugNote,
 		"XMPPUtils::decodeDateTimeSec() incorrect time=%s in '%s'",
 		t.c_str(),time.c_str());
 	    break;
 	}
+#ifdef DEBUG
+	else
+	    Debug(DebugAll,
+		"XMPPUtils::decodeDateTimeSec() decoded hour=%u minute=%u sec=%u from '%s'",
+		hh,mm,ss,time.c_str());
+#endif
 	// Get the rest
 	unsigned int parsed = date.length() + t.length() + 1;
 	unsigned int len = time.length() - parsed;
@@ -742,10 +744,12 @@ unsigned int XMPPUtils::decodeDateTimeSec(const String& time, unsigned int* frac
 	    break;
 	}
 	ret = Time::toEpoch(year,month,day,hh,mm,ss,offsetSec);
+#ifdef DEBUG
 	if (ret == (unsigned int)-1)
-	    DDebug(DebugNote,
+	    Debug(DebugNote,
 		"XMPPUtils::decodeDateTimeSec() failed to convert '%s'",
 		time.c_str());
+#endif
 	break;
     }
 

@@ -61,7 +61,8 @@ public:
 	: m_f1(f1), m_f2(f2), m_mod(modulated), m_data(0)
 	{ }
     inline ToneData(const ToneData& original)
-	: m_f1(original.f1()), m_f2(original.f2()),
+	: GenObject(),
+	  m_f1(original.f1()), m_f2(original.f2()),
 	  m_mod(original.modulated()), m_data(0)
 	{ }
     virtual ~ToneData();

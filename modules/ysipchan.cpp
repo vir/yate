@@ -2164,12 +2164,14 @@ void YateSIPRefer::run()
 	RefPointer<Channel> chan = m_transferredDrv->find(m_transferredID);
 	m_transferredDrv->unlock();
 	if (!(ok && chan)) {
+#ifdef DEBUG
 	    if (ok)
-		DDebug(&plugin,DebugAll,"%s(%s). Connection vanished while routing! [%p]",
+		Debug(&plugin,DebugAll,"%s(%s). Connection vanished while routing! [%p]",
 		    name(),m_transferorID.c_str(),this);
 	    else
-		DDebug(&plugin,DebugAll,"%s(%s). 'call.route' failed [%p]",
+		Debug(&plugin,DebugAll,"%s(%s). 'call.route' failed [%p]",
 		    name(),m_transferorID.c_str(),this);
+#endif
 	    m_rspCode = m_notifyCode = (ok ? 487 : 481);
 	    break;
 	}

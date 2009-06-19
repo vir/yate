@@ -3584,10 +3584,12 @@ void YJGTransfer::run()
     YJGConnection* conn = static_cast<YJGConnection*>(plugin.Driver::find(m_transferorID));
     if (conn)
 	conn->transferTerminated(!error,error);
+#ifdef DEBUG
     else
-	DDebug(&plugin,DebugInfo,
+	Debug(&plugin,DebugInfo,
 	    "%s thread transfer terminated trans=%s error=%s [%p]",
 	    name(),m_transferredID.c_str(),error.c_str(),this);
+#endif
     plugin.unlock();
 }
 

@@ -31,7 +31,8 @@
 using namespace TelEngine;
 
 SIPMessage::SIPMessage(const SIPMessage& original)
-    : version(original.version), method(original.method), uri(original.uri),
+    : RefObject(),
+      version(original.version), method(original.method), uri(original.uri),
       code(original.code), reason(original.reason),
       body(0), m_ep(0),
       m_valid(original.isValid()), m_answer(original.isAnswer()),

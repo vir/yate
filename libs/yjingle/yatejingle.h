@@ -79,7 +79,8 @@ public:
      * Copy constructor
      */
     inline JGRtpMedia(const JGRtpMedia& src)
-	: m_params(src.m_params)
+	: GenObject(),
+	  m_params(src.m_params)
 	{ set(src.m_id,src.m_name,src.m_clockrate,src.m_channels,src.m_synonym); }
 
     /**

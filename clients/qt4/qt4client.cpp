@@ -2736,11 +2736,10 @@ bool QtClient::getProperty(QObject* obj, const char* name, String& value)
 	    name,value.c_str(),YQT_OBJECT_NAME(obj));
 	return true;
     }
-    const char* err = (var.type() == QVariant::Invalid) ? "no such property" :
-	"unsupported type";
     DDebug(ClientDriver::self(),DebugNote,
 	"Failed to get property '%s' (type=%s) for object '%s': %s",
-	name,var.typeName(),YQT_OBJECT_NAME(obj),err);
+	name,var.typeName(),YQT_OBJECT_NAME(obj),
+	((var.type() == QVariant::Invalid) ? "no such property" : "unsupported type"));
     return false;
 }
 

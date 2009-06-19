@@ -54,7 +54,8 @@ RTPSecure::RTPSecure(const String& suite)
 }
 
 RTPSecure::RTPSecure(const RTPSecure& other)
-    : m_owner(0), m_rtpCipher(0),
+    : GenObject(),
+      m_owner(0), m_rtpCipher(0),
       m_rtpAuthLen(other.m_rtpAuthLen), m_rtpEncrypted(other.m_rtpEncrypted)
 {
     DDebug(DebugAll,"RTPSecure::~RTPSecure(%p) [%p]",&other,this);

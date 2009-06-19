@@ -2635,8 +2635,10 @@ void ClientChannel::checkSilence()
 	return;
     m_silence = !(getConsumer() && getConsumer()->getConnSource() &&
 	DataNode::invalidStamp() != getConsumer()->getConnSource()->timeStamp());
+#ifdef DEBUG
     if (!m_silence)
-	DDebug(this,DebugInfo,"Got audio data [%p]",this);
+	Debug(this,DebugInfo,"Got audio data [%p]",this);
+#endif
 }
 
 // Open/close media

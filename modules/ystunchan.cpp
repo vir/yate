@@ -838,9 +838,11 @@ bool YStunUtils::sendMessage(Socket* socket, const YStunMessage* msg,
     if (!socket->canRetry())
 	Debug(&iplugin,DebugWarn,"Socket write error: '%s' (%d). [%p]",
 	    ::strerror(socket->error()),socket->error(),sender);
+#ifdef DEBUG
     else
-	DDebug(&iplugin,DebugMild,"Socket temporary unavailable: '%s' (%d). [%p]",
+	Debug(&iplugin,DebugMild,"Socket temporary unavailable: '%s' (%d). [%p]",
 	    ::strerror(socket->error()),socket->error(),sender);
+#endif
     return false;
 }
 

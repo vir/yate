@@ -45,7 +45,8 @@ DataBlock::DataBlock()
 }
 
 DataBlock::DataBlock(const DataBlock& value)
-    : m_data(0), m_length(0)
+    : GenObject(),
+      m_data(0), m_length(0)
 {
     assign(value.data(),value.length());
 }
@@ -272,7 +273,7 @@ bool DataBlock::convert(const DataBlock& src, const String& sFormat,
 }
 
 // Decode a single nibble, return -1 on error
-inline char hexDecode(char c)
+inline signed char hexDecode(char c)
 {
     if (('0' <= c) && (c <= '9'))
 	return c - '0';
@@ -319,8 +320,8 @@ bool DataBlock::unHexify(const char* data, unsigned int len, char sep)
     char* buf = (char*)::malloc(n);
     unsigned int iBuf = 0;
     for (unsigned int i = 0; i < len; i += (sep ? 3 : 2)) {
-	char c1 = hexDecode(data[i]);
-	char c2 = hexDecode(data[i+1]);
+	signed char c1 = hexDecode(data[i]);
+	signed char c2 = hexDecode(data[i+1]);
 	if (c1 == -1 || c2 == -1 || (sep && (iBuf != n - 1) && (sep != data[i+2])))
 	    break;
 	buf[iBuf++] = (c1 << 4) | c2;

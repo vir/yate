@@ -203,7 +203,8 @@ String::String(const char* value, int len)
 }
 
 String::String(const String& value)
-    : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
+    : GenObject(),
+      m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
 {
     XDebug(DebugAll,"String::String(%p) [%p]",&value,this);
     if (!value.null()) {

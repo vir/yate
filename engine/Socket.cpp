@@ -609,7 +609,7 @@ bool File::setBlocking(bool block)
 #else
     unsigned long flags = 1;
     flags = ::fcntl(m_handle,F_GETFL);
-    if (flags < 0) {
+    if ((signed long)flags < 0) {
 	copyError();
 	return false;
     }
@@ -1577,7 +1577,7 @@ bool Socket::setBlocking(bool block)
     return checkError(::ioctlsocket(m_handle,FIONBIO,(unsigned long *) &flags));
 #else
     flags = ::fcntl(m_handle,F_GETFL);
-    if (flags < 0) {
+    if ((signed long)flags < 0) {
 	copyError();
 	return false;
     }

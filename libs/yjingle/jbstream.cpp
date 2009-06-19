@@ -654,9 +654,11 @@ JBEvent* JBStream::getEvent(u_int64_t time)
 	}
     }
 
+#ifdef DEBUG
     if (m_lastEvent)
-	DDebug(m_engine,DebugAll,"Stream. Raising event (%p,%s) [%p]",
+	Debug(m_engine,DebugAll,"Stream. Raising event (%p,%s) [%p]",
 	    m_lastEvent,m_lastEvent->name(),this);
+#endif
     return m_lastEvent;
 }
 

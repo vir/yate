@@ -888,6 +888,7 @@ public:
      * @param value Original RefPointer
      */
     inline RefPointer(const RefPointer<Obj>& value)
+	: RefPointerBase()
 	{ assign(value); }
 
     /**
@@ -4058,7 +4059,8 @@ public:
      * @param value Address to copy
      */
     inline SocketAddr(const SocketAddr& value)
-	: m_address(0), m_length(0)
+	: GenObject(),
+	  m_address(0), m_length(0)
 	{ assign(value.address(),value.length()); }
 
     /**

@@ -327,9 +327,11 @@ IAXTransaction* IAXTransaction::sendMedia(const DataBlock& data, u_int32_t forma
 		format,m_formatOut,this);
 	    m_formatOut = format;
 	}
+#ifdef DEBUG
 	else
-	    DDebug(m_engine,DebugNote,"Transaction(%u,%u) Time to send VOICE: ts=%u last=%u [%p]",
+	    Debug(m_engine,DebugNote,"Transaction(%u,%u) Time to send VOICE: ts=%u last=%u [%p]",
 		localCallNo(),remoteCallNo(),ts,m_lastMiniFrameOut,this);
+#endif
 	m_lastMiniFrameOut = (u_int16_t)ts;
 	postFrame(IAXFrame::Voice,m_formatOut,data.data(),data.length(),ts,true);
 	return this;

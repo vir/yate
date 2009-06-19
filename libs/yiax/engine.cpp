@@ -148,14 +148,18 @@ IAXTransaction* IAXEngine::addFrame(const SocketAddr& addr, IAXFrame* frame)
 	    return 0;
 	case IAXControl::FwDownl:
 	default:
+#ifdef DEBUG
 	    if (frame->fullFrame()) {
-	        if (frame->fullFrame()->destCallNo())
-		    XDebug(this,DebugAll,"Unmatched Frame(%u,%u) for (%u,%u)",
-			frame->type(),frame->fullFrame()->subclass(),frame->fullFrame()->destCallNo(),frame->fullFrame()->sourceCallNo());
-		else
-		    DDebug(this,DebugAll,"Unsupported incoming transaction Frame(%u,%u). Source call no: %u",
+	        if (frame->fullFrame()->destCallNo() == 0)
+		    Debug(this,DebugAll,"Unsupported incoming transaction Frame(%u,%u). Source call no: %u",
 			frame->type(),frame->fullFrame()->subclass(),frame->fullFrame()->sourceCallNo());
+#ifdef XDEBUG
+		else
+		    Debug(this,DebugAll,"Unmatched Frame(%u,%u) for (%u,%u)",
+			frame->type(),frame->fullFrame()->subclass(),frame->fullFrame()->destCallNo(),frame->fullFrame()->sourceCallNo());
+#endif
 	    }
+#endif
 	    return 0;
     }
     // Generate local number
@@ -239,9 +243,11 @@ bool IAXEngine::writeSocket(const void* buf, int len, const SocketAddr& addr, IA
 	if (!m_socket.canRetry())
 	    Debug(this,DebugWarn,"Socket write error: %s (%d)",
 		::strerror(m_socket.error()),m_socket.error());
+#ifdef DEBUG
 	else
-	    DDebug(this,DebugMild,"Socket temporary unavailable: %s (%d)",
+	    Debug(this,DebugMild,"Socket temporary unavailable: %s (%d)",
 		::strerror(m_socket.error()),m_socket.error());
+#endif
 	return false;
     }
     return true;
@@ -432,11 +438,13 @@ bool IAXEngine::acceptFormatAndCapability(IAXTransaction* trans)
 	Debug(this,DebugAll,"acceptFormatAndCapability. Received: Format: %u(%s). Capabilities: '%s'.",
 	    format,IAXFormat::audioText(format),rec.c_str());
     }
-#endif //XDEBUG
+#endif
     // Valid capability ?
     if (!capability) {
+#ifdef DEBUG
 	if (!trans->outgoing())
-	    XDebug(this,DebugAll,"acceptFormatAndCapability. No capabilities received.");
+	    Debug(this,DebugNote,"acceptFormatAndCapability. No capabilities received.");
+#endif
 	return false;
     }
     for (;;) {
@@ -457,10 +465,10 @@ bool IAXEngine::acceptFormatAndCapability(IAXTransaction* trans)
 	    format = IAXFormat::audioData[i].value;
 	    break;
 	}
-	XDebug(this,DebugAll,"acceptFormatAndCapability. Unable to choose a format.");
+	DDebug(this,DebugNote,"acceptFormatAndCapability. Unable to choose a format.");
 	return false;
     }
-    XDebug(this,DebugAll,"acceptFormatAndCapability. Format %u: '%s'.",
+    DDebug(this,DebugAll,"acceptFormatAndCapability. Format %u: '%s'.",
 	format,IAXFormat::audioText(format));
     trans->m_format = format;
     trans->m_capability = capability;

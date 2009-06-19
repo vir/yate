@@ -1605,8 +1605,10 @@ void YIAXConnection::handleEvent(IAXEvent* event)
 		event->getList().getString(IAXInfoElement::CAUSE,m_reason);
 		DDebug(this,DebugCall,"REJECT/HANGUP: '%s' [%p]",m_reason.c_str(),this);
 	    }
+#ifdef DEBUG
 	    else
-		DDebug(this,DebugCall,"REJECT/HANGUP [%p]",this);
+		Debug(this,DebugCall,"REJECT/HANGUP [%p]",this);
+#endif
 	    break;
 	case IAXEvent::Timeout:
 	    DDebug(this,DebugNote,"TIMEOUT. Transaction: %u,%u, Frame: %u,%u [%p]",

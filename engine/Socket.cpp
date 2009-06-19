@@ -1480,7 +1480,7 @@ bool Socket::canSelect(SOCKET handle)
 	return false;
 #ifdef FD_SETSIZE
 #ifndef _WINDOWS
-    if (handle >= FD_SETSIZE)
+    if (handle >= (SOCKET)FD_SETSIZE)
 	return false;
 #endif
 #endif
@@ -1494,7 +1494,7 @@ bool Socket::select(bool* readok, bool* writeok, bool* except, struct timeval* t
 #ifdef FD_SETSIZE
 #ifndef _WINDOWS
     static bool localFail = true;
-    if (m_handle >= FD_SETSIZE) {
+    if (m_handle >= (SOCKET)FD_SETSIZE) {
 	if (localFail) {
 	    localFail = false;
 	    Debug(DebugGoOn,"Socket::select: handle %d larger than compiled in maximum %d",

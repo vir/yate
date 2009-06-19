@@ -105,7 +105,8 @@ XMLElement::XMLElement()
 }
 
 XMLElement::XMLElement(const XMLElement& src)
-    : m_type(Invalid), m_owner(true), m_element(0)
+    : GenObject(),
+      m_type(Invalid), m_owner(true), m_element(0)
 {
     TiXmlElement* e = src.get();
     if (!e)
@@ -427,10 +428,8 @@ bool XMLParser::consume(const char* data, u_int32_t len)
 	    String tmp = m_buffer.substr(end,m_buffer.length() - end);
 	    m_buffer = m_buffer.substr(0,end) << " /" << tmp;
 	}
-	else 
-	    // Received end stream tag before start stream tag
-	    // The element will be parsed: the upper layer will deal with it
-	    ;
+	// If we received end stream tag before start stream tag
+	// The element will be parsed: the upper layer will deal with it
     }
     if (!m_buffer)
 	return true;

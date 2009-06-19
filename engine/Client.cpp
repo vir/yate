@@ -2504,8 +2504,10 @@ ClientChannel::ClientChannel(const String& soundId)
 {
     Lock lock(ClientSound::s_soundsMutex);
     ClientSound* s = ClientSound::find(m_soundId);
-    if (s)
+    if (s) {
 	s->setChannel(id(),true);
+	update(Startup);
+    }
     else
 	m_soundId = "";
 }
@@ -2554,8 +2556,10 @@ void ClientChannel::destroyed()
     if (m_utility) {
 	Lock lock(ClientSound::s_soundsMutex);
 	ClientSound* s = ClientSound::find(m_soundId);
-	if (s)
+	if (s) {
+	    update(Destroyed,false);
 	    s->setChannel(id(),false);
+	}
 	m_soundId = "";
 	lock.drop();
 	Lock lck(m_mutex);
@@ -2892,8 +2896,19 @@ void ClientChannel::callAnswer(bool setActive)
 void ClientChannel::update(int notif, bool chan, bool updatePeer,
     const char* engineMsg, bool minimal, bool data)
 {
-    if (m_utility)
+    if (m_utility) {
+	if (m_soundId) {
+	    const char* op = lookup(notif);
+	    if (!op)
+		return;
+	    Message* m = new Message("clientchan.update");
+	    m->addParam("notify",op);
+	    m->addParam("utility",String::boolText(true));
+	    m->addParam("sound",m_soundId);
+	    Engine::enqueue(m);
+	}
 	return;
+    }
     if (engineMsg)
 	Engine::enqueue(message(engineMsg,minimal,data));
     if (updatePeer) {

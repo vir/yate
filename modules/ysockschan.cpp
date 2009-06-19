@@ -749,7 +749,7 @@ private:
  * Socket listener. Notify the engine when an incoming connection is created
  * @short A socket listener
  */
-class SOCKSListener : virtual public Runnable
+class SOCKSListener
 {
     friend class SOCKSEngine;            // Reset the engine when stopped
 public:
@@ -776,7 +776,7 @@ public:
     /**
      * Destructor
      */
-    ~SOCKSListener();
+    virtual ~SOCKSListener();
 
     /**
      * Get the endpoint definition used by this listener

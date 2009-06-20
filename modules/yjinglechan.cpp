@@ -1532,6 +1532,9 @@ bool YJGConnection::route()
 {
     Message* m = message("call.preroute",false,true);
     m->addParam("username",m_remote.node());
+    if (m_session && m_session->stream() &&
+	m_session->stream()->type() == JBEngine::Client)
+	m->addParam("in_line",m_session->stream()->name());
     m->addParam("called",m_local.node());
     m->addParam("calleduri",BUILD_XMPP_URI(m_local));
     m->addParam("caller",m_remote.node());

@@ -3268,7 +3268,8 @@ public:
      * @param device Optional device used to play the file. Set to 0 to use the default one
      */
     inline ClientSound(const char* name, const char* file, const char* device = 0)
-	: String(name), m_file(file), m_device(device), m_repeat(0), m_started(false)
+	: String(name), m_file(file), m_device(device), m_repeat(0),
+	m_started(false), m_stereo(false)
 	{}
 
     /**
@@ -3317,9 +3318,10 @@ public:
      * Set the file played by this sound.
      * The new file will not be used until the next time the sound is started
      * @param filename The new file played by this sound
+     * @param stereo True if the file contains 2 channel audio
      */
-    inline void file(const char* filename)
-	{ Lock lock(s_soundsMutex); m_file = filename; }
+    inline void file(const char* filename, bool stereo)
+	{ Lock lock(s_soundsMutex); m_file = filename; m_stereo = stereo; }
 
     /**
      * Set the repeat counter.
@@ -3328,6 +3330,13 @@ public:
      */
     inline void setRepeat(unsigned int count)
 	{ m_repeat = count; }
+
+    /**
+     * Check if this sound's file contains 2 channel audio
+     * @return True if the sound file contains 2 channel audio
+     */
+    inline bool stereo() const
+	{ return m_stereo; }
 
     /**
      * Start playing the file
@@ -3363,10 +3372,11 @@ public:
      * @param repeat The number of times to play the sound,
      *  0 to repeat until explicitely stopped
      * @param resetExisting True to reset the file of an already created sound
+     * @param stereo True if the sound file contains 2 channel audio
      * @return True on success, false if the sound already exists
      */
     static bool build(const String& id, const char* file, const char* device = 0,
-	unsigned int repeat = 0, bool resetExisting = true);
+	unsigned int repeat = 0, bool resetExisting = true, bool stereo = false);
 
     /**
      * Check if a sound is started
@@ -3421,6 +3431,7 @@ protected:
     String m_device;
     unsigned int m_repeat;
     bool m_started;
+    bool m_stereo;
     String m_channel;                    // Utility channel using this sound
 };
 

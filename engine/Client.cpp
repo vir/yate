@@ -2610,6 +2610,11 @@ void ClientChannel::connected(const char* reason)
     m.userData(this);
     m.clearParam("id");
     m.setParam("consumer",dev);
+    ClientSound::s_soundsMutex.lock();
+    ClientSound* s = ClientSound::find(m_soundId);
+    if (s && s->stereo())
+	m.addParam("stereo",String::boolText(true));
+    ClientSound::s_soundsMutex.unlock();
     Engine::dispatch(m);
     if (!getConsumer())
         Debug(this,DebugNote,"Utility channel failed to set data consumer [%p]",this);
@@ -3707,10 +3712,9 @@ bool ClientSound::started(const String& name)
     return obj ? (static_cast<ClientSound*>(obj->get()))->started() : false;
 }
 
-
 // Create a sound
 bool ClientSound::build(const String& id, const char* file, const char* device,
-    unsigned int repeat, bool resetExisting)
+    unsigned int repeat, bool resetExisting, bool stereo)
 {
     if (!id)
 	return false;
@@ -3718,7 +3722,7 @@ bool ClientSound::build(const String& id, const char* file, const char* device,
     ClientSound* s = find(id);
     if (s) {
 	if (resetExisting) {
-	    s->file(file);
+	    s->file(file,stereo);
 	    s->device(device);
 	    s->setRepeat(repeat);
 	}
@@ -3726,6 +3730,7 @@ bool ClientSound::build(const String& id, const char* file, const char* device,
     }
     s = new ClientSound(id,file,device);
     s->setRepeat(repeat);
+    s->m_stereo = stereo;
     s_sounds.append(s);
     DDebug(ClientDriver::self(),DebugAll,"Created sound '%s' file=%s device=%s [%p]",
 	id.c_str(),file,device,s);

@@ -70,6 +70,10 @@ typedef void* HMODULE;
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#ifdef HAVE_PRCTL
+#include <sys/prctl.h>
+#endif
+
 #include <assert.h>
 
 namespace TelEngine {
@@ -1862,6 +1866,11 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 
 #ifdef RLIMIT_CORE
     while (s_coredump) {
+#ifdef HAVE_PRCTL
+#ifdef PR_SET_DUMPABLE
+	prctl(PR_SET_DUMPABLE,1,0,0,0);
+#endif
+#endif
 	struct rlimit lim;
 	if (!::getrlimit(RLIMIT_CORE,&lim)) {
 	    errno = 0;

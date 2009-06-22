@@ -36,6 +36,10 @@ static int pthread_attr_setinheritsched(pthread_attr_t *,int) { return 0; }
 #endif
 #endif
 
+#ifdef HAVE_PRCTL
+#include <sys/prctl.h>
+#endif
+
 #ifndef PTHREAD_STACK_MIN
 #define PTHREAD_STACK_MIN 16384
 #else
@@ -302,6 +306,13 @@ void ThreadPrivate::run()
     ::pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS,0);
 #endif
     ::pthread_detach(::pthread_self());
+#endif /* _WINDOWS */
+
+#ifdef HAVE_PRCTL
+#ifdef PR_SET_NAME
+    if (m_name)
+	prctl(PR_SET_NAME,(unsigned long)m_name,0,0,0);
+#endif
 #endif
 
     // FIXME: possible race if public object is destroyed during thread startup

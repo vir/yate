@@ -561,6 +561,9 @@ public:
 
     /**
      * Installs a handler in the dispatcher.
+     * The handlers are installed in ascending order of their priorities.
+     * There is NO GUARANTEE on the order of handlers with equal priorities
+     *  although for avoiding uncertainity such handlers are sorted by address.
      * @param handler A pointer to the handler to install
      * @return True on success, false on failure
      */
@@ -574,7 +577,11 @@ public:
     bool uninstall(MessageHandler* handler);
 
     /**
-     * Synchronously dispatch a message to the installed handlers
+     * Synchronously dispatch a message to the installed handlers.
+     * Handlers matching the message name and filter parameter are called in
+     *  their installed order (based on priority) until one returns true.
+     * Note that in some cases when a handler is removed from the list
+     *  other handlers with equal priority may be called twice.
      * @param msg The message to dispatch
      * @return True if one handler accepted it, false if all ignored
      */

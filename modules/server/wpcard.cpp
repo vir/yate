@@ -268,7 +268,7 @@ class WpSigThread : public Thread
     friend class WpInterface;
 public:
     inline WpSigThread(WpInterface* iface, Priority prio = Normal)
-	: Thread("WpInterfaceThread",prio), m_interface(iface)
+	: Thread("Wp Interface",prio), m_interface(iface)
 	{}
     virtual ~WpSigThread();
     virtual void run();
@@ -406,7 +406,7 @@ class WpSpanThread : public Thread
     friend class WpSpan;
 public:
     inline WpSpanThread(WpSpan* data, Priority prio = Normal)
-	: Thread("WpSpanThread",prio), m_data(data)
+	: Thread("Wp Span",prio), m_data(data)
 	{}
     virtual ~WpSpanThread();
     virtual void run();

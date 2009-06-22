@@ -161,7 +161,7 @@ class FileSourceWorker : public Thread
 {
 public:
     inline FileSourceWorker(FileSource* src, Thread::Priority prio = Thread::Normal)
-	: Thread("FileSource worker",prio), m_source(src)
+	: Thread("FileSource Worker",prio), m_source(src)
 	{}
     virtual void cleanup();
     virtual void run();

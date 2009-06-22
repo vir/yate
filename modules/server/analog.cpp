@@ -3131,7 +3131,7 @@ ModuleGroup* AnalogDriver::findGroup(const char* name, bool useFxo)
  * AnalogWorkerThread
  */
 AnalogWorkerThread::AnalogWorkerThread(ModuleGroup* group)
-    : Thread("AnalogWorkerThread"),
+    : Thread("Analog Worker"),
     m_client(group),
     m_groupName(group ? group->debugName() : "")
 {

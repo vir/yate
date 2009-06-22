@@ -82,7 +82,7 @@ class EnginePrivate : public Thread
 {
 public:
     EnginePrivate()
-	: Thread("EnginePrivate")
+	: Thread("Engine Worker")
 	{ count++; }
     ~EnginePrivate()
 	{ count--; }

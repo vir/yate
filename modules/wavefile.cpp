@@ -186,7 +186,7 @@ void WaveSource::init(const String& file, bool autorepeat)
 	if (file == "-") {
 	    m_nodata = true;
 	    m_brate = 8000;
-	    start("WaveSource");
+	    start("Wave Source");
 	    return;
 	}
 	m_stream = new File;
@@ -228,7 +228,7 @@ void WaveSource::init(const String& file, bool autorepeat)
 	if (autorepeat)
 	    m_repeatPos = m_stream->seek(Stream::SeekCurrent);
 	asyncDelete(s_asyncDelete);
-	start("WaveSource");
+	start("Wave Source");
     }
     else {
 	Debug(DebugWarn,"Unable to compute data rate for file '%s'",file.c_str());

@@ -3502,7 +3502,7 @@ void YJGConnection::handleAudioInfoEvent(JGEvent* event)
  * Transfer thread (route and execute)
  */
 YJGTransfer::YJGTransfer(YJGConnection* conn, const char* subject)
-    : Thread("Jingle transfer"),
+    : Thread("Jingle Transfer"),
     m_msg("call.route")
 {
     if (!conn)

@@ -967,11 +967,11 @@ void YIAXEngine::start(u_int16_t listenThreadCount, u_int16_t eventThreadCount, 
     if (!trunkThreadCount)
 	Debug(this,DebugWarn,"YIAXEngine. No trunking threads(s)!");
     for (; listenThreadCount; listenThreadCount--)
-	(new YIAXListener(this,"YIAXListener thread",s_priority))->startup();
+	(new YIAXListener(this,"YIAX Listener",s_priority))->startup();
     for (; eventThreadCount; eventThreadCount--)
-	(new YIAXGetEvent(this,"YIAXGetEvent thread"))->startup();
+	(new YIAXGetEvent(this,"YIAX GetEvent"))->startup();
     for (; trunkThreadCount; trunkThreadCount--)
-	(new YIAXTrunking(this,"YIAXTrunking thread",s_priority))->startup();
+	(new YIAXTrunking(this,"YIAX Trunking",s_priority))->startup();
     m_threadsCreated = true;
 }
 

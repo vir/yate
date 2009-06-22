@@ -461,7 +461,7 @@ void ToneSource::zeroRefs()
 bool ToneSource::startup()
 {
     DDebug(&__plugin,DebugAll,"ToneSource::startup(\"%s\") tone=%p",m_name.c_str(),m_tone);
-    return m_tone && start("ToneSource");
+    return m_tone && start("Tone Source");
 }
 
 const ToneDesc* ToneSource::getBlock(String& tone)

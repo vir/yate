@@ -509,7 +509,7 @@ class SigTrunkThread : public Thread
     friend class SigTrunk;                // SigTrunk will set m_timeout when needded
 public:
     inline SigTrunkThread(SigTrunk* trunk, unsigned long sleepUsec)
-	: Thread("SigTrunkThread"),
+	: Thread("YSIG Trunk"),
 	  m_trunk(trunk), m_timeout(0), m_sleepUsec(sleepUsec)
 	{ }
     virtual ~SigTrunkThread();

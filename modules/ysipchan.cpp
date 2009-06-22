@@ -2105,7 +2105,7 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
 YateSIPRefer::YateSIPRefer(const String& transferorID, const String& transferredID,
     Driver* transferredDrv, Message* msg, SIPMessage* sipNotify,
     SIPTransaction* transaction)
-    : Thread("YSIP Transfer Thread"),
+    : Thread("YSIP Transfer"),
     m_transferorID(transferorID), m_transferredID(transferredID),
     m_transferredDrv(transferredDrv), m_msg(msg), m_sipNotify(sipNotify),
     m_notifyCode(200), m_transaction(0), m_rspCode(500)

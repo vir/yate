@@ -660,7 +660,7 @@ void ZapWorkerClient::stop()
 /**
  * ZapWorkerThread
  */
-const char* ZapWorkerThread::s_threadName = "ZapWorkerThread";
+const char* ZapWorkerThread::s_threadName = "Zap Worker";
 
 ZapWorkerThread::~ZapWorkerThread()
 {

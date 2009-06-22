@@ -87,7 +87,8 @@ class TdmThread : public Thread
 {
     public:
     inline TdmThread(TdmWorker* worker, const String& addr, Priority prio = Normal)
-	: Thread(s_threadName,prio), m_worker(worker), m_address(addr)
+	: Thread(s_threadName,prio),
+	  m_worker(worker), m_address(addr)
 	{}
     virtual ~TdmThread();
     virtual void run();
@@ -486,7 +487,7 @@ void TdmWorker::stop()
 	Thread::yield();
 }
 
-const char* TdmThread::s_threadName = "TdmWorker";
+const char* TdmThread::s_threadName = "Tdm Worker";
 
 TdmThread::~TdmThread()
 {

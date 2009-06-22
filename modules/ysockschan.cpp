@@ -1187,7 +1187,7 @@ class YSocksWrapperWorker: public Thread
 {
 public:
     inline YSocksWrapperWorker(YSocksWrapper* w, Thread::Priority prio = Thread::Normal)
-	: Thread("SOCKS wrapper worker thread",prio),
+	: Thread("SOCKS Wrapper",prio),
 	m_wrapper(w)
 	{}
     // Check if the thread should terminate
@@ -1245,7 +1245,7 @@ public:
 	unsigned int backlog, bool blocking, unsigned int sleepMs = 20,
 	Thread::Priority prio = Thread::Normal)
 	: SOCKSListener(engine,proxy,backlog,blocking,sleepMs),
-	Thread("SOCKS listener thread",prio)
+	  Thread("SOCKS Listener",prio)
 	{}
 
     // Add the listener to engine and start it
@@ -1268,7 +1268,7 @@ class YSocksProcessThread : public Thread
 {
 public:
     inline YSocksProcessThread(Thread::Priority prio = Thread::Normal)
-	: Thread("SOCKS engine processor thread",prio)
+	: Thread("SOCKS Processor",prio)
 	{}
     void run();
 };

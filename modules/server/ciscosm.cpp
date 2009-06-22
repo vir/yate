@@ -462,7 +462,7 @@ YSIGFACTORY2(SLT);
 */
 
 RudpThread::RudpThread(RudpSocket* rudp, Priority prio)
-    : Thread("RudpRunner",prio),
+    : Thread("RUDP Runner",prio),
     m_rudp(rudp), m_stop(false)
 {
 }

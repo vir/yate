@@ -224,7 +224,7 @@ AsyncFFT* AsyncFFT::create(unsigned int length, WinType window, Priority prio)
 }
 
 AsyncFFT::AsyncFFT(unsigned int length, WinType window, Priority prio)
-    : Thread("AsyncFFT",prio),
+    : Thread("Async FFT",prio),
       m_ready(false), m_start(false), m_stop(false), m_notify(0),
       m_length(0), m_window(0), m_real(0), m_imag(0), m_nBits(0), m_winName(0)
 {

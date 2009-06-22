@@ -167,7 +167,7 @@ MOHSource* MOHSource::getSource(String& name, const NamedList& params)
     }
     if (cmd) {
 	MOHSource *s = new MOHSource(name,cmd);
-	if (s->start("MOHSource")) {
+	if (s->start("MOH Source")) {
 	    sources.append(s);
 	    return s;
 	} else

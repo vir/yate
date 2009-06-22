@@ -90,7 +90,7 @@ class DbThread : public Thread
 {
 public:
     inline DbThread(MyConn* conn)
-	: Thread("mysqldb"), m_conn(conn)
+	: Thread("Mysql Connection"), m_conn(conn)
 	{ }
     virtual void run();
     virtual void cleanup();

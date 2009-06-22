@@ -269,7 +269,7 @@ class ExtThread : public Thread
 {
 public:
     ExtThread(ExtModReceiver* receiver)
-	: Thread("ExtModule"), m_receiver(receiver)
+	: Thread("ExtMod Receiver"), m_receiver(receiver)
 	{ }
     virtual void run()
 	{ m_receiver->run(); }
@@ -369,7 +369,7 @@ ExtModSource::ExtModSource(Stream* str, ExtModChan* chan)
     Debug(DebugAll,"ExtModSource::ExtModSource(%p) [%p]",str,this);
     if (m_str) {
 	chan->setRunning(true);
-	start("ExtModSource");
+	start("ExtMod Source");
     }
 }
 
@@ -1619,7 +1619,8 @@ bool ExtModCommand::complete(const String& partLine, const String& partWord, Str
 
 
 ExtListener::ExtListener(const char* name)
-    : Thread("ExtListener"), m_name(name), m_role(ExtModReceiver::RoleUnknown)
+    : Thread("ExtMod Listener"),
+      m_name(name), m_role(ExtModReceiver::RoleUnknown)
 {
 }
 

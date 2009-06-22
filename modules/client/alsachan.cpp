@@ -167,7 +167,7 @@ bool AlsaSource::init()
 {
     m_brate = 16000;
     m_total = 0;
-    start("AlsaSource",Thread::High);
+    start("Alsa Source",Thread::High);
     return true;
 }
 

@@ -509,7 +509,7 @@ bool CallCdrHandler::received(Message& msg)
  * QueuedCallWorker
  */
 QueuedCallWorker::QueuedCallWorker(Priority prio)
-    : Thread("QueuedCallWorker",prio)
+    : Thread("QueuedCall Worker",prio)
 {
     s_thread = this;
 }

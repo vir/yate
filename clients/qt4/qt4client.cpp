@@ -2473,7 +2473,7 @@ void QtWindow::updatePosSize()
  * QtClient
  */
 QtClient::QtClient()
-    : Client("QtClient")
+    : Client("Qt Client")
 {
     m_oneThread = Engine::config().getBoolValue("client","onethread",true);
 

@@ -61,7 +61,7 @@ class FaxThread : public Thread
 {
 public:
     inline FaxThread(FaxWrapper* wrapper)
-	: Thread("Fax"), m_wrap(wrapper)
+	: Thread("Fax Wrapper"), m_wrap(wrapper)
 	{ }
     virtual void run();
 private:

@@ -81,12 +81,12 @@ static TokenDict s_serviceType[] = {
 };
 
 static TokenDict s_threadNames[] = {
-    {"Jabber stream connect", JBThread::StreamConnect},
-    {"Engine receive",        JBThread::EngineReceive},
-    {"Engine process",        JBThread::EngineProcess},
-    {"Presence",              JBThread::Presence},
-    {"Jingle",                JBThread::Jingle},
-    {"Message",               JBThread::Message},
+    {"Jabber Connect", JBThread::StreamConnect},
+    {"Jabber Receive", JBThread::EngineReceive},
+    {"Jabber Process", JBThread::EngineProcess},
+    {"Jabber Presence",  JBThread::Presence},
+    {"Jabber Messages",  JBThread::Message},
+    {"Jingle Events",  JBThread::Jingle},
     {0,0}
 };
 

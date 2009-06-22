@@ -174,7 +174,7 @@ bool OssSource::init()
 	Debug(DebugWarn, "Unable to set input mode");
 	return false;
     }
-    start("OssSource");
+    start("Oss Source");
     return true;
 }
 

@@ -86,7 +86,7 @@ class GenThread : public Thread
 {
 public:
     GenThread()
-	: Thread("CallGen")
+	: Thread("CallGen Caller")
 	{ }
     virtual void run();
 };
@@ -95,7 +95,7 @@ class CleanThread : public Thread
 {
 public:
     CleanThread()
-	: Thread("GenCleaner")
+	: Thread("CallGen Cleaner")
 	{ }
     virtual void run();
 };

@@ -65,12 +65,13 @@ class DSoundConsumer : public DataConsumer
 {
     friend class DSoundPlay;
 public:
-    DSoundConsumer();
+    DSoundConsumer(bool stereo = false);
     ~DSoundConsumer();
     virtual void Consume(const DataBlock &data, unsigned long tStamp);
     bool control(NamedList& msg);
 private:
     DSoundPlay* m_dsound;
+    bool m_stereo;
 };
 
 // all DirectSound play related objects are created in this thread's apartment
@@ -201,12 +202,23 @@ bool DSoundPlay::init()
 	Debug(DebugGoOn,"Could not set the DirectSound cooperative level, code 0x%X",hr);
 	return false;
     }
+    
+    // Set channel number depending data
+    WORD nChannels = 1;
+    DWORD nAvgBytesPerSec = 16000;       // nSamplesPerSec * nBlockAlign.
+    WORD nBlockAlign = 2;                // nChannels * wBitsPerSample / 8
+    if (m_owner && m_owner->m_stereo) {
+	nChannels = 2;
+	nAvgBytesPerSec = 32000;
+	nBlockAlign = 4;
+    }
+
     WAVEFORMATEX fmt;
     fmt.wFormatTag = WAVE_FORMAT_PCM;
-    fmt.nChannels = 1;
+    fmt.nChannels = nChannels;
     fmt.nSamplesPerSec = 8000;
-    fmt.nAvgBytesPerSec = 16000;
-    fmt.nBlockAlign = 2;
+    fmt.nAvgBytesPerSec = nAvgBytesPerSec;
+    fmt.nBlockAlign = nBlockAlign;
     fmt.wBitsPerSample = 16;
     fmt.cbSize = 0;
     DSBUFFERDESC bdesc;
@@ -235,11 +247,11 @@ bool DSoundPlay::init()
 	return false;
     }
     if ((fmt.wFormatTag != WAVE_FORMAT_PCM) ||
-	(fmt.nChannels != 1) ||
+	(fmt.nChannels != nChannels) ||
 	(fmt.nSamplesPerSec != 8000) ||
 	(fmt.wBitsPerSample != 16)) {
-	Debug(DebugGoOn,"DirectSound does not support 8000Hz 16bit mono PCM format, "
-	    "got fmt=%u, chans=%d samp=%d size=%u",
+	Debug(DebugGoOn,"DirectSound does not support 8000Hz 16bit %s PCM format, "
+	    "got fmt=%u, chans=%d samp=%d size=%u",nChannels == 1 ? "mono" : "stereo",
 	    fmt.wFormatTag,fmt.nChannels,fmt.nSamplesPerSec,fmt.wBitsPerSample);
 	return false;
     }
@@ -601,8 +613,9 @@ bool DSoundSource::control(NamedList& msg)
 }
 
 
-DSoundConsumer::DSoundConsumer()
-    : m_dsound(0)
+DSoundConsumer::DSoundConsumer(bool stereo)
+    : DataConsumer(stereo ? "2*slin" : "slin"),
+    m_dsound(0), m_stereo(stereo)
 {
     DSoundPlay* ds = new DSoundPlay(this);
     ds->startup();
@@ -678,7 +691,7 @@ bool AttachHandler::received(Message &msg)
     }
 
     if (cons) {
-	DSoundConsumer* c = new DSoundConsumer;
+	DSoundConsumer* c = new DSoundConsumer(msg.getBoolValue("stereo"));
 	dd->setConsumer(c);
 	c->deref();
 	Thread::msleep(50);

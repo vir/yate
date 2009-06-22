@@ -41,16 +41,16 @@ extern int pthread_mutexattr_settype(pthread_mutexattr_t *__attr, int __kind) __
 }
 #endif
 
+typedef pthread_mutex_t HMUTEX;
+
+#endif /* ! _WINDOWS */
+
 #ifdef MUTEX_STATIC_UNSAFE
 #undef MUTEX_STATIC_UNSAFE
 #define MUTEX_STATIC_UNSAFE true
 #else
 #define MUTEX_STATIC_UNSAFE false
 #endif
-
-typedef pthread_mutex_t HMUTEX;
-
-#endif /* ! _WINDOWS */
 
 namespace TelEngine {
 

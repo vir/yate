@@ -65,7 +65,7 @@ using namespace TelEngine;
  */
 MGCPPrivateThread::MGCPPrivateThread(MGCPEngine* engine, bool process,
 	Thread::Priority priority)
-    : Thread(process?"MGCP private process":"MGCP private receive",priority),
+    : Thread(process?"MGCP Process":"MGCP Receive",priority),
     m_engine(engine),
     m_action(process?Process:Receive)
 {

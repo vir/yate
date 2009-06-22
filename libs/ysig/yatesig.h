@@ -759,7 +759,7 @@ public:
      * @param usec How long to sleep between iterations in usec, 0 to use library default
      * @return True if (already) started, false if an error occured
      */
-    bool start(const char* name = "Signalling", Thread::Priority prio = Thread::Normal, unsigned long usec = 0);
+    bool start(const char* name = "Sig Engine", Thread::Priority prio = Thread::Normal, unsigned long usec = 0);
 
     /**
      * Stops and destroys the worker thread if running

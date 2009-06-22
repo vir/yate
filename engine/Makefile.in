@@ -83,7 +83,7 @@ strip: all
 	-strip --strip-debug --discard-locals ../$(YLIB)
 
 Engine.o: @srcdir@/Engine.cpp $(MKDEPS) $(EINC) ../yateversn.h ../yatepaths.h
-	$(COMPILE) @FDSIZE_HACK@ -c $<
+	$(COMPILE) @FDSIZE_HACK@ @HAVE_PRCTL@ -c $<
 
 Channel.o: @srcdir@/Channel.cpp $(MKDEPS) $(PINC)
 	$(COMPILE) -c $<
@@ -101,7 +101,7 @@ Mutex.o: @srcdir@/Mutex.cpp $(MKDEPS) $(CINC)
 	$(COMPILE) @MUTEX_HACK@ -c $<
 
 Thread.o: @srcdir@/Thread.cpp $(MKDEPS) $(CINC)
-	$(COMPILE) @THREAD_KILL@ -c $<
+	$(COMPILE) @THREAD_KILL@ @HAVE_PRCTL@ -c $<
 
 Client.o: @srcdir@/Client.cpp $(MKDEPS) $(CLINC)
 	$(COMPILE) -c $<

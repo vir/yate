@@ -93,6 +93,20 @@ AC_HEADER_TIME
 AC_TYPE_SIGNAL
 AC_CHECK_FUNCS([malloc gettimeofday inet_ntoa memmove strerror], , [AC_MSG_ERROR([This function is required.])])
 
+HAVE_PRCTL=""
+AC_MSG_CHECKING([for prctl])
+have_prctl="no"
+AC_TRY_COMPILE([
+#include <sys/prctl.h>
+],[
+prctl(1,2,3,4,5);
+],have_prctl="yes")
+AC_MSG_RESULT([$have_prctl])
+if [[ "$have_prctl" = "yes" ]]; then
+HAVE_PRCTL="-DHAVE_PRCTL"
+fi
+AC_SUBST(HAVE_PRCTL)
+
 AC_CACHE_SAVE
 
 SAVE_LIBS="$LIBS"

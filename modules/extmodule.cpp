@@ -1077,7 +1077,7 @@ void ExtModReceiver::run()
 	    Lock mylock(this);
 	    if (m_in && m_in->canRetry()) {
 		mylock.drop();
-		Thread::msleep(5);
+		Thread::idle();
 		continue;
 	    }
 	    Debug("ExtModule",DebugWarn,"Read error %d on %p [%p]",errno,m_in,this);
@@ -1676,7 +1676,7 @@ void ExtListener::run()
 {
     SocketAddr addr;
     for (;;) {
-	Thread::msleep(5,true);
+	Thread::idle(true);
 	Socket* skt = m_socket.accept(addr);
 	if (!skt) {
 	    if (m_socket.canRetry())

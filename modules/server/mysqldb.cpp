@@ -294,7 +294,7 @@ void MyConn::runQueries()
 	    Thread::yield(true);
 	}
 	else
-	    Thread::msleep(10,true);
+	    Thread::idle(true);
     }
 }
 

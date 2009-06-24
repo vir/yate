@@ -481,7 +481,7 @@ void RudpThread::run()
 	if (m_rudp->readData())
 	    Thread::check(true);
 	else
-	    Thread::msleep(10,true);
+	    Thread::idle(true);
     }
 }
 

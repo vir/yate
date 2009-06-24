@@ -1586,7 +1586,7 @@ bool DefaultLogic::handleUiAction(Message& msg, bool& stopLogic)
 
     // block until client finishes initialization
     while (!Client::self()->initialized())
-	Thread::msleep(10);
+	Thread::idle();
     // call the appropiate function for the given action
     Window* wnd = Client::getWindow(msg.getValue("window"));
     if (*action == "set_status")
@@ -1674,7 +1674,7 @@ bool DefaultLogic::handleCallCdr(Message& msg, bool& stopLogic)
 
     // block until client finishes initialization
     while (!Client::self()->initialized())
-	Thread::msleep(10);
+	Thread::idle();
 
     // Update UI/history
     callLogUpdate(msg,true,true);
@@ -1709,7 +1709,7 @@ bool DefaultLogic::handleUserNotify(Message& msg, bool& stopLogic)
 
     // block until client finishes initialization
     while (!Client::self()->initialized())
-	Thread::msleep(10);
+	Thread::idle();
 
     // Update interface
     NamedList p("");

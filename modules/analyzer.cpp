@@ -304,7 +304,7 @@ void AsyncFFT::run()
     DDebug(&__plugin,DebugAll,"AsyncFFT::run() [%p]",this);
     while (!m_stop) {
 	while (!m_start) {
-	    Thread::msleep(5);
+	    Thread::idle();
 	    if (m_stop)
 		return;
 	}

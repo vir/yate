@@ -3897,6 +3897,13 @@ public:
     static void yield(bool exitCheck = false);
 
     /**
+     * Sleep for a system dependent period adequate for an idle thread.
+     * On most operating systems this is a 5 msec sleep.
+     * @param exitCheck Terminate the thread if asked so
+     */
+    static void idle(bool exitCheck = false);
+
+    /**
      * Sleep for a number of seconds
      * @param sec Number of seconds to sleep
      * @param exitCheck Terminate the thread if asked so

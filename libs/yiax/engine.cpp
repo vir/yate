@@ -257,7 +257,7 @@ void IAXEngine::runGetEvents()
 {
     while (1) {
 	if (!process()) {
-	    Thread::msleep(2,true);
+	    Thread::idle(true);
 	    continue;
 	}
     }

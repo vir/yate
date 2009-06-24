@@ -3254,7 +3254,7 @@ void YSocksWrapperWorker::run()
 	// NOTE: The SOCKS protocol is negotiated by the engine
 	bool waitStart = !m_wrapper->autoStart();
 	while (!invalid() && m_wrapper->state() != YSocksWrapper::Running) {
-	    Thread::msleep(20,false);
+	    Thread::msleep(20);
 	    if (waitStart && m_wrapper->state() == YSocksWrapper::WaitStart) {
 		waitStart = false;
 		m_wrapper->notify("established");
@@ -3266,13 +3266,13 @@ void YSocksWrapperWorker::run()
 	// Read data
 	while (!invalid()) {
 	    if (!m_wrapper->canRecv()) {
-		Thread::msleep(20,false);
+		Thread::idle();
 		continue;
 	    }
 	    if (m_wrapper->recvData())
-		Thread::yield(false);
+		Thread::yield();
 	    else
-		Thread::msleep(2,false);
+		Thread::idle();
 	}
 	break;
     }

@@ -579,13 +579,13 @@ RefPointer<MGCPMessage> MGCPWrapper::sendSync(MGCPMessage* mm, const SocketAddr&
     while (m_msg) {
 	if (Thread::check(false))
 	    return 0;
-	Thread::msleep(10);
+	Thread::idle();
     }
     MGCPTransaction* tr = s_engine->sendCommand(mm,address);
     tr->userData(static_cast<GenObject*>(this));
     m_tr = tr;
     while (m_tr == tr)
-	Thread::msleep(10);
+	Thread::idle();
     RefPointer<MGCPMessage> tmp = m_msg;
     m_msg = 0;
     if (tmp)
@@ -1257,13 +1257,13 @@ RefPointer<MGCPMessage> MGCPCircuit::sendSync(MGCPMessage* mm)
     while (m_msg) {
 	if (Thread::check(false))
 	    return 0;
-	Thread::msleep(10);
+	Thread::idle();
     }
     MGCPTransaction* tr = s_engine->sendCommand(mm,ep->address);
     tr->userData(static_cast<GenObject*>(this));
     m_tr = tr;
     while (m_tr == tr)
-	Thread::msleep(10);
+	Thread::idle();
     RefPointer<MGCPMessage> tmp = m_msg;
     m_msg = 0;
     if (tmp)

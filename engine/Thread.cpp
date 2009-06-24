@@ -48,6 +48,10 @@ static int pthread_attr_setinheritsched(pthread_attr_t *,int) { return 0; }
 #endif
 #endif
 
+#ifndef THREAD_IDLE_MSEC
+#define THREAD_IDLE_MSEC 5
+#endif
+
 namespace TelEngine {
 
 class ThreadPrivate : public GenObject {
@@ -287,7 +291,7 @@ void ThreadPrivate::pubdestroy()
 	    s_tmutex.unlock();
 	    if (done)
 		return;
-	    Thread::msleep(5,false);
+	    Thread::idle(false);
 	}
 	if (m_cancel && !cancel(true))
 	    Debug(DebugWarn,"ThreadPrivate::pubdestroy() %p '%s' failed cancel [%p]",m_thread,m_name,this);
@@ -627,6 +631,11 @@ void Thread::yield(bool exitCheck)
 #endif
     if (exitCheck)
 	check();
+}
+
+void Thread::idle(bool exitCheck)
+{
+    msleep(THREAD_IDLE_MSEC,exitCheck);
 }
 
 void Thread::sleep(unsigned int sec, bool exitCheck)

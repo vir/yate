@@ -210,7 +210,7 @@ void RManagerThread::run()
 {
     for (;;)
     {
-	Thread::msleep(10,true);
+	Thread::idle(true);
 	SocketAddr sa;
 	Socket* as = s_sock.accept(sa);
 	if (!as) {

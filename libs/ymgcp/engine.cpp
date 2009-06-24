@@ -457,7 +457,7 @@ void MGCPEngine::runReceive()
 
     while (true)
 	if (!receive(m_recvBuf,addr))
-	    Thread::msleep(2,true);
+	    Thread::idle(true);
 	else
 	    Thread::check(true);
 }
@@ -467,7 +467,7 @@ void MGCPEngine::runProcess()
 {
     while (true)
 	if (!process())
-	    Thread::msleep(2,true);
+	    Thread::idle(true);
 	else
 	    Thread::check(true);
 }

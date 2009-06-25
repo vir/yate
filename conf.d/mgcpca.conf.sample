@@ -44,11 +44,22 @@
 ; user: string: Remote MGCP resource name
 ;user=
 
-; host: ipaddress: IP address of the gateway, mandatory
+; host: ipaddress: IP address or hostname of the gateway, mandatory
 ;host=
 
 ; port: int: Remote port to send packets to
 ;port=2427
+
+; address: ipaddress: IP address of the gateway, if present will override
+;  resolving the host name and will immediately make the span operational
+;  without waiting for a remote RSIP
+;address=
+
+; version: string: Protocol name and version to use initially, if left blank
+;  will autodetect from first received RSIP, until then uses MGCP 1.0
+; Depending on remote capabilities and settings it is possible to use the SGCP
+;  or TGCP protocols too.
+;version=
 
 ; default: bool: This is the default gateway to send commands to
 ; The first gateway which is not explicitely disabled or the last that is

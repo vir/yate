@@ -852,6 +852,20 @@ bool MGCPSpan::init(const NamedList& params)
 	if (clear)
 	    circuit->needClear();
     }
+
+    if (ok) {
+	m_version = config->getValue("version");
+	const char* addr = config->getValue("address");
+	if (addr) {
+	    MGCPEpInfo* ep = s_endpoint->find(epId().id());
+	    if (ep) {
+		SocketAddr a(ep->address);
+		a.host(addr);
+		operational(a);
+	    }
+	}
+    }
+
     return ok;
 }
 

@@ -109,22 +109,24 @@ static TokenDict s_dict_screening[] = {
 
 // Message Compatibility Information (Q.763 3.33)
 static const SignallingFlags s_flags_msgcompat[] = {
-    { 0x01, 0x01, "end-node" },          // End node / transit exchange
+    { 0x01, 0x00, "transit" },           // End node / transit exchange
+    { 0x01, 0x01, "end-node" },
     { 0x02, 0x02, "release" },           // Release call indicator
     { 0x04, 0x04, "cnf" },               // Pass on set but not possible: Send CNF / RLC
-    { 0x08, 0x08, "discard-msg" },       // Discard / pass on message
-    { 0x10, 0x10, "discard" },           // Pass on set but not possible: Discard information / Release call
+    { 0x08, 0x08, "discard" },           // Discard / pass on message
+    { 0x10, 0x00, "nopass-release" },    // Pass on not possible: Release call
+    { 0x10, 0x10, "nopass-discard" },    // Pass on not possible: Discard message
     { 0, 0, 0 }
 };
 
 // Parameter Compatibility Information (Q.763 3.41)
 static const SignallingFlags s_flags_paramcompat[] = {
-    { 0x01, 0x01, "end-node" },          // End node / transit exchange
+    { 0x01, 0x00, "transit" },           // End node / transit exchange
+    { 0x01, 0x01, "end-node" },
     { 0x02, 0x02, "release" },           // Release call indicator
     { 0x04, 0x04, "cnf" },               // Parameter pass on set but not possible: Send CNF / RLC
     { 0x08, 0x08, "discard-msg" },       // Discard / pass on message
-    { 0x10, 0x10, "discard-param" },     // Discard / pass on parameter
-    { 0x60, 0x40, "discard" },           // Parameter pass on set but not possible: Discard parameter / Release call
+    { 0x18, 0x10, "discard-param" },     // Discard / pass on parameter (if not discarding message)
     { 0, 0, 0 }
 };
 
@@ -800,6 +802,13 @@ static const SignallingFlags s_flags_accdelinfo[] = {
     { 0, 0, 0 }
 };
 
+// MCID Request or Response Indicators (Q.763 3.31 and 3.32)
+static const SignallingFlags s_flags_mcid[] = {
+    { 0x01, 0x01, "MCID" },
+    { 0x02, 0x02, "holding" },
+    { 0, 0, 0 }
+};
+
 // Calling Party Category (Q.763 3.11)
 static TokenDict s_dict_callerCat[] = {
     { "unknown",     0 },                // calling party's category is unknown
@@ -886,8 +895,8 @@ static const IsupParam s_paramDefs[] = {
     MAKE_PARAM(InformationIndicators,          0,0,             0,             0),                    // 3.28
     MAKE_PARAM(InformationRequestIndicators,   0,0,             0,             0),                    // 3.29
     MAKE_PARAM(LocationNumber,                 0,decodeDigits,  encodeDigits,  0),                    // 3.30
-    MAKE_PARAM(MCID_RequestIndicator,          0,0,             0,             0),                    // 3.31
-    MAKE_PARAM(MCID_ResponseIndicator,         0,0,             0,             0),                    // 3.32
+    MAKE_PARAM(MCID_RequestIndicator,          1,decodeFlags,   encodeFlags,   s_flags_mcid),         // 3.31
+    MAKE_PARAM(MCID_ResponseIndicator,         1,decodeFlags,   encodeFlags,   s_flags_mcid),         // 3.32
     MAKE_PARAM(MessageCompatInformation,       0,decodeCompat,  0,             0),                    // 3.33
     MAKE_PARAM(NatureOfConnectionIndicators,   1,decodeFlags,   encodeFlags,   s_flags_naci),         // 3.35
     MAKE_PARAM(NetworkSpecificFacilities,      0,0,             0,             0),                    // 3.36
@@ -1181,6 +1190,16 @@ static const MsgParams s_ansi_params[] = {
     { SS7MsgISUP::Unknown, false, { SS7MsgISUP::EndOfParameters } }
 };
 
+// Descriptor for decoding of compatibility parameters of unsupported messages
+//  with only optional parameters (all new messages should be like this)
+static const MsgParams s_compatibility = {
+    SS7MsgISUP::Unknown, true,
+    {
+    SS7MsgISUP::EndOfParameters,
+    SS7MsgISUP::EndOfParameters
+    }
+};
+
 // Generic decode helper function for a single parameter
 static bool decodeParam(const SS7ISUP* isup, NamedList& list, const IsupParam* param,
     const unsigned char* buf, unsigned int len, const String& prefix)
@@ -1281,6 +1300,52 @@ static const MsgParams* getIsupParams(SS7PointCode::Type type, SS7MsgISUP::Type 
     }
     return 0;
 }
+
+// Check if an unhandled messages has only optional parameters
+#define MAKE_CASE(x) case SS7MsgISUP::x:
+static bool hasOptionalOnly(SS7MsgISUP::Type msg)
+{
+    switch (msg) {
+	MAKE_CASE(IAM)
+	MAKE_CASE(SAM)
+	MAKE_CASE(INR)
+	MAKE_CASE(INF)
+	MAKE_CASE(COT)
+	MAKE_CASE(ACM)
+	MAKE_CASE(CON)
+	MAKE_CASE(REL)
+	MAKE_CASE(SUS)
+	MAKE_CASE(RES)
+	MAKE_CASE(CCR)
+	MAKE_CASE(RSC)
+	MAKE_CASE(BLK)
+	MAKE_CASE(UBL)
+	MAKE_CASE(BLA)
+	MAKE_CASE(UBA)
+	MAKE_CASE(GRS)
+	MAKE_CASE(CGB)
+	MAKE_CASE(CGU)
+	MAKE_CASE(CGA)
+	MAKE_CASE(CUA)
+	MAKE_CASE(FACR)
+	MAKE_CASE(FAA)
+	MAKE_CASE(FRJ)
+	MAKE_CASE(LPA)
+	MAKE_CASE(PAM)
+	MAKE_CASE(GRA)
+	MAKE_CASE(CQM)
+	MAKE_CASE(CQR)
+	MAKE_CASE(CPR)
+	MAKE_CASE(USR)
+	MAKE_CASE(UEC)
+	MAKE_CASE(CNF)
+	MAKE_CASE(OLM)
+	    return false;
+	default:
+	    return true;
+    }
+}
+#undef MAKE_CASE
 
 #define MAKE_NAME(x) { #x, SS7MsgISUP::x }
 static const TokenDict s_names[] = {
@@ -2585,21 +2650,29 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
     SS7MsgISUP::Type msgType, SS7PointCode::Type pcType,
     const unsigned char* paramPtr, unsigned int paramLen)
 {
+    const char* msgName = SS7MsgISUP::lookup(msgType);
 #ifdef XDEBUG
     String tmp;
     tmp.hexify((void*)paramPtr,paramLen,' ');
     Debug(this,DebugAll,"Decoding msg=%s len=%u: %s [%p]",
-	SS7MsgISUP::lookup(msgType),paramLen,tmp.c_str(),this);
+	msgName,paramLen,tmp.c_str(),this);
 #else
     DDebug(this,DebugAll,"Decoding msg=%s len=%u [%p]",
-	SS7MsgISUP::lookup(msgType),paramLen,this);
+	msgName,paramLen,this);
 #endif
 
     // see what parameters we expect for this message
     const MsgParams* params = getIsupParams(pcType,msgType);
     if (!params) {
-	Debug(this,DebugGoOn,"Invalid point code or message type [%p]",this);
-	return false;
+	if (hasOptionalOnly(msgType)) {
+	    Debug(this,DebugNote,"Unsupported message %s, decoding compatibility [%p]",msgName,this);
+	    params = &s_compatibility;
+	}
+	else {
+	    Debug(this,DebugWarn,"Unsupported message%s%s or point code type [%p]",
+		(msgName ? " " : ""),c_safe(msgName),this);
+	    return false;
+	}
     }
 
     // Get parameter prefix
@@ -2616,8 +2689,9 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	    break;
 	default: ;
     }
-    msg.addParam(prefix+"message-type",SS7MsgISUP::lookup(msgType));
+    msg.addParam(prefix+"message-type",msgName);
 
+    String unsupported;
     const SS7MsgISUP::Parameters* plist = params->params;
     SS7MsgISUP::Parameters ptype;
     // first decode any mandatory fixed parameters the message should have
@@ -2636,8 +2710,10 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	    Debug(this,DebugWarn,"Truncated ISUP message! [%p]",this);
 	    return false;
 	}
-	if (!decodeParam(this,msg,param,paramPtr,param->size,prefix))
+	if (!decodeParam(this,msg,param,paramPtr,param->size,prefix)) {
 	    Debug(this,DebugWarn,"Could not decode fixed ISUP parameter %s [%p]",param->name,this);
+	    unsupported.append(param->name,",");
+	}
 	paramPtr += param->size;
 	paramLen -= param->size;
     } // while ((ptype = *plist++)...
@@ -2665,9 +2741,11 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 		size,offs,paramLen,param->name,this);
 	    return false;
 	}
-	if (!decodeParam(this,msg,param,paramPtr+offs+1,size,prefix))
+	if (!decodeParam(this,msg,param,paramPtr+offs+1,size,prefix)) {
 	    Debug(this,DebugWarn,"Could not decode variable ISUP parameter %s (size=%u) [%p]",
 		param->name,size,this);
+	    unsupported.append(param->name,",");
+	}
 	paramPtr++;
 	paramLen--;
     } // while ((ptype = *plist++)...
@@ -2702,10 +2780,14 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 		    return false;
 		}
 		const IsupParam* param = getParamDesc(ptype);
-		if (!param)
+		if (!param) {
 		    Debug(this,DebugMild,"Unknown optional ISUP parameter 0x%02x (size=%u) [%p]",ptype,size,this);
-		else if (!decodeParam(this,msg,param,paramPtr,size,prefix))
+		    unsupported.append(String((unsigned int)ptype),",");
+		}
+		else if (!decodeParam(this,msg,param,paramPtr,size,prefix)) {
 		    Debug(this,DebugWarn,"Could not decode optional ISUP parameter %s (size=%u) [%p]",param->name,size,this);
+		    unsupported.append(param->name,",");
+		}
 		paramPtr += size;
 		paramLen -= size;
 	    } // while (paramLen)
@@ -2713,6 +2795,8 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	else
 	    paramLen = 0;
     }
+    if (unsupported)
+	msg.setParam(prefix+"parameters-unsupported",unsupported);
     if (paramLen && mustWarn)
 	Debug(this,DebugWarn,"Got %u garbage octets after message type 0x%02x [%p]",
 	    paramLen,msgType,this);
@@ -2792,6 +2876,8 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
 	    msg->name(),msg->cic(),tmp.c_str());
     }
 
+    // TODO: check parameters-unsupported vs. ParameterCompatInformation
+
     // Check if we expected some response to UPT
     // Ignore 
     if (!m_userPartAvail && m_uptTimer.started()) {
@@ -2802,6 +2888,7 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
 	    (msg->type() == SS7MsgISUP::UPA ||
 	     msg->type() == SS7MsgISUP::CNF ||
 	     msg->type() == SS7MsgISUP::UEC)) {
+	    m_uptCicCode = 0;
 	    TelEngine::destruct(msg);
 	    return true;
 	}
@@ -3102,8 +3189,10 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		DDebug(this,DebugInfo,"Received valid %s",msg->name());
 		m_uptCicCode = 0;
 	    }
+#ifdef DEBUG
 	    else
-		DDebug(this,DebugMild,"Received unexpected %s",msg->name());
+		Debug(this,DebugMild,"Received unexpected %s",msg->name());
+#endif
 	    break;
 	case SS7MsgISUP::GRA: // Circuit Group Reset Acknowledgement
 	    // TODO: stop receiving segments
@@ -3113,6 +3202,7 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	case SS7MsgISUP::CQM: // Circuit Group Query (national use)
 	case SS7MsgISUP::COT: // Continuity
 	default:
+	    // TODO: check MessageCompatInformation
 	    impl = false;
 	    reason = "service-not-implemented";
     }

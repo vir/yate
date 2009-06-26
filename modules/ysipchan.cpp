@@ -2545,7 +2545,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 	m->addHeader(hl);
     }
 
-    m_rtpLocalAddr = s_rtpip;
+    m_rtpLocalAddr = msg.getValue("rtp_localip",s_rtpip);
     MimeSdpBody* sdp = createPasstroughSDP(msg);
     if (!sdp)
 	sdp = createRtpSDP(m_host,msg);

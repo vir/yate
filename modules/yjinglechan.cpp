@@ -963,14 +963,14 @@ bool YJBClientPresence::accept(JBEvent* event, bool& processed, bool& insert)
 			item = query->findNextChild(item,"item");
 			if (!item)
 			    break;
-			const char* tmp = item->getAttribute("jid");
-			if (!tmp)
+			String jid = item->getAttribute("jid");
+			if (!jid)
 			    continue;
 			count++;
 			String base("contact.");
 			base << count;
-			m->addParam(base,tmp);
-			tmp = item->getAttribute("name");
+			m->addParam(base,jid.toLower());
+			const char* tmp = item->getAttribute("name");
 			if (tmp)
 			    m->addParam(base + ".name",tmp);
 			tmp = item->getAttribute("subscription");
@@ -995,7 +995,8 @@ bool YJBClientPresence::accept(JBEvent* event, bool& processed, bool& insert)
 		    item->getAttribute("subscription"));
 		if (event->stream() && event->stream()->name())
 		    m->setParam("account",event->stream()->name());
-		m->setParam("contact",item->getAttribute("jid"));
+		m->setParam("contact",String(item->getAttribute("jid")).toLower());
+		m->addParam("roster",String::boolText(true));
 		addValidParam(*m,"contactname",item->getAttribute("name"));
 		addValidParam(*m,"ask",item->getAttribute("ask"));
 		// Copy children
@@ -1250,6 +1251,12 @@ Message* YJBPresence::message(int presence, const char* from, const char* to,
     m->addParam("module",plugin.name());
     m->addParam("protocol",plugin.defProtoName());
     m->addParam("to",to);
+    if (!TelEngine::null(from)) {
+	JabberID jid(from);
+	m->addParam("contact",String(jid.bare()).toLower());
+	if (jid.resource())
+	    m->addParam("instance",jid.resource());
+    }
     addValidParam(*m,"from",from);
     addValidParam(*m,"operation",operation);
     addValidParam(*m,"subscription",subscription);
@@ -3618,7 +3625,11 @@ bool ResNotifyHandler::received(Message& msg)
 	JBClientStream* stream = static_cast<JBClientStream*>(s_jabber->findStream(*account));
 	if (!stream)
 	    return false;
-	const char* to = msg.getValue("to");
+	JabberID to(msg.getValue("to"));
+	if (!to) {
+	    to.set(msg.getValue("contact"));
+	    to.resource(msg.getValue("instance",to.resource()));
+	}
 	XDebug(&plugin,DebugAll,"%s account=%s to=%s status=%s",
 	    msg.c_str(),account->c_str(),to,status->c_str());
 	XMLElement* pres = 0;
@@ -3665,16 +3676,30 @@ bool ResNotifyHandler::received(Message& msg)
     bool broadcast = false;
     if (!plugin.getJidFrom(from,msg,true))
 	return false;
-    if (!s_presence->autoRoster())
-	to = msg.getValue("to");
-    else
+    if (!s_presence->autoRoster()) {
+	to.set(msg.getValue("to"));
+	if (!to) {
+	    to.set(msg.getValue("contact"));
+	    to.resource(msg.getValue("instance",to.resource()));
+	}
+    }
+    else {
+	bool decodeTo = true;
 	if (s_presence->addOnPresence().to() || s_presence->addOnSubscribe().to()) {
-	    broadcast = (0 == msg.getParam("to"));
-	    if (!(broadcast || plugin.decodeJid(to,msg,"to")))
+	    broadcast = (0 == msg.getParam("to") && 0 == msg.getParam("contact"));
+	    decodeTo = !broadcast;
+	}
+	if (decodeTo) {
+	    if (msg.getParam("to")) {
+		if (!plugin.decodeJid(to,msg,"to"))
+		    return false;
+	    }
+	    else if (plugin.decodeJid(to,msg,"contact"))
+		to.resource(msg.getValue("instance",to.resource()));
+	    else
 		return false;
 	}
-	else if (!plugin.decodeJid(to,msg,"to"))
-	    return false;
+    }
     // *** Everything is OK. Process the message
     XDebug(&plugin,DebugAll,"Received '%s' from '%s' with status '%s'",
 	msg.c_str(),from.c_str(),status->c_str());

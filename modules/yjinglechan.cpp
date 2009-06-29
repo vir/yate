@@ -903,6 +903,7 @@ bool YJBStreamService::accept(JBEvent* event, bool& processed, bool& insert)
 	return false;
 
     Message* m = new Message("user.notify");
+    m->addParam("module",plugin.name());
     m->addParam("account",stream->name());
     m->addParam("protocol",plugin.defProtoName());
     m->addParam("username",stream->local().node());

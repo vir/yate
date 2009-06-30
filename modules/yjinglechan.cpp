@@ -5058,6 +5058,9 @@ void YJGDriver::processImMsg(JBEvent& event)
 	m->addParam("caller",event.from());
 	m->addParam("called",event.to());
 	m->addParam("module",name());
+	m->addParam("contact",event.from().bare());
+	if (event.from().resource())
+	    m->addParam("instance",event.from().resource());
 	String billid;
 	billid << Engine::runId() << "-" << Channel::allocId();
 	m->addParam("billid",billid);

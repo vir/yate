@@ -1741,22 +1741,6 @@ bool DefaultLogic::handleUserNotify(Message& msg, bool& stopLogic)
     return false;
 }
 
-// Utility used when handling resource.notify
-// Parse a jabber JID: node@domain[/resource]
-static bool decodeJID(const String& jid, String& bare, String& res)
-{
-    int pos = jid.find("/");
-    if (pos < 0) {
-	bare = jid;
-	res = "";
-    }
-    else {
-	bare = jid.substr(0,pos);
-	res = jid.substr(pos + 1);
-    }
-    return !bare.null();
-}
-
 // Process resource.notify message
 bool DefaultLogic::handleResourceNotify(Message& msg, bool& stopLogic)
 {
@@ -1772,26 +1756,24 @@ bool DefaultLogic::handleResourceNotify(Message& msg, bool& stopLogic)
     if (!(account && Client::self()->hasOption(s_accountList,*account)))
 	return false;
 
-    // Check for contact list update
-    NamedString* contact = msg.getParam("contact");
-    if (contact) {
-	DDebug(ClientDriver::self(),DebugStub,
-	    "Logic(%s) account=%s contact='%s' [%p]",
-	    toString().c_str(),account->c_str(),contact->c_str(),this);
-	return true;
-    }
-
-    // Presence update
-    contact = msg.getParam("from");
+    String contact = msg.getParam("contact");
     if (!contact)
 	return false;
+
+    // Check for contact list update
+    if (msg.getBoolValue("roster")) {
+	DDebug(ClientDriver::self(),DebugStub,
+	    "Logic(%s) account=%s contact='%s' [%p]",
+	    toString().c_str(),account->c_str(),contact.c_str(),this);
+	return true;
+    }
 
     // Process errors
     NamedString* error = msg.getParam("error");
     if (error) {
 	String txt;
 	txt << "Account '" << *account << "' received error='" << *error <<
-	    "' from '" << *contact << "'";
+	    "' from '" << contact << "'";
 	Client::self()->addToLog(txt);
 	return true;
     }
@@ -1801,7 +1783,7 @@ bool DefaultLogic::handleResourceNotify(Message& msg, bool& stopLogic)
     bool sub = (status && *status == "subscribed");
     if (sub || (status && *status == "unsubscribed")) {
 	String txt;
-	txt << "Account '" << *account << "'. Contact '" << *contact <<
+	txt << "Account '" << *account << "'. Contact '" << contact <<
 	    (sub ? " accepted" : " removed") << "' subscription";
 	Client::self()->addToLog(txt);
 	return true;
@@ -1811,14 +1793,11 @@ bool DefaultLogic::handleResourceNotify(Message& msg, bool& stopLogic)
     bool offline = (status && *status == "offline");
     NamedString* proto = msg.getParam("protocol");
     bool jabber = proto && *proto && (*proto == "jabber" || *proto == "xmpp" || *proto == "jingle");
-    String contactName = *contact;
-    String contactUri = *contact;
+    String contactUri = contact;
+    contact.toLower();
     // Special care for jabber
     if (jabber) {
-	String res;
-	if (!decodeJID(*contact,contactName,res))
-	    return false;
-	contactName.toLower();
+	const char* res = msg.getValue("instance");
 	if (offline) {
 	    // Get all contacts
 	    NamedList p("");
@@ -1826,7 +1805,7 @@ bool DefaultLogic::handleResourceNotify(Message& msg, bool& stopLogic)
 	    unsigned int n = p.length();
 	    // Remove all contact's resources if res is null
 	    // Check account
-	    String compare = contactName + "/" + res;
+	    String compare = contact + "/" + res;
 	    for (unsigned int i = 0; i < n; i++) {
 		NamedString* s = p.getParam(i);
 		if (!s)
@@ -1847,16 +1826,16 @@ bool DefaultLogic::handleResourceNotify(Message& msg, bool& stopLogic)
 	    return true;
 	}
 	// Presence: ignore if no resource
-	if (!res)
+	if (TelEngine::null(res))
 	    return false;
-	contactUri = contactName + "/" + res;
+	contactUri = contact + "/" + res;
     }
     else if (offline)
-	Client::self()->delTableRow(s_contactList,*contact);
+	Client::self()->delTableRow(s_contactList,contact);
 
     if (!offline) {
 	NamedList p("");
-	p.addParam("name",contactName);
+	p.addParam("name",contact);
 	p.addParam("number/uri",contactUri);
 	p.addParam("hidden:account",*account);
 	p.addParam("hidden:protocol",msg.getValue("protocol"));
@@ -1880,7 +1859,7 @@ bool DefaultLogic::handleResourceSubscribe(Message& msg, bool& stopLogic)
 
     NamedString* account = msg.getParam("account");
     NamedString* oper = msg.getParam("operation");
-    NamedString* contact = msg.getParam("from");
+    NamedString* contact = msg.getParam("contact");
     if (!(account && oper && contact))
 	return false;
     bool sub = (*oper == "subscribe");

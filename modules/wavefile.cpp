@@ -75,7 +75,7 @@ public:
     WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxlen, const char* format = 0, const NamedString* param = 0);
     ~WaveConsumer();
     virtual bool setFormat(const DataFormat& format);
-    virtual void Consume(const DataBlock& data, unsigned long tStamp);
+    virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags);
     inline void setNotify(const String& id)
 	{ m_id = id; }
 private:
@@ -633,7 +633,7 @@ bool WaveConsumer::setFormat(const DataFormat& format)
     return false;
 }
 
-void WaveConsumer::Consume(const DataBlock& data, unsigned long tStamp)
+unsigned long WaveConsumer::Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 {
     if (!data.null()) {
 	if (!m_time)
@@ -675,7 +675,9 @@ void WaveConsumer::Consume(const DataBlock& data, unsigned long tStamp)
 		disc->init();
 	    }
 	}
+	return invalidStamp();
     }
+    return 0;
 }
 
 

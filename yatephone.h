@@ -293,6 +293,19 @@ class YATE_API DataNode : public RefObject
 {
 public:
     /**
+     * Flags associated with the DataBlocks forwarded between nodes
+     */
+    enum DataFlags {
+	DataStart   = 0x0001,
+	DataEnd     = 0x0002,
+	DataMark    = 0x0004,
+	DataSilent  = 0x0008,
+	DataMissed  = 0x0010,
+	DataError   = 0x0020,
+	DataPrivate = 0x0100
+    };
+
+    /**
      * Construct a DataNode
      * @param format Description of the data format, default none
      */
@@ -387,10 +400,13 @@ public:
 
     /**
      * Consumes the data sent to it from a source
-     * @param data The raw data block to process; an empty block ends data
+     * @param data The raw data block to process
      * @param tStamp Timestamp of data - typically samples
+     * @param flags Indicator flags associated with the data block
+     * @return Number of samples actually consumed,
+     *  use invalidStamp() to indicate that all data was consumed
      */
-    virtual void Consume(const DataBlock& data, unsigned long tStamp) = 0;
+    virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags) = 0;
 
     /**
      * Get the data source of this object if it's connected
@@ -422,7 +438,8 @@ protected:
     virtual bool synchronize(DataSource* source);
 
 private:
-    void Consume(const DataBlock& data, unsigned long tStamp, DataSource* source);
+    unsigned long Consume(const DataBlock& data, unsigned long tStamp,
+	unsigned long flags, DataSource* source);
     DataSource* m_source;
     DataSource* m_override;
     long m_regularTsDelta;
@@ -460,10 +477,13 @@ public:
     
     /**
      * Forwards the data to its consumers
-     * @param data The raw data block to forward; an empty block ends data
+     * @param data The raw data block to forward
      * @param tStamp Timestamp of data - typically samples
+     * @param flags Indicator flags associated with the data block
+     * @return Number of samples actually forwarded to all consumers
      */
-    void Forward(const DataBlock& data, unsigned long tStamp = invalidStamp());
+    unsigned long Forward(const DataBlock& data, unsigned long tStamp = invalidStamp(),
+	unsigned long flags = 0);
 
     /**
      * Attach a data consumer

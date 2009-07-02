@@ -146,7 +146,7 @@ class SpeexCodec : public DataTranslator
 public:
     SpeexCodec(const char* sFormat, const char* dFormat, bool encoding, int type, int mode);
     ~SpeexCodec();
-    virtual void Consume(const DataBlock& data, unsigned long tStamp);
+    virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags);
 private:
     bool m_encoding;
     DataBlock m_data;
@@ -246,12 +246,12 @@ SpeexCodec::~SpeexCodec()
     s_cmutex.unlock();
 }
 
-void SpeexCodec::Consume(const DataBlock& data, unsigned long tStamp)
+unsigned long SpeexCodec::Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 {
     if (!(m_state && m_bits && getTransSource()))
-	return;
+	return 0;
     if (!ref())
-	return;
+	return 0;
 
     m_data += data;
     DataBlock outdata;
@@ -321,12 +321,14 @@ void SpeexCodec::Consume(const DataBlock& data, unsigned long tStamp)
 	    "%scoding %d frames of %d input bytes (consumed %d) in %d output bytes, frame size %d, time %lu, ret %d",
 	   m_encoding ? "en" : "de", frames, m_data.length(), consumed, outdata.length(), frame_size, tStamp, ret);
 
+    unsigned long len = 0;
     if (frames) {
 	m_data.cut(-(int)consumed);
-	getTransSource()->Forward(outdata, tStamp);
+	len = getTransSource()->Forward(outdata, tStamp, flags);
     }
 
     deref();
+    return len;
 }
 
 SpeexPlugin::SpeexPlugin()

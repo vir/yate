@@ -339,7 +339,7 @@ public:
     virtual BOOL Close(); 
     virtual BOOL IsOpen() const;
     virtual BOOL Read(void *buf, PINDEX len);
-    virtual void Consume(const DataBlock &data, unsigned long tStamp);
+    virtual unsigned long Consume(const DataBlock &data, unsigned long tStamp, unsigned long flags);
 private:
     PAdaptiveDelay readDelay;
     DataBlock m_buffer;
@@ -1762,17 +1762,20 @@ BOOL YateH323AudioConsumer::IsOpen() const
     return !m_exit;
 }
 
-void YateH323AudioConsumer::Consume(const DataBlock &data, unsigned long tStamp)
+unsigned long YateH323AudioConsumer::Consume(const DataBlock &data, unsigned long tStamp, unsigned long flags)
 {
     if (m_exit)
-	return;
+	return 0;
     Lock lock(this);
-    if ((m_buffer.length() + data.length()) <= (480*5))
+    if ((m_buffer.length() + data.length()) <= (480*5)) {
 	m_buffer += data;
+	return invalidStamp();
+    }
 #ifdef DEBUG
     else
 	Debug(&hplugin,DebugAll,"Consumer skipped %u bytes, buffer is full [%p]",data.length(),this);
 #endif
+    return 0;
 }
 
 BOOL YateH323AudioConsumer::Read(void *buf, PINDEX len)

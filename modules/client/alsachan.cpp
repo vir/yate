@@ -68,7 +68,7 @@ public:
     AlsaConsumer(AlsaDevice* dev);
     ~AlsaConsumer();
     bool init();
-    virtual void Consume(const DataBlock &data, unsigned long tStamp);
+    virtual unsigned long Consume(const DataBlock &data, unsigned long tStamp, unsigned long flags);
 private:
     AlsaDevice* m_device;
     unsigned m_total;
@@ -248,12 +248,13 @@ AlsaConsumer::~AlsaConsumer()
     m_device->deref();
 }
 
-void AlsaConsumer::Consume(const DataBlock &data, unsigned long tStamp)
+unsigned long AlsaConsumer::Consume(const DataBlock &data, unsigned long tStamp, unsigned long flags)
 {
     if (m_device->closed() || data.null())
-	return;
+	return 0;
     m_device->write(data.data(),data.length()/2);
     m_total += data.length();
+    return invalidStamp();
 }
 
 AlsaChan::AlsaChan(const String& dev)

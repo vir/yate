@@ -401,7 +401,7 @@ class YIAXConsumer : public DataConsumer
 public:
     YIAXConsumer(YIAXConnection* conn, u_int32_t format, const char* formatText);
     ~YIAXConsumer();
-    virtual void Consume(const DataBlock &data, unsigned long tStamp);
+    virtual unsigned long Consume(const DataBlock &data, unsigned long tStamp, unsigned long flags);
 private:
     YIAXConnection* m_connection;
     unsigned m_total;
@@ -1353,13 +1353,16 @@ YIAXConsumer::~YIAXConsumer()
 {
 }
 
-void YIAXConsumer::Consume(const DataBlock& data, unsigned long tStamp)
+unsigned long YIAXConsumer::Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 {
     if (m_connection && !m_connection->mutedOut()) {
 	m_total += data.length();
-	if (m_connection->transaction())
+	if (m_connection->transaction()) {
 	    m_connection->transaction()->sendMedia(data,m_format);
+	    return invalidStamp();
+	}
     }
+    return 0;
 }
 
 /**

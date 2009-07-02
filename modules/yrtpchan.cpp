@@ -212,7 +212,7 @@ class YRTPConsumer : public DataConsumer
 public:
     YRTPConsumer(YRTPWrapper* wrap);
     ~YRTPConsumer();
-    virtual void Consume(const DataBlock &data, unsigned long tStamp);
+    virtual unsigned long Consume(const DataBlock &data, unsigned long tStamp, unsigned long flags);
     inline void setSplitable()
 	{ m_splitable = (m_format == "alaw") || (m_format == "mulaw"); }
 private:
@@ -698,7 +698,7 @@ bool YRTPSession::rtpRecvData(bool marker, unsigned int timestamp, const void* d
     // the source will not be destroyed until we reset the busy flag
     DataBlock block;
     block.assign((void*)data, len, false);
-    source->Forward(block,timestamp);
+    source->Forward(block,timestamp,(marker ? DataNode::DataMark : 0));
     block.clear(false);
     source->busy(false);
     return true;
@@ -818,10 +818,10 @@ YRTPConsumer::~YRTPConsumer()
     }
 }
 
-void YRTPConsumer::Consume(const DataBlock &data, unsigned long tStamp)
+unsigned long YRTPConsumer::Consume(const DataBlock &data, unsigned long tStamp, unsigned long flags)
 {
     if (!(m_wrap && m_wrap->bufSize() && m_wrap->rtp()))
-	return;
+	return 0;
     XDebug(&splugin,DebugAll,"YRTPConsumer writing %d bytes, ts=%lu [%p]",
 	data.length(),tStamp,this);
     unsigned int buf = m_wrap->bufSize();
@@ -837,12 +837,15 @@ void YRTPConsumer::Consume(const DataBlock &data, unsigned long tStamp)
 		sz = buf;
 	    DDebug(&splugin,DebugAll,"Creating %u bytes fragment of %u bytes buffer",sz,len);
 	}
-	m_wrap->rtp()->rtpSendData(false,tStamp,ptr,sz);
+	bool mark = (flags & DataMark) != 0;
+	flags &= ~DataMark;
+	m_wrap->rtp()->rtpSendData(mark,tStamp,ptr,sz);
 	// if timestamp increment is not provided we have to guess...
 	tStamp += sz;
 	len -= sz;
 	ptr += sz;
     }
+    return invalidStamp();
 }
 
 

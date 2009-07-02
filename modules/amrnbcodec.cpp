@@ -72,7 +72,7 @@ class AmrTrans : public DataTranslator
 public:
     AmrTrans(const char* sFormat, const char* dFormat, void* amrState, bool octetAlign = false);
     virtual ~AmrTrans();
-    virtual void Consume(const DataBlock& data, unsigned long tStamp);
+    virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags);
     inline bool valid() const
 	{ return 0 != m_amrState; }
     static inline const char* alignName(bool align)
@@ -178,10 +178,12 @@ AmrTrans::~AmrTrans()
 }
 
 // Actual transcoding of data
-void AmrTrans::Consume(const DataBlock& data, unsigned long tStamp)
+unsigned long AmrTrans::Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 {
     if (!(m_amrState && getTransSource()))
-	return;
+	return 0;
+    if (data.null() && (flags & DataSilent))
+	return getTransSource()->Forward(data,tStamp,flags);
     ref();
     m_data += data;
     if (!tStamp)
@@ -189,6 +191,7 @@ void AmrTrans::Consume(const DataBlock& data, unsigned long tStamp)
     while (pushData(tStamp))
 	;
     deref();
+    return invalidStamp();
 }
 
 // Data error, report error 1st time and clear buffer

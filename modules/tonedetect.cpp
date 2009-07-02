@@ -96,7 +96,7 @@ public:
     };
     ToneConsumer(const String& id, const String& name);
     virtual ~ToneConsumer(); 
-    virtual void Consume(const DataBlock& data, unsigned long tStamp);
+    virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags);
     virtual const String& toString() const
 	{ return m_name; }
     inline const String& id() const
@@ -390,16 +390,16 @@ void ToneConsumer::checkFax()
 }
 
 // Feed samples to the filter(s)
-void ToneConsumer::Consume(const DataBlock& data, unsigned long timeDelta)
+unsigned long ToneConsumer::Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 {
     unsigned int samp = data.length() / 2;
     if (m_mode != Mono)
 	samp /= 2;
     if (!samp)
-	return;
+	return 0;
     const int16_t* s = (const int16_t*)data.data();
     if (!s)
-	return;
+	return 0;
     while (samp--) {
 	m_xv[0] = m_xv[1]; m_xv[1] = m_xv[2];
 	switch (m_mode) {
@@ -450,6 +450,7 @@ void ToneConsumer::Consume(const DataBlock& data, unsigned long timeDelta)
     }
     XDebug(&plugin,DebugAll,"Fax detector on %s: signal=%0.1f, total=%0.1f",
 	m_id.c_str(),m_fax.value(),m_pwr);
+    return invalidStamp();
 }
 
 // Copy parameters required for automatic fax call diversion

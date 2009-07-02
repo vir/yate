@@ -78,8 +78,8 @@ private:
 class DummyConsumer : public DataConsumer
 {
 public:
-    virtual void Consume(const DataBlock& data, unsigned long tStamp)
-	{ }
+    virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags)
+	{ return invalidStamp(); }
 };
 
 class GenThread : public Thread

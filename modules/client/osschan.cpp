@@ -71,7 +71,7 @@ public:
     OssConsumer(OssDevice* dev);
     ~OssConsumer();
     bool init();
-    virtual void Consume(const DataBlock &data, unsigned long tStamp);
+    virtual unsigned long Consume(const DataBlock &data, unsigned long tStamp, unsigned long flags);
 private:
     OssDevice* m_device;
     unsigned m_total;
@@ -280,12 +280,13 @@ OssConsumer::~OssConsumer()
     m_device->deref();
 }
 
-void OssConsumer::Consume(const DataBlock &data, unsigned long tStamp)
+unsigned long OssConsumer::Consume(const DataBlock &data, unsigned long tStamp, unsigned long flags)
 {
     if (m_device->closed() || data.null())
-	return;
+	return 0;
     ::write(m_device->fd(),data.data(),data.length());
     m_total += data.length();
+    return invalidStamp();
 }
 
 OssChan::OssChan(const String& dev)

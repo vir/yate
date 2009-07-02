@@ -42,7 +42,7 @@ public:
     virtual ~ADConsumer()
 	{}
     // Process received data
-    virtual void Consume(const DataBlock& data, unsigned long tStamp);
+    virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags);
     // Remove from module's consumer list
     virtual void destroyed();
 protected:
@@ -147,16 +147,17 @@ ADConsumer::ADConsumer(const String& id, const char* notify)
 }
 
 // Process received data
-void ADConsumer::Consume(const DataBlock& data, unsigned long tStamp)
+unsigned long ADConsumer::Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 {
     if (m_terminated)
-	return;
+	return 0;
     m_terminated = !process(data);
     if (!m_terminated)
-	return;
+	return invalidStamp();
     DDebug(&plugin,DebugAll,"Terminated %s targetid=%s [%p]",
 	m_id.c_str(),m_targetid.c_str(),this);
     Engine::enqueue(chanNotify("terminate","reason",getTerminateReason()));
+    return invalidStamp();
 }
 
 // Remove from module's consumer list

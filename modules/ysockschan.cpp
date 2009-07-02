@@ -1222,7 +1222,7 @@ class YSocksConsumer : public DataConsumer
     friend class YSocksWrapper;
 public:
     YSocksConsumer(YSocksWrapper* w);
-    virtual void Consume(const DataBlock &data, unsigned long tStamp);
+    virtual unsigned long Consume(const DataBlock &data, unsigned long tStamp, unsigned long flags);
 protected:
     // Remove from wrapper. Release memory
     virtual void destroyed();
@@ -3337,12 +3337,15 @@ YSocksConsumer::YSocksConsumer(YSocksWrapper* w)
 	m_wrapper ? m_wrapper->toString().c_str() : "",this);
 }
 
-void YSocksConsumer::Consume(const DataBlock &data, unsigned long tStamp)
+unsigned long YSocksConsumer::Consume(const DataBlock &data, unsigned long tStamp, unsigned long flags)
 {
     XDebug(m_wrapper,DebugAll,"Sending %u bytes [%p]",data.length(),m_wrapper);
     unsigned int sent = data.length();
-    if (m_wrapper && m_wrapper->state() == YSocksWrapper::Running && m_wrapper->m_conn)
+    if (m_wrapper && m_wrapper->state() == YSocksWrapper::Running && m_wrapper->m_conn) {
 	m_wrapper->m_conn->send(data.data(),sent);
+	return invalidStamp();
+    }
+    return 0;
 }
 
 // Remove from endpoint. Release memory

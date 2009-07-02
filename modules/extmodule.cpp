@@ -93,7 +93,7 @@ class ExtModConsumer : public DataConsumer
 public:
     ExtModConsumer(Stream* str);
     ~ExtModConsumer();
-    virtual void Consume(const DataBlock& data, unsigned long timestamp);
+    virtual unsigned long Consume(const DataBlock& data, unsigned long timestamp, unsigned long flags);
 private:
     Stream* m_str;
     unsigned m_total;
@@ -437,12 +437,14 @@ ExtModConsumer::~ExtModConsumer()
     }
 }
 
-void ExtModConsumer::Consume(const DataBlock& data, unsigned long timestamp)
+unsigned long ExtModConsumer::Consume(const DataBlock& data, unsigned long timestamp, unsigned long flags)
 {
     if ((m_str) && !data.null()) {
 	m_str->writeData(data);
 	m_total += data.length();
+	return invalidStamp();
     }
+    return 0;
 }
 
 

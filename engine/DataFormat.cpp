@@ -146,10 +146,11 @@ class SimpleTranslator : public DataTranslator
 public:
     SimpleTranslator(const DataFormat& sFormat, const DataFormat& dFormat)
 	: DataTranslator(sFormat,dFormat) { }
-    virtual void Consume(const DataBlock& data, unsigned long tStamp)
+    virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 	{
 	    if (!ref())
-		return;
+		return 0;
+	    unsigned long len = 0;
 	    while (getTransSource()) {
 		int nchan = m_format.numChannels();
 		if (nchan != getTransSource()->getFormat().numChannels())
@@ -163,18 +164,19 @@ public:
 		}
 		DataBlock oblock;
 		if (oblock.convert(data, sFmt, dFmt)) {
-		    if (tStamp == (unsigned long)-1) {
+		    if (tStamp == invalidStamp()) {
 			unsigned int delta = data.length();
 			if (delta > oblock.length())
 			    delta = oblock.length();
 			tStamp = m_timestamp + delta;
 		    }
 		    m_timestamp = tStamp;
-		    getTransSource()->Forward(oblock, tStamp);
+		    len = getTransSource()->Forward(oblock, tStamp, flags);
 		}
 		break;
 	    }
 	    deref();
+	    return len;
 	}
 };
 
@@ -188,11 +190,12 @@ public:
 	: DataTranslator(sFormat,dFormat),
 	m_sRate(sFormat.sampleRate()), m_dRate(dFormat.sampleRate())
 	{ }
-    virtual void Consume(const DataBlock& data, unsigned long tStamp)
+    virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 	{
 	    unsigned int n = data.length();
 	    if (!n || (n & 1) || !m_sRate || !m_dRate || !ref())
-		return;
+		return 0;
+	    unsigned long len = 0;
 	    n /= 2;
 	    DataSource* src = getTransSource();
 	    if (src) {
@@ -235,9 +238,10 @@ public:
 		}
 		if (src->timeStamp() != invalidStamp())
 		    delta += src->timeStamp();
-		src->Forward(oblock, delta);
+		len = src->Forward(oblock, delta, flags);
 	    }
 	    deref();
+	    return len;
 	}
 };
 
@@ -251,11 +255,12 @@ public:
 	: DataTranslator(sFormat,dFormat),
 	m_sChans(sFormat.numChannels()), m_dChans(dFormat.numChannels())
 	{ }
-    virtual void Consume(const DataBlock& data, unsigned long tStamp)
+    virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 	{
 	    unsigned int n = data.length();
 	    if (!n || (n & 1) || !ref())
-		return;
+		return 0;
+	    unsigned long len = 0;
 	    n /= 2;
 	    if (getTransSource()) {
 		short* s = (short*) data.data();
@@ -286,9 +291,10 @@ public:
 			*d++ = v;
 		    }
 		}
-		getTransSource()->Forward(oblock, tStamp);
+		len = getTransSource()->Forward(oblock, tStamp, flags);
 	    }
 	    deref();
+	    return len;
 	}
 };
 
@@ -453,18 +459,19 @@ void* DataConsumer::getObject(const String& name) const
     return DataNode::getObject(name);
 }
 
-void DataConsumer::Consume(const DataBlock& data, unsigned long tStamp, DataSource* source)
+unsigned long DataConsumer::Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags, DataSource* source)
 {
     if (source == m_override)
 	tStamp += m_overrideTsDelta;
     else if (m_override || (source != m_source))
-	return;
+	return 0;
     else
 	tStamp += m_regularTsDelta;
     u_int64_t tsTime = Time::now();
-    Consume(data,tStamp);
+    unsigned long len = Consume(data,tStamp,flags);
     m_timestamp = tStamp;
     m_lastTsTime = tsTime;
+    return len;
 }
 
 bool DataConsumer::synchronize(DataSource* source)
@@ -504,13 +511,13 @@ bool DataConsumer::synchronize(DataSource* source)
 }
 
 
-void DataSource::Forward(const DataBlock& data, unsigned long tStamp)
+unsigned long DataSource::Forward(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 {
     Lock mylock(this,100000);
     // we DON'T refcount here, we rely on the mutex to keep us safe
     if (!(mylock.mutex() && alive())) {
 	DDebug(DebugInfo,"Forwarding on a dead DataSource! [%p]",this);
-	return;
+	return 0;
     }
 
     // try to evaluate amount of samples in this packet
@@ -526,13 +533,20 @@ void DataSource::Forward(const DataBlock& data, unsigned long tStamp)
 	    m_timestamp,nSamp,this);
 	tStamp = m_timestamp + nSamp;
     }
+    unsigned long len = invalidStamp();
     ObjList *l = m_consumers.skipNull();
     for (; l; l=l->skipNext()) {
 	DataConsumer *c = static_cast<DataConsumer *>(l->get());
-	c->Consume(data,tStamp,this);
+	unsigned long ll = c->Consume(data,tStamp,flags,this);
+	// get the minimum data amount forwarded to all consumers
+	if (len > ll)
+	    len = ll;
     }
+    if (len == invalidStamp())
+	len = 0;
     m_timestamp = tStamp;
     m_nextStamp = nSamp ? (tStamp + nSamp) : invalidStamp();
+    return len;
 }
 
 bool DataSource::attach(DataConsumer* consumer, bool override)

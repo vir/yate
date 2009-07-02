@@ -139,7 +139,7 @@ public:
 	    return (tmp && File::exists(m_tmpFileName)) ||
 		(file && File::exists(m_fileName));
 	}
-    virtual void Consume(const DataBlock& data, unsigned long tStamp);
+    virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags);
 protected:
     // Release memory
     virtual void destroyed();
@@ -544,7 +544,7 @@ FileConsumer::FileConsumer(const String& file, NamedList* params, const char* ch
 	m_delTemp = false;
 }
 
-void FileConsumer::Consume(const DataBlock& data, unsigned long tStamp)
+unsigned long FileConsumer::Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 {
     if (!m_startTime) {
 	m_startTime = Time::now();
@@ -556,7 +556,7 @@ void FileConsumer::Consume(const DataBlock& data, unsigned long tStamp)
 	    Debug(&__plugin,DebugNote,
 		"FileConsumer(%s) failed to start: temporary file already exists! [%p]",
 		m_fileName.c_str(),this);
-	    return;
+	    return 0;
 	}
 	m_delTemp = true;
 	if (!m_file.openPath(m_tmpFileName,true,false,true,true,true)) {
@@ -566,12 +566,12 @@ void FileConsumer::Consume(const DataBlock& data, unsigned long tStamp)
 	    Debug(&__plugin,DebugNote,
 		"FileConsumer(%s) failed to create temporary file. %d: '%s' [%p]",
 		m_fileName.c_str(),m_file.error(),error.c_str(),this);
-	    return;
+	    return 0;
 	}
     }
 
     if (data.null())
-	return;
+	return 0;
 
     XDebug(&__plugin,DebugAll,"FileConsumer(%s) consuming %u bytes [%p]",
 	m_fileName.c_str(),data.length(),this);
@@ -594,6 +594,7 @@ void FileConsumer::Consume(const DataBlock& data, unsigned long tStamp)
     m_transferred += data.length();
     if (m_transferred && (m_transferred >= m_fileSize))
 	terminate();
+    return data.length();
 }
 
 // Release memory

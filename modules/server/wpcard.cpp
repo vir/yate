@@ -303,7 +303,7 @@ public:
     virtual ~WpConsumer();
     inline void changeFormat(const char* format)
 	{ m_format = format; }
-    virtual void Consume(const DataBlock& data, unsigned long tStamp);
+    virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags);
 protected:
     WpCircuit* m_owner;                  // B-channel owning this consumer
     u_int32_t m_errorCount;              // The number of times the fifo was full
@@ -1123,7 +1123,7 @@ WpConsumer::~WpConsumer()
 }
 
 // Put data in fifo buffer
-void WpConsumer::Consume(const DataBlock& data, unsigned long tStamp)
+unsigned long WpConsumer::Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 {
     unsigned int err = put((const unsigned char*)data.data(),data.length());
     if (err) {
@@ -1131,6 +1131,7 @@ void WpConsumer::Consume(const DataBlock& data, unsigned long tStamp)
 	m_errorBytes += err;
     }
     m_total += data.length();
+    return invalidStamp();
 }
 
 /**

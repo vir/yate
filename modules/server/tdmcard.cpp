@@ -386,8 +386,8 @@ public:
     virtual ~TdmConsumer();
     inline void changeFormat(const char* format)
 	{ m_format = format; }
-    virtual void Consume(const DataBlock& data, unsigned long tStamp)
-	{ if (m_circuit) m_circuit->consume(data); }
+    virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags)
+	{ if (m_circuit) m_circuit->consume(data); return invalidStamp(); }
 private:
     TdmCircuit* m_circuit;
     String m_address;

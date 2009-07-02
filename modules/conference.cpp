@@ -157,7 +157,7 @@ public:
 	{ }
     ~ConfConsumer()
 	{ }
-    virtual void Consume(const DataBlock& data, unsigned long tStamp);
+    virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags);
     unsigned int energy() const;
     unsigned int noise() const;
     inline unsigned int energy2() const
@@ -545,10 +545,10 @@ void ConfRoom::mix(ConfConsumer* cons)
 
 
 // Compute the energy level and noise threshold, store the data and call mixer
-void ConfConsumer::Consume(const DataBlock& data, unsigned long tStamp)
+unsigned long ConfConsumer::Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 {
     if (m_muted || data.null() || !m_room)
-	return;
+	return 0;
     if (m_smart) {
 	// we need to compute the average energy and take decay into account
 	int64_t sum2 = m_energy2;
@@ -580,13 +580,14 @@ void ConfConsumer::Consume(const DataBlock& data, unsigned long tStamp)
 	    m_room->toString().c_str(),this);
 	// mute the channel to avoid getting back here
 	m_muted = true;
-	return;
+	return 0;
     }
     if (m_buffer.length()+data.length() <= MAX_BUFFER)
 	m_buffer += data;
     m_room->unlock();
     if (m_buffer.length() >= MIN_BUFFER)
 	m_room->mix(this);
+    return invalidStamp();
 }
 
 // Take out of the buffer the samples mixed in or skipped

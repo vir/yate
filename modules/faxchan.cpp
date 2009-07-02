@@ -82,7 +82,7 @@ class FaxConsumer : public DataConsumer
 public:
     FaxConsumer(FaxWrapper* wrapper, const char* format = "slin");
     ~FaxConsumer();
-    virtual void Consume(const DataBlock& data, unsigned long tStamp);
+    virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags);
 private:
     RefPointer<FaxWrapper> m_wrap;
 };
@@ -244,11 +244,12 @@ FaxConsumer::~FaxConsumer()
     m_wrap = 0;
 }
 
-void FaxConsumer::Consume(const DataBlock& data, unsigned long tStamp)
+unsigned long FaxConsumer::Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 {
     if (data.null() || !m_wrap)
-	return;
+	return 0;
     m_wrap->rxData(data,tStamp);
+    return invalidStamp();
 }
 
 

@@ -80,7 +80,7 @@ class iLBCCodec : public DataTranslator
 public:
     iLBCCodec(const char* sFormat, const char* dFormat, bool encoding, int msec);
     ~iLBCCodec();
-    virtual void Consume(const DataBlock& data, unsigned long timeDelta);
+    virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags);
 private:
     bool m_encoding;
     DataBlock m_data;
@@ -116,8 +116,13 @@ iLBCCodec::~iLBCCodec()
     s_cmutex.unlock();
 }
 
-void iLBCCodec::Consume(const DataBlock& data, unsigned long tStamp)
+unsigned long iLBCCodec::Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 {
+    if (!getTransSource())
+	return 0;
+    if (data.null() && (flags & DataSilent))
+	return getTransSource()->Forward(data,tStamp,flags);
+    ref();
     // block size in samples per frame, no_bytes frame length in bytes
     int block,no_bytes;
     if (m_mode == 20)
@@ -128,9 +133,6 @@ void iLBCCodec::Consume(const DataBlock& data, unsigned long tStamp)
 	block = BLOCKL_30MS;
 	no_bytes=NO_OF_BYTES_30MS;
     }
-    if (!getTransSource())
-	return;
-    ref();
     m_data += data;
     DataBlock outdata;
     int frames,consumed;
@@ -175,11 +177,13 @@ void iLBCCodec::Consume(const DataBlock& data, unsigned long tStamp)
 
     XDebug("iLBCCodec",DebugAll,"%scoding %d frames of %d input bytes (consumed %d) in %d output bytes",
 	m_encoding ? "en" : "de",frames,m_data.length(),consumed,outdata.length());
+    unsigned long len = 0;
     if (frames) {
 	m_data.cut(-consumed);
-	getTransSource()->Forward(outdata,tStamp);
+	len = getTransSource()->Forward(outdata,tStamp,flags);
     }
     deref();
+    return len;
 }
 
 iLBCPlugin::iLBCPlugin()

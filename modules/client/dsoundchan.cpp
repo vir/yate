@@ -67,7 +67,7 @@ class DSoundConsumer : public DataConsumer
 public:
     DSoundConsumer(bool stereo = false);
     ~DSoundConsumer();
-    virtual void Consume(const DataBlock &data, unsigned long tStamp);
+    virtual unsigned long Consume(const DataBlock &data, unsigned long tStamp, unsigned long flags);
     bool control(NamedList& msg);
 private:
     DSoundPlay* m_dsound;
@@ -627,10 +627,13 @@ DSoundConsumer::~DSoundConsumer()
 	m_dsound->terminate();
 }
 
-void DSoundConsumer::Consume(const DataBlock &data, unsigned long tStamp)
+unsigned long DSoundConsumer::Consume(const DataBlock &data, unsigned long tStamp, unsigned long flags)
 {
-    if (m_dsound)
+    if (m_dsound) {
 	m_dsound->put(data);
+	return invalidStamp();
+    }
+    return 0;
 }
 
 bool DSoundConsumer::control(NamedList& msg)

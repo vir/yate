@@ -110,7 +110,7 @@ class AnalyzerCons : public DataConsumer, public Runnable
 public:
     AnalyzerCons(const String& type, const char* window = 0);
     virtual ~AnalyzerCons();
-    virtual void Consume(const DataBlock& data, unsigned long tStamp);
+    virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags);
     virtual void statusParams(String& str);
     virtual void run();
 protected:
@@ -449,13 +449,13 @@ AnalyzerCons::~AnalyzerCons()
     s_mutex.unlock();
 }
 
-void AnalyzerCons::Consume(const DataBlock& data, unsigned long tStamp)
+unsigned long AnalyzerCons::Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 {
     if (!m_timeStart) {
 	// the first data block may be garbled or have bad timestamp - ignore
 	m_timeStart = Time::now();
 	m_tsStart = tStamp;
-	return;
+	return invalidStamp();
     }
     unsigned int samples = data.length() / 2;
     long delta = tStamp - timeStamp() - samples;
@@ -468,11 +468,11 @@ void AnalyzerCons::Consume(const DataBlock& data, unsigned long tStamp)
 	m_tsGapLength += delta;
     }
     if (!m_spectrum)
-	return;
+	return invalidStamp();
     m_data += data;
     unsigned int len = 2 * m_spectrum->samples();
     if (m_data.length() < len)
-	return;
+	return invalidStamp();
     // limit the length of the buffer
     int toCut = data.length() - (2 * len);
     if (toCut > 0) {
@@ -481,6 +481,7 @@ void AnalyzerCons::Consume(const DataBlock& data, unsigned long tStamp)
     }
     if (m_spectrum->prepare((const short*)m_data.data()))
 	m_data.cut(-(int)len);
+    return invalidStamp();
 }
 
 void AnalyzerCons::run()

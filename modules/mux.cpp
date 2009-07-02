@@ -43,7 +43,7 @@ public:
     virtual ~MuxConsumer()
 	{}
     // Send data to the owner, if any
-    virtual void Consume(const DataBlock& data, unsigned long tStamp);
+    virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags);
 protected:
     virtual void destroyed();
 private:
@@ -198,10 +198,13 @@ MuxConsumer::MuxConsumer(MuxSource* owner, unsigned int chan, const char* format
     DDebug(ENABLER,DebugAll,"MuxConsumer(%s,%u) created [%p]",OWNERNAME,m_channel,this);
 }
 
-void MuxConsumer::Consume(const DataBlock& data, unsigned long tStamp)
+unsigned long MuxConsumer::Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 {
-    if (m_owner)
+    if (m_owner) {
 	m_owner->consume(*this,data,tStamp);
+	return invalidStamp();
+    }
+    return 0;
 }
 
 void MuxConsumer::destroyed()

@@ -50,7 +50,7 @@ public:
     MrcpConsumer(const String& id, const char* target, const char* format = 0);
     virtual ~MrcpConsumer(); 
     virtual bool setFormat(const DataFormat& format);
-    virtual void Consume(const DataBlock& data, unsigned long tStamp);
+    virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags);
     bool init(Message& msg);
 private:
     void cleanup();
@@ -168,10 +168,9 @@ bool MrcpConsumer::setFormat(const DataFormat& format)
     return m_source && m_source->setFormat(format);
 }
 
-void MrcpConsumer::Consume(const DataBlock& data, unsigned long timeDelta)
+unsigned long MrcpConsumer::Consume(const DataBlock& data, unsigned long timeDelta, unsigned long flags)
 {
-    if (m_source)
-	m_source->Forward(data,timeDelta);
+    return m_source ? m_source->Forward(data,timeDelta,flags) : 0;
 }
 
 

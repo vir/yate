@@ -415,7 +415,7 @@ class SigConsumerMux : public DataConsumer
 public:
     virtual ~SigConsumerMux()
 	{ }
-    virtual void Consume(const DataBlock& data, unsigned long tStamp);
+    virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags);
 protected:
     inline SigConsumerMux(SigSourceMux* owner, bool first, const char* format)
 	: DataConsumer(format), m_owner(owner), m_first(first)
@@ -2529,10 +2529,13 @@ void SigIsdnMonitor::release()
 /**
  * SigConsumerMux
  */
-void SigConsumerMux::Consume(const DataBlock& data, unsigned long tStamp)
+unsigned long SigConsumerMux::Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 {
-    if (m_owner)
+    if (m_owner) {
 	m_owner->consume(m_first,data,tStamp);
+	return invalidStamp();
+    }
+    return 0;
 }
 
 /**

@@ -941,6 +941,9 @@ MGCPCircuit* MGCPSpan::findCircuit(const String& epId, const String& rqId) const
     if (epId.find('@') <= 0)
 	return 0;
     bool localId = (rqId != "0") && !rqId.null();
+    String id = epId;
+    if (id.rfind(':') < 0)
+	id << ":" << m_epId.port();
     for (unsigned int i = 0; i < m_count; i++) {
 	MGCPCircuit* circuit = m_circuits[i];
 	if (!circuit)
@@ -950,7 +953,7 @@ MGCPCircuit* MGCPSpan::findCircuit(const String& epId, const String& rqId) const
 		continue;
 	}
 	else {
-	    if (circuit->epId() != epId)
+	    if (circuit->epId() != id)
 		continue;
 	}
 	return circuit;

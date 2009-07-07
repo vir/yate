@@ -4712,6 +4712,27 @@ bool YateSIPLine::process(SIPEvent* ev)
 	c_str(),msg->code,this);
     switch (msg->code) {
 	case 200:
+	    {
+		int exp = m_interval;
+		const MimeHeaderLine* hl = msg->getHeader("Contact");
+		if (hl) {
+		    const NamedString* e = hl->getParam("expires");
+		    if (e)
+			exp = e->toInteger(exp);
+		    else
+			hl = 0;
+		}
+		if (!hl) {
+		    hl = msg->getHeader("Expires");
+		    if (hl)
+			exp = hl->toInteger(exp);
+		}
+		if ((exp != m_interval) && (exp >= 60)) {
+		    Debug(&plugin,DebugNote,"SIP line '%s' changed expire interval from %d to %d",
+			c_str(),m_interval,exp);
+		    m_interval = exp;
+		}
+	    }
 	    // re-register at 3/4 of the expire interval
 	    m_resend = m_interval*(int64_t)750000 + Time::now();
 	    m_keepalive = m_alive ? m_alive*(int64_t)1000000 + Time::now() : 0;

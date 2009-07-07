@@ -1756,7 +1756,7 @@ bool DefaultLogic::handleResourceNotify(Message& msg, bool& stopLogic)
     if (!(account && Client::self()->hasOption(s_accountList,*account)))
 	return false;
 
-    String contact = msg.getParam("contact");
+    String contact(msg.getValue("contact"));
     if (!contact)
 	return false;
 
@@ -1812,8 +1812,9 @@ bool DefaultLogic::handleResourceNotify(Message& msg, bool& stopLogic)
 		    continue;
 		// Check if this a candidate
 		// Resource: full
-		// No resource: check bare
-		if ((res && s->name() != compare) || (!res && s->name().startsWith(compare)))
+		// No resource: check bare ('compare' already contains the '/' separator)
+		if ((res && s->name() != compare) ||
+		    !(res || s->name().startsWith(compare)))
 		    continue;
 		// This is a candidate: check account
 		NamedList c("");

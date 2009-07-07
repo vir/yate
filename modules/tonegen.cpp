@@ -97,12 +97,13 @@ public:
 	{ return m_name; }
     bool startup();
     static ToneSource* getTone(String& tone);
-    static const ToneDesc* getBlock(String& tone);
+    static const ToneDesc* getBlock(String& tone, bool oneShot = false);
     static Tone* buildCadence(const String& desc);
     static Tone* buildDtmf(const String& dtmf, int len = DTMF_LEN, int gap = DTMF_GAP);
 protected:
     ToneSource(const ToneDesc* tone = 0);
     virtual void zeroRefs();
+    static const ToneDesc* getBlock(String& tone, const ToneDesc* table);
     String m_name;
     const Tone* m_tone;
     int m_repeat;
@@ -207,6 +208,12 @@ static const Tone t_outoforder[] = {
     { 1600, tone421hz }, { 1600, 0 },
     { 0, 0 } };
 
+static const Tone t_callwait[] = {
+    { 160, 0 },
+    { 800, tone421hz }, { 800, 0 }, { 800, tone421hz },
+    { 160, 0 },
+    { 0, 0 } };
+
 static const Tone t_info[] = {
     { 2640, tone941hz }, { 240, 0 },
     { 2640, tone1454hz }, { 240, 0 },
@@ -267,6 +274,14 @@ static const ToneDesc s_desc[] = {
     { t_mwatt, "milliwatt", "mw" },
     { t_silence, "silence", 0 },
     { t_noise, "noise", "cn" },
+    { t_probes[0], "probe/0", "probe" },
+    { t_probes[1], "probe/1", 0 },
+    { t_probes[2], "probe/2", 0 },
+    { 0, 0, 0 }
+};
+
+static const ToneDesc s_descOne[] = {
+    { t_callwait, "callwaiting", "cw" },
     { t_dtmf[0], "dtmf/0", "0" },
     { t_dtmf[1], "dtmf/1", "1" },
     { t_dtmf[2], "dtmf/2", "2" },
@@ -283,9 +298,6 @@ static const ToneDesc s_desc[] = {
     { t_dtmf[13], "dtmf/b", "b" },
     { t_dtmf[14], "dtmf/c", "c" },
     { t_dtmf[15], "dtmf/d", "d" },
-    { t_probes[0], "probe/0", "probe" },
-    { t_probes[1], "probe/1", 0 },
-    { t_probes[2], "probe/2", 0 },
     { 0, 0, 0 }
 };
 
@@ -464,19 +476,28 @@ bool ToneSource::startup()
     return m_tone && start("Tone Source");
 }
 
-const ToneDesc* ToneSource::getBlock(String& tone)
+const ToneDesc* ToneSource::getBlock(String& tone, const ToneDesc* table)
+{
+    for (; table->tone; table++) {
+	if (tone == table->name)
+	    return table;
+	if (table->alias && (tone == table->alias)) {
+	    tone = table->name;
+	    return table;
+	}
+    }
+    return 0;
+}
+
+const ToneDesc* ToneSource::getBlock(String& tone, bool oneShot)
 {
     if (tone.trimBlanks().toLower().null())
 	return 0;
-    const ToneDesc* d = s_desc;
-    for (; d->tone; d++) {
-	if (tone == d->name)
-	    return d;
-	if (d->alias && (tone == d->alias)) {
-	    tone = d->name;
-	    return d;
-	}
-    }
+    const ToneDesc* d = getBlock(tone,s_desc);
+    if (d)
+	return d;
+    if (oneShot)
+	return getBlock(tone,s_descOne);
     return 0;
 }
 
@@ -537,6 +558,8 @@ ToneSource* ToneSource::getTone(String& tone)
 	if (t && (t->name() == tone) && t->ref())
 	    return t;
     }
+    if (!td)
+	return 0;
     ToneSource* t = new ToneSource(td);
     tones.append(t);
     t->startup();
@@ -625,7 +648,7 @@ TempSource::TempSource(String& desc, DataBlock* rawdata)
 	return;
     }
     // try first the named tones
-    const ToneDesc* tde = getBlock(desc);
+    const ToneDesc* tde = getBlock(desc,true);
     if (tde) {
 	m_tone = tde->tone;
 	return;

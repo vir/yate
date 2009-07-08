@@ -3341,10 +3341,9 @@ unsigned long YSocksConsumer::Consume(const DataBlock &data, unsigned long tStam
 {
     XDebug(m_wrapper,DebugAll,"Sending %u bytes [%p]",data.length(),m_wrapper);
     unsigned int sent = data.length();
-    if (m_wrapper && m_wrapper->state() == YSocksWrapper::Running && m_wrapper->m_conn) {
-	m_wrapper->m_conn->send(data.data(),sent);
-	return invalidStamp();
-    }
+    if (m_wrapper && m_wrapper->state() == YSocksWrapper::Running &&
+	m_wrapper->m_conn && m_wrapper->m_conn->send(data.data(),sent))
+	return sent;
     return 0;
 }
 

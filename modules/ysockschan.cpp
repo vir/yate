@@ -24,9 +24,6 @@
 
 #include <yatephone.h>
 
-#include <string.h>
-#include <stdlib.h>
-
 using namespace TelEngine;
 namespace { // anonymous
 
@@ -730,6 +727,7 @@ private:
     SOCKSPacket* m_waitMsg;              // Indicates the next packet to receive
     SOCKSEngine* m_engine;
     Socket* m_socket;
+    int m_sendError;                     // Avoid repeating non fatal send error messages
     u_int64_t m_socksTimeoutMs;          // The timeout value when negotiating SOCKS
     SOCKSEndpointDef* m_epDef;
     // SOCKS request data
@@ -1760,7 +1758,7 @@ SOCKSPacket* SOCKSPacket::buildUnamePwdReply(SOCKSConn* conn, unsigned char ok)
 SOCKSConn::SOCKSConn(SOCKSEngine* engine, Socket* sock, SOCKSEndpointDef* epDef)
     : Mutex(true,"SOCKSConn"),
     m_status(Idle), m_outgoing(false),
-    m_waitMsg(0), m_engine(engine), m_socket(sock),
+    m_waitMsg(0), m_engine(engine), m_socket(sock), m_sendError(0),
     m_socksTimeoutMs(0), m_epDef(epDef),
     m_reqCmd(SOCKSPacket::CmdUnknown), m_reqAddrType(SOCKSPacket::AddrUnknown),
     m_reqPort(0),
@@ -1778,7 +1776,7 @@ SOCKSConn::SOCKSConn(SOCKSEngine* engine, SOCKSEndpointDef* epDef, unsigned char
     unsigned char addrType, const String& addr, int port)
     : Mutex(true,"SOCKSConn"),
     m_status(Idle), m_outgoing(true),
-    m_waitMsg(0), m_engine(engine), m_socket(0),
+    m_waitMsg(0), m_engine(engine), m_socket(0), m_sendError(0),
     m_socksTimeoutMs(0), m_epDef(epDef),
     m_reqCmd(cmd), m_reqAddrType(addrType), m_reqAddr(addr), m_reqPort(port),
     m_replyRsp(SOCKSPacket::EOk), m_replyAddrType(SOCKSPacket::AddrUnknown),
@@ -1977,11 +1975,14 @@ bool SOCKSConn::connect(bool sendAuthMeth)
 	    sendAuthMethods();
     }
     else {
-	if (valid())
+	if (valid()) {
+	    String s;
+	    Thread::errorString(s,m_socket->error());
 	    Debug(m_engine,DebugWarn,
 		"SOCKSConn(%s) failed to %s socket '%s:%d'. %d: '%s' [%p]",
 		m_id.c_str(),result,address.c_str(),port,
-		m_socket->error(),::strerror(m_socket->error()),this);
+		m_socket->error(),s.c_str(),this);
+	}
 	terminate();
     }
     return ok;
@@ -1996,6 +1997,7 @@ void SOCKSConn::terminate()
 	return;
     DDebug(m_engine,DebugAll,"SOCKSConn(%s) terminating socket [%p]",m_id.c_str(),this);
     SOCKSEngine::destroySocket(m_socket);
+    m_sendError = 0;
 }
 
 // Build and send an auth methods message
@@ -2096,17 +2098,25 @@ bool SOCKSConn::send(const void* buf, unsigned int& len)
 	}
 #endif
 	len = c;
+	m_sendError = 0;
 	return true;
     }
     len = 0;
     if (m_socket->canRetry()) {
-	Debug(m_engine,DebugMild,
-	    "SOCKSConn(%s) socket temporary unavailable to send. %d: '%s' [%p]",
-	    m_id.c_str(),m_socket->error(),::strerror(m_socket->error()),this);
+	if (m_sendError != m_socket->error()) {
+	    m_sendError = m_socket->error();
+	    String s;
+	    Thread::errorString(s,m_socket->error());
+	    DDebug(m_engine,DebugMild,
+		"SOCKSConn(%s) socket temporary unavailable to send. %d: '%s' [%p]",
+		m_id.c_str(),m_socket->error(),s.c_str(),this);
+	}
 	return true;
     }
+    String s;
+    Thread::errorString(s,m_socket->error());
     Debug(m_engine,DebugWarn,"SOCKSConn(%s) socket send error. %d: '%s' [%p]",
-        m_id.c_str(),m_socket->error(),::strerror(m_socket->error()),this);
+	m_id.c_str(),m_socket->error(),s.c_str(),this);
     return false;
 }
 
@@ -2133,8 +2143,10 @@ bool SOCKSConn::recv(void* buf, unsigned int& len)
     len = 0;
     if (m_socket->canRetry())
 	return true;
+    String s;
+    Thread::errorString(s,m_socket->error());
     Debug(m_engine,DebugWarn,"SOCKSConn(%s) socket read error. %d: '%s' [%p]",
-        m_id.c_str(),m_socket->error(),::strerror(m_socket->error()),this);
+	m_id.c_str(),m_socket->error(),s.c_str(),this);
     return false;
 }
 
@@ -2381,8 +2393,10 @@ bool SOCKSListener::init()
     }
     else {
 	if (!m_listenError) {
+	    String s;
+	    Thread::errorString(s,m_socket->error());
 	    Debug(m_engine,DebugWarn,"Listener(%s) failed to %s socket. %d: '%s' [%p]",
-		m_id.c_str(),op,m_socket->error(),::strerror(m_socket->error()),this);
+		m_id.c_str(),op,m_socket->error(),s.c_str(),this);
 	    m_listenError = true;
 	}
 	terminate();
@@ -2402,8 +2416,10 @@ bool SOCKSListener::startListen()
 	return true;
     }
     if (!m_listenError) {
+	String s;
+	Thread::errorString(s,m_socket->error());
 	Debug(m_engine,DebugWarn,"Listener(%s) failed to start. %d: '%s' [%p]",
-	    m_id.c_str(),m_socket->error(),::strerror(m_socket->error()),this);
+	    m_id.c_str(),m_socket->error(),s.c_str(),this);
 	m_listenError = true;
     }
     return false;

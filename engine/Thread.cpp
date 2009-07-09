@@ -318,6 +318,24 @@ void ThreadPrivate::run()
 	prctl(PR_SET_NAME,(unsigned long)m_name,0,0,0);
 #endif
 #endif
+#ifdef _WINDOWS
+#ifndef NDEBUG
+    if (m_name) {
+	struct {
+	    DWORD dwType;
+	    LPCSTR szName;
+	    DWORD dwThreadID;
+	    DWORD dwFlags;
+	} threadInfo;
+	threadInfo.dwType = 0x1000;
+	threadInfo.szName = m_name;
+	threadInfo.dwThreadID = (DWORD)-1;
+	threadInfo.dwFlags = 0;
+	__try { RaiseException(0x406D1388, 0, sizeof(threadInfo)/sizeof(DWORD), (DWORD*)&threadInfo); }
+	__except (EXCEPTION_CONTINUE_EXECUTION) { }
+    }
+#endif
+#endif
 
     // FIXME: possible race if public object is destroyed during thread startup
     while (!m_started)

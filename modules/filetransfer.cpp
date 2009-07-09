@@ -420,32 +420,48 @@ void FileSource::run()
 	    Thread::errorString(error,m_file.error());
 	    break;
 	}
+	unsigned char* buf = 0;
+	unsigned int len = 0;
 	while (true) {
 	    if (Thread::check(false)) {
 		error = "cancelled";
 		break;
 	    }
-	    int rd = m_file.readData(m_buffer.data(),m_buffer.length());
-	    if (rd <= 0) {
-		if (m_file.canRetry()) {
-		    m_retryableReadErrors++;
-		    if (m_retryableReadErrors != (unsigned int)s_retryableReadErrors)
-			continue;
+	    if (!buf) {
+		int rd = m_file.readData(m_buffer.data(),m_buffer.length());
+		if (rd <= 0) {
+		    if (m_file.canRetry()) {
+			m_retryableReadErrors++;
+			if (m_retryableReadErrors != (unsigned int)s_retryableReadErrors)
+			    continue;
+		    }
+		    Thread::errorString(error,m_file.error());
+		    break;
 		}
-		Thread::errorString(error,m_file.error());
-		break;
+		buf = (unsigned char*)m_buffer.data();
+		len = rd;
 	    }
-	    DataBlock tmp(m_buffer.data(),rd,false);
-	    XDebug(&__plugin,DebugAll,"FileSource(%s) forwarding %d bytes [%p]",
-		m_fileName.c_str(),rd,this);
-	    Forward(tmp,tStamp);
+	    DataBlock tmp(buf,len,false);
+	    XDebug(&__plugin,DebugAll,"FileSource(%s) forwarding %u bytes [%p]",
+		m_fileName.c_str(),len,this);
+	    unsigned int sent = Forward(tmp,tStamp);
 	    tmp.clear(false);
-	    m_transferred += rd;
-	    if (m_notifyProgress)
-		FileDriver::notifyStatus(true,m_notify,"progressing",m_fileName,
-		    m_transferred,m_fileSize);
-	    if (m_transferred >= m_fileSize)
-		break;
+	    if (sent && sent != invalidStamp()) {
+		m_transferred += sent;
+		if (m_notifyProgress)
+		    FileDriver::notifyStatus(true,m_notify,"progressing",m_fileName,
+			m_transferred,m_fileSize);
+		if (sent == len) {
+		    buf = 0;
+		    len = 0;
+		}
+		else {
+		    buf += sent;
+		    len -= sent;
+		}
+		if (m_transferred >= m_fileSize)
+		    break;
+	    }
 	    tStamp += m_sleepMs;
 	    if (m_sleepMs)
 		Thread::msleep(m_sleepMs,false);

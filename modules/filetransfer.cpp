@@ -969,7 +969,7 @@ void FileDriver::initialize()
     s_notifyProgress = general->getBoolValue("notify_progress",Engine::clientMode());
     s_srcFileInfo = general->getBoolValue("source_file_info",true);
     s_srcFileMd5 = general->getBoolValue("source_file_md5",true);
-    s_path = general->getValue("notify_progress",".");
+    s_path = general->getValue("path",".");
     if (s_path && !s_path.endsWith(Engine::pathSeparator()))
 	s_path << Engine::pathSeparator();
     unlock();
@@ -1119,10 +1119,8 @@ bool FileDriver::commandExecute(String& retVal, const String& line)
 	if (posFile > 0) {
 	    filename = l.substr(0,posFile);
 	    posTarget = l.find(' ',posFile + 1);
-	    if (posTarget) {
-		target = l.substr(posFile + 1,posTarget - posFile);
-		direct = target.startSkip("callto:",false);
-	    }
+	    target = l.substr(posFile + 1,posTarget - posFile - 1);
+	    direct = target.startSkip("callto:",false);
 	}
 	if (!(filename && target)) {
 	    retVal << "Invalid parameters\r\n";
@@ -1132,19 +1130,21 @@ bool FileDriver::commandExecute(String& retVal, const String& line)
 	Message m("call.execute");
 	m.addParam(direct ? "direct" : "target",target);
 	// Set parameters
-	l.trimSpaces();
-	ObjList* list = l.substr(posTarget + 1).split(' ',false);
-	for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
-	    int pos = o->get()->toString().find('=');
-	    if (pos > 0) {
-		String pname = o->get()->toString().substr(0,pos);
-		String pval = o->get()->toString().substr(pos + 1);
-		XDebug(this,DebugAll,"commandExecute() adding param %s=%s",
-		    pname.c_str(),pval.c_str());
-		m.addParam(pname,pval);
+	if (posTarget > 0) {
+	    l.trimSpaces();
+	    ObjList* list = l.substr(posTarget + 1).split(' ',false);
+	    for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
+		int pos = o->get()->toString().find('=');
+		if (pos > 0) {
+		    String pname = o->get()->toString().substr(0,pos);
+		    String pval = o->get()->toString().substr(pos + 1);
+		    Debug(this,DebugAll,"commandExecute() adding param %s=%s",
+			pname.c_str(),pval.c_str());
+		    m.addParam(pname,pval);
+		}
 	    }
+	    TelEngine::destruct(list);
 	}
-	TelEngine::destruct(list);
 
 	String dest;
 	dest << dirStr(outgoing) << "/" << filename;

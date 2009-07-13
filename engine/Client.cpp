@@ -3797,9 +3797,10 @@ bool ClientSound::doStart()
 void ClientSound::doStop()
 {
     if (m_channel) {
-	Message* m = new Message("call.drop");
-	m->addParam("id",m_channel);
-	Engine::enqueue(m);
+	ClientChannel* chan = ClientDriver::findChan(m_channel);
+	if (chan)
+	    chan->disconnect();
+	TelEngine::destruct(chan);
     }
     m_channel = "";
     m_started = false;

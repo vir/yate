@@ -214,8 +214,10 @@ def formatReason(msg):
             
 @defer.inlineCallbacks
 def outgoing(yate, target, maxcall = 30*1000,
-             callto = "dumb/", formats = None, ret_callid = False,
-             extra_attrs = {}):
+             callto = "dumb/", formats = None,
+             extra_attrs = {},
+             retCallIdFast = False,
+             until = None):
 
     logger.debug("Calling: %s" % target)
 
@@ -236,30 +238,37 @@ def outgoing(yate, target, maxcall = 30*1000,
         raise OutgoingCallException(formatReason(execute))
 
     end = yate.onwatch("chan.hangup",
-        lambda m : m["id"] == execute["targetid"])
+        lambda m : m["id"] == execute["targetid"],
+        until = until)
+        
+    answered = yate.onwatch(
+        "call.answered",
+        lambda m : m["id"] ==  execute["targetid"],
+        until = end)
 
-    @defer.inlineCallbacks
-    def rest():
-        try:
-            logger.debug(
-                "Waiting for answer: %s, %s" % (execute["id"], execute["targetid"]))
+    def trapAbandoned(f):
+        f.trap(AbandonedException)
+        raise OutgoingCallException(formatReason(f.value.cause))
 
-            answered = yield yate.onwatch(
-                    "call.answered",
-                    lambda m : m["id"] ==  execute["targetid"],
-                    until = end)
+    answered.addErrback(trapAbandoned)
 
-            logger.debug("Answered: %s, %s" % (answered["id"], answered["peerid"]))
-
-            defer.returnValue(answered)
-
-        except AbandonedException, e:
-            raise OutgoingCallException(formatReason(e.cause))
-
-    if ret_callid:
-        defer.returnValue((execute["targetid"], rest))
+    if logger.isEnabledFor(logging.DEBUG):
+        def logAnswered(msg):                
+            logger.debug("Answered: %s, %s", execute["id"], execute["targetid"])
+            return msg
+        
+    if retCallIdFast:
+        defer.returnValue((execute["targetid"], execute["id"],
+                           end,
+                           answered))
     else:
-        defer.returnValue((yield rest()))
+        logger.debug(
+            "Waiting for answer: %s, %s", execute["targetid"], execute["id"])
+
+        yield answered
+
+        defer.returnValue((execute["id"], execute["targetid"], end))        
+
 
 ## @defer.inlineCallbacks
 ## def attach(yate, callid, wave, sync = False):

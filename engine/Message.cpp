@@ -386,7 +386,8 @@ bool MessageDispatcher::dispatch(Message& msg)
 	    // the handler list has changed - find again
 	    NDebug(DebugAll,"Rescanning handler list for '%s' [%p] at priority %u",
 		msg.c_str(),&msg,p);
-	    for (l = &m_handlers; l; l=l->next()) {
+	    ObjList* l2 = &m_handlers;
+	    for (l = l2; l; l=l->next()) {
 		MessageHandler *mh = static_cast<MessageHandler*>(l->get());
 		if (!mh)
 		    continue;
@@ -398,8 +399,11 @@ bool MessageDispatcher::dispatch(Message& msg)
 		if ((mh->priority() > p) || ((mh->priority() == p) && (mh > h))) {
 		    Debug(DebugAll,"Handler list for '%s' [%p] changed, skipping from %p (%u) to %p (%u)",
 			msg.c_str(),&msg,h,p,mh,mh->priority());
+		    // l will advance in the outer for loop so use previous
+		    l = l2;
 		    break;
 		}
+		l2 = l;
 	    }
 	}
     }

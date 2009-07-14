@@ -1492,7 +1492,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
     bool daemonic = false;
     bool supervised = false;
 #endif
-    bool client = (mode == Client) || (mode == ClientProxy);
+    bool client = (mode == Client);
     Debugger::Formatting tstamp = Debugger::None;
     bool colorize = false;
     const char* pidfile = 0;

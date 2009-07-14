@@ -854,7 +854,7 @@ void Client::loadUI(const char* file, bool init)
     ObjList* o = m_windows.skipNull();
     for (; o && !getVisible(o->get()->toString()); o = o->skipNext())
 	;
-    if (!o)
+    if ((Engine::mode() == Engine::Client) && !o)
 	Debug(ClientDriver::self(),DebugWarn,"There is no window visible !!!");
 }
 

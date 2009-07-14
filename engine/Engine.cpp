@@ -271,7 +271,7 @@ static void initUsrPath(String& path, const char* newPath = 0)
 	path = ::getenv("HOME");
 #endif
 	if (path.null()) {
-	    if (Engine::clientMode())
+	    if (Engine::mode() == Engine::Client)
 		Debug(DebugWarn,"Could not get per-user application data path!");
 	    path = s_cfgpath;
 	}
@@ -1492,7 +1492,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
     bool daemonic = false;
     bool supervised = false;
 #endif
-    bool client = (mode == Client);
+    bool client = (mode == Client) || (mode == ClientProxy);
     Debugger::Formatting tstamp = Debugger::None;
     bool colorize = false;
     const char* pidfile = 0;

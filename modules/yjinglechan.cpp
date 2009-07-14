@@ -4248,7 +4248,7 @@ void YJGDriver::initialize()
 	s_knownCodecs.add("98", "iLBC",    "8000",  "1", "ilbc30");
 
 	// Jabber protocol to use
-	JBEngine::Protocol proto = (Engine::mode() == Engine::Client) ?
+	JBEngine::Protocol proto = Engine::clientMode() ?
 	    JBEngine::Client : JBEngine::Component;
 	NamedString* p = sect->getParam("protocol");
 	if (p)

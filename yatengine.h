@@ -781,8 +781,9 @@ public:
     enum RunMode {
 	Stopped = 0,
 	Console = 1,
-	Client = 2,
-	Server = 3,
+	Server = 2,
+	Client = 3,
+	ClientProxy = 4,
     };
 
     /**
@@ -840,7 +841,7 @@ public:
      * @return True if the engine is running in client mode
      */
     inline static bool clientMode()
-	{ return s_mode == Client; }
+	{ return (s_mode == Client) || (s_mode == ClientProxy); }
 
     /**
      * Register or unregister a plugin to the engine.

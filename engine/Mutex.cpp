@@ -518,7 +518,8 @@ Mutex::Mutex(bool recursive, const char* name)
 }
 
 Mutex::Mutex(const Mutex &original)
-    : m_private(original.privDataCopy())
+    : Lockable(),
+      m_private(original.privDataCopy())
 {
 }
 
@@ -596,7 +597,8 @@ Semaphore::Semaphore(unsigned int maxcount, const char* name)
 }
 
 Semaphore::Semaphore(const Semaphore &original)
-    : m_private(original.privDataCopy())
+    : Lockable(),
+      m_private(original.privDataCopy())
 {
 }
 

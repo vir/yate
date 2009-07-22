@@ -1695,7 +1695,6 @@ void YateSIPEndPoint::addMessage(const char* buf, int len, const SocketAddr& add
 
 void YateSIPEndPoint::run()
 {
-    struct timeval tv;
     int evCount = 0;
     char* buf = (char*)m_buffer.data();
 
@@ -1711,11 +1710,9 @@ void YateSIPEndPoint::run()
 	// in any case, try to read a packet now and then to keep up
 	ok = ok || ((evCount & 3) == 0);
 	if (ok) {
-	    // wait up to 5000 microseconds if we had no events in last run
-	    tv.tv_sec = 0;
-	    tv.tv_usec = (evCount <= 0) ? 5000 : 0;
+	    // wait up to the platform idle time if we had no events in last run
 	    ok = false;
-	    m_sock->select(&ok,0,0,&tv);
+	    m_sock->select(&ok,0,0,((evCount <= 0) ? Thread::idleUsec() : 0));
 	}
 	if (ok)
 	{

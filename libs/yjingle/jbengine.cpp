@@ -162,6 +162,8 @@ JBThread::~JBThread()
 bool JBThread::start(Type type, JBThreadList* list, void* client,
 	int sleep, int prio)
 {
+    if (sleep <= 0)
+	sleep = Thread::idleMsec();
     Lock lock(list->m_mutex);
     const char* error = 0;
     bool ok = !list->m_cancelling;
@@ -359,10 +361,10 @@ void JBEngine::initialize(const NamedList& params)
 
 	recv = params.getIntValue("private_receive_threads",1);
 	for (int i = 0; i < recv; i++)
-	    JBThread::start(JBThread::EngineReceive,this,this,2,Thread::Normal);
+	    JBThread::start(JBThread::EngineReceive,this,this);
 	proc = params.getIntValue("private_process_threads",1);
 	for (int i = 0; i < proc; i++)
-	    JBThread::start(JBThread::EngineProcess,this,this,2,Thread::Normal);
+	    JBThread::start(JBThread::EngineProcess,this,this);
     }
 
     m_serverMutex.lock();
@@ -724,7 +726,7 @@ void JBEngine::connect(JBStream* stream)
 {
     XDebug(this,DebugAll,"JBEngine::connect(%p) [%p]",stream,this);
     if (stream && stream->state() == JBStream::Idle)
-	JBThread::start(JBThread::StreamConnect,this,stream,2,Thread::Normal);
+	JBThread::start(JBThread::StreamConnect,this,stream);
 }
 
 // Setup the transport layer security for a stream
@@ -1125,7 +1127,7 @@ void JBMessage::initialize(const NamedList& params)
     if (!m_syncProcess) {
 	int c = params.getIntValue("private_process_threads",1);
 	for (int i = 0; i < c; i++)
-	    JBThread::start(JBThread::Message,this,this,2,Thread::Normal);
+	    JBThread::start(JBThread::Message,this,this);
     }
 }
 
@@ -1980,7 +1982,7 @@ void JBPresence::initialize(const NamedList& params)
 	m_initialized = true;
 	int c = params.getIntValue("private_process_threads",1);
 	for (int i = 0; i < c; i++)
-	     JBThread::start(JBThread::Presence,this,this,2,Thread::Normal);
+	     JBThread::start(JBThread::Presence,this,this);
     }
 }
 

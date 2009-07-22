@@ -88,7 +88,7 @@ void JGEngine::initialize(const NamedList& params)
 	m_initialized = true;
 	int c = params.getIntValue("private_process_threads",1);
 	for (int i = 0; i < c; i++)
-	    JBThread::start(JBThread::Jingle,this,this,2,Thread::Normal);
+	    JBThread::start(JBThread::Jingle,this,this);
     }
 }
 

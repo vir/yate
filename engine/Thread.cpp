@@ -694,6 +694,16 @@ void Thread::usleep(unsigned long usec, bool exitCheck)
 	check();
 }
 
+unsigned long Thread::idleUsec()
+{
+    return THREAD_IDLE_MSEC * 1000;
+}
+
+unsigned long Thread::idleMsec()
+{
+    return THREAD_IDLE_MSEC;
+}
+
 Thread::Priority Thread::priority(const char* name, Thread::Priority defvalue)
 {
     return (Thread::Priority)lookup(name,s_prio,defvalue);

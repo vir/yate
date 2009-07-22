@@ -1106,11 +1106,11 @@ public:
      * @param type Thread type
      * @param list The list owning this thread
      * @param client The client to process
-     * @param sleep Time to sleep if there is nothing to do
-     * @param prio Thread priority
+     * @param sleep Time to sleep if there is nothing to do, zero to use platform default
+     * @param prio Thread priority, defaults to Normal
      * @return False if failed to start the requested thread
      */
-    static bool start(Type type, JBThreadList* list, void* client, int sleep, int prio);
+    static bool start(Type type, JBThreadList* list, void* client, int sleep = 0, int prio = Thread::Normal);
 
 protected:
     /**

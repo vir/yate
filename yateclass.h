@@ -4051,6 +4051,18 @@ public:
     static void usleep(unsigned long usec, bool exitCheck = false);
 
     /**
+     * Get the platform dependent idle sleep interval in microseconds
+     * @return Number of microseconds each call to idle() will sleep
+     */
+    static unsigned long idleUsec();
+
+    /**
+     * Get the platform dependent idle sleep interval in milliseconds
+     * @return Number of milliseconds each call to idle() will sleep
+     */
+    static unsigned long idleMsec();
+
+    /**
      * Get a pointer to the currently running thread
      * @return A pointer to the current thread or NULL for the main thread
      *  or threads created by other libraries

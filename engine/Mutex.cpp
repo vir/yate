@@ -31,6 +31,7 @@ typedef HANDLE HSEMAPHORE;
 
 #include <pthread.h>
 #include <semaphore.h>
+#include <time.h>
 
 #ifdef MUTEX_HACK
 extern "C" {

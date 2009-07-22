@@ -158,6 +158,7 @@ AC_MSG_CHECKING([for pthread_mutex_timedlock declaration])
 AC_TRY_COMPILE([
 #include <unistd.h>
 #include <pthread.h>
+#include <time.h>
 ],[
 pthread_mutex_t mutex;
 struct timespec tout;
@@ -174,6 +175,7 @@ AC_MSG_RESULT([$have_mutex_timedlock])
 AC_MSG_CHECKING([for sem_timedwait declaration])
 AC_TRY_COMPILE([
 #include <semaphore.h>
+#include <time.h>
 ],[
 sem_t sem;
 struct timespec tout;

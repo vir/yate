@@ -25,10 +25,12 @@
 #ifdef _WINDOWS
 
 typedef HANDLE HMUTEX;
+typedef HANDLE HSEMAPHORE;
 
 #else
 
 #include <pthread.h>
+#include <semaphore.h>
 
 #ifdef MUTEX_HACK
 extern "C" {
@@ -42,6 +44,7 @@ extern int pthread_mutexattr_settype(pthread_mutexattr_t *__attr, int __kind) __
 #endif
 
 typedef pthread_mutex_t HMUTEX;
+typedef sem_t HSEMAPHORE;
 
 #endif /* ! _WINDOWS */
 
@@ -69,7 +72,7 @@ public:
     bool locked() const
     	{ return (m_locked > 0); }
     bool lock(long maxwait);
-    void unlock();
+    bool unlock();
     static volatile int s_count;
     static volatile int s_locks;
 private:
@@ -79,6 +82,30 @@ private:
     bool m_recursive;
     const char* m_name;
     const char* m_owner;
+};
+
+class SemaphorePrivate {
+public:
+    SemaphorePrivate(unsigned int maxcount, const char* name);
+    ~SemaphorePrivate();
+    inline void ref()
+	{ ++m_refcount; }
+    inline void deref()
+	{ if (!--m_refcount) delete this; }
+    inline const char* name() const
+	{ return m_name; }
+    bool locked() const
+    	{ return (m_waiting > 0); }
+    bool lock(long maxwait);
+    bool unlock();
+    static volatile int s_count;
+    static volatile int s_locks;
+private:
+    HSEMAPHORE m_semaphore;
+    int m_refcount;
+    volatile unsigned int m_waiting;
+    unsigned int m_maxcount;
+    const char* m_name;
 };
 
 class GlobalMutex {
@@ -103,6 +130,8 @@ static bool s_unsafe = MUTEX_STATIC_UNSAFE;
 
 volatile int MutexPrivate::s_count = 0;
 volatile int MutexPrivate::s_locks = 0;
+volatile int SemaphorePrivate::s_count = 0;
+volatile int SemaphorePrivate::s_locks = 0;
 bool GlobalMutex::s_init = true;
 
 // WARNING!!!
@@ -211,7 +240,6 @@ bool MutexPrivate::lock(long maxwait)
 {
     bool rval = false;
     bool warn = false;
-    bool dead = false;
     if (s_maxwait && (maxwait < 0)) {
 	maxwait = (long)s_maxwait;
 	warn = true;
@@ -226,9 +254,8 @@ bool MutexPrivate::lock(long maxwait)
     DWORD ms = 0;
     if (maxwait < 0)
 	ms = INFINITE;
-    else if (maxwait > 0) {
+    else if (maxwait > 0)
 	ms = (DWORD)(maxwait / 1000);
-    }
     rval = s_unsafe || (::WaitForSingleObject(m_mutex,ms) == WAIT_OBJECT_0);
 #else
     if (s_unsafe)
@@ -239,6 +266,15 @@ bool MutexPrivate::lock(long maxwait)
 	rval = !::pthread_mutex_trylock(&m_mutex);
     else {
 	u_int64_t t = Time::now() + maxwait;
+#ifdef HAVE_TIMEDLOCK
+	struct timeval tv;
+	struct timespec ts;
+	Time::toTimeval(&tv,t);
+	ts.tv_sec = tv.tv_sec;
+	ts.tv_nsec = 1000 * tv.tv_usec;
+	rval = !::pthread_mutex_timedlock(&m_mutex,&ts);
+#else
+	bool dead = false;
 	do {
 	    if (!dead) {
 		dead = Thread::check(false);
@@ -251,8 +287,9 @@ bool MutexPrivate::lock(long maxwait)
 		break;
 	    Thread::yield();
 	} while (t > Time::now());
+#endif // HAVE_TIMEDLOCK
     }
-#endif
+#endif // _WINDOWS
     GlobalMutex::lock();
     if (thr)
 	thr->m_locking = false;
@@ -275,8 +312,9 @@ bool MutexPrivate::lock(long maxwait)
     return rval;
 }
 
-void MutexPrivate::unlock()
+bool MutexPrivate::unlock()
 {
+    bool ok = false;
     // Hope we don't hit a bug related to the debug mutex!
     GlobalMutex::lock();
     if (m_locked) {
@@ -304,10 +342,169 @@ void MutexPrivate::unlock()
 	    ::pthread_mutex_unlock(&m_mutex);
 #endif
 	deref();
+	ok = true;
     }
     else
 	Debug(DebugFail,"MutexPrivate::unlock called on unlocked '%s' [%p]",m_name,this);
     GlobalMutex::unlock();
+    return ok;
+}
+
+
+SemaphorePrivate::SemaphorePrivate(unsigned int maxcount, const char* name)
+    : m_refcount(1), m_waiting(0), m_maxcount(maxcount),
+      m_name(name)
+{
+    GlobalMutex::lock();
+    s_count++;
+#ifdef _WINDOWS
+    m_semaphore = ::CreateSemaphore(NULL,1,maxcount,NULL);
+#else
+    ::sem_init(&m_semaphore,0,1);
+#endif
+    GlobalMutex::unlock();
+}
+
+SemaphorePrivate::~SemaphorePrivate()
+{
+    GlobalMutex::lock();
+    s_count--;
+#ifdef _WINDOWS
+    ::CloseHandle(m_semaphore);
+    m_semaphore = 0;
+#else
+    ::sem_destroy(&m_semaphore);
+#endif
+    GlobalMutex::unlock();
+    if (m_waiting)
+	Debug(DebugFail,"SemaphorePrivate '%s' destroyed with %u locks [%p]",
+	    m_name,m_waiting,this);
+}
+
+bool SemaphorePrivate::lock(long maxwait)
+{
+    bool rval = false;
+    bool warn = false;
+    if (s_maxwait && (maxwait < 0)) {
+	maxwait = (long)s_maxwait;
+	warn = true;
+    }
+    GlobalMutex::lock();
+    ref();
+    s_locks++;
+    m_waiting++;
+    Thread* thr = Thread::current();
+    if (thr)
+	thr->m_locking = true;
+    GlobalMutex::unlock();
+#ifdef _WINDOWS
+    DWORD ms = 0;
+    if (maxwait < 0)
+	ms = INFINITE;
+    else if (maxwait > 0)
+	ms = (DWORD)(maxwait / 1000);
+    rval = s_unsafe || (::WaitForSingleObject(m_semaphore,ms) == WAIT_OBJECT_0);
+#else
+    if (s_unsafe)
+	rval = true;
+    else if (maxwait < 0)
+	rval = !::sem_wait(&m_semaphore);
+    else if (!maxwait)
+	rval = !::sem_trywait(&m_semaphore);
+    else {
+	u_int64_t t = Time::now() + maxwait;
+#ifdef HAVE_TIMEDWAIT
+	struct timeval tv;
+	struct timespec ts;
+	Time::toTimeval(&tv,t);
+	ts.tv_sec = tv.tv_sec;
+	ts.tv_nsec = 1000 * tv.tv_usec;
+	rval = !::sem_timedwait(&m_semaphore,&ts);
+#else
+	bool dead = false;
+	do {
+	    if (!dead) {
+		dead = Thread::check(false);
+		// give up only if caller asked for a limited wait
+		if (dead && !warn)
+		    break;
+	    }
+	    rval = !::sem_trywait(&m_semaphore);
+	    if (rval)
+		break;
+	    Thread::yield();
+	} while (t > Time::now());
+#endif // HAVE_TIMEDWAIT
+    }
+#endif // _WINDOWS
+    GlobalMutex::lock();
+    m_waiting--;
+    int locks = --s_locks;
+    if (locks < 0) {
+	// this is very very bad - abort right now
+	abortOnBug(true);
+	s_locks = 0;
+	Debug(DebugFail,"SemaphorePrivate::locks() is %d [%p]",locks,this);
+    }
+    if (thr)
+	thr->m_locking = false;
+    if (!rval)
+	deref();
+    GlobalMutex::unlock();
+    if (warn && !rval)
+	Debug(DebugFail,"Thread '%s' could not lock semaphore '%s' for %lu usec!",
+	    Thread::currentName(),m_name,maxwait);
+    return rval;
+}
+
+bool SemaphorePrivate::unlock()
+{
+    if (!s_unsafe) {
+#ifdef _WINDOWS
+	::ReleaseSemaphore(m_semaphore,1,NULL);
+#else
+	int val = 0;
+	if (!::sem_getvalue(&m_semaphore,&val) && (val < (int)m_maxcount))
+	    ::sem_post(&m_semaphore);
+#endif
+    }
+    GlobalMutex::lock();
+    deref();
+    GlobalMutex::unlock();
+    return true;
+}
+
+
+Lockable::~Lockable()
+{
+}
+
+bool Lockable::check(long maxwait)
+{
+    bool ret = lock(maxwait);
+    if (ret)
+	unlock();
+    return ret;
+}
+
+bool Lockable::unlockAll()
+{
+    while (locked()) {
+	if (!unlock())
+	    return false;
+	Thread::yield();
+    }
+    return true;
+}
+
+void Lockable::startUsingNow()
+{
+    s_unsafe = false;
+}
+
+void Lockable::wait(unsigned long maxwait)
+{
+    s_maxwait = maxwait;
 }
 
 
@@ -326,7 +523,7 @@ Mutex::Mutex(const Mutex &original)
 
 Mutex::~Mutex()
 {
-    MutexPrivate *priv = m_private;
+    MutexPrivate* priv = m_private;
     m_private = 0;
     if (priv)
 	priv->deref();
@@ -334,14 +531,14 @@ Mutex::~Mutex()
 
 Mutex& Mutex::operator=(const Mutex& original)
 {
-    MutexPrivate *priv = m_private;
+    MutexPrivate* priv = m_private;
     m_private = original.privDataCopy();
     if (priv)
 	priv->deref();
     return *this;
 }
 
-MutexPrivate *Mutex::privDataCopy() const
+MutexPrivate* Mutex::privDataCopy() const
 {
     if (m_private)
 	m_private->ref();
@@ -350,21 +547,12 @@ MutexPrivate *Mutex::privDataCopy() const
 
 bool Mutex::lock(long maxwait)
 {
-    return m_private ? m_private->lock(maxwait) : false;
+    return m_private && m_private->lock(maxwait);
 }
 
-void Mutex::unlock()
+bool Mutex::unlock()
 {
-    if (m_private)
-	m_private->unlock();
-}
-
-bool Mutex::check(long maxwait)
-{
-    bool ret = lock(maxwait);
-    if (ret)
-	unlock();
-    return ret;
+    return m_private && m_private->unlock();
 }
 
 bool Mutex::recursive() const
@@ -387,14 +575,86 @@ int Mutex::locks()
     return MutexPrivate::s_locks;
 }
 
-void Mutex::startUsingNow()
+bool Mutex::efficientTimedLock()
 {
-    s_unsafe = false;
+#if defined(_WINDOWS) || defined(HAVE_TIMEDLOCK)
+    return true;
+#else
+    return false;
+#endif
 }
 
-void Mutex::wait(unsigned long maxwait)
+
+Semaphore::Semaphore(unsigned int maxcount, const char* name)
+    : m_private(0)
 {
-    s_maxwait = maxwait;
+    if (!name)
+	name = "?";
+    if (maxcount)
+	m_private = new SemaphorePrivate(maxcount,name);
+}
+
+Semaphore::Semaphore(const Semaphore &original)
+    : m_private(original.privDataCopy())
+{
+}
+
+Semaphore::~Semaphore()
+{
+    SemaphorePrivate* priv = m_private;
+    m_private = 0;
+    if (priv)
+	priv->deref();
+}
+
+Semaphore& Semaphore::operator=(const Semaphore& original)
+{
+    SemaphorePrivate* priv = m_private;
+    m_private = original.privDataCopy();
+    if (priv)
+	priv->deref();
+    return *this;
+}
+
+SemaphorePrivate* Semaphore::privDataCopy() const
+{
+    if (m_private)
+	m_private->ref();
+    return m_private;
+}
+
+bool Semaphore::lock(long maxwait)
+{
+    return m_private && m_private->lock(maxwait);
+}
+
+bool Semaphore::unlock()
+{
+    return m_private && m_private->unlock();
+}
+
+bool Semaphore::locked() const
+{
+    return m_private && m_private->locked();
+}
+
+int Semaphore::count()
+{
+    return SemaphorePrivate::s_count;
+}
+
+int Semaphore::locks()
+{
+    return SemaphorePrivate::s_locks;
+}
+
+bool Semaphore::efficientTimedLock()
+{
+#if defined(_WINDOWS) || defined(HAVE_TIMEDWAIT)
+    return true;
+#else
+    return false;
+#endif
 }
 
 

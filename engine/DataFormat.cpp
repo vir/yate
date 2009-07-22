@@ -515,7 +515,7 @@ unsigned long DataSource::Forward(const DataBlock& data, unsigned long tStamp, u
 {
     Lock mylock(this,100000);
     // we DON'T refcount here, we rely on the mutex to keep us safe
-    if (!(mylock.mutex() && alive())) {
+    if (!(mylock.locked() && alive())) {
 	DDebug(DebugInfo,"Forwarding on a dead DataSource! [%p]",this);
 	return 0;
     }
@@ -627,7 +627,7 @@ void DataSource::clear()
 void DataSource::synchronize(unsigned long tStamp)
 {
     Lock mylock(this,100000);
-    if (!(mylock.mutex() && alive())) {
+    if (!(mylock.locked() && alive())) {
 	DDebug(DebugInfo,"Synchronizing on a dead DataSource! [%p]",this);
 	return;
     }

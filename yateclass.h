@@ -3563,13 +3563,77 @@ protected:
 };
 
 class MutexPrivate;
+class SemaphorePrivate;
 class ThreadPrivate;
+
+/**
+ * An abstract base class for implementing lockable objects
+ * @short Abstract interface for lockable objects
+ */
+class YATE_API Lockable
+{
+public:
+    /**
+     * Destructor
+     */
+    virtual ~Lockable();
+
+    /**
+     * Attempt to lock the object and eventually wait for it
+     * @param maxwait Time in microseconds to wait, -1 wait forever
+     * @return True if successfully locked, false on failure
+     */
+    virtual bool lock(long maxwait = -1) = 0;
+
+    /**
+     * Unlock the object, does never wait
+     * @return True if successfully unlocked the object
+     */
+    virtual bool unlock() = 0;
+
+    /**
+     * Check if the object is currently locked - as it's asynchronous it
+     *  guarantees nothing if other thread changes the status
+     * @return True if the object was locked when the function was called
+     */
+    virtual bool locked() const = 0;
+
+    /**
+     * Check if the object is unlocked (try to lock and unlock it)
+     * @param maxwait Time in microseconds to wait, -1 to wait forever
+     * @return True if successfully locked and unlocked, false on failure
+     */
+    virtual bool check(long maxwait = -1);
+
+    /**
+     * Fully unlock the object, even if it was previously multiple locked.
+     * There is no guarantee about the object status after the function returns.
+     * This function should be used only if you understand it very well
+     * @return True if the object was fully unlocked
+     */
+    virtual bool unlockAll();
+
+    /**
+     * Set a maximum wait time for debugging purposes
+     * @param maxwait Maximum time in microseconds to wait for any lockable
+     *  object when no time limit was requested, zero to disable limit
+     */
+    static void wait(unsigned long maxwait);
+
+    /**
+     * Start actually using lockables, for platforms where these objects are not
+     *  usable in global object constructors.
+     * This method must be called at least once somewhere from main() but
+     *  before creating any threads and without holding any object locked.
+     */
+    static void startUsingNow();
+};
 
 /**
  * A simple mutual exclusion for locking access between threads
  * @short Mutex support
  */
-class YATE_API Mutex
+class YATE_API Mutex : public Lockable
 {
     friend class MutexPrivate;
 public:
@@ -3582,7 +3646,7 @@ public:
     Mutex(bool recursive = false, const char* name = 0);
 
     /**
-     * Copy constructor creates a shared mutex
+     * Copy constructor, creates a shared mutex
      * @param original Reference of the mutex to share
      */
     Mutex(const Mutex& original);
@@ -3603,26 +3667,20 @@ public:
      * @param maxwait Time in microseconds to wait for the mutex, -1 wait forever
      * @return True if successfully locked, false on failure
      */
-    bool lock(long maxwait = -1);
+    virtual bool lock(long maxwait = -1);
 
     /**
      * Unlock the mutex, does never wait
+     * @return True if successfully unlocked the mutex
      */
-    void unlock();
+    virtual bool unlock();
 
     /**
      * Check if the mutex is currently locked - as it's asynchronous it
      *  guarantees nothing if other thread changes the mutex's status
      * @return True if the mutex was locked when the function was called
      */
-    bool locked() const;
-
-    /**
-     * Check if the mutex is unlocked (try to lock and unlock the mutex)
-     * @param maxwait Time in microseconds to wait for the mutex, -1 wait forever
-     * @return True if successfully locked and unlocked, false on failure
-     */
-    bool check(long maxwait = -1);
+    virtual bool locked() const;
 
     /**
      * Check if this mutex is recursive or not
@@ -3643,19 +3701,10 @@ public:
     static int locks();
 
     /**
-     * Set a maximum mutex wait time for debugging purposes
-     * @param maxwait Maximum time in microseconds to wait for any mutex
-     *  when no time limit was requested, zero to disable limit
+     * Check if a timed lock() is efficient on this platform
+     * @return True if a lock with a maxwait parameter is efficiently implemented
      */
-    static void wait(unsigned long maxwait);
-
-    /**
-     * Start actually using mutexes, for platforms where mutexes are not
-     *  usable in global object constructors.
-     * This method must be called at least once somewhere from main() but
-     *  before creating any threads and without holding any mutex locked.
-     */
-    static void startUsingNow();
+    static bool efficientTimedLock();
 
 private:
     MutexPrivate* privDataCopy() const;
@@ -3663,50 +3712,125 @@ private:
 };
 
 /**
- * A lock is a stack allocated (automatic) object that locks a mutex on
- *  creation and unlocks it on destruction - typically when exiting a block
- * @short Ephemeral mutex locking object
+ * A semaphore object for synchronizing threads, can also be used as a token bucket
+ * @short Semaphore implementation
+ */
+class YATE_API Semaphore : public Lockable
+{
+    friend class SemaphorePrivate;
+public:
+    /**
+     * Construct a new unlocked semaphore
+     * @param maxcount Maximum unlock count, must be strictly positive
+     * @param name Static name of the semaphore (for debugging purpose only)
+     */
+    Semaphore(unsigned int maxcount = 1, const char* name = 0);
+
+    /**
+     * Copy constructor, creates a shared semaphore
+     * @param original Reference of the semaphore to share
+     */
+    Semaphore(const Semaphore& original);
+
+    /**
+     * Destroy the semaphore
+     */
+    ~Semaphore();
+
+    /**
+     * Assignment operator makes the semaphore shared with the original
+     * @param original Reference of the semaphore to share
+     */
+    Semaphore& operator=(const Semaphore& original);
+
+    /**
+     * Attempt to get a lock on the semaphore and eventually wait for it
+     * @param maxwait Time in microseconds to wait, -1 wait forever
+     * @return True if successfully locked, false on failure
+     */
+    virtual bool lock(long maxwait = -1);
+
+    /**
+     * Unlock the semaphore, does never wait nor get over counter maximum
+     * @return True if successfully unlocked
+     */
+    virtual bool unlock();
+
+    /**
+     * Check if the semaphore is currently locked (waiting) - as it's
+     *  asynchronous it guarantees nothing if other thread changes status
+     * @return True if the semaphore was locked when the function was called
+     */
+    virtual bool locked() const;
+
+    /**
+     * Get the number of semaphores counting the shared ones only once
+     * @return Count of individual semaphores
+     */
+    static int count();
+
+    /**
+     * Get the number of currently locked (waiting) semaphores
+     * @return Count of locked semaphores, should be zero at program exit
+     */
+    static int locks();
+
+    /**
+     * Check if a timed lock() is efficient on this platform
+     * @return True if a lock with a maxwait parameter is efficiently implemented
+     */
+    static bool efficientTimedLock();
+
+private:
+    SemaphorePrivate* privDataCopy() const;
+    SemaphorePrivate* m_private;
+};
+
+/**
+ * A lock is a stack allocated (automatic) object that locks a lockable object
+ *  on creation and unlocks it on destruction - typically when exiting a block
+ * @short Ephemeral mutex or semaphore locking object
  */
 class YATE_API Lock
 {
 public:
     /**
-     * Create the lock, try to lock the mutex
-     * @param mutex Reference to the mutex to lock
-     * @param maxwait Time in microseconds to wait for the mutex, -1 wait forever
+     * Create the lock, try to lock the object
+     * @param lck Reference to the object to lock
+     * @param maxwait Time in microseconds to wait, -1 wait forever
      */
-    inline Lock(Mutex& mutex, long maxwait = -1)
-	{ m_mutex = mutex.lock(maxwait) ? &mutex : 0; }
+    inline Lock(Lockable& lck, long maxwait = -1)
+	{ m_lock = lck.lock(maxwait) ? &lck : 0; }
 
     /**
-     * Create the lock, try to lock the mutex
-     * @param mutex Pointer to the mutex to lock
-     * @param maxwait Time in microseconds to wait for the mutex, -1 wait forever
+     * Create the lock, try to lock the object
+     * @param lck Pointer to the object to lock
+     * @param maxwait Time in microseconds to wait, -1 wait forever
      */
-    inline Lock(Mutex* mutex, long maxwait = -1)
-	{ m_mutex = (mutex && mutex->lock(maxwait)) ? mutex : 0; }
+    inline Lock(Lockable* lck, long maxwait = -1)
+	{ m_lock = (lck && lck->lock(maxwait)) ? lck : 0; }
 
     /**
      * Destroy the lock, unlock the mutex if it was locked
      */
     inline ~Lock()
-	{ if (m_mutex) m_mutex->unlock(); }
+	{ if (m_lock) m_lock->unlock(); }
 
     /**
-     * Return a pointer to the mutex this lock holds
-     * @return A mutex pointer or NULL if locking failed
+     * Return a pointer to the lockable object this lock holds
+     * @return A pointer to a Lockable or NULL if locking failed
      */
-    inline Mutex* mutex() const
-	{ return m_mutex; }
+    inline Lockable* locked() const
+	{ return m_lock; }
 
     /**
-     * Unlock the mutex if it was locked and drop the reference to it
+     * Unlock the object if it was locked and drop the reference to it
      */
     inline void drop()
-	{ if (m_mutex) m_mutex->unlock(); m_mutex = 0; }
+	{ if (m_lock) m_lock->unlock(); m_lock = 0; }
 
 private:
-    Mutex* m_mutex;
+    Lockable* m_lock;
 
     /** Make sure no Lock is ever created on heap */
     inline void* operator new(size_t);
@@ -3828,6 +3952,7 @@ class YATE_API Thread : public Runnable
 {
     friend class ThreadPrivate;
     friend class MutexPrivate;
+    friend class SemaphorePrivate;
 public:
     /**
      * Running priorities, their mapping is operating system dependent

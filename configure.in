@@ -82,7 +82,7 @@ AC_MSG_RESULT([$ld_unresolved_symbols])
 # Checks for header files.
 AC_HEADER_DIRENT
 AC_HEADER_STDC
-AC_CHECK_HEADERS([fcntl.h arpa/inet.h netdb.h netinet/in.h sys/ioctl.h sys/socket.h sys/time.h], , [AC_MSG_ERROR([This header file is required.])])
+AC_CHECK_HEADERS([fcntl.h semaphore.h arpa/inet.h netdb.h netinet/in.h sys/ioctl.h sys/socket.h sys/time.h], , [AC_MSG_ERROR([This header file is required.])])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
@@ -133,11 +133,12 @@ AC_SUBST(DLOPEN_LIB)
 LIBS="$SAVE_LIBS"
 
 MUTEX_HACK=""
-AC_MSG_CHECKING([for pthread_mutexattr_settype declaration])
 AC_LANG_SAVE
 AC_LANG_C
 SAVE_CFLAGS="$CFLAGS"
 CFLAGS="$CFLAGS -Wall -Werror"
+
+AC_MSG_CHECKING([for pthread_mutexattr_settype declaration])
 AC_TRY_COMPILE([
 #include <unistd.h>
 #include <pthread.h>
@@ -148,12 +149,46 @@ pthread_mutexattr_settype(&attr,PTHREAD_MUTEX_RECURSIVE_NP);
 have_mutex_settype="yes",
 have_mutex_settype="no"
 )
-CFLAGS="$SAVE_CFLAGS"
-AC_LANG_RESTORE
 if [[ "$have_mutex_settype" = "no" ]]; then
 MUTEX_HACK="-DMUTEX_HACK"
 fi
 AC_MSG_RESULT([$have_mutex_settype])
+
+AC_MSG_CHECKING([for pthread_mutex_timedlock declaration])
+AC_TRY_COMPILE([
+#include <unistd.h>
+#include <pthread.h>
+],[
+pthread_mutex_t mutex;
+struct timespec tout;
+pthread_mutex_timedlock(&mutex,&tout);
+],
+have_mutex_timedlock="yes",
+have_mutex_timedlock="no"
+)
+if [[ "$have_mutex_timedlock" = "yes" ]]; then
+MUTEX_HACK="$MUTEX_HACK -DHAVE_TIMEDLOCK"
+fi
+AC_MSG_RESULT([$have_mutex_timedlock])
+
+AC_MSG_CHECKING([for sem_timedwait declaration])
+AC_TRY_COMPILE([
+#include <semaphore.h>
+],[
+sem_t sem;
+struct timespec tout;
+sem_timedwait(&sem,&tout);
+],
+have_sem_timedwait="yes",
+have_sem_timedwait="no"
+)
+if [[ "$have_sem_timedwait" = "yes" ]]; then
+MUTEX_HACK="$MUTEX_HACK -DHAVE_TIMEDWAIT"
+fi
+AC_MSG_RESULT([$have_sem_timedwait])
+
+CFLAGS="$SAVE_CFLAGS"
+AC_LANG_RESTORE
 AC_SUBST(MUTEX_HACK)
 
 THREAD_KILL=""

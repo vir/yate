@@ -485,7 +485,7 @@ void ForkModule::initialize()
 bool ForkModule::unload()
 {
     Lock lock(s_mutex,500000);
-    if (!lock.mutex())
+    if (!lock.locked())
 	return false;
     if (s_calls.count())
 	return false;

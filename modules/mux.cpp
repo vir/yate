@@ -360,7 +360,7 @@ void MuxSource::consume(MuxConsumer& consumer, const DataBlock& data, unsigned l
     if (!data.length() || consumer.m_owner != this)
 	return;
     Lock lock(m_lock,100000);
-    if (!(lock.mutex() && alive())) {
+    if (!(lock.locked() && alive())) {
 	Debug(this,DebugMild,"Locking failed, dropping %u bytes [%p]",data.length(),this);
 	return;
     }

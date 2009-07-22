@@ -524,9 +524,9 @@ private:
  * Local data
  */
 static Configuration s_cfg; 		// Configuration file
-static YIAXDriver iplugin;		// Init the driver
 static YIAXLineContainer s_lines;	// Lines
 static Thread::Priority s_priority = Thread::Normal;  // Threads priority
+static YIAXDriver iplugin;		// Init the driver
 
 
 /*

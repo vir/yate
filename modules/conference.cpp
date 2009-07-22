@@ -980,7 +980,7 @@ bool ConferenceDriver::checkRoom(String& room, bool existing, bool counted)
 bool ConferenceDriver::unload()
 {
     Lock lock(this,500000);
-    if (!lock.mutex())
+    if (!lock.locked())
 	return false;
     if (isBusy() || s_rooms.count())
 	return false;

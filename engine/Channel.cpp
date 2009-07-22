@@ -161,7 +161,7 @@ bool CallEndpoint::disconnect(bool final, const char* reason, bool notify, const
     DDebug(DebugAll,"CallEndpoint '%s' disconnecting peer %p from [%p]",m_id.c_str(),m_peer,this);
 
     Lock lock(s_mutex,5000000);
-    if (!lock.mutex()) {
+    if (!lock.locked()) {
 	Debug(DebugFail,"Call disconnect failed - deadlock on call endpoint mutex!");
 	Engine::restart(0);
 	return false;

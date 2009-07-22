@@ -302,6 +302,8 @@ bool EngineStatusHandler::received(Message &msg)
     msg.retValue() << ",workers=" << EnginePrivate::count;
     msg.retValue() << ",mutexes=" << Mutex::count();
     msg.retValue() << ",locks=" << Mutex::locks();
+    msg.retValue() << ",semaphores=" << Semaphore::count();
+    msg.retValue() << ",waiting=" << Semaphore::locks();
     msg.retValue() << "\r\n";
     return false;
 }
@@ -1500,7 +1502,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
     const char* usrpath = 0;
     int debug_level = debugLevel();
 
-    Mutex::startUsingNow();
+    Lockable::startUsingNow();
 
     const char* cfgfile = ::strrchr(argv[0],'/');
     if (!cfgfile)
@@ -1680,7 +1682,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 				    s_lateabrt = true;
 				    break;
 				case 'm':
-				    Mutex::wait(10000000);
+				    Lockable::wait(10000000);
 				    break;
 #ifdef RTLD_GLOBAL
 				case 'l':

@@ -766,10 +766,9 @@ public:
      * @param epDef The endpoint definition used by the listener
      * @param backlog Maximum length of the queue of pending connections, 0 for system maximum
      * @param blocking True if I/O operations should block, false for non-blocking
-     * @param sleepMs Time to sleep if no connection request was received
      */
     SOCKSListener(SOCKSEngine* engine, SOCKSEndpointDef* epDef,
-	unsigned int backlog = 0, bool blocking = false, unsigned int sleepMs = 20);
+	unsigned int backlog = 5, bool blocking = false);
 
     /**
      * Destructor
@@ -852,7 +851,6 @@ protected:
     String m_id;
     unsigned int m_backlog;
     bool m_blocking;
-    unsigned int m_sleepMs;
     Socket* m_socket;
     bool m_listenError;
     SOCKSEngine* m_engine;
@@ -1237,12 +1235,10 @@ public:
      // @param port The local port to bind to
      // @param backlog Maximum length of the queue of pending connections, 0 for system maximum
      // @param blocking True if I/O operations should block, false for non-blocking
-     // @param sleepMs Time to sleep if no connection request was received
      // @param prio Thread priority
     inline YSocksListenerThread(SOCKSEngine* engine, SOCKSEndpointDef* proxy,
-	unsigned int backlog, bool blocking, unsigned int sleepMs = 20,
-	Thread::Priority prio = Thread::Normal)
-	: SOCKSListener(engine,proxy,backlog,blocking,sleepMs),
+	unsigned int backlog, bool blocking, Thread::Priority prio = Thread::Normal)
+	: SOCKSListener(engine,proxy,backlog,blocking),
 	  Thread("SOCKS Listener",prio)
 	{}
 
@@ -2344,9 +2340,9 @@ const String& SOCKSEndpointDef::toString() const
  * SOCKSListener
  */
 SOCKSListener::SOCKSListener(SOCKSEngine* engine, SOCKSEndpointDef* epDef,
-    unsigned int backlog, bool blocking, unsigned int sleepMs)
+    unsigned int backlog, bool blocking)
     : m_epDef(epDef),
-    m_backlog(backlog), m_blocking(blocking), m_sleepMs(sleepMs),
+    m_backlog(backlog), m_blocking(blocking),
     m_socket(0), m_listenError(false), m_engine(engine), m_status(Created)
 {
     if (m_epDef)
@@ -2470,7 +2466,7 @@ void SOCKSListener::run()
 	    if (processed)
 		Thread::yield(false);
 	    else
-		Thread::msleep(m_sleepMs,false);
+		Thread::idle(false);
 	}
     terminate();
     if (m_engine)
@@ -3389,7 +3385,7 @@ void YSocksProcessThread::run()
 	if (s_engine->process())
 	    Thread::yield(false);
 	else
-	    Thread::msleep(2,false);
+	    Thread::idle(false);
     }
 }
 

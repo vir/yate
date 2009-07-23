@@ -97,6 +97,7 @@ HAVE_PRCTL=""
 AC_MSG_CHECKING([for prctl])
 have_prctl="no"
 AC_TRY_COMPILE([
+#include <unistd.h>
 #include <sys/prctl.h>
 ],[
 prctl(1,2,3,4,5);

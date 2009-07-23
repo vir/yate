@@ -137,6 +137,8 @@ AC_LANG_SAVE
 AC_LANG_C
 SAVE_CFLAGS="$CFLAGS"
 CFLAGS="$CFLAGS -Wall -Werror"
+SAVE_LIBS="$LIBS"
+LIBS="$LIBS $THREAD_LIB"
 
 AC_MSG_CHECKING([for pthread_mutexattr_settype declaration])
 AC_TRY_COMPILE([
@@ -154,8 +156,8 @@ MUTEX_HACK="-DMUTEX_HACK"
 fi
 AC_MSG_RESULT([$have_mutex_settype])
 
-AC_MSG_CHECKING([for pthread_mutex_timedlock declaration])
-AC_TRY_COMPILE([
+AC_MSG_CHECKING([for pthread_mutex_timedlock])
+AC_TRY_LINK([
 #include <unistd.h>
 #include <pthread.h>
 #include <time.h>
@@ -172,8 +174,8 @@ MUTEX_HACK="$MUTEX_HACK -DHAVE_TIMEDLOCK"
 fi
 AC_MSG_RESULT([$have_mutex_timedlock])
 
-AC_MSG_CHECKING([for sem_timedwait declaration])
-AC_TRY_COMPILE([
+AC_MSG_CHECKING([for sem_timedwait])
+AC_TRY_LINK([
 #include <semaphore.h>
 #include <time.h>
 ],[
@@ -190,6 +192,7 @@ fi
 AC_MSG_RESULT([$have_sem_timedwait])
 
 CFLAGS="$SAVE_CFLAGS"
+LIBS="$SAVE_LIBS"
 AC_LANG_RESTORE
 AC_SUBST(MUTEX_HACK)
 

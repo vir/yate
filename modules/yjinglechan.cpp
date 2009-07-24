@@ -389,6 +389,7 @@ private:
     State m_state;                       // Connection state
     JGSession* m_session;                // Jingle session attached to this connection
     bool m_rtpStarted;                   // RTP started flag used by version 0 of the jingle session
+    bool m_acceptRelay;                  // Accept to replace with a relay candidate
     JGSession::Version m_sessVersion;    // Jingle session version
     JabberID m_local;                    // Local user's JID
     JabberID m_remote;                   // Remote user's JID
@@ -623,6 +624,7 @@ static bool s_attachPresToCmd = false;            // Attach presence to command 
 static bool s_userRoster = false;                 // Send client roster with user.roster or resource.notify
 static bool s_useCrypto = false;
 static bool s_cryptoMandatory = false;
+static bool s_acceptRelay = false;
 static JGSession::Version s_sessVersion = JGSession::VersionUnknown; // Default jingle session version for outgoing calls
 static YJBEngine* s_jabber = 0;
 static YJGEngine* s_jingle = 0;
@@ -1330,7 +1332,8 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
 	bool available, const char* file)
     : Channel(&plugin,0,true),
     m_mutex(true,"YJGConnection"),
-    m_state(Pending), m_session(0), m_rtpStarted(false), m_sessVersion(s_sessVersion),
+    m_state(Pending), m_session(0), m_rtpStarted(false), m_acceptRelay(s_acceptRelay),
+    m_sessVersion(s_sessVersion),
     m_local(caller), m_remote(called), m_audioContent(0),
     m_callerPrompt(msg.getValue("callerprompt")), m_sendRawRtpFirst(true),
     m_useCrypto(s_useCrypto), m_cryptoMandatory(s_cryptoMandatory),
@@ -1411,7 +1414,7 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
 YJGConnection::YJGConnection(JGEvent* event)
     : Channel(&plugin,0,false),
     m_mutex(true,"YJGConnection"),
-    m_state(Active), m_session(event->session()), m_rtpStarted(false),
+    m_state(Active), m_session(event->session()), m_rtpStarted(false), m_acceptRelay(s_acceptRelay),
     m_sessVersion(event->session()->version()),
     m_local(event->session()->local()), m_remote(event->session()->remote()),
     m_audioContent(0), m_sendRawRtpFirst(true),
@@ -2535,9 +2538,23 @@ bool YJGConnection::updateCandidate(unsigned int component, JGSessionContent& lo
     JGRtpCandidate* rtp = local.m_rtpRemoteCandidates.findByComponent(component);
     // Version0: check acceptable transport
     if (m_sessVersion == JGSession::Version0) {
-	// Don't accept another transport if we already have one
-	// Check for valid attributes
-	if (rtp || rtpRecv->m_protocol != "udp" || rtpRecv->m_type != "local")
+	// We only handle UDP based transports for now
+	if (rtpRecv->m_protocol != "udp")
+	    return false;
+	// Only accept a relay as a second transport and only once
+	if (m_acceptRelay && rtpRecv->m_type == "relay") {
+	    m_acceptRelay = false;
+	    if (rtp) {
+		Debug(this,DebugNote,"Replacing remote transport type '%s' with a relay [%p]",
+		    rtp->m_type.c_str(),this);
+		local.m_rtpRemoteCandidates.remove(rtp);
+		rtp = 0;
+		clearEndpoint();
+		m_rtpStarted = false;
+	    }
+	}
+	// Any other transport type accepted only initially
+	else if (rtp)
 	    return false;
     }
     if (!rtp) {
@@ -4335,6 +4352,7 @@ void YJGDriver::initialize()
     s_userRoster = sect->getBoolValue("user.roster",false);
     s_useCrypto = sect->getBoolValue("secure_rtp",false);
     s_cryptoMandatory = s_useCrypto;
+    s_acceptRelay = sect->getBoolValue("accept_relay",Engine::clientMode());
     s_sessVersion = JGSession::lookupVersion(sect->getValue("jingle_version"),JGSession::Version1);
 
     // Init codecs in use. Check each codec in known codecs list against the configuration

@@ -120,8 +120,8 @@ bool JBSocket::connect(bool& terminated, const char* newAddr, int newPort)
 	m_error = "Resolver failure";
 	DDebug(m_engine,DebugWarn,"Stream. Failed to resolve '%s' [%p]",
 	    m_remoteDomain.safe(),m_stream);
+	terminated = (m_socket == 0);
 	terminate();
-	terminated = m_socket == 0;
 	return false;
     }
     DDebug(m_engine,DebugInfo,"Stream. Attempt to connect to '%s:%d' [%p]",

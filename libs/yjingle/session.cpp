@@ -720,6 +720,7 @@ TokenDict JGSession::s_actions0[] = {
     {"accept",                ActAccept},
     {"initiate",              ActInitiate},
     {"terminate",             ActTerminate},
+    {"reject",                ActTerminate},
     {"info",                  ActInfo},
     {"transport-info",        ActTransportInfo},
     {"transport-accept",      ActTransportAccept},

@@ -104,6 +104,7 @@ static const CommandInfo s_cmdInfo[] =
 #endif
     { "drop", "{chan|*|all} [reason]", s_dall, "Drops one or all active calls" },
     { "call", "chan target", 0, "Execute an outgoing call" },
+    { "control", "chan operation", 0, "Apply arbitrary control operations to a channel or entity" },
     { "reload", 0, 0, "Reloads module configuration files" },
     { "restart", "[now]", s_rnow, "Restarts the engine if executing supervised" },
     { "stop", "[exitcode]", 0, "Stops the engine with optionally provided exit code" },
@@ -945,6 +946,34 @@ bool Connection::processLine(const char *line)
 	    str = "Debug level: ";
 	    str << debugLevel() << " local: " << (m_debug ? "on\r\n" : "off\r\n");
 	}
+	writeStr(str);
+    }
+    else if (str.startSkip("control"))
+    {
+	int pos = str.find(' ');
+	if (pos <= 0) {
+	    writeStr(m_machine ? "%%=control:fail=noarg\r\n" : "You must specify channel and operation!\r\n");
+	    return false;
+	}
+	String id = str.substr(0,pos);
+	String ctrl = str.substr(pos+1);
+	Message m("chan.control");
+	m.addParam("targetid",id);
+	m.addParam("component",id);
+	pos = ctrl.find('=');
+	if (pos <= 0)
+	    m.addParam("operation",ctrl);
+	else
+	    m.addParam(ctrl.substr(0,pos),ctrl.substr(pos+1));
+
+	if (Engine::dispatch(m)) {
+	    if (m_machine)
+		str = "%%=control:success:" + id + ":" + m.retValue() + "\r\n";
+	    else
+		str = "Control '" + id + "' " + m.retValue().safe("OK") + "\r\n";
+	}
+	else
+	    str = (m_machine ? "%%=control:fail:" : "Could not control ") + str + "\r\n";
 	writeStr(str);
     }
 #ifdef HAVE_COREDUMPER

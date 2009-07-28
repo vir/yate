@@ -1221,6 +1221,7 @@ public:
 	// Non-call related
 	Message,
 	Facility,
+	Circuit,
 	// Controller related
 	Enable,
 	Disable,
@@ -1243,6 +1244,13 @@ public:
      * @param controller Controller this event refers to
      */
     SignallingEvent(Type type, SignallingMessage* message, SignallingCallControl* controller = 0);
+
+    /**
+     * Constructor for a signalling circuit related event
+     * @param event The event signaled by the circuit
+     * @param call Call this event refers to
+     */
+    SignallingEvent(SignallingCircuitEvent* event, SignallingCall* call);
 
     /**
      * Destructor, dereferences any resources, notify the signalling call of termination
@@ -1282,6 +1290,12 @@ public:
 	{ return m_controller; }
 
     /**
+     * Retrive the circuit event
+     */
+    inline SignallingCircuitEvent* cicEvent() const
+	{ return m_cicEvent; }
+
+    /**
      * Get the text associated with a given event type for debug purposes
      * @param t The requested type
      * @return The text associated with the given type
@@ -1300,6 +1314,7 @@ private:
     SignallingMessage* m_message;
     SignallingCall* m_call;
     SignallingCallControl* m_controller;
+    SignallingCircuitEvent* m_cicEvent;
     static TokenDict s_types[];
 };
 
@@ -1332,6 +1347,11 @@ public:
 	Flash        = 33,               // Off hook momentarily
 	PulseStart   = 40,               // Pulse dialing start
 	PulseDigit   = 41,               // Transfer pulse digits: param: pulse
+	// Remote circuit events
+	Connect      = 50,               // Request connect
+	Disconnect   = 51,               // Request disconnect
+	Connected    = 52,               // Connected notification
+	Disconnected = 53,               // Disconnected notification
 	// Errors
 	Alarm        = 100,              // Param: alarms (comma separated list of strings)
 	NoAlarm      = 101,              // No more alarms
@@ -1363,6 +1383,12 @@ public:
      */
     inline SignallingCircuit* circuit()
 	{ return m_circuit; }
+
+    /**
+     * Send this event through the circuit. Release (delete) the event
+     * @return True if the operation succeded
+     */
+    bool sendEvent();
 
 private:
     SignallingCircuit* m_circuit;

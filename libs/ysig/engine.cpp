@@ -513,6 +513,7 @@ static TokenDict s_dict_causeCCITT[] = {
 	{"forbidden-in",                   0x37}, // Incoming call barred within CUG
 	{"bearer-cap-not-auth",            0x39}, // Bearer capability not authorized
 	{"bearer-cap-not-available",       0x3a}, // Bearer capability not presently available
+	{"nomedia",                        0x3a},
 	{"service-unavailable",            0x3f}, // Service or option not available
 	// service-not-implemented class
 	{"bearer-cap-not-implemented",     0x41}, // Bearer capability not implemented

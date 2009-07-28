@@ -310,6 +310,7 @@ TokenDict SignallingEvent::s_types[] = {
 	{"Info",     Info},
 	{"Message",  Message},
 	{"Facility", Facility},
+	{"Circuit",  Circuit},
 	{"Enable",   Enable},
 	{"Disable",  Disable},
 	{"Reset",    Reset},
@@ -318,7 +319,7 @@ TokenDict SignallingEvent::s_types[] = {
 	};
 
 SignallingEvent::SignallingEvent(Type type, SignallingMessage* message, SignallingCall* call)
-    : m_type(type), m_message(0), m_call(0), m_controller(0)
+    : m_type(type), m_message(0), m_call(0), m_controller(0), m_cicEvent(0)
 {
     if (call && call->ref()) {
 	m_call = call;
@@ -329,10 +330,20 @@ SignallingEvent::SignallingEvent(Type type, SignallingMessage* message, Signalli
 }
 
 SignallingEvent::SignallingEvent(Type type, SignallingMessage* message, SignallingCallControl* controller)
-    : m_type(type), m_message(0), m_call(0), m_controller(controller)
+    : m_type(type), m_message(0), m_call(0), m_controller(controller), m_cicEvent(0)
 {
     if (message && message->ref())
 	m_message = message;
+}
+
+// Constructor for a signalling circuit related event
+SignallingEvent::SignallingEvent(SignallingCircuitEvent* event, SignallingCall* call)
+    : m_type(Circuit), m_message(0), m_call(0), m_controller(0), m_cicEvent(event)
+{
+    if (call && call->ref()) {
+	m_call = call;
+	m_controller = call->controller();
+    }
 }
 
 SignallingEvent::~SignallingEvent()
@@ -344,6 +355,7 @@ SignallingEvent::~SignallingEvent()
 	m_call->eventTerminated(this);
 	m_call->deref();
     }
+    TelEngine::destruct(m_cicEvent);
 }
 
 bool SignallingEvent::sendEvent()
@@ -375,6 +387,14 @@ SignallingCircuitEvent::~SignallingCircuitEvent()
 	m_circuit->deref();
     }
     XDebug(DebugAll,"SignallingCircuitEvent::~SignallingCircuitEvent() [%p]",this);
+}
+
+// Send this event through the circuit. Release (delete) the event on success
+bool SignallingCircuitEvent::sendEvent()
+{
+    bool ok = m_circuit && m_circuit->sendEvent(type(),this);
+    delete this;
+    return ok;
 }
 
 

@@ -1650,7 +1650,8 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 	if (cicEvent) {
 	    if (isup())
 		m_lastEvent = isup()->processCircuitEvent(*cicEvent,this);
-	    TelEngine::destruct(cicEvent);
+	    if (!(m_lastEvent && m_lastEvent->cicEvent()))
+		TelEngine::destruct(cicEvent);
 	}
     }
     if (m_lastEvent)
@@ -2922,6 +2923,7 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
 SignallingEvent* SS7ISUP::processCircuitEvent(SignallingCircuitEvent& event,
 	SignallingCall* call)
 {
+    SignallingEvent* ev = 0;
     switch (event.type()) {
 	case SignallingCircuitEvent::Alarm:
 	case SignallingCircuitEvent::NoAlarm:
@@ -2931,13 +2933,22 @@ SignallingEvent* SS7ISUP::processCircuitEvent(SignallingCircuitEvent& event,
 		event.circuit()->hwLock(block,false,true,true);
 		m_lockNeed = true;
 		unlock();
+		ev = new SignallingEvent(&event,call);
+	    }
+	    break;
+	case SignallingCircuitEvent::Dtmf:
+	    if (event.getValue("tone")) {
+		SignallingMessage* msg = new SignallingMessage(event.c_str());
+		msg->params().addParam("tone",event.getValue("tone"));
+		msg->params().addParam("inband",event.getValue("inband",String::boolText(true)));
+		ev = new SignallingEvent(SignallingEvent::Info,msg,call);
+		TelEngine::destruct(msg);
 	    }
 	    break;
 	default:
-	    Debug(this,DebugStub,"Unhandled circuit event (%u,%s) from call %p",
-		event.type(),event.c_str(),call);
+	    ev = new SignallingEvent(&event,call);
     }
-    return 0;
+    return ev;
 }
 
 // Process call related messages

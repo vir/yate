@@ -92,6 +92,7 @@ private:
     void evAccept(SignallingEvent* event);
     void evAnswer(SignallingEvent* event);
     void evRinging(SignallingEvent* event);
+    void evCircuit(SignallingEvent* event);
     // Update circuit and format in source, optionally in consumer too
     void updateCircuitFormat(SignallingEvent* event, bool consumer);
     // Open or update format source/consumer
@@ -794,6 +795,7 @@ void SigChannel::handleEvent(SignallingEvent* event)
 	case SignallingEvent::Answer:    evAnswer(event);   break;
 	case SignallingEvent::Release:   evRelease(event);  break;
 	case SignallingEvent::Ringing:   evRinging(event);  break;
+	case SignallingEvent::Circuit:   evCircuit(event);  break;
 	default:
 	    DDebug(this,DebugStub,"No handler for event '%s' [%p]",
 		event->name(),this);
@@ -1120,6 +1122,18 @@ void SigChannel::evRinging(SignallingEvent* event)
     Engine::enqueue(msg);
 }
 
+void SigChannel::evCircuit(SignallingEvent* event)
+{
+    SignallingCircuitEvent* ev = event->cicEvent();
+    if (!ev)
+	return;
+    if (ev->type() == SignallingCircuitEvent::Disconnected)
+	hangup("nomedia");
+    else
+	Debug(this,DebugStub,"Unhandled circuit event '%s' type=%d [%p]",
+	    ev->c_str(),ev->type(),this);
+}
+
 void SigChannel::updateCircuitFormat(SignallingEvent* event, bool consumer)
 {
     const char* format = 0;
@@ -1388,7 +1402,7 @@ void SigDriver::handleEvent(SignallingEvent* event)
 	clearTrunk(trunk->name(),false,0);
 	return;
     }
-    if (!event->message()) {
+    if (!event->message() && event->type() != SignallingEvent::Circuit) {
 	Debug(this,DebugGoOn,"Received event (%p,'%s') without message",event,event->name());
 	return;
     }
@@ -1398,7 +1412,9 @@ void SigDriver::handleEvent(SignallingEvent* event)
     unlock();
     if (ch) {
 	ch->handleEvent(event);
-	if (event->type() == SignallingEvent::Release)
+	if (event->type() == SignallingEvent::Release ||
+	    (event->type() == SignallingEvent::Circuit && event->cicEvent() &&
+	    event->cicEvent()->type() == SignallingCircuitEvent::Disconnected))
 	    ch->disconnect();
 	return;
     }

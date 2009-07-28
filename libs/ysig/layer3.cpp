@@ -633,8 +633,11 @@ void SS7MTP3::notify(SS7Layer2* link)
     Debug(this,DebugInfo,"%sLinkset has %u/%u active links [%p]",tmp.null()?"":tmp.c_str(),m_active,m_total,this);
 #endif
     // if operational status changed notify upper layer
-    if (ok != operational())
+    if (ok != operational()) {
+	Debug(this,DebugNote,"Linkset is%s operational [%p]",
+	    (operational() ? "" : " not"),this);
 	SS7Layer3::notify(link ? link->sls() : -1);
+    }
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

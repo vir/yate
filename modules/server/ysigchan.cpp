@@ -1267,6 +1267,10 @@ bool SigDriver::received(Message& msg, int id)
 		    return true;
 	    }
 	    return Driver::received(msg,id);
+	case Control:
+	    if (m_engine && m_engine->control(msg))
+		return true;
+	    return Driver::received(msg,id);
 	case Halt:
 	    clearTrunk();
 	    if (m_engine)
@@ -1557,13 +1561,37 @@ bool SigDriver::commandComplete(Message& msg, const String& partLine,
 		msg.retValue() = params.getValue("completion");
 	}
     }
+    else if (partLine == "control") {
+	if (m_engine) {
+	    NamedList params("");
+	    params.addParam("partword",partWord);
+	    params.addParam("completion",msg.retValue());
+	    if (m_engine->control(params))
+		msg.retValue() = params.getValue("completion");
+	}
+	return false;
+    }
+    else {
+	String tmp = partLine;
+	if (tmp.startSkip("control")) {
+	    if (m_engine) {
+		NamedList params("");
+		params.addParam("component",tmp);
+		params.addParam("partword",partWord);
+		params.addParam("completion",msg.retValue());
+		if (m_engine->control(params))
+		    msg.retValue() = params.getValue("completion");
+	    }
+	    return false;
+	}
+    }
     bool status = partLine.startsWith("status");
     bool drop = !status && partLine.startsWith("drop");
     if (!(status || drop))
 	return Driver::commandComplete(msg,partLine,partWord);
 
     Lock lock(this);
-    // line='status sig': add trunks
+    // line='status sig': add trunks and topmost components
     if (partLine == m_statusCmd) {
 	ObjList* o;
 	m_trunksMutex.lock();

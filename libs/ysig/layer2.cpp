@@ -23,27 +23,34 @@
  */
 
 #include "yatesig.h"
+#include <yatephone.h>
 #include <string.h>
 
 
 using namespace TelEngine;
 
-static TokenDict s_dict_prio[] = {
-	{"regular",  SS7MSU::Regular},
-	{"special",  SS7MSU::Special},
-	{"circuit",  SS7MSU::Circuit},
-	{"facility", SS7MSU::Facility},
-	{0,0}
-	};
+static const TokenDict s_dict_prio[] = {
+    { "regular",  SS7MSU::Regular },
+    { "special",  SS7MSU::Special },
+    { "circuit",  SS7MSU::Circuit },
+    { "facility", SS7MSU::Facility },
+    { 0, 0 }
+};
 
-static TokenDict s_dict_netind[] = {
-	{"international",      SS7MSU::International},
-	{"spareinternational", SS7MSU::SpareInternational},
-	{"national",           SS7MSU::National},
-	{"reservednational",   SS7MSU::ReservedNational},
-	{0,0}
-	};
+static const TokenDict s_dict_netind[] = {
+    { "international",      SS7MSU::International },
+    { "spareinternational", SS7MSU::SpareInternational },
+    { "national",           SS7MSU::National },
+    { "reservednational",   SS7MSU::ReservedNational },
+    { 0, 0 }
+};
 
+static const TokenDict s_dict_control[] = {
+    { "pause",  SS7Layer2::Pause },
+    { "resume", SS7Layer2::Resume },
+    { "align",  SS7Layer2::Align },
+    { 0, 0 }
+};
 
 SS7MSU::SS7MSU(unsigned char sio, const SS7Label label, void* value, unsigned int len)
 {
@@ -181,6 +188,28 @@ const char* SS7Layer2::statusName(unsigned int status, bool brief) const
 bool SS7Layer2::control(Operation oper, NamedList* params)
 {
     return false;
+}
+
+bool SS7Layer2::control(NamedList& params)
+{
+    String* ret = params.getParam("completion");
+    const String* oper = params.getParam("operation");
+    int cmd = oper ? oper->toInteger(s_dict_control,-1) : -1;
+    if (ret) {
+	if (oper && (cmd < 0))
+	    return false;
+	const char* cmp = params.getValue("component");
+	String part = params.getValue("partword");
+	if (cmp) {
+	    if (toString() != cmp)
+		return false;
+	    for (const TokenDict* d = s_dict_control; d->token; d++)
+		Module::itemComplete(*ret,d->token,part);
+	    return true;
+	}
+	return Module::itemComplete(*ret,toString(),part);
+    }
+    return (cmd >= 0) && control((Operation)cmd,&params);
 }
 
 ObjList* SS7Layer2::recoverMSU()

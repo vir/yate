@@ -4137,6 +4137,13 @@ public:
      */
     virtual bool control(Operation oper, NamedList* params = 0);
 
+    /**
+     * Query or modify layer's settings or operational parameters
+     * @param params The list of parameters to query or change
+     * @return True if the control operation was executed
+     */
+    virtual bool control(NamedList& params);
+
 protected:
     /**
      * Constructor
@@ -4780,7 +4787,7 @@ protected:
 
 private:
     virtual bool control(NamedList& params)
-	{ return SignallingDumpable::control(params,this); }
+	{ return SignallingDumpable::control(params,this) || SS7Layer2::control(params); }
     void unqueueAck(unsigned char bsn);
     bool txPacket(const DataBlock& packet, bool repeat, SignallingInterface::PacketType type = SignallingInterface::Unknown);
     void setLocalStatus(unsigned int status);

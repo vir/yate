@@ -1459,16 +1459,13 @@ void MGCPCircuit::processDelete(MGCPMessage* mm, const String& error)
 	case 901: // Endpoint taken out of service
 	case 904: // Manual intervention
 	    SignallingCircuit::status(Disabled);
-	    break;
-	case 900: // Malfunction
-	case 902: // Loss of connectivity
-	case 905: // Facility failure
-	    SignallingCircuit::status(Missing);
-	    break;
+	    enqueueEvent(SignallingCircuitEvent::Alarm,error);
+	    return;
 	default:
-	    SignallingCircuit::status(Idle);
+	    SignallingCircuit::status(
+		SignallingCircuit::status() >= Reserved ? Reserved : Idle);
     }
-    enqueueEvent(SignallingCircuitEvent::Alarm,error);
+    enqueueEvent(SignallingCircuitEvent::Disconnected,error);
 }
 
 // Enqueue an event detected by this circuit

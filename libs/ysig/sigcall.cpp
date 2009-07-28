@@ -187,8 +187,7 @@ SignallingEvent* SignallingCallControl::getEvent(const Time& when)
 	    SignallingCircuitEvent* ev = cic->getEvent(when);
 	    if (!ev)
 		continue;
-	    SignallingEvent* event = processCircuitEvent(*ev);
-	    TelEngine::destruct(ev);
+	    SignallingEvent* event = processCircuitEvent(ev);
 	    if (event)
 		return event;
 	}
@@ -337,9 +336,10 @@ SignallingEvent::SignallingEvent(Type type, SignallingMessage* message, Signalli
 }
 
 // Constructor for a signalling circuit related event
-SignallingEvent::SignallingEvent(SignallingCircuitEvent* event, SignallingCall* call)
+SignallingEvent::SignallingEvent(SignallingCircuitEvent*& event, SignallingCall* call)
     : m_type(Circuit), m_message(0), m_call(0), m_controller(0), m_cicEvent(event)
 {
+    event = 0;
     if (call && call->ref()) {
 	m_call = call;
 	m_controller = call->controller();

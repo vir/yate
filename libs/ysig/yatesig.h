@@ -1027,13 +1027,13 @@ protected:
 
     /**
      * Process an event received from a non-reserved circuit
-     * @param event The event
+     * @param event The event, will be consumed and zeroed
      * @param call Optional signalling call whose circuit generated the event
      * @return Signalling event pointer or 0
      */
-    virtual SignallingEvent* processCircuitEvent(SignallingCircuitEvent& event,
+    virtual SignallingEvent* processCircuitEvent(SignallingCircuitEvent*& event,
 	SignallingCall* call = 0)
-	{ return 0; }
+	{ TelEngine::destruct(event); return 0; }
 
     /**
      * Clear call list
@@ -1247,10 +1247,10 @@ public:
 
     /**
      * Constructor for a signalling circuit related event
-     * @param event The event signaled by the circuit
+     * @param event The event signaled by the circuit, will be consumed and zeroed
      * @param call Call this event refers to
      */
-    SignallingEvent(SignallingCircuitEvent* event, SignallingCall* call);
+    SignallingEvent(SignallingCircuitEvent*& event, SignallingCall* call);
 
     /**
      * Destructor, dereferences any resources, notify the signalling call of termination
@@ -5829,11 +5829,11 @@ protected:
 
     /**
      * Process an event received from a non-reserved circuit
-     * @param event The event
+     * @param event The event, will be consumed and zeroed
      * @param call Optional signalling call whose circuit generated the event
      * @return Signalling event pointer or 0
      */
-    virtual SignallingEvent* processCircuitEvent(SignallingCircuitEvent& event,
+    virtual SignallingEvent* processCircuitEvent(SignallingCircuitEvent*& event,
 	SignallingCall* call = 0);
 
     /**

@@ -1649,9 +1649,8 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 	SignallingCircuitEvent* cicEvent = m_circuit->getEvent(when);
 	if (cicEvent) {
 	    if (isup())
-		m_lastEvent = isup()->processCircuitEvent(*cicEvent,this);
-	    if (!(m_lastEvent && m_lastEvent->cicEvent()))
-		TelEngine::destruct(cicEvent);
+		m_lastEvent = isup()->processCircuitEvent(cicEvent,this);
+	    TelEngine::destruct(cicEvent);
 	}
     }
     if (m_lastEvent)
@@ -2920,34 +2919,37 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
 }
 
 // Process an event received from a non-reserved circuit
-SignallingEvent* SS7ISUP::processCircuitEvent(SignallingCircuitEvent& event,
-	SignallingCall* call)
+SignallingEvent* SS7ISUP::processCircuitEvent(SignallingCircuitEvent*& event,
+    SignallingCall* call)
 {
+    if (!event)
+	return 0;
     SignallingEvent* ev = 0;
-    switch (event.type()) {
+    switch (event->type()) {
 	case SignallingCircuitEvent::Alarm:
 	case SignallingCircuitEvent::NoAlarm:
-	    if (event.circuit()) {
+	    if (event->circuit()) {
 		lock();
-		bool block = (event.type() == SignallingCircuitEvent::Alarm);
-		event.circuit()->hwLock(block,false,true,true);
+		bool block = (event->type() == SignallingCircuitEvent::Alarm);
+		event->circuit()->hwLock(block,false,true,true);
 		m_lockNeed = true;
 		unlock();
-		ev = new SignallingEvent(&event,call);
+		ev = new SignallingEvent(event,call);
 	    }
 	    break;
 	case SignallingCircuitEvent::Dtmf:
-	    if (event.getValue("tone")) {
-		SignallingMessage* msg = new SignallingMessage(event.c_str());
-		msg->params().addParam("tone",event.getValue("tone"));
-		msg->params().addParam("inband",event.getValue("inband",String::boolText(true)));
+	    if (event->getValue("tone")) {
+		SignallingMessage* msg = new SignallingMessage(event->c_str());
+		msg->params().addParam("tone",event->getValue("tone"));
+		msg->params().addParam("inband",event->getValue("inband",String::boolText(true)));
 		ev = new SignallingEvent(SignallingEvent::Info,msg,call);
 		TelEngine::destruct(msg);
 	    }
 	    break;
 	default:
-	    ev = new SignallingEvent(&event,call);
+	    ev = new SignallingEvent(event,call);
     }
+    TelEngine::destruct(event);
     return ev;
 }
 

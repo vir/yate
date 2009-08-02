@@ -22,7 +22,6 @@
 
 
 #include "yatecbase.h"
-#include "yateversn.h"
 
 #include <stdio.h>
 
@@ -847,7 +846,10 @@ void Client::loadUI(const char* file, bool init)
 	    if (logic->initializedClient())
 		break;
 	}
-	setStatus(Engine::config().getValue("client","greeting","Yate " YATE_VERSION " - " YATE_STATUS YATE_RELEASE));
+	String greeting = Engine::config().getValue("client","greeting","Yate ${version} - ${release}");
+	Engine::runParams().replaceParams(greeting);
+	if (greeting)
+	    setStatus(greeting);
 	m_initialized = true;
     }
     // Sanity check: at least one window should be visible

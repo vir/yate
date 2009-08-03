@@ -197,15 +197,17 @@ bool JBSocket::recv(char* buffer, unsigned int& len)
 
     int read = m_socket->readData(buffer,len);
     if (read != Socket::socketError()) {
+	if (!read)
+	    Debug(m_engine,DebugInfo,"Stream EOF [%p]",this);
 #ifdef XDEBUG
-	if (read) {
+	else {
 	    String s(buffer,read);
-	    XDebug(m_engine,DebugAll,"Stream recv [%p]\r\n%s",
+	    Debug(m_engine,DebugAll,"Stream recv [%p]\r\n%s",
 		m_stream,s.c_str());
 	}
 #endif
 	len = read;
-	return true;
+	return (len != 0);
     }
 
     len = 0;

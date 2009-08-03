@@ -253,14 +253,14 @@ int SslSocket::sslError(int retcode)
 	    case SSL_ERROR_WANT_CONNECT:
 	    case SSL_ERROR_WANT_ACCEPT:
 		m_error = EAGAIN;
-		retcode = 0;
+		retcode = socketError();
 		break;
 	    case SSL_ERROR_SYSCALL:
 		copyError();
 		break;
 	    default:
 		m_error = EINVAL;
-		retcode = -1;
+		retcode = socketError();
 		break;
 	}
     }

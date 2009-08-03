@@ -70,6 +70,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				LinkIncremental="1"
+				GenerateDebugInformation="true"
 			/>
 			<Tool
 				Name="VCALinkTool"

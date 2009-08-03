@@ -71,6 +71,7 @@
 				Name="VCLinkerTool"
 				OutputFile=".\Debug/Libysig.dll"
 				LinkIncremental="1"
+				GenerateDebugInformation="true"
 			/>
 			<Tool
 				Name="VCALinkTool"

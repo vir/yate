@@ -1263,10 +1263,11 @@ bool Socket::canRetry() const
 	return false;
     if (!m_error)
 	return true;
+    return (m_error == EAGAIN) || (m_error == EINTR) ||
 #ifdef _WINDOWS
-    return (m_error == WSAEWOULDBLOCK);
+	(m_error == WSAEWOULDBLOCK);
 #else
-    return (m_error == EAGAIN) || (m_error == EINTR) || (m_error == EWOULDBLOCK);
+	(m_error == EWOULDBLOCK);
 #endif
 }
 

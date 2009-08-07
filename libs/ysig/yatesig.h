@@ -1519,12 +1519,28 @@ public:
 	{ return false; }
 
     /**
+     * Set circuit data from a list of parameters
+     * @param params Parameter list to set in the circuit
+     * @return True if all parameters were succesfully set
+     */
+    virtual bool setParams(const NamedList& params);
+
+    /**
      * Get circuit parameter
      * @param param The parameter to get
      * @param value The value of the parameter
      * @return True on success. False if the parameter doesn't exist
      */
     virtual bool getParam(const String& param, String& value) const
+	{ return false; }
+
+    /**
+     * Get circuit parameters
+     * @param params Parameter list to fill from the circuit
+     * @param category Optional category used to select desired parameters
+     * @return True if handled
+     */
+    virtual bool getParams(NamedList& params, const String& category = String::empty())
 	{ return false; }
 
     /**

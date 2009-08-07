@@ -449,6 +449,19 @@ SignallingCircuit::~SignallingCircuit()
     XDebug(m_group,DebugAll,"SignallingCircuit::~SignallingCircuit [%p]",this);
 }
 
+// Set circuit data from a list of parameters
+bool SignallingCircuit::setParams(const NamedList& params)
+{
+    bool ok = true;
+    unsigned int n = params.length();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* param = params.getParam(i);
+	if (param && !setParam(param->name(),*param))
+	    ok = false;
+    }
+    return ok;
+}
+
 // Get first event from queue
 SignallingCircuitEvent* SignallingCircuit::getEvent(const Time& when)
 {

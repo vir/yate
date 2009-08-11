@@ -104,7 +104,7 @@ static const CommandInfo s_cmdInfo[] =
 #endif
     { "drop", "{chan|*|all} [reason]", s_dall, "Drops one or all active calls" },
     { "call", "chan target", 0, "Execute an outgoing call" },
-    { "control", "chan operation", 0, "Apply arbitrary control operations to a channel or entity" },
+    { "control", "chan [operation] [param=val] [param=...]", 0, "Apply arbitrary control operations to a channel or entity" },
     { "reload", 0, 0, "Reloads module configuration files" },
     { "restart", "[now]", s_rnow, "Restarts the engine if executing supervised" },
     { "stop", "[exitcode]", 0, "Stops the engine with optionally provided exit code" },
@@ -951,21 +951,24 @@ bool Connection::processLine(const char *line)
     else if (str.startSkip("control"))
     {
 	int pos = str.find(' ');
-	if (pos <= 0) {
+	String id = str.substr(0,pos).trimBlanks();
+	String ctrl = str.substr(pos+1).trimBlanks();
+	if ((pos <= 0) || id.null() || ctrl.null()) {
 	    writeStr(m_machine ? "%%=control:fail=noarg\r\n" : "You must specify channel and operation!\r\n");
 	    return false;
 	}
-	String id = str.substr(0,pos);
-	String ctrl = str.substr(pos+1);
 	Message m("chan.control");
 	m.addParam("targetid",id);
 	m.addParam("component",id);
-	pos = ctrl.find('=');
-	if (pos <= 0)
-	    m.addParam("operation",ctrl);
-	else
-	    m.addParam(ctrl.substr(0,pos),ctrl.substr(pos+1));
-
+	Regexp r("^\\(.* \\)\\?\\([^= ]\\+\\)=\\([^=]*\\)$");
+	while (ctrl) {
+	    if (!ctrl.matches(r)) {
+		m.setParam("operation",ctrl);
+		break;
+	    }
+	    m.setParam(ctrl.matchString(2),ctrl.matchString(3).trimBlanks());
+	    ctrl = ctrl.matchString(1).trimBlanks();
+	}
 	if (Engine::dispatch(m)) {
 	    if (m_machine)
 		str = "%%=control:success:" + id + ":" + m.retValue() + "\r\n";

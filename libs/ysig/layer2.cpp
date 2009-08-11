@@ -322,6 +322,24 @@ bool SS7MTP2::initialize(const NamedList* config)
 
 bool SS7MTP2::control(Operation oper, NamedList* params)
 {
+    if (params) {
+	lock();
+	m_fillLink = params->getBoolValue("filllink",m_fillLink);
+	// The following are for test purposes
+	if (params->getBoolValue("toggle-bib"))
+	    m_bib = !m_bib;
+	if (params->getBoolValue("toggle-fib"))
+	    m_fib = !m_fib;
+	int tmp = params->getIntValue("change-fsn");
+	if (tmp)
+	    m_fsn = (m_fsn + tmp) & 0x7f;
+	unlock();
+	tmp = params->getIntValue("send-lssu",-1);
+	if (tmp >= 0)
+	    transmitLSSU(tmp);
+	if (params->getBoolValue("send-fisu"))
+	    transmitFISU();
+    }
     switch (oper) {
 	case Pause:
 	    m_status = OutOfService;
@@ -415,12 +433,18 @@ void SS7MTP2::timerTick(const Time& when)
 	if (resend) {
 	    int c = 0;
 	    lock();
+	    m_fib = m_lastBib;
 	    ObjList* l = m_queue.skipNull();
 	    for (; l; l = l->skipNext()) {
 		DataBlock* packet = static_cast<DataBlock*>(l->get());
 		unsigned char* buf = (unsigned char*)packet->data();
 		// update the BSN/BIB in packet
 		buf[0] = m_bib ? m_bsn | 0x80 : m_bsn;
+		// also adjust the FIB but not FSN
+		if (m_fib)
+		    buf[1] |= 0x80;
+		else
+		    buf[1] &= 0x7f;
 		Debug(this,DebugInfo,"Resending packet %p with FSN=%u [%p]",
 		    packet,buf[1] & 0x7f,this);
 		txPacket(*packet,false,SignallingInterface::SS7Msu);
@@ -435,8 +459,8 @@ void SS7MTP2::timerTick(const Time& when)
 	    unlock();
 	}
     }
-    else {
-	if (tout && (m_lStatus == OutOfService)) {
+    else if (tout) {
+	if (m_lStatus == OutOfService) {
 	    switch (m_status) {
 		case NormalAlignment:
 		case EmergencyAlignment:
@@ -446,6 +470,8 @@ void SS7MTP2::timerTick(const Time& when)
 		    setLocalStatus(m_status);
 	    }
 	}
+	else if (m_lStatus == OutOfAlignment)
+	    Debug(this,DebugMild,"Initial alignment timed out, retrying");
     }
     if (when >= m_fillTime) {
 	if (operational())
@@ -695,12 +721,7 @@ void SS7MTP2::processLSSU(unsigned int status)
     status &= 0x07;
     XDebug(this,DebugAll,"Process LSSU with status %s (L:%s R:%s)",
 	statusName(status,true),statusName(m_lStatus,true),statusName(m_rStatus,true));
-    bool unaligned = true;
-    switch (m_rStatus) {
-	case NormalAlignment:
-	case EmergencyAlignment:
-	    unaligned = false;
-    }
+    bool unaligned = !aligned();
     setRemoteStatus(status);
     if (status == Busy) {
 	if (unaligned)
@@ -709,7 +730,7 @@ void SS7MTP2::processLSSU(unsigned int status)
 	    m_congestion = true;
 	return;
     }
-    // cancel any timer except aborted alignment
+    // cancel any timer except aborted or initial alignment
     switch (status) {
 	case OutOfAlignment:
 	case NormalAlignment:
@@ -720,7 +741,7 @@ void SS7MTP2::processLSSU(unsigned int status)
 	default:
 	    if (!m_interval)
 		abortAlignment();
-	    else if (m_lStatus != OutOfService)
+	    else if (m_lStatus != OutOfService && m_lStatus != OutOfAlignment)
 		m_interval = 0;
     }
 }
@@ -775,20 +796,23 @@ void SS7MTP2::startAlignment(bool emergency)
     if (q)
 	Debug(this,DebugWarn,"Starting alignment with %u queued MSUs! [%p]",q,this);
     else
-	Debug(this,DebugInfo,"Starting %s alignment [%p]",emergency?"emergency":"normal",this);
+	Debug(this,DebugInfo,"Starting %s alignment [%p]",
+	    (emergency ? "emergency" : "normal"),this);
     m_status = emergency ? EmergencyAlignment : NormalAlignment;
-    m_abort = m_resend = m_interval = 0;
+    m_abort = m_resend = 0;
     setLocalStatus(OutOfAlignment);
+    m_interval = Time::now() + 5000000;
     m_fsn = 127;
     m_fib = true;
     unlock();
     transmitLSSU();
+    SS7Layer2::notify();
 }
 
 void SS7MTP2::abortAlignment()
 {
     lock();
-    DDebug(this,DebugNote,"Aborting alignment");
+    DDebug(this,DebugNote,"Aborting alignment [%p]",this);
     setLocalStatus(OutOfService);
     m_interval = Time::now() + 1000000;
     m_abort = m_resend = 0;
@@ -802,11 +826,7 @@ void SS7MTP2::abortAlignment()
 
 bool SS7MTP2::startProving()
 {
-    if (m_interval)
-	return false;
-    if ((m_status != NormalAlignment) && (m_status != EmergencyAlignment))
-	return false;
-    if ((m_rStatus != NormalAlignment) && (m_rStatus != EmergencyAlignment))
+    if (!aligned())
 	return false;
     lock();
     bool emg = (m_rStatus == EmergencyAlignment);

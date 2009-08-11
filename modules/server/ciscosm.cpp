@@ -24,8 +24,8 @@
 
 #include <yatephone.h>
 #include <yatesig.h>
+#include <stdlib.h>
 #include <string.h>
-//#include <sys/socket.h>
 
 #define MAX_BUF_SIZE  48500
 
@@ -184,8 +184,11 @@ private:
     SignallingTimer m_retransTimer;                        // Retransmission timer
     SignallingTimer m_synTimer;                            // Syn retransmission timer
     // Flags
+    int m_version;                                         // RUDP version, negative to autodetect
     bool m_haveChecksum;                                   // Flag that indicate if we have checksum or not
     bool m_sendSyn;                                        // Flag that indicate if we should send syn segment or wait for it
+    // Connection
+    u_int32_t m_connId;                                    // Connection identifier
     // Counters
     u_int8_t m_retransCounter;                             // The maximum number of retransmissions
     u_int8_t m_maxCumAck;                                  // The maximum number of segments received without being confirmed
@@ -456,7 +459,6 @@ static CiscoSMModule plugin;
 typedef GenPointer<SessionUser> UserPointer;
 YSIGFACTORY2(SLT);
 
-
 /**
     Class SltThread
 */
@@ -522,7 +524,9 @@ const TokenDict RudpSocket::s_RudpStates[] = {
 RudpSocket::RudpSocket(SessionManager* sm)
     : Mutex(true,"RudpSocket"),
       m_sm(sm), m_thread(0), m_socket(0), m_sequence(0), m_ackNum(0), m_lastAck(0), m_lastSend(0), m_retTStartSeq(0),
-      m_syn(1000), m_cumAckTimer(0), m_nullTimer(0), m_retransTimer(0), m_synTimer(0), m_haveChecksum(false), m_sendSyn(false),
+      m_syn(1000), m_cumAckTimer(0), m_nullTimer(0), m_retransTimer(0), m_synTimer(0),
+      m_version(-1), m_haveChecksum(false), m_sendSyn(false),
+      m_connId(0x208000),
       m_retransCounter(0), m_maxCumAck(0), m_wrongChecksum(0), m_state(RudpDown)
 {
 }
@@ -554,7 +558,7 @@ void RudpSocket::changeState(RudpState newState)
 // Initialize Parameters ,initialize socket and start thread
 bool RudpSocket::initialize(const NamedList& params)
 {
-    m_sequence = params.getIntValue("rudp_sequence",0);
+    m_sequence = params.getIntValue("rudp_sequence",0xff & ::random());
     if (!Modulo256::between(m_sequence,0,255)) {
 	Debug(m_sm,DebugNote,"Rudp Sequence value out of bounds set to 0");
 	m_sequence = 0;
@@ -565,6 +569,7 @@ bool RudpSocket::initialize(const NamedList& params)
     m_synTimer.interval(params,"rudp_syntimer",900,1000,false);
     m_retransCounter = params.getIntValue("rudp_maxretrans",2);
     m_maxCumAck = params.getIntValue("rudp_maxcumulative",3);
+    m_version = params.getIntValue("rudp_version",-1);
     m_haveChecksum = params.getBoolValue("rudp_checksum",false);
     m_sendSyn = params.getBoolValue("rudp_sendsyn",false);
     if (!initSocket(params)) {
@@ -709,7 +714,6 @@ void RudpSocket::retransData()
     }
 }
 
-
 void RudpSocket::reset()
 {
     m_sequence = m_ackNum = m_lastAck = m_lastSend = m_retTStartSeq = 0;
@@ -764,11 +768,26 @@ void RudpSocket::sendNull()
     keepData(data,m_sequence);
 }
 
+// helper function to store a 16 bit in big endian format
+static void store16(u_int8_t* dest, u_int16_t val)
+{
+    dest[0] = (u_int8_t)(0xff & (val >> 8));
+    dest[1] = (u_int8_t)(0xff & val);
+}
+
+// helper function to store a 32 bit in big endian format
+static void store32(u_int8_t* dest, u_int32_t val)
+{
+    store16(dest,val >> 16);
+    store16(dest+2,val & 0xffff);
+}
 
 void RudpSocket::sendSyn(bool recvSyn)
 {
-    u_int8_t buf[12];
-    for (int i = 0;i < 12;i ++)
+    if (m_version < 0)
+	return;
+    u_int8_t buf[30];
+    for (unsigned int i = 0; i < sizeof(buf); i++)
 	buf[i] = 0;
     if (!recvSyn) {
 	m_synTimer.start();
@@ -780,13 +799,33 @@ void RudpSocket::sendSyn(bool recvSyn)
 	buf[0] = 0xc0;
 	buf[3] = m_ackNum;
     }
-    m_haveChecksum ? buf[1] = 12 : buf[1] = 8;
     buf[2] = m_sequence;
     m_syn = m_sequence;
-    buf[4] = 0;
-    buf[5] = 0x20;
-    buf[6] = 0x80;
-    buf[7] = 0;
+    switch (m_version) {
+	case 0:
+	    m_haveChecksum ? buf[1] = 12 : buf[1] = 8;
+	    store32(buf+4,m_connId);
+	    break;
+	case 1:
+	    buf[1] = 30;
+	    store16(buf+8,0xe447); // ???
+	    store16(buf+10,0xce0c); // ???
+	    store32(buf+12,m_connId);
+	    store16(buf+16,0x0180); // MSS?
+	    store16(buf+18,m_retransTimer.interval());
+	    store16(buf+20,m_cumAckTimer.interval());
+	    store16(buf+22,m_nullTimer.interval());
+	    store16(buf+24,2000); // Transf. state timeout?
+	    buf[26] = m_retransCounter;
+	    buf[27] = m_maxCumAck;
+	    buf[28] = 0x03; // Max out of seq?
+	    buf[29] = 0x05; // Max auto reset?
+	    break;
+	default:
+	    Debug(m_sm,DebugWarn,"Unhandled RUDP version %d",m_version);
+	    m_version = -1;
+	    return;
+    }
     DataBlock data;
     data.assign((void*)buf,buf[1]);
     if (m_haveChecksum)
@@ -833,17 +872,15 @@ bool RudpSocket::readData()
 #ifdef XDEBUG
     String seen;
     seen.hexify(packet.data(),packet.length(),' ');
-    Debug("RudpSocket",DebugInfo,"Reading data: %s length returned = %d",seen.c_str(), r);
+    Debug(m_sm,DebugInfo,"Reading data: %s length returned = %d",seen.c_str(), r);
 #endif
     u_int8_t flag = packet.at(0);
     if (m_state == RudpDown && !haveSyn((u_int8_t)flag))
 	return false;
     if (haveSyn((u_int8_t)flag) && m_state == RudpUp)
 	return false;
-    if (m_state == RudpWait && !haveAck((u_int8_t)flag))
-	return false;
     if (m_haveChecksum && !checkChecksum(packet)) {
-	DDebug(m_sm,DebugNote,"Wrong checksum received");
+	DDebug(m_sm,DebugMild,"Wrong checksum received");
 	return false;
     }
     if (m_nullTimer.started())
@@ -867,7 +904,7 @@ bool RudpSocket::sendData(const DataBlock& msg)
 	int msgLen = msg.length();
 	int len = m_socket->send(msg.data(),msgLen);
 	if (len != msgLen) {
-	    Debug("RudpSocket",DebugAll,"Error sending data, message not sent: %s ",strerror(m_socket->error()));
+	    Debug(m_sm,DebugAll,"Error sending data, message not sent: %s ",strerror(m_socket->error()));
 	    return false;
 	}
 	else {
@@ -877,7 +914,7 @@ bool RudpSocket::sendData(const DataBlock& msg)
 #ifdef XDEBUG
 	    String seen;
 	    seen.hexify(msg.data(),msg.length(),' ');
-	    XDebug("RudpSocket",DebugInfo,"Sending data: %s length returned = %d",seen.c_str(), msg.length());
+	    XDebug(m_sm,DebugInfo,"Sending data: %s length returned = %d",seen.c_str(), msg.length());
 #endif
 	    return true;
 	}
@@ -946,7 +983,37 @@ void RudpSocket::recvMsg(DataBlock& packet)
 
 bool RudpSocket::handleSyn(DataBlock& data, bool ack)
 {
+    DDebug(m_sm,DebugInfo,"Handling SYN%s with length %u",
+	(ack ? "-ACK" : ""),data.length());
+    if (m_version < 0) {
+	switch (data.length()) {
+	    case 12:
+		m_haveChecksum = true;
+		// fall through
+	    case 8:
+		m_version = 0;
+		break;
+	    case 30:
+		m_version = 1;
+		m_haveChecksum = true;
+		break;
+	    default:
+		Debug(m_sm,DebugWarn,"Cannot guess RUDP version from SYN length %u",
+		    data.length());
+		return false;
+	}
+	Debug(m_sm,DebugNote,"Guessed RUDP version %d%s from SYN length %u",
+	    m_version,(m_haveChecksum ? " (CKSUM)" : ""),data.length());
+    }
     m_ackNum = data.at(2);
+    if ((m_version == 1) && (data.length() >= 30)) {
+	m_connId = (data.at(12) << 24) | (data.at(13) << 16) | (data.at(14) << 8) | data.at(15);
+	m_retransTimer.interval((data.at(18) << 8) | data.at(19));
+	m_cumAckTimer.interval((data.at(20) << 8) | data.at(21));
+	m_nullTimer.interval((data.at(22) << 8) | data.at(23));
+	m_retransCounter = data.at(26);
+	m_maxCumAck = data.at(27);
+    }
     if (ack) {
 	checkAck(data);
 	sendAck();
@@ -1072,7 +1139,7 @@ u_int16_t RudpSocket::checksum(u_int16_t len, const u_int8_t* buff)
 	sum += (((u_int16_t)buff[i]) << 8) + ((i+1 < len) ? buff[i+1] : 0);
     while (sum >> 16)
 	sum = (sum & 0xFFFF) + (sum >> 16);
-    return ~sum;
+    return (m_version == 1) ? sum : ~sum;
 }
 
 bool RudpSocket::checkChecksum(DataBlock& data)
@@ -1101,14 +1168,17 @@ void RudpSocket::appendChecksum(DataBlock& data, bool recalculate)
     if (!buf)
 	return;
     rudpLen = buf[1];
+    u_int8_t* cks = buf + (rudpLen - 4);
+    if (haveSyn(buf[0]) && (m_version == 1))
+	cks = buf+4;
     if (recalculate)
-	buf[rudpLen - 4] = buf[rudpLen - 3] = 0;
+	cks[0] = cks[1] = 0;
     if (haveChecksum(buf[0]))
 	sum = checksum(dataLen,buf);
     else
 	sum = checksum(rudpLen,buf);
-    buf[rudpLen - 4] = (u_int8_t)(sum >> 8);
-    buf[rudpLen - 3] = (u_int8_t)(sum & 0xff);
+    cks[0] = (u_int8_t)(sum >> 8);
+    cks[1] = (u_int8_t)(sum & 0xff);
 }
 
 /**

@@ -229,7 +229,7 @@ bool SS7Layer3::unavailable(const SS7MSU& msu, const SS7Label& label, int sls, u
 	return false;
     d[0] = SS7MsgSNM::UPU;
     label.dpc().store(label.type(),d+1);
-    d[llen-1] = msu.getSIF() | ((cause & 0x0f) << 4);
+    d[llen+1] = msu.getSIF() | ((cause & 0x0f) << 4);
     return transmitMSU(answer,lbl,sls) >= 0;
 }
 

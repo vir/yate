@@ -168,10 +168,10 @@ public:
 	{ return m_lCrypto; }
     inline bool securable() const
 	{ return m_securable; }
-    inline bool sameAs(const NetMedia* other) const
+    inline bool sameAs(const NetMedia* other, bool ignorePort = false) const
 	{ return other && (other->formats() == m_formats) &&
 	  (other->transport() == m_transport) &&
-	  (other->remotePort() == m_rPort); }
+	  (ignorePort || (other->remotePort() == m_rPort)); }
     const char* fmtList() const;
     bool update(const char* formats, int rport = -1, int lport = -1);
     void update(const Message& msg, bool pickFormat);
@@ -655,6 +655,7 @@ static bool s_forward_sdp = false;
 static bool s_start_rtp = false;
 static bool s_ack_required = true;
 static bool s_1xx_formats = true;
+static bool s_ignore_port = false;
 static bool s_auth_register = true;
 static bool s_reg_async = true;
 static bool s_multi_ringing = false;
@@ -2585,7 +2586,7 @@ void YateSIPConnection::setMedia(ObjList* media)
 	for (; l; l = l->skipNext()) {
 	    NetMedia* m = static_cast<NetMedia*>(l->get());
 	    // preserve data endpoints if media didn't change
-	    if (m->sameAs(static_cast<NetMedia*>((*media)[*m])))
+	    if (m->sameAs(static_cast<NetMedia*>((*media)[*m]),s_ignore_port))
 		continue;
 	    clearEndpoint(*m);
 	}
@@ -5207,6 +5208,7 @@ void SIPDriver::initialize()
     s_reg_async = s_cfg.getBoolValue("registrar","async_process",true);
     s_ack_required = !s_cfg.getBoolValue("hacks","ignore_missing_ack",false);
     s_1xx_formats = s_cfg.getBoolValue("hacks","1xx_change_formats",true);
+    s_ignore_port = s_cfg.getBoolValue("hacks","ignore_sdp_port",false);
     initAudioCodecs();
     if (!m_endpoint) {
 	m_endpoint = new YateSIPEndPoint();

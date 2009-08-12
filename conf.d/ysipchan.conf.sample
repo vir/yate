@@ -200,3 +200,7 @@
 
 ; 1xx_change_formats: bool: Provisional messages can change the formats list
 ;1xx_change_formats=yes
+
+; ignore_sdp_port: bool: Ignore SDP changes if only the port is different
+; This allows preserving the local RTP session and port
+;ignore_sdp_port=no

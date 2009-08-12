@@ -102,7 +102,7 @@ public:
 class Disconnector : public Thread
 {
 public:
-    Disconnector(CallEndpoint* chan, const String& id, WaveSource* source, bool disc, const char* reason = 0);
+    Disconnector(CallEndpoint* chan, const String& id, WaveSource* source, WaveConsumer* consumer, bool disc, const char* reason = 0);
     virtual ~Disconnector();
     virtual void run();
     bool init();
@@ -110,6 +110,7 @@ private:
     RefPointer<CallEndpoint> m_chan;
     Message* m_msg;
     WaveSource* m_source;
+    WaveConsumer* m_consumer;
     bool m_disc;
 };
 
@@ -489,7 +490,7 @@ bool WaveSource::notify(WaveSource* source, const char* reason)
     if (m_id || m_autoclose) {
 	DDebug(&__plugin,DebugInfo,"Preparing '%s' disconnector for '%s' chan %p '%s' source=%p [%p]",
 	    reason,m_id.c_str(),m_chan,(m_chan ? m_chan->id().c_str() : ""),source,this);
-	Disconnector *disc = new Disconnector(m_chan,m_id,source,m_autoclose,reason);
+	Disconnector *disc = new Disconnector(m_chan,m_id,source,0,m_autoclose,reason);
 	return disc->init();
     }
     return false;
@@ -670,7 +671,7 @@ unsigned long WaveConsumer::Consume(const DataBlock& data, unsigned long tStamp,
 	    if (m_chan) {
 		DDebug(&__plugin,DebugInfo,"Preparing 'maxlen' disconnector for '%s' chan %p '%s' in consumer [%p]",
 		    m_id.c_str(),m_chan,(m_chan ? m_chan->id().c_str() : ""),this);
-		Disconnector *disc = new Disconnector(m_chan,m_id,0,false,"maxlen");
+		Disconnector *disc = new Disconnector(m_chan,m_id,0,this,false,"maxlen");
 		m_chan = 0;
 		disc->init();
 	    }
@@ -681,9 +682,9 @@ unsigned long WaveConsumer::Consume(const DataBlock& data, unsigned long tStamp,
 }
 
 
-Disconnector::Disconnector(CallEndpoint* chan, const String& id, WaveSource* source, bool disc, const char* reason)
+Disconnector::Disconnector(CallEndpoint* chan, const String& id, WaveSource* source, WaveConsumer* consumer, bool disc, const char* reason)
     : Thread("WaveDisconnector"),
-      m_chan(chan), m_msg(0), m_source(0), m_disc(disc)
+      m_chan(chan), m_msg(0), m_source(0), m_consumer(consumer), m_disc(disc)
 {
     if (id) {
 	Message* m = new Message("chan.notify");
@@ -743,8 +744,19 @@ void Disconnector::run()
 	    m_chan->disconnect("eof");
     }
     else {
-	if (m_msg)
-	    m_chan->setConsumer();
+	if (m_msg) {
+	    if (!m_consumer)
+		return;
+	    DataEndpoint* de = m_chan->getEndpoint();
+	    if (!de)
+		return;
+	    if (de->getConsumer() == m_consumer)
+		de->setConsumer();
+	    if (de->getCallRecord() == m_consumer)
+		de->setCallRecord();
+	    if (de->getPeerRecord() == m_consumer)
+		de->setPeerRecord();
+	}
 	else
 	    m_chan->disconnect();
     }

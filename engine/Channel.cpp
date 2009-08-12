@@ -580,7 +580,7 @@ bool Channel::msgMasquerade(Message& msg)
     if (msg == "call.answered") {
 	Debug(this,DebugInfo,"Masquerading answer operation [%p]",this);
 	m_maxcall = 0;
-	status("answered");
+	m_status = "answered";
     }
     else if (msg == "call.progress") {
 	Debug(this,DebugInfo,"Masquerading progress operation [%p]",this);

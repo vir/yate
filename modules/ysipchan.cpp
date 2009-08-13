@@ -2562,6 +2562,8 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     s->setParam("billid",msg.getValue("billid"));
     s->setParam("username",msg.getValue("username"));
     s->setParam("calledfull",m_uri.getUser());
+    if (m_callid)
+	s->setParam("sip_callid",m_callid);
     Engine::enqueue(s);
 }
 

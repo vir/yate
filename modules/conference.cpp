@@ -433,6 +433,8 @@ bool ConfRoom::setRecording(const NamedList& params)
 	m->setParam("called",params.getValue("called"));
 	m->setParam("billid",params.getValue("billid"));
 	m->setParam("username",params.getValue("username"));
+	m->setParam("maxlen",params.getValue("maxlen"));
+	m->setParam("notify",params.getValue("notify"));
 	m->addParam("room",m_name);
 	if (m_notify)
 	    m->setParam("targetid",m_notify);

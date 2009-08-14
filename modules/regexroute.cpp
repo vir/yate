@@ -33,6 +33,7 @@ namespace { // anonymous
 static Configuration s_cfg;
 static bool s_extended;
 static bool s_insensitive;
+static bool s_prerouteall;
 static Mutex s_mutex(true,"RegexRoute");
 static ObjList s_extra;
 static NamedList s_vars("");
@@ -526,11 +527,11 @@ bool PrerouteHandler::received(Message &msg)
 {
     u_int64_t tmr = Time::now();
     // return immediately if there is already a context
-    if (msg.getValue("context"))
+    if (!s_prerouteall && msg.getValue("context"))
 	return false;
 
     String caller(msg.getValue("caller"));
-    if (caller.null())
+    if (!s_prerouteall && caller.null())
 	return false;
 
     String ret;
@@ -605,6 +606,7 @@ void RegexRoutePlugin::initialize()
     s_cfg.load();
     s_extended = s_cfg.getBoolValue("priorities","extended",false);
     s_insensitive = s_cfg.getBoolValue("priorities","insensitive",false);
+    s_prerouteall = s_cfg.getBoolValue("priorities","prerouteall",false);
     TelEngine::destruct(m_preroute);
     TelEngine::destruct(m_route);
     s_extra.clear();

@@ -66,6 +66,15 @@
 ; route: int: Priority of the routing message handler
 ;route=100
 
+; extended: bool: Use extended regular expressions
+;extended=no
+
+; insensitive: bool: Make the regular expressions case insensitive
+;insensitive=no
+
+; prerouteall: bool: Preroute even calls having a context or with empty caller
+;prerouteall=no
+
 
 [$once]
 ; First-time only global variables initialization.

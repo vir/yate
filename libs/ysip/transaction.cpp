@@ -646,6 +646,7 @@ SIPEvent* SIPTransaction::getServerEvent(int state, int timeout)
 	    if (timeout)
 		break;
 	    setResponse(408);
+	    e = new SIPEvent(m_lastMessage,this);
 	    break;
 	case Retrans:
 	    if (isInvite() && (timeout == 0)) {

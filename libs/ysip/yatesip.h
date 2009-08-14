@@ -622,12 +622,19 @@ public:
     /**
      * Check if a message belongs to this transaction and process it if so
      * @param message A pointer to the message to check, should not be used
-     *  afterwards if this method returned True
+     *  afterwards if this method returned Matched
      * @param branch The branch parameter extracted from first Via header
      * @return Matched if the message was handled by this transaction, in
      *  which case it takes ownership over the message
      */
     virtual Processed processMessage(SIPMessage* message, const String& branch);
+
+    /**
+     * Process a message belonging to this transaction
+     * @param message A pointer to the message to process, the caller must
+     *  make sure it belongs to this transaction
+     */
+    virtual void processMessage(SIPMessage* message);
 
     /**
      * Get an event for this transaction if any is available.

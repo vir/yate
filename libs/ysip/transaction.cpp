@@ -507,11 +507,16 @@ SIPTransaction::Processed SIPTransaction::processMessage(SIPMessage* message, co
 	}
     }
 
+    processMessage(message);
+    return Matched;
+}
+
+void SIPTransaction::processMessage(SIPMessage* message)
+{
     if (isOutgoing())
 	processClientMessage(message,m_state);
     else
 	processServerMessage(message,m_state);
-    return Matched;
 }
 
 void SIPTransaction::processClientMessage(SIPMessage* message, int state)

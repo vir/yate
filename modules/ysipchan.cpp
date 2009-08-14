@@ -1421,6 +1421,7 @@ SIPTransaction* YateSIPEngine::forkInvite(SIPMessage* answer, SIPTransaction* tr
     {
 	Debug(this,DebugNote,"Changing early dialog tag because of forked 2xx");
 	trans->setDialogTag(answer->getParamValue("To","tag"));
+	trans->processMessage(answer);
 	return trans;
     }
     return SIPEngine::forkInvite(answer,trans);

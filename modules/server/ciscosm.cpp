@@ -1626,7 +1626,7 @@ bool SLT::control(Operation oper, NamedList* params)
     switch (oper) {
 	case Pause:
 	    setReqStatus(OutOfService);
-	    sendControllerR(PLD);
+	    sendManagement(Disconnect_R);
 	    return true;
 	case Resume:
 	    if (aligned())

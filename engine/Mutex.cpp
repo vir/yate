@@ -449,8 +449,7 @@ bool SemaphorePrivate::lock(long maxwait)
     }
     if (thr)
 	thr->m_locking = false;
-    if (!rval)
-	deref();
+    deref();
     GlobalMutex::unlock();
     if (warn && !rval)
 	Debug(DebugFail,"Thread '%s' could not lock semaphore '%s' for %lu usec!",
@@ -460,6 +459,8 @@ bool SemaphorePrivate::lock(long maxwait)
 
 bool SemaphorePrivate::unlock()
 {
+    GlobalMutex::lock();
+    ref();
     if (!s_unsafe) {
 #ifdef _WINDOWS
 	::ReleaseSemaphore(m_semaphore,1,NULL);
@@ -469,7 +470,6 @@ bool SemaphorePrivate::unlock()
 	    ::sem_post(&m_semaphore);
 #endif
     }
-    GlobalMutex::lock();
     deref();
     GlobalMutex::unlock();
     return true;

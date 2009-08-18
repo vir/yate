@@ -65,10 +65,12 @@ public:
 	{ return m_calls.count(); }
     inline QueuedCall* findCall(const String& id) const
 	{ return static_cast<QueuedCall*>(m_calls[id]); }
+    inline QueuedCall* findCall(unsigned int index) const
+	{ return static_cast<QueuedCall*>(m_calls[index]); }
     bool addCall(Message& msg);
-    inline bool removeCall(const String& id, const char* reason)
+    inline int removeCall(const String& id, const char* reason)
 	{ return removeCall(findCall(id),reason); }
-    bool removeCall(QueuedCall* call, const char* reason);
+    int removeCall(QueuedCall* call, const char* reason);
     QueuedCall* markCall(const char* mark);
     bool unmarkCall(const String& id);
     void countCalls(unsigned int& marked, unsigned int& unmarked) const;
@@ -113,7 +115,7 @@ protected:
     void onHangup(Message& msg, String id);
     void onQueued(Message& msg, String qname);
     void onPickup(Message& msg, String qname);
-    void onDrop(Message& msg, String qname);
+    bool onDrop(Message& msg, String qname);
 private:
     bool m_init;
 };
@@ -298,10 +300,11 @@ bool CallsQueue::addCall(Message& msg)
 }
 
 // Remove and destroy call from the queue, destroy the queue if it becomes empty
-bool CallsQueue::removeCall(QueuedCall* call, const char* reason)
+int CallsQueue::removeCall(QueuedCall* call, const char* reason)
 {
     if (!call)
-	return false;
+	return -1;
+    int waited = (call->waitingTime() + 500000) / 1000000;
     notify(reason,call);
     int pos = m_detail ? position(call) : -1;
     m_calls.remove(call);
@@ -315,7 +318,7 @@ bool CallsQueue::removeCall(QueuedCall* call, const char* reason)
 		notify("position",c);
 	}
     }
-    return true;
+    return waited;
 }
 
 // Mark a call as being routed to an operator
@@ -340,6 +343,10 @@ bool CallsQueue::unmarkCall(const String& id)
 	return false;
     if (m_single) {
 	removeCall(call,"noanswer");
+	Message* m = new Message("call.drop");
+	m->addParam("id",id);
+	m->addParam("reason","noanswer");
+	Engine::enqueue(m);
 	return false;
     }
     call->setMarked();
@@ -568,7 +575,7 @@ void QueuesModule::onPickup(Message& msg, String qname)
 	if (call) {
 	    id = *call;
 	    String pid = msg.getValue("id");
-	    queue->removeCall(call,"pickup");
+	    String waited(queue->removeCall(call,"pickup"));
 	    // convert message and let it connect to the queued call
 	    msg = "chan.connect";
 	    msg.setParam("targetid",id);
@@ -581,6 +588,7 @@ void QueuesModule::onPickup(Message& msg, String qname)
 	    m = new Message("call.answered");
 	    m->setParam("id",id);
 	    m->setParam("targetid",pid);
+	    m->setParam("queuetime",waited);
 	    Engine::enqueue(m);
 	    return;
 	}
@@ -608,7 +616,11 @@ void QueuesModule::onAnswered(Message& msg, String targetid, String reason)
 	return;
     Debug(this,DebugCall,"Answered call '%s' in queue '%s'",
 	targetid.c_str(),queue->c_str());
-    queue->removeCall(targetid,"answered");
+    String waited(queue->removeCall(targetid,"answered"));
+    Message* m = new Message("call.update");
+    m->addParam("id",targetid);
+    m->addParam("queuetime",waited);
+    Engine::enqueue(m);
 }
 
 // Handle hangups on either caller or operator
@@ -637,10 +649,10 @@ void QueuesModule::onHangup(Message& msg, String id)
 }
 
 // Drop the call from the head of a queue or a call specified by ID
-void QueuesModule::onDrop(Message& msg, String qname)
+bool QueuesModule::onDrop(Message& msg, String qname)
 {
     if (qname.null())
-	return;
+	return false;
     String id;
     int sep = qname.find('/');
     if (sep >= 0) {
@@ -649,6 +661,20 @@ void QueuesModule::onDrop(Message& msg, String qname)
     }
     CallsQueue* queue = findQueue(qname);
     if (queue) {
+	if (id == "*") {
+	    const char* reason = msg.getValue("reason");
+	    for (unsigned int i = 0; ; i++) {
+		QueuedCall* call = queue->findCall(i);
+		if (!call)
+		    break;
+		Message* m = new Message("call.drop");
+		m->addParam("id",*call);
+		if (reason)
+		    m->addParam("reason",reason);
+		Engine::enqueue(m);
+	    }
+	    return true;
+	}
 	QueuedCall* call = id ? queue->findCall(id) : queue->topCall();
 	if (call) {
 	    id = *call;
@@ -657,6 +683,7 @@ void QueuesModule::onDrop(Message& msg, String qname)
 	    msg.setParam("id",id);
 	}
     }
+    return false;
 }
 
 // Command line execute handler
@@ -696,8 +723,7 @@ bool QueuesModule::received(Message& msg, int id)
 	    onHangup(msg,msg.getValue("id"));
 	    break;
 	case Drop:
-	    onDrop(msg,msg.getValue("id"));
-	    break;
+	    return onDrop(msg,msg.getValue("id"));
 	default:
 	    lock.drop();
 	    return Module::received(msg,id);
@@ -752,7 +778,7 @@ void QueuesModule::initialize()
 	return;
     m_init = true;
     setup();
-    int priority = s_cfg.getIntValue("general","priority",50);
+    int priority = s_cfg.getIntValue("general","priority",45);
     installRelay(Execute,s_cfg.getIntValue("priorities","call.execute",priority));
     installRelay(Answered,s_cfg.getIntValue("priorities","call.answered",priority));
     installRelay(Private,"chan.hangup",s_cfg.getIntValue("priorities","chan.hangup",priority));

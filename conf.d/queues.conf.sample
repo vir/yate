@@ -5,7 +5,7 @@
 ;account=
 
 ; priority: int: Default priority of message handlers, 0 to disable them
-;priority=50
+;priority=45
 
 ; rescan: int: Period of polling for available operators, in seconds
 ;rescan=5

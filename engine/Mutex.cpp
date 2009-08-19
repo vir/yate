@@ -80,6 +80,7 @@ private:
     HMUTEX m_mutex;
     int m_refcount;
     volatile unsigned int m_locked;
+    volatile unsigned int m_waiting;
     bool m_recursive;
     const char* m_name;
     const char* m_owner;
@@ -185,7 +186,7 @@ void GlobalMutex::unlock()
 
 
 MutexPrivate::MutexPrivate(bool recursive, const char* name)
-    : m_refcount(1), m_locked(0), m_recursive(recursive),
+    : m_refcount(1), m_locked(0), m_waiting(0), m_recursive(recursive),
       m_name(name), m_owner(0)
 {
     GlobalMutex::lock();
@@ -229,9 +230,9 @@ MutexPrivate::~MutexPrivate()
     ::pthread_mutex_destroy(&m_mutex);
 #endif
     GlobalMutex::unlock();
-    if (m_locked)
-	Debug(DebugFail,"MutexPrivate '%s' owned by '%s' destroyed with %u locks [%p]",
-	    m_name,m_owner,m_locked,this);
+    if (m_locked || m_waiting)
+	Debug(DebugFail,"MutexPrivate '%s' owned by '%s' destroyed with %u locks, %u waiting [%p]",
+	    m_name,m_owner,m_locked,m_waiting,this);
     else if (warn)
 	Debug(DebugGoOn,"MutexPrivate '%s' owned by '%s' unlocked in destructor [%p]",
 	    m_name,m_owner,this);
@@ -247,6 +248,7 @@ bool MutexPrivate::lock(long maxwait)
     }
     GlobalMutex::lock();
     ref();
+    m_waiting++;
     Thread* thr = Thread::current();
     if (thr)
 	thr->m_locking = true;
@@ -294,6 +296,7 @@ bool MutexPrivate::lock(long maxwait)
     GlobalMutex::lock();
     if (thr)
 	thr->m_locking = false;
+    m_waiting--;
     if (rval) {
 	s_locks++;
 	m_locked++;
@@ -308,8 +311,8 @@ bool MutexPrivate::lock(long maxwait)
 	deref();
     GlobalMutex::unlock();
     if (warn && !rval)
-	Debug(DebugFail,"Thread '%s' could not lock mutex '%s' owned by '%s' for %lu usec!",
-	    Thread::currentName(),m_name,m_owner,maxwait);
+	Debug(DebugFail,"Thread '%s' could not lock mutex '%s' owned by '%s' waited by %u others for %lu usec!",
+	    Thread::currentName(),m_name,m_owner,m_waiting,maxwait);
     return rval;
 }
 
@@ -452,8 +455,8 @@ bool SemaphorePrivate::lock(long maxwait)
     deref();
     GlobalMutex::unlock();
     if (warn && !rval)
-	Debug(DebugFail,"Thread '%s' could not lock semaphore '%s' for %lu usec!",
-	    Thread::currentName(),m_name,maxwait);
+	Debug(DebugFail,"Thread '%s' could not lock semaphore '%s' waited by %u others for %lu usec!",
+	    Thread::currentName(),m_name,m_waiting,maxwait);
     return rval;
 }
 

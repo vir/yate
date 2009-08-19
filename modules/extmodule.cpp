@@ -637,21 +637,13 @@ ExtModReceiver* ExtModReceiver::build(const char* script, const char* args,
 				      File* ain, File* aout, ExtModChan* chan)
 {
     ExtModReceiver* recv = new ExtModReceiver(script,args,ain,aout,chan);
-    if (!recv->start()) {
-	recv->unuse();
-	return 0;
-    }
-    return recv;
+    return recv->start() ? recv : 0;
 }
 
 ExtModReceiver* ExtModReceiver::build(const char* name, Stream* io, ExtModChan* chan, int role)
 {
     ExtModReceiver* recv = new ExtModReceiver(name,io,chan,role);
-    if (!recv->start()) {
-	recv->unuse();
-	return 0;
-    }
-    return recv;
+    return recv->start() ? recv : 0;
 }
 
 ExtModReceiver* ExtModReceiver::find(const String& script)
@@ -777,8 +769,11 @@ bool ExtModReceiver::start()
 {
     if (m_pid < 0) {
 	ExtThread *ext = new ExtThread(this);
-	if (!ext->startup())
+	if (!ext->startup()) {
+	    // self destruct here since there is no thread to do it later
+	    unuse();
 	    return false;
+	}
 	while (m_pid < 0)
 	    Thread::yield();
     }

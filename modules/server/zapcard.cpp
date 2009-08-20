@@ -1686,8 +1686,10 @@ bool ZapInterface::transmitPacket(const DataBlock& packet, bool repeat, PacketTy
     hex.hexify(packet.data(),packet.length(),' ');
     Debug(this,DebugAll,"Sending data: %s [%p]",hex.safe(),this);
 #endif
-    *((DataBlock*)&packet) += crc;
-    return m_device.send(packet.data(),packet.length());
+    DataBlock pkt(packet);
+    // zaptel needs the extra space to write the CRC there
+    pkt += crc;
+    return m_device.send(pkt.data(),pkt.length());
 }
 
 // Interface control. Open device and start worker when enabled, cleanup when disabled

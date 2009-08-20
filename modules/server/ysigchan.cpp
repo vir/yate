@@ -55,6 +55,7 @@ public:
     // Outgoing
     SigChannel(const char* caller, const char* called);
     virtual ~SigChannel();
+    bool startRouter();
     bool startCall(Message& msg, String& trunks);
     inline SignallingCall* call() const
         { return m_call; }
@@ -114,6 +115,7 @@ private:
     bool m_hungup;                       // Hang up flag
     String m_reason;                     // Hangup reason
     bool m_inband;                       // True to try to send in-band tones
+    Message* m_route;                    // Prepared call.preroute message
 };
 
 class SigDriver : public Driver
@@ -639,7 +641,8 @@ SigChannel::SigChannel(SignallingEvent* event)
     m_call(event->call()),
     m_trunk(0),
     m_hungup(true),
-    m_inband(false)
+    m_inband(false),
+    m_route(0)
 {
     if (!(m_call && m_call->ref())) {
 	Debug(this,DebugCall,"No signalling call for this incoming call");
@@ -667,6 +670,13 @@ SigChannel::SigChannel(SignallingEvent* event)
 	m->copyParam(msg->params(),"callername");
     // TODO: Add call control parameter ?
     Engine::enqueue(m);
+    // call.preroute message
+    m_route = message("call.preroute",false,true);
+    // Parameters to be copied to call.preroute
+    static String params = "caller,called,callername,format,formats,callernumtype,callernumplan,callerpres,callerscreening,callednumtype,callednumplan,inn,overlapped";
+    plugin.copySigMsgParams(*m_route,event,&params);
+    if (m_route->getBoolValue("overlapped") && !m_route->getValue("called"))
+	m_route->setParam("called","off-hook");
 }
 
 // Construct an unstarted outgoing channel
@@ -678,14 +688,23 @@ SigChannel::SigChannel(const char* caller, const char* called)
     m_trunk(0),
     m_hungup(true),
     m_reason("noconn"),
-    m_inband(false)
+    m_inband(false),
+    m_route(0)
 {
 }
 
 SigChannel::~SigChannel()
 {
+    TelEngine::destruct(m_route);
     hangup();
     setState("destroyed",true,true);
+}
+
+bool SigChannel::startRouter()
+{
+    Message* m = m_route;
+    m_route = 0;
+    return Channel::startRouter(m);
 }
 
 // Start outgoing call by name of a trunk or list of trunks
@@ -1428,14 +1447,7 @@ void SigDriver::handleEvent(SignallingEvent* event)
 	ch = new SigChannel(event);
 	unlock();
 	// Route the call
-	Message* m = ch->message("call.preroute",false,true);
-	// Parameters to be copied to call.preroute
-	static String params = "caller,called,callername,format,formats,callernumtype,callernumplan,callerpres,callerscreening,callednumtype,callednumplan,inn,overlapped";
-	copySigMsgParams(*m,event,&params);
-	if (m->getBoolValue("overlapped") && !m->getValue("called"))
-	    m->setParam("called","off-hook");
-	// TODO: Add call control parameter ?
-	if (!ch->startRouter(m)) {
+	if (!ch->startRouter()) {
 	    ch->hangup("temporary-failure");
 	    TelEngine::destruct(ch);
 	}

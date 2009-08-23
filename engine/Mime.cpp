@@ -372,6 +372,16 @@ MimeBody::~MimeBody()
     DDebug(DebugAll,"MimeBody::~MimeBody() '%s' [%p]",m_type.c_str(),this);
 }
 
+// Find the first (sub)body matching the given type
+MimeBody* MimeBody::getFirst(const String& type) const
+{
+    if (type.null())
+	return 0;
+    if (getType() == type)
+	return const_cast<MimeBody*>(this);
+    return isMultipart() ? (static_cast<const MimeMultipartBody*>(this))->findBody(type) : 0;
+}
+
 // Find an additional header line by its name
 MimeHeaderLine* MimeBody::findHdr(const String& name, const MimeHeaderLine* start) const
 {

@@ -248,14 +248,21 @@ public:
     virtual void* getObject(const String& name) const;
 
     /**
-     * Retrive the MIME type of this body
+     * Retrieve the MIME type of this body
      * @return Name of the MIME type/subtype
      */
     inline const MimeHeaderLine& getType() const
 	{ return m_type; }
 
     /**
-     * Retrive the additional headers of this MIME body (other then Content-Type)
+     * Get the first body that matches a requested type, descends into multiparts
+     * @param type Name of the MIME type to search for
+     * @return Pointer to requested body or NULL if not found
+     */
+    MimeBody* getFirst(const String& type) const;
+
+    /**
+     * Retrieve the additional headers of this MIME body (other then Content-Type)
      * @return The list of header lines of this MIME body
      */
     inline const ObjList& headers() const
@@ -316,14 +323,14 @@ public:
     /**
      * Get a header parameter
      * @param name Parameter's name
-     * @param header Header whose parameter will be retrived.
+     * @param header Header whose parameter will be retrieved.
      *  Set to 0 to use the body's content type header
      * @return Pointer to the desired parameter or 0 if not found
      */
     const NamedString* getParam(const char* name, const char* header = 0) const;
 
     /**
-     * Retrive the binary encoding of this MIME body. Build the body if empty.
+     * Retrieve the binary encoding of this MIME body. Build the body if empty.
      * The body doesn't contain the Content-Type header or the additional headers
      * @return Block of binary data
      */
@@ -591,7 +598,7 @@ public:
     virtual MimeBody* clone() const;
 
     /**
-     * Retrive the lines hold in data
+     * Retrieve the lines hold in data
      * @return List of NamedStrings
      */
     inline const ObjList& lines() const
@@ -606,14 +613,14 @@ public:
 	{ m_lines.append(new NamedString(name,value)); }
 
     /**
-     * Retrive the first line matching a name
+     * Retrieve the first line matching a name
      * @param name Name of the line to search
      * @return First instance of the searched name or NULL if none present
      */
     const NamedString* getLine(const char* name) const;
 
     /**
-     * Retrive the next line of the same type as the current
+     * Retrieve the next line of the same type as the current
      * @param line Current line
      * @return Next instance of same name or NULL if no more
      */
@@ -732,7 +739,7 @@ public:
     virtual MimeBody* clone() const;
 
     /**
-     * Retrive the stored data
+     * Retrieve the stored data
      * @return String holding the data text
      */
     inline const String& text() const
@@ -795,7 +802,7 @@ public:
     virtual MimeBody* clone() const;
 
     /**
-     * Retrive the stored lines of text
+     * Retrieve the stored lines of text
      * @return List of Strings
      */
     inline const ObjList& lines() const

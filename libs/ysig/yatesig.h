@@ -1535,6 +1535,24 @@ public:
 	{ return false; }
 
     /**
+     * Get boolean circuit parameter
+     * @param param The parameter to get
+     * @param defValue The default returned value
+     * @return Value from circuit, devValue if the parameter doesn't exist
+     */
+    virtual bool getBoolParam(const String& param, bool defValue = false) const
+	{ return defValue; }
+
+    /**
+     * Get integer circuit parameter
+     * @param param The parameter to get
+     * @param defValue The default returned value
+     * @return Value from circuit, devValue if the parameter doesn't exist
+     */
+    virtual int getIntParam(const String& param, int defValue = 0) const
+	{ return defValue; }
+
+    /**
      * Get circuit parameters
      * @param params Parameter list to fill from the circuit
      * @param category Optional category used to select desired parameters
@@ -1563,6 +1581,13 @@ public:
      */
     inline const SignallingCircuitGroup* group() const
 	{ return m_group; }
+
+    /**
+     * Get the circuit span this one belongs to - const version
+     * @return Pointer to const circuit span
+     */
+    inline const SignallingCircuitSpan* span() const
+	{ return m_span; }
 
     /**
      * Get the group-local code of this circuit

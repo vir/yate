@@ -24,6 +24,7 @@
 
 #include <yatephone.h>
 #include <yatesip.h>
+#include <yatesdp.h>
 
 #include <string.h>
 
@@ -34,59 +35,6 @@ namespace { // anonymous
 #define EXPIRES_MIN 60
 #define EXPIRES_DEF 600
 #define EXPIRES_MAX 3600
-
-/* Yate Payloads for the AV profile */
-static TokenDict dict_payloads[] = {
-    { "mulaw",         0 },
-    { "alaw",          8 },
-    { "gsm",           3 },
-    { "lpc10",         7 },
-    { "slin",         11 },
-    { "g726",          2 },
-    { "g722",          9 },
-    { "g723",          4 },
-    { "g728",         15 },
-    { "g729",         18 },
-    { "ilbc",         98 },
-    { "ilbc20",       98 },
-    { "ilbc30",       98 },
-    { "amr",          96 },
-    { "amr-o",        96 },
-    { "amr/16000",    99 },
-    { "amr-o/16000",  99 },
-    { "speex",       102 },
-    { "speex/16000", 103 },
-    { "speex/32000", 104 },
-    { "h261",         31 },
-    { "h263",         34 },
-    { "mpv",          32 },
-    {      0,          0 },
-};
-
-/* SDP Payloads for the AV profile */
-static TokenDict dict_rtpmap[] = {
-    { "PCMU/8000",     0 },
-    { "PCMA/8000",     8 },
-    { "GSM/8000",      3 },
-    { "LPC/8000",      7 },
-    { "L16/8000",     11 },
-    { "G726-32/8000",  2 },
-    { "G722/8000",     9 },
-    { "G723/8000",     4 },
-    { "G728/8000",    15 },
-    { "G729/8000",    18 },
-    { "G729A/8000",   18 },
-    { "ILBC/8000",    98 },
-    { "AMR/8000",     96 },
-    { "AMR-WB/16000", 99 },
-    { "SPEEX/8000",  102 },
-    { "SPEEX/16000", 103 },
-    { "SPEEX/32000", 104 },
-    { "H261/90000",   31 },
-    { "H263/90000",   34 },
-    { "MPV/90000",    32 },
-    {           0,     0 },
-};
 
 static TokenDict dict_errors[] = {
     { "incomplete", 484 },
@@ -122,88 +70,6 @@ static TokenDict info_signals[] = {
     { "C", 14 },
     { "D", 15 },
     {  0,   0 },
-};
-
-// Network media description
-class NetMedia : public NamedList
-{
-public:
-    NetMedia(const char* media, const char* transport, const char* formats,
-	int rport = -1, int lport = -1);
-    virtual ~NetMedia();
-    inline bool isAudio() const
-	{ return m_audio; }
-    inline bool isModified() const
-	{ return m_modified; }
-    inline void setModified(bool modified = true)
-	{ m_modified = modified; }
-    inline const String& suffix() const
-	{ return m_suffix; }
-    inline const String& transport() const
-	{ return m_transport; }
-    inline const String& id() const
-	{ return m_id; }
-    inline const String& format() const
-	{ return m_format; }
-    inline const String& formats() const
-	{ return m_formats; }
-    inline const String& remotePort() const
-	{ return m_rPort; }
-    inline const String& localPort() const
-	{ return m_lPort; }
-    inline const String& mappings() const
-	{ return m_mappings; }
-    inline void mappings(const char* newMap)
-	{ if (newMap) m_mappings = newMap; }
-    inline const String& rfc2833() const
-	{ return m_rfc2833; }
-    inline void rfc2833(int payload)
-	{ if (payload >= 0)
-	    m_rfc2833 = payload;
-	  else
-	    m_rfc2833 = String::boolText(false); }
-    inline const String& remoteCrypto() const
-	{ return m_rCrypto; }
-    inline const String& localCrypto() const
-	{ return m_lCrypto; }
-    inline bool securable() const
-	{ return m_securable; }
-    inline bool sameAs(const NetMedia* other, bool ignorePort = false) const
-	{ return other && (other->formats() == m_formats) &&
-	  (other->transport() == m_transport) &&
-	  (ignorePort || (other->remotePort() == m_rPort)); }
-    const char* fmtList() const;
-    bool update(const char* formats, int rport = -1, int lport = -1);
-    void update(const Message& msg, bool pickFormat);
-    void parameter(const char* name, const char* value, bool append);
-    void parameter(NamedString* param, bool append);
-    void crypto(const char* desc, bool remote);
-private:
-    bool m_audio;
-    bool m_modified;
-    bool m_securable;
-    // suffix used for this type
-    String m_suffix;
-    // transport protocol
-    String m_transport;
-    // list of supported format names
-    String m_formats;
-    // format used for sending data
-    String m_format;
-    // id of the local media channel
-    String m_id;
-    // remote media port
-    String m_rPort;
-    // local media port
-    String m_lPort;
-    // mappings of RTP payloads
-    String m_mappings;
-    // payload for telephone/event
-    String m_rfc2833;
-    // remote security descriptor
-    String m_rCrypto;
-    // local security descriptor
-    String m_lCrypto;
 };
 
 class YateUDPParty : public SIPParty
@@ -381,7 +247,7 @@ private:
     RefPointer<SIPTransaction> m_tr;
 };
 
-class YateSIPConnection : public Channel
+class YateSIPConnection : public Channel, public SDPSession
 {
     friend class SipHandler;
     YCLASS(YateSIPConnection,Channel)
@@ -392,11 +258,6 @@ public:
 	Ringing = 2,
 	Established = 3,
 	Cleared = 4,
-    };
-    enum {
-	MediaMissing,
-	MediaStarted,
-	MediaMuted
     };
     enum {
 	ReinviteNone,
@@ -439,14 +300,10 @@ public:
 	{ return m_callid; }
     inline const String& user() const
 	{ return m_user; }
-    inline const String& getHost() const
-	{ return m_host; }
     inline int getPort() const
 	{ return m_port; }
     inline const String& getLine() const
 	{ return m_line; }
-    inline const String& getRtpAddr() const
-	{ return m_externalAddr ? m_externalAddr : m_rtpLocalAddr; }
     inline void referTerminated()
 	{ m_referring = false; }
     inline bool isDialog(const String& dialog, const String& fromTag,
@@ -471,26 +328,19 @@ public:
 	    nl.addParam("callid",tmp);
 	}
 
+protected:
+    virtual Message* buildChanRtp(RefObject* context);
+    MimeSdpBody* createProvisionalSDP(Message& msg);
+
 private:
     virtual void statusParams(String& str);
-    void setMedia(ObjList* media);
     void clearTransaction();
     void detachTransaction2();
     void startPendingUpdate();
     bool processTransaction2(SIPEvent* ev, const SIPMessage* msg, int code);
     SIPMessage* createDlgMsg(const char* method, const char* uri = 0);
     bool emitPRACK(const SIPMessage* msg);
-    bool dispatchRtp(NetMedia* media, const char* addr, bool start, bool pick);
-    MimeSdpBody* createSDP(const char* addr = 0, ObjList* mediaList = 0);
-    MimeSdpBody* createProvisionalSDP(Message& msg);
-    MimeSdpBody* createPasstroughSDP(Message& msg, bool update = true);
-    MimeSdpBody* createRtpSDP(const char* addr, const Message& msg);
-    MimeSdpBody* createRtpSDP(const char* addr, bool start);
-    MimeSdpBody* createRtpSDP(bool start);
     void updateFormats(const Message& msg);
-    bool startRtp();
-    bool addSdpParams(Message& msg, const MimeBody* body);
-    bool addRtpParams(Message& msg, const String& natAddr, const MimeBody* body);
     bool startClientReInvite(Message& msg);
     // Build the 'call.route' and NOTIFY messages needed by the transfer thread
     bool initTransfer(Message*& msg, SIPMessage*& sipNotify, const SIPMessage* sipRefer,
@@ -520,41 +370,20 @@ private:
     SIPDialog m_dialog;
     // remote URI as we send in dialog messages
     URI m_uri;
-    // our external IP address, possibly outside of a NAT
-    String m_externalAddr;
-    // if we do RTP forwarding or not
-    bool m_rtpForward;
-    // if we forward the SDP as-is
-    bool m_sdpForward;
-    // remote RTP address
-    String m_rtpAddr;
-    // local RTP address
-    String m_rtpLocalAddr;
-    // list of media descriptors
-    ObjList* m_rtpMedia;
-    // unique SDP session number
-    int m_sdpSession;
-    // SDP version number, incremented each time we generate a new SDP
-    int m_sdpVersion;
-    String m_host;
     String m_user;
     String m_line;
     int m_port;
     Message* m_route;
     ObjList* m_routes;
     bool m_authBye;
-    int m_mediaStatus;
     bool m_inband;
     bool m_info;
-    bool m_secure;
     // REFER already running
     bool m_referring;
     // reINVITE requested or in progress
     int m_reInviting;
     // sequence number of last transmitted PRACK
     int m_lastRseq;
-    // should we offer RFC 2833? note that we will handle it anyway
-    bool m_rfc2833;
 };
 
 class YateSIPGenerate : public GenObject
@@ -623,6 +452,8 @@ public:
     virtual bool received(Message& msg, int id);
     inline YateSIPEndPoint* ep() const
 	{ return m_endpoint; }
+    inline SDPParser& parser()
+        { return m_parser; }
     YateSIPConnection* findCall(const String& callid, bool incRef = false);
     YateSIPConnection* findDialog(const SIPDialog& dialog, bool incRef = false);
     YateSIPConnection* findDialog(const String& dialog, const String& fromTag,
@@ -631,7 +462,7 @@ public:
     YateSIPLine* findLine(const String& addr, int port, const String& user = String::empty());
     bool validLine(const String& line);
 private:
-    void initAudioCodecs();
+    SDPParser m_parser;
     YateSIPEndPoint *m_endpoint;
 };
 
@@ -649,13 +480,9 @@ static bool s_auto_nat = true;
 static bool s_progress = false;
 static bool s_inband = false;
 static bool s_info = false;
-static bool s_rfc2833 = true;
-static bool s_secure = false;
-static bool s_forward_sdp = false;
 static bool s_start_rtp = false;
 static bool s_ack_required = true;
 static bool s_1xx_formats = true;
-static bool s_ignore_port = false;
 static bool s_auth_register = true;
 static bool s_reg_async = true;
 static bool s_multi_ringing = false;
@@ -665,242 +492,6 @@ static bool s_sipt_isup = false;         // Control the application/isup body pr
 static int s_expires_min = EXPIRES_MIN;
 static int s_expires_def = EXPIRES_DEF;
 static int s_expires_max = EXPIRES_MAX;
-
-// Parse a SDP and return a possibly filtered list of SDP media
-static ObjList* parseSDP(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia = 0, const char* media = 0)
-{
-    const NamedString* c = sdp->getLine("c");
-    if (c) {
-	String tmp(*c);
-	if (tmp.startSkip("IN IP4")) {
-	    tmp.trimBlanks();
-	    // Handle the case media is muted
-	    if (tmp == "0.0.0.0")
-		tmp.clear();
-	    addr = tmp;
-	}
-    }
-    ObjList* lst = 0;
-    c = sdp->getLine("m");
-    for (; c; c = sdp->getNextLine(c)) {
-	String tmp(*c);
-	int sep = tmp.find(' ');
-	if (sep < 1)
-	    continue;
-	String type = tmp.substr(0,sep);
-	tmp >> " ";
-	if (media && (type != media))
-	    continue;
-        int port = 0;
-	tmp >> port >> " ";
-	sep = tmp.find(' ');
-	if (sep < 1)
-	    continue;
-	bool rtp = true;
-	String trans(tmp,sep);
-	tmp = tmp.c_str() + sep;
-	if ((trans &= "RTP/AVP") || (trans &= "RTP/SAVP") ||
-	    (trans &= "RTP/AVPF") || (trans &= "RTP/SAVPF"))
-	    trans.toUpper();
-	else if ((trans &= "udptl") || (trans &= "tcp")) {
-	    trans.toLower();
-	    rtp = false;
-	}
-	else {
-	    Debug(&plugin,DebugWarn,"Unknown SDP transport '%s' for media '%s'",trans.c_str(),type.c_str());
-	    continue;
-	}
-	String fmt;
-	String aux;
-	String mappings;
-	String crypto;
-	ObjList params;
-	bool defcodecs = s_cfg.getBoolValue("codecs","default",true);
-	bool first = true;
-	int ptime = 0;
-	int rfc2833 = -1;
-	while (tmp[0] == ' ') {
-	    int var = -1;
-	    tmp >> " " >> var;
-	    if (var < 0) {
-		if (rtp || fmt || aux || tmp.null())
-		    continue;
-		// brutal but effective
-		for (char* p = const_cast<char*>(tmp.c_str()); *p; p++) {
-		    if (*p == ' ')
-			*p = ',';
-		}
-		Debug(&plugin,DebugInfo,"Assuming format list '%s' for media '%s'",
-		    tmp.c_str(),type.c_str());
-		fmt = tmp;
-		tmp.clear();
-	    }
-	    int mode = 0;
-	    bool annexB = s_cfg.getBoolValue("codecs","g729_annexb",false);
-	    bool amrOctet = s_cfg.getBoolValue("codecs","amr_octet",false);
-	    int defmap = -1;
-	    String payload(lookup(var,dict_payloads));
-
-	    const ObjList* l = sdp->lines().find(c);
-	    while (l && (l = l->skipNext())) {
-		const NamedString* s = static_cast<NamedString*>(l->get());
-		if (s->name() == "m")
-		    break;
-		if (s->name() != "a")
-		    continue;
-		String line(*s);
-		if (line.startSkip("ptime:",false))
-		    line >> ptime;
-		else if (line.startSkip("rtpmap:",false)) {
-		    int num = var - 1;
-		    line >> num >> " ";
-		    if (num == var) {
-			line.trimBlanks().toUpper();
-			if (line.startsWith("G729B/")) {
-			    // some devices add a second map for same payload
-			    annexB = true;
-			    continue;
-			}
-			if (line.startsWith("TELEPHONE-EVENT/")) {
-			    rfc2833 = var;
-			    continue;
-			}
-			const char* pload = 0;
-			for (const TokenDict* map = dict_rtpmap; map->token; map++) {
-			    if (line.startsWith(map->token,false,true)) {
-				defmap = map->value;
-				pload = lookup(defmap,dict_payloads);
-				break;
-			    }
-			}
-			payload = pload;
-		    }
-		}
-		else if (line.startSkip("fmtp:",false)) {
-		    int num = var - 1;
-		    line >> num >> " ";
-		    if (num == var) {
-			if (line.startSkip("mode=",false))
-			    line >> mode;
-			else if (line.startSkip("annexb=",false))
-			    line >> annexB;
-			else if (line.startSkip("octet-align=",false))
-			    amrOctet = (0 != line.toInteger(0));
-		    }
-		}
-		else if (first) {
-		    if (line.startSkip("crypto:",false)) {
-			if (crypto.null())
-			    crypto = line;
-			else
-			    Debug(&plugin,DebugMild,"Ignoring SDES: '%s'",line.c_str());
-		    }
-		    else {
-			int pos = line.find(':');
-			if (pos >= 0)
-			    params.append(new NamedString(line.substr(0,pos),line.substr(pos+1)));
-			else
-			    params.append(new NamedString(line));
-		    }
-		}
-	    }
-	    if (var < 0)
-		break;
-	    first = false;
-
-	    if (payload == "ilbc") {
-		const char* forced = s_cfg.getValue("hacks","ilbc_forced");
-		if (forced)
-		    payload = forced;
-		else if ((mode == 20) || (ptime == 20))
-		    payload = "ilbc20";
-		else if ((mode == 30) || (ptime == 30))
-		    payload = "ilbc30";
-		else
-		    payload = s_cfg.getValue("hacks","ilbc_default","ilbc30");
-	    }
-
-	    if (amrOctet && payload == "amr")
-		payload = "amr-o";
-
-	    XDebug(&plugin,DebugAll,"Payload %d format '%s'",var,payload.c_str());
-	    if (payload && s_cfg.getBoolValue("codecs",payload,defcodecs && DataTranslator::canConvert(payload))) {
-		if (fmt)
-		    fmt << ",";
-		fmt << payload;
-		if (var != defmap) {
-		    if (mappings)
-			mappings << ",";
-		    mappings << payload << "=" << var;
-		}
-		if ((payload == "g729") && s_cfg.getBoolValue("hacks","g729_annexb",annexB))
-		    aux << ",g729b";
-	    }
-	}
-	fmt += aux;
-	DDebug(&plugin,DebugAll,"Formats '%s' mappings '%s'",fmt.c_str(),mappings.c_str());
-	NetMedia* net = 0;
-	// try to take the media descriptor from the old list
-	if (oldMedia) {
-	    ObjList* om = oldMedia->find(type);
-	    if (om)
-		net = static_cast<NetMedia*>(om->remove(false));
-	}
-	bool append = false;
-	if (net)
-	    net->update(fmt,port);
-	else {
-	    net = new NetMedia(type,trans,fmt,port);
-	    append = true;
-	}
-	while (NamedString* par = static_cast<NamedString*>(params.remove(false)))
-	    net->parameter(par,append);
-	net->setModified(false);
-	net->mappings(mappings);
-	net->rfc2833(rfc2833);
-	net->crypto(crypto,true);
-	if (!lst)
-	    lst = new ObjList;
-	lst->append(net);
-	// found media - get out
-	if (media)
-	    return lst;
-    }
-    return lst;
-}
-
-// Put a list of net media in a message
-static void putMedia(Message& msg, ObjList* lst, bool putPort = true)
-{
-    if (!lst)
-	return;
-    ObjList* l = lst->skipNull();
-    for (; l; l = l->skipNext()) {
-	NetMedia* m = static_cast<NetMedia*>(l->get());
-	msg.addParam("media"+m->suffix(),"yes");
-	msg.addParam("formats"+m->suffix(),m->formats());
-	msg.addParam("transport"+m->suffix(),m->transport());
-	if (m->mappings())
-	    msg.addParam("rtp_mapping"+m->suffix(),m->mappings());
-	if (m->isAudio())
-	    msg.addParam("rtp_rfc2833",m->rfc2833());
-	if (putPort)
-	    msg.addParam("rtp_port"+m->suffix(),m->remotePort());
-	if (m->remoteCrypto())
-	    msg.addParam("crypto"+m->suffix(),m->remoteCrypto());
-	// must handle encryption differently
-	const char* enc = m->getValue("encryption");
-	if (enc)
-	    msg.addParam("encryption"+m->suffix(),enc);
-	m->clearParam("encryption");
-	unsigned int n = m->length();
-	for (unsigned int i = 0; i < n; i++) {
-	    const NamedString* param = m->getParam(i);
-	    if (param)
-		msg.addParam("sdp"+m->suffix()+"_"+param->name(),*param);
-	}
-    }
-}
 
 // Check if an IPv4 address belongs to one of the non-routable blocks
 static bool isPrivateAddr(const String& host)
@@ -1123,22 +714,16 @@ static void copyPrivacy(SIPMessage& sip, const Message& msg)
 // Find the given type inside multiparts
 static inline MimeBody* getOneBody(MimeBody* body, const char* type)
 {
-    if (!(body && type && *type))
-	return 0;
-    if (body->getType() == type)
-	return body;
-    if (body->isMultipart())
-	return (static_cast<MimeMultipartBody*>(body))->findBody(type);
-    return 0;
+    return body ? body->getFirst(type) : 0;
 }
 
 // Check if the given body is a SDP one or find an enclosed SDP body
 //  if it is a multipart
 static inline MimeSdpBody* getSdpBody(MimeBody* body)
 {
-    if (body && body->isSDP())
-	return static_cast<MimeSdpBody*>(body);
-    return static_cast<MimeSdpBody*>(getOneBody(body,"application/sdp"));
+    if (!body)
+	return 0;
+    return static_cast<MimeSdpBody*>(body->isSDP() ? body : body->getFirst("application/sdp"));
 }
 
 // Add a mime body parameter to a list of parameters
@@ -1168,133 +753,6 @@ static inline int findURIParamSep(const String& str, int start)
 	if (str[i] == '?' || str[i] == '&')
 	    return i;
     return -1;
-}
-
-NetMedia::NetMedia(const char* media, const char* transport, const char* formats, int rport, int lport)
-    : NamedList(media),
-      m_audio(true), m_modified(false), m_securable(true),
-      m_transport(transport), m_formats(formats),
-      m_rfc2833(String::boolText(false))
-{
-    DDebug(&plugin,DebugAll,"NetMedia::NetMedia('%s','%s','%s',%d,%d) [%p]",
-	media,transport,formats,rport,lport,this);
-    if (String::operator!=("audio")) {
-	m_audio = false;
-	m_suffix << "_" << media;
-    }
-    int q = m_formats.find(',');
-    m_format = m_formats.substr(0,q);
-    if (rport >= 0)
-	m_rPort = rport;
-    if (lport >= 0)
-	m_lPort = lport;
-}
-
-NetMedia::~NetMedia()
-{
-    DDebug(&plugin,DebugAll,"NetMedia::~NetMedia() '%s' [%p]",c_str(),this);
-}
-
-const char* NetMedia::fmtList() const
-{
-    if (m_formats)
-	return m_formats.c_str();
-    if (m_format)
-	return m_format.c_str();
-    // unspecified audio assumed to support G711
-    if (m_audio)
-	return "alaw,mulaw";
-    return 0;
-}
-
-// Update members with data taken from a SDP, return true if something changed
-bool NetMedia::update(const char* formats, int rport, int lport)
-{
-    DDebug(&plugin,DebugAll,"NetMedia::update('%s',%d,%d) [%p]",
-	formats,rport,lport,this);
-    bool chg = false;
-    String tmp(formats);
-    if (m_formats != tmp) {
-	if ((tmp.find(',') < 0) && m_formats && m_formats.find(tmp) < 0)
-	    Debug(&plugin,DebugInfo,"Not changing to '%s' from '%s' [%p]",
-		formats,m_formats.c_str(),this);
-	else {
-	    chg = true;
-	    m_formats = tmp;
-	    int q = m_formats.find(',');
-	    m_format = m_formats.substr(0,q);
-	}
-    }
-    if (rport >= 0) {
-	tmp = rport;
-	if (m_rPort != tmp) {
-	    chg = true;
-	    m_rPort = tmp;
-	}
-    }
-    if (lport >= 0) {
-	tmp = lport;
-	if (m_lPort != tmp) {
-	    chg = true;
-	    m_lPort = tmp;
-	}
-    }
-    return chg;
-}
-
-// Update members from a dispatched "chan.rtp" message
-void NetMedia::update(const Message& msg, bool pickFormat)
-{
-    DDebug(&plugin,DebugAll,"NetMedia::update('%s',%s) [%p]",
-	msg.c_str(),String::boolText(pickFormat),this);
-    m_id = msg.getValue("rtpid",m_id);
-    m_lPort = msg.getValue("localport",m_lPort);
-    if (pickFormat) {
-	const char* format = msg.getValue("format");
-	if (format) {
-	    m_format = format;
-	    if ((m_formats != m_format) && (msg.getIntValue("remoteport") > 0)) {
-		Debug(&plugin,DebugNote,"Choosing started '%s' format '%s' [%p]",
-		    c_str(),format,this);
-		m_formats = m_format;
-	    }
-	}
-    }
-}
-
-// Add or replace a parameter by name and value, set the modified flag
-void NetMedia::parameter(const char* name, const char* value, bool append)
-{
-    if (!name)
-	return;
-    m_modified = true;
-    if (append)
-	addParam(name,value);
-    else
-	setParam(name,value);
-}
-
-// Add or replace a parameter, set the modified flag
-void NetMedia::parameter(NamedString* param, bool append)
-{
-    if (!param)
-	return;
-    m_modified = true;
-    if (append)
-	addParam(param);
-    else
-	setParam(param);
-}
-
-void NetMedia::crypto(const char* desc, bool remote)
-{
-    String& sdes = remote ? m_rCrypto : m_lCrypto;
-    if (sdes != desc) {
-	sdes = desc;
-	m_modified = true;
-    }
-    if (remote && !desc)
-	m_securable = false;
 }
 
 
@@ -2253,11 +1711,11 @@ void YateSIPRefer::release(bool fromCleanup)
 // Incoming call constructor - just before starting the routing thread
 YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     : Channel(plugin,0,false),
+      SDPSession(&plugin.parser()),
       m_tr(tr), m_tr2(0), m_hungup(false), m_byebye(true), m_cancel(false),
-      m_state(Incoming), m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
-      m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
-      m_authBye(true), m_mediaStatus(MediaMissing), m_inband(s_inband), m_info(s_info), m_secure(s_secure),
-      m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0), m_rfc2833(s_rfc2833)
+      m_state(Incoming), m_port(0), m_route(0), m_routes(0),
+      m_authBye(true), m_inband(s_inband), m_info(s_info),
+      m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0)
 {
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,%p) [%p]",ev,tr,this);
     setReason();
@@ -2372,7 +1830,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     m_rtpLocalAddr = s_rtpip;
     MimeSdpBody* sdp = getSdpBody(ev->getMessage()->body);
     if (sdp) {
-	setMedia(parseSDP(sdp,m_rtpAddr,m_rtpMedia));
+	setMedia(plugin.parser().parse(sdp,m_rtpAddr,m_rtpMedia));
 	if (m_rtpMedia) {
 	    m_rtpForward = true;
 	    // guess if the call comes from behind a NAT
@@ -2384,9 +1842,9 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 		m_rtpAddr = m_host;
 	    }
 	    m->addParam("rtp_addr",m_rtpAddr);
-	    putMedia(*m,m_rtpMedia);
+	    putMedia(*m);
 	}
-	if (s_forward_sdp) {
+	if (plugin.parser().sdpForward()) {
 	    const DataBlock& raw = sdp->getBody();
 	    String tmp((const char*)raw.data(),raw.length());
 	    m->addParam("sdp_raw",tmp);
@@ -2410,11 +1868,11 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 // Outgoing call constructor - in call.execute handler
 YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char* target)
     : Channel(plugin,0,true),
+      SDPSession(&plugin.parser()),
       m_tr(0), m_tr2(0), m_hungup(false), m_byebye(true), m_cancel(true),
-      m_state(Outgoing), m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
-      m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
-      m_authBye(false), m_mediaStatus(MediaMissing), m_inband(s_inband), m_info(s_info), m_secure(s_secure),
-      m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0), m_rfc2833(s_rfc2833)
+      m_state(Outgoing), m_port(0), m_route(0), m_routes(0),
+      m_authBye(false), m_inband(s_inband), m_info(s_info),
+      m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0)
 {
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,'%s') [%p]",
 	&msg,uri.c_str(),this);
@@ -2422,8 +1880,8 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     setReason();
     m_inband = msg.getBoolValue("dtmfinband",s_inband);
     m_info = msg.getBoolValue("dtmfinfo",s_info);
-    m_secure = msg.getBoolValue("secure",s_secure);
-    m_rfc2833 = msg.getBoolValue("rfc2833",s_rfc2833);
+    m_secure = msg.getBoolValue("secure",plugin.parser().secure());
+    m_rfc2833 = msg.getBoolValue("rfc2833",plugin.parser().rfc2833());
     m_rtpForward = msg.getBoolValue("rtp_forward");
     m_user = msg.getValue("user");
     m_line = msg.getValue("line");
@@ -2576,25 +2034,6 @@ YateSIPConnection::~YateSIPConnection()
     setMedia(0);
     TelEngine::destruct(m_route);
     TelEngine::destruct(m_routes);
-}
-
-void YateSIPConnection::setMedia(ObjList* media)
-{
-    if (media == m_rtpMedia)
-	return;
-    ObjList* tmp = m_rtpMedia;
-    m_rtpMedia = media;
-    if (tmp) {
-	ObjList* l = tmp->skipNull();
-	for (; l; l = l->skipNext()) {
-	    NetMedia* m = static_cast<NetMedia*>(l->get());
-	    // preserve data endpoints if media didn't change
-	    if (m->sameAs(static_cast<NetMedia*>((*media)[*m]),s_ignore_port))
-		continue;
-	    clearEndpoint(*m);
-	}
-	tmp->destruct();
-    }
 }
 
 void YateSIPConnection::startRouter()
@@ -2808,528 +2247,16 @@ MimeSdpBody* YateSIPConnection::createProvisionalSDP(Message& msg)
     return createRtpSDP(true);
 }
 
-// Creates a SDP from RTP address data present in message
-MimeSdpBody* YateSIPConnection::createPasstroughSDP(Message& msg, bool update)
+Message* YateSIPConnection::buildChanRtp(RefObject* context)
 {
-    String tmp = msg.getValue("rtp_forward");
-    msg.clearParam("rtp_forward");
-    if (!(m_rtpForward && tmp.toBoolean()))
-	return 0;
-    String* raw = msg.getParam("sdp_raw");
-    if (raw) {
-	m_sdpForward = m_sdpForward || s_forward_sdp;
-	if (m_sdpForward) {
-	    msg.setParam("rtp_forward","accepted");
-	    return new MimeSdpBody("application/sdp",raw->safe(),raw->length());
-	}
+    Message* m = new Message("chan.rtp");
+    if (context)
+	m->userData(context);
+    else {
+	complete(*m,true);
+	m->userData(static_cast<CallEndpoint*>(this));
     }
-    String addr(msg.getValue("rtp_addr"));
-    if (addr.null())
-	return 0;
-
-    const char* sdpPrefix = msg.getValue("osdp-prefix","osdp");
-    ObjList* lst = 0;
-    unsigned int n = msg.length();
-    for (unsigned int i = 0; i < n; i++) {
-	const NamedString* p = msg.getParam(i);
-	if (!p)
-	    continue;
-	// search for rtp_port or rtp_port_MEDIANAME parameters
-	tmp = p->name();
-	if (!tmp.startSkip("rtp_port",false))
-	    continue;
-	if (tmp && (tmp[0] != '_'))
-	    continue;
-	// now tmp holds the suffix for the media, null for audio
-	bool audio = tmp.null();
-	// check if media is supported, default only for audio
-	if (!msg.getBoolValue("media"+tmp,audio))
-	    continue;
-	int port = p->toInteger();
-	if (!port)
-	    continue;
-	const char* fmts = msg.getValue("formats"+tmp);
-	if (!fmts)
-	    continue;
-	String trans = msg.getValue("transport"+tmp,"RTP/AVP");
-	if (audio)
-	    tmp = "audio";
-	else
-	    tmp >> "_";
-	NetMedia* rtp = 0;
-	// try to take the media descriptor from the old list
-	if (update && m_rtpMedia) {
-	    ObjList* om = m_rtpMedia->find(tmp);
-	    if (om)
-		rtp = static_cast<NetMedia*>(om->remove(false));
-	}
-	bool append = false;
-	if (rtp)
-	    rtp->update(fmts,-1,port);
-	else {
-	    rtp = new NetMedia(tmp,trans,fmts,-1,port);
-	    append = true;
-	}
-	if (sdpPrefix) {
-	    for (unsigned int j = 0; j < n; j++) {
-		const NamedString* param = msg.getParam(j);
-		if (!param)
-		    continue;
-		tmp = param->name();
-		if (tmp.startSkip(sdpPrefix+rtp->suffix()+"_",false) && (tmp.find('_') < 0))
-		    rtp->parameter(tmp,*param,append);
-	    }
-	}
-	rtp->mappings(msg.getValue("rtp_mapping"+rtp->suffix()));
-	if (audio)
-	    rtp->rfc2833(msg.getIntValue("rtp_rfc2833",-1));
-	rtp->crypto(msg.getValue("crypto"+rtp->suffix()),false);
-	if (!lst)
-	    lst = new ObjList;
-	lst->append(rtp);
-    }
-    if (!lst)
-	return 0;
-
-    MimeSdpBody* sdp = createSDP(addr,lst);
-    if (update) {
-	m_rtpLocalAddr = addr;
-	setMedia(lst);
-    }
-    else
-	lst->destruct();
-
-    if (sdp)
-	msg.setParam("rtp_forward","accepted");
-    return sdp;
-}
-
-// Dispatches a RTP message for a media, optionally start RTP and pick parameters
-bool YateSIPConnection::dispatchRtp(NetMedia* media, const char* addr, bool start, bool pick)
-{
-    if (!(media && addr))
-	return false;
-    Message m("chan.rtp");
-    complete(m,true);
-    m.userData(static_cast<CallEndpoint *>(this));
-    m.addParam("media",*media);
-    m.addParam("transport",media->transport());
-    m.addParam("direction","bidir");
-    if (m_rtpLocalAddr)
-	m.addParam("localip",m_rtpLocalAddr);
-    m.addParam("remoteip",addr);
-    if (start) {
-	m.addParam("remoteport",media->remotePort());
-	m.addParam("format",media->format());
-	String tmp = media->format();
-	tmp << "=";
-	ObjList* mappings = media->mappings().split(',',false);
-	for (ObjList* pl = mappings; pl; pl = pl->next()) {
-	    String* mapping = static_cast<String*>(pl->get());
-	    if (!mapping)
-		continue;
-	    if (mapping->startsWith(tmp)) {
-		tmp = *mapping;
-		tmp >> "=";
-		m.addParam("payload",tmp);
-		break;
-	    }
-	}
-	m.addParam("evpayload",media->rfc2833());
-	TelEngine::destruct(mappings);
-    }
-    if (m_secure) {
-	if (media->remoteCrypto()) {
-	    String sdes = media->remoteCrypto();
-	    Regexp r("^\\([0-9]\\+\\) \\+\\([^ ]\\+\\) \\+\\([^ ]\\+\\) *\\(.*\\)$");
-	    if (sdes.matches(r)) {
-		m.addParam("secure",String::boolText(true));
-		m.addParam("crypto_tag",sdes.matchString(1));
-		m.addParam("crypto_suite",sdes.matchString(2));
-		m.addParam("crypto_key",sdes.matchString(3));
-		if (sdes.matchLength(4))
-		    m.addParam("crypto_params",sdes.matchString(4));
-	    }
-	    else
-		Debug(this,DebugWarn,"Invalid SDES: '%s' [%p]",sdes.c_str(),this);
-	}
-	else if (media->securable())
-	    m.addParam("secure",String::boolText(true));
-    }
-    else
-	media->crypto(0,true);
-    unsigned int n = media->length();
-    for (unsigned int i = 0; i < n; i++) {
-	const NamedString* param = media->getParam(i);
-	if (!param)
-	    continue;
-	m.addParam("sdp_" + param->name(),*param);
-    }
-    if (!Engine::dispatch(m))
-	return false;
-    media->update(m,start);
-    if (!pick)
-	return true;
-    m_rtpForward = false;
-    m_rtpLocalAddr = m.getValue("localip",m_rtpLocalAddr);
-    m_mediaStatus = MediaStarted;
-    const char* sdpPrefix = m.getValue("osdp-prefix","osdp");
-    if (sdpPrefix) {
-	n = m.length();
-	for (unsigned int j = 0; j < n; j++) {
-	    const NamedString* param = m.getParam(j);
-	    if (!param)
-		continue;
-	    String tmp = param->name();
-	    if (tmp.startSkip(sdpPrefix,false) && tmp.startSkip("_",false) && tmp)
-	        media->parameter(tmp,*param,false);
-	}
-    }
-    if (m_secure) {
-	int tag = m.getIntValue("crypto_tag",1);
-	tag = m.getIntValue("ocrypto_tag",tag);
-	const String* suite = m.getParam("ocrypto_suite");
-	const String* key = m.getParam("ocrypto_key");
-	const String* params = m.getParam("ocrypto_params");
-	if (suite && key && (tag > 0)) {
-	    String sdes(tag);
-	    sdes << " " << *suite << " " << *key;
-	    if (params)
-		sdes << " " << *params;
-	    media->crypto(sdes,false);
-	}
-    }
-    return true;
-}
-
-// Creates a set of unstarted external RTP channels from remote addr and builds SDP from them
-MimeSdpBody* YateSIPConnection::createRtpSDP(const char* addr, const Message& msg)
-{
-
-    bool defaults = true;
-    const char* sdpPrefix = msg.getValue("osdp-prefix","osdp");
-    ObjList* lst = 0;
-    unsigned int n = msg.length();
-    for (unsigned int i = 0; i < n; i++) {
-	const NamedString* p = msg.getParam(i);
-	if (!p)
-	    continue;
-	// search for rtp_port or rtp_port_MEDIANAME parameters
-	String tmp(p->name());
-	if (!tmp.startSkip("media",false))
-	    continue;
-	if (tmp && (tmp[0] != '_'))
-	    continue;
-	// since we found at least one media declaration disable defaults
-	defaults = false;
-	// now tmp holds the suffix for the media, null for audio
-	bool audio = tmp.null();
-	// check if media is supported, default only for audio
-	if (!p->toBoolean(audio))
-	    continue;
-	String fmts = msg.getValue("formats"+tmp);
-	if (audio && fmts.null())
-	    fmts = s_audio;
-	if (fmts.null())
-	    continue;
-	String trans = msg.getValue("transport"+tmp,"RTP/AVP");
-	String crypto;
-	if (m_secure)
-	    crypto = msg.getValue("crypto"+tmp);
-	if (audio)
-	    tmp = "audio";
-	else
-	    tmp >> "_";
-	NetMedia* rtp = 0;
-	// try to take the media descriptor from the old list
-	if (m_rtpMedia) {
-	    ObjList* om = m_rtpMedia->find(tmp);
-	    if (om)
-		rtp = static_cast<NetMedia*>(om->remove(false));
-	}
-	bool append = false;
-	if (rtp)
-	    rtp->update(fmts);
-	else {
-	    rtp = new NetMedia(tmp,trans,fmts);
-	    append = true;
-	}
-	rtp->crypto(crypto,false);
-	if (sdpPrefix) {
-	    for (unsigned int j = 0; j < n; j++) {
-		const NamedString* param = msg.getParam(j);
-		if (!param)
-		    continue;
-		tmp = param->name();
-		if (tmp.startSkip(sdpPrefix+rtp->suffix()+"_",false) && (tmp.find('_') < 0))
-		    rtp->parameter(tmp,*param,append);
-	    }
-	}
-	if (!lst)
-	    lst = new ObjList;
-	lst->append(rtp);
-    }
-
-    if (defaults && !lst) {
-	lst = new ObjList;
-	lst->append(new NetMedia("audio","RTP/AVP",msg.getValue("formats",s_audio)));
-    }
-
-    setMedia(lst);
-    return createRtpSDP(addr,false);
-}
-
-// Creates a set of RTP channels from address and media info and builds SDP from them
-MimeSdpBody* YateSIPConnection::createRtpSDP(const char* addr, bool start)
-{
-    bool ok = false;
-    ObjList* l = m_rtpMedia->skipNull();
-    while (l) {
-	NetMedia* m = static_cast<NetMedia*>(l->get());
-	if (dispatchRtp(m,addr,start,true))
-	    ok = true;
-	else {
-	    Debug(this,DebugMild,"Removing failed media '%s' format '%s' from offer [%p]",
-		m->c_str(),m->format().safe(),this);
-	    l->remove();
-	    l = l->skipNull();
-	    continue;
-	}
-	l = l->skipNext();
-    }
-    return ok ? createSDP(getRtpAddr()) : 0;
-}
-
-// Creates a set of started external RTP channels from remote addr and builds SDP from them
-MimeSdpBody* YateSIPConnection::createRtpSDP(bool start)
-{
-    if (m_rtpAddr.null()) {
-	m_mediaStatus = MediaMuted;
-	return createSDP(0);
-    }
-    return createRtpSDP(m_rtpAddr,start);
-}
-
-// Starts an already created set of external RTP channels
-bool YateSIPConnection::startRtp()
-{
-    if (m_mediaStatus != MediaStarted)
-	return false;
-    DDebug(this,DebugAll,"YateSIPConnection::startRtp() [%p]",this);
-
-    bool ok = true;
-    ObjList* l = m_rtpMedia->skipNull();
-    for (; l; l = l->skipNext()) {
-	NetMedia* m = static_cast<NetMedia*>(l->get());
-	ok = dispatchRtp(m,m_rtpAddr,true,false) && ok;
-    }
-    return ok;
-}
-
-// Creates a SDP body from transport address and list of media descriptors
-MimeSdpBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
-{
-    DDebug(this,DebugAll,"YateSIPConnection::createSDP('%s',%p) [%p]",
-	addr,mediaList,this);
-    if (!mediaList)
-	mediaList = m_rtpMedia;
-    // if we got no media descriptors we simply create no SDP
-    if (!mediaList)
-	return 0;
-    if (m_sdpSession)
-	++m_sdpVersion;
-    else
-	m_sdpVersion = m_sdpSession = Time::secNow();
-
-    // no address means on hold or muted
-    String origin;
-    origin << "yate " << m_sdpSession << " " << m_sdpVersion << " IN IP4 " << (addr ? addr : m_host.safe());
-    String conn;
-    conn << "IN IP4 " << (addr ? addr : "0.0.0.0");
-
-    MimeSdpBody* sdp = new MimeSdpBody;
-    sdp->addLine("v","0");
-    sdp->addLine("o",origin);
-    sdp->addLine("s","SIP Call");
-    sdp->addLine("c",conn);
-    sdp->addLine("t","0 0");
-
-    bool defcodecs = s_cfg.getBoolValue("codecs","default",true);
-    for (ObjList* ml = mediaList->skipNull(); ml; ml = ml->skipNext()) {
-	NetMedia* m = static_cast<NetMedia*>(ml->get());
-
-	String mline(m->fmtList());
-	ObjList* l = mline.split(',',false);
-	mline = *m;
-	mline << " " << (m->localPort() ? m->localPort().c_str() : "0") << " " << m->transport();
-	ObjList* map = m->mappings().split(',',false);
-	ObjList rtpmap;
-	String frm;
-	int ptime = 0;
-	ObjList* f = l;
-	for (; f; f = f->next()) {
-	    String* s = static_cast<String*>(f->get());
-	    if (s) {
-		int mode = 0;
-		if (*s == "ilbc20")
-		    ptime = mode = 20;
-		else if (*s == "ilbc30")
-		    ptime = mode = 30;
-		else if (*s == "g729b")
-		    continue;
-		int payload = s->toInteger(dict_payloads,-1);
-		int defcode = payload;
-		String tmp = *s;
-		tmp << "=";
-		for (ObjList* pl = map; pl; pl = pl->next()) {
-		    String* mapping = static_cast<String*>(pl->get());
-		    if (!mapping)
-			continue;
-		    if (mapping->startsWith(tmp)) {
-			payload = -1;
-			tmp = *mapping;
-			tmp >> "=" >> payload;
-			XDebug(this,DebugAll,"RTP mapped payload %d for '%s'",payload,s->c_str());
-			break;
-		    }
-		}
-		if (payload >= 0) {
-		    if (defcode < 0)
-			defcode = payload;
-		    const char* map = lookup(defcode,dict_rtpmap);
-		    if (map && s_cfg.getBoolValue("codecs",*s,defcodecs && DataTranslator::canConvert(*s))) {
-			frm << " " << payload;
-			String* temp = new String("rtpmap:");
-			*temp << payload << " " << map;
-			rtpmap.append(temp);
-			if (mode) {
-			    temp = new String("fmtp:");
-			    *temp << payload << " mode=" << mode;
-			    rtpmap.append(temp);
-			}
-			if (*s == "g729") {
-			    temp = new String("fmtp:");
-			    *temp << payload << " annexb=" <<
-				((0 != l->find("g729b")) ? "yes" : "no");
-			    rtpmap.append(temp);
-			}
-			else if (*s == "amr") {
-			    temp = new String("fmtp:");
-			    *temp << payload << " octet-align=0";
-			    rtpmap.append(temp);
-			}
-			else if (*s == "amr-o") {
-			    temp = new String("fmtp:");
-			    *temp << payload << " octet-align=1";
-			    rtpmap.append(temp);
-			}
-		    }
-		}
-	    }
-	}
-	TelEngine::destruct(l);
-	TelEngine::destruct(map);
-
-	if (m_rfc2833 && frm && m->isAudio()) {
-	    int rfc2833 = m->rfc2833().toInteger(-1);
-	    if (rfc2833 < 0)
-		rfc2833 = 101;
-	    // claim to support telephone events
-	    frm << " " << rfc2833;
-	    String* s = new String;
-	    *s << "rtpmap:" << rfc2833 << " telephone-event/8000";
-	    rtpmap.append(s);
-	}
-
-	if (frm.null()) {
-	    if (m->isAudio() || !m->fmtList()) {
-		Debug(this,DebugMild,"No formats for '%s', excluding from SDP [%p]",
-		    m->c_str(),this);
-		continue;
-	    }
-	    Debug(this,DebugInfo,"Assuming formats '%s' for media '%s' [%p]",
-		m->fmtList(),m->c_str(),this);
-	    frm << " " << m->fmtList();
-	    // brutal but effective
-	    for (char* p = const_cast<char*>(frm.c_str()); *p; p++) {
-		if (*p == ',')
-		    *p = ' ';
-	    }
-	}
-
-	if (ptime) {
-	    String* temp = new String("ptime:");
-	    *temp << ptime;
-	    rtpmap.append(temp);
-	}
-
-	sdp->addLine("m",mline + frm);
-	bool enc = false;
-	if (m->isModified()) {
-	    unsigned int n = m->length();
-	    for (unsigned int i = 0; i < n; i++) {
-		const NamedString* param = m->getParam(i);
-		if (param) {
-		    String tmp = param->name();
-		    if (*param)
-			tmp << ":" << *param;
-		    sdp->addLine("a",tmp);
-		    enc = enc || (param->name() == "encryption");
-		}
-	    }
-	}
-	for (f = rtpmap.skipNull(); f; f = f->skipNext()) {
-	    String* s = static_cast<String*>(f->get());
-	    if (s)
-		sdp->addLine("a",*s);
-	}
-	if (addr && m->localCrypto()) {
-	    sdp->addLine("a","crypto:" + m->localCrypto());
-	    if (!enc)
-		sdp->addLine("a","encryption:optional");
-	}
-    }
-
-    return sdp;
-}
-
-// Add raw SDP forwarding parameter to a message
-bool YateSIPConnection::addSdpParams(Message& msg, const MimeBody* body)
-{
-    if (!m_sdpForward)
-	return false;
-    MimeSdpBody* sdp = getSdpBody((MimeBody*)body);
-    if (!sdp)
-	return false;
-    const DataBlock& raw = sdp->getBody();
-    String tmp((const char*)raw.data(),raw.length());
-    msg.setParam("rtp_forward","yes");
-    msg.addParam("sdp_raw",tmp);
-    return true;
-}
-
-// Add RTP forwarding parameters to a message
-bool YateSIPConnection::addRtpParams(Message& msg, const String& natAddr, const MimeBody* body)
-{
-    if (!(m_rtpMedia && m_rtpAddr))
-	return false;
-    putMedia(msg,m_rtpMedia,false);
-    if (!startRtp() && m_rtpForward) {
-	if (natAddr)
-	    msg.addParam("rtp_nat_addr",natAddr);
-	msg.addParam("rtp_forward","yes");
-	msg.addParam("rtp_addr",m_rtpAddr);
-	ObjList* l = m_rtpMedia->skipNull();
-	for (; l; l = l->skipNext()) {
-	    NetMedia* m = static_cast<NetMedia*>(l->get());
-	    msg.addParam("rtp_port"+m->suffix(),m->remotePort());
-	    if (m->isAudio())
-		msg.addParam("rtp_rfc2833",m->rfc2833());
-	}
-	addSdpParams(msg,body);
-	return true;
-    }
-    return false;
+    return m;
 }
 
 // Process SIP events belonging to this connection
@@ -3435,7 +2362,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
     MimeSdpBody* sdp = getSdpBody(msg->body);
     if (sdp) {
 	DDebug(this,DebugInfo,"YateSIPConnection got SDP [%p]",this);
-	setMedia(parseSDP(sdp,m_rtpAddr,m_rtpMedia));
+	setMedia(plugin.parser().parse(sdp,m_rtpAddr,m_rtpMedia));
 	// guess if the call comes from behind a NAT
 	if (s_auto_nat && isNatBetween(m_rtpAddr,m_host)) {
 	    Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
@@ -3553,16 +2480,16 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
 	    MimeSdpBody* sdp = getSdpBody(msg->body);
 	    while (sdp) {
 		String addr;
-		ObjList* lst = parseSDP(sdp,addr);
+		ObjList* lst = plugin.parser().parse(sdp,addr);
 		if (!lst)
 		    break;
 		if ((addr == m_rtpAddr) || isNatBetween(addr,m_host)) {
 		    ObjList* l = m_rtpMedia;
 		    for (; l; l = l->next()) {
-			NetMedia* m = static_cast<NetMedia*>(l->get());
+			SDPMedia* m = static_cast<SDPMedia*>(l->get());
 			if (!m)
 			    continue;
-			NetMedia* m2 = static_cast<NetMedia*>((*lst)[*m]);
+			SDPMedia* m2 = static_cast<SDPMedia*>((*lst)[*m]);
 			if (!m2)
 			    continue;
 			// both old and new media exist, compare ports
@@ -3600,7 +2527,7 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
 	MimeSdpBody* sdp = getSdpBody(msg->body);
 	if (sdp) {
 	    DDebug(this,DebugInfo,"YateSIPConnection got reINVITE SDP [%p]",this);
-	    setMedia(parseSDP(sdp,m_rtpAddr,m_rtpMedia));
+	    setMedia(plugin.parser().parse(sdp,m_rtpAddr,m_rtpMedia));
 	    // guess if the call comes from behind a NAT
 	    if (s_auto_nat && isNatBetween(m_rtpAddr,m_host)) {
 		Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
@@ -3646,7 +2573,7 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	if (m_rtpForward) {
 	    String addr;
 	    String natAddr;
-	    ObjList* lst = parseSDP(sdp,addr);
+	    ObjList* lst = plugin.parser().parse(sdp,addr);
 	    if (!lst)
 		break;
 	    // guess if the call comes from behind a NAT
@@ -3667,11 +2594,7 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	    if (natAddr)
 		msg.addParam("rtp_nat_addr",natAddr);
 	    putMedia(msg,lst);
-	    if (m_sdpForward) {
-		const DataBlock& raw = sdp->getBody();
-		String tmp((const char*)raw.data(),raw.length());
-		msg.addParam("sdp_raw",tmp);
-	    }
+	    addSdpParams(msg,sdp);
 	    // if peer doesn't support updates fail the reINVITE
 	    if (!Engine::dispatch(msg)) {
 		t->setResponse(msg.getIntValue("error",dict_errors,488),msg.getValue("reason"));
@@ -3687,7 +2610,7 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	if (m_mediaStatus == MediaMissing)
 	    break;
 	String addr;
-	ObjList* lst = parseSDP(sdp,addr);
+	ObjList* lst = plugin.parser().parse(sdp,addr);
 	if (!lst)
 	    break;
 	// guess if the call comes from behind a NAT
@@ -3721,26 +2644,16 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	msg->addParam("operation","notify");
 	msg->addParam("mandatory","false");
 	msg->addParam("mute",String::boolText(MediaStarted != m_mediaStatus));
-	putMedia(*msg,m_rtpMedia);
+	putMedia(*msg);
 	Engine::enqueue(msg);
 	return;
     }
     if (s_refresh_nosdp && !sdp) {
 	// be permissive, accept session refresh with no SDP
 	SIPMessage* m = new SIPMessage(t->initialMessage(),200);
-	if (!m_rtpForward) {
-	    // if possible provide our own media offer
-	    switch (m_mediaStatus) {
-		case MediaStarted:
-		    m->setBody(createSDP(getRtpAddr()));
-		    break;
-		case MediaMuted:
-		    m->setBody(createSDP(0));
-		    break;
-		default:
-		    break;
-	    }
-	}
+	// if required provide our own media offer
+	if (!m_rtpForward)
+	    m->setBody(createSDP());
 	t->setResponse(m);
 	m->deref();
 	return;
@@ -4007,7 +2920,7 @@ bool YateSIPConnection::msgAnswered(Message& msg)
 	    if (startNow && !m_rtpMedia) {
 		// early RTP start but media list yet unknown - build best guess
 		ObjList* lst = new ObjList;
-		lst->append(new NetMedia("audio","RTP/AVP",msg.getValue("formats",s_audio)));
+		lst->append(new SDPMedia("audio","RTP/AVP",msg.getValue("formats",s_audio)));
 		setMedia(lst);
 		m_rtpAddr = m_host;
 	    }
@@ -4054,7 +2967,7 @@ bool YateSIPConnection::msgTone(Message& msg, const char* tone)
     // RFC 2833 and inband require that we have an active local RTP stream
     if (m_rtpMedia && (m_mediaStatus == MediaStarted) && !info) {
 	ObjList* l = m_rtpMedia->find("audio");
-	const NetMedia* m = static_cast<const NetMedia*>(l ? l->get() : 0);
+	const SDPMedia* m = static_cast<const SDPMedia*>(l ? l->get() : 0);
 	if (m) {
 	    if (!(inband || m->rfc2833().toBoolean(true))) {
 		Debug(this,DebugNote,"Forcing DTMF '%s' inband, format '%s' [%p]",
@@ -4314,7 +3227,7 @@ void YateSIPConnection::updateFormats(const Message& msg)
 	    tmp = "audio";
 	else
 	    tmp = tmp.substr(1);
-	NetMedia* rtp = static_cast<NetMedia*>(m_rtpMedia->operator[](tmp));
+	SDPMedia* rtp = static_cast<SDPMedia*>(m_rtpMedia->operator[](tmp));
 	if (rtp && rtp->update(*p))
 	    Debug(this,DebugNote,"Formats for '%s' changed to '%s'",tmp.c_str(),p->c_str());
     }
@@ -4381,7 +3294,7 @@ void YateSIPConnection::startPendingUpdate()
     msg.addParam("operation","request");
     msg.addParam("rtp_forward","yes");
     msg.addParam("rtp_addr",m_rtpAddr);
-    putMedia(msg,m_rtpMedia);
+    putMedia(msg);
     m_reInviting = ReinviteRequest;
     // if peer doesn't support updates fail the reINVITE
     if (!Engine::dispatch(msg)) {
@@ -5151,35 +4064,17 @@ bool SIPDriver::msgExecute(Message& msg, String& dest)
 }
 
 SIPDriver::SIPDriver()
-    : Driver("sip","varchans"), m_endpoint(0)
+    : Driver("sip","varchans"), 
+      m_parser("sip","SIP Call"),
+      m_endpoint(0)
 {
     Output("Loaded module SIP Channel");
+    m_parser.debugChain(this);
 }
 
 SIPDriver::~SIPDriver()
 {
     Output("Unloading module SIP Channel");
-}
-
-void SIPDriver::initAudioCodecs()
-{
-    bool defcodecs = s_cfg.getBoolValue("codecs","default",true);
-    String tmp;
-    String audio = "audio";
-    for (const TokenDict* dict = dict_payloads; dict->token; dict++) {
-	DataFormat fmt(dict->token);
-	const FormatInfo* info = fmt.getInfo();
-	if (info && (audio == info->type)) {
-	    if (s_cfg.getBoolValue("codecs",fmt,defcodecs && DataTranslator::canConvert(fmt)))
-		tmp.append(fmt,",");
-	}
-    }
-    if (tmp.null()) {
-	Debug(this,DebugWarn,"No default audio codecs, using defaults");
-	tmp = "alaw,mulaw";
-    }
-    s_audio = tmp;
-    DDebug(this,DebugNote,"Default audio codecs: %s",s_audio.c_str());
 }
 
 void SIPDriver::initialize()
@@ -5195,9 +4090,6 @@ void SIPDriver::initialize()
     s_progress = s_cfg.getBoolValue("general","progress",false);
     s_inband = s_cfg.getBoolValue("general","dtmfinband",false);
     s_info = s_cfg.getBoolValue("general","dtmfinfo",false);
-    s_rfc2833 = s_cfg.getBoolValue("general","rfc2833",true);
-    s_secure = s_cfg.getBoolValue("general","secure",false);
-    s_forward_sdp = s_cfg.getBoolValue("general","forward_sdp",false);
     s_rtpip = s_cfg.getValue("general","rtp_localip");
     s_start_rtp = s_cfg.getBoolValue("general","rtp_start",false);
     s_multi_ringing = s_cfg.getBoolValue("general","multi_ringing",false);
@@ -5211,8 +4103,7 @@ void SIPDriver::initialize()
     s_reg_async = s_cfg.getBoolValue("registrar","async_process",true);
     s_ack_required = !s_cfg.getBoolValue("hacks","ignore_missing_ack",false);
     s_1xx_formats = s_cfg.getBoolValue("hacks","1xx_change_formats",true);
-    s_ignore_port = s_cfg.getBoolValue("hacks","ignore_sdp_port",false);
-    initAudioCodecs();
+    m_parser.initialize(s_cfg.getSection("codecs"),s_cfg.getSection("hacks"),s_cfg.getSection("general"));
     if (!m_endpoint) {
 	m_endpoint = new YateSIPEndPoint();
 	if (!(m_endpoint->Init())) {

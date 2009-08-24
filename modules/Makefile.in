@@ -248,18 +248,18 @@ yjinglechan.yate jingle/jinglefeatures.yate: LOCALLIBS = -lyatejingle
 
 server/dbpbx.yate server/pbxassist.yate: ../libs/ypbx/libyatepbx.a
 server/dbpbx.yate server/pbxassist.yate: LOCALFLAGS = -I@top_srcdir@/libs/ypbx
-server/dbpbx.yate server/pbxassist.yate: LOCALLIBS = ../libs/ypbx/libyatepbx.a
+server/dbpbx.yate server/pbxassist.yate: LOCALLIBS = -L../libs/ypbx -lyatepbx
 
-server/mgcpca.yate: ../libyatemgcp.so ../libyatesig.so
-server/mgcpca.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymgcp -I@top_srcdir@/libs/ysig
-server/mgcpca.yate: LOCALLIBS = -lyatemgcp -lyatesig
+server/mgcpca.yate: ../libyatemgcp.so ../libyatesig.so ../libs/ysdp/libyatesdp.a
+server/mgcpca.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymgcp -I@top_srcdir@/libs/ysig -I@top_srcdir@/libs/ysdp
+server/mgcpca.yate: LOCALLIBS = -lyatemgcp -lyatesig -L../libs/ysdp -lyatesdp
 
 server/mgcpgw.yate: ../libyatemgcp.so
 server/mgcpgw.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymgcp
 server/mgcpgw.yate: LOCALLIBS = -lyatemgcp
 
 ilbccodec.yate: ../libs/ilbc/libilbc.a
-ilbccodec.yate: LOCALLIBS = ../libs/ilbc/libilbc.a
+ilbccodec.yate: LOCALLIBS = -L../libs/ilbc -lilbc
 ilbccodec.yate: LOCALFLAGS = @ILBC_INC@
 
 gsmcodec.yate: LOCALLIBS = -lgsm
@@ -274,13 +274,13 @@ amrnbcodec.yate: LOCALLIBS = @AMRNB_LIB@
 faxchan.yate: LOCALLIBS = -lspandsp
 faxchan.yate: LOCALFLAGS = @SPANDSP_INC@
 
-ysipchan.yate: ../libs/ysip/libyatesip.a
-ysipchan.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysip
-ysipchan.yate: LOCALLIBS = ../libs/ysip/libyatesip.a
+ysipchan.yate: ../libs/ysip/libyatesip.a ../libs/ysdp/libyatesdp.a
+ysipchan.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysip -I@top_srcdir@/libs/ysdp
+ysipchan.yate: LOCALLIBS = -L../libs/ysip -lyatesip -L../libs/ysdp -lyatesdp
 
 yrtpchan.yate: ../libs/yrtp/libyatertp.a
 yrtpchan.yate: LOCALFLAGS = -I@top_srcdir@/libs/yrtp
-yrtpchan.yate: LOCALLIBS = ../libs/yrtp/libyatertp.a
+yrtpchan.yate: LOCALLIBS = -L../libs/yrtp -lyatertp
 
 openssl.yate: LOCALFLAGS = @OPENSSL_INC@
 openssl.yate: LOCALLIBS = @OPENSSL_LIB@
@@ -303,6 +303,9 @@ qt4/updater.yate: LOCALLIBS = @QT4_LIB_NET@
 
 ../libs/yrtp/libyatertp.a:
 	$(MAKE) -C ../libs/yrtp
+
+../libs/ysdp/libyatesdp.a:
+	$(MAKE) -C ../libs/ysdp
 
 ../libs/yiax/libyateiax.a:
 	$(MAKE) -C ../libs/yiax

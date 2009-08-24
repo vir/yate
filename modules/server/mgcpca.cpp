@@ -27,6 +27,7 @@
 #include <yatephone.h>
 #include <yatemgcp.h>
 #include <yatesig.h>
+#include <yatesdp.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -112,6 +113,7 @@ public:
     bool ownsId(const String& rqId) const;
     static SignallingComponent* create(const String& type, const NamedList& name);
     static MGCPSpan* findNotify(const String& id);
+    bool getBoolParam(const String& param, bool defValue) const;
     bool matchEndpoint(const MGCPEndpointId& ep);
     bool processEvent(MGCPTransaction* tr, MGCPMessage* mm);
     bool processNotify(MGCPTransaction* tr, MGCPMessage* mm, const String& event, const String& requestId);
@@ -127,6 +129,8 @@ private:
     unsigned int m_count;
     MGCPEndpointId m_epId;
     bool m_operational;
+    bool m_rtpForward;
+    bool m_sdpForward;
     bool m_fxo;
     bool m_fxs;
     String m_notify;
@@ -134,7 +138,7 @@ private:
     String m_version;
 };
 
-class MGCPCircuit : public SignallingCircuit
+class MGCPCircuit : public SignallingCircuit, public SDPSession
 {
 public:
     MGCPCircuit(unsigned int code, MGCPSpan* span, const char* id);
@@ -142,6 +146,11 @@ public:
     virtual void* getObject(const String& name) const;
     virtual bool status(Status newStat, bool sync);
     virtual bool updateFormat(const char* format, int direction);
+    virtual bool setParam(const String& param, const String& value);
+    virtual bool getParam(const String& param, String& value) const;
+    virtual bool getBoolParam(const String& param, bool defValue) const;
+    virtual bool setParams(const NamedList& params);
+    virtual bool getParams(NamedList& params, const String& category = String::empty());
     virtual bool sendEvent(SignallingCircuitEvent::Type type, NamedList* params);
     inline const String& epId() const
 	{ return m_epId; }
@@ -150,12 +159,16 @@ public:
     inline const String& connId() const
 	{ return m_connId; }
     inline bool hasRtp() const
-	{ return m_rtpId && (m_source || m_consumer); }
+	{ return m_source || m_consumer; }
+    inline bool hasLocalRtp() const
+	{ return m_rtpLocalAddr || m_localRawSdp; }
     inline MGCPSpan* mySpan()
 	{ return static_cast<MGCPSpan*>(span()); }
-    inline bool fxo()
+    inline const MGCPSpan* mySpan() const
+	{ return static_cast<const MGCPSpan*>(span()); }
+    inline bool fxo() const
 	{ return mySpan()->fxo(); }
-    inline bool fxs()
+    inline bool fxs() const
 	{ return mySpan()->fxs(); }
     inline void needClear()
 	{ m_needClear = true; }
@@ -163,7 +176,26 @@ public:
     bool processNotify(const String& package, const String& event, const String& fullName);
     void processDelete(MGCPMessage* mm, const String& error);
     void clearConn(bool force = false);
+protected:
+    // Create a chan.rtp message pointing to the circuit
+    virtual Message* buildChanRtp(RefObject* context)
+	{
+	    Message* m = new Message("chan.rtp");
+	    m->userData(context ? context : this);
+	    return m;
+	}
+    virtual Message* buildChanRtp(SDPMedia* media, const char* addr, bool start, RefObject* context)
+	{
+	    Message* m = SDPSession::buildChanRtp(media,addr,start,context);
+	    if (m) {
+		if (start && media->id())
+		    m->addParam("rtpid",media->id());
+		m->addParam("mgcp_allowed",String::boolText(false));
+	    }
+	    return m;
+	}
 private:
+    void waitNotChanging();
     MGCPMessage* message(const char* cmd);
     bool sendAsync(MGCPMessage* mm);
     RefPointer<MGCPMessage> sendSync(MGCPMessage* mm);
@@ -171,28 +203,25 @@ private:
     bool enqueueEvent(SignallingCircuitEvent::Type type, const char* name, const char* dtmf = 0);
     void cleanupRtp();
     bool createRtp();
-    bool startRtp();
     bool setupConn();
     String m_epId;
     Status m_statusReq;
     String m_notify;
+    bool m_changing;
+    // Gateway endpoint bearer information
+    String m_gwFormat;
+    bool m_gwFormatChanged;
     // Connection data
     String m_connId;
     String m_callId;
     // Local RTP related data
     RefPointer<DataSource> m_source;
     RefPointer<DataConsumer> m_consumer;
-    String m_rtpId;
-    String m_localIp;
-    int m_localPort;
-    int m_sdpSession;
-    int m_sdpVersion;
+    String m_localRawSdp;
+    bool m_localRtpChanged;
     // Remote (MGCP GW side) RTP data
-    String m_remoteIp;
-    int m_remotePort;
-    int m_remotePayload;
-    const char* m_payloads;
     bool m_needClear;
+    String m_remoteRawSdp;
     // Synchronous transaction data
     MGCPTransaction* m_tr;
     RefPointer<MGCPMessage> m_msg;
@@ -227,11 +256,13 @@ public:
     virtual void initialize();
     virtual void statusParams(String& str);
     virtual void statusDetail(String& str);
+    inline SDPParser& parser()
+	{ return m_parser; }
+private:
+    SDPParser m_parser;
 };
 
 YSIGFACTORY2(MGCPSpan);
-
-static const char* s_payloads = "0 8";
 
 static YMGCPEngine* s_engine = 0;
 static MGCPEndpoint* s_endpoint = 0;
@@ -242,6 +273,40 @@ static ObjList s_wrappers;
 static ObjList s_spans;
 static Mutex s_mutex(false,"MGCP-CA");
 
+// Yate Payloads for the AV profile
+static TokenDict s_dict_payloads[] = {
+    { "mulaw",         0 },
+    { "alaw",          8 },
+    { "gsm",           3 },
+    { "lpc10",         7 },
+    { "slin",         11 },
+    { "g726",          2 },
+    { "g722",          9 },
+    { "g723",          4 },
+    { "g728",         15 },
+    { "g729",         18 },
+    { "ilbc",         98 },
+    { "ilbc20",       98 },
+    { "ilbc30",       98 },
+    { "amr",          96 },
+    { "amr-o",        96 },
+    { "amr/16000",    99 },
+    { "amr-o/16000",  99 },
+    { "speex",       102 },
+    { "speex/16000", 103 },
+    { "speex/32000", 104 },
+    { "h261",         31 },
+    { "h263",         34 },
+    { "mpv",          32 },
+    {      0,          0 },
+};
+
+// Media gateway bearer information (mapped from s_dict_payloads)
+static TokenDict s_dict_gwbearerinfo[] = {
+    { "e:mu",          0 },
+    { "e:A",           8 },
+    {      0,          0 },
+};
 
 // Copy one parameter (if present) with new name
 static bool copyRename(NamedList& dest, const char* dname, const NamedList& src, const String& sname)
@@ -742,7 +807,7 @@ MGCPSpan::MGCPSpan(const NamedList& params, const char* name, const MGCPEpInfo& 
     : SignallingCircuitSpan(params.getValue("debugname",name),
        static_cast<SignallingCircuitGroup*>(params.getObject("SignallingCircuitGroup"))),
       m_circuits(0), m_count(0), m_epId(ep), m_operational(false),
-      m_fxo(false), m_fxs(false)
+      m_rtpForward(false), m_sdpForward(false), m_fxo(false), m_fxs(false)
 {
     Debug(&splugin,DebugAll,"MGCPSpan::MGCPSpan(%p,'%s') [%p]",
 	&params,name,this);
@@ -824,6 +889,8 @@ bool MGCPSpan::init(const NamedList& params)
 	    break;
     }
     m_increment = config->getIntValue("increment",m_increment);
+    m_rtpForward = config->getBoolValue("forward_rtp",!(m_fxo || m_fxs));
+    m_sdpForward = config->getBoolValue("forward_sdp",false);
     bool clear = config->getBoolValue("clearconn",false);
     m_circuits = new MGCPCircuit*[m_count];
     unsigned int i;
@@ -895,6 +962,18 @@ void MGCPSpan::operational(const SocketAddr& address)
     if (ep && !(m_operational && ep->address.valid()))
 	ep->address = address;
     operational(true);
+}
+
+// Get a configuration or operational boolean parameter by name
+bool MGCPSpan::getBoolParam(const String& param, bool defValue) const
+{
+    if (param == "operational")
+	return operational();
+    if (param == "rtp_forward")
+	return m_rtpForward;
+    if (param == "sdp_forward")
+	return m_sdpForward;
+    return defValue;
 }
 
 // Check if this span matches an endpoint ID
@@ -1048,10 +1127,9 @@ bool MGCPSpan::processDelete(MGCPTransaction* tr, MGCPMessage* mm, const String&
 
 MGCPCircuit::MGCPCircuit(unsigned int code, MGCPSpan* span, const char* id)
     : SignallingCircuit(RTP,code,Missing,span->group(),span),
-      m_epId(id), m_statusReq(Missing),
-      m_localPort(0), m_sdpSession(0), m_sdpVersion(0),
-      m_remotePort(0), m_remotePayload(-1),
-      m_payloads(s_payloads), m_needClear(false), m_tr(0)
+      SDPSession(&splugin.parser()),
+      m_epId(id), m_statusReq(Missing), m_changing(false), m_gwFormatChanged(false),
+      m_localRtpChanged(false), m_needClear(false), m_tr(0)
 {
     Debug(&splugin,DebugAll,"MGCPCircuit::MGCPCircuit(%u,%p,'%s') [%p]",
 	code,span,id,this);
@@ -1093,11 +1171,10 @@ void* MGCPCircuit::getObject(const String& name) const
 // Clean up any RTP we may still hold
 void MGCPCircuit::cleanupRtp()
 {
-    if (m_rtpId) {
-	m_rtpId.clear();
-	m_localIp.clear();
-	m_localPort = 0;
-    }
+    resetSdp();
+    m_localRawSdp.clear();
+    m_localRtpChanged = false;
+    m_remoteRawSdp.clear();
     m_source = 0;
     m_consumer = 0;
 }
@@ -1108,54 +1185,22 @@ bool MGCPCircuit::createRtp()
     if (hasRtp())
 	return true;
     cleanupRtp();
-    Message m("chan.rtp");
+    resetSdp();
+    updateSDP(NamedList::empty());
     RefPointer<DataEndpoint> de = new DataEndpoint;
-    de->deref();
-    m.userData(de);
-    m.addParam("direction","bidir");
-    if (m_remoteIp && m_remotePort) {
-	m.addParam("remoteip",m_remoteIp);
-	m.addParam("remoteport",String(m_remotePort));
-    }
-    else
-	m.addParam("remoteip",mySpan()->address());
-    m.addParam("mgcp_allowed",String::boolText(false));
-    if (Engine::dispatch(m)) {
+    bool ok = dispatchRtp(mySpan()->address(),false,de);
+    if (ok) {
 	m_source = de->getSource();
 	m_consumer = de->getConsumer();
-	m_rtpId = m.getValue("rtpid");
-	m_localIp = m.getValue("localip");
-	m_localPort = m.getIntValue("localport");
-	if (m_localIp && m_localPort && hasRtp())
-	    return true;
+	DDebug(&splugin,DebugAll,"MGCPCircuit::createRtp() src=%p cons=%p [%p]",
+	    (void*)m_source,(void*)m_consumer,this);
     }
-    m_localIp.clear();
-    m_localPort = 0;
-    Debug(&splugin,DebugWarn,"MGCPCircuit::createRtp() failed [%p]",this);
-    cleanupRtp();
-    return false;
-}
-
-// Start the local RTP instance
-bool MGCPCircuit::startRtp()
-{
-    if (!(m_remoteIp && m_remotePort && (m_remotePayload >= 0) && hasRtp()))
-	return false;
-    Message m("chan.rtp");
-    m.addParam("direction","bidir");
-    m.addParam("rtpid",m_rtpId);
-    m.addParam("remoteip",m_remoteIp);
-    m.addParam("remoteport",String(m_remotePort));
-    m.addParam("payload",String(m_remotePayload));
-    if (m_localIp)
-	m.addParam("localip",m_localIp);
-    if (m_localPort)
-	m.addParam("localport",String(m_localPort));
-    m.addParam("mgcp_allowed",String::boolText(false));
-    if (Engine::dispatch(m))
-	return true;
-    Debug(&splugin,DebugWarn,"MGCPCircuit::startRtp() failed [%p]",this);
-    return false;
+    else {
+	Debug(&splugin,DebugWarn,"MGCPCircuit::createRtp() failed [%p]",this);
+	cleanupRtp();
+    }
+    TelEngine::destruct(de);
+    return ok;
 }
 
 // Create or update remote connection
@@ -1165,61 +1210,41 @@ bool MGCPCircuit::setupConn()
     mm->params.addParam("C",m_callId);
     if (m_connId)
 	mm->params.addParam("I",m_connId);
-    if (m_localIp && m_localPort) {
+    if (m_gwFormatChanged && m_gwFormat)
+	mm->params.addParam("B",m_gwFormat);
+    if (m_localRawSdp) {
 	mm->params.addParam("M","sendrecv");
-	if (m_sdpSession)
-	    ++m_sdpVersion;
-	else
-	    m_sdpSession = m_sdpVersion = Time::secNow();
-	String mLine("audio ");
-	String oLine("yate ");
-	mLine << m_localPort << " RTP/AVP " << m_payloads;
-	oLine << m_sdpSession << " " << m_sdpVersion << " IN IP4 " << m_localIp;
-	MimeSdpBody* sdp = new MimeSdpBody;
-	sdp->addLine("v","0");
-	sdp->addLine("o",oLine);
-	sdp->addLine("s","PSTN Circuit");
-	sdp->addLine("c","IN IP4 " + m_localIp);
-	sdp->addLine("t","0 0");
-	sdp->addLine("m",mLine);
-	mm->sdp.append(sdp);
+	mm->sdp.append(new MimeSdpBody("application/sdp",
+	    m_localRawSdp.safe(),m_localRawSdp.length()));
+    }
+    else {
+	MimeSdpBody* sdp = createSDP(getRtpAddr());
+	if (sdp) {
+	    mm->params.addParam("M","sendrecv");
+	    mm->sdp.append(sdp);
+	}
     }
     mm = sendSync(mm);
     if (!mm)
 	return false;
+    m_gwFormatChanged = false;
     if (m_connId.null())
 	m_connId = mm->params.getParam("i");
     if (m_connId.null()) {
 	m_needClear = true;
 	return false;
     }
+    m_localRtpChanged = false;
     MimeSdpBody* sdp = static_cast<MimeSdpBody*>(mm->sdp[0]);
     if (sdp) {
-	m_remoteIp.clear();
-	m_remotePort = 0;
-	const NamedString* c = sdp->getLine("c");
-	if (c) {
-	    String tmp(*c);
-	    if (tmp.startSkip("IN IP4")) {
-		tmp.trimBlanks();
-		if (tmp == "0.0.0.0")
-		    tmp.clear();
-		m_remoteIp = tmp;
-	    }
-	}
-	c = sdp->getLine("m");
-	for (; c; c = sdp->getNextLine(c)) {
-	    String tmp(*c);
-	    if (!tmp.startSkip("audio",true))
-		continue;
-	    int port = 0;
-	    tmp >> port >> " ";
-	    if (!tmp.startSkip("RTP/AVP",true,true))
-		continue;
-	    m_remotePort = port;
-	    tmp >> m_remotePayload;
-	    return (m_remotePayload >= 0) && (m_remotePayload <= 255);
-	}
+	String oldIp = m_rtpAddr;
+	bool mediaChanged = setMedia(splugin.parser().parse(*sdp,m_rtpAddr,m_rtpMedia));
+	const DataBlock& raw = sdp->getBody();
+	m_remoteRawSdp.assign((const char*)raw.data(),raw.length());
+	// Disconnect if media changed
+	if (mediaChanged && oldIp && oldIp != m_rtpAddr)
+	    enqueueEvent(SignallingCircuitEvent::Disconnected,"Disconnected");
+	return true;
     }
     return true;
 }
@@ -1236,11 +1261,29 @@ void MGCPCircuit::clearConn(bool force)
     }
     if (!force)
 	mm->params.addParam("C",m_callId);
+    else {
+	m_gwFormat.clear();
+	m_gwFormatChanged = false;
+    }
     m_connId.clear();
-    m_remoteIp.clear();
-    m_remotePort = 0;
-    m_sdpSession = 0;
+    resetSdp();
+    m_remoteRawSdp.clear();
+    m_localRtpChanged = false;
     sendAsync(mm);
+}
+
+// Wait for changing flag to be false
+void MGCPCircuit::waitNotChanging()
+{
+    while (true) {
+	Lock lock(s_mutex);
+	if (!m_changing) {
+	    m_changing = true;
+	    break;
+	}
+	lock.drop();
+	Thread::yield(true);
+    }
 }
 
 // Build a MGCP message
@@ -1308,32 +1351,65 @@ bool MGCPCircuit::sendRequest(const char* sigReq, const char* reqEvt, const char
 // Circuit status change request
 bool MGCPCircuit::status(Status newStat, bool sync)
 {
-    Debug(&splugin,DebugInfo,"MGCPCircuit::status(%s,%s) [%p]",
-	lookupStatus(newStat),String::boolText(sync),this);
-    if ((newStat == m_statusReq) && ((SignallingCircuit::status() == newStat) || !sync))
-	return true;
-    if (!mySpan()->operational()) {
-	if (newStat >= Idle)
+    Debug(&splugin,DebugInfo,"MGCPCircuit::status(%s,%s) %u [%p]",
+	lookupStatus(newStat),String::boolText(sync),code(),this);
+    waitNotChanging();
+    // Don't notify local rtp if we already have it (addr/port/sdp) and didn't changed
+    // Accept only synchronous connect requests
+    bool allowRtpChange = false;
+    if (newStat == Connected) {
+	if (!sync) {
+	    m_changing = false;
 	    return false;
+	}
+	allowRtpChange = SignallingCircuit::status() == Connected &&
+	    hasLocalRtp() && m_localRtpChanged;
+	if (SignallingCircuit::status() != Connected && !(fxs() || fxo()))
+	    sendRequest(0,"D/[0-9#*](N)");
+    }
+    if (!allowRtpChange && (newStat == m_statusReq) &&
+	((SignallingCircuit::status() == newStat) || !sync)) {
+	m_changing = false;
+	return true;
+    }
+    if (!mySpan()->operational()) {
+	if (newStat >= Idle) {
+	    m_changing = false;
+	    return false;
+	}
     }
     m_statusReq = newStat;
     switch (newStat) {
 	case Connected:
-	    if (createRtp() && setupConn() && startRtp())
-		break;
+	    // Create local rtp if we don't have one
+	    // Start it if we don't forward the rtp
+	    if (m_rtpForward || hasLocalRtp() || createRtp()) {
+		if (setupConn()) {
+		    if (m_rtpForward || startRtp())
+			break;
+		    clearConn();
+		}
+		cleanupRtp();
+	    }
 	    m_statusReq = SignallingCircuit::status();
+	    m_changing = false;
 	    return false;
+	case Reserved:
+	    break;
 	case Idle:
 	    if (m_needClear) {
 		m_needClear = false;
 		clearConn(true);
 	    }
 	default:
-	    m_payloads = s_payloads;
 	    cleanupRtp();
 	    clearConn();
     }
-    return SignallingCircuit::status(newStat,sync);
+    DDebug(&splugin,DebugInfo,"MGCPCircuit new status '%s' on %u [%p]",
+	lookupStatus(newStat),code(),this);
+    bool ok = SignallingCircuit::status(newStat,sync);
+    m_changing = false;
+    return ok;
 }
 
 // Change the format of this circuit
@@ -1343,12 +1419,99 @@ bool MGCPCircuit::updateFormat(const char* format, int direction)
 	return false;
     Debug(&splugin,DebugInfo,"MGCPCircuit::updateFormat('%s',%d) %u [%p]",
 	format,direction,code(),this);
-    if (0 == ::strcmp(format,"mulaw"))
-	m_payloads = "0";
-    else if (0 == ::strcmp(format,"alaw"))
-	m_payloads = "8";
+    int fmt = lookup(format,s_dict_payloads,-1);
+    const char* gwFmt = lookup(fmt,s_dict_gwbearerinfo);
+    if (!gwFmt)
+	return false;
+    waitNotChanging();
+    if (m_gwFormat != gwFmt) {
+	m_gwFormat = gwFmt;
+	m_gwFormatChanged = true;
+    }
+    m_changing = false;
+    return true;
+}
+
+bool MGCPCircuit::setParam(const String& param, const String& value)
+{
+    if (m_changing)
+	return false;
+    Lock lock(s_mutex);
+    if (m_changing)
+	return false;
+    bool rtpChanged = false;
+    if (param == "sdp_raw") {
+	rtpChanged = m_localRawSdp != value;
+	m_localRawSdp = value;
+    }
+    else if (param == "rtp_forward") {
+	bool fwd = value.toBoolean();
+	rtpChanged = m_rtpForward != fwd;
+	m_rtpForward = fwd;
+    }
     else
 	return false;
+    m_localRtpChanged = m_localRtpChanged || rtpChanged;
+    lock.drop();
+    DDebug(&splugin,DebugAll,"MGCPCircuit::setParam(%s,%s) %u [%p]",
+	param.c_str(),value.c_str(),code(),this);
+    return true;
+}
+
+bool MGCPCircuit::getParam(const String& param, String& value) const
+{
+    if (m_changing)
+	return false;
+    Lock lock(s_mutex);
+    if (m_changing)
+	return false;
+    if (param == "rtp_addr") {
+	value = m_rtpAddr;
+	return true;
+    }
+    else if (param == "sdp_raw") {
+	value = m_remoteRawSdp;
+	return true;
+    }
+    return false;
+}
+
+bool MGCPCircuit::getBoolParam(const String& param, bool defValue) const
+{
+    return mySpan()->getBoolParam(param,defValue);
+}
+
+// Set circuit data from a list of parameters
+bool MGCPCircuit::setParams(const NamedList& params)
+{
+    if (params == "rtp") {
+	waitNotChanging();
+	DDebug(&splugin,DebugAll,"MGCPCircuit::setParams(rtp) %u [%p]",code(),this);
+	String* raw = params.getParam("sdp_raw");
+	if (raw && m_localRawSdp != *raw) {
+	    m_localRawSdp = *raw;
+	    m_localRtpChanged = true;
+	    m_rtpForward = true;
+	}
+	if (!m_localRawSdp) {
+	    m_localRtpChanged = updateRtpSDP(params) || localRtpChanged() || m_localRtpChanged;
+	    setLocalRtpChanged();
+	    if (m_localRtpChanged)
+		m_rtpForward = true;
+	}
+	m_changing = false;
+	return true;
+    }
+    return SignallingCircuit::setParams(params);
+}
+
+bool MGCPCircuit::getParams(NamedList& params, const String& category)
+{
+    if (category != "rtp")
+	return false;
+    waitNotChanging();
+    addRtpParams(params,String::empty(),0,true);
+    m_changing = false;
     return true;
 }
 
@@ -1358,6 +1521,10 @@ bool MGCPCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params
     DDebug(&splugin,DebugAll,"MGCPCircuit::sendEvent(%u,%p) %u [%p]",
 	type,params,code(),this);
     switch (type) {
+	case SignallingCircuitEvent::Connect:
+	    if (params)
+		setParams(*params);
+	    return status(Connected,!params || params->getBoolValue("sync",true));
 	case SignallingCircuitEvent::RingBegin:
 	    return fxs() && sendRequest("L/rg");
 //	case SignallingCircuitEvent::RingEnd:
@@ -1434,6 +1601,11 @@ bool MGCPCircuit::processNotify(const String& package, const String& event, cons
 	    return enqueueEvent(SignallingCircuitEvent::Polarity,fullName);
     }
     else if (package == "D") {
+#if 0
+	// TEST
+	Debug(&splugin,DebugStub,"MGCPCircuit::processNotify() sending DTMF req [%p]",this);
+        sendRequest(0,"D/[0-9#*](N)");
+#endif
 	// DTMF events
 	if (event.length() == 1)
 	    return enqueueEvent(SignallingCircuitEvent::Dtmf,fullName,event);
@@ -1444,14 +1616,15 @@ bool MGCPCircuit::processNotify(const String& package, const String& event, cons
 // We were forcibly disconnected by the gateway
 void MGCPCircuit::processDelete(MGCPMessage* mm, const String& error)
 {
+    waitNotChanging();
     if (m_connId)
 	Debug(&splugin,DebugWarn,"Gateway deleted connection '%s' on circuit %u [%p]",
 	    m_connId.c_str(),code(),this);
     m_connId.clear();
-    m_remoteIp.clear();
-    m_remotePort = 0;
-    m_sdpSession = 0;
-    m_payloads = s_payloads;
+    m_gwFormat.clear();
+    m_gwFormatChanged = false;
+    cleanupRtp();
+    m_changing = false;
     unsigned int code = 0;
     String tmp(error);
     tmp >> code;
@@ -1469,7 +1642,8 @@ void MGCPCircuit::processDelete(MGCPMessage* mm, const String& error)
 }
 
 // Enqueue an event detected by this circuit
-bool MGCPCircuit::enqueueEvent(SignallingCircuitEvent::Type type, const char* name, const char* dtmf)
+bool MGCPCircuit::enqueueEvent(SignallingCircuitEvent::Type type, const char* name,
+    const char* dtmf)
 {
     DDebug(&splugin,DebugAll,"Enqueueing event %u '%s' '%s' on %u [%p]",
 	type,name,dtmf,code(),this);
@@ -1553,9 +1727,11 @@ bool DTMFHandler::received(Message& msg)
 
 
 MGCPPlugin::MGCPPlugin()
-    : Module("mgcpca","misc")
+    : Module("mgcpca","misc"),
+      m_parser("mgcpca","PSTN Circuit")
 {
     Output("Loaded module MGCP-CA");
+    m_parser.debugChain(this);
 }
 
 MGCPPlugin::~MGCPPlugin()
@@ -1644,6 +1820,7 @@ void MGCPPlugin::initialize()
 	    Engine::install(new DTMFHandler);
 	}
     }
+    m_parser.initialize(cfg.getSection("codecs"),cfg.getSection("hacks"));
 }
 
 }; // anonymous namespace

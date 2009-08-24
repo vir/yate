@@ -94,6 +94,11 @@ private:
     void evAnswer(SignallingEvent* event);
     void evRinging(SignallingEvent* event);
     void evCircuit(SignallingEvent* event);
+    // Handle RTP forward from a message.
+    // Return a circuit event to be sent or 0 if not handled
+    SignallingCircuitEvent* handleRtp(Message& msg);
+    // Set RTP data from circuit to message
+    bool addRtp(Message& msg, bool possible = false);
     // Update circuit and format in source, optionally in consumer too
     void updateCircuitFormat(SignallingEvent* event, bool consumer);
     // Open or update format source/consumer
@@ -115,6 +120,8 @@ private:
     bool m_hungup;                       // Hang up flag
     String m_reason;                     // Hangup reason
     bool m_inband;                       // True to try to send in-band tones
+    bool m_rtpForward;                   // Forward RTP
+    bool m_sdpForward;                   // Forward SDP (only of rtp forward is enabled)
     Message* m_route;                    // Prepared call.preroute message
 };
 
@@ -642,6 +649,8 @@ SigChannel::SigChannel(SignallingEvent* event)
     m_trunk(0),
     m_hungup(true),
     m_inband(false),
+    m_rtpForward(false),
+    m_sdpForward(false),
     m_route(0)
 {
     if (!(m_call && m_call->ref())) {
@@ -660,8 +669,12 @@ SigChannel::SigChannel(SignallingEvent* event)
     m_hungup = false;
     setState(0);
     SignallingCircuit* cic = getCircuit();
-    if (m_trunk && cic)
-	m_address << m_trunk->name() << "/" << cic->code();
+    if (cic) {
+	if (m_trunk)
+	    m_address << m_trunk->name() << "/" << cic->code();
+	m_rtpForward = cic->getBoolParam("rtp_forward");
+	m_sdpForward = cic->getBoolParam("sdp_forward");
+    }
     Message* m = message("chan.startup");
     m->setParam("direction",status());
     m->addParam("caller",m_caller);
@@ -689,6 +702,8 @@ SigChannel::SigChannel(const char* caller, const char* called)
     m_hungup(true),
     m_reason("noconn"),
     m_inband(false),
+    m_rtpForward(false),
+    m_sdpForward(false),
     m_route(0)
 {
 }
@@ -704,6 +719,15 @@ bool SigChannel::startRouter()
 {
     Message* m = m_route;
     m_route = 0;
+    Lock lock(m_mutex);
+    SignallingCircuit* cic = getCircuit();
+    String addr;
+    if (cic && cic->getParam("rtp_addr",addr)) {
+	m_rtpForward = true;
+	m_sdpForward = cic->getBoolParam("sdp_forward");
+	addRtp(*m,true);
+    }
+    lock.drop();
     return Channel::startRouter(m);
 }
 
@@ -748,6 +772,11 @@ bool SigChannel::startCall(Message& msg, String& trunks)
 	    else
 		cic->setParam("echocancel",String::boolText(echo->toBoolean(true)));
 	}
+	m_rtpForward = cic->getBoolParam("rtp_forward") && msg.getBoolValue("rtp_forward");
+	if (m_rtpForward) {
+	    m_sdpForward = (0 != msg.getParam("sdp_raw"));
+	    msg.setParam("rtp_forward","accepted");
+	}
     }
     setMaxcall(msg);
     Message* m = message("chan.startup",msg);
@@ -781,6 +810,12 @@ bool SigChannel::startCall(Message& msg, SigTrunk* trunk)
     sigMsg->params().copyParam(msg,"callednumtype");
     sigMsg->params().copyParam(msg,"callednumplan");
     sigMsg->params().copyParam(msg,"calledpointcode");
+    // Copy RTP parameters
+    if (msg.getBoolValue("rtp_forward")) {
+	NamedList* tmp = new NamedList("rtp");
+	tmp->copyParams(msg);
+	sigMsg->params().addParam(new NamedPointer("circuit_parameters",tmp));
+    }
     // Copy routing params
     unsigned int n = msg.length();
     String prefix;
@@ -838,7 +873,10 @@ bool SigChannel::msgProgress(Message& msg)
     }
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Progress,sm,m_call);
     TelEngine::destruct(sm);
+    SignallingCircuitEvent* cicEvent = handleRtp(msg);
     lock.drop();
+    if (cicEvent)
+	cicEvent->sendEvent();
     plugin.copySigMsgParams(event,msg);
     event->sendEvent();
     return true;
@@ -859,7 +897,10 @@ bool SigChannel::msgRinging(Message& msg)
     }
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Ringing,sm,m_call);
     TelEngine::destruct(sm);
+    SignallingCircuitEvent* cicEvent = handleRtp(msg);
     lock.drop();
+    if (cicEvent)
+	cicEvent->sendEvent();
     plugin.copySigMsgParams(event,msg);
     event->sendEvent();
     return true;
@@ -886,7 +927,10 @@ bool SigChannel::msgAnswered(Message& msg)
     }
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Answer,sm,m_call);
     TelEngine::destruct(sm);
+    SignallingCircuitEvent* cicEvent = handleRtp(msg);
     lock.drop();
+    if (cicEvent)
+	cicEvent->sendEvent();
     plugin.copySigMsgParams(event,msg);
     event->sendEvent();
     return true;
@@ -964,6 +1008,8 @@ bool SigChannel::callPrerouted(Message& msg, bool handled)
 bool SigChannel::callRouted(Message& msg)
 {
     Lock lock(m_mutex);
+    if (m_rtpForward && !msg.getBoolValue("rtp_forward"))
+	m_rtpForward = false;
     setState("routed",false);
     return m_call != 0;
 }
@@ -982,6 +1028,11 @@ void SigChannel::callAccept(Message& msg)
 	}
 	event = new SignallingEvent(SignallingEvent::Accept,sm,m_call);
 	TelEngine::destruct(sm);
+    }
+    if (m_rtpForward) {
+	const String* tmp = msg.getParam("rtp_forward");
+	if (!(tmp && (*tmp == "accepted")))
+	    m_rtpForward = false;
     }
     setState("accepted",false);
     lock.drop();
@@ -1098,6 +1149,7 @@ void SigChannel::evProgress(SignallingEvent* event)
     updateCircuitFormat(event,false);
     Message* msg = message("call.progress");
     plugin.copySigMsgParams(*msg,event,&s_noPrefixParams);
+    addRtp(*msg);
     Engine::enqueue(msg);
 }
 
@@ -1129,6 +1181,7 @@ void SigChannel::evAnswer(SignallingEvent* event)
     Message* msg = message("call.answered",false,true);
     plugin.copySigMsgParams(*msg,event,&s_noPrefixParams);
     msg->clearParam("earlymedia");
+    addRtp(*msg);
     Engine::enqueue(msg);
 }
 
@@ -1138,6 +1191,7 @@ void SigChannel::evRinging(SignallingEvent* event)
     updateCircuitFormat(event,false);
     Message* msg = message("call.ringing",false,true);
     plugin.copySigMsgParams(*msg,event,&s_noPrefixParams);
+    addRtp(*msg);
     Engine::enqueue(msg);
 }
 
@@ -1157,6 +1211,42 @@ void SigChannel::evCircuit(SignallingEvent* event)
     }
 }
 
+// Handle RTP forward from a message.
+// Return a circuit event to be sent or 0 if not handled
+SignallingCircuitEvent* SigChannel::handleRtp(Message& msg)
+{
+    if (!(m_rtpForward && msg.getBoolValue("rtp_forward")))
+	return 0;
+    SignallingCircuit* cic = getCircuit();
+    if (!cic)
+	return 0;
+    SignallingCircuitEvent* ev = new SignallingCircuitEvent(cic,
+	SignallingCircuitEvent::Connect,"rtp");
+    ev->copyParams(msg);
+    return ev;
+}
+
+// Set RTP data from circuit to message
+bool SigChannel::addRtp(Message& msg, bool possible)
+{
+    if (!m_rtpForward)
+	return false;
+    SignallingCircuit* cic = getCircuit();
+    if (!cic)
+	return false;
+    bool ok = cic->getParams(msg,"rtp");
+    if (m_sdpForward) {
+	String sdp;
+    	if (cic->getParam("sdp_raw",sdp) && sdp) {
+	    ok = true;
+	    msg.setParam("sdp_raw",sdp);
+	}
+    }
+    if (ok)
+	msg.setParam("rtp_forward",possible ? "possible" : String::boolText(true));
+    return ok;
+}
+
 void SigChannel::updateCircuitFormat(SignallingEvent* event, bool consumer)
 {
     const char* format = 0;
@@ -1173,6 +1263,8 @@ void SigChannel::updateCircuitFormat(SignallingEvent* event, bool consumer)
 
 bool SigChannel::updateConsumer(const char* format, bool force)
 {
+    if (m_rtpForward)
+	return true;
     DataConsumer* consumer = getConsumer();
     SignallingCircuit* cic = getCircuit();
     if (!cic)
@@ -1194,6 +1286,8 @@ bool SigChannel::updateConsumer(const char* format, bool force)
 
 bool SigChannel::updateSource(const char* format, bool force)
 {
+    if (m_rtpForward)
+	return true;
     DataSource* source = getSource();
     SignallingCircuit* cic = getCircuit();
     if (!cic)

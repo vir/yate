@@ -2343,6 +2343,12 @@ SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
     }
     SignallingCall* call = 0;
     if (reason.null()) {
+	String* cicParams = msg->params().getParam("circuit_parameters");
+	if (cicParams) {
+	    NamedList* p = YOBJECT(NamedList,cicParams);
+	    if (p)
+		cic->setParams(*p);
+	}
 	call = new SS7ISUPCall(this,cic,*m_defPoint,dest,true,-1,range);
 	call->ref();
 	m_calls.append(call);

@@ -194,11 +194,11 @@ bool SS7Layer2::control(NamedList& params)
 {
     String* ret = params.getParam("completion");
     const String* oper = params.getParam("operation");
+    const char* cmp = params.getValue("component");
     int cmd = oper ? oper->toInteger(s_dict_control,-1) : -1;
     if (ret) {
 	if (oper && (cmd < 0))
 	    return false;
-	const char* cmp = params.getValue("component");
 	String part = params.getValue("partword");
 	if (cmp) {
 	    if (toString() != cmp)
@@ -209,6 +209,8 @@ bool SS7Layer2::control(NamedList& params)
 	}
 	return Module::itemComplete(*ret,toString(),part);
     }
+    if (!(cmp && toString() == cmp))
+	return false;
     return (cmd >= 0) && control((Operation)cmd,&params);
 }
 

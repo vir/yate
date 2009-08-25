@@ -4904,6 +4904,18 @@ class YSIG_API SS7MTP3 : public SS7Layer3, public SS7L2User, public SignallingDu
     YCLASS(SS7MTP3,SS7Layer3)
 public:
     /**
+     * Control primitives
+     */
+    enum Operation {
+	// take linkset out of service
+	Pause  = 0x100,
+	// start linkset operation
+	Resume = 0x200,
+	// get operational status
+	Status = 0x400,
+    };
+
+    /**
      * Constructor
      * @param params Layer's parameters
      */
@@ -4938,6 +4950,15 @@ public:
     virtual bool operational(int sls = -1) const;
 
     /**
+     * Execute a control operation on the linkset
+     * @param oper Operation to execute
+     * @param params Optional parameters for the operation
+     * @return True if the command completed successfully, for query operations
+     *  also indicates the linkset is enabled and operational
+     */
+    virtual bool control(Operation oper, NamedList* params = 0);
+
+    /**
      * Attach a SS7 Layer 2 (data link) to the network transport. Attach itself to the link
      * @param link Pointer to data link to attach
      */
@@ -4948,6 +4969,13 @@ public:
      * @param link Pointer to data link to detach
      */
     virtual void detach(SS7Layer2* link);
+
+    /**
+     * Query or modify layer's settings or operational parameters
+     * @param params The list of parameters to query or change
+     * @return True if the control operation was executed
+     */
+    virtual bool control(NamedList& params);
 
     /**
      * Get the total number of links attached
@@ -4992,13 +5020,13 @@ protected:
     unsigned int countLinks();
 
 private:
-    virtual bool control(NamedList& params)
-	{ return SignallingDumpable::control(params,this); }
     ObjList m_links;
     // total links in linkset
     unsigned int m_total;
     // currently active links
     unsigned int m_active;
+    // inhibited flag
+    bool m_inhibit;
 };
 
 /**

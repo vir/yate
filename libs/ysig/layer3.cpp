@@ -23,11 +23,17 @@
  */
 
 #include "yatesig.h"
-
+#include <yatephone.h>
 #include <stdlib.h>
 
 
 using namespace TelEngine;
+
+static const TokenDict s_dict_control[] = {
+    { "pause",  SS7MTP3::Pause },
+    { "resume", SS7MTP3::Resume },
+    { 0, 0 }
+};
 
 typedef GenPointer<SS7Layer2> L2Pointer;
 
@@ -341,7 +347,7 @@ SS7MTP3::SS7MTP3(const NamedList& params)
     : SignallingComponent(params.safe("SS7MTP3"),&params),
       SignallingDumpable(SignallingDumper::Mtp3),
       Mutex(true,"SS7MTP3"),
-      m_total(0), m_active(0)
+      m_total(0), m_active(0), m_inhibit(false)
 {
 #ifdef DEBUG
     if (debugAt(DebugAll)) {
@@ -410,6 +416,8 @@ unsigned int SS7MTP3::countLinks()
 
 bool SS7MTP3::operational(int sls) const
 {
+    if (m_inhibit)
+	return false;
     if (sls < 0)
 	return (m_active != 0);
     const ObjList* l = &m_links;
@@ -477,6 +485,56 @@ void SS7MTP3::detach(SS7Layer2* link)
 	countLinks();
 	return;
     }
+}
+
+bool SS7MTP3::control(Operation oper, NamedList* params)
+{
+    bool ok = operational();
+    switch (oper) {
+	case Pause:
+	    if (!m_inhibit) {
+		m_inhibit = true;
+		if (ok)
+		    SS7Layer3::notify(-1);
+	    }
+	    return true;
+	case Resume:
+	    if (m_inhibit) {
+		m_inhibit = false;
+		if (ok != operational())
+		    SS7Layer3::notify(-1);
+	    }
+	    return true;
+	case Status:
+	    return ok;
+    }
+    return false;
+}
+
+bool SS7MTP3::control(NamedList& params)
+{
+    String* ret = params.getParam("completion");
+    const String* oper = params.getParam("operation");
+    const char* cmp = params.getValue("component");
+    int cmd = oper ? oper->toInteger(s_dict_control,-1) : -1;
+    if (ret) {
+	if (oper && (cmd < 0))
+	    return false;
+	String part = params.getValue("partword");
+	if (cmp) {
+	    if (toString() != cmp)
+		return false;
+	    for (const TokenDict* d = s_dict_control; d->token; d++)
+		Module::itemComplete(*ret,d->token,part);
+	    return true;
+	}
+	return Module::itemComplete(*ret,toString(),part);
+    }
+    if (!(cmp && toString() == cmp))
+	return false;
+    if (cmd >= 0)
+	return control((Operation)cmd,&params);
+    return SignallingDumpable::control(params,this);
 }
 
 // Configure and initialize MTP3 and its links

@@ -163,7 +163,7 @@ public:
     inline SignallingComponent* owner() const
 	{ return m_owner; }
     inline bool valid() const
-	{ return m_sock > 0; }
+	{ return m_sock != Socket::invalidHandle(); }
     inline int channel()
 	{ return m_chan; }
     inline u_int64_t received() const
@@ -543,7 +543,7 @@ TdmDevice::TdmDevice(unsigned int chan, bool disableDbg)
 
 TdmDevice::TdmDevice(Type t, SignallingComponent* dbg, unsigned int chan,
 	unsigned int circuit)
-    : m_sock(0),
+    : m_sock(Socket::invalidHandle()),
     m_type(t),
     m_span(-1),
     m_chan(chan),
@@ -565,7 +565,11 @@ void TdmDevice::close()
     m_span = -1;
     if (!valid())
 	return;
-    ::close(m_sock);
+    if (::close(m_sock) == 0)
+	m_sock = Socket::invalidHandle();
+    else
+	Debug(&plugin,DebugWarn,"Failed to close tdm device %d: '%s'",errno,strerror(errno));
+
     if (m_type != Control && m_type != TypeUnknown)
 	plugin.openClose(false);
 }
@@ -576,6 +580,7 @@ TdmDevice::~TdmDevice()
 	lookup(m_type,s_types),m_owner?m_owner->debugName():"",this);
     if (m_type == Control || m_type == TypeUnknown)
 	TelEngine::destruct(m_owner);
+    close();
     plugin.remove(this);
 }
 
@@ -665,7 +670,8 @@ int TdmDevice::sangoma_tdm_read_event(sng_fd_t fd, wanpipe_tdm_api_t *tdm_api)
 
 int TdmDevice::sangoma_open_tdmapi_span_chan(int span, int chan) 
 {
-   char fname[50];
+    char fname[50];
+    int fd = 0;
 #if defined(WIN32)
 
 	//NOTE: under Windows Interfaces are zero based but 'chan' is 1 based.
@@ -674,7 +680,7 @@ int TdmDevice::sangoma_open_tdmapi_span_chan(int span, int chan)
 
     //prn(verbose, "Opening device: %s...\n", fname);
 
-    return CreateFile(	fname, 
+    fd = CreateFile(	fname, 
 			GENERIC_READ | GENERIC_WRITE, 
 			FILE_SHARE_READ | FILE_SHARE_WRITE,
 			(LPSECURITY_ATTRIBUTES)NULL, 
@@ -683,13 +689,17 @@ int TdmDevice::sangoma_open_tdmapi_span_chan(int span, int chan)
 			(HANDLE)NULL
 			);
 #else
-    int fd = 0;
     sprintf(fname,"/dev/wptdm_s%dc%d",span,chan);
     DDebug(m_owner,DebugNote,"fname = %s",fname);
     fd = ::open(fname, O_RDWR);
-    DDebug(m_owner,DebugNote,"fd=%d errno = %d",fd,errno);
-    return fd;
 #endif
+    if (fd == Socket::invalidHandle()) {
+	String err;
+	Thread::errorString(err);
+	Debug(m_owner,DebugNote,"Failed to open '%s' %d: '%s'",
+	    fname,Thread::lastError(),err.c_str());
+    }
+    return fd;
 }
 
 int TdmDevice::sangoma_span_chan_fromif(const char *interface_name, int *span, int *chan)
@@ -1366,14 +1376,14 @@ void TdmCircuit::cleanup(bool release, Status stat, bool stop)
 	TdmWorker::stop();
     // Don't deref the source - the thread will do it
     m_source = 0;
+    Debug(DebugNote,"Cleanup release=%s received="FMT64" sent="FMT64" on interface: %s",
+	String::boolText(release),m_device.received(),m_device.sent(),m_device.tdmName().c_str());
     TelEngine::destruct(m_consumer);
     if (release) {
 	SignallingCircuit::destroyed();
 	return;
     }
     status(stat);
-    Debug(DebugNote,"Data: received="FMT64" sent="FMT64" on interface: %s",
-	m_device.received(),m_device.sent(),m_device.tdmName().c_str());
     m_device.resetdatatrans();
     m_sourceBuffer.clear(false);
     m_consBuffer.clear(false);

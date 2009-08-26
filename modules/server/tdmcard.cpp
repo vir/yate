@@ -527,7 +527,7 @@ static TokenDict s_types[] = {
 
 
 TdmDevice::TdmDevice(unsigned int chan, bool disableDbg)
-    : m_sock(0),
+    : m_sock(Socket::invalidHandle()),
     m_type(chan ? TypeUnknown : Control),
     m_chan(chan),
     m_owner(0)

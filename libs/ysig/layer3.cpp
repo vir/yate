@@ -387,6 +387,7 @@ SS7MTP3::SS7MTP3(const NamedList& params)
     }
     Debug(this,level,"Point code types are '%s' [%p]",stype.safe(),this);
 
+    m_inhibit = !params.getBoolValue("autostart",true);
     buildRoutes(params);
     setDumper(params.getValue("layer3dump"));
 }
@@ -573,6 +574,7 @@ bool SS7MTP3::initialize(const NamedList* config)
 		TelEngine::destruct(link);
 	    }
 	}
+	m_inhibit = !config->getBoolValue("autostart",true);
     }
     if (engine() && !user()) {
 	NamedList params("ss7router");
@@ -615,9 +617,11 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 	    continue;
 	SS7Layer2* link = *p;
 	if (link->sls() == sls) {
-	    DDebug(this,DebugAll,"Found link %p for SLS=%d [%p]",link,sls,this);
+	    XDebug(this,DebugAll,"Found link %p for SLS=%d [%p]",link,sls,this);
 	    if (link->operational()) {
 		if (link->transmitMSU(msu)) {
+		    DDebug(this,DebugAll,"Sent MSU over link %p with SLS=%d%s [%p]",
+			link,sls,(m_inhibit ? " while inhibited" : ""),this);
 		    dump(msu,true,sls);
 		    return sls;
 		}
@@ -636,8 +640,11 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 	    continue;
 	SS7Layer2* link = *p;
 	if (link->operational() && link->transmitMSU(msu)) {
-	    dump(msu,true,link->sls());
-	    return link->sls();
+	    sls = link->sls();
+	    DDebug(this,DebugAll,"Sent MSU over link %p with SLS=%d%s [%p]",
+		link,sls,(m_inhibit ? " while inhibited" : ""),this);
+	    dump(msu,true,sls);
+	    return sls;
 	}
     }
 
@@ -666,7 +673,8 @@ bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
     if (debugAt(DebugInfo)) {
 	String tmp;
 	tmp << label << " (" << label.opc().pack(cpType) << ":" << label.dpc().pack(cpType) << ":" << label.sls() << ")";
-	Debug(this,DebugAll,"Received MSU. Address: %s",tmp.c_str());
+	Debug(this,DebugAll,"Received MSU from link %p with SLS=%d. Address: %s",
+	    link,sls,tmp.c_str());
     }
 #endif
     // first try to call the user part

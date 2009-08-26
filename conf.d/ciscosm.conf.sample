@@ -60,6 +60,9 @@
 ; channel: int: Number of the channel inside the session, must match remote config
 ;channel=0
 
+; autostart: bool: Automatically try to align the remote MTP2 at startup
+;autostart=yes
+
 ; configuration: int: Configuration request retransmission interval in ms, 250+
 ;configuration=5000
 

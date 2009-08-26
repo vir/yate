@@ -293,6 +293,7 @@ bool SS7MTP2::initialize(const NamedList* config)
     if (config)
 	debugLevel(config->getIntValue("debuglevel_mtp2",
 	    config->getIntValue("debuglevel",-1)));
+    bool noStart = true;
     if (config && !iface()) {
 	NamedString* name = config->getParam("sig");
 	if (!name)
@@ -318,8 +319,9 @@ bool SS7MTP2::initialize(const NamedList* config)
 	    if (!(ifc->initialize(ifConfig) && control((Operation)SignallingInterface::Enable,ifConfig)))
 		TelEngine::destruct(SignallingReceiver::attach(0));
 	}
+	noStart = !config->getBoolValue("autostart",true);
     }
-    return iface() && control(Resume,const_cast<NamedList*>(config));
+    return iface() && (noStart || control(Resume,const_cast<NamedList*>(config)));
 }
 
 bool SS7MTP2::control(Operation oper, NamedList* params)

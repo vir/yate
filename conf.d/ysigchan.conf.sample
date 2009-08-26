@@ -353,6 +353,9 @@
 ; Example: route=ITU,2-2-2,0
 ;route=
 
+; autostart: bool: Automatically enable the linkset at startup
+;autostart=yes
+
 ; layer3dump: string: Filename to dump MTP3 packets to
 ;layer3dump=
 
@@ -364,6 +367,9 @@
 ; Allowed values:
 ;  ss7-mtp2:      SS7 Message Transfer Part - Layer 2
 ;type=ss7-mtp2
+
+; autostart: bool: Automatically try to align the MTP2 at startup
+;autostart=yes
 
 ; emergency: boolean: Emergency align SS7 MTP2 layer at startup
 ;emergency=yes

@@ -376,7 +376,6 @@ public:
     virtual ~SLT();
     virtual unsigned int status() const;
     void setStatus(unsigned int status);
-    void setLocalStatus(unsigned int status);
     void setRemoteStatus(unsigned int status);
     void setReqStatus(unsigned int status);
     virtual void notify(bool up);
@@ -424,7 +423,6 @@ public:
     static SignallingComponent* create(const String& type,const NamedList& params);
 protected:
     unsigned int m_status;                                 // Layer status
-    unsigned int m_lStatus;                                // Local layer status
     unsigned int m_rStatus;                                // Remote layer status
     unsigned int m_reqStatus;                              // We keep the requested status and we change it when
                                                            // receive the confirmation
@@ -1537,9 +1535,10 @@ const TokenDict SLT::s_protocolError[] = {
 };
 
 SLT::SLT(const String& name, const NamedList& param)
-    : SignallingComponent(param.safe("CiscoSLT")), SessionUser(1),
-      m_status(Unconfigured), m_lStatus(NormalAlignment), m_rStatus(OutOfAlignment),
-      m_reqStatus(NormalAlignment), m_messageId(1), m_channelId(0), m_bearerId(0),
+    : SignallingComponent(param.safe("CiscoSLT")),
+      SessionUser(1),
+      m_status(Unconfigured), m_rStatus(OutOfService), m_reqStatus(OutOfService),
+      m_messageId(1), m_channelId(0), m_bearerId(0),
       m_confReqTimer(0), m_printMsg(false)
 {
     m_channelId = param.getIntValue("channel",0);
@@ -1552,6 +1551,8 @@ SLT::SLT(const String& name, const NamedList& param)
     }
     m_confReqTimer.interval(param,"configuration",250,5000,true);
     m_printMsg = param.getBoolValue("printslt",false);
+    if (param.getBoolValue("autostart",true))
+	m_reqStatus = NormalAlignment;
 }
 
 SLT::~SLT()
@@ -1581,22 +1582,16 @@ void SLT::setStatus(unsigned int status)
     m_status = status;
 }
 
-void SLT::setLocalStatus(unsigned int status)
-{
-    if (status == m_lStatus)
-	return;
-    DDebug(this,DebugNote,"Local status change: %s -> %s [%p]",
-	statusName(m_lStatus,true),statusName(status,true),this);
-    m_lStatus = status;
-}
-
 void SLT::setRemoteStatus(unsigned int status)
 {
     if (status == m_rStatus)
 	return;
     DDebug(this,DebugNote,"Remote status change: %s -> %s [%p]",
 	statusName(m_rStatus,true),statusName(status,true),this);
+    bool old = aligned();
     m_rStatus = status;
+    if (aligned() != old)
+	SS7Layer2::notify();
 }
 
 void SLT::setReqStatus(unsigned int status)
@@ -1605,7 +1600,10 @@ void SLT::setReqStatus(unsigned int status)
 	return;
     DDebug(this,DebugNote,"Request status change: %s -> %s [%p]",
 	statusName(m_reqStatus,true),statusName(status,true),this);
+    bool old = aligned();
     m_reqStatus = status;
+    if (aligned() != old)
+	SS7Layer2::notify();
 }
 
 // Process notification received from session manager
@@ -1622,7 +1620,6 @@ void SLT::notify(bool up)
 
 bool SLT::control(Operation oper, NamedList* params)
 {
-    bool normal = true;
     switch (oper) {
 	case Pause:
 	    setReqStatus(OutOfService);
@@ -1632,11 +1629,21 @@ bool SLT::control(Operation oper, NamedList* params)
 	    if (aligned())
 		return true;
 	case Align:
-	    normal = !params->getBoolValue("emergency",false);
-	    sendConnect(normal ? Emergency : Normal);
-	    setReqStatus(normal ? EmergencyAlignment : NormalAlignment);
-	    setLocalStatus(NormalAlignment);
-	    setStatus(Waiting);
+	    {
+		bool emg = params->getBoolValue("emergency");
+		setReqStatus(emg ? EmergencyAlignment : NormalAlignment);
+		switch (m_status) {
+		    case Configured:
+			sendConnect(emg ? Emergency : Normal);
+			break;
+		    case Waiting:
+			break;
+		    default:
+			sendManagement(Configuration_R);
+			m_confReqTimer.start();
+			setStatus(Waiting);
+		}
+	    }
 	    return true;
 	case Status:
 	    return aligned() && m_status == Configured;
@@ -1647,7 +1654,7 @@ bool SLT::control(Operation oper, NamedList* params)
 
 bool SLT::aligned() const
 {
-    return ((m_lStatus == NormalAlignment) || (m_lStatus == EmergencyAlignment)) &&
+    return ((m_reqStatus == NormalAlignment) || (m_reqStatus == EmergencyAlignment)) &&
 	((m_rStatus == NormalAlignment) || (m_rStatus == EmergencyAlignment));
 }
 
@@ -1746,8 +1753,8 @@ bool SLT::checkMessage(DataBlock& data)
 	    SS7MSU msu(data);
 	    return receivedMSU(msu);
 	} else
-	    DDebug(this,DebugWarn,"Received data message but we are not aligned local status = %s,remote status = %s",
-		statusName(m_lStatus,false),statusName(m_rStatus,false));
+	    DDebug(this,DebugWarn,"Received data message while not aligned, local status = %s, remote status = %s",
+		statusName(m_reqStatus,false),statusName(m_rStatus,false));
     } else if (msgType & 0x40) {
 	data.cut(-16); // Management message
 	processManagement(msgType,data);
@@ -1801,16 +1808,15 @@ void SLT::processSltMessage(u_int16_t msgType, DataBlock& data)
 		setRemoteStatus(mes == Normal ? NormalAlignment : EmergencyAlignment);
 		if (aligned())
 		    m_session->userNotice(true);
-		SS7Layer2::notify();
 	    }
 	    break;
 	case Disconnect_C:
+	    setRemoteStatus(OutOfService);
 	    if (m_reqStatus == EmergencyAlignment || m_reqStatus == NormalAlignment)
 		sendConnect(m_reqStatus == NormalAlignment ? Normal : Emergency);
-	    else
-		setRemoteStatus(m_reqStatus);
 	    break;
 	case Disconnect_I:
+	    setRemoteStatus(OutOfService);
 	    if (m_reqStatus == EmergencyAlignment || m_reqStatus == NormalAlignment)
 		sendConnect(m_reqStatus == NormalAlignment ? Normal : Emergency);
 	    break;
@@ -1818,7 +1824,6 @@ void SLT::processSltMessage(u_int16_t msgType, DataBlock& data)
 	    setRemoteStatus(m_reqStatus);
 	    if (aligned())
 		m_session->userNotice(false);
-	    SS7Layer2::notify();
 	    break;
 	case Link_State_Controller_I:
 	    processCIndication(data);
@@ -1961,7 +1966,6 @@ bool SLT::transmitMSU(const SS7MSU& msu)
 	return false;
     if (!aligned()) {
 	Debug(this,DebugNote,"Requested to send data while not operational");
-	SS7Layer2::notify();
 	return false;
     }
     DataBlock data;

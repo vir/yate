@@ -563,8 +563,10 @@ bool SS7MTP3::initialize(const NamedList* config)
 	    params.addParam("basename",*param);
 	    if (linkConfig)
 		params.copyParams(*linkConfig);
-	    else
+	    else {
+		params.copySubParams(*config,params + ".");
 		linkConfig = &params;
+	    }
 	    SS7Layer2* link = YSIGCREATE(SS7Layer2,&params);
 	    if (!link)
 		continue;

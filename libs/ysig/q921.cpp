@@ -211,8 +211,10 @@ bool ISDNQ921::initialize(const NamedList* config)
 	    params.addParam("basename",*name);
 	    if (ifConfig)
 		fixParams(params,*ifConfig);
-	    else
+	    else {
+		params.copySubParams(*config,*name + ".");
 		ifConfig = &params;
+	    }
 	    SignallingInterface* ifc = YSIGCREATE(SignallingInterface,&params);
 	    if (!ifc)
 		return false;

@@ -2464,8 +2464,10 @@ bool ISDNQ931::initialize(const NamedList* config)
 	    params.addParam("network",String::boolText(network()));
 	    if (linkConfig)
 		params.copyParams(*linkConfig);
-	    else
+	    else {
+		params.copySubParams(*config,*name + ".");
 		linkConfig = &params;
+	    }
 	    ISDNLayer2* l2 = YSIGCREATE(ISDNLayer2,&params);
 	    if (!l2) {
 		Debug(this,DebugWarn,"Could not create ISDN Layer 2 '%s' [%p]",name->c_str(),this);
@@ -3451,8 +3453,10 @@ bool ISDNQ931Monitor::initialize(const NamedList* config)
 		params.addParam("basename",*name);
 		if (linkConfig)
 		    params.copyParams(*linkConfig);
-		else
+		else {
+		    params.copySubParams(*config,*name + ".");
 		    linkConfig = &params;
+		}
 		ISDNQ921Passive* l2 = YSIGCREATE(ISDNQ921Passive,&params);
 		if (!l2)
 		    return false;

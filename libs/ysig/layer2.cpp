@@ -310,8 +310,10 @@ bool SS7MTP2::initialize(const NamedList* config)
 		if ((rx > 0) && (rx < 25))
 		    params.setParam("rxunderrun","25");
 	    }
-	    else
+	    else {
+		params.copySubParams(*config,params + ".");
 		ifConfig = &params;
+	    }
 	    SignallingInterface* ifc = YSIGCREATE(SignallingInterface,&params);
 	    if (!ifc)
 		return false;

@@ -141,8 +141,10 @@ bool SS7Router::initialize(const NamedList* config)
 	    config->getIntValue("debuglevel",-1)));
 	const String* param = config->getParam("management");
 	const char* name = "ss7snm";
-	if (param)
-	    name = param->c_str();
+	if (param) {
+	    if (*param && !param->toBoolean(false))
+		name = param->c_str();
+	}
 	else
 	    param = config;
 	if (param->toBoolean(true)) {
@@ -152,14 +154,18 @@ bool SS7Router::initialize(const NamedList* config)
 	    params.addParam("basename",name);
 	    if (mConfig)
 		params.copyParams(*mConfig);
-	    else
+	    else {
+		params.copySubParams(*config,params + ".");
 		mConfig = &params;
+	    }
 	    attach(YSIGCREATE(SS7Management,&params));
 	}
 	param = config->getParam("maintenance");
 	name = "ss7mtn";
-	if (param)
-	    name = param->c_str();
+	if (param) {
+	    if (*param && !param->toBoolean(false))
+		name = param->c_str();
+	}
 	else
 	    param = config;
 	if (param->toBoolean(true)) {
@@ -169,8 +175,10 @@ bool SS7Router::initialize(const NamedList* config)
 	    params.addParam("basename",name);
 	    if (mConfig)
 		params.copyParams(*mConfig);
-	    else
+	    else {
+		params.copySubParams(*config,params + ".");
 		mConfig = &params;
+	    }
 	    attach(YSIGCREATE(SS7Maintenance,&params));
 	}
     }

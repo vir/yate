@@ -1541,6 +1541,13 @@ SLT::SLT(const String& name, const NamedList& param)
       m_messageId(1), m_channelId(0), m_bearerId(0),
       m_confReqTimer(0), m_printMsg(false)
 {
+#ifdef DEBUG
+    String tmp;
+    if (debugAt(DebugAll))
+        param.dump(tmp,"\r\n  ",'\'',true);
+    Debug(this,DebugInfo,"SLT::SLT('%s',%p) [%p]%s",
+	name.c_str(),&param,this,tmp.c_str());
+#endif
     m_channelId = param.getIntValue("channel",0);
     String sessionName = param.getValue("session","session");
     setName(name);
@@ -2003,6 +2010,7 @@ SignallingComponent* SLT::create(const String& type, const NamedList& name)
 	return 0;
     }
     layer->copyParams(*section);
+    layer->copyParams(name);
     return new SLT(name,*layer);
 }
 

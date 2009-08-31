@@ -46,6 +46,12 @@ NamedList::NamedList(const NamedList& original)
     }
 }
 
+NamedList::NamedList(const char* name, const NamedList& original, const String& prefix)
+    : String(name)
+{
+    copySubParams(original,prefix);
+}
+
 void* NamedList::getObject(const String& name) const
 {
     if (name == "NamedList")
@@ -168,6 +174,24 @@ NamedList& NamedList::copyParams(const NamedList& original, const String& list, 
     if (l) {
 	copyParams(original,l,childSep);
 	l->destruct();
+    }
+    return *this;
+}
+
+NamedList& NamedList::copySubParams(const NamedList& original, const String& prefix)
+{
+    XDebug(DebugInfo,"NamedList::copySubParams(%p,\"%s\")",&original,prefix.c_str());
+    if (prefix) {
+	unsigned int offs = prefix.length();
+	unsigned int n = original.length();
+	for (unsigned int i = 0; i < n; i++) {
+	    const NamedString* s = original.getParam(i);
+	    if (s && s->name().startsWith(prefix)) {
+		const char* name = s->name().c_str() + offs;
+		if (*name)
+		    addParam(name,*s);
+	    }
+	}
     }
     return *this;
 }

@@ -3241,6 +3241,14 @@ public:
     NamedList(const NamedList& original);
 
     /**
+     * Creates a named list with subparameters of another list.
+     * @param name Name of the list - must not be NULL or empty
+     * @param original Named list to copy parameters from
+     * @param prefix Prefix to match and remove from parameter names
+     */
+    NamedList(const char* name, const NamedList& original, const String& prefix);
+
+    /**
      * Get a pointer to a derived class given that class name
      * @param name Name of the class we are asking for
      * @return Pointer to the requested class or NULL if this object doesn't implement it
@@ -3329,6 +3337,13 @@ public:
      * @param childSep If set copies all child parameters in format name+childSep+anything
      */
     NamedList& copyParams(const NamedList& original, const String& list, char childSep = 0);
+
+    /**
+     * Copy subparameters from another list
+     * @param original Named list to copy parameters from
+     * @param prefix Prefix to match and remove from parameter names, must not be NULL
+     */
+    NamedList& copySubParams(const NamedList& original, const String& prefix);
 
     /**
      * Get the index of a named string in the parameter list.

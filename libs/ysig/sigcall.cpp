@@ -744,7 +744,7 @@ bool SignallingCircuitGroup::insertSpan(SignallingCircuitSpan* span)
     return true;
 }
 
-SignallingCircuitSpan* SignallingCircuitGroup::buildSpan(const String& name, unsigned int start)
+SignallingCircuitSpan* SignallingCircuitGroup::buildSpan(const String& name, unsigned int start, NamedList* param)
 {
     // Local class used to pass the circuit group pointer to the span
     class VoiceParams : public NamedList
@@ -761,6 +761,8 @@ SignallingCircuitSpan* SignallingCircuitGroup::buildSpan(const String& name, uns
     VoiceParams params(debugName(),this);
     params << "/" << name;
     params.addParam("voice",name);
+    if (param)
+	params.copyParams(*param);
     if (start)
 	params.addParam("start",String(start));
     return YSIGCREATE(SignallingCircuitSpan,&params);

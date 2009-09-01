@@ -1979,7 +1979,7 @@ public:
      * @param start Desired start of circuit codes in span
      * @return Pointer to new circuit span or NULL on failure
      */
-    SignallingCircuitSpan* buildSpan(const String& name, unsigned int start = 0);
+    SignallingCircuitSpan* buildSpan(const String& name, unsigned int start = 0, NamedList* params = 0);
 
     /**
      * Insert a circuit span in the group

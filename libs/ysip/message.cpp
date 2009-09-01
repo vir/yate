@@ -238,7 +238,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	if (!hl) {
 	    String tmp = "<sip:";
 	    if (user)
-		tmp << String::uriEscape(user,'@') << "@";
+		tmp << String::uriEscape(user,'@',"+?&") << "@";
 	    tmp << domain << ">";
 	    hl = new MimeHeaderLine("From",tmp);
 	    header.append(hl);
@@ -293,7 +293,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	    tmp = tmp.matchString(1).uriUnescape();
 	}
 	if (tmp)
-	    tmp = tmp.uriEscape('@') + "@";
+	    tmp = tmp.uriEscape('@',"+?&") + "@";
 	tmp = "<sip:" + tmp; 
 	tmp << getParty()->getLocalAddr() << ":";
 	tmp << getParty()->getLocalPort() << ">";

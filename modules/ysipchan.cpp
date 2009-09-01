@@ -331,6 +331,7 @@ public:
 protected:
     virtual Message* buildChanRtp(RefObject* context);
     MimeSdpBody* createProvisionalSDP(Message& msg);
+    virtual void mediaChanged(const String& name);
 
 private:
     virtual void statusParams(String& str);
@@ -470,7 +471,6 @@ static SIPDriver plugin;
 static ObjList s_lines;
 static Configuration s_cfg;
 static String s_realm = "Yate";
-static String s_audio = "alaw,mulaw";
 static String s_rtpip;
 static int s_floodEvents = 20;
 static int s_maxForwards = 20;
@@ -2247,6 +2247,7 @@ MimeSdpBody* YateSIPConnection::createProvisionalSDP(Message& msg)
     return createRtpSDP(true);
 }
 
+// Build and populate a chan.rtp message
 Message* YateSIPConnection::buildChanRtp(RefObject* context)
 {
     Message* m = new Message("chan.rtp");
@@ -2257,6 +2258,13 @@ Message* YateSIPConnection::buildChanRtp(RefObject* context)
 	m->userData(static_cast<CallEndpoint*>(this));
     }
     return m;
+}
+
+// Media changed notification, reimplemented from SDPSession
+void YateSIPConnection::mediaChanged(const String& name)
+{
+    // Clear the data endpoint, will be rebuilt later if required
+    clearEndpoint(name);
 }
 
 // Process SIP events belonging to this connection
@@ -2919,8 +2927,10 @@ bool YateSIPConnection::msgAnswered(Message& msg)
 	    bool startNow = msg.getBoolValue("rtp_start",s_start_rtp);
 	    if (startNow && !m_rtpMedia) {
 		// early RTP start but media list yet unknown - build best guess
+		String fmts;
+		plugin.parser().getAudioFormats(fmts);
 		ObjList* lst = new ObjList;
-		lst->append(new SDPMedia("audio","RTP/AVP",msg.getValue("formats",s_audio)));
+		lst->append(new SDPMedia("audio","RTP/AVP",msg.getValue("formats",fmts)));
 		setMedia(lst);
 		m_rtpAddr = m_host;
 	    }

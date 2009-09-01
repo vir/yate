@@ -880,6 +880,7 @@ if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
 	QT4_INC_NET=`pkg-config --cflags QtNetwork 2>/dev/null | grep -o '[[^ ]]*QtNetwork[[^ ]]*'`
 	QT4_LIB_NET=`pkg-config --libs QtNetwork 2>/dev/null | grep -o '[[^ ]]*QtNetwork[[^ ]]*'`
 	QT4_MOC=`echo "$incqt" | sed -n 's,^.*-I\([[^ ]]\+\)/include .*$,\1/bin/moc,p'`
+	test -z "$QT4_MOC" && QT4_MOC=`which moc-qt4 2>/dev/null`
 	test -z "$QT4_MOC" && QT4_MOC="moc"
 	QT4_VER=`echo "$verqt" | sed "$vsed" | sed "$vsed" | sed 's/\(..\)\.\(..\)\.\(..\)/\1\2\3/'`
 	ac_cv_use_libqt="no"

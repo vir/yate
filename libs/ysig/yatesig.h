@@ -1977,6 +1977,7 @@ public:
      * Create a circuit span using the factory
      * @param name Name of the span to create
      * @param start Desired start of circuit codes in span
+     * @param params Optional parameters for creation of span and circuits
      * @return Pointer to new circuit span or NULL on failure
      */
     SignallingCircuitSpan* buildSpan(const String& name, unsigned int start = 0, NamedList* params = 0);

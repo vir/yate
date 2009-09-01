@@ -1970,17 +1970,19 @@ public:
      * Create an escaped string suitable for use in URIs
      * @param str String to convert to escaped format
      * @param extraEsc Character to escape other than the default ones
+     * @param noEsc Optional pointer to string of characters that shouldn't be escaped
      * @return The string with special characters escaped
      */
-    static String uriEscape(const char* str, char extraEsc = 0);
+    static String uriEscape(const char* str, char extraEsc = 0, const char* noEsc = 0);
 
     /**
      * Create an escaped string suitable for use in URI
      * @param extraEsc Character to escape other than the default ones
+     * @param noEsc Optional pointer to string of characters that shouldn't be escaped
      * @return The string with special characters escaped
      */
-    inline String uriEscape(char extraEsc = 0) const
-	{ return uriEscape(c_str(),extraEsc); }
+    inline String uriEscape(char extraEsc = 0, const char* noEsc = 0) const
+	{ return uriEscape(c_str(),extraEsc,noEsc); }
 
     /**
      * Decode an URI escaped string back to its raw form

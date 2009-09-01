@@ -987,14 +987,15 @@ String String::sqlEscape(const char* str, char extraEsc)
     return s;
 }
 
-String String::uriEscape(const char* str, char extraEsc)
+String String::uriEscape(const char* str, char extraEsc, const char* noEsc)
 {
     String s;
     if (TelEngine::null(str))
 	return s;
     char c;
     while ((c=*str++)) {
-	if ((unsigned char)c <= ' ' || c == '%' || c == '+' || c == '?' || c == '&' || c == extraEsc)
+	if ((unsigned char)c <= ' ' || c == '%' || c == extraEsc ||
+	    ((c == '+' || c == '?' || c == '&') && !(noEsc && ::strchr(noEsc,c))))
 	    s << '%' << hexEncode(c >> 4) << hexEncode(c);
 	else
 	    s += c;

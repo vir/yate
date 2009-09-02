@@ -137,6 +137,9 @@ class IVR
 		case "stop":       // Stop sound playback
 		    $this->PlayStop();
 		    break;
+		case "dtmf":       // Emit a DTMF sequence
+		    $this->PlayDTMF($op[1],(isset($op[2]) ? $op[2] : null));
+		    break;
 		case "jump":       // Jump to another IVR, leave this one
 		    IVR::Jump($op[1],(isset($op[2]) ? $op[2] : null));
 		    break;
@@ -420,6 +423,23 @@ class IVR
 	$m->id = "";
 	$m->SetParam("source","wave/play/-");
 	$m->SetParam("single",true);
+	$m->Dispatch();
+    }
+
+    /**
+     * Emit a DTMF to the other end
+     * @param $dtmf DTMF tones to play
+     * @param $method Method to emit the DTMF, null to use technology default
+     */
+    function PlayDTMF($dtmf, $method = null)
+    {
+	$m = new Yate("chan.dtmf");
+	$m->id = "";
+	$m->SetParam("id",IVR::ChannelID());
+	$m->SetParam("targetid",IVR::TargetID());
+	$m->SetParam("text",$dtmf);
+	if ($method !== null)
+	    $m->SetParam("method",$method);
 	$m->Dispatch();
     }
 

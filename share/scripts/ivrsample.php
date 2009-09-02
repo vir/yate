@@ -15,6 +15,8 @@ class IVR1 extends IVR
     {
 	// initialize the operation table on entering the IVR
 	$this->optable = array(
+	    // key 0 - play back some DTMF keys inband
+	    ":0" => "dtmf:123:inband",
 	    // key 5 - call the 2nd IVR state 'b', allow it to return
 	    ":5" => "call:ivr2:b",
 	    // key 6 - jump to 2nd IVR state 'b', will not return to us

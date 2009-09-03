@@ -38,3 +38,8 @@
 ; If not set or empty will use the default for your system
 ; This setting is not available on older MySQL client libraries
 ;encoding=
+
+; poolsize: int: Number of connections to establish for this account
+; If not set or empty, it will create only one connection
+; Minimum number of connections is 1, maximum is 10
+;poolsize=1

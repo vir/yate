@@ -420,7 +420,7 @@ bool AAAHandler::received(Message& msg)
 	    if (s_critical)
 		return failure(&msg);
 	    Message m("database");
-	    prepareQuery(m,account,query,false);
+	    prepareQuery(m,account,query,true);
 	    if (Engine::dispatch(m))
 		if (m.getIntValue("affected") >= 1 || m.getIntValue("rows") >=1)
 		    return true;
@@ -486,7 +486,8 @@ bool AAAHandler::received(Message& msg)
 	{
 	    // no error check needed on unregister - we return false
 	    Message m("database");
-	    prepareQuery(m,account,query,false);
+	    prepareQuery(m,account,query,true);
+	    // we don't enqueue the message because we must assure ourselves that this message is processed synchronously
 	    Engine::dispatch(m);
 	}
 	break;

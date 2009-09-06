@@ -306,20 +306,14 @@ public:
 	{ return m_line; }
     inline void referTerminated()
 	{ m_referring = false; }
-    inline bool isDialog(const String& dialog, const String& fromTag,
-	const String& toTag) const {
-	    if (dialog != m_dialog)
-		return false;
-	    if (isIncoming())
-		return fromTag == m_dialog.remoteTag && toTag == m_dialog.localTag;
-	    return fromTag == m_dialog.localTag && toTag == m_dialog.remoteTag;
-	}
+    inline bool isDialog(const String& callid, const String& fromTag,
+	const String& toTag) const
+	{ return callid == m_dialog &&
+	    m_dialog.fromTag(isOutgoing()) == fromTag &&
+	    m_dialog.toTag(isOutgoing()) == toTag; }
     // Build a callid parameter from channel dialog and add it to a list
-    inline void addDialog(NamedList& nl) const {
-	    addCallId(nl,m_dialog,
-		isIncoming() ? m_dialog.remoteTag : m_dialog.localTag,
-		isIncoming() ? m_dialog.localTag : m_dialog.remoteTag);
-	}
+    inline void addDialog(NamedList& nl) const
+	{ addCallId(nl,m_dialog,m_dialog.fromTag(isOutgoing()),m_dialog.toTag(isOutgoing())); }
     // Build and add a callid parameter to a list
     static inline void addCallId(NamedList& nl, const String& dialog,
 	const String& fromTag, const String& toTag) {
@@ -3971,7 +3965,7 @@ YateSIPConnection* SIPDriver::findDialog(const SIPDialog& dialog, bool incRef)
     ObjList* l = channels().skipNull();
     for (; l; l = l->skipNext()) {
 	YateSIPConnection* c = static_cast<YateSIPConnection*>(l->get());
-	if (c->dialog() == dialog)
+	if (c->dialog() &= dialog)
 	    return (incRef ? c->ref() : c->alive()) ? c : 0;
     }
     return 0;

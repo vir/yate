@@ -807,19 +807,15 @@ SIPDialog& SIPDialog::operator=(const SIPMessage& message)
     return *this;
 }
 
-bool SIPDialog::operator==(const SIPDialog& other) const
+bool SIPDialog::matches(const SIPDialog& other, bool ignoreURIs) const
 {
     return
 	String::operator==(other) &&
-	localURI == other.localURI &&
 	localTag == other.localTag &&
-	remoteURI == other.remoteURI &&
-	remoteTag == other.remoteTag;
-}
-
-bool SIPDialog::operator!=(const SIPDialog& other) const
-{
-    return !operator==(other);
+	remoteTag == other.remoteTag &&
+	(ignoreURIs ||
+	    (localURI == other.localURI &&
+	    remoteURI == other.remoteURI));
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

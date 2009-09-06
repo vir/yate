@@ -401,17 +401,142 @@ private:
 class YSIP_API SIPDialog : public String
 {
 public:
+    /**
+     * Default constructor, build an empty SIP dialog
+     */
     SIPDialog();
+
+    /**
+     * Copy constructor
+     * @param original Original SIP dialog to copy
+     */
     SIPDialog(const SIPDialog& original);
-    SIPDialog(const SIPMessage& message);
+
+    /**
+     * Constructor from a SIP message
+     * @param message SIP message to copy the dialog information from
+     */
+    explicit SIPDialog(const SIPMessage& message);
+
+    /**
+     * Constructor from a Call ID, leaves URIs and tags empty
+     * @param callid Call ID to insert in the dialog
+     */
+    inline explicit SIPDialog(const String& callid)
+	: String(callid)
+	{ }
+
+    /**
+     * Assignment from another dialog
+     * @param original Original SIP dialog to copy
+     * @return Reference to this SIP dialog
+     */
     SIPDialog& operator=(const SIPDialog& original);
+
+    /**
+     * Assignment from a SIP message
+     * @param message SIP message to copy the dialog information from
+     * @return Reference to this SIP dialog
+     */
     SIPDialog& operator=(const SIPMessage& message);
+
+    /**
+     * Assignment from a Call ID, URIs and tags are cleared
+     * @param callid Call ID to copy to the dialog
+     * @return Reference to this SIP dialog
+     */
     SIPDialog& operator=(const String& callid);
-    bool operator==(const SIPDialog& other) const;
-    bool operator!=(const SIPDialog& other) const;
+
+    /**
+     * SIP dialog matching check
+     * @param other Other dialog to compare to
+     * @param ignoreURIs True to ignore local and remote URIs when comparing
+     * @return True if the two dialogs match
+     */
+    bool matches(const SIPDialog& other, bool ignoreURIs) const;
+
+    /**
+     * Dialog equality comparation, suitable for RFC 2543
+     * @param other Other dialog to compare to
+     * @return True if the two dialogs are equal
+     */
+    inline bool operator==(const SIPDialog& other) const
+	{ return matches(other,false); }
+
+    /**
+     * Dialog inequality comparation, suitable for RFC 2543
+     * @param other Other dialog to compare to
+     * @return True if the two dialogs are different
+     */
+    inline bool operator!=(const SIPDialog& other) const
+	{ return !matches(other,false); }
+
+    /**
+     * Dialog equality comparation, suitable for RFC 3261
+     * @param other Other dialog to compare to
+     * @return True if the two dialogs match (ignoring local and remote URIs)
+     */
+    inline bool operator&=(const SIPDialog& other) const
+	{ return matches(other,true); }
+
+    /**
+     * Dialog inequality comparation, suitable for RFC 3261
+     * @param other Other dialog to compare to
+     * @return True if the two dialogs do not match (ignoring local and remote URIs)
+     */
+    inline bool operator|=(const SIPDialog& other) const
+	{ return !matches(other,true); }
+
+    /**
+     * Get the From URI from the dialog
+     * @bool outgoing True if getting the URI for an outgoing transaction
+     * @return Reference to the From URI in dialog
+     */
+    inline const String& fromURI(bool outgoing) const
+	{ return outgoing ? localURI : remoteURI; }
+
+    /**
+     * Get the From tag from the dialog
+     * @bool outgoing True if getting the tag for an outgoing transaction
+     * @return Reference to the From URI tag in dialog
+     */
+    inline const String& fromTag(bool outgoing) const
+	{ return outgoing ? localTag : remoteTag; }
+
+    /**
+     * Get the To URI from the dialog
+     * @bool outgoing True if getting the URI for an outgoing transaction
+     * @return Reference to the To URI in dialog
+     */
+    inline const String& toURI(bool outgoing) const
+	{ return outgoing ? remoteURI : localURI; }
+
+    /**
+     * Get the To tag from the dialog
+     * @bool outgoing True if getting the tag for an outgoing transaction
+     * @return Reference to the To URI tag in dialog
+     */
+    inline const String& toTag(bool outgoing) const
+	{ return outgoing ? remoteTag : localTag; }
+
+    /**
+     * Local URI of the dialog
+     */
     String localURI;
+
+    /**
+     * Tag parameter of the local URI
+     */
     String localTag;
+
+    /**
+     * Remote URI of the dialog
+     */
     String remoteURI;
+
+    /**
+     * Tag parameter of the remote URI
+     */
     String remoteTag;
 };
 

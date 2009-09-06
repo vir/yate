@@ -88,6 +88,7 @@ protected:
  * An object that holds the sip message parsed into this library model.
  * This class can be used to parse a sip message from a text buffer, or it
  * can be used to create a text buffer from a sip message.
+ * @short A container and parser for SIP messages
  */
 class YSIP_API SIPMessage : public RefObject
 {
@@ -397,6 +398,7 @@ private:
 
 /**
  * A class to store information required to identify a dialog
+ * @short SIP Dialog object
  */
 class YSIP_API SIPDialog : public String
 {
@@ -489,7 +491,7 @@ public:
 
     /**
      * Get the From URI from the dialog
-     * @bool outgoing True if getting the URI for an outgoing transaction
+     * @param outgoing True if getting the URI for an outgoing transaction
      * @return Reference to the From URI in dialog
      */
     inline const String& fromURI(bool outgoing) const
@@ -497,7 +499,7 @@ public:
 
     /**
      * Get the From tag from the dialog
-     * @bool outgoing True if getting the tag for an outgoing transaction
+     * @param outgoing True if getting the tag for an outgoing transaction
      * @return Reference to the From URI tag in dialog
      */
     inline const String& fromTag(bool outgoing) const
@@ -505,7 +507,7 @@ public:
 
     /**
      * Get the To URI from the dialog
-     * @bool outgoing True if getting the URI for an outgoing transaction
+     * @param outgoing True if getting the URI for an outgoing transaction
      * @return Reference to the To URI in dialog
      */
     inline const String& toURI(bool outgoing) const
@@ -513,7 +515,7 @@ public:
 
     /**
      * Get the To tag from the dialog
-     * @bool outgoing True if getting the tag for an outgoing transaction
+     * @param outgoing True if getting the tag for an outgoing transaction
      * @return Reference to the To URI tag in dialog
      */
     inline const String& toTag(bool outgoing) const
@@ -542,6 +544,7 @@ public:
 
 /**
  * All informaton related to a SIP transaction, starting with 1st message
+ * @short A class holding one SIP transaction
  */
 class YSIP_API SIPTransaction : public RefObject
 {
@@ -906,6 +909,7 @@ protected:
 
 /**
  * This object is an event that will be taken from SIPEngine
+ * @short A SIP event as retrieved from engine
  */ 
 class YSIP_API SIPEvent
 {
@@ -987,7 +991,8 @@ protected:
 };
 
 /**
- * This object can be one for each SIPListener.
+ * The SIP engine holds common methods and the list of current transactions
+ * @short The SIP engine and transaction list
  */
 class YSIP_API SIPEngine : public DebugEnabler, public Mutex
 {

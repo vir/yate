@@ -471,6 +471,19 @@ bool Connection::processChar(unsigned char c)
 	    m_escmode = 0;
 	    m_echoing = !m_echoing;
 	    return false;
+	case 0x0F: // ^O
+	    m_escmode = 0;
+	    // cycle [no output] -> [output] -> [debug (only if auth)]
+	    if (m_debug)
+		m_output = m_debug = false;
+	    else if (m_output) {
+		m_output = false;
+		if ((m_debug = m_auth))
+		    Debugger::enableOutput(true);
+	    }
+	    else
+		m_output = true;
+	    return false;
 	case 0x0C: // ^L
 	    if (!m_echoing)
 		break;

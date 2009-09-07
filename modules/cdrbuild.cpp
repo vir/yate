@@ -395,9 +395,9 @@ bool CdrHandler::received(Message &msg)
     Lock lock(s_mutex);
     if (m_type == EngHalt) {
 	unsigned int n = s_cdrs.count();
-	s_cdrs.clear();
 	if (n)
-	    Debug("cdrbuild",DebugWarn,"Forcibly finalized %u CDR records.",n);
+	    Debug("cdrbuild",DebugWarn,"Forcibly finalizing %u CDR records.",n);
+	s_cdrs.clear();
 	return false;
     }
     bool track = true;

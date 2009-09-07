@@ -285,6 +285,16 @@ DataConsumer* CallEndpoint::getConsumer(const char* type) const
     return dat ? dat->getConsumer() : 0;
 }
 
+bool CallEndpoint::clearData(DataNode* node, const char* type)
+{
+    if (null(type) || !node)
+	return false;
+    Lock mylock(DataEndpoint::commonMutex());
+    RefPointer<DataEndpoint> dat = getEndpoint(type);
+    return dat && dat->clearData(node);
+}
+
+
 Channel::Channel(Driver* driver, const char* id, bool outgoing)
     : CallEndpoint(id),
       m_parameters(""), m_driver(driver), m_outgoing(outgoing),

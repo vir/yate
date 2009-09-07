@@ -170,10 +170,9 @@ MOHSource* MOHSource::getSource(String& name, const NamedList& params)
 	if (s->start("MOH Source")) {
 	    sources.append(s);
 	    return s;
-	} else
-	    return (MOHSource *) NULL;
-    } else 
-	return (MOHSource *) NULL;
+	}
+    }
+    return 0;
 }
 
 bool MOHSource::create()
@@ -237,11 +236,11 @@ void MOHSource::run()
     }
 
     m_data.assign(0,(m_brate*20)/1000);
-    int r = 0;
+    int r = 1;
     u_int64_t tpos = Time::now();
     m_time = tpos;
 
-    do {
+    while ((r > 0) && looping()) {
 	r = (m_in >= 0) ? ::read(m_in,m_data.data(),m_data.length()) : m_data.length();
 
 	if (r < 0) {
@@ -267,7 +266,7 @@ void MOHSource::run()
 	}
 	Forward(m_data);
 	tpos += (r*1000000ULL/m_brate);
-    } while (r > 0);
+    }
 }
 
 

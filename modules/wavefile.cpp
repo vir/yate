@@ -37,9 +37,8 @@ public:
     ~WaveSource();
     virtual void run();
     virtual void cleanup();
-    virtual bool zeroRefsTest();
+    virtual void attached(bool added);
     void setNotify(const String& id);
-    bool derefReady();
 private:
     WaveSource(const char* file, CallEndpoint* chan, bool autoclose);
     void init(const String& file, bool autorepeat);
@@ -47,7 +46,7 @@ private:
     void detectWavFormat();
     void detectIlbcFormat();
     bool computeDataRate();
-    bool notify(WaveSource* source, const char* reason = 0);
+    void notify(WaveSource* source, const char* reason = 0);
     CallEndpoint* m_chan;
     Stream* m_stream;
     DataBlock m_data;
@@ -58,10 +57,7 @@ private:
     u_int64_t m_time;
     String m_id;
     bool m_autoclose;
-    bool m_autoclean;
     bool m_nodata;
-    bool m_insert;
-    volatile bool m_derefOk;
 };
 
 class WaveConsumer : public DataConsumer
@@ -76,6 +72,7 @@ public:
     ~WaveConsumer();
     virtual bool setFormat(const DataFormat& format);
     virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags);
+    virtual void attached(bool added);
     inline void setNotify(const String& id)
 	{ m_id = id; }
 private:
@@ -134,11 +131,15 @@ public:
     WaveFileDriver();
     virtual void initialize();
     virtual bool msgExecute(Message& msg, String& dest);
+protected:
+    void statusParams(String& str);
 private:
     AttachHandler* m_handler;
 };
 
-bool s_asyncDelete = true;
+Mutex s_mutex(false,"WaveFile");
+int s_reading = 0;
+int s_writing = 0;
 bool s_dataPadding = true;
 bool s_pubReadable = false;
 
@@ -228,7 +229,6 @@ void WaveSource::init(const String& file, bool autorepeat)
     if (computeDataRate()) {
 	if (autorepeat)
 	    m_repeatPos = m_stream->seek(Stream::SeekCurrent);
-	asyncDelete(s_asyncDelete);
 	start("Wave Source");
     }
     else {
@@ -239,12 +239,13 @@ void WaveSource::init(const String& file, bool autorepeat)
 
 WaveSource::WaveSource(const char* file, CallEndpoint* chan, bool autoclose)
     : m_chan(chan), m_stream(0), m_swap(false), m_brate(0), m_repeatPos(-1),
-      m_total(0), m_time(0), m_autoclose(autoclose), m_autoclean(false),
-      m_nodata(false), m_insert(false), m_derefOk(true)
+      m_total(0), m_time(0), m_autoclose(autoclose),
+      m_nodata(false)
 {
     Debug(&__plugin,DebugAll,"WaveSource::WaveSource(\"%s\",%p) [%p]",file,chan,this);
-    if (m_chan)
-	m_insert = true;
+    s_mutex.lock();
+    s_reading++;
+    s_mutex.unlock();
 }
 
 WaveSource::~WaveSource()
@@ -260,6 +261,9 @@ WaveSource::~WaveSource()
     }
     delete m_stream;
     m_stream = 0;
+    s_mutex.lock();
+    s_reading--;
+    s_mutex.unlock();
 }
 
 void WaveSource::detectAuFormat()
@@ -340,7 +344,7 @@ void WaveSource::run()
 	r = m_consumers.count();
 	unlock();
 	Thread::yield();
-	if (!alive()) {
+	if (!looping()) {
 	    notify(0,"replaced");
 	    return;
 	}
@@ -350,12 +354,15 @@ void WaveSource::run()
     m_data.assign(0,blen);
     u_int64_t tpos = 0;
     m_time = tpos;
-    do {
+    while ((r > 0) && looping()) {
 	r = m_stream ? m_stream->readData(m_data.data(),m_data.length()) : m_data.length();
 	if (r < 0) {
 	    if (m_stream->canRetry()) {
-		r = 1;
-		continue;
+		if (looping()) {
+		    r = 1;
+		    continue;
+		}
+		r = 0;
 	    }
 	    break;
 	}
@@ -396,63 +403,44 @@ void WaveSource::run()
 	    XDebug(&__plugin,DebugAll,"WaveSource sleeping for " FMT64 " usec",dly);
 	    Thread::usleep((unsigned long)dly);
 	}
-	if (!alive()) {
-	    notify(0,"replaced");
-	    return;
-	}
+	if (!looping())
+	    break;
 	Forward(m_data,ts);
 	ts += m_data.length()*8000/m_brate;
 	m_total += r;
 	tpos += (r*(u_int64_t)1000000/m_brate);
-    } while (r > 0);
-    Debug(&__plugin,DebugAll,"WaveSource '%s' end of data (%u played) chan=%p [%p]",m_id.c_str(),m_total,m_chan,this);
-    if (!ref()) {
-	notify(0,"replaced");
-	return;
     }
-    // prevent disconnector thread from succeeding before notify returns
-    m_derefOk = false;
-    // at cleanup time deref the data source if we start no disconnector thread
-    m_autoclean = !notify(this,"eof");
-    if (!deref())
-	m_derefOk = m_autoclean;
+    if (r)
+	notify(0,"replaced");
+    else {
+	Debug(&__plugin,DebugAll,"WaveSource '%s' end of data (%u played) chan=%p [%p]",
+	    m_id.c_str(),m_total,m_chan,this);
+	notify(this,"eof");
+    }
 }
 
 void WaveSource::cleanup()
 {
-    Lock lock(DataEndpoint::commonMutex());
-    Debug(&__plugin,DebugAll,"WaveSource cleanup, total=%u, alive=%s, autoclean=%s chan=%p [%p]",
-	m_total,String::boolText(alive()),String::boolText(m_autoclean),m_chan,this);
-    clearThread();
-    if (m_autoclean) {
-	asyncDelete(false);
-	if (m_insert) {
-	    if (m_chan && (m_chan->getSource() == this))
-		m_chan->setSource();
-	}
-	else
-	    deref();
-	return;
+    RefPointer<CallEndpoint> chan;
+    if (m_chan) {
+	DataEndpoint::commonMutex().lock();
+	chan = m_chan;
+	m_chan = 0;
+	DataEndpoint::commonMutex().unlock();
     }
-    if (m_derefOk)
-	ThreadedSource::cleanup();
-    else
-	m_derefOk = true;
+    Debug(&__plugin,DebugAll,"WaveSource cleanup, total=%u, chan=%p [%p]",
+	m_total,(void*)chan,this);
+    if (chan)
+	chan->clearData(this);
+    ThreadedSource::cleanup();
 }
 
-bool WaveSource::zeroRefsTest()
+void WaveSource::attached(bool added)
 {
-    DDebug(&__plugin,DebugAll,"WaveSource::zeroRefsTest() chan=%p%s%s%s [%p]",
-	m_chan,
-	(thread() ? " thread" : ""),
-	(m_autoclose ? " close" : ""),
-	(m_autoclean ? " clean" : ""),
-	this);
-    // since this is a zombie it has no owner anymore and needs no removal
-    m_chan = 0;
-    m_autoclose = false;
-    m_autoclean = false;
-    return ThreadedSource::zeroRefsTest();
+    if (!added && m_chan && !m_chan->alive()) {
+	DDebug(&__plugin,DebugInfo,"WaveSource clearing dead chan %p [%p]",m_chan,this);
+	m_chan = 0;
+    }
 }
 
 void WaveSource::setNotify(const String& id)
@@ -462,21 +450,17 @@ void WaveSource::setNotify(const String& id)
 	notify(this);
 }
 
-bool WaveSource::derefReady()
+void WaveSource::notify(WaveSource* source, const char* reason)
 {
-    for (int i = 0; i < 10; i++) {
-	if (m_derefOk)
-	    return true;
-	Thread::yield();
+    RefPointer<CallEndpoint> chan;
+    if (m_chan) {
+	DataEndpoint::commonMutex().lock();
+	if (source)
+	    chan = m_chan;
+	m_chan = 0;
+	DataEndpoint::commonMutex().unlock();
     }
-    Debug(&__plugin,DebugWarn,"Source not deref ready, waiting more... [%p]",this);
-    Thread::msleep(10);
-    return m_derefOk;
-}
-
-bool WaveSource::notify(WaveSource* source, const char* reason)
-{
-    if (!m_chan) {
+    if (!chan) {
 	if (m_id) {
 	    DDebug(&__plugin,DebugAll,"WaveSource enqueueing notify message [%p]",this);
 	    Message* m = new Message("chan.notify");
@@ -485,15 +469,15 @@ bool WaveSource::notify(WaveSource* source, const char* reason)
 		m->addParam("reason",reason);
 	    Engine::enqueue(m);
 	}
-	return false;
     }
-    if (m_id || m_autoclose) {
+    else if (m_id || m_autoclose) {
 	DDebug(&__plugin,DebugInfo,"Preparing '%s' disconnector for '%s' chan %p '%s' source=%p [%p]",
-	    reason,m_id.c_str(),m_chan,(m_chan ? m_chan->id().c_str() : ""),source,this);
-	Disconnector *disc = new Disconnector(m_chan,m_id,source,0,m_autoclose,reason);
-	return disc->init();
+	    reason,m_id.c_str(),(void*)chan,chan->id().c_str(),source,this);
+	Disconnector *disc = new Disconnector(chan,m_id,source,0,m_autoclose,reason);
+	if (!disc->init() && m_autoclose)
+	    chan->clearData(source);
     }
-    return false;
+    stop();
 }
 
 
@@ -503,6 +487,9 @@ WaveConsumer::WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxl
 {
     Debug(&__plugin,DebugAll,"WaveConsumer::WaveConsumer(\"%s\",%p,%u,\"%s\",%p) [%p]",
 	file.c_str(),chan,maxlen,format,param,this);
+    s_mutex.lock();
+    s_writing++;
+    s_mutex.unlock();
     if (format) {
 	m_locked = true;
 	m_format = format;
@@ -562,6 +549,9 @@ WaveConsumer::~WaveConsumer()
     }
     delete m_stream;
     m_stream = 0;
+    s_mutex.lock();
+    s_writing--;
+    s_mutex.unlock();
 }
 
 void WaveConsumer::writeIlbcHeader() const
@@ -668,17 +658,31 @@ unsigned long WaveConsumer::Consume(const DataBlock& data, unsigned long tStamp,
 	    m_maxlen = 0;
 	    delete m_stream;
 	    m_stream = 0;
+	    RefPointer<CallEndpoint> chan;
 	    if (m_chan) {
-		DDebug(&__plugin,DebugInfo,"Preparing 'maxlen' disconnector for '%s' chan %p '%s' in consumer [%p]",
-		    m_id.c_str(),m_chan,(m_chan ? m_chan->id().c_str() : ""),this);
-		Disconnector *disc = new Disconnector(m_chan,m_id,0,this,false,"maxlen");
+		DataEndpoint::commonMutex().lock();
+		chan = m_chan;
 		m_chan = 0;
+		DataEndpoint::commonMutex().unlock();
+	    }
+	    if (chan) {
+		DDebug(&__plugin,DebugInfo,"Preparing 'maxlen' disconnector for '%s' chan %p '%s' in consumer [%p]",
+		    m_id.c_str(),(void*)chan,chan->id().c_str(),this);
+		Disconnector *disc = new Disconnector(chan,m_id,0,this,false,"maxlen");
 		disc->init();
 	    }
 	}
 	return invalidStamp();
     }
     return 0;
+}
+
+void WaveConsumer::attached(bool added)
+{
+    if (!added && m_chan && !m_chan->alive()) {
+	DDebug(&__plugin,DebugInfo,"WaveConsumer clearing dead chan %p [%p]",m_chan,this);
+	m_chan = 0;
+    }
 }
 
 
@@ -696,15 +700,6 @@ Disconnector::Disconnector(CallEndpoint* chan, const String& id, WaveSource* sou
 	m->userData(m_chan);
 	m_msg = m;
     }
-    if (source) {
-	if (source->ref())
-	    m_source = source;
-	else {
-	    Debug(&__plugin,DebugGoOn,"Disconnecting dead source %p, reason: '%s'",
-		source,reason);
-	    m_chan = 0;
-	}
-    }
 }
 
 Disconnector::~Disconnector()
@@ -717,12 +712,12 @@ Disconnector::~Disconnector()
 
 bool Disconnector::init()
 {
-    if (error()) {
-	Debug(&__plugin,DebugGoOn,"Error creating disconnector thread %p",this);
+    if (error() || !startup()) {
+	Debug(&__plugin,DebugGoOn,"Error starting disconnector thread %p",this);
 	delete this;
 	return false;
     }
-    return startup();
+    return true;
 }
 
 void Disconnector::run()
@@ -732,31 +727,15 @@ void Disconnector::run()
     if (!m_chan)
 	return;
     if (m_source) {
-	if (m_chan->getSource() == m_source)
-	    m_chan->setSource();
-	else
-	    Debug(&__plugin,DebugMild,"Source %p in channel %p was replaced with %p",
+	if (!m_chan->clearData(m_source))
+	    Debug(&__plugin,DebugNote,"Source %p in channel %p was replaced with %p",
 		m_source,(void*)m_chan,m_chan->getSource());
-	if (!m_source->derefReady())
-	    Debug(&__plugin,DebugGoOn,"Source %p is not deref ready, crash may occur",m_source);
-	m_source->deref();
 	if (m_disc)
 	    m_chan->disconnect("eof");
     }
     else {
-	if (m_msg) {
-	    if (!m_consumer)
-		return;
-	    DataEndpoint* de = m_chan->getEndpoint();
-	    if (!de)
-		return;
-	    if (de->getConsumer() == m_consumer)
-		de->setConsumer();
-	    if (de->getCallRecord() == m_consumer)
-		de->setCallRecord();
-	    if (de->getPeerRecord() == m_consumer)
-		de->setPeerRecord();
-	}
+	if (m_msg)
+	    m_chan->clearData(m_consumer);
 	else
 	    m_chan->disconnect();
     }
@@ -903,7 +882,9 @@ bool AttachHandler::received(Message &msg)
     }
 
     while (!ovr.null()) {
-	DataConsumer* c = ch->getConsumer();
+	DataEndpoint::commonMutex().lock();
+	RefPointer<DataConsumer> c = ch->getConsumer();
+	DataEndpoint::commonMutex().unlock();
 	if (!c) {
 	    Debug(DebugWarn,"Wave override '%s' attach request with no consumer!",ovr.c_str());
 	    ret = false;
@@ -914,15 +895,18 @@ bool AttachHandler::received(Message &msg)
 	if (DataTranslator::attachChain(s,c,true))
 	    msg.clearParam("override");
 	else {
-	    Debug(DebugWarn,"Failed to override attach wave '%s' to consumer %p",ovr.c_str(),c);
-	    s->deref();
+	    Debug(DebugWarn,"Failed to override attach wave '%s' to consumer %p",
+		ovr.c_str(),(void*)c);
 	    ret = false;
 	}
+	s->deref();
 	break;
     }
 
     while (!repl.null()) {
-	DataConsumer* c = ch->getConsumer();
+	DataEndpoint::commonMutex().lock();
+	RefPointer<DataConsumer> c = ch->getConsumer();
+	DataEndpoint::commonMutex().unlock();
 	if (!c) {
 	    Debug(DebugWarn,"Wave replacement '%s' attach request with no consumer!",repl.c_str());
 	    ret = false;
@@ -933,10 +917,11 @@ bool AttachHandler::received(Message &msg)
 	if (DataTranslator::attachChain(s,c,false))
 	    msg.clearParam("replace");
 	else {
-	    Debug(DebugWarn,"Failed to replacement attach wave '%s' to consumer %p",repl.c_str(),c);
-	    s->deref();
+	    Debug(DebugWarn,"Failed to replacement attach wave '%s' to consumer %p",
+		repl.c_str(),(void*)c);
 	    ret = false;
 	}
+	s->deref();
 	break;
     }
 
@@ -962,11 +947,11 @@ bool RecordHandler::received(Message &msg)
 	    else {
 		Debug(DebugWarn,"Could not attach call recorder with method '%s', use 'record'",
 		    c1.matchString(1).c_str());
-		c1 = "";
+		c1.clear();
 	    }
 	}
 	else
-	    c1 = "";
+	    c1.clear();
     }
 
     String c2(msg.getValue("peer"));
@@ -982,11 +967,11 @@ bool RecordHandler::received(Message &msg)
 	    else {
 		Debug(DebugWarn,"Could not attach peer recorder with method '%s', use 'record'",
 		    c2.matchString(1).c_str());
-		c2 = "";
+		c2.clear();
 	    }
 	}
 	else
-	    c2 = "";
+	    c2.clear();
     }
 
     if (c1.null() && c2.null())
@@ -1096,6 +1081,13 @@ bool WaveFileDriver::msgExecute(Message& msg, String& dest)
     return false;
 }
 
+void WaveFileDriver::statusParams(String& str)
+{
+    str.append("play=",",") << s_reading;
+    str << ",record=" << s_writing;
+    Driver::statusParams(str);
+}
+
 WaveFileDriver::WaveFileDriver()
     : Driver("wave","misc"), m_handler(0)
 {
@@ -1106,7 +1098,6 @@ void WaveFileDriver::initialize()
 {
     Output("Initializing module WaveFile");
     setup();
-    s_asyncDelete = Engine::config().getBoolValue("hacks","asyncdelete",true);
     s_dataPadding = Engine::config().getBoolValue("hacks","datapadding",true);
     s_pubReadable = Engine::config().getBoolValue("hacks","wavepubread",false);
     if (!m_handler) {

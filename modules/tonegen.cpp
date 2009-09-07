@@ -102,7 +102,7 @@ public:
     static Tone* buildDtmf(const String& dtmf, int len = DTMF_LEN, int gap = DTMF_GAP);
 protected:
     ToneSource(const ToneDesc* tone = 0);
-    virtual void zeroRefs();
+    virtual void cleanup();
     static const ToneDesc* getBlock(String& tone, const ToneDesc* table);
     String m_name;
     const Tone* m_tone;
@@ -119,8 +119,6 @@ class TempSource : public ToneSource
 public:
     TempSource(String& desc, DataBlock* rawdata);
     virtual ~TempSource();
-protected:
-    virtual void cleanup();
 private:
     Tone* m_single;
     DataBlock* m_rawdata;                // Raw linear data to be sent
@@ -449,7 +447,6 @@ ToneSource::ToneSource(const ToneDesc* tone)
     }
     Debug(&__plugin,DebugAll,"ToneSource::ToneSource(%p) '%s' [%p]",
 	tone,m_name.c_str(),this);
-    asyncDelete(true);
 }
 
 void ToneSource::destroyed()
@@ -461,19 +458,19 @@ void ToneSource::destroyed()
 	Debug(&__plugin,DebugInfo,"ToneSource rate=%u b/s",byteRate(m_time,m_total));
 }
 
-void ToneSource::zeroRefs()
-{
-    Debug(&__plugin,DebugAll,"ToneSource::zeroRefs() '%s' [%p]",m_name.c_str(),this);
-    __plugin.lock();
-    tones.remove(this,false);
-    __plugin.unlock();
-    ThreadedSource::zeroRefs();
-}
-
 bool ToneSource::startup()
 {
     DDebug(&__plugin,DebugAll,"ToneSource::startup(\"%s\") tone=%p",m_name.c_str(),m_tone);
     return m_tone && start("Tone Source");
+}
+
+void ToneSource::cleanup()
+{
+    Debug(&__plugin,DebugAll,"ToneSource::cleanup() '%s' [%p]",m_name.c_str(),this);
+    __plugin.lock();
+    tones.remove(this,false);
+    __plugin.unlock();
+    ThreadedSource::cleanup();
 }
 
 const ToneDesc* ToneSource::getBlock(String& tone, const ToneDesc* table)
@@ -555,8 +552,10 @@ ToneSource* ToneSource::getTone(String& tone)
     ObjList* l = &tones;
     for (; l; l = l->next()) {
 	ToneSource* t = static_cast<ToneSource*>(l->get());
-	if (t && (t->name() == tone) && t->ref())
+	if (t && (t->name() == tone) && t->running() && (t->refcount() > 1)) {
+	    t->ref();
 	    return t;
+	}
     }
     if (!td)
 	return 0;
@@ -577,7 +576,7 @@ void ToneSource::run()
     int nsam = tone->nsamples;
     if (nsam < 0)
 	nsam = -nsam;
-    while (alive() && m_tone) {
+    while (m_tone && looping()) {
 	Thread::check();
 	short *d = (short *) m_data.data();
 	for (unsigned int i = m_data.length()/2; i--; samp++,dpos++) {
@@ -613,6 +612,8 @@ void ToneSource::run()
 	    XDebug(&__plugin,DebugAll,"ToneSource sleeping for " FMT64 " usec",dly);
 	    Thread::usleep((unsigned long)dly);
 	}
+	if (!looping())
+	    break;
 	Forward(m_data,m_total/2);
 	m_total += m_data.length();
 	tpos += (m_data.length()*(u_int64_t)1000000/m_brate);
@@ -685,12 +686,6 @@ TempSource::~TempSource()
     TelEngine::destruct(m_rawdata);
 }
 
-void TempSource::cleanup()
-{
-    ToneSource::cleanup();
-    deref();
-}
-
 
 ToneChan::ToneChan(String& tone)
     : Channel(__plugin)
@@ -743,11 +738,14 @@ bool AttachHandler::received(Message& msg)
     if (src.null() && ovr.null() && repl.null())
 	return false;
 
-    DataEndpoint* de = static_cast<DataEndpoint*>(msg.userObject("DataEndpoint"));
+    RefPointer<DataEndpoint> de = static_cast<DataEndpoint*>(msg.userObject("DataEndpoint"));
     if (!de) {
 	CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
-	if (ch)
+	if (ch) {
+	    DataEndpoint::commonMutex().lock();
 	    de = ch->setEndpoint();
+	    DataEndpoint::commonMutex().unlock();
+	}
     }
 
     if (!de) {
@@ -767,12 +765,14 @@ bool AttachHandler::received(Message& msg)
 	    msg.clearParam("source");
 	}
 	else {
-	    Debug(DebugWarn,"No source tone '%s' could be attached to %p",src.c_str(),de);
+	    Debug(DebugWarn,"No source tone '%s' could be attached to %p",src.c_str(),(void*)de);
 	    ret = false;
 	}
     }
     if (ovr) {
-	DataConsumer* c = de->getConsumer();
+	DataEndpoint::commonMutex().lock();
+	RefPointer<DataConsumer> c = de->getConsumer();
+	DataEndpoint::commonMutex().unlock();
 	if (c) {
 	    TempSource* t = new TempSource(ovr,getRawData(msg));
 	    if (DataTranslator::attachChain(t,c,true) && t->startup())
@@ -781,14 +781,17 @@ bool AttachHandler::received(Message& msg)
 		Debug(DebugWarn,"Override source tone '%s' failed to start [%p]",ovr.c_str(),t);
 		ret = false;
 	    }
+	    t->deref();
 	}
 	else {
-	    Debug(DebugWarn,"Requested override '%s' to missing consumer of %p",ovr.c_str(),de);
+	    Debug(DebugWarn,"Requested override '%s' to missing consumer of %p",ovr.c_str(),(void*)de);
 	    ret = false;
 	}
     }
     if (repl) {
-	DataConsumer* c = de->getConsumer();
+	DataEndpoint::commonMutex().lock();
+	RefPointer<DataConsumer> c = de->getConsumer();
+	DataEndpoint::commonMutex().unlock();
 	if (c) {
 	    TempSource* t = new TempSource(repl,getRawData(msg));
 	    if (DataTranslator::attachChain(t,c,false) && t->startup())
@@ -797,9 +800,10 @@ bool AttachHandler::received(Message& msg)
 		Debug(DebugWarn,"Replacement source tone '%s' failed to start [%p]",repl.c_str(),t);
 		ret = false;
 	    }
+	    t->deref();
 	}
 	else {
-	    Debug(DebugWarn,"Requested replacement '%s' to missing consumer of %p",repl.c_str(),de);
+	    Debug(DebugWarn,"Requested replacement '%s' to missing consumer of %p",repl.c_str(),(void*)de);
 	    ret = false;
 	}
     }

@@ -194,13 +194,12 @@ OssSource::~OssSource()
 
 void OssSource::run()
 {
-    int r = 0;
+    int r = 1;
     int len = 0;
     u_int64_t tpos = Time::now();
-    do {
+    while ((r > 0) && looping()) {
 	if (m_device->closed()) {
 	    Thread::yield();
-	    r = 1;
 	    continue;
 	}
 	unsigned char* ptr = (unsigned char*)m_data.data() + len;
@@ -233,7 +232,7 @@ void OssSource::run()
 	m_total += len;
 	tpos += (len*1000000ULL/m_brate);
 	len = 0;
-    } while (r > 0);
+    }
     Debug(DebugAll,"OssSource [%p] end of data",this);
 }
 

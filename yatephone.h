@@ -130,6 +130,7 @@ struct YATE_API FormatInfo {
 	{ }
 };
 
+class DataEndpoint;
 class CallEndpoint;
 class Driver;
 
@@ -291,6 +292,8 @@ private:
  */
 class YATE_API DataNode : public RefObject
 {
+    friend class DataEndpoint;
+
 public:
     /**
      * Flags associated with the DataBlocks forwarded between nodes
@@ -359,6 +362,14 @@ public:
 	{ return (unsigned long)-1; }
 
 protected:
+    /**
+     * Owner attach and detach notification.
+     * This method is called with @ref DataEndpoint::commonMutex() held
+     * @param added True if a new owner was added, false if it was removed
+     */
+    virtual void attached(bool added)
+	{ }
+
     DataFormat m_format;
     unsigned long m_timestamp;
 };
@@ -543,7 +554,7 @@ class YATE_API ThreadedSource : public DataSource
     friend class ThreadedSourcePrivate;
 public:
     /**
-     * The destruction notification, stops the thread
+     * The destruction notification, checks that the thread is gone
      */
     virtual void destroyed();
 
@@ -572,33 +583,14 @@ public:
      */
     bool running() const;
 
-    /**
-     * Get the current status of the asynchronous deletion flag
-     */
-    inline bool asyncDelete() const
-	{ return m_asyncDelete; }
-
 protected:
     /**
      * Threaded Source constructor
      * @param format Name of the data format, default "slin" (Signed Linear)
      */
     inline ThreadedSource(const char* format = "slin")
-	: DataSource(format), m_thread(0), m_asyncDelete(false)
+	: DataSource(format), m_thread(0)
 	{ }
-
-    /**
-     * Derived classes should call this method to let the source to be
-     *  destroyed asynchronously in the data thread
-     */
-    inline void asyncDelete(bool async)
-	{ m_asyncDelete = async; }
-
-    /**
-     * Clear the worker thread pointer
-     */
-    inline void clearThread()
-	{ m_thread = 0; }
 
     /**
      * The worker method. You have to reimplement it as you need
@@ -612,15 +604,13 @@ protected:
     virtual void cleanup();
 
     /**
-     * Override so destruction can be delayed after all references were lost
-     *  to let the data pumping thread end normally
-     * @return True to delete the source right away, false to defer
+     * Check if the calling thread should keep looping the worker method
+     * @return True if the calling thread should remain in the run() method
      */
-    virtual bool zeroRefsTest();
+    bool looping() const;
 
 private:
     ThreadedSourcePrivate* m_thread;
-    bool m_asyncDelete;
 };
 
 /**
@@ -976,6 +966,13 @@ public:
 	{ return m_callRecord; }
 
     /**
+     * Clear a data node from any slot of this object
+     * @param node Pointer to DataSource or DataConsumer to clear
+     * @return True if the node was removed from at least one slot
+     */
+    bool clearData(DataNode* node);
+
+    /**
      * Adds a data consumer to the list of sniffers of the local call data
      * @param sniffer Pointer to the DataConsumer to add to sniffer list
      * @return True if the sniffer was added to list, false if NULL or already added
@@ -1203,6 +1200,14 @@ public:
      * @return A pointer to the DataConsumer object or NULL
      */
     DataConsumer* getConsumer(const char* type = "audio") const;
+
+    /**
+     * Clear a data node from any slot of a DataEndpoint of this object
+     * @param node Pointer to DataSource or DataConsumer to clear
+     * @param type Type of data node: "audio", "video", "text"
+     * @return True if the node was removed from at least one slot
+     */
+    bool clearData(DataNode* node, const char* type = "audio");
 
 protected:
     /**

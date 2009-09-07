@@ -387,9 +387,9 @@ ExtModSource::~ExtModSource()
 void ExtModSource::run()
 {
     char data[320];
-    int r = 0;
+    int r = 1;
     u_int64_t tpos = Time::now();
-    do {
+    while ((r > 0) && looping()) {
 	if (!m_str) {
 	    Thread::yield();
 	    continue;
@@ -415,7 +415,7 @@ void ExtModSource::run()
 	buf.clear(false);
 	m_total += r;
 	tpos += (r*(u_int64_t)1000000/m_brate);
-    } while (r > 0);
+    }
     Debug(DebugAll,"ExtModSource [%p] end of data total=%u",this,m_total);
     m_chan->setRunning(false);
 }

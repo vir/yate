@@ -128,16 +128,14 @@ protected:
 
     virtual void cleanup()
 	{
-	    RefObject::refMutex().lock();
-	    ThreadedSource* source = m_source;
+	    RefPointer<ThreadedSource> source = m_source;
 	    m_source = 0;
-	    RefObject::refMutex().unlock();
 	    if (source)
 		source->cleanup();
 	}
 
 private:
-    ThreadedSource* m_source;
+    RefPointer<ThreadedSource> m_source;
 };
 
 // slin/alaw/mulaw converter
@@ -805,6 +803,7 @@ void DataEndpoint::setSource(DataSource* source)
 	ObjList* l = m_sniffers.skipNull();
 	for (; l; l = l->skipNext())
 	    DataTranslator::detachChain(temp,static_cast<DataConsumer*>(l->get()));
+	temp->attached(false);
     }
     if (source) {
 	source->ref();
@@ -817,6 +816,7 @@ void DataEndpoint::setSource(DataSource* source)
 	ObjList* l = m_sniffers.skipNull();
 	for (; l; l = l->skipNext())
 	    DataTranslator::attachChain(source,static_cast<DataConsumer*>(l->get()));
+	source->attached(true);
     }
     m_source = source;
     if (m_callRecord)
@@ -847,6 +847,10 @@ void DataEndpoint::setConsumer(DataConsumer* consumer)
     m_consumer = consumer;
     if (source && temp)
 	DataTranslator::detachChain(source,temp);
+    if (temp)
+	temp->attached(false);
+    if (consumer)
+	consumer->attached(true);
     lock.drop();
     TelEngine::destruct(temp);
 }
@@ -871,6 +875,10 @@ void DataEndpoint::setPeerRecord(DataConsumer* consumer)
     m_peerRecord = consumer;
     if (source && temp)
 	DataTranslator::detachChain(source,temp);
+    if (temp)
+	temp->attached(false);
+    if (consumer)
+	consumer->attached(true);
     lock.drop();
     TelEngine::destruct(temp);
 }
@@ -894,6 +902,10 @@ void DataEndpoint::setCallRecord(DataConsumer* consumer)
     m_callRecord = consumer;
     if (temp && m_source)
 	DataTranslator::detachChain(m_source,temp);
+    if (temp)
+	temp->attached(false);
+    if (consumer)
+	consumer->attached(true);
     lock.drop();
     TelEngine::destruct(temp);
 }
@@ -912,6 +924,7 @@ bool DataEndpoint::addSniffer(DataConsumer* sniffer)
     m_sniffers.append(sniffer);
     if (m_source)
 	DataTranslator::attachChain(m_source,sniffer);
+    sniffer->attached(true);
     return true;
 }
 
@@ -926,6 +939,7 @@ bool DataEndpoint::delSniffer(DataConsumer* sniffer)
 	return false;
     if (m_source)
 	DataTranslator::detachChain(m_source,sniffer);
+    sniffer->attached(false);
     sniffer->deref();
     return true;
 }
@@ -941,8 +955,34 @@ void DataEndpoint::clearSniffers()
 	    sniffer,m_source,this);
 	if (m_source)
 	    DataTranslator::detachChain(m_source,sniffer);
+	sniffer->attached(false);
 	sniffer->deref();
     }
+}
+
+bool DataEndpoint::clearData(DataNode* node)
+{
+    if (!node)
+	return false;
+    Lock lock(s_dataMutex);
+    bool ok = delSniffer(static_cast<DataConsumer*>(node));
+    if (m_callRecord == node) {
+	setCallRecord();
+	ok = true;
+    }
+    if (m_peerRecord == node) {
+	setPeerRecord();
+	ok = true;
+    }
+    if (m_consumer == node) {
+	setConsumer();
+	ok = true;
+    }
+    if (m_source == node) {
+	setSource();
+	ok = true;
+    }
+    return ok;
 }
 
 // Change source(s) or consumer(s)
@@ -957,11 +997,8 @@ bool DataEndpoint::control(NamedList& params)
 
 void ThreadedSource::destroyed()
 {
-    if (m_asyncDelete && m_thread)
-	Debug(DebugFail,"ThreadedSource destroyed holding thread %p [%p]",m_thread,this);
-    m_asyncDelete = false;
     if (m_thread)
-	stop();
+	Debug(DebugFail,"ThreadedSource destroyed holding thread %p [%p]",m_thread,this);
     DataSource::destroyed();
 }
 
@@ -983,42 +1020,20 @@ bool ThreadedSource::start(const char* name, Thread::Priority prio)
 void ThreadedSource::stop()
 {
     Lock mylock(this);
-    if (!m_thread)
-	return;
-    RefObject::refMutex().lock();
     ThreadedSourcePrivate* tmp = m_thread;
     m_thread = 0;
-    if (tmp) {
-	if (tmp->m_source == this)
-	    tmp->m_source = 0;
-	else
-	    tmp = 0;
-    }
-    RefObject::refMutex().unlock();
-    if (tmp)
-	delete tmp;
+    if (!tmp || tmp->running())
+	return;
+    Debug(DebugInfo,"ThreadedSource deleting stopped thread %p [%p]",tmp,this);
+    mylock.drop();
+    delete tmp;
 }
 
 void ThreadedSource::cleanup()
 {
-    Lock lock(RefObject::refMutex());
+    lock();
     m_thread = 0;
-    if (m_asyncDelete && !alive()) {
-	lock.drop();
-	zeroRefs();
-    }
-}
-
-bool ThreadedSource::zeroRefsTest()
-{
-    // let the data thread destroy us if possible
-    if (m_asyncDelete && m_thread && m_thread->running()) {
-	m_thread = 0;
-	return false;
-    }
-    // if async not possible make sure we are set up for synchronous destruction
-    m_asyncDelete = false;
-    return DataSource::zeroRefsTest();
+    unlock();
 }
 
 Thread* ThreadedSource::thread() const
@@ -1028,8 +1043,15 @@ Thread* ThreadedSource::thread() const
 
 bool ThreadedSource::running() const
 {
-    Lock lock(RefObject::refMutex());
+    Lock mylock(const_cast<ThreadedSource*>(this));
     return m_thread && m_thread->running();
+}
+
+bool ThreadedSource::looping() const
+{
+    Lock mylock(const_cast<ThreadedSource*>(this));
+    return (refcount() > 1) && m_thread && !m_thread->check(false) &&
+	m_thread->isCurrent() && !Engine::exiting();
 }
 
 

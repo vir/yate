@@ -187,38 +187,34 @@ AlsaSource::~AlsaSource()
 
 void AlsaSource::run()
 {
-    int r = 0;
-    //u_int64_t tpos = Time::now();
+    int r = 1;
     DataBlock data(0,(m_brate*20)/1000);
-    do {
-		if (m_device->closed()) {
-			m_device->open();
-			Thread::yield();
-			r = 1;
-			continue;
-		}
-		r = m_device->read(data.data(), data.length()/2);
-		if (r <= 0) {
-			Thread::yield();
-			r = 1;
-			continue;
-		}
-		if(((unsigned int)r)*2==data.length()) Forward(data);
-		else{
-			DataBlock d2(data.data(),r*2);
-			Forward(d2);
-		}
-/*
-		int64_t dly = tpos - Time::now();
-		if (dly > 0) {
-			Debug("AlsaSource",DebugWarn,"Sleeping for " FMT64 " usec",dly);
-			Thread::usleep((unsigned long)dly);
-		}
-*/
-			
-		m_total += r;
-		//tpos += (r*(u_int64_t)1000000/m_brate);
-    } while (r > 0);
+    while ((r > 0) && looping()) {
+	if (m_device->closed())
+	    m_device->open();
+	r = m_device->read(data.data(), data.length()/2);
+	if (r < 0) {
+	    if (errno == EINTR || errno == EAGAIN) {
+		Thread::yield();
+		r = 1;
+		continue;
+	    }
+	    break;
+	}
+	else if (r == 0) {
+	    Thread::yield();
+	    r = 1;
+	    continue;
+	}
+	if (r*2 == (int)data.length())
+	    Forward(data);
+	else {
+	    DataBlock d2(data.data(),r*2,false);
+	    Forward(d2);
+	    d2.clear(false);
+	}
+	m_total += r;
+    }
     Debug(DebugWarn,"AlsaSource [%p] end of data",this);
 }
 
@@ -317,7 +313,8 @@ AlsaDevice::AlsaDevice(const String& dev,bool init)
         if (m_dev_out.null()) m_dev_out = m_dev_in;
         if(q>0) m_initdata = dev.substr(p+2+q);
     }
-	if (init) open();
+    if (init)
+	open();
 };
 
 
@@ -333,8 +330,8 @@ bool AlsaDevice::open()
     snd_pcm_uframes_t period_size_out = 20 * 4;
     snd_pcm_uframes_t buffer_size_out= period_size_out * 16;
     snd_pcm_sw_params_t *swparams = NULL;
-	Debug(DebugNote, "Opening ALSA input device %s",m_dev_in.c_str());
-	Lock lock(s_mutex);
+    Debug(DebugNote, "Opening ALSA input device %s",m_dev_in.c_str());
+    Lock lock(s_mutex);
     if ((err = snd_pcm_open (&m_handle_in, m_dev_in.c_str(), SND_PCM_STREAM_CAPTURE, 0)) < 0) {
 	Debug(DebugWarn, "cannot open audio device %s (%s)", m_dev.c_str(),snd_strerror (err));
 	return false;
@@ -377,15 +374,10 @@ bool AlsaDevice::open()
     snd_pcm_sw_params_current(m_handle_out, swparams);
 
     if ((err = snd_pcm_sw_params_get_start_threshold( swparams, &val)) < 0) Debug(DebugWarn, "cannot get start threshold: (%s)", snd_strerror (err));
-
     if ((err = snd_pcm_sw_params_get_stop_threshold( swparams, &val)) < 0) Debug(DebugWarn, "cannot get stop threshold: (%s)", snd_strerror (err));
-
     if ((err = snd_pcm_sw_params_get_boundary( swparams, &val)) < 0) Debug(DebugWarn, "cannot get boundary: (%s)", snd_strerror (err));
-
     if ((err = snd_pcm_sw_params_set_silence_threshold(m_handle_out, swparams, 0)) < 0) Debug(DebugWarn, "cannot set silence threshold: (%s)", snd_strerror (err));
-
     if ((err = snd_pcm_sw_params_set_silence_size(m_handle_out, swparams, 0)) < 0) Debug(DebugWarn, "cannot set silence size: (%s)", snd_strerror (err));
-
     if ((err = snd_pcm_sw_params(m_handle_out, swparams)) < 0) Debug(DebugWarn, "cannot set sw param: (%s)", snd_strerror (err));
 
     Debug(DebugNote, "Alsa(%s/%s) %u/%u %u/%u %u/%u", m_dev_in.c_str(),m_dev_out.c_str(),rate_in,rate_out,(unsigned int)period_size_in,(unsigned int)period_size_out,(unsigned int)buffer_size_in,(unsigned int)buffer_size_out);
@@ -415,50 +407,53 @@ AlsaDevice::~AlsaDevice()
 
 int AlsaDevice::read(void *buffer, int frames)
 {
-    if (closed() || !m_handle_in) return 0;
+    if (closed() || !m_handle_in)
+	return 0;
     int rc = ::snd_pcm_readi(m_handle_in, buffer, frames);
     if (rc <= 0) {
-        int err = rc;
-        if (err == -EPIPE) {    /* under-run */
-            Debug(DebugWarn, "ALSA read underrun: %s", snd_strerror(err));
-            err = snd_pcm_prepare(m_handle_in);
-            if (err < 0)
-                    Debug(DebugWarn, "ALSA read can't recover from underrun, prepare failed: %s", snd_strerror(err));
-            return 0;
-        } else if (err == -ESTRPIPE) {
-                while ((err = snd_pcm_resume(m_handle_in)) == -EAGAIN)
-                        sleep(1);       /* wait until the suspend flag is released */
-                if (err < 0) {
-                        err = snd_pcm_prepare(m_handle_in);
-                        if (err < 0)
-                                Debug(DebugWarn, "ALSA read can't recover from suspend, prepare failed: %s", snd_strerror(err));
-                }
-                return 0;
-        }
-        return err;
+	int err = rc;
+	if (err == -EPIPE) {    /* under-run */
+	    Debug(DebugWarn, "ALSA read underrun: %s", snd_strerror(err));
+	    err = snd_pcm_prepare(m_handle_in);
+	    if (err < 0)
+		Debug(DebugWarn, "ALSA read can't recover from underrun, prepare failed: %s", snd_strerror(err));
+	    return 0;
+	} else if (err == -ESTRPIPE) {
+	    while ((err = snd_pcm_resume(m_handle_in)) == -EAGAIN)
+		sleep(1);       /* wait until the suspend flag is released */
+	    if (err < 0) {
+		err = snd_pcm_prepare(m_handle_in);
+		if (err < 0)
+		    Debug(DebugWarn, "ALSA read can't recover from suspend, prepare failed: %s", snd_strerror(err));
+	    }
+	    return 0;
+	}
+	return err;
     }
     return rc;
 }
 
 int AlsaDevice::write(void *buffer, int frames)
 {
-    if (closed() || !m_handle_out) return 0;
+    if (closed() || !m_handle_out)
+	return 0;
     int rc = snd_pcm_writei(m_handle_out, buffer, frames);
     if (rc == -EPIPE) {
-		Debug(DebugWarn, "ALSA write underrun occurred");
-		snd_pcm_prepare(m_handle_out);
-		Debug(DebugWarn, "ALSA write underrun fix frame 1");
-		rc = snd_pcm_writei(m_handle_out, buffer, frames);
-    	if (rc == -EPIPE) snd_pcm_prepare(m_handle_out);
-		Debug(DebugWarn, "ALSA write underrun fix frame 2"); //to catch-up missed time
-		rc = snd_pcm_writei(m_handle_out, buffer, frames);
-    	if (rc == -EPIPE) snd_pcm_prepare(m_handle_out);
-    } else if (rc < 0) {
-      Debug(DebugWarn,"ALSA error from writei: %s",::snd_strerror(rc));
-    }  else if (rc != (int)frames) {
-      Debug(DebugWarn,"ALSA short write, writei wrote %d frames", rc);
-    }
-	return rc;
+	Debug(DebugWarn, "ALSA write underrun occurred");
+	snd_pcm_prepare(m_handle_out);
+	DDebug(DebugInfo, "ALSA write underrun fix frame 1");
+	rc = snd_pcm_writei(m_handle_out, buffer, frames);
+	if (rc == -EPIPE)
+	    snd_pcm_prepare(m_handle_out);
+	DDebug(DebugInfo, "ALSA write underrun fix frame 2");
+	rc = snd_pcm_writei(m_handle_out, buffer, frames); //to catch-up missed time
+    	if (rc == -EPIPE)
+	    snd_pcm_prepare(m_handle_out);
+    } else if (rc < 0)
+	Debug(DebugWarn,"ALSA error from writei: %s",::snd_strerror(rc));
+    else if (rc != (int)frames)
+	Debug(DebugWarn,"ALSA short write, writei wrote %d frames", rc);
+    return rc;
 }
 
 bool AlsaDevice::timePassed(void)
@@ -513,8 +508,7 @@ bool AlsaHandler::received(Message &msg)
     }
     else {
         const char *direct = msg.getValue("direct");
-	if (direct)
-	{
+	if (direct) {
 	    Message m("call.execute");
 	    m.addParam("module","alsa");
 	    m.addParam("id",dest);

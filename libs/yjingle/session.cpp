@@ -1335,14 +1335,14 @@ bool JGSession::processJabberIqResponse(JBEvent& ev)
     }
     if (!sent)
 	return true;
+    bool iqErr = (ev.type() == JBEvent::IqJingleErr || ev.type() == JBEvent::IqError);
     // Check termination conditions
     // Always terminate when receiving responses in Ending state
     bool terminateEnding = (state() == Ending);
     // Terminate pending outgoing if no notification required
     // (Initial session request is sent without notification required)
     bool terminatePending = false;
-    if (state() == Pending && outgoing() &&
-	(ev.type() == JBEvent::IqJingleErr || ev.type() == JBEvent::WriteFail))
+    if (state() == Pending && outgoing() && (iqErr || ev.type() == JBEvent::WriteFail))
 	terminatePending = !sent->notify();
     // Write fail: Terminate if failed stanza is a Jingle one and the sender
     //  didn't requested notification
@@ -1376,8 +1376,7 @@ bool JGSession::processJabberIqResponse(JBEvent& ev)
     else {
 	// Terminate on ping error
 	if (sent->ping()) {
-	    terminateFail = ev.type() == JBEvent::IqJingleErr ||
-		ev.type() == JBEvent::WriteFail || ev.type() == JBEvent::IqError;
+	    terminateFail = iqErr || ev.type() == JBEvent::WriteFail;
 	    if (terminateFail)
 		m_lastEvent = new JGEvent(JGEvent::Terminated,this,
 		    ev.type() != JBEvent::WriteFail ? ev.releaseXML() : 0,

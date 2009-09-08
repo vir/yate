@@ -166,6 +166,7 @@ private:
 
 OssChan *s_chan = 0;
 
+
 bool OssSource::init()
 {
     m_brate = 16000;
@@ -239,6 +240,7 @@ void OssSource::run()
 void OssSource::cleanup()
 {
     Debug(DebugAll,"OssSource [%p] cleanup, total=%u",this,m_total);
+    ThreadedSource::cleanup();
 }
 
 bool OssConsumer::init()
@@ -288,6 +290,7 @@ unsigned long OssConsumer::Consume(const DataBlock &data, unsigned long tStamp, 
     return invalidStamp();
 }
 
+
 OssChan::OssChan(const String& dev)
     : CallEndpoint("oss"),
       m_dev(dev)
@@ -330,6 +333,25 @@ bool OssChan::init()
     cons->deref();
     return true;
 }
+
+void OssChan::disconnected(bool final, const char *reason)
+{
+    Debugger debug("OssChan::disconnected()"," '%s' [%p]",reason,this);
+    setTarget();
+}
+
+void OssChan::answer()
+{
+    Message* m = new Message("call.answered");
+    m->addParam("module","oss");
+    String tmp("oss/");
+    tmp += m_dev;
+    m->addParam("id",tmp);
+    if (m_target)
+	m->addParam("targetid",m_target);
+    Engine::enqueue(m);
+}
+
 
 OssDevice::OssDevice(const String& dev)
     : m_dev(dev), m_fullDuplex(false), m_readMode(true), m_fd(-1)
@@ -449,23 +471,6 @@ int OssDevice::setOutputMode(bool force)
     return 1;
 }
 
-void OssChan::disconnected(bool final, const char *reason)
-{
-    Debugger debug("OssChan::disconnected()"," '%s' [%p]",reason,this);
-    setTarget();
-}
-
-void OssChan::answer()
-{
-    Message* m = new Message("call.answered");
-    m->addParam("module","oss");
-    String tmp("oss/");
-    tmp += m_dev;
-    m->addParam("id",tmp);
-    if (m_target)
-	m->addParam("targetid",m_target);
-    Engine::enqueue(m);
-}
 
 bool OssHandler::received(Message &msg)
 {
@@ -547,6 +552,7 @@ bool OssHandler::received(Message &msg)
     return true;
 }
 
+
 bool StatusHandler::received(Message &msg)
 {
     const String* sel = msg.getParam("module");
@@ -555,6 +561,7 @@ bool StatusHandler::received(Message &msg)
     msg.retValue() << "name=oss,type=misc;osschan=" << (s_chan != 0 ) << "\r\n";
     return false;
 }
+
 
 bool DropHandler::received(Message &msg)
 {
@@ -569,6 +576,7 @@ bool DropHandler::received(Message &msg)
     return false;
 }
 
+
 bool MasqHandler::received(Message &msg)
 {
     String id(msg.getValue("id"));
@@ -582,6 +590,7 @@ bool MasqHandler::received(Message &msg)
     }
     return false;
 }
+
 
 bool AttachHandler::received(Message &msg)
 {
@@ -646,6 +655,7 @@ bool AttachHandler::received(Message &msg)
     // Stop dispatching if we handled all requested
     return !more;
 }
+
 
 OssPlugin::OssPlugin()
     : m_handler(0)

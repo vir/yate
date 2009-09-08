@@ -163,6 +163,7 @@ private:
 AlsaChan *s_chan = 0;
 AlsaDevice* s_dev = 0;
 
+
 bool AlsaSource::init()
 {
     m_brate = 16000;
@@ -218,11 +219,12 @@ void AlsaSource::run()
     Debug(DebugWarn,"AlsaSource [%p] end of data",this);
 }
 
-
 void AlsaSource::cleanup()
 {
     Debug(DebugNote,"AlsaSource [%p] cleanup, total=%u",this,m_total);
+    ThreadedSource::cleanup();
 }
+
 
 bool AlsaConsumer::init()
 {
@@ -252,6 +254,7 @@ unsigned long AlsaConsumer::Consume(const DataBlock &data, unsigned long tStamp,
     m_total += data.length();
     return invalidStamp();
 }
+
 
 AlsaChan::AlsaChan(const String& dev)
     : CallEndpoint("alsa"),
@@ -298,6 +301,7 @@ bool AlsaChan::init()
     return true;
 }
 
+
 AlsaDevice::AlsaDevice(const String& dev,bool init)
     : m_dev(dev), m_dev_in(dev), m_dev_out(dev), m_closed(true),
       m_handle_in(0), m_handle_out(0)
@@ -316,7 +320,6 @@ AlsaDevice::AlsaDevice(const String& dev,bool init)
     if (init)
 	open();
 };
-
 
 bool AlsaDevice::open()
 {
@@ -385,7 +388,6 @@ bool AlsaDevice::open()
     m_lastTime = Time::now() + MIN_SWITCH_TIME;
     return true;
 }
-
 
 AlsaDevice::~AlsaDevice()
 {
@@ -461,6 +463,7 @@ bool AlsaDevice::timePassed(void)
     return Time::now() > m_lastTime;
 }
 
+
 void AlsaChan::disconnected(bool final, const char *reason)
 {
     Debugger debug("AlsaChan::disconnected()"," '%s' [%p]",reason,this);
@@ -478,6 +481,7 @@ void AlsaChan::answer()
 	m->addParam("targetid",m_target);
     Engine::enqueue(m);
 }
+
 
 bool AlsaHandler::received(Message &msg)
 {
@@ -558,6 +562,7 @@ bool AlsaHandler::received(Message &msg)
     return true;
 }
 
+
 bool StatusHandler::received(Message &msg)
 {
     const String* sel = msg.getParam("module");
@@ -566,6 +571,7 @@ bool StatusHandler::received(Message &msg)
     msg.retValue() << "name=alsa,type=misc;alsachan=" << (s_chan != 0 ) << "\r\n";
     return false;
 }
+
 
 bool DropHandler::received(Message &msg)
 {
@@ -580,6 +586,7 @@ bool DropHandler::received(Message &msg)
     return false;
 }
 
+
 bool MasqHandler::received(Message &msg)
 {
     String id(msg.getValue("id"));
@@ -593,6 +600,7 @@ bool MasqHandler::received(Message &msg)
     }
     return false;
 }
+
 
 bool AttachHandler::received(Message &msg)
 {
@@ -659,6 +667,7 @@ bool AttachHandler::received(Message &msg)
     // Stop dispatching if we handled all requested
     return !more;
 }
+
 
 AlsaPlugin::AlsaPlugin()
     : m_handler(0)

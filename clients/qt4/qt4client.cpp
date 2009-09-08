@@ -1086,7 +1086,7 @@ bool QtWindow::setText(const String& name, const String& text,
 
 bool QtWindow::setCheck(const String& name, bool checked)
 {
-    XDebug(QtDriver::self(), DebugInfo, "QtWindow::setCheck(%s,%s) [%p]",
+    XDebug(QtDriver::self(),DebugAll,"QtWindow::setCheck(%s,%s) [%p]",
 	name.c_str(),String::boolText(checked),this);
     QtWidget w(this,name);
     if (w.invalid())
@@ -1916,6 +1916,8 @@ void QtWindow::openUrl(const QString& link)
 
 void QtWindow::doubleClick()
 {
+    XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) doubleClick() sender=%s [%p]",
+	m_id.c_str(),YQT_OBJECT_NAME(sender()),this);
     if (QtClient::self() && sender())
 	Client::self()->action(this,YQT_OBJECT_NAME(sender()));
 }
@@ -1923,6 +1925,8 @@ void QtWindow::doubleClick()
 // A widget's selection changed
 void QtWindow::selectionChanged()
 {
+    XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) selectionChanged() sender=%s [%p]",
+	m_id.c_str(),YQT_OBJECT_NAME(sender()),this);
     if (!(QtClient::self() && sender()))
 	return;
     String name = YQT_OBJECT_NAME(sender());
@@ -2370,8 +2374,12 @@ void QtWindow::doInit()
 	// Connect signals
 	QtClient::connectObjects(t.table(),SIGNAL(cellDoubleClicked(int,int)),
 	    this,SLOT(doubleClick()));
+#if 0
+	// This would generate action() twice since QT will signal both cell and
+	// table item double click
 	QtClient::connectObjects(t.table(),SIGNAL(itemDoubleClicked(QTableWidgetItem*)),
 	    this,SLOT(doubleClick()));
+#endif
 	String noSel;
 	getProperty(t.name(),"dynamicNoItemSelChanged",noSel);
 	if (!noSel.toBoolean())

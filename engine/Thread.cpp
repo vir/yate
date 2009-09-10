@@ -653,6 +653,12 @@ void Thread::yield(bool exitCheck)
 
 void Thread::idle(bool exitCheck)
 {
+#ifdef DEBUG
+    const Thread* t = Thread::current();
+    if (t && t->locked())
+	Debug(DebugMild,"Thread '%s' idling with %d mutex locks held [%p]",
+	    t->name(),t->locks(),t);
+#endif
     msleep(THREAD_IDLE_MSEC,exitCheck);
 }
 

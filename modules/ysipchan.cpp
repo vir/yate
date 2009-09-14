@@ -2249,6 +2249,10 @@ Message* YateSIPConnection::buildChanRtp(RefObject* context)
 	m->userData(context);
     else {
 	complete(*m,true);
+	m->addParam("call_direction",direction());
+	m->addParam("call_address",address());
+	m->addParam("call_status",status());
+	m->addParam("call_billid",billid());
 	m->userData(static_cast<CallEndpoint*>(this));
     }
     return m;
@@ -2258,6 +2262,18 @@ Message* YateSIPConnection::buildChanRtp(RefObject* context)
 void YateSIPConnection::mediaChanged(const SDPMedia& media)
 {
     SDPSession::mediaChanged(media);
+    if (media.id() && media.transport()) {
+	Message m("chan.rtp");
+	m.addParam("rtpid",media.id());
+	m.addParam("media",media);
+	m.addParam("transport",media.transport());
+	m.addParam("terminate",String::boolText(true));
+	m.addParam("call_direction",direction());
+	m.addParam("call_address",address());
+	m.addParam("call_status",status());
+	m.addParam("call_billid",billid());
+	Engine::dispatch(m);
+    }
     // Clear the data endpoint, will be rebuilt later if required
     clearEndpoint(media);
 }

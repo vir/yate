@@ -154,9 +154,9 @@ public:
     ConfConsumer(ConfRoom* room, bool smart = false)
 	: m_room(room), m_src(0), m_muted(false), m_smart(smart),
 	  m_energy2(ENERGY_MIN), m_noise2(ENERGY_MIN)
-	{ }
+	{ DDebug(DebugAll,"ConfConsumer::ConfConsumer(%p,%s) [%p]",room,String::boolText(smart),this); }
     ~ConfConsumer()
-	{ }
+	{ DDebug(DebugAll,"ConfConsumer::~ConfConsumer() [%p]",this); }
     virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags);
     unsigned int energy() const;
     unsigned int noise() const;

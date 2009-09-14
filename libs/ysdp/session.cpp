@@ -586,12 +586,13 @@ Message* SDPSession::buildChanRtp(SDPMedia* media, const char* addr, bool start,
     m->addParam("media",*media);
     m->addParam("transport",media->transport());
     m->addParam("direction","bidir");
+    if (media->format())
+	m->addParam("format",media->format());
     if (m_rtpLocalAddr)
 	m->addParam("localip",m_rtpLocalAddr);
     m->addParam("remoteip",addr);
     if (start) {
 	m->addParam("remoteport",media->remotePort());
-	m->addParam("format",media->format());
 	String tmp = media->format();
 	tmp << "=";
 	ObjList* mappings = media->mappings().split(',',false);

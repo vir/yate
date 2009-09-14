@@ -935,8 +935,9 @@ bool RtpHandler::received(Message &msg)
     if (trans && !trans.startsWith("RTP/"))
 	return false;
     Debug(&splugin,DebugAll,"%s message received",(trans ? trans.c_str() : "No-transport"));
+    bool terminate = msg.getBoolValue("terminate",false);
     String dir(msg.getValue("direction"));
-    RTPSession::Direction direction = RTPSession::SendRecv;
+    RTPSession::Direction direction = terminate ? RTPSession::FullStop : RTPSession::SendRecv;
     bool d_recv = false;
     bool d_send = false;
     if (dir == "bidir") {
@@ -965,7 +966,8 @@ bool RtpHandler::received(Message &msg)
 	    Debug(&splugin,DebugAll,"Wrapper %p found by ID '%s'",w,rid);
     }
     if (!(ch || de || w)) {
-	Debug(&splugin,DebugWarn,"Neither call channel nor RTP wrapper found!");
+	if (!terminate)
+	    Debug(&splugin,DebugWarn,"Neither call channel nor RTP wrapper found!");
 	return false;
     }
 

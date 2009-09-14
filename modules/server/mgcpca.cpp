@@ -187,11 +187,8 @@ protected:
     virtual Message* buildChanRtp(SDPMedia* media, const char* addr, bool start, RefObject* context)
 	{
 	    Message* m = SDPSession::buildChanRtp(media,addr,start,context);
-	    if (m) {
-		if (start && media->id())
-		    m->addParam("rtpid",media->id());
+	    if (m)
 		m->addParam("mgcp_allowed",String::boolText(false));
-	    }
 	    return m;
 	}
 private:

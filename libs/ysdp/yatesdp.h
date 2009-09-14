@@ -583,9 +583,9 @@ protected:
     /**
      * Media changed notification.
      * This method is called when setting new media and an old one changed
-     * @param name Changed media name
+     * @param media Old media that changed
      */
-    virtual void mediaChanged(const String& name);
+    virtual void mediaChanged(const SDPMedia& media);
 };
 
 /**

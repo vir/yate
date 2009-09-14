@@ -581,6 +581,8 @@ Message* SDPSession::buildChanRtp(SDPMedia* media, const char* addr, bool start,
     Message* m = buildChanRtp(context);
     if (!m)
 	return 0;
+    if (media->id())
+	m->addParam("rtpid",media->id());
     m->addParam("media",*media);
     m->addParam("transport",media->transport());
     m->addParam("direction","bidir");
@@ -731,9 +733,10 @@ ObjList* SDPSession::updateRtpSDP(const NamedList& params, String& rtpAddr, ObjL
 }
 
 // Media changed notification.
-void SDPSession::mediaChanged(const String& name)
+void SDPSession::mediaChanged(const SDPMedia& media)
 {
-    XDebug(m_parser,DebugAll,"SDPSession::mediaChanged(%s) [%p]",name.c_str(),this);
+    XDebug(m_parser,DebugAll,"SDPSession::mediaChanged('%s' %p)%s%s [%p]",
+	media.c_str(),&media,(media.id() ? " id=" : ""),media.id().safe(),this);
 }
 
 };   // namespace TelEngine

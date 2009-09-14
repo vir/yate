@@ -325,7 +325,7 @@ public:
 protected:
     virtual Message* buildChanRtp(RefObject* context);
     MimeSdpBody* createProvisionalSDP(Message& msg);
-    virtual void mediaChanged(const String& name);
+    virtual void mediaChanged(const SDPMedia& media);
 
 private:
     virtual void statusParams(String& str);
@@ -2255,10 +2255,11 @@ Message* YateSIPConnection::buildChanRtp(RefObject* context)
 }
 
 // Media changed notification, reimplemented from SDPSession
-void YateSIPConnection::mediaChanged(const String& name)
+void YateSIPConnection::mediaChanged(const SDPMedia& media)
 {
+    SDPSession::mediaChanged(media);
     // Clear the data endpoint, will be rebuilt later if required
-    clearEndpoint(name);
+    clearEndpoint(media);
 }
 
 // Process SIP events belonging to this connection

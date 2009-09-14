@@ -338,13 +338,15 @@ void WaveSource::run()
 {
     unsigned long ts = 0;
     int r = 0;
+    // internally reference if used for override or replace purpose
+    bool noChan = (0 == m_chan);
     // wait until at least one consumer is attached
     while (!r) {
 	lock();
 	r = m_consumers.count();
 	unlock();
 	Thread::yield();
-	if (!looping()) {
+	if (!looping(noChan)) {
 	    notify(0,"replaced");
 	    return;
 	}
@@ -354,11 +356,11 @@ void WaveSource::run()
     m_data.assign(0,blen);
     u_int64_t tpos = 0;
     m_time = tpos;
-    while ((r > 0) && looping()) {
+    while ((r > 0) && looping(noChan)) {
 	r = m_stream ? m_stream->readData(m_data.data(),m_data.length()) : m_data.length();
 	if (r < 0) {
 	    if (m_stream->canRetry()) {
-		if (looping()) {
+		if (looping(noChan)) {
 		    r = 1;
 		    continue;
 		}
@@ -403,7 +405,7 @@ void WaveSource::run()
 	    XDebug(&__plugin,DebugAll,"WaveSource sleeping for " FMT64 " usec",dly);
 	    Thread::usleep((unsigned long)dly);
 	}
-	if (!looping())
+	if (!looping(noChan))
 	    break;
 	Forward(m_data,ts);
 	ts += m_data.length()*8000/m_brate;

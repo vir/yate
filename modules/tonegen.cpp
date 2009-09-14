@@ -102,6 +102,8 @@ public:
     static Tone* buildDtmf(const String& dtmf, int len = DTMF_LEN, int gap = DTMF_GAP);
 protected:
     ToneSource(const ToneDesc* tone = 0);
+    virtual bool noChan() const
+	{ return false; }
     virtual void cleanup();
     static const ToneDesc* getBlock(String& tone, const ToneDesc* table);
     String m_name;
@@ -119,6 +121,9 @@ class TempSource : public ToneSource
 public:
     TempSource(String& desc, DataBlock* rawdata);
     virtual ~TempSource();
+protected:
+    virtual bool noChan() const
+	{ return true; }
 private:
     Tone* m_single;
     DataBlock* m_rawdata;                // Raw linear data to be sent
@@ -576,7 +581,7 @@ void ToneSource::run()
     int nsam = tone->nsamples;
     if (nsam < 0)
 	nsam = -nsam;
-    while (m_tone && looping()) {
+    while (m_tone && looping(noChan())) {
 	Thread::check();
 	short *d = (short *) m_data.data();
 	for (unsigned int i = m_data.length()/2; i--; samp++,dpos++) {
@@ -612,7 +617,7 @@ void ToneSource::run()
 	    XDebug(&__plugin,DebugAll,"ToneSource sleeping for " FMT64 " usec",dly);
 	    Thread::usleep((unsigned long)dly);
 	}
-	if (!looping())
+	if (!looping(noChan()))
 	    break;
 	Forward(m_data,m_total/2);
 	m_total += m_data.length();

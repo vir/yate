@@ -548,6 +548,7 @@ private:
 
 /**
  * A data source with a thread of its own
+ * @short Data source with own thread
  */
 class YATE_API ThreadedSource : public DataSource
 {
@@ -605,9 +606,10 @@ protected:
 
     /**
      * Check if the calling thread should keep looping the worker method
+     * @param runConsumers True to keep running as long consumers are attached
      * @return True if the calling thread should remain in the run() method
      */
-    bool looping() const;
+    bool looping(bool runConsumers = false) const;
 
 private:
     ThreadedSourcePrivate* m_thread;

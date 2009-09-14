@@ -153,7 +153,6 @@ public:
      */
     static void setMinSleep(int msec);
 
-protected:
     /**
      * Add a RTP processor to this group
      * @param proc Pointer to the RTP processor to add

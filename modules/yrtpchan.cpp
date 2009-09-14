@@ -49,6 +49,7 @@ static TokenDict dict_payloads[] = {
     { "g723",          4 },
     { "g728",         15 },
     { "g729",         18 },
+    { "mpa",          14 },
     { "ilbc",         98 },
     { "ilbc20",       98 },
     { "ilbc30",       98 },
@@ -59,9 +60,12 @@ static TokenDict dict_payloads[] = {
     { "speex",       102 },
     { "speex/16000", 103 },
     { "speex/32000", 104 },
+    { "mjpeg",        26 },
     { "h261",         31 },
     { "h263",         34 },
     { "mpv",          32 },
+    { "mp2t",         33 },
+    { "mp4v",         98 },
     { 0 ,              0 },
 };
 

@@ -106,6 +106,7 @@ static int s_maxjitter = 0;
 class YRTPSource;
 class YRTPConsumer;
 class YRTPSession;
+class YRTPReflector;
 
 class YRTPWrapper : public RefObject
 {
@@ -224,6 +225,62 @@ private:
     bool m_splitable;
 };
 
+class YRTPMonitor : public RTPProcessor
+{
+public:
+    inline YRTPMonitor(const String* id = 0)
+	: m_id(id),
+	  m_rtpPackets(0), m_rtcpPackets(0), m_rtpBytes(0),
+	  m_payload(-1), m_start(0), m_last(0)
+	{ }
+    virtual void rtpData(const void* data, int len);
+    virtual void rtcpData(const void* data, int len);
+    void startup();
+    void saveStats(Message& msg) const;
+protected:
+    void updateTimes(u_int64_t when);
+    void timerTick(const Time& when);
+    void timeout(bool initial);
+    const String* m_id;
+    unsigned int m_rtpPackets;
+    unsigned int m_rtcpPackets;
+    unsigned int m_rtpBytes;
+    int m_payload;
+    u_int64_t m_start;
+    u_int64_t m_last;
+};
+
+class YRTPReflector : public GenObject
+{
+public:
+    YRTPReflector(const String& id, bool passiveA, bool passiveB);
+    virtual ~YRTPReflector();
+    inline const String& idA() const
+	{ return m_idA; }
+    inline const String& idB() const
+	{ return m_idB; }
+    inline RTPTransport& rtpA() const
+	{ return *m_rtpA; }
+    inline RTPTransport& rtpB() const
+	{ return *m_rtpB; }
+    inline YRTPMonitor& monA() const
+	{ return *m_monA; }
+    inline YRTPMonitor& monB() const
+	{ return *m_monB; }
+    inline void setA(const String& id)
+	{ m_idA = id; }
+    inline void setB(const String& id)
+	{ m_idB = id; }
+private:
+    RTPGroup* m_group;
+    RTPTransport* m_rtpA;
+    RTPTransport* m_rtpB;
+    YRTPMonitor* m_monA;
+    YRTPMonitor* m_monB;
+    String m_idA;
+    String m_idB;
+};
+
 class CipherHolder : public RefObject
 {
 public:
@@ -267,14 +324,22 @@ public:
     YRTPPlugin();
     virtual ~YRTPPlugin();
     virtual void initialize();
+    virtual bool received(Message& msg, int id);
     virtual void statusParams(String& str);
     virtual void statusDetail(String& str);
 private:
+    bool reflectSetup(Message& msg, const char* id, RTPTransport& rtp, const char* rHost, const char* leg);
+    bool reflectStart(Message& msg, const char* id, RTPTransport& rtp, SocketAddr& rAddr);
+    void reflectDrop(YRTPReflector*& refl, Lock& mylock);
+    void reflectExecute(Message& msg);
+    void reflectAnswer(Message& msg, bool ignore);
+    void reflectHangup(Message& msg);
     bool m_first;
 };
 
 static YRTPPlugin splugin;
 static ObjList s_calls;
+static ObjList s_mirrors;
 static Mutex s_mutex(false,"YRTPChan");
 static Mutex s_srcMutex(false,"YRTPChan::source");
 
@@ -853,6 +918,112 @@ unsigned long YRTPConsumer::Consume(const DataBlock &data, unsigned long tStamp,
 }
 
 
+void YRTPMonitor::updateTimes(u_int64_t when)
+{
+    if (!m_start)
+	m_start = when;
+    m_last = when;
+}
+
+void YRTPMonitor::rtpData(const void* data, int len)
+{
+    updateTimes(Time::now());
+    m_rtpPackets++;
+    m_rtpBytes += len;
+    // we already know data is at least 12 bytes (RTP header) long
+    m_payload = 0x7f & ((const unsigned char*)data)[1];
+}
+
+void YRTPMonitor::rtcpData(const void* data, int len)
+{
+    updateTimes(Time::now());
+    m_rtcpPackets++;
+}
+
+void YRTPMonitor::timerTick(const Time& when)
+{
+    if (!(m_id && m_last))
+	return;
+    u_int64_t tout = 1000 * s_timeout;
+    if (tout && ((m_last + tout) < when.usec()))
+	timeout(0 == m_start);
+}
+
+void YRTPMonitor::timeout(bool initial)
+{
+    if (null(m_id))
+	return;
+    if (!(initial || s_warnLater))
+	return;
+    Debug(&splugin,DebugWarn,"%s timeout in '%s' reflector [%p]",
+	(initial ? "Initial" : "Later"),m_id->c_str(),this);
+    if (s_notifyMsg) {
+	Message* m = new Message(s_notifyMsg);
+	m->addParam("id",m_id->c_str());
+	m->addParam("reason","nomedia");
+	m->addParam("event","timeout");
+	m->addParam("initial",String::boolText(initial));
+	Engine::enqueue(m);
+    }
+    // been there, done that, enough
+    m_id = 0;
+}
+
+void YRTPMonitor::startup()
+{
+    if (0 == m_last)
+	m_last = Time::now();
+}
+
+void YRTPMonitor::saveStats(Message& msg) const
+{
+    unsigned int d = m_start ? ((m_last - m_start + 500000) / 1000000) : 0;
+    msg.addParam("rtp_rx_packets",String(m_rtpPackets));
+    msg.addParam("rtcp_rx_packets",String(m_rtcpPackets));
+    msg.addParam("rtp_rx_bytes",String(m_rtpBytes));
+    msg.addParam("rtp_rx_duration",String(d));
+    if (m_payload >= 0)
+	msg.addParam("rtp_rx_payload",String(m_payload));
+}
+
+
+YRTPReflector::YRTPReflector(const String& id, bool passiveA, bool passiveB)
+    : m_idA(id)
+{
+    DDebug(&splugin,DebugInfo,"YRTPReflector::YRTPReflector('%s') [%p]",id.c_str(),this);
+    m_group = new RTPGroup(s_sleep,s_priority);
+    m_rtpA = new RTPTransport;
+    m_group->join(m_rtpA);
+    m_rtpB = new RTPTransport;
+    m_rtpA->setProcessor(m_rtpB);
+    m_rtpB->setProcessor(m_rtpA);
+    m_monA = new YRTPMonitor(passiveA ? 0 : &m_idA);
+    m_rtpA->setMonitor(m_monA);
+    m_monB = new YRTPMonitor(passiveB ? 0 : &m_idB);
+    m_rtpB->setMonitor(m_monB);
+    m_group->join(m_monA);
+    m_group->join(m_monB);
+}
+
+YRTPReflector::~YRTPReflector()
+{
+    DDebug(&splugin,DebugInfo,"YRTPReflector::~YRTPReflector() [%p]",this);
+    m_rtpA->setProcessor();
+    m_rtpA->setMonitor();
+    m_rtpB->setProcessor();
+    m_rtpB->setMonitor();
+    m_group->part(m_rtpA);
+    m_group->part(m_monA);
+    m_group->part(m_rtpB);
+    m_group->part(m_monB);
+    m_group = 0;
+    TelEngine::destruct(m_rtpA);
+    TelEngine::destruct(m_rtpB);
+    TelEngine::destruct(m_monA);
+    TelEngine::destruct(m_monB);
+}
+
+
 bool AttachHandler::received(Message &msg)
 {
     int more = 2;
@@ -1067,12 +1238,14 @@ YRTPPlugin::~YRTPPlugin()
 {
     Output("Unloading module YRTP");
     s_calls.clear();
+    s_mirrors.clear();
 }
 
 void YRTPPlugin::statusParams(String& str)
 {
     s_mutex.lock();
     str.append("chans=",",") << s_calls.count();
+    str.append("mirrors=",",") << s_mirrors.count();
     s_mutex.unlock();
 }
 
@@ -1084,7 +1257,254 @@ void YRTPPlugin::statusDetail(String& str)
 	YRTPWrapper* w = static_cast<YRTPWrapper*>(l->get());
         str.append(w->id(),",") << "=" << w->callId();
     }
+    for (l = s_mirrors.skipNull(); l; l=l->skipNext()) {
+	YRTPReflector* r = static_cast<YRTPReflector*>(l->get());
+        str.append(r->idA(),",") << "=" << r->idB().safe("?");
+    }
     s_mutex.unlock();
+}
+
+static Regexp s_reflectMatch(
+    "^\\(.*o=[^[:cntrl:]]\\+ IN IP4 \\)"
+    "\\([0-9]\\+\\.[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+\\)"
+    "\\([[:cntrl:]].*c=IN IP4 \\)"
+    "\\([0-9]\\+\\.[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+\\)"
+    "\\([[:cntrl:]].*m=audio \\)"
+    "\\([0-9]\\+\\)"
+    "\\( RTP/.*\\)$"
+);
+
+bool YRTPPlugin::reflectSetup(Message& msg, const char* id, RTPTransport& rtp,
+    const char* rHost, const char* leg)
+{
+    String lip(msg.getValue("rtp_localip"));
+    if (lip.null())
+	YRTPWrapper::guessLocal(rHost,lip);
+    SocketAddr addr(AF_INET);
+    if (!addr.host(lip)) {
+	Debug(this,DebugWarn,"Bad local RTP address '%s' for %s '%s'",
+	    lip.c_str(),leg,id);
+	return false;
+    }
+
+    int minport = msg.getIntValue("rtp_minport",s_minport);
+    int maxport = msg.getIntValue("rtp_maxport",s_maxport);
+    int attempt = 10;
+    if (minport > maxport) {
+	int tmp = maxport;
+	maxport = minport;
+	minport = tmp;
+    }
+    else if (minport == maxport) {
+	maxport++;
+	attempt = 1;
+    }
+    bool rtcp = msg.getBoolValue("rtp_rtcp",s_rtcp);
+    for (;;) {
+	int lport = (minport + (::random() % (maxport - minport))) & 0xfffe;
+	addr.port(lport);
+	if (rtp.localAddr(addr,rtcp)) {
+	    Debug(this,DebugInfo,"Reflector %s for '%s' bound to %s:%u%s",
+		leg,id,lip.c_str(),lport,(rtcp ? " +RTCP" : ""));
+	    break;
+	}
+	if (--attempt <= 0) {
+	    Debug(this,DebugWarn,"Could not bind reflector %s for '%s' in range %d - %d",
+		leg,id,minport,maxport);
+	    return false;
+	}
+    }
+    return true;
+}
+
+bool YRTPPlugin::reflectStart(Message& msg, const char* id, RTPTransport& rtp,
+    SocketAddr& rAddr)
+{
+    if (!rtp.remoteAddr(rAddr,msg.getBoolValue("rtp_autoaddr",s_autoaddr))) {
+	Debug(this,DebugWarn,"Could not set remote RTP address for '%s'",id);
+	return false;
+    }
+    if (msg.getBoolValue("rtp_drillhole",s_drill)) {
+	bool ok = rtp.drillHole();
+	Debug(this,(ok ? DebugInfo : DebugWarn),
+	    "Reflector for '%s' %s a hole in firewall/NAT",
+	    id,(ok ? "opened" : "failed to open"));
+    }
+    return true;
+}
+
+void YRTPPlugin::reflectDrop(YRTPReflector*& refl, Lock& mylock)
+{
+    s_mirrors.remove(refl,false);
+    mylock.drop();
+    Message* m = new Message("call.drop");
+    m->addParam("id",refl->idA());
+    m->addParam("reason","nomedia");
+    TelEngine::destruct(refl);
+    Engine::enqueue(m);
+}
+
+void YRTPPlugin::reflectExecute(Message& msg)
+{
+    const String* id = msg.getParam("id");
+    if (null(id))
+	return;
+    String* sdp = msg.getParam("sdp_raw");
+    if (null(sdp))
+	return;
+    if (!(msg.getBoolValue("rtp_forward",false) && msg.getBoolValue("rtp_reflect",false)))
+	return;
+    DDebug(this,DebugAll,"YRTPPlugin::reflectExecute() A='%s'",id->c_str());
+    // we have a candidate
+    if (!sdp->matches(s_reflectMatch)) {
+	Debug(this,DebugWarn,"Unable to match SDP to reflect RTP for '%s'",id->c_str());
+	return;
+    }
+    SocketAddr ra(AF_INET);
+    if (!(ra.host(sdp->matchString(4)) && ra.port(sdp->matchString(6).toInteger(-1)) && ra.valid())) {
+	Debug(this,DebugWarn,"Invalid RTP transport address for '%s'",id->c_str());
+	return;
+    }
+    const char* aHost = msg.getValue("rtp_addr",ra.host().c_str());
+    const char* bHost = msg.getValue("rtp_remoteip",aHost);
+    YRTPReflector* r = new YRTPReflector(*id,
+	(sdp->find("a=recvonly") >= 0),(sdp->find("a=sendonly") >= 0));
+    if (!(reflectSetup(msg,id->c_str(),r->rtpA(),aHost,"A") &&
+	reflectStart(msg,id->c_str(),r->rtpA(),ra) &&
+	reflectSetup(msg,id->c_str(),r->rtpB(),bHost,"B"))) {
+	TelEngine::destruct(r);
+	return;
+    }
+    String templ;
+    templ << "\\1" << r->rtpB().localAddr().host();
+    templ << "\\3" << r->rtpB().localAddr().host();
+    templ << "\\5" << r->rtpB().localAddr().port() << "\\7";
+    *sdp = sdp->replaceMatches(templ);
+    s_mutex.lock();
+    s_mirrors.append(r);
+    s_mutex.unlock();
+}
+
+void YRTPPlugin::reflectAnswer(Message& msg, bool ignore)
+{
+    const String* peerid = msg.getParam("peerid");
+    if (null(peerid))
+	return;
+    YRTPReflector* r = 0;
+    Lock mylock(s_mutex);
+    ObjList* l = s_mirrors.skipNull();
+    for (; l; l=l->skipNext()) {
+	r = static_cast<YRTPReflector*>(l->get());
+	if (r->idA() == *peerid)
+	    break;
+	r = 0;
+    }
+    if (!r)
+	return;
+    DDebug(this,DebugAll,"YRTPPlugin::reflectAnswer() A='%s'",peerid->c_str());
+    const String* id = msg.getParam("id");
+    if (null(id)) {
+	if (ignore)
+	    return;
+	Debug(this,DebugWarn,"Peer of RTP reflection '%s' answered without ID",peerid->c_str());
+	reflectDrop(r,mylock);
+	return;
+    }
+    if (r->idB() && (r->idB() != *id)) {
+	Debug(this,DebugWarn,"Reflect target of '%s' changed from '%s' to '%s'",
+	    peerid->c_str(),r->idB().c_str(),id->c_str());
+	reflectDrop(r,mylock);
+	return;
+    }
+    String* sdp = msg.getParam("sdp_raw");
+    if (null(sdp) || !msg.getBoolValue("rtp_forward",false)) {
+	if (ignore)
+	    return;
+	Debug(this,DebugWarn,"Unable to complete RTP reflection for '%s'",peerid->c_str());
+	reflectDrop(r,mylock);
+	return;
+    }
+    if (!sdp->matches(s_reflectMatch)) {
+	if (ignore)
+	    return;
+	Debug(this,DebugWarn,"Unable to match SDP to reflect RTP for '%s'",id->c_str());
+	reflectDrop(r,mylock);
+	return;
+    }
+    if (r->idB().null())
+	r->setB(*id);
+    SocketAddr ra(AF_INET);
+    if (!(ra.host(sdp->matchString(4)) && ra.port(sdp->matchString(6).toInteger(-1)) && ra.valid())) {
+	Debug(this,DebugWarn,"Invalid RTP transport address for '%s'",id->c_str());
+	reflectDrop(r,mylock);
+	return;
+    }
+    if (!reflectStart(msg,id->c_str(),r->rtpB(),ra)) {
+	reflectDrop(r,mylock);
+	return;
+    }
+    r->monA().startup();
+    r->monB().startup();
+    String templ;
+    templ << "\\1" << r->rtpA().localAddr().host();
+    templ << "\\3" << r->rtpA().localAddr().host();
+    templ << "\\5" << r->rtpA().localAddr().port() << "\\7";
+    *sdp = sdp->replaceMatches(templ);
+}
+
+void YRTPPlugin::reflectHangup(Message& msg)
+{
+    const String* id = msg.getParam("id");
+    if (null(id))
+	return;
+    Lock mylock(s_mutex);
+    ObjList* l = s_mirrors.skipNull();
+    for (; l; l=l->skipNext()) {
+	YRTPReflector* r = static_cast<YRTPReflector*>(l->get());
+	if (r->idA() == *id) {
+	    DDebug(this,DebugAll,"YRTPPlugin::reflectHangup() A='%s' B='%s'",
+		id->c_str(),r->idB().c_str());
+	    r->setA(String::empty());
+	    r->monA().saveStats(msg);
+	    if (r->idB())
+		return;
+	}
+	else if (r->idB() == *id) {
+	    DDebug(this,DebugAll,"YRTPPlugin::reflectHangup() B='%s' A='%s'",
+		id->c_str(),r->idA().c_str());
+	    r->setB(String::empty());
+	    r->monB().saveStats(msg);
+	    if (r->idA())
+		return;
+	}
+	else
+	    continue;
+	s_mirrors.remove(r,false);
+	mylock.drop();
+	TelEngine::destruct(r);
+	break;
+    }
+}
+
+bool YRTPPlugin::received(Message& msg, int id)
+{
+    switch (id) {
+	case Execute:
+	    reflectExecute(msg);
+	    return false;
+	case Ringing:
+	case Progress:
+	    reflectAnswer(msg,true);
+	    return false;
+	case Answered:
+	    reflectAnswer(msg,false);
+	    return false;
+	case Private:
+	    reflectHangup(msg);
+	    return false;
+	default:
+	    return Module::received(msg,id);
+    }
 }
 
 void YRTPPlugin::initialize()
@@ -1112,6 +1532,11 @@ void YRTPPlugin::initialize()
     setup();
     if (m_first) {
 	m_first = false;
+	installRelay(Execute,50);
+	installRelay(Ringing,50);
+	installRelay(Progress,50);
+	installRelay(Answered,50);
+	installRelay(Private,"chan.hangup",50);
 	Engine::install(new AttachHandler);
 	Engine::install(new RtpHandler);
 	Engine::install(new DTMFHandler);

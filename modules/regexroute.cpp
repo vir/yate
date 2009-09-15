@@ -292,6 +292,10 @@ static void replaceFuncs(String &str)
 	    evalFunc(v);
 	    str = str.substr(0,p1) + v + str.substr(p2+1);
 	}
+	else {
+	    Debug("RegexRoute",DebugWarn,"Unmatched function end: '%s'",str.c_str()+p1);
+	    break;
+	}
     }
 }
 

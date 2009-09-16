@@ -993,7 +993,6 @@ YRTPReflector::YRTPReflector(const String& id, bool passiveA, bool passiveB)
     DDebug(&splugin,DebugInfo,"YRTPReflector::YRTPReflector('%s') [%p]",id.c_str(),this);
     m_group = new RTPGroup(s_sleep,s_priority);
     m_rtpA = new RTPTransport;
-    m_group->join(m_rtpA);
     m_rtpB = new RTPTransport;
     m_rtpA->setProcessor(m_rtpB);
     m_rtpB->setProcessor(m_rtpA);
@@ -1001,6 +1000,8 @@ YRTPReflector::YRTPReflector(const String& id, bool passiveA, bool passiveB)
     m_rtpA->setMonitor(m_monA);
     m_monB = new YRTPMonitor(passiveB ? 0 : &m_idB);
     m_rtpB->setMonitor(m_monB);
+    m_group->join(m_rtpA);
+    m_group->join(m_rtpB);
     m_group->join(m_monA);
     m_group->join(m_monB);
 }

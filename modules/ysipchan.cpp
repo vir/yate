@@ -3855,7 +3855,6 @@ bool YateSIPGenerate::process(SIPEvent* ev)
 	return false;
     if (ev->getState() != SIPTransaction::Process)
 	return false;
-    m_code = msg->code;
     clearTransaction();
     Debug(&plugin,DebugAll,"YateSIPGenerate got answer %d [%p]",
 	m_code,this);
@@ -3867,6 +3866,7 @@ void YateSIPGenerate::clearTransaction()
     if (m_tr) {
 	DDebug(&plugin,DebugInfo,"YateSIPGenerate clearing transaction %p [%p]",
 	    m_tr,this);
+	m_code = m_tr->getResponseCode();
 	m_tr->setUserData(0);
 	m_tr->deref();
 	m_tr = 0;
@@ -3953,7 +3953,7 @@ bool SipHandler::received(Message &msg)
     }
     YateSIPGenerate gen(sip);
     while (gen.busy())
-	Thread::yield();
+	Thread::idle();
     if (gen.code())
 	msg.setParam("code",String(gen.code()));
     else

@@ -30,6 +30,7 @@
 #define MAX_BUF_SIZE  48500
 
 using namespace TelEngine;
+namespace { // anonymous
 
 class RudpSocket;
 class SessionManager;
@@ -2060,5 +2061,7 @@ UNLOAD_PLUGIN(unloadNow)
     }
     return true;
 }
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

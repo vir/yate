@@ -765,10 +765,8 @@ public:
      * @param engine The engine using this listener's services
      * @param epDef The endpoint definition used by the listener
      * @param backlog Maximum length of the queue of pending connections, 0 for system maximum
-     * @param blocking True if I/O operations should block, false for non-blocking
      */
-    SOCKSListener(SOCKSEngine* engine, SOCKSEndpointDef* epDef,
-	unsigned int backlog = 5, bool blocking = false);
+    SOCKSListener(SOCKSEngine* engine, SOCKSEndpointDef* epDef, unsigned int backlog = 5);
 
     /**
      * Destructor
@@ -850,7 +848,6 @@ protected:
     SOCKSEndpointDef* m_epDef;
     String m_id;
     unsigned int m_backlog;
-    bool m_blocking;
     Socket* m_socket;
     bool m_listenError;
     SOCKSEngine* m_engine;
@@ -1234,11 +1231,10 @@ public:
      // @param address The local address to bind to
      // @param port The local port to bind to
      // @param backlog Maximum length of the queue of pending connections, 0 for system maximum
-     // @param blocking True if I/O operations should block, false for non-blocking
      // @param prio Thread priority
     inline YSocksListenerThread(SOCKSEngine* engine, SOCKSEndpointDef* proxy,
-	unsigned int backlog, bool blocking, Thread::Priority prio = Thread::Normal)
-	: SOCKSListener(engine,proxy,backlog,blocking),
+	unsigned int backlog, Thread::Priority prio = Thread::Normal)
+	: SOCKSListener(engine,proxy,backlog),
 	  Thread("SOCKS Listener",prio)
 	{}
 
@@ -1789,6 +1785,7 @@ SOCKSConn::~SOCKSConn()
 // Terminate the socket. Release memory
 void SOCKSConn::destroyed()
 {
+    DDebug(m_engine,DebugAll,"SOCKSConn(%s) destroyed [%p]",m_id.c_str(),this);
     TelEngine::destruct(m_epDef);
     terminate();
     RefObject::destroyed();
@@ -2340,10 +2337,10 @@ const String& SOCKSEndpointDef::toString() const
  * SOCKSListener
  */
 SOCKSListener::SOCKSListener(SOCKSEngine* engine, SOCKSEndpointDef* epDef,
-    unsigned int backlog, bool blocking)
+    unsigned int backlog)
     : m_epDef(epDef),
-    m_backlog(backlog), m_blocking(blocking),
-    m_socket(0), m_listenError(false), m_engine(engine), m_status(Created)
+    m_backlog(backlog), m_socket(0), m_listenError(false),
+    m_engine(engine), m_status(Created)
 {
     if (m_epDef)
 	m_id << m_epDef->address() << ":" << m_epDef->port();
@@ -2376,16 +2373,19 @@ bool SOCKSListener::init()
     if (ok) {
 	m_socket->setReuse();
 	ok = m_socket->bind(addr);
-	if (!ok)
+	if (ok) {
+	    ok = m_socket->setBlocking(false);
+	    if (!ok)
+		op = "set blocking (false)";
+	}
+	else
 	    op = "bind";
     }
     else
 	op = "create";
     if (ok) {
 	m_status = Bind;
-	Debug(m_engine,DebugAll,"Listener(%s) succesfully bind blocking=%s [%p]",
-	    m_id.c_str(),String::boolText(m_blocking),this);
-	m_socket->setBlocking(m_blocking);
+	Debug(m_engine,DebugAll,"Listener(%s) bind succeeded [%p]",m_id.c_str(),this);
     }
     else {
 	if (!m_listenError) {
@@ -2456,11 +2456,21 @@ void SOCKSListener::run()
 	    Socket* sock = accept(addr);
 	    bool processed = false;
 	    if (sock) {
-		m_status = Accepting;
-		if (m_engine)
-		    processed = m_engine->incomingConnection(this,sock,addr);
-		else
+		if (sock->setBlocking(false)) {
+		    m_status = Accepting;
+		    if (m_engine)
+			processed = m_engine->incomingConnection(this,sock,addr);
+		    else
+			delete sock;
+		}
+		else {
+		    String tmp;
+		    Thread::errorString(tmp,sock->error());
+		    Debug(m_engine,DebugNote,
+			"Listener(%s) failed to reset blocking for incoming conn from '%s:%d'. %d: %s [%p]",
+			m_id.c_str(),addr.host().c_str(),addr.port(),sock->error(),tmp.c_str(),this);
 		    delete sock;
+		}
 	    }
 	    m_status = Listening;
 	    if (processed)
@@ -3548,7 +3558,7 @@ void YSocksPlugin::initialize()
 	}
 	if (epDef) {
 	    if (*sect == "server" || sect->getBoolValue("incoming",true))
-		(new YSocksListenerThread(s_engine,epDef,5,false))->addAndStart();
+		(new YSocksListenerThread(s_engine,epDef,5))->addAndStart();
 	    s_engine->addEpDef(epDef);
 	}
     }

@@ -80,13 +80,16 @@ function setState($newstate)
     $state = $newstate;
 }
 
-function gotNotify()
+function gotNotify($reason)
 {
     global $ourcallid;
     global $partycallid;
     global $state;
 
     Yate::Output("gotNotify() state: " . $state);
+
+    if ($reason == "replaced")
+	return;
 
     switch ($state) {
 	case "goodbye":
@@ -159,7 +162,7 @@ while ($state != "") {
 
 		case "chan.notify":
 		    if ($ev->params["targetid"] == $ourcallid) {
-			gotNotify();
+			gotNotify($ev->getValue("reason"));
 			$ev->handled = true;
 		    }
 		    break;

@@ -49,8 +49,10 @@ bool ChanAssistList::received(Message& msg, int id)
 	    return false;
 	case Hangup:
 	    if (ca) {
+		removeAssist(ca);
 		ca->msgHangup(msg);
-		m_calls.remove(ca,true);
+		ca->deref();
+		ca = 0;
 	    }
 	    return false;
 	case Execute:

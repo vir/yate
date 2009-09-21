@@ -43,7 +43,9 @@ bool ChanAssistList::received(Message& msg, int id)
 	    }
 	    ca = create(msg,*chanId);
 	    if (ca) {
+		lock();
 		m_calls.append(ca);
+		unlock();
 		ca->msgStartup(msg);
 	    }
 	    return false;
@@ -62,7 +64,9 @@ bool ChanAssistList::received(Message& msg, int id)
 	    }
 	    ca = create(msg,*chanId);
 	    if (ca) {
+		lock();
 		m_calls.append(ca);
+		unlock();
 		ca->msgStartup(msg);
 		ca->msgExecute(msg);
 	    }

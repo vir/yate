@@ -261,6 +261,7 @@ AC_SUBST(FDSIZE_HACK)
 
 HAVE_SCTP=no
 HAVE_SCTP_NETINET=no
+SCTP_FLAGS=""
 AC_ARG_ENABLE(sctp,AC_HELP_STRING([--enable-sctp],[Enable SCTP sockets (default: no)]),want_sctp=$enableval,want_sctp=no)
 if [[ "x$want_sctp" = "xyes" ]]; then
 AC_LANG_SAVE
@@ -279,11 +280,17 @@ AC_MSG_RESULT([$HAVE_SCTP_NETINET])
 if [[ "x$HAVE_SCTP_NETINET" != "xno" ]]; then
 # including netinet/sctp.h fixes SCTP support so enable it
 HAVE_SCTP=yes
+SCTP_FLAGS="-DHAVE_SCTP -DHAVE_SCTP_NETINET"
+else
+if [[ "x$HAVE_SCTP" != "xno" ]]; then
+SCTP_FLAGS="-DHAVE_SCTP"
+fi
 fi
 AC_LANG_RESTORE
 fi
 AC_SUBST(HAVE_SCTP)
 AC_SUBST(HAVE_SCTP_NETINET)
+AC_SUBST(SCTP_FLAGS)
 
 # Checks for optional libraries.
 

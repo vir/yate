@@ -36,14 +36,7 @@ CLEANS = $(LIBOBJS) core
 CCOMPILE = $(CC) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
 COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CPPFLAGS)
 LINK = $(CXX) $(LDFLAGS)
-SCTPOPTS:=
 
-ifneq (@HAVE_SCTP@,no)
-SCTPOPTS := $(SCTPOPTS) -DHAVE_SCTP
-endif
-ifneq (@HAVE_SCTP_NETINET@,no)
-SCTPOPTS := $(SCTPOPTS) -DHAVE_SCTP_NETINET
-endif
 ifeq (@INTERNAL_REGEX@,yes)
 REGEX_INC:= -I@top_srcdir@/engine/regex
 LIBOBJS := $(LIBOBJS) regex.o
@@ -95,7 +88,7 @@ DataFormat.o: @srcdir@/DataFormat.cpp $(MKDEPS) $(PINC)
 	$(COMPILE) -c $<
 
 Socket.o: @srcdir@/Socket.cpp $(MKDEPS) $(CINC)
-	$(COMPILE) @FDSIZE_HACK@ $(SCTPOPTS) -c $<
+	$(COMPILE) @FDSIZE_HACK@ @SCTP_FLAGS@ -c $<
 
 Mutex.o: @srcdir@/Mutex.cpp $(MKDEPS) $(CINC)
 	$(COMPILE) @MUTEX_HACK@ -c $<

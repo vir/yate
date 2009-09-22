@@ -1694,6 +1694,7 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 		if (event->message())
 		    m->params().copyParams(event->message()->params(),s_copyBkInd);
 		m_state = Ringing;
+		mylock.drop();
 		result = transmitMessage(m);
 	    }
 	    break;
@@ -1703,6 +1704,7 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 		if (event->message())
 		    m->params().copyParams(event->message()->params(),s_copyBkInd);
 		m_state = Accepted;
+		mylock.drop();
 		result = transmitMessage(m);
 	    }
 	    break;
@@ -1712,6 +1714,7 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 		if (event->message())
 		    m->params().copyParams(event->message()->params(),s_copyBkInd);
 		m_state = Answered;
+		mylock.drop();
 		result = transmitMessage(m);
 	    }
 	    break;
@@ -2459,8 +2462,9 @@ void SS7ISUP::timerTick(const Time& when)
 	m_uptCicCode = cic ? cic->code() : 1;
 	SS7MsgISUP* msg = new SS7MsgISUP(SS7MsgISUP::UPT,m_uptCicCode);
 	SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
-	transmitMessage(msg,label,false);
 	m_uptTimer.start(when.msec());
+	mylock.drop();
+	transmitMessage(msg,label,false);
 	return;
     }
 
@@ -2496,6 +2500,7 @@ void SS7ISUP::timerTick(const Time& when)
 	reserveCircuit(m_rscCic,0,SignallingCircuit::LockLocal)) {
 	SS7MsgISUP* msg = new SS7MsgISUP(SS7MsgISUP::RSC,m_rscCic->code());
 	SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
+	mylock.drop();
 	transmitMessage(msg,label,false);
     }
 }

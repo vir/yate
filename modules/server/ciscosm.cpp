@@ -1366,20 +1366,24 @@ void SessionManager::userNotice(bool up)
         m_upUsers = 0;
 }
 
-// Method that look  for an user to process the message
+// Method that looks for an user to process the message
 // When the user is found we stop looking
 void SessionManager::handlePDU(DataBlock& data)
 {
     u_int8_t* buf = data.data(4,2);
     u_int16_t protType = 0;
     protType = (buf[0] << 8) + buf[1];
-    Lock mylock(this);
-    ObjList* obj = m_users.skipNull();
-    for (; obj; obj = obj->skipNext()) {
-	UserPointer* user = static_cast<UserPointer*>(obj->get());
-	if (protType == (*user)->protocol() && (*user)->checkMessage(data))
+    lock();
+    ListIterator iter(m_users);
+    while (UserPointer* user = static_cast<UserPointer*>(iter.get())) {
+	if ((*user)->protocol() != protType)
+	    continue;
+	unlock();
+	if ((*user)->checkMessage(data))
 	    return;
+	lock();
     }
+    unlock();
 }
 
 void SessionManager::changeState(State newState)

@@ -509,6 +509,20 @@ bool DataConsumer::synchronize(DataSource* source)
 }
 
 
+bool DataSource::valid() const
+{
+    Lock mylock(const_cast<DataSource*>(this));
+    if (!m_translator)	
+	return true;
+    // this is a translator's source - check if we have at least one valid consumer
+    for (ObjList* l = m_consumers.skipNull(); l; l=l->skipNext()) {
+	DataConsumer* c = static_cast<DataConsumer *>(l->get());
+	if (c->valid())
+	    return true;
+    }
+    return false;
+}
+
 unsigned long DataSource::Forward(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 {
     Lock mylock(this,100000);
@@ -532,15 +546,26 @@ unsigned long DataSource::Forward(const DataBlock& data, unsigned long tStamp, u
 	tStamp = m_timestamp + nSamp;
     }
     unsigned long len = invalidStamp();
-    ObjList *l = m_consumers.skipNull();
-    for (; l; l=l->skipNext()) {
-	DataConsumer *c = static_cast<DataConsumer *>(l->get());
+    bool empty = true;
+    ObjList* l = m_consumers.skipNull();
+    while (l) {
+	DataConsumer* c = static_cast<DataConsumer *>(l->get());
 	unsigned long ll = c->Consume(data,tStamp,flags,this);
-	// get the minimum data amount forwarded to all consumers
-	if (len > ll)
-	    len = ll;
+	if (ll || c->valid()) {
+	    // get the minimum data amount forwarded to all consumers
+	    if (len > ll)
+		len = ll;
+	    l = l->skipNext();
+	    empty = false;
+	}
+	else {
+	    DDebug(DebugInfo,"Consumer %p becomes invalid [%p]",c,this);
+	    detachInternal(c);
+	    // do not advance in list, we just removed the current element
+	    l = l->skipNull();
+	}
     }
-    if (len == invalidStamp())
+    if (empty)
 	len = 0;
     m_timestamp = tStamp;
     m_nextStamp = nSamp ? (tStamp + nSamp) : invalidStamp();
@@ -558,15 +583,11 @@ bool DataSource::attach(DataConsumer* consumer, bool override)
     if (!(consumer && consumer->ref()))
 	return false;
     Lock mylock(this);
-    if (override) {
-	if (consumer->m_override)
-	    consumer->m_override->detach(consumer);
-	consumer->m_override = this;
-    }
-    else {
-	if (consumer->m_source)
-	    consumer->m_source->detach(consumer);
-	consumer->m_source = this;
+    DataSource*& src = override ? consumer->m_override : consumer->m_source;
+    if (src != this) {
+	if (src)
+	    src->detach(consumer);
+	src = this;
     }
     consumer->synchronize(this);
     m_consumers.append(consumer);

@@ -347,6 +347,13 @@ public:
 	{ return m_timestamp; }
 
     /**
+     * Check if this data node is still valid
+     * @return True if still valid, false if node should be removed
+     */
+    virtual bool valid() const
+	{ return true; }
+
+    /**
      * Modify node parameters
      * @param params The list of parameters to change
      * @return True if processed
@@ -415,7 +422,8 @@ public:
      * @param tStamp Timestamp of data - typically samples
      * @param flags Indicator flags associated with the data block
      * @return Number of samples actually consumed,
-     *  use invalidStamp() to indicate that all data was consumed
+     *  use invalidStamp() to indicate that all data was consumed,
+     *  return zero for consumers that become invalid
      */
     virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags) = 0;
 
@@ -486,6 +494,12 @@ public:
      */
     virtual void* getObject(const String& name) const;
     
+    /**
+     * Check if this data source is still valid
+     * @return True if still valid, false if node should be removed
+     */
+    virtual bool valid() const;
+
     /**
      * Forwards the data to its consumers
      * @param data The raw data block to forward
@@ -650,6 +664,13 @@ public:
      * @return Pointer to the requested class or NULL if this object doesn't implement it
      */
     virtual void* getObject(const String& name) const;
+
+    /**
+     * Check if the data translator has a valid source
+     * @return True if still valid, false if node should be removed
+     */
+    virtual bool valid() const
+	{ return m_tsource && m_tsource->valid(); }
 
     /**
      * Get the data source of a translator object

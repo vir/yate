@@ -147,9 +147,12 @@ public:
 	{ if (master) m_master = master; }
     inline bool isAudio() const
 	{ return m_audio; }
+    inline bool valid() const
+	{ return m_valid; }
     YRTPSource* getSource();
     YRTPConsumer* getConsumer();
     void addDirection(RTPSession::Direction direction);
+    void terminate(Message& msg);
     static YRTPWrapper* find(const CallEndpoint* conn, const String& media);
     static YRTPWrapper* find(const String& id);
     static void guessLocal(const char* remoteip, String& localip);
@@ -168,11 +171,11 @@ private:
     unsigned int m_bufsize;
     unsigned int m_port;
     bool m_audio;
+    bool m_valid;
 };
 
 class YRTPSession : public RTPSession
 {
-    friend class RTPSession;
 public:
     inline YRTPSession(YRTPWrapper* wrap)
 	: m_wrap(wrap), m_resync(false), m_anyssrc(false)
@@ -204,6 +207,8 @@ class YRTPSource : public DataSource
 public:
     YRTPSource(YRTPWrapper* wrap);
     ~YRTPSource();
+    virtual bool valid() const
+	{ return m_wrap && m_wrap->valid(); }
     inline void busy(bool isBusy)
 	{ m_busy = isBusy; }
 private:
@@ -217,6 +222,8 @@ class YRTPConsumer : public DataConsumer
 public:
     YRTPConsumer(YRTPWrapper* wrap);
     ~YRTPConsumer();
+    virtual bool valid() const
+	{ return m_wrap && m_wrap->valid(); }
     virtual unsigned long Consume(const DataBlock &data, unsigned long tStamp, unsigned long flags);
     inline void setSplitable()
 	{ m_splitable = (m_format == "alaw") || (m_format == "mulaw"); }
@@ -347,7 +354,7 @@ static Mutex s_srcMutex(false,"YRTPChan::source");
 YRTPWrapper::YRTPWrapper(const char* localip, CallEndpoint* conn, const char* media, RTPSession::Direction direction, bool rtcp)
     : m_rtp(0), m_dir(direction), m_conn(conn),
       m_source(0), m_consumer(0), m_media(media),
-      m_bufsize(0), m_port(0)
+      m_bufsize(0), m_port(0), m_valid(true)
 {
     Debug(&splugin,DebugAll,"YRTPWrapper::YRTPWrapper('%s',%p,'%s',%s,%s) [%p]",
 	localip,conn,media,lookup(direction,dict_yrtp_dir),String::boolText(rtcp),this);
@@ -740,6 +747,12 @@ void YRTPWrapper::addDirection(RTPSession::Direction direction)
 	m_rtp->direction(m_dir);
 }
 
+void YRTPWrapper::terminate(Message& msg)
+{
+    Debug(&splugin,DebugInfo,"YRTPWrapper::terminate() [%p]",this);
+    m_valid = false;
+}
+
 
 YRTPSession::~YRTPSession()
 {
@@ -889,7 +902,7 @@ YRTPConsumer::~YRTPConsumer()
 
 unsigned long YRTPConsumer::Consume(const DataBlock &data, unsigned long tStamp, unsigned long flags)
 {
-    if (!(m_wrap && m_wrap->bufSize() && m_wrap->rtp()))
+    if (!(m_wrap && m_wrap->valid() && m_wrap->bufSize() && m_wrap->rtp()))
 	return 0;
     XDebug(&splugin,DebugAll,"YRTPConsumer writing %d bytes, ts=%lu [%p]",
 	data.length(),tStamp,this);
@@ -1137,9 +1150,15 @@ bool RtpHandler::received(Message &msg)
 	if (w)
 	    Debug(&splugin,DebugAll,"Wrapper %p found by ID '%s'",w,rid);
     }
+    if (terminate) {
+	if (w) {
+	    w->terminate(msg);
+	    return true;
+	}
+	return false;
+    }
     if (!(ch || de || w)) {
-	if (!terminate)
-	    Debug(&splugin,DebugWarn,"Neither call channel nor RTP wrapper found!");
+	Debug(&splugin,DebugWarn,"Neither call channel nor RTP wrapper found!");
 	return false;
     }
 
@@ -1160,10 +1179,12 @@ bool RtpHandler::received(Message &msg)
 	w = new YRTPWrapper(lip,ch,media,direction,msg.getBoolValue("rtcp",s_rtcp));
 	w->setMaster(msg.getValue("id"));
     }
-    else {
+    else if (w->valid()) {
 	w->ref();
 	w->addDirection(direction);
     }
+    else
+	return false;
 
     if (d_recv) {
 	if (ch && !ch->getSource(media)) {

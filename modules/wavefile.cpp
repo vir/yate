@@ -218,6 +218,8 @@ void WaveSource::init(const String& file, bool autorepeat)
 	m_format = "ilbc20";
     else if (file.endsWith(".ilbc30"))
 	m_format = "ilbc30";
+    else if (file.endsWith(".g729"))
+	m_format = "g729";
     else if (file.endsWith(".au"))
 	detectAuFormat();
     else if (file.endsWith(".wav"))
@@ -522,6 +524,8 @@ WaveConsumer::WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxl
 	m_format = "ilbc20";
     else if (file.endsWith(".ilbc30"))
 	m_format = "ilbc30";
+    else if (file.endsWith(".g729"))
+	m_format = "g729";
     else if (file.endsWith(".lbc"))
 	m_header=Ilbc;
     else if (file.endsWith(".au"))

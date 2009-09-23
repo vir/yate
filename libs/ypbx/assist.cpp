@@ -31,27 +31,27 @@ bool ChanAssistList::received(Message& msg, int id)
     String* chanId = msg.getParam("id");
     if (!chanId || chanId->null())
 	return (id < Private) && Module::received(msg,id);
-    lock();
+    Lock mylock(this);
     RefPointer <ChanAssist> ca = find(*chanId);
-    unlock();
     switch (id) {
 	case Startup:
 	    if (ca) {
 		Debug(this,DebugNote,"Channel '%s' already assisted!",chanId->c_str());
+		mylock.drop();
 		ca->msgStartup(msg);
 		return false;
 	    }
 	    ca = create(msg,*chanId);
 	    if (ca) {
-		lock();
 		m_calls.append(ca);
-		unlock();
+		mylock.drop();
 		ca->msgStartup(msg);
 	    }
 	    return false;
 	case Hangup:
 	    if (ca) {
 		removeAssist(ca);
+		mylock.drop();
 		ca->msgHangup(msg);
 		ca->deref();
 		ca = 0;
@@ -59,21 +59,23 @@ bool ChanAssistList::received(Message& msg, int id)
 	    return false;
 	case Execute:
 	    if (ca) {
+		mylock.drop();
 		ca->msgExecute(msg);
 		return false;
 	    }
 	    ca = create(msg,*chanId);
 	    if (ca) {
-		lock();
 		m_calls.append(ca);
-		unlock();
+		mylock.drop();
 		ca->msgStartup(msg);
 		ca->msgExecute(msg);
 	    }
 	    return false;
 	case Disconnected:
+	    mylock.drop();
 	    return ca && ca->msgDisconnect(msg,msg.getValue("reason"));
 	default:
+	    mylock.drop();
 	    if (ca)
 		return received(msg,id,ca);
 	    return (id < Private) && Module::received(msg,id);

@@ -104,7 +104,7 @@ bool SDPSession::dispatchRtp(SDPMedia* media, const char* addr, bool start,
     }
     m_rtpForward = false;
     m_rtpLocalAddr = m->getValue("localip",m_rtpLocalAddr);
-    m_mediaStatus = MediaStarted;
+    m_mediaStatus = m_rtpLocalAddr.null() ? MediaMuted : MediaStarted;
     const char* sdpPrefix = m->getValue("osdp-prefix","osdp");
     if (sdpPrefix) {
 	unsigned int n = m->length();

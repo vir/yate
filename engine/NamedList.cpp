@@ -295,10 +295,17 @@ int NamedList::replaceParams(String& str, bool sqlEsc, char extraEsc) const
     while ((p1 = str.find("${",p1)) >= 0) {
 	int p2 = str.find('}',p1+2);
 	if (p2 > 0) {
+	    String def;
 	    String tmp = str.substr(p1+2,p2-p1-2);
 	    tmp.trimBlanks();
+	    int pq = tmp.find('$');
+	    if (pq >= 0) {
+		// param is in ${<name>$<default>} format
+		def = tmp.substr(pq+1).trimBlanks();
+		tmp = tmp.substr(0,pq).trimBlanks();
+	    }
 	    DDebug(DebugAll,"NamedList replacing parameter '%s' [%p]",tmp.c_str(),this);
-	    const NamedString* ns = getParam(tmp);
+	    const String* ns = getParam(tmp);
 	    if (ns) {
 		if (sqlEsc) {
 		    const DataBlock* data = 0;
@@ -316,7 +323,7 @@ int NamedList::replaceParams(String& str, bool sqlEsc, char extraEsc) const
 		    tmp = *ns;
 	    }
 	    else
-		tmp.clear();
+		tmp = def;
 	    str = str.substr(0,p1) + tmp + str.substr(p2+1);
 	    // advance search offset past the string we just replaced
 	    p1 += tmp.length();

@@ -219,14 +219,17 @@ bool SocketAddr::host(const String& name)
 		in_addr_t a = inet_addr(name);
 		if (a == INADDR_NONE) {
 #ifdef HAVE_GHBN_R
-		    char buf[256];
+		    char buf[576];
 		    struct hostent h;
-		    struct hostent* he = 0;
+		    struct hostent* hr = 0;
 		    int errn = 0;
-		    if ((!gethostbyname_r(name,&h,buf,sizeof(buf),&he,&errn)) &&
-			he && (he->h_addrtype == AF_INET))
-			    a = *((in_addr_t*)(he->h_addr_list[0]));
-#else
+		    int r = gethostbyname_r(name,&h,buf,sizeof(buf),&hr,&errn);
+		    if (r != ERANGE) {
+			if ((r == 0) && hr && (hr->h_addrtype == AF_INET))
+			    a = *((in_addr_t*)(hr->h_addr_list[0]));
+		    }
+		    else // fallback to single threaded version
+#endif
 		    if (s_mutex.lock(MAX_RESWAIT)) {
 			struct hostent* he = gethostbyname(name);
 			if (he && (he->h_addrtype == AF_INET))
@@ -235,7 +238,6 @@ bool SocketAddr::host(const String& name)
 		    }
 		    else
 			Debug(DebugGoOn,"Resolver was busy, failing '%s'",name.c_str());
-#endif // HAVE_GHBN_R
 		}
 		if (a != INADDR_NONE) {
 		    ((struct sockaddr_in*)m_address)->sin_addr.s_addr = a;

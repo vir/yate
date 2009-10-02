@@ -1747,6 +1747,14 @@ bool QtWindow::getSelect(const String& name, String& item)
 		    QtClient::getUtf8(item,wid->objectName());
 	    }
 	    return true;
+	case QtWidget::StackWidget:
+	    {
+		item = "";
+		QWidget* wid = w.stackWidget()->currentWidget();
+		if (wid)
+		    QtClient::getUtf8(item,wid->objectName());
+	    }
+	    return true;
     }
     return false;
 }
@@ -2344,6 +2352,11 @@ void QtWindow::doInit()
     QList<QTabWidget*> tabs = qFindChildren<QTabWidget*>(this);
     for (int i = 0; i < tabs.size(); i++)
 	QtClient::connectObjects(tabs[i],SIGNAL(currentChanged(int)),this,SLOT(selectionChanged()));
+
+    // Connect stacked widget signals
+    QList<QStackedWidget*> sw = qFindChildren<QStackedWidget*>(this);
+    for (int i = 0; i < sw.size(); i++)
+	QtClient::connectObjects(sw[i],SIGNAL(currentChanged(int)),this,SLOT(selectionChanged()));
 
     // Connect line edit signals
     QList<QLineEdit*> le = qFindChildren<QLineEdit*>(this);

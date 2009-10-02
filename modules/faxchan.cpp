@@ -47,6 +47,15 @@
 #include <fcntl.h>
 #include <errno.h>
 
+#ifdef SPANDSP_PRE006
+#define fax_get_t30_state(x) (&(x)->t30_state)
+#define t38_get_t38_state(x) (&(x)->t38)
+#define t38_get_t30_state(x) (&(x)->t30_state)
+#else
+#define t38_get_t38_state(x) (&(x)->t38_fe.t38)
+#define t38_get_t30_state(x) (&(x)->t30)
+#endif
+
 using namespace TelEngine;
 
 namespace { // anonymous
@@ -473,8 +482,8 @@ T38Terminal::T38Terminal(const char *file, const char *ident, bool sender, bool 
 	(sender ? "transmit" : "receive"),
 	file,ident,this);
     t38_terminal_init(&m_t38,iscaller,txHandler,this);
-    t38_set_t38_version(&m_t38.t38_fe.t38,1);
-    init(&m_t38.t30,ident,file,sender);
+    t38_set_t38_version(t38_get_t38_state(&m_t38),1);
+    init(t38_get_t30_state(&m_t38),ident,file,sender);
 }
 
 T38Terminal::~T38Terminal()
@@ -502,7 +511,7 @@ int T38Terminal::txHandler(t38_core_state_t* t38s, void* userData,
 void T38Terminal::rxData(const DataBlock& data, unsigned long tStamp)
 {
     Debug(this,DebugStub,"Please implement T38Terminal::rxData()");
-    t38_core_rx_ifp_packet(&m_t38.t38_fe.t38,(uint8_t*)data.data(),data.length(),tStamp);
+    t38_core_rx_ifp_packet(t38_get_t38_state(&m_t38),(uint8_t*)data.data(),data.length(),tStamp);
 }
 
 int T38Terminal::txData(const void* buf, int len, int seq, int count)

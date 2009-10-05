@@ -659,7 +659,12 @@ AC_SUBST(AMRNB_LIB)
 
 HAVE_SPANDSP=no
 SPANDSP_INC=""
+SPANDSP_LIB="-lspandsp"
 AC_ARG_WITH(spandsp,AC_HELP_STRING([--with-spandsp],[use spandsp library if available (default)]),[ac_cv_use_spandsp=$withval],[ac_cv_use_spandsp=yes])
+if [[ "x$ac_cv_use_spandsp" = "xstatic" ]]; then
+    ac_cv_use_spandsp="yes"
+    SPANDSP_LIB="-Wl,-Bstatic -lspandsp -ltiff -lz -ljpeg -Wl,-Bdynamic"
+fi
 if [[ "x$ac_cv_use_spandsp" = "xyes" ]]; then
 for i in /usr/include /usr/local/include; do
     ac_cv_use_spandsp="$i"
@@ -763,6 +768,7 @@ AC_MSG_RESULT([$HAVE_SPANDSP])
 fi
 AC_SUBST(HAVE_SPANDSP)
 AC_SUBST(SPANDSP_INC)
+AC_SUBST(SPANDSP_LIB)
 
 
 HAVE_PWLIB=no

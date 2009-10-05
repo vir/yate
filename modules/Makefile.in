@@ -271,7 +271,7 @@ speexcodec.yate: LOCALFLAGS = @SPEEX_INC@
 amrnbcodec.yate: LOCALFLAGS = @AMRNB_INC@
 amrnbcodec.yate: LOCALLIBS = @AMRNB_LIB@
 
-faxchan.yate: LOCALLIBS = -lspandsp
+faxchan.yate: LOCALLIBS = @SPANDSP_LIB@
 faxchan.yate: LOCALFLAGS = @SPANDSP_INC@
 
 ysipchan.yate: ../libs/ysip/libyatesip.a ../libs/ysdp/libyatesdp.a

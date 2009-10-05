@@ -124,6 +124,7 @@ public:
     bool setRemote(const char* raddr, unsigned int rport, const Message& msg);
     bool sendDTMF(char dtmf, int duration = 0);
     void gotDTMF(char tone);
+    void gotFax();
     void timeout(bool initial);
     inline YRTPSession* rtp() const
 	{ return m_rtp; }
@@ -178,7 +179,7 @@ class YRTPSession : public RTPSession
 {
 public:
     inline YRTPSession(YRTPWrapper* wrap)
-	: m_wrap(wrap), m_resync(false), m_anyssrc(false)
+	: m_wrap(wrap), m_resync(false), m_anyssrc(false), m_getFax(true)
 	{ }
     virtual ~YRTPSession();
     virtual bool rtpRecvData(bool marker, unsigned int timestamp,
@@ -199,6 +200,7 @@ private:
     YRTPWrapper* m_wrap;
     bool m_resync;
     bool m_anyssrc;
+    bool m_getFax;
 };
 
 class YRTPSource : public DataSource
@@ -687,6 +689,18 @@ void YRTPWrapper::gotDTMF(char tone)
     Engine::enqueue(m);
 }
 
+void YRTPWrapper::gotFax()
+{
+    Debug(&splugin,DebugInfo,"YRTPWrapper::gotFax() [%p]",this);
+    if (m_master.null())
+	return;
+    Message* m = new Message("chan.masquerade");
+    m->addParam("id",m_master);
+    m->addParam("message","call.fax");
+    m->addParam("detected","rfc2833");
+    Engine::enqueue(m);
+}
+
 void YRTPWrapper::timeout(bool initial)
 {
     if (!(initial || s_warnLater))
@@ -789,10 +803,21 @@ bool YRTPSession::rtpRecvData(bool marker, unsigned int timestamp, const void* d
 bool YRTPSession::rtpRecvEvent(int event, char key, int duration,
 	int volume, unsigned int timestamp)
 {
-    if (!(m_wrap && key))
+    if (!m_wrap)
 	return false;
-    m_wrap->gotDTMF(key);
-    return true;
+    if (key) {
+	m_wrap->gotDTMF(key);
+	return true;
+    }
+    if (event == 36) {
+	// got G3 CNG
+	if (m_getFax) {
+	    m_getFax = false;
+	    m_wrap->gotFax();
+	}
+	return true;
+    }
+    return false;
 }
 
 void YRTPSession::rtpNewPayload(int payload, unsigned int timestamp)

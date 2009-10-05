@@ -384,8 +384,10 @@ void ToneConsumer::checkFax()
 	m->addParam("callto",m_divert);
 	m->addParam("reason","fax");
     }
-    else
+    else {
 	m->addParam("message","call.fax");
+	m->addParam("detected","inband");
+    }
     Engine::enqueue(m);
 }
 

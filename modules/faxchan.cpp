@@ -618,11 +618,15 @@ void FaxChan::updateInfo(t30_state_t* t30)
     t30_get_transfer_statistics(t30, &t);
     if (!t.error_correcting_mode)
 	m_ecm = false;
+#ifdef SPANDSP_TXRXSTATS
+    m_pages = t.pages_tx + t.pages_rx;
+#else
     m_pages = t.pages_transferred;
+#endif
 
     Debug(this,DebugAll,"bit rate %d", t.bit_rate);
     Debug(this,DebugAll,"error correction %d", t.error_correcting_mode);
-    Debug(this,DebugAll,"pages transferred %d", t.pages_transferred);
+    Debug(this,DebugAll,"pages transferred %d", m_pages);
     Debug(this,DebugAll,"image size %d x %d", t.width, t.length);
     Debug(this,DebugAll,"image resolution %d x %d", t.x_resolution, t.y_resolution);
     Debug(this,DebugAll,"bad rows %d", t.bad_rows);

@@ -67,7 +67,7 @@ SIPTransaction::SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outg
     }
     m_invite = (getMethod() == "INVITE");
     m_state = Initial;
-    m_engine->TransList.append(this);
+    m_engine->append(this);
 }
 
 // Constructor from original and authentication requesting answer
@@ -104,13 +104,13 @@ SIPTransaction::SIPTransaction(SIPTransaction& original, SIPMessage* answer)
     // if this transaction is an INVITE and we append it to the list its
     //  ACK will be sent after the new INVITE which is legal but "unnatural"
     // some SIP endpoints seem to assume things about transactions
-    m_engine->TransList.append(this);
+    m_engine->append(this);
 #else
     // insert this transaction rather than appending it
     // this way we get a chance to send one ACK before a new INVITE
     // note that there is no guarantee because of the possibility of the
     //  packets getting lost and retransmitted or to use a different route
-    m_engine->TransList.insert(this);
+    m_engine->insert(this);
 #endif
 }
 
@@ -128,10 +128,10 @@ SIPTransaction::SIPTransaction(const SIPTransaction& original, const String& tag
 
 #ifdef SIP_PRESERVE_TRANSACTION_ORDER
     // new transactions at the end, preserve "natural" order
-    m_engine->TransList.append(this);
+    m_engine->append(this);
 #else
     // put new transactions first - faster to match new messages
-    m_engine->TransList.insert(this);
+    m_engine->insert(this);
 #endif
 }
 
@@ -140,15 +140,17 @@ SIPTransaction::~SIPTransaction()
 #ifdef DEBUG
     Debugger debug(DebugAll,"SIPTransaction::~SIPTransaction()"," [%p]",this);
 #endif
+    setPendingEvent(0,true);
+    TelEngine::destruct(m_lastMessage);
+    TelEngine::destruct(m_firstMessage);
+}
+
+void SIPTransaction::destroyed()
+{
+    DDebug(getEngine(),DebugAll,"SIPTransaction::destroyed() [%p]",this);
     m_state = Invalid;
-    m_engine->TransList.remove(this,false);
-    setPendingEvent();
-    if (m_lastMessage)
-	m_lastMessage->deref();
-    m_lastMessage = 0;
-    if (m_firstMessage)
-	m_firstMessage->deref();
-    m_firstMessage = 0;
+    m_engine->remove(this,false);
+    setPendingEvent(0,true);
 }
 
 const char* SIPTransaction::stateName(int state)
@@ -292,7 +294,7 @@ SIPEvent* SIPTransaction::getEvent(bool pendingOnly)
 	    // make sure we don't get trough this one again
 	    changeState(Invalid);
 	    // remove from list and dereference
-	    m_engine->TransList.remove(this);
+	    m_engine->remove(this);
 	    return e;
 	case Invalid:
 	    Debug(getEngine(),DebugFail,"SIPTransaction::getEvent in invalid state [%p]",this);
@@ -635,7 +637,7 @@ SIPEvent* SIPTransaction::getServerEvent(int state, int timeout)
 	    m_transmit = false;
 	    changeState(Invalid);
 	    // remove from list and dereference
-	    m_engine->TransList.remove(this);
+	    m_engine->remove(this);
 	    break;
 	case Trying:
 	    e = new SIPEvent(m_firstMessage,this);

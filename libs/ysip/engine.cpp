@@ -142,10 +142,8 @@ SIPEvent::SIPEvent(SIPMessage* message, SIPTransaction* transaction)
 SIPEvent::~SIPEvent()
 {
     DDebug(DebugAll,"SIPEvent::~SIPEvent() [%p]",this);
-    if (m_transaction)
-	m_transaction->deref();
-    if (m_message)
-	m_message->deref();
+    TelEngine::destruct(m_transaction);
+    TelEngine::destruct(m_message);
 }
 
 
@@ -207,7 +205,7 @@ SIPTransaction* SIPEngine::addMessage(SIPMessage* message)
 	branch.clear();
     Lock lock(this);
     SIPTransaction* forked = 0;
-    ObjList* l = &TransList;
+    ObjList* l = &m_transList;
     for (; l; l = l->next()) {
 	SIPTransaction* t = static_cast<SIPTransaction*>(l->get());
 	if (!t)
@@ -258,7 +256,7 @@ bool SIPEngine::process()
 SIPEvent* SIPEngine::getEvent()
 {
     Lock lock(this);
-    ObjList* l = &TransList;
+    ObjList* l = &m_transList;
     for (; l; l = l->next()) {
 	SIPTransaction* t = static_cast<SIPTransaction*>(l->get());
 	if (t) {
@@ -270,7 +268,7 @@ SIPEvent* SIPEngine::getEvent()
 	    }
 	}
     }
-    for (l = &TransList; l; l = l->next()) {
+    for (l = &m_transList; l; l = l->next()) {
 	SIPTransaction* t = static_cast<SIPTransaction*>(l->get());
 	if (t) {
 	    SIPEvent* e = t->getEvent(false);

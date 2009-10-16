@@ -815,6 +815,11 @@ protected:
     SIPTransaction(SIPTransaction& original, SIPMessage* answer);
 
     /**
+     * Pre-destruction notification used to clean up the transaction
+     */
+    virtual void destroyed();
+
+    /**
      * Attempt to perform automatic client transaction authentication
      * @param answer SIP answer that creates the new transaction
      * @return True if current client processing must be abandoned
@@ -1206,12 +1211,33 @@ public:
 	{ return m_allowed; }
 
     /**
-     * TransList is the key. 
-     * Is the list that holds all the transactions.
+     * Remove a transaction from the list
+     * @param transaction Pointer to transaction to remove
+     * @param deref Dereference the transaction if it was in list
      */
-    ObjList TransList;
+    inline void remove(SIPTransaction* transaction, bool deref = true)
+	{ lock(); m_transList.remove(transaction,deref); unlock(); }
+
+    /**
+     * Append a transaction to the end of the list
+     * @param transaction Pointer to transaction to append
+     */
+    inline void append(SIPTransaction* transaction)
+	{ lock(); m_transList.append(transaction); unlock(); }
+
+    /**
+     * Insert a transaction at the start of the list
+     * @param transaction Pointer to transaction to insert
+     */
+    inline void insert(SIPTransaction* transaction)
+	{ lock(); m_transList.insert(transaction); unlock(); }
 
 protected:
+    /**
+     * The list that holds all the SIP transactions.
+     */
+    ObjList m_transList;
+
     u_int64_t m_t1;
     u_int64_t m_t4;
     unsigned int m_maxForwards;

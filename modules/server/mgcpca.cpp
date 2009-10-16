@@ -1626,15 +1626,23 @@ void MGCPCircuit::processDelete(MGCPMessage* mm, const String& error)
     String tmp(error);
     tmp >> code;
     switch (code) {
+	case 501: // Endpoint is not ready or is out of service
 	case 901: // Endpoint taken out of service
 	case 904: // Manual intervention
+	    // Disable the circuit and signal Alarm condition
 	    SignallingCircuit::status(Disabled);
 	    enqueueEvent(SignallingCircuitEvent::Alarm,error);
 	    return;
+	case 403: // Insufficient resources at this time
+	case 502: // Insufficient resources (permanent)
+	    // Delete all connections on the endpoint before going idle again
+	    m_needClear = true;
+	    // fall-through
 	default:
 	    SignallingCircuit::status(
 		SignallingCircuit::status() >= Reserved ? Reserved : Idle);
     }
+    // Signal a transient media failure condition
     enqueueEvent(SignallingCircuitEvent::Disconnected,error);
 }
 

@@ -1095,7 +1095,7 @@ bool YateSIPEndPoint::Init()
 	    return false;
 	}
     }
-    
+
     if (!m_sock->getSockName(addr)) {
 	Debug(&plugin,DebugGoOn,"Unable to figure out what I'm bound to");
 	return false;
@@ -1118,6 +1118,7 @@ bool YateSIPEndPoint::Init()
 	m_local = addr.host();
     m_port = addr.port();
     m_engine = new YateSIPEngine(this);
+    m_engine->debugChain(&plugin);
     return true;
 }
 

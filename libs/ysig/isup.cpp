@@ -62,7 +62,7 @@ struct MsgParams {
 
 // Nature of Address Indicator
 static TokenDict s_dict_nai[] = {
-    { "subcriber",     1 },
+    { "subscriber",    1 },
     { "unknown",       2 },
     { "national",      3 },
     { "international", 4 },

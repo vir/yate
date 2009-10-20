@@ -80,10 +80,18 @@ void SDPSession::putMedia(NamedList& msg, ObjList* mList, bool putPort)
 {
     if (!mList)
 	return;
+    bool audio = false;
+    bool other = false;
     for (mList = mList->skipNull(); mList; mList = mList->skipNext()) {
 	SDPMedia* m = static_cast<SDPMedia*>(mList->get());
 	m->putMedia(msg,putPort);
+	if (m->isAudio())
+	    audio = true;
+	else
+	    other = true;
     }
+    if (other && !audio)
+	msg.setParam("media",String::boolText(false));
 }
 
 // Build and dispatch a chan.rtp message for a given media. Update media on success

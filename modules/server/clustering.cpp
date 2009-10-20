@@ -50,6 +50,8 @@ private:
     Regexp m_regexp;
     String m_message;
     bool m_init;
+    bool m_handleReg;
+    bool m_handleCdr;
 };
 
 INIT_PLUGIN(ClusterModule);
@@ -200,9 +202,9 @@ bool ClusterModule::received(Message& msg, int id)
 	case Execute:
 	    return msgExecute(msg);
 	case Register:
-	    return msgRegister(msg);
+	    return m_handleReg && msgRegister(msg);
 	case Cdr:
-	    return msgCdr(msg);
+	    return m_handleCdr && msgCdr(msg);
 	default:
 	    return Module::received(msg,id);
     }
@@ -210,7 +212,7 @@ bool ClusterModule::received(Message& msg, int id)
 
 ClusterModule::ClusterModule()
     : Module("clustering","misc",true),
-      m_init(false)
+      m_init(false), m_handleReg(false), m_handleCdr(false)
 {
     Output("Loaded module Clustering");
 }
@@ -236,6 +238,8 @@ void ClusterModule::initialize()
     m_regexp = cfg.getValue("general","regexp");
     m_callto = cfg.getValue("general","callto");
     m_message = cfg.getValue("general","locate","cluster.locate");
+    m_handleReg = cfg.getBoolValue("general","user.register",true);
+    m_handleCdr = cfg.getBoolValue("general","call.cdr",true);
     unlock();
     if (!m_init && cfg.getBoolValue("general","enabled",(m_callto && m_regexp))) {
 	setup();

@@ -16,9 +16,15 @@
 ; locate: string: Message used for locating dynamic resources on cluster nodes
 ;locate=cluster.locate
 
+; user.register: boolean: Enable modifying registration messages for clustering
+;user.register=yes
+
+; call.cdr: boolean: Enable adding prefix and node information to CDR messages
+;call.cdr=yes
+
 
 [priorities]
-; Handler priorities for each message
+; Handler priorities for each message, applied only on first initialization
 
 ; call.route: int: Priority of route message handler (on target node)
 ;call.route=50

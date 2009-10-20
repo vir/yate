@@ -490,12 +490,42 @@ MimeSdpBody* SDPSession::createPasstroughSDP(NamedList& msg, bool update)
 }
 
 // Update media format lists from parameters
-void SDPSession::updateFormats(const NamedList& msg)
+void SDPSession::updateFormats(const NamedList& msg, bool changeMedia)
 {
     if (!m_rtpMedia)
 	return;
     unsigned int n = msg.length();
-    for (unsigned int i = 0; i < n; i++) {
+    unsigned int i;
+    if (changeMedia) {
+	// check if any media is to be removed
+	for (i = 0; i < n; i++) {
+	    const NamedString* p = msg.getParam(i);
+	    if (!p)
+		continue;
+	    // search for media_MEDIANAME parameters
+	    String tmp = p->name();
+	    if (!tmp.startSkip("media",false))
+		continue;
+	    if (tmp && (tmp[0] != '_'))
+		continue;
+	    // only check for explicit disabled media
+	    if (p->toBoolean(true))
+		continue;
+	    if (tmp.null())
+		tmp = "audio";
+	    else
+		tmp = tmp.substr(1);
+	    SDPMedia* rtp = static_cast<SDPMedia*>(m_rtpMedia->operator[](tmp));
+	    if (!rtp)
+		continue;
+	    Debug(m_parser,DebugNote,"Removing disabled media '%s' [%p]",
+		tmp.c_str(),this);
+	    m_rtpMedia->remove(rtp,false);
+	    mediaChanged(*rtp);
+	    TelEngine::destruct(rtp);
+	}
+    }
+    for (i = 0; i < n; i++) {
 	const NamedString* p = msg.getParam(i);
 	if (!p)
 	    continue;
@@ -505,14 +535,29 @@ void SDPSession::updateFormats(const NamedList& msg)
 	    continue;
 	if (tmp && (tmp[0] != '_'))
 	    continue;
+	const char* trans = 0;
+	// make sure we don't re-add explicitely disabled media
+	if (changeMedia && msg.getBoolValue("media"+tmp,true))
+	    trans = msg.getValue("transport"+tmp);
 	if (tmp.null())
 	    tmp = "audio";
 	else
 	    tmp = tmp.substr(1);
 	SDPMedia* rtp = static_cast<SDPMedia*>(m_rtpMedia->operator[](tmp));
-	if (rtp && rtp->update(*p))
-	    Debug(m_parser,DebugNote,"Formats for '%s' changed to '%s' [%p]",
-		tmp.c_str(),p->c_str(),this);
+	if (rtp) {
+	    if (rtp->update(*p))
+		Debug(m_parser,DebugNote,"Formats for '%s' changed to '%s' [%p]",
+		    tmp.c_str(),p->c_str(),this);
+	}
+	else if (*p) {
+	    Debug(m_parser,DebugNote,"Got formats '%s' for absent media '%s' [%p]",
+		p->c_str(),tmp.c_str(),this);
+	    if (trans) {
+		rtp = new SDPMedia(tmp,trans,p->c_str());
+		m_rtpMedia->append(rtp);
+		mediaChanged(*rtp);
+	    }
+	}
     }
 }
 

@@ -489,8 +489,9 @@ public:
     /**
      * Update media format lists from parameters
      * @param msg Parameter list
+     * @param changeMedia True to update media list if required
      */
-    void updateFormats(const NamedList& msg);
+    void updateFormats(const NamedList& msg, bool changeMedia = false);
 
     /**
      * Add raw SDP forwarding parameter from body if SDP forward is enabled

@@ -335,7 +335,6 @@ private:
     bool processTransaction2(SIPEvent* ev, const SIPMessage* msg, int code);
     SIPMessage* createDlgMsg(const char* method, const char* uri = 0);
     bool emitPRACK(const SIPMessage* msg);
-    void updateFormats(const Message& msg);
     bool startClientReInvite(Message& msg);
     // Build the 'call.route' and NOTIFY messages needed by the transfer thread
     bool initTransfer(Message*& msg, SIPMessage*& sipNotify, const SIPMessage* sipRefer,
@@ -2930,7 +2929,7 @@ bool YateSIPConnection::msgAnswered(Message& msg)
 {
     Lock lock(driver());
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
-	updateFormats(msg);
+	updateFormats(msg,true);
 	SIPMessage* m = new SIPMessage(m_tr->initialMessage(), 200);
 	copySipHeaders(*m,msg);
 	MimeSdpBody* sdp = createPasstroughSDP(msg);
@@ -3226,33 +3225,6 @@ void YateSIPConnection::callRejected(const char* error, const char* reason, cons
 	    m_tr->setResponse(code,reason);
     }
     setReason(reason,code);
-}
-
-// Update media format lists from a message
-void YateSIPConnection::updateFormats(const Message& msg)
-{
-    if (!m_rtpMedia)
-	return;
-
-    unsigned int n = msg.length();
-    for (unsigned int i = 0; i < n; i++) {
-	const NamedString* p = msg.getParam(i);
-	if (!p)
-	    continue;
-	// search for formats_MEDIANAME parameters
-	String tmp = p->name();
-	if (!tmp.startSkip("formats",false))
-	    continue;
-	if (tmp && (tmp[0] != '_'))
-	    continue;
-	if (tmp.null())
-	    tmp = "audio";
-	else
-	    tmp = tmp.substr(1);
-	SDPMedia* rtp = static_cast<SDPMedia*>(m_rtpMedia->operator[](tmp));
-	if (rtp && rtp->update(*p))
-	    Debug(this,DebugNote,"Formats for '%s' changed to '%s'",tmp.c_str(),p->c_str());
-    }
 }
 
 // Start a client reINVITE transaction

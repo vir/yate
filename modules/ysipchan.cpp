@@ -334,6 +334,7 @@ private:
     void startPendingUpdate();
     bool processTransaction2(SIPEvent* ev, const SIPMessage* msg, int code);
     SIPMessage* createDlgMsg(const char* method, const char* uri = 0);
+    void emitUpdate();
     bool emitPRACK(const SIPMessage* msg);
     bool startClientReInvite(Message& msg);
     // Build the 'call.route' and NOTIFY messages needed by the transfer thread
@@ -2186,6 +2187,14 @@ SIPMessage* YateSIPConnection::createDlgMsg(const char* method, const char* uri)
     return m;
 }
 
+// Emit a call.update to notify cdrbuild of callid dialog tags change
+void YateSIPConnection::emitUpdate()
+{
+    Message* m = message("call.update");
+    m->addParam("operation","cdrbuild");
+    Engine::enqueue(m);
+}
+
 // Emit a PRovisional ACK if enabled in the engine, return true to handle them
 bool YateSIPConnection::emitPRACK(const SIPMessage* msg)
 {
@@ -2298,14 +2307,12 @@ bool YateSIPConnection::process(SIPEvent* ev)
     if (ev->getTransaction() == m_tr2)
 	return processTransaction2(ev,msg,code);
 
+    bool updateTags = true;
+    SIPDialog oldDlg(m_dialog);
     m_dialog = *ev->getTransaction()->recentMessage();
-    // Update incoming channels' callid
-    if (isIncoming()) {
-	Message* m = message("call.update");
-	m->addParam("operation","cdrbuild");
-	Engine::enqueue(m);
-    }
+
     if (msg && !msg->isOutgoing() && msg->isAnswer() && (code >= 300)) {
+	updateTags = false;
 	m_cancel = false;
 	m_byebye = false;
 	parameters().clearParams();
@@ -2349,12 +2356,17 @@ bool YateSIPConnection::process(SIPEvent* ev)
     }
     else if (code == 408) {
 	// Proxy timeout does not provide an answer message
+	updateTags = false;
 	if (m_dialog.remoteTag.null())
 	    m_byebye = false;
 	parameters().setParam("cause_sip","408");
 	setReason("Request Timeout",code);
 	hangup();
     }
+
+    // Only update channels' callid if dialog tags change
+    updateTags = updateTags && (oldDlg |= m_dialog);
+
     if (!ev->isActive()) {
 	Lock lock(driver());
 	if (m_tr) {
@@ -2371,12 +2383,18 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    setReason("Not received ACK",code);
 	    hangup();
 	}
-	else
+	else {
+	    if (updateTags)
+		emitUpdate();
 	    startPendingUpdate();
+	}
 	return false;
     }
-    if (!msg || msg->isOutgoing())
+    if (!msg || msg->isOutgoing()) {
+	if (updateTags)
+	    emitUpdate();
 	return false;
+    }
     String natAddr;
     MimeSdpBody* sdp = getSdpBody(msg->body);
     if (sdp) {
@@ -2411,6 +2429,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
     }
 
     if (msg->isAnswer() && ((msg->code / 100) == 2)) {
+	updateTags = false;
 	m_cancel = false;
 	Lock lock(driver());
 	const SIPMessage* ack = m_tr ? m_tr->latestMessage() : 0;
@@ -2441,6 +2460,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    const char* reason = 0;
 	    switch (msg->code) {
 		case 180:
+		    updateTags = false;
 		    name = "call.ringing";
 		    setStatus("ringing",Ringing);
 		    break;
@@ -2470,6 +2490,8 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    }
 	}
     }
+    if (updateTags)
+	emitUpdate();
     if (msg->isACK()) {
 	DDebug(this,DebugInfo,"YateSIPConnection got ACK [%p]",this);
 	startRtp();

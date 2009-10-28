@@ -1,0 +1,23 @@
+[general]
+; Global settings of the per context call counters
+
+; parameter: string: Name of the call parameter to use for context counting
+; This parameter must exist in the call.cdr messages by adding a line
+;  like: context=false to the [parameters] section of cdrbuild.conf
+;parameter=
+
+; direction: string: Direction of the call legs counted, set empty to count all
+;direction=incoming
+
+; allcounters: boolean: Add all counters instead of just the current context
+;allcounters=false
+
+
+[priorities]
+; Numerical priorities of installed message handlers
+
+; call.cdr: integer: Priority of CDR message handler used to count calls
+;call.cdr=20
+
+; call.route: integer: Priority of handler used to add counters to routing message
+;call.route=20

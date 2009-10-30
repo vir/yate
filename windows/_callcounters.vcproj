@@ -2,9 +2,9 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="8.00"
-	Name="_clustering"
-	ProjectGUID="{56A805CD-59D3-41AE-8992-2A2F5C99DC67}"
-	RootNamespace="_clustering"
+	Name="_callcounters"
+	ProjectGUID="{2BA805ED-19D3-4100-BC32-2AD05C9977A7}"
+	RootNamespace="_callcounters"
 	>
 	<Platforms>
 		<Platform
@@ -42,7 +42,7 @@
 				MkTypLibCompatible="true"
 				SuppressStartupBanner="true"
 				TargetEnvironment="1"
-				TypeLibraryName=".\Release/_clustering.tlb"
+				TypeLibraryName=".\Release/_callcounters.tlb"
 				HeaderFileName=""
 			/>
 			<Tool
@@ -54,7 +54,7 @@
 				StringPooling="true"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
-				PrecompiledHeaderFile=".\Release\modules/_clustering.pch"
+				PrecompiledHeaderFile=".\Release\modules/_callcounters.pch"
 				AssemblerListingLocation=".\Release\modules/"
 				ObjectFile=".\Release\modules/"
 				ProgramDataBaseFileName=".\Release\modules/"
@@ -75,11 +75,11 @@
 			<Tool
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
-				OutputFile="Release/server/clustering.yate"
+				OutputFile="Release/server/callcounters.yate"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
-				ProgramDatabaseFile=".\Release/clustering.pdb"
-				ImportLibrary=".\Release/clustering.lib"
+				ProgramDatabaseFile=".\Release/callcounters.pdb"
+				ImportLibrary=".\Release/callcounters.lib"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -94,7 +94,7 @@
 			<Tool
 				Name="VCBscMakeTool"
 				SuppressStartupBanner="true"
-				OutputFile=".\Release/_clustering.bsc"
+				OutputFile=".\Release/_callcounters.bsc"
 			/>
 			<Tool
 				Name="VCFxCopTool"
@@ -137,7 +137,7 @@
 				MkTypLibCompatible="true"
 				SuppressStartupBanner="true"
 				TargetEnvironment="1"
-				TypeLibraryName=".\Debug/_clustering.tlb"
+				TypeLibraryName=".\Debug/_callcounters.tlb"
 				HeaderFileName=""
 			/>
 			<Tool
@@ -148,7 +148,7 @@
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
-				PrecompiledHeaderFile=".\Debug\modules/_clustering.pch"
+				PrecompiledHeaderFile=".\Debug\modules/_callcounters.pch"
 				AssemblerListingLocation=".\Debug\modules/"
 				ObjectFile=".\Debug\modules/"
 				ProgramDataBaseFileName=".\Debug\modules/"
@@ -170,12 +170,12 @@
 			<Tool
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
-				OutputFile="Debug/server/clustering.yate"
+				OutputFile="Debug/server/callcounters.yate"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				GenerateDebugInformation="true"
-				ProgramDatabaseFile=".\Debug/clustering.pdb"
-				ImportLibrary=".\Debug/clustering.lib"
+				ProgramDatabaseFile=".\Debug/callcounters.pdb"
+				ImportLibrary=".\Debug/callcounters.lib"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -190,7 +190,7 @@
 			<Tool
 				Name="VCBscMakeTool"
 				SuppressStartupBanner="true"
-				OutputFile=".\Debug/_clustering.bsc"
+				OutputFile=".\Debug/_callcounters.bsc"
 			/>
 			<Tool
 				Name="VCFxCopTool"
@@ -214,7 +214,7 @@
 			Filter="cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 			>
 			<File
-				RelativePath="..\modules\server\clustering.cpp"
+				RelativePath="..\modules\server\callcounters.cpp"
 				>
 				<FileConfiguration
 					Name="Release|Win32"

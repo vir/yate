@@ -26,7 +26,7 @@
 /*
     WARNING: This file requires PHP 5
 */
-	    
+
 
 require_once("libyate.php");
 
@@ -622,8 +622,10 @@ class IVR
 		    continue;
 		if ($ev === false)
 		    break;
-		if (($ev->type == "incoming") && ($ev->name == "call.execute"))
+		if (($ev->type == "incoming") && ($ev->name == "call.execute")) {
 		    $yate_ivr_target = $ev->GetValue("id");
+		    IVR::SetChannelID($ev->GetValue("ivrchanid"));
+		}
 		IVR::EventIVR($ev);
 		if ($init_id && ($yate_ivr_current !== null)) {
 		    $init_id = false;
@@ -633,7 +635,7 @@ class IVR
 		}
 		if ($ev && ($ev->type == "incoming")) {
 		    if ($ev->handled && $ev->name == "call.execute")
-			$ev->params["targetid"] = IVR::ChannelID();
+			$ev->SetParam("targetid",IVR::ChannelID());
 		    $ev->Acknowledge();
 		}
 	    }

@@ -29,7 +29,7 @@
 
     sed -i.bak -e 's/static \(function\)/\1/' libyatechan.php
 */
-	    
+
 
 require_once("libyate.php");
 

@@ -7,6 +7,7 @@
 # to disable the GUI clients run rpmbuild --define 'nogui 1'
 
 %{!?dist:%define dist %{nil}}
+%{!?revision:%define revision %{nil}}
 %{?nodeps:%define no_auto_deps 1}
 %{?nopstn:%define no_pstn 1}
 %{?noh323:%define no_h323 1}
@@ -24,6 +25,9 @@
 %define revision @PACKAGE_REVISION@svn
 %endif
 
+%if "%{dist}" == ""
+%define dist %{?distsuffix:%distsuffix}%{?product_version:%product_version}
+%endif
 %if "%{dist}" == ""
 %define dist %(test -f /etc/mandriva-release && echo mdv)
 %endif
@@ -93,22 +97,28 @@ for small to large scale projects.
 %{_libdir}/yate/msgsniff.yate
 %{_libdir}/yate/mux.yate
 %{_libdir}/yate/pbx.yate
+%{_libdir}/yate/server/dbwave.yate
 %{_libdir}/yate/server/dbpbx.yate
 %{_libdir}/yate/server/pbxassist.yate
 %{_libdir}/yate/server/park.yate
 %{_libdir}/yate/server/queues.yate
 %{_libdir}/yate/server/lateroute.yate
+%{_libdir}/yate/server/callcounters.yate
 %{_libdir}/yate/dumbchan.yate
 %{_libdir}/yate/callfork.yate
 %{_libdir}/yate/extmodule.yate
+%{_libdir}/yate/filetransfer.yate
 %{_libdir}/yate/server/yradius.yate
 %{_libdir}/yate/ysipchan.yate
 %{_libdir}/yate/yrtpchan.yate
 %{_libdir}/yate/ystunchan.yate
+%{_libdir}/yate/ysockschan.yate
 %{_libdir}/yate/yiaxchan.yate
 %{_libdir}/yate/yjinglechan.yate
 %{_libdir}/yate/enumroute.yate
+%{_libdir}/yate/jingle/jinglefeatures.yate
 %{_libdir}/yate/server/sipfeatures.yate
+%{_libdir}/yate/server/queuesnotify.yate
 %{_libdir}/yate/client/osschan.yate
 %{_libdir}/yate/ilbccodec.yate
 %{_libdir}/yate/server/heartbeat.yate
@@ -117,21 +127,25 @@ for small to large scale projects.
 %{_libdir}/yate/server/mgcpgw.yate
 %{_libdir}/yate/server/mrcpspeech.yate
 %{_libdir}/yate/server/ysigchan.yate
+%{_libdir}/yate/server/ciscosm.yate
 %{_libdir}/yate/server/analog.yate
 %{_libdir}/yate/server/analogdetect.yate
 %dir %{_sysconfdir}/yate
 %config(noreplace) %{_sysconfdir}/yate/accfile.conf
 %config(noreplace) %{_sysconfdir}/yate/cdrbuild.conf
 %config(noreplace) %{_sysconfdir}/yate/cdrfile.conf
+%config(noreplace) %{_sysconfdir}/yate/callcounters.conf
 %config(noreplace) %{_sysconfdir}/yate/dbpbx.conf
 %config(noreplace) %{_sysconfdir}/yate/dsoundchan.conf
 %config(noreplace) %{_sysconfdir}/yate/enumroute.conf
 %config(noreplace) %{_sysconfdir}/yate/sipfeatures.conf
 %config(noreplace) %{_sysconfdir}/yate/extmodule.conf
+%config(noreplace) %{_sysconfdir}/yate/filetransfer.conf
 %config(noreplace) %{_sysconfdir}/yate/moh.conf
 %config(noreplace) %{_sysconfdir}/yate/mux.conf
 %config(noreplace) %{_sysconfdir}/yate/pbxassist.conf
 %config(noreplace) %{_sysconfdir}/yate/queues.conf
+%config(noreplace) %{_sysconfdir}/yate/queuesnotify.conf
 %config(noreplace) %{_sysconfdir}/yate/lateroute.conf
 %config(noreplace) %{_sysconfdir}/yate/regexroute.conf
 %config(noreplace) %{_sysconfdir}/yate/regfile.conf
@@ -141,6 +155,7 @@ for small to large scale projects.
 %config(noreplace) %{_sysconfdir}/yate/yiaxchan.conf
 %config(noreplace) %{_sysconfdir}/yate/yradius.conf
 %config(noreplace) %{_sysconfdir}/yate/yrtpchan.conf
+%config(noreplace) %{_sysconfdir}/yate/ysockschan.conf
 %config(noreplace) %{_sysconfdir}/yate/ystunchan.conf
 %config(noreplace) %{_sysconfdir}/yate/ysipchan.conf
 %config(noreplace) %{_sysconfdir}/yate/yjinglechan.conf
@@ -150,7 +165,8 @@ for small to large scale projects.
 %config(noreplace) %{_sysconfdir}/yate/mgcpgw.conf
 %config(noreplace) %{_sysconfdir}/yate/analog.conf
 %config(noreplace) %{_sysconfdir}/yate/ysigchan.conf
-      
+%config(noreplace) %{_sysconfdir}/yate/ciscosm.conf
+
 %config %{_sysconfdir}/logrotate.d/yate
 
 %post
@@ -298,6 +314,7 @@ with a Qt version 4 graphical interface.
 %files qt4
 %defattr(-, root, root)
 %{_bindir}/yate-qt4
+%{_libdir}/yate/qt4/updater.yate
 %{_menudir}/yate-qt4.menu
 %{_datadir}/applications/yate-qt4.desktop
 %config(noreplace) %{_sysconfdir}/yate/yate-qt4.conf
@@ -436,6 +453,10 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Mon Nov 02 2009 Paul Chitescu <paulc@voip.null.ro>
+- Added new modules to main package and qt4client
+- Fixed distro and revision variables
+
 * Fri Jun 20 2008 Paul Chitescu <paulc@voip.null.ro>
 - Option to remove H.323 subpackage
 - Added missing openssl subpackage

@@ -1,0 +1,24 @@
+; This file keeps the configuration of the openssl module
+; Each section, except for 'general' configures a server context
+
+[general]
+
+[server_context]
+; This section configures a SSL server context
+
+; enable: boolean: Enable or disable the context
+; Defaults to yes
+;enable=yes
+
+; domains: string: Comma separated list of domains the context will be used for
+; A subdomain wildcard can be specified for a given domain, e.g.
+;  *.null.ro will match any null.ro subdomains (including the 'null.ro' domain)
+;domains=
+
+; certificate: string: The name of the file containing the certificate for the context
+; This parameter is required
+;certificate=
+
+; key: string: Optional certificate key file name
+;key=
+

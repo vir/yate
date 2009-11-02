@@ -51,7 +51,7 @@ class JGSentStanza;                      // Sent stanza timeout info
  * This class holds a Jingle data payload description
  * @short A Jingle data payload
  */
-class YJINGLE_API JGRtpMedia : public GenObject
+class YJABBER_API JGRtpMedia : public GenObject
 {
 public:
     /**
@@ -59,21 +59,24 @@ public:
      * @param id The 'id' attribute
      * @param name The 'name' attribute
      * @param clockrate The 'clockrate' attribute
-     * @param channels The 'channels' attribute
-     * @param synonym The 'synonym' attribute
+     * @param synonym Application synonym for this payload
+     * @param channels Optional 'channels' attribute (the number of channels)
+     * @param pTime Optional "ptime" attribute (packet time)
+     * @param maxPTime Optional "maxptime" attribute (maximum packet time)
      */
     inline JGRtpMedia(const char* id, const char* name, const char* clockrate,
-	const char* channels, const char* synonym)
+	const char* synonym, const char* channels = 0,
+	const char* pTime = 0, const char* maxPTime = 0)
 	: m_params("")
-	{ set(id,name,clockrate,channels,synonym); }
+	{ set(id,name,clockrate,synonym,channels); }
 
     /**
      * Constructor. Fill this object from an XML element
      * @param xml The element to fill from
      */
-    inline JGRtpMedia(XMLElement* xml)
+    inline JGRtpMedia(XmlElement* xml)
 	: m_params("")
-	{ fromXML(xml); }
+	{ fromXml(xml); }
 
     /**
      * Copy constructor
@@ -81,23 +84,29 @@ public:
     inline JGRtpMedia(const JGRtpMedia& src)
 	: GenObject(),
 	  m_params(src.m_params)
-	{ set(src.m_id,src.m_name,src.m_clockrate,src.m_channels,src.m_synonym); }
+	{ set(src.m_id,src.m_name,src.m_clockrate,src.m_synonym,src.m_channels); }
 
     /**
      * Set the data
      * @param id The 'id' attribute
      * @param name The 'name' attribute
      * @param clockrate The 'clockrate' attribute
-     * @param channels The 'channels' attribute
-     * @param synonym The 'synonym' attribute
+     * @param synonym Application synonym for this payload
+     * @param channels Optional 'channels' attribute (the number of channels)
+     * @param pTime Optional "ptime" attribute (packet time)
+     * @param maxPTime Optional "maxptime" attribute (maximum packet time)
      */
     inline void set(const char* id, const char* name, const char* clockrate,
-	const char* channels, const char* synonym) {
+	const char* synonym = 0, const char* channels = 0,
+	const char* pTime = 0, const char* maxPTime = 0) {
 	    m_id = id;
 	    m_name = name;
 	    m_clockrate = clockrate;
-	    m_channels = channels;
 	    m_synonym = synonym;
+	    m_channels = channels;
+	    m_pTime = pTime;
+	    m_maxPTime = maxPTime;
+	    m_params.clearParams();
 	}
 
     /**
@@ -109,15 +118,22 @@ public:
 
     /**
      * Create a 'payload-type' element from this object
-     * @return Valid XMLElement pointer
+     * @return Valid XmlElement pointer
      */
-    XMLElement* toXML() const;
+    XmlElement* toXml() const;
 
     /**
      * Fill this object from a given element
      * @param xml The element
      */
-    void fromXML(XMLElement* xml);
+    void fromXml(XmlElement* xml);
+
+    /**
+     * Build a telephone-event media
+     * @return JGRtpMedia pointer
+     */
+    static inline JGRtpMedia* telEvent()
+	{ return new JGRtpMedia("106","telephone-event","8000",""); }
 
     /**
      * The numeric id of this payload
@@ -135,14 +151,24 @@ public:
     String m_clockrate;
 
     /**
+     * A synonym of this payload's name
+     */
+    String m_synonym;
+
+    /**
      * The number of channels
      */
     String m_channels;
 
     /**
-     * A synonym of this payload's name
+     * Packet time
      */
-    String m_synonym;
+    String m_pTime;
+
+    /**
+     * Maximum packet time
+     */
+    String m_maxPTime;
 
     /**
      * List of optional parameters
@@ -152,10 +178,10 @@ public:
 
 /**
  * This class holds a content description's crypto data.
- * The tag is kepti in the String component
+ * The tag is kept in the String component
  * @short Content crypto data
  */
-class YJINGLE_API JGCrypto : public String
+class YJABBER_API JGCrypto : public String
 {
 public:
     /**
@@ -175,20 +201,36 @@ public:
      * Constructor. Build this element from a received element
      * @param xml The received xml element
      */
-    inline JGCrypto(const XMLElement* xml)
-	{ fromXML(xml); }
+    inline JGCrypto(const XmlElement* xml)
+	{ fromXml(xml); }
 
     /**
      * Create a 'crypto' element from this object
-     * @return Valid XMLElement pointer
+     * @return Valid XmlElement pointer
      */
-    XMLElement* toXML() const;
+    XmlElement* toXml() const;
 
     /**
      * Build this element from a received element
      * @param xml The received xml element
      */
-    void fromXML(const XMLElement* xml);
+    void fromXml(const XmlElement* xml);
+
+    /**
+     * Build an 'encryption' element from a list of crypto objects
+     * @param list The list of crypto objects
+     * @param required True if encryption is required
+     * @return XmlElement pointer or 0 if the list is empty
+     */
+    static XmlElement* buildEncryption(const ObjList& list, bool required);
+
+    /**
+     * Decode an 'encryption' element. Clear the list before starting
+     * @param xml The element to decode
+     * @param list The list to be filled with crypto objects
+     * @param required Variable to be filled with the value of the 'required' attribute
+     */
+    static void decodeEncryption(const XmlElement* xml, ObjList& list, bool& required);
 
     String m_suite;
     String m_keyParams;
@@ -199,7 +241,7 @@ public:
  * Hold a list of RTP data payloads
  * @short A List of Jingle RTP data payloads
  */
-class YJINGLE_API JGRtpMediaList : public ObjList
+class YJABBER_API JGRtpMediaList : public ObjList
 {
 public:
     /**
@@ -214,11 +256,17 @@ public:
     /**
      * Constructor
      * @param m Media type as enumeration
-     * @param cryptoMandatory True to require media encryption
+     * @param cryptoRequired True to require media encryption
      */
-    inline JGRtpMediaList(Media m = MediaMissing, bool cryptoMandatory = false)
-	: m_media(m), m_cryptoMandatory(cryptoMandatory), m_ready(false)
+    inline JGRtpMediaList(Media m = MediaMissing, bool cryptoRequired = false)
+	: m_media(m), m_bandwidth(0), m_cryptoRequired(cryptoRequired), m_ready(false)
 	{}
+
+    /**
+     * Destructor
+     */
+    inline ~JGRtpMediaList()
+	{ TelEngine::destruct(m_bandwidth); }
 
     /**
      * Get the media type of the payloads owned by this list
@@ -229,15 +277,23 @@ public:
  
     /**
      * Append a new data payload
-     * @param id The payload's id
-     * @param name The payload's name
-     * @param clockrate The payload's clockrate
-     * @param bitrate The payload's bitrate
-     * @param synonym The payload's synonym
+     * @param id The 'id' attribute
+     * @param name The 'name' attribute
+     * @param clockrate The 'clockrate' attribute
+     * @param synonym Optional application synonym for the payload
+     * @param channels Optional 'channels' attribute (the number of channels)
+     * @param pTime Optional "ptime" attribute (packet time)
+     * @param maxPTime Optional "maxptime" attribute (maximum packet time)
      */
     inline void add(const char* id, const char* name, const char* clockrate,
-	const char* bitrate, const char* synonym)
-	{ append(new JGRtpMedia(id,name,clockrate,bitrate,synonym)); }
+	const char* synonym = 0, const char* channels = 0,
+	const char* pTime = 0, const char* maxPTime = 0)
+	{ append(new JGRtpMedia(id,name,clockrate,synonym,channels,pTime,maxPTime)); }
+
+    /**
+     * Reset the list and data
+     */
+    void reset();
 
     /**
      * Find a data payload by its id
@@ -256,15 +312,15 @@ public:
     /**
      * Create a 'description' element and add payload children to it
      * @param telEvent True to append a telephone event data payload
-     * @return Valid XMLElement pointer
+     * @return Valid XmlElement pointer
      */
-    XMLElement* toXML(bool telEvent = true) const;
+    XmlElement* toXml(bool telEvent = true) const;
 
     /**
      * Fill this list from an XML element's children. Clear before attempting to fill
      * @param xml The source XML element
      */
-    void fromXML(XMLElement* xml);
+    void fromXml(XmlElement* xml);
 
     /**
      * Create a list from data payloads
@@ -278,7 +334,7 @@ public:
     /**
      * The list of media type names
      */
-    static TokenDict s_media[];
+    static const TokenDict s_media[];
 
     /**
      * The media type
@@ -286,9 +342,20 @@ public:
     Media m_media;
 
     /**
+     * Synchronization source
+     */
+    String m_ssrc;
+
+    /**
+     * Optional SDP media bandwith. The name of the string keeps the type ('bwtype')
+     * and its value keeps the actual bandwith
+     */
+    NamedString* m_bandwidth;
+
+    /**
      * Crypto (SRTP) params
      */
-    bool m_cryptoMandatory;
+    bool m_cryptoRequired;
     ObjList m_cryptoLocal;
     ObjList m_cryptoRemote;
 
@@ -321,22 +388,22 @@ public:
      * @param xml Received xml element
      * @param container The transport container
      */
-    inline JGRtpCandidate(XMLElement* xml, const JGRtpCandidates& container)
+    inline JGRtpCandidate(XmlElement* xml, const JGRtpCandidates& container)
 	{ fromXml(xml,container); }
 
     /**
      * Create a 'candidate' element from this object using local address/port
      * @param container The transport container
-     * @return Valid XMLElement pointer if type is a known one
+     * @return Valid XmlElement pointer if type is a known one
      */
-    XMLElement* toXml(const JGRtpCandidates& container) const;
+    XmlElement* toXml(const JGRtpCandidates& container) const;
 
     /**
      * Fill this object from a candidate element using remote address/port
      * @param xml Received xml element
      * @param container The transport container
      */
-    void fromXml(XMLElement* xml, const JGRtpCandidates& container);
+    void fromXml(XmlElement* xml, const JGRtpCandidates& container);
 
     String m_address;
     String m_port;
@@ -353,7 +420,7 @@ public:
  * This class holds a list of jingle RTP transport candidates
  * @short A list of RTP transport candidates
  */
-class YJINGLE_API JGRtpCandidates : public ObjList
+class YJABBER_API JGRtpCandidates : public ObjList
 {
 public:
     /**
@@ -407,15 +474,15 @@ public:
      * Create a 'transport' element from this object. Add candidates
      * @param addCandidates True to add the candidate children
      * @param addAuth RtpIceUdp only: add auth data
-     * @return Valid XMLElement pointer
+     * @return Valid XmlElement pointer
      */
-    XMLElement* toXML(bool addCandidates, bool addAuth) const;
+    XmlElement* toXml(bool addCandidates, bool addAuth) const;
 
     /**
      * Fill this object from a given element
      * @param element The element
      */
-    void fromXML(XMLElement* element);
+    void fromXml(XmlElement* element);
 
     /**
      * Generate a random password or username to be used with ICE-UDP transport
@@ -444,7 +511,7 @@ public:
     /**
      * The list of type names
      */
-    static TokenDict s_type[];
+    static const TokenDict s_type[];
 
     Type m_type;
     String m_password;
@@ -457,7 +524,7 @@ public:
  *  it can build an xml element from itself
  * @short A Jingle session content
  */
-class YJINGLE_API JGSessionContent : public RefObject
+class YJABBER_API JGSessionContent : public RefObject
 {
 public:
     /**
@@ -565,9 +632,9 @@ public:
      * @param addTrans True to add the transport child
      * @param addCandidates True to add the transport candidate children
      * @param addAuth RtpIceUdp only: add auth data
-     * @return Valid XMLElement pointer
+     * @return Valid XmlElement pointer
      */
-    XMLElement* toXml(bool minimum, bool addDesc,
+    XmlElement* toXml(bool minimum, bool addDesc,
 	bool addTrans, bool addCandidates, bool addAuth) const;
 
     /**
@@ -577,18 +644,18 @@ public:
      * @param error Error text to be sent on failure
      * @return Valid JGSessionContent pointer on success
      */
-    static JGSessionContent* fromXml(XMLElement* xml, XMPPError::Type& err,
+    static JGSessionContent* fromXml(XmlElement* xml, XMPPError::Type& err,
 	String& error);
 
     /**
      * The list containing the text values for Senders enumeration
      */
-    static TokenDict s_senders[];
+    static const TokenDict s_senders[];
 
     /**
      * The list containing the text values for Creator enumeration
      */
-    static TokenDict s_creator[];
+    static const TokenDict s_creator[];
 
     /**
      * The RTP media description if used
@@ -650,33 +717,33 @@ public:
 
     /**
      * Build an XML element from this stream host
-     * @return Valid XMLElement pointer
+     * @return Valid XmlElement pointer
      */
-    XMLElement* toXml();
+    XmlElement* toXml();
 
     /**
      * Build a stream host from an XML element
      * @param xml The element to build from
      * @return Valid JGStreamHost pointer or 0 on error
      */
-    static JGStreamHost* fromXml(XMLElement* xml);
+    static JGStreamHost* fromXml(XmlElement* xml);
 
     /**
      * Build a query XML element carrying a list of stream hosts
      * @param hosts List of JGStreamHost objects
      * @param sid The query element's sid attribute
      * @param mode The query element's mode attribute
-     * @return Valid XMLElement pointer
+     * @return Valid XmlElement pointer
      */
-    static XMLElement* buildHosts(const ObjList& hosts, const char* sid,
+    static XmlElement* buildHosts(const ObjList& hosts, const char* sid,
 	const char* mode = "tcp");
 
     /**
      * Build a query XML element with a streamhost-used child
      * @param jid The jid of the stream host used
-     * @return Valid XMLElement pointer
+     * @return Valid XmlElement pointer
      */
-    static XMLElement* buildRsp(const char* jid);
+    static XmlElement* buildRsp(const char* jid);
 
     String m_address;
     int m_port;
@@ -688,7 +755,7 @@ public:
  * This class is a base class for all specific jingle sessions
  * @short A basic Jingle session
  */
-class YJINGLE_API JGSession : public RefObject, public Mutex
+class YJABBER_API JGSession : public RefObject, public Mutex
 {
     friend class JGEvent;
     friend class JGEngine;
@@ -703,21 +770,43 @@ public:
     };
 
     /**
-     * Jingle defined termination reasons
+     * Jingle defined reasons and errors
      */
     enum Reason {
-	ReasonBusy,                      // <busy/>
-	ReasonDecline,                   // <decline/>
-	ReasonConn,                      // <connectivity-error/>
-	ReasonMedia,                     // <media-error/>
-	ReasonTransport,                 // <unsupported-transports/>
-	ReasonNoError,                   // <no-error/>
-	ReasonOk,                        // <success/>
-	ReasonNoApp,                     // <unsupported-applications/>
-	ReasonAltSess,                   // <alternative-session/>
-	ReasonUnknown,                   // <general-error/>
-	ReasonTransfer,                  // <transferred>
-	ReasonNone                       // None of the above
+	ReasonUnknown = 0,
+	// Session termination reason
+	ReasonOk,                        // success
+	ReasonBusy,                      // busy
+	ReasonDecline,                   // decline
+	ReasonCancel,                    // cancel
+	ReasonExpired,                   // expired
+	ReasonConn,                      // connectivity-error
+	ReasonFailApp,                   // failed-application
+	ReasonFailTransport,             // failed-transport
+	ReasonGone,                      // gone
+	ReasonParams,                    // incompatible-parameters
+	ReasonMedia,                     // media-error
+	ReasonTransport,                 // unsupported-transports
+	ReasonApp,                       // unsupported-applications
+	ReasonSecurity,                  // security-error
+	ReasonTimeout,                   // timeout
+	ReasonGeneral,                   // general-error
+	ReasonAltSess,                   // alternative-session
+	// Session transfer (XEP 0251)
+	Transferred,                     // transferred
+	// RTP session errors (XEP 0167)
+	CryptoRequired,                  // crypto-required
+	InvalidCrypto,                   // invalid-crypto
+    };
+
+    /**
+     * RTP session info (XEP 0167)
+     */
+    enum RtpInfo {
+	RtpActive,                       // active
+	RtpHold,                         // hold
+	RtpMute,                         // mute
+	RtpRinging,                      // ringing
     };
 
     /**
@@ -738,17 +827,20 @@ public:
 	ActAccept,                       // session-accept
 	ActInitiate,                     // session-initiate
 	ActTerminate,                    // session-terminate
+	ActReject,                       // reject
 	ActInfo,                         // session-info
 	ActTransportInfo,                // transport-info
 	ActTransportAccept,              // transport-accept
 	ActTransportReject,              // transport-reject
 	ActTransportReplace,             // transport-replace
+	ActCandidates,                   // candidates
 	ActContentAccept,                // content-accept
 	ActContentAdd,                   // content-add
 	ActContentModify,                // content-modify
 	ActContentReject,                // content-reject
 	ActContentRemove,                // content-remove
 	ActContentInfo,                  // content-info
+	ActDescriptionInfo,              // description-info
 	ActTransfer,                     // session-info: Transfer
 	ActRinging,                      // session-info: Ringing
 	ActTrying,                       // session-info: Trying
@@ -774,6 +866,13 @@ public:
 	{ return m_version; }
 
     /**
+     * Retrieve the engine owning this session
+     * @return The engine owning this session
+     */
+    inline JGEngine* engine() const
+	{ return m_engine; }
+
+    /**
      * Get the session direction
      * @return True if it is an outgoing session
      */
@@ -792,14 +891,14 @@ public:
      * @return The local peer's JID
      */
     inline const JabberID& local() const
-	{ return m_localJID; }
+	{ return m_local; }
 
     /**
      * Get the remote peer's JID
      * @return The remote peer's JID
      */
     inline const JabberID& remote() const
-	{ return m_remoteJID; }
+	{ return m_remote; }
 
     /**
      * Get the session state.
@@ -807,13 +906,6 @@ public:
      */
     inline State state() const
 	{ return m_state; }
-
-    /**
-     * Get the stream this session is bound to
-     * @return The stream this session is bound to
-     */
-    inline const JBStream* stream() const
-	{ return m_stream; }
 
     /**
      * Get the arbitrary user data of this session
@@ -830,40 +922,41 @@ public:
 	{ m_private = userdata; }
 
     /**
-     * Check if a given XML element is valid jingle one
-     * @param xml Element to check
-     * @return The given element if it's a valid jingle element, 0 otherwise
-     */
-    virtual XMLElement* checkJingle(XMLElement* xml)
-	{ return 0; }
-
-    /**
      * Get an action (jingle element type) from a jingle element
      * @param xml Element to check
      * @return The found action, ActCount if not found or unknown
      */
-    inline Action getAction(XMLElement* xml)
-	{ return xml ? lookupAction(xml->getAttribute("type"),m_version) : ActCount; }
+    inline Action getAction(XmlElement* xml)
+	{ return xml ? lookupAction(xml->attribute("type"),m_version) : ActCount; }
 
     /**
-     * Ask this session to accept an event
-     * @param event The event to accept
-     * @param sid The session id if this is a request
-     * @return True if accepted (the event was enqueued), false if not
+     * Ask this session to accept an incoming xml 'iq' element
+     * @param type Iq type as enumeration
+     * @param from The sender
+     * @param to The recipient
+     * @param id The session id of this is a request (set/get) or the stanza id
+     * @param xml The received element
+     * @return True if accepted (the element was enqueued), false if not
      */
-    bool acceptEvent(JBEvent* event, const String& sid = String::empty());
+    bool acceptIq(XMPPUtils::IqType type, const JabberID& from, const JabberID& to,
+	const String& id, XmlElement* xml);
 
     /**
-     * Confirm a received element. If the error is NoError a result stanza will be sent.
-     *  Otherwise, an error stanza will be created and sent and the received element is
-     *  consumed (attached to the sent error stanza)
+     * Confirm (send result) a received element
      * @param xml The element to confirm
+     * @return False if send failed or element is 0
+     */
+    bool confirmResult(XmlElement* xml);
+
+    /**
+     * Confirm (send error) a received element
+     * @param xml The element to confirm (will be consumed and zeroed)
      * @param error The error condition
      * @param text Optional text to add to the error element
      * @param type Error type
      * @return False if send failed or element is 0
      */
-    bool confirm(XMLElement* xml, XMPPError::Type error = XMPPError::NoError,
+    bool confirmError(XmlElement*& xml, XMPPError::Type error,
 	const char* text = 0, XMPPError::ErrorType type = XMPPError::TypeModify);
 
     /**
@@ -879,24 +972,44 @@ public:
     /**
      * Close a Pending or Active session
      * This method is thread safe
-     * @param reason Termination reason
-     * @param msg Optional termination message
+     * @param reason Optional termination reason
      * @return False if send failed
      */
-    virtual bool hangup(int reason, const char* msg = 0);
+    virtual bool hangup(XmlElement* reason = 0);
 
     /**
-     * Create a 'hold' child to be added to a session-info element
-     * @return Valid XMLElement pointer or 0
+     * Create a RTP info child to be added to a session-info element
+     * @param info The informational tag as enumeration
+     * @return Valid XmlElement pointer or 0 if not supported
      */
-    virtual XMLElement* createHoldXml()
+    virtual XmlElement* createRtpInfoXml(RtpInfo info)
 	{ return 0; }
 
     /**
-     * Create an 'active' child to be added to a session-info element
-     * @return Valid XMLElement pointer or 0
+     * Create a termination reason element
+     * @param reason The reason code
+     * @param text Optional reason text child
+     * @param child Optional additional reason child
+     * @return Valid XmlElement pointer or 0 if not supported
      */
-    virtual XMLElement* createActiveXml()
+    virtual XmlElement* createReason(int reason, const char* text = 0,
+	XmlElement* child = 0)
+	{ return 0; }
+
+    /**
+     * Create a transfer reason element
+     * @param reason The reason code
+     * @return Valid XmlElement pointer or 0 if not supported
+     */
+    virtual XmlElement* createTransferReason(int reason)
+	{ return 0; }
+
+    /**
+     * Create a RTP session reason element
+     * @param reason The reason code
+     * @return Valid XmlElement pointer or 0 if not supported
+     */
+    virtual XmlElement* createRtpSessionReason(int reason)
 	{ return 0; }
 
     /**
@@ -960,11 +1073,11 @@ public:
     /**
      * Send a session info element to the remote peer.
      * This method is thread safe
-     * @param xml The XMLElement carried by the session info element
+     * @param xml The XmlElement carried by the session info element
      * @param stanzaId Optional string to be filled with sent stanza id (used to track the response)
      * @return False on failure
      */
-    bool sendInfo(XMLElement* xml, String* stanzaId = 0);
+    bool sendInfo(XmlElement* xml, String* stanzaId = 0);
 
     /**
      * Send a dtmf string to remote peer. If the string's length is greater then 1, each
@@ -975,17 +1088,6 @@ public:
      * @return False if send failed
      */
     bool sendDtmf(const char* dtmf, unsigned int msDuration = 0, String* stanzaId = 0);
-
-    /**
-     * Send a message to the remote peer.
-     * This method is thread safe
-     * @param msg The message to send
-     * @return False on socket error
-     */
-    inline bool sendMessage(const char* msg) {
-	    return sendStanza(JBMessage::createMessage(JBMessage::Chat,
-		m_localJID,m_remoteJID,0,msg),0,false);
-	}
 
     /**
      * Check if the remote party supports a given feature
@@ -999,9 +1101,9 @@ public:
      * @param transferTo The JID to transfer to
      * @param transferFrom The transferror's JID
      * @param sid Optional session id used for attended transfer (empty for unattended transfer)
-     * @return Valid XMLElement pointer
+     * @return Valid XmlElement pointer
      */
-    static XMLElement* buildTransfer(const String& transferTo, const String& transferFrom,
+    static XmlElement* buildTransfer(const String& transferTo, const String& transferFrom,
 	const String& sid = String::empty());
 
      /**
@@ -1067,50 +1169,55 @@ public:
     /**
      * Session version names
      */
-    static TokenDict s_versions[];
+    static const TokenDict s_versions[];
 
     /**
-     * Termination reasons
+     * Termination reasons and errors
      */
-    static TokenDict s_reasons[];
+    static const TokenDict s_reasons[];
+
+    /**
+     * RTP session info (XEP 0167)
+     */
+    static const TokenDict s_rtpInfo[];
 
     /**
      * Session state names
      */
-    static TokenDict s_states[];
+    static const TokenDict s_states[];
 
     /**
      * Action names for version Version0
      */
-    static TokenDict s_actions0[];
+    static const TokenDict s_actions0[];
 
     /**
      * Action names for version Version1
      */
-    static TokenDict s_actions1[];
+    static const TokenDict s_actions1[];
 
 protected:
     /**
      * Constructor. Create an outgoing session
      * @param ver The session version
-     * @param engine The engine that owns this session
-     * @param stream The stream this session is bound to
-     * @param callerJID The caller's full JID
-     * @param calledJID The called party's full JID
-     * @param msg Optional message to be sent before session initiate
+     * @param engine The engine owning this session
+     * @param caller The caller's full JID
+     * @param called The called party's full JID
      */
-    JGSession(Version ver, JGEngine* engine, JBStream* stream,
-	const String& callerJID, const String& calledJID,
-	const char* msg = 0);
+    JGSession(Version ver, JGEngine* engine,
+	const JabberID& caller, const JabberID& called);
 
     /**
      * Constructor. Create an incoming session.
      * @param ver The session version
-     * @param engine The engine that owns this session
-     * @param event A valid Jabber Jingle event with action session initiate
+     * @param engine The engine owning this session
+     * @param caller The caller's full JID
+     * @param called The called party's full JID
+     * @param xml A valid Jabber Jingle xml with action session initiate
      * @param id Session id
      */
-    JGSession(Version ver, JGEngine* engine, JBEvent* event, const String& id);
+    JGSession(Version ver, JGEngine* engine, const JabberID& caller,
+	const JabberID& called, XmlElement* xml, const String& id);
 
     /**
      * Build and send the initial message on an outgoing session
@@ -1119,7 +1226,7 @@ protected:
      * @param subject Optional session subject
      * @return True on success
      */
-    virtual bool initiate(const ObjList& contents, XMLElement* extra,
+    virtual bool initiate(const ObjList& contents, XmlElement* extra,
 	const char* subject = 0) = 0;
 
     /**
@@ -1136,13 +1243,6 @@ protected:
     virtual void destroyed();
 
     /**
-     * Enqueue a Jabber engine event.
-     * This method is thread safe
-     * @param event The event event to process
-     */
-    void enqueue(JBEvent* event);
-
-    /**
      * Send a stanza to the remote peer
      * @param stanza The stanza to send
      * @param stanzaId Optional string to be filled with sent stanza id (used to track the response)
@@ -1150,7 +1250,7 @@ protected:
      * @param ping True if the stanza is a ping one
      * @return True on success
      */
-    bool sendStanza(XMLElement* stanza, String* stanzaId = 0, bool confirmation = true,
+    bool sendStanza(XmlElement* stanza, String* stanzaId = 0, bool confirmation = true,
 	bool ping = false);
 
     /**
@@ -1161,11 +1261,12 @@ protected:
     bool sendPing(u_int64_t msecNow);
 
     /**
-     * Decode a valid jingle set event. Set the event's data on success
-     * @param jbev The event to decode
+     * Decode a jingle element
+     * @param xml The element to decode
+     * @param child The element's first child
      * @return JGEvent pointer or 0
      */
-    virtual JGEvent* decodeJingle(JBEvent* jbev) = 0;
+    virtual JGEvent* decodeJingle(XmlElement*& xml, XmlElement* child) = 0;
 
     /**
      * Create an 'iq' of type 'set' with a 'jingle' child
@@ -1173,38 +1274,43 @@ protected:
      * @param element1 Optional child element
      * @param element2 Optional child element
      * @param element3 Optional child element
-     * @return Valid XMLElement pointer
+     * @return Valid XmlElement pointer
      */
-    virtual XMLElement* createJingle(Action action, XMLElement* element1 = 0,
-	XMLElement* element2 = 0, XMLElement* element3 = 0) = 0;
+    virtual XmlElement* createJingle(Action action, XmlElement* element1 = 0,
+	XmlElement* element2 = 0, XmlElement* element3 = 0) = 0;
 
     /**
      * Create a dtmf XML element
      * @param dtmf The dtmf string
      * @param msDuration The tone duration in miliseconds. Ignored if 0
-     * @return Valid XMLElement pointer or 0
+     * @return Valid XmlElement pointer or 0
      */
-    virtual XMLElement* createDtmf(const char* dtmf, unsigned int msDuration = 0) = 0;
+    virtual XmlElement* createDtmf(const char* dtmf, unsigned int msDuration = 0) = 0;
 
     /**
-     * Method called in getEvent() to process a last event set from a
-     *  jingle set jabber event
-     * @param ev The event to process
+     * Method called in getEvent() to process a last event decoded from a
+     *  received jingle element
+     * @param ev The event to process (will be consumed and zeroed)
+     * @return JGEvent pointer or 0
      */
-    virtual void processJingleSetLastEvent(JBEvent& ev);
+    virtual JGEvent* processJingleSetEvent(JGEvent*& ev);
 
     /**
      * Method called in getEvent() to process a jabber event carrying a response
-     * @param ev The event to process
-     * @return False to stop further processing
+     * @param result True if the element is a result, false if it's an error response
+     * @param xml Xml element to process
+     * @return JGEvent pointer or 0
      */
-    virtual bool processJabberIqResponse(JBEvent& ev);
+    virtual JGEvent* processJabberIqResponse(bool result, XmlElement*& xml);
 
     /**
-     * Method called in getEvent() to process a generic jabber iq event
-     * @param ev The event to process
+     * Decode a file transfer element
+     * @param set True if the xml is an iq 'set', false if type is 'get'
+     * @param xml The element to decode
+     * @param child The element's first child
+     * @return JGEvent pointer or 0
      */
-    virtual void processJabberIqEvent(JBEvent& ev);
+    virtual JGEvent* processFileTransfer(bool set, XmlElement*& xml, XmlElement* child);
 
     /**
      * Terminate notification from an event. Reset the last generated event
@@ -1219,23 +1325,17 @@ protected:
     void changeState(State newState);
 
     Version m_version;                   // Session version
-    // State info
     State m_state;                       // Session state
     u_int64_t m_timeToPing;              // Time to send ping (empty session-info)
-    // Links
     JGEngine* m_engine;                  // The engine that owns this session
-    JBStream* m_stream;                  // The stream this session is bound to
-    // Session info
     bool m_outgoing;                     // Session direction
     String m_sid;                        // Session id
-    JabberID m_localJID;                 // Local peer's JID
-    JabberID m_remoteJID;                // Remote peer's JID
-    // Session data
-    ObjList m_events;                    // Incoming events from Jabber engine
+    JabberID m_local;                    // Local peer's JID
+    JabberID m_remote;                   // Remote peer's JID
+    XmlFragment m_queue;                 // Incoming, unprocessed, xml elements
     JGEvent* m_lastEvent;                // Last generated event
     bool m_recvTerminate;                // Flag indicating whether session-terminate was received
     void* m_private;                     // Arbitrary user data
-    // Sent stanzas id generation
     String m_localSid;                   // Local session id (used to generate element's id)
     u_int32_t m_stanzaId;                // Sent stanza id counter
     ObjList m_sentStanza;                // Sent stanzas' id
@@ -1249,7 +1349,7 @@ private:
  * A session implementing the old jingle protocol
  * @short The version 0 of a jingle session
  */
-class YJINGLE_API JGSession0 : public JGSession
+class YJABBER_API JGSession0 : public JGSession
 {
     friend class JGEvent;
     friend class JGEngine;
@@ -1258,13 +1358,6 @@ public:
      * Destructor
      */
     virtual ~JGSession0();
-
-    /**
-     * Check if a given XML element is valid jingle one
-     * @param xml Element to check
-     * @return The given element if it's a valid jingle element, 0 otherwise
-     */
-    virtual XMLElement* checkJingle(XMLElement* xml);
 
     /**
      * Accept a Pending incoming session.
@@ -1278,22 +1371,22 @@ public:
 protected:
     /**
      * Constructor. Create an outgoing session
-     * @param engine The engine that owns this session
-     * @param stream The stream this session is bound to
-     * @param callerJID The caller's full JID
-     * @param calledJID The called party's full JID
-     * @param msg Optional message to be sent before session initiate
+     * @param engine The engine owning this session
+     * @param caller The caller's full JID
+     * @param called The called party's full JID
      */
-    JGSession0(JGEngine* engine, JBStream* stream,
-	const String& callerJID, const String& calledJID, const char* msg = 0);
+    JGSession0(JGEngine* engine, const JabberID& caller, const JabberID& called);
 
     /**
      * Constructor. Create an incoming session.
-     * @param engine The engine that owns this session
-     * @param event A valid Jabber Jingle event with action session initiate
+     * @param engine The engine owning this session
+     * @param caller The caller's full JID
+     * @param called The called party's full JID
+     * @param xml A valid Jabber Jingle xml with action session initiate
      * @param id Session id
      */
-    JGSession0(JGEngine* engine, JBEvent* event, const String& id);
+    JGSession0(JGEngine* engine, const JabberID& caller, const JabberID& called,
+	XmlElement* xml, const String& id);
 
     /**
      * Build and send the initial message on an outgoing session
@@ -1302,7 +1395,7 @@ protected:
      * @param subject Optional session subject
      * @return True on success
      */
-    virtual bool initiate(const ObjList& contents, XMLElement* extra,
+    virtual bool initiate(const ObjList& contents, XmlElement* extra,
 	const char* subject = 0);
 
     /**
@@ -1317,11 +1410,12 @@ protected:
     virtual bool sendContent(Action action, const ObjList& contents, String* stanzaId = 0);
 
     /**
-     * Decode a valid jingle set event. Set the event's data on success
-     * @param jbev The event to decode
+     * Decode a jingle element
+     * @param xml The element to decode
+     * @param child The element's first child
      * @return JGEvent pointer or 0
      */
-    virtual JGEvent* decodeJingle(JBEvent* jbev);
+    virtual JGEvent* decodeJingle(XmlElement*& xml, XmlElement* child);
 
     /**
      * Create an 'iq' of type 'set' with a 'jingle' child
@@ -1329,28 +1423,29 @@ protected:
      * @param element1 Optional child element
      * @param element2 Optional child element
      * @param element3 Optional child element
-     * @return Valid XMLElement pointer
+     * @return Valid XmlElement pointer
      */
-    virtual XMLElement* createJingle(Action action, XMLElement* element1 = 0,
-	XMLElement* element2 = 0, XMLElement* element3 = 0);
+    virtual XmlElement* createJingle(Action action, XmlElement* element1 = 0,
+	XmlElement* element2 = 0, XmlElement* element3 = 0);
 
     /**
      * Create a dtmf XML element
      * @param dtmf The dtmf string
      * @param msDuration The tone duration in miliseconds. Ignored if 0
-     * @return Valid XMLElement pointer or 0
+     * @return Valid XmlElement pointer or 0
      */
-    virtual XMLElement* createDtmf(const char* dtmf, unsigned int msDuration = 0);
+    virtual XmlElement* createDtmf(const char* dtmf, unsigned int msDuration = 0);
 
 protected:
     String m_sessContentName;            // Content name advertised to upper layer
+    Action m_candidatesAction;           // Use candidates/transport-info for candidates
 };
 
 /**
  * A session implementing the Jingle protocol including session transfer and file transfer
  * @short The version 1 of a jingle session
  */
-class YJINGLE_API JGSession1 : public JGSession
+class YJABBER_API JGSession1 : public JGSession
 {
     friend class JGEvent;
     friend class JGEngine;
@@ -1359,13 +1454,6 @@ public:
      * Destructor
      */
     virtual ~JGSession1();
-
-    /**
-     * Check if a given XML element is valid jingle one
-     * @param xml Element to check
-     * @return The given element if it's a valid jingle element, 0 otherwise
-     */
-    virtual XMLElement* checkJingle(XMLElement* xml);
 
     /**
      * Accept a Pending incoming session.
@@ -1377,16 +1465,35 @@ public:
     virtual bool accept(const ObjList& contents, String* stanzaId = 0);
 
     /**
-     * Create a 'hold' child to be added to a session-info element
-     * @return Valid XMLElement pointer or 0
+     * Create a RTP info child to be added to a session-info element
+     * @param info The informational tag as enumeration
+     * @return Valid XmlElement pointer or 0 if not supported
      */
-    virtual XMLElement* createHoldXml();
+    virtual XmlElement* createRtpInfoXml(RtpInfo info);
 
     /**
-     * Create an 'active' child to be added to a session-info element
-     * @return Valid XMLElement pointer or 0
+     * Create a termination reason element
+     * @param reason The reason code
+     * @param text Optional reason text child
+     * @param child Optional additional reason child
+     * @return Valid XmlElement pointer or 0 if not supported
      */
-    virtual XMLElement* createActiveXml();
+    virtual XmlElement* createReason(int reason, const char* text = 0,
+	XmlElement* child = 0);
+
+    /**
+     * Create a transfer reason element
+     * @param reason The reason code
+     * @return Valid XmlElement pointer or 0 if not supported
+     */
+    virtual XmlElement* createTransferReason(int reason);
+
+    /**
+     * Create a RTP session reason element
+     * @param reason The reason code
+     * @return Valid XmlElement pointer or 0 if not supported
+     */
+    virtual XmlElement* createRtpSessionReason(int reason);
 
     /**
      * Send a stanza with session content(s)
@@ -1422,22 +1529,22 @@ public:
 protected:
     /**
      * Constructor. Create an outgoing session
-     * @param engine The engine that owns this session
-     * @param stream The stream this session is bound to
-     * @param callerJID The caller's full JID
-     * @param calledJID The called party's full JID
-     * @param msg Optional message to be sent before session initiate
+     * @param engine The engine owning this session
+     * @param caller The caller's full JID
+     * @param called The called party's full JID
      */
-    JGSession1(JGEngine* engine, JBStream* stream,
-	const String& callerJID, const String& calledJID, const char* msg = 0);
+    JGSession1(JGEngine* engine, const JabberID& caller, const JabberID& called);
 
     /**
      * Constructor. Create an incoming session.
-     * @param engine The engine that owns this session
-     * @param event A valid Jabber Jingle event with action session initiate
+     * @param engine The engine owning this session
+     * @param caller The caller's full JID
+     * @param called The called party's full JID
+     * @param xml A valid Jabber Jingle xml with action session initiate
      * @param id Session id
      */
-    JGSession1(JGEngine* engine, JBEvent* event, const String& id);
+    JGSession1(JGEngine* engine, const JabberID& caller, const JabberID& called,
+	XmlElement* xml, const String& id);
 
     /**
      * Build and send the initial message on an outgoing session
@@ -1446,15 +1553,16 @@ protected:
      * @param subject Optional session subject
      * @return True on success
      */
-    virtual bool initiate(const ObjList& contents, XMLElement* extra,
+    virtual bool initiate(const ObjList& contents, XmlElement* extra,
 	const char* subject = 0);
 
     /**
-     * Decode a valid jingle set event. Set the event's data on success
-     * @param jbev The event to decode
+     * Decode a jingle element
+     * @param xml The element to decode
+     * @param child The element's first child
      * @return JGEvent pointer or 0
      */
-    virtual JGEvent* decodeJingle(JBEvent* jbev);
+    virtual JGEvent* decodeJingle(XmlElement*& xml, XmlElement* child);
 
     /**
      * Create an 'iq' of type 'set' with a 'jingle' child
@@ -1462,23 +1570,27 @@ protected:
      * @param element1 Optional child element
      * @param element2 Optional child element
      * @param element3 Optional child element
-     * @return Valid XMLElement pointer
+     * @return Valid XmlElement pointer
      */
-    virtual XMLElement* createJingle(Action action, XMLElement* element1 = 0,
-	XMLElement* element2 = 0, XMLElement* element3 = 0);
+    virtual XmlElement* createJingle(Action action, XmlElement* element1 = 0,
+	XmlElement* element2 = 0, XmlElement* element3 = 0);
 
     /**
      * Create a dtmf XML element
      * @param dtmf The dtmf string
      * @param msDuration The tone duration in miliseconds. Ignored if 0
-     * @return Valid XMLElement pointer or 0
+     * @return Valid XmlElement pointer or 0
      */
-    virtual XMLElement* createDtmf(const char* dtmf, unsigned int msDuration = 0);
+    virtual XmlElement* createDtmf(const char* dtmf, unsigned int msDuration = 0);
 
     /**
-     * @param ev The event to process
+     * Decode a file transfer element
+     * @param set True if the xml is an iq 'set', false if type is 'get'
+     * @param xml The element to decode
+     * @param child The element's first child
+     * @return JGEvent pointer or 0
      */
-    virtual void processJabberIqEvent(JBEvent& ev);
+    virtual JGEvent* processFileTransfer(bool set, XmlElement*& xml, XmlElement* child);
 
 };
 
@@ -1486,7 +1598,7 @@ protected:
  * This class holds an event generated by a Jingle session
  * @short A Jingle event
  */
-class YJINGLE_API JGEvent
+class YJABBER_API JGEvent
 {
     friend class JGSession;
     friend class JGSession0;
@@ -1499,7 +1611,6 @@ public:
 	Jingle,                          //
 	ResultOk,                        // Response for a sent stanza (iq with type=result)
 	ResultError,                     // Response for a sent stanza (iq with type=error)
-	ResultWriteFail,                 // Response for a sent stanza (failed to send stanza)
 	ResultTimeout,                   // Response for a sent stanza (stanza timeout)
 	// Final
 	Terminated,                      // m_element is the element that caused the termination
@@ -1537,7 +1648,7 @@ public:
      * Get the XML element that generated this event
      * @return The XML element that generated this event
      */
-    inline XMLElement* element() const
+    inline XmlElement* element() const
 	{ return m_element; }
 
     /**
@@ -1545,7 +1656,7 @@ public:
      * Don't delete it after use: it is owned by the event
      * @return The Jingle child of the XML element carried by the event
      */
-    inline XMLElement* jingle() const
+    inline XmlElement* jingle() const
 	{ return m_jingle; }
 
     /**
@@ -1587,10 +1698,9 @@ public:
      * Get the XML element that generated this event and set it to 0
      * @return The XML element that generated this event
      */
-    inline XMLElement* releaseXML() {
-	    TelEngine::destruct(m_jingle);
-	    XMLElement* tmp = m_element;
-	    m_element = 0;
+    inline XmlElement* releaseXml() {
+	    XmlElement* tmp = m_element;
+	    m_jingle = m_element = 0;
 	    return tmp;
 	 }
 
@@ -1613,8 +1723,9 @@ public:
 	    if (m_session && element() && !m_confirmed) {
 		m_confirmed = true;
 		if (error == XMPPError::NoError)
-		    return m_session->confirm(element());
-		return m_session->confirm(releaseXML(),error,text,type);
+		    return m_session->confirmResult(element());
+		XmlElement* err = releaseXml();
+		return m_session->confirmError(err,error,text,type);
 	    }
 	    return false;
 	}
@@ -1642,7 +1753,7 @@ public:
     /**
      * Dictionary with event type names
      */
-    static TokenDict s_typeName[];
+    static const TokenDict s_typeName[];
 
     /**
      * The list of session contents if used
@@ -1663,7 +1774,7 @@ protected:
      * @param reason Optional reason data
      * @param text Optional text data
      */
-    inline JGEvent(Type type, JGSession* session, XMLElement* element = 0,
+    inline JGEvent(Type type, JGSession* session, XmlElement* element = 0,
 	const char* reason = 0, const char* text = 0)
 	: m_type(type), m_confirmed(true), m_session(0), m_element(element),
 	m_jingle(0), m_action(JGSession::ActCount), m_reason(reason), m_text(text)
@@ -1677,7 +1788,7 @@ protected:
      * @param reason Optional reason data
      * @param text Optional text data
      */
-    inline JGEvent(JGSession::Action act, JGSession* session, XMLElement* element,
+    inline JGEvent(JGSession::Action act, JGSession* session, XmlElement* element,
 	const char* reason = 0, const char* text = 0)
 	: m_type(Jingle), m_confirmed(false), m_session(0), m_element(element), m_jingle(0),
 	m_action(act), m_reason(reason), m_text(text) {
@@ -1692,8 +1803,8 @@ private:
     Type m_type;                         // The type of this event
     bool m_confirmed;                    // Flag indicating that element was confirmed
     JGSession* m_session;                // Jingle session that generated this event
-    XMLElement* m_element;               // XML element that generated this event
-    XMLElement* m_jingle;                // The session child, if present
+    XmlElement* m_element;               // XML element that generated this event
+    XmlElement* m_jingle;                // The session child, if present
     // Event specific
     JGSession::Action m_action;          // The action if type is Jingle
     String m_id;                         // The element's id attribute
@@ -1706,17 +1817,15 @@ private:
  *  stanza write fail events and stream termination events
  * @short A Jingle engine
  */
-class YJINGLE_API JGEngine : public JBService, public JBThreadList
+class YJABBER_API JGEngine : public DebugEnabler, public Mutex
 {
     friend class JGSession;
 public:
     /**
-     * Constructor. Constructs a Jingle service
-     * @param engine The Jabber engine
-     * @param params Service's parameters
-     * @param prio The priority of this service
+     * Constructor
+     * @param name Debug name
      */
-    JGEngine(JBEngine* engine, const NamedList* params, int prio = 0);
+    JGEngine(const char* name = "jgengine");
 
     /**
      * Destructor. Terminates all active sessions
@@ -1744,6 +1853,23 @@ public:
     virtual void initialize(const NamedList& params);
 
     /**
+     * Send a session's stanza.
+     * This method should be re-implemented 
+     * @param session The session requesting the operation
+     * @param stanza The stanza to send. Will be consumed and zeroed
+     * @return True on success
+     */
+    virtual bool sendStanza(JGSession* session, XmlElement*& stanza);
+
+    /**
+     * Send a chat message on behalf of a session
+     * @param session The session requesting the operation
+     * @param body Message body
+     * @return True on success
+     */
+    virtual bool sendMessage(JGSession* session, const char* body);
+
+    /**
      * Call getEvent() for each session list until an event is generated or the end is reached
      * This method is thread safe
      * @param time Current time in miliseconds
@@ -1755,17 +1881,32 @@ public:
      * Make an outgoing call.
      * 'media' and 'transport' will be invalid on exit. Don't delete them
      * @param ver The session version to use
-     * @param callerName The local peer's username
-     * @param remoteJID The remote peer's JID
+     * @param caller The caller
+     * @param called The called
      * @param contents The list of session content(s)
      * @param extra Optional extra child for session initiate element
      * @param msg Optional message to send before call
      * @param subject Optional session subject
      * @return Valid JGSession pointer (referenced) on success
      */
-    JGSession* call(JGSession::Version ver, const String& callerName, const String& remoteJID,
-	const ObjList& contents, XMLElement* extra = 0, const char* msg = 0,
+    JGSession* call(JGSession::Version ver, const JabberID& caller, const JabberID& called,
+	const ObjList& contents, XmlElement* extra = 0, const char* msg = 0,
 	const char* subject = 0);
+
+    /**
+     * Ask this engine to accept an incoming xml 'iq' element
+     * @param type Iq type as enumeration
+     * @param from The sender
+     * @param to The recipient
+     * @param id Element id attribute
+     * @param xml The received element
+     * @param error XMPPError result. This value should be check if false is returned.
+     *  Any value different from NoError indicate an invalid element
+     * @param text Error text
+     * @return True if accepted (don't use the given pointer if accepted)
+     */
+    bool acceptIq(XMPPUtils::IqType type, const JabberID& from, const JabberID& to,
+	const String& id, XmlElement* xml, XMPPError::Type& error, String& text);
 
     /**
      * Default event processor. Delete event.
@@ -1780,22 +1921,11 @@ public:
      */
     virtual void processEvent(JGEvent* event);
 
-protected:
-    /**
-     * Accept an event from the Jabber engine
-     * @param event The event to accept
-     * @param processed Set to true on exit to signal that the event was already processed
-     * @param insert Set to true if accepted to insert on top of the event queue
-     * @return False if not accepted, let the engine try another service
-     */
-    virtual bool accept(JBEvent* event, bool& processed, bool& insert);
-
 private:
     // Create a local session id
     void createSessionId(String& id);
 
     ObjList m_sessions;                  // List of sessions
-    Mutex m_sessionIdMutex;              // Session id counter lock
     u_int32_t m_sessionId;               // Session id counter
     u_int64_t m_stanzaTimeout;           // The timeout of a sent stanza
     u_int64_t m_pingInterval;            // Interval to send ping (empty session-info)
@@ -1806,7 +1936,7 @@ private:
  * This class holds sent stanzas info used for timeout checking
  * @short Send stanza timeout info
  */
-class YJINGLE_API JGSentStanza : public String
+class YJABBER_API JGSentStanza : public String
 {
 public:
     /**

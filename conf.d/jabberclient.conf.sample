@@ -1,0 +1,54 @@
+[general]
+
+; stream_readbuffer: integer: The length of the stream read buffer
+; Defaults to 8192 if missing or invalid. Minimum allowed value is 1024
+;stream_readbuffer=8192
+
+; stream_parsermaxbuffer: integer: The maximum length of an incomplete xml allowed
+;  in a stream parser's buffer
+; Defaults to 8192 if missing or invalid. Minimum allowed value is 1024
+;stream_parsermaxbuffer=8192
+
+; stream_restartcount: integer: The maximum value for stream restart counter
+; Defaults to 2 if missing or invalid
+; Minimum allowed value is 1, maximum allowed value is 10
+;stream_restartcount=2
+
+; stream_restartupdateinterval: integer: The interval, in milliseconds, to increase a
+;  stream's current restart counter (not exceeding the stream_restartcount value)
+; Defaults to 15000 if missing or invalid
+; Minimum allowed value is 5000, maximum allowed value is 300000
+;stream_restartupdateinterval=15000
+
+; stream_starttimeout: integer: The interval, in milliseconds, allowed for a remote
+;  party to send the stream start tag
+; Defaults to 5000 if missing or invalid
+; Minimum allowed value is 1000, maximum allowed value is 10000
+;stream_starttimeout=5000
+
+; stream_setuptimeout: integer: Overall stream setup interval in milliseconds. The timer
+;  will stop when the stream is authenticated
+; Defaults to 60000 if missing or invalid
+; Minimum allowed value is 5000, maximum allowed value is 120000
+;stream_setuptimeout=60000
+
+; stream_connecttimeout: integer: The interval, in milliseconds, allowed for an
+;  outgoing stream to make a TCP connection to a remote host, including SRV request
+;  and resolving domain(s)
+; Defaults to 5000 if missing or invalid
+; Minimum allowed value is 1000, maximum allowed value is 10000
+;stream_connecttimeout=5000
+
+; entitycaps: boolean: Enable entity capabilities cache.
+; If enabled entity capabilities will be requested and cached each time a presence
+;  stanza is received
+; Defaults to enable
+;entitycaps=enable
+
+; printxml: boolean/string: Print sent/received XML data to output if debug
+;  level is at least 9
+; Allowed values are boolean values or 'verbose' string
+; If verbose is specified, XML elements' children, attributes or text will be
+;  shown on separate lines
+; Defaults to no
+;printxml=no

@@ -30,7 +30,7 @@ PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 	yrtpchan.yate ystunchan.yate \
 	ysipchan.yate \
 	yiaxchan.yate \
-	yjinglechan.yate jingle/jinglefeatures.yate \
+	yjinglechan.yate jabber/jabberserver.yate jabber/jbfeatures.yate \
 	ysockschan.yate filetransfer.yate \
 	server/pbxassist.yate server/dbpbx.yate server/lateroute.yate \
 	server/park.yate server/queues.yate server/queuesnotify.yate \
@@ -44,7 +44,10 @@ PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 	server/mrcpspeech.yate \
 	server/ysigchan.yate \
 	server/ciscosm.yate \
+	server/presence.yate server/subscription.yate \
+	server/users.yate \
 	server/analog.yate server/analogdetect.yate \
+	client/jabberclient.yate \
 	callgen.yate analyzer.yate rmanager.yate msgsniff.yate
 LIBS :=
 DIRS := client server
@@ -243,9 +246,9 @@ yiaxchan.yate: ../libs/yiax/libyateiax.a
 yiaxchan.yate: LOCALFLAGS = -I@top_srcdir@/libs/yiax
 yiaxchan.yate: LOCALLIBS = -L../libs/yiax -lyateiax
 
-yjinglechan.yate jingle/jinglefeatures.yate: ../libyatejingle.so
-yjinglechan.yate jingle/jinglefeatures.yate: LOCALFLAGS = -I@top_srcdir@/libs/yxml -I@top_srcdir@/libs/yjingle
-yjinglechan.yate jingle/jinglefeatures.yate: LOCALLIBS = -lyatejingle
+yjinglechan.yate jabber/jabberserver.yate jabber/jbfeatures.yate client/jabberclient.yate: ../libyatejabber.so
+yjinglechan.yate jabber/jabberserver.yate jabber/jbfeatures.yate client/jabberclient.yate: LOCALFLAGS = -I@top_srcdir@/libs/yxml -I@top_srcdir@/libs/yjabber
+yjinglechan.yate jabber/jabberserver.yate jabber/jbfeatures.yate client/jabberclient.yate: LOCALLIBS = -lyatejabber
 
 server/dbpbx.yate server/pbxassist.yate: ../libs/ypbx/libyatepbx.a
 server/dbpbx.yate server/pbxassist.yate: LOCALFLAGS = -I@top_srcdir@/libs/ypbx
@@ -320,8 +323,8 @@ qt4/updater.yate: LOCALLIBS = @QT4_LIB_NET@
 ../libs/yxml/libyatexml.a:
 	$(MAKE) -C ../libs/yxml
 
-../libyatejingle.so ../libs/yjingle/libyatejingle.a:
-	$(MAKE) -C ../libs/yjingle
+../libyatejabber.so ../libs/yjabber/libyatejabber.a:
+	$(MAKE) -C ../libs/yjabber
 
 ../libs/ypbx/libyatepbx.a:
 	$(MAKE) -C ../libs/ypbx

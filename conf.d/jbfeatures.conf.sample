@@ -1,0 +1,96 @@
+[general]
+
+; account: string: Default database account
+; This parameter can be overridden in section using the database
+;account=
+
+
+[register]
+; This section configures in stream user management (add, change, delete)
+
+; allow_management: boolean: Enable user add/remove
+; Defaults to yes
+;allow_management=yes
+
+; allow_change: boolean: Enable existing authenticated user to change its password
+; Defaults to yes
+;allow_change=yes
+
+; allow_unsecure: boolean: Enable user management on unsecure connections
+; Defaults to no
+;allow_unsecure=no
+
+; url: string: URL to be sent to the user when requesting registration data
+;  if in stream registration is not enabled
+;url=
+
+; intructions: string: Instructions to be sent with the URL
+;intructions=
+
+
+[vcard]
+; User vcard management
+
+; get: string: Query executed on user vcard get request
+;get=SELECT vcard FROM users WHERE username='${username}'
+
+; set: string: Query executed on user vcard set request
+; The query must update the user's vcard
+; Care must be taken if the user vcard is kept in the same table with the user: avoid
+; inserting items when the user is not found
+;set=UPDATE users SET vcard VALUES ('${vcard}') WHERE username='${username}'
+
+; clear_user: string: Query used to delete an user's vcard
+; This query must be set if an user's vcard is not stored in the users table
+;clear_user=
+
+
+[private_data]
+; User private data management
+; User private data chunk key is given by xml tag and namespace
+; Data should be kept in a separate table with a one-to-many relationship from the users
+;  table
+
+; get: string: Query executed on user private data get request
+;get=SELECT xml FROM privatedata WHERE username='${username}' AND tag='${tag}' AND xmlns='${xmlns}'
+
+; set: string: Query executed on user private data set request
+; The query must update existing data or insert it if not found
+;set=SELECT * FROM privatedata_set('${username}', '${tag}', '${xmlns}', '${xml}')
+
+; clear_user: string: Query used to delete all private data belonging to an user
+;clear_user=DELETE FROM privatedata WHERE username='${username}'
+
+
+[offline_chat]
+; Offline messages management
+
+; maxcount: integer: Maximum number of chat messages saved for an user
+; This parameter can be used to limit the number of chat messages stored on
+;  behalf of an user
+; This parameter is applied on reload
+; Defaults to 0 (no limit) if missing or invalid
+;maxcount=
+
+; expires: integer: The time interval (in minutes) a saved chat message
+;  will be kept in the database
+; This parameter can be used to clear old messages
+; This parameter is applied on reload
+; Defaults to 0 (no limit) if missing or invalid
+;expires=
+
+; expire_query: string: Query used to expire offline messages
+;expire_query=DELETE FROM offlinechat WHERE time<'${time}'
+
+; get: string: Query used to retrieve an user's offline messages
+;get=SELECT * FROM offlinechat WHERE username='${username}' ORDER BY time
+
+; set: string: Query used to add an offline message addressed to an user
+; The query should check if the user exists
+; It should return a non 0 integer value indicating success or 0 on failure
+; If 'maxcount' is greater then 0 the query should check for maximum
+;  allowed number of chat messages
+;add=SELECT * FROM offlinechat_add('${username}', '${xml}', ${time}, ${maxcount})
+
+; clear_user: string: Query used to delete all offline messages belonging to an user
+;clear_user=DELETE FROM offlinechat WHERE username='${username}'

@@ -22,13 +22,14 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#include <yatengine.h>
+#include <yatephone.h>
 
 #include <string.h>
 
 #include <openssl/opensslconf.h>
 #include <openssl/ssl.h>
 #include <openssl/rand.h>
+#include <openssl/err.h>
 
 #ifndef OPENSSL_NO_AES
 #include <openssl/aes.h>
@@ -36,8 +37,6 @@
 
 using namespace TelEngine;
 namespace { // anonymous
-
-#define MODNAME "openssl"
 
 #define MAKE_ERR(x) { #x, X509_V_ERR_##x }
 static TokenDict s_verifyCodes[] = {
@@ -75,11 +74,31 @@ static TokenDict s_verifyMode[] = {
     { 0, 0 }
 };
 
+class SslContext : public String
+{
+public:
+    // Constructor. Build the context
+    SslContext(const char* name);
+    // Initialize certificate, key and domains. Check the key
+    // Return false on failure
+    bool init(const NamedList& params);
+    // Check if this context can be used for server sockets in a given domain
+    bool hasDomain(const String& domain);
+    // Add a comma separated list of domains to a buffer
+    void addDomains(String& buf);
+    // Release memory, free the context
+    virtual void destruct();
+    inline operator SSL_CTX*()
+	{ return m_context; }
+protected:
+    SSL_CTX* m_context;
+    ObjList m_domains;
+};
 
 class SslSocket : public Socket, public Mutex
 {
 public:
-    SslSocket(SOCKET handle, bool server, int verify);
+    SslSocket(SOCKET handle, bool server, int verify, SslContext* context = 0);
     virtual ~SslSocket();
     virtual bool terminate();
     virtual bool valid();
@@ -132,20 +151,29 @@ public:
 };
 #endif
 
-class OpenSSL : public Plugin
+class OpenSSL : public Module
 {
 public:
     OpenSSL();
     ~OpenSSL();
     virtual void initialize();
+    // Find a context by name or domain
+    // This method is not thread safe. The caller must lock the plugin
+    // until the returned context is not used anymore
+    SslContext* findContext(const String& token, bool byDomain = false) const;
 protected:
+    virtual void statusParams(String& str);
+    virtual void statusDetail(String& str);
+
     SslHandler* m_handler;
+    ObjList m_contexts;                  // Server contexts list
+    String m_statusCmd;                  // Module status command
 };
 
-INIT_PLUGIN(OpenSSL);
 
 static int s_index = -1;
 static SSL_CTX* s_context = 0;
+static OpenSSL __plugin;
 
 
 // Attempt to add randomness from system time when called
@@ -165,20 +193,142 @@ void infoCallback(const SSL* ssl, int where, int retVal)
 	if (sock->ssl() == ssl)
 	    sock->onInfo(where,retVal);
 	else
-	    Debug(MODNAME,DebugFail,"Mismatched session %p [%p]",ssl,sock);
+	    Debug(&__plugin,DebugFail,"Mismatched session %p [%p]",ssl,sock);
     }
+}
+
+// Callback function called from OpenSSL for protocol messages
+void msgCallback(int write, int version, int content_type, const void* buf,
+    size_t len, SSL* ssl, void* arg)
+{
+    Debug(&__plugin,DebugAll,
+	"%s SSL message: version=%d content_type=%d buf=%p len=%u ssl=%p",
+	write ? "Sent" : "Received",version,content_type,buf,(unsigned int)len,ssl);
+}
+
+
+SslContext::SslContext(const char* name)
+    : String(name),
+    m_context(0)
+{
+    m_context = ::SSL_CTX_new(::SSLv23_server_method());
+    ::SSL_CTX_set_info_callback(m_context,infoCallback);
+#ifdef DEBUG
+    ::SSL_CTX_set_msg_callback(m_context,msgCallback);
+#endif
+}
+
+// Initialize certificate, key and domains. Check the key
+// Return false on failure
+bool SslContext::init(const NamedList& params)
+{
+    String cert;
+    const char* c = params.getValue("certificate");
+    if (c) {
+	cert << Engine::configPath();
+	if (cert && !cert.endsWith(Engine::pathSeparator()))
+	    cert << Engine::pathSeparator();
+	cert << c;
+    }
+    String key;
+    const char* k = params.getValue("key");
+    if (k) {
+	key << Engine::configPath();
+	if (key && !key.endsWith(Engine::pathSeparator()))
+	    key << Engine::pathSeparator();
+	key << k;
+    }
+    else
+	key = cert;
+    // Load certificate and key. Check them
+    if (!::SSL_CTX_use_certificate_chain_file(m_context,cert)) {
+	unsigned long err = ::ERR_get_error();
+	Debug(&__plugin,DebugWarn,
+	    "Context '%s' failed to load certificate from '%s' '%s'",
+	    c_str(),c ? cert.c_str() : "",::ERR_error_string(err,0));
+	return false;
+    }
+    if (!::SSL_CTX_use_PrivateKey_file(m_context,key,SSL_FILETYPE_PEM)) {
+	unsigned long err = ::ERR_get_error();
+	Debug(&__plugin,DebugWarn,
+	    "Context '%s' failed to load key from '%s' '%s'",
+	    c_str(),k ? key.c_str() : "",::ERR_error_string(err,0));
+	return false;
+    }
+    if (!::SSL_CTX_check_private_key(m_context)) {
+	unsigned long err = ::ERR_get_error();
+	Debug(&__plugin,DebugWarn,
+	    "Context '%s' certificate='%s' or key='%s' are invalid '%s'",
+	    c_str(),cert.c_str(),key.c_str(),::ERR_error_string(err,0));
+	return false;
+    }
+    // Load domains
+    m_domains.clear();
+    String* d = params.getParam("domains");
+    if (d) {
+	ObjList* list = d->split(',',false);
+	for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
+	    String* s = static_cast<String*>(o->get());
+	    s->trimBlanks();
+	    if (s->null())
+		continue;
+	    if (s->startsWith("*") && (s->length() < 3 || (*s)[1] != '.')) {
+		Debug(&__plugin,DebugNote,"Context '%s' ignoring invalid domain='%s'",
+		    c_str(),s->c_str());
+		continue;
+	    }
+	    m_domains.append(new String(s->toLower()));
+	}
+	TelEngine::destruct(list);
+    }
+    DDebug(&__plugin,DebugAll,"Context '%s' loaded certificate='%s' key='%s' domains=%s",
+	c_str(),cert.c_str(),key.c_str(),TelEngine::c_safe(d));
+    return true;
+}
+
+// Check if this context can be used for server sockets in a given domain
+bool SslContext::hasDomain(const String& domain)
+{
+    for (ObjList* o = m_domains.skipNull(); o; o = o->skipNext()) {
+	String* s = static_cast<String*>(o->get());
+	if (*s == domain ||
+	    ((*s)[0] == '*' && domain.endsWith(s->c_str() + 1)))
+	    return true;
+    }
+    return false;
+}
+
+// Add a comma separated list of domains to a buffer
+void SslContext::addDomains(String& buf)
+{
+    bool notFirst = false;
+    for (ObjList* o = m_domains.skipNull(); o; o = o->skipNext()) {
+	if (notFirst)
+	    buf << ",";
+	else
+	    notFirst = true;
+	buf << (static_cast<String*>(o->get()))->c_str();
+    }
+}
+
+// Release memory, free the context
+void SslContext::destruct()
+{
+    ::SSL_CTX_free(m_context);
+    String::destruct();
 }
 
 
 // Create a SSL socket from a regular socket handle
-SslSocket::SslSocket(SOCKET handle, bool server, int verify)
+SslSocket::SslSocket(SOCKET handle, bool server, int verify, SslContext* context)
     : Socket(handle), Mutex(false,"SslSocket"),
       m_ssl(0)
 {
-    DDebug(DebugAll,"SslSocket::SslSocket(%d,%s,%s) [%p]",
-	handle,String::boolText(server),lookup(verify,s_verifyMode,"unknown"),this);
+    DDebug(&__plugin,DebugAll,"SslSocket::SslSocket(%d,%s,%s,%s) [%p]",
+	handle,String::boolText(server),lookup(verify,s_verifyMode,"unknown"),
+	context ? context->c_str() : "",this);
     if (Socket::valid()) {
-	m_ssl = ::SSL_new(s_context);
+	m_ssl = ::SSL_new(context ? *context : s_context);
 	if (s_index >= 0)
 	    ::SSL_set_ex_data(m_ssl,s_index,this);
 	::SSL_set_verify(m_ssl,verify,0);
@@ -193,7 +343,7 @@ SslSocket::SslSocket(SOCKET handle, bool server, int verify)
 // Destructor, clean up early
 SslSocket::~SslSocket()
 {
-    DDebug(DebugAll,"SslSocket::~SslSocket() handle=%d [%p]",handle(),this);
+    DDebug(&__plugin,DebugAll,"SslSocket::~SslSocket() handle=%d [%p]",handle(),this);
     clearFilters();
     terminate();
 }
@@ -274,12 +424,12 @@ void SslSocket::onInfo(int where, int retVal)
 {
 #ifdef DEBUG
     if (where & SSL_CB_LOOP)
-	Debug(MODNAME,DebugAll,"State %s [%p]",SSL_state_string_long(m_ssl),this);
+	Debug(&__plugin,DebugAll,"State %s [%p]",SSL_state_string_long(m_ssl),this);
 #endif
     if ((where & SSL_CB_EXIT) && (retVal == 0))
-	Debug(MODNAME,DebugMild,"Failed %s [%p]",SSL_state_string_long(m_ssl),this);
+	Debug(&__plugin,DebugMild,"Failed %s [%p]",SSL_state_string_long(m_ssl),this);
     if (where & SSL_CB_ALERT)
-	Debug(MODNAME,DebugMild,"Alert %s: %s [%p]",
+	Debug(&__plugin,DebugMild,"Alert %s: %s [%p]",
 	    SSL_alert_type_string_long(retVal),
 	    SSL_alert_desc_string_long(retVal),this);
     if (where & SSL_CB_HANDSHAKE_DONE) {
@@ -287,7 +437,7 @@ void SslSocket::onInfo(int where, int retVal)
 	if (verify != X509_V_OK) {
 	    // handshake succeeded but the certificate has problems
 	    const char* error = lookup(verify,s_verifyCodes);
-	    Debug(MODNAME,DebugWarn,"Certificate verify error %ld%s%s [%p]",
+	    Debug(&__plugin,DebugWarn,"Certificate verify error %ld%s%s [%p]",
 		verify,error ? ": " : "",c_safe(error),this);
 	}
     }
@@ -300,23 +450,42 @@ bool SslHandler::received(Message& msg)
     addRand(msg.msgTime());
     Socket** ppSock = static_cast<Socket**>(msg.userObject("Socket*"));
     if (!ppSock) {
-	Debug(MODNAME,DebugGoOn,"SslHandler: No pointer to Socket");
+	Debug(&__plugin,DebugGoOn,"SslHandler: No pointer to Socket");
 	return false;
     }
     Socket* pSock = *ppSock;
     if (!pSock) {
-	Debug(MODNAME,DebugGoOn,"SslHandler: NULL Socket pointer");
+	Debug(&__plugin,DebugGoOn,"SslHandler: NULL Socket pointer");
 	return false;
     }
     if (!pSock->valid()) {
-	Debug(MODNAME,DebugWarn,"SslHandler: Invalid Socket");
+	Debug(&__plugin,DebugWarn,"SslHandler: Invalid Socket");
 	return false;
     }
-    SslSocket* sSock = new SslSocket(pSock->handle(),
-	msg.getBoolValue("server",false),
-	msg.getIntValue("verify",s_verifyMode,SSL_VERIFY_NONE));
+    SslSocket* sSock = 0;
+    if (msg.getBoolValue("server",false)) {
+	Lock lock(&__plugin);
+	SslContext* c = 0;
+	String* token = msg.getParam("context");
+	if (!TelEngine::null(token))
+	    c = __plugin.findContext(*token);
+	if (!c) {
+	    token = msg.getParam("domain");
+	    if (!TelEngine::null(token))
+		c = __plugin.findContext(String(*token).toLower(),true);
+	}
+	if (!c) {
+	    Debug(&__plugin,DebugWarn,"SslHandler: Unable to find a server context");
+	    return false;
+	}
+	sSock = new SslSocket(pSock->handle(),true,
+	    msg.getIntValue("verify",s_verifyMode,SSL_VERIFY_NONE),c);
+    }
+    else
+	sSock = new SslSocket(pSock->handle(),false,
+	    msg.getIntValue("verify",s_verifyMode,SSL_VERIFY_NONE));
     if (!sSock->valid()) {
-	Debug(MODNAME,DebugWarn,"SslHandler: Invalid SSL Socket");
+	Debug(&__plugin,DebugWarn,"SslHandler: Invalid SSL Socket");
 	// detach and destroy new socket, preserve old one
 	sSock->detach();
 	delete sSock;
@@ -335,12 +504,12 @@ AesCtrCipher::AesCtrCipher()
     : m_key(0)
 {
     m_key = new AES_KEY;
-    DDebug(DebugAll,"AesCtrCipher::AesCtrCipher() key=%p [%p]",m_key,this);
+    DDebug(&__plugin,DebugAll,"AesCtrCipher::AesCtrCipher() key=%p [%p]",m_key,this);
 }
 
 AesCtrCipher::~AesCtrCipher()
 {
-    DDebug(DebugAll,"AesCtrCipher::~AesCtrCipher() key=%p [%p]",m_key,this);
+    DDebug(&__plugin,DebugAll,"AesCtrCipher::~AesCtrCipher() key=%p [%p]",m_key,this);
     delete m_key;
 }
 
@@ -410,10 +579,11 @@ bool CipherHandler::received(Message& msg)
 
 
 OpenSSL::OpenSSL()
-    : Plugin("openssl",true),
+    : Module("openssl","misc",true),
       m_handler(0)
 {
     Output("Loaded module OpenSSL - based on " OPENSSL_VERSION_TEXT);
+    m_statusCmd << "status " << name();
 }
 
 OpenSSL::~OpenSSL()
@@ -424,20 +594,90 @@ OpenSSL::~OpenSSL()
 
 void OpenSSL::initialize()
 {
-    if (m_handler)
-	return;
     Output("Initializing module OpenSSL");
-    ::SSL_load_error_strings();
-    ::SSL_library_init();
-    addRand(Time::now());
-    s_index = ::SSL_get_ex_new_index(0,const_cast<char*>("TelEngine::SslSocket"),0,0,0);
-    s_context = ::SSL_CTX_new(::SSLv23_method());
-    SSL_CTX_set_info_callback(s_context,infoCallback); // macro - no ::
-    m_handler = new SslHandler;
-    Engine::install(m_handler);
+    Configuration cfg(Engine::configFile("openssl"));
+    if (!m_handler) {
+	setup();
+	::SSL_load_error_strings();
+	::SSL_library_init();
+	addRand(Time::now());
+	s_index = ::SSL_get_ex_new_index(0,const_cast<char*>("TelEngine::SslSocket"),0,0,0);
+	s_context = ::SSL_CTX_new(::SSLv23_method());
+	SSL_CTX_set_info_callback(s_context,infoCallback); // macro - no ::
+	m_handler = new SslHandler;
+	Engine::install(m_handler);
 #ifndef OPENSSL_NO_AES
-    Engine::install(new CipherHandler);
+	Engine::install(new CipherHandler);
 #endif
+    }
+
+    lock();
+    // Load server contexts
+    unsigned int n = cfg.sections();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedList* p = cfg.getSection(i);
+	if (!p || *p == "general" || !p->c_str())
+	    continue;
+	SslContext* context = findContext(*p);
+	if (!p->getBoolValue("enable",true)) {
+	    if (context) {
+		DDebug(this,DebugAll,"Removing disabled context '%s'",context->c_str());
+		m_contexts.remove(context);
+	    }
+	    continue;
+	}
+	if (!context)
+	    context = new SslContext(*p);
+	if (context->init(*p)) {
+	    if (!findContext(*p)) {
+		m_contexts.append(context);
+		DDebug(this,DebugAll,"Added context '%s'",context->c_str());
+	    }
+	}
+	else {
+	    if (findContext(*p)) {
+		DDebug(this,DebugAll,"Removing invalid context '%s'",context->c_str());
+		m_contexts.remove(context);
+	    }
+	    else {
+		DDebug(this,DebugAll,"Ignoring invalid context '%s'",context->c_str());
+		TelEngine::destruct(context);
+	    }
+	}
+    }
+    unlock();
+}
+
+// Find a context by name or domain
+SslContext* OpenSSL::findContext(const String& token, bool byDomain) const
+{
+    if (!byDomain) {
+	ObjList* o = m_contexts.find(token);
+	return o ? static_cast<SslContext*>(o->get()) : 0;
+    }
+    for (ObjList* o = m_contexts.skipNull(); o; o = o->skipNext()) {
+	SslContext* c = static_cast<SslContext*>(o->get());
+	if (c->hasDomain(token))
+	    return c;
+    }
+    return 0;
+}
+
+void OpenSSL::statusParams(String& str)
+{
+    Lock lock(this);
+    str << "contexts=" << m_contexts.count();
+}
+
+void OpenSSL::statusDetail(String& str)
+{
+    Lock lock(this);
+    for (ObjList* o = m_contexts.skipNull(); o; o = o->skipNext()) {
+	SslContext* c = static_cast<SslContext*>(o->get());
+	str.append(c->c_str(),";");
+	str << "=";
+	c->addDomains(str);
+    }
 }
 
 }; // anonymous namespace

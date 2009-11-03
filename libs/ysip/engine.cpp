@@ -264,6 +264,8 @@ SIPEvent* SIPEngine::getEvent()
 	    if (e) {
 		DDebug(this,DebugInfo,"Got pending event %p (state %s) from transaction %p [%p]",
 		    e,SIPTransaction::stateName(e->getState()),t,this);
+		if (t->getState() == SIPTransaction::Invalid)
+		    m_transList.remove(t);
 		return e;
 	    }
 	}
@@ -275,6 +277,8 @@ SIPEvent* SIPEngine::getEvent()
 	    if (e) {
 		DDebug(this,DebugInfo,"Got event %p (state %s) from transaction %p [%p]",
 		    e,SIPTransaction::stateName(e->getState()),t,this);
+		if (t->getState() == SIPTransaction::Invalid)
+		    m_transList.remove(t);
 		return e;
 	    }
 	}

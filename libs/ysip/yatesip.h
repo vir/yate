@@ -1211,12 +1211,11 @@ public:
 	{ return m_allowed; }
 
     /**
-     * Remove a transaction from the list
+     * Remove a transaction from the list without dereferencing it
      * @param transaction Pointer to transaction to remove
-     * @param deref Dereference the transaction if it was in list
      */
-    inline void remove(SIPTransaction* transaction, bool deref = true)
-	{ lock(); m_transList.remove(transaction,deref); unlock(); }
+    inline void remove(SIPTransaction* transaction)
+	{ lock(); m_transList.remove(transaction,false); unlock(); }
 
     /**
      * Append a transaction to the end of the list

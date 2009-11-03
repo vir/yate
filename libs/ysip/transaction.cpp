@@ -149,7 +149,7 @@ void SIPTransaction::destroyed()
 {
     DDebug(getEngine(),DebugAll,"SIPTransaction::destroyed() [%p]",this);
     m_state = Invalid;
-    m_engine->remove(this,false);
+    m_engine->remove(this);
     setPendingEvent(0,true);
 }
 
@@ -293,8 +293,6 @@ SIPEvent* SIPTransaction::getEvent(bool pendingOnly)
 	    e = new SIPEvent(m_firstMessage,this);
 	    // make sure we don't get trough this one again
 	    changeState(Invalid);
-	    // remove from list and dereference
-	    m_engine->remove(this);
 	    return e;
 	case Invalid:
 	    Debug(getEngine(),DebugFail,"SIPTransaction::getEvent in invalid state [%p]",this);
@@ -636,8 +634,6 @@ SIPEvent* SIPTransaction::getServerEvent(int state, int timeout)
 	    e = new SIPEvent(m_lastMessage,this);
 	    m_transmit = false;
 	    changeState(Invalid);
-	    // remove from list and dereference
-	    m_engine->remove(this);
 	    break;
 	case Trying:
 	    e = new SIPEvent(m_firstMessage,this);

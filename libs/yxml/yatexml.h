@@ -175,6 +175,7 @@ public:
 
     /**
      * Retrieve the error string associated with a given error code
+     * @param code Code of the error to look up
      * @param defVal Value to return if not found
      * @return The error string
      */
@@ -271,7 +272,8 @@ protected:
 
     /**
      * Unescape the given text.
-     * Handled: &lt;, &gt;, &apos;, &quot;, &amp;, ascii (&#decNumber;), hexa (&#xhexNumber;)
+     * Handled: &amp;lt; &amp;gt; &amp;apos; &amp;quot; &amp;amp;
+     *  &amp;\#DecimalNumber; &amp;\#xHexNumber;
      * @param text The requested text to unescape
      */
     void unEscape(String& text);
@@ -852,7 +854,7 @@ public:
      * @param dump The string where to append representation
      * @param escape True if the attributes values need to be escaped
      * @param indent Spaces for output
-     * @param origindent Original indent
+     * @param origIndent Original indent
      * @param completeOnly True to build only if complete
      * @param auth Optional list of tag and attribute names to be replaced with '***'. This
      *  parameter can be used when the result will be printed to output to avoid printing
@@ -860,7 +862,7 @@ public:
      * @param parent Optional parent element whose tag will be searched in the auth list
      */
     void toString(String& dump, bool escape = true, const String& indent = String::empty(),
-	const String& origindent = String::empty(), bool completeOnly = true,
+	const String& origIndent = String::empty(), bool completeOnly = true,
 	const String* auth = 0, const XmlElement* parent = 0) const;
 
     /**
@@ -941,7 +943,7 @@ public:
 
     /**
      * Load this document from data stream and parse it.
-     * @param stream The input stream
+     * @param in The input stream
      * @param error Optional pointer to data to be filled with error if IOError is returned
      * @return Parser error (NoError on success)
      */
@@ -949,18 +951,18 @@ public:
 
     /**
      * Write this document to a data stream.
-     * A indent + n * origindent will be added before each xml child,
+     * A indent + n * origIndent will be added before each xml child,
      *  where n is the imbrication level, starting with 0.
-     * A indent + (n + 1) * origindent will be added before each attribute
-     * @param stream The output stream
+     * A indent + (n + 1) * origIndent will be added before each attribute
+     * @param out The output stream
      * @param escape True if the attributes values need to be escaped
      * @param indent Line indent
-     * @param origindent Original indent
+     * @param origIndent Original indent
      * @param completeOnly True to build only if complete
      * @return Written bytes, negative on error
      */
     virtual int write(Stream& out, bool escape = true,
-	const String& indent = String::empty(), const String& origindent = String::empty(),
+	const String& indent = String::empty(), const String& origIndent = String::empty(),
 	bool completeOnly = true) const;
 
     /**
@@ -991,10 +993,10 @@ public:
      * @param dump The string where to append representation
      * @param escape True if the attributes values need to be escaped
      * @param indent Spaces for output
-     * @param origindent Original indent
+     * @param origIndent Original indent
      */
     void toString(String& dump, bool escape = true, const String& indent = String::empty(),
-	const String& origindent = String::empty()) const;
+	const String& origIndent = String::empty()) const;
 
 private:
     XmlElement* m_root;                  // The root element
@@ -1061,7 +1063,6 @@ public:
 
     /**
      * Retrieve the element's tag (without prefix)
-     * @param tag Pointer to element tag
      * @return Element tag
      */
     const String& getTag() const
@@ -1181,7 +1182,7 @@ public:
 
     /**
      * Add inherited namespaces from a list
-     * @param The list of namespaces
+     * @param list The list of namespaces
      */
     void addInheritedNs(const NamedList& list);
 
@@ -1208,14 +1209,14 @@ public:
      * @param dump The destination string
      * @param escape True if the attributes values need to be escaped
      * @param indent Spaces for output
-     * @param origindent Original indent
+     * @param origIndent Original indent
      * @param completeOnly True to build only if complete
      * @param auth Optional list of tag and attribute names to be replaced with '***'. This
      *  parameter can be used when the result will be printed to output to avoid printing
      *  authentication data to output. The array must end with an empty string
      */
     void toString(String& dump, bool escape = true, const String& indent = String::empty(),
-	const String& origindent = String::empty(), bool completeOnly = true,
+	const String& origIndent = String::empty(), bool completeOnly = true,
 	const String* auth = 0) const;
 
     /**

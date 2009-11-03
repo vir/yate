@@ -1371,7 +1371,7 @@ XmlChild* XmlFragment::removeChild(XmlChild* child, bool delObj)
 
 // Create a String from this XmlFragment
 void XmlFragment::toString(String& dump, bool escape, const String& indent,
-    const String& origindent, bool completeOnly, const String* auth,
+    const String& origIndent, bool completeOnly, const String* auth,
     const XmlElement* parent) const
 {
     ObjList* ob = m_list.skipNull();
@@ -1380,7 +1380,7 @@ void XmlFragment::toString(String& dump, bool escape, const String& indent,
     for (;ob;ob = ob->skipNext()) {
 	XmlChild* obj = static_cast<XmlChild*>(ob->get());
 	if (obj->xmlElement())
-	    obj->xmlElement()->toString(dump,escape,indent,origindent,completeOnly,auth);
+	    obj->xmlElement()->toString(dump,escape,indent,origIndent,completeOnly,auth);
 	else if (obj->xmlText())
 	    obj->xmlText()->toString(dump,escape,indent,auth,parent);
 	else if (obj->xmlCData())
@@ -1390,7 +1390,7 @@ void XmlFragment::toString(String& dump, bool escape, const String& indent,
 	else if (obj->xmlDeclaration())
 	    obj->xmlDeclaration()->toString(dump,escape);
 	else if (obj->xmlDoctype())
-	    obj->xmlDoctype()->toString(dump,origindent);
+	    obj->xmlDoctype()->toString(dump,origIndent);
 	else
 	    Debug(DebugStub,"XmlFragment::toString() unhandled element type!");
     }
@@ -1510,12 +1510,12 @@ XmlElement* XmlDocument::root(bool completed) const
     return (m_root && (m_root->completed() || !completed)) ? m_root : 0;
 }
 
-void XmlDocument::toString(String& dump, bool escape, const String& indent, const String& origindent) const
+void XmlDocument::toString(String& dump, bool escape, const String& indent, const String& origIndent) const
 {
-    m_beforeRoot.toString(dump,escape,indent,origindent);
+    m_beforeRoot.toString(dump,escape,indent,origIndent);
     if (m_root) {
-	dump << origindent;
-	m_root->toString(dump,escape,indent,origindent);
+	dump << origIndent;
+	m_root->toString(dump,escape,indent,origIndent);
     }
 }
 
@@ -1563,12 +1563,12 @@ XmlSaxParser::Error XmlDocument::read(Stream& in, int* error)
 
 // Write this document to a data stream
 int XmlDocument::write(Stream& out, bool escape, const String& indent,
-    const String& origindent, bool completeOnly) const
+    const String& origIndent, bool completeOnly) const
 {
     String dump;
-    m_beforeRoot.toString(dump,escape,indent,origindent);
+    m_beforeRoot.toString(dump,escape,indent,origIndent);
     if (m_root)
-	m_root->toString(dump,escape,indent,origindent,completeOnly);
+	m_root->toString(dump,escape,indent,origIndent,completeOnly);
     return out.writeData(dump);
 }
 
@@ -1796,15 +1796,15 @@ void XmlElement::setParent(XmlParent* parent)
 
 // Obtain a string from this xml element
 void XmlElement::toString(String& dump, bool esc, const String& indent,
-    const String& origindent, bool completeOnly, const String* auth) const
+    const String& origIndent, bool completeOnly, const String* auth) const
 {
     XDebug(DebugAll,"XmlElement(%s) toString(%u,%s,%s,%u,%p) complete=%u [%p]",
-	tag(),esc,indent.c_str(),origindent.c_str(),completeOnly,auth,m_complete,this);
+	tag(),esc,indent.c_str(),origIndent.c_str(),completeOnly,auth,m_complete,this);
     if (!m_complete && completeOnly)
 	return;
     String auxDump;
     auxDump << indent << "<" << m_element;
-    String newIndent(indent + origindent);
+    String newIndent(indent + origIndent);
     const char* sep = newIndent ? newIndent.c_str() : " ";
     int n = m_element.count();
     for (int i = 0; i < n; i++) {
@@ -1822,7 +1822,7 @@ void XmlElement::toString(String& dump, bool esc, const String& indent,
 	auxDump << "/";
     auxDump << ">";
     if (m) {
-	m_children.toString(auxDump,esc,newIndent,origindent,completeOnly,auth,this);
+	m_children.toString(auxDump,esc,newIndent,origIndent,completeOnly,auth,this);
 	if (m_complete)
 	   auxDump << indent << "</" << getName() << ">";
     }

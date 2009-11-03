@@ -212,9 +212,9 @@ SslContext::SslContext(const char* name)
     m_context(0)
 {
     m_context = ::SSL_CTX_new(::SSLv23_server_method());
-    ::SSL_CTX_set_info_callback(m_context,infoCallback);
+    SSL_CTX_set_info_callback(m_context,infoCallback);
 #ifdef DEBUG
-    ::SSL_CTX_set_msg_callback(m_context,msgCallback);
+    SSL_CTX_set_msg_callback(m_context,msgCallback);
 #endif
 }
 

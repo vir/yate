@@ -452,13 +452,16 @@ MimeBody* MimeBody::build(const char* buf, int len, const MimeHeaderLine& type)
 	return new MimeStringBody(type,buf,len);
     if (what.startsWith("multipart/"))
 	return new MimeMultipartBody(type,buf,len);
-    // Build a binary body. Remove leading CRLF
+    // Remove any spurious leading CRLF
     if (len >= 2 && buf[0] == '\r' && buf[1] == '\n') {
 	len -= 2;
 	if (!len)
 	    return 0;
 	buf += 2;
     }
+    if ((what.length() >=7) && what.endsWith("+xml"))
+	return new MimeStringBody(type,buf,len);
+    // Create a default binary body
     return new MimeBinaryBody(type,buf,len);
 }
 
@@ -545,8 +548,6 @@ String* MimeBody::getUnfoldedLine(const char*& buf, int& len)
 /**
  * MimeMultipartBody
  */
-YCLASSIMP(MimeMultipartBody,MimeBody)
-
 // Constructor to build an empty multipart body
 MimeMultipartBody::MimeMultipartBody(const char* subtype, const char* boundary)
     : MimeBody((subtype && *subtype) ? (String("multipart/") + subtype) : "multipart/mixed")
@@ -586,6 +587,23 @@ MimeMultipartBody::MimeMultipartBody(const MimeMultipartBody& original)
 	MimeBody* body = static_cast<MimeBody*>(o->get());
 	m_bodies.append(body->clone());
     }
+}
+
+// Find object by class name, descend into parts
+void* MimeMultipartBody::getObject(const String& name) const
+{
+    if (name == "MimeMultipartBody")
+	return const_cast<MimeMultipartBody*>(this);
+    void* res = MimeBody::getObject(name);
+    if (res)
+	return res;
+    for (ObjList* o = m_bodies.skipNull(); o; o = o->skipNext()) {
+	const MimeBody* body = static_cast<const MimeBody*>(o->get());
+	res = body->getObject(name);
+	if (res)
+	    return res;
+    }
+    return 0;
 }
 
 // Find a body. Enclosed multiparts are also searched for the requested body

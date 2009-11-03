@@ -80,7 +80,7 @@ private:
 class FaxSource : public DataSource
 {
 public:
-    FaxSource(FaxWrapper* wrapper, const char* format = "slin");
+    FaxSource(FaxWrapper* wrapper, const char* format);
     ~FaxSource();
 private:
     RefPointer<FaxWrapper> m_wrap;
@@ -89,7 +89,7 @@ private:
 class FaxConsumer : public DataConsumer
 {
 public:
-    FaxConsumer(FaxWrapper* wrapper, const char* format = "slin");
+    FaxConsumer(FaxWrapper* wrapper, const char* format);
     ~FaxConsumer();
     virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags);
 private:
@@ -118,6 +118,7 @@ public:
 protected:
     FaxWrapper();
     void init(t30_state_t* t30, const char* ident, const char* file, bool sender);
+    bool newPage();
     String m_name;
     String m_error;
     t30_state_t* m_t30;
@@ -125,13 +126,14 @@ protected:
     FaxConsumer* m_consumer;
     CallEndpoint* m_chan;
     bool m_eof;
+    bool m_new;
 };
 
 // An audio fax terminal, sends or receives a local file
 class FaxTerminal : public FaxWrapper
 {
 public:
-    FaxTerminal(const char *file, const char *ident, bool sender, bool iscaller);
+    FaxTerminal(const char *file, const char *ident, bool sender, bool iscaller, const Message& msg);
     virtual ~FaxTerminal();
     virtual void run();
     virtual void rxData(const DataBlock& data, unsigned long tStamp);
@@ -146,7 +148,7 @@ private:
 class T38Terminal : public FaxWrapper
 {
 public:
-    T38Terminal(const char *file, const char *ident, bool sender, bool iscaller);
+    T38Terminal(const char *file, const char *ident, bool sender, bool iscaller, const Message& msg, int version);
     virtual ~T38Terminal();
     virtual void run();
     virtual void rxData(const DataBlock& data, unsigned long tStamp);
@@ -170,10 +172,19 @@ class FaxChan : public Channel
     friend class FaxWrapper;
     YCLASS(FaxChan,Channel)
 public:
+    enum Type {
+	Unknown,
+	Detect,
+	Analog,
+	Digital,
+    };
     FaxChan(bool outgoing, const char *file, bool sender, Message& msg);
     virtual ~FaxChan();
+    virtual void destroyed();
+    virtual void complete(Message& msg, bool minimal = false) const;
     virtual bool msgAnswered(Message& msg);
-    void answer(const char* targetid);
+    virtual bool msgUpdate(Message& msg);
+    void answer(Message& msg, const char* targetid);
     inline const String& localId() const
 	{ return m_localId; }
     inline const String& remoteId() const
@@ -182,12 +193,17 @@ public:
 	{ return m_sender; }
     inline bool isCaller() const
 	{ return m_caller; }
+    static void setParams(Message& msg, Type type, int t38version = -1);
+    Type guessType(const Message& msg);
+    static int guessT38(const Message& msg, int version = 0);
 private:
-    bool startup(FaxWrapper* wrap, const char* type = "audio");
-    bool startup(bool digital = false);
+    bool startup(FaxWrapper* wrap, const char* type = "audio", const char* format = "slin");
+    bool startup(Message& msg);
     void updateInfo(t30_state_t* t30);
     String m_localId;
     String m_remoteId;
+    Type m_type;
+    int m_t38version;
     bool m_sender;
     bool m_caller;
     bool m_ecm;
@@ -215,6 +231,13 @@ private:
 
 static FaxDriver plugin;
 static bool s_debug = false;
+static const TokenDict s_types[] = {
+    { "autodetect",  FaxChan::Detect },
+    { "detect",      FaxChan::Detect },
+    { "analog",      FaxChan::Analog },
+    { "digital",     FaxChan::Digital },
+    { 0, 0 }
+};
 
 FaxSource::FaxSource(FaxWrapper* wrapper, const char* format)
     : DataSource(format), m_wrap(wrapper)
@@ -285,7 +308,8 @@ static void phase_e_handler(t30_state_t* s, void* user_data, int result)
 
 FaxWrapper::FaxWrapper()
     : Mutex(true,"FaxWrapper"),
-      m_t30(0), m_source(0), m_consumer(0), m_chan(0), m_eof(false)
+      m_t30(0), m_source(0), m_consumer(0), m_chan(0),
+      m_eof(false), m_new(false)
 {
     debugChain(&plugin);
     debugName(plugin.debugName());
@@ -364,6 +388,16 @@ void FaxWrapper::cleanup()
 	m_chan->disconnect(m_error);
 }
 
+// Atomically check if the page has changed
+bool FaxWrapper::newPage()
+{
+    lock();
+    bool changed = m_new;
+    m_new = false;
+    unlock();
+    return changed;
+}
+
 // Called on intermediate states
 void FaxWrapper::phaseB(int result)
 {
@@ -376,6 +410,9 @@ void FaxWrapper::phaseD(int result)
 {
     Debug(this,DebugInfo,"Phase D code 0x%X: %s [%p]",
 	result,t30_completion_code_to_str(result),this);
+    lock();
+    m_new = true;
+    unlock();
     FaxChan* chan = YOBJECT(FaxChan,m_chan);
     if (chan)
 	chan->updateInfo(t30());
@@ -387,8 +424,7 @@ void FaxWrapper::phaseE(int result)
     const char* err = t30_completion_code_to_str(result);
     Debug(this,DebugInfo,"Phase E code 0x%X: %s [%p]",
 	result,err,this);
-    if (T30_ERR_OK != result)
-	m_error = err;
+    m_error = (T30_ERR_OK == result) ? "eof" : err;
     m_eof = true;
     FaxChan* chan = YOBJECT(FaxChan,m_chan);
     if (chan)
@@ -397,13 +433,13 @@ void FaxWrapper::phaseE(int result)
 
 
 // Constructor for the analog fax terminal
-FaxTerminal::FaxTerminal(const char *file, const char *ident, bool sender, bool iscaller)
+FaxTerminal::FaxTerminal(const char *file, const char *ident, bool sender, bool iscaller, const Message& msg)
     : m_lastr(0)
 {
-    Debug(this,DebugAll,"FaxTerminal::FaxTerminal(%s %s '%s','%s') [%p]",
+    Debug(this,DebugAll,"FaxTerminal::FaxTerminal(%s %s '%s','%s',%p) [%p]",
 	(iscaller ? "caller" : "called"),
 	(sender ? "transmit" : "receive"),
-	file,ident,this);
+	file,ident,&msg,this);
     fax_init(&m_fax,iscaller);
     init(fax_get_t30_state(&m_fax),ident,file,sender);
     fax_set_transmit_on_idle(&m_fax,1);
@@ -447,7 +483,7 @@ int FaxTerminal::txBlock()
     m_lastr = r;
     lock.drop();
     if (m_source)
-	m_source->Forward(data);
+	m_source->Forward(data,DataNode::invalidStamp(),(newPage() ? DataNode::DataMark : 0));
     return data.length();
 }
 
@@ -475,14 +511,20 @@ void FaxTerminal::rxData(const DataBlock& data, unsigned long tStamp)
 
 
 // Constructor for the digital fax terminal
-T38Terminal::T38Terminal(const char *file, const char *ident, bool sender, bool iscaller)
+T38Terminal::T38Terminal(const char *file, const char *ident, bool sender, bool iscaller, const Message& msg, int version)
 {
-    Debug(this,DebugAll,"T38Terminal::T38Terminal(%s %s '%s','%s') [%p]",
+    Debug(this,DebugAll,"T38Terminal::T38Terminal(%s %s '%s','%s',%p,%d) [%p]",
 	(iscaller ? "caller" : "called"),
 	(sender ? "transmit" : "receive"),
-	file,ident,this);
+	file,ident,&msg,version,this);
     t38_terminal_init(&m_t38,iscaller,txHandler,this);
-    t38_set_t38_version(t38_get_t38_state(&m_t38),1);
+    t38_set_t38_version(t38_get_t38_state(&m_t38),version);
+    bool tmp = msg.getBoolValue("t38fillbitremoval",0 != msg.getParam("sdp_image_T38FaxFillBitRemoval"));
+    t38_set_fill_bit_removal(t38_get_t38_state(&m_t38),tmp ? 1 : 0);
+    tmp = msg.getBoolValue("t38mmr",0 != msg.getParam("sdp_image_T38FaxTranscodingMMR"));
+    t38_set_mmr_transcoding(t38_get_t38_state(&m_t38),tmp ? 1 : 0);
+    tmp = msg.getBoolValue("t38jbig",0 != msg.getParam("sdp_image_T38FaxTranscodingJBIG"));
+    t38_set_jbig_transcoding(t38_get_t38_state(&m_t38),tmp ? 1 : 0);
     init(t38_get_t30_state(&m_t38),ident,file,sender);
 }
 
@@ -494,8 +536,11 @@ T38Terminal::~T38Terminal()
 // Run the terminal
 void T38Terminal::run()
 {
-    Debug(this,DebugStub,"Please implement T38Terminal::run()");
-    t38_terminal_send_timeout(&m_t38,T38_DATA_CHUNK);
+    while ((m_source || m_consumer) && !m_eof) {
+	if (t38_terminal_send_timeout(&m_t38,T38_DATA_CHUNK))
+	    break;
+	Thread::idle();
+    }
 }
 
 // Static callback that sends out T.38 data
@@ -510,13 +555,18 @@ int T38Terminal::txHandler(t38_core_state_t* t38s, void* userData,
 // Handle received digital data
 void T38Terminal::rxData(const DataBlock& data, unsigned long tStamp)
 {
-    Debug(this,DebugStub,"Please implement T38Terminal::rxData()");
-    t38_core_rx_ifp_packet(t38_get_t38_state(&m_t38),(uint8_t*)data.data(),data.length(),tStamp);
+    t38_core_rx_ifp_packet(t38_get_t38_state(&m_t38),(uint8_t*)data.data(),data.length(),tStamp & 0xffff);
 }
 
 int T38Terminal::txData(const void* buf, int len, int seq, int count)
 {
-    Debug(this,DebugStub,"Please implement T38Terminal::txData()");
+    if (!m_source)
+	return 0;
+    XDebug(this,DebugInfo,"T38Terminal::txData(%p,%d,%d,%d)",buf,len,seq,count);
+    DataBlock data((void*)buf,len,false);
+    m_source->Forward(data,seq,(newPage() ? DataNode::DataMark : 0));
+    data.clear(false);
+    return 0;
 }
 
 
@@ -530,7 +580,8 @@ void FaxThread::run()
 
 // Constructor for a generic fax terminal channel
 FaxChan::FaxChan(bool outgoing, const char *file, bool sender, Message& msg)
-    : Channel(plugin,0,outgoing), m_sender(sender), m_pages(0)
+    : Channel(plugin,0,outgoing),
+      m_type(Unknown), m_t38version(0), m_sender(sender), m_pages(0)
 {
     Debug(this,DebugAll,"FaxChan::FaxChan(%s \"%s\") [%p]",
 	(sender ? "transmit" : "receive"),
@@ -550,62 +601,154 @@ FaxChan::FaxChan(bool outgoing, const char *file, bool sender, Message& msg)
 FaxChan::~FaxChan()
 {
     Debug(DebugAll,"FaxChan::~FaxChan() [%p]",this);
-    clearEndpoint();
-    Message* msg = message("chan.hangup");
+}
+
+// Destruction notification - virtual methods still valid
+void FaxChan::destroyed()
+{
+    Engine::enqueue(message("chan.hangup"));
+    Channel::destroyed();
+}
+
+// Fill in message parameters
+void FaxChan::complete(Message& msg, bool minimal) const
+{
+    Channel::complete(msg,minimal);
+    if (minimal)
+	return;
     if (m_localId)
-	msg->addParam("faxident_local",m_localId);
+	msg.addParam("faxident_local",m_localId);
     if (m_remoteId)
-	msg->addParam("faxident_remote",m_remoteId);
+	msg.addParam("faxident_remote",m_remoteId);
     if (m_pages)
-	msg->addParam("faxpages",String(m_pages));
-    msg->addParam("faxecm",String::boolText(m_ecm));
-    msg->addParam("faxcaller",String::boolText(m_caller));
-    Engine::enqueue(msg);
+	msg.addParam("faxpages",String(m_pages));
+    const char* type = lookup(m_type,s_types);
+    if (type)
+	msg.addParam("faxtype",type);
+    msg.addParam("faxecm",String::boolText(m_ecm));
+    msg.addParam("faxcaller",String::boolText(m_caller));
 }
 
 // Build data channels, attaches a wrapper and starts it up
-bool FaxChan::startup(FaxWrapper* wrap, const char* type)
+bool FaxChan::startup(FaxWrapper* wrap, const char* type, const char* format)
 {
     wrap->debugName(debugName());
-    FaxSource* fs = new FaxSource(wrap);
+    FaxSource* fs = new FaxSource(wrap,format);
     setSource(fs,type);
     fs->deref();
-    FaxConsumer* fc = new FaxConsumer(wrap);
+    FaxConsumer* fc = new FaxConsumer(wrap,format);
     setConsumer(fc,type);
     fc->deref();
     wrap->setECM(m_ecm);
     bool ok = wrap->startup(this);
     wrap->deref();
+    Debug(this,DebugInfo,"Fax startup %s in %s mode [%p]",
+	(ok ? "succeeded" : "failed"),lookup(m_type,s_types,"unknown"),this);
     return ok;
 }
 
 // Attach and start an analog or digital wrapper
-bool FaxChan::startup(bool digital)
+bool FaxChan::startup(Message& msg)
 {
-    if (digital)
-	return startup(new T38Terminal(address(),m_localId,m_sender,m_caller),"image");
-    else
-	return startup(new FaxTerminal(address(),m_localId,m_sender,m_caller));
+    Type t = guessType(msg);
+    switch (t) {
+	case Detect:
+	    m_t38version = guessT38(msg,m_t38version);
+	    // fall through
+	case Analog:
+	    if (t == m_type)
+		return true;
+	    clearEndpoint();
+	    m_type = t;
+	    return startup(new FaxTerminal(address(),m_localId,m_sender,m_caller,msg));
+	case Digital:
+	    if (t == m_type)
+		return true;
+	    clearEndpoint();
+	    m_type = t;
+	    m_t38version = guessT38(msg,m_t38version);
+	    return startup(new T38Terminal(address(),m_localId,m_sender,m_caller,msg,m_t38version),"image","t38");
+	default:
+	    return false;
+    }
 }
 
 // Handler for an originator fax start request
 bool FaxChan::msgAnswered(Message& msg)
 {
     if (Channel::msgAnswered(msg)) {
-	startup();
+	startup(msg);
 	return true;
     }
     return false;
 }
 
+// Handler for update notifications, the fax type may have changed
+bool FaxChan::msgUpdate(Message& msg)
+{
+    const String* oper = msg.getParam("operation");
+    if (oper && (*oper == "notify")) {
+	Channel::msgUpdate(msg);
+	return startup(msg);
+    }
+    return Channel::msgUpdate(msg);
+}
+
 // Handler for an answerer fax start request
-void FaxChan::answer(const char* targetid)
+void FaxChan::answer(Message& msg, const char* targetid)
 {
     if (targetid)
 	m_targetid = targetid;
     status("answered");
-    startup();
-    Engine::enqueue(message("call.answered"));
+    startup(msg);
+    Message* m = message("call.answered");
+    setParams(*m,m_type,m_t38version);
+    Engine::enqueue(m);
+}
+
+// Guess fax type from message parameters
+FaxChan::Type FaxChan::guessType(const Message& msg)
+{
+    Type t = (Type)msg.getIntValue("faxtype",s_types,Unknown);
+    if (Unknown == t) {
+	// guess fax type from media offer
+	const String* imgFmt = msg.getParam("formats_image");
+	if (imgFmt && msg.getBoolValue("media_image") && (*imgFmt == "t38"))
+	    t = msg.getBoolValue("media") ? Detect : Digital;
+	else if (msg.getBoolValue("media",true))
+	    t = Analog;
+	Debug(this,DebugAll,"Guessed fax type: %s [%p]",lookup(t,s_types,"unknown"),this);
+    }
+    return t;
+}
+
+int FaxChan::guessT38(const Message& msg, int version)
+{
+    version = msg.getIntValue("sdp_image_T38FaxVersion",version);
+    return msg.getIntValue("t38version",version);
+}
+
+// Set media parameters of message to best reflect fax type
+void FaxChan::setParams(Message& msg, Type type, int t38version)
+{
+    bool audio = (Digital != type);
+    msg.setParam("media",String::boolText(audio));
+    if (audio && !msg.getValue("formats"))
+	msg.setParam("formats","alaw,mulaw");
+    switch (type) {
+	case Digital:
+	case Detect:
+	    msg.setParam("media_image",String::boolText(true));
+	    msg.setParam("formats_image","t38");
+	    msg.setParam("transport_image","udptl");
+	    if (t38version >= 0) {
+		String ver(t38version);
+		msg.setParam("t38version",ver);
+		msg.setParam("osdp_image_T38FaxVersion",ver);
+	    }
+	default:
+	    break;
+    }
 }
 
 void FaxChan::updateInfo(t30_state_t* t30)
@@ -638,6 +781,7 @@ void FaxChan::updateInfo(t30_state_t* t30)
     Debug(this,DebugAll,"remote ident '%s'", ident);
 }
 
+
 bool FaxDriver::msgExecute(Message& msg, String& dest)
 {
     Regexp r("^\\([^/]*\\)/\\(.*\\)$");
@@ -662,7 +806,7 @@ bool FaxDriver::msgExecute(Message& msg, String& dest)
 	if (fc->connect(ce)) {
 	    msg.setParam("peerid",fc->id());
 	    msg.setParam("targetid",fc->id());
-	    fc->answer(msg.getValue("id",ce->id()));
+	    fc->answer(msg,msg.getValue("id",ce->id()));
 	    return true;
 	}
     }
@@ -671,6 +815,7 @@ bool FaxDriver::msgExecute(Message& msg, String& dest)
 	fc->deref();
 	Message m("call.route");
 	fc->complete(m);
+	fc->setParams(m,fc->guessType(msg),FaxChan::guessT38(msg));
 	m.userData(fc);
 	String callto = msg.getValue("caller");
 	if (callto)
@@ -720,9 +865,11 @@ FaxDriver::FaxDriver()
 void FaxDriver::initialize()
 {
     Output("Initializing module Fax");
-    setup();
+    setup(0,true);
     if (m_first) {
 	m_first = false;
+	installRelay(Answered);
+	installRelay(Update,110);
 	// TODO: add other handlers
     }
 }

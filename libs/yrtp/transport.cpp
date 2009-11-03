@@ -158,11 +158,11 @@ void RTPProcessor::rtcpData(const void* data, int len)
 }
 
 
-RTPTransport::RTPTransport()
+RTPTransport::RTPTransport(RTPTransport::Type type)
     : RTPProcessor(),
-      m_processor(0), m_monitor(0), m_autoRemote(false)
+      m_type(type), m_processor(0), m_monitor(0), m_autoRemote(false)
 {
-    DDebug(DebugAll,"RTPTransport::RTPTransport() [%p]",this);
+    DDebug(DebugAll,"RTPTransport::RTPTransport(%d) [%p]",type,this);
 }
 
 RTPTransport::~RTPTransport()
@@ -179,9 +179,21 @@ void RTPTransport::timerTick(const Time& when)
 	char buf[BUF_SIZE];
 	SocketAddr addr;
 	int len;
-	while ((len = m_rtpSock.recvFrom(buf,sizeof(buf),addr)) >= 12) {
-	    if (((unsigned char)buf[0] & 0xc0) != 0x80)
-		continue;
+	while ((len = m_rtpSock.recvFrom(buf,sizeof(buf),addr)) > 0) {
+	    switch (m_type) {
+		case RTP:
+		    if (len < 12)
+			continue;
+		    if (((unsigned char)buf[0] & 0xc0) != 0x80)
+			continue;
+		    break;
+		case UDPTL:
+		    if (len < 6)
+			continue;
+		    break;
+		default:
+		    break;
+	    }
 	    if (!m_remoteAddr.valid())
 		continue;
 	    // looks like it's RTP, at least by version
@@ -217,8 +229,20 @@ void RTPTransport::timerTick(const Time& when)
 
 void RTPTransport::rtpData(const void* data, int len)
 {
-    if ((len < 12) || !data)
+    if (!data)
 	return;
+    switch (m_type) {
+	case RTP:
+	    if (len < 12)
+		return;
+	    break;
+	case UDPTL:
+	    if (len < 6)
+		return;
+	    break;
+	default:
+	    break;
+    }
     if (m_rtpSock.valid() && m_remoteAddr.valid())
 	m_rtpSock.sendTo(data,len,m_remoteAddr);
 }

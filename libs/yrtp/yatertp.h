@@ -60,9 +60,10 @@ class RTPSecure;
  */
 class YRTP_API RTPProcessor : public GenObject
 {
+    friend class UDPSession;
+    friend class UDPTLSession;
     friend class RTPGroup;
     friend class RTPTransport;
-    friend class RTPSession;
     friend class RTPSender;
     friend class RTPReceiver;
 
@@ -188,9 +189,19 @@ public:
     };
 
     /**
-     * Constructor, creates an unconnected transport
+     * Type of transported data
      */
-    RTPTransport();
+    enum Type {
+	Unknown,
+	RTP,
+	UDPTL
+    };
+
+    /**
+     * Constructor, creates an unconnected transport
+     * @param type Type of check to apply to the data
+     */
+    RTPTransport(Type type = RTP);
 
     /**
      * Destructor
@@ -282,6 +293,7 @@ protected:
     virtual void rtcpData(const void* data, int len);
 
 private:
+    Type m_type;
     RTPProcessor* m_processor;
     RTPProcessor* m_monitor;
     Socket m_rtpSock;
@@ -756,10 +768,110 @@ private:
 };
 
 /**
+ * A base class for RTP, SRTP or UDPTL sessions
+ * @short RTP or UDPTL session
+ */
+class YRTP_API UDPSession : public RTPProcessor
+{
+public:
+    /**
+     * Destructor - cleans up any remaining resources
+     */
+    virtual ~UDPSession();
+
+    /**
+     * Create a new RTP or UDP transport for this session.
+     * Override this method to create objects derived from RTPTransport.
+     * @return Pointer to the new transport or NULL on failure
+     */
+    virtual RTPTransport* createTransport();
+
+    /**
+     * Initialize the RTP session, attach a transport if there is none
+     * @return True if initialized, false on some failure
+     */
+    bool initTransport();
+
+    /**
+     * Initialize the RTP session, attach a group if none is present
+     * @param msec Minimum time to sleep in group loop in milliseconds
+     * @param prio Thread priority to run the new group
+     * @return True if initialized, false on some failure
+     */
+    bool initGroup(int msec = 0, Thread::Priority prio = Thread::Normal);
+
+    /**
+     * Set the remote network address of the RTP transport of this session
+     * @param addr New remote RTP transport address
+     * @param sniff Automatically adjust the address from the first incoming packet
+     * @return True if address set, false if a failure occured
+     */
+    inline bool remoteAddr(SocketAddr& addr, bool sniff = false)
+	{ return m_transport && m_transport->remoteAddr(addr,sniff); }
+
+    /**
+     * Set the Type Of Service for the RTP transport socket
+     * @param tos Type Of Service bits to set
+     * @return True if operation was successfull, false if an error occured
+     */
+    inline bool setTOS(int tos)
+	{ return m_transport && m_transport->setTOS(tos); }
+
+    /**
+     * Get the main transport socket used by this session
+     * @return Pointer to the RTP or UDPTL socket, NULL if no transport exists
+     */
+    inline Socket* rtpSock()
+	{ return m_transport ? m_transport->rtpSock() : 0; }
+
+    /**
+     * Drill a hole in a firewall or NAT for the RTP and RTCP sockets
+     * @return True if at least a packet was sent for the RTP socket
+     */
+    inline bool drillHole()
+	{ return m_transport && m_transport->drillHole(); }
+
+    /**
+     * Set the interval until receiver timeout is detected
+     * @param interval Milliseconds until receiver times out, zero to disable
+     */
+    void setTimeout(int interval);
+
+    /**
+     * Get the RTP/RTCP transport of data handled by this session.
+     * @return A pointer to the RTPTransport of this session
+     */
+    inline RTPTransport* transport() const
+	{ return m_transport; }
+
+    /**
+     * Set the UDP transport of data handled by this session
+     * @param trans A pointer to the new RTPTransport for this session
+     */
+    virtual void transport(RTPTransport* trans);
+
+protected:
+    /**
+     * Default constructor
+     */
+    UDPSession();
+
+    /**
+     * Method called when the receiver timed out
+     * @param initial True if no packet was ever received in this session
+     */
+    virtual void timeout(bool initial);
+
+    RTPTransport* m_transport;
+    u_int64_t m_timeoutTime;
+    u_int64_t m_timeoutInterval;
+};
+
+/**
  * An unidirectional or bidirectional RTP session
  * @short Full RTP session
  */
-class YRTP_API RTPSession : public RTPProcessor
+class YRTP_API RTPSession : public UDPSession
 {
 public:
     /**
@@ -852,13 +964,6 @@ public:
     virtual RTPReceiver* createReceiver();
 
     /**
-     * Create a new RTP transport for this session.
-     * Override this method to create objects derived from RTPTransport.
-     * @return Pointer to the new transport or NULL on failure
-     */
-    virtual RTPTransport* createTransport();
-
-    /**
      * Create a cipher when required for SRTP
      * @param name Name of the cipher to create
      * @param dir Direction the cipher must be able to handle
@@ -872,20 +977,6 @@ public:
      * @return True if the specified cipher is supported
      */
     virtual bool checkCipher(const String& name);
-
-    /**
-     * Initialize the RTP session, attach a transport if there is none
-     * @return True if initialized, false on some failure
-     */
-    bool initTransport();
-
-    /**
-     * Initialize the RTP session, attach a group if none is present
-     * @param msec Minimum time to sleep in group loop in milliseconds
-     * @param prio Thread priority to run the new group
-     * @return True if initialized, false on some failure
-     */
-    bool initGroup(int msec = 0, Thread::Priority prio = Thread::Normal);
 
     /**
      * Send one RTP payload packet
@@ -958,17 +1049,10 @@ public:
 	{ if (m_recv) m_recv->setDejitter(mindelay,maxdelay); }
 
     /**
-     * Get the RTP/RTCP transport of data handled by this session.
-     * @return A pointer to the RTPTransport of this session
-     */
-    inline RTPTransport* transport() const
-	{ return m_transport; }
-
-    /**
      * Set the RTP/RTCP transport of data handled by this session
      * @param trans A pointer to the new RTPTransport for this session
      */
-    void transport(RTPTransport* trans);
+    virtual void transport(RTPTransport* trans);
 
     /**
      * Get the RTP/RTCP sender of this session
@@ -1060,43 +1144,6 @@ public:
 	{ return m_transport && m_transport->localAddr(addr,rtcp); }
 
     /**
-     * Set the remote network address of the RTP transport of this session
-     * @param addr New remote RTP transport address
-     * @param sniff Automatically adjust the address from the first incoming packet
-     * @return True if address set, false if a failure occured
-     */
-    inline bool remoteAddr(SocketAddr& addr, bool sniff = false)
-	{ return m_transport && m_transport->remoteAddr(addr,sniff); }
-
-    /**
-     * Set the Type Of Service for the RTP transport socket
-     * @param tos Type Of Service bits to set
-     * @return True if operation was successfull, false if an error occured
-     */
-    inline bool setTOS(int tos)
-	{ return m_transport && m_transport->setTOS(tos); }
-
-    /**
-     * Get the RTP socket used by this session
-     * @return Pointer to the RTP socket, NULL if no transport exists
-     */
-    inline Socket* rtpSock()
-	{ return m_transport ? m_transport->rtpSock() : 0; }
-
-    /**
-     * Drill a hole in a firewall or NAT for the RTP and RTCP sockets
-     * @return True if at least a packet was sent for the RTP socket
-     */
-    inline bool drillHole()
-	{ return m_transport && m_transport->drillHole(); }
-
-    /**
-     * Set the interval until receiver timeout is detected
-     * @param interval Milliseconds until receiver times out, zero to disable
-     */
-    void setTimeout(int interval);
-
-    /**
      * Get the stored security provider or of the sender
      * @return A pointer to the RTPSecure or NULL
      */
@@ -1116,20 +1163,101 @@ protected:
      */
     virtual void timerTick(const Time& when);
 
-    /**
-     * Method called when the receiver timed out
-     * @param initial True if no packet was ever received in this session
-     */
-    virtual void timeout(bool initial);
-
 private:
-    RTPTransport* m_transport;
     Direction m_direction;
     RTPSender* m_send;
     RTPReceiver* m_recv;
     RTPSecure* m_secure;
-    u_int64_t m_timeoutTime;
-    u_int64_t m_timeoutInterval;
+};
+
+/**
+ * A bidirectional UDPTL session usable for T.38
+ * @short UDPTL session
+ */
+class YRTP_API UDPTLSession : public UDPSession
+{
+public:
+    /**
+     * Destructor
+     */
+    ~UDPTLSession();
+
+    /**
+     * Set the local network address of the RTP transport of this session
+     * @param addr New local RTP transport address
+     * @return True if address set, false if a failure occured
+     */
+    inline bool localAddr(SocketAddr& addr)
+	{ return m_transport && m_transport->localAddr(addr,false); }
+
+    /**
+     * Get the maximum UDPTL packet length
+     * @return Maximum length of UDPTL packet length in bytes
+     */
+    inline u_int16_t maxLen() const
+	{ return m_maxLen; }
+
+    /**
+     * Get the maximum number of UDPTL secondary IFPs
+     * @return Maximum number of secondary IFPs, zero if disabled
+     */
+    inline u_int8_t maxSec() const
+	{ return m_maxSec; }
+
+    /**
+     * This method is called to send or process an UDPTL packet
+     * @param data Pointer to raw UDPTL data
+     * @param len Length of the data packet
+     */
+    virtual void rtpData(const void* data, int len);
+
+    /**
+     * Send UDPTL data over the transport, add older blocks for error recovery
+     * @param data Pointer to IFP block to send as primary
+     * @param len Length of primary IFP block
+     * @param seq Sequence number to incorporate in message
+     * @return True if data block was sent, false if an error occured
+     */
+    bool udptlSend(const void* data, int len, u_int16_t seq);
+
+protected:
+    /**
+     * UDPTL Session constructor
+     * @param maxLen Maximum length of UDPTL packet, at least longest primary IFP + 5 bytes
+     * @param maxSec Maximum number of secondary IFPs, set to zero to disable
+     */
+    UDPTLSession(u_int16_t maxLen = 250, u_int8_t maxSec = 2);
+
+    /**
+     * Method called periodically to push any asynchronous data or statistics
+     * @param when Time to use as base in all computing
+     */
+    virtual void timerTick(const Time& when);
+
+    /**
+     * Create a new UDPTL transport for this session.
+     * Override this method to create objects derived from RTPTransport.
+     * @return Pointer to the new transport or NULL on failure
+     */
+    virtual RTPTransport* createTransport();
+
+    /**
+     * Method called when UDPTL data is received
+     * @param data Pointer to IFP block
+     * @param len Length of the IFP block
+     * @param seq Sequence number of the block
+     * @param recovered True if the IFP block was recovered after data loss
+     */
+    virtual void udptlRecv(const void* data, int len, u_int16_t seq, bool recovered) = 0;
+
+private:
+    void recoverSec(const unsigned char* data, int len, u_int16_t seq, int nSec);
+    u_int16_t m_rxSeq;
+    u_int16_t m_txSeq;
+    u_int16_t m_maxLen;
+    u_int8_t m_maxSec;
+    bool m_warn;
+    ObjList m_txQueue;
 };
 
 /**

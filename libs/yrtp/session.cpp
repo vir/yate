@@ -382,10 +382,9 @@ RTPSender::RTPSender(RTPSession* session, bool randomTs)
     }
 }
 		
-
 bool RTPSender::rtpSend(bool marker, int payload, unsigned int timestamp, const void* data, int len)
 {
-    if (!(m_session && m_session->transport()))
+    if (!(m_session && m_session->UDPSession::transport()))
 	return false;
 
     if (!data)
@@ -432,7 +431,7 @@ bool RTPSender::rtpSend(bool marker, int payload, unsigned int timestamp, const 
     }
     if (m_secLen)
 	rtpAddIntegrity((const unsigned char*)buf.data(),len + padding + 12,pc + (len + padding + m_mkiLen));
-    static_cast<RTPProcessor*>(m_session->transport())->rtpData(buf.data(),buf.length());
+    static_cast<RTPProcessor*>(m_session->UDPSession::transport())->rtpData(buf.data(),buf.length());
     return true;
 }
 
@@ -545,10 +544,90 @@ void RTPSender::rtpAddIntegrity(const unsigned char* data, int len, unsigned cha
 }
 
 
+UDPSession::UDPSession()
+    : m_transport(0), m_timeoutTime(0), m_timeoutInterval(0)
+{
+    DDebug(DebugAll,"UDPSession::UDPSession() [%p]",this);
+}
+
+UDPSession::~UDPSession()
+{
+    DDebug(DebugAll,"UDPSession::~UDPSession() [%p]",this);
+    group(0);
+    transport(0);
+}
+
+void UDPSession::timeout(bool initial)
+{
+    DDebug(DebugNote,"UDPSession::timeout(%s) [%p]",String::boolText(initial),this);
+}
+
+void UDPSession::transport(RTPTransport* trans)
+{
+    DDebug(DebugInfo,"UDPSession::transport(%p) old=%p [%p]",trans,m_transport,this);
+    if (trans == m_transport)
+	return;
+    RTPTransport* tmp = m_transport;
+    m_transport = 0;
+    if (tmp) {
+	tmp->setProcessor(0);
+	tmp->destruct();
+    }
+    m_transport = trans;
+    if (m_transport)
+	m_transport->setProcessor(this);
+}
+
+RTPTransport* UDPSession::createTransport()
+{
+    RTPTransport* trans = new RTPTransport();
+    trans->group(group());
+    return trans;
+}
+
+bool UDPSession::initGroup(int msec, Thread::Priority prio)
+{
+    if (m_group)
+	return true;
+    // try to pick the grop from the transport if it has one
+    if (m_transport)
+	group(m_transport->group());
+    if (!m_group)
+	group(new RTPGroup(msec,prio));
+    if (!m_group)
+	return false;
+    if (m_transport)
+	m_transport->group(m_group);
+    return true;
+}
+
+bool UDPSession::initTransport()
+{
+    if (m_transport)
+	return true;
+    transport(createTransport());
+    return (m_transport != 0);
+}
+
+void UDPSession::setTimeout(int interval)
+{
+    if (interval) {
+	if (interval < 0)
+	    interval = 0;
+	// force sane limits: between 500ms and 60s
+	else if (interval < 500)
+	    interval = 500;
+	else if (interval > 60000)
+	    interval = 60000;
+    }
+    m_timeoutTime = 0;
+    m_timeoutInterval = interval * (u_int64_t)1000;
+}
+
+
 RTPSession::RTPSession()
-    : m_transport(0), m_direction(FullStop),
-      m_send(0), m_recv(0), m_secure(0),
-      m_timeoutTime(0), m_timeoutInterval(0)
+    : m_direction(FullStop),
+      m_send(0), m_recv(0), m_secure(0)
 {
     DDebug(DebugInfo,"RTPSession::RTPSession() [%p]",this);
 }
@@ -629,11 +708,6 @@ void RTPSession::rtpNewSSRC(u_int32_t newSsrc,bool marker)
 	newSsrc,String::boolText(marker),this);
 }
 
-void RTPSession::timeout(bool initial)
-{
-    DDebug(DebugNote,"RTPSession::timeout(%s) [%p]",String::boolText(initial),this);
-}
-
 RTPSender* RTPSession::createSender()
 {
     return new RTPSender(this);
@@ -642,13 +716,6 @@ RTPSender* RTPSession::createSender()
 RTPReceiver* RTPSession::createReceiver()
 {
     return new RTPReceiver(this);
-}
-
-RTPTransport* RTPSession::createTransport()
-{
-    RTPTransport* trans = new RTPTransport();
-    trans->group(group());
-    return trans;
 }
 
 Cipher* RTPSession::createCipher(const String& name, Cipher::Direction dir)
@@ -661,45 +728,10 @@ bool RTPSession::checkCipher(const String& name)
     return false;
 }
 
-bool RTPSession::initGroup(int msec, Thread::Priority prio)
-{
-    if (m_group)
-	return true;
-    // try to pick the grop from the transport if it has one
-    if (m_transport)
-	group(m_transport->group());
-    if (!m_group)
-	group(new RTPGroup(msec,prio));
-    if (!m_group)
-	return false;
-    if (m_transport)
-	m_transport->group(m_group);
-    return true;
-}
-
-bool RTPSession::initTransport()
-{
-    if (m_transport)
-	return true;
-    transport(createTransport());
-    return (m_transport != 0);
-}
-
 void RTPSession::transport(RTPTransport* trans)
 {
-    DDebug(DebugInfo,"RTPSession::transport(%p) old=%p [%p]",trans,m_transport,this);
-    if (trans == m_transport)
-	return;
-    RTPTransport* tmp = m_transport;
-    m_transport = 0;
-    if (tmp) {
-	tmp->setProcessor(0);
-	tmp->destruct();
-    }
-    m_transport = trans;
-    if (m_transport)
-	m_transport->setProcessor(this);
-    else
+    UDPSession::transport(trans);
+    if (!m_transport)
 	m_direction = FullStop;
 }
 
@@ -794,19 +826,171 @@ bool RTPSession::silencePayload(int type)
     return false;
 }
 
-void RTPSession::setTimeout(int interval)
+
+UDPTLSession::UDPTLSession(u_int16_t maxLen, u_int8_t maxSec)
+    : m_rxSeq(0xffff), m_txSeq(0xffff),
+      m_maxLen(maxLen), m_maxSec(maxSec),
+      m_warn(true)
 {
-    if (interval) {
-	if (interval < 0)
-	    interval = 0;
-	// force sane limits: between 500ms and 60s
-	else if (interval < 500)
-	    interval = 500;
-	else if (interval > 60000)
-	    interval = 60000;
+    DDebug(DebugInfo,"UDPTLSession::UDPTLSession(%u,%u) [%p]",maxLen,maxSec,this);
+    if (m_maxLen < 96)
+	m_maxLen = 96;
+    else if (m_maxLen > 1492)
+	m_maxLen = 1492;
+}
+
+UDPTLSession::~UDPTLSession()
+{
+    DDebug(DebugInfo,"UDPTLSession::~UDPTLSession() [%p]",this);
+}
+
+void UDPTLSession::timerTick(const Time& when)
+{
+    if (m_timeoutInterval) {
+	if (m_timeoutTime) {
+	    if (when >= m_timeoutTime) {
+		// rearm timeout next time we get a packet
+		m_timeoutTime = INF_TIMEOUT;
+		timeout(0xffff == m_rxSeq);
+	    }
+	}
+	else
+	    m_timeoutTime = when + m_timeoutInterval;
     }
+}
+
+RTPTransport* UDPTLSession::createTransport()
+{
+    RTPTransport* trans = new RTPTransport(RTPTransport::UDPTL);
+    trans->group(group());
+    return trans;
+}
+
+void UDPTLSession::rtpData(const void* data, int len)
+{
+    if ((len < 6) || !data)
+	return;
     m_timeoutTime = 0;
-    m_timeoutInterval = interval * (u_int64_t)1000;
+    const unsigned char* pd = (const unsigned char*)data;
+    int pLen = pd[2];
+    if (pLen > (len-5)) {
+	// primary IFP does not fit in packet
+	if ((m_rxSeq == 0xffff) && ((pd[0] & 0xc0) == 0x80) && m_warn) {
+	    m_warn = false;
+	    Debug(DebugWarn,"Receiving RTP instead of UDPTL [%p]",this);
+	}
+	return;
+    }
+    u_int16_t seq = pd[1] + (((u_int16_t)pd[0]) << 8);
+    // substraction with overflow
+    int16_t ds = seq - m_rxSeq;
+    if ((m_rxSeq == 0xffff) && (seq != 0)) {
+	// received sequence does not start at zero
+	if ((pd[0] & 0xc0) == 0x80) {
+	    if (m_warn) {
+		m_warn = false;
+		Debug(DebugWarn,"Receiving RTP instead of UDPTL [%p]",this);
+	    }
+	    return;
+	}
+	ds = 1;
+    }
+    if (ds < 0) {
+	// received old packet
+	if (m_warn) {
+	    m_warn = false;
+	    Debug(DebugWarn,"UDPTL received SEQ %u while current is %u [%p]",seq,m_rxSeq,this);
+	}
+	return;
+    }
+    m_warn = true;
+    if (ds > 1) {
+	// some packets were lost, try to recover
+	if (0 == pd[pLen+3])
+	    // recover from secondary IFPs
+	    recoverSec(pd+pLen+5,len-pLen-5,seq-1,pd[pLen+4]);
+    }
+    m_rxSeq = seq;
+    udptlRecv(pd+3,pLen,seq,false);
+}
+
+void UDPTLSession::recoverSec(const unsigned char* data, int len, u_int16_t seq, int nSec)
+{
+    if ((nSec <= 0) || (len <= 1))
+	return;
+    if ((int16_t)(seq - m_rxSeq) <= 0)
+	return;
+    int sLen = data[0];
+    if (sLen >= len)
+	return;
+    // recursively recover from remaining secondaries
+    recoverSec(data+sLen+1,len-sLen-1,seq-1,nSec-1);
+    int16_t ds = seq - m_rxSeq;
+    switch (ds) {
+	case 1:
+	    break;
+	case 2:
+	    Debug(DebugMild,"UDPTL lost IFP with SEQ %u [%p]",m_rxSeq+1,this);
+	    break;
+	default:
+	    Debug(DebugWarn,"UDPTL lost IFPs with SEQ %u-%u [%p]",m_rxSeq+1,seq-1,this);
+	    break;
+    }
+    Debug(DebugInfo,"UDPTL recovered IFP with SEQ %u [%p]",seq,this);
+    m_rxSeq = seq;
+    udptlRecv(data+1,sLen,seq,true);
+}
+
+bool UDPTLSession::udptlSend(const void* data, int len, u_int16_t seq)
+{
+    if (!(UDPSession::transport() && data && len))
+	return false;
+    int pl = len + 5;
+    if ((len > 255) || (pl > m_maxLen)) {
+	Debug(DebugWarn,"UDPTL could not send IFP with len=%d [%p]",len,this);
+	m_txQueue.clear();
+	return false;
+    }
+    // substraction with overflow
+    int16_t ds = seq - m_txSeq;
+    if (ds != 0) {
+	if (ds != 1) {
+	    Debug(DebugInfo,"UDPTL sending SEQ %u while current is %u [%p]",seq,m_txSeq,this);
+	    m_txQueue.clear();
+	}
+	if (m_maxSec)
+	    m_txQueue.insert(new DataBlock(const_cast<void*>(data),len));
+    }
+    DataBlock buf(0,m_maxLen);
+    unsigned char* pd = buf.data(0,6);
+    if (!pd)
+	return false;
+    pd[0] = (seq >> 8) & 0xff;
+    pd[1] = seq & 0xff;
+    pd[2] = len & 0xff;
+    ::memcpy(pd+3,data,len);
+    pd[len+3] = 0; // secondary IFPs
+    int nSec = 0;
+    for (ObjList* l = m_txQueue.skipNext(); l; l = l->skipNext()) {
+	// truncate the TX queue when reaching maximum packet length or IFP count
+	if (nSec >= m_maxSec) {
+	    l->clear();
+	    break;
+	}
+	DataBlock* d = static_cast<DataBlock*>(l->get());
+	if ((pl+d->length()+1) > m_maxLen) {
+	    l->clear();
+	    break;
+	}
+	pd[pl] = d->length() & 0xff;
+	::memcpy(pd+pl+1,d->data(),d->length());
+	pl += d->length()+1;
+	nSec++;
+    }
+    pd[len+4] = nSec;
+    m_txSeq = seq;
+    static_cast<RTPProcessor*>(UDPSession::transport())->rtpData(pd,pl);
+    return true;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

@@ -41,6 +41,7 @@ public:
     ForkMaster(ObjList* targets);
     virtual ~ForkMaster();
     bool startCalling(Message& msg);
+    void checkTimer(const Time& tmr);
     void lostSlave(ForkSlave* slave, const char* reason);
     bool msgAnswered(Message& msg, const String& dest);
     bool msgProgress(Message& msg, const String& dest);
@@ -61,6 +62,8 @@ protected:
     bool m_fake;
     ObjList* m_targets;
     Message* m_exec;
+    u_int64_t m_timer;
+    bool m_timerDrop;
     String m_reason;
     String m_media;
 };
@@ -123,7 +126,8 @@ UNLOAD_PLUGIN(unloadNow)
 
 ForkMaster::ForkMaster(ObjList* targets)
     : m_index(0), m_answered(false), m_rtpForward(false), m_rtpStrict(false),
-      m_fake(false), m_targets(targets), m_exec(0), m_reason("hangup")
+      m_fake(false), m_targets(targets), m_exec(0),
+      m_timer(0), m_timerDrop(false), m_reason("hangup")
 {
     String tmp(MOD_PREFIX "/");
     tmp << ++s_current;
@@ -135,6 +139,7 @@ ForkMaster::ForkMaster(ObjList* targets)
 ForkMaster::~ForkMaster()
 {
     DDebug(&__plugin,DebugAll,"ForkMaster::~ForkMaster() '%s'",id().c_str());
+    m_timer = 0;
     s_mutex.lock();
     s_calls.remove(this,false);
     s_mutex.unlock();
@@ -195,6 +200,7 @@ bool ForkMaster::forkSlave(const char* dest)
     }
     else
 	error = m_exec->getValue("error",error);
+    m_exec->userData(0);
     if (ok) {
 	ForkSlave::Type type = static_cast<ForkSlave::Type>(m_exec->getIntValue("fork.calltype",s_calltypes,ForkSlave::Regular));
 	Debug(&__plugin,DebugCall,"Call '%s' calling on %s '%s' target '%s'",
@@ -227,8 +233,12 @@ bool ForkMaster::startCalling(Message& msg)
     m_rtpForward = msg.getBoolValue("rtp_forward");
     m_rtpStrict = msg.getBoolValue("rtpstrict");
     if (!callContinue()) {
-	msg.setParam("error",m_exec->getValue("error"));
-	msg.setParam("reason",m_exec->getValue("reason"));
+	const char* err = m_exec->getValue("reason");
+	if (err)
+	    msg.setParam("reason",err);
+	err = m_exec->getValue("error");
+	msg.setParam("error",err);
+	disconnect(err);
 	return false;
     }
     if (m_rtpForward) {
@@ -247,6 +257,8 @@ bool ForkMaster::startCalling(Message& msg)
 
 bool ForkMaster::callContinue()
 {
+    m_timer = 0;
+    m_timerDrop = false;
     int forks = 0;
     while (m_exec && !m_answered) {
 	// get the fake media source at start of each group
@@ -254,7 +266,22 @@ bool ForkMaster::callContinue()
 	String* dest = getNextDest();
 	if (!dest)
 	    break;
-	if (*dest == "|") {
+	if (dest->startSkip("|",false)) {
+	    if (*dest) {
+		String tmp(*dest);
+		int tout = 0;
+		if (tmp.startSkip("next=",false) && ((tout = tmp.toInteger()) > 0)) {
+		    m_timer = 1000 * tout + Time::now();
+		    m_timerDrop = false;
+		}
+		else if (tmp.startSkip("drop=",false) && ((tout = tmp.toInteger()) > 0)) {
+		    m_timer = 1000 * tout + Time::now();
+		    m_timerDrop = true;
+		}
+		else
+		    Debug(&__plugin,DebugMild,"Call '%s' ignoring modifier '%s'",
+			getPeerId().c_str(),dest->c_str());
+	    }
 	    dest->destruct();
 	    if (forks)
 		break;
@@ -265,6 +292,23 @@ bool ForkMaster::callContinue()
 	dest->destruct();
     }
     return (forks > 0);
+}
+
+void ForkMaster::checkTimer(const Time& tmr)
+{
+    if (!m_timer || m_timer > tmr)
+	return;
+    m_timer = 0;
+    if (m_timerDrop) {
+	m_timerDrop = false;
+	Debug(&__plugin,DebugNote,"Call '%s' dropping slaves on timer",
+	    getPeerId().c_str());
+	clear(true);
+    }
+    else
+	Debug(&__plugin,DebugNote,"Call '%s' calling more on timer",
+	    getPeerId().c_str());
+    callContinue();
 }
 
 void ForkMaster::lostSlave(ForkSlave* slave, const char* reason)
@@ -313,6 +357,7 @@ void ForkMaster::lostSlave(ForkSlave* slave, const char* reason)
 	Debug(&__plugin,DebugCall,"Call '%s' failed by '%s' after %d attempts with reason '%s'",
 	    getPeerId().c_str(),id().c_str(),m_index,reason);
     }
+    m_timer = 0;
     lock.drop();
     disconnect(reason);
 }
@@ -320,6 +365,7 @@ void ForkMaster::lostSlave(ForkSlave* slave, const char* reason)
 bool ForkMaster::msgAnswered(Message& msg, const String& dest)
 {
     Lock lock(s_mutex);
+    m_timer = 0;
     // make sure only the first succeeds
     if (m_answered)
 	return false;
@@ -353,7 +399,7 @@ bool ForkMaster::msgProgress(Message& msg, const String& dest)
 	return false;
     if (m_ringing && (m_ringing != dest))
 	return false;
-    
+
     ForkSlave* slave = static_cast<ForkSlave*>(m_slaves[dest]);
     if (!slave)
 	return false;
@@ -585,6 +631,15 @@ bool ForkModule::received(Message& msg, int id)
 	    while (msgToMaster(msg,false))
 		;
 	    return false;
+	case Timer:
+	    s_mutex.lock();
+	    for (ObjList* l = s_calls.skipNull(); l; l = l->skipNext()) {
+		RefPointer<ForkMaster> m = static_cast<ForkMaster*>(l->get());
+		if (m)
+		    m->checkTimer(msg.msgTime());
+	    }
+	    s_mutex.unlock();
+	    // fall through
 	default:
 	    return Module::received(msg,id);
     }

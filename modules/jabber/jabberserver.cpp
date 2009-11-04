@@ -181,8 +181,19 @@ public:
 	}
     // Replace the list of domains service by this engine
     void setDomains(const String& list);
+    // Retrieve a subdomain of a serviced domain
+    void getSubDomain(String& subdomain, const String& domain);
+    // Add or remove a component to/from serviced domains and components list
+    void setComponent(const String& domain, bool add);
+    // Check if a component is serviced by this engine
+    bool hasComponent(const String& domain);
     // Check if a resource name is retricted
     bool restrictedResource(const String& name);
+    // Check if a domain is serviced by a server item
+    bool isServerItemDomain(const String& domain);
+    // Internally route c2s <--> comp stanzas
+    // Return true if handled
+    bool routeInternal(JBEvent* ev);
     // Process 'user.roster' notification messages
     void handleUserRoster(Message& msg);
     // Process 'user.update' messages
@@ -283,6 +294,7 @@ private:
     ObjList m_domains;                   // Domains serviced by this engine
     ObjList m_restrictedResources;       // Resource names the users can't use
     ObjList m_items;
+    ObjList m_components;
     XMPPFeatureList m_c2sFeatures;       // Server features to advertise on c2s streams
     XMPPFeatureList m_features;          // Server features to advertise on non c2s streams
     String m_dialbackSecret;             // Server dialback secret used to build keys
@@ -651,7 +663,7 @@ static XmlElement* buildRosterItem(NamedList& list, unsigned int index)
 // Complete stream type
 static void completeStreamType(String& buf, const String& part, bool addAll = false)
 {
-    static const String t[] = {"c2s","s2s",""};
+    static const String t[] = {"c2s","s2s","comp", ""};
     static const String all[] = {"all","*",""};
     for (const String* d = t; !d->null(); d++)
 	Module::itemComplete(buf,*d,part);
@@ -704,6 +716,8 @@ YJBEngine::YJBEngine()
     m_c2sProcess = new YStreamSetProcess(this,10,"c2s/process");
     m_s2sReceive = new YStreamSetReceive(this,0,"s2s/recv");
     m_s2sProcess = new YStreamSetProcess(this,0,"s2s/process");
+    m_compReceive = new YStreamSetReceive(this,0,"comp/recv");
+    m_compProcess = new YStreamSetProcess(this,0,"comp/process");
     // c2s features
     m_c2sFeatures.add(XMPPNamespace::DiscoInfo);
     m_c2sFeatures.add(XMPPNamespace::DiscoItems);
@@ -792,14 +806,22 @@ void YJBEngine::processEvent(JBEvent* ev)
     XDebug(this,DebugInfo,"Processing event (%p,%s)",ev,ev->name());
     switch (ev->type()) {
 	case JBEvent::Message:
-	    JBPendingWorker::add(ev);
+	    if (!ev->element())
+		break;
+	    if (!routeInternal(ev))
+		JBPendingWorker::add(ev);
 	    break;
 	case JBEvent::Presence:
-	    if (ev->element())
+	    if (!ev->element())
+		break;
+	    if (!routeInternal(ev))
 		processPresenceStanza(ev);
 	    break;
 	case JBEvent::Iq:
-	    JBPendingWorker::add(ev);
+	    if (!ev->element())
+		break;
+	    if (!routeInternal(ev))
+		JBPendingWorker::add(ev);
 	    break;
 	case JBEvent::Start:
 	    if (ev->stream()->incoming())
@@ -872,8 +894,15 @@ void YJBEngine::buildDialbackKey(const String& id, String& key)
 // Check if a domain is serviced by this engine
 bool YJBEngine::hasDomain(const String& domain)
 {
+    if (!domain)
+	return false;
     Lock lock(this);
-    return domain && m_domains.find(domain);
+    for (ObjList* o = m_domains.skipNull(); o; o = o->skipNext()) {
+	String* tmp = static_cast<String*>(o->get());
+	if (*tmp == domain)
+	    return true;
+    }
+    return false;
 }
 
 // Replace the list of domains service by this engine
@@ -902,6 +931,48 @@ void YJBEngine::setDomains(const String& list)
 	Debug(this,DebugGoOn,"No domains configured");
 }
 
+// Add or remove a component to/from serviced domains and components list
+void YJBEngine::setComponent(const String& domain, bool add)
+{
+    Lock lock(this);
+    ObjList* oc = m_components.skipNull();
+    for (; oc; oc = oc->skipNext()) {
+	String* tmp = static_cast<String*>(oc->get());
+	if (*tmp == domain)
+	    break;
+    }
+    ObjList* od = m_domains.skipNull();
+    for (; od; od = od->skipNext()) {
+	String* tmp = static_cast<String*>(od->get());
+	if (*tmp == domain)
+	    break;
+    }
+    if (add) {
+	if (!oc)
+	    m_components.append(new String(domain));
+	if (!od)
+	    m_domains.append(new String(domain));
+    }
+    else {
+	if (oc)
+	    oc->remove();
+	if (od)
+	    od->remove();
+    }
+}
+
+// Check if a component is serviced by this engine
+bool YJBEngine::hasComponent(const String& domain)
+{
+    Lock lock(this);
+    for (ObjList* o = m_components.skipNull(); o; o = o->skipNext()) {
+	String* tmp = static_cast<String*>(o->get());
+	if (*tmp == domain)
+	    return true;
+    }
+    return false;
+}
+
 // Check if a resource name is retricted
 bool YJBEngine::restrictedResource(const String& name)
 {
@@ -912,6 +983,60 @@ bool YJBEngine::restrictedResource(const String& name)
 	    return true;
     }
     return false;
+}
+
+// Check if a domain is serviced by a server item
+bool YJBEngine::isServerItemDomain(const String& domain)
+{
+    Lock lock(this);
+    for (ObjList* o = m_items.skipNull(); o; o = o->skipNext()) {
+	JabberID* jid = static_cast<JabberID*>(o->get());
+	if (domain == jid->domain())
+	    return true;
+    }
+    return false;
+}
+
+// Internally route c2s <--> comp stanzas
+// Return true if handled
+bool YJBEngine::routeInternal(JBEvent* ev)
+{
+    JBStream* s = 0;
+    if (ev->stream()->type() == JBStream::s2s) {
+	// Incoming on s2s: check if it should be routed to a component
+	if (!hasComponent(ev->to().domain()))
+	    return false;
+	String comp;
+	getSubDomain(comp,ev->to().domain());
+	if (comp) {
+	    String local = ev->to().domain().substr(comp.length() + 1);
+	    s = findServerStream(local,ev->to().domain(),true);
+	}
+    }
+    else if (ev->stream()->type() == JBStream::comp) {
+	// Incoming on comp: check if it should be routed to a remote domain
+	if (hasDomain(ev->to().domain()))
+	    return false;
+	s = findServerStream(ev->from().domain(),ev->to().domain(),true);
+    }
+    else
+	return false;
+
+    DDebug(this,DebugAll,"routeInternal() src=%s from=%s to=%s stream=%p",
+	ev->stream()->typeName(),ev->from().c_str(),ev->to().c_str(),s);
+    if (s) {
+	XmlElement* xml = ev->releaseXml();
+	bool ok = false;
+	if (xml) {
+	    xml->removeAttribute(XmlElement::s_ns);
+	    ok = s->sendStanza(xml);
+	}
+	if (!ok)
+	    ev->sendStanzaError(XMPPError::Internal);
+    }
+    else
+	ev->sendStanzaError(XMPPError::NoRemote,0,XMPPError::TypeCancel);
+    return true;
 }
 
 // Process an 'user.roster' messages
@@ -976,7 +1101,7 @@ bool YJBEngine::handleJabberIq(Message& msg)
 	return false;
     DDebug(this,DebugAll,"YJBEngine::handleJabberIq() from=%s to=%s",from.c_str(),to.c_str());
     JBStream* stream = 0;
-    if (hasDomain(to.domain())) {
+    if (hasDomain(to.domain()) && !hasComponent(to.domain())) {
 	stream = findClientStream(true,to);
 	if (!(stream && stream->flag(JBStream::AvailableResource)))
 	    TelEngine::destruct(stream);
@@ -1014,7 +1139,7 @@ bool YJBEngine::handleResSubscribe(Message& msg)
 	msg.c_str(),from.bare().c_str(),to.bare().c_str(),oper->c_str());
     XmlElement* xml = getPresenceXml(msg,from.bare(),presType);
     bool ok = false;
-    if (hasDomain(to.domain())) {
+    if (hasDomain(to.domain()) && !hasComponent(to.domain())) {
 	xml->removeAttribute("to");
 	// RFC 3921: (un)subscribe requests are sent only to available resources
 	String* instance = msg.getParam("instance");
@@ -1054,7 +1179,7 @@ bool YJBEngine::handleResNotify(Message& msg)
     Debug(this,DebugAll,"Processing %s from=%s to=%s oper=%s",
 	msg.c_str(),from.c_str(),to.c_str(),oper->c_str());
     XmlElement* xml = 0;
-    bool c2s = hasDomain(to.domain());
+    bool c2s = hasDomain(to.domain()) && !hasComponent(to.domain());
     bool online = (*oper == "online" || *oper == "update");
     if (online  || *oper == "offline" || *oper == "delete") {
 	if (!from.resource())
@@ -1135,7 +1260,7 @@ bool YJBEngine::handleMsgExecute(Message& msg)
     if (!(caller.resource()))
 	return false;
     DDebug(this,DebugAll,"handleMsgExecute() caller=%s called=%s",caller.c_str(),called.c_str());
-    if (hasDomain(called.domain())) {
+    if (hasDomain(called.domain()) && !hasComponent(called.domain())) {
 	// RFC 3921 11.1: Send chat only to clients with non-negative resource priority
 	bool ok = false;
 	unsigned int n = msg.getIntValue("instance.count");
@@ -1210,7 +1335,20 @@ bool YJBEngine::handleJabberItem(Message& msg)
 	Debug(this,DebugAll,"Removed item '%s'",jid);
     }
     else if (!o) {
-	m_items.append(new String(jid));
+	JabberID* j = new JabberID(jid);
+	String comp;
+	getSubDomain(comp,j->domain());
+	if (comp) {
+	    String local(j->domain().substr(comp.length() + 1));
+	    if (findServerStream(local,j->domain(),true)) {
+		Debug(this,DebugMild,
+		    "Request to add server item '%s' while already having a component in the same domain",
+		    jid);
+		TelEngine::destruct(j);
+		return false;
+	    }
+	}
+	m_items.append(j);
 	Debug(this,DebugAll,"Added item '%s'",jid);
     }
     return false;
@@ -1324,12 +1462,49 @@ void YJBEngine::processPresenceStanza(JBEvent* ev)
     ev->sendStanzaError(XMPPError::ServiceUnavailable);
 }
 
+// Retrieve a subdomain of a serviced domain
+void YJBEngine::getSubDomain(String& subdomain, const String& domain)
+{
+    Lock lock(this);
+    for (ObjList* o = m_domains.skipNull(); o; o = o->skipNext()) {
+	String cmp("." + o->get()->toString());
+	if (domain.endsWith(cmp) && domain.length() > cmp.length()) {
+	    subdomain = domain.substr(0,domain.length() - cmp.length());
+	    return;
+	}
+    }
+}
+
 // Process a stream start element received by an incoming stream
 // The given event is always valid and carry a valid stream
 // Set local domain and stream features to advertise to remote party
 void YJBEngine::processStartIn(JBEvent* ev)
 {
     static const char* node = "http://yate.null.ro/yate/server/caps";
+
+    JBServerStream* comp = ev->serverStream();
+    if (comp && comp->type() == JBStream::comp) {
+	String sub;
+	if (ev->from() && !ev->from().node() && !ev->from().resource())
+	    getSubDomain(sub,ev->from().domain());
+	if (!sub) {
+	    comp->terminate(-1,true,0,XMPPError::HostUnknown);
+	    return;
+	}
+	String local(ev->from().substr(sub.length() + 1));
+	bool isItem = isServerItemDomain(ev->from().domain());
+	if (isItem || findServerStream(local,ev->from(),false)) {
+	    if (isItem)
+		Debug(this,DebugMild,"Component request for server item domain '%s'",
+		    ev->from().domain().c_str());
+	    comp->terminate(-1,true,0,XMPPError::Conflict);
+	    return;
+	}
+	// Add component to serviced domain
+	setComponent(ev->from(),true);
+	comp->startComp(local,ev->from());
+	return;
+    }
 
     // Set c2s stream TLS required flag
     if (ev->stream()->type() == JBStream::c2s)
@@ -1485,6 +1660,9 @@ void YJBEngine::processStreamEvent(JBEvent* ev)
 		// TODO: notify offline for all users in remote domain
 		m = userRegister(*s,false);
 	    }
+	    // Remove component from serviced domain
+	    if (ev->stream()->type() == JBStream::comp)
+		setComponent(ev->stream()->remote(),false);
 	}
     }
     else {
@@ -1787,12 +1965,16 @@ bool YJBEngine::sendStanza(XmlElement*& xml, ObjList*& streams)
 // Build a new one if not found
 JBStream* YJBEngine::getServerStream(const JabberID& from, const JabberID& to)
 {
-    // Avoid streams to internal components
-    if (m_items.find(to.domain()) || !hasDomain(from.domain()))
-	return 0;
     JBServerStream* s = findServerStream(from.domain(),to.domain(),true);
     if (s)
 	return s;
+    // Avoid streams to internal components or (sub)domains
+    if (m_items.find(to.domain()) || !hasDomain(from.domain()))
+	return 0;
+    String comp;
+    getSubDomain(comp,to.domain());
+    if (comp)
+	return 0;
     return createServerStream(from.domain(),to.domain());
 }
 
@@ -1891,9 +2073,11 @@ void YJBEngine::statusParams(String& str)
     lock();
     unsigned int c2s = m_c2sReceive ? m_c2sReceive->streamCount() : 0;
     unsigned int s2s = m_s2sReceive ? m_s2sReceive->streamCount() : 0;
+    unsigned int comp = m_compReceive ? m_compReceive->streamCount() : 0;
     unlock();
     str << lookup(JBStream::c2s,JBStream::s_typeName) << "=" << c2s;
     str << "," << lookup(JBStream::s2s,JBStream::s_typeName) << "=" << s2s;
+    str << "," << lookup(JBStream::comp,JBStream::s_typeName) << "=" << comp;
 }
 
 // Fill module status detail
@@ -2235,7 +2419,8 @@ void JBPendingWorker::processChat(JBPendingJob& job)
 	return;
     }
     XMPPError::Type error = XMPPError::NoError;
-    bool localTarget = s_jabber->hasDomain(ev->to().domain());
+    bool localTarget = s_jabber->hasDomain(ev->to().domain()) &&
+	!s_jabber->hasComponent(ev->to().domain());
     Message m("msg.route");
     while (true) {
 	__plugin.complete(m);
@@ -2426,7 +2611,8 @@ void JBPendingWorker::processIq(JBPendingJob& job)
     bool respond = (t == XMPPUtils::IqGet || t == XMPPUtils::IqSet);
     // Destination at local domain: deny the request if the sender is not
     // the target's roster
-    if (s_jabber->hasDomain(ev->to().domain())) {
+    if (s_jabber->hasDomain(ev->to().domain()) &&
+	!s_jabber->hasComponent(ev->to().domain())) {
 	// Check auth
 	Message auth("resource.subscribe");
 	auth.addParam("module",__plugin.name());
@@ -2486,6 +2672,8 @@ UserAuthMessage::UserAuthMessage(JBEvent* ev)
     : Message("user.auth"),
     m_stream(ev->stream()->toString()), m_streamType((JBStream::Type)ev->stream()->type())
 {
+    XDebug(&__plugin,DebugAll,"UserAuthMessage stream=%s type=%u",
+	m_stream.c_str(),m_streamType);
     __plugin.complete(*this);
     addParam("streamtype",ev->stream()->typeName());
     ev->stream()->lock();
@@ -2497,6 +2685,10 @@ UserAuthMessage::UserAuthMessage(JBEvent* ev)
 	    user << username << "@";
 	user << ev->stream()->local().domain();
 	setParam("username",user);
+    }
+    else if (m_streamType == JBStream::comp) {
+	setParam("username",ev->stream()->remote());
+	setParam("handshake",ev->text());
     }
     ev->stream()->unlock();
     SocketAddr addr;
@@ -2510,13 +2702,13 @@ UserAuthMessage::UserAuthMessage(JBEvent* ev)
 void UserAuthMessage::dispatched(bool accepted)
 {
     JBStream* stream = s_jabber->findStream(m_stream,m_streamType);
+    XDebug(&__plugin,DebugAll,"UserAuthMessage::dispatch(%u) stream=(%p,%s) type=%u",
+	accepted,stream,m_stream.c_str(),m_streamType);
     bool ok = false;
     String rspValue;
     // Use a while() to break to the end
     while (stream) {
 	Lock lock(stream);
-	if (!stream->m_sasl)
-	    break;
 	// Returned value '-' means deny
 	if (accepted && retValue() == "-")
 	    break;
@@ -2527,16 +2719,28 @@ void UserAuthMessage::dispatched(bool accepted)
 	if (!getValue("username"))
 	    break;
 	// Check credentials
-	String* rsp = getParam("response");
-	if (rsp) {
-	    if (stream->m_sasl->m_plain)
-		ok = (*rsp == retValue());
-	    else {
+	if (m_streamType != JBStream::comp) {
+	    String* rsp = getParam("response");
+	    if (rsp) {
+		if (!stream->m_sasl)
+		    break;
+		if (stream->m_sasl->m_plain)
+		    ok = (*rsp == retValue());
+		else {
+		    String digest;
+		    stream->m_sasl->buildMD5Digest(digest,retValue(),true);
+		    ok = (*rsp == digest);
+		    if (ok)
+			stream->m_sasl->buildMD5Digest(rspValue,retValue(),false);
+		}
+	    }
+	}
+	else {
+	    JBServerStream* comp = stream->serverStream();
+	    if (comp) {
 		String digest;
-		stream->m_sasl->buildMD5Digest(digest,retValue(),true);
-		ok = (*rsp == digest);
-		if (ok)
-		    stream->m_sasl->buildMD5Digest(rspValue,retValue(),false);
+		comp->buildHandshake(digest,retValue());
+		ok = (digest == getValue("handshake"));
 	    }
 	}
 	break;

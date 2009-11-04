@@ -113,6 +113,7 @@ const TokenDict JBStream::s_flagName[] = {
 const TokenDict JBStream::s_typeName[] = {
     {"c2s",      c2s},
     {"s2s",      s2s},
+    {"comp",     comp},
     {0,0}
 };
 
@@ -536,6 +537,10 @@ bool JBStream::authenticated(bool ok, const String& rsp, XMPPError::Type error)
 	    XmlElement* rsp = XMPPUtils::createDialbackResult(m_local,m_remote,true);
 	    ok = sendStreamXml(Running,rsp);
 	}
+	else if (m_type == comp) {
+	    XmlElement* rsp = XMPPUtils::createElement(XmlTag::Handshake);
+	    ok = sendStreamXml(Running,rsp);
+	}
     }
     else {
 	if (m_type == c2s) {
@@ -548,6 +553,8 @@ bool JBStream::authenticated(bool ok, const String& rsp, XMPPError::Type error)
 	    if (ok)
 		terminate(0,true,0,XMPPError::NotAuthorized);
 	}
+	else if (m_type == comp)
+	    terminate(0,true,0,XMPPError::NotAuthorized);
     }
     TelEngine::destruct(m_sasl);
     return ok;
@@ -738,7 +745,7 @@ void JBStream::process(u_int64_t time)
 	    JabberID to;
 	    if (!getJids(root,from,to))
 		break;
-	    XDebug(this,DebugAll,"Processing (%p,%s) in state %s [%p]",
+	    Debug(this,DebugAll,"Processing (%p,%s) in state %s [%p]",
 		root,root->tag(),stateName(),this);
 	    processStart(root,from,to);
 	    break;
@@ -988,6 +995,7 @@ bool JBStream::processAuth(XmlElement* xml, const JabberID& from,
 // Check if a received start start element's namespaces are correct.
 bool JBStream::processStreamStart(const XmlElement* xml)
 {
+    XDebug(this,DebugAll,"JBStream::processStreamStart() [%p]",this);
     if (m_state == Starting)
 	return true;
     changeState(Starting);
@@ -1000,7 +1008,7 @@ bool JBStream::processStreamStart(const XmlElement* xml)
     XMPPError::Type error = XMPPError::NoError;
     const char* reason = 0;
     while (true) {
-	if (m_type != c2s && m_type != s2s) {
+	if (m_type != c2s && m_type != s2s && m_type != comp) {
 	    Debug(this,DebugStub,"processStreamStart() type %u not handled!",m_type);
 	    error = XMPPError::Internal;
 	    break;
@@ -1039,7 +1047,7 @@ bool JBStream::processStreamStart(const XmlElement* xml)
 		else
 		    error = XMPPError::EncryptionRequired;
 	    }
-	    else
+	    else if (m_type != comp)
 		error = XMPPError::Internal;
 	}
 	else if (remoteVersion > 1)
@@ -1162,14 +1170,16 @@ bool JBStream::checkStanzaRecv(XmlElement* xml, JabberID& from, JabberID& to)
 		    "Possible checkStanzaRecv() unhandled outgoing c2s stream [%p]",this);
 	    }
 	    break;
+	case comp:
 	case s2s:
 	    // RFC 3920bis 9.1.1.2 and 9.1.2.1:
 	    // Validate 'to' and 'from'
+	    // Accept anything for component streams
 	    if (!(to && from)) {
 		terminate(0,m_incoming,xml,XMPPError::BadAddressing);
 		return false;
 	    }
-	    if (!m_engine->hasDomain(to.domain())) {
+	    if (m_type == s2s && !m_engine->hasDomain(to.domain())) {
 		terminate(0,m_incoming,xml,XMPPError::HostUnknown);
 		return false;
 	    }
@@ -1582,6 +1592,20 @@ bool JBStream::processFeaturesIn(XmlElement* xml, const JabberID& from, const Ja
     if (!xml->getTag(t,nsName))
 	return dropXml(xml,"invalid tag namespace prefix");
     int ns = nsName ? XMPPUtils::s_ns[*nsName] : XMPPNamespace::Count;
+
+    // Component: Waiting for handshake in the stream namespace
+    if (type() == comp) {
+	if (outgoing())
+	    return dropXml(xml,"invalid state for incoming stream");
+	if (*t != XMPPUtils::s_tag[XmlTag::Handshake] || ns != m_xmlns)
+	    return dropXml(xml,"expecting handshake in stream's namespace");
+	JBEvent* ev = new JBEvent(JBEvent::Auth,this,xml,from,to);
+	ev->m_text = xml->getText();
+	m_events.append(ev);
+	changeState(Auth);
+	return true;
+    }
+
     // Check if received unexpected feature
     if (!m_features.get(ns)) {
 	// Check for some features that can be negotiated via 'iq' elements
@@ -1811,6 +1835,9 @@ void JBStream::setXmlns()
 	    break;
 	case s2s:
 	    m_xmlns = XMPPNamespace::Server;
+	    break;
+	case comp:
+	    m_xmlns = XMPPNamespace::ComponentAccept;
 	    break;
     }
 }
@@ -2308,8 +2335,8 @@ bool JBClientStream::bind()
  * JBServerStream
  */
 // Build an incoming stream from a socket
-JBServerStream::JBServerStream(JBEngine* engine, Socket* socket)
-    : JBStream(engine,socket,s2s),
+JBServerStream::JBServerStream(JBEngine* engine, Socket* socket, bool component)
+    : JBStream(engine,socket,component ? comp : s2s),
     m_dbKey(0)
 {
 }
@@ -2387,7 +2414,7 @@ bool JBServerStream::processRunning(XmlElement* xml, const JabberID& from,
     // Check the tags of known dialback elements:
     //  there are servers who don't stamp them with the namespace
     // Let other elements stamped with dialback namespace go the upper layer
-    if (isDbResult(*xml)) {
+    if (type() != comp && isDbResult(*xml)) {
 	if (outgoing())
 	    return dropXml(xml,"dialback result on outgoing stream");
 	const char* key = xml->getText();
@@ -2422,14 +2449,20 @@ XmlElement* JBServerStream::buildStreamStart()
 	start->setAttribute("id",m_id);
     XMPPUtils::setStreamXmlns(*start);
     start->setAttribute(XmlElement::s_ns,XMPPUtils::s_ns[m_xmlns]);
-    start->setAttribute(XmlElement::s_nsPrefix + "db",XMPPUtils::s_ns[XMPPNamespace::Dialback]);
-    if (!dialback()) {
-	start->setAttributeValid("from",m_local.bare());
-	start->setAttributeValid("to",m_remote.bare());
-	if (!flag(StreamSecured) || flag(TlsRequired)) {
-	    start->setAttribute("version","1.0");
-	    start->setAttribute("xml:lang","en");
+    if (type() == s2s) {
+	start->setAttribute(XmlElement::s_nsPrefix + "db",XMPPUtils::s_ns[XMPPNamespace::Dialback]);
+	if (!dialback()) {
+	    start->setAttributeValid("from",m_local.bare());
+	    start->setAttributeValid("to",m_remote.bare());
+	    if (!flag(StreamSecured) || flag(TlsRequired)) {
+		start->setAttribute("version","1.0");
+		start->setAttribute("xml:lang","en");
+	    }
 	}
+    }
+    else if (type() == comp) {
+	if (incoming())
+	    start->setAttributeValid("from",m_remote.domain());
     }
     return start;
 }
@@ -2441,8 +2474,21 @@ XmlElement* JBServerStream::buildStreamStart()
 bool JBServerStream::processStart(const XmlElement* xml, const JabberID& from,
     const JabberID& to)
 {
+    XDebug(this,DebugAll,"JBServerStream::processStart() [%p]",this);
+
     if (!processStreamStart(xml))
 	return true;
+
+    if (type() == comp) {
+	if (incoming()) {
+	    changeState(Starting);
+	    m_events.append(new JBEvent(JBEvent::Start,this,0,to,JabberID::empty()));
+	    return true;
+	}
+	Debug(this,DebugStub,"JBComponentStream::processStart() not implemented for outgoing [%p]",this);
+	terminate(0,true,0,XMPPError::NoError);
+	return false;
+    }
 
     if (outgoing()) {
 	// Wait features ?
@@ -2504,6 +2550,19 @@ bool JBServerStream::processAuth(XmlElement* xml, const JabberID& from,
 	return true;
     }
     return dropXml(xml,"incomplete state process");
+}
+
+// Start the stream (reply to received stream start)
+bool JBServerStream::startComp(const String& local, const String& remote)
+{
+    if (state() != Starting || type() != comp)
+	return false;
+    Lock lock(this);
+    m_local.set(local);
+    m_remote.set(remote);
+    setSecured();
+    XmlElement* s = buildStreamStart();
+    return sendStreamXml(Features,s);
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

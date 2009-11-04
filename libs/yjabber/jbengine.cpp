@@ -819,7 +819,9 @@ bool JBEngine::acceptConn(Socket* sock, SocketAddr& remote, JBStream::Type t)
     if (t == JBStream::c2s)
 	s = new JBClientStream(this,sock);
     else if (t == JBStream::s2s)
-	s = new JBServerStream(this,sock);
+	s = new JBServerStream(this,sock,false);
+    else if (t == JBStream::comp)
+	s = new JBServerStream(this,sock,true);
     if (s)
 	addStream(s);
     else
@@ -1096,23 +1098,6 @@ void JBEngine::removeStream(JBStream* stream, bool delObj)
     unlock();
 }
 
-// Find a stream by its name in a given set list
-JBStream* JBEngine::findStream(const String& id, JBStreamSetList* list)
-{
-    if (!list)
-	return 0;
-    Lock lock(list);
-    ObjList* found = 0;
-    for (ObjList* o = list->sets().skipNull(); !found && o; o = o->skipNext()) {
-	JBStreamSet* set = static_cast<JBStreamSet*>(o->get());
-	found = set->clients().find(id);
-    }
-    JBStream* stream = found ? static_cast<JBStream*>(found->get()) : 0;
-    if (stream && !stream->ref())
-	stream = 0;
-    return stream;
-}
-
 // Add/remove a connect stream thread when started/stopped
 void JBEngine::connectStatus(JBConnect* conn, bool started)
 {
@@ -1130,6 +1115,23 @@ void JBEngine::connectStatus(JBConnect* conn, bool started)
     }
 }
 
+// Find a stream by its name in a given set list
+JBStream* JBEngine::findStream(const String& id, JBStreamSetList* list)
+{
+    if (!list)
+	return 0;
+    Lock lock(list);
+    ObjList* found = 0;
+    for (ObjList* o = list->sets().skipNull(); !found && o; o = o->skipNext()) {
+	JBStreamSet* set = static_cast<JBStreamSet*>(o->get());
+	found = set->clients().find(id);
+    }
+    JBStream* stream = found ? static_cast<JBStream*>(found->get()) : 0;
+    if (stream && !stream->ref())
+	stream = 0;
+    return stream;
+}
+
 
 /*
  * JBServerEngine
@@ -1137,7 +1139,8 @@ void JBEngine::connectStatus(JBConnect* conn, bool started)
 JBServerEngine::JBServerEngine(const char* name)
     : JBEngine(name),
     m_streamIndex(0),
-    m_c2sReceive(0), m_c2sProcess(0), m_s2sReceive(0), m_s2sProcess(0)
+    m_c2sReceive(0), m_c2sProcess(0), m_s2sReceive(0), m_s2sProcess(0),
+    m_compReceive(0), m_compProcess(0)
 {
 }
 
@@ -1158,6 +1161,8 @@ void JBServerEngine::cleanup(bool final, bool waitTerminate)
     TelEngine::destruct(m_c2sProcess);
     TelEngine::destruct(m_s2sReceive);
     TelEngine::destruct(m_s2sProcess);
+    TelEngine::destruct(m_compReceive);
+    TelEngine::destruct(m_compProcess);
 }
 
 // Stop all stream sets
@@ -1166,23 +1171,14 @@ void JBServerEngine::stopStreamSets(bool waitTerminate)
     XDebug(this,DebugAll,"JBServerEngine::stopStreamSets() wait=%s",
 	String::boolText(waitTerminate));
     lock();
-    RefPointer<JBStreamSetList> c2sReceive = m_c2sReceive;
-    RefPointer<JBStreamSetList> c2sProcess = m_c2sProcess;
-    RefPointer<JBStreamSetList> s2sReceive = m_s2sReceive;
-    RefPointer<JBStreamSetList> s2sProcess = m_s2sProcess;
+    RefPointer<JBStreamSetList> sets[6] = {m_c2sReceive,m_c2sProcess,
+	m_s2sReceive,m_s2sProcess,m_compReceive,m_compProcess};
     unlock();
-    if (c2sReceive)
-	c2sReceive->stop(0,waitTerminate);
-    if (c2sProcess)
-	c2sProcess->stop(0,waitTerminate);
-    if (s2sReceive)
-	s2sReceive->stop(0,waitTerminate);
-    if (s2sProcess)
-	s2sProcess->stop(0,waitTerminate);
-    c2sReceive = 0;
-    c2sProcess = 0;
-    s2sReceive = 0;
-    s2sProcess = 0;
+    for (int i = 0; i < 6; i++)
+	if (sets[i])
+	    sets[i]->stop(0,waitTerminate);
+    for (int j = 0; j < 6; j++)
+	sets[j] = 0;
 }
 
 // Retrieve the list of streams of a given type
@@ -1193,9 +1189,11 @@ void JBServerEngine::getStreamList(RefPointer<JBStreamSetList>& list, int type)
 	list = m_c2sReceive;
     else if (type == JBStream::s2s)
 	list = m_s2sReceive;
+    else if (type == JBStream::comp)
+	list = m_compReceive;
 }
 
-// Find a server to server stream by local/remote domain.
+// Find a server to server or component stream by local/remote domain.
 // Skip over outgoing dialback streams
 JBServerStream* JBServerEngine::findServerStream(const String& local, const String& remote,
     bool out)
@@ -1203,29 +1201,34 @@ JBServerStream* JBServerEngine::findServerStream(const String& local, const Stri
     if (!(local && remote))
 	return 0;
     lock();
-    RefPointer<JBStreamSetList> list = m_s2sReceive;
+    RefPointer<JBStreamSetList> list[2] = {m_s2sReceive,m_compReceive};
     unlock();
-    if (!list)
-	return 0;
     JBServerStream* stream = 0;
-    list->lock();
-    for (ObjList* o = list->sets().skipNull(); o; o = o->skipNext()) {
-	JBStreamSet* set = static_cast<JBStreamSet*>(o->get());
-	for (ObjList* s = set->clients().skipNull(); s; s = s->skipNext()) {
-	    stream = static_cast<JBServerStream*>(s->get());
-	    if (out == stream->outgoing() && !stream->dialback()) {
-		// Lock the stream: remote jid might change
-		Lock lock(stream);
-		if (local == stream->local() && remote == stream->remote()) {
-		    stream->ref();
-		    break;
+    for (int i = 0; i < 2; i++) {
+	list[i]->lock();
+	for (ObjList* o = list[i]->sets().skipNull(); o; o = o->skipNext()) {
+	    JBStreamSet* set = static_cast<JBStreamSet*>(o->get());
+	    for (ObjList* s = set->clients().skipNull(); s; s = s->skipNext()) {
+		stream = static_cast<JBServerStream*>(s->get());
+		if (stream->type() == JBStream::comp ||
+		    (out == stream->outgoing() && !stream->dialback())) {
+		    // Lock the stream: remote jid might change
+		    Lock lock(stream);
+		    if (local == stream->local() && remote == stream->remote()) {
+			stream->ref();
+			break;
+		    }
 		}
+		stream = 0;
 	    }
-	    stream = 0;
+	    if (stream)
+		break;
 	}
+	list[i]->unlock();
+	if (stream)
+	    break;
     }
-    list->unlock();
-    list = 0;
+    list[0] = list[1] = 0;
     return stream;
 }
 
@@ -1286,6 +1289,10 @@ void JBServerEngine::addStream(JBStream* stream)
 	recv = m_s2sReceive;
 	process = m_s2sProcess;
     }
+    else if (stream->type() == JBStream::comp) {
+	recv = m_compReceive;
+	process = m_compProcess;
+    }
     unlock();
     if (recv && process) {
 	recv->add(stream);
@@ -1317,6 +1324,10 @@ void JBServerEngine::removeStream(JBStream* stream, bool delObj)
     else if (stream->type() == JBStream::s2s) {
 	recv = m_s2sReceive;
 	process = m_s2sProcess;
+    }
+    else if (stream->type() == JBStream::comp) {
+	recv = m_compReceive;
+	process = m_compProcess;
     }
     unlock();
     if (recv)

@@ -223,6 +223,7 @@ const String XMPPNamespace::s_array[Count] = {
     "jabber:x:oob",                                        // XOob
     "http://jabber.org/protocol/command",                  // Command
     "msgoffline",                                          // MsgOffline
+    "jabber:component:accept",                             // ComponentAccept
 };
 
 const String XMPPError::s_array[Count] = {
@@ -356,6 +357,7 @@ const String XmlTag::s_array[Count] = {
     "identity",                          // Identity
     "priority",                          // Priority
     "c",                                 // EntityCapsTag
+    "handshake",                         // Handshake
 };
 
 XMPPNamespace XMPPUtils::s_ns;

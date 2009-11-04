@@ -214,7 +214,8 @@ public:
 	XOob = 44,                       // jabber:x:oob
 	Command= 45,                     // http://jabber.org/protocol/command
 	MsgOffline= 46,                  // msgoffline
-	Count = 47,
+	ComponentAccept = 47,            // jabber:component:accept
+	Count = 48,
     };
 
     /**
@@ -399,7 +400,8 @@ public:
 	Identity = 63,                   // identity
 	Priority = 64,                   // priority
 	EntityCapsTag = 65,              // c
-	Count = 66
+	Handshake = 66,                  // handshake
+	Count = 67
     };
 
     /**

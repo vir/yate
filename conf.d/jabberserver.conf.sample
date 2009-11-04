@@ -88,6 +88,7 @@
 ; Allowed values:
 ;  c2s Client to server connection
 ;  s2s Server to server connection
+;  comp External component connection
 ;type=
 
 ; address: string: IP address to listen
@@ -98,6 +99,7 @@
 ; These are the default values for some known types (only if this parameter is missing)
 ;  c2s 5222
 ;  s2s 5269
+; Tehre is no default value for external component listeners
 ;port=
 
 ; backlog: integer: Maximum length of the queue of pending connections

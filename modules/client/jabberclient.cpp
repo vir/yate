@@ -996,8 +996,7 @@ void YJBEngine::statusParams(String& str)
 // Fill module status detail
 unsigned int YJBEngine::statusDetail(String& str)
 {
-    XDebug(this,DebugAll,"statusDetail('%s','%s')",
-	lookup(t,JBStream::s_typeName),TelEngine::c_safe(remote));
+    XDebug(this,DebugAll,"statusDetail('%s')",str.c_str());
     lock();
     RefPointer<JBStreamSetList> list = m_receive;
     unlock();

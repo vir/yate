@@ -3497,10 +3497,10 @@ bool YJGDriver::handleResNotify(Message& msg)
 	    remote.resource(msg.getValue("instance"));
 	else {
 	    local.set(msg.getValue("to"));
-	    lock();
+	    Lock lock(this);
 	    if (!handleDomain(local.domain()))
 		return false;
-	    unlock();
+	    lock.drop();
 	    if (!local.resource())
 		local.resource(msg.getValue("to_instance"));
 	    remote.set(msg.getValue("from"));
@@ -3514,7 +3514,7 @@ bool YJGDriver::handleResNotify(Message& msg)
 	if (online) {
 	    if (!remote.resource())
 		return false;
-	    lock();
+	    Lock lock(this);
 	    for (ObjList* o = channels().skipNull(); o; o = o->skipNext()) {
 		YJGConnection* conn = static_cast<YJGConnection*>(o->get());
 		if (conn->state() != YJGConnection::Pending)
@@ -3527,13 +3527,12 @@ bool YJGDriver::handleResNotify(Message& msg)
 			conn->disconnect(0);
 		}
 	    }
-	    unlock();
 	    return false;
 	}
 	// Offline
 	// Remote user is unavailable: notify all connections
 	// Remote has no resource: match connections by bare jid
-	lock();
+	Lock lock(this);
 	for (ObjList* o = channels().skipNull(); o; o = o->skipNext()) {
 	    YJGConnection* conn = static_cast<YJGConnection*>(o->get());
 	    if (conn->remote().match(remote) && (!local ||
@@ -3542,7 +3541,6 @@ bool YJGDriver::handleResNotify(Message& msg)
 		    conn->disconnect(0);
 	    }
 	}
-	unlock();
 	return false;
     }
     String* src = msg.getParam("from");

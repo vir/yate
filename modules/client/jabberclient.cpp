@@ -672,7 +672,7 @@ bool YJBEngine::handleMsgExecute(Message& msg, const String& line)
 bool YJBEngine::handleUserLogin(Message& msg, const String& line)
 {
     String* proto = msg.getParam("protocol");
-    if (!(proto || !__plugin.canHandleProtocol(*proto)))
+    if (proto && !__plugin.canHandleProtocol(*proto))
 	return false;
 
     // Check operation

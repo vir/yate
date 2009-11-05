@@ -2319,6 +2319,15 @@ public:
 	{}
 
     /**
+     * Check if an audio capability is present
+     * @param return True if an audio capability is present
+     */
+    inline bool hasAudio() {
+	    return m_features.get(XMPPNamespace::JingleAppsRtpAudio) ||
+		m_features.get(XMPPNamespace::JingleAudio);
+	}
+
+    /**
      * Build an entity caps id
      * @param buf Destination buffer
      * @param version Entity caps version

@@ -299,6 +299,7 @@ private:
     String m_callerPrompt;               // Text to be sent to called before calling it
     String m_formats;                    // Formats received in call.execute
     String m_subject;                    // Connection subject
+    String m_line;                       // Connection line
     bool m_offerRawTransport;            // Offer RAW transport on outgoing session
     bool m_offerIceTransport;            // Offer ICE transport on outgoing session
     // Crypto (for contents created by us)
@@ -427,8 +428,6 @@ public:
     virtual bool received(Message& msg, int id);
     // Handle jabber.iq messages
     bool handleJabberIq(Message& msg);
-    // Dispatch jabber.iq messages
-    bool dispatchJabberIq(JGSession* session, XmlElement*& xml);
     // Handle resource.notify messages
     bool handleResNotify(Message& msg);
     // Handle resource.subscribe messages
@@ -578,7 +577,35 @@ static void setMedia(JGRtpMediaList& dest, const String& formats,
 // Send a session's stanza (dispatch a jabber.iq message)
 bool YJGEngine::sendStanza(JGSession* session, XmlElement*& stanza)
 {
-    return plugin.dispatchJabberIq(session,stanza);
+    if (!(session && stanza)) {
+	TelEngine::destruct(stanza);
+	return false;
+    }
+    bool iq = stanza->toString() == XMPPUtils::s_tag[XmlTag::Iq];
+    if (!(iq || stanza->toString() == XMPPUtils::s_tag[XmlTag::Message])) {
+	TelEngine::destruct(stanza);
+	return false;
+    }
+    DDebug(this,DebugAll,"sendStanza() session=(%p,%s) stanza=(%p,%s)",
+	session,session->sid().c_str(),stanza,stanza->tag());
+    Message m(iq ? "jabber.iq" : "msg.execute");
+    m.addParam("module",plugin.name());
+    if (session->line())
+	m.addParam("line",session->line());
+    if (iq) {
+	m.addParam("from",session->local().bare());
+	m.addParam("to",session->remote().bare());
+	m.addParam("from_instance",session->local().resource());
+	m.addParam("to_instance",session->remote().resource());
+    }
+    else {
+	m.addParam("caller",session->local().bare());
+	m.addParam("called",session->remote().bare());
+	m.addParam("caller_instance",session->local().resource());
+	m.addParam("called_instance",session->remote().resource());
+    }
+    m.addParam(new NamedPointer("xml",stanza));
+    return Engine::dispatch(m);
 }
 
 // Process jingle events
@@ -671,6 +698,7 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
     else
 	m_offerRawTransport = false;
     m_subject = msg.getValue("subject");
+    m_line = msg.getValue("line");
     String uri = msg.getValue("diverteruri",msg.getValue("diverter"));
     // Skip protocol if present
     if (uri) {
@@ -750,6 +778,7 @@ YJGConnection::YJGConnection(JGEvent* event)
     m_hangup(false), m_timeout(0), m_transferring(false), m_recvTransferStanza(0),
     m_dataFlags(0), m_ftStatus(FTNone), m_ftHostDirection(FTHostNone)
 {
+    m_line = m_session->line();
     if (event->jingle()) {
         // Check if this call is transferred
 	XmlElement* trans = XMPPUtils::findFirstChild(*event->jingle(),XmlTag::Transfer);
@@ -1617,6 +1646,7 @@ bool YJGConnection::presenceChanged(bool available, NamedList* params)
 
     bool ok = true;
     if (params) {
+	// Check for required audio or file transfer
 	if (m_ftStatus == FTNone)
 	    ok = params->getBoolValue("caps.audio");
 	else
@@ -1624,7 +1654,6 @@ bool YJGConnection::presenceChanged(bool available, NamedList* params)
     }
     if (!ok)
 	return false;
-
     // Check for jingle version override
     if (params)
 	overrideJingleVersion(*params,true);
@@ -1642,14 +1671,14 @@ bool YJGConnection::presenceChanged(bool available, NamedList* params)
 	if (m_offerIceTransport)
 	    addContent(true,buildAudioContent(JGRtpCandidates::RtpIceUdp));
 	m_session = s_jingle->call(m_sessVersion,m_local,m_remote,m_audioContents,transfer,
-	    m_callerPrompt,m_subject);
+	    m_callerPrompt,m_subject,m_line);
 	// Init now the transport for version 0
 	if (m_session && m_session->version() == JGSession::Version0)
 	    resetCurrentAudioContent(true,false);
     }
     else
 	m_session = s_jingle->call(m_sessVersion,m_local,m_remote,m_ftContents,0,
-	    m_callerPrompt,m_subject);
+	    m_callerPrompt,m_subject,m_line);
     if (!m_session) {
 	hangup("noconn");
 	return true;
@@ -3179,7 +3208,7 @@ bool YJGDriver::hasLine(const String& line) const
     return Engine::dispatch(m);
 }
 
-// Make an outgoing calls
+// Make outgoing calls
 // Build peers' JIDs and check if the destination is available
 bool YJGDriver::msgExecute(Message& msg, String& dest)
 {
@@ -3190,6 +3219,13 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
     }
     JabberID caller;
     JabberID called;
+    NamedList caps("");
+    called.set(dest);
+    if (!called.node()) {
+	Debug(this,DebugNote,"Jingle call failed. Incomplete called '%s'",called.c_str());
+	msg.setParam("error","failure");
+	return false;
+    }
     const char* line = msg.getValue("line");
     // Set caller
     if (s_serverMode) {
@@ -3238,15 +3274,31 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	}
     }
     else {
-	// Check line
+	// Get line data
 	if (!TelEngine::null(line)) {
-	    // TODO: request a full JID from stream name (account)
 	    Message m("jabber.account");
 	    m.addParam("module",name());
 	    m.addParam("line",line);
+	    m.addParam("query",String::boolText(true));
+	    if (called) {
+		m.addParam("contact",called.bare());
+		if (called.resource())
+		    m.addParam("instance",called.resource());
+	    }
 	    if (Engine::dispatch(m)) {
 		caller.set(m.getValue("jid"));
-		if (!caller.isFull())
+		if (caller.isFull()) {
+		    if (called && !called.resource())
+			called.resource(m.getValue("instance"));
+		    // Copy resource caps
+		    unsigned int n = m.length();
+		    for (unsigned int i = 0; i < n; i++) {
+			NamedString* ns = m.getParam(i);
+			if (ns && ns->name().startsWith("caps."))
+			    caps.addParam(ns->name(),*ns);
+		    }
+		}
+		else
 		    caller.set("");
 	    }
 	    if (!caller)
@@ -3261,9 +3313,10 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	msg.setParam("error","failure");
 	return false;
     }
-    called.set(dest);
-    if (!called.node()) {
-	Debug(this,DebugNote,"Jingle call failed. Incomplete called '%s'",called.c_str());
+    // Called party must always be full in client mode
+    if (!(s_serverMode || called.isFull())) {
+	Debug(this,DebugNote,"Jingle call failed. Incomplete called '%s'",
+	    called.c_str());
 	msg.setParam("error","failure");
 	return false;
     }
@@ -3288,7 +3341,6 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 
     bool online = !called.resource().null();
     bool local = (caller.domain() == called.domain());
-    NamedList caps("");
     if (!online) {
 	bool reqSub = false;
 	// Get a resource
@@ -3402,9 +3454,9 @@ bool YJGDriver::received(Message& msg, int id)
 bool YJGDriver::handleJabberIq(Message& msg)
 {
     JabberID to(msg.getValue("to"));
-    if (!(to.domain() && handleDomain(to.domain())))
+    if (s_serverMode && !(to.domain() && handleDomain(to.domain())))
 	return false;
-    if (!to.resource())
+    if (to && !to.resource())
 	to.resource(msg.getValue("to_instance"));
     const char* xmlns = msg.getValue("xmlns");
     bool session = false;
@@ -3468,7 +3520,8 @@ bool YJGDriver::handleJabberIq(Message& msg)
     XMPPError::Type error = XMPPError::NoError;
     String text;
     const String* id = msg.getParam("id");
-    bool ok = s_jingle->acceptIq(t,from,to,id ? *id : String::empty(),xml,error,text);
+    bool ok = s_jingle->acceptIq(t,from,to,id ? *id : String::empty(),xml,
+	msg.getValue("line"),error,text);
     if (ok || error != XMPPError::NoError) {
 	msg.setParam("respond",String::boolText(!ok));
 	if (!ok) {
@@ -3685,25 +3738,6 @@ bool YJGDriver::handleUserRegister(Message& msg, bool reg)
 void YJGDriver::handleEngineStart(Message& msg)
 {
     setDomains(s_cfg.getValue("general","domains"));
-}
-
-// Dispatch jabber.iq messages
-bool YJGDriver::dispatchJabberIq(JGSession* session, XmlElement*& xml)
-{
-    if (!(session && xml)) {
-	TelEngine::destruct(xml);
-	return false;
-    }
-    DDebug(this,DebugAll,"dispatchJabberIq() session=(%p,%s) xml=%p",
-	session,session->sid().c_str(),xml);
-    Message m("jabber.iq");
-    m.addParam("module",name());
-    m.addParam("from",session->local().bare());
-    m.addParam("to",session->remote().bare());
-    m.addParam("from_instance",session->local().resource());
-    m.addParam("to_instance",session->remote().resource());
-    m.addParam(new NamedPointer("xml",xml));
-    return Engine::dispatch(m);
 }
 
 // Find a connection by local and remote jid, optionally ignore local

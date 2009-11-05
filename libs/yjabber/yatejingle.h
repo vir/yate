@@ -922,6 +922,20 @@ public:
 	{ m_private = userdata; }
 
     /**
+     * Retrieve the client account used by this session
+     * @return The client account used by this session
+     */
+    inline const String& line() const
+	{ return m_line; }
+
+    /**
+     * Set the client account used by this session
+     * @param acc The client account used by this session
+     */
+    inline void line(const String& acc)
+	{ m_line = acc; }
+
+    /**
      * Get an action (jingle element type) from a jingle element
      * @param xml Element to check
      * @return The found action, ActCount if not found or unknown
@@ -1339,6 +1353,7 @@ protected:
     String m_localSid;                   // Local session id (used to generate element's id)
     u_int32_t m_stanzaId;                // Sent stanza id counter
     ObjList m_sentStanza;                // Sent stanzas' id
+    String m_line;                       // Session account
 
 private:
     JGSession() {}                       // Don't use it
@@ -1887,11 +1902,12 @@ public:
      * @param extra Optional extra child for session initiate element
      * @param msg Optional message to send before call
      * @param subject Optional session subject
+     * @param line Optional session account
      * @return Valid JGSession pointer (referenced) on success
      */
     JGSession* call(JGSession::Version ver, const JabberID& caller, const JabberID& called,
 	const ObjList& contents, XmlElement* extra = 0, const char* msg = 0,
-	const char* subject = 0);
+	const char* subject = 0, const char* line = 0);
 
     /**
      * Ask this engine to accept an incoming xml 'iq' element
@@ -1900,13 +1916,15 @@ public:
      * @param to The recipient
      * @param id Element id attribute
      * @param xml The received element
+     * @param line Account receiving the stanza (may be empty)
      * @param error XMPPError result. This value should be check if false is returned.
      *  Any value different from NoError indicate an invalid element
      * @param text Error text
      * @return True if accepted (don't use the given pointer if accepted)
      */
     bool acceptIq(XMPPUtils::IqType type, const JabberID& from, const JabberID& to,
-	const String& id, XmlElement* xml, XMPPError::Type& error, String& text);
+	const String& id, XmlElement* xml, const char* line,
+	XMPPError::Type& error, String& text);
 
     /**
      * Default event processor. Delete event.

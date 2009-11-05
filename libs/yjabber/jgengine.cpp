@@ -84,7 +84,7 @@ void JGEngine::initialize(const NamedList& params)
 // Make an outgoing call
 JGSession* JGEngine::call(JGSession::Version ver, const JabberID& caller,
     const JabberID& called, const ObjList& contents, XmlElement* extra,
-    const char* msg, const char* subject)
+    const char* msg, const char* subject, const char* line)
 {
     DDebug(this,DebugAll,"call() from '%s' to '%s'",caller.c_str(),called.c_str());
     JGSession* session = 0;
@@ -100,6 +100,7 @@ JGSession* JGEngine::call(JGSession::Version ver, const JabberID& caller,
 	    return 0;
     }
     if (session) {
+	session->line(line);
 	if (!TelEngine::null(msg))
 	    sendMessage(session,msg);
 	if (session->initiate(contents,extra,subject)) {
@@ -161,7 +162,8 @@ JGEvent* JGEngine::getEvent(u_int64_t time)
 
 // Ask this engine to accept an incoming xml 'iq' element
 bool JGEngine::acceptIq(XMPPUtils::IqType type, const JabberID& from, const JabberID& to,
-    const String& id, XmlElement* xml, XMPPError::Type& error, String& text)
+    const String& id, XmlElement* xml, const char* line, XMPPError::Type& error,
+    String& text)
 {
     error = XMPPError::NoError;
     if (!xml)
@@ -242,8 +244,10 @@ bool JGEngine::acceptIq(XMPPUtils::IqType type, const JabberID& from, const Jabb
 	    error = XMPPError::Request;
 	    text = "Unknown session";
 	}
-	if (session)
+	if (session) {
+	    session->line(line);
 	    m_sessions.append(session);
+	}
 	return error == XMPPError::NoError;
     }
     return false;

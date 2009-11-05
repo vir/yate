@@ -154,6 +154,8 @@ public:
 	{ TelEngine::destruct(m_presence); }
     // Retrieve a contact
     inline NamedList* contact(const String& name) {
+	    if (name == *this)
+		return this;
 	    ObjList* o = find(name);
 	    return o ? static_cast<NamedList*>(o->get()) : 0;
 	}
@@ -174,19 +176,16 @@ public:
 	    if (o)
 		o->remove();
 	}
-    // Append or update a resource (user own resource if contact is empty)
-    inline void setResource(const String& name, const String& capsid,
-	const String& cn = String::empty()) {
-	    if (!name)
-		return;
-	    NamedList* c = cn ? contact(cn) : this;
+    // Append or update a resource
+    inline void setResource(const String& cn, const String& name, const String& capsid) {
+	    NamedList* c = name ? contact(cn) : 0;
 	    if (c)
 		c->setParam(name,capsid);
 	}
-    // Remove a resource  (user own resource if contact is empty)
+    // Remove a resource
     // Remove all of them if resource name is empty
-    inline void removeResource(const String& name, const String& cn = String::empty()) {
-	    NamedList* c = cn ? contact(cn) : this;
+    inline void removeResource(const String& cn, const String& name) {
+	    NamedList* c = contact(cn);
 	    if (!c)
 		return;
 	    if (name)
@@ -222,11 +221,12 @@ public:
 	    JBStream* s = findStream(name);
 	    return s ? s->clientStream() : 0;
 	}
+    // Retrieve stream data from a stream
+    inline StreamData* streamData(JBClientStream* s)
+	{ return s ? static_cast<StreamData*>(s->userData()) : 0; }
     // Retrieve stream data from an event's stream
-    inline StreamData* streamData(JBEvent* ev) {
-	    JBClientStream* s = ev ? ev->clientStream() : 0;
-	    return s ? static_cast<StreamData*>(s->userData()) : 0;
-	}
+    inline StreamData* streamData(JBEvent* ev)
+	{ return ev ? streamData(ev->clientStream()) : 0; }
     // (Re)initialize the engine
     void initialize(const NamedList* params, bool first = false);
     // Process events
@@ -628,8 +628,13 @@ bool YJBEngine::handleUserUpdate(Message& msg, const String& line)
 // Process 'jabber.iq' messages
 bool YJBEngine::handleJabberIq(Message& msg, const String& line)
 {
-    Debug(this,DebugStub,"YJBEngine::handleJabberIq() not implemented!");
-    return false;
+    JBClientStream* s = find(line);
+    if (!s)
+	return false;
+    XmlElement* xml = XMPPUtils::getXml(msg);
+    bool ok = xml && s->sendStanza(xml);
+    TelEngine::destruct(s);
+    return ok;
 }
 
 // Process 'jabber.account' messages
@@ -638,10 +643,39 @@ bool YJBEngine::handleJabberAccount(Message& msg, const String& line)
     JBClientStream* s = find(line);
     if (!s)
 	return false;
-    if (msg.getBoolValue("query")) {
-	// TODO fill stream data
-	// local bare jid, resource
-	// Get available audio for a contact
+    // Use a while to break to the end
+    while (msg.getBoolValue("query")) {
+	msg.setParam("jid",s->local());
+	String* contact = msg.getParam("contact");
+	if (TelEngine::null(contact))
+	    break;
+	Lock lock(s);
+	StreamData* data = streamData(s);
+	NamedList* c = data ? data->contact(*contact) : 0;
+	if (!c)
+	    break;
+	String* inst = msg.getParam("instance");
+	if (!TelEngine::null(inst)) {
+	    String* res = c->getParam(*inst);
+	    if (res)
+		s_entityCaps.addCaps(msg,*res);
+	    break;
+	}
+	// Find an audio resource for the contact
+	unsigned int n = c->count();
+	for (unsigned int i = 0; i < n; i++) {
+	    NamedString* res = c->getParam(i);
+	    if (TelEngine::null(res))
+		continue;
+	    Lock lock(s_entityCaps);
+	    JBEntityCaps* caps = s_entityCaps.findCaps(*res);
+	    if (caps && caps->hasAudio()) {
+		msg.setParam("instance",res->name());
+		s_entityCaps.addCaps(msg,*caps);
+		break;
+	    }
+	}
+	break;
     }
     TelEngine::destruct(s);
     return true;
@@ -657,15 +691,52 @@ bool YJBEngine::handleResSubscribe(Message& msg, const String& line)
 // Process 'resource.notify' messages
 bool YJBEngine::handleResNotify(Message& msg, const String& line)
 {
-    Debug(this,DebugStub,"YJBEngine::handleResNotify() not implemented!");
-    return false;
+    String* oper = msg.getParam("operation");
+    if (TelEngine::null(oper))
+	return false;
+    DDebug(this,DebugAll,"handleResNotify() line=%s oper=%s",
+	line.c_str(),TelEngine::c_safe(oper));
+    JBClientStream* s = find(line);
+    if (!s)
+	return false;
+    // Use a while to break to the end
+    bool ok = false;
+    while (true) {
+	Debug(this,DebugStub,"handleResNotify() oper=%s not implemented!",
+	    oper->c_str());
+	break;
+    }
+    TelEngine::destruct(s);
+    return ok;
 }
 
 // Process 'msg.execute' messages
 bool YJBEngine::handleMsgExecute(Message& msg, const String& line)
 {
-    Debug(this,DebugStub,"YJBEngine::handleMsgExecute() not implemented!");
-    return false;
+    DDebug(this,DebugAll,"handleMsgExecute() line=%s",line.c_str());
+    JBClientStream* s = find(line);
+    if (!s)
+	return false;
+    XmlElement* xml = XMPPUtils::getChatXml(msg);
+    bool ok = false;
+    if (xml) {
+	String* to = xml->getAttribute("to");
+	if (!to) {
+	    to = msg.getParam("called");
+	    if (to) {
+		JabberID c(*to);
+		if (!c.resource())
+		    c.resource(msg.getValue("called_instance"));
+		xml->setAttribute("to",c);
+	    }
+	}
+	if (to)
+	    ok = s->sendStanza(xml);
+	else
+	    TelEngine::destruct(xml);
+    }
+    TelEngine::destruct(s);
+    return true;
 }
 
 // Process 'user.login' messages
@@ -742,12 +813,10 @@ void YJBEngine::processPresenceStanza(JBEvent* ev)
 	StreamData* sdata = streamData(ev);
 	if (!sdata)
 	    return;
-	const String& c = (ev->from().bare() != ev->to().bare()) ? String::empty() :
-	    ev->from().bare();
 	if (online)
-	    sdata->setResource(ev->from().resource(),capsId,c);
+	    sdata->setResource(ev->from().bare(),ev->from().resource(),capsId);
 	else
-	    sdata->removeResource(ev->from().resource(),c);
+	    sdata->removeResource(ev->from().bare(),ev->from().resource());
 	lock.drop();
 	// Notify
 	Message* m = __plugin.message("resource.notify",ev->stream());
@@ -802,20 +871,59 @@ void YJBEngine::processIqStanza(JBEvent* ev)
     int n = XMPPNamespace::Count;
     if (service)
 	XMPPUtils::getTag(*service,t,n);
-    switch (n) {
-	case XMPPNamespace::Roster:
-	    processRoster(ev,service,t,type);
-	    return;
-    }
-    // Check responses without child
-    if (rsp) {
-	if (ev->id() == s_rosterQueryId) {
-	    processRoster(ev,service,t,type);
-	    return;
+    bool fromServer = (!ev->from() || ev->from() == ev->stream()->local().bare());
+    if (fromServer) {
+	switch (n) {
+	    case XMPPNamespace::Roster:
+		processRoster(ev,service,t,type);
+		return;
+	}
+	// Check responses without child
+	if (rsp) {
+	    if (ev->id() == s_rosterQueryId) {
+		processRoster(ev,service,t,type);
+		return;
+	    }
 	}
     }
-    // TODO: enqueue custom message (respond with error if not handled)
-    Debug(this,DebugStub,"processIqStanza() not implemented!");
+    // Iq from known contact or user itself
+    ev->stream()->lock();
+    StreamData* data = streamData(ev);
+    bool allow = data && data->contact(ev->from().bare());
+    ev->stream()->unlock();
+    if (!allow)
+	allow = (ev->from().bare() == ev->to().bare());
+    if (!allow) {
+	if (!rsp)
+	    ev->sendStanzaError(XMPPError::ServiceUnavailable);
+	return;
+    }
+    // Route the iq
+    Message m("jabber.iq");
+    m.addParam("module",__plugin.name());
+    m.addParam("from",ev->from().bare());
+    m.addParam("from_instance",ev->from().resource());
+    m.addParam("to",ev->to().bare());
+    m.addParam("to_instance",ev->to().resource());
+    addValidParam(m,"id",ev->id());
+    addValidParam(m,"type",ev->stanzaType());
+    if (!rsp && n != XMPPNamespace::Count)
+	m.addParam("xmlns",XMPPUtils::s_ns[n]);
+    m.addParam(new NamedPointer("xml",ev->releaseXml()));
+    XmlElement* xmlRsp = 0;
+    if (Engine::dispatch(m)) {
+	if (!rsp) {
+	    xmlRsp = XMPPUtils::getXml(m,"response",0);
+	    if (!xmlRsp && m.getBoolValue("respond"))
+		xmlRsp = ev->buildIqResult(true);
+	}
+    }
+    else if (!rsp) {
+	xmlRsp = XMPPUtils::createIq(XMPPUtils::IqError,ev->to(),ev->from(),ev->id());
+	xmlRsp->addChild(XMPPUtils::createError(XMPPError::TypeCancel,XMPPError::ServiceUnavailable));
+    }
+    if (xmlRsp)
+	ev->stream()->sendStanza(xmlRsp);
 }
 
 // Process stream Running, Destroy, Terminated events
@@ -949,6 +1057,8 @@ void YJBEngine::processRoster(JBEvent* ev, XmlElement* service, int tag, int iqT
 		    sdata->addContact(*jid);
 		else
 		    sdata->removeContact(*jid);
+		Debug(this,DebugAll,"Account(%s) %s roster item '%s'",
+		    m->getValue("account"),upd ? "updated" : "deleted",jid->c_str());
 	    }
 	}
 	ev->stream()->unlock();
@@ -970,11 +1080,20 @@ void YJBEngine::processRoster(JBEvent* ev, XmlElement* service, int tag, int iqT
 	m->addParam(count);
 	int n = 0;
 	XmlElement* x = 0;
+	ev->stream()->lock();
+	StreamData* sdata = streamData(ev);
 	while (0 != (x = XMPPUtils::findNextChild(*service,x,XmlTag::Item,XMPPNamespace::Roster))) {
 	    String* jid = x->getAttribute("jid");
-	    if (!TelEngine::null(jid))
+	    if (!TelEngine::null(jid)) {
+		if (sdata && *jid != ev->stream()->local().bare()) {
+		    sdata->addContact(*jid);
+		    Debug(this,DebugAll,"Account(%s) updated roster item '%s'",
+			m->getValue("account"),jid->c_str());
+		}
 		addRosterItem(*m,*x,*jid,++n);
+	    }
 	}
+	ev->stream()->unlock();
 	*count = String(n);
 	Engine::enqueue(m);
 	return;
@@ -1139,12 +1258,12 @@ JBMessageHandler::JBMessageHandler(int handler)
 
 bool JBMessageHandler::received(Message& msg)
 {
-    XDebug(&__plugin,DebugAll,"JBMessageHandler(%s)",msg.c_str());
     if (__plugin.isModule(msg))
 	return false;
     String* line = __plugin.getLine(msg);
     if (TelEngine::null(line))
 	return false;
+    XDebug(&__plugin,DebugAll,"%s line=%s",msg.c_str(),line->c_str());
     switch (m_handler) {
 	case JabberIq:
 	    return s_jabber->handleJabberIq(msg,*line);

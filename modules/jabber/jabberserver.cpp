@@ -1289,7 +1289,7 @@ bool YJBEngine::handleMsgExecute(Message& msg)
 	else {
 	    // Directed chat
 	    if (!called.resource())
-		called.resource(msg.getValue("called_resource"));
+		called.resource(msg.getValue("called_instance"));
 	    JBClientStream* stream = called.resource() ? findClientStream(true,called) : 0;
 	    bool ok = stream && stream->flag(flags);
 	    if (ok) {
@@ -2634,7 +2634,8 @@ void JBPendingWorker::processIq(JBPendingJob& job)
     m.addParam("to_instance",ev->to().resource());
     addValidParam(m,"id",ev->id());
     addValidParam(m,"type",ev->stanzaType());
-    addValidParam(m,"xmlns",TelEngine::c_safe(xmlns));
+    if (!respond)
+	addValidParam(m,"xmlns",TelEngine::c_safe(xmlns));
     m.addParam(new NamedPointer("xml",ev->releaseXml()));
     if (Engine::dispatch(m)) {
 	if (respond) {

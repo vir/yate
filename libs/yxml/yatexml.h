@@ -475,7 +475,13 @@ public:
      * Constructor
      */
     XmlParent()
-	{}
+	{ }
+
+    /**
+     * Destructor
+     */
+    virtual ~XmlParent()
+	{ }
 
     /**
      * Get an XmlDocument object from this XmlParent.

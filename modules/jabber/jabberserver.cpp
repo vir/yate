@@ -2045,6 +2045,7 @@ Message* YJBEngine::xmppIq(JBEvent* ev, const char* xmlns)
     addValidParam(*m,"id",ev->id());
     addValidParam(*m,"type",ev->stanzaType());
     addValidParam(*m,"xmlns",xmlns);
+    return m;
 }
 
 // Build an user.(un)register message

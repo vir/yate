@@ -79,10 +79,10 @@
 ;samples=50
 
 ; errormask: integer: Value to AND with the received error byte
-; The errors controlled by this mask are 1: RX overrun, 2: CRC, 4: Align
+; The errors controlled by this mask are 1: RX overrun, 2: CRC, 4: Abort/align
 ; Maximum value 255
-; Defaults to 255 if missing or invalid
-;errormask=255
+; Defaults to 250 (all except overrun and abort) if missing or invalid
+;errormask=250
 
 ; echocancel: boolean: Enable or disable echo canceller on voice circuits
 ; Defaults to no

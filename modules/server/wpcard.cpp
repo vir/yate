@@ -90,6 +90,8 @@ extern "C" {
 #define WP_ERR_FIFO  0x01
 #define WP_ERR_CRC   0x02
 #define WP_ERR_ABORT 0x04
+// by default ignore ABORT and OVERFLOW conditions unrelated to current packet
+#define WP_ERR_MASK  (0xff & ~(WP_ERR_FIFO|WP_ERR_ABORT))
 
 #define WP_RPT_REPEAT 0                  // Repeat flag in header
 #define WP_RPT_LEN 1                     // Repeated data length
@@ -254,6 +256,7 @@ private:
     int m_notify;                        // Upper layer notification on received data (0: success. 1: not notified. 2: notified)
     int m_overRead;                      // Header extension
     unsigned char m_errorMask;           // Error mask to filter received errors
+    unsigned char m_lastError;           // Last error seen
     bool m_sendReadOnly;                 // Print send attempt on readonly interface error
     SignallingTimer m_timerRxUnder;      // RX underrun notification
     // Repeat packet
@@ -776,6 +779,7 @@ WpInterface::WpInterface(const NamedList& params)
       m_readOnly(false),
       m_notify(0),
       m_overRead(0),
+      m_lastError(0),
       m_sendReadOnly(false),
       m_timerRxUnder(0),
       m_repeatCapable(s_repeatCapable),
@@ -805,8 +809,8 @@ bool WpInterface::init(const NamedList& config, NamedList& params)
 
     m_readOnly = params.getBoolValue("readonly",config.getBoolValue("readonly",false));
 
-    int i = params.getIntValue("errormask",config.getIntValue("errormask",255));
-    m_errorMask = ((i >= 0 && i < 256) ? i : 255);
+    int i = params.getIntValue("errormask",config.getIntValue("errormask",WP_ERR_MASK));
+    m_errorMask = ((i >= 0 && i < 256) ? i : WP_ERR_MASK);
 
     int rx = params.getIntValue("rxunderrun");
     if (rx > 0)
@@ -884,21 +888,6 @@ bool WpInterface::transmitPacket(const DataBlock& packet, bool repeat, PacketTyp
     return -1 != m_socket.send(data.data(),data.length(),0);
 }
 
-static inline const char* error(unsigned char err)
-{
-    static String s;
-    s.clear();
-    if (err & WP_ERR_CRC)
-	s.append("CRC");
-    if (err & WP_ERR_FIFO)
-	s.append("RxOver"," ");
-    if (err & WP_ERR_ABORT)
-	s.append("Align"," ");
-    if (s.null())
-	s << (int)err;
-    return s.safe();
-}
-
 // Receive signalling packet
 // Send repeated packet if needed
 bool WpInterface::receiveAttempt()
@@ -923,10 +912,25 @@ bool WpInterface::receiveAttempt()
 	XDebug(this,DebugAll,"Received %d bytes packet. Header length is %u [%p]",
 	    r,WP_HEADER + m_overRead,this);
 	r -= (WP_HEADER + m_overRead);
-	unsigned char err = buf[WP_RD_ERROR] & m_errorMask;
+	unsigned char err = buf[WP_RD_ERROR];
+	if (err != m_lastError) {
+	    m_lastError = err;
+	    if (err) {
+		String errText;
+		if (err & WP_ERR_CRC)
+		    errText.append("CRC");
+		if (err & WP_ERR_FIFO)
+		    errText.append("RxOver"," ");
+		if (err & WP_ERR_ABORT)
+		    errText.append("Align"," ");
+		if (errText)
+		    errText = " (" + errText + ")";
+		Debug(this,DebugWarn,"Packet got error: %u%s [%p]",
+		    err,errText.safe(),this);
+	    }
+	}
+	err &= m_errorMask;
 	if (err) {
-	    DDebug(this,DebugWarn,"Packet got error: %u (%s) [%p]",
-		buf[WP_RD_ERROR],error(buf[WP_RD_ERROR]),this);
 	    if (err & WP_ERR_FIFO)
 		notify(RxOverflow);
 	    if (err & WP_ERR_CRC)

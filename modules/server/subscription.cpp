@@ -501,8 +501,9 @@ private:
 
 
 INIT_PLUGIN(SubscriptionModule);         // The module
-static bool s_singleOffline = true;       // Enqueue a single 'offline' resource.notify
-                                          // message when multiple instances are available
+static bool s_singleOffline = true;      // Enqueue a single 'offline' resource.notify
+                                         // message when multiple instances are available
+static bool s_usersLoaded = false;       // Users were loaded at startup
 bool s_check = true;
 
 // Subscription flag names
@@ -1111,7 +1112,7 @@ PresenceUser* UserList::getUser(const String& user, bool load)
 	return u->ref() ? u : 0;
     }
     lock.drop();
-    if (!load)
+    if (s_usersLoaded || !load)
 	return 0;
     PresenceUser* u = askDatabase(user);
     if (!u)
@@ -1384,6 +1385,47 @@ bool SubMessageHandler::received(Message& msg)
 	return false;
     }
     if (m_handler == EngineStart) {
+	Configuration cfg(Engine::configFile("subscription"));
+	const char* loadAll = cfg.getValue("general","user_roster_load_all");
+	if (!TelEngine::null(loadAll)) {
+	    s_usersLoaded = true;
+	    XDebug(&__plugin,DebugAll,"Loading all users");
+	    NamedList p("");
+	    Message* m = __plugin.buildDb(__plugin.m_account,loadAll,p);
+	    m = __plugin.queryDb(m);
+	    if (m) {
+		unsigned int n = 0;
+		Array* a = static_cast<Array*>(m->userObject("Array"));
+		if (a) {
+		    __plugin.m_users.lock();
+		    int rows = a->getRows();
+		    for (int i = 1; i < rows; i++) {
+			String* s = YOBJECT(String,a->get(0,i));
+			if (!s)
+			    continue;
+			Contact* c = Contact::build(*a,i);
+			if (!c)
+			    continue;
+			PresenceUser* u =  __plugin.m_users.getUser(*s,false);
+			if (u) {
+			    u->appendContact(c);
+			    TelEngine::destruct(u);
+			}
+			else {
+			    n++;
+			    u = new PresenceUser(*s);
+			    __plugin.m_users.users().append(u);
+			    u->appendContact(c);
+			}
+		    }
+		    __plugin.m_users.unlock();
+		}
+		TelEngine::destruct(m);
+		Debug(&__plugin,DebugAll,"Loaded %u users",n);
+	    }
+	    else
+		Debug(&__plugin,DebugMild,"Failed to load users");
+	}
 	__plugin.m_genericUsers.load();
 	return false;
     }

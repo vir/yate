@@ -110,6 +110,9 @@ SignallingCircuitGroup* SignallingCallControl::attach(SignallingCircuitGroup* ci
 bool SignallingCallControl::reserveCircuit(SignallingCircuit*& cic, const char* range,
 	int checkLock, const String* list, bool mandatory, bool reverseRestrict)
 {
+    DDebug(DebugAll,"SignallingCallControl::reserveCircuit(%p,'%s',%d,'%s',%s,%s) [%p]",
+	cic,range,checkLock,TelEngine::c_safe(list),
+	String::boolText(mandatory),String::boolText(reverseRestrict),this);
     Lock mylock(this);
     releaseCircuit(cic);
     if (!m_circuits)
@@ -885,6 +888,8 @@ unsigned int SignallingCircuitGroup::advance(unsigned int n, int strategy,
 SignallingCircuit* SignallingCircuitGroup::reserve(int checkLock, int strategy,
 	SignallingCircuitRange* range)
 {
+    DDebug(this,DebugInfo,"SignallingCircuitGroup::reserve(%d,%d,%p) [%p]",
+	checkLock,strategy,range,this);
     Lock mylock(this);
     if (!range)
 	range = &m_range;
@@ -959,6 +964,8 @@ SignallingCircuit* SignallingCircuitGroup::reserve(int checkLock, int strategy,
 SignallingCircuit* SignallingCircuitGroup::reserve(const String& list, bool mandatory,
 	int checkLock, int strategy, SignallingCircuitRange* range)
 {
+    DDebug(this,DebugInfo,"SignallingCircuitGroup::reserve('%s',%s,%d,%d,%p) [%p]",
+	list.c_str(),String::boolText(mandatory),checkLock,strategy,range,this);
     Lock mylock(this);
     if (!range)
 	range = &m_range;

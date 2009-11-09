@@ -385,9 +385,14 @@ bool ISDNQ931IEData::processChannelID(ISDNQ931Message* msg, bool add,
 	    return false;
     }
     // ChannelID IE may repeat if channel is given by number
-    if (m_channelByNumber)
-	for (; ie; ie = msg->getIE(ISDNQ931IE::ChannelID,ie))
-	    m_channels.append(ie->getValue("channels"),",");
+    if (m_channelByNumber) {
+	unsigned int n = ie->length();
+	for (unsigned int i = 0; i < n; i++) {
+	    NamedString* ns = ie->getParam(i);
+	    if (ns && (ns->name() == "channels"))
+		m_channels.append(*ns,",");
+	}
+    }
     else
 	m_channels = ie->getValue("slot-map");
     return true;
@@ -1791,10 +1796,10 @@ bool ISDNQ931Call::reserveCircuit()
     bool anyCircuit = false;
     while (true) {
 	// For incoming PRI calls we reserve the circuit only one time (at SETUP)
-	if (!outgoing()) {
+	if (!(outgoing() || q931()->primaryRate())) {
 	    // Check if we are a BRI NET and we should assign any channel
 	    int briChan = lookup(m_data.m_channelSelect,Q931Parser::s_dict_channelIDSelect_BRI,3);
-	    if (m_net && (briChan == 3) && !q931()->primaryRate())
+	    if (m_net && (briChan == 3))
 		anyCircuit = true;
 	    else
 		m_data.m_channels = briChan;
@@ -1807,7 +1812,8 @@ bool ISDNQ931Call::reserveCircuit()
 	}
 	// Check if we don't have a circuit reserved
 	if (!m_circuit) {
-	    anyCircuit = m_net || q931()->primaryRate();
+	    anyCircuit = (outgoing() || !m_data.m_channelMandatory) &&
+		(m_net || q931()->primaryRate());
 	    break;
 	}
 	// Check the received circuit if any

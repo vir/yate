@@ -2320,7 +2320,7 @@ public:
 
     /**
      * Check if an audio capability is present
-     * @param return True if an audio capability is present
+     * @return True if an audio capability is present
      */
     inline bool hasAudio() {
 	    return m_features.get(XMPPNamespace::JingleAppsRtpAudio) ||

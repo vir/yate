@@ -361,8 +361,6 @@ public:
 	EngineStart      = -3,           // handleEngineStart()
 	ResNotify        = -4,           // handleResNotify()
 	ResSubscribe     = -5,           // handleResSubscribe()
-	UserRegister     = 10,           // handleUserRegister()
-	UserUnRegister   = 11,           // handleUserRegister()
     };
     YJGMessageHandler(int handler);
 protected:
@@ -436,8 +434,6 @@ public:
     bool handleChanNotify(Message& msg);
     // Handle msg.execute messages. Send chan.text if enabled
     bool handleImExecute(Message& msg);
-    // Handle user.(un)unregister messages. Send resource.notify if enabled
-    bool handleUserRegister(Message& msg, bool reg);
     // Handle engine.start message
     void handleEngineStart(Message& msg);
     // Search a client's roster to get a resource
@@ -502,8 +498,6 @@ static const TokenDict s_msgHandler[] = {
     {"engine.start",        YJGMessageHandler::EngineStart},
     {"resource.notify",     YJGMessageHandler::ResNotify},
     {"resource.subscribe",  YJGMessageHandler::ResSubscribe},
-    {"user.register",       YJGMessageHandler::UserRegister},
-    {"user.unregister",     YJGMessageHandler::UserUnRegister},
     {0,0}
 };
 
@@ -3004,10 +2998,6 @@ bool YJGMessageHandler::received(Message& msg)
 	    return !plugin.isModule(msg) && plugin.handleResSubscribe(msg);
 	case ChanNotify:
 	    return !plugin.isModule(msg) && plugin.handleChanNotify(msg);
-	case UserRegister:
-	case UserUnRegister:
-	    plugin.handleUserRegister(msg,m_handler == UserRegister);
-	    return false;
 	case EngineStart:
 	    plugin.handleEngineStart(msg);
 	    return false;
@@ -3693,45 +3683,6 @@ bool YJGDriver::handleImExecute(Message& msg)
 	Engine::enqueue(m);
     }
     return m != 0;
-}
-
-// Handle user.(un)unregister messages. Send resource.notify if enabled
-bool YJGDriver::handleUserRegister(Message& msg, bool reg)
-{
-    if (!msg.getParam("driver"))
-	return false;
-    const char* user = msg.getValue("number",msg.getValue("username"));
-    if (TelEngine::null(user))
-	return false;
-    lock();
-    String domain;
-    ObjList* o = m_domains.skipNull();
-    if (o)
-	domain = static_cast<String*>(o->get());
-    unlock();
-    if (!domain)
-	return false;
-    String tmp;
-    defaultResource(tmp);
-    if (!tmp)
-	return false;
-    Message* m = message("resource.notify");
-    m->addParam("operation",reg ? "online" : "offline");
-    m->addParam("contact",JabberID(user,domain));
-    m->addParam("instance",tmp);
-    if (reg) {
-	m->addParam("priority",s_priority);
-	XmlElement* xml = XMPPUtils::createPresence(0,0);
-	XMPPUtils::setPriority(*xml,s_priority);
-	xml->addChild(XMPPUtils::createEntityCapsGTalkV1());
-	xml->addChild(new XmlElement(*m_entityCaps));
-	String data;
-	xml->toString(data);
-	m->addParam("data",data);
-	m->addParam(new NamedPointer("xml",xml));
-    }
-    Engine::enqueue(m);
-    return false;
 }
 
 // Handle engine.start message

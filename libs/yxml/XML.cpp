@@ -71,23 +71,6 @@ static inline void addAuth(String& buf, const String& comp, const String& value,
 	buf << value;
 }
 
-// Find an entry by its value
-// Optional: check if the name starts with a given string
-static NamedString* findByValue(const NamedList& list, const String& value,
-    const String& nameStartsWith, const String& nameIs)
-{
-    unsigned int n = list.count();
-    for (unsigned int i = 0; i < n; i++) {
-	NamedString* ns = list.getParam(i);
-	if (!ns || *ns != value)
-	    continue;
-	if ((nameIs && ns->name() == nameIs) ||
-	    (nameStartsWith && ns->name().startsWith(nameStartsWith)))
-	    return ns;
-    }
-    return 0;
-}
-
 
 /*
  * XmlSaxParser
@@ -1036,28 +1019,15 @@ void XmlSaxParser::escape(String& buf, const String& text)
     }
 }
 
-// Check duplicate namespace values. Calls gotElement() if ok
-// See http://www.w3.org/TR/xml-names/
+// Calls gotElement(). Reset parsed if ok
 bool XmlSaxParser::processElement(NamedList& list, bool empty)
 {
-    unsigned int n = list.count();
-    for (unsigned int i = 0; i < n; i++) {
-	NamedString* ns = list.getParam(i);
-	if (!(ns && XmlElement::isXmlns(ns->name())))
-	    continue;
-	for (unsigned int j = i + 1; j < n; j++) {
-	    NamedString* nsCmp = list.getParam(j);
-	    if (nsCmp && XmlElement::isXmlns(nsCmp->name()) && *ns == *nsCmp) {
-		Debug(this,DebugNote,
-		    "Duplicate namespace value '%s' for attributes '%s' and '%s' [%p]",
-		    ns->c_str(),ns->name().c_str(),nsCmp->name().c_str(),this);
-		return setError(NotWellFormed);
-	    }
-	}
-    }
     gotElement(list,empty);
-    resetParsed();
-    return true;
+    if (error() == XmlSaxParser::NoError) {
+	resetParsed();
+	return true;
+    }
+    return false;
 }
 
 
@@ -1182,18 +1152,19 @@ void XmlDomParser::gotElement(const NamedList& elem, bool empty)
 	// should hold it
 	element = new XmlElement(elem,empty);
 	setError(m_data->addChild(element),element);
-	if (!empty)
+	if (!empty && error() == XmlSaxParser::NoError)
 	    m_current = element;
     }
     else {
 	if (empty) {
 	    element = new XmlElement(elem,empty);
-	    m_current->addChild(element);
+	    setError(m_current->addChild(element),element);
 	}
 	else {
 	    element = new XmlElement(elem,empty,m_current);
-	    m_current->addChild(element);
-	    m_current = element;
+	    setError(m_current->addChild(element),element);
+	    if (error() == XmlSaxParser::NoError)
+		m_current = element;
 	}
     }
 }
@@ -1717,12 +1688,8 @@ void XmlElement::addInheritedNs(const NamedList& list)
 	    continue;
 	if (m_inheritedNs && m_inheritedNs->getParam(ns->name()))
 	    continue;
-	// Avoid adding duplicate namespace values
-	// See http://www.w3.org/TR/xml-names/
-	if (findByValue(m_element,*ns,s_nsPrefix,s_ns))
-	    continue;
-	if (m_inheritedNs && findByValue(*m_inheritedNs,*ns,s_nsPrefix,s_ns))
-	    continue;
+	// TODO: Check if attribute names are unique after adding the namespace
+	//       See http://www.w3.org/TR/xml-names/ Section 6.3
 	if (!m_inheritedNs)
 	    m_inheritedNs = new NamedList("");
 	XDebug(DebugAll,"XmlElement(%s) adding inherited %s=%s [%p]",
@@ -1766,6 +1733,8 @@ XmlSaxParser::Error XmlElement::addChild(XmlChild* child)
 {
     if (!child) 
 	return XmlSaxParser::NoError;
+    // TODO: Check if a child element's attribute names are unique in the new context
+    //       See http://www.w3.org/TR/xml-names/ Section 6.3
     XmlSaxParser::Error err = m_children.addChild(child);
     if (err == XmlSaxParser::NoError)
 	child->setParent(this);
@@ -1864,25 +1833,20 @@ bool XmlElement::setXmlns(const String& name, bool addAttr, const String& value)
     }
     if (!(addAttr && value))
 	return true;
-    // Check non repeating value
     String attr;
     if (*cmp == s_ns)
 	attr = s_ns;
     else
 	attr << s_nsPrefix << *cmp;
-    NamedString* ns = findByValue(m_element,value,s_nsPrefix,s_ns);
-    if (ns)
-	return ns->name() == attr;
-    if (m_inheritedNs) {
-	ns = findByValue(*m_inheritedNs,value,s_nsPrefix,s_ns);
-	if (ns) {
-	    if (ns->name() == attr)
-		m_inheritedNs->clearParam(attr);
-	    else
-		return false;
-	}
-    }
-    m_element.addParam(attr,value);
+    NamedString* ns = m_element.getParam(attr);
+    if (!ns && m_inheritedNs && m_inheritedNs->getParam(attr))
+	m_inheritedNs->clearParam(attr);
+    // TODO: Check if attribute names are unique after adding the namespace
+    //       See http://www.w3.org/TR/xml-names/ Section 6.3
+    if (!ns)
+	m_element.addParam(attr,value);
+    else
+	*ns = value;
     return true;
 }
 

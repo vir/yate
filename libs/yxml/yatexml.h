@@ -419,11 +419,10 @@ protected:
 	{ return true; }
 
     /**
-     * Check duplicate namespace values. Calls gotElement() if ok.
-     * Reset parsed if gotElement() was called
+     * Calls gotElement() and eset parsed on success
      * @param list The list element and its attributes
      * @param empty True if the element does not have attributes
-     * @return False if duplicate namespace values were found and the error was set
+     * @return True if there is no error
      */
     bool processElement(NamedList& list, bool empty);
 

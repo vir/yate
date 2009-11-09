@@ -953,11 +953,12 @@ void XmlSaxParser::unEscape(String& text)
 	    len += 1; // Append ';' character
 	    String aux(str + found,len - found);
 	    char re = 0;
-	    if (aux.startsWith("&#"))
+	    if (aux.startsWith("&#")) {
 		if (aux.at(2) == 'x')
 		    re = getHex(aux);
 		else
 		    re = getDec(aux);
+	    }
 	    if (re == '&') {
 		if (str[len] == '#') {
 		    aux = String(str + len,4);

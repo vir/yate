@@ -2911,8 +2911,12 @@ void JBModule::initialize()
 	    m_handlers.append(h);
 	}
 	// Start pending job workers
-	// TODO: add config for worker count and thread priority
-	JBPendingWorker::initialize(3);
+	int n = cfg.getIntValue("general","workers",1);
+	if (n < 1)
+	    n = 1;
+	else if (n > 10)
+	    n = 10;
+	JBPendingWorker::initialize(n,Thread::priority(cfg.getValue("general","worker_priority")));
 
 	// Load entity caps file
 	s_entityCaps.m_enable = cfg.getBoolValue("general","entitycaps",true);

@@ -1012,7 +1012,8 @@ void XMPPUtils::decodeError(XmlElement* xml, String& error, String& text)
 	case XmlTag::Presence:
 	case XmlTag::Message:
 	    // Stanza in stream namespace
-	    if (ns == XMPPNamespace::Server || ns == XMPPNamespace::Client)
+	    if (ns == XMPPNamespace::Server || ns == XMPPNamespace::Client ||
+		ns == XMPPNamespace::ComponentAccept)
 		decodeError(xml,true,error,text);
 	    break;
     }
@@ -1023,7 +1024,13 @@ void XMPPUtils::decodeError(XmlElement* xml, bool stanza, String& error, String&
 {
     if (!xml)
 	return;
-    int ns = stanza ? XMPPNamespace::StanzaError : XMPPNamespace::StreamError;
+    int ns = stanza ? XMPPNamespace::StanzaError: XMPPNamespace::StreamError;
+    if (stanza) {
+	String* xmlns = xml->xmlns();
+	xml = xml->findFirstChild(&s_tag[XmlTag::Error],xmlns);
+	if (!xml)
+	    return;
+    }
     XmlElement* ch = findFirstChild(*xml,XmlTag::Count,ns);
     for (; ch; ch = findNextChild(*xml,ch,XmlTag::Count,ns)) {
 	if (ch->unprefixedTag() != s_tag[XmlTag::Text])

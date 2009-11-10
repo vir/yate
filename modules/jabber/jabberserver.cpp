@@ -179,8 +179,6 @@ public:
 	    if (o)
 		domain = o->get()->toString();
 	}
-    // Replace the list of domains service by this engine
-    void setDomains(const String& list);
     // Retrieve a subdomain of a serviced domain
     void getSubDomain(String& subdomain, const String& domain);
     // Add or remove a component to/from serviced domains and components list
@@ -289,9 +287,18 @@ private:
     // Notify an incoming s2s stream about a dialback verify response
     void notifyDbVerifyResult(const JabberID& local, const JabberID& remote,
 	const String& id, bool ok);
+    // Find a configured or dynamic domain
+    inline ObjList* findDomain(const String& domain, bool cfg) {
+	    ObjList* o = cfg ? m_domains.skipNull() : m_dynamicDomains.skipNull();
+	    for (; o; o = o->skipNext())
+		if (*static_cast<String*>(o->get()) == domain)
+		    return o;
+	    return 0;
+	}
 
     bool m_c2sTlsRequired;               // TLS is required on c2s streams
     ObjList m_domains;                   // Domains serviced by this engine
+    ObjList m_dynamicDomains;            // Dynamic domains (components or items)
     ObjList m_restrictedResources;       // Resource names the users can't use
     ObjList m_items;
     ObjList m_components;
@@ -347,6 +354,7 @@ public:
     String m_local;                      // Stream local domain
     int m_flags;                         // Stream flags
     bool m_serverTarget;                 // The recipient is the server itself
+    bool m_serverItemTarget;             // The recipient is a server item
 };
 
 /*
@@ -751,8 +759,39 @@ void YJBEngine::initialize(const NamedList* params, bool first)
     lock();
     if (!params)
 	params = &dummy;
+
     // Serviced domains
-    setDomains(params->getValue("domains"));
+    // Check if an existing domain is no longer accepted
+    // Terminate all streams having local party the deleted domain
+    String domains(params->getValue("domains"));
+    domains.toLower();
+    ObjList* l = domains.split(',',false);
+    // Remove serviced domains
+    ObjList* o = l->skipNull();
+    for (; o; o = o->skipNext())
+	m_domains.remove(o->get()->toString());
+    // Terminate streams
+    for (o = m_domains.skipNull(); o; o = o->skipNext()) {
+	JabberID local(o->get()->toString());
+	if (local)
+	    dropAll(JBStream::TypeCount,local);
+    }
+    m_domains.clear();
+    // Set domains
+    while (0 != (o = l->skipNull()))
+	m_domains.append(o->remove(false));
+    TelEngine::destruct(l);
+    if (m_domains.skipNull()) {
+	if (debugAt(DebugAll)) {
+	    String tmp;
+	    for (ObjList* o = m_domains.skipNull(); o; o = o->skipNext())
+		tmp.append(o->get()->toString(),",");
+	    DDebug(this,DebugAll,"Configured domains='%s'",tmp.c_str());
+	}
+    }
+    else
+	Debug(this,DebugGoOn,"No domains configured");
+
     // Restricted resources
     String* res = params->getParam("restricted_resources");
     m_restrictedResources.clear();
@@ -768,8 +807,13 @@ void YJBEngine::initialize(const NamedList* params, bool first)
 
     if (first) {
 	m_dialbackSecret = params->getValue("dialback_secret");
-	if (!m_dialbackSecret)
-	    m_dialbackSecret << (unsigned int)Time::msecNow() << "_" << (int)::random();
+	if (!m_dialbackSecret) {
+	    MD5 md5;
+	    md5 << String((unsigned int)Time::msecNow());
+	    md5 << String(Engine::runId());
+	    md5 << String((int)::random());
+	    m_dialbackSecret = md5.hexDigest();
+	}
     }
 
     m_c2sTlsRequired = params->getBoolValue("c2s_tlsrequired");
@@ -897,38 +941,7 @@ bool YJBEngine::hasDomain(const String& domain)
     if (!domain)
 	return false;
     Lock lock(this);
-    for (ObjList* o = m_domains.skipNull(); o; o = o->skipNext()) {
-	String* tmp = static_cast<String*>(o->get());
-	if (*tmp == domain)
-	    return true;
-    }
-    return false;
-}
-
-// Replace the list of domains service by this engine
-void YJBEngine::setDomains(const String& list)
-{
-    // TODO: check if an existing domain is no longer accepted
-    // Terminate all streams having local party the deleted domain
-    Lock lock(this);
-    m_domains.clear();
-    ObjList* l = list.split(',',false);
-    for (ObjList* o = l->skipNull(); o; o = l->skipNull()) {
-	String* s = static_cast<String*>(o->remove(false));
-	s->toLower();
-	m_domains.append(s);
-    }
-    TelEngine::destruct(l);
-    if (m_domains.skipNull()) {
-	if (debugAt(DebugAll)) {
-	    String tmp;
-	    for (ObjList* o = m_domains.skipNull(); o; o = o->skipNext())
-		tmp.append(o->get()->toString(),",");
-	    DDebug(this,DebugAll,"Configured domains='%s'",tmp.c_str());
-	}
-    }
-    else
-	Debug(this,DebugGoOn,"No domains configured");
+    return 0 != findDomain(domain,true) || 0 != findDomain(domain,false);
 }
 
 // Add or remove a component to/from serviced domains and components list
@@ -941,23 +954,25 @@ void YJBEngine::setComponent(const String& domain, bool add)
 	if (*tmp == domain)
 	    break;
     }
-    ObjList* od = m_domains.skipNull();
-    for (; od; od = od->skipNext()) {
-	String* tmp = static_cast<String*>(od->get());
-	if (*tmp == domain)
-	    break;
-    }
+    ObjList* od = findDomain(domain,false);
     if (add) {
 	if (!oc)
 	    m_components.append(new String(domain));
-	if (!od)
-	    m_domains.append(new String(domain));
+	if (!od) {
+	    m_dynamicDomains.append(new String(domain));
+	    Debug(this,DebugAll,"Added component '%s' to dynamic domains",
+		domain.c_str());
+	}
     }
     else {
 	if (oc)
 	    oc->remove();
-	if (od)
+	if (od) {
+	    // TODO: remove streams ?
 	    od->remove();
+	    Debug(this,DebugAll,"Removed component '%s' from dynamic domains",
+		domain.c_str());
+	}
     }
 }
 
@@ -980,6 +995,12 @@ bool YJBEngine::restrictedResource(const String& name)
     for (ObjList* o = m_restrictedResources.skipNull(); o; o = o->skipNext()) {
 	String* s = static_cast<String*>(o->get());
 	if (s->startsWith(name))
+	    return true;
+    }
+    // Check item resources
+    for (ObjList* o = m_items.skipNull(); o; o = o->skipNext()) {
+	JabberID* jid = static_cast<JabberID*>(o->get());
+	if (jid->resource() && jid->resource().startsWith(name))
 	    return true;
     }
     return false;
@@ -1323,35 +1344,47 @@ bool YJBEngine::handleMsgExecute(Message& msg)
 }
 
 // Process 'jabber.item' messages
+// Add or remove server items and/or serviced domains
 bool YJBEngine::handleJabberItem(Message& msg)
 {
+    JabberID jid = msg.getValue("jid");
+    if (!jid)
+	return false;
+
     Lock lock(this);
-    const char* jid = msg.getValue("jid");
-    ObjList* o = m_items.find(jid);
-    if (msg.getBoolValue("remove")) {
-	if (!o)
-	    return false;
+    ObjList* o = m_items.skipNull();
+    for (; o; o = o->skipNext()) {
+	JabberID* tmp = static_cast<JabberID*>(o->get());
+	if (*tmp == jid)
+	    break;
+    }
+    bool remove = msg.getBoolValue("remove");
+    if ((o != 0) != remove)
+	return true;
+    ObjList* dynamic = findDomain(jid.domain(),false);
+    if (remove) {
 	o->remove();
-	Debug(this,DebugAll,"Removed item '%s'",jid);
-    }
-    else if (!o) {
-	JabberID* j = new JabberID(jid);
-	String comp;
-	getSubDomain(comp,j->domain());
-	if (comp) {
-	    String local(j->domain().substr(comp.length() + 1));
-	    if (findServerStream(local,j->domain(),true)) {
-		Debug(this,DebugMild,
-		    "Request to add server item '%s' while already having a component in the same domain",
-		    jid);
-		TelEngine::destruct(j);
-		return false;
-	    }
+	Debug(this,DebugAll,"Removed item '%s'",jid.c_str());
+	if (dynamic && !isServerItemDomain(jid.domain())) {
+	     // TODO: remove streams ?
+	     dynamic->remove();
+	     Debug(this,DebugAll,"Removed item '%s' from serviced domains",jid.c_str());
 	}
-	m_items.append(j);
-	Debug(this,DebugAll,"Added item '%s'",jid);
+	return true;
     }
-    return false;
+    if (dynamic && hasComponent(jid.domain())) {
+	Debug(this,DebugMild,
+	    "Request to add server item '%s' while already having a component",
+	    jid.c_str());
+	return false;
+    }
+    m_items.append(new JabberID(jid));
+    Debug(this,DebugAll,"Added item '%s'",jid.c_str());
+    if (!dynamic) {
+	m_dynamicDomains.append(new String(jid.domain()));
+	Debug(this,DebugAll,"Added item '%s' to serviced domains",jid.c_str());
+    }
+    return true;
 }
 
 // Handle 'presence' stanzas
@@ -1500,7 +1533,7 @@ void YJBEngine::processStartIn(JBEvent* ev)
 	    comp->terminate(-1,true,0,XMPPError::Conflict);
 	    return;
 	}
-	// Add component to serviced domain
+	// Add component to serviced domains
 	setComponent(ev->from(),true);
 	comp->startComp(local,ev->from());
 	return;
@@ -1969,12 +2002,13 @@ JBStream* YJBEngine::getServerStream(const JabberID& from, const JabberID& to)
     if (s)
 	return s;
     // Avoid streams to internal components or (sub)domains
-    if (m_items.find(to.domain()) || !hasDomain(from.domain()))
+    if (!hasDomain(from.domain()))
 	return 0;
     String comp;
     getSubDomain(comp,to.domain());
     if (comp)
 	return 0;
+    DDebug(this,DebugAll,"getServerStream(%s,%s) creating s2s",from.c_str(),to.c_str());
     return createServerStream(from.domain(),to.domain());
 }
 
@@ -2129,7 +2163,7 @@ void YJBEngine::statusDetail(String& str, const String& name)
     str << ",remote=" << stream->remote();
     String buf;
     XMPPUtils::buildFlags(buf,stream->flags(),JBStream::s_flagName);
-    str << ",options=" << buf;
+    str << ",flags=" << buf;
 }
 
 // Complete stream detail
@@ -2219,8 +2253,11 @@ JBPendingJob::JBPendingJob(JBEvent* ev)
     m_streamType((JBStream::Type)ev->stream()->type()),
     m_local(ev->stream()->local().domain()),
     m_flags(ev->stream()->flags()),
-    m_serverTarget(!ev->to() || ev->to() == ev->stream()->local())
+    m_serverTarget(false),
+    m_serverItemTarget(false)
 {
+    m_serverItemTarget = ev->to() && s_jabber->isServerItemDomain(ev->to().domain());
+    m_serverTarget = !m_serverItemTarget && (!ev->to() || ev->to() == ev->stream()->local());
     m_event->releaseStream(true);
 }
 
@@ -2421,7 +2458,8 @@ void JBPendingWorker::processChat(JBPendingJob& job)
     }
     XMPPError::Type error = XMPPError::NoError;
     bool localTarget = s_jabber->hasDomain(ev->to().domain()) &&
-	!s_jabber->hasComponent(ev->to().domain());
+	!s_jabber->hasComponent(ev->to().domain()) &&
+	!s_jabber->isServerItemDomain(ev->to().domain());
     Message m("msg.route");
     while (true) {
 	__plugin.complete(m);
@@ -2550,6 +2588,8 @@ void JBPendingWorker::processIq(JBPendingJob& job)
 	// RFC 3921 Roster management
 	// Namespace restricted for non c2s streams
 	case XMPPNamespace::Roster:
+	    if (job.m_serverItemTarget)
+		break;
 	    rsp = s_jabber->processIqRoster(ev,job.m_streamType,t);
 	    if (rsp)
 		job.sendStanza(rsp);
@@ -2567,8 +2607,8 @@ void JBPendingWorker::processIq(JBPendingJob& job)
 	    // vcard requests from remote domain
 	    if (job.m_streamType != JBStream::c2s)
 		break;
-	    // vcard requests to remote domain
-	    if (ev->to() && !s_jabber->hasDomain(ev->to().domain()))
+	    // vcard requests to remote domain or to server items
+	    if (job.m_serverItemTarget || (ev->to() && !s_jabber->hasDomain(ev->to().domain())))
 		break;
 	    rsp = s_jabber->processIqVCard(ev,job.m_streamType,t);
 	    if (rsp)
@@ -2613,7 +2653,8 @@ void JBPendingWorker::processIq(JBPendingJob& job)
     // Destination at local domain: deny the request if the sender is not
     // the target's roster
     if (s_jabber->hasDomain(ev->to().domain()) &&
-	!s_jabber->hasComponent(ev->to().domain())) {
+	!s_jabber->hasComponent(ev->to().domain()) &&
+	!job.m_serverItemTarget) {
 	// Check auth
 	Message auth("resource.subscribe");
 	auth.addParam("module",__plugin.name());
@@ -2635,7 +2676,7 @@ void JBPendingWorker::processIq(JBPendingJob& job)
     m.addParam("to_instance",ev->to().resource());
     addValidParam(m,"id",ev->id());
     addValidParam(m,"type",ev->stanzaType());
-    if (!respond)
+    if (respond)
 	addValidParam(m,"xmlns",TelEngine::c_safe(xmlns));
     m.addParam(new NamedPointer("xml",ev->releaseXml()));
     if (Engine::dispatch(m)) {

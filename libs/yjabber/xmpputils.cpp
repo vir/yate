@@ -1259,12 +1259,17 @@ void XMPPUtils::print(String& xmlStr, XmlChild& xml, bool verbose)
 	xmlStr << "\r\n-----";
     const XmlElement* element = xml.xmlElement();
     if (element) {
-	String indent("\r\n");
-	String origindent("  ");
+	String indent;
+	String origindent;
+	if (verbose) {
+	    indent << "\r\n";
+	    origindent << "  ";
+	}
 	element->toString(xmlStr,false,indent,origindent,false,s_auth);
     }
     else if (xml.xmlDeclaration()) {
-	xmlStr << "\r\n";
+	if (verbose)
+	    xmlStr << "\r\n";
 	xml.xmlDeclaration()->toString(xmlStr,false);
     }
     else

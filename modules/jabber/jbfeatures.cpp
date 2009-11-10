@@ -1,8 +1,8 @@
 /**
- * .cpp
+ * jbfeatures.cpp
  * This file is part of the YATE Project http://YATE.null.ro
  *
- * 
+ * Jabber features module
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
  * Copyright (C) 2004-2006 Null Team

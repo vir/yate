@@ -1575,7 +1575,7 @@ bool JGSession0::sendContent(Action action, const ObjList& contents, String* sta
     addJingleContents0(m_sessContentName,xml,contents,minimal,addDesc,addTrans,
 	ActTransportInfo);
     bool ok = sendStanza(xml,stanzaId);
-    tmp << stanzaId << "_1";
+    tmp << *stanzaId << "_1";
     xml = createJingle(ActCandidates);
     addJingleContents0(m_sessContentName,xml,contents,minimal,addDesc,addTrans,
 	ActCandidates);

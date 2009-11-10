@@ -1144,9 +1144,9 @@ private:
     inline bool socketCanRead() const
 	{ return m_socket && (m_socketFlags & SocketCanRead); }
     inline bool socketReading() const
-	{ return m_socketFlags & SocketReading; }
+	{ return (m_socketFlags & SocketReading) != 0; }
     inline bool socketWriting() const
-	{ return m_socketFlags & SocketWriting; }
+	{ return (m_socketFlags & SocketWriting) != 0; }
 
     JBEngine* m_engine;                  // The owner of this stream
     int m_type;                          // Stream type
@@ -2220,7 +2220,7 @@ public:
      * Retrieve the maximum number of streams per set
      * @return The maximum number of streams per set
      */
-    inline unsigned int max() const
+    inline unsigned int maxStreams() const
 	{ return m_max; }
 
     /**

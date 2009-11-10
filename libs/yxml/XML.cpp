@@ -75,7 +75,7 @@ static inline void addAuth(String& buf, const String& comp, const String& value,
 /*
  * XmlSaxParser
  */
-TokenDict XmlSaxParser::s_errorString[] = {
+const TokenDict XmlSaxParser::s_errorString[] = {
 	{"No error",                      NoError},
 	{"Error",                         Unknown},
 	{"Not well formed",               NotWellFormed},
@@ -96,7 +96,7 @@ TokenDict XmlSaxParser::s_errorString[] = {
 	{0,0}
 };
 
-XmlEscape XmlSaxParser::s_escape[] = {
+const XmlEscape XmlSaxParser::s_escape[] = {
 	{"&lt;",   '<'},
 	{"&gt;",   '>'},
 	{"&amp;",  '&'},

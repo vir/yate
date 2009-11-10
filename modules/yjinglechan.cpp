@@ -404,7 +404,7 @@ public:
     // Check if a domain is handled by the module
     inline bool handleDomain(const String& domain) {
 	    Lock lock(this);
-	    return m_domains.find(domain);
+	    return m_domains.find(domain) != 0;
 	}
     // Retrieve the default resource
     inline void defaultResource(String& buf) {

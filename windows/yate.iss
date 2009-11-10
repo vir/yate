@@ -38,9 +38,10 @@ Name: "driver\openssl\run"; Description: "OpenSSL runtime libraries"; Types: ful
 Name: "driver\sip"; Description: "SIP Protocol driver"; Types: full client server
 Name: "driver\h323"; Description: "H.323 Protocol driver"; Types: full client server
 Name: "driver\iax"; Description: "IAX Protocol driver"; Types: full client server
-Name: "driver\jingle"; Description: "Jingle Protocol driver"; Types: full client server
-Name: "driver\jingle\transfer"; Description: "Jingle file transfer"; Types: full client server
-Name: "driver\jingle\features"; Description: "Jingle special features"; Types: full server
+Name: "driver\jabber"; Description: "Jabber Protocol driver"; Types: full client server
+Name: "driver\jabber\server"; Description: "Jabber server"; Types: full server
+Name: "driver\jabber\client"; Description: "Jabber client"; Types: full client
+Name: "driver\jabber\jingle"; Description: "Jingle voice protocol"; Types: full client server
 ;Name: "driver\wp"; Description: "Wanpipe card driver"; Types: full server
 Name: "database"; Description: "Database drivers"; Types: full server
 Name: "database\my"; Description: "MySQL database driver"; Types: full server
@@ -64,7 +65,7 @@ Name: "desktop"; Description: "Create a &Desktop icon"; GroupDescription: "Addit
 
 [Files]
 Source: "Release\libyate.dll"; DestDir: "{app}"; Flags: replacesameversion; Components: engine
-Source: "Release\libyjingle.dll"; DestDir: "{app}"; Flags: replacesameversion; Components: driver\jingle
+Source: "Release\libyjabber.dll"; DestDir: "{app}"; Flags: replacesameversion; Components: driver\jabber
 Source: "Release\libymgcp.dll"; DestDir: "{app}"; Flags: replacesameversion; Components: server\pstn server\cluster
 Source: "Release\libysig.dll"; DestDir: "{app}"; Flags: replacesameversion; Components: server\pstn server\cluster
 Source: "Release\libyqt4.dll"; DestDir: "{app}"; Flags: replacesameversion; Components: client\qt
@@ -113,15 +114,17 @@ Source: "Release\server\mgcpca.yate"; DestDir: "{app}\modules\server"; Flags: re
 Source: "Release\server\mgcpgw.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\pstn server\cluster
 
 ;Source: "Release\wpchan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\wp
-Source: "Release\yrtpchan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\sip driver\h323 driver\jingle
+Source: "Release\yrtpchan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\sip driver\h323 driver\jabber\jingle
 Source: "Release\ysipchan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\sip
 Source: "Release\h323chan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\h323
 Source: "Release\yiaxchan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\iax
-Source: "Release\yjinglechan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\jingle
-Source: "Release\ystunchan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\jingle
-Source: "Release\ysockschan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\jingle\transfer
-Source: "Release\filetransfer.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\jingle\transfer
-Source: "Release\jingle\jinglefeatures.yate"; DestDir: "{app}\modules\jingle"; Flags: replacesameversion; Components: driver\jingle\features
+Source: "Release\yjinglechan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\jabber\jingle
+Source: "Release\ystunchan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\jabber\jingle
+Source: "Release\ysockschan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\jabber\jingle
+Source: "Release\filetransfer.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\jabber\jingle
+Source: "Release\client\jabberclient.yate"; DestDir: "{app}\modules\client"; Flags: replacesameversion; Components: driver\jabber\client
+Source: "Release\jabber\jbfeatures.yate"; DestDir: "{app}\modules\jabber"; Flags: replacesameversion; Components: driver\jabber\server
+Source: "Release\jabber\jabberserver.yate"; DestDir: "{app}\modules\jabber"; Flags: replacesameversion; Components: driver\jabber\server
 Source: "Release\openssl.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\openssl
 
 Source: "Release\gsmcodec.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: codecs\gsm

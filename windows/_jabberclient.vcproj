@@ -2,9 +2,9 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="8.00"
-	Name="libyxml"
-	ProjectGUID="{E351C8F9-20A7-4363-909C-1A06E9BEAA6B}"
-	RootNamespace="libyxml"
+	Name="_jabberclient"
+	ProjectGUID="{9F28A731-2E7E-9E22-719D-22FA2A18D588}"
+	RootNamespace="_jabberclient"
 	>
 	<Platforms>
 		<Platform
@@ -16,9 +16,9 @@
 	<Configurations>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory=".\Debug"
-			IntermediateDirectory=".\Debug\yxml"
-			ConfigurationType="4"
+			OutputDirectory=".\Debug\client"
+			IntermediateDirectory=".\Debug\modules"
+			ConfigurationType="2"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
 			UseOfMFC="0"
 			ATLMinimizesCRunTimeLibraryUsage="false"
@@ -38,20 +38,25 @@
 			/>
 			<Tool
 				Name="VCMIDLTool"
+				PreprocessorDefinitions="_DEBUG"
+				MkTypLibCompatible="true"
+				SuppressStartupBanner="true"
+				TargetEnvironment="1"
+				TypeLibraryName=".\Debug/_jabberclient.tlb"
+				HeaderFileName=""
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories=".,..,..\libs\yxml"
-				PreprocessorDefinitions="_DEBUG;WIN32;_LIB;LIBYXML_EXPORTS;_CRT_SECURE_NO_DEPRECATE"
+				AdditionalIncludeDirectories=".,..,..\libs\yxml,..\libs\yjabber"
+				PreprocessorDefinitions="_DEBUG;WIN32;_WINDOWS;_USRDLL"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
-				PrecompiledHeaderFile=".\Debug\yxml/libyxml.pch"
-				AssemblerListingLocation=".\Debug\yxml/"
-				ObjectFile=".\Debug\yxml/"
-				ProgramDataBaseFileName=".\Debug\yxml/"
-				BrowseInformation="1"
+				PrecompiledHeaderFile=".\Debug\modules/_jabberclient.pch"
+				AssemblerListingLocation=".\Debug\modules/"
+				ObjectFile=".\Debug\modules/"
+				ProgramDataBaseFileName=".\Debug\modules/"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
 				DebugInformationFormat="3"
@@ -68,12 +73,21 @@
 				Name="VCPreLinkEventTool"
 			/>
 			<Tool
-				Name="VCLibrarianTool"
-				OutputFile=".\Debug\libyxml.lib"
+				Name="VCLinkerTool"
+				IgnoreImportLibrary="true"
+				OutputFile="Debug/client/jabberclient.yate"
+				LinkIncremental="1"
 				SuppressStartupBanner="true"
+				GenerateDebugInformation="true"
+				ProgramDatabaseFile=".\Debug/jabberclient.pdb"
+				ImportLibrary=".\Debug/jabberclient.lib"
+				TargetMachine="1"
 			/>
 			<Tool
 				Name="VCALinkTool"
+			/>
+			<Tool
+				Name="VCManifestTool"
 			/>
 			<Tool
 				Name="VCXDCMakeTool"
@@ -81,10 +95,16 @@
 			<Tool
 				Name="VCBscMakeTool"
 				SuppressStartupBanner="true"
-				OutputFile=".\Debug/libyxml.bsc"
+				OutputFile=".\Debug/_jabberclient.bsc"
 			/>
 			<Tool
 				Name="VCFxCopTool"
+			/>
+			<Tool
+				Name="VCAppVerifierTool"
+			/>
+			<Tool
+				Name="VCWebDeploymentTool"
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
@@ -92,9 +112,9 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory=".\Release"
-			IntermediateDirectory=".\Release\yxml"
-			ConfigurationType="4"
+			OutputDirectory=".\Release\client"
+			IntermediateDirectory=".\Release\modules"
+			ConfigurationType="2"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
 			UseOfMFC="0"
 			ATLMinimizesCRunTimeLibraryUsage="false"
@@ -114,20 +134,26 @@
 			/>
 			<Tool
 				Name="VCMIDLTool"
+				PreprocessorDefinitions="NDEBUG"
+				MkTypLibCompatible="true"
+				SuppressStartupBanner="true"
+				TargetEnvironment="1"
+				TypeLibraryName=".\Release/_jabberclient.tlb"
+				HeaderFileName=""
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				InlineFunctionExpansion="1"
-				AdditionalIncludeDirectories=".,..,..\libs\yxml"
-				PreprocessorDefinitions="NDEBUG;WIN32;_LIB;LIBYXML_EXPORTS;_CRT_SECURE_NO_DEPRECATE"
+				AdditionalIncludeDirectories=".,..,..\libs\yxml,..\libs\yjabber"
+				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;_USRDLL"
 				StringPooling="true"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
-				PrecompiledHeaderFile=".\Release\yxml/libyxml.pch"
-				AssemblerListingLocation=".\Release\yxml/"
-				ObjectFile=".\Release\yxml/"
-				ProgramDataBaseFileName=".\Release\yxml/"
+				PrecompiledHeaderFile=".\Release\modules/_jabberclient.pch"
+				AssemblerListingLocation=".\Release\modules/"
+				ObjectFile=".\Release\modules/"
+				ProgramDataBaseFileName=".\Release\modules/"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
 			/>
@@ -143,12 +169,20 @@
 				Name="VCPreLinkEventTool"
 			/>
 			<Tool
-				Name="VCLibrarianTool"
-				OutputFile=".\Release\libyxml.lib"
+				Name="VCLinkerTool"
+				IgnoreImportLibrary="true"
+				OutputFile="Release/client/jabberclient.yate"
+				LinkIncremental="1"
 				SuppressStartupBanner="true"
+				ProgramDatabaseFile=".\Release/jabberclient.pdb"
+				ImportLibrary=".\Release/jabberclient.lib"
+				TargetMachine="1"
 			/>
 			<Tool
 				Name="VCALinkTool"
+			/>
+			<Tool
+				Name="VCManifestTool"
 			/>
 			<Tool
 				Name="VCXDCMakeTool"
@@ -156,10 +190,16 @@
 			<Tool
 				Name="VCBscMakeTool"
 				SuppressStartupBanner="true"
-				OutputFile=".\Release/libyxml.bsc"
+				OutputFile=".\Release/_jabberclient.bsc"
 			/>
 			<Tool
 				Name="VCFxCopTool"
+			/>
+			<Tool
+				Name="VCAppVerifierTool"
+			/>
+			<Tool
+				Name="VCWebDeploymentTool"
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
@@ -174,18 +214,39 @@
 			Filter="cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 			>
 			<File
-				RelativePath="..\libs\yxml\XML.cpp"
+				RelativePath="..\modules\client\jabberclient.cpp"
 				>
+			</File>
+		</Filter>
+		<Filter
+			Name="Resource Files"
+			Filter="ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe"
+			>
+			<File
+				RelativePath="version.rc"
+				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCResourceCompilerTool"
+						PreprocessorDefinitions=""
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCResourceCompilerTool"
+						PreprocessorDefinitions=""
+					/>
+				</FileConfiguration>
 			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
 			Filter="h;hpp;hxx;hm;inl"
 			>
-			<File
-				RelativePath="..\libs\yxml\yatexml.h"
-				>
-			</File>
 		</Filter>
 	</Files>
 	<Globals>

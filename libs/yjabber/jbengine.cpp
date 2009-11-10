@@ -870,8 +870,8 @@ ObjList* JBEngine::findClientStreams(bool in, const JabberID& jid, int flags)
 	    if (stream->incoming() != in || stream->state() == JBStream::Destroy)
 		continue;
 	    Lock lock(stream);
-	    const JabberID& s = in ? stream->remote() : stream->local();
-	    if (s.bare() == jid.bare() && stream->flag(flags) && stream->ref()) {
+	    const JabberID& sid = in ? stream->remote() : stream->local();
+	    if (sid.bare() == jid.bare() && stream->flag(flags) && stream->ref()) {
 		if (!result)
 		    result = new ObjList;
 		result->append(stream);
@@ -904,8 +904,8 @@ ObjList* JBEngine::findClientStreams(bool in, const JabberID& jid, const ObjList
 	    if (stream->incoming() != in || stream->state() == JBStream::Destroy)
 		continue;
 	    Lock lock(stream);
-	    const JabberID& s = in ? stream->remote() : stream->local();
-	    if (s.bare() == jid.bare() && resources.find(s.resource()) &&
+	    const JabberID& sid = in ? stream->remote() : stream->local();
+	    if (sid.bare() == jid.bare() && resources.find(sid.resource()) &&
 		stream->flag(flags) && stream->ref()) {
 		if (!result)
 		    result = new ObjList;
@@ -937,8 +937,8 @@ JBClientStream* JBEngine::findClientStream(bool in, const JabberID& jid)
 	    if (found->incoming() != in || found->state() == JBStream::Destroy)
 		continue;
 	    Lock lock(found);
-	    const JabberID& s = in ? found->remote() : found->local();
-	    if (s == jid && found->ref())
+	    const JabberID& sid = in ? found->remote() : found->local();
+	    if (sid == jid && found->ref())
 		break;
 	    found = 0;
 	}
@@ -1657,7 +1657,7 @@ bool JBStreamSet::add(JBStream* client)
     if (!client)
 	return false;
     Lock lock(this);
-    if (m_exiting || (m_owner->max() && m_clients.count() >= m_owner->max()) ||
+    if (m_exiting || (m_owner->maxStreams() && m_clients.count() >= m_owner->maxStreams()) ||
 	!client->ref())
 	return false;
     m_clients.append(client);

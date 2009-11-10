@@ -27,6 +27,22 @@
 
 #include <yateclass.h>
 
+#ifdef _WINDOWS
+
+#ifdef LIBYXML_EXPORTS
+#define YXML_API __declspec(dllexport)
+#else
+#ifndef LIBYXML_STATIC
+#define YXML_API __declspec(dllimport)
+#endif
+#endif
+
+#endif /* _WINDOWS */
+
+#ifndef YXML_API
+#define YXML_API
+#endif
+
 /**
  * Holds all Telephony Engine related classes.
  */
@@ -44,14 +60,25 @@ class XmlComment;
 class XmlCData;
 class XmlText;
 class XmlDoctype;
-struct XmlEscape;
 
+
+struct YXML_API XmlEscape {
+    /**
+     * Value to match
+     */
+    const char* value;
+
+    /**
+     * Character replacement for value
+     */
+    char replace;
+};
 
 /**
  * A Serial Access Parser (SAX) for arbitrary XML data
  * @short Serial Access XML Parser
  */
-class YATE_API XmlSaxParser : public DebugEnabler
+class YXML_API XmlSaxParser : public DebugEnabler
 {
 public:
     enum Error {
@@ -192,12 +219,12 @@ public:
     /**
      * Errors dictionary
      */
-    static TokenDict s_errorString[];
+    static const TokenDict s_errorString[];
 
     /**
      * Escaped strings dictionary
      */
-    static XmlEscape s_escape[];
+    static const XmlEscape s_escape[];
 
 protected:
     /**
@@ -467,7 +494,7 @@ protected:
  * Xml Parent for a Xml child
  * @short Xml Parent
  */
-class YATE_API XmlParent
+class YXML_API XmlParent
 {
 public:
     /**
@@ -548,7 +575,7 @@ public:
  * A Document Object Model (DOM) parser for XML documents and fragments
  * @short Document Object Model XML Parser
  */
-class YATE_API XmlDomParser : public XmlSaxParser
+class YXML_API XmlDomParser : public XmlSaxParser
 {
     friend class XmlChild;
 public:
@@ -664,7 +691,7 @@ private:
  * Xml Child for Xml document 
  * @short Xml Child
  */
-class YATE_API XmlChild : public GenObject
+class YXML_API XmlChild : public GenObject
 {
     YCLASS(XmlChild,GenObject)
     friend class XmlDomParser;
@@ -729,7 +756,7 @@ public:
  * Xml Declaration for Xml document 
  * @short Xml Declaration
  */
-class YATE_API XmlDeclaration : public XmlChild
+class YXML_API XmlDeclaration : public XmlChild
 {
     YCLASS(XmlDeclaration,XmlChild)
 public:
@@ -787,7 +814,7 @@ private:
  * Xml Fragment a fragment from a Xml document 
  * @short Xml Fragment
  */
-class YATE_API XmlFragment : public XmlParent
+class YXML_API XmlFragment : public XmlParent
 {
 public:
 
@@ -887,7 +914,7 @@ private:
  * Xml Document
  * @short Xml Document
  */
-class YATE_API XmlDocument : public XmlParent
+class YXML_API XmlDocument : public XmlParent
 {
 public:
 
@@ -1015,7 +1042,7 @@ private:
  * @short Xml Element
  */
 
-class YATE_API XmlElement : public XmlChild, public XmlParent
+class YXML_API XmlElement : public XmlChild, public XmlParent
 {
     YCLASS(XmlElement,XmlChild)
 public:
@@ -1064,14 +1091,14 @@ public:
      * @return The element's tag unprefixed
      */
     inline const String& unprefixedTag() const
-	{ return !m_prefixed ? m_element : m_prefixed->name(); }
+	{ return m_prefixed ? m_prefixed->name() : static_cast<const String&>(m_element); }
 
     /**
      * Retrieve the element's tag (without prefix)
      * @return Element tag
      */
-    const String& getTag() const
-	{ return !m_prefixed ? m_element : m_prefixed->name(); }
+    inline const String& getTag() const
+	{ return m_prefixed ? m_prefixed->name() : static_cast<const String&>(m_element); }
 
     /**
      * Retrieve the element's tag (without prefix) and namespace
@@ -1398,7 +1425,7 @@ private:
  * A Xml Comment from Xml document 
  * @short Xml Comment
  */
-class YATE_API XmlComment : public XmlChild
+class YXML_API XmlComment : public XmlChild
 {
     YCLASS(XmlComment,XmlChild)
 public:
@@ -1448,7 +1475,7 @@ private:
  * A Xml CData from Xml document 
  * @short Xml Declaration
  */
-class YATE_API XmlCData : public XmlChild
+class YXML_API XmlCData : public XmlChild
 {
     YCLASS(XmlCData,XmlChild)
 public:
@@ -1499,7 +1526,7 @@ private:
  * A Xml Declaration for Xml document 
  * @short Xml Declaration
  */
-class YATE_API XmlText : public XmlChild
+class YXML_API XmlText : public XmlChild
 {
     YCLASS(XmlText,XmlChild)
 public:
@@ -1550,7 +1577,7 @@ private:
     String m_text;                        // The text
 };
 
-class YATE_API XmlDoctype : public XmlChild
+class YXML_API XmlDoctype : public XmlChild
 {
     YCLASS(XmlDoctype,XmlChild)
 public:
@@ -1594,18 +1621,6 @@ public:
 
 private:
     String m_doctype;                          // The document type
-};
-
-struct XmlEscape {
-    /**
-     * Value to match
-     */
-    const char* value;
-
-    /**
-     * Character replacement for value
-     */
-    char replace;
 };
 
 }; // namespace TelEngine

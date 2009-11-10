@@ -60,6 +60,12 @@
 ; Minimum allowed value is 1000, maximum allowed value is 10000
 ;stream_connecttimeout=5000
 
+; stream_idletimeout: integer: The interval, in milliseconds, allowed for a
+;  server to server stream to be idle
+; Defaults to 3600000 (1h) if missing or invalid
+; Minimum allowed value is 600000 (10min), maximum allowed value is 21600000 (6h)
+;stream_idletimeout=3600000
+
 ; entitycaps: boolean: Enable entity capabilities cache.
 ; If enabled entity capabilities will be requested and cached each time a presence
 ;  stanza is received

@@ -1,17 +1,23 @@
 ; This file keeps the configuration for the Jingle channel
 
 [general]
-; Global settings of Jabber and Jingle engines
+; Global settings of Jingle channel
+
+; domains: string: Comma separated list of domains serviced by the jingle channel
+; The parameter is not used in client mode
+; When running in non client mode any domain should be a jabber server (sub)domain
+;domains=
+
+; resources: string: Comma separated list of resources serviced by the jingle channel
+; The parameter is not used in client mode
+; The first resource will be the default one (for outgoing calls)
+;resources=
 
 ; jingle_version: integer: Jingle session version to use for outgoing calls
 ; Defaults to the newest version if missing or invalid
 ; Allowed values are 0 or 1
 ; This parameter can be overridden when routing by an 'ojingle_version' parameter
 ;jingle_version=
-
-; secure_rtp: boolean: Offer SRTP when negotiating Jingle sessions
-; Defaults to disable
-;secure_rtp=disable
 
 ; accept_relay: bool: Accept a "relay" transport type even if we had another type before
 ; This works only with Jingle version 0 (Google Talk, libjingle)
@@ -28,19 +34,6 @@
 ; Defaults to disable
 ;imtochantext=disable
 
-; addpresencetocommand: boolean: Attach a presence stanza to an 'iq' command when
-;  this one is used to notify presence
-; Defaults to disable
-;addpresencetocommand=disable
-
-; user.roster: boolean: Controls the way a roster query response or roster
-;  push received from server is handled.
-; If disabled, a resource.notify message will be sent for each item in the list received
-;  from server.
-; If enabled, an user.roster message containing all items wil be enqueued.
-; Defaults to disable
-;user.roster=disable
-
 ; localip: string: Set this machine's IP address. If missing, we will try to guess one
 ; The local machine's IP address is used to negotiate the audio stream
 ;localip=
@@ -53,6 +46,7 @@
 ;   Defaults to enable
 ; pending_timeout: integer: How much an outgoing call will wait for a response to a probe
 ;   Defaults to 10000
+; The parameters are not used in client mode
 ; These options are used when we want to make an outgoing call and we can't do that because we don't have
 ;   a resource with audio capability for the called party, so we have to probe its presence
 ; Since we might not receive a response if the caller is not subscribed to called's party presence,
@@ -64,68 +58,13 @@
 ;request_subscribe=enable
 ;pending_timeout=10000
 
-; xmlparser_maxbuffer: integer: Maximum length of text we ever parse as XML
-; Defaults to 8192
-;xmlparser_maxbuffer=8192
-
-; stream_restartcount: integer: Maximum value for stream restart counter
-;   Defaults to 2. Take values between 1 and 10
-; stream_restartupdateinterval: integer: Interval (in miliseconds) to update (increase)
-;   the stream restart counter. Defaults to 15000. Take values between 5000 and 300000
-; The TCP connection with a server may be closed due to XML parser or socket errors or the open
-;   operation may fail (the server may be down)
-; These options defines the TCP connection restart behaviour. The mechanism is designed to avoid
-;   repetitive connect attempts
-; The restart count defines the number of times the engine will try to establish a TCP connection
-;   with the server. Each time a connect attempt fails the counter is decremented. No more attempts
-;   to (re)connect are made when the counter is 0
-; The restart count update interval defines the interval at which the restart counter is incremented,
-;   up to the value given by stream_restartcount
-;stream_restartcount=2
-;stream_restartupdateinterval=15000
-
-; stream_setuptimeout: integer: The time, in milliseconds, allowed for stream
-;   setup (negotiate stream features, authenticate, bind client resource, etc)
-; The stream will be destroyed if this timer expires before setup completion
-; Set it to 0 to disable this timer (NOT RECOMMENDED)
-; Defaults to 10000. Minimum allowed value is 1000
-; Any value below the minimum allowed will disable this timer
-;stream_setuptimeout=10000
-
-; auto_subscribe: string: Presence. Set the behaviour of processing the subscribe/unsubscribe requests
-; Allowed values:
-;    none: All subscription are processed as a result of messages. The subscription changes are made
-;          on receiving 'unsubscribed' responses from remote users or 'resource.subscribe' from another module
-;    from: Automatically accept subscribe/unsubscribe requests
-;    to:   Automatically subscribe/unsubscribe to/from the remote user when adding to the roster
-;    both: The combination of 'from' and 'to'
-; Defaults to none
-; This parameter is forced to 'from' if the roster is kept by the server
-;auto_subscribe=none
-
-; delete_unavailable: bool: Presence. Automatically delete an user or a resource when unavailable
-; This setting is ignored if the roster is kept by the server
-; Defaults to enable
-;delete_unavailable=enable
-
-; auto_probe: boolean: Presence. Automatically respond to probe requests for users in our domain when
-;   we know nothing about the user presence
-; Defaults to enable
-; This parameter is forced to enable if the roster is kept by the server
-;auto_probe=enable
-
-; probe_interval: integer: Presence. Interval to probe a remote user if no data was received
-;   Defaults to 1800000
-; expire_interval: integer: Presence: Interval to wait a response to a probe request sent as a result
-;   of interval (set in probe_interval) ellapsing
-;   Defaults to 300000
-; These options are used to refresh the roster. The probe interval is the maximum time allowed between
-;   succesive presence notifications from remote users. After this interval ellapses a probe request will
-;   be sent to the user. If a response is not received within expire_interval, the remote user will be
-;   supposed to be unavailable
-; These parameters are ignored when the roster is kept by the server
-;probe_interval=1800000
-;expire_interval=300000
+; auto_subscribe: boolean: Automatically respond to (un)subscribe requests
+; The parameter is not used in client mode
+; Defaults to disable
+; WARNING: If auto_subscribe is enabled when the module is handling the same domain(s) as
+;  the jabber server this might lead to subscription request aproval on behalf of 'real'
+;  jabber users!
+;auto_subscribe=disable
 
 ; stanza_timeout: integer: The timeout interval (in milliseconds) of a stanza sent by a
 ;  jingle session
@@ -133,7 +72,7 @@
 ; Minimum allowed value is 10000
 ; Defaults to 20000 if missing or to the minimum value if invalid
 ;stanza_timeout=20000
-
+ 
 ; ping_interval: integer: The interval (in milliseconds) to ping the remote party of a
 ;  jingle session
 ; If enabled and the ping element fails the session will be terminated
@@ -142,18 +81,6 @@
 ; If enabled, it's value must be greater then stanza_timeout
 ;ping_interval=300000
 
-; default_resource: string: Default resource name when missing from local users' JIDs
-; Defaults to yate
-;default_resource=yate
-
-; extra_domain: string: Extra domain served by us
-; Here may be specified an extra domain accepted by the engine (other then the domain name of
-;   the default component server) as destination for incoming data
-;extra_domain=
-
-; printxml: boolean: Print sent/received XML data to output if debug level is at least 9
-; Defaults to no
-;printxml=no
 
 [codecs]
 ; This section allows to individually enable or disable the codecs
@@ -187,51 +114,3 @@ g728=default
 
 ; g729: bool: ITU G.729 all variations (G729/8000)
 g729=default
-
-
-[jabber.domain]
-; Each other section is used to initialize the server list as a Jabber Component
-; The name of the section is used as base Jabber domain
-; Changes don't affect the already opened streams
-
-; address: string: The IP address of the machine running the Jabber server (required)
-;address=
-
-; port: integer: The port on server to connect to (required)
-;port=
-
-; password: string: The password used by Yate to authenticate with the server
-;password=
-
-; identity: string: The (sub)domain used by the component
-; This setting controls the roster storing and will be used to generate the domain name of local users
-; If identity is equal to jabber.domain (section name) the roster will be kept by the component server
-;   The domain part of local user's JID will be given by the identity: jabber.domain
-; If identity is not equal to section name:
-;   If terminated in '.jabber.domain' it will be left untouched, otherwise the suffix '.jabber.domain' will be added
-;   In this case, the roster will be kept locally
-; Examples:
-;   Section name: null.ro, subdomain=somename
-;   identity=null.ro
-;     The roster is kept by the component server. Domain part of local JIDs: null.ro
-;     Yate identify itself to the server as somename.null.ro
-;   identity=someidentity or identity=someidentity.null.ro
-;     The roster is kept locally. Domain part of local JIDs: someidentity.null.ro
-;     Yate identify itself to the server as someidentity.null.ro
-; Either way, the domain part of the local users will be also the domain accepted by the engine
-;   as destination for received data (and, of course, the domain given by extra_domain)
-; Defaults to section name
-;identity=
-
-; subdomain: string: The subdomain to use if the identity equals the section name
-; Defaults to the value of default_resource
-;subdomain=yate
-
-; startup: boolean: Open the stream to the server when initializing the driver
-; Defaults to no (open stream on first demand)
-;startup=no
-
-; default: boolean: This is the default component to use. If no component is
-;  marked as default the first will be implicitely default
-; Defaults to false
-;default=false

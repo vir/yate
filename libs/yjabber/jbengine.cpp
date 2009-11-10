@@ -97,9 +97,9 @@ static const String s_googleMailNode = "http://mail.google.com/xmpp/client/caps"
 #define JB_PING_TIMEOUT_MIN        10000
 #define JB_PING_TIMEOUT_MAX        JB_PING_INTERVAL_MIN
 // Idle
-#define JB_IDLE_INTERVAL        43200000 // 12h
-#define JB_IDLE_INTERVAL_MIN     3600000 // 1h
-#define JB_IDLE_INTERVAL_MAX    86400000 // 24h
+#define JB_IDLE_INTERVAL         3600000 // 1h
+#define JB_IDLE_INTERVAL_MIN      600000 // 10min
+#define JB_IDLE_INTERVAL_MAX    21600000 // 6h
 
 
 /*
@@ -770,7 +770,7 @@ void JBEngine::initialize(const NamedList& params)
     m_pingTimeout = fixValue(params,"stream_pingtimeout",
 	JB_PING_TIMEOUT,JB_PING_TIMEOUT_MIN,JB_PING_TIMEOUT_MAX);
     m_idleTimeout = fixValue(params,"stream_idletimeout",
-	JB_IDLE_INTERVAL,JB_IDLE_INTERVAL_MIN,JB_IDLE_INTERVAL_MAX,true);
+	JB_IDLE_INTERVAL,JB_IDLE_INTERVAL_MIN,JB_IDLE_INTERVAL_MAX);
     m_initialized = true;
 }
 

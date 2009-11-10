@@ -98,6 +98,7 @@ const TokenDict JBStream::s_flagName[] = {
     {"dialback",         DialbackOnly},
     {"allowplainauth",   AllowPlainAuth},
     {"register",         RegisterUser},
+    {"error",            InError},
     // Internal flags
     {"roster_requested", RosterRequested},
     {"online",           AvailableResource},
@@ -576,6 +577,20 @@ void JBStream::terminate(int location, bool destroy, XmlElement* xml, int error,
     }
     bool sendEndTag = true;
     destroy = destroy || final || flag(NoAutoRestart);
+    // Set error flag
+    if (state() == Running) {
+	if (error != XMPPError::NoError)
+	    m_flags |= InError;
+	else
+	    m_flags &= ~InError;
+    }
+    else
+	m_flags |= InError;
+    if (flag(InError)) {
+	// Reset re-connect counter if not internal policy error
+	if (location || error != XMPPError::Policy)
+	    m_restart = 0;
+    }
     if (error == XMPPError::NoError && m_engine->exiting())
 	error = XMPPError::Shutdown;
     // Last check for sendEndTag
@@ -661,7 +676,11 @@ bool JBStream::canProcess(u_int64_t time)
 	}
 	if (state() == Idle) {
 	    // Re-connect
+	    // Don't connect if we are in error and have nothing to send
 	    if (m_restart) {
+		if (flag(InError) && !m_pending.skipNull())
+		    return false;
+		m_flags &= ~InError;
 		changeState(Connecting);
 		m_restart--;
 		m_engine->connectStream(this);
@@ -767,8 +786,7 @@ void JBStream::process(u_int64_t time)
 	if (!getJids(xml,from,to))
 	    break;
 	// Restart the idle timer
-	if (m_state == Running && m_engine->m_idleTimeout)
-	    m_idleTimeout = time + m_engine->m_idleTimeout;
+	setIdleTimer(time);
 	// Check if a received stanza is valid and allowed in current state
 	if (!checkStanzaRecv(xml,from,to))
 	    break;
@@ -1202,8 +1220,6 @@ void JBStream::changeState(State newState, u_int64_t time)
 	return;
     DDebug(this,DebugAll,"Changing state from '%s' to '%s' [%p]",
 	stateName(),lookup(newState,s_stateName),this);
-    // Always reset the idle timer: something happened
-    m_idleTimeout = m_engine->m_idleTimeout ? time + m_engine->m_idleTimeout : 0;
     // Set/reset state depending data
     switch (m_state) {
 	case WaitStart:
@@ -1249,6 +1265,7 @@ void JBStream::changeState(State newState, u_int64_t time)
 	    break;
 	case Running:
 	    m_flags |= StreamSecured | StreamAuthenticated;
+	    m_flags &= ~InError;
 	    m_setupTimeout = 0;
 	    m_startTimeout = 0;
 	    if (m_state != Running)
@@ -1267,6 +1284,8 @@ void JBStream::changeState(State newState, u_int64_t time)
 	default: ;
     }
     m_state = newState;
+    if (m_state == Running)
+	setIdleTimer(time);
 }
 
 // Check for pending events. Set the last event
@@ -1342,6 +1361,7 @@ bool JBStream::sendPending(bool streamOnly)
     u_int32_t len;
     const char* data = eout->getData(len);
     if (writeSocket(data,len)) {
+	setIdleTimer();
 	// Adjust element's buffer. Remove it from list on completion
 	eout->dataSent(len);
 	unsigned int rest = eout->dataCount();
@@ -1439,6 +1459,16 @@ bool JBStream::dropXml(XmlElement*& xml, const char* reason)
 	xml,xml->tag(),TelEngine::c_safe(xml->xmlns()),stateName(),reason,this);
     TelEngine::destruct(xml);
     return true;
+}
+
+// Set the idle timer in Running state
+void JBStream::setIdleTimer(u_int64_t msecNow)
+{
+    // Set only for c2s in Running state
+    if (m_type != c2s || m_state != Running || !m_engine->m_idleTimeout)
+	return;
+    m_idleTimeout = msecNow + m_engine->m_idleTimeout;
+    XDebug(this,DebugAll,"Idle timeout set to " FMT64 "ms [%p]",m_idleTimeout,this);
 }
 
 // Process incoming elements in Challenge state

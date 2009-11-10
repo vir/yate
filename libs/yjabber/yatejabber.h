@@ -508,6 +508,7 @@ public:
 	                                 //  offered by server the stream will be terminated
 	DialbackOnly        = 0x00000008,// Outgoing s2s dialback stream
 	RegisterUser        = 0x00000010,// Outgoing c2s register new user
+	InError             = 0x00000080,// The stream was terminated with error
 	// Flags to be managed by the upper layer
 	RosterRequested     = 0x00000100,// c2s: the roster was already requested
 	AvailableResource   = 0x00000200,// c2s: available presence was sent/received
@@ -1053,6 +1054,12 @@ protected:
 	    m_flags |= StreamSecured;
 	    m_features.remove(XMPPNamespace::Tls);
 	}
+
+    /**
+     * Set the idle timer in Running state
+     * @param msecNow Current time in milliseconds
+     */
+    void setIdleTimer(u_int64_t msecNow = Time::msecNow());
 
     State m_state;                       // Stream state
     String m_id;                         // Stream id

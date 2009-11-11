@@ -2650,23 +2650,6 @@ void JBPendingWorker::processIq(JBPendingJob& job)
     }
 
     bool respond = (t == XMPPUtils::IqGet || t == XMPPUtils::IqSet);
-    // Destination at local domain: deny the request if the sender is not
-    // the target's roster
-    if (s_jabber->hasDomain(ev->to().domain()) &&
-	!s_jabber->hasComponent(ev->to().domain()) &&
-	!job.m_serverItemTarget) {
-	// Check auth
-	Message auth("resource.subscribe");
-	auth.addParam("module",__plugin.name());
-	auth.addParam("operation","query");
-	auth.addParam("subscriber",ev->from().bare());
-	auth.addParam("notifier",ev->to().bare());
-	if (!Engine::dispatch(auth)) {
-	    if (respond)
-		job.sendIqErrorStanza(XMPPError::ServiceUnavailable);
-	    return;
-	}
-    }
     // Route the iq
     Message m("jabber.iq");
     m.addParam("module",__plugin.name());

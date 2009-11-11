@@ -131,7 +131,7 @@ public:
     void load();
 protected:
     inline void getEntityCapsFile(String& file) {
-	    file = Engine::configPath();
+	    file = Engine::configPath(Engine::clientMode());
 	    if (!file.endsWith(Engine::pathSeparator()))
 		file << Engine::pathSeparator();
 	    file << "jabberentitycaps.xml";
@@ -871,6 +871,10 @@ void YJBEngine::processIqStanza(JBEvent* ev)
     int n = XMPPNamespace::Count;
     if (service)
 	XMPPUtils::getTag(*service,t,n);
+    // Server entity caps responses
+    if (rsp && n == XMPPNamespace::DiscoInfo &&
+	s_entityCaps.processRsp(ev->element(),ev->id(),type == XMPPUtils::IqResult))
+	return;
     bool fromServer = (!ev->from() || ev->from() == ev->stream()->local().bare());
     if (fromServer) {
 	switch (n) {

@@ -315,7 +315,7 @@ public:
 	{ return m_users; }
     // Find an user. Load it from database if not found and load is true
     // Returns referrenced pointer if found
-    PresenceUser* getUser(const String& user, bool load = true);
+    PresenceUser* getUser(const String& user, bool load = true, bool force = false);
     // Remove an user from list
     void removeUser(const String& user);
 protected:
@@ -1102,7 +1102,7 @@ UserList::UserList()
 
 // Find an user. Load it from database if not found
 // Returns referrenced pointer if found
-PresenceUser* UserList::getUser(const String& user, bool load)
+PresenceUser* UserList::getUser(const String& user, bool load, bool force)
 {
     XDebug(&__plugin,DebugAll,"UserList::getUser(%s)",user.c_str());
     Lock lock(this);
@@ -1112,7 +1112,7 @@ PresenceUser* UserList::getUser(const String& user, bool load)
 	return u->ref() ? u : 0;
     }
     lock.drop();
-    if (s_usersLoaded || !load)
+    if ((s_usersLoaded || !load) && !force)
 	return 0;
     PresenceUser* u = askDatabase(user);
     if (!u)
@@ -1152,12 +1152,11 @@ PresenceUser* UserList::askDatabase(const String& name)
     m = __plugin.queryDb(m);
     if (!m)
 	return 0;
-    PresenceUser* u = 0;
+    PresenceUser* u = new PresenceUser(name);
     Array* a = 0;
     if (m->getIntValue("rows") >= 1)
 	a = static_cast<Array*>(m->userObject("Array"));
     if (a) {
-	u = new PresenceUser(name);
 	int rows = a->getRows();
 	for (int i = 1; i < rows; i++) {
 	    Contact* c = Contact::build(*a,i);
@@ -1376,12 +1375,15 @@ bool SubMessageHandler::received(Message& msg)
     }
     if (m_handler == UserUpdate) {
 	String* notif = msg.getParam("notify");
-	if (TelEngine::null(notif) || *notif != "delete")
+	if (TelEngine::null(notif))
 	    return false;
 	String* user = msg.getParam("user");
 	if (TelEngine::null(user))
 	    return false;
-	__plugin.handleUserUpdateDelete(*user,msg);
+	if (*notif == "delete")
+	    __plugin.handleUserUpdateDelete(*user,msg);
+	else if (s_usersLoaded && *notif == "add")
+	    TelEngine::destruct(__plugin.m_users.getUser(*user,true,true));
 	return false;
     }
     if (m_handler == EngineStart) {
@@ -1403,20 +1405,17 @@ bool SubMessageHandler::received(Message& msg)
 			String* s = YOBJECT(String,a->get(0,i));
 			if (!s)
 			    continue;
-			Contact* c = Contact::build(*a,i);
-			if (!c)
-			    continue;
 			PresenceUser* u =  __plugin.m_users.getUser(*s,false);
-			if (u) {
-			    u->appendContact(c);
-			    TelEngine::destruct(u);
-			}
-			else {
+			if (!u) {
 			    n++;
 			    u = new PresenceUser(*s);
 			    __plugin.m_users.users().append(u);
-			    u->appendContact(c);
+			    u->ref();
 			}
+			Contact* c = Contact::build(*a,i);
+			if (c)
+			    u->appendContact(c);
+			TelEngine::destruct(u);
 		    }
 		    __plugin.m_users.unlock();
 		}

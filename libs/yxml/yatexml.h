@@ -1224,8 +1224,9 @@ public:
      */
     inline XmlElement* pop() {
 	    XmlElement* x = findFirstChild();
-	    if (x)
-		m_children.removeChild(x,false);
+	    if (!(x && x->completed()))
+		return 0;
+	    m_children.removeChild(x,false);
 	    return x;
 	}
 

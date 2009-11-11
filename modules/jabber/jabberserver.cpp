@@ -1687,7 +1687,7 @@ void YJBEngine::processStreamEvent(JBEvent* ev)
 		if (changed && s->remote().resource())
 		    notifyPresence(*(static_cast<JBClientStream*>(s)),false,0,String::empty());
 		// Unregister
-		m = userRegister(*s,false);
+		m = userRegister(*s,false,s->remote().resource());
 	    }
 	    else {
 		// TODO: notify offline for all users in remote domain

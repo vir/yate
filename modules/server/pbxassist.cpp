@@ -103,6 +103,9 @@ static bool s_incoming = true;
 // filter for channel names to enable assistance
 static Regexp s_filter;
 
+// filter mode: fail creation if filter does not match or reverse
+static bool s_filterFail = false;
+
 // DTMF pass-through all channels by default?
 static bool s_pass = false;
 
@@ -165,7 +168,7 @@ ChanAssist* PBXList::create(Message& msg, const String& id)
 {
     if (msg == "chan.startup" || msg.userObject("Channel")) {
 	// if a filter is set try to match it
-	if (s_filter && !s_filter.matches(id))
+	if (s_filter && (s_filterFail == s_filter.matches(id)))
 	    return 0;
 	// allow routing to enable/disable assistance
 	if (msg.getBoolValue("pbxassist",s_assist)) {
@@ -199,6 +202,13 @@ void PBXList::initialize()
     s_assist = s_cfg.getBoolValue("general","default",true);
     s_incoming = s_cfg.getBoolValue("general","incoming",true);
     s_filter = s_cfg.getValue("general","filter");
+    if (s_filter.endsWith("^")) {
+	// reverse match on final ^ (makes no sense in a regexp)
+	s_filter = s_filter.substr(0,s_filter.length()-1);
+	s_filterFail = true;
+    }
+    else
+	s_filterFail = false;
     s_pass = s_cfg.getBoolValue("general","dtmfpass",false);
     s_dialHeld = s_cfg.getBoolValue("general","dialheld",false);
     s_divProto = s_cfg.getBoolValue("general","diversion",false);

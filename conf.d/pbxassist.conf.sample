@@ -14,6 +14,7 @@
 ;incoming=yes
 
 ; filter: regexp: Expression matching assisted channel IDs, default all
+; Adding a ^ character at the very end reverses the matching mode
 ;filter=
 
 ; dtmfpass: bool: Enter DTMF pass-through mode by default

@@ -3918,7 +3918,7 @@ public:
      * @return True on success - both locked
      */
     inline bool lock(Mutex& mx1, Mutex& mx2, long maxwait = -1)
-	{ return lock(&mx1,&mx2); }
+	{ return lock(&mx1,&mx2,maxwait); }
 
     /**
      * Unlock both mutexes if they were locked and drop the references

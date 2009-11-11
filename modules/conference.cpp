@@ -320,6 +320,8 @@ void ConfRoom::addChannel(ConfChan* chan, bool player)
 	Message* m = new Message("chan.notify");
 	m->addParam("id",chan->id());
 	m->addParam("targetid",m_notify);
+	if (chan->getPeerId())
+	    m->addParam("peerid",chan->getPeerId());
 	chan->populateMsg(*m);
 	m->addParam("event","joined");
 	m->addParam("maxusers",String(m_maxusers));

@@ -1197,6 +1197,7 @@ RManager::~RManager()
 
 bool RManager::isBusy() const
 {
+    Lock mylock(s_mutex);
     return (s_connList.count() != 0);
 }
 

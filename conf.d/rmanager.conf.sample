@@ -10,8 +10,16 @@
 ; header: string: Header string to display on connect
 ;header=YATE ${version}-${release} (http://YATE.null.ro) ready.
 
-; password: string: Password required to authenticate, default empty!
+; password: string: Password required to authenticate as admin, default empty!
 ;password=
+
+; userpass: string: Password to authenticate as observer user, default empty!
+;userpass=
+
+; timeout: int: Timeout until authentication succeeds in msec
+;  Defaults to waiting 30s until closing an unauthenticated connection
+;  Set to zero to disable else enforced minimum value is 5000 ms (5s)
+;timeout=30000
 
 ; telnet: bool: Initiate TELNET negotiation on connect
 ;telnet=yes

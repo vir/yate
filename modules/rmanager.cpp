@@ -89,15 +89,20 @@ static const char* s_rnow[] =
 
 static const CommandInfo s_cmdInfo[] =
 {
+    // Unauthenticated commands
     { "quit", 0, 0, "Disconnect this control session from Yate" },
+    { "echo", "[on|off]", s_bools, "Show or turn remote echo on or off" },
     { "help", "[command]", 0, "Provide help on all or given command" },
+    { "auth", "password", 0, "Authenticate so you can access privileged commands" },
+
+    // User commands
     { "status", "[overview] [modulename]", s_oview, "Shows status of all or selected modules or channels" },
     { "uptime", 0, 0, "Show information on how long Yate has run" },
-    { "echo", "[on|off]", s_bools, "Show or turn remote echo on or off" },
     { "machine", "[on|off]", s_bools, "Show or turn machine output mode on or off" },
     { "output", "[on|off]", s_bools, "Show or turn local output on or off" },
     { "color", "[on|off]", s_bools, "Show status or turn local colorization on or off" },
-    { "auth", "password", 0, "Authenticate so you can access priviledged commands" },
+
+    // Admin commands
     { "debug", "[module] [level|on|off]", s_level, "Show or change debugging level globally or per module" },
 #ifdef HAVE_COREDUMPER
     { "coredump", "[filename]", 0, "Dumps memory image of running Yate to a file" },
@@ -131,8 +136,8 @@ Socket s_sock;
 Mutex s_mutex(true,"RManager");
 
 //we gonna create here the list with all the new connections.
-static ObjList connectionlist;
-    
+static ObjList s_connList;
+
 class RManagerThread : public Thread
 {
 public:
@@ -144,6 +149,11 @@ private:
 class Connection : public GenObject, public Thread
 {
 public:
+    enum Level {
+	None = 0,
+	User,
+	Admin
+    };
     Connection(Socket* sock, const char* addr);
     ~Connection();
 
@@ -161,9 +171,10 @@ public:
 	{ writeStr(s.safe(),s.length()); }
     inline const String& address() const
 	{ return m_address; }
+    void checkTimer(u_int64_t time);
     static Connection *checkCreate(Socket* sock, const char* addr = 0);
 private:
-    bool m_auth;
+    Level m_auth;
     bool m_debug;
     bool m_output;
     bool m_colorize;
@@ -173,6 +184,7 @@ private:
     unsigned char m_escmode;
     bool m_echoing;
     bool m_beeping;
+    u_int64_t m_timeout;
     String m_buffer;
     String m_address;
     String m_lastcmd;
@@ -198,7 +210,7 @@ public:
 static void dbg_remote_func(const char *buf, int level)
 {
     s_mutex.lock();
-    ObjList *p = &connectionlist;
+    ObjList* p = &s_connList;
     for (; p; p=p->next()) {
 	Connection *con = static_cast<Connection *>(p->get());
 	if (con)
@@ -247,12 +259,12 @@ Connection *Connection::checkCreate(Socket* sock, const char* addr)
 
 Connection::Connection(Socket* sock, const char* addr)
     : Thread("RManager Connection"),
-      m_auth(false), m_debug(false), m_output(s_output), m_colorize(false), m_machine(false),
+      m_auth(None), m_debug(false), m_output(s_output), m_colorize(false), m_machine(false),
       m_socket(sock), m_lastch(0), m_escmode(0), m_echoing(false), m_beeping(false),
-      m_address(addr)
+      m_timeout(0), m_address(addr)
 {
     s_mutex.lock();
-    connectionlist.append(this);
+    s_connList.append(this);
     s_mutex.unlock();
 }
 
@@ -261,7 +273,7 @@ Connection::~Connection()
     m_debug = false;
     m_output = false;
     s_mutex.lock();
-    connectionlist.remove(this,false);
+    s_connList.remove(this,false);
     s_mutex.unlock();
     Output("Closing connection to %s",m_address.c_str());
     delete m_socket;
@@ -284,7 +296,16 @@ void Connection::run()
 	Debug("RManager",DebugMild, "Failed to set tcp socket to TCP_NODELAY mode: %s", strerror(m_socket->error()));
 
     Output("Remote connection from %s",m_address.c_str());
-    m_auth = !s_cfg.getValue("general","password");
+    if (s_cfg.getValue("general","userpass")) {
+	int tout = s_cfg.getIntValue("general","timeout",30000);
+	if (tout > 0) {
+	    if (tout < 5000)
+		tout = 5000;
+	    m_timeout = Time::now() + 1000 * tout;
+	}
+    }
+    else
+	m_auth = s_cfg.getValue("general","password") ? User : Admin;
     String hdr = s_cfg.getValue("general","header","YATE ${version}-${release} (http://YATE.null.ro) ready.");
     Engine::runParams().replaceParams(hdr);
     if (s_cfg.getBoolValue("general","telnet",true)) {
@@ -296,7 +317,7 @@ void Connection::run()
 	hdr.clear();
     }
     unsigned char buffer[128];
-    for (;;) {
+    while (m_socket && m_socket->valid()) {
 	Thread::check();
 	bool readok = false;
 	bool error = false;
@@ -328,7 +349,7 @@ void Connection::run()
 	    Debug("RManager",DebugWarn,"socket select error %d on %d",errno,m_socket->handle());
 	    return;
 	}
-    }	
+    }
 }
 
 // generates a beep - just one per processed buffer
@@ -478,7 +499,7 @@ bool Connection::processChar(unsigned char c)
 		m_output = m_debug = false;
 	    else if (m_output) {
 		m_output = false;
-		if ((m_debug = m_auth))
+		if ((m_debug = (m_auth >= Admin)))
 		    Debugger::enableOutput(true);
 	    }
 	    else
@@ -684,7 +705,8 @@ bool Connection::autoComplete()
     Regexp r("^debug [^ ]\\+$");
     if (r.matches(partLine))
 	completeWords(m.retValue(),s_level,partWord);
-    Engine::dispatch(m);
+    if (m_auth >= Admin)
+	Engine::dispatch(m);
     if (m.retValue().null())
 	return false;
     if (m.retValue().find('\t') < 0) {
@@ -733,13 +755,96 @@ bool Connection::processLine(const char *line)
     line = 0;
     m_buffer.clear();
 
+    if (str.startSkip("quit"))
+    {
+	writeStr(m_machine ? "%%=quit\r\n" : "Goodbye!\r\n");
+	return true;
+    }
+    else if (str.startSkip("echo"))
+    {
+	str >> m_echoing;
+	str = "Remote echo: ";
+	str += (m_echoing ? "on\r\n" : "off\r\n");
+	writeStr(str);
+	return false;
+    }
+    else if (str.startSkip("help") || str.startSkip("?"))
+    {
+	Message m("engine.help");
+	if (str)
+	{
+	    const CommandInfo* info = s_cmdInfo;
+	    for (; info->name; info++) {
+		if (str == info->name) {
+		    str = "  ";
+		    str << info->name;
+		    if (info->args)
+			str << " " << info->args;
+		    str << "\r\n" << info->desc << "\r\n";
+		    writeStr(str);
+		    return false;
+		}
+	    }
+	    m.addParam("line",str);
+	    if ((m_auth >= Admin) && Engine::dispatch(m))
+		writeStr(m.retValue());
+	    else
+		writeStr("No help for '"+str+"'\r\n");
+	}
+	else
+	{
+	    m.retValue() = "Available commands:\r\n";
+	    const CommandInfo* info = s_cmdInfo;
+	    for (; info->name; info++) {
+		m.retValue() << "  " << info->name;
+		if (info->args)
+		    m.retValue() << " " << info->args;
+		m.retValue() << "\r\n";
+	    }
+	    if (m_auth >= Admin)
+		Engine::dispatch(m);
+	    writeStr(m.retValue());
+	}
+	return false;
+    }
+    else if (str.startSkip("auth"))
+    {
+	if (m_auth >= Admin) {
+	    writeStr(m_machine ? "%%=auth:success\r\n" : "You are already authenticated as admin!\r\n");
+	    return false;
+	}
+	const char* pass = s_cfg.getValue("general","password");
+	if (pass && (str == pass)) {
+	    Output("Authenticated admin connection %s",m_address.c_str());
+	    m_auth = Admin;
+	    m_timeout = 0;
+	    writeStr(m_machine ? "%%=auth:success\r\n" : "Authenticated successfully as admin!\r\n");
+	}
+	else if ((pass = s_cfg.getValue("general","userpass")) && (str == pass)) {
+	    if (m_auth < User) {
+		Output("Authenticated user connection %s",m_address.c_str());
+		m_auth = User;
+		m_timeout = 0;
+		writeStr(m_machine ? "%%=auth:success\r\n" : "Authenticated successfully as user!\r\n");
+	    }
+	    else
+		writeStr(m_machine ? "%%=auth:success\r\n" : "You are already authenticated as user!\r\n");
+	}
+	else
+	    writeStr(m_machine ? "%%=auth:fail=badpass\r\n" : "Bad authentication password!\r\n");
+	return false;
+    }
+    if (m_auth < User) {
+	writeStr(m_machine ? "%%=*:fail=noauth\r\n" : "Not authenticated!\r\n");
+	return false;
+    }
     if (str.startSkip("status"))
     {
 	Message m("engine.status");
 	if (str.startSkip("overview"))
 	    m.addParam("details",String::boolText(false));
 	if (str.null() || (str == "rmanager"))
-	    m.retValue() << "name=rmanager,type=misc;conn=" << connectionlist.count() << "\r\n";
+	    m.retValue() << "name=rmanager,type=misc;conn=" << s_connList.count() << "\r\n";
 	if (!str.null()) {
 	    m.addParam("module",str);
 	    str = ":" + str;
@@ -750,11 +855,23 @@ bool Connection::processLine(const char *line)
 	writeStr(str);
 	return false;
     }
-    else if (str.startSkip("echo"))
+    else if (str.startSkip("uptime"))
     {
-	str >> m_echoing;
-	str = "Remote echo: ";
-	str += (m_echoing ? "on\r\n" : "off\r\n");
+	str.clear();
+	u_int32_t t = SysUsage::secRunTime();
+	if (m_machine) {
+	    str << "%%=uptime:" << (unsigned int)t;
+	    (str << ":").append(SysUsage::runTime(SysUsage::UserTime));
+	    (str << ":").append(SysUsage::runTime(SysUsage::KernelTime));
+	}
+	else {
+	    char buf[64];
+	    ::sprintf(buf,"%u:%02u:%02u (%u)",t / 3600,(t / 60) % 60,t % 60,t);
+	    str << "Uptime: " << buf;
+	    (str << " user: ").append(SysUsage::runTime(SysUsage::UserTime));
+	    (str << " kernel: ").append(SysUsage::runTime(SysUsage::KernelTime));
+	}
+	str << "\r\n";
 	writeStr(str);
 	return false;
     }
@@ -782,85 +899,7 @@ bool Connection::processLine(const char *line)
 	writeStr(str);
 	return false;
     }
-    else if (str.startSkip("uptime"))
-    {
-	str.clear();
-	u_int32_t t = SysUsage::secRunTime();
-	if (m_machine) {
-	    str << "%%=uptime:" << (unsigned int)t;
-	    (str << ":").append(SysUsage::runTime(SysUsage::UserTime));
-	    (str << ":").append(SysUsage::runTime(SysUsage::KernelTime));
-	}
-	else {
-	    char buf[64];
-	    ::sprintf(buf,"%u:%02u:%02u (%u)",t / 3600,(t / 60) % 60,t % 60,t);
-	    str << "Uptime: " << buf;
-	    (str << " user: ").append(SysUsage::runTime(SysUsage::UserTime));
-	    (str << " kernel: ").append(SysUsage::runTime(SysUsage::KernelTime));
-	}
-	str << "\r\n";
-	writeStr(str);
-	return false;
-    }
-    else if (str.startSkip("quit"))
-    {
-	writeStr(m_machine ? "%%=quit\r\n" : "Goodbye!\r\n");
-	return true;
-    }
-    else if (str.startSkip("help") || str.startSkip("?"))
-    {
-	Message m("engine.help");
-	if (str)
-	{
-	    const CommandInfo* info = s_cmdInfo;
-	    for (; info->name; info++) {
-		if (str == info->name) {
-		    str = "  ";
-		    str << info->name;
-		    if (info->args)
-			str << " " << info->args;
-		    str << "\r\n" << info->desc << "\r\n";
-		    writeStr(str);
-		    return false;
-		}
-	    }
-	    m.addParam("line",str);
-	    if (Engine::dispatch(m))
-		writeStr(m.retValue());
-	    else
-		writeStr("No help for '"+str+"'\r\n");
-	}
-	else
-	{
-	    m.retValue() = "Available commands:\r\n";
-	    const CommandInfo* info = s_cmdInfo;
-	    for (; info->name; info++) {
-		m.retValue() << "  " << info->name;
-		if (info->args)
-		    m.retValue() << " " << info->args;
-		m.retValue() << "\r\n";
-	    }
-	    Engine::dispatch(m);
-	    writeStr(m.retValue());
-	}
-	return false;
-    }
-    else if (str.startSkip("auth"))
-    {
-	if (m_auth) {
-	    writeStr(m_machine ? "%%=auth:success\r\n" : "You are already authenticated!\r\n");
-	    return false;
-	}
-	if (str == s_cfg.getValue("general","password")) {
-	    Output("Authenticated connection %s",m_address.c_str());
-	    m_auth = true;
-	    writeStr(m_machine ? "%%=auth:success\r\n" : "Authenticated successfully!\r\n");
-	}
-	else
-	    writeStr(m_machine ? "%%=auth:fail=badpass\r\n" : "Bad authentication password!\r\n");
-	return false;
-    }
-    if (!m_auth) {
+    if (m_auth < Admin) {
 	writeStr(m_machine ? "%%=*:fail=noauth\r\n" : "Not authenticated!\r\n");
 	return false;
     }
@@ -1113,15 +1152,30 @@ void Connection::writeStr(const char *str, int len)
     }
 }
 
+void Connection::checkTimer(u_int64_t time)
+{
+    if (!m_timeout)
+	return;
+    if (time < m_timeout)
+	return;
+    m_timeout = 0;
+    if (m_socket)
+	m_socket->terminate();
+}
+
 
 void RHook::dispatched(const Message& msg, bool handled)
 {
+    u_int64_t t = 0;
+    if (msg == "engine.timer")
+	t = msg.msgTime();
     s_mutex.lock();
-    ObjList *p = &connectionlist;
-    for (; p; p=p->next()) {
-	Connection *con = static_cast<Connection *>(p->get());
-	if (con)
-	    con->writeStr(msg,handled);
+    ObjList* p = s_connList.skipNull();
+    for (; p; p = p->skipNext()) {
+	Connection* c = static_cast<Connection*>(p->get());
+	if (t)
+	    c->checkTimer(t);
+	c->writeStr(msg,handled);
     }
     s_mutex.unlock();
 };
@@ -1143,7 +1197,7 @@ RManager::~RManager()
 
 bool RManager::isBusy() const
 {
-    return (connectionlist.count() != 0);
+    return (s_connList.count() != 0);
 }
 
 void RManager::initialize()
@@ -1190,7 +1244,7 @@ void RManager::initialize()
 	s_sock.terminate();
 	return;
     }
-    
+
     // don't bother to install handlers until we are listening
     if (m_first) {
 	m_first = false;

@@ -1528,16 +1528,17 @@ bool Socket::canSelect(SOCKET handle)
 
 bool Socket::select(bool* readok, bool* writeok, bool* except, struct timeval* timeout)
 {
+    HANDLE tmp = m_handle;
     if (!valid())
 	return false;
 #ifdef FD_SETSIZE
 #ifndef _WINDOWS
     static bool localFail = true;
-    if (m_handle >= (SOCKET)FD_SETSIZE) {
+    if (tmp >= (SOCKET)FD_SETSIZE) {
 	if (localFail) {
 	    localFail = false;
 	    Debug(DebugGoOn,"Socket::select: handle %d larger than compiled in maximum %d",
-		m_handle,FD_SETSIZE);
+		tmp,FD_SETSIZE);
 	}
 	return false;
     }
@@ -1550,25 +1551,30 @@ bool Socket::select(bool* readok, bool* writeok, bool* except, struct timeval* t
     if (readok) {
 	rfds = &readfd;
 	FD_ZERO(rfds);
-	FD_SET(m_handle,rfds);
+	FD_SET(tmp,rfds);
     }
     if (writeok) {
 	wfds = &writefd;
 	FD_ZERO(wfds);
-	FD_SET(m_handle,wfds);
+	FD_SET(tmp,wfds);
     }
     if (except) {
 	efds = &exceptfd;
 	FD_ZERO(efds);
-	FD_SET(m_handle,efds);
+	FD_SET(tmp,efds);
     }
-    if (checkError(::select(m_handle+1,rfds,wfds,efds,timeout),true)) {
+    if (checkError(::select(tmp+1,rfds,wfds,efds,timeout),true)) {
 	if (readok)
-	    *readok = (FD_ISSET(m_handle,rfds) != 0);
+	    *readok = (FD_ISSET(tmp,rfds) != 0);
 	if (writeok)
-	    *writeok = (FD_ISSET(m_handle,wfds) != 0);
+	    *writeok = (FD_ISSET(tmp,wfds) != 0);
 	if (except)
-	    *except = (FD_ISSET(m_handle,efds) != 0);
+	    *except = (FD_ISSET(tmp,efds) != 0);
+	return true;
+    }
+    if (tmp != m_handle) {
+	if (except)
+	    *except = true;
 	return true;
     }
     return false;

@@ -1512,8 +1512,8 @@ bool JBStream::dropXml(XmlElement*& xml, const char* reason)
 // Set the idle timer in Running state
 void JBStream::setIdleTimer(u_int64_t msecNow)
 {
-    // Set only for c2s in Running state
-    if (m_type != c2s || m_state != Running || !m_engine->m_idleTimeout)
+    // Set only for non c2s in Running state
+    if (m_type == c2s || m_state != Running || !m_engine->m_idleTimeout)
 	return;
     m_idleTimeout = msecNow + m_engine->m_idleTimeout;
     XDebug(this,DebugAll,"Idle timeout set to " FMT64 "ms [%p]",m_idleTimeout,this);

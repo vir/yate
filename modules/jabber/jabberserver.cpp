@@ -2314,6 +2314,12 @@ void YJBEngine::statusDetail(String& str, const String& name)
     str << ",state=" << stream->stateName();
     str << ",local=" << stream->local();
     str << ",remote=" << stream->remote();
+    SocketAddr l;
+    stream->localAddr(l);
+    str << ",localip=" << l.host() << ":" << l.port();
+    SocketAddr r;
+    stream->remoteAddr(r);
+    str << ",remoteip=" << r.host() << ":" << r.port();
     String buf;
     XMPPUtils::buildFlags(buf,stream->flags(),JBStream::s_flagName);
     str << ",flags=" << buf;

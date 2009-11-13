@@ -2518,6 +2518,9 @@ void QtClient::cleanup()
 
 void QtClient::run()
 {
+    const char* style = Engine::config().getValue("client","style");
+    if (style && !QApplication::setStyle(QString::fromUtf8(style)))
+	Debug(ClientDriver::self(),DebugWarn,"Could not set Qt style '%s'",style);
     int argc = 0;
     char* argv =  0;
     m_app = new QApplication(argc,&argv);
@@ -2596,7 +2599,7 @@ bool QtClient::chooseFile(Window* parent, NamedList& params)
     //  child dialog and we might have incomplete (not full) custom styled controls
     QFileDialog* dlg = new QFileDialog(0,setUtf8(params.getValue("caption")),
 	setUtf8(params.getValue("dir")));
-    
+
     if (wnd)
 	dlg->setWindowIcon(wnd->windowIcon());
 

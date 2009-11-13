@@ -3,3 +3,9 @@
 
 [localsym]
 h323chan.yate=yes
+
+[client]
+;skin=default
+;style=
+;device=
+;greeting=Yate ${version} - ${release}

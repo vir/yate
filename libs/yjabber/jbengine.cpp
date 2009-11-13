@@ -805,7 +805,7 @@ void JBEngine::cleanup(bool final, bool waitTerminate)
 }
 
 // Accept an incoming stream connection. Build a stream
-bool JBEngine::acceptConn(Socket* sock, SocketAddr& remote, JBStream::Type t)
+bool JBEngine::acceptConn(Socket* sock, SocketAddr& remote, JBStream::Type t, bool ssl)
 {
     if (!sock)
 	return false;
@@ -815,9 +815,13 @@ bool JBEngine::acceptConn(Socket* sock, SocketAddr& remote, JBStream::Type t)
 	    remote.host().c_str(),remote.port(),lookup(t,JBStream::s_typeName));
 	return false;
     }
+    if (ssl && t != JBStream::c2s) {
+	Debug(this,DebugStub,"SSL connection on non c2s stream");
+	return false;
+    }
     JBStream* s = 0;
     if (t == JBStream::c2s)
-	s = new JBClientStream(this,sock);
+	s = new JBClientStream(this,sock,ssl);
     else if (t == JBStream::s2s)
 	s = new JBServerStream(this,sock,false);
     else if (t == JBStream::comp)

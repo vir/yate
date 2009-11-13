@@ -964,6 +964,34 @@ XmlElement* XMPPUtils::createRegisterQuery(IqType type, const char* from,
     return iq;
 }
 
+// Build a jabber:iq:auth 'iq' set element
+XmlElement* XMPPUtils::createIqAuthSet(const char* id, const char* username,
+    const char* resource, const char* authStr, bool digest)
+{
+    XmlElement* iq = createIq(IqSet,0,0,id);
+    XmlElement* q = createElement(XmlTag::Query,XMPPNamespace::IqAuth);
+    iq->addChild(q);
+    q->addChild(createElement(XmlTag::Username,username));
+    q->addChild(createElement(XmlTag::Resource,resource));
+    q->addChild(createElement(digest ? XmlTag::Digest : XmlTag::Password,authStr));
+    return iq;
+}
+
+// Build a jabber:iq:auth 'iq' offer in response to a 'get' request
+XmlElement* XMPPUtils::createIqAuthOffer(const char* id, bool digest, bool plain)
+{
+    XmlElement* iq = createIq(IqResult,0,0,id);
+    XmlElement* q = createElement(XmlTag::Query,XMPPNamespace::IqAuth);
+    iq->addChild(q);
+    q->addChild(createElement(XmlTag::Username));
+    q->addChild(createElement(XmlTag::Resource));
+    if (digest)
+	q->addChild(createElement(XmlTag::Digest));
+    if (plain)
+	q->addChild(createElement(XmlTag::Password));
+    return iq;
+}
+
 // Find an element's first child element in a given namespace
 XmlElement* XMPPUtils::findFirstChild(const XmlElement& xml, int t, int ns)
 {

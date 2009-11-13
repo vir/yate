@@ -1262,6 +1262,39 @@ public:
 	XmlElement* child1 = 0, XmlElement* child2 = 0, XmlElement* child3 = 0);
 
     /**
+     * Build a jabber:iq:auth 'iq' get element
+     * @param id Element 'id' attribute
+     * @return A valid XmlElement pointer
+     */
+    static inline XmlElement* createIqAuthGet(const char* id) {
+	    XmlElement* iq = createIq(IqGet,0,0,id);
+	    iq->addChild(createElement(XmlTag::Query,XMPPNamespace::IqAuth));
+	    return iq;
+	}
+
+    /**
+     * Build a jabber:iq:auth 'iq' set element
+     * @param id Element 'id' attribute
+     * @param username The username
+     * @param resource The resource
+     * @param authStr Authentication string
+     * @param digest True if authentication string is a digest, false if it's a plain password
+     * @return A valid XmlElement pointer
+     */
+    static XmlElement* createIqAuthSet(const char* id, const char* username,
+	const char* resource, const char* authStr, bool digest);
+
+    /**
+     * Build a jabber:iq:auth 'iq' offer in response to a 'get' request
+     * @param id Element 'id' attribute
+     * @param digest Offer digest authentication
+     * @param plain Offer plain password authentication
+     * @return A valid XmlElement pointer
+     */
+    static XmlElement* createIqAuthOffer(const char* id, bool digest = true,
+	bool plain = false);
+
+    /**
      * Build an register query element used to create/set username/password
      * @param from The 'from' attribute
      * @param to The 'to' attribute

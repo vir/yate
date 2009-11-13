@@ -761,10 +761,14 @@ public:
      *  false if authentication failed
      * @param rsp Optional success response content. Ignored if not authenticated
      * @param error Failure reason. Ignored if authenticated
+     * @param username Authenticated user
+     * @param id Non SASL auth response id
+     * @param resource Client resource to set when non SASL authentication is used
      * @return False if stream state is incorrect
      */
     bool authenticated(bool ok, const String& rsp = String::empty(),
-	XMPPError::Type error = XMPPError::NotAuthorized);
+	XMPPError::Type error = XMPPError::NotAuthorized,
+	const char* username = 0, const char* id = 0, const char* resource = 0);
 
     /**
      * Terminate the stream. Send stream end tag or error.
@@ -810,6 +814,17 @@ public:
 	{ return lookup(type(),s_typeName); }
 
     /**
+     * Build a SHA1 digest from stream id and secret
+     * @param buf Destination buffer
+     * @param secret The secret
+     */
+    inline void buildSha1Digest(String& buf, const String& secret) {
+	    SHA1 sha(id() + secret);
+	    buf = sha.hexDigest();
+	    buf.toLower();
+	}
+
+    /**
      * Get the string representation of this stream
      * @return Stream name
      */
@@ -850,8 +865,9 @@ protected:
      * @param engine Engine owning this stream
      * @param socket The socket
      * @param t Stream type as enumeration
+     * @param ssl True if the socket is already using SSL/TLS
      */
-    JBStream(JBEngine* engine, Socket* socket, Type t);
+    JBStream(JBEngine* engine, Socket* socket, Type t, bool ssl = false);
 
     /**
      * Constructor. Build an outgoing stream
@@ -1177,8 +1193,9 @@ public:
      * Constructor. Build an incoming stream from a socket
      * @param engine Engine owning this stream
      * @param socket The socket
+     * @param ssl True if the socket is already using SSL/TLS
      */
-    JBClientStream(JBEngine* engine, Socket* socket);
+    JBClientStream(JBEngine* engine, Socket* socket, bool ssl = false);
 
     /**
      * Constructor. Build an outgoing stream
@@ -1227,7 +1244,7 @@ public:
 	XMPPError::Type error = XMPPError::NoError);
 
     /**
-     * Request account register or change an outgoing stream.
+     * Request account register or change on outgoing stream.
      * This method is thread safe
      * @param data True to request registration/change, false to request info
      * @param set True to request new user registration, false to remove account from server
@@ -1394,17 +1411,6 @@ public:
      * @return Flase if stream termination was initiated
      */
     bool sendDialback();
-
-    /**
-     * Build a component handshake from stream id and secret as defined in XEP 0114
-     * @param buf Destination buffer
-     * @param secret The secret
-     */
-    inline void buildHandshake(String& buf, const String& secret) {
-	    SHA1 sha(id() + secret);
-	    buf = sha.hexDigest();
-	    buf.toLower();
-	}
 
     /**
      * Start a component stream (reply to received stream start)
@@ -1638,9 +1644,10 @@ public:
      * @param sock Accepted socket
      * @param remote Remote ip and port
      * @param t Expected stream type
+     * @param ssl True if the socket is already using SSL/TLS
      * @return True on success
      */
-    bool acceptConn(Socket* sock, SocketAddr& remote, JBStream::Type t);
+    bool acceptConn(Socket* sock, SocketAddr& remote, JBStream::Type t, bool ssl = false);
 
     /**
      * Find a stream by its name. This method is thread safe

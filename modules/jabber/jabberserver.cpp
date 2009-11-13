@@ -245,6 +245,9 @@ public:
     // The given event is always valid and carry a valid element
     XmlElement* processIqRegister(JBEvent* ev, JBStream::Type sType, XMPPUtils::IqType t,
 	const String& domain, int flags);
+    // Process all incoming jabber:iq:auth stanzas
+    // The given event is always valid and carry a valid element
+    XmlElement* processIqAuth(JBEvent* ev, JBStream::Type sType, XMPPUtils::IqType t, int flags);
     // Handle disco info requests addressed to the server
     XmlElement* discoInfo(JBEvent* ev, JBStream::Type sType);
     // Handle disco items requests addressed to the server
@@ -280,6 +283,13 @@ public:
     void completeStreamRemote(String& str, const String& partWord, JBStream::Type t);
     // Complete stream name starting with partWord
     void completeStreamName(String& str, const String& partWord);
+    // Remove a resource from binding resources list
+    inline void removeBindingResource(const JabberID& user) {
+	    Lock lock(this);
+	    ObjList* o = user ? findBindingRes(user) : 0;
+	    if (o)
+		o->remove();
+	}
     // Program name and version to be advertised on request
     String m_progName;
     String m_progVersion;
@@ -295,8 +305,18 @@ private:
 		    return o;
 	    return 0;
 	}
+    // Add a resource to binding resources list. Make sure the resource is unique
+    // Return true on success
+    bool bindingResource(const JabberID& user);
+    inline ObjList* findBindingRes(const JabberID& user) {
+	    for (ObjList* o = m_bindingResources.skipNull(); o; o = o->skipNext())
+		if (user == *static_cast<JabberID*>(o->get()))
+		    return o;
+	    return 0;
+	}
 
     bool m_c2sTlsRequired;               // TLS is required on c2s streams
+    bool m_allowUnsecurePlainAuth;       // Allow user plain password auth on unsecured streams
     ObjList m_domains;                   // Domains serviced by this engine
     ObjList m_dynamicDomains;            // Dynamic domains (components or items)
     ObjList m_restrictedResources;       // Resource names the users can't use
@@ -305,6 +325,7 @@ private:
     XMPPFeatureList m_c2sFeatures;       // Server features to advertise on c2s streams
     XMPPFeatureList m_features;          // Server features to advertise on non c2s streams
     String m_dialbackSecret;             // Server dialback secret used to build keys
+    ObjList m_bindingResources;          // List of resources in bind process
 };
 
 /*
@@ -400,6 +421,8 @@ class UserAuthMessage : public Message
 public:
     // Fill the message with authentication data
     UserAuthMessage(JBEvent* ev);
+    ~UserAuthMessage();
+    JabberID m_bindingUser;
 protected:
     // Check accepted and returned value. Calls stream's authenticated() method
     virtual void dispatched(bool accepted);
@@ -450,6 +473,19 @@ public:
 	m_engine(engine), m_type(t), m_address(addr), m_port(port),
 	m_backlog(backlog)
 	{}
+     // Build a SSL/TLS c2s stream listener
+     // engine The engine to be notified when a connection request is received
+     // addr Address to bind
+     // port Port to bind
+     // backlog Maximum length of the queue of pending connections, 0 for system maximum
+     // prio Thread priority
+    inline TcpListener(const char* name, JBEngine* engine, const char* context,
+	const char* addr, int port, unsigned int backlog = 0,
+	Thread::Priority prio = Thread::Normal)
+	: Thread("TcpListener",prio), String(name),
+	m_engine(engine), m_type(JBStream::c2s), m_address(addr), m_port(port),
+	m_backlog(backlog), m_sslContext(context)
+	{}
     // Remove from plugin
     virtual ~TcpListener();
 protected:
@@ -465,6 +501,7 @@ private:
     String m_address;
     int m_port;
     unsigned int m_backlog;              // Pending connections queue length
+    String m_sslContext;                 // SSL/TLS context
 };
 
 /*
@@ -680,6 +717,13 @@ static void completeStreamType(String& buf, const String& part, bool addAll = fa
 	    Module::itemComplete(buf,*d,part);
 }
 
+// Retrieve an element's child text
+static const String& getChildText(XmlElement& xml, int tag, int ns)
+{
+    XmlElement* ch = XMPPUtils::findFirstChild(xml,tag,ns);
+    return ch ? ch->getText() : String::empty();
+}
+
 
 /*
  * YJBEntityCapsList
@@ -718,7 +762,8 @@ void YJBEntityCapsList::capsAdded(JBEntityCaps* caps)
  * YJBEngine
  */
 YJBEngine::YJBEngine()
-    : m_c2sTlsRequired(false)
+    : m_c2sTlsRequired(false),
+    m_allowUnsecurePlainAuth(false)
 {
     m_c2sReceive = new YStreamSetReceive(this,10,"c2s/recv");
     m_c2sProcess = new YStreamSetProcess(this,10,"c2s/process");
@@ -759,6 +804,8 @@ void YJBEngine::initialize(const NamedList* params, bool first)
     lock();
     if (!params)
 	params = &dummy;
+
+    m_allowUnsecurePlainAuth = params->getBoolValue("c2s_allowunsecureplainauth");
 
     // Serviced domains
     // Check if an existing domain is no longer accepted
@@ -823,6 +870,11 @@ void YJBEngine::initialize(const NamedList* params, bool first)
 	m_remoteDomain.m_flags |= JBStream::TlsRequired;
     else
 	m_remoteDomain.m_flags &= ~JBStream::TlsRequired;
+
+    // Allow old style client auth
+    m_c2sFeatures.remove(XMPPNamespace::IqAuth);
+    if (params->getBoolValue("c2s_oldstyleauth",true))
+	m_c2sFeatures.add(XmlTag::Auth,XMPPNamespace::IqAuth);
 
     // Program name and version to be advertised on request
     if (!m_progName) {
@@ -1543,14 +1595,33 @@ void YJBEngine::processStartIn(JBEvent* ev)
     if (ev->stream()->type() == JBStream::c2s)
 	ev->stream()->setTlsRequired(m_c2sTlsRequired);
 
-    // Don't advertise any features if version is not 1
+    XMPPFeatureList features;
+
+    // Stream version is not 1
     if (!ev->stream()->flag(JBStream::StreamRemoteVer1)) {
-	ev->stream()->start();
+	XMPPError::Type error = XMPPError::NoError;
+	if (ev->stream()->type() == JBStream::c2s) {
+	    lock();
+	    bool ok = m_c2sFeatures.get(XMPPNamespace::IqAuth);
+	    unlock();
+	    if (ok) {
+		if (ev->stream()->flag(JBStream::StreamTls) ||
+		    !ev->stream()->flag(JBStream::TlsRequired))
+		    features.add(XmlTag::Auth,XMPPNamespace::IqAuth,true);
+		else
+		    error = XMPPError::EncryptionRequired;
+	    }
+	    else
+		error = XMPPError::UnsupportedVersion;
+	}
+	if (error == XMPPError::NoError)
+	    ev->stream()->start(&features);
+	else
+	    ev->stream()->terminate(-1,true,0,error);
 	return;
     }
 
     // Set stream features
-    XMPPFeatureList features;
     // Add TLS if not secured
     if (!ev->stream()->flag(JBStream::StreamSecured))
 	features.add(XmlTag::Starttls,XMPPNamespace::Tls,
@@ -1566,20 +1637,13 @@ void YJBEngine::processStartIn(JBEvent* ev)
     bool addCaps = false;
     if (!(tls && tls->required())) {
 	addCaps = true;
-	// Stream secured
-	// Add SASL if stream is not authenticated
-	if (!ev->stream()->flag(JBStream::StreamAuthenticated)) {
-	    int mech = 0;
-	    switch (ev->stream()->type()) {
-		case JBStream::c2s:
-		    mech = XMPPUtils::AuthMD5 | XMPPUtils::AuthPlain;
-		    break;
-		case JBStream::s2s:
-		    mech = XMPPUtils::AuthMD5 | XMPPUtils::AuthPlain;
-		    break;
-	    }
-	    if (mech)
-		features.add(new XMPPFeatureSasl(mech,true));
+	// Add SASL auth if stream is not authenticated
+	if (!ev->stream()->flag(JBStream::StreamAuthenticated) &&
+	    ev->stream()->type() == JBStream::c2s) {
+	    int mech = XMPPUtils::AuthMD5;
+	    if (ev->stream()->flag(JBStream::StreamTls) || m_allowUnsecurePlainAuth)
+		mech |= XMPPUtils::AuthPlain;
+	    features.add(new XMPPFeatureSasl(mech,true));
 	}
 	// Add register if enabled
 	if (addReg)
@@ -1607,18 +1671,90 @@ void YJBEngine::processStartIn(JBEvent* ev)
 // The given event is always valid and carry a valid stream
 void YJBEngine::processAuthIn(JBEvent* ev)
 {
+    UserAuthMessage* m = new UserAuthMessage(ev);
+    XMPPError::Type error = XMPPError::NoError;
     ev->stream()->lock();
-    bool plain = ev->stream()->m_sasl && ev->stream()->m_sasl->m_plain &&
-	!ev->stream()->flag(JBStream::StreamTls);
-    ev->stream()->unlock();
-    if (plain) {
-	// TODO: check if the remote party is allowed to use plain
-	// password auth on unsecured transport
-	ev->releaseStream();
-	ev->stream()->authenticated(false,String::empty(),XMPPError::EncryptionRequired);
-	return;
+    if (ev->stream()->type() == JBStream::c2s) {
+	bool allowPlain = ev->stream()->flag(JBStream::StreamTls) ||
+	    m_allowUnsecurePlainAuth;
+	while (true) {
+	    // Stream is using SASL auth
+	    if (ev->stream()->m_sasl) {
+		XDebug(this,DebugAll,"processAuthIn(%s) c2s sasl",ev->stream()->name());
+		if (ev->stream()->m_sasl->m_plain && !allowPlain) {
+		    error = XMPPError::EncryptionRequired;
+		    break;
+		}
+		if (ev->stream()->m_sasl->m_params) {
+		    m->copyParams(*(ev->stream()->m_sasl->m_params));
+		    // Override username: set it to bare jid
+		    String* user = ev->stream()->m_sasl->m_params->getParam("username");
+		    if (!TelEngine::null(user))
+			m->setParam("username",*user + "@" + ev->stream()->local().domain());
+		}
+		break;
+	    }
+	    // Check non SASL request
+	    XmlElement* q = ev->child();
+	    if (q) {
+		int t,ns;
+		if (XMPPUtils::getTag(*q,t,ns)) {
+		    if (t != XmlTag::Query || ns != XMPPNamespace::IqAuth) {
+			error = XMPPError::ServiceUnavailable;
+			break;
+		    }
+		    XDebug(this,DebugAll,"processAuthIn(%s) c2s non sasl",ev->stream()->name());
+		    JabberID user(getChildText(*q,XmlTag::Username,XMPPNamespace::IqAuth),
+			ev->stream()->local().domain(),
+			getChildText(*q,XmlTag::Resource,XMPPNamespace::IqAuth));
+		    if (!user.resource()) {
+			error = XMPPError::NotAcceptable;
+			break;
+		    }
+		    if (user.bare())
+			m->addParam("username",user.bare());
+		    const String& pwd = getChildText(*q,XmlTag::Password,XMPPNamespace::IqAuth);
+		    if (pwd) {
+			if (allowPlain)
+			    m->addParam("password",pwd);
+			else {
+			    error = XMPPError::EncryptionRequired;
+			    break;
+			}
+		    }
+		    else {
+			const String& d = getChildText(*q,XmlTag::Digest,XMPPNamespace::IqAuth);
+			if (d)
+			    m->addParam("digest",d);
+		    }
+		    // Make sure the resource is unique
+		    if (!bindingResource(user)) {
+			error = XMPPError::Conflict;
+			break;
+		    }
+		    else
+			m->m_bindingUser = user;
+		    m->addParam("instance",user.resource());
+		    break;
+		}
+	    }
+	    error = XMPPError::Internal;
+	    break;
+	}
     }
-    Engine::enqueue(new UserAuthMessage(ev));
+    else if (ev->stream()->type() == JBStream::comp) {
+	XDebug(this,DebugAll,"processAuthIn(%s) component handshake",ev->stream()->name());
+	m->setParam("username",ev->stream()->remote());
+	m->setParam("handshake",ev->text());
+    }
+    ev->stream()->unlock();
+    if (error == XMPPError::NoError)
+	Engine::enqueue(m);
+    else {
+	ev->releaseStream();
+	ev->stream()->authenticated(false,String::empty(),error,0,ev->id());
+	TelEngine::destruct(m);
+    }
 }
 
 // Process Bind events
@@ -1630,38 +1766,32 @@ void YJBEngine::processBind(JBEvent* ev)
 	ev->sendStanzaError(XMPPError::ServiceUnavailable);
 	return;
     }
-    String resource;
-    XmlElement* res = XMPPUtils::findFirstChild(*ev->child(),XmlTag::Resource);
-    if (res) {
-	// Lock the engine to prevent other stream to bind the same resource
-	lock();
-	resource = res->getText();
-	if (resource) {
-	    if (restrictedResource(resource))
-		resource.clear();
-	    else {
-		Message* m = __plugin.message("resource.notify");
-		m->addParam("operation","query");
-		m->addParam("nodata",String::boolText(true));
-		m->addParam("contact",c2s->remote().bare());
-		m->addParam("instance",resource);
-		if (Engine::dispatch(*m))
-		    resource.clear();
-		TelEngine::destruct(m);
-	    }
+    c2s->lock();
+    JabberID jid(c2s->local());
+    c2s->unlock();
+    jid.resource(getChildText(*ev->child(),XmlTag::Resource,XMPPNamespace::Bind));
+    if (jid.resource() && !bindingResource(jid))
+	jid.resource("");
+    if (!jid.resource()) {
+	for (int i = 0; i < 3; i++) {
+	    MD5 md5(c2s->id());
+	    jid.resource(md5.hexDigest());
+	    if (bindingResource(jid))
+		break;
+	    jid.resource("");
 	}
-	unlock();
     }
-    if (!resource) {
-	MD5 md5(c2s->id());
-	resource = md5.hexDigest();
+    bool ok = false;
+    if (jid.resource()) {
+	Message* m = userRegister(*c2s,true,jid.resource());
+	ok = Engine::dispatch(m);
+	TelEngine::destruct(m);
     }
-    Message* m = userRegister(*c2s,true,resource);
-    if (Engine::dispatch(m))
-	c2s->bind(resource,ev->id());
+    if (ok)
+	c2s->bind(jid.resource(),ev->id());
     else
 	ev->sendStanzaError(XMPPError::NotAuthorized);
-    TelEngine::destruct(m);
+    removeBindingResource(jid);
 }
 
 // Process stream Running, Destroy, Terminated events
@@ -1902,6 +2032,29 @@ XmlElement* YJBEngine::processIqRegister(JBEvent* ev, JBStream::Type sType,
     XmlElement* rsp = XMPPUtils::getXml(*m,"response");
     TelEngine::destruct(m);
     return rsp;
+}
+
+// Process all incoming jabber:iq:auth stanzas
+// The given event is always valid and carry a valid element
+XmlElement* YJBEngine::processIqAuth(JBEvent* ev, JBStream::Type sType, XMPPUtils::IqType t,
+    int flags)
+{
+    if (sType != JBStream::c2s) {
+	Debug(this,DebugInfo,"processIqAuth(%p) type=%s on non-client stream",
+	    ev,ev->stanzaType().c_str());
+	// Iq auth not allowed from other servers
+	if (t == XMPPUtils::IqGet || t == XMPPUtils::IqSet)
+	    return ev->buildIqError(false,XMPPError::NotAllowed);
+	return 0;
+    }
+    DDebug(this,DebugAll,"processIqAuth(%p) type=%s",ev,ev->stanzaType().c_str());
+    // Ignore responses
+    if (t != XMPPUtils::IqGet && t != XMPPUtils::IqSet)
+	return 0;
+    if (t == XMPPUtils::IqGet)
+	return XMPPUtils::createIqAuthOffer(ev->id(),true,
+	    m_allowUnsecurePlainAuth || (flags & JBStream::StreamTls));
+    return ev->buildIqError(false,XMPPError::ServiceUnavailable);
 }
 
 // Handle disco info requests addressed to the server
@@ -2241,6 +2394,26 @@ void YJBEngine::notifyDbVerifyResult(const JabberID& local, const JabberID& remo
 	    "No incoming s2s stream local=%s remote=%s id='%s' to notify dialback verify result",
 	    local.c_str(),remote.c_str(),id.c_str());
     TelEngine::destruct(notify);
+}
+
+// Add a resource to binding resources list. Make sure the resource is unique
+// Return true on success
+bool YJBEngine::bindingResource(const JabberID& user)
+{
+    Lock lock(this);
+    if (!user.resource() || restrictedResource(user.resource()) ||
+	findBindingRes(user))
+	return false;
+    Message* m = __plugin.message("resource.notify");
+    m->addParam("operation","query");
+    m->addParam("nodata",String::boolText(true));
+    m->addParam("contact",user.bare());
+    m->addParam("instance",user.resource());
+    bool ok = !Engine::dispatch(*m);
+    TelEngine::destruct(m);
+    if (ok)
+	m_bindingResources.append(new JabberID(user));
+    return ok;
 }
 
 
@@ -2646,6 +2819,15 @@ void JBPendingWorker::processIq(JBPendingJob& job)
 	    else
 		job.sendIqErrorStanza(XMPPError::ServiceUnavailable);
 	    return;
+	// XEP-0078 Non SASL authentication
+	case XMPPNamespace::IqAuth:
+	    if (job.m_serverTarget) {
+		rsp = s_jabber->processIqAuth(ev,job.m_streamType,t,job.m_flags);
+		job.sendStanza(rsp,false);
+	    }
+	    else
+		job.sendIqErrorStanza(XMPPError::ServiceUnavailable);
+	    return;
 	default: ;
     }
 
@@ -2698,30 +2880,22 @@ UserAuthMessage::UserAuthMessage(JBEvent* ev)
     : Message("user.auth"),
     m_stream(ev->stream()->toString()), m_streamType((JBStream::Type)ev->stream()->type())
 {
-    XDebug(&__plugin,DebugAll,"UserAuthMessage stream=%s type=%u",
-	m_stream.c_str(),m_streamType);
+    XDebug(&__plugin,DebugAll,"UserAuthMessage stream=%s type=%u [%p]",
+	m_stream.c_str(),m_streamType,this);
     __plugin.complete(*this);
     addParam("streamtype",ev->stream()->typeName());
-    ev->stream()->lock();
-    if (ev->stream()->m_sasl && ev->stream()->m_sasl->m_params) {
-	copyParams(*(ev->stream()->m_sasl->m_params));
-	const char* username = ev->stream()->m_sasl->m_params->getValue("username");
-	String user;
-	if (username)
-	    user << username << "@";
-	user << ev->stream()->local().domain();
-	setParam("username",user);
-    }
-    else if (m_streamType == JBStream::comp) {
-	setParam("username",ev->stream()->remote());
-	setParam("handshake",ev->text());
-    }
-    ev->stream()->unlock();
     SocketAddr addr;
     if (ev->stream()->remoteAddr(addr)) {
 	addParam("ip_host",addr.host());
 	addParam("ip_port",String(addr.port()));
     }
+    addParam("requestid",ev->id());
+}
+
+UserAuthMessage::~UserAuthMessage()
+{
+    if (m_bindingUser)
+	s_jabber->removeBindingResource(m_bindingUser);
 }
 
 // Check accepted and returned value. Calls stream's authenticated() method
@@ -2732,6 +2906,7 @@ void UserAuthMessage::dispatched(bool accepted)
 	accepted,stream,m_stream.c_str(),m_streamType);
     bool ok = false;
     String rspValue;
+    JabberID username = getValue("username");
     // Use a while() to break to the end
     while (stream) {
 	Lock lock(stream);
@@ -2742,37 +2917,50 @@ void UserAuthMessage::dispatched(bool accepted)
 	if (!(accepted || retValue()))
 	    break;
 	// Returned password works only with username
-	if (!getValue("username"))
+	if (!username)
 	    break;
 	// Check credentials
-	if (m_streamType != JBStream::comp) {
-	    String* rsp = getParam("response");
-	    if (rsp) {
-		if (!stream->m_sasl)
-		    break;
-		if (stream->m_sasl->m_plain)
-		    ok = (*rsp == retValue());
-		else {
+	if (m_streamType == JBStream::c2s) {
+	    if (stream->m_sasl) {
+		XDebug(&__plugin,DebugAll,"UserAuthMessage checking c2s sasl [%p]",this);
+		String* rsp = getParam("response");
+		if (rsp) {
+		    if (stream->m_sasl->m_plain)
+			ok = (*rsp == retValue());
+		    else {
+			String digest;
+			stream->m_sasl->buildMD5Digest(digest,retValue(),true);
+			ok = (*rsp == digest);
+			if (ok)
+			    stream->m_sasl->buildMD5Digest(rspValue,retValue(),false);
+		    }
+		}
+	    }
+	    else {
+		XDebug(&__plugin,DebugAll,"UserAuthMessage checking c2s non-sasl [%p]",this);
+		String* auth = getParam("digest");
+		if (auth) {
 		    String digest;
-		    stream->m_sasl->buildMD5Digest(digest,retValue(),true);
-		    ok = (*rsp == digest);
-		    if (ok)
-			stream->m_sasl->buildMD5Digest(rspValue,retValue(),false);
+		    stream->buildSha1Digest(digest,retValue());
+		    ok = (digest == *auth);
+		}
+		else {
+		    auth = getParam("password");
+		    ok = auth && (*auth == retValue());
 		}
 	    }
 	}
-	else {
-	    JBServerStream* comp = stream->serverStream();
-	    if (comp) {
-		String digest;
-		comp->buildHandshake(digest,retValue());
-		ok = (digest == getValue("handshake"));
-	    }
+	else if (stream->type() == JBStream::comp) {
+	    XDebug(&__plugin,DebugAll,"UserAuthMessage checking component handshake [%p]",this);
+	    String digest;
+	    stream->buildSha1Digest(digest,retValue());
+	    ok = (digest == getValue("handshake"));
 	}
 	break;
     }
     if (stream)
-	stream->authenticated(ok,rspValue);
+	stream->authenticated(ok,rspValue,XMPPError::NotAuthorized,username.node(),
+	    getValue("requestid"),getValue("instance"));
     TelEngine::destruct(stream);
 }
 
@@ -2825,12 +3013,31 @@ TcpListener::~TcpListener()
     __plugin.listener(this,false);
 }
 
+// Objects added to socket.ssl message when incoming connection is using SSL
+class RefSocket : public RefObject
+{
+public:
+    inline RefSocket(Socket** sock)
+	: m_socket(sock)
+	{}
+    virtual void* getObject(const String& name) const {
+	    if (name == "Socket*")
+		return (void*)m_socket;
+	    return RefObject::getObject(name);
+	}
+    Socket** m_socket;
+private:
+    RefSocket() {}
+};
+
 // Bind and listen
 void TcpListener::run()
 {
     __plugin.listener(this,true);
-    DDebug(&__plugin,DebugAll,"TcpListener(%s) '%s:%d' type='%s' start running [%p]",
-	c_str(),m_address.safe(),m_port,lookup(m_type,JBStream::s_typeName),this);
+    DDebug(&__plugin,DebugAll,
+	"TcpListener(%s) '%s:%d' type='%s' context=%s start running [%p]",
+	c_str(),m_address.safe(),m_port,lookup(m_type,JBStream::s_typeName),
+	m_sslContext.c_str(),this);
     // Create the socket
     if (!m_socket.create(PF_INET,SOCK_STREAM)) {
 	terminateSocket("failed to create socket");
@@ -2853,6 +3060,7 @@ void TcpListener::run()
     }
     XDebug(&__plugin,DebugAll,"Listener(%s) '%s:%d' start listening [%p]",
 	c_str(),m_address.safe(),m_port,this);
+    bool plain = m_sslContext.null();
     while (true) {
 	if (Thread::check(false))
 	    break;
@@ -2862,21 +3070,26 @@ void TcpListener::run()
 	if (sock) {
 	    DDebug(&__plugin,DebugAll,"Listener(%s) '%s:%d' got conn from '%s:%d' [%p]",
 		c_str(),m_address.safe(),m_port,addr.host().c_str(),addr.port(),this);
-	    processed = m_engine && m_engine->acceptConn(sock,addr,m_type);
+	    if (plain)
+		processed = m_engine && m_engine->acceptConn(sock,addr,m_type);
+	    else {
+		Message m("socket.ssl");
+		m.userData(new RefSocket(&sock));
+		m.addParam("server",String::boolText(true));
+		m.addParam("context",m_sslContext);
+		if (Engine::dispatch(m))
+		    processed = m_engine && m_engine->acceptConn(sock,addr,m_type,true);
+		else {
+		    Debug(&__plugin,DebugWarn,"Listener(%s) Failed to start SSL [%p]",
+			c_str(),this);
+		    delete sock;
+		    break;
+		}
+	    }
 	    if (!processed)
 		delete sock;
 	}
 	Thread::idle();
-#if 0
-	if (processed) {
-	    if (m_sleepMs)
-		Thread::msleep(m_sleepMs,false);
-	}
-	else if (m_sleepMsNone)
-	    Thread::msleep(m_sleepMsNone,false);
-	else
-	    Thread::yield(false);
-#endif
     }
     terminateSocket();
     DDebug(&__plugin,DebugAll,"Listener(%s) '%s:%d' terminated [%p]",c_str(),
@@ -3296,21 +3509,30 @@ bool JBModule::buildListener(const String& name, NamedList& p)
 	    name.c_str(),stype);
 	return false;
     }
+    const char* context = 0;
     String* sport = p.getParam("port");
     int port = 0;
     if (!TelEngine::null(sport))
 	port = sport->toInteger();
-    else if (t == JBStream::c2s)
-	port = XMPP_C2S_PORT;
     else if (t == JBStream::s2s)
 	port = XMPP_S2S_PORT;
+    if (t == JBStream::c2s) {
+	context = p.getValue("sslcontext");
+	if (TelEngine::null(sport) && TelEngine::null(context))
+	    port = XMPP_C2S_PORT;
+    }
     if (!port) {
 	Debug(this,DebugWarn,"Can't build listener='%s' with invalid port='%s'",
 	    name.c_str(),c_safe(sport));
 	return false;
     }
-    TcpListener* l = new TcpListener(name,s_jabber,t,
-	p.getValue("address"),port,p.getIntValue("backlog",5));
+    const char* addr = p.getValue("address");
+    unsigned int backlog = p.getIntValue("backlog",5);
+    TcpListener* l = 0;
+    if (TelEngine::null(context))
+	l = new TcpListener(name,s_jabber,t,addr,port,backlog);
+    else
+	l = new TcpListener(name,s_jabber,context,addr,port,backlog);
     if (l->startup())
 	return true;
     Debug(this,DebugWarn,"Failed to start listener='%s' type='%s' addr='%s' port=%d",

@@ -21,6 +21,15 @@
 ; Defaults to no
 ;c2s_tlsrequired=
 
+; c2s_allowunsecureplainauth: boolean: Allow user plain password authentication on
+;  unsecured stream
+; Defaults to no
+;c2s_allowunsecureplainauth=
+
+; c2s_oldstyleauth: boolean: Enable old style (XEP 0078) user authentication
+; Defaults to yes
+;c2s_oldstyleauth=
+
 ; stream_readbuffer: integer: The length of the stream read buffer
 ; Defaults to 8192 if missing or invalid. Minimum allowed value is 1024
 ;stream_readbuffer=8192
@@ -115,10 +124,16 @@
 ; These are the default values for some known types (only if this parameter is missing)
 ;  c2s 5222
 ;  s2s 5269
-; There is no default value for external component listeners
+; There is no default value for external component listeners or c2s SSL listeners
 ;port=
 
 ; backlog: integer: Maximum length of the queue of pending connections
 ; Set it to 0 for system maximum
 ; Defaults to 5 if missing or invalid
 ;backlog=5
+
+; sslcontext: string: The SSL context of a c2s listener using encryption
+; The context will be used to encrypt the socket before starting a new stream
+; This parameter is ignored if type is not c2s
+;sslcontext=
+

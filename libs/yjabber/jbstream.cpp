@@ -129,7 +129,7 @@ static inline unsigned int timerMultiplier(JBStream* stream)
  * JBStream
  */
 // Incoming
-JBStream::JBStream(JBEngine* engine, Socket* socket, Type t)
+JBStream::JBStream(JBEngine* engine, Socket* socket, Type t, bool ssl)
     : Mutex(true,"JBStream"),
     m_sasl(0),
     m_state(Idle), m_flags(0), m_xmlns(XMPPNamespace::Count), m_lastEvent(0),
@@ -141,11 +141,13 @@ JBStream::JBStream(JBEngine* engine, Socket* socket, Type t)
     m_incoming(true), m_terminateEvent(0),
     m_xmlDom(0), m_socket(0), m_socketFlags(0), m_connectPort(0)
 {
+    if (ssl)
+	m_flags |= (StreamSecured | StreamTls);
     m_engine->buildStreamName(m_name);
     debugName(m_name);
     debugChain(m_engine);
-    Debug(this,DebugAll,"JBStream::JBStream(%p,%p,%s) incoming [%p]",
-	engine,socket,typeName(),this);
+    Debug(this,DebugAll,"JBStream::JBStream(%p,%p,%s,%s) incoming [%p]",
+	engine,socket,typeName(),String::boolText(ssl),this);
     setXmlns();
     // Don't restart incoming streams
     m_flags |= NoAutoRestart;
@@ -480,15 +482,21 @@ void JBStream::start(XMPPFeatureList* features, XmlElement* caps)
     m_features.clear();
     if (features)
 	m_features.add(*features);
-    // Set secured flag if we don't advertise TLS
-    if (!(flag(StreamSecured) || m_features.get(XMPPNamespace::Tls)))
+    if (flag(StreamRemoteVer1)) {
+	// Set secured flag if we don't advertise TLS
+	if (!(flag(StreamSecured) || m_features.get(XMPPNamespace::Tls)))
+	    setSecured();
+	// Set authenticated flag if we don't advertise authentication mechanisms
+	if (flag(StreamSecured)) {
+	    if (flag(StreamAuthenticated))
+	        m_features.remove(XMPPNamespace::Sasl);
+	    else if (!m_features.get(XMPPNamespace::Sasl))
+		m_flags |= JBStream::StreamAuthenticated;
+	}
+    }
+    else if (m_type == c2s) {
+	// c2s using non-sasl auth
 	setSecured();
-    // Set authenticated flag if we don't advertise authentication mechanisms
-    if (flag(StreamSecured)) {
-	if (flag(StreamAuthenticated))
-	    m_features.remove(XMPPNamespace::Sasl);
-	else if (!m_features.get(XMPPNamespace::Sasl))
-	    m_flags |= JBStream::StreamAuthenticated;
     }
     // Send start and features
     XmlElement* s = buildStreamStart();
@@ -510,7 +518,8 @@ void JBStream::start(XMPPFeatureList* features, XmlElement* caps)
 }
 
 // Authenticate an incoming stream
-bool JBStream::authenticated(bool ok, const String& rsp, XMPPError::Type error)
+bool JBStream::authenticated(bool ok, const String& rsp, XMPPError::Type error,
+    const char* username, const char* id, const char* resource)
 {
     Lock lock(this);
     if (m_state != Auth || !incoming())
@@ -519,20 +528,38 @@ bool JBStream::authenticated(bool ok, const String& rsp, XMPPError::Type error)
 	String::boolText(ok),rsp.safe(),XMPPUtils::s_error[error].c_str(),
 	m_local.c_str(),this);
     if (ok) {
-	m_flags |= StreamAuthenticated;
 	if (m_type == c2s) {
-	    // Set remote party node if not provided
-	    if (m_type == c2s && m_sasl && m_sasl->m_params && !m_remote.node()) {
-		m_remote.set(m_sasl->m_params->getValue("username"),m_local.domain(),"");
-		Debug(this,DebugAll,"Remote party set to '%s' [%p]",m_remote.c_str(),this);
-	    }
-	    m_features.remove(XMPPNamespace::Sasl);
-	    String text;
-	    if (m_sasl)
+	    if (m_sasl) {
+		// Set remote party node if provided
+		if (!TelEngine::null(username)) {
+		    m_remote.set(username,m_local.domain(),"");
+		    Debug(this,DebugAll,"Remote party set to '%s' [%p]",m_remote.c_str(),this);
+		}
+		String text;
 		m_sasl->buildAuthRspReply(text,rsp);
-	    XmlElement* s = XMPPUtils::createElement(XmlTag::Success,
-		XMPPNamespace::Sasl,text);
-	    ok = sendStreamXml(WaitStart,s);
+		XmlElement* s = XMPPUtils::createElement(XmlTag::Success,
+		    XMPPNamespace::Sasl,text);
+		ok = sendStreamXml(WaitStart,s);
+	    }
+	    else if (m_features.get(XMPPNamespace::IqAuth)) {
+		// Set remote party if not provided
+		if (!TelEngine::null(username))
+		    m_remote.set(username,m_local.domain(),resource);
+		else
+		    m_remote.resource(resource);
+		if (m_remote.isFull()) {
+		    Debug(this,DebugAll,"Remote party set to '%s' [%p]",m_remote.c_str(),this);
+		    XmlElement* rsp = XMPPUtils::createIqResult(0,0,id,
+			XMPPUtils::createElement(XmlTag::Query,XMPPNamespace::IqAuth));
+		    ok = sendStreamXml(Running,rsp);
+		    if (!ok)
+			m_remote.set(m_local.domain());
+		}
+		else
+		    terminate(0,true,0,XMPPError::Internal);
+	    }
+	    else
+		terminate(0,true,0,XMPPError::Internal);
 	}
 	else if (m_type == s2s) {
 	    XmlElement* rsp = XMPPUtils::createDialbackResult(m_local,m_remote,true);
@@ -542,11 +569,24 @@ bool JBStream::authenticated(bool ok, const String& rsp, XMPPError::Type error)
 	    XmlElement* rsp = XMPPUtils::createElement(XmlTag::Handshake);
 	    ok = sendStreamXml(Running,rsp);
 	}
+	if (ok) {
+	    m_features.remove(XMPPNamespace::Sasl);
+	    m_features.remove(XMPPNamespace::IqAuth);
+	    m_flags |= StreamAuthenticated;
+	}
     }
     else {
 	if (m_type == c2s) {
-	    XmlElement* failure = XMPPUtils::createFailure(XMPPNamespace::Sasl,error);
-	    ok = sendStreamXml(Features,failure);
+	    XmlElement* rsp = 0;
+	    if (m_sasl)
+		rsp = XMPPUtils::createFailure(XMPPNamespace::Sasl,error);
+	    else {
+		rsp = XMPPUtils::createIq(XMPPUtils::IqError,0,0,id);
+		if (TelEngine::null(id))
+		    rsp->addChild(XMPPUtils::createElement(XmlTag::Query,XMPPNamespace::IqAuth));
+		rsp->addChild(XMPPUtils::createError(XMPPError::TypeAuth,error));
+	    }
+	    ok = sendStreamXml(Features,rsp);
 	}
 	else if (m_type == s2s) {
 	    XmlElement* rsp = XMPPUtils::createDialbackResult(m_local,m_remote,false);
@@ -919,7 +959,8 @@ void JBStream::checkTimeouts(u_int64_t time)
 // Reset the stream's connection. Build a new XML parser if the socket is valid
 void JBStream::resetConnection(Socket* sock)
 {
-    XDebug(this,DebugAll,"JBStream::resetConnection(%p) [%p]",sock,this);
+    DDebug(this,DebugAll,"JBStream::resetConnection(%p) current=%p [%p]",
+	sock,m_socket,this);
     // Release the old one
     if (m_socket) {
 	// Wait for the socket to become available (not reading or writing)
@@ -978,7 +1019,8 @@ XmlElement* JBStream::buildStreamStart()
     start->setAttribute(XmlElement::s_ns,XMPPUtils::s_ns[m_xmlns]);
     start->setAttributeValid("from",m_local.bare());
     start->setAttributeValid("to",m_remote.bare());
-    start->setAttribute("version","1.0");
+    if (outgoing() || flag(StreamRemoteVer1))
+	start->setAttribute("version","1.0");
     start->setAttribute("xml:lang","en");
     return start;
 }
@@ -1051,9 +1093,9 @@ bool JBStream::processStreamStart(const XmlElement* xml)
 	    m_flags |= StreamRemoteVer1;
 	else if (remoteVersion < 1) {
 	    if (m_type == c2s)
-		error = XMPPError::UnsupportedVersion;
+		XDebug(this,DebugAll,"c2s stream start with version < 1 [%p]",this);
 	    else if (m_type == s2s) {
-		// Accept invalid/unsupported version on if TLS is not required
+		// Accept invalid/unsupported version only if TLS is not required
 		if (!flag(TlsRequired)) {
 		    // Check dialback
 		    if (!xml->hasAttribute("xmlns:db",XMPPUtils::s_ns[XMPPNamespace::Dialback])) {
@@ -1150,15 +1192,21 @@ bool JBStream::checkStanzaRecv(XmlElement* xml, JabberID& from, JabberID& to)
 
     // RFC 3920bis 5.2: Accept stanzas only if the stream was authenticated
     // Accept IQs in jabber:iq:register namespace
+    // Accept IQs in jabber:iq:auth namespace
     // They might be received on a non authenticated stream)
     if (!flag(StreamAuthenticated)) {
 	bool isIq = XMPPUtils::isTag(*xml,XmlTag::Iq,m_xmlns);
 	bool valid = isIq && XMPPUtils::findFirstChild(*xml,XmlTag::Count,
 	    XMPPNamespace::IqRegister);
-	// Outgoing client stream: check register responses
-	if (!valid && outgoing()) {
-	    JBClientStream* c2s = clientStream();
-	    valid = c2s && c2s->isRegisterId(*xml);
+	JBClientStream* c2s = clientStream();
+	if (!valid && c2s) {
+	    // Outgoing client stream: check register responses
+	    // Incoming client stream: check auth stanzas
+	    if (outgoing())
+		valid = c2s->isRegisterId(*xml);
+	    else
+		valid = isIq && XMPPUtils::findFirstChild(*xml,XmlTag::Count,
+		    XMPPNamespace::IqAuth);
 	}
 	if (!valid) {
 	    terminate(0,false,xml,XMPPError::NotAuthorized,
@@ -1640,18 +1688,26 @@ bool JBStream::processFeaturesIn(XmlElement* xml, const JabberID& from, const Ja
     if (!m_features.get(ns)) {
 	// Check for some features that can be negotiated via 'iq' elements
 	if (m_type == c2s && *t == XMPPUtils::s_tag[XmlTag::Iq] && ns == m_xmlns) {
+	    int chTag = XmlTag::Count;
+	    int chNs = XMPPNamespace::Count;
 	    XmlElement* child = xml->findFirstChild();
-	    int chNs = child ? XMPPUtils::ns(*child) : XMPPNamespace::Count;
-	    bool bindOk = chNs == XMPPNamespace::Bind && m_features.get(XMPPNamespace::Bind);
-	    bool regOk = !bindOk && chNs == XMPPNamespace::IqRegister;
+	    if (child)
+		XMPPUtils::getTag(*child,chTag,chNs);
 	    // Bind
-	    if (bindOk) {
+	    if (chNs == XMPPNamespace::Bind && m_features.get(XMPPNamespace::Bind)) {
 		// We've sent bind feature
 		// Don't accept it if not authenticated and TLS/SASL must be negotiated
 		if (!flag(StreamAuthenticated)) {
 		    XMPPFeature* tls = m_features.get(XMPPNamespace::Tls);
+		    if (tls && tls->required()) {
+			XmlElement* e = XMPPUtils::createError(xml,XMPPError::TypeWait,
+			    XMPPError::EncryptionRequired);
+			sendStreamXml(m_state,e);
+			return true;
+		    }
 		    XMPPFeature* sasl = m_features.get(XMPPNamespace::Sasl);
-		    if ((tls && tls->required()) || (sasl && sasl->required())) {
+		    XMPPFeature* iqAuth = m_features.get(XMPPNamespace::IqAuth);
+		    if ((sasl && sasl->required()) || (iqAuth && iqAuth->required())) {
 			XmlElement* e = XMPPUtils::createError(xml,XMPPError::TypeAuth,
 			    XMPPError::NotAllowed);
 			sendStreamXml(m_state,e);
@@ -1662,12 +1718,53 @@ bool JBStream::processFeaturesIn(XmlElement* xml, const JabberID& from, const Ja
 		m_flags |= StreamSecured | StreamAuthenticated;
 		m_features.remove(XMPPNamespace::Tls);
 		m_features.remove(XMPPNamespace::Sasl);
+		m_features.remove(XMPPNamespace::IqAuth);
 		changeState(Running);
 		return processRunning(xml,from,to);
 	    }
-	    // Register
-	    if (regOk) {
+	    else if (chNs == XMPPNamespace::IqRegister) {
+		// Register
 		m_events.append(new JBEvent(JBEvent::Iq,this,xml,xml->findFirstChild()));
+		return true;
+	    }
+	    else if (chNs == XMPPNamespace::IqAuth) {
+		XMPPUtils::IqType type = XMPPUtils::iqType(xml->attribute("type"));
+		bool req = type == XMPPUtils::IqGet || type == XMPPUtils::IqSet;
+		// Stream non SASL auth
+		// Check if we support it
+		if (!m_features.get(XMPPNamespace::IqAuth)) {
+		    if (req) {
+			XmlElement* e = XMPPUtils::createError(xml,XMPPError::TypeCancel,
+			    XMPPError::NotAllowed);
+			return sendStreamXml(m_state,e);
+		    }
+		    return dropXml(xml,"unexpected jabber:iq:auth element");
+		}
+		if (flag(StreamRemoteVer1)) {
+		    XMPPFeature* tls = m_features.get(XMPPNamespace::Tls);
+		    if (tls && tls->required()) {
+			XmlElement* e = XMPPUtils::createError(xml,XMPPError::TypeWait,
+			    XMPPError::EncryptionRequired);
+			sendStreamXml(m_state,e);
+			return true;
+		    }
+		}
+		if (chTag != XmlTag::Query) {
+		    if (req) {
+			XmlElement* e = XMPPUtils::createError(xml,XMPPError::TypeModify,
+			    XMPPError::FeatureNotImpl);
+			sendStreamXml(m_state,e);
+			return true;
+		    }
+		    return dropXml(xml,"expecting iq auth with 'query' child");
+		}
+		// Send it to the uppper layer
+		if (type == XMPPUtils::IqSet) {
+		    m_events.append(new JBEvent(JBEvent::Auth,this,xml,xml->findFirstChild()));
+		    changeState(Auth);
+		}
+		else
+		    m_events.append(new JBEvent(JBEvent::Iq,this,xml,xml->findFirstChild()));
 		return true;
 	    }
 	}
@@ -1736,7 +1833,7 @@ bool JBStream::processFeaturesIn(XmlElement* xml, const JabberID& from, const Ja
 	}
 	return true;
     }
-    // Stream auth
+    // Stream SASL auth
     if (ns == XMPPNamespace::Sasl) {
 	if (*t != XMPPUtils::s_tag[XmlTag::Auth])
 	    return dropXml(xml,"expecting sasl 'auth' element");
@@ -1885,8 +1982,8 @@ void JBStream::eventTerminated(const JBEvent* ev)
 /*
  * JBClientStream
  */
-JBClientStream::JBClientStream(JBEngine* engine, Socket* socket)
-    : JBStream(engine,socket,c2s),
+JBClientStream::JBClientStream(JBEngine* engine, Socket* socket, bool ssl)
+    : JBStream(engine,socket,c2s,ssl),
     m_userData(0), m_registerReq(0)
 {
 }
@@ -1926,7 +2023,7 @@ void JBClientStream::bind(const String& resource, const char* id, XMPPError::Typ
 	m_features.remove(XMPPNamespace::Bind);
 }
 
-// Request account setup (or info) an outgoing stream
+// Request account setup (or info) on outgoing stream
 bool JBClientStream::requestRegister(bool data, bool set, const String& newPass)
 {
     if (incoming())

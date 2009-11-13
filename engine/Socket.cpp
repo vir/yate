@@ -1528,7 +1528,7 @@ bool Socket::canSelect(SOCKET handle)
 
 bool Socket::select(bool* readok, bool* writeok, bool* except, struct timeval* timeout)
 {
-    HANDLE tmp = m_handle;
+    SOCKET tmp = m_handle;
     if (!valid())
 	return false;
 #ifdef FD_SETSIZE

@@ -127,23 +127,63 @@ static void completeWords(String& str, const char** list, const char* partial = 
     }
 }
 
-static Configuration s_cfg;
-
-static bool s_output = false;
-
-/* I need this here because i'm gonna use it in both classes */
-Socket s_sock;
-Mutex s_mutex(true,"RManager");
+static Mutex s_mutex(true,"RManager");
 
 //we gonna create here the list with all the new connections.
 static ObjList s_connList;
 
+// the incomming connections listeners list
+static ObjList s_listeners;
+
+class Connection;
+class RManagerThread;
+
+class SockRef : public RefObject
+{
+public:
+    inline SockRef(Socket** sock)
+	: m_sock(sock)
+	{ }
+    void* getObject(const String& name) const
+    {
+	if (name == "Socket*")
+	    return m_sock;
+	return RefObject::getObject(name);
+    }
+private:
+    Socket** m_sock;
+};
+
+class RManagerListener : public RefObject
+{
+    friend class RManagerThread;
+public:
+    inline RManagerListener(const NamedList& sect)
+	: m_cfg(sect)
+	{ }
+    ~RManagerListener();
+    void init();
+    inline NamedList& cfg()
+	{ return m_cfg; }
+private:
+    void run();
+    bool initSocket();
+    Connection* checkCreate(Socket* sock, const char* addr);
+    NamedList m_cfg;
+    Socket m_socket;
+    String m_address;
+};
+
 class RManagerThread : public Thread
 {
 public:
-    RManagerThread() : Thread("RManager Listener") { }
-    virtual void run();
+    inline RManagerThread(RManagerListener* listener)
+	: Thread("RManager Listener"), m_listener(listener)
+	{ }
+    virtual void run()
+	{ m_listener->run(); }
 private:
+    RefPointer<RManagerListener> m_listener;
 };
 
 class Connection : public GenObject, public Thread
@@ -154,7 +194,7 @@ public:
 	User,
 	Admin
     };
-    Connection(Socket* sock, const char* addr);
+    Connection(Socket* sock, const char* addr, RManagerListener* listener);
     ~Connection();
 
     virtual void run();
@@ -171,8 +211,9 @@ public:
 	{ writeStr(s.safe(),s.length()); }
     inline const String& address() const
 	{ return m_address; }
+    inline const NamedList& cfg() const
+	{ return m_listener->cfg(); }
     void checkTimer(u_int64_t time);
-    static Connection *checkCreate(Socket* sock, const char* addr = 0);
 private:
     Level m_auth;
     bool m_debug;
@@ -188,6 +229,7 @@ private:
     String m_buffer;
     String m_address;
     String m_lastcmd;
+    RefPointer<RManagerListener> m_listener;
 };
 
 class RManager : public Plugin
@@ -207,6 +249,7 @@ public:
     virtual void dispatched(const Message& msg, bool handled);
 };
 
+
 static void dbg_remote_func(const char *buf, int level)
 {
     s_mutex.lock();
@@ -219,36 +262,127 @@ static void dbg_remote_func(const char *buf, int level)
     s_mutex.unlock();
 }
 
-void RManagerThread::run()
+
+RManagerListener::~RManagerListener()
+{
+    DDebug("RManager",DebugInfo,"No longer listening '%s' on %s",
+	m_cfg.c_str(),m_address.c_str());
+    s_mutex.lock();
+    s_listeners.remove(this,false);
+    s_mutex.unlock();
+}
+
+void RManagerListener::init()
+{
+    if (initSocket()) {
+	s_mutex.lock();
+	s_listeners.append(this);
+	s_mutex.unlock();
+    }
+    deref();
+}
+
+bool RManagerListener::initSocket()
+{
+    // check configuration
+    int port = m_cfg.getIntValue("port",5038);
+    const char* host = c_safe(m_cfg.getValue("addr","127.0.0.1"));
+    if (!(port && *host))
+	return false;
+
+    m_socket.create(AF_INET, SOCK_STREAM);
+    if (!m_socket.valid()) {
+	Debug("RManager",DebugGoOn,"Unable to create the listening socket: %s",
+	    strerror(m_socket.error()));
+	return false;
+    }
+
+    if (!m_socket.setBlocking(false)) {
+	Debug("RManager",DebugGoOn, "Failed to set listener to nonblocking mode: %s",
+	    strerror(m_socket.error()));
+	return false;
+    }
+
+    SocketAddr sa(AF_INET);
+    sa.host(host);
+    sa.port(port);
+    m_address << sa.host() << ":" << sa.port();
+    m_socket.setReuse();
+    if (!m_socket.bind(sa)) {
+	Debug("RManager",DebugGoOn,"Failed to bind to %s : %s",
+	    m_address.c_str(),strerror(m_socket.error()));
+	return false;
+    }
+    if (!m_socket.listen(2)) {
+	Debug("RManager",DebugGoOn,"Unable to listen on socket: %s",
+	    strerror(m_socket.error()));
+	return false;
+    }
+    Debug("RManager",DebugInfo,"Starting listener '%s' on %s",
+	m_cfg.c_str(),m_address.c_str());
+    RManagerThread* t = new RManagerThread(this);
+    if (t->startup())
+	return true;
+    delete t;
+    return false;
+}
+
+void RManagerListener::run()
 {
     for (;;)
     {
 	Thread::idle(true);
 	SocketAddr sa;
-	Socket* as = s_sock.accept(sa);
+	Socket* as = m_socket.accept(sa);
 	if (!as) {
-	    if (!s_sock.canRetry())
-		Debug("RManager",DebugWarn, "Accept error: %s", strerror(s_sock.error()));
+	    if (!m_socket.canRetry())
+		Debug("RManager",DebugWarn, "Accept error: %s",strerror(m_socket.error()));
 	    continue;
 	} else {
 	    String addr(sa.host());
 	    addr << ":" << sa.port();
-	    if (!Connection::checkCreate(as,addr))
+	    if (!checkCreate(as,addr))
 		Debug("RManager",DebugWarn,"Connection rejected for %s",addr.c_str());
 	}
     }
 }
 
-Connection *Connection::checkCreate(Socket* sock, const char* addr)
+Connection* RManagerListener::checkCreate(Socket* sock, const char* addr)
 {
-    if (!sock)
-	return 0;
     if (!sock->valid()) {
 	delete sock;
 	return 0;
     }
+    const NamedString* secure = m_cfg.getParam("context");
+    if (TelEngine::null(secure))
+	secure = m_cfg.getParam("domain");
+    if (TelEngine::null(secure))
+	secure = 0;
+    if (secure) {
+	Message m("socket.ssl");
+	m.addParam("server",String::boolText(true));
+	m.addParam(secure->name(),*secure);
+	m.copyParam(m_cfg,"verify");
+	SockRef* s = new SockRef(&sock);
+	m.userData(s);
+	TelEngine::destruct(s);
+	if (!(Engine::dispatch(m) && sock)) {
+	    Debug("RManager",DebugWarn, "Failed to switch '%s' to SSL for %s '%s'",
+		cfg().c_str(),secure->name().c_str(),secure->c_str());
+	    delete sock;
+	    return 0;
+	}
+    }
+    else if (!sock->setBlocking(false)) {
+	Debug("RManager",DebugGoOn, "Failed to set tcp socket to nonblocking mode: %s",
+	    strerror(sock->error()));
+	delete sock;
+	return 0;
+    }
     // should check IP address here
-    Connection *conn = new Connection(sock,addr);
+    Output("Remote%s connection from %s to %s",
+	(secure ? " secure" : ""),addr,m_address.c_str());
+    Connection* conn = new Connection(sock,addr,this);
     if (conn->error()) {
 	conn->destruct();
 	return 0;
@@ -257,11 +391,12 @@ Connection *Connection::checkCreate(Socket* sock, const char* addr)
     return conn;
 }
 
-Connection::Connection(Socket* sock, const char* addr)
+
+Connection::Connection(Socket* sock, const char* addr, RManagerListener* listener)
     : Thread("RManager Connection"),
-      m_auth(None), m_debug(false), m_output(s_output), m_colorize(false), m_machine(false),
+      m_auth(None), m_debug(false), m_output(false), m_colorize(false), m_machine(false),
       m_socket(sock), m_lastch(0), m_escmode(0), m_echoing(false), m_beeping(false),
-      m_timeout(0), m_address(addr)
+      m_timeout(0), m_address(addr), m_listener(listener)
 {
     s_mutex.lock();
     s_connList.append(this);
@@ -284,31 +419,28 @@ void Connection::run()
 {
     if (!m_socket)
 	return;
-    if (!m_socket->setBlocking(false)) {
-	Debug("RManager",DebugGoOn, "Failed to set tcp socket to nonblocking mode: %s",strerror(m_socket->error()));
-	return;
-    }
 
     // For the sake of responsiveness try to turn off the tcp assembly timer
     int arg = 1;
-    if (s_cfg.getBoolValue("general","interactive",false) &&
+    if (cfg().getBoolValue("interactive",false) &&
 	!m_socket->setOption(SOL_SOCKET, TCP_NODELAY, &arg, sizeof(arg)))
 	Debug("RManager",DebugMild, "Failed to set tcp socket to TCP_NODELAY mode: %s", strerror(m_socket->error()));
 
-    Output("Remote connection from %s",m_address.c_str());
-    if (s_cfg.getValue("general","userpass")) {
-	int tout = s_cfg.getIntValue("general","timeout",30000);
+    if (cfg().getValue("userpass")) {
+	int tout = cfg().getIntValue("timeout",30000);
 	if (tout > 0) {
 	    if (tout < 5000)
 		tout = 5000;
 	    m_timeout = Time::now() + 1000 * tout;
 	}
     }
-    else
-	m_auth = s_cfg.getValue("general","password") ? User : Admin;
-    String hdr = s_cfg.getValue("general","header","YATE ${version}-${release} (http://YATE.null.ro) ready.");
+    else {
+	m_auth = cfg().getValue("password") ? User : Admin;
+	m_output = cfg().getBoolValue("output",false);
+    }
+    String hdr = cfg().getValue("header","YATE ${version}-${release} (http://YATE.null.ro) ready.");
     Engine::runParams().replaceParams(hdr);
-    if (s_cfg.getBoolValue("general","telnet",true)) {
+    if (cfg().getBoolValue("telnet",true)) {
 	// WILL SUPPRESS GO AHEAD, WILL ECHO - and enough BS and blanks to hide them
 	writeStr("\377\373\003\377\373\001\r      \b\b\b\b\b\b");
     }
@@ -494,7 +626,11 @@ bool Connection::processChar(unsigned char c)
 	    return false;
 	case 0x0F: // ^O
 	    m_escmode = 0;
-	    // cycle [no output] -> [output] -> [debug (only if auth)]
+	    if (m_auth < User) {
+		errorBeep();
+		return false;
+	    }
+	    // cycle [no output] -> [output] -> [debug (only if admin)]
 	    if (m_debug)
 		m_output = m_debug = false;
 	    else if (m_output) {
@@ -813,14 +949,14 @@ bool Connection::processLine(const char *line)
 	    writeStr(m_machine ? "%%=auth:success\r\n" : "You are already authenticated as admin!\r\n");
 	    return false;
 	}
-	const char* pass = s_cfg.getValue("general","password");
+	const char* pass = cfg().getValue("password");
 	if (pass && (str == pass)) {
 	    Output("Authenticated admin connection %s",m_address.c_str());
 	    m_auth = Admin;
 	    m_timeout = 0;
 	    writeStr(m_machine ? "%%=auth:success\r\n" : "Authenticated successfully as admin!\r\n");
 	}
-	else if ((pass = s_cfg.getValue("general","userpass")) && (str == pass)) {
+	else if ((pass = cfg().getValue("userpass")) && (str == pass)) {
 	    if (m_auth < User) {
 		Output("Authenticated user connection %s",m_address.c_str());
 		m_auth = User;
@@ -843,8 +979,13 @@ bool Connection::processLine(const char *line)
 	Message m("engine.status");
 	if (str.startSkip("overview"))
 	    m.addParam("details",String::boolText(false));
-	if (str.null() || (str == "rmanager"))
-	    m.retValue() << "name=rmanager,type=misc;conn=" << s_connList.count() << "\r\n";
+	if (str.null() || (str == "rmanager")) {
+	    s_mutex.lock();
+	    m.retValue() << "name=rmanager,type=misc"
+		<< ";listeners=" << s_listeners.count()
+		<< ",conn=" << s_connList.count() << "\r\n";
+	    s_mutex.unlock();
+	}
 	if (!str.null()) {
 	    m.addParam("module",str);
 	    str = ":" + str;
@@ -1191,7 +1332,8 @@ RManager::RManager()
 RManager::~RManager()
 {
     Output("Unloading module RManager");
-    s_sock.terminate();
+    s_connList.clear();
+    s_listeners.clear();
     Debugger::setIntOut(0);
 }
 
@@ -1203,55 +1345,24 @@ bool RManager::isBusy() const
 
 void RManager::initialize()
 {
-    Output("Initializing module RManager");
-    s_cfg = Engine::configFile("rmanager");
-    s_cfg.load();
-    s_output = s_cfg.getBoolValue("general","output",false);
-
-    if (s_sock.valid())
-	return;
-
-    // check configuration
-    int port = s_cfg.getIntValue("general","port",5038);
-    const char *host = c_safe(s_cfg.getValue("general","addr","127.0.0.1"));
-    if (!(port && *host))
-	return;
-
-    s_sock.create(AF_INET, SOCK_STREAM);
-    if (!s_sock.valid()) {
-	Debug("RManager",DebugGoOn,"Unable to create the listening socket: %s",strerror(s_sock.error()));
-	return;
-    }
-
-    if (!s_sock.setBlocking(false)) {
-	Debug("RManager",DebugGoOn, "Failed to set listener to nonblocking mode: %s",strerror(s_sock.error()));
-	return;
-    }
-
-    const int reuseFlag = 1;
-    s_sock.setOption(SOL_SOCKET,SO_REUSEADDR,&reuseFlag,sizeof(reuseFlag));
-
-    SocketAddr sa(AF_INET);
-    sa.host(host);
-    sa.port(port);
-    s_sock.setReuse();
-    if (!s_sock.bind(sa)) {
-	Debug("RManager",DebugGoOn,"Failed to bind to %s:%u : %s",sa.host().c_str(),sa.port(),strerror(s_sock.error()));
-	s_sock.terminate();
-	return;
-    }
-    if (!s_sock.listen(2)) {
-	Debug("RManager",DebugGoOn,"Unable to listen on socket: %s", strerror(s_sock.error()));
-	s_sock.terminate();
-	return;
-    }
-
-    // don't bother to install handlers until we are listening
     if (m_first) {
-	m_first = false;
-	Engine::self()->setHook(new RHook);
-	RManagerThread *mt = new RManagerThread;
-	mt->startup();
+	Output("Initializing module RManager");
+	Configuration cfg;
+	cfg = Engine::configFile("rmanager");
+	// in server mode assume a default empty "general" section exists
+	if (!(cfg.load() || Engine::clientMode()))
+	    (new RManagerListener(NamedList("general")))->init();
+	for (unsigned int i = 0; i < cfg.sections(); i++) {
+	    NamedList* s = cfg.getSection(i);
+	    if (s)
+		(new RManagerListener(*s))->init();
+	}
+	Lock mylock(s_mutex);
+	// don't bother to install handlers until we are listening
+	if (s_listeners.count()) {
+	    m_first = false;
+	    Engine::self()->setHook(new RHook);
+	}
     }
 }
 

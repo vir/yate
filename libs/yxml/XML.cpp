@@ -1774,25 +1774,21 @@ void XmlElement::toString(String& dump, bool esc, const String& indent,
 	return;
     String auxDump;
     auxDump << indent << "<" << m_element;
-    String newIndent(indent + origIndent);
-    const char* sep = newIndent ? newIndent.c_str() : " ";
     int n = m_element.count();
     for (int i = 0; i < n; i++) {
 	NamedString* ns = m_element.getParam(i);
 	if (!ns)
 	    continue;
-	auxDump << sep << ns->name() << "=\"";
+	auxDump << " " << ns->name() << "=\"";
 	addAuth(auxDump,ns->name(),*ns,esc,auth);
 	auxDump << "\"";
     }
     int m = getChildren().count();
-    if (n)
-	auxDump << indent;
     if (m_complete && !m)
 	auxDump << "/";
     auxDump << ">";
     if (m) {
-	m_children.toString(auxDump,esc,newIndent,origIndent,completeOnly,auth,this);
+	m_children.toString(auxDump,esc,indent + origIndent,origIndent,completeOnly,auth,this);
 	if (m_complete)
 	   auxDump << indent << "</" << getName() << ">";
     }

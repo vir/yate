@@ -479,6 +479,7 @@ public:
     String m_contactLoadQuery;
     String m_contactSubSetQuery;
     String m_contactSetQuery;
+    String m_contactSetFullQuery;
     String m_contactDeleteQuery;
     String m_genericUserLoadQuery;
     UserList m_users;
@@ -1479,6 +1480,7 @@ void SubscriptionModule::initialize()
 	m_contactLoadQuery = cfg.getValue("general","contact_load");
 	m_contactSubSetQuery = cfg.getValue("general","contact_subscription_set");
 	m_contactSetQuery = cfg.getValue("general","contact_set");
+	m_contactSetFullQuery = cfg.getValue("general","contact_set_full");
 	m_contactDeleteQuery = cfg.getValue("general","contact_delete");
 	m_genericUserLoadQuery = cfg.getValue("general","generic_roster_load");
 
@@ -2257,32 +2259,36 @@ bool SubscriptionModule::handleUserRosterUpdate(const String& user, const String
 {
     DDebug(this,DebugAll,"handleUserRosterUpdate() user=%s contact=%s",
 	user.c_str(),contact.c_str());
+
+    // Check if the user exists
+    PresenceUser* u = m_users.getUser(user);
+    if (!u)
+	return false;
+
     NamedList p("");
     String params("username,contact");
     NamedString* cParams = msg.getParam("contact.parameters");
     if (!TelEngine::null(cParams))
 	params.append(*cParams,",");
     p.copyParams(msg,params);
-    Message* m = buildDb(m_account,m_contactSetQuery,p);
+    bool full = msg.getBoolValue("full");
+    Message* m = buildDb(m_account,full ? m_contactSetFullQuery : m_contactSetQuery,p);
     m = queryDb(m);
-    if (!m)
+    if (!m) {
+	TelEngine::destruct(u);
 	return false;
-
+    }
     // Load the contact to get all its data
     // The data will be used to notify changes and handle contact
     //  subscription related notifications
     // Notify the update before notifying the instances
     Array* contactData = notifyRosterUpdate(user,contact,true);
-    if (!contactData)
-	return true;
-
-    // Find the user and (re)load the contact (its subscription might change or
-    // it can be a new contact)
-    PresenceUser* u = m_users.getUser(user);
-    if (!u) {
-	TelEngine::destruct(contactData);
+    if (!contactData) {
+	TelEngine::destruct(u);
 	return true;
     }
+
+    // Check if contact changed
     u->lock();
     SubscriptionState oldSub;
     Contact* c = u->findContact(contact);

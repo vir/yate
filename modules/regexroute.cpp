@@ -156,9 +156,11 @@ static void evalFunc(String& str)
 	    s_vars.setParam(tmp,str);
     }
     else {
+	bool bare = true;
 	int sep = str.find(',');
 	String par;
 	if (sep > 0) {
+	    bare = false;
 	    par = str.substr(sep+1);
 	    str = str.substr(0,sep);
 	    sep = par.find(',');
@@ -248,6 +250,8 @@ static void evalFunc(String& str)
 	    }
 	    lst->destruct();
 	}
+	else if (str == "engine")
+	    str = Engine::runParams().getValue(vars(par));
 	else if (str == "runid") {
 	    str.clear();
 	    str << Engine::runId();
@@ -269,7 +273,7 @@ static void evalFunc(String& str)
 	}
 	else if (str == "dispatching")
 	    str = s_dispatching;
-	else if ((sep < 0) && str.trimBlanks())
+	else if (bare && str.trimBlanks())
 	    str = s_vars.getValue(str);
 	else {
 	    Debug("RegexRoute",DebugWarn,"Invalid function '%s'",str.c_str());

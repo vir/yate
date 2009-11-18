@@ -78,7 +78,7 @@ static void mathOper(String& str, String& par, int sep, int oper)
     par = par.substr(sep+1);
     int len = str.length();
     sep = par.find(',');
-    if (sep > 0) {
+    if (sep >= 0) {
 	String tmp = par.substr(sep+1);
 	len = vars(tmp).toInteger();
 	par = par.substr(0,sep);
@@ -171,7 +171,7 @@ static void evalFunc(String& str)
 	    str = vars(par).toLower();
 	else if (str == "chr")
 	    str = static_cast<char>(0xff & vars(par).toInteger());
-	else if ((sep > 0) && ((str == "streq") || (str == "strne"))) {
+	else if ((sep >= 0) && ((str == "streq") || (str == "strne"))) {
 	    bool ret = (str == "strne");
 	    str = par.substr(sep+1);
 	    par = par.substr(0,sep);
@@ -180,27 +180,27 @@ static void evalFunc(String& str)
 	    ret ^= (str == par);
 	    str = ret;
 	}
-	else if ((sep > 0) && ((str == "add") || (str == "+")))
+	else if ((sep >= 0) && ((str == "add") || (str == "+")))
 	    mathOper(str,par,sep,OPER_ADD);
-	else if ((sep > 0) && ((str == "sub") || (str == "-")))
+	else if ((sep >= 0) && ((str == "sub") || (str == "-")))
 	    mathOper(str,par,sep,OPER_SUB);
-	else if ((sep > 0) && ((str == "mul") || (str == "*")))
+	else if ((sep >= 0) && ((str == "mul") || (str == "*")))
 	    mathOper(str,par,sep,OPER_MUL);
-	else if ((sep > 0) && ((str == "div") || (str == "/")))
+	else if ((sep >= 0) && ((str == "div") || (str == "/")))
 	    mathOper(str,par,sep,OPER_DIV);
-	else if ((sep > 0) && ((str == "mod") || (str == "%")))
+	else if ((sep >= 0) && ((str == "mod") || (str == "%")))
 	    mathOper(str,par,sep,OPER_MOD);
-	else if ((sep > 0) && (str == "eq"))
+	else if ((sep >= 0) && (str == "eq"))
 	    mathOper(str,par,sep,OPER_EQ);
-	else if ((sep > 0) && (str == "ne"))
+	else if ((sep >= 0) && (str == "ne"))
 	    mathOper(str,par,sep,OPER_NE);
-	else if ((sep > 0) && ((str == "gt") || (str == ">")))
+	else if ((sep >= 0) && ((str == "gt") || (str == ">")))
 	    mathOper(str,par,sep,OPER_GT);
-	else if ((sep > 0) && ((str == "lt") || (str == "<")))
+	else if ((sep >= 0) && ((str == "lt") || (str == "<")))
 	    mathOper(str,par,sep,OPER_LT);
-	else if ((sep > 0) && (str == "ge"))
+	else if ((sep >= 0) && (str == "ge"))
 	    mathOper(str,par,sep,OPER_GE);
-	else if ((sep > 0) && (str == "le"))
+	else if ((sep >= 0) && (str == "le"))
 	    mathOper(str,par,sep,OPER_LE);
 	else if (str == "random") {
 	    str.clear();

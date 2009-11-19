@@ -1495,7 +1495,7 @@ void YJBEngine::processPresenceStanza(JBEvent* ev)
 			    if (p && p->name() == "xml") {
 				XmlElement* xml = XMPPUtils::getXml(p);
 				if (xml)
-				    ok = c2s->sendStanza(xml) && ok;
+				    ok = c2s->sendStanza(xml) || ok;
 			    }
 			}
 			if (ok)

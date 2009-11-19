@@ -184,7 +184,9 @@ static const TokenDict q931_errors[] = {
     { "congestion", Q931::Congestion },
     { "offline", Q931::SubscriberAbsent },
     { "nocall", Q931::InvalidCallReference },
+#if (OPENH323_NUMVERSION >= 11800)
     { "nocall", Q931::IdentifiedChannelNonExistent },
+#endif
     { 0 , 0 },
 };
 

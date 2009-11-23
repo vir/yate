@@ -1549,7 +1549,7 @@ XmlElement* XMPPUtils::getChatXml(NamedList& list, const char* param,
     XmlElement* xml = getXml(list,param,extra);
     if (xml || !build)
 	return xml;
-    xml = createMessage(list.getValue("type"),0,0,list.getValue("id"),0);
+    xml = createMessage(msgType(list.getValue("type")),0,0,list.getValue("id"),0);
     const char* subject = list.getValue("subject");
     if (!TelEngine::null(subject))
 	xml->addChild(createSubject(subject));

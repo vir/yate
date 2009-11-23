@@ -1850,7 +1850,7 @@ public:
      * @return Message type as enumeration
      */
     static inline MsgType msgType(const char* text)
-	{ return (MsgType)lookup(text,s_msg,TelEngine::null(text) ? Normal : MsgNone); }
+	{ return (MsgType)lookup(text,s_msg,TelEngine::null(text) ? Chat : MsgNone); }
 
     /**
      * Get the text from a message type

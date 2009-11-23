@@ -108,6 +108,7 @@ const TokenDict JBStream::s_flagName[] = {
     {"waitsessrsp",      StreamWaitSessRsp},
     {"waitchallenge",    StreamWaitChallenge},
     {"waitchallengersp", StreamWaitChgRsp},
+    {"version1",         StreamRemoteVer1},
     {0,0}
 };
 
@@ -121,7 +122,7 @@ const TokenDict JBStream::s_typeName[] = {
 // Retrieve the multiplier for non client stream timers
 static inline unsigned int timerMultiplier(JBStream* stream)
 {
-    return stream->type() == JBStream::c2s ? 1 : 1;
+    return stream->type() == JBStream::c2s ? 1 : 2;
 }
 
 
@@ -142,7 +143,7 @@ JBStream::JBStream(JBEngine* engine, Socket* socket, Type t, bool ssl)
     m_xmlDom(0), m_socket(0), m_socketFlags(0), m_connectPort(0)
 {
     if (ssl)
-	m_flags |= (StreamSecured | StreamTls);
+	setFlags(StreamSecured | StreamTls);
     m_engine->buildStreamName(m_name);
     debugName(m_name);
     debugChain(m_engine);
@@ -150,7 +151,7 @@ JBStream::JBStream(JBEngine* engine, Socket* socket, Type t, bool ssl)
 	engine,socket,typeName(),String::boolText(ssl),this);
     setXmlns();
     // Don't restart incoming streams
-    m_flags |= NoAutoRestart;
+    setFlags(NoAutoRestart);
     resetConnection(socket);
     changeState(WaitStart);
 }
@@ -177,7 +178,7 @@ JBStream::JBStream(JBEngine* engine, Type t, const JabberID& local, const Jabber
     debugChain(m_engine);
     if (params) {
 	int flgs = XMPPUtils::decodeFlags(params->getValue("options"),s_flagName);
-	m_flags = flgs & StreamFlags;
+	setFlags(flgs & StreamFlags);
 	m_connectAddr = params->getValue("server",params->getValue("address"));
 	m_connectPort = params->getIntValue("port");
     }
@@ -244,9 +245,9 @@ void JBStream::setRosterRequested(bool ok)
     if (ok == flag(RosterRequested))
 	return;
     if (ok)
-	m_flags |= RosterRequested;
+	setFlags(RosterRequested);
     else
-	m_flags &= ~RosterRequested;
+	resetFlags(RosterRequested);
     XDebug(this,DebugAll,"%s roster requested flag [%p]",ok ? "Set" : "Reset",this);
 }
 
@@ -255,15 +256,15 @@ bool JBStream::setAvailableResource(bool ok, bool positive)
 {
     Lock lock(this);
     if (ok && positive)
-	m_flags |= PositivePriority;
+	setFlags(PositivePriority);
     else
-	m_flags &= ~PositivePriority;
+	resetFlags(PositivePriority);
     if (ok == flag(AvailableResource))
 	return false;
     if (ok)
-	m_flags |= AvailableResource;
+	setFlags(AvailableResource);
     else
-	m_flags &= ~AvailableResource;
+	resetFlags(AvailableResource);
     XDebug(this,DebugAll,"%s available resource flag [%p]",ok ? "Set" : "Reset",this);
     return true;
 }
@@ -491,7 +492,7 @@ void JBStream::start(XMPPFeatureList* features, XmlElement* caps)
 	    if (flag(StreamAuthenticated))
 	        m_features.remove(XMPPNamespace::Sasl);
 	    else if (!m_features.get(XMPPNamespace::Sasl))
-		m_flags |= JBStream::StreamAuthenticated;
+		setFlags(StreamAuthenticated);
 	}
     }
     else if (m_type == c2s) {
@@ -572,7 +573,7 @@ bool JBStream::authenticated(bool ok, const String& rsp, XMPPError::Type error,
 	if (ok) {
 	    m_features.remove(XMPPNamespace::Sasl);
 	    m_features.remove(XMPPNamespace::IqAuth);
-	    m_flags |= StreamAuthenticated;
+	    setFlags(StreamAuthenticated);
 	}
     }
     else {
@@ -620,12 +621,12 @@ void JBStream::terminate(int location, bool destroy, XmlElement* xml, int error,
     // Set error flag
     if (state() == Running) {
 	if (error != XMPPError::NoError)
-	    m_flags |= InError;
+	    setFlags(InError);
 	else
-	    m_flags &= ~InError;
+	    resetFlags(InError);
     }
     else
-	m_flags |= InError;
+	setFlags(InError);
     if (flag(InError)) {
 	// Reset re-connect counter if not internal policy error
 	if (location || error != XMPPError::Policy)
@@ -720,7 +721,7 @@ bool JBStream::canProcess(u_int64_t time)
 	    if (m_restart) {
 		if (flag(InError) && !m_pending.skipNull())
 		    return false;
-		m_flags &= ~InError;
+		resetFlags(InError);
 		changeState(Connecting);
 		m_restart--;
 		m_engine->connectStream(this);
@@ -1090,7 +1091,7 @@ bool JBStream::processStreamStart(const XmlElement* xml)
 		remoteVersion = ver.substr(0,pos).toInteger(-1);
 	}
 	if (remoteVersion == 1)
-	    m_flags |= StreamRemoteVer1;
+	    setFlags(StreamRemoteVer1);
 	else if (remoteVersion < 1) {
 	    if (m_type == c2s)
 		XDebug(this,DebugAll,"c2s stream start with version < 1 [%p]",this);
@@ -1274,7 +1275,7 @@ void JBStream::changeState(State newState, u_int64_t time)
 	    m_startTimeout = 0;
 	    break;
 	case Securing:
-	    m_flags |= StreamSecured;
+	    setFlags(StreamSecured);
 	    socketSetCanRead(true);
 	    break;
 	case Connecting:
@@ -1307,13 +1308,13 @@ void JBStream::changeState(State newState, u_int64_t time)
 	    m_setupTimeout = 0;
 	    m_startTimeout = 0;
 	    // Reset all internal flags
-	    m_flags &= ~InternalFlags;
+	    resetFlags(InternalFlags);
 	    if (type() == c2s)
 		clientStream()->m_registerReq = 0;
 	    break;
 	case Running:
-	    m_flags |= StreamSecured | StreamAuthenticated;
-	    m_flags &= ~InError;
+	    setFlags(StreamSecured | StreamAuthenticated);
+	    resetFlags(InError);
 	    m_setupTimeout = 0;
 	    m_startTimeout = 0;
 	    if (m_state != Running)
@@ -1382,7 +1383,7 @@ bool JBStream::sendPending(bool streamOnly)
 	if (m_incoming && m_state == Securing) {
 	    if (all) {
 		m_engine->encryptStream(this);
-		m_flags |= StreamTls;
+		setFlags(StreamTls);
 		socketSetCanRead(true);
 	    }
 	    return true;
@@ -1474,11 +1475,11 @@ bool JBStream::writeSocket(const char* data, unsigned int& len)
 
 // Update stream flags and remote connection data from engine
 void JBStream::updateFromRemoteDef()
- {
+{
     m_engine->lock();
     JBRemoteDomainDef* domain = m_engine->remoteDomainDef(m_remote.domain());
     // Update flags
-    m_flags = (domain->m_flags & StreamFlags);
+    setFlags(domain->m_flags & StreamFlags);
     // Update connection data
     if (outgoing() && state() == Idle) {
 	m_connectAddr = domain->m_address;
@@ -1715,7 +1716,7 @@ bool JBStream::processFeaturesIn(XmlElement* xml, const JabberID& from, const Ja
 		    }
 		}
 		// Remove TLS/SASL features from list: they can't be negotiated anymore
-		m_flags |= StreamSecured | StreamAuthenticated;
+		setFlags(StreamSecured | StreamAuthenticated);
 		m_features.remove(XMPPNamespace::Tls);
 		m_features.remove(XMPPNamespace::Sasl);
 		m_features.remove(XMPPNamespace::IqAuth);
@@ -1788,7 +1789,7 @@ bool JBStream::processFeaturesIn(XmlElement* xml, const JabberID& from, const Ja
 	    if (TelEngine::null(key))
 		return destroyDropXml(xml,XMPPError::NotAcceptable,
 		    "dialback result with empty key");
-	    m_flags |= StreamSecured;
+	    setFlags(StreamSecured);
 	    changeState(Auth);
 	    JBEvent* ev = new JBEvent(JBEvent::DbResult,this,xml,from,to);
 	    ev->m_text = key;
@@ -1806,7 +1807,7 @@ bool JBStream::processFeaturesIn(XmlElement* xml, const JabberID& from, const Ja
 	}
 	// No more required features: change state to Running
 	// Remove TLS/SASL features from list: they can't be negotiated anymore
-	m_flags |= StreamSecured | StreamAuthenticated;
+	setFlags(StreamSecured | StreamAuthenticated);
 	m_features.remove(XMPPNamespace::Tls);
 	m_features.remove(XMPPNamespace::Sasl);
 	changeState(Running);
@@ -1857,7 +1858,7 @@ bool JBStream::processFeaturesIn(XmlElement* xml, const JabberID& from, const Ja
 	    Debug(this,DebugNote,
 		"Received auth request while already authenticated [%p]",
 		this);
-	    m_flags &= ~StreamAuthenticated;
+	    resetFlags(StreamAuthenticated);
 	}
 	return processSaslAuth(xml,from,to);
     }
@@ -1886,7 +1887,7 @@ bool JBStream::processFeaturesOut(XmlElement* xml, const JabberID& from,
 	if (flag(TlsRequired))
 	    return destroyDropXml(xml,XMPPError::EncryptionRequired,
 		"required encryption not supported by remote");
-	m_flags |= StreamSecured;
+	setFlags(StreamSecured);
     }
     // Check auth
     if (!flag(StreamAuthenticated)) {
@@ -1944,7 +1945,7 @@ bool JBStream::processWaitTlsRsp(XmlElement* xml, const JabberID& from,
 	changeState(Securing);
 	m_engine->encryptStream(this);
 	socketSetCanRead(true);
-	m_flags |= StreamTls;
+	setFlags(StreamTls);
 	XmlElement* s = buildStreamStart();
 	return sendStreamXml(WaitStart,s);
     }
@@ -2200,8 +2201,8 @@ bool JBClientStream::processAuth(XmlElement* xml, const JabberID& from,
 		m_sasl->setAuthParams(m_local.node(),m_password);
 		tmp.clear();
 		m_sasl->buildAuthRsp(tmp,"xmpp/" + m_local.domain());
-		m_flags &= ~StreamWaitChallenge;
-		m_flags |= StreamWaitChgRsp;
+		resetFlags(StreamWaitChallenge);
+		setFlags(StreamWaitChgRsp);
 		XmlElement* rsp = XMPPUtils::createElement(XmlTag::Response,XMPPNamespace::Sasl,tmp);
 		return sendStreamXml(state(),rsp);
 	    }
@@ -2231,14 +2232,14 @@ bool JBClientStream::processAuth(XmlElement* xml, const JabberID& from,
 #ifdef RFC3920
 		// Send empty response to challenge
 		if (t == XmlTag::Challenge) {
-		    m_flags |= StreamRfc3920Chg;
+		    setFlags(StreamRfc3920Chg);
 		    TelEngine::destruct(xml);
 		    XmlElement* rsp = XMPPUtils::createElement(XmlTag::Response,
 			XMPPNamespace::Sasl);
 		    return sendStreamXml(state(),rsp);
 		}
 #endif
-		m_flags &= ~(StreamWaitChgRsp | StreamRfc3920Chg);
+		resetFlags(StreamWaitChgRsp | StreamRfc3920Chg);
 	    }
 	    else
 		return dropXml(xml,"unhandled sasl digest md5 state");
@@ -2252,7 +2253,7 @@ bool JBClientStream::processAuth(XmlElement* xml, const JabberID& from,
 	Debug(this,DebugAll,"Authenticated [%p]",this);
 	TelEngine::destruct(xml);
 	TelEngine::destruct(m_sasl);
-	m_flags |= StreamAuthenticated;
+	setFlags(StreamAuthenticated);
 	XmlElement* start = buildStreamStart();
 	return sendStreamXml(WaitStart,start);
     }
@@ -2295,7 +2296,7 @@ bool JBClientStream::processAuth(XmlElement* xml, const JabberID& from,
 	if (!ok)
 	    return destroyDropXml(xml,XMPPError::UndefinedCondition,
 		"unacceptable bind response");
-	m_flags &= ~StreamWaitBindRsp;
+	resetFlags(StreamWaitBindRsp);
 	TelEngine::destruct(xml);
 	if (!m_features.get(XMPPNamespace::Session)) {
 	    changeState(Running);
@@ -2304,7 +2305,7 @@ bool JBClientStream::processAuth(XmlElement* xml, const JabberID& from,
 	// Send session
 	XmlElement* sess = XMPPUtils::createIq(XMPPUtils::IqSet,0,0,"sess_1");
 	sess->addChild(XMPPUtils::createElement(XmlTag::Session,XMPPNamespace::Session));
-	m_flags |= StreamWaitSessRsp;
+	setFlags(StreamWaitSessRsp);
 	return sendStreamXml(state(),sess);
     }
 
@@ -2321,7 +2322,7 @@ bool JBClientStream::processAuth(XmlElement* xml, const JabberID& from,
 	    return false;
 	}
 	TelEngine::destruct(xml);
-	m_flags &= ~StreamWaitBindRsp;
+	resetFlags(StreamWaitBindRsp);
 	changeState(Running);
 	return true;
     }
@@ -2373,7 +2374,7 @@ bool JBClientStream::processRegister(XmlElement* xml, const JabberID& from,
     if (m_registerReq == '2') {
 	m_events.append(new JBEvent(JBEvent::RegisterOk,this,xml,from,to));
 	// Reset register user flag
-	m_flags &= ~RegisterUser;
+	resetFlags(RegisterUser);
 	// Done if account changed after authentication
 	if (flag(StreamAuthenticated)) {
 	    m_password = m_newPassword;
@@ -2436,7 +2437,7 @@ bool JBClientStream::startAuth()
 	}
     }
     else
-	m_flags |= StreamWaitChallenge;
+	setFlags(StreamWaitChallenge);
     // MD5: send auth element, wait challenge
     // Plain auth: send auth element with credentials and wait response (success/failure)
     XmlElement* xml = XMPPUtils::createElement(XmlTag::Auth,XMPPNamespace::Sasl,rsp);
@@ -2453,7 +2454,7 @@ bool JBClientStream::bind()
 	bind->addChild(XMPPUtils::createElement(XmlTag::Resource,m_local.resource()));
     XmlElement* b = XMPPUtils::createIq(XMPPUtils::IqSet,0,0,"bind_1");
     b->addChild(bind);
-    m_flags |= StreamWaitBindRsp;
+    setFlags(StreamWaitBindRsp);
     return sendStreamXml(Auth,b);
 }
 
@@ -2477,7 +2478,7 @@ JBServerStream::JBServerStream(JBEngine* engine, const JabberID& local,
     if (!(TelEngine::null(dbId) || TelEngine::null(dbKey)))
 	m_dbKey = new NamedString(dbId,dbKey);
     if (dbOnly)
-	m_flags |= DialbackOnly | NoAutoRestart;
+	setFlags(DialbackOnly | NoAutoRestart);
 }
 
 // Send a dialback key response.
@@ -2631,9 +2632,8 @@ bool JBServerStream::processStart(const XmlElement* xml, const JabberID& from,
 		terminate(0,false,0,XMPPError::EncryptionRequired);
 		return false;
 	    }
-	    m_flags |= StreamSecured;
 	}
-	m_flags |= StreamSecured;
+	setFlags(StreamSecured);
 	return sendDialback();
     }
 
@@ -2672,7 +2672,7 @@ bool JBServerStream::processAuth(XmlElement* xml, const JabberID& from,
 	}
 	// Stream authenticated
 	TelEngine::destruct(xml);
-	m_flags |= StreamAuthenticated;
+	setFlags(StreamAuthenticated);
 	changeState(Running);
 	return true;
     }

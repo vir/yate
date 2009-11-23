@@ -655,9 +655,9 @@ public:
      */
     inline void setTlsRequired(bool set) {
 	    if (set)
-		m_flags |= TlsRequired;
+		setFlags(TlsRequired);
 	    else
-		m_flags &= ~TlsRequired;
+		resetFlags(TlsRequired);
 	}
 
     /**
@@ -1064,10 +1064,29 @@ protected:
 	}
 
     /**
+     * Set stream flag mask
+     * @param The mask to set
+     */
+    inline void setFlags(int mask) {
+	    XDebug(this,DebugAll,"Setting flags 0x%X current=0x%X [%p]",mask,m_flags,this);
+	    m_flags |= mask;
+	}
+
+
+    /**
+     * Reset stream flag mask
+     * @param The mask to reset
+     */
+    void resetFlags(int mask) {
+	    XDebug(this,DebugAll,"Resetting flags 0x%X current=0x%X [%p]",mask,m_flags,this);
+	    m_flags &= ~mask;
+	}
+
+    /**
      * Set secured flag. Remove feature from list
      */
     inline void setSecured() {
-	    m_flags |= StreamSecured;
+	    setFlags(StreamSecured);
 	    m_features.remove(XMPPNamespace::Tls);
 	}
 

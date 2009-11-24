@@ -2030,54 +2030,62 @@ bool SubscriptionModule::handleResNotifySub(bool sub, const String& src, const S
     DDebug(this,DebugAll,"handleResNotifySub(%s,%s,%s)",
 	String::boolText(sub),src.c_str(),dest.c_str());
 
-    PresenceUser* from = m_users.getUser(src);
-    PresenceUser* to = m_users.getUser(dest);
+    PresenceUser* from = msg.getBoolValue("from_local",true) ? m_users.getUser(src) : 0;
+    PresenceUser* to = msg.getBoolValue("to_local",true) ? m_users.getUser(dest) : 0;
     while (from) {
 	Lock lock(from);
 	Contact* c = from->findContact(dest);
+	Message* updExist = 0;
 	bool notify = false;
 	// Add it to the list if subscribed and not found
-	if (!c && sub) {
-	    c = new Contact(dest,SubscriptionState::From);
-	    Message* m = c->buildUpdateDb(src,true);
-	    m = queryDb(m);
-	    if (m) {
-		from->appendContact(c);
-		TelEngine::destruct(m);
-		notify = true;
+	if (!c) {
+	    if (sub) {
+		c = new Contact(dest,SubscriptionState::From);
+		Message* m = c->buildUpdateDb(src,true);
+		m = queryDb(m);
+		if (m) {
+		    from->appendContact(c);
+		    DDebug(this,DebugAll,"User '%s' added contact '%s' on 'subscribed'",
+			src.c_str(),dest.c_str());
+		    TelEngine::destruct(m);
+		    notify = true;
+		}
+		else
+		    TelEngine::destruct(c);
 	    }
-	    else
-		TelEngine::destruct(c);
-	}
-	if (!c)
-	    break;
-	bool changed = c->m_subscription.pendingIn();
-	c->m_subscription.reset(SubscriptionState::PendingIn);
-	if (sub) {
-	    if (!c->m_subscription.from()) {
-		c->m_subscription.set(SubscriptionState::From);
-		changed = true;
-		notify = true;
-	    }
+	    if (!c)
+		break;
 	}
 	else {
-	    if (c->m_subscription.from()) {
-		c->m_subscription.reset(SubscriptionState::From);
-		changed = true;
-		notify = true;
+	    bool changed = c->m_subscription.pendingIn();
+	    c->m_subscription.reset(SubscriptionState::PendingIn);
+	    if (sub) {
+		if (!c->m_subscription.from()) {
+		    c->m_subscription.set(SubscriptionState::From);
+		    changed = true;
+		    notify = true;
+		}
 	    }
+	    else {
+		if (c->m_subscription.from()) {
+		    c->m_subscription.reset(SubscriptionState::From);
+		    changed = true;
+		    notify = true;
+		}
+	    }
+	    if (changed)
+		updExist = c->buildUpdateDb(src);
 	}
-	Message* m = 0;
-	if (changed)
-	    m = c->buildUpdateDb(src);
 	lock.drop();
-	m = queryDb(m);
-	// Notify user roster change on success
-	if (m) {
-	    TelEngine::destruct(m);
-	    if (notify)
-		notifyRosterUpdate(src,dest);
+	if (updExist) {
+	    updExist = queryDb(updExist);
+	    if (!updExist)
+		notify = false;
+	    TelEngine::destruct(updExist);
 	}
+	// Notify user roster change on success
+	if (notify)
+	    notifyRosterUpdate(src,dest);
 	// Notify user presence to contact if subscribed to its presence
 	if (notify) {
 	    if (to) {

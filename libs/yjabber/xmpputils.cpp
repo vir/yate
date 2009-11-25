@@ -31,6 +31,7 @@ using namespace TelEngine;
 #include <windns.h>
 #else
 #include <resolv.h>
+#include <arpa/nameser.h>
 #endif
 // Insert a SrvRecord into a list in the proper location
 void SrvRecord::insert(ObjList& list, SrvRecord* rec)

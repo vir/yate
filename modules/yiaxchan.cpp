@@ -1405,9 +1405,7 @@ YIAXConnection::YIAXConnection(YIAXEngine* iaxEngine, IAXTransaction* transactio
     if (msg) {
 	m_targetid = msg->getValue("id");
 	m_password = msg->getValue("password");
-	m->setParam("caller",msg->getValue("caller"));
-	m->setParam("called",msg->getValue("called"));
-	m->setParam("billid",msg->getValue("billid"));
+	m->copyParams(*msg,"caller,callername,called,billid,callto,username");
     }
     Engine::enqueue(m);
 }

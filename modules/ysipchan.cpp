@@ -2012,9 +2012,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     setMaxcall(msg);
     Message* s = message("chan.startup",msg);
     s->setParam("caller",caller);
-    s->setParam("called",msg.getValue("called"));
-    s->setParam("billid",msg.getValue("billid"));
-    s->setParam("username",msg.getValue("username"));
+    s->copyParams(msg,"callername,called,billid,callto,username");
     s->setParam("calledfull",m_uri.getUser());
     if (m_callid)
 	s->setParam("sip_callid",m_callid);

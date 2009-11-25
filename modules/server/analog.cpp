@@ -1371,11 +1371,11 @@ AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg, RecordTrigger recor
     // Startup
     Message* m = message("chan.startup");
     m->setParam("direction",status());
+    if (msg)
+	m->copyParams(*msg,"caller,callername,called,billid,callto,username");
     m_line->copyCall(*m);
-    if (isOutgoing()) {
+    if (isOutgoing())
 	m_targetid = msg->getValue("id");
-	m->addParam("billid",msg->getValue("billid"));
-    }
     Engine::enqueue(m);
 
     // Init call

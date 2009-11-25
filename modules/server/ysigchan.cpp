@@ -782,9 +782,7 @@ bool SigChannel::startCall(Message& msg, String& trunks)
     Message* m = message("chan.startup",msg);
     m->setParam("direction",status());
     m_targetid = msg.getValue("id");
-    m->setParam("caller",m_caller);
-    m->setParam("called",m_called);
-    m->setParam("billid",msg.getValue("billid"));
+    m->copyParams(msg,"caller,callername,called,billid,callto,username");
     // TODO: Add call control parameter ?
     Engine::enqueue(m);
     return true;

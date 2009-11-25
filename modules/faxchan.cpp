@@ -593,7 +593,7 @@ FaxChan::FaxChan(bool outgoing, const char *file, bool sender, Message& msg)
     m_address = file;
     Message* s = message("chan.startup",msg);
     if (outgoing)
-	s->copyParams(msg,"called,caller,callername,billid");
+	s->copyParams(msg,"caller,callername,called,billid,callto,username");
     Engine::enqueue(s);
 }
 

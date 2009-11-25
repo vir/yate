@@ -42,7 +42,10 @@ public:
       Channel(__plugin, 0, (exeMsg != 0))
     {
 	m_address = addr;
-	Engine::enqueue(message("chan.startup",exeMsg));
+	Message* s = message("chan.startup",exeMsg);
+	if (exeMsg)
+	    s->copyParams(*exeMsg,"caller,callername,called,billid,callto,username");
+	Engine::enqueue(s);
     };
     ~DumbChannel();
     virtual void disconnected(bool final, const char *reason);

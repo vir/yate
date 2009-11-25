@@ -715,10 +715,7 @@ ConfChan::ConfChan(const String& name, const NamedList& params, bool counted, bo
     }
     if (m_billing) {
 	Message* s = message("chan.startup",params);
-	s->setParam("caller",params.getValue("caller"));
-	s->setParam("called",params.getValue("called"));
-	s->setParam("billid",params.getValue("billid"));
-	s->setParam("username",params.getValue("username"));
+	s->copyParams(params,"caller,callername,called,billid,callto,username");
 	Engine::enqueue(s);
     }
 }

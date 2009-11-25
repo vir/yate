@@ -2032,10 +2032,7 @@ YateH323Chan::YateH323Chan(YateH323Connection* conn,Message* msg,const char* add
     Message* s = message("chan.startup",msg);
     if (msg) {
 	m_inband = msg->getBoolValue("dtmfinband",s_inband);
-	s->setParam("caller",msg->getValue("caller"));
-	s->setParam("called",msg->getValue("called"));
-	s->setParam("billid",msg->getValue("billid"));
-	s->setParam("username",msg->getValue("username"));
+	s->copyParams(*msg,"caller,callername,called,billid,callto,username");
     }
     Engine::enqueue(s);
 }

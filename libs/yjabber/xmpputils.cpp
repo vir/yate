@@ -85,7 +85,7 @@ int Resolver::srvQuery(const char* query, ObjList& result)
     }
     if (srv)
 	::DnsRecordListFree(srv,DnsFreeRecordList);
-#else
+#elif defined(__NAMESER)
     unsigned char buf[512];
     int r = res_query(query,ns_c_in,ns_t_srv,buf,sizeof(buf));
     // TODO: return proper error

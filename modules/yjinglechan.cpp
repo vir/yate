@@ -754,9 +754,7 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
     Message* m = message("chan.startup",msg);
     m->setParam("direction",status());
     m_targetid = msg.getValue("id");
-    m->setParam("caller",msg.getValue("caller"));
-    m->setParam("called",msg.getValue("called"));
-    m->setParam("billid",msg.getValue("billid"));
+    m->copyParams(msg,"caller,callername,called,billid,callto,username");
     Engine::enqueue(m);
     // Make the call
     if (available)

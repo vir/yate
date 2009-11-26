@@ -150,7 +150,7 @@ static XmlElement* buildRosterItem(NamedList& list, unsigned int index)
 	String name = param->name();
 	name.startSkip(prefix,false);
 	if (name == "name")
-	    item->setAttribute("name",*param);
+	    item->setAttributeValid("name",*param);
 	else if (name == "subscription")
 	    addSubscription(*item,*param);
 	else if (name == "groups") {

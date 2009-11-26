@@ -685,7 +685,7 @@ static XmlElement* buildRosterItem(NamedList& list, unsigned int index)
 	String name = param->name();
 	name.startSkip(prefix,false);
 	if (name == "name")
-	    item->setAttribute("name",*param);
+	    item->setAttributeValid("name",*param);
 	else if (name == "subscription")
 	    addSubscription(*item,*param);
 	else if (name == "groups") {
@@ -1112,7 +1112,7 @@ bool YJBEngine::routeInternal(JBEvent* ev)
     return true;
 }
 
-// Process an 'user.roster' messages
+// Process 'user.roster' message
 void YJBEngine::handleUserRoster(Message& msg)
 {
     String* what = msg.getParam("notify");
@@ -1148,7 +1148,7 @@ void YJBEngine::handleUserRoster(Message& msg)
     sendStanza(xml,streams);
 }
 
-// Process an 'user.update' messages
+// Process 'user.update' messages
 void YJBEngine::handleUserUpdate(Message& msg)
 {
     JabberID user(msg.getValue("user"));
@@ -1161,7 +1161,7 @@ void YJBEngine::handleUserUpdate(Message& msg)
     terminateClientStreams(user,XMPPError::Reg);
 }
 
-// Process a 'jabber.iq' messages
+// Process 'jabber.iq' messages
 bool YJBEngine::handleJabberIq(Message& msg)
 {
     JabberID from(msg.getValue("from"));
@@ -1195,7 +1195,7 @@ bool YJBEngine::handleJabberIq(Message& msg)
     return ok;
 }
 
-// Process an 'resource.subscribe' messages
+// Process 'resource.subscribe' messages
 bool YJBEngine::handleResSubscribe(Message& msg)
 {
     String* oper = msg.getParam("operation");
@@ -1239,7 +1239,7 @@ bool YJBEngine::handleResSubscribe(Message& msg)
     return ok;
 }
 
-// Process an 'resource.notify' messages
+// Process 'resource.notify' messages
 bool YJBEngine::handleResNotify(Message& msg)
 {
     String* oper = msg.getParam("operation");
@@ -1323,7 +1323,7 @@ bool YJBEngine::handleResNotify(Message& msg)
     return ok;
 }
 
-// Process a 'msg.execute' messages
+// Process 'msg.execute' messages
 bool YJBEngine::handleMsgExecute(Message& msg)
 {
     JabberID caller(msg.getValue("caller"));

@@ -588,7 +588,7 @@ void JBConnect::connect()
     int port = m_port;
     if (!port)
 	port = (m_streamType == JBStream::c2s) ? XMPP_C2S_PORT : XMPP_S2S_PORT;
-    if (!TelEngine::null(m_address) && connect(sock,m_address,port)) {
+    if (m_address && connect(sock,m_address,port)) {
 	terminated(sock,false);
 	return;
     }
@@ -600,35 +600,37 @@ void JBConnect::connect()
 	terminated(0,false);
 	return;
     }
-    // Get SRV records from remote party
-    String query;
-    if (m_streamType == JBStream::c2s)
-	query = "_xmpp-client._tcp.";
-    else
-	query = "_xmpp-server._tcp.";
-    query << m_domain;
-    ObjList srv;
-    int code = Resolver::srvQuery(query,srv);
-    if (exiting(sock))
-	return;
-    if (!code) {
-	DDebug(m_engine,DebugAll,"JBConnect(%s) SRV query for '%s' got %u records [%p]",
-	    m_stream.c_str(),query.c_str(),srv.count(),this);
-	for (ObjList* o = srv.skipNull(); o; o = o->skipNext()) {
-	    SrvRecord* rec = static_cast<SrvRecord*>(o->get());
-	    if (connect(sock,*rec,rec->m_port)) {
-		terminated(sock,false);
-		return;
+    if (!m_port) {
+	// Get SRV records from remote party
+	String query;
+	if (m_streamType == JBStream::c2s)
+	    query = "_xmpp-client._tcp.";
+	else
+	    query = "_xmpp-server._tcp.";
+	query << m_domain;
+	ObjList srv;
+	int code = m_port ? Resolver::srvQuery(query,srv);
+	if (exiting(sock))
+	    return;
+	if (!code) {
+	    DDebug(m_engine,DebugAll,"JBConnect(%s) SRV query for '%s' got %u records [%p]",
+		m_stream.c_str(),query.c_str(),srv.count(),this);
+	    for (ObjList* o = srv.skipNull(); o; o = o->skipNext()) {
+		SrvRecord* rec = static_cast<SrvRecord*>(o->get());
+		if (connect(sock,*rec,rec->m_port)) {
+		    terminated(sock,false);
+		    return;
+		}
+		if (exiting(sock))
+		    return;
 	    }
-	    if (exiting(sock))
-		return;
 	}
-    }
-    else {
-	String s;
-	Thread::errorString(s,code);
-	Debug(m_engine,DebugNote,"JBConnect(%s) SRV query for '%s' failed: %d '%s' [%p]",
-	    m_stream.c_str(),query.c_str(),code,s.c_str(),this);
+	else {
+	    String s;
+	    Thread::errorString(s,code);
+	    Debug(m_engine,DebugNote,"JBConnect(%s) SRV query for '%s' failed: %d '%s' [%p]",
+		m_stream.c_str(),query.c_str(),code,s.c_str(),this);
+	}
     }
     // Try to resolve the domain
     if (connect(sock,m_domain,port)) {

@@ -333,6 +333,10 @@ SslSocket::SslSocket(SOCKET handle, bool server, int verify, SslContext* context
 	    ::SSL_set_ex_data(m_ssl,s_index,this);
 	::SSL_set_verify(m_ssl,verify,0);
 	::SSL_set_fd(m_ssl,handle);
+	BIO* bio = ::SSL_get_rbio(m_ssl);
+	if (!(bio && BIO_set_close(bio,BIO_NOCLOSE)))
+	    Debug(&__plugin,DebugGoOn,"SslSocket::SslSocket(%d) no BIO or cannot set NOCLOSE [%p]",
+		handle,this);
 	if (server)
 	    ::SSL_set_accept_state(m_ssl);
 	else
@@ -358,8 +362,7 @@ bool SslSocket::terminate()
 	::SSL_shutdown(m_ssl);
 	::SSL_free(m_ssl);
 	m_ssl = 0;
-	// SSL_free also destroys the BIO and the socket so get rid of them
-	detach();
+	// SSL_free also destroys the BIO
     }
     unlock();
     return Socket::terminate();

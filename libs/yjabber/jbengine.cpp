@@ -609,7 +609,7 @@ void JBConnect::connect()
 	    query = "_xmpp-server._tcp.";
 	query << m_domain;
 	ObjList srv;
-	int code = m_port ? Resolver::srvQuery(query,srv);
+	int code = Resolver::srvQuery(query,srv);
 	if (exiting(sock))
 	    return;
 	if (!code) {

@@ -543,6 +543,23 @@ void YJBEngine::processEvent(JBEvent* ev)
 		XmlElement* xml = ev->releaseXml();
 		addValidParam(*m,"subject",XMPPUtils::subject(*xml));
 		addValidParam(*m,"body",XMPPUtils::body(*xml));
+		String tmp("delay");
+		XmlElement* delay = xml->findFirstChild(&tmp,&XMPPUtils::s_ns[XMPPNamespace::Delay]);
+		if (delay) {
+		    String* time = delay->getAttribute("stamp");
+		    unsigned int sec = (unsigned int)-1;
+		    if (!TelEngine::null(time))
+			sec = XMPPUtils::decodeDateTimeSec(*time);
+		    if (sec != (unsigned int)-1) {
+			m->addParam("delay_time",String(sec));
+			addValidParam(*m,"delay_text",delay->getText());
+			JabberID from(delay->attribute("from"));
+			if (from)
+			    m->addParam("delay_by",from);
+			else
+			    m->addParam("delay_by",ev->stream()->remote());
+		    }
+		}
 		m->addParam(new NamedPointer("xml",xml));
 		Engine::enqueue(m);
 	    }
@@ -599,8 +616,61 @@ void YJBEngine::connectStream(JBStream* stream)
 // Process 'user.roster' messages
 bool YJBEngine::handleUserRoster(Message& msg, const String& line)
 {
-    Debug(this,DebugStub,"YJBEngine::handleUserRoster() not implemented!");
-    return false;
+    String* oper = msg.getParam("operation");
+    if (TelEngine::null(oper))
+	return false;
+    bool upd = (*oper == "update");
+    if (!upd && *oper != "delete") {
+	DDebug(this,DebugStub,"handleUserRoster() oper=%s not implemented!",oper->c_str());
+	return false;
+    }
+    JBClientStream* s = find(line);
+    if (!s)
+	return false;
+    JabberID contact(msg.getValue("contact"));
+    DDebug(this,DebugAll,"handleUserRoster() line=%s oper=%s contact=%s",
+	line.c_str(),oper->c_str(),contact.c_str());
+
+    s->lock();
+    bool same = TelEngine::null(contact) || contact.bare() == s->local().bare();
+    s->unlock();
+    if (same) {
+	TelEngine::destruct(s);
+	return false;
+    }
+
+    XmlElement* query = XMPPUtils::createIq(XMPPUtils::IqSet,0,0);
+    XmlElement* x = XMPPUtils::createElement(XmlTag::Query,XMPPNamespace::Roster);
+    query->addChild(x);
+    XmlElement* item = new XmlElement("item");
+    item->setAttribute("jid",contact.bare());
+    x->addChild(item);
+    if (upd) {
+	item->setAttributeValid("name",msg.getValue("name"));
+	String* grp = msg.getParam("groups");
+	if (grp) {
+	    ObjList* list = grp->split(',',false);
+	    for (ObjList* o = list->skipNull(); o; o = o->skipNext())
+		item->addChild(XMPPUtils::createElement(XmlTag::Group,o->get()->toString()));
+	    TelEngine::destruct(list);
+	}
+	// Arbitrary children
+	String* tmp = msg.getParam("extra");
+	if (tmp) {
+	    ObjList* list = tmp->split(',',false);
+	    for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
+		NamedString* ns = msg.getParam(o->get()->toString());
+		if (ns)
+		    item->addChild(XMPPUtils::createElement(ns->name(),*ns));
+	    }
+	    TelEngine::destruct(list);
+	}
+    }
+    else
+	item->setAttribute("subscription","remove");
+    bool ok = s->sendStanza(query);
+    TelEngine::destruct(s);
+    return ok;
 }
 
 // Process 'user.update' messages
@@ -684,8 +754,25 @@ bool YJBEngine::handleJabberAccount(Message& msg, const String& line)
 // Process 'resource.subscribe' messages
 bool YJBEngine::handleResSubscribe(Message& msg, const String& line)
 {
-    Debug(this,DebugStub,"YJBEngine::handleResSubscribe() not implemented!");
-    return false;
+    String* oper = msg.getParam("operation");
+    if (TelEngine::null(oper))
+	return false;
+    bool sub = (*oper == "subscribe");
+    if (!sub && *oper != "unsubscribe")
+	return false;
+    JabberID to(msg.getValue("to"));
+    if (!to.node())
+	return false;
+    DDebug(this,DebugAll,"handleResSubscribe() line=%s oper=%s to=%s",
+	line.c_str(),oper->c_str(),to.c_str());
+    JBClientStream* s = find(line);
+    if (!s)
+	return false;
+    XmlElement* p = XMPPUtils::createPresence(0,to.bare(),
+	sub ? XMPPUtils::Subscribe : XMPPUtils::Unsubscribe);
+    bool ok = s->sendStanza(p);
+    TelEngine::destruct(s);
+    return ok;
 }
 
 // Process 'resource.notify' messages
@@ -694,14 +781,23 @@ bool YJBEngine::handleResNotify(Message& msg, const String& line)
     String* oper = msg.getParam("operation");
     if (TelEngine::null(oper))
 	return false;
-    DDebug(this,DebugAll,"handleResNotify() line=%s oper=%s",
-	line.c_str(),TelEngine::c_safe(oper));
+    DDebug(this,DebugAll,"handleResNotify() line=%s oper=%s",line.c_str(),oper->c_str());
     JBClientStream* s = find(line);
     if (!s)
 	return false;
     // Use a while to break to the end
     bool ok = false;
     while (true) {
+	bool sub = (*oper == "subscribed");
+	if (sub || *oper == "unsubscribed") {
+	    JabberID to(msg.getValue("to"));
+	    if (to.node()) {
+		XmlElement* p = XMPPUtils::createPresence(0,to.bare(),
+		    sub ? XMPPUtils::Subscribed : XMPPUtils::Unsubscribed);
+		ok = s->sendStanza(p);
+	    }
+	    break;
+	}
 	Debug(this,DebugStub,"handleResNotify() oper=%s not implemented!",
 	    oper->c_str());
 	break;
@@ -1021,7 +1117,7 @@ static void addRosterItem(NamedList& list, XmlElement& x, const String& id,
     pref << ".";
     addValidParam(list,pref + "name",x.attribute("name"));
     addValidParam(list,pref + "subscription",x.attribute("subscription"));
-    NamedString* groups = new NamedString("groups");
+    NamedString* groups = new NamedString(pref + "groups");
     list.addParam(groups);
     // Groups and other children
     const String* ns = &XMPPUtils::s_ns[XMPPNamespace::Roster];

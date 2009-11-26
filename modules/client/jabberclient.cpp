@@ -322,11 +322,17 @@ public:
     // Build a Message. Complete module, protocol and line parameters
     inline Message* message(const char* msg, JBStream* stream = 0) {
 	    Message* m = new Message(msg);
-	    m->addParam("module",name());
-	    m->addParam("protocol","jabber");
-	    if (stream)
-		m->addParam("account",stream->name());
+	    complete(*m,stream);
 	    return m;
+	}
+    // Complete module, protocol and line parameters
+    inline void complete(Message& m, JBStream* stream = 0) {
+	    m.addParam("module",name());
+	    m.addParam("protocol","jabber");
+	    if (stream) {
+		m.addParam("account",stream->name());
+		m.addParam("line",stream->name());
+	    }
 	}
     // Retrieve the line (account) from a message
     inline String* getLine(Message& msg) {
@@ -1000,7 +1006,7 @@ void YJBEngine::processIqStanza(JBEvent* ev)
     }
     // Route the iq
     Message m("jabber.iq");
-    m.addParam("module",__plugin.name());
+    __plugin.complete(m,ev->stream());
     m.addParam("from",ev->from().bare());
     m.addParam("from_instance",ev->from().resource());
     m.addParam("to",ev->to().bare());

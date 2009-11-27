@@ -1371,8 +1371,36 @@ void JBClientEngine::cleanup(bool final, bool waitTerminate)
     TelEngine::destruct(m_process);
 }
 
+// Find a stream by account
+JBClientStream* JBClientEngine::findAccount(const String& account)
+{
+    if (!account)
+	return 0;
+    RefPointer<JBStreamSetList> list;
+    getStreamList(list,JBStream::c2s);
+    if (!list)
+	return 0;
+    JBClientStream* found = 0;
+    list->lock();
+    for (ObjList* o = list->sets().skipNull(); !found && o; o = o->skipNext()) {
+	JBStreamSet* set = static_cast<JBStreamSet*>(o->get());
+	for (ObjList* s = set->clients().skipNull(); s; s = s->skipNext()) {
+	    found = static_cast<JBClientStream*>(s->get());
+	    if (account == found->account())
+		break;
+	    found = 0;
+	}
+    }
+    if (found && !found->ref())
+	found = 0;
+    list->unlock();
+    list = 0;
+    return found;
+}
+
 // Build an outgoing client stream
-JBClientStream* JBClientEngine::create(const String& account, const NamedList& params)
+JBClientStream* JBClientEngine::create(const String& account, const NamedList& params,
+    const String& name)
 {
     if (!account)
 	return 0;
@@ -1385,9 +1413,9 @@ JBClientStream* JBClientEngine::create(const String& account, const NamedList& p
 	return 0;
     }
     Lock lock(this);
-    JBClientStream* stream = static_cast<JBClientStream*>(findStream(account));
+    JBClientStream* stream = static_cast<JBClientStream*>(findAccount(account));
     if (!stream) {
-	stream = new JBClientStream(this,jid,account,params);
+	stream = new JBClientStream(this,jid,account,params,name);
 	stream->ref();
 	addStream(stream);
     }

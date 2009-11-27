@@ -163,7 +163,7 @@ public:
     // Process events
     virtual void processEvent(JBEvent* ev);
     // Build an internal stream name from node name and stream index
-    virtual void buildStreamName(String& name);
+    virtual void buildStreamName(String& name, const JBStream* stream);
     // Start stream TLS
     virtual void encryptStream(JBStream* stream);
     // Connect an outgoing stream
@@ -949,10 +949,12 @@ void YJBEngine::processEvent(JBEvent* ev)
 }
 
 // Build an internal stream name from node name and stream index
-void YJBEngine::buildStreamName(String& name)
+void YJBEngine::buildStreamName(String& name, const JBStream* stream)
 {
 //    name << Engine::nodeName() << "/";
-    JBServerEngine::buildStreamName(name);
+    JBServerEngine::buildStreamName(name,stream);
+    if (stream)
+	name = String(stream->typeName()) + "/" + name;
 }
 
 // Start stream TLS

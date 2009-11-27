@@ -803,14 +803,14 @@ public:
      * Get the name of a stream state
      * @return The name of the stream state
      */
-    inline const char* stateName()
+    inline const char* stateName() const
 	{ return lookup(state(),s_stateName); }
 
     /**
      * Get the name of a stream type
      * @return The name of the stream type
      */
-    inline const char* typeName()
+    inline const char* typeName() const
 	{ return lookup(type(),s_typeName); }
 
     /**
@@ -1222,9 +1222,17 @@ public:
      * @param jid User jid
      * @param account Account (stream) name
      * @param params Stream parameters
+     * @param name Optional stream name
      */
     JBClientStream(JBEngine* engine, const JabberID& jid, const String& account,
-	const NamedList& params);
+	const NamedList& params, const char* name = 0);
+
+    /**
+     * Retrieve stream's account
+     * @return Stream account
+     */
+    inline const String& account() const
+	{ return m_account; }
 
     /**
      * Retrieve stream's user data
@@ -1340,6 +1348,7 @@ private:
 	    return id && id->length() == 1 && (*id)[0] == m_registerReq;
 	}
 
+    String m_account;                    // Stream account
     GenObject* m_userData;               // User (upper layer) data
     String m_password;                   // The password
     String m_newPassword;                // New password
@@ -1728,8 +1737,9 @@ public:
     /**
      * Build an internal stream name
      * @param name Destination buffer
+     * @param stream Stream requesting it
      */
-    virtual void buildStreamName(String& name)
+    virtual void buildStreamName(String& name, const JBStream* stream)
 	{}
 
     /**
@@ -1906,8 +1916,9 @@ public:
     /**
      * Build an internal stream name
      * @param name Destination buffer
+     * @param stream Stream requesting it
      */
-    virtual void buildStreamName(String& name)
+    virtual void buildStreamName(String& name, const JBStream* stream)
 	{ name << "stream/" << getStreamIndex(); }
 
     /**
@@ -2018,12 +2029,21 @@ public:
     virtual void cleanup(bool final = false, bool waitTerminate = true);
 
     /**
+     * Find a stream by account
+     * @param account Account name
+     * @return Referenced JBClientStream pointer or 0
+     */
+    JBClientStream* findAccount(const String& account);
+
+    /**
      * Build an outgoing client stream
-     * @param account Account (stream) name
+     * @param account Account name
      * @param params Stream parameters
+     * @param name Optional stream name
      * @return Referenced JBClientStream pointer or 0 if a stream already exists
      */
-    JBClientStream* create(const String& account, const NamedList& params);
+    JBClientStream* create(const String& account, const NamedList& params,
+	const String& name = String::empty());
 
 protected:
     /**

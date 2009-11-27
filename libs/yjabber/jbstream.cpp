@@ -144,7 +144,7 @@ JBStream::JBStream(JBEngine* engine, Socket* socket, Type t, bool ssl)
 {
     if (ssl)
 	setFlags(StreamSecured | StreamTls);
-    m_engine->buildStreamName(m_name);
+    m_engine->buildStreamName(m_name,this);
     debugName(m_name);
     debugChain(m_engine);
     Debug(this,DebugAll,"JBStream::JBStream(%p,%p,%s,%s) incoming [%p]",
@@ -173,7 +173,7 @@ JBStream::JBStream(JBEngine* engine, Type t, const JabberID& local, const Jabber
     m_xmlDom(0), m_socket(0), m_socketFlags(0), m_connectPort(0)
 {
     if (!m_name)
-	m_engine->buildStreamName(m_name);
+	m_engine->buildStreamName(m_name,this);
     debugName(m_name);
     debugChain(m_engine);
     if (params) {
@@ -1990,9 +1990,9 @@ JBClientStream::JBClientStream(JBEngine* engine, Socket* socket, bool ssl)
 }
 
 JBClientStream::JBClientStream(JBEngine* engine, const JabberID& jid, const String& account,
-    const NamedList& params)
-    : JBStream(engine,c2s,jid,jid.domain(),account,&params),
-    m_userData(0), m_registerReq(0)
+    const NamedList& params, const char* name)
+    : JBStream(engine,c2s,jid,jid.domain(),TelEngine::null(name) ? account.c_str() : name,&params),
+    m_account(account), m_userData(0), m_registerReq(0)
 {
     m_password = params.getValue("password");
 }

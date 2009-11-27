@@ -216,11 +216,6 @@ class YJBEngine : public JBClientEngine
 public:
     YJBEngine();
     ~YJBEngine();
-    // Find a c2s stream by account
-    inline JBClientStream* find(const String& name) {
-	    JBStream* s = findStream(name);
-	    return s ? s->clientStream() : 0;
-	}
     // Retrieve stream data from a stream
     inline StreamData* streamData(JBClientStream* s)
 	{ return s ? static_cast<StreamData*>(s->userData()) : 0; }
@@ -320,18 +315,18 @@ public:
 	    return module && *module == name();
 	}
     // Build a Message. Complete module, protocol and line parameters
-    inline Message* message(const char* msg, JBStream* stream = 0) {
+    inline Message* message(const char* msg, JBClientStream* stream = 0) {
 	    Message* m = new Message(msg);
 	    complete(*m,stream);
 	    return m;
 	}
     // Complete module, protocol and line parameters
-    inline void complete(Message& m, JBStream* stream = 0) {
+    inline void complete(Message& m, JBClientStream* stream = 0) {
 	    m.addParam("module",name());
 	    m.addParam("protocol","jabber");
 	    if (stream) {
-		m.addParam("account",stream->name());
-		m.addParam("line",stream->name());
+		m.addParam("account",stream->account());
+		m.addParam("line",stream->account());
 	    }
 	}
     // Retrieve the line (account) from a message
@@ -542,7 +537,7 @@ void YJBEngine::processEvent(JBEvent* ev)
     switch (ev->type()) {
 	case JBEvent::Message:
 	    if (ev->element()) {
-		Message* m = __plugin.message("msg.execute",ev->stream());
+		Message* m = __plugin.message("msg.execute",ev->clientStream());
 		m->addParam("type",ev->stanzaType());
 		m->addParam("caller",ev->from().bare());
 		addValidParam(*m,"caller_instance",ev->from().resource());
@@ -630,7 +625,7 @@ bool YJBEngine::handleUserRoster(Message& msg, const String& line)
 	DDebug(this,DebugStub,"handleUserRoster() oper=%s not implemented!",oper->c_str());
 	return false;
     }
-    JBClientStream* s = find(line);
+    JBClientStream* s = findAccount(line);
     if (!s)
 	return false;
     JabberID contact(msg.getValue("contact"));
@@ -685,7 +680,7 @@ bool YJBEngine::handleUserUpdate(Message& msg, const String& line)
     String* oper = msg.getParam("operation");
     if (TelEngine::null(oper))
 	return false;
-    JBClientStream* s = find(line);
+    JBClientStream* s = findAccount(line);
     if (!s)
 	return false;
     bool ok = false;
@@ -704,7 +699,7 @@ bool YJBEngine::handleUserUpdate(Message& msg, const String& line)
 // Process 'jabber.iq' messages
 bool YJBEngine::handleJabberIq(Message& msg, const String& line)
 {
-    JBClientStream* s = find(line);
+    JBClientStream* s = findAccount(line);
     if (!s)
 	return false;
     XmlElement* xml = XMPPUtils::getXml(msg);
@@ -716,7 +711,7 @@ bool YJBEngine::handleJabberIq(Message& msg, const String& line)
 // Process 'jabber.account' messages
 bool YJBEngine::handleJabberAccount(Message& msg, const String& line)
 {
-    JBClientStream* s = find(line);
+    JBClientStream* s = findAccount(line);
     if (!s)
 	return false;
     // Use a while to break to the end
@@ -775,7 +770,7 @@ bool YJBEngine::handleResSubscribe(Message& msg, const String& line)
 	return false;
     DDebug(this,DebugAll,"handleResSubscribe() line=%s oper=%s to=%s",
 	line.c_str(),oper->c_str(),to.c_str());
-    JBClientStream* s = find(line);
+    JBClientStream* s = findAccount(line);
     if (!s)
 	return false;
     XmlElement* p = XMPPUtils::createPresence(0,to.bare(),
@@ -792,7 +787,7 @@ bool YJBEngine::handleResNotify(Message& msg, const String& line)
     if (TelEngine::null(oper))
 	return false;
     DDebug(this,DebugAll,"handleResNotify() line=%s oper=%s",line.c_str(),oper->c_str());
-    JBClientStream* s = find(line);
+    JBClientStream* s = findAccount(line);
     if (!s)
 	return false;
     // Use a while to break to the end
@@ -834,7 +829,7 @@ bool YJBEngine::handleResNotify(Message& msg, const String& line)
 bool YJBEngine::handleMsgExecute(Message& msg, const String& line)
 {
     DDebug(this,DebugAll,"handleMsgExecute() line=%s",line.c_str());
-    JBClientStream* s = find(line);
+    JBClientStream* s = findAccount(line);
     if (!s)
 	return false;
     XmlElement* xml = XMPPUtils::getChatXml(msg);
@@ -875,11 +870,12 @@ bool YJBEngine::handleUserLogin(Message& msg, const String& line)
     Debug(&__plugin,DebugAll,"handleUserLogin(%s) account=%s",
 	String::boolText(login),line.c_str());
 
-    JBClientStream* stream = s_jabber->find(line);
+    JBClientStream* stream = s_jabber->findAccount(line);
     bool ok = false;
     if (login) {
 	if (!stream) {
-	    stream = s_jabber->create(line,msg);
+	    stream = s_jabber->create(line,msg,
+		String(::lookup(JBStream::c2s,JBStream::s_typeName)) + "/" + line);
 	    if (stream) {
 		// Build user data and set it
 		Lock lock(stream);
@@ -939,7 +935,7 @@ void YJBEngine::processPresenceStanza(JBEvent* ev)
 	    sdata->removeResource(ev->from().bare(),ev->from().resource());
 	lock.drop();
 	// Notify
-	Message* m = __plugin.message("resource.notify",ev->stream());
+	Message* m = __plugin.message("resource.notify",ev->clientStream());
 	m->addParam("operation",online ? "online" : "offline");
 	m->addParam("contact",ev->from().bare());
 	if (ev->from().resource())
@@ -965,7 +961,7 @@ void YJBEngine::processPresenceStanza(JBEvent* ev)
     }
     bool subReq = (pres == XMPPUtils::Subscribe);
     if (subReq || pres == XMPPUtils::Unsubscribe) {
-	Message* m = __plugin.message("resource.subscribe",ev->stream());
+	Message* m = __plugin.message("resource.subscribe",ev->clientStream());
 	m->addParam("operation",ev->stanzaType());
 	m->addParam("subscriber",ev->from().bare());
 	Engine::enqueue(m);
@@ -1024,7 +1020,7 @@ void YJBEngine::processIqStanza(JBEvent* ev)
     }
     // Route the iq
     Message m("jabber.iq");
-    __plugin.complete(m,ev->stream());
+    __plugin.complete(m,ev->clientStream());
     m.addParam("from",ev->from().bare());
     m.addParam("from_instance",ev->from().resource());
     m.addParam("to",ev->to().bare());
@@ -1076,7 +1072,7 @@ void YJBEngine::processStreamEvent(JBEvent* ev, bool ok)
 	    sendPresence(ev->stream(),true,pres);
     }
 
-    Message* m = __plugin.message("user.notify",ev->stream());
+    Message* m = __plugin.message("user.notify",ev->clientStream());
     m->addParam("username",ev->stream()->local().node());
     m->addParam("server",ev->stream()->local().domain());
     m->addParam("jid",ev->stream()->local());
@@ -1170,7 +1166,7 @@ void YJBEngine::processRoster(JBEvent* ev, XmlElement* service, int tag, int iqT
 	String* jid = x->getAttribute("jid");
 	if (TelEngine::null(jid))
 	    return;
-	Message* m = __plugin.message("user.roster",ev->stream());
+	Message* m = __plugin.message("user.roster",ev->clientStream());
 	String* sub = x->getAttribute("subscription");
 	bool upd = !sub || *sub != "remove";
 	ev->stream()->lock();
@@ -1198,7 +1194,7 @@ void YJBEngine::processRoster(JBEvent* ev, XmlElement* service, int tag, int iqT
 	// Handle 'query' responses
 	if (!service || tag != XmlTag::Query || ev->id() != s_rosterQueryId)
 	    return;
-	Message* m = __plugin.message("user.roster",ev->stream());
+	Message* m = __plugin.message("user.roster",ev->clientStream());
 	m->addParam("operation","update");
 	NamedString* count = new NamedString("contact.count");
 	m->addParam(count);

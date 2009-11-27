@@ -753,6 +753,10 @@ bool YJBEngine::handleJabberAccount(Message& msg, const String& line)
 	}
 	break;
     }
+    SocketAddr a;
+    s->localAddr(a);
+    if (a.host())
+	msg.addParam("localip",a.host());
     TelEngine::destruct(s);
     return true;
 }

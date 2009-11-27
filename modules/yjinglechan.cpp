@@ -118,7 +118,7 @@ public:
     };
     // Outgoing constructor
     YJGConnection(Message& msg, const char* caller, const char* called, bool available,
-	const NamedList& caps, const char* file);
+	const NamedList& caps, const char* file, const char* localip);
     // Incoming contructor
     YJGConnection(JGEvent* event);
     virtual ~YJGConnection();
@@ -300,6 +300,7 @@ private:
     String m_formats;                    // Formats received in call.execute
     String m_subject;                    // Connection subject
     String m_line;                       // Connection line
+    String m_localip;                    // Local address
     bool m_offerRawTransport;            // Offer RAW transport on outgoing session
     bool m_offerIceTransport;            // Offer ICE transport on outgoing session
     // Crypto (for contents created by us)
@@ -383,7 +384,7 @@ public:
 	    return module && *module == name();
 	}
     // Build a message to be sent by us
-    inline Message* message(const char* msg) {
+    inline Message* message(const char* msg) const {
 	    Message* m = new Message(msg);
 	    m->addParam("module",name());
 	    return m;
@@ -455,6 +456,9 @@ public:
 	}
     // Notify presence
     void notifyPresence(const JabberID& from, const char* to, bool online);
+    // Build and dispatch a 'jabber.account' message. Returns it on success
+    Message* checkAccount(const String& line, bool query = false,
+	const JabberID* contact = 0) const;
 private:
     // Update the list of domains
     void setDomains(const String& list);
@@ -672,13 +676,14 @@ void YJGEngineWorker::run()
  */
 // Outgoing call
 YJGConnection::YJGConnection(Message& msg, const char* caller, const char* called,
-    bool available, const NamedList& caps, const char* file)
+    bool available, const NamedList& caps, const char* file, const char* localip)
     : Channel(&plugin,0,true),
     m_mutex(true,"YJGConnection"),
     m_state(Pending), m_session(0), m_rtpStarted(false), m_acceptRelay(s_acceptRelay),
     m_sessVersion(s_sessVersion),
     m_local(caller), m_remote(called), m_audioContent(0),
     m_callerPrompt(msg.getValue("callerprompt")),
+    m_localip(localip),
     m_offerRawTransport(true), m_offerIceTransport(true),
     m_secure(s_useCrypto), m_secureRequired(s_cryptoMandatory),
     m_hangup(false), m_timeout(0), m_transferring(false), m_recvTransferStanza(0),
@@ -775,6 +780,14 @@ YJGConnection::YJGConnection(JGEvent* event)
     m_dataFlags(0), m_ftStatus(FTNone), m_ftHostDirection(FTHostNone)
 {
     m_line = m_session->line();
+    // Update local ip in non server mode
+    if (!s_serverMode && m_line) {
+	Message* m = plugin.checkAccount(m_line);
+	if (m) {
+	    m_localip = m->getValue("localip");
+	    TelEngine::destruct(m);
+	}
+    }
     if (event->jingle()) {
         // Check if this call is transferred
 	XmlElement* trans = XMPPUtils::findFirstChild(*event->jingle(),XmlTag::Transfer);
@@ -2434,18 +2447,12 @@ bool YJGConnection::initLocalCandidates(JGSessionContent& content, bool sendTran
     m.addParam("media","audio");
     m.addParam("getsession","true");
     m.addParam("anyssrc","true");
-    if (!plugin.addLocalIp(m)) {
+    if (m_localip)
+	m.addParam("localip",m_localip);
+    else if (!plugin.addLocalIp(m)) {
 	JGRtpCandidate* remote = content.m_rtpRemoteCandidates.findByComponent(1);
 	if (remote && remote->m_address)
 	    m.addParam("remoteip",remote->m_address);
-#if 0
-	else {
-	    String rem;
-	    getRemoteAddr(rem);
-	    if (rem)
-		m.addParam("remoteip",rem);
-	}
-#endif
     }
     ObjList* cr = content.m_rtpMedia.m_cryptoRemote.skipNull();
     if (cr) {
@@ -3193,9 +3200,11 @@ bool YJGDriver::hasLine(const String& line) const
 {
     if (!line)
 	return false;
-    Message m("jabber.account");
-    m.addParam("account",line);
-    return Engine::dispatch(m);
+    Message* m = checkAccount(line);
+    if (!m)
+	return false;
+    TelEngine::destruct(m);
+    return true;
 }
 
 // Make outgoing calls
@@ -3217,6 +3226,7 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	return false;
     }
     const char* line = msg.getValue("line");
+    String localip;
     // Set caller
     if (s_serverMode) {
 	const char* cr = msg.getValue("caller");
@@ -3266,30 +3276,24 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
     else {
 	// Get line data
 	if (!TelEngine::null(line)) {
-	    Message m("jabber.account");
-	    m.addParam("module",name());
-	    m.addParam("line",line);
-	    m.addParam("query",String::boolText(true));
-	    if (called) {
-		m.addParam("contact",called.bare());
-		if (called.resource())
-		    m.addParam("instance",called.resource());
-	    }
-	    if (Engine::dispatch(m)) {
-		caller.set(m.getValue("jid"));
+	    Message* m = plugin.checkAccount(line,true,&called);
+	    if (m) {
+		caller.set(m->getValue("jid"));
 		if (caller.isFull()) {
 		    if (called && !called.resource())
-			called.resource(m.getValue("instance"));
+			called.resource(m->getValue("instance"));
 		    // Copy resource caps
-		    unsigned int n = m.length();
+		    unsigned int n = m->length();
 		    for (unsigned int i = 0; i < n; i++) {
-			NamedString* ns = m.getParam(i);
+			NamedString* ns = m->getParam(i);
 			if (ns && ns->name().startsWith("caps."))
 			    caps.addParam(ns->name(),*ns);
 		    }
 		}
 		else
 		    caller.set("");
+		localip = m->getValue("localip");
+		TelEngine::destruct(m);
 	    }
 	    if (!caller)
 		DDebug(this,DebugInfo,"No stream for line=%s",line);
@@ -3404,7 +3408,7 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	"msgExecute. caller='%s' called='%s' online=%s filetransfer=%s",
 	caller.c_str(),called.c_str(),String::boolText(online),
 	String::boolText(!file.null()));
-    YJGConnection* conn = new YJGConnection(msg,caller,called,online,caps,file);
+    YJGConnection* conn = new YJGConnection(msg,caller,called,online,caps,file,localip);
     bool ok = conn->state() != YJGConnection::Terminated;
     lock.drop();
     if (ok) {
@@ -3781,6 +3785,27 @@ void YJGDriver::notifyPresence(const JabberID& from, const char* to, bool online
 		break;
 	}
     }
+}
+
+// Build and dispatch a 'jabber.account' message. Returns it on success
+Message* YJGDriver::checkAccount(const String& line, bool query,
+    const JabberID* contact) const
+{
+    if (!line)
+	return 0;
+    Message* m = message("jabber.account");
+    m->addParam("module",name());
+    m->addParam("line",line);
+    if (query)
+	m->addParam("query",String::boolText(true));
+    if (contact) {
+	m->addParam("contact",contact->bare());
+	if (contact->resource())
+	    m->addParam("instance",contact->resource());
+    }
+    if (!Engine::dispatch(m))
+	TelEngine::destruct(m);
+    return m;
 }
 
 // Update the list of domains

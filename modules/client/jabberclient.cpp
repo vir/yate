@@ -797,21 +797,35 @@ bool YJBEngine::handleResNotify(Message& msg, const String& line)
 	return false;
     // Use a while to break to the end
     bool ok = false;
+    XmlElement* xml = 0;
+    JabberID to(msg.getValue("to"));
     while (true) {
+	if (*oper == "online") {
+	    s->lock();
+	    StreamData* sdata = streamData(s);
+	    if (sdata)
+		sdata->setPresence(msg.getValue("priority",s_priority),
+		   msg.getValue("show"),msg.getValue("status"));
+	    xml = StreamData::buildPresence(sdata);
+	    s->unlock();
+	    // Directed presence
+	    if (xml && to.node())
+		xml->setAttribute("to",to);
+	    break;
+	}
 	bool sub = (*oper == "subscribed");
 	if (sub || *oper == "unsubscribed") {
-	    JabberID to(msg.getValue("to"));
-	    if (to.node()) {
-		XmlElement* p = XMPPUtils::createPresence(0,to.bare(),
+	    if (to.node())
+		xml = XMPPUtils::createPresence(0,to.bare(),
 		    sub ? XMPPUtils::Subscribed : XMPPUtils::Unsubscribed);
-		ok = s->sendStanza(p);
-	    }
 	    break;
 	}
 	Debug(this,DebugStub,"handleResNotify() oper=%s not implemented!",
 	    oper->c_str());
 	break;
     }
+    if (xml)
+	ok = s->sendStanza(xml);
     TelEngine::destruct(s);
     return ok;
 }

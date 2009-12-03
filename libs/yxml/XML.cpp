@@ -1941,6 +1941,8 @@ void XmlText::toString(String& dump, bool esc, const String& indent,
     dump << indent;
     if (auth)
 	addAuth(dump,parent ? parent->toString() : String::empty(),m_text,esc,auth);
+    else if (esc)
+        XmlSaxParser::escape(dump,m_text);
     else
 	dump << m_text;
 }

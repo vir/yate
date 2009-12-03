@@ -350,7 +350,7 @@ class WpSpan : public SignallingCircuitSpan
 {
     friend class WpSpanThread;
 public:
-    WpSpan(const NamedList& params);
+    WpSpan(const NamedList& params, const char* debugname);
     virtual ~WpSpan();
     // Initialize data channel span. Return false on failure
     bool init(const NamedList& config, const NamedList& defaults, NamedList& params);
@@ -765,7 +765,7 @@ SignallingComponent* WpInterface::create(const String& type, const NamedList& na
     }
     NamedList* general = cfg.getSection("general");
     NamedList dummy("general");
-    WpSpan* data = new WpSpan(name);
+    WpSpan* data = new WpSpan(name,sectName);
     if (data->init(*config,general?*general:dummy,(NamedList&)name))
 	return data;
     TelEngine::destruct(data);
@@ -1317,8 +1317,8 @@ unsigned char WpSpan::s_bitswap[256] = {
 
 // Initialize B-channel group
 // Create circuits. Start worker thread
-WpSpan::WpSpan(const NamedList& params)
-    : SignallingCircuitSpan(params.getValue("debugname"),
+WpSpan::WpSpan(const NamedList& params, const char* debugname)
+    : SignallingCircuitSpan(params.getValue("debugname",debugname),
 	static_cast<SignallingCircuitGroup*>(params.getObject("SignallingCircuitGroup"))),
     m_socket(m_group),
     m_thread(0),

@@ -585,8 +585,9 @@ bool DataSource::attach(DataConsumer* consumer, bool override)
     Lock mylock(this);
     DataSource*& src = override ? consumer->m_override : consumer->m_source;
     if (src != this) {
-	if (src)
-	    src->detach(consumer);
+	RefPointer<DataSource> src2(src);
+	if (src2)
+	    src2->detach(consumer);
 	src = this;
     }
     consumer->synchronize(this);

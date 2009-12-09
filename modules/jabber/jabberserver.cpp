@@ -1530,21 +1530,27 @@ void YJBEngine::processPresenceStanza(JBEvent* ev)
 	case XMPPUtils::Subscribed:
 	case XMPPUtils::Unsubscribed:
 	case XMPPUtils::Probe:
-	    if (ev->to()) {
+	case XMPPUtils::PresenceError:
+	    if (ev->to() || pres == XMPPUtils::PresenceError) {
 		Message* m = __plugin.message("resource.notify");
 		m->addParam("operation",ev->stanzaType());
 		m->addParam("from",ev->from().bare());
 		m->addParam("from_local",String::boolText(c2s != 0));
-		m->addParam("to",ev->to().bare());
-		m->addParam("to_local",String::boolText(hasDomain(ev->to().domain())));
+		if (ev->to()) {
+		    m->addParam("to",ev->to().bare());
+		    m->addParam("to_local",String::boolText(hasDomain(ev->to().domain())));
+		}
+		if (pres == XMPPUtils::PresenceError) {
+		    if (ev->from().resource())
+			m->addParam("from_instance",ev->from().resource());
+		    if (ev->to().resource())
+			m->addParam("to_instance",ev->to().resource());
+		}
 		addXmlParam(*m,ev->element());
 		Engine::enqueue(m);
 		return;
 	    }
 	    break;
-	case XMPPUtils::PresenceError:
-	    // TODO: enqueue some message
-	    return;
     }
     ev->sendStanzaError(XMPPError::ServiceUnavailable);
 }

@@ -3638,6 +3638,12 @@ public:
     static void wait(unsigned long maxwait);
 
     /**
+     * Get the maximum wait time used for debugging purposes
+     * @return Maximum time in microseconds, zero if no maximum is set
+     */
+    static unsigned long wait();
+
+    /**
      * Start actually using lockables, for platforms where these objects are not
      *  usable in global object constructors.
      * This method must be called at least once somewhere from main() but

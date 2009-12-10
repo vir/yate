@@ -511,6 +511,10 @@ void Lockable::wait(unsigned long maxwait)
     s_maxwait = maxwait;
 }
 
+unsigned long Lockable::wait()
+{
+    return s_maxwait;
+}
 
 Mutex::Mutex(bool recursive, const char* name)
     : m_private(0)

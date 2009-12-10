@@ -1682,7 +1682,17 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 				    s_lateabrt = true;
 				    break;
 				case 'm':
-				    Lockable::wait(10000000);
+				    {
+					unsigned long lockWait = Lockable::wait();
+					if (lockWait) {
+					    lockWait /= 2;
+					    if (lockWait < Thread::idleUsec())
+						lockWait = Thread::idleUsec();
+					}
+					else
+					    lockWait = 10000000;
+					Lockable::wait(lockWait);
+				    }
 				    break;
 #ifdef RTLD_GLOBAL
 				case 'l':

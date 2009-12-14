@@ -33,10 +33,6 @@
 
 #include "yateclass.h"
 
-#ifdef HAVE_SCTP_NETINET
-#include <netinet/sctp.h>
-#endif
-
 #include <string.h>
 
 #undef HAS_AF_UNIX
@@ -1309,6 +1305,11 @@ bool Socket::canRetry() const
 #endif
 }
 
+bool Socket::canSelect() const
+{
+    return canSelect(m_handle);
+}
+
 bool Socket::bind(struct sockaddr* addr, socklen_t addrlen)
 {
     return checkError(::bind(m_handle,addr,addrlen));
@@ -1347,28 +1348,6 @@ SOCKET Socket::acceptHandle(struct sockaddr* addr, socklen_t* addrlen)
     else
 	clearError();
     return res;
-}
-
-Socket* Socket::peelOff(unsigned int assoc)
-{
-    SOCKET sock = peelOffHandle(assoc);
-    return (sock == invalidHandle()) ? 0 : new Socket(sock);
-}
-
-SOCKET Socket::peelOffHandle(unsigned int assoc)
-{
-#ifdef SCTP_SOCKOPT_PEELOFF
-    sctp_peeloff_arg_t buffer;
-    buffer.associd = assoc;
-    buffer.sd = invalidHandle();
-    socklen_t length = sizeof(buffer);
-    if (!getOption(SOL_SCTP, SCTP_SOCKOPT_PEELOFF, &buffer, &length))
-	return invalidHandle();
-    return buffer.sd;
-#else
-    Debug(DebugMild,"Socket::peelOffHandle() not supported on this platform");
-    return invalidHandle();
-#endif
 }
 
 bool Socket::connect(struct sockaddr* addr, socklen_t addrlen)

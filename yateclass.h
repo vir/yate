@@ -1251,7 +1251,7 @@ public:
      * @return True for success, false if index was larger than the array
      */
     bool addRow(ObjList* row = 0, int index = -1);
-    
+
     /**
      * Insert a column of objects
      * @param column List of objects to insert or NULL
@@ -1259,7 +1259,7 @@ public:
      * @return True for success, false if index was larger than the array
      */
     bool addColumn(ObjList* column = 0, int index = -1);
-    
+
     /**
      * Delete an entire row of objects
      * @param index Number of the row to delete
@@ -1273,7 +1273,7 @@ public:
      * @return True for success, false if index was out of bounds
      */
     bool delColumn(int index);
- 
+
     /**
      * Retrive an object from the array
      * @param column Number of the column in the array
@@ -1298,7 +1298,7 @@ public:
      * @return True for success, false if indexes were out of bounds
      */
     bool set(GenObject* obj, int column, int row);
-    
+
     /**
      * Get the number of rows in the array
      * @return Total number of rows
@@ -2442,7 +2442,7 @@ private:
 };
 
 /**
- * An ObjList or HashList iterator that can be used even when list elements 
+ * An ObjList or HashList iterator that can be used even when list elements
  * are changed while iterating. Note that it will not detect that an item was
  * removed and another with the same address was inserted back in list.
  * @short Class used to iterate the items of a list
@@ -2886,7 +2886,7 @@ public:
      *  exactly 1 separator. Only 1 leading or 1 trailing separators are allowed
      * @param data Input character string
      * @param len Length of the input string
-     * @param sep Separator character used between octets. 0 if no separator is expected 
+     * @param sep Separator character used between octets. 0 if no separator is expected
      * @return True if the input string was succesfully parsed, false otherwise
      */
     bool unHexify(const char* data, unsigned int len, char sep = 0);
@@ -3200,7 +3200,7 @@ public:
      *  decode must be a valid one
      * @return True on succes, false if an invalid (non Base64) character was
      *  found or the number of Base64 characters is invalid (must be a multiple
-     *  of 4 plus 0, 2 or 3 characters) or the padding is incorrect 
+     *  of 4 plus 0, 2 or 3 characters) or the padding is incorrect
      */
     bool decode(DataBlock& dest, bool liberal = true);
 
@@ -4806,9 +4806,9 @@ public:
 
     /**
      * Build the MD5 hex digest of a file. The file must be opened for read access.
-     * This method will move the file pointer 
+     * This method will move the file pointer
      * @param buffer Destination buffer
-     * @return True on success 
+     * @return True on success
      */
     virtual bool md5(String& buffer);
 
@@ -4860,7 +4860,7 @@ public:
      * @param name The file to build MD5 from
      * @param buffer Destination buffer
      * @param error Optional pointer to error code to be filled on failure
-     * @return True on success 
+     * @return True on success
      */
     static bool md5(const char* name, String& buffer, int* error = 0);
 
@@ -4868,7 +4868,7 @@ public:
      * Create a folder (directory). It only creates the last directory in the path
      * @param path The folder path
      * @param error Optional pointer to error code to be filled on failure
-     * @return True on success 
+     * @return True on success
      */
     static bool mkDir(const char* path, int* error = 0);
 
@@ -4876,7 +4876,7 @@ public:
      * Remove an empty folder (directory)
      * @param path The folder path
      * @param error Optional pointer to error code to be filled on failure
-     * @return True on success 
+     * @return True on success
      */
     static bool rmDir(const char* path, int* error = 0);
 
@@ -4960,7 +4960,7 @@ public:
      * @param protocol Specific protocol for the domain, 0 to use default
      * @return True if socket was created, false if an error occured
      */
-    bool create(int domain, int type, int protocol = 0);
+    virtual bool create(int domain, int type, int protocol = 0);
 
     /**
      * Closes the socket handle, terminates the connection
@@ -5019,7 +5019,7 @@ public:
      * @param length Size of the supplied buffer
      * @return True if operation was successfull, false if an error occured
      */
-    bool setOption(int level, int name, const void* value = 0, socklen_t length = 0);
+    virtual bool setOption(int level, int name, const void* value = 0, socklen_t length = 0);
 
     /**
      * Get socket options
@@ -5029,15 +5029,15 @@ public:
      * @param length Pointer to size of the supplied buffer, will be filled on return
      * @return True if operation was successfull, false if an error occured
      */
-    bool getOption(int level, int name, void* buffer, socklen_t* length);
+    virtual bool getOption(int level, int name, void* buffer, socklen_t* length);
 
     /**
      * Set the Type of Service on the IP level of this socket
      * @param tos New TOS bits to set
      * @return True if operation was successfull, false if an error occured
      */
-    bool setTOS(int tos);
-    
+    virtual bool setTOS(int tos);
+
     /**
      * Set the blocking or non-blocking operation mode of the socket
      * @param block True if I/O operations should block, false for non-blocking
@@ -5052,7 +5052,7 @@ public:
      * @param exclusive Grant exclusive access to the address
      * @return True if operation was successfull, false if an error occured
      */
-    bool setReuse(bool reuse = true, bool exclusive = false);
+    virtual bool setReuse(bool reuse = true, bool exclusive = false);
 
     /**
      * Set the way closing a socket is handled
@@ -5060,7 +5060,7 @@ public:
      *  negative to no wait (close in background), zero to reset connection
      * @return True if operation was successfull, false if an error occured
      */
-    bool setLinger(int seconds = -1);
+    virtual bool setLinger(int seconds = -1);
 
     /**
      * Associates the socket with a local address
@@ -5068,7 +5068,7 @@ public:
      * @param addrlen Length of the address structure
      * @return True if operation was successfull, false if an error occured
      */
-    bool bind(struct sockaddr* addr, socklen_t addrlen);
+    virtual bool bind(struct sockaddr* addr, socklen_t addrlen);
 
     /**
      * Associates the socket with a local address
@@ -5083,7 +5083,7 @@ public:
      * @param backlog Maximum length of the queue of pending connections, 0 for system maximum
      * @return True if operation was successfull, false if an error occured
      */
-    bool listen(unsigned int backlog = 0);
+    virtual bool listen(unsigned int backlog = 0);
 
     /**
      * Create a new socket for an incoming connection attempt on a listening socket
@@ -5091,7 +5091,7 @@ public:
      * @param addrlen Length of the address structure on input, length of address data on return
      * @return Open socket to the new connection or NULL on failure
      */
-    Socket* accept(struct sockaddr* addr = 0, socklen_t* addrlen = 0);
+    virtual Socket* accept(struct sockaddr* addr = 0, socklen_t* addrlen = 0);
 
     /**
      * Create a new socket for an incoming connection attempt on a listening socket
@@ -5119,22 +5119,7 @@ public:
      * Check if this socket object can be used in a select
      * @return True if this socket can be safely used in select
      */
-    inline bool canSelect() const
-	{ return canSelect(handle()); }
-
-    /**
-     * Create a new socket by peeling off an association from a SCTP socket
-     * @param assoc Identifier of the association to peel off
-     * @return Open socket to the association or NULL on failure
-     */
-    Socket* peelOff(unsigned int assoc);
-
-    /**
-     * Create a new socket by peeling off an association from a SCTP socket
-     * @param assoc Identifier of the association to peel off
-     * @return Operating system handle to the association or @ref invalidHandle() on failure
-     */
-    SOCKET peelOffHandle(unsigned int assoc);
+    virtual bool canSelect() const;
 
     /**
      * Connects the socket to a remote address
@@ -5142,7 +5127,7 @@ public:
      * @param addrlen Length of the address structure
      * @return True if operation was successfull, false if an error occured
      */
-    bool connect(struct sockaddr* addr, socklen_t addrlen);
+    virtual bool connect(struct sockaddr* addr, socklen_t addrlen);
 
     /**
      * Connects the socket to a remote address
@@ -5158,7 +5143,7 @@ public:
      * @param stopWrites Request to shut down the write side of the socket
      * @return True if operation was successfull, false if an error occured
      */
-    bool shutdown(bool stopReads, bool stopWrites);
+    virtual bool shutdown(bool stopReads, bool stopWrites);
 
     /**
      * Retrive the address of the local socket of a connection
@@ -5166,7 +5151,7 @@ public:
      * @param addrlen Length of the address structure on input, length of address data on return
      * @return True if operation was successfull, false if an error occured
      */
-    bool getSockName(struct sockaddr* addr, socklen_t* addrlen);
+    virtual bool getSockName(struct sockaddr* addr, socklen_t* addrlen);
 
     /**
      * Retrive the address of the local socket of a connection
@@ -5181,7 +5166,7 @@ public:
      * @param addrlen Length of the address structure on input, length of address data on return
      * @return True if operation was successfull, false if an error occured
      */
-    bool getPeerName(struct sockaddr* addr, socklen_t* addrlen);
+    virtual bool getPeerName(struct sockaddr* addr, socklen_t* addrlen);
 
     /**
      * Retrive the address of the remote socket of a connection
@@ -5199,7 +5184,7 @@ public:
      * @param flags Operating system specific bit flags that change the behaviour
      * @return Number of bytes transferred, @ref socketError() if an error occurred
      */
-    int sendTo(const void* buffer, int length, const struct sockaddr* addr, socklen_t adrlen, int flags = 0);
+    virtual int sendTo(const void* buffer, int length, const struct sockaddr* addr, socklen_t adrlen, int flags = 0);
 
     /**
      * Send a message over a connected or unconnected socket
@@ -5219,7 +5204,7 @@ public:
      * @param flags Operating system specific bit flags that change the behaviour
      * @return Number of bytes transferred, @ref socketError() if an error occurred
      */
-    int send(const void* buffer, int length, int flags = 0);
+    virtual int send(const void* buffer, int length, int flags = 0);
 
     /**
      * Write data to a connected stream socket
@@ -5238,7 +5223,7 @@ public:
      * @param flags Operating system specific bit flags that change the behaviour
      * @return Number of bytes transferred, @ref socketError() if an error occurred
      */
-    int recvFrom(void* buffer, int length, struct sockaddr* addr = 0, socklen_t* adrlen = 0, int flags = 0);
+    virtual int recvFrom(void* buffer, int length, struct sockaddr* addr = 0, socklen_t* adrlen = 0, int flags = 0);
 
     /**
      * Receive a message from a connected or unconnected socket
@@ -5257,7 +5242,7 @@ public:
      * @param flags Operating system specific bit flags that change the behaviour
      * @return Number of bytes transferred, @ref socketError() if an error occurred
      */
-    int recv(void* buffer, int length, int flags = 0);
+    virtual int recv(void* buffer, int length, int flags = 0);
 
     /**
      * Receive data from a connected stream socket
@@ -5275,7 +5260,7 @@ public:
      * @param timeout Maximum time until the method returns, NULL for blocking
      * @return True if operation was successfull, false if an error occured
      */
-    bool select(bool* readok, bool* writeok, bool* except, struct timeval* timeout = 0);
+    virtual bool select(bool* readok, bool* writeok, bool* except, struct timeval* timeout = 0);
 
     /**
      * Determines the availability to perform synchronous I/O of the socket

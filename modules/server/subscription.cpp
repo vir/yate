@@ -2451,6 +2451,7 @@ bool SubscriptionModule::imRoute(Message& msg)
 	    msg.c_str(),caller->c_str(),called->c_str());
 	return false;
     }
+    bool auth = msg.getBoolValue("auth");
     bool ok = true;
     unsigned int n = 0;
     u->lock();
@@ -2459,12 +2460,12 @@ bool SubscriptionModule::imRoute(Message& msg)
 	String* skip = 0;
 	if (*caller == *called)
 	    skip = msg.getParam("caller_instance");
-	else if (!u->findContact(*caller))
-	    ok = false;
+	else
+	    ok = !auth || u->findContact(*caller);
 	if (ok)
 	    n = u->instances().addListParam(msg,skip);
     }
-    else if (u->findContact(*caller) || *caller == *called) {
+    else if (!auth || u->findContact(*caller) || *caller == *called) {
 	Instance* inst = u->instances().findInstance(*tmp);
 	if (inst)
 	    inst->addListParam(msg,++n);

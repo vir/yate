@@ -3691,7 +3691,7 @@ bool YJGDriver::handleImExecute(Message& msg)
     if (!local)
 	return false;
     Message* m = 0;
-    lock();
+    Lock lock(this);
     // Check if target is in our domain(s)
     if (!(local.node() && handleDomain(local.domain())))
 	return false;
@@ -3707,7 +3707,7 @@ bool YJGDriver::handleImExecute(Message& msg)
 	    conn,conn->debugName(),remote.c_str(),local.c_str());
 	m = conn->message("chan.text");
     }
-    unlock();
+    lock.drop();
     if (m) {
 	m->addParam("text",msg.getValue("body"));
 	Engine::enqueue(m);

@@ -1332,14 +1332,11 @@ bool YJBEngine::handleMsgExecute(Message& msg)
     JabberID called(msg.getValue("called"));
     if (!caller.resource())
 	caller.resource(msg.getValue("caller_instance"));
-    if (!(caller.resource()))
-	return false;
     DDebug(this,DebugAll,"handleMsgExecute() caller=%s called=%s",caller.c_str(),called.c_str());
     if (hasDomain(called.domain()) && !hasComponent(called.domain())) {
-	// RFC 3921 11.1: Send chat only to clients with non-negative resource priority
+	// RFC 3921 11.1: Broadcast chat only to clients with non-negative resource priority
 	bool ok = false;
 	unsigned int n = msg.getIntValue("instance.count");
-	int flags = JBStream::AvailableResource | JBStream::PositivePriority;
 	if (n) {
 	    ObjList resources;
 	    for (unsigned int i = 1; i <= n; i++) {
@@ -1350,13 +1347,13 @@ bool YJBEngine::handleMsgExecute(Message& msg)
 		    continue;
 		resources.append(new String(tmp->c_str()));
 	    }
-	    ObjList* streams = findClientStreams(true,called,resources,flags);
+	    ObjList* streams = findClientStreams(true,called,resources,
+		JBStream::AvailableResource | JBStream::PositivePriority);
 	    if (streams) {
 		XmlElement* xml = XMPPUtils::getChatXml(msg);
 		if (xml) {
-		    called.resource("");
 		    xml->setAttribute("from",caller);
-		    xml->setAttribute("to",called);
+		    xml->setAttribute("to",called.bare());
 		}
 		ok = sendStanza(xml,streams);
 	    }
@@ -1366,7 +1363,7 @@ bool YJBEngine::handleMsgExecute(Message& msg)
 	    if (!called.resource())
 		called.resource(msg.getValue("called_instance"));
 	    JBClientStream* stream = called.resource() ? findClientStream(true,called) : 0;
-	    bool ok = stream && stream->flag(flags);
+	    ok = stream && stream->flag(JBStream::AvailableResource);
 	    if (ok) {
 		XmlElement* xml = XMPPUtils::getChatXml(msg);
 		if (xml) {
@@ -2639,14 +2636,35 @@ void JBPendingWorker::processChat(JBPendingJob& job)
     JBEvent* ev = job.m_event;
     XDebug(&__plugin,DebugAll,"JBPendingWorker(%u) processChat xml=%p from=%s to=%s [%p]",
 	m_index,ev->element(),ev->from().c_str(),ev->to().c_str(),this);
+    int mType = XMPPUtils::msgType(ev->stanzaType());
     if (!ev->to()) {
-	job.sendChatErrorStanza(XMPPError::ServiceUnavailable);
+	if (mType != XMPPUtils::MsgError)
+	    job.sendChatErrorStanza(XMPPError::ServiceUnavailable);
 	return;
     }
     XMPPError::Type error = XMPPError::NoError;
     bool localTarget = s_jabber->hasDomain(ev->to().domain()) &&
 	!s_jabber->hasComponent(ev->to().domain()) &&
 	!s_jabber->isServerItemDomain(ev->to().domain());
+
+    // NOTE: RFC3921bis recommends to broadcast only 'headline' messages
+    //  for bare jid target (or target resource not found)
+    //  and send 'chat' and 'normal' to the highest priority resource
+
+    // Process now some stanzas with bare jid target in local domain
+    if (localTarget && !ev->to().resource()) {
+	// See RFC3921bis 8.3
+	// Discard errors
+	if (mType == XMPPUtils::MsgError)
+	    return;
+	// Deny groupchat without resource
+	if (mType == XMPPUtils::GroupChat) {
+	    if (mType != XMPPUtils::MsgError)
+		job.sendChatErrorStanza(XMPPError::ServiceUnavailable);
+	    return;
+	}
+    }
+
     Message m("msg.route");
     while (true) {
 	__plugin.complete(m);
@@ -2659,12 +2677,43 @@ void JBPendingWorker::processChat(JBPendingJob& job)
 	    bool ok = Engine::dispatch(m);
 	    if (!ok || (m.retValue() == "-") || (m.retValue() == "error")) {
 		// Check if an 'instance.count' parameter was returned:
-		//  the target has the source in its roster
+		//  the target exists
 		if (m.getParam("instance.count"))
 		    error = XMPPError::ItemNotFound;
 		else
 		    error = XMPPError::ServiceUnavailable;
 		break;
+	    }
+	    // Directed message with instance not found
+	    if (ev->to().resource()) {
+		if (m.getIntValue("instance.count")) {
+		    // Clear instance.count to signal directed message
+		    m.clearParam("instance.count");
+		}
+		else {
+		    // See RFC3921bis 8.2.2
+		    // Discard errors
+		    if (mType == XMPPUtils::MsgError)
+			break;
+		    // Deny groupchat
+		    if (mType == XMPPUtils::GroupChat) {
+			error = XMPPError::ServiceUnavailable;
+			break;
+		    }
+		    // Broadcast all other types
+		    m.clearParam("called_instance");
+		    ok = Engine::dispatch(m);
+		    if (!ok || (m.retValue() == "-") || (m.retValue() == "error")) {
+			// Check if an 'instance.count' parameter was returned: the target exists
+			if (m.getParam("instance.count"))
+			    error = XMPPError::ItemNotFound;
+			else
+			    error = XMPPError::ServiceUnavailable;
+			break;
+		    }
+		    // Add again the called_instance param to signal directed message
+		    m.addParam("called_instance",ev->to().resource());
+		}
 	    }
 	}
 	// Check route(s)
@@ -2689,17 +2738,21 @@ void JBPendingWorker::processChat(JBPendingJob& job)
 	if (!xml)
 	    xml = XMPPUtils::getChatXml(m);
 	if (xml) {
-	    Message* f = s_jabber->jabberFeature(xml,XMPPNamespace::MsgOffline,
-		job.m_streamType,ev->from(),ev->to());
-	    f->addParam("time",String(m.msgTime().sec()));
-	    ok = Engine::dispatch(f);
-	    TelEngine::destruct(f);
+	    // Save only 'chat' and 'normal' messages
+	    if (mType == XMPPUtils::Chat || mType == XMPPUtils::Normal) {
+		Message* f = s_jabber->jabberFeature(xml,XMPPNamespace::MsgOffline,
+		    job.m_streamType,ev->from(),ev->to());
+		f->addParam("time",String(m.msgTime().sec()));
+		ok = Engine::dispatch(f);
+		TelEngine::destruct(f);
+	    }
 	}
 	if (ok)
 	    return;
 	error = XMPPError::ServiceUnavailable;
     }
-    job.sendChatErrorStanza(error);
+    if (mType != XMPPUtils::MsgError)
+	job.sendChatErrorStanza(error);
 }
 
 // Process iq jobs

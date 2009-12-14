@@ -215,7 +215,11 @@ public:
 	Command= 45,                     // http://jabber.org/protocol/command
 	MsgOffline= 46,                  // msgoffline
 	ComponentAccept = 47,            // jabber:component:accept
-	Count = 48,
+	Muc = 48,                        // http://jabber.org/protocol/muc
+	MucAdmin = 49,                   // http://jabber.org/protocol/muc#admin
+	MucOwner = 50,                   // http://jabber.org/protocol/muc#owner
+	MucUser = 51,                    // http://jabber.org/protocol/muc#user
+	Count = 52,
     };
 
     /**
@@ -1018,7 +1022,6 @@ public:
 	HeadLine,                        // headline
 	Normal,                          // normal
 	MsgError,                        // error
-	MsgNone
     };
 
     /**
@@ -1850,7 +1853,7 @@ public:
      * @return Message type as enumeration
      */
     static inline MsgType msgType(const char* text)
-	{ return (MsgType)lookup(text,s_msg,TelEngine::null(text) ? Chat : MsgNone); }
+	{ return (MsgType)lookup(text,s_msg,Normal); }
 
     /**
      * Get the text from a message type

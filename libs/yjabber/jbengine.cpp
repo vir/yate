@@ -2228,10 +2228,10 @@ void JBEntityCapsList::addCaps(NamedList& list, JBEntityCaps& caps)
 	jingleVersion = 1;
     else if (caps.m_features.get(XMPPNamespace::JingleSession))
 	jingleVersion = 0;
+    NamedString* params = new NamedString("caps.params");
+    list.addParam("caps.id",caps.toString());
+    list.addParam(params);
     if (jingleVersion != -1) {
-	list.addParam("caps.id",caps.toString());
-	NamedString* params = new NamedString("caps.params");
-	list.addParam(params);
 	params->append("caps.jingle_version");
 	list.addParam("caps.jingle_version",String(jingleVersion));
 	switch (jingleVersion) {
@@ -2245,6 +2245,7 @@ void JBEntityCapsList::addCaps(NamedList& list, JBEntityCaps& caps)
 		break;
 	}
     }
+    CHECK_NS(XMPPNamespace::Muc,"caps.muc");
 #undef CHECK_NS
 }
 

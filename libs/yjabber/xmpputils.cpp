@@ -225,6 +225,10 @@ const String XMPPNamespace::s_array[Count] = {
     "http://jabber.org/protocol/command",                  // Command
     "msgoffline",                                          // MsgOffline
     "jabber:component:accept",                             // ComponentAccept
+    "http://jabber.org/protocol/muc",                      // Muc
+    "http://jabber.org/protocol/muc#admin",                // MucAdmin
+    "http://jabber.org/protocol/muc#owner",                // MucOwner
+    "http://jabber.org/protocol/muc#user",                 // MucUser
 };
 
 const String XMPPError::s_array[Count] = {
@@ -1550,7 +1554,9 @@ XmlElement* XMPPUtils::getChatXml(NamedList& list, const char* param,
     XmlElement* xml = getXml(list,param,extra);
     if (xml || !build)
 	return xml;
-    xml = createMessage(msgType(list.getValue("type")),0,0,list.getValue("id"),0);
+    String* type = list.getParam("type");
+    MsgType t = TelEngine::null(type) ? Chat : msgType(*type);
+    xml = createMessage(t,0,0,list.getValue("id"),0);
     const char* subject = list.getValue("subject");
     if (!TelEngine::null(subject))
 	xml->addChild(createSubject(subject));

@@ -1386,6 +1386,8 @@ bool YJBEngine::handleMsgExecute(Message& msg)
     bool ok = false;
     XmlElement* xml = XMPPUtils::getChatXml(msg);
     if (xml) {
+	if (!called.resource())
+	    called.resource(msg.getValue("called_instance"));
 	xml->setAttribute("from",caller);
 	xml->setAttribute("to",called);
 	ok = stream->sendStanza(xml);

@@ -2891,7 +2891,7 @@ QtEventProxy::QtEventProxy(Type type, QApplication* app)
 		QTimer* timer = new QTimer(this);
 		timer->setObjectName("qtClientIdleTimer");
 		QtClient::connectObjects(timer,SIGNAL(timeout()),this,SLOT(timerTick()));
-		timer->start(1);
+		timer->start(0);
 	    }
 	    break;
 	case AllHidden:
@@ -2909,6 +2909,7 @@ void QtEventProxy::timerTick()
 {
     if (Client::self())
 	Client::self()->idleActions();
+    Thread::idle();
 }
 
 void QtEventProxy::allHidden()

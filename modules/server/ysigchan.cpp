@@ -690,6 +690,11 @@ SigChannel::SigChannel(SignallingEvent* event)
     plugin.copySigMsgParams(*m_route,event,&params);
     if (m_route->getBoolValue("overlapped") && !m_route->getValue("called"))
 	m_route->setParam("called","off-hook");
+    if (event->message()) {
+	const String* pres = event->message()->params().getParam("callerpres");
+	if (pres && (*pres == "restricted"))
+	    m_route->setParam("privacy",String::boolText(true));
+    }
 }
 
 // Construct an unstarted outgoing channel
@@ -803,7 +808,10 @@ bool SigChannel::startCall(Message& msg, SigTrunk* trunk)
     sigMsg->params().copyParam(msg,"format");
     sigMsg->params().copyParam(msg,"callernumtype");
     sigMsg->params().copyParam(msg,"callernumplan");
-    sigMsg->params().copyParam(msg,"callerpres");
+    if (msg.getValue("privacy") && msg.getBoolValue("privacy",true))
+	sigMsg->params().addParam("callerpres","restricted");
+    else
+	sigMsg->params().copyParam(msg,"callerpres");
     sigMsg->params().copyParam(msg,"callerscreening");
     sigMsg->params().copyParam(msg,"callednumtype");
     sigMsg->params().copyParam(msg,"callednumplan");

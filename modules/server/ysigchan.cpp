@@ -1364,6 +1364,7 @@ bool SigDriver::msgExecute(Message& msg, String& dest)
     bool ok = sigCh->startCall(msg,*trunk);
     if (ok) {
 	if (sigCh->connect(peer,msg.getValue("reason"))) {
+	    sigCh->callConnect(msg);
 	    msg.setParam("peerid",sigCh->id());
 	    msg.setParam("targetid",sigCh->id());
         }

@@ -2726,6 +2726,7 @@ bool AnalogDriver::msgExecute(Message& msg, String& dest)
     error = msg.getValue("error");
     if (!error) {
 	if (analogCh->connect(peer,msg.getValue("reason"))) {
+	    analogCh->callConnect(msg);
 	    msg.setParam("peerid",analogCh->id());
 	    msg.setParam("targetid",analogCh->id());
         }

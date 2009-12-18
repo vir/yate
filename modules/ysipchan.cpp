@@ -2444,7 +2444,6 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	lock.drop();
 	setReason("",0);
 	setStatus("answered",Established);
-	maxcall(0);
 	Message *m = message("call.answered");
 	copySipHeaders(*m,*msg);
 	decodeIsupBody(*m,msg->body);

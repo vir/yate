@@ -1302,7 +1302,6 @@ void YateH323Connection::OnEstablished()
 	return;
     }
     m_chan->status("answered");
-    m_chan->maxcall(0);
     Message *m = m_chan->message("call.answered",false,true);
     lock.drop();
     if (m_passtrough) {

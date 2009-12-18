@@ -441,7 +441,10 @@ Message* Channel::getDisconnect(const char* reason)
 void Channel::status(const char* newstat)
 {
     m_status = newstat;
-    m_answered = m_answered || (m_status == "answered");
+    if (!m_answered && (m_status == "answered")) {
+	m_maxcall = 0;
+	m_answered = true;
+    }
 }
 
 const char* Channel::direction() const

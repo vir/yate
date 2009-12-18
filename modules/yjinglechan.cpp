@@ -1554,7 +1554,6 @@ bool YJGConnection::handleEvent(JGEvent* event)
 	    }
 	    if (!m_audioContent)
 		resetCurrentAudioContent(true,false,true);
-	    maxcall(0);
 	    status("answered");
 	    Engine::enqueue(message("call.answered",false,true));
 	    break;

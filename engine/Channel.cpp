@@ -629,6 +629,7 @@ void Channel::msgStatus(Message& msg)
 // Find a data endpoint to process it
 bool Channel::msgControl(Message& msg)
 {
+    setMaxcall(msg);
     for (ObjList* o = m_data.skipNull(); o; o = o->skipNext()) {
 	DataEndpoint* dep = static_cast<DataEndpoint*>(o->get());
 	if (dep->control(msg))

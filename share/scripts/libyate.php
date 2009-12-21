@@ -56,8 +56,12 @@ class Yate
      */
     static function Output($str)
     {
-	global $yate_stderr, $yate_socket;
-	if ($yate_socket)
+	global $yate_stderr, $yate_output;
+	if ($str === true)
+	    $yate_output = true;
+	else if ($str === false)
+	    $yate_output = false;
+	else if ($yate_output)
 	    _yate_print("%%>output:$str\n");
 	else
 	    fputs($yate_stderr, "$str\n");
@@ -429,11 +433,13 @@ class Yate
      */
     static function Init($async = false, $addr = "", $port = 0, $role = "")
     {
-	global $yate_stdin, $yate_stdout, $yate_stderr, $yate_socket, $yate_debug;
+	global $yate_stdin, $yate_stdout, $yate_stderr;
+	global $yate_socket, $yate_debug, $yate_output;
 	$yate_debug = false;
 	$yate_stdin = false;
 	$yate_stdout = false;
 	$yate_stderr = false;
+	$yate_output = false;
 	if ($addr) {
 	    $ok = false;
 	    if ($port) {
@@ -450,6 +456,7 @@ class Yate
 		Yate::Output("Socket error, initialization failed");
 		return false;
 	    }
+	    $yate_output = true;
 	}
 	else {
 	    $yate_socket = false;

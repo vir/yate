@@ -415,10 +415,15 @@ public:
 	    m->addParam("module",name());
 	    return m;
 	}
+    // Dispatch a message
+    inline bool dispatch(Message& msg) const {
+	    msg.setParam("module",name());
+	    return Engine::dispatch(msg);
+	}
     // Enqueue a resource.notify for a given instance
     void notify(bool online, const String& from, const String& to,
 	const String& fromInst = String::empty(), const String& toInst = String::empty(),
-	const char* data = 0);
+	const char* data = 0, bool sync = false);
     // Notify (un)subscribed
     void subscribed(bool sub, const String& from, const String& to);
     // Enqueue a resource.subscribe
@@ -1505,7 +1510,7 @@ void SubscriptionModule::initialize()
 // Enqueue a resource.notify for a given instance
 // data: optional data used to override instance's data
 void SubscriptionModule::notify(bool online, const String& from, const String& to,
-    const String& fromInst, const String& toInst, const char* data)
+    const String& fromInst, const String& toInst, const char* data, bool sync)
 {
     const char* what = online ? "online" : "offline";
     Debug(this,DebugAll,"notify=%s notifier=%s (%s) subscriber=%s (%s)",
@@ -1520,7 +1525,12 @@ void SubscriptionModule::notify(bool online, const String& from, const String& t
 	m->addParam("to_instance",toInst);
     if (!TelEngine::null(data))
 	m->addParam("data",data);
-    Engine::enqueue(m);
+    if (!sync)
+	Engine::enqueue(m);
+    else {
+	Engine::dispatch(m);
+	TelEngine::destruct(m);
+    }
 }
 
 // Notify (un)subscribed
@@ -2032,6 +2042,7 @@ bool SubscriptionModule::handleResNotifySub(bool sub, const String& src, const S
 
     PresenceUser* from = msg.getBoolValue("from_local",true) ? m_users.getUser(src) : 0;
     PresenceUser* to = msg.getBoolValue("to_local",true) ? m_users.getUser(dest) : 0;
+    bool retVal = false;
     while (from) {
 	Lock lock(from);
 	Contact* c = from->findContact(dest);
@@ -2083,17 +2094,24 @@ bool SubscriptionModule::handleResNotifySub(bool sub, const String& src, const S
 		notify = false;
 	    TelEngine::destruct(updExist);
 	}
-	// Notify user roster change on success
-	if (notify)
-	    notifyRosterUpdate(src,dest);
-	// Notify user presence to contact if subscribed to its presence
-	if (notify) {
-	    if (to) {
-		Lock2 lck(from,to);
-		notifyInstances(sub,*from,*to);
+	if (!notify)
+	    break;
+	// Synchronous notify "unavailable' to contact if unsubscribed
+	// to make sure the notification is received before any other contact list changes
+	if (!sub)
+	    this->notify(false,src,dest,String::empty(),String::empty(),0,true);
+	notifyRosterUpdate(src,dest);
+	if (sub) {
+	    // Do nothing if the target is a local one
+	    // Re-dispatch the message to remote user and notify our presence
+	    if (!to) {
+		Lock lck(from);
+		if (from->instances().skipNull()) {
+		    __plugin.dispatch(msg);
+		    from->instances().notifyUpdate(true,src,dest,String::empty());
+		    retVal = true;
+		}
 	    }
-	    else
-		probe(src,dest);
 	}
 	break;
     }
@@ -2144,7 +2162,7 @@ bool SubscriptionModule::handleResNotifySub(bool sub, const String& src, const S
     }
     TelEngine::destruct(from);
     TelEngine::destruct(to);
-    return false;
+    return retVal;
 }
 
 // Handle resource.notify with operation probe

@@ -1257,7 +1257,7 @@ bool Engine::loadPluginDir(const String& relPath)
 		loadPlugin(path + PATH_SEP + entry.cFileName,false,
 		    s_cfg.getBoolValue("nounload",entry.cFileName));
 	}
-    } while (::FindNextFile(hf,&entry));
+    } while (::FindNextFile(hf,&entry) && !exiting());
     ::FindClose(hf);
 #else
     DIR *dir = ::opendir(path);
@@ -1266,7 +1266,7 @@ bool Engine::loadPluginDir(const String& relPath)
 	return false;
     }
     struct dirent *entry;
-    while ((entry = ::readdir(dir)) != 0) {
+    while (((entry = ::readdir(dir)) != 0) && !exiting()) {
 	XDebug(DebugInfo,"Found dir entry %s",entry->d_name);
 	int n = ::strlen(entry->d_name) - s_modsuffix.length();
 	if ((n > 0) && !::strcmp(entry->d_name+n,s_modsuffix)) {
@@ -1290,6 +1290,8 @@ void Engine::loadPlugins()
             NamedString *n = l->getParam(i);
             if (n && n->toBoolean())
                 loadPlugin(n->name());
+	    if (exiting())
+		break;
 	}
     }
     loadPluginDir(String::empty());
@@ -1301,6 +1303,8 @@ void Engine::loadPlugins()
     if (l) {
         unsigned int len = l->length();
         for (unsigned int i=0; i<len; i++) {
+	    if (exiting())
+		return;
             NamedString *n = l->getParam(i);
             if (n && n->toBoolean())
                 loadPlugin(n->name());
@@ -1310,6 +1314,8 @@ void Engine::loadPlugins()
 
 void Engine::initPlugins()
 {
+    if (exiting())
+	return;
     Output("Initializing plugins");
     if (dispatch("engine.init"))
 	Debug(DebugGoOn,"Message engine.init was unexpectedly handled!");
@@ -1317,6 +1323,10 @@ void Engine::initPlugins()
     for (; l; l = l->skipNext()) {
 	Plugin *p = static_cast<Plugin *>(l->get());
 	p->initialize();
+	if (exiting()) {
+	    Output("Initialization aborted, exiting...");
+	    return;
+	}
     }
     Output("Initialization complete");
 }

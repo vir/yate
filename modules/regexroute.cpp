@@ -609,15 +609,20 @@ void RegexRoutePlugin::initVars(NamedList* sect)
 void RegexRoutePlugin::initialize()
 {
     Output("Initializing module RegexRoute");
-    Lock lock(s_mutex);
-    s_cfg = Engine::configFile("regexroute");
-    s_cfg.load();
-    s_extended = s_cfg.getBoolValue("priorities","extended",false);
-    s_insensitive = s_cfg.getBoolValue("priorities","insensitive",false);
-    s_prerouteall = s_cfg.getBoolValue("priorities","prerouteall",false);
     TelEngine::destruct(m_preroute);
     TelEngine::destruct(m_route);
     s_extra.clear();
+    Lock lock(s_mutex);
+    s_cfg = Engine::configFile("regexroute");
+    s_cfg.load();
+    if (m_first) {
+	m_first = false;
+	initVars(s_cfg.getSection("$once"));
+    }
+    initVars(s_cfg.getSection("$init"));
+    s_extended = s_cfg.getBoolValue("priorities","extended",false);
+    s_insensitive = s_cfg.getBoolValue("priorities","insensitive",false);
+    s_prerouteall = s_cfg.getBoolValue("priorities","prerouteall",false);
     unsigned priority = s_cfg.getIntValue("priorities","preroute",100);
     if (priority) {
 	m_preroute = new PrerouteHandler(priority);
@@ -637,11 +642,6 @@ void RegexRoutePlugin::initialize()
 		Engine::install(new GenericHandler(n->name(),n->toInteger()));
 	}
     }
-    if (m_first) {
-	m_first = false;
-	initVars(s_cfg.getSection("$once"));
-    }
-    initVars(s_cfg.getSection("$init"));
 }
 
 INIT_PLUGIN(RegexRoutePlugin);

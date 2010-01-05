@@ -392,7 +392,8 @@ void PgModule::initialize()
 	if (!sec || (*sec == "general"))
 	    continue;
 	PgConn* conn = new PgConn(sec);
-	conn->initDb();
+	if (sec->getBoolValue("autostart",true))
+	    conn->initDb();
 	s_conns.insert(conn);
     }
 

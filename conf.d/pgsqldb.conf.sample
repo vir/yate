@@ -10,6 +10,9 @@
 ;[default]
 ; The section name is used as the database connection name
 
+; autostart: bool: Automatically initiate the connection on startup
+;autostart=yes
+
 ; timeout: int: Query timeout in milliseconds
 ;timeout=10000
 

@@ -128,8 +128,24 @@ bool PgConn::initDb(int retry)
     }
     PQsetnonblocking(m_conn,1);
     Thread::msleep(1);
+    PostgresPollingStatusType polling = PGRES_POLLING_OK;
     while (Time::now() < timeout) {
-	PQconnectPoll(m_conn);
+	if (PGRES_POLLING_WRITING == polling || PGRES_POLLING_READING == polling) {
+	    // the Postgres library should have done all this internally...
+	    SOCKET s = PQsocket(m_conn);
+	    struct timeval tm;
+	    Time::toTimeval(&tm,Thread::idleUsec());
+	    fd_set fs;
+	    FD_ZERO(&fs);
+	    FD_SET(s,&fs);
+	    ::select(s+1,
+		((PGRES_POLLING_READING == polling) ? &fs : 0),
+		((PGRES_POLLING_WRITING == polling) ? &fs : 0),
+		0,&tm);
+	    if (!FD_ISSET(s,&fs))
+		continue;
+	}
+	polling = PQconnectPoll(m_conn);
 	switch (PQstatus(m_conn)) {
 	    case CONNECTION_BAD:
 		Debug(&module,DebugWarn,"Connection for '%s' failed: %s",m_name.c_str(),PQerrorMessage(m_conn));
@@ -144,7 +160,7 @@ bool PgConn::initDb(int retry)
 	    default:
 		break;
 	}
-	Thread::yield();
+	Thread::idle();
     }
     Debug(&module,DebugWarn,"Connection timed out for '%s'",m_name.c_str());
     dropDb();

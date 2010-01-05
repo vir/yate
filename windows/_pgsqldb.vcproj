@@ -75,7 +75,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
-				AdditionalDependencies="libpq.lib"
+				AdditionalDependencies="libpq.lib ws2_32.lib"
 				OutputFile="Release/server/pgsqldb.yate"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -171,7 +171,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
-				AdditionalDependencies="libpq.lib"
+				AdditionalDependencies="libpq.lib ws2_32.lib"
 				OutputFile="Debug/server/pgsqldb.yate"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"

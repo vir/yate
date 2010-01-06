@@ -75,6 +75,9 @@
 [user.auth]
 ; Query and result name for the user.auth message
 ; The result must not be empty for password authentication to work
+; The designated result field is mandatory in the columns to prevent a
+;  configuration error from authorizing everybody. Use something
+;  like "SELECT NULL AS password" if you really don't need it ever
 
 ;query=SELECT password FROM users WHERE username='${username}' AND password IS NOT NULL AND password<>''
 ;result=password

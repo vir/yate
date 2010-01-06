@@ -268,24 +268,30 @@ static void copyParams2(Message &msg, Array* a, int row = 0)
     }
 }
 
-static void copyParams(Message &msg,Array *a,const char* resultName=0) {
+// copy parameters from multiple SQL result rows to a Message
+// returns true if resultName was found in columns
+
+static bool copyParams(Message &msg, Array *a, const String& resultName)
+{
     if (!a)
-	return;
+	return false;
+    bool ok = false;
     FallBackRoute* fallback = 0;
     for (int j=1; j <a->getRows();j++) {
 	Message* m = (j <= 1) ? &msg : new Message(msg);
 	for (int i=0; i<a->getColumns();i++) {
-	    String* s = YOBJECT(String,a->get(i,0));
-	    if (!(s && *s))
+	    const String* name = YOBJECT(String,a->get(i,0));
+	    if (!(name && *name))
 		continue;
-	    String name = *s;
-	    s = YOBJECT(String,a->get(i,j));
+	    bool res = (*name == resultName);
+	    ok = ok || res;
+	    const String* s = YOBJECT(String,a->get(i,j));
 	    if (!s)
 		continue;
-	    if (name == resultName)
+	    if (res)
 		m->retValue() = *s;
 	    else
-		m->setParam(name,*s);
+		m->setParam(*name,*s);
 	}	
 	if (j>1) {
 	    if (m->retValue().null()) {
@@ -310,6 +316,7 @@ static void copyParams(Message &msg,Array *a,const char* resultName=0) {
 	else
 	    fallback->destruct();
     }
+    return ok;
 }
 
 
@@ -435,7 +442,11 @@ bool AAAHandler::received(Message& msg)
 		if (m.getIntValue("rows") >=1)
 		{
 		    Array* a = static_cast<Array*>(m.userObject("Array"));
-		    copyParams(msg,a,m_result);
+		    if (!copyParams(msg,a,m_result)) {
+			Debug(&module,DebugWarn,"Misconfigured result column for '%s'",name().c_str());
+			msg.setParam("error","failure");
+			return false;
+		    }
 		    return true;
 		}
 	    return false;

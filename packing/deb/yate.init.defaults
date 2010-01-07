@@ -1,0 +1,14 @@
+# defaults for /etc/init.d/yate
+
+# 0: start at boot, 1: don't start
+NO_START=1
+
+# arguments passed to yate
+DAEMON_ARGS="-ds -p /var/run/yate.pid -l /var/log/yate -r -vvv"
+
+# yate user and group
+YATE_USER="root"
+YATE_GROUP="root"
+
+# nice
+NICE_LEVEL="-4"

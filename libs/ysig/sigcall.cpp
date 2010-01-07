@@ -430,7 +430,7 @@ SignallingCircuit::SignallingCircuit(Type type, unsigned int code,
       m_group(group), m_span(span),
       m_code(code), m_type(type),
       m_status(Disabled),
-      m_lock(0), m_lastEvent(0)
+      m_lock(0), m_lastEvent(0), m_noEvents(true)
 {
     XDebug(m_group,DebugAll,"SignallingCircuit::SignallingCircuit [%p]",this);
 }
@@ -441,7 +441,7 @@ SignallingCircuit::SignallingCircuit(Type type, unsigned int code, Status status
       m_group(group), m_span(span),
       m_code(code), m_type(type),
       m_status(status),
-      m_lock(0), m_lastEvent(0)
+      m_lock(0), m_lastEvent(0), m_noEvents(true)
 {
     XDebug(m_group,DebugAll,"SignallingCircuit::SignallingCircuit [%p]",this);
 }
@@ -468,12 +468,16 @@ bool SignallingCircuit::setParams(const NamedList& params)
 // Get first event from queue
 SignallingCircuitEvent* SignallingCircuit::getEvent(const Time& when)
 {
+    if (m_noEvents)
+	return 0;
     Lock lock(m_mutex);
     if (m_lastEvent)
 	return 0;
     ObjList* obj = m_events.skipNull();
-    if (!obj)
+    if (!obj) {
+	m_noEvents = true;
 	return 0;
+    }
     m_lastEvent = static_cast<SignallingCircuitEvent*>(m_events.remove(obj->get(),false));
     return m_lastEvent;
 }
@@ -526,6 +530,7 @@ void SignallingCircuit::addEvent(SignallingCircuitEvent* event)
     if (!event)
 	return;
     Lock lock(m_mutex);
+    m_noEvents = false;
     m_events.append(event);
 }
 

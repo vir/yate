@@ -1740,6 +1740,7 @@ private:
     int m_lock;                          // Circuit lock flags
     ObjList m_events;                    // In-band events
     SignallingCircuitEvent* m_lastEvent; // The last generated event
+    bool m_noEvents;                     // No events pending, exit quickly
 };
 
 /**

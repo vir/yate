@@ -140,6 +140,7 @@ static bool s_makeworker = true;
 static bool s_keepclosing = false;
 static bool s_nounload = false;
 static int s_super_handle = -1;
+static int s_run_attempt = 0;
 static bool s_localsymbol = false;
 static bool s_logtruncate = false;
 
@@ -298,6 +299,7 @@ bool EngineStatusHandler::received(Message &msg)
     msg.retValue() << ",handlers=" << Engine::self()->handlerCount();
     msg.retValue() << ",messages=" << Engine::self()->messageCount();
     msg.retValue() << ",supervised=" << (s_super_handle >= 0);
+    msg.retValue() << ",runattempt=" << s_run_attempt;
     msg.retValue() << ",threads=" << Thread::count();
     msg.retValue() << ",workers=" << EnginePrivate::count;
     msg.retValue() << ",mutexes=" << Mutex::count();
@@ -719,6 +721,7 @@ static int supervise(void)
 	while (::waitpid(-1,0,WNOHANG) > 0)
 	    ;
 	rotatelogs();
+	s_run_attempt++;
 	s_childpid = ::fork();
 	if (s_childpid < 0) {
 	    int err = errno;
@@ -999,6 +1002,7 @@ int Engine::run()
     s_params.addParam("logfile",s_logfile);
     s_params.addParam("clientmode",String::boolText(clientMode()));
     s_params.addParam("supervised",String::boolText(s_super_handle >= 0));
+    s_params.addParam("runattempt",String(s_run_attempt));
     s_params.addParam("maxworkers",String(s_maxworkers));
     DDebug(DebugAll,"Engine::run()");
     install(new EngineStatusHandler);

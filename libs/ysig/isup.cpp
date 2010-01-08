@@ -1667,6 +1667,7 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
     if (!event)
 	return false;
     if (m_terminate || m_state == Released) {
+	mylock.drop();
 	delete event;
 	return false;
     }
@@ -1732,6 +1733,7 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
     }
     XDebug(isup(),DebugAll,"Call(%u). Event (%p,'%s') sent. Result: %s [%p]",
 	id(),event,event->name(),String::boolText(result),this);
+    mylock.drop();
     delete event;
     return result;
 }

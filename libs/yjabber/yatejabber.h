@@ -1065,7 +1065,7 @@ protected:
 
     /**
      * Set stream flag mask
-     * @param The mask to set
+     * @param mask The bit mask to set
      */
     inline void setFlags(int mask) {
 	    XDebug(this,DebugAll,"Setting flags 0x%X current=0x%X [%p]",mask,m_flags,this);
@@ -1075,7 +1075,7 @@ protected:
 
     /**
      * Reset stream flag mask
-     * @param The mask to reset
+     * @param mask The bit mask to reset
      */
     void resetFlags(int mask) {
 	    XDebug(this,DebugAll,"Resetting flags 0x%X current=0x%X [%p]",mask,m_flags,this);

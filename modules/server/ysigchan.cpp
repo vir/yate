@@ -1226,6 +1226,8 @@ SignallingCircuitEvent* SigChannel::handleRtp(Message& msg)
     SignallingCircuit* cic = getCircuit();
     if (!cic)
 	return 0;
+    setSource();
+    setConsumer();
     SignallingCircuitEvent* ev = new SignallingCircuitEvent(cic,
 	SignallingCircuitEvent::Connect,"rtp");
     ev->copyParams(msg);

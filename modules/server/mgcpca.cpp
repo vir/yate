@@ -1382,7 +1382,12 @@ bool MGCPCircuit::status(Status newStat, bool sync)
 	    // Start it if we don't forward the rtp
 	    if (m_rtpForward || hasLocalRtp() || createRtp()) {
 		if (setupConn()) {
-		    if (m_rtpForward || startRtp())
+		    if (m_rtpForward) {
+			m_source = 0;
+			m_consumer = 0;
+			break;
+		    }
+		    if (startRtp())
 			break;
 		    clearConn();
 		}

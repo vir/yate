@@ -200,6 +200,32 @@ void CallEndpoint::setPeer(CallEndpoint* peer, const char* reason, bool notify, 
     }
 }
 
+bool CallEndpoint::getPeerId(String& id) const
+{
+    Lock lock(s_mutex,5000000);
+    if (!lock.locked()) {
+	Debug(DebugFail,"Peer ID failed - deadlock on call endpoint mutex!");
+	Engine::restart(0);
+	id.clear();
+	return false;
+    }
+    if (m_peer) {
+	id = m_peer->id();
+	return true;
+    }
+    else {
+	id.clear();
+	return false;
+    }
+}
+
+String CallEndpoint::getPeerId() const
+{
+    String id;
+    getPeerId(id);
+    return id;
+}
+
 DataEndpoint* CallEndpoint::getEndpoint(const char* type) const
 {
     if (null(type))
@@ -398,7 +424,7 @@ void Channel::connected(const char* reason)
     Channel* peer = YOBJECT(Channel,getPeer());
     if (peer && peer->billid() && m_billid.null())
 	m_billid = peer->billid();
-    m_lastPeerId = getPeerId();
+    getPeerId(m_lastPeerId);
 }
 
 void Channel::disconnected(bool final, const char* reason)
@@ -485,8 +511,9 @@ void Channel::complete(Message& msg, bool minimal) const
 	msg.setParam("targetid",m_targetid);
     if (m_billid)
 	msg.setParam("billid",m_billid);
-    if (getPeer())
-	msg.setParam("peerid",getPeer()->id());
+    String peer;
+    if (getPeerId(peer))
+	msg.setParam("peerid",peer);
     if (m_lastPeerId)
 	msg.setParam("lastpeerid",m_lastPeerId);
     msg.setParam("answered",String::boolText(m_answered));
@@ -642,8 +669,9 @@ void Channel::statusParams(String& str)
 {
     if (m_driver)
 	str.append("module=",",") << m_driver->name();
-    if (getPeer())
-	str.append("peerid=",",") << getPeer()->id();
+    String peer;
+    if (getPeerId(peer))
+	str.append("peerid=",",") << peer;
     str.append("status=",",") << m_status;
     str << ",direction=" << direction();
     str << ",answered=" << m_answered;

@@ -2804,7 +2804,7 @@ void ClientChannel::callAccept(Message& msg)
     Debug(this,DebugCall,"callAccept() [%p]",this);
     Channel::callAccept(msg);
     Lock lock(m_mutex);
-    m_peerId = getPeerId();
+    getPeerId(m_peerId);
     Debug(this,DebugInfo,"Peer id set to %s",m_peerId.c_str());
     update(Accepted);
 }

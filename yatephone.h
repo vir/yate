@@ -1129,11 +1129,17 @@ public:
 	{ return m_peer; }
 
     /**
+     * Get the connected peer call id in a caller supplied String
+     * @param id String to fill in
+     * @return True if the call endpoint had a peer
+     */
+    bool getPeerId(String& id) const;
+
+    /**
      * Get the connected peer call id
      * @return Connected peer call id or empty string
      */
-    inline const String& getPeerId() const
-	{ return m_peer ? m_peer->id() : String::empty(); }
+    String getPeerId() const;
 
     /**
      * Get the mutex that serializes access to this call endpoint, if any

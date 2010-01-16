@@ -70,6 +70,8 @@ public:
 	{ return m_recursive; }
     inline const char* name() const
 	{ return m_name; }
+    inline const char* owner() const
+	{ return m_owner; }
     bool locked() const
     	{ return (m_locked > 0); }
     bool lock(long maxwait);
@@ -572,6 +574,11 @@ bool Mutex::recursive() const
 bool Mutex::locked() const
 {
     return m_private && m_private->locked();
+}
+
+const char* Mutex::owner() const
+{
+    return m_private ? m_private->owner() : static_cast<const char*>(0);
 }
 
 int Mutex::count()

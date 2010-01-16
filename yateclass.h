@@ -3706,6 +3706,12 @@ public:
     virtual bool locked() const;
 
     /**
+     * Retrieve the name of the Thread (if any) holding the Mutex locked
+     * @return Thread name() or NULL if thread not named
+     */
+    const char* owner() const;
+
+    /**
      * Check if this mutex is recursive or not
      * @return True if this is a recursive mutex, false for a fast mutex
      */

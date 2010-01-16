@@ -652,6 +652,10 @@ static pid_t s_superpid = -1;
 static void superhandler(int signal)
 {
     switch (signal) {
+	case SIGUSR1:
+	case SIGUSR2:
+	    s_rundelay = RUNDELAY_MIN;
+	    break;
 	case SIGHUP:
 	    if (s_logrotator)
 		s_rotatenow = true;

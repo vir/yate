@@ -118,8 +118,9 @@ bool CallEndpoint::connect(CallEndpoint* peer, const char* reason, bool notify)
     DDebug(DebugAll,"CallEndpoint '%s' connecting peer %p to [%p]",m_id.c_str(),peer,this);
 
 #if 0
-    if (!s_mutex.lock(5000000)) {
-	Debug(DebugFail,"Call connect failed - deadlock on call endpoint mutex!");
+    Lock lock(s_mutex,5000000);
+    if (!lock.locked()) {
+	Debug(DebugFail,"Call connect failed - timeout on call endpoint mutex owned by '%s'!",s_mutex.owner());
 	Engine::restart(0);
 	return false;
     }
@@ -147,10 +148,6 @@ bool CallEndpoint::connect(CallEndpoint* peer, const char* reason, bool notify)
     setDisconnect(0);
     connected(reason);
 
-#if 0
-    s_mutex.unlock();
-#endif
-
     return true;
 }
 
@@ -162,7 +159,7 @@ bool CallEndpoint::disconnect(bool final, const char* reason, bool notify, const
 
     Lock lock(s_mutex,5000000);
     if (!lock.locked()) {
-	Debug(DebugFail,"Call disconnect failed - deadlock on call endpoint mutex!");
+	Debug(DebugFail,"Call disconnect failed - timeout on call endpoint mutex owned by '%s'!",s_mutex.owner());
 	Engine::restart(0);
 	return false;
     }
@@ -202,21 +199,21 @@ void CallEndpoint::setPeer(CallEndpoint* peer, const char* reason, bool notify, 
 
 bool CallEndpoint::getPeerId(String& id) const
 {
+    id.clear();
+    if (!m_peer)
+	return false;
     Lock lock(s_mutex,5000000);
     if (!lock.locked()) {
-	Debug(DebugFail,"Peer ID failed - deadlock on call endpoint mutex!");
+	Debug(DebugFail,"Peer ID failed - timeout on call endpoint mutex owned by '%s'!",s_mutex.owner());
 	Engine::restart(0);
-	id.clear();
 	return false;
     }
     if (m_peer) {
 	id = m_peer->id();
 	return true;
     }
-    else {
-	id.clear();
+    else
 	return false;
-    }
 }
 
 String CallEndpoint::getPeerId() const

@@ -29,7 +29,6 @@ namespace { // anonymous
 
 #define MOD_PREFIX "fork"
 
-static Mutex s_mutex(true,"CallFork");
 static ObjList s_calls;
 static int s_current = 0;
 
@@ -140,9 +139,9 @@ ForkMaster::~ForkMaster()
 {
     DDebug(&__plugin,DebugAll,"ForkMaster::~ForkMaster() '%s'",id().c_str());
     m_timer = 0;
-    s_mutex.lock();
+    CallEndpoint::commonMutex().lock();
     s_calls.remove(this,false);
-    s_mutex.unlock();
+    CallEndpoint::commonMutex().unlock();
     clear(false);
 }
 
@@ -313,7 +312,7 @@ void ForkMaster::checkTimer(const Time& tmr)
 
 void ForkMaster::lostSlave(ForkSlave* slave, const char* reason)
 {
-    Lock lock(s_mutex);
+    Lock lock(CallEndpoint::commonMutex());
     bool ringing = m_ringing == slave->id();
     if (ringing) {
 	m_fake = false;
@@ -364,7 +363,7 @@ void ForkMaster::lostSlave(ForkSlave* slave, const char* reason)
 
 bool ForkMaster::msgAnswered(Message& msg, const String& dest)
 {
-    Lock lock(s_mutex);
+    Lock lock(CallEndpoint::commonMutex());
     m_timer = 0;
     // make sure only the first succeeds
     if (m_answered)
@@ -394,7 +393,7 @@ bool ForkMaster::msgAnswered(Message& msg, const String& dest)
 
 bool ForkMaster::msgProgress(Message& msg, const String& dest)
 {
-    Lock lock(s_mutex);
+    Lock lock(CallEndpoint::commonMutex());
     if (m_answered)
 	return false;
     if (m_ringing && (m_ringing != dest))
@@ -461,25 +460,25 @@ bool ForkMaster::msgProgress(Message& msg, const String& dest)
 void ForkMaster::clear(bool softly)
 {
     RefPointer<ForkSlave> slave;
-    s_mutex.lock();
+    CallEndpoint::commonMutex().lock();
     ListIterator iter(m_slaves);
     while (slave = static_cast<ForkSlave*>(iter.get())) {
 	if (softly && (slave->type() == ForkSlave::Persistent))
 	    continue;
 	m_slaves.remove(slave,false);
 	slave->clearMaster();
-	s_mutex.unlock();
+	CallEndpoint::commonMutex().unlock();
 	slave->lostMaster(m_reason);
-	s_mutex.lock();
+	CallEndpoint::commonMutex().lock();
 	slave = 0;
     }
     if (softly) {
-	s_mutex.unlock();
+	CallEndpoint::commonMutex().unlock();
 	return;
     }
     TelEngine::destruct(m_exec);
     TelEngine::destruct(m_targets);
-    s_mutex.unlock();
+    CallEndpoint::commonMutex().unlock();
 }
 
 
@@ -496,9 +495,9 @@ ForkSlave::~ForkSlave()
 
 void ForkSlave::disconnected(bool final, const char* reason)
 {
-    s_mutex.lock();
+    CallEndpoint::commonMutex().lock();
     RefPointer<ForkMaster> master = m_master;
-    s_mutex.unlock();
+    CallEndpoint::commonMutex().unlock();
     CallEndpoint::disconnected(final,reason);
     if (master)
 	master->lostSlave(this,reason);
@@ -530,7 +529,7 @@ void ForkModule::initialize()
 
 bool ForkModule::unload()
 {
-    Lock lock(s_mutex,500000);
+    Lock lock(CallEndpoint::commonMutex(),500000);
     if (!lock.locked())
 	return false;
     if (s_calls.count())
@@ -541,9 +540,9 @@ bool ForkModule::unload()
 
 void ForkModule::statusParams(String& str)
 {
-    s_mutex.lock();
+    CallEndpoint::commonMutex().lock();
     str.append("total=",",") << s_current << ",forks=" << s_calls.count();
-    s_mutex.unlock();
+    CallEndpoint::commonMutex().unlock();
 }
 
 bool ForkModule::msgExecute(Message& msg)
@@ -557,10 +556,10 @@ bool ForkModule::msgExecute(Message& msg)
     ObjList* targets = dest.split(' ',false);
     if (!targets)
 	return false;
-    s_mutex.lock();
+    CallEndpoint::commonMutex().lock();
     ForkMaster* master = new ForkMaster(targets);
     bool ok = master->connect(ch,msg.getValue("reason")) && master->startCalling(msg);
-    s_mutex.unlock();
+    CallEndpoint::commonMutex().unlock();
     master->deref();
     return ok;
 }
@@ -570,7 +569,7 @@ bool ForkModule::msgLocate(Message& msg, bool masquerade)
     String tmp(msg.getParam("id"));
     if (!tmp.startsWith(MOD_PREFIX "/"))
 	return false;
-    Lock lock(s_mutex);
+    Lock lock(CallEndpoint::commonMutex());
     CallEndpoint* c = static_cast<CallEndpoint*>(s_calls[tmp]);
     if (!c) {
 	ForkMaster* m = static_cast<ForkMaster*>(s_calls[tmp.substr(0,tmp.rfind('/'))]);
@@ -604,10 +603,10 @@ bool ForkModule::msgToMaster(Message& msg, bool answer)
     if (!dest.startsWith(MOD_PREFIX "/"))
 	return false;
     int slash = dest.rfind('/');
-    s_mutex.lock();
+    CallEndpoint::commonMutex().lock();
     // the fork master will be kept referenced until we finish the work
     RefPointer<ForkMaster> m = static_cast<ForkMaster*>(s_calls[dest.substr(0,slash)]);
-    s_mutex.unlock();
+    CallEndpoint::commonMutex().unlock();
     if (m)
 	return answer ? m->msgAnswered(msg,dest) : m->msgProgress(msg,dest);
     return false;
@@ -632,13 +631,13 @@ bool ForkModule::received(Message& msg, int id)
 		;
 	    return false;
 	case Timer:
-	    s_mutex.lock();
+	    CallEndpoint::commonMutex().lock();
 	    for (ObjList* l = s_calls.skipNull(); l; l = l->skipNext()) {
 		RefPointer<ForkMaster> m = static_cast<ForkMaster*>(l->get());
 		if (m)
 		    m->checkTimer(msg.msgTime());
 	    }
-	    s_mutex.unlock();
+	    CallEndpoint::commonMutex().unlock();
 	    // fall through
 	default:
 	    return Module::received(msg,id);

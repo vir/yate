@@ -206,7 +206,7 @@ public:
 	RoleGlobal,
 	RoleChannel
     };
-    static ExtModReceiver* build(const char *script, const char *args,
+    static ExtModReceiver* build(const char *script, const char *args, bool ref = false,
 	File* ain = 0, File* aout = 0, ExtModChan *chan = 0);
     static ExtModReceiver* build(const char* name, Stream* io, ExtModChan* chan = 0, int role = RoleUnknown);
     static ExtModReceiver* find(const String& script);
@@ -496,7 +496,7 @@ ExtModChan::ExtModChan(const char* file, const char* args, int type)
     s_mutex.lock();
     s_chans.append(this);
     s_mutex.unlock();
-    m_recv = ExtModReceiver::build(file,args,reader,writer,this);
+    m_recv = ExtModReceiver::build(file,args,true,reader,writer,this);
 }
 
 ExtModChan::ExtModChan(ExtModReceiver* recv)
@@ -633,10 +633,17 @@ bool MsgWatcher::delWatched(const String& name)
 }
 
 
-ExtModReceiver* ExtModReceiver::build(const char* script, const char* args,
+ExtModReceiver* ExtModReceiver::build(const char* script, const char* args, bool ref,
 				      File* ain, File* aout, ExtModChan* chan)
 {
     ExtModReceiver* recv = new ExtModReceiver(script,args,ain,aout,chan);
+    if (ref) {
+	recv->use();
+	if (recv->start())
+	    return recv;
+	recv->unuse();
+	return 0;
+    }
     return recv->start() ? recv : 0;
 }
 
@@ -1516,8 +1523,13 @@ bool ExtModHandler::received(Message& msg)
     }
     if (typ == ExtModChan::NoChannel) {
 	ExtModReceiver *r = ExtModReceiver::build(dest.matchString(2).c_str(),
-						  dest.matchString(3).trimBlanks().c_str());
-	return r ? r->received(msg,1) : false;
+						  dest.matchString(3).trimBlanks().c_str(),
+						  true);
+	if (!r)
+	    return false;
+	bool ok = r->received(msg,1);
+	r->unuse();
+	return ok;
     }
     ExtModChan *em = ExtModChan::build(dest.matchString(2).c_str(),
 				       dest.matchString(3).c_str(),typ);
@@ -1525,19 +1537,23 @@ bool ExtModHandler::received(Message& msg)
 	Debug(DebugGoOn,"Failed to create ExtMod for '%s'",dest.matchString(2).c_str());
 	return false;
     }
+    ExtModReceiver* recv = em->receiver();
     // new messages must be blocked until connect() returns (if applicable)
     if (ch)
 	em->waitMsg(&msg);
-    if (!(em->receiver() && em->receiver()->received(msg,1))) {
+    if (!(recv && recv->received(msg,1))) {
 	em->waitMsg(0);
 	int level = DebugWarn;
 	if (msg.getValue("error") || msg.getValue("reason"))
 	    level = DebugNote;
 	Debug(level,"ExtMod '%s' did not handle call message",dest.matchString(2).c_str());
 	em->waiting(false);
+	if (recv)
+	    recv->unuse();
 	em->deref();
 	return false;
     }
+    recv->unuse();
     if (ch) {
 	em->waitMsg(0);
 	ch->connect(em);

@@ -380,6 +380,10 @@ int SslSocket::writeData(const void* buffer, int length)
     if (!buffer)
 	length = 0;
     Lock lock(this);
+    if (!m_ssl) {
+	m_error = EINVAL;
+	return socketError();
+    }
     return sslError(::SSL_write(m_ssl,buffer,length));
 }
 
@@ -389,6 +393,10 @@ int SslSocket::readData(void* buffer, int length)
     if (!buffer)
 	length = 0;
     Lock lock(this);
+    if (!m_ssl) {
+	m_error = EINVAL;
+	return socketError();
+    }
     return sslError(::SSL_read(m_ssl,buffer,length));
 }
 

@@ -42,15 +42,7 @@ ObjList::~ObjList()
 #ifdef XDEBUG
     Debugger debug("ObjList::~ObjList()"," [%p]",this);
 #endif
-    if (m_obj) {
-	GenObject *tmp = m_obj;
-	m_obj = 0;
-	if (m_delete) {
-	    XDebug(DebugInfo,"ObjList::~ObjList() deleting %p",tmp);
-	    tmp->destruct();
-	}
-    }
-    TelEngine::destruct(m_next);
+    clear();
 }
 
 void* ObjList::getObject(const String& name) const

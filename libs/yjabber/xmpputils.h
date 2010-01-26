@@ -1433,10 +1433,11 @@ public:
     /**
      * Set the 'stream' namespace to an element
      * @param xml Element
+     * @param addAttr True to add the xmlns attribute
      * @return True on success
      */
-    static inline bool setStreamXmlns(XmlElement& xml)
-	{ return setXmlns(xml,"stream",true,XMPPNamespace::Stream); }
+    static inline bool setStreamXmlns(XmlElement& xml, bool addAttr = true)
+	{ return setXmlns(xml,"stream",addAttr,XMPPNamespace::Stream); }
 
     /**
      * Set the 'db' namespace to an element

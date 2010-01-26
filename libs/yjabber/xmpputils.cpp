@@ -731,7 +731,7 @@ XMPPFeature* XMPPFeatureList::get(int feature)
 XmlElement* XMPPFeatureList::buildStreamFeatures()
 {
     XmlElement* xml = XMPPUtils::createElement(XmlTag::Features);
-    XMPPUtils::setStreamXmlns(*xml);
+    XMPPUtils::setStreamXmlns(*xml,false);
     for (ObjList* o = skipNull(); o; o = o->skipNext())
 	xml->addChild((static_cast<XMPPFeature*>(o->get()))->build());
     return xml;
@@ -944,7 +944,7 @@ XmlElement* XMPPUtils::createError(XmlElement* xml, int type, int error,
 XmlElement* XMPPUtils::createStreamError(int error, const char* text)
 {
     XmlElement* xml = createElement(XmlTag::Error);
-    setStreamXmlns(*xml);
+    setStreamXmlns(*xml,false);
     XmlElement* err = createElement(s_error[error],XMPPNamespace::StreamError);
     xml->addChild(err);
     if (!TelEngine::null(text))

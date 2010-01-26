@@ -1157,8 +1157,10 @@ private:
 	SocketCanRead = 0x01,
 	SocketReading = 0x02,
 	SocketWriting = 0x10,
+	SocketWaitReset = 0x80,
     };
     inline void socketSetCanRead(bool ok) {
+	    Lock lock(m_socketMutex);
 	    if (ok)
 		m_socketFlags |= SocketCanRead;
 	    else
@@ -1176,8 +1178,10 @@ private:
 	    else
 		m_socketFlags &= ~SocketWriting;
 	}
-    inline bool socketCanRead() const
-	{ return m_socket && (m_socketFlags & SocketCanRead); }
+    inline bool socketCanRead() const {
+	    return m_socket && (m_socketFlags & SocketCanRead) &&
+		0 == (m_socketFlags & SocketWaitReset);
+	}
     inline bool socketReading() const
 	{ return (m_socketFlags & SocketReading) != 0; }
     inline bool socketWriting() const
@@ -1194,6 +1198,7 @@ private:
     XmlDomParser* m_xmlDom;
     Socket* m_socket;
     char m_socketFlags;                  // Socket flags: 0: unavailable
+    Mutex m_socketMutex;                 // Protect the socket and parser
     String m_connectAddr;                // Remote ip to connect to
     int m_connectPort;                   // Remote port to connect to
 };

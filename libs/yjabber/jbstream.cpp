@@ -140,7 +140,8 @@ JBStream::JBStream(JBEngine* engine, Socket* socket, Type t, bool ssl)
     m_restart(0), m_timeToFillRestart(0),
     m_engine(engine), m_type(t),
     m_incoming(true), m_terminateEvent(0),
-    m_xmlDom(0), m_socket(0), m_socketFlags(0), m_connectPort(0)
+    m_xmlDom(0), m_socket(0), m_socketFlags(0), m_socketMutex(true,"JBStream::Socket"),
+    m_connectPort(0)
 {
     if (ssl)
 	setFlags(StreamSecured | StreamTls);
@@ -170,7 +171,8 @@ JBStream::JBStream(JBEngine* engine, Type t, const JabberID& local, const Jabber
     m_engine(engine), m_type(t),
     m_incoming(false), m_name(name),
     m_terminateEvent(0),
-    m_xmlDom(0), m_socket(0), m_socketFlags(0), m_connectPort(0)
+    m_xmlDom(0), m_socket(0), m_socketFlags(0), m_socketMutex(true,"JBStream::Socket"),
+    m_connectPort(0)
 {
     if (!m_name)
 	m_engine->buildStreamName(m_name,this);
@@ -276,7 +278,7 @@ bool JBStream::readSocket(char* buf, unsigned int len)
 	return false;
     if (!socketCanRead())
 	return false;
-    Lock lock(this);
+    Lock2 lock(*this,m_socketMutex);
     if (!socketCanRead() || state() == Destroy || state() == Idle || state() == Connecting)
 	return false;
     socketSetReading(true);
@@ -285,9 +287,15 @@ bool JBStream::readSocket(char* buf, unsigned int len)
     else
 	len = 1;
     lock.drop();
+    // Check stream state
     XMPPError::Type error = XMPPError::NoError;
     int read = m_socket->readData(buf,len);
-    Lock lck(this);
+    Lock lck(m_socketMutex);
+    // Check if the connection is waiting to be reset
+    if (0 != (m_socketFlags & SocketWaitReset)) {
+	socketSetReading(false);
+	return false;
+    }
     // Check if something changed
     if (!(m_socket && socketReading())) {
 	Debug(this,DebugAll,"Socket deleted while reading [%p]",this);
@@ -748,72 +756,60 @@ void JBStream::process(u_int64_t time)
     if (!m_xmlDom)
 	return;
     XDebug(this,DebugAll,"JBStream::process() [%p]",this);
-    XmlDocument* doc = m_xmlDom->document();
-    if (!doc) {
-	Debug(this,DebugGoOn,"The parser is not a document! [%p]",this);
-	terminate(0,true,0,XMPPError::Internal);
-	return;
-    }
-    XmlElement* root = doc->root(false);
     while (true) {
 	sendPending();
-	if (m_terminateEvent || !root)
+	if (m_terminateEvent)
 	    break;
-	// Check for stream termination
-	if (root->completed()) {
-	    bool error = false;
-	    // Check if received an error
-	    XmlElement* xml = 0;
-	    while (0 != (xml = root->pop())) {
-		if (streamError(xml)) {
-		    error = true;
-		    break;
-		}
-		TelEngine::destruct(xml);
-	    }
-	    if (error)
-		break;
-	    Debug(this,DebugAll,"Remote closed the stream in state %s [%p]",
-		stateName(),this);
-	    terminate(1,false,0);
+
+	// Lock the parser to obtain the root and/or child
+	// Unlock it before processing received element
+	Lock lockDoc(m_socketMutex);
+	XmlDocument* doc = m_xmlDom ? m_xmlDom->document() : 0;
+	XmlElement* root = doc ? doc->root(false) : 0;
+	if (!root)
 	    break;
-	}
 
 	if (m_state == WaitStart) {
 	    // Print the declaration
 	    XmlDeclaration* dec = doc->declaration();
 	    if (dec)
 		m_engine->printXml(this,false,*dec);
+	    XmlElement xml(*root);
+	    lockDoc.drop();
 	    // Print the root. Make sure we don't print its children
-	    if (!root->getChildren().skipNull())
-		m_engine->printXml(this,false,*root);
-	    else {
-		XmlElement tmp(*root);
-		tmp.clearChildren();
-		m_engine->printXml(this,false,tmp);
-	    }
+	    xml.clearChildren();
+	    m_engine->printXml(this,false,xml);
 	    // Check if valid
-	    if (!XMPPUtils::isTag(*root,XmlTag::Stream,XMPPNamespace::Stream)) {
-		String* ns = root->xmlns();
+	    if (!XMPPUtils::isTag(xml,XmlTag::Stream,XMPPNamespace::Stream)) {
+		String* ns = xml.xmlns();
 		Debug(this,DebugMild,"Received invalid stream root '%s' namespace='%s' [%p]",
-		    root->tag(),TelEngine::c_safe(ns),this);
+		    xml.tag(),TelEngine::c_safe(ns),this);
 		terminate(0,true,0);
 		break;
 	    }
 	    // Check 'from' and 'to'
 	    JabberID from;
 	    JabberID to;
-	    if (!getJids(root,from,to))
+	    if (!getJids(&xml,from,to))
 		break;
-	    Debug(this,DebugAll,"Processing (%p,%s) in state %s [%p]",
-		root,root->tag(),stateName(),this);
-	    processStart(root,from,to);
+	    DDebug(this,DebugAll,"Processing root '%s' in state %s [%p]",
+		xml.tag(),stateName(),this);
+	    processStart(&xml,from,to);
 	    break;
 	}
 
 	XmlElement* xml = root->pop();
-	if (!xml)
+	if (!xml) {
+	    // No (more) children: check termination
+	    if (root->completed()) {
+		lockDoc.drop();
+		Debug(this,DebugAll,"Remote closed the stream in state %s [%p]",
+		    stateName(),this);
+		terminate(1,false,0);
+	    }
 	    break;
+	}
+	lockDoc.drop();
 
 	// Process received element
 	// Print it
@@ -964,10 +960,13 @@ void JBStream::resetConnection(Socket* sock)
 	sock,m_socket,this);
     // Release the old one
     if (m_socket) {
+	m_socketMutex.lock();
+	m_socketFlags |= SocketWaitReset;
+	m_socketMutex.unlock();
 	// Wait for the socket to become available (not reading or writing)
 	Socket* tmp = 0;
 	while (true) {
-	    Lock lock(this);
+	    Lock lock(m_socketMutex);
 	    if (!(m_socket && (socketReading() || socketWriting()))) {
 		tmp = m_socket;
 		m_socket = 0;
@@ -988,7 +987,7 @@ void JBStream::resetConnection(Socket* sock)
 	}
     }
     if (sock) {
-	Lock lock(this);
+	Lock lock(m_socketMutex);
 	if (m_socket) {
 	    Debug(this,DebugWarn,"Duplicate attempt to set socket! [%p]",this);
 	    delete sock;
@@ -1001,8 +1000,8 @@ void JBStream::resetConnection(Socket* sock)
 	    SocketAddr l, r;
 	    localAddr(l);
 	    remoteAddr(r);
-	    Debug(this,DebugAll,"Connection set local=%s:%d remote=%s:%d [%p]",
-		l.host().c_str(),l.port(),r.host().c_str(),r.port(),this);
+	    Debug(this,DebugAll,"Connection set local=%s:%d remote=%s:%d sock=%p [%p]",
+		l.host().c_str(),l.port(),r.host().c_str(),r.port(),m_socket,this);
 	}
 	m_socket->setReuse(true);
 	m_socket->setBlocking(false);
@@ -1437,8 +1436,8 @@ bool JBStream::writeSocket(const char* data, unsigned int& len)
 	len = 0;
 	return m_socket != 0;
     }
-    Lock lock(this);
-    if (!m_socket) {
+    Lock lock(m_socketMutex);
+    if (!m_socket || 0 != (m_socketFlags & SocketWaitReset)) {
 	len = 0;
 	return false;
     }
@@ -1454,7 +1453,12 @@ bool JBStream::writeSocket(const char* data, unsigned int& len)
     String sent(data,len);
     Debug(this,DebugInfo,"Sent %s [%p]",sent.c_str(),this);
 #endif
-    Lock lck(this);
+    Lock lck(m_socketMutex);
+    // Check if the connection is waiting to be reset
+    if (0 != (m_socketFlags & SocketWaitReset)) {
+	socketSetWriting(false);
+	return true;
+    }
     // Check if something changed
     if (!(m_socket && socketWriting())) {
 	Debug(this,DebugAll,"Socket deleted while writing [%p]",this);

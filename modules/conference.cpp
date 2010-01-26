@@ -425,6 +425,7 @@ bool ConfRoom::setRecording(const NamedList& params)
     if (*record && (*record != "-") && record->toBoolean(true)) {
 	String warn = params.getValue("recordwarn");
 	ch = new ConfChan(this,!warn.null());
+	ch->initChan();
 	DDebug(&__plugin,DebugCall,"Starting record leg '%s' to '%s'",
 	    ch->id().c_str(),record->c_str());
 	Message* m = ch->message("call.execute");
@@ -851,6 +852,7 @@ bool ConfHandler::received(Message& msg)
 
     // create a conference leg or even a room for the caller
     ConfChan *c = new ConfChan(room,msg,counted,utility);
+    c->initChan();
     if (chan->connect(c,reason,false)) {
 	msg.setParam("peerid",c->id());
 	c->deref();
@@ -858,6 +860,7 @@ bool ConfHandler::received(Message& msg)
 	if (peer) {
 	    // create a conference leg for the old peer too
 	    ConfChan *p = new ConfChan(room,msg,counted,utility);
+	    p->initChan();
 	    peer->connect(p,reason,false);
 	    p->deref();
 	}
@@ -941,6 +944,7 @@ bool ConferenceDriver::msgExecute(Message& msg, String& dest)
     CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
     if (ch) {
 	ConfChan *c = new ConfChan(dest,msg,counted,utility);
+	c->initChan();
 	if (ch->connect(c)) {
 	    c->callConnect(msg);
 	    msg.setParam("peerid",c->id());

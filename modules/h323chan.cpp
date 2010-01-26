@@ -1017,6 +1017,7 @@ YateH323Connection::YateH323Connection(YateH323EndPoint& endpoint,
     Message* msg = static_cast<Message*>(userdata);
     m_chan = new YateH323Chan(this,msg,
 	((transport && !userdata) ? (const char*)transport->GetRemoteAddress() : 0));
+    m_chan->initChan();
     m_chanId = m_chan->id();
     m_mutex = m_chan->mutex();
     debugCopy(m_chan);

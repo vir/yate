@@ -1319,6 +1319,7 @@ void YateSIPEndPoint::invite(SIPEvent* e, SIPTransaction* t)
     }
 
     YateSIPConnection* conn = new YateSIPConnection(e,t);
+    conn->initChan();
     conn->startRouter();
 
 }
@@ -4062,6 +4063,7 @@ bool SIPDriver::msgExecute(Message& msg, String& dest)
 	return false;
     }
     YateSIPConnection* conn = new YateSIPConnection(msg,dest,msg.getValue("id"));
+    conn->initChan();
     if (conn->getTransaction()) {
 	CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
 	if (ch && conn->connect(ch,msg.getValue("reason"))) {

@@ -1039,6 +1039,7 @@ bool WaveFileDriver::msgExecute(Message& msg, String& dest)
 	Debug(this,DebugInfo,"%s wave file '%s'", (meth ? "Record to" : "Play from"),
 	    dest.matchString(2).c_str());
 	WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen,msg.getBoolValue("autorepeat"),msg.getValue("format"),msg.getParam("callto"));
+	c->initChan();
 	if (ch->connect(c,msg.getValue("reason"))) {
 	    c->callConnect(msg);
 	    msg.setParam("peerid",c->id());
@@ -1075,6 +1076,7 @@ bool WaveFileDriver::msgExecute(Message& msg, String& dest)
     m = "call.execute";
     m.addParam("callto",callto);
     WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen,msg.getBoolValue("autorepeat"),msg.getValue("format"));
+    c->initChan();
     m.setParam("id",c->id());
     m.userData(c);
     if (Engine::dispatch(m)) {

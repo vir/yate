@@ -200,6 +200,7 @@ bool YMGCPEngine::createConn(MGCPTransaction* trans, MGCPMessage* msg)
 	return true;
     }
     MGCPChan* chan = new MGCPChan(connId);
+    chan->initChan();
     return chan->initialEvent(trans,msg,id);
 }
 

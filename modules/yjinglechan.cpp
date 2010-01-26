@@ -632,6 +632,7 @@ void YJGEngine::processEvent(JGEvent* event)
 	    event->action() == JGSession::ActInitiate) {
 	    if (event->session()->ref()) {
 		conn = new YJGConnection(event);
+		conn->initChan();
 		// Constructor failed ?
 		if (conn->state() == YJGConnection::Pending)
 		    TelEngine::destruct(conn);
@@ -3408,6 +3409,7 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	caller.c_str(),called.c_str(),String::boolText(online),
 	String::boolText(!file.null()));
     YJGConnection* conn = new YJGConnection(msg,caller,called,online,caps,file,localip);
+    conn->initChan();
     bool ok = conn->state() != YJGConnection::Terminated;
     lock.drop();
     if (ok) {

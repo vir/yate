@@ -2136,6 +2136,7 @@ bool Client::buildIncomingChannel(Message& msg, const String& dest)
 	return false;
     ClientDriver::self()->lock();
     ClientChannel* chan = new ClientChannel(msg,peer->id());
+    chan->initChan();
     ClientDriver::self()->unlock();
     bool ok = chan->connect(peer,msg.getValue("reason"));
     // Activate or answer
@@ -2170,6 +2171,7 @@ bool Client::buildOutgoingChannel(NamedList& params)
     if (!driverLockLoop())
 	return false;
     ClientChannel* chan = new ClientChannel(*target,params);
+    chan->initChan();
     if (!(chan->ref() && chan->start(*target,params)))
 	TelEngine::destruct(chan);
     driverUnlock();
@@ -3788,6 +3790,7 @@ bool ClientSound::doStart()
     Message m("call.execute");
     m.addParam("callto",s_calltoPrefix + file());
     ClientChannel* chan = new ClientChannel(toString());
+    chan->initChan();
     m.userData(chan);
     m.addParam("autorepeat",String::boolText(m_repeat != 1));
     TelEngine::destruct(chan);

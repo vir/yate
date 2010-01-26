@@ -996,6 +996,7 @@ void YIAXEngine::processEvent(IAXEvent* event)
 		if (event->type() == IAXEvent::New) {
 		    // Incoming request for a new call
 		    connection = new YIAXConnection(this,event->getTransaction());
+		    connection->initChan();
 		    event->getTransaction()->setUserData(connection);
 		    if (!connection->route())
 			event->getTransaction()->setUserData(0);
@@ -1233,6 +1234,7 @@ bool YIAXDriver::msgExecute(Message& msg, String& dest)
     if (!tr)
 	return false;
     YIAXConnection* conn = new YIAXConnection(m_iaxEngine,tr,&msg);
+    conn->initChan();
     tr->setUserData(conn);
     Channel* ch = static_cast<Channel*>(msg.userData());
     if (ch && conn->connect(ch,msg.getValue("reason"))) {

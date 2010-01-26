@@ -801,6 +801,7 @@ bool FileDriver::msgExecute(Message& msg, String& dest)
 
 	// Build channel
 	FileChan* c = new FileChan(src,cons);
+	c->initChan();
 	ok = ch->connect(c,msg.getValue("reason"));
 	if (ok) {
 	    c->callConnect(msg);
@@ -869,6 +870,7 @@ bool FileDriver::msgExecute(Message& msg, String& dest)
 
     // Build message and dispatch it
     FileChan* c = new FileChan(src,cons);
+    c->initChan();
     m.setParam("id",c->id());
     m.userData(c);
     m.addParam("format",format);

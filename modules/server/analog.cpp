@@ -860,6 +860,7 @@ void ModuleGroup::handleEvent(ModuleLine& line, SignallingCircuitEvent& event)
 			? AnalogChannel::FXS : AnalogChannel::FXO)
 		    : AnalogChannel::None;
 	    ch = new AnalogChannel(&line,0,rec);
+	    ch->initChan();
 	    if (!ch->line())
 		plugin.terminateChan(ch);
 	}
@@ -2723,6 +2724,7 @@ bool AnalogDriver::msgExecute(Message& msg, String& dest)
     msg.clearParam("error");
     // Create channel
     AnalogChannel* analogCh = new AnalogChannel(line,&msg);
+    analogCh->initChan();
     error = msg.getValue("error");
     if (!error) {
 	if (analogCh->connect(peer,msg.getValue("reason"))) {

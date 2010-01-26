@@ -698,6 +698,7 @@ bool AnalyzerDriver::startCall(NamedList& params, const String& dest)
     }
     // this is an incoming call!
     AnalyzerChan *ac = new AnalyzerChan(dest,false,params.getValue("window"));
+    ac->initChan();
     ac->startChannel(params);
     Message* m = ac->message("call.route",false,true);
     m->addParam("called",tmp);
@@ -716,6 +717,7 @@ bool AnalyzerDriver::msgExecute(Message& msg, String& dest)
     CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
     if (ch) {
 	AnalyzerChan *ac = new AnalyzerChan(dest,true,msg.getValue("window"));
+	ac->initChan();
 	if (ch->connect(ac,msg.getValue("reason"))) {
 	    ac->callConnect(msg);
 	    msg.setParam("peerid",ac->id());

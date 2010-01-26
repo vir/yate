@@ -802,6 +802,7 @@ bool FaxDriver::msgExecute(Message& msg, String& dest)
     CallEndpoint* ce = static_cast<CallEndpoint *>(msg.userData());
     if (ce) {
 	fc = new FaxChan(true,dest,transmit,msg);
+	fc->initChan();
 	fc->deref();
 	if (fc->connect(ce)) {
 	    msg.setParam("peerid",fc->id());
@@ -812,6 +813,7 @@ bool FaxDriver::msgExecute(Message& msg, String& dest)
     }
     else {
 	fc = new FaxChan(false,dest,transmit,msg);
+	fc->initChan();
 	fc->deref();
 	Message m("call.route");
 	fc->complete(m);

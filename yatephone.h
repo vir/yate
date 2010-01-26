@@ -1900,6 +1900,12 @@ public:
 	{ return m_lastPeerId; }
 
     /**
+     * Add the channel to the parent driver list
+     * This method must be called exactly once after the object is fully constructed
+     */
+    void initChan();
+
+    /**
      * Start a routing thread for this channel, dereference dynamic channels
      * @param msg Pointer to message to route, typically a "call.route", will be
      *  destroyed after routing fails or completes

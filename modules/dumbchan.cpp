@@ -70,6 +70,7 @@ bool DumbDriver::msgExecute(Message& msg, String& dest)
     CallEndpoint *dd = static_cast<CallEndpoint *>(msg.userData());
     if (dd) {
 	DumbChannel *c = new DumbChannel(dest,&msg);
+	c->initChan();
 	if (dd->connect(c)) {
 	    c->callConnect(msg);
 	    msg.setParam("peerid", c->id());
@@ -94,6 +95,7 @@ bool DumbDriver::msgExecute(Message& msg, String& dest)
     }
 
     DumbChannel* c = new DumbChannel(dest);
+    c->initChan();
 
     String caller = msg.getValue("caller");
     if (caller.null())

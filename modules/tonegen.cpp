@@ -821,6 +821,7 @@ bool ToneGenDriver::msgExecute(Message& msg, String& dest)
     CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
     if (ch) {
 	ToneChan *tc = new ToneChan(dest);
+	tc->initChan();
 	if (ch->connect(tc,msg.getValue("reason"))) {
 	    tc->callConnect(msg);
 	    msg.setParam("peerid",tc->id());
@@ -862,6 +863,7 @@ bool ToneGenDriver::msgExecute(Message& msg, String& dest)
 	m = "call.execute";
 	m.setParam("callto",callto);
 	ToneChan *tc = new ToneChan(dest);
+	tc->initChan();
 	m.setParam("id",tc->id());
 	m.userData(tc);
 	if (Engine::dispatch(m)) {

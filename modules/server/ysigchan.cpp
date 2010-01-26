@@ -1362,6 +1362,7 @@ bool SigDriver::msgExecute(Message& msg, String& dest)
     // Create channel
     lock();
     SigChannel* sigCh = new SigChannel(msg.getValue("caller"),dest);
+    sigCh->initChan();
     unlock();
     bool ok = sigCh->startCall(msg,*trunk);
     if (ok) {
@@ -1548,6 +1549,7 @@ void SigDriver::handleEvent(SignallingEvent* event)
     if (event->type() == SignallingEvent::NewCall) {
 	lock();
 	ch = new SigChannel(event);
+	ch->initChan();
 	unlock();
 	// Route the call
 	if (!ch->startRouter()) {

@@ -364,9 +364,6 @@ void Channel::init()
 	    tmp << m_driver->nextid();
 	    setId(tmp);
 	}
-	m_driver->m_total++;
-	m_driver->channels().append(this);
-	m_driver->changed();
 	m_driver->unlock();
     }
     // assign a new billid only to incoming calls
@@ -394,6 +391,23 @@ void Channel::filterDebug(const String& item)
 	else
 	    debugChain(m_driver);
     }
+}
+
+void Channel::initChan()
+{
+    if (!m_driver)
+	return;
+    Lock mylock(m_driver);
+#ifndef NDEBUG
+    if (m_driver->channels().find(this)) {
+	Debug(DebugGoOn,"Channel '%s' already in list of '%s' driver [%p]",
+	    id().c_str(),m_driver->name().c_str(),this);
+	return;
+    }
+#endif
+    m_driver->m_total++;
+    m_driver->channels().append(this);
+    m_driver->changed();
 }
 
 void Channel::dropChan()

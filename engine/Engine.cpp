@@ -111,8 +111,12 @@ using namespace TelEngine;
 #ifndef CFG_PATH
 #define CFG_PATH "." PATH_SEP "conf.d"
 #endif
+#ifndef DLL_SUFFIX
 #define DLL_SUFFIX ".yate"
+#endif
+#ifndef CFG_SUFFIX
 #define CFG_SUFFIX ".conf"
+#endif
 
 
 // Supervisor control constants

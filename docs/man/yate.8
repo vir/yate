@@ -141,7 +141,9 @@ the documentation for each module.
 .TP
 \- SIGTERM and SIGINT (Ctrl\-C) will cleanly stop the engine
 .TP
-\- SIGHUP and SIGQUIT (Ctrl\-\\) will reinitialize the modules
+\- SIGQUIT (Ctrl\-\\) will reinitialize the modules
+.TP
+\- SIGHUP will reinitialize the modules if started in daemon mode (\-d)
 .TP
 \- SIGUSR1 will initiate a gracefull restart (when no plugin is busy)
 .TP

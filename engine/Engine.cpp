@@ -141,8 +141,10 @@ static bool s_keepclosing = false;
 static bool s_nounload = false;
 static int s_super_handle = -1;
 static int s_run_attempt = 0;
+static bool s_interactive = true;
 static bool s_localsymbol = false;
 static bool s_logtruncate = false;
+static const char* s_logfile = 0;
 
 static void sighandler(int signal)
 {
@@ -158,6 +160,14 @@ static void sighandler(int signal)
 	    Engine::restart(0,false);
 	    break;
 	case SIGHUP:
+	    if (s_interactive) {
+		// console got closed so shutdown without writing to console
+		if (!s_logfile)
+		    Debugger::enableOutput(false);
+		Engine::halt(0);
+		break;
+	    }
+	    // intentionally fall through
 	case SIGQUIT:
 	    if (s_nextinit <= Time::now())
 		Engine::init();
@@ -208,7 +218,6 @@ static bool s_sigabrt = false;
 static bool s_lateabrt = false;
 static String s_cfgfile;
 static String s_userdir(CFG_DIR);
-static const char* s_logfile = 0;
 static Configuration s_cfg;
 static ObjList plugins;
 static ObjList* s_cmds = 0;
@@ -657,9 +666,12 @@ static void superhandler(int signal)
 	    s_rundelay = RUNDELAY_MIN;
 	    break;
 	case SIGHUP:
-	    if (s_logrotator)
-		s_rotatenow = true;
-	    break;
+	    if (!s_interactive) {
+		if (s_logrotator)
+		    s_rotatenow = true;
+		break;
+	    }
+	    // intentionally fall through
 	case SIGINT:
 	case SIGTERM:
 	case SIGABRT:
@@ -1004,6 +1016,7 @@ int Engine::run()
     s_params.addParam("modulepath",s_modpath);
     s_params.addParam("modsuffix",s_modsuffix);
     s_params.addParam("logfile",s_logfile);
+    s_params.addParam("interactive",String::boolText(s_interactive));
     s_params.addParam("clientmode",String::boolText(clientMode()));
     s_params.addParam("supervised",String::boolText(s_super_handle >= 0));
     s_params.addParam("runattempt",String(s_run_attempt));
@@ -1873,6 +1886,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 	    ::fprintf(stderr,"Daemonification failed: %s (%d)\n",::strerror(err),err);
 	    return err;
 	}
+	s_interactive = false;
     }
 #endif
 
@@ -1946,8 +1960,10 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
     Debugger::setFormatting(tstamp);
 
 #ifdef _WINDOWS
-    if (service)
+    if (service) {
+	s_interactive = false;
 	retcode = ::StartServiceCtrlDispatcher(dispatchTable) ? 0 : ::GetLastError();
+    }
     else
 #endif
 	retcode = engineRun();

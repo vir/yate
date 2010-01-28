@@ -1059,7 +1059,11 @@ void JBEngine::printXml(const JBStream* stream, bool send, XmlChild& xml) const
     if (!(m_printXml && debugAt(DebugInfo)))
 	return;
     String s;
+    if (m_printXml > 0)
+	s << "\r\n-----";
     XMPPUtils::print(s,xml,m_printXml > 0);
+    if (m_printXml > 0)
+	s << "\r\n-----";
     const char* dir = send ? "Sending to" : "Receiving from";
     if (m_printXml < 0)
 	Debug(stream,DebugInfo,"%s '%s' %s [%p]",dir,stream->remote().c_str(),s.c_str(),stream);
@@ -1073,8 +1077,12 @@ void JBEngine::printXml(const JBStream* stream, bool send, XmlFragment& frag) co
     if (!(m_printXml && debugAt(DebugInfo)))
 	return;
     String s;
+    if (m_printXml > 0)
+	s << "\r\n-----";
     for (ObjList* o = frag.getChildren().skipNull(); o; o = o->skipNext())
 	XMPPUtils::print(s,*static_cast<XmlChild*>(o->get()),m_printXml > 0);
+    if (m_printXml > 0)
+	s << "\r\n-----";
     const char* dir = send ? "Sending to" : "Receiving from";
     if (m_printXml < 0)
 	Debug(stream,DebugInfo,"%s '%s' %s [%p]",dir,stream->remote().c_str(),s.c_str(),stream);

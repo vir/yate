@@ -1288,8 +1288,6 @@ unsigned int XMPPUtils::decodeDateTimeSec(const String& time, unsigned int* frac
 
 void XMPPUtils::print(String& xmlStr, XmlChild& xml, bool verbose)
 {
-    if (verbose)
-	xmlStr << "\r\n-----";
     const XmlElement* element = xml.xmlElement();
     if (element) {
 	String indent;
@@ -1307,8 +1305,6 @@ void XMPPUtils::print(String& xmlStr, XmlChild& xml, bool verbose)
     }
     else
 	Debug(DebugStub,"XMPPUtils::print() not implemented for this type!");
-    if (verbose)
-	xmlStr << "\r\n-----";
 }
 
 // Put an element's name, text and attributes to a list of parameters

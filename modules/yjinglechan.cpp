@@ -3434,6 +3434,15 @@ bool YJGDriver::received(Message& msg, int id)
 {
     if (id == ImExecute)
 	return !isModule(msg) && handleImExecute(msg);
+    if (id == Execute) {
+	// Client only: handle call.execute with target starting jabber/
+	if (s_serverMode)
+	    return Driver::received(msg,id);
+	String callto(msg.getValue("callto"));
+	if (!callto.startSkip("jabber/",false))
+	    return Driver::received(msg,id);
+	return msgExecute(msg,callto);
+    }
     if (id == Halt) {
 	// Uninstall message handlers
 	for (ObjList* o = m_handlers.skipNull(); o; o = o->skipNext()) {

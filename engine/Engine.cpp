@@ -866,7 +866,7 @@ SLib::SLib(HMODULE handle, const char* file, bool nounload)
 SLib::~SLib()
 {
 #ifdef DEBUG
-    Debugger debug("SLib::~SLib()"," [%p]",this);
+    Debugger debug("SLib::~SLib()"," '%s' [%p]",c_str(),this);
 #endif
     if (s_nounload || m_nounload) {
 #ifdef _WINDOWS

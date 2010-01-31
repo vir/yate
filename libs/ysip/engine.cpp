@@ -200,9 +200,9 @@ SIPTransaction* SIPEngine::addMessage(SIPMessage* message)
 	Debug(this,DebugMild,"Received message with no Via header! (sender bug)");
 #endif
     const NamedString* br = hl ? hl->getParam("branch") : 0;
-    String branch(br ? *br : String::empty());
-    if (!branch.startsWith("z9hG4bK"))
-	branch.clear();
+    String branch;
+    if (br && br->startsWith("z9hG4bK"))
+	branch = *br;
     Lock lock(this);
     SIPTransaction* forked = 0;
     ObjList* l = &m_transList;

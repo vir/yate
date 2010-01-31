@@ -90,12 +90,12 @@ void URI::parse() const
     // the compiler generates wrong code so use the temporary
     String tmp(*this);
     bool hasDesc = false;
-    Regexp r("^[[:space:]]*\"\\([^\"]\\+\\)\"[[:space:]]*\\(.*\\)$");
-    if (tmp.matches(r))
+    static Regexp r1("^[[:space:]]*\"\\([^\"]\\+\\)\"[[:space:]]*\\(.*\\)$");
+    if (tmp.matches(r1))
 	hasDesc = true;
     else {
-	r = "^[[:space:]]*\\([^<]\\+\\)[[:space:]]*<\\([^>]\\+\\)";
-	hasDesc = tmp.matches(r);
+	static Regexp r2("^[[:space:]]*\\([^<]\\+\\)[[:space:]]*<\\([^>]\\+\\)");
+	hasDesc = tmp.matches(r2);
     }
     if (hasDesc) {
 	m_desc = tmp.matchString(1);
@@ -104,8 +104,8 @@ void URI::parse() const
 	DDebug("URI",DebugAll,"new value='%s' [%p]",c_str(),this);
     }
 
-    r = "<\\([^>]\\+\\)>";
-    if (tmp.matches(r)) {
+    static Regexp r3("<\\([^>]\\+\\)>");
+    if (tmp.matches(r3)) {
 	tmp = tmp.matchString(1);
 	*const_cast<URI*>(this) = tmp;
 	DDebug("URI",DebugAll,"new value='%s' [%p]",c_str(),this);
@@ -116,9 +116,9 @@ void URI::parse() const
     // We parse:
     // [proto:][//][user@]hostname[:port][/path][;params][?params][&params]
 
-    r = "^\\([[:alpha:]]\\+:\\)\\?/\\?/\\?\\([^[:space:][:cntrl:]@]\\+@\\)\\?\\([[:alnum:]._-]\\+\\|[[][[:xdigit:].:]\\+[]]\\)\\(:[0-9]\\+\\)\\?";
+    static Regexp r4("^\\([[:alpha:]]\\+:\\)\\?/\\?/\\?\\([^[:space:][:cntrl:]@]\\+@\\)\\?\\([[:alnum:]._-]\\+\\|[[][[:xdigit:].:]\\+[]]\\)\\(:[0-9]\\+\\)\\?");
     // hack: use while only so we could break out of it
-    while (tmp.matches(r)) {
+    while (tmp.matches(r4)) {
 	int errptr = -1;
 	m_proto = tmp.matchString(1).toLower();
 	m_proto = m_proto.substr(0,m_proto.length()-1);

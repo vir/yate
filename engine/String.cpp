@@ -1261,6 +1261,7 @@ Regexp::Regexp(const char* value, bool extended, bool insensitive)
     XDebug(DebugAll,"Regexp::Regexp(\"%s\",%d,%d) [%p]",
 	value,extended,insensitive,this);
     setFlags(extended,insensitive);
+    compile();
 }
 
 Regexp::Regexp(const Regexp& value)

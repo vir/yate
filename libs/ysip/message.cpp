@@ -30,6 +30,8 @@
 
 using namespace TelEngine;
 
+static Regexp s_angled("<\\([^>]\\+\\)>");
+
 SIPMessage::SIPMessage(const SIPMessage& original)
     : RefObject(),
       version(original.version), method(original.method), uri(original.uri),
@@ -145,7 +147,7 @@ SIPMessage::SIPMessage(const SIPMessage* original, const SIPMessage* answer)
 	const MimeHeaderLine* co = answer->getHeader("Contact");
 	if (co) {
 	    uri = *co;
-	    Regexp r("^[^<]*<\\([^>]*\\)>.*$");
+	    static Regexp r("^[^<]*<\\([^>]*\\)>.*$");
 	    if (uri.matches(r))
 		uri = uri.matchString(1);
 	}
@@ -288,7 +290,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	String tmp(user);
 	if (!tmp) {
 	    tmp = uri;
-	    Regexp r(":\\([^:@]*\\)@");
+	    static Regexp r(":\\([^:@]*\\)@");
 	    tmp.matches(r);
 	    tmp = tmp.matchString(1).uriUnescape();
 	}
@@ -335,7 +337,7 @@ bool SIPMessage::parseFirst(String& line)
     XDebug(DebugAll,"SIPMessage::parse firstline= '%s'",line.c_str());
     if (line.null())
 	return false;
-    Regexp r("^\\([Ss][Ii][Pp]/[0-9]\\.[0-9]\\+\\)[[:space:]]\\+\\([0-9][0-9][0-9]\\)[[:space:]]\\+\\(.*\\)$");
+    static Regexp r("^\\([Ss][Ii][Pp]/[0-9]\\.[0-9]\\+\\)[[:space:]]\\+\\([0-9][0-9][0-9]\\)[[:space:]]\\+\\(.*\\)$");
     if (line.matches(r)) {
 	// Answer: <version> <code> <reason-phrase>
 	m_answer = true;
@@ -346,8 +348,8 @@ bool SIPMessage::parseFirst(String& line)
 	    version.c_str(),code,reason.c_str());
     }
     else {
-	r = "^\\([[:alpha:]]\\+\\)[[:space:]]\\+\\([^[:space:]]\\+\\)[[:space:]]\\+\\([Ss][Ii][Pp]/[0-9]\\.[0-9]\\+\\)$";
-	if (line.matches(r)) {
+	static Regexp r2("^\\([[:alpha:]]\\+\\)[[:space:]]\\+\\([^[:space:]]\\+\\)[[:space:]]\\+\\([Ss][Ii][Pp]/[0-9]\\.[0-9]\\+\\)$");
+	if (line.matches(r2)) {
 	    // Request: <method> <uri> <version>
 	    m_answer = false;
 	    method = line.matchString(1).toUpper();
@@ -699,8 +701,7 @@ void SIPMessage::addRoutes(const ObjList* routes)
     if (hl) {
 	// check if first route is to a RFC 2543 proxy
 	String tmp = *hl;
-	Regexp r("<\\([^>]\\+\\)>");
-	if (tmp.matches(r))
+	if (tmp.matches(s_angled))
 	    tmp = tmp.matchString(1);
 	if (tmp.find(";lr") < 0) {
 	    // prepare a new final route
@@ -765,17 +766,16 @@ SIPDialog& SIPDialog::operator=(const String& callid)
 SIPDialog::SIPDialog(const SIPMessage& message)
     : String(message.getHeaderValue("Call-ID"))
 {
-    Regexp r("<\\([^>]\\+\\)>");
     bool local = message.isOutgoing() ^ message.isAnswer();
     const MimeHeaderLine* hl = message.getHeader(local ? "From" : "To");
     localURI = hl;
-    if (localURI.matches(r))
+    if (localURI.matches(s_angled))
         localURI = localURI.matchString(1);
     if (hl)
 	localTag = hl->getParam("tag");
     hl = message.getHeader(local ? "To" : "From");
     remoteURI = hl;
-    if (remoteURI.matches(r))
+    if (remoteURI.matches(s_angled))
         remoteURI = remoteURI.matchString(1);
     if (hl)
 	remoteTag = hl->getParam("tag");
@@ -788,17 +788,16 @@ SIPDialog& SIPDialog::operator=(const SIPMessage& message)
     const char* cid = message.getHeaderValue("Call-ID");
     if (cid)
 	String::operator=(cid);
-    Regexp r("<\\([^>]\\+\\)>");
     bool local = message.isOutgoing() ^ message.isAnswer();
     const MimeHeaderLine* hl = message.getHeader(local ? "From" : "To");
     localURI = hl;
-    if (localURI.matches(r))
+    if (localURI.matches(s_angled))
         localURI = localURI.matchString(1);
     if (hl)
 	localTag = hl->getParam("tag");
     hl = message.getHeader(local ? "To" : "From");
     remoteURI = hl;
-    if (remoteURI.matches(r))
+    if (remoteURI.matches(s_angled))
         remoteURI = remoteURI.matchString(1);
     if (hl)
 	remoteTag = hl->getParam("tag");

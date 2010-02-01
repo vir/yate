@@ -502,7 +502,8 @@ class YateGkRegThread : public PThread
     PCLASSINFO(YateGkRegThread, PThread);
 public:
     YateGkRegThread(YateH323EndPoint* endpoint, int mode, int retry = 0, const char* name = "")
-	: PThread(10000), m_ep(endpoint), m_mode(mode), m_retry(retry), m_name(name)
+	: PThread(256000),
+	  m_ep(endpoint), m_mode(mode), m_retry(retry), m_name(name)
 	{ }
     void Main()
 	{ m_ep->asyncGkClient(m_mode,m_name,m_retry); }
@@ -518,7 +519,8 @@ class YateCallThread : public PThread
     PCLASSINFO(YateCallThread, PThread);
 public:
     YateCallThread(YateH323EndPoint* ep, const char* remoteParty, void* userData, int& status)
-	: PThread(10000), m_ep(ep), m_userData(userData), m_remoteParty(remoteParty), m_status(status)
+	: PThread(256000),
+	  m_ep(ep), m_userData(userData), m_remoteParty(remoteParty), m_status(status)
 	{ }
     virtual void Main();
     static bool makeCall(YateH323EndPoint* ep, const char* remoteParty, void* userData, bool newThread = false);
@@ -700,7 +702,7 @@ BOOL YateGatekeeperServer::Init()
     }
     disengageOnHearbeatFail = s_cfg.getBoolValue("gk","heartbeatdrop",true);
     canOnlyAnswerRegisteredEP = canOnlyCallRegisteredEP = s_cfg.getBoolValue("gk","registeredonly",false);
-    return TRUE;	
+    return TRUE;
 }
 
 YateH323EndPoint::YateH323EndPoint(const NamedList* params, const char* name)
@@ -885,6 +887,7 @@ bool YateH323EndPoint::startGkClient(int mode, int retry, const char* name)
     }
     m_thread = new YateGkRegThread(this,mode,retry,name);
     hplugin.unlock();
+    m_thread->SetThreadName("Yate H323GkClient");
     m_thread->SetAutoDelete();
     m_thread->Resume();
     return true;
@@ -982,10 +985,11 @@ bool YateCallThread::makeCall(YateH323EndPoint* ep, const char* remoteParty, voi
     }
     int status = 0;
     YateCallThread* call = new YateCallThread(ep,remoteParty,userData,status);
-    call->SetAutoDelete();
+    call->SetThreadName("Yate H323Call");
+    call->SetNoAutoDelete();
     call->Resume();
-    while (!status)
-	Thread::yield();
+    call->WaitForTermination();
+    delete call;
     return status > 0;
 }
 

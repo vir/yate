@@ -237,13 +237,26 @@ def outgoing(yate, target, maxcall = 30*1000,
     if not (yield execute.dispatch()):
         raise OutgoingCallException(formatReason(execute))
 
-    end = yate.onwatch("chan.hangup",
-        lambda m : m["id"] == execute["targetid"],
-        until = until)
-        
+    if execute["targetid"].startswith("fork/"):
+        end = XOR(yate.onwatch("chan.disconnected",
+                               lambda m : m["id"] == execute["id"] and m["answered"] == "false",
+                               until = until),
+                  yate.onwatch("chan.hangup",
+                               lambda m : m["id"] == execute["id"] and m["answered"] == "false",
+                               until = until),
+                  yate.onwatch("chan.hangup",
+                               lambda m : m["targetid"] and m["targetid"].startswith(execute["targetid"]) and m['answered'] == 'true',
+                               until = until))
+
+        end.addBoth(lambda r: r[1])
+    else:
+        end = yate.onwatch("chan.hangup",
+                           lambda m : m["id"] == execute["targetid"],
+                           until = until)
+
     answered = yate.onwatch(
         "call.answered",
-        lambda m : m["id"] ==  execute["targetid"],
+        lambda m : m["targetid"] ==  execute["id"],
         until = end)
 
     def trapAbandoned(f):
@@ -254,7 +267,7 @@ def outgoing(yate, target, maxcall = 30*1000,
 
     if logger.isEnabledFor(logging.DEBUG):
         def logAnswered(msg):                
-            logger.debug("Answered: %s, %s", execute["id"], execute["targetid"])
+            logger.debug("Answered: %s, %s", answered["id"], answered["targetid"])
             return msg
         
     if retCallIdFast:
@@ -265,9 +278,9 @@ def outgoing(yate, target, maxcall = 30*1000,
         logger.debug(
             "Waiting for answer: %s, %s", execute["targetid"], execute["id"])
 
-        yield answered
+        answered = yield answered
 
-        defer.returnValue((execute["id"], execute["targetid"], end))        
+        defer.returnValue((answered["targetid"], answered["id"], end))        
 
 
 ## @defer.inlineCallbacks

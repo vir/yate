@@ -827,7 +827,7 @@ class TCPDispatcher(Dispatcher, LineReceiver):
         """
         Message handler install response parser.
         """
-        
+
         values = values.split(':')
         mid = "install-" + values[1]
         if self.waiting.has_key(mid):

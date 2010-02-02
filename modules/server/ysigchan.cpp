@@ -419,6 +419,7 @@ public:
 	SigSS7Router      = 0x05 | SigDefaults,
 	SigSS7Management  = 0x06 | SigDefaults,
 	SigSS7Maintenance = 0x07 | SigDefaults,
+	SigSS7M2PA        = 0x08 | SigOnDemand,
 	SigSS7Isup  = SigTrunk::SS7Isup    | SigIsTrunk | SigTopMost,
 	SigSS7Bicc  = SigTrunk::SS7Bicc    | SigIsTrunk | SigTopMost,
 	SigISDNPN   = SigTrunk::IsdnPriNet | SigIsTrunk | SigTopMost,
@@ -592,6 +593,7 @@ const TokenDict SigFactory::s_compNames[] = {
     { "ss7-mtp3",     SigSS7Layer3 },
     { "ss7-snm",      SigSS7Management },
     { "ss7-mtn",      SigSS7Maintenance },
+    { "ss7-m2pa",     SigSS7M2PA },
     { "ss7-isup",     SigSS7Isup },
     { "ss7-bicc",     SigSS7Bicc },
     { "isdn-pri-net", SigISDNPN },
@@ -617,6 +619,7 @@ const TokenDict SigFactory::s_compClass[] = {
     MAKE_CLASS(SS7Layer3),
     MAKE_CLASS(SS7Management),
     MAKE_CLASS(SS7Maintenance),
+    MAKE_CLASS(SS7M2PA),
     MAKE_CLASS(SS7Isup),
     MAKE_CLASS(SS7Bicc),
     MAKE_CLASS(ISDNPN),
@@ -656,8 +659,14 @@ SignallingComponent* SigFactory::create(const String& type, const NamedList& nam
 	    return new ISDNQ921Management(*config,name,name.getBoolValue("network",true));
 	case SigISDNLayer3:
 	    return new ISDNQ931(*config,name);
-	case SigSS7Layer2:
+	case SigSS7Layer2: {
+	    String* ty = config->getParam("type");
+	    if (ty && *ty == "ss7-m2pa")
+		return new SS7M2PA(*config);
 	    return new SS7MTP2(*config);
+	}
+	case SigSS7M2PA:
+	    return new SS7M2PA(*config);
 	case SigSS7Layer3:
 	    return new SS7MTP3(*config);
 	case SigSS7Router:
@@ -1705,6 +1714,10 @@ void SigDriver::copySigMsgParams(SignallingEvent* event, const NamedList& params
     prefix = params.getValue("message-oprefix",prefix);
     if (prefix.null())
 	return;
+    event->message()->params().copySubParams(params,prefix + ".");
+
+return;
+    prefix << ".";
     unsigned int n = params.length();
     for (unsigned int i = 0; i < n; i++) {
 	NamedString* param = params.getParam(i);

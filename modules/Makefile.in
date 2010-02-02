@@ -43,7 +43,7 @@ PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 	server/mgcpgw.yate server/mgcpca.yate \
 	server/mrcpspeech.yate \
 	server/ysigchan.yate \
-	server/ciscosm.yate \
+	server/ciscosm.yate server/sigtransport.yate \
 	server/presence.yate server/subscription.yate \
 	server/users.yate \
 	server/analog.yate server/analogdetect.yate \
@@ -89,6 +89,10 @@ ifeq (@BUILD_TDMCARD@,yes)
 PROGS := $(PROGS) server/tdmcard.yate
 endif
 endif
+endif
+
+ifneq (@HAVE_SCTP_NETINET@,no)
+PROGS := $(PROGS) server/lksctp.yate
 endif
 
 ifneq (@HAVE_SPANDSP@,no)
@@ -219,11 +223,11 @@ qt4/%.moc: @srcdir@/qt4/%.h $(MKDEPS) $(INCFILES)
 
 # Take special care of the modules that depend on optional libs
 
-server/ysigchan.yate server/wpcard.yate server/tdmcard.yate server/zapcard.yate server/analog.yate server/ciscosm.yate: ../libyatesig.so
-server/ysigchan.yate server/analog.yate server/ciscosm.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig
+server/ysigchan.yate server/wpcard.yate server/tdmcard.yate server/zapcard.yate server/analog.yate server/ciscosm.yate server/sigtransport.yate: ../libyatesig.so
+server/ysigchan.yate server/analog.yate server/ciscosm.yate server/sigtransport.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig
 server/wpcard.yate server/tdmcard.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig @WANPIPE_FLAGS@
 server/zapcard.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig @ZAP_FLAGS@
-server/ysigchan.yate server/wpcard.yate server/tdmcard.yate server/zapcard.yate server/analog.yate server/ciscosm.yate: LOCALLIBS = -lyatesig
+server/ysigchan.yate server/wpcard.yate server/tdmcard.yate server/zapcard.yate server/analog.yate server/ciscosm.yate server/sigtransport.yate: LOCALLIBS = -lyatesig
 
 server/analogdetect.yate: ../libs/ymodem/libyatemodem.a
 server/analogdetect.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymodem
@@ -261,6 +265,9 @@ server/mgcpca.yate: LOCALLIBS = -lyatemgcp -lyatesig -L../libs/ysdp -lyatesdp
 server/mgcpgw.yate: ../libyatemgcp.so
 server/mgcpgw.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymgcp
 server/mgcpgw.yate: LOCALLIBS = -lyatemgcp
+
+server/lksctp.yate: LOCALFLAGS = @SCTP_FLAGS@
+server/lksctp.yate: LOCALLIBS = -lsctp
 
 ilbccodec.yate: ../libs/ilbc/libilbc.a
 ilbccodec.yate: LOCALLIBS = -L../libs/ilbc -lilbc

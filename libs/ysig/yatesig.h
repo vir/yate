@@ -3788,8 +3788,24 @@ public:
      * Get the SIGTRAN component attached to this transport
      * @return Pointer to adaptation layer or NULL
      */
-    inline SIGTRAN* sigtran() const
+     inline SIGTRAN* sigtran() const
 	{ return m_sigtran; }
+
+    /**
+     * Check if transport layer is reliable
+     * @return true if transport is reliable
+     */
+     virtual bool reliable() const = 0;
+
+    void notifyLayer(SignallingInterface::Notification status);
+
+    /**
+     * Configure and initialize the component and any subcomponents it may have
+     * @param config Optional configuration parameters override
+     * @return True if the component was initialized properly
+     */
+    virtual bool initialize(const NamedList* config)
+	{ return false;}
 
     /**
      * Check if the network transport layer is connected
@@ -3798,26 +3814,11 @@ public:
      */
     virtual bool connected(int streamId) const = 0;
 
-protected:
-    /**
-     * Constructor
-     * @param name Default empty component name
-     */
-    inline SIGTransport(const char* name = 0)
-	: SignallingComponent(name), m_sigtran(0)
-	{ }
-
     /**
      * Attach an user adaptation layer
      * @param sigtran SIGTRAN component to attach, can be NULL
      */
     void attach(SIGTRAN* sigtran);
-
-    /**
-     * Notification if the attached state changed
-     * @param hasUAL True if an User Adaptation Layer is now attached
-     */
-    virtual void attached(bool hasUAL) = 0;
 
     /**
      * Send a complete message to the adaptation layer for processing
@@ -3830,6 +3831,21 @@ protected:
      */
     bool processMSG(unsigned char msgVersion, unsigned char msgClass,
 	unsigned char msgType, const DataBlock& msg, int streamId) const;
+
+protected:
+    /**
+     * Constructor
+     * @param name Default empty component name
+     */
+    inline SIGTransport(const char* name = 0)
+	: SignallingComponent(name), m_sigtran(0)
+	{ }
+
+    /**
+     * Notification if the attached state changed
+     * @param hasUAL True if an User Adaptation Layer is now attached
+     */
+    virtual void attached(bool hasUAL) = 0;
 
     /**
      * Transmit a message to the network
@@ -3923,6 +3939,9 @@ public:
      * @return True if the transport (and stream if applicable) is connected
      */
     bool connected(int streamId = 0) const;
+
+    virtual void notifyLayer(SignallingInterface::Notification status)
+	{}
 
     /**
      * Message class names dictionary
@@ -4676,6 +4695,211 @@ protected:
  */
 class YSIG_API SS7M2PA : public SS7Layer2, public SIGTRAN
 {
+public:
+    enum m2paState {
+	Alignment = 1,
+	ProvingNormal = 2,
+	ProvingEmergency = 3,
+	Ready = 4,
+	ProcessorOutage = 5,
+	ProcessorRecovered = 6,
+	Busy = 7,
+	BusyEnded = 8,
+	OutOfService = 9,
+    };
+
+    enum msgType {
+	UserData = 1,
+	LinkStatus = 2
+    };
+
+    enum sctpState {
+	Idle,
+	Associating,
+	Established
+    };
+
+    /**
+     * Constructor
+     */
+    SS7M2PA(const NamedList& params);
+
+    /**
+     * Destructor
+     */
+    ~SS7M2PA();
+
+    /**
+     * Configure and initialize MTP2 and its interface
+     * @param config Optional configuration parameters override
+     * @return True if MTP2 and the interface were initialized properly
+     */
+    virtual bool initialize(const NamedList* config);
+
+    /**
+     * Execute a control operation. Operations can change the link status or
+     *  can query the aligned status.
+     * @param oper Operation to execute
+     * @param params Optional parameters for the operation
+     * @return True if the command completed successfully, for query operations
+     *  also indicates the data link is aligned and operational
+     */
+    virtual bool control(Operation oper, NamedList* params = 0);
+
+    /**
+     * Push a Message Signal Unit down the protocol stack
+     * @param msu MSU data to transmit
+     * @return True if message was successfully queued
+     */
+     virtual bool transmitMSU(const SS7MSU& msu);
+
+    /**
+     * Method called when the transport status has been changed
+     * @param status Up or down
+     */
+     virtual void notifyLayer(SignallingInterface::Notification status);
+
+    /**
+     * Remove the MSUs waiting in the transmit queue and return them
+     * @return List of MSUs taken from the queue
+     */
+     virtual ObjList* recoverMSU();
+
+    /**
+     * Decode sequence numbers from message and process them
+     * @param data The message
+     * @param msgType The message type
+     * @return True if sequence numbers ar as we expected to be
+     */
+    bool decodeSeq(const DataBlock& data, u_int8_t msgType);
+
+    /**
+     * Helper method called when an error was detected
+     * Change state to OutOfService and notifys upper layer
+     * @param from Debuging purpose, Information about detected error
+     */
+    void abortAlignment(String from);
+
+    /**
+     * Send link status message to inform the peer about ouer curent state
+     * @param streamId The id of the stream who should send the message
+     */
+    void transmitLS(int streamId = 0);
+
+    /**
+     * Create M2PA header (sequence numbers)
+     * @param data The data where the header will be stored
+     */
+    void setHeader(DataBlock& data);
+
+    /**
+     * Decode and process link status message
+     * @param data The message
+     * @param streamId The stream id witch received the message
+     * @return True if the message was procesed
+     */
+    bool processLinkStatus(DataBlock& data, int streamId);
+
+    /**
+     * Helper method used to acknowledge the last received message
+     * when no data are to transmit
+     */
+    void sendAck();
+
+    /**
+     * Remove a frame from acknowledgement list
+     * @param bsn The sequence number of the frame to be removed
+     */
+    void removeFrame(u_int32_t bsn);
+
+    /**
+     * Increment the given sequence number
+     * @param nr The number to increment
+     * @return The incremented number
+     */
+    inline u_int32_t increment(u_int32_t &nr)
+	{ return (nr == 0xffffff) ?(nr = 0) : nr++; }
+
+    /**
+     * Obtain next sequence number
+     * @param nr The number
+     * @return The next number in sequence
+     */
+    inline u_int32_t getNext(u_int32_t nr)
+	{ return (nr == 0xffffff) ? 0 : nr + 1; }
+
+protected:
+
+    /**
+     * Periodical timer tick used to perform alignment and housekeeping
+     * @param when Time to use as computing base for events and timeouts
+     */
+    virtual void timerTick(const Time& when);
+
+    /**
+     * Check if the link is aligned.
+     * The link may not be operational, the other side may be still proving.
+     * @return True if the link is aligned
+     */
+    virtual bool aligned() const;
+
+    /**
+     * Check if the link is aligned and operational
+     * @return True if the link is operational
+     */
+    virtual bool operational() const;
+
+    /**
+     * Process a complete message
+     * @param msgVersion Version of the protocol
+     * @param msgClass Class of the message
+     * @param msgType Type of the message, depends on the class
+     * @param msg Message data, may be empty
+     * @param streamId Identifier of the stream the message was received on
+     * @return True if the message was handled
+     */
+    virtual bool processMSG(unsigned char msgVersion, unsigned char msgClass,
+	unsigned char msgType, const DataBlock& msg, int streamId);
+
+    /**
+     * Initiates alignment and proving procedure
+     * @param emergency True if emergency alignment is desired
+     */
+    void startAlignment(bool emergency = false);
+
+    /**
+     * Retransmit unacknowledged data
+     */
+     void retransData();
+
+    /**
+     * Transmit the buffered messages to mtp3 and acknowledge them
+     */
+     void dequeueMsg();
+private:
+    void dumpMsg(u_int8_t version, u_int8_t mClass, u_int8_t type,
+	const DataBlock& data, int stream, bool send);
+    void setLocalStatus(unsigned int status);
+    void setRemoteStatus(unsigned int status);
+    u_int32_t m_seqNr;
+    u_int32_t m_needToAck;
+    u_int32_t m_lastAck;
+    unsigned int m_localStatus;
+    unsigned int m_state;
+    unsigned int m_remoteStatus;
+    unsigned int m_transportState;
+    Mutex m_mutex;
+    bool m_reliable;
+    bool m_autostart;
+    ObjList m_ackList;
+    ObjList m_bufMsg;
+    SignallingTimer m_t1;
+    SignallingTimer m_t2;
+    SignallingTimer m_t3;
+    SignallingTimer m_t4;
+    SignallingTimer m_ackTimer;
+    SignallingTimer m_confTimer;
+    bool m_dumpMsg;
 };
 
 /**

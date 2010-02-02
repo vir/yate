@@ -94,6 +94,8 @@ SignallingComponent* SignallingFactory::build(const String& type, const NamedLis
     // now build some objects we know about
     if (type == "SS7MTP2")
 	return new SS7MTP2(*name);
+    else if (type == "SS7M2PA")
+	return new SS7M2PA(*name);
     else if (type == "SS7MTP3")
 	return new SS7MTP3(*name);
     else if (type == "SS7Router")

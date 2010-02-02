@@ -1350,6 +1350,8 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
     }
 
     Message msg("user.register");
+    msg.addParam("sip_uri",t->getURI());
+    msg.addParam("sip_callid",t->getCallID());
     String user;
     int age = t->authUser(user,false,&msg);
     DDebug(&plugin,DebugAll,"User '%s' age %d",user.c_str(),age);

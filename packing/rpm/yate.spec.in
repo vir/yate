@@ -239,6 +239,7 @@ Yate driver for the ITU-T H.323 VoIP protocol based on the OpenH323 library.
 %{_libdir}/yate/h323chan.yate
 %config(noreplace) %{_sysconfdir}/yate/h323chan.conf
 
+%define conf_h323 %{nil}
 %else
 %define conf_h323 --without-pwlib
 %endif

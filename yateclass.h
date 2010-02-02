@@ -5871,6 +5871,110 @@ protected:
 };
 
 /**
+ * The SctpSocket interface provides access to SCTP specific functions
+ * @short Abstract SCTP Socket
+ */
+class YATE_API SctpSocket : public Socket
+{
+public:
+    /**
+     * Constructor
+     */
+     inline SctpSocket()
+	{ }
+
+    /**
+     * Constructor
+     * @param fd File descriptor of an existing handle
+     */
+     inline SctpSocket(SOCKET fd)
+	: Socket(fd)
+	{ }
+
+    /**
+     * Destructor
+     */
+     virtual ~SctpSocket();
+
+    /**
+     * Bind this socket to multiple addresses
+     * @param addresses The list of addresses (SocketAddr)
+     * @return True if the socket bind succeded
+     */
+     virtual bool bindx(ObjList& addresses) = 0;
+
+    /**
+     * Connect this socket to multiple addresses
+     * @param addresses the list of addresses (SocketAddr)
+     * @return True if the socket connect succeded
+     */
+     virtual bool connectx(ObjList& addresses) = 0;
+
+    /**
+     * Send a message over a connected or unconnected socket
+     * @param buffer Buffer for data transfer
+     * @param length Length of the buffer
+     * @param stream The stream number
+     * @param addr Address to send the message to, if NULL will behave like @ref send()
+     * @param flags Operating system specific bit flags that change the behaviour
+     * @return Number of bytes transferred, @ref socketError() if an error occurred
+     */
+     virtual int sendTo(void* buffer, int length, int stream, SocketAddr& addr, int flags) = 0;
+
+    /**
+     * Accept an incoming connection
+     * @param addr The socket address of the incoming connection
+     * @return A new SctpSocket if an incoming connection was detected
+     */
+     virtual Socket* accept(SocketAddr& addr)
+	{ return 0; }
+
+    /**
+     * Send a buffer of data over a connected socket
+     * @param buf The data to send
+     * @param length Data length
+     * @param stream The stream number to send over
+     * @param flags Flags, gets altered on return
+     * @return The number of bytes sent
+     */
+     virtual int sendMsg(const void* buf, int length, int stream, int& flags) = 0;
+
+    /**
+     * Receive data from a connected socket
+     * @param buf The buffer where the data will be stored
+     * @param length The buffer length
+     * @param addr Gets the remote address from which the data was received
+     * @param stream Gets the stream number on which the data was read
+     * @param flags Flags, gets altered on return
+     * @return The number of bytes read
+     */
+     virtual int recvMsg(void* buf, int length, SocketAddr& addr, int& stream, int& flags) = 0;
+
+    /**
+     * Set the number of streams
+     * @param inbound The number of inbound streams
+     * @param outbound The number of outbound streams
+     * @return True if the number of streams was set
+     */
+     virtual bool setStreams(int inbound, int outbound) = 0;
+
+    /**
+     * Subscribe to SCTP events
+     * This method should be called if we need to find from which stream the data came
+     * @return True if subscription has succeeded
+     */
+     virtual bool subscribeEvents() = 0;
+
+    /**
+     * Get the number of negotiated streams
+     * @param inbound Number of inbound streams
+     * @param outbound Number of outbound streams
+     * @return True if operation has succeded
+     */
+     virtual bool getStreams(int& inbound, int& outbound) = 0;
+};
+
+/**
  * The Cipher class provides an abstraction for data encryption classes
  * @short An abstract cipher
  */

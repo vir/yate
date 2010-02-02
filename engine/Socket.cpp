@@ -1703,4 +1703,9 @@ void Socket::timerTick(const Time& when)
     }
 }
 
+
+SctpSocket::~SctpSocket()
+{
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

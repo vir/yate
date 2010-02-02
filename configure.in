@@ -287,6 +287,16 @@ if [[ "x$HAVE_SCTP_NETINET" != "xno" ]]; then
 # including netinet/sctp.h fixes SCTP support so enable it
 HAVE_SCTP=yes
 SCTP_FLAGS="-DHAVE_SCTP -DHAVE_SCTP_NETINET"
+sctp_connectx_new=no
+AC_MSG_CHECKING([whether sctp_connectx has 4 arguments])
+AC_TRY_COMPILE([#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/sctp.h>],[sctp_connectx(0,0,0,0);],[sctp_connectx_new=yes])
+AC_MSG_RESULT([$sctp_connectx_new])
+if [[ "x$sctp_connectx_new" = "xyes" ]]; then
+SCTP_FLAGS="$SCTP_FLAGS -DHAVE_SCTP_CONNECTX_4"
+fi
 else
 if [[ "x$HAVE_SCTP" != "xno" ]]; then
 SCTP_FLAGS="-DHAVE_SCTP"

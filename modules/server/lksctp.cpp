@@ -114,7 +114,11 @@ bool LKSocket::connectx(ObjList& addresses)
 	SocketAddr* a = static_cast<SocketAddr*>(o->get());
 	addr[i++] = *(a->address());
     }
+#ifdef HAVE_SCTP_CONNECTX_4
     int error = sctp_connectx(handle(),addr,addresses.count(),NULL);
+#else
+    int error = sctp_connectx(handle(),addr,addresses.count());
+#endif
     return (error >= 0);
 }
 

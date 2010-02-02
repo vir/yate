@@ -1514,10 +1514,23 @@ SignallingComponent* ZapInterface::create(const String& type, const NamedList& n
     else
 	return 0;
 
+    const String* module = name.getParam("module");
+    if (module && *module != "zapcard")
+	return 0;
     Configuration cfg(Engine::configFile("zapcard"));
     const char* sectName = name.getValue((circuit ? "voice" : "sig"),name.getValue("basename",name));
     NamedList* config = cfg.getSection(sectName);
-    if (!config) {
+    if (module) {
+	DDebug(&plugin,DebugAll,"Replace config params in section %s",c_safe(sectName));
+	if (!config) {
+	    cfg.createSection(sectName);
+	    config = cfg.getSection(sectName);
+	}
+	config->copyParams(name);
+	if(!cfg.save())
+	    DDebug(&plugin,DebugAll,"Failed to save configuration in file %s ",module);
+    }
+    else if (!config){
 	DDebug(&plugin,DebugAll,"No section '%s' in configuration",c_safe(sectName));
 	return 0;
     }

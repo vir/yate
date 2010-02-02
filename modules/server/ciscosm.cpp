@@ -2003,18 +2003,43 @@ SignallingComponent* SLT::create(const String& type, const NamedList& name)
 {
     if (type != "SS7Layer2")
 	return 0;
+    const String* module = name.getParam("module");
+    if (module && *module != "ciscosm")
+	return 0;
     Configuration cfg(Engine::configFile("ciscosm"));
     const char* sectName = name.getValue("link",name);
     NamedList* layer = cfg.getSection(sectName);
-    if (!layer)
+    if (module) {
+	if (layer)
+	    layer->clearParams();
+	else {
+	    cfg.createSection(sectName);
+	    layer = cfg.getSection(sectName);
+	}
+	layer->copyParams(name);
+	cfg.save();
+    }
+    if (!layer) {
 	return 0;
+    }
     String confSec = layer->getValue("session","default");
+    NamedList recvSec(confSec);
+    recvSec.copySubParams(*layer,confSec + ".");
     NamedList* section = cfg.getSection(confSec);
+    if (recvSec.count()) {
+	if (section)
+	    section->clearParams();
+	else {
+	    cfg.createSection(confSec);
+	    section = cfg.getSection(confSec);
+	}
+	section->copyParams(recvSec);
+	cfg.save();
+    }
     if (!section) {
 	Debug(DebugWarn,"Session '%s' does not exist in configuration",confSec.c_str());
 	return 0;
     }
-    layer->copyParams(*section);
     layer->copyParams(name);
     return new SLT(name,*layer);
 }

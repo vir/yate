@@ -140,25 +140,24 @@ public:
     // process rx
     void close();
     bool select(unsigned int usec);
-    //void* process(void *slot);
     //send Rx Data
     int request_transmit_data(DataBlock buffer,int timeout, unsigned maxlen = 0);
-    int sangoma_tdm_read_event(sng_fd_t fd, wanpipe_tdm_api_t *tdm_api);
+    int sangoma_tdm_read_event();
     int sangoma_open_tdmapi_span_chan(int span, int chan);
     int sangoma_span_chan_fromif(const char *interface_name, int *span, int *chan);
-    int sangoma_tdm_cmd_exec(sng_fd_t fd, wanpipe_tdm_api_t  *tdm_api, String called = "");
-    int sangoma_readmsg_tdm(sng_fd_t fd, void *hdrbuf,
+    int sangoma_tdm_cmd_exec();
+    int sangoma_readmsg_tdm(void *hdrbuf,
 		int hdrlen, void *databuf, int datalen, int flag);
-    int sangoma_writemsg_tdm(sng_fd_t fd, void *hdrbuf,
+    int sangoma_writemsg_tdm(void *hdrbuf,
 		int hdrlen, void *databuf, unsigned short datalen, int flag);
-    int sangoma_tdm_set_codec(sng_fd_t fd, wanpipe_tdm_api_t  *tdm_api, int codec);
-    int sangoma_tdm_flush_bufs(sng_fd_t fd, wanpipe_tdm_api_t  *tdm_api);
+    int sangoma_tdm_set_codec(int codec);
+    int sangoma_tdm_flush_bufs();
     bool setFormat(Format format);
     // flush buffers
     bool flushBuffers();
     // send comandas
     bool sendHook(int hookstatus);
-    void decode_alarms(const char* if_name, unsigned int alarm_types);
+    void decode_alarms(unsigned int alarm_types);
     int transmit_data(unsigned char * buf, int lenbuf, int timeout);
     inline SignallingComponent* owner() const
 	{ return m_owner; }
@@ -584,8 +583,11 @@ TdmDevice::~TdmDevice()
     plugin.remove(this);
 }
 
-int TdmDevice::sangoma_tdm_read_event(sng_fd_t fd, wanpipe_tdm_api_t *tdm_api)
+int TdmDevice::sangoma_tdm_read_event()
 {
+    if (!valid())
+	return -1;
+
 #ifdef WP_TDM_FEATURE_EVENTS
 
     wp_tdm_api_event_t *rx_event;
@@ -594,27 +596,27 @@ int TdmDevice::sangoma_tdm_read_event(sng_fd_t fd, wanpipe_tdm_api_t *tdm_api)
     rx_event = &last_tdm_api_event_buffer;
 #else
     int err;
-    tdm_api->wp_tdm_cmd.cmd = SIOC_WP_TDM_READ_EVENT;
-    err = sangoma_tdm_cmd_exec(fd,tdm_api,"read_event");
+    m_tdm_api->wp_tdm_cmd.cmd = SIOC_WP_TDM_READ_EVENT;
+    err = sangoma_tdm_cmd_exec();
     if (err){
 	return err;
     }
-    rx_event = &tdm_api->wp_tdm_cmd.event;
+    rx_event = &m_tdm_api->wp_tdm_cmd.event;
 #endif
 
     switch (rx_event->wp_tdm_api_event_type){
 	case WP_TDMAPI_EVENT_RBS:
-	printf("%d: GOT RBS EVENT %p\n",(int)fd,tdm_api->wp_tdm_event.wp_rbs_event);
-	if (tdm_api->wp_tdm_event.wp_rbs_event) {
-	    tdm_api->wp_tdm_event.wp_rbs_event(fd,rx_event->wp_tdm_api_event_rbs_bits);
+	printf("%d: GOT RBS EVENT %p\n",(int)m_sock,m_tdm_api->wp_tdm_event.wp_rbs_event);
+	if (m_tdm_api->wp_tdm_event.wp_rbs_event) {
+	    m_tdm_api->wp_tdm_event.wp_rbs_event(m_sock,rx_event->wp_tdm_api_event_rbs_bits);
 	}
 	break;
 	
 #ifdef WP_TDM_FEATURE_DTMF_EVENTS	
 	case WP_TDMAPI_EVENT_DTMF:
-	    printf("%d: GOT DTMF EVENT\n",(int)fd);
-	    if (tdm_api->wp_tdm_event.wp_dtmf_event) {
-		tdm_api->wp_tdm_event.wp_dtmf_event(fd,
+	    printf("%d: GOT DTMF EVENT\n",(int)m_sock);
+	    if (m_tdm_api->wp_tdm_event.wp_dtmf_event) {
+		m_tdm_api->wp_tdm_event.wp_dtmf_event(m_sock,
 			rx_event->wp_tdm_api_event_dtmf_digit,
 			rx_event->wp_tdm_api_event_dtmf_type,
 			rx_event->wp_tdm_api_event_dtmf_port);
@@ -623,41 +625,41 @@ int TdmDevice::sangoma_tdm_read_event(sng_fd_t fd, wanpipe_tdm_api_t *tdm_api)
 #endif
 		
 	case WP_TDMAPI_EVENT_RXHOOK:
-	     printf("%d: GOT RXHOOK EVENT\n",(int)fd);
-	     if (tdm_api->wp_tdm_event.wp_rxhook_event) {
-		tdm_api->wp_tdm_event.wp_rxhook_event(fd,
+	     printf("%d: GOT RXHOOK EVENT\n",(int)m_sock);
+	     if (m_tdm_api->wp_tdm_event.wp_rxhook_event) {
+		m_tdm_api->wp_tdm_event.wp_rxhook_event(m_sock,
 			rx_event->wp_tdm_api_event_hook_state);
 	    }
 	    break;
 
 	case WP_TDMAPI_EVENT_RING_DETECT:
-	    printf("%d: GOT RXRING EVENT\n",(int)fd);
-	    if (tdm_api->wp_tdm_event.wp_ring_detect_event) {
-		tdm_api->wp_tdm_event.wp_ring_detect_event(fd,
+	    printf("%d: GOT RXRING EVENT\n",(int)m_sock);
+	    if (m_tdm_api->wp_tdm_event.wp_ring_detect_event) {
+		m_tdm_api->wp_tdm_event.wp_ring_detect_event(m_sock,
 			rx_event->wp_tdm_api_event_ring_state);
 	    }
 	    break;
 
 	case WP_TDMAPI_EVENT_RING_TRIP_DETECT:
-	    printf("%d: GOT RING TRIP EVENT\n",(int)fd);
-	    if (tdm_api->wp_tdm_event.wp_ring_trip_detect_event) {
-		tdm_api->wp_tdm_event.wp_ring_trip_detect_event(fd,
+	    printf("%d: GOT RING TRIP EVENT\n",(int)m_sock);
+	    if (m_tdm_api->wp_tdm_event.wp_ring_trip_detect_event) {
+		m_tdm_api->wp_tdm_event.wp_ring_trip_detect_event(m_sock,
 			rx_event->wp_tdm_api_event_ring_state);
 	    }
 	    break;
 
 #ifdef WP_TDM_FEATURE_FE_ALARM
 	case WP_TDMAPI_EVENT_ALARM:
-	    printf("%d: GOT FE ALARMS EVENT %i\n",(int)fd,
+	    printf("%d: GOT FE ALARMS EVENT %i\n",(int)m_sock,
 			rx_event->wp_tdm_api_event_alarm);
-	    if (tdm_api->wp_tdm_event.wp_fe_alarm_event) {
-		tdm_api->wp_tdm_event.wp_fe_alarm_event(fd,
+	    if (m_tdm_api->wp_tdm_event.wp_fe_alarm_event) {
+		m_tdm_api->wp_tdm_event.wp_fe_alarm_event(m_sock,
 			rx_event->wp_tdm_api_event_alarm);
 	}
 	break;
 #endif
 	default:
-	    printf("%d: Unknown TDM event!", (int)fd);
+	    printf("%d: Unknown TDM event!", (int)m_sock);
 	    break;
 	}
 	
@@ -672,6 +674,7 @@ int TdmDevice::sangoma_open_tdmapi_span_chan(int span, int chan)
 {
     char fname[50];
     int fd = 0;
+
 #if defined(WIN32)
 
 	//NOTE: under Windows Interfaces are zero based but 'chan' is 1 based.
@@ -733,18 +736,22 @@ int TdmDevice::sangoma_span_chan_fromif(const char *interface_name, int *span, i
     return ret;
 }
 
-int TdmDevice::sangoma_tdm_cmd_exec(sng_fd_t fd, wanpipe_tdm_api_t *tdm_api, String apel_name)
+int TdmDevice::sangoma_tdm_cmd_exec()
 {
+    if (!valid())
+	return -1;
     int err;
-    wanpipe_tdm_api_t *tdm_api1 = tdm_api;
+    wanpipe_tdm_api_t *tdm_api1 = m_tdm_api;
+
 #if defined(WIN32)
-    err = tdmv_api_ioctl(fd, &tdm_api->wp_tdm_cmd);
+    err = tdmv_api_ioctl(m_sock, &m_tdm_api->wp_tdm_cmd);
 #else
-    err = ioctl(fd,SIOC_WANPIPE_TDM_API,&tdm_api1->wp_tdm_cmd);
+    err = ioctl(m_sock,SIOC_WANPIPE_TDM_API,&tdm_api1->wp_tdm_cmd);
     if (err < 0){
 	char tmp[50];
 	sprintf(tmp,"TDM API: CMD: %i\n",tdm_api1->wp_tdm_cmd.cmd);
-	DDebug(m_owner,DebugWarn,"interface name=%s, was call by :%s",tdmName().c_str(),apel_name.c_str());
+	DDebug(m_owner,DebugWarn,"Command execute failed on interface %s",
+	    tdmName().c_str());
 	perror(tmp);
 	return -1;
     }
@@ -752,9 +759,11 @@ int TdmDevice::sangoma_tdm_cmd_exec(sng_fd_t fd, wanpipe_tdm_api_t *tdm_api, Str
     return err;
 }
 
-int TdmDevice::sangoma_readmsg_tdm(sng_fd_t fd, void *hdrbuf, int hdrlen, void *databuf, int datalen, int flag)
+int TdmDevice::sangoma_readmsg_tdm(void *hdrbuf, int hdrlen, void *databuf, int datalen, int flag)
 {
     int rx_len=0;
+    if (!valid())
+	return -1;
 
 #if defined(WIN32)
     static RX_DATA_STRUCT	rx_data;
@@ -831,7 +840,7 @@ int TdmDevice::sangoma_readmsg_tdm(sng_fd_t fd, void *hdrbuf, int hdrlen, void *
     iov[1].iov_base = databuf;
     msg.msg_iovlen = 2;
     msg.msg_iov = iov;
-    rx_len = read(fd,&msg,datalen+hdrlen);
+    rx_len = read(m_sock,&msg,datalen+hdrlen);
     rx_len-=sizeof(wp_tdm_api_rx_hdr_t);
     if (rx_len < 0) {
 	return -EINVAL;
@@ -845,9 +854,11 @@ int TdmDevice::sangoma_readmsg_tdm(sng_fd_t fd, void *hdrbuf, int hdrlen, void *
     return rx_len;
 }
 
-int TdmDevice::sangoma_writemsg_tdm(sng_fd_t fd, void *hdrbuf, int hdrlen, void *databuf, unsigned short datalen, int flag)
+int TdmDevice::sangoma_writemsg_tdm(void *hdrbuf, int hdrlen, void *databuf, unsigned short datalen, int flag)
 {
     int bsent;
+    if (!valid())
+	return -1;
 
 #if defined(WIN32)
     static TX_DATA_STRUCT local_tx_data;
@@ -856,7 +867,7 @@ int TdmDevice::sangoma_writemsg_tdm(sng_fd_t fd, void *hdrbuf, int hdrlen, void 
     pri->data_length = datalen;
     memcpy(local_tx_data.data, databuf, pri->data_length);
     //queue data for transmission
-    if(DoWriteCommand(fd, &local_tx_data)){
+    if(DoWriteCommand(m_sock, &local_tx_data)){
 	//error
 	prn(1, "Error: DoWriteCommand() failed!! Check messages log.\n");
 	return -1;
@@ -905,7 +916,7 @@ int TdmDevice::sangoma_writemsg_tdm(sng_fd_t fd, void *hdrbuf, int hdrlen, void 
     iov[1].iov_base = databuf;
     msg.msg_iovlen = 2;
     msg.msg_iov = iov;
-    bsent = write(fd,&msg,datalen+hdrlen);
+    bsent = write(m_sock,&msg,datalen+hdrlen);
     if (bsent > 0)
 	bsent-=sizeof(wp_tdm_api_tx_hdr_t);
     else
@@ -916,16 +927,16 @@ int TdmDevice::sangoma_writemsg_tdm(sng_fd_t fd, void *hdrbuf, int hdrlen, void 
     return bsent;
 }
 
-int TdmDevice::sangoma_tdm_set_codec(sng_fd_t fd, wanpipe_tdm_api_t *tdm_api, int codec)
+int TdmDevice::sangoma_tdm_set_codec(int codec)
 {
     int err;
-    tdm_api->wp_tdm_cmd.cmd = SIOC_WP_TDM_SET_CODEC;
-    tdm_api->wp_tdm_cmd.tdm_codec = codec;
-    err = sangoma_tdm_cmd_exec(fd,tdm_api,"setcodec");
+    m_tdm_api->wp_tdm_cmd.cmd = SIOC_WP_TDM_SET_CODEC;
+    m_tdm_api->wp_tdm_cmd.tdm_codec = codec;
+    err = sangoma_tdm_cmd_exec();
     return err;
 }
 
-int TdmDevice::sangoma_tdm_flush_bufs(sng_fd_t fd, wanpipe_tdm_api_t *tdm_api)
+int TdmDevice::sangoma_tdm_flush_bufs()
 {
 #if 0
     tdm_api->wp_tdm_cmd.cmd = SIOC_WP_TDM_FLUSH_BUFFERS;
@@ -943,7 +954,7 @@ bool TdmDevice::makeConnection()
     DDebug(m_owner,DebugNote,"Conn: name='%s' span=%d chan=%d [%p]",tdmName().c_str(),m_span,m_chan,this);
     if (m_span > 0 && m_chan > 0) {
 	m_sock = sangoma_open_tdmapi_span_chan(m_span,m_chan);
-	if (m_sock < 0) {
+	if (!valid()) {
 	    DDebug(m_owner,DebugNote,"Cannot open span=%d chan=%d sock=%d",m_span,m_chan,m_sock);
 	    return false;
 	}
@@ -960,7 +971,7 @@ int TdmDevice::receiveData(u_int8_t*& buff, unsigned int &buflen)
 {
     wp_tdm_api_rx_hdr_t abuff;
     memset(&abuff,0,sizeof(abuff));
-    int buflength = sangoma_readmsg_tdm(m_sock,&abuff,sizeof(abuff),
+    int buflength = sangoma_readmsg_tdm(&abuff,sizeof(abuff),
 		buff,buflen,0);
     if (buflength < 0)
 	return -1;
@@ -969,9 +980,8 @@ int TdmDevice::receiveData(u_int8_t*& buff, unsigned int &buflen)
     return buflength;
 }
 
-void TdmDevice::decode_alarms(const char* if_name, unsigned int alarm_types)
+void TdmDevice::decode_alarms(unsigned int alarm_types)
 {
-    DDebug(m_owner,DebugNote,"%s: alarms:%X\n", if_name, alarm_types);
     DDebug(m_owner,DebugNote,"[Framer]: ALOS:%s  LOS:%s RED:%s AIS:%s RAI:%s OOF:%s\n", 
 			WAN_TE_ALOS_ALARM(alarm_types),
 			WAN_TE_LOS_ALARM(alarm_types),
@@ -991,7 +1001,7 @@ void TdmDevice::decode_alarms(const char* if_name, unsigned int alarm_types)
 bool TdmDevice::checkEvents()
 {
     wp_tdm_api_event_t *rx_event;
-    int err = sangoma_tdm_read_event(m_sock,m_tdm_api);
+    int err = sangoma_tdm_read_event();
     if (err != 0)
 	return false;
     rx_event = &m_tdm_api->wp_tdm_cmd.event;
@@ -1003,7 +1013,7 @@ bool TdmDevice::checkEvents()
 	    else {
 		DDebug(m_owner,DebugInfo,"%s: Link is connected",tdmName().c_str());
 	    }
-	    decode_alarms(tdmName(),rx_event->wp_tdm_api_event_alarm);
+	    decode_alarms(rx_event->wp_tdm_api_event_alarm);
 	    break;
 	default :
 	    DDebug(m_owner,DebugNote,"%s: Unknown OOB event",tdmName().c_str());
@@ -1014,6 +1024,8 @@ bool TdmDevice::checkEvents()
 
 bool TdmDevice::select(unsigned int usec)
 {
+    if (!valid())
+	return false;
     fd_set ready;
     fd_set oob;
     FD_ZERO(&ready);
@@ -1044,17 +1056,23 @@ int TdmDevice::transmit_data(unsigned char *buf, int length, int timeout)
     int  err = 0;
     fd_set write;
     char hdr[16];
+    if (!valid()) {
+	DDebug(m_owner,DebugNote,"TdmDevice::transmit_data socket invalid %d",m_sock);
+	return -1;
+    }
     FD_ZERO(&write);
     FD_SET(m_sock, &write);
     for (int i = 0;i <16; i++)
 	hdr[i]= i;
     m_tv.tv_sec = 0;
     m_tv.tv_usec = timeout;
-    if(::select((m_sock+1),NULL, &write, NULL, &m_tv)){
+    int ret = ::select((m_sock+1),NULL, &write, NULL, &m_tv);
+    if(ret > 0) {
 	if (FD_ISSET(m_sock, &write)) {
-	    err = sangoma_writemsg_tdm(m_sock, hdr, 16, buf, length, 0);
+	    err = sangoma_writemsg_tdm(hdr, 16, buf, length, 0);
 	    if (err < 0) {
-		DDebug(m_owner,DebugNote,"%s: Error: Failed to transmit data",tdmName().c_str());
+		DDebug(m_owner,DebugNote,"%s: Error: Failed to transmit data, %d %s "
+		,tdmName().c_str(),errno,::strerror(errno));
 		return 0;
 	    }
 	}
@@ -1072,7 +1090,7 @@ int TdmDevice::request_transmit_data(DataBlock data, int timeout, unsigned int m
 
 bool TdmDevice::setFormat(Format format)
 {
-    int aux = sangoma_tdm_set_codec(m_sock,m_tdm_api,format);
+    int aux = sangoma_tdm_set_codec(format);
     if (aux != 0) {
 	Debug(m_owner,DebugNote,"Failed to set format '%d' on channel %d",
 	    format,m_sock);
@@ -1085,7 +1103,7 @@ bool TdmDevice::setFormat(Format format)
 
 bool TdmDevice::flushBuffers()
 {
-    int x = sangoma_tdm_flush_bufs(m_sock,m_tdm_api);
+    int x = sangoma_tdm_flush_bufs();
     if (x != 0) {
 	DDebug(m_owner,DebugWarn,"Error flushing TDM buffers");
 	return false;
@@ -1096,7 +1114,7 @@ bool TdmDevice::flushBuffers()
 bool TdmDevice::sendHook(int tx)
 {
     m_tdm_api->wp_tdm_cmd.cmd = (unsigned int)tx;
-    int err = sangoma_tdm_cmd_exec(m_sock,m_tdm_api);
+    int err = sangoma_tdm_cmd_exec();
     if (!err) {
 	DDebug(m_owner,DebugNote,"Unable to send hook events");
 	return false;
@@ -1109,7 +1127,7 @@ bool TdmDevice::sendHook(int tx)
 bool TdmSpan::init(TdmDevice::Type type,
 	const NamedList& config, const NamedList& defaults, const NamedList& params)
 {
-    String voice = config.getValue("voicechans");
+    String voice = params.getValue("voicechans",config.getValue("voicechans"));
     unsigned int chans = 0;
     bool digital = true;
     switch (type) {
@@ -1192,7 +1210,7 @@ bool TdmSpan::init(TdmDevice::Type type,
     if (m_group && m_group->debugAt(DebugInfo)) {
 	String s;
 	s << "driver=" << plugin.debugName();
-	s << " section=" << config.c_str();
+	s << " section=" << !params.null() ? params.c_str() : config.c_str();
 	s << " type=" << lookup(type,s_types);
 	String c,ch;
 	for (unsigned int i = 0; i < count; i++) {
@@ -1234,12 +1252,12 @@ TdmCircuit::TdmCircuit(TdmDevice::Type type, unsigned int code, unsigned int cha
     m_bufpos(0),
     m_errno(0)
 {
-    int sp = config.getIntValue("span",1);
+    int sp = params.getIntValue("span",config.getIntValue("span",1));
     String name;
     name << "s" << sp << "c" << channel;
     m_device.setInterfaceName(name);
     m_device.makeConnection();
-    m_dtmfDetect = config.getBoolValue("dtmfdetect",true);
+    m_dtmfDetect = params.getBoolValue("dtmfdetect",config.getBoolValue("dtmfdetect",true));
     if (m_dtmfDetect) {
 	Debug(group(),DebugAll,
 	    "TdmCircuit(%u). DTMF detection is not supported by hardware [%p]",
@@ -1247,18 +1265,22 @@ TdmCircuit::TdmCircuit(TdmDevice::Type type, unsigned int code, unsigned int cha
 	m_dtmfDetect = false;
     }
     m_crtDtmfDetect = m_dtmfDetect;
-    int tmp = config.getIntValue("echotaps",defaults.getIntValue("echotaps",0));
+    int tmp = defaults.getIntValue("echotaps");
+    tmp = params.getIntValue("echotaps",config.getIntValue("echotaps",tmp));
     m_echoTaps = tmp >= 0 ? tmp : 0;
     m_crtEchoCancel = m_echoCancel = m_echoTaps;
-    tmp = (unsigned int)config.getIntValue("echotrain",defaults.getIntValue("echotrain",400));
+    tmp = defaults.getIntValue("echotrain",400);
+    tmp = (unsigned int)params.getIntValue("echotrain",config.getIntValue("echotrain",tmp));
     m_echoTrain = tmp >= 0 ? tmp : 0;
-    m_canSend = !getBoolValue("readonly",config,defaults,params);
-    m_buflen = (unsigned int)config.getIntValue("buflen",defaults.getIntValue("buflen",160));
+    m_canSend = !getBoolValue("readonly",params,config,defaults);
+    m_buflen = defaults.getIntValue("buflen",80);
+    m_buflen = (unsigned int)params.getIntValue("buflen",config.getIntValue("buflen",m_buflen));
     m_consBufMax = m_buflen * 4;
     m_sourceBuffer.assign(0,m_buflen);
     m_idleValue = defaults.getIntValue("idlevalue",0xff);
     m_idleValue = params.getIntValue("idlevalue",config.getIntValue("idlevalue",m_idleValue));
-    m_priority = Thread::priority(config.getValue("priority",defaults.getValue("priority")));
+    String priority = defaults.getValue("priority","100");
+    m_priority = Thread::priority(params.getValue("priority",config.getValue("priority",priority)));
     m_format = TdmDevice::WP_SLINEAR;
 
     if (group() && group()->debugAt(DebugAll)) {
@@ -1457,7 +1479,7 @@ void TdmCircuit::consume(const DataBlock& data)
     if (m_consBuffer.length() + data.length() <= m_consBufMax)
 	m_consBuffer += data;
     else {
-	Debug(group(),DebugInfo,
+	XDebug(group(),DebugInfo,
 	    "TdmCircuit(%u). Buffer overrun old=%u channel=%u (%d: %s) [%p]",
 	    code(),m_consBuffer.length(),m_device.channel(),m_errno,
 	    ::strerror(m_errno),this);
@@ -1661,10 +1683,25 @@ SignallingComponent* TdmInterface::create(const String& type, const NamedList& n
     else
 	return 0;
 
+    // Check in params if the module witch should create the component is specifyed
+    // if the module is specifyed and is not tdmcard let the specifyed module to create the component
+    const String* module = name.getParam("module");
+    if (module && *module != "tdmcard")
+	return 0;
     Configuration cfg(Engine::configFile("tdmcard"));
     const char* sectName = name.getValue((circuit ? "voice" : "sig"),name.getValue("basename",name));
     NamedList* config = cfg.getSection(sectName);
-    if (!config) {
+    if (module) {
+	DDebug(&plugin,DebugAll,"Replace config params in section %s",c_safe(sectName));
+	if (!config) {
+	    cfg.createSection(sectName);
+	    config = cfg.getSection(sectName);
+	}
+	config->copyParams(name);
+	if(!cfg.save())
+	    DDebug(&plugin,DebugAll,"Failed to save configuration in file %s ",module->c_str());
+    }
+    else if (!config){
 	DDebug(&plugin,DebugAll,"No section '%s' in configuration",c_safe(sectName));
 	return 0;
     }
@@ -1784,14 +1821,15 @@ bool TdmInterface::process()
 bool TdmInterface::init(TdmDevice::Type type, unsigned int code, unsigned int channel,
 	const NamedList& config, const NamedList& defaults, const NamedList& params)
 {
-    m_readOnly = getBoolValue("readonly",config,defaults,params);
-    m_priority = Thread::priority(config.getValue("priority",defaults.getValue("priority")));
+    m_readOnly = getBoolValue("readonly",params,config,defaults);
+    String priority = defaults.getValue("priority");
+    m_priority = Thread::priority(params.getValue("priority",config.getValue("priority",priority)));
     int rx = params.getIntValue("rxunderrun");
     if (rx > 0)
 	m_timerRxUnder.interval(rx);
     int i = params.getIntValue("errormask",config.getIntValue("errormask",255));
     m_errorMask = ((i >= 0 && i < 256) ? i : 255);
-    int sp = config.getIntValue("span",1);
+    int sp = params.getIntValue("spam",config.getIntValue("span",1));
     (m_ifname = "") << "s" << sp << "c" << channel;
     if (debugAt(DebugInfo)) {
 	String s;

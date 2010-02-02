@@ -732,6 +732,11 @@ bool WpSocket::updateLinkStatus()
 // Create WpInterface or WpSpan
 SignallingComponent* WpInterface::create(const String& type, const NamedList& name)
 {
+    const String* module = name.getParam("module");
+    if (module && *module != "wpcard") {
+	DDebug(&driver,DebugWarn,"We aren't the target for creating %s",type.c_str());
+	return 0;
+    }
     bool interface = false;
     if (type == "SignallingInterface")
 	interface = true;
@@ -743,7 +748,17 @@ SignallingComponent* WpInterface::create(const String& type, const NamedList& na
     Configuration cfg(Engine::configFile("wpcard"));
     const char* sectName = name.getValue((interface ? "sig" : "voice"),name.getValue("basename",name));
     NamedList* config = cfg.getSection(sectName);
-    if (!config) {
+    if (module) {
+	DDebug(&driver,DebugAll,"Replace config params in section %s",c_safe(sectName));
+	if (!config) {
+	    cfg.createSection(sectName);
+	    config = cfg.getSection(sectName);
+	}
+	config->copyParams(name);
+	if(!cfg.save())
+	    DDebug(&driver,DebugAll,"Failed to save configuration in file %s ",module);
+    }
+    else if (!config){
 	DDebug(&driver,DebugAll,"No section '%s' in configuration",c_safe(sectName));
 	return 0;
     }
@@ -797,8 +812,8 @@ WpInterface::~WpInterface()
 bool WpInterface::init(const NamedList& config, NamedList& params)
 {
     // Set socket card / device
-    m_socket.card(config);
-    const char* sig = config.getValue("siggroup");
+    m_socket.card(!params.null() ? params : config);
+    const char* sig = params.getValue("siggroup",config.getValue("siggroup"));
     if (!(sig && *sig)) {
 	Debug(this,DebugWarn,
 	    "Missing or invalid siggroup='%s' in configuration [%p]",
@@ -1366,7 +1381,7 @@ bool WpSpan::init(const NamedList& config, const NamedList& defaults, NamedList&
 	return false;
     }
     // Set socket card / device
-    m_socket.card(config);
+    m_socket.card(!params.null() ? params : config);
     const char* voice = params.getValue("voicegroup",config.getValue("voicegroup"));
     if (!voice) {
 	Debug(m_group,DebugNote,"WpSpan('%s'). Missing or invalid voice group [%p]",
@@ -1376,9 +1391,9 @@ bool WpSpan::init(const NamedList& config, const NamedList& defaults, NamedList&
     m_socket.device(voice);
     m_canSend = !params.getBoolValue("readonly",config.getBoolValue("readonly",false));
     // Type depending data: channel count, samples, circuit list
-    String type = config.getValue("type");
-    String cics = config.getValue("voicechans");
-    unsigned int offs = config.getIntValue("offset",0);
+    String type = params.getValue("type",config.getValue("type"));
+    String cics = params.getValue("voicechans",config.getValue("voicechans"));
+    unsigned int offs = params.getIntValue("offset",config.getIntValue("offset",0));
     m_samples = params.getIntValue("samples",config.getIntValue("samples"));
     if (type.null())
 	type = "E1";

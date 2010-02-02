@@ -131,6 +131,12 @@ class SigDriver : public Driver
     friend class SigTrunk;               // Needded for appendTrunk() / removeTrunk()
     friend class SigTrunkThread;         // Needded for clearTrunk()
 public:
+    enum Operations {
+	Create      = 0x01,
+	Configure   = 0x02,
+	Unknown     = 0x03,
+    };
+	
     SigDriver();
     ~SigDriver();
     virtual void initialize();
@@ -152,8 +158,20 @@ public:
     //  event call controller's prefix
     void copySigMsgParams(NamedList& dest, SignallingEvent* event,
 	const String* params = 0);
+    // Reinitialize
+    bool reInitialize(NamedList& params);
+    // Build an configuration file from param list
+    void getCfg(NamedList& params, Configuration& cfg);
+    // Check if the cfg sections exists in conf file
+    bool checkSections(Configuration* cfg);
+    // Append the new sections in the conf file
+    // Save the configuration
+    void saveConf(Configuration* cfg);
+    // Init configuration sections
+    bool initSection(NamedList* sect);
     // Copy outgoing message parameters
     void copySigMsgParams(SignallingEvent* event, const NamedList& params);
+    static const TokenDict s_operations[];
 private:
     // Handle command complete requests
     virtual bool commandComplete(Message& msg, const String& partLine,
@@ -171,7 +189,7 @@ private:
     // Remove a trunk from list without deleting it
     void removeTrunk(SigTrunk* trunk);
     // Create or initialize a trunk
-    void initTrunk(NamedList& sect, int type);
+    bool initTrunk(NamedList& sect, int type);
     // Get the status of a trunk
     void status(SigTrunk* trunk, String& retVal, const String& target);
     // Append a topmost non-trunk component
@@ -179,7 +197,7 @@ private:
     // Remove a topmost component without deleting it
     void removeTopmost(SigTopmost* topmost);
     // Create or initialize a topmost component
-    void initTopmost(NamedList& sect, int type);
+    bool initTopmost(NamedList& sect, int type);
     // Get the status of a topmost component
     void status(SigTopmost* topmost, String& retVal);
 
@@ -584,6 +602,13 @@ const TokenDict SigFactory::s_compNames[] = {
     { 0, 0 }
 };
 
+const TokenDict SigDriver::s_operations[] = {
+    { "create",       Create },
+    { "configure",    Configure },
+    { "unknown",      Unknown },
+    { 0, 0 }
+};
+
 const TokenDict SigFactory::s_compClass[] = {
 #define MAKE_CLASS(x) { #x, Sig##x }
     MAKE_CLASS(ISDNLayer2),
@@ -613,10 +638,16 @@ SignallingComponent* SigFactory::create(const String& type, const NamedList& nam
     if (type < 0)
 	return 0;
     if (!config) {
-	if ((compType & SigDefaults) != 0)
+	NamedList sec(name);
+	sec.copySubParams(name,name + ".");
+	if (sec.count())
 	    config = &name;
-	else
-	    return 0;
+	else {
+	    if ((compType & SigDefaults) != 0)
+		config = &name;
+	    else
+		return 0;
+	}
     }
     switch (compType) {
 	case SigISDNLayer2:
@@ -1409,6 +1440,11 @@ bool SigDriver::received(Message& msg, int id)
 	    }
 	    return Driver::received(msg,id);
 	case Control:
+	    {
+		const String* dest = msg.getParam("component");
+		if (dest && (*dest == "sig"))
+		    return reInitialize(msg);
+	    }
 	    if (m_engine && m_engine->control(msg))
 		return true;
 	    return Driver::received(msg,id);
@@ -1894,12 +1930,14 @@ void SigDriver::clearTrunk(const char* name, bool waitCallEnd, unsigned int howL
     m_trunks.remove(trunk,true);
 }
 
-void SigDriver::initTrunk(NamedList& sect, int type)
+bool SigDriver::initTrunk(NamedList& sect, int type)
 {
     // Disable ?
     if (!sect.getBoolValue("enable",true)) {
+	if (!findTrunk(sect,false) && !sect.null())
+	    return false;
 	clearTrunk(sect,false);
-	return;
+	return true;
     }
     const char* ttype = lookup(type,SigTrunk::s_type);
     // Create or initialize
@@ -1925,7 +1963,7 @@ void SigDriver::initTrunk(NamedList& sect, int type)
 		trunk = new SigIsdnMonitor(sect);
 		break;
 	    default:
-		return;
+		return false;
 	}
     }
     if (!trunk->initialize(sect)) {
@@ -1933,15 +1971,17 @@ void SigDriver::initTrunk(NamedList& sect, int type)
 	    sect.c_str(),ttype);
 	if (create)
 	    clearTrunk(sect);
+	return false;
     }
+    return true;
 }
 
-void SigDriver::initTopmost(NamedList& sect, int type)
+bool SigDriver::initTopmost(NamedList& sect, int type)
 {
     // Disable ?
     if (!sect.getBoolValue("enable",true)) {
 	m_topmost.remove(sect);
-	return;
+	return true;
     }
     const char* ttype = lookup(type,SigFactory::s_compNames);
     // Create or initialize
@@ -1956,7 +1996,7 @@ void SigDriver::initTopmost(NamedList& sect, int type)
 		topmost = new SigLinkSet(sect);
 		break;
 	    default:
-		return;
+		return false;
 	}
     }
     if (!topmost->initialize(sect)) {
@@ -1964,12 +2004,101 @@ void SigDriver::initTopmost(NamedList& sect, int type)
 	    sect.c_str(),ttype);
 	if (create)
 	    TelEngine::destruct(topmost);
+	return false;
+    }
+    return true;
+}
+
+bool SigDriver::reInitialize(NamedList& params)
+{
+    Lock2 lock(m_trunksMutex,m_topmostMutex);
+    Configuration* cfg = new Configuration();
+    getCfg(params,*cfg);
+    String oper = params.getValue("operation");
+    int op = lookup(oper,s_operations,Unknown);
+    switch (op) {
+	case Create:
+	    if (checkSections(cfg))
+		break;
+	    return false;
+	case Configure:
+	    saveConf(cfg);
+	    break;
+	default:
+	    Debug(this,DebugNote,"Received Unknown control operation: %s", oper.c_str());
+	    return false;
+    }
+    bool ret = false;
+    unsigned int n = cfg->sections(); 
+    for (unsigned int i = 0; i < n; i++) {
+	NamedList* sect = cfg->getSection(i);
+	ret = initSection(sect);
+    }
+    TelEngine::destruct(cfg);
+    SignallingComponent* router = 0;
+    while ((router = engine()->find("","SS7Router",router)))
+	YOBJECT(SS7Router,router)->printRoutes();
+    return ret;
+}
+
+bool SigDriver::checkSections(Configuration* cfg)
+{
+    unsigned int n = cfg->sections();
+    for (unsigned int i = 0;i < n;i ++) {
+	NamedList* sect = cfg->getSection(i);
+	if (!sect || sect->null())
+	    continue;
+	NamedList* sect1 = s_cfg.getSection(*sect);
+	if (sect1 && !sect1->getBoolValue("enable")) {
+	    Debug(this,DebugAll,"Section '%s' already exists in %s conf file",sect->c_str(),name().c_str());
+	    return false;
+	}
+    }
+    // If we are here no section was found in configuration
+    // Just append the sections in the specifyed conf file
+    saveConf(cfg);
+    return true;
+}
+
+void SigDriver::saveConf(Configuration* cfg)
+{
+    unsigned int n = cfg->sections();
+    for (unsigned int i = 0;i < n;i ++) {
+	NamedList* sect = cfg->getSection(i);
+	if (!sect || sect->null())
+	    continue;
+	NamedList* sect1 = s_cfg.getSection(*sect);
+	if (!sect1) {
+	    s_cfg.createSection(*sect);
+	    sect1 = s_cfg.getSection(*sect);
+	}
+	else {
+	    sect1->clearParams();
+	}
+	sect1->copyParams(*sect);
+	if(!s_cfg.save())
+	    Debug(this,DebugWarn,"Failed to save configuration data in file: %s",s_cfg.c_str());
+    }
+}
+
+void SigDriver::getCfg(NamedList& params, Configuration& cfg)
+{
+    String trunk = params.getValue("section");
+    String voice = params.getValue("voice");
+    unsigned int n = params.count();
+    for (unsigned int i = 0;i <= n;i ++) {
+	NamedString* ns = params.getParam(i);
+	if (!ns || ns->name() == "operation" || ns->name() == "targetid"
+	    || ns->name() == "component" || ns->name() == "section")
+	    continue;
+	cfg.setValue(trunk,ns->name(),*ns);
     }
 }
 
 void SigDriver::initialize()
 {
     Output("Initializing module Signalling Channel");
+    Lock2 lock(m_trunksMutex,m_topmostMutex);
     s_cfg = Engine::configFile("ysigchan");
     s_cfg.load();
     // Startup
@@ -1997,27 +2126,33 @@ void SigDriver::initialize()
     if (level >= 0)
 	m_engine->debugLevel(level);
     // Build/initialize trunks and topmost components
-    Lock2 lock(m_trunksMutex,m_topmostMutex);
-    unsigned int n = s_cfg.sections();
+    unsigned int n = s_cfg.sections(); 
     for (unsigned int i = 0; i < n; i++) {
 	NamedList* sect = s_cfg.getSection(i);
-	if (!sect || sect->null() || *sect == "general")
-	    continue;
-	const char* stype = sect->getValue("type");
-	int type = lookup(stype,SigFactory::s_compNames,SigFactory::Unknown);
-	// Check for valid type
-	if (type == SigFactory::Unknown) {
-	    Debug(this,DebugNote,"Section '%s'. Unknown/missing type '%s'",sect->c_str(),stype);
-	    continue;
-	}
-	if (type & SigFactory::SigIsTrunk)
-	    initTrunk(*sect,type & SigFactory::SigPrivate);
-	else if (type & SigFactory::SigTopMost)
-	    initTopmost(*sect,type);
+	initSection(sect);
     }
     SignallingComponent* router = 0;
     while ((router = engine()->find("","SS7Router",router)))
 	YOBJECT(SS7Router,router)->printRoutes();
+}
+
+bool SigDriver::initSection(NamedList* sect)
+{
+    if (!sect || sect->null() || *sect == "general")
+	return false;
+    bool ret = false;
+    const char* stype = sect->getValue("type");
+    int type = lookup(stype,SigFactory::s_compNames,SigFactory::Unknown);
+    // Check for valid type
+    if (type == SigFactory::Unknown) {
+	Debug(this,DebugNote,"Section '%s'. Unknown/missing type '%s'",sect->c_str(),stype);
+	return false;
+    }
+    if (type & SigFactory::SigIsTrunk)
+	ret = initTrunk(*sect,type & SigFactory::SigPrivate);
+    else if (type & SigFactory::SigTopMost)
+	ret = initTopmost(*sect,type);
+    return ret;
 }
 
 
@@ -2184,7 +2319,9 @@ SignallingCircuitGroup* SigTrunk::buildCircuits(NamedList& params, const String&
 	String* s = static_cast<String*>(o->get());
 	if (s->null())
 	    continue;
-	SignallingCircuitSpan* span = group->buildSpan(*s,start);
+	NamedList spanParams(*s);
+	spanParams.copySubParams(params,*s + ".");
+	SignallingCircuitSpan* span = group->buildSpan(*s,start,&spanParams);
 	if (!span) {
 	    error << "Failed to build voice span '" << *s << "'";
 	    break;

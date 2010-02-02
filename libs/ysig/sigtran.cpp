@@ -171,19 +171,20 @@ static TokenDict s_messageType[] = {
 };
 
 SS7M2PA::SS7M2PA(const NamedList& params)
-    : SignallingComponent(params.safe("SS7M2PA"),&params), m_seqNr(0),
-    m_needToAck(0), m_lastAck(0), m_localStatus(OutOfService), m_state(OutOfService),
-    m_remoteStatus(OutOfService), m_transportState(Idle), m_mutex(String("Mutex:") + debugName()), m_t1(0),
-    m_t2(0), m_t3(0), m_t4(0), m_ackTimer(0), m_confTimer(0), m_dumpMsg(false)
+    : SignallingComponent(params.safe("SS7M2PA"),&params),
+      m_seqNr(0xffffff), m_needToAck(0xffffff), m_lastAck(0xffffff),
+      m_localStatus(OutOfService), m_state(OutOfService),
+      m_remoteStatus(OutOfService), m_transportState(Idle), m_mutex(String("Mutex:") + debugName()), m_t1(0),
+      m_t2(0), m_t3(0), m_t4(0), m_ackTimer(0), m_confTimer(0), m_dumpMsg(false)
 
 {
-    // Alignemnt ready timer ~45s
+    // Alignment ready timer ~45s
     m_t1.interval(params,"t1",45000,50000,false);
     // Not Aligned timer ~5s
     m_t2.interval(params,"t2",5000,5500,false);
     // Aligned timer ~1s
     m_t3.interval(params,"t3",1000,1500,false);
-    // Prouving timer Normal ~8s, Emergency ~0.5s
+    // Proving timer Normal ~8s, Emergency ~0.5s
     m_t4.interval(params,"t4",1000,1000,false);
     // Acknowledge timer ~1s
     m_ackTimer.interval(params,"ack_timer",1000,1100,false);
@@ -197,7 +198,7 @@ SS7M2PA::~SS7M2PA()
     Lock lock(m_mutex);
     m_ackList.clear();
     m_bufMsg.clear();
-    DDebug(this,DebugAll,"Destroing SS7M2PA [%p]",this);
+    DDebug(this,DebugAll,"Destroying SS7M2PA [%p]",this);
 }
 
 bool SS7M2PA::initialize(const NamedList* config)
@@ -270,7 +271,7 @@ bool SS7M2PA::processMSG(unsigned char msgVersion, unsigned char msgClass,
 	unsigned char msgType, const DataBlock& msg, int streamId)
 {
     if (msgClass != M2PA) {
-	Debug(this,DebugWarn,"M2PA received non M2PA message class %d",msgClass);
+	Debug(this,DebugWarn,"Received non M2PA message class %d",msgClass);
 	dumpMsg(msgVersion,msgClass,msgType,msg,streamId,false);
 	return false;
     }
@@ -296,9 +297,10 @@ bool SS7M2PA::processMSG(unsigned char msgVersion, unsigned char msgClass,
 	return true;
     if (msgType == LinkStatus)
 	return processLinkStatus(data,streamId);
+#ifdef DEBUG
     if (streamId != 1)
-	DDebug(this,DebugNote,"Received data message on Link status stream");
-	// We should return false only if transport is sctp!!!!!!!!!!
+	Debug(this,DebugNote,"Received data message on Link status stream");
+#endif
     lock.drop();
     SS7MSU msu(data);
     return receivedMSU(msu);
@@ -388,7 +390,7 @@ void SS7M2PA::timerTick(const Time& when)
     }
     if (m_t1.started() && m_t1.timeout(when.msec())) {
 	m_t1.stop();
-	abortAlignment("T1 timeout.");
+	abortAlignment("T1 timeout");
     }
 }
 
@@ -411,6 +413,8 @@ void SS7M2PA::setLocalStatus(unsigned int status)
 {
     if (status == m_localStatus)
 	return;
+    DDebug(this,DebugInfo,"Local status change %s -> %s [%p]",
+	lookup(m_localStatus,s_state),lookup(status,s_state),this);
     m_localStatus = status;
 }
 
@@ -418,13 +422,25 @@ void SS7M2PA::setRemoteStatus(unsigned int status)
 {
     if (status == m_remoteStatus)
 	return;
+    DDebug(this,DebugInfo,"Remote status change %s -> %s [%p]",
+	lookup(m_remoteStatus,s_state),lookup(status,s_state),this);
     m_remoteStatus = status;
 }
 
 bool SS7M2PA::aligned() const
 {
-    return ((m_localStatus == ProvingNormal) || (m_localStatus == ProvingEmergency)) &&
-	((m_remoteStatus == ProvingNormal) || (m_remoteStatus == ProvingEmergency));
+    switch (m_localStatus) {
+	case ProvingNormal:
+	case ProvingEmergency:
+	case Ready:
+	    switch (m_remoteStatus) {
+		case ProvingNormal:
+		case ProvingEmergency:
+		case Ready:
+		    return true;
+	    }
+    }
+    return false;
 }
 
 bool SS7M2PA::operational() const
@@ -508,7 +524,7 @@ void SS7M2PA::abortAlignment(String from)
     DDebug(this,DebugNote,"Aborting alignment: %s",from.c_str());
     setLocalStatus(OutOfService);
     setRemoteStatus(OutOfService);
-    m_needToAck = m_lastAck = m_seqNr = 0;
+    m_needToAck = m_lastAck = m_seqNr = 0xffffff;
     if (m_confTimer.started())
 	m_confTimer.stop();
     if (m_ackTimer.started())
@@ -534,7 +550,7 @@ bool SS7M2PA::processLinkStatus(DataBlock& data,int streamId)
     if (m_remoteStatus == status && status != OutOfService)
 	return true;
     
-    XDebug(this,DebugAll,"Received link status: %s , local status : %s , requested status %s",
+    XDebug(this,DebugAll,"Received link status: %s, local status : %s, requested status %s",
 	lookup(status,s_state),lookup(m_localStatus,s_state),lookup(m_state,s_state));
     switch (status) {
 	case Alignment:
@@ -573,6 +589,8 @@ bool SS7M2PA::processLinkStatus(DataBlock& data,int streamId)
 	    }
 	    setRemoteStatus(status);
 	    SS7Layer2::notify();
+	    if (m_t3.started())
+		m_t3.stop();
 	    if (m_t4.started())
 		m_t4.stop();
 	    if (m_t1.started())
@@ -696,7 +714,7 @@ void SS7M2PA::notifyLayer(SignallingInterface::Notification event)
     switch (event) {
 	case SignallingInterface::LinkDown:
 	    m_transportState = Idle;
-	    m_seqNr = m_needToAck = m_lastAck = 0;
+	    m_seqNr = m_needToAck = m_lastAck = 0xffffff;
 	    abortAlignment("LinkDown");
 	    SS7Layer2::notify();
 	    break;

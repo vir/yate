@@ -470,7 +470,7 @@ bool SS7M2PA::control(Operation oper, NamedList* params)
 	case Align:
 	{
 	    bool em = params && params->getBoolValue("emergency");
-	    m_state = em ? ProvingNormal : ProvingEmergency;
+	    m_state = em ? ProvingEmergency : ProvingNormal;
 	    if (m_autostart)
 		startAlignment();
 	    return true;

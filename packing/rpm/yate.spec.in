@@ -2,10 +2,12 @@
 # to add a revision tag run rpmbuild --define 'revision value'
 # to create a debug info package run rpmbuild --define 'debuginfo 1'
 # to suppress auto dependencies run rpmbuild --define 'nodeps 1'
-# to disable PSTN card drivers run rpmbuild --define 'nopstn 1'
+# to disable all PSTN card drivers run rpmbuild --define 'nopstn 1'
 # to disable SCTP support run rpmbuild --define 'nosctp 1'
 # to disable H.323 support run rpmbuild --define 'noh323 1'
 # to disable the GUI clients run rpmbuild --define 'nogui 1'
+# to disable only Zaptel support run rpmbuild --define 'nozap 1'
+# to disable only TDMV support run rpmbuild --define 'notdm 1'
 
 %{!?dist:%define dist %{nil}}
 %{!?revision:%define revision %{nil}}
@@ -14,6 +16,8 @@
 %{?nosctp:%define no_sctp 1}
 %{?noh323:%define no_h323 1}
 %{?nogui:%define no_gui 1}
+%{?nozap:%define no_zaptel 1}
+%{?notdm:%define no_tdmapi 1}
 
 %{!?debuginfo:%define debuginfo %{nil}}
 %if "%{debuginfo}"
@@ -247,6 +251,8 @@ Yate driver for the ITU-T H.323 VoIP protocol based on the OpenH323 library.
 
 %if "%{no_pstn}" != "1"
 
+%define conf_pstn %{conf_zaptel} %{conf_tdmapi}
+
 %package isdn
 Summary:	ISDN PRI card and protocol drivers for Yate
 Group:		Applications/Communication
@@ -258,13 +264,26 @@ interfaces.
 
 %files isdn
 %{_libdir}/yate/server/wpcard.yate
-%{_libdir}/yate/server/zapcard.yate
 %config(noreplace) %{_sysconfdir}/yate/wpcard.conf
-%config(noreplace) %{_sysconfdir}/yate/zapcard.conf
 
-%define conf_pstn --enable-wpcard --enable-zaptel
+%if "%{no_zaptel}" != "1"
+%{_libdir}/yate/server/zapcard.yate
+%config(noreplace) %{_sysconfdir}/yate/zapcard.conf
+%define conf_zaptel --enable-zaptel
 %else
-%define conf_pstn --disable-wpcard --disable-zaptel
+%define conf_zaptel --disable-zaptel
+%endif
+
+%if "%{no_tdmapi}" != "1"
+%{_libdir}/yate/server/tdmcard.yate
+%config(noreplace) %{_sysconfdir}/yate/tdmcard.conf
+%define conf_tdmapi --enable-tdmcard
+%else
+%define conf_tdmapi --disable-tdmcard
+%endif
+
+%else
+%define conf_pstn --disable-wpcard --disable-zaptel --disable-tdmcard
 %endif
 
 
@@ -449,6 +468,12 @@ The devel package must still be installed separately.
 
 # disable unpackaged files check if we know we are going to skip some
 %if "%{no_pstn}" == "1"
+%define _unpackaged_files_terminate_build 0
+%endif
+%if "%{no_zaptel}" == "1"
+%define _unpackaged_files_terminate_build 0
+%endif
+%if "%{no_tdmapi}" == "1"
 %define _unpackaged_files_terminate_build 0
 %endif
 %if "%{no_h323}" == "1"

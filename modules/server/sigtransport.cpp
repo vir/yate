@@ -596,6 +596,10 @@ bool Transport::bindSocket()
 		DDebug(this,DebugInfo,"Failed to set sctp stream number");
 	    if (!sctp->subscribeEvents())
 		DDebug(this,DebugInfo,"Unable to subscribe to Sctp events");
+	    int ppid = sigtran() ? sigtran()->payload() : 0;
+	    ppid = m_config.getIntValue("payload",ppid);
+	    if (ppid > 0)
+		sctp->setPayload(ppid);
 	    break;
 	}
 	case Transport::Udp:

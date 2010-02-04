@@ -51,8 +51,9 @@ const TokenDict* SIGTRAN::classNames()
     return s_classes;
 }
 
-SIGTRAN::SIGTRAN()
-    : m_trans(0), m_transMutex(false,"SIGTRAN::transport")
+SIGTRAN::SIGTRAN(u_int32_t payload)
+    : m_trans(0), m_payload(payload),
+      m_transMutex(false,"SIGTRAN::transport")
 {
 }
 
@@ -171,7 +172,7 @@ static TokenDict s_messageType[] = {
 };
 
 SS7M2PA::SS7M2PA(const NamedList& params)
-    : SignallingComponent(params.safe("SS7M2PA"),&params),
+    : SignallingComponent(params.safe("SS7M2PA"),&params), SIGTRAN(5),
       m_seqNr(0xffffff), m_needToAck(0xffffff), m_lastAck(0xffffff),
       m_localStatus(OutOfService), m_state(OutOfService),
       m_remoteStatus(OutOfService), m_transportState(Idle), m_mutex(String("Mutex:") + debugName()), m_t1(0),
@@ -185,7 +186,7 @@ SS7M2PA::SS7M2PA(const NamedList& params)
     // Aligned timer ~1s
     m_t3.interval(params,"t3",1000,1500,false);
     // Proving timer Normal ~8s, Emergency ~0.5s
-    m_t4.interval(params,"t4",1000,1000,false);
+    m_t4.interval(params,"t4",500,8000,false);
     // Acknowledge timer ~1s
     m_ackTimer.interval(params,"ack_timer",1000,1100,false);
     // Confirmation timer 1/2 t4
@@ -251,8 +252,8 @@ void SS7M2PA::dumpMsg(u_int8_t version, u_int8_t mClass, u_int8_t type,
     dump << "    " << "Message class: " << mClass;
     dump << "    " << "Message type: " << lookup(type,s_messageType,"Unknown");
     dump << indent << "Stream: " << stream;
-    u_int32_t fsn = (data[1] << 16) | (data[2] << 8) | data[3];
-    u_int32_t bsn = (data[5] << 16) | (data[6] << 8) | data[7];
+    u_int32_t bsn = (data[1] << 16) | (data[2] << 8) | data[3];
+    u_int32_t fsn = (data[5] << 16) | (data[6] << 8) | data[7];
     dump << indent << "FSN : " << fsn << "	BSN: " << bsn;
     if (type == LinkStatus) {
 	u_int32_t status = (data[8] << 24) | (data[9] << 16) | (data[10] << 8) | data[11];
@@ -302,6 +303,7 @@ bool SS7M2PA::processMSG(unsigned char msgVersion, unsigned char msgClass,
 	Debug(this,DebugNote,"Received data message on Link status stream");
 #endif
     lock.drop();
+    data.cut(-1); // priority octet
     SS7MSU msu(data);
     return receivedMSU(msu);
 }
@@ -310,8 +312,8 @@ bool SS7M2PA::decodeSeq(const DataBlock& data,u_int8_t msgType)
 {
     if (data.length() < 8)
 	return false;
-    u_int32_t fsn = (data[1] << 16) | (data[2] << 8) | data[3];
-    u_int32_t bsn = (data[5] << 16) | (data[6] << 8) | data[7];
+    u_int32_t bsn = (data[1] << 16) | (data[2] << 8) | data[3];
+    u_int32_t fsn = (data[5] << 16) | (data[6] << 8) | data[7];
     if (msgType == LinkStatus) {
 	if (fsn != m_needToAck) {
 	    DDebug(this,DebugNote,"Received LinkStatus message with wrong sequence number %d expected %d",
@@ -399,7 +401,7 @@ void SS7M2PA::removeFrame(u_int32_t bsn)
     Lock lock(m_mutex);
     for (ObjList* o = m_ackList.skipNull();o;o = o->skipNext()) {
 	DataBlock* d = static_cast<DataBlock*>(o->get());
-	u_int32_t seq = (d->at(1) << 16) | (d->at(2) << 8) | d->at(3);
+	u_int32_t seq = (d->at(5) << 16) | (d->at(6) << 8) | d->at(7);
 	if (bsn != seq)
 	    continue;
 	m_lastAck = bsn;
@@ -497,7 +499,7 @@ void SS7M2PA::transmitLS(int streamId)
     DataBlock data;
     setHeader(data);
     u_int8_t ms[4];
-    ms[1] = ms[2] = ms[3] = ms[0] = 0;
+    ms[2] = ms[1] = ms[0] = 0;
     ms[3] = m_localStatus;
     data.append(ms,4);
     if (m_dumpMsg)
@@ -510,18 +512,18 @@ void SS7M2PA::setHeader(DataBlock& data)
 {
     u_int8_t head[8];
     head[0] = head[4] = 0;
-    head[1] = (m_seqNr >> 16) & 0xff;
-    head[2] = (m_seqNr >> 8) & 0xff;
-    head[3] = m_seqNr & 0xff ;
-    head[5] = (m_needToAck >> 16) & 0xff;
-    head[6] = (m_needToAck >> 8) & 0xff;
-    head[7] = m_needToAck & 0xff ;
+    head[1] = (m_needToAck >> 16) & 0xff;
+    head[2] = (m_needToAck >> 8) & 0xff;
+    head[3] = m_needToAck & 0xff ;
+    head[5] = (m_seqNr >> 16) & 0xff;
+    head[6] = (m_seqNr >> 8) & 0xff;
+    head[7] = m_seqNr & 0xff ;
     data.append(head,8);
 }
 
-void SS7M2PA::abortAlignment(String from)
+void SS7M2PA::abortAlignment(const String& info)
 {
-    DDebug(this,DebugNote,"Aborting alignment: %s",from.c_str());
+    Debug(this,DebugInfo,"Aborting alignment: %s",info.c_str());
     setLocalStatus(OutOfService);
     setRemoteStatus(OutOfService);
     m_needToAck = m_lastAck = m_seqNr = 0xffffff;
@@ -658,9 +660,9 @@ void SS7M2PA::retransData()
     for (ObjList* o = m_ackList.skipNull();o;o = o->skipNext()) {
 	DataBlock* msg = static_cast<DataBlock*>(o->get());
 	u_int8_t* head = (u_int8_t*)msg->data();
-	head[5] = (m_needToAck >> 16) & 0xff;
-	head[6] = (m_needToAck >> 8) & 0xff;
-	head[7] = m_needToAck & 0xff ;
+	head[1] = (m_needToAck >> 16) & 0xff;
+	head[2] = (m_needToAck >> 8) & 0xff;
+	head[3] = m_needToAck & 0xff ;
 	if (m_confTimer.started())
 	    m_confTimer.stop();
 	transmitMSG(1,M2PA, 1, *msg,1);
@@ -675,7 +677,7 @@ void SS7M2PA::dequeueMsg()
 	DataBlock* msg = static_cast<DataBlock*>(o->get());
 	if (!decodeSeq(*msg,UserData))
 	    return;
-	msg->cut(-8); // Remove M2PA Header
+	msg->cut(-9); // Remove M2PA Header and priority octet
 	SS7MSU msu(*msg);
 	receivedMSU(msu);
 	sendAck();
@@ -698,6 +700,8 @@ bool SS7M2PA::transmitMSU(const SS7MSU& msu)
     setHeader(packet);
     if (m_confTimer.started())
 	m_confTimer.stop();
+    static const DataBlock priority(0,1);
+    packet += priority;
     packet += msu;
     m_ackList.append(new DataBlock(packet));
     if (m_dumpMsg)

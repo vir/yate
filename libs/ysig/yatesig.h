@@ -3912,8 +3912,9 @@ public:
 
     /**
      * Constructs an uninitialized signalling transport
+     * @param payload SCTP payload code, ignored for other transports
      */
-    SIGTRAN();
+    SIGTRAN(u_int32_t payload = 0);
 
     /**
      * Destructor, terminates transport layer
@@ -3932,6 +3933,13 @@ public:
      */
     inline SIGTransport* transport() const
 	{ return m_trans; }
+
+    /**
+     * Get the SCTP payload of this user adaptation component
+     * @return SCTP payload code
+     */
+    inline u_int32_t payload() const
+	{ return m_payload; }
 
     /**
      * Check if the network transport layer is connected
@@ -3976,6 +3984,7 @@ protected:
 
 private:
     SIGTransport* m_trans;
+    u_int32_t m_payload;
     mutable Mutex m_transMutex;
 };
 
@@ -4776,9 +4785,9 @@ public:
     /**
      * Helper method called when an error was detected
      * Change state to OutOfService and notifys upper layer
-     * @param from Debuging purpose, Information about detected error
+     * @param info Debuging purpose, Information about detected error
      */
-    void abortAlignment(String from);
+    void abortAlignment(const String& info);
 
     /**
      * Send link status message to inform the peer about ouer curent state

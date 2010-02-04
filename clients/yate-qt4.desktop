@@ -1,7 +1,7 @@
 [Desktop Entry]
 Encoding=UTF-8
-Name=Yate (Qt)
-Name[ro]=Yate (Qt)
+Name=Yate VoIP Client
+Name[ro]=Yate client de VoIP
 GenericName=VoIP Phone
 GenericName[ro]=Telefon VoIP
 Comment=Place phone calls over the Internet

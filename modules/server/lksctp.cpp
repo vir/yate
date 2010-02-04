@@ -47,12 +47,15 @@ public:
     virtual bool setStreams(int inbound, int outbound);
     virtual bool getStreams(int& in, int& out);
     virtual bool subscribeEvents();
+    virtual bool setPayload(u_int32_t payload)
+	{ m_payload = payload; return true; }
     virtual int sendTo(void* buf, int buflen, int stream, SocketAddr& addr, int flags);
     bool sctpDown(void* buf);
     bool sctpUp(void* buf);
 private:
     int m_inbound;
     int m_outbound;
+    u_int32_t m_payload;
 };
 
 class LKHandler : public MessageHandler
@@ -79,19 +82,21 @@ static LKModule plugin;
  */
 
 LKSocket::LKSocket()
+    : m_payload(0)
 {
     XDebug(&plugin,DebugAll,"Creating LKSocket [%p]",this);
 }
 
 LKSocket::LKSocket(SOCKET fd)
-    : SctpSocket(fd)
+    : SctpSocket(fd),
+      m_payload(0)
 {
     XDebug(&plugin,DebugAll,"Creating LKSocket [%p]",this);
 }
 
 LKSocket::~LKSocket()
 {
-    XDebug(&plugin,DebugAl,"Destroying LKSocket [%p]",this);
+    XDebug(&plugin,DebugAll,"Destroying LKSocket [%p]",this);
 }
 
 bool LKSocket::bindx(ObjList& addresses)
@@ -161,13 +166,15 @@ int LKSocket::sendMsg(const void* buf, int length, int stream, int& flags)
     sctp_sndrcvinfo sri;
     memset(&sri,0,sizeof(sri));
     sri.sinfo_stream = stream;
+    sri.sinfo_ppid = htonl(m_payload);
     int r = sctp_send(handle(),buf,length,&sri,flags);
     return r;
 }
 
 int LKSocket::sendTo(void* buf, int buflen, int stream, SocketAddr& addr, int flags)
 {
-    return sctp_sendmsg(handle(),buf,buflen,addr.address(),addr.length(),0,flags,stream,0,0);
+    return sctp_sendmsg(handle(),buf,buflen,addr.address(),addr.length(),
+	htonl(m_payload),flags,stream,0,0);
 }
 
 bool LKSocket::setStreams(int inbound, int outbound)

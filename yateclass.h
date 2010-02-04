@@ -5887,28 +5887,28 @@ public:
      * Constructor
      * @param fd File descriptor of an existing handle
      */
-     inline SctpSocket(SOCKET fd)
+    inline SctpSocket(SOCKET fd)
 	: Socket(fd)
 	{ }
 
     /**
      * Destructor
      */
-     virtual ~SctpSocket();
+    virtual ~SctpSocket();
 
     /**
      * Bind this socket to multiple addresses
      * @param addresses The list of addresses (SocketAddr)
      * @return True if the socket bind succeded
      */
-     virtual bool bindx(ObjList& addresses) = 0;
+    virtual bool bindx(ObjList& addresses) = 0;
 
     /**
      * Connect this socket to multiple addresses
      * @param addresses the list of addresses (SocketAddr)
      * @return True if the socket connect succeded
      */
-     virtual bool connectx(ObjList& addresses) = 0;
+    virtual bool connectx(ObjList& addresses) = 0;
 
     /**
      * Send a message over a connected or unconnected socket
@@ -5919,14 +5919,14 @@ public:
      * @param flags Operating system specific bit flags that change the behaviour
      * @return Number of bytes transferred, @ref socketError() if an error occurred
      */
-     virtual int sendTo(void* buffer, int length, int stream, SocketAddr& addr, int flags) = 0;
+    virtual int sendTo(void* buffer, int length, int stream, SocketAddr& addr, int flags) = 0;
 
     /**
      * Accept an incoming connection
      * @param addr The socket address of the incoming connection
      * @return A new SctpSocket if an incoming connection was detected
      */
-     virtual Socket* accept(SocketAddr& addr)
+    virtual Socket* accept(SocketAddr& addr)
 	{ return 0; }
 
     /**
@@ -5937,7 +5937,7 @@ public:
      * @param flags Flags, gets altered on return
      * @return The number of bytes sent
      */
-     virtual int sendMsg(const void* buf, int length, int stream, int& flags) = 0;
+    virtual int sendMsg(const void* buf, int length, int stream, int& flags) = 0;
 
     /**
      * Receive data from a connected socket
@@ -5948,7 +5948,7 @@ public:
      * @param flags Flags, gets altered on return
      * @return The number of bytes read
      */
-     virtual int recvMsg(void* buf, int length, SocketAddr& addr, int& stream, int& flags) = 0;
+    virtual int recvMsg(void* buf, int length, SocketAddr& addr, int& stream, int& flags) = 0;
 
     /**
      * Set the number of streams
@@ -5956,14 +5956,14 @@ public:
      * @param outbound The number of outbound streams
      * @return True if the number of streams was set
      */
-     virtual bool setStreams(int inbound, int outbound) = 0;
+    virtual bool setStreams(int inbound, int outbound) = 0;
 
     /**
      * Subscribe to SCTP events
      * This method should be called if we need to find from which stream the data came
      * @return True if subscription has succeeded
      */
-     virtual bool subscribeEvents() = 0;
+    virtual bool subscribeEvents() = 0;
 
     /**
      * Get the number of negotiated streams
@@ -5971,7 +5971,14 @@ public:
      * @param outbound Number of outbound streams
      * @return True if operation has succeded
      */
-     virtual bool getStreams(int& inbound, int& outbound) = 0;
+    virtual bool getStreams(int& inbound, int& outbound) = 0;
+
+    /**
+     * Set the SCTP payload protocol identifier (RFC 4960)
+     * @param payload Payload identifier code
+     * @return True if set successfully
+     */
+    virtual bool setPayload(u_int32_t payload) = 0;
 };
 
 /**

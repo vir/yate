@@ -382,6 +382,10 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath="..\engine\Evaluator.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\engine\HashList.cpp"
 				>
 				<FileConfiguration

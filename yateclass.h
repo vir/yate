@@ -170,6 +170,9 @@ typedef int HANDLE;
 #ifndef IPTOS_MINCOST
 #define IPTOS_MINCOST       0x02
 #endif
+#ifndef IPPROTO_SCTP
+#define IPPROTO_SCTP        132
+#endif
 
 #ifndef YATE_API
 #define YATE_API
@@ -3613,7 +3616,7 @@ public:
  * A class used to build stack based (posifix) expression parsers and evaluators
  * @short An expression parser and evaluator
  */
-class ExpEvaluator
+class YATE_API ExpEvaluator
 {
 public:
     /**
@@ -3784,8 +3787,7 @@ public:
      * Set the expression extender to use in evaluation
      * @param ext Pointer to the extender to use, NULL to remove current
      */
-    inline void extender(ExpExtender* ext)
-	{ m_extender = ext; }
+    void extender(ExpExtender* ext);
 
 protected:
     /**
@@ -3964,14 +3966,14 @@ protected:
     ObjList m_opcodes;
 
 private:
-    RefPointer<ExpExtender> m_extender;
+    ExpExtender* m_extender;
 };
 
 /**
  * This class describes a single operation in an expression evaluator
  * @short A single operation in an expression
  */
-class ExpOperation : public NamedString
+class YATE_API ExpOperation : public NamedString
 {
     friend class ExpEvaluator;
 public:

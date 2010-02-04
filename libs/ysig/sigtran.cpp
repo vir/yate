@@ -175,7 +175,7 @@ SS7M2PA::SS7M2PA(const NamedList& params)
     : SignallingComponent(params.safe("SS7M2PA"),&params), SIGTRAN(5),
       m_seqNr(0xffffff), m_needToAck(0xffffff), m_lastAck(0xffffff),
       m_localStatus(OutOfService), m_state(OutOfService),
-      m_remoteStatus(OutOfService), m_transportState(Idle), m_mutex(String("Mutex:") + debugName()), m_t1(0),
+      m_remoteStatus(OutOfService), m_transportState(Idle), m_mutex(true,"SS7M2PA"), m_t1(0),
       m_t2(0), m_t3(0), m_t4(0), m_ackTimer(0), m_confTimer(0), m_dumpMsg(false)
 
 {

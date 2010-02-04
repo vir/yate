@@ -119,6 +119,18 @@ ExpEvaluator::ExpEvaluator(const ExpEvaluator& original)
 
 ExpEvaluator::~ExpEvaluator()
 {
+    extender(0);
+}
+
+void ExpEvaluator::extender(ExpExtender* ext)
+{
+    if (ext == m_extender)
+	return;
+    if (ext && !ext->ref())
+	return;
+    ExpExtender* tmp = m_extender;
+    m_extender = ext;
+    TelEngine::destruct(tmp);
 }
 
 char ExpEvaluator::skipWhites(const char*& expr) const

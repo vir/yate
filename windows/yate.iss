@@ -80,6 +80,7 @@ Source: "Release\server\accfile.yate"; DestDir: "{app}\modules\server"; Flags: r
 Source: "Release\server\analog.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\pstn
 Source: "Release\server\ysigchan.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\pstn
 Source: "Release\server\ciscosm.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\pstn
+Source: "Release\server\sigtransport.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\pstn
 Source: "Release\analyzer.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server debug
 Source: "Release\server\callcounters.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
 Source: "Release\callfork.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server

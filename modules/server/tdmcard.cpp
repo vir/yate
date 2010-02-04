@@ -1746,18 +1746,13 @@ SignallingComponent* TdmInterface::create(const String& type, const NamedList& n
     if (devType == TdmDevice::E1)
 	count = 31;
     else
-	if (devType == TdmDevice::T1)
-	    count = 24;
-	else 
-	    count = 3;
-    if (!sig)
+	count = (devType == TdmDevice::T1) ? 24 : 3;
+    if (!sig) {
 	if (devType == TdmDevice::E1)
 	    sig = 16;
 	else
-	    if (devType == TdmDevice::T1)
-		sig = 24;
-	    else
-		sig = 3;
+	    sig = (devType == TdmDevice::T1) ? 24 : 3;
+    }
     unsigned int code = (unsigned int)sig.toInteger(0);
     if (!(sig && code && code <= count)) {
 	Debug(&plugin,DebugWarn,"Section '%s'. Invalid sigchan='%s' for type='%s'",

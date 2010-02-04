@@ -268,7 +268,7 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 
 bool SS7Maintenance::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
-    if (msu.getSIF() != SS7MSU::MTN)
+    if (msu.getSIF() != SS7MSU::MTN && msu.getSIF() != SS7MSU::MTNS)
 	return false;
     XDebug(this,DebugStub,"Possibly incomplete SS7Maintenance::receivedMSU(%p,%p,%p,%d) [%p]",
 	&msu,&label,network,sls,this);

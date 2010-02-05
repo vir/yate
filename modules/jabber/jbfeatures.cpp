@@ -553,6 +553,8 @@ bool JBFeaturesModule::handleFeatureMsgOffline(JabberID& from, Message& msg)
 	bool ok = body && (t == XMPPUtils::Normal || t == XMPPUtils::Chat);
 	if (ok) {
 	    xml->removeAttribute("to");
+	    if (TelEngine::null(xml->getAttribute("from")))
+		xml->setAttribute("from",from);
 	    NamedList p("");
 	    p.addParam("username",user.bare());
 	    addXmlData(p,xml);

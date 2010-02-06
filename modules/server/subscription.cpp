@@ -2042,12 +2042,11 @@ bool SubscriptionModule::handleResNotifySub(bool sub, const String& src, const S
 
     PresenceUser* from = msg.getBoolValue("from_local",true) ? m_users.getUser(src) : 0;
     PresenceUser* to = msg.getBoolValue("to_local",true) ? m_users.getUser(dest) : 0;
-    bool retVal = false;
+    bool notifyFrom = false;
     while (from) {
 	Lock lock(from);
 	Contact* c = from->findContact(dest);
 	Message* updExist = 0;
-	bool notify = false;
 	// Add it to the list if subscribed and not found
 	if (!c) {
 	    if (sub) {
@@ -2059,7 +2058,7 @@ bool SubscriptionModule::handleResNotifySub(bool sub, const String& src, const S
 		    DDebug(this,DebugAll,"User '%s' added contact '%s' on 'subscribed'",
 			src.c_str(),dest.c_str());
 		    TelEngine::destruct(m);
-		    notify = true;
+		    notifyFrom = true;
 		}
 		else
 		    TelEngine::destruct(c);
@@ -2074,14 +2073,14 @@ bool SubscriptionModule::handleResNotifySub(bool sub, const String& src, const S
 		if (!c->m_subscription.from()) {
 		    c->m_subscription.set(SubscriptionState::From);
 		    changed = true;
-		    notify = true;
+		    notifyFrom = true;
 		}
 	    }
 	    else {
 		if (c->m_subscription.from()) {
 		    c->m_subscription.reset(SubscriptionState::From);
 		    changed = true;
-		    notify = true;
+		    notifyFrom = true;
 		}
 	    }
 	    if (changed)
@@ -2091,28 +2090,16 @@ bool SubscriptionModule::handleResNotifySub(bool sub, const String& src, const S
 	if (updExist) {
 	    updExist = queryDb(updExist);
 	    if (!updExist)
-		notify = false;
+		notifyFrom = false;
 	    TelEngine::destruct(updExist);
 	}
-	if (!notify)
+	if (!notifyFrom)
 	    break;
 	// Synchronous notify "unavailable' to contact if unsubscribed
 	// to make sure the notification is received before any other contact list changes
 	if (!sub)
 	    this->notify(false,src,dest,String::empty(),String::empty(),0,true);
 	notifyRosterUpdate(src,dest);
-	if (sub) {
-	    // Do nothing if the target is a local one
-	    // Re-dispatch the message to remote user and notify our presence
-	    if (!to) {
-		Lock lck(from);
-		if (from->instances().skipNull()) {
-		    __plugin.dispatch(msg);
-		    from->instances().notifyUpdate(true,src,dest,String::empty());
-		    retVal = true;
-		}
-	    }
-	}
 	break;
     }
     while (to) {
@@ -2159,6 +2146,23 @@ bool SubscriptionModule::handleResNotifySub(bool sub, const String& src, const S
 		probe(dest,src);
 	}
 	break;
+    }
+    // Notify sender's presence on subscription aproval
+    // Re-dispatch the subscription aproval message to a remote user before it
+    bool retVal = false;
+    if (notifyFrom && sub) {
+	Lock lck(from);
+	if (from->instances().skipNull()) {
+	    if (to) {
+		Lock lck2(to);
+		notifyInstances(true,*from,*to);
+	    }
+	    else {
+		__plugin.dispatch(msg);
+		from->instances().notifyUpdate(true,src,dest,String::empty());
+		retVal = true;
+	    }
+	}
     }
     TelEngine::destruct(from);
     TelEngine::destruct(to);

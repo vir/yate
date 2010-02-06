@@ -2127,7 +2127,7 @@ bool SubscriptionModule::handleResNotifySub(bool sub, const String& src, const S
 	Message* m = 0;
 	if (changed)
 	    m = c->buildUpdateDb(dest);
-	bool subscribed = c->m_subscription.to();
+	bool probeSubscriber = notify && c->m_subscription.to() && !from;
 	lock.drop();
 	m = queryDb(m);
 	// Notify user roster change on success
@@ -2136,15 +2136,9 @@ bool SubscriptionModule::handleResNotifySub(bool sub, const String& src, const S
 	    if (notify)
 		notifyRosterUpdate(dest,src);
 	}
-	// Notify user presence to contact if subscribed to its presence
-	if (notify && subscribed) {
-	    if (from) {
-		Lock2 lck(to,from);
-		notifyInstances(sub,*to,*from);
-	    }
-	    else
-		probe(dest,src);
-	}
+	// Probe remote subscriber (local subscribers will automatically notify presence)
+	if (probeSubscriber)
+	    probe(dest,src);
 	break;
     }
     // Notify sender's presence on subscription aproval

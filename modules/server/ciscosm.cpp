@@ -2040,6 +2040,7 @@ SignallingComponent* SLT::create(const String& type, const NamedList& name)
 	Debug(DebugWarn,"Session '%s' does not exist in configuration",confSec.c_str());
 	return 0;
     }
+    layer->copyParams(*section);
     layer->copyParams(name);
     return new SLT(name,*layer);
 }

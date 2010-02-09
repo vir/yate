@@ -1737,7 +1737,7 @@ bool DTMFHandler::received(Message& msg)
 
 
 MGCPPlugin::MGCPPlugin()
-    : Module("mgcpca","misc"),
+    : Module("mgcpca","misc",true),
       m_parser("mgcpca","PSTN Circuit")
 {
     Output("Loaded module MGCP-CA");

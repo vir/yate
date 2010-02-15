@@ -301,8 +301,8 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 void SDPParser::initialize(const NamedList* codecs, const NamedList* hacks, const NamedList* general)
 {
     Lock lock(this);
-    m_codecs.clear();
-    m_hacks.clear();
+    m_codecs.clearParams();
+    m_hacks.clearParams();
     if (codecs)
 	m_codecs.copyParams(*codecs);
     if (hacks)

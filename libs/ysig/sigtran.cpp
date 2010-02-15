@@ -247,8 +247,8 @@ void SS7M2PA::dumpMsg(u_int8_t version, u_int8_t mClass, u_int8_t type,
 {
     String dump = "SS7M2PA ";
     dump << (send ? "Sending:" : "Received:");
-    dump << "\n-----";
-    String indent = "\n  ";
+    dump << "\r\n-----";
+    String indent = "\r\n  ";
     dump << indent << "Version: " << version;
     dump << "    " << "Message class: " << mClass;
     dump << "    " << "Message type: " << lookup(type,s_messageType,"Unknown");
@@ -265,7 +265,7 @@ void SS7M2PA::dumpMsg(u_int8_t version, u_int8_t mClass, u_int8_t type,
 	hex.hexify((u_int8_t*)data.data() + 8,data.length() - 8,' ');
 	dump << indent << "Data: " << hex;
     }
-    dump << "\n-----";
+    dump << "\r\n-----";
     Debug(this,DebugInfo,"%s",dump.c_str());
 }
 

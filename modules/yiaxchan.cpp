@@ -893,7 +893,7 @@ IAXTransaction* YIAXEngine::reg(YIAXLine* line, bool regreq)
     addr.host(line->remoteAddr());
     addr.port(line->remotePort());
     Debug(this,DebugAll,
-	"Outgoing Registration[%s]:\nUsername: %s\nHost: %s\nPort: %d\nTime(sec): %u",
+	"Outgoing Registration[%s]:\r\nUsername: %s\r\nHost: %s\r\nPort: %d\r\nTime(sec): %u",
 	line->c_str(),line->username().c_str(),addr.host().c_str(),addr.port(),Time::secNow());
     // Create IE list
     IAXIEList ieList;
@@ -914,7 +914,7 @@ IAXTransaction* YIAXEngine::reg(YIAXLine* line, bool regreq)
 IAXTransaction* YIAXEngine::call(SocketAddr& addr, NamedList& params)
 {
     Debug(this,DebugAll,
-	"Outgoing Call:\nUsername: %s\nHost: %s\nPort: %d\nCalled number: %s\nCalled context: %s",
+	"Outgoing Call:\r\nUsername: %s\r\nHost: %s\r\nPort: %d\r\nCalled number: %s\r\nCalled context: %s",
 	params.getValue("username"),addr.host().c_str(),addr.port(),
 	params.getValue("called"),params.getValue("calledname"));
     // Create IE list

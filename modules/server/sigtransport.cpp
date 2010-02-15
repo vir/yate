@@ -142,18 +142,20 @@ public:
     virtual bool initialize(const NamedList* config);
     Transport(const NamedList& params);
     ~Transport();
-    inline unsigned char getVersion(unsigned char* buf)
+    inline unsigned char getVersion(unsigned char* buf) const
 	{ return buf[0]; }
-    inline unsigned char getType(unsigned char* buf)
+    inline unsigned char getType(unsigned char* buf) const
 	{ return buf[3]; }
-    inline unsigned char getClass(unsigned char* buf)
+    inline unsigned char getClass(unsigned char* buf) const
 	{ return buf[2]; }
-    inline int transType()
+    inline int transType() const
 	{ return m_type; }
-    inline bool listen()
+    inline bool listen() const
 	{ return m_listener != 0; }
+    inline bool streamDefault() const
+	{ return m_type == Tcp || m_type == Unix; }
     void setStatus(int status);
-    inline int status()
+    inline int status() const
 	{ return m_state; }
     inline void resetListener()
 	{ m_listener = 0; }
@@ -290,7 +292,7 @@ bool ListenerThread::init(const NamedList& param)
 {
     m_socket = new Socket();
     bool multi = param.getParam("local1") != 0;
-    m_stream = param.getBoolValue("stream",true);
+    m_stream = param.getBoolValue("stream",m_transport->streamDefault());
     if (multi && m_transport->transType() != Transport::Sctp) {
 	Debug("ListenerThread",DebugWarn,"Socket %s does not suport multihomed",
 	    lookup(m_transport->transType(),s_transType));
@@ -534,7 +536,7 @@ bool Transport::initialize(const NamedList* params)
 	return false;
     }
     m_type = lookup(config->getValue("type","sctp"),s_transType);
-    m_streamer = config->getBoolValue("stream",true);
+    m_streamer = config->getBoolValue("stream",streamDefault());
     m_endpoint = config->getBoolValue("endpoint",false);
     if (!m_endpoint && m_streamer) {
 	m_listener = new ListenerThread(this);

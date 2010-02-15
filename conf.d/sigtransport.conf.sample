@@ -10,8 +10,8 @@
 ; stream: bool: Socket connection type.
 ; Designed for SCTP sockets to create a stream socket or a sequenced packet socket
 ; NOTE: for M2PA if stream is false the M2PA autostart should be on true on both ends,
-;  if stream is false the M2PA autostart should be true only at one end
-;stream=true
+;  if stream is true the M2PA autostart must be true only at one end
+;stream=true for TCP or UNIX sockets, false for other types
 
 ; local: string: Primary local address
 ; Format is ipv4:port like: 1.1.1.1:3566

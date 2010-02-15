@@ -24,6 +24,7 @@
 
 #include "yatesig.h"
 
+#define MAX_UNACK 16
 
 using namespace TelEngine;
 
@@ -308,6 +309,15 @@ bool SS7M2PA::processMSG(unsigned char msgVersion, unsigned char msgClass,
     return receivedMSU(msu);
 }
 
+bool SS7M2PA::nextBsn(u_int32_t bsn) const
+{
+    u_int32_t n = (0x1000000 + m_seqNr - bsn) & 0xffffff;
+    if (n > MAX_UNACK)
+	return false;
+    n = (0x1000000 + bsn - m_lastAck) & 0xffffff;
+    return (n != 0) && (n <= MAX_UNACK);
+}
+
 bool SS7M2PA::decodeSeq(const DataBlock& data,u_int8_t msgType)
 {
     if (data.length() < 8)
@@ -315,6 +325,8 @@ bool SS7M2PA::decodeSeq(const DataBlock& data,u_int8_t msgType)
     u_int32_t bsn = (data[1] << 16) | (data[2] << 8) | data[3];
     u_int32_t fsn = (data[5] << 16) | (data[6] << 8) | data[7];
     if (msgType == LinkStatus) {
+	if (OutOfService == m_state)
+	    return true;
 	if (fsn != m_needToAck) {
 	    DDebug(this,DebugNote,"Received LinkStatus message with wrong sequence number %d expected %d",
 		fsn,m_needToAck);
@@ -322,11 +334,11 @@ bool SS7M2PA::decodeSeq(const DataBlock& data,u_int8_t msgType)
 	    transmitLS();
 	    return false;
 	}
-	if (bsn == getNext(m_lastAck))
-	    removeFrame(bsn);
+	while (nextBsn(bsn))
+	    removeFrame(getNext(m_lastAck));
 	if (bsn == m_lastAck)
 	    return true;
-	// If we are here meens that something went wrong
+	// If we are here means that something went wrong
 	abortAlignment("msgType == LinkStatus");
 	transmitLS();
 	return false;
@@ -348,8 +360,8 @@ bool SS7M2PA::decodeSeq(const DataBlock& data,u_int8_t msgType)
 	else if (!operational())
 	    m_bufMsg.append(new DataBlock(data));
     }
-    if (bsn == getNext(m_lastAck))
-	removeFrame(bsn);
+    while (nextBsn(bsn))
+	removeFrame(getNext(m_lastAck));
     if (bsn != m_lastAck) {
 	abortAlignment(String("Received unexpected bsn: ") << bsn);
 	transmitLS();

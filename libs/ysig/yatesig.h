@@ -4822,19 +4822,26 @@ public:
     void removeFrame(u_int32_t bsn);
 
     /**
+     * Check if a sequence number may be a valid next BSN
+     * @param bsn Backward Sequence Number to check
+     * @return True if the provided BSN is in the valid range
+     */
+    bool nextBsn(u_int32_t bsn) const;
+
+    /**
      * Increment the given sequence number
-     * @param nr The number to increment
+     * @param nr Reference of the number to increment
      * @return The incremented number
      */
-    inline u_int32_t increment(u_int32_t &nr)
-	{ return (nr == 0xffffff) ?(nr = 0) : nr++; }
+    static inline u_int32_t increment(u_int32_t& nr)
+	{ return (nr == 0xffffff) ? (nr = 0) : nr++; }
 
     /**
      * Obtain next sequence number
-     * @param nr The number
+     * @param nr The current sequence number
      * @return The next number in sequence
      */
-    inline u_int32_t getNext(u_int32_t nr)
+    static inline u_int32_t getNext(u_int32_t nr)
 	{ return (nr == 0xffffff) ? 0 : nr + 1; }
 
 protected:
@@ -5295,10 +5302,12 @@ public:
 	LUN  = 0x26, // Link Uninhibit signal
 	TRW  = 0x27, // Traffic Restart Waiting (ANSI only)
 	CSS  = 0x28, // Connection Successful signal
+	XCO  = 0x31, // Extended Changeover Order signal
 	TFR  = 0x34, // Transfer Restricted signal (national use)
 	RCP  = 0x35, // Route Set Test for cluster-prohibited
 	LIA  = 0x36, // Link Inhibit Acknowledgment signal
 	CNS  = 0x38, // Connection Not Successful signal
+	XCA  = 0x41, // Extended Changeover Acknowledgment signal
 	TCR  = 0x44, // Transfer Cluster Restricted signal (ANSI only)
 	RCR  = 0x45, // Route Set Test for cluster-restricted (ANSI only)
 	LUA  = 0x46, // Link Uninhibit Acknowledgment signal

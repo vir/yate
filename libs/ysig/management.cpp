@@ -49,10 +49,12 @@ static const TokenDict s_snm_names[] = {
     MAKE_NAME(LUN),
     MAKE_NAME(TRW),
     MAKE_NAME(CSS),
+    MAKE_NAME(XCO),
     MAKE_NAME(TFR),
     MAKE_NAME(RCP),
     MAKE_NAME(LIA),
     MAKE_NAME(CNS),
+    MAKE_NAME(XCA),
     MAKE_NAME(TCR),
     MAKE_NAME(RCR),
     MAKE_NAME(LUA),
@@ -216,6 +218,23 @@ bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Lay
 	dest << label.opc();
 	Debug(this,DebugInfo,"%s (label=%s): Traffic can restart to dest=%s [%p]",
 	    msg->name(),l.c_str(),dest.c_str(),this);
+    }
+    else if (msg->type() == SS7MsgSNM::CBD || msg->type() == SS7MsgSNM::XCO) {
+	if (!len--)
+	    return false;
+	const unsigned char* s = msu.getData(label.length()+2,len);
+	if (!s)
+	    return false;
+	Debug(this,DebugInfo,"%s (code len=%u) [%p]",msg->name(),len,this);
+	SS7Label lbl(label,sls,0);
+	SS7MSU answer(msu.getSIO(),lbl,0,len+1);
+	unsigned char* d = answer.getData(lbl.length()+1,len+1);
+	if (!d)
+	    return false;
+	*d++ = (msg->type() == SS7MsgSNM::CBD) ? SS7MsgSNM::CBA : SS7MsgSNM::XCA;
+	while (len--)
+	    *d++ = *s++;
+	return transmitMSU(answer,lbl,sls) >= 0;
     }
     else {
 	String tmp;

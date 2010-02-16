@@ -362,6 +362,7 @@ public:
 	EngineStart      = -3,           // handleEngineStart()
 	ResNotify        = -4,           // handleResNotify()
 	ResSubscribe     = 10,           // handleResSubscribe()
+	UserNotify       = -5,           // handleUserNotify()
     };
     YJGMessageHandler(int handler);
 protected:
@@ -431,6 +432,8 @@ public:
     bool handleResNotify(Message& msg);
     // Handle resource.subscribe messages
     bool handleResSubscribe(Message& msg);
+    // Handle user.notify messages
+    bool handleUserNotify(Message& msg);
     // Handle chan.notify messages
     bool handleChanNotify(Message& msg);
     // Handle msg.execute messages. Send chan.text if enabled
@@ -506,6 +509,7 @@ static const TokenDict s_msgHandler[] = {
     {"engine.start",        YJGMessageHandler::EngineStart},
     {"resource.notify",     YJGMessageHandler::ResNotify},
     {"resource.subscribe",  YJGMessageHandler::ResSubscribe},
+    {"user.notify",         YJGMessageHandler::UserNotify},
     {0,0}
 };
 
@@ -1270,8 +1274,6 @@ void YJGConnection::hangup(const char* reason, const char* text)
     if (m_session) {
 	m_session->userData(0);
 	int res = lookup(m_reason,s_errMap,JGSession::ReasonUnknown);
-	Debug(this,DebugAll,"Hangup. %s %s [%p]",
-	    m_reason.c_str(),lookup(res,JGSession::s_reasons),this);
 	XmlElement* xml = 0;
 	switch (res) {
 	    case JGSession::CryptoRequired:
@@ -3010,6 +3012,8 @@ bool YJGMessageHandler::received(Message& msg)
 	case EngineStart:
 	    plugin.handleEngineStart(msg);
 	    return false;
+	case UserNotify:
+	    return !plugin.isModule(msg) && plugin.handleUserNotify(msg);
 	default:
 	    Debug(&plugin,DebugStub,"YJGMessageHandler(%s) not handled!",msg.c_str());
     }
@@ -3083,6 +3087,8 @@ void YJGDriver::initialize()
 	installRelay(Progress);
 	// Install handlers
 	for (const TokenDict* d = s_msgHandler; d->token; d++) {
+	    if (!Engine::clientMode() && d->value == YJGMessageHandler::UserNotify)
+		continue;
 	    YJGMessageHandler* h = new YJGMessageHandler(d->value);
 	    Engine::install(h);
 	    m_handlers.append(h);
@@ -3662,6 +3668,23 @@ bool YJGDriver::handleResSubscribe(Message& msg)
     if (ok)
 	notifyPresence(notifier,subscriber,sub);
     return ok;
+}
+
+// Handle user.notify messages
+bool YJGDriver::handleUserNotify(Message& msg)
+{
+    if (!Engine::clientMode() || msg.getBoolValue("registered"))
+	return false;
+    // Local account is offline: disconnect it
+    JabberID jid(msg.getValue("jid"));
+    DDebug(this,DebugAll,"handleUserNotify(offline) jid=%s",jid.c_str());
+    Lock lock(this);
+    for (ObjList* o = channels().skipNull(); o; o = o->skipNext()) {
+	YJGConnection* conn = static_cast<YJGConnection*>(o->get());
+	if (jid == conn->local())
+	    conn->disconnect("unregistered");
+    }
+    return false;
 }
 
 // Handle chan.notify messages

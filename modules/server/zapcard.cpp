@@ -1527,8 +1527,8 @@ SignallingComponent* ZapInterface::create(const String& type, const NamedList& n
 	    config = cfg.getSection(sectName);
 	}
 	config->copyParams(name);
-	if(!cfg.save())
-	    DDebug(&plugin,DebugAll,"Failed to save configuration in file %s ",module);
+	if (!cfg.save())
+	    Debug(&plugin,DebugNote,"Failed to save configuration in file %s",cfg.c_str());
     }
     else if (!config){
 	DDebug(&plugin,DebugAll,"No section '%s' in configuration",c_safe(sectName));

@@ -113,6 +113,8 @@ public:
     inline Instance(const char* name, int prio)
 	: String(name), m_priority(prio), m_caps(0)
 	{}
+    ~Instance()
+	{ TelEngine::destruct(m_caps); }
     // Add prefixed parameter(s) from this instance
     void addListParam(NamedList& list, unsigned int index);
     inline bool isCaps(const String& capsid) const
@@ -264,9 +266,27 @@ public:
 	    ObjList* o = m_list.find(name);
 	    return o ? static_cast<Contact*>(o->get()) : 0;
 	}
+    // Check if a contact is subscribed to user's presence
+    inline bool isSubFrom(const String& contact) {
+	    Contact* c = findContact(contact);
+	    return c && c->m_subscription.from();
+	}
     // Remove a contact. Return it if found and not deleted
     Contact* removeContact(const String& name, bool delObj = true);
-    //
+    // Add or remove directed presence. Remove all instances if instance is empty.
+    // Update it for all targets if target is empty
+    void updateDirectNotify(bool online, const String& instance = String::empty(),
+	const String& target = String::empty(), const String& targetInst = String::empty());
+    // Notify offline for sent directed presence
+    // Remove instance from list or clear the list
+    void directNotifyOffline(const String& instance, const char* data);
+    // Retrieve a directed notify instance. Create it if not found and requested
+    NamedList* findDirectNotify(const String& instance, bool create = false);
+    // List of directed notifications
+    // Each element is a NamedList whose name is the user's instance
+    // Each list's parameter name is the target
+    // Parameter value may contain a target's instance
+    ObjList m_directNotify;
 private:
     InstanceList m_instances;            // The list of instances
 };
@@ -449,7 +469,7 @@ public:
     // Handle 'resource.subscribe' messages with query operation
     bool handleResSubscribeQuery(const String& subscriber, const String& notifier,
 	Message& msg);
-    // Handle online/offline resource.notify from contact
+    // Handle online/offline resource.notify from contact or directed notifications
     bool handleResNotify(bool online, Message& msg);
     // Handle resource.notify with operation (un)subscribed
     bool handleResNotifySub(bool sub, const String& from, const String& to,
@@ -559,6 +579,18 @@ static void encodeFlags(String& buf, int value, const TokenDict* flags)
     for (; flags->token; flags++)
 	if (0 != (value & flags->value))
 	    buf.append(flags->token,",");
+}
+
+// Find a list parameter having a given name and value
+static NamedString* getParam(NamedList& list, const String& name, const String& value)
+{
+    unsigned int n = list.length();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* ns = list.getParam(i);
+	if (ns && ns->name() == name && *ns == value)
+	    return ns;
+    }
+    return 0;
 }
 
 
@@ -897,6 +929,94 @@ Contact* PresenceUser::removeContact(const String& name, bool delObj)
 #endif
     o->remove(delObj);
     return delObj ? 0 : c;
+}
+
+// Add or remove directed presence. Remove all instances if instance is empty.
+// Update it for all targets if contact is empty
+void PresenceUser::updateDirectNotify(bool online, const String& instance,
+    const String& target, const String& targetInst)
+{
+    if (!instance) {
+	if (!online) {
+	    DDebug(&__plugin,DebugAll,
+		"PresenceUser(%s) removing all directed notifications [%p]",
+		user().c_str(),this);
+	    m_directNotify.clear();
+	}
+	return;
+    }
+    if (online && !target)
+	return;
+    NamedList* p = findDirectNotify(instance,online);
+    if (!p)
+	return;
+    if (online) {
+	// Add the target if not found. Keep empty target instances
+	// Do nothing if the target instance is already in the list
+	// Don't use NamedList::setParam(): this will update the first found target
+	if (getParam(*p,target,targetInst))
+	    return;
+	p->addParam(target,targetInst);
+	DDebug(&__plugin,DebugAll,
+	    "PresenceUser(%s) added directed notifications inst=%s target=(%s,%s) [%p]",
+	    user().c_str(),instance.c_str(),target.c_str(),targetInst.c_str(),this);
+	return;
+    }
+    DDebug(&__plugin,DebugAll,
+	"PresenceUser(%s) removing directed notification inst=%s target=(%s,%s) [%p]",
+	user().c_str(),instance.c_str(),target.c_str(),targetInst.c_str(),this);
+    if (!target) {
+	m_directNotify.remove(p);
+	return;
+    }
+    if (targetInst) {
+	NamedString* ns = getParam(*p,target,targetInst);
+	if (!ns)
+	    return;
+	p->clearParam(ns);
+    }
+    else
+	p->clearParam(target);
+    // Remove empty list
+    if (!p->count())
+	m_directNotify.remove(p);
+}
+
+// Notify offline for sent directed presence
+// Remove instance from list or clear the list
+void PresenceUser::directNotifyOffline(const String& instance, const char* data)
+{
+    DDebug(&__plugin,DebugAll,"PresenceUser(%s) directNotifyOffline(%s) [%p]",
+	    user().c_str(),instance.c_str(),this);
+    for (ObjList* o = m_directNotify.skipNull(); o; o = o->skipNext()) {
+	NamedList* p = static_cast<NamedList*>(o->get());
+	if (instance && *p != instance)
+	    continue;
+	unsigned int n = p->length();
+	for (unsigned int i = 0; i < n; i++) {
+	    NamedString* ns = p->getParam(i);
+	    if (ns && ns->name() && !isSubFrom(ns->name()))
+		__plugin.notify(false,toString(),ns->name(),instance,*ns,data);
+	}
+    }
+    updateDirectNotify(false,instance);
+}
+
+// Retrieve a directed notify instance. Create it if not found and requested
+NamedList* PresenceUser::findDirectNotify(const String& instance, bool create)
+{
+    if (!instance)
+	return 0;
+    for (ObjList* o = m_directNotify.skipNull(); o; o = o->skipNext()) {
+	NamedList* p = static_cast<NamedList*>(o->get());
+	if (instance == *p)
+	    return p;
+    }
+    if (!create)
+	return 0;
+    NamedList* p = new NamedList(instance);
+    m_directNotify.append(p);
+    return p;
 }
 
 /*
@@ -1893,14 +2013,16 @@ bool SubscriptionModule::handleResSubscribeQuery(const String& subscriber,
     return ok;
 }
 
-// Handle online/offline resource.notify from contact
+// Handle online/offline resource.notify from contact or directed notifications
 bool SubscriptionModule::handleResNotify(bool online, Message& msg)
 {
     String* contact = msg.getParam("contact");
     if (TelEngine::null(contact)) {
 	// TODO: handle generic users
 	// TODO: handle offline without 'to' or without instance
-	if (!msg.getBoolValue("to_local",true))
+	bool fromLocal = msg.getBoolValue("from_local",true);
+	bool toLocal = msg.getBoolValue("to_local",true);
+	if (!(fromLocal || toLocal))
 	    return false;
 	String* inst = msg.getParam("from_instance");
 	if (TelEngine::null(inst))
@@ -1911,9 +2033,21 @@ bool SubscriptionModule::handleResNotify(bool online, Message& msg)
 	    return false;
 	DDebug(this,DebugAll,"handleResNotify(%s) from=%s instance=%s to=%s",
 	    String::boolText(online),from->c_str(),inst->c_str(),to->c_str());
-	PresenceUser* u = m_users.getUser(*to);
+	// Update directed notifications for contacts not in sender's roster
+	// or not having a subscription 'from'
+	PresenceUser* src = fromLocal ? m_users.getUser(*from) : 0;
+	Lock lock(src);
+	if (src) {
+	    src->lock();
+	    if (!src->isSubFrom(*to))
+		src->updateDirectNotify(online,*inst,*to,msg.getValue("to_instance"));
+	    src->unlock();
+	    TelEngine::destruct(src);
+	}
+	// Update instance capabilities to target's instances
+	PresenceUser* u = toLocal ? m_users.getUser(*to) : 0;
 	if (!u)
-	   return false;
+	    return false;
 	u->lock();
 	Contact* c = u->findContact(*from);
 	if (c) {
@@ -1963,14 +2097,16 @@ bool SubscriptionModule::handleResNotify(bool online, Message& msg)
 		    contact->c_str(),inst->c_str());
 		TelEngine::destruct(i);
 	    }
+	    u->directNotifyOffline(*inst,msg.getValue("data"));
 	}
 	else {
-	     notify = (0 != u->instances().skipNull());
-	     if (notify) {
+	    notify = (0 != u->instances().skipNull());
+	    if (notify) {
 		DDebug(this,DebugAll,"handleResNotify(offline) user=%s removed %u instances",
 		    contact->c_str(),u->instances().count());
 		u->instances().clear();
 	    }
+	    u->directNotifyOffline(String::empty(),msg.getValue("data"));
 	}
     }
     if (notify) {

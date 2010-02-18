@@ -479,14 +479,13 @@ bool SS7M2PA::control(Operation oper, NamedList* params)
 	    transmitLS();
 	    return true;
 	case Resume:
-	    if (aligned())
+	    if (aligned() || !m_autostart)
 		return true;
 	case Align:
 	{
 	    bool em = params && params->getBoolValue("emergency");
 	    m_state = em ? ProvingEmergency : ProvingNormal;
-	    if (m_autostart)
-		startAlignment();
+	    startAlignment();
 	    return true;
 	}
 	case Status:
@@ -730,7 +729,6 @@ void SS7M2PA::notifyLayer(SignallingInterface::Notification event)
     switch (event) {
 	case SignallingInterface::LinkDown:
 	    m_transportState = Idle;
-	    m_seqNr = m_needToAck = m_lastAck = 0xffffff;
 	    abortAlignment("LinkDown");
 	    SS7Layer2::notify();
 	    break;
@@ -738,6 +736,12 @@ void SS7M2PA::notifyLayer(SignallingInterface::Notification event)
 	    m_transportState = Established;
 	    Debug(this,DebugInfo,"Interface is up [%p]",this);
 	    if (m_autostart)
+		startAlignment();
+	    SS7Layer2::notify();
+	    break;
+	case SignallingInterface::HardwareError:
+	    abortAlignment("HardwareError");
+	    if (m_autostart && (m_transportState == Established))
 		startAlignment();
 	    SS7Layer2::notify();
 	    break;

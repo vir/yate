@@ -219,7 +219,8 @@ public:
 	MucAdmin = 49,                   // http://jabber.org/protocol/muc#admin
 	MucOwner = 50,                   // http://jabber.org/protocol/muc#owner
 	MucUser = 51,                    // http://jabber.org/protocol/muc#user
-	Count = 52,
+	DialbackFeature = 52,            // urn:xmpp:features:dialback
+	Count = 53,
     };
 
     /**
@@ -405,7 +406,8 @@ public:
 	Priority = 64,                   // priority
 	EntityCapsTag = 65,              // c
 	Handshake = 66,                  // handshake
-	Count = 67
+	Dialback = 67,                   // dialback
+	Count = 68
     };
 
     /**
@@ -1469,22 +1471,23 @@ public:
 	int t = XmlTag::Count, int ns = XMPPNamespace::Count);
 
     /**
+     * Find an error child of a given element and decode it
+     * @param xml The element
+     * @param ns Expected error condition namespace. If not set, defaults to stream error
+     *  namespace if the element is a stream error or to stanza error namespace otherwise
+     * @param error Optional string to be filled with error tag
+     * @param text Optional string to be filled with error text
+     */
+    static void decodeError(XmlElement* xml, int ns = XMPPNamespace::Count,
+	String* error = 0, String* text = 0);
+
+    /**
      * Decode a stream error or stanza error
      * @param xml The element
      * @param error The error condition
      * @param text The stanza's error or error text
      */
     static void decodeError(XmlElement* xml, String& error, String& text);
-
-    /**
-     * Decode a stream or stanza error condition element
-     * @param xml The element
-     * @param stanza True if the condition must be a stanza error, false to
-     *  decode a stream error
-     * @param error The error condition
-     * @param text The stanza's error or error text
-     */
-    static void decodeError(XmlElement* xml, bool stanza, String& error, String& text);
 
     /**
      * Encode EPOCH time given in seconds to a date/time profile as defined in
@@ -1620,11 +1623,12 @@ public:
      * Build a dialback 'db:result' xml element used to send a dialback key response
      * @param from The sender
      * @param to The recipient
-     * @param valid True if valid, false if invalid
+     * @param rsp The response as enumeration: set it to NoError if valid,
+     *  NotAuthorized if invalid or any other error to send a db:result error type
      * @return XmlElement pointer
      */
     static XmlElement* createDialbackResult(const char* from, const char* to,
-	bool valid);
+	XMPPError::Type rsp = XMPPError::NoError);
 
     /**
      * Build a dialback 'db:verify' xml element
@@ -1642,11 +1646,20 @@ public:
      * @param from The sender
      * @param to The recipient
      * @param id The 'id' attribute (stream id)
-     * @param valid True if valid, false if invalid
+     * @param rsp The response as enumeration: set it to NoError if valid,
+     *  NotAuthorized if invalid or any other error to send a db:verify error type
      * @return XmlElement pointer
      */
     static XmlElement* createDialbackVerifyRsp(const char* from, const char* to,
-	const char* id, bool valid);
+	const char* id, XMPPError::Type rsp = XMPPError::NoError);
+
+    /**
+     * Decode a dialback verify or result response element
+     * @param xml The element
+     * @return The response as enumeration: NoError if valid, NotAuthorized if invalid or
+     *  any other error if set in the response
+     */
+    static int decodeDbRsp(XmlElement* xml);
 
     /**
      * Build a 'subject' xml element

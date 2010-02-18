@@ -518,6 +518,7 @@ public:
 	StreamTls           = 0x00040000,// The stream is using TLS
 	StreamAuthenticated = 0x00080000,// Stream already authenticated
 	StreamRemoteVer1    = 0x00100000,// Remote party advertised RFC3920 version=1.0
+	StreamLocalVer1     = 0x00200000,// Advertise RFC3920 version=1.0 on incoming streams
 	StreamWaitBindRsp   = 0x01000000,// Outgoing c2s waiting for bind response
 	StreamWaitSessRsp   = 0x02000000,// Outgoing c2s waiting for session response
 	StreamWaitChallenge = 0x04000000,// Outgoing waiting for auth challenge
@@ -654,6 +655,7 @@ public:
      * @param set True to set, false to reset the flag
      */
     inline void setTlsRequired(bool set) {
+	    Lock lock(this);
 	    if (set)
 		setFlags(TlsRequired);
 	    else
@@ -719,7 +721,7 @@ public:
     JBEvent* getEvent(u_int64_t time = Time::msecNow());
 
     /**
-     * Send a stanza ('iq', 'message' or 'presence') in Running state.
+     * Send a stanza ('iq', 'message' or 'presence') or dialback elements in Running state.
      * This method is thread safe
      * @param xml Element to send (will be consumed and zeroed)
      * @return True on success
@@ -750,8 +752,9 @@ public:
      *  If processed, list's elements will be moved to stream's features list
      * @param caps Optional entity capabilities to be added to the stream features.
      *  Ignored for outgoing streams
+     * @param useVer1 Advertise RFC3920 version. Ignored for outgoing streams
      */
-    void start(XMPPFeatureList* features = 0, XmlElement* caps = 0);
+    void start(XMPPFeatureList* features = 0, XmlElement* caps = 0, bool useVer1 = true);
 
     /**
      * Auth event result. This method should be called by the
@@ -1368,6 +1371,7 @@ private:
 class YJABBER_API JBServerStream : public JBStream
 {
     YCLASS(JBServerStream,JBStream)
+    friend class JBStream;
 public:
     /**
      * Constructor. Build an incoming stream from a socket
@@ -1397,6 +1401,26 @@ public:
 	{ return outgoing() && flag(DialbackOnly); }
 
     /**
+     * Retrieve the list of remote domains.
+     * This method is not thread safe
+     * @return The list of remote domains
+     */
+    inline const NamedList& remoteDomains() const
+	{ return m_remoteDomains; }
+
+    /**
+     * Check if this stream has an already authenticated remote domain.
+     * This method is not thread safe
+     * @param domain Domain to check
+     * @param auth Check if the domain is authenticated
+     * @return True if a domain was found
+     */
+    inline bool hasRemoteDomain(const String& domain, bool auth = true) {
+	    NamedString* tmp = m_remoteDomains.getParam(domain);
+	    return tmp && (!auth || tmp->null());
+	}
+
+    /**
      * Take the dialback key from this stream
      * @return NamedString pointer or 0 if there is no dialback key held by this stream
      */
@@ -1419,29 +1443,28 @@ public:
      * @param from The 'from' attribute
      * @param to The 'to' attribute
      * @param id The 'id' attribute
-     * @param valid True if valid, false if invalid
+     * @param rsp The response as enumeration: set it to NoError if valid,
+     *  NotAuthorized if invalid or any other error to send a db:verify error type
      * @return True on success
      */
-    inline bool sendDbVerify(const char* from, const char* to, const char* id,
-	bool valid) {
-	    XmlElement* rsp = XMPPUtils::createDialbackVerifyRsp(from,to,id,valid);
-	    return sendStreamXml(state(),rsp);
-	}
+    bool sendDbVerify(const char* from, const char* to, const char* id,
+	XMPPError::Type rsp = XMPPError::NoError);
 
     /**
-     * Send a dialback key response.
-     * If the stream is in Dialback state change it's state to Running if valid or
-     *  terminate it if invalid
+     * Send a dialback key response. Update the remote domains list.
+     * Terminate the stream if there are no more remote domains
      * @param from The 'from' attribute
      * @param to The 'to' attribute
-     * @param valid True if valid, false if invalid
+     * @param rsp The response as enumeration: set it to NoError if valid,
+     *  NotAuthorized if invalid or any other error to send a db:result error type
      * @return True on success
      */
-    bool sendDbResult(const JabberID& from, const JabberID& to, bool valid);
+    bool sendDbResult(const JabberID& from, const JabberID& to,
+	XMPPError::Type rsp = XMPPError::NoError);
 
     /**
      * Send dialback data (key/verify)
-     * @return Flase if stream termination was initiated
+     * @return False if stream termination was initiated
      */
     bool sendDialback();
 
@@ -1494,6 +1517,32 @@ protected:
      */
     virtual bool processAuth(XmlElement* xml, const JabberID& from,
 	const JabberID& to);
+
+    /**
+     * Process dialback key (db:result) requests
+     * @param xml Received element (will be consumed)
+     * @param from Already parsed source JID
+     * @param to Already parsed destination JID
+     * @return False if stream termination was initiated
+     */
+    bool processDbResult(XmlElement* xml, const JabberID& from, const JabberID& to);
+
+    /**
+     * Adjust a dialback response to avoid sending XEP 0220 'error' to a party
+     * not advertising rfc3920 version=1 (might not support it)
+     * @param rsp The response to adjust
+     */
+    inline void adjustDbRsp(XMPPError::Type& rsp) {
+	    Lock lock(this);
+	    if (!flag(StreamRemoteVer1) && rsp != XMPPError::NoError)
+		rsp = XMPPError::NotAuthorized;
+	}
+
+    /**
+     * Incoming stream remote domains.
+     * Each element's value will contain the dialback key if not authenticated
+     */
+    NamedList m_remoteDomains;
 
 private:
     NamedString* m_dbKey;                // Outgoing: initial dialback key to check
@@ -1787,9 +1836,12 @@ public:
     /**
      * Build a dialback key
      * @param id The stream id
+     * @param local Local domain
+     * @param remote Remote domain
      * @param key The dialback key
      */
-    virtual void buildDialbackKey(const String& id, String& key);
+    virtual void buildDialbackKey(const String& id, const String& local,
+	const String& remote, String& key);
 
     /**
      * Check if an outgoing stream exists with the same id and remote peer
@@ -1934,9 +1986,11 @@ public:
      * @param remote Remote domain
      * @param out True to find an outgoing stream, false to find an incoming one.
      *  Ignored for component streams
+     * @param auth Check if the remote domain of an incoming s2s stream is authenticated
      * @return Referenced JBServerStream pointer or 0
      */
-     JBServerStream* findServerStream(const String& local, const String& remote, bool out);
+    JBServerStream* findServerStream(const String& local, const String& remote, bool out,
+	bool auth = true);
 
     /**
      * Create an outgoing s2s stream.

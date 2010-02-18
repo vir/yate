@@ -169,7 +169,8 @@ public:
     // Connect an outgoing stream
     virtual void connectStream(JBStream* stream);
     // Build a dialback key
-    virtual void buildDialbackKey(const String& id, String& key);
+    virtual void buildDialbackKey(const String& id, const String& local,
+	const String& remote, String& key);
     // Check if a domain is serviced by this engine
     virtual bool hasDomain(const String& domain);
     // Get the first domain in the list
@@ -296,7 +297,7 @@ public:
 private:
     // Notify an incoming s2s stream about a dialback verify response
     void notifyDbVerifyResult(const JabberID& local, const JabberID& remote,
-	const String& id, bool ok);
+	const String& id, XMPPError::Type rsp);
     // Find a configured or dynamic domain
     inline ObjList* findDomain(const String& domain, bool cfg) {
 	    ObjList* o = cfg ? m_domains.skipNull() : m_dynamicDomains.skipNull();
@@ -559,6 +560,8 @@ private:
 JBPendingWorker** JBPendingWorker::s_threads = 0;
 unsigned int JBPendingWorker::s_threadCount = 0;
 Mutex JBPendingWorker::s_mutex(false,"JBPendingWorker");
+static bool s_s2sFeatures = true;        // Offer RFC 3920 version=1 and stream features
+                                         //  on incoming s2s streams
 INIT_PLUGIN(JBModule);                   // The module
 static YJBEntityCapsList s_entityCaps;
 static YJBEngine* s_jabber = 0;
@@ -722,6 +725,22 @@ static const String& getChildText(XmlElement& xml, int tag, int ns)
 {
     XmlElement* ch = XMPPUtils::findFirstChild(xml,tag,ns);
     return ch ? ch->getText() : String::empty();
+}
+
+// Append stream's remote jid/domain(s) to a string
+static void fillStreamRemote(String& buf, JBStream& stream, const char* sep = " ")
+{
+    String tmp;
+    if (stream.remote())
+	tmp = stream.remote();
+    JBServerStream* s = stream.serverStream();
+    unsigned int n = s ? s->remoteDomains().count() : 0;
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* ns = s->remoteDomains().getParam(i);
+	if (ns)
+	    tmp.append(ns->name(),sep);
+    }
+    buf << tmp;
 }
 
 
@@ -982,11 +1001,13 @@ void YJBEngine::connectStream(JBStream* stream)
 }
 
 // Build a dialback key
-void YJBEngine::buildDialbackKey(const String& id, String& key)
+void YJBEngine::buildDialbackKey(const String& id, const String& local,
+    const String& remote, String& key)
 {
-    MD5 md5;
-    md5 << id << m_dialbackSecret;
-    key = md5.hexDigest();
+    SHA1 sha(m_dialbackSecret);
+    SHA1 shaKey(sha.hexDigest());
+    shaKey << local << " " << remote << " " << id;
+    key = shaKey.hexDigest();
 }
 
 // Check if a domain is serviced by this engine
@@ -1628,14 +1649,17 @@ void YJBEngine::processStartIn(JBEvent* ev)
 	return;
     }
 
+    bool s2sVer1 = s_s2sFeatures;
+
     // Set stream features
     // Add TLS if not secured
-    if (!ev->stream()->flag(JBStream::StreamSecured))
+    if (!ev->stream()->flag(JBStream::StreamSecured) &&
+	(ev->stream()->type() == JBStream::c2s || s2sVer1))
 	features.add(XmlTag::Starttls,XMPPNamespace::Tls,
 	    ev->stream()->flag(JBStream::TlsRequired));
     // Done for s2s streams
     if (ev->stream()->type() == JBStream::s2s) {
-	ev->stream()->start(&features);
+	ev->stream()->start(&features,0,s2sVer1);
 	return;
     }
     XMPPFeature* tls = features.get(XMPPNamespace::Tls);
@@ -1841,7 +1865,9 @@ void YJBEngine::processStreamEvent(JBEvent* ev)
 	    JBServerStream* s2s = ev->serverStream();
 	    NamedString* db = s2s ? s2s->takeDb() : 0;
 	    if (db) {
-		notifyDbVerifyResult(s2s->local(),s2s->remote(),db->name(),false);
+		// See XEP 0220 2.4
+		notifyDbVerifyResult(s2s->local(),s2s->remote(),db->name(),
+		    XMPPError::RemoteTimeout);
 		TelEngine::destruct(db);
 	    }
 	}
@@ -1882,7 +1908,7 @@ void YJBEngine::processDbResult(JBEvent* ev)
 	"Failed to authenticate dialback request from=%s to=%s id=%s key=%s",
 	ev->from().c_str(),ev->to().c_str(),id,ev->text().c_str());
     if (stream)
-	stream->sendDbResult(ev->to(),ev->from(),false);
+	stream->sendDbResult(ev->to(),ev->from(),XMPPError::RemoteConn);
 }
 
 // Process stream DbVerify events
@@ -1897,25 +1923,27 @@ void YJBEngine::processDbVerify(JBEvent* ev)
     if (stream->incoming()) {
 	String key;
 	if (id)
-	    buildDialbackKey(id,key);
-	bool valid = key && key == ev->element()->getText();
-	stream->sendDbVerify(ev->to(),ev->from(),id,valid);
+	    buildDialbackKey(id,ev->to(),ev->from(),key);
+	if (key && key == ev->element()->getText())
+	    stream->sendDbVerify(ev->to(),ev->from(),id);
+	else
+	    stream->sendDbVerify(ev->to(),ev->from(),id,XMPPError::NotAuthorized);
 	return;
     }
     // Outgoing: we have an incoming stream to authenticate
     // Remove the dialback request from the stream and check it
-    bool valid = false;
     NamedString* db = stream->takeDb();
-    XMPPError::Type err = XMPPError::NoError;
-    if (id && db && db->name() == id)
-	valid = String("valid") == ev->element()->getAttribute("type");
-    else
-	err = XMPPError::InvalidId;
+    if (id && db && db->name() == id) {
+	int r = XMPPUtils::decodeDbRsp(ev->element());
+	// Adjust the response. See XEP 0220 2.4
+	if (r == XMPPError::ItemNotFound || r == XMPPError::HostUnknown)
+	    r = XMPPError::NoRemote;
+	notifyDbVerifyResult(ev->to(),ev->from(),id,(XMPPError::Type)r);
+    }
     TelEngine::destruct(db);
-    // Terminate dialback only streams and notify the incoming one
+    // Terminate dialback only streams
     if (stream->dialback())
-	stream->terminate(-1,true,0,err);
-    notifyDbVerifyResult(ev->to(),ev->from(),id,valid);
+	stream->terminate(-1,true,0);
 }
 
 // Process all incoming jabber:iq:roster stanzas
@@ -2293,10 +2321,17 @@ unsigned int YJBEngine::statusDetail(String& str, JBStream::Type t, JabberID* re
 	    for (ObjList* s = set->clients().skipNull(); s; s = s->skipNext()) {
 		JBStream* stream = static_cast<JBStream*>(s->get());
 		Lock lock(stream);
-		if (!remote || (i == JBStream::c2s && stream->remote().match(*remote)) ||
-		    (i == JBStream::s2s && stream->remote() == *remote)) {
+		if (!remote || (i == JBStream::c2s && stream->remote().match(*remote))) {
 		    n++;
 		    streamDetail(str,stream);
+		}
+		else if (i == JBStream::s2s) {
+		    JBServerStream* s2s = stream->serverStream();
+		    if ((s2s->outgoing() && s2s->remote() == *remote) ||
+			(s2s->incoming() && s2s->hasRemoteDomain(*remote,false))) {
+			n++;
+			streamDetail(str,stream);
+		    }
 		}
 	    }
 	}
@@ -2320,7 +2355,8 @@ void YJBEngine::statusDetail(String& str, const String& name)
     str << ",type=" << stream->typeName();
     str << ",state=" << stream->stateName();
     str << ",local=" << stream->local();
-    str << ",remote=" << stream->remote();
+    str << ",remote=";
+    fillStreamRemote(str,*stream);
     SocketAddr l;
     stream->localAddr(l);
     str << ",localip=" << l.host() << ":" << l.port();
@@ -2340,7 +2376,8 @@ void YJBEngine::streamDetail(String& str, JBStream* stream)
     str << "|" << stream->typeName();
     str << "|" << stream->stateName();
     str << "|" << stream->local();
-    str << "|" << stream->remote();
+    str << "|";
+    fillStreamRemote(str,*stream);
 }
 
 // Complete remote party jid starting with partWord
@@ -2361,7 +2398,17 @@ void YJBEngine::completeStreamRemote(String& str, const String& partWord, JBStre
 	for (ObjList* s = set->clients().skipNull(); s; s = s->skipNext()) {
 	    JBStream* stream = static_cast<JBStream*>(s->get());
 	    Lock lock(stream);
-	    Module::itemComplete(str,stream->remote(),partWord);
+	    if (t == JBStream::c2s || stream->outgoing())
+		Module::itemComplete(str,stream->remote(),partWord);
+	    else if (t == JBStream::s2s && stream->incoming()) {
+		JBServerStream* s2s = stream->serverStream();
+		unsigned int n = s2s->remoteDomains().length();
+		for (unsigned int i = 0; i < n; i++) {
+		    NamedString* ns = s2s->remoteDomains().getParam(i);
+		    if (ns && ns->name())
+			Module::itemComplete(str,ns->name(),partWord);
+		}
+	    }
 	}
     }
     list->unlock();
@@ -2394,14 +2441,14 @@ void YJBEngine::completeStreamName(String& str, const String& partWord)
 
 // Notify an incoming s2s stream about a dialback verify response
 void YJBEngine::notifyDbVerifyResult(const JabberID& local, const JabberID& remote,
-    const String& id, bool ok)
+    const String& id, XMPPError::Type rsp)
 {
     if (!id)
 	return;
     // Notify the incoming stream
-    JBServerStream* notify = findServerStream(local,remote,false);
+    JBServerStream* notify = findServerStream(local,remote,false,false);
     if (notify && notify->id() == id)
-	notify->sendDbResult(local,remote,ok);
+	notify->sendDbResult(local,remote,rsp);
     else
 	Debug(this,DebugNote,
 	    "No incoming s2s stream local=%s remote=%s id='%s' to notify dialback verify result",
@@ -2450,7 +2497,7 @@ JBPendingJob::JBPendingJob(JBEvent* ev)
 // Retrieve the stream from jabber engine
 JBStream* JBPendingJob::getStream()
 {
-    // FIXME: Don't use the stream id when finding a s2s stream
+    // Don't use the stream id when finding a s2s stream
     // We can use any stream to a remote domain to send stanzas
     if (m_streamType != JBStream::s2s)
 	return s_jabber->findStream(m_stream,m_streamType);
@@ -3231,6 +3278,9 @@ void JBModule::initialize()
 	else
 	    Debug(this,DebugAll,"Entity capability is disabled");
     }
+
+    // (re)init globals
+    s_s2sFeatures = cfg.getBoolValue("general","s2s_offerfeatures",true);
 
     // Init the engine
     s_jabber->initialize(cfg.getSection("general"),!m_init);

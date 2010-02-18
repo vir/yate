@@ -229,6 +229,7 @@ const String XMPPNamespace::s_array[Count] = {
     "http://jabber.org/protocol/muc#admin",                // MucAdmin
     "http://jabber.org/protocol/muc#owner",                // MucOwner
     "http://jabber.org/protocol/muc#user",                 // MucUser
+    "urn:xmpp:features:dialback",                          // DialbackFeature
 };
 
 const String XMPPError::s_array[Count] = {
@@ -363,6 +364,7 @@ const String XmlTag::s_array[Count] = {
     "priority",                          // Priority
     "c",                                 // EntityCapsTag
     "handshake",                         // Handshake
+    "dialback",                          // Dialback
 };
 
 XMPPNamespace XMPPUtils::s_ns;
@@ -1024,6 +1026,45 @@ XmlElement* XMPPUtils::findNextChild(const XmlElement& xml, XmlElement* start,
     return xml.findNextChild(start);
 }
 
+// Find an error child of a given element and return the associated code
+void XMPPUtils::decodeError(XmlElement* xml, int ns, String* error, String* text)
+{
+    if (!(xml && (error || text)))
+	return;
+    XmlElement* errParent = xml;
+    int xmlNs = xmlns(*xml);
+    if (xmlNs < XMPPNamespace::Count && xmlNs != XMPPNamespace::Stream) {
+	// Non stream error: find the 'error' child
+	// Check if there is one in the default namespace or in the element's namespace
+	errParent = findFirstChild(*xml,XmlTag::Error,XMPPNamespace::Count);
+	if (!errParent)
+	    errParent = findFirstChild(*xml,XmlTag::Error,xmlNs);
+	if (!errParent)
+	    return;
+    }
+    // Adjust error condition namespace if not set
+    if (ns >= XMPPNamespace::Count) {
+	if (xmlNs != XMPPNamespace::Stream)
+	    ns = XMPPNamespace::StanzaError;
+	else
+	    ns = XMPPNamespace::StreamError;
+    }
+    // Retrieve the first error condition and text
+    if (error) {
+	XmlElement* ch = findFirstChild(*errParent,XmlTag::Count,ns);
+	for (; ch; ch = findNextChild(*errParent,ch,XmlTag::Count,ns))
+	    if (ch->unprefixedTag() != s_tag[XmlTag::Text]) {
+		*error = ch->unprefixedTag();
+		break;
+	    }
+    }
+    if (text) {
+	XmlElement* ch = findFirstChild(*errParent,XmlTag::Text,XMPPNamespace::Count);
+	if (ch)
+	    *text = ch->getText();
+    }
+}
+
 // Decode an 'error' XML element
 void XMPPUtils::decodeError(XmlElement* xml, String& error, String& text)
 {
@@ -1039,7 +1080,7 @@ void XMPPUtils::decodeError(XmlElement* xml, String& error, String& text)
 	case XmlTag::Error:
 	    // Stream error
 	    if (ns == XMPPNamespace::Stream)
-		decodeError(xml,false,error,text);
+		decodeError(xml,XMPPNamespace::StreamError,&error,&text);
 	    break;
 	case XmlTag::Iq:
 	case XmlTag::Presence:
@@ -1047,30 +1088,7 @@ void XMPPUtils::decodeError(XmlElement* xml, String& error, String& text)
 	    // Stanza in stream namespace
 	    if (ns == XMPPNamespace::Server || ns == XMPPNamespace::Client ||
 		ns == XMPPNamespace::ComponentAccept)
-		decodeError(xml,true,error,text);
-	    break;
-    }
-}
-
-// Decode a stream or stanza error condition element
-void XMPPUtils::decodeError(XmlElement* xml, bool stanza, String& error, String& text)
-{
-    if (!xml)
-	return;
-    int ns = stanza ? XMPPNamespace::StanzaError: XMPPNamespace::StreamError;
-    if (stanza) {
-	String* xmlns = xml->xmlns();
-	xml = xml->findFirstChild(&s_tag[XmlTag::Error],xmlns);
-	if (!xml)
-	    return;
-    }
-    XmlElement* ch = findFirstChild(*xml,XmlTag::Count,ns);
-    for (; ch; ch = findNextChild(*xml,ch,XmlTag::Count,ns)) {
-	if (ch->unprefixedTag() != s_tag[XmlTag::Text])
-	    error = ch->unprefixedTag();
-	else
-	    text = ch->getText();
-	if (error && text)
+		decodeError(xml,XMPPNamespace::StanzaError,&error,&text);
 	    break;
     }
 }
@@ -1438,13 +1456,20 @@ XmlElement* XMPPUtils::createDialbackKey(const char* from, const char* to,
 
 // Build a dialback 'db:result' xml element used to send a dialback key response
 XmlElement* XMPPUtils::createDialbackResult(const char* from, const char* to,
-    bool valid)
+    XMPPError::Type rsp)
 {
     XmlElement* db = createElement("result");
     setDbXmlns(*db);
     db->setAttribute("from",from);
     db->setAttribute("to",to);
-    db->setAttribute("type",valid ? "valid" : "invalid");
+    if (rsp == XMPPError::NoError)
+	db->setAttribute("type","valid");
+    else if (rsp == XMPPError::NotAuthorized)
+	db->setAttribute("type","invalid");
+    else {
+	db->setAttribute("type","error");
+	db->addChild(createError(XMPPError::TypeCancel,rsp));
+    }
     return db;
 }
 
@@ -1462,15 +1487,46 @@ XmlElement* XMPPUtils::createDialbackVerify(const char* from, const char* to,
 
 // Build a dialback 'db:verify' response xml element
 XmlElement* XMPPUtils::createDialbackVerifyRsp(const char* from, const char* to,
-    const char* id, bool valid)
+    const char* id, XMPPError::Type rsp)
 {
     XmlElement* db = createElement("verify");
     setDbXmlns(*db);
     db->setAttribute("from",from);
     db->setAttribute("to",to);
     db->setAttribute("id",id);
-    db->setAttribute("type",valid ? "valid" : "invalid");
+    if (rsp == XMPPError::NoError)
+	db->setAttribute("type","valid");
+    else if (rsp == XMPPError::NotAuthorized)
+	db->setAttribute("type","invalid");
+    else {
+	db->setAttribute("type","error");
+	db->addChild(createError(XMPPError::TypeCancel,rsp));
+    }
     return db;
+}
+
+// Decode a dialback verify or result response element
+int XMPPUtils::decodeDbRsp(XmlElement* xml)
+{
+    if (!xml)
+	return XMPPError::NotAuthorized;
+    String* type = xml->getAttribute("type");
+    if (TelEngine::null(type))
+	return XMPPError::NotAuthorized;
+    if (*type == "valid")
+	return XMPPError::NoError;
+    if (*type == "valid")
+	return XMPPError::NotAuthorized;
+    if (*type == "error") {
+	String error;
+	decodeError(xml,XMPPNamespace::StanzaError,&error);
+	if (error) {
+	    int rsp = s_error[error];
+	    if (rsp > XMPPError::NoError && rsp < XMPPError::TypeCount)
+		return rsp;
+	}
+    }
+    return XMPPError::NotAuthorized;
 }
 
 // Retrieve the text of an element's body child

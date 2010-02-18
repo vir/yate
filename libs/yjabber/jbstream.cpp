@@ -405,13 +405,14 @@ JBEvent* JBStream::getEvent(u_int64_t time)
     return m_lastEvent;
 }
 
-// Send a stanza ('iq', 'message' or 'presence') in Running state.
+// Send a stanza ('iq', 'message' or 'presence') or dialback elements in Running state.
 bool JBStream::sendStanza(XmlElement*& xml)
 {
     if (!xml)
 	return false;
     DDebug(this,DebugAll,"sendStanza(%p) '%s' [%p]",xml,xml->tag(),this);
-    if (!XMPPUtils::isStanza(*xml)) {
+    if (!(XMPPUtils::isStanza(*xml) ||
+	(m_type == s2s && XMPPUtils::hasXmlns(*xml,XMPPNamespace::Dialback)))) {
 	Debug(this,DebugNote,"Request to send non stanza xml='%s' [%p]",xml->tag(),this);
 	TelEngine::destruct(xml);
 	return false;
@@ -477,7 +478,7 @@ bool JBStream::sendStreamXml(State newState, XmlElement* first, XmlElement* seco
 // Start the stream. This method should be called by the upper layer
 //  when processing an incoming stream Start event. For outgoing streams
 //  this method is called internally on succesfully connect.
-void JBStream::start(XMPPFeatureList* features, XmlElement* caps)
+void JBStream::start(XMPPFeatureList* features, XmlElement* caps, bool useVer1)
 {
     Lock lock(this);
     if (m_state != Starting)
@@ -491,7 +492,9 @@ void JBStream::start(XMPPFeatureList* features, XmlElement* caps)
     m_features.clear();
     if (features)
 	m_features.add(*features);
-    if (flag(StreamRemoteVer1)) {
+    if (useVer1 && flag(StreamRemoteVer1))
+	m_flags |= StreamLocalVer1;
+    if (flag(StreamRemoteVer1) && flag(StreamLocalVer1)) {
 	// Set secured flag if we don't advertise TLS
 	if (!(flag(StreamSecured) || m_features.get(XMPPNamespace::Tls)))
 	    setSecured();
@@ -503,14 +506,13 @@ void JBStream::start(XMPPFeatureList* features, XmlElement* caps)
 		setFlags(StreamAuthenticated);
 	}
     }
-    else if (m_type == c2s) {
-	// c2s using non-sasl auth
+    else
+	// c2s using non-sasl auth or s2s not using TLS
 	setSecured();
-    }
     // Send start and features
     XmlElement* s = buildStreamStart();
     XmlElement* f = 0;
-    if (flag(StreamRemoteVer1))
+    if (flag(StreamRemoteVer1) && flag(StreamLocalVer1))
 	f = m_features.buildStreamFeatures();
     if (f && caps)
 	f->addChild(caps);
@@ -570,10 +572,8 @@ bool JBStream::authenticated(bool ok, const String& rsp, XMPPError::Type error,
 	    else
 		terminate(0,true,0,XMPPError::Internal);
 	}
-	else if (m_type == s2s) {
-	    XmlElement* rsp = XMPPUtils::createDialbackResult(m_local,m_remote,true);
-	    ok = sendStreamXml(Running,rsp);
-	}
+	else if (m_type == s2s)
+	    ok = false;
 	else if (m_type == comp) {
 	    XmlElement* rsp = XMPPUtils::createElement(XmlTag::Handshake);
 	    ok = sendStreamXml(Running,rsp);
@@ -597,12 +597,8 @@ bool JBStream::authenticated(bool ok, const String& rsp, XMPPError::Type error,
 	    }
 	    ok = sendStreamXml(Features,rsp);
 	}
-	else if (m_type == s2s) {
-	    XmlElement* rsp = XMPPUtils::createDialbackResult(m_local,m_remote,false);
-	    ok = sendStreamXml(state(),rsp);
-	    if (ok)
-		terminate(0,true,0,XMPPError::NotAuthorized);
-	}
+	else if (m_type == s2s)
+	    ok = false;
 	else if (m_type == comp)
 	    terminate(0,true,0,XMPPError::NotAuthorized);
     }
@@ -1154,7 +1150,7 @@ bool JBStream::streamError(XmlElement* xml)
 	return false;
     String text;
     String error;
-    XMPPUtils::decodeError(xml,false,error,text);
+    XMPPUtils::decodeError(xml,XMPPNamespace::StreamError,&error,&text);
     Debug(this,DebugAll,"Received stream error '%s' text='%s' in state %s [%p]",
 	error.c_str(),text.c_str(),stateName(),this);
     int err = XMPPUtils::s_error[error];
@@ -1245,11 +1241,27 @@ bool JBStream::checkStanzaRecv(XmlElement* xml, JabberID& from, JabberID& to)
 		terminate(0,m_incoming,xml,XMPPError::BadAddressing);
 		return false;
 	    }
-	    if (m_type == s2s && !m_engine->hasDomain(to.domain())) {
-		terminate(0,m_incoming,xml,XMPPError::HostUnknown);
-		return false;
+	    // TODO: Find an outgoing stream and send stanza error to the remote server
+	    //  instead of terminating the stream
+	    if (m_type == s2s) {
+		if (incoming()) {
+		    // Accept stanzas only for validated domains
+		    if (!serverStream()->hasRemoteDomain(from.domain())) {
+			terminate(0,m_incoming,xml,XMPPError::BadAddressing);
+			return false;
+		    }
+		}
+		else {
+		    // We should not receive any stanza on outgoing s2s
+		    terminate(0,m_incoming,xml,XMPPError::NotAuthorized);
+		    return false;
+		}
+		if (m_local != to.domain()) {
+		    terminate(0,m_incoming,xml,XMPPError::BadAddressing);
+		    return false;
+		}
 	    }
-	    if (from.domain() != m_remote.domain()) {
+	    else if (from.domain() != m_remote.domain()) {
 		terminate(0,m_incoming,xml,XMPPError::InvalidFrom);
 		return false;
 	    }
@@ -1775,30 +1787,9 @@ bool JBStream::processFeaturesIn(XmlElement* xml, const JabberID& from, const Ja
 	}
 	// s2s waiting for dialback
 	if (m_type == s2s) {
-	    if (flag(TlsRequired) && !flag(StreamSecured))
-		return destroyDropXml(xml,XMPPError::EncryptionRequired,
-		    "required encryption not supported by remote");
-	    if (*t != s_dbResult || ns != XMPPNamespace::Dialback)
-		return dropXml(xml,"expecting dialback result");
-	    // Auth data
-	    m_local = to;
-	    m_remote = from;
-	    if (!(m_local && engine()->hasDomain(m_local)))
-		return destroyDropXml(xml,XMPPError::HostUnknown,
-		    "dialback result with unknown 'to' domain");
-	    if (!m_remote)
-		return destroyDropXml(xml,XMPPError::BadAddressing,
-		    "dialback result with empty 'from' domain");
-	    const char* key = xml->getText();
-	    if (TelEngine::null(key))
-		return destroyDropXml(xml,XMPPError::NotAcceptable,
-		    "dialback result with empty key");
-	    setFlags(StreamSecured);
-	    changeState(Auth);
-	    JBEvent* ev = new JBEvent(JBEvent::DbResult,this,xml,from,to);
-	    ev->m_text = key;
-	    m_events.append(ev);
-	    return true;
+	    if (isDbResult(*xml))
+		return serverStream()->processDbResult(xml,from,to);
+	    return dropXml(xml,"expecting dialback result");
 	}
 	// Check if all remaining features are optional
 	XMPPFeature* req = firstRequiredFeature();
@@ -2469,7 +2460,7 @@ bool JBClientStream::bind()
 // Build an incoming stream from a socket
 JBServerStream::JBServerStream(JBEngine* engine, Socket* socket, bool component)
     : JBStream(engine,socket,component ? comp : s2s),
-    m_dbKey(0)
+    m_remoteDomains(""), m_dbKey(0)
 {
 }
 
@@ -2477,7 +2468,7 @@ JBServerStream::JBServerStream(JBEngine* engine, Socket* socket, bool component)
 JBServerStream::JBServerStream(JBEngine* engine, const JabberID& local,
     const JabberID& remote, const char* dbId, const char* dbKey, bool dbOnly)
     : JBStream(engine,s2s,local,remote),
-    m_dbKey(0)
+    m_remoteDomains(""), m_dbKey(0)
 {
     if (!(TelEngine::null(dbId) || TelEngine::null(dbKey)))
 	m_dbKey = new NamedString(dbId,dbKey);
@@ -2485,15 +2476,60 @@ JBServerStream::JBServerStream(JBEngine* engine, const JabberID& local,
 	setFlags(DialbackOnly | NoAutoRestart);
 }
 
-// Send a dialback key response.
-// If the stream is in Dialback state change it's state to Running if valid or
-//  terminate it if invalid
-bool JBServerStream::sendDbResult(const JabberID& from, const JabberID& to, bool valid)
+// Send a dialback verify response
+bool JBServerStream::sendDbVerify(const char* from, const char* to, const char* id,
+    XMPPError::Type rsp)
 {
-    if (incoming() && state() == Auth && from == m_local && to == m_remote)
-	return authenticated(valid);
-    XmlElement* rsp = XMPPUtils::createDialbackResult(from,to,valid);
-    return sendStanza(rsp);
+    adjustDbRsp(rsp);
+    XmlElement* result = XMPPUtils::createDialbackVerifyRsp(from,to,id,rsp);
+    DDebug(this,DebugAll,"Sending '%s' db:verify response from %s to %s [%p]",
+	result->attribute("type"),from,to,this);
+    return state() < Running ? sendStreamXml(state(),result) : sendStanza(result);
+}
+
+// Send a dialback key response. Update the remote domains list
+// Terminate the stream if there are no more remote domains
+bool JBServerStream::sendDbResult(const JabberID& from, const JabberID& to, XMPPError::Type rsp)
+{
+    Lock lock(this);
+    // Check local domain
+    if (m_local != from)
+	return false;
+    // Respond only to received requests
+    NamedString* p = m_remoteDomains.getParam(to);
+    if (!p)
+	return false;
+    bool valid = rsp == XMPPError::NoError;
+    // Don't deny already authenticated requests
+    if (p->null() && !valid)
+	return false;
+    // Set request state or remove it if not accepted
+    if (valid)
+	p->clear();
+    else
+	m_remoteDomains.clearParam(to);
+    bool ok = false;
+    adjustDbRsp(rsp);
+    XmlElement* result = XMPPUtils::createDialbackResult(from,to,rsp);
+    DDebug(this,DebugAll,"Sending '%s' db:result response from %s to %s [%p]",
+	result->attribute("type"),from.c_str(),to.c_str(),this);
+    if (m_state < Running) {
+	ok = sendStreamXml(Running,result);
+	// Remove features and set the authenticated flag
+	if (ok && valid) {
+	    m_features.remove(XMPPNamespace::Sasl);
+	    m_features.remove(XMPPNamespace::IqAuth);
+	    setFlags(StreamAuthenticated);
+	}
+    }
+    else if (m_state == Running)
+	ok = sendStanza(result);
+    else
+	TelEngine::destruct(result);
+    // Terminate the stream if there are no more remote domains
+    if (!m_remoteDomains.count())
+	terminate(-1,true,0,rsp);
+    return ok;
 }
 
 // Send dialback data (key/verify)
@@ -2506,7 +2542,7 @@ bool JBServerStream::sendDialback()
 	    newState = Running;
 	else {
 	    String key;
-	    engine()->buildDialbackKey(id(),key);
+	    engine()->buildDialbackKey(id(),m_local,m_remote,key);
 	    result = XMPPUtils::createDialbackKey(m_local,m_remote,key);
 	    newState = Auth;
 	}
@@ -2549,25 +2585,7 @@ bool JBServerStream::processRunning(XmlElement* xml, const JabberID& from,
     if (type() != comp && isDbResult(*xml)) {
 	if (outgoing())
 	    return dropXml(xml,"dialback result on outgoing stream");
-	const char* key = xml->getText();
-	// Result: accept already authenticated
-	if (m_local == to && m_remote == from) {
-	    if (TelEngine::null(key))
-		return destroyDropXml(xml,XMPPError::BadFormat,
-		    "dialback result with empty key");
-	    String tmp;
-	    engine()->buildDialbackKey(id(),tmp);
-	    if (tmp == key) {
-		TelEngine::destruct(xml);
-		return sendDbResult(m_local,m_remote,true);
-	    }
-	    return destroyDropXml(xml,XMPPError::NotAuthorized,
-		"dialback result with invalid key");
-	}
-	JBEvent* ev = new JBEvent(JBEvent::DbResult,this,xml,from,to);
-	ev->m_text = key;
-	m_events.append(ev);
-	return true;
+	return processDbResult(xml,from,to);
     }
     // Call default handler
     return JBStream::processRunning(xml,from,to);
@@ -2586,10 +2604,9 @@ XmlElement* JBServerStream::buildStreamStart()
 	if (!dialback()) {
 	    start->setAttributeValid("from",m_local.bare());
 	    start->setAttributeValid("to",m_remote.bare());
-	    if (!flag(StreamSecured) || flag(TlsRequired)) {
+	    if (outgoing() || flag(StreamLocalVer1))
 		start->setAttribute("version","1.0");
-		start->setAttribute("xml:lang","en");
-	    }
+	    start->setAttribute("xml:lang","en");
 	}
     }
     else if (type() == comp) {
@@ -2643,7 +2660,6 @@ bool JBServerStream::processStart(const XmlElement* xml, const JabberID& from,
 
     // Incoming stream
     m_local = to;
-    m_remote = from;
     if (m_local && !engine()->hasDomain(m_local)) {
 	terminate(0,true,0,XMPPError::HostUnknown);
 	return false;
@@ -2669,9 +2685,9 @@ bool JBServerStream::processAuth(XmlElement* xml, const JabberID& from,
 	    return destroyDropXml(xml,XMPPError::BadAddressing,
 		"dialback response with invalid 'from'");
 	// Expect dialback key response
-	String type(xml->getAttribute("type"));
-	if (type != "valid") {
-	    terminate(1,false,xml,XMPPError::NoError);
+	int rsp = XMPPUtils::decodeDbRsp(xml);
+	if (rsp != XMPPError::NoError) {
+	    terminate(1,false,xml,rsp);
 	    return false;
 	}
 	// Stream authenticated
@@ -2694,6 +2710,57 @@ bool JBServerStream::startComp(const String& local, const String& remote)
     setSecured();
     XmlElement* s = buildStreamStart();
     return sendStreamXml(Features,s);
+}
+
+// Process dialback key (db:result) requests
+bool JBServerStream::processDbResult(XmlElement* xml, const JabberID& from,
+    const JabberID& to)
+{
+    // Check TLS when stream:features were sent
+    if (m_state == Features) {
+	if (flag(TlsRequired) && !flag(StreamSecured))
+	    return destroyDropXml(xml,XMPPError::EncryptionRequired,
+		"required encryption not supported by remote");
+	// TLS can't be negotiated anymore
+	setFlags(StreamSecured);
+    }
+    // Check remote domain
+    if (!from)
+	return destroyDropXml(xml,XMPPError::BadAddressing,
+	    "dialback result with empty 'from' domain");
+    // Accept non empty key only
+    const char* key = xml->getText();
+    if (TelEngine::null(key))
+	return destroyDropXml(xml,XMPPError::NotAcceptable,
+	    "dialback result with empty key");
+    // Check local domain
+    if (!(to && engine()->hasDomain(to))) {
+	const char* reason = "dialback result with unknown 'to' domain";
+	dropXml(xml,reason);
+	XmlElement* rsp = XMPPUtils::createDialbackResult(to,from,XMPPError::ItemNotFound);
+	if (m_state < Running)
+	    sendStreamXml(state(),rsp);
+	else
+	    sendStanza(rsp);
+	return false;
+    }
+    if (!m_local)
+	m_local = to;
+    else if (m_local != to)
+	return destroyDropXml(xml,XMPPError::NotAcceptable,
+	    "dialback result with incorrect 'to' domain");
+    // Ignore duplicate requests
+    if (m_remoteDomains.getParam(from)) {
+	dropXml(xml,"duplicate dialback key request");
+	return false;
+    }
+    m_remoteDomains.addParam(from,key);
+    Debug(this,DebugAll,"Added db:result request from %s [%p]",from.c_str(),this);
+    // Notify the upper layer of incoming request
+    JBEvent* ev = new JBEvent(JBEvent::DbResult,this,xml,from,to);
+    ev->m_text = key;
+    m_events.append(ev);
+    return true;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

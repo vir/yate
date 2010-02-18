@@ -1015,7 +1015,8 @@ void JBEngine::connectStream(JBStream* stream)
 }
 
 // Build a dialback key
-void JBEngine::buildDialbackKey(const String& id, String& key)
+void JBEngine::buildDialbackKey(const String& id, const String& local,
+    const String& remote, String& key)
 {
     Debug(this,DebugStub,"JBEngine::buildDialbackKey() not implemented!");
 }
@@ -1210,7 +1211,7 @@ void JBServerEngine::getStreamList(RefPointer<JBStreamSetList>& list, int type)
 // Find a server to server or component stream by local/remote domain.
 // Skip over outgoing dialback streams
 JBServerStream* JBServerEngine::findServerStream(const String& local, const String& remote,
-    bool out)
+    bool out, bool auth)
 {
     if (!(local && remote))
 	return 0;
@@ -1228,7 +1229,13 @@ JBServerStream* JBServerEngine::findServerStream(const String& local, const Stri
 		    (out == stream->outgoing() && !stream->dialback())) {
 		    // Lock the stream: remote jid might change
 		    Lock lock(stream);
-		    if (local == stream->local() && remote == stream->remote()) {
+		    if (local != stream->local()) {
+		        stream = 0;
+			continue;
+		    }
+		    bool checkRemote = out || stream->type() == JBStream::comp;
+		    if ((checkRemote && remote == stream->remote()) ||
+			(!checkRemote && stream->hasRemoteDomain(remote,auth))) {
 			stream->ref();
 			break;
 		    }
@@ -1740,12 +1747,17 @@ unsigned int JBStreamSet::dropAll(const JabberID& local, const JabberID& remote,
 	bool terminate = false;
 	if (!(local || remote))
 	    terminate = true;
-	else if (local && remote)
-	    terminate = stream->local().match(local) && stream->remote().match(remote);
-	else if (remote)
-	    terminate = stream->remote().match(remote);
-	else
-	    terminate = stream->local().match(local);
+	else {
+	    if (local)
+		terminate = stream->local().match(local);
+	    if (remote && !terminate) {
+		JBServerStream* s2s = stream->incoming() ? stream->serverStream() : 0;
+		if (s2s)
+		    terminate = s2s->hasRemoteDomain(remote,false);
+		else
+		    terminate = stream->remote().match(remote);
+	    }
+	}
 	if (terminate) {
 	    if (stream->state() != JBStream::Destroy)
 		n++;

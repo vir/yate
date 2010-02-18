@@ -941,7 +941,7 @@ bool StreamReader::readData()
 	    len = s->recvMsg((void*)buf,m_headerLen,addr,stream,flags);
 	    if (flags) {
 		if (flags == 2) {
-		    Debug(DebugInfo,"Sctp commUp");
+		    Debug(m_transport,DebugInfo,"Sctp commUp");
 		    m_transport->setStatus(Transport::Up);
 		    return true;
 		}
@@ -989,8 +989,8 @@ bool StreamReader::readData()
 	    }
 	    len = s->recvMsg((void*)buf1,m_totalPacketLen,addr,stream,flags);
 	    if (flags) {
-		DDebug(m_transport,DebugWarn,"Connection down [%p]",m_socket);
-		m_transport->notifyLayer(SignallingInterface::LinkDown);
+		DDebug(m_transport,DebugWarn,"Receive error [%p]",m_socket);
+		m_transport->notifyLayer(SignallingInterface::HardwareError);
 	    }
 	}
 	else {
@@ -999,6 +999,7 @@ bool StreamReader::readData()
 	}
 	if (len <= 0)
 	    return false;
+	m_transport->setStatus(Transport::Up);
 	m_totalPacketLen -= len;
 	m_readBuffer.append(buf1,len);
 	if (m_totalPacketLen > 0)
@@ -1113,11 +1114,11 @@ bool MessageReader::readData()
 	r = s->recvMsg((void*)buffer,MAX_BUF_SIZE,addr,stream,flags);
 	if (flags) {
 	     if (flags == 2) {
-		DDebug(DebugAll,"Sctp connection is Up");
+		DDebug(m_transport,DebugAll,"Sctp connection is Up");
 		m_transport->setStatus(Transport::Up);
 		return true;
 	    }
-	    DDebug(m_transport,DebugNote,"Connection down [%p] %d",m_socket,flags);
+	    DDebug(m_transport,DebugNote,"Message error [%p] %d",m_socket,flags);
 	    m_transport->setStatus(Transport::Initiating);
 	    return false;
 	}
@@ -1133,6 +1134,7 @@ bool MessageReader::readData()
 	Debug(m_transport,DebugNote,"Protocol read error read: %d, expected %d",r,len);
 	return false;
     }
+    m_transport->setStatus(Transport::Up);
     DataBlock packet(buffer,r);
     packet.cut(-8);
     m_transport->processMSG(m_transport->getVersion((unsigned char*)buffer),

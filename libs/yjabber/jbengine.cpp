@@ -1230,7 +1230,7 @@ JBServerStream* JBServerEngine::findServerStream(const String& local, const Stri
 		    // Lock the stream: remote jid might change
 		    Lock lock(stream);
 		    if (local != stream->local()) {
-		        stream = 0;
+			stream = 0;
 			continue;
 		    }
 		    bool checkRemote = out || stream->type() == JBStream::comp;

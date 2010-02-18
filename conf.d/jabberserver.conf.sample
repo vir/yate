@@ -17,6 +17,13 @@
 ; Defaults to no
 ;s2s_tlsrequired=
 
+; s2s_offerfeatures: boolean: Offer RFC 3920 version 1 and features on incoming
+;  server to server streams requesting it
+; This option is ignored on streams not advertising version 1 in stream start
+; If set to 'no' this parameter will override any other stream encryption option
+; Defaults to yes
+;s2s_offerfeatures=
+
 ; c2s_tlsrequired: boolean: Stream encryption is required on all client to server streams
 ; Defaults to no
 ;c2s_tlsrequired=

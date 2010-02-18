@@ -118,6 +118,18 @@ NamedList& NamedList::clearParam(const String& name, char childSep)
     return *this;
 }
 
+// Remove a specific parameter
+NamedList& NamedList::clearParam(NamedString* param)
+{
+    if (!param)
+	return *this;
+    ObjList* o = m_params.find(param);
+    if (o)
+	o->remove();
+    XDebug(DebugInfo,"NamedList::clearParam(%p) found=%p",param,o);
+    return *this;
+}
+
 NamedList& NamedList::copyParam(const NamedList& original, const String& name, char childSep)
 {
     XDebug(DebugInfo,"NamedList::copyParam(%p,\"%s\",'%1s')",

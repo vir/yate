@@ -3314,6 +3314,12 @@ public:
     NamedList& clearParam(const String& name, char childSep = 0);
 
     /**
+     * Remove a specific parameter
+     * @param param Pointer to parameter to remove
+     */
+    NamedList& clearParam(NamedString* param);
+
+    /**
      * Copy a parameter from another NamedList, clears it if not present there
      * @param original NamedList to copy the parameter from
      * @param name Name of the string to copy or clear

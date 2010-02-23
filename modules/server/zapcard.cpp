@@ -30,11 +30,15 @@
 #else
 
 extern "C" {
+#ifdef HAVE_ZAP
 #ifdef NEW_ZAPTEL_LOCATION
 #define __LINUX__
 #include <zaptel/zaptel.h>
 #else
 #include <linux/zaptel.h>
+#endif
+#else
+#include <dahdi/user.h>
 #endif
 };
 
@@ -63,6 +67,152 @@ class ZapModule;                         // The module
 
 #define ZAP_CRC_LEN 2                    // The length of the CRC field in signalling packets
 
+#ifdef HAVE_ZAP
+
+// alarms
+#define DAHDI_ALARM_RECOVER	ZT_ALARM_RECOVER
+#define DAHDI_ALARM_LOOPBACK	ZT_ALARM_LOOPBACK
+#define DAHDI_ALARM_RED		ZT_ALARM_RED
+#define DAHDI_ALARM_YELLOW	ZT_ALARM_YELLOW
+#define DAHDI_ALARM_BLUE	ZT_ALARM_BLUE
+#define DAHDI_ALARM_NOTOPEN	ZT_ALARM_NOTOPEN
+
+
+// events
+#define DAHDI_EVENT_NONE		ZT_EVENT_NONE
+#define DAHDI_EVENT_ONHOOK		ZT_EVENT_ONHOOK
+#define DAHDI_EVENT_RINGOFFHOOK		ZT_EVENT_RINGOFFHOOK
+#define DAHDI_EVENT_WINKFLASH		ZT_EVENT_WINKFLASH
+#define DAHDI_EVENT_ALARM		ZT_EVENT_ALARM
+#define DAHDI_EVENT_NOALARM		ZT_EVENT_NOALARM
+#define DAHDI_EVENT_ABORT		ZT_EVENT_ABORT
+#define DAHDI_EVENT_OVERRUN		ZT_EVENT_OVERRUN
+#define DAHDI_EVENT_BADFCS		ZT_EVENT_BADFCS
+#define DAHDI_EVENT_DIALCOMPLETE	ZT_EVENT_DIALCOMPLETE
+#define DAHDI_EVENT_RINGERON		ZT_EVENT_RINGERON
+#define DAHDI_EVENT_RINGEROFF		ZT_EVENT_RINGEROFF
+#define DAHDI_EVENT_HOOKCOMPLETE	ZT_EVENT_HOOKCOMPLETE
+#define DAHDI_EVENT_BITSCHANGED		ZT_EVENT_BITSCHANGED
+#define DAHDI_EVENT_PULSE_START		ZT_EVENT_PULSE_START
+#define DAHDI_EVENT_TIMER_EXPIRED	ZT_EVENT_TIMER_EXPIRED
+#define DAHDI_EVENT_TIMER_PING		ZT_EVENT_TIMER_PING
+#define DAHDI_EVENT_RINGBEGIN		ZT_EVENT_RINGBEGIN
+#define DAHDI_EVENT_POLARITY   		ZT_EVENT_POLARITY
+
+#ifdef ZT_EVENT_REMOVED
+#define DAHDI_EVENT_REMOVED		ZT_EVENT_REMOVED
+#endif
+
+#define DAHDI_EVENT_PULSEDIGIT 		ZT_EVENT_PULSEDIGIT
+#define DAHDI_EVENT_DTMFDOWN   		ZT_EVENT_DTMFDOWN
+#define DAHDI_EVENT_DTMFUP  		ZT_EVENT_DTMFUP 
+#define DAHDI_EVENT_PULSEDIGIT		ZT_EVENT_PULSEDIGIT
+
+// hook events
+#define DAHDI_ONHOOK	ZT_ONHOOK
+#define DAHDI_OFFHOOK	ZT_OFFHOOK
+#define DAHDI_WINK	ZT_WINK
+#define DAHDI_FLASH	ZT_FLASH
+#define DAHDI_START	ZT_START
+#define DAHDI_RING	ZT_RING
+#define DAHDI_RINGOFF	ZT_RINGOFF
+
+// flush buffers
+#define DAHDI_FLUSH_READ	ZT_FLUSH_READ
+#define DAHDI_FLUSH_WRITE	ZT_FLUSH_WRITE
+#define DAHDI_FLUSH_BOTH	ZT_FLUSH_BOTH
+#define DAHDI_FLUSH_EVENT	ZT_FLUSH_EVENT
+#define DAHDI_FLUSH_ALL		ZT_FLUSH_ALL
+
+// formats
+#define DAHDI_LAW_DEFAULT	ZT_LAW_DEFAULT
+#define DAHDI_LAW_MULAW		ZT_LAW_MULAW
+#define DAHDI_LAW_ALAW		ZT_LAW_ALAW
+
+// dial operations
+#define DAHDI_DIAL_OP_APPEND	ZT_DIAL_OP_APPEND
+#define DAHDI_DIAL_OP_REPLACE	ZT_DIAL_OP_REPLACE
+#define DAHDI_DIAL_OP_CANCEL	ZT_DIAL_OP_CANCEL
+
+// signalling types
+#define DAHDI_SIG_NONE		ZT_SIG_NONE
+#define DAHDI_SIG_FXSLS		ZT_SIG_FXSLS
+#define DAHDI_SIG_FXSGS		ZT_SIG_FXSGS
+#define DAHDI_SIG_FXSKS		ZT_SIG_FXSKS
+#define DAHDI_SIG_FXOLS		ZT_SIG_FXOLS
+#define DAHDI_SIG_FXOGS		ZT_SIG_FXOGS
+#define DAHDI_SIG_FXOKS		ZT_SIG_FXOKS
+#define DAHDI_SIG_EM		ZT_SIG_EM
+#define DAHDI_SIG_CLEAR		ZT_SIG_CLEAR
+#define DAHDI_SIG_HDLCRAW	ZT_SIG_HDLCRAW
+#define DAHDI_SIG_HDLCFCS	ZT_SIG_HDLCFCS
+#define DAHDI_SIG_HDLCNET	ZT_SIG_HDLCNET
+#define DAHDI_SIG_SLAVE		ZT_SIG_SLAVE
+#define DAHDI_SIG_SF		ZT_SIG_SF
+#define DAHDI_SIG_CAS		ZT_SIG_CAS
+#define DAHDI_SIG_DACS		ZT_SIG_DACS
+#define DAHDI_SIG_EM_E1		ZT_SIG_EM_E1
+#define DAHDI_SIG_DACS_RBS	ZT_SIG_DACS_RBS
+#define DAHDI_SIG_HARDHDLC	ZT_SIG_HARDHDLC
+
+// tonedetect
+#define DAHDI_TONEDETECT_ON	ZT_TONEDETECT_ON
+#define DAHDI_TONEDETECT_MUTE	ZT_TONEDETECT_MUTE
+
+// dtmfs
+#define DAHDI_MAX_DTMF_BUF	ZT_MAX_DTMF_BUF
+#define DAHDI_TONE_DTMF_0	ZT_TONE_DTMF_0
+#define DAHDI_TONE_DTMF_1	ZT_TONE_DTMF_1
+#define DAHDI_TONE_DTMF_2	ZT_TONE_DTMF_2
+#define DAHDI_TONE_DTMF_3	ZT_TONE_DTMF_3
+#define DAHDI_TONE_DTMF_4	ZT_TONE_DTMF_4
+#define DAHDI_TONE_DTMF_5	ZT_TONE_DTMF_5
+#define DAHDI_TONE_DTMF_6	ZT_TONE_DTMF_6
+#define DAHDI_TONE_DTMF_7	ZT_TONE_DTMF_7
+#define DAHDI_TONE_DTMF_8	ZT_TONE_DTMF_8
+#define DAHDI_TONE_DTMF_9	ZT_TONE_DTMF_9
+#define DAHDI_TONE_DTMF_s	ZT_TONE_DTMF_s
+#define DAHDI_TONE_DTMF_p	ZT_TONE_DTMF_p
+#define DAHDI_TONE_DTMF_A	ZT_TONE_DTMF_A
+#define DAHDI_TONE_DTMF_B	ZT_TONE_DTMF_B
+#define DAHDI_TONE_DTMF_C	ZT_TONE_DTMF_C
+#define DAHDI_TONE_DTMF_D	ZT_TONE_DTMF_D
+
+// ioctl operations
+#define DAHDI_SIG_EM		ZT_SIG_EM
+#define DAHDI_GETEVENT		ZT_GETEVENT
+#define DAHDI_SPECIFY		ZT_SPECIFY
+#define DAHDI_SET_BLOCKSIZE	ZT_SET_BLOCKSIZE
+#define DAHDI_SET_BUFINFO	ZT_SET_BUFINFO
+#define DAHDI_SETLAW		ZT_SETLAW
+#define DAHDI_AUDIOMODE		ZT_AUDIOMODE
+#define DAHDI_ECHOCANCEL	ZT_ECHOCANCEL
+#define DAHDI_DIAL		ZT_DIAL
+#define DAHDI_HOOK		ZT_HOOK
+#define DAHDI_TONEDETECT	ZT_TONEDETECT
+#define DAHDI_SETPOLARITY	ZT_SETPOLARITY
+#define DAHDI_SETLINEAR		ZT_SETLINEAR
+#define DAHDI_SET_DIALPARAMS	ZT_SET_DIALPARAMS
+#define DAHDI_GET_PARAMS	ZT_GET_PARAMS
+#define DAHDI_SPANSTAT		ZT_SPANSTAT
+#define DAHDI_GET_DIALPARAMS	ZT_GET_DIALPARAMS
+#define DAHDI_ECHOTRAIN		ZT_ECHOTRAIN
+#define DAHDI_FLUSH		ZT_FLUSH
+#define DAHDI_SENDTONE		ZT_SENDTONE
+#define DAHDI_GETVERSION	ZT_GETVERSION
+
+// policies
+#define DAHDI_POLICY_IMMEDIATE  ZT_POLICY_IMMEDIATE
+
+// data types
+#define dahdi_params		zt_params
+#define dahdi_bufferinfo	zt_bufferinfo
+#define dahdi_dialoperation	zt_dialoperation
+#define dahdi_dialparams	zt_dialparams
+#define	dahdi_spaninfo		zt_spaninfo
+#define dahdi_versioninfo 	zt_versioninfo
+
+#endif
 // Worker thread client (implements process())
 class ZapWorkerClient
 {
@@ -105,54 +255,54 @@ class ZapDevice : public GenObject
 public:
     // Flags to check alarms
     enum Alarm {
-	Recover  = ZT_ALARM_RECOVER,     // Recovering from alarm
-	Loopback = ZT_ALARM_LOOPBACK,    // In loopback
-	Red      = ZT_ALARM_RED,         // Interface is down
-	Yellow   = ZT_ALARM_YELLOW,      // Remote peer doesn't see us
-	Blue     = ZT_ALARM_BLUE,        // We don't see the remote peer
-	NotOpen  = ZT_ALARM_NOTOPEN
+	Recover  = DAHDI_ALARM_RECOVER,     // Recovering from alarm
+	Loopback = DAHDI_ALARM_LOOPBACK,    // In loopback
+	Red      = DAHDI_ALARM_RED,         // Interface is down
+	Yellow   = DAHDI_ALARM_YELLOW,      // Remote peer doesn't see us
+	Blue     = DAHDI_ALARM_BLUE,        // We don't see the remote peer
+	NotOpen  = DAHDI_ALARM_NOTOPEN
     };
 
     // List of events
     enum Event {
-	None = ZT_EVENT_NONE,
-	OnHook = ZT_EVENT_ONHOOK,
-	OffHookRing = ZT_EVENT_RINGOFFHOOK,
-	WinkFlash = ZT_EVENT_WINKFLASH,
-	Alarm = ZT_EVENT_ALARM,
-	NoAlarm = ZT_EVENT_NOALARM,
-	HdlcAbort = ZT_EVENT_ABORT,
-	HdlcOverrun = ZT_EVENT_OVERRUN,
-	BadFCS = ZT_EVENT_BADFCS,
-	DialComplete = ZT_EVENT_DIALCOMPLETE,
-	RingerOn = ZT_EVENT_RINGERON,
-	RingerOff = ZT_EVENT_RINGEROFF,
-	HookComplete = ZT_EVENT_HOOKCOMPLETE,
-	BitsChanged = ZT_EVENT_BITSCHANGED,  // Bits changing on a CAS/User channel
-	PulseStart = ZT_EVENT_PULSE_START,   // Beginning of a pulse coming on its way
-	Timeout = ZT_EVENT_TIMER_EXPIRED,
-	TimerPing = ZT_EVENT_TIMER_PING,
-	RingBegin = ZT_EVENT_RINGBEGIN,
-	Polarity = ZT_EVENT_POLARITY,        // Polarity reversal event
-#ifdef ZT_EVENT_REMOVED
-	Removed = ZT_EVENT_REMOVED,
+	None 		= DAHDI_EVENT_NONE,
+	OnHook 		= DAHDI_EVENT_ONHOOK,
+	OffHookRing 	= DAHDI_EVENT_RINGOFFHOOK,
+	WinkFlash 	= DAHDI_EVENT_WINKFLASH,
+	Alarm 		= DAHDI_EVENT_ALARM,
+	NoAlarm 	= DAHDI_EVENT_NOALARM,
+	HdlcAbort 	= DAHDI_EVENT_ABORT,
+	HdlcOverrun 	= DAHDI_EVENT_OVERRUN,
+	BadFCS		= DAHDI_EVENT_BADFCS,
+	DialComplete	= DAHDI_EVENT_DIALCOMPLETE,
+	RingerOn	= DAHDI_EVENT_RINGERON,
+	RingerOff	= DAHDI_EVENT_RINGEROFF,
+	HookComplete	= DAHDI_EVENT_HOOKCOMPLETE,
+	BitsChanged	= DAHDI_EVENT_BITSCHANGED,  // Bits changing on a CAS/User channel
+	PulseStart	= DAHDI_EVENT_PULSE_START,   // Beginning of a pulse coming on its way
+	Timeout		= DAHDI_EVENT_TIMER_EXPIRED,
+	TimerPing	= DAHDI_EVENT_TIMER_PING,
+	RingBegin	= DAHDI_EVENT_RINGBEGIN,
+	Polarity	= DAHDI_EVENT_POLARITY,        // Polarity reversal event
+#ifdef DAHDI_EVENT_REMOVED
+	Removed		= DAHDI_EVENT_REMOVED,
 #endif
 	// These are event masks
-	PulseDigit = ZT_EVENT_PULSEDIGIT,    // This is OR'd with the digit received
-	DtmfDown = ZT_EVENT_DTMFDOWN,        // Ditto for DTMF key down event
-	DtmfUp = ZT_EVENT_DTMFUP,            // Ditto for DTMF key up event
-	DigitEvent = ZT_EVENT_PULSEDIGIT | ZT_EVENT_DTMFDOWN | ZT_EVENT_DTMFUP
+	PulseDigit	= DAHDI_EVENT_PULSEDIGIT,    // This is OR'd with the digit received
+	DtmfDown	= DAHDI_EVENT_DTMFDOWN,        // Ditto for DTMF key down event
+	DtmfUp		= DAHDI_EVENT_DTMFUP,            // Ditto for DTMF key up event
+	DigitEvent	= DAHDI_EVENT_PULSEDIGIT | DAHDI_EVENT_DTMFDOWN | DAHDI_EVENT_DTMFUP
     };
 
     // List of hook to send events
     enum HookEvent {
-	HookOn      = ZT_ONHOOK,
-	HookOff     = ZT_OFFHOOK,
-	HookWink    = ZT_WINK,
-	HookFlash   = ZT_FLASH,
-	HookStart   = ZT_START,
-	HookRing    = ZT_RING,
-	HookRingOff = ZT_RINGOFF
+	HookOn      = DAHDI_ONHOOK,
+	HookOff     = DAHDI_OFFHOOK,
+	HookWink    = DAHDI_WINK,
+	HookFlash   = DAHDI_FLASH,
+	HookStart   = DAHDI_START,
+	HookRing    = DAHDI_RING,
+	HookRingOff = DAHDI_RINGOFF
     };
 
     // Rx Hook states, not exported from zaptel.h in user mode
@@ -174,7 +324,7 @@ public:
 	SetEchoCancel  = 5,              // Set echo cancel
 	SetDial        = 6,              // Append, replace, or cancel a dial string
 	SetHook        = 7,              // Set Hookswitch Status
-#ifdef ZT_TONEDETECT
+#ifdef DAHDI_TONEDETECT
 	SetToneDetect  = 8,              // Set tone detection
 #else
 	SetToneDetect  = 101,
@@ -193,19 +343,19 @@ public:
     };
 
     enum FlushTarget {
-	FlushRead  = ZT_FLUSH_READ,
-	FlushWrite = ZT_FLUSH_WRITE,
-	FlushRdWr  = ZT_FLUSH_BOTH,
-	FlushEvent = ZT_FLUSH_EVENT,
-	FlushAll   = ZT_FLUSH_ALL,
+	FlushRead  = DAHDI_FLUSH_READ,
+	FlushWrite = DAHDI_FLUSH_WRITE,
+	FlushRdWr  = DAHDI_FLUSH_BOTH,
+	FlushEvent = DAHDI_FLUSH_EVENT,
+	FlushAll   = DAHDI_FLUSH_ALL,
     };
 
     // Zaptel formats
     enum Format {
 	Slin    = -1,
-	Default = ZT_LAW_DEFAULT,
-	Mulaw   = ZT_LAW_MULAW,
-	Alaw    = ZT_LAW_ALAW
+	Default = DAHDI_LAW_DEFAULT,
+	Mulaw   = DAHDI_LAW_MULAW,
+	Alaw    = DAHDI_LAW_ALAW
     };
 
     // Device type: D-channel, voice/data circuit or control
@@ -222,9 +372,9 @@ public:
 
     // Dial operations
     enum DialOperation {
-	DialAppend  = ZT_DIAL_OP_APPEND,
-	DialReplace = ZT_DIAL_OP_REPLACE,
-	DialCancel  = ZT_DIAL_OP_CANCEL
+	DialAppend  = DAHDI_DIAL_OP_APPEND,
+	DialReplace = DAHDI_DIAL_OP_REPLACE,
+	DialCancel  = DAHDI_DIAL_OP_CANCEL
     };
 
     // Create a device used to query the driver (chan=0) or a zaptel channel
@@ -700,25 +850,25 @@ static TokenDict s_alarms[] = {
 
 // Zaptel signalling type
 static TokenDict s_zaptelSig[] = {
-    {"NONE",     ZT_SIG_NONE},           // Channel not configured
-    {"FXSLS",    ZT_SIG_FXSLS},
-    {"FXSGS",    ZT_SIG_FXSGS},
-    {"FXSKS",    ZT_SIG_FXSKS},
-    {"FXOLS",    ZT_SIG_FXOLS},
-    {"FXOGS",    ZT_SIG_FXOGS},
-    {"FXOKS",    ZT_SIG_FXOKS},
-    {"E&M",      ZT_SIG_EM},             // Ear & mouth
-    {"CLEAR",    ZT_SIG_CLEAR},          // Clear channel
-    {"HDLCRAW",  ZT_SIG_HDLCRAW},        // Raw unchecked HDLC
-    {"HDLCFCS",  ZT_SIG_HDLCFCS},        // HDLC with FCS calculation
-    {"HDLCNET",  ZT_SIG_HDLCNET},        // HDLC Network
-    {"SLAVE",    ZT_SIG_SLAVE},          // Slave to another channel
-    {"SF",       ZT_SIG_SF},             // Single Freq. tone only, no sig bits
-    {"CAS",      ZT_SIG_CAS },           // Just get bits
-    {"DACS",     ZT_SIG_DACS},           // Cross connect
-    {"EM_E1",    ZT_SIG_EM_E1},          // E1 E&M Variation
-    {"DACS_RBS", ZT_SIG_DACS_RBS},       // Cross connect w/ RBS
-    {"HARDHDLC", ZT_SIG_HARDHDLC},
+    {"NONE",     DAHDI_SIG_NONE},           // Channel not configured
+    {"FXSLS",    DAHDI_SIG_FXSLS},
+    {"FXSGS",    DAHDI_SIG_FXSGS},
+    {"FXSKS",    DAHDI_SIG_FXSKS},
+    {"FXOLS",    DAHDI_SIG_FXOLS},
+    {"FXOGS",    DAHDI_SIG_FXOGS},
+    {"FXOKS",    DAHDI_SIG_FXOKS},
+    {"E&M",      DAHDI_SIG_EM},             // Ear & mouth
+    {"CLEAR",    DAHDI_SIG_CLEAR},          // Clear channel
+    {"HDLCRAW",  DAHDI_SIG_HDLCRAW},        // Raw unchecked HDLC
+    {"HDLCFCS",  DAHDI_SIG_HDLCFCS},        // HDLC with FCS calculation
+    {"HDLCNET",  DAHDI_SIG_HDLCNET},        // HDLC Network
+    {"SLAVE",    DAHDI_SIG_SLAVE},          // Slave to another channel
+    {"SF",       DAHDI_SIG_SF},             // Single Freq. tone only, no sig bits
+    {"CAS",      DAHDI_SIG_CAS},           // Just get bits
+    {"DACS",     DAHDI_SIG_DACS},           // Cross connect
+    {"EM_E1",    DAHDI_SIG_EM_E1},          // E1 E&M Variation
+    {"DACS_RBS", DAHDI_SIG_DACS_RBS},       // Cross connect w/ RBS
+    {"HARDHDLC", DAHDI_SIG_HARDHDLC},
     {0,0}
 };
 
@@ -747,7 +897,7 @@ static TokenDict s_events[] = {
     MAKE_NAME(DtmfDown),
     MAKE_NAME(DtmfUp),
     MAKE_NAME(DigitEvent),
-#ifdef ZT_EVENT_REMOVED
+#ifdef DAHDI_EVENT_REMOVED
     MAKE_NAME(Removed),
 #endif
     {0,0}
@@ -808,10 +958,13 @@ static TokenDict s_formats[] = {
     {"alaw",    ZapDevice::Alaw},
     {0,0}
     };
-
+#ifdef HAVE_ZAP 
 const char* ZapDevice::s_zapCtlName = "/dev/zap/ctl";
 const char* ZapDevice::s_zapDevName = "/dev/zap/channel";
-
+#else
+const char* ZapDevice::s_zapCtlName = "/dev/dahdi/ctl";
+const char* ZapDevice::s_zapDevName = "/dev/dahdi/channel";
+#endif
 ZapDevice::ZapDevice(Type t, SignallingComponent* dbg, unsigned int chan,
 	unsigned int circuit)
     : m_type(t),
@@ -923,7 +1076,7 @@ bool ZapDevice::open(unsigned int numbufs, unsigned int bufsize)
 	if (!ioctl(SetChannel,&m_channel))
 	    break;
 
-	ZT_PARAMS par;
+	struct dahdi_params par;
 	if (!ioctl(GetParams,&par))
 	    break;
 
@@ -943,16 +1096,16 @@ bool ZapDevice::open(unsigned int numbufs, unsigned int bufsize)
 
 	// Open for an interface
 	// Check channel mode
-	if (par.sigtype != ZT_SIG_HDLCFCS && par.sigtype != ZT_SIG_HARDHDLC) {
+	if (par.sigtype != DAHDI_SIG_HDLCFCS && par.sigtype != DAHDI_SIG_HARDHDLC) {
 	    Debug(m_owner,DebugWarn,"Channel %u is not in '%s' or '%s' mode [%p]",
-		m_channel,lookup(ZT_SIG_HDLCFCS,s_zaptelSig),
-		lookup(ZT_SIG_HARDHDLC,s_zaptelSig),m_owner);
+		m_channel,lookup(DAHDI_SIG_HDLCFCS,s_zaptelSig),
+		lookup(DAHDI_SIG_HARDHDLC,s_zaptelSig),m_owner);
 	    break;
 	}
 	// Set buffers
-	ZT_BUFFERINFO bi;
-	bi.txbufpolicy = ZT_POLICY_IMMEDIATE;
-	bi.rxbufpolicy = ZT_POLICY_IMMEDIATE;
+	struct dahdi_bufferinfo bi;
+	bi.txbufpolicy = DAHDI_POLICY_IMMEDIATE;
+	bi.rxbufpolicy = DAHDI_POLICY_IMMEDIATE;
 	bi.numbufs = numbufs;
 	bi.bufsize = bufsize;
 	if (ioctl(SetBuffers,&bi))
@@ -1000,10 +1153,10 @@ bool ZapDevice::setFormat(Format format)
 bool ZapDevice::setDtmfDetect(bool detect)
 {
     int tmp = 0;
-#ifdef ZT_TONEDETECT
+#ifdef DAHDI_TONEDETECT
     setLinear(0,DebugAll);
     if (detect)
-	tmp = ZT_TONEDETECT_ON | ZT_TONEDETECT_MUTE;
+	tmp = DAHDI_TONEDETECT_ON | DAHDI_TONEDETECT_MUTE;
 #endif
     if (!ioctl(SetToneDetect,&tmp,detect?DebugNote:DebugAll))
 	return false;
@@ -1052,7 +1205,7 @@ void ZapDevice::pollHook()
     if (m_rxHookSig < 0)
 	return;
 
-    ZT_PARAMS par;
+    struct dahdi_params par;
     if (!ioctl(GetParams,&par))
 	return;
 
@@ -1064,7 +1217,7 @@ void ZapDevice::pollHook()
     // state changed, save the event for later
     m_rxHookSig = rxsig;
     // states are reversed but that's how Zaptel is...
-    m_savedEvent = (rxsig == RxSigOnHook) ? ZT_EVENT_WINKFLASH : ZT_EVENT_ONHOOK;
+    m_savedEvent = (rxsig == RxSigOnHook) ? DAHDI_EVENT_WINKFLASH : DAHDI_EVENT_ONHOOK;
 }
 
 // Send hook events
@@ -1095,13 +1248,13 @@ bool ZapDevice::sendDtmf(const char* tone, bool dtmf, DialOperation op,
     if (!(tone && *tone))
 	return false;
 
-    ZT_DIAL_OPERATION dop;
+    struct dahdi_dialoperation dop;
     dop.op = op;
     dop.dialstr[0] = dtmf ? 'T' : 'P';
 
     if (allDigits) {
 	int len = strlen(tone);
-	int maxLen = ZT_MAX_DTMF_BUF - 2;
+	int maxLen = DAHDI_MAX_DTMF_BUF - 2;
 	if (len > maxLen) {
 	    Debug(m_owner,DebugNote,
 		"%sCan't send DTMF '%s' (len %d greater then max len %d) [%p]",
@@ -1139,11 +1292,11 @@ bool ZapDevice::sendDtmf(char tone)
 #define YZAP_TONES 20
     static char tones[YZAP_TONES+1] = "0123456789*#ABCDabcd";
     static int zapTones[YZAP_TONES] = {
-	ZT_TONE_DTMF_0, ZT_TONE_DTMF_1, ZT_TONE_DTMF_2, ZT_TONE_DTMF_3,
-	ZT_TONE_DTMF_4, ZT_TONE_DTMF_5, ZT_TONE_DTMF_6, ZT_TONE_DTMF_7,
-	ZT_TONE_DTMF_8, ZT_TONE_DTMF_9, ZT_TONE_DTMF_s, ZT_TONE_DTMF_p,
-	ZT_TONE_DTMF_A, ZT_TONE_DTMF_B, ZT_TONE_DTMF_C, ZT_TONE_DTMF_D,
-	ZT_TONE_DTMF_A, ZT_TONE_DTMF_B, ZT_TONE_DTMF_C, ZT_TONE_DTMF_D
+	DAHDI_TONE_DTMF_0, DAHDI_TONE_DTMF_1, DAHDI_TONE_DTMF_2, DAHDI_TONE_DTMF_3,
+	DAHDI_TONE_DTMF_4, DAHDI_TONE_DTMF_5, DAHDI_TONE_DTMF_6, DAHDI_TONE_DTMF_7,
+	DAHDI_TONE_DTMF_8, DAHDI_TONE_DTMF_9, DAHDI_TONE_DTMF_s, DAHDI_TONE_DTMF_p,
+	DAHDI_TONE_DTMF_A, DAHDI_TONE_DTMF_B, DAHDI_TONE_DTMF_C, DAHDI_TONE_DTMF_D,
+	DAHDI_TONE_DTMF_A, DAHDI_TONE_DTMF_B, DAHDI_TONE_DTMF_C, DAHDI_TONE_DTMF_D
 	};
 
     // Get zaptel tone
@@ -1170,7 +1323,7 @@ int ZapDevice::getEvent(char& digit)
 	m_savedEvent = 0;
     else if (!ioctl(GetEvent,&event,DebugMild))
 	return 0;
-    if ((m_zapsig == ZT_SIG_EM) && (m_type == FXO)) {
+    if ((m_zapsig == DAHDI_SIG_EM) && (m_type == FXO)) {
 	// For an "E&M FXO" the meanings of on/off hook change
 	switch (event) {
 	    case OnHook:
@@ -1198,7 +1351,7 @@ int ZapDevice::getEvent(char& digit)
 // Get alarms from this device. Return true if alarms changed
 bool ZapDevice::checkAlarms()
 {
-    ZT_SPANINFO info;
+    struct dahdi_spaninfo info;
     memset(&info,0,sizeof(info));
     info.spanno = m_span;
     if (!(ioctl(GetInfo,&info,DebugAll)))
@@ -1308,7 +1461,7 @@ int ZapDevice::send(const void* buffer, int len)
 // Get driver version and echo canceller
 bool ZapDevice::getVersion(NamedList& dest)
 {
-    zt_versioninfo info;
+    struct dahdi_versioninfo info;
     if (!ioctl(GetVersion,&info,DebugNote))
 	return false;
     dest.setParam("version",info.version);
@@ -1319,7 +1472,7 @@ bool ZapDevice::getVersion(NamedList& dest)
 // Get span info
 bool ZapDevice::getSpanInfo(int span, NamedList& dest, int* spans)
 {
-    zt_spaninfo info;
+    struct dahdi_spaninfo info;
     memset(&info,0,sizeof(info));
     info.spanno = (span != -1) ? span : m_span;
     if (!ioctl(GetInfo,&info,DebugNote))
@@ -1343,7 +1496,7 @@ bool ZapDevice::getSpanInfo(int span, NamedList& dest, int* spans)
 // Get channel parameters
 bool ZapDevice::getChanParams(NamedList& dest)
 {
-    ZT_PARAMS par;
+    struct dahdi_params par;
     if (!ioctl(GetParams,&par))
 	return false;
     dest.addParam("format",lookup(par.curlaw,s_formats));
@@ -1364,8 +1517,8 @@ bool ZapDevice::getChanParams(NamedList& dest)
 // Set/get dial parameters (DTMF/MF length)
 bool ZapDevice::dialParams(bool set, int& toneLen, int& mfLen)
 {
-    ZT_DIAL_PARAMS dp;
-    ::memset(&dp,0,sizeof(ZT_DIAL_PARAMS));
+    struct dahdi_dialparams dp;
+    ::memset(&dp,0,sizeof(struct dahdi_dialparams));
 
     if (!set) {
 	if (!ioctl(GetDialParams,&dp,DebugMild))
@@ -1391,35 +1544,35 @@ bool ZapDevice::ioctl(IoctlRequest request, void* param, int level)
     int ret = -1;
     switch (request) {
 	case GetEvent:
-	    ret = ::ioctl(m_handle,ZT_GETEVENT,param);
+	    ret = ::ioctl(m_handle,DAHDI_GETEVENT,param);
 	    break;
 	case SetChannel:
-	    ret = ::ioctl(m_handle,ZT_SPECIFY,param);
+	    ret = ::ioctl(m_handle,DAHDI_SPECIFY,param);
 	    break;
 	case SetBlkSize:
-	    ret = ::ioctl(m_handle,ZT_SET_BLOCKSIZE,param);
+	    ret = ::ioctl(m_handle,DAHDI_SET_BLOCKSIZE,param);
 	    break;
 	case SetBuffers:
-	    ret = ::ioctl(m_handle,ZT_SET_BUFINFO,param);
+	    ret = ::ioctl(m_handle,DAHDI_SET_BUFINFO,param);
 	    break;
 	case SetFormat:
-	    ret = ::ioctl(m_handle,ZT_SETLAW,param);
+	    ret = ::ioctl(m_handle,DAHDI_SETLAW,param);
 	    break;
 	case SetAudioMode:
-	    ret = ::ioctl(m_handle,ZT_AUDIOMODE,param);
+	    ret = ::ioctl(m_handle,DAHDI_AUDIOMODE,param);
 	    break;
 	case SetEchoCancel:
-	    ret = ::ioctl(m_handle,ZT_ECHOCANCEL,param);
+	    ret = ::ioctl(m_handle,DAHDI_ECHOCANCEL,param);
 	    break;
 	case SetDial:
-	    ret = ::ioctl(m_handle,ZT_DIAL,param);
+	    ret = ::ioctl(m_handle,DAHDI_DIAL,param);
 	    break;
 	case SetHook:
-	    ret = ::ioctl(m_handle,ZT_HOOK,param);
+	    ret = ::ioctl(m_handle,DAHDI_HOOK,param);
 	    break;
 	case SetToneDetect:
-#ifdef ZT_TONEDETECT
-	    ret = ::ioctl(m_handle,ZT_TONEDETECT,param);
+#ifdef DAHDI_TONEDETECT
+	    ret = ::ioctl(m_handle,DAHDI_TONEDETECT,param);
 	    break;
 #else
 	    // Show message only if requested to set tone detection
@@ -1429,34 +1582,34 @@ bool ZapDevice::ioctl(IoctlRequest request, void* param, int level)
 	    return false;
 #endif
 	case SetPolarity:
-	    ret = ::ioctl(m_handle,ZT_SETPOLARITY,param);
+	    ret = ::ioctl(m_handle,DAHDI_SETPOLARITY,param);
 	    break;
 	case SetLinear:
-	    ret = ::ioctl(m_handle,ZT_SETLINEAR,param);
+	    ret = ::ioctl(m_handle,DAHDI_SETLINEAR,param);
 	    break;
 	case SetDialParams:
-	    ret = ::ioctl(m_handle,ZT_SET_DIALPARAMS,param);
+	    ret = ::ioctl(m_handle,DAHDI_SET_DIALPARAMS,param);
 	    break;
 	case GetParams:
-	    ret = ::ioctl(m_handle,ZT_GET_PARAMS,param);
+	    ret = ::ioctl(m_handle,DAHDI_GET_PARAMS,param);
 	    break;
 	case GetInfo:
-	    ret = ::ioctl(m_handle,ZT_SPANSTAT,param);
+	    ret = ::ioctl(m_handle,DAHDI_SPANSTAT,param);
 	    break;
 	case GetDialParams:
-	    ret = ::ioctl(m_handle,ZT_GET_DIALPARAMS,param);
+	    ret = ::ioctl(m_handle,DAHDI_GET_DIALPARAMS,param);
 	    break;
 	case StartEchoTrain:
-	    ret = ::ioctl(m_handle,ZT_ECHOTRAIN,param);
+	    ret = ::ioctl(m_handle,DAHDI_ECHOTRAIN,param);
 	    break;
 	case FlushBuffers:
-	    ret = ::ioctl(m_handle,ZT_FLUSH,param);
+	    ret = ::ioctl(m_handle,DAHDI_FLUSH,param);
 	    break;
 	case SendTone:
-	    ret = ::ioctl(m_handle,ZT_SENDTONE,param);
+	    ret = ::ioctl(m_handle,DAHDI_SENDTONE,param);
 	    break;
 	case GetVersion:
-	    ret = ::ioctl(m_handle,ZT_GETVERSION,param);
+	    ret = ::ioctl(m_handle,DAHDI_GETVERSION,param);
 	    break;
     }
     if (!ret || errno == EINPROGRESS) {
@@ -2580,7 +2733,7 @@ bool ZapAnalogCircuit::processEvent(int event, char c)
 	    return enqueueEvent(event,SignallingCircuitEvent::RingerOn);
 	case ZapDevice::RingerOff:
 	    return enqueueEvent(event,SignallingCircuitEvent::RingerOff);
-#ifdef ZT_EVENT_REMOVED
+#ifdef DAHDI_EVENT_REMOVED
 	case ZapDevice::Removed:
 #endif
 	case ZapDevice::OnHook:

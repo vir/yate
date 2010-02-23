@@ -167,6 +167,7 @@ private:
     SIPTransaction* m_tr;
     bool m_marked;
     bool m_valid;
+    String m_callid;
     String m_localAddr;
     String m_partyAddr;
     int m_localPort;
@@ -3561,6 +3562,8 @@ SIPMessage* YateSIPLine::buildRegister(int expires) const
     tmp = "<sip:";
     tmp << m_username << "@" << domain() << ">";
     m->addHeader("To",tmp);
+    if (m_callid)
+	m->addHeader("Call-ID",m_callid);
     m->complete(plugin.ep()->engine(),m_username,domain());
     return m;
 }
@@ -3596,6 +3599,8 @@ void YateSIPLine::login()
     if (m_tr) {
 	m_tr->ref();
 	m_tr->setUserData(this);
+	if (m_callid.null())
+	    m_callid = m_tr->getCallID();
     }
     m->deref();
 }
@@ -3617,6 +3622,7 @@ void YateSIPLine::logout()
 	plugin.ep()->engine()->addMessage(m);
 	m->deref();
     }
+    m_callid.clear();
 }
 
 bool YateSIPLine::process(SIPEvent* ev)

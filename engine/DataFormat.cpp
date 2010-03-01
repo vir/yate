@@ -1072,11 +1072,7 @@ bool ThreadedSource::running() const
 bool ThreadedSource::looping(bool runConsumers) const
 {
     Lock mylock(const_cast<ThreadedSource*>(this));
-    if (runConsumers) {
-	if (!(alive() && m_consumers.count()))
-	    return false;
-    }
-    else if (refcount() <= 1)
+    if ((refcount() <= 1) && !(runConsumers && alive() && m_consumers.count()))
 	return false;
     return m_thread && !m_thread->check(false) &&
 	m_thread->isCurrent() && !Engine::exiting();

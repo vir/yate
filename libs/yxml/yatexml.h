@@ -998,10 +998,8 @@ public:
 	bool completeOnly = true) const;
 
     /**
-     * Load an file an parse it
-
-     * Reset the document 
-
+     * Load a file an parse it
+     * Reset the document
      * @param file The file to load
      * @param error Pointer to data to be filled with file error if IOError is returned
      * @return Parser error (NoError on success)

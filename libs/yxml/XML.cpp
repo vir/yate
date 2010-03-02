@@ -1788,9 +1788,16 @@ void XmlElement::toString(String& dump, bool esc, const String& indent,
 	auxDump << "/";
     auxDump << ">";
     if (m) {
-	m_children.toString(auxDump,esc,indent + origIndent,origIndent,completeOnly,auth,this);
+	// Avoid adding text on new line when text is the only child
+	XmlText* text = 0;
+	if (m == 1)
+	    text = static_cast<XmlChild*>(getChildren().skipNull()->get())->xmlText();
+	if (!text)
+	    m_children.toString(auxDump,esc,indent + origIndent,origIndent,completeOnly,auth,this);
+	else
+	    text->toString(auxDump,esc,String::empty(),auth,this);
 	if (m_complete)
-	   auxDump << indent << "</" << getName() << ">";
+	    auxDump << (!text ? indent : String::empty()) << "</" << getName() << ">";
     }
     dump << auxDump;
 }

@@ -79,7 +79,7 @@ class Presence : public GenObject
 {
 public:
     Presence(const String& id, bool online = true, const char* instance = 0,
-	const char* data = 0, unsigned int expiresMsecs = 0);
+	const char* data = 0, unsigned int expiresMsecs = 0, const char* node = 0);
     ~Presence();
     inline void update(const char* data, unsigned int expireMs) {
 	    m_data = data;
@@ -106,6 +106,13 @@ public:
 	    m_caps = new NamedList(capsid);
 	    m_caps->copyParams(list,"caps",'.');
 	}
+    inline const String& node() const
+	{ return m_nodeName; }
+    // Check if a given node is the same as ours
+    inline bool isNode(const String& node) {
+	    return node == m_nodeName || (!node && m_nodeName == Engine::nodeName()) ||
+		(!m_nodeName && node == Engine::nodeName());
+	}
     // Copy parameters to a list
     void addCaps(NamedList& list, const String& prefix = String::empty());
 private:
@@ -115,6 +122,7 @@ private:
     u_int64_t m_expires;// time at which this object will expire
     bool m_online;	// online/offline flag
     NamedList* m_caps;  // Capabilities
+    String m_nodeName;  // Location
 };
 
 /*
@@ -136,11 +144,8 @@ public:
 	}
     // Remove an item from list. Optionally delete it
     // Return the item if found and not deleted
-    inline Presence* removePresence(const String& contact, const String& instance,
-	bool delObj = true) {
-	    ObjList* o = find(contact,instance);
-	    return o ? static_cast<Presence*>(o->remove(delObj)) : 0;
-	}
+    Presence* removePresence(const String& contact, const String& instance,
+	const String* node = 0, bool delObj = true);
     // delete expired objects
     void expire();
     // Find an item by id and instance
@@ -265,16 +270,9 @@ UNLOAD_PLUGIN(unloadNow)
  */
 bool ResNotifyHandler::received(Message& msg)
 {
-    // TODO
-    // see message parameters and what to do with them
-    String* node = msg.getParam("nodename");
-    if (!TelEngine::null(node) && *node != Engine::nodeName())
-	__plugin.removeDB(0, true, true, *node);
-
     String* operation = msg.getParam("operation");
     if (TelEngine::null(operation))
 	return false;
-
     if (*operation == "updatecaps") {
 	String* capsid = msg.getParam("caps.id");
 	if (TelEngine::null(capsid))
@@ -284,12 +282,12 @@ bool ResNotifyHandler::received(Message& msg)
 	__plugin.updateCaps(*capsid,msg);
 	return false;
     }
-
     String* contact = msg.getParam("contact");
     if (TelEngine::null(contact))
 	return false;
-    DDebug(&__plugin,DebugAll,"Processing %s contact=%s oper=%s",
-	msg.c_str(),contact->c_str(),operation->c_str());
+    const String& node = msg["nodename"];
+    DDebug(&__plugin,DebugAll,"Processing %s contact=%s oper=%s node=%s",
+	msg.c_str(),contact->c_str(),operation->c_str(),node.safe());
     String* instance = msg.getParam("instance");
     PresenceList* list = __plugin.getList(*contact);
     if (*operation == "online" || *operation == "update") {
@@ -299,15 +297,25 @@ bool ResNotifyHandler::received(Message& msg)
 	Presence* pres = list->findPresence(*contact,*instance);
 	bool newPres = (pres == 0);
 	if (newPres) {
-	    pres = new Presence(*contact,true,*instance);
+	    pres = new Presence(*contact,true,*instance,0,0,node);
 	    list->append(pres);
+	}
+	else if (!pres->isNode(node)) {
+	    // Instance online on more then 1 node
+	    Debug(&__plugin,DebugNote,
+		"User('%s') duplicate online instance '%s' on node '%s' (current '%s')",
+		contact->c_str(),instance->c_str(),node.c_str(),pres->node().c_str());
+	    return false;
 	}
 	pres->update(msg.getValue("data"),s_presExpire);
 	String* capsid = msg.getParam("caps.id");
 	if (!TelEngine::null(capsid))
 	    pres->setCaps(*capsid,msg);
+	Debug(&__plugin,DebugAll,"User '%s' instance=%s node=%s is online",
+	    contact->c_str(),instance->c_str(),pres->node().c_str());
 	// Update database only if we expire the data from memory
-	if (s_presExpire) {
+	//  and the instance is located on this machine
+	if (s_presExpire && node == Engine::nodeName()) {
 	    Message* m = __plugin.buildUpdateDb(*pres,newPres);
 	    lock.drop();
 	    TelEngine::destruct(__plugin.queryDb(m));
@@ -319,10 +327,14 @@ bool ResNotifyHandler::received(Message& msg)
 	    return false;
 	}
 	list->lock();
-	Presence* pres = list->removePresence(*contact,*instance,false);
+	Presence* pres = list->removePresence(*contact,*instance,&node,false);
 	list->unlock();
+	if (pres)
+	    Debug(&__plugin,DebugAll,"User '%s' instance=%s node=%s is offline",
+		contact->c_str(),instance->c_str(),pres->node().safe());
 	// Remove from database only if we expire the data from memory
-	if (pres && s_presExpire)
+	//  and the instance is located on this machine
+	if (pres && s_presExpire && node == Engine::nodeName())
 	    TelEngine::destruct(__plugin.queryDb(__plugin.buildDeleteDb(*pres)));
 	TelEngine::destruct(pres);
     }
@@ -332,7 +344,8 @@ bool ResNotifyHandler::received(Message& msg)
 	    Presence* pres = list->findPresence(*contact,*instance);
 	    if (pres) {
 		msg.addParam("data",pres->data());
-		msg.addParam("nodename",Engine::nodeName());
+		if (pres->node())
+		    msg.addParam("nodename",pres->node());
 		pres->addCaps(msg);
 		return true;
 	    }
@@ -350,7 +363,8 @@ bool ResNotifyHandler::received(Message& msg)
 		param << prefix << ++n << ".";
 		msg.addParam(param + "instance",pres->getInstance());
 		msg.addParam(param + "data",pres->data());
-		msg.addParam(param + "nodename",Engine::nodeName());
+		if (pres->node())
+		    msg.addParam(param + "nodename",pres->node());
 		pres->addCaps(msg,param);
 	    }
 	    msg.addParam(prefix + "count",String(n));
@@ -375,13 +389,14 @@ bool EngineStartHandler::received(Message& msg)
  * Presence
  */
 Presence::Presence(const String& id, bool online, const char* instance,
-    const char* data, unsigned int expireMs)
+    const char* data, unsigned int expireMs, const char* node)
     : m_id(id), m_instance(instance), m_data(data), m_online(online),
-    m_caps(0)
+    m_caps(0), m_nodeName(node)
 {
     updateExpireTime(expireMs);
-    DDebug(&__plugin,DebugAll,"Presence contact='%s' instance='%s' online=%s [%p]",
-	id.c_str(),instance,String::boolText(m_online),this);
+    DDebug(&__plugin,DebugAll,
+	"Presence contact='%s' instance='%s' online=%s node=%s [%p]",
+	id.c_str(),instance,String::boolText(m_online),node,this);
 }
 
 Presence::~Presence()
@@ -437,6 +452,19 @@ ObjList* PresenceList::findPresence(const String& id)
 	}
     }
     return res;
+}
+
+// Remove an item from list. Optionally delete it
+// Return the item if found and not deleted
+Presence* PresenceList::removePresence(const String& contact, const String& instance,
+    const String* node, bool delObj)
+{
+    ObjList* o = find(contact,instance);
+    if (!o)
+	return 0;
+    if (node && !(static_cast<Presence*>(o->get()))->isNode(node))
+	return 0;
+    return static_cast<Presence*>(o->remove(delObj));
 }
 
 void PresenceList::expire()
@@ -528,7 +556,6 @@ void PresenceModule::initialize()
     Output("Initializing module Presence");
 
     Configuration cfg(Engine::configFile("presence"));
-    cfg.load();
 
     if (!m_list) {
 	setup();

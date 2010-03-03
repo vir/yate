@@ -879,6 +879,13 @@ void YRTPWrapper::addDirection(RTPSession::Direction direction)
 void YRTPWrapper::terminate(Message& msg)
 {
     Debug(&splugin,DebugInfo,"YRTPWrapper::terminate() [%p]",this);
+    String stats;
+    if (m_rtp)
+	m_rtp->getStats(stats);
+    if (m_udptl)
+	m_udptl->getStats(stats);
+    if (stats)
+	msg.setParam("stats",stats);
     m_valid = false;
 }
 

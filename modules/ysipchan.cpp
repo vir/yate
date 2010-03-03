@@ -268,6 +268,7 @@ public:
     YateSIPConnection(SIPEvent* ev, SIPTransaction* tr);
     YateSIPConnection(Message& msg, const String& uri, const char* target = 0);
     ~YateSIPConnection();
+    virtual void destroyed();
     virtual void complete(Message& msg, bool minimal=false) const;
     virtual void disconnected(bool final, const char *reason);
     virtual bool msgProgress(Message& msg);
@@ -2026,11 +2027,16 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 YateSIPConnection::~YateSIPConnection()
 {
     Debug(this,DebugAll,"YateSIPConnection::~YateSIPConnection() [%p]",this);
+}
+
+void YateSIPConnection::destroyed()
+{
+    DDebug(this,DebugAll,"YateSIPConnection::destroyed() [%p]",this);
     hangup();
     clearTransaction();
-    setMedia(0);
     TelEngine::destruct(m_route);
     TelEngine::destruct(m_routes);
+    Channel::destroyed();
 }
 
 void YateSIPConnection::startRouter()
@@ -2085,6 +2091,7 @@ void YateSIPConnection::hangup()
     const char* error = lookup(m_reasonCode,dict_errors);
     Debug(this,DebugAll,"YateSIPConnection::hangup() state=%d trans=%p error='%s' code=%d reason='%s' [%p]",
 	m_state,m_tr,error,m_reasonCode,m_reason.c_str(),this);
+    setMedia(0);
     Message* m = message("chan.hangup");
     m->copyParams(parameters());
     if (m_reason)
@@ -2144,6 +2151,9 @@ void YateSIPConnection::hangup()
 		hl->setParam("text",MimeHeaderLine::quote(m_reason));
 		m->addHeader(hl);
 	    }
+	    const char* stats = parameters().getValue("rtp_stats");
+	    if (stats)
+		m->addHeader("P-RTP-Stat",stats);
 	    plugin.ep()->engine()->addMessage(m);
 	    m->deref();
 	}
@@ -2284,6 +2294,9 @@ void YateSIPConnection::mediaChanged(const SDPMedia& media)
 	m.addParam("call_status",status());
 	m.addParam("call_billid",billid());
 	Engine::dispatch(m);
+	const char* stats = m.getValue("stats");
+	if (stats)
+	    parameters().setParam("rtp_stats"+media.suffix(),stats);
     }
     // Clear the data endpoint, will be rebuilt later if required
     clearEndpoint(media);
@@ -2730,7 +2743,13 @@ void YateSIPConnection::doBye(SIPTransaction* t)
 	    m_reason = MimeHeaderLine::unquote(*text);
 	// FIXME: add SIP and Q.850 cause codes
     }
-    t->setResponse(200);
+    setMedia(0);
+    SIPMessage* m = new SIPMessage(t->initialMessage(),200);
+    const char* stats = parameters().getValue("rtp_stats");
+    if (stats)
+	m->addHeader("P-RTP-Stat",stats);
+    t->setResponse(m);
+    m->deref();
     m_byebye = false;
     hangup();
 }

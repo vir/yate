@@ -199,6 +199,7 @@ void RTPReceiver::rtpData(const void* data, int len)
     // check if we received duplicate or delayed packet
     // be much more tolerant when authenticating as we cannot resync
     if ((ds <= 0) || ((ds > SEQ_DESYNC_COUNT) && !secPtr)) {
+	m_ioLostPkt++;
 	if (ds && !secPtr) {
 	    // try to resync sequence unless we need to authenticate
 	    if (m_seqCount++) {
@@ -228,6 +229,9 @@ void RTPReceiver::rtpData(const void* data, int len)
 	return;
     }
 
+    if (ds > 1)
+	m_ioLostPkt += (ds - 1);
+
     u_int32_t rollover = m_rollover;
     // this time compare unsigned to detect rollovers
     if (seq < m_seq)
@@ -244,6 +248,8 @@ void RTPReceiver::rtpData(const void* data, int len)
     m_rollover = rollover;
     m_tsLast = ts - m_ts;
     m_seqCount = 0;
+    m_ioPackets++;
+    m_ioOctets += len;
 
     if (!len)
 	pc = 0;
@@ -381,7 +387,7 @@ RTPSender::RTPSender(RTPSession* session, bool randomTs)
 	m_seq = 2500 + (::random() % 60000);
     }
 }
-		
+
 bool RTPSender::rtpSend(bool marker, int payload, unsigned int timestamp, const void* data, int len)
 {
     if (!(m_session && m_session->UDPSession::transport()))
@@ -398,6 +404,8 @@ bool RTPSender::rtpSend(bool marker, int payload, unsigned int timestamp, const 
     m_seq++;
     if (m_seq == 0)
 	m_rollover++;
+    m_ioPackets++;
+    m_ioOctets += len;
 
     unsigned char padding = 0;
     unsigned char byte1 = 0x80;
@@ -824,6 +832,20 @@ bool RTPSession::silencePayload(int type)
 	return ((!m_send) || m_send->silencePayload(type)) && ok;
     }
     return false;
+}
+
+void RTPSession::getStats(String& stats) const
+{
+    DDebug(DebugInfo,"RTPSession::getStats() tx=%p rx=%p [%p]",m_send,m_recv,this);
+    if (m_send) {
+	stats.append("PS=",",") << m_send->ioPackets();
+	stats << ",OS=" << m_send->ioOctets();
+    }
+    if (m_recv) {
+	stats.append("PR=",",") << m_recv->ioPackets();
+	stats << ",OR=" << m_recv->ioOctets();
+	stats << ",PL=" << m_recv->ioPacketsLost();
+    }
 }
 
 

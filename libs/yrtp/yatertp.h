@@ -99,6 +99,12 @@ public:
      */
     virtual void rtcpData(const void* data, int len);
 
+    /**
+     * Retrieve MGCP P: style comma separated session parameters
+     * @param stats String to append parameters to
+     */
+    virtual void getStats(String& stats) const;
+
 protected:
     /**
      * Set a new RTP group for this processor
@@ -372,6 +378,7 @@ public:
 	  m_ssrcInit(true), m_ssrc(0), m_ts(0),
 	  m_seq(0), m_rollover(0), m_secLen(0), m_mkiLen(0),
 	  m_evTs(0), m_evNum(-1), m_evVol(-1),
+	  m_ioPackets(), m_ioOctets(0),
 	  m_dataType(-1), m_eventType(-1), m_silenceType(-1)
 	{ }
 
@@ -470,6 +477,20 @@ public:
 	{ return m_seq | (((u_int64_t)m_rollover) << 16); }
 
     /**
+     * Retrieve the number of packets exchanged on current session
+     * @return Number of packets exchanged
+     */
+    inline u_int32_t ioPackets() const
+	{ return m_ioPackets; }
+
+    /**
+     * Retrieve the number of payload octets exchanged on current session
+     * @return Number of octets exchanged except headers and padding
+     */
+    inline u_int32_t ioOctets() const
+	{ return m_ioOctets; }
+
+    /**
      * Get the session this object belongs to
      * @return Pointer to RTP session or NULL
      */
@@ -516,6 +537,8 @@ protected:
     u_int32_t m_evTs;
     int m_evNum;
     int m_evVol;
+    u_int32_t m_ioPackets;
+    u_int32_t m_ioOctets;
 
 private:
     int m_dataType;
@@ -535,7 +558,8 @@ public:
      * Constructor
      */
     inline RTPReceiver(RTPSession* session = 0)
-	: RTPBaseIO(session), m_dejitter(0), m_tsLast(0),
+	: RTPBaseIO(session),
+	  m_ioLostPkt(0), m_dejitter(0), m_tsLast(0),
 	  m_seqSync(0), m_seqCount(0), m_warn(true)
 	{ }
 
@@ -543,6 +567,14 @@ public:
      * Destructor - gets rid of the jitter buffer if present
      */
     virtual ~RTPReceiver();
+
+    /**
+     * Retrieve the number of lost packets in current session
+     * @return Number of packets in sequence gaps
+     */
+    inline u_int32_t ioPacketsLost() const
+	{ return m_ioLostPkt; }
+
 
     /**
      * Set a new dejitter buffer in this receiver
@@ -642,6 +674,8 @@ protected:
      * @return True is the packet passed integrity checks
      */
     virtual bool rtpCheckIntegrity(const unsigned char* data, int len, const void* authData, u_int32_t ssrc, u_int64_t seq);
+
+    u_int32_t m_ioLostPkt;
 
 private:
     void rtpData(const void* data, int len);
@@ -893,6 +927,12 @@ public:
      * Destructor - shuts down the session and destroys the transport
      */
     virtual ~RTPSession();
+
+    /**
+     * Retrieve MGCP P: style comma separated session parameters
+     * @param stats String to append parameters to
+     */
+    virtual void getStats(String& stats) const;
 
     /**
      * This method is called to process a RTP packet.

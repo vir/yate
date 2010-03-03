@@ -157,6 +157,10 @@ void RTPProcessor::rtcpData(const void* data, int len)
 {
 }
 
+void RTPProcessor::getStats(String& stats) const
+{
+}
+
 
 RTPTransport::RTPTransport(RTPTransport::Type type)
     : RTPProcessor(),

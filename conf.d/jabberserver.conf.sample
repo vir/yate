@@ -98,6 +98,10 @@
 ; Defaults to normal
 ;worker_priority=normal
 
+; dump_iq: boolean: Dump the iq stanza in a 'data' parameter of dispatched jabber.iq messages
+; Defaults to no
+;dump_iq=no
+
 ; printxml: boolean/string: Print sent/received XML data to output if debug
 ;  level is at least 9
 ; Allowed values are boolean values or 'verbose' string

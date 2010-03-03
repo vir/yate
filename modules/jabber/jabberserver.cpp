@@ -562,6 +562,7 @@ unsigned int JBPendingWorker::s_threadCount = 0;
 Mutex JBPendingWorker::s_mutex(false,"JBPendingWorker");
 static bool s_s2sFeatures = true;        // Offer RFC 3920 version=1 and stream features
                                          //  on incoming s2s streams
+static bool s_dumpIq = false;            // Dump 'iq' xml string in jabber.iq message
 INIT_PLUGIN(JBModule);                   // The module
 static YJBEntityCapsList s_entityCaps;
 static YJBEngine* s_jabber = 0;
@@ -2959,7 +2960,13 @@ void JBPendingWorker::processIq(JBPendingJob& job)
     addValidParam(m,"type",ev->stanzaType());
     if (respond)
 	addValidParam(m,"xmlns",TelEngine::c_safe(xmlns));
-    m.addParam(new NamedPointer("xml",ev->releaseXml()));
+    XmlElement* iq = ev->releaseXml();
+    if (s_dumpIq) {
+	NamedString* ns = new NamedString("data");
+	iq->toString(*ns);
+	m.addParam(ns);
+    }
+    m.addParam(new NamedPointer("xml",iq));
     if (Engine::dispatch(m)) {
 	if (respond) {
 	    XmlElement* xml = XMPPUtils::getXml(m,"response",0);
@@ -3281,6 +3288,7 @@ void JBModule::initialize()
 
     // (re)init globals
     s_s2sFeatures = cfg.getBoolValue("general","s2s_offerfeatures",true);
+    s_dumpIq = cfg.getBoolValue("general","dump_iq");
 
     // Init the engine
     s_jabber->initialize(cfg.getSection("general"),!m_init);

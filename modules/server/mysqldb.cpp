@@ -306,8 +306,17 @@ int MyConn::queryDbInternal(DbQuery* query)
 		    for (c = 0; c < cols; c++) {
 			if (!row[c])
 			    continue;
-			if (63 == fields[c].charsetnr) {
-			    // field holds binary data
+			bool binary = false;
+			switch (fields[c].type) {
+			    case MYSQL_TYPE_STRING:
+			    case MYSQL_TYPE_VAR_STRING:
+			    case MYSQL_TYPE_BLOB:
+				// field may hold binary data
+				binary = (63 == fields[c].charsetnr);
+			    default:
+				break;
+			}
+			if (binary) {
 			    if (!len)
 				continue;
 			    a->set(new DataBlock(row[c],len[c]),c,r);

@@ -468,28 +468,15 @@ static void setWidget(QWidget* parent, QWidget* child)
 // Utility function used to get the name of a control
 // The name of the control indicates actions, toggles ...
 // The action name alias can contain parameters
-// The accessible name property can override controls's name
 static bool translateName(QtWidget& w, String& name, NamedList** params = 0)
 {
-    static String actionProp = "accessibleName";
-
     if (w.invalid())
 	return false;
-    bool noAlias = true;
-    if (w.type() != QtWidget::Action) {
-	noAlias = w->accessibleName().isEmpty();
-	if (noAlias) 
-	    QtClient::getUtf8(name,w->objectName());
-	else
-	    QtClient::getUtf8(name,w->accessibleName());
-    }
-    else {
-	QtClient::getProperty(w.action(),actionProp,name);
-	noAlias = name.null();
-	if (noAlias)
-	    QtClient::getUtf8(name,w.action()->objectName());
-    }
-    if (noAlias)
+    if (w.type() != QtWidget::Action)
+	QtClient::getIdentity(w.widget(),name);
+    else
+	QtClient::getIdentity(w.action(),name);
+    if (!name)
 	return true;
     // Check params
     int pos = name.find('|');
@@ -790,7 +777,6 @@ QtWindow::QtWindow(const char* name, const char* description, const char* alias)
     m_maximized(false), m_mainWindow(false)
 {
     setObjectName(QtClient::setUtf8(m_id));
-    setAccessibleName(QtClient::setUtf8(description));
 }
 
 QtWindow::~QtWindow()
@@ -1999,7 +1985,6 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 {
     if (!obj)
 	return false;
-#if QT_VERSION >= 0x040200
     // Apply dynamic properties changes
     if (event->type() == QEvent::DynamicPropertyChange) {
 	String name = YQT_OBJECT_NAME(obj);
@@ -2053,7 +2038,6 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 		prop.c_str(),value.c_str(),name.c_str());
 	return false;
     }
-#endif
     if (event->type() == QEvent::KeyPress) {
 	static int mask = Qt::SHIFT | Qt::CTRL | Qt::ALT;
 
@@ -2235,11 +2219,11 @@ void QtWindow::doInit()
     m_visible = m_mainWindow || m_visible;
 
     // Create custom widgets from
-    // accessibleName=customwidget|[separator=sep|] sep widgetclass sep widgetname [sep param=value]
+    // _yate_identity=customwidget|[separator=sep|] sep widgetclass sep widgetname [sep param=value]
     QList<QFrame*> frm = qFindChildren<QFrame*>(this);
     for (int i = 0; i < frm.size(); i++) {
 	String create;
-	QtClient::getUtf8(create,frm[i]->accessibleName());
+	QtClient::getProperty(frm[i],"yate_identity",create);
 	if (!create.startSkip("customwidget|",false))
 	    continue;
 	char sep = '|';
@@ -2412,7 +2396,6 @@ void QtWindow::doInit()
 	}
     }
 
-#if QT_VERSION >= 0x040200
     // Install event filer and apply dynamic properties
     QList<QObject*> w = qFindChildren<QObject*>(this);
     for (int i = 0; i < w.size(); i++) {
@@ -2436,7 +2419,6 @@ void QtWindow::doInit()
 	    eventFilter(w[i],&ev);
 	}
     }
-#endif
 
     qRegisterMetaType<QModelIndex>("QModelIndex");
     qRegisterMetaType<QTextCursor>("QTextCursor");

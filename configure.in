@@ -964,7 +964,7 @@ QT4_MOC=""
 QT4_VER=""
 AC_ARG_WITH(libqt4,AC_HELP_STRING([--with-libqt4],[use Qt for graphical clients (default)]),[ac_cv_use_libqt4=$withval],[ac_cv_use_libqt4=yes])
 if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
-    AC_MSG_CHECKING([for Qt4 using pkg-config])
+    AC_MSG_CHECKING([for Qt4 >= 4.2.0 using pkg-config])
     pkgd="/usr/lib/qt4/$ARCHLIB/pkgconfig"
     if [[ -d "$pkgd" ]]; then
 	export PKG_CONFIG_LIBDIR="$pkgd"
@@ -984,6 +984,10 @@ if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
 	test -z "$QT4_MOC" && QT4_MOC="moc"
 	QT4_VER=`echo "$verqt" | sed "$vsed" | sed "$vsed" | sed 's/\(..\)\.\(..\)\.\(..\)/\1\2\3/'`
 	ac_cv_use_libqt="no"
+	if [[ 1$QT4_VER -lt 1040200 ]]; then
+	    HAVE_QT4=no
+	    verqt="too old ($verqt)"
+	fi
     else
 	verqt="no"
     fi

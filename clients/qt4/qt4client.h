@@ -230,6 +230,16 @@ public:
     static bool getProperty(QObject* obj, const char* name, String& value);
 
     /**
+     * Retrieve an object's identity from '_yate_identity' property or object name
+     * @param obj The object
+     * @param ident String to be filled with object identity
+     */
+    static inline void getIdentity(QObject* obj, String& ident) {
+	    if (obj && !(getProperty(obj,"_yate_identity",ident) && ident))
+		getUtf8(ident,obj->objectName());
+	}
+
+    /**
      * Build a menu object from a list of parameters.
      * Each menu item is indicated by a parameter starting with 'item:".
      * item:menu_name=Menu Text will create a menu item named 'menu_name' with 

@@ -989,7 +989,7 @@
        <property name="toolTip" >
         <string>Help on this window</string>
        </property>
-       <property name="accessibleName" >
+       <property name="_yate_identity" stdset="0" >
         <string>showwindow:help:3</string>
        </property>
        <property name="icon" >

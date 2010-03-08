@@ -116,7 +116,7 @@
              <pointsize>8</pointsize>
             </font>
            </property>
-           <property name="accessibleName" >
+           <property name="_yate_identity" stdset="0" >
             <string>selectitem:framePages:PageCalls</string>
            </property>
            <property name="text" >
@@ -165,7 +165,7 @@
              <height>60</height>
             </size>
            </property>
-           <property name="accessibleName" >
+           <property name="_yate_identity" stdset="0" >
             <string>selectitem:framePages:PageCDR</string>
            </property>
            <property name="text" >
@@ -211,7 +211,7 @@
              <height>60</height>
             </size>
            </property>
-           <property name="accessibleName" >
+           <property name="_yate_identity" stdset="0" >
             <string>selectitem:framePages:PageAccounts</string>
            </property>
            <property name="text" >
@@ -257,7 +257,7 @@
              <height>60</height>
             </size>
            </property>
-           <property name="accessibleName" >
+           <property name="_yate_identity" stdset="0" >
             <string>selectitem:framePages:PageContacts</string>
            </property>
            <property name="text" >
@@ -303,7 +303,7 @@
              <height>60</height>
             </size>
            </property>
-           <property name="accessibleName" >
+           <property name="_yate_identity" stdset="0" >
             <string>selectitem:framePages:PageSettings</string>
            </property>
            <property name="text" >
@@ -641,7 +641,7 @@
                  <property name="toolTip" >
                   <string>Show or hide the keypad</string>
                  </property>
-                 <property name="accessibleName" >
+                 <property name="_yate_identity" stdset="0" >
                   <string/>
                  </property>
                  <property name="text" >
@@ -759,7 +759,7 @@
                         <bold>true</bold>
                        </font>
                       </property>
-                      <property name="accessibleName" >
+                      <property name="_yate_identity" stdset="0" >
                        <string>digit:1</string>
                       </property>
                       <property name="text" >
@@ -796,7 +796,7 @@
                         <bold>true</bold>
                        </font>
                       </property>
-                      <property name="accessibleName" >
+                      <property name="_yate_identity" stdset="0" >
                        <string>digit:4</string>
                       </property>
                       <property name="text" >
@@ -833,7 +833,7 @@
                         <bold>true</bold>
                        </font>
                       </property>
-                      <property name="accessibleName" >
+                      <property name="_yate_identity" stdset="0" >
                        <string>digit:7</string>
                       </property>
                       <property name="text" >
@@ -870,7 +870,7 @@
                         <bold>true</bold>
                        </font>
                       </property>
-                      <property name="accessibleName" >
+                      <property name="_yate_identity" stdset="0" >
                        <string>digit:*</string>
                       </property>
                       <property name="text" >
@@ -917,7 +917,7 @@
                         <bold>true</bold>
                        </font>
                       </property>
-                      <property name="accessibleName" >
+                      <property name="_yate_identity" stdset="0" >
                        <string>digit:2</string>
                       </property>
                       <property name="text" >
@@ -954,7 +954,7 @@
                         <bold>true</bold>
                        </font>
                       </property>
-                      <property name="accessibleName" >
+                      <property name="_yate_identity" stdset="0" >
                        <string>digit:5</string>
                       </property>
                       <property name="text" >
@@ -991,7 +991,7 @@
                         <bold>true</bold>
                        </font>
                       </property>
-                      <property name="accessibleName" >
+                      <property name="_yate_identity" stdset="0" >
                        <string>digit:8</string>
                       </property>
                       <property name="text" >
@@ -1028,7 +1028,7 @@
                         <bold>true</bold>
                        </font>
                       </property>
-                      <property name="accessibleName" >
+                      <property name="_yate_identity" stdset="0" >
                        <string>digit:0</string>
                       </property>
                       <property name="text" >
@@ -1075,7 +1075,7 @@
                         <bold>true</bold>
                        </font>
                       </property>
-                      <property name="accessibleName" >
+                      <property name="_yate_identity" stdset="0" >
                        <string>digit:3</string>
                       </property>
                       <property name="text" >
@@ -1112,7 +1112,7 @@
                         <bold>true</bold>
                        </font>
                       </property>
-                      <property name="accessibleName" >
+                      <property name="_yate_identity" stdset="0" >
                        <string>digit:6</string>
                       </property>
                       <property name="text" >
@@ -1155,7 +1155,7 @@
                         <bold>true</bold>
                        </font>
                       </property>
-                      <property name="accessibleName" >
+                      <property name="_yate_identity" stdset="0" >
                        <string>digit:9</string>
                       </property>
                       <property name="text" >
@@ -1193,7 +1193,7 @@
                         <kerning>true</kerning>
                        </font>
                       </property>
-                      <property name="accessibleName" >
+                      <property name="_yate_identity" stdset="0" >
                        <string>digit:#</string>
                       </property>
                       <property name="text" >
@@ -1703,7 +1703,7 @@
                        <property name="toolTip" >
                         <string>Clear all incoming calls log</string>
                        </property>
-                       <property name="accessibleName" >
+                       <property name="_yate_identity" stdset="0" >
                         <string>clear:log_outgoing</string>
                        </property>
                        <property name="text" >
@@ -1885,7 +1885,7 @@
                        <property name="toolTip" >
                         <string>Clear all incoming calls log</string>
                        </property>
-                       <property name="accessibleName" >
+                       <property name="_yate_identity" stdset="0" >
                         <string>clear:log_incoming</string>
                        </property>
                        <property name="text" >
@@ -2477,7 +2477,7 @@
                   <property name="toolTip" >
                    <string>Show or hide the events window</string>
                   </property>
-                  <property name="accessibleName" >
+                  <property name="_yate_identity" stdset="0" >
                    <string>showwindow:events</string>
                   </property>
                   <property name="text" >
@@ -2812,7 +2812,7 @@
         <property name="toolTip" >
          <string>Show or hide the Help window</string>
         </property>
-        <property name="accessibleName" >
+        <property name="_yate_identity" stdset="0" >
          <string>showwindow:help:0</string>
         </property>
         <property name="text" >

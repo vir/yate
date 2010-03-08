@@ -102,7 +102,7 @@
        <property name="toolTip" >
         <string/>
        </property>
-       <property name="accessibleName" >
+       <property name="_yate_identity" stdset="0" >
         <string>help:prev</string>
        </property>
        <property name="text" >
@@ -136,7 +136,7 @@
        <property name="toolTip" >
         <string>Home</string>
        </property>
-       <property name="accessibleName" >
+       <property name="_yate_identity" stdset="0" >
         <string>help:home</string>
        </property>
        <property name="text" >
@@ -167,7 +167,7 @@
          <height>25</height>
         </size>
        </property>
-       <property name="accessibleName" >
+       <property name="_yate_identity" stdset="0" >
         <string>help:next</string>
        </property>
        <property name="text" >

@@ -2223,7 +2223,7 @@ void QtWindow::doInit()
     QList<QFrame*> frm = qFindChildren<QFrame*>(this);
     for (int i = 0; i < frm.size(); i++) {
 	String create;
-	QtClient::getProperty(frm[i],"yate_identity",create);
+	QtClient::getProperty(frm[i],"_yate_identity",create);
 	if (!create.startSkip("customwidget|",false))
 	    continue;
 	char sep = '|';

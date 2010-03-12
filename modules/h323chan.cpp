@@ -1337,9 +1337,12 @@ void YateH323Connection::OnCleared()
 	error,rtext,reason,this);
     TelEngine::Lock lock(m_mutex);
     if (m_chan && m_chan->ref()) {
+	YateH323Chan* tmp = m_chan;
+	m_chan = 0;
 	lock.drop();
-	m_chan->disconnect(error ? error : rtext);
-	m_chan->deref();
+	tmp->disconnect(error ? error : rtext);
+	tmp->finish();
+	tmp->deref();
     }
 }
 

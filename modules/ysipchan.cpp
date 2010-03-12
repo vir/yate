@@ -313,9 +313,6 @@ public:
 	{ return callid == m_dialog &&
 	    m_dialog.fromTag(isOutgoing()) == fromTag &&
 	    m_dialog.toTag(isOutgoing()) == toTag; }
-    // Build a callid parameter from channel dialog and add it to a list
-    inline void addDialog(NamedList& nl) const
-	{ addCallId(nl,m_dialog,m_dialog.fromTag(isOutgoing()),m_dialog.toTag(isOutgoing())); }
     // Build and add a callid parameter to a list
     static inline void addCallId(NamedList& nl, const String& dialog,
 	const String& fromTag, const String& toTag) {
@@ -2323,8 +2320,10 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	return processTransaction2(ev,msg,code);
 
     bool updateTags = true;
+    Lock mylock(driver());
     SIPDialog oldDlg(m_dialog);
     m_dialog = *ev->getTransaction()->recentMessage();
+    mylock.drop();
 
     if (msg && !msg->isOutgoing() && msg->isAnswer() && (code >= 300)) {
 	updateTags = false;
@@ -2380,7 +2379,10 @@ bool YateSIPConnection::process(SIPEvent* ev)
     }
 
     // Only update channels' callid if dialog tags change
-    updateTags = updateTags && (oldDlg |= m_dialog);
+    if (updateTags) {
+	Lock lock(driver());
+	updateTags = (oldDlg |= m_dialog);
+    }
 
     if (!ev->isActive()) {
 	Lock lock(driver());
@@ -2912,7 +2914,8 @@ void YateSIPConnection::doRefer(SIPTransaction* t)
 void YateSIPConnection::complete(Message& msg, bool minimal) const
 {
     Channel::complete(msg,minimal);
-    addDialog(msg);
+    Lock mylock(driver());
+    addCallId(msg,m_dialog,m_dialog.fromTag(isOutgoing()),m_dialog.toTag(isOutgoing()));
 }
 
 void YateSIPConnection::disconnected(bool final, const char *reason)

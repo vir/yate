@@ -970,8 +970,8 @@ if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
 	export PKG_CONFIG_LIBDIR="$pkgd"
     fi
     verqt=`pkg-config --modversion QtCore 2>/dev/null`
-    incqt=`pkg-config --cflags QtCore QtGui QtXml QtNetwork 2>/dev/null | sed 's/QtNetwork/QtUiTools/'`
-    libqt=`pkg-config --libs QtCore QtGui QtXml QtNetwork 2>/dev/null | sed 's/QtNetwork/QtUiTools/'`
+    incqt=`pkg-config --cflags QtNetwork QtGui QtXml QtCore 2>/dev/null | sed 's/QtNetwork/QtUiTools/'`
+    libqt=`pkg-config --libs QtNetwork QtGui QtXml QtCore 2>/dev/null | sed 's/QtNetwork/QtUiTools/'`
     unset PKG_CONFIG_LIBDIR
     if [[ "x$incqt" != "x" -a "x$libqt" != "x" ]]; then
 	HAVE_QT4=yes

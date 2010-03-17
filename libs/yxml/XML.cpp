@@ -128,8 +128,8 @@ bool XmlSaxParser::parse(const char* text)
     m_buf << text;
     if (m_buf.lenUtf8() == -1) {
 	//FIXME this should not be here in case we have a different encoding
-	Debug(this,DebugNote,"Request to parse invalid utf-8 data [%p]",this);
-	return setError(InvalidEncoding);
+	DDebug(this,DebugNote,"Request to parse invalid utf-8 data [%p]",this);
+	return setError(Incomplete);
     }
     if (unparsed()) {
 	if (unparsed() != Text) {

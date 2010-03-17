@@ -1805,11 +1805,31 @@ void YJBEngine::processBind(JBEvent* ev)
 	return;
     }
     c2s->lock();
-    JabberID jid(c2s->local());
+    JabberID jid(c2s->remote());
     c2s->unlock();
     jid.resource(getChildText(*ev->child(),XmlTag::Resource,XMPPNamespace::Bind));
-    if (jid.resource() && !bindingResource(jid))
-	jid.resource("");
+    if (jid.resource()) {
+	// Check if the user and resource are in bind process
+	if (bindingResource(jid)) {
+	    // Not binding: check if already bound
+	    ObjList res;
+	    res.append(new String(jid.resource()));
+	    ObjList* list = findClientStreams(true,jid,res);
+	    if (list) {
+		for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
+		    JBClientStream* s = static_cast<JBClientStream*>(o->get());
+		    if (s != c2s) {
+			removeBindingResource(jid);
+			jid.resource("");
+			break;
+		    }
+		}
+		TelEngine::destruct(list);
+	    }
+	}
+	else
+	    jid.resource("");
+    }
     if (!jid.resource()) {
 	for (int i = 0; i < 3; i++) {
 	    MD5 md5(c2s->id());

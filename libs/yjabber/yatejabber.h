@@ -744,8 +744,7 @@ public:
 
     /**
      * Start the stream. This method should be called by the upper layer
-     *  when processing an incoming stream Start event. For outgoing streams
-     *  this method is called internally on succesfully connect.
+     *  when processing an incoming stream Start event
      * This method is thread safe
      * @param features Optional features to advertise to the remote party of an
      *  incoming stream. The caller is responsable of freeing it.
@@ -1848,7 +1847,7 @@ public:
      * @param stream The calling stream
      * @return True if a duplicate is found
      */
-    bool checkDupId(const JBStream* stream);
+    bool checkDupId(JBStream* stream);
 
     /**
      * Print XML to output

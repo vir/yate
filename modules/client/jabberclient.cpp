@@ -583,6 +583,14 @@ void YJBEngine::processEvent(JBEvent* ev)
 	    if (ev->element())
 		processRegisterEvent(ev,ev->type() == JBEvent::RegisterOk);
 	    break;
+	case JBEvent::Start:
+	    if (ev->stream()->outgoing()) {
+		if (!checkDupId(ev->stream()))
+		    ev->stream()->start();
+		else
+		    ev->stream()->terminate(-1,true,0,XMPPError::InvalidId,"Duplicate stream id");
+		break;
+	    }
 	default:
 	    returnEvent(ev,XMPPError::ServiceUnavailable);
 	    return;

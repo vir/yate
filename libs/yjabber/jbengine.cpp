@@ -1022,7 +1022,7 @@ void JBEngine::buildDialbackKey(const String& id, const String& local,
 }
 
 // Check for duplicate stream id at a remote server
-bool JBEngine::checkDupId(const JBStream* stream)
+bool JBEngine::checkDupId(JBStream* stream)
 {
     if (!stream || stream->incoming())
 	return false;
@@ -1030,6 +1030,10 @@ bool JBEngine::checkDupId(const JBStream* stream)
     getStreamList(list,stream->type());
     if (!list)
 	return false;
+    stream->lock();
+    String domain = stream->remote().domain();
+    String id = stream->id();
+    stream->unlock();
     list->lock();
     JBStream* found = 0;
     for (ObjList* o = list->sets().skipNull(); o; o = o->skipNext()) {
@@ -1040,8 +1044,8 @@ bool JBEngine::checkDupId(const JBStream* stream)
 		// Lock the stream: its data might change
 		Lock lock(found);
 		// Ignore destroying streams
-		if (found->remote() == stream->remote() &&
-		    found->id() == stream->id() && found->state() != JBStream::Destroy)
+		if (found->remote().domain() == domain &&
+		    found->id() == id && found->state() != JBStream::Destroy)
 		    break;
 	    }
 	    found = 0;

@@ -942,6 +942,12 @@ void YJBEngine::processEvent(JBEvent* ev)
 	case JBEvent::Start:
 	    if (ev->stream()->incoming())
 		processStartIn(ev);
+	    else {
+		if (!checkDupId(ev->stream()))
+		    ev->stream()->start();
+		else
+		    ev->stream()->terminate(-1,true,0,XMPPError::InvalidId,"Duplicate stream id");
+	    }
 	    break;
 	case JBEvent::Auth:
 	    if (ev->stream()->incoming())

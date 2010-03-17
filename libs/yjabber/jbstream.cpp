@@ -208,7 +208,8 @@ void JBStream::connectTerminated(Socket*& sock)
 	    resetConnection(sock);
 	    sock = 0;
 	    changeState(Starting);
-	    start();
+	    XmlElement* s = buildStreamStart();
+	    sendStreamXml(WaitStart,s);
 	}
 	else {
 	    DDebug(this,DebugNote,"Connect failed [%p]",this);
@@ -476,17 +477,39 @@ bool JBStream::sendStreamXml(State newState, XmlElement* first, XmlElement* seco
 }
 
 // Start the stream. This method should be called by the upper layer
-//  when processing an incoming stream Start event. For outgoing streams
-//  this method is called internally on succesfully connect.
+//  when processing an incoming stream Start event
 void JBStream::start(XMPPFeatureList* features, XmlElement* caps, bool useVer1)
 {
     Lock lock(this);
     if (m_state != Starting)
 	return;
     if (outgoing()) {
+	TelEngine::destruct(features);
 	TelEngine::destruct(caps);
-	XmlElement* s = buildStreamStart();
-	sendStreamXml(WaitStart,s);
+	if (m_type == c2s) {
+	    // c2s: just wait for stream features
+	    changeState(Features);
+	}
+	else if (m_type == s2s) {
+	    // Wait features ?
+	    if (flag(StreamRemoteVer1)) {
+		changeState(Features);
+		return;
+	    }
+	    // Stream not secured
+	    if (!flag(StreamSecured)) {
+		// Accept dialback auth stream
+		// The namspace presence was already checked in checkStreamStart()
+		if (flag(TlsRequired)) {
+		    terminate(0,false,0,XMPPError::EncryptionRequired);
+		    return;
+		}
+	    }
+	    setFlags(StreamSecured);
+	    serverStream()->sendDialback();
+	}
+	else
+	    DDebug(this,DebugStub,"JBStream::start() not handled for type=%s",typeName());
 	return;
     }
     m_features.clear();
@@ -1123,13 +1146,10 @@ bool JBStream::processStreamStart(const XmlElement* xml)
 	}
 	else {
 	    m_id = xml->getAttribute("id");
-	    if (!m_id)
-		reason = "Missing stream id";
-	    else if (m_engine->checkDupId(this))
-		reason = "Duplicate stream id";
-	    if (reason) {
+	    if (!m_id) {
 		Debug(this,DebugNote,"Received '%s' with invalid stream id='%s' [%p]",
 		    xml->tag(),m_id.c_str(),this);
+		reason = "Missing stream id";
 		error = XMPPError::InvalidId;
 		break;
 	    }
@@ -2141,13 +2161,8 @@ bool JBClientStream::processStart(const XmlElement* xml, const JabberID& from,
 	    "Invalid 'to' attribute");
 	return false;
     }
-    if (incoming()) {
+    if (incoming() || flag(StreamRemoteVer1)) {
 	m_events.append(new JBEvent(JBEvent::Start,this,0,from,to));
-	return true;
-    }
-    // Wait features ?
-    if (flag(StreamRemoteVer1)) {
-	changeState(Features);
 	return true;
     }
     Debug(this,DebugStub,"Outgoing client stream: unsupported remote version (expecting 1.x)");
@@ -2640,22 +2655,8 @@ bool JBServerStream::processStart(const XmlElement* xml, const JabberID& from,
     }
 
     if (outgoing()) {
-	// Wait features ?
-	if (flag(StreamRemoteVer1)) {
-	    changeState(Features);
-	    return true;
-	}
-	// Stream not secured
-	if (!flag(StreamSecured)) {
-	    // Accept dialback auth stream
-	    // The namspace presence was already checked in checkStreamStart()
-	    if (flag(TlsRequired)) {
-		terminate(0,false,0,XMPPError::EncryptionRequired);
-		return false;
-	    }
-	}
-	setFlags(StreamSecured);
-	return sendDialback();
+	m_events.append(new JBEvent(JBEvent::Start,this,0,from,to));
+	return true;
     }
 
     // Incoming stream

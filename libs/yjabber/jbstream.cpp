@@ -1328,8 +1328,11 @@ void JBStream::changeState(State newState, u_int64_t time)
 	    DDebug(this,DebugAll,"Set timeouts start=" FMT64 " setup=" FMT64 " [%p]",
 		m_startTimeout,m_setupTimeout,this);
 	    if (m_xmlDom) {
-		m_xmlDom->reset();
-		DDebug(this,DebugAll,"XML parser reset [%p]",this);
+		Lock lck(m_socketMutex);
+		if (m_xmlDom) {
+		    m_xmlDom->reset();
+		    DDebug(this,DebugAll,"XML parser reset [%p]",this);
+		}
 	    }
 	    break;
 	case Idle:

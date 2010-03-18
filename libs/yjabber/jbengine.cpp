@@ -609,7 +609,8 @@ void JBConnect::connect()
 	    query = "_xmpp-server._tcp.";
 	query << m_domain;
 	ObjList srv;
-	int code = Resolver::srvQuery(query,srv);
+	String error;
+	int code = Resolver::srvQuery(query,srv,&error);
 	if (exiting(sock))
 	    return;
 	if (!code) {
@@ -625,12 +626,9 @@ void JBConnect::connect()
 		    return;
 	    }
 	}
-	else {
-	    String s;
-	    Thread::errorString(s,code);
+	else
 	    Debug(m_engine,DebugNote,"JBConnect(%s) SRV query for '%s' failed: %d '%s' [%p]",
-		m_stream.c_str(),query.c_str(),code,s.c_str(),this);
-	}
+		m_stream.c_str(),query.c_str(),code,error.c_str(),this);
     }
     // Try to resolve the domain
     if (connect(sock,m_domain,port)) {

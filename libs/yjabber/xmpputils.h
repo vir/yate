@@ -96,9 +96,10 @@ public:
      * Make a SRV query
      * @param query The query content
      * @param result List of resulting SrvRecord items
-     * @return 0 on success, error code otherwise
+     * @param error Optional string to be filled with error string
+     * @return 0 on success, error code otherwise (h_errno value on Linux)
      */
-    static int srvQuery(const char* query, ObjList& result);
+    static int srvQuery(const char* query, ObjList& result, String* error = 0);
 };
 
 

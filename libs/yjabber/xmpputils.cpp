@@ -68,7 +68,7 @@ void SrvRecord::insert(ObjList& list, SrvRecord* rec)
 }
 
 // Make a SRV query
-int Resolver::srvQuery(const char* query, ObjList& result)
+int Resolver::srvQuery(const char* query, ObjList& result, String* error)
 {
     int code = 0;
     XDebug(DebugAll,"Starting SRV query for '%s'",query);
@@ -83,13 +83,18 @@ int Resolver::srvQuery(const char* query, ObjList& result)
 		dr->Data.SRV.wPriority,dr->Data.SRV.wWeight));
 	}
     }
+    else if (error)
+	Thread::errorString(*error,code);
     if (srv)
 	::DnsRecordListFree(srv,DnsFreeRecordList);
 #elif defined(__NAMESER)
     unsigned char buf[512];
     int r = res_query(query,ns_c_in,ns_t_srv,buf,sizeof(buf));
-    // TODO: return proper error
-    code = r >= 0 ? 0 : -1;
+    if (r < 0) {
+	code = h_errno;
+	if (error)
+	    *error = hstrerror(code);
+    }
     if (!code && r > 0 && r <= (int)sizeof(buf)) {
 	int queryCount = 0;
 	int answerCount = 0;
@@ -148,11 +153,8 @@ int Resolver::srvQuery(const char* query, ObjList& result)
 	}
 	Debug(DebugAll,"SRV query for '%s' got %d records%s",query,result.count(),s.safe());
     }
-    else {
-	String s;
-	Thread::errorString(s,code);
-	Debug(DebugNote,"SRV query for '%s' failed: %d '%s'",query,code,s.c_str());
-    }
+    else
+	Debug(DebugNote,"SRV query for '%s' failed with code %d",query,code);
 #endif
     return code;
 }

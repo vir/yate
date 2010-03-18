@@ -425,7 +425,7 @@ bool JBFeaturesModule::handleFeaturePrivateData(JabberID& from, Message& msg)
 	    if (pdata) {
 		// Avoid sending inconsistent tag or namespace
 		if (tag != pdata->toString() || *ns != pdata->xmlns()) {
-		    Debug(this,DebugMild,
+		    Debug(this,DebugNote,
 			"User %s got invalid private data tag/ns='%s'/'%s' instead of '%s'/'%s'",
 			from.bare().c_str(),pdata->tag(),
 			TelEngine::c_safe(pdata->xmlns()),tag.c_str(),ns->c_str());
@@ -433,7 +433,7 @@ bool JBFeaturesModule::handleFeaturePrivateData(JabberID& from, Message& msg)
 		}
 	    }
 	    else if (data)
-		Debug(this,DebugMild,"User %s got invalid xml private data",from.bare().c_str());
+		Debug(this,DebugNote,"User %s got invalid xml private data",from.bare().c_str());
 	    TelEngine::destruct(m);
 	}
 	if (!pdata)
@@ -519,13 +519,13 @@ bool JBFeaturesModule::handleFeatureVCard(JabberID& from, Message& msg)
 		if (vcard) {
 		    // Avoid sending inconsistent tag
 		    if (!XMPPUtils::isTag(*vcard,XmlTag::VCard,XMPPNamespace::VCard)) {
-			Debug(this,DebugMild,"Wrong vcard tag='%s' or ns='%s' for '%s'",
+			Debug(this,DebugNote,"Wrong vcard tag='%s' or ns='%s' for '%s'",
 			    vcard->tag(),TelEngine::c_safe(vcard->xmlns()),p.getValue("username"));
 			TelEngine::destruct(vcard);
 		    }
 		}
 		else
-		    Debug(this,DebugMild,"Failed to parse vcard for '%s'",p.getValue("username"));
+		    Debug(this,DebugNote,"Failed to parse vcard for '%s'",p.getValue("username"));
 	    }
 	}
     }
@@ -618,7 +618,7 @@ bool JBFeaturesModule::handleFeatureMsgOffline(JabberID& from, Message& msg)
 		msg.addParam(new NamedPointer("xml",xml));
 		continue;
 	    }
-	    Debug(this,DebugMild,"Invalid database offline chat xml for user=%s",
+	    Debug(this,DebugNote,"Invalid database offline chat xml for user=%s",
 		from.bare().c_str());
 	}
 	return true;

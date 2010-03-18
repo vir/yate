@@ -738,7 +738,7 @@ bool JBStream::canProcess(u_int64_t time)
 	    m_timeToFillRestart = time + m_engine->m_restartUpdInterval;
 	    if (m_restart < m_engine->m_restartMax) {
 		m_restart++;
-		Debug(this,DebugAll,"Restart count set to %u max=%u [%p]",
+		DDebug(this,DebugAll,"Restart count set to %u max=%u [%p]",
 		    m_restart,m_engine->m_restartMax,this);
 	    }
 	}
@@ -822,7 +822,7 @@ void JBStream::process(u_int64_t time)
 	    // No (more) children: check termination
 	    if (root->completed()) {
 		lockDoc.drop();
-		Debug(this,DebugAll,"Remote closed the stream in state %s [%p]",
+		DDebug(this,DebugAll,"Remote closed the stream in state %s [%p]",
 		    stateName(),this);
 		terminate(1,false,0);
 	    }
@@ -1117,11 +1117,8 @@ bool JBStream::processStreamStart(const XmlElement* xml)
 		// Accept invalid/unsupported version only if TLS is not required
 		if (!flag(TlsRequired)) {
 		    // Check dialback
-		    if (!xml->hasAttribute("xmlns:db",XMPPUtils::s_ns[XMPPNamespace::Dialback])) {
-			Debug(this,DebugNote,"Received non dialback '%s' [%p]",
-			    xml->tag(),this);
+		    if (!xml->hasAttribute("xmlns:db",XMPPUtils::s_ns[XMPPNamespace::Dialback]))
 			error = XMPPError::InvalidNamespace;
-		    }
 		}
 		else
 		    error = XMPPError::EncryptionRequired;
@@ -1132,8 +1129,8 @@ bool JBStream::processStreamStart(const XmlElement* xml)
 	else if (remoteVersion > 1)
 	    error = XMPPError::UnsupportedVersion;
 	if (error != XMPPError::NoError) {
-	    Debug(this,DebugNote,"Received '%s' with unacceptable version='%s' [%p]",
-		xml->tag(),ver.c_str(),this);
+	    Debug(this,DebugNote,"Unacceptable '%s' version='%s' error=%s [%p]",
+		xml->tag(),ver.c_str(),XMPPUtils::s_error[error].c_str(),this);
 	    break;
 	}
 	// Set stream id: generate one for incoming, get it from xml if outgoing
@@ -1147,8 +1144,8 @@ bool JBStream::processStreamStart(const XmlElement* xml)
 	else {
 	    m_id = xml->getAttribute("id");
 	    if (!m_id) {
-		Debug(this,DebugNote,"Received '%s' with invalid stream id='%s' [%p]",
-		    xml->tag(),m_id.c_str(),this);
+		Debug(this,DebugNote,"Received '%s' with empty stream id [%p]",
+		    xml->tag(),this);
 		reason = "Missing stream id";
 		error = XMPPError::InvalidId;
 		break;
@@ -1543,7 +1540,7 @@ bool JBStream::dropXml(XmlElement*& xml, const char* reason)
 {
     if (!xml)
 	return true;
-    Debug(this,DebugStub,"Dropping xml=(%p,%s) ns=%s in state=%s reason='%s' [%p]",
+    Debug(this,DebugNote,"Dropping xml=(%p,%s) ns=%s in state=%s reason='%s' [%p]",
 	xml,xml->tag(),TelEngine::c_safe(xml->xmlns()),stateName(),reason,this);
     TelEngine::destruct(xml);
     return true;
@@ -1576,9 +1573,7 @@ bool JBStream::processChallenge(XmlElement* xml, const JabberID& from, const Jab
 	return true;
     }
     if (t != XmlTag::Response) {
-	Debug(this,DebugStub,"Unhandled SASL '%s' in %s state [%p]",
-	    xml->tag(),stateName(),this);
-	TelEngine::destruct(xml);
+	dropXml(xml,"expecting sasl response");
 	return true;
     }
     XMPPError::Type error = XMPPError::NoError;
@@ -1606,7 +1601,7 @@ bool JBStream::processChallenge(XmlElement* xml, const JabberID& from, const Jab
 	m_events.append(new JBEvent(JBEvent::Auth,this,xml,from,to));
     }
     else {
-	Debug(this,DebugNote,"Received challenge response error='%s' [%p]",
+	Debug(this,DebugNote,"Received bad challenge response error='%s' [%p]",
 	    XMPPUtils::s_error[error].c_str(),this);
 	XmlElement* failure = XMPPUtils::createFailure(XMPPNamespace::Sasl,error);
 	sendStreamXml(Features,failure);
@@ -2168,7 +2163,7 @@ bool JBClientStream::processStart(const XmlElement* xml, const JabberID& from,
 	m_events.append(new JBEvent(JBEvent::Start,this,0,from,to));
 	return true;
     }
-    Debug(this,DebugStub,"Outgoing client stream: unsupported remote version (expecting 1.x)");
+    Debug(this,DebugNote,"Outgoing client stream: unsupported remote version (expecting 1.x)");
     terminate(0,true,0,XMPPError::Internal,"Unsupported version");
     return false;
 }
@@ -2567,7 +2562,7 @@ bool JBServerStream::sendDialback()
     }
     else if (!m_dbKey) {
 	// Dialback only with no key?
-	Debug(this,DebugGoOn,"Outgoing dialback stream with no key! [%p]",this);
+	Debug(this,DebugNote,"Outgoing dialback stream with no key! [%p]",this);
 	terminate(0,true,0,XMPPError::Internal);
 	return false;
     }
@@ -2759,7 +2754,7 @@ bool JBServerStream::processDbResult(XmlElement* xml, const JabberID& from,
 	return false;
     }
     m_remoteDomains.addParam(from,key);
-    Debug(this,DebugAll,"Added db:result request from %s [%p]",from.c_str(),this);
+    DDebug(this,DebugAll,"Added db:result request from %s [%p]",from.c_str(),this);
     // Notify the upper layer of incoming request
     JBEvent* ev = new JBEvent(JBEvent::DbResult,this,xml,from,to);
     ev->m_text = key;

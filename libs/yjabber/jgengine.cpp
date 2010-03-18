@@ -96,7 +96,8 @@ JGSession* JGEngine::call(JGSession::Version ver, const JabberID& caller,
 	    session = new JGSession0(this,caller,called);
 	    break;
 	case JGSession::VersionUnknown:
-	    Debug(this,DebugNote,"Unhandled session version %d in call()",ver);
+	    Debug(this,DebugNote,"Outgoing call from '%s' to '%s' failed: unknown version %d",
+		caller.c_str(),called.c_str(),ver);
 	    return 0;
     }
     if (session) {
@@ -237,7 +238,9 @@ bool JGEngine::acceptIq(XMPPUtils::IqType type, const JabberID& from, const Jabb
 		    break;
 		default:
 		    error = XMPPError::ServiceUnavailable;
-		    Debug(this,DebugStub,"JGEngine::accept(): unhandled session version %d",ver);
+		    Debug(this,DebugNote,
+			"Can't accept xml child=%s sid=%s with unhandled version %d",
+			child->tag(),sid.c_str(),ver);
 	    }
 	}
 	else {
@@ -250,6 +253,8 @@ bool JGEngine::acceptIq(XMPPUtils::IqType type, const JabberID& from, const Jabb
 	}
 	return error == XMPPError::NoError;
     }
+    Debug(this,DebugNote,"Can't accept xml child=%s sid=%s with unknown version %d",
+	child->tag(),sid.c_str(),ver);
     return false;
 }
 

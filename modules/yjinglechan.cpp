@@ -622,7 +622,7 @@ void YJGEngine::processEvent(JGEvent* event)
     JGSession* session = event->session();
     // This should never happen !!!
     if (!session) {
-	Debug(this,DebugWarn,"Received event without session");
+	DDebug(this,DebugStub,"Received event without session");
 	delete event;
 	return;
     }
@@ -831,7 +831,7 @@ YJGConnection::YJGConnection(JGEvent* event)
 		default:
 		    // processContentAdd() should return only known content types in ok list
 		    // This a safeguard if we add new content type(s) and forget to process them
-		    Debug(this,DebugStub,
+		    Debug(this,DebugNote,
 			"Can't process incoming content '%s' of type %u [%p]",
 			c->toString().c_str(),c->type(),this);
 		    // Append this content to 'remove' list
@@ -869,7 +869,7 @@ YJGConnection::YJGConnection(JGEvent* event)
 	// We don't support mixed sessions for now
 	// Remove file transfer contents if we have an audio session request
 	if (m_audioContents.skipNull() && m_ftContents.skipNull()) {
-	    Debug(this,DebugMild,"Denying file transfer in audio session [%p]",this);
+	    Debug(this,DebugNote,"Denying file transfer in audio session [%p]",this);
 	    m_session->sendContent(JGSession::ActContentRemove,m_ftContents);
 	    m_ftContents.clear();
 	}
@@ -1329,7 +1329,7 @@ bool YJGConnection::handleEvent(JGEvent* event)
 	    response = true;
 	    break;
 	default:
-	    Debug(this,DebugStub,"Unhandled event (%p,%u) [%p]",
+	    DDebug(this,DebugStub,"Unhandled event (%p,%u) [%p]",
 		event,event->type(),this);
 	    return true;
     }
@@ -1360,7 +1360,7 @@ bool YJGConnection::handleEvent(JGEvent* event)
 		    m_ftStatus = FTIdle;
 		clearEndpoint("data");
 	    }
-	    Debug(this,rspOk ? DebugAll : DebugMild,
+	    Debug(this,rspOk ? DebugAll : DebugInfo,
 		"Received result=%s to streamhost used=%s [%p]",
 		event->name(),usedHost.c_str(),this);
 	    return ok;
@@ -1369,7 +1369,7 @@ bool YJGConnection::handleEvent(JGEvent* event)
 	// Hold/active result
 	bool hold = (m_onHoldOutId && m_onHoldOutId == event->id());
 	if (hold || (m_activeOutId && m_activeOutId == event->id())) {
-	    Debug(this,rspOk ? DebugAll : DebugMild,
+	    Debug(this,rspOk ? DebugAll : DebugInfo,
 		"Received result=%s to %s request [%p]",
 		event->name(),hold ? "hold" : "active",this);
 
@@ -1403,7 +1403,7 @@ bool YJGConnection::handleEvent(JGEvent* event)
 		// TODO: implement
 	    }
 	    else {
-		Debug(this,DebugMild,"Transfer failed error=%s [%p]",
+		Debug(this,DebugNote,"Transfer failed error=%s [%p]",
 		    event->text().c_str(),this);
 	    }
 	    return true;
@@ -1416,7 +1416,7 @@ bool YJGConnection::handleEvent(JGEvent* event)
     switch (event->action()) {
 	case JGSession::ActDtmf:
 	    event->confirmElement();
-	    Debug(this,DebugInfo,"Received dtmf(%s) '%s' [%p]",
+	    Debug(this,DebugAll,"Received dtmf(%s) '%s' [%p]",
 		event->reason().c_str(),event->text().c_str(),this);
 	    if (event->text()) {
 		Message* m = message("chan.dtmf");
@@ -2202,7 +2202,7 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
 		// File transfer contents can be added only in session initiate
 		if (event.action() != JGSession::ActInitiate) {
 		    Debug(this,DebugInfo,
-			"Event(%s) content='%s':  [%p]",
+			"Event(%s) file transfer content='%s' in non initiate event [%p]",
 			event.actionName(),c->toString().c_str(),this);
 		    remove.append(c)->setDelete(false);
 		    continue;
@@ -2211,7 +2211,7 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
 		break;
 	    case JGSessionContent::Unknown:
 	    case JGSessionContent::UnknownFileTransfer:
-		Debug(this,DebugInfo,
+		Debug(this,DebugNote,
 		    "Event(%s) with unknown (unsupported) content '%s' [%p]",
 		    event.actionName(),c->toString().c_str(),this);
 		remove.append(c)->setDelete(false);
@@ -2221,7 +2221,7 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
 	// Check creator
 	if ((isOutgoing() && c->creator() == JGSessionContent::CreatorInitiator) ||
 	    (isIncoming() && c->creator() == JGSessionContent::CreatorResponder)) {
-	    Debug(this,DebugInfo,
+	    Debug(this,DebugNote,
 		"Event(%s) content='%s' has invalid creator [%p]",
 		event.actionName(),c->toString().c_str(),this);
 	    remove.append(c)->setDelete(false);
@@ -2236,7 +2236,7 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
 
 	// Check if we already have an audio content with the same name and creator
 	if (findContent(*c,m_audioContents)) {
-	    Debug(this,DebugInfo,
+	    Debug(this,DebugNote,
 		"Event(%s) content='%s' is already added [%p]",
 		event.actionName(),c->toString().c_str(),this);
 	    return false;
@@ -2244,7 +2244,7 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
 
 	// Check transport type
 	if (c->m_rtpRemoteCandidates.m_type == JGRtpCandidates::Unknown) {
-	    Debug(this,DebugInfo,
+	    Debug(this,DebugNote,
 		"Event(%s) content='%s' has unknown transport type [%p]",
 		event.actionName(),c->toString().c_str(),this);
 	    remove.append(c)->setDelete(false);
@@ -2256,7 +2256,7 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
 	JGRtpCandidate* rtp = c->m_rtpRemoteCandidates.findByComponent(1);
 	if (rtp) {
 	    if (!checkRecvCandidate(*c,*rtp)) {
-		Debug(this,DebugInfo,
+		Debug(this,DebugNote,
 		    "Event(%s) content='%s' has invalid RTP candidate [%p]",
 		    event.actionName(),c->toString().c_str(),this);
 	        remove.append(c)->setDelete(false);
@@ -2264,7 +2264,7 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
 	    }
 	}
 	else if (c->m_rtpRemoteCandidates.m_type == JGRtpCandidates::RtpRawUdp) {
-	    Debug(this,DebugInfo,
+	    Debug(this,DebugNote,
 		"Event(%s) raw udp content='%s' without RTP candidate [%p]",
 		event.actionName(),c->toString().c_str(),this);
 	    remove.append(c)->setDelete(false);
@@ -2272,7 +2272,7 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
 	}
 	JGRtpCandidate* rtcp = c->m_rtpRemoteCandidates.findByComponent(2);
 	if (rtcp && !checkRecvCandidate(*c,*rtcp)) {
-	    Debug(this,DebugInfo,
+	    Debug(this,DebugNote,
 		"Event(%s) content='%s' has invalid RTCP candidate [%p]",
 		event.actionName(),c->toString().c_str(),this);
 	    remove.append(c)->setDelete(false);
@@ -2303,7 +2303,7 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
 	    if (debugAt(DebugInfo)) {
 		String localCaps;
 		s_usedCodecs.createList(localCaps,false);
-		Debug(this,DebugInfo,
+		Debug(this,DebugNote,
 		    "Event(%s) no common media for content='%s' local='%s' remote='%s' [%p]",
 		    event.actionName(),c->toString().c_str(),localCaps.c_str(),
 		    remoteCaps.c_str(),this);
@@ -2324,7 +2324,7 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
 	    }
 	}
 	if (error) {
-	    Debug(this,DebugInfo,
+	    Debug(this,DebugNote,
 		"Event(%s) content=%s with invalid crypto [%p]",
 		event.actionName(),c->toString().c_str(),this);
 	    remove.append(c)->setDelete(false);
@@ -2716,7 +2716,7 @@ bool YJGConnection::changeFTHostDir()
 	return true;
     }
     if (m_ftHostDirection != FTHostNone)
-	Debug(this,DebugNote,"No more host available [%p]",this); 
+	Debug(this,DebugNote,"No more hosts available [%p]",this); 
     m_ftHostDirection = FTHostNone;
     return false;
 }
@@ -2883,7 +2883,7 @@ void YJGConnection::overrideJingleVersion(const NamedList& list, bool caps)
 	return;
     JGSession::Version v = JGSession::lookupVersion(*ver);
     if (v != JGSession::VersionUnknown && v != m_sessVersion) {
-	DDebug(this,DebugInfo,"Jingle version set to %s from %s",
+	Debug(this,DebugAll,"Jingle version set to %s from %s",
 	    ver->c_str(),caps ? "resource caps" : "routing");
 	m_sessVersion = v;
     }
@@ -2981,8 +2981,8 @@ void YJGTransfer::run()
 	conn->transferTerminated(!error,error);
 #ifdef DEBUG
     else
-	Debug(&plugin,DebugInfo,
-	    "%s thread transfer terminated trans=%s error=%s [%p]",
+	Debug(&plugin,DebugNote,
+	    "%s thread transfer terminated trans=%s error=%s (transferor not found) [%p]",
 	    name(),m_transferredID.c_str(),error.c_str(),this);
 #endif
     plugin.unlock();
@@ -3015,7 +3015,7 @@ bool YJGMessageHandler::received(Message& msg)
 	case UserNotify:
 	    return !plugin.isModule(msg) && plugin.handleUserNotify(msg);
 	default:
-	    Debug(&plugin,DebugStub,"YJGMessageHandler(%s) not handled!",msg.c_str());
+	    DDebug(&plugin,DebugStub,"YJGMessageHandler(%s) not handled!",msg.c_str());
     }
     return false;
 }
@@ -3354,7 +3354,7 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	bool ok = Engine::dispatch(m);
 	if (ok) {
 	    int n = m->getIntValue("instance.count");
-	    Debug(this,DebugAll,"Checking %d instances for call from %s to %s",
+	    DDebug(this,DebugAll,"Checking %d instances for call from %s to %s",
 		n,caller.c_str(),called.c_str());
 	    String prefix("instance.");
 	    for (int i = 1; i <= n; i++) {
@@ -3492,7 +3492,7 @@ bool YJGDriver::handleJabberIq(Message& msg)
 
     XmlElement* xml = XMPPUtils::getXml(msg,"xml",0);
     if (!xml) {
-	DDebug(this,DebugAll,"YJGDriver::handleJabberIq() no xml element");
+	DDebug(this,DebugAll,"handleJabberIq() no xml element");
 	return false;
     }
     JabberID from(msg.getValue("from"));

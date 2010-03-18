@@ -857,7 +857,7 @@ void YJBEngine::initialize(const NamedList* params, bool first)
 	}
     }
     else
-	Debug(this,DebugGoOn,"No domains configured");
+	Debug(this,DebugNote,"No domains configured");
 
     // Restricted resources
     String* res = params->getParam("restricted_resources");
@@ -915,7 +915,7 @@ void YJBEngine::processEvent(JBEvent* ev)
 {
     if (!(ev && ev->stream())) {
 	if (ev && !ev->stream())
-	    Debug(this,DebugStub,"Event (%p,'%s') without stream",ev,ev->name());
+	    DDebug(this,DebugStub,"Event (%p,'%s') without stream",ev,ev->name());
 	TelEngine::destruct(ev);
 	return;
     }
@@ -1152,8 +1152,8 @@ void YJBEngine::handleUserRoster(Message& msg)
     if (!to.node())
 	return;
     const char* contact = msg.getValue("contact");
-    Debug(this,DebugAll,"handleUserRoster(%s,%s) notify=%s",
-	to.c_str(),contact,what->c_str());
+    Debug(this,DebugAll,"Processing %s from=%s to=%s notify=%s",
+	msg.c_str(),to.c_str(),contact,what->c_str());
     XmlElement* item = 0;
     if (*what == "update")
 	item = buildRosterItem(msg,1);
@@ -1202,7 +1202,8 @@ bool YJBEngine::handleJabberIq(Message& msg)
 	to.resource(msg.getValue("to_instance"));
     if (!(from && to))
 	return false;
-    DDebug(this,DebugAll,"YJBEngine::handleJabberIq() from=%s to=%s",from.c_str(),to.c_str());
+    Debug(this,DebugAll,"Processing %s from=%s to=%s",
+	msg.c_str(),from.c_str(),to.c_str());
     JBStream* stream = 0;
     if (hasDomain(to.domain()) && !hasComponent(to.domain())) {
 	stream = findClientStream(true,to);
@@ -1360,7 +1361,8 @@ bool YJBEngine::handleMsgExecute(Message& msg)
     JabberID called(msg.getValue("called"));
     if (!caller.resource())
 	caller.resource(msg.getValue("caller_instance"));
-    DDebug(this,DebugAll,"handleMsgExecute() caller=%s called=%s",caller.c_str(),called.c_str());
+    Debug(this,DebugAll,"Processing %s caller=%s called=%s",
+	msg.c_str(),caller.c_str(),called.c_str());
     if (hasDomain(called.domain()) && !hasComponent(called.domain())) {
 	// RFC 3921 11.1: Broadcast chat only to clients with non-negative resource priority
 	bool ok = false;
@@ -1454,7 +1456,7 @@ bool YJBEngine::handleJabberItem(Message& msg)
 	return true;
     }
     if (dynamic && hasComponent(jid.domain())) {
-	Debug(this,DebugMild,
+	Debug(this,DebugNote,
 	    "Request to add server item '%s' while already having a component",
 	    jid.c_str());
 	return false;
@@ -1473,19 +1475,19 @@ bool YJBEngine::handleJabberItem(Message& msg)
 // The given event is always valid and carry a valid stream and xml element
 void YJBEngine::processPresenceStanza(JBEvent* ev)
 {
-    Debug(this,DebugAll,"Processing presence type=%s from=%s to=%s stream=%s",
-	ev->stanzaType().c_str(),ev->from().c_str(),ev->to().c_str(),
-	ev->stream()->typeName());
+    Debug(this,DebugAll,"Processing (%p,%s) type=%s from=%s to=%s stream=%s",
+	ev->element(),ev->element()->tag(),ev->stanzaType().c_str(),
+	ev->from().c_str(),ev->to().c_str(),ev->stream()->typeName());
     JBServerStream* s2s = ev->serverStream();
     JBClientStream* c2s = ev->clientStream();
     if (!(c2s || s2s)) {
-	Debug(this,DebugStub,
-	    "processPresenceStanza(%s) not implemented for stream type '%s'",
+	Debug(this,DebugNote,
+	    "processPresenceStanza(%s) not handled for stream type '%s'",
 	    ev->stanzaType().c_str(),lookup(ev->stream()->type(),JBStream::s_typeName));
 	return;
     }
     if (c2s && c2s->outgoing()) {
-	Debug(this,DebugStub,
+	DDebug(this,DebugStub,
 	    "processPresenceStanza(%s) not implemented for outgoing client streams",
 	    ev->stanzaType().c_str());
 	ev->sendStanzaError(XMPPError::ServiceUnavailable);
@@ -1615,7 +1617,7 @@ void YJBEngine::processStartIn(JBEvent* ev)
 	bool isItem = isServerItemDomain(ev->from().domain());
 	if (isItem || findServerStream(local,ev->from(),false)) {
 	    if (isItem)
-		Debug(this,DebugMild,"Component request for server item domain '%s'",
+		Debug(this,DebugNote,"Component request for server item domain '%s'",
 		    ev->from().domain().c_str());
 	    comp->terminate(-1,true,0,XMPPError::Conflict);
 	    return;
@@ -1856,7 +1858,7 @@ void YJBEngine::processBind(JBEvent* ev)
 // The given event is always valid and carry a valid stream
 void YJBEngine::processStreamEvent(JBEvent* ev)
 {
-    XDebug(this,DebugAll,"YJBEngine::processStreamEvent(%p,%s)",ev,ev->name());
+    XDebug(this,DebugAll,"processStreamEvent(%p,%s)",ev,ev->name());
     JBStream* s = ev->stream();
     bool in = s->incoming();
     bool reg = ev->type() == JBEvent::Running;
@@ -1931,7 +1933,7 @@ void YJBEngine::processDbResult(JBEvent* ev)
 	    return;
 	}
     }
-    Debug(this,DebugWarn,
+    Debug(this,DebugNote,
 	"Failed to authenticate dialback request from=%s to=%s id=%s key=%s",
 	ev->from().c_str(),ev->to().c_str(),id,ev->text().c_str());
     if (stream)
@@ -2605,7 +2607,7 @@ void JBPendingWorker::run()
 		    processIq(*job);
 		    break;
 		default:
-		    Debug(&__plugin,DebugStub,
+		    DDebug(&__plugin,DebugStub,
 			"JBPendingWorker unhandled xml tag '%s' [%p]",
 			job->m_event->element()->tag(),this);
 	    }
@@ -2710,8 +2712,10 @@ bool JBPendingWorker::add(JBEvent* ev)
 void JBPendingWorker::processChat(JBPendingJob& job)
 {
     JBEvent* ev = job.m_event;
-    XDebug(&__plugin,DebugAll,"JBPendingWorker(%u) processChat xml=%p from=%s to=%s [%p]",
-	m_index,ev->element(),ev->from().c_str(),ev->to().c_str(),this);
+    Debug(&__plugin,DebugAll,
+	"JBPendingWorker(%u) processing (%p,%s) from=%s to=%s [%p]",
+	m_index,ev->element(),ev->element()->tag(),ev->from().c_str(),
+	ev->to().c_str(),this);
     int mType = XMPPUtils::msgType(ev->stanzaType());
     if (!ev->to()) {
 	if (mType != XMPPUtils::MsgError)
@@ -2844,12 +2848,11 @@ void JBPendingWorker::processIq(JBPendingJob& job)
 	if (xmlns)
 	    ns = XMPPUtils::s_ns[*xmlns];
     }
-    XDebug(&__plugin,DebugAll,
-	"JBPendingWorker(%u) processing iq type=%s from=%s to=%s child=%s xmlns=%s stream=%s [%p]",
-	m_index,ev->stanzaType().c_str(),ev->from().c_str(),ev->to().c_str(),
-	service ? service->tag() : "",TelEngine::c_safe(xmlns),
-	lookup(job.m_streamType,JBStream::s_typeName),this);
-
+    Debug(&__plugin,DebugAll,
+	"JBPendingWorker(%u) processing (%p,%s) type=%s from=%s to=%s child=(%s,%s) stream=%s [%p]",
+	m_index,ev->element(),ev->element()->tag(),ev->stanzaType().c_str(),
+	ev->from().c_str(),ev->to().c_str(),service ? service->tag() : "",
+	TelEngine::c_safe(xmlns),lookup(job.m_streamType,JBStream::s_typeName),this);
     // Server entity caps responses
     if (ns == XMPPNamespace::DiscoInfo &&
 	(t == XMPPUtils::IqResult || t == XMPPUtils::IqError) &&
@@ -3143,7 +3146,7 @@ bool JBMessageHandler::received(Message& msg)
 	case JabberItem:
 	    return s_jabber->handleJabberItem(msg);
 	default:
-	    Debug(&__plugin,DebugStub,"JBMessageHandler(%s) not handled!",msg.c_str());
+	    DDebug(&__plugin,DebugStub,"JBMessageHandler(%s) not handled!",msg.c_str());
     }
     return false;
 }
@@ -3183,8 +3186,8 @@ private:
 void TcpListener::run()
 {
     __plugin.listener(this,true);
-    DDebug(&__plugin,DebugAll,
-	"TcpListener(%s) '%s:%d' type='%s' context=%s start running [%p]",
+    Debug(&__plugin,DebugInfo,
+	"Listener(%s) '%s:%d' type='%s' context=%s start running [%p]",
 	c_str(),m_address.safe(),m_port,lookup(m_type,JBStream::s_typeName),
 	m_sslContext.c_str(),this);
     // Create the socket
@@ -3241,7 +3244,7 @@ void TcpListener::run()
 	Thread::idle();
     }
     terminateSocket();
-    DDebug(&__plugin,DebugAll,"Listener(%s) '%s:%d' terminated [%p]",c_str(),
+    Debug(&__plugin,DebugInfo,"Listener(%s) '%s:%d' terminated [%p]",c_str(),
 	m_address.safe(),m_port,this);
     __plugin.listener(this,false);
 }
@@ -3658,7 +3661,7 @@ bool JBModule::buildListener(const String& name, NamedList& p)
     const char* stype = p.getValue("type");
     JBStream::Type t = JBStream::lookupType(stype);
     if (t == JBStream::TypeCount) {
-	Debug(this,DebugWarn,"Can't build listener='%s' with invalid type='%s'",
+	Debug(this,DebugNote,"Can't build listener='%s' with invalid type='%s'",
 	    name.c_str(),stype);
 	return false;
     }
@@ -3675,7 +3678,7 @@ bool JBModule::buildListener(const String& name, NamedList& p)
 	    port = XMPP_C2S_PORT;
     }
     if (!port) {
-	Debug(this,DebugWarn,"Can't build listener='%s' with invalid port='%s'",
+	Debug(this,DebugNote,"Can't build listener='%s' with invalid port='%s'",
 	    name.c_str(),c_safe(sport));
 	return false;
     }
@@ -3688,7 +3691,7 @@ bool JBModule::buildListener(const String& name, NamedList& p)
 	l = new TcpListener(name,s_jabber,context,addr,port,backlog);
     if (l->startup())
 	return true;
-    Debug(this,DebugWarn,"Failed to start listener='%s' type='%s' addr='%s' port=%d",
+    Debug(this,DebugNote,"Failed to start listener='%s' type='%s' addr='%s' port=%d",
 	name.c_str(),stype,p.getValue("address"),port);
     TelEngine::destruct(l);
     return false;
@@ -3707,7 +3710,7 @@ void JBModule::listener(TcpListener* l, bool add)
 	m_streamListeners.append(l)->setDelete(false);
     else
 	found->remove(false);
-    Debug(this,DebugAll,"%s listener (%p,'%s')",add ? "Added" : "Removed",
+    DDebug(this,DebugAll,"%s listener (%p,'%s')",add ? "Added" : "Removed",
 	l,l->toString().c_str());
 }
 

@@ -638,7 +638,7 @@ XMPPFeature* XMPPFeature::fromStreamFeature(XmlElement& xml)
 	    if (m)
 		mech |= m;
 	    else
-		Debug(DebugStub,"XMPPFeature::fromStreamFeature() Unhandled mechanism '%s'",
+		DDebug(DebugStub,"XMPPFeature::fromStreamFeature() Unhandled mechanism '%s'",
 		    n.c_str());
 	}
 	f = new XMPPFeatureSasl(mech,required);
@@ -1182,7 +1182,7 @@ unsigned int XMPPUtils::decodeDateTimeSec(const String& time, unsigned int* frac
 		"XMPPUtils::decodeDateTimeSec() decoded year=%d month=%u day=%u from '%s'",
 		year,month,day,time.c_str());
 	else {
-	    DDebug(DebugNote,
+	    Debug(DebugNote,
 		"XMPPUtils::decodeDateTimeSec() incorrect date=%s in '%s'",
 		date.c_str(),time.c_str());
 	    break;
@@ -1206,7 +1206,7 @@ unsigned int XMPPUtils::decodeDateTimeSec(const String& time, unsigned int* frac
 	}
 	TelEngine::destruct(list);
 	if (!valid) {
-	    DDebug(DebugNote,
+	    Debug(DebugNote,
 		"XMPPUtils::decodeDateTimeSec() incorrect time=%s in '%s'",
 		t.c_str(),time.c_str());
 	    break;
@@ -1238,7 +1238,7 @@ unsigned int XMPPUtils::decodeDateTimeSec(const String& time, unsigned int* frac
 			"XMPPUtils::decodeDateTimeSec() decoded fractions=%u from '%s'",
 			timeFractions,time.c_str());
 		else {
-		    DDebug(DebugNote,
+		    Debug(DebugNote,
 			"XMPPUtils::decodeDateTimeSec() incorrect fractions=%s in '%s'",
 			fr.c_str(),time.c_str());
 		    break;
@@ -1258,7 +1258,7 @@ unsigned int XMPPUtils::decodeDateTimeSec(const String& time, unsigned int* frac
 		String offs(buf,5);
 		// We should have at least 5 bytes: hh:ss
 		if (len < 5 || buf[2] != ':') {
-		    DDebug(DebugNote,
+		    Debug(DebugNote,
 			"XMPPUtils::decodeDateTimeSec() incorrect time offset=%s in '%s'",
 			offs.c_str(),time.c_str());
 		    break;
@@ -1267,7 +1267,7 @@ unsigned int XMPPUtils::decodeDateTimeSec(const String& time, unsigned int* frac
 		unsigned int mmOffs = (unsigned int)offs.substr(3,2).toInteger(-1,10);
 		// XML Schema Part 2 3.2.7.3: the hour may be 0..13. It can be 14 if minute is 0
 		if (mmOffs > 59 || (hhOffs > 13 && !mmOffs)) {
-		    DDebug(DebugNote,
+		    Debug(DebugNote,
 			"XMPPUtils::decodeDateTimeSec() incorrect time offset values hour=%u minute=%u in '%s'",
 			hhOffs,mmOffs,time.c_str());
 		    break;
@@ -1288,12 +1288,9 @@ unsigned int XMPPUtils::decodeDateTimeSec(const String& time, unsigned int* frac
 	    break;
 	}
 	ret = Time::toEpoch(year,month,day,hh,mm,ss,offsetSec);
-#ifdef DEBUG
 	if (ret == (unsigned int)-1)
-	    Debug(DebugNote,
-		"XMPPUtils::decodeDateTimeSec() failed to convert '%s'",
+	    Debug(DebugNote,"XMPPUtils::decodeDateTimeSec() failed to convert '%s'",
 		time.c_str());
-#endif
 	break;
     }
 
@@ -1322,7 +1319,7 @@ void XMPPUtils::print(String& xmlStr, XmlChild& xml, bool verbose)
 	xml.xmlDeclaration()->toString(xmlStr,false);
     }
     else
-	Debug(DebugStub,"XMPPUtils::print() not implemented for this type!");
+	DDebug(DebugStub,"XMPPUtils::print() not implemented for this type!");
 }
 
 // Put an element's name, text and attributes to a list of parameters

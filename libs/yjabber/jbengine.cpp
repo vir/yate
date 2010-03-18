@@ -818,7 +818,7 @@ bool JBEngine::acceptConn(Socket* sock, SocketAddr& remote, JBStream::Type t, bo
 	return false;
     }
     if (ssl && t != JBStream::c2s) {
-	Debug(this,DebugStub,"SSL connection on non c2s stream");
+	Debug(this,DebugNote,"SSL connection on non c2s stream");
 	return false;
     }
     JBStream* s = 0;
@@ -1324,7 +1324,7 @@ void JBServerEngine::addStream(JBStream* stream)
 	process->add(stream);
     }
     else
-	Debug(this,DebugStub,"JBServerEngine::addStream() type='%s' not handled!",
+	DDebug(this,DebugStub,"JBServerEngine::addStream() type='%s' not handled!",
 	    stream->typeName());
     recv = 0;
     process = 0;
@@ -1461,7 +1461,7 @@ void JBClientEngine::addStream(JBStream* stream)
 	process->add(stream);
     }
     else
-	Debug(this,DebugStub,"JBClientEngine::addStream() type='%s' not handled!",
+	DDebug(this,DebugStub,"JBClientEngine::addStream() type='%s' not handled!",
 	    stream->typeName());
     recv = 0;
     process = 0;

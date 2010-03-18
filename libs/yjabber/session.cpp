@@ -158,7 +158,7 @@ const TokenDict JGSession::s_actions1[] = {
 static void unhandledAction(JGSession* sess, XmlElement*& xml, int act,
     XmlElement* ch = 0)
 {
-    Debug(sess->engine(),DebugStub,
+    Debug(sess->engine(),DebugNote,
 	"Call(%s). Unhandled action '%s' child=(%p,%s,%s) [%p]",
 	sess->sid().c_str(),JGSession::lookupAction(act,sess->version()),
 	ch,ch ? ch->tag() : 0,ch ? TelEngine::c_safe(ch->xmlns()) : 0,sess);
@@ -2108,7 +2108,7 @@ JGEvent* JGSession1::decodeJingle(XmlElement*& xml, XmlElement* child)
 	    continue;
 	}
 	if (err == XMPPError::NoError) {
-	    DDebug(m_engine,DebugAll,
+	    Debug(m_engine,DebugInfo,
 		"Call(%s). Ignoring content='%s' in '%s' stanza [%p]",
 		m_sid.c_str(),c->attribute("name"),event->actionName(),this);
 	    continue;

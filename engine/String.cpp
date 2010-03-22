@@ -558,13 +558,14 @@ String& String::operator+=(const char* value)
 	value = 0;
     if (value) {
 	if (m_string) {
-	    int len = ::strlen(value)+length();
+	    int olen = length();
+	    int len = ::strlen(value)+olen;
 	    char *tmp1 = m_string;
 	    char *tmp2 = (char *) ::malloc(len+1);
 	    if (tmp2) {
-		::strncpy(tmp2,m_string,len);
-		tmp2[len] = 0;
-		::strncat(tmp2,value,len);
+		::strncpy(tmp2,m_string,olen);
+		tmp2[olen] = 0;
+		::strncat(tmp2,value,len-olen);
 		tmp2[len] = 0;
 		m_string = tmp2;
 		::free(tmp1);

@@ -966,10 +966,11 @@ AC_ARG_WITH(libqt4,AC_HELP_STRING([--with-libqt4],[use Qt for graphical clients 
 if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
     AC_MSG_CHECKING([for Qt4 >= 4.2.0 using pkg-config])
     pkgd="/usr/lib/qt4/$ARCHLIB/pkgconfig"
-    if [[ -d "$pkgd" ]]; then
-	export PKG_CONFIG_LIBDIR="$pkgd"
-    fi
     verqt=`pkg-config --modversion QtCore 2>/dev/null`
+    if [[ -z "$verqt" -a -d "$pkgd" ]]; then
+	export PKG_CONFIG_LIBDIR="$pkgd"
+	verqt=`pkg-config --modversion QtCore 2>/dev/null`
+    fi
     incqt=`pkg-config --cflags QtNetwork QtGui QtXml QtCore 2>/dev/null | sed 's/QtNetwork/QtUiTools/'`
     libqt=`pkg-config --libs QtNetwork QtGui QtXml QtCore 2>/dev/null | sed 's/QtNetwork/QtUiTools/'`
     unset PKG_CONFIG_LIBDIR

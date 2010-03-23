@@ -381,7 +381,7 @@ static void qtMsgHandler(QtMsgType type, const char* text)
 	    dbg = DebugFail;
 	    break;
     }
-    Debug("QT",dbg,text);
+    Debug("QT",dbg,"%s",text);
 }
 
 // Build a list of parameters from a string

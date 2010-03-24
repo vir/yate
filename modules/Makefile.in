@@ -10,6 +10,10 @@ DEBUG :=
 CC  := @CC@ -Wall
 CXX := @CXX@ -Wall
 MOC := @QT4_MOC@
+QT4_INC := @QT4_INC@
+QT4_LIB := @QT4_LIB@
+QT4_INC_NET := @QT4_INC_NET@
+QT4_LIB_NET := @QT4_LIB_NET@
 SED := sed
 DEFS :=
 INCLUDES := -I.. -I@top_srcdir@
@@ -214,10 +218,10 @@ client/%.yate: @srcdir@/client/%.cpp $(MKDEPS) $(INCFILES)
 	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS) $(YATELIBS)
 
 qt4/%.yate: @srcdir@/qt4/%.cpp $(MKDEPS) $(INCFILES)
-	$(MODCOMP) -o $@ $(LOCALFLAGS) @QT4_INC@ -I@top_srcdir@/clients/qt4 $< $(LOCALLIBS) @QT4_LIB@ $(YATELIBS)
+	$(MODCOMP) -o $@ $(LOCALFLAGS) $(QT4_INC) -I@top_srcdir@/clients/qt4 $< $(LOCALLIBS) $(QT4_LIB) $(YATELIBS)
 
 qt4/%.moc: @srcdir@/qt4/%.h $(MKDEPS) $(INCFILES)
-	mkdir -p qt4 && $(MOC) $(DEFS) $(INCLUDES) @QT4_INC@ -I@top_srcdir@/clients/qt4 -I@srcdir@/qt4 -o $@ $<
+	mkdir -p qt4 && $(MOC) $(DEFS) $(INCLUDES) $(QT4_INC) -I@top_srcdir@/clients/qt4 -I@srcdir@/qt4 -o $@ $<
 
 %.yate: @srcdir@/%.cpp $(MKDEPS) $(INCFILES)
 	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS) $(YATELIBS)
@@ -301,8 +305,8 @@ rmanager.yate: LOCALFLAGS = $(COREDUMP_INC)
 rmanager.yate: LOCALLIBS = $(COREDUMP_LIB)
 
 qt4/updater.yate: qt4/updater.moc
-qt4/updater.yate: LOCALFLAGS = @QT4_INC_NET@
-qt4/updater.yate: LOCALLIBS = @QT4_LIB_NET@
+qt4/updater.yate: LOCALFLAGS = $(QT4_INC_NET)
+qt4/updater.yate: LOCALLIBS = $(QT4_LIB_NET)
 
 ../libyatesig.so ../libs/ysig/libyatesig.a:
 	$(MAKE) -C ../libs/ysig

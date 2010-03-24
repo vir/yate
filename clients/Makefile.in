@@ -10,6 +10,11 @@ DEBUG :=
 CXX := @CXX@ -Wall
 SED := sed
 DEFS :=
+MOC := @QT4_MOC@
+QT4_INC := @QT4_INC@
+QT4_LIB := @QT4_LIB@
+QT4_INC_NET := @QT4_INC_NET@
+QT4_LIB_NET := @QT4_LIB_NET@
 LIBTHR:= @THREAD_LIB@
 INCLUDES := -I.. -I@top_srcdir@
 CFLAGS := @CFLAGS@ @MODULE_CPPFLAGS@ @INLINE_FLAGS@
@@ -41,6 +46,10 @@ LOCALFLAGS =
 LOCALLIBS =
 COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
 LINK = $(CXX) $(LDFLAGS)
+
+ifneq (x@QT4_VER@,x)
+DEFS := $(DEFS) -DQT4_VER=@QT4_VER@
+endif
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
@@ -119,6 +128,12 @@ uninstall: do-uninstall
 %.o: @srcdir@/%.cpp $(MKDEPS) $(INCFILES)
 	$(COMPILE) -c $<
 
+%.moc.o: %.moc $(INCFILES)
+	$(COMPILE) $(QT4_INC) -o $@ -c -x c++ $<
+
+%.moc: @srcdir@/%.h
+	$(MOC) $(DEFS) $(INCLUDES) $(QT4_INC) -o $@ $<
+
 do-all do-strip do-clean do-install do-uninstall:
 	$(if $(SUBDIRS),\
 	@target=`echo $@ | $(SED) -e 's/^do-//'`; \
@@ -133,12 +148,11 @@ Makefile: @srcdir@/Makefile.in $(MKDEPS)
 	cd .. && ./config.status
 
 yate-%: @srcdir@/main-%.cpp $(MKDEPS) ../libyate.so $(INCFILES)
-	$(COMPILE) -o $@ $(LOCALFLAGS) $< $(LIBTHR) $(LDFLAGS) $(LOCALLIBS) $(YATELIBS)
+	$(COMPILE) -o $@ $(LOCALFLAGS) $< $(LDFLAGS) $(LIBTHR) $(LOCALLIBS) $(YATELIBS)
 
 yate-qt4: $(QTCLIENT)
-yate-qt4: LDFLAGS := $(QTCLIENT) $(LDFLAGS)
-yate-qt4: LOCALFLAGS = @QT4_INC@
-yate-qt4: LOCALLIBS = @QT4_LIB@
+yate-qt4: LOCALFLAGS = $(QT4_INC)
+yate-qt4: LOCALLIBS = $(QTCLIENT) $(QT4_LIB)
 
 $(QTCLIENT):
 	$(MAKE) -C qt4

@@ -7,9 +7,13 @@ DEBUG :=
 CXX := @CXX@ -Wall
 AR  := ar
 MOC := @QT4_MOC@
+QT4_INC := @QT4_INC@
+QT4_LIB := @QT4_LIB@
+QT4_INC_NET := @QT4_INC_NET@
+QT4_LIB_NET := @QT4_LIB_NET@
 DEFS:=
 
-INCLUDES:=-I. -I@srcdir@ -I@top_srcdir@ @QT4_INC@
+INCLUDES:=-I. -I@srcdir@ -I@top_srcdir@ $(QT4_INC)
 CXXFLAGS:=$(CXXFLAGS) @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= @LDFLAGS@
 YATELIBS := -L../.. -lyate @LIBS@

@@ -8,7 +8,8 @@ AR  := ar
 DEFS :=
 INCLUDES := -I@top_srcdir@ -I../.. -I@srcdir@/../yxml -I@srcdir@
 CFLAGS := @CFLAGS@ @MODULE_CPPFLAGS@ @INLINE_FLAGS@
-LDFLAGS:= @LDFLAGS@ -L../.. -lyate
+LDFLAGS:= @LDFLAGS@
+YATELIBS := -L../.. -lyate @LIBS@
 INCFILES := @top_srcdir@/yateclass.h @srcdir@/../yxml/yatexml.h @srcdir@/xmpputils.h @srcdir@/yatejabber.h @srcdir@/yatejingle.h
 
 PROGS=
@@ -57,7 +58,7 @@ Makefile: @srcdir@/Makefile.in ../../config.status
 	cd ../.. && ./config.status
 
 ../../$(LIBD_VER): $(OBJS) $(YXML)
-	$(LINK) -shared -o $@ -Wl,--soname=$(LIBD_VER) $^ @LIBS@ @RESOLV_LIB@
+	$(LINK) -shared -o $@ -Wl,--soname=$(LIBD_VER) $^ $(YATELIBS) @RESOLV_LIB@
 
 ../../$(LIBD_DEV): ../../$(LIBD_VER)
 	cd ../.. && ln -sf $(LIBD_VER) $(LIBD_DEV)

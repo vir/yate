@@ -315,7 +315,7 @@ config.status: @srcdir@/configure
 Makefile: @srcdir@/Makefile.in $(MKDEPS)
 	./config.status
 
-yate: libyate.so $(OBJS) $(LIBS)
+yate: $(OBJS) $(LIBS) libyate.so
 	$(LINK) -o $@ $(LIBTHR) $^ @LIBS@
 
 libyate.so: $(YLIB)

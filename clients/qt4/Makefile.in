@@ -11,7 +11,8 @@ DEFS:=
 
 INCLUDES:=-I. -I@srcdir@ -I@top_srcdir@ @QT4_INC@
 CXXFLAGS:=$(CXXFLAGS) @MODULE_CPPFLAGS@ @INLINE_FLAGS@
-LDFLAGS:= @LDFLAGS@ -L../.. -lyate
+LDFLAGS:= @LDFLAGS@
+YATELIBS := -L../.. -lyate @LIBS@
 INCFILES := @top_srcdir@/yateclass.h @top_srcdir@/yatecbase.h @srcdir@/qt4client.h
 
 PROJECT = libqt4client.a

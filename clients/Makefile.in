@@ -13,7 +13,8 @@ DEFS :=
 LIBTHR:= @THREAD_LIB@
 INCLUDES := -I.. -I@top_srcdir@
 CFLAGS := @CFLAGS@ @MODULE_CPPFLAGS@ @INLINE_FLAGS@
-LDFLAGS:= @LDFLAGS@ -L.. -lyate
+LDFLAGS:= @LDFLAGS@
+YATELIBS := -L.. -lyate @LIBS@
 INCFILES := @top_srcdir@/yatengine.h @top_srcdir@/yatephone.h ../yateversn.h
 
 MKDEPS  := ../config.status
@@ -132,7 +133,7 @@ Makefile: @srcdir@/Makefile.in $(MKDEPS)
 	cd .. && ./config.status
 
 yate-%: @srcdir@/main-%.cpp $(MKDEPS) ../libyate.so $(INCFILES)
-	$(COMPILE) -o $@ $(LOCALFLAGS) $< $(LIBTHR) $(LDFLAGS) $(LOCALLIBS) @LIBS@
+	$(COMPILE) -o $@ $(LOCALFLAGS) $< $(LIBTHR) $(LDFLAGS) $(LOCALLIBS) $(YATELIBS)
 
 yate-qt4: $(QTCLIENT)
 yate-qt4: LDFLAGS := $(QTCLIENT) $(LDFLAGS)

@@ -115,4 +115,4 @@ Makefile: @srcdir@/Makefile.in $(MKDEPS)
 	cd .. && ./config.status
 
 ../$(YLIB): $(LIBOBJS) $(LIBS)
-	$(LINK) -shared -o $@ -Wl,--soname=$(YLIB) $(LIBTHR) $^ $(LIBAUX)
+	$(LINK) -shared -o $@ -Wl,--soname=$(YLIB) $^ $(LIBTHR) $(LIBAUX)

@@ -8,7 +8,8 @@ AR  := ar
 DEFS :=
 INCLUDES := -I@top_srcdir@ -I../.. -I@srcdir@
 CFLAGS := @CFLAGS@ @MODULE_CPPFLAGS@ @INLINE_FLAGS@
-LDFLAGS:= @LDFLAGS@ -L../.. -lyate
+LDFLAGS:= @LDFLAGS@
+YATELIBS := -L../.. -lyate @LIBS@
 INCFILES := @top_srcdir@/yateclass.h @srcdir@/yatemgcp.h
 
 PROGS=
@@ -56,7 +57,7 @@ Makefile: @srcdir@/Makefile.in ../../config.status
 	cd ../.. && ./config.status
 
 ../../$(LIBD_VER): $(OBJS)
-	$(LINK) -shared -o $@ -Wl,--soname=$(LIBD_VER) $^ @LIBS@
+	$(LINK) -shared -o $@ -Wl,--soname=$(LIBD_VER) $^ $(YATELIBS)
 
 ../../$(LIBD_DEV): ../../$(LIBD_VER)
 	cd ../.. && ln -sf $(LIBD_VER) $(LIBD_DEV)

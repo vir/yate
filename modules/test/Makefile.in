@@ -6,7 +6,8 @@ SED := sed
 DEFS :=
 INCLUDES := -I@top_srcdir@
 CFLAGS := -O0 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
-LDFLAGS:= @LDFLAGS@ -L../.. -lyate
+LDFLAGS:= @LDFLAGS@
+YATELIBS:= -L../.. -lyate @LIBS@
 MODFLAGS:= @MODULE_LDFLAGS@
 MODSTRIP:= @MODULE_SYMBOLS@
 
@@ -49,4 +50,4 @@ lib%.so: %.o
 	$(LINK) -shared -o $@ $^
 
 %.yate: @srcdir@/%.cpp $(MKDEPS) $(INCFILES)
-	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS)
+	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS) $(YATELIBS)

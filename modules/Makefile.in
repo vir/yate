@@ -55,7 +55,7 @@ PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 	client/jabberclient.yate \
 	callgen.yate analyzer.yate rmanager.yate msgsniff.yate
 LIBS :=
-DIRS := client server
+DIRS := client server jabber qt4
 
 ifneq (@HAVE_PGSQL@,no)
 PROGS := $(PROGS) server/pgsqldb.yate

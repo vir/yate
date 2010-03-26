@@ -682,6 +682,8 @@ bool ExpEvaluator::runEvaluate(ObjList& stack)
 
 int ExpEvaluator::compile(const char* expr)
 {
+    if (!skipWhites(expr))
+	return 0;
     int res = 0;
     do {
 	if (!runCompile(expr))

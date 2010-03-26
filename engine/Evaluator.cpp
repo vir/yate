@@ -90,12 +90,12 @@ bool ExpExtender::runField(ExpEvaluator* eval, ObjList& stack, const ExpOperatio
 
 
 ExpEvaluator::ExpEvaluator(const TokenDict* operators)
-    : m_operators(operators)
+    : m_operators(operators), m_extender(0)
 {
 }
 
 ExpEvaluator::ExpEvaluator(ExpEvaluator::Parser style)
-    : m_operators(0)
+    : m_operators(0), m_extender(0)
 {
     switch (style) {
 	case C:
@@ -108,7 +108,7 @@ ExpEvaluator::ExpEvaluator(ExpEvaluator::Parser style)
 }
 
 ExpEvaluator::ExpEvaluator(const ExpEvaluator& original)
-    : m_operators(original.m_operators)
+    : m_operators(original.m_operators), m_extender(0)
 {
     extender(original.extender());
     for (ObjList* l = original.m_opcodes.skipNull(); l; l = l->skipNext()) {

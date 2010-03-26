@@ -726,10 +726,8 @@ String& String::append(double value, unsigned int decimals)
 {
     if (decimals > 12)
 	decimals = 12;
-    char fmt[8];
-    ::sprintf(fmt,"%%0.%uf",decimals);
     char buf[80];
-    ::sprintf(buf,fmt,value);
+    ::sprintf(buf,"%0.*f",decimals,value);
     return operator+=(buf);
 }
 

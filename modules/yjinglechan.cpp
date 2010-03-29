@@ -3054,6 +3054,9 @@ void YJGDriver::initialize()
     if (!sect)
 	sect = &dummy;
 
+    // Update now the server mode flag
+    s_serverMode = sect->getBoolValue("servermode",!Engine::clientMode());
+
     if (!m_init) {
 	m_init = true;
 

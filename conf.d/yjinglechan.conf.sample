@@ -3,6 +3,11 @@
 [general]
 ; Global settings of Jingle channel
 
+; servermode: boolean: Server/client mode
+; This parameter can be used to override yate running mode
+; Defaults to true if yate is running in non client mode, false otherwise
+;servermode=
+
 ; domains: string: Comma separated list of domains serviced by the jingle channel
 ; The parameter is not used in client mode
 ; When running in non client mode any domain should be a jabber server (sub)domain

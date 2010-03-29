@@ -1314,8 +1314,10 @@ bool YJGConnection::handleEvent(JGEvent* event)
 	Debug(this,DebugInfo,
 	    "Session terminated with reason='%s' text='%s' [%p]",
 	    reason,event->text().c_str(),this);
-	int jingleReason = lookup(reason,JGSession::s_reasons,JGSession::ReasonGeneral);
-	setReason(lookup(jingleReason,s_errMap,reason));
+	if (!TelEngine::null(reason)) {
+	    int jingleReason = lookup(reason,JGSession::s_reasons,JGSession::ReasonGeneral);
+	    setReason(lookup(jingleReason,s_errMap,reason));
+	}
 	return false;
     }
 

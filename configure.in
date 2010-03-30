@@ -20,14 +20,6 @@ AC_SUBST(PACKAGE_RELEASE)
 AC_SUBST(PACKAGE_STATUS)
 AC_SUBST(PACKAGE_REVISION)
 
-# sed expression to convert version into something comparable lexicographically
-csed='sed'
-vsed='s/\(^\|\.\)\([[0-9]]\)\($\|\.\)/\10\2\3/g'
-if [[ -n `echo a | sed 's/a\|b//'` ]]; then
-    csed='sed -E'
-    vsed='s/(^|\.)([[0-9]])($|\.)/\10\2\3/g'
-fi
-
 # We may need the host OS type but avoid the overhead of AC_CANONICAL_SYSTEM
 AC_MSG_CHECKING([for local operating system type])
 uname_os=`uname -s`
@@ -62,6 +54,16 @@ AC_SUBST(ARCHLIB)
 AC_PROG_CXX
 AC_PROG_CC
 AC_PROG_AWK
+
+AC_MSG_CHECKING([for sed command to use])
+# sed expression to convert version into something comparable lexicographically
+csed='sed'
+vsed='s/\(^\|\.\)\([[0-9]]\)\($\|\.\)/\10\2\3/g'
+if [[ -n "`echo a | sed 's/a\|b//'`" ]]; then
+    csed='sed -E'
+    vsed='s/(^|\.)([[0-9]])($|\.)/\10\2\3/g'
+fi
+AC_MSG_RESULT([$csed])
 
 # Check if gcc style printf argument check is supported
 HAVE_GCC_FORMAT_CHECK=""

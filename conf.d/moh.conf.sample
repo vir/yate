@@ -1,9 +1,9 @@
 [mohs]
-;List of pipelines that will be used as sources of music (on hold). 
-;Each pipeline should write to stdout in 16bit signed linear 
-;at rate 8000/s.
-;From outside (e.g. routing modules) mohs are addressed 
-;as moh/default, moh/noise etc.
+; List of pipelines that will be used as sources of music (on hold).
+; Each pipeline should write to stdout in 16bit signed linear
+;  at default rate 8000/s or as specificed in the "rate" parameter.
+; From outside (e.g. routing modules) mohs are addressed 
+;  as moh/default, moh/noise etc.
 
 ; use mpg123 to play a bunch of mp3 files (shuffled)
 default=while true; do mpg123 -q -m -r 8000 -s -Z sounds/*.mp3; done
@@ -14,3 +14,6 @@ noise=cat /dev/urandom
 ; a relatively new madplay (>=0.15) is the best choice - low CPU usage,
 ;  built-in resampling, plays multiple files (shuffled)
 madplay=while true; do madplay -q --no-tty-control -m -R 8000 -o raw:- -z sounds/*.mp3; done
+
+; same madplay but with wideband support
+wideband=while true; do madplay -q --no-tty-control -m -R ${rate$8000} -o raw:- -z sounds/*.mp3; done

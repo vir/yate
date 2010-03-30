@@ -154,7 +154,7 @@ public:
     ConfConsumer(ConfRoom* room, bool smart = false)
 	: m_room(room), m_src(0), m_muted(false), m_smart(smart),
 	  m_energy2(ENERGY_MIN), m_noise2(ENERGY_MIN)
-	{ DDebug(DebugAll,"ConfConsumer::ConfConsumer(%p,%s) [%p]",room,String::boolText(smart),this); }
+	{ DDebug(DebugAll,"ConfConsumer::ConfConsumer(%p,%s) [%p]",room,String::boolText(smart),this); m_format = room->getFormat(); }
     ~ConfConsumer()
 	{ DDebug(DebugAll,"ConfConsumer::~ConfConsumer() [%p]",this); }
     virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags);
@@ -268,6 +268,8 @@ ConfRoom::ConfRoom(const String& name, const NamedList& params)
     m_maxusers = params.getIntValue("maxusers",m_maxusers);
     m_notify = params.getValue("notify");
     m_lonely = params.getBoolValue("lonely");
+    if (m_rate != 8000)
+	m_format << "/" << m_rate;
     s_rooms.append(this);
     // possibly create outgoing call to room record utility channel
     setRecording(params);
@@ -394,6 +396,7 @@ void ConfRoom::msgStatus(Message& msg)
     msg.retValue() << ",room=" << m_name;
     msg.retValue() << ",maxusers=" << m_maxusers;
     msg.retValue() << ",lonely=" << m_lonely;
+    msg.retValue() << ",rate=" << m_rate;
     msg.retValue() << ",users=" << m_users;
     msg.retValue() << ",chans=" << m_chans.count();
     if (m_notify)
@@ -661,8 +664,10 @@ unsigned int ConfConsumer::noise() const
 ConfSource::ConfSource(ConfConsumer* cons)
     : m_cons(cons)
 {
-    if (m_cons)
+    if (m_cons) {
+	m_format = m_cons->getFormat();
 	m_cons->m_src = this;
+    }
 }
 
 ConfSource::~ConfSource()

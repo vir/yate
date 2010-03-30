@@ -62,7 +62,7 @@ public:
 	{ return m_name; }
     static MOHSource* getSource(String& name, const NamedList& params);
 private:
-    MOHSource(const String &name, const String &command_line);
+    MOHSource(const String &name, const String &command_line, unsigned int rate = 8000);
     String m_name;
     String m_command_line;
     bool create();
@@ -121,11 +121,13 @@ private:
 };
 
 
-MOHSource::MOHSource(const String &name, const String &command_line)
+MOHSource::MOHSource(const String &name, const String &command_line, unsigned int rate)
     : ThreadedSource("slin"),
-      m_name(name), m_command_line(command_line), m_swap(false), m_brate(16000)
+      m_name(name), m_command_line(command_line), m_swap(false), m_brate(2*rate)
 {
-    Debug(DebugAll,"MOHSource::MOHSource(\"%s\", \"%s\") [%p]", name.c_str(), command_line.c_str(), this);
+    Debug(DebugAll,"MOHSource::MOHSource('%s','%s',%u) [%p]",name.c_str(),command_line.c_str(),rate,this);
+    if (rate != 8000)
+	m_format << "/" << rate;
 }
 
 MOHSource::~MOHSource()
@@ -152,6 +154,10 @@ void MOHSource::destroyed()
 MOHSource* MOHSource::getSource(String& name, const NamedList& params)
 {
     String cmd = s_cfg.getValue("mohs", name);
+    unsigned int rate = 8000;
+    // honor the rate only if the command knows about it
+    if ((cmd.find("${rate}") >= 0) || (cmd.find("${rate$") >= 0))
+	rate = params.getIntValue("rate",8000);
     if (params.replaceParams(cmd) > 0) {
 	// command is parametrized, suffix name to account for it
 	name << "-" << cmd.hash();
@@ -166,7 +172,7 @@ MOHSource* MOHSource::getSource(String& name, const NamedList& params)
 	}
     }
     if (cmd) {
-	MOHSource *s = new MOHSource(name,cmd);
+	MOHSource *s = new MOHSource(name,cmd,rate);
 	if (s->start("MOH Source")) {
 	    sources.append(s);
 	    return s;

@@ -77,7 +77,7 @@ private:
 class AlsaDevice : public RefObject
 {
 public:
-    AlsaDevice(const String& dev, bool init=false);
+    AlsaDevice(const String& dev, unsigned int rate = 8000);
     ~AlsaDevice();
     bool timePassed(void);
 	bool open();
@@ -85,13 +85,16 @@ public:
     int read(void *buffer, int frames);
     inline bool closed() const
 	{ return m_closed; }
-	int m_fd;
+    inline unsigned int rate() const
+	{ return m_rate; }
 private:
-    String m_dev;    
+    int m_fd;
+    String m_dev;
     String m_dev_in;
     String m_dev_out;
     String m_initdata;
     bool m_closed;
+    unsigned int m_rate;
     snd_pcm_t *m_handle_in;
     snd_pcm_t *m_handle_out;
     u_int64_t m_lastTime;
@@ -100,7 +103,7 @@ private:
 class AlsaChan : public CallEndpoint
 {
 public:
-    AlsaChan(const String& dev);
+    AlsaChan(const String& dev, unsigned int rate = 8000);
     ~AlsaChan();
     bool init();
     virtual void disconnected(bool final, const char *reason);
@@ -110,9 +113,10 @@ public:
     inline const String& getTarget() const
 	{ return m_target; }
 
-private:    
+private:
     String m_dev;
     String m_target;
+    unsigned int m_rate;
 };
 
 class AlsaHandler : public MessageHandler
@@ -166,7 +170,7 @@ AlsaDevice* s_dev = 0;
 
 bool AlsaSource::init()
 {
-    m_brate = 16000;
+    m_brate = 2 * m_device->rate();
     m_total = 0;
     start("Alsa Source",Thread::High);
     return true;
@@ -178,6 +182,8 @@ AlsaSource::AlsaSource(AlsaDevice* dev)
     Debug(DebugNote,"AlsaSource::AlsaSource(%p) [%p]",dev,this);
     dev->ref();
     m_device = dev;
+    if (dev->rate() != 8000)
+	m_format << "/" << dev->rate();
 }
 
 AlsaSource::~AlsaSource()
@@ -238,6 +244,8 @@ AlsaConsumer::AlsaConsumer(AlsaDevice* dev)
     Debug(DebugNote,"AlsaConsumer::AlsaConsumer(%p) [%p]",dev,this);
     dev->ref();
     m_device = dev;
+    if (dev->rate() != 8000)
+	m_format << "/" << dev->rate();
 }
 
 AlsaConsumer::~AlsaConsumer()
@@ -256,11 +264,11 @@ unsigned long AlsaConsumer::Consume(const DataBlock &data, unsigned long tStamp,
 }
 
 
-AlsaChan::AlsaChan(const String& dev)
+AlsaChan::AlsaChan(const String& dev, unsigned int rate)
     : CallEndpoint("alsa"),
-      m_dev(dev)
+      m_dev(dev), m_rate(rate)
 {
-    Debug(DebugNote,"AlsaChan::AlsaChan dev [%s] [%p]",dev.c_str(),this);
+    Debug(DebugNote,"AlsaChan::AlsaChan('%s',%u) [%p]",dev.c_str(),rate,this);
     s_chan = this;
 }
 
@@ -277,7 +285,7 @@ bool AlsaChan::init()
 {
     if (s_dev)
 	return false;
-    AlsaDevice* dev = new AlsaDevice(m_dev,true);
+    AlsaDevice* dev = new AlsaDevice(m_dev,m_rate);
     if (dev->closed()) {
 	dev->deref();
 	return false;
@@ -302,11 +310,11 @@ bool AlsaChan::init()
 }
 
 
-AlsaDevice::AlsaDevice(const String& dev,bool init)
-    : m_dev(dev), m_dev_in(dev), m_dev_out(dev), m_closed(true),
+AlsaDevice::AlsaDevice(const String& dev, unsigned int rate)
+    : m_dev(dev), m_dev_in(dev), m_dev_out(dev), m_closed(true), m_rate(rate),
       m_handle_in(0), m_handle_out(0)
 {
-    Debug(DebugNote,"AlsaDevice::AlsaDevice('%s') [%p]",m_dev.c_str(),this);
+    Debug(DebugNote,"AlsaDevice::AlsaDevice('%s',%u) [%p]",m_dev.c_str(),rate,this);
     if (!s_dev)
 	s_dev = this;
     int p = dev.find('/');
@@ -317,16 +325,15 @@ AlsaDevice::AlsaDevice(const String& dev,bool init)
         if (m_dev_out.null()) m_dev_out = m_dev_in;
         if(q>0) m_initdata = dev.substr(p+2+q);
     }
-    if (init)
-	open();
+    open();
 };
 
 bool AlsaDevice::open()
 {
     int err;
     snd_pcm_hw_params_t *hw_params = NULL;
-    unsigned int rate_in=8000;
-    unsigned int rate_out=8000;
+    unsigned int rate_in = m_rate;
+    unsigned int rate_out = m_rate;
     int direction=0;
     snd_pcm_uframes_t period_size_in = 20 * 4;
     snd_pcm_uframes_t buffer_size_in= period_size_in * 16;
@@ -346,7 +353,7 @@ bool AlsaDevice::open()
     if ((err = snd_pcm_hw_params_any (m_handle_in, hw_params)) < 0) Debug(DebugWarn, "cannot initialize hardware parameter structure (%s)", snd_strerror (err));
     if ((err = snd_pcm_hw_params_set_access (m_handle_in, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)) < 0) Debug(DebugWarn, "cannot set access type (%s)", snd_strerror (err));
     if ((err = snd_pcm_hw_params_set_format (m_handle_in, hw_params, SND_PCM_FORMAT_S16_LE)) < 0) Debug(DebugWarn, "cannot set sample format (%s)", snd_strerror (err));
-    if ((err = snd_pcm_hw_params_set_rate_near (m_handle_in, hw_params, &rate_in, &direction)) < 0) Debug(DebugWarn, "cannot set sample rate (%s)", snd_strerror (err));
+    if ((err = snd_pcm_hw_params_set_rate_near (m_handle_in, hw_params, &rate_in, &direction)) < 0) Debug(DebugWarn, "cannot set sample rate %u (%s)", m_rate, snd_strerror (err));
     if ((err = snd_pcm_hw_params_set_channels (m_handle_in, hw_params, 1)) < 0) Debug(DebugWarn, "cannot set channel count (%s)", snd_strerror (err));
     if ((err = snd_pcm_hw_params (m_handle_in, hw_params)) < 0) Debug(DebugWarn, "cannot set parameters (%s)", snd_strerror (err));
     snd_pcm_hw_params_free (hw_params);
@@ -364,7 +371,7 @@ bool AlsaDevice::open()
     if ((err = snd_pcm_hw_params_any (m_handle_out, hw_params)) < 0) Debug(DebugWarn, "cannot initialize hardware parameter structure (%s)", snd_strerror (err));
     if ((err = snd_pcm_hw_params_set_access (m_handle_out, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)) < 0) Debug(DebugWarn, "cannot set access type (%s)", snd_strerror (err));
     if ((err = snd_pcm_hw_params_set_format (m_handle_out, hw_params, SND_PCM_FORMAT_S16_LE)) < 0) Debug(DebugWarn, "cannot set sample format (%s)", snd_strerror (err));
-    if ((err = snd_pcm_hw_params_set_rate_near (m_handle_out, hw_params, &rate_out, 0)) < 0) Debug(DebugWarn, "cannot set sample rate (%s)", snd_strerror (err));
+    if ((err = snd_pcm_hw_params_set_rate_near (m_handle_out, hw_params, &rate_out, 0)) < 0) Debug(DebugWarn, "cannot set sample rate %u (%s)", m_rate, snd_strerror (err));
     if ((err = snd_pcm_hw_params_set_channels (m_handle_out, hw_params, 1)) < 0) Debug(DebugWarn, "cannot set channel count (%s)", snd_strerror (err));
     if ((err = snd_pcm_hw_params_set_period_size_near(m_handle_out, hw_params, &period_size_out, &direction)) < 0) Debug(DebugWarn, "cannot set period size (%s)", snd_strerror (err));
     if ((err = snd_pcm_hw_params_set_buffer_size_near(m_handle_out, hw_params, &buffer_size_out)) < 0) Debug(DebugWarn, "cannot set buffer size (%s)", snd_strerror (err));
@@ -495,7 +502,7 @@ bool AlsaHandler::received(Message &msg)
 	msg.setParam("error","busy");
 	return false;
     }
-    AlsaChan *chan = new AlsaChan(dest.matchString(1).c_str());
+    AlsaChan *chan = new AlsaChan(dest.matchString(1).c_str(),msg.getIntValue("rate",8000));
     if (!chan->init())
     {
 	chan->destruct();
@@ -642,7 +649,7 @@ bool AttachHandler::received(Message &msg)
 	return false;
     }
     
-    AlsaDevice* dev = new AlsaDevice(src ? src : cons,true);
+    AlsaDevice* dev = new AlsaDevice(src ? src : cons,msg.getIntValue("rate",8000));
     if (dev->closed()) {
 	dev->deref();
 	return false;

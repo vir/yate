@@ -80,7 +80,7 @@ private:
 class OssDevice : public RefObject
 {
 public:
-    OssDevice(const String& dev);
+    OssDevice(const String& dev, unsigned int rate = 8000);
     ~OssDevice();
     bool reOpen(int iomode);
     bool setPcmFormat();
@@ -93,8 +93,11 @@ public:
 	{ return m_fd < 0; }
     inline bool fullDuplex() const
 	{ return m_fullDuplex; }
-private:    
+    inline unsigned int rate() const
+	{ return m_rate; }
+private:
     String m_dev;
+    unsigned int m_rate;
     bool m_fullDuplex;
     bool m_readMode;
     int m_fd;
@@ -104,7 +107,7 @@ private:
 class OssChan : public CallEndpoint
 {
 public:
-    OssChan(const String& dev);
+    OssChan(const String& dev, unsigned int rate = 8000);
     ~OssChan();
     bool init();
     virtual void disconnected(bool final, const char *reason);
@@ -114,9 +117,10 @@ public:
     inline const String& getTarget() const
 	{ return m_target; }
 
-private:    
+private:
     String m_dev;
     String m_target;
+    unsigned int m_rate;
 };
 
 class OssHandler : public MessageHandler
@@ -169,7 +173,7 @@ OssChan *s_chan = 0;
 
 bool OssSource::init()
 {
-    m_brate = 16000;
+    m_brate = 2 * m_device->rate();
     m_total = 0;
     if (m_device->setInputMode(false) < 0) {
 	Debug(DebugWarn, "Unable to set input mode");
@@ -185,6 +189,8 @@ OssSource::OssSource(OssDevice* dev)
     Debug(DebugAll,"OssSource::OssSource(%p) [%p]",dev,this);
     dev->ref();
     m_device = dev;
+    if (dev->rate() != 8000)
+	m_format << "/" << dev->rate();
 }
 
 OssSource::~OssSource()
@@ -243,6 +249,7 @@ void OssSource::cleanup()
     ThreadedSource::cleanup();
 }
 
+
 bool OssConsumer::init()
 {
     m_total = 0;
@@ -273,6 +280,8 @@ OssConsumer::OssConsumer(OssDevice* dev)
     Debug(DebugAll,"OssConsumer::OssConsumer(%p) [%p]",dev,this);
     dev->ref();
     m_device = dev;
+    if (dev->rate() != 8000)
+	m_format << "/" << dev->rate();
 }
 
 OssConsumer::~OssConsumer()
@@ -291,11 +300,11 @@ unsigned long OssConsumer::Consume(const DataBlock &data, unsigned long tStamp, 
 }
 
 
-OssChan::OssChan(const String& dev)
+OssChan::OssChan(const String& dev, unsigned int rate)
     : CallEndpoint("oss"),
-      m_dev(dev)
+      m_dev(dev), m_rate(rate)
 {
-    Debug(DebugAll,"OssChan::OssChan dev [%s] [%p]",dev.c_str(),this);
+    Debug(DebugAll,"OssChan::OssChan('%s',%u) [%p]",dev.c_str(),rate,this);
     s_chan = this;
 }
 
@@ -310,7 +319,7 @@ OssChan::~OssChan()
 
 bool OssChan::init()
 {
-    OssDevice* dev = new OssDevice(m_dev);
+    OssDevice* dev = new OssDevice(m_dev,m_rate);
     if (dev->closed()) {
 	dev->deref();
 	return false;
@@ -353,10 +362,10 @@ void OssChan::answer()
 }
 
 
-OssDevice::OssDevice(const String& dev)
-    : m_dev(dev), m_fullDuplex(false), m_readMode(true), m_fd(-1)
+OssDevice::OssDevice(const String& dev, unsigned int rate)
+    : m_dev(dev), m_rate(rate), m_fullDuplex(false), m_readMode(true), m_fd(-1)
 {
-    Debug(DebugAll,"OssDevice::OssDevice('%s') [%p]",dev.c_str(),this);
+    Debug(DebugAll,"OssDevice::OssDevice('%s',%u) [%p]",dev.c_str(),rate,this);
     m_fd = ::open(m_dev, O_RDWR|O_NONBLOCK);
     if (m_fd < 0) {
 	Debug(DebugWarn, "Unable to open %s: %s", m_dev.c_str(), ::strerror(errno));
@@ -414,16 +423,15 @@ bool OssDevice::setPcmFormat()
 	return false;
     }
 
-    // try to set the desired speed (8kHz) and check if it was actually set
-    int desired = 8000;
-    fmt = desired;
+    // try to set the desired speed (8/16/32kHz) and check if it was actually set
+    fmt = m_rate;
     res = ::ioctl(m_fd, SNDCTL_DSP_SPEED, &fmt);
     if (res < 0) {
 	Debug(DebugWarn, "Failed to set audio device speed");
 	return false;
     }
-    if (fmt != desired)
-	Debug(DebugWarn, "Requested %d Hz, got %d Hz - sound may be choppy", desired, fmt);
+    if (fmt != (int)m_rate)
+	Debug(DebugWarn, "Requested %d Hz, got %d Hz - sound may be choppy", m_rate, fmt);
     return true;
 }
 
@@ -484,7 +492,7 @@ bool OssHandler::received(Message &msg)
 	msg.setParam("error","busy");
 	return false;
     }
-    OssChan *chan = new OssChan(dest.matchString(1).c_str());
+    OssChan *chan = new OssChan(dest.matchString(1).c_str(),msg.getIntValue("rate",8000));
     if (!chan->init())
     {
 	chan->destruct();
@@ -630,7 +638,7 @@ bool AttachHandler::received(Message &msg)
 	return false;
     }
 
-    OssDevice* dev = new OssDevice(src ? src : cons);
+    OssDevice* dev = new OssDevice(src ? src : cons,msg.getIntValue("rate",8000));
     if (dev->closed()) {
 	dev->deref();
 	return false;

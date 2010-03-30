@@ -1018,8 +1018,8 @@ if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
 
     if [[ "x$HAVE_QT4" = "xno" ]]; then
 	AC_MSG_CHECKING([or Qt4 >= 4.2.0 using qmake])
-	incqt=`qmake -query QT_INSTALL_HEADERS`
-	libqt=`qmake -query QT_INSTALL_LIBS`
+	incqt=`qmake -query QT_INSTALL_HEADERS 2>/dev/null`
+	libqt=`qmake -query QT_INSTALL_LIBS 2>/dev/null`
 	if [[ "x$incqt" != "x" -a "x$libqt" != "x" ]]; then
 	    HAVE_QT4=yes
 	    QT4_INC="-I$incqt -I$incqt/QtUiTools -I$incqt/QtGui -I$incqt/QtXml -I$incqt/QtCore"
@@ -1039,9 +1039,9 @@ if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
 	            QT4_LIB_NET="-framework QtNetwork"
 		    ;;
 	    esac	
-	    QT4_MOC=`qmake -query QT_INSTALL_BINS`
+	    QT4_MOC=`qmake -query QT_INSTALL_BINS 2>/dev/null`
 	    QT4_MOC="$QT4_MOC/moc"
-	    verqt=`qmake -query QT_VERSION`
+	    verqt=`qmake -query QT_VERSION 2>/dev/null`
 	    QT4_VER=`echo "$verqt" | sed "$vsed" | sed "$vsed" | sed 's/\(..\)\.\(..\)\.\(..\)/\1\2\3/'`	    
 	    if [[ 1$QT4_VER -lt 1040200 ]]; then
 	    	HAVE_QT4=no

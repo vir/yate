@@ -1015,6 +1015,43 @@ if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
 	verqt="no"
     fi
     AC_MSG_RESULT([$verqt])
+
+    if [[ "x$HAVE_QT4" = "xno" ]]; then
+	AC_MSG_CHECKING([or Qt4 >= 4.2.0 using qmake])
+	incqt=`qmake -query QT_INSTALL_HEADERS`
+	libqt=`qmake -query QT_INSTALL_LIBS`
+	if [[ "x$incqt" != "x" -a "x$libqt" != "x" ]]; then
+	    HAVE_QT4=yes
+	    QT4_INC="-I$incqt -I$incqt/QtUiTools -I$incqt/QtGui -I$incqt/QtXml -I$incqt/QtCore"
+	    case "$uname_os" in
+		*Darwin)
+		    QT4_INC="-D__USE_WS_X11__ $QT4_INC"
+		    ;;
+	    esac
+	    QT4_LIB="-L$libqt -lQtUiTools -lQtGui -lQtXml -lQtCore"
+	    QT4_INC_NET="-I$incqt/QtNetwork"
+	    QT4_LIB_NET="-L$libqt -lQtNetwork"
+	    case "$libqt" in
+		*Frameworks)
+		    QT4_INC="-I$incqt  -I$incqt/QtUiTools -I$libqt/QtGui.framework/Headers -I$libqt/QtXml.framework/Headers -I$libqt/QtCore.framework/Headers"
+		    QT4_LIB="-F$libqt -lQtUiTools -framework QtGui -framework QtXml -framework QtCore"
+	    	    QT4_INC_NET="-I$libqt/QtNetwork.framework/Headers"
+	            QT4_LIB_NET="-framework QtNetwork"
+		    ;;
+	    esac	
+	    QT4_MOC=`qmake -query QT_INSTALL_BINS`
+	    QT4_MOC="$QT4_MOC/moc"
+	    verqt=`qmake -query QT_VERSION`
+	    QT4_VER=`echo "$verqt" | sed "$vsed" | sed "$vsed" | sed 's/\(..\)\.\(..\)\.\(..\)/\1\2\3/'`	    
+	    if [[ 1$QT4_VER -lt 1040200 ]]; then
+	    	HAVE_QT4=no
+	    	verqt="too old ($verqt)"
+	   fi
+	else
+	    verqt="no"
+	fi
+	AC_MSG_RESULT([$verqt])
+    fi
 fi
 AC_SUBST(HAVE_QT4)
 AC_SUBST(QT4_INC)

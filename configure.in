@@ -23,7 +23,7 @@ AC_SUBST(PACKAGE_REVISION)
 # sed expression to convert version into something comparable lexicographically
 csed='sed'
 vsed='s/\(^\|\.\)\([[0-9]]\)\($\|\.\)/\10\2\3/g'
-if [[ -z `echo a | sed 's/a\|b//'` ]]; then
+if [[ -n `echo a | sed 's/a\|b//'` ]]; then
     csed='sed -E'
     vsed='s/(^|\.)([[0-9]])($|\.)/\10\2\3/g'
 fi

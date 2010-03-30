@@ -595,6 +595,19 @@ HAVE_ALSA="yes"
 AC_MSG_RESULT([$HAVE_ALSA])
 AC_SUBST(HAVE_ALSA)
 
+# check for Mac OS X audio headers
+HAVE_COREAUDIO=no
+if [[ "x$uname_os" = "xDarwin" ]]; then
+AC_MSG_CHECKING([for Mac OS X audio headers])
+AC_TRY_COMPILE([
+#include <AudioUnit/AudioUnit.h>
+#include <AudioToolbox/AudioToolbox.h>
+],[],
+[HAVE_COREAUDIO="yes"],[]
+)
+AC_MSG_RESULT([$HAVE_COREAUDIO])
+fi
+AC_SUBST(HAVE_COREAUDIO)
 
 HAVE_GSM=no
 GSM_INC=""

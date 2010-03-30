@@ -77,6 +77,10 @@ ifneq (@HAVE_ALSA@,no)
 PROGS := $(PROGS) client/alsachan.yate
 endif
 
+ifneq (@HAVE_COREAUDIO@,no)
+PROGS := $(PROGS) client/coreaudio.yate
+endif
+
 ifneq (@HAVE_QT4@,no)
 PROGS := $(PROGS) qt4/updater.yate
 endif
@@ -253,6 +257,8 @@ server/mysqldb.yate: LOCALLIBS = @MYSQL_LIB@
 enumroute.yate: LOCALLIBS = @RESOLV_LIB@
 
 client/alsachan.yate: LOCALLIBS = -lasound
+
+client/coreaudio.yate: LOCALLIBS = -framework CoreServices  -framework CoreAudio -framework AudioUnit -framework AudioToolBox
 
 yiaxchan.yate: ../libs/yiax/libyateiax.a
 yiaxchan.yate: LOCALFLAGS = -I@top_srcdir@/libs/yiax

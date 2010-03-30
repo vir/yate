@@ -27,6 +27,8 @@
 
 #ifdef _WINDOWS
 #define DEFAULT_DEVICE "dsound/*"
+#elif defined(__APPLE__)
+#define DEFAULT_DEVICE "coreaudio/*"
 #elif defined(__linux__)
 #define DEFAULT_DEVICE "alsa/default"
 #else

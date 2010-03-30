@@ -21,7 +21,12 @@ AC_SUBST(PACKAGE_STATUS)
 AC_SUBST(PACKAGE_REVISION)
 
 # sed expression to convert version into something comparable lexicographically
+csed='sed'
 vsed='s/\(^\|\.\)\([[0-9]]\)\($\|\.\)/\10\2\3/g'
+if [[ -z `echo a | sed 's/a\|b//'` ]]; then
+    csed='sed -E'
+    vsed='s/(^|\.)([[0-9]])($|\.)/\10\2\3/g'
+fi
 
 # We may need the host OS type but avoid the overhead of AC_CANONICAL_SYSTEM
 AC_MSG_CHECKING([for local operating system type])
@@ -842,7 +847,7 @@ if [[ "x$verpw" = "x" ]]; then
     verpw=`cat "$ac_cv_use_pwlib/include/ptbuildopts.h" 2>/dev/null | sed -n 's/^.*PWLIB_VERSION "\([[^"]]*\)".*$/\1/p'`
 fi
 PWLIB_INC="-I$ac_cv_use_pwlib/include/ptlib"
-vpw=`echo "$verpw" | sed "$vsed" | sed "$vsed"`
+vpw=`echo "$verpw" | $csed "$vsed" | $csed "$vsed"`
 if [[ "$vpw" '<' "01.06.00" ]]; then
     PWLIB_INC="$PWLIB_INC/unix/ptlib $PWLIB_INC/unix $PWLIB_INC"
 fi
@@ -1005,7 +1010,7 @@ if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
 	QT4_MOC=`echo "$incqt" | sed -n 's,^.*-I\([[^ ]]\+\)/include .*$,\1/bin/moc,p'`
 	test -z "$QT4_MOC" && QT4_MOC=`which moc-qt4 2>/dev/null`
 	test -z "$QT4_MOC" && QT4_MOC="moc"
-	QT4_VER=`echo "$verqt" | sed "$vsed" | sed "$vsed" | sed 's/\(..\)\.\(..\)\.\(..\)/\1\2\3/'`
+	QT4_VER=`echo "$verqt" | $csed "$vsed" | $csed "$vsed" | sed 's/\(..\)\.\(..\)\.\(..\)/\1\2\3/'`
 	ac_cv_use_libqt="no"
 	if [[ 1$QT4_VER -lt 1040200 ]]; then
 	    HAVE_QT4=no
@@ -1042,7 +1047,7 @@ if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
 	    QT4_MOC=`qmake -query QT_INSTALL_BINS 2>/dev/null`
 	    QT4_MOC="$QT4_MOC/moc"
 	    verqt=`qmake -query QT_VERSION 2>/dev/null`
-	    QT4_VER=`echo "$verqt" | sed "$vsed" | sed "$vsed" | sed 's/\(..\)\.\(..\)\.\(..\)/\1\2\3/'`	    
+	    QT4_VER=`echo "$verqt" | $csed "$vsed" | $csed "$vsed" | sed 's/\(..\)\.\(..\)\.\(..\)/\1\2\3/'`
 	    if [[ 1$QT4_VER -lt 1040200 ]]; then
 	    	HAVE_QT4=no
 	    	verqt="too old ($verqt)"

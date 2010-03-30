@@ -14,6 +14,7 @@ INCLUDES := -I.. -I@top_srcdir@
 CFLAGS := @CFLAGS@ @MODULE_CFLAGS@ @INLINE_FLAGS@
 CPPFLAGS := @CFLAGS@ @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= @LDFLAGS@
+SONAME_OPT := @SONAME_OPT@
 LDCONFIG:=true
 
 MKDEPS := ../config.status
@@ -38,7 +39,7 @@ COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CPPFLAGS)
 LINK = $(CXX) $(LDFLAGS)
 
 ifeq (@INTERNAL_REGEX@,yes)
-REGEX_INC:= -I@top_srcdir@/engine/regex
+REGEX_INC:= -I@top_srcdir@/engine/regex -UDEBUG
 LIBOBJS := $(LIBOBJS) regex.o
 else
 REGEX_INC:=
@@ -115,4 +116,4 @@ Makefile: @srcdir@/Makefile.in $(MKDEPS)
 	cd .. && ./config.status
 
 ../$(YLIB): $(LIBOBJS) $(LIBS)
-	$(LINK) -shared -o $@ -Wl,--soname=$(YLIB) $^ $(LIBTHR) $(LIBAUX)
+	$(LINK) -o $@ $(SONAME_OPT)$(YLIB) $^ $(LIBTHR) $(LIBAUX)

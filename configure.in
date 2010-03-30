@@ -317,10 +317,19 @@ AC_LANG_SAVE
 AC_LANG_C
 SAVE_CFLAGS="$CFLAGS"
 CFLAGS="$CFLAGS -Wall -Werror $GCC_UNRESOLVED_SYMBOLS"
+SAVE_LIBS="$LIBS"
 AC_TRY_LINK([#include <netinet/in.h>
 #include <arpa/nameser.h>
-#include <resolv.h>],[res_init();],[HAVE_RESOLV=yes],[HAVE_RESOLV=no])
-if [[ "x$HAVE_RESOLV" != "xno" ]]; then
+#include <resolv.h>],[res_init();],[HAVE_RESOLV=yes])
+if [[ "x$HAVE_RESOLV" = "xno" ]]; then
+LIBS="$LIBS -lresolv"
+AC_TRY_LINK([#include <netinet/in.h>
+#include <arpa/nameser.h>
+#include <resolv.h>],[res_init();],
+[HAVE_RESOLV=yes RESOLV_LIB=-lresolv])
+fi
+LIBS="$SAVE_LIBS"
+if [[ "x$HAVE_RESOLV" != "xno" -a "x$RESOLV_LIB" = "x" ]]; then
 AC_TRY_LINK([#include <netinet/in.h>
 #include <arpa/nameser.h>
 #include <resolv.h>],[unsigned char x[2]; res_query("",0,0,x,0);],[],[RESOLV_LIB=-lresolv])
@@ -1066,20 +1075,28 @@ CFLAGS=`echo "$CFLAGS" | sed 's/\(^\| *\)-g[[0-9]]*//' | sed 's/[[[:space:]]]\{2
 MODULE_CFLAGS="-fno-exceptions -fPIC $HAVE_GCC_FORMAT_CHECK"
 MODULE_CPPFLAGS="-fno-check-new $RTTI_OPT $MODULE_CFLAGS"
 MODULE_LDRELAX="-export-dynamic -shared"
+MODULE_SYMBOLS="-Wl,--retain-symbols-file,/dev/null"
+SONAME_OPT="-shared -Wl,-soname="
 case "x$uname_os" in
     x*BSD)
 	INSTALL_D="install"
 	MODULE_LDRELAX="$MODULE_LDRELAX -lc"
 	;;
+   xDarwin)
+	INSTALL_D="install"
+	MODULE_LDRELAX="-dynamiclib"
+	MODULE_SYMBOLS=""
+	SONAME_OPT="-dynamiclib -Wl,-dylib_install_name,"
+        ;;
 esac
 MODULE_LDFLAGS="$MODULE_LDRELAX $GCC_UNRESOLVED_SYMBOLS"
-MODULE_SYMBOLS="-Wl,--retain-symbols-file,/dev/null"
 AC_SUBST(INSTALL_D)
 AC_SUBST(MODULE_CFLAGS)
 AC_SUBST(MODULE_CPPFLAGS)
 AC_SUBST(MODULE_LDRELAX)
 AC_SUBST(MODULE_LDFLAGS)
 AC_SUBST(MODULE_SYMBOLS)
+AC_SUBST(SONAME_OPT)
 
 
 DOXYGEN_BIN=""

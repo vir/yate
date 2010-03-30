@@ -417,14 +417,9 @@ void NDebug(const char* facility, int level, const char* format, ...);
 void NDebug(const DebugEnabler* local, int level, const char* format, ...);
 #endif
 
-#ifdef _DEBUG
+#if defined(_DEBUG) || defined(DEBUG) || defined(XDEBUG)
 #undef DEBUG
-#define DEBUG
-#endif
-
-#ifdef XDEBUG
-#undef DEBUG
-#define DEBUG
+#define DEBUG	1
 #endif
 
 #ifdef DEBUG

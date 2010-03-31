@@ -989,6 +989,7 @@ int Engine::run()
 	    Debug(DebugWarn,"Timer resolution not set: %s",err.c_str());
     }
 #endif
+    Thread::idleMsec(s_cfg.getIntValue("general","idlemsec",(clientMode() ? 2 * Thread::idleMsec() : 0)));
     SysUsage::init();
 
     s_runid = Time::secNow();

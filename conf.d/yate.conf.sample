@@ -33,6 +33,11 @@
 ;  of zero disables such warnings
 ;warntime=0
 
+; idlemsec: int: System idle time in milliseconds
+;  Set to zero to use platform default
+;  If not set the platform default is doubled only in client mode
+;idlemsec=
+
 ; wintimer: int: Requested timer resolution in milliseconds (Windows only, does
 ;  not work on 9x and ME). The default resolution depends on hardware, Windows
 ;  version and currently running programs

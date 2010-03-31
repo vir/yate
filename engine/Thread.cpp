@@ -51,6 +51,8 @@ static int pthread_attr_setinheritsched(pthread_attr_t *,int) { return 0; }
 #ifndef THREAD_IDLE_MSEC
 #define THREAD_IDLE_MSEC 5
 #endif
+#define THREAD_IDLE_MIN  1
+#define THREAD_IDLE_MAX 20
 
 namespace TelEngine {
 
@@ -132,6 +134,7 @@ static TokenDict s_prio[] = {
     { 0, 0 }
 };
 
+static unsigned long s_idleMs = 1000 * THREAD_IDLE_MSEC;
 static ObjList s_threads;
 static Mutex s_tmutex(true,"Thread");
 
@@ -659,7 +662,7 @@ void Thread::idle(bool exitCheck)
 	Debug(DebugMild,"Thread '%s' idling with %d mutex locks held [%p]",
 	    t->name(),t->locks(),t);
 #endif
-    msleep(THREAD_IDLE_MSEC,exitCheck);
+    msleep(s_idleMs,exitCheck);
 }
 
 void Thread::sleep(unsigned int sec, bool exitCheck)
@@ -702,12 +705,23 @@ void Thread::usleep(unsigned long usec, bool exitCheck)
 
 unsigned long Thread::idleUsec()
 {
-    return THREAD_IDLE_MSEC * 1000;
+    return s_idleMs * 1000;
 }
 
 unsigned long Thread::idleMsec()
 {
-    return THREAD_IDLE_MSEC;
+    return s_idleMs;
+}
+
+void Thread::idleMsec(unsigned long msec)
+{
+    if (msec == 0)
+	msec = THREAD_IDLE_MSEC;
+    else if (msec < THREAD_IDLE_MIN)
+	msec = THREAD_IDLE_MIN;
+    else if (msec > THREAD_IDLE_MAX)
+	msec = THREAD_IDLE_MAX;
+    s_idleMs = msec;
 }
 
 Thread::Priority Thread::priority(const char* name, Thread::Priority defvalue)

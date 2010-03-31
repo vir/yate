@@ -4621,6 +4621,12 @@ public:
     static unsigned long idleMsec();
 
     /**
+     * Set the idle sleep interval or reset to platform default
+     * @param msec Sleep interval in milliseconds, platform default if zero
+     */
+    static void idleMsec(unsigned long msec);
+
+    /**
      * Get a pointer to the currently running thread
      * @return A pointer to the current thread or NULL for the main thread
      *  or threads created by other libraries

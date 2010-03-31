@@ -43,18 +43,14 @@ namespace { // anonymous
 // we should use the primary sound buffer else we will lose sound while we have no input focus
 static bool s_primary = true;
 
-// 20ms minimum chunk, 100ms buffer
-#define CHUNK_SIZE 320
-static unsigned int s_chunk = CHUNK_SIZE;
-static unsigned int s_minsize = 2*CHUNK_SIZE;
-static unsigned int s_bufsize = 4*CHUNK_SIZE;
-static unsigned int s_maxsize = 5*CHUNK_SIZE;
+// default sampling rate
+static int s_rate = 8000;
 
 class DSoundSource : public DataSource
 {
     friend class DSoundRec;
 public:
-    DSoundSource();
+    DSoundSource(int rate = 8000);
     ~DSoundSource();
     bool control(NamedList& msg);
 private:
@@ -65,7 +61,7 @@ class DSoundConsumer : public DataConsumer
 {
     friend class DSoundPlay;
 public:
-    DSoundConsumer(bool stereo = false);
+    DSoundConsumer(int rate = 8000, bool stereo = false);
     ~DSoundConsumer();
     virtual unsigned long Consume(const DataBlock &data, unsigned long tStamp, unsigned long flags);
     bool control(NamedList& msg);
@@ -78,7 +74,7 @@ private:
 class DSoundPlay : public Thread, public Mutex
 {
 public:
-    DSoundPlay(DSoundConsumer* owner, LPGUID device = 0);
+    DSoundPlay(DSoundConsumer* owner, DWORD rate, LPGUID device = 0);
     virtual ~DSoundPlay();
     virtual void run();
     virtual void cleanup();
@@ -93,10 +89,12 @@ public:
     bool control(NamedList& msg);
 private:
     DSoundConsumer* m_owner;
+    DWORD m_rate;
     LPGUID m_device;
     LPDIRECTSOUND m_ds;
     LPDIRECTSOUNDBUFFER m_dsb;
     DWORD m_buffSize;
+    DWORD m_chunk;
     DataBlock m_buf;
     u_int64_t m_start;
     u_int64_t m_total;
@@ -106,7 +104,7 @@ private:
 class DSoundRec : public Thread
 {
 public:
-    DSoundRec(DSoundSource* owner, LPGUID device = 0);
+    DSoundRec(DSoundSource* owner, DWORD rate, LPGUID device = 0);
     virtual ~DSoundRec();
     virtual void run();
     virtual void cleanup();
@@ -120,6 +118,7 @@ public:
     bool control(NamedList& msg);
 private:
     DSoundSource* m_owner;
+    DWORD m_rate;
     LPGUID m_device;
     LPDIRECTSOUNDCAPTURE m_ds;
     LPDIRECTSOUNDCAPTUREBUFFER m_dsb;
@@ -133,7 +132,7 @@ private:
 class DSoundChan : public Channel
 {
 public:
-    DSoundChan();
+    DSoundChan(int rate = 8000);
     virtual ~DSoundChan();
 };
 
@@ -162,10 +161,10 @@ private:
 INIT_PLUGIN(SoundDriver);
 
 
-DSoundPlay::DSoundPlay(DSoundConsumer* owner, LPGUID device)
+DSoundPlay::DSoundPlay(DSoundConsumer* owner, DWORD rate, LPGUID device)
     : Thread("DirectSound Play",High), Mutex(false,"DSoundPlay"),
-      m_owner(0), m_device(device), m_ds(0), m_dsb(0),
-      m_buffSize(0), m_start(0), m_total(0)
+      m_owner(0), m_rate(rate), m_device(device), m_ds(0), m_dsb(0),
+      m_buffSize(0), m_chunk(320), m_start(0), m_total(0)
 {
     if (owner && owner->ref())
 	m_owner = owner;
@@ -205,18 +204,19 @@ bool DSoundPlay::init()
     
     // Set channel number depending data
     WORD nChannels = 1;
-    DWORD nAvgBytesPerSec = 16000;       // nSamplesPerSec * nBlockAlign.
+    DWORD nAvgBytesPerSec = 2 * m_rate;  // nSamplesPerSec * nBlockAlign.
     WORD nBlockAlign = 2;                // nChannels * wBitsPerSample / 8
     if (m_owner && m_owner->m_stereo) {
 	nChannels = 2;
-	nAvgBytesPerSec = 32000;
+	nAvgBytesPerSec = 4 * m_rate;
 	nBlockAlign = 4;
     }
+    m_chunk = nChannels * m_rate / 25;   // 20ms of 2-byte samples
 
     WAVEFORMATEX fmt;
     fmt.wFormatTag = WAVE_FORMAT_PCM;
     fmt.nChannels = nChannels;
-    fmt.nSamplesPerSec = 8000;
+    fmt.nSamplesPerSec = m_rate;
     fmt.nAvgBytesPerSec = nAvgBytesPerSec;
     fmt.nBlockAlign = nBlockAlign;
     fmt.wBitsPerSample = 16;
@@ -230,7 +230,7 @@ bool DSoundPlay::init()
     else {
 	bdesc.dwFlags |= DSBCAPS_GLOBALFOCUS;
 	// we have to set format when creating secondary buffers
-	bdesc.dwBufferBytes = s_bufsize;
+	bdesc.dwBufferBytes = 4*m_chunk;
 	bdesc.lpwfxFormat = &fmt;
     }
     if (FAILED(hr = m_ds->CreateSoundBuffer(&bdesc, &m_dsb, NULL)) || !m_dsb) {
@@ -248,10 +248,10 @@ bool DSoundPlay::init()
     }
     if ((fmt.wFormatTag != WAVE_FORMAT_PCM) ||
 	(fmt.nChannels != nChannels) ||
-	(fmt.nSamplesPerSec != 8000) ||
+	(fmt.nSamplesPerSec != m_rate) ||
 	(fmt.wBitsPerSample != 16)) {
-	Debug(DebugGoOn,"DirectSound does not support 8000Hz 16bit %s PCM format, "
-	    "got fmt=%u, chans=%d samp=%d size=%u",nChannels == 1 ? "mono" : "stereo",
+	Debug(DebugGoOn,"DirectSound does not support %dHz 16bit %s PCM format, "
+	    "got fmt=%u, chans=%d samp=%d size=%u",m_rate,nChannels == 1 ? "mono" : "stereo",
 	    fmt.wFormatTag,fmt.nChannels,fmt.nSamplesPerSec,fmt.wBitsPerSample);
 	return false;
     }
@@ -283,12 +283,12 @@ void DSoundPlay::run()
     else
 	return;
     DWORD writeOffs = 0;
-    DWORD margin = s_chunk/4;
+    DWORD margin = m_chunk/4;
     bool first = true;
     while (m_owner->refcount() > 1) {
 	msleep(1,true);
 	if (first) {
-	    if ((m_buf.length() < s_minsize) || !m_dsb)
+	    if ((m_buf.length() < 2*m_chunk) || !m_dsb)
 		continue;
 	    first = false;
 	    m_dsb->GetCurrentPosition(NULL,&writeOffs);
@@ -316,10 +316,10 @@ void DSoundPlay::run()
 		    writeOffs,adjOffs,playPos,writePos);
 		writeOffs = adjOffs;
 	    }
-	    bool hasData = (m_buf.length() >= s_chunk);
+	    bool hasData = (m_buf.length() >= m_chunk);
 	    if (!(adjust || hasData)) {
 		// don't fill the buffer if we still have at least one chunk until underflow
-		if ((m_buffSize + writeOffs - writePos) % m_buffSize >= s_chunk)
+		if ((m_buffSize + writeOffs - writePos) % m_buffSize >= m_chunk)
 		    break;
 	    }
 	    void* buf = 0;
@@ -327,13 +327,13 @@ void DSoundPlay::run()
 	    DWORD len = 0;
 	    DWORD len2 = 0;
 	    // locking will prevent us to skip ahead and overwrite the play position
-	    HRESULT hr = m_dsb->Lock(writeOffs,s_chunk,&buf,&len,&buf2,&len2,0);
+	    HRESULT hr = m_dsb->Lock(writeOffs,m_chunk,&buf,&len,&buf2,&len2,0);
 	    if (FAILED(hr)) {
 		writeOffs = 0;
 		if ((hr == DSERR_BUFFERLOST) && SUCCEEDED(m_dsb->Restore())) {
 		    m_dsb->Play(0,0,DSBPLAY_LOOPING);
 		    m_dsb->GetCurrentPosition(NULL,&writeOffs);
-		    writeOffs = (s_chunk/4 + writeOffs) % m_buffSize;
+		    writeOffs = (margin + writeOffs) % m_buffSize;
 		    Debug(&__plugin,DebugAll,"DirectSound buffer lost and restored, playing at %u",
 			writeOffs);
 		}
@@ -356,15 +356,15 @@ void DSoundPlay::run()
 		    ::memset(buf2,0,len2);
 	    }
 	    m_dsb->Unlock(buf,len,buf2,len2);
-	    m_total += s_chunk;
-	    m_buf.cut(-(int)s_chunk);
+	    m_total += m_chunk;
+	    m_buf.cut(-(int)m_chunk);
 	    unlock();
 #ifdef DEBUG
 	    if (!hasData)
 		Debug(&__plugin,DebugInfo,"Underflow, filled %u bytes at %u, p=%u w=%u",
-		    s_chunk,writeOffs,playPos,writePos);
+		    m_chunk,writeOffs,playPos,writePos);
 #endif
-	    writeOffs += s_chunk;
+	    writeOffs += m_chunk;
 	    if (writeOffs >= m_buffSize)
 		writeOffs -= m_buffSize;
 	    XDebug(&__plugin,DebugAll,"Locked %p,%d %p,%d",buf,len,buf2,len2);
@@ -420,7 +420,7 @@ void DSoundPlay::put(const DataBlock& data)
     if (!m_dsb)
 	return;
     lock();
-    if (m_buf.length() + data.length() <= s_maxsize)
+    if (m_buf.length() + data.length() <= m_buffSize + m_chunk)
 	m_buf += data;
     else
 	Debug(&__plugin,DebugMild,"DSoundPlay skipped %u bytes, buffer is full",data.length());
@@ -428,9 +428,9 @@ void DSoundPlay::put(const DataBlock& data)
 }
 
 
-DSoundRec::DSoundRec(DSoundSource* owner, LPGUID device)
+DSoundRec::DSoundRec(DSoundSource* owner, DWORD rate, LPGUID device)
     : Thread("DirectSound Rec",High),
-      m_owner(0), m_device(device), m_ds(0), m_dsb(0),
+      m_owner(0), m_rate(rate), m_device(device), m_ds(0), m_dsb(0),
       m_buffSize(0), m_readPos(0), m_start(0), m_total(0), m_rshift(0)
 {
     if (owner && owner->ref())
@@ -464,8 +464,8 @@ bool DSoundRec::init()
     WAVEFORMATEX fmt;
     fmt.wFormatTag = WAVE_FORMAT_PCM;
     fmt.nChannels = 1;
-    fmt.nSamplesPerSec = 8000;
-    fmt.nAvgBytesPerSec = 16000;
+    fmt.nSamplesPerSec = m_rate;
+    fmt.nAvgBytesPerSec = 2 * m_rate;
     fmt.nBlockAlign = 2;
     fmt.wBitsPerSample = 16;
     fmt.cbSize = 0;
@@ -473,7 +473,7 @@ bool DSoundRec::init()
     ZeroMemory(&bdesc, sizeof(bdesc));
     bdesc.dwSize = sizeof(bdesc);
     bdesc.dwFlags = DSCBCAPS_WAVEMAPPED;
-    bdesc.dwBufferBytes = s_bufsize;
+    bdesc.dwBufferBytes = 4 * m_rate / 25;
     bdesc.lpwfxFormat = &fmt;
     if (FAILED(hr = m_ds->CreateCaptureBuffer(&bdesc, &m_dsb, NULL)) || !m_dsb) {
 	Debug(DebugGoOn,"Could not create the DirectSoundCapture buffer, code 0x%X",hr);
@@ -485,10 +485,10 @@ bool DSoundRec::init()
     }
     if ((fmt.wFormatTag != WAVE_FORMAT_PCM) ||
 	(fmt.nChannels != 1) ||
-	(fmt.nSamplesPerSec != 8000) ||
+	(fmt.nSamplesPerSec != m_rate) ||
 	(fmt.wBitsPerSample != 16)) {
-	Debug(DebugGoOn,"DirectSoundCapture does not support 8000Hz 16bit mono PCM format, "
-	    "got fmt=%u, chans=%d samp=%d size=%u",
+	Debug(DebugGoOn,"DirectSoundCapture does not support %dHz 16bit mono PCM format, "
+	    "got fmt=%u, chans=%d samp=%d size=%u",m_rate,
 	    fmt.wFormatTag,fmt.nChannels,fmt.nSamplesPerSec,fmt.wBitsPerSample);
 	return false;
     }
@@ -512,6 +512,7 @@ void DSoundRec::run()
     if (!init())
 	return;
     Debug(&__plugin,DebugInfo,"DSoundRec is initialized and running");
+    DWORD chunk = m_rate / 25; // 20ms of 2-byte samples
     m_start = Time::now();
     if (m_owner)
 	m_owner->m_dsound = this;
@@ -526,13 +527,13 @@ void DSoundRec::run()
 	    if (pos < m_readPos)
 		pos += m_buffSize;
 	    pos -= m_readPos;
-	    if (pos < s_chunk)
+	    if (pos < chunk)
 		continue;
 	    void* buf = 0;
 	    void* buf2 = 0;
 	    DWORD len = 0;
 	    DWORD len2 = 0;
-	    if (FAILED(m_dsb->Lock(m_readPos,s_chunk,&buf,&len,&buf2,&len2,0)))
+	    if (FAILED(m_dsb->Lock(m_readPos,chunk,&buf,&len,&buf2,&len2,0)))
 		continue;
 	    DataBlock data(0,len+len2);
 	    ::memcpy(data.data(),buf,len);
@@ -592,10 +593,12 @@ bool DSoundRec::control(TelEngine::NamedList &msg)
 }
 
 
-DSoundSource::DSoundSource()
+DSoundSource::DSoundSource(int rate)
     : m_dsound(0)
 {
-    DSoundRec* ds = new DSoundRec(this);
+    if (rate != 8000)
+	m_format << "/" << rate;
+    DSoundRec* ds = new DSoundRec(this,rate);
     ds->startup();
 }
 
@@ -613,11 +616,13 @@ bool DSoundSource::control(NamedList& msg)
 }
 
 
-DSoundConsumer::DSoundConsumer(bool stereo)
+DSoundConsumer::DSoundConsumer(int rate, bool stereo)
     : DataConsumer(stereo ? "2*slin" : "slin"),
     m_dsound(0), m_stereo(stereo)
 {
-    DSoundPlay* ds = new DSoundPlay(this);
+    if (rate != 8000)
+	m_format << "/" << rate;
+    DSoundPlay* ds = new DSoundPlay(this,rate);
     ds->startup();
 }
 
@@ -644,15 +649,15 @@ bool DSoundConsumer::control(NamedList& msg)
 }
 
 
-DSoundChan::DSoundChan()
+DSoundChan::DSoundChan(int rate)
     : Channel(__plugin)
 {
-    Debug(this,DebugAll,"DSoundChan::DSoundChan() [%p]",this);
+    Debug(this,DebugAll,"DSoundChan::DSoundChan(%d) [%p]",rate,this);
 
-    setConsumer(new DSoundConsumer);
+    setConsumer(new DSoundConsumer(rate));
     getConsumer()->deref();
     Thread::msleep(50);
-    setSource(new DSoundSource);
+    setSource(new DSoundSource(rate));
     getSource()->deref();
     Thread::msleep(50);
 }
@@ -693,15 +698,17 @@ bool AttachHandler::received(Message &msg)
 	return false;
     }
 
+    int rate = msg.getIntValue("rate",s_rate);
+
     if (cons) {
-	DSoundConsumer* c = new DSoundConsumer(msg.getBoolValue("stereo"));
+	DSoundConsumer* c = new DSoundConsumer(rate,msg.getBoolValue("stereo"));
 	dd->setConsumer(c);
 	c->deref();
 	Thread::msleep(50);
     }
 
     if (src) {
-	DSoundSource* s = new DSoundSource;
+	DSoundSource* s = new DSoundSource(rate);
 	dd->setSource(s);
 	s->deref();
 	Thread::msleep(50);
@@ -717,7 +724,7 @@ bool SoundDriver::msgExecute(Message& msg, String& dest)
 {
     CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
     if (ch) {
-	DSoundChan *ds = new DSoundChan;
+	DSoundChan *ds = new DSoundChan(msg.getIntValue("rate",s_rate));
 	if (ch->connect(ds,msg.getValue("reason"))) {
 	    msg.setParam("peerid",ds->id());
 	    ds->deref();
@@ -751,7 +758,7 @@ bool SoundDriver::msgExecute(Message& msg, String& dest)
 	}
 	m = "call.execute";
 	m.addParam("callto",callto);
-	DSoundChan *ds = new DSoundChan;
+	DSoundChan *ds = new DSoundChan(msg.getIntValue("rate",8000));
 	m.setParam("targetid",ds->id());
 	m.userData(ds);
 	if (Engine::dispatch(m)) {
@@ -783,33 +790,11 @@ void SoundDriver::initialize()
     Output("Initializing module DirectSound");
     setup(0,true); // no need to install notifications
     Driver::initialize();
+    Configuration cfg(Engine::configFile("dsoundchan"));
+    s_rate = cfg.getIntValue("general","rate",8000);
+    // prefer primary buffer as we try to retain control of audio board
+    s_primary = cfg.getBoolValue("general","primary",true);
     if (!m_handler) {
-	Configuration cfg(Engine::configFile("dsoundchan"));
-	s_chunk = cfg.getIntValue("general","chunk",CHUNK_SIZE);
-	// make sure the chunk is even sized and has some decent limits (20-50 ms)
-	s_chunk &= ~1;
-	if (s_chunk < 320)
-	    s_chunk = 320;
-	if (s_chunk > 800)
-	    s_chunk = 800;
-	s_minsize = cfg.getIntValue("general","minsize",2*s_chunk);
-	s_bufsize = cfg.getIntValue("general","bufsize",4*s_chunk);
-	s_maxsize = cfg.getIntValue("general","maxsize",5*s_chunk);
-	// the buffer MUST hold at least one chunk and about 15ms of audio - we allow 30
-	if (s_bufsize < s_chunk + 480)
-	    s_bufsize = s_chunk + 480;
-	// also keep it under 2s and even sized
-	if (s_bufsize > 32000)
-	    s_bufsize = 32000;
-	s_bufsize &= ~1;
-	// make sure playback can ever start
-	if (s_minsize > s_bufsize - s_chunk)
-	    s_minsize = s_bufsize - s_chunk;
-	// and that we don't do stupid drops
-	if (s_maxsize < s_bufsize + s_chunk)
-	    s_maxsize = s_bufsize + s_chunk;
-	// prefer primary buffer as we try to retain control of audio board
-	s_primary = cfg.getBoolValue("general","primary",true);
 	m_handler = new AttachHandler;
 	Engine::install(m_handler);
     }

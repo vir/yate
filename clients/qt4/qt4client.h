@@ -22,6 +22,9 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
+#ifndef __QT4CLIENT_H
+#define __QT4CLIENT_H
+
 #include <yatecbase.h>
 
 #ifdef _WINDOWS
@@ -606,5 +609,7 @@ private:
 };
 
 }; // namespace TelEngine
+
+#endif // __QT4CLIENT_H
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

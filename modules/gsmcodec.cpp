@@ -132,6 +132,7 @@ unsigned long GsmCodec::Consume(const DataBlock& data, unsigned long tStamp, uns
 }
 
 GsmPlugin::GsmPlugin()
+    : TranslatorFactory("gsm")
 {
     Output("Loaded module GSM - based on libgsm-%d.%d.%d",GSM_MAJOR,GSM_MINOR,GSM_PATCHLEVEL);
     const FormatInfo* f = FormatRepository::addFormat("gsm",33,20000);

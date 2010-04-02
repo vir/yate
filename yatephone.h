@@ -819,8 +819,10 @@ class YATE_API TranslatorFactory : public GenObject
 protected:
     /**
      * Constructor - registers the factory in the global list
+     * @param name Static name of the factory, used for debugging
      */
-    inline TranslatorFactory()
+    inline TranslatorFactory(const char* name = 0)
+	: m_name(name ? name : "?")
 	{ DataTranslator::install(this); }
 
 public:
@@ -875,6 +877,16 @@ public:
      * @return Pointer to intermediate format or NULL
      */
     virtual const FormatInfo* intermediate() const;
+
+    /**
+     * Get the name of this factory, useful for debugging purposes
+     * @return Name of the factory as specified in the constructor
+     */
+    virtual const char* name() const
+	{ return m_name; }
+
+private:
+    const char* m_name;
 };
 
 /**

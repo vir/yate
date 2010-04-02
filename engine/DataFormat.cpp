@@ -299,8 +299,8 @@ public:
 class SimpleFactory : public TranslatorFactory
 {
 public:
-    SimpleFactory(const TranslatorCaps* caps)
-	: m_caps(caps)
+    SimpleFactory(const TranslatorCaps* caps, const char* name)
+	: TranslatorFactory(name), m_caps(caps)
 	{ }
     virtual DataTranslator* create(const DataFormat& sFormat, const DataFormat& dFormat)
 	{ return converts(sFormat,dFormat) ? new SimpleTranslator(sFormat,dFormat) : 0; }
@@ -312,6 +312,9 @@ private:
 
 class ResampFactory : public TranslatorFactory
 {
+public:
+    ResampFactory() : TranslatorFactory("resample")
+	{ }
     virtual DataTranslator* create(const DataFormat& sFormat, const DataFormat& dFormat)
 	{ return converts(sFormat,dFormat) ? new ResampTranslator(sFormat,dFormat) : 0; }
     virtual const TranslatorCaps* getCapabilities() const
@@ -320,6 +323,9 @@ class ResampFactory : public TranslatorFactory
 
 class StereoFactory : public TranslatorFactory
 {
+public:
+    StereoFactory() : TranslatorFactory("stereo")
+	{ }
     virtual DataTranslator* create(const DataFormat& sFormat, const DataFormat& dFormat)
 	{ return converts(sFormat,dFormat) ? new StereoTranslator(sFormat,dFormat) : 0; }
     virtual const TranslatorCaps* getCapabilities() const
@@ -342,9 +348,12 @@ public:
 	{ return m_length; }
     virtual const FormatInfo* intermediate() const;
     virtual bool intermediate(const FormatInfo* info) const;
+    virtual const char* name() const
+	{ return m_name.c_str(); }
 private:
     TranslatorFactory* m_factory1;
     TranslatorFactory* m_factory2;
+    String m_name;
     DataFormat m_format;
     unsigned int m_length;
     const TranslatorCaps* m_capabilities;
@@ -541,7 +550,7 @@ unsigned long DataSource::Forward(const DataBlock& data, unsigned long tStamp, u
 	tStamp = m_nextStamp;
     // still no timestamp known - wild guess based on this packet size
     if (tStamp == invalidStamp()) {
-	DDebug(DebugNote,"Unknow timestamp - assuming %lu + %lu [%p]",
+	DDebug(DebugNote,"Unknown timestamp - assuming %lu + %lu [%p]",
 	    m_timestamp,nSamp,this);
 	tStamp = m_timestamp + nSamp;
     }
@@ -1143,9 +1152,9 @@ Mutex DataTranslator::s_mutex(true,"DataTranslator");
 ObjList DataTranslator::s_factories;
 unsigned int DataTranslator::s_maxChain = 3;
 static ObjList s_compose;
-static SimpleFactory s_sFactory(s_simpleCaps);
-static SimpleFactory s_sFactory16k(s_simpleCaps16k);
-static SimpleFactory s_sFactory32k(s_simpleCaps32k);
+static SimpleFactory s_sFactory(s_simpleCaps,"g711");
+static SimpleFactory s_sFactory16k(s_simpleCaps16k,"g711wb");
+static SimpleFactory s_sFactory32k(s_simpleCaps32k,"g711uwb");
 // FIXME
 static ResampFactory s_rFactory;
 static StereoFactory s_stereoFactory;
@@ -1182,9 +1191,11 @@ void DataTranslator::compose()
 
 void DataTranslator::compose(TranslatorFactory* factory)
 {
-    XDebug(DebugInfo,"Composing TranslatorFactory %p=(%u,'%s')",
-	factory,factory->length(),factory->intermediate() ? factory->intermediate()->name : "");
     const TranslatorCaps* caps = factory->getCapabilities();
+    XDebug(DebugInfo,"Composing TranslatorFactory '%s' (%u,'%s'->'%s'->'%s')",
+	factory->name(),factory->length(),caps ? caps->src->name : "",
+	factory->intermediate() ? factory->intermediate()->name : "",
+	caps ? caps->dest->name : "");
     if ((!caps) || (factory->length() >= s_maxChain))
 	return;
     Lock lock(s_mutex);
@@ -1195,27 +1206,42 @@ void DataTranslator::compose(TranslatorFactory* factory)
 	if (f2 == factory)
 	    continue;
 	// don't try to build a too long chain
-	if ((factory->length() + f2->length()) > s_maxChain)
+	if ((factory->length() + f2->length()) > s_maxChain) {
+	    XDebug(DebugAll,"Chain would be too long");
 	    continue;
+	}
+	const FormatInfo* fi;
 	// and avoid loops
-	if (factory->intermediate(f2->intermediate()) ||
-	    f2->intermediate(factory->intermediate()))
+	if (factory->intermediate(fi = f2->intermediate()) ||
+	    f2->intermediate(fi = factory->intermediate())) {
+	    XDebug(DebugAll,"Would directly loop through format '%s'",fi->name);
 	    continue;
-	XDebug(DebugInfo,"Composing %p with %p=(%u,'%s')",
-	    factory,f2,f2->length(),f2->intermediate() ? f2->intermediate()->name : "");
+	}
 	const TranslatorCaps* c2 = f2->getCapabilities();
+	XDebug(DebugInfo,"Composing '%s' with '%s' (%u,'%s'->'%s'->'%s')",
+	    factory->name(),f2->name(),f2->length(),c2 ? c2->src->name : "",
+	    f2->intermediate() ? f2->intermediate()->name : "",
+	    c2 ? c2->dest->name : "");
 	for (; c2 && c2->src && c2->dest; c2++) {
-	    if (factory->intermediate(c2->src) || factory->intermediate(c2->dest))
+	    if (!(c2->src->converter || c2->dest->converter))
+		continue;
+	    if (factory->intermediate(fi = c2->src) || factory->intermediate(fi = c2->dest)) {
+		XDebug(DebugAll,"Factory '%s' already has intermediate '%s'",factory->name(),fi->name);
 		break;
+	    }
 	    for (const TranslatorCaps* c = caps; c->src && c->dest; c++) {
-		if (f2->intermediate(c->src) || f2->intermediate(c->dest)) {
-		    c2 = 0;
+		if (!(c->src->converter || c->dest->converter))
+		    continue;
+		if (f2->intermediate(fi = c->src) || f2->intermediate(fi = c->dest)) {
+		    XDebug(DebugAll,"Factory '%s' already has intermediate '%s'",f2->name(),fi->name);
 		    break;
 		}
 		if ((c->src == c2->dest) && c->src->converter) {
-		    if (canConvert(c2->src,c->dest))
+		    if (canConvert(c2->src,c->dest)) {
+			XDebug(DebugAll,"Can already convert '%s' to '%s'",c2->src->name,c->dest->name);
 			continue;
-		    DDebug(DebugInfo,"Building chain (%s,...)%s%s -> (%s) -> %s%s(%s,...)",
+		    }
+		    DDebug(DebugInfo,"Building chain (%s)%s%s -> (%s) -> %s%s(%s)",
 			c2->src->name,
 			f2->intermediate() ? " -> " : "",
 			f2->intermediate() ? f2->intermediate()->name : "",
@@ -1224,13 +1250,14 @@ void DataTranslator::compose(TranslatorFactory* factory)
 			factory->intermediate() ? " -> " : "",
 			c->dest->name);
 		    new ChainedFactory(f2,factory,c->src);
-		    c2 = 0;
 		    break;
 		}
 		if ((c2->src == c->dest) && c2->src->converter) {
-		    if (canConvert(c->src,c2->dest))
+		    if (canConvert(c->src,c2->dest)) {
+			XDebug(DebugAll,"Can already convert '%s' to '%s'",c->src->name,c2->dest->name);
 			continue;
-		    DDebug(DebugInfo,"Building chain (%s,...)%s%s -> (%s) -> %s%s(%s,...)",
+		    }
+		    DDebug(DebugInfo,"Building chain (%s)%s%s -> (%s) -> %s%s(%s)",
 			c->src->name,
 			factory->intermediate() ? " -> " : "",
 			factory->intermediate() ? factory->intermediate()->name : "",
@@ -1239,12 +1266,9 @@ void DataTranslator::compose(TranslatorFactory* factory)
 			f2->intermediate() ? " -> " : "",
 			c2->dest->name);
 		    new ChainedFactory(factory,f2,c->dest);
-		    c2 = 0;
 		    break;
 		}
 	    }
-	    if (!c2)
-		break;
 	}
     }
 }
@@ -1583,15 +1607,17 @@ bool TranslatorFactory::converts(const DataFormat& sFormat, const DataFormat& dF
 
 
 ChainedFactory::ChainedFactory(TranslatorFactory* factory1, TranslatorFactory* factory2, const FormatInfo* info)
-    : m_factory1(factory1), m_factory2(factory2), m_format(info),
+    : TranslatorFactory("chained"),
+      m_factory1(factory1), m_factory2(factory2), m_format(info),
       m_length(factory1->length()+factory2->length()), m_capabilities(0)
 {
-    XDebug(DebugInfo,"ChainedFactory::ChainedFactory(%p=(%d,'%s'),%p=(%d,'%s'),'%s') len=%u [%p]",
-	factory1,factory1->length(),factory1->intermediate() ? factory1->intermediate()->name : "",
-	factory2,factory2->length(),factory2->intermediate() ? factory2->intermediate()->name : "",
+    XDebug(DebugInfo,"ChainedFactory::ChainedFactory('%s' (%d,'%s'), '%s' (%d,'%s'),'%s') len=%u [%p]",
+	factory1->name(),factory1->length(),factory1->intermediate() ? factory1->intermediate()->name : "",
+	factory2->name(),factory2->length(),factory2->intermediate() ? factory2->intermediate()->name : "",
 	info->name,m_length,this);
+    m_name << factory1->name() << "(" << info->name << ")" << factory2->name();
     if (!info->converter)
-	Debug(DebugMild,"Building chain factory using non-converter format '%s'",info->name);
+	Debug(DebugMild,"Building chain factory '%s' using non-converter format",m_name.c_str());
     const TranslatorCaps* cap1 = factory1->getCapabilities();
     const TranslatorCaps* cap2 = factory2->getCapabilities();
     int c1 = 0;
@@ -1639,8 +1665,8 @@ ChainedFactory::ChainedFactory(TranslatorFactory* factory1, TranslatorFactory* f
 
 ChainedFactory::~ChainedFactory()
 {
-    XDebug(DebugInfo,"ChainedFactory::~ChainedFactory() %p,%p,'%s' [%p]",
-	m_factory1,m_factory2,m_format.c_str(),this);
+    XDebug(DebugInfo,"ChainedFactory::~ChainedFactory() '%s' [%p]",
+	m_name.c_str(),this);
     delete[] const_cast<TranslatorCaps*>(m_capabilities);
     m_capabilities = 0;
 }

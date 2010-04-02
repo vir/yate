@@ -54,7 +54,7 @@ class iLBCFactory : public TranslatorFactory
 {
 public:
     inline iLBCFactory(const TranslatorCaps* caps)
-	: m_caps(caps)
+	: TranslatorFactory("ilbc"), m_caps(caps)
 	{ }
     virtual const TranslatorCaps* getCapabilities() const
 	{ return m_caps; }
@@ -94,7 +94,7 @@ iLBCCodec::iLBCCodec(const char* sFormat, const char* dFormat, bool encoding, in
 {
     Debug(DebugAll,"iLBCCodec::iLBCCodec(\"%s\",\"%s\",%scoding,%d) [%p]",
 	sFormat,dFormat, m_encoding ? "en" : "de",msec,this);
-    
+
     if (encoding) {
 	memset(&m_enc,0,sizeof(m_enc));
 	initEncode(&m_enc,m_mode);

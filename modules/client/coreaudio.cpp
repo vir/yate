@@ -29,6 +29,7 @@
 #include <AudioToolbox/AudioToolbox.h>
 
 #define FRAME_SIZE 320
+#define DEFAULT_SAMPLE_RATE 8000
 
 using namespace TelEngine;
 
@@ -37,10 +38,10 @@ namespace { //anonymous
 class CoreAudioSource : public ThreadedSource
 {
 public:
-    CoreAudioSource();
+    CoreAudioSource(unsigned int rate = DEFAULT_SAMPLE_RATE);
     ~CoreAudioSource();
     // inherited methods
-    bool init(const String& type);
+    bool init();
     virtual void run();
     virtual void cleanup();
     virtual bool control(NamedList& params);
@@ -58,8 +59,11 @@ public:
     OSStatus buildConverter(AudioStreamBasicDescription inFormat, AudioConverterRef* ac);
 	
     // obtain the output format of the AudioUnit
-    inline AudioStreamBasicDescription outFormat()
+    inline AudioStreamBasicDescription outFormat() const
 	{ return m_outDevFormat; }
+    // obtain the output sample rate
+    inline unsigned int rate() const
+	{ return m_rate; }
 	
 private:
     // callback for obtaining data from input source
@@ -83,18 +87,23 @@ private:
     bool m_volSettable;
     // internal buffer
     DataBlock m_data;
+    // output sample rate
+    unsigned int m_rate;
 };
 
 class CoreAudioConsumer : public DataConsumer, public Mutex
 {
 public:
-    CoreAudioConsumer();
+    CoreAudioConsumer(unsigned int rate = DEFAULT_SAMPLE_RATE);
     ~CoreAudioConsumer();
-    bool init(const String& type);
+    bool init();
     // inherited methods
     virtual unsigned long Consume(const DataBlock &data, unsigned long tStamp, unsigned long flags);
     virtual bool control(NamedList& params);
     virtual void getData(AudioBufferList* buf);
+    // obtain the input sample rate
+    inline unsigned int rate() const
+	{ return m_rate; }
 
 private:
     // callback through which the AudioUnit requires data to play
@@ -110,12 +119,14 @@ private:
     AudioDeviceID fOutputDevID;
     // internal buffer
     DataBlock m_data;
+    // input sample rate
+    unsigned int m_rate;
 };
 	
 class CoreAudioChan : public CallEndpoint
 {
 public:
-    CoreAudioChan(const String& dev);
+    CoreAudioChan(const String& dev, unsigned int rate = DEFAULT_SAMPLE_RATE);
     ~CoreAudioChan();
     bool init();
     virtual void disconnected(bool final, const char *reason);
@@ -124,10 +135,12 @@ public:
 	{ m_target = target; }
     inline const String& getTarget() const
 	{ return m_target; }
-			
+    inline unsigned int rate() const
+	{ return m_rate; }			
 private:
     String m_dev;
     String m_target;
+    unsigned int m_rate;
 };
 	
 class CoreAudioHandler : public MessageHandler
@@ -223,10 +236,13 @@ OSStatus convertCallback(AudioConverterRef inAudioConverter, UInt32* ioNumberDat
     return noErr;
 }
 
-CoreAudioSource::CoreAudioSource()
-    : m_inAudioBuffer(0), m_audioConvert(NULL), fInputDevID(0), m_total(0)
+CoreAudioSource::CoreAudioSource(unsigned int rate)
+    : m_inAudioBuffer(0), m_audioConvert(NULL), fInputDevID(0),
+      m_total(0), m_rate(rate)
 {
     Debug(DebugAll,"CoreAudioSource::CoreAudioSource() [%p]",this);
+    if (m_rate != DEFAULT_SAMPLE_RATE)
+	m_format << "/" << m_rate;
 }
 
 CoreAudioSource::~CoreAudioSource()
@@ -241,7 +257,7 @@ CoreAudioSource::~CoreAudioSource()
     destroyAudioBufferList(m_inAudioBuffer);
 }
 	
-bool CoreAudioSource::init(const String& type)
+bool CoreAudioSource::init()
 {
     OSStatus err = noErr;
     UInt32  param;
@@ -391,7 +407,7 @@ bool CoreAudioSource::init(const String& type)
 OSStatus CoreAudioSource::buildConverter(AudioStreamBasicDescription inputFormat, AudioConverterRef* ac)
 {
     m_convertToFormat.mChannelsPerFrame = 1;
-    m_convertToFormat.mSampleRate = 8000.0;
+    m_convertToFormat.mSampleRate = rate();
     m_convertToFormat.mFormatID = kAudioFormatLinearPCM;
     m_convertToFormat.mFormatFlags = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
     m_convertToFormat.mFormatFlags &= ~kAudioFormatFlagIsBigEndian;
@@ -567,11 +583,13 @@ bool CoreAudioSource::control(NamedList& params)
 }
 	
 	
-CoreAudioConsumer::CoreAudioConsumer()
+CoreAudioConsumer::CoreAudioConsumer(unsigned int rate)
     : Mutex(false,"CoreAudioConsumer"),
-      m_total(0), m_volSettable(false), fOutputDevID(0)
+      m_total(0), m_volSettable(false), fOutputDevID(0), m_rate(rate)
 {
     Debug(DebugAll,"AudioSystemConsumer::AudioSystemConsumer() [%p]",this);
+    if (m_rate != DEFAULT_SAMPLE_RATE)
+	m_format << "/" << m_rate;
 }
 	
 CoreAudioConsumer::~CoreAudioConsumer()
@@ -585,7 +603,7 @@ CoreAudioConsumer::~CoreAudioConsumer()
     	Debug(DebugInfo,"CoreAudioConsumer::~CoreAudioConsumer() [%p] - Failed to uninitialize the AudioUnit error=%4.4s, %ld",this,(char*)&err,err);
 }
 	
-bool CoreAudioConsumer::init(const String& type)
+bool CoreAudioConsumer::init()
 {
     OSStatus err = noErr;
 
@@ -616,7 +634,7 @@ bool CoreAudioConsumer::init(const String& type)
 
     // provide the input format of the date we're supplying
     AudioStreamBasicDescription inputFormat;
-    inputFormat.mSampleRate = 8000.0;
+    inputFormat.mSampleRate = rate();
     inputFormat.mFormatID = kAudioFormatLinearPCM;
     inputFormat.mBitsPerChannel = sizeof(int16_t) * 8; //  = 16
     inputFormat.mBytesPerFrame = inputFormat.mBitsPerChannel / 8;
@@ -631,6 +649,11 @@ bool CoreAudioConsumer::init(const String& type)
 	Debug(DebugInfo,"CoreAudioConsumer::init() [%p] - set input format failed error==%4.4s, %ld",this,(char*)&err,err);
 	return false;
     }
+    DDebug(DebugInfo,"CoreAudioConsumer::init() [%p] - intput format is : channels/frame=%u, sampleRate=%f, bits/channel=%u, "
+	   "bytes/frame=%u, frames/packet=%u, bytes/packet=%u, formatFlags=0x%x",
+	   this,(unsigned int)inputFormat.mChannelsPerFrame,inputFormat.mSampleRate,(unsigned int)inputFormat.mBitsPerChannel,
+	   (unsigned int)inputFormat.mBytesPerFrame,(unsigned int)inputFormat.mFramesPerPacket,(unsigned int)inputFormat.mBytesPerPacket,
+	   (unsigned int)inputFormat.mFormatFlags);
 
     // initialize the AudioUnit
     err = AudioUnitInitialize(fAudioUnit);
@@ -719,9 +742,9 @@ bool CoreAudioConsumer::control(NamedList& params)
     return err1 == noErr && err2 == noErr;
 }
 	
-CoreAudioChan::CoreAudioChan(const String& dev)
+CoreAudioChan::CoreAudioChan(const String& dev, unsigned int rate)
     : CallEndpoint("coreaudio"),
-	  m_dev(dev)
+      m_dev(dev), m_rate(rate)
 {
     Debug(DebugAll,"CoreAudioChan::CoreAudioChan ('%s') [%p]",dev.c_str(),this);
     s_audioChan = this;
@@ -738,15 +761,15 @@ CoreAudioChan::~CoreAudioChan()
 	
 bool CoreAudioChan::init()
 {
-    CoreAudioSource* source = new CoreAudioSource();
-    if (!source->init(m_dev)) {
+    CoreAudioSource* source = new CoreAudioSource(rate());
+    if (!source->init()) {
 	source->deref();
 	return false;
     }
     setSource(source);
     source->deref();
-    CoreAudioConsumer* cons = new CoreAudioConsumer();
-    if (!cons->init(m_dev)) {
+    CoreAudioConsumer* cons = new CoreAudioConsumer(rate());
+    if (!cons->init()) {
 	cons->deref();
 	setSource();
 	return false;
@@ -787,7 +810,7 @@ bool CoreAudioHandler::received(Message &msg)
         msg.setParam("error","busy");
         return false;
     }
-    CoreAudioChan *chan = new CoreAudioChan(dest.matchString(1).c_str());
+    CoreAudioChan *chan = new CoreAudioChan(dest.matchString(1).c_str(),msg.getIntValue("rate",DEFAULT_SAMPLE_RATE));
     if (!chan->init()) 	{
         chan->destruct();
         return false;
@@ -932,15 +955,15 @@ bool AttachHandler::received(Message& msg)
     }
 	
     if (src) {
-	CoreAudioSource* s = new CoreAudioSource();
-	if (s->init(src))
+	CoreAudioSource* s = new CoreAudioSource(msg.getIntValue("rate",DEFAULT_SAMPLE_RATE));
+	if (s->init())
 	    dd->setSource(s);
 	s->deref();
     }
 	
     if (cons) {
-	CoreAudioConsumer* c = new CoreAudioConsumer();
-	if (c->init(cons))
+	CoreAudioConsumer* c = new CoreAudioConsumer(msg.getIntValue("rate",DEFAULT_SAMPLE_RATE));
+	if (c->init())
 	    dd->setConsumer(c);
 	c->deref();
     }

@@ -2325,9 +2325,9 @@ SignallingCircuitGroup* SigTrunk::buildCircuits(NamedList& params, const String&
 	error = "Missing or invalid voice parameter";
 	return 0;
     }
+    unsigned int start = params.getIntValue("offset",0);
     SignallingCircuitGroup* group =
 	new SignallingCircuitGroup(0,SignallingCircuitGroup::Increment,debugName);
-    unsigned int start = 0;
     for (ObjList* o = voice->skipNull(); o; o = o->skipNext()) {
 	String* s = static_cast<String*>(o->get());
 	if (s->null())

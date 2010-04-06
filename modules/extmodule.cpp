@@ -169,7 +169,7 @@ private:
     bool m_accepted;
 };
 
-class MsgHolder : public GenObject
+class MsgHolder : public GenObject, public Semaphore
 {
 public:
     MsgHolder(Message &msg);
@@ -910,7 +910,7 @@ bool ExtModReceiver::received(Message &msg, int id)
     //  other thread - unfortunately this does not work with all mutexes
     // sorry, Maciek - have to do it work in Windows too :-(
     while (ok) {
-	Thread::yield();
+	h.lock(Thread::idleUsec());
 	lock();
 	ok = (m_waiting.find(&h) != 0);
 	if (ok && tout && (Time::now() > tout)) {
@@ -1246,6 +1246,7 @@ bool ExtModReceiver::processLine(const char* line)
 		    m_chan->waitMsg(0);
 		    m_chan->waiting(true);
 		}
+		msg->unlock();
 		p->remove(false);
 		return false;
 	    }

@@ -1002,7 +1002,6 @@ if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
     fi
     incqt=`pkg-config --cflags QtNetwork QtGui QtXml QtCore 2>/dev/null | sed 's/QtNetwork/QtUiTools/'`
     libqt=`pkg-config --libs QtNetwork QtGui QtXml QtCore 2>/dev/null | sed 's/QtNetwork/QtUiTools/'`
-    unset PKG_CONFIG_LIBDIR
     if [[ "x$incqt" != "x" -a "x$libqt" != "x" ]]; then
 	HAVE_QT4=yes
 	QT4_INC="$incqt"
@@ -1021,6 +1020,7 @@ if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
     else
 	verqt="no"
     fi
+    unset PKG_CONFIG_LIBDIR
     AC_MSG_RESULT([$verqt])
 
     if [[ "x$HAVE_QT4" = "xno" ]]; then

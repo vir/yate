@@ -3615,6 +3615,14 @@ void YateSIPLine::login()
 	setValid(false);
 	return;
     }
+
+    if (m_localDetect) {
+	if (m_localAddr.null())
+	    m_localAddr = m->getParty()->getLocalAddr();
+	if (!m_localPort)
+	    m_localPort = m->getParty()->getLocalPort();
+    }
+
     DDebug(&plugin,DebugInfo,"YateSIPLine '%s' emiting %p [%p]",
 	c_str(),m,this);
     m_tr = plugin.ep()->engine()->addMessage(m);

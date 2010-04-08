@@ -2774,7 +2774,8 @@ QMenu* QtClient::buildMenu(NamedList& params, const char* text, QObject* receive
 	 const char* aboutToShowSlot)
 {
     QMenu* menu = 0;
-    for (unsigned int i = 0; i < params.length(); i++) {
+    unsigned int n = params.length();
+    for (unsigned int i = 0; i < n; i++) {
 	NamedString* param = params.getParam(i);
 	if (!(param && param->name().startsWith("item:")))
 	    continue;
@@ -2782,20 +2783,31 @@ QMenu* QtClient::buildMenu(NamedList& params, const char* text, QObject* receive
 	if (!menu)
 	    menu = new QMenu(setUtf8(text),parent);
 
-        String name = param->name().substr(5);
 	NamedList* p = static_cast<NamedList*>(param->getObject("NamedList"));
-	QAction* action = 0;
 	if (p)  {
 	    QMenu* subMenu = buildMenu(*p,*param,receiver,triggerSlot,toggleSlot,menu);
 	    if (subMenu)
-		action = menu->addMenu(subMenu);
+		menu->addMenu(subMenu);
+	    continue;
 	}
-	else if (*param) {
-	    action = menu->addAction(QtClient::setUtf8(*param));
-	    action->setObjectName(QtClient::setUtf8(name));
+	String name = param->name().substr(5);
+	if (*param) {
+	    QAction* a = menu->addAction(QtClient::setUtf8(*param));
+	    a->setObjectName(QtClient::setUtf8(name));
 	}
-	else
+	else if (!name)
 	    menu->addSeparator();
+	else {
+	    // Check if the action is already there
+	    QAction* a = 0;
+	    if (parent && parent->window())
+		a = qFindChild<QAction*>(parent->window(),QtClient::setUtf8(name));
+	    if (a)
+		menu->addAction(a);
+	    else
+		Debug(ClientDriver::self(),DebugNote,
+		    "buildMenu(%s) action '%s' not found",params.c_str(),name.c_str());
+	}
     }
 
     if (!menu)
@@ -2806,7 +2818,7 @@ QMenu* QtClient::buildMenu(NamedList& params, const char* text, QObject* receive
     // Apply properties
     // Format: property:object_name:property_name=value
     if (parent)
-	for (unsigned int i = 0; i < params.length(); i++) {
+	for (unsigned int i = 0; i < n; i++) {
 	    NamedString* param = params.getParam(i);
 	    if (!(param && param->name().startsWith("property:")))
 		continue;
@@ -2817,9 +2829,11 @@ QMenu* QtClient::buildMenu(NamedList& params, const char* text, QObject* receive
 	    if (obj)
 		setProperty(obj,param->name().substr(pos + 1),*param);
 	}
-    // Connect signals
+    // Connect signals (direct children only: actions from sub-menus are already connected)
     QList<QAction*> list = qFindChildren<QAction*>(menu);
     for (int i = 0; i < list.size(); i++) {
+	if (list[i]->isSeparator() || list[i]->parent() != menu)
+	    continue;
 	if (list[i]->isCheckable())
 	    QtClient::connectObjects(list[i],SIGNAL(toggled(bool)),receiver,toggleSlot);
 	else

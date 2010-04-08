@@ -233,6 +233,36 @@ public:
     static bool getProperty(QObject* obj, const char* name, String& value);
 
     /**
+     * Get an object's property and return its boolean conversion
+     * @param obj The object
+     * @param name Property name
+     * @param defVal Default value to return if the property is not found or has
+     *  invalid boolean value
+     * @return The boolean conversion of the property or given default value
+     */
+    static inline bool getBoolProperty(QObject* obj, const char* name,
+	bool defVal = false) {
+	    String tmp;
+	    if (!getProperty(obj,name,tmp))
+		return defVal;
+	    return tmp.toBoolean(defVal);
+	}
+
+    /**
+     * Associate actions to buttons with '_yate_setaction' property set
+     * @param parent Parent widget
+     */
+    static void setAction(QWidget* parent);
+
+    /**
+     * Check if an object has '_yate_noautoconnect' boolean property set to true
+     * @param obj The object
+     * @return True if the object don't have the property or its value is not a boolean 'true'
+     */
+    static inline bool autoConnect(QObject* obj)
+	{ return !getBoolProperty(obj,"_yate_noautoconnect"); }
+
+    /**
      * Retrieve an object's identity from '_yate_identity' property or object name
      * @param obj The object
      * @param ident String to be filled with object identity
@@ -419,6 +449,19 @@ public:
     virtual void moveRel(int dx, int dy);
     virtual bool related(const Window* wnd) const;
     virtual void menu(int x, int y) ;
+
+    /**
+     * Connect an abstract button to window slots
+     * @param b The button to connect
+     * @return True on success
+     */
+    inline bool connectButton(QAbstractButton* b) {
+	    if (!b)
+		return false;
+	    if (!b->isCheckable())
+		return QtClient::connectObjects(b,SIGNAL(clicked()),this,SLOT(action()));
+	    return QtClient::connectObjects(b,SIGNAL(toggled(bool)),this,SLOT(toggled(bool)));
+	}
 
     /**
      * Load a widget from file

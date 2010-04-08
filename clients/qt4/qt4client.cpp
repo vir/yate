@@ -2280,7 +2280,10 @@ void QtWindow::doInit()
 	if (sect && *sect && *sect != "general")
 	    addDynamicProps(qFindChild<QObject*>(this,sect->c_str()),*sect);
     }
-	
+
+    // Process "_yate_setaction" property for our children
+    QtClient::setAction(this);
+
     // Connect actions' signal
     QList<QAction*> actions = qFindChildren<QAction*>(this);
     for (int i = 0; i < actions.size(); i++) {
@@ -2302,10 +2305,8 @@ void QtWindow::doInit()
     // Connect abstract buttons (check boxes and radio/push/tool buttons) signals
     QList<QAbstractButton*> buttons = qFindChildren<QAbstractButton*>(this);
     for(int i = 0; i < buttons.size(); i++)
-	if (buttons[i]->isCheckable())
-	    QtClient::connectObjects(buttons[i],SIGNAL(toggled(bool)),this,SLOT(toggled(bool)));
-	else
-	    QtClient::connectObjects(buttons[i],SIGNAL(clicked()),this,SLOT(action()));
+	if (QtClient::autoConnect(buttons[i]))
+	    connectButton(buttons[i]);
 
     // Connect group boxes signals
     QList<QGroupBox*> grp = qFindChildren<QGroupBox*>(this);
@@ -2749,6 +2750,22 @@ bool QtClient::getProperty(QObject* obj, const char* name, String& value)
 	name,var.typeName(),YQT_OBJECT_NAME(obj),
 	((var.type() == QVariant::Invalid) ? "no such property" : "unsupported type"));
     return false;
+}
+
+// Associate actions to buttons with '_yate_setaction' property set
+void QtClient::setAction(QWidget* parent)
+{
+    if (!parent)
+	return;
+    QList<QToolButton*> tb = qFindChildren<QToolButton*>(parent);
+    for (int i = 0; i < tb.size(); i++) {
+	QVariant var = tb[i]->property("_yate_setaction");
+	if (var.toString().isEmpty())
+	    continue;
+	QAction* a = qFindChild<QAction*>(parent,var.toString());
+	if (a)
+	    tb[i]->setDefaultAction(a);
+    }
 }
 
 // Build a menu object from a list of parameters

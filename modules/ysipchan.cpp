@@ -2136,8 +2136,7 @@ void YateSIPConnection::hangup()
     clearTransaction();
     m_state = Cleared;
 
-    if (m_byebye) {
-	m_byebye = false;
+    if (m_byebye && m_dialog.localTag && m_dialog.remoteTag) {
 	SIPMessage* m = createDlgMsg("BYE");
 	if (m) {
 	    if (m_reason) {
@@ -2155,6 +2154,7 @@ void YateSIPConnection::hangup()
 	    m->deref();
 	}
     }
+    m_byebye = false;
     if (!error)
 	error = m_reason.c_str();
     disconnect(error,parameters());

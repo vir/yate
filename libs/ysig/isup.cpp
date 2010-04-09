@@ -1187,6 +1187,12 @@ static const MsgParams s_ansi_params[] = {
 		SS7MsgISUP::EndOfParameters
 	}
     },
+    { SS7MsgISUP::RLC, false,
+	{
+	SS7MsgISUP::EndOfParameters,
+	SS7MsgISUP::EndOfParameters
+	}
+    },
     { SS7MsgISUP::Unknown, false, { SS7MsgISUP::EndOfParameters } }
 };
 
@@ -2764,11 +2770,15 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
     } // while ((ptype = *plist++)...
     // now decode the optional parameters if the message supports them
     if (params->optional) {
-	unsigned int offs = paramPtr[0];
+	unsigned int offs = paramLen ? paramPtr[0] : 0;
 	if (offs >= paramLen) {
-	    Debug(this,DebugWarn,"Invalid ISUP optional offset %u (len=%u) [%p]",
-		offs,paramLen,this);
-	    return false;
+	    if (paramLen) {
+		Debug(this,DebugWarn,"Invalid ISUP optional offset %u (len=%u) [%p]",
+		    offs,paramLen,this);
+		return false;
+	    }
+	    Debug(this,DebugMild,"ISUP message %s lacking optional parameters [%p]",
+		msgName,this);
 	}
 	else if (offs) {
 	    mustWarn = true;

@@ -809,6 +809,33 @@ static const SignallingFlags s_flags_mcid[] = {
     { 0, 0, 0 }
 };
 
+// ANSI Circuit Validation Response Indicator
+static const SignallingFlags s_flags_ansi_cvri[] = {
+    { 0x03, 0x00, "failed" },
+    { 0x03, 0x01, "success" },
+    { 0, 0, 0 }
+};
+
+// ANSI Circuit Group Characteristics Indicator
+static const SignallingFlags s_flags_ansi_cgci[] = {
+    { 0x03, 0x00, "carrier-unknown" },
+    { 0x03, 0x01, "carrier-analog" },
+    { 0x03, 0x02, "carrier-digital" },
+    { 0x03, 0x03, "carrier-mixed" },
+    { 0x0c, 0x00, "seize-none" },
+    { 0x0c, 0x04, "seize-odd" },
+    { 0x0c, 0x08, "seize-even" },
+    { 0x0c, 0x0c, "seize-all" },
+    { 0x30, 0x00, "alarm-default" },
+    { 0x30, 0x10, "alarm-software" },
+    { 0x30, 0x20, "alarm-hardware" },
+    { 0xc0, 0x00, "continuity-unknown" },
+    { 0xc0, 0x40, "continuity-none" },
+    { 0xc0, 0x80, "continuity-statistical" },
+    { 0xc0, 0xc0, "continuity-call" },
+    { 0, 0, 0 }
+};
+
 // Calling Party Category (Q.763 3.11)
 static TokenDict s_dict_callerCat[] = {
     { "unknown",     0 },                // calling party's category is unknown
@@ -934,8 +961,8 @@ static const IsupParam s_paramDefs[] = {
     MAKE_PARAM(CarrierSelectionInformation,    0,0,             0,             0),                    //
     MAKE_PARAM(ChargeNumber,                   0,0,             0,             0),                    //
     MAKE_PARAM(CircuitAssignmentMap,           0,0,             0,             0),                    //
-    MAKE_PARAM(CircuitGroupCharactIndicator,   0,0,             0,             0),                    //
-    MAKE_PARAM(CircuitValidationRespIndicator, 0,0,             0,             0),                    //
+    MAKE_PARAM(CircuitGroupCharactIndicator,   1,decodeFlags,   encodeFlags,   s_flags_ansi_cgci),    // T1.113 ??
+    MAKE_PARAM(CircuitValidationRespIndicator, 1,decodeFlags,   encodeFlags,   s_flags_ansi_cvri),    // T1.113 ??
     MAKE_PARAM(CommonLanguage,                 0,0,             0,             0),                    //
     MAKE_PARAM(CUG_CheckResponseIndicators,    0,0,             0,             0),                    //
     MAKE_PARAM(Egress,                         0,0,             0,             0),                    //
@@ -1189,6 +1216,20 @@ static const MsgParams s_ansi_params[] = {
     },
     { SS7MsgISUP::RLC, false,
 	{
+	SS7MsgISUP::EndOfParameters,
+	SS7MsgISUP::EndOfParameters
+	}
+    },
+    { SS7MsgISUP::CVT, false,
+	{
+	SS7MsgISUP::EndOfParameters,
+	SS7MsgISUP::EndOfParameters
+	}
+    },
+    { SS7MsgISUP::CVR, true,
+	{
+	    SS7MsgISUP::CircuitValidationRespIndicator,
+	    SS7MsgISUP::CircuitGroupCharactIndicator,
 	SS7MsgISUP::EndOfParameters,
 	SS7MsgISUP::EndOfParameters
 	}
@@ -3234,6 +3275,15 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    // TODO: stop receiving segments
 	case SS7MsgISUP::CQR: // Circuit Group Query Response (national use)
 	    reason = "wrong-state-message";
+	    break;
+	case SS7MsgISUP::CVT: // Circuit Validation Test (ANSI)
+	    if (circuits() && circuits()->find(msg->cic())) {
+		SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::CVR,msg->cic());
+		m->params().addParam("CircuitValidationRespIndicator","success");
+		transmitMessage(m,label,true,sls);
+	    }
+	    else
+		reason = "unknown-channel";
 	    break;
 	case SS7MsgISUP::CQM: // Circuit Group Query (national use)
 	case SS7MsgISUP::COT: // Continuity

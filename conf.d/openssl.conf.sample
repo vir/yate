@@ -3,7 +3,7 @@
 
 [general]
 
-[server_context]
+;[server_context]
 ; This section configures a SSL server context
 
 ; enable: boolean: Enable or disable the context

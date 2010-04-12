@@ -6060,6 +6060,13 @@ public:
     virtual void cleanup(const char* reason = "offline");
 
     /**
+     * Query or modify ISUP's settings or operational parameters
+     * @param params The list of parameters to query or change
+     * @return True if the control operation was executed
+     */
+    virtual bool control(NamedList& params);
+
+    /**
      * Decode an ISUP message buffer to a list of parameters
      * @param msg Destination list of parameters
      * @param msgType The message type

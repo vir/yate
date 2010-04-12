@@ -360,7 +360,7 @@ bool PgHandler::received(Message& msg)
     if (!db)
 	return false;
     str = msg.getParam("query");
-    if (TelEngine::null(str))
+    if (!TelEngine::null(str))
 	db->queryDb(*str,&msg);
     msg.setParam("dbtype","pgsqldb");
     return true;

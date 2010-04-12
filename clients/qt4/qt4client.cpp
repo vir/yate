@@ -1781,6 +1781,12 @@ void QtWindow::closeEvent(QCloseEvent* event)
     // NOTE: Don't access window's data after calling hide():
     //  some logics might destroy the window when hidden
 
+    // Notify window closed
+    String tmp;
+    if (Client::self() &&
+	QtClient::getProperty(wndWidget(),"_yate_windowclosedaction",tmp))
+	Client::self()->action(this,tmp);
+
     // Hide the window when requested
     String hideWnd;
     if (QtClient::getProperty(wndWidget(),"dynamicHideOnClose",hideWnd)	&&

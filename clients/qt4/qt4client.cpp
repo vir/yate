@@ -2108,6 +2108,17 @@ void QtWindow::keyPressEvent(QKeyEvent* event)
 void QtWindow::setVisible(bool visible)
 {
     if (visible && !isMaximized()) {
+	// Override position for notification windows
+	if (QtClient::getBoolProperty(wndWidget(),"_yate_notificationwindow")) {
+	    QDesktopWidget* d = QApplication::desktop();
+	    if (d) {
+		QRect r = d->availableGeometry(this);
+		if (r.width() > m_width)
+		    m_x = r.width() - m_width;
+		if (r.height() > m_height)
+		    m_y = r.height() - m_height;
+	    }
+	}
 	QWidget::move(m_x,m_y);
 	resize(m_width,m_height);
     }

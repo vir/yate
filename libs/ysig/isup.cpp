@@ -3345,6 +3345,63 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		reason = "unknown-channel";
 	    break;
 	case SS7MsgISUP::CQM: // Circuit Group Query (national use)
+	    if (circuits()) {
+		// Q.763 3.43 min=1 max=31
+		unsigned int n = getRangeAndStatus(msg->params(),1,31);
+		if (!n) {
+		    reason = "invalid-ie";
+		    break;
+		}
+		DataBlock si(0,n);
+		for (unsigned int i = 0; i < n; i++) {
+		    unsigned char* state = si.data(i);
+		    if (!state)
+			break;
+		    SignallingCircuit* circuit = circuits()->find(msg->cic()+i);
+		    if (circuit && (circuit->status() != SignallingCircuit::Missing)) {
+			switch (circuit->locked(SignallingCircuit::LockLocalMaint | SignallingCircuit::LockRemoteMaint)) {
+			    case SignallingCircuit::LockLocalMaint:
+				*state = 0x01; // locally maint blocked
+				break;
+			    case SignallingCircuit::LockRemoteMaint:
+				*state = 0x02; // remote maint blocked
+				break;
+			    case SignallingCircuit::LockLocalMaint | SignallingCircuit::LockRemoteMaint:
+				*state = 0x03; // locally and remote maint blocked
+				break;
+			}
+			switch (circuit->locked(SignallingCircuit::LockLocalHWFail | SignallingCircuit::LockRemoteHWFail)) {
+			    case SignallingCircuit::LockLocalHWFail:
+				*state |= 0x1c; // locally hw blocked
+				continue;
+			    case SignallingCircuit::LockRemoteHWFail:
+				*state |= 0x2c; // locally hw blocked
+				continue;
+			    case SignallingCircuit::LockLocalHWFail | SignallingCircuit::LockRemoteHWFail:
+				*state |= 0x3c; // locally and remotely hw blocked
+				continue;
+			}
+			if (circuit->connected())
+			    *state |= 0x04; // incoming busy
+			else if (!circuit->available())
+			    *state |= 0x08; // outgoing busy
+			else
+			    *state |= 0x0c; // idle
+		    }
+		    else
+			*state = 0x03; // Unequipped
+		}
+		String tmp;
+		tmp.hexify(si.data(),si.length(),' ');
+		DDebug(this,DebugInfo,"Sending CQR (%u+%u): %s",msg->cic(),n,tmp.c_str());
+		SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::CQR,msg->cic());
+		m->params().addParam("RangeAndStatus",String(n));
+		m->params().addParam("CircuitStateIndicator",tmp);
+		transmitMessage(m,label,true,sls);
+	    }
+	    else
+		reason = "unknown-channel";
+	    break;
 	case SS7MsgISUP::COT: // Continuity
 	default:
 	    // TODO: check MessageCompatInformation

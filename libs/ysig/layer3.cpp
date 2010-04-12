@@ -99,18 +99,21 @@ bool SS7Layer3::buildRoutes(const NamedList& params)
     for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++)
 	m_route[i].clear();
     unsigned int n = params.length();
-    const char* param = "route";
     bool added = false;
     for (unsigned int i= 0; i < n; i++) {
 	NamedString* ns = params.getParam(i);
-	if (!(ns && ns->name() == param))
+	if (!ns)
+	    continue;
+	unsigned int prio = 0;
+	if (ns->name() == "route")
+	    prio = 100;
+	else if (ns->name() != "adjacent")
 	    continue;
 	// Get & check the route
 	ObjList* route = ns->split(',',true);
 	ObjList* obj = route->skipNull();
 	SS7PointCode* pc = new SS7PointCode(0,0,0);
 	SS7PointCode::Type type = SS7PointCode::Other;
-	unsigned int prio = 0;
 	while (true) {
 	    if (!obj)
 		break;
@@ -119,8 +122,8 @@ bool SS7Layer3::buildRoutes(const NamedList& params)
 	    if (!(obj && pc->assign(obj->get()->toString(),type)))
 		break;
 	    obj = obj->skipNext();
-	    if (obj)
-		prio = obj->get()->toString().toInteger(0);
+	    if (obj && prio)
+		prio = obj->get()->toString().toInteger(prio);
 	    break;
 	}
 	TelEngine::destruct(route);
@@ -128,7 +131,7 @@ bool SS7Layer3::buildRoutes(const NamedList& params)
 	TelEngine::destruct(pc);
 	if ((unsigned int)type > YSS7_PCTYPE_COUNT || !packed) {
 	    Debug(this,DebugNote,"Invalid %s='%s' (invalid point code%s) [%p]",
-		param,ns->safe(),type == SS7PointCode::Other ? " type" : "",this);
+		ns->name().c_str(),ns->safe(),type == SS7PointCode::Other ? " type" : "",this);
 	    continue;
 	}
 	if (findRoute(type,packed))

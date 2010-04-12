@@ -356,8 +356,17 @@
 ; The format of this option is pointcodetype,label,priority
 ; This parameter can be repeated to build multiple destination routes
 ; The network will notify the router about its destination(s) and priority
-; Example: route=ITU,2-2-2,0
+; If not specified the priority is 100. A zero priority creates an adjacent route
+; Example: route=ITU,2-2-2,100
 ;route=
+
+; adjacent: string: Build an adjacent route for the SS7 network (A, E and F links)
+; The format of this option is pointcodetype,label
+; This parameter can be repeated to declare multiple adjacent routers
+; The network will notify the router about its destination(s) and priority
+; The priority is always zero so an adjacent route will always match first.
+; Example: route=ANSI,40-50-60
+;adjacent=
 
 ; autostart: bool: Automatically enable the linkset at startup
 ;autostart=yes

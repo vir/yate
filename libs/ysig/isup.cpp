@@ -1074,6 +1074,14 @@ static const MsgParams s_common_params[] = {
 	SS7MsgISUP::EndOfParameters
 	}
     },
+    { SS7MsgISUP::CQR, false,
+	{
+	SS7MsgISUP::EndOfParameters,
+	    SS7MsgISUP::RangeAndStatus,
+	    SS7MsgISUP::CircuitStateIndicator,
+	SS7MsgISUP::EndOfParameters
+	}
+    },
     // circuit group blocking, unblocking and acknowledgement
     { SS7MsgISUP::CGB, false,
 	{

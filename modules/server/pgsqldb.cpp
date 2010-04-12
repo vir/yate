@@ -33,13 +33,14 @@ namespace { // anonymous
 static ObjList s_conns;
 Mutex s_conmutex(false,"PgSQL::conn");
 
-class PgConn : public GenObject, public Mutex
+class PgConn : public RefObject, public Mutex
 {
 public:
     PgConn(const NamedList* sect);
     ~PgConn();
     virtual const String& toString() const
 	{ return m_name; }
+    virtual void destroyed();
 
     bool ok();
     int queryDb(const char* query, Message* dest = 0);
@@ -108,10 +109,16 @@ PgConn::PgConn(const NamedList* sect)
 }
 
 PgConn::~PgConn()
-{ 
+{
+}
+
+void PgConn::destroyed()
+{
+    s_conmutex.lock();
     s_conns.remove(this,false);
+    s_conmutex.unlock();
     dropDb();
-    Debug(&module,DebugInfo,"Database connection %s closed",m_name.c_str());
+    Debug(&module,DebugInfo,"Database account '%s' destroyed",m_name.c_str());
 }
 
 // initialize the database connection and handler data
@@ -303,7 +310,7 @@ int PgConn::queryDbInternal(const char* query, Message* dest)
 	PQclear(res);
     }
     Debug(&module,DebugWarn,"Query timed out for '%s'",m_name.c_str());
-    dest->setParam("error","query timeout");	    
+    dest->setParam("error","query timeout");
     dropDb();
     return -2;
 }
@@ -328,34 +335,33 @@ int PgConn::queryDb(const char* query, Message* dest)
 		failure(dest);
 	    // ok or non-retryable error, get out of here
 	    return res;
-	} 
+	}
     }
     failure(dest);
     return -2;
 }
 
 
-static PgConn* findDb(String& account)
+static PgConn* findDb(const String& account)
 {
     if (account.null())
 	return 0;
-    ObjList* l = s_conns.find(account);
-    return l ? static_cast<PgConn *>(l->get()): 0;
+    return static_cast<PgConn*>(s_conns[account]);
 }
 
 bool PgHandler::received(Message& msg)
 {
-    String tmp(msg.getValue("account"));
-    if (tmp.null())
+    const String* str = msg.getParam("account");
+    if (TelEngine::null(str))
 	return false;
-    Lock lock(s_conmutex);
-    PgConn* db = findDb(tmp);
+    s_conmutex.lock();
+    RefPointer<PgConn> db = findDb(*str);
+    s_conmutex.unlock();
     if (!db)
 	return false;
-    Lock lo(db);
-    lock.drop();
-    String query(msg.getValue("query"));
-    db->queryDb(query,&msg);
+    str = msg.getParam("query");
+    if (TelEngine::null(str))
+	db->queryDb(*str,&msg);
     msg.setParam("dbtype","pgsqldb");
     return true;
 }
@@ -374,7 +380,9 @@ PgModule::~PgModule()
 
 void PgModule::statusParams(String& str)
 {
+    s_conmutex.lock();
     str.append("conns=",",") << s_conns.count();
+    s_conmutex.unlock();
 }
 
 void PgModule::initialize()
@@ -394,7 +402,9 @@ void PgModule::initialize()
 	PgConn* conn = new PgConn(sec);
 	if (sec->getBoolValue("autostart",true))
 	    conn->initDb();
+	s_conmutex.lock();
 	s_conns.insert(conn);
+	s_conmutex.unlock();
     }
 
 }

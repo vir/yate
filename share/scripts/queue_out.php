@@ -13,6 +13,7 @@ require_once("libyate.php");
 
 $ourcallid = "q-out/" . uniqid(rand(),1);
 $partycallid = "";
+$caller = "";
 $prompt = "";
 $queue = "";
 
@@ -43,6 +44,7 @@ for (;;) {
 	    switch ($ev->name) {
 		case "call.execute":
 		    $partycallid = $ev->GetValue("notify");
+		    $caller = $ev->GetValue("caller");
 		    $prompt = $ev->GetValue("prompt");
 		    $queue = $ev->GetValue("queue");
 		    $ev->handled=true;
@@ -50,7 +52,7 @@ for (;;) {
 		    // create call leg to operator
 		    $m = new Yate("call.execute");
 		    $m->params["id"] = $ourcallid;
-		    $m->params["caller"] = $ev->GetValue("caller");
+		    $m->params["caller"] = $caller;
 		    $m->params["called"] = $ev->GetValue("called");
 		    $m->params["callto"] = $ev->GetValue("direct");
 		    $m->params["billid"] = $ev->GetValue("billid");

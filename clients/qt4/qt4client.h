@@ -249,6 +249,22 @@ public:
 	}
 
     /**
+     * Get an object's property and return its integer conversion
+     * @param obj The object
+     * @param name Property name
+     * @param defVal Default value to return if the property is not found or has
+     *  invalid integer value
+     * @return The integer conversion of the property or given default value
+     */
+    static inline int getIntProperty(QObject* obj, const char* name,
+	int defVal = 0) {
+	    String tmp;
+	    if (!getProperty(obj,name,tmp))
+		return defVal;
+	    return tmp.toInteger(defVal);
+	}
+
+    /**
      * Associate actions to buttons with '_yate_setaction' property set
      * @param parent Parent widget
      */

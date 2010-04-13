@@ -326,7 +326,7 @@ using namespace TelEngine;
 // Dynamic properies
 static String s_propHHeader = "dynamicHHeader";       // Tables: show/hide the horizontal header
 static String s_propAction = "dynamicAction";         // Prefix for properties that would trigger some action
-static String s_propWindowFlags = "dynamicWindowFlags"; // Window flags
+static String s_propWindowFlags = "_yate_windowflags"; // Window flags
 static String s_propHideInactive = "dynamicHideOnInactive"; // Hide inactive window
 static String s_qtPropPrefix = "_q_";                 // QT dynamic properties prefix
 //
@@ -601,7 +601,6 @@ TableWidget::~TableWidget()
 	return;
     if (m_sortControl >= 0)
 	m_table->setSortingEnabled((bool)m_sortControl);
-    m_table->verticalHeader()->hide();
     m_table->repaint();
 }
 
@@ -635,6 +634,20 @@ void TableWidget::updateRow(int row, const NamedList& data)
 	tmp = data.getParam(header + "_image");
 	if (tmp)
 	    setImage(row,i,*tmp);
+    }
+    // Init vertical header
+    String* rowText = data.getParam("row_text");
+    String* rowImg = data.getParam("row_image");
+    if (rowText || rowImg) {
+	QTableWidgetItem* item = m_table->verticalHeaderItem(row);
+	if (!item) {
+	    item = new QTableWidgetItem;
+	    m_table->setVerticalHeaderItem(row,item);
+	}
+	if (rowText)
+	    item->setText(QtClient::setUtf8(*rowText));
+	if (rowImg)
+	    item->setIcon(QIcon(QtClient::setUtf8(*rowImg)));
     }
 }
 
@@ -2236,6 +2249,10 @@ void QtWindow::doInit()
 	m_visible = s_cfg.getBoolValue(m_oldId,"visible");
     }
     m_visible = m_mainWindow || m_visible;
+    if (!m_width)
+	m_width = wndWidget()->width();
+    if (!m_height)
+	m_height = wndWidget()->height();
 
     // Create custom widgets from
     // _yate_identity=customwidget|[separator=sep|] sep widgetclass sep widgetname [sep param=value]
@@ -2376,6 +2393,27 @@ void QtWindow::doInit()
     // Hide columns starting with "hidden:"
     QList<QTableWidget*> tables = qFindChildren<QTableWidget*>(this);
     for (int i = 0; i < tables.size(); i++) {
+	// Horizontal header
+	QHeaderView* hdr = tables[i]->horizontalHeader();
+	// Stretch last column
+	bool b = QtClient::getBoolProperty(tables[i],"_yate_horizontalstretch",true);
+	hdr->setStretchLastSection(b);
+	if (!QtClient::getBoolProperty(tables[i],"_yate_horizontalheader",true))
+	    hdr->hide();
+	// Vertical header
+	hdr = tables[i]->verticalHeader();
+	int itemH = QtClient::getIntProperty(tables[i],"_yate_rowheight");
+	if (itemH > 0)
+	    hdr->setDefaultSectionSize(itemH);
+	if (!QtClient::getBoolProperty(tables[i],"_yate_verticalheader"))
+	    hdr->hide();
+	else {
+	    int width = QtClient::getIntProperty(tables[i],"_yate_verticalheaderwidth");
+	    if (width > 0)
+		hdr->setFixedWidth(width);
+	    if (!QtClient::getBoolProperty(tables[i],"_yate_allowvheaderresize"))
+		hdr->setResizeMode(QHeaderView::Fixed);
+	}
 	TableWidget t(tables[i]);
 	// Insert the column containing the ID
 	t.addColumn(0,0,"hidden:id");

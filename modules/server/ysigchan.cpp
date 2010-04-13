@@ -250,6 +250,22 @@ private:
     SS7Layer3* m_linkset;
 };
 
+// MTP Traffic Testing
+class SigTesting : public SigTopmost
+{
+public:
+    inline SigTesting(const char* name)
+	: SigTopmost(name), m_testing(0)
+	{ }
+    // Initialize (create or reload) the linkset
+    // Return false on failure
+    virtual bool initialize(NamedList& params);
+protected:
+    virtual void destroyed();
+private:
+    SS7Testing* m_testing;
+};
+
 // Signalling trunk (Call Controller)
 class SigTrunk : public TopMost
 {
@@ -420,6 +436,7 @@ public:
 	SigSS7Management  = 0x06 | SigDefaults,
 	SigSS7Maintenance = 0x07 | SigDefaults,
 	SigSS7M2PA        = 0x08 | SigOnDemand,
+	SigSS7Testing     = 0x09 | SigTopMost,
 	SigSS7Isup  = SigTrunk::SS7Isup    | SigIsTrunk | SigTopMost,
 	SigSS7Bicc  = SigTrunk::SS7Bicc    | SigIsTrunk | SigTopMost,
 	SigISDNPN   = SigTrunk::IsdnPriNet | SigIsTrunk | SigTopMost,
@@ -593,6 +610,7 @@ const TokenDict SigFactory::s_compNames[] = {
     { "ss7-mtp3",     SigSS7Layer3 },
     { "ss7-snm",      SigSS7Management },
     { "ss7-mtn",      SigSS7Maintenance },
+    { "ss7-test",     SigSS7Testing },
     { "ss7-m2pa",     SigSS7M2PA },
     { "ss7-isup",     SigSS7Isup },
     { "ss7-bicc",     SigSS7Bicc },
@@ -619,6 +637,7 @@ const TokenDict SigFactory::s_compClass[] = {
     MAKE_CLASS(SS7Layer3),
     MAKE_CLASS(SS7Management),
     MAKE_CLASS(SS7Maintenance),
+    MAKE_CLASS(SS7Testing),
     MAKE_CLASS(SS7M2PA),
     MAKE_CLASS(SS7Isup),
     MAKE_CLASS(SS7Bicc),
@@ -675,6 +694,8 @@ SignallingComponent* SigFactory::create(const String& type, const NamedList& nam
 	    return new SS7Management(*config);
 	case SigSS7Maintenance:
 	    return new SS7Maintenance(*config);
+	case SigSS7Testing:
+	    return new SS7Testing(*config);
     }
     return 0;
 }
@@ -2008,6 +2029,9 @@ bool SigDriver::initTopmost(NamedList& sect, int type)
 	    case SigFactory::SigSS7Layer3:
 		topmost = new SigLinkSet(sect);
 		break;
+	    case SigFactory::SigSS7Testing:
+		topmost = new SigTesting(sect);
+		break;
 	    default:
 		return false;
 	}
@@ -2203,6 +2227,28 @@ bool SigLinkSet::initialize(NamedList& params)
 	plugin.engine()->insert(m_linkset);
     }
     return m_linkset && m_linkset->initialize(&params);
+}
+
+
+/**
+ * SigTesting
+ */
+void SigTesting::destroyed()
+{
+    TelEngine::destruct(m_testing);
+    SigTopmost::destroyed();
+}
+
+bool SigTesting::initialize(NamedList& params)
+{
+    if (!m_testing) {
+	m_testing = YSIGCREATE(SS7Testing,&params);
+	plugin.engine()->insert(m_testing);
+	SS7Router* router = YOBJECT(SS7Router,plugin.engine()->find("","SS7Router"));
+	if (router)
+	    router->attach(m_testing);
+    }
+    return m_testing && m_testing->initialize(&params);
 }
 
 

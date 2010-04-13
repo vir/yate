@@ -19,7 +19,7 @@ LIBS = libyatesig.a
 OBJS = engine.o address.o sigcall.o sigtran.o \
 	interface.o layer2.o layer3.o layer4.o\
 	router.o sccp.o tcap.o dumper.o\
-	management.o isup.o tup.o \
+	management.o isup.o tup.o testpart.o \
 	q921.o q931.o
 LIBD_VER:= libyatesig.so.@PACKAGE_VERSION@
 LIBD_DEV:= libyatesig.so

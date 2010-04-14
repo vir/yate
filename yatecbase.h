@@ -465,6 +465,24 @@ public:
 	{ return m_popup; }
 
     /**
+     * Create a modal dialog
+     * @param name Dialog name (resource config section)
+     * @param title Dialog title
+     * @param alias Optional dialog alias (used as dialog object name)
+     * @param params Optional dialog parameters
+     * @return True on success
+     */
+    virtual bool createDialog(const String& name, const String& title,
+	const String& alias = String::empty(), const NamedList* params = 0) = 0;
+
+    /**
+     * Destroy a modal dialog
+     * @param name Dialog name
+     * @return True on success
+     */
+    virtual bool closeDialog(const String& name) = 0;
+
+    /**
      * Check if a string is a parameter prefix handled by setParams().
      * Exact prefix match is not a valid one
      * @param prefix String to check
@@ -819,6 +837,18 @@ public:
 	const String& alias = String::empty());
 
     /**
+     * Create a modal dialog owned by a given window
+     * @param name Dialog name (resource config section)
+     * @param parent Parent window
+     * @param title Dialog title
+     * @param alias Optional dialog alias (used as dialog object name)
+     * @param params Optional dialog parameters
+     * @return True on success
+     */
+    virtual bool createDialog(const String& name, Window* parent, const String& title,
+	const String& alias = String::empty(), const NamedList* params = 0);
+
+    /**
      * Ask to an UI factory to create an object in the UI's thread
      * @param dest Destination to be filled with the newly create object's address
      * @param type Object's type
@@ -836,6 +866,15 @@ public:
      * @return True on success
      */
     virtual bool closeWindow(const String& name, bool hide = true);
+
+    /**
+     * Destroy a modal dialog
+     * @param name Dialog name
+     * @param wnd Window owning the dialog
+     * @param skip Optional window to skip if wnd is null
+     * @return True on success
+     */
+    virtual bool closeDialog(const String& name, Window* wnd, Window* skip = 0);
 
     /**
      * Install/uninstall a debugger output hook

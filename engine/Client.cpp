@@ -59,6 +59,8 @@ public:
 	getSelect,
 	createWindow,
 	closeWindow,
+	createDialog,
+	closeDialog,
 	setParams,
 	addLines,
 	createObject,
@@ -707,6 +709,12 @@ void ClientThreadProxy::process()
 	    break;
 	case closeWindow:
 	    m_rval = client->closeWindow(m_name,m_bool);
+	    break;
+	case createDialog:
+	    m_rval = client->createDialog(m_name,m_wnd,m_text,const_cast<NamedList*>(m_params));
+	    break;
+	case closeDialog:
+	    m_rval = client->closeDialog(m_name,m_wnd,m_skip);
 	    break;
 	case setParams:
 	    m_rval = client->setParams(m_params,m_wnd,m_skip);
@@ -1724,6 +1732,19 @@ bool Client::createWindowSafe(const String& name, const String& alias)
     return true;
 }
 
+// Create a modal dialog owned by a given window
+bool Client::createDialog(const String& name, Window* parent, const String& title,
+    const String& alias, const NamedList* params)
+{
+    if (!(valid() && name && parent))
+	return false;
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::createDialog,name,title,alias,params,parent,0);
+	return proxy.execute();
+    }
+    return parent->createDialog(name,title,alias,params);
+}
+
 // Ask to an UI factory to create an object in the UI's thread
 bool Client::createObject(void** dest, const String& type, const char* name,
 	NamedList* params)
@@ -1757,6 +1778,28 @@ bool Client::closeWindow(const String& name, bool hide)
     else
 	return false;
     return true;
+}
+
+// Destroy a modal dialog
+bool Client::closeDialog(const String& name, Window* wnd, Window* skip)
+{
+    if (!valid())
+	return false;
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::closeDialog,name,0,0,wnd,skip);
+	return proxy.execute();
+    }
+    if (wnd)
+	return wnd->closeDialog(name);
+    ++s_changing;
+    bool ok = false;
+    for (ObjList* o = m_windows.skipNull(); o; o = o->skipNext()) {
+	wnd = static_cast<Window*>(o->get());
+	if (wnd != skip)
+	    ok = wnd->closeDialog(name) || ok;
+    }
+    --s_changing;
+    return ok;
 }
 
 // Set multiple window parameters

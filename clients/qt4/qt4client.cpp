@@ -39,12 +39,6 @@ namespace TelEngine {
 
 static unsigned int s_allHiddenQuit = 0; // Quit on all hidden notification if this counter is 0
 
-// Macro used to get a QT object's name
-// Can't use an inline function: the QByteArray object returned by toUtf8()
-//  would be destroyed on exit
-#define	YQT_OBJECT_NAME(qobject) ((qobject) ? (qobject)->objectName().toUtf8().constData() : "")
-
-
 // Factory used to create objects in client's thread
 class Qt4ClientFactory : public UIFactory
 {
@@ -446,25 +440,6 @@ static int findStackedWidget(QStackedWidget& w, const String& name)
 	    return i;
     }
     return -1;
-}
-
-// Utility: Insert a widget into another
-static void setWidget(QWidget* parent, QWidget* child)
-{
-    if (!(parent && child))
-	return;
-    QVBoxLayout* layout = new QVBoxLayout;
-    layout->setSpacing(0);
-#if QT_VERSION < 0x040300
-    layout->setMargin(0);
-#else
-    layout->setContentsMargins(0,0,0,0);
-#endif
-    layout->addWidget(child);
-    QLayout* l = parent->layout();
-    if (l)
-	delete l;
-    parent->setLayout(layout);
 }
 
 // Utility function used to get the name of a control
@@ -2153,6 +2128,12 @@ void QtWindow::setVisible(bool visible)
 	    Engine::enqueue(m);
 	}
     }
+    // Destroy owned dialogs
+    if (!m_visible) {
+	QList<QDialog*> d = qFindChildren<QDialog*>(this);
+	for (int i = 0; i < d.size(); i++)
+	    delete d[i];
+    }
 }
 
 // Show the window
@@ -2199,6 +2180,27 @@ void QtWindow::menu(int x, int y)
     DDebug(QtDriver::self(),DebugAll,"QtWindow::menu(%d,%d) [%p]",x,y,this);
 }
 
+// Create a modal dialog
+bool QtWindow::createDialog(const String& name, const String& title, const String& alias,
+    const NamedList* params)
+{
+    QtDialog* d = new QtDialog(this);
+    if (d->show(name,title,alias,params))
+	return true;
+    delete d;
+    return false;
+}
+
+// Destroy a modal dialog
+bool QtWindow::closeDialog(const String& name)
+{
+    QDialog* d = qFindChild<QDialog*>(this,QtClient::setUtf8(name));
+    if (!d)
+	return false;
+    delete d;
+    return true;
+}
+
 // Load UI file and setup the window
 void QtWindow::doPopulate()
 {
@@ -2210,7 +2212,7 @@ void QtWindow::doPopulate()
     setMinimumSize(formWidget->minimumSize().width(),formWidget->minimumSize().height());
     setMaximumSize(formWidget->maximumSize().width(),formWidget->maximumSize().height());
     resize(formWidget->width(),formWidget->height());
-    setWidget(this,formWidget);
+    QtClient::setWidget(this,formWidget);
     m_widget = YQT_OBJECT_NAME(formWidget);
     String wTitle;
     QtClient::getUtf8(wTitle,formWidget->windowTitle());
@@ -2298,7 +2300,7 @@ void QtWindow::doInit()
 	    continue;
 	QWidget* wid = qobject_cast<QWidget*>(obj);
 	if (wid)
-	    setWidget(frm[i],wid);
+	    QtClient::setWidget(frm[i],wid);
 	else {
 	    obj->setParent(frm[i]);
 	    QtCustomObject* customObj = qobject_cast<QtCustomObject*>(obj);
@@ -2527,6 +2529,95 @@ void QtWindow::updatePosSize()
     m_y = point.y();
     m_width = width();
     m_height = height();
+}
+
+
+/*
+ * QtDialog
+ */
+// Destructor. Notify the client if not exiting
+QtDialog::~QtDialog()
+{
+    QtWindow* w = parentWindow();
+    if (w && m_notifyOnClose && Client::valid())
+	QtClient::self()->action(w,buildActionName(m_notifyOnClose,m_notifyOnClose));
+    DDebug(QtDriver::self(),DebugAll,"QtWindow(%s) QtDialog(%s) destroyed [%p]",
+	w ? w->id().c_str() : "",YQT_OBJECT_NAME(this),w);
+}
+
+// Initialize dialog. Load the widget.
+// Connect non checkable actions to own slot.
+// Connect checkable actions/buttons to parent window's slot
+// Display the dialog on success
+bool QtDialog::show(const String& name, const String& title, const String& alias,
+    const NamedList* params)
+{
+    QtWindow* w = parentWindow();
+    if (!w)
+	return false;
+    QWidget* widget = QtWindow::loadUI(Client::s_skinPath + s_cfg.getValue(name,"description"),this,name);
+    if (!widget)
+	return false;
+    QtClient::getProperty(widget,"_yate_notifyonclose",m_notifyOnClose);
+    setObjectName(QtClient::setUtf8(alias ? alias : name));
+    setMinimumSize(widget->minimumSize().width(),widget->minimumSize().height());
+    setMaximumSize(widget->maximumSize().width(),widget->maximumSize().height());
+    resize(widget->width(),widget->height());
+    QtClient::setWidget(this,widget);
+    if (title)
+	setWindowTitle(QtClient::setUtf8(title));
+    else if (widget->windowTitle().length())
+	setWindowTitle(widget->windowTitle());
+    else
+	setWindowTitle(w->windowTitle());
+    // Connect abstract buttons (check boxes and radio/push/tool buttons) signals
+    QList<QAbstractButton*> buttons = qFindChildren<QAbstractButton*>(widget);
+    for(int i = 0; i < buttons.size(); i++) {
+	if (!QtClient::autoConnect(buttons[i]))
+	    continue;
+	if (!buttons[i]->isCheckable())
+	    QtClient::connectObjects(buttons[i],SIGNAL(clicked()),this,SLOT(action()));
+	else
+	    QtClient::connectObjects(buttons[i],SIGNAL(toggled(bool)),w,SLOT(toggled(bool)));
+    }
+    // Connect actions' signal
+    QList<QAction*> actions = qFindChildren<QAction*>(widget);
+    for (int i = 0; i < actions.size(); i++) {
+	if (!QtClient::autoConnect(actions[i]))
+	    continue;
+	if (!actions[i]->isCheckable())
+	    QtClient::connectObjects(actions[i],SIGNAL(triggered()),this,SLOT(action()));
+	else
+	    QtClient::connectObjects(actions[i],SIGNAL(toggled(bool)),w,SLOT(toggled(bool)));
+    }
+    if (params)
+	w->setParams(*params);
+    setWindowModality(Qt::WindowModal);
+    QDialog::show();
+    return true;
+}
+
+// Notify client
+void QtDialog::action()
+{
+    QtWindow* w = parentWindow();
+    if (!w)
+	return;
+    DDebug(QtDriver::self(),DebugAll,"QtWindow(%s) dialog action '%s' [%p]",
+	w->id().c_str(),YQT_OBJECT_NAME(sender()),w);
+    if (!QtClient::self() || QtClient::changing())
+	return;
+    String name;
+    QtClient::getIdentity(sender(),name);
+    if (name && QtClient::self()->action(w,buildActionName(name,name)))
+	deleteLater();
+}
+
+// Delete the dialog
+void QtDialog::closeEvent(QCloseEvent* event)
+{
+    QDialog::closeEvent(event);
+    deleteLater();
 }
 
 
@@ -2916,6 +3007,22 @@ bool QtClient::connectObjects(QObject* sender, const char* signal,
 	    "Failed to connect sender=%s signal=%s to receiver=%s slot=%s",
 	    YQT_OBJECT_NAME(sender),signal,YQT_OBJECT_NAME(receiver),slot);
     return ok;
+}
+
+// Insert a widget into another one replacing any existing children
+bool QtClient::setWidget(QWidget* parent, QWidget* child)
+{
+    if (!(parent && child))
+	return false;
+    QVBoxLayout* layout = new QVBoxLayout;
+    layout->setSpacing(0);
+    layout->setContentsMargins(0,0,0,0);
+    layout->addWidget(child);
+    QLayout* l = parent->layout();
+    if (l)
+	delete l;
+    parent->setLayout(layout);
+    return true;
 }
 
 

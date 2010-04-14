@@ -67,10 +67,16 @@ class QtEventProxy;                      // Proxy to global QT events
 class QtClient;                          // The QT based client
 class QtDriver;                          // The QT based telephony driver
 class QtWindow;                          // A QT window
+class QtDialog;                          // A custom modal dialog
 class QtCustomObject;                    // A custom QT object
 class QtCustomWidget;                    // A custom QT widget
 class QtTable;                           // A custom QT table widget
 class QtSound;                           // A QT client sound
+
+// Macro used to get a QT object's name
+// Can't use an inline function: the QByteArray object returned by toUtf8()
+//  would be destroyed on exit
+#define YQT_OBJECT_NAME(qobject) ((qobject) ? (qobject)->objectName().toUtf8().constData() : "")
 
 /**
  * Proxy to global QT events
@@ -310,6 +316,14 @@ public:
 	 const char* aboutToShowSlot = 0);
 
     /**
+     * Insert a widget into another one replacing any existing children
+     * @param parent Parent widget
+     * @param child Widget to insert into parent
+     * @return True on success
+     */
+    static bool setWidget(QWidget* parent, QWidget* child);
+
+    /**
      * Wrapper for QObject::connect() used to put a debug mesage on failure
      */
     static bool connectObjects(QObject* sender, const char* signal,
@@ -467,6 +481,24 @@ public:
     virtual void menu(int x, int y) ;
 
     /**
+     * Create a modal dialog
+     * @param name Dialog name (resource config section)
+     * @param title Dialog title
+     * @param alias Optional dialog alias (used as dialog object name)
+     * @param params Optional dialog parameters
+     * @return True on success
+     */
+    virtual bool createDialog(const String& name, const String& title,
+	const String& alias = String::empty(), const NamedList* params = 0);
+
+    /**
+     * Destroy a modal dialog
+     * @param name Dialog name
+     * @return True on success
+     */
+    virtual bool closeDialog(const String& name);
+
+    /**
      * Connect an abstract button to window slots
      * @param b The button to connect
      * @return True on success
@@ -564,6 +596,90 @@ protected:
     QString m_widget;                    // The widget with window's content
     bool m_moving;                       // Flag used to move the window on mouse move event
     QPoint m_movePos;                    // Old position used when moving the window
+};
+
+/**
+ * This class encapsulates a custom modal dialog window.
+ * A dialog context can be set in '_yate_context' property
+ * Actions triggered by dialogs have the following format: dialog:dialog_name:action_name.
+ * The dialog will delete itself if an action is handled
+ * @short A custom modal dialog
+ */
+class YQT4_API QtDialog : public QDialog
+{
+    Q_CLASSINFO("QtDialog","Yate")
+    Q_OBJECT
+    Q_PROPERTY(QString _yate_context READ context WRITE setContext(QString))
+public:
+    /**
+     * Constructor
+     * @param parent Parent widget
+     */
+    inline QtDialog(QtWindow* parent)
+	: QDialog(parent)
+	{}
+
+    /**
+     * Destructor. Notify the client if not exiting
+     */
+    virtual ~QtDialog();
+
+    /**
+     * Retrieve the parent window
+     * @return QtWindow pointer or 0
+     */
+    inline QtWindow* parentWindow() const
+	{ return qobject_cast<QtWindow*>(parentWidget() ? parentWidget()->window() : 0); }
+
+    /**
+     * Initialize dialog. Load the widget.
+     * Connect non checkable actions to own slot.
+     * Connect checkable actions/buttons to parent window's slot
+     * Display the dialog on success
+     * @param name Object and config section name
+     * @param title Window title
+     * @param alias Object name to set if not empty
+     * @param params Optional parent window parameters
+     * @return True on success
+     */
+    bool show(const String& name, const String& title, const String& alias,
+	const NamedList* params);
+
+    /**
+     * Retrieve the context property
+     * @return The dialog context
+     */
+    QString context()
+	{ return m_context; }
+
+    /**
+     * Set the dialog context
+     * @param c The new dialog context
+     */
+    void setContext(QString c)
+	{ m_context = c; }
+
+    /**
+     * Build an action's name
+     * @param buf Destination buffer
+     * @param action Action name
+     * @return The destination string
+     */
+    inline String& buildActionName(String& buf, const String& action) {
+	    buf = String("dialog:") + YQT_OBJECT_NAME(this) + ":" + action;
+	    return buf;
+	}
+
+protected slots:
+    // Notify client
+    void action();
+
+protected:
+    // Destroy the dialog
+    virtual void closeEvent(QCloseEvent* event);
+
+    String m_notifyOnClose;              // Action to notify when closed
+    QString m_context;                   // Dialog context
 };
 
 /**

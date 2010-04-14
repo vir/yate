@@ -1,5 +1,5 @@
 #!/usr/bin/php -q
-<?
+<?php
 /* Script to automatically initiate fax receiving
    To test add in extmodule.conf
 

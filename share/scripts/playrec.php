@@ -1,5 +1,5 @@
 #!/usr/bin/php -q
-<?
+<?php
 /* Simple player/recorder for the Yate PHP interface
    To test add in regexroute.conf
 

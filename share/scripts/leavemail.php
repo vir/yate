@@ -1,5 +1,5 @@
 #!/usr/bin/php -q
-<?
+<?php
 /* Simple voicemail recorder for the Yate PHP interface
 
    To use it you must re-route calls to offline or non-responding numbers to:

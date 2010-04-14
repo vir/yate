@@ -1,5 +1,5 @@
 #!/usr/bin/php -q
-<?
+<?php
 /*
  * Queue outbound calls (distributed to operators)
  * The queue module will create one instance every time it tries to send a

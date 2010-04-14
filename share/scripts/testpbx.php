@@ -1,5 +1,5 @@
 #!/usr/bin/php -q
-<?
+<?php
 /* Dialer scheduler and PBX/IVR tester
    Global script - start it from rmanager with: external start testpbx.php
 */

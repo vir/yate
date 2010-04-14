@@ -1,5 +1,5 @@
 #!/usr/bin/php -q
-<?
+<?php
 /* Test script for the Yate PHP interface
    To test add in extmodule.conf
 

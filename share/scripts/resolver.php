@@ -1,5 +1,5 @@
 #!/usr/bin/php -q
-<?
+<?php
 /* Caching resolver script for the Yate PHP interface
    Needs php pear Net_DNS http://pear.php.net/package/Net_DNS
 

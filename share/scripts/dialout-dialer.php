@@ -1,5 +1,5 @@
 #!/usr/bin/php -q
-<?
+<?php
 /* Dialout IVR for the Yate PHP interface
    It will be started from dialout-scheduler.php
 */

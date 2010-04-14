@@ -1,5 +1,5 @@
 #!/usr/bin/php -q
-<?
+<?php
 /* Simple example for the object oriented IVR interface
 
    To use it you must route a number to:

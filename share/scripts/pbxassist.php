@@ -1,5 +1,5 @@
 #!/usr/bin/php -q
-<?
+<?php
 /* Sample PBX assistant for the Yate PHP interface
 To use add in regexroute.conf
 

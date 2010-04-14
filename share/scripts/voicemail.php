@@ -1,5 +1,5 @@
 #!/usr/bin/php -q
-<?
+<?php
 /* Simple voicemail manipulation for the Yate PHP interface
    To use add in regexroute.conf
 

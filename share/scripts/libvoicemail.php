@@ -1,4 +1,4 @@
-<?
+<?php
 
 /* libvoicemail.php
  * This file is part of the YATE Project http://YATE.null.ro

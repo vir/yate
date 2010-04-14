@@ -1,5 +1,5 @@
 #!/usr/bin/php -q
-<?
+<?php
 /* Sample dialout scheduler script
    To use add in extmodule.conf
 

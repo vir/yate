@@ -1,5 +1,5 @@
 #!/usr/bin/php -q
-<?
+<?php
 /*
  * Queue inbound calls (waiting in queue)
  * The queue module should let the call.execute fall through to this script.

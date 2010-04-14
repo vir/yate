@@ -1,5 +1,5 @@
 #!/usr/bin/php -q
-<?
+<?php
 /* Simple test overlapped dialer for the Yate PHP interface
    To test add in regexroute.conf
 

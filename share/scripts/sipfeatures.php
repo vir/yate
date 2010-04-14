@@ -1,5 +1,5 @@
 #!/usr/bin/php -q
-<?
+<?php
 /* Sample script for the Yate PHP interface.
    Implements SIP SUBSCRIBE and NOTIFY for voicemail and dialog state.
 

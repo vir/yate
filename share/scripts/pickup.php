@@ -1,5 +1,5 @@
 #!/usr/bin/php -q
-<?
+<?php
 /* Call pickup script for the Yate PHP interface
    Add in extmodule.conf
 

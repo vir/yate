@@ -1974,11 +1974,13 @@ void Client::line(int newLine)
 // actions taken when the client is idle, has nothing to do
 void Client::idleActions()
 {
-    s_debugMutex.lock();
-    NamedList* log = s_debugLog;
-    s_debugLog = 0;
-    s_debugMutex.unlock();
-    // add to the debug log new information  
+    NamedList* log = 0;
+    if (s_debugLog && s_debugMutex.lock(20000)) {
+	log = s_debugLog;
+	s_debugLog = 0;
+	s_debugMutex.unlock();
+    }
+    // Add to the debug log new information
     if (log) {
 	addLines(s_debugWidget,log,s_eventLen);
 	TelEngine::destruct(log);

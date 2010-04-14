@@ -511,7 +511,10 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
 	}
 	else
 	    ctrl = name.substr(8);
-	return Client::self() && Client::self()->setText(ctrl,text,false,wnd);
+	bool ok = Client::self() && Client::self()->setText(ctrl,text,false,wnd);
+	if (ok)
+	    Client::self()->setFocus(ctrl,false,wnd);
+	return ok;
     }
     // action taken when receiving a backspace
     if (name.startsWith("back:"))

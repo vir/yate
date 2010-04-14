@@ -500,6 +500,19 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
 	    return true;
 	}
     }
+    // 'settext' action
+    if (name.startsWith("settext:") && name.at(8)) {
+	int pos = name.find(':',9);
+	String ctrl;
+	String text;
+	if (pos > 9) {
+	    ctrl = name.substr(8,pos - 8);
+	    text = name.substr(pos + 1);
+	}
+	else
+	    ctrl = name.substr(8);
+	return Client::self() && Client::self()->setText(ctrl,text,false,wnd);
+    }
     // action taken when receiving a backspace
     if (name.startsWith("back:"))
 	return backspace(name.substr(5),wnd);

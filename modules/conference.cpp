@@ -98,6 +98,8 @@ public:
 	{ return m_record; }
     inline const String& notify() const
 	{ return m_notify; }
+    inline int maxLock() const
+	{ return m_maxLock; }
     void mix(ConfConsumer* cons = 0);
     void addChannel(ConfChan* chan, bool player = false);
     void delChannel(ConfChan* chan);
@@ -115,6 +117,7 @@ private:
     int m_rate;
     int m_users;
     int m_maxusers;
+    int m_maxLock;
 };
 
 // A conference channel is just a dumb holder of its data channels
@@ -260,12 +263,13 @@ ConfRoom* ConfRoom::get(const String& name, const NamedList* params)
 // Private constructor, always called from ConfRoom::get() with mutex hold
 ConfRoom::ConfRoom(const String& name, const NamedList& params)
     : m_name(name), m_lonely(false), m_record(0),
-      m_rate(8000), m_users(0), m_maxusers(10)
+      m_rate(8000), m_users(0), m_maxusers(10), m_maxLock(200)
 {
     DDebug(&__plugin,DebugAll,"ConfRoom::ConfRoom('%s',%p) [%p]",
 	name.c_str(),&params,this);
     m_rate = params.getIntValue("rate",m_rate);
     m_maxusers = params.getIntValue("maxusers",m_maxusers);
+    m_maxLock = params.getIntValue("waitlock",m_maxLock);
     m_notify = params.getValue("notify");
     m_lonely = params.getBoolValue("lonely");
     if (m_rate != 8000)
@@ -582,12 +586,24 @@ unsigned long ConfConsumer::Consume(const DataBlock& data, unsigned long tStamp,
 	if (m_noise2 < ENERGY_MIN)
 	    m_noise2 = ENERGY_MIN;
     }
+    bool autoMute = true;
+    int maxLock = 1000 * m_room->maxLock();
+    if (maxLock < 0) {
+	autoMute = false;
+	maxLock = -maxLock;
+    }
+    // clamp lock timer between 50 and 500ms
+    if (maxLock < 50000)
+	maxLock = 50000;
+    else if (maxLock > 500000)
+	maxLock = 500000;
     // make sure looping back conferences is not fatal
-    if (!m_room->lock(150000)) {
-	Debug(&__plugin,DebugWarn,"Failed to lock room '%s' - data loopback? [%p]",
-	    m_room->toString().c_str(),this);
+    if (!m_room->lock(maxLock)) {
+	Debug(&__plugin,DebugWarn,"Failed to lock room '%s' - data loopback?%s [%p]",
+	    m_room->toString().c_str(),(autoMute ? " Channel muted!" : ""),this);
 	// mute the channel to avoid getting back here
-	m_muted = true;
+	if (autoMute)
+	    m_muted = true;
 	return 0;
     }
     if (m_buffer.length()+data.length() <= MAX_BUFFER)

@@ -1161,12 +1161,8 @@ bool QtWindow::setUrgent(const String& name, bool urgent)
 	name.c_str(),String::boolText(urgent),this);
 
     if (name == m_id) {
-#if QT_VERSION >= 0x040300
 	QApplication::alert(this,0);
 	return true;
-#else
-	return false;
-#endif
     }
 
     QtWidget w(this,name);

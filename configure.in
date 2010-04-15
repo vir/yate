@@ -993,7 +993,7 @@ QT4_MOC=""
 QT4_VER=""
 AC_ARG_WITH(libqt4,AC_HELP_STRING([--with-libqt4],[use Qt for graphical clients (default)]),[ac_cv_use_libqt4=$withval],[ac_cv_use_libqt4=yes])
 if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
-    AC_MSG_CHECKING([for Qt4 >= 4.2.0 using pkg-config])
+    AC_MSG_CHECKING([for Qt4 >= 4.3.0 using pkg-config])
     pkgd="/usr/lib/qt4/$ARCHLIB/pkgconfig"
     verqt=`pkg-config --modversion QtCore 2>/dev/null`
     if [[ -z "$verqt" -a -d "$pkgd" ]]; then
@@ -1013,7 +1013,7 @@ if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
 	test -z "$QT4_MOC" && QT4_MOC="moc"
 	QT4_VER=`echo "$verqt" | $csed "$vsed" | $csed "$vsed" | sed 's/\(..\)\.\(..\)\.\(..\)/\1\2\3/'`
 	ac_cv_use_libqt="no"
-	if [[ 1$QT4_VER -lt 1040200 ]]; then
+	if [[ 1$QT4_VER -lt 1040300 ]]; then
 	    HAVE_QT4=no
 	    verqt="too old ($verqt)"
 	fi
@@ -1024,9 +1024,13 @@ if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
     AC_MSG_RESULT([$verqt])
 
     if [[ "x$HAVE_QT4" = "xno" ]]; then
-	AC_MSG_CHECKING([or Qt4 >= 4.2.0 using qmake])
+	AC_MSG_CHECKING([or Qt4 >= 4.3.0 using qmake])
 	incqt=`qmake -query QT_INSTALL_HEADERS 2>/dev/null`
 	libqt=`qmake -query QT_INSTALL_LIBS 2>/dev/null`
+	if [[ "x$incqt" = "x**Unknown**" -o "x$libqt" = "x**Unknown**" ]]; then
+	    incqt=""
+	    libqt=""
+	fi
 	if [[ "x$incqt" != "x" -a "x$libqt" != "x" ]]; then
 	    HAVE_QT4=yes
 	    QT4_INC="-I$incqt -I$incqt/QtUiTools -I$incqt/QtGui -I$incqt/QtXml -I$incqt/QtCore"
@@ -1050,7 +1054,7 @@ if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
 	    QT4_MOC="$QT4_MOC/moc"
 	    verqt=`qmake -query QT_VERSION 2>/dev/null`
 	    QT4_VER=`echo "$verqt" | $csed "$vsed" | $csed "$vsed" | sed 's/\(..\)\.\(..\)\.\(..\)/\1\2\3/'`
-	    if [[ 1$QT4_VER -lt 1040200 ]]; then
+	    if [[ 1$QT4_VER -lt 1040300 ]]; then
 	    	HAVE_QT4=no
 	    	verqt="too old ($verqt)"
 	   fi

@@ -718,7 +718,7 @@ ExtModReceiver::ExtModReceiver(const char* name, Stream* io, ExtModChan* chan, i
 }
 
 ExtModReceiver::~ExtModReceiver()
-{   
+{
     Debug(DebugAll,"ExtModReceiver::~ExtModReceiver() pid=%d [%p]",m_pid,this);
     Lock lock(this);
     // One destruction is plenty enough
@@ -844,6 +844,8 @@ void ExtModReceiver::die(bool clearChan)
 	chan->setRecv(0);
     mylock.drop();
 
+    if (m_role == RoleGlobal)
+	Output("Unloading external module '%s' '%s'",m_script.c_str(),m_args.safe());
     // Give the external script a chance to die gracefully
     closeOut();
     if (m_pid > 1) {
@@ -1000,7 +1002,10 @@ bool ExtModReceiver::create(const char *script, const char *args)
 	// Shit happened. Die as quick and brutal as possible
 	::_exit(1);
     }
-    Debug(DebugInfo,"Launched External Script %s", script);
+    if (m_role == RoleGlobal)
+	Output("Loading external module '%s' '%s'",m_script.c_str(),args);
+    else
+	Debug(DebugInfo,"Launched External Script '%s' '%s'",script,args);
     m_in = new File(ext2yate[0]);
     m_out = new File(yate2ext[1]);
 
@@ -1071,8 +1076,8 @@ void ExtModReceiver::run()
 	    closeIn();
 	    flush();
 	    if (invalid)
-		Debug("ExtModule",DebugWarn,"Never got anything valid from '%s' '%s'",
-		m_script.c_str(),m_args.safe());
+		Debug("ExtModule",DebugWarn,"Never got anything valid from terminated '%s' '%s'",
+		    m_script.c_str(),m_args.safe());
 	    if (m_chan && m_chan->running())
 		Thread::sleep(1);
 	    break;

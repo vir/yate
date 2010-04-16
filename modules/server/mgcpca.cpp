@@ -200,10 +200,11 @@ private:
     bool enqueueEvent(SignallingCircuitEvent::Type type, const char* name, const char* dtmf = 0);
     void cleanupRtp();
     bool createRtp();
-    bool setupConn();
+    bool setupConn(const char* mode = 0);
     String m_epId;
     Status m_statusReq;
     String m_notify;
+    String m_specialMode;
     bool m_changing;
     // Gateway endpoint bearer information
     String m_gwFormat;
@@ -1201,7 +1202,7 @@ bool MGCPCircuit::createRtp()
 }
 
 // Create or update remote connection
-bool MGCPCircuit::setupConn()
+bool MGCPCircuit::setupConn(const char* mode)
 {
     RefPointer<MGCPMessage> mm = message(m_connId.null() ? "CRCX" : "MDCX");
     mm->params.addParam("C",m_callId);
@@ -1209,7 +1210,9 @@ bool MGCPCircuit::setupConn()
 	mm->params.addParam("I",m_connId);
     if (m_gwFormatChanged && m_gwFormat)
 	mm->params.addParam("B",m_gwFormat);
-    if (m_localRawSdp) {
+    if (mode)
+	mm->params.addParam("M",mode);
+    else if (m_localRawSdp) {
 	mm->params.addParam("M","sendrecv");
 	mm->sdp.append(new MimeSdpBody("application/sdp",
 	    m_localRawSdp.safe(),m_localRawSdp.length()));
@@ -1263,6 +1266,7 @@ void MGCPCircuit::clearConn(bool force)
 	m_gwFormatChanged = false;
     }
     m_connId.clear();
+    m_specialMode.clear();
     resetSdp();
     m_remoteRawSdp.clear();
     m_localRtpChanged = false;
@@ -1396,6 +1400,10 @@ bool MGCPCircuit::status(Status newStat, bool sync)
 	    m_statusReq = SignallingCircuit::status();
 	    m_changing = false;
 	    return false;
+	case Special:
+	    if (m_specialMode && setupConn(m_specialMode))
+		break;
+	    return false;
 	case Reserved:
 	    break;
 	case Idle:
@@ -1451,6 +1459,8 @@ bool MGCPCircuit::setParam(const String& param, const String& value)
 	rtpChanged = m_rtpForward != fwd;
 	m_rtpForward = fwd;
     }
+    else if (param == "special_mode")
+	m_specialMode = value;
     else
 	return false;
     m_localRtpChanged = m_localRtpChanged || rtpChanged;
@@ -1473,6 +1483,10 @@ bool MGCPCircuit::getParam(const String& param, String& value) const
     }
     else if (param == "sdp_raw") {
 	value = m_remoteRawSdp;
+	return true;
+    }
+    else if (param == "special_mode") {
+	value = m_specialMode;
 	return true;
     }
     return false;

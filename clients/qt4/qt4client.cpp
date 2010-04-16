@@ -2380,8 +2380,7 @@ void QtWindow::doInit()
     // Connect line edit signals
     QList<QLineEdit*> le = qFindChildren<QLineEdit*>(this);
     for (int i = 0; i < le.size(); i++) {
-	QVariant var = le[i]->property("dynamicTextChangedNotify");
-	if (var.toBool())
+	if (QtClient::getBoolProperty(le[i],"_yate_textchangednotify"))
 	    QtClient::connectObjects(le[i],SIGNAL(textChanged(const QString&)),this,
 		SLOT(textChanged(const QString&)));
     }

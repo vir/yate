@@ -1652,6 +1652,7 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 	if (msg && validMsgState(false,msg->type()))
 	    switch (msg->type()) {
 		case SS7MsgISUP::IAM:
+		case SS7MsgISUP::COT:
 		case SS7MsgISUP::ACM:
 		case SS7MsgISUP::CPR:
 		case SS7MsgISUP::ANM:
@@ -1970,6 +1971,10 @@ bool SS7ISUPCall::validMsgState(bool send, SS7MsgISUP::Type type)
 	    if (m_state != Null || send != outgoing())
 		break;
 	    return true;
+	case SS7MsgISUP::COT:    // Continuity
+	    if (m_state != Testing || send != outgoing())
+		break;
+	    return true;
 	case SS7MsgISUP::ACM:    // Address complete
 	    if (m_state != Setup || send == outgoing())
 		break;
@@ -2004,18 +2009,31 @@ bool SS7ISUPCall::validMsgState(bool send, SS7MsgISUP::Type type)
     return false;
 }
 
-// Connect the reserved circuit. Return false if it fails.
+// Connect or test the reserved circuit. Return false if it fails.
 // Return true if this call is a signalling only one
-bool SS7ISUPCall::connectCircuit()
+bool SS7ISUPCall::connectCircuit(bool testing)
 {
-    if (signalOnly())
-	return true;
-    if (m_circuit && (m_circuit->status() == SignallingCircuit::Connected ||
-	m_circuit->connect(m_format)))
-	return true;
-    Debug(isup(),DebugMild,"Call(%u). Circuit connect failed (format='%s')%s [%p]",
-	id(),m_format.safe(),m_circuit?"":". No circuit",this);
-    return false;
+    bool ok = signalOnly();
+    if (m_circuit && !ok) {
+	if (testing)
+	    ok = m_circuit->setParam("special_mode","conttest") &&
+		m_circuit->status(SignallingCircuit::Special);
+	else
+	    ok = m_circuit->connected() || m_circuit->connect(m_format);
+    }
+    if (!ok)
+	Debug(isup(),DebugMild,"Call(%u). Circuit %s failed (format='%s')%s [%p]",
+	    id(),(testing ? "testing" : "connect"),
+	    m_format.safe(),(m_circuit ? "" : ". No circuit"),this);
+
+    if (m_sgmMsg) {
+	if (m_circuitChanged) {
+	    m_sgmMsg->params().setParam("circuit-change","true");
+	    m_circuitChanged = false;
+	}
+	m_sgmMsg->params().setParam("format",m_format);
+    }
+    return ok;
 }
 
 // Transmit the IAM message. Start IAM timer if not started
@@ -2060,18 +2078,42 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
     m_sgmRecvTimer.stop();
     // Raise event, connect the reserved circuit, change call state
     m_iamTimer.stop();
-    connectCircuit();
-    if (m_circuitChanged) {
-	m_sgmMsg->params().setParam("circuit-change","true");
-	m_circuitChanged = false;
+    if (m_sgmMsg->type() == SS7MsgISUP::IAM) {
+	const String* naci = m_sgmMsg->params().getParam("NatureOfConnectionIndicators");
+	if (naci) {
+	    ObjList* list = naci->split(',',false);
+	    bool ckPrev = 0 != list->find("cont-check-prev");
+	    bool ckThis = 0 != list->find("cont-check-this");
+	    TelEngine::destruct(list);
+	    if (ckPrev || ckThis) {
+		Debug(isup(),DebugNote,"Call(%u). Waiting for continuity check [%p]",
+		    id(),this);
+		connectCircuit(ckThis);
+		m_state = Testing;
+		// Save message for later
+		m_iamMsg = m_sgmMsg;
+		m_sgmMsg = 0;
+		return 0;
+	    }
+	}
     }
-    m_sgmMsg->params().setParam("format",m_format);
     switch (m_sgmMsg->type()) {
+	case SS7MsgISUP::COT:
+	    if (!m_iamMsg) {
+		m_lastEvent = new SignallingEvent(SignallingEvent::Info,m_sgmMsg,this);
+		break;
+	    }
+	    TelEngine::destruct(m_sgmMsg);
+	    m_sgmMsg = m_iamMsg;
+	    m_iamMsg = 0;
+	    // intentionally fall through
 	case SS7MsgISUP::IAM:
+	    connectCircuit();
 	    m_state = Setup;
 	    m_lastEvent = new SignallingEvent(SignallingEvent::NewCall,m_sgmMsg,this);
 	    break;
 	case SS7MsgISUP::ACM:
+	    connectCircuit();
 	    m_state = Accepted;
 	    {
 		m_lastEvent = 0;
@@ -2093,6 +2135,7 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 	    }
 	    break;
 	case SS7MsgISUP::CPR:
+	    connectCircuit();
 	    m_state = Ringing;
 	    {
 		bool ring = SignallingUtils::hasFlag(m_sgmMsg->params(),"EventInformation","ringing");
@@ -2103,6 +2146,7 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 	    break;
 	case SS7MsgISUP::ANM:
 	case SS7MsgISUP::CON:
+	    connectCircuit();
 	    m_state = Answered;
 	    m_lastEvent = new SignallingEvent(SignallingEvent::Answer,m_sgmMsg,this);
 	    break;
@@ -3025,6 +3069,7 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
 	case SS7MsgISUP::CON:
 	case SS7MsgISUP::REL:
 	case SS7MsgISUP::SGM:
+	case SS7MsgISUP::COT:
 	    processCallMsg(msg,label,sls);
 	    break;
 	case SS7MsgISUP::RLC:
@@ -3402,7 +3447,6 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    else
 		reason = "unknown-channel";
 	    break;
-	case SS7MsgISUP::COT: // Continuity
 	default:
 	    // TODO: check MessageCompatInformation
 	    impl = false;

@@ -1426,6 +1426,7 @@ public:
 	Reserved,
 	Starting,
 	Stopping,
+	Special,
 	Connected,
     };
 
@@ -5839,12 +5840,13 @@ public:
     enum State {
 	// NOTE: Keep the order of state values: the code relies on it
 	Null      = 0,                   // No message exchanged
-	Setup     = 1,                   // IAM (initial address)
-	Accepted  = 2,                   // ACM (address complete)
-	Ringing   = 3,                   // CPM (call progress)
-	Answered  = 4,                   // ANM (answer)
-	Releasing = 5,                   // REL (release)
-	Released  = 6                    // Call released, no message or events allowed
+	Testing   = 1,                   // IAM but waiting for continuity check
+	Setup     = 2,                   // IAM (initial address)
+	Accepted  = 3,                   // ACM (address complete)
+	Ringing   = 4,                   // CPM (call progress)
+	Answered  = 5,                   // ANM (answer)
+	Releasing = 6,                   // REL (release)
+	Released  = 7                    // Call released, no message or events allowed
     };
 
     /**
@@ -5968,7 +5970,7 @@ private:
     // Accept send/receive messages in current state based on call direction
     bool validMsgState(bool send, SS7MsgISUP::Type type);
     // Connect the reserved circuit. Return false if it fails. Return true if this call is a signalling only one
-    bool connectCircuit();
+    bool connectCircuit(bool testing = false);
     // Transmit the IAM message. Start IAM timer if not started
     bool transmitIAM();
     // Stop waiting for a SGM (Segmentation) message. Copy parameters to the pending segmented message if sgm is valid.

@@ -420,6 +420,7 @@ static TokenDict s_cicStatusDict[] = {
     {"Reserved",  SignallingCircuit::Reserved},
     {"Starting",  SignallingCircuit::Starting},
     {"Stopping",  SignallingCircuit::Stopping},
+    {"Special",   SignallingCircuit::Special},
     {"Connected", SignallingCircuit::Connected},
     {0,0}
 };

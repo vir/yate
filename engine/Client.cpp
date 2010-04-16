@@ -3705,6 +3705,8 @@ bool ClientSound::start(bool force)
     stop();
     DDebug(ClientDriver::self(),DebugInfo,"Starting sound %s",c_str());
     m_started = doStart();
+    if (!m_started)
+	Debug(ClientDriver::self(),DebugNote,"Failed to start sound %s",c_str());
     return m_started;
 }
 

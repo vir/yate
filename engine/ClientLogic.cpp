@@ -616,7 +616,7 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
 // Handle actions from checkable widgets
 bool DefaultLogic::toggle(Window* wnd, const String& name, bool active)
 {
-    Debug(ClientDriver::self(),DebugAll,
+    DDebug(ClientDriver::self(),DebugAll,
 	"Logic(%s) toggle '%s'=%s in window (%p,%s)",
 	toString().c_str(),name.c_str(),String::boolText(active),
 	wnd,wnd ? wnd->id().c_str() : "");

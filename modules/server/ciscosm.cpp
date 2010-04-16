@@ -142,7 +142,7 @@ public:
     bool startThread(Thread::Priority prio = Thread::Normal);
     void stopThread();
     u_int16_t checksum(u_int16_t len,const u_int8_t* buff);
-    void appendChecksum(DataBlock& data, bool recalculate = false);
+    void appendChecksum(DataBlock& data);
     inline void setThread()
 	{ m_thread = 0;}
     inline bool haveSyn(u_int8_t flags)
@@ -690,7 +690,7 @@ void RudpSocket::retransData()
 	    if (data->retransCounter() <= m_retransCounter) {
 		if (m_haveChecksum) {
 		    data->refreshAck(m_ackNum);
-		    appendChecksum(static_cast<DataBlock&>(*data),true);
+		    appendChecksum(static_cast<DataBlock&>(*data));
 		    sendData(static_cast<DataBlock&>(*data));
 		} else
 		    sendData(static_cast<DataBlock&>(*data));
@@ -828,7 +828,7 @@ void RudpSocket::sendSyn(bool recvSyn)
     DataBlock data;
     data.assign((void*)buf,buf[1]);
     if (m_haveChecksum)
-	appendChecksum(data,false);
+	appendChecksum(data);
     if (sendData(data))
 	changeState(RudpWait);
 }
@@ -930,7 +930,7 @@ void RudpSocket::sendMSG(const DataBlock& data)
     buildAck(auxdata);
     auxdata += data;
     if (m_haveChecksum)
-	appendChecksum(auxdata,false);
+	appendChecksum(auxdata);
     keepData(auxdata,m_sequence);
 }
 
@@ -987,10 +987,12 @@ bool RudpSocket::handleSyn(DataBlock& data, bool ack)
     if (m_version < 0) {
 	switch (data.length()) {
 	    case 12:
+		m_version = 0;
 		m_haveChecksum = true;
-		// fall through
+		break;
 	    case 8:
 		m_version = 0;
+		m_haveChecksum = false;
 		break;
 	    case 30:
 		m_version = 1;
@@ -1138,7 +1140,7 @@ u_int16_t RudpSocket::checksum(u_int16_t len, const u_int8_t* buff)
 	sum += (((u_int16_t)buff[i]) << 8) + ((i+1 < len) ? buff[i+1] : 0);
     while (sum >> 16)
 	sum = (sum & 0xFFFF) + (sum >> 16);
-    return (m_version == 1) ? sum : ~sum;
+    return ~sum;
 }
 
 bool RudpSocket::checkChecksum(DataBlock& data)
@@ -1146,21 +1148,13 @@ bool RudpSocket::checkChecksum(DataBlock& data)
     u_int8_t* buf = data.data(0,data.length());
     if (!buf)
 	return false;
-    if (haveSyn(buf[0]) && buf[1] == 8) {
-	m_haveChecksum = false;
-	return true;
-    }
     if (!haveEack(buf[0]) && buf[1] == 4)
 	return true;
-    if (haveChecksum(buf[0]))
-	return 0xffff == checksum(data.length(),buf);
-    else
-	return 0xffff == checksum(buf[1],buf);
+    return checksum((haveChecksum(buf[0]) ? data.length() : buf[1]),buf) == 0;
 }
 
-void RudpSocket::appendChecksum(DataBlock& data, bool recalculate)
+void RudpSocket::appendChecksum(DataBlock& data)
 {
-    u_int16_t sum = 0;
     int dataLen = data.length();
     int rudpLen = 0;
     u_int8_t* buf = data.data(0,dataLen);
@@ -1170,12 +1164,8 @@ void RudpSocket::appendChecksum(DataBlock& data, bool recalculate)
     u_int8_t* cks = buf + (rudpLen - 4);
     if (haveSyn(buf[0]) && (m_version == 1))
 	cks = buf+4;
-    if (recalculate)
-	cks[0] = cks[1] = 0;
-    if (haveChecksum(buf[0]))
-	sum = checksum(dataLen,buf);
-    else
-	sum = checksum(rudpLen,buf);
+    cks[0] = cks[1] = 0;
+    u_int16_t sum = checksum((haveChecksum(buf[0]) ? dataLen : rudpLen),buf);
     cks[0] = (u_int8_t)(sum >> 8);
     cks[1] = (u_int8_t)(sum & 0xff);
 }

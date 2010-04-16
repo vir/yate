@@ -756,7 +756,7 @@ SignallingComponent* WpInterface::create(const String& type, const NamedList& na
 	}
 	config->copyParams(name);
 	if(!cfg.save())
-	    DDebug(&driver,DebugAll,"Failed to save configuration in file %s ",module);
+	    DDebug(&driver,DebugAll,"Failed to save configuration in file %s ",cfg.c_str());
     }
     else if (!config){
 	DDebug(&driver,DebugAll,"No section '%s' in configuration",c_safe(sectName));

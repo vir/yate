@@ -263,6 +263,8 @@ static const Tone t_probes[][2] = {
     MAKE_PROBE("2000+125"),
     MAKE_PROBE("2000*125"),
     MAKE_PROBE("2000*1000"),
+    MAKE_PROBE("2010"),
+    MAKE_PROBE("1780"),
 };
 #undef MAKE_PROBE
 
@@ -280,6 +282,8 @@ static const ToneDesc s_desc[] = {
     { t_probes[0], "probe/0", "probe" },
     { t_probes[1], "probe/1", 0 },
     { t_probes[2], "probe/2", 0 },
+    { t_probes[3], "cotv", "co1" },
+    { t_probes[4], "cots", "co2" },
     { 0, 0, 0 }
 };
 

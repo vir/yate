@@ -716,11 +716,14 @@ public:
 	ResourceNotify     = 4,
 	ResourceSubscribe  = 5,
 	ClientChanUpdate   = 7,
+	UserRoster         = 8,
 	// Handlers not automatically installed
-	ChanNotify         = 8,
+	ChanNotify         = 10,
+	// Id used only to postpone msg.execute messages
+	MsgExecute         = 11,
 	// NOTE: Keep the MsgIdCount in sync: it can be used by other parties to install
 	//  other relays
-	MsgIdCount         = 9
+	MsgIdCount         = 12
     };
 
     /**
@@ -2210,6 +2213,15 @@ public:
      * @return True to stop further processing by the engine
      */
     virtual bool handleUserNotify(Message& msg, bool& stopLogic)
+	{ return false; }
+
+    /**
+     * Process user.roster message
+     * @param msg Received message
+     * @param stopLogic Set to true on exit to tell the client to stop asking other logics
+     * @return True to stop further processing by the engine
+     */
+    virtual bool handleUserRoster(Message& msg, bool& stopLogic)
 	{ return false; }
 
     /**

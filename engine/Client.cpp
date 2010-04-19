@@ -199,6 +199,7 @@ static MsgRelay s_relays[] = {
     {"resource.notify",    Client::ResourceNotify,    50},
     {"resource.subscribe", Client::ResourceSubscribe, 50},
     {"clientchan.update",  Client::ClientChanUpdate,  50},
+    {"user.roster",        Client::UserRoster,        50},
     {0,0,0},
 };
 
@@ -1898,6 +1899,9 @@ bool Client::received(Message& msg, int id)
 		break;
 	    case ClientChanUpdate:
 		processed = logic->handleClientChanUpdate(msg,stop) || processed;
+		break;
+	    case UserRoster:
+		processed = logic->handleUserRoster(msg,stop) || processed;
 		break;
 	    default:
 		processed = logic->defaultMsgHandler(msg,id,stop) || processed;

@@ -3027,6 +3027,13 @@ public:
 	{ return m_owner; }
 
     /**
+     * Get this contact account's name (id)
+     * @return This contact account name (id) or an empty string if none
+     */
+    inline const String& accountName() const
+	{ return m_owner ? m_owner->toString() : String::empty(); }
+
+    /**
      * Get this contact's URI
      * @return This contact's URI
      */
@@ -3155,6 +3162,14 @@ public:
      * @return ClientResource pointer or 0 if a resource with the given name already exists
      */
     virtual ClientResource* appendResource(const String& id);
+
+    /**
+     * Insert a resource in the list by its priority.
+     * If the resource is already there it will be extracted and re-inserted
+     * @param res The resource to insert
+     * @return True on success, false a resource with the same name already exists
+     */
+    virtual bool insertResource(ClientResource* res);
 
     /**
      * Remove a resource having a given id

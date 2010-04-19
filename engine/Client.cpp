@@ -3734,15 +3734,40 @@ ClientResource* ClientContact::findAudioResource(bool ref)
 // Append a resource having a given id
 ClientResource* ClientContact::appendResource(const String& id)
 {
-    Lock lock(m_owner);
     if (findResource(id))
-	return 0;
+	return false;
     ClientResource* r = new ClientResource(id);
-    m_resources.append(r);
-    DDebug(ClientDriver::self(),DebugAll,
-	"Account(%s) contact='%s' added resource '%s' [%p]",
-	m_owner ? m_owner->uri().c_str() : "",m_uri.c_str(),id.c_str(),this);
+    if (!insertResource(r))
+	TelEngine::destruct(r);
     return r;
+}
+
+// Insert a resource in the list by its priority.
+// If the resource is already there it will be extracted and re-inserted
+bool ClientContact::insertResource(ClientResource* res)
+{
+    if (!res || findResource(res->toString()))
+	return false;
+    ObjList* found = m_resources.find(res);
+    if (found)
+	found->remove(false);
+    // Insert it
+    ObjList* o = m_resources.skipNull();
+    for (; o; o = o->skipNext()) {
+	ClientResource* r = static_cast<ClientResource*>(o->get());
+	if (r->m_priority < res->m_priority)
+	    break;
+    }
+    if (o)
+	o->insert(res);
+    else
+	m_resources.append(res);
+    if (!found)
+	DDebug(ClientDriver::self(),DebugAll,
+	    "Account(%s) contact='%s' added resource '%s' prio=%d [%p]",
+	    accountName().c_str(),m_uri.c_str(),
+	    res->toString().c_str(),res->m_priority,this);
+    return true;
 }
 
 // Remove a resource having a given id

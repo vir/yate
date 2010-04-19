@@ -125,11 +125,11 @@ public:
     inline const String& getLocalAddr() const
 	{ return m_localAddr; }
     inline const String& getPartyAddr() const
-	{ return m_outbound ? m_outbound : m_partyAddr; }
+	{ return m_proxyAddr ? m_proxyAddr : m_partyAddr; }
     inline int getLocalPort() const
 	{ return m_localPort; }
     inline int getPartyPort() const
-	{ return m_partyPort; }
+	{ return m_proxyPort ? m_proxyPort : m_partyPort; }
     inline bool localDetect() const
 	{ return m_localDetect; }
     inline const String& getFullName() const
@@ -157,7 +157,6 @@ private:
     String m_username;
     String m_authname;
     String m_password;
-    String m_outbound;
     String m_domain;
     String m_display;
     u_int64_t m_resend;
@@ -169,8 +168,10 @@ private:
     bool m_valid;
     String m_callid;
     String m_localAddr;
+    String m_proxyAddr;
     String m_partyAddr;
     int m_localPort;
+    int m_proxyPort;
     int m_partyPort;
     bool m_localDetect;
 };
@@ -3523,7 +3524,7 @@ MimeBody* YateSIPConnection::buildSIPBody(Message& msg, MimeSdpBody* sdp)
 YateSIPLine::YateSIPLine(const String& name)
     : String(name), m_resend(0), m_keepalive(0), m_interval(0), m_alive(0),
       m_tr(0), m_marked(false), m_valid(false),
-      m_localPort(0), m_partyPort(0), m_localDetect(false)
+      m_localPort(0), m_proxyPort(0), m_partyPort(0), m_localDetect(false)
 {
     DDebug(&plugin,DebugInfo,"YateSIPLine::YateSIPLine('%s') [%p]",c_str(),this);
     s_lines.append(this);
@@ -3819,7 +3820,6 @@ bool YateSIPLine::update(const Message& msg)
     }
     bool chg = false;
     chg = change(m_registrar,msg.getValue("registrar",msg.getValue("server"))) || chg;
-    chg = change(m_outbound,msg.getValue("outbound")) || chg;
     chg = change(m_username,msg.getValue("username")) || chg;
     chg = change(m_authname,msg.getValue("authname")) || chg;
     chg = change(m_password,msg.getValue("password")) || chg;
@@ -3846,6 +3846,17 @@ bool YateSIPLine::update(const Message& msg)
 	chg = change(m_localAddr,tmp) || chg;
 	chg = change(m_localPort,port) || chg;
     }
+    tmp = msg.getValue("outbound");
+    int port = 0;
+    if (tmp) {
+	int sep = tmp.find(':');
+	if (sep > 0) {
+	    port = tmp.substr(sep+1).toInteger(0);
+	    tmp = tmp.substr(0,sep);
+	}
+    }
+    chg = change(m_proxyAddr,tmp) || chg;
+    chg = change(m_proxyPort,port) || chg;
     m_alive = msg.getIntValue("keepalive",(m_localDetect ? 25 : 0));
     tmp = msg.getValue("operation");
     // if something changed we logged out so try to climb back

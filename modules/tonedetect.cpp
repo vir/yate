@@ -38,6 +38,8 @@ namespace { // anonymous
 #define THRESHOLD2_ABS     1e+06
 // relative square of spectral power from total signal power
 #define THRESHOLD2_REL_FAX  0.95
+// same for continuity test tones
+#define THRESHOLD2_REL_COT  0.90
 // sum of tones (low+high) from total
 #define THRESHOLD2_REL_ALL  0.60
 // each tone from threshold from total
@@ -106,6 +108,7 @@ public:
 private:
     void checkDtmf();
     void checkFax();
+    void checkCont();
     String m_id;
     String m_name;
     String m_divert;
@@ -115,6 +118,7 @@ private:
     String m_dnis;
     Mode m_mode;
     bool m_detFax;
+    bool m_detCont;
     bool m_detDtmf;
     bool m_detDnis;
     char m_dtmfTone;
@@ -122,6 +126,7 @@ private:
     double m_xv[3];
     double m_pwr;
     Tone2PoleFilter m_fax;
+    Tone2PoleFilter m_cont;
     Tone2PoleFilter m_dtmfL[4];
     Tone2PoleFilter m_dtmfH[4];
 };
@@ -170,6 +175,18 @@ static Params2Pole s_paramsCNG =
 static Params2Pole s_paramsCED =
     { 8.587870006e+01, -0.9767113407, -0.1551017476 }; // 2100Hz
 
+// generated continuity test verified detector (2010Hz) filter parameters
+// mkfilter -Bu -Bp -o 1 -a 2.5025000000e-01 2.5225000000e-01
+//  -> 2-pole butterworth bandpass, 2010Hz +-8Hz @ -3dB
+static Params2Pole s_paramsCOTv =
+    { 1.601528486e+02, -0.9875119299, -0.0156100298 }; // 2010Hz
+
+// generated continuity test send detector (1780Hz) filter parameters
+// mkfilter -Bu -Bp -o 1 -a 2.1875000000e-01 2.2625000000e-01
+//  -> 2-pole butterworth bandpass, 1780Hz +-30Hz @ -3dB
+static Params2Pole s_paramsCOTs =
+    { 4.343337207e+01, -0.9539525559, 0.3360345780 }; // 1780Hz
+
 // generated DTMF component filter parameters
 // 2-pole butterworth bandpass, +-1% @ -3dB
 static Params2Pole s_paramsDtmfL[] = {
@@ -209,8 +226,8 @@ void Tone2PoleFilter::update(double xd)
 
 ToneConsumer::ToneConsumer(const String& id, const String& name)
     : m_id(id), m_name(name), m_mode(Mono),
-      m_detFax(true), m_detDtmf(true), m_detDnis(false),
-      m_fax(s_paramsCNG)
+      m_detFax(true), m_detCont(false), m_detDtmf(true), m_detDnis(false),
+      m_fax(s_paramsCNG), m_cont(s_paramsCOTv)
 { 
     Debug(&plugin,DebugAll,"ToneConsumer::ToneConsumer(%s,'%s') [%p]",
 	id.c_str(),name.c_str(),this);
@@ -232,18 +249,24 @@ ToneConsumer::ToneConsumer(const String& id, const String& name)
 	m_format = "2*slin";
     if (tmp && (tmp != "*")) {
 	// individual detection requested
-	m_detFax = m_detDtmf = m_detDnis = false;
+	m_detFax = m_detCont = m_detDtmf = m_detDnis = false;
 	ObjList* k = tmp.split(',',false);
 	for (ObjList* l = k; l; l = l->next()) {
 	    String* s = static_cast<String*>(l->get());
 	    if (!s)
 		continue;
 	    m_detFax = m_detFax || (*s == "fax");
+	    m_detCont = m_detCont || (*s == "cotv");
 	    m_detDtmf = m_detDtmf || (*s == "dtmf");
 	    if (*s == "rfax") {
 		// detection of receiving Fax requested
 		m_fax.assign(s_paramsCED);
 		m_detFax = true;
+	    }
+	    else if (*s == "cots") {
+		// detection of COT Send tone requested
+		m_cont.assign(s_paramsCOTs);
+		m_detCont = true;
 	    }
 	    else if (*s == "callsetup") {
 		// call setup info in the form *ANI*DNIS*
@@ -271,6 +294,7 @@ void ToneConsumer::init()
     m_xv[1] = m_xv[2] = 0.0;
     m_pwr = 0.0;
     m_fax.init();
+    m_cont.init();
     for (int i = 0; i < 4; i++) {
 	m_dtmfL[i].init();
 	m_dtmfH[i].init();
@@ -359,7 +383,7 @@ void ToneConsumer::checkDtmf()
     }
 }
 
-// Check if we detected a Fax CNG tone
+// Check if we detected a Fax CNG or CED tone
 void ToneConsumer::checkFax()
 {
     if (m_fax.value() < m_pwr*THRESHOLD2_REL_FAX)
@@ -388,6 +412,30 @@ void ToneConsumer::checkFax()
 	m->addParam("message","call.fax");
 	m->addParam("detected","inband");
     }
+    Engine::enqueue(m);
+}
+
+// Check if we detected a Continuity Test tone
+void ToneConsumer::checkCont()
+{
+    if (m_cont.value() < m_pwr*THRESHOLD2_REL_COT)
+	return;
+    if (m_cont.value() > m_pwr) {
+	DDebug(&plugin,DebugNote,"Overshoot on %s, signal=%0.2f, total=%0.2f",
+	    m_id.c_str(),m_cont.value(),m_pwr);
+	init();
+	return;
+    }
+    DDebug(&plugin,DebugInfo,"Continuity detected on %s, signal=%0.1f, total=%0.1f",
+	m_id.c_str(),m_cont.value(),m_pwr);
+    // prepare for new detection
+    init();
+    m_detCont = false;
+    Message* m = new Message("chan.masquerade");
+    m->addParam("id",m_id);
+    m->addParam("message","chan.dtmf");
+    m->addParam("text","O");
+    m->addParam("detected","inband");
     Engine::enqueue(m);
 }
 
@@ -429,6 +477,8 @@ unsigned long ToneConsumer::Consume(const DataBlock& data, unsigned long tStamp,
 	// update all active detectors
 	if (m_detFax)
 	    m_fax.update(dx);
+	if (m_detCont)
+	    m_cont.update(dx);
 	if (m_detDtmf || m_detDnis) {
 	    for (int j = 0; j < 4; j++) {
 		m_dtmfL[j].update(dx);
@@ -444,6 +494,8 @@ unsigned long ToneConsumer::Consume(const DataBlock& data, unsigned long tStamp,
 		checkDtmf();
 	    if (m_detFax)
 		checkFax();
+	    if (m_detCont)
+		checkCont();
 	}
 	else {
 	    m_dtmfTone = '\0';

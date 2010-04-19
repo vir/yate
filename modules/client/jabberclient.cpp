@@ -1014,18 +1014,6 @@ void YJBEngine::processIqStanza(JBEvent* ev)
 	    }
 	}
     }
-    // Iq from known contact or user itself
-    ev->stream()->lock();
-    StreamData* data = streamData(ev);
-    bool allow = data && data->contact(ev->from().bare());
-    ev->stream()->unlock();
-    if (!allow)
-	allow = (ev->from().bare() == ev->to().bare());
-    if (!allow) {
-	if (!rsp)
-	    ev->sendStanzaError(XMPPError::ServiceUnavailable);
-	return;
-    }
     // Route the iq
     Message m("jabber.iq");
     __plugin.complete(m,ev->clientStream());

@@ -908,6 +908,14 @@ void Client::run()
     exitClient();
 }
 
+// Check if a message is sent by the client
+bool Client::isClientMsg(Message& msg)
+{
+    String* module = msg.getParam("module");
+    return module && ClientDriver::self() &&
+	ClientDriver::self()->name() == *module;
+}
+
 // retrieve the window named by the value of "name" from the client's list of windows 
 Window* Client::getWindow(const String& name)
 {
@@ -2158,6 +2166,8 @@ bool Client::imExecute(Message& msg)
 {
     static String sect = "miscellaneous";
 
+    if (Client::isClientMsg(msg))
+	return false;
     XDebug(ClientDriver::self(),DebugAll,"Client::imExecute [%p]",this);
     // Check for a preferred or only logic
     String name = "imincoming";
@@ -2412,6 +2422,58 @@ void Client::engineStart(Message& msg)
 	    logic->toString().c_str(),logic);
 	logic->engineStart(msg);
     }
+}
+
+// Build a message to be sent by the client.
+Message* Client::buildMessage(const char* msg, const String& account, const char* oper)
+{
+    Message* m = new Message(msg);
+    if (ClientDriver::self())
+	m->addParam("module",ClientDriver::self()->name());
+    if (!TelEngine::null(oper))
+	m->addParam("operation",oper);
+    m->addParam("account",account);
+    return m;
+}
+
+// Build a resource.notify message
+Message* Client::buildNotify(bool online, const String& account, const ClientResource* from)
+{
+    Message* m = buildMessage("resource.notify",account,online ? "online" : "offline");
+    if (from) {
+	m->addParam("priority",String(from->m_priority));
+	m->addParam("status",from->m_text);
+	if (from->m_status > ClientResource::Online)
+	    m->addParam("show",lookup(from->m_status,ClientResource::s_statusName));
+    }
+    return m;
+}
+
+// Build a resource.subscribe or resource.notify message to request a subscription
+//  or respond to a request
+Message* Client::buildSubscribe(bool request, bool ok, const String& account,
+    const String& contact, const char* proto)
+{
+    Message* m = 0;
+    if (request)
+	m = buildMessage("resource.subscribe",account,ok ? "subscribe" : "unsubscribe");
+    else
+	m = buildMessage("resource.notify",account,ok ? "subscribed" : "unsubscribed");
+    if (!TelEngine::null(proto))
+	m->addParam("protocol",proto);
+    m->addParam("to",contact);
+    return m;
+}
+
+// Build an user.roster message
+Message* Client::buildUserRoster(bool update, const String& account,
+    const String& contact, const char* proto)
+{
+    Message* m = buildMessage("user.roster",account,update ? "update" : "delete");
+    if (!TelEngine::null(proto))
+	m->addParam("protocol",proto);
+    m->addParam("contact",contact);
+    return m;
 }
 
 // Add a new module for handling actions
@@ -3090,7 +3152,7 @@ bool ClientDriver::received(Message& msg, int id)
 	return true;
     }
     if (id == ImExecute || id == Text) {
-	if (name() == msg.getValue("module"))
+	if (Client::isClientMsg(msg))
 	    return false;
 	return Client::self() && Client::self()->imExecute(msg);
     }

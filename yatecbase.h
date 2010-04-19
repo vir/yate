@@ -1122,6 +1122,13 @@ public:
     static inline bool valid()
 	{ return self() && (self() == Thread::current() || !(exiting() || Engine::exiting())); }
 
+    /**
+     * Check if a message is sent by the client
+     * @param msg The message to check
+     * @return True if the message has a 'module' parameter with the client driver's name
+     */
+    static bool isClientMsg(Message& msg);
+
     inline static bool changing()
 	{ return (s_changing > 0); }
     static Window* getWindow(const String& name);
@@ -1333,6 +1340,51 @@ public:
      */
     static inline bool exiting()
 	{ return s_exiting; }
+
+    /**
+     * Build a message to be sent by the client.
+     * Add module, line and operation parameters
+     * @param msg Message name
+     * @param account The account sending the message
+     * @param oper Optional operation parameter
+     * @return Message pointer
+     */
+    static Message* buildMessage(const char* msg, const String& account,
+	const char* oper = 0);
+
+    /**
+     * Build a resource.notify message
+     * @param online True to build an 'online' message, false to build an 'offline' one
+     * @param account The account sending the message
+     * @param from Optional resource to add to message
+     * @return Message pointer
+     */
+    static Message* buildNotify(bool online, const String& account,
+	const ClientResource* from = 0);
+
+    /**
+     * Build a resource.subscribe or resource.notify message to request a subscription
+     *  or respond to a request
+     * @param request True to build a request, false to build a response
+     * @param ok True to build a subscribe(d) message, false to build an unsubscribe(d) message
+     * @param account The account to use for the message
+     * @param contact The destination contact
+     * @param proto Optional protocol
+     * @return Valid Message pointer
+     */
+    static Message* buildSubscribe(bool request, bool ok, const String& account,
+	const String& contact, const char* proto = 0);
+
+    /**
+     * Build an user.roster message
+     * @param update True to build an update, false to build a delete request
+     * @param account The account to use for the message
+     * @param contact The contact to update or delete
+     * @param proto Optional protocol
+     * @return Valid Message pointer
+     */
+    static Message* buildUserRoster(bool update, const String& account,
+	const String& contact, const char* proto = 0);
 
     /**
      * Add a logic to the list. The added object is not owned by the client  

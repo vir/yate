@@ -295,6 +295,26 @@ public:
 	}
 
     /**
+     * Copy a string list to a list of parameters
+     * @param dest Destination list
+     * @param src Source string list
+     */
+    static void copyParams(NamedList& dest, QStringList& src);
+
+    /**
+     * Copy a list of parameters to string list
+     * @param dest Destination list
+     * @param src Source list
+     */
+    static void copyParams(QStringList& dest, const NamedList& src);
+
+    /**
+     * Build custom UI widgets from frames owned by a widget
+     * @param parent Parent widget
+     */
+    static void buildFrameUiWidgets(QWidget* parent);
+
+    /**
      * Build a menu object from a list of parameters.
      * Each menu item is indicated by a parameter starting with 'item:".
      * item:menu_name=Menu Text will create a menu item named 'menu_name' with 

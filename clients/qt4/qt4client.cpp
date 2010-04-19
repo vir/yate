@@ -2252,6 +2252,9 @@ void QtWindow::doInit()
     if (!m_height)
 	m_height = wndWidget()->height();
 
+    // Build custom UI widgets from frames owned by this widget
+    QtClient::buildFrameUiWidgets(this);
+
     // Create custom widgets from
     // _yate_identity=customwidget|[separator=sep|] sep widgetclass sep widgetname [sep param=value]
     QList<QFrame*> frm = qFindChildren<QFrame*>(this);
@@ -2880,6 +2883,16 @@ bool QtClient::getProperty(QObject* obj, const char* name, String& value)
     if (!(obj && name && *name))
 	return false;
     QVariant var = obj->property(name);
+    if (var.type() == QVariant::StringList) {
+	NamedList* l = static_cast<NamedList*>(value.getObject("NamedList"));
+	if (l)
+	    copyParams(*l,var.toStringList());
+	else
+	    getUtf8(value,var.toStringList().join(","));
+	DDebug(ClientDriver::self(),DebugAll,"Got list property %s for object '%s'",
+	    name,YQT_OBJECT_NAME(obj));
+	return true;
+    }
     if (var.canConvert(QVariant::String)) {
 	QtClient::getUtf8(value,var.toString());
 	DDebug(ClientDriver::self(),DebugAll,"Got property %s=%s for object '%s'",
@@ -2891,6 +2904,72 @@ bool QtClient::getProperty(QObject* obj, const char* name, String& value)
 	name,var.typeName(),YQT_OBJECT_NAME(obj),
 	((var.type() == QVariant::Invalid) ? "no such property" : "unsupported type"));
     return false;
+}
+
+// Copy a string list to a list of parameters
+void QtClient::copyParams(NamedList& dest, QStringList& src)
+{
+    for (int i = 0; i < src.size(); i++) {
+	if (!src[i].length())
+	    continue;
+	int pos = src[i].indexOf('=');
+	String name;
+	if (pos >= 0) {
+	    getUtf8(name,src[i].left(pos));
+	    getUtf8(dest,name,src[i].right(src[i].length() - pos - 1));
+	}
+	else {
+	    getUtf8(name,src[i]);
+	    dest.addParam(name,"");
+	}
+    }
+}
+
+// Copy a list of parameters to string list
+void QtClient::copyParams(QStringList& dest, const NamedList& src)
+{
+    unsigned int n = src.length();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* ns = src.getParam(i);
+	if (ns)
+	    dest.append(setUtf8(ns->name() + "=" + *ns));
+    }
+}
+
+// Build custom UI widgets from frames owned by a widget
+void QtClient::buildFrameUiWidgets(QWidget* parent)
+{
+    if (!parent)
+	return;
+    QList<QFrame*> frm = qFindChildren<QFrame*>(parent);
+    for (int i = 0; i < frm.size(); i++) {
+	if (!getBoolProperty(frm[i],"_yate_uiwidget"))
+	    continue;
+	String name;
+	String type;
+	getProperty(frm[i],"_yate_uiwidget_name",name);
+	getProperty(frm[i],"_yate_uiwidget_class",type);
+	if (!(name && type))
+	    continue;
+	NamedList params("");
+	getProperty(frm[i],"_yate_uiwidget_params",params);
+	QtWindow* w = static_cast<QtWindow*>(parent->window());
+	if (w)
+	    params.setParam("parentwindow",w->id());
+	getUtf8(params,"parentwidget",frm[i]->objectName(),true);
+	QObject* obj = (QObject*)UIFactory::build(type,name,&params);
+	if (!obj)
+	    continue;
+	QWidget* wid = qobject_cast<QWidget*>(obj);
+	if (wid)
+	    QtClient::setWidget(frm[i],wid);
+	else {
+	    obj->setParent(frm[i]);
+	    QtCustomObject* customObj = qobject_cast<QtCustomObject*>(obj);
+	    if (customObj)
+		customObj->parentChanged();
+	}
+    }
 }
 
 // Associate actions to buttons with '_yate_setaction' property set

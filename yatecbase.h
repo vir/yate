@@ -3160,15 +3160,30 @@ private:
  */
 class YATE_API ClientResource : public RefObject
 {
+    YCLASS(ClientResource,RefObject)
 public:
+    /**
+     * Resource status
+     */
+    enum Status {
+	Unknown = 0,
+	Offline = 1,
+	Connecting = 2,
+	Online = 3,
+	Busy = 4,
+	Dnd = 5,
+	Away = 6,
+	Xa = 7,
+    };
+
     /**
      * Constructor
      * @param id The resource's id
-     * @param audio True (default) if the resource has audio capability
      * @param name Optional display name. Defaults to the id's value if 0
+     * @param audio True (default) if the resource has audio capability
      */
     inline ClientResource(const char* id, const char* name = 0, bool audio = true)
-	: m_name(name ? name : id), m_audio(audio), m_priority(0), m_id(id)
+	: m_id(id), m_name(name ? name : id), m_audio(audio), m_priority(0)
 	{}
 
     /**
@@ -3178,13 +3193,93 @@ public:
     virtual const String& toString() const
 	{ return m_id; }
 
+    /**
+     * Check if the resource is online
+     * @return True if the resource is online
+     */
+    inline bool online() const
+	{ return m_status > Connecting; }
+
+    /**
+     * Check if the resource is offline
+     * @return True if the resource is offline
+     */
+    inline bool offline() const
+	{ return m_status == Offline; }
+
+    /**
+     * Retrieve resource status name
+     * @return Resource status name
+     */
+    inline const char* statusName() const
+	{ return lookup(m_status,s_statusName); }
+
+    /**
+     * Retrieve resource status text or associated status name if text is empty
+     * @return Resource status text
+     */
+    inline const char* text() const
+	{ return m_text ? m_text.c_str() : statusName(); }
+
+    /**
+     * Update resource audio capability
+     * @param ok The new audio capability value
+     * @return True if changed
+     */
+    inline bool setAudio(bool ok) {
+	    if (m_audio == ok)
+		return false;
+	    m_audio = ok;
+	    return true;
+	}
+
+    /**
+     * Update resource priority
+     * @param prio Resource priority
+     * @return True if changed
+     */
+    inline bool setPriority(int prio) {
+	    if (m_priority == prio)
+		return false;
+	    m_priority = prio;
+	    return true;
+	}
+
+    /**
+     * Update resource status
+     * @param stat Resource status
+     * @return True if changed
+     */
+    inline bool setStatus(int stat) {
+	    if (m_status == stat)
+		return false;
+	    m_status = stat;
+	    return true;
+	}
+
+    /**
+     * Update resource status text
+     * @param text Resource status text
+     * @return True if changed
+     */
+    inline bool setStatusText(const String& text) {
+	    if (m_text == text)
+		return false;
+	    m_text = text;
+	    return true;
+	}
+
+    /**
+     * Resource status names
+     */
+    static const TokenDict s_statusName[];
+
+    String m_id;                         // The resource id
     String m_name;                       // Account's display name
     bool m_audio;                        // Audio capability flag
     int m_priority;                      // Resource priority
-    String m_status;                     // Resource status string
-
-protected:
-    String m_id;                         // The account's id
+    int m_status;                        // Resource status
+    String m_text;                       // Resource status text
 };
 
 /**

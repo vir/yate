@@ -221,6 +221,18 @@ TokenDict ClientChannel::s_notification[] = {
     {0,0}
 };
 
+// Resource status names
+const TokenDict ClientResource::s_statusName[] = {
+    {"offline",   ClientResource::Offline},
+    {"connecting",ClientResource::Connecting},
+    {"online",    ClientResource::Online},
+    {"busy",      ClientResource::Busy},
+    {"dnd",       ClientResource::Dnd},
+    {"away",      ClientResource::Away},
+    {"xa",        ClientResource::Xa},
+    {0,0}
+};
+
 String ClientContact::s_chatPrefix = "chat";     // Client contact chat window prefix
 
 

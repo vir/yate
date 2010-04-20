@@ -1786,10 +1786,18 @@ void QtWindow::closeEvent(QCloseEvent* event)
     }
 
     QWidget::closeEvent(event);
-    if (m_mainWindow && Client::self())
+    if (m_mainWindow && Client::self()) {
 	Client::self()->quit();
-    else
-	hide();
+	return;
+    }
+    if (QtClient::getBoolProperty(wndWidget(),"_yate_destroyonclose")) {
+	XDebug(QtDriver::self(),DebugAll,
+	    "Window(%s) closeEvent() set delete later [%p]",m_id.c_str(),this);
+	QObject::deleteLater();
+	// Safe to call hide(): the window will be deleted when control returns
+	//  to the main loop
+    }
+    hide();
 }
 
 void QtWindow::changeEvent(QEvent* event)
@@ -2128,6 +2136,11 @@ void QtWindow::setVisible(bool visible)
 	    m->addParam("window",m_id);
 	    Engine::enqueue(m);
 	}
+    }
+    if (!m_visible && QtClient::getBoolProperty(wndWidget(),"_yate_destroyonhide")) {
+	XDebug(QtDriver::self(),DebugAll,
+	    "Window(%s) setVisible(false) set delete later [%p]",m_id.c_str(),this);
+	QObject::deleteLater();
     }
     // Destroy owned dialogs
     if (!m_visible) {

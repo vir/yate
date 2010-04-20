@@ -3646,6 +3646,22 @@ ClientContact::ClientContact(ClientAccount* owner, NamedList& params, bool chat)
 	createChatWindow();
 }
 
+// Show or hide this contact's chat window
+bool ClientContact::showChat(bool visible, bool active)
+{
+    if (!Client::self())
+	return false;
+    Window* w = getChatWnd();
+    if (!w)
+	return false;
+    if (!visible)
+	return Client::self()->setVisible(m_chatWndName,false);
+    bool ok = Client::self()->setVisible(w->id(),true);
+    if (active)
+	Client::self()->setActive(w->id(),true,w);
+    return ok;
+}
+
 // Create the chat window
 void ClientContact::createChatWindow(bool force, const char* name)
 {
@@ -3653,10 +3669,8 @@ void ClientContact::createChatWindow(bool force, const char* name)
 	destroyChatWindow();
     if (hasChat())
 	return;
-
     // Generate chat window name and create the window
-    MD5 md5(m_id);
-    m_chatWndName = s_chatPrefix + md5.hexDigest();
+    buildIdHash(m_chatWndName,s_chatPrefix);
     if (Client::self())
 	Client::self()->createWindowSafe(name,m_chatWndName);
     Window* w = Client::self()->getWindow(m_chatWndName);

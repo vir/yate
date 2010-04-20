@@ -3069,6 +3069,16 @@ public:
 	{  buildContactId(dest,m_owner ? m_owner->toString() : String::empty(),m_id); }
 
     /**
+     * Build a string from prefix and contact id hash
+     * @param buf Destination string
+     * @param prefix Optional prefix
+     */
+    inline void buildIdHash(String& buf, const String& prefix = String::empty()) {
+	    MD5 md5(m_id);
+	    buf = prefix + md5.hexDigest();
+	}
+
+    /**
      * Check if a window is this contact's chat
      * @param wnd The window to check
      * @return True if the given window is this contact's chat
@@ -3092,11 +3102,11 @@ public:
 
     /**
      * Show or hide this contact's chat window
-     * @param active The chat window's visibility flag
+     * @param visible True to show, false to hide
+     * @param active True to activate the window if shown
      * @return True on success
      */
-    inline bool showChat(bool active)
-	{ return Client::self() ? Client::self()->setVisible(m_chatWndName,active) : false; }
+    virtual bool showChat(bool visible, bool active = false);
 
     /**
      * Get the chat window

@@ -234,6 +234,8 @@ public:
     bool handleUserRoster(Message& msg, const String& line);
     // Process 'user.update' messages
     bool handleUserUpdate(Message& msg, const String& line);
+    // Process 'contact.info' messages
+    bool handleContactInfo(Message& msg, const String& line);
     // Process 'jabber.iq' messages
     bool handleJabberIq(Message& msg, const String& line);
     // Process 'jabber.account' messages
@@ -289,6 +291,7 @@ public:
 	UserUpdate     = -4,           // YJBEngine::handleUserUpdate()
 	UserLogin      = -5,           // YJBEngine::handleUserLogin()
 	JabberAccount  = -6,           // YJBEngine::handleJabberAccount()
+	ContactInfo    = -7,           // YJBEngine::handleContactInfo()
 	JabberIq       = 150,          // YJBEngine::handleJabberIq()
     };
     JBMessageHandler(int handler);
@@ -380,10 +383,19 @@ static const TokenDict s_msgHandler[] = {
     {"user.update",         JBMessageHandler::UserUpdate},
     {"user.login",          JBMessageHandler::UserLogin},
     {"jabber.account",      JBMessageHandler::JabberAccount},
+    {"contact.info",        JBMessageHandler::ContactInfo},
     {"jabber.iq",           JBMessageHandler::JabberIq},
     {0,0}
 };
 
+// Find an xml element's child text
+static inline const String& getChildText(XmlElement& xml, const String& name,
+    XmlElement* start = 0)
+{
+    XmlElement* child = xml.findNextChild(start,&name);
+    return child ? child->getText() : String::empty();
+}
+ 
 // Add xml data parameter to a message
 static inline void addValidParam(NamedList& list, const char* param, const char* value)
 {
@@ -704,6 +716,26 @@ bool YJBEngine::handleUserUpdate(Message& msg, const String& line)
     return ok;
 }
 
+// Process 'contact.info' messages
+bool YJBEngine::handleContactInfo(Message& msg, const String& line)
+{
+    String* oper = msg.getParam("operation");
+    if (TelEngine::null(oper))
+	return false;
+    JBClientStream* s = findAccount(line);
+    if (!s)
+	return false;
+    bool ok = false;
+    const char* contact = msg.getValue("contact");
+    const char* id = msg.getValue("id");
+    if (*oper == "query") {
+	XmlElement* xml = XMPPUtils::createVCard(true,0,contact,id);
+	ok = s->sendStanza(xml);
+    }
+    TelEngine::destruct(s);
+    return ok;
+}
+
 // Process 'jabber.iq' messages
 bool YJBEngine::handleJabberIq(Message& msg, const String& line)
 {
@@ -1013,6 +1045,52 @@ void YJBEngine::processIqStanza(JBEvent* ev)
 		return;
 	    }
 	}
+    }
+    // Vcard responses
+    if (rsp && t == XmlTag::VCard && n == XMPPNamespace::VCard) {
+	Message* m = __plugin.message("contact.info",ev->clientStream());
+	m->addParam("operation","notify");
+	if (!fromServer)
+	    m->addParam("contact",ev->from().bare());
+	String prefix("contact.");
+	// Name
+	String ch("N");
+	XmlElement* tmp = service->findFirstChild(&ch);
+        if (tmp) {
+	    String name;
+	    const String& given = getChildText(*tmp,"GIVEN");
+	    if (given) {
+		m->addParam(prefix + "name.first",given);
+		name << given;
+	    }
+	    const String& middle = getChildText(*tmp,"MIDDLE");
+	    if (middle) {
+		m->addParam(prefix + "name.middle",middle);
+		name.append(middle," ");
+	    }
+	    const String& family = getChildText(*tmp,"FAMILY");
+	    if (family) {
+		m->addParam(prefix + "name.last",family);
+		name.append(family," ");
+	    }
+	    if (name)
+		m->addParam(prefix + "name",name);
+	}
+        // EMAIL
+	addValidParam(*m,prefix + "email",getChildText(*service,"EMAIL"));
+	// Photo
+	ch = "PHOTO";
+	tmp = service->findFirstChild(&ch);
+	if (tmp) {
+	    const String& t = getChildText(*tmp,"TYPE");
+	    const String& img = getChildText(*tmp,"BINVAL");
+	    if (t && img) {
+		m->addParam(prefix + "photo_format",t);
+		m->addParam(prefix + "photo",img);
+	    }
+	}
+	Engine::enqueue(m);
+	return;
     }
     // Route the iq
     Message m("jabber.iq");
@@ -1395,6 +1473,8 @@ bool JBMessageHandler::received(Message& msg)
 	    return s_jabber->handleUserUpdate(msg,*line);
 	case JabberAccount:
 	    return s_jabber->handleJabberAccount(msg,*line);
+	case ContactInfo:
+	    return s_jabber->handleContactInfo(msg,*line);
 	default:
 	    Debug(&__plugin,DebugStub,"JBMessageHandler(%s) not handled!",msg.c_str());
     }

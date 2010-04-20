@@ -3094,6 +3094,16 @@ public:
 	{ return Client::self() && Client::self()->getWindow(m_chatWndName); }
 
     /**
+     * Send chat to contact (enqueue a msg.execute message)
+     * @param body Chat body
+     * @param res Optional target instance
+     * @param type Optional message type parameter
+     * @return True on success
+     */
+    virtual bool sendChat(const char* body, const String& res = String::empty(),
+	const char* type = 0);
+
+    /**
      * Check if this contact's chat window is visible
      * @return True if this contact's chat window is visible
      */

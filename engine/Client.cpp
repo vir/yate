@@ -3646,6 +3646,19 @@ ClientContact::ClientContact(ClientAccount* owner, NamedList& params, bool chat)
 	createChatWindow();
 }
 
+// Send chat to contact (enqueue a msg.execute message)
+bool ClientContact::sendChat(const char* body, const String& res, const char* type)
+{
+    Message* m = Client::buildMessage("msg.execute",accountName());
+    if (!TelEngine::null(type))
+	m->addParam("type",type);
+    m->addParam("called",m_uri);
+    if (res)
+	m->addParam("called_instance",res);
+    m->addParam("body",body);
+    return Engine::enqueue(m);
+}
+
 // Show or hide this contact's chat window
 bool ClientContact::showChat(bool visible, bool active)
 {

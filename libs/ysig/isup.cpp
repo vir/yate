@@ -2062,7 +2062,7 @@ bool SS7ISUPCall::transmitIAM()
 
 bool SS7ISUPCall::needsTesting(const SS7MsgISUP* msg)
 {
-    if (!msg)
+    if ((m_state >= Testing) || !msg)
 	return false;
     const String* naci = msg->params().getParam("NatureOfConnectionIndicators");
     if (!naci)

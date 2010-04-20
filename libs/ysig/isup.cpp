@@ -1567,6 +1567,7 @@ SS7ISUPCall::SS7ISUPCall(SS7ISUP* controller, SignallingCircuit* cic,
     m_terminate(false),
     m_gracefully(true),
     m_circuitChanged(false),
+    m_circuitTesting(false),
     m_iamMsg(0),
     m_sgmMsg(0),
     m_relTimer(300000),                  // Q.764: T5  - 5..15 minutes
@@ -1696,6 +1697,7 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
     // No events: check timeouts
     if (!m_lastEvent) {
 	switch (m_state) {
+	    case Testing:
 	    case Setup:
 		if (timeout(isup(),this,m_iamTimer,when,"IAM"))
 		    release();
@@ -2011,19 +2013,21 @@ bool SS7ISUPCall::validMsgState(bool send, SS7MsgISUP::Type type)
 
 // Connect or test the reserved circuit. Return false if it fails.
 // Return true if this call is a signalling only one
-bool SS7ISUPCall::connectCircuit(bool testing)
+bool SS7ISUPCall::connectCircuit(const char* special)
 {
     bool ok = signalOnly();
+    if (TelEngine::null(special))
+	special = 0;
     if (m_circuit && !ok) {
-	if (testing)
-	    ok = m_circuit->setParam("special_mode","conttest") &&
+	if (special)
+	    ok = m_circuit->setParam("special_mode",special) &&
 		m_circuit->status(SignallingCircuit::Special);
 	else
 	    ok = m_circuit->connected() || m_circuit->connect(m_format);
     }
     if (!ok)
 	Debug(isup(),DebugMild,"Call(%u). Circuit %s failed (format='%s')%s [%p]",
-	    id(),(testing ? "testing" : "connect"),
+	    id(),(special ? special : "connect"),
 	    m_format.safe(),(m_circuit ? "" : ". No circuit"),this);
 
     if (m_sgmMsg) {
@@ -2044,9 +2048,30 @@ bool SS7ISUPCall::transmitIAM()
     m_state = Setup;
     if (!m_iamMsg)
 	return false;
+    if (needsTesting(m_iamMsg)) {
+	Debug(isup(),DebugNote,"Call(%u). %s continuity check [%p]",
+	    id(),(m_circuitTesting ? "Executing" : "Forwarding"),this);
+	m_state = Testing;
+	if (m_circuitTesting)
+	    connectCircuit();
+    }
     m_iamMsg->m_cic = id();
     m_iamMsg->ref();
     return transmitMessage(m_iamMsg);
+}
+
+bool SS7ISUPCall::needsTesting(const SS7MsgISUP* msg)
+{
+    if (!msg)
+	return false;
+    const String* naci = msg->params().getParam("NatureOfConnectionIndicators");
+    if (!naci)
+	return false;
+    ObjList* list = naci->split(',',false);
+    m_circuitTesting = (0 != list->find("cont-check-this"));
+    bool checkIt = m_circuitTesting || (0 != list->find("cont-check-prev"));
+    TelEngine::destruct(list);
+    return checkIt;
 }
 
 // Stop waiting for a SGM (Segmentation) message. Copy parameters to
@@ -2078,25 +2103,6 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
     m_sgmRecvTimer.stop();
     // Raise event, connect the reserved circuit, change call state
     m_iamTimer.stop();
-    if (m_sgmMsg->type() == SS7MsgISUP::IAM) {
-	const String* naci = m_sgmMsg->params().getParam("NatureOfConnectionIndicators");
-	if (naci) {
-	    ObjList* list = naci->split(',',false);
-	    bool ckPrev = 0 != list->find("cont-check-prev");
-	    bool ckThis = 0 != list->find("cont-check-this");
-	    TelEngine::destruct(list);
-	    if (ckPrev || ckThis) {
-		Debug(isup(),DebugNote,"Call(%u). Waiting for continuity check [%p]",
-		    id(),this);
-		connectCircuit(ckThis);
-		m_state = Testing;
-		// Save message for later
-		m_iamMsg = m_sgmMsg;
-		m_sgmMsg = 0;
-		return 0;
-	    }
-	}
-    }
     switch (m_sgmMsg->type()) {
 	case SS7MsgISUP::COT:
 	    if (!m_iamMsg) {
@@ -2106,8 +2112,19 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 	    TelEngine::destruct(m_sgmMsg);
 	    m_sgmMsg = m_iamMsg;
 	    m_iamMsg = 0;
+	    m_circuitTesting = false;
 	    // intentionally fall through
 	case SS7MsgISUP::IAM:
+	    if (needsTesting(m_sgmMsg)) {
+		Debug(isup(),DebugNote,"Call(%u). Waiting for continuity check [%p]",
+		    id(),this);
+		connectCircuit(m_circuitTesting ? "conttest" : "");
+		m_state = Testing;
+		// Save message for later
+		m_iamMsg = m_sgmMsg;
+		m_sgmMsg = 0;
+		return 0;
+	    }
 	    connectCircuit();
 	    m_state = Setup;
 	    m_lastEvent = new SignallingEvent(SignallingEvent::NewCall,m_sgmMsg,this);

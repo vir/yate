@@ -851,6 +851,13 @@ public:
     inline NamedList& params()
 	{ return m_params; }
 
+    /**
+     * Get this message's parameter list - const version
+     * @return This message's parameter list
+     */
+    inline const NamedList& params() const
+	{ return m_params; }
+
 protected:
     /**
      * Message parameter list
@@ -5970,9 +5977,11 @@ private:
     // Accept send/receive messages in current state based on call direction
     bool validMsgState(bool send, SS7MsgISUP::Type type);
     // Connect the reserved circuit. Return false if it fails. Return true if this call is a signalling only one
-    bool connectCircuit(bool testing = false);
+    bool connectCircuit(const char* special = 0);
     // Transmit the IAM message. Start IAM timer if not started
     bool transmitIAM();
+    // Check if the circuit needs continuity testing
+    bool needsTesting(const SS7MsgISUP* msg);
     // Stop waiting for a SGM (Segmentation) message. Copy parameters to the pending segmented message if sgm is valid.
     // Change call state and set m_lastEvent
     // @param sgm Optional received SGM message with parameters to be added to the pending segmented message
@@ -5990,7 +5999,8 @@ private:
     SS7Label m_label;                    // The routing label for this call
     bool m_terminate;                    // Termination flag
     bool m_gracefully;                   // Terminate gracefully: send RLC
-    bool m_circuitChanged;               // circuit change flag
+    bool m_circuitChanged;               // Circuit change flag
+    bool m_circuitTesting;               // The circuit is tested for continuity
     String m_format;                     // Data format used by the circuit
     String m_reason;                     // Termination reason
     SS7MsgISUP* m_iamMsg;                // Message with the call parameters for outgoing calls

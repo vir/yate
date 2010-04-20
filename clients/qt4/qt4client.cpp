@@ -914,6 +914,11 @@ bool QtWindow::setParams(const NamedList& params)
     // Parameters for the widget whose name is the list name
     if(params) {
 	QtWidget w(this, params);
+	if (w.customTable()) {
+	    bool ok = w.customTable()->setParams(params);
+	    setUpdatesEnabled(true);
+	    return ok;
+	}
 	if (w.type() == QtWidget::Calendar) {
 	    int year = params.getIntValue("year");
 	    int month = params.getIntValue("month");

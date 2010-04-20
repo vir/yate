@@ -703,9 +703,9 @@ static const SignallingFlags s_flags_naci[] = {
     { 0x03, 0x00, "0sat" },
     { 0x03, 0x01, "1sat" },
     { 0x03, 0x02, "2sat" },
-    { 0xc0, 0x00, "cont-check-none" },      // Continuity check not required
-    { 0xc0, 0x40, "cont-check-this" },      // Continuity check required on this circuit
-    { 0xc0, 0x80, "cont-check-prev" },      // Continuity check performed on a previous circuit
+    { 0x0c, 0x00, "cont-check-none" },      // Continuity check not required
+    { 0x0c, 0x04, "cont-check-this" },      // Continuity check required on this circuit
+    { 0x0c, 0x08, "cont-check-prev" },      // Continuity check performed on a previous circuit
     { 0x10, 0x10, "echodev" },              // Outgoing half echo control device included
     { 0, 0, 0 }
 };

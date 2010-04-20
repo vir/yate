@@ -299,7 +299,7 @@ public:
      * @param dest Destination list
      * @param src Source string list
      */
-    static void copyParams(NamedList& dest, QStringList& src);
+    static void copyParams(NamedList& dest, const QStringList& src);
 
     /**
      * Copy a list of parameters to string list

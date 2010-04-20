@@ -2907,7 +2907,7 @@ bool QtClient::getProperty(QObject* obj, const char* name, String& value)
 }
 
 // Copy a string list to a list of parameters
-void QtClient::copyParams(NamedList& dest, QStringList& src)
+void QtClient::copyParams(NamedList& dest, const QStringList& src)
 {
     for (int i = 0; i < src.size(); i++) {
 	if (!src[i].length())

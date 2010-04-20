@@ -473,6 +473,10 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath="..\libs\ysig\testpart.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\ysig\tup.cpp"
 				>
 			</File>

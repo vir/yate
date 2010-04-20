@@ -2672,7 +2672,13 @@ void QtClient::run()
     char* argv =  0;
     m_app = new QApplication(argc,&argv);
     m_app->setQuitOnLastWindowClosed(false);
-    Debug(ClientDriver::self(),DebugInfo,"QT client start running (version=%s)",qVersion());
+    String imgRead;
+    QList<QByteArray> imgs = QImageReader::supportedImageFormats();
+    for (int i = 0; i < imgs.size(); i++)
+	imgRead.append(imgs[i].constData(),",");
+    imgRead = "read image formats '" + imgRead + "'";
+    Debug(ClientDriver::self(),DebugInfo,"QT client start running (version=%s) %s",
+	qVersion(),imgRead.c_str());
     if (!QSound::isAvailable())
 	Debug(ClientDriver::self(),DebugWarn,"QT sounds are not available");
     // Create events proxy

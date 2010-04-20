@@ -2105,14 +2105,25 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
     m_iamTimer.stop();
     switch (m_sgmMsg->type()) {
 	case SS7MsgISUP::COT:
-	    if (!m_iamMsg) {
-		m_lastEvent = new SignallingEvent(SignallingEvent::Info,m_sgmMsg,this);
-		break;
+	    {
+		const String* cont = m_sgmMsg->params().getParam("ContinuityIndicators");
+		bool ok = cont && (*cont == "success");
+		if (ok) {
+		    Debug(isup(),DebugNote,"Call(%u). Continuity check succeeded [%p]",
+			id(),this);
+		    m_circuitTesting = false;
+		}
+		else
+		    Debug(isup(),DebugWarn,"Call(%u). Continuity check failed [%p]",
+			id(),this);
+		if (!(ok && m_iamMsg)) {
+		    m_lastEvent = new SignallingEvent(SignallingEvent::Info,m_sgmMsg,this);
+		    break;
+		}
 	    }
 	    TelEngine::destruct(m_sgmMsg);
 	    m_sgmMsg = m_iamMsg;
 	    m_iamMsg = 0;
-	    m_circuitTesting = false;
 	    // intentionally fall through
 	case SS7MsgISUP::IAM:
 	    if (needsTesting(m_sgmMsg)) {

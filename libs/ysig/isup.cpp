@@ -2374,6 +2374,7 @@ bool SS7ISUP::initialize(const NamedList* config)
 	    config->getBoolValue("extended-debug",false));
 	m_lockGroup = config->getBoolValue("lockgroup",m_lockGroup);
 	m_earlyAcm = config->getBoolValue("earlyacm",m_earlyAcm);
+	m_continuity = config->getValue("continuity",m_continuity);
     }
     if (engine() && !network()) {
 	NamedList params("ss7router");

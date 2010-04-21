@@ -138,6 +138,7 @@ static const String s_copyBkInd("BackwardCallIndicators,OptionalBackwardCallIndi
 static const TokenDict s_dict_control[] = {
     { "validate", SS7MsgISUP::CVT },
     { "query", SS7MsgISUP::CQM },
+    { "conttest", SS7MsgISUP::CCR },
     { 0, 0 }
 };
 
@@ -1654,6 +1655,7 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 	if (msg && validMsgState(false,msg->type()))
 	    switch (msg->type()) {
 		case SS7MsgISUP::IAM:
+		case SS7MsgISUP::CCR:
 		case SS7MsgISUP::COT:
 		case SS7MsgISUP::ACM:
 		case SS7MsgISUP::CPR:
@@ -1701,8 +1703,14 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 	    case Testing:
 	    case Setup:
 		if (timeout(isup(),this,m_iamTimer,when,"IAM")) {
-		    if (m_circuitTesting)
-			setReason("bearer-cap-not-available",0);
+		    if (m_circuitTesting) {
+			if (m_iamMsg)
+			    setReason("bearer-cap-not-available",0);
+			else {
+			    setTerminate(true,"bearer-cap-not-available");
+			    break;
+			}
+		    }
 		    release();
 		}
 		break;
@@ -1972,6 +1980,10 @@ bool SS7ISUPCall::validMsgState(bool send, SS7MsgISUP::Type type)
 {
     bool handled = true;
     switch (type) {
+	case SS7MsgISUP::CCR:    // Continuity check
+	    if (m_state == Testing && send == outgoing())
+		return true;
+	    // fall through
 	case SS7MsgISUP::IAM:    // Initial address
 	    if (m_state != Null || send != outgoing())
 		break;
@@ -2163,6 +2175,36 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 	    connectCircuit();
 	    m_state = Setup;
 	    m_lastEvent = new SignallingEvent(SignallingEvent::NewCall,m_sgmMsg,this);
+	    break;
+	case SS7MsgISUP::CCR:
+	    if (m_state < Testing) {
+		if (!(isup() && isup()->m_continuity)) {
+		    Debug(isup(),DebugWarn,"Call(%u). Continuity check requested but not configured [%p]",
+			id(),this);
+		    setTerminate(false,"service-not-implemented");
+		    TelEngine::destruct(m_sgmMsg);
+		    release();
+		    return 0;
+		}
+		m_circuitTesting = true;
+		if (!connectCircuit(isup()->m_continuity)) {
+		    setTerminate(false,"bearer-cap-not-available");
+		    TelEngine::destruct(m_sgmMsg);
+		    release();
+		    return 0;
+		}
+		Debug(isup(),DebugNote,"Call(%u). Continuity test only [%p]",
+		    id(),this);
+		m_state = Testing;
+	    }
+	    else if (!m_circuitTesting) {
+		setTerminate(false,"wrong-state-message");
+		TelEngine::destruct(m_sgmMsg);
+		release();
+		return 0;
+	    }
+	    m_iamTimer.start();
+	    transmitMessage(new SS7MsgISUP(SS7MsgISUP::LPA,id()));
 	    break;
 	case SS7MsgISUP::ACM:
 	    connectCircuit();
@@ -2732,6 +2774,16 @@ bool SS7ISUP::control(NamedList& params)
 		transmitMessage(msg,label,false);
 	    }
 	    return true;
+	case SS7MsgISUP::CCR:
+	    {
+		unsigned int code = params.getIntValue("circuit",code1);
+		// TODO: create a test call, not just send CCR
+		SS7MsgISUP* msg = new SS7MsgISUP(SS7MsgISUP::CCR,code);
+		SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
+		mylock.drop();
+		transmitMessage(msg,label,false);
+	    }
+	    return true;
     }
     mylock.drop();
     return SignallingComponent::control(params);
@@ -3150,6 +3202,7 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
 	case SS7MsgISUP::CON:
 	case SS7MsgISUP::REL:
 	case SS7MsgISUP::SGM:
+	case SS7MsgISUP::CCR:
 	case SS7MsgISUP::COT:
 	    processCallMsg(msg,label,sls);
 	    break;
@@ -3213,12 +3266,12 @@ void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 	if (!msg->cic())
 	    DROP_MSG("invalid CIC")
 	// non IAM message. Drop it if there is no call for it
-	if (msg->type() != SS7MsgISUP::IAM) {
+	if ((msg->type() != SS7MsgISUP::IAM) && (msg->type() != SS7MsgISUP::CCR)) {
 	    if (!call)
 		DROP_MSG("no call for this CIC")
 	    break;
 	}
-	// IAM message
+	// IAM or CCR message
 	SignallingCircuit* circuit = 0;
 	// Check collision
 	if (call) {
@@ -3244,7 +3297,8 @@ void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 	int flags = SignallingCircuit::LockLocked;
 	// Q.764 2.8.2 - accept test calls even if the remote side is blocked
 	// Q.764 2.8.2.3 (xiv) - unblock remote side of the circuit for non-test calls
-	if (String(msg->params().getValue("CallingPartyCategory")) == "test") {
+	if ((msg->type() == SS7MsgISUP::CCR) ||
+	    (String(msg->params().getValue("CallingPartyCategory")) == "test")) {
 	    Debug(this,DebugInfo,"Received test call on circuit %u",msg->cic());
 	    flags = 0;
 	}
@@ -3529,6 +3583,7 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    break;
 	case SS7MsgISUP::CQR: // Circuit Group Query Response (national use)
 	case SS7MsgISUP::CVR: // Circuit Validation Response (ANSI)
+	case SS7MsgISUP::LPA: // Loopback Acknowledge (national use)
 	    // Known but not implemented responses, just ignore them
 	    impl = false;
 	    break;

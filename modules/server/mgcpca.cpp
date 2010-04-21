@@ -1379,6 +1379,7 @@ bool MGCPCircuit::status(Status newStat, bool sync)
 	    return false;
 	}
     }
+    bool special = false;
     m_statusReq = newStat;
     switch (newStat) {
 	case Special:
@@ -1389,6 +1390,7 @@ bool MGCPCircuit::status(Status newStat, bool sync)
 		break;
 	    if (m_rtpForward)
 		return false;
+	    special = true;
 	    // fall through, we'll check it later after connecting
 	case Connected:
 	    // Create local rtp if we don't have one
@@ -1424,7 +1426,7 @@ bool MGCPCircuit::status(Status newStat, bool sync)
 	lookupStatus(newStat),code(),this);
     bool ok = SignallingCircuit::status(newStat,sync);
     m_changing = false;
-    if (ok && (Special == newStat)) {
+    if (ok && special) {
 	Message m("circuit.special");
 	m.userData(this);
 	if (group())

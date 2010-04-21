@@ -407,10 +407,10 @@ static unsigned char encodeRaw(const SS7ISUP* isup, SS7MSU& msu,
 	::memcpy(buf,raw.data(),raw.length());
 	return raw.length();
     }
-    unsigned char size = param->size ? (unsigned char)param->size : (unsigned char)raw.length();
+    unsigned char size = (unsigned char)raw.length();
     msu.append(&size,1);
     msu += raw;
-    return raw.length() + size;
+    return size;
 }
 
 // Encoder for fixed length ISUP indicators (flags)

@@ -137,6 +137,7 @@ static const String s_copyBkInd("BackwardCallIndicators,OptionalBackwardCallIndi
 // Control operations
 static const TokenDict s_dict_control[] = {
     { "validate", SS7MsgISUP::CVT },
+    { "query", SS7MsgISUP::CQM },
     { 0, 0 }
 };
 
@@ -2688,6 +2689,17 @@ bool SS7ISUP::control(NamedList& params)
 		transmitMessage(msg,label,false);
 	    }
 	    return true;
+	case SS7MsgISUP::CQM:
+	    {
+		unsigned int code = params.getIntValue("circuit",code1);
+		unsigned int range = params.getIntValue("range",1);
+		SS7MsgISUP* msg = new SS7MsgISUP(SS7MsgISUP::CQM,code);
+		msg->params().addParam("RangeAndStatus",String(range));
+		SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
+		mylock.drop();
+		transmitMessage(msg,label,false);
+	    }
+	    return true;
     }
     mylock.drop();
     return SignallingComponent::control(params);
@@ -3414,7 +3426,6 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    break;
 	case SS7MsgISUP::GRA: // Circuit Group Reset Acknowledgement
 	    // TODO: stop receiving segments
-	case SS7MsgISUP::CQR: // Circuit Group Query Response (national use)
 	    reason = "wrong-state-message";
 	    break;
 	case SS7MsgISUP::CVT: // Circuit Validation Test (ANSI)
@@ -3484,6 +3495,11 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    else
 		reason = "unknown-channel";
 	    break;
+	case SS7MsgISUP::CQR: // Circuit Group Query Response (national use)
+	case SS7MsgISUP::CVR: // Circuit Validation Response (ANSI)
+	    // Known but not implemented responses, just ignore them
+	    impl = false;
+	    break;
 	default:
 	    // TODO: check MessageCompatInformation
 	    impl = false;
@@ -3494,9 +3510,11 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	if (call)
 	    call->stopWaitSegment(false);
     }
-    if (reason) {
-	Debug(this,impl?DebugNote:DebugStub,"'%s' with cic=%u: %s",msg->name(),msg->cic(),reason);
-	transmitCNF(this,msg->cic(),label,true,sls,reason);
+    if (reason || !impl) {
+	Debug(this,impl?DebugNote:DebugStub,"'%s' with cic=%u: %s",
+	    msg->name(),msg->cic(),(reason ? reason : "Not implemented, ignoring"));
+	if (reason)
+	    transmitCNF(this,msg->cic(),label,true,sls,reason);
     }
 }
 

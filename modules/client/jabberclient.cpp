@@ -1097,8 +1097,15 @@ void YJBEngine::processIqStanza(JBEvent* ev)
     __plugin.complete(m,ev->clientStream());
     m.addParam("from",ev->from().bare());
     m.addParam("from_instance",ev->from().resource());
-    m.addParam("to",ev->to().bare());
-    m.addParam("to_instance",ev->to().resource());
+    if (ev->to()) {
+	m.addParam("to",ev->to().bare());
+	m.addParam("to_instance",ev->to().resource());
+    }
+    else {
+	Lock lock(ev->stream());
+	m.addParam("to",ev->stream()->local().bare());
+	m.addParam("to_instance",ev->stream()->local().resource());
+    }
     addValidParam(m,"id",ev->id());
     addValidParam(m,"type",ev->stanzaType());
     if (!rsp && n != XMPPNamespace::Count)

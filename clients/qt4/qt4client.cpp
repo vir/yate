@@ -1104,10 +1104,16 @@ bool QtWindow::setSelect(const String& name, const String& item)
 		return true;
 	    }
 	case QtWidget::ComboBox:
-	    d = w.combo()->findText(QtClient::setUtf8(item));
-	    if (d < 0)
+	    if (item) {
+		d = w.combo()->findText(QtClient::setUtf8(item));
+		if (d < 0)
+		    return false;
+	        w.combo()->setCurrentIndex(d);
+	    }
+	    else if (w.combo()->lineEdit())
+		w.combo()->lineEdit()->setText("");
+	    else
 		return false;
-	    w.combo()->setCurrentIndex(d);
 	    return true;
 	case QtWidget::ListBox:
 	    d = findListRow(*(w.list()),item);

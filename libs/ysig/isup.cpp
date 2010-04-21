@@ -2254,7 +2254,16 @@ SS7ISUP::SS7ISUP(const NamedList& params)
 
     m_format = params.getValue("format");
     if (-1 == lookup(m_format,SignallingUtils::dict(0,0),-1))
-	m_format = "alaw";
+	switch (m_type) {
+	    case SS7PointCode::ANSI:
+	    case SS7PointCode::ANSI8:
+	    case SS7PointCode::Japan:
+	    case SS7PointCode::Japan5:
+		m_format = "mulaw";
+		break;
+	    default:
+		m_format = "alaw";
+	}
 
     const char* rpc = params.getValue("remotepointcode");
     m_remotePoint = new SS7PointCode(0,0,0);

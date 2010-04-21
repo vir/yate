@@ -134,10 +134,10 @@
 ; Defaults to user-provided if missing or incorrect
 ;screening=user-provided
 
-; format: string:  Default data format for outgoing calls. Values: alaw, mulaw, g721
-; Defaults to alaw if missing or incorrect
+; format: string: Default data format for outgoing calls. Values: alaw, mulaw, g721
+; Defaults to mulaw for ANSI and Japan point codes, alaw for all others
 ; alaw is used commonly in Europe while mulaw is used commonly in US and Japan.
-;format=alaw
+;format=
 
 ; print-messages: boolean: Print decoded protocol data units to output
 ; This option is applied on reload

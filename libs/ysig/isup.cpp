@@ -1700,8 +1700,11 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 	switch (m_state) {
 	    case Testing:
 	    case Setup:
-		if (timeout(isup(),this,m_iamTimer,when,"IAM"))
+		if (timeout(isup(),this,m_iamTimer,when,"IAM")) {
+		    if (m_circuitTesting)
+			setReason("nomedia",0);
 		    release();
+		}
 		break;
 	    case Releasing:
 		if (timeout(isup(),this,m_relTimer,when,"REL"))
@@ -1836,8 +1839,7 @@ bool SS7ISUPCall::replaceCircuit(SignallingCircuit* circuit)
     m_circuit = circuit;
     Debug(isup(),DebugNote,"Call(%u). Circuit replaced by %u [%p]",oldId,id(),this);
     m_circuitChanged = true;
-    transmitIAM();
-    return true;
+    return transmitIAM();
 }
 
 // Stop timers. Send a RLC (Release Complete) message if it should terminate gracefully
@@ -2046,16 +2048,22 @@ bool SS7ISUPCall::transmitIAM()
 {
     if (!m_iamTimer.started())
 	m_iamTimer.start();
-    m_state = Setup;
     if (!m_iamMsg)
 	return false;
     if (needsTesting(m_iamMsg)) {
+	if (m_circuitTesting && !(isup() && isup()->m_continuity)) {
+	    Debug(isup(),DebugWarn,"Call(%u). Continuity check requested but not configured [%p]",
+		id(),this);
+	    return false;
+	}
 	Debug(isup(),DebugNote,"Call(%u). %s continuity check [%p]",
 	    id(),(m_circuitTesting ? "Executing" : "Forwarding"),this);
 	m_state = Testing;
 	if (m_circuitTesting)
-	    connectCircuit();
+	    connectCircuit(isup()->m_continuity);
     }
+    else
+	m_state = Setup;
     m_iamMsg->m_cic = id();
     m_iamMsg->ref();
     return transmitMessage(m_iamMsg);
@@ -2128,9 +2136,20 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 	    // intentionally fall through
 	case SS7MsgISUP::IAM:
 	    if (needsTesting(m_sgmMsg)) {
+		if (m_circuitTesting && !(isup() && isup()->m_continuity)) {
+		    Debug(isup(),DebugWarn,"Call(%u). Continuity check requested but not configured [%p]",
+			id(),this);
+		    setTerminate(true,"service-not-implemented");
+		    TelEngine::destruct(m_sgmMsg);
+		    return 0;
+		}
+		if (m_circuitTesting && !connectCircuit(isup()->m_continuity)) {
+		    setTerminate(true,"nomedia");
+		    TelEngine::destruct(m_sgmMsg);
+		    return 0;
+		}
 		Debug(isup(),DebugNote,"Call(%u). Waiting for continuity check [%p]",
 		    id(),this);
-		connectCircuit(m_circuitTesting ? "conttest" : "");
 		m_state = Testing;
 		// Save message for later
 		m_iamMsg = m_sgmMsg;
@@ -2203,7 +2222,7 @@ bool SS7ISUPCall::transmitMessage(SS7MsgISUP* msg)
     return true;
 }
 
-SS7ISUP* SS7ISUPCall::isup()
+SS7ISUP* SS7ISUPCall::isup() const
 {
     return static_cast<SS7ISUP*>(SignallingCall::controller());
 }
@@ -2303,6 +2322,8 @@ SS7ISUP::SS7ISUP(const NamedList& params)
     if (m_uptTimer.interval())
 	m_userPartAvail = false;
 
+    m_continuity = params.getValue("continuity");
+
     setDebug(params.getBoolValue("print-messages",false),
 	params.getBoolValue("extended-debug",false));
 
@@ -2322,6 +2343,8 @@ SS7ISUP::SS7ISUP(const NamedList& params)
 	s << " lockcircuits=" << params.getValue("lockcircuits");
 	s << " userpartavail=" << String::boolText(m_userPartAvail);
 	s << " lockgroup=" << String::boolText(m_lockGroup);
+	if (m_continuity)
+	    s << " continuity=" << m_continuity;
 	Debug(this,DebugInfo,"ISUP Call Controller %s [%p]",s.c_str(),this);
     }
 }
@@ -2507,7 +2530,11 @@ SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
 	    m_rscTimer.start();
 	// Drop lock and send the event
 	mylock.drop();
-	event->sendEvent();
+	if (!event->sendEvent()) {
+	    m_calls.remove(call);
+	    call = 0;
+	    reason = "failure";
+	}
     }
     TelEngine::destruct(msg);
     return call;

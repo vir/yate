@@ -5991,7 +5991,7 @@ private:
     // Transmit message. Set routing label's link if not already set
     inline bool transmitMessage(SS7MsgISUP* msg);
     // Get the ISUP call controller
-    inline SS7ISUP* isup();
+    inline SS7ISUP* isup() const;
 
     State m_state;                       // Call state
     SignallingCircuit* m_circuit;        // Circuit reserved for this call
@@ -6277,6 +6277,7 @@ private:
     String m_numScreening;               // Number screening
     String m_callerCat;                  // Caller party category
     String m_format;                     // Default format
+    String m_continuity;                 // Continuity test type
     bool m_l3LinkUp;                     // Flag indicating the availability of a Layer3 data link
     // Remote User Part test
     SignallingTimer m_uptTimer;          // Timer for UPT

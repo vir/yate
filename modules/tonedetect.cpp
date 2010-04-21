@@ -539,8 +539,9 @@ bool AttachHandler::received(Message& msg)
 	snif.clear();
     if (cons.null() && snif.null())
 	return false;
-    CallEndpoint* ch = static_cast<CallEndpoint *>(msg.userObject("CallEndpoint"));
-    DataSource* ds = static_cast<DataSource *>(msg.userObject("DataSource"));
+    CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
+    DataEndpoint* de = static_cast<DataEndpoint*>(msg.userObject("DataEndpoint"));
+    DataSource* ds = static_cast<DataSource*>(msg.userObject("DataSource"));
     if (ch) {
 	if (cons) {
 	    ToneConsumer* c = new ToneConsumer(ch->id(),cons);
@@ -549,7 +550,7 @@ bool AttachHandler::received(Message& msg)
 	    c->deref();
 	}
 	if (snif) {
-	    DataEndpoint* de = ch->setEndpoint();
+	    de = ch->setEndpoint();
 	    // try to reinit sniffer if one already exists
 	    ToneConsumer* c = static_cast<ToneConsumer*>(de->getSniffer(snif));
 	    if (c) {
@@ -575,6 +576,13 @@ bool AttachHandler::received(Message& msg)
 	    msg.setParam("reason","attach-failure");
 	c->deref();
 	return ok && msg.getBoolValue("single");
+    }
+    else if (de && cons) {
+	ToneConsumer* c = new ToneConsumer(msg.getValue("id"),cons);
+	c->setDivert(msg);
+	de->setConsumer(c);
+	c->deref();
+	return msg.getBoolValue("single");
     }
     else
 	Debug(&plugin,DebugWarn,"ToneDetector attach request with no call endpoint!");

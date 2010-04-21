@@ -2022,9 +2022,11 @@ bool SS7ISUPCall::connectCircuit(const char* special)
     if (TelEngine::null(special))
 	special = 0;
     if (m_circuit && !ok) {
-	if (special)
+	if (special) {
+	    m_circuit->updateFormat(m_format,0);
 	    ok = m_circuit->setParam("special_mode",special) &&
 		m_circuit->status(SignallingCircuit::Special);
+	}
 	else
 	    ok = m_circuit->connected() || m_circuit->connect(m_format);
     }
@@ -2057,7 +2059,7 @@ bool SS7ISUPCall::transmitIAM()
 	    return false;
 	}
 	m_state = Testing;
-	if (m_circuitTesting && !connectCircuit(isup()->m_continuity))
+	if (m_circuitTesting && !connectCircuit("test:" + isup()->m_continuity))
 	    return false;
 	Debug(isup(),DebugNote,"Call(%u). %s continuity check [%p]",
 	    id(),(m_circuitTesting ? "Executing" : "Forwarding"),this);

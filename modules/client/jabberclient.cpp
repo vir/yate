@@ -1145,7 +1145,15 @@ void YJBEngine::processStreamEvent(JBEvent* ev, bool ok)
 	if (pres)
 	    sendPresence(ev->stream(),true,pres);
     }
-
+    else {
+	// Reset stream data
+	ev->stream()->lock();
+	ev->stream()->setRosterRequested(false);
+	StreamData* sdata = streamData(ev);
+	if (sdata)
+	    sdata->m_contacts.clear();
+	ev->stream()->unlock();
+    }
     Message* m = __plugin.message("user.notify",ev->clientStream());
     m->addParam("username",ev->stream()->local().node());
     m->addParam("server",ev->stream()->local().domain());
@@ -1219,7 +1227,7 @@ static void addRosterItem(NamedList& list, XmlElement& x, const String& id,
 	if (XMPPUtils::isUnprefTag(*c,XmlTag::Group))
 	    groups->append(c->getText(),",");
 	else
-	    list.append(pref + c->unprefixedTag(),c->getText());
+	    list.addParam(pref + c->unprefixedTag(),c->getText());
     }
 }
 

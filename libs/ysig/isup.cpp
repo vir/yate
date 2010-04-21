@@ -1702,7 +1702,7 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 	    case Setup:
 		if (timeout(isup(),this,m_iamTimer,when,"IAM")) {
 		    if (m_circuitTesting)
-			setReason("nomedia",0);
+			setReason("bearer-cap-not-available",0);
 		    release();
 		}
 		break;
@@ -1747,7 +1747,7 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 		if (!event->message()) {
 		    DDebug(isup(),DebugNote,
 			"Call(%u). No parameters for outgoing call [%p]",id(),this);
-		    setTerminate("temporary-failure");
+		    setTerminate(true,"temporary-failure");
 		    break;
 		}
 		m_iamMsg = new SS7MsgISUP(SS7MsgISUP::IAM,id());
@@ -2056,11 +2056,11 @@ bool SS7ISUPCall::transmitIAM()
 		id(),this);
 	    return false;
 	}
+	m_state = Testing;
+	if (m_circuitTesting && !connectCircuit(isup()->m_continuity))
+	    return false;
 	Debug(isup(),DebugNote,"Call(%u). %s continuity check [%p]",
 	    id(),(m_circuitTesting ? "Executing" : "Forwarding"),this);
-	m_state = Testing;
-	if (m_circuitTesting)
-	    connectCircuit(isup()->m_continuity);
     }
     else
 	m_state = Setup;
@@ -2139,13 +2139,15 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 		if (m_circuitTesting && !(isup() && isup()->m_continuity)) {
 		    Debug(isup(),DebugWarn,"Call(%u). Continuity check requested but not configured [%p]",
 			id(),this);
-		    setTerminate(true,"service-not-implemented");
+		    setTerminate(false,"service-not-implemented");
 		    TelEngine::destruct(m_sgmMsg);
+		    release();
 		    return 0;
 		}
 		if (m_circuitTesting && !connectCircuit(isup()->m_continuity)) {
-		    setTerminate(true,"nomedia");
+		    setTerminate(false,"bearer-cap-not-available");
 		    TelEngine::destruct(m_sgmMsg);
+		    release();
 		    return 0;
 		}
 		Debug(isup(),DebugNote,"Call(%u). Waiting for continuity check [%p]",

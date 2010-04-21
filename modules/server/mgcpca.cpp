@@ -1381,6 +1381,15 @@ bool MGCPCircuit::status(Status newStat, bool sync)
     }
     m_statusReq = newStat;
     switch (newStat) {
+	case Special:
+	    if (m_specialMode.null())
+		return false;
+	    if ((m_specialMode == "loopback" || m_specialMode == "conttest") &&
+		setupConn(m_specialMode))
+		break;
+	    if (m_rtpForward)
+		return false;
+	    // fall through, we'll check it later after connecting
 	case Connected:
 	    // Create local rtp if we don't have one
 	    // Start it if we don't forward the rtp
@@ -1400,10 +1409,6 @@ bool MGCPCircuit::status(Status newStat, bool sync)
 	    m_statusReq = SignallingCircuit::status();
 	    m_changing = false;
 	    return false;
-	case Special:
-	    if (m_specialMode && setupConn(m_specialMode))
-		break;
-	    return false;
 	case Reserved:
 	    break;
 	case Idle:
@@ -1419,6 +1424,18 @@ bool MGCPCircuit::status(Status newStat, bool sync)
 	lookupStatus(newStat),code(),this);
     bool ok = SignallingCircuit::status(newStat,sync);
     m_changing = false;
+    if (ok && (Special == newStat)) {
+	Message m("circuit.special");
+	m.userData(this);
+	if (group())
+	    m.addParam("group",group()->toString());
+	if (span())
+	    m.addParam("span",span()->toString());
+	m.addParam("mode",m_specialMode);
+	ok = Engine::dispatch(m);
+	if (!ok)
+	    status(Idle,false);
+    }
     return ok;
 }
 

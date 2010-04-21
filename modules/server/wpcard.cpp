@@ -326,6 +326,7 @@ public:
     virtual ~WpCircuit();
     virtual bool status(Status newStat, bool sync = false);
     virtual bool updateFormat(const char* format, int direction);
+    virtual bool setParam(const String& param, const String& value);
     virtual void* getObject(const String& name) const;
     inline bool validSource()
 	{ return 0 != m_sourceValid; }
@@ -343,6 +344,7 @@ private:
     WpConsumer* m_consumerValid;         // Circuit's consumer if reserved, otherwise: 0
     WpSource* m_source;
     WpConsumer* m_consumer;
+    String m_specialMode;
 };
 
 // Wanpipe B-channel group
@@ -1200,6 +1202,9 @@ bool WpCircuit::status(Status newStat, bool sync)
 	case Disabled:
 	case Idle:
 	case Reserved:
+	    m_specialMode.clear();
+	    // fall through
+	case Special:
 	case Connected:
 	    break;
 	default: ;
@@ -1221,7 +1226,7 @@ bool WpCircuit::status(Status newStat, bool sync)
     // Enable/disable data transfer
     clearEvents();
     bool enableData = false;
-    if (SignallingCircuit::status() == Connected)
+    if (SignallingCircuit::status() >= Special)
 	enableData = true;
     // Don't put this message for final states
     if (!Engine::exiting())
@@ -1230,6 +1235,17 @@ bool WpCircuit::status(Status newStat, bool sync)
     if (enableData) {
 	m_sourceValid = m_source;
 	m_consumerValid = m_consumer;
+	if (newStat == Special) {
+	    Message m("circuit.special");
+	    m.userData(this);
+	    if (group())
+		m.addParam("group",group()->toString());
+	    if (span())
+		m.addParam("span",span()->toString());
+	    if (m_specialMode)
+		m.addParam("mode",m_specialMode);
+	    return Engine::dispatch(m);
+	}
 	return true;
     }
     // Disable data if not already disabled
@@ -1285,6 +1301,15 @@ bool WpCircuit::updateFormat(const char* format, int direction)
 	    sourceChanged = false;
     }
     return consumerChanged && sourceChanged;
+}
+
+bool WpCircuit::setParam(const String& param, const String& value)
+{
+    if (param == "special_mode")
+	m_specialMode = value;
+    else
+	return false;
+    return true;
 }
 
 // Get source or consumer

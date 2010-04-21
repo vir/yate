@@ -625,6 +625,7 @@ protected:
     ZapDevice m_device;                  // The device
     ZapDevice::Type m_type;              // Circuit type
     ZapDevice::Format m_format;          // The data format
+    String m_specialMode;                // Special test mode
     bool m_echoCancel;                   // Echo canceller state
     bool m_crtEchoCancel;                // Current echo canceller state
     unsigned int m_echoTaps;             // Echo cancel taps
@@ -2316,6 +2317,10 @@ bool ZapCircuit::setParam(const String& param, const String& value)
 	    m_crtDtmfDetect = ok;
 	return ok;
     }
+    if (param == "special_mode") {
+	m_specialMode = value;
+	return true;
+    }
     return false;
 }
 
@@ -2414,7 +2419,7 @@ bool ZapCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params)
 // Consume data sent by the consumer
 void ZapCircuit::consume(const DataBlock& data)
 {
-    if (!(SignallingCircuit::status() == Connected && m_canSend && data.length()))
+    if (!(SignallingCircuit::status() >= Special && m_canSend && data.length()))
 	return;
 
     // Copy data in buffer
@@ -2476,6 +2481,7 @@ void ZapCircuit::cleanup(bool release, Status stat, bool stop)
 	return;
     }
     status(stat);
+    m_specialMode.clear();
     m_sourceBuffer.clear();
     m_consBuffer.clear();
     m_consErrors = m_consErrorBytes = m_consTotal = 0;
@@ -2616,6 +2622,7 @@ bool ZapAnalogCircuit::status(Status newStat, bool sync)
 	case Disabled:
 	case Idle:
 	case Reserved:
+	case Special:
 	case Connected:
 	    break;
 	default: ;
@@ -2633,7 +2640,7 @@ bool ZapAnalogCircuit::status(Status newStat, bool sync)
 	DDebug(group(),DebugAll,"ZapCircuit(%u). Changed status to %u [%p]",
 	    code(),newStat,this);
 
-    if (newStat != Connected && m_device.valid())
+    if (newStat < Special && m_device.valid())
 	m_device.flushBuffers();
 
     if (newStat == Reserved) {
@@ -2653,12 +2660,25 @@ bool ZapAnalogCircuit::status(Status newStat, bool sync)
 	}
 	return SignallingCircuit::status() == Reserved;
     }
-    else if (newStat == Connected) {
-	if (m_device.valid())
+    else if (newStat >= Special) {
+	if (m_device.valid()) {
 	    createData();
+	    if (newStat == Special) {
+		Message m("circuit.special");
+		m.userData(this);
+		if (group())
+		    m.addParam("group",group()->toString());
+		if (span())
+		    m.addParam("span",span()->toString());
+		if (m_specialMode)
+		    m.addParam("mode",m_specialMode);
+		if (!Engine::dispatch(m))
+		    cleanup(false,Idle,true);
+	    }
+	}
 	else
 	    cleanup(false,Idle,true);
-	return SignallingCircuit::status() == Connected;
+	return SignallingCircuit::status() == newStat;
     }
     return true;
 }

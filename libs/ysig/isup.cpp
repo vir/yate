@@ -62,7 +62,7 @@ struct MsgParams {
 
 
 // Nature of Address Indicator
-static TokenDict s_dict_nai[] = {
+static const TokenDict s_dict_nai[] = {
     { "subscriber",    1 },
     { "unknown",       2 },
     { "national",      3 },
@@ -71,7 +71,7 @@ static TokenDict s_dict_nai[] = {
 };
 
 // Numbering Plan Indicator
-static TokenDict s_dict_numPlan[] = {
+static const TokenDict s_dict_numPlan[] = {
     { "unknown",  0 },
     { "isdn",     1 },
     { "data",     3 },
@@ -82,7 +82,7 @@ static TokenDict s_dict_numPlan[] = {
 };
 
 // Address Presentation
-static TokenDict s_dict_presentation[] = {
+static const TokenDict s_dict_presentation[] = {
     { "allowed",     0 },
     { "restricted",  1 },
     { "unavailable", 2 },
@@ -95,7 +95,7 @@ static TokenDict s_dict_presentation[] = {
 };
 
 // Screening Indicator
-static TokenDict s_dict_screening[] = {
+static const TokenDict s_dict_screening[] = {
     { "user-provided",        0 },
     { "user-provided-passed", 1 },
     { "user-provided-failed", 2 },
@@ -105,6 +105,21 @@ static TokenDict s_dict_screening[] = {
     { "false", 0 },
     { "yes",   1 },
     { "true",  1 },
+    { 0, 0 }
+};
+
+// Generic number qualifier
+static const TokenDict s_dict_qual[] = {
+    { "dialed-digits",        0 },
+    { "called-additional",    1 },
+    { "caller-failed",        2 },
+    { "caller-not-screened",  3 },
+    { "terminating",          4 },
+    { "connected-additional", 5 },
+    { "caller-additional",    6 },
+    { "called-original",      7 },
+    { "redirecting",          8 },
+    { "redirection",          9 },
     { 0, 0 }
 };
 
@@ -249,6 +264,13 @@ static bool decodeDigits(const SS7ISUP* isup, NamedList& list, const IsupParam* 
 {
     if (len < 2)
 	return false;
+    unsigned char qualifier = 0;
+    if (SS7MsgISUP::GenericNumber == param->type) {
+	if (--len < 2)
+	    return false;
+	qualifier = buf[0];
+	buf++;
+    }
     unsigned char nai = buf[0] & 0x7f;
     unsigned char plan = (buf[1] >> 4) & 7;
     unsigned char pres = (buf[1] >> 2) & 3;
@@ -259,6 +281,8 @@ static bool decodeDigits(const SS7ISUP* isup, NamedList& list, const IsupParam* 
 	param->name,tmp.c_str(),buf[1] >> 7,nai,plan,pres,scrn);
     String preName(prefix + param->name);
     list.addParam(preName,tmp);
+    if (SS7MsgISUP::GenericNumber == param->type)
+	SignallingUtils::addKeyword(list,preName+".qualifier",s_dict_qual,qualifier);
     SignallingUtils::addKeyword(list,preName+".nature",s_dict_nai,nai);
     SignallingUtils::addKeyword(list,preName+".plan",s_dict_numPlan,plan);
     switch (param->type) {
@@ -269,6 +293,7 @@ static bool decodeDigits(const SS7ISUP* isup, NamedList& list, const IsupParam* 
 	    list.addParam(preName+".inn",tmp);
 	    break;
 	case SS7MsgISUP::CallingPartyNumber:
+	case SS7MsgISUP::GenericNumber:
 	    tmp = ((buf[1] & 0x80) == 0);
 	    list.addParam(preName+".complete",tmp);
 	    break;
@@ -281,6 +306,7 @@ static bool decodeDigits(const SS7ISUP* isup, NamedList& list, const IsupParam* 
 	case SS7MsgISUP::OriginalCalledNumber:
 	case SS7MsgISUP::LocationNumber:
 	case SS7MsgISUP::ConnectedNumber:
+	case SS7MsgISUP::GenericNumber:
 	    SignallingUtils::addKeyword(list,preName+".restrict",s_dict_presentation,pres);
 	default:
 	    break;
@@ -289,6 +315,7 @@ static bool decodeDigits(const SS7ISUP* isup, NamedList& list, const IsupParam* 
 	case SS7MsgISUP::CallingPartyNumber:
 	case SS7MsgISUP::LocationNumber:
 	case SS7MsgISUP::ConnectedNumber:
+	case SS7MsgISUP::GenericNumber:
 	    SignallingUtils::addKeyword(list,preName+".screened",s_dict_screening,scrn);
 	default:
 	    break;
@@ -494,11 +521,14 @@ static unsigned char encodeInt(const SS7ISUP* isup, SS7MSU& msu, unsigned char* 
 }
 
 // Utility function - write digit sequences
-static unsigned char setDigits(SS7MSU& msu, const char* val, unsigned char nai, int b2 = -1, int b3 = -1)
+static unsigned char setDigits(SS7MSU& msu, const char* val, unsigned char nai, int b2 = -1, int b3 = -1, int b0 = -1)
 {
     unsigned char buf[32];
-    buf[1] = nai & 0x7f;
-    unsigned int len = 2;
+    unsigned int len = 1;
+    if (b0 >= 0)
+	buf[len++] = b0 & 0xff;
+    unsigned int naiPos = len++;
+    buf[naiPos] = nai & 0x7f;
     if (b2 >= 0) {
 	buf[len++] = b2 & 0xff;
 	if (b3 >= 0)
@@ -527,7 +557,7 @@ static unsigned char setDigits(SS7MSU& msu, const char* val, unsigned char nai, 
 	    buf[len++] |= (n << 4);
     }
     if (odd) {
-	buf[1] |= 0x80;
+	buf[naiPos] |= 0x80;
 	len++;
     }
     buf[0] = (len-1) & 0xff;
@@ -548,6 +578,12 @@ static unsigned char encodeDigits(const SS7ISUP* isup, SS7MSU& msu,
     unsigned char nai = 2;
     unsigned char plan = 1;
     String preName(prefix + param->name);
+    int b0 = -1;
+    if (SS7MsgISUP::GenericNumber == param->type) {
+	b0 = 0;
+	if (val && extra)
+	    b0 = 0xff & extra->getIntValue(preName+".qualifier",s_dict_qual,0);
+    }
     if (val && extra) {
 	nai = extra->getIntValue(preName+".nature",s_dict_nai,nai);
 	plan = extra->getIntValue(preName+".plan",s_dict_numPlan,plan);
@@ -561,6 +597,7 @@ static unsigned char encodeDigits(const SS7ISUP* isup, SS7MSU& msu,
 		b2 |= 0x80;
 	    break;
 	case SS7MsgISUP::CallingPartyNumber:
+	case SS7MsgISUP::GenericNumber:
 	    if (val && extra && !extra->getBoolValue(preName+".complete",true))
 		b2 |= 0x80;
 	    break;
@@ -573,6 +610,7 @@ static unsigned char encodeDigits(const SS7ISUP* isup, SS7MSU& msu,
 	case SS7MsgISUP::OriginalCalledNumber:
 	case SS7MsgISUP::LocationNumber:
 	case SS7MsgISUP::ConnectedNumber:
+	case SS7MsgISUP::GenericNumber:
 	    if (val && extra)
 		b2 |= (extra->getIntValue(preName+".restrict",s_dict_presentation) & 3) << 2;
 	default:
@@ -582,12 +620,13 @@ static unsigned char encodeDigits(const SS7ISUP* isup, SS7MSU& msu,
 	case SS7MsgISUP::CallingPartyNumber:
 	case SS7MsgISUP::LocationNumber:
 	case SS7MsgISUP::ConnectedNumber:
+	case SS7MsgISUP::GenericNumber:
 	    if (val && extra)
 		b2 |= extra->getIntValue(preName+".screened",s_dict_screening) & 3;
 	default:
 	    break;
     }
-    return setDigits(msu,val ? val->c_str() : 0,nai,b2);
+    return setDigits(msu,val ? val->c_str() : 0,nai,b2,-1,b0);
 }
 
 // Encoder for circuit group range and status (Q.763 3.43)
@@ -926,7 +965,7 @@ static const IsupParam s_paramDefs[] = {
     MAKE_PARAM(ForwardCallIndicators,          2,decodeFlags,   encodeFlags,   s_flags_fwcallind),    // 3.23
     MAKE_PARAM(GenericDigits,                  0,0,             0,             0),                    // 3.24
     MAKE_PARAM(GenericNotification,            0,decodeNotif,   encodeNotif,   s_dict_notifications), // 3.25
-    MAKE_PARAM(GenericNumber,                  0,0,             0,             0),                    // 3.26
+    MAKE_PARAM(GenericNumber,                  0,decodeDigits,  encodeDigits,  0),                    // 3.26
     MAKE_PARAM(GenericReference,               0,0,             0,             0),                    // 3.27
     MAKE_PARAM(InformationIndicators,          0,0,             0,             0),                    // 3.28
     MAKE_PARAM(InformationRequestIndicators,   0,0,             0,             0),                    // 3.29
@@ -1904,9 +1943,15 @@ bool SS7ISUPCall::copyParamIAM(SS7MsgISUP* msg, bool outgoing, SignallingMessage
     NamedList& dest = msg->params();
     if (outgoing) {
 	NamedList& src = sigMsg->params();
-	dest.copyParam(src,"ForwardCallIndicators");
-	dest.copyParam(src,"NatureOfConnectionIndicators");
-	dest.copyParam(src,"TransmissionMediumRequirement");
+	// Copy all parameters starting with a capital letter
+	static const Regexp r("^[A-Z][A-Za-z_.]\\+$");
+	unsigned int n = src.length();
+	for (unsigned int i = 0; i < n; i++) {
+	    const NamedString* p = src.getParam(i);
+	    if (!p || !r.matches(p->name()))
+		continue;
+	    dest.setParam(p->name(),*p);
+	}
 	param(dest,src,"CalledPartyNumber","called","");
 	param(dest,src,"CalledPartyNumber.inn","inn",String::boolText(isup()->m_inn));
 	param(dest,src,"CalledPartyNumber.nature","callednumtype",isup()->m_numType);

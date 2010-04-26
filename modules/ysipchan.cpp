@@ -140,6 +140,9 @@ public:
 	{ return m_authname ? m_authname : m_username; }
     inline const String& domain() const
 	{ return m_domain ? m_domain : m_registrar; }
+    inline const char* domain(const char* defDomain) const
+	{ return m_domain ? m_domain.c_str() :
+	    (TelEngine::null(defDomain) ? m_registrar.c_str() : defDomain); }
     inline bool valid() const
 	{ return m_valid; }
     inline bool marked() const
@@ -365,6 +368,7 @@ private:
     SIPDialog m_dialog;
     // remote URI as we send in dialog messages
     URI m_uri;
+    String m_domain;
     String m_user;
     String m_line;
     int m_port;
@@ -940,6 +944,11 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
 	}
 	// a dialogless INVITE could create a new call
 	m.addParam("newcall",String::boolText((message->method == "INVITE") && !message->getParam("To","tag")));
+	const MimeHeaderLine* hl = message->getHeader("From");
+	if (hl) {
+	    URI from(*hl);
+	    m.addParam("domain",from.getHost());
+	}
     }
 
     if (params) {
@@ -1482,8 +1491,9 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
     const String* auth = s_cfg.getKey("methods",meth);
     if (!auth)
 	return false;
+    Message m("sip." + meth);
     if (auth->toBoolean(true)) {
-	int age = t->authUser(user);
+	int age = t->authUser(user,false,&m);
 	DDebug(&plugin,DebugAll,"User '%s' age %d",user.c_str(),age);
 	if ((age < 0) || (age > 10)) {
 	    t->requestAuth(s_realm,"",age >= 0);
@@ -1492,7 +1502,6 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
     }
 
     const SIPMessage* message = e->getMessage();
-    Message m("sip." + meth);
     if (message->getParam("To","tag")) {
 	SIPDialog dlg(*message);
 	YateSIPConnection* conn = plugin.findDialog(dlg,true);
@@ -1730,7 +1739,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     m_tr->setUserData(this);
 
     URI uri(m_tr->getURI());
-    YateSIPLine* line = plugin.findLine(m_host,m_port,m_uri.getUser());
+    YateSIPLine* line = plugin.findLine(m_host,m_port,uri.getUser());
     Message *m = message("call.preroute");
     decodeIsupBody(*m,m_tr->initialMessage()->body);
     m->addParam("caller",m_uri.getUser());
@@ -1753,7 +1762,9 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 	m_user = line->getUserName();
 	m_externalAddr = line->getLocalAddr();
 	m_line = *line;
+	m_domain = line->domain();
 	m->addParam("username",m_user);
+	m->addParam("domain",m_domain);
 	m->addParam("in_line",m_line);
     }
     else {
@@ -1769,6 +1780,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 		m->addParam("expired_user",user);
 	    m->addParam("xsip_nonce_age",String(age));
 	}
+	m_domain = m->getValue("domain");
     }
     if (s_privacy)
 	copyPrivacy(*m,*ev->getMessage());
@@ -1917,6 +1929,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     int maxf = msg.getIntValue("antiloop",s_maxForwards);
     m->addHeader("Max-Forwards",String(maxf));
     copySipHeaders(*m,msg);
+    m_domain = msg.getValue("domain");
     const String* callerId = msg.getParam("caller");
     String caller;
     if (callerId)
@@ -1924,11 +1937,12 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     else if (line) {
 	caller = line->getUserName();
 	callerId = &caller;
+	m_domain = line->domain(m_domain);
     }
     String display = msg.getValue("callername",(line ? line->getFullName().c_str() : (const char*)0));
     m->complete(plugin.ep()->engine(),
 	callerId ? (callerId->null() ? "anonymous" : callerId->c_str()) : (const char*)0,
-	msg.getValue("domain",(line ? line->domain().c_str() : (const char*)0)));
+	m_domain);
     if (display) {
 	MimeHeaderLine* hl = const_cast<MimeHeaderLine*>(m->getHeader("From"));
 	if (hl) {
@@ -2729,7 +2743,7 @@ bool YateSIPConnection::checkUser(SIPTransaction* t, bool refuse)
 	return true;
     DDebug(this,DebugAll,"YateSIPConnection::checkUser(%p) failed, age %d [%p]",t,age,this);
     if (refuse)
-	t->requestAuth(s_realm,"",age >= 0);
+	t->requestAuth(s_realm,m_domain,age >= 0);
     return false;
 }
 
@@ -2915,7 +2929,11 @@ void YateSIPConnection::doRefer(SIPTransaction* t)
 void YateSIPConnection::complete(Message& msg, bool minimal) const
 {
     Channel::complete(msg,minimal);
+    if (minimal)
+	return;
     Lock mylock(driver());
+    if (m_domain)
+	msg.setParam("domain",m_domain);
     addCallId(msg,m_dialog,m_dialog.fromTag(isOutgoing()),m_dialog.toTag(isOutgoing()));
 }
 
@@ -3266,7 +3284,7 @@ void YateSIPConnection::callRejected(const char* error, const char* reason, cons
     Lock lock(driver());
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	if (code == 401)
-	    m_tr->requestAuth(s_realm,"",false);
+	    m_tr->requestAuth(s_realm,m_domain,false);
 	else
 	    m_tr->setResponse(code,reason);
     }
@@ -3553,6 +3571,8 @@ void YateSIPLine::setValid(bool valid, const char* reason)
 	m->addParam("account",*this);
 	m->addParam("protocol","sip");
 	m->addParam("username",m_username);
+	if (m_domain)
+	    m->addParam("domain",m_domain);
 	m->addParam("registered",String::boolText(valid));
 	if (reason)
 	    m->addParam("reason",reason);
@@ -3966,6 +3986,7 @@ bool SipHandler::received(Message &msg)
 
     SIPMessage* sip = 0;
     YateSIPLine* line = 0;
+    const char* domain = msg.getValue("domain");
     if (conn) {
 	line = plugin.findLine(conn->getLine());
 	sip = conn->createDlgMsg(method,uri);
@@ -3979,6 +4000,7 @@ bool SipHandler::received(Message &msg)
 	}
 	sip = new SIPMessage(method,uri);
 	plugin.ep()->buildParty(sip,msg.getValue("host"),msg.getIntValue("port"),line);
+	domain = line->domain(domain);
     }
     sip->addHeader("Max-Forwards",String(maxf));
     copySipHeaders(*sip,msg,"sip_");
@@ -3986,7 +4008,7 @@ bool SipHandler::received(Message &msg)
     const char* body = msg.getValue("xsip_body");
     if (type && body)
 	sip->setBody(new MimeStringBody(type,body,-1));
-    sip->complete(plugin.ep()->engine(),msg.getValue("user"),msg.getValue("domain"));
+    sip->complete(plugin.ep()->engine(),msg.getValue("user"),domain);
     if (!msg.getBoolValue("wait")) {
 	// no answer requested - start transaction and forget
 	plugin.ep()->engine()->addMessage(sip);

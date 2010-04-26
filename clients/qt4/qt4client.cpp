@@ -2358,8 +2358,12 @@ void QtWindow::doInit()
 
     // Connect combo boxes signals
     QList<QComboBox*> combos = qFindChildren<QComboBox*>(this);
-    for (int i = 0; i < combos.size(); i++)
+    for (int i = 0; i < combos.size(); i++) {
 	QtClient::connectObjects(combos[i],SIGNAL(activated(int)),this,SLOT(selectionChanged()));
+	if (QtClient::getBoolProperty(combos[i],"_yate_textchangednotify"))
+	    QtClient::connectObjects(combos[i],SIGNAL(editTextChanged(const QString&)),this,
+				     SLOT(textChanged(const QString&)));
+    }
 
     // Connect abstract buttons (check boxes and radio/push/tool buttons) signals
     QList<QAbstractButton*> buttons = qFindChildren<QAbstractButton*>(this);

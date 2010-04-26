@@ -4000,7 +4000,8 @@ bool SipHandler::received(Message &msg)
 	}
 	sip = new SIPMessage(method,uri);
 	plugin.ep()->buildParty(sip,msg.getValue("host"),msg.getIntValue("port"),line);
-	domain = line->domain(domain);
+	if (line)
+	    domain = line->domain(domain);
     }
     sip->addHeader("Max-Forwards",String(maxf));
     copySipHeaders(*sip,msg,"sip_");

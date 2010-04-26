@@ -3282,7 +3282,8 @@ public:
      * @param audio True (default) if the resource has audio capability
      */
     inline ClientResource(const char* id, const char* name = 0, bool audio = true)
-	: m_id(id), m_name(name ? name : id), m_audio(audio), m_priority(0)
+	: m_id(id), m_name(name ? name : id), m_audio(audio), m_priority(0),
+	m_status(Offline)
 	{}
 
     /**

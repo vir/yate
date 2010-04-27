@@ -379,7 +379,7 @@ bool RTPReceiver::rtpCheckIntegrity(const unsigned char* data, int len, const vo
 
 
 RTPSender::RTPSender(RTPSession* session, bool randomTs)
-    : RTPBaseIO(session), m_evTime(0), m_tsLast(0), m_padding(0)
+    : RTPBaseIO(session), m_evTime(0), m_padding(0)
 {
     if (randomTs) {
 	m_ts = ::random() & ~1;
@@ -635,7 +635,8 @@ void UDPSession::setTimeout(int interval)
 
 RTPSession::RTPSession()
     : m_direction(FullStop),
-      m_send(0), m_recv(0), m_secure(0)
+      m_send(0), m_recv(0), m_secure(0),
+      m_reportTime(0), m_reportInterval(0)
 {
     DDebug(DebugInfo,"RTPSession::RTPSession() [%p]",this);
 }
@@ -667,6 +668,12 @@ void RTPSession::timerTick(const Time& when)
 	}
 	else
 	    m_timeoutTime = when + m_timeoutInterval;
+    }
+    if (m_reportInterval) {
+	if (when >= m_reportTime) {
+	    m_reportTime = when + m_reportInterval;
+	    sendRtcpReport(when);
+	}
     }
 }
 
@@ -738,6 +745,8 @@ bool RTPSession::checkCipher(const String& name)
 
 void RTPSession::transport(RTPTransport* trans)
 {
+    if (!trans)
+	sendRtcpBye();
     UDPSession::transport(trans);
     if (!m_transport)
 	m_direction = FullStop;
@@ -748,6 +757,7 @@ void RTPSession::sender(RTPSender* send)
     DDebug(DebugInfo,"RTPSession::sender(%p) old=%p [%p]",send,m_send,this);
     if (send == m_send)
 	return;
+    sendRtcpBye();
     RTPSender* tmp = m_send;
     m_send = send;
     if (tmp)
@@ -846,6 +856,93 @@ void RTPSession::getStats(String& stats) const
 	stats << ",OR=" << m_recv->ioOctets();
 	stats << ",PL=" << m_recv->ioPacketsLost();
     }
+}
+
+void RTPSession::setReports(int interval)
+{
+    if (interval > 0 && m_transport && m_transport->rtcpSock()->valid()) {
+	if (interval < 500)
+	    interval = 500;
+	else if (interval > 60000)
+	    interval = 60000;
+	m_reportInterval = interval * (u_int64_t)1000 + (::random() % 20000);
+    }
+    else
+	m_reportInterval = 0;
+    m_reportTime = 0;
+}
+
+static void store32(unsigned char* buf, unsigned int& len, u_int32_t val)
+{
+    buf[len++] = (unsigned char)(val >> 24);
+    buf[len++] = (unsigned char)(val >> 16);
+    buf[len++] = (unsigned char)(val >> 8);
+    buf[len++] = (unsigned char)(val & 0xff);
+}
+
+void RTPSession::sendRtcpReport(const Time& when)
+{
+    if (!((m_send || m_recv) && m_transport && m_transport->rtcpSock()->valid()))
+	return;
+    unsigned char buf[52];
+    buf[0] = 0x80; // RC=0
+    buf[1] = 0xc9; // RR
+    buf[2] = 0;
+    unsigned int len = 8;
+    if (m_send && m_send->ioPackets()) {
+	// Include a sender report
+	buf[1] = 0xc8; // SR
+	// NTP timestamp
+	store32(buf,len,2208988800 + (when.usec() / 1000000));
+	store32(buf,len,((when.usec() % 1000000) << 32) / 1000000);
+	// RTP timestamp
+	store32(buf,len,m_send->tsLast());
+	// Packet and octet counters
+	store32(buf,len,m_send->ioPackets());
+	store32(buf,len,m_send->ioOctets());
+    }
+    if (m_recv && m_recv->ioPackets()) {
+	// Add a single receiver report
+	buf[0] |= 0x01; // RC=1
+	store32(buf,len,m_recv->ssrc());
+	u_int32_t lost = m_recv->ioPacketsLost();
+	u_int32_t lostf = 0xff & (lost * 255 / (lost + m_recv->ioPackets()));
+	store32(buf,len,(lost & 0xffffff) | (lostf << 24));
+	store32(buf,len,m_recv->fullSeq());
+	// TODO: Compute and store Jitter, LSR and DLSR
+	store32(buf,len,0);
+	store32(buf,len,0);
+	store32(buf,len,0);
+    }
+    // Don't send a RR with no receiver report blocks...
+    if (len <= 8)
+	return;
+    DDebug(DebugInfo,"RTPSession sending RTCP Report [%p]",this);
+    unsigned int lptr = 4;
+    store32(buf,lptr,(m_send ? m_send->ssrcInit() : 0));
+    buf[3] = (len - 1) / 4; // same as ((len + 3) / 4) - 1
+    static_cast<RTPProcessor*>(m_transport)->rtcpData(buf,len);
+}
+
+void RTPSession::sendRtcpBye()
+{
+    if (!(m_send && m_transport && m_transport->rtcpSock()->valid()))
+	return;
+    u_int32_t ssrc = m_send->ssrc();
+    if (!ssrc)
+	return;
+    DDebug(DebugInfo,"RTPSession sending RTCP Bye [%p]",this);
+    // SSRC was initialized if we sent at least one RTP or RTCP packet
+    unsigned char buf[8];
+    buf[0] = 0x81;
+    buf[1] = 0xcb;
+    buf[2] = 0;
+    buf[3] = 1; // len = 2 x 32bit
+    buf[4] = (unsigned char)(ssrc >> 24);
+    buf[5] = (unsigned char)(ssrc >> 16);
+    buf[6] = (unsigned char)(ssrc >> 8);
+    buf[7] = (unsigned char)(0xff & ssrc);
+    static_cast<RTPProcessor*>(m_transport)->rtcpData(buf,8);
 }
 
 

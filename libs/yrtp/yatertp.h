@@ -272,6 +272,13 @@ public:
 	{ return &m_rtpSock; }
 
     /**
+     * Get the RTCP socket used by this transport
+     * @return Pointer to the RTCP socket
+     */
+    inline Socket* rtcpSock()
+	{ return &m_rtcpSock; }
+
+    /**
      * Drill a hole in a firewall or NAT for the RTP and RTCP sockets
      * @return True if at least a packet was sent for the RTP socket
      */
@@ -378,7 +385,7 @@ public:
 	  m_ssrcInit(true), m_ssrc(0), m_ts(0),
 	  m_seq(0), m_rollover(0), m_secLen(0), m_mkiLen(0),
 	  m_evTs(0), m_evNum(-1), m_evVol(-1),
-	  m_ioPackets(), m_ioOctets(0),
+	  m_ioPackets(), m_ioOctets(0), m_tsLast(0),
 	  m_dataType(-1), m_eventType(-1), m_silenceType(-1)
 	{ }
 
@@ -491,6 +498,13 @@ public:
 	{ return m_ioOctets; }
 
     /**
+     * Get the timestamp of the last packet as transmitted over the wire
+     * @return Timestamp of last packet sent or received
+     */
+    inline unsigned int tsLast() const
+	{ return m_ts + m_tsLast; }
+
+    /**
      * Get the session this object belongs to
      * @return Pointer to RTP session or NULL
      */
@@ -539,6 +553,7 @@ protected:
     int m_evVol;
     u_int32_t m_ioPackets;
     u_int32_t m_ioOctets;
+    unsigned int m_tsLast;
 
 private:
     int m_dataType;
@@ -559,7 +574,7 @@ public:
      */
     inline RTPReceiver(RTPSession* session = 0)
 	: RTPBaseIO(session),
-	  m_ioLostPkt(0), m_dejitter(0), m_tsLast(0),
+	  m_ioLostPkt(0), m_dejitter(0),
 	  m_seqSync(0), m_seqCount(0), m_warn(true)
 	{ }
 
@@ -685,7 +700,6 @@ private:
     void finishEvent(unsigned int timestamp);
     bool pushEvent(int event, int duration, int volume, unsigned int timestamp);
     RTPDejitter* m_dejitter;
-    unsigned int m_tsLast;
     u_int16_t m_seqSync;
     u_int16_t m_seqCount;
     bool m_warn;
@@ -796,7 +810,6 @@ protected:
 
 private:
     int m_evTime;
-    unsigned int m_tsLast;
     unsigned char m_padding;
     bool sendEventData(unsigned int timestamp);
 };
@@ -1196,6 +1209,12 @@ public:
      */
     void security(RTPSecure* secure);
 
+    /**
+     * Set the RTCP report interval
+     * @param interval Average interval between reports in msec, zero to disable
+     */
+    void setReports(int interval);
+
 protected:
     /**
      * Method called periodically to push any asynchronous data or statistics
@@ -1203,11 +1222,24 @@ protected:
      */
     virtual void timerTick(const Time& when);
 
+    /**
+     * Send a RTCP report
+     * @param when Time to use as base for timestamps
+     */
+    void sendRtcpReport(const Time& when);
+
+    /**
+     * Send a RTCP BYE when the sender is stopped or replaced
+     */
+    void sendRtcpBye();
+
 private:
     Direction m_direction;
     RTPSender* m_send;
     RTPReceiver* m_recv;
     RTPSecure* m_secure;
+    u_int64_t m_reportTime;
+    u_int64_t m_reportInterval;
 };
 
 /**

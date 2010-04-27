@@ -30,6 +30,9 @@
 ; rtcp: bool: Allocate socket for the RTCP protocol by default
 ;rtcp=enabled
 
+; rtcp_interval: int: RTCP report interval in ms (500-60000), zero disables
+;rtcp_interval=4500
+
 ; drillhole: bool: Attempt to drill a hole through a firewall or NAT
 ;drillhole=disable in server mode, enable in client mode
 

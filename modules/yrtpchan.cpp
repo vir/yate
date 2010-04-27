@@ -99,7 +99,9 @@ static bool s_drill = false;
 static Thread::Priority s_priority = Thread::Normal;
 static int s_tos     = 0;
 static int s_sleep   = 5;
+static int s_interval= 0;
 static int s_timeout = 0;
+
 static int s_minjitter = 0;
 static int s_maxjitter = 0;
 
@@ -700,6 +702,7 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, Message& msg)
 	    (ok ? "opened" : "failed to open"),this);
     }
     setTimeout(msg,s_timeout);
+    m_rtp->setReports(msg.getIntValue("rtcp_interval",s_interval));
 //    if (maxJitter > 0)
 //	m_rtp->setDejitter(minJitter*1000,maxJitter*1000);
     m_bufsize = s_bufsize;
@@ -1737,6 +1740,7 @@ void YRTPPlugin::initialize()
     s_anyssrc = cfg.getBoolValue("general","anyssrc",false);
     s_padding = cfg.getIntValue("general","padding",0);
     s_rtcp = cfg.getBoolValue("general","rtcp",true);
+    s_interval = cfg.getIntValue("general","rtcp_interval",4500);
     s_drill = cfg.getBoolValue("general","drillhole",Engine::clientMode());
     s_sleep = cfg.getIntValue("general","defsleep",5);
     RTPGroup::setMinSleep(cfg.getIntValue("general","minsleep"));

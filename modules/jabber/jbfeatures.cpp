@@ -437,7 +437,7 @@ bool JBFeaturesModule::handleFeaturePrivateData(JabberID& from, Message& msg)
 	    TelEngine::destruct(m);
 	}
 	if (!pdata)
-	    pdata = XMPPUtils::createElement(tag,*ns);
+	    pdata = XMPPUtils::createElement(tag,"",*ns);
 	query->addChild(pdata);
 	return buildResult(msg,xml,query);
     }

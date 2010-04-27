@@ -1083,12 +1083,16 @@ public:
      * Create an XML element
      * @param name Element's name
      * @param text Optional text for the element
+     * @param ns Optional element namespace
      * @return A valid XmlElement pointer
      */
-    static inline XmlElement* createElement(const char* name, const char* text = 0) {
+    static inline XmlElement* createElement(const char* name, const char* text = 0,
+	    const String& ns = String::empty()) {
 	    XmlElement* xml = new XmlElement(String(name),true);
 	    if (!TelEngine::null(text))
 		xml->addText(text);
+	    if (ns)
+		xml->setXmlns(String::empty(),true,ns);
 	    return xml;
 	}
 

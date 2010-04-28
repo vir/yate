@@ -2165,6 +2165,7 @@ JGEvent* JGSession1::processFileTransfer(bool set, XmlElement*& xml, XmlElement*
 	    if (s)
 		ev->m_streamHosts.append(s);
 	}
+	xml = 0;
     }
     else {
 	confirmError(xml,XMPPError::FeatureNotImpl);

@@ -1027,19 +1027,30 @@ void YJBEngine::processPresenceStanza(JBEvent* ev)
 	    m->addParam("instance",ev->from().resource());
 	if (online) {
 	    m->addParam("uri",ev->from());
-	    m->addParam("priority",String(XMPPUtils::priority(*ev->element())));
-	    const String& ns = XMPPUtils::s_ns[ev->stream()->xmlns()];
-	    String s("show");
-	    XmlElement* tmp = ev->element()->findFirstChild(&s,&ns);
-	    if (tmp)
-		addValidParam(*m,"show",tmp->getText());
-	    s = "status";
-	    tmp = ev->element()->findFirstChild(&s,&ns);
-	    if (tmp)
-		addValidParam(*m,"status",tmp->getText());
+	    unsigned int n = 0;
+	    XmlElement* ch = 0;
+	    while (0 != (ch = ev->element()->findNextChild(ch))) {
+		int tag = XmlTag::Count; 
+		int ns = XMPPNamespace::Count; 
+		XMPPUtils::getTag(*ch,tag,ns);
+		// Known children in stream's namespace
+		if (ns == ev->stream()->xmlns() &&
+		    (tag == XmlTag::Priority || ch->unprefixedTag() == "show" ||
+		    ch->unprefixedTag() == "status")) {
+		    m->addParam(ch->unprefixedTag(),ch->getText());
+		    continue;
+		}
+		// Add extra parameters
+		if (!n)
+		    m->addParam("message-prefix",ev->element()->tag());
+		n++;
+		String pref;
+		pref << ev->element()->tag() << "." << n;
+		m->addParam(pref,ch->tag());
+		ch->copyAttributes(*m,pref + ".");
+	    }
 	    if (capsId)
 		s_entityCaps.addCaps(*m,capsId);
-	    // TODO: add arbitrary children texts
 	}
 	Engine::enqueue(m);
 	return;

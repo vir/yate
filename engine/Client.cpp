@@ -2667,6 +2667,9 @@ bool ClientChannel::start(const String& target, const NamedList& params)
     String* cs = params.getParam("chanstartup_parameters");
     if (!null(cs))
 	s->copyParams(params,*cs);
+    String* c = params.getParam("call_parameters");
+    if (!null(c))
+	m->copyParams(params,*c);
     Engine::enqueue(s);
     if (startRouter(m)) {
 	update(Startup);

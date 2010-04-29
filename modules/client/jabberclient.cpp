@@ -732,6 +732,51 @@ bool YJBEngine::handleContactInfo(Message& msg, const String& line)
 	XmlElement* xml = XMPPUtils::createVCard(true,0,contact,id);
 	ok = s->sendStanza(xml);
     }
+    else if (*oper == "update") {
+	XmlElement* xml = XMPPUtils::createVCard(false,0,contact,id);
+	XmlElement* vcard = XMPPUtils::findFirstChild(*xml,XmlTag::VCard);
+	if (vcard) {
+	    String prefix(msg.getValue("message-prefix"));
+	    if (prefix)
+		prefix = "." + prefix;
+	    // Name
+	    const char* first = msg.getValue(prefix + "name.first");
+	    const char* middle = msg.getValue(prefix + "name.middle");
+	    const char* last = msg.getValue(prefix + "name.last");
+	    String firstN, lastN;
+	    // Try to build elements if missing
+	    if (!(first || last || middle)) {
+		String* tmp = msg.getParam(prefix + "name");
+		if (tmp) {
+		    int pos = tmp->rfind(' ');
+		    if (pos > 0) {
+			firstN = tmp->substr(0,pos);
+			lastN = tmp->substr(pos + 1);
+		    }
+		    else
+			lastN = *tmp;
+		}
+		first = firstN.c_str();
+		last = lastN.c_str();
+	    }
+	    XmlElement* n = new XmlElement("N");
+	    n->addChild(XMPPUtils::createElement("GIVEN",first));
+	    n->addChild(XMPPUtils::createElement("MIDDLE",middle));
+	    n->addChild(XMPPUtils::createElement("FAMILY",last));
+	    vcard->addChild(n);
+	    // email
+	    const char* email = msg.getValue(prefix + "email");
+	    if (email)
+		vcard->addChild(XMPPUtils::createElement("EMAIL",email));
+	    // photo
+	    const char* photo = msg.getValue(prefix + "photo");
+	    if (!TelEngine::null(photo)) {
+		vcard->addChild(XMPPUtils::createElement("TYPE",msg.getValue(prefix + "photo_format")));
+		vcard->addChild(XMPPUtils::createElement("BINVAL",photo));
+	    }
+	}
+	ok = s->sendStanza(xml);
+    }
     TelEngine::destruct(s);
     return ok;
 }

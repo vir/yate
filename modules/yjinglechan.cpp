@@ -700,8 +700,8 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
     if (available)
 	overrideJingleVersion(caps,true);
     if (m_sessVersion != JGSession::Version0) {
-	m_offerRawTransport = s_offerRawTransport;
-	m_offerIceTransport = s_offerIceTransport;
+	m_offerRawTransport = msg.getBoolValue("offerrawudp",s_offerRawTransport);
+	m_offerIceTransport = msg.getBoolValue("offericeudp",s_offerIceTransport);
     }
     else
 	m_offerRawTransport = false;

@@ -1802,6 +1802,21 @@ void XmlElement::toString(String& dump, bool esc, const String& indent,
     dump << auxDump;
 }
 
+// Copy element attributes to a list of parameters
+unsigned int XmlElement::copyAttributes(NamedList& list, const String& prefix) const
+{
+    unsigned int copy = 0;
+    unsigned int n = m_element.length();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* ns = m_element.getParam(i);
+	if (!(ns && ns->name()))
+	    continue;
+	list.addParam(prefix + ns->name(),*ns);
+	copy++;
+    }
+    return copy;
+}
+
 // Retrieve a namespace attribute. Search in parent or inherited for it
 String* XmlElement::xmlnsAttribute(const String& name) const
 {

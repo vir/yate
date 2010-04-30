@@ -1152,8 +1152,8 @@ void YJBEngine::processIqStanza(JBEvent* ev)
     // Route the iq
     Message m("jabber.iq");
     __plugin.complete(m,ev->clientStream());
-    m.addParam("from",ev->from().bare());
-    m.addParam("from_instance",ev->from().resource());
+    addValidParam(m,"from",ev->from().bare());
+    addValidParam(m,"from_instance",ev->from().resource());
     if (ev->to()) {
 	m.addParam("to",ev->to().bare());
 	m.addParam("to_instance",ev->to().resource());
@@ -1165,7 +1165,7 @@ void YJBEngine::processIqStanza(JBEvent* ev)
     }
     addValidParam(m,"id",ev->id());
     addValidParam(m,"type",ev->stanzaType());
-    if (!rsp && n != XMPPNamespace::Count)
+    if (n != XMPPNamespace::Count)
 	m.addParam("xmlns",XMPPUtils::s_ns[n]);
     m.addParam(new NamedPointer("xml",ev->releaseXml()));
     XmlElement* xmlRsp = 0;

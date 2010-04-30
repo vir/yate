@@ -393,8 +393,6 @@ static bool decodeNotif(const SS7ISUP* isup, NamedList& list, const IsupParam* p
     String flg;
     for (; len; len--) {
 	unsigned char val = *buf++;
-	if (val & 0x80)
-	    break;
 	const char* keyword = lookup(val & 0x7f,(const TokenDict*)param->data);
 	if (keyword)
 	    flg.append(keyword,",");
@@ -402,6 +400,8 @@ static bool decodeNotif(const SS7ISUP* isup, NamedList& list, const IsupParam* p
 	    String tmp(0x7f & (int)val);
 	    flg.append(tmp,",");
 	}
+	if (val & 0x80)
+	    break;
     }
     DDebug(isup,DebugAll,"decodeNotif decoded %s='%s'",param->name,flg.c_str());
     list.addParam(prefix+param->name,flg);
@@ -990,6 +990,14 @@ static const TokenDict s_dict_notifications[] = {
     { 0, 0 }
 };
 
+// Number Portability Forward Information (Q.763 3.101)
+static const TokenDict s_dict_portability[] = {
+    { "not-queried",       1 },
+    { "called-not-ported", 2 },
+    { "called-ported",     3 },
+    { 0, 0 }
+};
+
 // ANSI Originating Line Info
 static const TokenDict s_dict_oli[] = {
     { "normal",            0 },
@@ -1070,6 +1078,25 @@ static const IsupParam s_paramDefs[] = {
     MAKE_PARAM(UserTeleserviceInformation,     0,0,             0,             0),                    // 3.59
     MAKE_PARAM(UserToUserIndicators,           0,0,             0,             0),                    // 3.60
     MAKE_PARAM(UserToUserInformation,          0,0,             0,             0),                    // 3.61
+    MAKE_PARAM(ForwardGVNS,                    0,0,             0,             0),                    // 3.66
+    MAKE_PARAM(BackwardGVNS,                   0,0,             0,             0),                    // 3.62
+    MAKE_PARAM(RedirectCapability,             0,0,             0,             0),                    // 3.96
+    MAKE_PARAM(RedirectCounter,                0,0,             0,             0),                    // 3.97
+    MAKE_PARAM(PivotRoutingIndicators,         0,0,             0,             0),                    // 3.85
+    MAKE_PARAM(CalledDirectoryNumber,          0,0,             0,             0),                    // 3.86
+    MAKE_PARAM(OriginalCalledINNumber,         0,0,             0,             0),                    // 3.87
+    MAKE_PARAM(CallingGeodeticLocation,        0,0,             0,             0),                    // 3.88
+    MAKE_PARAM(HTR_Information,                0,0,             0,             0),                    // 3.89
+    MAKE_PARAM(NetworkRoutingNumber,           0,0,             0,             0),                    // 3.90
+    MAKE_PARAM(QueryOnReleaseCapability,       0,0,             0,             0),                    // 3.91
+    MAKE_PARAM(PivotStatus,                    0,0,             0,             0),                    // 3.92
+    MAKE_PARAM(PivotCounter,                   0,0,             0,             0),                    // 3.93
+    MAKE_PARAM(PivotRoutingForwardInformation, 0,0,             0,             0),                    // 3.94
+    MAKE_PARAM(PivotRoutingBackInformation,    0,0,             0,             0),                    // 3.95
+    MAKE_PARAM(RedirectStatus,                 0,0,             0,             0),                    // 3.98
+    MAKE_PARAM(RedirectForwardInformation,     0,0,             0,             0),                    // 3.99
+    MAKE_PARAM(RedirectBackwardInformation,    0,0,             0,             0),                    // 3.100
+    MAKE_PARAM(NumberPortabilityInformation,   0,decodeNotif,   encodeNotif,   s_dict_portability),   // 3.101
     // No references
     MAKE_PARAM(ApplicationTransport,           0,0,             0,             0),                    //
     MAKE_PARAM(BusinessGroup,                  0,0,             0,             0),                    //

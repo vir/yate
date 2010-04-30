@@ -885,7 +885,7 @@ static const SignallingFlags s_flags_ansi_cgci[] = {
 };
 
 // Calling Party Category (Q.763 3.11)
-static TokenDict s_dict_callerCat[] = {
+static const TokenDict s_dict_callerCat[] = {
     { "unknown",     0 },                // calling party's category is unknown
     { "operator-FR", 1 },                // operator, language French
     { "operator-EN", 2 },                // operator, language English
@@ -901,7 +901,7 @@ static TokenDict s_dict_callerCat[] = {
 };
 
 // Transmission Medium Requirement (Q.763 3.54)
-static TokenDict s_dict_mediumReq[] = {
+static const TokenDict s_dict_mediumReq[] = {
     { "speech",          0 },
     { "64kbit",          2 },
     { "3.1khz-audio",    3 },
@@ -914,7 +914,7 @@ static TokenDict s_dict_mediumReq[] = {
 };
 
 // Generic Notification Indicator (Q.763 3.25)
-static TokenDict s_dict_notifications[] = {
+static const TokenDict s_dict_notifications[] = {
     { "user-suspended",         0x00 },
     { "user-resumed",           0x01 },
     { "call-completion-delay",  0x04 },
@@ -935,6 +935,24 @@ static TokenDict s_dict_notifications[] = {
     { "remote-hold",            0x79 },
     { "remote-retrieval",       0x7a },
     { "call-diverting",         0x7b },
+    { 0, 0 }
+};
+
+// ANSI Originating Line Info
+static const TokenDict s_dict_oli[] = {
+    { "normal",            0 },
+    { "multiparty",        1 },
+    { "ani-failure",       2 },
+    { "hotel-room-id",     6 },
+    { "coinless",          7 },
+    { "restricted",        8 },
+    { "test-call-1",      10 },
+    { "aiod-listed-dn",   20 },
+    { "identified-line",  23 },
+    { "800-call",         24 },
+    { "coin-line",        27 },
+    { "restricted-hotel", 68 },
+    { "test-call-2",      95 },
     { 0, 0 }
 };
 
@@ -1017,14 +1035,14 @@ static const IsupParam s_paramDefs[] = {
     MAKE_PARAM(FacilityInformationIndicators,  0,0,             0,             0),                    //
     MAKE_PARAM(FreephoneIndicators,            0,0,             0,             0),                    //
     MAKE_PARAM(GenericName,                    0,0,             0,             0),                    //
-    MAKE_PARAM(HopCounter,                     0,0,             0,             0),                    //
+    MAKE_PARAM(HopCounter,                     1,decodeInt,     encodeInt,     0),                    // 3.80
     MAKE_PARAM(Index,                          0,0,             0,             0),                    //
     MAKE_PARAM(Jurisdiction,                   0,0,             0,             0),                    //
     MAKE_PARAM(MLPP_Precedence,                0,0,             0,             0),                    //
     MAKE_PARAM(NetworkTransport,               0,0,             0,             0),                    //
     MAKE_PARAM(NotificationIndicator,          0,0,             0,             0),                    //
     MAKE_PARAM(OperatorServicesInformation,    0,0,             0,             0),                    //
-    MAKE_PARAM(OriginatingLineInformation,     0,0,             0,             0),                    //
+    MAKE_PARAM(OriginatingLineInformation,     1,decodeInt,     encodeInt,     s_dict_oli),           //
     MAKE_PARAM(OutgoingTrunkGroupNumber,       0,0,             0,             0),                    //
     MAKE_PARAM(Precedence,                     0,0,             0,             0),                    //
     MAKE_PARAM(ServiceCodeIndicator,           0,0,             0,             0),                    //

@@ -2749,6 +2749,7 @@ void JBPendingWorker::processChat(JBPendingJob& job)
     while (true) {
 	__plugin.complete(m);
 	m.addParam("type",ev->stanzaType());
+	addValidParam(m,"id",ev->id());
 	m.addParam("caller",ev->from().bare());
 	addValidParam(m,"called",ev->to().bare());
 	addValidParam(m,"caller_instance",ev->from().resource());

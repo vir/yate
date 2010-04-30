@@ -123,6 +123,15 @@ static const TokenDict s_dict_qual[] = {
     { 0, 0 }
 };
 
+// Generic name qualifier
+static const TokenDict s_dict_qual_name[] = {
+    { "caller" ,           0x20 },
+    { "called" ,           0x40 },
+    { "redirecting" ,      0x60 },
+    { "connected" ,        0x80 },
+    { 0, 0 }
+};
+
 // Message Compatibility Information (Q.763 3.33)
 static const SignallingFlags s_flags_msgcompat[] = {
     { 0x01, 0x00, "transit" },           // End node / transit exchange
@@ -411,6 +420,22 @@ static bool decodeCause(const SS7ISUP* isup, NamedList& list, const IsupParam* p
     const unsigned char* buf, unsigned int len, const String& prefix)
 {
     return SignallingUtils::decodeCause(isup,list,buf,len,prefix+param->name,true);
+}
+
+// Decoder for generic name
+static bool decodeName(const SS7ISUP* isup, NamedList& list, const IsupParam* param,
+    const unsigned char* buf, unsigned int len, const String& prefix)
+{
+    if (len < 1)
+	return false;
+    String val((const char*)buf+1,len-1);
+    String preName(prefix + param->name);
+    list.addParam(preName,val);
+    list.addParam(preName+".available",String::boolText((buf[0] & 0x10) == 0));
+    SignallingUtils::addKeyword(list,preName+".qualifier",s_dict_qual_name,buf[0] & 0xe0);
+    SignallingUtils::addKeyword(list,preName+".restrict",s_dict_presentation,buf[0] & 0x03);
+    DDebug(isup,DebugAll,"decodeName decoded %s='%s'",param->name,val.c_str());
+    return true;
 }
 
 // Default encoder, get hexified octets
@@ -738,6 +763,33 @@ static unsigned char encodeCause(const SS7ISUP* isup, SS7MSU& msu,
     return tmp.length() - 1;
 }
 
+// Encoder for Generic Name
+static unsigned char encodeName(const SS7ISUP* isup, SS7MSU& msu,
+    unsigned char* buf, const IsupParam* param, const NamedString* val,
+    const NamedList* extra, const String& prefix)
+{
+    if (!(param && val) || buf || param->size)
+	return 0;
+    unsigned int len = val->length() + 1;
+    if (len >= 127)
+	return 0;
+    unsigned char gn[2] = { len, 3 };
+    if (extra) {
+	String preName(prefix + param->name);
+	if (!extra->getBoolValue(preName+".available",true))
+	    gn[1] |= 0x10;
+	gn[1] = (gn[1] & 0x1f) |
+	    (extra->getIntValue(preName+".qualifier",s_dict_qual_name,gn[1] & 0xe0) & 0xe0);
+	gn[1] = (gn[1] & 0xfc) |
+	    (extra->getIntValue(preName+".restrict",s_dict_presentation,gn[1] & 0x03) & 0x03);
+    }
+    DataBlock tmp(gn,2);
+    tmp += *val;
+    DDebug(isup,DebugAll,"encodeName encoding %s on %u octets",param->name,tmp.length());
+    msu += tmp;
+    return len;
+}
+
 // Nature of Connection Indicators (Q.763 3.35)
 static const SignallingFlags s_flags_naci[] = {
     // TODO: add more flags
@@ -1034,7 +1086,7 @@ static const IsupParam s_paramDefs[] = {
     MAKE_PARAM(Egress,                         0,0,             0,             0),                    //
     MAKE_PARAM(FacilityInformationIndicators,  0,0,             0,             0),                    //
     MAKE_PARAM(FreephoneIndicators,            0,0,             0,             0),                    //
-    MAKE_PARAM(GenericName,                    0,0,             0,             0),                    //
+    MAKE_PARAM(GenericName,                    0,decodeName,    encodeName,    0),                    //
     MAKE_PARAM(HopCounter,                     1,decodeInt,     encodeInt,     0),                    // 3.80
     MAKE_PARAM(Index,                          0,0,             0,             0),                    //
     MAKE_PARAM(Jurisdiction,                   0,0,             0,             0),                    //

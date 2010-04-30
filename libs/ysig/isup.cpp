@@ -1998,6 +1998,8 @@ bool SS7ISUPCall::copyParamIAM(SS7MsgISUP* msg, bool outgoing, SignallingMessage
     dest.setParam("callednumtype",dest.getValue("CalledPartyNumber.nature"));
     dest.setParam("callednumplan",dest.getValue("CalledPartyNumber.plan"));
     dest.setParam("inn",dest.getValue("CalledPartyNumber.inn"));
+    if (m_label.sls() != 0xff)
+	dest.setParam("sls",String((unsigned int)m_label.sls()));
     return true;
 }
 
@@ -2631,7 +2633,8 @@ SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
 	    if (p)
 		cic->setParams(*p);
 	}
-	call = new SS7ISUPCall(this,cic,*m_defPoint,dest,true,-1,range);
+	call = new SS7ISUPCall(this,cic,*m_defPoint,dest,true,
+	    msg->params().getIntValue("sls",-1),range);
 	call->ref();
 	m_calls.append(call);
 	SignallingEvent* event = new SignallingEvent(SignallingEvent::NewCall,msg,call);

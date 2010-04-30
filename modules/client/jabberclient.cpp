@@ -551,6 +551,7 @@ void YJBEngine::processEvent(JBEvent* ev)
 	    if (ev->element()) {
 		Message* m = __plugin.message("msg.execute",ev->clientStream());
 		m->addParam("type",ev->stanzaType());
+		addValidParam(*m,"id",ev->id());
 		m->addParam("caller",ev->from().bare());
 		addValidParam(*m,"caller_instance",ev->from().resource());
 		XmlElement* xml = ev->releaseXml();

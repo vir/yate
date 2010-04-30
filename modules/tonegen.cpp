@@ -134,6 +134,7 @@ class ToneChan : public Channel
 public:
     ToneChan(String& tone);
     ~ToneChan();
+    bool attachConsumer(const char* consumer);
 };
 
 class AttachHandler : public MessageHandler
@@ -718,6 +719,19 @@ ToneChan::~ToneChan()
     Debug(this,DebugAll,"ToneChan::~ToneChan() %s [%p]",id().c_str(),this);
 }
 
+bool ToneChan::attachConsumer(const char* consumer)
+{
+    if (TelEngine::null(consumer))
+	return false;
+    Message m("chan.attach");
+    m.userData(this);
+    m.addParam("id",id());
+    m.addParam("consumer",consumer);
+    m.addParam("single",String::boolText(true));
+    return Engine::dispatch(m);
+}
+
+
 // Get a data block from a binary parameter of msg
 DataBlock* getRawData(Message& msg)
 {
@@ -826,6 +840,7 @@ bool ToneGenDriver::msgExecute(Message& msg, String& dest)
     if (ch) {
 	ToneChan *tc = new ToneChan(dest);
 	tc->initChan();
+	tc->attachConsumer(msg.getValue("consumer"));
 	if (ch->connect(tc,msg.getValue("reason"))) {
 	    tc->callConnect(msg);
 	    msg.setParam("peerid",tc->id());
@@ -868,6 +883,7 @@ bool ToneGenDriver::msgExecute(Message& msg, String& dest)
 	m.setParam("callto",callto);
 	ToneChan *tc = new ToneChan(dest);
 	tc->initChan();
+	tc->attachConsumer(msg.getValue("consumer"));
 	m.setParam("id",tc->id());
 	m.userData(tc);
 	if (Engine::dispatch(m)) {

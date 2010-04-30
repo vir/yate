@@ -94,6 +94,8 @@ class WaveChan : public Channel
 public:
     WaveChan(const String& file, bool record, unsigned maxlen, bool autorepeat, const char* format = 0, const NamedString* param = 0);
     ~WaveChan();
+    bool attachSource(const char* source);
+    bool attachConsumer(const char* consumer);
 };
 
 class Disconnector : public Thread
@@ -767,6 +769,30 @@ WaveChan::~WaveChan()
     Debug(this,DebugAll,"WaveChan::~WaveChan() %s [%p]",id().c_str(),this);
 }
 
+bool WaveChan::attachSource(const char* source)
+{
+    if (TelEngine::null(source))
+	return false;
+    Message m("chan.attach");
+    m.userData(this);
+    m.addParam("id",id());
+    m.addParam("source",source);
+    m.addParam("single",String::boolText(true));
+    return Engine::dispatch(m);
+}
+
+bool WaveChan::attachConsumer(const char* consumer)
+{
+    if (TelEngine::null(consumer))
+	return false;
+    Message m("chan.attach");
+    m.userData(this);
+    m.addParam("id",id());
+    m.addParam("consumer",consumer);
+    m.addParam("single",String::boolText(true));
+    return Engine::dispatch(m);
+}
+
 
 bool AttachHandler::received(Message &msg)
 {
@@ -1040,6 +1066,10 @@ bool WaveFileDriver::msgExecute(Message& msg, String& dest)
 	    dest.matchString(2).c_str());
 	WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen,msg.getBoolValue("autorepeat"),msg.getValue("format"),msg.getParam("callto"));
 	c->initChan();
+	if (meth)
+	    c->attachSource(msg.getValue("source"));
+	else
+	    c->attachConsumer(msg.getValue("consumer"));
 	if (ch->connect(c,msg.getValue("reason"))) {
 	    c->callConnect(msg);
 	    msg.setParam("peerid",c->id());
@@ -1077,6 +1107,10 @@ bool WaveFileDriver::msgExecute(Message& msg, String& dest)
     m.addParam("callto",callto);
     WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen,msg.getBoolValue("autorepeat"),msg.getValue("format"));
     c->initChan();
+    if (meth)
+	c->attachSource(msg.getValue("source"));
+    else
+	c->attachConsumer(msg.getValue("consumer"));
     m.setParam("id",c->id());
     m.userData(c);
     if (Engine::dispatch(m)) {

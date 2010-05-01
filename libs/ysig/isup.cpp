@@ -158,6 +158,14 @@ static const SignallingFlags s_flags_paramcompat[] = {
 // Backward call indicators to be copied
 static const String s_copyBkInd("BackwardCallIndicators,OptionalBackwardCallIndicators");
 
+// SLS special values on outbound calls
+static const TokenDict s_dict_callSls[] = {
+    { "auto", -1 }, // Let Layer3 deal with it
+    { "last", -2 }, // Last SLS used
+    { "cic",  -3 }, // Lower bits of CIC
+    { 0, 0 }
+};
+
 // Control operations
 static const TokenDict s_dict_control[] = {
     { "validate", SS7MsgISUP::CVT },
@@ -2432,6 +2440,7 @@ SS7ISUP::SS7ISUP(const NamedList& params)
       m_sls(255),
       m_earlyAcm(true),
       m_inn(false),
+      m_defaultSls(-2),
       m_l3LinkUp(false),
       m_uptTimer(0),
       m_userPartAvail(true),
@@ -2513,6 +2522,7 @@ SS7ISUP::SS7ISUP(const NamedList& params)
 	m_userPartAvail = false;
 
     m_continuity = params.getValue("continuity");
+    m_defaultSls = params.getIntValue("sls",s_dict_callSls,m_defaultSls);
 
     setDebug(params.getBoolValue("print-messages",false),
 	params.getBoolValue("extended-debug",false));
@@ -2533,6 +2543,12 @@ SS7ISUP::SS7ISUP(const NamedList& params)
 	s << " lockcircuits=" << params.getValue("lockcircuits");
 	s << " userpartavail=" << String::boolText(m_userPartAvail);
 	s << " lockgroup=" << String::boolText(m_lockGroup);
+	const char* sls = lookup(m_defaultSls,s_dict_callSls);
+	s << " outboundsls=";
+	if (sls)
+	    s << sls;
+	else
+	    s << m_defaultSls;
 	if (m_continuity)
 	    s << " continuity=" << m_continuity;
 	Debug(this,DebugInfo,"ISUP Call Controller %s [%p]",s.c_str(),this);
@@ -2563,6 +2579,7 @@ bool SS7ISUP::initialize(const NamedList* config)
 	m_lockGroup = config->getBoolValue("lockgroup",m_lockGroup);
 	m_earlyAcm = config->getBoolValue("earlyacm",m_earlyAcm);
 	m_continuity = config->getValue("continuity",m_continuity);
+	m_defaultSls = config->getIntValue("sls",s_dict_callSls,m_defaultSls);
     }
     if (engine() && !network()) {
 	NamedList params("ss7router");
@@ -2712,8 +2729,19 @@ SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
 	    if (p)
 		cic->setParams(*p);
 	}
-	call = new SS7ISUPCall(this,cic,*m_defPoint,dest,true,
-	    msg->params().getIntValue("sls",-1),range);
+	int sls = msg->params().getIntValue("sls",s_dict_callSls,m_defaultSls);
+	switch (sls) {
+	    case -3:
+		if (cic) {
+		    sls = cic->code();
+		    break;
+		}
+		// fall through
+	    case -2:
+		sls = m_sls;
+		break;
+	}
+	call = new SS7ISUPCall(this,cic,*m_defPoint,dest,true,sls,range);
 	call->ref();
 	m_calls.append(call);
 	SignallingEvent* event = new SignallingEvent(SignallingEvent::NewCall,msg,call);

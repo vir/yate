@@ -6290,6 +6290,7 @@ private:
     unsigned char m_sls;                 // Last known valid SLS
     bool m_earlyAcm;                     // Accept progress/ringing in early ACM
     bool m_inn;                          // Routing to internal network number flag
+    int m_defaultSls;                    // Default SLS to use in outbound calls
     String m_numPlan;                    // Numbering plan
     String m_numType;                    // Number type
     String m_numPresentation;            // Number presentation

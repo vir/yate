@@ -181,7 +181,12 @@ Source: "..\docs\api\*.png"; DestDir: "{app}\devel\docs\api"; Components: devel\
 Source: "..\docs\api\*.css"; DestDir: "{app}\devel\docs\api"; Components: devel\doc; Flags: skipifsourcedoesntexist
 
 Source: "Release\msvcrtest.dll"; Flags: dontcopy
+; Global CRT DLLs installer, should not be used together with local installs
 Source: "Runtimes\vcredist_x86.exe"; DestDir: "{app}"; Flags: skipifsourcedoesntexist dontcopy nocompression
+; Local CRT DLLs install, either all or none of the files must be present
+Source: "Runtimes\Microsoft.VC80.CRT.manifest"; DestDir: "{app}"; Flags: skipifsourcedoesntexist; Check: CrtLocalInstall
+Source: "Runtimes\msvcr80.dll"; DestDir: "{app}"; Flags: skipifsourcedoesntexist; Check: CrtLocalInstall
+Source: "Runtimes\msvcp80.dll"; DestDir: "{app}"; Flags: skipifsourcedoesntexist; Check: CrtLocalInstall
 
 [Icons]
 Name: "{group}\Yate Client (Qt)"; Filename: "{app}\yate-qt4.exe"; Parameters: "-n yate-qt4 -w ""{app}"""; Components: client\qt
@@ -206,6 +211,7 @@ Filename: "{app}\yate-service.exe"; Parameters: "--remove"; Components: server
 [Code]
 var
     CrtLoadable : Boolean;
+    CrtLocal    : Boolean;
 
 function CrtTrue() : Integer;
 external 'crt_true@files:msvcrtest.dll cdecl delayload setuponly';
@@ -218,7 +224,14 @@ begin
     except
         CrtLoadable := False;
     end;
+    CrtLocal := False;
     Result := True;
+end;
+
+function CrtLocalInstall() : Boolean;
+begin
+    if not CrtLoadable then CrtLocal := True;
+    Result := CrtLocal;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -228,7 +241,7 @@ var
     err : Integer;
 begin
     if (CurStep = ssInstall) then begin
-        if not CrtLoadable then begin
+        if not (CrtLoadable or CrtLocal) then begin
             msg := 'MSVCR80.DLL is not installed or loadable';
             msg := msg + #13 #13 'Do you want to install Microsoft Runtime 8.0 now?';
             repeat

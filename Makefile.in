@@ -15,6 +15,7 @@ INCLUDES := -I. -I@srcdir@
 CFLAGS := @CFLAGS@ @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= @LDFLAGS@
 LDCONFIG:=true
+RPMOPT :=
 
 MKDEPS := ./config.status
 PROGS:= yate
@@ -293,11 +294,11 @@ snapshot tarball: check-topdir revision clean tables windows apidocs
 	$$wd; \
 	rm $$wd/tar-exclude
 
-rpm: check-root tarball
-	rpmbuild -tb packing/tarballs/@PACKAGE_TARNAME@-@PACKAGE_VERSION@-@PACKAGE_STATUS@@PACKAGE_RELEASE@.tar.gz
+rpm: tarball
+	rpmbuild -tb $(RPMOPT) packing/tarballs/@PACKAGE_TARNAME@-@PACKAGE_VERSION@-@PACKAGE_STATUS@@PACKAGE_RELEASE@.tar.gz
 
-srpm: check-root tarball
-	rpmbuild -ta packing/tarballs/@PACKAGE_TARNAME@-@PACKAGE_VERSION@-@PACKAGE_STATUS@@PACKAGE_RELEASE@.tar.gz
+srpm: tarball
+	rpmbuild -ta $(RPMOPT) packing/tarballs/@PACKAGE_TARNAME@-@PACKAGE_VERSION@-@PACKAGE_STATUS@@PACKAGE_RELEASE@.tar.gz
 
 revision: check-topdir
 	@-rev=`svn info 2>/dev/null | sed -n 's,^Revision: *,,p'`; \

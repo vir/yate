@@ -143,6 +143,7 @@ Source: "Runtimes\libintl-2.dll"; DestDir: "{app}"; Components: database\pg\run
 Source: "Runtimes\libiconv-2.dll"; DestDir: "{app}"; Components: database\pg\run
 Source: "Runtimes\libeay32.dll"; DestDir: "{app}"; Components: database\pg\run driver\openssl\run
 Source: "Runtimes\ssleay32.dll"; DestDir: "{app}"; Components: database\pg\run driver\openssl\run
+Source: "Runtimes\msvcr71.dll"; DestDir: "{app}"; Components: database\pg\run driver\openssl\run
 Source: "Runtimes\libspeex.dll"; DestDir: "{app}"; Components: codecs\speex\run
 Source: "Runtimes\libspeexdsp.dll"; DestDir: "{app}"; Components: codecs\speex\run
 

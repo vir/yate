@@ -3,7 +3,7 @@ AC_INIT(Yate, 3.0.0)
 AC_CONFIG_SRCDIR([README])
 AC_PREREQ(2.52)
 
-PACKAGE_RELEASE="2"
+PACKAGE_RELEASE="3"
 PACKAGE_STATUS="alpha"
 PACKAGE_REVISION=`cat packing/revision.txt 2>/dev/null`
 

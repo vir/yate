@@ -398,6 +398,7 @@ public:
     virtual bool transmitMSU(const SS7MSU& msu);
     void getStringMessage(String& tmp, DataBlock& data);
     virtual bool operational() const;
+    virtual void configure(bool start);
     static inline const char* stateName(State s)
 	{ return lookup((int)s,s_states); }
     inline u_int16_t channel()
@@ -1613,11 +1614,8 @@ void SLT::notify(bool up)
 {
     if (!up)
 	setStatus(Unconfigured);
-    else {
-	sendManagement(Configuration_R);
-	m_confReqTimer.start();
-	setStatus(Waiting);
-   }
+    else
+	configure(true);
 }
 
 bool SLT::control(Operation oper, NamedList* params)
@@ -1641,9 +1639,7 @@ bool SLT::control(Operation oper, NamedList* params)
 		    case Waiting:
 			break;
 		    default:
-			sendManagement(Configuration_R);
-			m_confReqTimer.start();
-			setStatus(Waiting);
+			configure(true);
 		}
 	    }
 	    return true;
@@ -1773,13 +1769,7 @@ void SLT::processManagement(u_int16_t msgType, DataBlock& data)
 {
     switch ((Messages)msgType) {
 	case Configuration_C:
-	    m_confReqTimer.stop();
-	    setStatus(Configured);
-	    SS7Layer2::notify();
-	    DDebug(this,DebugInfo,"requested status = %s",statusName(m_reqStatus,false));
-	    if (m_reqStatus != NormalAlignment && m_reqStatus != EmergencyAlignment)
-		break;
-	    sendConnect(m_reqStatus == NormalAlignment ? Normal : Emergency);
+	    configure(false);
 	    break;
 	case Status_C:
 	case Statistic_C:
@@ -1987,6 +1977,22 @@ bool SLT::transmitMSU(const SS7MSU& msu)
 bool SLT::operational() const
 {
     return aligned();
+}
+
+void SLT::configure(bool start)
+{
+    if (start && m_confReqTimer.interval()) {
+	sendManagement(Configuration_R);
+	m_confReqTimer.start();
+	setStatus(Waiting);
+	return;
+    }
+    m_confReqTimer.stop();
+    setStatus(Configured);
+    SS7Layer2::notify();
+    DDebug(this,DebugInfo,"requested status = %s",statusName(m_reqStatus,false));
+    if (m_reqStatus == NormalAlignment || m_reqStatus == EmergencyAlignment)
+	sendConnect(m_reqStatus == NormalAlignment ? Normal : Emergency);
 }
 
 SignallingComponent* SLT::create(const String& type, const NamedList& name)

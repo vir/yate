@@ -1294,8 +1294,8 @@ public:
 
     /**
      * Copy element attributes to a list of parameters
-     * @list Destination list
-     * @prefix Prefix to be added to each attribute name
+     * @param list Destination list
+     * @param prefix Prefix to be added to each attribute name
      * @return The number of attributes added to the destination list
      */
     unsigned int copyAttributes(NamedList& list, const String& prefix) const;

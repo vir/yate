@@ -2705,7 +2705,7 @@ SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
 	    break;
 	}
 	String pc = msg->params().getValue("calledpointcode");
-	if (!(dest.assign(pc) && dest.pack(m_type))) {
+	if (!(dest.assign(pc,m_type) && dest.pack(m_type))) {
 	    if (!m_remotePoint) {
 		Debug(this,DebugNote,
 		    "Destination point code is missing (calledpointcode=%s)",pc.safe());
@@ -3293,10 +3293,8 @@ bool SS7ISUP::encodeMessage(DataBlock& buf, SS7MsgISUP::Type msgType, SS7PointCo
 
 bool SS7ISUP::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
-    if (msu.getSIF() != SS7MSU::ISUP || !hasPointCode(label.dpc())) {
-	DDebug(this,DebugAll,"Refusing MSU: %s",msu.getSIF()!=SS7MSU::ISUP?"not ISUP":"invalid point code");
+    if (msu.getSIF() != SS7MSU::ISUP || !hasPointCode(label.dpc()) || !handlesRemotePC(label.opc()))
 	return false;
-    }
     // we should have at least 2 bytes CIC and 1 byte message type
     const unsigned char* s = msu.getData(label.length()+1,3);
     if (!s)
@@ -3981,7 +3979,7 @@ SS7MSU* SS7BICC::createMSU(SS7MsgISUP::Type type, unsigned char ssf,
 
 bool SS7BICC::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
-    if (msu.getSIF() != SS7MSU::BICC || !hasPointCode(label.dpc()))
+    if (msu.getSIF() != SS7MSU::BICC || !hasPointCode(label.dpc()) || !handlesRemotePC(label.opc()))
 	return false;
     // we should have at least 4 bytes CIC and 1 byte message type
     const unsigned char* s = msu.getData(label.length()+1,5);

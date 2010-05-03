@@ -3236,6 +3236,13 @@ public:
 	{ return m_network == original.network() && m_cluster == original.cluster() && m_member == original.member(); }
 
     /**
+     * Inequality operator
+     * @param original Code point to be compared with
+     */
+    inline bool operator!=(const SS7PointCode& original) const
+	{ return m_network != original.network() || m_cluster != original.cluster() || m_member != original.member(); }
+
+    /**
      * Check if the point code is compatible with a packing type
      * @return True if the Network and Member fit in the packing format
      */
@@ -6095,6 +6102,14 @@ public:
      * @return SS7PointCode pointer or 0 if not found
      */
     SS7PointCode* hasPointCode(const SS7PointCode& pc);
+
+    /**
+     * Check if this controller should handle a remote point code
+     * @param pc The remote point code to check
+     * @return True if pc matches the remote or there is no remote set
+     */
+    inline bool handlesRemotePC(const SS7PointCode& pc) const
+	{ return !m_remotePoint || (pc == *m_remotePoint); }
 
     /**
      * Set a routing label to be used for outgoing messages

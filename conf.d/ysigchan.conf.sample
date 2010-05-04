@@ -306,10 +306,10 @@
 ; sls: integer or keyword: Default Signaling Link Selection in outbound calls
 ; Allowed values:
 ;    auto    Let SS7 Layer3 add a proper value
-;    last    Last SLS used (default)
+;    last    Last SLS used (default for non-ITU)
 ;    cic     Use the circuit number as SLS (ITU style)
 ;    0..255  Explicit numeric value, gets truncated to the SLS bit range
-;sls=auto
+;sls=last (cic if pointcodetype is ITU)
 
 ; numplan: string: Default numbering plan for outgoing calls
 ; Values: unknown, isdn, data, telex, national, private

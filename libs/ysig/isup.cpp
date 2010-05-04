@@ -160,9 +160,9 @@ static const String s_copyBkInd("BackwardCallIndicators,OptionalBackwardCallIndi
 
 // SLS special values on outbound calls
 static const TokenDict s_dict_callSls[] = {
-    { "auto", -1 }, // Let Layer3 deal with it
-    { "last", -2 }, // Last SLS used
-    { "cic",  -3 }, // Lower bits of CIC
+    { "auto", SS7ISUP::SlsAuto    }, // Let Layer3 deal with it
+    { "last", SS7ISUP::SlsLatest  }, // Last SLS used
+    { "cic",  SS7ISUP::SlsCircuit }, // Lower bits of CIC
     { 0, 0 }
 };
 
@@ -1663,20 +1663,19 @@ void SS7MsgISUP::toString(String& dest, const SS7Label& label, bool params,
 // @param label The routing label for the message
 // @param recvLbl True if the given label is from a received message. If true, a new routing
 //   label will be created from the received one
-// @param sls Signalling Link to use for the new routing label. Ignored if recvLbl is false
 // @return Link the message was successfully queued to, negative for error
-inline int transmitREL(SS7ISUP* isup, unsigned int cic, const SS7Label& label, bool recvLbl, int sls,
+inline int transmitREL(SS7ISUP* isup, unsigned int cic, const SS7Label& label, bool recvLbl,
 	const char* reason)
 {
     SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::REL,cic);
     if (reason)
 	m->params().addParam("CauseIndicators",reason);
-    return isup->transmitMessage(m,label,recvLbl,sls);
+    return isup->transmitMessage(m,label,recvLbl);
 }
 
 // Push down the protocol stack a RLC (Release Complete) message
 // @param msg Optional received message to copy release parameters. Ignored if reason is valid
-inline int transmitRLC(SS7ISUP* isup, unsigned int cic, const SS7Label& label, bool recvLbl, int sls,
+inline int transmitRLC(SS7ISUP* isup, unsigned int cic, const SS7Label& label, bool recvLbl,
 	const char* reason = 0, const SS7MsgISUP* msg = 0)
 {
     SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::RLC,cic);
@@ -1686,17 +1685,17 @@ inline int transmitRLC(SS7ISUP* isup, unsigned int cic, const SS7Label& label, b
 	m->params().copyParam(((SS7MsgISUP*)msg)->params(),"CauseIndicators",'.');
     else
 	m->params().addParam("CauseIndicators","normal-clearing");
-    return isup->transmitMessage(m,label,recvLbl,sls);
+    return isup->transmitMessage(m,label,recvLbl);
 }
 
 // Push down the protocol stack a CNF (Confusion) message
-inline int transmitCNF(SS7ISUP* isup, unsigned int cic, const SS7Label& label, bool recvLbl, int sls,
+inline int transmitCNF(SS7ISUP* isup, unsigned int cic, const SS7Label& label, bool recvLbl,
 	const char* reason)
 {
     SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::CNF,cic);
     if (reason)
 	m->params().addParam("CauseIndicators",reason);
-    return isup->transmitMessage(m,label,recvLbl,sls);
+    return isup->transmitMessage(m,label,recvLbl);
 }
 
 
@@ -2008,8 +2007,8 @@ SignallingEvent* SS7ISUPCall::releaseComplete(bool final, SS7MsgISUP* msg, const
     if (m_state == Released)
 	return 0;
     if (isup() && m_gracefully) {
-	int sls = transmitRLC(isup(),id(),m_label,false,m_label.sls(),m_reason);
-	if (sls != -1)
+	int sls = transmitRLC(isup(),id(),m_label,false,m_reason);
+	if (sls != -1 && m_label.sls() == 255)
 	    m_label.setSls(sls);
     }
     m_state = Released;
@@ -2110,8 +2109,8 @@ bool SS7ISUPCall::release(SignallingEvent* event)
     m_state = Releasing;
     if (!isup())
 	return 0;
-    int sls = transmitREL(isup(),id(),m_label,false,m_label.sls(),m_reason);
-    if (sls != -1)
+    int sls = transmitREL(isup(),id(),m_label,false,m_reason);
+    if (sls != -1 && m_label.sls() == 255)
 	m_label.setSls(sls);
     return sls != -1;
 }
@@ -2416,7 +2415,8 @@ bool SS7ISUPCall::transmitMessage(SS7MsgISUP* msg)
     int sls = isup()->transmitMessage(msg,m_label,false);
     if (sls == -1)
 	return false;
-    m_label.setSls(sls);
+    if (m_label.sls() == 255)
+	m_label.setSls(sls);
     return true;
 }
 
@@ -2440,7 +2440,7 @@ SS7ISUP::SS7ISUP(const NamedList& params)
       m_sls(255),
       m_earlyAcm(true),
       m_inn(false),
-      m_defaultSls(-2),
+      m_defaultSls(SlsLatest),
       m_l3LinkUp(false),
       m_uptTimer(0),
       m_userPartAvail(true),
@@ -2470,6 +2470,8 @@ SS7ISUP::SS7ISUP(const NamedList& params)
 	Debug(this,DebugWarn,"Invalid point code type '%s'",c_safe(stype));
 	return;
     }
+    if (m_type == SS7PointCode::ITU)
+	m_defaultSls = SlsCircuit;
 
     m_format = params.getValue("format");
     if (-1 == lookup(m_format,SignallingUtils::dict(0,0),-1))
@@ -2731,13 +2733,13 @@ SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
 	}
 	int sls = msg->params().getIntValue("sls",s_dict_callSls,m_defaultSls);
 	switch (sls) {
-	    case -3:
+	    case SlsCircuit:
 		if (cic) {
 		    sls = cic->code();
 		    break;
 		}
 		// fall through
-	    case -2:
+	    case SlsLatest:
 		sls = m_sls;
 		break;
 	}
@@ -2769,6 +2771,17 @@ int SS7ISUP::transmitMessage(SS7MsgISUP* msg, const SS7Label& label, bool recvLb
     const SS7Label* p = &label;
     SS7Label tmp;
     if (recvLbl) {
+	switch (sls) {
+	    case SlsCircuit:
+		sls = msg->cic();
+		break;
+	    case SlsLatest:
+		sls = m_sls;
+		break;
+	    case SlsDefault:
+		sls = label.sls();
+		break;
+	}
 	tmp.assign(label.type(),label.opc(),label.dpc(),sls,label.spare());
 	p = &tmp;
     }
@@ -2854,7 +2867,8 @@ void SS7ISUP::timerTick(const Time& when)
 	SignallingCircuit* cic = o ? static_cast<SignallingCircuit*>(o->get()) : 0;
 	m_uptCicCode = cic ? cic->code() : 1;
 	SS7MsgISUP* msg = new SS7MsgISUP(SS7MsgISUP::UPT,m_uptCicCode);
-	SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
+	SS7Label label(m_type,*m_remotePoint,*m_defPoint,
+	    (m_defaultSls == SlsCircuit) ? m_uptCicCode : m_sls);
 	m_uptTimer.start(when.msec());
 	mylock.drop();
 	transmitMessage(msg,label,false);
@@ -2892,7 +2906,8 @@ void SS7ISUP::timerTick(const Time& when)
     if (m_defPoint && m_remotePoint &&
 	reserveCircuit(m_rscCic,0,SignallingCircuit::LockLocal)) {
 	SS7MsgISUP* msg = new SS7MsgISUP(SS7MsgISUP::RSC,m_rscCic->code());
-	SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
+	SS7Label label(m_type,*m_remotePoint,*m_defPoint,
+	    (m_defaultSls == SlsCircuit) ? m_rscCic->code() : m_sls);
 	mylock.drop();
 	transmitMessage(msg,label,false);
     }
@@ -3485,12 +3500,12 @@ void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 	}
 	String s(msg->cic());
 	if (reserveCircuit(circuit,0,flags,&s,true)) {
-	    call = new SS7ISUPCall(this,circuit,label.dpc(),label.opc(),false,sls);
+	    call = new SS7ISUPCall(this,circuit,label.dpc(),label.opc(),false,label.sls());
 	    m_calls.append(call);
 	    break;
 	}
 	// Congestion: send REL
-	transmitREL(this,msg->cic(),label,true,sls,"congestion");
+	transmitREL(this,msg->cic(),label,true,"congestion");
 	DROP_MSG("can't reserve circuit")
 	#undef DROP_MSG
     }
@@ -3501,9 +3516,9 @@ void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
     else {
 	if (msg->type() != SS7MsgISUP::IAM && msg->type() != SS7MsgISUP::RLC) {
 	    if (msg->type() != SS7MsgISUP::REL)
-		transmitRLC(this,msg->cic(),label,true,sls);
+		transmitRLC(this,msg->cic(),label,true);
 	    else
-		transmitRLC(this,msg->cic(),label,true,sls,0,msg);
+		transmitRLC(this,msg->cic(),label,true,0,msg);
 	}
 	if (msg->type() != SS7MsgISUP::RLC)
 	    Debug(this,DebugNote,"'%s' with cic=%u: %s",msg->name(),msg->cic(),reason);
@@ -3557,7 +3572,7 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    break;
 	case SS7MsgISUP::RSC: // Reset Circuit
 	    if (resetCircuit(msg->cic(),true,true))
-		transmitRLC(this,msg->cic(),label,true,sls);
+		transmitRLC(this,msg->cic(),label,true);
 	    else
 		reason = "unknown-channel";
 	    stopSGM = true;
@@ -3660,7 +3675,7 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		m->params().copyParam(msg->params(),"GroupSupervisionTypeIndicator");
 		m->params().addParam("RangeAndStatus",String(nCics));
 		m->params().addParam("RangeAndStatus.map",map);
-		transmitMessage(m,label,true,sls);
+		transmitMessage(m,label,true);
 	    }
 	    break;
 	case SS7MsgISUP::UEC: // Unequipped CIC (national use)
@@ -3669,7 +3684,7 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    blockCircuit(msg->cic(),true,true,false,true,true);
 	    break;
 	case SS7MsgISUP::UPT: // User Part Test
-	    transmitMessage(new SS7MsgISUP(SS7MsgISUP::UPA,msg->cic()),label,true,sls);
+	    transmitMessage(new SS7MsgISUP(SS7MsgISUP::UPA,msg->cic()),label,true);
 	    break;
 	case SS7MsgISUP::UPA: // User Part Available
 	    if (m_uptCicCode && m_uptCicCode == msg->cic()) {
@@ -3772,7 +3787,7 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	Debug(this,impl?DebugNote:DebugStub,"'%s' with cic=%u: %s",
 	    msg->name(),msg->cic(),(reason ? reason : "Not implemented, ignoring"));
 	if (reason)
-	    transmitCNF(this,msg->cic(),label,true,sls,reason);
+	    transmitCNF(this,msg->cic(),label,true,reason);
     }
 }
 

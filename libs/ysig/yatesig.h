@@ -6047,6 +6047,16 @@ class YSIG_API SS7ISUP : public SignallingCallControl, public SS7Layer4
     friend class SS7ISUPCall;
 public:
     /**
+     * Special SLS values
+     */
+    enum {
+	SlsAuto    = -1,
+	SlsLatest  = -2,
+	SlsCircuit = -3,
+	SlsDefault = -4
+    };
+
+    /**
      * Constructor
      * @param params Call controller's parameters
      */
@@ -6161,7 +6171,7 @@ public:
      * @param sls Signalling Link to use for the new routing label. Ignored if recvLbl is false
      * @return Link the message was successfully queued to, negative for error
      */
-    int transmitMessage(SS7MsgISUP* msg, const SS7Label& label, bool recvLbl, int sls = -1);
+    int transmitMessage(SS7MsgISUP* msg, const SS7Label& label, bool recvLbl, int sls = SlsDefault);
 
     /**
      * Cleanup calls

@@ -3404,6 +3404,7 @@ ClientAccount::ClientAccount(const char* proto, const char* user,
     m_resource(0)
 {
     setIdUri(proto,user,host);
+    setResource(new ClientResource(""));
     DDebug(ClientDriver::self(),DebugAll,"Created client account=%s [%p]",
 	m_uri.c_str(),this);
 }
@@ -3417,9 +3418,7 @@ ClientAccount::ClientAccount(const NamedList& params)
     setIdUri(params.getValue("protocol"),params.getValue("username"),params.getValue("domain"));
     m_startup = params.getBoolValue("enable");
     m_password = params.getValue("password");
-    const char* res = params.getValue("resource");
-    if (res)
-	setResource(new ClientResource(res));
+    setResource(new ClientResource(params.getValue("resource")));
     m_server = params.getValue("server");
     m_options = params.getValue("options");
     m_port = params.getIntValue("port",m_port);
@@ -3435,13 +3434,17 @@ ClientResource* ClientAccount::resource(bool ref)
     Lock lock(this);
     if (!m_resource)
 	return 0;
-    return (!ref || m_resource->ref()) ? m_resource : 0; 
+    return (!ref || m_resource->ref()) ? m_resource : 0;
 }
 
-// Set/reset this account's resource
+// Set this account's resource
 void ClientAccount::setResource(ClientResource* res)
 {
+    if (!res)
+	return;
     Lock lock(this);
+    if (res == m_resource)
+	return;
     TelEngine::destruct(m_resource);
     m_resource = res;
 }
@@ -3539,7 +3542,7 @@ Message* ClientAccount::userlogin(bool login, const char* msg)
 void ClientAccount::destroyed()
 {
     lock();
-    setResource();
+    TelEngine::destruct(m_resource);
     // Clear contacts. Remove their owner before
     for (ObjList* o = m_contacts.skipNull(); o; o = o->skipNext())
 	(static_cast<ClientContact*>(o->get()))->m_owner = 0;

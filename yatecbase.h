@@ -2833,15 +2833,22 @@ public:
 
     /**
      * Get this account's resource
-     * @return ClientResource pointer or 0
+     * @return ClientResource pointer
      */
-    ClientResource* resource(bool ref = false);
+    ClientResource* resource(bool ref);
 
     /**
-     * Set/reset this account's resource
-     * @param res The new account's resource
+     * Get this account's resource
+     * @return ClientResource reference
      */
-    void setResource(ClientResource* res = 0);
+    inline ClientResource& resource() const
+	{ return *m_resource; }
+
+    /**
+     * Set this account's resource
+     * @param res The new account's resource (ignored if 0)
+     */
+    void setResource(ClientResource* res);
 
     /**
      * Find a contact by its id
@@ -2927,8 +2934,10 @@ protected:
 
     URI m_id;                            // The account's id
     URI m_uri;                           // Account's URI
-    ClientResource* m_resource;          // Account's resource
     ObjList m_contacts;                  // Account's contacts
+
+private:
+    ClientResource* m_resource;          // Account's resource
 };
 
 /**

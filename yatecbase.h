@@ -2779,6 +2779,10 @@ protected:
 };
 
 
+/**
+ * This class holds an account
+ * @short An account
+ */
 class YATE_API ClientAccount : public RefObject, public Mutex
 {
     friend class ClientContact;

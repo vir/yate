@@ -3249,6 +3249,13 @@ public:
     NamedList(const char* name, const NamedList& original, const String& prefix);
 
     /**
+     * Assignment operator
+     * @param value New name and parameters to assign
+     * @return Reference to this NamedList
+     */
+    NamedList& operator=(const NamedList& value);
+
+    /**
      * Get a pointer to a derived class given that class name
      * @param name Name of the class we are asking for
      * @return Pointer to the requested class or NULL if this object doesn't implement it
@@ -3454,7 +3461,6 @@ public:
 
 private:
     NamedList(); // no default constructor please
-    NamedList& operator=(const NamedList& value); // no assignment please
     ObjList m_params;
 };
 

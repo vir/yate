@@ -52,13 +52,19 @@ NamedList::NamedList(const char* name, const NamedList& original, const String& 
     copySubParams(original,prefix);
 }
 
+NamedList& NamedList::operator=(const NamedList& value)
+{
+    String::operator=(value);
+    clearParams();
+    return copyParams(value);
+}
+
 void* NamedList::getObject(const String& name) const
 {
     if (name == "NamedList")
 	return const_cast<NamedList*>(this);
     return String::getObject(name);
 }
-		
 
 NamedList& NamedList::addParam(NamedString* param)
 {
@@ -346,5 +352,5 @@ int NamedList::replaceParams(String& str, bool sqlEsc, char extraEsc) const
     }
     return cnt;
 }
-			
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

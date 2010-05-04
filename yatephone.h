@@ -30,7 +30,7 @@
 #endif
 
 #include <yatengine.h>
-	
+
 /**
  * Holds all Telephony Engine related classes.
  */
@@ -182,14 +182,14 @@ public:
  * An extension of a String that can parse data formats
  * @short A Data format
  */
-class YATE_API DataFormat : public String
+class YATE_API DataFormat : public NamedList
 {
 public:
     /**
      * Creates a new, empty format string.
      */
     inline DataFormat()
-	: m_parsed(0)
+	: NamedList((const char*)0), m_parsed(0)
 	{ }
 
     /**
@@ -197,7 +197,7 @@ public:
      * @param value Initial value of the format
      */
     inline DataFormat(const char* value)
-	: String(value), m_parsed(0)
+	: NamedList(value), m_parsed(0)
 	{ }
 
     /**
@@ -205,7 +205,7 @@ public:
      * @param value Initial value of the format
      */
     inline DataFormat(const DataFormat& value)
-	: String(value), m_parsed(value.getInfo())
+	: NamedList(value), m_parsed(value.getInfo())
 	{ }
 
     /**
@@ -213,7 +213,15 @@ public:
      * @param value Initial value of the format
      */
     inline DataFormat(const String& value)
-	: String(value), m_parsed(0)
+	: NamedList(value), m_parsed(0)
+	{ }
+
+    /**
+     * Constructor from NamedList reference
+     * @param value Initial value of the format and parameters
+     */
+    inline DataFormat(const NamedList& value)
+	: NamedList(value), m_parsed(0)
 	{ }
 
     /**
@@ -221,7 +229,7 @@ public:
      * @param value Initial value of the format
      */
     inline DataFormat(const String* value)
-	: String(value), m_parsed(0)
+	: NamedList(value ? value->c_str() : (const char*)0), m_parsed(0)
 	{ }
 
     /**
@@ -229,14 +237,14 @@ public:
      * @param format Pointer to existing FormatInfo
      */
     inline DataFormat(const FormatInfo* format)
-	: String(format ? format->name : (const char*)0), m_parsed(format)
+	: NamedList(format ? format->name : (const char*)0), m_parsed(format)
 	{ }
 
     /**
      * Assignment operator.
      */
     inline DataFormat& operator=(const DataFormat& value)
-	{ String::operator=(value); return *this; }
+	{ NamedList::operator=(value); m_parsed = value.getInfo(); return *this; }
 
     /**
      * Retrive a pointer to the format information
@@ -493,7 +501,7 @@ public:
      * @return Pointer to the requested class or NULL if this object doesn't implement it
      */
     virtual void* getObject(const String& name) const;
-    
+
     /**
      * Check if this data source is still valid
      * @return True if still valid, false if node should be removed

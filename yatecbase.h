@@ -2940,11 +2940,18 @@ class YATE_API ClientAccountList : public String, public Mutex
 public:
     /**
      * Constructor
-     * @param name List's name used for debug purposes 
+     * @param name List's name used for debug purposes
+     * @param localContacts Optional account owning locally stored contacts
      */
-    inline ClientAccountList(const char* name)
-	: String(name), Mutex(true,"ClientAccountList")
+    inline ClientAccountList(const char* name, ClientAccount* localContacts = 0)
+	: String(name), Mutex(true,"ClientAccountList"),
+	m_localContacts(localContacts)
 	{}
+
+    /**
+     * Destructor
+     */
+    ~ClientAccountList();
 
     /**
      * Get the accounts list
@@ -2952,6 +2959,20 @@ public:
      */
     inline ObjList& accounts()
 	{ return m_accounts; }
+
+    /**
+     * Retrieve the account owning locally stored contacts
+     * @return ClientAccount pointer or 0
+     */
+    inline ClientAccount* localContacts() const
+	{ return m_localContacts; }
+
+    /**
+     * Check if a contact is locally stored
+     * @param c The contact to check
+     * @return True if the contact owner is the account owning locally stored contacts
+     */
+    bool isLocalContact(ClientContact* c) const;
 
     /**
      * Find an account
@@ -2993,6 +3014,10 @@ public:
 
 protected:
     ObjList m_accounts;
+
+private:
+    ClientAccountList() {}               // Avoid using the default constructor
+    ClientAccount* m_localContacts;      // Account owning locally stored contacts
 };
 
 /**

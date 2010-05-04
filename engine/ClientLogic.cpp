@@ -414,7 +414,7 @@ bool ClientLogic::debug(const String& name, bool active, Window* wnd)
 /**
  * DefaultLogic
  */
-// constructor
+// Constructor
 DefaultLogic::DefaultLogic(const char* name, int prio)
     : ClientLogic(name,prio), m_accShowAdvanced(false)
 {
@@ -1211,7 +1211,7 @@ bool DefaultLogic::updateContact(const NamedList& params, bool save, bool update
     return true;
 }
 
-// Called when the user wants to save account data
+// Called when the user wants to save contact data
 bool DefaultLogic::acceptContact(NamedList* params, Window* wnd)
 {
     if (!Client::self())

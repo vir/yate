@@ -3567,10 +3567,24 @@ void ClientAccount::appendContact(ClientContact* contact)
 /**
  * ClientAccountList
  */
+// Destructor
+ClientAccountList::~ClientAccountList()
+{
+    TelEngine::destruct(m_localContacts);
+}
+
+// Check if a contact is locally stored
+bool ClientAccountList::isLocalContact(ClientContact* c) const
+{
+    return m_localContacts && c && c->account() == m_localContacts;
+}
+
 // Find an account
 ClientAccount* ClientAccountList::findAccount(const String& id, bool ref)
 {
     Lock lock(this);
+    if (m_localContacts && m_localContacts->toString() == id)
+	return (!ref || m_localContacts->ref()) ? m_localContacts : 0;
     ObjList* obj = m_accounts.find(id);
     if (!obj)
 	return 0;
@@ -3616,6 +3630,7 @@ void ClientAccountList::removeAccount(const String& id)
 	c_str(),(static_cast<ClientAccount*>(obj->get()))->uri().c_str());
     obj->remove();
 }
+
 
 /**
  * ClientContact

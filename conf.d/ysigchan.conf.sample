@@ -98,11 +98,6 @@
 ;    odd-fallback   Allocate odd channels, fall back to even channels
 ;strategy-restrict=
 
-; userparttest: integer: Remote user part test interval in seconds
-; Set to 0 to always assume the remote user part is available
-; Invalid values default to minimum (10s)
-;userparttest=60
-
 ; channelsync: integer: The interval (in seconds) at which the call controller
 ;  will try to re-sync idle channels
 ; The call controller will notify the other side of the link of idle channels
@@ -250,6 +245,11 @@
 ; If missing or invalid, no maintenance message will be sent
 ; The format is network-cluster-member or number
 ;remotepointcode=
+
+; userparttest: integer: Remote user part test interval in seconds
+; Set to 0 to always assume the remote user part is available
+; Invalid values default to minimum (10s)
+;userparttest=60
 
 ; lockgroup: boolean: Allow sending circuit group block/unblock requests
 ; Normally the remote side must support circuit group operations

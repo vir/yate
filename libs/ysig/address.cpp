@@ -362,7 +362,7 @@ bool SS7Label::store(unsigned char* dest) const
 	    *dest++ = m_opc.member();
 	    *dest++ = m_opc.cluster();
 	    *dest++ = m_opc.network();
-	    *dest++ = m_sls | (m_spare << 5);
+	    *dest++ = (m_sls & 0x1f) | (m_spare << 5);
 	    break;
 	case SS7PointCode::ANSI8:
 	    *dest++ = m_dpc.member();
@@ -380,7 +380,7 @@ bool SS7Label::store(unsigned char* dest) const
 	    *dest++ = m_opc.member();
 	    *dest++ = m_opc.cluster();
 	    *dest++ = m_opc.network();
-	    *dest++ = m_sls | (m_spare << 4);
+	    *dest++ = (m_sls & 0x0f) | (m_spare << 4);
 	    break;
 	case SS7PointCode::Japan:
 	    tmp = m_dpc.pack(m_type) | (m_opc.pack(m_type) << 16);
@@ -388,7 +388,7 @@ bool SS7Label::store(unsigned char* dest) const
 	    *dest++ = (unsigned char)((tmp >> 8) & 0xff);
 	    *dest++ = (unsigned char)((tmp >> 16) & 0xff);
 	    *dest++ = (unsigned char)((tmp >> 24) & 0xff);
-	    *dest++ = m_sls | (m_spare << 4);
+	    *dest++ = (m_sls & 0x0f) | (m_spare << 4);
 	    break;
 	case SS7PointCode::Japan5:
 	    tmp = m_dpc.pack(m_type) | (m_opc.pack(m_type) << 16);
@@ -396,7 +396,7 @@ bool SS7Label::store(unsigned char* dest) const
 	    *dest++ = (unsigned char)((tmp >> 8) & 0xff);
 	    *dest++ = (unsigned char)((tmp >> 16) & 0xff);
 	    *dest++ = (unsigned char)((tmp >> 24) & 0xff);
-	    *dest++ = m_sls | (m_spare << 5);
+	    *dest++ = (m_sls & 0x1f) | (m_spare << 5);
 	default:
 	    return false;
     }

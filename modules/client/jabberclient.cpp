@@ -396,13 +396,6 @@ static inline const String& getChildText(XmlElement& xml, const String& name,
     return child ? child->getText() : String::empty();
 }
  
-// Add xml data parameter to a message
-static inline void addValidParam(NamedList& list, const char* param, const char* value)
-{
-    if (!TelEngine::null(value))
-	list.addParam(param,value);
-}
-
 // Get a space separated word from a buffer
 // Return false if empty
 static inline bool getWord(String& buf, String& word)
@@ -551,12 +544,12 @@ void YJBEngine::processEvent(JBEvent* ev)
 	    if (ev->element()) {
 		Message* m = __plugin.message("msg.execute",ev->clientStream());
 		m->addParam("type",ev->stanzaType());
-		addValidParam(*m,"id",ev->id());
+		m->addParam("id",ev->id(),false);
 		m->addParam("caller",ev->from().bare());
-		addValidParam(*m,"caller_instance",ev->from().resource());
+		m->addParam("caller_instance",ev->from().resource(),false);
 		XmlElement* xml = ev->releaseXml();
-		addValidParam(*m,"subject",XMPPUtils::subject(*xml));
-		addValidParam(*m,"body",XMPPUtils::body(*xml));
+		m->addParam("subject",XMPPUtils::subject(*xml),false);
+		m->addParam("body",XMPPUtils::body(*xml),false);
 		String tmp("delay");
 		XmlElement* delay = xml->findFirstChild(&tmp,&XMPPUtils::s_ns[XMPPNamespace::Delay]);
 		if (delay) {
@@ -566,7 +559,7 @@ void YJBEngine::processEvent(JBEvent* ev)
 			sec = XMPPUtils::decodeDateTimeSec(*time);
 		    if (sec != (unsigned int)-1) {
 			m->addParam("delay_time",String(sec));
-			addValidParam(*m,"delay_text",delay->getText());
+			m->addParam("delay_text",delay->getText(),false);
 			JabberID from(delay->attribute("from"));
 			if (from)
 			    m->addParam("delay_by",from);
@@ -1134,7 +1127,7 @@ void YJBEngine::processIqStanza(JBEvent* ev)
 		m->addParam(prefix + "name",name);
 	}
         // EMAIL
-	addValidParam(*m,prefix + "email",getChildText(*service,"EMAIL"));
+	m->addParam(prefix + "email",getChildText(*service,"EMAIL"),false);
 	// Photo
 	ch = "PHOTO";
 	tmp = service->findFirstChild(&ch);
@@ -1152,8 +1145,8 @@ void YJBEngine::processIqStanza(JBEvent* ev)
     // Route the iq
     Message m("jabber.iq");
     __plugin.complete(m,ev->clientStream());
-    addValidParam(m,"from",ev->from().bare());
-    addValidParam(m,"from_instance",ev->from().resource());
+    m.addParam("from",ev->from().bare(),false);
+    m.addParam("from_instance",ev->from().resource(),false);
     if (ev->to()) {
 	m.addParam("to",ev->to().bare());
 	m.addParam("to_instance",ev->to().resource());
@@ -1163,8 +1156,8 @@ void YJBEngine::processIqStanza(JBEvent* ev)
 	m.addParam("to",ev->stream()->local().bare());
 	m.addParam("to_instance",ev->stream()->local().resource());
     }
-    addValidParam(m,"id",ev->id());
-    addValidParam(m,"type",ev->stanzaType());
+    m.addParam("id",ev->id(),false);
+    m.addParam("type",ev->stanzaType(),false);
     if (n != XMPPNamespace::Count)
 	m.addParam("xmlns",XMPPUtils::s_ns[n]);
     m.addParam(new NamedPointer("xml",ev->releaseXml()));
@@ -1281,8 +1274,8 @@ static void addRosterItem(NamedList& list, XmlElement& x, const String& id,
     if (del)
 	return;
     pref << ".";
-    addValidParam(list,pref + "name",x.attribute("name"));
-    addValidParam(list,pref + "subscription",x.attribute("subscription"));
+    list.addParam(pref + "name",x.attribute("name"),false);
+    list.addParam(pref + "subscription",x.attribute("subscription"),false);
     NamedString* groups = new NamedString(pref + "groups");
     list.addParam(groups);
     // Groups and other children

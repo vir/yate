@@ -1113,8 +1113,7 @@ bool Client::openMessage(const char* text, const Window* parent, const char* con
     NamedList params("");
     params.addParam("text",text);
     params.addParam("modal",String::boolText(parent != 0));
-    if (!null(context))
-	params.addParam("context",context);
+    params.addParam("context",context,false);
     return openPopup("message",&params,parent);
 }
 
@@ -1124,8 +1123,7 @@ bool Client::openConfirm(const char* text, const Window* parent, const char* con
     NamedList params("");
     params.addParam("text",text);
     params.addParam("modal",String::boolText(parent != 0));
-    if (!null(context))
-	params.addParam("context",context);
+    params.addParam("context",context,false);
     return openPopup("confirm",&params,parent);
 }
 
@@ -2025,8 +2023,7 @@ bool Client::select(Window* wnd, const String& name, const String& item, const S
     // Not processed: enqueue event
     Message* m = eventMessage("select",wnd,substitute);
     m->addParam("item",item);
-    if (text)
-	m->addParam("text",text);
+    m->addParam("text",text,false);
     Engine::enqueue(m);
     return false;
 }
@@ -2335,10 +2332,8 @@ void Client::callTerminate(const String& id, const char* reason, const char* err
 	if (!reason)
 	    reason = s_rejectReason;
     }
-    if (!null(error))
-	m->addParam("error",error);
-    if (!null(reason))
-	m->addParam("reason",reason);
+    m->addParam("error",error,false);
+    m->addParam("reason",reason,false);
     Engine::enqueue(m);
 }
 
@@ -2430,8 +2425,7 @@ Message* Client::buildMessage(const char* msg, const String& account, const char
     Message* m = new Message(msg);
     if (ClientDriver::self())
 	m->addParam("module",ClientDriver::self()->name());
-    if (!TelEngine::null(oper))
-	m->addParam("operation",oper);
+    m->addParam("operation",oper,false);
     m->addParam("account",account);
     return m;
 }
@@ -2459,8 +2453,7 @@ Message* Client::buildSubscribe(bool request, bool ok, const String& account,
 	m = buildMessage("resource.subscribe",account,ok ? "subscribe" : "unsubscribe");
     else
 	m = buildMessage("resource.notify",account,ok ? "subscribed" : "unsubscribed");
-    if (!TelEngine::null(proto))
-	m->addParam("protocol",proto);
+    m->addParam("protocol",proto,false);
     m->addParam("to",contact);
     return m;
 }
@@ -2470,8 +2463,7 @@ Message* Client::buildUserRoster(bool update, const String& account,
     const String& contact, const char* proto)
 {
     Message* m = buildMessage("user.roster",account,update ? "update" : "delete");
-    if (!TelEngine::null(proto))
-	m->addParam("protocol",proto);
+    m->addParam("protocol",proto,false);
     m->addParam("contact",contact);
     return m;
 }
@@ -2576,8 +2568,7 @@ Message* Client::eventMessage(const String& event, Window* wnd, const char* name
     if (wnd)
 	m->addParam("window",wnd->id());
     m->addParam("event",event);
-    if (name && *name)
-	m->addParam("name",name);
+    m->addParam("name",name,false);
     if (params) {
 	unsigned int n = params->count();
 	for (unsigned int i = 0; i < n; i++) {
@@ -3069,14 +3060,12 @@ void ClientChannel::update(int notif, bool chan, bool updatePeer,
 	m->userData(m_clientData);
 	m->addParam("id",id());
 	m->addParam("direction",isOutgoing() ? "incoming" : "outgoing");
-	if (m_address)
-	    m->addParam("address",m_address);
+	m->addParam("address",m_address,false);
 	if (notif != Noticed && m_noticed)
 	    m->addParam("noticed",String::boolText(true));
 	if (m_active)
 	    m->addParam("active",String::boolText(true));
-	if (m_transferId)
- 	    m->addParam("transferid",m_transferId);
+	m->addParam("transferid",m_transferId,false);
 	if (m_conference)
  	    m->addParam("conference",String::boolText(m_conference));
     }
@@ -3211,8 +3200,7 @@ void ClientDriver::dropCalls(const char* reason)
     Message m("call.drop");
     if (!reason && Engine::exiting())
 	reason = "shutdown";
-    if (reason)
-	m.addParam("reason",reason);
+    m.addParam("reason",reason,false);
     if (self())
 	self()->dropAll(m);
 }

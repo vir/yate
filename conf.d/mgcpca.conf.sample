@@ -132,7 +132,16 @@
 ;  explicitely enabled will become default
 ;default=no
 
+; voicechans: string: The range of channels used for voice (data) transfer
+; Channel intervals may be specified by separating the margins using the '-' character
+; Individual channels or channel intervals may be separated by '.'
+; Duplicate or not strict positive channel numbers are not allowed
+; If specified the highest circuit number is used as number of PSTN channels
+; E.g. 1-15.17-31 or 1-23 or 1.2.3-15.17.18-30.31
+;voicechans=
+
 ; chans: int: Number of PSTN circuits to create in span
+; Defaults to 1 or highest voicechan declared
 ;chans=1
 
 ; offset: int: Offset of circuit code relative to start in span

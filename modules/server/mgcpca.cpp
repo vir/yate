@@ -870,7 +870,11 @@ bool MGCPSpan::init(const NamedList& params)
 	    id().safe(),this);
 	return false;
     }
-    m_count = config->getIntValue("chans",1);
+    SignallingCircuitRange range(config->getValue("voicechans"));
+    m_count = 1;
+    if (range.count())
+	m_count = range[range.count()-1];
+    m_count = config->getIntValue("chans",m_count);
     cicStart += config->getIntValue("offset");
 
     if (!m_count)
@@ -896,6 +900,8 @@ bool MGCPSpan::init(const NamedList& params)
 	m_circuits[i] = 0;
     bool ok = true;
     for (i = 0; i < m_count; i++) {
+	if (range.count() && !range.find(i+1))
+	    continue;
 	String name = epId().id();
 	if (!tailIncrement(name,i)) {
 	    Debug(m_group,DebugWarn,"MGCPSpan('%s'). Failed to increment name by %u. Rollback [%p]",

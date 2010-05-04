@@ -988,7 +988,7 @@ public:
      * Cleanup
      * @param reason Cleanup reason
      */
-    virtual void cleanup(const char* reason = "offline")
+    virtual void cleanup(const char* reason = "net-out-of-order")
 	{ }
 
     /**
@@ -6168,7 +6168,7 @@ public:
      * This method is thread safe
      * @param reason Cleanup reason
      */
-    virtual void cleanup(const char* reason = "offline");
+    virtual void cleanup(const char* reason = "net-out-of-order");
 
     /**
      * Query or modify ISUP's settings or operational parameters

@@ -485,16 +485,22 @@ static TokenDict s_dict_causeCCITT[] = {
 	{"unallocated",                    0x01}, // Unallocated (unassigned) number
 	{"noroute-to-network",             0x02}, // No route to specified transit network
 	{"noroute",                        0x03}, // No route to destination
+	{"send-info-tone",                 0x04}, // Send special information tone
+	{"misdialed-trunk-prefix",         0x05}, // Misdialed trunk prefix
 	{"channel-unacceptable",           0x06}, // Channel unacceptable
 	{"call-delivered",                 0x07}, // Call awarded and being delivered in an established channel
+	{"preemption",                     0x08}, // Preemption
+	{"preemption-circuit-reserved",    0x09}, // Preemption circuit reserved for re-use
+	{"excess-digits",                  0x0e}, // Excess digits received, call is proceeding
 	{"normal-clearing",                0x10}, // Normal Clearing
 	{"busy",                           0x11}, // User busy
 	{"noresponse",                     0x12}, // No user responding
 	{"noanswer",                       0x13}, // No answer from user (user alerted)
+	{"offline",                        0x14}, // Subscriber absent
 	{"rejected",                       0x15}, // Call Rejected
 	{"moved",                          0x16}, // Number changed
 	{"answered",                       0x1a}, // Non-selected user clearing (answered elsewhere)
-	{"offline",                        0x1b}, // Destination out of order
+	{"out-of-order",                   0x1b}, // Destination out of order
 	{"invalid-number",                 0x1c}, // Invalid number format
 	{"facility-rejected",              0x1d}, // Facility rejected
 	{"status-enquiry-rsp",             0x1e}, // Response to STATUS ENQUIRY

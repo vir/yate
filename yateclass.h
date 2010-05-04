@@ -3285,6 +3285,7 @@ public:
     /**
      * Add a named string to the parameter list.
      * @param param Parameter to add
+     * @return Reference to this NamedList
      */
     NamedList& addParam(NamedString* param);
 
@@ -3292,12 +3293,15 @@ public:
      * Add a named string to the parameter list.
      * @param name Name of the new string
      * @param value Value of the new string
+     * @param emptyOK True to always add parameter, false to skip empty values
+     * @return Reference to this NamedList
      */
-    NamedList& addParam(const char* name, const char* value);
+    NamedList& addParam(const char* name, const char* value, bool emptyOK = true);
 
     /**
      * Set a named string in the parameter list.
      * @param param Parameter to set or add
+     * @return Reference to this NamedList
      */
     NamedList& setParam(NamedString* param);
 
@@ -3305,6 +3309,7 @@ public:
      * Set a named string in the parameter list.
      * @param name Name of the string
      * @param value Value of the string
+     * @return Reference to this NamedList
      */
     NamedList& setParam(const char* name, const char* value);
 
@@ -3312,12 +3317,14 @@ public:
      * Clears all instances of a named string in the parameter list.
      * @param name Name of the string to remove
      * @param childSep If set clears all child parameters in format name+childSep+anything
+     * @return Reference to this NamedList
      */
     NamedList& clearParam(const String& name, char childSep = 0);
 
     /**
      * Remove a specific parameter
      * @param param Pointer to parameter to remove
+     * @return Reference to this NamedList
      */
     NamedList& clearParam(NamedString* param);
 
@@ -3326,12 +3333,14 @@ public:
      * @param original NamedList to copy the parameter from
      * @param name Name of the string to copy or clear
      * @param childSep If set copies all child parameters in format name+childSep+anything
+     * @return Reference to this NamedList
      */
     NamedList& copyParam(const NamedList& original, const String& name, char childSep = 0);
 
     /**
      * Copy all parameters from another NamedList, does not clear list first
      * @param original NamedList to copy the parameters from
+     * @return Reference to this NamedList
      */
     NamedList& copyParams(const NamedList& original);
 
@@ -3340,6 +3349,7 @@ public:
      * @param original NamedList to copy the parameters from
      * @param list List of objects (usually String) whose name (blanks stripped) is used as parameters names
      * @param childSep If set copies all child parameters in format name+childSep+anything
+     * @return Reference to this NamedList
      */
     NamedList& copyParams(const NamedList& original, ObjList* list, char childSep = 0);
 
@@ -3348,6 +3358,7 @@ public:
      * @param original NamedList to copy the parameter from
      * @param list Comma separated list of parameters to copy or clear
      * @param childSep If set copies all child parameters in format name+childSep+anything
+     * @return Reference to this NamedList
      */
     NamedList& copyParams(const NamedList& original, const String& list, char childSep = 0);
 
@@ -3355,6 +3366,7 @@ public:
      * Copy subparameters from another list
      * @param original Named list to copy parameters from
      * @param prefix Prefix to match and remove from parameter names, must not be NULL
+     * @return Reference to this NamedList
      */
     NamedList& copySubParams(const NamedList& original, const String& prefix);
 

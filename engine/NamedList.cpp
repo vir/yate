@@ -74,10 +74,11 @@ NamedList& NamedList::addParam(NamedString* param)
     return *this;
 }
 
-NamedList& NamedList::addParam(const char* name, const char* value)
+NamedList& NamedList::addParam(const char* name, const char* value, bool emptyOK)
 {
-    XDebug(DebugInfo,"NamedList::addParam(\"%s\",\"%s\")",name,value);
-    m_params.append(new NamedString(name, value));
+    XDebug(DebugInfo,"NamedList::addParam(\"%s\",\"%s\",%s)",name,value,String::boolText(emptyOK));
+    if (emptyOK || !TelEngine::null(value))
+	m_params.append(new NamedString(name, value));
     return *this;
 }
 

@@ -70,6 +70,11 @@
 ; offset: int: Offset of voice circuit codes relative to low level circuit number
 ;offset=0
 
+; range: string: Arbitrary ranges of circuits for outbound calls (can be repeated)
+; Possible formats:
+;  range=name:list of circuits (like 1,3,5-9)
+;  range=name:strategy:list of circuits (like 1,3,5-9)
+
 ; number: string: Prefix of numbers we accept call setups for, empty to accept all
 ; Only used by isdn-pri-cpe, makes sense when NET side is Point-to-Multipoint
 ; Setups are ignored if called number is present but doesn't start with this prefix
@@ -266,6 +271,11 @@
 
 ; offset: int: Offset of voice circuit codes relative to low level circuit number
 ;offset=0
+
+; range: string: Arbitrary ranges of circuits for outbound calls (can be repeated)
+; Possible formats:
+;  range=name:list of circuits (like 1,3,5-9)
+;  range=name:strategy:list of circuits (like 1,3,5-9)
 
 ; strategy: string: The strategy used to allocate voice channels for outgoing calls
 ; Allowed values:

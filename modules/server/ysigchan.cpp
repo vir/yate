@@ -2390,6 +2390,30 @@ SignallingCircuitGroup* SigTrunk::buildCircuits(NamedList& params, const String&
     }
     TelEngine::destruct(voice);
     if (error.null()) {
+	unsigned int n = params.length();
+	for (unsigned int i = 0; i < n; i++) {
+	    const NamedString* s = params.getParam(i);
+	    if (!s || (s->name() != "range"))
+		continue;
+	    ObjList* o = s->split(':',false);
+	    switch (o->count()) {
+		case 2:
+		    // name:range
+		    group->insertRange(o->at(1)->toString(),o->at(0)->toString());
+		    break;
+		case 3:
+		    // name:strategy:range
+		    group->insertRange(o->at(2)->toString(),o->at(0)->toString(),
+			SignallingCircuitGroup::str2strategy(o->at(1)->toString(),-1));
+		    break;
+		default:
+		    error << "Invalid range: '" << *s << "'";
+		    n = 0;
+	    }
+	    TelEngine::destruct(o);
+	}
+    }
+    if (error.null()) {
 	plugin.engine()->insert(group);
 	return group;
     }

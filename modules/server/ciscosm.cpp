@@ -1620,6 +1620,8 @@ void SLT::notify(bool up)
 
 bool SLT::control(Operation oper, NamedList* params)
 {
+    if (params)
+	m_printMsg = params->getBoolValue("printslt",m_printMsg);
     switch (oper) {
 	case Pause:
 	    setReqStatus(OutOfService);

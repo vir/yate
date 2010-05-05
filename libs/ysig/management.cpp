@@ -226,7 +226,7 @@ bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Lay
 	if (!s)
 	    return false;
 	Debug(this,DebugInfo,"%s (code len=%u) [%p]",msg->name(),len,this);
-	SS7Label lbl(label,sls,0);
+	SS7Label lbl(label,label.sls(),0);
 	SS7MSU answer(msu.getSIO(),lbl,0,len+1);
 	unsigned char* d = answer.getData(lbl.length()+1,len+1);
 	if (!d)
@@ -309,7 +309,7 @@ bool SS7Maintenance::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7La
 	case SS7MsgMTN::SLTM:
 	    {
 		Debug(this,DebugNote,"Received SLTM with test pattern length %u",len);
-		SS7Label lbl(label,sls,0);
+		SS7Label lbl(label,label.sls(),0);
 		SS7MSU answer(msu.getSIO(),lbl,0,len+2);
 		unsigned char* d = answer.getData(lbl.length()+1,len+2);
 		if (!d)

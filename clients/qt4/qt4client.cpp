@@ -161,6 +161,49 @@ public:
     inline QAction* action()
 	{ return m_action; }
 
+    // Find a combo box item
+    inline int findComboItem(const String& item) {
+	    QComboBox* c = combo();
+	    return c ? c->findText(QtClient::setUtf8(item)) : -1;
+	}
+    // Add an item to a combo box
+    inline bool addComboItem(const String& item, bool atStart) {
+	    QComboBox* c = combo();
+	    if (!c)
+		return false;
+	    QString it(QtClient::setUtf8(item));
+	    if (atStart)
+		c->insertItem(0,it);
+	    else
+		c->addItem(it);
+	    return true;
+	}
+    // Find a list box item
+    inline int findListItem(const String& item) {
+	    QListWidget* l = list();
+	    if (!l)
+		return -1;
+	    QString it(QtClient::setUtf8(item));
+	    for (int i = l->count(); i >= 0 ; i--) {
+		QListWidgetItem* tmp = l->item(i);
+		if (tmp && it == tmp->text())
+		    return i;
+	    }
+	    return -1;
+	}
+    // Add an item to a list box
+    inline bool addListItem(const String& item, bool atStart) {
+	    QListWidget* l = list();
+	    if (!l)
+		return false;
+	    QString it(QtClient::setUtf8(item));
+	    if (atStart)
+		l->insertItem(0,it);
+	    else
+		l->addItem(it);
+	    return true;
+	}
+
     int getType() {
 	    if (m_widget) {
 		String cls = m_widget->metaObject()->className(); 
@@ -416,18 +459,6 @@ static inline QString fixPathSep(QString str)
 #else
     return str;
 #endif
-}
-
-// Utility: get a list row containing the given text
-static int findListRow(QListWidget& list, const String& item)
-{
-    QString it(QtClient::setUtf8(item));
-    for (int i = 0; i < list.count(); i++) {
-	QListWidgetItem* tmp = list.item(i);
-	if (tmp && it == tmp->text())
-	    return i;
-    }
-    return -1;
 }
 
 // Utility: find a stacked widget's page with the given name
@@ -1105,7 +1136,7 @@ bool QtWindow::setSelect(const String& name, const String& item)
 	    }
 	case QtWidget::ComboBox:
 	    if (item) {
-		d = w.combo()->findText(QtClient::setUtf8(item));
+		d = w.findComboItem(item);
 		if (d < 0)
 		    return false;
 	        w.combo()->setCurrentIndex(d);
@@ -1116,7 +1147,7 @@ bool QtWindow::setSelect(const String& name, const String& item)
 		return false;
 	    return true;
 	case QtWidget::ListBox:
-	    d = findListRow(*(w.list()),item);
+	    d = w.findListItem(item);
 	    if (d >= 0)
 		w.list()->setCurrentRow(d);
 	    return d >= 0;
@@ -1192,11 +1223,11 @@ bool QtWindow::hasOption(const String& name, const String& item)
 	return false;
     switch (w.type()) {
 	case QtWidget::ComboBox:
-	    return -1 != w.combo()->findText(QtClient::setUtf8(item));
+	    return -1 != w.findComboItem(item);
 	case QtWidget::Table:
 	    return getTableRow(name,item);
 	case QtWidget::ListBox:
-	    return 0 <= findListRow(*(w.list()),item);
+	    return -1 != w.findListItem(item);
     }
     return false;
 }
@@ -1211,22 +1242,14 @@ bool QtWindow::addOption(const String& name, const String& item, bool atStart,
     QtWidget w(this,name);
     switch (w.type()) {
 	case QtWidget::ComboBox:
-	    if (atStart) {
-		w.combo()->insertItem(0,QtClient::setUtf8(item));
-		if (w.combo()->lineEdit())
-		    w.combo()->lineEdit()->setText(w.combo()->itemText(0));
-	    }
-	    else 
-		w.combo()->addItem(QtClient::setUtf8(item));
+	    w.addComboItem(item,atStart);
+	    if (atStart && w.combo()->lineEdit())
+		w.combo()->lineEdit()->setText(w.combo()->itemText(0));
 	    return true;
 	case QtWidget::Table:
 	    return addTableRow(name,item,0,atStart);
 	case QtWidget::ListBox:
-	    if (atStart)
-		w.list()->insertItem(0,QtClient::setUtf8(item));
-	    else
-		w.list()->addItem(QtClient::setUtf8(item));
-	    return true;
+	    return w.addListItem(item,atStart);
     }
     return false;
 }
@@ -1235,32 +1258,7 @@ bool QtWindow::delOption(const String& name, const String& item)
 {
     XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) delOption(%s,%s) [%p]",
 	m_id.c_str(),name.c_str(),item.c_str(),this);
-
-    QtWidget w(this,name);
-    if (w.invalid())
-	return false;
-    int row = -1;
-    switch (w.type()) {
-	case QtWidget::ComboBox:
-	    row = w.combo()->findText(QtClient::setUtf8(item));
-	    if (row >= 0) {
-		w.combo()->removeItem(row);
-		raiseSelectIfEmpty(w.combo()->count(),this,name);
-	    }
-	    break;
-	case QtWidget::Table:
-	    return delTableRow(name,item);
-	case QtWidget::ListBox:
-	    row = findListRow(*(w.list()),item);
-	    if (row >= 0) {
-		QStringListModel* model = (QStringListModel*)w.list()->model();
-		if (!(model && model->removeRow(row)))
-		    row = -1;
-		raiseSelectIfEmpty(w.list()->count(),this,name);
-	    }
-	    break;
-    }
-    return row >= 0;
+    return delTableRow(name,item);
 }
 
 bool QtWindow::getOptions(const String& name, NamedList* items)
@@ -1450,15 +1448,49 @@ bool QtWindow::delTableRow(const String& name, const String& item)
 {
     XDebug(QtDriver::self(),DebugAll,"QtWindow::delTableRow(%s,%s) [%p]",
 	name.c_str(),item.c_str(),this);
-    TableWidget tbl(this,name);
-    if (!tbl.valid())
+    QtWidget w(this,name);
+    if (w.invalid())
 	return false;
-    QtTable* custom = tbl.customTable();
-    if (custom)
-	custom->delTableRow(item);
-    else
-	tbl.delRow(tbl.getRow(item));
-    raiseSelectIfEmpty(tbl.rowCount(),this,name);
+    int row = -1;
+    int n = 0;
+    switch (w.type()) {
+	case QtWidget::Table:
+	case QtWidget::CustomTable:
+	    {
+		TableWidget tbl(w.table());
+		QtTable* custom = tbl.customTable();
+		if (custom)
+		    if (custom->delTableRow(item))
+			row = 0;
+		else {
+		    row = tbl.getRow(item);
+		    if (row >= 0)
+			tbl.delRow(row);
+		}
+		n = tbl.rowCount();
+	    }
+	    break;
+	case QtWidget::ComboBox:
+	    row = w.findComboItem(item);
+	    if (row >= 0) {
+		w.combo()->removeItem(row);
+		n = w.combo()->count();
+	    }
+	    break;
+	case QtWidget::ListBox:
+	    row = w.findListItem(item);
+	    if (row >= 0) {
+		QStringListModel* model = (QStringListModel*)w.list()->model();
+		if (!(model && model->removeRow(row)))
+		    row = -1;
+		n = w.list()->count();
+	    }
+	    break;
+    }
+    if (row < 0)
+	return false;
+    if (!n)
+	raiseSelectIfEmpty(0,this,name);
     return true;
 }
 
@@ -1519,19 +1551,29 @@ bool QtWindow::updateTableRow(const String& name, const String& item,
 {
     XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) updateTableRow('%s','%s',%p,%s) [%p]",
 	m_id.c_str(),name.c_str(),item.c_str(),data,String::boolText(atStart),this);
-
-    TableWidget tbl(this,name);
-    if (!tbl.valid())
+    QtWidget w(this,name);
+    if (w.invalid())
 	return false;
-
-    QtTable* custom = tbl.customTable();
-    if (custom) {
-	if (custom->getTableRow(item))
-	    return custom->setTableRow(item,data);
-	return custom->addTableRow(item,data,atStart);
+    switch (w.type()) {
+	case QtWidget::Table:
+	case QtWidget::CustomTable:
+	    {
+		TableWidget tbl(w.table());
+		QtTable* custom = tbl.customTable();
+		if (custom) {
+		    if (custom->getTableRow(item))
+			return custom->setTableRow(item,data);
+		    return custom->addTableRow(item,data,atStart);
+		}
+		tbl.updateRow(item,data,atStart);
+		return true;
+	    }
+	case QtWidget::ComboBox:
+	    return w.findComboItem(item) >= 0 || w.addComboItem(item,atStart);
+	case QtWidget::ListBox:
+	    return w.findListItem(item) >= 0 || w.addListItem(item,atStart);
     }
-    tbl.updateRow(item,data,atStart);
-    return true;
+    return false;
 }
 
 // Add or set one or more table row(s). Screen update is locked while changing the table.

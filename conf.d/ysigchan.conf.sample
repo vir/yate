@@ -331,6 +331,10 @@
 ; Defaults to user-provided if missing or incorrect
 ;screening=user-provided
 
+; inn: boolean: Routing to Internal Network Number allowed
+; Defaults to no
+;inn=no
+
 ; format: string: Default data format for outgoing calls. Values: alaw, mulaw, g721
 ; Defaults to mulaw for ANSI and Japan point codes, alaw for all others
 ; alaw is used commonly in Europe while mulaw is used commonly in US and Japan.

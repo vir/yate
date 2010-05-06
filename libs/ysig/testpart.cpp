@@ -76,7 +76,7 @@ bool SS7Testing::sendTraffic()
     if (!d)
 	return false;
     for (unsigned int i = 0; i < 4; i++)
-	*d++ = 0xff & (seq << (8 * i));
+	*d++ = 0xff & (seq >> (8 * i));
     *d++ = m_len & 0xff;
     *d++ = (m_len >> 8) & 0xff;
     Debug(this,DebugInfo,"Sending MTP_T seq %u, test length %u",seq,m_len);

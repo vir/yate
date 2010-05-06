@@ -27,6 +27,7 @@ function SendMsg($msg)
     $m->params["peerid"] = $partycallid;
     $m->params["targetid"] = $partycallid;
     $m->params["reason"] = "queued";
+    $m->params["cdrcreate"] = "false";
     $m->Dispatch();
 }
 

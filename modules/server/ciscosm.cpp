@@ -115,7 +115,7 @@ public:
     // Socket initialization
     bool initSocket(const NamedList& params);
     // Check if we have any new data in queue
-    void checkData();
+    bool checkData(bool force);
     // Retransmit the data between the retransmission timer sequence number and actual sequence number
     void retransData();
     void checkAck(DataBlock& data, bool ack = false);
@@ -626,17 +626,19 @@ bool RudpSocket::initSocket(const NamedList& params)
 // Call check data and verify if any timer has expired is called from readData()
 void RudpSocket::checkTimeouts(u_int64_t time)
 {
-    checkData();
+    checkData(false);
     if (m_retransTimer.started() && m_retransTimer.timeout(time)) {
 	m_retransTimer.stop();
 	retransData();
     }
     if (m_cumAckTimer.started() && m_cumAckTimer.timeout(time)) {
-	sendAck();
+    	if (!checkData(true))
+	    sendAck();
 	m_cumAckTimer.stop();
     }
     if (m_nullTimer.timeout(time)) {
-	sendNull();
+    	if (!checkData(true))
+	    sendNull();
 	m_nullTimer.stop();
 	m_nullTimer.start();
     }
@@ -648,31 +650,36 @@ void RudpSocket::checkTimeouts(u_int64_t time)
 
 // Verify if exist any new data in the queue and transmit all data 
 // with sequence number > last sent and <= actual sequence number
-void RudpSocket::checkData()
+bool RudpSocket::checkData(bool force)
 {
     Lock mylock(this);
-    if (m_queueCount >= m_msgList.count())
-	return;
+    if (!force && (m_queueCount >= m_msgList.count()))
+	return false;
+    bool sent = false;
     ObjList* obj = m_msgList.skipNull();
     for (; obj; obj = obj->skipNext()) {
 	DataSequence* data = static_cast<DataSequence*>(obj->get());
 	if (data && data->sequence() != m_lastSend && Modulo256::between(data->sequence(),m_lastSend,m_sequence)) {
+	    sent = true;
 	    sendData(static_cast<DataBlock>(*data));
-	    // Stop cumulative acknowledge timer because we send acknowledge segment with data
-	    if (m_cumAckTimer.started())
-		m_cumAckTimer.stop();
-	    // Restart null timer because we have data trafic
-	    m_nullTimer.stop();
-	    m_nullTimer.start();
-	    if (!m_retransTimer.started()) {
-		// start retrasnsmission timer and refresh retransmission sequence number
-		m_retransTimer.start();
-		m_retTStartSeq = data->sequence();
-	    }
 	    m_lastSend = data->sequence();
 	}
     }
     m_queueCount = m_msgList.count();
+    if (sent) {
+	// Stop cumulative acknowledge timer because we send acknowledge segment with data
+	if (m_cumAckTimer.started())
+	    m_cumAckTimer.stop();
+	// Restart null timer because we have data trafic
+	m_nullTimer.stop();
+	m_nullTimer.start();
+	if (!m_retransTimer.started()) {
+	    // start retrasnsmission timer and refresh retransmission sequence number
+	    m_retransTimer.start();
+	    m_retTStartSeq = m_lastSend;
+	}
+    }
+    return sent;
 }
 
 // Method called from checkTimeouts
@@ -689,6 +696,8 @@ void RudpSocket::retransData()
 	DataSequence* data = static_cast<DataSequence*>(obj->get());
 	if (data && Modulo256::between(data->sequence(),m_lastAck,m_sequence)) {
 	    if (data->retransCounter() <= m_retransCounter) {
+		XDebug(m_sm,DebugInfo,"Retransmission %u of data with seq %u",
+		    data->retransCounter(),data->sequence());
 		data->refreshAck(m_ackNum);
 		if (m_haveChecksum)
 		    appendChecksum(static_cast<DataBlock&>(*data));
@@ -801,7 +810,7 @@ void RudpSocket::sendSyn(bool recvSyn)
     m_syn = m_sequence;
     switch (m_version) {
 	case 0:
-	    m_haveChecksum ? buf[1] = 12 : buf[1] = 8;
+	    buf[1] = m_haveChecksum ? 12 : 8;
 	    store32(buf+4,m_connId);
 	    break;
 	case 1:
@@ -875,8 +884,6 @@ bool RudpSocket::readData()
     u_int8_t flag = packet.at(0);
     if (m_state == RudpDown && !haveSyn((u_int8_t)flag))
 	return false;
-    if (haveSyn((u_int8_t)flag) && m_state == RudpUp)
-	return false;
     if (m_haveChecksum && !checkChecksum(packet)) {
 	DDebug(m_sm,DebugMild,"Wrong checksum received");
 	return false;
@@ -936,6 +943,8 @@ void RudpSocket::sendMSG(const DataBlock& data)
 // Check received packet and send it for processing
 void RudpSocket::recvMsg(DataBlock& packet)
 {
+    if (packet.length() < 4)
+	return;
     unsigned int aux = m_ackNum;
     u_int8_t flag = packet.at(0);
     Modulo256::inc(aux);
@@ -948,15 +957,21 @@ void RudpSocket::recvMsg(DataBlock& packet)
 	handleSyn(packet,false);
 	return;
     }
-    if (packet.at(2) >= 0 && (u_int8_t)packet.at(2) == aux) {
-	if (!(flag == 0x40 && packet.at(1) >= 0 && packet.length() == (u_int8_t)packet.at(1))) {
-	    // If we received an alone ack segment just let it pass trough
-	    if (!m_cumAckTimer.started())
-		m_cumAckTimer.start();
-	    m_ackNum = aux;
-	}
-    } else  // If the received packet is not next in sequence drop it
+
+    if (!m_cumAckTimer.started())
+	m_cumAckTimer.start();
+    if ((u_int8_t)packet.at(2) != aux) {
+	// If the received packet is not next in sequence drop it but check for ACK
+	if ((u_int8_t)packet.at(2) != m_ackNum)
+	    Debug(m_sm,DebugInfo,"Packet out of sequence, expecting %u or %u but got %u",m_ackNum,aux,packet.at(2));
+	if (haveEack(flag))
+	    handleEack(packet);
+	else if (haveAck(flag))
+	    checkAck(packet);
 	return;
+    }
+    if ((flag & 0xcf) || packet.length() != (u_int8_t)packet.at(1))
+	m_ackNum = aux;
 
     if (haveNul(flag)) {
 	if (haveAck(flag))
@@ -1042,10 +1057,11 @@ void RudpSocket::removeData(u_int8_t ack)
     if (Modulo256::between(m_retTStartSeq,m_lastAck,m_sequence))
 	m_retransTimer.stop();
     Lock mylock(this);
+    XDebug(m_sm,DebugInfo,"Removing packets in range %u - %u",m_lastAck,ack);
     ListIterator iter(m_msgList);
      while (DataSequence* data = static_cast<DataSequence*>(iter.get())) {
 	if (Modulo256::between(data->sequence(),m_lastAck,ack)) {
-	    DDebug(m_sm,DebugAll,"Removed packet with seq %u",data->sequence());
+	    XDebug(m_sm,DebugAll,"Removed packet with seq %u",data->sequence());
 	    m_msgList.remove(data,true);
 	    if (m_queueCount > 0)
 		m_queueCount -- ;
@@ -1067,19 +1083,19 @@ void RudpSocket::removeData(u_int8_t ack)
 void RudpSocket::handleNull(DataBlock& data)
 {
     checkAck(data);
-    sendAck();
-    if (m_cumAckTimer.started())
-	m_cumAckTimer.stop();
+    if (!m_cumAckTimer.started())
+	sendAck();
 }
 
 void RudpSocket::handleEack(DataBlock& data)
 {
     checkAck(data);
-    u_int8_t pack = data.at(1) - m_haveChecksum ? 8 : 4;
-    DDebug(m_sm,DebugNote,"Received EACK for %u packets",pack);
+    u_int8_t pack = data.at(1) - (m_haveChecksum ? 8 : 4);
+    DDebug(m_sm,DebugNote,"Received EACK for %u packets, last Ack %u",pack,m_lastAck);
     for (int i = 4; i < pack + 4; i++)
 	removeOneData(data.at(i));
-    sendAck();
+    if (!m_cumAckTimer.started())
+	sendAck();
 }
 
 void RudpSocket::removeOneData(u_int8_t ack)
@@ -1089,7 +1105,7 @@ void RudpSocket::removeOneData(u_int8_t ack)
     for (; obj; obj = obj->skipNext()) {
 	DataSequence* data = static_cast<DataSequence*>(obj->get());
 	if (data && data->sequence() == ack) {
-	    DDebug(m_sm,DebugAll,"Removed one packet with seq %u",ack);
+	    XDebug(m_sm,DebugAll,"Removed one packet with seq %u",ack);
 	    m_msgList.remove(data,true);
 	    if (m_queueCount > 0)
 		m_queueCount --;
@@ -1270,9 +1286,11 @@ void SessionManager::handleData(DataBlock& data)
     if (smMessageType == PDU)
 	handlePDU(data);
     else {
+#ifdef DEBUG
 	String aux;
 	aux.hexify(data.data(),data.length(),' ');
-	DDebug(this,DebugInfo,"Session data dump: %s",aux.c_str());
+	Debug(this,DebugInfo,"Session data dump: %s",aux.c_str());
+#endif
 	handleSmMessage(smMessageType);
     }
 }

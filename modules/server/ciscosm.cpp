@@ -689,21 +689,19 @@ void RudpSocket::retransData()
 	DataSequence* data = static_cast<DataSequence*>(obj->get());
 	if (data && Modulo256::between(data->sequence(),m_lastAck,m_sequence)) {
 	    if (data->retransCounter() <= m_retransCounter) {
-		if (m_haveChecksum) {
-		    data->refreshAck(m_ackNum);
+		data->refreshAck(m_ackNum);
+		if (m_haveChecksum)
 		    appendChecksum(static_cast<DataBlock&>(*data));
-		    sendData(static_cast<DataBlock&>(*data));
-		} else
-		    sendData(static_cast<DataBlock&>(*data));
+		sendData(static_cast<DataBlock&>(*data));
 		data->inc();
 		if (!m_retransTimer.started())
 		     m_retransTimer.start();
 	    } else {
-		Debug(m_sm,DebugNote,"RUDP Layer down, received maximum retransmission counter");
+		Debug(m_sm,DebugNote,"RUDP Layer down, retransmission exceeded for seq %u",data->sequence());
 #ifdef DEBUG
 		String aux;
 		aux.hexify(data->data(),data->length(),' ');
-		Debug(m_sm,DebugInfo,"Retransmission counter received for data: %s ",aux.c_str());
+		Debug(m_sm,DebugInfo,"Retransmission exceeded for data: %s ",aux.c_str());
 #endif
 		m_sm->notify(true);
 		changeState(RudpDown);
@@ -1047,6 +1045,7 @@ void RudpSocket::removeData(u_int8_t ack)
     ListIterator iter(m_msgList);
      while (DataSequence* data = static_cast<DataSequence*>(iter.get())) {
 	if (Modulo256::between(data->sequence(),m_lastAck,ack)) {
+	    DDebug(m_sm,DebugAll,"Removed packet with seq %u",data->sequence());
 	    m_msgList.remove(data,true);
 	    if (m_queueCount > 0)
 		m_queueCount -- ;
@@ -1076,9 +1075,9 @@ void RudpSocket::handleNull(DataBlock& data)
 void RudpSocket::handleEack(DataBlock& data)
 {
     checkAck(data);
-    DDebug(m_sm,DebugNote,"Received EACK");
     u_int8_t pack = data.at(1) - m_haveChecksum ? 8 : 4;
-    for (int i = 4;i < pack + 4;i ++)
+    DDebug(m_sm,DebugNote,"Received EACK for %u packets",pack);
+    for (int i = 4; i < pack + 4; i++)
 	removeOneData(data.at(i));
     sendAck();
 }
@@ -1090,6 +1089,7 @@ void RudpSocket::removeOneData(u_int8_t ack)
     for (; obj; obj = obj->skipNext()) {
 	DataSequence* data = static_cast<DataSequence*>(obj->get());
 	if (data && data->sequence() == ack) {
+	    DDebug(m_sm,DebugAll,"Removed one packet with seq %u",ack);
 	    m_msgList.remove(data,true);
 	    if (m_queueCount > 0)
 		m_queueCount --;
@@ -1098,6 +1098,7 @@ void RudpSocket::removeOneData(u_int8_t ack)
 	    return;
 	}
     }
+    DDebug(m_sm,DebugInfo,"Not found packet with seq %u",ack);
 }
 
 bool RudpSocket::running()

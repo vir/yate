@@ -1263,7 +1263,7 @@ bool QtWindow::delOption(const String& name, const String& item)
 
 bool QtWindow::getOptions(const String& name, NamedList* items)
 {
-    Debug(QtDriver::self(),DebugAll,"QtWindow(%s) getOptions(%s,%p) [%p]",
+    XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) getOptions(%s,%p) [%p]",
 	m_id.c_str(),name.c_str(),items,this);
 
     QtWidget w(this,name);
@@ -1459,9 +1459,10 @@ bool QtWindow::delTableRow(const String& name, const String& item)
 	    {
 		TableWidget tbl(w.table());
 		QtTable* custom = tbl.customTable();
-		if (custom)
+		if (custom) {
 		    if (custom->delTableRow(item))
 			row = 0;
+		}
 		else {
 		    row = tbl.getRow(item);
 		    if (row >= 0)

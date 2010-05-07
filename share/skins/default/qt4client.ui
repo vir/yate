@@ -132,11 +132,6 @@
              <height>60</height>
             </size>
            </property>
-           <property name="font" >
-            <font>
-             <pointsize>8</pointsize>
-            </font>
-           </property>
            <property name="text" >
             <string>Calls</string>
            </property>

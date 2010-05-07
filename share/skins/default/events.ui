@@ -48,9 +48,6 @@
          <height>100</height>
         </size>
        </property>
-       <property name="_yate_identity" stdset="0" >
-        <string/>
-       </property>
        <property name="title" >
         <string>Debug Here</string>
        </property>
@@ -59,6 +56,9 @@
        </property>
        <property name="checked" >
         <bool>false</bool>
+       </property>
+       <property name="_yate_identity" stdset="0" >
+        <string/>
        </property>
        <layout class="QVBoxLayout" >
         <item>
@@ -92,11 +92,11 @@
               <height>25</height>
              </size>
             </property>
-            <property name="_yate_identity" stdset="0" >
-             <string>debug:jingle:level 9:level 5</string>
-            </property>
             <property name="text" >
              <string>JABBER</string>
+            </property>
+            <property name="_yate_identity" stdset="0" >
+             <string>debug:jingle:level 9:level 5</string>
             </property>
            </widget>
           </item>
@@ -114,11 +114,11 @@
               <height>25</height>
              </size>
             </property>
-            <property name="_yate_identity" stdset="0" >
-             <string>debug:sip:level 9:level 5</string>
-            </property>
             <property name="text" >
              <string>SIP</string>
+            </property>
+            <property name="_yate_identity" stdset="0" >
+             <string>debug:sip:level 9:level 5</string>
             </property>
            </widget>
           </item>
@@ -136,11 +136,11 @@
               <height>25</height>
              </size>
             </property>
-            <property name="_yate_identity" stdset="0" >
-             <string>debug:h323:level 9:level 5</string>
-            </property>
             <property name="text" >
              <string>H.323</string>
+            </property>
+            <property name="_yate_identity" stdset="0" >
+             <string>debug:h323:level 9:level 5</string>
             </property>
            </widget>
           </item>
@@ -158,11 +158,11 @@
               <height>25</height>
              </size>
             </property>
-            <property name="_yate_identity" stdset="0" >
-             <string>debug:iax:level 9:level 5</string>
-            </property>
             <property name="text" >
              <string>IAX</string>
+            </property>
+            <property name="_yate_identity" stdset="0" >
+             <string>debug:iax:level 9:level 5</string>
             </property>
            </widget>
           </item>
@@ -185,9 +185,6 @@
          <layout class="QHBoxLayout" >
           <item>
            <widget class="QPushButton" name="debug_sniffer" >
-            <property name="_yate_identity" stdset="0" >
-             <string>command:sniffer</string>
-            </property>
             <property name="text" >
              <string>Message Sniffer</string>
             </property>
@@ -196,6 +193,9 @@
             </property>
             <property name="autoRepeat" >
              <bool>true</bool>
+            </property>
+            <property name="_yate_identity" stdset="0" >
+             <string>command:sniffer</string>
             </property>
            </widget>
           </item>
@@ -236,9 +236,6 @@
            <height>25</height>
           </size>
          </property>
-         <property name="_yate_identity" stdset="0" >
-          <string>clear:log_events</string>
-         </property>
          <property name="text" >
           <string>Clear</string>
          </property>
@@ -253,6 +250,9 @@
          </property>
          <property name="checkable" >
           <bool>false</bool>
+         </property>
+         <property name="_yate_identity" stdset="0" >
+          <string>clear:log_events</string>
          </property>
         </widget>
        </item>
@@ -320,14 +320,14 @@
          <property name="toolTip" >
           <string>Help on this window</string>
          </property>
-         <property name="_yate_identity" stdset="0" >
-          <string>showwindow:help:4</string>
-         </property>
          <property name="icon" >
           <iconset>quest.png</iconset>
          </property>
          <property name="checkable" >
           <bool>true</bool>
+         </property>
+         <property name="_yate_identity" stdset="0" >
+          <string>showwindow:help:4</string>
          </property>
         </widget>
        </item>

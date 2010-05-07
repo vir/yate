@@ -10,9 +10,7 @@
    </rect>
   </property>
   <property name="sizePolicy" >
-   <sizepolicy>
-    <hsizetype>0</hsizetype>
-    <vsizetype>0</vsizetype>
+   <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
     <horstretch>0</horstretch>
     <verstretch>0</verstretch>
    </sizepolicy>
@@ -45,18 +43,25 @@
    <string>Yate Client - Telephony Client</string>
   </property>
   <layout class="QVBoxLayout" >
-   <property name="margin" >
+   <property name="spacing" >
     <number>0</number>
    </property>
-   <property name="spacing" >
+   <property name="leftMargin" >
+    <number>0</number>
+   </property>
+   <property name="topMargin" >
+    <number>0</number>
+   </property>
+   <property name="rightMargin" >
+    <number>0</number>
+   </property>
+   <property name="bottomMargin" >
     <number>0</number>
    </property>
    <item>
     <widget class="QFrame" name="frameCentral" >
      <property name="sizePolicy" >
-      <sizepolicy>
-       <hsizetype>7</hsizetype>
-       <vsizetype>7</vsizetype>
+      <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
        <horstretch>0</horstretch>
        <verstretch>0</verstretch>
       </sizepolicy>
@@ -68,18 +73,25 @@
       <enum>QFrame::Raised</enum>
      </property>
      <layout class="QHBoxLayout" >
-      <property name="margin" >
-       <number>4</number>
-      </property>
       <property name="spacing" >
        <number>0</number>
+      </property>
+      <property name="leftMargin" >
+       <number>4</number>
+      </property>
+      <property name="topMargin" >
+       <number>4</number>
+      </property>
+      <property name="rightMargin" >
+       <number>4</number>
+      </property>
+      <property name="bottomMargin" >
+       <number>4</number>
       </property>
       <item>
        <widget class="QFrame" name="frameButtons" >
         <property name="sizePolicy" >
-         <sizepolicy>
-          <hsizetype>0</hsizetype>
-          <vsizetype>7</vsizetype>
+         <sizepolicy vsizetype="Expanding" hsizetype="Fixed" >
           <horstretch>0</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
@@ -91,11 +103,20 @@
          <enum>QFrame::Raised</enum>
         </property>
         <layout class="QVBoxLayout" >
-         <property name="margin" >
-          <number>1</number>
-         </property>
          <property name="spacing" >
           <number>0</number>
+         </property>
+         <property name="leftMargin" >
+          <number>1</number>
+         </property>
+         <property name="topMargin" >
+          <number>1</number>
+         </property>
+         <property name="rightMargin" >
+          <number>1</number>
+         </property>
+         <property name="bottomMargin" >
+          <number>1</number>
          </property>
          <item>
           <widget class="QToolButton" name="ctrlCalls" >
@@ -115,9 +136,6 @@
             <font>
              <pointsize>8</pointsize>
             </font>
-           </property>
-           <property name="_yate_identity" stdset="0" >
-            <string>selectitem:framePages:PageCalls</string>
            </property>
            <property name="text" >
             <string>Calls</string>
@@ -149,6 +167,9 @@
            <property name="toolButtonStyle" >
             <enum>Qt::ToolButtonTextUnderIcon</enum>
            </property>
+           <property name="_yate_identity" stdset="0" >
+            <string>selectitem:framePages:PageCalls</string>
+           </property>
           </widget>
          </item>
          <item>
@@ -164,9 +185,6 @@
              <width>60</width>
              <height>60</height>
             </size>
-           </property>
-           <property name="_yate_identity" stdset="0" >
-            <string>selectitem:framePages:PageCDR</string>
            </property>
            <property name="text" >
             <string>Call Log</string>
@@ -195,6 +213,9 @@
            <property name="toolButtonStyle" >
             <enum>Qt::ToolButtonTextUnderIcon</enum>
            </property>
+           <property name="_yate_identity" stdset="0" >
+            <string>selectitem:framePages:PageCDR</string>
+           </property>
           </widget>
          </item>
          <item>
@@ -210,9 +231,6 @@
              <width>60</width>
              <height>60</height>
             </size>
-           </property>
-           <property name="_yate_identity" stdset="0" >
-            <string>selectitem:framePages:PageAccounts</string>
            </property>
            <property name="text" >
             <string>Accounts</string>
@@ -241,6 +259,9 @@
            <property name="toolButtonStyle" >
             <enum>Qt::ToolButtonTextUnderIcon</enum>
            </property>
+           <property name="_yate_identity" stdset="0" >
+            <string>selectitem:framePages:PageAccounts</string>
+           </property>
           </widget>
          </item>
          <item>
@@ -256,9 +277,6 @@
              <width>60</width>
              <height>60</height>
             </size>
-           </property>
-           <property name="_yate_identity" stdset="0" >
-            <string>selectitem:framePages:PageContacts</string>
            </property>
            <property name="text" >
             <string>Contacts</string>
@@ -287,6 +305,9 @@
            <property name="toolButtonStyle" >
             <enum>Qt::ToolButtonTextUnderIcon</enum>
            </property>
+           <property name="_yate_identity" stdset="0" >
+            <string>selectitem:framePages:PageContacts</string>
+           </property>
           </widget>
          </item>
          <item>
@@ -302,9 +323,6 @@
              <width>60</width>
              <height>60</height>
             </size>
-           </property>
-           <property name="_yate_identity" stdset="0" >
-            <string>selectitem:framePages:PageSettings</string>
            </property>
            <property name="text" >
             <string>Settings</string>
@@ -336,6 +354,9 @@
            <property name="autoRaise" >
             <bool>false</bool>
            </property>
+           <property name="_yate_identity" stdset="0" >
+            <string>selectitem:framePages:PageSettings</string>
+           </property>
           </widget>
          </item>
          <item>
@@ -357,9 +378,7 @@
       <item>
        <widget class="QStackedWidget" name="framePages" >
         <property name="sizePolicy" >
-         <sizepolicy>
-          <hsizetype>7</hsizetype>
-          <vsizetype>7</vsizetype>
+         <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
           <horstretch>0</horstretch>
           <verstretch>1</verstretch>
          </sizepolicy>
@@ -387,26 +406,31 @@
         </property>
         <widget class="QWidget" name="PageCalls" >
          <property name="sizePolicy" >
-          <sizepolicy>
-           <hsizetype>7</hsizetype>
-           <vsizetype>7</vsizetype>
+          <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
          </property>
          <layout class="QHBoxLayout" >
-          <property name="margin" >
-           <number>9</number>
-          </property>
           <property name="spacing" >
            <number>0</number>
+          </property>
+          <property name="leftMargin" >
+           <number>9</number>
+          </property>
+          <property name="topMargin" >
+           <number>9</number>
+          </property>
+          <property name="rightMargin" >
+           <number>9</number>
+          </property>
+          <property name="bottomMargin" >
+           <number>9</number>
           </property>
           <item>
            <widget class="QFrame" name="framePageCalls" >
             <property name="sizePolicy" >
-             <sizepolicy>
-              <hsizetype>7</hsizetype>
-              <vsizetype>7</vsizetype>
+             <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
               <horstretch>0</horstretch>
               <verstretch>0</verstretch>
              </sizepolicy>
@@ -424,26 +448,53 @@
              <enum>QFrame::Raised</enum>
             </property>
             <layout class="QVBoxLayout" >
-             <property name="margin" >
-              <number>0</number>
-             </property>
              <property name="spacing" >
               <number>4</number>
              </property>
+             <property name="leftMargin" >
+              <number>0</number>
+             </property>
+             <property name="topMargin" >
+              <number>0</number>
+             </property>
+             <property name="rightMargin" >
+              <number>0</number>
+             </property>
+             <property name="bottomMargin" >
+              <number>0</number>
+             </property>
              <item>
               <layout class="QHBoxLayout" >
-               <property name="margin" >
-                <number>0</number>
-               </property>
                <property name="spacing" >
                 <number>2</number>
                </property>
+               <property name="leftMargin" >
+                <number>0</number>
+               </property>
+               <property name="topMargin" >
+                <number>0</number>
+               </property>
+               <property name="rightMargin" >
+                <number>0</number>
+               </property>
+               <property name="bottomMargin" >
+                <number>0</number>
+               </property>
                <item>
                 <layout class="QVBoxLayout" >
-                 <property name="margin" >
+                 <property name="spacing" >
                   <number>0</number>
                  </property>
-                 <property name="spacing" >
+                 <property name="leftMargin" >
+                  <number>0</number>
+                 </property>
+                 <property name="topMargin" >
+                  <number>0</number>
+                 </property>
+                 <property name="rightMargin" >
+                  <number>0</number>
+                 </property>
+                 <property name="bottomMargin" >
                   <number>0</number>
                  </property>
                  <item>
@@ -456,9 +507,7 @@
                  <item>
                   <widget class="QComboBox" name="protocol" >
                    <property name="sizePolicy" >
-                    <sizepolicy>
-                     <hsizetype>7</hsizetype>
-                     <vsizetype>0</vsizetype>
+                    <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
                      <horstretch>0</horstretch>
                      <verstretch>0</verstretch>
                     </sizepolicy>
@@ -484,10 +533,19 @@
                </item>
                <item>
                 <layout class="QVBoxLayout" >
-                 <property name="margin" >
+                 <property name="spacing" >
                   <number>0</number>
                  </property>
-                 <property name="spacing" >
+                 <property name="leftMargin" >
+                  <number>0</number>
+                 </property>
+                 <property name="topMargin" >
+                  <number>0</number>
+                 </property>
+                 <property name="rightMargin" >
+                  <number>0</number>
+                 </property>
+                 <property name="bottomMargin" >
                   <number>0</number>
                  </property>
                  <item>
@@ -500,9 +558,7 @@
                  <item>
                   <widget class="QComboBox" name="account" >
                    <property name="sizePolicy" >
-                    <sizepolicy>
-                     <hsizetype>7</hsizetype>
-                     <vsizetype>0</vsizetype>
+                    <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
                      <horstretch>0</horstretch>
                      <verstretch>0</verstretch>
                     </sizepolicy>
@@ -530,18 +586,25 @@
              </item>
              <item>
               <layout class="QHBoxLayout" >
-               <property name="margin" >
-                <number>0</number>
-               </property>
                <property name="spacing" >
                 <number>2</number>
+               </property>
+               <property name="leftMargin" >
+                <number>0</number>
+               </property>
+               <property name="topMargin" >
+                <number>0</number>
+               </property>
+               <property name="rightMargin" >
+                <number>0</number>
+               </property>
+               <property name="bottomMargin" >
+                <number>0</number>
                </property>
                <item>
                 <widget class="QComboBox" name="callto" >
                  <property name="sizePolicy" >
-                  <sizepolicy>
-                   <hsizetype>7</hsizetype>
-                   <vsizetype>0</vsizetype>
+                  <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
                    <horstretch>0</horstretch>
                    <verstretch>0</verstretch>
                   </sizepolicy>
@@ -575,9 +638,7 @@
                <item>
                 <widget class="QPushButton" name="call" >
                  <property name="sizePolicy" >
-                  <sizepolicy>
-                   <hsizetype>0</hsizetype>
-                   <vsizetype>0</vsizetype>
+                  <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
                    <horstretch>0</horstretch>
                    <verstretch>0</verstretch>
                   </sizepolicy>
@@ -619,9 +680,7 @@
                <item>
                 <widget class="QPushButton" name="display_keypad" >
                  <property name="sizePolicy" >
-                  <sizepolicy>
-                   <hsizetype>0</hsizetype>
-                   <vsizetype>0</vsizetype>
+                  <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
                    <horstretch>0</horstretch>
                    <verstretch>0</verstretch>
                   </sizepolicy>
@@ -641,9 +700,6 @@
                  <property name="toolTip" >
                   <string>Show or hide the keypad</string>
                  </property>
-                 <property name="_yate_identity" stdset="0" >
-                  <string/>
-                 </property>
                  <property name="text" >
                   <string/>
                  </property>
@@ -662,6 +718,9 @@
                  <property name="checked" >
                   <bool>true</bool>
                  </property>
+                 <property name="_yate_identity" stdset="0" >
+                  <string/>
+                 </property>
                 </widget>
                </item>
               </layout>
@@ -669,9 +728,7 @@
              <item>
               <widget class="QFrame" name="keypad" >
                <property name="sizePolicy" >
-                <sizepolicy>
-                 <hsizetype>7</hsizetype>
-                 <vsizetype>0</vsizetype>
+                <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
                  <horstretch>0</horstretch>
                  <verstretch>0</verstretch>
                 </sizepolicy>
@@ -695,18 +752,36 @@
                 <enum>QFrame::Raised</enum>
                </property>
                <layout class="QVBoxLayout" >
-                <property name="margin" >
-                 <number>9</number>
-                </property>
                 <property name="spacing" >
                  <number>0</number>
                 </property>
+                <property name="leftMargin" >
+                 <number>9</number>
+                </property>
+                <property name="topMargin" >
+                 <number>9</number>
+                </property>
+                <property name="rightMargin" >
+                 <number>9</number>
+                </property>
+                <property name="bottomMargin" >
+                 <number>9</number>
+                </property>
                 <item>
                  <layout class="QHBoxLayout" >
-                  <property name="margin" >
+                  <property name="spacing" >
                    <number>0</number>
                   </property>
-                  <property name="spacing" >
+                  <property name="leftMargin" >
+                   <number>0</number>
+                  </property>
+                  <property name="topMargin" >
+                   <number>0</number>
+                  </property>
+                  <property name="rightMargin" >
+                   <number>0</number>
+                  </property>
+                  <property name="bottomMargin" >
                    <number>0</number>
                   </property>
                   <item>
@@ -724,18 +799,25 @@
                   </item>
                   <item>
                    <layout class="QVBoxLayout" >
-                    <property name="margin" >
+                    <property name="spacing" >
                      <number>0</number>
                     </property>
-                    <property name="spacing" >
+                    <property name="leftMargin" >
+                     <number>0</number>
+                    </property>
+                    <property name="topMargin" >
+                     <number>0</number>
+                    </property>
+                    <property name="rightMargin" >
+                     <number>0</number>
+                    </property>
+                    <property name="bottomMargin" >
                      <number>0</number>
                     </property>
                     <item>
                      <widget class="QPushButton" name="digit_5" >
                       <property name="sizePolicy" >
-                       <sizepolicy>
-                        <hsizetype>0</hsizetype>
-                        <vsizetype>0</vsizetype>
+                       <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
                         <horstretch>0</horstretch>
                         <verstretch>0</verstretch>
                        </sizepolicy>
@@ -759,20 +841,18 @@
                         <bold>true</bold>
                        </font>
                       </property>
-                      <property name="_yate_identity" stdset="0" >
-                       <string>digit:1</string>
-                      </property>
                       <property name="text" >
                        <string>1</string>
+                      </property>
+                      <property name="_yate_identity" stdset="0" >
+                       <string>digit:1</string>
                       </property>
                      </widget>
                     </item>
                     <item>
                      <widget class="QPushButton" name="digit_6" >
                       <property name="sizePolicy" >
-                       <sizepolicy>
-                        <hsizetype>0</hsizetype>
-                        <vsizetype>0</vsizetype>
+                       <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
                         <horstretch>0</horstretch>
                         <verstretch>0</verstretch>
                        </sizepolicy>
@@ -796,20 +876,18 @@
                         <bold>true</bold>
                        </font>
                       </property>
-                      <property name="_yate_identity" stdset="0" >
-                       <string>digit:4</string>
-                      </property>
                       <property name="text" >
                        <string>4</string>
+                      </property>
+                      <property name="_yate_identity" stdset="0" >
+                       <string>digit:4</string>
                       </property>
                      </widget>
                     </item>
                     <item>
                      <widget class="QPushButton" name="digit_7" >
                       <property name="sizePolicy" >
-                       <sizepolicy>
-                        <hsizetype>0</hsizetype>
-                        <vsizetype>0</vsizetype>
+                       <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
                         <horstretch>0</horstretch>
                         <verstretch>0</verstretch>
                        </sizepolicy>
@@ -833,20 +911,18 @@
                         <bold>true</bold>
                        </font>
                       </property>
-                      <property name="_yate_identity" stdset="0" >
-                       <string>digit:7</string>
-                      </property>
                       <property name="text" >
                        <string>7</string>
+                      </property>
+                      <property name="_yate_identity" stdset="0" >
+                       <string>digit:7</string>
                       </property>
                      </widget>
                     </item>
                     <item>
                      <widget class="QPushButton" name="digit_8" >
                       <property name="sizePolicy" >
-                       <sizepolicy>
-                        <hsizetype>0</hsizetype>
-                        <vsizetype>0</vsizetype>
+                       <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
                         <horstretch>0</horstretch>
                         <verstretch>0</verstretch>
                        </sizepolicy>
@@ -870,11 +946,11 @@
                         <bold>true</bold>
                        </font>
                       </property>
-                      <property name="_yate_identity" stdset="0" >
-                       <string>digit:*</string>
-                      </property>
                       <property name="text" >
                        <string>*</string>
+                      </property>
+                      <property name="_yate_identity" stdset="0" >
+                       <string>digit:*</string>
                       </property>
                      </widget>
                     </item>
@@ -882,18 +958,25 @@
                   </item>
                   <item>
                    <layout class="QVBoxLayout" >
-                    <property name="margin" >
+                    <property name="spacing" >
                      <number>0</number>
                     </property>
-                    <property name="spacing" >
+                    <property name="leftMargin" >
+                     <number>0</number>
+                    </property>
+                    <property name="topMargin" >
+                     <number>0</number>
+                    </property>
+                    <property name="rightMargin" >
+                     <number>0</number>
+                    </property>
+                    <property name="bottomMargin" >
                      <number>0</number>
                     </property>
                     <item>
                      <widget class="QPushButton" name="digit_9" >
                       <property name="sizePolicy" >
-                       <sizepolicy>
-                        <hsizetype>0</hsizetype>
-                        <vsizetype>0</vsizetype>
+                       <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
                         <horstretch>0</horstretch>
                         <verstretch>0</verstretch>
                        </sizepolicy>
@@ -917,20 +1000,18 @@
                         <bold>true</bold>
                        </font>
                       </property>
-                      <property name="_yate_identity" stdset="0" >
-                       <string>digit:2</string>
-                      </property>
                       <property name="text" >
                        <string>2</string>
+                      </property>
+                      <property name="_yate_identity" stdset="0" >
+                       <string>digit:2</string>
                       </property>
                      </widget>
                     </item>
                     <item>
                      <widget class="QPushButton" name="digit_10" >
                       <property name="sizePolicy" >
-                       <sizepolicy>
-                        <hsizetype>0</hsizetype>
-                        <vsizetype>0</vsizetype>
+                       <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
                         <horstretch>0</horstretch>
                         <verstretch>0</verstretch>
                        </sizepolicy>
@@ -954,20 +1035,18 @@
                         <bold>true</bold>
                        </font>
                       </property>
-                      <property name="_yate_identity" stdset="0" >
-                       <string>digit:5</string>
-                      </property>
                       <property name="text" >
                        <string>5</string>
+                      </property>
+                      <property name="_yate_identity" stdset="0" >
+                       <string>digit:5</string>
                       </property>
                      </widget>
                     </item>
                     <item>
                      <widget class="QPushButton" name="digit_11" >
                       <property name="sizePolicy" >
-                       <sizepolicy>
-                        <hsizetype>0</hsizetype>
-                        <vsizetype>0</vsizetype>
+                       <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
                         <horstretch>0</horstretch>
                         <verstretch>0</verstretch>
                        </sizepolicy>
@@ -991,20 +1070,18 @@
                         <bold>true</bold>
                        </font>
                       </property>
-                      <property name="_yate_identity" stdset="0" >
-                       <string>digit:8</string>
-                      </property>
                       <property name="text" >
                        <string>8</string>
+                      </property>
+                      <property name="_yate_identity" stdset="0" >
+                       <string>digit:8</string>
                       </property>
                      </widget>
                     </item>
                     <item>
                      <widget class="QPushButton" name="digit_12" >
                       <property name="sizePolicy" >
-                       <sizepolicy>
-                        <hsizetype>0</hsizetype>
-                        <vsizetype>0</vsizetype>
+                       <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
                         <horstretch>0</horstretch>
                         <verstretch>0</verstretch>
                        </sizepolicy>
@@ -1028,11 +1105,11 @@
                         <bold>true</bold>
                        </font>
                       </property>
-                      <property name="_yate_identity" stdset="0" >
-                       <string>digit:0</string>
-                      </property>
                       <property name="text" >
                        <string>0</string>
+                      </property>
+                      <property name="_yate_identity" stdset="0" >
+                       <string>digit:0</string>
                       </property>
                      </widget>
                     </item>
@@ -1040,18 +1117,25 @@
                   </item>
                   <item>
                    <layout class="QVBoxLayout" >
-                    <property name="margin" >
+                    <property name="spacing" >
                      <number>0</number>
                     </property>
-                    <property name="spacing" >
+                    <property name="leftMargin" >
+                     <number>0</number>
+                    </property>
+                    <property name="topMargin" >
+                     <number>0</number>
+                    </property>
+                    <property name="rightMargin" >
+                     <number>0</number>
+                    </property>
+                    <property name="bottomMargin" >
                      <number>0</number>
                     </property>
                     <item>
                      <widget class="QPushButton" name="digit_13" >
                       <property name="sizePolicy" >
-                       <sizepolicy>
-                        <hsizetype>0</hsizetype>
-                        <vsizetype>0</vsizetype>
+                       <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
                         <horstretch>0</horstretch>
                         <verstretch>0</verstretch>
                        </sizepolicy>
@@ -1075,20 +1159,18 @@
                         <bold>true</bold>
                        </font>
                       </property>
-                      <property name="_yate_identity" stdset="0" >
-                       <string>digit:3</string>
-                      </property>
                       <property name="text" >
                        <string>3</string>
+                      </property>
+                      <property name="_yate_identity" stdset="0" >
+                       <string>digit:3</string>
                       </property>
                      </widget>
                     </item>
                     <item>
                      <widget class="QPushButton" name="digit_14" >
                       <property name="sizePolicy" >
-                       <sizepolicy>
-                        <hsizetype>0</hsizetype>
-                        <vsizetype>0</vsizetype>
+                       <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
                         <horstretch>0</horstretch>
                         <verstretch>0</verstretch>
                        </sizepolicy>
@@ -1112,20 +1194,18 @@
                         <bold>true</bold>
                        </font>
                       </property>
-                      <property name="_yate_identity" stdset="0" >
-                       <string>digit:6</string>
-                      </property>
                       <property name="text" >
                        <string>6</string>
+                      </property>
+                      <property name="_yate_identity" stdset="0" >
+                       <string>digit:6</string>
                       </property>
                      </widget>
                     </item>
                     <item>
                      <widget class="QPushButton" name="digit_15" >
                       <property name="sizePolicy" >
-                       <sizepolicy>
-                        <hsizetype>0</hsizetype>
-                        <vsizetype>0</vsizetype>
+                       <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
                         <horstretch>0</horstretch>
                         <verstretch>0</verstretch>
                        </sizepolicy>
@@ -1155,20 +1235,18 @@
                         <bold>true</bold>
                        </font>
                       </property>
-                      <property name="_yate_identity" stdset="0" >
-                       <string>digit:9</string>
-                      </property>
                       <property name="text" >
                        <string>9</string>
+                      </property>
+                      <property name="_yate_identity" stdset="0" >
+                       <string>digit:9</string>
                       </property>
                      </widget>
                     </item>
                     <item>
                      <widget class="QPushButton" name="digit_16" >
                       <property name="sizePolicy" >
-                       <sizepolicy>
-                        <hsizetype>0</hsizetype>
-                        <vsizetype>0</vsizetype>
+                       <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
                         <horstretch>0</horstretch>
                         <verstretch>0</verstretch>
                        </sizepolicy>
@@ -1193,11 +1271,11 @@
                         <kerning>true</kerning>
                        </font>
                       </property>
-                      <property name="_yate_identity" stdset="0" >
-                       <string>digit:#</string>
-                      </property>
                       <property name="text" >
                        <string>#</string>
+                      </property>
+                      <property name="_yate_identity" stdset="0" >
+                       <string>digit:#</string>
                       </property>
                      </widget>
                     </item>
@@ -1223,11 +1301,20 @@
              </item>
              <item>
               <layout class="QHBoxLayout" >
-               <property name="margin" >
-                <number>0</number>
-               </property>
                <property name="spacing" >
                 <number>2</number>
+               </property>
+               <property name="leftMargin" >
+                <number>0</number>
+               </property>
+               <property name="topMargin" >
+                <number>0</number>
+               </property>
+               <property name="rightMargin" >
+                <number>0</number>
+               </property>
+               <property name="bottomMargin" >
+                <number>0</number>
                </property>
                <item>
                 <widget class="QPushButton" name="answer" >
@@ -1235,9 +1322,7 @@
                   <bool>false</bool>
                  </property>
                  <property name="sizePolicy" >
-                  <sizepolicy>
-                   <hsizetype>0</hsizetype>
-                   <vsizetype>0</vsizetype>
+                  <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
                    <horstretch>0</horstretch>
                    <verstretch>0</verstretch>
                   </sizepolicy>
@@ -1280,9 +1365,7 @@
                   <bool>false</bool>
                  </property>
                  <property name="sizePolicy" >
-                  <sizepolicy>
-                   <hsizetype>0</hsizetype>
-                   <vsizetype>0</vsizetype>
+                  <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
                    <horstretch>0</horstretch>
                    <verstretch>0</verstretch>
                   </sizepolicy>
@@ -1454,9 +1537,7 @@
              <item>
               <widget class="QTableWidget" name="channels" >
                <property name="sizePolicy" >
-                <sizepolicy>
-                 <hsizetype>7</hsizetype>
-                 <vsizetype>7</vsizetype>
+                <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
                  <horstretch>0</horstretch>
                  <verstretch>0</verstretch>
                 </sizepolicy>
@@ -1530,26 +1611,31 @@
         </widget>
         <widget class="QWidget" name="PageCDR" >
          <property name="sizePolicy" >
-          <sizepolicy>
-           <hsizetype>7</hsizetype>
-           <vsizetype>7</vsizetype>
+          <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
          </property>
          <layout class="QVBoxLayout" >
-          <property name="margin" >
-           <number>9</number>
-          </property>
           <property name="spacing" >
            <number>0</number>
+          </property>
+          <property name="leftMargin" >
+           <number>9</number>
+          </property>
+          <property name="topMargin" >
+           <number>9</number>
+          </property>
+          <property name="rightMargin" >
+           <number>9</number>
+          </property>
+          <property name="bottomMargin" >
+           <number>9</number>
           </property>
           <item>
            <widget class="QFrame" name="framePageCDR" >
             <property name="sizePolicy" >
-             <sizepolicy>
-              <hsizetype>7</hsizetype>
-              <vsizetype>7</vsizetype>
+             <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
               <horstretch>0</horstretch>
               <verstretch>0</verstretch>
              </sizepolicy>
@@ -1564,11 +1650,20 @@
              <number>1</number>
             </property>
             <layout class="QVBoxLayout" >
-             <property name="margin" >
-              <number>0</number>
-             </property>
              <property name="spacing" >
               <number>4</number>
+             </property>
+             <property name="leftMargin" >
+              <number>0</number>
+             </property>
+             <property name="topMargin" >
+              <number>0</number>
+             </property>
+             <property name="rightMargin" >
+              <number>0</number>
+             </property>
+             <property name="bottomMargin" >
+              <number>0</number>
              </property>
              <item>
               <widget class="QTabWidget" name="tabWidget" >
@@ -1583,19 +1678,37 @@
                  <iconset>up.png</iconset>
                 </attribute>
                 <layout class="QVBoxLayout" >
-                 <property name="margin" >
-                  <number>0</number>
-                 </property>
                  <property name="spacing" >
                   <number>4</number>
                  </property>
+                 <property name="leftMargin" >
+                  <number>0</number>
+                 </property>
+                 <property name="topMargin" >
+                  <number>0</number>
+                 </property>
+                 <property name="rightMargin" >
+                  <number>0</number>
+                 </property>
+                 <property name="bottomMargin" >
+                  <number>0</number>
+                 </property>
                  <item>
                   <layout class="QVBoxLayout" >
-                   <property name="margin" >
-                    <number>3</number>
-                   </property>
                    <property name="spacing" >
                     <number>4</number>
+                   </property>
+                   <property name="leftMargin" >
+                    <number>3</number>
+                   </property>
+                   <property name="topMargin" >
+                    <number>3</number>
+                   </property>
+                   <property name="rightMargin" >
+                    <number>3</number>
+                   </property>
+                   <property name="bottomMargin" >
+                    <number>3</number>
                    </property>
                    <item>
                     <widget class="QTableWidget" name="log_outgoing" >
@@ -1636,11 +1749,20 @@
                    </item>
                    <item>
                     <layout class="QHBoxLayout" >
-                     <property name="margin" >
-                      <number>3</number>
-                     </property>
                      <property name="spacing" >
                       <number>0</number>
+                     </property>
+                     <property name="leftMargin" >
+                      <number>3</number>
+                     </property>
+                     <property name="topMargin" >
+                      <number>3</number>
+                     </property>
+                     <property name="rightMargin" >
+                      <number>3</number>
+                     </property>
+                     <property name="bottomMargin" >
+                      <number>3</number>
                      </property>
                      <item>
                       <spacer>
@@ -1703,9 +1825,6 @@
                        <property name="toolTip" >
                         <string>Clear all incoming calls log</string>
                        </property>
-                       <property name="_yate_identity" stdset="0" >
-                        <string>clear:log_outgoing</string>
-                       </property>
                        <property name="text" >
                         <string>Clear</string>
                        </property>
@@ -1717,6 +1836,9 @@
                          <width>20</width>
                          <height>20</height>
                         </size>
+                       </property>
+                       <property name="_yate_identity" stdset="0" >
+                        <string>clear:log_outgoing</string>
                        </property>
                       </widget>
                      </item>
@@ -1765,19 +1887,37 @@
                  <iconset>down.png</iconset>
                 </attribute>
                 <layout class="QVBoxLayout" >
-                 <property name="margin" >
+                 <property name="spacing" >
                   <number>0</number>
                  </property>
-                 <property name="spacing" >
+                 <property name="leftMargin" >
+                  <number>0</number>
+                 </property>
+                 <property name="topMargin" >
+                  <number>0</number>
+                 </property>
+                 <property name="rightMargin" >
+                  <number>0</number>
+                 </property>
+                 <property name="bottomMargin" >
                   <number>0</number>
                  </property>
                  <item>
                   <layout class="QVBoxLayout" >
-                   <property name="margin" >
-                    <number>3</number>
-                   </property>
                    <property name="spacing" >
                     <number>4</number>
+                   </property>
+                   <property name="leftMargin" >
+                    <number>3</number>
+                   </property>
+                   <property name="topMargin" >
+                    <number>3</number>
+                   </property>
+                   <property name="rightMargin" >
+                    <number>3</number>
+                   </property>
+                   <property name="bottomMargin" >
+                    <number>3</number>
                    </property>
                    <item>
                     <widget class="QTableWidget" name="log_incoming" >
@@ -1818,11 +1958,20 @@
                    </item>
                    <item>
                     <layout class="QHBoxLayout" >
-                     <property name="margin" >
-                      <number>3</number>
-                     </property>
                      <property name="spacing" >
                       <number>0</number>
+                     </property>
+                     <property name="leftMargin" >
+                      <number>3</number>
+                     </property>
+                     <property name="topMargin" >
+                      <number>3</number>
+                     </property>
+                     <property name="rightMargin" >
+                      <number>3</number>
+                     </property>
+                     <property name="bottomMargin" >
+                      <number>3</number>
                      </property>
                      <item>
                       <spacer>
@@ -1885,9 +2034,6 @@
                        <property name="toolTip" >
                         <string>Clear all incoming calls log</string>
                        </property>
-                       <property name="_yate_identity" stdset="0" >
-                        <string>clear:log_incoming</string>
-                       </property>
                        <property name="text" >
                         <string>Clear</string>
                        </property>
@@ -1899,6 +2045,9 @@
                          <width>20</width>
                          <height>20</height>
                         </size>
+                       </property>
+                       <property name="_yate_identity" stdset="0" >
+                        <string>clear:log_incoming</string>
                        </property>
                       </widget>
                      </item>
@@ -1948,19 +2097,26 @@
         </widget>
         <widget class="QWidget" name="PageAccounts" >
          <property name="sizePolicy" >
-          <sizepolicy>
-           <hsizetype>7</hsizetype>
-           <vsizetype>7</vsizetype>
+          <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
          </property>
          <layout class="QVBoxLayout" >
-          <property name="margin" >
-           <number>9</number>
-          </property>
           <property name="spacing" >
            <number>2</number>
+          </property>
+          <property name="leftMargin" >
+           <number>9</number>
+          </property>
+          <property name="topMargin" >
+           <number>9</number>
+          </property>
+          <property name="rightMargin" >
+           <number>9</number>
+          </property>
+          <property name="bottomMargin" >
+           <number>9</number>
           </property>
           <item>
            <widget class="QTableWidget" name="accounts" >
@@ -2008,11 +2164,20 @@
              <enum>QFrame::Raised</enum>
             </property>
             <layout class="QHBoxLayout" >
-             <property name="margin" >
-              <number>9</number>
-             </property>
              <property name="spacing" >
               <number>2</number>
+             </property>
+             <property name="leftMargin" >
+              <number>9</number>
+             </property>
+             <property name="topMargin" >
+              <number>9</number>
+             </property>
+             <property name="rightMargin" >
+              <number>9</number>
+             </property>
+             <property name="bottomMargin" >
+              <number>9</number>
              </property>
              <item>
               <widget class="QPushButton" name="acc_login" >
@@ -2195,19 +2360,26 @@
         </widget>
         <widget class="QWidget" name="PageContacts" >
          <property name="sizePolicy" >
-          <sizepolicy>
-           <hsizetype>7</hsizetype>
-           <vsizetype>7</vsizetype>
+          <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
          </property>
          <layout class="QVBoxLayout" >
-          <property name="margin" >
-           <number>9</number>
-          </property>
           <property name="spacing" >
            <number>0</number>
+          </property>
+          <property name="leftMargin" >
+           <number>9</number>
+          </property>
+          <property name="topMargin" >
+           <number>9</number>
+          </property>
+          <property name="rightMargin" >
+           <number>9</number>
+          </property>
+          <property name="bottomMargin" >
+           <number>9</number>
           </property>
           <item>
            <widget class="QFrame" name="framePageContacts" >
@@ -2218,11 +2390,20 @@
              <enum>QFrame::Raised</enum>
             </property>
             <layout class="QVBoxLayout" >
-             <property name="margin" >
-              <number>0</number>
-             </property>
              <property name="spacing" >
               <number>2</number>
+             </property>
+             <property name="leftMargin" >
+              <number>0</number>
+             </property>
+             <property name="topMargin" >
+              <number>0</number>
+             </property>
+             <property name="rightMargin" >
+              <number>0</number>
+             </property>
+             <property name="bottomMargin" >
+              <number>0</number>
              </property>
              <item>
               <widget class="QTableWidget" name="contacts" >
@@ -2283,11 +2464,20 @@
                 <enum>QFrame::Raised</enum>
                </property>
                <layout class="QHBoxLayout" >
-                <property name="margin" >
-                 <number>9</number>
-                </property>
                 <property name="spacing" >
                  <number>2</number>
+                </property>
+                <property name="leftMargin" >
+                 <number>9</number>
+                </property>
+                <property name="topMargin" >
+                 <number>9</number>
+                </property>
+                <property name="rightMargin" >
+                 <number>9</number>
+                </property>
+                <property name="bottomMargin" >
+                 <number>9</number>
                 </property>
                 <item>
                  <spacer>
@@ -2439,11 +2629,20 @@
         </widget>
         <widget class="QWidget" name="PageSettings" >
          <layout class="QVBoxLayout" >
-          <property name="margin" >
-           <number>9</number>
-          </property>
           <property name="spacing" >
            <number>2</number>
+          </property>
+          <property name="leftMargin" >
+           <number>9</number>
+          </property>
+          <property name="topMargin" >
+           <number>9</number>
+          </property>
+          <property name="rightMargin" >
+           <number>9</number>
+          </property>
+          <property name="bottomMargin" >
+           <number>9</number>
           </property>
           <item>
            <widget class="QFrame" name="framePageSettings" >
@@ -2454,11 +2653,20 @@
              <enum>QFrame::Raised</enum>
             </property>
             <layout class="QVBoxLayout" >
-             <property name="margin" >
-              <number>0</number>
-             </property>
              <property name="spacing" >
               <number>6</number>
+             </property>
+             <property name="leftMargin" >
+              <number>0</number>
+             </property>
+             <property name="topMargin" >
+              <number>0</number>
+             </property>
+             <property name="rightMargin" >
+              <number>0</number>
+             </property>
+             <property name="bottomMargin" >
+              <number>0</number>
              </property>
              <item>
               <widget class="QGroupBox" name="grpOptions" >
@@ -2466,22 +2674,31 @@
                 <string/>
                </property>
                <layout class="QVBoxLayout" >
-                <property name="margin" >
-                 <number>9</number>
-                </property>
                 <property name="spacing" >
                  <number>2</number>
+                </property>
+                <property name="leftMargin" >
+                 <number>9</number>
+                </property>
+                <property name="topMargin" >
+                 <number>9</number>
+                </property>
+                <property name="rightMargin" >
+                 <number>9</number>
+                </property>
+                <property name="bottomMargin" >
+                 <number>9</number>
                 </property>
                 <item>
                  <widget class="QCheckBox" name="toggle_show_events" >
                   <property name="toolTip" >
                    <string>Show or hide the events window</string>
                   </property>
-                  <property name="_yate_identity" stdset="0" >
-                   <string>showwindow:events</string>
-                  </property>
                   <property name="text" >
                    <string>Show log/events window</string>
+                  </property>
+                  <property name="_yate_identity" stdset="0" >
+                   <string>showwindow:events</string>
                   </property>
                  </widget>
                 </item>
@@ -2494,11 +2711,20 @@
                 <string/>
                </property>
                <layout class="QVBoxLayout" >
-                <property name="margin" >
-                 <number>9</number>
-                </property>
                 <property name="spacing" >
                  <number>1</number>
+                </property>
+                <property name="leftMargin" >
+                 <number>9</number>
+                </property>
+                <property name="topMargin" >
+                 <number>9</number>
+                </property>
+                <property name="rightMargin" >
+                 <number>9</number>
+                </property>
+                <property name="bottomMargin" >
+                 <number>9</number>
                 </property>
                 <item>
                  <widget class="QCheckBox" name="multilines" >
@@ -2578,11 +2804,20 @@
                 <bool>false</bool>
                </property>
                <layout class="QVBoxLayout" >
-                <property name="margin" >
-                 <number>9</number>
-                </property>
                 <property name="spacing" >
                  <number>4</number>
+                </property>
+                <property name="leftMargin" >
+                 <number>9</number>
+                </property>
+                <property name="topMargin" >
+                 <number>9</number>
+                </property>
+                <property name="rightMargin" >
+                 <number>9</number>
+                </property>
+                <property name="bottomMargin" >
+                 <number>9</number>
                 </property>
                 <item>
                  <widget class="QLabel" name="label_6" >
@@ -2597,9 +2832,7 @@
                 <item>
                  <widget class="QLineEdit" name="def_username" >
                   <property name="sizePolicy" >
-                   <sizepolicy>
-                    <hsizetype>0</hsizetype>
-                    <vsizetype>0</vsizetype>
+                   <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
                     <horstretch>0</horstretch>
                     <verstretch>0</verstretch>
                    </sizepolicy>
@@ -2634,9 +2867,7 @@
                 <item>
                  <widget class="QLineEdit" name="def_callerid" >
                   <property name="sizePolicy" >
-                   <sizepolicy>
-                    <hsizetype>0</hsizetype>
-                    <vsizetype>0</vsizetype>
+                   <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
                     <horstretch>0</horstretch>
                     <verstretch>0</verstretch>
                    </sizepolicy>
@@ -2674,9 +2905,7 @@
                 <item>
                  <widget class="QLineEdit" name="def_domain" >
                   <property name="sizePolicy" >
-                   <sizepolicy>
-                    <hsizetype>0</hsizetype>
-                    <vsizetype>0</vsizetype>
+                   <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
                     <horstretch>0</horstretch>
                     <verstretch>0</verstretch>
                    </sizepolicy>
@@ -2727,9 +2956,7 @@
    <item>
     <widget class="QFrame" name="frameStatus" >
      <property name="sizePolicy" >
-      <sizepolicy>
-       <hsizetype>7</hsizetype>
-       <vsizetype>0</vsizetype>
+      <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
        <horstretch>0</horstretch>
        <verstretch>0</verstretch>
       </sizepolicy>
@@ -2747,18 +2974,25 @@
       <enum>QFrame::Sunken</enum>
      </property>
      <layout class="QHBoxLayout" >
-      <property name="margin" >
-       <number>4</number>
-      </property>
       <property name="spacing" >
        <number>0</number>
+      </property>
+      <property name="leftMargin" >
+       <number>4</number>
+      </property>
+      <property name="topMargin" >
+       <number>4</number>
+      </property>
+      <property name="rightMargin" >
+       <number>4</number>
+      </property>
+      <property name="bottomMargin" >
+       <number>4</number>
       </property>
       <item>
        <widget class="QLabel" name="status" >
         <property name="sizePolicy" >
-         <sizepolicy>
-          <hsizetype>0</hsizetype>
-          <vsizetype>0</vsizetype>
+         <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
           <horstretch>0</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
@@ -2790,9 +3024,7 @@
       <item>
        <widget class="QPushButton" name="toggle_show_help" >
         <property name="sizePolicy" >
-         <sizepolicy>
-          <hsizetype>0</hsizetype>
-          <vsizetype>0</vsizetype>
+         <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
           <horstretch>0</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
@@ -2812,9 +3044,6 @@
         <property name="toolTip" >
          <string>Show or hide the Help window</string>
         </property>
-        <property name="_yate_identity" stdset="0" >
-         <string>showwindow:help:0</string>
-        </property>
         <property name="text" >
          <string/>
         </property>
@@ -2823,6 +3052,9 @@
         </property>
         <property name="checkable" >
          <bool>true</bool>
+        </property>
+        <property name="_yate_identity" stdset="0" >
+         <string>showwindow:help:0</string>
         </property>
        </widget>
       </item>

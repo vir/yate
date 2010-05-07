@@ -174,9 +174,6 @@
        <property name="toolTip" >
         <string>Help on this window</string>
        </property>
-       <property name="_yate_identity" stdset="0" >
-        <string>showwindow:help:2</string>
-       </property>
        <property name="text" >
         <string/>
        </property>
@@ -185,6 +182,9 @@
        </property>
        <property name="checkable" >
         <bool>true</bool>
+       </property>
+       <property name="_yate_identity" stdset="0" >
+        <string>showwindow:help:2</string>
        </property>
       </widget>
      </item>

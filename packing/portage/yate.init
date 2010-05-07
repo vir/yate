@@ -1,5 +1,7 @@
 #!/sbin/runscript
+#
 # Run script for Gentoo /etc/init.d
+# Package net-voip/yate
 
 opts="${opts} reload"
 

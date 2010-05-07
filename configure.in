@@ -1195,6 +1195,7 @@ AC_SUBST(KDOC_BIN)
 m4_sinclude(./YateLocal.ac)
 
 AC_CONFIG_FILES([packing/rpm/yate.spec
+                 packing/portage/yate.ebuild
                  yate.pc
 		 yateversn.h
 		 yateiss.inc
@@ -1223,6 +1224,6 @@ AC_CONFIG_FILES([packing/rpm/yate.spec
                  conf.d/Makefile])
 AC_CONFIG_FILES([yate-config],[chmod +x yate-config])
 AC_CONFIG_FILES([run],[chmod +x run])
-CONFIGURE_FILES=`echo "$ac_config_files config.status config.log" | sed 's,packing/yate\.spec *,,'`
+CONFIGURE_FILES=`echo "$ac_config_files config.status config.log" | sed 's,packing/[[^ ]]* *,,g'`
 AC_SUBST(CONFIGURE_FILES)
 AC_OUTPUT

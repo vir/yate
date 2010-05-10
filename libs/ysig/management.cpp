@@ -175,7 +175,7 @@ const TokenDict* SS7MsgMTN::names()
 
 bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
-    if (msu.getSIF() != SS7MSU::SNM)
+    if (msu.getSIF() != sif())
 	return false;
 
     unsigned int len = msu.length() - label.length() - 1;
@@ -287,7 +287,7 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 
 bool SS7Maintenance::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
-    if (msu.getSIF() != SS7MSU::MTN && msu.getSIF() != SS7MSU::MTNS)
+    if (msu.getSIF() != sif() && msu.getSIF() != SS7MSU::MTNS)
 	return false;
     XDebug(this,DebugStub,"Possibly incomplete SS7Maintenance::receivedMSU(%p,%p,%p,%d) [%p]",
 	&msu,&label,network,sls,this);

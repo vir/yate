@@ -4537,11 +4537,34 @@ public:
     inline SS7Layer3* network() const
 	{ return m_layer3; }
 
+    /**
+     * Get the default sending Service Information Octet for this protocol
+     * @return SIO value
+     */
+    inline unsigned char sio() const
+	{ return m_sio; }
+
+    /**
+     * Get the Service Information Field (SS7 protocol number)
+     * @return SIF value used in matching and sending MSUs
+     */
+    inline unsigned char sif() const
+	{ return m_sio & 0x0f; }
+
+    /**
+     * Get the default sending Service Switching Function bits for this protocol
+     * @return Combined Priority and Network Indicator bits
+     */
+    inline unsigned char ssf() const
+	{ return m_sio & 0xf0; }
+
 protected:
     /**
      * Constructor
+     * @param sio Default value of Service Information Octet
+     * @param params Optional parameters to alter the value of SIO
      */
-    SS7Layer4();
+    SS7Layer4(unsigned char sio = SS7MSU::National, const NamedList* params = 0);
 
     /**
      * Ask the Layer 3 to push a Message Signal Unit down the protocol stack
@@ -4557,6 +4580,11 @@ protected:
 	m_l3Mutex.unlock();
 	return tmp ? tmp->transmitMSU(msu,label,sls) : -1;
     }
+
+    /**
+     * Service Information Octet (SIO) for this protocol
+     */
+    unsigned char m_sio;
 
 private:
     Mutex m_l3Mutex;                     // Lock pointer use operations
@@ -5735,8 +5763,9 @@ public:
     /**
      * Constructor
      */
-    inline SS7Management(const NamedList& params)
-	: SignallingComponent(params.safe("SS7Management"),&params)
+    inline SS7Management(const NamedList& params, unsigned char sio = SS7MSU::SNM|SS7MSU::National)
+	: SignallingComponent(params.safe("SS7Management"),&params),
+	  SS7Layer4(sio)
 	{ }
 
 protected:
@@ -5770,8 +5799,9 @@ public:
     /**
      * Constructor
      */
-    inline SS7Maintenance(const NamedList& params)
-	: SignallingComponent(params.safe("SS7Maintenance"),&params)
+    inline SS7Maintenance(const NamedList& params, unsigned char sio = SS7MSU::MTN|SS7MSU::National)
+	: SignallingComponent(params.safe("SS7Maintenance"),&params),
+	  SS7Layer4(sio)
 	{ }
 
 protected:
@@ -5805,8 +5835,9 @@ public:
     /**
      * Constructor
      */
-    inline SS7Testing(const NamedList& params)
+    inline SS7Testing(const NamedList& params, unsigned char sio = SS7MSU::MTP_T|SS7MSU::National)
 	: SignallingComponent(params.safe("SS7Testing"),&params),
+	  SS7Layer4(sio),
 	  Mutex(true,"SS7Testing"),
 	  m_timer(0), m_seq(0), m_len(16)
 	{ }
@@ -6059,8 +6090,9 @@ public:
     /**
      * Constructor
      * @param params Call controller's parameters
+     * @param sio The default Service Information Octet
      */
-    SS7ISUP(const NamedList& params);
+    SS7ISUP(const NamedList& params, unsigned char sio = SS7MSU::ISUP|SS7MSU::National);
 
     /**
      * Destructor
@@ -6311,7 +6343,6 @@ private:
     ObjList m_pointCodes;                // Point codes serviced by this call controller
     SS7PointCode* m_defPoint;            // Default point code for outgoing calls
     SS7PointCode* m_remotePoint;         // Default remote point code for outgoing calls and maintenance
-    unsigned char m_priossf;             // MSU priority + Subservice field
     unsigned char m_sls;                 // Last known valid SLS
     bool m_earlyAcm;                     // Accept progress/ringing in early ACM
     bool m_inn;                          // Routing to internal network number flag
@@ -6355,26 +6386,15 @@ public:
     /**
      * Constructor
      * @param params Call controller's parameters
+     * @param sio The default Service Information Octet
      */
-    SS7BICC(const NamedList& params);
+    SS7BICC(const NamedList& params, unsigned char sio = SS7MSU::BICC|SS7MSU::National);
 
     /**
      * Destructor
      * Terminate all calls
      */
     virtual ~SS7BICC();
-
-    /**
-     * Create a new MSU populated with type, routing label and space for fixed part
-     * @param type Type of ISUP message
-     * @param ssf Subservice Field
-     * @param label Routing label for the new MSU
-     * @param cic Circuit Identification Code
-     * @param params Optional parameter list
-     * @return Pointer to the new MSU or NULL if an error occured
-     */
-    virtual SS7MSU* createMSU(SS7MsgISUP::Type type, unsigned char ssf,
-	const SS7Label& label, unsigned int cic, const NamedList* params = 0) const;
 
 protected:
     /**
@@ -6395,7 +6415,17 @@ protected:
 class YSIG_API SS7TUP : public SignallingCallControl, public SS7Layer4
 {
 public:
-    SS7TUP(const NamedList& params);
+    /**
+     * Constructor
+     * @param params Call controller's parameters
+     * @param sif The default Service Information Field
+     */
+    SS7TUP(const NamedList& params, unsigned char sif = SS7MSU::TUP);
+
+    /**
+     * Destructor
+     * Terminate all calls
+     */
     virtual ~SS7TUP();
 };
 

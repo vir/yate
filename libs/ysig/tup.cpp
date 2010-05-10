@@ -27,9 +27,10 @@
 
 using namespace TelEngine;
 
-SS7TUP::SS7TUP(const NamedList& params)
+SS7TUP::SS7TUP(const NamedList& params, unsigned char sio)
     : SignallingComponent("SS7TUP",&params),
-      SignallingCallControl(params,"tup.")
+      SignallingCallControl(params,"tup."),
+      SS7Layer4(sio,&params)
 {
 }
 

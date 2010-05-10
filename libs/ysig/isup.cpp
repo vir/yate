@@ -2429,14 +2429,14 @@ SS7ISUP* SS7ISUPCall::isup() const
 /**
  * SS7ISUP
  */
-SS7ISUP::SS7ISUP(const NamedList& params)
+SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
     : SignallingComponent(params.safe("SS7ISUP"),&params),
       SignallingCallControl(params,"isup."),
+      SS7Layer4(sio,&params),
       m_cicLen(2),
       m_type(SS7PointCode::Other),
       m_defPoint(0),
       m_remotePoint(0),
-      m_priossf(0),
       m_sls(255),
       m_earlyAcm(true),
       m_inn(false),
@@ -2493,9 +2493,6 @@ SS7ISUP::SS7ISUP(const NamedList& params)
 	TelEngine::destruct(m_remotePoint);
     }
 
-    m_priossf |= SS7MSU::getPriority(params.getValue("priority"),SS7MSU::Regular);
-    m_priossf |= SS7MSU::getNetIndicator(params.getValue("netindicator"),SS7MSU::National);
-
     m_lockGroup = params.getBoolValue("lockgroup",m_lockGroup);
     m_earlyAcm = params.getBoolValue("earlyacm",m_earlyAcm);
     m_inn = params.getBoolValue("inn",m_inn);
@@ -2541,7 +2538,7 @@ SS7ISUP::SS7ISUP(const NamedList& params)
 	    s << *m_remotePoint;
 	else
 	    s << "missing";
-	s << " priority+SSF=" << (unsigned int)m_priossf;
+	s << " SIF/SSF=" << (unsigned int)sif() << "/" << (unsigned int)ssf();
 	s << " lockcircuits=" << params.getValue("lockcircuits");
 	s << " userpartavail=" << String::boolText(m_userPartAvail);
 	s << " lockgroup=" << String::boolText(m_lockGroup);
@@ -2671,7 +2668,7 @@ SS7PointCode* SS7ISUP::hasPointCode(const SS7PointCode& pc)
 SS7MSU* SS7ISUP::createMSU(SS7MsgISUP::Type type, unsigned char ssf,
     const SS7Label& label, unsigned int cic, const NamedList* params) const
 {
-    return buildMSU(type,SS7MSU::ISUP | (ssf & 0xf0),label,cic,params);
+    return buildMSU(type,sif() | (ssf & 0xf0),label,cic,params);
 }
 
 // Make an outgoing call
@@ -2787,7 +2784,7 @@ int SS7ISUP::transmitMessage(SS7MsgISUP* msg, const SS7Label& label, bool recvLb
     }
 
     lock();
-    SS7MSU* msu = createMSU(msg->type(),m_priossf,*p,msg->cic(),&msg->params());
+    SS7MSU* msu = createMSU(msg->type(),ssf(),*p,msg->cic(),&msg->params());
 
     if (m_printMsg && debugAt(DebugInfo)) {
 	String tmp;
@@ -3308,7 +3305,7 @@ bool SS7ISUP::encodeMessage(DataBlock& buf, SS7MsgISUP::Type msgType, SS7PointCo
 
 bool SS7ISUP::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
-    if (msu.getSIF() != SS7MSU::ISUP || !hasPointCode(label.dpc()) || !handlesRemotePC(label.opc()))
+    if (msu.getSIF() != sif() || !hasPointCode(label.dpc()) || !handlesRemotePC(label.opc()))
 	return false;
     // we should have at least 2 bytes CIC and 1 byte message type
     const unsigned char* s = msu.getData(label.length()+1,3);
@@ -3972,9 +3969,9 @@ bool SS7ISUP::sendLocalLock(u_int64_t when)
 /**
  * SS7BICC
  */
-SS7BICC::SS7BICC(const NamedList& params)
+SS7BICC::SS7BICC(const NamedList& params, unsigned char sio)
     : SignallingComponent(params.safe("SS7BICC"),&params),
-      SS7ISUP(params)
+      SS7ISUP(params,sio)
 {
     m_cicLen = 4;
     Debug(this,DebugInfo,"BICC Call Controller [%p]",this);
@@ -3986,15 +3983,9 @@ SS7BICC::~SS7BICC()
     Debug(this,DebugInfo,"BICC Call Controller destroyed [%p]",this);
 }
 
-SS7MSU* SS7BICC::createMSU(SS7MsgISUP::Type type, unsigned char ssf,
-    const SS7Label& label, unsigned int cic, const NamedList* params) const
-{
-    return buildMSU(type,SS7MSU::BICC | (ssf & 0xf0),label,cic,params);
-}
-
 bool SS7BICC::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
-    if (msu.getSIF() != SS7MSU::BICC || !hasPointCode(label.dpc()) || !handlesRemotePC(label.opc()))
+    if (msu.getSIF() != sif() || !hasPointCode(label.dpc()) || !handlesRemotePC(label.opc()))
 	return false;
     // we should have at least 4 bytes CIC and 1 byte message type
     const unsigned char* s = msu.getData(label.length()+1,5);

@@ -251,6 +251,18 @@
 ; The format is network-cluster-member or number
 ;remotepointcode=
 
+; service: int: Service Information Field (protocol number)
+; It is unlikely you will ever need to modify it
+;service=5
+
+; priority: keyword: Value of the Priority bits in the Service Information Octet
+; Allowed values: regular, special, circuit, facility
+;priority=regular
+
+; netindicator: keyword: Value of Network Indicator bits in the SIO
+; Allowed values: international, spareinternational, national, reservednational
+;netindicator=national
+
 ; userparttest: integer: Remote user part test interval in seconds
 ; Set to 0 to always assume the remote user part is available
 ; Invalid values default to minimum (10s)

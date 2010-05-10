@@ -42,7 +42,7 @@ static const TokenDict s_dict_control[] = {
 
 bool SS7Testing::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
-    if (msu.getSIF() != SS7MSU::MTP_T)
+    if (msu.getSIF() != sif())
 	return false;
     XDebug(this,DebugStub,"Possibly incomplete SS7Testing::receivedMSU(%p,%p,%p,%d) [%p]",
 	&msu,&label,network,sls,this);
@@ -71,7 +71,7 @@ bool SS7Testing::sendTraffic()
 	return false;
     u_int32_t seq = m_seq++;
     u_int16_t len = m_len + 6;
-    SS7MSU msu(SS7MSU::MTP_T,m_lbl,0,len);
+    SS7MSU msu(sio(),m_lbl,0,len);
     unsigned char* d = msu.getData(m_lbl,len);
     if (!d)
 	return false;

@@ -145,9 +145,9 @@ public:
     /**
      * Makes sure a section with a given name exists, creates if required
      * @param sect Name of section to check or create
+     * @return The section's content or NULL if no such section
      */
-    inline void createSection(const String& sect)
-	{ if (sect) makeSectHolder(sect); }
+    NamedList* createSection(const String& sect);
 
     /**
      * Deletes a key/value pair

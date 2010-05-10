@@ -112,6 +112,13 @@ void Configuration::clearSection(const char* sect)
 	m_sections.clear();
 }
 
+// Make sure a section with a given name exists, create it if required
+NamedList* Configuration::createSection(const String& sect)
+{
+    ObjList* o = makeSectHolder(sect);
+    return o ? static_cast<NamedList*>(o->get()) : 0;
+}
+
 void Configuration::clearKey(const String& sect, const String& key)
 {
     NamedList *l = getSection(sect);

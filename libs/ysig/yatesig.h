@@ -5765,7 +5765,7 @@ public:
      */
     inline SS7Management(const NamedList& params, unsigned char sio = SS7MSU::SNM|SS7MSU::National)
 	: SignallingComponent(params.safe("SS7Management"),&params),
-	  SS7Layer4(sio)
+	  SS7Layer4(sio,&params)
 	{ }
 
 protected:
@@ -5801,7 +5801,7 @@ public:
      */
     inline SS7Maintenance(const NamedList& params, unsigned char sio = SS7MSU::MTN|SS7MSU::National)
 	: SignallingComponent(params.safe("SS7Maintenance"),&params),
-	  SS7Layer4(sio)
+	  SS7Layer4(sio,&params)
 	{ }
 
 protected:
@@ -5837,7 +5837,7 @@ public:
      */
     inline SS7Testing(const NamedList& params, unsigned char sio = SS7MSU::MTP_T|SS7MSU::National)
 	: SignallingComponent(params.safe("SS7Testing"),&params),
-	  SS7Layer4(sio),
+	  SS7Layer4(sio,&params),
 	  Mutex(true,"SS7Testing"),
 	  m_timer(0), m_seq(0), m_len(16)
 	{ }

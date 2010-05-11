@@ -1,3 +1,24 @@
+; If you want to create windows which have as a parent another window, in the section for each child window
+; add the parameter "parent=" with the name of the parent window.
+; ATTENTION! Keep in mind that the parent window should be created before the child window.
+; This means that here you should list the windows in a order similar to the example bellow:
+;
+; [parentwindow_1]
+; description=...
+; [childwindow_1]
+; description=...
+; parent=parentwindow_1
+; [childwindow_2]
+; description=...
+; parent=parentwindow_1
+;
+; [parentwindow_2]
+; description=...
+; [childwindow_3]
+; description=...
+; parent=parentwindow_2
+
+
 [mainwindow]
 enabled=true
 visible=true

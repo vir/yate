@@ -375,7 +375,7 @@ class YQT4_API QtWindow : public QWidget, public Window
     friend class QtClient;
 public:
     QtWindow();
-    QtWindow(const char* name, const char* description, const char* alias);
+    QtWindow(const char* name, const char* description, const char* alias, QtWindow* parent = 0);
     virtual ~QtWindow();
 
     virtual void title(const String& text);
@@ -547,6 +547,13 @@ public:
      * @param fileName Optional UI filename to clear. Clear all if 0
      */
     static void clearUICache(const char* fileName = 0);
+    
+    /**
+     * Retrieve the parent window
+     * @return QtWindow pointer or 0
+     */
+    inline QtWindow* parentWindow() const
+	{ return qobject_cast<QtWindow*>(parentWidget() ? parentWidget()->window() : 0); }
 
 protected:
     // Notify client on selection changes
@@ -635,7 +642,7 @@ public:
      * Constructor
      * @param parent Parent widget
      */
-    inline QtDialog(QtWindow* parent)
+    inline QtDialog(QWidget* parent)
 	: QDialog(parent)
 	{}
 

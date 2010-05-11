@@ -1734,15 +1734,16 @@ bool RtpHandler::received(Message& msg)
 	if (w)
 	    Debug(&splugin,DebugAll,"Wrapper %p found by ID",w);
     }
+    const char* epId = msg.getValue("mgcp_endpoint",s_defaultEp);
     if (!(ch || w)) {
-	Debug(&splugin,DebugWarn,"Neither call channel nor MGCP wrapper found!");
+	if (epId)
+	    Debug(&splugin,DebugWarn,"Neither call channel nor MGCP wrapper found!");
 	return false;
     }
 
     if (w)
 	return w->rtpMessage(msg);
 
-    const char* epId = msg.getValue("mgcp_endpoint",s_defaultEp);
     if (!epId)
 	return false;
 
@@ -1857,7 +1858,7 @@ void MGCPPlugin::initialize()
 		);
 		if (ep) {
 		    ep->alias = sect->getValue("name",name);
-		    if (sect->getBoolValue("default",s_defaultEp.null()))
+		    if (sect->getBoolValue("cluster",false))
 			s_defaultEp = ep->toString();
 		}
 		else

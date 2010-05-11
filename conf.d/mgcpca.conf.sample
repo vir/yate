@@ -127,10 +127,10 @@
 ;  or TGCP protocols too.
 ;version=
 
-; default: bool: This is the default gateway to send commands to
-; The first gateway which is not explicitely disabled or the last that is
-;  explicitely enabled will become default
-;default=no
+; cluster: bool: This is the gateway to send remote RTP commands to
+; Do not activate this functionality unless you know very well what it does
+;  as it disrupts other based RTP protocols
+;cluster=no
 
 ; voicechans: string: The range of channels used for voice (data) transfer
 ; Channel intervals may be specified by separating the margins using the '-' character

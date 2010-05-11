@@ -63,6 +63,7 @@ protected:
     Message* m_exec;
     u_int64_t m_timer;
     bool m_timerDrop;
+    bool m_execNext;
     String m_reason;
     String m_media;
 };
@@ -126,7 +127,7 @@ UNLOAD_PLUGIN(unloadNow)
 ForkMaster::ForkMaster(ObjList* targets)
     : m_index(0), m_answered(false), m_rtpForward(false), m_rtpStrict(false),
       m_fake(false), m_targets(targets), m_exec(0),
-      m_timer(0), m_timerDrop(false), m_reason("hangup")
+      m_timer(0), m_timerDrop(false), m_execNext(false), m_reason("hangup")
 {
     String tmp(MOD_PREFIX "/");
     tmp << ++s_current;
@@ -158,9 +159,6 @@ bool ForkMaster::forkSlave(const char* dest)
     if (null(dest))
 	return false;
     bool ok = false;
-    String tmp(id());
-    tmp << "/" << ++m_index;
-    ForkSlave* slave = new ForkSlave(this,tmp);
     m_exec->clearParam("error");
     m_exec->clearParam("reason");
     m_exec->clearParam("peerid");
@@ -168,12 +166,31 @@ bool ForkMaster::forkSlave(const char* dest)
     m_exec->clearParam("fork.ringer");
     m_exec->clearParam("fork.autoring");
     m_exec->clearParam("fork.calltype");
-    m_exec->setParam("cdrtrack",String::boolText(false));
-    m_exec->setParam("id",tmp);
     m_exec->setParam("callto",dest);
     m_exec->setParam("rtp_forward",String::boolText(m_rtpForward));
-    m_exec->userData(slave);
     m_exec->msgTime() = Time::now();
+    if (m_execNext) {
+	RefPointer<CallEndpoint> peer = getPeer();
+	if (!peer) {
+	    clear(false);
+	    return false;
+	}
+	Debug(&__plugin,DebugCall,"Call '%s' directly to target '%s'",
+	    peer->id().c_str(),dest);
+	m_exec->userData(peer);
+	m_exec->setParam("id",peer->id());
+	m_exec->clearParam("cdrtrack");
+	if (!Engine::dispatch(m_exec))
+	    return false;
+	clear(false);
+	return true;
+    }
+    m_exec->setParam("cdrtrack",String::boolText(false));
+    String tmp(id());
+    tmp << "/" << ++m_index;
+    ForkSlave* slave = new ForkSlave(this,tmp);
+    m_exec->setParam("id",tmp);
+    m_exec->userData(slave);
     const char* error = "failure";
     bool autoring = false;
     if (Engine::dispatch(m_exec)) {
@@ -277,6 +294,13 @@ bool ForkMaster::callContinue()
 		    m_timer = 1000 * tout + Time::now();
 		    m_timerDrop = true;
 		}
+		else if (tmp.startSkip("exec=",false) && ((tout = tmp.toInteger()) > 0)) {
+		    m_timer = 1000 * tout + Time::now();
+		    m_timerDrop = true;
+		    m_execNext = true;
+		}
+		else if (tmp == "exec")
+		    m_execNext = true;
 		else
 		    Debug(&__plugin,DebugMild,"Call '%s' ignoring modifier '%s'",
 			getPeerId().c_str(),dest->c_str());

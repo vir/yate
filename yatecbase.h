@@ -2157,7 +2157,15 @@ public:
      * @param update True to update the interface
      * @return True
     */
-    virtual bool callLogUpdate(NamedList& params, bool save, bool update)
+    virtual bool callLogUpdate(const NamedList& params, bool save, bool update)
+	{ return false; }
+
+    /**
+     * Remove a call log item
+     * @param billid The bill id of the call
+     * @return True on success
+    */
+    virtual bool callLogDelete(const String& billid)
 	{ return false; }
 
     /**
@@ -2365,6 +2373,29 @@ public:
     virtual void destruct();
 
     /**
+     * Retrieve the remote party from CDR parameters
+     * @param params CDR parameters
+     * @param outgoing True if the call was an outgoing one
+     * @return The remote party (may be empty)
+     */
+    static const String& cdrRemoteParty(const NamedList& params, bool outgoing)
+	{ return outgoing ? params["called"] : params["caller"]; }
+
+    /**
+     * Retrieve the remote party from CDR parameters
+     * @param params CDR parameters
+     * @return The remote party (may be empty)
+     */
+    static const String& cdrRemoteParty(const NamedList& params) {
+	    const String& dir = params["direction"];
+	    if (dir == "incoming")
+		return cdrRemoteParty(params,true);
+	    if (dir == "outgoing")
+		return cdrRemoteParty(params,false);
+	    return String::empty();
+	}
+
+    /**
      * Init static logic lists.
      * Called by the client when start running
      */
@@ -2420,6 +2451,11 @@ public:
      * @param prio The priority of this logic
      */
     DefaultLogic(const char* name = "default", int prio = -100);
+
+    /**
+     * Destructor
+     */
+    ~DefaultLogic();
 
     /**
      * Handle actions from user interface
@@ -2597,7 +2633,14 @@ public:
      * @param update True to update the interface
      * @return True
     */
-    virtual bool callLogUpdate(NamedList& params, bool save, bool update);
+    virtual bool callLogUpdate(const NamedList& params, bool save, bool update);
+
+    /**
+     * Remove a call log item
+     * @param billid The bill id of the call
+     * @return True on success
+    */
+    virtual bool callLogDelete(const String& billid);
 
     /**
      * Clear the specified log and the entries from the history file and save the history file
@@ -2695,6 +2738,14 @@ public:
     virtual bool handleUserNotify(Message& msg, bool& stopLogic);
 
     /**
+     * Process user.roster message
+     * @param msg Received message
+     * @param stopLogic Set to true on exit to tell the client to stop asking other logics
+     * @return True to stop further processing by the engine
+     */
+    virtual bool handleUserRoster(Message& msg, bool& stopLogic);
+
+    /**
      * Process resource.notify message
      * @param msg Received message
      * @param stopLogic Set to true on exit to tell the client to stop asking other logics
@@ -2773,9 +2824,55 @@ protected:
      */
     virtual void channelSelectionChanged(const String& old);
 
+    /**
+     * Fill contact edit/delete active parameters
+     * @param list Destination list
+     * @param active True to activate, false to deactivate
+     * @param item Optional selected item to check in contacts list if active
+     */
+    virtual void fillContactEditActive(NamedList& list, bool active, const String* item = 0);
+
+    /**
+     * Fill log contact active parameter
+     * @param list Destination list
+     * @param active True to activate, false to deactivate
+     * @param item Optional selected item to check in calls log list if active
+     */
+    virtual void fillLogContactActive(NamedList& list, bool active, const String* item = 0);
+
+    /**
+     * Clear a list/table. Handle specific lists like CDR, accounts, contacts
+     * @param action The list. May contain an optional confirmation text to display.
+     *  Format: 'list_name[:confirmation_text]'
+     * @param wnd Window owning the list/table
+     * @return True on success
+     */
+    virtual bool clearList(const String& action, Window* wnd);
+
+    /**
+     * Delete a list/table item. Handle specific lists like CDR, accounts, contacts
+     * @param list The list
+     * @param item Item to delete
+     * @param wnd Window owning the list/table
+     * @return True on success
+     */
+    virtual bool deleteItem(const String& list, const String& item, Window* wnd);
+
+    /**
+     * Handle list/table selection deletion.
+     * Handle specific lists like CDR, accounts, contacts
+     * @param action Action to handle. May contain an optional confirmation text to display.
+     *  Format: 'list_name[:confirmation_text]'
+     * @param wnd Window owning the list/table
+     * @return True on success
+     */
+    virtual bool deleteSelectedItem(const String& action, Window* wnd);
+
     String m_selectedChannel;            // The currently selected channel
     String m_transferInitiated;          // Tranfer initiated id
-    bool m_accShowAdvanced;              // Show/hide the account advanced options
+
+private:
+    ClientAccountList* m_accounts;       // Accounts list (always valid)
 };
 
 
@@ -2793,29 +2890,25 @@ public:
      * @param user The account's username
      * @param host The account's host
      * @param startup True if the account should login at startup
+     * @param contact Optional account's own contact
      */
-    ClientAccount(const char* proto, const char* user,
-	const char* host, bool startup);
+    ClientAccount(const char* proto, const char* user, const char* host,
+	bool startup, ClientContact* contact = 0);
 
     /**
      * Constructor. Build an account from a list of parameters
-     * @param params The list of parameters used to build this account
+     * @param params The list of parameters used to build this account.
+     *  The list's name will be used as account id
+     * @param contact Optional account's own contact
      */
-    ClientAccount(const NamedList& params);
+    ClientAccount(const NamedList& params, ClientContact* contact = 0);
 
     /**
-     * Get this account's URI
-     * @return This account's URI
+     * Get this account's parameters
+     * @return This account's parameter list
      */
-    inline const URI& uri() const
-	{ return m_uri; }
-
-    /**
-     * Get this account's id
-     * @return This account's id
-     */
-    inline const URI& id() const
-	{ return m_id; }
+    inline const NamedList& params() const
+	{ return m_params; }
 
     /**
      * Get this account's contacts. The caller should lock the account while browsing the list
@@ -2825,11 +2918,45 @@ public:
 	{ return m_contacts; }
 
     /**
+     * Retrieve account own contact
+     * @return ClientContact pointer
+     */
+    inline ClientContact* contact() const
+	{ return m_contact; }
+
+    /**
+     * Set or reset account own contact
+     * @param contact New account contact (may be NULL to reset it)
+     */
+    void setContact(ClientContact* contact);
+
+    /**
+     * Retrieve the account's protocol
+     * @return The account's protocol
+     */
+    inline const String& protocol() const
+	{ return m_params["protocol"]; }
+
+    /**
+     * Check if the account should be logged in at startup
+     * @return True if the account should be logged in at startup
+     */
+    inline bool startup() const
+	{ return m_params.getBoolValue("enabled",true); }
+
+    /**
+     * Set the account's startup login flag
+     * @param ok The account's startup login flag value
+     */
+    inline void startup(bool ok)
+	{ m_params.setParam("enabled",String::boolText(ok)); }
+
+    /**
      * Get a string representation of this object
      * @return The account's compare id
      */
     virtual const String& toString() const
-	{ return m_id; }
+	{ return m_params; }
 
     /**
      * Get this account's resource
@@ -2851,12 +2978,31 @@ public:
     void setResource(ClientResource* res);
 
     /**
+     * Save or remove this account to/from client accounts file
+     * @param ok True to save, false to remove
+     * @param savePwd True to save the password
+     * @return True on success
+     */
+    bool save(bool ok = true, bool savePwd = true);
+
+    /**
      * Find a contact by its id
      * @param id The id of the desired contact
      * @param ref True to obtain a referenced pointer
-     * @return ClientContact pointer or 0 if not found
+     * @return ClientContact pointer (may be account's own contact) or 0 if not found
      */
     virtual ClientContact* findContact(const String& id, bool ref = false);
+
+    /**
+     * Find a contact by name and/or uri. Account own contact is ignored
+     * @param name Optional name to check (may be a pointer to an empty string)
+     * @param uri Optional uri to check (may be a pointer to an empty string)
+     * @param skipId Optional contact to skip
+     * @param ref True to obtain a referenced pointer
+     * @return ClientContact pointer or 0 if not found
+     */
+    virtual ClientContact* findContact(const String* name = 0, const String* uri = 0,
+	const String* skipId = 0, bool ref = false);
 
     /**
      * Find a contact having a given id and resource
@@ -2865,8 +3011,16 @@ public:
      * @param ref True to obtain a referenced pointer
      * @return ClientContact pointer or 0 if not found
      */
-    virtual ClientContact* findContact(const String& id, const String& resid, 
+    virtual ClientContact* findContact(const String& id, const String& resid,
 	bool ref = false);
+
+    /**
+     * Find a contact by its URI (build an id from account and uri)
+     * @param uri The contact's uri
+     * @param ref True to get a referenced pointer
+     * @return ClientContact pointer or 0 if not found
+     */
+    virtual ClientContact* findContactByUri(const String& uri, bool ref = false);
 
     /**
      * Build a contact and append it to the list
@@ -2900,44 +3054,24 @@ public:
     virtual Message* userlogin(bool login, const char* msg = "user.login");
 
     /**
-     * Build an account id
-     * @param dest Destination URI
-     * @param proto The account's protocol
-     * @param user The account's username
-     * @param host The account's host
+     * Fill a list used to update a account's list item
+     * @param list Parameter list to fill
      */
-    static void buildAccountId(URI& dest, const char* proto, const char* user, const char* host) {
-	    URI u(proto,user,host);
-	    dest = u.toLower();
-	}
+    virtual void fillItemParams(NamedList& list);
 
-    String m_password;                   // Account's password
-    String m_server;                     // Account's server (name or IP address)
-    int m_port;                          // Server's port used to connect to
-    String m_options;                    // Account's options
-    bool m_startup;                      // Enable/disable flag
-    String m_outbound;                   // Outbound server (if any)
-    int m_expires;                       // Registration interval for protocols supporting it
-    bool m_connected;                    // Logged in/out flag
+    NamedList m_params;                  // Account parameters
 
 protected:
     // Remove from owner. Release data
     virtual void destroyed();
     // Method used by the contact to append itself to this account's list
     virtual void appendContact(ClientContact* contact);
-    // Set ID and URI
-    inline void setIdUri(const char* proto, const char* user,
-	const char* host) {
-	    buildAccountId(m_id,proto,user,host);
-	    m_uri = String(user) + "@" + host;
-	}
 
-    URI m_id;                            // The account's id
-    URI m_uri;                           // Account's URI
     ObjList m_contacts;                  // Account's contacts
 
 private:
     ClientResource* m_resource;          // Account's resource
+    ClientContact* m_contact;            // Account's contact data
 };
 
 /**
@@ -2984,12 +3118,30 @@ public:
     bool isLocalContact(ClientContact* c) const;
 
     /**
+     * Check if a contact is locally stored
+     * @param id Contact id to check
+     * @return True if the contact owner is the account owning locally stored contacts
+     */
+    inline bool isLocalContact(const String& id) const
+	{ return m_localContacts && m_localContacts->findContact(id); }
+
+    /**
      * Find an account
      * @param id The account's id
      * @param ref True to get a referenced pointer
      * @return ClientAccount pointer or 0 if not found
      */
     virtual ClientAccount* findAccount(const String& id, bool ref = false);
+
+    /**
+     * Find an account's contact by its URI (build an id from account and uri)
+     * @param account The account's id
+     * @param uri The contact's uri
+     * @param ref True to get a referenced pointer
+     * @return ClientContact pointer or 0 if not found
+     */
+    virtual ClientContact* findContactByUri(const String& account, const String& uri,
+	bool ref = false);
 
     /**
      * Find an account's contact
@@ -3007,6 +3159,25 @@ public:
      * @return ClientContact pointer or 0 if not found
      */
     virtual ClientContact* findContact(const String& builtId, bool ref = false);
+
+    /**
+     * Find a contact an instance id
+     * @param id The id
+     * @param instance Optional pointer to String to be filled with instance id
+     * @param ref True to get a referenced pointer
+     * @return ClientContact pointer or 0 if not found
+     */
+    virtual ClientContact* findContactByInstance(const String& id, String* instance = 0,
+	bool ref = false);
+
+    /**
+     * Check if there is a single registered account and return it
+     * @param skipProto Optional account protocol to skip
+     * @param ref True to get a referenced pointer
+     * @return ClientAccount pointer or 0 if not found
+     */
+    virtual ClientAccount* findSingleRegAccount(const String* skipProto = 0,
+	bool ref = false);
 
     /**
      * Append a new account. The account's reference counter is increased before
@@ -3050,12 +3221,15 @@ public:
 
     /**
      * Constructor. Build a contact from a list of parameters.
-     . Append itself to the owner's list
+     * Append itself to the owner's list
      * @param owner The contact's owner
      * @param params The list of parameters used to build this contact
+     * @param id Optional contact id
+     * @param uri Optional contact URI
      * @param chat True to create the chat window
      */
-    ClientContact(ClientAccount* owner, NamedList& params, bool chat);
+    ClientContact(ClientAccount* owner, const NamedList& params, const char* id = 0,
+	const char* uri = 0, bool chat = false);
 
     /**
      * Get this contact's account
@@ -3079,11 +3253,25 @@ public:
 	{ return m_uri; }
 
     /**
+     * Set this contact's URI
+     * @param u New contact URI
+     */
+    inline void setUri(const char* u)
+	{ m_uri = u; }
+
+    /**
      * Get the resource list of this contact
      * @return The resource list of this contact
      */
     inline ObjList& resources()
 	{ return m_resources; }
+
+    /**
+     * Check if the contact is online (has at least 1 resource in list)
+     * @return True if the contact is online
+     */
+    inline bool online() const
+	{ return 0 != m_resources.skipNull(); }
 
     /**
      * Get the group list of this contact
@@ -3093,6 +3281,17 @@ public:
 	{ return m_groups; }
 
     /**
+     * Remove account prefix from contact id and URI unescape the result
+     * @param buf Destination buffer
+     */
+    inline void getContactSection(String& buf) {
+	    String pref;
+	    buf = toString();
+	    buf.startSkip(buildContactId(pref,accountName(),String::empty()),false);
+	    buf = buf.uriUnescape();
+	}
+
+    /**
      * Get a string representation of this object
      * @return The contact's id
      */
@@ -3100,11 +3299,15 @@ public:
 	{ return m_id; }
 
     /**
-     * Build a contact id to be used in UI
+     * Build a contact instance id to be used in UI
      * @param dest Destination string
+     * @param inst Instance name
+     * @return Destination string
      */
-    inline void buildContactId(String& dest)
-	{  buildContactId(dest,m_owner ? m_owner->toString() : String::empty(),m_id); }
+    inline String& buildInstanceId(String& dest, const String& inst = String::empty()) {
+	    dest << m_id << "|" << inst.uriEscape('|');
+	    return dest;
+	}
 
     /**
      * Build a string from prefix and contact id hash
@@ -3245,31 +3448,40 @@ public:
 	{ return wnd && wnd->toString().startsWith(s_chatPrefix); }
 
     /**
-     * Build a contact id to be used in UI
+     * Build a contact id to be used in UI (all strings are URI escaped using extra '|' character)
      * @param dest Destination string
      * @param account Account owning the contact
      * @param contact The contact's id
+     * @return Destination string
      */
-    static inline void buildContactId(String& dest, const String& account,
-	const String& contact)
-	{ dest << String(account).toLower() << "|" << String(contact).toLower(); }
+    static inline String& buildContactId(String& dest, const String& account,
+	const String& contact) {
+	    dest << account.uriEscape('|') << "|" << String::uriEscape(contact,'|').toLower();
+	    return dest;
+	}
 
     /**
-     * Split a contact id
+     * Retrieve the account part of a contact id
      * @param src Source string
-     * @param account Account name
-     * @param contact Contact's name
+     * @param account Account id (URI unescaped)
      */
-    static inline void splitContactId(const String& src, String& account,
-	String& contact) {
+    static inline void splitContactId(const String& src, String& account) {
 	    int pos = src.find('|');
-	    if (pos < 1) {
-		account = src;
-		return;
-	    }
-	    account = src.substr(0,pos);
-	    contact = src.substr(pos + 1);
+	    if (pos >= 0)
+		account = src.substr(0,pos).uriUnescape();
+	    else
+		account = src.uriUnescape();
 	}
+
+    /**
+     * Split a contact instance id in account/contact/instance parts
+     * @param src Source string
+     * @param account Account id (URI unescaped)
+     * @param contact Contact id
+     * @param instance Optional pointer to a String to be filled with instance id (URI unescaped)
+     */
+    static void splitContactInstanceId(const String& src, String& account,
+	String& contact, String* instance = 0);
 
     // Chat window prefix
     static String s_chatPrefix;
@@ -3400,7 +3612,7 @@ public:
      * @param text Resource status text
      * @return True if changed
      */
-    inline bool setStatusText(const String& text) {
+    inline bool setStatusText(const String& text = String::empty()) {
 	    if (m_text == text)
 		return false;
 	    m_text = text;
@@ -3413,7 +3625,7 @@ public:
     static const TokenDict s_statusName[];
 
     String m_id;                         // The resource id
-    String m_name;                       // Account's display name
+    String m_name;                       // Resource display name
     bool m_audio;                        // Audio capability flag
     int m_priority;                      // Resource priority
     int m_status;                        // Resource status

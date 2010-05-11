@@ -9,7 +9,7 @@
     <x>0</x>
     <y>0</y>
     <width>500</width>
-    <height>285</height>
+    <height>280</height>
    </rect>
   </property>
   <property name="sizePolicy" >
@@ -21,13 +21,13 @@
   <property name="minimumSize" >
    <size>
     <width>500</width>
-    <height>285</height>
+    <height>280</height>
    </size>
   </property>
   <property name="maximumSize" >
    <size>
     <width>500</width>
-    <height>285</height>
+    <height>280</height>
    </size>
   </property>
   <property name="windowTitle" >
@@ -41,16 +41,16 @@
     <number>2</number>
    </property>
    <property name="leftMargin" >
-    <number>9</number>
+    <number>6</number>
    </property>
    <property name="topMargin" >
-    <number>9</number>
+    <number>6</number>
    </property>
    <property name="rightMargin" >
-    <number>9</number>
+    <number>6</number>
    </property>
    <property name="bottomMargin" >
-    <number>9</number>
+    <number>4</number>
    </property>
    <item>
     <layout class="QHBoxLayout" >
@@ -71,15 +71,21 @@
      </property>
      <item>
       <widget class="QFrame" name="frame_protocol" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Preferred" hsizetype="Fixed" >
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
        <property name="minimumSize" >
         <size>
-         <width>210</width>
+         <width>220</width>
          <height>16</height>
         </size>
        </property>
        <property name="maximumSize" >
         <size>
-         <width>210</width>
+         <width>220</width>
          <height>16777215</height>
         </size>
        </property>
@@ -108,7 +114,7 @@
         <item>
          <layout class="QHBoxLayout" >
           <property name="spacing" >
-           <number>6</number>
+           <number>2</number>
           </property>
           <property name="leftMargin" >
            <number>0</number>
@@ -124,6 +130,24 @@
           </property>
           <item>
            <widget class="QLabel" name="label_protocol" >
+            <property name="sizePolicy" >
+             <sizepolicy vsizetype="Preferred" hsizetype="Fixed" >
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize" >
+             <size>
+              <width>66</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="maximumSize" >
+             <size>
+              <width>66</width>
+              <height>16777215</height>
+             </size>
+            </property>
             <property name="text" >
              <string>Protocol:</string>
             </property>
@@ -132,14 +156,14 @@
           <item>
            <widget class="QComboBox" name="acc_protocol" >
             <property name="sizePolicy" >
-             <sizepolicy vsizetype="Fixed" hsizetype="MinimumExpanding" >
+             <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
               <horstretch>0</horstretch>
               <verstretch>0</verstretch>
              </sizepolicy>
             </property>
             <property name="minimumSize" >
              <size>
-              <width>120</width>
+              <width>0</width>
               <height>25</height>
              </size>
             </property>
@@ -159,7 +183,7 @@
      <item>
       <layout class="QHBoxLayout" >
        <property name="spacing" >
-        <number>6</number>
+        <number>2</number>
        </property>
        <property name="leftMargin" >
         <number>0</number>
@@ -175,6 +199,24 @@
        </property>
        <item>
         <widget class="QLabel" name="label" >
+         <property name="sizePolicy" >
+          <sizepolicy vsizetype="Preferred" hsizetype="Fixed" >
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize" >
+          <size>
+           <width>80</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="maximumSize" >
+          <size>
+           <width>80</width>
+           <height>16777215</height>
+          </size>
+         </property>
          <property name="text" >
           <string>Use provider:</string>
          </property>
@@ -183,14 +225,14 @@
        <item>
         <widget class="QComboBox" name="acc_providers" >
          <property name="sizePolicy" >
-          <sizepolicy vsizetype="Fixed" hsizetype="MinimumExpanding" >
+          <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
          </property>
          <property name="minimumSize" >
           <size>
-           <width>120</width>
+           <width>0</width>
            <height>25</height>
           </size>
          </property>
@@ -251,16 +293,22 @@
      </property>
      <item>
       <widget class="QFrame" name="frame_account" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Preferred" hsizetype="Fixed" >
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
        <property name="minimumSize" >
         <size>
-         <width>210</width>
-         <height>148</height>
+         <width>220</width>
+         <height>136</height>
         </size>
        </property>
        <property name="maximumSize" >
         <size>
-         <width>210</width>
-         <height>444</height>
+         <width>220</width>
+         <height>136</height>
         </size>
        </property>
        <property name="frameShape" >
@@ -304,6 +352,24 @@
           </property>
           <item>
            <widget class="QLabel" name="label_3" >
+            <property name="sizePolicy" >
+             <sizepolicy vsizetype="Preferred" hsizetype="Fixed" >
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize" >
+             <size>
+              <width>66</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="maximumSize" >
+             <size>
+              <width>66</width>
+              <height>16777215</height>
+             </size>
+            </property>
             <property name="text" >
              <string>Account:</string>
             </property>
@@ -312,14 +378,14 @@
           <item>
            <widget class="QLineEdit" name="acc_account" >
             <property name="sizePolicy" >
-             <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+             <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
               <horstretch>0</horstretch>
               <verstretch>0</verstretch>
              </sizepolicy>
             </property>
             <property name="minimumSize" >
              <size>
-              <width>152</width>
+              <width>0</width>
               <height>25</height>
              </size>
             </property>
@@ -355,6 +421,24 @@
           </property>
           <item>
            <widget class="QLabel" name="label_5" >
+            <property name="sizePolicy" >
+             <sizepolicy vsizetype="Preferred" hsizetype="Fixed" >
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize" >
+             <size>
+              <width>66</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="maximumSize" >
+             <size>
+              <width>66</width>
+              <height>16777215</height>
+             </size>
+            </property>
             <property name="text" >
              <string>Username:</string>
             </property>
@@ -398,20 +482,20 @@
           <item>
            <widget class="QLineEdit" name="acc_domain" >
             <property name="sizePolicy" >
-             <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+             <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
               <horstretch>0</horstretch>
               <verstretch>0</verstretch>
              </sizepolicy>
             </property>
             <property name="minimumSize" >
              <size>
-              <width>78</width>
+              <width>0</width>
               <height>25</height>
              </size>
             </property>
             <property name="maximumSize" >
              <size>
-              <width>78</width>
+              <width>16777215</width>
               <height>25</height>
              </size>
             </property>
@@ -438,6 +522,24 @@
           </property>
           <item>
            <widget class="QLabel" name="label_7" >
+            <property name="sizePolicy" >
+             <sizepolicy vsizetype="Preferred" hsizetype="Fixed" >
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize" >
+             <size>
+              <width>66</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="maximumSize" >
+             <size>
+              <width>66</width>
+              <height>16777215</height>
+             </size>
+            </property>
             <property name="text" >
              <string>Password:</string>
             </property>
@@ -446,14 +548,14 @@
           <item>
            <widget class="QLineEdit" name="acc_password" >
             <property name="sizePolicy" >
-             <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+             <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
               <horstretch>0</horstretch>
               <verstretch>0</verstretch>
              </sizepolicy>
             </property>
             <property name="minimumSize" >
              <size>
-              <width>152</width>
+              <width>0</width>
               <height>25</height>
              </size>
             </property>
@@ -489,6 +591,24 @@
           </property>
           <item>
            <widget class="QLabel" name="label_4" >
+            <property name="sizePolicy" >
+             <sizepolicy vsizetype="Preferred" hsizetype="Fixed" >
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize" >
+             <size>
+              <width>66</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="maximumSize" >
+             <size>
+              <width>66</width>
+              <height>16777215</height>
+             </size>
+            </property>
             <property name="text" >
              <string>Server:</string>
             </property>
@@ -497,14 +617,14 @@
           <item>
            <widget class="QLineEdit" name="acc_server" >
             <property name="sizePolicy" >
-             <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+             <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
               <horstretch>0</horstretch>
               <verstretch>0</verstretch>
              </sizepolicy>
             </property>
             <property name="minimumSize" >
              <size>
-              <width>152</width>
+              <width>0</width>
               <height>25</height>
              </size>
             </property>
@@ -517,6 +637,19 @@
            </widget>
           </item>
          </layout>
+        </item>
+        <item>
+         <spacer>
+          <property name="orientation" >
+           <enum>Qt::Vertical</enum>
+          </property>
+          <property name="sizeHint" >
+           <size>
+            <width>20</width>
+            <height>40</height>
+           </size>
+          </property>
+         </spacer>
         </item>
         <item>
          <layout class="QHBoxLayout" >
@@ -549,7 +682,7 @@
            </spacer>
           </item>
           <item>
-           <widget class="QPushButton" name="toggleAccAdvanced" >
+           <widget class="QPushButton" name="acc_showadvanced" >
             <property name="minimumSize" >
              <size>
               <width>80</width>
@@ -574,16 +707,22 @@
      </item>
      <item>
       <widget class="QStackedWidget" name="acc_proto_spec" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Preferred" hsizetype="Fixed" >
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
        <property name="minimumSize" >
         <size>
          <width>16</width>
-         <height>148</height>
+         <height>136</height>
         </size>
        </property>
        <property name="maximumSize" >
         <size>
          <width>500</width>
-         <height>148</height>
+         <height>136</height>
         </size>
        </property>
        <property name="frameShape" >
@@ -615,7 +754,7 @@
          <item>
           <widget class="QLabel" name="label_2" >
            <property name="sizePolicy" >
-            <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+            <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
              <horstretch>0</horstretch>
              <verstretch>0</verstretch>
             </sizepolicy>
@@ -628,6 +767,9 @@
            </property>
            <property name="pixmap" >
             <pixmap>null_team-48.png</pixmap>
+           </property>
+           <property name="alignment" >
+            <set>Qt::AlignCenter</set>
            </property>
           </widget>
          </item>
@@ -658,17 +800,8 @@
              <height>0</height>
             </size>
            </property>
-           <property name="title" >
-            <string/>
-           </property>
-           <property name="alignment" >
-            <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
-           </property>
-           <property name="flat" >
-            <bool>true</bool>
-           </property>
-           <property name="checkable" >
-            <bool>false</bool>
+           <property name="styleSheet" >
+            <string>border: 0px;</string>
            </property>
            <layout class="QVBoxLayout" >
             <property name="spacing" >
@@ -707,16 +840,6 @@
              <widget class="QCheckBox" name="acc_proto_jabber_opt_noautorestart" >
               <property name="text" >
                <string>Don't restart connection when down</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QCheckBox" name="acc_proto_jabber_opt_oldstyleauth" >
-              <property name="text" >
-               <string>Use old style authentication</string>
-              </property>
-              <property name="autoExclusive" >
-               <bool>false</bool>
               </property>
              </widget>
             </item>
@@ -1081,7 +1204,7 @@
       <number>0</number>
      </property>
      <property name="topMargin" >
-      <number>0</number>
+      <number>4</number>
      </property>
      <property name="rightMargin" >
       <number>0</number>

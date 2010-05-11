@@ -397,7 +397,7 @@
          <enum>QFrame::Raised</enum>
         </property>
         <property name="currentIndex" >
-         <number>0</number>
+         <number>1</number>
         </property>
         <widget class="QWidget" name="PageCalls" >
          <property name="sizePolicy" >
@@ -1628,465 +1628,249 @@
            <number>9</number>
           </property>
           <item>
-           <widget class="QFrame" name="framePageCDR" >
-            <property name="sizePolicy" >
-             <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
+           <layout class="QVBoxLayout" >
+            <property name="spacing" >
+             <number>4</number>
             </property>
-            <property name="frameShape" >
-             <enum>QFrame::NoFrame</enum>
+            <property name="leftMargin" >
+             <number>0</number>
             </property>
-            <property name="frameShadow" >
-             <enum>QFrame::Raised</enum>
+            <property name="topMargin" >
+             <number>0</number>
             </property>
-            <property name="lineWidth" >
-             <number>1</number>
+            <property name="rightMargin" >
+             <number>0</number>
             </property>
-            <layout class="QVBoxLayout" >
-             <property name="spacing" >
-              <number>4</number>
-             </property>
-             <property name="leftMargin" >
-              <number>0</number>
-             </property>
-             <property name="topMargin" >
-              <number>0</number>
-             </property>
-             <property name="rightMargin" >
-              <number>0</number>
-             </property>
-             <property name="bottomMargin" >
-              <number>0</number>
-             </property>
-             <item>
-              <widget class="QTabWidget" name="tabWidget" >
-               <property name="currentIndex" >
-                <number>0</number>
+            <property name="bottomMargin" >
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QTableWidget" name="log" >
+              <property name="editTriggers" >
+               <set>QAbstractItemView::NoEditTriggers</set>
+              </property>
+              <property name="selectionMode" >
+               <enum>QAbstractItemView::SingleSelection</enum>
+              </property>
+              <property name="selectionBehavior" >
+               <enum>QAbstractItemView::SelectRows</enum>
+              </property>
+              <property name="columnCount" >
+               <number>3</number>
+              </property>
+              <column>
+               <property name="text" >
+                <string>Party</string>
                </property>
-               <widget class="QWidget" name="tabLogOutgoing" >
-                <attribute name="title" >
-                 <string>Dialed</string>
-                </attribute>
-                <attribute name="icon" >
-                 <iconset>up.png</iconset>
-                </attribute>
-                <layout class="QVBoxLayout" >
-                 <property name="spacing" >
-                  <number>4</number>
-                 </property>
-                 <property name="leftMargin" >
-                  <number>0</number>
-                 </property>
-                 <property name="topMargin" >
-                  <number>0</number>
-                 </property>
-                 <property name="rightMargin" >
-                  <number>0</number>
-                 </property>
-                 <property name="bottomMargin" >
-                  <number>0</number>
-                 </property>
-                 <item>
-                  <layout class="QVBoxLayout" >
-                   <property name="spacing" >
-                    <number>4</number>
-                   </property>
-                   <property name="leftMargin" >
-                    <number>3</number>
-                   </property>
-                   <property name="topMargin" >
-                    <number>3</number>
-                   </property>
-                   <property name="rightMargin" >
-                    <number>3</number>
-                   </property>
-                   <property name="bottomMargin" >
-                    <number>3</number>
-                   </property>
-                   <item>
-                    <widget class="QTableWidget" name="log_outgoing" >
-                     <property name="autoFillBackground" >
-                      <bool>false</bool>
-                     </property>
-                     <property name="editTriggers" >
-                      <set>QAbstractItemView::NoEditTriggers</set>
-                     </property>
-                     <property name="alternatingRowColors" >
-                      <bool>true</bool>
-                     </property>
-                     <property name="selectionMode" >
-                      <enum>QAbstractItemView::SingleSelection</enum>
-                     </property>
-                     <property name="selectionBehavior" >
-                      <enum>QAbstractItemView::SelectRows</enum>
-                     </property>
-                     <property name="columnCount" >
-                      <number>3</number>
-                     </property>
-                     <column>
-                      <property name="text" >
-                       <string>Caller</string>
-                      </property>
-                     </column>
-                     <column>
-                      <property name="text" >
-                       <string>Called</string>
-                      </property>
-                     </column>
-                     <column>
-                      <property name="text" >
-                       <string>Duration</string>
-                      </property>
-                     </column>
-                    </widget>
-                   </item>
-                   <item>
-                    <layout class="QHBoxLayout" >
-                     <property name="spacing" >
-                      <number>0</number>
-                     </property>
-                     <property name="leftMargin" >
-                      <number>3</number>
-                     </property>
-                     <property name="topMargin" >
-                      <number>3</number>
-                     </property>
-                     <property name="rightMargin" >
-                      <number>3</number>
-                     </property>
-                     <property name="bottomMargin" >
-                      <number>3</number>
-                     </property>
-                     <item>
-                      <spacer>
-                       <property name="orientation" >
-                        <enum>Qt::Horizontal</enum>
-                       </property>
-                       <property name="sizeHint" >
-                        <size>
-                         <width>40</width>
-                         <height>20</height>
-                        </size>
-                       </property>
-                      </spacer>
-                     </item>
-                     <item>
-                      <widget class="QPushButton" name="log_out_call" >
-                       <property name="minimumSize" >
-                        <size>
-                         <width>0</width>
-                         <height>25</height>
-                        </size>
-                       </property>
-                       <property name="maximumSize" >
-                        <size>
-                         <width>64</width>
-                         <height>25</height>
-                        </size>
-                       </property>
-                       <property name="toolTip" >
-                        <string>Call back this number</string>
-                       </property>
-                       <property name="text" >
-                        <string>Call</string>
-                       </property>
-                       <property name="icon" >
-                        <iconset>phone.png</iconset>
-                       </property>
-                       <property name="iconSize" >
-                        <size>
-                         <width>20</width>
-                         <height>20</height>
-                        </size>
-                       </property>
-                      </widget>
-                     </item>
-                     <item>
-                      <widget class="QPushButton" name="log_out_clear" >
-                       <property name="minimumSize" >
-                        <size>
-                         <width>0</width>
-                         <height>25</height>
-                        </size>
-                       </property>
-                       <property name="maximumSize" >
-                        <size>
-                         <width>64</width>
-                         <height>25</height>
-                        </size>
-                       </property>
-                       <property name="toolTip" >
-                        <string>Clear all incoming calls log</string>
-                       </property>
-                       <property name="text" >
-                        <string>Clear</string>
-                       </property>
-                       <property name="icon" >
-                        <iconset>cdr_clear.png</iconset>
-                       </property>
-                       <property name="iconSize" >
-                        <size>
-                         <width>20</width>
-                         <height>20</height>
-                        </size>
-                       </property>
-                       <property name="_yate_identity" stdset="0" >
-                        <string>clear:log_outgoing</string>
-                       </property>
-                      </widget>
-                     </item>
-                     <item>
-                      <widget class="QPushButton" name="log_out_contact" >
-                       <property name="minimumSize" >
-                        <size>
-                         <width>0</width>
-                         <height>25</height>
-                        </size>
-                       </property>
-                       <property name="maximumSize" >
-                        <size>
-                         <width>64</width>
-                         <height>25</height>
-                        </size>
-                       </property>
-                       <property name="toolTip" >
-                        <string>Turn this number into a contact</string>
-                       </property>
-                       <property name="text" >
-                        <string>Contact</string>
-                       </property>
-                       <property name="icon" >
-                        <iconset>book.png</iconset>
-                       </property>
-                       <property name="iconSize" >
-                        <size>
-                         <width>16</width>
-                         <height>16</height>
-                        </size>
-                       </property>
-                      </widget>
-                     </item>
-                    </layout>
-                   </item>
-                  </layout>
-                 </item>
-                </layout>
+              </column>
+              <column>
+               <property name="text" >
+                <string>Time</string>
+               </property>
+              </column>
+              <column>
+               <property name="text" >
+                <string>Duration</string>
+               </property>
+              </column>
+             </widget>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" >
+              <property name="spacing" >
+               <number>2</number>
+              </property>
+              <property name="leftMargin" >
+               <number>0</number>
+              </property>
+              <property name="topMargin" >
+               <number>4</number>
+              </property>
+              <property name="rightMargin" >
+               <number>0</number>
+              </property>
+              <property name="bottomMargin" >
+               <number>0</number>
+              </property>
+              <item>
+               <spacer>
+                <property name="orientation" >
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeHint" >
+                 <size>
+                  <width>40</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+              <item>
+               <widget class="QPushButton" name="log_call" >
+                <property name="enabled" >
+                 <bool>false</bool>
+                </property>
+                <property name="sizePolicy" >
+                 <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="minimumSize" >
+                 <size>
+                  <width>70</width>
+                  <height>25</height>
+                 </size>
+                </property>
+                <property name="maximumSize" >
+                 <size>
+                  <width>70</width>
+                  <height>25</height>
+                 </size>
+                </property>
+                <property name="toolTip" >
+                 <string>Call back this number</string>
+                </property>
+                <property name="text" >
+                 <string>Call</string>
+                </property>
+                <property name="icon" >
+                 <iconset>phone.png</iconset>
+                </property>
+                <property name="iconSize" >
+                 <size>
+                  <width>20</width>
+                  <height>20</height>
+                 </size>
+                </property>
                </widget>
-               <widget class="QWidget" name="tabLogIncoming" >
-                <attribute name="title" >
-                 <string>Received</string>
-                </attribute>
-                <attribute name="icon" >
-                 <iconset>down.png</iconset>
-                </attribute>
-                <layout class="QVBoxLayout" >
-                 <property name="spacing" >
-                  <number>0</number>
-                 </property>
-                 <property name="leftMargin" >
-                  <number>0</number>
-                 </property>
-                 <property name="topMargin" >
-                  <number>0</number>
-                 </property>
-                 <property name="rightMargin" >
-                  <number>0</number>
-                 </property>
-                 <property name="bottomMargin" >
-                  <number>0</number>
-                 </property>
-                 <item>
-                  <layout class="QVBoxLayout" >
-                   <property name="spacing" >
-                    <number>4</number>
-                   </property>
-                   <property name="leftMargin" >
-                    <number>3</number>
-                   </property>
-                   <property name="topMargin" >
-                    <number>3</number>
-                   </property>
-                   <property name="rightMargin" >
-                    <number>3</number>
-                   </property>
-                   <property name="bottomMargin" >
-                    <number>3</number>
-                   </property>
-                   <item>
-                    <widget class="QTableWidget" name="log_incoming" >
-                     <property name="autoFillBackground" >
-                      <bool>false</bool>
-                     </property>
-                     <property name="editTriggers" >
-                      <set>QAbstractItemView::NoEditTriggers</set>
-                     </property>
-                     <property name="alternatingRowColors" >
-                      <bool>true</bool>
-                     </property>
-                     <property name="selectionMode" >
-                      <enum>QAbstractItemView::SingleSelection</enum>
-                     </property>
-                     <property name="selectionBehavior" >
-                      <enum>QAbstractItemView::SelectRows</enum>
-                     </property>
-                     <property name="columnCount" >
-                      <number>3</number>
-                     </property>
-                     <column>
-                      <property name="text" >
-                       <string>Caller</string>
-                      </property>
-                     </column>
-                     <column>
-                      <property name="text" >
-                       <string>Called</string>
-                      </property>
-                     </column>
-                     <column>
-                      <property name="text" >
-                       <string>Duration</string>
-                      </property>
-                     </column>
-                    </widget>
-                   </item>
-                   <item>
-                    <layout class="QHBoxLayout" >
-                     <property name="spacing" >
-                      <number>0</number>
-                     </property>
-                     <property name="leftMargin" >
-                      <number>3</number>
-                     </property>
-                     <property name="topMargin" >
-                      <number>3</number>
-                     </property>
-                     <property name="rightMargin" >
-                      <number>3</number>
-                     </property>
-                     <property name="bottomMargin" >
-                      <number>3</number>
-                     </property>
-                     <item>
-                      <spacer>
-                       <property name="orientation" >
-                        <enum>Qt::Horizontal</enum>
-                       </property>
-                       <property name="sizeHint" >
-                        <size>
-                         <width>40</width>
-                         <height>20</height>
-                        </size>
-                       </property>
-                      </spacer>
-                     </item>
-                     <item>
-                      <widget class="QPushButton" name="log_in_call" >
-                       <property name="minimumSize" >
-                        <size>
-                         <width>0</width>
-                         <height>25</height>
-                        </size>
-                       </property>
-                       <property name="maximumSize" >
-                        <size>
-                         <width>64</width>
-                         <height>25</height>
-                        </size>
-                       </property>
-                       <property name="toolTip" >
-                        <string>Call back this number</string>
-                       </property>
-                       <property name="text" >
-                        <string>Call</string>
-                       </property>
-                       <property name="icon" >
-                        <iconset>phone.png</iconset>
-                       </property>
-                       <property name="iconSize" >
-                        <size>
-                         <width>20</width>
-                         <height>20</height>
-                        </size>
-                       </property>
-                      </widget>
-                     </item>
-                     <item>
-                      <widget class="QPushButton" name="log_in_clear" >
-                       <property name="minimumSize" >
-                        <size>
-                         <width>0</width>
-                         <height>25</height>
-                        </size>
-                       </property>
-                       <property name="maximumSize" >
-                        <size>
-                         <width>64</width>
-                         <height>25</height>
-                        </size>
-                       </property>
-                       <property name="toolTip" >
-                        <string>Clear all incoming calls log</string>
-                       </property>
-                       <property name="text" >
-                        <string>Clear</string>
-                       </property>
-                       <property name="icon" >
-                        <iconset>cdr_clear.png</iconset>
-                       </property>
-                       <property name="iconSize" >
-                        <size>
-                         <width>20</width>
-                         <height>20</height>
-                        </size>
-                       </property>
-                       <property name="_yate_identity" stdset="0" >
-                        <string>clear:log_incoming</string>
-                       </property>
-                      </widget>
-                     </item>
-                     <item>
-                      <widget class="QPushButton" name="log_in_contact" >
-                       <property name="minimumSize" >
-                        <size>
-                         <width>0</width>
-                         <height>25</height>
-                        </size>
-                       </property>
-                       <property name="maximumSize" >
-                        <size>
-                         <width>64</width>
-                         <height>25</height>
-                        </size>
-                       </property>
-                       <property name="toolTip" >
-                        <string>Turn this number into a contact</string>
-                       </property>
-                       <property name="text" >
-                        <string>Contact</string>
-                       </property>
-                       <property name="icon" >
-                        <iconset>book.png</iconset>
-                       </property>
-                       <property name="iconSize" >
-                        <size>
-                         <width>16</width>
-                         <height>16</height>
-                        </size>
-                       </property>
-                      </widget>
-                     </item>
-                    </layout>
-                   </item>
-                  </layout>
-                 </item>
-                </layout>
+              </item>
+              <item>
+               <widget class="QPushButton" name="log_clear" >
+                <property name="sizePolicy" >
+                 <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="minimumSize" >
+                 <size>
+                  <width>70</width>
+                  <height>25</height>
+                 </size>
+                </property>
+                <property name="maximumSize" >
+                 <size>
+                  <width>70</width>
+                  <height>25</height>
+                 </size>
+                </property>
+                <property name="toolTip" >
+                 <string>Clear all calls log</string>
+                </property>
+                <property name="text" >
+                 <string>Clear</string>
+                </property>
+                <property name="icon" >
+                 <iconset>cdr_clear.png</iconset>
+                </property>
+                <property name="iconSize" >
+                 <size>
+                  <width>20</width>
+                  <height>20</height>
+                 </size>
+                </property>
+                <property name="_yate_identity" stdset="0" >
+                 <string>clear:log:</string>
+                </property>
                </widget>
-              </widget>
-             </item>
-            </layout>
-           </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="log_del" >
+                <property name="enabled" >
+                 <bool>false</bool>
+                </property>
+                <property name="sizePolicy" >
+                 <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="minimumSize" >
+                 <size>
+                  <width>70</width>
+                  <height>25</height>
+                 </size>
+                </property>
+                <property name="maximumSize" >
+                 <size>
+                  <width>70</width>
+                  <height>25</height>
+                 </size>
+                </property>
+                <property name="toolTip" >
+                 <string>Delete the selected call log</string>
+                </property>
+                <property name="text" >
+                 <string>Delete</string>
+                </property>
+                <property name="icon" >
+                 <iconset>close.png</iconset>
+                </property>
+                <property name="iconSize" >
+                 <size>
+                  <width>20</width>
+                  <height>20</height>
+                 </size>
+                </property>
+                <property name="_yate_identity" stdset="0" >
+                 <string>deleteselecteditem:log:</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="log_contact" >
+                <property name="enabled" >
+                 <bool>false</bool>
+                </property>
+                <property name="sizePolicy" >
+                 <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="minimumSize" >
+                 <size>
+                  <width>70</width>
+                  <height>25</height>
+                 </size>
+                </property>
+                <property name="maximumSize" >
+                 <size>
+                  <width>70</width>
+                  <height>25</height>
+                 </size>
+                </property>
+                <property name="toolTip" >
+                 <string>Turn this number into a contact</string>
+                </property>
+                <property name="text" >
+                 <string>Contact</string>
+                </property>
+                <property name="icon" >
+                 <iconset>book.png</iconset>
+                </property>
+                <property name="iconSize" >
+                 <size>
+                  <width>16</width>
+                  <height>16</height>
+                 </size>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+           </layout>
           </item>
          </layout>
         </widget>
@@ -2318,6 +2102,9 @@
                  <height>20</height>
                 </size>
                </property>
+               <property name="_yate_identity" stdset="0" >
+                <string>deleteselecteditem:accounts:</string>
+               </property>
               </widget>
              </item>
              <item>
@@ -2421,7 +2208,7 @@
                 <enum>QAbstractItemView::SelectRows</enum>
                </property>
                <property name="columnCount" >
-                <number>5</number>
+                <number>2</number>
                </property>
                <column>
                 <property name="text" >
@@ -2431,21 +2218,6 @@
                <column>
                 <property name="text" >
                  <string>Number/URI</string>
-                </property>
-               </column>
-               <column>
-                <property name="text" >
-                 <string>hidden:account</string>
-                </property>
-               </column>
-               <column>
-                <property name="text" >
-                 <string>hidden:protocol</string>
-                </property>
-               </column>
-               <column>
-                <property name="text" >
-                 <string>hidden:editable</string>
                 </property>
                </column>
               </widget>
@@ -2583,6 +2355,9 @@
                     <width>20</width>
                     <height>20</height>
                    </size>
+                  </property>
+                  <property name="_yate_identity" stdset="0" >
+                   <string>deleteselecteditem:contacts:</string>
                   </property>
                  </widget>
                 </item>

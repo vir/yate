@@ -2230,7 +2230,11 @@ bool Client::buildIncomingChannel(Message& msg, const String& dest)
 // Build an outgoing channel
 bool Client::buildOutgoingChannel(NamedList& params)
 {
-    Debug(ClientDriver::self(),DebugAll,"Client::buildOutgoingChannel() [%p]",this);
+    String tmp;
+//#ifdef DEBUG
+    params.dump(tmp," ");
+//#endif
+    Debug(ClientDriver::self(),DebugAll,"Client::buildOutgoingChannel(%s) [%p]",tmp.safe(),this);
     // get the target of the call
     NamedString* target = params.getParam("target");
     if (TelEngine::null(target))
@@ -3385,35 +3389,40 @@ ClientChannel* ClientDriver::findChanByPeer(const String& peer)
  * ClientAccount
  */
 // Constructor
-ClientAccount::ClientAccount(const char* proto, const char* user,
-	const char* host, bool startup)
+ClientAccount::ClientAccount(const char* proto, const char* user, const char* host,
+    bool startup, ClientContact* contact)
     : Mutex(true,"ClientAccount"),
-    m_port(0), m_startup(startup), m_expires(-1), m_connected(false),
-    m_resource(0)
+    m_params(""), m_resource(0), m_contact(0)
 {
-    setIdUri(proto,user,host);
-    setResource(new ClientResource(""));
-    DDebug(ClientDriver::self(),DebugAll,"Created client account=%s [%p]",
-	m_uri.c_str(),this);
+    m_params.addParam("enabled",String::boolText(startup));
+    m_params.addParam("protocol",proto,false);
+    m_params.addParam("username",user,false);
+    m_params.addParam("domain",host,false);
+    setResource(new ClientResource(m_params.getValue("resource")));
+    setContact(contact);
+    Debug(ClientDriver::self(),DebugAll,"Created client account='%s' [%p]",
+	toString().c_str(),this);
 }
 
 // Constructor. Build an account from a list of parameters.
-ClientAccount::ClientAccount(const NamedList& params)
+ClientAccount::ClientAccount(const NamedList& params, ClientContact* contact)
     : Mutex(true,"ClientAccount"),
-    m_port(0), m_startup(false), m_expires(-1), m_connected(false),
-    m_resource(0)
+    m_params(params), m_resource(0), m_contact(0)
 {
-    setIdUri(params.getValue("protocol"),params.getValue("username"),params.getValue("domain"));
-    m_startup = params.getBoolValue("enable");
-    m_password = params.getValue("password");
-    setResource(new ClientResource(params.getValue("resource")));
-    m_server = params.getValue("server");
-    m_options = params.getValue("options");
-    m_port = params.getIntValue("port",m_port);
-    m_outbound = params.getValue("outbound");
-    m_expires = params.getIntValue("expires",m_expires);
-    DDebug(ClientDriver::self(),DebugAll,"Created client account=%s [%p]",
-	m_uri.c_str(),this);
+    setResource(new ClientResource(m_params.getValue("resource")));
+    setContact(contact);
+    Debug(ClientDriver::self(),DebugAll,"Created client account='%s' [%p]",
+	toString().c_str(),this);
+}
+
+// Set account own contact
+void ClientAccount::setContact(ClientContact* contact)
+{
+    Lock lock(this);
+    if (m_contact == contact)
+	return;
+    TelEngine::destruct(m_contact);
+    m_contact = contact;
 }
 
 // Get this account's resource
@@ -3437,19 +3446,64 @@ void ClientAccount::setResource(ClientResource* res)
     m_resource = res;
 }
 
+// Save this account to client accounts file
+bool ClientAccount::save(bool ok, bool savePwd)
+{
+    NamedList* sect = Client::s_accounts.getSection(toString());
+    if (ok) {
+	if (!sect)
+	    sect = Client::s_accounts.createSection(toString());
+	if (!sect)
+	    return false;
+	*sect = m_params;
+	if (!savePwd)
+	    sect->clearParam("password");
+	sect->assign(toString());
+    }
+    else if (sect)
+	Client::s_accounts.clearSection(toString());
+    else
+	return true;
+    return Client::save(Client::s_accounts);
+}
+
 // Find a contact by its id
 ClientContact* ClientAccount::findContact(const String& id, bool ref)
 {
-    Lock lock(this);
-    ObjList* obj = m_contacts.find(id);
-    if (!obj)
+    if (!id)
 	return 0;
-    ClientContact* c = static_cast<ClientContact*>(obj->get());
-    return (!ref || c->ref()) ? c : 0;
+    Lock lock(this);
+    ClientContact* c = 0;
+    if (!m_contact || id != m_contact->toString()) {
+	ObjList* o = m_contacts.skipNull();
+	while (o && o->get()->toString() != id)
+	    o = o->skipNext();
+	c = o ? static_cast<ClientContact*>(o->get()) : 0;
+    }
+    else
+	c = m_contact;
+    return c && (!ref || c->ref()) ? c : 0;
+}
+
+// Find a contact by name and/or uri
+ClientContact* ClientAccount::findContact(const String* name, const String* uri,
+    const String* skipId, bool ref)
+{
+    if (!(name || uri))
+	return 0;
+    Lock lock(this);
+    for (ObjList* o = m_contacts.skipNull(); o; o = o->skipNext()) {
+	ClientContact* c = static_cast<ClientContact*>(o->get());
+	if ((skipId && *skipId == c->toString()) ||
+	    (name && *name != c->m_name) || (uri && *uri != c->uri()))
+	    continue;
+	return (!ref || c->ref()) ? c : 0;
+    }
+    return 0;
 }
 
 // Find a contact having a given id and resource
-ClientContact* ClientAccount::findContact(const String& id, const String& resid, 
+ClientContact* ClientAccount::findContact(const String& id, const String& resid,
     bool ref)
 {
     Lock lock(this);
@@ -3457,6 +3511,15 @@ ClientContact* ClientAccount::findContact(const String& id, const String& resid,
     if (!(c && c->findResource(resid)))
 	return 0;
     return (!ref || c->ref()) ? c : 0;
+}
+
+// Find a contact by its URI (build an id from account and uri)
+ClientContact* ClientAccount::findContactByUri(const String& uri, bool ref)
+{
+    Lock lock(this);
+    String id;
+    ClientContact::buildContactId(id,toString(),uri);
+    return findContact(id,ref);
 }
 
 // Build a contact and append it to the list
@@ -3484,14 +3547,15 @@ ClientContact* ClientAccount::removeContact(const String& id, bool delObj)
 {
     Lock lock(this);
     ClientContact* c = findContact(id);
-    if (!c)
+    if (!c || c == m_contact)
 	return 0;
     m_contacts.remove(c,false);
     c->m_owner = 0;
     lock.drop();
     Debug(ClientDriver::self(),DebugAll,
-	"Account(%s) removed contact '%s' delObj=%u [%p]",
-	m_uri.c_str(),c->uri().c_str(),delObj,this);
+	"Account(%s) removed contact '%s' name='%s' uri='%s' delObj=%u [%p]",
+	toString().c_str(),c->toString().c_str(),c->m_name.c_str(),c->uri().c_str(),
+	delObj,this);
     if (delObj)
 	TelEngine::destruct(c);
     return c;
@@ -3500,30 +3564,23 @@ ClientContact* ClientAccount::removeContact(const String& id, bool delObj)
 // Build a login/logout message from account's data
 Message* ClientAccount::userlogin(bool login, const char* msg)
 {
-#define SAFE_FILL(param,value) { if(value) m->addParam(param,value); }
-    Message* m = new Message(msg);
-    m->addParam("account",m_id);
-    m->addParam("operation",login ? "create" : "delete");
-    // Fill login data    
-    if (login) {
-	SAFE_FILL("username",m_uri.getUser());
-	SAFE_FILL("password",m_password);
-	SAFE_FILL("domain",m_uri.getHost());
-	lock();
-	if (m_resource)
-	    SAFE_FILL("resource",m_resource->toString());
-	unlock();
-	SAFE_FILL("server",m_server);
-	SAFE_FILL("options",m_options);
-	if (m_port)
-	    m->addParam("port",String(m_port));
-	SAFE_FILL("outbound",m_outbound);
-	if (m_expires >= 0)
-	    m->addParam("expires",String(m_expires));
-    }
-    SAFE_FILL("protocol",m_id.getProtocol());
-#undef SAFE_FILL
+    Message* m = Client::buildMessage(msg,toString(),login ? "login" : "logout");
+    if (login)
+	m->copyParams(m_params);
+    else
+	m->addParam("protocol",protocol(),false);
     return m;
+}
+
+// Fill a list used to update an account list item
+void ClientAccount::fillItemParams(NamedList& list)
+{
+    list.addParam("account",toString());
+    list.addParam("protocol",m_params.getValue("protocol"));
+    const char* sName = resource().statusName();
+    NamedString* status = new NamedString("status",sName);
+    status->append(resource().m_text,": ");
+    list.addParam(status);
 }
 
 // Remove from owner. Release data
@@ -3531,13 +3588,14 @@ void ClientAccount::destroyed()
 {
     lock();
     TelEngine::destruct(m_resource);
+    TelEngine::destruct(m_contact);
     // Clear contacts. Remove their owner before
     for (ObjList* o = m_contacts.skipNull(); o; o = o->skipNext())
 	(static_cast<ClientContact*>(o->get()))->m_owner = 0;
     m_contacts.clear();
     unlock();
-    DDebug(ClientDriver::self(),DebugAll,"Destroyed client account=%s [%p]",
-	m_uri.c_str(),this);
+    Debug(ClientDriver::self(),DebugAll,"Destroyed client account=%s [%p]",
+	toString().c_str(),this);
     RefObject::destroyed();
 }
 
@@ -3550,8 +3608,9 @@ void ClientAccount::appendContact(ClientContact* contact)
     m_contacts.append(contact);
     contact->m_owner = this;
     Debug(ClientDriver::self(),DebugAll,
-	"Account(%s) added contact '%s' [%p]",
-	m_uri.c_str(),contact->uri().c_str(),this);
+	"Account(%s) added contact '%s' name='%s' uri='%s' [%p]",
+	toString().c_str(),contact->toString().c_str(),contact->m_name.c_str(),
+	contact->uri().c_str(),this);
 }
 
 
@@ -3576,15 +3635,28 @@ ClientAccount* ClientAccountList::findAccount(const String& id, bool ref)
     Lock lock(this);
     if (m_localContacts && m_localContacts->toString() == id)
 	return (!ref || m_localContacts->ref()) ? m_localContacts : 0;
-    ObjList* obj = m_accounts.find(id);
-    if (!obj)
+    if (!id)
 	return 0;
-    ClientAccount* a = static_cast<ClientAccount*>(obj->get());
-    return (!ref || a->ref()) ? a : 0;
+    for (ObjList* o = m_accounts.skipNull(); o; o = o->skipNext()) {
+	ClientAccount* a = static_cast<ClientAccount*>(o->get());
+	if (a->toString() == id)
+	    return (!ref || a->ref()) ? a : 0;
+    }
+    return 0;
+}
+
+// Find an account's contact by its URI
+ClientContact* ClientAccountList::findContactByUri(const String& account, const String& uri,
+    bool ref)
+{
+    Lock lock(this);
+    ClientAccount* acc = findAccount(account,false);
+    return acc ? acc->findContactByUri(uri,ref) : 0;
 }
 
 // Find an account's contact
-ClientContact* ClientAccountList::findContact(const String& account, const String& id, bool ref)
+ClientContact* ClientAccountList::findContact(const String& account, const String& id,
+    bool ref)
 {
     Lock lock(this);
     ClientAccount* acc = findAccount(account,false);
@@ -3594,9 +3666,37 @@ ClientContact* ClientAccountList::findContact(const String& account, const Strin
 // Find an account's contact from a built id
 ClientContact* ClientAccountList::findContact(const String& builtId, bool ref)
 {
-    String account, contact;
-    ClientContact::splitContactId(builtId,account,contact);
+    String account;
+    ClientContact::splitContactId(builtId,account);
+    return findContact(account,builtId,ref);
+}
+
+// Find a contact an instance id
+ClientContact* ClientAccountList::findContactByInstance(const String& id, String* instance,
+    bool ref)
+{
+    String account,contact;
+    ClientContact::splitContactInstanceId(id,account,contact,instance);
     return findContact(account,contact,ref);
+}
+
+// Check if there is a single registered account and return it
+ClientAccount* ClientAccountList::findSingleRegAccount(const String* skipProto, bool ref)
+{
+    Lock lock(this);
+    ClientAccount* found = 0;
+    for (ObjList* o = m_accounts.skipNull(); o; o = o->skipNext()) {
+	ClientAccount* a = static_cast<ClientAccount*>(o->get());
+	if (!a->resource().online() || (skipProto && *skipProto == a->protocol()))
+	    continue;
+	if (!found)
+	    found = a;
+	else {
+	    found = 0;
+	    break;
+	}
+    }
+    return (found && (!ref || found->ref())) ? found : 0;
 }
 
 // Append a new account
@@ -3606,7 +3706,7 @@ bool ClientAccountList::appendAccount(ClientAccount* account)
 	return false;
     m_accounts.append(account);
     DDebug(ClientDriver::self(),DebugAll,"List(%s) added account '%s'",
-	c_str(),account->uri().c_str());
+	c_str(),account->toString().c_str());
     return true;
 }
 
@@ -3618,7 +3718,7 @@ void ClientAccountList::removeAccount(const String& id)
     if (!obj)
 	return;
     DDebug(ClientDriver::self(),DebugAll,"List(%s) removed account '%s'",
-	c_str(),(static_cast<ClientAccount*>(obj->get()))->uri().c_str());
+	c_str(),obj->get()->toString().c_str());
     obj->remove();
 }
 
@@ -3642,11 +3742,11 @@ ClientContact::ClientContact(ClientAccount* owner, const char* id, const char* n
 }
 
 // Constructor. Build a contact from a list of parameters.
-ClientContact::ClientContact(ClientAccount* owner, NamedList& params, bool chat)
-    : m_name(params.getValue("name",params)), m_owner(owner), m_uri(params)
+ClientContact::ClientContact(ClientAccount* owner, const NamedList& params, const char* id,
+    const char* uri, bool chat)
+    : m_name(params.getValue("name",params)), m_owner(owner), m_uri(uri)
 {
-    m_id = m_uri;
-    m_id.toLower();
+    m_id = id ? id : params.c_str();
     XDebug(ClientDriver::self(),DebugAll,"ClientContact(%p,%s) [%p]",
 	owner,m_uri.c_str(),this);
     if (m_owner)
@@ -3698,9 +3798,7 @@ void ClientContact::createChatWindow(bool force, const char* name)
     Window* w = Client::self()->getWindow(m_chatWndName);
     if (!w)
 	return;
-    String id;
-    buildContactId(id);
-    w->context(id);
+    w->context(toString());
     NamedList tmp("");
     tmp.addParam("contactname",m_name);
     Client::self()->setParams(&tmp,w);
@@ -3724,7 +3822,7 @@ bool ClientContact::appendGroup(const String& group)
     m_groups.append(new String(group));
     DDebug(ClientDriver::self(),DebugAll,
 	"Account(%s) contact='%s' added group '%s' [%p]",
-	m_owner ? m_owner->uri().c_str() : "",m_uri.c_str(),group.c_str(),this);
+	m_owner ? m_owner->toString().c_str() : "",m_uri.c_str(),group.c_str(),this);
     return true;
 }
 
@@ -3738,7 +3836,7 @@ bool ClientContact::removeGroup(const String& group)
     obj->remove();
     DDebug(ClientDriver::self(),DebugAll,
 	"Account(%s) contact='%s' removed group '%s' [%p]",
-	m_owner ? m_owner->uri().c_str() : "",m_uri.c_str(),group.c_str(),this);
+	m_owner ? m_owner->toString().c_str() : "",m_uri.c_str(),group.c_str(),this);
     return true;
 }
 
@@ -3816,8 +3914,28 @@ bool ClientContact::removeResource(const String& id)
     obj->remove();
     DDebug(ClientDriver::self(),DebugAll,
 	"Account(%s) contact='%s' removed resource '%s' [%p]",
-	m_owner ? m_owner->uri().c_str() : "",m_uri.c_str(),id.c_str(),this);
+	m_owner ? m_owner->toString().c_str() : "",m_uri.c_str(),id.c_str(),this);
     return true;
+}
+
+// Split a contact instance id in account/contact/instance parts
+void ClientContact::splitContactInstanceId(const String& src, String& account,
+    String& contact, String* instance)
+{
+    int pos = src.find('|');
+    if (pos < 0) {
+	account = src.uriUnescape();
+	return;
+    }
+    account = src.substr(0,pos).uriUnescape();
+    int pp = src.find('|',pos + 1);
+    if (pp > pos) {
+	contact = src.substr(0,pp);
+	if (instance)
+	    *instance = src.substr(pp + 1).uriUnescape();
+    }
+    else
+	contact = src;
 }
 
 // Remove from owner. Release data

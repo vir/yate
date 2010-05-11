@@ -28,22 +28,23 @@
 
 using namespace TelEngine;
 
-// Contact parameters to be copied from lists 
-static String s_contactParams = "contact,subscription,group,ask";
+// Windows
+static const String s_wndAccount = "account";           // Account edit/add
+static const String s_wndAddrbook = "addrbook";         // Contact edit/add
 // Some UI widgets
-static String s_channelList = "channels";
-static String s_accountList = "accounts";
-static String s_contactList = "contacts";
-static String s_logOutgoing = "log_outgoing";
-static String s_logIncoming = "log_incoming";
-static String s_calltoList = "callto";
+static const String s_channelList = "channels";
+static const String s_accountList = "accounts";
+static const String s_contactList = "contacts";
+static const String s_logList = "log";
+static const String s_calltoList = "callto";
+static const String s_account = "account";               // Account selector
 // Actions
-static String s_actionCall = "call";
-static String s_actionAnswer = "answer";
-static String s_actionHangup = "hangup";
-static String s_actionTransfer = "transfer";
-static String s_actionConf = "conference";
-static String s_actionHold = "hold";
+static const String s_actionCall = "call";
+static const String s_actionAnswer = "answer";
+static const String s_actionHangup = "hangup";
+static const String s_actionTransfer = "transfer";
+static const String s_actionConf = "conference";
+static const String s_actionHold = "hold";
 // Not selected string(s)
 static String s_notSelected = "-none-";
 // Maximum number of call log entries
@@ -105,13 +106,17 @@ static inline void setImageParam(NamedList& p, const char* param,
 // Set protocol specific widgets: options, address, port ....
 // Text widgets' name should start with acc_proto_[protocol]_
 // Option widgets' name should start with acc_proto_[protocol]_opt_
-static void updateProtocolSpec(NamedList& p, const String& proto, const String& options)
+static void updateProtocolSpec(NamedList& p, const String& proto, const String& options,
+    bool edit)
 {
     ObjList* obj = options.split(',',false);
     String prefix = "acc_proto_" + proto;
     // Texts
-    setAccParam(p,prefix,"resource",proto == "jabber" ? "yate" : "");
-    setAccParam(p,prefix,"port",proto == "jabber" ? "5222" : "");
+    if (edit)
+	setAccParam(p,prefix,"resource","");
+    else
+	setAccParam(p,prefix,"resource",proto == "jabber" ? "yate" : "");
+    setAccParam(p,prefix,"port","");
     setAccParam(p,prefix,"address","");
     // Options
     prefix << "_opt_";
@@ -153,15 +158,6 @@ static bool checkParam(NamedList& p, const char* param, const String& widget,
     return ok;
 }
 
-// Check if a given contact can be modified
-static bool checkContactEdit(NamedList& p, Window* parent)
-{
-    if (p.getBoolValue("hidden:editable",true))
-	return true;
-    Client::openMessage(String("Contact ") + p.getValue("name") + " can't be modified !",parent);
-    return false;
-}
-
 // Utility: activate the calls page
 inline void activatePageCalls(ClientLogic* logic, Window* wnd = 0)
 {
@@ -169,6 +165,88 @@ inline void activatePageCalls(ClientLogic* logic, Window* wnd = 0)
     static String s_toggleCalls = "selectitem:framePages:PageCalls";
     Client::self()->setCheck(s_buttonCalls,true,wnd);
     logic->toggle(wnd,s_toggleCalls,true);
+}
+
+// Add/Update a contact list item
+static void updateContactList(ClientContact& c, const String& inst = String::empty(),
+    const char* uri = 0)
+{
+    DDebug(ClientDriver::self(),DebugAll,"updateContactList(%s,%s,%s)",
+	c.toString().c_str(),inst.c_str(),uri);
+    NamedList p("");
+    p.addParam("name",c.m_name);
+    p.addParam("number/uri",TelEngine::null(uri) ? c.uri().c_str() : uri);
+    String id;
+    c.buildInstanceId(id,inst);
+    Client::self()->updateTableRow(s_contactList,id,&p);
+}
+
+// Remove all contacts starting with a given string
+static void removeContacts(const String& idstart)
+{
+    NamedList p("");
+    if (!Client::self()->getOptions(s_contactList,&p))
+	return;
+    DDebug(ClientDriver::self(),DebugAll,"removeContacts(%s)",idstart.c_str());
+    unsigned int n = p.count();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* param = p.getParam(i);
+	if (param && param->name().startsWith(idstart,false))
+	    Client::self()->delTableRow(s_contactList,param->name());
+    }
+}
+
+// Contact deleted: clear UI
+static void contactDeleted(ClientContact& c)
+{
+    DDebug(ClientDriver::self(),DebugAll,"contactDeleted(%s)",c.toString().c_str());
+    // Remove instances from contacts list
+    String instid;
+    removeContacts(c.buildInstanceId(instid));
+}
+
+// Remove all account contacts from UI
+static void clearAccountContacts(ClientAccount& a)
+{
+    DDebug(ClientDriver::self(),DebugAll,"clearAccountContacts(%s)",a.toString().c_str());
+    ObjList* o = 0;
+    while (0 != (o = a.contacts().skipNull())) {
+	ClientContact* c = static_cast<ClientContact*>(o->get());
+	contactDeleted(*c);
+	a.removeContact(c->toString());
+    }
+    // Clear account own instances
+    if (a.contact() && a.contact()->resources().skipNull()) {
+	String instid;
+	a.contact()->buildInstanceId(instid);
+	a.contact()->resources().clear();
+	removeContacts(instid);
+    }
+}
+
+// Retrieve the selected account
+static inline ClientAccount* selectedAccount(ClientAccountList& accounts, Window* wnd = 0)
+{
+    String account;
+    if (Client::valid())
+	Client::self()->getSelect(s_accountList,account,wnd);
+    return account ? accounts.findAccount(account) : 0;
+}
+
+// Fill acc_login/logout active parameters
+static inline void fillAccLoginActive(NamedList& p, ClientAccount* acc)
+{
+    bool offline = !acc || acc->resource().offline();
+    p.addParam("active:acc_login",String::boolText(offline));
+    p.addParam("active:acc_logout",String::boolText(!offline));
+}
+
+// Fill acc_del/edit active parameters
+static inline void fillAccEditActive(NamedList& p, bool active)
+{
+    const char* tmp = String::boolText(active);
+    p.addParam("active:acc_del",tmp);
+    p.addParam("active:acc_edit",tmp);
 }
 
 
@@ -416,8 +494,16 @@ bool ClientLogic::debug(const String& name, bool active, Window* wnd)
  */
 // Constructor
 DefaultLogic::DefaultLogic(const char* name, int prio)
-    : ClientLogic(name,prio), m_accShowAdvanced(false)
+    : ClientLogic(name,prio),
+    m_accounts(0)
 {
+    m_accounts = new ClientAccountList(name,new ClientAccount(NamedList::empty()));
+}
+
+// Destructor
+DefaultLogic::~DefaultLogic()
+{
+    TelEngine::destruct(m_accounts);
 }
 
 // Declare a NamedList and set a parameter
@@ -487,19 +573,20 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
     if (name.startsWith("line:") && line(name.substr(5),wnd))
 	return false;
     // Action taken when receiving a clear action
-    if (name.startsWith("clear:") && name.at(6)) {
-	String w = name.substr(6);
-	// Special care for call logs (call direction is opposite for CDR)
-	if (w == s_logOutgoing)
-	    return callLogClear(w,"incoming");
-	if (w == s_logIncoming)
-	    return callLogClear(w,"outgoing");
-	if (Client::self() && (Client::self()->clearTable(w,wnd) ||
-	    Client::self()->setText(w,"",false,wnd))) {
-	    Client::self()->setFocus(w,false,wnd);
-	    return true;
-	}
+    if (name.startsWith("clear:") && name.at(6))
+	return clearList(name.substr(6),wnd);
+    // Delete a list/table item
+    if (name.startsWith("deleteitem:") && name.at(11)) {
+	String list;
+	int pos = name.find(":",11);
+	if (pos > 0)
+	    return deleteItem(name.substr(11,pos - 11),name.substr(pos + 1),wnd);
+	return false;
     }
+    // Delete a selected list/table item
+    if (name.startsWith("deleteselecteditem:") && name.at(19))
+	return deleteSelectedItem(name.substr(19),wnd);
+
     // 'settext' action
     if (name.startsWith("settext:") && name.at(8)) {
 	int pos = name.find(':',9);
@@ -543,13 +630,21 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
     // Login/logout
     bool login = (name == "acc_login");
     if (login || name == "acc_logout") {
-	String account;
-	if (!(Client::self() && Client::self()->getSelect(s_accountList,account,wnd)))
+	ClientAccount* acc = selectedAccount(*m_accounts,wnd);
+	if (!acc)
 	    return false;
-	NamedList* sect = Client::s_accounts.getSection(account);
-	if (!sect)
-	    return false;
-	return loginAccount(*sect,login);
+	bool ok = Engine::enqueue(acc->userlogin(login));
+	if (ok && login && acc->resource().offline() && Client::valid()) {
+	    acc->resource().setStatus(ClientResource::Connecting);
+	    acc->resource().setStatusText("");
+	    NamedList p("");
+	    acc->fillItemParams(p);
+	    Client::self()->updateTableRow(s_accountList,acc->toString(),&p);
+	    p.clearParams();
+	    fillAccLoginActive(p,acc);
+	    Client::self()->setParams(&p);
+	}
+	return ok;
     }
 
     // *** Address book actions
@@ -576,29 +671,21 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
 	return acceptContact(params,wnd);
 
     // *** Call log management
-
-    // Call a log entry
-    bool callOut = (name == "log_out_call");
-    if (callOut || name == "log_in_call") {
+    bool logCall = (name == "log_call");
+    if (logCall || name == "log_contact") {
 	String billid;
-	if (Client::self() && 
-	    Client::self()->getSelect(callOut ? s_logOutgoing : s_logIncoming,billid) &&
-	    billid)
+	if (Client::valid())
+	    Client::self()->getSelect(s_logList,billid,wnd);
+	if (!billid)
+	    return false;
+	if (logCall)
 	    return callLogCall(billid);
-	return false;
+	return callLogCreateContact(billid);
     }
-    // Create a contact from a call log entry
-    callOut = (name == "log_out_contact");
-    if (callOut || name == "log_in_contact") {
-	String billid;
-	if (Client::self() && 
-	    Client::self()->getSelect(callOut ? s_logOutgoing : s_logIncoming,billid) &&
-	    billid)
-	    return callLogCreateContact(billid);
-	return false;
-    }
+    if (name == "log_clear")
+	return callLogClear(s_logList,String::empty());
 
-    // *** Miscellanous
+    // *** Miscellaneous
 
     // Handle show window actions
     if (name.startsWith("action_show_"))
@@ -693,15 +780,28 @@ bool DefaultLogic::toggle(Window* wnd, const String& name, bool active)
     if (wnd && name == "window_visible_changed") {
 	if (!Client::self())
 	    return false;
+	const char* yText = String::boolText(active);
+	const char* nText = String::boolText(!active);
 	NamedList p("");
-	p.addParam("check:toggle_show_" + wnd->toString(),String::boolText(active));
-	p.addParam("check:action_show_" + wnd->toString(),String::boolText(active));
+	p.addParam("check:toggle_show_" + wnd->toString(),yText);
+	p.addParam("check:action_show_" + wnd->toString(),yText);
+	if (wnd->id() == s_wndAccount) {
+	    p.addParam("active:acc_new",nText);
+	    if (active)
+		fillAccEditActive(p,false);
+	    else
+		fillAccEditActive(p,0 != selectedAccount(*m_accounts));
+	}
+	else if (wnd->id() == s_wndAddrbook) {
+	    p.addParam("active:abk_new",nText);
+	    fillContactEditActive(p,!active);
+	    fillLogContactActive(p,!active);
+	}
 	Client::self()->setParams(&p);
 	return true;
     }
 
-    // Select item if active
-    // Return true if inactive
+    // Select item if active. Return true if inactive
     if (name.startsWith("selectitem:")) {
 	if (!active)
 	    return true;
@@ -742,15 +842,10 @@ bool DefaultLogic::toggle(Window* wnd, const String& name, bool active)
     }
 
     // Advanced button from account window
-    if (name == "toggleAccAdvanced") {
-	m_accShowAdvanced = active;
-	// Save it
-	Client::s_settings.setValue("client","showaccadvanced",String::boolText(m_accShowAdvanced));
-	Client::save(Client::s_settings,wnd);
-	// Select the page
-	// Set advanced for the current protocol
+    if (name == "acc_showadvanced") {
+	// Select the page. Set advanced for the current protocol
 	String proto;
-	if (!m_accShowAdvanced)
+	if (!active)
 	    proto = "none";
 	else if (Client::self())
 	    Client::self()->getSelect("acc_protocol",proto);
@@ -781,43 +876,33 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
     if (name == s_accountList) {
 	if (!Client::self())
 	    return false;
-	const char* active = String::boolText(!item.null());
+	ClientAccount* a = item ? m_accounts->findAccount(item) : 0;
 	NamedList p("");
-	p.addParam("active:acc_login",active);
-	p.addParam("active:acc_logout",active);
-	p.addParam("active:acc_del",active);
-	p.addParam("active:acc_edit",active);
+	fillAccLoginActive(p,a);
+	fillAccEditActive(p,!item.null());
 	Client::self()->setParams(&p,wnd);
 	return true;
     }
 
     if (name == s_contactList) {
-	if (!Client::self())
+	if (!Client::valid())
 	    return false;
-	const char* active = String::boolText(!item.null());
 	NamedList p("");
-	p.addParam("active:abk_call",active);
-	p.addParam("active:abk_del",active);
-	p.addParam("active:abk_edit",active);
+	p.addParam("active:abk_call",String::boolText(!item.null()));
+	fillContactEditActive(p,true,&item);
 	Client::self()->setParams(&p,wnd);
 	return true;
     }
 
-    // Log out/in calls
-    bool out = (name == s_logOutgoing);
-    if (out || name == s_logIncoming) {
+    // Item selected in calls log list
+    if (name == s_logList) {
 	if (!Client::self())
 	    return false;
 	const char* active = String::boolText(!item.null());
 	NamedList p("");
-	if (out) {
-	    p.addParam("active:log_out_call",active);
-	    p.addParam("active:log_out_contact",active);
-	}
-	else {
-	    p.addParam("active:log_in_call",active);
-	    p.addParam("active:log_in_contact",active);
-	}
+	p.addParam("active:log_call",active);
+	p.addParam("active:log_del",active);
+	fillLogContactActive(p,true,&item);
 	Client::self()->setParams(&p,wnd);
 	return true;
     }
@@ -845,8 +930,12 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
     // Handle protocol selection in edit window: activate advanced options
     if (name == "acc_protocol") {
 	static String proto = "acc_proto_spec";
-	String what = proto + (m_accShowAdvanced ? "_" + item : "_none");
-	return Client::self() && Client::self()->setSelect(proto,what,wnd);
+	if (!Client::self())
+	    return false;
+	bool adv = false;
+	Client::self()->getCheck("acc_showadvanced",adv,wnd);
+	String what = proto + "_" + (adv ? item.safe() : "none");
+	return Client::self()->setSelect(proto,what,wnd);
     }
 
     // Apply provider template
@@ -864,11 +953,12 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
 	NamedList p("");
 	for (const char** par = s_provParams; *par; par++)
 	    p.addParam(String("acc_") + *par,sect->getValue(*par));
-	NamedString* proto = sect->getParam("protocol");
+	const String& proto = (*sect)["protocol"];
 	if (proto) {
-	    selectProtocolSpec(p,*proto,m_accShowAdvanced);
-	    NamedString* opt = sect->getParam("options");
-	    updateProtocolSpec(p,*proto,opt ? *opt : String::empty());
+	    bool adv = false;
+	    Client::self()->getCheck("acc_showadvanced",adv,wnd);
+	    selectProtocolSpec(p,proto,adv);
+	    updateProtocolSpec(p,proto,(*sect)["options"],wnd && wnd->context());
 	}
 	Client::self()->setParams(&p,wnd);
 	return true;
@@ -934,7 +1024,7 @@ bool DefaultLogic::callStart(NamedList& params, Window* wnd)
     // Delete the number from the "callto" widget and put it in the callto history
     NamedString* ns = params.getParam("target");
     if (ns) {
-	Client::self()->delOption(s_calltoList,*ns);
+	Client::self()->delTableRow(s_calltoList,*ns);
 	Client::self()->addOption(s_calltoList,*ns,true);
 	Client::self()->setText(s_calltoList,"");
     }
@@ -974,46 +1064,56 @@ bool DefaultLogic::editAccount(bool newAcc, NamedList* params, Window* wnd)
 {
     // Make sure we reset all controls in window
     USE_SAFE_PARAMS("select:acc_providers",s_notSelected);
-    params->setParam("check:acc_loginnow","true");
-
-    bool enable = true;
+    bool loginNow = Client::s_settings.getBoolValue("client","acc_loginnow",true);
+    params->setParam("check:acc_loginnow",String::boolText(loginNow));
     String acc;
     String proto;
+    bool enabled = true;
     if (newAcc) {
-	proto = "--";
 	for (const String* par = s_accParams; !par->null(); par++)
 	    params->setParam("acc_" + *par,"");
+	enabled = Client::s_settings.getBoolValue("client","acc_enabled",true);
+	proto = Client::s_settings.getValue("client","acc_protocol","sip");
+	// Check if the protocol is valid. Retrieve the first one if invalid
+	s_protocolsMutex.lock();
+	if (proto && !s_protocols.find(proto))
+	    proto = "";
+	if (!proto) {
+	    ObjList* o = s_protocols.skipNull();
+	    if (o)
+		proto = o->get()->toString();
+	}
+	if (!proto)
+	    proto = "none";
+	s_protocolsMutex.unlock();
     }
     else {
-	if (!Client::self())
+	ClientAccount* a = selectedAccount(*m_accounts,wnd);
+	if (!a)
 	    return false;
-	if (!Client::self()->getSelect(s_accountList,acc))
-	    return false;
-	NamedList* sect = Client::s_accounts.getSection(acc);
-	if (sect) {
-	    enable = sect->getBoolValue("enabled",true);
-	    proto = sect->getValue("protocol");
-	    for (const String* par = s_accParams; !par->null(); par++)
-		params->setParam("acc_" + *par,sect->getValue(*par));
-	}
+	acc = a->toString();
+	enabled = a->startup();
+	proto = a->protocol();
+	for (const String* par = s_accParams; !par->null(); par++)
+	    params->setParam("acc_" + *par,a->params().getValue(*par));
     }
-
-    // Enable account
-    params->setParam("check:acc_enabled",String::boolText(enable));
     // Protocol combo and specific widget (page) data
-    selectProtocolSpec(*params,proto,m_accShowAdvanced);
+    params->setParam("check:acc_enabled",String::boolText(enabled));
+    bool adv = Client::s_settings.getBoolValue("client","acc_showadvanced",true);
+    params->setParam("check:acc_showadvanced",String::boolText(adv));
+    selectProtocolSpec(*params,proto,adv);
     NamedString* tmp = params->getParam("acc_options");
     s_protocolsMutex.lock();
     for (ObjList* o = s_protocols.skipNull(); o; o = o->skipNext()) {
 	String* s = static_cast<String*>(o->get());
 	if (*s)
-	    updateProtocolSpec(*params,*s,tmp ? *tmp : String::empty());
+	    updateProtocolSpec(*params,*s,tmp ? *tmp : String::empty(),!newAcc);
     }
     s_protocolsMutex.unlock();
+    params->setParam("title",newAcc ? "Add account" : "Edit account: " + acc);
     params->setParam("context",acc);
     params->setParam("acc_account",acc);
-    params->setParam("modal",String::boolText(true));
-    return Client::openPopup("account",params,wnd);
+    return Client::openPopup(s_wndAccount,params);
 }
 
 // Utility function used to save a widget's text
@@ -1021,8 +1121,7 @@ static inline void saveAccParam(NamedList& params,
 	const String& prefix, const String& param, Window* wnd)
 {
     String val;
-    if (!Client::self()->getText(prefix + param,val,false,wnd))
-	return;
+    Client::self()->getText(prefix + param,val,false,wnd);
     if (val)
 	params.setParam(param,val);
     else
@@ -1032,21 +1131,35 @@ static inline void saveAccParam(NamedList& params,
 // Called when the user wants to save account data
 bool DefaultLogic::acceptAccount(NamedList* params, Window* wnd)
 {
-    if (!Client::self())
+    if (!Client::valid())
 	return false;
-    
-    // Check required data
     String account;
     String proto;
     const char* err = 0;
+    ClientAccount* edit = 0;
     while (true) {
 #define SET_ERR_BREAK(e) { err = e; break; }
+	// Check required data
 	Client::self()->getText("acc_account",account,false,wnd);
 	if (!account)
 	    SET_ERR_BREAK("Account name field can't be empty");
 	Client::self()->getText("acc_protocol",proto,false,wnd);
 	if (!proto)
 	    SET_ERR_BREAK("A protocol must be selected");
+	ClientAccount* upd = m_accounts->findAccount(account);
+	if (wnd && wnd->context())
+	    edit = m_accounts->findAccount(wnd->context());
+	if (edit) {
+	    if (upd && upd != edit) {
+		// Don't know what to do: replace the duplicate or rename the editing one
+		SET_ERR_BREAK("An account with the same name already exists");
+	    }
+	}
+	else if (upd) {
+	    SET_ERR_BREAK("An account with the same name already exists");
+	    // TODO: ask to replace
+	}
+	// Fallthrough to add a new account or check if existing changed
 	break;
 #undef SET_ERR_BREAK
     }
@@ -1055,34 +1168,22 @@ bool DefaultLogic::acceptAccount(NamedList* params, Window* wnd)
 	    Debug(ClientDriver::self(),DebugNote,"Logic(%s). %s",toString().c_str(),err);
 	return false;
     }
-
-    // Get account from file or create a new one if not found
-    NamedList* accSect = Client::s_accounts.getSection(account);
-    bool newAcc = (accSect == 0);
-    if (newAcc) {
-	Client::s_accounts.createSection(account);
-	accSect = Client::s_accounts.getSection(account);
-    }
-
+    NamedList p(account);
     // Account flags
     bool enable = true;
-    if (!Client::self()->getCheck("acc_enabled",enable,wnd))
-	enable = true;
-    bool login = false;
-    Client::self()->getCheck("acc_loginnow",login,wnd);
-
-    accSect->setParam("enabled",String::boolText(enable));
-    accSect->setParam("protocol",proto);
+    Client::self()->getCheck("acc_enabled",enable,wnd);
+    p.addParam("enabled",String::boolText(enable));
+    p.addParam("protocol",proto);
     String prefix = "acc_";
     // Save account parrameters
     for (const String* par = s_accParams; !par->null(); par++)
-	saveAccParam(*accSect,prefix,*par,wnd);
+	saveAccParam(p,prefix,*par,wnd);
     // Special care for protocol specific data
     prefix << "proto_" << proto << "_";
     // Texts
-    saveAccParam(*accSect,prefix,"resource",wnd);
-    saveAccParam(*accSect,prefix,"port",wnd);
-    saveAccParam(*accSect,prefix,"address",wnd);
+    saveAccParam(p,prefix,"resource",wnd);
+    saveAccParam(p,prefix,"port",wnd);
+    saveAccParam(p,prefix,"address",wnd);
     // Options
     prefix << "opt_";
     String options;
@@ -1093,36 +1194,68 @@ bool DefaultLogic::acceptAccount(NamedList* params, Window* wnd)
 	if (checked)
 	    options.append(*opt,",");
     }
-    if (options)
-	accSect->setParam("options",options);
-    else
-	accSect->clearParam("options");
-
-    if (wnd)
-	Client::self()->setVisible(wnd->toString(),false);
-    return updateAccount(*accSect,login,true);
+    p.addParam("options",options,false);
+    bool login = false;
+    Client::self()->getCheck("acc_loginnow",login,wnd);
+    if (edit) {
+	// Set changed only if online
+	bool changed = false;
+	if (edit->toString() != account) {
+	    if (edit->resource().offline()) {
+		// Remove the old account and add the new one
+		delAccount(edit->toString(),0);
+		edit = 0;
+	    }
+	    else
+		changed = true;
+	}
+	else if (!edit->resource().offline()) {
+	    // Compare account parameters. Avoid parameters not affecting the connection
+	    NamedList l1(p), l2(edit->params());
+	    l1.clearParam("enabled");
+	    l2.clearParam("enabled");
+	    String a1, a2;
+	    l1.dump(a1,"");
+	    l2.dump(a2,"");
+	    changed = a1 != a2;
+	}
+	if (changed) {
+	    Client::openMessage("Can't change a registered account",wnd);
+	    return false;
+	}
+    }
+    if (!updateAccount(p,login,true))
+	return false;
+    if (!wnd)
+	return true;
+    // Hide the window. Save some settings
+    bool showAccAdvanced = false;
+    Client::self()->getCheck("acc_showadvanced",showAccAdvanced,wnd);
+    Client::self()->setVisible(wnd->toString(),false);
+    Client::s_settings.setValue("client","acc_protocol",proto);
+    Client::s_settings.setValue("client","acc_showadvanced",String::boolText(showAccAdvanced));
+    Client::s_settings.setValue("client","acc_enabled",String::boolText(enable));
+    Client::s_settings.setValue("client","acc_loginnow",String::boolText(login));
+    Client::save(Client::s_settings);
+    return true;
 }
 
 // Called when the user wants to delete an existing account
 bool DefaultLogic::delAccount(const String& account, Window* wnd)
 {
-    if (!account) {
-	String acc;
-	if (Client::self() && Client::self()->getSelect(s_accountList,acc) && acc)
-	    return Client::openConfirm("Delete account " + acc + "?",wnd,"acc_del:" + acc);
+    if (!account)
+	return deleteSelectedItem(s_accountList + ":",wnd);
+    ClientAccount* acc = m_accounts->findAccount(account);
+    if (!acc)
 	return false;
-    }
-
-    // Delete the account from config and all UI controls
-    Client::self()->delTableRow(s_accountList,account);
-    Client::self()->delOption("account",account);
-    Client::s_accounts.clearSection(account);
-    Client::save(Client::s_accounts);
     // Disconnect
-    Message* m = new Message("user.login");
-    m->addParam("account",account);
-    m->addParam("operation","delete");
-    Engine::enqueue(m);
+    Engine::enqueue(acc->userlogin(false));
+    // Delete from memory and UI. Save the accounts file
+    clearAccountContacts(*acc);
+    Client::self()->delTableRow(s_account,account);
+    Client::self()->delTableRow(s_accountList,account);
+    acc->save(false);
+    m_accounts->removeAccount(account);
     return true;
 }
 
@@ -1131,24 +1264,41 @@ bool DefaultLogic::updateAccount(const NamedList& account, bool login, bool save
 {
     DDebug(ClientDriver::self(),DebugAll,"Logic(%s) updateAccount(%s,%s,%s)",
 	toString().c_str(),account.c_str(),String::boolText(login),String::boolText(save));
-
-    if (!Client::self() || account.null())
+    if (!Client::valid() || account.null())
 	return false;
-    if (save && !Client::save(Client::s_accounts))
+    ClientAccount* acc = m_accounts->findAccount(account,true);
+    if (!acc) {
+	acc = new ClientAccount(account);
+	if (!m_accounts->appendAccount(acc))
+	    TelEngine::destruct(acc);
+    }
+    else
+	acc->m_params = account;
+    if (!acc)
 	return false;
-
-    NamedList uiParams(account);
-    uiParams.addParam("account",account);
-    // Make sure some parameters are present to avoid incorrect UI data on update
-    if (!uiParams.getParam("protocol"))
-	uiParams.addParam("protocol",""); 
-    // Update UI (lists and tables)
-    if (!Client::self()->hasOption("account",account))
-	Client::self()->addOption("account",account,false);
-    Client::self()->updateTableRow(s_accountList,account,&uiParams);
+    // (Re)set account own contact
+    String cId;
+    String uri;
+    const String& user = acc->m_params["username"];
+    const String& host = acc->m_params["domain"];
+    if (user && host) {
+	uri << user << "@" << host;
+	ClientContact::buildContactId(cId,acc->toString(),uri);
+    }
+    else
+	cId = acc->toString();
+    acc->setContact(new ClientContact(0,NamedList::empty(),cId,uri));
+    if (save)
+	acc->save();
+    // Update account list
+    NamedList p("");
+    acc->fillItemParams(p);
+    Message* m = login ? acc->userlogin(true) : 0;
+    TelEngine::destruct(acc);
+    Client::self()->updateTableRow(s_accountList,account,&p);
     // Login if required
-    if (login)
-	return loginAccount(account,true);
+    if (m)
+	Engine::enqueue(m);
     return true;
 }
 
@@ -1178,31 +1328,47 @@ bool DefaultLogic::loginAccount(const NamedList& account, bool login)
 // Add/update a contact
 bool DefaultLogic::updateContact(const NamedList& params, bool save, bool update)
 {
-    if (!(Client::self() && (save || update)))
+    if (!(Client::valid() && (save || update) && params))
 	return false;
-
-    NamedString* target = params.getParam("target");
+    const String& target = params["target"];
     if (!target)
 	return false;
-
-    // Update UI
-    if (update) {
-	NamedList tmp(params);
-	tmp.setParam("number/uri",*target);
-	Client::self()->updateTableRow(s_contactList,*target,&tmp);
+    // Fix contact id
+    String id;
+    String pref;
+    ClientContact::buildContactId(pref,m_accounts->localContacts()->toString(),String::empty());
+    if (params.startsWith(pref,false))
+	id = params;
+    else
+	ClientContact::buildContactId(id,m_accounts->localContacts()->toString(),params);
+    ClientContact* c = m_accounts->findContact(id);
+    if (!c)
+	c = new ClientContact(m_accounts->localContacts(),params,id,target);
+    else if (c) {
+	const String& name = params["name"];
+	if (name)
+	    c->m_name = name;
+	c->setUri(target);
     }
+    else
+	return false;
+    // Update UI
+    if (update)
+	updateContactList(*c);
     // Save file
     bool ok = true;
-    if (save) {
+    if (save && m_accounts->isLocalContact(c)) {
+	String name;
+	c->getContactSection(name);
 	unsigned int n = params.length();
 	for (unsigned int i = 0; i < n; i++) {
 	    NamedString* ns = params.getParam(i);
 	    if (!ns)
 		continue;
 	    if (*ns)
-		Client::s_contacts.setValue(*target,ns->name(),*ns);
+		Client::s_contacts.setValue(name,ns->name(),*ns);
 	    else
-		Client::s_contacts.clearKey(*target,ns->name());
+		Client::s_contacts.clearKey(name,ns->name());
 	}
 	ok = Client::save(Client::s_contacts);
     }
@@ -1214,44 +1380,67 @@ bool DefaultLogic::updateContact(const NamedList& params, bool save, bool update
 // Called when the user wants to save contact data
 bool DefaultLogic::acceptContact(NamedList* params, Window* wnd)
 {
-    if (!Client::self())
+    if (!Client::valid())
 	return false;
-    
-    NamedList p("");
+
     const char* err = 0;
+    String id;
+    String name;
     String target;
     // Check required data
     while (true) {
 #define SET_ERR_BREAK(e) { err = e; break; }
-	Client::self()->getText("abk_name",p,false,wnd);
-	if (p.null())
+	Client::self()->getText("abk_name",name,false,wnd);
+	if (!name)
 	    SET_ERR_BREAK("A contact name must be specified");
 	Client::self()->getText("abk_target",target,false,wnd);
-	if (target)
-	    p.addParam("target",target);
-	else
+	if (!target)
 	    SET_ERR_BREAK("Contact number/target field can't be empty");
+	// Check if adding/editing contact. Generate a new contact id
+	if (wnd && wnd->context())
+	    id = wnd->context();
+	else {
+	    String tmp;
+	    tmp << (unsigned int)Time::msecNow() << "_" << (int)Engine::runId();
+	    ClientContact::buildContactId(id,m_accounts->localContacts()->toString(),tmp);
+	}
+	ClientContact* existing = m_accounts->localContacts()->findContact(id);
+	ClientContact* dup = 0;
+	if (existing) {
+	    if (existing->m_name == name && existing->uri() == target) {
+		// No changes: return
+		if (wnd)
+		    Client::self()->setVisible(wnd->toString(),false);
+		return true;
+	    }
+	    dup = m_accounts->localContacts()->findContact(&name,0,&id);
+	}
+	else
+	    dup = m_accounts->localContacts()->findContact(&name);
+	if (dup)
+	    SET_ERR_BREAK("A contact with the same name already exists!");
 	break;
 #undef SET_ERR_BREAK
     }
-    if (!err) {
-	// Check if the given contact can be changed
-	NamedList pp("");
-	if (Client::self()->getTableRow(s_contactList,target,&pp) &&
-	    !checkContactEdit(pp,wnd))
-	    return false;
-	p.addParam("name",p);
-	if (wnd)
-	    Client::self()->setVisible(wnd->toString(),false);
-        return updateContact(p,true,true);
+    if (err) {
+	Client::openMessage(err,wnd);
+	return false;
     }
-    Client::openMessage(err,wnd);
-    return false;
+    NamedList p(id);
+    p.addParam("name",name);
+    p.addParam("target",target);
+    if (!updateContact(p,true,true))
+	return false;
+    if (wnd)
+	Client::self()->setVisible(wnd->toString(),false);
+    return true;
 }
 
 // Called when the user wants to add a new contact or edit an existing one
 bool DefaultLogic::editContact(bool newCont, NamedList* params, Window* wnd)
 {
+    if (!Client::valid())
+	return false;
     // Make sure we reset all controls in window
     NamedList p("");
     if (newCont) {
@@ -1259,45 +1448,35 @@ bool DefaultLogic::editContact(bool newCont, NamedList* params, Window* wnd)
 	p.addParam("abk_target",params ? params->getValue("target") : "");
     }
     else {
-	if (!Client::self())
+	String cont;
+	Client::self()->getSelect(s_contactList,cont);
+	ClientContact* c = cont ? m_accounts->findContactByInstance(cont) : 0;
+	if (!(c && m_accounts->isLocalContact(c)))
 	    return false;
-	String id;
-	if (!Client::self()->getSelect(s_contactList,id))
-	    return false;
-	if (!Client::self()->getTableRow(s_contactList,id,&p))
-	    return false;
-	if (!checkContactEdit(p,wnd))
-	    return false;
-	p.addParam("abk_name",p.getValue("name"));
-	p.addParam("abk_target",id);
+	p.addParam("context",c->toString());
+	p.addParam("abk_name",c->m_name);
+	p.addParam("abk_target",c->uri());
     }
-    p.addParam("modal",String::boolText(true));
-    return Client::openPopup("addrbook",&p,wnd);
+    return Client::openPopup(s_wndAddrbook,&p);
 }
 
 // Called when the user wants to delete an existing contact
 bool DefaultLogic::delContact(const String& contact, Window* wnd)
 {
-    if (!contact) {
-	String c;
-	if (Client::self() && Client::self()->getSelect(s_contactList,c) && c) {
-	    NamedList p("");
-	    Client::self()->getTableRow(s_contactList,c,&p);
-	    if (!checkContactEdit(p,wnd))
-		return false;
-	    return Client::openConfirm(String("Delete contact ") +
-		p.getValue("name") + "?",wnd,"abk_del:" + c);
-	}
+    if (!Client::valid())
 	return false;
-    }
-
-    // Delete the account from config and all UI controls
-    Client::self()->delTableRow(s_contactList,contact);
-    Client::self()->delOption("contact",contact);
-    Client::s_contacts.clearSection(contact);
+    if (!contact)
+	return deleteSelectedItem(s_contactList + ":",wnd);
+    ClientContact* c = m_accounts->findContactByInstance(contact);
+    if (!(c && m_accounts->isLocalContact(c)))
+	return false;
+    // Delete the contact from config and all UI controls
+    contactDeleted(*c);
+    String sectName;
+    c->getContactSection(sectName);
+    Client::s_contacts.clearSection(sectName);
+    m_accounts->localContacts()->removeContact(contact);
     Client::save(Client::s_contacts);
-    // Notify server if this is a client account (stored on server)
-    // TODO: implement
     return true;
 }
 
@@ -1308,114 +1487,98 @@ bool DefaultLogic::updateProviders(const NamedList& provider, bool save, bool up
 	return false;
     if (provider.null() || !provider.getBoolValue("enabled",true))
 	return false;
-
     if (save && !Client::save(Client::s_providers))
 	return false;
-    String ctrl = "acc_providers";
-    if (Client::self() && !Client::self()->hasOption(ctrl,provider))
-	Client::self()->addOption(ctrl,provider,false);
-    return true;
+    return Client::valid() && Client::self()->updateTableRow("acc_providers",provider);
 }
 
 // Called when the user wants to call an existing contact
 bool DefaultLogic::callContact(NamedList* params, Window* wnd)
 {
-    if (!Client::self())
+    if (!Client::valid())
 	return false;
     NamedList dummy("");
     if (!params) {
 	params = &dummy;
-	Client::self()->Client::getSelect(s_contactList,*params);
+	Client::self()->getSelect(s_contactList,*params);
     }
-
     if (!Client::self()->getTableRow(s_contactList,*params,params))
 	return false;
-
-    // Check if the target is a complete one
-    Regexp r("^[a-z0-9]\\+/");
-    bool complete = r.matches(params->c_str());
-    NamedString* tmp = params->getParam("hidden:account");
-    // Set account
-    // Check for registered account(s) if none and the target is not a complete one
-    if (tmp) {
-	params->setParam("line",*tmp);
-	params->setParam("account",*tmp);
-    }
-    else if (!complete) {
-	// 1 account: call from it without checking it's status
-	// n with 1 registered: call from it
-	// ELSE: fill callto and activate the calls page
-	NamedList accounts("");
-	Client::self()->Client::getOptions(s_accountList,&accounts);
-	unsigned int n = accounts.length();
-	String account;
-	if (n == 1) {
-	    NamedString* s = accounts.getParam(0);
-	    if (s)
-		account = s->name();
+    const String& target = (*params)["number/uri"];
+    if (!target)
+	return false;
+    bool call = true;
+    String account;
+    String proto;
+    ClientContact* c = m_accounts->findContactByInstance(*params);
+    if (!m_accounts->isLocalContact(c)) {
+	// Not a local contact: check if it belongs to registered account
+	if (c && c->account() && c->account()->resource().online()) {
+	    account = c->account()->toString();
+	    proto = c->account()->protocol();
 	}
-	else
-	    for (unsigned int i = 0; i < n; i++) {
-		NamedString* acc = accounts.getParam(i);
-		if (!acc)
-		    continue;
-		NamedList p("");
-		Client::self()->getTableRow(s_accountList,acc->name(),&p);
-		NamedString* reg = p.getParam("status");
-		if (!(reg && *reg == "Registered"))
-		    continue;
-		// A second account registered
-		if (account) {
-		    account = "";
-		    break;
-		}
-		account = acc->name();
+	call = !account.null();
+    }
+    else {
+	Regexp r("^[a-z0-9]\\+/");
+	if (!r.matches(target)) {
+	    // Incomplete target:
+	    //   1 registered account: call from it
+	    //   ELSE: fill callto and activate the calls page
+	    // Skip the jabber protocol: we can't call incomplete targets on it
+	    String skip("jabber");
+	    ClientAccount* a = m_accounts->findSingleRegAccount(&skip);
+	    if (a) {
+		account = a->toString();
+		proto = a->protocol();
 	    }
-	if (account) {
-	    params->setParam("line",account);
-	    params->setParam("account",account);
-	}
-	else {
-	    Client::self()->setText(s_calltoList,*params);
-	    activatePageCalls(this);
-	    return true;
+	    call = !account.null();
 	}
     }
-    tmp = params->getParam("hidden:protocol");
-    if (tmp)
-	params->setParam("protocol",*tmp);
-    params->setParam("target",*params);
-
-    return callStart(*params);
+    if (call) {
+	NamedList p("");
+	p.addParam("line",account,false);
+	p.addParam("account",account,false);
+	p.addParam("target",target);
+	p.addParam("protocol",proto,false);
+	return callStart(p);
+    }
+    Client::self()->setText(s_calltoList,target);
+    activatePageCalls(this);
+    return true;
 }
 
 // Update the call log history
-bool DefaultLogic::callLogUpdate(NamedList& params, bool save, bool update)
+bool DefaultLogic::callLogUpdate(const NamedList& params, bool save, bool update)
 {
     if (!(save || update))
 	return false;
-
-    NamedString* id = params.getParam("billid");
-    if (!id)
-	id = params.getParam("id");
+    String* bid = params.getParam("billid");
+    const String& id = bid ? (const String&)(*bid) : params["id"];
     if (!id)
 	return false;
-
-    while (Client::self() && update) {
-	// determine if the call was incoming or outgoing
-	String* dir = params.getParam("direction");
-	if (!dir)
-	    break;
+    if (Client::valid() && update) {
 	// Remember: directions are opposite of what the user expects
-	// choose the table accordingly
-	if (*dir == "outgoing")
-	    Client::self()->addTableRow(s_logIncoming,*id,&params);
-	else if (*dir == "incoming")
-	    Client::self()->addTableRow(s_logOutgoing,*id,&params);
-	else
-	    break;
-	Client::self()->addTableRow("log_global",*id,&params);
-	break;
+	const String& dir = params["direction"];
+	bool outgoing = (dir == "incoming");
+	if (outgoing || dir == "outgoing") {
+	    // Skip if there is no remote party
+	    const String& party = cdrRemoteParty(params,outgoing);
+	    if (party) {
+		NamedList p("");
+		String time;
+		Client::self()->formatDateTime(time,(unsigned int)params.getDoubleValue("time"),
+		    "yyyy.MM.dd hh:mm",false);
+		p.addParam("party",party);
+		p.addParam("party_image",Client::s_skinPath + (outgoing ? "up.png" : "down.png"));
+		p.addParam("time",time);
+		time.clear();
+		Client::self()->formatDateTime(time,(unsigned int)params.getDoubleValue("duration"),
+		    "hh:mm:ss",true);
+		p.addParam("duration",time);
+		Client::self()->updateTableRow(s_logList,id,&p);
+	    }
+	}
     }
 
     if (!save)
@@ -1430,15 +1593,28 @@ bool DefaultLogic::callLogUpdate(NamedList& params, bool save, bool update)
 	    break;
 	Client::s_history.clearSection(*sect);
     }
-    // write to the file the information about the calls
-    unsigned int n = params.length();
-    for (unsigned int i = 0; i < n; i++) {
-	NamedString* param = params.getParam(i);
-	if (!param)
-	    continue;
-	Client::s_history.setValue(*id,param->name(),param->c_str());
-    }
+    // Write to the file the information about the calls
+    NamedList* sect = Client::s_history.createSection(id);
+    if (!sect)
+	return false;
+    *sect = params;
+    sect->assign(id);
     return Client::save(Client::s_history);
+}
+
+// Remove a call log item
+bool DefaultLogic::callLogDelete(const String& billid)
+{
+    if (!billid)
+	return false;
+    bool ok = true;
+    if (Client::valid())
+	ok = Client::self()->delTableRow(s_logList,billid);
+    NamedList* sect = Client::s_history.getSection(billid);
+    if (!sect)
+	return ok;
+    Client::s_history.clearSection(*sect);
+    return Client::save(Client::s_history) && ok;
 }
 
 // Clear the specified log and the entries from the history file and save the history file
@@ -1461,7 +1637,6 @@ bool DefaultLogic::callLogClear(const String& table, const String& direction)
 	save = (0 != n);
 	Client::s_history.clearSection();
     }
-
     // Clear table and save the file
     if (Client::self())
 	Client::self()->clearTable(table);
@@ -1470,28 +1645,14 @@ bool DefaultLogic::callLogClear(const String& table, const String& direction)
     return true;
 }
 
-// Utility function to get the called from list of parameters built from call.cdr message
-// Remember: directions are opposite of what the user expects
-inline NamedString* getCdrCalled(NamedList& list, const String& direction)
-{
-    if (direction == "incoming")
-	return list.getParam("called");
-    if (direction == "outgoing")
-	return list.getParam("caller");
-    return 0;
-}
-
 // Make an outgoing call to a target picked from the call log
 bool DefaultLogic::callLogCall(const String& billid)
 {
     NamedList* sect = Client::s_history.getSection(billid);
     if (!sect)
 	return false;
-    NamedString* direction = sect->getParam("direction");
-    if (!direction)
-	return false;
-    NamedString* called = getCdrCalled(*sect,*direction);
-    return called && *called && Client::openConfirm("Call to " + *called,0,"callto:" + *called);
+    const String& party = cdrRemoteParty(*sect);
+    return party && Client::openConfirm("Call to '" + party + "'?",0,"callto:" + party);
 }
 
 // Create a contact from a call log entry
@@ -1500,15 +1661,10 @@ bool DefaultLogic::callLogCreateContact(const String& billid)
     NamedList* sect = Client::s_history.getSection(billid);
     if (!sect)
 	return false;
-    NamedString* direction = sect->getParam("direction");
-    if (!direction)
-	return false;
-    NamedString* called = getCdrCalled(*sect,*direction);
-    NamedList p("");
-    p.setParam("abk_name",called ? called->c_str() : "");
-    p.setParam("abk_target",called ? called->c_str() : "");
-    p.setParam("modal",String::boolText(true));
-    return Client::openPopup("addrbook",&p);
+    const String& party = cdrRemoteParty(*sect);
+    NamedList p(party);
+    p.setParam("target",party);
+    return editContact(true,&p);
 }
 
 // Process help related actions
@@ -1646,7 +1802,7 @@ bool DefaultLogic::handleUiAction(Message& msg, bool& stopLogic)
     else if (*action == "add_option")
 	ok = Client::self()->addOption(name,msg.getValue("item"),msg.getBoolValue("insert"),msg.getValue("text"),wnd);
     else if (*action == "del_option")
-	ok = Client::self()->delOption(name,msg.getValue("item"),wnd);
+	ok = Client::self()->delTableRow(name,msg.getValue("item"),wnd);
     else if (*action == "get_text") {
 	String text;
 	ok = Client::self()->getText(name,text,false,wnd);
@@ -1680,20 +1836,14 @@ bool DefaultLogic::handleCallCdr(Message& msg, bool& stopLogic)
 {
     if (!Client::self())
 	return false;
-
-    String* op = msg.getParam("operation");
-    if (!(op && (*op == "finalize")))
+    if (msg["operation"] != "finalize")
 	return false;
-    op = msg.getParam("chan");
-    if (!(op && op->startsWith("client/",false)))
+    if (!msg["chan"].startsWith("client/",false))
 	return false;
-
-    // block until client finishes initialization
-    while (!Client::self()->initialized())
-	Thread::idle();
-
-    // Update UI/history
-    callLogUpdate(msg,true,true);
+    if (Client::self()->postpone(msg,Client::CallCdr,false))
+	stopLogic = true;
+    else
+	callLogUpdate(msg,true,true);
     return false;
 }
 
@@ -1708,159 +1858,236 @@ bool DefaultLogic::handleUserNotify(Message& msg, bool& stopLogic)
 {
     if (!Client::self())
 	return false;
-    // get name of the account
-    NamedString* account = msg.getParam("account");
+    if (Client::self()->postpone(msg,Client::UserNotify,false)) {
+	stopLogic = true;
+	return false;
+    }
+    const String& account = msg["account"];
     if (!account)
 	return false;
-    // see if it's registered, get the protocol and reason
+    ClientAccount* acc = m_accounts->findAccount(account);
+    if (!acc)
+	return false;
     bool reg = msg.getBoolValue("registered");
-    const char* proto = msg.getValue("protocol");
-    const char* reason = msg.getValue("reason");
+    // Notify status
     String txt = reg ? "Registered" : "Unregistered";
-    if (proto)
-	txt << " " << proto;
-    txt << " account " << *account;
-    if (reason)
-	txt << " reason: " << reason;
-
-    // block until client finishes initialization
-    while (!Client::self()->initialized())
-	Thread::idle();
-
-    // Update interface
-    NamedList p("");
-    p.copyParams(msg,"account,protocol");
-    String status = (reg ? "Registered" : "Unregistered");
-    if (!reg && reason)
-	status << ": " << reason; 
-    p.addParam("status",status); 
-    Client::self()->setTableRow(s_accountList,*account,&p);
-    // Remove account's contacts if unregistered
-    while (!reg) {
-	NamedList contacts("");
-	if (!Client::self()->getOptions(s_contactList,&contacts))
-	    break;
-	unsigned int n = contacts.length();
-	for (unsigned int i = 0; i < n; i++) {
-	    NamedString* param = contacts.getParam(i);
-	    NamedList p("");
-	    if (!(param && Client::self()->getTableRow(s_contactList,param->name(),&p)))
-		continue;
-	    NamedString* acc = p.getParam("hidden:account");
-	    if (acc && *acc == *account)
-		Client::self()->delOption(s_contactList,param->name());
-	}
-	break;
-    }
-
+    txt.append(acc->params().getValue("protocol")," ");
+    txt << " account " << account;
+    const String& reason = msg["reason"];
+    txt.append(reason," reason: ");
     Client::self()->setStatusLocked(txt);
+    int stat = ClientResource::Online;
+    if (reg) {
+	// Clear account register option
+	NamedString* opt = acc->m_params.getParam("options");
+	if (opt) {
+	    ObjList* list = opt->split(',',false);
+	    ObjList* o = list->find("register");
+	    if (o) {
+		o->remove();
+		opt->clear();
+		opt->append(list,",");
+		if (opt->null())
+		    acc->m_params.clearParam(opt);
+		acc->save();
+		// TODO: update account edit if displayed
+	    }
+	    TelEngine::destruct(list);
+ 	}
+	acc->resource().m_id = msg.getValue("instance");
+	// Add account to accounts selector(s)
+	Client::self()->updateTableRow(s_account,account);
+    }
+    else {
+	// Remove account from selector(s)
+	Client::self()->delTableRow(s_account,account);
+	if (msg.getBoolValue("autorestart"))
+	    stat = ClientResource::Connecting;
+	else {
+	    stat = ClientResource::Offline;
+	    // Reset resource name to configured
+	    acc->resource().m_id = acc->m_params.getValue("resource");
+	}
+	clearAccountContacts(*acc);
+    }
+    bool changed = acc->resource().setStatus(stat);
+    changed = acc->resource().setStatusText(reg ? String::empty() : reason) || changed;
+    if (changed) {
+	NamedList p("");
+	acc->fillItemParams(p);
+	Client::self()->setTableRow(s_accountList,account,&p);
+	// Update login/logout buttons state
+	if (acc == selectedAccount(*m_accounts)) {
+	    NamedList p("");
+	    fillAccLoginActive(p,acc);
+	    Client::self()->setParams(&p);
+	}
+    }
     return false;
+}
+
+// Process user.roster message
+bool DefaultLogic::handleUserRoster(Message& msg, bool& stopLogic)
+{
+    if (!Client::valid() || Client::isClientMsg(msg))
+	return false;
+    const String& oper = msg["operation"];
+    if (!oper)
+	return false;
+    bool remove = (oper != "update");
+    if (remove && oper != "delete")
+	return false;
+    // Postpone message processing
+    if (Client::self()->postpone(msg,Client::UserRoster)) {
+	stopLogic = true;
+	return false;
+    }
+    int n = msg.getIntValue("contact.count");
+    if (n < 1)
+	return false;
+    const String& account = msg["account"];
+    ClientAccount* a = account ? m_accounts->findAccount(account) : 0;
+    if (!a)
+	return false;
+    ObjList removed;
+    for (int i = 1; i <= n; i++) {
+	String pref("contact." + String(i));
+	const String& uri = msg[pref];
+	if (!uri)
+	    continue;
+	String id;
+	ClientContact::buildContactId(id,account,uri);
+	ClientContact* c = a->findContact(id);
+	// Avoid account's own contact
+	if (c && c == a->contact())
+	    continue;
+	if (remove) {
+	    if (!c)
+		continue;
+	    removed.append(a->removeContact(id,false));
+	    continue;
+	}
+	pref << ".";
+	// Add/update contact
+	const char* cName = msg.getValue(pref + "name",uri);
+	bool changed = (c == 0);
+	if (c) {
+	    changed = (c->m_name != cName);
+	    if (changed)
+		c->m_name = cName;
+	}
+	else {
+	    c = a->appendContact(id,cName);
+	    if (!c)
+		continue;
+	    c->setUri(uri);
+	}
+	const String& sub = msg[pref + "subscription"];
+	if (c->m_subscription != sub) {
+	    c->m_subscription = sub;
+	    changed = true;
+	}
+	const String& grps = msg[pref + "groups"];
+	if (grps) {
+	    String oldGrp;
+	    oldGrp.append(c->groups(),",");
+	    changed = changed || oldGrp != grps;
+	    c->groups().clear();
+	    ObjList* list = grps.split(',',false);
+	    for (ObjList* o = list->skipNull(); o; o = o->skipNext())
+		c->appendGroup(o->get()->toString());
+	    TelEngine::destruct(list);
+	}
+	else if (c->groups().skipNull()) {
+	    c->groups().clear();
+	    changed = true;
+	}
+	if (!changed)
+	    continue;
+    }
+    // Update UI
+    for (ObjList* o = removed.skipNull(); o; o = o->skipNext())
+	contactDeleted(*static_cast<ClientContact*>(o->get()));
+    return true;
 }
 
 // Process resource.notify message
 bool DefaultLogic::handleResourceNotify(Message& msg, bool& stopLogic)
 {
-    if (!Client::self())
+    if (!Client::valid() || Client::isClientMsg(msg))
 	return false;
-
-    NamedString* module = msg.getParam("module");
-    // Avoid loopback
-    if (module && ClientDriver::self() && ClientDriver::self()->name() == *module)
-	return false;
-
-    NamedString* account = msg.getParam("account");
-    if (!(account && Client::self()->hasOption(s_accountList,*account)))
-	return false;
-
-    String contact(msg.getValue("contact"));
+    const String& contact = msg["contact"];
     if (!contact)
 	return false;
-
-    // Check for contact list update
-    if (msg.getBoolValue("roster")) {
-	DDebug(ClientDriver::self(),DebugStub,
-	    "Logic(%s) account=%s contact='%s' [%p]",
-	    toString().c_str(),account->c_str(),contact.c_str(),this);
-	return true;
+    const String& oper = msg["operation"];
+    if (!oper)
+	return false;
+    // Postpone message processing
+    if (Client::self()->postpone(msg,Client::ResourceNotify)) {
+	stopLogic = true;
+	return false;
     }
-
-    // Process errors
-    NamedString* error = msg.getParam("error");
-    if (error) {
-	String txt;
-	txt << "Account '" << *account << "' received error='" << *error <<
-	    "' from '" << contact << "'";
-	Client::self()->addToLog(txt);
-	return true;
-    }
-
-    // Subscription status
-    NamedString* status = msg.getParam("status");
-    bool sub = (status && *status == "subscribed");
-    if (sub || (status && *status == "unsubscribed")) {
-	String txt;
-	txt << "Account '" << *account << "'. Contact '" << contact <<
-	    (sub ? " accepted" : " removed") << "' subscription";
-	Client::self()->addToLog(txt);
-	return true;
-    }
-
-    // Update presence
-    bool offline = (status && *status == "offline");
-    NamedString* proto = msg.getParam("protocol");
-    bool jabber = proto && *proto && (*proto == "jabber" || *proto == "xmpp" || *proto == "jingle");
-    String contactUri = contact;
-    contact.toLower();
-    // Special care for jabber
-    if (jabber) {
-	const char* res = msg.getValue("instance");
-	if (offline) {
-	    // Get all contacts
-	    NamedList p("");
-	    Client::self()->getOptions(s_contactList,&p);
-	    unsigned int n = p.length();
-	    // Remove all contact's resources if res is null
-	    // Check account
-	    String compare = contact + "/" + res;
-	    for (unsigned int i = 0; i < n; i++) {
-		NamedString* s = p.getParam(i);
-		if (!s)
-		    continue;
-		// Check if this a candidate
-		// Resource: full
-		// No resource: check bare ('compare' already contains the '/' separator)
-		if ((res && s->name() != compare) ||
-		    !(res || s->name().startsWith(compare)))
-		    continue;
-		// This is a candidate: check account
-		NamedList c("");
-		Client::self()->getTableRow(s_contactList,s->name(),&c);
-		NamedString* acc = c.getParam("hidden:account");
-		// Delete if account matches
-		if (acc && *acc == *account)
-		    Client::self()->delTableRow(s_contactList,s->name());
-	    }
-	    return true;
-	}
-	// Presence: ignore if no resource
-	if (TelEngine::null(res))
+    const String& account = msg["account"];
+    ClientAccount* a = account ? m_accounts->findAccount(account) : 0;
+    ClientContact* c = a ? a->findContactByUri(contact) : 0;
+    if (!c)
+	return false;
+    const String& inst = msg["instance"];
+    Debug(ClientDriver::self(),DebugAll,
+	"Logic(%s) account=%s contact=%s instance=%s operation=%s",
+	name().c_str(),account.c_str(),contact.c_str(),inst.safe(),oper.c_str());
+    bool ownContact = c == a->contact();
+    String instid;
+    bool online = false;
+    // Use a while() to break to the end
+    while (true) {
+	// Avoid account own instance
+	if (ownContact && inst && inst == a->resource().toString())
 	    return false;
-	contactUri = contact + "/" + res;
+	online = (oper == "online");
+	if (online || oper == "offline") {
+	    if (!c)
+		break;
+	    if (online) {
+		if (!inst)
+		    break;
+		ClientResource* res = c->findResource(inst);
+		if (!res)
+		    res = new ClientResource(inst);
+		// Update resource
+		res->setAudio(msg.getBoolValue("caps.audio"));
+		res->setPriority(msg.getIntValue("priority"));;
+		res->setStatusText(msg.getValue("status"));
+		int stat = ::lookup(msg.getValue("show"),ClientResource::s_statusName);
+		if (stat < ClientResource::Online)
+		    stat = ClientResource::Online;
+		res->setStatus(stat);
+		// (Re)insert the resource
+		c->insertResource(res);
+		// Update/set resource in contacts list (only for resources with audio caps)
+		if (res->m_audio)
+		    instid = inst;
+	    }
+	    else {
+		if (inst)
+		    c->removeResource(inst);
+		else
+		    c->resources().clear();
+		// Remove resource(s) from contacts list
+		c->buildInstanceId(instid,inst);
+	    }
+	    break;
+	}
+	// TODO: handle other operations like received errors
+	break;
     }
-    else if (offline)
-	Client::self()->delTableRow(s_contactList,contact);
-
-    if (!offline) {
-	NamedList p("");
-	p.addParam("name",contact);
-	p.addParam("number/uri",contactUri);
-	p.addParam("hidden:account",*account);
-	p.addParam("hidden:protocol",msg.getValue("protocol"));
-	p.addParam("hidden:editable",String::boolText(!jabber));
-	Client::self()->updateTableRow(s_contactList,contactUri,&p);
+    if (instid) {
+	if (online)
+	    updateContactList(*c,instid,msg.getValue("uri"));
+	else
+	    removeContacts(instid);
     }
-	
-    return true;
+    return false;
 }
 
 // Process resource.subscribe message
@@ -1922,7 +2149,7 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	    if (!o)
 		Client::self()->ringer(true,false);
 	}
-	Client::self()->delOption(s_channelList,id);
+	Client::self()->delTableRow(s_channelList,id);
 	enableCallActions(m_selectedChannel);
 	String status;
 	buildStatus(status,"Hung up",msg.getValue("address"),id,msg.getValue("reason"));
@@ -2157,36 +2384,55 @@ void DefaultLogic::initializedWindows()
     activatePageCalls(this);
 }
 
+// Utility: set check parameter from another list
+void setCheck(NamedList& p, const NamedList& src, const String& param, bool defVal = true)
+{
+    bool ok = src.getBoolValue(param,defVal);
+    p.addParam("check:" + param,String::boolText(ok));
+}
+
 // Initialize client from settings
 bool DefaultLogic::initializedClient()
 {
-    m_accShowAdvanced = Client::s_settings.getBoolValue("client","showaccadvanced",m_accShowAdvanced);
-    if (Client::self())
-	Client::self()->setCheck("toggleAccAdvanced",m_accShowAdvanced);
+    if (!Client::self())
+	return false;
+
+    NamedList dummy("client");
+    NamedList* cSect = Client::s_settings.getSection("client");
+    if (!cSect)
+	cSect = &dummy;
+    NamedList* cGen = Client::s_settings.getSection("general");
+    if (!cGen)
+	cGen = &dummy;
+
+    // Account edit defaults
+    NamedList p("");
+    setCheck(p,*cSect,"acc_showadvanced");
+    setCheck(p,*cSect,"acc_enabled");
+    setCheck(p,*cSect,"acc_loginnow");
+    Client::self()->setParams(&p);
 
     // Check if global settings override the users'
-    NamedList* clientSect = Engine::config().getSection("client");
-    bool globalOverride = clientSect && clientSect->getBoolValue("globaloverride",false);
+    bool globalOverride = Engine::config().getBoolValue("client","globaloverride",false);
 
     // Booleans
     for (unsigned int i = 0; i < Client::OptCount; i++) {
 	bool tmp = Client::self()->getBoolOpt((Client::ClientToggle)i);
 	bool active = true;
 	if (globalOverride) {
-	    String* over = clientSect->getParam(Client::s_toggles[i]);
+	    String* over = Engine::config().getKey("client",Client::s_toggles[i]);
 	    if (over) {
 		tmp = over->toBoolean(tmp);
 		active = false;
 	    }
 	    else
-		tmp = Client::s_settings.getBoolValue("general",Client::s_toggles[i],tmp);
+		tmp = cGen->getBoolValue(Client::s_toggles[i],tmp);
 	}
 	else {
 	    tmp = Engine::config().getBoolValue("client",Client::s_toggles[i],tmp);
-	    tmp = Client::s_settings.getBoolValue("general",Client::s_toggles[i],tmp);
+	    tmp = cGen->getBoolValue(Client::s_toggles[i],tmp);
 	}
-	if (Client::self())
-	    Client::self()->setActive(Client::s_toggles[i],active);
+	Client::self()->setActive(Client::s_toggles[i],active);
 	setClientParam(Client::s_toggles[i],String::boolText(tmp),false,true);
     }
 
@@ -2195,17 +2441,16 @@ bool DefaultLogic::initializedClient()
     setClientParam("callerid",Client::s_settings.getValue("default","callerid"),false,true);
     setClientParam("domain",Client::s_settings.getValue("default","domain"),false,true);
     // Create default ring sound
-    String ring = Client::s_settings.getValue("general","ringinfile",Client::s_soundPath + "ring.wav");
+    String ring = cGen->getValue("ringinfile",Client::s_soundPath + "ring.wav");
     Client::self()->createSound(Client::s_ringInName,ring);
-    ring = Client::s_settings.getValue("general","ringoutfile",Client::s_soundPath + "tone.wav");
+    ring = cGen->getValue("ringoutfile",Client::s_soundPath + "tone.wav");
     Client::self()->createSound(Client::s_ringOutName,ring);
 
     // Enable call actions
     enableCallActions(m_selectedChannel);
 
     // Set chan.notify handler
-    if (Client::self())
-	Client::self()->installRelay("chan.notify",Client::ChanNotify,100);
+    Client::self()->installRelay("chan.notify",Client::ChanNotify,100);
     return false;
 }
 
@@ -2231,11 +2476,8 @@ void DefaultLogic::exitingClient()
     // Save callto history
     NamedList p("");
     if (Client::self()->getOptions(s_calltoList,&p)) {
-	NamedList* sect = Client::s_calltoHistory.getSection("calls");
-	if (sect)
-	    Client::s_calltoHistory.clearSection(*sect);
-	Client::s_calltoHistory.createSection("calls");
-	sect = Client::s_calltoHistory.getSection("calls");
+	NamedList* sect = Client::s_calltoHistory.createSection("calls");
+	sect->clearParams();
 	unsigned int n = p.length();
 	unsigned int max = 0;
 	for (unsigned int i = 0; max < s_maxCallHistory && i < n; i++) {
@@ -2353,11 +2595,150 @@ void DefaultLogic::channelSelectionChanged(const String& old)
     enableCallActions(m_selectedChannel);
 }
 
+// Fill contact edit/delete active parameters
+void DefaultLogic::fillContactEditActive(NamedList& list, bool active, const String* item)
+{
+    if (active) {
+	if (!Client::self())
+	    return;
+	if (!Client::self()->getVisible(s_wndAddrbook)) {
+	    ClientContact* c = 0;
+	    if (item)
+		c = !item->null() ? m_accounts->findContactByInstance(*item) : 0;
+	    else {
+		String sel;
+		Client::self()->getSelect(s_contactList,sel);
+		c = sel ? m_accounts->findContactByInstance(sel) : 0;
+	    }
+	    active = c && m_accounts->isLocalContact(c);
+	}
+	else
+	    active = false;
+    }
+    const char* ok = String::boolText(active);
+    list.addParam("active:abk_del",ok);
+    list.addParam("active:abk_edit",ok);
+}
+
+// Fill log contact active parameter
+void DefaultLogic::fillLogContactActive(NamedList& list, bool active, const String* item)
+{
+    if (active) {
+	if (!Client::self())
+	    return;
+	if (!Client::self()->getVisible(s_wndAddrbook)) {
+	    if (item)
+		active = !item->null();
+	    else {
+		String sel;
+		active = Client::self()->getSelect(s_logList,sel) && sel;
+	    }
+	}
+	else
+	    active = false;
+    }
+    list.addParam("active:log_contact",String::boolText(active));
+}
+
+
+// Clear a list/table. Handle specific lists like CDR, accounts, contacts
+bool DefaultLogic::clearList(const String& action, Window* wnd)
+{
+    if (!(Client::valid() && action))
+	return false;
+    // Check for a confirmation text
+    int pos = action.find(":");
+    String list;
+    if (pos > 0)
+	list = action.substr(0,pos);
+    else if (pos < 0)
+	list = action;
+    if (!list)
+	return false;
+    if (pos > 0) {
+	String text = action.substr(pos + 1);
+	if (!text) {
+	    // Handle some known lists
+	    if (list == s_logList)
+		text = "Clear call history?";
+	}
+	if (text)
+	    return Client::openConfirm(text,wnd,"clear:" + list);
+    }
+    DDebug(ClientDriver::self(),DebugAll,"DefaultLogic::clearList(%s,%p)",
+	list.c_str(),wnd);
+    // Handle CDR
+    if (list == s_logList)
+	return callLogClear(s_logList,String::empty());
+    bool ok = Client::self()->clearTable(list,wnd) || Client::self()->setText(list,"",false,wnd);
+    if (ok)
+	Client::self()->setFocus(list,false,wnd);
+    return ok;
+}
+
+// Delete a list/table item. Handle specific lists like CDR
+bool DefaultLogic::deleteItem(const String& list, const String& item, Window* wnd)
+{
+    if (!(Client::valid() && list && item))
+	return false;
+    DDebug(ClientDriver::self(),DebugAll,"DefaultLogic::deleteItem(%s,%s,%p)",
+	list.c_str(),item.c_str(),wnd);
+    // Handle known lists
+    if (list == s_contactList)
+	return delContact(item,wnd);
+    if (list == s_accountList)
+	return delAccount(item,wnd);
+    if (list == s_logList)
+	return callLogDelete(item);
+    // Remove table row
+    return Client::self()->delTableRow(list,item,wnd);
+}
+
+// Handle list/table selection deletion
+bool DefaultLogic::deleteSelectedItem(const String& action, Window* wnd)
+{
+    if (!Client::valid())
+	return false;
+    DDebug(ClientDriver::self(),DebugAll,"DefaultLogic::deleteSelectedItem(%s,%p)",
+	action.c_str(),wnd);
+    // Check for a confirmation text
+    int pos = action.find(":");
+    String list;
+    if (pos > 0)
+	list = action.substr(0,pos);
+    else if (pos < 0)
+	list = action;
+    if (!list)
+	return false;
+    String item;
+    Client::self()->getSelect(list,item,wnd);
+    if (!item)
+	return false;
+    if (pos > 0) {
+	String text = action.substr(pos + 1);
+	if (!text) {
+	    // Handle some known lists
+	    if (list == s_logList)
+		text = "Delete the selected call log?";
+	    else if (list == s_accountList)
+		text << "Delete account '" + item + "'?";
+	    else if (list == s_contactList) {
+		ClientContact* c = m_accounts->findContactByInstance(item);
+		if (!(c && m_accounts->isLocalContact(c)))
+		    return false;
+		text << "Delete contact '" << c->m_name + "'?";
+	    }
+	}
+	if (text)
+	    return Client::openConfirm(text,wnd,"deleteitem:" + list + ":" + item);
+    }
+    return deleteItem(list,item,wnd);
+}
+
 
 /**
  * DurationUpdate
  */
-
 // Destructor
 DurationUpdate::~DurationUpdate()
 {

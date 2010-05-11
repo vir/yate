@@ -993,9 +993,18 @@ bool MGCPSpan::matchEndpoint(const MGCPEndpointId& ep)
 	return true;
     if (findCircuit(ep.id()))
 	return true;
+    // check for wildcards like */*/*
+    static Regexp s_termsAll("^\\*[/*]\\+\\*$");
+    if (s_termsAll.matches(ep.user()))
+	return true;
     String tmp = ep.user();
-    Regexp r("^\\(.*\\)\\[\\([0-9]\\+\\)-\\([0-9]\\+\\)\\]$");
-    if (!(tmp.matches(r) && m_epId.user().startsWith(tmp.matchString(1),false,true)))
+    // check for prefix/*/*
+    static Regexp s_finalAll("^\\([^*]\\+/\\)[/*]\\+$");
+    if (tmp.matches(s_finalAll) && m_epId.user().startsWith(tmp.matchString(1),false,true))
+	return true;
+    // check for prefix[min-max]
+    static Regexp s_finalRange("^\\(.*\\)\\[\\([0-9]\\+\\)-\\([0-9]\\+\\)\\]$");
+    if (!(tmp.matches(s_finalRange) && m_epId.user().startsWith(tmp.matchString(1),false,true)))
 	return false;
     int idx = m_epId.user().substr(tmp.matchLength(1)).toInteger(-1,10);
     if (idx < 0)

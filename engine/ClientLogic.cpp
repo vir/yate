@@ -2459,8 +2459,12 @@ void DefaultLogic::exitingClient()
 {
     clearDurationUpdate();
 
-    if (!Client::self())
+    if (!Client::valid())
 	return;
+
+    // Hide some windows to avoid displying them the next time we start
+    Client::self()->setVisible(s_wndAccount,false);
+    Client::self()->setVisible(s_wndAddrbook,false);
 
     String tmp;
     if (Client::self()->getText("def_username",tmp))

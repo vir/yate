@@ -127,6 +127,14 @@
 ;  or TGCP protocols too.
 ;version=
 
+; range: string: Range of gateways to create using this section as a template
+; If range is not empty the "user" setting must contain an asterisk
+; Example for creating aaln1/[1-10], aaln2/[1-10], aaln3/[1-10] and aaln6/[1-10]:
+;  user=aaln*/1
+;  chans=10
+;  range=1-3,6
+;range=
+
 ; cluster: bool: This is the gateway to send remote RTP commands to
 ; Do not activate this functionality unless you know very well what it does
 ;  as it disrupts other based RTP protocols

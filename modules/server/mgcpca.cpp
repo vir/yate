@@ -864,7 +864,14 @@ bool MGCPSpan::init(const NamedList& params)
     if ((cicStart < 0) || !sect)
 	return false;
     Configuration cfg(Engine::configFile("mgcpca"));
-    const NamedList* config = cfg.getSection("gw " + *sect);
+    String sn = "gw " + *sect;
+    const NamedList* config = cfg.getSection(sn);
+    if (!config) {
+	// Try to find a template section for gateway:number
+	int sep = sn.rfind(':');
+	if (sep > 0)
+	    config = cfg.getSection(sn.substr(0,sep));
+    }
     if (!config) {
 	Debug(m_group,DebugWarn,"MGCPSpan('%s'). Failed to find config section [%p]",
 	    id().safe(),this);
@@ -1851,13 +1858,32 @@ void MGCPPlugin::initialize()
 			cfg.getIntValue("endpoint","port")
 		    );
 		}
-		MGCPEpInfo* ep = s_endpoint->append(
-		    sect->getValue("user",name),
-		    host,
-		    sect->getIntValue("port",0)
-		);
+		int port = sect->getIntValue("port",0);
+		String user = sect->getValue("user",name);
+		name = sect->getValue("name",name);
+		SignallingCircuitRange range(sect->getValue("range"));
+		if (range.count() && user.find('*') >= 0) {
+		    // This section is a template
+		    for (unsigned int idx = 0; idx < range.count(); idx++) {
+			String num(range[idx]);
+			String tmpN = name + ":" + num;
+			String tmpU(user);
+			// Replace * with number
+			int sep;
+			while ((sep = tmpU.find('*')) >= 0)
+			    tmpU = tmpU.substr(0,sep) + num + tmpU.substr(sep+1);
+			MGCPEpInfo* ep = s_endpoint->append(tmpU,host,port);
+			if (ep)
+			    ep->alias = tmpN;
+			else
+			    Debug(this,DebugWarn,"Could not set user '%s' for gateway '%s'",
+				tmpU.c_str(),tmpN.c_str());
+		    }
+		    continue;
+		}
+		MGCPEpInfo* ep = s_endpoint->append(user,host,port);
 		if (ep) {
-		    ep->alias = sect->getValue("name",name);
+		    ep->alias = name;
 		    if (sect->getBoolValue("cluster",false))
 			s_defaultEp = ep->toString();
 		}

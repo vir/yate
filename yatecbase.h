@@ -2784,11 +2784,10 @@ public:
     virtual void updateSelectedChannel(const String* item = 0);
 
     /**
-     * Engine start notification
+     * Engine start notification. Connect startup accounts
      * @param msg The engine.start message
      */
-    virtual void engineStart(Message& msg)
-	{}
+    virtual void engineStart(Message& msg);
 
 protected:
     /**

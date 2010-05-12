@@ -249,6 +249,22 @@ static inline void fillAccEditActive(NamedList& p, bool active)
     p.addParam("active:acc_edit",tmp);
 }
 
+// Update account status and login/logout active status if selected
+static void updateAccountStatus(ClientAccount* acc, ClientAccountList* accounts,
+    Window* wnd = 0)
+{
+    if (!acc)
+	return;
+    NamedList p("");
+    acc->fillItemParams(p);
+    Client::self()->updateTableRow(s_accountList,acc->toString(),&p,wnd);
+    if (!accounts || acc != selectedAccount(*accounts,wnd))
+	return;
+    NamedList pp("");
+    fillAccLoginActive(pp,acc);
+    Client::self()->setParams(&pp,wnd);
+}
+
 
 /**
  * ClientLogic
@@ -631,20 +647,7 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
     bool login = (name == "acc_login");
     if (login || name == "acc_logout") {
 	ClientAccount* acc = selectedAccount(*m_accounts,wnd);
-	if (!acc)
-	    return false;
-	bool ok = Engine::enqueue(acc->userlogin(login));
-	if (ok && login && acc->resource().offline() && Client::valid()) {
-	    acc->resource().setStatus(ClientResource::Connecting);
-	    acc->resource().setStatusText("");
-	    NamedList p("");
-	    acc->fillItemParams(p);
-	    Client::self()->updateTableRow(s_accountList,acc->toString(),&p);
-	    p.clearParams();
-	    fillAccLoginActive(p,acc);
-	    Client::self()->setParams(&p);
-	}
-	return ok;
+	return acc ? loginAccount(acc->params(),login) : false;
     }
 
     // *** Address book actions
@@ -1293,12 +1296,10 @@ bool DefaultLogic::updateAccount(const NamedList& account, bool login, bool save
     // Update account list
     NamedList p("");
     acc->fillItemParams(p);
-    Message* m = login ? acc->userlogin(true) : 0;
-    TelEngine::destruct(acc);
     Client::self()->updateTableRow(s_accountList,account,&p);
-    // Login if required
-    if (m)
-	Engine::enqueue(m);
+    if (login && Client::s_engineStarted)
+	loginAccount(acc->params(),true);
+    TelEngine::destruct(acc);
     return true;
 }
 
@@ -1308,21 +1309,28 @@ bool DefaultLogic::loginAccount(const NamedList& account, bool login)
     DDebug(ClientDriver::self(),DebugAll,"Logic(%s) loginAccount(%s,%s)",
 	toString().c_str(),account.c_str(),String::boolText(login));
 
-    Message* m = new Message("user.login");
-    m->addParam("account",account);
-    m->addParam("operation",login ? "login" : "delete");
-    // Fill login data
-    if (login) {
-    	unsigned int n = account.length();
-	for (unsigned int i = 0; i < n; i++) {
-	    NamedString* p = account.getParam(i);
-	    if (p)
-		m->addParam(p->name(),*p);
-	}
+    Message* m = 0;
+    ClientAccount* acc = m_accounts->findAccount(account);
+    if (acc)
+	m = acc->userlogin(login);
+    else {
+	m = Client::buildMessage("user.login",account,login ? "login" : "logout");
+	if (login)
+	    m->copyParams(account);
+	else
+	    m->copyParams(account,"protocol");
     }
-    else
-	m->copyParams(account,"protocol");
-    return Engine::enqueue(m);
+    bool ok = Engine::enqueue(m);
+    // Done if failed or logout
+    if (!(ok && login))
+	return ok;
+    // Update UI account status
+    if (!(acc && acc->resource().offline() && Client::valid()))
+	return true;
+    acc->resource().setStatus(ClientResource::Connecting);
+    acc->resource().setStatusText("");
+    updateAccountStatus(acc,m_accounts);
+    return true;
 }
 
 // Add/update a contact
@@ -1912,17 +1920,8 @@ bool DefaultLogic::handleUserNotify(Message& msg, bool& stopLogic)
     }
     bool changed = acc->resource().setStatus(stat);
     changed = acc->resource().setStatusText(reg ? String::empty() : reason) || changed;
-    if (changed) {
-	NamedList p("");
-	acc->fillItemParams(p);
-	Client::self()->setTableRow(s_accountList,account,&p);
-	// Update login/logout buttons state
-	if (acc == selectedAccount(*m_accounts)) {
-	    NamedList p("");
-	    fillAccLoginActive(p,acc);
-	    Client::self()->setParams(&p);
-	}
-    }
+    if (changed)
+	updateAccountStatus(acc,m_accounts);
     return false;
 }
 
@@ -2507,6 +2506,16 @@ void DefaultLogic::updateSelectedChannel(const String* item)
 	m_selectedChannel = "";
     if (old != m_selectedChannel)
 	channelSelectionChanged(old);
+}
+
+// Engine start notification. Connect startup accounts
+void DefaultLogic::engineStart(Message& msg)
+{
+    for (ObjList* o = m_accounts->accounts().skipNull(); o; o = o->skipNext()) {
+	ClientAccount* a = static_cast<ClientAccount*>(o->get());
+	if (a->resource().offline() && a->startup())
+	    loginAccount(a->params(),true);
+    }
 }
 
 // Method called by the client when idle

@@ -407,6 +407,13 @@ public:
 	{ if (m_interval) m_timeout = time + m_interval; }
 
     /**
+     * Fire the timer at a specific absolute time
+     * @param time Absolute time (in msec) when the timer will fire
+     */
+    inline void fire(u_int64_t time = Time::msecNow())
+	{ m_timeout = time; }
+
+    /**
      * Stop the timer
      */
     inline void stop()

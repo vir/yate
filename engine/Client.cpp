@@ -125,7 +125,12 @@ public:
     inline EngineStartHandler(unsigned int prio = 100)
 	: MessageHandler("engine.start",prio)
 	{}
-    virtual bool received(Message& msg);
+    virtual bool received(Message& msg) {
+	    Client::s_engineStarted = true;
+	    if (!(Client::self() && Client::self()->postpone(msg,Client::EngineStart)))
+		Debug(DebugGoOn,"Failed to postpone %s in client",msg.c_str());
+	    return false;
+	}
 };
 
 
@@ -180,6 +185,7 @@ String Client::s_toggles[OptCount] = {
     "activatelastoutcall", "activatelastincall", "activatecallonselect",
     "display_keypad", "openincomingurl"
 };
+bool Client::s_engineStarted = false;            // Engine started flag
 bool Client::s_idleLogicsTick = false;           // Call logics' timerTick()
 bool Client::s_exiting = false;                  // Client exiting flag
 ClientDriver* ClientDriver::s_driver = 0;
@@ -763,19 +769,6 @@ bool ClientThreadProxy::execute()
 	Thread::yield();
     s_proxyMutex.unlock();
     return m_rval;
-}
-
-
-/**
- * EngineStartHandler
- */
-// Notify logics
-bool EngineStartHandler::received(Message& msg)
-{
-    while (!Client::self())
-	Thread::yield(true);
-    Client::self()->engineStart(msg);
-    return false;
 }
 
 
@@ -1882,7 +1875,7 @@ bool Client::received(Message& msg, int id)
     bool stop = false;
     for (ObjList* o = s_logics.skipNull(); !stop && o; o = o->skipNext()) {
 	ClientLogic* logic = static_cast<ClientLogic*>(o->get());
-	Debug(ClientDriver::self(),DebugAll,"Logic(%s) processing %s [%p]",
+	DDebug(ClientDriver::self(),DebugAll,"Logic(%s) processing %s [%p]",
 	    logic->toString().c_str(),msg.c_str(),logic);
 	switch (id) {
 	    case CallCdr:
@@ -1908,6 +1901,9 @@ bool Client::received(Message& msg, int id)
 		break;
 	    case UserRoster:
 		processed = logic->handleUserRoster(msg,stop) || processed;
+		break;
+	    case EngineStart:
+		logic->engineStart(msg);
 		break;
 	    default:
 		processed = logic->defaultMsgHandler(msg,id,stop) || processed;
@@ -2407,20 +2403,6 @@ bool Client::setBoolOpt(ClientToggle toggle, bool value, bool updateUi)
 	default: ;
     }
     return true;
-}
-
-// Engine start notification. Notify all registered logics
-void Client::engineStart(Message& msg)
-{
-    // Wait for init
-    while (!initialized())
-	Thread::yield();
-    for(ObjList* o = s_logics.skipNull(); o; o = o->skipNext()) {
-	ClientLogic* logic = static_cast<ClientLogic*>(o->get());
-	DDebug(ClientDriver::self(),DebugAll,"Logic(%s) processing engine.start [%p]",
-	    logic->toString().c_str(),logic);
-	logic->engineStart(msg);
-    }
 }
 
 // Build a message to be sent by the client.

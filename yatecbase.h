@@ -719,11 +719,11 @@ public:
 	UserRoster         = 8,
 	// Handlers not automatically installed
 	ChanNotify         = 10,
-	// Id used only to postpone msg.execute messages
+	// IDs used only to postpone messages
 	MsgExecute         = 11,
-	// NOTE: Keep the MsgIdCount in sync: it can be used by other parties to install
-	//  other relays
-	MsgIdCount         = 12
+	EngineStart        = 12,
+	// Starting value for custom relays
+	MsgIdCount         = 100
     };
 
     /**
@@ -1329,12 +1329,6 @@ public:
 	{ return false; }
 
     /**
-     * Engine start notification. Notify all registered logics
-     * @param msg The engine.start message
-     */
-    virtual void engineStart(Message& msg);
-
-    /**
      * Check if the client is exiting
      * @return True if the client therad is exiting
      */
@@ -1461,6 +1455,8 @@ public:
     static String s_debugWidget;
     // The list of cient's toggles
     static String s_toggles[OptCount];
+    // Engine started flag
+    static bool s_engineStarted;
 
 protected:
     /**

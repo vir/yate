@@ -618,7 +618,12 @@ AC_SUBST(HAVE_COREAUDIO)
 
 HAVE_GSM=no
 GSM_INC=""
+GSM_LIB="-lgsm"
 AC_ARG_WITH(libgsm,AC_HELP_STRING([--with-libgsm],[use GSM codec if available (default)]),[ac_cv_use_libgsm=$withval],[ac_cv_use_libgsm=yes])
+if [[ "x$ac_cv_use_libgsm" = "xstatic" ]]; then
+    ac_cv_use_libgsm=yes
+    GSM_LIB="-Wl,-Bstatic $GSM_LIB -Wl,-Bdynamic"
+fi
 if [[ "x$ac_cv_use_libgsm" = "xyes" ]]; then
 for i in /usr/include /usr/include/gsm /usr/local/include /usr/local/include/gsm; do
     ac_cv_use_libgsm="$i"
@@ -635,6 +640,7 @@ AC_MSG_RESULT([$HAVE_GSM])
 fi
 AC_SUBST(HAVE_GSM)
 AC_SUBST(GSM_INC)
+AC_SUBST(GSM_LIB)
 
 
 HAVE_ILBC=no
@@ -657,7 +663,12 @@ AC_SUBST(ILBC_INC)
 
 HAVE_SPEEX=no
 SPEEX_INC=""
+SPEEX_LIB="-lspeex"
 AC_ARG_WITH(libspeex,AC_HELP_STRING([--with-libspeex],[use Speex codec if available (default)]),[ac_cv_use_libspeex=$withval],[ac_cv_use_libspeex=yes])
+if [[ "x$ac_cv_use_libspeex" = "xstatic" ]]; then
+    ac_cv_use_libspeex=yes
+    SPEEX_LIB="-Wl,-Bstatic $SPEEX_LIB -Wl,-Bdynamic"
+fi
 if [[ "x$ac_cv_use_libspeex" = "xyes" ]]; then
 for i in /usr/include /usr/include/speex /usr/local/include /usr/local/include/speex; do
     ac_cv_use_libspeex="$i"
@@ -686,12 +697,17 @@ AC_MSG_RESULT([$HAVE_SPEEX])
 fi
 AC_SUBST(HAVE_SPEEX)
 AC_SUBST(SPEEX_INC)
+AC_SUBST(SPEEX_LIB)
 
 
 HAVE_AMRNB=no
 AMRNB_INC=""
-AMRNB_LIB=""
+AMRNB_LIB="-lamrnb"
 AC_ARG_WITH(amrnb,AC_HELP_STRING([--with-amrnb=DIR],[use AMR-NB if available (default)]),[ac_cv_use_amrnb=$withval],[ac_cv_use_amrnb=/usr])
+if [[ "x$ac_cv_use_amrnb" = "xstatic" ]]; then
+    ac_cv_use_amrnb=/usr
+    AMRNB_LIB="-Wl,-Bstatic $AMRNB_LIB -Wl,-Bdynamic"
+fi
 if [[ "x$ac_cv_use_amrnb" != "xno" ]]; then
 AC_MSG_CHECKING([for AMR-NB in $ac_cv_use_amrnb])
 local_lib="$ARCHLIB"
@@ -699,7 +715,7 @@ amrinc="$ac_cv_use_amrnb/include/amrnb"
 test -f "$ac_cv_use_amrnb/$local_lib/libamrnb.so" || local_lib="lib"
 if [[ -f "$ac_cv_use_amrnb/$local_lib/libamrnb.so" -a -f "$amrinc/interf_rom.h" ]]; then
     HAVE_AMRNB=yes
-    AMRNB_LIB="-L$ac_cv_use_amrnb/$local_lib -lamrnb"
+    AMRNB_LIB="-L$ac_cv_use_amrnb/$local_lib $AMRNB_LIB"
     AMRNB_INC="-I$amrinc"
 fi
 AC_MSG_RESULT([$HAVE_AMRNB])
@@ -715,7 +731,7 @@ SPANDSP_LIB="-lspandsp"
 AC_ARG_WITH(spandsp,AC_HELP_STRING([--with-spandsp],[use spandsp library if available (default)]),[ac_cv_use_spandsp=$withval],[ac_cv_use_spandsp=yes])
 if [[ "x$ac_cv_use_spandsp" = "xstatic" ]]; then
     ac_cv_use_spandsp="yes"
-    SPANDSP_LIB="-Wl,-Bstatic -lspandsp -ltiff -lz -ljpeg -Wl,-Bdynamic"
+    SPANDSP_LIB="-Wl,-Bstatic $SPANDSP_LIB -ltiff -lz -ljpeg -Wl,-Bdynamic"
 fi
 if [[ "x$ac_cv_use_spandsp" = "xyes" ]]; then
 for i in /usr/include /usr/local/include; do

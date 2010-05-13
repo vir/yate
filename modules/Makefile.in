@@ -287,10 +287,10 @@ ilbccodec.yate: ../libs/ilbc/libilbc.a
 ilbccodec.yate: LOCALLIBS = -L../libs/ilbc -lilbc
 ilbccodec.yate: LOCALFLAGS = @ILBC_INC@
 
-gsmcodec.yate: LOCALLIBS = -lgsm
+gsmcodec.yate: LOCALLIBS = @GSM_LIB@
 gsmcodec.yate: LOCALFLAGS = @GSM_INC@
 
-speexcodec.yate: LOCALLIBS = -lspeex
+speexcodec.yate: LOCALLIBS = @SPEEX_LIB@
 speexcodec.yate: LOCALFLAGS = @SPEEX_INC@
 
 amrnbcodec.yate: LOCALFLAGS = @AMRNB_INC@

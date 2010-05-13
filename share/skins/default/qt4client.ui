@@ -1655,8 +1655,14 @@
               <property name="selectionBehavior" >
                <enum>QAbstractItemView::SelectRows</enum>
               </property>
+              <property name="sortingEnabled" >
+               <bool>true</bool>
+              </property>
               <property name="columnCount" >
                <number>3</number>
+              </property>
+              <property name="_yate_sorting" stdset="0" >
+               <string>2,false</string>
               </property>
               <column>
                <property name="text" >

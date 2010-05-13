@@ -2363,12 +2363,14 @@ bool Client::ringer(bool in, bool on)
 // Send DTMFs on selected channel
 bool Client::emitDigits(const char* digits, const String& id)
 {
-    Debug(ClientDriver::self(),DebugInfo,"emitDigit(%s,%s)",digits,id.c_str());
+    XDebug(ClientDriver::self(),DebugAll,"Client::emitDigits(%s,%s)",digits,id.c_str());
     if (!driverLockLoop())
 	return false;
-    ClientChannel* chan = static_cast<ClientChannel*>(ClientDriver::self()->find(id));
+    Channel* chan = !id ? ClientDriver::self()->find(ClientDriver::self()->activeId()) :
+	ClientDriver::self()->find(id);
     bool ok = (0 != chan);
     if (ok) {
+	Debug(chan,DebugAll,"emitDigits(%s) [%p]",digits,chan);
 	Message* m = chan->message("chan.dtmf");
 	m->addParam("text",digits);
 	Engine::enqueue(m);

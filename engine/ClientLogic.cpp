@@ -1041,16 +1041,16 @@ bool DefaultLogic::callStart(NamedList& params, Window* wnd)
 // function which is called when a digit is pressed
 bool DefaultLogic::digitPressed(NamedList& params, Window* wnd)
 {
-    if (!Client::self())
+    if (!Client::valid())
 	return false;
 
     // Send digits (DTMF) on active channel
     // or add them to 'callto' box
-    String digits = params.getValue("digits");
-    if (digits && ClientDriver::self() && ClientDriver::self()->activeId()) {
-	Client::self()->emitDigits(digits,ClientDriver::self()->activeId());
+    const String& digits = params["digits"];
+    if (!digits)
+	return false;
+    if (Client::self()->emitDigits(digits))
 	return true;
-    }
     String target;
     if (isE164(digits) && Client::self()->getText("callto",target)) {
 	target += digits;

@@ -361,6 +361,7 @@ using namespace TelEngine;
 // Dynamic properies
 static const String s_propsSave = "_yate_save_props"; // Save properties property name
 static const String s_propColWidths = "_yate_col_widths"; // Column widths
+static const String s_propSorting = "_yate_sorting";  // Table/List sorting
 static String s_propHHeader = "dynamicHHeader";       // Tables: show/hide the horizontal header
 static String s_propAction = "dynamicAction";         // Prefix for properties that would trigger some action
 static String s_propWindowFlags = "_yate_windowflags"; // Window flags
@@ -837,11 +838,22 @@ QtWindow::~QtWindow()
 	for (int i = 0; i < tables.size(); i++) {
 	    if (qobject_cast<QtTable*>(tables[i]))
 		continue;
+	    // Column widths
 	    unsigned int n = tables[i]->columnCount();
 	    String widths;
 	    for (unsigned int j = 0; j < n; j++)
 		widths.append(String(tables[i]->columnWidth(j)),",",true);
 	    tables[i]->setProperty(s_propColWidths,QVariant(QtClient::setUtf8(widths)));
+	    // Sorting
+	    String sorting;
+	    if (tables[i]->isSortingEnabled()) {
+		QHeaderView* h = tables[i]->horizontalHeader();
+		int col = h ? h->sortIndicatorSection() : -1;
+		if (col >= 0)
+		    sorting << col << "," <<
+			String::boolText(Qt::AscendingOrder == h->sortIndicatorOrder());
+	    }
+	    tables[i]->setProperty(s_propSorting,QVariant(QtClient::setUtf8(sorting)));
 	}
 	// Save child objects properties
 	QList<QObject*> child = qFindChildren<QObject*>(wndWidget());
@@ -2097,6 +2109,19 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 		TelEngine::destruct(list);
 	    }
 	}
+	else if (prop == s_propSorting) {
+	    if (w.table()) {
+		ObjList* list = value.split(',',false);
+		String* tmp = static_cast<String*>((*list)[0]);
+		int col = tmp ? tmp->toInteger(-1) : -1;
+		if (col >= 0) {
+		    tmp = static_cast<String*>((*list)[1]);
+		    bool asc = tmp ? tmp->toBoolean(true) : true;
+		    w.table()->sortItems(col,asc ? Qt::AscendingOrder : Qt::DescendingOrder);
+		}
+		TelEngine::destruct(list);
+	    }
+	}
 	else if (prop == s_propWindowFlags) {
 	    QWidget* wid = (name == m_id || name == m_oldId) ? this : w.widget();
 	    // Set window flags from enclosed widget:
@@ -2543,6 +2568,7 @@ void QtWindow::doInit()
 		// Make sure saved properties exists to allow them to be restored
 		QStringList sl = var.toStringList();
 		bool changed = createProperty(tables[i],s_propColWidths,QVariant::String,this,&sl);
+		changed = createProperty(tables[i],s_propSorting,QVariant::String,this,&sl) || changed;
 		if (changed)
 		    tables[i]->setProperty(s_propsSave,QVariant(sl));
 	    }

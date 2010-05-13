@@ -257,7 +257,7 @@ static void updateAccountStatus(ClientAccount* acc, ClientAccountList* accounts,
 	return;
     NamedList p("");
     acc->fillItemParams(p);
-    Client::self()->updateTableRow(s_accountList,acc->toString(),&p,wnd);
+    Client::self()->updateTableRow(s_accountList,acc->toString(),&p,false,wnd);
     if (!accounts || acc != selectedAccount(*accounts,wnd))
 	return;
     NamedList pp("");

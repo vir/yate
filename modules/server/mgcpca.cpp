@@ -104,6 +104,8 @@ public:
 	{ return m_operational; }
     inline const String& address() const
 	{ return m_address; }
+    inline const String& bearer() const
+	{ return m_bearer; }
     inline const char* version() const
 	{ return m_version.null() ? "MGCP 1.0" : m_version.c_str(); }
     inline bool fxo() const
@@ -136,6 +138,7 @@ private:
     String m_notify;
     String m_address;
     String m_version;
+    String m_bearer;
 };
 
 class MGCPCircuit : public SignallingCircuit, public SDPSession
@@ -900,6 +903,7 @@ bool MGCPSpan::init(const NamedList& params)
     m_increment = config->getIntValue("increment",m_increment);
     m_rtpForward = config->getBoolValue("forward_rtp",!(m_fxo || m_fxs));
     m_sdpForward = config->getBoolValue("forward_sdp",false);
+    m_bearer = lookup(config->getIntValue("bearer",s_dict_payloads,-1),s_dict_gwbearerinfo);
     bool clear = config->getBoolValue("clearconn",false);
     m_circuits = new MGCPCircuit*[m_count];
     unsigned int i;
@@ -1158,6 +1162,7 @@ MGCPCircuit::MGCPCircuit(unsigned int code, MGCPSpan* span, const char* id)
     m_callId.hexify(this,sizeof(this));
     m_callId += m_notify;
     m_notify = span->ntfyId() + m_notify;
+    m_gwFormat = span->bearer();
 }
 
 MGCPCircuit::~MGCPCircuit()
@@ -1284,7 +1289,7 @@ void MGCPCircuit::clearConn(bool force)
     if (!force)
 	mm->params.addParam("C",m_callId);
     else {
-	m_gwFormat.clear();
+	m_gwFormat = mySpan()->bearer();
 	m_gwFormatChanged = false;
     }
     m_connId.clear();
@@ -1678,7 +1683,7 @@ void MGCPCircuit::processDelete(MGCPMessage* mm, const String& error)
 	Debug(&splugin,DebugWarn,"Gateway deleted connection '%s' on circuit %u [%p]",
 	    m_connId.c_str(),code(),this);
     m_connId.clear();
-    m_gwFormat.clear();
+    m_gwFormat = mySpan()->bearer();
     m_gwFormatChanged = false;
     cleanupRtp();
     m_changing = false;

@@ -164,6 +164,13 @@
 ; clearconn: bool: Clear all connections of remote endpoints when initialized
 ;clearconn=no
 
+; bearer: keyword: Default bearer encoding
+; Allowed values: mulaw, alaw
+; If bearer is set a default encoding is assumed on the circuit side and a
+;  B: e:mu or B: e:A line is added only if the circuit data format changes
+; Normally the default bearer is not set so a B: line is added when needed
+;bearer=
+
 ; forward_rtp: bool: Support to forward RTP directly to protocols that support it
 ; The actual direct RTP forwarding is still negotiated in routing
 ;forward_rtp=yes for digital gateways, no for analogic

@@ -260,7 +260,7 @@ public:
 	}
     inline bool getHeaderText(int col, String& dest, bool lower = true) {
     	    QTableWidgetItem* item = m_table->horizontalHeaderItem(col);
-	    if (item)	{
+	    if (item) {
 		QtClient::getUtf8(dest,item->text());
 		if (lower)
 		    dest.toLower();
@@ -324,8 +324,6 @@ public:
     int getRow(const String& item);
     // Find a column by its label. Return -1 if not found 
     int getColumn(const String& name, bool caseInsentive = true);
-    // Save/Load the table column's widths from/to a comma separated list
-    void colWidths(bool save, const String& section);
 protected:
     void init(bool tmp);
 private:
@@ -361,11 +359,13 @@ private:
 using namespace TelEngine;
 
 // Dynamic properies
+static const String s_propsSave = "_yate_save_props"; // Save properties property name
+static const String s_propColWidths = "_yate_col_widths"; // Column widths
 static String s_propHHeader = "dynamicHHeader";       // Tables: show/hide the horizontal header
 static String s_propAction = "dynamicAction";         // Prefix for properties that would trigger some action
 static String s_propWindowFlags = "_yate_windowflags"; // Window flags
 static String s_propHideInactive = "dynamicHideOnInactive"; // Hide inactive window
-static String s_qtPropPrefix = "_q_";                 // QT dynamic properties prefix
+static const String s_yatePropPrefix = "_yate_";      // Yate dynamic properties prefix
 //
 static Qt4ClientFactory s_qt4Factory;
 static Configuration s_cfg;
@@ -555,6 +555,34 @@ inline QSystemTrayIcon* findSysTrayIcon(QObject* obj, const char* name)
     return qFindChild<QSystemTrayIcon*>(obj,QtClient::setUtf8(name));
 }
 
+// Utility used to create an object's property if not found
+// Add it to a list of strings
+// Return true if the list changed
+static bool createProperty(QObject* obj, const char* name, QVariant::Type t,
+    QtWindow* wnd, QStringList* list)
+{
+    if (!obj || TelEngine::null(name))
+	return false;
+    QVariant var = obj->property(name);
+    if (var.type() == QVariant::Invalid)
+	obj->setProperty(name,QVariant(t));
+    else if (var.type() != t) {
+	if (wnd)
+	    Debug(QtDriver::self(),DebugNote,
+		"Window(%s) child '%s' already has a %s property '%s' [%p]",
+		wnd->toString().c_str(),YQT_OBJECT_NAME(obj),var.typeName(),name,wnd);
+	return false;
+    }
+    if (!list)
+	return false;
+    QString s = QtClient::setUtf8(name);
+    if (list->contains(s))
+	return false;
+    *list << s;
+    return true;
+}
+
+
 /**
  * Qt4ClientFactory
  */
@@ -677,34 +705,10 @@ int TableWidget::getColumn(const String& name, bool caseInsensitive)
 	String val;
 	if (!getHeaderText(i,val,false))
 	    continue;
-	if ((caseInsensitive && (name |= val)) || (name == val))
+	if ((caseInsensitive && (name &= val)) || (!caseInsensitive && name == val))
 	    return i;
     }
     return -1;
-}
-
-// Load/save the table column's widths to/from a comma separated list
-void TableWidget::colWidths(bool save, const String& section)
-{
-    String param(m_name + "_col_widths");
-    if (save) {
-	unsigned int n = columnCount();
-	String widths;
-	for (unsigned int i = 0; i < n; i++)
-	    widths.append(String(m_table->columnWidth(i)),",",true);
-	s_save.setValue(section,param,widths);
-	return;
-    }
-    // Load
-    String widths = s_save.getValue(section,param);
-    ObjList* list = widths.split(',');
-    unsigned int col = 0;
-    for (ObjList* o = list->skipNull(); o; o = o->skipNext(), col++) {
-	int width = (static_cast<String*>(o->get()))->toInteger(-1);
-	if (width >= 0)
-	    m_table->setColumnWidth(col,width); 
-    }
-    TelEngine::destruct(list);
 }
 
 void TableWidget::init(bool tmp)
@@ -828,11 +832,29 @@ QtWindow::~QtWindow()
 	    s_save.setValue(m_id,"height",m_height);
 	}
 	s_save.setValue(m_id,"visible",m_visible);
-	// Save tables
-	QList<QTableWidget*> tables = qFindChildren<QTableWidget*>(this);
+	// Set dynamic properties to be saved for native QT objects
+	QList<QTableWidget*> tables = qFindChildren<QTableWidget*>(wndWidget());
 	for (int i = 0; i < tables.size(); i++) {
-	    TableWidget t(tables[i]);
-	    t.colWidths(true,m_id);
+	    if (qobject_cast<QtTable*>(tables[i]))
+		continue;
+	    unsigned int n = tables[i]->columnCount();
+	    String widths;
+	    for (unsigned int j = 0; j < n; j++)
+		widths.append(String(tables[i]->columnWidth(j)),",",true);
+	    tables[i]->setProperty(s_propColWidths,QVariant(QtClient::setUtf8(widths)));
+	}
+	// Save child objects properties
+	QList<QObject*> child = qFindChildren<QObject*>(wndWidget());
+	for (int i = 0; i < child.size(); i++) {
+	    NamedList props("");
+	    if (!QtClient::getProperty(child[i],s_propsSave,props))
+		continue;
+	    unsigned int n = props.length();
+	    for (unsigned int j = 0; j < n; j++) {
+		NamedString* ns = props.getParam(j);
+		if (ns && ns->name())
+		    QtClient::saveProperty(child[i],ns->name(),this);
+	    }
 	}
     }
 }
@@ -2049,9 +2071,11 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 	String name = YQT_OBJECT_NAME(obj);
 	QDynamicPropertyChangeEvent* ev = static_cast<QDynamicPropertyChangeEvent*>(event);
 	String prop = ev->propertyName().constData();
-	// Avoid QT's internal dynamic properties
-	if (prop.startsWith(s_qtPropPrefix))
+	// Handle only yate dynamic properties
+	if (!prop.startsWith(s_yatePropPrefix,false))
 	    return QWidget::eventFilter(obj,event);
+	XDebug(QtDriver::self(),DebugAll,"Window(%s) eventFilter(%s) prop=%s [%p]",
+	    m_id.c_str(),YQT_OBJECT_NAME(obj),prop.c_str(),this);
 	// Return false for now on: it's our property
 	QtWidget w(obj);
 	if (w.invalid())
@@ -2061,7 +2085,19 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 	    return false;
 	bool ok = true;
 	bool handled = true;
-	if (prop == s_propWindowFlags) {
+	if (prop == s_propColWidths) {
+	    if (w.table()) {
+		ObjList* list = value.split(',',false);
+		unsigned int col = 0;
+		for (ObjList* o = list->skipNull(); o; o = o->skipNext(), col++) {
+		    int width = (static_cast<String*>(o->get()))->toInteger(-1);
+		    if (width >= 0)
+			w.table()->setColumnWidth(col,width);
+		}
+		TelEngine::destruct(list);
+	    }
+	}
+	else if (prop == s_propWindowFlags) {
 	    QWidget* wid = (name == m_id || name == m_oldId) ? this : w.widget();
 	    // Set window flags from enclosed widget:
 	    //  custom window title/border/sysmenu config
@@ -2469,6 +2505,7 @@ void QtWindow::doInit()
     // Hide columns starting with "hidden:"
     QList<QTableWidget*> tables = qFindChildren<QTableWidget*>(wndWidget());
     for (int i = 0; i < tables.size(); i++) {
+	bool nonCustom = (0 == qobject_cast<QtTable*>(tables[i]));
 	// Horizontal header
 	QHeaderView* hdr = tables[i]->horizontalHeader();
 	// Stretch last column
@@ -2490,11 +2527,29 @@ void QtWindow::doInit()
 	    if (!QtClient::getBoolProperty(tables[i],"_yate_allowvheaderresize"))
 		hdr->setResizeMode(QHeaderView::Fixed);
 	}
+	if (nonCustom) {
+	    // Set _yate_save_props
+	    QVariant var = tables[i]->property(s_propsSave);
+	    if (var.type() != QVariant::StringList) {
+		// Create the property if not found, ignore it if not a string list
+		if (var.type() == QVariant::Invalid)
+		    var = QVariant(QVariant::StringList);
+		else
+		    Debug(QtDriver::self(),DebugNote,
+			"Window(%s) table '%s' already has a non string list property %s [%p]",
+			m_id.c_str(),YQT_OBJECT_NAME(tables[i]),s_propsSave.c_str(),this);
+	    }
+	    if (var.type() == QVariant::StringList) {
+		// Make sure saved properties exists to allow them to be restored
+		QStringList sl = var.toStringList();
+		bool changed = createProperty(tables[i],s_propColWidths,QVariant::String,this,&sl);
+		if (changed)
+		    tables[i]->setProperty(s_propsSave,QVariant(sl));
+	    }
+	}
 	TableWidget t(tables[i]);
 	// Insert the column containing the ID
 	t.addColumn(0,0,"hidden:id");
-	// Set column widths
-	t.colWidths(false,m_id);
 	// Hide columns
 	for (int i = 0; i < t.columnCount(); i++) {
 	    String name;
@@ -2530,16 +2585,36 @@ void QtWindow::doInit()
 	}
     }
 
-    // Install event filer and apply dynamic properties
+    // Restore saved children properties
+    if (sect) {
+	unsigned int n = sect->length();
+	for (unsigned int i = 0; i < n; i++) {
+	    NamedString* ns = sect->getParam(i);
+	    if (!ns)
+		continue;
+	    String prop(ns->name());
+	    if (!prop.startSkip("property:",false))
+		continue;
+	    int pos = prop.find(":");
+	    if (pos > 0) {
+		String wName = prop.substr(0,pos);
+		String pName = prop.substr(pos + 1);
+		DDebug(QtDriver::self(),DebugAll,
+		    "Window(%s) restoring property %s=%s for child '%s' [%p]",
+		    m_id.c_str(),pName.c_str(),ns->c_str(),wName.c_str(),this);
+		setProperty(wName,pName,*ns);
+	    }
+	}
+    }
+
+    // Install event filter and apply dynamic properties
     QList<QObject*> w = qFindChildren<QObject*>(wndWidget());
     for (int i = 0; i < w.size(); i++) {
-	// dynamicPropertyNames() was added in 4.2
-	String name = YQT_OBJECT_NAME(w[i]);
 	QList<QByteArray> props = w[i]->dynamicPropertyNames();
 	// Check for our dynamic properties
 	int j = 0;
 	for (j = 0; j < props.size(); j++)
-	    if (!props[j].startsWith(s_qtPropPrefix))
+	    if (props[j].startsWith(s_yatePropPrefix))
 		break;
 	if (j == props.size())
 	    continue;
@@ -2547,7 +2622,7 @@ void QtWindow::doInit()
 	w[i]->installEventFilter(this);
 	// Fake dynamic property change to apply them
 	for (j = 0; j < props.size(); j++) {
-	    if (props[j].startsWith(s_qtPropPrefix))
+	    if (!props[j].startsWith(s_yatePropPrefix))
 		continue;
 	    QDynamicPropertyChangeEvent ev(props[j]);
 	    eventFilter(w[i],&ev);
@@ -2915,6 +2990,37 @@ QString QtClient::formatDateTime(unsigned int secs, const char* format, bool utc
 	time.setTimeSpec(Qt::UTC);
     time.setTime_t(secs);
     return time.toString(format);
+}
+
+// Retrieve an object's QtWindow parent
+QtWindow* QtClient::parentWindow(QObject* obj)
+{
+    for (; obj; obj = obj->parent()) {
+	QtWindow* w = qobject_cast<QtWindow*>(obj);
+	if (w)
+	    return w;
+    }
+    return 0;
+}
+
+// Save an object's property into parent window's section. Clear it on failure
+bool QtClient::saveProperty(QObject* obj, const String& prop, QtWindow* owner)
+{
+    if (!obj)
+	return false;
+    if (!owner)
+	owner = parentWindow(obj);
+    if (!owner)
+	return false;
+    String value;
+    bool ok = getProperty(obj,prop,value);
+    String pName;
+    pName << "property:" << YQT_OBJECT_NAME(obj) << ":" << prop;
+    if (ok)
+	s_save.setValue(owner->id(),pName,value);
+    else
+	s_save.clearKey(owner->id(),pName);
+    return ok;
 }
 
 // Set or an object's property

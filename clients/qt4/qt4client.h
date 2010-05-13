@@ -221,6 +221,22 @@ public:
 	{ return QString::fromUtf8(TelEngine::c_safe(str)); }
 
     /**
+     * Retrieve an object's QtWindow parent
+     * @param obj The object
+     * @return QtWindow pointer or 0
+     */
+    static QtWindow* parentWindow(QObject* obj);
+
+    /**
+     * Set an object's property into parent window's section. Clear it on failure
+     * @param obj The object
+     * @param prop Property to save
+     * @param owner Optional window owning the object
+     * @return True on success
+     */
+    static bool saveProperty(QObject* obj, const String& prop, QtWindow* owner = 0);
+
+    /**
      * Set or an object's property
      * @param obj The object
      * @param name Property's name

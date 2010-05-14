@@ -158,6 +158,18 @@ public:
 	{ return qobject_cast<QtCustomWidget*>(m_widget); }
     inline QtCustomObject* customObject()
 	{ return qobject_cast<QtCustomObject*>(m_object); }
+    inline UIWidget* uiWidget() {
+	    switch (type()) {
+		case CustomTable:
+		    return static_cast<UIWidget*>(customTable());
+		case CustomWidget:
+		    return static_cast<UIWidget*>(customWidget());
+		case CustomObject:
+		    return static_cast<UIWidget*>(customObject());
+	    }
+	    return 0;
+	}
+
     inline QAction* action()
 	{ return m_action; }
 
@@ -980,8 +992,10 @@ bool QtWindow::setParams(const NamedList& params)
     // Parameters for the widget whose name is the list name
     if(params) {
 	QtWidget w(wndWidget(), params);
-	if (w.customTable()) {
-	    bool ok = w.customTable()->setParams(params);
+	// Handle UIWidget descendants
+	UIWidget* uiw = w.uiWidget();
+	if (uiw) {
+	    bool ok = uiw->setParams(params);
 	    setUpdatesEnabled(true);
 	    return ok;
 	}

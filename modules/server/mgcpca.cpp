@@ -871,7 +871,7 @@ bool MGCPSpan::init(const NamedList& params)
     const NamedList* config = cfg.getSection(sn);
     if (!config) {
 	// Try to find a template section for gateway:number
-	int sep = sn.rfind(':');
+	int sep = sn.rfind('+');
 	if (sep > 0)
 	    config = cfg.getSection(sn.substr(0,sep));
     }
@@ -1871,7 +1871,7 @@ void MGCPPlugin::initialize()
 		    // This section is a template
 		    for (unsigned int idx = 0; idx < range.count(); idx++) {
 			String num(range[idx]);
-			String tmpN = name + ":" + num;
+			String tmpN = name + "+" + num;
 			String tmpU(user);
 			// Replace * with number
 			int sep;

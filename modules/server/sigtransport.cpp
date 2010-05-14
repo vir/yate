@@ -887,7 +887,7 @@ bool StreamReader::sendMSG(const DataBlock& header, const DataBlock& msg, int st
     }
     else
 	Debug(m_transport,DebugAll,"Buffer Overrun");
-    while (m_sendBuffer.length()) {
+    while (m_socket && m_sendBuffer.length()) {
 	bool sendOk = false, error = false;
 	int flags = 0;
 	if (m_socket->select(0,&sendOk,&error,5000)) {
@@ -1054,7 +1054,7 @@ bool MessageReader::sendMSG(const DataBlock& header, const DataBlock& msg, int s
     bool sendOk = false, error = false;
     bool ret = false;
     m_isSending = true;
-    while (m_socket->select(0,&sendOk,&error,5000)) {
+    while (m_socket && m_socket->select(0,&sendOk,&error,5000)) {
 	if (error) {
 	    DDebug(m_transport,DebugAll,"Send error detected. %s",strerror(errno));
 	    m_transport->setStatus(Transport::Down);
@@ -1094,7 +1094,7 @@ bool MessageReader::sendMSG(const DataBlock& header, const DataBlock& msg, int s
 bool MessageReader::readData()
 {
     bool readOk = false,error = false;
-    if (!m_socket->select(&readOk,0,&error,5000))
+    if (!(m_socket && m_socket->select(&readOk,0,&error,5000)))
 	return false;
     if (!readOk || error)
 	return false;

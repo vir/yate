@@ -638,6 +638,16 @@ public:
      */
     virtual bool getSelect(String& item)
 	{ return false; }
+
+    /**
+     * Append or insert text lines to this widget
+     * @param lines List containing the lines
+     * @param max The maximum number of lines allowed to be displayed. Set to 0 to ignore
+     * @param atStart True to insert, false to append
+     * @return True on success
+     */
+    virtual bool addLines(const NamedList& lines, unsigned int max, bool atStart = false)
+	{ return false; }
 };
 
 /**

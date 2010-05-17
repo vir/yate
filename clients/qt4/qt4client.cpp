@@ -1365,6 +1365,9 @@ bool QtWindow::addLines(const String& name, const NamedList* lines, unsigned int
 	return false;
     if (!lines)
 	return true;
+    UIWidget* uiw = w.uiWidget();
+    if (uiw)
+	return uiw->addLines(*lines,max,atStart);
     unsigned int count = lines->length();
     if (!count)
 	return true;

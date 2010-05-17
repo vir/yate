@@ -1705,6 +1705,9 @@ bool QtWindow::clearTable(const String& name)
     QtWidget w(wndWidget(),name);
     if (w.invalid())
 	return false;
+    UIWidget* uiw = w.uiWidget();
+    if (uiw)
+	return uiw->clearTable();
     bool ok = true;
     if (w.widget())
 	w->setUpdatesEnabled(false);
@@ -1721,9 +1724,6 @@ bool QtWindow::clearTable(const String& name)
 	    break;
 	case QtWidget::ComboBox:
 	    w.combo()->clear();
-	    break;
-	case QtWidget::CustomTable:
-	    ok = w.customTable()->clearTable();
 	    break;
 	default:
 	    ok = false;

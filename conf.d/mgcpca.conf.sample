@@ -171,6 +171,13 @@
 ; Normally the default bearer is not set so a B: line is added when needed
 ;bearer=
 
+; req_dtmf: keyword: When to request DTMF notification from gateway
+; Allowed values:
+;  none - do not request to be notified about DTMF events
+;  once - emit RQNT once when connecting the circuit (default)
+;  more - emit RQNT on connection and after each notification received
+;req_dtmf=once
+
 ; forward_rtp: bool: Support to forward RTP directly to protocols that support it
 ; The actual direct RTP forwarding is still negotiated in routing
 ;forward_rtp=yes for digital gateways, no for analogic

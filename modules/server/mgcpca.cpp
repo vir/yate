@@ -92,6 +92,11 @@ private:
 class MGCPSpan : public SignallingCircuitSpan
 {
 public:
+    enum RqntType {
+	RqntNone = 0,
+	RqntOnce = 1,
+	RqntMore = 2,
+    };
     MGCPSpan(const NamedList& params, const char* name, const MGCPEpInfo& ep);
     virtual ~MGCPSpan();
     inline const String& ntfyId() const
@@ -112,6 +117,10 @@ public:
 	{ return m_fxo; }
     inline bool fxs() const
 	{ return m_fxs; }
+    inline RqntType rqntType() const
+	{ return m_rqntType; }
+    inline const char* rqntStr() const
+	{ return m_rqntStr; }
     bool ownsId(const String& rqId) const;
     static SignallingComponent* create(const String& type, const NamedList& name);
     static MGCPSpan* findNotify(const String& id);
@@ -135,6 +144,8 @@ private:
     bool m_sdpForward;
     bool m_fxo;
     bool m_fxs;
+    RqntType m_rqntType;
+    const char* m_rqntStr;
     String m_notify;
     String m_address;
     String m_version;
@@ -299,14 +310,21 @@ static TokenDict s_dict_payloads[] = {
     { "h261",         31 },
     { "h263",         34 },
     { "mpv",          32 },
-    {      0,          0 },
+    {      0,          0 }
 };
 
 // Media gateway bearer information (mapped from s_dict_payloads)
 static TokenDict s_dict_gwbearerinfo[] = {
     { "e:mu",          0 },
     { "e:A",           8 },
-    {      0,          0 },
+    {      0,          0 }
+};
+
+static TokenDict s_dict_rqnt[] = {
+    { "none", MGCPSpan::RqntNone },
+    { "once", MGCPSpan::RqntOnce },
+    { "more", MGCPSpan::RqntMore },
+    { 0,      0                  }
 };
 
 // Copy one parameter (if present) with new name
@@ -814,6 +832,7 @@ MGCPSpan::MGCPSpan(const NamedList& params, const char* name, const MGCPEpInfo& 
 	&params,name,this);
     u_int32_t ntfy = (u_int32_t)::random();
     m_notify.hexify(&ntfy,sizeof(ntfy));
+    m_rqntStr = "D/[0-9#*](N)";
     const AnalogLineGroup* analog = YOBJECT(AnalogLineGroup,group());
     if (analog) {
 	switch (analog->type()) {
@@ -822,6 +841,7 @@ MGCPSpan::MGCPSpan(const NamedList& params, const char* name, const MGCPEpInfo& 
 		break;
 	    case AnalogLine::FXS:
 		m_fxs = true;
+		m_rqntStr = "L/hu(N),D/[0-9#*](N)";
 		break;
 	    default:
 		break;
@@ -904,6 +924,7 @@ bool MGCPSpan::init(const NamedList& params)
     m_rtpForward = config->getBoolValue("forward_rtp",!(m_fxo || m_fxs));
     m_sdpForward = config->getBoolValue("forward_sdp",false);
     m_bearer = lookup(config->getIntValue("bearer",s_dict_payloads,-1),s_dict_gwbearerinfo);
+    m_rqntType = (RqntType)config->getIntValue("req_dtmf",s_dict_rqnt,RqntOnce);
     bool clear = config->getBoolValue("clearconn",false);
     m_circuits = new MGCPCircuit*[m_count];
     unsigned int i;
@@ -1365,6 +1386,13 @@ RefPointer<MGCPMessage> MGCPCircuit::sendSync(MGCPMessage* mm)
 // Send asynchronously a notification request
 bool MGCPCircuit::sendRequest(const char* sigReq, const char* reqEvt, const char* digitMap)
 {
+    if (!(sigReq || reqEvt || digitMap))
+	return false;
+    Debug(&splugin,DebugInfo,"MGCPCircuit%s%s%s%s%s%s %u [%p]",
+	(sigReq ? " Signal out: " : ""),c_safe(sigReq),
+	(reqEvt ? " Notify on: " : ""),c_safe(reqEvt),
+	(digitMap ? " Digit map: " : ""),c_safe(digitMap),
+	code(),this);
     MGCPMessage* mm = message("RQNT");
     mm->params.addParam("X",m_notify);
     if (sigReq)
@@ -1392,8 +1420,10 @@ bool MGCPCircuit::status(Status newStat, bool sync)
 	}
 	allowRtpChange = SignallingCircuit::status() == Connected &&
 	    hasLocalRtp() && m_localRtpChanged;
-	if (SignallingCircuit::status() != Connected && !(fxs() || fxo()))
-	    sendRequest(0,"D/[0-9#*](N)");
+	if (SignallingCircuit::status() != Connected
+	    && mySpan()->rqntType() != MGCPSpan::RqntNone
+	    && !(fxs() || fxo()))
+	    sendRequest(0,mySpan()->rqntStr());
     }
     if (!allowRtpChange && (newStat == m_statusReq) &&
 	((SignallingCircuit::status() == newStat) || !sync)) {
@@ -1644,8 +1674,8 @@ bool MGCPCircuit::processNotify(const String& package, const String& event, cons
 		    mySpan()->id().c_str(),this);
 		return false;
 	    }
-	    if (fxs())
-		sendRequest(0,"L/hu(N),D/[0-9#*](N)");
+	    if (fxs() && mySpan()->rqntType() != MGCPSpan::RqntNone)
+		sendRequest(0,mySpan()->rqntStr());
 	    return enqueueEvent(SignallingCircuitEvent::OffHook,fullName);
 	}
 	else if (event &= "hu") {
@@ -1663,11 +1693,8 @@ bool MGCPCircuit::processNotify(const String& package, const String& event, cons
 	    return enqueueEvent(SignallingCircuitEvent::Polarity,fullName);
     }
     else if (package == "D") {
-#if 0
-	// TEST
-	Debug(&splugin,DebugStub,"MGCPCircuit::processNotify() sending DTMF req [%p]",this);
-        sendRequest(0,"D/[0-9#*](N)");
-#endif
+	if (mySpan()->rqntType() == MGCPSpan::RqntMore)
+	    sendRequest(0,mySpan()->rqntStr());
 	// DTMF events
 	if (event.length() == 1)
 	    return enqueueEvent(SignallingCircuitEvent::Dtmf,fullName,event);

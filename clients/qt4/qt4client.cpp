@@ -1173,11 +1173,12 @@ bool QtWindow::setSelect(const String& name, const String& item)
     QtWidget w(wndWidget(),name);
     if (w.invalid())
 	return false;
+    UIWidget* uiw = w.uiWidget();
+    if (uiw)
+	return uiw->setSelect(item);
 
     int d = 0;
     switch (w.type()) {
-	case QtWidget::CustomTable:
-	    return w.customTable()->setSelect(item);
 	case QtWidget::Table:
 	    {
 		TableWidget t(w);
@@ -1324,6 +1325,9 @@ bool QtWindow::getOptions(const String& name, NamedList* items)
 	return false;
     if (!items)
 	return true;
+    UIWidget* uiw = w.uiWidget();
+    if (uiw)
+	return uiw->getOptions(*items);
 
     switch (w.type()) {
 	case QtWidget::ComboBox:
@@ -1347,8 +1351,6 @@ bool QtWindow::getOptions(const String& name, NamedList* items)
 		    QtClient::getUtf8(*items,"",tmp->text(),false);
 	    }
 	    break;
-	case QtWidget::CustomTable:
-	    return w.customTable()->getOptions(*items);
     }
     return true;
 }
@@ -1442,14 +1444,16 @@ bool QtWindow::addTableRow(const String& name, const String& item,
     XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) addTableRow(%s,%s,%p,%s) [%p]",
 	m_id.c_str(),name.c_str(),item.c_str(),data,String::boolText(atStart),this);
 
-    TableWidget tbl(wndWidget(),name);
-    if (!tbl.valid())
+    QtWidget w(wndWidget(),name);
+    if (w.invalid())
 	return false;
-
-    QtTable* custom = tbl.customTable();
-    if (custom)
-	return custom->addTableRow(item,data,atStart);
-
+    UIWidget* uiw = w.uiWidget();
+    if (uiw)
+	return uiw->addTableRow(item,data,atStart);
+    // Handle basic QTableWidget
+    if (!w.table())
+	return false;
+    TableWidget tbl(w.table());
     int row = atStart ? 0 : tbl.rowCount();
     tbl.addRow(row);
     // Set item (the first column) and the rest of data
@@ -1465,14 +1469,12 @@ bool QtWindow::setMultipleRows(const String& name, const NamedList& data, const 
     XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) setMultipleRows('%s',%p,'%s') [%p]",
 	m_id.c_str(),name.c_str(),&data,prefix.c_str(),this);
 
-    TableWidget tbl(wndWidget(),name);
-    if (!tbl.valid())
+    QtWidget w(wndWidget(),name);
+    if (w.invalid())
 	return false;
-
-    QtTable* custom = tbl.customTable();
-    return custom && custom->setMultipleRows(data,prefix);
+    UIWidget* uiw = w.uiWidget();
+    return uiw && uiw->setMultipleRows(data,prefix);
 }
-
 
 // Insert a row into a table owned by this window
 bool QtWindow::insertTableRow(const String& name, const String& item,
@@ -1481,14 +1483,15 @@ bool QtWindow::insertTableRow(const String& name, const String& item,
     XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) insertTableRow(%s,%s,%s,%p) [%p]",
 	m_id.c_str(),name.c_str(),item.c_str(),before.c_str(),data,this);
 
-    TableWidget tbl(wndWidget(),name);
+    QtWidget w(wndWidget(),name);
+    if (w.invalid())
+	return false;
+    UIWidget* uiw = w.uiWidget();
+    if (uiw)
+	return uiw->insertTableRow(item,before,data);
+    TableWidget tbl(w.table());
     if (!tbl.valid())
 	return false;
-
-    QtTable* custom = tbl.customTable();
-    if (custom)
-	return custom->insertTableRow(item,before,data);
-
     int row = tbl.getRow(before);
     if (row == -1)
 	row = tbl.rowCount();
@@ -1543,6 +1546,13 @@ bool QtWindow::delTableRow(const String& name, const String& item)
 		n = w.list()->count();
 	    }
 	    break;
+	default:
+	    UIWidget* uiw = w.uiWidget();
+	    if (uiw && uiw->delTableRow(item)) {
+		row = 0;
+		// Don't notify empty: we don't know it
+		n = 1;
+	    }
     }
     if (row < 0)
 	return false;
@@ -1556,14 +1566,15 @@ bool QtWindow::setTableRow(const String& name, const String& item, const NamedLi
     XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) setTableRow(%s,%s,%p) [%p]",
 	m_id.c_str(),name.c_str(),item.c_str(),data,this);
 
-    TableWidget tbl(wndWidget(),name);
+    QtWidget w(wndWidget(),name);
+    if (w.invalid())
+	return false;
+    UIWidget* uiw = w.uiWidget();
+    if (uiw)
+	return uiw->setTableRow(item,data);
+    TableWidget tbl(w.table());
     if (!tbl.valid())
 	return false;
-
-    QtTable* custom = tbl.customTable();
-    if (custom)
-	return custom->setTableRow(item,data);
-
     int row = tbl.getRow(item);
     if (row < 0)
 	return false;
@@ -1577,14 +1588,15 @@ bool QtWindow::getTableRow(const String& name, const String& item, NamedList* da
     XDebug(QtDriver::self(),DebugAll,"QtWindow::getTableRow(%s,%s,%p) [%p]",
 	name.c_str(),item.c_str(),data,this);
 
-    TableWidget tbl(wndWidget(),name);
+    QtWidget w(wndWidget(),name);
+    if (w.invalid())
+	return false;
+    UIWidget* uiw = w.uiWidget();
+    if (uiw)
+	return uiw->getTableRow(item,data);
+    TableWidget tbl(w.table(),false);
     if (!tbl.valid())
 	return false;
-
-    QtTable* custom = tbl.customTable();
-    if (custom)
-	return custom->getTableRow(item,data);
-
     int row = tbl.getRow(item);
     if (row < 0)
 	return false;
@@ -1643,19 +1655,22 @@ bool QtWindow::updateTableRows(const String& name, const NamedList* data, bool a
     XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) updateTableRows('%s',%p,%s) [%p]",
 	m_id.c_str(),name.c_str(),data,String::boolText(atStart),this);
 
-    TableWidget tbl(wndWidget(),name);
+    QtWidget w(wndWidget(),name);
+    if (w.invalid())
+	return false;
+    UIWidget* uiw = w.uiWidget();
+    if (uiw) {
+	bool ok = uiw->updateTableRows(data,atStart);
+	QtTable* ct = w.customTable();
+	if (ct)
+	    raiseSelectIfEmpty(ct->rowCount(),this,name);
+	return ok;
+    }
+    TableWidget tbl(w.table());
     if (!tbl.valid())
 	return false;
     if (!data)
 	return true;
-
-    QtTable* custom = tbl.customTable();
-    if (custom) {
-	bool ok = custom->updateTableRows(data,atStart);
-	raiseSelectIfEmpty(tbl.rowCount(),this,name);
-	return ok;
-    }
-
     bool ok = true;
     tbl.table()->setUpdatesEnabled(false);
     unsigned int n = data->length();
@@ -1793,6 +1808,9 @@ bool QtWindow::getSelect(const String& name, String& item)
     QtWidget w(wndWidget(),name);
     if (w.invalid())
 	return false;
+    UIWidget* uiw = w.uiWidget();
+    if (uiw)
+	return uiw->getSelect(item);
     switch (w.type()) {
 	case QtWidget::ComboBox:
 	    if (w.combo()->lineEdit() && w.combo()->lineEdit()->selectedText().isEmpty())
@@ -1819,8 +1837,6 @@ bool QtWindow::getSelect(const String& name, String& item)
 	case QtWidget::ProgressBar:
 	    item = w.progressBar()->value();
 	    return true;
-	case QtWidget::CustomTable:
-	    return w.customTable()->getSelect(item);
 	case QtWidget::Tab:
 	    {
 		item = "";

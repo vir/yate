@@ -699,6 +699,13 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
     // Hide windows
     if (name == "button_hide" && wnd)
 	return Client::self() && Client::self()->setVisible(wnd->toString(),false);
+    // Quit
+    if (name == "quit") {
+	if (!Client::valid())
+	    return false;
+	Client::self()->quit();
+	return true;
+    }
 
     return false;
 }

@@ -183,7 +183,7 @@ String Client::s_debugWidget = "log_events";     // Default widget displaying th
 String Client::s_toggles[OptCount] = {
     "multilines", "autoanswer", "ringincoming", "ringoutgoing",
     "activatelastoutcall", "activatelastincall", "activatecallonselect",
-    "display_keypad", "openincomingurl"
+    "display_keypad", "openincomingurl", "addaccountonstartup"
 };
 bool Client::s_engineStarted = false;            // Engine started flag
 bool Client::s_idleLogicsTick = false;           // Call logics' timerTick()
@@ -787,6 +787,7 @@ Client::Client(const char *name)
 	m_toggles[i] = false;
     m_toggles[OptMultiLines] = true;
     m_toggles[OptKeypadVisible] = true;
+    m_toggles[OptAddAccountOnStartup] = true;
     s_incomingUrlParam = Engine::config().getValue("client","incomingcallurlparam",
 	"caller_info_uri");
 

@@ -749,7 +749,8 @@ public:
 	OptActivateCallOnSelect   = 6,   // Set the active call when selected in channel list (don't require double click)
 	OptKeypadVisible          = 7,   // Show/hide keypad
 	OptOpenIncomingUrl        = 8,   // Open an incoming URL in call.execute message
-	OptCount                  = 9
+	OptAddAccountOnStartup    = 9,   // Open account add window on startup
+	OptCount                  = 10
     };
 
     /**

@@ -2472,7 +2472,12 @@ void DefaultLogic::exitingClient()
 
     // Hide some windows to avoid displying them the next time we start
     Client::self()->setVisible(s_wndAccount,false);
-    Client::self()->setVisible(s_wndAddrbook,false);
+    if (Client::self()->getVisible(s_wndAddrbook))
+	Client::self()->setVisible(s_wndAddrbook,false);
+    else
+	// Avoid open account add the next time we start if the user closed the window
+	setClientParam(Client::s_toggles[Client::OptAddAccountOnStartup],
+	    String(false),true,false);
 
     String tmp;
     if (Client::self()->getText("def_username",tmp))
@@ -2520,10 +2525,18 @@ void DefaultLogic::updateSelectedChannel(const String* item)
 // Engine start notification. Connect startup accounts
 void DefaultLogic::engineStart(Message& msg)
 {
-    for (ObjList* o = m_accounts->accounts().skipNull(); o; o = o->skipNext()) {
-	ClientAccount* a = static_cast<ClientAccount*>(o->get());
-	if (a->resource().offline() && a->startup())
-	    loginAccount(a->params(),true);
+    ObjList* o = m_accounts->accounts().skipNull();
+    if (o) {
+	for (; o; o = o->skipNext()) {
+	    ClientAccount* a = static_cast<ClientAccount*>(o->get());
+	    if (a->resource().offline() && a->startup())
+		loginAccount(a->params(),true);
+	}
+    }
+    else if (Client::valid() &&
+	Client::self()->getBoolOpt(Client::OptAddAccountOnStartup)) {
+	// Add account
+	editAccount(true,0);
     }
 }
 

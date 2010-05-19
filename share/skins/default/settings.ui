@@ -1,0 +1,342 @@
+<ui version="4.0" >
+ <class>settings</class>
+ <widget class="QWidget" name="settings" >
+  <property name="geometry" >
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>336</width>
+    <height>429</height>
+   </rect>
+  </property>
+  <property name="windowTitle" >
+   <string>Settings</string>
+  </property>
+  <property name="windowIcon" >
+   <iconset>configure.png</iconset>
+  </property>
+  <layout class="QVBoxLayout" >
+   <property name="leftMargin" >
+    <number>4</number>
+   </property>
+   <property name="topMargin" >
+    <number>4</number>
+   </property>
+   <property name="rightMargin" >
+    <number>4</number>
+   </property>
+   <property name="bottomMargin" >
+    <number>4</number>
+   </property>
+   <item>
+    <widget class="QGroupBox" name="grpOptions" >
+     <property name="title" >
+      <string/>
+     </property>
+     <layout class="QVBoxLayout" >
+      <property name="spacing" >
+       <number>2</number>
+      </property>
+      <property name="leftMargin" >
+       <number>9</number>
+      </property>
+      <property name="topMargin" >
+       <number>9</number>
+      </property>
+      <property name="rightMargin" >
+       <number>9</number>
+      </property>
+      <property name="bottomMargin" >
+       <number>9</number>
+      </property>
+      <item>
+       <widget class="QCheckBox" name="toggle_show_events" >
+        <property name="toolTip" >
+         <string>Show or hide the events window</string>
+        </property>
+        <property name="text" >
+         <string>Show log/events window</string>
+        </property>
+        <property name="_yate_identity" stdset="0" >
+         <string>showwindow:events</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="grpClientOptions" >
+     <property name="title" >
+      <string/>
+     </property>
+     <layout class="QVBoxLayout" >
+      <property name="spacing" >
+       <number>1</number>
+      </property>
+      <property name="leftMargin" >
+       <number>9</number>
+      </property>
+      <property name="topMargin" >
+       <number>9</number>
+      </property>
+      <property name="rightMargin" >
+       <number>9</number>
+      </property>
+      <property name="bottomMargin" >
+       <number>9</number>
+      </property>
+      <item>
+       <widget class="QCheckBox" name="multilines" >
+        <property name="toolTip" >
+         <string>Allow having more one simultaneously open connections</string>
+        </property>
+        <property name="text" >
+         <string>Multiple Lines</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="autoanswer" >
+        <property name="toolTip" >
+         <string>Automatically answer incoming calls</string>
+        </property>
+        <property name="text" >
+         <string>Auto Answer</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="ringincoming" >
+        <property name="toolTip" >
+         <string>Enable/disable ringer</string>
+        </property>
+        <property name="text" >
+         <string>Ringer</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="ringoutgoing" >
+        <property name="toolTip" >
+         <string>Locally generate ring tone if missing</string>
+        </property>
+        <property name="text" >
+         <string>Generate ringing on outgoing calls</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="activatelastoutcall" >
+        <property name="toolTip" >
+         <string>Force the last outgoing call to be the active one</string>
+        </property>
+        <property name="text" >
+         <string>Force active the last outgoing call</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="activatecallonselect" >
+        <property name="toolTip" >
+         <string>Set the selected call active (need double click if unchecked)</string>
+        </property>
+        <property name="text" >
+         <string>Set call active when selected in channel list</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="grpCallerId" >
+     <property name="maximumSize" >
+      <size>
+       <width>16777215</width>
+       <height>180</height>
+      </size>
+     </property>
+     <property name="title" >
+      <string>Caller identity</string>
+     </property>
+     <property name="flat" >
+      <bool>false</bool>
+     </property>
+     <layout class="QVBoxLayout" >
+      <property name="spacing" >
+       <number>4</number>
+      </property>
+      <property name="leftMargin" >
+       <number>9</number>
+      </property>
+      <property name="topMargin" >
+       <number>9</number>
+      </property>
+      <property name="rightMargin" >
+       <number>9</number>
+      </property>
+      <property name="bottomMargin" >
+       <number>9</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="label_6" >
+        <property name="toolTip" >
+         <string>Phone number, user identifier or alias</string>
+        </property>
+        <property name="text" >
+         <string>Username or number</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLineEdit" name="def_username" >
+        <property name="sizePolicy" >
+         <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize" >
+         <size>
+          <width>175</width>
+          <height>25</height>
+         </size>
+        </property>
+        <property name="maximumSize" >
+         <size>
+          <width>175</width>
+          <height>25</height>
+         </size>
+        </property>
+        <property name="toolTip" >
+         <string>Phone number, user identifier or alias</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="label_7" >
+        <property name="toolTip" >
+         <string>Caller ID to insert in outgoing calls</string>
+        </property>
+        <property name="text" >
+         <string>Caller Name</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLineEdit" name="def_callerid" >
+        <property name="sizePolicy" >
+         <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize" >
+         <size>
+          <width>175</width>
+          <height>25</height>
+         </size>
+        </property>
+        <property name="maximumSize" >
+         <size>
+          <width>175</width>
+          <height>25</height>
+         </size>
+        </property>
+        <property name="toolTip" >
+         <string>Caller ID to insert in outgoing calls</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="label_8" >
+        <property name="mouseTracking" >
+         <bool>false</bool>
+        </property>
+        <property name="toolTip" >
+         <string>Domain name to use in VoIP addresses</string>
+        </property>
+        <property name="text" >
+         <string>Domain</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLineEdit" name="def_domain" >
+        <property name="sizePolicy" >
+         <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize" >
+         <size>
+          <width>175</width>
+          <height>25</height>
+         </size>
+        </property>
+        <property name="maximumSize" >
+         <size>
+          <width>175</width>
+          <height>25</height>
+         </size>
+        </property>
+        <property name="toolTip" >
+         <string>Domain name to use in VoIP addresses</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" >
+     <item>
+      <spacer>
+       <property name="orientation" >
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" >
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="button_hide" >
+       <property name="minimumSize" >
+        <size>
+         <width>0</width>
+         <height>25</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>16777215</width>
+         <height>25</height>
+        </size>
+       </property>
+       <property name="text" >
+        <string>Close</string>
+       </property>
+       <property name="icon" >
+        <iconset>close.png</iconset>
+       </property>
+       <property name="iconSize" >
+        <size>
+         <width>20</width>
+         <height>20</height>
+        </size>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

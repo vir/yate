@@ -29,6 +29,10 @@ description=qt4client.ui
 enabled=true
 description=account.ui
 
+[accountlist]
+enabled=true
+description=accountlist.ui
+
 [addrbook]
 enabled=true
 description=addrbook.ui
@@ -48,3 +52,7 @@ description=confirm.ui
 [message]
 enabled=true
 description=message.ui
+
+[settings]
+enabled=yes
+description=settings.ui

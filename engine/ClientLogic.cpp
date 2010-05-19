@@ -1072,6 +1072,8 @@ bool DefaultLogic::digitPressed(NamedList& params, Window* wnd)
 // Called when the user wants to add ane account or edit an existing one
 bool DefaultLogic::editAccount(bool newAcc, NamedList* params, Window* wnd)
 {
+    if (!Client::valid() || Client::self()->getVisible(s_wndAccount))
+	return false;
     // Make sure we reset all controls in window
     USE_SAFE_PARAMS("select:acc_providers",s_notSelected);
     bool loginNow = Client::s_settings.getBoolValue("client","acc_loginnow",true);

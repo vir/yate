@@ -347,7 +347,7 @@ public:
      * @param parent Optional widget parent
      * @return QMenu pointer or 0 if failed to build it
      */
-    static QMenu* buildMenu(NamedList& params, const char* text, QObject* receiver,
+    static QMenu* buildMenu(const NamedList& params, const char* text, QObject* receiver,
 	 const char* actionSlot, const char* toggleSlot, QWidget* parent = 0,
 	 const char* aboutToShowSlot = 0);
 
@@ -358,6 +358,14 @@ public:
      * @return True on success
      */
     static bool setWidget(QWidget* parent, QWidget* child);
+
+    /**
+     * Set an object's image property
+     * @param obj The object
+     * @param img Image file to load
+     * @return True on success
+     */
+    static bool setImage(QObject* obj, const String& img);
 
     /**
      * Wrapper for QObject::connect() used to put a debug mesage on failure
@@ -489,6 +497,22 @@ public:
 
     virtual bool getCheck(const String& name, bool& checked);
     virtual bool getSelect(const String& name, String& item);
+
+    /**
+     * Build a menu from a list of parameters.
+     * See Client::buildMenu() for more info
+     * @param params Menu build parameters
+     * @return True on success
+     */
+    virtual bool buildMenu(const NamedList& params);
+
+    /**
+     * Remove a menu from UI and memory
+     * See Client::removeMenu() for more info
+     * @param params Menu remove parameters
+     * @return True on success
+     */
+    virtual bool removeMenu(const NamedList& params);
 
     /**
      * Set a property for this window or for a widget owned by it

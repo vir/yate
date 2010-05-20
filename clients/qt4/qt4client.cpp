@@ -1857,6 +1857,97 @@ bool QtWindow::getSelect(const String& name, String& item)
     return false;
 }
 
+// Build a menu from a list of parameters
+bool QtWindow::buildMenu(const NamedList& params)
+{
+    QWidget* parent = wndWidget();
+    // Retrieve the owner
+    const String& owner = params["owner"];
+    if (owner && owner != m_id) {
+	parent = qFindChild<QWidget*>(wndWidget(),QtClient::setUtf8(owner));
+	if (!parent) {
+	    DDebug(QtDriver::self(),DebugNote,
+		"QtWindow(%s) buildMenu(%s) owner '%s' not found [%p]",
+		m_id.c_str(),params.c_str(),owner.c_str(),this);
+	    return false;
+	}
+    }
+    QWidget* target = parent;
+    const String& t = params["target"];
+    if (t) {
+	target = qFindChild<QWidget*>(wndWidget(),QtClient::setUtf8(t));
+	if (!target) {
+	    DDebug(QtDriver::self(),DebugNote,
+		"QtWindow(%s) buildMenu(%s) target '%s' not found [%p]",
+		m_id.c_str(),params.c_str(),t.c_str(),this);
+	    return false;
+	}
+    }
+    // Remove existing menu
+    removeMenu(params);
+    QMenu* menu = QtClient::buildMenu(params,params.getValue("title",params),this,
+	SLOT(action()),SLOT(toggled(bool)),parent);
+    if (!menu)
+	return false;
+    QMenuBar* mbOwner = qobject_cast<QMenuBar*>(target);
+    QMenu* mOwner = !mbOwner ? qobject_cast<QMenu*>(target) : 0;
+    if (mbOwner || mOwner) {
+	QAction* before = 0;
+	const String& bef = params["before"];
+	// Retrieve the action to insert before
+	if (bef) {
+	    QString cmp = QtClient::setUtf8(bef);
+	    QList<QAction*> list = target->actions();
+	    for (int i = 0; !before && i < list.size(); i++) {
+		// Check action name or menu name if the action is associated with a menu
+		if (list[i]->objectName() == cmp)
+		    before = list[i];
+		else if (list[i]->menu() && list[i]->menu()->objectName() == cmp)
+		    before = list[i]->menu()->menuAction();
+		if (before && i && list[i - 1]->isSeparator() &&
+		    params.getBoolValue("before_separator",true))
+		    before = list[i - 1];
+	    }
+	}
+	// Insert the menu
+	if (mbOwner)
+	    mbOwner->insertMenu(before,menu);
+	else
+	    mOwner->insertMenu(before,menu);
+    }
+    else {
+	QToolButton* tb = qobject_cast<QToolButton*>(target);
+	if (tb)
+	    tb->setMenu(menu);
+	else {
+	    QPushButton* pb = qobject_cast<QPushButton*>(target);
+	    if (pb)
+		pb->setMenu(menu);
+	    else
+		target->addAction(menu->menuAction());
+	}
+    }
+    return true;
+}
+
+// Remove a menu
+bool QtWindow::removeMenu(const NamedList& params)
+{
+    QWidget* parent = wndWidget();
+    // Retrieve the owner
+    const String& owner = params["owner"];
+    if (owner && owner != m_id) {
+	parent = qFindChild<QWidget*>(wndWidget(),QtClient::setUtf8(owner));
+	if (!parent)
+	    return false;
+    }
+    QMenu* menu = qFindChild<QMenu*>(parent,QtClient::setUtf8(params));
+    if (!menu)
+	return false;
+    delete menu;
+    return true;
+}
+
 // Set a property for this window or for a widget owned by it
 bool QtWindow::setProperty(const String& name, const String& item, const String& value)
 {
@@ -3243,7 +3334,7 @@ void QtClient::setAction(QWidget* parent)
 }
 
 // Build a menu object from a list of parameters
-QMenu* QtClient::buildMenu(NamedList& params, const char* text, QObject* receiver,
+QMenu* QtClient::buildMenu(const NamedList& params, const char* text, QObject* receiver,
 	 const char* triggerSlot, const char* toggleSlot, QWidget* parent,
 	 const char* aboutToShowSlot)
 {
@@ -3259,9 +3350,12 @@ QMenu* QtClient::buildMenu(NamedList& params, const char* text, QObject* receive
 
 	NamedList* p = static_cast<NamedList*>(param->getObject("NamedList"));
 	if (p)  {
-	    QMenu* subMenu = buildMenu(*p,*param,receiver,triggerSlot,toggleSlot,menu);
-	    if (subMenu)
+	    QMenu* subMenu = buildMenu(*p,*param ? param->c_str() : p->getValue("title",*p),
+		receiver,triggerSlot,toggleSlot,menu);
+	    if (subMenu) {
 		menu->addMenu(subMenu);
+		setImage(subMenu,params["image:" + *p]);
+	    }
 	    continue;
 	}
 	String name = param->name().substr(5);
@@ -3269,6 +3363,7 @@ QMenu* QtClient::buildMenu(NamedList& params, const char* text, QObject* receive
 	    QAction* a = menu->addAction(QtClient::setUtf8(*param));
 	    a->setObjectName(QtClient::setUtf8(name));
 	    a->setParent(menu);
+	    setImage(a,params["image:" + name]);
 	}
 	else if (!name)
 	    menu->addSeparator()->setParent(menu);
@@ -3353,6 +3448,27 @@ bool QtClient::setWidget(QWidget* parent, QWidget* child)
     parent->setLayout(layout);
     return true;
 }
+
+// Set an object's image property
+bool QtClient::setImage(QObject* obj, const String& img)
+{
+    if (!obj)
+	return false;
+#define QtClient_setImage(Class,method,ImgClass) { \
+    Class* Class##var = qobject_cast<Class*>(obj); \
+    if (Class##var) { \
+	Class##var->method(ImgClass(setUtf8(img))); \
+	return true; \
+    } \
+}
+    QtClient_setImage(QLabel,setPixmap,QPixmap);
+    QtClient_setImage(QAction,setIcon,QIcon);
+    QtClient_setImage(QAbstractButton,setIcon,QIcon);
+    QtClient_setImage(QMenu,setIcon,QIcon);
+#undef QtClient_setIcon
+    return false;
+}
+
 
 
 /**

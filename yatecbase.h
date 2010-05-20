@@ -329,6 +329,22 @@ public:
     virtual bool getSelect(const String& name, String& item) = 0;
 
     /**
+     * Build a menu from a list of parameters.
+     * See Client::buildMenu() for more info
+     * @param params Menu build parameters
+     * @return True on success
+     */
+    virtual bool buildMenu(const NamedList& params) = 0;
+
+    /**
+     * Remove a menu (from UI and memory)
+     * See Client::removeMenu() for more info
+     * @param params Menu remove parameters
+     * @return True on success
+     */
+    virtual bool removeMenu(const NamedList& params) = 0;
+
+    /**
      * Set a property for this window or for a widget owned by it
      * @param name Name of the element
      * @param item Property's name
@@ -1095,6 +1111,44 @@ public:
 
     bool getCheck(const String& name, bool& checked, Window* wnd = 0, Window* skip = 0);
     bool getSelect(const String& name, String& item, Window* wnd = 0, Window* skip = 0);
+
+    /**
+     * Build a menu from a list of parameters and add it to a target.
+     * @param params Menu build parameters (list name is the menu name).
+     * Each menu item is indicated by a parameter item:[item_name]=[display_text].
+     * A separator will be added if 'item_name' is empty.
+     * A new item will be created if 'display_text' is not empty.
+     * Set 'display_text' to empty string to use an existing item.
+     * Item image can be set by an 'image:item_name' parameter.
+     * If the item parameter is a NamedPointer carrying a NamedList a submenu will be created.
+     * Menu item properties can be set from parameters with format
+     *  property:item_name:property_name=value.
+     * The following parameters can be set:
+     *  - title: menu display text (defaults to menu name)
+     *  - owner: optional menu owner (the window building the menu is
+     *   assumed to be the owner if this parameter is empty)
+     *  - target: optional menu target (defaults to owner)
+     *  - before: optional item to insert before if the target is a menu container
+     *   (another menu or a menu bar)
+     *  - before_separator: check if a separator already exists before the item
+     *   'before' and insert the menu before the separator
+     * @param wnd Optional target window
+     * @param skip Optional window to skip if wnd is 0
+     * @return True on success
+     */
+    bool buildMenu(const NamedList& params, Window* wnd = 0, Window* skip = 0);
+
+    /**
+     * Remove a menu (from UI and memory)
+     * @param params Menu remove parameters.
+     * The following parameters can be set:
+     *  - owner: optional menu owner (the window building the menu is
+     *   assumed to be the owner if this parameter is empty)
+     * @param wnd Optional target window
+     * @param skip Optional window to skip if wnd is 0
+     * @return True on success
+     */
+    bool removeMenu(const NamedList& params, Window* wnd = 0, Window* skip = 0);
 
     /**
      * Set a property

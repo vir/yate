@@ -64,6 +64,8 @@ public:
 	setParams,
 	addLines,
 	createObject,
+	buildMenu,
+	removeMenu,
 	setProperty,
 	getProperty,
 	openUrl
@@ -744,6 +746,12 @@ void ClientThreadProxy::process()
 	    break;
 	case createObject:
 	    m_rval = client->createObject(m_pointer,m_name,m_text,const_cast<NamedList*>(m_params));
+	    break;
+	case buildMenu:
+	    m_rval = m_params && client->buildMenu(*m_params,m_wnd,m_skip);
+	    break;
+	case removeMenu:
+	    m_rval = m_params && client->removeMenu(*m_params,m_wnd,m_skip);
 	    break;
 	case setProperty:
 	    m_rval = client->setProperty(m_name,m_item,m_text,m_wnd,m_skip);
@@ -1679,6 +1687,50 @@ bool Client::getSelect(const String& name, String& item, Window* wnd, Window* sk
 	    return true;
     }
     return false;
+}
+
+// Build a menu from a list of parameters.
+bool Client::buildMenu(const NamedList& params, Window* wnd, Window* skip)
+{
+    if (!valid())
+	return false;
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::buildMenu,String::empty(),&params,wnd,skip);
+	return proxy.execute();
+    }
+    if (wnd)
+	return wnd->buildMenu(params);
+    ++s_changing;
+    bool ok = false;
+    for (ObjList* o = m_windows.skipNull(); o; o = o->skipNext()) {
+	wnd = static_cast<Window*>(o->get());
+	if (wnd != skip)
+	    ok = wnd->buildMenu(params) || ok;
+    }
+    --s_changing;
+    return ok;
+}
+
+// Remove a menu
+bool Client::removeMenu(const NamedList& params, Window* wnd, Window* skip)
+{
+    if (!valid())
+	return false;
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::removeMenu,String::empty(),&params,wnd,skip);
+	return proxy.execute();
+    }
+    if (wnd)
+	return wnd->removeMenu(params);
+    ++s_changing;
+    bool ok = false;
+    for (ObjList* o = m_windows.skipNull(); o; o = o->skipNext()) {
+	wnd = static_cast<Window*>(o->get());
+	if (wnd != skip)
+	    ok = wnd->removeMenu(params) || ok;
+    }
+    --s_changing;
+    return ok;
 }
 
 // Set a property

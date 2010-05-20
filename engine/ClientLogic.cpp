@@ -45,6 +45,8 @@ static const String s_actionHangup = "hangup";
 static const String s_actionTransfer = "transfer";
 static const String s_actionConf = "conference";
 static const String s_actionHold = "hold";
+static const String s_actionLogin = "acc_login";
+static const String s_actionLogout = "acc_logout";
 // Not selected string(s)
 static String s_notSelected = "-none-";
 // Maximum number of call log entries
@@ -233,12 +235,30 @@ static inline ClientAccount* selectedAccount(ClientAccountList& accounts, Window
     return account ? accounts.findAccount(account) : 0;
 }
 
+// Build account action item from account id
+static inline String& buildAccAction(String& buf, const String& action, ClientAccount* acc)
+{
+    buf = action + ":" + acc->toString();
+    return buf;
+}
+
 // Fill acc_login/logout active parameters
 static inline void fillAccLoginActive(NamedList& p, ClientAccount* acc)
 {
     bool offline = !acc || acc->resource().offline();
-    p.addParam("active:acc_login",String::boolText(offline));
-    p.addParam("active:acc_logout",String::boolText(!offline));
+    p.addParam("active:" + s_actionLogin,String::boolText(offline));
+    p.addParam("active:" + s_actionLogout,String::boolText(!offline));
+}
+
+// Fill acc_login/logout item active parameters
+static inline void fillAccItemLoginActive(NamedList& p, ClientAccount* acc)
+{
+    if (!acc)
+	return;
+    bool offline = !acc || acc->resource().offline();
+    String tmp;
+    p.addParam("active:" + buildAccAction(tmp,s_actionLogin,acc),String::boolText(offline));
+    p.addParam("active:" + buildAccAction(tmp,s_actionLogout,acc),String::boolText(!offline));
 }
 
 // Fill acc_del/edit active parameters
@@ -258,11 +278,39 @@ static void updateAccountStatus(ClientAccount* acc, ClientAccountList* accounts,
     NamedList p("");
     acc->fillItemParams(p);
     Client::self()->updateTableRow(s_accountList,acc->toString(),&p,false,wnd);
-    if (!accounts || acc != selectedAccount(*accounts,wnd))
-	return;
+    // Set login/logout enabled status
+    bool selected = accounts && acc == selectedAccount(*accounts,wnd);
     NamedList pp("");
-    fillAccLoginActive(pp,acc);
+    if (selected)
+	fillAccLoginActive(pp,acc);
+    fillAccItemLoginActive(pp,acc);
     Client::self()->setParams(&pp,wnd);
+}
+
+// Create or remove an account's menu
+static void setAccountMenu(bool create, ClientAccount* acc)
+{
+    NamedList p("accountmenu" + acc->toString());
+    p.addParam("owner","menuYate");
+    if (create) {
+	p.addParam("target","menuYate");
+	p.addParam("title",acc->toString());
+	p.addParam("before","acc_new");
+	String in, out;
+	buildAccAction(in,s_actionLogin,acc);
+	buildAccAction(out,s_actionLogout,acc);
+	p.addParam("item:" + in,"Login");
+	p.addParam("item:" + out,"Logout");
+	p.addParam("image:" + in,Client::s_skinPath + "handshake.png");
+	p.addParam("image:" + out,Client::s_skinPath + "handshake_x.png");
+	Client::self()->buildMenu(p);
+	// Update menu
+	NamedList pp("");
+	fillAccItemLoginActive(pp,acc);
+	Client::self()->setParams(&pp);
+    }
+    else
+	Client::self()->removeMenu(p);
 }
 
 
@@ -644,9 +692,18 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
 	    return delAccount(name.substr(8),wnd);
     }
     // Login/logout
-    bool login = (name == "acc_login");
-    if (login || name == "acc_logout") {
+    bool login = (name == s_actionLogin);
+    if (login || name == s_actionLogout) {
 	ClientAccount* acc = selectedAccount(*m_accounts,wnd);
+	return acc ? loginAccount(acc->params(),login) : false;
+    }
+    login = name.startsWith(s_actionLogin + ":",false);
+    if (login || name.startsWith(s_actionLogout + ":",false)) {
+	ClientAccount* acc = 0;
+	if (login)
+	    acc = m_accounts->findAccount(name.substr(s_actionLogin.length() + 1));
+	else
+	    acc = m_accounts->findAccount(name.substr(s_actionLogout.length() + 1));
 	return acc ? loginAccount(acc->params(),login) : false;
     }
 
@@ -1266,6 +1323,7 @@ bool DefaultLogic::delAccount(const String& account, Window* wnd)
     clearAccountContacts(*acc);
     Client::self()->delTableRow(s_account,account);
     Client::self()->delTableRow(s_accountList,account);
+    setAccountMenu(false,acc);
     acc->save(false);
     m_accounts->removeAccount(account);
     return true;
@@ -1281,13 +1339,18 @@ bool DefaultLogic::updateAccount(const NamedList& account, bool login, bool save
     ClientAccount* acc = m_accounts->findAccount(account,true);
     if (!acc) {
 	acc = new ClientAccount(account);
-	if (!m_accounts->appendAccount(acc))
+	if (m_accounts->appendAccount(acc)) {
+	    // Add account menu
+	    setAccountMenu(true,acc);
+	}
+	else
 	    TelEngine::destruct(acc);
     }
     else
 	acc->m_params = account;
     if (!acc)
 	return false;
+
     // (Re)set account own contact
     String cId;
     String uri;

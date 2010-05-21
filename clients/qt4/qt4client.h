@@ -653,11 +653,17 @@ protected:
     virtual void mouseMoveEvent(QMouseEvent* event);
     virtual void closeEvent(QCloseEvent* event);
     virtual void changeEvent(QEvent* event);
+    virtual void contextMenuEvent(QContextMenuEvent* ev) {
+	    if (handleContextMenuEvent(ev,wndWidget()))
+		ev->accept();
+	}
     // Update window position and size
     void updatePosSize();
     // Get the widget with this window's content
     inline QWidget* wndWidget()
 	{ return findChild<QWidget*>(m_widget); }
+    // Handle context menu events. Return true if handled
+    bool handleContextMenuEvent(QContextMenuEvent* event, QObject* obj);
 
     String m_description;
     String m_oldId;                      // Old id used to retreive the config section in .rc

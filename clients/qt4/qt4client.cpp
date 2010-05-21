@@ -377,6 +377,7 @@ static const String s_propSorting = "_yate_sorting";  // Table/List sorting
 static String s_propHHeader = "dynamicHHeader";       // Tables: show/hide the horizontal header
 static String s_propAction = "dynamicAction";         // Prefix for properties that would trigger some action
 static String s_propWindowFlags = "_yate_windowflags"; // Window flags
+static const String s_propContextMenu = "_yate_context_menu"; // Context menu name
 static String s_propHideInactive = "dynamicHideOnInactive"; // Hide inactive window
 static const String s_yatePropPrefix = "_yate_";      // Yate dynamic properties prefix
 //
@@ -1887,8 +1888,14 @@ bool QtWindow::buildMenu(const NamedList& params)
     removeMenu(params);
     QMenu* menu = QtClient::buildMenu(params,params.getValue("title",params),this,
 	SLOT(action()),SLOT(toggled(bool)),parent);
-    if (!menu)
+    if (!menu) {
+	DDebug(QtDriver::self(),DebugNote,
+	    "QtWindow(%s) failed to build menu '%s' target='%s' [%p]",
+	    m_id.c_str(),params.c_str(),YQT_OBJECT_NAME(target),this);
 	return false;
+    }
+    DDebug(QtDriver::self(),DebugAll,"QtWindow(%s) built menu '%s' target='%s' [%p]",
+	m_id.c_str(),params.c_str(),YQT_OBJECT_NAME(target),this);
     QMenuBar* mbOwner = qobject_cast<QMenuBar*>(target);
     QMenu* mOwner = !mbOwner ? qobject_cast<QMenu*>(target) : 0;
     if (mbOwner || mOwner) {
@@ -1923,7 +1930,7 @@ bool QtWindow::buildMenu(const NamedList& params)
 	    QPushButton* pb = qobject_cast<QPushButton*>(target);
 	    if (pb)
 		pb->setMenu(menu);
-	    else
+	    else if (!QtClient::setProperty(target,s_propContextMenu,params))
 		target->addAction(menu->menuAction());
 	}
     }
@@ -2336,6 +2343,10 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 		Client::self()->action(this,action);
 	    return ret;
 	}
+    }
+    else if (event->type() == QEvent::ContextMenu) {
+	if (handleContextMenuEvent(static_cast<QContextMenuEvent*>(event),obj))
+	    return false;
     }
 
     return QWidget::eventFilter(obj,event);
@@ -2839,6 +2850,22 @@ void QtWindow::updatePosSize()
     m_y = point.y();
     m_width = width();
     m_height = height();
+}
+
+// Handle context menu events. Return true if handled
+bool QtWindow::handleContextMenuEvent(QContextMenuEvent* event, QObject* obj)
+{
+    if (!(event && obj))
+	return false;
+    String mname;
+    QtClient::getProperty(obj,s_propContextMenu,mname);
+    XDebug(ClientDriver::self(),DebugAll,
+	"Window(%s) handleContextMenuEvent() obj=%s menu=%s [%p]",
+	m_id.c_str(),YQT_OBJECT_NAME(obj),mname.c_str(),this);
+    QMenu* m = mname ? qFindChild<QMenu*>(wndWidget(),QtClient::setUtf8(mname)) : 0;
+    if (m)
+	m->exec(event->globalPos());
+    return m != 0;
 }
 
 

@@ -3352,10 +3352,8 @@ QMenu* QtClient::buildMenu(const NamedList& params, const char* text, QObject* r
 	if (p)  {
 	    QMenu* subMenu = buildMenu(*p,*param ? param->c_str() : p->getValue("title",*p),
 		receiver,triggerSlot,toggleSlot,menu);
-	    if (subMenu) {
+	    if (subMenu)
 		menu->addMenu(subMenu);
-		setImage(subMenu,params["image:" + *p]);
-	    }
 	    continue;
 	}
 	String name = param->name().substr(5);
@@ -3385,6 +3383,7 @@ QMenu* QtClient::buildMenu(const NamedList& params, const char* text, QObject* r
 
     // Set name
     menu->setObjectName(setUtf8(params));
+    setImage(menu,params["image:" + params]);
     // Apply properties
     // Format: property:object_name:property_name=value
     if (parent)

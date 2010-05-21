@@ -66,6 +66,7 @@ public:
 	createObject,
 	buildMenu,
 	removeMenu,
+	setImage,
 	setProperty,
 	getProperty,
 	openUrl
@@ -401,6 +402,8 @@ bool Window::setParams(const NamedList& params)
 		ok = setCheck(n,s->toBoolean()) && ok;
 	    else if (n.startSkip("select:",false))
 		ok = setSelect(n,*s) && ok;
+	    else if (n.startSkip("image:",false))
+		ok = setImage(n,*s) && ok;
 	    else if (n.startSkip("property:",false)) {
 		// Set property: object_name:property_name=value
 		int pos = n.find(':');
@@ -752,6 +755,9 @@ void ClientThreadProxy::process()
 	    break;
 	case removeMenu:
 	    m_rval = m_params && client->removeMenu(*m_params,m_wnd,m_skip);
+	    break;
+	case setImage:
+	    m_rval = client->setImage(m_name,m_text,m_wnd,m_skip);
 	    break;
 	case setProperty:
 	    m_rval = client->setProperty(m_name,m_item,m_text,m_wnd,m_skip);
@@ -1728,6 +1734,28 @@ bool Client::removeMenu(const NamedList& params, Window* wnd, Window* skip)
 	wnd = static_cast<Window*>(o->get());
 	if (wnd != skip)
 	    ok = wnd->removeMenu(params) || ok;
+    }
+    --s_changing;
+    return ok;
+}
+
+// Set an element's image
+bool Client::setImage(const String& name, const String& image, Window* wnd, Window* skip)
+{
+    if (!valid())
+	return false;
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::setImage,name,image,wnd,skip);
+	return proxy.execute();
+    }
+    if (wnd)
+	return wnd->setImage(name,image);
+    ++s_changing;
+    bool ok = false;
+    for (ObjList* o = m_windows.skipNull(); o; o = o->skipNext()) {
+	wnd = static_cast<Window*>(o->get());
+	if (wnd != skip)
+	    ok = wnd->setImage(name,image) || ok;
     }
     --s_changing;
     return ok;

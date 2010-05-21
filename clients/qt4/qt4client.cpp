@@ -1948,6 +1948,17 @@ bool QtWindow::removeMenu(const NamedList& params)
     return true;
 }
 
+// Set an element's image
+bool QtWindow::setImage(const String& name, const String& image)
+{
+    if (!name)
+	return false;
+    if (name == m_id)
+	return QtClient::setImage(this,image);
+    QObject* obj = qFindChild<QObject*>(wndWidget(),QtClient::setUtf8(name));
+    return obj && QtClient::setImage(obj,image);
+}
+
 // Set a property for this window or for a widget owned by it
 bool QtWindow::setProperty(const String& name, const String& item, const String& value)
 {

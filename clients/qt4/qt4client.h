@@ -515,6 +515,14 @@ public:
     virtual bool removeMenu(const NamedList& params);
 
     /**
+     * Set an element's image
+     * @param name Name of the element
+     * @param image Image to set
+     * @return True on success
+     */
+    virtual bool setImage(const String& name, const String& image);
+
+    /**
      * Set a property for this window or for a widget owned by it
      * @param name Name of the element
      * @param item Property's name

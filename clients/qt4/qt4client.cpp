@@ -2521,8 +2521,9 @@ void QtWindow::doInit()
 	m_visible = sect->getBoolValue("visible");
     }
     else {
-	Debug(QtDriver::self(),DebugNote,"Window(%s) not found in config [%p]",
-	    m_id.c_str(),this);
+	if (m_saveOnClose)
+	    Debug(QtDriver::self(),DebugNote,"Window(%s) not found in config [%p]",
+		m_id.c_str(),this);
 	m_visible = s_cfg.getBoolValue(m_oldId,"visible");
     }
     m_visible = m_mainWindow || m_visible;

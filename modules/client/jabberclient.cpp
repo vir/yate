@@ -552,19 +552,25 @@ void YJBEngine::processEvent(JBEvent* ev)
 		m->addParam("body",XMPPUtils::body(*xml),false);
 		String tmp("delay");
 		XmlElement* delay = xml->findFirstChild(&tmp,&XMPPUtils::s_ns[XMPPNamespace::Delay]);
+		if (!delay) {
+		    // Handle old jabber:x:delay
+		    tmp = "x";
+		    String ns = "jabber:x:delay";
+		    delay = xml->findFirstChild(&tmp,&ns);
+		}
 		if (delay) {
-		    String* time = delay->getAttribute("stamp");
 		    unsigned int sec = (unsigned int)-1;
-		    if (!TelEngine::null(time))
-			sec = XMPPUtils::decodeDateTimeSec(*time);
+		    String* time = delay->getAttribute("stamp");
+		    if (!TelEngine::null(time)) {
+			if (tmp == "delay")
+			    sec = XMPPUtils::decodeDateTimeSec(*time);
+			else
+			    sec = XMPPUtils::decodeDateTimeSecXDelay(*time);
+		    }
 		    if (sec != (unsigned int)-1) {
 			m->addParam("delay_time",String(sec));
+			m->addParam("delay_by",delay->attribute("from"),false);
 			m->addParam("delay_text",delay->getText(),false);
-			JabberID from(delay->attribute("from"));
-			if (from)
-			    m->addParam("delay_by",from);
-			else
-			    m->addParam("delay_by",ev->stream()->remote());
 		    }
 		}
 		m->addParam(new NamedPointer("xml",xml));

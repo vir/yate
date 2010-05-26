@@ -1514,6 +1514,13 @@ public:
     static unsigned int decodeDateTimeSec(const String& time, unsigned int* fractions = 0);
 
     /**
+     * Decode a date/time stamp as defined in XEP-0091 (jabber:x:delay)
+     * @param time The date/time string
+     * @return The decoded time in seconds, -1 on error
+     */
+    static unsigned int decodeDateTimeSecXDelay(const String& time);
+
+    /**
      * Print an XmlElement to a string
      * @param xmlStr The destination string
      * @param xml The xml to print

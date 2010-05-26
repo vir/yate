@@ -1303,6 +1303,52 @@ unsigned int XMPPUtils::decodeDateTimeSec(const String& time, unsigned int* frac
     return ret;
 }
 
+// Decode a date/time stamp as defined in XEP-0091 (jabber:x:delay)
+// Format: YYYYMMDDThh:mm:ss
+unsigned int XMPPUtils::decodeDateTimeSecXDelay(const String& time)
+{
+    int year = -1;
+    unsigned int month = (unsigned int)-1;
+    unsigned int day = (unsigned int)-1;
+    unsigned int hh = (unsigned int)-1;
+    unsigned int mm = (unsigned int)-1;
+    unsigned int ss = (unsigned int)-1;
+    while (true) {
+	// Split date/time
+	int pos = time.find('T');
+	if (pos == -1)
+	    break;
+	// Decode date
+	if (pos == 8) {
+	    year = time.substr(0,4).toInteger(-1,10);
+	    month = (unsigned int)time.substr(4,2).toInteger(-1,10);
+	    day = (unsigned int)time.substr(6,2).toInteger(-1,10);
+	}
+	else
+	    break;
+	// Decode time
+	ObjList* list = time.substr(pos + 1).split(':');
+	if (list->length() == 3 && list->count() == 3) {
+	    hh = (unsigned int)(*list)[0]->toString().toInteger(-1,10);
+	    mm = (unsigned int)(*list)[1]->toString().toInteger(-1,10);
+	    ss = (unsigned int)(*list)[2]->toString().toInteger(-1,10);
+	}
+	TelEngine::destruct(list);
+	break;
+    }
+    if (!(year != -1 && month && month <= 12 && day && day <= 31 &&
+	((hh <= 23 && mm <= 59 && ss <= 59) || (hh == 24 && mm == 0 && ss == 0)))) {
+	Debug(DebugNote,
+	    "XMPPUtils::decodeDateTimeSecXDelay() incorrect stamp '%s'",time.c_str());
+	return (unsigned int)-1;
+    }
+    unsigned int ret = Time::toEpoch(year,month,day,hh,mm,ss);
+    if (ret == (unsigned int)-1)
+	Debug(DebugNote,"XMPPUtils::decodeDateTimeSecXDelay() failed to convert '%s'",
+	    time.c_str());
+    return ret;
+}
+
 void XMPPUtils::print(String& xmlStr, XmlChild& xml, bool verbose)
 {
     const XmlElement* element = xml.xmlElement();

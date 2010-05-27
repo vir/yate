@@ -286,7 +286,7 @@ static ObjList s_spans;
 static Mutex s_mutex(false,"MGCP-CA");
 
 // Yate Payloads for the AV profile
-static TokenDict s_dict_payloads[] = {
+static const TokenDict s_dict_payloads[] = {
     { "mulaw",         0 },
     { "alaw",          8 },
     { "gsm",           3 },
@@ -314,13 +314,13 @@ static TokenDict s_dict_payloads[] = {
 };
 
 // Media gateway bearer information (mapped from s_dict_payloads)
-static TokenDict s_dict_gwbearerinfo[] = {
+static const TokenDict s_dict_gwbearerinfo[] = {
     { "e:mu",          0 },
     { "e:A",           8 },
     {      0,          0 }
 };
 
-static TokenDict s_dict_rqnt[] = {
+static const TokenDict s_dict_rqnt[] = {
     { "none", MGCPSpan::RqntNone },
     { "once", MGCPSpan::RqntOnce },
     { "more", MGCPSpan::RqntMore },

@@ -1040,7 +1040,7 @@ if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
     AC_MSG_RESULT([$verqt])
 
     if [[ "x$HAVE_QT4" = "xno" ]]; then
-	AC_MSG_CHECKING([or Qt4 >= 4.3.0 using qmake])
+	AC_MSG_CHECKING([for Qt4 >= 4.3.0 using qmake])
 	incqt=`qmake -query QT_INSTALL_HEADERS 2>/dev/null`
 	libqt=`qmake -query QT_INSTALL_LIBS 2>/dev/null`
 	if [[ "x$incqt" = "x**Unknown**" -o "x$libqt" = "x**Unknown**" ]]; then

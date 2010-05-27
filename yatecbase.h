@@ -672,6 +672,24 @@ public:
      */
     virtual bool addLines(const NamedList& lines, unsigned int max, bool atStart = false)
 	{ return false; }
+
+    /**
+     * Set the displayed text of this widget
+     * @param text Text value to set
+     * @param richText True if the text contains format data
+     * @return True on success
+     */
+    virtual bool setText(const String& text, bool richText = false)
+	{ return false; }
+
+    /**
+     * Retrieve the displayed text of this widget
+     * @param text Text value
+     * @param richText True to retrieve formatted data
+     * @return True on success
+     */
+    virtual bool getText(String& text, bool richText = false)
+	{ return false; }
 };
 
 /**

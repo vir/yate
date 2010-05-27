@@ -1105,6 +1105,9 @@ bool QtWindow::setText(const String& name, const String& text,
     QtWidget w(wndWidget(),name);
     if (w.invalid())
 	return false;
+    UIWidget* uiw = w.uiWidget();
+    if (uiw)
+	return uiw->setText(text,richText);
     switch (w.type()) {
 	case QtWidget::CheckBox:
 	    w.check()->setText(QtClient::setUtf8(text));
@@ -1756,6 +1759,9 @@ bool QtWindow::getText(const String& name, String& text, bool richText)
     QtWidget w(wndWidget(),name);
     if (w.invalid())
 	return false;
+    UIWidget* uiw = w.uiWidget();
+    if (uiw)
+	return uiw->getText(text,richText);
     switch (w.type()) {
 	case QtWidget::ComboBox:
 	    QtClient::getUtf8(text,w.combo()->currentText());

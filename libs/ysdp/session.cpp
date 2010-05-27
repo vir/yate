@@ -547,7 +547,7 @@ void SDPSession::updateFormats(const NamedList& msg, bool changeMedia)
 	if (rtp) {
 	    if (rtp->update(*p))
 		Debug(m_parser,DebugNote,"Formats for '%s' changed to '%s' [%p]",
-		    tmp.c_str(),p->c_str(),this);
+		    tmp.c_str(),rtp->formats().c_str(),this);
 	}
 	else if (*p) {
 	    Debug(m_parser,DebugNote,"Got formats '%s' for absent media '%s' [%p]",

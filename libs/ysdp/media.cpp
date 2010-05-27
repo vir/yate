@@ -73,15 +73,41 @@ bool SDPMedia::update(const char* formats, int rport, int lport)
     DDebug(DebugAll,"SDPMedia::update('%s',%d,%d) [%p]",formats,rport,lport,this);
     bool chg = false;
     String tmp(formats);
-    if (m_formats != tmp) {
-	if ((tmp.find(',') < 0) && m_formats && m_formats.find(tmp) < 0)
-	    Debug(DebugInfo,"Not changing to '%s' from '%s' [%p]",
-		formats,m_formats.c_str(),this);
-	else {
+    if (tmp && (m_formats != tmp)) {
+	if (tmp.find(',') < 0) {
+	    // single format received, check if acceptable
+	    if (m_formats && m_formats.find(tmp) < 0) {
+		Debug(DebugNote,"Not changing to '%s' from '%s' [%p]",
+		    formats,m_formats.c_str(),this);
+		tmp.clear();
+	    }
+	}
+	else if (m_formats) {
+	    // from received list keep only already offered formats
+	    ObjList* l1 = tmp.split(',',false);
+	    ObjList* l2 = m_formats.split(',',false);
+	    for (ObjList* fmt = l1->skipNull(); fmt; ) {
+		if (l2->find(fmt->get()->toString()))
+		    fmt = fmt->skipNext();
+		else {
+		    fmt->remove();
+		    fmt = fmt->skipNull();
+		}
+	    }
+	    tmp.clear();
+	    tmp.append(l1,",");
+	    TelEngine::destruct(l1);
+	    TelEngine::destruct(l2);
+	    if (tmp.null())
+		Debug(DebugNote,"Not changing formats '%s' [%p]",m_formats.c_str(),this);
+	}
+	if (tmp && (m_formats != tmp)) {
 	    chg = true;
 	    m_formats = tmp;
 	    int q = m_formats.find(',');
 	    m_format = m_formats.substr(0,q);
+	    Debug(DebugInfo,"Choosing offered '%s' format '%s' [%p]",
+		c_str(),m_format.c_str(),this);
 	}
     }
     if (rport >= 0) {

@@ -2352,7 +2352,10 @@ void QtWindow::setVisible(bool visible)
 	QWidget::move(m_x,m_y);
 	resize(m_width,m_height);
     }
-    QWidget::setVisible(visible);
+    if (visible && isMinimized())
+	showNormal();
+    else
+	QWidget::setVisible(visible);
     // Notify the client on window visibility changes
     bool changed = (m_visible != visible);
     m_visible = visible;

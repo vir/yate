@@ -2814,8 +2814,16 @@ void QtWindow::doInit()
     // Force window visibility change notification by changing the visibility flag
     // Some controls might need to be updated
     m_visible = !m_visible;
-    if (m_visible)
+    if (m_visible) {
+	// Disable _yate_destroyonhide property: avoid destroying the window now
+	String tmp;
+	getProperty(m_id,"_yate_destroyonhide",tmp);
+	if (tmp)
+	    setProperty(m_id,"_yate_destroyonhide",String::boolText(false));
 	hide();
+	if (tmp)
+	    setProperty(m_id,"_yate_destroyonhide",tmp);
+    }
     else
 	show();
 }

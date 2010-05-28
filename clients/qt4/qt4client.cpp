@@ -1047,6 +1047,7 @@ bool QtWindow::setActive(const String& name, bool active)
 	if (QWidget::isMinimized())
 	    QWidget::showNormal();
 	QWidget::activateWindow();
+	QWidget::raise();
     }
     QtWidget w(wndWidget(),name);
     if (w.invalid())

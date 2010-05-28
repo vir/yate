@@ -438,7 +438,7 @@ void Connection::run()
 	m_auth = cfg().getValue("password") ? User : Admin;
 	m_output = cfg().getBoolValue("output",false);
     }
-    String hdr = cfg().getValue("header","YATE ${version}-${release} (http://YATE.null.ro) ready.");
+    String hdr = cfg().getValue("header","YATE ${version}-${release} (http://YATE.null.ro) ready on ${nodename}.");
     Engine::runParams().replaceParams(hdr);
     if (cfg().getBoolValue("telnet",true)) {
 	// WILL SUPPRESS GO AHEAD, WILL ECHO - and enough BS and blanks to hide them

@@ -2307,50 +2307,16 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 	return false;
     }
     if (event->type() == QEvent::KeyPress) {
-	static int mask = Qt::SHIFT | Qt::CTRL | Qt::ALT;
-
-	if (!Client::self())
-	    return QWidget::eventFilter(obj,event);
-	QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
-	QWidget* wid = QApplication::focusWidget();
-	if (!wid)
-	    return false;
-	// Check if we should raise an action for the widget
-	QKeySequence ks(keyEvent->key());
-	String prop;
-	QtClient::getUtf8(prop,ks.toString());
-	prop = s_propAction + prop;
 	String action;
-	getProperty(YQT_OBJECT_NAME(wid),prop,action);
-	if (!action)
+	bool filter = false;
+	if (!QtClient::filterKeyEvent(obj,static_cast<QKeyEvent*>(event),
+	    action,filter,this))
 	    return QWidget::eventFilter(obj,event);
-	QVariant v = wid->property(prop + "Modifiers");
-	// Get modifiers from property and check them against event
-	int tmp = 0;
-	if (v.type() == QVariant::String) {
-	    QKeySequence ks(v.toString());
-	    for (unsigned int i = 0; i < ks.count(); i++)
-		tmp |= ks[i];
-	}
-	if (tmp == (mask & keyEvent->modifiers())) {
-	    // Check if we should let the control process the key
-	    QVariant v = wid->property(prop + "Filter");
-	    bool ret = ((v.type() == QVariant::Bool) ? v.toBool() : false);
-	    QObject* obj = qFindChild<QObject*>(this,QtClient::setUtf8(action));
-	    bool trigger = true;
-	    if (obj) {
-		QtWidget w(wndWidget(),action);
-		if (w.widget())
-		    trigger = w.widget()->isEnabled();
-		else if (w.type() == QtWidget::Action)
-		    trigger = w.action()->isEnabled();
-	    }
-	    if (trigger)
-		Client::self()->action(this,action);
-	    return ret;
-	}
+	if (action && Client::self())
+	    Client::self()->action(this,action);
+	return filter;
     }
-    else if (event->type() == QEvent::ContextMenu) {
+    if (event->type() == QEvent::ContextMenu) {
 	if (handleContextMenuEvent(static_cast<QContextMenuEvent*>(event),obj))
 	    return false;
     }
@@ -3521,6 +3487,52 @@ bool QtClient::setImage(QObject* obj, const String& img)
     return false;
 }
 
+// Process a key press event. Retrieve an action associated with the key
+bool QtClient::filterKeyEvent(QObject* obj, QKeyEvent* event, String& action,
+    bool& filter, QObject* parent)
+{
+    static int mask = Qt::SHIFT | Qt::CTRL | Qt::ALT;
+    if (!(obj && event))
+	return false;
+    // Try to match key and modifiers
+    QKeySequence ks(event->key());
+    String prop;
+    getUtf8(prop,ks.toString());
+    prop = "dynamicAction" + prop;
+    // Get modifiers from property and check them against event
+    QVariant v = obj->property(prop + "Modifiers");
+    int tmp = 0;
+    if (v.type() == QVariant::String) {
+	QKeySequence ks(v.toString());
+	for (unsigned int i = 0; i < ks.count(); i++)
+	    tmp |= ks[i];
+    }
+    if (tmp != (mask & event->modifiers()))
+	return false;
+    // We matched the key and modifiers
+    // Set filter flag
+    filter = getBoolProperty(obj,prop + "Filter");
+    // Retrieve the action
+    getProperty(obj,prop,action);
+    if (!action)
+	return true;
+    if (!parent)
+	return true;
+    parent = qFindChild<QObject*>(parent,setUtf8(action));
+    if (!parent)
+	return true;
+    // Avoid notifying a disabled action
+    bool ok = true;
+    if (parent->isWidgetType())
+	ok = (qobject_cast<QWidget*>(parent))->isEnabled();
+    else {
+	QAction* a = qobject_cast<QAction*>(parent);
+	ok = !a || a->isEnabled();
+    }
+    if (!ok)
+	action.clear();
+    return true;
+}
 
 
 /**

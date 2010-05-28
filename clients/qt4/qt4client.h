@@ -368,6 +368,20 @@ public:
     static bool setImage(QObject* obj, const String& img);
 
     /**
+     * Filter key press events. Retrieve an action associated with the key.
+     * Check if the object is allowed to process the key
+     * @param obj The object
+     * @param event QKeyEvent event to process
+     * @param action Found action name
+     * @param filter Filter key or let the object process it
+     * @param parent Optional parent to look for the action and check its state
+     * @return True if key and modifiers were matched against object properties
+     *  (the action parameter may be empty if true is returned and the action is disabled)
+     */
+    static bool filterKeyEvent(QObject* obj, QKeyEvent* event, String& action,
+	bool& filter, QObject* parent = 0);
+
+    /**
      * Wrapper for QObject::connect() used to put a debug mesage on failure
      */
     static bool connectObjects(QObject* sender, const char* signal,

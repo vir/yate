@@ -87,6 +87,8 @@
 ; If enabled, it's value must be greater then stanza_timeout
 ;ping_interval=300000
 
+; resource.notify: integer: Override the priority of module's resource.notify message handler
+;resource.notify=
 
 [codecs]
 ; This section allows to individually enable or disable the codecs

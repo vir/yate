@@ -364,7 +364,7 @@ public:
 	ResSubscribe     = 10,           // handleResSubscribe()
 	UserNotify       = -5,           // handleUserNotify()
     };
-    YJGMessageHandler(int handler);
+    YJGMessageHandler(int handler, int prio);
 protected:
     virtual bool received(Message& msg);
 private:
@@ -2997,8 +2997,8 @@ void YJGTransfer::run()
 /*
  * JBMessageHandler
  */
-YJGMessageHandler::YJGMessageHandler(int handler)
-    : MessageHandler(lookup(handler,s_msgHandler),handler < 0 ? 100 : handler),
+YJGMessageHandler::YJGMessageHandler(int handler, int prio)
+    : MessageHandler(lookup(handler,s_msgHandler),prio),
     m_handler(handler)
 {
 }
@@ -3097,7 +3097,10 @@ void YJGDriver::initialize()
 	for (const TokenDict* d = s_msgHandler; d->token; d++) {
 	    if (!Engine::clientMode() && d->value == YJGMessageHandler::UserNotify)
 		continue;
-	    YJGMessageHandler* h = new YJGMessageHandler(d->value);
+	    int prio = d->value < 0 ? 100 : d->value;
+	    if (d->value == YJGMessageHandler::ResNotify)
+		prio = sect->getIntValue(d->token,prio);
+	    YJGMessageHandler* h = new YJGMessageHandler(d->value,prio);
 	    Engine::install(h);
 	    m_handlers.append(h);
 	}
@@ -3578,6 +3581,28 @@ bool YJGDriver::handleResNotify(Message& msg)
     bool online = (*oper == "update" || *oper == "online");
     if (online  || *oper == "delete" || *oper == "offline") {
 	JabberID remote(msg.getValue("contact"));
+	// Add jingle caps for serviced domains if requested
+	if (msg.getBoolValue("addjinglecaps") && handleDomain(remote.domain())) {
+	    XmlElement* xml = YOBJECT(XmlElement,msg.getParam("xml"));
+	    String* data = !xml ? msg.getParam("data") : 0;
+	    XmlElement* dataXml = data ? XMPPUtils::getXml(*data) : 0;
+	    if (xml || dataXml) {
+		XmlElement* target = xml ? xml : dataXml;
+		// Add entity caps if not already there
+		if (!XMPPUtils::findFirstChild(*target,XmlTag::EntityCapsTag,
+		    XMPPNamespace::EntityCaps)) {
+		    target->addChild(new XmlElement(*m_entityCaps));
+		    target->addChild(XMPPUtils::createEntityCapsGTalkV1());
+		    // Restore the data parameter
+		    if (dataXml) {
+			data->clear();
+			dataXml->toString(*data);
+		    }
+		    msg.clearParam("addjinglecaps");
+		}
+		TelEngine::destruct(dataXml);
+	    }
+	}
 	JabberID local;
 	if (remote)
 	    remote.resource(msg.getValue("instance"));

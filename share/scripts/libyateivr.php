@@ -104,6 +104,7 @@ class IVR
     {
 	$this->Debug("::SetState('$state')");
 	$this->curstate = $state;
+	$this->OperTable("state");
     }
 
     /**

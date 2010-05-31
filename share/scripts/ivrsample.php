@@ -25,6 +25,12 @@ class IVR1 extends IVR
 	    ":8" => "leave",
 	    // key 9 - clear play queue, add 2 files and start playing
 	    ":9" => "play:file1.au:file2.slin:clear",
+	    // key # in state pound - enter state "nopound"
+	    "pound:#" => "state:nopound",
+	    // key # - enter state "pound"
+	    ":#" => "state:pound",
+	    // when entering state "pound"
+	    "pound:state" => "output:Entered state pound",
 	    // on call.execute immediately answer the call
 	    ":execute" => "answered",
 	    // when entering this IVR output a message to logs

@@ -132,6 +132,13 @@ class IVR
 		    array_shift($op);
 		    $this->PlayFile($op);
 		    break;
+		case "play_recstop":
+		    array_shift($op);
+		    $this->PlayRecStop($op);
+		    break;
+		case "recstop":
+		    $this->RecStop($op[1]);
+		    break;
 		case "tone":       // Start playing a tone
 		    $this->PlayTone($op[1]);
 		    break;
@@ -380,6 +387,35 @@ class IVR
 	    $this->playfile[] = $args[$i];
 	if ($clear)
 	    $this->PlayNext();
+    }
+
+    /**
+     * Stop recording then play a wave file or add it to the queue
+     * @param $file1,$file2,... Path to files to play
+     * @param $clear Optional - true to clear the queue and start playing now
+     */
+    function PlayRecStop()
+    {
+	$args = func_get_args();
+	$this->RecStop();
+	call_user_func_array(array($this, "PlayFile"), $args);
+    }
+
+    /**
+     * Stop recording
+     * @param $maxlen Maximum number of octets that should be transferred. Default NULL
+     */
+    function RecStop($maxlen=null)
+    {
+	$m = new Yate("chan.attach");
+	$m->id = "";
+	$m->SetParam("consumer","wave/record/-");
+	$m->SetParam("single",true);
+	if($maxlen) {
+	    $m->SetParam("maxlen", $maxlen);
+	    $m->SetParam("notify", IVR::ChannelID());
+	}
+	$m->Dispatch();
     }
 
     /**

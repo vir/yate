@@ -16,6 +16,7 @@
 ; resources: string: Comma separated list of resources serviced by the jingle channel
 ; The parameter is not used in client mode
 ; The first resource will be the default one (for outgoing calls)
+; If this parameter is empty the module will handle all resources
 ;resources=
 
 ; jingle_version: integer: Jingle session version to use for outgoing calls

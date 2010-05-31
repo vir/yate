@@ -417,6 +417,8 @@ public:
 	}
     // Check if a resource can be handled by the module
     inline bool handleResource(const String& name) {
+	    if (m_handleAllRes)
+		return true;
 	    Lock lock(this);
 	    return !m_resources.skipNull() || m_resources.find(name);
 	}
@@ -472,6 +474,7 @@ private:
     JGStreamHost* m_ftProxy;             // Default file transfer proxy
     ObjList m_handlers;                  // Message handlers list
     ObjList m_domains;                   // Domains handled by the module
+    bool m_handleAllRes;                 // Handle all resources (ignore the list)
     ObjList m_resources;                 // Resources handled by the module
     XMPPFeatureList m_features;          // Domain or resource features to advertise
     XmlElement* m_entityCaps;            // ntity capabilities element built from features
@@ -3027,7 +3030,7 @@ bool YJGMessageHandler::received(Message& msg)
  * YJGDriver
  */
 YJGDriver::YJGDriver()
-    : Driver("jingle","varchans"), m_init(false), m_ftProxy(0),
+    : Driver("jingle","varchans"), m_init(false), m_ftProxy(0), m_handleAllRes(false),
     m_entityCaps(0)
 {
     Output("Loaded module YJingle");
@@ -3132,14 +3135,22 @@ void YJGDriver::initialize()
 	s_requestSubscribe = sect->getBoolValue("request_subscribe",true);
 	s_autoSubscribe = sect->getBoolValue("auto_subscribe",false);
 	m_resources.clear();
-	String resList(sect->getValue("resources","yate"));
-	ObjList* list = resList.split(',',false);
-	for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
-	    String* tmp = static_cast<String*>(o->get());
-	    if (!m_resources.find(*tmp))
-		m_resources.append(new String(*tmp));
+	m_handleAllRes = false;
+	const char* resources = sect->getValue("resources");
+	if (resources) {
+	    String resList(resources);
+	    ObjList* list = resList.split(',',false);
+	    for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
+		String* tmp = static_cast<String*>(o->get());
+		if (!m_resources.find(*tmp))
+		    m_resources.append(new String(*tmp));
+	    }
+	    TelEngine::destruct(list);
 	}
-	TelEngine::destruct(list);
+	else {
+	    m_handleAllRes = true;
+	    m_resources.append(new String("yate"));
+	}
     }
     else {
 	s_requestSubscribe = false;

@@ -3104,6 +3104,7 @@ void YJGDriver::initialize()
 	// Set features
 	m_features.add(XMPPNamespace::Jingle);
 	m_features.add(XMPPNamespace::JingleError);
+	m_features.add(XMPPNamespace::JingleAppsRtpAudio);
 	m_features.add(XMPPNamespace::JingleAppsRtp);
 	m_features.add(XMPPNamespace::JingleAppsRtpInfo);
 	m_features.add(XMPPNamespace::JingleAppsRtpError);

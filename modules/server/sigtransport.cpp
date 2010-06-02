@@ -278,7 +278,7 @@ ListenerThread::ListenerThread(Transport* trans)
 
 ListenerThread::~ListenerThread()
 {
-    DDebug("Transport Listener",DebugAll,"Destroing ListenerThread (%p)",this);
+    DDebug("Transport Listener",DebugAll,"Destroying ListenerThread (%p)",this);
     if (m_transport) {
 	Debug("Transport Listener",DebugWarn,"Unusual exit");
 	m_transport->resetListener();
@@ -420,7 +420,7 @@ TransportThread::~TransportThread()
 {
     if (m_worker)
 	m_worker->resetThread();
-    DDebug(DebugAll,"Destroing Transport Thread [%p]",this);
+    DDebug(DebugAll,"Destroying Transport Thread [%p]",this);
 }
 
 void TransportThread::run()
@@ -430,8 +430,8 @@ void TransportThread::run()
     while (true) {
 	bool ret = false;
 	if (m_worker->needConnect())
-	     ret = m_worker->connectSocket();
-	else 
+	    ret = m_worker->connectSocket();
+	else
 	    ret = m_worker->readData();
 	if (ret)
 	    Thread::check(true);
@@ -442,7 +442,7 @@ void TransportThread::run()
 
 TReader::~TReader()
 {
-    Debug(DebugAll,"Destroing TReader [%p]",this);
+    Debug(DebugAll,"Destroying TReader [%p]",this);
 }
 
 /** TransportWorker class */
@@ -456,9 +456,7 @@ bool TransportWorker::start(Thread::Priority prio)
 {
     if (!m_thread)
 	m_thread = new TransportThread(this,prio);
-    if (m_thread->running())
-	return true;
-    if (m_thread->startup())
+    if (m_thread->running() || m_thread->startup())
 	return true;
     m_thread->cancel(true);
     m_thread = 0;
@@ -467,14 +465,20 @@ bool TransportWorker::start(Thread::Priority prio)
 
 void TransportWorker::stop()
 {
-    if (!m_thread)
+    if (!(m_thread && m_thread->running()))
 	return;
-    if (m_thread->running())
-	m_thread->cancel();
+    m_thread->cancel();
+    for (unsigned int i = 2 * Thread::idleMsec(); i--; ) {
+	Thread::msleep(1);
+	if (!m_thread)
+	    return;
+    }
+    m_thread->cancel(true);
+    m_thread = 0;
 }
 
 /**
- * Transport calss
+ * Transport class
  */
 
 SignallingComponent* Transport::create(const String& type, const NamedList& name)
@@ -506,7 +510,7 @@ Transport::~Transport()
 	m_listener->terminate();
     while (m_listener)
 	Thread::yield();
-    DDebug(this,DebugGoOn,"Destroing Transport [%p]",this);
+    Debug(this,DebugAll,"Destroying Transport [%p]",this);
     delete m_reader;
 }
 
@@ -559,11 +563,13 @@ bool Transport::initialize(const NamedList* params)
 	m_reader = new MessageReader(this,0,addr);
 	bindSocket();
 	if (m_type == Sctp) {
-	    // Send an empty message to create the connection
-	    DataBlock data;
-	    data.append("0");
-	    if(m_reader->sendMSG(data,data,1))
+	    // Send a dummy MGMT NTFY message to create the connection
+	    static const unsigned char dummy[8] =
+		{ 1, 0, 0, 1, 0, 0, 0, 8 };
+	    DataBlock hdr((void*)dummy,8,false);
+	    if (m_reader->sendMSG(hdr,DataBlock::empty(),1))
 		m_reader->listen(1);
+	    hdr.clear(false);
 	    setStatus(Up);
 	}
     }
@@ -861,7 +867,7 @@ StreamReader::~StreamReader()
 	m_socket->terminate();
 	delete m_socket;
     }
-    DDebug(m_transport,DebugAll,"Destroing StreamReader [%p]",this);
+    DDebug(m_transport,DebugAll,"Destroying StreamReader [%p]",this);
 }
 
 void StreamReader::setSocket(Socket* s)
@@ -889,8 +895,7 @@ bool StreamReader::sendMSG(const DataBlock& header, const DataBlock& msg, int st
 	Debug(m_transport,DebugAll,"Buffer Overrun");
     while (m_socket && m_sendBuffer.length()) {
 	bool sendOk = false, error = false;
-	int flags = 0;
-	if (m_socket->select(0,&sendOk,&error,5000)) {
+	if (m_socket->select(0,&sendOk,&error,Thread::idleUsec())) {
 	    if (error) {
 		DDebug(m_transport,DebugAll,"Error detected. %s",strerror(errno));
 		break;
@@ -904,6 +909,7 @@ bool StreamReader::sendMSG(const DataBlock& header, const DataBlock& msg, int st
 		    DDebug(m_transport,DebugGoOn,"Sctp conversion failed");
 		    break;
 		}
+		int flags = 0;
 		len = s->sendMsg(m_sendBuffer.data(),m_sendBuffer.length(),streamId,flags);
 	    }
 	    else
@@ -923,9 +929,9 @@ bool StreamReader::readData()
     if (!m_socket)
 	return false;
     bool readOk = false, error = false;
-    if (!m_socket->select(&readOk,0,&error,5000))
+    if (!m_socket->select(&readOk,0,&error,Thread::idleUsec()))
 	return false;
-    if (!readOk || error)
+    if (!readOk || error || !running())
 	return false;
     int stream = 0, len = 0;
     SocketAddr addr;
@@ -1033,7 +1039,7 @@ MessageReader::~MessageReader()
 	m_socket->terminate();
 	delete m_socket;
     }
-    DDebug(DebugAll,"Destroing MessageReader [%p]",this);
+    DDebug(DebugAll,"Destroying MessageReader [%p]",this);
 }
 
 void MessageReader::setSocket(Socket* s)
@@ -1054,7 +1060,7 @@ bool MessageReader::sendMSG(const DataBlock& header, const DataBlock& msg, int s
     bool sendOk = false, error = false;
     bool ret = false;
     m_isSending = true;
-    while (m_socket && m_socket->select(0,&sendOk,&error,5000)) {
+    while (m_socket && m_socket->select(0,&sendOk,&error,Thread::idleUsec())) {
 	if (error) {
 	    DDebug(m_transport,DebugAll,"Send error detected. %s",strerror(errno));
 	    m_transport->setStatus(Transport::Down);
@@ -1063,19 +1069,25 @@ bool MessageReader::sendMSG(const DataBlock& header, const DataBlock& msg, int s
 	if (!sendOk)
 	    break;
 	int totalLen = header.length() + msg.length();
+	if (!totalLen) {
+	    ret = true;
+	    break;
+	}
 	DataBlock buf(header);
 	buf += msg;
+#ifdef XDEBUG
 	String aux;
 	aux.hexify(buf.data(),buf.length(),' ');
-	XDebug(m_transport,DebugInfo,"Sending :%s",aux.c_str());
+	Debug(m_transport,DebugInfo,"Sending: %s",aux.c_str());
+#endif
 	int len = 0;
-	int flags = 0;
 	if (m_transport->transType() == Transport::Sctp) {
 	    SctpSocket* s = static_cast<SctpSocket*>(m_socket);
 	    if (!s) {
 		DDebug(m_transport,DebugGoOn,"Sctp conversion failed");
 		break;
 	    }
+	    int flags = 0;
 	    len = s->sendTo(buf.data(),totalLen,streamId,m_remote,flags);
 	}
 	else
@@ -1084,7 +1096,7 @@ bool MessageReader::sendMSG(const DataBlock& header, const DataBlock& msg, int s
 	    ret = true;
 	    break;
 	}
-	DDebug(m_transport,DebugAll,"Error sending message %d %d %s",len,totalLen,strerror(errno));
+	DDebug(m_transport,DebugMild,"Error sending message %d %d %s",len,totalLen,strerror(errno));
 	break;
     }
     m_isSending = false;
@@ -1094,7 +1106,7 @@ bool MessageReader::sendMSG(const DataBlock& header, const DataBlock& msg, int s
 bool MessageReader::readData()
 {
     bool readOk = false,error = false;
-    if (!(m_socket && m_socket->select(&readOk,0,&error,5000)))
+    if (!(running() && m_socket && m_socket->select(&readOk,0,&error,Thread::idleUsec())))
 	return false;
     if (!readOk || error)
 	return false;

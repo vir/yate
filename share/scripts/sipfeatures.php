@@ -302,6 +302,11 @@ function onSubscribe($ev)
 	return false;
     $s->Update($ev,false);
     $s->Flush();
+    // Return expires in OK
+    $exp = $s->expire - time();
+    if ($exp < 0)
+	$exp = 0;
+    $ev->params["osip_Expires"] = strval($exp);
     return true;
 }
 

@@ -269,15 +269,18 @@ Message* QueuedCall::buildResNotify(int stat)
 {
     Message* m = new Message("resource.notify");
     m->addParam("module",__plugin.name());
+    if (stat != QueuedCall::Hangup)
+	m->addParam("operation","online");
+    else
+	m->addParam("operation","offline");
     m->addParam("account",m_queue);
     m->addParam("username",m_queue);
     String res;
     if (s_addNodeToResource)
 	res << Engine::nodeName() + "/";
     res << m_channelid;
-    m->addParam("resource",res);
-    m->addParam("subscription",String::boolText(true));
-    m->addParam("status",resNotifStatus(stat));
+    m->addParam("instance",res);
+    m->addParam("show",resNotifStatus(stat));
     return m;
 }
 

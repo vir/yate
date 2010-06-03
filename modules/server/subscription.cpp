@@ -216,8 +216,14 @@ public:
 	{ return *this; }
     inline unsigned int getSeq()
 	{ return m_sequence++; }
-    inline int getTimeLeft()
-	{ return m_time - Time::secNow(); }
+    inline u_int64_t getTimeLeft()
+	{ return m_time - Time::msecNow(); }
+    // Notify 'dialog'
+    void notify(const Message& msg);
+    // Notify MWI
+    void notifyMwi(const Message& msg);
+    // Notify subscription termination
+    void notifyTerminate(const char* reason);
 private:
     u_int64_t m_time;
     unsigned int m_sequence;
@@ -299,8 +305,9 @@ class EventUser : public User
 public:
     EventUser(const char* name);
     virtual ~EventUser();
-    // Notify all user's
-    void notify(const Message& msg, bool haveDialog = true);
+    // Notify 'dialog' to all contacts
+    void notify(const Message& msg);
+    // Notify 'MWI' to all contacts
     void notifyMwi(const Message& msg);
     // Append a new contact
     void appendContact(EventContact* c);
@@ -309,11 +316,9 @@ public:
 	    ObjList* o = m_list.find(name);
 	    return o ? static_cast<EventContact*>(o->get()) : 0;
 	}
-    void expire(u_int64_t time);
+    void expire(u_int64_t time, const char* event);
     // Remove a contact. Return it if found and not deleted
     EventContact* removeContact(const String& name, bool delObj = true);
-    NamedList* getParams(const NamedList& msg,bool init);
-    //
 };
 
 class ExpireThread : public Thread
@@ -465,7 +470,13 @@ public:
     bool handleResSubscribe(bool sub, const String& subscriber, const String& notifier,
 	Message& msg);
     bool askDB(const String& subscriber, const String& notifier, const String& oper);
+    // Retrieve an event notifier
+    // Valid objects are returned with reference counter increased
     EventUser* getEventUser(bool create, const String& notifier, const String& oper);
+    // Remove an event's user contact. Remove the user if empty
+    // Return true if the contact was removed from user
+    bool removeEventUserContact(const String& user, const String& contact,
+	const String& event);
     // Handle 'resource.subscribe' messages with query operation
     bool handleResSubscribeQuery(const String& subscriber, const String& notifier,
 	Message& msg);
@@ -508,7 +519,8 @@ public:
     String m_contactDeleteQuery;
     String m_genericUserLoadQuery;
     UserList m_users;
-    NamedList m_events;
+    Mutex m_eventsMutex;
+    ObjList m_events;
     ExpireThread* m_expire;
     GenericUserList m_genericUsers;
 
@@ -844,6 +856,60 @@ Contact* Contact::build(Array& a, int row)
     return c;
 }
 
+/*
+ * EventContact
+ */
+// Notify 'dialog'
+void EventContact::notify(const Message& msg)
+{
+    Message* m = __plugin.message("resource.notify");
+    m->copyParams(*this);
+    m->setParam("notifyseq",String(getSeq()));
+    m->setParam("subscriptionstate","active");
+    m->setParam("remaining",String((unsigned int)(getTimeLeft() / 1000)));
+    String mType;
+    if (msg == "call.cdr")
+	mType = "cdr";
+    if (mType) {
+	m->setParam(mType,String::boolText(true));
+	mType << ".";
+	unsigned int n = msg.length();
+	for (unsigned int i = 0; i < n; i++) {
+	    NamedString* ns = msg.getParam(i);
+	    if (ns && ns->name())
+		m->addParam(mType + ns->name(),*ns);
+	}
+    }
+    Engine::enqueue(m);
+}
+
+// Notify MWI
+void EventContact::notifyMwi(const Message& msg)
+{
+    Message* m = __plugin.message("resource.notify");
+    m->copyParams(*this);
+    if (msg == "mwi")
+	m->copyParams(msg);
+    else {
+	m->addParam("message-summary.voicenew","0");
+	m->addParam("message-summary.voiceold","0");
+    }
+    Engine::enqueue(m);
+}
+
+// Notify subscription termination
+void EventContact::notifyTerminate(const char* reason)
+{
+    Message* m = __plugin.message("resource.notify");
+    m->copyParams(*this);
+    m->addParam("subscriptionstate","terminated");
+    m->addParam("terminatereason",reason,false);
+    Engine::enqueue(m);
+}
+
+/*
+ * User
+ */
 User::User(const char* name)
     : Mutex(true,__plugin.name() + ":User"), m_user(name)
 {
@@ -1045,136 +1111,69 @@ void EventUser::appendContact(EventContact* c)
 	o->set(c);
     else
 	m_list.append(c);
-#ifdef DEBUG
-    String sub;
     DDebug(&__plugin,DebugAll,"EventUser(%s) added contact (%p,%s) [%p]",
 	user().c_str(),c,c->c_str(),this);
-#endif
 }
 
 // Remove a contact. Return it if found and not deleted
 EventContact* EventUser::removeContact(const String& name, bool delObj)
 {
+    Lock lock(this);
     ObjList* o = m_list.find(name);
     if (!o)
 	return 0;
     EventContact* c = static_cast<EventContact*>(o->get());
-#ifdef DEBUG
     DDebug(&__plugin,DebugAll,"EventUser(%s) removed contact (%p,%s) [%p]",
 	user().c_str(),c,c->c_str(),this);
-#endif
     o->remove(delObj);
     return delObj ? 0 : c;
 }
 
-void EventUser::notify(const Message& msg, bool haveDialog)
+void EventUser::notify(const Message& msg)
 {
+    Lock lock(this);
     for (ObjList* o = m_list.skipNull(); o; o = o->skipNext()) {
 	EventContact* c = static_cast<EventContact*>(o->get());
 	if (!c)
 	    continue;
-	String notif = msg.getValue("caller");
-	if(notif == *c)
+	const String& notif = msg["caller"];
+	if (notif == *c)
 	    continue;
-	Message* m = new Message("resource.notify");
-	m->copyParams(*c);
-	m->setParam("notifyseq",String(c->getSeq()));
-	m->setParam("subscriptionstate","active");
-	m->setParam("expires",String(c->getTimeLeft()));
-	if (m->getParam("notifier-uri"))
-	    m->setParam("notifier-uri",msg.getValue("local-uri"));
-	String oper = msg.getValue("operation");
-	bool init = (oper == "initialize");
-	if (haveDialog) {
-	    m->setParam("state","full");
-	    NamedList* nl = getParams(msg,init);
-	    if (!nl) {
-		Engine::enqueue(m);
-		continue;
-	    }
-	    String dir = msg.getValue("direction");
-	    String caller,called;
-	    if (dir == "incoming") {
-		called = msg.getParam("called");
-		caller = msg.getParam("caller");
-	    }
-	    else if (dir == "outgoing") {
-		called = msg.getParam("caller");
-		caller = msg.getParam("called");
-	    }
-	    nl->addParam("dialog.caller",caller);
-	    nl->addParam("dialog.called",called);
-	    NamedPointer* p = new NamedPointer("cdr",nl);
-	    m->addParam(p);
-	}
-	else {
-	    m->setParam("state","full");
-	    for (unsigned int i = 0;i < msg.count();i++) {
-		NamedString* ns = msg.getParam(i);
-		NamedPointer* p = ns ? static_cast<NamedPointer*>(ns->getObject("NamedPointer")) : 0;
-		if (!p)
-		    continue;
-		NamedList* list = static_cast<NamedList*>(p->userData());
-		if (!list)
-		    continue;
-		NamedList* nl = getParams(*list,init);
-		NamedPointer* np = new NamedPointer("cdr",nl);
-		m->addParam(np);
-	    }
-	}
-	Engine::enqueue(m);
+	DDebug(&__plugin,DebugAll,"EventUser(%s) notifying 'dialog' to '%s' [%p]",
+	    toString().c_str(),c->toString().c_str(),this);
+	c->notify(msg);
     }
 }
 
 void EventUser::notifyMwi(const Message& msg)
 {
+    Lock lock(this);
     for (ObjList* o = m_list.skipNull(); o; o = o->skipNext()) {
 	EventContact* c = static_cast<EventContact*>(o->get());
 	if (!c)
 	    continue;
-	Message* m = new Message("resource.notify");
-	m->copyParams(msg);
-	m->copyParams(*c);
-	Engine::enqueue(m);
+	DDebug(&__plugin,DebugAll,"EventUser(%s) notifying 'mwi' to '%s' [%p]",
+	    toString().c_str(),c->toString().c_str(),this);
+	c->notifyMwi(msg);
     }
 }
 
-NamedList* EventUser::getParams(const NamedList& msg,bool init)
+void EventUser::expire(u_int64_t time, const char* event)
 {
-    NamedList* nl = new NamedList("");
-    nl->setParam("dialog.id",msg.getValue("billid"));
-    String state = msg.getValue("status");
-    if (state == "incoming" || state == "outgoing")
-	state = "initiating";
-    String oper = msg.getValue("operation");
-    if (oper == "finalize")
-	state = "hangup";
-    nl->setParam("dialog.state",state);
-    if (init)
-	return nl;
-    nl->setParam("dialog.callid",msg.getValue("chan"));
-    nl->setParam("dialog.remoteuri",msg.getValue("remote-uri"));
-    nl->setParam("dialog.localuri",msg.getValue("local-uri"));
-    nl->setParam("duration",msg.getValue("duration"));
-    nl->setParam("dialog.direction",msg.getValue("direction"));
-    return nl;
-}
-
-void EventUser::expire(u_int64_t time)
-{
-    for (ObjList* o = m_list.skipNull(); o; o = o->skipNext()) {
+    Lock lock(this);
+    ObjList* o = m_list.skipNull();
+    while (o) {
 	EventContact* c = static_cast<EventContact*>(o->get());
-	if (!c)
+	if (!c->hasExpired(time)) {
+	    o = o->skipNext();
 	    continue;
-	if (!c->hasExpired(time))
-	    continue;
-	Debug(DebugNote,"Subscribtion terminated for Contact %s",c->c_str());
-	Message* m = new Message ("resource.notify");
-	m->addParam("subscriptionstate","terminated");
-	m->addParam("terminatereason","timeout");
-	m->copyParams(*c);
-	m_list.remove(c);
-	Engine::enqueue(m);
+	}
+	Debug(&__plugin,DebugInfo,
+	    "EventUser(%s) subscription of '%s' for event '%s' timed out [%p]",
+	    toString().c_str(),c->toString().c_str(),event,this);
+	c->notifyTerminate("timeout");
+	o->remove();
+	o = o->skipNull();
     }
 }
 
@@ -1578,7 +1577,7 @@ bool SubMessageHandler::received(Message& msg)
  * SubscriptionModule Module
  */
 SubscriptionModule::SubscriptionModule()
-    : Module("subscription","misc",true), m_events("")
+    : Module("subscription","misc",true), m_eventsMutex(true,"subscription:events")
 {
     Output("Loaded module Subscriptions");
 }
@@ -1746,75 +1745,104 @@ Array* SubscriptionModule::notifyRosterUpdate(const char* username, const char* 
 
 // Handle 'resource.subscribe' for messages with event
 bool SubscriptionModule::handleResSubscribe(const String& event, const String& subscriber,
-    const String& notifier, const String& oper,Message& msg)
+    const String& notifier, const String& oper, Message& msg)
 {
-    EventUser* user = 0;
-    if (oper != "subscribe") {
-	user = getEventUser(false,notifier,event);
-	if (!user)
-	    return false;
-	user->removeContact(subscriber,true);
-	//TODO should the user be removed????? // Make notification of subscription terminated
-	return true;
-    }
-    if (!askDB(notifier,subscriber,event))
+    DDebug(this,DebugAll,"handleResSubscribe(%s,%s,%s,%s)",
+	event.c_str(),subscriber.c_str(),notifier.c_str(),oper.c_str());
+    if (oper != "subscribe")
+	return removeEventUserContact(notifier,subscriber,event);
+    if (!askDB(notifier,subscriber,event)) {
+	// Remove subscriber if no longer allowed
+	removeEventUserContact(notifier,subscriber,event);
 	return false;
-    user = getEventUser(true,notifier,event);
+    }
+    EventUser* user = getEventUser(true,notifier,event);
     if (!user)
 	return false;
-    user->appendContact(new EventContact(subscriber,msg));
-    Message* m = 0;
-    if (event == "dilaog") {
-	m = new Message("cdr.query");
-	m->addParam("external",notifier);
-    }
+    Message m("cdr.query");
+    if (event == "dialog")
+	m.addParam("external",notifier);
     else {
-	m = new Message("mwi.query");
-	m->addParam("subscriber",subscriber);
-	m->addParam("notifier",notifier);
-	m->addParam("message-summary.voicenew","0");
-	m->addParam("message-summary.voiceold","0");
+	m = "mwi.query";
+	m.addParam("subscriber",subscriber);
+	m.addParam("notifier",notifier);
     }
+    user->lock();
+    EventContact* c = new EventContact(subscriber,msg);
+    user->appendContact(c);
     if (Engine::dispatch(m))
-	event == "dilaog" ? user->notify(*m,false) : user->notifyMwi(*m);
+	event == "dialog" ? c->notify(m) : c->notifyMwi(m);
     else
-	event == "dilaog" ? user->notify(msg,false) : user->notifyMwi(msg);
-    TelEngine::destruct(m);
+	event == "dialog" ? c->notify(msg) : c->notifyMwi(msg);
+    user->unlock();
+    TelEngine::destruct(user);
     return true;
 }
 
+// Retrieve an event notifier
+// Valid objects are returned with reference counter increased
 EventUser* SubscriptionModule::getEventUser(bool create, const String& notifier,
     const String& event)
 {
-    NamedString* p = m_events.getParam(event);
-    NamedPointer* po = static_cast<NamedPointer*>(p);
-    if (!po) {
-	if (!create)
-	    return 0;
-	po = new NamedPointer(event,new NamedList(event));
-	XDebug(this,DebugAll,"Creating List for Event %s",event.c_str());
-	m_events.setParam(po);
+    Lock lock(m_eventsMutex);
+    ObjList* o = m_events.find(event);
+    if (!o && create) {
+	o = m_events.append(new NamedList(event));
+	XDebug(this,DebugAll,"Added list for event '%s'",event.c_str());
     }
-    NamedList* eventList = static_cast<NamedList*>(po->userData());
+    if (!o)
+	return 0;
+    NamedList* evList = static_cast<NamedList*>(o->get());
     // Find Notifier list
-    NamedString* ns = eventList->getParam(notifier);
+    NamedString* ns = evList->getParam(notifier);
     NamedPointer* np = static_cast<NamedPointer*>(ns);
     if (!np) {
 	if (!create)
 	    return 0;
 	np = new NamedPointer(notifier,new EventUser(notifier));
-	XDebug(this,DebugAll,"Creating user %s for Event %s",notifier.c_str(),event.c_str());
-	eventList->setParam(np);
+	DDebug(this,DebugAll,"Adding user '%s' event '%s'",notifier.c_str(),event.c_str());
+	evList->addParam(np);
     }
-
-    return static_cast<EventUser*>(np->userData());
+    EventUser* user = static_cast<EventUser*>(np->userData());
+    return (user && user->ref()) ? user : 0;
 }
 
+// Remove an event's user contact
+// Remove the user if empty
+bool SubscriptionModule::removeEventUserContact(const String& user, const String& contact,
+    const String& event)
+{
+    Lock lock(m_eventsMutex);
+    ObjList* o = m_events.find(event);
+    if (!o)
+	return false;
+    NamedList* evList = static_cast<NamedList*>(o->get());
+    NamedString* ns = evList->getParam(user);
+    if (!ns)
+	return false;
+    NamedPointer* np = static_cast<NamedPointer*>(ns);
+    EventUser* u = static_cast<EventUser*>(np->userData());
+    if (!u)
+	return false;
+    EventContact* c = u->removeContact(contact,false);
+    if (!c)
+	return false;
+    TelEngine::destruct(c);
+    if (!u->m_list.skipNull()) {
+	DDebug(this,DebugAll,"Removing empty user '%s' event '%s'",user.c_str(),event.c_str());
+	evList->clearParam(ns);
+	// Remove empty list also
+	if (!evList->count()) {
+	    DDebug(this,DebugAll,"Removing empty event list '%s'",evList->c_str());
+	    o->remove();
+	}
+    }
+    return true;
+}
+    
 bool SubscriptionModule::askDB(const String& subscriber, const String& notifier,
     const String& oper)
 {
-    if (subscriber)
-	return true;
     NamedList nl("");
     nl.setParam("subscriber",subscriber);
     nl.setParam("notifier",notifier);
@@ -1823,7 +1851,10 @@ bool SubscriptionModule::askDB(const String& subscriber, const String& notifier,
     if (!m)
 	return false;
     m = queryDb(m);
-    bool ok = m != 0;
+    if (!m)
+	return false;
+    // Fail it if there is no record in database
+    bool ok = (m->getIntValue("rows") > 0);
     TelEngine::destruct(m);
     return ok;
 }
@@ -1831,10 +1862,11 @@ bool SubscriptionModule::askDB(const String& subscriber, const String& notifier,
 void SubscriptionModule::handleCallCdr(const Message& msg, const String& notif)
 {
     DDebug(this,DebugAll,"handleCallCdr() notifier=%s",notif.c_str());
-    // TODO: lock!!!!!!!!!!!
     EventUser* user = getEventUser(false,notif,"dialog");
-    if (user)
+    if (user) {
 	user->notify(msg);
+	TelEngine::destruct(user);
+    }
     PresenceUser* pu = 0;
     m_users.lock();
     for (ObjList* o = m_users.users().skipNull(); o; o = o->skipNext()) {
@@ -1857,7 +1889,9 @@ void SubscriptionModule::handleMwi(const Message& msg)
     EventUser* user = getEventUser(false,msg.getValue("notifier"),"message-summary");
     if (user)
 	user->notifyMwi(msg);
+    TelEngine::destruct(user);
 }
+
 // Handle 'resource.subscribe' messages with (un)subscribe operation
 bool SubscriptionModule::handleResSubscribe(bool sub, const String& subscriber,
     const String& notifier, Message& msg)
@@ -2634,25 +2668,45 @@ bool SubscriptionModule::imRoute(Message& msg)
 void SubscriptionModule::expireSubscriptions()
 {
     u_int64_t time = Time::msecNow();
-    unsigned int evCount = m_events.count();
-    for (unsigned int i = 0;i < evCount;i ++) {
-	NamedPointer* p = static_cast<NamedPointer*>(m_events.getParam(i));
-	NamedList* nl = static_cast<NamedList*>(p->userData());
-	if (!nl)
-	    continue;
-	unsigned int nlCount = nl->count();
-	for (unsigned int j = 0;j < nlCount;j++) {
-	    NamedPointer* p1 = static_cast<NamedPointer*>(nl->getParam(j));
-	    if (!p1)
-		continue;
-	    EventUser* eu = static_cast<EventUser*>(p1->userData());
+    Lock lock(m_eventsMutex);
+    ObjList* o = m_events.skipNull();
+    while (o) {
+	NamedList* nl = static_cast<NamedList*>(o->get());
+	unsigned int n = nl->length();
+	ObjList remove;
+	for (unsigned int i = 0; i < n ; i++) {
+	    NamedString* ns = nl->getParam(i);
+	    NamedPointer* np = static_cast<NamedPointer*>(ns);
+	    EventUser* eu = static_cast<EventUser*>(np->userData());
 	    if (!eu)
 		continue;
-	    eu->expire(time);
-	    if (eu->m_list.count() == 0) {
-		nl->clearParam(eu->user());
-		j--;
-	    }
+	    XDebug(this,DebugAll,"Expiring user '%s' event '%s'",
+		eu->toString().c_str(),nl->c_str());
+	    eu->expire(time,nl->c_str());
+	    if (!eu->m_list.skipNull())
+		remove.append(ns)->setDelete(false);
+	}
+	ObjList* oo = remove.skipNull();
+	if (!oo) {
+	    o = o->skipNext();
+	    continue;
+	}
+	for (; oo; oo = oo->skipNext()) {
+	    NamedString* ns = static_cast<NamedString*>(oo->get());
+	    NamedPointer* np = static_cast<NamedPointer*>(ns);
+	    EventUser* eu = static_cast<EventUser*>(np->userData());
+	    if (!eu)
+		continue;
+	    DDebug(this,DebugAll,"Removing empty user '%s' event '%s'",
+		eu->toString().c_str(),nl->c_str());
+	    nl->clearParam(ns);
+	}
+	if (nl->count())
+	    o = o->skipNext();
+	else {
+	    DDebug(this,DebugAll,"Removing empty event list '%s'",nl->c_str());
+	    o->remove();
+	    o = o->skipNull();
 	}
     }
 }

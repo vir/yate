@@ -23,6 +23,7 @@
  */
 
 #include <yatephone.h>
+#include <yatexml.h>
 
 #include <stdlib.h>
 
@@ -95,6 +96,7 @@ private:
 
 #define KNOWN_EVENTS 2
 
+static bool s_verboseXml = true;        // Build verbose XML body (add line breaks and spaces)
 static YSipFeatures s_module;
 static TokenDict s_allowedEvents[KNOWN_EVENTS+1];
 
@@ -392,82 +394,112 @@ bool YSipNotifyHandler::received(Message &msg)
     return Engine::dispatch(m);
 }
 
-inline void addStartTag(String& dest, const char* tag, bool close, const char* indent = 0)
-{
-    dest << indent << "<" << tag;
-    if (close)
-	dest << ">";
-}
-
-inline void addEndTag(String& dest, const char* tag = 0, const char* indent = 0, bool eol = true)
-{
-    dest << indent;
-    if (tag)
-	dest << "</" << tag;
-    dest << ">";
-    if (eol)
-	dest << "\r\n";
-}
-
-inline void addAttr(String& dest, const char* attr, const String& value)
-{
-    if (value)
-	dest << " " << attr << "=\"" << value << "\"";
-}
-
 // Create the body for 'dialog' event notification
 void YSipNotifyHandler::createDialogBody(String& dest, const Message& src,
 	const String& entity)
 {
-    // NOTE: Line separators and indentations are inserted for debug purposes
-    const char* indent1 = "  ";
-    const char* indent2 = "    ";
-
     dest = "";
-    dest << "<?xml version=\"1.0\"?>\r\n";
-    addStartTag(dest,"dialog-info",false);
-    addAttr(dest,"xmlns","urn:ietf:params:xml:ns:dialog-info");
-    addAttr(dest,"version",src.getValue("notifyseq"));
+    dest << "<?xml version=\"1.0\"?>";
+    XmlElement* xml = new XmlElement("dialog-info");
+    xml->setXmlns(String::empty(),true,"urn:ietf:params:xml:ns:dialog-info");
+    xml->setAttributeValid("version",src.getValue("notifyseq"));
+    String prefix;
+    if (src.getBoolValue("cdr"))
+	prefix = "cdr.";
     // We always send partial data (only dialogs changed since last notification)
     // state will be 'full' if we send data for all active dialogs
     const char* id = src.getValue("dialog.id");
-    addAttr(dest,"notify-state",id ? "partial" : "full");
-    addAttr(dest,"entity",entity);
-    addEndTag(dest);
+    xml->setAttribute("notify-state",(prefix || id) ? "partial" : "full");
+    xml->setAttributeValid("entity",entity);
     // Append dialog data
-    const char* state = src.getValue("dialog.state");
-    if (id && *id && state && *state) {
-	// dialog tag and attributes
-	addStartTag(dest,"dialog",false,indent1);
-	addAttr(dest,"id",id);
-	addAttr(dest,"call-id",src.getValue("dialog.callid"));
-	addAttr(dest,"local-tag",src.getValue("dialog.localtag"));
-	addAttr(dest,"remote-tag",src.getValue("dialog.remotetag"));
-	String dir = src.getValue("dialog.direction");
-	if (dir == "incoming")
-	    dir = "initiator";
-	else if (dir == "outgoing")
-	    dir = "recipient";
-	else
-	    dir = "";
-	addAttr(dest,"direction",dir);
-	addEndTag(dest);
-	// "state" child of "dialog"
-	addStartTag(dest,"state",true,indent2);
-	dest << state;
-	addEndTag(dest,"state",0);
-	// "remote" child of "dialog"
-	String tmp = src.getValue("dialog.remoteuri");
-	if (tmp) {
-	    addStartTag(dest,"remote",true,indent2);
-	    addStartTag(dest,"target",false);
-	    addAttr(dest,"uri",tmp);
-	    addEndTag(dest,0,0,false);
-	    addEndTag(dest,"remote",0);
+    XmlElement* dlg = 0;
+    if (prefix == "cdr.") {
+	const char* state = 0;
+	const String& oper = src[prefix + "operation"];
+	// Set dialog status
+	if (oper == "initialize")
+	    state = "trying";
+	else if (oper == "finalize")
+	    state = "terminated";
+	else {
+	    const String& status = src[prefix + "status"];
+	    if (status == "connected" || status == "answered")
+		state = "confirmed";
+	    else if (status == "incoming" || status == "outgoing" ||
+		status == "calling" || status == "ringing" || status == "progressing")
+		state = "early";
+	    else if (status == "redirected")
+		state = "rejected";
+	    else if (status == "destroyed")
+		state = "terminated";
 	}
-	addEndTag(dest,"dialog",indent1);
+	// Set dialog direction
+	const char* direction = 0;
+	if (state) {
+	    // Directions are reversed because we are talking about the remote end
+	    const String& dir = src[prefix + "direction"];
+	    if (dir == "incoming")
+		direction = "initiator";
+	    else if (dir == "outgoing")
+		direction = "recipient";
+	}
+	const String& id = direction ? src[prefix + "chan"] : String::empty();
+	if (id) {
+	    dlg = new XmlElement("dialog");
+	    dlg->setAttribute("id",id);
+	    dlg->setAttribute("call-id",id);
+	    const char* external = src.getValue(prefix + "external");
+	    dlg->setAttributeValid("local-tag",src.getValue(prefix + "local-tag",external));
+	    dlg->setAttributeValid("remote-tag",src.getValue(prefix + "remote-tag",external));
+	    dlg->setAttribute("direction",direction);
+	    // "state" child of "dialog"
+	    XmlElement* st = new XmlElement("state");
+	    st->addText(state);
+	    dlg->addChild(st);
+	    // "remote" child of "dialog"
+	    XmlElement* remote = new XmlElement("remote");
+	    XmlElement* target = new XmlElement("target");
+	    target->setAttributeValid("uri",entity);
+	    remote->addChild(target);
+	    dlg->addChild(remote);
+	}
     }
-    addEndTag(dest,"dialog-info");
+    else {
+	const char* state = src.getValue("dialog.state");
+	if (id && *id && state && *state) {
+	    dlg = new XmlElement("dialog");
+	    dlg->setAttribute("id",id);
+	    dlg->setAttributeValid("call-id",src.getValue("dialog.callid"));
+	    dlg->setAttributeValid("local-tag",src.getValue("dialog.localtag"));
+	    dlg->setAttributeValid("remote-tag",src.getValue("dialog.remotetag"));
+	    String dir = src.getValue("dialog.direction");
+	    if (dir == "incoming")
+		dlg->setAttribute("direction","initiator");
+	    else if (dir == "outgoing")
+		dlg->setAttribute("direction","recipient");
+	    // "state" child of "dialog"
+	    XmlElement* st = new XmlElement("state");
+	    st->addText(state);
+	    dlg->addChild(st);
+	    // "remote" child of "dialog"
+	    String tmp = src.getValue("dialog.remoteuri");
+	    if (tmp) {
+		XmlElement* remote = new XmlElement("remote");
+		XmlElement* target = new XmlElement("target");
+		target->setAttribute("uri",tmp);
+		remote->addChild(target);
+		dlg->addChild(remote);
+	    }
+	}
+    }
+    if (dlg)
+	xml->addChild(dlg);
+    if (s_verboseXml)
+	xml->toString(dest,true,"\r\n","  ");
+    else
+	xml->toString(dest);
+    dest << "\r\n";
+    TelEngine::destruct(xml);
 }
 
 // Create the body for 'message-summary' event notification
@@ -509,7 +541,8 @@ void YSipFeatures::initialize()
     m_expiresMax = cfg.getIntValue("general","expires_max",EXPIRES_MAX);
     m_expiresDef = cfg.getIntValue("general","expires_def",EXPIRES_DEF);
     m_forceDlgID = cfg.getBoolValue("general","forcedialogdata",true);
-
+    s_verboseXml = cfg.getBoolValue("general","verbosexml",true);
+    
     // Build the list of allowed events
     NamedList* evs = cfg.getSection("allow_events");
     bool def = evs ? evs->getBoolValue("default",true) : true;

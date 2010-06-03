@@ -317,6 +317,10 @@ qt4/updater.yate: qt4/updater.moc
 qt4/updater.yate: LOCALFLAGS = $(QT4_INC_NET)
 qt4/updater.yate: LOCALLIBS = $(QT4_LIB_NET)
 
+server/sipfeatures.yate: ../libs/yxml/libyatexml.a
+server/sipfeatures.yate: LOCALFLAGS = -I@top_srcdir@/libs/yxml
+server/sipfeatures.yate: LOCALLIBS = -L../libs/yxml -lyatexml
+
 ../libyatesig.so ../libs/ysig/libyatesig.a:
 	$(MAKE) -C ../libs/ysig
 

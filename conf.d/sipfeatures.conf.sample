@@ -17,6 +17,11 @@
 ; Defaults to enable
 ;forcedialogdata=enable
 
+; verbosexml: boolean: Build verbose XML bodies (add line breaks and spaces)
+; A dialog XML notification body will spare about 38 chars if this option is disabled
+; Defaults to enable
+;verbosexml=enable
+
 [allow_events]
 ; Restrict/allow subscriptions to individual events
 ; If an event is disabled, no subscriptions to it will be allowed

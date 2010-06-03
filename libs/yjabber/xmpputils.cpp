@@ -863,9 +863,9 @@ XmlElement* XMPPUtils::createIq(IqType type, const char* from,
 XmlElement* XMPPUtils::createIqError(const char* from, const char* to, XmlElement*& xml,
     int type, int error, const char* text)
 {
-    const char* id = xml->attribute("id");
+    const char* id = xml ? xml->attribute("id") : 0;
     XmlElement* iq = createIq(XMPPUtils::IqError,from,to,id);
-    if (TelEngine::null(id)) {
+    if (TelEngine::null(id) && xml) {
 	iq->addChild(xml);
 	xml = 0;
     }

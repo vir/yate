@@ -30,7 +30,7 @@
 #endif
 
 #include <yateclass.h>
-	
+
 /**
  * Holds all Telephony Engine related classes.
  */
@@ -53,7 +53,7 @@ public:
      * @param filename Name of file to initialize from
      * @param warn True to warn if the configuration could not be loaded
      */
-    Configuration(const char* filename, bool warn = true);
+    explicit Configuration(const char* filename, bool warn = true);
 
     /**
      * Assignment from string operator
@@ -226,7 +226,7 @@ public:
      * @param name Name of the message - must not be NULL or empty
      * @param retval Default return value
      */
-    Message(const char* name, const char* retval = 0);
+    explicit Message(const char* name, const char* retval = 0);
 
     /**
      * Copy constructor.
@@ -385,7 +385,7 @@ public:
      * @param name Name of the handled message - may be NULL
      * @param priority Priority of the handler, 0 = top
      */
-    MessageHandler(const char* name, unsigned priority = 100);
+    explicit MessageHandler(const char* name, unsigned priority = 100);
 
     /**
      * Handler destructor.
@@ -437,7 +437,7 @@ public:
      */
     void clearFilter();
 
-protected:    
+protected:
     /**
      * Remove the handler from its dispatcher, remove any installed filter.
      * This method is called internally from destruct and the destructor
@@ -663,7 +663,7 @@ public:
      * @param name the undecorated name of the library that contains the plugin
      * @param earlyInit True to initialize the plugin early
      */
-    Plugin(const char* name, bool earlyInit = false);
+    explicit Plugin(const char* name, bool earlyInit = false);
 
     /**
      * Creates a new Plugin container.

@@ -505,7 +505,7 @@ public:
      * @param name Name of the function or block entered, must be static
      * @param format printf() style format string
      */
-    Debugger(const char* name, const char* format = 0, ...);
+    explicit Debugger(const char* name, const char* format = 0, ...);
 
     /**
      * The constructor prints the method entry message and indents.
@@ -1228,7 +1228,7 @@ public:
      * @param columns Initial number of columns
      * @param rows Initial number of rows
      */
-    Array(int columns = 0, int rows = 0);
+    explicit Array(int columns = 0, int rows = 0);
 
     /**
      * Destructor. Destructs all objects in the array
@@ -2120,7 +2120,7 @@ public:
      * @param extended True to use POSIX Extended Regular Expression syntax
      * @param insensitive True to not differentiate case
      */
-    Regexp(const char* value, bool extended = false, bool insensitive = false);
+    explicit Regexp(const char* value, bool extended = false, bool insensitive = false);
 
     /**
      * Copy constructor.
@@ -2204,7 +2204,7 @@ public:
      * @param name Name of this string
      * @param value Initial value of the string
      */
-    NamedString(const char* name, const char* value = 0);
+    explicit NamedString(const char* name, const char* value = 0);
 
     /**
      * Retrive the name of this string.
@@ -2252,7 +2252,7 @@ public:
      * @param data Initial pointer value. The pointer will be owned by this object
      * @param value Initial string value
      */
-    NamedPointer(const char* name, GenObject* data = 0, const char* value = 0);
+    explicit NamedPointer(const char* name, GenObject* data = 0, const char* value = 0);
 
     /**
      * Destructor. Release the pointer
@@ -2326,7 +2326,7 @@ public:
      * Creates a new, empty list.
      * @param size Number of classes to divide the objects
      */
-    HashList(unsigned int size = 17);
+    explicit HashList(unsigned int size = 17);
 
     /**
      * Destroys the list and everything in it.
@@ -3232,7 +3232,7 @@ public:
      * Creates a new named list.
      * @param name Name of the list - must not be NULL or empty
      */
-    NamedList(const char* name);
+    explicit NamedList(const char* name);
 
     /**
      * Copy constructor
@@ -3499,13 +3499,13 @@ public:
      * Constructor from a String that gets parsed later
      * @param uri String form of the URI
      */
-    URI(const String& uri);
+    explicit URI(const String& uri);
 
     /**
      * Constructor from a C string that gets parsed later
      * @param uri String form of the URI
      */
-    URI(const char* uri);
+    explicit URI(const char* uri);
 
     /**
      * Constructor from URI components
@@ -4213,7 +4213,7 @@ public:
      *  false for a normal fast mutex
      * @param name Static name of the mutex (for debugging purpose only)
      */
-    Mutex(bool recursive = false, const char* name = 0);
+    explicit Mutex(bool recursive = false, const char* name = 0);
 
     /**
      * Copy constructor, creates a shared mutex
@@ -4300,7 +4300,7 @@ public:
      * @param maxcount Maximum unlock count, must be strictly positive
      * @param name Static name of the semaphore (for debugging purpose only)
      */
-    Semaphore(unsigned int maxcount = 1, const char* name = 0);
+    explicit Semaphore(unsigned int maxcount = 1, const char* name = 0);
 
     /**
      * Copy constructor, creates a shared semaphore
@@ -4793,7 +4793,7 @@ public:
      * Constructor of a null address
      * @param family Family of the address to create
      */
-    SocketAddr(int family);
+    explicit SocketAddr(int family);
 
     /**
      * Constructor that stores a copy of an address
@@ -5253,7 +5253,7 @@ public:
      * Constructor from an existing handle
      * @param handle Operating system handle to an open file
      */
-    File(HANDLE handle);
+    explicit File(HANDLE handle);
 
     /**
      * Destructor, closes the file
@@ -5497,7 +5497,7 @@ public:
      * Constructor from an existing handle
      * @param handle Operating system handle to an existing socket
      */
-    Socket(SOCKET handle);
+    explicit Socket(SOCKET handle);
 
     /**
      * Constructor that also creates the socket handle
@@ -5914,7 +5914,7 @@ public:
      * Constructor
      * @param fd File descriptor of an existing handle
      */
-    inline SctpSocket(SOCKET fd)
+    inline explicit SctpSocket(SOCKET fd)
 	: Socket(fd)
 	{ }
 

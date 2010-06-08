@@ -432,7 +432,7 @@ public:
      *  A random one will be created if missing. The length will be truncated
      *  to 70 if this value is exceeded
      */
-    MimeMultipartBody(const char* subtype = "mixed", const char* boundary = 0);
+    explicit MimeMultipartBody(const char* subtype = "mixed", const char* boundary = 0);
 
     /**
      * Constructor from block of data

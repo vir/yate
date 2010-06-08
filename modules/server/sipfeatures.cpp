@@ -196,7 +196,7 @@ bool YSipSubscribeHandler::received(Message &msg)
 	notifyTo = notifyTo.matchString(1);
     m.addParam("notifyto",notifyTo);
 
-    URI uriRequest = msg.getValue("sip_uri");
+    URI uriRequest(msg.getValue("sip_uri"));
     m.addParam("notifier",uriRequest.getUser());
     // Pack data parameters
     String data;

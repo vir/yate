@@ -65,7 +65,7 @@ public:
      * Constructor, creates a new windows with an ID
      * @param id String identifier of the new window
      */
-    Window(const char* id = 0);
+    explicit Window(const char* id = 0);
 
     /**
      * Destructor
@@ -538,7 +538,7 @@ public:
      * Constructor, creates a new widget
      * @param name The widget's name
      */
-    inline UIWidget(const char* name = 0)
+    inline explicit UIWidget(const char* name = 0)
 	: String(name)
 	{}
 
@@ -703,7 +703,7 @@ public:
     /**
      * Constructor. Append itself to the factories list
      */
-    UIFactory(const char* name);
+    explicit UIFactory(const char* name);
 
     /**
      * Destructor. Remove itself from list
@@ -799,7 +799,7 @@ public:
      * Constructor
      * @param name The client's name
      */
-    Client(const char *name = 0);
+    explicit Client(const char *name = 0);
 
     /**
      * Destructor
@@ -1643,7 +1643,7 @@ public:
      * Constructor for utility channels used to play notifications
      * @param soundId The id of the sound to play
      */
-    ClientChannel(const String& soundId);
+    explicit ClientChannel(const String& soundId);
 
     virtual ~ClientChannel();
 
@@ -2548,7 +2548,7 @@ public:
      * @param name The name of this logic
      * @param prio The priority of this logic
      */
-    DefaultLogic(const char* name = "default", int prio = -100);
+    explicit DefaultLogic(const char* name = "default", int prio = -100);
 
     /**
      * Destructor
@@ -2998,7 +2998,7 @@ public:
      *  The list's name will be used as account id
      * @param contact Optional account's own contact
      */
-    ClientAccount(const NamedList& params, ClientContact* contact = 0);
+    explicit ClientAccount(const NamedList& params, ClientContact* contact = 0);
 
     /**
      * Get this account's parameters
@@ -3183,7 +3183,7 @@ public:
      * @param name List's name used for debug purposes
      * @param localContacts Optional account owning locally stored contacts
      */
-    inline ClientAccountList(const char* name, ClientAccount* localContacts = 0)
+    inline explicit ClientAccountList(const char* name, ClientAccount* localContacts = 0)
 	: String(name), Mutex(true,"ClientAccountList"),
 	m_localContacts(localContacts)
 	{}
@@ -3628,7 +3628,7 @@ public:
      * @param name Optional display name. Defaults to the id's value if 0
      * @param audio True (default) if the resource has audio capability
      */
-    inline ClientResource(const char* id, const char* name = 0, bool audio = true)
+    inline explicit ClientResource(const char* id, const char* name = 0, bool audio = true)
 	: m_id(id), m_name(name ? name : id), m_audio(audio), m_priority(0),
 	m_status(Offline)
 	{}

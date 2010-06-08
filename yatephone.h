@@ -121,7 +121,7 @@ struct YATE_API FormatInfo {
     /**
      * Normal constructor
      */
-    inline FormatInfo(const char* _name, int fsize = 0, int ftime = 10000,
+    inline explicit FormatInfo(const char* _name, int fsize = 0, int ftime = 10000,
 	const char* _type = "audio", int srate = 8000, int nchan = 1, bool convert = false)
 	: name(_name), type(_type),
 	  frameSize(fsize), frameTime(ftime),
@@ -236,7 +236,7 @@ public:
      * Constructor from format information
      * @param format Pointer to existing FormatInfo
      */
-    inline DataFormat(const FormatInfo* format)
+    inline explicit DataFormat(const FormatInfo* format)
 	: NamedList(format ? format->name : (const char*)0), m_parsed(format)
 	{ }
 
@@ -320,7 +320,7 @@ public:
      * Construct a DataNode
      * @param format Description of the data format, default none
      */
-    inline DataNode(const char* format = 0)
+    inline explicit DataNode(const char* format = 0)
 	: m_format(format), m_timestamp(0)
 	{ }
 
@@ -406,7 +406,7 @@ public:
      * Consumer constructor
      * @param format Name of the data format, default "slin" (Signed Linear)
      */
-    inline DataConsumer(const char* format = "slin")
+    inline explicit DataConsumer(const char* format = "slin")
 	: DataNode(format),
 	  m_source(0), m_override(0),
 	  m_regularTsDelta(0), m_overrideTsDelta(0), m_lastTsTime(0)
@@ -486,7 +486,7 @@ public:
      * Source constructor
      * @param format Name of the data format, default "slin" (Signed Linear)
      */
-    inline DataSource(const char* format = "slin")
+    inline explicit DataSource(const char* format = "slin")
 	: DataNode(format), Mutex(false,"DataSource"),
 	  m_nextStamp(invalidStamp()), m_translator(0) { }
 
@@ -611,7 +611,7 @@ protected:
      * Threaded Source constructor
      * @param format Name of the data format, default "slin" (Signed Linear)
      */
-    inline ThreadedSource(const char* format = "slin")
+    inline explicit ThreadedSource(const char* format = "slin")
 	: DataSource(format), m_thread(0)
 	{ }
 
@@ -659,7 +659,7 @@ public:
      * @param sFormat Name of the source format (data received from the consumer)
      * @param source Optional pointer to a DataSource object
      */
-    DataTranslator(const char* sFormat, DataSource* source = 0);
+    explicit DataTranslator(const char* sFormat, DataSource* source = 0);
 
     /**
      * Destroys the translator and its source
@@ -829,7 +829,7 @@ protected:
      * Constructor - registers the factory in the global list
      * @param name Static name of the factory, used for debugging
      */
-    inline TranslatorFactory(const char* name = 0)
+    inline explicit TranslatorFactory(const char* name = 0)
 	: m_name(name ? name : "?")
 	{ DataTranslator::install(this); }
 
@@ -909,7 +909,7 @@ public:
     /**
      * Creates an empty data endpoint
      */
-    DataEndpoint(CallEndpoint* call = 0, const char* name = "audio");
+    explicit DataEndpoint(CallEndpoint* call = 0, const char* name = "audio");
 
     /**
      * Endpoint destruct notification, clears source and consumer

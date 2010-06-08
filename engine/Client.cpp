@@ -174,7 +174,7 @@ Configuration Client::s_providers;               // Provider settings
 Configuration Client::s_history;                 // Call log
 Configuration Client::s_calltoHistory;           // Dialed destinations history
 int Client::s_changing = 0;
-Regexp Client::s_notSelected = "^-\\(.*\\)-$";   // Holds a not selected/set value match
+Regexp Client::s_notSelected("^-\\(.*\\)-$");    // Holds a not selected/set value match
 ObjList Client::s_logics;
 String Client::s_skinPath;                       // Skin path
 String Client::s_soundPath;                      // Sounds path

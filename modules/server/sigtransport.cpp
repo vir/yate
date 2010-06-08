@@ -1001,8 +1001,19 @@ bool StreamReader::readData()
 	    return true;
 	unsigned char* auxBuf = (unsigned char*)m_headerBuffer.data();
 	m_totalPacketLen = m_transport->getMsgLen(auxBuf);
-	if (m_totalPacketLen >= 8 && m_totalPacketLen < MAX_BUF_SIZE)
+	if (m_totalPacketLen >= 8 && m_totalPacketLen < MAX_BUF_SIZE) {
 	    m_totalPacketLen -= 8;
+	    XDebug(m_transport,DebugAll,"Expecting %d bytes of packet data",m_totalPacketLen);
+	    if (!m_totalPacketLen) {
+		m_transport->setStatus(Transport::Up);
+		m_transport->processMSG(m_transport->getVersion((unsigned char*)m_headerBuffer.data()),
+		    m_transport->getClass((unsigned char*)m_headerBuffer.data()),
+		    m_transport->getType((unsigned char*)m_headerBuffer.data()),
+		    DataBlock::empty(),stream);
+		m_headerLen = 8;
+		m_headerBuffer.clear(true);
+	    }
+	}
 	else {
 	    DDebug(m_transport,DebugWarn,"Protocol error - unsupported length of packet %d!",
 		m_totalPacketLen);

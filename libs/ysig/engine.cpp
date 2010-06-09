@@ -271,6 +271,7 @@ bool SignallingEngine::find(const SignallingComponent* component)
     if (!component)
 	return false;
     Lock mylock(this);
+    DDebug(this,DebugAll,"Engine finding component @%p [%p]",component,this);
     return m_components.find(component) != 0;
 }
 

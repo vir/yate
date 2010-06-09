@@ -49,7 +49,7 @@ void SS7Layer4::attach(SS7Layer3* network)
     lock.drop();
     if (tmp) {
 	const char* name = 0;
-	if (engine() && engine()->find(tmp)) {
+	if (!engine() || engine()->find(tmp)) {
 	    name = tmp->toString().safe();
 	    if (tmp->getObject("SS7Router"))
 		(static_cast<SS7Router*>(tmp))->detach(this);

@@ -584,6 +584,9 @@
                <property name="spacing" >
                 <number>2</number>
                </property>
+               <property name="sizeConstraint" >
+                <enum>QLayout::SetNoConstraint</enum>
+               </property>
                <property name="leftMargin" >
                 <number>0</number>
                </property>
@@ -599,7 +602,7 @@
                <item>
                 <widget class="QComboBox" name="callto" >
                  <property name="sizePolicy" >
-                  <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+                  <sizepolicy vsizetype="Fixed" hsizetype="Ignored" >
                    <horstretch>0</horstretch>
                    <verstretch>0</verstretch>
                   </sizepolicy>
@@ -607,13 +610,13 @@
                  <property name="minimumSize" >
                   <size>
                    <width>0</width>
-                   <height>25</height>
+                   <height>26</height>
                   </size>
                  </property>
                  <property name="maximumSize" >
                   <size>
                    <width>16777215</width>
-                   <height>25</height>
+                   <height>26</height>
                   </size>
                  </property>
                  <property name="focusPolicy" >
@@ -631,7 +634,7 @@
                 </widget>
                </item>
                <item>
-                <widget class="QPushButton" name="call" >
+                <widget class="QToolButton" name="call" >
                  <property name="sizePolicy" >
                   <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
                    <horstretch>0</horstretch>
@@ -641,7 +644,7 @@
                  <property name="minimumSize" >
                   <size>
                    <width>0</width>
-                   <height>25</height>
+                   <height>26</height>
                   </size>
                  </property>
                  <property name="maximumSize" >
@@ -658,6 +661,9 @@
                  <property name="toolTip" >
                   <string>Make a new call</string>
                  </property>
+                 <property name="styleSheet" >
+                  <string/>
+                 </property>
                  <property name="text" >
                   <string>Call</string>
                  </property>
@@ -670,10 +676,13 @@
                    <height>22</height>
                   </size>
                  </property>
+                 <property name="toolButtonStyle" >
+                  <enum>Qt::ToolButtonTextBesideIcon</enum>
+                 </property>
                 </widget>
                </item>
                <item>
-                <widget class="QPushButton" name="display_keypad" >
+                <widget class="QToolButton" name="display_keypad" >
                  <property name="sizePolicy" >
                   <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
                    <horstretch>0</horstretch>
@@ -682,14 +691,14 @@
                  </property>
                  <property name="minimumSize" >
                   <size>
-                   <width>0</width>
-                   <height>25</height>
+                   <width>26</width>
+                   <height>26</height>
                   </size>
                  </property>
                  <property name="maximumSize" >
                   <size>
-                   <width>25</width>
-                   <height>25</height>
+                   <width>26</width>
+                   <height>26</height>
                   </size>
                  </property>
                  <property name="toolTip" >
@@ -1312,7 +1321,7 @@
                 <number>0</number>
                </property>
                <item>
-                <widget class="QPushButton" name="answer" >
+                <widget class="QToolButton" name="answer" >
                  <property name="enabled" >
                   <bool>false</bool>
                  </property>
@@ -1355,7 +1364,7 @@
                 </widget>
                </item>
                <item>
-                <widget class="QPushButton" name="hangup" >
+                <widget class="QToolButton" name="hangup" >
                  <property name="enabled" >
                   <bool>false</bool>
                  </property>
@@ -1420,6 +1429,12 @@
                  <property name="icon" >
                   <iconset>transfer.png</iconset>
                  </property>
+                 <property name="iconSize" >
+                  <size>
+                   <width>24</width>
+                   <height>24</height>
+                  </size>
+                 </property>
                  <property name="checkable" >
                   <bool>true</bool>
                  </property>
@@ -1456,6 +1471,12 @@
                  </property>
                  <property name="icon" >
                   <iconset>conference.png</iconset>
+                 </property>
+                 <property name="iconSize" >
+                  <size>
+                   <width>24</width>
+                   <height>24</height>
+                  </size>
                  </property>
                  <property name="checkable" >
                   <bool>true</bool>
@@ -1712,7 +1733,7 @@
                </spacer>
               </item>
               <item>
-               <widget class="QPushButton" name="log_call" >
+               <widget class="QToolButton" name="log_call" >
                 <property name="enabled" >
                  <bool>false</bool>
                 </property>
@@ -1725,13 +1746,13 @@
                 <property name="minimumSize" >
                  <size>
                   <width>70</width>
-                  <height>25</height>
+                  <height>26</height>
                  </size>
                 </property>
                 <property name="maximumSize" >
                  <size>
                   <width>70</width>
-                  <height>25</height>
+                  <height>26</height>
                  </size>
                 </property>
                 <property name="toolTip" >
@@ -1749,10 +1770,13 @@
                   <height>20</height>
                  </size>
                 </property>
+                <property name="toolButtonStyle" >
+                 <enum>Qt::ToolButtonTextBesideIcon</enum>
+                </property>
                </widget>
               </item>
               <item>
-               <widget class="QPushButton" name="log_clear" >
+               <widget class="QToolButton" name="log_clear" >
                 <property name="sizePolicy" >
                  <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
                   <horstretch>0</horstretch>
@@ -1762,13 +1786,13 @@
                 <property name="minimumSize" >
                  <size>
                   <width>70</width>
-                  <height>25</height>
+                  <height>26</height>
                  </size>
                 </property>
                 <property name="maximumSize" >
                  <size>
-                  <width>70</width>
-                  <height>25</height>
+                  <width>16777215</width>
+                  <height>26</height>
                  </size>
                 </property>
                 <property name="toolTip" >
@@ -1786,13 +1810,16 @@
                   <height>20</height>
                  </size>
                 </property>
+                <property name="toolButtonStyle" >
+                 <enum>Qt::ToolButtonTextBesideIcon</enum>
+                </property>
                 <property name="_yate_identity" stdset="0" >
                  <string>clear:log:</string>
                 </property>
                </widget>
               </item>
               <item>
-               <widget class="QPushButton" name="log_del" >
+               <widget class="QToolButton" name="log_del" >
                 <property name="enabled" >
                  <bool>false</bool>
                 </property>
@@ -1804,14 +1831,14 @@
                 </property>
                 <property name="minimumSize" >
                  <size>
-                  <width>70</width>
-                  <height>25</height>
+                  <width>74</width>
+                  <height>26</height>
                  </size>
                 </property>
                 <property name="maximumSize" >
                  <size>
-                  <width>70</width>
-                  <height>25</height>
+                  <width>74</width>
+                  <height>26</height>
                  </size>
                 </property>
                 <property name="toolTip" >
@@ -1829,13 +1856,16 @@
                   <height>20</height>
                  </size>
                 </property>
+                <property name="toolButtonStyle" >
+                 <enum>Qt::ToolButtonTextBesideIcon</enum>
+                </property>
                 <property name="_yate_identity" stdset="0" >
                  <string>deleteselecteditem:log:</string>
                 </property>
                </widget>
               </item>
               <item>
-               <widget class="QPushButton" name="log_contact" >
+               <widget class="QToolButton" name="log_contact" >
                 <property name="enabled" >
                  <bool>false</bool>
                 </property>
@@ -1847,14 +1877,14 @@
                 </property>
                 <property name="minimumSize" >
                  <size>
-                  <width>70</width>
-                  <height>25</height>
+                  <width>78</width>
+                  <height>26</height>
                  </size>
                 </property>
                 <property name="maximumSize" >
                  <size>
-                  <width>70</width>
-                  <height>25</height>
+                  <width>78</width>
+                  <height>26</height>
                  </size>
                 </property>
                 <property name="toolTip" >
@@ -1871,6 +1901,9 @@
                   <width>16</width>
                   <height>16</height>
                  </size>
+                </property>
+                <property name="toolButtonStyle" >
+                 <enum>Qt::ToolButtonTextBesideIcon</enum>
                 </property>
                </widget>
               </item>
@@ -1953,32 +1986,32 @@
               <number>2</number>
              </property>
              <property name="leftMargin" >
-              <number>9</number>
+              <number>0</number>
              </property>
              <property name="topMargin" >
-              <number>9</number>
+              <number>12</number>
              </property>
              <property name="rightMargin" >
-              <number>9</number>
+              <number>0</number>
              </property>
              <property name="bottomMargin" >
-              <number>9</number>
+              <number>12</number>
              </property>
              <item>
-              <widget class="QPushButton" name="acc_login" >
+              <widget class="QToolButton" name="acc_login" >
                <property name="enabled" >
                 <bool>false</bool>
                </property>
                <property name="minimumSize" >
                 <size>
-                 <width>0</width>
-                 <height>25</height>
+                 <width>40</width>
+                 <height>26</height>
                 </size>
                </property>
                <property name="maximumSize" >
                 <size>
-                 <width>50</width>
-                 <height>25</height>
+                 <width>40</width>
+                 <height>26</height>
                 </size>
                </property>
                <property name="toolTip" >
@@ -1999,20 +2032,20 @@
               </widget>
              </item>
              <item>
-              <widget class="QPushButton" name="acc_logout" >
+              <widget class="QToolButton" name="acc_logout" >
                <property name="enabled" >
                 <bool>false</bool>
                </property>
                <property name="minimumSize" >
                 <size>
-                 <width>0</width>
-                 <height>25</height>
+                 <width>40</width>
+                 <height>26</height>
                 </size>
                </property>
                <property name="maximumSize" >
                 <size>
-                 <width>50</width>
-                 <height>25</height>
+                 <width>40</width>
+                 <height>26</height>
                 </size>
                </property>
                <property name="toolTip" >
@@ -2027,7 +2060,7 @@
                <property name="iconSize" >
                 <size>
                  <width>20</width>
-                 <height>20</height>
+                 <height>18</height>
                 </size>
                </property>
               </widget>
@@ -2046,17 +2079,17 @@
               </spacer>
              </item>
              <item>
-              <widget class="QPushButton" name="acc_new" >
+              <widget class="QToolButton" name="acc_new" >
                <property name="minimumSize" >
                 <size>
-                 <width>0</width>
-                 <height>25</height>
+                 <width>60</width>
+                 <height>26</height>
                 </size>
                </property>
                <property name="maximumSize" >
                 <size>
-                 <width>64</width>
-                 <height>25</height>
+                 <width>59</width>
+                 <height>26</height>
                 </size>
                </property>
                <property name="toolTip" >
@@ -2074,23 +2107,26 @@
                  <height>16</height>
                 </size>
                </property>
+               <property name="toolButtonStyle" >
+                <enum>Qt::ToolButtonTextBesideIcon</enum>
+               </property>
               </widget>
              </item>
              <item>
-              <widget class="QPushButton" name="acc_del" >
+              <widget class="QToolButton" name="acc_del" >
                <property name="enabled" >
                 <bool>false</bool>
                </property>
                <property name="minimumSize" >
                 <size>
                  <width>0</width>
-                 <height>25</height>
+                 <height>26</height>
                 </size>
                </property>
                <property name="maximumSize" >
                 <size>
-                 <width>64</width>
-                 <height>25</height>
+                 <width>74</width>
+                 <height>26</height>
                 </size>
                </property>
                <property name="toolTip" >
@@ -2108,26 +2144,29 @@
                  <height>20</height>
                 </size>
                </property>
+               <property name="toolButtonStyle" >
+                <enum>Qt::ToolButtonTextBesideIcon</enum>
+               </property>
                <property name="_yate_identity" stdset="0" >
                 <string>deleteselecteditem:accounts:</string>
                </property>
               </widget>
              </item>
              <item>
-              <widget class="QPushButton" name="acc_edit" >
+              <widget class="QToolButton" name="acc_edit" >
                <property name="enabled" >
                 <bool>false</bool>
                </property>
                <property name="minimumSize" >
                 <size>
                  <width>0</width>
-                 <height>25</height>
+                 <height>26</height>
                 </size>
                </property>
                <property name="maximumSize" >
                 <size>
-                 <width>64</width>
-                 <height>25</height>
+                 <width>70</width>
+                 <height>26</height>
                 </size>
                </property>
                <property name="toolTip" >
@@ -2138,6 +2177,9 @@
                </property>
                <property name="icon" >
                 <iconset>edit.png</iconset>
+               </property>
+               <property name="toolButtonStyle" >
+                <enum>Qt::ToolButtonTextBesideIcon</enum>
                </property>
               </widget>
              </item>
@@ -2241,13 +2283,13 @@
                  <number>2</number>
                 </property>
                 <property name="leftMargin" >
-                 <number>9</number>
+                 <number>0</number>
                 </property>
                 <property name="topMargin" >
                  <number>9</number>
                 </property>
                 <property name="rightMargin" >
-                 <number>9</number>
+                 <number>0</number>
                 </property>
                 <property name="bottomMargin" >
                  <number>9</number>
@@ -2266,20 +2308,20 @@
                  </spacer>
                 </item>
                 <item>
-                 <widget class="QPushButton" name="abk_call" >
+                 <widget class="QToolButton" name="abk_call" >
                   <property name="enabled" >
                    <bool>false</bool>
                   </property>
                   <property name="minimumSize" >
                    <size>
                     <width>0</width>
-                    <height>25</height>
+                    <height>26</height>
                    </size>
                   </property>
                   <property name="maximumSize" >
                    <size>
                     <width>64</width>
-                    <height>25</height>
+                    <height>26</height>
                    </size>
                   </property>
                   <property name="toolTip" >
@@ -2297,20 +2339,23 @@
                     <height>20</height>
                    </size>
                   </property>
+                  <property name="toolButtonStyle" >
+                   <enum>Qt::ToolButtonTextBesideIcon</enum>
+                  </property>
                  </widget>
                 </item>
                 <item>
-                 <widget class="QPushButton" name="abk_new" >
+                 <widget class="QToolButton" name="abk_new" >
                   <property name="minimumSize" >
                    <size>
                     <width>0</width>
-                    <height>25</height>
+                    <height>26</height>
                    </size>
                   </property>
                   <property name="maximumSize" >
                    <size>
                     <width>64</width>
-                    <height>25</height>
+                    <height>26</height>
                    </size>
                   </property>
                   <property name="toolTip" >
@@ -2324,27 +2369,30 @@
                   </property>
                   <property name="iconSize" >
                    <size>
-                    <width>18</width>
-                    <height>18</height>
+                    <width>16</width>
+                    <height>16</height>
                    </size>
+                  </property>
+                  <property name="toolButtonStyle" >
+                   <enum>Qt::ToolButtonTextBesideIcon</enum>
                   </property>
                  </widget>
                 </item>
                 <item>
-                 <widget class="QPushButton" name="abk_del" >
+                 <widget class="QToolButton" name="abk_del" >
                   <property name="enabled" >
                    <bool>false</bool>
                   </property>
                   <property name="minimumSize" >
                    <size>
                     <width>0</width>
-                    <height>25</height>
+                    <height>26</height>
                    </size>
                   </property>
                   <property name="maximumSize" >
                    <size>
-                    <width>64</width>
-                    <height>25</height>
+                    <width>74</width>
+                    <height>26</height>
                    </size>
                   </property>
                   <property name="toolTip" >
@@ -2362,26 +2410,29 @@
                     <height>20</height>
                    </size>
                   </property>
+                  <property name="toolButtonStyle" >
+                   <enum>Qt::ToolButtonTextBesideIcon</enum>
+                  </property>
                   <property name="_yate_identity" stdset="0" >
                    <string>deleteselecteditem:contacts:</string>
                   </property>
                  </widget>
                 </item>
                 <item>
-                 <widget class="QPushButton" name="abk_edit" >
+                 <widget class="QToolButton" name="abk_edit" >
                   <property name="enabled" >
                    <bool>false</bool>
                   </property>
                   <property name="minimumSize" >
                    <size>
                     <width>0</width>
-                    <height>25</height>
+                    <height>26</height>
                    </size>
                   </property>
                   <property name="maximumSize" >
                    <size>
-                    <width>64</width>
-                    <height>25</height>
+                    <width>70</width>
+                    <height>26</height>
                    </size>
                   </property>
                   <property name="toolTip" >
@@ -2392,6 +2443,9 @@
                   </property>
                   <property name="icon" >
                    <iconset>edit.png</iconset>
+                  </property>
+                  <property name="toolButtonStyle" >
+                   <enum>Qt::ToolButtonTextBesideIcon</enum>
                   </property>
                  </widget>
                 </item>
@@ -2739,7 +2793,7 @@
      </property>
      <property name="minimumSize" >
       <size>
-       <width>16</width>
+       <width>25</width>
        <height>32</height>
       </size>
      </property>
@@ -2751,7 +2805,7 @@
      </property>
      <layout class="QHBoxLayout" >
       <property name="spacing" >
-       <number>0</number>
+       <number>1</number>
       </property>
       <property name="leftMargin" >
        <number>4</number>
@@ -2791,14 +2845,14 @@
         </property>
         <property name="sizeHint" >
          <size>
-          <width>191</width>
+          <width>190</width>
           <height>20</height>
          </size>
         </property>
        </spacer>
       </item>
       <item>
-       <widget class="QPushButton" name="toggle_show_help" >
+       <widget class="QToolButton" name="toggle_show_help" >
         <property name="sizePolicy" >
          <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
           <horstretch>0</horstretch>
@@ -2807,14 +2861,14 @@
         </property>
         <property name="minimumSize" >
          <size>
-          <width>25</width>
-          <height>25</height>
+          <width>26</width>
+          <height>26</height>
          </size>
         </property>
         <property name="maximumSize" >
          <size>
           <width>16777215</width>
-          <height>25</height>
+          <height>26</height>
          </size>
         </property>
         <property name="toolTip" >
@@ -2825,6 +2879,12 @@
         </property>
         <property name="icon" >
          <iconset>quest.png</iconset>
+        </property>
+        <property name="iconSize" >
+         <size>
+          <width>20</width>
+          <height>20</height>
+         </size>
         </property>
         <property name="checkable" >
          <bool>true</bool>

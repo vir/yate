@@ -35,160 +35,211 @@
   </property>
   <layout class="QVBoxLayout" >
    <property name="spacing" >
-    <number>6</number>
+    <number>0</number>
    </property>
    <property name="leftMargin" >
-    <number>9</number>
+    <number>0</number>
    </property>
    <property name="topMargin" >
-    <number>9</number>
+    <number>0</number>
    </property>
    <property name="rightMargin" >
-    <number>9</number>
+    <number>0</number>
    </property>
    <property name="bottomMargin" >
-    <number>9</number>
+    <number>0</number>
    </property>
    <item>
-    <widget class="QLabel" name="label" >
-     <property name="toolTip" >
-      <string>Name used to identify this contact</string>
+    <widget class="QFrame" name="frame" >
+     <property name="frameShape" >
+      <enum>QFrame::NoFrame</enum>
      </property>
-     <property name="text" >
-      <string>Name:</string>
+     <property name="frameShadow" >
+      <enum>QFrame::Raised</enum>
      </property>
+     <layout class="QVBoxLayout" >
+      <property name="spacing" >
+       <number>6</number>
+      </property>
+      <property name="leftMargin" >
+       <number>8</number>
+      </property>
+      <property name="topMargin" >
+       <number>8</number>
+      </property>
+      <property name="rightMargin" >
+       <number>8</number>
+      </property>
+      <property name="bottomMargin" >
+       <number>8</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="label" >
+        <property name="toolTip" >
+         <string>Name used to identify this contact</string>
+        </property>
+        <property name="text" >
+         <string>Name:</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLineEdit" name="abk_name" >
+        <property name="toolTip" >
+         <string>Name used to identify this contact</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="label_2" >
+        <property name="toolTip" >
+         <string>Number or URI used to reach this contact</string>
+        </property>
+        <property name="text" >
+         <string>Phone Number or URI Target:</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLineEdit" name="abk_target" >
+        <property name="toolTip" >
+         <string>Number or URI used to reach this contact</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" >
+        <property name="spacing" >
+         <number>6</number>
+        </property>
+        <property name="leftMargin" >
+         <number>0</number>
+        </property>
+        <property name="topMargin" >
+         <number>0</number>
+        </property>
+        <property name="rightMargin" >
+         <number>0</number>
+        </property>
+        <property name="bottomMargin" >
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QToolButton" name="abk_accept" >
+          <property name="minimumSize" >
+           <size>
+            <width>0</width>
+            <height>26</height>
+           </size>
+          </property>
+          <property name="maximumSize" >
+           <size>
+            <width>16777215</width>
+            <height>26</height>
+           </size>
+          </property>
+          <property name="toolTip" >
+           <string>Update the contact data</string>
+          </property>
+          <property name="text" >
+           <string>Ok</string>
+          </property>
+          <property name="icon" >
+           <iconset>ok.png</iconset>
+          </property>
+          <property name="toolButtonStyle" >
+           <enum>Qt::ToolButtonTextBesideIcon</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QToolButton" name="button_hide" >
+          <property name="minimumSize" >
+           <size>
+            <width>0</width>
+            <height>26</height>
+           </size>
+          </property>
+          <property name="maximumSize" >
+           <size>
+            <width>16777215</width>
+            <height>26</height>
+           </size>
+          </property>
+          <property name="toolTip" >
+           <string>Abandon changes and exit</string>
+          </property>
+          <property name="text" >
+           <string>Cancel</string>
+          </property>
+          <property name="icon" >
+           <iconset>close.png</iconset>
+          </property>
+          <property name="iconSize" >
+           <size>
+            <width>20</width>
+            <height>20</height>
+           </size>
+          </property>
+          <property name="toolButtonStyle" >
+           <enum>Qt::ToolButtonTextBesideIcon</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer>
+          <property name="orientation" >
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" >
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QToolButton" name="toggle_show_help" >
+          <property name="minimumSize" >
+           <size>
+            <width>0</width>
+            <height>26</height>
+           </size>
+          </property>
+          <property name="maximumSize" >
+           <size>
+            <width>16777215</width>
+            <height>26</height>
+           </size>
+          </property>
+          <property name="toolTip" >
+           <string>Help on this window</string>
+          </property>
+          <property name="text" >
+           <string/>
+          </property>
+          <property name="icon" >
+           <iconset>quest.png</iconset>
+          </property>
+          <property name="iconSize" >
+           <size>
+            <width>16</width>
+            <height>16</height>
+           </size>
+          </property>
+          <property name="checkable" >
+           <bool>true</bool>
+          </property>
+          <property name="_yate_identity" stdset="0" >
+           <string>showwindow:help:2</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
     </widget>
-   </item>
-   <item>
-    <widget class="QLineEdit" name="abk_name" >
-     <property name="toolTip" >
-      <string>Name used to identify this contact</string>
-     </property>
-    </widget>
-   </item>
-   <item>
-    <widget class="QLabel" name="label_2" >
-     <property name="toolTip" >
-      <string>Number or URI used to reach this contact</string>
-     </property>
-     <property name="text" >
-      <string>Phone Number or URI Target:</string>
-     </property>
-    </widget>
-   </item>
-   <item>
-    <widget class="QLineEdit" name="abk_target" >
-     <property name="toolTip" >
-      <string>Number or URI used to reach this contact</string>
-     </property>
-    </widget>
-   </item>
-   <item>
-    <layout class="QHBoxLayout" >
-     <property name="spacing" >
-      <number>6</number>
-     </property>
-     <property name="leftMargin" >
-      <number>0</number>
-     </property>
-     <property name="topMargin" >
-      <number>0</number>
-     </property>
-     <property name="rightMargin" >
-      <number>0</number>
-     </property>
-     <property name="bottomMargin" >
-      <number>0</number>
-     </property>
-     <item>
-      <widget class="QPushButton" name="abk_accept" >
-       <property name="minimumSize" >
-        <size>
-         <width>0</width>
-         <height>25</height>
-        </size>
-       </property>
-       <property name="maximumSize" >
-        <size>
-         <width>16777215</width>
-         <height>25</height>
-        </size>
-       </property>
-       <property name="toolTip" >
-        <string>Update the contact data</string>
-       </property>
-       <property name="text" >
-        <string>Ok</string>
-       </property>
-       <property name="icon" >
-        <iconset>ok.png</iconset>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="button_hide" >
-       <property name="minimumSize" >
-        <size>
-         <width>0</width>
-         <height>25</height>
-        </size>
-       </property>
-       <property name="maximumSize" >
-        <size>
-         <width>16777215</width>
-         <height>25</height>
-        </size>
-       </property>
-       <property name="toolTip" >
-        <string>Abandon changes and exit</string>
-       </property>
-       <property name="text" >
-        <string>Cancel</string>
-       </property>
-       <property name="icon" >
-        <iconset>close.png</iconset>
-       </property>
-       <property name="iconSize" >
-        <size>
-         <width>20</width>
-         <height>20</height>
-        </size>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <spacer>
-       <property name="orientation" >
-        <enum>Qt::Horizontal</enum>
-       </property>
-       <property name="sizeHint" >
-        <size>
-         <width>40</width>
-         <height>20</height>
-        </size>
-       </property>
-      </spacer>
-     </item>
-     <item>
-      <widget class="QPushButton" name="toggle_show_help" >
-       <property name="toolTip" >
-        <string>Help on this window</string>
-       </property>
-       <property name="text" >
-        <string/>
-       </property>
-       <property name="icon" >
-        <iconset>quest.png</iconset>
-       </property>
-       <property name="checkable" >
-        <bool>true</bool>
-       </property>
-       <property name="_yate_identity" stdset="0" >
-        <string>showwindow:help:2</string>
-       </property>
-      </widget>
-     </item>
-    </layout>
    </item>
   </layout>
  </widget>

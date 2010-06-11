@@ -153,9 +153,9 @@ struct YATE_API TranslatorCaps {
  */
 class YATE_API FormatRepository
 {
+    YNOCOPY(FormatRepository); // no automatic copies please
 private:
     FormatRepository();
-    FormatRepository& operator=(const FormatRepository&);
 public:
     /**
      * Retrieve a format by name and type
@@ -301,7 +301,7 @@ private:
 class YATE_API DataNode : public RefObject
 {
     friend class DataEndpoint;
-
+    YNOCOPY(DataNode); // no automatic copies please
 public:
     /**
      * Flags associated with the DataBlocks forwarded between nodes
@@ -480,7 +480,7 @@ private:
 class YATE_API DataSource : public DataNode, public Mutex
 {
     friend class DataTranslator;
-
+    YNOCOPY(DataSource); // no automatic copies please
 public:
     /**
      * Source constructor
@@ -824,6 +824,7 @@ private:
  */
 class YATE_API TranslatorFactory : public GenObject
 {
+    YNOCOPY(TranslatorFactory); // no automatic copies please
 protected:
     /**
      * Constructor - registers the factory in the global list
@@ -904,8 +905,8 @@ private:
  */
 class YATE_API DataEndpoint : public RefObject
 {
+    YNOCOPY(DataEndpoint); // no automatic copies please
 public:
-
     /**
      * Creates an empty data endpoint
      */
@@ -1105,7 +1106,7 @@ private:
 class YATE_API CallEndpoint : public RefObject
 {
     friend class DataEndpoint;
-
+    YNOCOPY(CallEndpoint); // no automatic copies please
 private:
     CallEndpoint* m_peer;
     String m_id;
@@ -1314,6 +1315,7 @@ private:
  */
 class YATE_API Module : public Plugin, public Mutex, public MessageReceiver, public DebugEnabler
 {
+    YNOCOPY(Module); // no automatic copies please
 private:
     bool m_init;
     int m_relays;
@@ -1605,7 +1607,7 @@ class YATE_API Channel : public CallEndpoint, public DebugEnabler
 {
     friend class Driver;
     friend class Router;
-
+    YNOCOPY(Channel); // no automatic copies please
 private:
     NamedList m_parameters;
     Driver* m_driver;
@@ -2341,6 +2343,7 @@ private:
  */
 class YATE_API Router : public Thread
 {
+    YNOCOPY(Router); // no automatic copies please
 private:
     Driver* m_driver;
     String m_id;

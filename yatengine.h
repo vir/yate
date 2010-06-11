@@ -42,6 +42,7 @@ namespace TelEngine {
  */
 class YATE_API Configuration : public String
 {
+    YNOCOPY(Configuration); // no automatic copies please
 public:
     /**
      * Create an empty configuration
@@ -202,8 +203,6 @@ public:
     bool save() const;
 
 private:
-    Configuration(const Configuration& value); // no copy constructor
-    Configuration& operator=(const Configuration& value); // no assignment please
     ObjList *getSectHolder(const String& sect) const;
     ObjList *makeSectHolder(const String& sect);
     ObjList m_sections;
@@ -379,6 +378,7 @@ class YATE_API MessageHandler : public String
 {
     friend class MessageDispatcher;
     friend class MessageRelay;
+    YNOCOPY(MessageHandler); // no automatic copies please
 public:
     /**
      * Creates a new message handler.
@@ -475,6 +475,7 @@ public:
  */
 class YATE_API MessageRelay : public MessageHandler
 {
+    YNOCOPY(MessageRelay); // no automatic copies please
 public:
     /**
      * Creates a new message relay.
@@ -548,6 +549,7 @@ class YATE_API MessagePostHook : public GenObject, public MessageNotifier
  */
 class YATE_API MessageDispatcher : public GenObject, public Mutex
 {
+    YNOCOPY(MessageDispatcher); // no automatic copies please
 public:
     /**
      * Creates a new message dispatcher.
@@ -774,6 +776,7 @@ class YATE_API Engine
 {
     friend class EnginePrivate;
     friend class EngineCommand;
+    YNOCOPY(Engine); // no automatic copies please
 public:
     /**
      * Running modes - run the engine as Console, Client or Server.

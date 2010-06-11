@@ -624,6 +624,12 @@ void YCLASSIMP3(class type,class base1,class base2,class base3);
  * @return Pointer to the class we want or NULL
  */
 class* YOBJECT(class type,GenObject* pntr);
+
+/**
+ * Macro to disable automatic copy and assignment operators
+ * @param type Class that is declared
+ */
+void YNOCOPY(class type);
 #endif
 
 #define YCLASS(type,base) \
@@ -663,6 +669,11 @@ void* type::getObject(const String& name) const \
   return tmp ? tmp : base3::getObject(name); }
 
 #define YOBJECT(type,pntr) (static_cast<type*>((pntr) ? (pntr)->getObject(#type) : 0))
+
+#define YNOCOPY(type) private: \
+type(const type&); \
+void operator=(const type&)
+
 
 /**
  * An object with just a public virtual destructor
@@ -727,6 +738,7 @@ template <class Obj> void destruct(Obj*& obj)
  */
 class YATE_API RefObject : public GenObject
 {
+    YNOCOPY(RefObject); // no automatic copies please
 public:
     /**
      * The constructor initializes the reference counter to 1!
@@ -1007,6 +1019,7 @@ public:
  */
 class YATE_API ObjList : public GenObject
 {
+    YNOCOPY(ObjList); // no automatic copies please
 public:
     /**
      * Creates a new, empty list.
@@ -2198,6 +2211,7 @@ private:
  */
 class YATE_API NamedString : public String
 {
+    YNOCOPY(NamedString); // no automatic copies please
 public:
     /**
      * Creates a new named string.
@@ -2321,6 +2335,7 @@ private:
  */
 class YATE_API HashList : public GenObject
 {
+    YNOCOPY(HashList); // no automatic copies please
 public:
     /**
      * Creates a new, empty list.
@@ -2447,6 +2462,7 @@ private:
  */
 class YATE_API ListIterator
 {
+    YNOCOPY(ListIterator); // no automatic copies please
 public:
     /**
      * Constructor used to iterate trough an ObjList.
@@ -3161,12 +3177,13 @@ private:
  */
 class YATE_API Base64 : public DataBlock
 {
+    YNOCOPY(Base64); // no automatic copies please
 public:
     /**
      * Constructor
      */
     inline Base64()
-	{}
+	{ }
 
     /**
      * Constructor. Set the buffer
@@ -3176,7 +3193,7 @@ public:
      */
     inline Base64(void* src, unsigned int len, bool copyData = true)
 	: DataBlock(src,len,copyData)
-	{}
+	{ }
 
     /**
      * Encode this buffer to a destination string
@@ -4369,6 +4386,7 @@ private:
  */
 class YATE_API Lock
 {
+    YNOCOPY(Lock); // no automatic copies please
 public:
     /**
      * Create the lock, try to lock the object
@@ -4413,9 +4431,6 @@ private:
 
     /** Never allocate an array of this class */
     inline void* operator new[](size_t);
-
-    /** No copy constructor */
-    inline Lock(const Lock&);
 };
 
 /**
@@ -4426,6 +4441,7 @@ private:
  */
 class YATE_API Lock2
 {
+    YNOCOPY(Lock2); // no automatic copies please
 public:
     /**
      * Create the dual lock, try to lock each mutex
@@ -4493,9 +4509,6 @@ private:
 
     /** Never allocate an array of this class */
     inline void* operator new[](size_t);
-
-    /** No copy constructor */
-    inline Lock2(const Lock2&);
 };
 
 /**
@@ -4529,6 +4542,7 @@ class YATE_API Thread : public Runnable
     friend class ThreadPrivate;
     friend class MutexPrivate;
     friend class SemaphorePrivate;
+    YNOCOPY(Thread); // no automatic copies please
 public:
     /**
      * Running priorities, their mapping is operating system dependent
@@ -4941,6 +4955,7 @@ protected:
 class YATE_API SocketFilter : public GenObject
 {
     friend class Socket;
+    YNOCOPY(SocketFilter); // no automatic copies please
 public:
     /**
      * Constructor
@@ -5158,6 +5173,7 @@ protected:
  */
 class YATE_API MemoryStream : public Stream
 {
+    YNOCOPY(MemoryStream); // no automatic copies please
 public:
     /**
      * Constructor of an empty stream
@@ -5243,6 +5259,7 @@ protected:
  */
 class YATE_API File : public Stream
 {
+    YNOCOPY(File); // no automatic copies please
 public:
     /**
      * Default constructor, creates a closed file
@@ -5477,6 +5494,7 @@ protected:
  */
 class YATE_API Socket : public Stream
 {
+    YNOCOPY(Socket); // no automatic copies please
 public:
     /**
      * Types of service
@@ -5903,6 +5921,7 @@ protected:
  */
 class YATE_API SctpSocket : public Socket
 {
+    YNOCOPY(SctpSocket); // no automatic copies please
 public:
     /**
      * Constructor

@@ -363,7 +363,7 @@ bool CdrBuilder::update(const Message& msg, int type, u_int64_t val)
 	    if (!p)
 		continue;
 	    bool overwrite = p->overwrite();
-	    NamedString* str = getParam(s->name());
+	    String* str = getParam(s->name());
 	    // parameter is not yet stored - store a copy
 	    if (!str)
 		addParam(s->name(),*s);

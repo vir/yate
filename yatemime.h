@@ -43,6 +43,7 @@ namespace TelEngine {
  */
 class YATE_API MimeHeaderLine : public NamedString
 {
+    YNOCOPY(MimeHeaderLine); // no automatic copies please
 public:
     /**
      * Constructor.
@@ -186,6 +187,7 @@ protected:
  */
 class YATE_API MimeAuthLine : public MimeHeaderLine
 {
+    YNOCOPY(MimeAuthLine); // no automatic copies please
 public:
     /**
      * Constructor.
@@ -234,6 +236,7 @@ public:
  */
 class YATE_API MimeBody : public GenObject
 {
+    YNOCOPY(MimeBody); // no automatic copies please
 public:
     /**
      * Destructor

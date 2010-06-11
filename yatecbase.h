@@ -60,6 +60,7 @@ class ClientSound;                       // A sound file
 class YATE_API Window : public GenObject
 {
     friend class Client;
+    YNOCOPY(Window); // no automatic copies please
 public:
     /**
      * Constructor, creates a new windows with an ID
@@ -533,6 +534,7 @@ private:
 
 class YATE_API UIWidget : public String
 {
+    YNOCOPY(UIWidget); // no automatic copies please
 public:
     /**
      * Constructor, creates a new widget
@@ -540,13 +542,13 @@ public:
      */
     inline explicit UIWidget(const char* name = 0)
 	: String(name)
-	{}
+	{ }
 
     /**
      * Destructor
      */
     virtual ~UIWidget()
-	{}
+	{ }
 
     /**
      * Retrieve the standard name of this Window
@@ -699,6 +701,7 @@ public:
  */
 class YATE_API UIFactory : public String
 {
+    YNOCOPY(UIFactory); // no automatic copies please
 public:
     /**
      * Constructor. Append itself to the factories list
@@ -1602,6 +1605,7 @@ protected:
 class YATE_API ClientChannel : public Channel
 {
     friend class ClientDriver;
+    YNOCOPY(ClientChannel); // no automatic copies please
 public:
     /**
      * Channel notifications
@@ -1875,6 +1879,7 @@ protected:
 class YATE_API ClientDriver : public Driver
 {
     friend class ClientChannel;          // Reset active channel's id
+    YNOCOPY(ClientDriver);               // No automatic copies please
 public:
     ClientDriver();
     virtual ~ClientDriver();
@@ -1994,6 +1999,7 @@ protected:
 class YATE_API ClientLogic : public GenObject
 {
     friend class Client;
+    YNOCOPY(ClientLogic); // no automatic copies please
 public:
     /**
      * Destructor. Remove itself from the client's list
@@ -2542,6 +2548,7 @@ private:
  */
 class YATE_API DefaultLogic : public ClientLogic
 {
+    YNOCOPY(DefaultLogic); // no automatic copies please
 public:
     /**
      * Constructor
@@ -2980,6 +2987,7 @@ private:
 class YATE_API ClientAccount : public RefObject, public Mutex
 {
     friend class ClientContact;
+    YNOCOPY(ClientAccount); // no automatic copies please
 public:
     /**
      * Constructor
@@ -3177,6 +3185,7 @@ private:
  */
 class YATE_API ClientAccountList : public String, public Mutex
 {
+    YNOCOPY(ClientAccountList); // no automatic copies please
 public:
     /**
      * Constructor
@@ -3185,8 +3194,8 @@ public:
      */
     inline explicit ClientAccountList(const char* name, ClientAccount* localContacts = 0)
 	: String(name), Mutex(true,"ClientAccountList"),
-	m_localContacts(localContacts)
-	{}
+	  m_localContacts(localContacts)
+	{ }
 
     /**
      * Destructor
@@ -3305,6 +3314,7 @@ private:
 class YATE_API ClientContact : public RefObject
 {
     friend class ClientAccount;
+    YNOCOPY(ClientContact); // no automatic copies please
 public:
     /**
      * Constructor. Append itself to the owner's list
@@ -3607,6 +3617,7 @@ private:
 class YATE_API ClientResource : public RefObject
 {
     YCLASS(ClientResource,RefObject)
+    YNOCOPY(ClientResource); // no automatic copies please
 public:
     /**
      * Resource status
@@ -3630,8 +3641,8 @@ public:
      */
     inline explicit ClientResource(const char* id, const char* name = 0, bool audio = true)
 	: m_id(id), m_name(name ? name : id), m_audio(audio), m_priority(0),
-	m_status(Offline)
-	{}
+	  m_status(Offline)
+	{ }
 
     /**
      * Get a string representation of this object
@@ -3736,6 +3747,7 @@ public:
  */
 class YATE_API DurationUpdate : public RefObject
 {
+    YNOCOPY(DurationUpdate); // no automatic copies please
 public:
     /**
      * Constructor. Add itself to logic's list
@@ -3841,6 +3853,7 @@ protected:
  */
 class YATE_API ClientSound : public String
 {
+    YNOCOPY(ClientSound); // no automatic copies please
 public:
     /**
      * Constructor
@@ -3851,7 +3864,7 @@ public:
     inline ClientSound(const char* name, const char* file, const char* device = 0)
 	: String(name), m_file(file), m_device(device), m_repeat(0),
 	m_started(false), m_stereo(false)
-	{}
+	{ }
 
     /**
      * Destructor. Stop playing the file

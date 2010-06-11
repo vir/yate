@@ -657,7 +657,7 @@ SignallingComponent* SigFactory::create(const String& type, const NamedList& nam
     DDebug(&plugin,DebugAll,"SigFactory::create('%s','%s') config=%p",
 	type.c_str(),name.c_str(),config);
     int compType = type.toInteger(s_compClass,-1);
-    if (type < 0)
+    if (compType < 0)
 	return 0;
     if (!config) {
 	NamedList sec(name);

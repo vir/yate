@@ -1052,8 +1052,9 @@ unsigned int String::hash(const char* value)
 	return 0;
 
     unsigned int h = 0;
+    // sdbm hash algorithm, hash(i) = hash(i-1) * 65599 + str[i]
     while (unsigned char c = (unsigned char) *value++)
-	h = (h << 1) + c;
+	h = (h << 6) + (h << 16) - h + c;
     return h;
 }
 

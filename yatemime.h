@@ -43,7 +43,6 @@ namespace TelEngine {
  */
 class YATE_API MimeHeaderLine : public NamedString
 {
-    YNOCOPY(MimeHeaderLine); // no automatic copies please
 public:
     /**
      * Constructor.
@@ -179,6 +178,8 @@ public:
 protected:
     ObjList m_params;                    // Header list of parameters
     char m_separator;                    // Parameter separator
+private:
+    void operator=(const MimeHeaderLine&); // no assignment
 };
 
 /**
@@ -187,7 +188,6 @@ protected:
  */
 class YATE_API MimeAuthLine : public MimeHeaderLine
 {
-    YNOCOPY(MimeAuthLine); // no automatic copies please
 public:
     /**
      * Constructor.
@@ -225,6 +225,8 @@ public:
      * @param line Destination string
      */
     virtual void buildLine(String& line) const;
+private:
+    void operator=(const MimeAuthLine&); // no assignment
 };
 
 /**

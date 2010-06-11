@@ -511,9 +511,9 @@ bool DataConsumer::synchronize(DataSource* source)
     DDebug(DebugInfo,"Offsetting consumer %s timestamps by " FMT64 " [%p]",
 	(override ? "override" : "regular"),dt,this);
     if (override)
-	m_overrideTsDelta = dt;
+	m_overrideTsDelta = (long int)dt;
     else
-	m_regularTsDelta = dt;
+	m_regularTsDelta = (long int)dt;
     return true;
 }
 

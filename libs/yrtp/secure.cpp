@@ -197,7 +197,7 @@ bool RTPSecure::create(String& suite, String& keyParams, bool buildMaster)
 #else
 	unsigned char sk[30];
 	for (unsigned int i = 0; i < sizeof(sk);) {
-	    u_int16_t r = ::random();
+	    u_int16_t r = (u_int16_t)::random();
 	    sk[i++] = r & 0xff;
 	    sk[i++] = (r >> 8) & 0xff;
 	}
@@ -275,7 +275,7 @@ bool RTPSecure::rtpCheckIntegrity(const unsigned char* data, int len, const void
 	return false;
 
     // RFC 3711 4.2
-    u_int32_t roc = htonl(0xffffffff & (seq >> 16));
+    u_int32_t roc = htonl((u_int32_t)(seq >> 16));
     SHA1 h1(m_authIpad);
     h1.update(data,len);
     h1.update(&roc,sizeof(roc));

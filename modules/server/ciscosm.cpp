@@ -825,9 +825,9 @@ void RudpSocket::sendSyn(bool recvSyn)
 	    store16(buf+10,0xce0c); // ???
 	    store32(buf+12,m_connId);
 	    store16(buf+16,0x0180); // MSS?
-	    store16(buf+18,m_retransTimer.interval());
-	    store16(buf+20,m_cumAckTimer.interval());
-	    store16(buf+22,m_nullTimer.interval());
+	    store16(buf+18,(u_int16_t)m_retransTimer.interval());
+	    store16(buf+20,(u_int16_t)m_cumAckTimer.interval());
+	    store16(buf+22,(u_int16_t)m_nullTimer.interval());
 	    store16(buf+24,2000); // Transf. state timeout?
 	    buf[26] = m_retransCounter;
 	    buf[27] = m_maxCumAck;

@@ -1639,7 +1639,7 @@ void YJBEngine::processStartIn(JBEvent* ev)
 	XMPPError::Type error = XMPPError::NoError;
 	if (ev->stream()->type() == JBStream::c2s) {
 	    lock();
-	    bool ok = m_c2sFeatures.get(XMPPNamespace::IqAuth);
+	    bool ok = (0 != m_c2sFeatures.get(XMPPNamespace::IqAuth));
 	    unlock();
 	    if (ok) {
 		if (ev->stream()->flag(JBStream::StreamTls) ||

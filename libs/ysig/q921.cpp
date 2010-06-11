@@ -1294,7 +1294,7 @@ void ISDNQ921Management::timerTick(const Time& when)
 	    m_teiManTimer.stop();
 	    u_int16_t ri = m_layer2[0]->m_ri;
 	    while (!ri)
-		ri = ::random() & 0xffff;
+		ri = (u_int16_t)::random();
 	    m_layer2[0]->m_tei = 0;
 	    m_layer2[0]->setRi(ri);
 	    sendTeiManagement(ISDNFrame::TeiReq,ri,Q921_TEI_BROADCAST);

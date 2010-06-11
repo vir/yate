@@ -459,7 +459,7 @@ void MGCPTransaction::initTimeout(u_int64_t time, bool extra)
 	m_retransCount = m_engine->retransCount();
     }
     else {
-	m_crtRetransInterval = m_engine->extraTime();
+	m_crtRetransInterval = (unsigned int)m_engine->extraTime();
 	m_retransCount = 0;
     }
     m_nextRetrans = time + m_crtRetransInterval;

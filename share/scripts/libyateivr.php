@@ -481,7 +481,7 @@ class IVR
     }
 
     /**
-     * Retrive the IVR's channel ID, initialize it if required
+     * Retrieve the IVR's channel ID, initialize it if required
      * @return ID of the IVR call leg
      */
     static function ChannelID()
@@ -508,7 +508,7 @@ class IVR
     }
 
     /**
-     * Retrive the target channel ID
+     * Retrieve the target channel ID
      * @return ID of the call leg that called into the IVR
      */
     static function TargetID()

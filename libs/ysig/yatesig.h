@@ -721,14 +721,14 @@ public:
     bool remove(const String& name);
 
     /**
-     * Retrive a component by name, lock the list while searching for it
+     * Retrieve a component by name, lock the list while searching for it
      * @param name Name of the component to find
      * @return Pointer to component found or NULL
      */
     SignallingComponent* find(const String& name);
 
     /**
-     * Retrive a component by name and class, lock the list while searching for it
+     * Retrieve a component by name and class, lock the list while searching for it
      * @param name Name of the component to find, empty to find any of the type
      * @param type Class or base class of the component to find, empty to match any
      * @param start Component to start searching from, search all list if NULL
@@ -737,7 +737,7 @@ public:
     SignallingComponent* find(const String& name, const String& type, const SignallingComponent* start = 0);
 
     /**
-     * Retrive and reference an existing component, create by factory if not present
+     * Retrieve and reference an existing component, create by factory if not present
      * @param type Class or base class of the component to find or create
      * @param params Name of component to find or create and creation parameters
      * @param init Set to true to initialize a newly created component
@@ -887,7 +887,7 @@ public:
      * Constructor
      * @param params Call controller's parameters
      * @param msgPrefix Optional prefix to be added before a decoded message's
-     *  parameters or retrive message parameters from a list
+     *  parameters or retrieve message parameters from a list
      */
     SignallingCallControl(const NamedList& params, const char* msgPrefix = 0);
 
@@ -924,7 +924,7 @@ public:
 
     /**
      * Get the prefix used by this call controller when decoding message parameters or
-     *  retrive message parameters from a list
+     *  retrieve message parameters from a list
      * @return Message parameters prefix used by this call controller
      */
     inline const String& msgPrefix() const
@@ -1068,7 +1068,7 @@ protected:
 
     /**
      * Prefix to be added to decoded message parameters or
-     *  retrive message parameters from a list
+     *  retrieve message parameters from a list
      */
     String m_msgPrefix;
 
@@ -1298,13 +1298,13 @@ public:
 	{ return m_message; }
 
     /**
-     * Retrive the controller of the call
+     * Retrieve the controller of the call
      */
     inline SignallingCallControl* controller() const
 	{ return m_controller; }
 
     /**
-     * Retrive the circuit event
+     * Retrieve the circuit event
      */
     inline SignallingCircuitEvent* cicEvent() const
 	{ return m_cicEvent; }
@@ -1699,14 +1699,14 @@ public:
 
     /**
      * Get the text associated with a circuit type
-     * @param type Circuit type used to retrive the text
+     * @param type Circuit type used to retrieve the text
      * @return Pointer to the string associated with the given circuit type
      */
     static const char* lookupType(int type);
 
     /**
      * Get the text associated with a circuit status
-     * @param status Circuit status used to retrive the text
+     * @param status Circuit status used to retrieve the text
      * @return Pointer to the string associated with the given circuit status
      */
     static const char* lookupStatus(int status);
@@ -2272,7 +2272,7 @@ public:
     virtual void attach(SignallingReceiver* receiver);
 
     /**
-     * Retrive the signalling receiver attached to this interface
+     * Retrieve the signalling receiver attached to this interface
      * @return Pointer to attached receiver, NULL if none
      */
     inline SignallingReceiver* receiver() const
@@ -2352,7 +2352,7 @@ public:
     virtual SignallingInterface* attach(SignallingInterface* iface);
 
     /**
-     * Retrive the interface used by this receiver
+     * Retrieve the interface used by this receiver
      * @return Pointer to the attached interface or NULL
      */
     inline SignallingInterface* iface() const
@@ -2557,7 +2557,7 @@ public:
      * @param comp Signalling component requesting the service. Used to print debug messages
      * @param dest Destination flak mask
      * @param flags The flag list
-     * @param dict Dictionary used to retrive the flag names and values
+     * @param dict Dictionary used to retrieve the flag names and values
      * @return The OR'd value of found flags
      */
     static void encodeFlags(const SignallingComponent* comp, int& dest, const String& flags,
@@ -3181,21 +3181,21 @@ public:
 	{ }
 
     /**
-     * Retrive the Network / Zone component of the Code Point
+     * Retrieve the Network / Zone component of the Code Point
      * @return ANSI Network Identifier / ITU-T Zone Identification
      */
     inline unsigned char network() const
 	{ return m_network; }
 
     /**
-     * Retrive the Cluster / Area component of the Code Point
+     * Retrieve the Cluster / Area component of the Code Point
      * @return ANSI Network Cluster / ITU-T Area/Network Identification
      */
     inline unsigned char cluster() const
 	{ return m_cluster; }
 
     /**
-     * Retrive the Cluster / Point component of the Code Point
+     * Retrieve the Cluster / Point component of the Code Point
      * @return ANSI Cluster Member / ITU-T Signalling Point Identification
      */
     inline unsigned char member() const
@@ -3716,54 +3716,54 @@ public:
 	{ return getData(label.length()+1,len); }
 
     /**
-     * Retrive the Service Information Octet
+     * Retrieve the Service Information Octet
      * @return Value of the SIO or -1 if the MSU is empty
      */
     inline int getSIO() const
 	{ return null() ? -1 : *(const unsigned char*)data(); }
 
     /**
-     * Retrive the Service Information Field
+     * Retrieve the Service Information Field
      * @return Value of the SIF or -1 if the MSU is empty
      */
     inline int getSIF() const
 	{ return null() ? -1 : 0x0f & *(const unsigned char*)data(); }
 
     /**
-     * Retrive the Subservice Field (SSF)
+     * Retrieve the Subservice Field (SSF)
      * @return Value of the subservice or -1 if the MSU is empty
      */
     inline int getSSF() const
 	{ return null() ? -1 : 0xf0 & *(const unsigned char*)data(); }
 
     /**
-     * Retrive the Priority Field
+     * Retrieve the Priority Field
      * @return Value of the priority or -1 if the MSU is empty
      */
     inline int getPrio() const
 	{ return null() ? -1 : 0x30 & *(const unsigned char*)data(); }
 
     /**
-     * Retrive the Network Indicator (NI)
+     * Retrieve the Network Indicator (NI)
      * @return Value of the subservice or -1 if the MSU is empty
      */
     inline int getNI() const
 	{ return null() ? -1 : 0xc0 & *(const unsigned char*)data(); }
 
     /**
-     * Retrive the name of the Service as decoded from the SIF
+     * Retrieve the name of the Service as decoded from the SIF
      * @return Name of the service, NULL if unknown or invalid MSU
      */
     const char* getServiceName() const;
 
     /**
-     * Retrive the name of the Priority as decoded from the SIF
+     * Retrieve the name of the Priority as decoded from the SIF
      * @return Name of the priority, NULL if unknown or invalid MSU
      */
     const char* getPriorityName() const;
 
     /**
-     * Retrive the name of the Network Indicator as decoded from the SIF
+     * Retrieve the name of the Network Indicator as decoded from the SIF
      * @return Name of the network indicator, NULL if unknown or invalid MSU
      */
     const char* getIndicatorName() const;
@@ -4059,7 +4059,7 @@ public:
     virtual void attach(SCCP* sccp);
 
     /**
-     * Retrive the SCCP to which this component is attached
+     * Retrieve the SCCP to which this component is attached
      * @return Pointer to the attached SCCP or NULL
      */
     inline SCCP* sccp() const
@@ -4088,7 +4088,7 @@ public:
     virtual void attach(SS7TCAP* tcap);
 
     /**
-     * Retrive the TCAP to which this user is attached
+     * Retrieve the TCAP to which this user is attached
      * @return Pointer to a SS7 TCAP interface or NULL
      */
     inline SS7TCAP* tcap() const
@@ -4192,7 +4192,7 @@ public:
     virtual ObjList* recoverMSU();
 
     /**
-     * Retrive the current link status indications
+     * Retrieve the current link status indications
      * @return Link status indication bits
      */
     virtual unsigned int status() const;
@@ -4375,14 +4375,14 @@ public:
     void attach(SS7L3User* l3user);
 
     /**
-     * Retrive the Layer 3 user component to which this network is attached
+     * Retrieve the Layer 3 user component to which this network is attached
      * @return Pointer to the Layer 3 user this network is attached to
      */
     inline SS7L3User* user() const
 	{ return m_l3user; }
 
     /**
-     * Retrive the point code type of this Layer 3 component for a MSU type
+     * Retrieve the point code type of this Layer 3 component for a MSU type
      * @param netType Type of the network like coded in the MSU NI field
      * @return The type of codepoint this component will use
      */
@@ -4538,7 +4538,7 @@ public:
     virtual void attach(SS7Layer3* network);
 
     /**
-     * Retrive the SS7 network or router to which this service is attached
+     * Retrieve the SS7 network or router to which this service is attached
      * @return Pointer to the network or router this service is attached to
      */
     inline SS7Layer3* network() const
@@ -5038,7 +5038,7 @@ public:
     virtual ObjList* recoverMSU();
 
     /**
-     * Retrive the current link status indications
+     * Retrieve the current link status indications
      * @return Link status indication bits
      */
     virtual unsigned int status() const;

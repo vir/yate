@@ -243,8 +243,8 @@ class Yate
     }
 
     /**
-     * Retrive the value of a named parameter
-     * @param $key Name of the parameter to retrive
+     * Retrieve the value of a named parameter
+     * @param $key Name of the parameter to retrieve
      * @param $defvalue (optional) Default value to return if parameter is not set
      * @return Value of the $key parameter or $defvalue
      */

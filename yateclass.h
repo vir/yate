@@ -228,7 +228,7 @@ enum DebugLevel {
 };
 
 /**
- * Retrive the current global debug level
+ * Retrieve the current global debug level
  * @return The current global debug level
  */
 YATE_API int debugLevel();
@@ -276,7 +276,7 @@ public:
 	{ m_name = 0; m_chain = 0; }
 
     /**
-     * Retrive the current local debug level
+     * Retrieve the current local debug level
      * @return The current local debug level
      */
     inline int debugLevel() const
@@ -290,7 +290,7 @@ public:
     int debugLevel(int level);
 
     /**
-     * Retrive the current debug activation status
+     * Retrieve the current debug activation status
      * @return True if local debugging is enabled
      */
     inline bool debugEnabled() const
@@ -618,7 +618,7 @@ void YCLASSIMP2(class type,class base1,class base2);
 void YCLASSIMP3(class type,class base1,class base2,class base3);
 
 /**
- * Macro to retrive a typed pointer to an interface from an object
+ * Macro to retrieve a typed pointer to an interface from an object
  * @param type Class we want to return
  * @param pntr Pointer to the object we want to get the interface from
  * @return Pointer to the class we want or NULL
@@ -861,7 +861,7 @@ template <class Obj = RefObject> class RefPointer : public RefPointerBase
 {
 protected:
     /**
-     * Retrive the stored pointer
+     * Retrieve the stored pointer
      * @return A typed pointer
      */
     inline Obj* pointer() const
@@ -1079,21 +1079,21 @@ public:
 
     /**
      * Get the object at a specific index in list
-     * @param index Index of the object to retrive
+     * @param index Index of the object to retrieve
      * @return Pointer to the object or NULL
      */
     GenObject* at(int index) const;
 
     /**
      * Pointer-like indexing operator
-     * @param index Index of the list item to retrive
+     * @param index Index of the list item to retrieve
      * @return Pointer to the list item or NULL
      */
     ObjList* operator+(int index) const;
 
     /**
      * Array-like indexing operator with signed parameter
-     * @param index Index of the object to retrive
+     * @param index Index of the object to retrieve
      * @return Pointer to the object or NULL
      */
     inline GenObject* operator[](signed int index) const
@@ -1101,7 +1101,7 @@ public:
 
     /**
      * Array-like indexing operator with unsigned parameter
-     * @param index Index of the object to retrive
+     * @param index Index of the object to retrieve
      * @return Pointer to the object or NULL
      */
     inline GenObject* operator[](unsigned int index) const
@@ -1273,7 +1273,7 @@ public:
     bool delColumn(int index);
 
     /**
-     * Retrive an object from the array
+     * Retrieve an object from the array
      * @param column Number of the column in the array
      * @param row Number of the row in the array
      * @return Pointer to the stored object, NULL for out of bound indexes
@@ -1281,7 +1281,7 @@ public:
     GenObject* get(int column, int row) const;
 
     /**
-     * Retrive and remove an object from the array
+     * Retrieve and remove an object from the array
      * @param column Number of the column in the array
      * @param row Number of the row in the array
      * @return Pointer to the stored object, NULL for out of bound indexes
@@ -2207,7 +2207,7 @@ public:
     explicit NamedString(const char* name, const char* value = 0);
 
     /**
-     * Retrive the name of this string.
+     * Retrieve the name of this string.
      * @return A hashed string with the name of the string
      */
     inline const String& name() const
@@ -2260,14 +2260,14 @@ public:
     virtual ~NamedPointer();
 
     /**
-     * Retrive the pointer carried by this object
+     * Retrieve the pointer carried by this object
      * @return Pointer to arbitrary user GenObject
      */
     inline GenObject* userData() const
 	{ return m_data; }
 
     /**
-     * Retrive the pointer carried by this object and release ownership.
+     * Retrieve the pointer carried by this object and release ownership.
      * The caller will own the returned pointer
      * @return Pointer to arbitrary user GenObject
      */
@@ -2354,25 +2354,25 @@ public:
     unsigned int count() const;
 
     /**
-     * Retrive one of the internal object lists. This method should be used
+     * Retrieve one of the internal object lists. This method should be used
      *  only to iterate all objects in the list.
-     * @param index Index of the internal list to retrive
+     * @param index Index of the internal list to retrieve
      * @return Pointer to the list or NULL
      */
     inline ObjList* getList(unsigned int index) const
 	{ return (index < m_size) ? m_lists[index] : 0; }
 
     /**
-     * Retrive one of the internal object lists knowing the hash value.
-     * @param hash Hash of the internal list to retrive
+     * Retrieve one of the internal object lists knowing the hash value.
+     * @param hash Hash of the internal list to retrieve
      * @return Pointer to the list or NULL if never filled
      */
     inline ObjList* getHashList(unsigned int hash) const
 	{ return getList(hash % m_size); }
 
     /**
-     * Retrive one of the internal object lists knowing the String value.
-     * @param str String whose hash internal list is to retrive
+     * Retrieve one of the internal object lists knowing the String value.
+     * @param str String whose hash internal list is to retrieve
      * @return Pointer to the list or NULL if never filled
      */
     inline ObjList* getHashList(const String& str) const
@@ -3406,7 +3406,7 @@ public:
     const String& operator[](const String& name) const;
 
     /**
-     * Retrive the value of a named parameter.
+     * Retrieve the value of a named parameter.
      * @param name Name of parameter to locate
      * @param defvalue Default value to return if not found
      * @return The string contained in the named parameter or the default
@@ -3414,7 +3414,7 @@ public:
     const char* getValue(const String& name, const char* defvalue = 0) const;
 
     /**
-     * Retrive the numeric value of a parameter.
+     * Retrieve the numeric value of a parameter.
      * @param name Name of parameter to locate
      * @param defvalue Default value to return if not found
      * @return The number contained in the named parameter or the default
@@ -3422,7 +3422,7 @@ public:
     int getIntValue(const String& name, int defvalue = 0) const;
 
     /**
-     * Retrive the numeric value of a parameter trying first a table lookup.
+     * Retrieve the numeric value of a parameter trying first a table lookup.
      * @param name Name of parameter to locate
      * @param tokens A pointer to an array of tokens to try to lookup
      * @param defvalue Default value to return if not found
@@ -3431,7 +3431,7 @@ public:
     int getIntValue(const String& name, const TokenDict* tokens, int defvalue = 0) const;
 
     /**
-     * Retrive the floating point value of a parameter.
+     * Retrieve the floating point value of a parameter.
      * @param name Name of parameter to locate
      * @param defvalue Default value to return if not found
      * @return The number contained in the named parameter or the default
@@ -3439,7 +3439,7 @@ public:
     double getDoubleValue(const String& name, double defvalue = 0.0) const;
 
     /**
-     * Retrive the boolean value of a parameter.
+     * Retrieve the boolean value of a parameter.
      * @param name Name of parameter to locate
      * @param defvalue Default value to return if not found
      * @return The boolean value contained in the named parameter or the default
@@ -5357,7 +5357,7 @@ public:
     virtual int readData(void* buffer, int length);
 
     /**
-     * Retrive the file's modification time (the file must be already opened)
+     * Retrieve the file's modification time (the file must be already opened)
      * @param secEpoch File creation time (seconds since Epoch)
      * @return True on success
      */
@@ -5705,7 +5705,7 @@ public:
     virtual bool shutdown(bool stopReads, bool stopWrites);
 
     /**
-     * Retrive the address of the local socket of a connection
+     * Retrieve the address of the local socket of a connection
      * @param addr Address to fill in with the address of the local socket
      * @param addrlen Length of the address structure on input, length of address data on return
      * @return True if operation was successfull, false if an error occured
@@ -5713,14 +5713,14 @@ public:
     virtual bool getSockName(struct sockaddr* addr, socklen_t* addrlen);
 
     /**
-     * Retrive the address of the local socket of a connection
+     * Retrieve the address of the local socket of a connection
      * @param addr Address to fill in with the address of the local socket
      * @return True if operation was successfull, false if an error occured
      */
     bool getSockName(SocketAddr& addr);
 
     /**
-     * Retrive the address of the remote socket of a connection
+     * Retrieve the address of the remote socket of a connection
      * @param addr Address to fill in with the address of the remote socket
      * @param addrlen Length of the address structure on input, length of address data on return
      * @return True if operation was successfull, false if an error occured
@@ -5728,7 +5728,7 @@ public:
     virtual bool getPeerName(struct sockaddr* addr, socklen_t* addrlen);
 
     /**
-     * Retrive the address of the remote socket of a connection
+     * Retrieve the address of the remote socket of a connection
      * @param addr Address to fill in with the address of the remote socket
      * @return True if operation was successfull, false if an error occured
      */

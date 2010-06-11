@@ -362,7 +362,7 @@ public:
     inline int port() const
 	{ return m_port; }
 
-    // Retrive the IAX engine
+    // Retrieve the IAX engine
     inline YIAXEngine* getEngine() const
 	{ return m_iaxEngine; }
 

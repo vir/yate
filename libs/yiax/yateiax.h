@@ -1192,105 +1192,105 @@ public:
         { return m_userdata; }
 
     /**
-     * Retrive the local call number
+     * Retrieve the local call number
      * @return 15-bit local call number
      */
     inline u_int16_t localCallNo() const
         { return m_lCallNo; }
 
     /**
-     * Retrive the remote call number
+     * Retrieve the remote call number
      * @return 15-bit remote call number
      */
     inline u_int16_t remoteCallNo() const
         { return m_rCallNo; }
 
     /**
-     * Retrive the remote host+port address
+     * Retrieve the remote host+port address
      * @return A reference to the remote address
      */
     inline const SocketAddr& remoteAddr() const
         { return m_addr; }
 
     /**
-     * Retrive the username
+     * Retrieve the username
      * @return A reference to the username
      */
     inline const String& username()
 	{ return m_username; }
 
     /**
-     * Retrive the calling number
+     * Retrieve the calling number
      * @return A reference to the calling number
      */
     inline const String& callingNo()
 	{ return m_callingNo; }
 
     /**
-     * Retrive the calling name
+     * Retrieve the calling name
      * @return A reference to the calling name
      */
     inline const String& callingName()
 	{ return m_callingName; }
 
     /**
-     * Retrive the called number
+     * Retrieve the called number
      * @return A reference to the called number
      */
     inline const String& calledNo()
 	{ return m_calledNo; }
 
     /**
-     * Retrive the called context
+     * Retrieve the called context
      * @return A reference to the called context
      */
     inline const String& calledContext()
 	{ return m_calledContext; }
 
     /**
-     * Retrive the challenge sent/received during authentication
+     * Retrieve the challenge sent/received during authentication
      * @return A reference to the challenge
      */
     inline const String& challenge()
 	{ return m_challenge; }
 
     /**
-     * Retrive the media format used during initialization
+     * Retrieve the media format used during initialization
      * @return The initial media format
      */
     inline u_int32_t format()
 	{ return m_format; }
 
     /**
-     * Retrive the incoming media format
+     * Retrieve the incoming media format
      * @return The incoming media format
      */
     inline u_int32_t formatIn()
 	{ return m_formatIn; }
 
     /**
-     * Retrive the outgoing media format
+     * Retrieve the outgoing media format
      * @return The outgoing media format
      */
     inline u_int32_t formatOut() const 
 	{ return m_formatOut; }
 
     /**
-     * Retrive the media capability of this transaction
+     * Retrieve the media capability of this transaction
      * @return The media capability of this transaction
      */
     inline u_int32_t capability() const
 	{ return m_capability; }
 
     /**
-     * Retrive the expiring time for a register/unregister transaction
+     * Retrieve the expiring time for a register/unregister transaction
      * @return The expiring time for a register/unregister transaction
      */
     inline u_int32_t expire() const
 	{ return m_expire; }
 
     /**
-     * Retrive the authentication data sent/received during authentication
+     * Retrieve the authentication data sent/received during authentication
      * @return A reference to the authentication data
      */
     inline const String& authdata()

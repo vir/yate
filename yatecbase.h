@@ -73,7 +73,7 @@ public:
     virtual ~Window();
 
     /**
-     * Retrive the standard name of this Window, used to search in lists
+     * Retrieve the standard name of this Window, used to search in lists
      * @return Identifier of this window
      */
     virtual const String& toString() const;
@@ -440,7 +440,7 @@ public:
 	{ return true; }
 
     /**
-     * Retrive the standard name of this Window
+     * Retrieve the standard name of this Window
      * @return Identifier of this window
      */
     inline const String& id() const
@@ -549,7 +549,7 @@ public:
 	{}
 
     /**
-     * Retrive the standard name of this Window
+     * Retrieve the standard name of this Window
      * @return Identifier of this window
      */
     inline const String& name() const

@@ -848,7 +848,7 @@ bool File::createPipe(File& reader, File& writer)
     return false;
 }
 
-// Retrive the file's modification time (the file must be already opened)
+// Retrieve the file's modification time (the file must be already opened)
 bool File::getFileTime(unsigned int& secEpoch)
 {
 #ifdef _WINDOWS

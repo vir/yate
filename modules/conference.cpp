@@ -389,7 +389,7 @@ void ConfRoom::dropAll(const char* reason)
     deref();
 }
 
-// Retrive status information about this room
+// Retrieve status information about this room
 void ConfRoom::msgStatus(Message& msg)
 {
     Lock mylock(this);

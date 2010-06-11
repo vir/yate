@@ -69,14 +69,14 @@ public:
 	{ return m_sections.length(); }
 
     /**
-     * Retrive an entire section
+     * Retrieve an entire section
      * @param index Index of the section
      * @return The section's content or NULL if no such section
      */
     NamedList* getSection(unsigned int index) const;
 
     /**
-     * Retrive an entire section
+     * Retrieve an entire section
      * @param sect Name of the section
      * @return The section's content or NULL if no such section
      */
@@ -91,7 +91,7 @@ public:
     NamedString* getKey(const String& sect, const String& key) const;
 
     /**
-     * Retrive the value of a key in a section.
+     * Retrieve the value of a key in a section.
      * @param sect Name of the section
      * @param key Name of the key in section
      * @param defvalue Default value to return if not found
@@ -100,7 +100,7 @@ public:
     const char* getValue(const String& sect, const String& key, const char* defvalue = 0) const;
 
     /**
-     * Retrive the numeric value of a key in a section.
+     * Retrieve the numeric value of a key in a section.
      * @param sect Name of the section
      * @param key Name of the key in section
      * @param defvalue Default value to return if not found
@@ -109,7 +109,7 @@ public:
     int getIntValue(const String& sect, const String& key, int defvalue = 0) const;
 
     /**
-     * Retrive the numeric value of a key in a section trying first a table lookup.
+     * Retrieve the numeric value of a key in a section trying first a table lookup.
      * @param sect Name of the section
      * @param key Name of the key in section
      * @param tokens A pointer to an array of tokens to try to lookup
@@ -119,7 +119,7 @@ public:
     int getIntValue(const String& sect, const String& key, const TokenDict* tokens, int defvalue = 0) const;
 
     /**
-     * Retrive the floating point value of a key in a section.
+     * Retrieve the floating point value of a key in a section.
      * @param sect Name of the section
      * @param key Name of the key in section
      * @param defvalue Default value to return if not found
@@ -128,7 +128,7 @@ public:
     double getDoubleValue(const String& sect, const String& key, double defvalue = 0.0) const;
 
     /**
-     * Retrive the boolean value of a key in a section.
+     * Retrieve the boolean value of a key in a section.
      * @param sect Name of the section
      * @param key Name of the key in section
      * @param defvalue Default value to return if not found
@@ -248,21 +248,21 @@ public:
     virtual void* getObject(const String& name) const;
 
     /**
-     * Retrive a reference to the value returned by the message.
+     * Retrieve a reference to the value returned by the message.
      * @return A reference to the value the message will return
      */
     inline String& retValue()
 	{ return m_return; }
 
     /**
-     * Retrive a const reference to the value returned by the message.
+     * Retrieve a const reference to the value returned by the message.
      * @return A reference to the value the message will return
      */
     inline const String& retValue() const
 	{ return m_return; }
 
     /**
-     * Retrive the object associated with the message
+     * Retrieve the object associated with the message
      * @return Pointer to arbitrary user RefObject
      */
     inline RefObject* userData() const
@@ -294,14 +294,14 @@ public:
 	{ m_notify = notify; }
 
     /**
-     * Retrive a reference to the creation time of the message.
+     * Retrieve a reference to the creation time of the message.
      * @return A reference to the @ref Time when the message was created
      */
     inline Time& msgTime()
 	{ return m_time; }
 
     /**
-     * Retrive a const reference to the creation time of the message.
+     * Retrieve a const reference to the creation time of the message.
      * @return A reference to the @ref Time when the message was created
      */
     inline const Time& msgTime() const
@@ -412,7 +412,7 @@ public:
 	{ return m_priority; }
 
     /**
-     * Retrive the filter (if installed) associated to this handler
+     * Retrieve the filter (if installed) associated to this handler
      */
     inline const NamedString* filter() const
 	{ return m_filter; }

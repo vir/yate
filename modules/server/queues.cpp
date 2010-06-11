@@ -366,7 +366,7 @@ void CallsQueue::countCalls(unsigned int& marked, unsigned int& unmarked) const
     }
 }
 
-// Retrive the call from the head of the queue
+// Retrieve the call from the head of the queue
 QueuedCall* CallsQueue::topCall() const
 {
     ObjList* l = m_calls.skipNull();

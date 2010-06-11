@@ -247,13 +247,13 @@ public:
 	{ NamedList::operator=(value); m_parsed = value.getInfo(); return *this; }
 
     /**
-     * Retrive a pointer to the format information
+     * Retrieve a pointer to the format information
      * @return Pointer to the associated format info or NULL if error
      */
     const FormatInfo* getInfo() const;
 
     /**
-     * Retrive the frame size
+     * Retrieve the frame size
      * @param defValue Default value to return if format is unknown
      * @return Frame size in octets/frame, 0 for non-framed, defValue if unknown
      */
@@ -261,7 +261,7 @@ public:
 	{ return getInfo() ? getInfo()->frameSize : defValue; }
 
     /**
-     * Retrive the frame time
+     * Retrieve the frame time
      * @param defValue Default value to return if format is unknown
      * @return Frame time in microseconds, 0 for variable, defValue if unknown
      */
@@ -269,7 +269,7 @@ public:
 	{ return getInfo() ? getInfo()->frameTime : defValue; }
 
     /**
-     * Retrive the sample rate
+     * Retrieve the sample rate
      * @param defValue Default value to return if format is unknown
      * @return Rate in samples/second (audio) or 1e-6 frames/second (video),
      *  0 for unknown, defValue if unknown format
@@ -278,7 +278,7 @@ public:
 	{ return getInfo() ? getInfo()->sampleRate : defValue; }
 
     /**
-     * Retrive the number of channels
+     * Retrieve the number of channels
      * @param defValue Default value to return if format is unknown
      * @return Number of channels (typically 1), defValue if unknown format
      */
@@ -1332,14 +1332,14 @@ public:
     virtual void* getObject(const String& name) const;
 
     /**
-     * Retrive the name of the module
+     * Retrieve the name of the module
      * @return The module's name as String
      */
     inline const String& name() const
 	{ return m_name; }
 
     /**
-     * Retrive the type of the module
+     * Retrieve the type of the module
      * @return The module's type as String
      */
     inline const String& type() const
@@ -1352,7 +1352,7 @@ public:
     void changed();
 
     /**
-     * Retrive the global update notification delay
+     * Retrieve the global update notification delay
      * @return Update delay value in seconds
      */
     inline static unsigned int updateDelay()
@@ -2106,7 +2106,7 @@ public:
     virtual void* getObject(const String& name) const;
 
     /**
-     * Retrive the prefix that is used as base for all channels
+     * Retrieve the prefix that is used as base for all channels
      * @return The driver's prefix
      */
     inline const String& prefix() const

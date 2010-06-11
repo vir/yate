@@ -1389,7 +1389,7 @@ void NamedPointer::userData(GenObject* data)
     m_data = data;
 }
 
-// Retrive the pointer carried by this object and release ownership
+// Retrieve the pointer carried by this object and release ownership
 GenObject* NamedPointer::takeData()
 {
     GenObject* tmp = m_data;

@@ -171,7 +171,7 @@ public:
     virtual bool msgDisconnect(Message& msg, const String& reason);
 
     /**
-     * Retrive the list that owns this object
+     * Retrieve the list that owns this object
      * @return Pointer to the owner list
      */
     inline ChanAssistList* list() const
@@ -185,14 +185,14 @@ public:
 	{ return m_chanId; }
 
     /**
-     * Retrive a smart pointer to an arbitrary channel
+     * Retrieve a smart pointer to an arbitrary channel
      * @param id Identifier of the channel to locate
      * @return Smart pointer to the channel or NULL if not found or dead
      */
     static RefPointer<CallEndpoint> locate(const String& id);
 
     /**
-     * Retrive a smart pointer to the assisted channel
+     * Retrieve a smart pointer to the assisted channel
      * @return Smart pointer to the channel or NULL if not found or dead
      */
     inline RefPointer<CallEndpoint> locate() const

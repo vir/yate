@@ -303,14 +303,14 @@ public:
 	{ m_authUser = username; m_authPass = password; }
 
     /**
-     * Retrive the username to be used for auto authentication
+     * Retrieve the username to be used for auto authentication
      * @return Username for auto authentication
      */
     inline const String& getAuthUsername() const
 	{ return m_authUser; }
 
     /**
-     * Retrive the password to be used for auto authentication
+     * Retrieve the password to be used for auto authentication
      * @return Password for auto authentication
      */
     inline const String& getAuthPassword() const
@@ -788,7 +788,7 @@ public:
     void setResponse(SIPMessage* message);
 
     /**
-     * Retrive the latest response code
+     * Retrieve the latest response code
      * @return Code of most recent response, zero if none is known
      */
     inline int getResponseCode() const

@@ -13,6 +13,7 @@
 ;  \{N\} matches preceeding expression exactly N times
 ;  \{N,\} matches preceeding expression N or more times
 ;  \{N,M\} matches preceeding expression between N and M times
+;  \| matches either the preceeding or following expression
 ;  \( \) captures the contained subexpression
 ; Remember matches are greedy, they will match as much as possible
 ; You must escape ^ $ . * [ and \ with \ whenever you want them to be normal

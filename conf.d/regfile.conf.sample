@@ -16,10 +16,36 @@
 ;
 ; route: int: Priority of the call.route handler
 ;route=100
+;
+; file: string. An auxiliary conf file used to save and load from it autocreated and registered entries
+; If file don't exists the registered entities will be lost on reload
+;file=filename
 
 
 ; you have to put username as a category and password into key password
 ; if password is missing the module will only register but not authenticate
 ; if password exists and is empty will blindly authenticate anybody
+
+
 ;[username]
 ;password=something
+
+; alternatives: list of called party numbers separated by coma
+; Note if multiple users share the same party number the call will go to all users.
+;alternatives= num1,num2,....
+;
+; Set/Modify call.route parameters when the caller matches this section
+; You can put call.route replacement ${variables} on the right side
+; Note: Any parameter except for "password" and "alternatives" will be used for set/modify
+;
+; Ex:
+; Modify caller name
+;callername=name
+;
+; Modify caller number
+;caller=number
+;
+; Replacement example
+;callername=John Doe from ${address}
+;
+;param=value

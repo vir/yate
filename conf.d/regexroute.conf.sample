@@ -94,11 +94,14 @@
 [extra]
 ; This section allows installing handlers for any message name.
 ; Each line must be of the form:
-;  message.name=priority
-; You can only install one handler for any given message name.
-; For each handler create a corresponding [message.name] section in which
-;  implement handling for that specific message. You will need to match
-;  parameters explicitely or set a new match string.
+;  message.name=priority[,[paramname][,context]]
+; For each handler create a corresponding [context] or [message.name] section
+;  in which implement handling for that specific message. If paramname is not
+;  set you will need to match parameters explicitely or set a new match string.
+; Examples:
+;  engine.command=90
+;  call.execute=120,callto
+;  call.route=200,called,reroute
 
 
 [contexts]

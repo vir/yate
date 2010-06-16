@@ -504,7 +504,8 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
     DDebug("RegexRoute",DebugAll,"Returning false at end of context '%s'", context.c_str());
     return false;
 }
-	
+
+
 bool RouteHandler::received(Message &msg)
 {
     u_int64_t tmr = Time::now();
@@ -522,7 +523,8 @@ bool RouteHandler::received(Message &msg)
 	called.c_str(),context,Time::now()-tmr);
     return false;
 };
-		    
+
+
 class PrerouteHandler : public MessageHandler
 {
 public:
@@ -554,28 +556,41 @@ bool PrerouteHandler::received(Message &msg)
 	caller.c_str(),Time::now()-tmr);
     return false;
 };
-		    
+
+
 class GenericHandler : public MessageHandler
 {
 public:
-    GenericHandler(const char* name, int prio)
-	: MessageHandler(name,prio)
+    GenericHandler(const char* name, int prio, const char* context, const char* match)
+	: MessageHandler(name,prio),
+	  m_context(context), m_match(match)
 	{
-	    Debug(DebugAll,"Installing generic handler for '%s' prio %d [%p]",c_str(),prio,this);
+	    Debug(DebugAll,"Generic handler for '%s' prio %d to [%s] match '%s%s%s' [%p]",
+		c_str(),prio,context,
+		(match ? "${" : ""),(match ? match : c_str()),(match ? "}" : ""),
+		this);
 	    s_extra.append(this);
 	}
     ~GenericHandler()
 	{ s_extra.remove(this,false); }
     virtual bool received(Message &msg);
+private:
+    String m_context;
+    String m_match;
 };
 
 bool GenericHandler::received(Message &msg)
 {
     DDebug(DebugAll,"Handling message '%s' [%p]",c_str(),this);
-    String what(*this);
+    String what(m_match);
+    if (what)
+	what = msg.getValue(what);
+    else
+	what = *this;
     Lock lock(s_mutex);
-    return oneContext(msg,what,*this,msg.retValue());
+    return oneContext(msg,what,m_context,msg.retValue());
 }
+
 
 class RegexRoutePlugin : public Plugin
 {
@@ -638,8 +653,21 @@ void RegexRoutePlugin::initialize()
 	unsigned int len = l->length();
 	for (unsigned int i=0; i<len; i++) {
 	    NamedString* n = l->getParam(i);
-	    if (n)
-		Engine::install(new GenericHandler(n->name(),n->toInteger()));
+	    if (n) {
+		// message=prio[:[context][:[parameter]]]
+		ObjList* o = n->split(',');
+		const String* s = static_cast<const String*>(o->at(0));
+		int prio = s ? s->toInteger(100) : 100;
+		const char* match = TelEngine::c_str(static_cast<const String*>(o->at(1)));
+		const char* context = TelEngine::c_str(static_cast<const String*>(o->at(2)));
+		if (TelEngine::null(context))
+		    context = n->name().c_str();
+		if (s_cfg.getSection(context))
+		    Engine::install(new GenericHandler(n->name(),prio,context,match));
+		else
+		    Debug(DebugWarn,"Missing context [%s] for handling %s",context,n->name().c_str());
+		TelEngine::destruct(o);
+	    }
 	}
     }
 }

@@ -1134,6 +1134,8 @@ int Engine::run()
 	Thread::usleep(t);
 	Message *m = new Message("engine.timer");
 	m->addParam("time",String((int)m->msgTime().sec()));
+	if (nodeName())
+	    m->addParam("nodename",nodeName());
 	// Try to fine tune the ticker
 	t = (long)(m->msgTime().usec() % 1000000);
 	if (t > 500000)
@@ -1445,6 +1447,8 @@ bool Engine::dispatch(const char* name)
     if (!(s_self && name && *name))
 	return false;
     Message msg(name);
+    if (nodeName())
+	msg.addParam("nodename",nodeName());
     return s_self->m_dispatcher.dispatch(msg);
 }
 

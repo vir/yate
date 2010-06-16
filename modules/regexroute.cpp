@@ -654,7 +654,7 @@ void RegexRoutePlugin::initialize()
 	for (unsigned int i=0; i<len; i++) {
 	    NamedString* n = l->getParam(i);
 	    if (n) {
-		// message=prio[:[context][:[parameter]]]
+		// message=priority[,[parameter][,context]]
 		ObjList* o = n->split(',');
 		const String* s = static_cast<const String*>(o->at(0));
 		int prio = s ? s->toInteger(100) : 100;

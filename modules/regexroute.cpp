@@ -376,14 +376,22 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 		    r = r.substr(p+1);
 		    match.trimBlanks();
 		    r.trimBlanks();
+		    String def;
+		    p = match.find('$');
+		    if (p >= 0) {
+			// param is in ${<name>$<default>} format
+			def = match.substr(p+1);
+			match = match.substr(0,p);
+			match.trimBlanks();
+		    }
 		    if (match.null() || r.null()) {
 			Debug("RegexRoute",DebugWarn,"Missing parameter or rule in rule #%u in context '%s'",
 			    i+1,context.c_str());
 			continue;
 		    }
-		    DDebug("RegexRoute",DebugAll,"Using message parameter '%s'",
-			match.c_str());
-		    match = msg.getValue(match);
+		    DDebug("RegexRoute",DebugAll,"Using message parameter '%s' default '%s'",
+			match.c_str(),def.c_str());
+		    match = msg.getValue(match,def);
 		}
 		else if (r.startsWith("$(")) {
 		    // handle special matching by param $(function)regexp

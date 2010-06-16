@@ -89,7 +89,7 @@ public:
 
 using namespace TelEngine;
 
-#define SOFT_KILLS 5
+#define SOFT_WAITS 3
 #define HARD_KILLS 5
 #define KILL_WAIT 32
 
@@ -428,13 +428,32 @@ void ThreadPrivate::killall()
     Debugger debug("ThreadPrivate::killall()");
     ThreadPrivate *t;
     bool sledgehammer = false;
-    int c = 1;
     s_tmutex.lock();
-    ObjList *l = &s_threads;
+    ObjList* l = &s_threads;
+    while (l && (t = static_cast<ThreadPrivate *>(l->get())) != 0)
+    {
+	Debug(DebugInfo,"Stopping ThreadPrivate '%s' [%p]",t->m_name,t);
+	t->cancel(false);
+	l = l->next();
+    }
+    int c;
+    for (int w = 0; w < SOFT_WAITS; w++) {
+	s_tmutex.unlock();
+	Thread::idle();
+	s_tmutex.lock();
+	c = s_threads.count();
+	if (!c) {
+	    s_tmutex.unlock();
+	    return;
+	}
+    }
+    Debug(DebugMild,"Hard cancelling %d remaining threads",c);
+    l = &s_threads;
+    c = 1;
     while (l && (t = static_cast<ThreadPrivate *>(l->get())) != 0)
     {
 	Debug(DebugInfo,"Trying to kill ThreadPrivate '%s' [%p], attempt %d",t->m_name,t,c);
-	bool ok = t->cancel(c > SOFT_KILLS);
+	bool ok = t->cancel(true);
 	if (ok) {
 	    int d = 0;
 	    // delay a little (exponentially) so threads have a chance to clean up
@@ -466,7 +485,7 @@ void ThreadPrivate::killall()
 		continue;
 	    }
 	    Thread::msleep(1);
-	    if (++c >= (SOFT_KILLS+HARD_KILLS)) {
+	    if (++c >= HARD_KILLS) {
 		Debug(DebugGoOn,"Could not kill %p, will use sledgehammer later.",t);
 		sledgehammer = true;
 		t->m_thread = 0;

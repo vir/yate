@@ -429,6 +429,8 @@ void ThreadPrivate::killall()
     ThreadPrivate *t;
     bool sledgehammer = false;
     s_tmutex.lock();
+    int c = s_threads.count();
+    Debug(DebugNote,"Soft cancelling %d running threads",c);
     ObjList* l = &s_threads;
     while (l && (t = static_cast<ThreadPrivate *>(l->get())) != 0)
     {
@@ -436,7 +438,6 @@ void ThreadPrivate::killall()
 	t->cancel(false);
 	l = l->next();
     }
-    int c;
     for (int w = 0; w < SOFT_WAITS; w++) {
 	s_tmutex.unlock();
 	Thread::idle();

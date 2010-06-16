@@ -118,6 +118,10 @@ using namespace TelEngine;
 #define CFG_SUFFIX ".conf"
 #endif
 
+// Maximum number of engine.stop messages we allow
+#ifndef MAX_STOP
+#define MAX_STOP 5
+#endif
 
 // Supervisor control constants
 
@@ -1066,7 +1070,8 @@ int Engine::run()
 #endif
     Output("Yate%s engine is initialized and starting up%s%s",
 	clientMode() ? " client" : "",s_node.null() ? "" : " on " ,s_node.safe());
-    while (s_haltcode == -1) {
+    int stops = MAX_STOP;
+    while (s_haltcode == -1 || ((--stops >= 0) && dispatch("engine.stop"))) {
 	if (s_cmds) {
 	    Output("Executing initial commands");
 	    for (ObjList* c = s_cmds->skipNull(); c; c=c->skipNext()) {
@@ -1136,13 +1141,15 @@ int Engine::run()
 	m->addParam("time",String((int)m->msgTime().sec()));
 	if (nodeName())
 	    m->addParam("nodename",nodeName());
-	// Try to fine tune the ticker
-	t = (long)(m->msgTime().usec() % 1000000);
-	if (t > 500000)
-	    corr -= (1000000-t)/10;
-	else
-	    corr += t/10;
-	XDebug(DebugAll,"Adjustment at %ld, corr %ld",t,corr);
+	if (s_haltcode == -1) {
+	    // Try to fine tune the ticker unless exiting
+	    t = (long)(m->msgTime().usec() % 1000000);
+	    if (t > 500000)
+		corr -= (1000000-t)/10;
+	    else
+		corr += t/10;
+	    XDebug(DebugAll,"Adjustment at %ld, corr %ld",t,corr);
+	}
 	enqueue(m);
 	Thread::yield();
     }

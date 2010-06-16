@@ -779,6 +779,7 @@ static int supervise(void)
 		// Child exited for some reason
 		if (WIFEXITED(status)) {
 		    retcode = WEXITSTATUS(status);
+		    ::fprintf(stderr,"Supervisor: child %d exited with code %d\n",s_childpid,retcode);
 		    if (retcode <= 127)
 			s_runagain = false;
 		    else
@@ -819,8 +820,13 @@ static int supervise(void)
 	if (s_childpid > 0) {
 	    // Child failed to proof sanity. Kill it - no need to be gentle.
 	    ::fprintf(stderr,"Supervisor: killing unresponsive child %d\n",s_childpid);
+#ifdef RLIMIT_CORE
+	    // If -Da or -C were specified try to get a corefile
+	    if (s_sigabrt || s_coredump) {
+#else
 	    // If -Da was specified try to get a corefile
 	    if (s_sigabrt) {
+#endif
 		::kill(s_childpid,SIGABRT);
 		::usleep(500000);
 	    }

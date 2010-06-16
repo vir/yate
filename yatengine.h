@@ -224,15 +224,24 @@ public:
      *
      * @param name Name of the message - must not be NULL or empty
      * @param retval Default return value
+     * @param broadcast Broadcast flag, true if handling the mesage must not stop it
      */
-    explicit Message(const char* name, const char* retval = 0);
+    explicit Message(const char* name, const char* retval = 0, bool broadcast = false);
 
     /**
      * Copy constructor.
-     * Note that user data and notification are not copied.
+     * Note that user data and notification are not copied
      * @param original Message we are copying from
      */
     Message(const Message& original);
+
+    /**
+     * Copy constructor that can alter the broadcast flag.
+     * Note that user data and notification are not copied
+     * @param original Message we are copying from
+     * @param broadcast Broadcast flag, true if handling the mesage must not stop it
+     */
+    Message(const Message& original, bool broadcast);
 
     /**
      * Destruct the message and dereferences any user data
@@ -291,6 +300,13 @@ public:
      */
     inline void setNotify(bool notify = true)
 	{ m_notify = notify; }
+
+    /**
+     * Retrieve the broadcast flag
+     * @return True if the message is a broadcast (handling does not stop it)
+     */
+    inline bool broadcast() const
+	{ return m_broadcast; }
 
     /**
      * Retrieve a reference to the creation time of the message.
@@ -364,6 +380,7 @@ private:
     Time m_time;
     RefObject* m_data;
     bool m_notify;
+    bool m_broadcast;
     void commonEncode(String& str) const;
     int commonDecode(const char* str, int offs);
 };
@@ -582,6 +599,8 @@ public:
      * Synchronously dispatch a message to the installed handlers.
      * Handlers matching the message name and filter parameter are called in
      *  their installed order (based on priority) until one returns true.
+     * If the message has the broadcast flag set all matching handlers are
+     *  called and the return value is true if any handler returned true.
      * Note that in some cases when a handler is removed from the list
      *  other handlers with equal priority may be called twice.
      * @param msg The message to dispatch
@@ -997,10 +1016,11 @@ public:
      * Convenience function.
      * Enqueue a new parameterless message in the message queue
      * @param name Name of the parameterless message to put in queue
+     * @param broadcast Broadcast flag, true if handling the mesage must not stop it
      * @return True if enqueued, false on error (already queued)
      */
-    inline static bool enqueue(const char* name)
-	{ return (name && *name) ? enqueue(new Message(name)) : false; }
+    inline static bool enqueue(const char* name, bool broadcast = false)
+	{ return name && *name && enqueue(new Message(name,0,broadcast)); }
 
     /**
      * Synchronously dispatch a message to the registered handlers
@@ -1020,9 +1040,10 @@ public:
      * Convenience function.
      * Dispatch a parameterless message to the registered handlers
      * @param name The name of the message to create and dispatch
+     * @param broadcast Broadcast flag, true if handling the mesage must not stop it
      * @return True if one handler accepted it, false if all ignored
      */
-    static bool dispatch(const char* name);
+    static bool dispatch(const char* name, bool broadcast = false);
 
     /**
      * Install or remove a hook to catch messages after being dispatched

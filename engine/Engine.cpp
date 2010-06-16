@@ -1057,8 +1057,7 @@ int Engine::run()
     ::signal(SIGINT,sighandler);
     ::signal(SIGTERM,sighandler);
     Debug(DebugAll,"Engine dispatching start message");
-    if (dispatch("engine.start"))
-	Debug(DebugGoOn,"Message engine.start was unexpectedly handled!");
+    dispatch("engine.start",true);
     setStatus(SERVICE_RUNNING);
     long corr = 0;
 #ifndef _WINDOWS
@@ -1071,7 +1070,7 @@ int Engine::run()
     Output("Yate%s engine is initialized and starting up%s%s",
 	clientMode() ? " client" : "",s_node.null() ? "" : " on " ,s_node.safe());
     int stops = MAX_STOP;
-    while (s_haltcode == -1 || ((--stops >= 0) && dispatch("engine.stop"))) {
+    while (s_haltcode == -1 || ((--stops >= 0) && dispatch("engine.stop",true))) {
 	if (s_cmds) {
 	    Output("Executing initial commands");
 	    for (ObjList* c = s_cmds->skipNull(); c; c=c->skipNext()) {
@@ -1137,7 +1136,7 @@ int Engine::run()
 	    t += 1000000;
 	XDebug(DebugAll,"Sleeping for %ld",t);
 	Thread::usleep(t);
-	Message *m = new Message("engine.timer");
+	Message* m = new Message("engine.timer",0,true);
 	m->addParam("time",String((int)m->msgTime().sec()));
 	if (nodeName())
 	    m->addParam("nodename",nodeName());
@@ -1157,8 +1156,7 @@ int Engine::run()
     Output("Yate engine is shutting down with code %d",s_haltcode);
     setStatus(SERVICE_STOP_PENDING);
     ::signal(SIGINT,SIG_DFL);
-    if (dispatch("engine.halt"))
-	Debug(DebugGoOn,"Message engine.halt was unexpectedly handled!");
+    dispatch("engine.halt",true);
     checkPoint();
     Thread::msleep(200);
     m_dispatcher.dequeue();
@@ -1359,8 +1357,7 @@ void Engine::initPlugins()
     if (exiting())
 	return;
     Output("Initializing plugins");
-    if (dispatch("engine.init"))
-	Debug(DebugGoOn,"Message engine.init was unexpectedly handled!");
+    dispatch("engine.init",true);
     ObjList *l = plugins.skipNull();
     for (; l; l = l->skipNext()) {
 	Plugin *p = static_cast<Plugin *>(l->get());
@@ -1449,11 +1446,11 @@ bool Engine::dispatch(Message& msg)
     return s_self ? s_self->m_dispatcher.dispatch(msg) : false;
 }
 
-bool Engine::dispatch(const char* name)
+bool Engine::dispatch(const char* name, bool broadcast)
 {
     if (!(s_self && name && *name))
 	return false;
-    Message msg(name);
+    Message msg(name,0,broadcast);
     if (nodeName())
 	msg.addParam("nodename",nodeName());
     return s_self->m_dispatcher.dispatch(msg);

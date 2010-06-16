@@ -25,18 +25,29 @@
 
 using namespace TelEngine;
 
-Message::Message(const char* name, const char* retval)
-    : NamedList(name), m_return(retval), m_data(0), m_notify(false)
+Message::Message(const char* name, const char* retval, bool broadcast)
+    : NamedList(name),
+      m_return(retval), m_data(0), m_notify(false), m_broadcast(broadcast)
 {
-    XDebug(DebugAll,"Message::Message(\"%s\",\"%s\") [%p]",name,retval,this);
+    XDebug(DebugAll,"Message::Message(\"%s\",\"%s\",%s) [%p]",
+	name,retval,String::boolText(broadcast),this);
 }
 
 Message::Message(const Message& original)
     : NamedList(original),
       m_return(original.retValue()), m_time(original.msgTime()),
-      m_data(0), m_notify(false)
+      m_data(0), m_notify(false), m_broadcast(original.broadcast())
 {
     XDebug(DebugAll,"Message::Message(&%p) [%p]",&original,this);
+}
+
+Message::Message(const Message& original, bool broadcast)
+    : NamedList(original),
+      m_return(original.retValue()), m_time(original.msgTime()),
+      m_data(0), m_notify(false), m_broadcast(broadcast)
+{
+    XDebug(DebugAll,"Message::Message(&%p,%s) [%p]",
+	&original,String::boolText(broadcast),this);
 }
 
 Message::~Message()
@@ -371,14 +382,14 @@ bool MessageDispatcher::dispatch(Message& msg)
 #ifdef DEBUG
 	    u_int64_t tm = Time::now();
 #endif
-	    retv = h->receivedInternal(msg);
+	    retv = h->receivedInternal(msg) || retv;
 #ifdef DEBUG
 	    tm = Time::now() - tm;
 	    if (m_warnTime && (tm > m_warnTime))
 		Debug(DebugInfo,"Message '%s' [%p] passed through %p in " FMT64U " usec",
 		    msg.c_str(),&msg,h,tm);
 #endif
-	    if (retv)
+	    if (retv && !msg.broadcast())
 		break;
 	    lock();
 	    if (c == m_changes)

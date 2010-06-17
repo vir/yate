@@ -1882,7 +1882,7 @@ public:
      * @param rexp Regular expression to check for match
      * @return True if matches, false otherwise
      */
-    bool matches(Regexp& rexp);
+    bool matches(const Regexp& rexp);
 
     /**
      * Get the offset of the last match
@@ -2156,7 +2156,7 @@ public:
      * Makes sure the regular expression is compiled
      * @return True if successfully compiled, false on error
      */
-    bool compile();
+    bool compile() const;
 
     /**
      * Checks if the pattern matches a given value
@@ -2200,8 +2200,8 @@ protected:
 
 private:
     void cleanup();
-    bool matches(const char *value, StringMatchPrivate *matchlist);
-    void* m_regexp;
+    bool matches(const char* value, StringMatchPrivate* matchlist) const;
+    mutable void* m_regexp;
     int m_flags;
 };
 

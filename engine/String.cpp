@@ -839,7 +839,7 @@ bool String::endsWith(const char* what, bool wordBreak, bool caseInsensitive) co
     return (::strncmp(m_string+m_length-l,what,l) == 0);
 }
 
-bool String::matches(Regexp& rexp)
+bool String::matches(const Regexp& rexp)
 {
     if (m_matches)
 	clearMatches();
@@ -1277,7 +1277,7 @@ Regexp::~Regexp()
     cleanup();
 }
 
-bool Regexp::matches(const char* value, StringMatchPrivate* matchlist)
+bool Regexp::matches(const char* value, StringMatchPrivate* matchlist) const
 {
     XDebug(DebugInfo,"Regexp::matches(\"%s\",%p)",value,matchlist);
     if (!value)
@@ -1291,8 +1291,7 @@ bool Regexp::matches(const char* value, StringMatchPrivate* matchlist)
 
 bool Regexp::matches(const char* value) const
 {
-    // this cast is wrong but so handy...
-    return const_cast<Regexp*>(this)->matches(value,0);
+    return matches(value,0);
 }
 
 void Regexp::changed()
@@ -1301,7 +1300,7 @@ void Regexp::changed()
     String::changed();
 }
 
-bool Regexp::compile()
+bool Regexp::compile() const
 {
     XDebug(DebugInfo,"Regexp::compile()");
     if (c_str() && !m_regexp) {

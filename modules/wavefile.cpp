@@ -801,7 +801,7 @@ bool AttachHandler::received(Message &msg)
     if (src.null())
 	more--;
     else {
-	Regexp r("^wave/\\([^/]*\\)/\\(.*\\)$");
+	static const Regexp r("^wave/\\([^/]*\\)/\\(.*\\)$");
 	if (src.matches(r)) {
 	    if (src.matchString(1) == "play") {
 		src = src.matchString(2);
@@ -821,7 +821,7 @@ bool AttachHandler::received(Message &msg)
     if (cons.null())
 	more--;
     else {
-	Regexp r("^wave/\\([^/]*\\)/\\(.*\\)$");
+	static const Regexp r("^wave/\\([^/]*\\)/\\(.*\\)$");
 	if (cons.matches(r)) {
 	    if (cons.matchString(1) == "record") {
 		cons = cons.matchString(2);
@@ -841,7 +841,7 @@ bool AttachHandler::received(Message &msg)
     if (ovr.null())
 	more--;
     else {
-	Regexp r("^wave/\\([^/]*\\)/\\(.*\\)$");
+	static const Regexp r("^wave/\\([^/]*\\)/\\(.*\\)$");
 	if (ovr.matches(r)) {
 	    if (ovr.matchString(1) == "play") {
 		ovr = ovr.matchString(2);
@@ -861,7 +861,7 @@ bool AttachHandler::received(Message &msg)
     if (repl.null())
 	more--;
     else {
-	Regexp r("^wave/\\([^/]*\\)/\\(.*\\)$");
+	static const Regexp r("^wave/\\([^/]*\\)/\\(.*\\)$");
 	if (repl.matches(r)) {
 	    if (repl.matchString(1) == "play") {
 		repl = repl.matchString(2);
@@ -970,7 +970,7 @@ bool RecordHandler::received(Message &msg)
     if (c1.null())
 	more--;
     else {
-	Regexp r("^wave/\\([^/]*\\)/\\(.*\\)$");
+	static const Regexp r("^wave/\\([^/]*\\)/\\(.*\\)$");
 	if (c1.matches(r)) {
 	    if (c1.matchString(1) == "record") {
 		c1 = c1.matchString(2);
@@ -990,7 +990,7 @@ bool RecordHandler::received(Message &msg)
     if (c2.null())
 	more--;
     else {
-	Regexp r("^wave/\\([^/]*\\)/\\(.*\\)$");
+	static const Regexp r("^wave/\\([^/]*\\)/\\(.*\\)$");
 	if (c2.matches(r)) {
 	    if (c2.matchString(1) == "record") {
 		c2 = c2.matchString(2);
@@ -1046,7 +1046,7 @@ bool RecordHandler::received(Message &msg)
 
 bool WaveFileDriver::msgExecute(Message& msg, String& dest)
 {
-    Regexp r("^\\([^/]*\\)/\\(.*\\)$");
+    static const Regexp r("^\\([^/]*\\)/\\(.*\\)$");
     if (!dest.matches(r))
 	return false;
 

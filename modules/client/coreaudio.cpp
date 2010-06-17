@@ -34,7 +34,7 @@
 using namespace TelEngine;
 
 namespace { //anonymous
-	
+
 class CoreAudioSource : public ThreadedSource
 {
 public:
@@ -803,7 +803,7 @@ bool CoreAudioHandler::received(Message &msg)
     String dest(msg.getValue("callto"));
     if (dest.null())
         return false;
-    Regexp r("^coreaudio/\\(.*\\)$");
+    static const Regexp r("^coreaudio/\\(.*\\)$");
     if (!dest.matches(r))
         return false;
     if (s_audioChan) {

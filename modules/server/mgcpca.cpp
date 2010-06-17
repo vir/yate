@@ -342,7 +342,7 @@ static bool copyRename(NamedList& dest, const char* dname, const NamedList& src,
 // Increment the number at the end of a name by an offset
 static bool tailIncrement(String& name, unsigned int offs)
 {
-    Regexp r("\\([0-9]\\+\\)@");
+    static const Regexp r("\\([0-9]\\+\\)@");
     if (name.matches(r)) {
 	int pos = name.matchOffset(1);
 	unsigned int len = name.matchLength(1);
@@ -1026,16 +1026,16 @@ bool MGCPSpan::matchEndpoint(const MGCPEndpointId& ep)
     if (findCircuit(ep.id()))
 	return true;
     // check for wildcards like */*/*
-    static Regexp s_termsAll("^\\*[/*]\\+\\*$");
+    static const Regexp s_termsAll("^\\*[/*]\\+\\*$");
     if (s_termsAll.matches(ep.user()))
 	return true;
     String tmp = ep.user();
     // check for prefix/*/*
-    static Regexp s_finalAll("^\\([^*]\\+/\\)[/*]\\+$");
+    static const Regexp s_finalAll("^\\([^*]\\+/\\)[/*]\\+$");
     if (tmp.matches(s_finalAll) && m_epId.user().startsWith(tmp.matchString(1),false,true))
 	return true;
     // check for prefix[min-max]
-    static Regexp s_finalRange("^\\(.*\\)\\[\\([0-9]\\+\\)-\\([0-9]\\+\\)\\]$");
+    static const Regexp s_finalRange("^\\(.*\\)\\[\\([0-9]\\+\\)-\\([0-9]\\+\\)\\]$");
     if (!(tmp.matches(s_finalRange) && m_epId.user().startsWith(tmp.matchString(1),false,true)))
 	return false;
     int idx = m_epId.user().substr(tmp.matchLength(1)).toInteger(-1,10);

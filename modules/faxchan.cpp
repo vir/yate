@@ -784,7 +784,7 @@ void FaxChan::updateInfo(t30_state_t* t30)
 
 bool FaxDriver::msgExecute(Message& msg, String& dest)
 {
-    Regexp r("^\\([^/]*\\)/\\(.*\\)$");
+    static const Regexp r("^\\([^/]*\\)/\\(.*\\)$");
     if (!dest.matches(r))
 	return false;
 

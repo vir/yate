@@ -1600,7 +1600,7 @@ bool DefaultLogic::callContact(NamedList* params, Window* wnd)
 	call = !account.null();
     }
     else {
-	Regexp r("^[a-z0-9]\\+/");
+	static const Regexp r("^[a-z0-9]\\+/");
 	if (!r.matches(target)) {
 	    // Incomplete target:
 	    //   1 registered account: call from it

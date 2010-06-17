@@ -2710,7 +2710,7 @@ bool ClientChannel::start(const String& target, const NamedList& params)
     Message* m = message("call.route");
     Message* s = message("chan.startup");
     // Make sure we set the target's protocol if we have one
-    Regexp r("^[a-z0-9]\\+/");
+    static const Regexp r("^[a-z0-9]\\+/");
     String to = target;
     const char* param = "callto";
     if (!r.matches(target.safe())) {

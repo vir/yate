@@ -838,7 +838,7 @@ bool Connection::autoComplete()
 	m.addParam("partword",partWord);
     if ((partLine == "status") || (partLine == "debug") || (partLine == "drop"))
 	m.setParam("complete","channels");
-    Regexp r("^debug [^ ]\\+$");
+    static const Regexp r("^debug [^ ]\\+$");
     if (r.matches(partLine))
 	completeWords(m.retValue(),s_level,partWord);
     if (m_auth >= Admin)
@@ -1153,7 +1153,7 @@ bool Connection::processLine(const char *line)
 	Message m("chan.control");
 	m.addParam("targetid",id);
 	m.addParam("component",id);
-	Regexp r("^\\(.* \\)\\?\\([^= ]\\+\\)=\\([^=]*\\)$");
+	static const Regexp r("^\\(.* \\)\\?\\([^= ]\\+\\)=\\([^=]*\\)$");
 	while (ctrl) {
 	    if (!ctrl.matches(r)) {
 		m.setParam("operation",ctrl);

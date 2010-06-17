@@ -666,7 +666,7 @@ Message* SDPSession::buildChanRtp(SDPMedia* media, const char* addr, bool start,
     if (m_secure) {
 	if (media->remoteCrypto()) {
 	    String sdes = media->remoteCrypto();
-	    Regexp r("^\\([0-9]\\+\\) \\+\\([^ ]\\+\\) \\+\\([^ ]\\+\\) *\\(.*\\)$");
+	    static const Regexp r("^\\([0-9]\\+\\) \\+\\([^ ]\\+\\) \\+\\([^ ]\\+\\) *\\(.*\\)$");
 	    if (sdes.matches(r)) {
 		m->addParam("secure",String::boolText(true));
 		m->addParam("crypto_tag",sdes.matchString(1));

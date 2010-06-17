@@ -485,7 +485,7 @@ bool OssHandler::received(Message &msg)
     String dest(msg.getValue("callto"));
     if (dest.null())
 	return false;
-    Regexp r("^oss/\\(.*\\)$");
+    static const Regexp r("^oss/\\(.*\\)$");
     if (!dest.matches(r))
 	return false;
     if (s_chan) {

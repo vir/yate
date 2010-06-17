@@ -1265,7 +1265,7 @@ bool ExtModReceiver::processLine(const char* line)
 	id >> prio >> ":";
 	String fname;
 	String fvalue;
-	Regexp r("^\\([^:]*\\):\\([^:]*\\):\\?\\(.*\\)");
+	static const Regexp r("^\\([^:]*\\):\\([^:]*\\):\\?\\(.*\\)");
 	if (id.matches(r)) {
 	    // a filter is specified
 	    fname = id.matchString(2);
@@ -1506,7 +1506,7 @@ bool ExtModHandler::received(Message& msg)
     String dest(msg.getValue("callto"));
     if (dest.null())
 	return false;
-    Regexp r("^external/\\([^/]*\\)/\\([^ ]*\\)\\(.*\\)$");
+    static const Regexp r("^external/\\([^/]*\\)/\\([^ ]*\\)\\(.*\\)$");
     if (!dest.matches(r))
 	return false;
     CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());

@@ -750,7 +750,7 @@ FileDriver::~FileDriver()
 // Execute/accept file transfer requests
 bool FileDriver::msgExecute(Message& msg, String& dest)
 {
-    Regexp r("^\\([^/]*\\)/\\(.*\\)$");
+    static const Regexp r("^\\([^/]*\\)/\\(.*\\)$");
     if (!dest.matches(r))
 	return false;
 
@@ -892,7 +892,7 @@ bool FileDriver::msgExecute(Message& msg, String& dest)
 bool FileDriver::chanAttach(Message& msg)
 {
     // Expect file/[send|receive]/filename
-    Regexp r("^filetransfer/\\([^/]*\\)/\\(.*\\)$");
+    static const Regexp r("^filetransfer/\\([^/]*\\)/\\(.*\\)$");
 
     String file(msg.getValue("source"));
     // Direction

@@ -495,7 +495,7 @@ bool AlsaHandler::received(Message &msg)
     String dest(msg.getValue("callto"));
     if (dest.null())
 	return false;
-    Regexp r("^alsa/\\(.*\\)$");
+    static const Regexp r("^alsa/\\(.*\\)$");
     if (!dest.matches(r))
 	return false;
     if (s_chan) {

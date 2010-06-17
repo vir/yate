@@ -313,7 +313,7 @@ bool MOHHandler::received(Message &msg)
     String dest(msg.getValue("callto"));
     if (dest.null())
 	return false;
-    Regexp r("^moh/\\(.*\\)$");
+    static const Regexp r("^moh/\\(.*\\)$");
     if (!dest.matches(r))
 	return false;
     String name = dest.matchString(1);
@@ -376,7 +376,7 @@ bool AttachHandler::received(Message &msg)
     String src(msg.getValue("source"));
     if (src.null())
 	return false;
-    Regexp r("^moh/\\(.*\\)$");
+    static const Regexp r("^moh/\\(.*\\)$");
     if (!src.matches(r))
 	return false;
     src = src.matchString(1);

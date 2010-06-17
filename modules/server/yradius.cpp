@@ -1168,7 +1168,7 @@ void RadiusClient::addAttributes(NamedList& params, NamedList* list)
 	    continue;
 	String val = *s;
 	params.replaceParams(val);
-	Regexp r("^\\([0-9]\\+\\):\\(.*\\)");
+	static const Regexp r("^\\([0-9]\\+\\):\\(.*\\)");
 	if (key.matches(r)) {
 	    int subType = key.matchString(1).toInteger(-1);
 	    if ((subType >= 0) && (subType <= 255)) {

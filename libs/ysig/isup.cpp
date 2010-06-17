@@ -2474,7 +2474,7 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
 	m_defaultSls = SlsCircuit;
 
     m_format = params.getValue("format");
-    if (-1 == lookup(m_format,SignallingUtils::dict(0,0),-1))
+    if (-1 == lookup(m_format,SignallingUtils::dict(1,0),-1))
 	switch (m_type) {
 	    case SS7PointCode::ANSI:
 	    case SS7PointCode::ANSI8:

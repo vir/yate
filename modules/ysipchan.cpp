@@ -2243,7 +2243,7 @@ bool YateSIPConnection::emitPRACK(const SIPMessage* msg)
     const MimeHeaderLine* co = msg->getHeader("Contact");
     if (co) {
 	tmp = *co;
-	Regexp r("^[^<]*<\\([^>]*\\)>.*$");
+	static const Regexp r("^[^<]*<\\([^>]*\\)>.*$");
 	if (tmp.matches(r))
 	    tmp = tmp.matchString(1);
     }
@@ -3420,7 +3420,7 @@ bool YateSIPConnection::initTransfer(Message*& msg, SIPMessage*& sipNotify,
     const MimeHeaderLine* co = sipRefer->getHeader("Contact");
     if (co) {
 	tmp = *co;
-	Regexp r("^[^<]*<\\([^>]*\\)>.*$");
+	static const Regexp r("^[^<]*<\\([^>]*\\)>.*$");
 	if (tmp.matches(r))
 	    tmp = tmp.matchString(1);
     }
@@ -3970,7 +3970,7 @@ bool SipHandler::received(Message &msg)
     }
     const char* method = msg.getValue("method");
     uri = msg.getValue("uri",uri);
-    Regexp r("<\\([^>]\\+\\)>");
+    static const Regexp r("<\\([^>]\\+\\)>");
     if (uri.matches(r))
 	uri = uri.matchString(1);
     if (!(method && uri))

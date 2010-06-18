@@ -1006,8 +1006,9 @@ bool Connection::processLine(const char *line)
 	    (str << ":").append(SysUsage::runTime(SysUsage::KernelTime));
 	}
 	else {
-	    char buf[64];
-	    ::sprintf(buf,"%u:%02u:%02u (%u)",t / 3600,(t / 60) % 60,t % 60,t);
+	    char buf[72];
+	    ::sprintf(buf,"%u %02u:%02u:%02u (%u)",
+		t / 86400, (t / 3600) % 24,(t / 60) % 60,t % 60,t);
 	    str << "Uptime: " << buf;
 	    (str << " user: ").append(SysUsage::runTime(SysUsage::UserTime));
 	    (str << " kernel: ").append(SysUsage::runTime(SysUsage::KernelTime));

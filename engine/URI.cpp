@@ -90,11 +90,11 @@ void URI::parse() const
     // the compiler generates wrong code so use the temporary
     String tmp(*this);
     bool hasDesc = false;
-    static Regexp r1("^[[:space:]]*\"\\([^\"]\\+\\)\"[[:space:]]*\\(.*\\)$");
+    static const Regexp r1("^[[:space:]]*\"\\([^\"]\\+\\)\"[[:space:]]*\\(.*\\)$");
     if (tmp.matches(r1))
 	hasDesc = true;
     else {
-	static Regexp r2("^[[:space:]]*\\([^<]\\+\\)[[:space:]]*<\\([^>]\\+\\)");
+	static const Regexp r2("^[[:space:]]*\\([^<]\\+\\)[[:space:]]*<\\([^>]\\+\\)");
 	hasDesc = tmp.matches(r2);
     }
     if (hasDesc) {
@@ -104,7 +104,7 @@ void URI::parse() const
 	DDebug("URI",DebugAll,"new value='%s' [%p]",c_str(),this);
     }
 
-    static Regexp r3("<\\([^>]\\+\\)>");
+    static const Regexp r3("<\\([^>]\\+\\)>");
     if (tmp.matches(r3)) {
 	tmp = tmp.matchString(1);
 	*const_cast<URI*>(this) = tmp;
@@ -116,7 +116,7 @@ void URI::parse() const
     // We parse:
     // [proto:][//][user@]hostname[:port][/path][;params][?params][&params]
 
-    static Regexp r4("^\\([[:alpha:]]\\+:\\)\\?/\\?/\\?\\([^[:space:][:cntrl:]@]\\+@\\)\\?\\([[:alnum:]._-]\\+\\|[[][[:xdigit:].:]\\+[]]\\)\\(:[0-9]\\+\\)\\?");
+    static const Regexp r4("^\\([[:alpha:]]\\+:\\)\\?/\\?/\\?\\([^[:space:][:cntrl:]@]\\+@\\)\\?\\([[:alnum:]._-]\\+\\|[[][[:xdigit:].:]\\+[]]\\)\\(:[0-9]\\+\\)\\?");
     // hack: use while only so we could break out of it
     while (tmp.matches(r4)) {
 	int errptr = -1;

@@ -805,6 +805,7 @@ bool PBXAssist::operOnHold(Message& msg)
 	    m_peer1.clear();
     }
 
+    const char* reason = msg.getValue("reason","hold");
     Message* m;
     if (c2) {
 	m = new Message("chan.operation");
@@ -812,14 +813,14 @@ bool PBXAssist::operOnHold(Message& msg)
 	m->addParam("id",c2->id());
 	m->addParam("state","*");
 	defState();
-	c->connect(c2,"hold");
+	c->connect(c2,reason);
     }
     else {
 	m = new Message("chan.masquerade");
 	m->addParam("id",id());
 	m->addParam("callto","tone/dial");
 	m->addParam("message","call.execute");
-	m->addParam("reason","hold");
+	m->addParam("reason",reason);
 	copyParams(*m,msg);
 	setState("dial");
     }
@@ -840,7 +841,7 @@ bool PBXAssist::operReturnHold(Message& msg)
     cancelTransfer(c1->getPeerId());
     m_peer1.clear();
     defState();
-    c1->connect(c2);
+    c1->connect(c2,msg.getValue("reason","pickup"));
     return true;
 }
 
@@ -870,6 +871,7 @@ bool PBXAssist::operReturnTone(Message& msg, const char* reason)
 {
     cancelTransfer();
     setState(msg.getValue("state","dial"));
+    reason = msg.getValue("reason",reason);
     Message* m = new Message("chan.masquerade");
     m->addParam("id",id());
     m->addParam("callto","tone/dial");
@@ -950,7 +952,7 @@ bool PBXAssist::operDoTransfer(Message& msg)
     cancelTransfer();
     setState(msg.getValue("state","hangup"));
     m_peer1.clear();
-    c1->connect(c2);
+    c1->connect(c2,msg.getValue("reason","transfer"));
     return true;
 }
 

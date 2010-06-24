@@ -299,12 +299,13 @@ bool PBXAssist::msgDisconnect(Message& msg, const String& reason)
 	return ChanAssist::msgDisconnect(msg,reason);
 
     if ((reason == "hold") || (reason == "park") || (reason == "intrusion")) {
-	if (s_onhold) {
+	String onhold = m_keep.getValue("onhold",s_onhold);
+	if (onhold) {
 	    Channel* c = static_cast<Channel*>(msg.userObject("Channel"));
 	    if (!c)
 		return false;
 	    Message *m = c->message("call.execute",false,true);
-	    m->addParam("callto",s_onhold);
+	    m->addParam("callto",onhold);
 	    m->addParam("reason",reason);
 	    m->addParam("pbxstate",state());
 	    Engine::enqueue(m);

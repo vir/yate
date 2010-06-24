@@ -460,7 +460,8 @@ ExtModChan* ExtModChan::build(const char* file, const char* args, int type)
 
 ExtModChan::ExtModChan(const char* file, const char* args, int type)
     : CallEndpoint("ExtModule"),
-      m_recv(0), m_waitRet(0), m_type(type), m_disconn(false), m_waiting(false)
+      m_recv(0), m_waitRet(0), m_type(type),
+      m_running(false), m_disconn(false), m_waiting(false)
 {
     Debug(DebugAll,"ExtModChan::ExtModChan(%d) [%p]",type,this);
     File* reader = 0;
@@ -501,7 +502,8 @@ ExtModChan::ExtModChan(const char* file, const char* args, int type)
 
 ExtModChan::ExtModChan(ExtModReceiver* recv)
     : CallEndpoint("ExtModule"),
-      m_recv(recv), m_waitRet(0), m_type(DataNone), m_disconn(false), m_waiting(false)
+      m_recv(recv), m_waitRet(0), m_type(DataNone),
+      m_running(false), m_disconn(false), m_waiting(false)
 {
     Debug(DebugAll,"ExtModChan::ExtModChan(%p) [%p]",recv,this);
     s_mutex.lock();

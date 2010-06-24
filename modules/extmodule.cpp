@@ -1566,7 +1566,7 @@ bool ExtModHandler::received(Message& msg)
     recv->unuse();
     if (ch) {
 	em->waitMsg(0);
-	ch->connect(em);
+	ch->connect(em,msg.getValue("reason"));
 	em->waiting(false);
     }
     em->deref();

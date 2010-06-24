@@ -175,8 +175,10 @@ ChanAssist* PBXList::create(Message& msg, const String& id)
 	    DDebug(this,DebugCall,"Creating assistant for '%s'",id.c_str());
 	    bool guest = false;
 	    if (!s_incoming) {
-		const NamedString* status = msg.getParam("status");
-		if (status && (*status == "incoming"))
+		const NamedString* dir = msg.getParam("direction");
+		if (TelEngine::null(dir))
+		    dir = msg.getParam("status");
+		if (dir && (*dir == "incoming"))
 		    guest = true;
 	    }
 	    return new PBXAssist(this,id,msg.getBoolValue("dtmfpass",s_pass),msg.getBoolValue("pbxguest",guest));

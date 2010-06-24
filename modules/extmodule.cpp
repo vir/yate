@@ -500,7 +500,8 @@ ExtModChan::ExtModChan(const char* file, const char* args, int type)
 }
 
 ExtModChan::ExtModChan(ExtModReceiver* recv)
-    : CallEndpoint("ExtModule"), m_recv(recv), m_type(DataNone), m_disconn(false)
+    : CallEndpoint("ExtModule"),
+      m_recv(recv), m_waitRet(0), m_type(DataNone), m_disconn(false), m_waiting(false)
 {
     Debug(DebugAll,"ExtModChan::ExtModChan(%p) [%p]",recv,this);
     s_mutex.lock();
@@ -513,11 +514,13 @@ ExtModChan::~ExtModChan()
     Debugger debug(DebugAll,"ExtModChan::~ExtModChan()"," [%p]",this);
     s_mutex.lock();
     s_chans.remove(this,false);
+    ExtModReceiver* recv = m_recv;
+    m_recv = 0;
     s_mutex.unlock();
     setSource();
     setConsumer();
-    if (m_recv)
-	m_recv->die(false);
+    if (recv)
+	recv->die(false);
 }
 
 void ExtModChan::disconnected(bool final, const char *reason)
@@ -534,8 +537,9 @@ void ExtModChan::disconnected(bool final, const char *reason)
 	    m->addParam("address",m_recv->scriptFile());
 	if (reason)
 	    m->addParam("reason",reason);
-	if (getPeer())
-	    m->addParam("peerid",getPeer()->id());
+	String peerId;
+	if (getPeerId(peerId) && peerId)
+	    m->addParam("peerid",peerId);
 	Engine::enqueue(m);
     }
 }

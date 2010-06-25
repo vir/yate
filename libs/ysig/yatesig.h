@@ -6369,6 +6369,8 @@ private:
     // Circuit reset
     SignallingTimer m_rscTimer;          // RSC message or idle timeout
     SignallingCircuit* m_rscCic;         // Circuit currently beeing reset
+    u_int32_t m_rscInterval;             // Saved reset interval
+    u_int32_t m_rscSpeedup;              // Circuits left for speedup
     // Blocking/unblocking circuits
     SignallingTimer m_lockTimer;         // Request timeout
     bool m_lockGroup;                    // Allow sending requests for a group

@@ -2373,7 +2373,7 @@ ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
     m_l2DownTimer.interval(params,"t309",60000,90000,false);
     m_recvSgmTimer.interval(params,"t314",3000,4000,false);
     m_syncCicTimer.interval(params,"t316",4000,5000,false);
-    m_syncGroupTimer.interval(params,"channelsync",500,1000,true,true);
+    m_syncGroupTimer.interval(params,"channelsync",60,300,true,true);
     m_callDiscTimer.interval(params,"t305",0,5000,false);
     m_callRelTimer.interval(params,"t308",0,5000,false);
     m_callConTimer.interval(params,"t313",0,5000,false);

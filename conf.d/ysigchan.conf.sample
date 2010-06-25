@@ -108,7 +108,7 @@
 ; The call controller will notify the other side of the link of idle channels
 ; Set to 0 to disable
 ; Invalid values default to minimum (60s)
-;channelsync=1000
+;channelsync=300
 
 ; channellock: integer: Maximum time (in ms) spent trying to lock a remote channel
 ; Invalid values default to minimum (2500ms)
@@ -313,7 +313,7 @@
 ; The call controller will notify the other side of the link of idle channels
 ; Set to 0 to disable
 ; Defaults to minimum value (60s) if missing or invalid
-;channelsync=1000
+;channelsync=300
 
 ; sls: integer or keyword: Default Signaling Link Selection in outbound calls
 ; Allowed values:

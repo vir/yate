@@ -171,6 +171,7 @@ static const TokenDict s_dict_control[] = {
     { "validate", SS7MsgISUP::CVT },
     { "query", SS7MsgISUP::CQM },
     { "conttest", SS7MsgISUP::CCR },
+    { "reset", SS7MsgISUP::RSC },
     { 0, 0 }
 };
 
@@ -2447,6 +2448,7 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
       m_uptCicCode(0),
       m_rscTimer(0),
       m_rscCic(0),
+      m_rscSpeedup(0),
       m_lockTimer(0),
       m_lockGroup(true),
       m_lockNeed(true),
@@ -2512,7 +2514,8 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
     if (-1 == lookup(m_callerCat,s_dict_callerCat,-1))
 	m_callerCat = "ordinary";
 
-    m_rscTimer.interval(params,"channelsync",60,1000,true,true);
+    m_rscTimer.interval(params,"channelsync",60,300,true,true);
+    m_rscInterval = m_rscTimer.interval();
     m_lockTimer.interval(params,"channellock",2500,10000,false,false);
 
     // Remote user part test
@@ -2898,6 +2901,10 @@ void SS7ISUP::timerTick(const Time& when)
 	    return;
 	}
     }
+    if (m_rscSpeedup && !--m_rscSpeedup) {
+	Debug(this,DebugNote,"Reset interval back to %u ms",m_rscInterval);
+	m_rscTimer.interval(m_rscInterval);
+    }
     m_rscTimer.start(when.msec());
     // Pick the next circuit to reset. Ignore circuits locally locked
     if (m_defPoint && m_remotePoint &&
@@ -2968,6 +2975,16 @@ bool SS7ISUP::control(NamedList& params)
 		mylock.drop();
 		transmitMessage(msg,label,false);
 	    }
+	    return true;
+	case SS7MsgISUP::RSC:
+	    if (0 == (m_rscSpeedup = circuits() ? circuits()->count() : 0))
+		return false;
+	    // Temporarily speed up reset interval to 10s or as provided
+	    m_rscTimer.interval(params,"interval",2,10,false,true);
+	    Debug(this,DebugNote,"Fast reset of %u circuits every %u ms",
+		m_rscSpeedup,(unsigned int)m_rscTimer.interval());
+	    if (m_rscTimer.started())
+		m_rscTimer.start(Time::msecNow());
 	    return true;
     }
     mylock.drop();

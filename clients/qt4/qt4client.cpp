@@ -1747,8 +1747,7 @@ bool QtWindow::clearTable(const String& name)
 	w->setUpdatesEnabled(false);
     switch (w.type()) {
 	case QtWidget::Table:
-	    while (w.table()->rowCount())
-		w.table()->removeRow(0);
+	    w.table()->setRowCount(0);
 	    break;
 	case QtWidget::TextEdit:
 	    w.textEdit()->clear();

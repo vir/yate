@@ -3484,23 +3484,67 @@ bool QtClient::setWidget(QWidget* parent, QWidget* child)
     return true;
 }
 
-// Set an object's image property
-bool QtClient::setImage(QObject* obj, const String& img)
+// Set an object's image property from image file
+bool QtClient::setImage(QObject* obj, const String& img, bool fit)
 {
     if (!obj)
 	return false;
-#define QtClient_setImage(Class,method,ImgClass) { \
-    Class* Class##var = qobject_cast<Class*>(obj); \
-    if (Class##var) { \
-	Class##var->method(ImgClass(setUtf8(img))); \
-	return true; \
-    } \
+    QPixmap pixmap(setUtf8(img));
+    return setImage(obj,pixmap,fit);
 }
-    QtClient_setImage(QLabel,setPixmap,QPixmap);
-    QtClient_setImage(QAction,setIcon,QIcon);
-    QtClient_setImage(QAbstractButton,setIcon,QIcon);
-    QtClient_setImage(QMenu,setIcon,QIcon);
-#undef QtClient_setIcon
+
+// Set an object's image property from raw data.
+bool QtClient::setImage(QObject* obj, const DataBlock& data, const String& format, bool fit)
+{
+    if (!obj)
+	return false;
+    QPixmap pixmap;
+    String f = format;
+    f.startSkip("image/",false);
+    if (!pixmap.loadFromData((const uchar*)data.data(),data.length(),f))
+	return false;
+    return setImage(obj,pixmap,fit);
+}
+
+// Set an object's image property from QPixmap
+bool QtClient::setImage(QObject* obj, const QPixmap& img, bool fit)
+{
+    if (!obj)
+	return false;
+    if (obj->isWidgetType()) {
+	QLabel* l = qobject_cast<QLabel*>(obj);
+	if (l) {
+	    if (fit && !l->hasScaledContents() &&
+		(img.width() > l->width() || img.height() > l->height())) {
+		QPixmap tmp;
+		if (l->width() <= l->height())
+		    tmp = img.scaledToWidth(l->width());
+		else
+		    tmp = img.scaledToHeight(l->height());
+		l->setPixmap(tmp);
+	    }
+	    else
+		l->setPixmap(img);
+	}
+	else {
+	    QAbstractButton* b = qobject_cast<QAbstractButton*>(obj);
+	    if (b)
+		b->setIcon(img);
+	    else {
+		QMenu* m = qobject_cast<QMenu*>(obj);
+		if (m)
+		    m->setIcon(img);
+		else
+		    return false;
+	    }
+	}
+	return true;
+    }
+    QAction* a = qobject_cast<QAction*>(obj);
+    if (a) {
+	a->setIcon(img);
+	return true;
+    }
     return false;
 }
 

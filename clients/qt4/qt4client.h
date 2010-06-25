@@ -360,12 +360,36 @@ public:
     static bool setWidget(QWidget* parent, QWidget* child);
 
     /**
-     * Set an object's image property
+     * Set an object's image property from image file
      * @param obj The object
      * @param img Image file to load
+     * @param fit True to adjust the image to target size if applicable (like
+     *  a QLabel without scaled contents)
      * @return True on success
      */
-    static bool setImage(QObject* obj, const String& img);
+    static bool setImage(QObject* obj, const String& img, bool fit = true);
+
+    /**
+     * Set an object's image property from raw data
+     * @param obj The object
+     * @param data The image data
+     * @param format Image format if known
+     * @param fit True to adjust the image to target size if applicable (like
+     *  a QLabel without scaled contents)
+     * @return True on success
+     */
+    static bool setImage(QObject* obj, const DataBlock& data,
+	const String& format = String::empty(), bool fit = true);
+
+    /**
+     * Set an object's image property from QPixmap
+     * @param obj The object
+     * @param img The image
+     * @param fit True to adjust the image to target size if applicable (like
+     *  a QLabel without scaled contents)
+     * @return True on success
+     */
+    static bool setImage(QObject* obj, const QPixmap& img, bool fit = true);
 
     /**
      * Filter key press events. Retrieve an action associated with the key.

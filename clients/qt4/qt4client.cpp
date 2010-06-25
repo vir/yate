@@ -1456,7 +1456,7 @@ bool QtWindow::addTableRow(const String& name, const String& item,
     if (uiw)
 	return uiw->addTableRow(item,data,atStart);
     // Handle basic QTableWidget
-    if (!w.table())
+    if (w.type() != QtWidget::Table)
 	return false;
     TableWidget tbl(w.table());
     int row = atStart ? 0 : tbl.rowCount();
@@ -1494,9 +1494,9 @@ bool QtWindow::insertTableRow(const String& name, const String& item,
     UIWidget* uiw = w.uiWidget();
     if (uiw)
 	return uiw->insertTableRow(item,before,data);
-    TableWidget tbl(w.table());
-    if (!tbl.valid())
+    if (w.type() != QtWidget::Table)
 	return false;
+    TableWidget tbl(w.table());
     int row = tbl.getRow(before);
     if (row == -1)
 	row = tbl.rowCount();
@@ -1577,9 +1577,9 @@ bool QtWindow::setTableRow(const String& name, const String& item, const NamedLi
     UIWidget* uiw = w.uiWidget();
     if (uiw)
 	return uiw->setTableRow(item,data);
-    TableWidget tbl(w.table());
-    if (!tbl.valid())
+    if (w.type() != QtWidget::Table)
 	return false;
+    TableWidget tbl(w.table());
     int row = tbl.getRow(item);
     if (row < 0)
 	return false;
@@ -1599,9 +1599,9 @@ bool QtWindow::getTableRow(const String& name, const String& item, NamedList* da
     UIWidget* uiw = w.uiWidget();
     if (uiw)
 	return uiw->getTableRow(item,data);
-    TableWidget tbl(w.table(),false);
-    if (!tbl.valid())
+    if (w.type() != QtWidget::Table)
 	return false;
+    TableWidget tbl(w.table(),false);
     int row = tbl.getRow(item);
     if (row < 0)
 	return false;
@@ -1671,11 +1671,11 @@ bool QtWindow::updateTableRows(const String& name, const NamedList* data, bool a
 	    raiseSelectIfEmpty(ct->rowCount(),this,name);
 	return ok;
     }
-    TableWidget tbl(w.table());
-    if (!tbl.valid())
+    if (w.type() != QtWidget::Table)
 	return false;
     if (!data)
 	return true;
+    TableWidget tbl(w.table());
     bool ok = true;
     tbl.table()->setUpdatesEnabled(false);
     unsigned int n = data->length();
@@ -2247,7 +2247,7 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 	bool ok = true;
 	bool handled = true;
 	if (prop == s_propColWidths) {
-	    if (w.table()) {
+	    if (w.type() == QtWidget::Table) {
 		ObjList* list = value.split(',',false);
 		unsigned int col = 0;
 		for (ObjList* o = list->skipNull(); o; o = o->skipNext(), col++) {
@@ -2259,7 +2259,7 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 	    }
 	}
 	else if (prop == s_propSorting) {
-	    if (w.table()) {
+	    if (w.type() == QtWidget::Table) {
 		ObjList* list = value.split(',',false);
 		String* tmp = static_cast<String*>((*list)[0]);
 		int col = tmp ? tmp->toInteger(-1) : -1;

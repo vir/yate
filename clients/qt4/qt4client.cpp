@@ -1678,16 +1678,15 @@ bool QtWindow::updateTableRows(const String& name, const NamedList* data, bool a
     TableWidget tbl(w.table());
     bool ok = true;
     tbl.table()->setUpdatesEnabled(false);
+    ObjList add;
     unsigned int n = data->length();
     for (unsigned int i = 0; i < n; i++) {
 	if (Client::exiting())
 	    break;
-
 	// Get item and the list of parameters
 	NamedString* ns = data->getParam(i);
 	if (!ns)
 	    continue;
-
 	// Delete ?
 	if (ns->null()) {
 	    int row = tbl.getRow(ns->name());
@@ -1697,21 +1696,36 @@ bool QtWindow::updateTableRows(const String& name, const NamedList* data, bool a
 		ok = false;
 	    continue;
 	}
-
-	NamedPointer* np = static_cast<NamedPointer*>(ns->getObject("NamedPointer"));
-	NamedList* params = 0;
-	if (np)
-	    params = static_cast<NamedList*>(np->userObject("NamedList"));
-	bool addNew = ns->toBoolean();
-
-	if (addNew)
-	    tbl.updateRow(ns->name(),params,atStart);
-	else {
-	    int row = tbl.getRow(ns->name());
-	    bool found = (row >= 0);
-	    if (found && params)
+	// Set existing row or postpone add
+	int row = tbl.getRow(ns->name());
+	if (row >= 0) {
+	    const NamedList* params = YOBJECT(NamedList,ns);
+	    if (params)
 		tbl.updateRow(row,*params);
-	    ok = found && ok;
+	}
+	else if (ns->toBoolean())
+	    add.append(ns)->setDelete(false);
+	else
+	    ok = false;
+    }
+    n = add.count();
+    if (n) {
+	int row = tbl.rowCount();
+	if (row < 0)
+	    row = 0;
+	// Append if not requested to insert at start or table is empty
+	if (!(atStart && row))
+	    tbl.table()->setRowCount(row + n);
+	else {
+	    for (unsigned int i = 0; i < n; i++)
+		tbl.table()->insertRow(0);
+	}
+	for (ObjList* o = add.skipNull(); o; row++, o = o->skipNext()) {
+	    NamedString* ns = static_cast<NamedString*>(o->get());
+	    tbl.setID(row,ns->name());
+	    const NamedList* params = YOBJECT(NamedList,ns);
+	    if (params)
+		tbl.updateRow(row,*params);
 	}
     }
     tbl.table()->setUpdatesEnabled(true);

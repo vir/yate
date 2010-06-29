@@ -129,6 +129,8 @@ bool AuthHandler::received(Message &msg)
     if (!pass)
 	return false;
     msg.retValue() = *pass;
+    Debug("RegFile",DebugAll,"Authenticating user %s with password length %u",
+	username.c_str(),pass->length());
     return true;
 }
 
@@ -280,19 +282,35 @@ bool StatusHandler::received(Message &msg)
     if (dest && (dest != "regfile") && (dest != "misc"))
 	return false;
     Lock lock(s_mutex);
-    msg.retValue() << "name=regfile,type=misc;users=" << s_accounts.sections() << ";";
-    unsigned int count = s_accounts.sections();
-    for (unsigned int i = 0;i < count; i ++) {
-        NamedList* ac = s_accounts.getSection(i);
-	if (!ac)
-	    continue;
-	const String data = ac->getValue("data");
-	if (first)
-	    first = false;
-	else
-	    msg.retValue() << ",";
-	if (data)
+    unsigned int n = s_cfg.sections();
+    if (s_cfg.getSection("general") || !s_cfg.getSection(0))
+	n--;
+    msg.retValue() << "name=regfile,type=misc;create=" << s_create;
+    msg.retValue() << ",defined=" << n;
+    n = s_accounts.sections();
+    if (!s_accounts.getSection(0))
+	n--;
+    msg.retValue() << ",users=" << n;
+    if (msg.getBoolValue("details",true)) {
+	msg.retValue() << ";";
+	unsigned int count = s_accounts.sections();
+	for (unsigned int i = 0; i < count; i ++) {
+	    NamedList* ac = s_accounts.getSection(i);
+	    if (!ac)
+		continue;
+	    String data = ac->getValue("data");
+	    if (data.null())
+		continue;
+	    if (first)
+		first = false;
+	    else
+		msg.retValue() << ",";
+	    for (char* s = const_cast<char*>(data.c_str()); *s; s++) {
+		if (*s < ' ' || *s == ',')
+		    *s = '?';
+	    }
 	    msg.retValue() << *ac << "=" << data;
+	}
     }
     msg.retValue() << "\r\n";
     return false;

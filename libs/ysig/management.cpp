@@ -23,6 +23,7 @@
  */
 
 #include "yatesig.h"
+#include <yatephone.h>
 
 
 using namespace TelEngine;
@@ -173,6 +174,17 @@ const TokenDict* SS7MsgMTN::names()
 }
 
 
+// Control operations
+static const TokenDict s_dict_control[] = {
+    { "prohibit", SS7MsgSNM::TFP },
+    { "allow", SS7MsgSNM::TFA },
+    { "restrict", SS7MsgSNM::TFR },
+    { "restart", SS7MsgSNM::TRA },
+    { "changeover", SS7MsgSNM::COO },
+    { "changeback", SS7MsgSNM::CBD },
+    { 0, 0 }
+};
+
 bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
     if (msu.getSIF() != sif())
@@ -257,6 +269,118 @@ bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Lay
     return true;
 }
 
+bool SS7Management::control(NamedList& params)
+{
+    String* ret = params.getParam("completion");
+    const String* oper = params.getParam("operation");
+    const char* cmp = params.getValue("component");
+    int cmd = oper ? oper->toInteger(s_dict_control,-1) : -1;
+
+    if (ret) {
+	if (oper && (cmd < 0))
+	    return false;
+	String part = params.getValue("partword");
+	if (cmp) {
+	    if (toString() != cmp)
+		return false;
+	    for (const TokenDict* d = s_dict_control; d->token; d++)
+		Module::itemComplete(*ret,d->token,part);
+	    return true;
+	}
+	return Module::itemComplete(*ret,toString(),part);
+    }
+
+    if (!(cmp && toString() == cmp))
+	return false;
+
+    const String* addr = params.getParam("address");
+    if (TelEngine::null(addr))
+	return SignallingComponent::control(params);
+    // TYPE,opc,dpc,sls,spare
+    SS7PointCode::Type t = SS7PointCode::Other;
+    ObjList* l = addr->split(',');
+    if (l->at(0) && (t = SS7PointCode::lookup(l->at(0)->toString())) != SS7PointCode::Other) {
+	SS7PointCode opc,dpc;
+	int sls = -1;
+	int spare = 0;
+	if (l->at(1) && opc.assign(l->at(1)->toString(),t) &&
+	    l->at(2) && dpc.assign(l->at(2)->toString(),t)) {
+	    if (l->at(3))
+		sls = l->at(3)->toString().toInteger(sls);
+	    if (l->at(4))
+		spare = l->at(4)->toString().toInteger(spare);
+	    TelEngine::destruct(l);
+	    SS7Label lbl(t,dpc,opc,sls,spare);
+	    switch (cmd) {
+		case SS7MsgSNM::TFP:
+		case SS7MsgSNM::TFA:
+		case SS7MsgSNM::TFR:
+		    {
+			addr = params.getParam("destination");
+			SS7PointCode dest(opc);
+			if (TelEngine::null(addr) || dest.assign(*addr,t)) {
+			    unsigned char data[5];
+			    data[0] = cmd;
+			    return dest.store(t,data+1,spare) &&
+				(transmitMSU(SS7MSU(sio(),lbl,data,
+				    SS7PointCode::length(t)+1),lbl,sls) >= 0);
+			}
+		    }
+		    return false;
+		case SS7MsgSNM::TRA:
+		    {
+			unsigned char data = cmd;
+			return transmitMSU(SS7MSU(sio(),lbl,&data,1),lbl,sls) >= 0;
+		    }
+		case SS7MsgSNM::COO:
+		    {
+			int seq = params.getIntValue("sequence",0) & 0x7f;
+			int len = 2;
+			unsigned char data[3];
+			data[0] = cmd;
+			switch (t) {
+			    case SS7PointCode::ITU:
+				data[1] = (unsigned char)seq;
+				break;
+			    case SS7PointCode::ANSI:
+				data[1] = (unsigned char)((sls & 0x0f) | (seq << 4));
+				data[2] = (unsigned char)(seq >> 4);
+				len = 3;
+				break;
+			    default:
+				Debug(DebugStub,"Please implement COO for type %u",t);
+				return false;
+			}
+			return transmitMSU(SS7MSU(sio(),lbl,&data,len),lbl,sls) >= 0;
+		    }
+		case SS7MsgSNM::CBD:
+		    {
+			int code = params.getIntValue("code",0);
+			int len = 2;
+			unsigned char data[3];
+			data[0] = cmd;
+			switch (t) {
+			    case SS7PointCode::ITU:
+				data[1] = (unsigned char)code;
+				break;
+			    case SS7PointCode::ANSI:
+				data[1] = (unsigned char)((sls & 0x0f) | (code << 4));
+				data[2] = (unsigned char)(code >> 4);
+				len = 3;
+				break;
+			    default:
+				Debug(DebugStub,"Please implement CBD for type %u",t);
+				return false;
+			}
+			return transmitMSU(SS7MSU(sio(),lbl,&data,len),lbl,sls) >= 0;
+		    }
+	    }
+	}
+    }
+    TelEngine::destruct(l);
+    return false;
+}
+
 void SS7Management::notify(SS7Layer3* network, int sls)
 {
     Debug(this,DebugStub,"Please implement SS7Management::notify(%p,%d) [%p]",
@@ -269,18 +393,6 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 
 	// Get local services attached to network
 	// Get destination routes from network
-#if 0
-	SS7PointCode dpc(1,8,1);
-	SS7PointCode opc(1,8,2);
-	unsigned char sio = SS7MSU::National;
-	SS7PointCode::Type type = network->type(sio);
-	sio |= SS7MSU::SNM;
-	SS7Label lbl(type,dpc,opc,sls,0);
-	SS7MSU tra(sio,lbl,0,1);
-	unsigned char* d = tra.getData(lbl.length()+1,1);
-	d[0] = SS7MsgSNM::TRA;
-	transmitMSU(tra,lbl,sls);
-#endif
     }
 }
 

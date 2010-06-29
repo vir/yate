@@ -5793,6 +5793,14 @@ protected:
      * @return True if notification was processed
      */
     virtual void notify(SS7Layer3* link, int sls);
+
+    /**
+     * Query or modify the management settings or operational parameters
+     * @param params The list of parameters to query or change
+     * @return True if the control operation was executed
+     */
+    virtual bool control(NamedList& params);
+
 };
 
 /**
@@ -5857,7 +5865,7 @@ public:
     virtual bool initialize(const NamedList* config);
 
     /**
-     * Query or modify ISUP's settings or operational parameters
+     * Query or modify the test part settings or operational parameters
      * @param params The list of parameters to query or change
      * @return True if the control operation was executed
      */

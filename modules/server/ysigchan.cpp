@@ -931,9 +931,8 @@ bool SigChannel::msgProgress(Message& msg)
 	return true;
     bool media = msg.getBoolValue("earlymedia",getPeer() && getPeer()->getSource());
     const char* format = msg.getValue("format");
-    SignallingMessage* sm = 0;
+    SignallingMessage* sm = new SignallingMessage;
     if (media && updateConsumer(format,false)) {
-	sm = new SignallingMessage;
 	sm->params().addParam("media",String::boolText(true));
 	if (format)
 	    sm->params().addParam("format",format);
@@ -957,11 +956,9 @@ bool SigChannel::msgRinging(Message& msg)
 	return true;
     bool media = msg.getBoolValue("earlymedia",getPeer() && getPeer()->getSource());
     const char* format = msg.getValue("format");
-    SignallingMessage* sm = 0;
-    if (media && updateConsumer(format,false) && format) {
-	sm = new SignallingMessage;
+    SignallingMessage* sm = new SignallingMessage;
+    if (media && updateConsumer(format,false) && format)
 	sm->params().addParam("format",format);
-    }
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Ringing,sm,m_call);
     TelEngine::destruct(sm);
     SignallingCircuitEvent* cicEvent = handleRtp(msg);
@@ -987,11 +984,9 @@ bool SigChannel::msgAnswered(Message& msg)
 	cic->setParam("echotrain",value);
     }
     const char* format = msg.getValue("format");
-    SignallingMessage* sm = 0;
-    if (updateConsumer(format,false) && format) {
-	sm = new SignallingMessage;
+    SignallingMessage* sm = new SignallingMessage;
+    if (updateConsumer(format,false) && format)
 	sm->params().addParam("format",format);
-    }
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Answer,sm,m_call);
     TelEngine::destruct(sm);
     SignallingCircuitEvent* cicEvent = handleRtp(msg);
@@ -1088,11 +1083,9 @@ void SigChannel::callAccept(Message& msg)
     if (m_call) {
 	const char* format = msg.getValue("format");
 	updateConsumer(format,false);
-	SignallingMessage* sm = 0;
-	if (format) {
-	    sm = new SignallingMessage;
+	SignallingMessage* sm = new SignallingMessage;
+	if (format)
 	    sm->params().addParam("format",format);
-	}
 	event = new SignallingEvent(SignallingEvent::Accept,sm,m_call);
 	TelEngine::destruct(sm);
     }
@@ -1735,19 +1728,7 @@ void SigDriver::copySigMsgParams(SignallingEvent* event, const NamedList& params
     prefix = params.getValue("message-oprefix",prefix);
     if (prefix.null())
 	return;
-    event->message()->params().copySubParams(params,prefix + ".");
-
-return;
-    prefix << ".";
-    unsigned int n = params.length();
-    for (unsigned int i = 0; i < n; i++) {
-	NamedString* param = params.getParam(i);
-	if (!param)
-	    continue;
-	String name = param->name();
-	if (name.startSkip(prefix,false))
-	    event->message()->params().addParam(name,*param);
-    }
+    event->message()->params().copySubParams(params,prefix);
 }
 
 // Handle command complete requests

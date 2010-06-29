@@ -155,9 +155,6 @@ static const SignallingFlags s_flags_paramcompat[] = {
     { 0, 0, 0 }
 };
 
-// Backward call indicators to be copied
-static const String s_copyBkInd("BackwardCallIndicators,OptionalBackwardCallIndicators");
-
 // SLS special values on outbound calls
 static const TokenDict s_dict_callSls[] = {
     { "auto", SS7ISUP::SlsAuto    }, // Let Layer3 deal with it
@@ -1665,7 +1662,7 @@ void SS7MsgISUP::toString(String& dest, const SS7Label& label, bool params,
 // @param recvLbl True if the given label is from a received message. If true, a new routing
 //   label will be created from the received one
 // @return Link the message was successfully queued to, negative for error
-inline int transmitREL(SS7ISUP* isup, unsigned int cic, const SS7Label& label, bool recvLbl,
+inline static int transmitREL(SS7ISUP* isup, unsigned int cic, const SS7Label& label, bool recvLbl,
 	const char* reason)
 {
     SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::REL,cic);
@@ -1676,7 +1673,7 @@ inline int transmitREL(SS7ISUP* isup, unsigned int cic, const SS7Label& label, b
 
 // Push down the protocol stack a RLC (Release Complete) message
 // @param msg Optional received message to copy release parameters. Ignored if reason is valid
-inline int transmitRLC(SS7ISUP* isup, unsigned int cic, const SS7Label& label, bool recvLbl,
+inline static int transmitRLC(SS7ISUP* isup, unsigned int cic, const SS7Label& label, bool recvLbl,
 	const char* reason = 0, const SS7MsgISUP* msg = 0)
 {
     SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::RLC,cic);
@@ -1690,7 +1687,7 @@ inline int transmitRLC(SS7ISUP* isup, unsigned int cic, const SS7Label& label, b
 }
 
 // Push down the protocol stack a CNF (Confusion) message
-inline int transmitCNF(SS7ISUP* isup, unsigned int cic, const SS7Label& label, bool recvLbl,
+inline static int transmitCNF(SS7ISUP* isup, unsigned int cic, const SS7Label& label, bool recvLbl,
 	const char* reason)
 {
     SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::CNF,cic);
@@ -1762,7 +1759,7 @@ void SS7ISUPCall::stopWaitSegment(bool discard)
 }
 
 // Helper functions called in getEvent
-inline bool timeout(SS7ISUP* isup, SS7ISUPCall* call, SignallingTimer& timer,
+inline static bool timeout(SS7ISUP* isup, SS7ISUPCall* call, SignallingTimer& timer,
 	const Time& when, const char* req)
 {
     if (!timer.timeout(when.msec()))
@@ -1881,6 +1878,19 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
     return m_lastEvent;
 }
 
+// Helper that copies all parameters starting with a capital letter
+static void copyUpper(NamedList& dest, const NamedList& src)
+{
+    static const Regexp r("^[A-Z][A-Za-z_.]\\+$");
+    unsigned int n = src.length();
+    for (unsigned int i = 0; i < n; i++) {
+	const NamedString* p = src.getParam(i);
+	if (!p || !r.matches(p->name()))
+	    continue;
+	dest.setParam(p->name(),*p);
+    }
+}
+
 // Send an event to this call
 bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 {
@@ -1914,7 +1924,7 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 		m->params().addParam("EventInformation",
 		    event->type() == SignallingEvent::Ringing ? "ringing": "progress");
 		if (event->message())
-		    m->params().copyParams(event->message()->params(),s_copyBkInd);
+		    copyUpper(m->params(),event->message()->params());
 		m_state = Ringing;
 		mylock.drop();
 		result = transmitMessage(m);
@@ -1924,7 +1934,7 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 	    if (validMsgState(true,SS7MsgISUP::ACM)) {
 		SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::ACM,id());
 		if (event->message())
-		    m->params().copyParams(event->message()->params(),s_copyBkInd);
+		    copyUpper(m->params(),event->message()->params());
 		m_state = Accepted;
 		mylock.drop();
 		result = transmitMessage(m);
@@ -1934,7 +1944,7 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 	    if (validMsgState(true,SS7MsgISUP::ANM)) {
 		SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::ANM,id());
 		if (event->message())
-		    m->params().copyParams(event->message()->params(),s_copyBkInd);
+		    copyUpper(m->params(),event->message()->params());
 		m_state = Answered;
 		mylock.drop();
 		result = transmitMessage(m);
@@ -2048,15 +2058,7 @@ bool SS7ISUPCall::copyParamIAM(SS7MsgISUP* msg, bool outgoing, SignallingMessage
     NamedList& dest = msg->params();
     if (outgoing) {
 	NamedList& src = sigMsg->params();
-	// Copy all parameters starting with a capital letter
-	static const Regexp r("^[A-Z][A-Za-z_.]\\+$");
-	unsigned int n = src.length();
-	for (unsigned int i = 0; i < n; i++) {
-	    const NamedString* p = src.getParam(i);
-	    if (!p || !r.matches(p->name()))
-		continue;
-	    dest.setParam(p->name(),*p);
-	}
+	copyUpper(dest,src);
 	param(dest,src,"CalledPartyNumber","called","");
 	param(dest,src,"CalledPartyNumber.inn","inn",String::boolText(isup()->m_inn));
 	param(dest,src,"CalledPartyNumber.nature","callednumtype",isup()->m_numType);

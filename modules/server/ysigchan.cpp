@@ -170,7 +170,7 @@ public:
     // Init configuration sections
     bool initSection(NamedList* sect);
     // Copy outgoing message parameters
-    void copySigMsgParams(SignallingEvent* event, const NamedList& params);
+    void copySigMsgParams(SignallingEvent* event, const NamedList& params, const char* prePrefix = "o");
     static const TokenDict s_operations[];
 private:
     // Handle command complete requests
@@ -1097,7 +1097,7 @@ void SigChannel::callAccept(Message& msg)
     setState("accepted",false);
     lock.drop();
     if (event) {
-	plugin.copySigMsgParams(event,msg);
+	plugin.copySigMsgParams(event,msg,"i");
 	event->sendEvent();
     }
     Channel::callAccept(msg);
@@ -1718,13 +1718,14 @@ void SigDriver::copySigMsgParams(NamedList& dest, SignallingEvent* event,
 }
 
 // Copy outgoing message parameters
-void SigDriver::copySigMsgParams(SignallingEvent* event, const NamedList& params)
+void SigDriver::copySigMsgParams(SignallingEvent* event,
+    const NamedList& params, const char* prePrefix)
 {
     if (!(event && event->message() && event->controller()))
 	return;
     String prefix = event->controller()->msgPrefix();
     if (prefix)
-	prefix = "o" + prefix;
+	prefix = prePrefix + prefix;
     prefix = params.getValue("message-oprefix",prefix);
     if (prefix.null())
 	return;

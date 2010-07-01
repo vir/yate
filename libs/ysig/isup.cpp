@@ -1711,6 +1711,7 @@ SS7ISUPCall::SS7ISUPCall(SS7ISUP* controller, SignallingCircuit* cic,
     m_gracefully(true),
     m_circuitChanged(false),
     m_circuitTesting(false),
+    m_inbandAvailable(false),
     m_iamMsg(0),
     m_sgmMsg(0),
     m_relTimer(300000),                  // Q.764: T5  - 5..15 minutes
@@ -1923,8 +1924,13 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 		SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::CPR,id());
 		m->params().addParam("EventInformation",
 		    event->type() == SignallingEvent::Ringing ? "ringing": "progress");
-		if (event->message())
+		if (event->message()) {
 		    copyUpper(m->params(),event->message()->params());
+		    m_inbandAvailable = m_inbandAvailable ||
+			event->message()->params().getBoolValue("earlymedia");
+		}
+		if (m_inbandAvailable)
+		    SignallingUtils::appendFlag(m->params(),"OptionalBackwardCallIndicators","inband");
 		m_state = Ringing;
 		mylock.drop();
 		result = transmitMessage(m);
@@ -1933,8 +1939,13 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 	case SignallingEvent::Accept:
 	    if (validMsgState(true,SS7MsgISUP::ACM)) {
 		SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::ACM,id());
-		if (event->message())
+		if (event->message()) {
 		    copyUpper(m->params(),event->message()->params());
+		    m_inbandAvailable = m_inbandAvailable ||
+			event->message()->params().getBoolValue("earlymedia");
+		}
+		if (m_inbandAvailable)
+		    SignallingUtils::appendFlag(m->params(),"OptionalBackwardCallIndicators","inband");
 		m_state = Accepted;
 		mylock.drop();
 		result = transmitMessage(m);
@@ -2365,19 +2376,19 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 	    m_state = Accepted;
 	    {
 		m_lastEvent = 0;
-		bool inband = SignallingUtils::hasFlag(m_sgmMsg->params(),"OptionalBackwardCallIndicators","inband");
+		m_inbandAvailable = m_inbandAvailable ||
+		    SignallingUtils::hasFlag(m_sgmMsg->params(),"OptionalBackwardCallIndicators","inband");
 		if (isup() && isup()->m_earlyAcm) {
 		    // If the called party is known free report ringing
 		    // If it may become free or there is inband audio report progress
 		    bool ring = SignallingUtils::hasFlag(m_sgmMsg->params(),"BackwardCallIndicators","called-free");
-		    if (inband || ring || SignallingUtils::hasFlag(m_sgmMsg->params(),"BackwardCallIndicators","called-conn")) {
-			m_sgmMsg->params().setParam("earlymedia",String::boolText(inband));
+		    if (m_inbandAvailable || ring || SignallingUtils::hasFlag(m_sgmMsg->params(),"BackwardCallIndicators","called-conn")) {
+			m_sgmMsg->params().setParam("earlymedia",String::boolText(m_inbandAvailable));
 			m_lastEvent = new SignallingEvent(ring ? SignallingEvent::Ringing : SignallingEvent::Progress,m_sgmMsg,this);
 		    }
 		}
 		if (!m_lastEvent) {
-		    if (inband)
-			m_sgmMsg->params().setParam("earlymedia",String::boolText(true));
+		    m_sgmMsg->params().setParam("earlymedia",String::boolText(m_inbandAvailable));
 		    m_lastEvent = new SignallingEvent(SignallingEvent::Accept,m_sgmMsg,this);
 		}
 	    }
@@ -2387,8 +2398,9 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 	    m_state = Ringing;
 	    {
 		bool ring = SignallingUtils::hasFlag(m_sgmMsg->params(),"EventInformation","ringing");
-		if (!ring && SignallingUtils::hasFlag(m_sgmMsg->params(),"EventInformation","inband"))
-		    m_sgmMsg->params().setParam("earlymedia",String::boolText(true));
+		m_inbandAvailable = m_inbandAvailable ||
+		    SignallingUtils::hasFlag(m_sgmMsg->params(),"EventInformation","inband");
+		m_sgmMsg->params().setParam("earlymedia",String::boolText(m_inbandAvailable));
 		m_lastEvent = new SignallingEvent(ring ? SignallingEvent::Ringing : SignallingEvent::Progress,m_sgmMsg,this);
 	    }
 	    break;

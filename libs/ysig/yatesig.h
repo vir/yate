@@ -6098,6 +6098,7 @@ private:
     bool m_gracefully;                   // Terminate gracefully: send RLC
     bool m_circuitChanged;               // Circuit change flag
     bool m_circuitTesting;               // The circuit is tested for continuity
+    bool m_inbandAvailable;              // Inband data is available
     String m_format;                     // Data format used by the circuit
     String m_reason;                     // Termination reason
     SS7MsgISUP* m_iamMsg;                // Message with the call parameters for outgoing calls

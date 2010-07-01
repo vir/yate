@@ -2458,6 +2458,30 @@ public:
     }
 
     /**
+     * Check if a comma separated list of flags has a given flag
+     * @param flags The list of flags
+     * @param flag The flag to check
+     * @return True if the given flag is found
+     */
+    static bool hasFlag(const String& flags, const char* flag);
+
+    /**
+     * Append a flag to a comma separated list of flags if it doesn't exist
+     * @param flags The list of flags
+     * @param flag The flag to add
+     * @return True if the given flag was not found but added
+     */
+    static bool appendFlag(String& flags, const char* flag);
+
+    /**
+     * Remove a flag from a comma separated list of flags
+     * @param flags The list of flags
+     * @param flag The flag to remove
+     * @return True if the given flag was found and removed
+     */
+    static bool removeFlag(String& flags, const char* flag);
+
+    /**
      * Check if a list's parameter (comma separated list of flags) has a given flag
      * @param list The parameter list
      * @param param The parameter to check
@@ -2467,12 +2491,13 @@ public:
     static bool hasFlag(const NamedList& list, const char* param, const char* flag);
 
     /**
-     * Remove a flag from a comma separated list of flags
-     * @param flags The list of flags
-     * @param flag The flag to remove
-     * @return True if the given flag was found and removed
+     * Append a flag to a list parameter (comma separated list), craete parameter if missing
+     * @param list The parameter list
+     * @param param The parameter to append to
+     * @param flag The flag to add
+     * @return True if the given flag was not found but added
      */
-    static bool removeFlag(String& flags, const char* flag);
+    static bool appendFlag(NamedList& list, const char* param, const char* flag);
 
     /**
      * Add string (keyword) if found in a dictionary or integer parameter to a named list

@@ -608,14 +608,22 @@ TokenDict* SignallingUtils::s_dictCCITT[5] = {
 	s_dict_transferRateCCITT
 	};
 
-// Check if a list's parameter (comma separated list of flags) has a given flag
-bool SignallingUtils::hasFlag(const NamedList& list, const char* param, const char* flag)
+// Check if a comma separated list of flags has a given flag
+bool SignallingUtils::hasFlag(const String& flags, const char* flag)
 {
-    String s = list.getValue(param);
-    ObjList* obj = s.split(',',false);
+    ObjList* obj = flags.split(',',false);
     bool found = (obj->find(flag) != 0);
     TelEngine::destruct(obj);
     return found;
+}
+
+// Append a flag to a comma separated list of flags
+bool SignallingUtils::appendFlag(String& flags, const char* flag)
+{
+    if (TelEngine::null(flag) || hasFlag(flags,flag))
+	return false;
+    flags.append(flag,",");
+    return true;
 }
 
 // Remove a flag from a comma separated list of flags
@@ -631,6 +639,23 @@ bool SignallingUtils::removeFlag(String& flags, const char* flag)
     }
     TelEngine::destruct(obj);
     return (found != 0);
+}
+
+// Check if a list's parameter (comma separated list of flags) has a given flag
+bool SignallingUtils::hasFlag(const NamedList& list, const char* param, const char* flag)
+{
+    const String* s = list.getParam(param);
+    return s && hasFlag(*s,flag);
+}
+
+// Append a flag to a list parameter, create parameter if missing
+bool SignallingUtils::appendFlag(NamedList& list, const char* param, const char* flag)
+{
+    String* s = list.getParam(param);
+    if (s)
+	return appendFlag(*s,flag);
+    list.addParam(param,flag);
+    return true;
 }
 
 // Add string (keyword) if found or integer parameter to a named list

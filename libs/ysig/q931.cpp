@@ -1204,7 +1204,7 @@ SignallingEvent* ISDNQ931Call::processMsgProgress(ISDNQ931Message* msg)
     // Q.931 says that we should ignore the message. We don't
     if (m_data.processProgress(msg,false)) {
 	bool media = (-1 != m_data.m_progress.find("in-band-info"));
-	msg->params().addParam("media",String::boolText(media));
+	msg->params().addParam("earlymedia",String::boolText(media));
     }
     if (m_data.processCause(msg,false))
 	msg->params().setParam("reason",m_data.m_reason);
@@ -1438,7 +1438,12 @@ SignallingEvent* ISDNQ931Call::processMsgStatusEnquiry(ISDNQ931Message* msg)
 bool ISDNQ931Call::sendAlerting(SignallingMessage* sigMsg)
 {
     MSG_CHECK_SEND(ISDNQ931Message::Alerting)
-    const char* format = sigMsg ? sigMsg->params().getValue("format") : 0;
+    const char* format = 0;
+    if (sigMsg) {
+	format = sigMsg->params().getValue("format");
+	if (sigMsg->params().getBoolValue("earlymedia",false))
+	    SignallingUtils::appendFlag(m_data.m_progress,"in-band-info");
+    }
     if (format)
 	m_data.m_format = format;
     // Change state, send message
@@ -1577,9 +1582,8 @@ bool ISDNQ931Call::sendProgress(SignallingMessage* sigMsg)
     MSG_CHECK_SEND(ISDNQ931Message::Progress)
     if (sigMsg) {
 	m_data.m_progress = sigMsg->params().getValue("progress");
-	if (sigMsg->params().getBoolValue("media",false) &&
-	    -1 == m_data.m_progress.find("in-band-info"))
-	    m_data.m_progress.append("in-band-info",",");
+	if (sigMsg->params().getBoolValue("earlymedia",false))
+	    SignallingUtils::appendFlag(m_data.m_progress,"in-band-info");
     }
     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::Progress,this);
     m_data.processProgress(msg,true);

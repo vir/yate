@@ -2399,6 +2399,7 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 	    {
 		bool ring = SignallingUtils::hasFlag(m_sgmMsg->params(),"EventInformation","ringing");
 		m_inbandAvailable = m_inbandAvailable ||
+		    SignallingUtils::hasFlag(m_sgmMsg->params(),"OptionalBackwardCallIndicators","inband") ||
 		    SignallingUtils::hasFlag(m_sgmMsg->params(),"EventInformation","inband");
 		m_sgmMsg->params().setParam("earlymedia",String::boolText(m_inbandAvailable));
 		m_lastEvent = new SignallingEvent(ring ? SignallingEvent::Ringing : SignallingEvent::Progress,m_sgmMsg,this);

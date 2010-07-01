@@ -932,11 +932,9 @@ bool SigChannel::msgProgress(Message& msg)
     bool media = msg.getBoolValue("earlymedia",getPeer() && getPeer()->getSource());
     const char* format = msg.getValue("format");
     SignallingMessage* sm = new SignallingMessage;
-    if (media && updateConsumer(format,false)) {
-	sm->params().addParam("media",String::boolText(true));
-	if (format)
-	    sm->params().addParam("format",format);
-    }
+    if (media && updateConsumer(format,false) && format)
+	sm->params().addParam("format",format);
+    sm->params().addParam("earlymedia",String::boolText(media));
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Progress,sm,m_call);
     TelEngine::destruct(sm);
     SignallingCircuitEvent* cicEvent = handleRtp(msg);
@@ -959,6 +957,7 @@ bool SigChannel::msgRinging(Message& msg)
     SignallingMessage* sm = new SignallingMessage;
     if (media && updateConsumer(format,false) && format)
 	sm->params().addParam("format",format);
+    sm->params().addParam("earlymedia",String::boolText(media));
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Ringing,sm,m_call);
     TelEngine::destruct(sm);
     SignallingCircuitEvent* cicEvent = handleRtp(msg);

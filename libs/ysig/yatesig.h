@@ -8435,6 +8435,7 @@ private:
     bool m_circuitChange;                // True if circuit changed
     bool m_channelIDSent;                // Incoming calls: ChannelID IE already sent
     bool m_rspBearerCaps;                // Incoming calls: Send BearerCaps IE in the first response
+    bool m_inbandAvailable;              // Inband data is available
     bool m_net;                          // Flag indicating call is sent by a NT
     ISDNQ931IEData m_data;               // Data to process IEs
     ObjList m_inMsg;                     // Incoming message queue

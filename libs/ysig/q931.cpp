@@ -717,6 +717,7 @@ ISDNQ931Call::ISDNQ931Call(ISDNQ931* controller, bool outgoing,
     m_circuitChange(false),
     m_channelIDSent(false),
     m_rspBearerCaps(false),
+    m_inbandAvailable(false),
     m_net(false),
     m_data(controller && !controller->primaryRate()),
     m_discTimer(0),
@@ -1085,6 +1086,11 @@ SignallingEvent* ISDNQ931Call::processMsgAlerting(ISDNQ931Message* msg)
     }
     if (m_data.processBearerCaps(msg,false) && !m_data.m_format.null())
 	msg->params().setParam("format",m_data.m_format);
+    // Check if inband ringback is available
+    if (m_data.processProgress(msg,false))
+	m_inbandAvailable = m_inbandAvailable ||
+	    SignallingUtils::hasFlag(m_data.m_progress,"in-band-info");
+    msg->params().addParam("earlymedia",String::boolText(m_inbandAvailable));
     changeState(CallDelivered);
     return new SignallingEvent(SignallingEvent::Ringing,msg,this);
 }
@@ -1202,10 +1208,10 @@ SignallingEvent* ISDNQ931Call::processMsgNotify(ISDNQ931Message* msg)
 SignallingEvent* ISDNQ931Call::processMsgProgress(ISDNQ931Message* msg)
 {
     // Q.931 says that we should ignore the message. We don't
-    if (m_data.processProgress(msg,false)) {
-	bool media = (-1 != m_data.m_progress.find("in-band-info"));
-	msg->params().addParam("earlymedia",String::boolText(media));
-    }
+    if (m_data.processProgress(msg,false))
+	m_inbandAvailable = m_inbandAvailable ||
+	    SignallingUtils::hasFlag(m_data.m_progress,"in-band-info");
+    msg->params().addParam("earlymedia",String::boolText(m_inbandAvailable));
     if (m_data.processCause(msg,false))
 	msg->params().setParam("reason",m_data.m_reason);
     if (m_data.processDisplay(msg,false))
@@ -1441,7 +1447,9 @@ bool ISDNQ931Call::sendAlerting(SignallingMessage* sigMsg)
     const char* format = 0;
     if (sigMsg) {
 	format = sigMsg->params().getValue("format");
-	if (sigMsg->params().getBoolValue("earlymedia",false))
+	m_inbandAvailable = m_inbandAvailable ||
+	    sigMsg->params().getBoolValue("earlymedia",false);
+	if (m_inbandAvailable)
 	    SignallingUtils::appendFlag(m_data.m_progress,"in-band-info");
     }
     if (format)
@@ -1466,6 +1474,7 @@ bool ISDNQ931Call::sendAlerting(SignallingMessage* sigMsg)
 	m_data.processChannelID(msg,true,&q931()->parserData());
 	m_channelIDSent = true;
     }
+    m_data.processProgress(msg,true);
     return q931()->sendMessage(msg,callTei());
 }
 
@@ -1582,7 +1591,9 @@ bool ISDNQ931Call::sendProgress(SignallingMessage* sigMsg)
     MSG_CHECK_SEND(ISDNQ931Message::Progress)
     if (sigMsg) {
 	m_data.m_progress = sigMsg->params().getValue("progress");
-	if (sigMsg->params().getBoolValue("earlymedia",false))
+	m_inbandAvailable = m_inbandAvailable ||
+	    sigMsg->params().getBoolValue("earlymedia",false);
+	if (m_inbandAvailable)
 	    SignallingUtils::appendFlag(m_data.m_progress,"in-band-info");
     }
     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::Progress,this);

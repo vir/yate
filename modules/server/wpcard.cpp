@@ -396,7 +396,7 @@ private:
     unsigned int m_count;                // Circuit count
     unsigned int m_first;                // First circuit code
     unsigned int m_samples;              // Sample count
-    unsigned char m_noData;              // Value to send when no data
+    unsigned int m_noData;               // Value to send on idle channels
     unsigned int m_buflen;               // Buffer length for sources/consumers
     // Used for data processing
     WpCircuit** m_circuits;              // The circuits belonging to this span
@@ -1420,6 +1420,7 @@ bool WpSpan::init(const NamedList& config, const NamedList& defaults, NamedList&
     String cics = params.getValue("voicechans",config.getValue("voicechans"));
     unsigned int offs = params.getIntValue("offset",config.getIntValue("offset",0));
     m_samples = params.getIntValue("samples",config.getIntValue("samples"));
+    int idleValue = 0xd5; // A-Law idle code
     if (type.null())
 	type = "E1";
     if (type == "E1") {
@@ -1431,6 +1432,7 @@ bool WpSpan::init(const NamedList& config, const NamedList& defaults, NamedList&
 	    m_samples = 50;
     }
     else if (type == "T1") {
+	idleValue = 0xff; // mu-Law idle code
 	m_chans = 24;
 	m_increment = 24;
 	if (cics.null())
@@ -1455,7 +1457,7 @@ bool WpSpan::init(const NamedList& config, const NamedList& defaults, NamedList&
 
     // Other data
     m_swap = defaults.getBoolValue("bitswap",true);
-    m_noData = defaults.getIntValue("idlevalue",0xff);
+    m_noData = defaults.getIntValue("idlevalue",idleValue);
     m_buflen = defaults.getIntValue("buflen",160);
     m_swap = params.getBoolValue("bitswap",config.getBoolValue("bitswap",m_swap));
     m_noData = params.getIntValue("idlevalue",config.getIntValue("idlevalue",m_noData));
@@ -1491,7 +1493,10 @@ bool WpSpan::init(const NamedList& config, const NamedList& defaults, NamedList&
 	s << " device=" << m_socket.device();
 	s << " samples=" << m_samples;
 	s << " bitswap=" << String::boolText(m_swap);
-	s << " idlevalue=" << (unsigned int)m_noData;
+	if (m_noData < 256)
+	    s << " idlevalue=" << m_noData;
+	else
+	    s << " idlevalue=(circuit)";
 	s << " buflen=" << (unsigned int)m_buflen;
 	s << " echocancel=" << String::boolText(m_echoCancel);
 	s << " dtmfdetect=" << String::boolText(m_dtmfDetect);
@@ -1600,10 +1605,10 @@ void WpSpan::run()
 		"WpSpan('%s'). Received %u samples. Expected %u [%p]",
 		id().safe(),samples,m_samples,this);
 	if (m_canSend) {
-	    unsigned char noData = swap(m_noData);
 	    for (unsigned int i = 0; i < m_count; i++) {
-		unsigned char* dat = m_buffer + WP_HEADER + i;
 		WpCircuit* circuit = m_circuits[i];
+		unsigned char noData = swap((m_noData < 256 || !circuit) ? m_noData : circuit->code() & 0xff);
+		unsigned char* dat = m_buffer + WP_HEADER + i;
 		WpSource* s = (circuit && circuit->validSource()) ? circuit->source() : 0;
 		WpConsumer* c = (circuit && circuit->validConsumer()) ? circuit->consumer() : 0;
 		Lock lock(c);

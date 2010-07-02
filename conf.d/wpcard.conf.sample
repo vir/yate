@@ -11,10 +11,11 @@
 ; This parameter can be overridden in group sections
 ;bitswap=enable
 
-; idlevalue: integer: The value to send for unused voice data channel
-; Interval: 0..255. Default value: 255
+; idlevalue: integer: The value to send for unused voice data channels
+; Interval: 0..255. Default value: 255 (0xFF) for T1, 213 (0xD5) for E1 and BRI
+; A value of -1 sets the circuit code as idle value (for circuit identification)
 ; This parameter can be overridden in group sections
-;idlevalue=255
+;idlevalue=
 
 ; buflen: integer: The length of the buffers used by the data sources and consumers
 ; Data consumers' buffers will be twice this value

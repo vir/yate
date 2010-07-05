@@ -42,6 +42,10 @@ class JBMessageHandler;                  // Module message handlers
 class JBModule;                          // The module
 
 
+// Max items in messages dispatched by the module
+// This value is used to avoid building large messages
+#define JABBERCLIENT_MAXITEMS 50
+
 /*
  * Stream receive thread
  */
@@ -262,6 +266,8 @@ public:
     void processRegisterEvent(JBEvent* ev, bool ok);
     // Process received roster elements
     void processRoster(JBEvent* ev, XmlElement* service, int tag, int iqType);
+    // Process disco info/items responses. Return true if processed
+    bool processDiscoRsp(JBEvent* ev, XmlElement* service, int tag, int ns, bool ok);
     // Fill module status
     void statusParams(String& str);
     unsigned int statusDetail(String& str);
@@ -442,7 +448,6 @@ static bool sendPresence(JBStream* stream, bool ok, XmlElement* xml)
     }
     return false;
 }
-
 
 
 /*
@@ -719,8 +724,8 @@ bool YJBEngine::handleUserUpdate(Message& msg, const String& line)
 // Process 'contact.info' messages
 bool YJBEngine::handleContactInfo(Message& msg, const String& line)
 {
-    String* oper = msg.getParam("operation");
-    if (TelEngine::null(oper))
+    const String& oper = msg["operation"];
+    if (!oper)
 	return false;
     JBClientStream* s = findAccount(line);
     if (!s)
@@ -728,11 +733,18 @@ bool YJBEngine::handleContactInfo(Message& msg, const String& line)
     bool ok = false;
     const char* contact = msg.getValue("contact");
     const char* id = msg.getValue("id");
-    if (*oper == "query") {
+    DDebug(this,DebugAll,"handleContactInfo() line=%s oper=%s contact=%s",
+	line.c_str(),oper.c_str(),contact);
+    bool info = (oper == "queryinfo");
+    if (info || oper == "queryitems") {
+	XmlElement* xml = XMPPUtils::createIqDisco(info,true,0,contact,id);
+	ok = s->sendStanza(xml);
+    }
+    else if (oper == "query") {
 	XmlElement* xml = XMPPUtils::createVCard(true,0,contact,id);
 	ok = s->sendStanza(xml);
     }
-    else if (*oper == "update") {
+    else if (oper == "update") {
 	XmlElement* xml = XMPPUtils::createVCard(false,0,contact,id);
 	XmlElement* vcard = XMPPUtils::findFirstChild(*xml,XmlTag::VCard);
 	if (vcard) {
@@ -1083,10 +1095,16 @@ void YJBEngine::processIqStanza(JBEvent* ev)
     int n = XMPPNamespace::Count;
     if (service)
 	XMPPUtils::getTag(*service,t,n);
-    // Server entity caps responses
-    if (rsp && n == XMPPNamespace::DiscoInfo &&
-	s_entityCaps.processRsp(ev->element(),ev->id(),type == XMPPUtils::IqResult))
-	return;
+    if (rsp) {
+	// Server entity caps responses
+	if (n == XMPPNamespace::DiscoInfo &&
+	    s_entityCaps.processRsp(ev->element(),ev->id(),type == XMPPUtils::IqResult))
+	    return;
+	// Responses to disco info/items requests
+	if (rsp && processDiscoRsp(ev,service,t,n,type == XMPPUtils::IqResult))
+	    return;
+    }
+
     bool fromServer = (!ev->from() || ev->from() == ev->stream()->local().bare());
     if (fromServer) {
 	switch (n) {
@@ -1366,6 +1384,100 @@ void YJBEngine::processRoster(JBEvent* ev, XmlElement* service, int tag, int iqT
     if (iqType == XMPPUtils::IqError)
 	return;
     ev->sendStanzaError(XMPPError::ServiceUnavailable);
+}
+
+// Process disco info/items responses. Return true if processed
+bool YJBEngine::processDiscoRsp(JBEvent* ev, XmlElement* service, int tag, int ns, bool ok)
+{
+    if (tag != XmlTag::Query)
+	return false;
+    bool info = (ns == XMPPNamespace::DiscoInfo);
+    if (!info && ns != XMPPNamespace::DiscoItems)
+	return false;
+    if (!ok) {
+	Message* m = __plugin.message("contact.info",ev->clientStream());
+	m->addParam("operation","error");
+	m->addParam("contact",ev->from(),false);
+	m->addParam("id",ev->id(),false);
+	Engine::enqueue(m);
+	return true;
+    }
+    // Disco info responses
+    if (info) {
+	Message* m = __plugin.message("contact.info",ev->clientStream());
+	m->addParam("operation","notifyinfo");
+	m->addParam("contact",ev->from(),false);
+	m->addParam("id",ev->id(),false);
+	JBEntityCaps caps(0,' ',0,0);
+	if (service)
+	    caps.m_features.fromDiscoInfo(*service);
+	// Add identities
+	ObjList* o = caps.m_features.m_identities.skipNull();
+	if (o) {
+	    NamedString* ns = new NamedString("info.count");
+	    m->addParam(ns);
+	    int n = 0;
+	    for (; o; o = o->skipNext()) {
+		JIDIdentity* ident = static_cast<JIDIdentity*>(o->get());
+		if (!(ident->m_category || ident->m_type || ident->m_name))
+		    continue;
+		String prefix("info.");
+		prefix << ++n;
+		m->addParam(prefix + ".category",ident->m_category,false);
+		m->addParam(prefix + ".type",ident->m_type,false);
+		m->addParam(prefix + ".name",ident->m_name,false);
+	     }
+	     if (n)
+		*ns = String(n);
+	     else
+		m->clearParam(ns);
+	}
+	// Add features
+	JBEntityCapsList list;
+	list.addCaps(*m,caps);
+	Engine::enqueue(m);
+	return true;
+    }
+    // Disco items
+    Message* m = __plugin.message("contact.info",ev->clientStream());
+    m->addParam("operation","notifyitems");
+    m->addParam("contact",ev->from(),false);
+    m->addParam("id",ev->id(),false);
+    if (service) {
+	NamedString* count = new NamedString("item.count","");
+	m->addParam(count);
+	String prefix("item.");
+	unsigned int n = 0;
+	XmlElement* c = 0;
+	while (0 != (c = XMPPUtils::findNextChild(*service,c,XmlTag::Item,ns))) {
+	    JabberID jid(c->attribute("jid"));
+	    if (!jid)
+		continue;
+	    if (n == JABBERCLIENT_MAXITEMS) {
+		m->setParam("partial",String::boolText(true));
+		*count = String(n);
+		Engine::enqueue(m);
+		n = 0;
+		m = __plugin.message("contact.info",ev->clientStream());
+		m->addParam("operation","notifyitems");
+		m->addParam("contact",ev->from(),false);
+		m->addParam("id",ev->id(),false);
+		count = new NamedString("item.count","");
+		m->addParam(count);
+	    }
+	    String pref(prefix + String(++n));
+	    m->addParam(pref,jid);
+	    const char* name = c->attribute("name");
+	    if (!TelEngine::null(name))
+		m->addParam(pref + ".name",name);
+	}
+	if (n)
+	    *count = String(n);
+	else
+	    m->clearParam(count);
+    }
+    Engine::enqueue(m);
+    return true;
 }
 
 // Fill module status params

@@ -92,7 +92,7 @@ static inline void setAccParam(NamedList& params, const String& prefix,
 static inline void setImageParam(NamedList& p, const char* param,
 	const String& image)
 {
-    static String suffix = "_image";
+    static const String suffix = "_image";
     p.setParam(param + suffix,Client::s_skinPath + image);
 }
 
@@ -163,8 +163,8 @@ static bool checkParam(NamedList& p, const char* param, const String& widget,
 // Utility: activate the calls page
 static inline void activatePageCalls(ClientLogic* logic, Window* wnd = 0)
 {
-    static String s_buttonCalls = "ctrlCalls";
-    static String s_toggleCalls = "selectitem:framePages:PageCalls";
+    static const String s_buttonCalls = "ctrlCalls";
+    static const String s_toggleCalls = "selectitem:framePages:PageCalls";
     Client::self()->setCheck(s_buttonCalls,true,wnd);
     logic->toggle(wnd,s_toggleCalls,true);
 }
@@ -996,7 +996,7 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
     }
     // Handle protocol selection in edit window: activate advanced options
     if (name == "acc_protocol") {
-	static String proto = "acc_proto_spec";
+	static const String proto = "acc_proto_spec";
 	if (!Client::self())
 	    return false;
 	bool adv = false;

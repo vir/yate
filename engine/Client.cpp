@@ -305,7 +305,7 @@ static inline bool callLogicSelect(ClientLogic* logic, Window* wnd, const String
 static inline bool hasOverride(const NamedList* params, String& name, String& handle,
     bool& only, bool& prefer, bool& ignore, bool& bailout)
 {
-    static String s_ignoreString = "ignore";
+    static const String s_ignoreString = "ignore";
 
     if (!params)
 	return false;
@@ -2008,7 +2008,7 @@ bool Client::postpone(const Message& msg, int id, bool copyUserData)
 // Handle actions from user interface
 bool Client::action(Window* wnd, const String& name, NamedList* params)
 {
-    static String sect = "action";
+    static const String sect = "action";
 
     XDebug(ClientDriver::self(),DebugAll,"Action '%s' in window (%p,%s)",
 	name.c_str(),wnd,wnd ? wnd->id().c_str() : "");
@@ -2039,7 +2039,7 @@ bool Client::action(Window* wnd, const String& name, NamedList* params)
 // Deal with toggle widget events
 bool Client::toggle(Window* wnd, const String& name, bool active)
 {
-    static String sect = "toggle";
+    static const String sect = "toggle";
 
     XDebug(ClientDriver::self(),DebugAll,
 	"Toggle name='%s' active='%s' in window (%p,%s)",
@@ -2073,7 +2073,7 @@ bool Client::toggle(Window* wnd, const String& name, bool active)
 // Handle selection changes (list selection changes, focus changes ...) 
 bool Client::select(Window* wnd, const String& name, const String& item, const String& text)
 {
-    static String sect = "select";
+    static const String sect = "select";
 
     XDebug(ClientDriver::self(),DebugAll,
 	"Select name='%s' item='%s' in window (%p,%s)",
@@ -2238,7 +2238,7 @@ void Client::installRelay(const char* name, int id, int prio)
 // Process an IM message
 bool Client::imExecute(Message& msg)
 {
-    static String sect = "miscellaneous";
+    static const String sect = "miscellaneous";
 
     if (Client::isClientMsg(msg))
 	return false;
@@ -2336,7 +2336,7 @@ bool Client::buildOutgoingChannel(NamedList& params)
 // Call execute handler called by the driver
 bool Client::callIncoming(Message& msg, const String& dest)
 {
-    static String sect = "miscellaneous";
+    static const String sect = "miscellaneous";
 
     XDebug(ClientDriver::self(),DebugAll,"Client::callIncoming [%p]",this);
     // if we are in single line mode and we have already a channel, reject the call

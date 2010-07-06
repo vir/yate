@@ -570,11 +570,6 @@ DefaultLogic::~DefaultLogic()
     TelEngine::destruct(m_accounts);
 }
 
-// Declare a NamedList and set a parameter
-// Used to avoid use of null pointers
-#define USE_SAFE_PARAMS(param,value) NamedList dummy(""); if (!params) params = &dummy; \
-    params->setParam(param,value);
-
 // main function which considering de value of the "action" parameter
 // Handle actions from user interface
 bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
@@ -590,19 +585,22 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
 
     // Show/hide widgets/windows
     bool widget = (name == "display");
-    if (widget || name == "show") {
-	USE_SAFE_PARAMS("","");
-	return display(*params,widget,wnd);
-    }
+    if (widget || name == "show")
+	return params ? display(*params,widget,wnd) : false;
 
     // Start a call
     if (name == s_actionCall || name == "callto") {
-	USE_SAFE_PARAMS("","");
+	NamedList dummy("");
+	if (!params)
+	    params = &dummy;
 	return callStart(*params,wnd);
     }
     // Start a call from an action specifying the target
     if (name.startsWith("callto:")) {
-	USE_SAFE_PARAMS("target",name.substr(7));
+	NamedList dummy("");
+	if (!params)
+	    params = &dummy;
+    	params->setParam("target",name.substr(7));
 	return callStart(*params,wnd);
     }
     // Answer/Hangup
@@ -630,7 +628,10 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
 	    ClientDriver::self()->setActive(m_selectedChannel);
     // Digit(s) pressed
     if (name.startsWith("digit:")) {
-	USE_SAFE_PARAMS("digits",name.substr(6));
+	NamedList dummy("");
+	if (!params)
+	    params = &dummy;
+	params->setParam("digits",name.substr(6));
 	return digitPressed(*params,wnd);
     }
     // New line
@@ -1131,8 +1132,11 @@ bool DefaultLogic::editAccount(bool newAcc, NamedList* params, Window* wnd)
 {
     if (!Client::valid() || Client::self()->getVisible(s_wndAccount))
 	return false;
+    NamedList dummy("");
+    if (!params)
+	params = &dummy;
     // Make sure we reset all controls in window
-    USE_SAFE_PARAMS("select:acc_providers",s_notSelected);
+    params->setParam("select:acc_providers",s_notSelected);
     bool loginNow = Client::s_settings.getBoolValue("client","acc_loginnow",true);
     params->setParam("check:acc_loginnow",String::boolText(loginNow));
     String acc;

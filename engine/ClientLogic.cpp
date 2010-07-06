@@ -161,7 +161,7 @@ static bool checkParam(NamedList& p, const char* param, const String& widget,
 }
 
 // Utility: activate the calls page
-inline void activatePageCalls(ClientLogic* logic, Window* wnd = 0)
+static inline void activatePageCalls(ClientLogic* logic, Window* wnd = 0)
 {
     static String s_buttonCalls = "ctrlCalls";
     static String s_toggleCalls = "selectitem:framePages:PageCalls";
@@ -2456,7 +2456,7 @@ void DefaultLogic::initializedWindows()
 }
 
 // Utility: set check parameter from another list
-void setCheck(NamedList& p, const NamedList& src, const String& param, bool defVal = true)
+static void setCheck(NamedList& p, const NamedList& src, const String& param, bool defVal = true)
 {
     bool ok = src.getBoolValue(param,defVal);
     p.addParam("check:" + param,String::boolText(ok));

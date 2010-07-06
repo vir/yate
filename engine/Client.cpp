@@ -259,7 +259,7 @@ static void dbg_client_func(const char* buf, int level)
 
 // Utility function used in Client::action()
 // Output a debug message and calls a logic's action method
-inline bool callLogicAction(ClientLogic* logic, Window* wnd, const String& name, NamedList* params)
+static inline bool callLogicAction(ClientLogic* logic, Window* wnd, const String& name, NamedList* params)
 {
     if (!logic)
 	return false;
@@ -271,7 +271,7 @@ inline bool callLogicAction(ClientLogic* logic, Window* wnd, const String& name,
 
 // Utility function used in Client::toggle()
 // Output a debug message and calls a logic's toggle method
-inline bool callLogicToggle(ClientLogic* logic, Window* wnd, const String& name, bool active)
+static inline bool callLogicToggle(ClientLogic* logic, Window* wnd, const String& name, bool active)
 {
     if (!logic)
 	return false;
@@ -284,7 +284,7 @@ inline bool callLogicToggle(ClientLogic* logic, Window* wnd, const String& name,
 
 // Utility function used in Client::select()
 // Output a debug message and calls a logic's select method
-inline bool callLogicSelect(ClientLogic* logic, Window* wnd, const String& name,
+static inline bool callLogicSelect(ClientLogic* logic, Window* wnd, const String& name,
     const String& item, const String& text)
 {
     if (!logic)
@@ -302,7 +302,7 @@ inline bool callLogicSelect(ClientLogic* logic, Window* wnd, const String& name,
 // Check for a preffered logic to process the action 
 // Check if a logic should be ignored (not notified)
 // Otherwise: check if the action should be ignored
-inline bool hasOverride(const NamedList* params, String& name, String& handle,
+static inline bool hasOverride(const NamedList* params, String& name, String& handle,
     bool& only, bool& prefer, bool& ignore, bool& bailout)
 {
     static String s_ignoreString = "ignore";

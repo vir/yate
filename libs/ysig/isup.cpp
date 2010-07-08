@@ -169,6 +169,8 @@ static const TokenDict s_dict_control[] = {
     { "query", SS7MsgISUP::CQM },
     { "conttest", SS7MsgISUP::CCR },
     { "reset", SS7MsgISUP::RSC },
+    { "block", SS7MsgISUP::BLK },
+    { "unblock", SS7MsgISUP::UBL },
     { 0, 0 }
 };
 
@@ -3001,6 +3003,17 @@ bool SS7ISUP::control(NamedList& params)
 	    if (m_rscTimer.started())
 		m_rscTimer.start(Time::msecNow());
 	    return true;
+	case SS7MsgISUP::BLK:
+	case SS7MsgISUP::UBL:
+	    {
+		int code = params.getIntValue("circuit");
+		if ((code < 1) || !blockCircuit(code,(SS7MsgISUP::BLK == cmd),
+		    false,false,true,true))
+		    return false;
+		if (!m_lockTimer.started())
+		    sendLocalLock();
+	    }
+	    return true;
     }
     mylock.drop();
     return SignallingComponent::control(params);
@@ -3991,7 +4004,8 @@ bool SS7ISUP::sendLocalLock(u_int64_t when)
 	msg = new SS7MsgISUP((m_blockReq ? SS7MsgISUP::BLK : SS7MsgISUP::UBL),
 	    m_lockCicCode);
     }
-    SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
+    SS7Label label(m_type,*m_remotePoint,*m_defPoint,
+	((m_defaultSls == SlsCircuit) ? m_lockCicCode : m_sls));
     transmitMessage(msg,label,false);
     m_lockTimer.start(when);
     return true;

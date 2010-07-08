@@ -3623,18 +3623,18 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::GRA,msg->cic());
 		m->params().addParam("RangeAndStatus",String(n));
 		m->params().addParam("RangeAndStatus.map",map);
-		transmitMessage(m,label,true,sls);
+		transmitMessage(m,label,true);
 	    }
 	    break;
 	case SS7MsgISUP::UBL: // Unblocking
 	    if (blockCircuit(msg->cic(),false,true,false,true,true))
-		transmitMessage(new SS7MsgISUP(SS7MsgISUP::UBA,msg->cic()),label,true,sls);
+		transmitMessage(new SS7MsgISUP(SS7MsgISUP::UBA,msg->cic()),label,true);
 	    else
 		reason = "unknown-channel";
 	    break;
 	case SS7MsgISUP::BLK: // Blocking
 	    if (blockCircuit(msg->cic(),true,true,false,true,true))
-		transmitMessage(new SS7MsgISUP(SS7MsgISUP::BLA,msg->cic()),label,true,sls);
+		transmitMessage(new SS7MsgISUP(SS7MsgISUP::BLA,msg->cic()),label,true);
 	    else
 		reason = "unknown-channel";
 	    break;
@@ -3733,7 +3733,7 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    if (circuits() && circuits()->find(msg->cic())) {
 		SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::CVR,msg->cic());
 		m->params().addParam("CircuitValidationRespIndicator","success");
-		transmitMessage(m,label,true,sls);
+		transmitMessage(m,label,true);
 	    }
 	    else
 		reason = "unknown-channel";
@@ -3791,7 +3791,7 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::CQR,msg->cic());
 		m->params().addParam("RangeAndStatus",String(n));
 		m->params().addParam("CircuitStateIndicator",tmp);
-		transmitMessage(m,label,true,sls);
+		transmitMessage(m,label,true);
 	    }
 	    else
 		reason = "unknown-channel";

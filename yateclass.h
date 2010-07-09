@@ -6179,6 +6179,160 @@ private:
 };
 
 /**
+ * The Compressor class provides an abstraction for data (de)compressor classes.
+ * The String component keeps an optional object name to be used for debug purposes
+ * @short An abstract data (de)compressor
+ */
+class YATE_API Compressor : public String
+{
+    YCLASS(Compressor,String)
+    YNOCOPY(Compressor); // no automatic copies please
+public:
+    /**
+     * Constructor
+     * @param format Compression format
+     * @param name Optional object name
+     */
+    inline Compressor(const char* format, const char* name = 0)
+	: String(name), m_format(format)
+	{}
+
+    /**
+     * Destructor
+     */
+    virtual ~Compressor()
+	{}
+
+    /**
+     * Retrieve (de)compressor format
+     * @return The format of this (de)compressor
+     */
+    inline const String& format() const
+	{ return m_format; }
+
+    /**
+     * Initialize
+     * @param comp True to initialize compressor
+     * @param decomp True to initialize decompressor
+     * @param params Optional parameters
+     * @return True on success
+     */
+    virtual bool init(bool comp = true, bool decomp = true,
+	const NamedList& params = NamedList::empty())
+	{ return true; }
+
+    /**
+     * Finalize the (de)compression
+     * @param comp True to finalize compression, false to finalize decompression
+     */
+    virtual void finalize(bool comp)
+	{}
+
+    /**
+     * Compress the input buffer, flush all pending data,
+     *  append compressed data to the received data block
+     * @param buf Pointer to input data
+     * @param len Length of input in bytes
+     * @param dest Destination buffer
+     * @return The number of bytes wrote to compressor, negative on error
+     */
+    virtual int compress(const void* buf, unsigned int len, DataBlock& dest);
+
+    /**
+     * Decompress the input buffer, flush all pending data,
+     *  append decompressed data to the received data block
+     * @param buf Pointer to input data
+     * @param len Length of input in bytes
+     * @param dest Destination buffer
+     * @return The number of bytes wrote to decompressor, negative on error
+     */
+    virtual int decompress(const void* buf, unsigned int len, DataBlock& dest);
+
+    /**
+     * Push data to compressor. Flush compressor input if input buffer is NULL
+     *  or the length is 0 and flush is true
+     * @param buf Pointer to input data
+     * @param len Length of input in bytes
+     * @param flush True to compress all now, false to let the compressor accumulate
+     *  more data for better compression
+     * @return The number of bytes written, negative on error. An incomplete write may occur
+     *  if the output buffer is full
+     */
+    virtual int writeComp(const void* buf, unsigned int len, bool flush) = 0;
+
+    /**
+     * Push data to compressor
+     * @param data Input data block
+     * @param flush True to compress all now, false to let the compressor accumulate
+     *  more data for better compression
+     * @return The number of bytes written, negative on error. An incomplete write may occur
+     *  if the output buffer is full
+     */
+    inline int writeComp(const DataBlock& data, bool flush)
+	{ return writeComp(data.data(),data.length(),flush); }
+
+    /**
+     * Push data to compressor
+     * @param data Input string
+     * @param flush True to compress all now, false to let the compressor accumulate
+     *  more data for better compression
+     * @return The number of bytes written, negative on error. An incomplete write may occur
+     *  if the output buffer is full
+     */
+    inline int writeComp(const String& data, bool flush)
+	{ return writeComp(data.c_str(),data.length(),flush); }
+
+    /**
+     * Read data from compressor. Append it to 'buf'
+     * @param buf Destination data block
+     * @param flush True to flush all compressor input data
+     * @return The number of bytes read, negative on error
+     */
+    virtual int readComp(DataBlock& buf, bool flush) = 0;
+
+    /**
+     * Push data to decompressor
+     * @param buf Pointer to input data
+     * @param len Length of input in bytes
+     * @param flush True to try to decompress all data
+     * @return The number of bytes written, negative on error. An incomplete write may occur
+     *  if the output buffer is full
+     */
+    virtual int writeDecomp(const void* buf, unsigned int len, bool flush) = 0;
+
+    /**
+     * Push data to decompressor
+     * @param data Input data block
+     * @param flush True to try to decompress all data
+     * @return The number of bytes written, negative on error. An incomplete write may occur
+     *  if the output buffer is full
+     */
+    inline int writeDecomp(const DataBlock& data, bool flush)
+	{ return writeDecomp(data.data(),data.length(),flush); }
+
+    /**
+     * Push data to decompressor
+     * @param data Input string
+     * @param flush True to try to decompress all data
+     * @return The number of bytes written, negative on error. An incomplete write may occur
+     *  if the output buffer is full
+     */
+    inline int writeDecomp(const String& data, bool flush)
+	{ return writeDecomp(data.c_str(),data.length(),flush); }
+
+    /**
+     * Read data from decompressor. Append it to 'buf'
+     * @param buf Destination data block
+     * @param flush True to flush all decompressor input data
+     * @return The number of bytes read, negative on error
+     */
+    virtual int readDecomp(DataBlock& buf, bool flush) = 0;
+
+protected:
+    String m_format;
+};
+
+/**
  * The SysUsage class allows collecting some statistics about engine's usage
  *  of system resources
  * @short A class exposing system resources usage

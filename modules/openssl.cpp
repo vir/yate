@@ -161,6 +161,9 @@ public:
     // This method is not thread safe. The caller must lock the plugin
     // until the returned context is not used anymore
     SslContext* findContext(const String& token, bool byDomain = false) const;
+    // Find a context from 'context' or 'domain' parameters
+    // This method is not thread safe
+    SslContext* findContext(Message& msg) const;
 protected:
     virtual void statusParams(String& str);
     virtual void statusDetail(String& str);
@@ -458,6 +461,12 @@ void SslSocket::onInfo(int where, int retVal)
 // Handler for the socket.ssl message - turns regular sockets into SSL
 bool SslHandler::received(Message& msg)
 {
+    if (msg.getBoolValue("test")) {
+	if (!msg.getBoolValue("server"))
+	    return true;
+	Lock lock(__plugin);
+	return 0 != __plugin.findContext(msg);
+    }
     addRand(msg.msgTime());
     Socket** ppSock = static_cast<Socket**>(msg.userObject("Socket*"));
     if (!ppSock) {
@@ -476,19 +485,9 @@ bool SslHandler::received(Message& msg)
     SslSocket* sSock = 0;
     if (msg.getBoolValue("server",false)) {
 	Lock lock(&__plugin);
-	SslContext* c = 0;
-	String* token = msg.getParam("context");
-	if (!TelEngine::null(token))
-	    c = __plugin.findContext(*token);
-	if (!c) {
-	    token = msg.getParam("domain");
-	    if (!TelEngine::null(token))
-		c = __plugin.findContext(String(*token).toLower(),true);
-	}
-	if (!c) {
-	    Debug(&__plugin,DebugWarn,"SslHandler: Unable to find a server context");
+	SslContext* c = __plugin.findContext(msg);
+	if (!c)
 	    return false;
-	}
 	sSock = new SslSocket(pSock->handle(),true,
 	    msg.getIntValue("verify",s_verifyMode,SSL_VERIFY_NONE),c);
     }
@@ -671,6 +670,27 @@ SslContext* OpenSSL::findContext(const String& token, bool byDomain) const
 	if (c->hasDomain(token))
 	    return c;
     }
+    return 0;
+}
+
+// Find a context from 'context' or 'domain' parameters
+SslContext* OpenSSL::findContext(Message& msg) const
+{
+    SslContext* c = 0;
+    const String& context = msg["context"];
+    String domain;
+    if (context)
+	c = __plugin.findContext(context);
+    if (!c) {
+	domain = msg["domain"];
+	if (domain)
+	    c = __plugin.findContext(domain.toLower(),true);
+    }
+    if (c)
+	return c;
+    Debug(this,DebugWarn,
+	"SslHandler: Unable to find a server context for context=%s or domain=%s",
+	context.safe(),domain.safe());
     return 0;
 }
 

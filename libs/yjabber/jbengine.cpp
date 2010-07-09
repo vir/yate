@@ -724,7 +724,7 @@ JBEngine::JBEngine(const char* name)
     m_pingInterval(JB_PING_INTERVAL), m_pingTimeout(JB_PING_TIMEOUT),
     m_idleTimeout(0),
     m_streamReadBuffer(JB_STREAMBUF), m_maxIncompleteXml(XMPP_MAX_INCOMPLETEXML),
-    m_printXml(0), m_initialized(false)
+    m_hasClientTls(true), m_printXml(0), m_initialized(false)
 {
     debugName(name);
     XDebug(this,DebugAll,"JBEngine [%p]",this);

@@ -207,6 +207,8 @@ public:
     bool handleMsgExecute(Message& msg);
     // Process 'jabber.item' messages
     bool handleJabberItem(Message& msg);
+    // Process 'engine.start' messages
+    void handleEngineStart(Message& msg);
     // Handle 'presence' stanzas
     // s2s: Destination domain was already checked by the lower layer
     // The given event is always valid and carry a valid stream and xml element
@@ -446,6 +448,7 @@ public:
 	UserRoster   = -3,             // YJBEngine::handleUserRoster()
 	UserUpdate   = -4,             // YJBEngine::handleUserUpdate()
 	JabberItem   = -5,             // YJBEngine::handleJabberItem()
+	EngineStart  = -6,             // YJBEngine::handleEngineStart()
 	JabberIq     = 150,            // YJBEngine::handleJabberIq()
     };
     JBMessageHandler(int handler);
@@ -534,6 +537,8 @@ public:
 	    msg.addParam("module",name());
 	    msg.addParam("protocol","jabber");
 	}
+    // Check if client/server TLS is available
+    bool checkTls(bool server, const String& domain = String::empty());
 protected:
     // Inherited methods
     virtual bool received(Message& msg, int id);
@@ -563,6 +568,7 @@ Mutex JBPendingWorker::s_mutex(false,"JBPendingWorker");
 static bool s_s2sFeatures = true;        // Offer RFC 3920 version=1 and stream features
                                          //  on incoming s2s streams
 static bool s_dumpIq = false;            // Dump 'iq' xml string in jabber.iq message
+static bool s_engineStarted = false;     // Engine started flag
 INIT_PLUGIN(JBModule);                   // The module
 static YJBEntityCapsList s_entityCaps;
 static YJBEngine* s_jabber = 0;
@@ -591,6 +597,7 @@ static const TokenDict s_msgHandler[] = {
     {"user.update",         JBMessageHandler::UserUpdate},
     {"jabber.iq",           JBMessageHandler::JabberIq},
     {"jabber.item",         JBMessageHandler::JabberItem},
+    {"engine.start",        JBMessageHandler::EngineStart},
     {0,0}
 };
 
@@ -1468,6 +1475,16 @@ bool YJBEngine::handleJabberItem(Message& msg)
 	Debug(this,DebugAll,"Added item '%s' to serviced domains",jid.c_str());
     }
     return true;
+}
+
+// Process 'engine.start' messages
+void YJBEngine::handleEngineStart(Message& msg)
+{
+    s_engineStarted = true;
+    // Check client TLS
+    m_hasClientTls = __plugin.checkTls(false);
+    if (!m_hasClientTls)
+	Debug(this,DebugNote,"TLS not available for outgoing streams");
 }
 
 // Handle 'presence' stanzas
@@ -3146,6 +3163,9 @@ bool JBMessageHandler::received(Message& msg)
 	    return false;
 	case JabberItem:
 	    return s_jabber->handleJabberItem(msg);
+	case EngineStart:
+	    s_jabber->handleEngineStart(msg);
+	    return false;
 	default:
 	    DDebug(&__plugin,DebugStub,"JBMessageHandler(%s) not handled!",msg.c_str());
     }
@@ -3378,6 +3398,17 @@ void JBModule::cancelListener(const String& name)
 	Debug(this,DebugInfo,"All listeners terminated");
     else
 	Debug(this,DebugInfo,"Listener '%s' terminated",name.c_str());
+}
+
+// Check if client/server TLS is available
+bool JBModule::checkTls(bool server, const String& domain)
+{
+    Message m("socket.ssl");
+    m.addParam("test",String::boolText(true));
+    m.addParam("server",String::boolText(server));
+    if (server)
+	m.addParam("domain",domain,false);
+    return Engine::dispatch(m);
 }
 
 // Message handler

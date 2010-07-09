@@ -1892,12 +1892,17 @@ bool JBStream::processFeaturesOut(XmlElement* xml, const JabberID& from,
     if (!flag(StreamSecured)) {
 	XMPPFeature* tls = m_features.get(XMPPNamespace::Tls);
 	if (tls) {
-	    TelEngine::destruct(xml);
-	    XmlElement* x = XMPPUtils::createElement(XmlTag::Starttls,
-		XMPPNamespace::Tls);
-	    return sendStreamXml(WaitTlsRsp,x);
+	    if (m_engine->hasClientTls()) {
+		TelEngine::destruct(xml);
+		XmlElement* x = XMPPUtils::createElement(XmlTag::Starttls,
+		    XMPPNamespace::Tls);
+		return sendStreamXml(WaitTlsRsp,x);
+	    }
+	    if (tls->required() || flag(TlsRequired))
+		return destroyDropXml(xml,XMPPError::Internal,
+		    "required encryption not available");
 	}
-	if (flag(TlsRequired))
+	else if (flag(TlsRequired))
 	    return destroyDropXml(xml,XMPPError::EncryptionRequired,
 		"required encryption not supported by remote");
 	setFlags(StreamSecured);

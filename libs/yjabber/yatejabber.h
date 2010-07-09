@@ -1691,6 +1691,13 @@ public:
 	}
 
     /**
+     * Check if TLS is available for outgoing streams
+     * @return True if TLS is available for outgoing streams
+     */
+    inline bool hasClientTls() const
+	{ return m_hasClientTls; }
+
+    /**
      * Find a remote domain definition. Return the default settings if not found.
      * This method is not thread safe
      * @param domain The domain to find
@@ -1933,6 +1940,7 @@ protected:
     unsigned int m_idleTimeout;          // Stream idle timeout (nothing sent or received)
     unsigned int m_streamReadBuffer;     // Stream read buffer length
     unsigned int m_maxIncompleteXml;     // Maximum length of an incomplete xml
+    bool m_hasClientTls;                 // True if TLS is available for outgoing streams
     int m_printXml;                      // Print XML data to output
     bool m_initialized;                  // True if already initialized
 

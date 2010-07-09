@@ -252,6 +252,8 @@ public:
     bool handleMsgExecute(Message& msg, const String& line);
     // Process 'user.login' messages
     bool handleUserLogin(Message& msg, const String& line);
+    // Process 'engine.start' messages
+    void handleEngineStart(Message& msg);
     // Handle 'presence' stanzas
     // The given event is always valid and carry a valid stream and xml element
     void processPresenceStanza(JBEvent* ev);
@@ -314,6 +316,10 @@ class JBModule : public Module
 {
     friend class TcpListener;            // Add/remove to/from list
 public:
+    // Message relays
+    enum {
+	EngineStart = Private
+    };
     JBModule();
     virtual ~JBModule();
     // Inherited methods
@@ -1002,6 +1008,18 @@ bool YJBEngine::handleUserLogin(Message& msg, const String& line)
     }
     TelEngine::destruct(stream);
     return ok;
+}
+
+// Process 'engine.start' messages
+void YJBEngine::handleEngineStart(Message& msg)
+{
+    // Check client TLS
+    Message m("socket.ssl");
+    m.addParam("test",String::boolText(true));
+    m.addParam("server",String::boolText(false));
+    m_hasClientTls = Engine::dispatch(m);
+    if (!m_hasClientTls)
+	Debug(this,DebugNote,"TLS not available for outgoing streams");
 }
 
 // Handle 'presence' stanzas
@@ -1693,6 +1711,7 @@ void JBModule::initialize()
 	installRelay(Halt);
 	installRelay(Help);
 	installRelay(ImExecute);
+	installRelay(EngineStart,"engine.start");
 	s_jabber = new YJBEngine;
 	s_jabber->debugChain(this);
 	// Install handlers
@@ -1769,6 +1788,8 @@ bool JBModule::received(Message& msg, int id)
     }
     if (id == Timer)
 	s_entityCaps.expire(msg.msgTime().msec());
+    else if (id == EngineStart)
+	s_jabber->handleEngineStart(msg);
     return Module::received(msg,id);
 }
 

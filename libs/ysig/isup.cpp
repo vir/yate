@@ -2929,6 +2929,7 @@ void SS7ISUP::timerTick(const Time& when)
 	SS7MsgISUP* msg = new SS7MsgISUP(SS7MsgISUP::RSC,m_rscCic->code());
 	SS7Label label(m_type,*m_remotePoint,*m_defPoint,
 	    (m_defaultSls == SlsCircuit) ? m_rscCic->code() : m_sls);
+	DDebug(this,DebugNote,"Periodic restart on cic=%u",m_rscCic->code());
 	mylock.drop();
 	transmitMessage(msg,label,false);
     }

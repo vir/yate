@@ -3314,7 +3314,7 @@ void ISDNQ931::sendRestart(u_int64_t time, bool retrans)
 	}
     }
     String s(m_restartCic->code());
-    DDebug(this,DebugInfo,"%s restart for circuit(s) '%s'",
+    DDebug(this,DebugNote,"%s restart for circuit(s) '%s'",
 	!retrans ? "Sending" : "Retransmitting",s.c_str());
     // Create the message
     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::Restart,true,

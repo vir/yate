@@ -294,6 +294,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\engine\Compressor.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\engine\Configuration.cpp"
 				>
 				<FileConfiguration

@@ -971,7 +971,7 @@ protected:
      * Check and set the id for outgoing streams
      * Generate an id for incoming streams
      * Terminate the stream if this conditions are met
-     * @param xml Received xml element. Will be consumed and zeroed if false is returned
+     * @param xml Received xml element
      * @return False if stream termination was initiated
      */
     bool processStreamStart(const XmlElement* xml);

@@ -36,6 +36,7 @@ using namespace TelEngine;
 
 namespace { // anonymous
 
+class LocalDomain;                       // Serviced domain along with features
 class YStreamReceive;                    // Stream receive thread
 class YStreamSetReceive;                 // A list of stream receive threads
 class YStreamProcess;                    // Stream process (getEvent()) thread
@@ -51,6 +52,40 @@ class JBMessageHandler;                  // Module message handlers
 class TcpListener;                       // Incoming connection listener
 class JBModule;                          // The module
 
+/*
+ * Serviced domain along with features
+ */
+class LocalDomain : public RefObject, public Mutex
+{
+public:
+    // Constructor. Update features if engine.start was handled
+    LocalDomain(const char* domain);
+    // Check if TLS can be used
+    inline bool canTls() const
+	{ return m_canTls; }
+    // Check if a feature is present
+    inline bool hasFeature(int f, bool c2s) {
+	    Lock lock(this);
+	    XMPPFeatureList& list = c2s ? m_c2sFeatures : m_features;
+	    return 0 != list.get(f);
+	}
+    // Build a disco info response if hash is empty or match the features hash
+    XmlElement* buildDiscoInfo(bool c2s, const String& hash, const String& id);
+    // Create a 'c' capabilities xml element
+    XmlElement* createEntityCaps(bool c2s);
+    // Check if TLS can be offered
+    // Does nothing if already checked
+    void updateFeatures();
+    // Retrieve the domain
+    virtual const String& toString() const
+	{ return m_domain; }
+private:
+    String m_domain;                     // The domain
+    bool m_checked;                      // Features already checked
+    bool m_canTls;                       // TLS supported
+    XMPPFeatureList m_c2sFeatures;       // Server features to advertise on c2s streams
+    XMPPFeatureList m_features;          // Server features to advertise on non c2s streams
+};
 
 /*
  * Stream receive thread
@@ -173,6 +208,11 @@ public:
 	const String& remote, String& key);
     // Check if a domain is serviced by this engine
     virtual bool hasDomain(const String& domain);
+    // Retrieve a serviced domain. Return a referenced object
+    LocalDomain* findDomain(const String& domain);
+    // Retrieve a serviced domain from an event 'to' or event stream
+    // Returns a referenced object
+    LocalDomain* findDomain(JBEvent* event);
     // Get the first domain in the list
     inline void firstDomain(String& domain) {
 	    Lock lock(this);
@@ -293,6 +333,9 @@ public:
 	    if (o)
 		o->remove();
 	}
+    // Update serviced domains features
+    // This method should be called with engine unlocked
+    void updateDomainsFeatures();
     // Program name and version to be advertised on request
     String m_progName;
     String m_progVersion;
@@ -301,13 +344,8 @@ private:
     void notifyDbVerifyResult(const JabberID& local, const JabberID& remote,
 	const String& id, XMPPError::Type rsp);
     // Find a configured or dynamic domain
-    inline ObjList* findDomain(const String& domain, bool cfg) {
-	    ObjList* o = cfg ? m_domains.skipNull() : m_dynamicDomains.skipNull();
-	    for (; o; o = o->skipNext())
-		if (*static_cast<String*>(o->get()) == domain)
-		    return o;
-	    return 0;
-	}
+    inline ObjList* findDomain(const String& domain, bool cfg)
+	{ return cfg ? m_domains.find(domain) : m_dynamicDomains.find(domain); }
     // Add a resource to binding resources list. Make sure the resource is unique
     // Return true on success
     bool bindingResource(const JabberID& user);
@@ -325,8 +363,6 @@ private:
     ObjList m_restrictedResources;       // Resource names the users can't use
     ObjList m_items;
     ObjList m_components;
-    XMPPFeatureList m_c2sFeatures;       // Server features to advertise on c2s streams
-    XMPPFeatureList m_features;          // Server features to advertise on non c2s streams
     String m_dialbackSecret;             // Server dialback secret used to build keys
     ObjList m_bindingResources;          // List of resources in bind process
 };
@@ -569,6 +605,8 @@ static bool s_s2sFeatures = true;        // Offer RFC 3920 version=1 and stream 
                                          //  on incoming s2s streams
 static bool s_dumpIq = false;            // Dump 'iq' xml string in jabber.iq message
 static bool s_engineStarted = false;     // Engine started flag
+static bool s_iqAuth = true;             // Allow old style auth on c2s streams
+static const String s_capsNode = "http://yate.null.ro/yate/server/caps"; // Server entity caps node
 INIT_PLUGIN(JBModule);                   // The module
 static YJBEntityCapsList s_entityCaps;
 static YJBEngine* s_jabber = 0;
@@ -753,6 +791,83 @@ static void fillStreamRemote(String& buf, JBStream& stream, const char* sep = " 
 
 
 /*
+ * LocalDomain
+ */
+LocalDomain::LocalDomain(const char* domain)
+    : Mutex(true,"jabberserver:localdomain"),
+    m_domain(domain),
+    m_checked(false),
+    m_canTls(false)
+{
+    // c2s features
+    m_c2sFeatures.add(XMPPNamespace::DiscoInfo);
+    m_c2sFeatures.add(XMPPNamespace::DiscoItems);
+    m_c2sFeatures.add(XMPPNamespace::Roster);
+    m_c2sFeatures.add(XMPPNamespace::IqPrivate);
+    m_c2sFeatures.add(XMPPNamespace::VCard);
+    m_c2sFeatures.add(XMPPNamespace::MsgOffline);
+    m_c2sFeatures.add(XMPPNamespace::IqVersion);
+    m_c2sFeatures.add(XMPPNamespace::Session);
+    m_c2sFeatures.add(XmlTag::Register,XMPPNamespace::Register);
+    m_c2sFeatures.m_identities.append(new JIDIdentity("server","im"));
+    m_c2sFeatures.updateEntityCaps();
+    // Non c2s features
+    m_features.add(XMPPNamespace::DiscoInfo);
+    m_features.add(XMPPNamespace::DiscoItems);
+    m_features.add(XMPPNamespace::VCard);
+    m_features.add(XMPPNamespace::MsgOffline);
+    m_features.add(XMPPNamespace::IqVersion);
+    m_features.m_identities.append(new JIDIdentity("server","im"));
+    m_features.updateEntityCaps();
+    // Update features now if possible
+    updateFeatures();
+}
+
+// Build a disco info response if hash is empty or match the features hash
+XmlElement* LocalDomain::buildDiscoInfo(bool c2s, const String& hash, const String& id)
+{
+    Lock lock(this);
+    XMPPFeatureList& list = c2s ? m_c2sFeatures : m_features;
+    if (hash && hash != list.m_entityCapsHash)
+	return 0;
+    return list.buildDiscoInfo(0,0,id);
+}
+
+// Create a 'c' capabilities xml element
+XmlElement* LocalDomain::createEntityCaps(bool c2s)
+{
+    Lock lock(this);
+    XMPPFeatureList& list = c2s ? m_c2sFeatures : m_features;
+    return XMPPUtils::createEntityCaps(list.m_entityCapsHash,s_capsNode);
+}
+
+// Check if TLS or compression can be offered. Update features
+// Does nothing if already checked
+void LocalDomain::updateFeatures()
+{
+    Lock lck(this);
+    // Allow old style client auth
+    if (s_iqAuth) {
+	if (!m_c2sFeatures.get(XMPPNamespace::IqAuth)) {
+	    m_c2sFeatures.add(XmlTag::Auth,XMPPNamespace::IqAuth);
+	    m_c2sFeatures.updateEntityCaps();
+	}
+    }
+    else
+	m_c2sFeatures.remove(XMPPNamespace::IqAuth);
+    if (m_checked || !s_engineStarted)
+	return;
+    m_checked = true;
+    lck.drop();
+    // Check TLS
+    m_canTls = __plugin.checkTls(true,toString());
+    Debug(&__plugin,m_canTls ? DebugInfo : DebugNote,
+	"Checked local domain '%s': tls=%s",
+	toString().c_str(),String::boolText(m_canTls));
+}
+
+
+/*
  * YJBEntityCapsList
  */
 // Load the entity caps file
@@ -798,26 +913,6 @@ YJBEngine::YJBEngine()
     m_s2sProcess = new YStreamSetProcess(this,0,"s2s/process");
     m_compReceive = new YStreamSetReceive(this,0,"comp/recv");
     m_compProcess = new YStreamSetProcess(this,0,"comp/process");
-    // c2s features
-    m_c2sFeatures.add(XMPPNamespace::DiscoInfo);
-    m_c2sFeatures.add(XMPPNamespace::DiscoItems);
-    m_c2sFeatures.add(XMPPNamespace::Roster);
-    m_c2sFeatures.add(XMPPNamespace::IqPrivate);
-    m_c2sFeatures.add(XMPPNamespace::VCard);
-    m_c2sFeatures.add(XMPPNamespace::MsgOffline);
-    m_c2sFeatures.add(XMPPNamespace::IqVersion);
-    m_c2sFeatures.add(XMPPNamespace::Session);
-    m_c2sFeatures.add(XmlTag::Register,XMPPNamespace::Register);
-    m_c2sFeatures.m_identities.append(new JIDIdentity("server","im"));
-    m_c2sFeatures.updateEntityCaps();
-    // Non c2s features
-    m_features.add(XMPPNamespace::DiscoInfo);
-    m_features.add(XMPPNamespace::DiscoItems);
-    m_features.add(XMPPNamespace::VCard);
-    m_features.add(XMPPNamespace::MsgOffline);
-    m_features.add(XMPPNamespace::IqVersion);
-    m_features.m_identities.append(new JIDIdentity("server","im"));
-    m_features.updateEntityCaps();
 }
 
 YJBEngine::~YJBEngine()
@@ -841,26 +936,42 @@ void YJBEngine::initialize(const NamedList* params, bool first)
     domains.toLower();
     ObjList* l = domains.split(',',false);
     // Remove serviced domains
+    ObjList notChanged;
     ObjList* o = l->skipNull();
-    for (; o; o = o->skipNext())
-	m_domains.remove(o->get()->toString());
+    for (; o; o = o->skipNext()) {
+	ObjList* tmp = findDomain(o->get()->toString(),true);
+	if (tmp)
+	    notChanged.append(tmp->remove(false));
+    }
     // Terminate streams
     for (o = m_domains.skipNull(); o; o = o->skipNext()) {
 	JabberID local(o->get()->toString());
+	Debug(this,DebugAll,"Removing '%s' from configured domains",local.c_str());
 	if (local)
 	    dropAll(JBStream::TypeCount,local);
     }
     m_domains.clear();
-    // Set domains
-    while (0 != (o = l->skipNull()))
-	m_domains.append(o->remove(false));
+    // Restore/add domains
+    for (o = l->skipNull(); o; o = o->skipNext()) {
+	String* s = static_cast<String*>(o->get());
+	if (findDomain(*s,true))
+	    continue;
+	ObjList* tmp = notChanged.find(*s);
+	if (tmp)
+	    m_domains.append(tmp->remove(false));
+	else {
+	    LocalDomain* d = new LocalDomain(*s);
+	    m_domains.append(d);
+	    DDebug(this,DebugAll,"Added %p '%s' to configured domains",
+		d,d->toString().c_str());
+	}
+    }
     TelEngine::destruct(l);
     if (m_domains.skipNull()) {
 	if (debugAt(DebugAll)) {
 	    String tmp;
-	    for (ObjList* o = m_domains.skipNull(); o; o = o->skipNext())
-		tmp.append(o->get()->toString(),",");
-	    DDebug(this,DebugAll,"Configured domains='%s'",tmp.c_str());
+	    tmp.append(m_domains,",");
+	    Debug(this,DebugAll,"Configured domains='%s'",tmp.c_str());
 	}
     }
     else
@@ -897,11 +1008,6 @@ void YJBEngine::initialize(const NamedList* params, bool first)
 	m_remoteDomain.m_flags |= JBStream::TlsRequired;
     else
 	m_remoteDomain.m_flags &= ~JBStream::TlsRequired;
-
-    // Allow old style client auth
-    m_c2sFeatures.remove(XMPPNamespace::IqAuth);
-    if (params->getBoolValue("c2s_oldstyleauth",true))
-	m_c2sFeatures.add(XmlTag::Auth,XMPPNamespace::IqAuth);
 
     // Program name and version to be advertised on request
     if (!m_progName) {
@@ -1033,6 +1139,39 @@ bool YJBEngine::hasDomain(const String& domain)
     return 0 != findDomain(domain,true) || 0 != findDomain(domain,false);
 }
 
+// Retrieve a serviced domain
+// Returns a refferenced object
+LocalDomain* YJBEngine::findDomain(const String& domain)
+{
+    if (!domain)
+	return false;
+    Lock lock(this);
+    ObjList* o = findDomain(domain,true);
+    if (!o)
+	o = findDomain(domain,false);
+    if (!o)
+	return 0;
+    LocalDomain* d = static_cast<LocalDomain*>(o->get());
+    return d->ref() ? d : 0;
+}
+
+// Retrieve a serviced domain from an event 'to' or event stream
+// Returns a referrenced object
+LocalDomain* YJBEngine::findDomain(JBEvent* event)
+{
+    if (!event)
+	return 0;
+    String dname;
+    if (event->to())
+	dname = event->to().domain();
+    else if (event->stream()) {
+	Lock lck(event->stream());
+	dname = event->stream()->local().domain();
+    }
+    dname.toLower();
+    return findDomain(dname);
+}
+
 // Add or remove a component to/from serviced domains and components list
 void YJBEngine::setComponent(const String& domain, bool add)
 {
@@ -1048,9 +1187,10 @@ void YJBEngine::setComponent(const String& domain, bool add)
 	if (!oc)
 	    m_components.append(new String(domain));
 	if (!od) {
-	    m_dynamicDomains.append(new String(domain));
-	    Debug(this,DebugAll,"Added component '%s' to dynamic domains",
-		domain.c_str());
+	    LocalDomain* d = new LocalDomain(domain);
+	    m_dynamicDomains.append(d);
+	    Debug(this,DebugAll,"Added component domain %p '%s' to dynamic domains",
+		d,d->toString().c_str());
 	}
     }
     else {
@@ -1058,9 +1198,10 @@ void YJBEngine::setComponent(const String& domain, bool add)
 	    oc->remove();
 	if (od) {
 	    // TODO: remove streams ?
+	    LocalDomain* d = static_cast<LocalDomain*>(od->get());
+	    Debug(this,DebugAll,"Removing component domain %p '%s' from dynamic domains",
+		d,d->toString().c_str());
 	    od->remove();
-	    Debug(this,DebugAll,"Removed component '%s' from dynamic domains",
-		domain.c_str());
 	}
     }
 }
@@ -1457,8 +1598,11 @@ bool YJBEngine::handleJabberItem(Message& msg)
 	Debug(this,DebugAll,"Removed item '%s'",jid.c_str());
 	if (dynamic && !isServerItemDomain(jid.domain())) {
 	     // TODO: remove streams ?
+	     LocalDomain* d = static_cast<LocalDomain*>(dynamic->get());
+	     Debug(this,DebugAll,
+		"Removed item '%s' (domain %p '%s') from dynamic domains",
+		jid.c_str(),d,d->toString().c_str());
 	     dynamic->remove();
-	     Debug(this,DebugAll,"Removed item '%s' from serviced domains",jid.c_str());
 	}
 	return true;
     }
@@ -1471,8 +1615,10 @@ bool YJBEngine::handleJabberItem(Message& msg)
     m_items.append(new JabberID(jid));
     Debug(this,DebugAll,"Added item '%s'",jid.c_str());
     if (!dynamic) {
-	m_dynamicDomains.append(new String(jid.domain()));
-	Debug(this,DebugAll,"Added item '%s' to serviced domains",jid.c_str());
+	LocalDomain* d = new LocalDomain(jid.domain());
+	m_dynamicDomains.append(d);
+	Debug(this,DebugAll,"Added item '%s' (domain %p '%s') to dynamic domains",
+	    jid.c_str(),d,d->toString().c_str());
     }
     return true;
 }
@@ -1485,6 +1631,8 @@ void YJBEngine::handleEngineStart(Message& msg)
     m_hasClientTls = __plugin.checkTls(false);
     if (!m_hasClientTls)
 	Debug(this,DebugNote,"TLS not available for outgoing streams");
+    // Update domains features
+    updateDomainsFeatures();
 }
 
 // Handle 'presence' stanzas
@@ -1619,8 +1767,6 @@ void YJBEngine::getSubDomain(String& subdomain, const String& domain)
 // Set local domain and stream features to advertise to remote party
 void YJBEngine::processStartIn(JBEvent* ev)
 {
-    static const char* node = "http://yate.null.ro/yate/server/caps";
-
     JBServerStream* comp = ev->serverStream();
     if (comp && comp->type() == JBStream::comp) {
 	String sub;
@@ -1645,9 +1791,26 @@ void YJBEngine::processStartIn(JBEvent* ev)
 	return;
     }
 
-    // Set c2s stream TLS required flag
-    if (ev->stream()->type() == JBStream::c2s)
-	ev->stream()->setTlsRequired(m_c2sTlsRequired);
+    LocalDomain* domain = findDomain(ev);
+    bool canTls = domain && domain->canTls();
+
+    // Set stream TLS required flag
+    bool secured = ev->stream()->flag(JBStream::StreamSecured);
+    if (!secured) {
+	bool reqTls = false;
+	if (ev->stream()->type() == JBStream::c2s)
+	    reqTls = m_c2sTlsRequired;
+	else
+	    reqTls = 0 != (m_remoteDomain.m_flags & JBStream::TlsRequired);
+	if (reqTls && !canTls) {
+	    TelEngine::destruct(domain);
+	    ev->releaseStream();
+	    ev->stream()->terminate(-1,true,0,XMPPError::Internal,
+		"TLS is required but not available");
+	    return;
+	}
+	ev->stream()->setTlsRequired(reqTls);
+    }
 
     XMPPFeatureList features;
 
@@ -1655,10 +1818,7 @@ void YJBEngine::processStartIn(JBEvent* ev)
     if (!ev->stream()->flag(JBStream::StreamRemoteVer1)) {
 	XMPPError::Type error = XMPPError::NoError;
 	if (ev->stream()->type() == JBStream::c2s) {
-	    lock();
-	    bool ok = (0 != m_c2sFeatures.get(XMPPNamespace::IqAuth));
-	    unlock();
-	    if (ok) {
+	    if (domain && domain->hasFeature(XMPPNamespace::IqAuth,true)) {
 		if (ev->stream()->flag(JBStream::StreamTls) ||
 		    !ev->stream()->flag(JBStream::TlsRequired))
 		    features.add(XmlTag::Auth,XMPPNamespace::IqAuth,true);
@@ -1668,6 +1828,7 @@ void YJBEngine::processStartIn(JBEvent* ev)
 	    else
 		error = XMPPError::UnsupportedVersion;
 	}
+	TelEngine::destruct(domain);
 	if (error == XMPPError::NoError)
 	    ev->stream()->start(&features);
 	else
@@ -1675,52 +1836,53 @@ void YJBEngine::processStartIn(JBEvent* ev)
 	return;
     }
 
-    bool s2sVer1 = s_s2sFeatures;
-
-    // Set stream features
-    // Add TLS if not secured
-    if (!ev->stream()->flag(JBStream::StreamSecured) &&
-	(ev->stream()->type() == JBStream::c2s || s2sVer1))
-	features.add(XmlTag::Starttls,XMPPNamespace::Tls,
-	    ev->stream()->flag(JBStream::TlsRequired));
-    // Done for s2s streams
-    if (ev->stream()->type() == JBStream::s2s) {
-	ev->stream()->start(&features,0,s2sVer1);
-	return;
-    }
-    XMPPFeature* tls = features.get(XMPPNamespace::Tls);
-    bool addReg = ev->stream()->type() == JBStream::c2s &&
-	m_c2sFeatures.get(XMPPNamespace::Register);
-    bool addCaps = false;
-    if (!(tls && tls->required())) {
-	addCaps = true;
-	// Add SASL auth if stream is not authenticated
-	if (!ev->stream()->flag(JBStream::StreamAuthenticated) &&
-	    ev->stream()->type() == JBStream::c2s) {
-	    int mech = XMPPUtils::AuthMD5;
-	    if (ev->stream()->flag(JBStream::StreamTls) || m_allowUnsecurePlainAuth)
-		mech |= XMPPUtils::AuthPlain;
-	    features.add(new XMPPFeatureSasl(mech,true));
-	}
-	// Add register if enabled
-	if (addReg)
-	    features.add(XmlTag::Register,XMPPNamespace::Register);
-	XMPPFeature* sasl = features.get(XMPPNamespace::Sasl);
-	if (!(sasl && sasl->required())) {
-	    if (ev->stream()->type() == JBStream::c2s) {
-		// TLS and/or SASL are missing or not required: add bind
-		features.add(XmlTag::Bind,XMPPNamespace::Bind,true);
-	    }
-	}
-    }
-    else if (addReg && tls && !tls->required()) {
-	// Stream not secured, TLS not required: add register
-	features.add(XmlTag::Register,XMPPNamespace::Register);
-    }
-    ev->releaseStream();
+    // Make sure we add features in the order indicated in XEP-0170
+    XMPPFeature* tls = 0;
+    XMPPFeature* reg = 0;
+    XMPPFeature* auth = 0;
+    XMPPFeature* bind = 0;
     XmlElement* caps = 0;
-    if (ev->stream()->type() == JBStream::c2s && addCaps)
-	caps = XMPPUtils::createEntityCaps(m_features.m_entityCapsHash,node);
+    bool c2s = ev->stream()->type() == JBStream::c2s;
+    // Add TLS if not secured
+    if (!secured && (c2s || s_s2sFeatures) && canTls)
+	tls = new XMPPFeature(XmlTag::Starttls,XMPPNamespace::Tls,
+	    ev->stream()->flag(JBStream::TlsRequired));
+    bool authenticated = ev->stream()->flag(JBStream::StreamAuthenticated);
+    if (ev->stream()->type() == JBStream::s2s) {
+	if (!authenticated)
+	    auth = new XMPPFeature(XmlTag::Dialback,XMPPNamespace::DialbackFeature);
+    }
+    else if (c2s) {
+	bool tlsReq = tls && tls->required();
+	bool addReg = !authenticated && domain &&
+	    domain->hasFeature(XMPPNamespace::Register,true);
+	// Add entity caps 'c' element
+	if (!tlsReq && domain)
+	    caps = domain->createEntityCaps(true);
+	if (!tlsReq) {
+	    // Add SASL auth if stream is not authenticated
+	    if (!authenticated) {
+		int mech = XMPPUtils::AuthMD5;
+		if (ev->stream()->flag(JBStream::StreamTls) || m_allowUnsecurePlainAuth)
+		    mech |= XMPPUtils::AuthPlain;
+		auth = new XMPPFeatureSasl(mech,true);
+	    }
+	    // TLS and/or SASL are missing or not required: add bind
+	    if (!(auth && auth->required()))
+		bind = new XMPPFeature(XmlTag::Bind,XMPPNamespace::Bind,true);
+	}
+	else if (addReg)
+	    // Stream not secured, TLS not required: add register
+	    addReg = tls && !tls->required();
+	if (addReg)
+	    reg = new XMPPFeature(XmlTag::Register,XMPPNamespace::Register);
+    }
+    TelEngine::destruct(domain);
+    features.add(tls);
+    features.add(reg);
+    features.add(auth);
+    features.add(bind);
+    ev->releaseStream();
     ev->stream()->start(&features,caps);
 }
 
@@ -2144,28 +2306,29 @@ XmlElement* YJBEngine::discoInfo(JBEvent* ev, JBStream::Type sType)
     XMPPError::Type error = XMPPError::NoError;
     if (ev->stanzaType() == "get" &&
 	XMPPUtils::isUnprefTag(*ev->child(),XmlTag::Query)) {
-	String* node = ev->child()->getAttribute("node");
-	bool ok = TelEngine::null(node);
-	Lock lock(this);
-	if (!ok && ev->to().domain() && node->startsWith(ev->to().domain())) {
-	    char c = node->at(ev->to().domain().length());
-	    if (!c)
-		ok = true;
-	    else if (c == '#') {
-		String hash(node->substr(ev->to().domain().length() + 1));
-		if (sType == JBStream::c2s)
-		    ok = hash == m_c2sFeatures.m_entityCapsHash;
+	XmlElement* rsp = 0;
+	LocalDomain* domain = findDomain(ev);
+	if (domain) {
+	    String* node = ev->child()->getAttribute("node");
+	    bool ok = TelEngine::null(node);
+	    String hash;
+	    if (!ok && ev->to().domain() && node->startsWith(ev->to().domain())) {
+		char c = node->at(ev->to().domain().length());
+		if (!c)
+		    ok = true;
+		else if (c == '#') {
+		    hash = node->substr(ev->to().domain().length() + 1);
+		    ok = !hash.null();
+		}
 		else
-		    ok = hash == m_features.m_entityCapsHash;
+		    ok = true;
 	    }
-	    else
-		ok = true;
+	    if (ok)
+		rsp = domain->buildDiscoInfo(sType == JBStream::c2s,hash,ev->id());
+	    TelEngine::destruct(domain);
 	}
-	if (ok) {
-	    if (sType == JBStream::c2s)
-		return m_c2sFeatures.buildDiscoInfo(0,0,ev->id());
-	    return m_features.buildDiscoInfo(0,0,ev->id());
-	}
+	if (rsp)
+	    return rsp;
 	error = XMPPError::ItemNotFound;
     }
     else
@@ -2482,6 +2645,27 @@ void YJBEngine::completeStreamName(String& str, const String& partWord)
 	}
 	list[i]->unlock();
 	list[i] = 0;
+    }
+}
+
+// Update serviced domains features
+// This method should be called with engine unlocked
+void YJBEngine::updateDomainsFeatures()
+{
+    ObjList* lists[2] = {&m_domains,&m_dynamicDomains};
+    for (unsigned int i = 0; i < 2; i++) {
+	lock();
+	ListIterator iter(*(lists[i]));
+	unlock();
+	RefPointer<LocalDomain> d;
+	do {
+	    lock();
+	    d = static_cast<LocalDomain*>(iter.get());
+	    unlock();
+	    if (d)
+		d->updateFeatures();
+	}
+	while (d);
     }
 }
 
@@ -3342,6 +3526,13 @@ void JBModule::initialize()
 
     // Init the engine
     s_jabber->initialize(cfg.getSection("general"),!m_init);
+
+    // Allow old style client auth
+    bool iqAuth = cfg.getBoolValue("general","c2s_oldstyleauth",true);
+    if (iqAuth != s_iqAuth) {
+	s_iqAuth = iqAuth;
+	s_jabber->updateDomainsFeatures();
+    }
 
     // Listeners
     unsigned int n = cfg.length();

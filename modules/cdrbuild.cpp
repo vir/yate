@@ -59,6 +59,13 @@ public:
     virtual bool received(Message &msg);
 };
 
+class CommandHandler : public MessageHandler
+{
+public:
+    CommandHandler() : MessageHandler("engine.command") { }
+    virtual bool received(Message &msg);
+};
+
 // Collects CDR information and emits the call.cdr messages when needed
 class CdrBuilder : public NamedList
 {
@@ -390,6 +397,7 @@ CdrBuilder* CdrBuilder::find(String &id)
     return static_cast<CdrBuilder*>(s_cdrs[id]);
 }
 
+
 bool CdrHandler::received(Message &msg)
 {
     Lock lock(s_mutex);
@@ -476,13 +484,14 @@ bool CdrHandler::received(Message &msg)
     }
     return rval;
 };
-		    
+
+
 bool StatusHandler::received(Message &msg)
 {
     const char *sel = msg.getValue("module");
     if (sel && ::strcmp(sel,"cdrbuild"))
 	return false;
-    String st("name=cdrbuild,type=cdr,format=Status|Caller|Called|Duration");
+    String st("name=cdrbuild,type=cdr,format=Status|Caller|Called|Peer|Duration");
     s_mutex.lock();
     expireHungup();
     st << ";cdrs=" << s_cdrs.count() << ",hungup=" << s_hungup.count();
@@ -505,7 +514,20 @@ bool StatusHandler::received(Message &msg)
     msg.retValue() << st << "\r\n";
     return false;
 }
-			
+
+
+bool CommandHandler::received(Message &msg)
+{
+    static const String name("cdrbuild");
+    const String* partial = msg.getParam("partline");
+    if (!partial || *partial != "status")
+	return false;
+    partial = msg.getParam("partword");
+    if (TelEngine::null(partial) || name.startsWith(*partial))
+	msg.retValue().append(name,"\t");
+    return false;
+}
+
 
 class CdrBuildPlugin : public Plugin
 {
@@ -518,7 +540,8 @@ private:
 };
 
 CdrBuildPlugin::CdrBuildPlugin()
-    : m_first(true)
+    : Plugin("cdrbuild"),
+      m_first(true)
 {
     Output("Loaded module CdrBuild");
 }
@@ -580,6 +603,7 @@ void CdrBuildPlugin::initialize()
 	Engine::install(new CdrHandler("call.drop",CdrDrop));
 	Engine::install(new CdrHandler("engine.halt",EngHalt,150));
 	Engine::install(new StatusHandler);
+	Engine::install(new CommandHandler);
     }
 }
 

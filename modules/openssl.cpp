@@ -35,6 +35,10 @@
 #include <openssl/aes.h>
 #endif
 
+#ifndef OPENSSL_NO_DES
+#include <openssl/des.h>
+#endif
+
 using namespace TelEngine;
 namespace { // anonymous
 
@@ -136,10 +140,43 @@ public:
     virtual bool initVector(const void* vect, unsigned int len, Direction dir);
     virtual bool encrypt(void* outData, unsigned int len, const void* inpData);
     virtual bool decrypt(void* outData, unsigned int len, const void* inpData);
-private:
+protected:
     AES_KEY* m_key;
     unsigned char m_initVector[AES_BLOCK_SIZE];
 };
+
+//AES - Cipher Feedback Mode
+class AesCfbCipher : public AesCtrCipher
+{
+public:
+    AesCfbCipher();
+    virtual ~AesCfbCipher();
+    virtual bool encrypt(void* outData, unsigned int len, const void* inpData);
+    virtual bool decrypt(void* outData, unsigned int len, const void* inpData);
+};
+
+#endif
+
+#ifndef OPENSSL_NO_DES
+// CBC-DES Cipher - Cipher-Block Chaining Mode
+class DesCtrCipher : public Cipher
+{
+public:
+    DesCtrCipher();
+    virtual ~DesCtrCipher();
+    virtual unsigned int blockSize() const
+	{ return DES_KEY_SZ; }
+    virtual unsigned int initVectorSize() const
+	{ return DES_KEY_SZ; }
+    virtual bool setKey(const void* key, unsigned int len, Direction dir);
+    virtual bool initVector(const void* vect, unsigned int len, Direction dir);
+    virtual bool encrypt(void* outData, unsigned int len, const void* inpData);
+    virtual bool decrypt(void* outData, unsigned int len, const void* inpData);
+private:
+    DES_key_schedule m_key;
+    unsigned char m_initVector[DES_KEY_SZ];
+};
+#endif
 
 class CipherHandler : public MessageHandler
 {
@@ -149,7 +186,6 @@ public:
 	{ }
     virtual bool received(Message& msg);
 };
-#endif
 
 class OpenSSL : public Module
 {
@@ -569,6 +605,123 @@ bool AesCtrCipher::decrypt(void* outData, unsigned int len, const void* inpData)
     return encrypt(outData,len,inpData);
 }
 
+AesCfbCipher::AesCfbCipher()
+{
+    DDebug(&__plugin,DebugAll,"AesCfbCipher::AesCfbCipher() key=%p [%p]",m_key,this);
+}
+
+AesCfbCipher::~AesCfbCipher()
+{
+    DDebug(&__plugin,DebugAll,"AesCfbCipher::~AesCfbCipher() key=%p [%p]",m_key,this);
+}
+
+bool AesCfbCipher::encrypt(void* outData, unsigned int len, const void* inpData)
+{
+    if (!(outData && len))
+	return false;
+    if (!inpData)
+	inpData = outData;
+    int num = 0;
+    AES_cfb128_encrypt(
+	(const unsigned char*)inpData,
+	(unsigned char*)outData,
+	len,
+	m_key,
+	m_initVector,
+	&num,
+	AES_ENCRYPT);
+    return true;
+}
+
+bool AesCfbCipher::decrypt(void* outData, unsigned int len, const void* inpData)
+{
+    if (!(outData && len))
+	return false;
+    if (!inpData)
+	inpData = outData;
+    int num = 0;
+    AES_cfb128_encrypt(
+	(const unsigned char*)inpData,
+	(unsigned char*)outData,
+	len,
+	m_key,
+	m_initVector,
+	&num,
+	AES_DECRYPT);
+    return true;
+}
+
+#endif
+
+#ifndef OPENSSL_NO_DES
+DesCtrCipher::DesCtrCipher()
+{
+    DES_cblock nativeDESKey;
+    DES_random_key(&nativeDESKey);
+    DES_set_key_checked(&nativeDESKey,&m_key);
+    DDebug(&__plugin,DebugAll,"DesCtrCipher::DesCtrCipher() key=%p [%p]",&m_key,this);
+}
+
+DesCtrCipher::~DesCtrCipher()
+{
+    DDebug(&__plugin,DebugAll,"DesCtrCipher::~DesCtrCipher() key=%p [%p]",&m_key,this);
+}
+
+bool DesCtrCipher::setKey(const void* key, unsigned int len, Direction dir)
+{
+    if (!(key && len))
+	return false;
+    DES_cblock nativeKey;
+    ::memcpy(nativeKey,key,len);
+
+    DES_set_odd_parity(&nativeKey);
+    int r = DES_set_key_checked(&nativeKey,&m_key);
+    return r== 0;
+}
+
+bool DesCtrCipher::initVector(const void* vect, unsigned int len, Direction dir)
+{
+    if (len && !vect)
+	return false;
+    if (len > DES_KEY_SZ)
+	len = DES_KEY_SZ;
+    if (len < DES_KEY_SZ)
+	::memset(m_initVector,0,DES_KEY_SZ);
+    if (len)
+	::memcpy(m_initVector,vect,len);
+    return true;
+}
+
+bool DesCtrCipher::encrypt(void* outData, unsigned int len, const void* inpData)
+{
+    DDebug(&__plugin,DebugAll,"DesCtrCipher::encrypt(%p, %d. %p) [%p]",outData,len,inpData,this);
+    if (!(outData && len))
+	return false;
+    if (len % 8 != 0) {
+	Debug(&__plugin,DebugWarn,"DesCtrCipher::encrypt() - length of data block to be encrypted is not a multiple of 8, memory corruption possible - encryption aborted");
+	return false;
+    }
+    if (!inpData)
+	inpData = outData;
+    DES_ncbc_encrypt((const unsigned char*)inpData,(unsigned char*)outData,len,&m_key,(DES_cblock *)m_initVector,DES_ENCRYPT);
+    return true;
+}
+
+bool DesCtrCipher::decrypt(void* outData, unsigned int len, const void* inpData)
+{
+    DDebug(&__plugin,DebugAll,"DesCtrCipher::decrypt(%p, %d. %p) [%p]",outData,len,inpData,this);
+    if (!(outData && len))
+	return false;
+    if (len % 8 != 0) {
+	Debug(&__plugin,DebugWarn,"DesCtrCipher::decrypt() - length of data block to be decrypted is not a multiple of 8, memory corruption possible - decryption aborted");
+	return false;
+    }
+    if (!inpData)
+	inpData = outData;
+    DES_ncbc_encrypt((const unsigned char*)inpData,(unsigned char*)outData,len,&m_key,(DES_cblock *)m_initVector,DES_DECRYPT);
+    return true;
+}
+#endif
 
 // Handler for the engine.cipher message - Cipher Factory
 bool CipherHandler::received(Message& msg)
@@ -578,14 +731,27 @@ bool CipherHandler::received(Message& msg)
     if (!name)
 	return false;
     Cipher** ppCipher = static_cast<Cipher**>(msg.userObject("Cipher*"));
+#ifndef OPENSSL_NO_AES
     if (*name == "aes_ctr") {
 	if (ppCipher)
 	    *ppCipher = new AesCtrCipher();
 	return true;
     }
+    if (*name == "aes_cfb") {
+	if (ppCipher)
+	    *ppCipher = new AesCfbCipher();
+	return true;
+    }
+#endif
+#ifndef OPENSSL_NO_DES
+    if (*name == "des_cbc") {
+	if (ppCipher)
+	    *ppCipher = new DesCtrCipher();
+	return true;
+    }
+#endif
     return false;
 }
-#endif
 
 
 OpenSSL::OpenSSL()
@@ -616,7 +782,7 @@ void OpenSSL::initialize()
 	SSL_CTX_set_info_callback(s_context,infoCallback); // macro - no ::
 	m_handler = new SslHandler;
 	Engine::install(m_handler);
-#ifndef OPENSSL_NO_AES
+#if !defined(OPENSSL_NO_AES) || !defined(OPENSSL_NO_DES)
 	Engine::install(new CipherHandler);
 #endif
     }

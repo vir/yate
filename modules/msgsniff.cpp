@@ -27,6 +27,20 @@
 using namespace TelEngine;
 namespace { // anonymous
 
+static const char* s_bools[] =
+{
+    "on",
+    "off",
+    "enable",
+    "disable",
+    "true",
+    "false",
+    "yes",
+    "no",
+    0
+};
+
+
 class MsgSniff : public Plugin
 {
 public:
@@ -71,21 +85,34 @@ bool SniffHandler::received(Message &msg)
     if (msg == "engine.timer")
 	return false;
     if (msg == "engine.command") {
+	static const String name("sniffer");
 	String line(msg.getValue("line"));
-	if (line.startSkip("sniffer")) {
+	if (line.startSkip(name)) {
 	    line >> s_active;
 	    msg.retValue() << "Message sniffer is " << (s_active ? "on" : "off") << "\r\n";
 	    return true;
+	}
+	line = msg.getParam("partline");
+	if (line.null()) {
+	    if (name.startsWith(msg.getValue("partword")))
+		msg.retValue().append(name,"\t");
+	}
+	else if (name == line) {
+	    line = msg.getValue("partword");
+	    for (const char** b = s_bools; *b; b++)
+		if (line.null() || String(*b).startsWith(line))
+		    msg.retValue().append(*b,"\t");
 	}
     }
     if (!s_active)
 	return false;
     String par;
     dumpParams(msg,par);
-    Output("Sniffed '%s' time=%u.%06u\r\n  thread=%p '%s'\r\n  data=%p\r\n  retval='%s'%s",
+    Output("Sniffed '%s' time=%u.%06u%s\r\n  thread=%p '%s'\r\n  data=%p\r\n  retval='%s'%s",
 	msg.c_str(),
 	(unsigned int)(msg.msgTime().usec() / 1000000),
 	(unsigned int)(msg.msgTime().usec() % 1000000),
+	(msg.broadcast() ? " (broadcast)" : ""),
 	Thread::current(),
 	Thread::currentName(),
 	msg.userData(),
@@ -102,11 +129,12 @@ void HookHandler::dispatched(const Message& msg, bool handled)
     u_int64_t dt = Time::now() - msg.msgTime().usec();
     String par;
     dumpParams(msg,par);
-    Output("Returned %s '%s' delay=%u.%06u\r\n  thread=%p '%s'\r\n  data=%p\r\n  retval='%s'%s",
+    Output("Returned %s '%s' delay=%u.%06u%s\r\n  thread=%p '%s'\r\n  data=%p\r\n  retval='%s'%s",
 	String::boolText(handled),
 	msg.c_str(),
 	(unsigned int)(dt / 1000000),
 	(unsigned int)(dt % 1000000),
+	(msg.broadcast() ? " (broadcast)" : ""),
 	Thread::current(),
 	Thread::currentName(),
 	msg.userData(),

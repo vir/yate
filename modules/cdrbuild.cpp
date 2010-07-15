@@ -262,7 +262,7 @@ void CdrBuilder::emit(const char *operation)
     DDebug("cdrbuild",DebugAll,"Emit '%s' for '%s' status '%s'",
 	operation,c_str(),m_status.c_str());
     char buf[64];
-    Message *m = new Message("call.cdr");
+    Message *m = new Message("call.cdr",0,true);
     m->addParam("time",printTime(buf,m_start));
     m->addParam("chan",c_str());
     m->addParam("cdrid",m_cdrId);
@@ -296,7 +296,7 @@ void CdrBuilder::emit(const char *operation)
 String CdrBuilder::getStatus() const
 {
     String s(m_status);
-    s << "|" << getValue("caller") << "|" << getValue("called");
+    s << "|" << getValue("caller") << "|" << getValue("called") << "|" << getValue("billid");
     unsigned int sec = 0;
     if (m_start)
 	sec = (Time::now() - m_start + 500000) / 1000000;
@@ -491,7 +491,7 @@ bool StatusHandler::received(Message &msg)
     const char *sel = msg.getValue("module");
     if (sel && ::strcmp(sel,"cdrbuild"))
 	return false;
-    String st("name=cdrbuild,type=cdr,format=Status|Caller|Called|Peer|Duration");
+    String st("name=cdrbuild,type=cdr,format=Status|Caller|Called|BillId|Duration");
     s_mutex.lock();
     expireHungup();
     st << ";cdrs=" << s_cdrs.count() << ",hungup=" << s_hungup.count();

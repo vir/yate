@@ -2396,7 +2396,7 @@ void QtWindow::setVisible(bool visible)
     if (!m_visible) {
 	QList<QDialog*> d = qFindChildren<QDialog*>(this);
 	for (int i = 0; i < d.size(); i++)
-	    delete d[i];
+	    d[i]->deleteLater();
     }
 }
 
@@ -2451,7 +2451,7 @@ bool QtWindow::createDialog(const String& name, const String& title, const Strin
     QtDialog* d = new QtDialog(wndWidget());
     if (d->show(name,title,alias,params))
 	return true;
-    delete d;
+    d->deleteLater();
     return false;
 }
 
@@ -2461,7 +2461,7 @@ bool QtWindow::closeDialog(const String& name)
     QDialog* d = qFindChild<QDialog*>(this,QtClient::setUtf8(name));
     if (!d)
 	return false;
-    delete d;
+    d->deleteLater();
     return true;
 }
 

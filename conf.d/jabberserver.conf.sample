@@ -102,6 +102,13 @@
 ; Defaults to no
 ;dump_iq=no
 
+; compression_formats: string: Comma separated list of supported compression formats
+; This parameter configures the formats to be offered on incoming streams
+; This parameter is not applied on reload
+; Set it to empty string to disable stream compression on incoming streams
+; Defaults to zlib if missing
+;compression_formats=zlib
+
 ; printxml: boolean/string: Print sent/received XML data to output if debug
 ;  level is at least 9
 ; Allowed values are boolean values or 'verbose' string

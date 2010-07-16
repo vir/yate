@@ -234,6 +234,8 @@ public:
     virtual void encryptStream(JBStream* stream);
     // Connect an outgoing stream
     virtual void connectStream(JBStream* stream);
+    // Start stream compression
+    virtual void compressStream(JBStream* stream, const String& formats);
     // Process 'user.roster' messages
     bool handleUserRoster(Message& msg, const String& line);
     // Process 'user.update' messages
@@ -643,6 +645,21 @@ void YJBEngine::connectStream(JBStream* stream)
 	return;
     if (stream && stream->outgoing())
 	(new YJBConnectThread(*stream))->startup();
+}
+
+// Start stream compression
+void YJBEngine::compressStream(JBStream* stream, const String& formats)
+{
+    if (!stream)
+	return;
+    DDebug(this,DebugAll,"compressStream(%p,'%s') formats=%s",
+	stream,stream->toString().c_str(),formats.c_str());
+    Message msg("engine.compress");
+    msg.userData(stream);
+    msg.addParam("formats",formats,false);
+    msg.addParam("name",stream->toString());
+    msg.addParam("data_type","text");
+    Engine::dispatch(msg);
 }
 
 // Process 'user.roster' messages

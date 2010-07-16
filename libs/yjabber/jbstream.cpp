@@ -26,6 +26,14 @@
 
 using namespace TelEngine;
 
+#ifdef XDEBUG
+  #define JBSTREAM_DEBUG_COMPRESS
+  #define JBSTREAM_DEBUG_SOCKET
+#else
+//  #define JBSTREAM_DEBUG_COMPRESS                 // Show (de)compress debug
+//  #define JBSTREAM_DEBUG_SOCKET                   // Show socket read/write debug
+#endif
+
 static const String s_dbVerify = "verify";
 static const String s_dbResult = "result";
 
@@ -87,6 +95,7 @@ const TokenDict JBStream::s_stateName[] = {
     {"Auth",             Auth},
     {"Challenge",        Challenge},
     {"Securing",         Securing},
+    {"Compressing",      Compressing},
     {"Register",         Register},
     {"Destroy",          Destroy},
     {0,0},
@@ -98,17 +107,20 @@ const TokenDict JBStream::s_flagName[] = {
     {"dialback",         DialbackOnly},
     {"allowplainauth",   AllowPlainAuth},
     {"register",         RegisterUser},
+    {"compress",         Compress},
     {"error",            InError},
     // Internal flags
     {"roster_requested", RosterRequested},
     {"online",           AvailableResource},
     {"secured",          StreamTls | StreamSecured},
+    {"encrypted",        StreamTls},
     {"authenticated",    StreamAuthenticated},
     {"waitbindrsp",      StreamWaitBindRsp},
     {"waitsessrsp",      StreamWaitSessRsp},
     {"waitchallenge",    StreamWaitChallenge},
     {"waitchallengersp", StreamWaitChgRsp},
     {"version1",         StreamRemoteVer1},
+    {"compressed",       StreamCompressed},
     {0,0}
 };
 
@@ -141,7 +153,7 @@ JBStream::JBStream(JBEngine* engine, Socket* socket, Type t, bool ssl)
     m_engine(engine), m_type(t),
     m_incoming(true), m_terminateEvent(0),
     m_xmlDom(0), m_socket(0), m_socketFlags(0), m_socketMutex(true,"JBStream::Socket"),
-    m_connectPort(0)
+    m_connectPort(0), m_compress(0)
 {
     if (ssl)
 	setFlags(StreamSecured | StreamTls);
@@ -172,7 +184,7 @@ JBStream::JBStream(JBEngine* engine, Type t, const JabberID& local, const Jabber
     m_incoming(false), m_name(name),
     m_terminateEvent(0),
     m_xmlDom(0), m_socket(0), m_socketFlags(0), m_socketMutex(true,"JBStream::Socket"),
-    m_connectPort(0)
+    m_connectPort(0), m_compress(0)
 {
     if (!m_name)
 	m_engine->buildStreamName(m_name,this);
@@ -186,6 +198,9 @@ JBStream::JBStream(JBEngine* engine, Type t, const JabberID& local, const Jabber
     }
     else
 	updateFromRemoteDef();
+    // Compress always defaults to true if not explicitly disabled
+    if (!flag(Compress) && !(params && params->getBoolValue("nocompression")))
+	setFlags(Compress);
     Debug(this,DebugAll,"JBStream::JBStream(%p,%s,%s,%s) outgoing [%p]",
 	engine,typeName(),local.c_str(),remote.c_str(),this);
     setXmlns();
@@ -230,6 +245,8 @@ void* JBStream::getObject(const String& name) const
 {
     if (name == "Socket*")
 	return state() == Securing ? (void*)&m_socket : 0;
+    if (name == "Compressor*")
+	return (void*)&m_compress;
     if (name == "JBStream")
 	return (void*)this;
     return RefObject::getObject(name);
@@ -303,14 +320,48 @@ bool JBStream::readSocket(char* buf, unsigned int len)
 	return false;
     }
     if (read && read != Socket::socketError()) {
-	buf[read] = 0;
-	XDebug(this,DebugInfo,"Received %s [%p]",buf,this);
-	if (!m_xmlDom->parse(buf)) {
-	    if (m_xmlDom->error() != XmlSaxParser::Incomplete)
-		error = XMPPError::Xml;
-	    else if (m_xmlDom->buffer().length() > m_engine->m_maxIncompleteXml)
-		error = XMPPError::Policy;
+	if (!flag(StreamCompressed)) {
+	    buf[read] = 0;
+#ifdef JBSTREAM_DEBUG_SOCKET
+	    Debug(this,DebugInfo,"Received %s [%p]",buf,this);
+#endif
+	    if (!m_xmlDom->parse(buf)) {
+		if (m_xmlDom->error() != XmlSaxParser::Incomplete)
+		    error = XMPPError::Xml;
+		else if (m_xmlDom->buffer().length() > m_engine->m_maxIncompleteXml)
+		    error = XMPPError::Policy;
+	    }
 	}
+	else if (m_compress) {
+#ifdef JBSTREAM_DEBUG_SOCKET
+	    Debug(this,DebugInfo,"Received %d compressed bytes [%p]",read,this);
+#endif
+	    DataBlock d;
+	    int res = m_compress->decompress(buf,read,d);
+	    if (res == read) {
+#ifdef JBSTREAM_DEBUG_COMPRESS
+		Debug(this,DebugInfo,"Decompressed %d --> %u [%p]",read,d.length(),this);
+#endif
+		if (d.length()) {
+		    char c = 0;
+		    d.append(&c,1);
+		    buf = (char*)d.data();
+#ifdef JBSTREAM_DEBUG_SOCKET
+		    Debug(this,DebugInfo,"Received compressed %s [%p]",buf,this);
+#endif
+		    if (!m_xmlDom->parse(buf)) {
+			if (m_xmlDom->error() != XmlSaxParser::Incomplete)
+			    error = XMPPError::Xml;
+			else if (m_xmlDom->buffer().length() > m_engine->m_maxIncompleteXml)
+			    error = XMPPError::Policy;
+		    }
+		}
+	    }
+	    else
+		error = XMPPError::UndefinedCondition;
+	}
+	else
+	    error = XMPPError::Internal;
     }
     socketSetReading(false);
     if (read) {
@@ -350,18 +401,24 @@ bool JBStream::readSocket(char* buf, unsigned int len)
     int location = 0;
     const char* reason = 0;
     if (error != XMPPError::SocketError) {
-	String tmp;
 	if (error == XMPPError::Xml) {
 	    reason = m_xmlDom->getError();
-	    tmp = m_xmlDom->buffer();
+	    Debug(this,DebugNote,"Parser error='%s' buffer='%s' [%p]",
+		reason,m_xmlDom->buffer().c_str(),this);
+	}
+	else if (error == XMPPError::UndefinedCondition) {
+	    reason = "Decompression failure";
+	    Debug(this,DebugNote,"Decompressor failure [%p]",this);
+	}
+	else if (error == XMPPError::Internal) {
+	    reason = "Decompression failure";
+	    Debug(this,DebugNote,"No decompressor [%p]",this);
 	}
 	else {
-	    tmp << "overflow len=" << m_xmlDom->buffer().length() << " max=" <<
-		m_engine->m_maxIncompleteXml;
 	    reason = "XML element too long";
+	    Debug(this,DebugNote,"Parser error='%s' overflow len=%u max= %u [%p]",
+		reason,m_xmlDom->buffer().length(),m_engine->m_maxIncompleteXml,this);
 	}
-	Debug(this,DebugNote,"Parser error='%s' buffer='%s' [%p]",
-	    reason,tmp.c_str(),this);
     }
     else if (read) {
 	String tmp;
@@ -435,8 +492,8 @@ bool JBStream::sendStreamXml(State newState, XmlElement* first, XmlElement* seco
     Lock lock(this);
     bool ok = false;
     XmlFragment frag;
-    // Use a while() to break to the end: safe cleanup
-    while (true) {
+    // Use a do while() to break to the end: safe cleanup
+    do {
 	if (m_state == Idle || m_state == Destroy)
 	    break;
 	// Check if we have unsent stream xml
@@ -464,10 +521,13 @@ bool JBStream::sendStreamXml(State newState, XmlElement* first, XmlElement* seco
 	    }
 	}
 	first = second = third = 0;
+	if (flag(StreamCompressed) && !compress()) {
+	    ok = false;
+	    break;
+	}
 	m_engine->printXml(this,true,frag);
 	ok = sendPending(true);
-	break;
-    }
+    } while (false);
     TelEngine::destruct(first);
     TelEngine::destruct(second);
     TelEngine::destruct(third);
@@ -516,7 +576,7 @@ void JBStream::start(XMPPFeatureList* features, XmlElement* caps, bool useVer1)
     if (features)
 	m_features.add(*features);
     if (useVer1 && flag(StreamRemoteVer1))
-	m_flags |= StreamLocalVer1;
+	setFlags(StreamLocalVer1);
     if (flag(StreamRemoteVer1) && flag(StreamLocalVer1)) {
 	// Set secured flag if we don't advertise TLS
 	if (!(flag(StreamSecured) || m_features.get(XMPPNamespace::Tls)))
@@ -638,6 +698,7 @@ void JBStream::terminate(int location, bool destroy, XmlElement* xml, int error,
 	location,destroy,xml,error,reason,final,stateName(),this);
     Lock lock(this);
     m_pending.clear();
+    m_outXmlCompress.clear();
     // Already in destroy
     if (state() == Destroy) {
 	TelEngine::destruct(xml);
@@ -696,6 +757,7 @@ void JBStream::terminate(int location, bool destroy, XmlElement* xml, int error,
     }
     resetConnection();
     m_outStreamXml.clear();
+    m_outStreamXmlCompress.clear();
 
     // Always set termination event, except when called from destructor
     if (!(final || m_terminateEvent)) {
@@ -893,6 +955,9 @@ void JBStream::process(u_int64_t time)
 	    case Register:
 		processRegister(xml,from,to);
 		break;
+	    case Compressing:
+		processCompressing(xml,from,to);
+		break;
 	    default:
 		dropXml(xml,"unhandled stream state in process()");
 	}
@@ -994,6 +1059,7 @@ void JBStream::resetConnection(Socket* sock)
 		    delete m_xmlDom;
 		    m_xmlDom = 0;
 		}
+		TelEngine::destruct(m_compress);
 		break;
 	    }
 	    lock.drop();
@@ -1053,6 +1119,63 @@ bool JBStream::processStart(const XmlElement* xml, const JabberID& from,
 {
     Debug(this,DebugStub,"JBStream::processStart(%s) [%p]",xml->tag(),this);
     return true;
+}
+
+// Process elements in Compressing state
+// Return false if stream termination was initiated
+bool JBStream::processCompressing(XmlElement* xml, const JabberID& from,
+    const JabberID& to)
+{
+    XDebug(this,DebugAll,"JBStream::processCompressing() [%p]",this);
+    int t = XmlTag::Count;
+    int n = XMPPNamespace::Count;
+    XMPPUtils::getTag(*xml,t,n);
+    if (n != XMPPNamespace::Compress)
+	return dropXml(xml,"expecting compression namespace");
+    if (outgoing()) {
+	// Expecting: compressed/failure
+	bool ok = (t == XmlTag::Compressed);
+	if (!ok && t != XmlTag::Failure)
+	    return dropXml(xml,"expecting compress response (compressed/failure)");
+	if (ok) {
+	    if (m_compress)
+		setFlags(StreamCompressed);
+	    else
+		return destroyDropXml(xml,XMPPError::Internal,"no compressor");
+	}
+	else {
+	    XmlElement* ch = xml->findFirstChild();
+	    Debug(this,DebugInfo,"Compress failed at remote party error=%s [%p]",
+		ch ? ch->tag() : "",this);
+	    TelEngine::destruct(m_compress);
+	}
+	TelEngine::destruct(xml);
+	// Restart the stream on success
+	if (ok) {
+	    XmlElement* s = buildStreamStart();
+	    return sendStreamXml(WaitStart,s);
+	}
+	// Compress failed: continue
+	JBServerStream* server = serverStream();
+	if (server)
+	    return server->sendDialback();
+	JBClientStream* client = clientStream();
+	if (client)
+	    return client->bind();
+	Debug(this,DebugNote,"Unhandled stream type in %s state [%p]",stateName(),this);
+	terminate(0,true,0,XMPPError::Internal);
+	return true;
+    }
+    // Incoming s2s waiting for compression or any other element
+    if (type() == s2s && m_features.get(XMPPNamespace::CompressFeature)) {
+	if (t == XmlTag::Compress && n == XMPPNamespace::Compress)
+	    return handleCompressReq(xml);
+	// Change state to Running
+	changeState(Running);
+	return processRunning(xml,from,to);
+    }
+
+    return dropXml(xml,"not implemented");
 }
 
 // Process elements in Register state
@@ -1158,6 +1281,39 @@ bool JBStream::processStreamStart(const XmlElement* xml)
 	return true;
     terminate(0,m_incoming,0,error,reason);
     return false;
+}
+
+// Handle an already checked (tag and namespace) compress request
+// Respond to it. Change stream state on success
+bool JBStream::handleCompressReq(XmlElement* xml)
+{
+    XMPPError::Type error = XMPPError::UnsupportedMethod;
+    State newState = state();
+    XmlElement* rsp = 0;
+    XmlElement* m = XMPPUtils::findFirstChild(*xml,XmlTag::Method,
+	XMPPNamespace::Compress);
+    if (m) {
+	// Get and check the method
+	const String& method = m->getText();
+	XMPPFeatureCompress* c = m_features.getCompress();
+	if (method && c && c->hasMethod(method)) {
+	    // Build the (de)compressor
+	    Lock lock(m_socketMutex);
+	    m_engine->compressStream(this,method);
+	    if (m_compress) {
+		newState = WaitStart;
+		setFlags(SetCompressed);
+		m_features.remove(XMPPNamespace::CompressFeature);
+		rsp = XMPPUtils::createElement(XmlTag::Compressed,XMPPNamespace::Compress);
+	    }
+	    else
+		error = XMPPError::SetupFailed;
+	}
+    }
+    TelEngine::destruct(xml);
+    if (!rsp)
+	rsp = XMPPUtils::createFailure(XMPPNamespace::Compress,error);
+    return sendStreamXml(newState,rsp);
 }
 
 // Check if a received element is a stream error one
@@ -1368,6 +1524,28 @@ void JBStream::changeState(State newState, u_int64_t time)
 	setIdleTimer(time);
 }
 
+// Check if the stream compress flag is set and compression was offered by remote party
+XmlElement* JBStream::checkCompress()
+{
+    if (flag(StreamCompressed) || !flag(Compress))
+	return 0;
+    XMPPFeatureCompress* c = m_features.getCompress();
+    if (!c)
+	return 0;
+    if (!(c && c->methods()))
+	return 0;
+    XmlElement* x = 0;
+    Lock lock(m_socketMutex);
+    m_engine->compressStream(this,c->methods());
+    if (m_compress && m_compress->format()) {
+	x = XMPPUtils::createElement(XmlTag::Compress,XMPPNamespace::Compress);
+	x->addChild(XMPPUtils::createElement(XmlTag::Method,m_compress->format()));
+    }
+    else
+	TelEngine::destruct(m_compress);
+    return x;
+}
+
 // Check for pending events. Set the last event
 void JBStream::checkPendingEvent()
 {
@@ -1398,18 +1576,40 @@ bool JBStream::sendPending(bool streamOnly)
     if (!m_socket)
 	return false;
     XDebug(this,DebugAll,"JBStream::sendPending() [%p]",this);
+    bool noComp = !flag(StreamCompressed);
     // Always try to send pending stream XML first
     if (m_outStreamXml) {
-	unsigned int len = m_outStreamXml.length();
-	if (!writeSocket(m_outStreamXml.c_str(),len)) {
+	const void* buf = 0;
+	unsigned int len = 0;
+	if (noComp) {
+	    buf = m_outStreamXml.c_str();
+	    len = m_outStreamXml.length();
+	}
+	else {
+	    buf = m_outStreamXmlCompress.data();
+	    len = m_outStreamXmlCompress.length();
+	}
+	if (!writeSocket(buf,len)) {
 	    terminate(0,m_incoming,0,XMPPError::SocketError);
 	    return false;
 	}
-	bool all = (len == m_outStreamXml.length());
-	if (all)
-	    m_outStreamXml.clear();
-	else
-	    m_outStreamXml = m_outStreamXml.substr(len);
+	bool all = false;
+	if (noComp) {
+	    all = (len == m_outStreamXml.length());
+	    if (all)
+		m_outStreamXml.clear();
+	    else
+		m_outStreamXml = m_outStreamXml.substr(len);
+	}
+	else {
+	    all = (len == m_outStreamXmlCompress.length());
+	    if (all) {
+		m_outStreamXml.clear();
+		m_outStreamXmlCompress.clear();
+	    }
+	    else
+		m_outStreamXmlCompress.cut(-len);
+	}
 	// Start TLS now for incoming streams
 	if (m_incoming && m_state == Securing) {
 	    if (all) {
@@ -1419,6 +1619,9 @@ bool JBStream::sendPending(bool streamOnly)
 	    }
 	    return true;
 	}
+	// Check set StreamCompressed flag if all data sent
+	if (all && flag(SetCompressed))
+	    setFlags(StreamCompressed);
 	if (streamOnly || !all)
 	    return true;
     }
@@ -1435,16 +1638,37 @@ bool JBStream::sendPending(bool streamOnly)
 	m_pending.remove(eout,true);
 	return true;
     }
+    bool sent = eout->sent();
+    const void* buf = 0;
+    unsigned int len = 0;
+    if (noComp)
+	buf = (const void*)eout->getData(len);
+    else {
+	if (!sent) {
+	    // Make sure the buffer is prepared for sending
+	    eout->getData(len);
+	    m_outXmlCompress.clear();
+	    if (!compress(eout))
+		return false;
+	}
+	buf = m_outXmlCompress.data();
+	len = m_outXmlCompress.length();
+    }
     // Print the element only if it's the first time we try to send it
-    if (!eout->sent())
+    if (!sent)
 	m_engine->printXml(this,true,*xml);
-    u_int32_t len;
-    const char* data = eout->getData(len);
-    if (writeSocket(data,len)) {
+    if (writeSocket(buf,len)) {
 	setIdleTimer();
 	// Adjust element's buffer. Remove it from list on completion
-	eout->dataSent(len);
-	unsigned int rest = eout->dataCount();
+	unsigned int rest = 0;
+	if (noComp) {
+	    eout->dataSent(len);
+	    rest = eout->dataCount();
+	}
+	else {
+	    m_outXmlCompress.cut(-len);
+	    rest = m_outXmlCompress.length();
+	}
 	if (!rest) {
 	    DDebug(this,DebugAll,"Sent element (%p,%s) [%p]",xml,xml->tag(),this);
 	    m_pending.remove(eout,true);
@@ -1462,7 +1686,7 @@ bool JBStream::sendPending(bool streamOnly)
 }
 
 // Write data to socket
-bool JBStream::writeSocket(const char* data, unsigned int& len)
+bool JBStream::writeSocket(const void* data, unsigned int& len)
 {
     if (!(data && m_socket)) {
 	len = 0;
@@ -1475,15 +1699,24 @@ bool JBStream::writeSocket(const char* data, unsigned int& len)
     }
     socketSetWriting(true);
     lock.drop();
-    XDebug(this,DebugInfo,"Sending %s [%p]",data,this);
+#ifdef JBSTREAM_DEBUG_SOCKET
+    if (!flag(StreamCompressed))
+	Debug(this,DebugInfo,"Sending %s [%p]",(const char*)data,this);
+    else
+	Debug(this,DebugInfo,"Sending %u compressed bytes [%p]",len,this);
+#endif
     int w = m_socket->writeData(data,len);
     if (w != Socket::socketError())
 	len = w;
     else
 	len = 0;
-#ifdef XDEBUG
-    String sent(data,len);
-    Debug(this,DebugInfo,"Sent %s [%p]",sent.c_str(),this);
+#ifdef JBSTREAM_DEBUG_SOCKET
+    if (!flag(StreamCompressed)) {
+	String sent((const char*)data,len);
+	Debug(this,DebugInfo,"Sent %s [%p]",sent.c_str(),this);
+    }
+    else
+	Debug(this,DebugInfo,"Sent %u compressed bytes [%p]",len,this);
 #endif
     Lock lck(m_socketMutex);
     // Check if the connection is waiting to be reset
@@ -1544,6 +1777,34 @@ bool JBStream::dropXml(XmlElement*& xml, const char* reason)
 	xml,xml->tag(),TelEngine::c_safe(xml->xmlns()),stateName(),reason,this);
     TelEngine::destruct(xml);
     return true;
+}
+
+// Set stream flag mask
+void JBStream::setFlags(int mask)
+{
+#ifdef XDEBUG
+    String f;
+    XMPPUtils::buildFlags(f,mask,s_flagName);
+    Debug(this,DebugAll,"Setting flags 0x%X (%s) current=0x%X [%p]",
+	mask,f.c_str(),m_flags,this);
+#endif
+    m_flags |= mask;
+#ifdef DEBUG
+    if (0 != (mask & StreamCompressed))
+	Debug(this,DebugAll,"Stream is using compression [%p]",this);
+#endif
+}
+
+// Reset stream flag mask
+void JBStream::resetFlags(int mask)
+{
+#ifdef XDEBUG
+    String f;
+    XMPPUtils::buildFlags(f,mask,s_flagName);
+    Debug(this,DebugAll,"Resetting flags 0x%X (%s) current=0x%X [%p]",
+	mask,f.c_str(),m_flags,this);
+#endif
+    m_flags &= ~mask;
 }
 
 // Set the idle timer in Running state
@@ -1618,7 +1879,7 @@ bool JBStream::processSaslAuth(XmlElement* xml, const JabberID& from, const Jabb
 	return true;
     if (!XMPPUtils::isTag(*xml,XmlTag::Auth,XMPPNamespace::Sasl))
 	return dropXml(xml,"expecting 'auth' in sasl namespace");
-    XMPPFeatureSasl* sasl = static_cast<XMPPFeatureSasl*>(m_features.get(XMPPNamespace::Sasl));
+    XMPPFeatureSasl* sasl = m_features.getSasl();
     TelEngine::destruct(m_sasl);
     XMPPError::Type error = XMPPError::NoError;
     const char* mName = xml->attribute("mechanism");
@@ -1719,8 +1980,15 @@ bool JBStream::processFeaturesIn(XmlElement* xml, const JabberID& from, const Ja
 	return true;
     }
 
+    XMPPFeature* f = 0;
+    // Stream compression feature and compression namespace are not the same!
+    if (ns != XMPPNamespace::Compress)
+	f = m_features.get(ns);
+    else
+	f = m_features.get(XMPPNamespace::CompressFeature);
+
     // Check if received unexpected feature
-    if (!m_features.get(ns)) {
+    if (!f) {
 	// Check for some features that can be negotiated via 'iq' elements
 	if (m_type == c2s && *t == XMPPUtils::s_tag[XmlTag::Iq] && ns == m_xmlns) {
 	    int chTag = XmlTag::Count;
@@ -1875,6 +2143,12 @@ bool JBStream::processFeaturesIn(XmlElement* xml, const JabberID& from, const Ja
 	}
 	return processSaslAuth(xml,from,to);
     }
+    // Stream compression
+    if (ns == XMPPNamespace::Compress) {
+	if (*t != XMPPUtils::s_tag[XmlTag::Compress])
+	    return dropXml(xml,"expecting stream compression 'compress' element");
+	return handleCompressReq(xml);
+    }
     return dropXml(xml,"unhandled stream feature");
 }
 
@@ -1923,10 +2197,20 @@ bool JBStream::processFeaturesOut(XmlElement* xml, const JabberID& from,
 	    return client->requestRegister(false);
 	}
     }
+    // Check compression
+    XmlElement* x = checkCompress();
+    if (x)
+	return sendStreamXml(Compressing,x);
     JBClientStream* client = clientStream();
     if (client) {
 	TelEngine::destruct(xml);
 	return client->bind();
+    }
+    JBServerStream* server = serverStream();
+    if (server) {
+	TelEngine::destruct(xml);
+	changeState(Running);
+	return true;
     }
     return dropXml(xml,"incomplete features process for outgoing stream");
 }
@@ -1995,6 +2279,32 @@ void JBStream::eventTerminated(const JBEvent* ev)
 	m_lastEvent = 0;
 	XDebug(this,DebugAll,"Event (%p,%s) terminated [%p]",ev,ev->name(),this);
     }
+}
+
+// Compress data to be sent (the pending stream xml buffer or pending stanza)
+// Return false on failure
+bool JBStream::compress(XmlElementOut* xml)
+{
+    DataBlock& buf = xml ? m_outXmlCompress : m_outStreamXmlCompress;
+    const String& xmlBuf = xml ? xml->buffer() : m_outStreamXml;
+    m_socketMutex.lock();
+    int res = m_compress ? m_compress->compress(xmlBuf.c_str(),xmlBuf.length(),buf) : -1000;
+    m_socketMutex.unlock();
+    const char* s = xml ? "pending" : "stream";
+    if (res >= 0) {
+	if ((unsigned int)res == xmlBuf.length()) {
+#ifdef JBSTREAM_DEBUG_COMPRESS
+	    Debug(this,DebugInfo,"Compressed %s xml %u --> %u [%p]",
+		s,xmlBuf.length(),buf.length(),this);
+#endif
+	    return true;
+	}
+	Debug(this,DebugNote,"Partially compressed %s xml %d/%u [%p]",
+	    s,res,xmlBuf.length(),this);
+    }
+    else
+	Debug(this,DebugNote,"Failed to compress %s xml: %d [%p]",s,res,this);
+    return false;
 }
 
 
@@ -2335,7 +2645,7 @@ bool JBClientStream::processAuth(XmlElement* xml, const JabberID& from,
 	    return false;
 	}
 	TelEngine::destruct(xml);
-	resetFlags(StreamWaitBindRsp);
+	resetFlags(StreamWaitSessRsp);
 	changeState(Running);
 	return true;
     }
@@ -2420,10 +2730,7 @@ bool JBClientStream::startAuth()
 
     TelEngine::destruct(m_sasl);
 
-    XMPPFeature* f = m_features.get(XMPPNamespace::Sasl);
-    XMPPFeatureSasl* sasl = 0;
-    if (f)
-	sasl = static_cast<XMPPFeatureSasl*>(f->getObject("XMPPFeatureSasl"));
+    XMPPFeatureSasl* sasl = m_features.getSasl();
     if (!sasl) {
 	terminate(0,true,0,XMPPError::NoError,"Missing authentication data");
 	return false;
@@ -2532,7 +2839,13 @@ bool JBServerStream::sendDbResult(const JabberID& from, const JabberID& to, XMPP
     DDebug(this,DebugAll,"Sending '%s' db:result response from %s to %s [%p]",
 	result->attribute("type"),from.c_str(),to.c_str(),this);
     if (m_state < Running) {
-	ok = sendStreamXml(Running,result);
+	// Authenticated, incoming, not compressed which might still be compressed:
+	// change state to Compressing
+	if (valid && !flag(StreamCompressed) &&
+	    m_features.get(XMPPNamespace::CompressFeature))
+	    ok = sendStreamXml(Compressing,result);
+	else
+	    ok = sendStreamXml(Running,result);
 	// Remove features and set the authenticated flag
 	if (ok && valid) {
 	    m_features.remove(XMPPNamespace::Sasl);
@@ -2697,6 +3010,10 @@ bool JBServerStream::processAuth(XmlElement* xml, const JabberID& from,
 	// Stream authenticated
 	TelEngine::destruct(xml);
 	setFlags(StreamAuthenticated);
+	// Check compression
+	XmlElement* x = checkCompress();
+	if (x)
+	    return sendStreamXml(Compressing,x);
 	changeState(Running);
 	return true;
     }

@@ -232,6 +232,8 @@ const String XMPPNamespace::s_array[Count] = {
     "http://jabber.org/protocol/muc#owner",                // MucOwner
     "http://jabber.org/protocol/muc#user",                 // MucUser
     "urn:xmpp:features:dialback",                          // DialbackFeature
+    "http://jabber.org/protocol/compress",                 // Compress
+    "http://jabber.org/features/compress",                 // CompressFeature
 };
 
 const String XMPPError::s_array[Count] = {
@@ -291,6 +293,8 @@ const String XMPPError::s_array[Count] = {
     "subscription-required",             // Subscription
     "unexpected-request",                // Request
     "",                                  // SocketError
+    "unsupported-method",                // UnsupportedMethod
+    "setup-failed",                      // SetupFailed
     "cancel",                            // TypeCancel
     "continue",                          // TypeContinue
     "modify",                            // TypeModify
@@ -367,6 +371,10 @@ const String XmlTag::s_array[Count] = {
     "c",                                 // EntityCapsTag
     "handshake",                         // Handshake
     "dialback",                          // Dialback
+    "method",                            // Method
+    "compress",                          // Compress
+    "compressed",                        // Compressed
+    "compression",                       // Compression
 };
 
 XMPPNamespace XMPPUtils::s_ns;
@@ -620,7 +628,9 @@ void XMPPFeature::addReqChild(XmlElement& xml)
 // Build a feature from a stream:features child
 XMPPFeature* XMPPFeature::fromStreamFeature(XmlElement& xml)
 {
-    int t = XMPPUtils::tag(xml);
+    int t = XmlTag::Count;
+    int n = XMPPNamespace::Count;
+    XMPPUtils::getTag(xml,t,n);
     if (t == XmlTag::Count) {
 	DDebug(DebugStub,"XMPPFeature::fromStreamFeature() unhandled tag '%s'",
 	    xml.tag());
@@ -628,7 +638,9 @@ XMPPFeature* XMPPFeature::fromStreamFeature(XmlElement& xml)
     }
     XMPPFeature* f = 0;
     bool required = XMPPUtils::required(xml);
-    if (t == XmlTag::Mechanisms && XMPPUtils::hasXmlns(xml,XMPPNamespace::Sasl)) {
+    DDebug(DebugAll,"XMPPFeature::fromStreamFeature() processing '%s' ns=%s",
+	xml.tag(),TelEngine::c_safe(xml.xmlns()));
+    if (t == XmlTag::Mechanisms && n == XMPPNamespace::Sasl) {
 	int mech = 0;
 	// Get mechanisms
 	XmlElement* x = XMPPUtils::findFirstChild(xml,XmlTag::Mechanism);
@@ -644,6 +656,14 @@ XMPPFeature* XMPPFeature::fromStreamFeature(XmlElement& xml)
 		    n.c_str());
 	}
 	f = new XMPPFeatureSasl(mech,required);
+    }
+    else if (t == XmlTag::Compression && n == XMPPNamespace::CompressFeature) {
+	String meth;
+	// Get methods
+	XmlElement* x = 0;
+	while (0 != (x = XMPPUtils::findNextChild(xml,x,XmlTag::Method)))
+	    meth.append(x->getText(),false);
+	f = new XMPPFeatureCompress(meth,required);
     }
     else {
 	String* xmlns = xml.xmlns();
@@ -671,6 +691,34 @@ XmlElement* XMPPFeatureSasl::build(bool addReq)
     for (const TokenDict* t = XMPPUtils::s_authMeth; t->value; t++)
 	if (mechanism(t->value))
 	    xml->addChild(XMPPUtils::createElement(XmlTag::Mechanism,t->token));
+    if (addReq)
+	addReqChild(*xml);
+    return xml;
+}
+
+
+/*
+ * XMPPFeatureCompress
+ */
+// Check if a given method is supported by this feature
+bool XMPPFeatureCompress::hasMethod(const String& method) const
+{
+    ObjList* list = m_methods.split(',',false);
+    bool ok = 0 != list->find(method);
+    TelEngine::destruct(list);
+    return ok;
+}
+
+// Build an xml element from this feature
+XmlElement* XMPPFeatureCompress::build(bool addReq)
+{
+    if (!m_methods)
+	return 0;
+    XmlElement* xml = XMPPFeature::build(false);
+    ObjList* list = m_methods.split(',',false);
+    for (ObjList* o = list->skipNull(); o; o = o->skipNext())
+	xml->addChild(XMPPUtils::createElement(XmlTag::Method,o->get()->toString()));
+    TelEngine::destruct(list);
     if (addReq)
 	addReqChild(*xml);
     return xml;

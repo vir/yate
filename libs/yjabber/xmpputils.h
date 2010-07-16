@@ -60,6 +60,7 @@ class JIDIdentity;                       // A JID's identity
 class JIDIdentityList;                   // A list of JID identities
 class XMPPFeature;                       // A feature (stream or JID)
 class XMPPFeatureSasl;                   // A SASL feature
+class XMPPFeatureCompress;               // A stream compression feature
 class XMPPFeatureList;                   // Feature list
 class XMPPUtils;                         // Utilities
 class XMPPDirVal;                        // Direction flags
@@ -221,7 +222,9 @@ public:
 	MucOwner = 50,                   // http://jabber.org/protocol/muc#owner
 	MucUser = 51,                    // http://jabber.org/protocol/muc#user
 	DialbackFeature = 52,            // urn:xmpp:features:dialback
-	Count = 53,
+	Compress = 53,                   // http://jabber.org/protocol/compress
+	CompressFeature = 54,            // http://jabber.org/features/compress
+	Count = 55,
     };
 
     /**
@@ -303,7 +306,9 @@ public:
 	Subscription = 53,               // subscription-required
 	Request = 54,                    // unexpected-request
 	SocketError = 55,                // Don't send any error or stream end tag to remote party
-	TypeCount = 56
+	UnsupportedMethod = 56,          // unsupported-method
+	SetupFailed = 57,                // setup-failed
+	TypeCount = 58
     };
 
     /**
@@ -408,7 +413,11 @@ public:
 	EntityCapsTag = 65,              // c
 	Handshake = 66,                  // handshake
 	Dialback = 67,                   // dialback
-	Count = 68
+	Method = 68,                     // method
+	Compress = 69,                   // compress
+	Compressed = 70,                 // compressed
+	Compression = 71,                // compression
+	Count = 72
     };
 
     /**
@@ -863,6 +872,50 @@ private:
 
 
 /**
+ * This class holds a compression feature along with compression methods
+ * @short A compression feature
+ */
+class YJABBER_API XMPPFeatureCompress : public XMPPFeature
+{
+    YCLASS(XMPPFeatureCompress,XMPPFeature)
+public:
+    /**
+     * Constructor
+     * @param meth Comma separated list of compression methods
+     * @param required Required flag
+     */
+    inline XMPPFeatureCompress(const String& meth, bool required = false)
+	: XMPPFeature(XmlTag::Compression,XMPPNamespace::CompressFeature,required),
+	m_methods(meth)
+	{}
+
+    /**
+     * Get the compression method(s)
+     * @return Comma separated list of compression methods
+     */
+    inline const String& methods() const
+	{ return m_methods; }
+
+    /**
+     * Check if a given method is supported by this feature
+     * @param method Method to check
+     * @return True if the method was found in feature's list
+     */
+    bool hasMethod(const String& method) const;
+
+    /**
+     * Build an xml element from this feature
+     * @param addReq True to add the required/optional child
+     * @return XmlElement pointer or 0
+     */
+    virtual XmlElement* build(bool addReq = true);
+
+private:
+    String m_methods;                    // Compression methods
+};
+
+
+/**
  * This class holds a list of JID features
  * @short JID feature list
  */
@@ -961,12 +1014,19 @@ public:
 	    return o ? static_cast<XMPPFeature*>(o->get()) : 0;
 	}
 
-     /**
+    /**
      * Get a XMPPFeatureSasl feature from list
      * @return XMPPFeatureSasl pointer or 0 if not found
      */
     inline XMPPFeatureSasl* getSasl()
 	{ return YOBJECT(XMPPFeatureSasl,get(XMPPNamespace::Sasl)); }
+
+    /**
+     * Get a XMPPFeatureCompress feature from list
+     * @return XMPPFeatureCompress pointer or 0 if not found
+     */
+    inline XMPPFeatureCompress* getCompress()
+	{ return YOBJECT(XMPPFeatureCompress,get(XMPPNamespace::CompressFeature)); }
 
     /**
      * Build stream features from this list

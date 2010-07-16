@@ -492,6 +492,10 @@ public:
 	Auth             = 11,           // Auth element (db:result for s2s streams) sent
 	                                 // Incoming comp: handshake received
 	Challenge        = 12,           // 'challenge' element sent/received
+	Compressing      = 15,           // Stream is negotiating compression
+	                                 // outgoing: compress element sent, wait for response
+	                                 // incoming: waiting for <compressed> element to be sent or
+	                                 //  s2s still waiting for compress
 	Register         = 20,           // A new user is currently registering
 	Running          = 100,          // Established. Allow XML stanzas to pass over the stream
 	Destroy,                         // Stream is destroying. No more traffic allowed
@@ -508,12 +512,15 @@ public:
 	                                 //  offered by server the stream will be terminated
 	DialbackOnly        = 0x00000008,// Outgoing s2s dialback stream
 	RegisterUser        = 0x00000010,// Outgoing c2s register new user
+	Compress            = 0x00000020,// Offer/handle compression
 	InError             = 0x00000080,// The stream was terminated with error
 	// Flags to be managed by the upper layer
 	RosterRequested     = 0x00000100,// c2s: the roster was already requested
 	AvailableResource   = 0x00000200,// c2s: available presence was sent/received
 	PositivePriority    = 0x00000400,// c2s: the resource advertised by the client has priority >= 0
 	// Internal flags (cleared when the stream is re-started)
+	SetCompressed       = 0x00010000,// Set StreamCompressed flag after succesfully sending
+	                                 //  the current stream xml buffer
 	StreamSecured       = 0x00020000,// TLS stage was done (possible without using TLS)
 	StreamTls           = 0x00040000,// The stream is using TLS
 	StreamAuthenticated = 0x00080000,// Stream already authenticated
@@ -524,6 +531,7 @@ public:
 	StreamWaitChallenge = 0x04000000,// Outgoing waiting for auth challenge
 	StreamWaitChgRsp    = 0x08000000,// Outgoing waiting challenge response confirmation
 	StreamRfc3920Chg    = 0x10000000,// Outgoing sent empty response to challenge with rspauth (RFC3920)
+	StreamCompressed    = 0x20000000,// The stream is using compression
 	// Flag masks
 	StreamFlags         = 0x000000ff,
 	InternalFlags       = 0xffff0000,
@@ -956,6 +964,16 @@ protected:
 	const JabberID& to);
 
     /**
+     * Process elements in Compressing state
+     * @param xml Received element (will be consumed)
+     * @param from Already parsed source JID
+     * @param to Already parsed destination JID
+     * @return False if stream termination was initiated
+     */
+    virtual bool processCompressing(XmlElement* xml, const JabberID& from,
+	const JabberID& to);
+
+    /**
      * Process elements in Register state
      * @param xml Received element (will be consumed)
      * @param from Already parsed source JID
@@ -975,6 +993,14 @@ protected:
      * @return False if stream termination was initiated
      */
     bool processStreamStart(const XmlElement* xml);
+
+    /**
+     * Handle an already checked (tag and namespace) compress request
+     * Respond to it. Change stream state on success
+     * @param xml Received xml element (will be consumed)
+     * @return False if stream termination was initiated
+     */
+    bool handleCompressReq(XmlElement* xml);
 
     /**
      * Check if a received element is a stream error one
@@ -1013,6 +1039,12 @@ protected:
     void changeState(State newState, u_int64_t time = Time::msecNow());
 
     /**
+     * Check if the stream compress flag is set and compression was offered by remote party
+     * @return Compress request XmlElement pointer or 0
+     */
+    XmlElement* checkCompress();
+
+    /**
      * Check for pending events. Set the last event
      */
     void checkPendingEvent();
@@ -1031,7 +1063,7 @@ protected:
      * @param len The number of bytes to send. Filled with actually sent bytes on exit
      * @return True on success, false if stream termination was initiated
      */
-    bool writeSocket(const char* data, unsigned int& len);
+    bool writeSocket(const void* data, unsigned int& len);
 
     /**
      * Update stream flags and remote connection data from engine
@@ -1069,20 +1101,13 @@ protected:
      * Set stream flag mask
      * @param mask The bit mask to set
      */
-    inline void setFlags(int mask) {
-	    XDebug(this,DebugAll,"Setting flags 0x%X current=0x%X [%p]",mask,m_flags,this);
-	    m_flags |= mask;
-	}
-
+    void setFlags(int mask);
 
     /**
      * Reset stream flag mask
      * @param mask The bit mask to reset
      */
-    void resetFlags(int mask) {
-	    XDebug(this,DebugAll,"Resetting flags 0x%X current=0x%X [%p]",mask,m_flags,this);
-	    m_flags &= ~mask;
-	}
+    void resetFlags(int mask);
 
     /**
      * Set secured flag. Remove feature from list
@@ -1154,6 +1179,9 @@ private:
     // Event termination notification
     // @param event The notifier. Ignored if it's not m_lastEvent
     void eventTerminated(const JBEvent* event);
+    // Compress data to be sent (the pending stream xml buffer or pending stanza)
+    // Return false on failure
+    bool compress(XmlElementOut* xml = 0);
 
     enum {
 	SocketCanRead = 0x01,
@@ -1196,6 +1224,8 @@ private:
     JBEvent* m_terminateEvent;           // Pending terminate event
     // Pending outgoing XML
     String m_outStreamXml;
+    DataBlock m_outStreamXmlCompress;
+    DataBlock m_outXmlCompress;
     // Connection related data
     XmlDomParser* m_xmlDom;
     Socket* m_socket;
@@ -1203,6 +1233,7 @@ private:
     Mutex m_socketMutex;                 // Protect the socket and parser
     String m_connectAddr;                // Remote ip to connect to
     int m_connectPort;                   // Remote port to connect to
+    Compressor* m_compress;
 };
 
 
@@ -1838,6 +1869,13 @@ public:
      * @param stream The stream to connect
      */
     virtual void connectStream(JBStream* stream);
+
+    /**
+     * Start stream compression
+     * @param stream The stream to compress
+     * @param formats Supported formats
+     */
+    virtual void compressStream(JBStream* stream, const String& formats);
 
     /**
      * Build a dialback key

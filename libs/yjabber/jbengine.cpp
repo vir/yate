@@ -1012,6 +1012,12 @@ void JBEngine::connectStream(JBStream* stream)
     Debug(this,DebugStub,"JBEngine::connectStream() not implemented!");
 }
 
+// Start stream compression
+void JBEngine::compressStream(JBStream* stream, const String& formats)
+{
+    Debug(this,DebugStub,"JBEngine::compressStream() not implemented!");
+}
+
 // Build a dialback key
 void JBEngine::buildDialbackKey(const String& id, const String& local,
     const String& remote, String& key)

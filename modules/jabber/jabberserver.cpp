@@ -203,6 +203,8 @@ public:
     virtual void encryptStream(JBStream* stream);
     // Connect an outgoing stream
     virtual void connectStream(JBStream* stream);
+    // Start stream compression
+    virtual void compressStream(JBStream* stream, const String& formats);
     // Build a dialback key
     virtual void buildDialbackKey(const String& id, const String& local,
 	const String& remote, String& key);
@@ -573,6 +575,13 @@ public:
 	    msg.addParam("module",name());
 	    msg.addParam("protocol","jabber");
 	}
+    // Retrieve the compression formats
+    inline String compressFmts() {
+	    Lock lock(this);
+	    return m_compressFmts;
+	}
+    // Check if compression formats are supported. Update the list
+    void checkCompressFmts();
     // Check if client/server TLS is available
     bool checkTls(bool server, const String& domain = String::empty());
 protected:
@@ -592,6 +601,7 @@ private:
     ObjList m_handlers;                  // Message handlers list
     String m_domain;                     // Default domain served by the jabber engine
     ObjList m_streamListeners;
+    String m_compressFmts;               // Supported compression formats
 };
 
 
@@ -1120,6 +1130,20 @@ void YJBEngine::connectStream(JBStream* stream)
 	(new YJBConnectThread(*stream))->startup();
 }
 
+// Start stream compression
+void YJBEngine::compressStream(JBStream* stream, const String& formats)
+{
+    if (!stream)
+	return;
+    DDebug(this,DebugAll,"compressStream(%p,'%s') formats=%s",
+	stream,stream->toString().c_str(),formats.c_str());
+    Message msg("engine.compress");
+    msg.userData(stream);
+    msg.addParam("formats",formats);
+    msg.addParam("name",stream->toString());
+    Engine::dispatch(msg);
+}
+
 // Build a dialback key
 void YJBEngine::buildDialbackKey(const String& id, const String& local,
     const String& remote, String& key)
@@ -1627,6 +1651,8 @@ bool YJBEngine::handleJabberItem(Message& msg)
 void YJBEngine::handleEngineStart(Message& msg)
 {
     s_engineStarted = true;
+    // Check configured compression formats
+    __plugin.checkCompressFmts();
     // Check client TLS
     m_hasClientTls = __plugin.checkTls(false);
     if (!m_hasClientTls)
@@ -1842,6 +1868,7 @@ void YJBEngine::processStartIn(JBEvent* ev)
     XMPPFeature* auth = 0;
     XMPPFeature* bind = 0;
     XmlElement* caps = 0;
+    bool setComp = false;
     bool c2s = ev->stream()->type() == JBStream::c2s;
     // Add TLS if not secured
     if (!secured && (c2s || s_s2sFeatures) && canTls)
@@ -1849,11 +1876,16 @@ void YJBEngine::processStartIn(JBEvent* ev)
 	    ev->stream()->flag(JBStream::TlsRequired));
     bool authenticated = ev->stream()->flag(JBStream::StreamAuthenticated);
     if (ev->stream()->type() == JBStream::s2s) {
-	if (!authenticated)
+	if (!authenticated) {
 	    auth = new XMPPFeature(XmlTag::Dialback,XMPPNamespace::DialbackFeature);
+	    setComp = true;
+	}
     }
     else if (c2s) {
 	bool tlsReq = tls && tls->required();
+	// NOTE: We should offer compression after authentication (XEP-0170)
+	// There are clients who ignore compression offered after auth
+	setComp = !tlsReq;
 	bool addReg = !authenticated && domain &&
 	    domain->hasFeature(XMPPNamespace::Register,true);
 	// Add entity caps 'c' element
@@ -1881,6 +1913,12 @@ void YJBEngine::processStartIn(JBEvent* ev)
     features.add(tls);
     features.add(reg);
     features.add(auth);
+    // Offer compression
+    if (setComp && !ev->stream()->flag(JBStream::StreamCompressed)) {
+	String fmts = __plugin.compressFmts();
+	if (fmts)
+	    features.add(new XMPPFeatureCompress(fmts));
+    }
     features.add(bind);
     ev->releaseStream();
     ev->stream()->start(&features,caps);
@@ -3518,6 +3556,15 @@ void JBModule::initialize()
 	    s_entityCaps.load();
 	else
 	    Debug(this,DebugAll,"Entity capability is disabled");
+
+	// Compression formats
+	String* fmts = cfg.getKey("general","compression_formats");
+	lock();
+	if (!fmts)
+	    m_compressFmts = "zlib";
+	else
+	    m_compressFmts = *fmts;
+	unlock();
     }
 
     // (re)init globals
@@ -3589,6 +3636,37 @@ void JBModule::cancelListener(const String& name)
 	Debug(this,DebugInfo,"All listeners terminated");
     else
 	Debug(this,DebugInfo,"Listener '%s' terminated",name.c_str());
+}
+
+// Check if compression formats are supported. Update the list
+void JBModule::checkCompressFmts()
+{
+    static bool s_checking = false;
+    if (!s_engineStarted)
+	return;
+    Lock lock1(this);
+    if (s_checking)
+	return;
+    s_checking = true;
+    ObjList* list = m_compressFmts.split(',',false);
+    lock1.drop();
+    String tmp;
+    for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
+	String* s = static_cast<String*>(o->get());
+	Message m("engine.compress");
+	m.addParam("test",String::boolText(true));
+	m.addParam("format",*s);
+	if (Engine::dispatch(m))
+	    tmp.append(*s,",");
+    }
+    TelEngine::destruct(list);
+    Lock lck(this);
+    if (m_compressFmts != tmp) {
+	Debug(this,DebugNote,"Changing supported compression formats to '%s' old='%s'",
+	    tmp.c_str(),m_compressFmts.c_str());
+	m_compressFmts = tmp;
+    }
+    s_checking = false;
 }
 
 // Check if client/server TLS is available

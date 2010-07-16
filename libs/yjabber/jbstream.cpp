@@ -1608,7 +1608,7 @@ bool JBStream::sendPending(bool streamOnly)
 		m_outStreamXmlCompress.clear();
 	    }
 	    else
-		m_outStreamXmlCompress.cut(-len);
+		m_outStreamXmlCompress.cut(-(int)len);
 	}
 	// Start TLS now for incoming streams
 	if (m_incoming && m_state == Securing) {
@@ -1666,7 +1666,7 @@ bool JBStream::sendPending(bool streamOnly)
 	    rest = eout->dataCount();
 	}
 	else {
-	    m_outXmlCompress.cut(-len);
+	    m_outXmlCompress.cut(-(int)len);
 	    rest = m_outXmlCompress.length();
 	}
 	if (!rest) {

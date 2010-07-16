@@ -323,6 +323,19 @@ well as cryptographic routines used for other purposes.
 %config(noreplace) %{_sysconfdir}/yate/openssl.conf
 
 
+%package zlib
+Summary:	Zlib compression support for Yate
+Group:		Applications/Communication
+Provides:	%{name}-compression
+
+%description zlib
+This package provides Zlib data compression for Yate.
+
+%files zlib
+%{_libdir}/yate/zlibcompress.yate
+%config(noreplace) %{_sysconfdir}/yate/zlibcompress.conf
+
+
 %package pgsql
 Summary:	PostgreSQL database driver for Yate
 Group:		Applications/Communication
@@ -451,6 +464,7 @@ Requires:	%{name}-isdn = %{version}-%{release}
 Requires:	%{name}-lksctp = %{version}-%{release}
 %endif
 Requires:	%{name}-openssl = %{version}-%{release}
+Requires:	%{name}-zlib = %{version}-%{release}
 Requires:	%{name}-mysql = %{version}-%{release}
 Requires:	%{name}-pgsql = %{version}-%{release}
 %if "%{no_gui}" != "1"
@@ -535,6 +549,9 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Fri Jul 16 2010 Paul Chitescu <paulc@voip.null.ro>
+- Added zlib subpackage
+
 * Tue Feb 02 2010 Paul Chitescu <paulc@voip.null.ro>
 - Moved some modules to new location in Yate 3
 - Added new modules

@@ -27,6 +27,10 @@
 
 #include <zlib.h>
 
+#ifndef Z_TEXT
+#define Z_TEXT Z_ASCII
+#endif
+
 using namespace TelEngine;
 namespace { // anonymous
 

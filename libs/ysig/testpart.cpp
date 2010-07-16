@@ -42,7 +42,7 @@ static const TokenDict s_dict_control[] = {
 
 bool SS7Testing::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
-    if (msu.getSIF() != sif())
+    if (msu.getSIF() != sif() || label.type() != m_lbl.type() || label.dpc() != m_lbl.opc())
 	return false;
     XDebug(this,DebugStub,"Possibly incomplete SS7Testing::receivedMSU(%p,%p,%p,%d) [%p]",
 	&msu,&label,network,sls,this);

@@ -1,5 +1,5 @@
 /**
- * zlib.cpp
+ * zlibcompress.cpp
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * ZLib support
@@ -24,9 +24,7 @@
 
 #include <yatephone.h>
 #include <string.h>
-#ifdef _WINDOWS
-#define ZLIB_WINAPI
-#endif
+
 #include <zlib.h>
 
 using namespace TelEngine;
@@ -386,7 +384,7 @@ bool ZLibComp::init(bool comp, bool decomp, const NamedList& params)
  * ZLibModule
  */
 ZLibModule::ZLibModule()
-    : Module("zlib","misc",true)
+    : Module("zlibcompress","misc",true)
 {
     Output("Loaded module ZLib - using zlib library version %s",zlibVersion());
 }
@@ -401,7 +399,7 @@ void ZLibModule::initialize()
     static bool first = true;
 
     Output("Initializing module ZLib");
-    Configuration cfg(Engine::configFile("zlib"));
+    Configuration cfg(Engine::configFile("zlibcompress"));
     NamedList dummy("");
     NamedList* gen = cfg.getSection("general");
     if (!gen)

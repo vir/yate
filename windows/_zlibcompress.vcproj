@@ -2,9 +2,9 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="8.00"
-	Name="_zlib"
+	Name="_zlibcompress"
 	ProjectGUID="{AB81DDE2-2AE9-C12C-9FAC-753E10B5C790}"
-	RootNamespace="_zlib"
+	RootNamespace="_zlibcompress"
 	>
 	<Platforms>
 		<Platform
@@ -42,7 +42,7 @@
 				MkTypLibCompatible="true"
 				SuppressStartupBanner="true"
 				TargetEnvironment="1"
-				TypeLibraryName=".\Release/_zlib.tlb"
+				TypeLibraryName=".\Release/_zlibcompress.tlb"
 				HeaderFileName=""
 			/>
 			<Tool
@@ -50,11 +50,11 @@
 				Optimization="2"
 				InlineFunctionExpansion="1"
 				AdditionalIncludeDirectories=".,.."
-				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;_USRDLL"
+				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;_USRDLL,ZLIB_WINAPI"
 				StringPooling="true"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
-				PrecompiledHeaderFile=".\Release\modules/_zlib.pch"
+				PrecompiledHeaderFile=".\Release\modules/_zlibcompress.pch"
 				AssemblerListingLocation=".\Release\modules/"
 				ObjectFile=".\Release\modules/"
 				ProgramDataBaseFileName=".\Release\modules/"
@@ -76,11 +76,11 @@
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
 				AdditionalDependencies="zlibstat.lib"
-				OutputFile="Release/zlib.yate"
+				OutputFile="Release/zlibcompress.yate"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
-				ProgramDatabaseFile=".\Release/zlib.pdb"
-				ImportLibrary=".\Release/zlib.lib"
+				ProgramDatabaseFile=".\Release/zlibcompress.pdb"
+				ImportLibrary=".\Release/zlibcompress.lib"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -95,7 +95,7 @@
 			<Tool
 				Name="VCBscMakeTool"
 				SuppressStartupBanner="true"
-				OutputFile=".\Release/_zlib.bsc"
+				OutputFile=".\Release/_zlibcompress.bsc"
 			/>
 			<Tool
 				Name="VCFxCopTool"
@@ -138,18 +138,18 @@
 				MkTypLibCompatible="true"
 				SuppressStartupBanner="true"
 				TargetEnvironment="1"
-				TypeLibraryName=".\Debug/_zlib.tlb"
+				TypeLibraryName=".\Debug/_zlibcompress.tlb"
 				HeaderFileName=""
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories=".,.."
-				PreprocessorDefinitions="_DEBUG;WIN32;_WINDOWS;_USRDLL"
+				PreprocessorDefinitions="_DEBUG;WIN32;_WINDOWS;_USRDLL,ZLIB_WINAPI"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
-				PrecompiledHeaderFile=".\Debug\modules/_zlib.pch"
+				PrecompiledHeaderFile=".\Debug\modules/_zlibcompress.pch"
 				AssemblerListingLocation=".\Debug\modules/"
 				ObjectFile=".\Debug\modules/"
 				ProgramDataBaseFileName=".\Debug\modules/"
@@ -172,12 +172,12 @@
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
 				AdditionalDependencies="zlibstat.lib"
-				OutputFile="Debug/zlib.yate"
+				OutputFile="Debug/zlibcompress.yate"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				GenerateDebugInformation="true"
-				ProgramDatabaseFile=".\Debug/zlib.pdb"
-				ImportLibrary=".\Debug/zlib.lib"
+				ProgramDatabaseFile=".\Debug/zlibcompress.pdb"
+				ImportLibrary=".\Debug/zlibcompress.lib"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -192,7 +192,7 @@
 			<Tool
 				Name="VCBscMakeTool"
 				SuppressStartupBanner="true"
-				OutputFile=".\Debug/_zlib.bsc"
+				OutputFile=".\Debug/_zlibcompress.bsc"
 			/>
 			<Tool
 				Name="VCFxCopTool"
@@ -216,7 +216,7 @@
 			Filter="cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 			>
 			<File
-				RelativePath="..\modules\zlib.cpp"
+				RelativePath="..\modules\zlibcompress.cpp"
 				>
 			</File>
 		</Filter>

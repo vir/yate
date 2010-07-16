@@ -133,7 +133,7 @@ PROGS := $(PROGS) openssl.yate
 endif
 
 ifneq (@HAVE_ZLIB@,no)
-PROGS := $(PROGS) zlib.yate
+PROGS := $(PROGS) zlibcompress.yate
 endif
 
 ifeq (@HAVE_COREDUMPER@,yes)
@@ -325,8 +325,8 @@ server/sipfeatures.yate: ../libs/yxml/libyatexml.a
 server/sipfeatures.yate: LOCALFLAGS = -I@top_srcdir@/libs/yxml
 server/sipfeatures.yate: LOCALLIBS = -L../libs/yxml -lyatexml
 
-zlib.yate: LOCALFLAGS = @ZLIB_INC@
-zlib.yate: LOCALLIBS = @ZLIB_LIB@
+zlibcompress.yate: LOCALFLAGS = @ZLIB_INC@
+zlibcompress.yate: LOCALLIBS = @ZLIB_LIB@
 
 ../libyatesig.so ../libs/ysig/libyatesig.a:
 	$(MAKE) -C ../libs/ysig

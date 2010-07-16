@@ -53,6 +53,8 @@ Name: "codecs\gsm"; Description: "GSM codec"; Types: full client server
 Name: "codecs\ilbc"; Description: "iLBC codec"; Types: full client server
 Name: "codecs\speex"; Description: "SPEEX codec"; Types: full client server
 Name: "codecs\speex\run"; Description: "SPEEX runtime libraries"; Types: full client server
+Name: "compress"; Description: "Data compression support"; Types: full client server
+Name: "compress\zlib"; Description: "Zlib compression"; Types: full client server
 Name: "external"; Description: "External interfaces"; Types: full server
 Name: "external\php"; Description: "PHP5 scripting"; Types: full server
 Name: "debug"; Description: "Extra debugging support"; Types: full engine
@@ -131,6 +133,8 @@ Source: "Release\openssl.yate"; DestDir: "{app}\modules"; Flags: replacesamevers
 Source: "Release\gsmcodec.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: codecs\gsm
 Source: "Release\ilbccodec.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: codecs\ilbc
 Source: "Release\speexcodec.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: codecs\speex
+
+Source: "Release\zlibcompress.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: compress\zlib
 
 Source: "Release\server\mysqldb.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: database\my
 Source: "Release\server\pgsqldb.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: database\pg

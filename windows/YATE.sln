@@ -482,7 +482,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "_sigtransport", "_sigtransp
 		{254C6F00-6DE5-44A6-AD44-ACABA8912381} = {254C6F00-6DE5-44A6-AD44-ACABA8912381}
 	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "_zlib", "_zlib.vcproj", "{AB81DDE2-2AE9-C12C-9FAC-753E10B5C790}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "_zlibcompress", "_zlibcompress.vcproj", "{AB81DDE2-2AE9-C12C-9FAC-753E10B5C790}"
 	ProjectSection(ProjectDependencies) = postProject
 		{254C6F00-6DE5-44A6-AD44-ACABA8912381} = {254C6F00-6DE5-44A6-AD44-ACABA8912381}
 	EndProjectSection

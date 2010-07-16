@@ -1000,6 +1000,33 @@ AC_SUBST(OPENSSL_LIB)
 AC_SUBST(OPENSSL_VER)
 
 
+HAVE_ZLIB=no
+ZLIB_INC=""
+ZLIB_LIB=""
+AC_ARG_WITH(zlib,AC_HELP_STRING([--with-zlib=DIR],[use zlib for data (de)compression from DIR (default /usr)]),[ac_cv_use_zlib=$withval],[ac_cv_use_zlib=/usr])
+if [[ "x$ac_cv_use_zlib" != "xno" ]]; then
+    AC_MSG_CHECKING([for zlib in $ac_cv_use_zlib])
+    if [[ -f "$ac_cv_use_zlib/include/zlib.h" ]]; then
+	# Save current system libs and include dirs and restore them after trying to link
+	SAVE_LIBS="$LIBS"
+	SAVE_CFLAGS="$CFLAGS"
+	LIBS="$LIBS -lz"
+	CFLAGS="$CFLAGS -I$ac_cv_use_zlib/include"
+	AC_TRY_LINK([#include <zlib.h>],[inflateInit2(0,0);],[HAVE_ZLIB=yes],[HAVE_ZLIB=no])
+	LIBS="$SAVE_LIBS"
+	CFLAGS="$SAVE_CFLAGS"
+	if [[ "$HAVE_ZLIB" = "yes" ]]; then
+	    ZLIB_INC="-I$ac_cv_use_zlib/include"
+	    ZLIB_LIB="-lz"
+	fi
+    fi
+    AC_MSG_RESULT([$HAVE_ZLIB])
+fi
+AC_SUBST(HAVE_ZLIB)
+AC_SUBST(ZLIB_INC)
+AC_SUBST(ZLIB_LIB)
+
+
 HAVE_QT4=no
 QT4_INC=""
 QT4_LIB=""

@@ -132,6 +132,10 @@ ifneq (@HAVE_OPENSSL@,no)
 PROGS := $(PROGS) openssl.yate
 endif
 
+ifneq (@HAVE_ZLIB@,no)
+PROGS := $(PROGS) zlib.yate
+endif
+
 ifeq (@HAVE_COREDUMPER@,yes)
 COREDUMP_INC := -DHAVE_COREDUMPER @COREDUMPER_INC@
 COREDUMP_LIB := @COREDUMPER_LIB@
@@ -320,6 +324,9 @@ qt4/updater.yate: LOCALLIBS = $(QT4_LIB_NET)
 server/sipfeatures.yate: ../libs/yxml/libyatexml.a
 server/sipfeatures.yate: LOCALFLAGS = -I@top_srcdir@/libs/yxml
 server/sipfeatures.yate: LOCALLIBS = -L../libs/yxml -lyatexml
+
+zlib.yate: LOCALFLAGS = @ZLIB_INC@
+zlib.yate: LOCALLIBS = @ZLIB_LIB@
 
 ../libyatesig.so ../libs/ysig/libyatesig.a:
 	$(MAKE) -C ../libs/ysig

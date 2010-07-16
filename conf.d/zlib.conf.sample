@@ -1,0 +1,20 @@
+[general]
+
+; compressor_buflen: integer: Compressor output buffer length
+; Minimum allowed value is 128
+; Defaults to 256 if missing or invalid
+;compressor_buflen=256
+
+; decompressor_buflen: integer: Decompressor output buffer length
+; Minimum allowed value is 256
+; Defaults to 1024 if missing or invalid
+;decompressor_buflen=1024
+
+; compress_level: string: Default compression level
+; Allowed values:
+;  none:    no compression
+;  speed:   best speed compression
+;  size:    best compression
+;  default: default library compression
+; Defaults to library default compression level if missing or invalid
+;compress_level=default

@@ -470,34 +470,36 @@ public:
      * Stream type enumeration
      */
     enum Type {
-	c2s       = 0,                   // Client to server
-	s2s       = 1,                   // Server to server
-	comp      = 2,                   // External component
-	TypeCount = 3                    // Unknown
+	c2s = 0,                         // Client to server
+	s2s,                             // Server to server
+	comp,                            // External component
+	TypeCount                        // Unknown
     };
 
     /**
      * Stream state enumeration
      */
     enum State {
-	Idle             = 0,            // Stream is waiting to be connected or destroyed
-	Connecting       = 1,            // Outgoing stream is waiting for the socket to connect
-	WaitStart        = 2,            // Waiting for remote's stream start
+	Idle = 0,                        // Stream is waiting to be connected or destroyed
+	Connecting,                      // Outgoing stream is waiting for the socket to connect
+	WaitStart,                       // Waiting for remote's stream start
 	                                 // (outgoing: stream start already sent)
-	Starting         = 3,            // Incoming stream is processing a stream start element
-	Features         = 4,            // Outgoing: waiting for stream features
+	Starting,                        // Incoming stream is processing a stream start element
+	Features,                        // Outgoing: waiting for stream features
 	                                 // Incoming: stream features sent
-	WaitTlsRsp       = 5,            // 'starttls' sent: waiting for response
-	Securing         = 10,           // Stream is currently negotiating the TLS
-	Auth             = 11,           // Auth element (db:result for s2s streams) sent
+	WaitTlsRsp,                      // 'starttls' sent: waiting for response
+	Securing,                        // Stream is currently negotiating the TLS
+	Auth,                            // Auth element (db:result for s2s streams) sent
 	                                 // Incoming comp: handshake received
-	Challenge        = 12,           // 'challenge' element sent/received
-	Compressing      = 15,           // Stream is negotiating compression
+	Challenge,                       // 'challenge' element sent/received
+	Compressing,                     // Stream is negotiating compression
 	                                 // outgoing: compress element sent, wait for response
 	                                 // incoming: waiting for <compressed> element to be sent or
 	                                 //  s2s still waiting for compress
-	Register         = 20,           // A new user is currently registering
-	Running          = 100,          // Established. Allow XML stanzas to pass over the stream
+	Register,                        // A new user is currently registering
+	// Keep Running state here: we expect all other states
+	//  (except for Destroy) to have lower values
+	Running,                         // Established. Allow XML stanzas to pass over the stream
 	Destroy,                         // Stream is destroying. No more traffic allowed
     };
 

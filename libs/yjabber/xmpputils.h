@@ -170,61 +170,62 @@ public:
      */
     enum Type {
 	Stream = 0,                      // http://etherx.jabber.org/streams
-	Client = 1,                      // jabber:client
-	Server = 2,                      // jabber:server
-	Dialback = 3,                    // jabber:server:dialback
-	StreamError = 4,                 // urn:ietf:params:xml:ns:xmpp-streams
-	StanzaError = 5,                 // urn:ietf:params:xml:ns:xmpp-stanzas
-	Ping = 6,                        // urn:xmpp:ping
-	Register = 7,                    // http://jabber.org/features/iq-register
-	IqRegister = 8,                  // jabber:iq:register
-	IqPrivate = 9,                   // jabber:iq:private
-	IqAuth = 10,                     // jabber:iq:auth
-	IqAuthFeature = 11,              // http://jabber.org/features/iq-auth
-	IqVersion = 12,                  // jabber:iq:version
-	Delay = 13,                      // urn:xmpp:delay
-	Tls = 14,                        // urn:ietf:params:xml:ns:xmpp-tls
-	Sasl = 15,                       // urn:ietf:params:xml:ns:xmpp-sasl
-	Session = 16,                    // urn:ietf:params:xml:ns:xmpp-session
-	Bind = 17,                       // urn:ietf:params:xml:ns:xmpp-bind
-	Roster = 18,                     // jabber:iq:roster
-	DynamicRoster = 19,              // jabber:iq:roster-dynamic
-	DiscoInfo = 20,                  // http://jabber.org/protocol/disco#info
-	DiscoItems = 21,                 // http://jabber.org/protocol/disco#items
-	EntityCaps = 22,                 // http://jabber.org/protocol/caps
-	VCard = 23,                      // vcard-temp
-	SIProfileFileTransfer = 24,      // http://jabber.org/protocol/si/profile/file-transfer
-	ByteStreams = 25,                // http://jabber.org/protocol/bytestreams
-	Jingle = 26,                     // urn:xmpp:jingle:1
-	JingleError = 27,                // urn:xmpp:jingle:errors:1
-	JingleAppsRtp = 28,              // urn:xmpp:jingle:apps:rtp:1
-	JingleAppsRtpError = 29,         // urn:xmpp:jingle:apps:rtp:errors:1
-	JingleAppsRtpInfo = 30,          // urn:xmpp:jingle:apps:rtp:info:1
-	JingleAppsRtpAudio = 31,         // urn:xmpp:jingle:apps:rtp:audio
-	JingleAppsFileTransfer = 32,     // urn:xmpp:jingle:apps:file-transfer:1
-	JingleTransportIceUdp = 33,      // urn:xmpp:jingle:transports:ice-udp:1
-	JingleTransportRawUdp = 34,      // urn:xmpp:jingle:transports:raw-udp:1
-	JingleTransportRawUdpInfo = 35,  // urn:xmpp:jingle:transports:raw-udp:info:1
-	JingleTransportByteStreams = 36, // urn:xmpp:jingle:transports:bytestreams:1
-	JingleTransfer = 37,             // urn:xmpp:jingle:transfer:0
-	JingleDtmf = 38,                 // urn:xmpp:jingle:dtmf:0
-	JingleSession = 39,              // http://www.google.com/session
-	JingleAudio = 40,                // http://www.google.com/session/phone
-	JingleTransport = 41,            // http://www.google.com/transport/p2p
-	JingleRtpInfoOld = 42,           // urn:xmpp:jingle:apps:rtp:info
-	DtmfOld = 43,                    // http://jabber.org/protocol/jingle/info/dtmf
-	XOob = 44,                       // jabber:x:oob
-	Command= 45,                     // http://jabber.org/protocol/command
-	MsgOffline= 46,                  // msgoffline
-	ComponentAccept = 47,            // jabber:component:accept
-	Muc = 48,                        // http://jabber.org/protocol/muc
-	MucAdmin = 49,                   // http://jabber.org/protocol/muc#admin
-	MucOwner = 50,                   // http://jabber.org/protocol/muc#owner
-	MucUser = 51,                    // http://jabber.org/protocol/muc#user
-	DialbackFeature = 52,            // urn:xmpp:features:dialback
-	Compress = 53,                   // http://jabber.org/protocol/compress
-	CompressFeature = 54,            // http://jabber.org/features/compress
-	Count = 55,
+	Client,                          // jabber:client
+	Server,                          // jabber:server
+	Dialback,                        // jabber:server:dialback
+	StreamError,                     // urn:ietf:params:xml:ns:xmpp-streams
+	StanzaError,                     // urn:ietf:params:xml:ns:xmpp-stanzas
+	Ping,                            // urn:xmpp:ping
+	Register,                        // http://jabber.org/features/iq-register
+	IqRegister,                      // jabber:iq:register
+	IqPrivate,                       // jabber:iq:private
+	IqAuth,                          // jabber:iq:auth
+	IqAuthFeature,                   // http://jabber.org/features/iq-auth
+	IqVersion,                       // jabber:iq:version
+	Delay,                           // urn:xmpp:delay
+	Tls,                             // urn:ietf:params:xml:ns:xmpp-tls
+	Sasl,                            // urn:ietf:params:xml:ns:xmpp-sasl
+	Session,                         // urn:ietf:params:xml:ns:xmpp-session
+	Bind,                            // urn:ietf:params:xml:ns:xmpp-bind
+	Roster,                          // jabber:iq:roster
+	DynamicRoster,                   // jabber:iq:roster-dynamic
+	DiscoInfo,                       // http://jabber.org/protocol/disco#info
+	DiscoItems,                      // http://jabber.org/protocol/disco#items
+	EntityCaps,                      // http://jabber.org/protocol/caps
+	VCard,                           // vcard-temp
+	SIProfileFileTransfer,           // http://jabber.org/protocol/si/profile/file-transfer
+	ByteStreams,                     // http://jabber.org/protocol/bytestreams
+	Jingle,                          // urn:xmpp:jingle:1
+	JingleError,                     // urn:xmpp:jingle:errors:1
+	JingleAppsRtp,                   // urn:xmpp:jingle:apps:rtp:1
+	JingleAppsRtpError,              // urn:xmpp:jingle:apps:rtp:errors:1
+	JingleAppsRtpInfo,               // urn:xmpp:jingle:apps:rtp:info:1
+	JingleAppsRtpAudio,              // urn:xmpp:jingle:apps:rtp:audio
+	JingleAppsFileTransfer,          // urn:xmpp:jingle:apps:file-transfer:1
+	JingleTransportIceUdp,           // urn:xmpp:jingle:transports:ice-udp:1
+	JingleTransportRawUdp,           // urn:xmpp:jingle:transports:raw-udp:1
+	JingleTransportRawUdpInfo,       // urn:xmpp:jingle:transports:raw-udp:info:1
+	JingleTransportByteStreams,      // urn:xmpp:jingle:transports:bytestreams:1
+	JingleTransfer,                  // urn:xmpp:jingle:transfer:0
+	JingleDtmf,                      // urn:xmpp:jingle:dtmf:0
+	JingleSession,                   // http://www.google.com/session
+	JingleAudio,                     // http://www.google.com/session/phone
+	JingleTransport,                 // http://www.google.com/transport/p2p
+	JingleRtpInfoOld,                // urn:xmpp:jingle:apps:rtp:info
+	DtmfOld,                         // http://jabber.org/protocol/jingle/info/dtmf
+	XOob,                            // jabber:x:oob
+	Command,                         // http://jabber.org/protocol/command
+	MsgOffline,                      // msgoffline
+	ComponentAccept,                 // jabber:component:accept
+	Muc,                             // http://jabber.org/protocol/muc
+	MucAdmin,                        // http://jabber.org/protocol/muc#admin
+	MucOwner,                        // http://jabber.org/protocol/muc#owner
+	MucUser,                         // http://jabber.org/protocol/muc#user
+	DialbackFeature,                 // urn:xmpp:features:dialback
+	Compress,                        // http://jabber.org/protocol/compress
+	CompressFeature,                 // http://jabber.org/features/compress
+	// This value MUST be the last one: it's used as array bound
+	Count,
     };
 
     /**
@@ -251,64 +252,65 @@ public:
      */
     enum Type {
 	NoError = 0,
-	BadFormat = 1,                   // bad-format
-	BadNamespace = 2,                // bad-namespace-prefix
-	Conflict = 3,                    // conflict
-	ConnTimeout = 4,                 // connection-timeout
-	HostGone = 5,                    // host-gone
-	HostUnknown = 6,                 // host-unknown
-	BadAddressing = 7,               // improper-addressing
-	Internal = 8,                    // internal-server-error
-	InvalidFrom = 9,                 // invalid-from
-	InvalidId = 10,                  // invalid-id
-	InvalidNamespace = 11,           // invalid-namespace
-	InvalidXml = 12,                 // invalid-xml
-	NotAuth = 13,                    // not-authorized
-	Policy = 14,                     // policy-violation
-	RemoteConn = 15,                 // remote-connection-failed
-	ResConstraint = 16,              // resource-constraint
-	RestrictedXml = 17,              // restricted-xml
-	SeeOther = 18,                   // see-other-host
-	Shutdown = 19,                   // system-shutdown
-	UndefinedCondition = 20,         // undefined-condition
-	UnsupportedEnc = 21,             // unsupported-encoding
-	UnsupportedStanza = 22,          // unsupported-stanza-type
-	UnsupportedVersion = 23,         // unsupported-version
-	Xml = 24,                        // xml-not-well-formed
-	Aborted = 25,                    // aborted
-	AccountDisabled = 26,            // account-disabled
-	CredentialsExpired = 27,         // credentials-expired
-	EncryptionRequired = 28,         // encryption-required
-	IncorrectEnc = 29,               // incorrect-encoding
-	InvalidAuth = 30,                // invalid-authzid
-	InvalidMechanism = 31,           // invalid-mechanism
-	MalformedRequest = 32,           // malformed-request
-	MechanismTooWeak = 33,           // mechanism-too-weak
-	NotAuthorized = 34,              // not-authorized
-	TempAuthFailure = 35,            // temporary-auth-failure
-	TransitionNeeded = 36,           // transition-needed
-	ResourceConstraint = 37,         // resource-constraint
-	NotAllowed = 38,                 // not-allowed
-	BadRequest = 39,                 // bad-request
-	FeatureNotImpl = 40,             // feature-not-implemented
-	Forbidden = 41,                  // forbidden
-	Gone = 42,                       // gone
-	ItemNotFound = 43,               // item-not-found
-	BadJid = 44,                     // jid-malformed
-	NotAcceptable = 45,              // not-acceptable
-	Payment = 46,                    // payment-required
-	Unavailable = 47,                // recipient-unavailable
-	Redirect = 48,                   // redirect
-	Reg = 49,                        // registration-required
-	NoRemote = 50,                   // remote-server-not-found
-	RemoteTimeout = 51,              // remote-server-timeout
-	ServiceUnavailable = 52,         // service-unavailable
-	Subscription = 53,               // subscription-required
-	Request = 54,                    // unexpected-request
-	SocketError = 55,                // Don't send any error or stream end tag to remote party
-	UnsupportedMethod = 56,          // unsupported-method
-	SetupFailed = 57,                // setup-failed
-	TypeCount = 58
+	BadFormat,                       // bad-format
+	BadNamespace,                    // bad-namespace-prefix
+	Conflict,                        // conflict
+	ConnTimeout,                     // connection-timeout
+	HostGone,                        // host-gone
+	HostUnknown,                     // host-unknown
+	BadAddressing,                   // improper-addressing
+	Internal,                        // internal-server-error
+	InvalidFrom,                     // invalid-from
+	InvalidId,                       // invalid-id
+	InvalidNamespace,                // invalid-namespace
+	InvalidXml,                      // invalid-xml
+	NotAuth,                         // not-authorized
+	Policy,                          // policy-violation
+	RemoteConn,                      // remote-connection-failed
+	ResConstraint,                   // resource-constraint
+	RestrictedXml,                   // restricted-xml
+	SeeOther,                        // see-other-host
+	Shutdown,                        // system-shutdown
+	UndefinedCondition,              // undefined-condition
+	UnsupportedEnc,                  // unsupported-encoding
+	UnsupportedStanza,               // unsupported-stanza-type
+	UnsupportedVersion,              // unsupported-version
+	Xml,                             // xml-not-well-formed
+	Aborted,                         // aborted
+	AccountDisabled,                 // account-disabled
+	CredentialsExpired,              // credentials-expired
+	EncryptionRequired,              // encryption-required
+	IncorrectEnc,                    // incorrect-encoding
+	InvalidAuth,                     // invalid-authzid
+	InvalidMechanism,                // invalid-mechanism
+	MalformedRequest,                // malformed-request
+	MechanismTooWeak,                // mechanism-too-weak
+	NotAuthorized,                   // not-authorized
+	TempAuthFailure,                 // temporary-auth-failure
+	TransitionNeeded,                // transition-needed
+	ResourceConstraint,              // resource-constraint
+	NotAllowed,                      // not-allowed
+	BadRequest,                      // bad-request
+	FeatureNotImpl,                  // feature-not-implemented
+	Forbidden,                       // forbidden
+	Gone,                            // gone
+	ItemNotFound,                    // item-not-found
+	BadJid,                          // jid-malformed
+	NotAcceptable,                   // not-acceptable
+	Payment,                         // payment-required
+	Unavailable,                     // recipient-unavailable
+	Redirect,                        // redirect
+	Reg,                             // registration-required
+	NoRemote,                        // remote-server-not-found
+	RemoteTimeout,                   // remote-server-timeout
+	ServiceUnavailable,              // service-unavailable
+	Subscription,                    // subscription-required
+	Request,                         // unexpected-request
+	SocketError,                     // Don't send any error or stream end tag to remote party
+	UnsupportedMethod,               // unsupported-method
+	SetupFailed,                     // setup-failed
+	// This value MUST be the last one: it's used as error type start
+	TypeCount
     };
 
     /**
@@ -316,11 +318,12 @@ public:
      */
     enum ErrorType {
 	TypeCancel = TypeCount,          // do not retry (the error is unrecoverable)
-	TypeContinue = TypeCount + 1,    // proceed (the condition was only a warning)
-	TypeModify = TypeCount + 2,      // retry after changing the data sent
-	TypeAuth = TypeCount + 3,        // retry after providing credentials
-	TypeWait = TypeCount + 4,        // retry after waiting (the error is temporary)
-	Count = TypeCount + 5
+	TypeContinue,                    // proceed (the condition was only a warning)
+	TypeModify,                      // retry after changing the data sent
+	TypeAuth,                        // retry after providing credentials
+	TypeWait,                        // retry after waiting (the error is temporary)
+	// This value MUST be the last one: it's used as array bound
+	Count
     };
 
     /**
@@ -346,78 +349,79 @@ public:
      */
     enum Type {
 	Stream = 0,                      // stream
-	Error = 1,                       // error
-	Features = 2,                    // features
-	Register = 3,                    // register
-	Starttls = 4,                    // starttls
-	Auth = 5,                        // auth
-	Challenge = 6,                   // challenge	
-	Abort = 7,                       // abort
-	Aborted = 8,                     // aborted
-	Response = 9,                    // response
-	Proceed = 10,                    // proceed
-	Success = 11,                    // success
-	Failure = 12,                    // failure 
-	Mechanisms = 13,                 // mechanisms
-	Mechanism = 14,                  // mechanism
-	Session = 15,                    // session
-	Iq = 16,                         // iq
-	Message = 17,                    // message
-	Presence = 18,                   // presence
-	Query = 19,                      // query
-	VCard = 20,                      // vCard
-	Jingle = 21,                     // jingle
-	Description = 22,                // description
-	PayloadType = 23,                // payload-type
-	Transport = 24,                  // transport
-	Candidate = 25,                  // candidate
-	Body = 26,                       // body
-	Subject = 27,                    // subject
-	Feature = 28,                    // feature
-	Bind = 29,                       // bind
-	Resource = 30,                   // resource
-	Transfer = 31,                   // transfer
-	Hold = 32,                       // hold
-	Active = 33,                     // active
-	Ringing = 34,                    // ringing
-	Mute = 35,                       // mute
-	Registered = 36,                 // registered
-	Remove = 37,                     // remove
-	Jid = 38,                        // jid
-	Username = 39,                   // username
-	Password = 40,                   // password
-	Digest = 41,                     // digest
-	Required = 42,                   // required
-	Optional = 43,                   // optional
-	Dtmf = 44,                       // dtmf
-	DtmfMethod = 45,                 // dtmf-method
-	Command = 46,                    // command
-	Text = 47,                       // text
-	Item = 48,                       // item
-	Group = 49,                      // group
-	Reason = 50,                     // reason
-	Content = 51,                    // content
-	Trying = 52,                     // trying
-	Received = 53,                   // received
-	File = 54,                       // file
-	Offer = 55,                      // offer
-	Request = 56,                    // request
-	StreamHost = 57,                 // streamhost
-	StreamHostUsed = 58,             // streamhost-used
-	Ping = 59,                       // ping
-	Encryption = 60,                 // encryption
-	Crypto = 61,                     // crypto
-	Parameter = 62,                  // parameter
-	Identity = 63,                   // identity
-	Priority = 64,                   // priority
-	EntityCapsTag = 65,              // c
-	Handshake = 66,                  // handshake
-	Dialback = 67,                   // dialback
-	Method = 68,                     // method
-	Compress = 69,                   // compress
-	Compressed = 70,                 // compressed
-	Compression = 71,                // compression
-	Count = 72
+	Error,                           // error
+	Features,                        // features
+	Register,                        // register
+	Starttls,                        // starttls
+	Auth,                            // auth
+	Challenge,                       // challenge	
+	Abort,                           // abort
+	Aborted,                         // aborted
+	Response,                        // response
+	Proceed,                         // proceed
+	Success,                         // success
+	Failure,                         // failure 
+	Mechanisms,                      // mechanisms
+	Mechanism,                       // mechanism
+	Session,                         // session
+	Iq,                              // iq
+	Message,                         // message
+	Presence,                        // presence
+	Query,                           // query
+	VCard,                           // vCard
+	Jingle,                          // jingle
+	Description,                     // description
+	PayloadType,                     // payload-type
+	Transport,                       // transport
+	Candidate,                       // candidate
+	Body,                            // body
+	Subject,                         // subject
+	Feature,                         // feature
+	Bind,                            // bind
+	Resource,                        // resource
+	Transfer,                        // transfer
+	Hold,                            // hold
+	Active,                          // active
+	Ringing,                         // ringing
+	Mute,                            // mute
+	Registered,                      // registered
+	Remove,                          // remove
+	Jid,                             // jid
+	Username,                        // username
+	Password,                        // password
+	Digest,                          // digest
+	Required,                        // required
+	Optional,                        // optional
+	Dtmf,                            // dtmf
+	DtmfMethod,                      // dtmf-method
+	Command,                         // command
+	Text,                            // text
+	Item,                            // item
+	Group,                           // group
+	Reason,                          // reason
+	Content,                         // content
+	Trying,                          // trying
+	Received,                        // received
+	File,                            // file
+	Offer,                           // offer
+	Request,                         // request
+	StreamHost,                      // streamhost
+	StreamHostUsed,                  // streamhost-used
+	Ping,                            // ping
+	Encryption,                      // encryption
+	Crypto,                          // crypto
+	Parameter,                       // parameter
+	Identity,                        // identity
+	Priority,                        // priority
+	EntityCapsTag,                   // c
+	Handshake,                       // handshake
+	Dialback,                        // dialback
+	Method,                          // method
+	Compress,                        // compress
+	Compressed,                      // compressed
+	Compression,                     // compression
+	// This value MUST be the last one: it's used as array bound
+	Count
     };
 
     /**

@@ -961,6 +961,13 @@ public:
 	    return o ? static_cast<XMPPFeature*>(o->get()) : 0;
 	}
 
+     /**
+     * Get a XMPPFeatureSasl feature from list
+     * @return XMPPFeatureSasl pointer or 0 if not found
+     */
+    inline XMPPFeatureSasl* getSasl()
+	{ return YOBJECT(XMPPFeatureSasl,get(XMPPNamespace::Sasl)); }
+
     /**
      * Build stream features from this list
      * @return XmlElement pointer

@@ -1607,16 +1607,25 @@ void WpSpan::run()
 	if (m_canSend) {
 	    for (unsigned int i = 0; i < m_count; i++) {
 		WpCircuit* circuit = m_circuits[i];
-		unsigned char noData = swap((m_noData < 256 || !circuit) ? m_noData : circuit->code() & 0xff);
-		unsigned char* dat = m_buffer + WP_HEADER + i;
+		// Forward read data if we have a source
 		WpSource* s = (circuit && circuit->validSource()) ? circuit->source() : 0;
-		WpConsumer* c = (circuit && circuit->validConsumer()) ? circuit->consumer() : 0;
-		Lock lock(c);
-		for (int n = samples; n > 0; n--, dat += m_count) {
-		    // Read each byte from buffer. Prepare buffer for sending
-		    if (s)
+		if (s) {
+		    unsigned char* dat = m_buffer + WP_HEADER + i;
+		    for (int n = samples; n > 0; n--, dat += m_count)
 			s->put(swap(*dat));
-		    *dat = c ? swap(c->get()) : noData;
+		}
+		// Fill send buffer for current circuit
+		unsigned char* dat = m_buffer + WP_HEADER + i;
+		WpConsumer* c = (circuit && circuit->validConsumer()) ? circuit->consumer() : 0;
+		if (c) {
+		    Lock lock(c);
+		    for (int n = samples; n > 0; n--, dat += m_count)
+			*dat = swap(c->get());
+		}
+		else {
+		    unsigned char noData = swap((m_noData < 256 || !circuit) ? m_noData : circuit->code() & 0xff);
+		    for (int n = samples; n > 0; n--, dat += m_count)
+			*dat = noData;
 		}
 	    }
 	    ::memset(m_buffer,0,WP_HEADER);

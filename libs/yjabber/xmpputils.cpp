@@ -234,6 +234,7 @@ const String XMPPNamespace::s_array[Count] = {
     "urn:xmpp:features:dialback",                          // DialbackFeature
     "http://jabber.org/protocol/compress",                 // Compress
     "http://jabber.org/features/compress",                 // CompressFeature
+    "jabber:x:data",                                       // XData
 };
 
 const String XMPPError::s_array[Count] = {
@@ -375,6 +376,7 @@ const String XmlTag::s_array[Count] = {
     "compress",                          // Compress
     "compressed",                        // Compressed
     "compression",                       // Compression
+    "x",                                 // X
 };
 
 XMPPNamespace XMPPUtils::s_ns;

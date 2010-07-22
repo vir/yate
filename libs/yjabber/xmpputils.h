@@ -224,6 +224,7 @@ public:
 	DialbackFeature,                 // urn:xmpp:features:dialback
 	Compress,                        // http://jabber.org/protocol/compress
 	CompressFeature,                 // http://jabber.org/features/compress
+	XData,                           // jabber:x:data
 	// This value MUST be the last one: it's used as array bound
 	Count,
     };
@@ -420,6 +421,7 @@ public:
 	Compress,                        // compress
 	Compressed,                      // compressed
 	Compression,                     // compression
+	X,                               // x
 	// This value MUST be the last one: it's used as array bound
 	Count
     };
@@ -1413,7 +1415,7 @@ public:
      * @return XmlElement pointer
      */
     static inline XmlElement* createXOobUrl(const char* url, const char* desc = 0) {
-	    XmlElement* xml = createElement("x",XMPPNamespace::XOob);
+	    XmlElement* xml = createElement(XmlTag::X,XMPPNamespace::XOob);
 	    xml->addChild(createElement("url",url));
 	    if (desc)
 		xml->addChild(createElement("desc",desc));

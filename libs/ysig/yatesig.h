@@ -80,6 +80,10 @@ class SS7Label;                          // SS7 Routing Label
 class SS7MSU;                            // A block of data that holds a Message Signal Unit
 class SIGTRAN;                           // Abstract SIGTRAN component
 class SIGTransport;                      // Abstract transport for SIGTRAN
+class SIGAdaptation;                     // Abstract Adaptation style SIGTRAN
+class SIGAdaptClient;                    // Client side of adaptation (ASP)
+class SIGAdaptServer;                    // Server side of adaptation (SG)
+class SIGAdaptUser;                      // Abstract Adaptation User SIGTRAN
 class ASPUser;                           // Abstract SS7 ASP user interface
 class SCCP;                              // Abstract SS7 SCCP interface
 class SCCPUser;                          // Abstract SS7 SCCP user interface
@@ -3884,7 +3888,7 @@ protected:
      * Constructor
      * @param name Default empty component name
      */
-    inline SIGTransport(const char* name = 0)
+    inline explicit SIGTransport(const char* name = 0)
 	: SignallingComponent(name), m_sigtran(0)
 	{ }
 
@@ -3949,7 +3953,7 @@ public:
 	CLMSG =  7,
 	// Connection-Oriented Messages (SUA)
 	COMSG =  8,
-	// Routing Key Management (M3UA)
+	// Routing Key Management (M3UA/SUA)
 	RKM   =  9,
 	// Interface Identifier Management (M2UA)
 	IIM   = 10,
@@ -3958,10 +3962,73 @@ public:
     };
 
     /**
+     * Management messages
+     */
+    enum MsgMGMT {
+	MgmtERR  =  0,
+	MgmtNTFY =  1,
+    };
+
+    /**
+     * Signalling Network Management messages
+     */
+    enum MsgSSNM {
+	SsnmDUNA =  1, // Destination Unavailable
+	SsnmDAVA =  2, // Destination Available
+	SsnmDAUD =  3, // Destination State Audit
+	SsnmSCON =  4, // Signalling Congestion
+	SsnmDUPU =  5, // Destination User Part Unavailable
+	SsnmDRST =  6, // Destination Restricted
+    };
+
+    /**
+     * ASP State Maintenance messages
+     */
+    enum MsgASPSM {
+	AspsmUP       =  1,
+	AspsmDOWN     =  2,
+	AspsmBEAT     =  3,
+	AspsmUP_ACK   =  4,
+	AspsmDOWN_ACK =  5,
+	AspsmBEAT_ACK =  6,
+    };
+
+    /**
+     * ASP Traffic Maintenance messages
+     */
+    enum MsgASPTM {
+	AsptmACTIVE       =  1,
+	AsptmINACTIVE     =  2,
+	AsptmACTIVE_ACK   =  3,
+	AsptmINACTIVE_ACK =  4,
+    };
+
+    /**
+     * Routing Key Management messages
+     */
+    enum MsgRKM {
+	RkmREG_REQ    =  1,
+	RkmREG_RSP    =  2,
+	RkmDEREG_REQ  =  3,
+	RkmDEREG_RSP  =  4,
+    };
+
+    /**
+     * Interface Identifier Management messages
+     */
+    enum MsgIIM {
+	IimREG_REQ    =  1,
+	IimREG_RSP    =  2,
+	IimDEREG_REQ  =  3,
+	IimDEREG_RSP  =  4,
+    };
+
+    /**
      * Constructs an uninitialized signalling transport
      * @param payload SCTP payload code, ignored for other transports
+     * @param port SCTP/TCP/UDP default port used for transport
      */
-    SIGTRAN(u_int32_t payload = 0);
+    explicit SIGTRAN(u_int32_t payload = 0, u_int16_t port = 0);
 
     /**
      * Destructor, terminates transport layer
@@ -3989,6 +4056,13 @@ public:
 	{ return m_payload; }
 
     /**
+     * Get the default SCTP/TCP/UDP port used for transport
+     * @return Default protocol port, 0 if unknown or not set
+     */
+    inline u_int16_t defPort() const
+	{ return m_defPort; }
+
+    /**
      * Check if the network transport layer is connected
      * @param streamId Identifier of the stream to check if applicable
      * @return True if the transport (and stream if applicable) is connected
@@ -3996,13 +4070,47 @@ public:
     bool connected(int streamId = 0) const;
 
     virtual void notifyLayer(SignallingInterface::Notification status)
-	{}
+	{ }
 
     /**
      * Message class names dictionary
      * @return Pointer to dictionary of message classes
      */
     static const TokenDict* classNames();
+
+    /**
+     * Message types name lookup
+     * @param msgClass Class of the message to look up
+     * @param msgType Type of the message, depends on the class
+     * @param defValue Value to return if lookup fails
+     * @return Pointer to message type name
+     */
+    static const char* typeName(unsigned char msgClass, unsigned char msgType,
+	const char* defValue = 0);
+
+    /**
+     * Transmit a message to the network transport layer
+     * @param msgVersion Version of the protocol
+     * @param msgClass Class of the message
+     * @param msgType Type of the message, depends on the class
+     * @param msg Message data, may be empty
+     * @param streamId Identifier of the stream to send the data over
+     * @return True if the message was transmitted to network
+     */
+    bool transmitMSG(unsigned char msgVersion, unsigned char msgClass,
+	unsigned char msgType, const DataBlock& msg, int streamId = 0) const;
+
+    /**
+     * Transmit a message with default version to the network transport layer
+     * @param msgClass Class of the message
+     * @param msgType Type of the message, depends on the class
+     * @param msg Message data, may be empty
+     * @param streamId Identifier of the stream to send the data over
+     * @return True if the message was transmitted to network
+     */
+    inline bool transmitMSG(unsigned char msgClass, unsigned char msgType,
+	const DataBlock& msg, int streamId = 0) const
+	{ return transmitMSG(1,msgClass,msgType,msg,streamId); }
 
 protected:
     /**
@@ -4017,22 +4125,401 @@ protected:
     virtual bool processMSG(unsigned char msgVersion, unsigned char msgClass,
 	unsigned char msgType, const DataBlock& msg, int streamId) = 0;
 
-    /**
-     * Transmit a message to the network transport layer
-     * @param msgVersion Version of the protocol
-     * @param msgClass Class of the message
-     * @param msgType Type of the message, depends on the class
-     * @param msg Message data, may be empty
-     * @param streamId Identifier of the stream to send the data over
-     * @return True if the message was transmitted to network
-     */
-    bool transmitMSG(unsigned char msgVersion, unsigned char msgClass,
-	unsigned char msgType, const DataBlock& msg, int streamId = 0) const;
-
 private:
     SIGTransport* m_trans;
     u_int32_t m_payload;
+    u_int16_t m_defPort;
     mutable Mutex m_transMutex;
+};
+
+/**
+ * An interface to a Signalling Transport User Adaptation component
+ * @short Abstract SIGTRAN User Adaptation component
+ */
+class YSIG_API SIGAdaptation : public SignallingComponent, public SIGTRAN, public Mutex
+{
+    YCLASS(SIGAdaptation,SignallingComponent)
+public:
+    /**
+     * Traffic modes
+     */
+    enum TrafficMode {
+	TrafficUnused    = 0,
+	TrafficOverride  = 1,
+	TrafficLoadShare = 2,
+	TrafficBroadcast = 3,
+    };
+
+    /**
+     * Destructor
+     */
+    virtual ~SIGAdaptation();
+
+    /**
+     * Transport initialization
+     * @param config Configuration section for the adaptation
+     */
+    virtual bool initialize(const NamedList* config);
+
+    /**
+     * Advance to next tag in a Type-Length-Value set of parameters
+     * @param data Block of data containing TLV parameters
+     * @param offset Offset of current parameter in block, initialize to negative for first tag
+     * @param tag Type tag of returned parameter
+     * @param length Unpadded length of returned parameter in octets
+     * @return True if the current parameter was valid
+     */
+    static bool nextTag(const DataBlock& data, int& offset, uint16_t& tag, uint16_t& length);
+
+    /**
+     * Find a specific tag in a Type-Length-Value set of parameters
+     * @param data Block of data containing TLV parameters
+     * @param offset Offset of current parameter in block, gets updated
+     * @param tag Type tag of searched parameter
+     * @param length Unpadded length of returned parameter in octets
+     * @return True if the requested parameter was found
+     */
+    static bool findTag(const DataBlock& data, int& offset, uint16_t tag, uint16_t& length);
+
+    /**
+     * Get the value of a 32 bit integer parameter
+     * @param data Block of data containing TLV parameters
+     * @param tag Type tag of searched parameter
+     * @param value Variable to store the decoded parameter if found
+     * @return True if the requested parameter was found and decoded
+     */
+    static bool getTag(const DataBlock& data, uint16_t tag, uint32_t& value);
+
+    /**
+     * Get the value of a String parameter
+     * @param data Block of data containing TLV parameters
+     * @param tag Type tag of searched parameter
+     * @param value Variable to store the decoded parameter if found
+     * @return True if the requested parameter was found and decoded
+     */
+    static bool getTag(const DataBlock& data, uint16_t tag, String& value);
+
+    /**
+     * Get the value of a raw binary parameter
+     * @param data Block of data containing TLV parameters
+     * @param tag Type tag of searched parameter
+     * @param value Variable to store the decoded parameter if found
+     * @return True if the requested parameter was found and decoded
+     */
+    static bool getTag(const DataBlock& data, uint16_t tag, DataBlock& value);
+
+    /**
+     * Add a 32 bit integer parameter
+     * @param data Block of data containing TLV parameters
+     * @param tag Type tag of parameter to add
+     * @param value Value of parameter to add
+     */
+    static void addTag(DataBlock& data, uint16_t tag, uint32_t value);
+
+    /**
+     * Add a String parameter
+     * @param data Block of data containing TLV parameters
+     * @param tag Type tag of parameter to add
+     * @param value Value of parameter to add
+     */
+    static void addTag(DataBlock& data, uint16_t tag, const String& value);
+
+    /**
+     * Add a raw binary parameter
+     * @param data Block of data containing TLV parameters
+     * @param tag Type tag of parameter to add
+     * @param value Value of parameter to add
+     */
+    static void addTag(DataBlock& data, uint16_t tag, const DataBlock& value);
+
+protected:
+    /**
+     * Constructs an uninitialized User Adaptation component
+     * @param name Name of this component
+     * @param params Optional pointer to creation parameters
+     * @param payload SCTP payload code, ignored for other transports
+     * @param port SCTP/TCP/UDP default port used for transport
+     */
+    explicit SIGAdaptation(const char* name = 0, const NamedList* params = 0,
+	u_int32_t payload = 0, u_int16_t port = 0);
+
+    /**
+     * Processing of common management messages
+     * @param msgClass Class of the message
+     * @param msgType Type of the message, depends on the class
+     * @param msg Message data, may be empty
+     * @param streamId Identifier of the stream the message was received on
+     * @return True if the message was handled
+     */
+    virtual bool processCommonMSG(unsigned char msgClass,
+	unsigned char msgType, const DataBlock& msg, int streamId);
+
+    /**
+     * Abstract processing of Management messages
+     * @param msgType Type of the message, depends on the class
+     * @param msg Message data, may be empty
+     * @param streamId Identifier of the stream the message was received on
+     * @return True if the message was handled
+     */
+    virtual bool processMgmtMSG(unsigned char msgType, const DataBlock& msg, int streamId) = 0;
+
+    /**
+     * Abstract processing of ASP State Maintenance messages
+     * @param msgType Type of the message, depends on the class
+     * @param msg Message data, may be empty
+     * @param streamId Identifier of the stream the message was received on
+     * @return True if the message was handled
+     */
+    virtual bool processAspsmMSG(unsigned char msgType, const DataBlock& msg, int streamId) = 0;
+
+    /**
+     * Abstract processing of ASP Traffic Maintenance messages
+     * @param msgType Type of the message, depends on the class
+     * @param msg Message data, may be empty
+     * @param streamId Identifier of the stream the message was received on
+     * @return True if the message was handled
+     */
+    virtual bool processAsptmMSG(unsigned char msgType, const DataBlock& msg, int streamId) = 0;
+};
+
+/**
+ * Generic client side (ASP) Signalling Transport User Adaptation component
+ * @short Client side SIGTRAN User Adaptation component
+ */
+class YSIG_API SIGAdaptClient : public SIGAdaptation
+{
+    friend class SIGAdaptUser;
+    YCLASS(SIGAdaptClient,SIGAdaptation)
+public:
+    /**
+     * ASP Client states
+     */
+    enum AspState {
+	AspDown = 0,
+	AspUpRq,
+	AspUp,
+	AspActRq,
+	AspActive
+    };
+
+protected:
+    /**
+     * Constructs an uninitialized User Adaptation client component
+     * @param name Name of this component
+     * @param params Optional pointer to creation parameters
+     * @param payload SCTP payload code, ignored for other transports
+     * @param port SCTP/TCP/UDP default port used for transport
+     */
+    explicit SIGAdaptClient(const char* name = 0, const NamedList* params = 0,
+	u_int32_t payload = 0, u_int16_t port = 0);
+
+    /**
+     * Process Management messages as ASP
+     * @param msgType Type of the message, depends on the class
+     * @param msg Message data, may be empty
+     * @param streamId Identifier of the stream the message was received on
+     * @return True if the message was handled
+     */
+    virtual bool processMgmtMSG(unsigned char msgType, const DataBlock& msg, int streamId);
+
+    /**
+     * Process ASP State Maintenance messages as ASP
+     * @param msgType Type of the message, depends on the class
+     * @param msg Message data, may be empty
+     * @param streamId Identifier of the stream the message was received on
+     * @return True if the message was handled
+     */
+    virtual bool processAspsmMSG(unsigned char msgType, const DataBlock& msg, int streamId);
+
+    /**
+     * Process ASP Traffic Maintenance messages as ASP
+     * @param msgType Type of the message, depends on the class
+     * @param msg Message data, may be empty
+     * @param streamId Identifier of the stream the message was received on
+     * @return True if the message was handled
+     */
+    virtual bool processAsptmMSG(unsigned char msgType, const DataBlock& msg, int streamId);
+
+    /**
+     * Traffic activity state change notification
+     * @param active True if the ASP is active and traffic is allowed
+     */
+    virtual void activeChange(bool active);
+
+    /**
+     * Check if the ASP is Up
+     * @return True if the ASPSM is in UP state
+     */
+    inline bool aspUp() const
+	{ return m_state >= AspUp; }
+
+    /**
+     * Check if the ASP is Active
+     * @return True if the ASPTM is in ACTIVE state
+     */
+    inline bool aspActive() const
+	{ return m_state >= AspActive; }
+
+    /**
+     * Request activation of the ASP
+     * @return True if ASP activation started, false on failure
+     */
+    bool activate();
+
+    /**
+     * Set the state of the ASP, notify user components of changes
+     * @param state New state of the ASP
+     * @param notify True to notify user layers, false if the changes are internal
+     */
+    void setState(AspState state, bool notify = true);
+
+    /**
+     * Get access to the list of Adaptation Users of this component
+     * @return Reference to the list of Adaptation Users
+     */
+    inline ObjList& users()
+	{ return m_users; }
+
+    /**
+     * ASP Identifier for ASPSM UP messages
+     */
+    int32_t m_aspId;
+
+    /**
+     * Traffic mode for ASPTM ACTIVE messages
+     */
+    TrafficMode m_traffic;
+
+private:
+    void attach(SIGAdaptUser* user);
+    void detach(SIGAdaptUser* user);
+    ObjList m_users;
+    AspState m_state;
+};
+
+/**
+ * Generic server side (SG) Signalling Transport User Adaptation component
+ * @short Server side SIGTRAN User Adaptation component
+ */
+class YSIG_API SIGAdaptServer : public SIGAdaptation
+{
+    YCLASS(SIGAdaptServer,SIGAdaptation)
+protected:
+    /**
+     * Constructs an uninitialized User Adaptation server component
+     * @param name Name of this component
+     * @param params Optional pointer to creation parameters
+     * @param payload SCTP payload code, ignored for other transports
+     * @param port SCTP/TCP/UDP default port used for transport
+     */
+    inline explicit SIGAdaptServer(const char* name = 0, const NamedList* params = 0,
+	u_int32_t payload = 0, u_int16_t port = 0)
+	: SIGAdaptation(name,params,payload,port)
+	{ }
+
+    /**
+     * Process Management messages as SG
+     * @param msgType Type of the message, depends on the class
+     * @param msg Message data, may be empty
+     * @param streamId Identifier of the stream the message was received on
+     * @return True if the message was handled
+     */
+    virtual bool processMgmtMSG(unsigned char msgType, const DataBlock& msg, int streamId);
+
+    /**
+     * Process ASP State Maintenance messages as SG
+     * @param msgType Type of the message, depends on the class
+     * @param msg Message data, may be empty
+     * @param streamId Identifier of the stream the message was received on
+     * @return True if the message was handled
+     */
+    virtual bool processAspsmMSG(unsigned char msgType, const DataBlock& msg, int streamId);
+
+    /**
+     * Process ASP Traffic Maintenance messages as SG
+     * @param msgType Type of the message, depends on the class
+     * @param msg Message data, may be empty
+     * @param streamId Identifier of the stream the message was received on
+     * @return True if the message was handled
+     */
+    virtual bool processAsptmMSG(unsigned char msgType, const DataBlock& msg, int streamId);
+};
+
+/**
+ * An interface to a Signalling Transport Adaptation user
+ * @short Abstract SIGTRAN Adaptation user
+ */
+class YSIG_API SIGAdaptUser
+{
+    friend class SIGAdaptClient;
+public:
+    /**
+     * Destructor
+     */
+    virtual ~SIGAdaptUser();
+
+protected:
+    /**
+     * Default constructor
+     */
+    inline SIGAdaptUser()
+	: m_autostart(false), m_adaptation(0)
+	{ }
+
+    /**
+     * Get the User Adaptation to which this component belongs
+     * @return Pointer to the User Adaptation layer
+     */
+    inline SIGAdaptClient* adaptation() const
+	{ return m_adaptation; }
+
+    /**
+     * Get the transport of the user adaptation component
+     * @return Pointer to the transport layer or NULL
+     */
+    inline SIGTransport* transport() const
+	{ return m_adaptation ? m_adaptation->transport() : 0; }
+
+    /**
+     * Set the User Adaptation to which this component belongs
+     * @param adapt Pointer to the new User Adaptation layer
+     */
+    void adaptation(SIGAdaptClient* adapt);
+
+    /**
+     * Traffic activity state change notification
+     * @param active True if the ASP is active and traffic is allowed
+     */
+    virtual void activeChange(bool active) = 0;
+
+    /**
+     * Request activation of the ASP
+     * @return True if ASP activation started, false on failure
+     */
+    inline bool activate()
+	{ return m_adaptation && m_adaptation->activate(); }
+
+    /**
+     * Check if the ASP is Up
+     * @return True if the ASPSM is in UP state
+     */
+    inline bool aspUp() const
+	{ return m_adaptation && m_adaptation->aspUp(); }
+
+    /**
+     * Check if the ASP is Active
+     * @return True if the ASPTM is in ACTIVE state
+     */
+    inline bool aspActive() const
+	{ return m_adaptation && m_adaptation->aspActive(); }
+
+    /**
+     * Automatically start on init flag
+     */
+    bool m_autostart;
+
+private:
+    SIGAdaptClient* m_adaptation;
 };
 
 /**
@@ -4779,6 +5266,7 @@ protected:
  */
 class YSIG_API SS7M2PA : public SS7Layer2, public SIGTRAN
 {
+    YCLASS(SS7M2PA,SS7Layer2)
 public:
     enum m2paState {
 	Alignment = 1,
@@ -4814,9 +5302,9 @@ public:
     ~SS7M2PA();
 
     /**
-     * Configure and initialize MTP2 and its interface
+     * Configure and initialize M2PA and its transport
      * @param config Optional configuration parameters override
-     * @return True if MTP2 and the interface were initialized properly
+     * @return True if M2PA and the transport were initialized properly
      */
     virtual bool initialize(const NamedList* config);
 
@@ -4980,8 +5468,6 @@ private:
     unsigned int m_remoteStatus;
     unsigned int m_transportState;
     Mutex m_mutex;
-    bool m_reliable;
-    bool m_autostart;
     ObjList m_ackList;
     ObjList m_bufMsg;
     SignallingTimer m_t1;
@@ -4990,7 +5476,26 @@ private:
     SignallingTimer m_t4;
     SignallingTimer m_ackTimer;
     SignallingTimer m_confTimer;
+    bool m_autostart;
     bool m_dumpMsg;
+};
+
+/**
+ * The common client side of SIGTRAN SS7 MTP2 User Adaptation (RFC3331)
+ * @short Client side of SIGTRAN SS7 MTP2 UA
+ */
+class YSIG_API SS7M2UAClient : public SIGAdaptClient
+{
+    YCLASS(SS7M2UAClient,SIGAdaptClient)
+public:
+    /**
+     * Contructor of an empty IUA client
+     */
+    inline SS7M2UAClient(const NamedList& params)
+	: SIGAdaptClient("SS7M2UAClient",&params,2,2904)
+	{ }
+    virtual bool processMSG(unsigned char msgVersion, unsigned char msgClass,
+	unsigned char msgType, const DataBlock& msg, int streamId);
 };
 
 /**
@@ -4999,8 +5504,74 @@ private:
  *  Signalling Gateway and MTP3 runs on an Application Server.
  * @short SIGTRAN MTP2 User Adaptation Layer
  */
-class YSIG_API SS7M2UA : public SS7Layer2, public SIGTRAN
+class YSIG_API SS7M2UA : public SS7Layer2, public SIGAdaptUser
 {
+    friend class SS7M2UAClient;
+    YCLASS(SS7M2UA,SS7Layer2)
+public:
+    /**
+     * Constructor
+     * @param params List of construction parameters
+     */
+    SS7M2UA(const NamedList& params);
+
+    /**
+     * Configure and initialize M2UA and its transport
+     * @param config Optional configuration parameters override
+     * @return True if M2UA and the transport were initialized properly
+     */
+    virtual bool initialize(const NamedList* config);
+
+    /**
+     * Execute a control operation. Operations can change the link status or
+     *  can query the aligned status.
+     * @param oper Operation to execute
+     * @param params Optional parameters for the operation
+     * @return True if the command completed successfully, for query operations
+     *  also indicates the data link is aligned and operational
+     */
+    virtual bool control(Operation oper, NamedList* params = 0);
+
+    /**
+     * Push a Message Signal Unit down the protocol stack
+     * @param msu Message data, starting with Service Indicator Octet
+     * @return True if message was successfully queued
+     */
+    virtual bool transmitMSU(const SS7MSU& msu);
+
+    /**
+     * Check if the link is fully operational
+     * @return True if the link is aligned and operational
+     */
+    virtual bool operational() const;
+
+    /**
+     * Traffic activity state change notification
+     * @param active True if the ASP is active and traffic is allowed
+     */
+    virtual void activeChange(bool active);
+
+    /**
+     * Retrieve the numeric Interface Identifier (if any)
+     * @return IID value, -1 if not set
+     */
+    inline int32_t iid() const
+	{ return m_iid; }
+
+protected:
+    enum LinkState {
+	LinkDown,
+	LinkReq,
+	LinkReqEmg,
+	LinkUp,
+	LinkUpEmg,
+    };
+    SS7M2UAClient* client() const
+	{ return static_cast<SS7M2UAClient*>(adaptation()); }
+    virtual bool processMGMT(unsigned char msgType, const DataBlock& msg, int streamId);
+    virtual bool processMAUP(unsigned char msgType, const DataBlock& msg, int streamId);
+    int32_t m_iid;
+    int m_linkState;
 };
 
 /**
@@ -5009,8 +5580,9 @@ class YSIG_API SS7M2UA : public SS7Layer2, public SIGTRAN
  *  Signalling Gateway and MTP users are located on an Application Server.
  * @short SIGTRAN MTP3 User Adaptation Layer
  */
-class YSIG_API SS7M3UA : public SS7Layer3, public SIGTRAN
+class YSIG_API SS7M3UA : public SS7Layer3, public SIGAdaptUser
 {
+    YCLASS(SS7M3UA,SS7Layer3)
 };
 
 /**
@@ -6486,7 +7058,7 @@ class YSIG_API SS7SCCP : public SS7Layer4, public SCCP
  *  Signalling Gateway and SCCP users are located on an Application Server.
  * @short SIGTRAN SCCP User Adaptation Layer
  */
-class YSIG_API SS7SUA : public SIGTRAN, public SCCP
+class YSIG_API SS7SUA : public SIGAdaptUser, public SCCP
 {
 };
 
@@ -7743,30 +8315,99 @@ private:
 };
 
 /**
+ * The common client side of SIGTRAN ISDN Q.921 User Adaptation (RFC4233)
+ * @short Client side of SIGTRAN ISDN Q.921 UA
+ */
+class YSIG_API ISDNIUAClient : public SIGAdaptClient
+{
+    YCLASS(ISDNIUAClient,SIGAdaptClient)
+public:
+    /**
+     * Contructor of an empty IUA client
+     */
+    inline ISDNIUAClient(const NamedList& params)
+	: SIGAdaptClient("ISDNIUAClient",&params,1,9900)
+	{ }
+
+    virtual bool processMSG(unsigned char msgVersion, unsigned char msgClass,
+	unsigned char msgType, const DataBlock& msg, int streamId);
+};
+
+/**
  * RFC4233 ISDN Layer 2 implementation over SCTP/IP
  * IUA is intended to be used as a Provider-User where Q.921 runs on a
  *  Signalling Gateway and the user (Q.931) runs on an Application Server.
  * @short SIGTRAN ISDN Q.921 User Adaptation Layer
  */
-class YSIG_API ISDNIUA : public ISDNLayer2, public SIGTRAN
+class YSIG_API ISDNIUA : public ISDNLayer2, public SIGAdaptUser
 {
+    friend class ISDNIUAClient;
     YCLASS(ISDNIUA,ISDNLayer2)
-protected:
+public:
     /**
      * Constructor
      * Initialize this object and the layer 2
      * @param params Object and Layer 2 parameters
      * @param name Optional name for Layer 2
+     * @param tei Value of TEI for this component
      */
-    inline ISDNIUA(const NamedList& params, const char* name = 0)
-	: ISDNLayer2(params,name)
-	{ }
+    ISDNIUA(const NamedList& params, const char* name = 0, u_int8_t tei = 0);
 
     /**
      * Destructor
      */
-    virtual ~ISDNIUA()
-	{ }
+    virtual ~ISDNIUA();
+
+    /**
+     * Configure and initialize IUA and its transport
+     * @param config Optional configuration parameters override
+     * @return True if IUA and the transport were initialized properly
+     */
+    virtual bool initialize(const NamedList* config);
+
+    /**
+     * Implements Q.921 DL-ESTABLISH and DL-RELEASE request primitives
+     * @param tei This layer's TEI
+     * @param establish True to establish. False to release
+     * @param force True to establish even if we already are in this mode. This
+     *  parameter is ignored if establish is false
+     * @return True if the request was accepted
+     */
+    virtual bool multipleFrame(u_int8_t tei, bool establish, bool force);
+
+    /**
+     * Implements Q.921 DL-DATA and DL-UNIT DATA request primitives
+     * @param data Data to send
+     * @param tei The TEI to send with the data frane
+     * @param ack True to send an acknowledged frame, false to send an unacknowledged one
+     * @return False if the request was not accepted or send operation failed
+     */
+    virtual bool sendData(const DataBlock& data, u_int8_t tei, bool ack);
+
+    /**
+     * Emergency release.
+     */
+    virtual void cleanup();
+
+    /**
+     * Traffic activity state change notification
+     * @param active True if the ASP is active and traffic is allowed
+     */
+    virtual void activeChange(bool active);
+
+    /**
+     * Retrieve the numeric Interface Identifier (if any)
+     * @return IID value, -1 if not set
+     */
+    inline int32_t iid() const
+	{ return m_iid; }
+
+protected:
+    ISDNIUAClient* client() const
+	{ return static_cast<ISDNIUAClient*>(adaptation()); }
+    virtual bool processMGMT(unsigned char msgType, const DataBlock& msg, int streamId);
+    virtual bool processQPTM(unsigned char msgType, const DataBlock& msg, int streamId);
+    int32_t m_iid;
 };
 
 /**

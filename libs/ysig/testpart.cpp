@@ -31,19 +31,36 @@ using namespace TelEngine;
 #define CMD_STOP   0
 #define CMD_SINGLE 1
 #define CMD_START  2
+#define CMD_RESET  3
 
 // Control operations
 static const TokenDict s_dict_control[] = {
     { "stop", CMD_STOP, },
     { "single", CMD_SINGLE, },
     { "start", CMD_START, },
+    { "reset", CMD_RESET, },
     { 0, 0 }
 };
 
 bool SS7Testing::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
-    if (msu.getSIF() != sif() || label.type() != m_lbl.type() || label.dpc() != m_lbl.opc())
+    if (msu.getSIF() != sif())
 	return false;
+    String src;
+    int lvl = DebugNote;
+    if (m_lbl.type() != SS7PointCode::Other) {
+	if (label.type() != m_lbl.type())
+	    return false;
+	if (label.opc() == m_lbl.opc() && label.dpc() == m_lbl.dpc()) {
+	    src = "MYSELF!";
+	    lvl = DebugWarn;
+	}
+	else if (label.dpc() != m_lbl.opc())
+	    return false;
+    }
+    if (src.null())
+	src << SS7PointCode::lookup(label.type()) << ":" << label.opc();
+
     XDebug(this,DebugStub,"Possibly incomplete SS7Testing::receivedMSU(%p,%p,%p,%d) [%p]",
 	&msu,&label,network,sls,this);
 
@@ -57,11 +74,14 @@ bool SS7Testing::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3
 
     const unsigned char* t = msu.getData(label.length()+6,len);
     if (!t) {
-	Debug(this,DebugMild,"Received MTP_T seq %u, length %u with invalid test length %u [%p]",
-	    seq,msu.length(),len,this);
+	if (lvl > DebugMild)
+	    lvl = DebugMild;
+	Debug(this,lvl,"Received MTP_T from %s, seq %u, length %u with invalid test length %u [%p]",
+	    src.c_str(),seq,msu.length(),len,this);
 	return false;
     }
-    Debug(this,DebugNote,"Received MTP_T seq %u, test length %u",seq,len);
+    Debug(this,lvl,"Received MTP_T from %s, seq %u, test length %u",
+	src.c_str(),seq,len);
     return true;
 }
 
@@ -148,8 +168,14 @@ bool SS7Testing::control(NamedList& params)
 		m_timer.start();
 		return sendTraffic();
 	    case CMD_SINGLE:
+		if (!m_lbl.length())
+		    return false;
 		m_timer.stop();
 		return sendTraffic();
+	    case CMD_RESET:
+		m_timer.stop();
+		m_lbl.assign(SS7PointCode::Other,m_lbl.opc(),m_lbl.dpc(),m_lbl.sls());
+		return true;
 	}
     }
     return SignallingComponent::control(params);

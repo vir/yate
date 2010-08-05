@@ -197,7 +197,7 @@ SS7Router::SS7Router(const NamedList& params)
     : SignallingComponent(params.safe("SS7Router"),&params),
       Mutex(true,"SS7Router"),
       m_changes(0), m_transfer(false), m_phase2(false), m_started(false),
-      m_restart(0), m_isolate(0),
+      m_restart(0), m_isolate(0), m_checkRoutes(false),
       m_rxMsu(0), m_txMsu(0), m_fwdMsu(0),
       m_mngmt(0), m_maint(0)
 {
@@ -297,6 +297,7 @@ bool SS7Router::restart()
     Lock mylock(this);
     m_phase2 = false;
     m_started = false;
+    m_checkRoutes = true;
     m_isolate.stop();
     m_restart.start();
     return true;
@@ -308,6 +309,7 @@ void SS7Router::disable()
     Lock mylock(this);
     m_phase2 = false;
     m_started = false;
+    m_checkRoutes = false;
     m_isolate.stop();
     m_restart.stop();
 }
@@ -440,6 +442,8 @@ void SS7Router::timerTick(const Time& when)
 	m_phase2 = false;
 	// send TRA to all operational adjacent nodes
 	sendRestart();
+	if (m_checkRoutes)
+	    checkRoutes();
 	// advertise all non-Prohibited routes we learned about
 	if (m_transfer)
 	    notifyRoutes(0,SS7Route::NotProhibited);
@@ -527,7 +531,7 @@ bool SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3*
     return m_transfer && (routeMSU(msu,label,network,sls,SS7Route::NotProhibited) >= 0);
 }
 
-void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type)
+void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type, GenObject* context)
 {
     if (!route)
 	return;
@@ -546,6 +550,7 @@ void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type)
     if (route->state() != SS7Route::Prohibited && !m_started)
 	return;
     if (m_mngmt && (route->state() != SS7Route::Unknown)) {
+	const SS7PointCode* apc = YOBJECT(SS7PointCode,context);
 	const ObjList* l = getRoutes(type);
 	if (l)
 	    l = l->skipNull();
@@ -553,6 +558,9 @@ void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type)
 	    const SS7Route* r = static_cast<const SS7Route*>(l->get());
 	    // send only to different adjacent nodes
 	    if (r == route || r->priority())
+		continue;
+	    SS7PointCode dpc(type,r->packed());
+	    if (apc && (*apc != dpc))
 		continue;
 	    unsigned int local = getLocal(type);
 	    for (ObjList* nl = r->m_networks.skipNull(); nl; nl = nl->skipNext()) {
@@ -573,8 +581,7 @@ void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type)
 		if (!ctl)
 		    break;
 		String addr;
-		addr << pct << "," << SS7PointCode(type,netLocal) <<
-		    "," << SS7PointCode(type,r->packed());
+		addr << pct << "," << SS7PointCode(type,netLocal) << "," << dpc;
 		DDebug(this,DebugAll,"Sending Route %s %s %s [%p]",
 		    dest.c_str(),state,addr.c_str(),this);
 		ctl->addParam("address",addr);
@@ -640,6 +647,7 @@ void SS7Router::checkRoutes()
 	return;
     bool isolated = true;
     Lock lock(m_routeMutex);
+    m_checkRoutes = false;
     for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
 	SS7PointCode::Type type = static_cast<SS7PointCode::Type>(i+1);
 	const ObjList* l = getRoutes(type);
@@ -652,7 +660,7 @@ void SS7Router::checkRoutes()
 	    else {
 		if (r->state() != SS7Route::Prohibited) {
 		    r->m_state = SS7Route::Prohibited;
-		    routeChanged(r,type);
+		    routeChanged(r,type,0);
 		}
 	    }
 	}
@@ -660,6 +668,19 @@ void SS7Router::checkRoutes()
     if (isolated) {
 	Debug(this,DebugMild,"Node has become isolated! [%p]",this);
 	m_isolate.start();
+	// we are in an emergency - uninhibit any possible link
+	for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
+	    L3Pointer* p = static_cast<L3Pointer*>(o->get());
+	    if (!*p)
+		continue;
+	    NamedList* ctl = (*p)->controlCreate("resume");
+	    if (ctl) {
+		ctl->setParam("emergency",String::boolText(true));
+		(*p)->controlExecute(ctl);
+	    }
+	    if (!m_isolate.started())
+		break;
+	}
     }
 }
 
@@ -672,7 +693,7 @@ void SS7Router::notify(SS7Layer3* network, int sls)
     if (network) {
 	if (network->operational()) {
 	    if (m_isolate.started()) {
-		Debug(this,DebugAll,"Isolation ended before restart [%p]",this);
+		Debug(this,DebugNote,"Isolation ended before shutting down [%p]",this);
 		m_isolate.stop();
 	    }
 	    if (m_started)
@@ -763,9 +784,14 @@ bool SS7Router::control(NamedList& params)
 		    err << "invalid destination: " << *dest ;
 		    break;
 		}
-		if (setRouteState(type,pc,routeState(static_cast<SS7MsgSNM::Type>(cmd))))
-		    return true;
-		err << "no such route: " << *dest;
+		if (!setRouteState(type,pc,routeState(static_cast<SS7MsgSNM::Type>(cmd)))) {
+		    err << "no such route: " << *dest;
+		    break;
+		}
+		// if STP is started advertise routes to just restarted node
+		if ((SS7MsgSNM::TRA == cmd) && m_transfer && m_started)
+		    notifyRoutes(0,SS7Route::AnyState,&pc);
+		return true;
 	    }
 	    break;
 	case -1:

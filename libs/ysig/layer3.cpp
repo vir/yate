@@ -206,7 +206,7 @@ SS7Route::State SS7Layer3::getRouteState(SS7PointCode::Type type, unsigned int p
 }
 
 // Set the state of a route.
-bool SS7Layer3::setRouteState(SS7PointCode::Type type, unsigned int packedPC, SS7Route::State state)
+bool SS7Layer3::setRouteState(SS7PointCode::Type type, unsigned int packedPC, SS7Route::State state, GenObject* context)
 {
     if (type == SS7PointCode::Other || (unsigned int)type > YSS7_PCTYPE_COUNT || !packedPC)
 	return false;
@@ -217,7 +217,7 @@ bool SS7Layer3::setRouteState(SS7PointCode::Type type, unsigned int packedPC, SS
     if (state != route->m_state) {
 	route->m_state = state;
 	if (state != SS7Route::Unknown)
-	    routeChanged(route,type);
+	    routeChanged(route,type,context);
     }
     return true;
 }
@@ -349,7 +349,7 @@ void SS7Layer3::updateRoutes(SS7Layer3* network)
 
 // Remove the given network from all destinations in the routing table.
 // Remove the entry in the routing table if empty (no more routes to the point code).
-void SS7Layer3::removeRoutes(SS7Layer3* network)
+void SS7Layer3::removeRoutes(SS7Layer3* network, GenObject* context)
 {
     if (!network)
 	return;
@@ -370,7 +370,7 @@ void SS7Layer3::removeRoutes(SS7Layer3* network)
 			break;
 		    default:
 			route->m_state = SS7Route::Prohibited;
-			routeChanged(route,type);
+			routeChanged(route,type,context);
 		}
 		m_route[i].remove(route,true);
 	    }
@@ -381,7 +381,7 @@ void SS7Layer3::removeRoutes(SS7Layer3* network)
 }
 
 // Call the route changed notification for all known routes that match
-void SS7Layer3::notifyRoutes(const SS7Layer3* network, SS7Route::State states)
+void SS7Layer3::notifyRoutes(const SS7Layer3* network, SS7Route::State states, GenObject* context)
 {
     if (SS7Route::Unknown == states)
 	return;
@@ -396,12 +396,12 @@ void SS7Layer3::notifyRoutes(const SS7Layer3* network, SS7Route::State states)
 		continue;
 	    if (network && !route->hasNetwork(network))
 		continue;
-	    routeChanged(route,static_cast<SS7PointCode::Type>(i+1));
+	    routeChanged(route,static_cast<SS7PointCode::Type>(i+1),context);
 	}
     }
 }
 
-void SS7Layer3::routeChanged(const SS7Route* route, SS7PointCode::Type type)
+void SS7Layer3::routeChanged(const SS7Route* route, SS7PointCode::Type type, GenObject* context)
 {
 }
 

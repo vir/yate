@@ -39,6 +39,28 @@ SS7Layer4::SS7Layer4(unsigned char sio, const NamedList* params)
 	| (SS7MSU::getNetIndicator(params->getValue("netindicator"),sio & 0xc0) & 0xc0);
 }
 
+bool SS7Layer4::initialize(const NamedList* config)
+{
+    if (engine() && !network()) {
+	NamedList params("ss7router");
+	if (config) {
+	    String name = config->getValue("router",params);
+	    if (name && !name.toBoolean(false))
+		static_cast<String&>(params) = name;
+	}
+	if (params.toBoolean(true))
+	    attach(YOBJECT(SS7Router,engine()->build("SS7Router",params,true)));
+	else if (config) {
+	    String name = config->getValue("network");
+	    if (name && name.toBoolean(true)) {
+		static_cast<String&>(params) = name;
+		attach(YOBJECT(SS7Layer3,engine()->build("SS7Layer3",params,true)));
+	    }
+	}
+    }
+    return m_layer3 != 0;
+}
+
 void SS7Layer4::attach(SS7Layer3* network)
 {
     Lock lock(m_l3Mutex);

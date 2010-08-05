@@ -173,6 +173,28 @@ bool SignallingComponent::control(NamedList& params)
     return false;
 }
 
+NamedList* SignallingComponent::controlCreate(const char* oper)
+{
+    if (m_name.null())
+	return 0;
+    NamedList* params = new NamedList("chan.control");
+    params->addParam("component",m_name);
+    if (!TelEngine::null(oper))
+	params->addParam("operation",oper);
+    return params;
+}
+
+bool SignallingComponent::controlExecute(NamedList* params)
+{
+    bool ok = false;
+    if (params) {
+	ok = control(*params);
+	TelEngine::destruct(params);
+    }
+    return ok;
+}
+
+
 void SignallingComponent::engine(SignallingEngine* eng)
 {
     if (eng == m_engine)

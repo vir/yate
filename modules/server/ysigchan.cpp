@@ -2263,9 +2263,6 @@ bool SigTesting::initialize(NamedList& params)
     if (!m_testing) {
 	m_testing = YSIGCREATE(SS7Testing,&params);
 	plugin.engine()->insert(m_testing);
-	SS7Router* router = YOBJECT(SS7Router,plugin.engine()->find("","SS7Router"));
-	if (router)
-	    router->attach(m_testing);
     }
     return m_testing && m_testing->initialize(&params);
 }

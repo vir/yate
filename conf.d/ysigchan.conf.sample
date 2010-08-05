@@ -263,6 +263,14 @@
 ; Allowed values: international, spareinternational, national, reservednational
 ;netindicator=national
 
+; router: string: Name of the SS7 Router to attach to
+; A boolean false value disables attaching a router (unlikely)
+;router=ss7router
+
+; network: string: Name of linkset to attach to if router is disabled
+; This allows direct connection without MTP management (unlikely)
+;network=
+
 ; userparttest: integer: Remote user part test interval in seconds
 ; Set to 0 to always assume the remote user part is available
 ; Invalid values default to minimum (10s)
@@ -403,15 +411,26 @@
 ; This parameter can be repeated to declare multiple adjacent routers
 ; The network will notify the router about its destination(s) and priority
 ; The priority is always zero so an adjacent route will always match first.
-; Example: route=ANSI,40-50-60
+; Example: adjacent=ANSI,40-50-60
 ;adjacent=
+
+; local: string: Declare a local pointcode for the SS7 network
+; The format of this option is pointcodetype,label
+; This parameter can be repeated to declare a local point codes per type
+; To be standards compliant at least one local pointcode must be declared
+; Example: local=ITU,2-2-4
+;local=
+
+; router: string: Name of the SS7 Router to attach to
+; A boolean false value disables attaching a router (unlikely)
+; If no router is attached only a single User Part can be connected
+;router=ss7router
 
 ; autostart: bool: Automatically enable the linkset at startup
 ;autostart=yes
 
 ; layer3dump: string: Filename to dump MTP3 packets to
 ;layer3dump=
-
 
 
 ; Example of a SS7 MTP2 link
@@ -437,3 +456,42 @@
 
 ; layer2dump: string: Filename to dump MTP2 packets to
 ;layer2dump=
+
+
+; Example of a SS7 router (combines discrimination and SN or STP functions)
+; A router named 'ss7router' is implicitely declared with default parameters
+;[ss7router]
+; type: keyword: identifies the component as a SS7 Router
+;type=ss7-router
+
+; transfer: boolean: Enable the Transfer function (STP mode)
+; Enabling STP allows routing messages between adjacent networks
+; By default only the SN and discrimination functions are enabled
+;transfer=no
+
+; local: string: Declare a default local pointcode for the attached SS7 networks
+; The format of this option is pointcodetype,label
+; This parameter can be repeated to declare a local point codes per type
+; Example: local=ITU,2-2-4
+;local=
+
+; management: string: Name of the SS7 Management component to create
+; A boolean false value will disable SS7 Management (unlikely)
+;management=ss7snm
+
+; maintenance: string: Name of the SS7 Maintenance component to create
+; A boolean false value will disable SS7 Maintenance (unlikely)
+;maintenance=ss7mtn
+
+; starttime: integer: MTP restart timer (T20) in milliseconds
+; It is enforced to be at least 5000 (5s)
+; Defaults to 60000 (Q.704 standard value) in STP mode or 10000 in SN mode
+;starttime=
+
+; isolation: integer: MTP isolation timer (T1) in milliseconds
+; It is enforced to be at least 500 (0.5s)
+;isolation=1000
+
+; autostart: boolean: Perform MTP restart sequence at initialization
+; According to the standard the restart is performed on first link activation
+;autostart=no

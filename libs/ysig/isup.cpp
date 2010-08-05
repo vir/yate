@@ -2600,13 +2600,6 @@ bool SS7ISUP::initialize(const NamedList* config)
 	m_continuity = config->getValue("continuity",m_continuity);
 	m_defaultSls = config->getIntValue("sls",s_dict_callSls,m_defaultSls);
     }
-    if (engine() && !network()) {
-	NamedList params("ss7router");
-	if (config)
-	    static_cast<String&>(params) = config->getValue("router",params);
-	if (params.toBoolean(true))
-	    SS7Layer4::attach(YOBJECT(SS7Router,engine()->build("SS7Router",params,true)));
-    }
     return SS7Layer4::initialize(config);
 }
 

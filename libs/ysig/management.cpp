@@ -117,17 +117,21 @@ void SS7MsgSNM::toString(String& dest, const SS7Label& label, bool params) const
 SS7MsgSNM* SS7MsgSNM::parse(SS7Management* receiver, unsigned char type,
     SS7PointCode::Type pcType, const unsigned char* buf, unsigned int len)
 {
+    const char* pct = SS7PointCode::lookup(pcType);
+    if (!pct)
+	return 0;
     SS7MsgSNM* msg = new SS7MsgSNM(type);
+    msg->params().addParam("pointcodetype",pct);
 #ifdef XDEBUG
     String tmp;
     tmp.hexify((void*)buf,len,' ');
-    Debug(receiver,DebugAll,"Decoding msg=%s pctype=%u buf: %s [%p]",
-	msg->name(),pcType,tmp.c_str(),receiver);
+    Debug(receiver,DebugAll,"Decoding msg=%s pctype=%s buf: %s [%p]",
+	msg->name(),pct,tmp.c_str(),receiver);
 #endif
     // TODO: parse the rest of the message. Check extra bytes (message specific)
     if (!(buf && len))
 	return msg;
-    while (true) {
+    do {
 	// TFP,TFR,TFA: Q.704 15.7 The must be at lease 2 bytes in buffer
 	if (type == TFP || type == TFR || type == TFA) {
 	    // 2 bytes destination
@@ -148,8 +152,7 @@ SS7MsgSNM* SS7MsgSNM::parse(SS7Management* receiver, unsigned char type,
 		    msg->name(),len,receiver);
 	    break;
 	}
-	break;
-    }
+    } while (false);
     return msg;
 }
 
@@ -177,11 +180,18 @@ const TokenDict* SS7MsgMTN::names()
 // Control operations
 static const TokenDict s_dict_control[] = {
     { "prohibit", SS7MsgSNM::TFP },
-    { "allow", SS7MsgSNM::TFA },
     { "restrict", SS7MsgSNM::TFR },
+    { "congest", SS7MsgSNM::TFC },
+    { "allow", SS7MsgSNM::TFA },
     { "restart", SS7MsgSNM::TRA },
     { "changeover", SS7MsgSNM::COO },
     { "changeback", SS7MsgSNM::CBD },
+    { "link-inhibit", SS7MsgSNM::LIN },
+    { "link-uninhibit", SS7MsgSNM::LUN },
+    { "link-force-uninhibit", SS7MsgSNM::LFU },
+    { "test-congestion", SS7MsgSNM::RCT },
+    { "test-prohibited", SS7MsgSNM::RST },
+    { "test-restricted", SS7MsgSNM::RSR },
     { 0, 0 }
 };
 
@@ -205,8 +215,8 @@ bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Lay
 	Debug(this,DebugInfo,"Received message (%p)%s",msg,tmp.c_str());
     }
 
+    SS7Router* router = YOBJECT(SS7Router,SS7Layer4::network());
     // TODO: implement
-
     String l;
     l << label;
     if (msg->type() == SS7MsgSNM::TFP ||
@@ -220,6 +230,25 @@ bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Lay
 		Debug(this,DebugInfo,"%s (label=%s): Traffic is %s to dest=%s [%p]",
 		    msg->name(),l.c_str(),status,dest.c_str(),this);
 	    }
+	    if (router) {
+		NamedList* ctrl = router->controlCreate();
+		if (ctrl) {
+		    ctrl->copyParams(msg->params());
+		    switch (msg->type()) {
+			case SS7MsgSNM::TFP:
+			    ctrl->setParam("operation","prohibit");
+			    break;
+			case SS7MsgSNM::TFR:
+			    ctrl->setParam("operation","restrict");
+			    break;
+			case SS7MsgSNM::TFA:
+			    ctrl->setParam("operation","allow");
+			    break;
+		    }
+		    ctrl->setParam("automatic",String::boolText(true));
+		    router->controlExecute(ctrl);
+		}
+	    }
 	}
 	else
 	    Debug(this,DebugNote,"Received %s (label=%s) without destination [%p]",
@@ -230,6 +259,15 @@ bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Lay
 	dest << label.opc();
 	Debug(this,DebugInfo,"%s (label=%s): Traffic can restart to dest=%s [%p]",
 	    msg->name(),l.c_str(),dest.c_str(),this);
+	if (router) {
+	    NamedList* ctrl = router->controlCreate("allowed");
+	    if (ctrl) {
+		ctrl->copyParams(msg->params());
+		ctrl->setParam("destination",dest);
+		ctrl->setParam("automatic",String::boolText(true));
+		router->controlExecute(ctrl);
+	    }
+	}
     }
     else if (msg->type() == SS7MsgSNM::CBD || msg->type() == SS7MsgSNM::XCO) {
 	if (!len--)
@@ -274,7 +312,12 @@ bool SS7Management::control(NamedList& params)
     String* ret = params.getParam("completion");
     const String* oper = params.getParam("operation");
     const char* cmp = params.getValue("component");
-    int cmd = oper ? oper->toInteger(s_dict_control,-1) : -1;
+    int cmd = -1;
+    if (!TelEngine::null(oper)) {
+	cmd = oper->toInteger(s_dict_control,cmd);
+	if (cmd < 0)
+	    cmd = oper->toInteger(s_snm_names,cmd);
+    }
 
     if (ret) {
 	if (oper && (cmd < 0))
@@ -294,7 +337,7 @@ bool SS7Management::control(NamedList& params)
 	return false;
 
     const String* addr = params.getParam("address");
-    if (TelEngine::null(addr))
+    if (cmd < 0 || TelEngine::null(addr))
 	return SignallingComponent::control(params);
     // TYPE,opc,dpc,sls,spare
     SS7PointCode::Type t = SS7PointCode::Other;
@@ -312,9 +355,13 @@ bool SS7Management::control(NamedList& params)
 	    TelEngine::destruct(l);
 	    SS7Label lbl(t,dpc,opc,sls,spare);
 	    switch (cmd) {
+		// Messages containing a destination point code
 		case SS7MsgSNM::TFP:
 		case SS7MsgSNM::TFA:
 		case SS7MsgSNM::TFR:
+		case SS7MsgSNM::TFC:
+		case SS7MsgSNM::RST:
+		case SS7MsgSNM::RSR:
 		    {
 			addr = params.getParam("destination");
 			SS7PointCode dest(opc);
@@ -327,13 +374,33 @@ bool SS7Management::control(NamedList& params)
 			}
 		    }
 		    return false;
+		// Messages with just the code
+		case SS7MsgSNM::ECO:
 		case SS7MsgSNM::TRA:
+		case SS7MsgSNM::LIN:
+		case SS7MsgSNM::LUN:
+		case SS7MsgSNM::LIA:
+		case SS7MsgSNM::LUA:
+		case SS7MsgSNM::LID:
+		case SS7MsgSNM::LFU:
+		case SS7MsgSNM::LLT:
+		case SS7MsgSNM::LRT:
+		case SS7MsgSNM::RCT:
+		case SS7MsgSNM::CSS:
+		case SS7MsgSNM::CNS:
+		case SS7MsgSNM::CNP:
 		    {
 			unsigned char data = cmd;
 			return transmitMSU(SS7MSU(sio(),lbl,&data,1),lbl,sls) >= 0;
 		    }
+		// Changeover messages
 		case SS7MsgSNM::COO:
-		    {
+		case SS7MsgSNM::COA:
+		    if (params.getBoolValue("emergency",false)) {
+			unsigned char data = (SS7MsgSNM::COO == cmd) ? SS7MsgSNM::ECO : SS7MsgSNM::ECA;
+			return transmitMSU(SS7MSU(sio(),lbl,&data,1),lbl,sls) >= 0;
+		    }
+		    else {
 			int seq = params.getIntValue("sequence",0) & 0x7f;
 			int len = 2;
 			unsigned char data[3];
@@ -353,7 +420,9 @@ bool SS7Management::control(NamedList& params)
 			}
 			return transmitMSU(SS7MSU(sio(),lbl,&data,len),lbl,sls) >= 0;
 		    }
+		// Changeback messages
 		case SS7MsgSNM::CBD:
+		case SS7MsgSNM::CBA:
 		    {
 			int code = params.getIntValue("code",0);
 			int len = 2;
@@ -374,6 +443,10 @@ bool SS7Management::control(NamedList& params)
 			}
 			return transmitMSU(SS7MSU(sio(),lbl,&data,len),lbl,sls) >= 0;
 		    }
+		default:
+		    if (cmd >= 0)
+			Debug(this,DebugStub,"Unimplemented control %s (%d) [%p]",
+			    lookup(cmd,s_snm_names,"???"),cmd,this);
 	    }
 	}
     }

@@ -122,14 +122,16 @@ bool SS7Testing::initialize(const NamedList* config)
 {
     if (!config)
 	return true;
+    Lock engLock(engine());
     Lock mylock(this);
     setParams(*config);
-    if (config->getBoolValue("autostart",false)) {
+    bool ok = SS7Layer4::initialize(config);
+    if (ok && config->getBoolValue("autostart",false)) {
 	if (m_timer.interval() && m_lbl.length())
 	    m_timer.start();
 	sendTraffic();
     }
-    return true;
+    return ok;
 }
 
 bool SS7Testing::control(NamedList& params)

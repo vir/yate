@@ -427,7 +427,7 @@ public:
      * Check if the timer is started
      * @return True if the timer is started
      */
-    inline bool started()
+    inline bool started() const
 	{ return m_timeout > 0; }
 
     /**
@@ -435,7 +435,7 @@ public:
      * @param time The time to compare with
      * @return True if the timer timed out
      */
-    inline bool timeout(u_int64_t time = Time::msecNow())
+    inline bool timeout(u_int64_t time = Time::msecNow()) const
 	{ return started() && (m_timeout < time); }
 
 private:
@@ -607,6 +607,20 @@ public:
      * @return True if the control operation was executed
      */
     virtual bool control(NamedList& params);
+
+    /**
+     * Create a parameter list adequate to control this component
+     * @param oper Optional name of the operation to execute
+     * @return A new parameter list or descendant object, NULL if not supported
+     */
+    virtual NamedList* controlCreate(const char* oper = 0);
+
+    /**
+     * Execute or postpone a control command
+     * @param params Parameter list describing the command, will be destroyed
+     * @return True if the command was accepted (but not necessarily executed)
+     */
+    virtual bool controlExecute(NamedList* params);
 
     /**
      * Set the @ref TelEngine::SignallingEngine that manages this component
@@ -4815,6 +4829,137 @@ private:
 };
 
 /**
+ * Keeps a packed destination point code, a network priority or a list of networks used
+ *  to route to the enclosed destination point code
+ * @short A SS7 MSU route
+ */
+class YSIG_API SS7Route : public RefObject, public Mutex
+{
+    friend class SS7Layer3;
+    friend class SS7Router;
+public:
+    /**
+     * Route state
+     */
+    enum State {
+	Unknown       = 0x00,
+	// Standard route states
+	Prohibited    = 0x01,
+	Restricted    = 0x02,
+	Congestion    = 0x04,
+	Allowed       = 0x08,
+	// Masks for typical combinations
+	NotAllowed    = 0xf7,
+	NotCongested  = 0xf8,
+	NotRestricted = 0xfc,
+	NotProhibited = 0xfe,
+        AnyState      = 0xff
+    };
+
+    /**
+     * Constructor
+     * @param packed The packed value of the destination point code
+     * @param priority Optional value of the network priority
+     */
+    inline SS7Route(unsigned int packed, unsigned int priority = 0)
+	: Mutex(true,"SS7Route"),
+	  m_packed(packed), m_priority(priority), m_state(Unknown), m_changes(0)
+	{ m_networks.setDelete(false); }
+
+    /**
+     * Copy constructor
+     * @param original The original route
+     */
+    inline SS7Route(const SS7Route& original)
+	: Mutex(true,"SS7Route"),
+	  m_packed(original.packed()), m_priority(original.priority()),
+	  m_state(original.state()), m_changes(0)
+	{ m_networks.setDelete(false); }
+
+    /**
+     * Destructor
+     */
+    virtual ~SS7Route()
+	{ }
+
+    /**
+     * Retrieve the current state of the route
+     * @return Current route state
+     */
+    State state() const
+	{ return m_state; }
+
+    /**
+     * Get the priority of this route
+     * @return Route priority, zero = highest (adjacent)
+     */
+    unsigned int priority() const
+	{ return m_priority; }
+
+    /**
+     * Get the packed Point Code of this route
+     * @return Packed Point Code of the route's destination
+     */
+    unsigned int packed() const
+	{ return m_packed; }
+
+    /**
+     * Attach a network to use for this destination or change its priority.
+     * This method is thread safe
+     * @param network The network to attach or change priority
+     * @param type The point code type used to get the priority from the given network or the networks already in the list
+     */
+    void attach(SS7Layer3* network, SS7PointCode::Type type);
+
+    /**
+     * Remove a network from the list without deleting it.
+     * This method is thread safe
+     * @param network The network to remove
+     * @return False if the list of networks is empty
+     */
+    bool detach(SS7Layer3* network);
+
+    /**
+     * Check if this route goes to a specific network
+     * @param network Pointer to the network to search
+     * @return True if the network was found in the route's list
+     */
+    bool hasNetwork(const SS7Layer3* network);
+
+    /**
+     * Check if this route goes to a specific network
+     * @param network Pointer to the network to search
+     * @return True if the network was found in the route's list
+     */
+    bool hasNetwork(const SS7Layer3* network) const;
+
+    /**
+     * Check if the at least one network/linkset is fully operational
+     * @param sls Signalling Link to check, negative to check if any is operational
+     * @return True if the route has at least one linkset operational
+     */
+    bool operational(int sls = -1);
+
+    /**
+     * Try to transmit a MSU through one of the attached networks.
+     * This method is thread safe
+     * @param router The router requesting the operation (used for debug)
+     * @param msu Message data, starting with Service Indicator Octet
+     * @param label Routing label of the MSU
+     * @param sls Signalling Link Selection, negative to choose best
+     * @return Link the message was successfully queued to, negative for error
+     */
+    int transmitMSU(const SS7Router* router, const SS7MSU& msu, const SS7Label& label, int sls);
+
+private:
+    unsigned int m_packed;               // Packed destination point code
+    unsigned int m_priority;             // Network priority for the given destination (used by SS7Layer3)
+    ObjList m_networks;                  // List of networks used to route to the given destination (used by SS7Router)
+    State m_state;                       // State of the route
+    int m_changes;                       // Counter used to spot changes in the list
+};
+
+/**
  * An user of a Layer 3 (data link) SS7 message transfer part
  * @short Abstract user of SS7 layer 3 (network) message transfer part
  */
@@ -4864,6 +5009,13 @@ public:
 	 { attach(0); }
 
     /**
+     * Initialize the network layer, connect it to the SS7 router
+     * @param config Optional configuration parameters override
+     * @return True if the network was initialized properly
+     */
+    virtual bool initialize(const NamedList* config);
+
+    /**
      * Push a Message Signal Unit down the protocol stack
      * @param msu Message data, starting with Service Indicator Octet
      * @param label Routing label of the MSU to use in routing
@@ -4878,6 +5030,13 @@ public:
      * @return True if the linkset is enabled and operational
      */
     virtual bool operational(int sls = -1) const = 0;
+
+    /**
+     * Initiate a MTP restart procedure if supported by the network layer
+     * @return True if a restart was initiated
+     */
+    virtual bool restart()
+	{ return false; }
 
     /**
      * Attach a Layer 3 user component to this network. Detach the old user if valid.
@@ -4922,13 +5081,63 @@ public:
     bool buildRoutes(const NamedList& params);
 
     /**
-     * Get the priority of a route.
+     * Get the priority of a route by packed Point Code.
      * This method is thread safe
      * @param type Destination point code type
      * @param packedPC The packed point code
      * @return The priority of the route. -1 if no route to the given point code
      */
     unsigned int getRoutePriority(SS7PointCode::Type type, unsigned int packedPC);
+
+    /**
+     * Get the priority of a route by unpacked Point Code.
+     * This method is thread safe
+     * @param type Destination point code type
+     * @param dest The destination point code
+     * @return The priority of the route. -1 if no route to the given point code
+     */
+    inline unsigned int getRoutePriority(SS7PointCode::Type type, const SS7PointCode& dest)
+	{ return getRoutePriority(type,dest.pack(type)); }
+
+    /**
+     * Get the current state of a route by packed Point Code.
+     * This method is thread safe
+     * @param type Destination point code type
+     * @param packedPC The packed point code
+     * @return The state of the route, SS7Route::Unknown if no route to the given point code
+     */
+    SS7Route::State getRouteState(SS7PointCode::Type type, unsigned int packedPC);
+
+    /**
+     * Get the current state of a route by unpacked Point Code.
+     * This method is thread safe
+     * @param type Destination point code type
+     * @param dest The destination point code
+     * @return The state of the route, SS7Route::Unknown if no route to the given point code
+     */
+    inline SS7Route::State getRouteState(SS7PointCode::Type type, const SS7PointCode& dest)
+	{ return getRouteState(type,dest.pack(type)); }
+
+    /**
+     * Set the current state of a route by packed Point Code.
+     * This method is thread safe
+     * @param type Destination point code type
+     * @param packedPC The packed point code
+     * @param state The new state of the route
+     * @return True if the route was found and its state changed
+     */
+    bool setRouteState(SS7PointCode::Type type, unsigned int packedPC, SS7Route::State state);
+
+    /**
+     * Set the current state of a route by unpacked Point Code.
+     * This method is thread safe
+     * @param type Destination point code type
+     * @param dest The destination point code
+     * @param state The new state of the route
+     * @return True if the route was found and its state changed
+     */
+    inline bool setRouteState(SS7PointCode::Type type, const SS7PointCode& dest, SS7Route::State state)
+	{ return setRouteState(type,dest.pack(type),state); }
 
     /**
      * Print the destinations or routing table to output
@@ -4940,12 +5149,7 @@ protected:
      * Constructor
      * @param type Default point code type
      */
-    inline SS7Layer3(SS7PointCode::Type type = SS7PointCode::Other)
-	: SignallingComponent("SS7Layer3"),
-	  m_l3userMutex(true,"SS7Layer3::l3user"),
-	  m_l3user(0),
-	  m_routeMutex(true,"SS7Layer3::route")
-	{ setType(type); }
+    SS7Layer3(SS7PointCode::Type type = SS7PointCode::Other);
 
     /**
      * Push a received Message Signal Unit up the protocol stack
@@ -5008,9 +5212,10 @@ protected:
      * This method is thread safe
      * @param type The point code type used to choose the list of packed point codes
      * @param packed The packed point code to find in the list
+     * @param states Mask of required states of the route
      * @return SS7Route pointer or 0 if type is invalid or the given packed point code was not found
      */
-    SS7Route* findRoute(SS7PointCode::Type type, unsigned int packed);
+    SS7Route* findRoute(SS7PointCode::Type type, unsigned int packed, SS7Route::State states = SS7Route::AnyState);
 
     /**
      * Add a network to the routing table. Clear all its routes before appending it to the table
@@ -5027,6 +5232,45 @@ protected:
      */
     void removeRoutes(SS7Layer3* network);
 
+    /**
+     * Trigger the route changed notification for each route that is not Unknown
+     * @param network The network for which to notify, NULL to notify all routes
+     * @param states Mask of required states of the route
+     */
+    void notifyRoutes(const SS7Layer3* network = 0, SS7Route::State states = SS7Route::AnyState);
+
+    /**
+     * Notification callback when a route state changed to other than Unknown.
+     * Used by a SS7 router. This method is called with the route mutex locked
+     * @param route Pointer to the route whose state has changed
+     * @param type Type of the pointcode of the route
+     */
+    virtual void routeChanged(const SS7Route* route, SS7PointCode::Type type);
+
+    /**
+     * Retrieve the route table for a specific Point Code type
+     * @param type Point Code type of the desired table
+     * @return Pointer to the list of SS7Route or NULL if no such route
+     */
+    inline ObjList* getRoutes(SS7PointCode::Type type)
+	{ return (type < SS7PointCode::DefinedTypes) ? &m_route[type-1] : 0; }
+
+    /**
+     * Retrieve the route table for a specific Point Code type
+     * @param type Point Code type of the desired table
+     * @return Pointer to the list of SS7Route or NULL if no such route
+     */
+    inline const ObjList* getRoutes(SS7PointCode::Type type) const
+	{ return (type < SS7PointCode::DefinedTypes) ? &m_route[type-1] : 0; }
+
+    /**
+     * Retrieve the local Point Code for a specific Point Code type
+     * @param type Desired Point Code type
+     * @return Packed local Point Code, zero if not set
+     */
+    inline unsigned int getLocal(SS7PointCode::Type type) const
+	{ return (type < SS7PointCode::DefinedTypes) ? m_local[type-1] : 0; }
+
 private:
     Mutex m_l3userMutex;                 // Mutex to lock L3 user pointer
     SS7L3User* m_l3user;
@@ -5034,6 +5278,7 @@ private:
     Mutex m_routeMutex;                  // Mutex to lock routing list operations
     ObjList m_route[YSS7_PCTYPE_COUNT];  // Outgoing point codes serviced by a network (for each point code type)
                                          // or the routing table of a message router
+    unsigned int m_local[YSS7_PCTYPE_COUNT];
 };
 
 /**
@@ -5043,6 +5288,13 @@ private:
 class YSIG_API SS7Layer4 : public SS7L3User
 {
 public:
+    /**
+     * Initialize the application layer, connect it to the SS7 router
+     * @param config Optional configuration parameters override
+     * @return True if the application was initialized properly
+     */
+    virtual bool initialize(const NamedList* config);
+
     /**
      * Attach a SS7 network or router to this service. Detach itself from the old one if valid
      * @param network Pointer to network or router to attach
@@ -5111,65 +5363,6 @@ private:
 };
 
 /**
- * Keeps a packed destination point code, a network priority or a list of networks used
- *  to route to the enclosed destination point code
- * @short A SS7 MSU route
- */
-class YSIG_API SS7Route : public RefObject, public Mutex
-{
-    friend class SS7Layer3;
-public:
-    /**
-     * Constructor
-     * @param packed The packed value of the destination point code
-     * @param priority Optional value of the network priority
-     */
-    inline SS7Route(unsigned int packed, unsigned int priority = 0)
-	: Mutex(true,"SS7Route"),
-	  m_packed(packed), m_priority(priority), m_changes(0)
-	{ m_networks.setDelete(false); }
-
-    /**
-     * Destructor
-     */
-    virtual ~SS7Route()
-	{ }
-
-    /**
-     * Attach a network to use for this destination or change its priority.
-     * This method is thread safe
-     * @param network The network to attach or change priority
-     * @param type The point code type used to get the priority from the given network or the networks already in the list
-     */
-    void attach(SS7Layer3* network, SS7PointCode::Type type);
-
-    /**
-     * Remove a network from the list without deleting it.
-     * This method is thread safe
-     * @param network The network to remove
-     * @return False if the list of networks is empty
-     */
-    bool detach(SS7Layer3* network);
-
-    /**
-     * Try to transmit a MSU through one of the attached networks.
-     * This method is thread safe
-     * @param router The router requesting the operation (used for debug)
-     * @param msu Message data, starting with Service Indicator Octet
-     * @param label Routing label of the MSU
-     * @param sls Signalling Link Selection, negative to choose best
-     * @return Link the message was successfully queued to, negative for error
-     */
-    int transmitMSU(const SS7Router* router, const SS7MSU& msu, const SS7Label& label, int sls);
-
-private:
-    unsigned int m_packed;               // Packed destination point code
-    unsigned int m_priority;             // Network priority for the given destination (used by SS7Layer3)
-    ObjList m_networks;                  // List of networks used to route to the given destination (used by SS7Router)
-    int m_changes;                       // Counter used to spot changes in the list
-};
-
-/**
  * A message router between Transfer and Application layers.
  *  Messages are distributed according to the service type.
  * @short Main router for SS7 message transfer and applications
@@ -5179,10 +5372,33 @@ class YSIG_API SS7Router : public SS7L3User, public SS7Layer3, public Mutex
     YCLASS2(SS7Router,SS7L3User,SS7Layer3)
 public:
     /**
+     * Control primitives
+     */
+    enum Operation {
+	// stop MTP operation, disable the router
+	Pause     = 0x100,
+	// start router, restart MTP if needed
+	Resume    = 0x200,
+	// forcibly execute MTP restart
+	Restart   = 0x300,
+	// get operational status
+	Status    = 0x400,
+	// forcibly advertise availability to adjacent routes
+	Traffic   = 0x500,
+	// forcibly advertise available routes
+	Advertise = 0x600,
+    };
+
+    /**
      * Default constructor
      * @param params The list with the parameters
      */
     SS7Router(const NamedList& params);
+
+    /**
+     * Destructor
+     */
+    virtual ~SS7Router();
 
     /**
      * Configure and initialize the router, maintenance and management
@@ -5208,6 +5424,12 @@ public:
     virtual bool operational(int sls = -1) const;
 
     /**
+     * Initiate a MTP restart procedure
+     * @return True if a restart was initiated
+     */
+    virtual bool restart();
+
+    /**
      * Attach a SS7 Layer 3 (network) to the router. Attach the router to the given network
      * @param network Pointer to network to attach
      */
@@ -5231,7 +5453,27 @@ public:
      */
     void detach(SS7Layer4* service);
 
+    /**
+     * Check if the transfer function is enabled
+     * @return True if acting as a STP
+     */
+    inline bool transfer() const
+	{ return m_transfer; }
+
+    /**
+     * Check if the MTP is restarting
+     * @return True if MTP restart procedure is in progress
+     */
+    inline bool starting() const
+	{ return !m_started; }
+
 protected:
+    /**
+     * Periodical timer tick used to perform state transition and housekeeping
+     * @param when Time to use as computing base for events and timeouts
+     */
+    virtual void timerTick(const Time& when);
+
     /**
      * Process a MSU received from the Layer 3 component
      * @param msu Message data, starting with Service Indicator Octet
@@ -5243,6 +5485,14 @@ protected:
     virtual bool receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls);
 
     /**
+     * Notification callback when a route state changed to other than Unknown.
+     * This method is called with the route mutex locked
+     * @param route Pointer to the route whose state has changed
+     * @param type Type of the pointcode of the route
+     */
+    virtual void routeChanged(const SS7Route* route, SS7PointCode::Type type);
+
+    /**
      * Process a notification generated by the attached network layer
      * @param network Network or linkset that generated the notification
      * @param sls Signallink Link that generated the notification, negative if none
@@ -5250,12 +5500,41 @@ protected:
      */
     virtual void notify(SS7Layer3* network, int sls);
 
+    /**
+     * Query or modify the management settings or operational parameters
+     * @param params The list of parameters to query or change
+     * @return True if the control operation was executed
+     */
+    virtual bool control(NamedList& params);
+
     /** List of L3 (networks) attached to this router */
     ObjList m_layer3;
     /** List of L4 (services) attached to this router */
     ObjList m_layer4;
     /** Counter used to spot changes in the lists of L3 or L4 */
     int m_changes;
+    /** Locally unhandled MSUs are to be routed to other networks */
+    bool m_transfer;
+    /** STP phase 2 of restart procedure in effect */
+    bool m_phase2;
+    /** MTP restart procedure has completed */
+    bool m_started;
+    /** MTP overall restart timer T20 */
+    SignallingTimer m_restart;
+    /** MTP isolation timer T1 */
+    SignallingTimer m_isolate;
+
+private:
+    void restart2();
+    void disable();
+    void sendRestart(const SS7Layer3* network = 0);
+    void checkRoutes();
+    int routeMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls, SS7Route::State states);
+    unsigned long m_rxMsu;
+    unsigned long m_txMsu;
+    unsigned long m_fwdMsu;
+    SS7Management* m_mngmt;
+    SS7Maintenance* m_maint;
 };
 
 /**
@@ -5797,11 +6076,13 @@ public:
      */
     enum Operation {
 	// take linkset out of service
-	Pause  = 0x100,
+	Pause   = 0x100,
 	// start linkset operation
-	Resume = 0x200,
+	Resume  = 0x200,
+	// force a MTP restart procedure
+	Restart = 0x300,
 	// get operational status
-	Status = 0x400,
+	Status  = 0x400,
     };
 
     /**
@@ -5978,8 +6259,8 @@ public:
     enum Group {
 	CHM = 0x01,  // Changeover and changeback
 	ECM = 0x02,  // Emergency changeover
-	FCM = 0x03,  // Tranfer controlled and signalling route set congestion
-	TFM = 0x04,  // Tranfer prohibited/allowed/restricted
+	FCM = 0x03,  // Transfer controlled and signalling route set congestion
+	TFM = 0x04,  // Transfer prohibited/allowed/restricted
 	RSM = 0x05,  // Signalling route/set/test
 	MIM = 0x06,  // Management inhibit
 	TRM = 0x07,  // Traffic restart allowed
@@ -9246,7 +9527,7 @@ public:
 	ForcePresNetProv = 0x00000004,
 	// Translate '3.1khz-audio' transfer capability code 0x10 to/from 0x08
 	Translate31kAudio = 0x00000008,
-	// Send only tranfer mode and rate when sending the Bearer Capability IE
+	// Send only transfer mode and rate when sending the Bearer Capability IE
 	// with transfer capability 'udi' or 'rdi' (unrestricted/restricted
 	// digital information)
 	URDITransferCapsOnly = 0x00000010,

@@ -5277,6 +5277,14 @@ protected:
     inline unsigned int getLocal(SS7PointCode::Type type) const
 	{ return (type < SS7PointCode::DefinedTypes) ? m_local[type-1] : 0; }
 
+    /**
+     * Retrieve the default local Point Code for a specific Point Code type
+     * @param type Desired Point Code type
+     * @return Packed local Point Code, zero if not set
+     */
+    virtual unsigned int getDefaultLocal(SS7PointCode::Type type) const
+	{ return getLocal(type); }
+
 private:
     Mutex m_l3userMutex;                 // Mutex to lock L3 user pointer
     SS7L3User* m_l3user;
@@ -5473,7 +5481,20 @@ public:
     inline bool starting() const
 	{ return !m_started; }
 
+    /**
+     * Retrieve the default local Point Code for a specific Point Code type
+     * @param type Desired Point Code type
+     * @return Packed local Point Code, zero if not set
+     */
+    virtual unsigned int getDefaultLocal(SS7PointCode::Type type) const;
+
 protected:
+    /**
+     * Load the default local Point Codes from a list of parameters
+     * @param params List of parameters to load "local=" entries from
+     */
+    void loadLocalPC(const NamedList& params);
+
     /**
      * Periodical timer tick used to perform state transition and housekeeping
      * @param when Time to use as computing base for events and timeouts

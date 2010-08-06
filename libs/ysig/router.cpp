@@ -212,6 +212,7 @@ SS7Router::SS7Router(const NamedList& params)
     m_transfer = params.getBoolValue("transfer");
     m_restart.interval(params,"starttime",5000,(m_transfer ? 60000 : 10000),false);
     m_isolate.interval(params,"isolation",500,1000,false);
+    loadLocalPC(params);
 }
 
 SS7Router::~SS7Router()
@@ -276,6 +277,56 @@ bool SS7Router::initialize(const NamedList* config)
 	}
     }
     return m_started || (config && !config->getBoolValue("autostart")) || restart();
+}
+
+void SS7Router::loadLocalPC(const NamedList& params)
+{
+    Lock lock(m_routeMutex);
+    for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++)
+	m_local[i] = 0;
+    unsigned int n = params.length();
+    for (unsigned int i= 0; i < n; i++) {
+	NamedString* ns = params.getParam(i);
+	if (!ns)
+	    continue;
+	if (ns->name() != "local")
+	    continue;
+	ObjList* route = ns->split(',',true);
+	ObjList* obj = route->skipNull();
+	SS7PointCode pc;
+	SS7PointCode::Type type = SS7PointCode::Other;
+	do {
+	    if (!obj)
+		break;
+	    type = SS7PointCode::lookup(obj->get()->toString());
+	    obj = obj->skipNext();
+	    if (obj)
+		pc.assign(obj->get()->toString(),type);
+	} while (false);
+	TelEngine::destruct(route);
+	unsigned int packed = pc.pack(type);
+	if ((unsigned int)type > YSS7_PCTYPE_COUNT || !packed) {
+	    Debug(this,DebugNote,"Invalid %s='%s' (invalid point code%s) [%p]",
+		ns->name().c_str(),ns->safe(),type == SS7PointCode::Other ? " type" : "",this);
+	    continue;
+	}
+	m_local[type - 1] = packed;
+    }
+}
+
+unsigned int SS7Router::getDefaultLocal(SS7PointCode::Type type) const
+{
+    unsigned int local = getLocal(type);
+    if (!local) {
+	for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
+	    L3Pointer* p = static_cast<L3Pointer*>(o->get());
+	    unsigned int l = (*p)->getLocal(type);
+	    if (l && local)
+		return 0;
+	    local = l;
+	}
+    }
+    return local;
 }
 
 bool SS7Router::operational(int sls) const

@@ -30,6 +30,9 @@
 
 #define MAX_BUF_SIZE  48500
 
+#define SCTP_RETRY_MIN  100000
+#define SCTP_RETRY_MAX 5000000
+
 using namespace TelEngine;
 namespace { // anonymous
 
@@ -228,6 +231,8 @@ private:
     Socket* m_socket;
     Transport* m_transport;
     SocketAddr m_remote;
+    u_int64_t m_tryAgain;
+    u_int32_t m_interval;
 };
 
 class TransportModule : public Module
@@ -1064,7 +1069,8 @@ bool StreamReader::readData()
  */
 
 MessageReader::MessageReader(Transport* transport, Socket* sock, SocketAddr& addr)
-    : m_socket(sock), m_transport(transport), m_remote(addr)
+    : m_socket(sock), m_transport(transport), m_remote(addr),
+      m_tryAgain(0), m_interval(SCTP_RETRY_MIN)
 {
     DDebug(DebugAll,"Creating MessageReader [%p]",this);
 }
@@ -1154,6 +1160,14 @@ bool MessageReader::readData()
     int r = 0;
     SocketAddr addr;
     if (m_transport->transType() == Transport::Sctp) {
+	if (m_transport->status() == Transport::Initiating) {
+	    Time t;
+	    if (t < m_tryAgain) {
+		Thread::yield(true);
+		return false;
+	    }
+	    m_tryAgain = t + m_interval;
+	}
 	int flags = 0;
 	SctpSocket* s = static_cast<SctpSocket*>(m_socket);
 	if (!s) {
@@ -1170,6 +1184,11 @@ bool MessageReader::readData()
 	    }
 	    DDebug(m_transport,DebugNote,"Message error [%p] %d",m_socket,flags);
 	    m_transport->setStatus(Transport::Initiating);
+	    m_tryAgain = Time::now() + m_interval;
+	    // exponential backoff
+	    m_interval *= 2;
+	    if (m_interval > SCTP_RETRY_MAX)
+		m_interval = SCTP_RETRY_MAX;
 	    return false;
 	}
     }
@@ -1178,6 +1197,7 @@ bool MessageReader::readData()
 
     if (r <= 0)
 	return false;
+    m_interval = SCTP_RETRY_MIN;
 
     u_int32_t len = m_transport->getMsgLen(buffer);
     if ((unsigned int)r != len) {

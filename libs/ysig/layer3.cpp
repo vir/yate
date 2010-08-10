@@ -335,8 +335,12 @@ void SS7Layer3::updateRoutes(SS7Layer3* network)
 	SS7PointCode::Type type = (SS7PointCode::Type)(i + 1);
 	for (ObjList* o = network->m_route[i].skipNull(); o; o = o->skipNext()) {
 	    SS7Route* src = static_cast<SS7Route*>(o->get());
-	    SS7Route* dest = findRoute(type,src->m_packed);
-	    if (!dest) {
+	    SS7Route* dest = findRoute(type,src->packed());
+	    if (dest) {
+		if (dest->priority() > src->priority())
+		    dest->m_priority = src->priority();
+	    }
+	    else {
 		dest = new SS7Route(*src);
 		m_route[i].append(dest);
 	    }
@@ -423,9 +427,10 @@ void SS7Layer3::printRoutes()
 	    SS7Route* route = static_cast<SS7Route*>(o->get());
 	    tmp << sType << SS7PointCode(type,route->m_packed);
 	    if (!router) {
-		tmp << " " << route->m_priority << "\r\n";
+		tmp << " " << route->m_priority << " (" << route->stateName() << ")\r\n";
 		continue;
 	    }
+	    tmp << " (" << route->stateName() << ")";
 	    for (ObjList* oo = route->m_networks.skipNull(); oo; oo = oo->skipNext()) {
 		GenPointer<SS7Layer3>* d = static_cast<GenPointer<SS7Layer3>*>(oo->get());
 		if (*d)
@@ -724,8 +729,9 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 	    XDebug(this,DebugAll,"Found link %p for SLS=%d [%p]",link,sls,this);
 	    if (link->operational()) {
 		if (link->transmitMSU(msu)) {
-		    DDebug(this,DebugAll,"Sent MSU over link %p with SLS=%d%s [%p]",
-			link,sls,(m_inhibit ? " while inhibited" : ""),this);
+		    DDebug(this,DebugAll,"Sent MSU over link '%s' %p with SLS=%d%s [%p]",
+			link->toString().c_str(),link,sls,
+			(m_inhibit ? " while inhibited" : ""),this);
 		    dump(msu,true,sls);
 		    return sls;
 		}
@@ -745,8 +751,9 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 	SS7Layer2* link = *p;
 	if (link->operational() && link->transmitMSU(msu)) {
 	    sls = link->sls();
-	    DDebug(this,DebugAll,"Sent MSU over link %p with SLS=%d%s [%p]",
-		link,sls,(m_inhibit ? " while inhibited" : ""),this);
+	    DDebug(this,DebugAll,"Sent MSU over link '%s' %p with SLS=%d%s [%p]",
+		link->toString().c_str(),link,sls,
+		(m_inhibit ? " while inhibited" : ""),this);
 	    dump(msu,true,sls);
 	    return sls;
 	}
@@ -777,8 +784,8 @@ bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
     if (debugAt(DebugInfo)) {
 	String tmp;
 	tmp << label << " (" << label.opc().pack(cpType) << ":" << label.dpc().pack(cpType) << ":" << label.sls() << ")";
-	Debug(this,DebugAll,"Received MSU from link %p with SLS=%d. Address: %s",
-	    link,sls,tmp.c_str());
+	Debug(this,DebugAll,"Received MSU from link '%s' %p with SLS=%d. Address: %s",
+	    link->toString().c_str(),link,sls,tmp.c_str());
     }
 #endif
     // first try to call the user part

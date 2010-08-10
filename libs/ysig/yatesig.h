@@ -4891,6 +4891,18 @@ public:
 	{ return m_state; }
 
     /**
+     * Retrieve the state names token table
+     * @return Pointer to the token table mapping states to names
+     */
+    static const TokenDict* stateNames();
+
+    /**
+     * Retrieve the name of the current state
+     */
+    const char* stateName() const
+	{ return lookup(m_state,stateNames()); }
+
+    /**
      * Get the priority of this route
      * @return Route priority, zero = highest (adjacent)
      */
@@ -4948,9 +4960,11 @@ public:
      * @param msu Message data, starting with Service Indicator Octet
      * @param label Routing label of the MSU
      * @param sls Signalling Link Selection, negative to choose best
+     * @param source Avoided network where the packet was received from
      * @return Link the message was successfully queued to, negative for error
      */
-    int transmitMSU(const SS7Router* router, const SS7MSU& msu, const SS7Label& label, int sls);
+    int transmitMSU(const SS7Router* router, const SS7MSU& msu,
+	const SS7Label& label, int sls, const SS7Layer3* source = 0);
 
 private:
     unsigned int m_packed;               // Packed destination point code

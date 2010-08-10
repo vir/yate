@@ -73,6 +73,12 @@ static SS7Route::State routeState(SS7MsgSNM::Type cmd)
 /**
  * SS7Route
  */
+// Get the state to name token table
+const TokenDict* SS7Route::stateNames()
+{
+    return s_dict_states;
+}
+
 // Attach a network to use for this destination or change its priority
 void SS7Route::attach(SS7Layer3* network, SS7PointCode::Type type)
 {
@@ -162,7 +168,7 @@ bool SS7Route::operational(int sls)
 
 // Try to transmit a MSU through one of the attached networks
 int SS7Route::transmitMSU(const SS7Router* router, const SS7MSU& msu,
-	const SS7Label& label, int sls)
+	const SS7Label& label, int sls, const SS7Layer3* source)
 {
     lock();
     ObjList* o;
@@ -170,7 +176,7 @@ int SS7Route::transmitMSU(const SS7Router* router, const SS7MSU& msu,
 	for (o = m_networks.skipNull(); o; o = o->skipNext()) {
 	    L3Pointer* p = static_cast<L3Pointer*>(o->get());
 	    RefPointer<SS7Layer3> l3 = static_cast<SS7Layer3*>(*p);
-	    if (!l3)
+	    if (!l3 || (source == l3))
 		continue;
 	    XDebug(router,DebugAll,"Attempting transmitMSU on L3=%p '%s' [%p]",
 		(void*)l3,l3->toString().c_str(),router);
@@ -527,7 +533,7 @@ int SS7Router::routeMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* net
     lock();
     RefPointer<SS7Route> route = findRoute(label.type(),label.dpc().pack(label.type()),states);
     unlock();
-    int slsTx = route ? route->transmitMSU(this,msu,label,sls) : -1;
+    int slsTx = route ? route->transmitMSU(this,msu,label,sls,network) : -1;
     if (slsTx >= 0) {
 	lock();
 	m_txMsu++;
@@ -591,7 +597,7 @@ void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type, Gen
     dest << SS7PointCode(type,route->packed());
     if (dest.null())
 	return;
-    const char* state = lookup(route->state(),s_dict_states);
+    const char* state = route->stateName();
     Debug(this,DebugAll,"Destination %s:%s state changed to %s [%p]",
 	pct,dest.c_str(),state,this);
     // only forward TRx if we are a STP and not in Restart Phase 1
@@ -618,8 +624,11 @@ void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type, Gen
 		GenPointer<SS7Layer3>* n = static_cast<GenPointer<SS7Layer3>*>(nl->get());
 		if (!(*n)->operational())
 		    continue;
-		if (route->hasNetwork(*n))
+		if (route->hasNetwork(*n)) {
+		    DDebug(this,DebugAll,"Not advertising route %s back on %s [%p]",
+			dest.c_str(),(*n)->toString().c_str(),this);
 		    continue;
+		}
 		unsigned int netLocal = (*n)->getLocal(type);
 		if (!netLocal)
 		    netLocal = local;
@@ -633,7 +642,7 @@ void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type, Gen
 		    break;
 		String addr;
 		addr << pct << "," << SS7PointCode(type,netLocal) << "," << dpc;
-		DDebug(this,DebugAll,"Sending Route %s %s %s [%p]",
+		Debug(this,DebugAll,"Advertising Route %s %s %s [%p]",
 		    dest.c_str(),state,addr.c_str(),this);
 		ctl->addParam("address",addr);
 		ctl->addParam("destination",dest);
@@ -726,6 +735,7 @@ void SS7Router::checkRoutes()
 		continue;
 	    NamedList* ctl = (*p)->controlCreate("resume");
 	    if (ctl) {
+		ctl->setParam("automatic",String::boolText(true));
 		ctl->setParam("emergency",String::boolText(true));
 		(*p)->controlExecute(ctl);
 	    }
@@ -836,7 +846,8 @@ bool SS7Router::control(NamedList& params)
 		    break;
 		}
 		if (!setRouteState(type,pc,routeState(static_cast<SS7MsgSNM::Type>(cmd)))) {
-		    err << "no such route: " << *dest;
+		    if (!params.getBoolValue("automatic"))
+			err << "no such route: " << *dest;
 		    break;
 		}
 		// if STP is started advertise routes to just restarted node

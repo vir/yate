@@ -1664,19 +1664,22 @@ void SS7MsgISUP::toString(String& dest, const SS7Label& label, bool params,
 // @param recvLbl True if the given label is from a received message. If true, a new routing
 //   label will be created from the received one
 // @return Link the message was successfully queued to, negative for error
-inline static int transmitREL(SS7ISUP* isup, unsigned int cic, const SS7Label& label, bool recvLbl,
-	const char* reason)
+static int transmitREL(SS7ISUP* isup, unsigned int cic, const SS7Label& label, bool recvLbl,
+    const char* reason, const char* diagnostic = 0, const char* location = 0)
 {
     SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::REL,cic);
     if (reason)
 	m->params().addParam("CauseIndicators",reason);
+    m->params().addParam("CauseIndicators.location",location,false);
+    m->params().addParam("CauseIndicators.diagnostic",diagnostic,false);
     return isup->transmitMessage(m,label,recvLbl);
 }
 
 // Push down the protocol stack a RLC (Release Complete) message
 // @param msg Optional received message to copy release parameters. Ignored if reason is valid
-inline static int transmitRLC(SS7ISUP* isup, unsigned int cic, const SS7Label& label, bool recvLbl,
-	const char* reason = 0, const SS7MsgISUP* msg = 0)
+static int transmitRLC(SS7ISUP* isup, unsigned int cic, const SS7Label& label, bool recvLbl,
+    const char* reason = 0, const SS7MsgISUP* msg = 0, const char* diagnostic = 0,
+    const char* location = 0)
 {
     SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::RLC,cic);
     if (reason && *reason)
@@ -1685,16 +1688,22 @@ inline static int transmitRLC(SS7ISUP* isup, unsigned int cic, const SS7Label& l
 	m->params().copyParam(((SS7MsgISUP*)msg)->params(),"CauseIndicators",'.');
     else
 	m->params().addParam("CauseIndicators","normal-clearing");
+    m->params().addParam("CauseIndicators.location",location,false);
+    m->params().addParam("CauseIndicators.diagnostic",diagnostic,false);
     return isup->transmitMessage(m,label,recvLbl);
 }
 
 // Push down the protocol stack a CNF (Confusion) message
-inline static int transmitCNF(SS7ISUP* isup, unsigned int cic, const SS7Label& label, bool recvLbl,
-	const char* reason)
+static int transmitCNF(SS7ISUP* isup, unsigned int cic, const SS7Label& label, bool recvLbl,
+    const char* reason, const char* diagnostic = 0, const char* location = 0)
 {
     SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::CNF,cic);
     if (reason)
 	m->params().addParam("CauseIndicators",reason);
+    if (!location)
+	location = isup->location();
+    m->params().addParam("CauseIndicators.location",location,false);
+    m->params().addParam("CauseIndicators.diagnostic",diagnostic,false);
     return isup->transmitMessage(m,label,recvLbl);
 }
 
@@ -2031,7 +2040,7 @@ SignallingEvent* SS7ISUPCall::releaseComplete(bool final, SS7MsgISUP* msg, const
     if (m_state == Released)
 	return 0;
     if (isup() && m_gracefully) {
-	int sls = transmitRLC(isup(),id(),m_label,false,m_reason);
+	int sls = transmitRLC(isup(),id(),m_label,false,m_reason,0,0,isup()->location());
 	if (sls != -1 && m_label.sls() == 255)
 	    m_label.setSls(sls);
     }
@@ -2125,21 +2134,28 @@ bool SS7ISUPCall::release(SignallingEvent* event)
     m_state = Releasing;
     if (!isup())
 	return 0;
-    int sls = transmitREL(isup(),id(),m_label,false,m_reason);
+    int sls = transmitREL(isup(),id(),m_label,false,m_reason,m_diagnostic,m_location);
     if (sls != -1 && m_label.sls() == 255)
 	m_label.setSls(sls);
     return sls != -1;
 }
 
 // Set termination reason from received text or message
-void SS7ISUPCall::setReason(const char* reason, SignallingMessage* msg)
+void SS7ISUPCall::setReason(const char* reason, SignallingMessage* msg,
+    const char* diagnostic, const char* location)
 {
     if (!m_reason.null())
 	return;
-    if (reason)
+    if (reason) {
 	m_reason = reason;
-    else if (msg)
+	m_diagnostic = diagnostic;
+	m_location = location;
+    }
+    else if (msg) {
 	m_reason = msg->params().getValue("CauseIndicators",msg->params().getValue("reason"));
+	m_diagnostic = msg->params().getValue("CauseIndicators.diagnostic",diagnostic);
+	m_location = msg->params().getValue("CauseIndicators.location",location);
+    }
 }
 
 // Accept send/receive messages in current state based on call direction

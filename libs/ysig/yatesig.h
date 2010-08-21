@@ -915,6 +915,13 @@ public:
     virtual ~SignallingCallControl();
 
     /**
+     * Retrieve Q.850 cause location
+     * @return Controller location
+     */
+    inline const String& location() const
+	{ return m_location; }
+
+    /**
      * Set exiting flag
      */
     inline void setExiting()
@@ -1100,6 +1107,11 @@ protected:
      * Timer used to raise verify events
      */
     SignallingTimer m_verifyTimer;
+
+    /**
+     * Controller location used when encoding Q.850 cause
+     */
+    String m_location;
 
 private:
     SignallingCircuitGroup* m_circuits;  // Circuit group
@@ -7014,13 +7026,16 @@ public:
      * Set termination flag. Set termination reason if not already set
      * @param gracefully True to send RLC on termination, false to destroy the call without notification
      * @param reason Termination reason
+     * @param diagnostic Optional diagnostic data to be sent with termination reason
+     * @param location Optional release location
      */
-    inline void setTerminate(bool gracefully, const char* reason = 0)
+    inline void setTerminate(bool gracefully, const char* reason = 0,
+	const char* diagnostic = 0, const char* location = 0)
     {
 	Lock lock(this);
 	m_terminate = true;
 	m_gracefully = gracefully;
-	setReason(reason,0);
+	setReason(reason,0,diagnostic,location);
     }
 
     /**
@@ -7085,7 +7100,8 @@ private:
     // @return True if the message was pushed down the protocol stack
     bool release(SignallingEvent* event = 0);
     // Set termination reason from message or parameter
-    void setReason(const char* reason, SignallingMessage* msg);
+    void setReason(const char* reason, SignallingMessage* msg, const char* diagnostic = 0,
+	const char* location = 0);
     // Accept send/receive messages in current state based on call direction
     bool validMsgState(bool send, SS7MsgISUP::Type type);
     // Connect the reserved circuit. Return false if it fails. Return true if this call is a signalling only one
@@ -7116,6 +7132,8 @@ private:
     bool m_inbandAvailable;              // Inband data is available
     String m_format;                     // Data format used by the circuit
     String m_reason;                     // Termination reason
+    String m_diagnostic;                 // Termination diagnostic
+    String m_location;                   // Termination location
     SS7MsgISUP* m_iamMsg;                // Message with the call parameters for outgoing calls
     SS7MsgISUP* m_sgmMsg;                // Pending received message with segmentation flag set
     // Timers

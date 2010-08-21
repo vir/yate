@@ -55,6 +55,8 @@ SignallingCallControl::SignallingCallControl(const NamedList& params,
       m_strategy(SignallingCircuitGroup::Increment),
       m_exiting(false)
 {
+    // Controller location
+    m_location = params.getValue("location");
     // Strategy
     const char* strategy = params.getValue("strategy","increment");
     m_strategy = SignallingCircuitGroup::str2strategy(strategy);

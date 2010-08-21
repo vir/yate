@@ -364,6 +364,19 @@
 ; If not set calls that request continuity check will be rejected
 ;continuity=
 
+; location: string: Exchange location to be set when sending Q.850 causes
+; Available values are: 
+;   U    User
+;   LPN  Private network serving the local user
+;   LN   Public network serving the local user
+;   TN   Transit network
+;   RLN  Public network serving the remote user
+;   RPN  Private network serving the remote user
+;   INTL International network
+;   BI   Network beyond the interworking point
+; A default 'BI' will be used if not set or invalid
+;location=
+
 ; print-messages: boolean: Print decoded protocol data units to output
 ; This option is applied on reload
 ; Defaults to no

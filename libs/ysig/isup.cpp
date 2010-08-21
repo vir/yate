@@ -201,6 +201,7 @@ static const TokenDict s_dict_control[] = {
     { "reset", SS7MsgISUP::RSC },
     { "block", SS7MsgISUP::BLK },
     { "unblock", SS7MsgISUP::UBL },
+    { "release", SS7MsgISUP::RLC },
     { 0, 0 }
 };
 
@@ -1965,7 +1966,8 @@ SS7ISUPCall::SS7ISUPCall(SS7ISUP* controller, SignallingCircuit* cic,
     m_sgmMsg(0),
     m_sentSamDigits(0),
     m_relTimer(300000),                  // Q.764: T5  - 5..15 minutes
-    m_iamTimer(20000),                   // Q.764: T7  - 20..30 seconds
+    m_iamTimer(20000),                   // Setup, Testing: Q.764: T7  - 20..30 seconds
+                                         // Releasing: Q.764: T1: 15..60 seconds
     m_sgmRecvTimer(3000)                 // Q.764: T34 - 2..4 seconds
 {
     if (!(controller && m_circuit)) {
@@ -1988,11 +1990,16 @@ SS7ISUPCall::~SS7ISUPCall()
 {
     if (m_iamMsg)
 	m_iamMsg->deref();
-    releaseComplete(true);
-    Debug(isup(),DebugAll,"Call(%u) destroyed with reason='%s' [%p]",
-	id(),m_reason.safe(),this);
-    if (controller())
-	controller()->releaseCircuit(m_circuit);
+    releaseComplete(true,0,0,m_relTimer.started());
+    Debug(isup(),!m_relTimer.started() ? DebugAll : DebugNote,
+	"Call(%u) destroyed with reason='%s'%s [%p]",
+	id(),m_reason.safe(),!m_relTimer.started() ? "" : " (release timed out)",this);
+    if (controller()) {
+	if (!m_relTimer.started())
+	    controller()->releaseCircuit(m_circuit);
+	else
+	    isup()->startCircuitReset(m_circuit,"T5");
+    }
 }
 
 // Stop waiting for a SGM (Segmentation) message when another message is
@@ -2011,11 +2018,12 @@ void SS7ISUPCall::stopWaitSegment(bool discard)
 
 // Helper functions called in getEvent
 inline static bool timeout(SS7ISUP* isup, SS7ISUPCall* call, SignallingTimer& timer,
-	const Time& when, const char* req)
+	const Time& when, const char* req, bool stop = true)
 {
     if (!timer.timeout(when.msec()))
 	return false;
-    timer.stop();
+    if (stop)
+	timer.stop();
     DDebug(isup,DebugNote,"Call(%u). %s request timed out [%p]",call->id(),req,call);
     return true;
 }
@@ -2079,6 +2087,7 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 		case SS7MsgISUP::RLC:
 		    m_gracefully = false;
 		case SS7MsgISUP::REL:
+		    m_relTimer.stop();
 		    m_lastEvent = releaseComplete(false,msg);
 		    break;
 		case SS7MsgISUP::SGM:
@@ -2113,8 +2122,10 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 		}
 		break;
 	    case Releasing:
-		if (timeout(isup(),this,m_relTimer,when,"REL"))
-		    m_lastEvent = releaseComplete(false,0,"noresponse");
+		if (timeout(isup(),this,m_relTimer,when,"REL",false))
+		    m_lastEvent = releaseComplete(false,0,"noresponse",true);
+		else if (timeout(isup(),this,m_iamTimer,when,"T1"))
+		    transmitREL(true,when);
 		break;
 	    default: ;
 	}
@@ -2311,9 +2322,11 @@ bool SS7ISUPCall::replaceCircuit(SignallingCircuit* circuit)
 // @param final True if called from destructor
 // @param msg Received message with parameters if any
 // @param reason Optional release reason
-SignallingEvent* SS7ISUPCall::releaseComplete(bool final, SS7MsgISUP* msg, const char* reason)
+SignallingEvent* SS7ISUPCall::releaseComplete(bool final, SS7MsgISUP* msg, const char* reason,
+    bool timeout)
 {
-    m_relTimer.stop();
+    if (timeout)
+	m_gracefully = false;
     m_iamTimer.stop();
     setReason(reason,msg);
     stopWaitSegment(true);
@@ -2410,14 +2423,12 @@ bool SS7ISUPCall::release(SignallingEvent* event)
 	m_terminate = true;
 	return false;
     }
+    m_iamTimer.interval(isup() ? isup()->m_t1Interval : 1);
+    m_relTimer.interval(isup() ? isup()->m_t5Interval : 1);
+    m_iamTimer.start();
     m_relTimer.start();
     m_state = Releasing;
-    if (!isup())
-	return 0;
-    int sls = transmitREL(isup(),id(),m_label,false,m_reason,m_diagnostic,m_location);
-    if (sls != -1 && m_label.sls() == 255)
-	m_label.setSls(sls);
-    return sls != -1;
+    return transmitREL();
 }
 
 // Set termination reason from received text or message
@@ -2587,6 +2598,22 @@ bool SS7ISUPCall::transmitSAM(const char* extra)
 	}
     }
     return true;
+}
+
+// (Re)transmit REL. Restart initial release timer if retransmission
+// Remember sls
+bool SS7ISUPCall::transmitREL(bool retrans, const Time& time)
+{
+    if (retrans) {
+	m_iamTimer.stop();
+	m_iamTimer.start(time.msec());
+    }
+    if (!isup())
+	return false;
+    int sls = ::transmitREL(isup(),id(),m_label,false,m_reason,m_diagnostic,m_location);
+    if (sls != -1 && m_label.sls() == 255)
+	m_label.setSls(sls);
+    return sls != -1;
 }
 
 bool SS7ISUPCall::needsTesting(const SS7MsgISUP* msg)
@@ -2812,18 +2839,25 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
       m_defaultSls(SlsLatest),
       m_maxCalledDigits(16),
       m_l3LinkUp(false),
+      m_t1Interval(15000),               // Q.764 T1 15..60 seconds
+      m_t5Interval(300000),              // Q.764 T5 5..15 minutes
+      m_t12Interval(20000),              // Q.764 T12 (BLK) 15..60 seconds
+      m_t13Interval(300000),             // Q.764 T13 (BLK global) 5..15 minutes
+      m_t14Interval(20000),              // Q.764 T14 (UBL) 15..60 seconds
+      m_t15Interval(300000),             // Q.764 T15 (UBL global) 5..15 minutes
+      m_t17Interval(300000),             // Q.764 T17 5..15 minutes
+      m_t18Interval(20000),              // Q.764 T18 (CGB) 15..60 seconds
+      m_t19Interval(300000),             // Q.764 T19 (CGB global) 5..15 minutes
+      m_t20Interval(20000),              // Q.764 T20 (CGU) 15..60 seconds
+      m_t21Interval(300000),             // Q.764 T21 (CGU global) 5..15 minutes
       m_uptTimer(0),
       m_userPartAvail(true),
       m_uptCicCode(0),
       m_rscTimer(0),
       m_rscCic(0),
       m_rscSpeedup(0),
-      m_lockTimer(0),
+      m_lockTimer(2000),
       m_lockGroup(true),
-      m_lockNeed(true),
-      m_hwFailReq(false),
-      m_blockReq(false),
-      m_lockCicCode(0),
       m_printMsg(false),
       m_extendedDebug(false)
 {
@@ -2885,12 +2919,13 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
 
     m_rscTimer.interval(params,"channelsync",60,300,true,true);
     m_rscInterval = m_rscTimer.interval();
-    m_lockTimer.interval(params,"channellock",2500,10000,false,false);
 
     // Remote user part test
     m_uptTimer.interval(params,"userparttest",10,60,true,true);
     if (m_uptTimer.interval())
 	m_userPartAvail = false;
+    else
+	m_lockTimer.start();
 
     m_continuity = params.getValue("continuity");
     m_defaultSls = params.getIntValue("sls",s_dict_callSls,m_defaultSls);
@@ -3081,7 +3116,7 @@ SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
 	    }
 	    dest = *m_remotePoint;
 	}
-	if (!reserveCircuit(cic,range,SignallingCircuit::LockLocked)) {
+	if (!reserveCircuit(cic,range,SignallingCircuit::LockLockedBusy)) {
 	    Debug(this,DebugNote,"Can't reserve circuit");
 	    reason = "congestion";
 	    break;
@@ -3241,16 +3276,62 @@ void SS7ISUP::timerTick(const Time& when)
     }
 
     // Blocking/unblocking circuits
-    if (m_lockNeed) {
-	if (m_lockTimer.started()) {
-	    if (!m_lockTimer.timeout(when.msec()))
-		return;
-	    Debug(this,DebugMild,"Circuit %sblocking timed out cic=%u map=%s",
-		(m_blockReq ? "" : "un"),
-		m_lockCicCode,m_lockMap.c_str());
+    if (m_lockTimer.timeout(when.msec())) {
+	DDebug(this,DebugAll,"Re-checking local lock sending");
+	m_lockTimer.stop();
+	mylock.drop();
+	sendLocalLock(when);
+	return;
+    }
+
+    // Pending messages
+    ObjList reInsert;
+    ObjList sendMsgs;
+    while (true) {
+	SignallingMessageTimer* m = m_pending.timeout(when);
+	if (!m)
+	    break;
+	SS7MsgISUP* msg = static_cast<SS7MsgISUP*>(m->message());
+	if (!msg) {
+	    TelEngine::destruct(m);
+	    continue;
 	}
-	if (sendLocalLock(when.msec()))
-	    return;
+	if (msg->type() != SS7MsgISUP::RSC &&
+	    msg->type() != SS7MsgISUP::CGB &&
+	    msg->type() != SS7MsgISUP::CGU &&
+	    msg->type() != SS7MsgISUP::BLK &&
+	    msg->type() != SS7MsgISUP::UBL) {
+	    Debug(this,DebugStub,"Unhandled pending message '%s'",msg->name());
+	    TelEngine::destruct(m);
+	    continue;
+	}
+	// Global timer timed out: set retransmission timer from it
+	if (m->global().timeout(when.msec())) {
+	    m->interval(m->global().interval());
+	    m->global().stop();
+	    m->global().interval(0);
+	    msg->params().setParam("isup_alert_maint",String::boolText(true));
+	}
+	bool alert = msg->params().getBoolValue("isup_alert_maint");
+	const char* reason = msg->params().getValue("isup_pending_reason","");
+	Debug(this,!alert ? DebugAll : DebugMild,
+	    "Pending operation '%s' cic=%u reason='%s' timed out",
+	    msg->name(),msg->cic(),reason);
+	if (alert) {
+	    // TODO: alert maintenance
+	}
+	msg->ref();
+	reInsert.append(m)->setDelete(false);
+	sendMsgs.append(msg)->setDelete(false);
+    }
+    // Re-insert
+    ObjList* o = reInsert.skipNull();
+    if (o) {
+	for (; o; o = o->skipNext())
+	    m_pending.add(static_cast<SignallingMessageTimer*>(o->get()),when);
+	mylock.drop();
+	transmitMessages(sendMsgs);
+	return;
     }
 
     // Circuit reset disabled ?
@@ -3262,6 +3343,7 @@ void SS7ISUP::timerTick(const Time& when)
 	m_rscTimer.stop();
 	if (m_rscCic) {
 	    Debug(this,DebugMild,"Circuit reset timed out for cic=%u",m_rscCic->code());
+	    m_rscCic->resetLock(SignallingCircuit::Resetting);
 	    releaseCircuit(m_rscCic);
 	    return;
 	}
@@ -3271,15 +3353,21 @@ void SS7ISUP::timerTick(const Time& when)
 	m_rscTimer.interval(m_rscInterval);
     }
     m_rscTimer.start(when.msec());
-    // Pick the next circuit to reset. Ignore circuits locally locked
+    // Pick the next circuit to reset. Ignore circuits locally locked or busy
     if (m_defPoint && m_remotePoint &&
-	reserveCircuit(m_rscCic,0,SignallingCircuit::LockLocal)) {
-	SS7MsgISUP* msg = new SS7MsgISUP(SS7MsgISUP::RSC,m_rscCic->code());
-	SS7Label label(m_type,*m_remotePoint,*m_defPoint,
-	    (m_defaultSls == SlsCircuit) ? m_rscCic->code() : m_sls);
-	DDebug(this,DebugNote,"Periodic restart on cic=%u",m_rscCic->code());
-	mylock.drop();
-	transmitMessage(msg,label,false);
+	reserveCircuit(m_rscCic,0,SignallingCircuit::LockLocal | SignallingCircuit::LockBusy)) {
+	// Avoid already resetting cic
+	if (!findPendingMessage(SS7MsgISUP::RSC,m_rscCic->code())) {
+	    m_rscCic->setLock(SignallingCircuit::Resetting);
+	    SS7MsgISUP* msg = new SS7MsgISUP(SS7MsgISUP::RSC,m_rscCic->code());
+	    SS7Label label(m_type,*m_remotePoint,*m_defPoint,
+		(m_defaultSls == SlsCircuit) ? m_rscCic->code() : m_sls);
+	    DDebug(this,DebugNote,"Periodic restart on cic=%u",m_rscCic->code());
+	    mylock.drop();
+	    transmitMessage(msg,label,false);
+	}
+	else
+	    releaseCircuit(m_rscCic);
     }
 }
 
@@ -3359,10 +3447,25 @@ bool SS7ISUP::control(NamedList& params)
 		if ((code < 1) || !blockCircuit(code,(SS7MsgISUP::BLK == cmd),
 		    false,false,true,true))
 		    return false;
-		if (!m_lockTimer.started())
-		    sendLocalLock();
+		sendLocalLock();
 	    }
 	    return true;
+	case SS7MsgISUP::RLC:
+	    {
+		int code = params.getIntValue("circuit");
+		SignallingMessageTimer* pending = 0;
+		if (code > 0)
+		    pending = findPendingMessage(SS7MsgISUP::RSC,code,true);
+		if (!pending)
+		    return false;
+		resetCircuit((unsigned int)code,false,false);
+		TelEngine::destruct(pending);
+		SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
+		mylock.drop();
+		transmitRLC(this,code,label,false,0,0,0,m_location);
+	    }
+	    return true;
+
     }
     mylock.drop();
     return SignallingComponent::control(params);
@@ -3845,6 +3948,7 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
     if (!m_userPartAvail && m_uptTimer.started()) {
 	m_uptTimer.stop();
 	m_userPartAvail = true;
+	m_lockTimer.start();
 	Debug(this,DebugInfo,"Remote user part is available");
 	if (msg->cic() == m_uptCicCode &&
 	    (msg->type() == SS7MsgISUP::UPA ||
@@ -3873,8 +3977,16 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
 	case SS7MsgISUP::RLC:
 	    if (m_rscCic && m_rscCic->code() == msg->cic())
 		processControllerMsg(msg,label,sls);
-	    else
-		processCallMsg(msg,label,sls);
+	    else {
+		SignallingMessageTimer* m = findPendingMessage(SS7MsgISUP::RSC,msg->cic(),true);
+		if (m) {
+		    DDebug(this,DebugAll,"RSC confirmed for pending cic=%u",msg->cic());
+		    resetCircuit(msg->cic(),false,false);
+		    TelEngine::destruct(m);
+		}
+		else
+		    processCallMsg(msg,label,sls);
+	    }
 	default:
 	    processControllerMsg(msg,label,sls);
     }
@@ -3896,8 +4008,9 @@ SignallingEvent* SS7ISUP::processCircuitEvent(SignallingCircuitEvent*& event,
 	    if (event->circuit()) {
 		lock();
 		bool block = (event->type() == SignallingCircuitEvent::Alarm);
-		event->circuit()->hwLock(block,false,true,true);
-		m_lockNeed = true;
+		bool changed = event->circuit()->hwLock(block,false,true,true);
+		if (changed && !m_lockTimer.started())
+		    m_lockTimer.start();
 		unlock();
 		ev = new SignallingEvent(event,call);
 	    }
@@ -3916,6 +4029,58 @@ SignallingEvent* SS7ISUP::processCircuitEvent(SignallingCircuitEvent*& event,
     }
     TelEngine::destruct(event);
     return ev;
+}
+
+// Initiate a circuit reset
+bool SS7ISUP::startCircuitReset(SignallingCircuit*& cic, const String& timer)
+{
+    if (!cic)
+	return false;
+    bool ok = false;
+    do {
+	Lock lock(this);
+	// Check if the circuit can be reset
+	// Do nothing on locally locked circuit: this would clear our lock
+	// state at remote side. See Q.764 2.9.3.1
+	if (cic->locked(SignallingCircuit::LockLocal)) {
+	    Debug(this,DebugNote,
+		"Failed to start reset on locally locked circuit (cic=%u timer=%s) [%p]",
+		cic->code(),timer.c_str(),this);
+	    ok = SignallingCallControl::releaseCircuit(cic);
+	    break;
+	}
+	// Check if there is any management operation in progress on the cic
+	if (cic->locked(SignallingCircuit::LockBusy))
+	    break;
+	bool relTimeout = (timer == "T5");
+	Debug(this,!relTimeout ? DebugAll : DebugNote,
+	    "Starting circuit %u reset on timer %s [%p]",
+	    cic->code(),timer.c_str(),this);
+	// TODO: alert maintenance if T5 timer expired
+	SignallingMessageTimer* m = m_pending.add(m_t17Interval);
+	if (m) {
+	    cic->setLock(SignallingCircuit::Resetting);
+	    SS7MsgISUP* msg = new SS7MsgISUP(SS7MsgISUP::RSC,cic->code());
+	    msg->params().addParam("isup_pending_reason",timer,false);
+	    if (relTimeout)
+		msg->params().addParam("isup_alert_maint",String::boolText(true));
+	    msg->ref();
+	    m->message(msg);
+	    lock.drop();
+	    ok = true;
+	    SS7Label label;
+	    if (setLabel(label,msg->cic()))
+		transmitMessage(msg,label,false);
+	}
+	else {
+	    Debug(this,DebugNote,
+		"Failed to add circuit %u reset to pending messages timer=%s [%p]",
+		cic->code(),timer.c_str(),this);
+	    ok = SignallingCallControl::releaseCircuit(cic);
+	}
+    } while (false);
+    TelEngine::destruct(cic);
+    return ok;
 }
 
 // Process call related messages
@@ -3954,11 +4119,11 @@ void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 	    if (dpc > opc && !(msg->cic() % 2))
 		DROP_MSG("collision - dpc greater then opc for even CIC")
 	    // Accept the incoming request. Change the call's circuit
-	    reserveCircuit(circuit,call->cicRange(),SignallingCircuit::LockLocked);
+	    reserveCircuit(circuit,call->cicRange(),SignallingCircuit::LockLockedBusy);
 	    call->replaceCircuit(circuit);
 	    circuit = 0;
 	}
-	int flags = SignallingCircuit::LockLocked;
+	int flags = SignallingCircuit::LockLockedBusy;
 	// Q.764 2.8.2 - accept test calls even if the remote side is blocked
 	// Q.764 2.8.2.3 (xiv) - unblock remote side of the circuit for non-test calls
 	if ((msg->type() == SS7MsgISUP::CCR) ||
@@ -4023,11 +4188,19 @@ unsigned int getRangeAndStatus(NamedList& nl, unsigned int minRange, unsigned in
     return range;
 }
 
+// Utility: set invalid-ie reason and diagnostic
+static inline void setInvalidIE(unsigned char ie, const char*& reason, String& diagnostic)
+{
+    reason = "invalid-ie";
+    diagnostic.hexify(&ie,1);
+}
+
 // Process controller related messages
 // Q.764 2.1.12: stop waiting for SGM if message is not: COT,BLK,BLA,UBL,UBA,CGB,CGA,CGU,CUA,CQM,CQR
 void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 {
     const char* reason = 0;
+    String diagnostic;
     bool impl = true;
     bool stopSGM = false;
 
@@ -4089,14 +4262,22 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    break;
 	case SS7MsgISUP::UBA: // Unblocking Acknowledgement
 	case SS7MsgISUP::BLA: // Blocking Acknowledgement
-	    // Check for correct response: msg type, circuit code, maintenance request
-	    if (!m_lockNeed || msg->cic() != m_lockCicCode || m_lockMap.length() != 1 ||
-		(msg->type() == SS7MsgISUP::BLA) != m_blockReq) {
-		reason = "wrong-state-message";
-		break;
+	    {
+		bool block = (msg->type() == SS7MsgISUP::BLA);
+		SS7MsgISUP::Type type = block ? SS7MsgISUP::BLK : SS7MsgISUP::UBL;
+		SignallingMessageTimer* t = findPendingMessage(type,msg->cic(),true);
+		if (t) {
+		    SS7MsgISUP* m = static_cast<SS7MsgISUP*>(t->message());
+		    bool hw = m && m->params().getBoolValue("isup_pending_block_hwfail");
+		    DDebug(this,m ? DebugAll : DebugNote,"%s confirmed for pending cic=%u",
+			  block ? "BLK" : "UBL",msg->cic());
+		    TelEngine::destruct(t);
+		    blockCircuit(msg->cic(),block,false,hw,true,false,true);
+		    sendLocalLock();
+		}
+		else
+		    reason = "wrong-state-message";
 	    }
-	    blockCircuit(msg->cic(),m_blockReq,false,m_hwFailReq,true,false);
-	    sendLocalLock();
 	    break;
 	case SS7MsgISUP::CGA: // Circuit Group Blocking Acknowledgement
 	case SS7MsgISUP::CUA: // Circuit Group Unblocking Acknowledgement
@@ -4106,27 +4287,56 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		String* srcMap = 0;
 		bool hwFail = false;
 		unsigned int nCics = getRangeAndStatus(msg->params(),1,256,256,&srcMap,&hwFail);
-		if (!nCics) {
-		    reason = "invalid-ie";
+		unsigned int count = 0;
+		if (nCics) {
+		    // Max bits set to 1 should be 32
+		    for (unsigned int i = 0; i < srcMap->length() && count < 33; i++)
+			if ((*srcMap)[i] == '1')
+			    count++;
+		}
+		if (!nCics || count > 32) {
+		    setInvalidIE(SS7MsgISUP::RangeAndStatus,reason,diagnostic);
 		    break;
 		}
+		bool block = (msg->type() == SS7MsgISUP::CGA);
+		lock();
 		// Check for correct response: same msg type, circuit code, type indicator, circuit map
-		bool ok = (m_lockNeed && msg->cic() == m_lockCicCode && m_lockMap.length() == nCics &&
-		    m_blockReq == (msg->type() == SS7MsgISUP::CGA) && (m_hwFailReq == hwFail));
-		if (ok)
-		    for (unsigned int i = 0; i < m_lockMap.length(); i++)
-			if (m_lockMap.at(i) == '0' && srcMap->at(i) != '0') {
-			    ok = false;
+		SS7MsgISUP::Type type = block ? SS7MsgISUP::CGB : SS7MsgISUP::CGU;
+		SignallingMessageTimer* t = findPendingMessage(type,msg->cic());
+		SS7MsgISUP* m = t ? static_cast<SS7MsgISUP*>(t->message()) : 0;
+		String map;
+		while (m) {
+		    // Check type indicator
+		    bool hw = (m->params()["GroupSupervisionTypeIndicator"] == "hw-failure");
+		    if (hw != hwFail)
+			break;
+		    // Check map
+		    map = m->params()["RangeAndStatus.map"];
+		    if (!map)
+			break;
+		    if (map.length() != nCics) {
+			map.clear();
+			break;
+		    }
+		    for (unsigned int i = 0; i < map.length(); i++)
+			if (map[i] == '0' && (*srcMap)[i] != '0') {
+			    map.clear();
 			    break;
 			}
-		if (!ok) {
+		    break;
+		}
+		if (map) {
+		    DDebug(this,DebugAll,"%s confirmed for pending cic=%u",m->name(),msg->cic());
+		    m_pending.remove(t);
+		}
+		unlock();
+		if (!map) {
 		    reason = "wrong-state-message";
 		    break;
 		}
-		// TODO: Max bits set to 1 should be 32
-		for (unsigned int i = 0; i < m_lockMap.length(); i++)
-		    if (m_lockMap.at(i) != '0')
-			blockCircuit(msg->cic()+i,m_blockReq,false,hwFail,true,false);
+		for (unsigned int i = 0; i < map.length(); i++)
+		    if (map[i] != '0')
+			blockCircuit(msg->cic()+i,block,false,hwFail,true,false,true);
 		sendLocalLock();
 	    }
 	    break;
@@ -4265,7 +4475,7 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	Debug(this,impl?DebugNote:DebugStub,"'%s' with cic=%u: %s",
 	    msg->name(),msg->cic(),(reason ? reason : "Not implemented, ignoring"));
 	if (reason)
-	    transmitCNF(this,msg->cic(),label,true,reason);
+	    transmitCNF(this,msg->cic(),label,true,reason,diagnostic);
     }
 }
 
@@ -4283,7 +4493,7 @@ bool SS7ISUP::resetCircuit(unsigned int cic, bool remote, bool checkCall)
 	SS7ISUPCall* call = findCall(cic);
 	if (call) {
 	    SignallingCircuit* newCircuit = 0;
-	    reserveCircuit(newCircuit,call->cicRange(),SignallingCircuit::LockLocked);
+	    reserveCircuit(newCircuit,call->cicRange(),SignallingCircuit::LockLockedBusy);
 	    call->replaceCircuit(newCircuit);
 	}
     }
@@ -4294,6 +4504,10 @@ bool SS7ISUP::resetCircuit(unsigned int cic, bool remote, bool checkCall)
 	circuit->maintLock(false,true,0!=circuit->locked(SignallingCircuit::LockRemoteMaint),false);
 	m_verifyEvent = true;
     }
+    // Remove pending RSC. Reset 'Resetting' flag'
+    SignallingMessageTimer* m = findPendingMessage(SS7MsgISUP::RSC,cic,true);
+    TelEngine::destruct(m);
+    circuit->resetLock(SignallingCircuit::Resetting);
     if (m_rscCic && m_rscCic->code() == cic)
 	releaseCircuit(m_rscCic);
     else
@@ -4304,8 +4518,10 @@ bool SS7ISUP::resetCircuit(unsigned int cic, bool remote, bool checkCall)
 // Block/unblock a circuit
 // See Q.764 2.8.2
 bool SS7ISUP::blockCircuit(unsigned int cic, bool block, bool remote, bool hwFail,
-	bool changed, bool changedState)
+	bool changed, bool changedState, bool resetLocking)
 {
+    XDebug(this,DebugAll,"blockCircuit(%u,%u,%u,%u,%u,%u,%u)",
+	cic,block,remote,hwFail,changed,changedState,resetLocking);
     SignallingCircuit* circuit = circuits() ? circuits()->find(cic) : 0;
     if (!circuit)
 	return false;
@@ -4314,7 +4530,7 @@ bool SS7ISUP::blockCircuit(unsigned int cic, bool block, bool remote, bool hwFai
     SS7ISUPCall* call = findCall(cic);
     if (call && call->outgoing() && call->state() == SS7ISUPCall::Setup) {
 	SignallingCircuit* newCircuit = 0;
-	reserveCircuit(newCircuit,call->cicRange(),SignallingCircuit::LockLocked);
+	reserveCircuit(newCircuit,call->cicRange(),SignallingCircuit::LockLockedBusy);
 	call->replaceCircuit(newCircuit);
     }
 
@@ -4323,6 +4539,8 @@ bool SS7ISUP::blockCircuit(unsigned int cic, bool block, bool remote, bool hwFai
 	something = circuit->hwLock(block,remote,changed,changedState);
     else
 	something = circuit->maintLock(block,remote,changed,changedState);
+    if (resetLocking && !remote)
+	circuit->resetLock(hwFail ? SignallingCircuit::LockingHWFail : SignallingCircuit::LockingMaint);
 
     if (something) {
 	Debug(this,DebugNote,"%s %s side of circuit %u. Current flags 0x%x",
@@ -4345,105 +4563,186 @@ SS7ISUPCall* SS7ISUP::findCall(unsigned int cic)
     return 0;
 }
 
+// Utility used in sendLocalLock()
+// Check if a circuit has lock change flag set and can be locked (not busy)
+static inline bool canLock(SignallingCircuit* cic, bool hw)
+{
+    if (hw)
+	return cic->locked(SignallingCircuit::LockLocalHWFailChg) &&
+            !cic->locked(SignallingCircuit::LockingHWFail | SignallingCircuit::Resetting);
+    return cic->locked(SignallingCircuit::LockLocalMaintChg) &&
+	!cic->locked(SignallingCircuit::LockingMaint | SignallingCircuit::Resetting);
+}
+
+// Utility: check if a circuit needs lock and not currently locking
+static inline void checkNeedLock(SignallingCircuit* cic, bool& needLock)
+{
+    if (needLock)
+	return;
+    needLock = cic->locked(SignallingCircuit::LockLocalChg) &&
+        !cic->locked(SignallingCircuit::LockingHWFail | SignallingCircuit::LockingMaint);
+}
+
 // Send blocking/unblocking messages
 // Return false if no request was sent
-bool SS7ISUP::sendLocalLock(u_int64_t when)
+bool SS7ISUP::sendLocalLock(const Time& when)
 {
+    Lock lock(this);
     if (!circuits())
 	return false;
-
-    // Reset all lock related data
-    m_lockTimer.stop();
-    m_lockNeed = false;
-    m_lockCicCode = 0;
-    m_lockMap.clear();
-
-    // Peek a starting circuit whose local state changed
-    ObjList* o = circuits()->circuits().skipNull();
-    SignallingCircuitSpan* span = 0;
-    for (; o; o = o->skipNext()) {
-	SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
-	if (!cic->locked(SignallingCircuit::LockLocalChg))
-	    continue;
-	if (cic->locked(SignallingCircuit::LockLocalHWFailChg)) {
-	    m_hwFailReq = true;
-	    m_blockReq = (0 != cic->locked(SignallingCircuit::LockLocalHWFail));
-	}
-	else if (cic->locked(SignallingCircuit::LockLocalMaintChg)) {
-	    m_hwFailReq = false;
-	    m_blockReq = (0 != cic->locked(SignallingCircuit::LockLocalMaint));
-	}
-	else
-	    continue;
-	m_lockNeed = true;
-	m_lockCicCode = cic->code();
-	span = cic->span();
-	o = o->skipNext();
-	break;
-    }
-    if (!m_lockNeed)
-	return false;
-
-    // If remote doesn't support group block/unblock just send BLK/UBL
-    if (!m_lockGroup)
-	o = 0;
-    // Check if we can pick a range of circuits within the same span
-    //  with the same operation to do
-    // Q.763 3.43: range can be 2..256. Bit: 0-no indication 1-block/unblock.
-    // Max bits set to 1 must be 32
-    char d[256];
-    d[0] = '1';
-    unsigned int cics = 1;
-    unsigned int lockRange = 1;
-    for (; o && cics < 32 && lockRange < 256; o = o->skipNext()) {
-	SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
-	// Presume all circuits belonging to the same span to follow each other in the list
-	if (span != cic->span())
+    bool needLock = false;
+    ObjList msgs;
+    while (true) {
+	bool hwReq = false;
+	bool lockReq = false;
+	unsigned int code = 0;
+	int locking = 0;
+	// Peek a starting circuit whose local state changed
+	ObjList* o = circuits()->circuits().skipNull();
+	SignallingCircuitSpan* span = 0;
+	for (; o; o = o->skipNext()) {
+	    SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
+	    if (canLock(cic,true)) {
+		hwReq = true;
+		lockReq = (0 != cic->locked(SignallingCircuit::LockLocalHWFail));
+		locking = SignallingCircuit::LockingHWFail;
+	    }
+	    else if (canLock(cic,false)) {
+		hwReq = false;
+		lockReq = (0 != cic->locked(SignallingCircuit::LockLocalMaint));
+		locking = SignallingCircuit::LockingMaint;
+	    }
+	    else {
+		checkNeedLock(cic,needLock);
+		continue;
+	    }
+	    code = cic->code();
+	    span = cic->span();
+	    cic->setLock(locking);
+	    o = o->skipNext();
 	    break;
-	// Make sure the circuit codes are sequential
-	if ((m_lockCicCode + lockRange) != cic->code())
-	    continue;
-	// Add circuit to map
-	// Circuit must have the same lock type and flags as the base circuit's
-	bool ok = false;
-	if (m_hwFailReq)
-	    ok = (0 != cic->locked(SignallingCircuit::LockLocalHWFailChg)) &&
-		 (m_blockReq == (0 != cic->locked(SignallingCircuit::LockLocalHWFail)));
-	else
-	    ok = (0 != cic->locked(SignallingCircuit::LockLocalMaintChg)) &&
-		 (m_blockReq == (0 != cic->locked(SignallingCircuit::LockLocalMaint)));
-	if (ok) {
-	    d[lockRange] = '1';
-	    cics++;
 	}
-	else
-	    d[lockRange] = '0';
-	lockRange++;
+	if (!code)
+	    break;
+	// If remote doesn't support group block/unblock just send BLK/UBL
+	if (!m_lockGroup)
+	    o = 0;
+	// Check if we can pick a range of circuits within the same span
+	//  with the same operation to do
+	// Q.763 3.43: range can be 2..256. Bit: 0-no indication 1-block/unblock.
+	// Max bits set to 1 must be 32
+	char d[256];
+	d[0] = '1';
+	unsigned int cics = 1;
+	unsigned int lockRange = 1;
+	int flag = hwReq ? SignallingCircuit::LockLocalHWFail : SignallingCircuit::LockLocalMaint;
+	for (; o && cics < 32 && lockRange < 256; o = o->skipNext()) {
+	    SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
+	    // Presume all circuits belonging to the same span to follow each other in the list
+	    if (span != cic->span())
+		break;
+	    // Make sure the circuit codes are sequential
+	    if ((code + lockRange) != cic->code()) {
+		checkNeedLock(cic,needLock);
+		continue;
+	    }
+	    // Add circuit to map. Skip busy circuits
+	    // Circuit must have the same lock type and flags as the base circuit's
+	    if (canLock(cic,hwReq) && (lockReq == (0 != cic->locked(flag)))) {
+		cic->setLock(locking);
+		d[lockRange] = '1';
+		cics++;
+	    }
+	    else {
+		checkNeedLock(cic,needLock);
+		d[lockRange] = '0';
+	    }
+	    lockRange++;
+	}
+	if (cics == 1)
+	    lockRange = 1;
+	// Build and send the message
+	// Don't send individual circuit blocking for HW failure (they are supposed
+	//  to be sent for maintenance reason)
+	String map(d,lockRange);
+	SS7MsgISUP* msg = 0;
+	SignallingMessageTimer* t = 0;
+	if (m_lockGroup && (map.length() > 1 || hwReq)) {
+	    msg = new SS7MsgISUP((lockReq ? SS7MsgISUP::CGB : SS7MsgISUP::CGU),code);
+	    msg->params().addParam("GroupSupervisionTypeIndicator",
+		(hwReq ? "hw-failure" : "maintenance"));
+	    msg->params().addParam("RangeAndStatus",String(map.length()));
+	    msg->params().addParam("RangeAndStatus.map",map);
+	    if (lockReq)
+		t = new SignallingMessageTimer(m_t18Interval,m_t19Interval);
+	    else
+		t = new SignallingMessageTimer(m_t20Interval,m_t21Interval);
+	}
+	else {
+	    msg = new SS7MsgISUP(lockReq ? SS7MsgISUP::BLK : SS7MsgISUP::UBL,code);
+	    // Remember HW/maintenance flag
+	    if (hwReq)
+		msg->params().addParam("isup_pending_block_hwfail",String::boolText(true));
+	    if (lockReq)
+		t = new SignallingMessageTimer(m_t12Interval,m_t13Interval);
+	    else
+		t = new SignallingMessageTimer(m_t14Interval,m_t15Interval);
+	}
+	t->message(msg);
+	m_pending.add(t);
+	msg->ref();
+	msgs.append(msg)->setDelete(false);
     }
-    if (cics == 1)
-	lockRange = 1;
+    // Restart timer if we still have cics needing lock
+    DDebug(this,DebugAll,"%s circuit locking timer",needLock ? "Starting" : "Stopping");
+    if (needLock)
+	m_lockTimer.start(when.msec());
+    else
+	m_lockTimer.stop();
+    lock.drop();
+    return transmitMessages(msgs);
+}
 
-    // Build and send the message
-    // Don't send individual circuit blocking for HW failure (they are supposed
-    //  to be sent for maintenance reason)
-    SS7MsgISUP* msg = 0;
-    m_lockMap.assign(d,lockRange);
-    if (m_lockGroup && (m_lockMap.length() > 1 || m_hwFailReq)) {
-	msg = new SS7MsgISUP((m_blockReq ? SS7MsgISUP::CGB : SS7MsgISUP::CGU),
-	    m_lockCicCode);
-	msg->params().addParam("GroupSupervisionTypeIndicator",
-	    (m_hwFailReq ? "hw-failure" : "maintenance"));
-	msg->params().addParam("RangeAndStatus",String(m_lockMap.length()));
-	msg->params().addParam("RangeAndStatus.map",m_lockMap);
+// Fill label from local/remote point codes
+bool SS7ISUP::setLabel(SS7Label& label, unsigned int cic)
+{
+    Lock lock(this);
+    if (!(m_remotePoint && m_defPoint))
+	return false;
+    label.assign(m_type,*m_remotePoint,*m_defPoint,
+	(m_defaultSls == SlsCircuit) ? cic : m_sls);
+    return true;
+}
+
+// Retrieve a pending message
+SignallingMessageTimer* SS7ISUP::findPendingMessage(SS7MsgISUP::Type type, unsigned int cic,
+    bool remove)
+{
+    Lock lock(this);
+    for (ObjList* o = m_pending.skipNull(); o; o = o->skipNext()) {
+	SignallingMessageTimer* m = static_cast<SignallingMessageTimer*>(o->get());
+	SS7MsgISUP* msg = static_cast<SS7MsgISUP*>(m->message());
+	if (msg && msg->type() == type && msg->cic() == cic) {
+	    if (remove)
+		o->remove(false);
+	    return m;
+	}
     }
-    else {
-	msg = new SS7MsgISUP((m_blockReq ? SS7MsgISUP::BLK : SS7MsgISUP::UBL),
-	    m_lockCicCode);
+    return 0;
+}
+
+// Transmit a list of messages. Return true if at least 1 message was sent
+bool SS7ISUP::transmitMessages(ObjList& list)
+{
+    ObjList* o = list.skipNull();
+    if (!o)
+	return false;
+    for (; o; o = o->skipNext()) {
+	SS7MsgISUP* msg = static_cast<SS7MsgISUP*>(o->get());
+    	SS7Label label;
+	setLabel(label,msg->cic());
+	transmitMessage(msg,label,false);
     }
-    SS7Label label(m_type,*m_remotePoint,*m_defPoint,
-	((m_defaultSls == SlsCircuit) ? m_lockCicCode : m_sls));
-    transmitMessage(msg,label,false);
-    m_lockTimer.start(when);
     return true;
 }
 

@@ -33,8 +33,11 @@ using namespace TelEngine;
 TokenDict SignallingCircuit::s_lockNames[] = {
     {"localhw",            LockLocalHWFail},
     {"localmaint",         LockLocalMaint},
+    {"lockinghw",          LockingHWFail},
+    {"lockingmaint",       LockingMaint},
     {"localhwchanged",     LockLocalHWFailChg},
     {"localmaintchanged",  LockLocalMaintChg},
+    {"resetting",          Resetting},
     {"remotehw",           LockRemoteHWFail},
     {"remotemaint",        LockRemoteMaint},
     {"remotehwchanged",    LockRemoteHWFailChg},

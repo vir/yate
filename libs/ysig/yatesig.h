@@ -70,6 +70,8 @@ class SignallingInterface;               // Abstract digital signalling interfac
 class SignallingReceiver;                // Abstract Layer 2 packet data receiver
 struct SignallingFlags;                  // Description of parameter flags
 class SignallingUtils;                   // Library wide services and data provider
+class SignallingMessageTimer;            // A pending signalling message
+class SignallingMessageTimerList;        // A pending signalling message list
 // Analog lines
 class AnalogLine;                        // An analog line
 class AnalogLineEvent;                   // A single analog line related event
@@ -402,6 +404,13 @@ public:
      */
     inline u_int64_t interval() const
 	{ return m_interval; }
+
+    /**
+     * Get the time this timer will fire (timeout)
+     * @return The timeout (fire) time
+     */
+    inline u_int64_t fireTime() const
+	{ return m_timeout; }
 
     /**
      * Start the timer if enabled (interval is positive)
@@ -1492,8 +1501,11 @@ public:
     enum LockFlags {
 	LockLocalHWFail       = 0x0001,  // Local side of the circuit is locked due to HW failure
 	LockLocalMaint        = 0x0002,  // Local side of the circuit is locked for maintenance
+	LockingHWFail         = 0x0004,  // Circuit (un)lock due to HW failure in progress
+	LockingMaint          = 0x0008,  // Circuit (un)lock due to maintenance in progress
 	LockLocalHWFailChg    = 0x0010,  // Local HW failure flag changed
 	LockLocalMaintChg     = 0x0020,  // Local maintenance flag changed
+	Resetting             = 0x0040,  // Circuit is beeing reset
 	LockRemoteHWFail      = 0x0100,  // Remote side of the circuit is locked due to HW failure
 	LockRemoteMaint       = 0x0200,  // Remote side of the circuit is locked for maintenance
 	LockRemoteHWFailChg   = 0x1000,  // Remote HW failure flag changed
@@ -1502,6 +1514,8 @@ public:
 	LockLocal             = LockLocalHWFail | LockLocalMaint,
 	LockRemote            = LockRemoteHWFail | LockRemoteMaint,
 	LockLocked            = LockLocal | LockRemote,
+	LockBusy              = LockingHWFail | LockingMaint | Resetting,
+	LockLockedBusy        = LockLocked | LockBusy,
 	LockLocalChg          = LockLocalHWFailChg | LockLocalMaintChg,
 	LockRemoteChg         = LockRemoteHWFailChg | LockRemoteMaintChg,
 	LockChanged           = LockLocalChg | LockRemoteChg,
@@ -2684,6 +2698,112 @@ public:
 
 private:
     static TokenDict* s_dictCCITT[5];
+};
+
+/**
+ * This class holds a signalling message along with timeout value(s)
+ * @short A pending signalling message
+ */
+class YSIG_API SignallingMessageTimer : public GenObject, public SignallingTimer
+{
+public:
+    /**
+     * Constructor
+     * @param interval Operation timeout interval
+     * @param global Operation global timeout interval
+     */
+    inline SignallingMessageTimer(u_int64_t interval, u_int64_t global = 0)
+	: SignallingTimer(interval),
+	  m_globalTimer(global), m_msg(0)
+	{ }
+
+    /**
+     * Destructor. Release data
+     */
+    virtual ~SignallingMessageTimer()
+	{ TelEngine::destruct(m_msg); }
+
+    /**
+     * Retrieve stored signaling message
+     * @return Pointer to the stored message
+     */
+    inline SignallingMessage* message() const
+	{ return m_msg; }
+
+    /**
+     * Set a new message
+     * @param msg Message to store in the timer
+     */
+    inline void message(SignallingMessage* msg)
+	{ m_msg = msg; }
+
+
+    /**
+     * Get access to the global timer
+     * @return A reference to the global timer
+     */
+    inline SignallingTimer& global()
+	{ return m_globalTimer; }
+
+    /**
+     * Get const access to the global timer
+     * @return A const reference to the global timer
+     */
+    inline const SignallingTimer& global() const
+	{ return m_globalTimer; }
+
+    /**
+     * Get the time this message timer will timeout
+     * @return The time this message timer will timeout
+     */
+    inline u_int64_t fireTime() const {
+	if (!m_globalTimer.started() || m_globalTimer.fireTime() > SignallingTimer::fireTime())
+	    return SignallingTimer::fireTime();
+	return m_globalTimer.fireTime();
+    }
+
+protected:
+    SignallingTimer m_globalTimer;
+    SignallingMessage* m_msg;
+};
+
+/**
+ * This class holds pending signalling messages.
+ * The list will keep objects in timeout ascending order
+ * @short A pending signalling message list
+ */
+class YSIG_API SignallingMessageTimerList : public ObjList
+{
+public:
+    /**
+     * Constructor
+     */
+    inline SignallingMessageTimerList()
+	{ }
+
+    /**
+     * Add a pending operation to the list. Start its timer
+     * @param interval Operation timeout interval
+     * @param when Current time
+     * @return Added operation or 0 on failure
+     */
+    inline SignallingMessageTimer* add(u_int64_t interval, const Time& when = Time())
+	{ return interval ? add(new SignallingMessageTimer(interval),when) : 0; }
+
+    /**
+     * Add a pending operation to the list. Start its timer
+     * @param m The Message Timer to add to the pending list
+     * @param when Current time
+     * @return Added message
+     */
+    SignallingMessageTimer* add(SignallingMessageTimer* m, const Time& when = Time());
+
+    /**
+     * Check if the first operation timed out. Remove it from list before returning it
+     * @param when Current time
+     * @return SignallingMessageTimer pointer or 0 if no timeout occured
+     */
+    SignallingMessageTimer* timeout(const Time& when = Time());
 };
 
 /**
@@ -7096,14 +7216,16 @@ protected:
 
     /**
      * Release call. Stop timers. Send a RLC (Release Complete) message if it should terminate gracefully
-     * Decrease the object's refence count and generate a Release event if not final
+     * Decrease the object's referrence count and generate a Release event if not final
      * This method is thread safe
      * @param final True if called from destructor
      * @param msg Received message with parameters if any
      * @param reason Optional release reason
+     * @param timeout True if this is method is called due to T5 timer expiry
      * @return SignallingEvent pointer or 0
      */
-    SignallingEvent* releaseComplete(bool final, SS7MsgISUP* msg = 0, const char* reason = 0);
+    SignallingEvent* releaseComplete(bool final, SS7MsgISUP* msg = 0, const char* reason = 0,
+	bool timeout = false);
 
     /**
      * Replace the circuit reserved for this call. Release the already reserved circuit.
@@ -7144,6 +7266,8 @@ private:
     bool transmitIAM();
     // Transmit SAM digits
     bool transmitSAM(const char* extra = 0);
+    // (Re)transmit REL. Restart initial release timer if retransmission. Remember sls
+    bool transmitREL(bool retrans = false, const Time& time = Time());
     // Check if the circuit needs continuity testing
     bool needsTesting(const SS7MsgISUP* msg);
     // Stop waiting for a SGM (Segmentation) message. Copy parameters to the pending segmented message if sgm is valid.
@@ -7436,6 +7560,16 @@ protected:
 	SignallingCall* call = 0);
 
     /**
+     * Initiate circuit reset. The circuit must be already reserved
+     * This method is thread safe
+     * @param cic The circuit to reset. Its referrence counter will be decreased and
+     *  the pointer will be zeroed
+     * @param timer Ellapsed timer
+     * @return True if the circuit reset was initiated
+     */
+    bool startCircuitReset(SignallingCircuit*& cic, const String& timer);
+
+    /**
      * Length of the Circuit Identification Code in octets
      */
     unsigned int m_cicLen;
@@ -7458,12 +7592,22 @@ private:
     // Block/unblock a circuit side (local or remote)
     // Return false if the given circuit doesn't exist
     bool blockCircuit(unsigned int cic, bool block, bool remote, bool hwFail,
-	bool changed, bool changedState);
+	bool changed, bool changedState, bool resetLocking = false);
     // Find a call by its circuit identification code
     SS7ISUPCall* findCall(unsigned int cic);
-    // Send blocking/unblocking messages
+    // Send blocking/unblocking messages.
+    // Restart the re-check timer if there is any (un)lockable, not sent cic
     // Return false if no request was sent
-    bool sendLocalLock(u_int64_t when = Time::msecNow());
+    bool sendLocalLock(const Time& when = Time());
+    // Fill label from local/remote point codes
+    // This method is thread safe
+    // Return a true if local and remote point codes are valid
+    bool setLabel(SS7Label& label, unsigned int cic);
+    // Retrieve a pending message
+    SignallingMessageTimer* findPendingMessage(SS7MsgISUP::Type type, unsigned int cic,
+	bool remove = false);
+    // Transmit a list of messages. Return true if at least 1 message was sent
+    bool transmitMessages(ObjList& list);
 
     SS7PointCode::Type m_type;           // Point code type of this call controller
     ObjList m_pointCodes;                // Point codes serviced by this call controller
@@ -7482,6 +7626,18 @@ private:
     String m_format;                     // Default format
     String m_continuity;                 // Continuity test type
     bool m_l3LinkUp;                     // Flag indicating the availability of a Layer3 data link
+    u_int64_t m_t1Interval;              // Q.764 T1 timer interval
+    u_int64_t m_t5Interval;              // Q.764 T5 timer interval
+    u_int64_t m_t12Interval;             // Q.764 T12 BLK timer interval
+    u_int64_t m_t13Interval;             // Q.764 T13 BLK global timer interval
+    u_int64_t m_t14Interval;             // Q.764 T14 UBL timer interval
+    u_int64_t m_t15Interval;             // Q.764 T15 UBL global timer interval
+    u_int64_t m_t17Interval;             // Q.764 T17 timer interval
+    u_int64_t m_t18Interval;             // Q.764 T18 CGB timer interval
+    u_int64_t m_t19Interval;             // Q.764 T19 CGB global timer interval
+    u_int64_t m_t20Interval;             // Q.764 T20 CGU timer interval
+    u_int64_t m_t21Interval;             // Q.764 T21 CGU global timer interval
+    SignallingMessageTimerList m_pending;// Pending messages (RSC ...)
     // Remote User Part test
     SignallingTimer m_uptTimer;          // Timer for UPT
     bool m_userPartAvail;                // Flag indicating the remote User Part availability
@@ -7492,13 +7648,8 @@ private:
     u_int32_t m_rscInterval;             // Saved reset interval
     u_int32_t m_rscSpeedup;              // Circuits left for speedup
     // Blocking/unblocking circuits
-    SignallingTimer m_lockTimer;         // Request timeout
+    SignallingTimer m_lockTimer;         // Timer used to re-check local lock
     bool m_lockGroup;                    // Allow sending requests for a group
-    bool m_lockNeed;                     // Flag used to signal that there are circuits whose lock state changed
-    bool m_hwFailReq;                    // HW failure/maintenance block/unblock sent
-    bool m_blockReq;                     // Block/unblock req. sent
-    unsigned int m_lockCicCode;          // Current (un)blocking cic code
-    String m_lockMap;                    // The sent circuit map (contains 1 element for single circuit request)
     // Debug flags
     bool m_printMsg;                     // Print messages to output
     bool m_extendedDebug;                // Extended debug flag

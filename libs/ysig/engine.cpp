@@ -1040,4 +1040,44 @@ unsigned int* SignallingUtils::parseUIntArray(const String& source,
     return 0;
 }
 
+
+/*
+ * SignallingMessageTimerList
+ */
+// Add a pending operation to the list. Start its timer
+SignallingMessageTimer* SignallingMessageTimerList::add(SignallingMessageTimer* m,
+    const Time& when)
+{
+    if (!m)
+	return 0;
+    m->stop();
+    m->start(when.msec());
+    if (m->global().interval() && !m->global().started())
+	m->global().start(when.msec());
+    ObjList* ins = skipNull();
+    for (; ins; ins = ins->skipNext()) {
+	SignallingMessageTimer* crt = static_cast<SignallingMessageTimer*>(ins->get());
+	if (m->fireTime() < crt->fireTime())
+	    break;
+    }
+    if (!ins)
+	append(m);
+    else
+	ins->insert(m);
+    return m;
+}
+
+// Check if the first operation timed out
+SignallingMessageTimer* SignallingMessageTimerList::timeout(const Time& when)
+{
+    ObjList* o = skipNull();
+    if (!o)
+	return 0;
+    SignallingMessageTimer* m = static_cast<SignallingMessageTimer*>(o->get());
+    if (!(m->timeout(when.msec()) || m->global().timeout(when.msec())))
+	return 0;
+    o->remove(false);
+    return m;
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

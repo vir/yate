@@ -864,6 +864,31 @@ void SignallingUtils::encodeFlags(const SignallingComponent* comp,
     TelEngine::destruct(list);
 }
 
+// Encode a comma separated list of signalling flags
+unsigned int SignallingUtils::encodeFlags(const SignallingComponent* comp, const String& flags,
+    const SignallingFlags* dict, const char* paramName)
+{
+    if (!dict)
+	return 0;
+    unsigned int v = 0;
+    ObjList* l = flags.split(',',false);
+    for (ObjList* o = l->skipNull(); o; o = o->skipNext()) {
+	const String* s = static_cast<const String*>(o->get());
+	for (const SignallingFlags* d = dict; d->mask; d++) {
+	    if (*s == d->name) {
+		if (v & d->mask) {
+		    Debug(comp,DebugMild,"Flag %s. %s overwriting bits 0x%x",
+			paramName,d->name,v & d->mask);
+		    v &= d->mask;
+		}
+		v |= d->value;
+	    }
+	}
+    }
+    TelEngine::destruct(l);
+    return v;
+}
+
 // Q.850 2.1
 bool SignallingUtils::encodeCause(const SignallingComponent* comp, DataBlock& buf,
 	const NamedList& params, const char* prefix, bool isup, bool fail)

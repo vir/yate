@@ -155,6 +155,13 @@ static const SignallingFlags s_flags_paramcompat[] = {
     { 0, 0, 0 }
 };
 
+// Application Transport Parameter instruction indicators (Q.763 3.82)
+static const SignallingFlags s_flags_apt_indicators[] = {
+    { 0x01, 0x01, "release" },           // Release call indicator
+    { 0x02, 0x02, "cnf" },               // Send CNF notification
+    { 0, 0, 0 }
+};
+
 // SLS special values on outbound calls
 static const TokenDict s_dict_callSls[] = {
     { "auto", SS7ISUP::SlsAuto    }, // Let Layer3 deal with it
@@ -430,6 +437,42 @@ static bool decodeCause(const SS7ISUP* isup, NamedList& list, const IsupParam* p
     return SignallingUtils::decodeCause(isup,list,buf,len,prefix+param->name,true);
 }
 
+// Decoder for application transport parameter
+static bool decodeAPT(const SS7ISUP* isup, NamedList& list, const IsupParam* param,
+    const unsigned char* buf, unsigned int len, const String& prefix)
+{
+    if (len < 4) {
+	if (len == 3)
+	    Debug(isup,DebugNote,"Received '%s' with no data",param->name);
+	return false;
+    }
+    // Field extension on more then 1 octet is not supported
+    if (0 == (buf[0] & buf[1] & buf[2] & 0x80)) {
+	Debug(isup,DebugNote,"Received %s with unsupported extension bits set to 0",
+	    param->name);
+	return false;
+    }
+    // Segmentation is not supported
+    unsigned char si = (buf[2] & 0x40);
+    unsigned char segments = (buf[2] & 0x3f);
+    if (!si || segments) {
+	Debug(isup,DebugNote,"Received unsupported segmented %s (si=%u segments=%u)",
+	    param->name,si,segments);
+	return false;
+    }
+    len -= 3;
+    String preName(prefix + param->name);
+    String context((int)(buf[0] & 0x7f));
+    list.addParam(preName,context);
+    preName << "." << context;
+    // Application context identifier
+    SignallingUtils::dumpData(isup,list,preName,buf + 3,len);
+    // Instruction indicators
+    unsigned char inds = (buf[1] & 0x7f);
+    SignallingUtils::decodeFlags(isup,list,preName + ".indicators",s_flags_apt_indicators,&inds,1);
+    return true;
+}
+
 // Decoder for generic name
 static bool decodeName(const SS7ISUP* isup, NamedList& list, const IsupParam* param,
     const unsigned char* buf, unsigned int len, const String& prefix)
@@ -485,25 +528,8 @@ static unsigned char encodeFlags(const SS7ISUP* isup, SS7MSU& msu, unsigned char
     if (!(n && param->data))
 	return 0;
     unsigned int v = 0;
-    if (val) {
-	ObjList* lst = val->split(',',false);
-	ObjList* p = lst->skipNull();
-	for (; p; p = p->skipNext()) {
-	    const String* s = static_cast<const String*>(p->get());
-	    const SignallingFlags* flags = (const SignallingFlags*)param->data;
-	    for (; flags->mask; flags++) {
-		if (*s == flags->name) {
-		    if (v & flags->mask) {
-			Debug(isup,DebugMild,"Flag %s.%s overwriting bits 0x%x",
-			    param->name,flags->name,v & flags->mask);
-			v &= flags->mask;
-		    }
-		    v |= flags->value;
-		}
-	    }
-	}
-	TelEngine::destruct(lst);
-    }
+    if (val)
+	v = SignallingUtils::encodeFlags(isup,*val,(const SignallingFlags*)param->data,param->name);
     else {
 	// locate the defaults
 	const SignallingFlags* flags = (const SignallingFlags*)param->data;
@@ -769,6 +795,62 @@ static unsigned char encodeCause(const SS7ISUP* isup, SS7MSU& msu,
 	return 0;
     msu += tmp;
     return tmp.length() - 1;
+}
+
+// Encoder for application transport parameter
+static unsigned char encodeAPT(const SS7ISUP* isup, SS7MSU& msu,
+    unsigned char* buf, const IsupParam* param, const NamedString* val,
+    const NamedList* extra, const String& prefix)
+{
+    if (!param)
+	return 0;
+    if (TelEngine::null(val)) {
+	if (val)
+	    Debug(isup,DebugNote,"Failed to encode empty %s",val->name().c_str());
+	return 0;
+    }
+    int context = val->toInteger(-1);
+    if (context < 0 || context > 127) {
+	// Assume binary parameter representation
+	DataBlock data;
+	if (!(data.unHexify(val->c_str(),val->length(),' ') && data.length()) ||
+	    data.length() < 4 || data.length() > 254) {
+	    Debug(isup,DebugNote,"Failed to encode invalid %s=%s",
+		param->name,val->c_str());
+	    return 0;
+	}
+	unsigned char len = data.length();
+	msu.append(&len,1);
+	msu += data;
+	return 1 + data.length();
+    }
+    String preName(prefix + param->name);
+    preName << "." << context;
+    unsigned char hdr[4] = {0,0x80 | context,0x80,0xc0};  // c0: extension bit set, new sequence bit set
+    // Retrieve data. Make sure all bytes are correct and final length don't
+    // overflow our return value
+    DataBlock data;
+    const String& tmp = extra ? (*extra)[preName] : String::empty();
+    if (!(data.unHexify(tmp.c_str(),tmp.length(),' ') && data.length()) ||
+	data.length() > (255 - sizeof(hdr))) {
+	Debug(isup,DebugNote,"Failed to encode invalid %s=%s",
+	    param->name,tmp.c_str());
+	return 0;
+    }
+    String indName(preName + ".indicators");
+    const String* inds = extra ? extra->getParam(indName) : 0;
+    if (inds) {
+	unsigned int v = SignallingUtils::encodeFlags(isup,*inds,s_flags_apt_indicators,indName);
+	hdr[2] |= (v & 0x7f);
+    }
+    else {
+	// Set default indicators value: send CNF, no call release
+	hdr[2] |= 0x02;
+    }
+    hdr[0] = data.length() + 3;
+    msu.append(hdr,sizeof(hdr));
+    msu += data;
+    return hdr[0];
 }
 
 // Encoder for Generic Name
@@ -1106,7 +1188,7 @@ static const IsupParam s_paramDefs[] = {
     MAKE_PARAM(RedirectBackwardInformation,    0,0,             0,             0),                    // 3.100
     MAKE_PARAM(NumberPortabilityInformation,   0,decodeNotif,   encodeNotif,   s_dict_portability),   // 3.101
     // No references
-    MAKE_PARAM(ApplicationTransport,           0,0,             0,             0),                    //
+    MAKE_PARAM(ApplicationTransport,           0,decodeAPT,     encodeAPT,     0),                    // 3.82
     MAKE_PARAM(BusinessGroup,                  0,0,             0,             0),                    //
     MAKE_PARAM(CallModificationIndicators,     0,0,             0,             0),                    //
     MAKE_PARAM(CarrierIdentification,          0,0,             0,             0),                    //
@@ -1343,6 +1425,13 @@ static const MsgParams s_common_params[] = {
 	SS7MsgISUP::EndOfParameters
 	}
     },
+    // application transport
+    { SS7MsgISUP::APM, true,
+	{
+	SS7MsgISUP::EndOfParameters,
+	SS7MsgISUP::EndOfParameters
+	}
+    },
     { SS7MsgISUP::Unknown, false, { SS7MsgISUP::EndOfParameters } }
 };
 
@@ -1507,6 +1596,34 @@ static const MsgParams* getIsupParams(SS7PointCode::Type type, SS7MsgISUP::Type 
 	    return params;
     }
     return 0;
+}
+
+// Hexify a list of isup parameter values/names
+static void hexifyIsupParams(String& s, const String& list)
+{
+    if (!list)
+	return;
+    ObjList* l = list.split(',',false);
+    unsigned int len = l->count();
+    if (len) {
+	unsigned char* buf = new unsigned char[len];
+	len = 0;
+	for (ObjList* o = l->skipNull(); o; o = o->skipNext()) {
+	    String* str = static_cast<String*>(o->get());
+	    int val = str->toInteger(-1);
+	    if (val < 0) {
+		const IsupParam* p = getParamDesc(*str);
+		if (p)
+		    buf[len++] = (unsigned char)p->type;
+	    }
+	    else if (val < 256)
+		buf[len++] = (unsigned char)val;
+	}
+	if (len)
+	    s.hexify(buf,len,' ');
+	delete[] buf;
+    }
+    TelEngine::destruct(l);
 }
 
 // Check if an unhandled messages has only optional parameters
@@ -1842,6 +1959,9 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 		case SS7MsgISUP::SGM:
 		    DDebug(isup(),DebugInfo,"Call(%u). Received late 'SGM' [%p]",id(),this);
 		    break;
+		case SS7MsgISUP::APM:
+		    m_lastEvent = new SignallingEvent(SignallingEvent::Generic,msg,this);
+		    break;
 		default: ;
 		    Debug(isup(),DebugStub,"Call(%u). Unhandled '%s' message in getEvent() [%p]",
 			id(),msg->name(),this);
@@ -1975,6 +2095,19 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 	case SignallingEvent::Release:
 	    if (validMsgState(true,SS7MsgISUP::REL))
 		result = release(event);
+	    break;
+	case SignallingEvent::Generic:
+	    if (event->message()) {
+		const String& oper = event->message()->params()["operation"];
+		if (oper != "transport")
+		    break;
+		if (!validMsgState(true,SS7MsgISUP::APM))
+		    break;
+		SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::APM,id());
+		copyUpper(m->params(),event->message()->params());
+		mylock.drop();
+		result = transmitMessage(m);
+	    }
 	    break;
 	case SignallingEvent::Info:
 	//case SignallingEvent::Message:
@@ -2198,6 +2331,7 @@ bool SS7ISUPCall::validMsgState(bool send, SS7MsgISUP::Type type)
 		break;
 	    return true;
 	case SS7MsgISUP::SGM:    // Segmentation
+	case SS7MsgISUP::APM:    // Application Transport
 	    return true;
 	default:
 	    handled = false;
@@ -3226,7 +3360,7 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
     }
     msg.addParam(prefix+"message-type",msgName);
 
-    String unsupported;
+    ObjList unsupported;
     const SS7MsgISUP::Parameters* plist = params->params;
     SS7MsgISUP::Parameters ptype;
     // first decode any mandatory fixed parameters the message should have
@@ -3247,7 +3381,7 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	}
 	if (!decodeParam(this,msg,param,paramPtr,param->size,prefix)) {
 	    Debug(this,DebugWarn,"Could not decode fixed ISUP parameter %s [%p]",param->name,this);
-	    unsupported.append(param->name,",");
+	    unsupported.append(new String(param->name));
 	}
 	paramPtr += param->size;
 	paramLen -= param->size;
@@ -3279,7 +3413,7 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	if (!decodeParam(this,msg,param,paramPtr+offs+1,size,prefix)) {
 	    Debug(this,DebugWarn,"Could not decode variable ISUP parameter %s (size=%u) [%p]",
 		param->name,size,this);
-	    unsupported.append(param->name,",");
+	    unsupported.append(new String(param->name));
 	}
 	paramPtr++;
 	paramLen--;
@@ -3321,11 +3455,11 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 		const IsupParam* param = getParamDesc(ptype);
 		if (!param) {
 		    Debug(this,DebugMild,"Unknown optional ISUP parameter 0x%02x (size=%u) [%p]",ptype,size,this);
-		    unsupported.append(String((unsigned int)ptype),",");
+		    unsupported.append(new String((unsigned int)ptype));
 		}
 		else if (!decodeParam(this,msg,param,paramPtr,size,prefix)) {
 		    Debug(this,DebugWarn,"Could not decode optional ISUP parameter %s (size=%u) [%p]",param->name,size,this);
-		    unsupported.append(param->name,",");
+		    unsupported.append(new String(param->name));
 		}
 		paramPtr += size;
 		paramLen -= size;
@@ -3334,8 +3468,39 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	else
 	    paramLen = 0;
     }
-    if (unsupported)
-	msg.setParam(prefix+"parameters-unsupported",unsupported);
+    String pCompat(prefix + "ParameterCompatInformation.");
+    String unsupp;
+    String release;
+    String cnf;
+    for (ObjList* o = unsupported.skipNull(); o; o = o->skipNext()) {
+	String* pName = static_cast<String*>(o->get());
+	const String& flags = msg[pCompat + *pName];
+	if (!flags)
+	    continue;
+	bool relCall = false;
+	bool sendCnf = false;
+	ObjList* l = flags.split(',',false);
+	for (ObjList* ol = l->skipNull(); ol; ol = ol->skipNext()) {
+	    String* s = static_cast<String*>(ol->get());
+	    if (*s == "release")
+		relCall = true;
+	    else if (*s == "cnf")
+		sendCnf = true;
+	}
+	TelEngine::destruct(l);
+	if (relCall)
+	    release.append(*pName,",");
+	else if (sendCnf)
+	    cnf.append(*pName,",");
+	else
+	    unsupp.append(*pName,",");
+    }
+    if (release)
+	msg.setParam(prefix + "parameters-unsupported-releasecall",release);
+    if (cnf)
+	msg.setParam(prefix + "parameters-unsupported-cnf",cnf);
+    if (unsupp)
+	msg.setParam(prefix + "parameters-unsupported",unsupp);
     if (paramLen && mustWarn)
 	Debug(this,DebugWarn,"Got %u garbage octets after message type 0x%02x [%p]",
 	    paramLen,msgType,this);
@@ -3356,6 +3521,61 @@ bool SS7ISUP::encodeMessage(DataBlock& buf, SS7MsgISUP::Type msgType, SS7PointCo
     buf.assign(((char*)msu->data()) + start,msu->length() - start);
     TelEngine::destruct(msu);
     return true;
+}
+
+// Process parameter compatibility lists
+// Terminate an existing call or send CNF
+// Return true if any parameter compatibility was handled
+bool SS7ISUP::processParamCompat(const NamedList& list, unsigned int cic, bool* callReleased)
+{
+    if (!cic)
+	return true;
+    const String& prefix = list["message-prefix"];
+    // Release call params
+    const String& relCall = list[prefix + "parameters-unsupported-releasecall"];
+    if (relCall) {
+	Lock lock(this);
+	SS7ISUPCall* call = findCall(cic);
+	Debug(this,DebugNote,
+	    "Terminating call (%p) on cic=%u: unknown/unhandled params='%s' [%p]",
+	    call,cic,relCall.c_str(),this);
+	String diagnostic;
+	hexifyIsupParams(diagnostic,relCall);
+	if (call) {
+	    SignallingMessage* msg = new SignallingMessage;
+	    msg->params().addParam("CauseIndicators","unknown-ie");
+	    msg->params().addParam("CauseIndicators.diagnostic",diagnostic,false);
+	    msg->params().addParam("CauseIndicators.location",m_location,false);
+	    SignallingEvent* ev = new SignallingEvent(SignallingEvent::Release,msg,call);
+	    TelEngine::destruct(msg);
+	    if (!ev->sendEvent())
+		call->setTerminate(true,"unknown-ie",diagnostic,m_location);
+	}
+	else {
+	    // No call: make sure the circuit is released at remote party
+	    SS7Label label(m_type,*m_remotePoint,*m_defPoint,
+		(m_defaultSls == SlsCircuit) ? cic : m_sls);
+	    lock.drop();
+	    transmitRLC(this,cic,label,false,"unknown-ie",0,diagnostic,m_location);
+	}
+	if (callReleased)
+	    *callReleased = true;
+	return true;
+    }
+    // Send CNF params
+    const String& cnf = list[prefix + "parameters-unsupported-cnf"];
+    if (!cnf)
+	return false;
+    DDebug(this,DebugAll,"processParamCompat() cic=%u sending CNF for '%s' [%p]",
+	cic,cnf.c_str(),this);
+    String diagnostic;
+    hexifyIsupParams(diagnostic,cnf);
+    if (diagnostic) {
+	SS7Label label(m_type,*m_remotePoint,*m_defPoint,
+	    (m_defaultSls == SlsCircuit) ? cic : m_sls);
+	transmitCNF(this,cic,label,false,"unknown-ie",diagnostic,m_location);
+    }
+    return !diagnostic.null();
 }
 
 bool SS7ISUP::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
@@ -3442,6 +3662,7 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
 	case SS7MsgISUP::SGM:
 	case SS7MsgISUP::CCR:
 	case SS7MsgISUP::COT:
+	case SS7MsgISUP::APM:
 	    processCallMsg(msg,label,sls);
 	    break;
 	case SS7MsgISUP::RLC:

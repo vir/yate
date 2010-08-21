@@ -2619,6 +2619,17 @@ public:
 	TokenDict* dict);
 
     /**
+     * Encode a comma separated list of signalling flags
+     * @param comp Signalling component requesting the service. Used to print debug messages
+     * @param flags The flag list
+     * @param dict Signalling flags used to retrieve the flag names and values
+     * @param paramName Optional flags parameter name used for debug purposes
+     * @return The OR'd value of found flags
+     */
+    static unsigned int encodeFlags(const SignallingComponent* comp, const String& flags,
+	const SignallingFlags* dict, const char* paramName = 0);
+
+    /**
      * Encode cause parameters as defined in Q.850. Create with normal clearing value if parameter is missing.
      * Don't encode diagnostic if total length exceeds 32 bytes for Q.931 requestor
      * @param comp Signalling component requesting the service. Used to print debug messages
@@ -7317,6 +7328,17 @@ public:
      */
     bool encodeMessage(DataBlock& buf, SS7MsgISUP::Type msgType, SS7PointCode::Type pcType,
 	const NamedList& params, unsigned int* cic = 0);
+
+    /**
+     * Process parameter compatibility lists.
+     * Terminate an existing call if a non emtpy release call parameter(s) list is found.
+     * Send CNF if non emtpy cnf parameter(s) list is found
+     * @param list Message parameter list
+     * @param cic The circuit code
+     * @param callReleased Optional pointer to boolean value to be set if a call was released
+     * @return True if any parameter compatibility was handled
+     */
+    bool processParamCompat(const NamedList& list, unsigned int cic, bool* callReleased = 0);
 
 protected:
     /**

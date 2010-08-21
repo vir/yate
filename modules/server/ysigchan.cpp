@@ -47,7 +47,7 @@ class IsupEncodeHandler;                 // Handler for "isup.encode" message
 
 
 // The signalling channel
-class SigChannel : public Channel
+class SigChannel : public Channel, public MessageNotifier
 {
 public:
     // Incoming
@@ -64,11 +64,13 @@ public:
     inline bool hungup() const
 	{ return m_hungup; }
     // Overloaded methods
+    virtual void* getObject(const String& name) const;
     virtual bool msgProgress(Message& msg);
     virtual bool msgRinging(Message& msg);
     virtual bool msgAnswered(Message& msg);
     virtual bool msgTone(Message& msg, const char* tone);
     virtual bool msgText(Message& msg, const char* text);
+    virtual bool msgUpdate(Message& msg);
     virtual bool msgDrop(Message& msg, const char* reason);
     virtual bool msgTransfer(Message& msg);
     virtual bool callPrerouted(Message& msg, bool handled);
@@ -81,6 +83,8 @@ public:
 	{ return Channel::disconnect(m_reason); }
     void handleEvent(SignallingEvent* event);
     void hangup(const char* reason = 0, SignallingEvent* event = 0);
+    // Notifier message dispatched handler
+    virtual void dispatched(const Message& msg, bool handled);
 private:
     bool startCall(Message& msg, SigTrunk* trunk);
     virtual void statusParams(String& str);
@@ -94,6 +98,7 @@ private:
     void evAnswer(SignallingEvent* event);
     void evRinging(SignallingEvent* event);
     void evCircuit(SignallingEvent* event);
+    void evGeneric(SignallingEvent* event);
     // Handle RTP forward from a message.
     // Return a circuit event to be sent or 0 if not handled
     SignallingCircuitEvent* handleRtp(Message& msg);
@@ -112,6 +117,11 @@ private:
 		cic = static_cast<SignallingCircuit*>(m_call->getObject("SignallingCircuit"));
 	    return cic;
 	}
+    // Retrieve the ISUP call controller from trunk
+    SS7ISUP* isupController() const;
+    // Process parameter compatibility data from a message
+    // Return true if the call was terminated
+    bool processCompat(const NamedList& list);
 private:
     String m_caller;
     String m_called;
@@ -954,10 +964,22 @@ void SigChannel::handleEvent(SignallingEvent* event)
 	case SignallingEvent::Release:   evRelease(event);  break;
 	case SignallingEvent::Ringing:   evRinging(event);  break;
 	case SignallingEvent::Circuit:   evCircuit(event);  break;
+	case SignallingEvent::Generic:   evGeneric(event);  break;
 	default:
 	    DDebug(this,DebugStub,"No handler for event '%s' [%p]",
 		event->name(),this);
+	    if (event->message())
+		processCompat(event->message()->params());
     }
+}
+
+void* SigChannel::getObject(const String& name) const
+{
+    if (name == "SigChannel")
+	return (void*)this;
+    if (name == "MessageNotifier")
+	return static_cast<MessageNotifier*>((SigChannel*)this);
+    return Channel::getObject(name);
 }
 
 bool SigChannel::msgProgress(Message& msg)
@@ -1078,6 +1100,24 @@ bool SigChannel::msgText(Message& msg, const char* text)
     return true;
 }
 
+bool SigChannel::msgUpdate(Message& msg)
+{
+    const String& oper = msg["operation"];
+    bool sendEvent = (oper == "transport");
+    if (!sendEvent)
+	return Channel::msgUpdate(msg);
+    Lock lock(m_mutex);
+    if (!m_call)
+	return false;
+    SignallingMessage* sm = new SignallingMessage;
+    sm->params().addParam("operation",oper);
+    SignallingEvent* event = new SignallingEvent(SignallingEvent::Generic,sm,m_call);
+    lock.drop();
+    TelEngine::destruct(sm);
+    plugin.copySigMsgParams(event,msg);
+    return event->sendEvent();
+}
+
 bool SigChannel::msgDrop(Message& msg, const char* reason)
 {
     hangup(reason ? reason : "dropped");
@@ -1114,9 +1154,10 @@ bool SigChannel::callRouted(Message& msg)
 
 void SigChannel::callAccept(Message& msg)
 {
+    bool terminated = processCompat(msg);
     Lock lock(m_mutex);
     SignallingEvent* event = 0;
-    if (m_call) {
+    if (!terminated && m_call) {
 	const char* format = msg.getValue("format");
 	updateConsumer(format,false);
 	SignallingMessage* sm = new SignallingMessage;
@@ -1190,6 +1231,13 @@ void SigChannel::hangup(const char* reason, SignallingEvent* event)
     Engine::enqueue(m);
 }
 
+// Notifier message dispatched handler
+void SigChannel::dispatched(const Message& msg, bool handled)
+{
+    DDebug(this,DebugAll,"dispatched(%s,%u) [%p]",msg.c_str(),handled,this);
+    processCompat(msg);
+}
+
 void SigChannel::statusParams(String& str)
 {
     Channel::statusParams(str);
@@ -1243,7 +1291,9 @@ void SigChannel::evProgress(SignallingEvent* event)
 {
     setState("progressing");
     updateCircuitFormat(event,false);
-    Message* msg = message("call.progress");
+    Message* msg = message("call.progress",false,true);
+    if (isupController())
+	msg->setNotify(true);
     plugin.copySigMsgParams(*msg,event,&s_noPrefixParams);
     addRtp(*msg);
     Engine::enqueue(msg);
@@ -1262,6 +1312,14 @@ void SigChannel::evAccept(SignallingEvent* event)
 {
     setState("accepted",false,false);
     updateCircuitFormat(event,true);
+    if (!(event->message() && event->message()->params().count()))
+	return;
+    Message* msg = message("call.update",false,true);
+    if (isupController())
+	msg->setNotify(true);
+    plugin.copySigMsgParams(*msg,event,&s_noPrefixParams);
+    msg->setParam("operation","accepted");
+    Engine::enqueue(msg);
 }
 
 void SigChannel::evAnswer(SignallingEvent* event)
@@ -1275,6 +1333,8 @@ void SigChannel::evAnswer(SignallingEvent* event)
 	cic->setParam("echotrain",value);
     }
     Message* msg = message("call.answered",false,true);
+    if (isupController())
+	msg->setNotify(true);
     plugin.copySigMsgParams(*msg,event,&s_noPrefixParams);
     msg->clearParam("earlymedia");
     addRtp(*msg);
@@ -1286,6 +1346,8 @@ void SigChannel::evRinging(SignallingEvent* event)
     setState("ringing");
     updateCircuitFormat(event,false);
     Message* msg = message("call.ringing",false,true);
+    if (isupController())
+	msg->setNotify(true);
     plugin.copySigMsgParams(*msg,event,&s_noPrefixParams);
     addRtp(*msg);
     Engine::enqueue(msg);
@@ -1305,6 +1367,17 @@ void SigChannel::evCircuit(SignallingEvent* event)
 	    Debug(this,DebugStub,"Unhandled circuit event '%s' type=%d [%p]",
 		ev->c_str(),ev->type(),this);
     }
+}
+
+void SigChannel::evGeneric(SignallingEvent* event)
+{
+    SignallingMessage* sig = (event ? event->message() : 0);
+    if (!sig || sig->params().count() < 1)
+	return;
+    Message* msg = message("call.update",false,true);
+    plugin.copySigMsgParams(*msg,event,&s_noPrefixParams);
+    msg->setParam("operation","transport");
+    Engine::enqueue(msg);
 }
 
 // Handle RTP forward from a message.
@@ -1403,6 +1476,34 @@ bool SigChannel::updateSource(const char* format, bool force)
     }
     Debug(this,DebugNote,"Failed to set data source [%p]",this);
     return false;
+}
+
+// Retrieve the ISUP call controller from trunk
+SS7ISUP* SigChannel::isupController() const
+{
+    if (!(m_trunk && m_trunk->type() == SigTrunk::SS7Isup))
+	return 0;
+    return static_cast<SS7ISUP*>(m_trunk->controller());
+}
+
+// Process parameter compatibility data from a message
+// Return true if the call was terminated
+bool SigChannel::processCompat(const NamedList& list)
+{
+    SS7ISUP* isup = isupController();
+    if (!isup)
+	return false;
+    Lock lock(m_mutex);
+    unsigned int cic = 0;
+    SignallingCircuit* c = getCircuit();
+    if (c)
+	cic = c->code();
+    if (!cic)
+	return false;
+    lock.drop();
+    bool terminated = false;
+    isup->processParamCompat(list,cic,&terminated);
+    return terminated;
 }
 
 /**

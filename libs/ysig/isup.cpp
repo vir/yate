@@ -751,6 +751,14 @@ static unsigned char encodeDigits(const SS7ISUP* isup, SS7MSU& msu,
     return setDigits(msu,val ? val->c_str() : 0,nai,b2,-1,b0);
 }
 
+// Special encoder for subsequent number
+static unsigned char encodeSubseq(const SS7ISUP* isup, SS7MSU& msu,
+    unsigned char* buf, const IsupParam* param, const NamedString* val,
+    const NamedList* extra, const String& prefix)
+{
+    return setDigits(msu,val ? val->c_str() : 0,0);
+}
+
 // Encoder for circuit group range and status (Q.763 3.43)
 static unsigned char encodeRangeSt(const SS7ISUP* isup, SS7MSU& msu,
     unsigned char* buf, const IsupParam* param, const NamedString* val,
@@ -1252,7 +1260,7 @@ static const IsupParam s_paramDefs[] = {
     MAKE_PARAM(RemoteOperations,               0,0,             0,             0),                    // 3.48
     MAKE_PARAM(ServiceActivation,              0,0,             0,             0),                    // 3.49
     MAKE_PARAM(SignallingPointCode,            0,0,             0,             0),                    // 3.50
-    MAKE_PARAM(SubsequentNumber,               0,decodeSubseq,  0,             0),                    // 3.51
+    MAKE_PARAM(SubsequentNumber,               0,decodeSubseq,  encodeSubseq,  0),                    // 3.51
     MAKE_PARAM(SuspendResumeIndicators,        0,0,             0,             0),                    // 3.52
     MAKE_PARAM(TransitNetworkSelection,        0,0,             0,             0),                    // 3.53
     MAKE_PARAM(TransmissionMediumRequirement,  1,decodeInt,     encodeInt,     s_dict_mediumReq),     // 3.54
@@ -1932,6 +1940,12 @@ static int transmitCNF(SS7ISUP* isup, unsigned int cic, const SS7Label& label, b
 }
 
 
+// Utility used to check for called number completion
+static inline bool isCalledIncomplete(const NamedList& l, const String& p = "CalledPartyNumber")
+{
+    return !l[p].endsWith(".");
+}
+
 /**
  * SS7ISUPCall
  */
@@ -1949,6 +1963,7 @@ SS7ISUPCall::SS7ISUPCall(SS7ISUP* controller, SignallingCircuit* cic,
     m_inbandAvailable(false),
     m_iamMsg(0),
     m_sgmMsg(0),
+    m_sentSamDigits(0),
     m_relTimer(300000),                  // Q.764: T5  - 5..15 minutes
     m_iamTimer(20000),                   // Q.764: T7  - 20..30 seconds
     m_sgmRecvTimer(3000)                 // Q.764: T34 - 2..4 seconds
@@ -2043,6 +2058,7 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 			const char* sgmParam = "OptionalBackwardCallIndicators";
 			if (msg->type() == SS7MsgISUP::IAM) {
 			    copyParamIAM(msg);
+			    setOverlapped(isCalledIncomplete(msg->params()));
 			    sgmParam = "OptionalForwardCallIndicators";
 			}
 			// Check segmentation. Keep the message and start timer if segmented
@@ -2055,7 +2071,9 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 		    processSegmented(0,false);
 		    break;
 		case SS7MsgISUP::SAM:
+		    setOverlapped(isCalledIncomplete(msg->params(),"SubsequentNumber"));
 		    msg->params().addParam("tone",msg->params().getValue("SubsequentNumber"));
+		    msg->params().addParam("dialing",String::boolText(true));
 		    m_lastEvent = new SignallingEvent(SignallingEvent::Info,msg,this);
 		    break;
 		case SS7MsgISUP::RLC:
@@ -2101,6 +2119,9 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 	    default: ;
 	}
     }
+    // Reset overlapped if our state is greater then Setup
+    if (m_state > Setup)
+	setOverlapped(false,false);
     // Check circuit event
     if (!m_lastEvent && m_circuit) {
 	SignallingCircuitEvent* cicEvent = m_circuit->getEvent(when);
@@ -2153,6 +2174,16 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 		}
 		m_iamMsg = new SS7MsgISUP(SS7MsgISUP::IAM,id());
 		copyParamIAM(m_iamMsg,true,event->message());
+		// Update overlap
+		setOverlapped(m_iamMsg->params());
+		if (m_overlap) {
+		    // Check for maximum number of digits allowed
+		    String* called = m_iamMsg->params().getParam("CalledPartyNumber");
+		    if (called && called->length() > isup()->m_maxCalledDigits) {
+			m_samDigits = called->substr(isup()->m_maxCalledDigits);
+			*called = called->substr(0,isup()->m_maxCalledDigits);
+		    }
+		}
 		result = transmitIAM();
 	    }
 	    break;
@@ -2217,6 +2248,12 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 	    }
 	    break;
 	case SignallingEvent::Info:
+	    if (validMsgState(true,SS7MsgISUP::SAM)) {
+		mylock.drop();
+		transmitSAM(event->message()->params().getValue("tone"));
+		result = true;
+		break;
+	    }
 	//case SignallingEvent::Message:
 	//case SignallingEvent::Transfer:
 	default:
@@ -2224,6 +2261,9 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 		"Call(%u). sendEvent not implemented for '%s' [%p]",
 		id(),event->name(),this);
     }
+    // Reset overlapped if our state is greater then Setup
+    if (m_state > Setup)
+	setOverlapped(false,false);
     XDebug(isup(),DebugAll,"Call(%u). Event (%p,'%s') sent. Result: %s [%p]",
 	id(),event,event->name(),String::boolText(result),this);
     mylock.drop();
@@ -2429,7 +2469,7 @@ bool SS7ISUPCall::validMsgState(bool send, SS7MsgISUP::Type type)
 		break;
 	    return true;
 	case SS7MsgISUP::SAM:    // Subsequent address
-	    if (m_state != Setup)
+	    if (m_state != Setup || !m_overlap || send != outgoing())
 		break;
 	    return true;
 	case SS7MsgISUP::REL:    // Release
@@ -2504,7 +2544,49 @@ bool SS7ISUPCall::transmitIAM()
 	m_state = Setup;
     m_iamMsg->m_cic = id();
     m_iamMsg->ref();
-    return transmitMessage(m_iamMsg);
+    // Reset SAM digits: this might be a re-send
+    m_sentSamDigits = 0;
+    bool ok = transmitMessage(m_iamMsg);
+    if (ok && m_overlap)
+	transmitSAM();
+    return ok;
+}
+
+// Transmit SAM digits
+bool SS7ISUPCall::transmitSAM(const char* extra)
+{
+    if (!m_overlap)
+	return false;
+    m_samDigits << extra;
+    while (m_samDigits.length() > m_sentSamDigits) {
+	unsigned int send = m_samDigits.length() - m_sentSamDigits;
+	if (send > isup()->m_maxCalledDigits)
+	    send = isup()->m_maxCalledDigits;
+	SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::SAM,id());
+	String number = m_samDigits.substr(m_sentSamDigits,send);
+	m->params().addParam("SubsequentNumber",number);
+	bool complete = !isCalledIncomplete(m->params(),"SubsequentNumber");
+	bool ok = transmitMessage(m);
+	if (ok) {
+	    m_sentSamDigits += send;
+	    if (complete) {
+		if (m_samDigits.length() > m_sentSamDigits)
+		    Debug(isup(),DebugNote,
+			"Call(%u). Completed number sending remaining='%s' [%p]",
+			id(),m_samDigits.substr(m_sentSamDigits).c_str(),this);
+		// Reset overlap sending
+		setOverlapped(false);
+		break;
+	    }
+	}
+	else {
+	    Debug(isup(),DebugNote,"Call(%u). Failed to send SAM with '%s' [%p]",
+		id(),number.c_str(),this);
+	    complete = false;
+	    break;
+	}
+    }
+    return true;
 }
 
 bool SS7ISUPCall::needsTesting(const SS7MsgISUP* msg)
@@ -2598,6 +2680,7 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 	    }
 	    connectCircuit();
 	    m_state = Setup;
+	    m_sgmMsg->params().setParam("overlapped",String::boolText(m_overlap));
 	    m_lastEvent = new SignallingEvent(SignallingEvent::NewCall,m_sgmMsg,this);
 	    break;
 	case SS7MsgISUP::CCR:
@@ -2700,6 +2783,17 @@ SS7ISUP* SS7ISUPCall::isup() const
     return static_cast<SS7ISUP*>(SignallingCall::controller());
 }
 
+// Set overlapped flag. Output a debug message
+void SS7ISUPCall::setOverlapped(bool on, bool numberComplete)
+{
+    if (m_overlap == on)
+	return;
+    m_overlap = on;
+    const char* reason = on ? "" : (numberComplete ? " (number complete)" : " (state changed)");
+    Debug(isup(),DebugAll,"Call(%u). Overlapped dialing is %s%s [%p]",
+	id(),String::boolText(on),reason,this);
+}
+
 
 /**
  * SS7ISUP
@@ -2716,6 +2810,7 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
       m_earlyAcm(true),
       m_inn(false),
       m_defaultSls(SlsLatest),
+      m_maxCalledDigits(16),
       m_l3LinkUp(false),
       m_uptTimer(0),
       m_userPartAvail(true),
@@ -2799,6 +2894,9 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
 
     m_continuity = params.getValue("continuity");
     m_defaultSls = params.getIntValue("sls",s_dict_callSls,m_defaultSls);
+    m_maxCalledDigits = params.getIntValue("maxcalleddigits",m_maxCalledDigits);
+    if (m_maxCalledDigits < 1)
+	m_maxCalledDigits = 16;
 
     setDebug(params.getBoolValue("print-messages",false),
 	params.getBoolValue("extended-debug",false));

@@ -240,6 +240,7 @@ void SignallingCallControl::removeCall(SignallingCall* call, bool del)
 SignallingCall::SignallingCall(SignallingCallControl* controller, bool outgoing, bool signalOnly)
     : Mutex(true,"SignallingCall"),
     m_lastEvent(0),
+    m_overlap(false),
     m_controller(controller),
     m_outgoing(outgoing),
     m_signalOnly(signalOnly),

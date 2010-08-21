@@ -30,12 +30,21 @@ $partycallid = "";
 $state = "call";
 $num = "";
 $collect = "";
+// Queued, not yet used DTMFs
+$queue = "";
+// Initial call.execute message used when re-routing
+$executeParams = array();
+// Final digit detected: no more routes allowed
+$final = false;
+// Don't answer the call, don't use prompts
+$routeOnly = true;
 
 function setState($newstate)
 {
     global $ourcallid;
     global $state;
     global $collect;
+    global $routeOnly;
 
     // are we exiting?
     if ($state == "")
@@ -58,6 +67,11 @@ function setState($newstate)
 
     if ($newstate == $state)
 	return;
+
+    if ($routeOnly) {
+	$state = $newstate;
+	return;
+    }
 
     switch ($newstate) {
 	case "goodbye":
@@ -94,8 +108,10 @@ function setState($newstate)
 function routeTo($num)
 {
     global $ourcallid;
+    global $executeParams;
     setState("routing");
     $m = new Yate("call.route");
+    $m->params = $executeParams;
     $m->params["id"] = $ourcallid;
     $m->params["called"] = $num;
     $m->params["overlapped"] = "yes";
@@ -119,25 +135,71 @@ function gotNotify()
     }
 }
 
-function gotDTMF($dtmf)
+function gotDTMF($dtmfs)
 {
     global $state;
     global $collect;
+    global $queue;
+    global $final;
+    global $routeOnly;
 
-    Yate::Debug("Overlapped gotDTMF('$dtmf') in state: $state collected: '$collect'");
-    switch ($dtmf) {
-	case "*":
+    Yate::Debug("Overlapped gotDTMF('$dtmfs') in state: '$state' collected: '$collect' queued: '$queue'");
+
+    $queue .= $dtmfs;
+    if ($state == "routing")
+	return;
+    $route = false;
+    while (true) {
+	$n = strlen($queue);
+	if ($n < 1)
+	    break;
+	if ($state == "call") {
+	    // First call: use all digits to route
+	    $route = true;
+	    if ($queue[$n - 1] != ".")
+		$collect .= $queue;
+	    else {
+		$collect .= substr($queue,0,$n - 1);
+		$final = true;
+	    }
+	    $queue = "";
+	    break;
+	}
+	if ($queue[0] == "*") {
+	    $queue = substr($queue,1);
 	    setState("");
-	    return;
-	case "#":
+	    continue;
+	}
+	if ($queue[0] == "#") {
 	    Yate::Output("Overlapped clearing already collected: '$collect'");
-	    $collect="";
-	    setState("prompt");
-	    return;
+	    $collect = "";
+	    $queue = substr($queue,1);
+	    if (!$routeOnly)
+		setState("prompt");
+	    continue;
+	}
+	if (!$final) {
+	    $route = true;
+	    $dtmf = $queue[0];
+	    $queue = substr($queue,1);
+	    $final = ($dtmf == ".");
+	    if (!$final) {
+		$collect .= $dtmf;
+		// Check for next char now
+		$n = strlen($queue);
+		if ($n > 0 && $queue[0] == ".") {
+		    $final = true;
+		    $queue = substr($queue,1);
+		}
+	    }
+	}
+	break;
     }
-
-    $collect .= $dtmf;
-    routeTo($collect);
+    if ($route) {
+	if ($final)
+	    Yate::Debug("Overlapped got final digit. Collected: '$collect' queued: '$queue'");
+	routeTo($collect);
+    }
 }
 
 function endRoute($callto,$ok,$err,$params)
@@ -145,6 +207,8 @@ function endRoute($callto,$ok,$err,$params)
     global $partycallid;
     global $num;
     global $collect;
+    global $final;
+    global $queue;
     if ($ok && ($callto != "-") && ($callto != "error")) {
 	Yate::Output("Overlapped got route: '$callto' for '$collect'");
 	$m = new Yate("chan.masquerade");
@@ -155,14 +219,32 @@ function endRoute($callto,$ok,$err,$params)
 	$m->params["caller"] = $num;
 	$m->params["called"] = $collect;
 	$m->Dispatch();
+	if (strlen($queue)) {
+	    // Masquerade the remaining digits
+	    // TODO: wait for call.execute to be processed to do that?
+	    $d = new Yate("chan.masquerade");
+	    $d->params["message"] = "chan.dtmf";
+	    $d->params["id"] = $partycallid;
+	    $d->params["tone"] = $queue;
+	    $d->Dispatch();
+	}
 	return;
     }
-    if ($err != "incomplete") {
-	Yate::Output("Overlapped get error '$err' for '$collect'");
-	setState("noroute");
+    if ($final) {
+	Yate::Output("Overlapped got final error '$err' for '$collect'");
+	setState("");
     }
-    else
+    else if ($err != "incomplete") {
+	Yate::Output("Overlapped got error '$err' for '$collect'");
+	setState("");
+	$final = true;
+    }
+    else {
 	Yate::Debug("Overlapped still incomplete: '$collect'");
+	setState("noroute");
+	// Check if got some other digits
+	gotDTMF("");
+    }
 }
 
 /* The main loop. We pick events and handle them */
@@ -181,7 +263,17 @@ while ($state != "") {
 		    $partycallid = $ev->GetValue("id");
 		    $ev->params["targetid"] = $ourcallid;
 		    $num = $ev->GetValue("caller");
-		    $autoanswer = ($ev->GetValue("called") != "off-hook");
+		    $routeOnly = !Yate::Str2bool($ev->getValue("accept_call"));
+		    $autoanswer = false;
+		    $callednum = "";
+		    if ($routeOnly) {
+			$callednum = $ev->GetValue("called");
+			if ($callednum == "off-hook")
+			    $callednum = "";
+		    }
+		    else
+			$autoanswer = ($ev->GetValue("called") != "off-hook");
+		    $executeParams =  $ev->params;
 		    $ev->handled = true;
 		    // we must ACK this message before dispatching a call.answered
 		    $ev->Acknowledge();
@@ -193,8 +285,12 @@ while ($state != "") {
 			$m->params["targetid"] = $partycallid;
 			$m->Dispatch();
 		    }
+		    // Route initial called number
+		    if (strlen($callednum))
+			gotDTMF($callednum);
 
-		    setState("prompt");
+		    if (!$routeOnly)
+			setState("prompt");
 		    break;
 
 		case "chan.notify":
@@ -206,9 +302,7 @@ while ($state != "") {
 
 		case "chan.dtmf":
 		    if ($ev->GetValue("targetid") == $ourcallid ) {
-			$dtmfs = $ev->GetValue("text");
-			for ($i = 0; $i < strlen($dtmfs); $i++)
-			    gotDTMF($dtmfs[$i]);
+			gotDTMF($ev->GetValue("text"));
 			$ev->handled = true;
 		    }   
 		    break;

@@ -78,6 +78,7 @@ public:
     virtual void callAccept(Message& msg);
     virtual void callRejected(const char* error, const char* reason = 0,
 	const Message* msg = 0);
+    virtual void connected(const char *reason);
     virtual void disconnected(bool final, const char* reason);
     bool disconnect()
 	{ return Channel::disconnect(m_reason); }
@@ -122,6 +123,10 @@ private:
     // Process parameter compatibility data from a message
     // Return true if the call was terminated
     bool processCompat(const NamedList& list);
+    // Send a tone through signalling call
+    bool sendSigTone(Message& msg, const char* tone);
+    // Release postponed call accepted event. Send it if requested
+    void releaseCallAccepted(bool send = false);
 private:
     String m_caller;
     String m_called;
@@ -133,6 +138,8 @@ private:
     bool m_rtpForward;                   // Forward RTP
     bool m_sdpForward;                   // Forward SDP (only of rtp forward is enabled)
     Message* m_route;                    // Prepared call.preroute message
+    ObjList m_chanDtmf;                  // Postponed (received while routing) chan.dtmf messages
+    SignallingEvent* m_callAccdEvent;    // Postponed call accepted event to be sent to remote
 };
 
 class SigDriver : public Driver
@@ -759,7 +766,8 @@ SigChannel::SigChannel(SignallingEvent* event)
     m_inband(false),
     m_rtpForward(false),
     m_sdpForward(false),
-    m_route(0)
+    m_route(0),
+    m_callAccdEvent(0)
 {
     if (!(m_call && m_call->ref())) {
 	Debug(this,DebugCall,"No signalling call for this incoming call");
@@ -817,13 +825,15 @@ SigChannel::SigChannel(const char* caller, const char* called)
     m_inband(false),
     m_rtpForward(false),
     m_sdpForward(false),
-    m_route(0)
+    m_route(0),
+    m_callAccdEvent(0)
 {
 }
 
 SigChannel::~SigChannel()
 {
     TelEngine::destruct(m_route);
+    releaseCallAccepted();
     hangup();
     setState("destroyed",true,true);
 }
@@ -1062,6 +1072,14 @@ bool SigChannel::msgTone(Message& msg, const char* tone)
 	return true;
     Lock lock(m_mutex);
     DDebug(this,DebugCall,"Tone. '%s' %s[%p]",tone,(m_call ? "" : ". No call "),this);
+    // Outgoing, overlap dialing call: try it first
+    if (isOutgoing() && m_call && m_call->overlapDialing()) {
+	lock.drop();
+	if (sendSigTone(msg,tone))
+	    return true;
+    }
+    // Re-aquire lock
+    Lock lock2(m_mutex);
     // Try to send: through the circuit, in band or through the signalling protocol
     SignallingCircuit* cic = getCircuit();
     if (cic) {
@@ -1074,13 +1092,9 @@ bool SigChannel::msgTone(Message& msg, const char* tone)
 	return true;
     if (!m_call)
 	return true;
-    SignallingMessage* sm = new SignallingMessage;
-    sm->params().addParam("tone",tone);
-    SignallingEvent* event = new SignallingEvent(SignallingEvent::Info,sm,m_call);
-    TelEngine::destruct(sm);
+    lock2.drop();
     lock.drop();
-    plugin.copySigMsgParams(event,msg);
-    event->sendEvent();
+    sendSigTone(msg,tone);
     return true;
 }
 
@@ -1158,12 +1172,20 @@ void SigChannel::callAccept(Message& msg)
     Lock lock(m_mutex);
     SignallingEvent* event = 0;
     if (!terminated && m_call) {
+	// Check if we should accept now the call
+	bool acceptNow = msg.getBoolValue("accept_call",true);
 	const char* format = msg.getValue("format");
 	updateConsumer(format,false);
 	SignallingMessage* sm = new SignallingMessage;
 	if (format)
 	    sm->params().addParam("format",format);
-	event = new SignallingEvent(SignallingEvent::Accept,sm,m_call);
+	if (acceptNow)
+	    event = new SignallingEvent(SignallingEvent::Accept,sm,m_call);
+	else {
+	    DDebug(this,DebugAll,"Postponing call accepted [%p]",this);
+	    m_callAccdEvent = new SignallingEvent(SignallingEvent::Accept,sm,m_call);
+	    plugin.copySigMsgParams(m_callAccdEvent,msg,"i");
+        }
 	TelEngine::destruct(sm);
     }
     if (m_rtpForward) {
@@ -1178,6 +1200,13 @@ void SigChannel::callAccept(Message& msg)
 	event->sendEvent();
     }
     Channel::callAccept(msg);
+    // Enqueue pending DTMFs
+    GenObject* gen = 0;
+    while (0 != (gen = m_chanDtmf.remove(false))) {
+	Message* m = static_cast<Message*>(gen);
+	complete(*m);
+	dtmfEnqueue(m);
+    }
 }
 
 void SigChannel::callRejected(const char* error, const char* reason, const Message* msg)
@@ -1186,6 +1215,12 @@ void SigChannel::callRejected(const char* error, const char* reason, const Messa
 	m_reason = error ? error : reason;
     setState("rejected",false,true);
     hangup();
+}
+
+void SigChannel::connected(const char *reason)
+{
+    releaseCallAccepted(true);
+    Channel::connected(m_reason);
 }
 
 void SigChannel::disconnected(bool final, const char* reason)
@@ -1201,6 +1236,7 @@ void SigChannel::hangup(const char* reason, SignallingEvent* event)
 {
     static String params = "reason";
     Lock lock(m_mutex);
+    releaseCallAccepted();
     if (m_hungup)
 	return;
     m_hungup = true;
@@ -1283,7 +1319,13 @@ void SigChannel::evInfo(SignallingEvent* event)
 	Message* m = message("chan.dtmf");
 	m->addParam("text",tmp);
 	m->addParam("detected",inband ? "inband" : "signal");
-	dtmfEnqueue(m);
+	m->copyParams(event->message()->params(),"dialing");
+	if (status() != "incoming")
+	    dtmfEnqueue(m);
+	else {
+	    Lock lock(m_mutex);
+	    m_chanDtmf.append(m);
+	}
     }
 }
 
@@ -1504,6 +1546,34 @@ bool SigChannel::processCompat(const NamedList& list)
     bool terminated = false;
     isup->processParamCompat(list,cic,&terminated);
     return terminated;
+}
+
+// Send a tone through signalling call
+bool SigChannel::sendSigTone(Message& msg, const char* tone)
+{
+    Lock lock(m_mutex);
+    if (!m_call)
+	return false;
+    SignallingMessage* sm = new SignallingMessage;
+    sm->params().addParam("tone",tone);
+    SignallingEvent* event = new SignallingEvent(SignallingEvent::Info,sm,m_call);
+    TelEngine::destruct(sm);
+    lock.drop();
+    plugin.copySigMsgParams(event,msg);
+    return event->sendEvent();
+}
+
+// Release postponed call accepted event. Sent it if requested
+void SigChannel::releaseCallAccepted(bool send)
+{
+    Lock lock(m_mutex);
+    if (!m_callAccdEvent)
+	return;
+    if (send)
+	m_callAccdEvent->sendEvent();
+    else
+	delete m_callAccdEvent;
+    m_callAccdEvent = 0;
 }
 
 /**

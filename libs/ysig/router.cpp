@@ -542,8 +542,8 @@ void SS7Router::restart2()
 
 int SS7Router::routeMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls, SS7Route::State states)
 {
-    XDebug(this,DebugStub,"Possibly incomplete SS7Router::routeMSU(%p,%p,%p,%d) min=%d",
-	&msu,&label,network,sls,minState);
+    XDebug(this,DebugStub,"Possibly incomplete SS7Router::routeMSU(%p,%p,%p,%d) states=0x%X",
+	&msu,&label,network,sls,states);
     lock();
     RefPointer<SS7Route> route = findRoute(label.type(),label.dpc().pack(label.type()),states);
     unlock();

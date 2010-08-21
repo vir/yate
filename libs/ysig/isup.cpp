@@ -132,6 +132,29 @@ static const TokenDict s_dict_qual_name[] = {
     { 0, 0 }
 };
 
+// Redirection Information (Q,763 3.45) bits CBA
+static const TokenDict s_dict_redir_main[] = {
+    { "none",                     0 },
+    { "rerouted",                 1 },
+    { "rerouted-restrict-all",    2 },
+    { "diverted",                 3 },
+    { "diverted-restrict-all",    4 },
+    { "rerouted-restrict-number", 5 },
+    { "diverted-restrict-number", 6 },
+    { 0, 0 }
+};
+
+// Redirection Information (Q,763 3.45) bits HGFE or PONM
+static const TokenDict s_dict_redir_reason[] = {
+    { "busy",      1 },
+    { "noanswer",  2 },
+    { "always",    3 },
+    { "deflected", 4 },
+    { "diverted",  5 },
+    { "offline",   6 },
+    { 0, 0 }
+};
+
 // Message Compatibility Information (Q.763 3.33)
 static const SignallingFlags s_flags_msgcompat[] = {
     { 0x01, 0x00, "transit" },           // End node / transit exchange
@@ -321,6 +344,11 @@ static bool decodeDigits(const SS7ISUP* isup, NamedList& list, const IsupParam* 
 	    tmp = ((buf[1] & 0x80) == 0);
 	    list.addParam(preName+".complete",tmp);
 	    break;
+	case SS7MsgISUP::LastDivertingLineIdentity:
+	case SS7MsgISUP::PresentationNumber:
+	    tmp = ((buf[1] & 0x80) != 0);
+	    list.addParam(preName+".pnp",tmp);
+	    break;
 	default:
 	    break;
     }
@@ -331,6 +359,8 @@ static bool decodeDigits(const SS7ISUP* isup, NamedList& list, const IsupParam* 
 	case SS7MsgISUP::LocationNumber:
 	case SS7MsgISUP::ConnectedNumber:
 	case SS7MsgISUP::GenericNumber:
+	case SS7MsgISUP::LastDivertingLineIdentity:
+	case SS7MsgISUP::PresentationNumber:
 	    SignallingUtils::addKeyword(list,preName+".restrict",s_dict_presentation,pres);
 	default:
 	    break;
@@ -340,6 +370,8 @@ static bool decodeDigits(const SS7ISUP* isup, NamedList& list, const IsupParam* 
 	case SS7MsgISUP::LocationNumber:
 	case SS7MsgISUP::ConnectedNumber:
 	case SS7MsgISUP::GenericNumber:
+	case SS7MsgISUP::LastDivertingLineIdentity:
+	case SS7MsgISUP::PresentationNumber:
 	    SignallingUtils::addKeyword(list,preName+".screened",s_dict_screening,scrn);
 	default:
 	    break;
@@ -486,6 +518,28 @@ static bool decodeName(const SS7ISUP* isup, NamedList& list, const IsupParam* pa
     SignallingUtils::addKeyword(list,preName+".qualifier",s_dict_qual_name,buf[0] & 0xe0);
     SignallingUtils::addKeyword(list,preName+".restrict",s_dict_presentation,buf[0] & 0x03);
     DDebug(isup,DebugAll,"decodeName decoded %s='%s'",param->name,val.c_str());
+    return true;
+}
+
+// Decoder for Redirection information (Q.763 3.45)
+static bool decodeRedir(const SS7ISUP* isup, NamedList& list, const IsupParam* param,
+    const unsigned char* buf, unsigned int len, const String& prefix)
+{
+    if (len < 1)
+	return false;
+    String preName(prefix + param->name);
+    SignallingUtils::addKeyword(list,preName,s_dict_redir_main,buf[0] & 0x07);
+    unsigned int reason = buf[0] >> 4;
+    if (reason)
+	SignallingUtils::addKeyword(list,preName+".reason-original",s_dict_redir_reason,reason);
+    if (len > 1) {
+	int cnt = buf[1] & 0x07;
+	if (cnt)
+	    list.addParam(preName+".counter",String(cnt));
+	reason = buf[1] >> 4;
+	if (reason)
+	    SignallingUtils::addKeyword(list,preName+".reason",s_dict_redir_reason,reason);
+    }
     return true;
 }
 
@@ -660,6 +714,11 @@ static unsigned char encodeDigits(const SS7ISUP* isup, SS7MSU& msu,
 	    if (val && extra && !extra->getBoolValue(preName+".complete",true))
 		b2 |= 0x80;
 	    break;
+	case SS7MsgISUP::LastDivertingLineIdentity:
+	case SS7MsgISUP::PresentationNumber:
+	    if (!val || !extra || extra->getBoolValue(preName+".pnp",true))
+		b2 |= 0x80;
+	    break;
 	default:
 	    break;
     }
@@ -670,6 +729,8 @@ static unsigned char encodeDigits(const SS7ISUP* isup, SS7MSU& msu,
 	case SS7MsgISUP::LocationNumber:
 	case SS7MsgISUP::ConnectedNumber:
 	case SS7MsgISUP::GenericNumber:
+	case SS7MsgISUP::LastDivertingLineIdentity:
+	case SS7MsgISUP::PresentationNumber:
 	    if (val && extra)
 		b2 |= (extra->getIntValue(preName+".restrict",s_dict_presentation) & 3) << 2;
 	default:
@@ -680,6 +741,8 @@ static unsigned char encodeDigits(const SS7ISUP* isup, SS7MSU& msu,
 	case SS7MsgISUP::LocationNumber:
 	case SS7MsgISUP::ConnectedNumber:
 	case SS7MsgISUP::GenericNumber:
+	case SS7MsgISUP::LastDivertingLineIdentity:
+	case SS7MsgISUP::PresentationNumber:
 	    if (val && extra)
 		b2 |= extra->getIntValue(preName+".screened",s_dict_screening) & 3;
 	default:
@@ -880,6 +943,27 @@ static unsigned char encodeName(const SS7ISUP* isup, SS7MSU& msu,
     return len;
 }
 
+// Encoder for Redirection information (Q.763 3.45)
+static unsigned char encodeRedir(const SS7ISUP* isup, SS7MSU& msu,
+    unsigned char* buf, const IsupParam* param, const NamedString* val,
+    const NamedList* extra, const String& prefix)
+{
+    if (!(param && val) || buf || param->size)
+	return 0;
+    unsigned char ri[3] = { 2, 0, 0 };
+    if (extra) {
+	String preName(prefix + param->name);
+	ri[1] = (extra->getIntValue(preName,s_dict_redir_main,0) & 0x07) |
+	    ((extra->getIntValue(preName+".reason-original",s_dict_redir_reason,0) & 0x0f) << 4);
+	ri[2] = (extra->getIntValue(preName+".counter") & 0x07) |
+	    ((extra->getIntValue(preName+".reason",s_dict_redir_reason,0) & 0x0f) << 4);
+    }
+    DataBlock tmp(ri,2,false);
+    msu += tmp;
+    tmp.clear(false);
+    return ri[0];
+}
+
 // Nature of Connection Indicators (Q.763 3.35)
 static const SignallingFlags s_flags_naci[] = {
     // TODO: add more flags
@@ -1026,6 +1110,16 @@ static const SignallingFlags s_flags_ansi_cgci[] = {
     { 0, 0, 0 }
 };
 
+// National Forward Call Indicators (NICC ND 1007 2001 3.2.1)
+static const SignallingFlags s_flags_nfci[] = {
+    { 0x0001, 0x0000, "cli-blocked" },      // CLI Blocking Indicator (CBI)
+    { 0x0001, 0x0001, "cli-allowed" },
+    { 0x0002, 0x0002, "translated" },       // Network translated address indicator
+    { 0x0004, 0x0004, "iup-priority" },     // Priority access indicator (IUP)
+    { 0x0008, 0x0008, "iup-protected" },    // Protection indicator (IUP)
+    { 0, 0, 0 }
+};
+
 // Calling Party Category (Q.763 3.11)
 static const TokenDict s_dict_callerCat[] = {
     { "unknown",     0 },                // calling party's category is unknown
@@ -1108,8 +1202,9 @@ static const TokenDict s_dict_oli[] = {
 
 #define MAKE_PARAM(p,s,a,d,t) { SS7MsgISUP::p,s,#p,a,d,t }
 static const IsupParam s_paramDefs[] = {
-//             name                          len decoder        encoder        table                  Q.763    Other
-//                                                                                                     ref      ref
+//             name                          len decoder        encoder        table                  References
+
+    // Standard parameters, references to ITU Q.763
     MAKE_PARAM(AccessDeliveryInformation,      1,decodeFlags,   encodeFlags,   s_flags_accdelinfo),   // 3.2
     MAKE_PARAM(AccessTransport,                0,0,             0,             0),                    // 3.3
     MAKE_PARAM(AutomaticCongestionLevel,       1,decodeInt,     encodeInt,     0),                    // 3.4
@@ -1151,7 +1246,7 @@ static const IsupParam s_paramDefs[] = {
     MAKE_PARAM(PropagationDelayCounter,        2,decodeInt,     encodeInt,     0),                    // 3.42
     MAKE_PARAM(RangeAndStatus,                 0,decodeRangeSt, encodeRangeSt, 0),                    // 3.43
     MAKE_PARAM(RedirectingNumber,              0,decodeDigits,  encodeDigits,  0),                    // 3.44
-    MAKE_PARAM(RedirectionInformation,         0,0,             0,             0),                    // 3.45
+    MAKE_PARAM(RedirectionInformation,         0,decodeRedir,   encodeRedir,   0),                    // 3.45
     MAKE_PARAM(RedirectionNumber,              0,decodeDigits,  encodeDigits,  0),                    // 3.46
     MAKE_PARAM(RedirectionNumberRestriction,   0,0,             0,             0),                    // 3.47
     MAKE_PARAM(RemoteOperations,               0,0,             0,             0),                    // 3.48
@@ -1217,6 +1312,18 @@ static const IsupParam s_paramDefs[] = {
     MAKE_PARAM(ServiceCodeIndicator,           0,0,             0,             0),                    //
     MAKE_PARAM(SpecialProcessingRequest,       0,0,             0,             0),                    //
     MAKE_PARAM(TransactionRequest,             0,0,             0,             0),                    //
+    // National use (UK-ISUP), references to NICC ND 1007 2001/07
+    MAKE_PARAM(NationalForwardCallIndicators,          2,decodeFlags,   encodeFlags,   s_flags_nfci), // 3.2.1
+    MAKE_PARAM(NationalForwardCallIndicatorsLinkByLink,0,0,             0,             0),            // 3.2.2
+    MAKE_PARAM(PresentationNumber,                     0,decodeDigits,  encodeDigits,  0),            // 3.2.3
+    MAKE_PARAM(LastDivertingLineIdentity,              0,decodeDigits,  encodeDigits,  0),            // 3.2.4
+    MAKE_PARAM(PartialCLI,                             0,0,             0,             0),            // 3.2.5
+    MAKE_PARAM(CalledSubscribersBasicServiceMarks,     0,0,             0,             0),            // 3.2.6
+    MAKE_PARAM(CallingSubscribersBasicServiceMarks,    0,0,             0,             0),            // 3.2.7
+    MAKE_PARAM(CallingSubscribersOriginatingFacilMarks,0,0,             0,             0),            // 3.2.8
+    MAKE_PARAM(CalledSubscribersTerminatingFacilMarks, 0,0,             0,             0),            // 3.2.9
+    MAKE_PARAM(NationalInformationRequestIndicators,   0,0,             0,             0),            // 3.2.10
+    MAKE_PARAM(NationalInformationIndicators,          0,0,             0,             0),            // 3.2.11
     { SS7MsgISUP::EndOfParameters, 0, 0, 0, 0, 0 }
 };
 #undef MAKE_PARAM

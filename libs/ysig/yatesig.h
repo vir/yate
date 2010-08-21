@@ -6751,6 +6751,17 @@ public:
 	SpecialProcessingRequest       = 0xed, // ANSI only
 	CarrierSelectionInformation    = 0xee, // ANSI only
 	NetworkTransport               = 0xef, // ANSI only
+	NationalForwardCallIndicatorsLinkByLink = 0xf4, // UK-ISUP
+	NationalInformationIndicators           = 0xf5, // UK-ISUP
+	NationalInformationRequestIndicators    = 0xf6, // UK-ISUP
+	CalledSubscribersTerminatingFacilMarks  = 0xf7, // UK-ISUP
+	CallingSubscribersOriginatingFacilMarks = 0xf8, // UK-ISUP
+	CallingSubscribersBasicServiceMarks     = 0xf9, // UK-ISUP
+	CalledSubscribersBasicServiceMarks      = 0xfa, // UK-ISUP
+	PartialCLI                              = 0xfb, // UK-ISUP
+	LastDivertingLineIdentity               = 0xfc, // UK-ISUP
+	PresentationNumber                      = 0xfd, // UK-ISUP
+	NationalForwardCallIndicators           = 0xfe, // UK-ISUP
     };
 
     /**

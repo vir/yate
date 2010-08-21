@@ -320,6 +320,20 @@ void SS7Router::loadLocalPC(const NamedList& params)
     }
 }
 
+unsigned char SS7Router::getNI(SS7PointCode::Type pcType, unsigned char defNI) const
+{
+    if ((defNI & 0xc0) == 0)
+	defNI <<= 6;
+    if (SS7Layer3::hasType(pcType))
+	return SS7Layer3::getNI(pcType,defNI);
+    for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
+	L3Pointer* p = static_cast<L3Pointer*>(o->get());
+	if ((*p)->hasType(pcType))
+	    return (*p)->getNI(pcType,defNI);
+    }
+    return defNI;
+}
+
 unsigned int SS7Router::getDefaultLocal(SS7PointCode::Type type) const
 {
     unsigned int local = getLocal(type);

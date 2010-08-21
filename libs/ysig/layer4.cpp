@@ -34,9 +34,23 @@ SS7Layer4::SS7Layer4(unsigned char sio, const NamedList* params)
 {
     if (!params)
 	return;
-    m_sio = (params->getIntValue("service",sio & 0x0f) & 0x0f)
-	| (SS7MSU::getPriority(params->getValue("priority"),sio & 0x30) & 0x30)
-	| (SS7MSU::getNetIndicator(params->getValue("netindicator"),sio & 0xc0) & 0xc0);
+    m_sio = getSIO(*params,sio);
+}
+
+unsigned char SS7Layer4::getSIO(const NamedList& params, unsigned char sif, unsigned char prio, unsigned char ni)
+{
+    if ((prio & 0x30) == 0)
+	prio <<= 4;
+    if ((ni & 0xc0) == 0)
+	ni <<= 6;
+    sif = params.getIntValue("service",sif & 0x0f);
+    prio = SS7MSU::getPriority(params.getValue("priority"),prio & 0x30);
+    if ((prio & 0x30) == 0)
+	prio <<= 4;
+    ni = SS7MSU::getNetIndicator(params.getValue("netindicator"),ni & 0xc0);
+    if ((ni & 0xc0) == 0)
+	ni <<= 6;
+    return (sif & 0x0f) | (prio & 0x30) | (ni & 0xc0);
 }
 
 bool SS7Layer4::initialize(const NamedList* config)

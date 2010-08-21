@@ -118,6 +118,33 @@ void SS7Layer3::setType(SS7PointCode::Type type)
     m_cpType[3] = m_cpType[2] = m_cpType[1] = m_cpType[0] = type;
 }
 
+unsigned char SS7Layer3::getNI(SS7PointCode::Type pcType, unsigned char defNI) const
+{
+    if ((defNI & 0xc0) == 0)
+	defNI <<= 6;
+    if (SS7PointCode::Other == pcType || type(defNI) == pcType)
+	return defNI;
+    if (pcType == m_cpType[2])
+	return SS7MSU::National;
+    if (pcType == m_cpType[3])
+	return SS7MSU::ReservedNational;
+    if (pcType == m_cpType[0])
+	return SS7MSU::International;
+    if (pcType == m_cpType[1])
+	return SS7MSU::SpareInternational;
+    return defNI;
+}
+
+bool SS7Layer3::hasType(SS7PointCode::Type pcType) const
+{
+    if (SS7PointCode::Other == pcType)
+	return false;
+    for (int i = 0; i < 4; i++)
+	if (pcType == m_cpType[i])
+	    return true;
+    return false;
+}
+
 // Build the list of destination point codes and set the routing priority
 bool SS7Layer3::buildRoutes(const NamedList& params)
 {

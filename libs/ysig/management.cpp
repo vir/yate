@@ -152,6 +152,52 @@ SS7MsgSNM* SS7MsgSNM::parse(SS7Management* receiver, unsigned char type,
 		    msg->name(),len,receiver);
 	    break;
 	}
+	// COO,COA: changeover sequence, slc
+	else if (type == COO || type == COA) {
+	    int seq = -1;
+	    int slc = -1;
+	    switch (pcType) {
+		case SS7PointCode::ITU:
+		    if (len >= 1)
+			seq = buf[0];
+		    break;
+		case SS7PointCode::ANSI:
+		    if (len >= 2) {
+			slc = buf[0] & 0x0f;
+			seq = (buf[0] >> 4) | (((unsigned int)buf[1]) << 4);
+		    }
+		    break;
+		default:
+		    Debug(DebugStub,"Please implement COO decoding for type %u",pcType);
+	    }
+	    if (seq >= 0)
+		msg->params().addParam("sequence",String(seq));
+	    if (slc >= 0)
+		msg->params().addParam("slc",String(slc));
+	}
+	// CBD,CBA: changeback code, slc
+	else if (type == CBD || type == CBA) {
+	    int code = -1;
+	    int slc = -1;
+	    switch (pcType) {
+		case SS7PointCode::ITU:
+		    if (len >= 1)
+			code = buf[0];
+		    break;
+		case SS7PointCode::ANSI:
+		    if (len >= 2) {
+			slc = buf[0] & 0x0f;
+			code = (buf[0] >> 4) | (((unsigned int)buf[1]) << 4);
+		    }
+		    break;
+		default:
+		    Debug(DebugStub,"Please implement CBD decoding for type %u",pcType);
+	    }
+	    if (code >= 0)
+		msg->params().addParam("code",String(code));
+	    if (slc >= 0)
+		msg->params().addParam("slc",String(slc));
+	}
     } while (false);
     return msg;
 }
@@ -269,7 +315,10 @@ bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Lay
 	    }
 	}
     }
-    else if (msg->type() == SS7MsgSNM::CBD || msg->type() == SS7MsgSNM::XCO) {
+    else if (msg->type() == SS7MsgSNM::COO ||
+	msg->type() == SS7MsgSNM::XCO ||
+	msg->type() == SS7MsgSNM::ECO ||
+	msg->type() == SS7MsgSNM::CBD) {
 	if (!len--)
 	    return false;
 	const unsigned char* s = msu.getData(label.length()+2,len);
@@ -281,7 +330,22 @@ bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Lay
 	unsigned char* d = answer.getData(lbl.length()+1,len+1);
 	if (!d)
 	    return false;
-	*d++ = (msg->type() == SS7MsgSNM::CBD) ? SS7MsgSNM::CBA : SS7MsgSNM::XCA;
+	switch (msg->type()) {
+	    case SS7MsgSNM::COO:
+		*d++ = SS7MsgSNM::COA;
+		break;
+	    case SS7MsgSNM::XCO:
+		*d++ = SS7MsgSNM::XCA;
+		break;
+	    case SS7MsgSNM::ECO:
+		*d++ = SS7MsgSNM::ECA;
+		break;
+	    case SS7MsgSNM::CBD:
+		*d++ = SS7MsgSNM::CBA;
+		break;
+	    default:
+		return false;
+	}
 	while (len--)
 	    *d++ = *s++;
 	return transmitMSU(answer,lbl,sls) >= 0;
@@ -343,6 +407,10 @@ bool SS7Management::control(NamedList& params)
     SS7PointCode::Type t = SS7PointCode::Other;
     ObjList* l = addr->split(',');
     if (l->at(0) && (t = SS7PointCode::lookup(l->at(0)->toString())) != SS7PointCode::Other) {
+	unsigned char netInd = ni();
+	if (network())
+	    netInd = network()->getNI(t,netInd);
+	unsigned char txSio = getSIO(params,ssf(),prio(),netInd);
 	SS7PointCode opc,dpc;
 	int sls = -1;
 	int spare = 0;
@@ -369,7 +437,7 @@ bool SS7Management::control(NamedList& params)
 			    unsigned char data[5];
 			    data[0] = cmd;
 			    return dest.store(t,data+1,spare) &&
-				(transmitMSU(SS7MSU(sio(),lbl,data,
+				(transmitMSU(SS7MSU(txSio,lbl,data,
 				    SS7PointCode::length(t)+1),lbl,sls) >= 0);
 			}
 		    }
@@ -391,14 +459,14 @@ bool SS7Management::control(NamedList& params)
 		case SS7MsgSNM::CNP:
 		    {
 			unsigned char data = cmd;
-			return transmitMSU(SS7MSU(sio(),lbl,&data,1),lbl,sls) >= 0;
+			return transmitMSU(SS7MSU(txSio,lbl,&data,1),lbl,sls) >= 0;
 		    }
 		// Changeover messages
 		case SS7MsgSNM::COO:
 		case SS7MsgSNM::COA:
 		    if (params.getBoolValue("emergency",false)) {
 			unsigned char data = (SS7MsgSNM::COO == cmd) ? SS7MsgSNM::ECO : SS7MsgSNM::ECA;
-			return transmitMSU(SS7MSU(sio(),lbl,&data,1),lbl,sls) >= 0;
+			return transmitMSU(SS7MSU(txSio,lbl,&data,1),lbl,sls) >= 0;
 		    }
 		    else {
 			int seq = params.getIntValue("sequence",0) & 0x7f;
@@ -410,7 +478,7 @@ bool SS7Management::control(NamedList& params)
 				data[1] = (unsigned char)seq;
 				break;
 			    case SS7PointCode::ANSI:
-				data[1] = (unsigned char)((sls & 0x0f) | (seq << 4));
+				data[1] = (unsigned char)((params.getIntValue("slc",sls) & 0x0f) | (seq << 4));
 				data[2] = (unsigned char)(seq >> 4);
 				len = 3;
 				break;
@@ -418,7 +486,7 @@ bool SS7Management::control(NamedList& params)
 				Debug(DebugStub,"Please implement COO for type %u",t);
 				return false;
 			}
-			return transmitMSU(SS7MSU(sio(),lbl,&data,len),lbl,sls) >= 0;
+			return transmitMSU(SS7MSU(txSio,lbl,&data,len),lbl,sls) >= 0;
 		    }
 		// Changeback messages
 		case SS7MsgSNM::CBD:
@@ -433,7 +501,7 @@ bool SS7Management::control(NamedList& params)
 				data[1] = (unsigned char)code;
 				break;
 			    case SS7PointCode::ANSI:
-				data[1] = (unsigned char)((sls & 0x0f) | (code << 4));
+				data[1] = (unsigned char)((params.getIntValue("slc",sls) & 0x0f) | (code << 4));
 				data[2] = (unsigned char)(code >> 4);
 				len = 3;
 				break;
@@ -441,7 +509,7 @@ bool SS7Management::control(NamedList& params)
 				Debug(DebugStub,"Please implement CBD for type %u",t);
 				return false;
 			}
-			return transmitMSU(SS7MSU(sio(),lbl,&data,len),lbl,sls) >= 0;
+			return transmitMSU(SS7MSU(txSio,lbl,&data,len),lbl,sls) >= 0;
 		    }
 		default:
 		    if (cmd >= 0)
@@ -458,14 +526,20 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 {
     Debug(this,DebugStub,"Please implement SS7Management::notify(%p,%d) [%p]",
 	network,sls,this);
-    if (network && network->operational(sls)) {
-	// one link gone up - see MTP restart procedure (Q.704 - 9.1, 9.2)
-	// TODO: implement MTP restart procedure (Q.704 - 9.1, 9.2)
-	// for now just send a Traffic Restart Allowed
-	// FIXME: get point codes and network indicator from configuration
-
-	// Get local services attached to network
-	// Get destination routes from network
+    if (network && (sls >= 0)) {
+	bool linkUp = network->operational(sls);
+	for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
+	    SS7PointCode::Type type = static_cast<SS7PointCode::Type>(i+1);
+	    unsigned int local = network->getLocal(type);
+	    if (!local && SS7Layer4::network())
+		local = SS7Layer4::network()->getLocal(type);
+	    if (!local)
+		continue;
+	    String addr;
+	    addr << SS7PointCode::lookup(type) << "," << SS7PointCode(type,local);
+	    Debug(this,DebugNote,"Link %s:%d is %s [%p]",addr.c_str(),sls,
+		(linkUp ? "up" : "down"),this);
+	}
     }
 }
 

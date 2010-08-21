@@ -5088,6 +5088,21 @@ public:
     void setType(SS7PointCode::Type type);
 
     /**
+     * Check if the network can possibly handle a Point Code type
+     * @param pcType Point code type to check
+     * @return True if there is one network type that can handle the Point Code
+     */
+    bool hasType(SS7PointCode::Type pcType) const;
+
+    /**
+     * Get the Network Indicator bits that would match a Point Code type
+     * @param pcType Point Code type to search for
+     * @param defNI Default Network Indicator bits to use
+     * @return Network Indicator bits matching the Point Code type
+     */
+    virtual unsigned char getNI(SS7PointCode::Type pcType, unsigned char defNI = SS7MSU::National) const;
+
+    /**
      * Build the list of outgoing routes serviced by this network. Clear the list before re-building it.
      * This method is thread safe
      * @param params The parameter list
@@ -5160,6 +5175,22 @@ public:
      * Print the destinations or routing table to output
      */
     void printRoutes();
+
+    /**
+     * Retrieve the local Point Code for a specific Point Code type
+     * @param type Desired Point Code type
+     * @return Packed local Point Code, zero if not set
+     */
+    inline unsigned int getLocal(SS7PointCode::Type type) const
+	{ return (type < SS7PointCode::DefinedTypes) ? m_local[type-1] : 0; }
+
+    /**
+     * Retrieve the default local Point Code for a specific Point Code type
+     * @param type Desired Point Code type
+     * @return Packed local Point Code, zero if not set
+     */
+    virtual unsigned int getDefaultLocal(SS7PointCode::Type type) const
+	{ return getLocal(type); }
 
 protected:
     /**
@@ -5283,22 +5314,6 @@ protected:
     inline const ObjList* getRoutes(SS7PointCode::Type type) const
 	{ return (type < SS7PointCode::DefinedTypes) ? &m_route[type-1] : 0; }
 
-    /**
-     * Retrieve the local Point Code for a specific Point Code type
-     * @param type Desired Point Code type
-     * @return Packed local Point Code, zero if not set
-     */
-    inline unsigned int getLocal(SS7PointCode::Type type) const
-	{ return (type < SS7PointCode::DefinedTypes) ? m_local[type-1] : 0; }
-
-    /**
-     * Retrieve the default local Point Code for a specific Point Code type
-     * @param type Desired Point Code type
-     * @return Packed local Point Code, zero if not set
-     */
-    virtual unsigned int getDefaultLocal(SS7PointCode::Type type) const
-	{ return getLocal(type); }
-
 private:
     Mutex m_l3userMutex;                 // Mutex to lock L3 user pointer
     SS7L3User* m_l3user;
@@ -5356,6 +5371,57 @@ public:
      */
     inline unsigned char ssf() const
 	{ return m_sio & 0xf0; }
+
+    /**
+     * Get the default sending Priority bits for this protocol
+     * @return Priority bits
+     */
+    inline unsigned char prio() const
+	{ return m_sio & 0x30; }
+
+    /**
+     * Get the default sending Network Indicator bits for this protocol
+     * @return Network Indicator bits
+     */
+    inline unsigned char ni() const
+	{ return m_sio & 0xc0; }
+
+    /**
+     * Get a SIO value from a parameters list
+     * @param params Parameter list to retrieve "service", "priority" and "netindicator"
+     * @param sif Default Service Information Field to apply parameters to
+     * @param prio Default Priority Field to apply parameters to
+     * @param ni Default Network Indicator Field to apply parameters to
+     * @return Adjusted SIO value
+     */
+    static unsigned char getSIO(const NamedList& params, unsigned char sif, unsigned char prio, unsigned char ni);
+
+    /**
+     * Get a SIO value from a parameters list
+     * @param params Parameter list to retrieve "service", "priority" and "netindicator"
+     * @param sif Default Service Information Field to apply parameters to
+     * @param ssf Default Subservice Field to apply parameters to
+     * @return Adjusted SIO value
+     */
+    static inline unsigned char getSIO(const NamedList& params, unsigned char sif, unsigned char ssf)
+	{ return getSIO(params,sif,ssf & 0x30,ssf & 0xc0); }
+
+    /**
+     * Get a SIO value from a parameters list
+     * @param params Parameter list to retrieve "service", "priority" and "netindicator"
+     * @param sio Default SIO to apply parameters to
+     * @return Adjusted SIO value
+     */
+    static inline unsigned char getSIO(const NamedList& params, unsigned char sio)
+	{ return getSIO(params,sio & 0x0f,sio & 0x30,sio & 0xc0); }
+
+    /**
+     * Get a SIO value from a parameters list
+     * @param params Parameter list to retrieve "service", "priority" and "netindicator"
+     * @return Adjusted SIO value
+     */
+    inline unsigned char getSIO(const NamedList& params) const
+	{ return getSIO(params,m_sio); }
 
 protected:
     /**
@@ -5494,6 +5560,14 @@ public:
      */
     inline bool starting() const
 	{ return !m_started; }
+
+    /**
+     * Get the Network Indicator bits that would match a Point Code type
+     * @param pcType Point Code type to search for
+     * @param defNI Default Network Indicator bits to use
+     * @return Network Indicator bits matching the Point Code type
+     */
+    virtual unsigned char getNI(SS7PointCode::Type pcType, unsigned char defNI = SS7MSU::National) const;
 
     /**
      * Retrieve the default local Point Code for a specific Point Code type

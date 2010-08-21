@@ -907,7 +907,8 @@ bool SS7M2PA::processMSG(unsigned char msgVersion, unsigned char msgClass,
 	unsigned char msgType, const DataBlock& msg, int streamId)
 {
     if (msgClass != M2PA) {
-	Debug(this,DebugWarn,"Received non M2PA message class %d",msgClass);
+	Debug(this,(msg.null() ? DebugInfo : DebugWarn),
+	    "Received non M2PA message class %d",msgClass);
 	dumpMsg(msgVersion,msgClass,msgType,msg,streamId,false);
 	return false;
     }
@@ -1001,6 +1002,7 @@ bool SS7M2PA::decodeSeq(const DataBlock& data,u_int8_t msgType)
 	transmitLS();
 	return false;
     }
+    m_lastSeqRx = (m_needToAck & 0x00ffffff) | 0x01000000;
     return true;
 }
 
@@ -1235,6 +1237,7 @@ bool SS7M2PA::processLinkStatus(DataBlock& data,int streamId)
 		transmitLS();
 	    }
 	    setRemoteStatus(status);
+	    m_lastSeqRx = -1;
 	    SS7Layer2::notify();
 	    if (m_t3.started())
 		m_t3.stop();

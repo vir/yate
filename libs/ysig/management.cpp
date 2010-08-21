@@ -539,6 +539,32 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 	    addr << SS7PointCode::lookup(type) << "," << SS7PointCode(type,local);
 	    Debug(this,DebugNote,"Link %s:%d is %s [%p]",addr.c_str(),sls,
 		(linkUp ? "up" : "down"),this);
+	    ObjList* routes = getNetRoutes(network,type);
+	    if (routes)
+		routes = routes->skipNull();
+	    for (; routes; routes = routes->skipNext()) {
+		const SS7Route* r = static_cast<const SS7Route*>(routes->get());
+		if (r && !r->priority()) {
+		    // found adjacent node, emit change order to it
+		    const char* oper = linkUp ? "changeback" : "changeover";
+		    NamedList* ctl = controlCreate(oper);
+		    if (!ctl)
+			continue;
+		    String tmp = addr;
+		    tmp << "," << SS7PointCode(type,r->packed()) << "," << sls;
+		    DDebug(this,DebugAll,"Sending Link %s %s [%p]",oper,tmp.c_str(),this);
+		    ctl->setParam("address",tmp);
+		    if (!linkUp) {
+			int seq = network->getSequence(sls);
+			if (seq >= 0)
+			    ctl->setParam("sequence",String(seq));
+			else
+			    ctl->setParam("emergency",String::boolText(true));
+		    }
+		    ctl->setParam("automatic",String::boolText(true));
+		    controlExecute(ctl);
+		}
+	    }
 	}
     }
 }

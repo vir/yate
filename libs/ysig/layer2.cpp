@@ -409,6 +409,7 @@ void SS7MTP2::timerTick(const Time& when)
 	if (tout) {
 	    Debug(this,DebugInfo,"Proving period ended, link operational [%p]",this);
 	    lock();
+	    m_lastSeqRx = -1;
 	    unsigned int q = m_queue.count();
 	    if (q >= 64) {
 		// there shouldn't have been that many queued MSUs
@@ -642,7 +643,7 @@ bool SS7MTP2::receivedPacket(const DataBlock& packet)
     // just drop MSUs if not operational or out of sequence
     if (!((diff == 1) && operational()))
 	return false;
-    m_bsn = fsn;
+    m_lastSeqRx = m_bsn = fsn;
     m_fillTime = 0;
     DDebug(this,DebugInfo,"New local bsn=%u/%d fsn=%u/%d [%p]",
 	m_bsn,m_bib,m_fsn,m_fib,this);

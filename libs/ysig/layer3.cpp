@@ -43,6 +43,16 @@ void SS7L3User::notify(SS7Layer3* network, int sls)
     Debug(this,DebugStub,"Please implement SS7L3User::notify(%p,%d) [%p]",network,sls,this);
 }
 
+ObjList* SS7L3User::getNetRoutes(SS7Layer3* network, SS7PointCode::Type type)
+{
+    return network ? network->getRoutes(type) : (ObjList*)0;
+}
+
+const ObjList* SS7L3User::getNetRoutes(const SS7Layer3* network, SS7PointCode::Type type)
+{
+    return network ? network->getRoutes(type) : (const ObjList*)0;
+}
+
 
 // Constructor
 SS7Layer3::SS7Layer3(SS7PointCode::Type type)
@@ -565,6 +575,21 @@ bool SS7MTP3::operational(int sls) const
     return false;
 }
 
+int SS7MTP3::getSequence(int sls) const
+{
+    if (sls < 0)
+	return -1;
+    const ObjList* l = &m_links;
+    for (; l; l = l->next()) {
+	L2Pointer* p = static_cast<L2Pointer*>(l->get());
+	if (!(p && *p))
+	    continue;
+	if ((*p)->sls() == sls)
+	    return (*p)->getSequence();
+    }
+    return false;
+}
+
 // Attach a link in the first free SLS
 void SS7MTP3::attach(SS7Layer2* link)
 {
@@ -828,7 +853,7 @@ bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
 void SS7MTP3::notify(SS7Layer2* link)
 {
     Lock lock(this);
-    bool ok = operational();
+    unsigned int act = m_active;
     countLinks();
 #ifdef DEBUG
     String tmp;
@@ -836,8 +861,8 @@ void SS7MTP3::notify(SS7Layer2* link)
 	tmp << "Link '" << link->toString() << "' is " << (link->operational()?"":"not ") << "operational. ";
     Debug(this,DebugInfo,"%sLinkset has %u/%u active links [%p]",tmp.null()?"":tmp.c_str(),m_active,m_total,this);
 #endif
-    // if operational status changed notify upper layer
-    if (ok != operational()) {
+    // if operational status of a link changed notify upper layer
+    if (act != m_active) {
 	Debug(this,DebugNote,"Linkset is%s operational [%p]",
 	    (operational() ? "" : " not"),this);
 	SS7Layer3::notify(link ? link->sls() : -1);

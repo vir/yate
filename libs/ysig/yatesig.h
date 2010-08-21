@@ -4774,6 +4774,13 @@ public:
 	{ if ((m_sls < 0) || !m_l2user) m_sls = linkSel; }
 
     /**
+     * Get the sequence number of the last MSU received
+     * @return Last FSN received, negative if not available
+     */
+    virtual int getSequence() const
+	{ return m_lastSeqRx; }
+
+    /**
      * Execute a control operation. Operations can change the link status or
      *  can query the aligned status.
      * @param oper Operation to execute
@@ -4795,7 +4802,8 @@ protected:
      * Constructor
      */
     inline SS7Layer2()
-	: m_l2userMutex(true,"SS7Layer2::l2user"), m_l2user(0), m_sls(-1)
+	: m_lastSeqRx(-1),
+	  m_l2userMutex(true,"SS7Layer2::l2user"), m_l2user(0), m_sls(-1)
 	{ }
 
     /**
@@ -4822,6 +4830,11 @@ protected:
 	if (tmp)
 	    tmp->notify(this);
     }
+
+    /**
+     * Last received MSU sequence number, -1 if unknown, bit 24 set if long FSN
+     */
+    int m_lastSeqRx;
 
 private:
     Mutex m_l2userMutex;
@@ -5006,6 +5019,22 @@ protected:
      * @param sls Signalling Link that generated the notification, negative if none
      */
     virtual void notify(SS7Layer3* link, int sls);
+
+    /**
+     * Retrieve the route table of a network for a specific Point Code type
+     * @param network Network layer to retrieve routes from
+     * @param type Point Code type of the desired table
+     * @return Pointer to the list of SS7Route or NULL if no such route
+     */
+    static ObjList* getNetRoutes(SS7Layer3* network, SS7PointCode::Type type);
+
+    /**
+     * Retrieve the route table of a network for a specific Point Code type
+     * @param network Network layer to retrieve routes from
+     * @param type Point Code type of the desired table
+     * @return Pointer to the list of SS7Route or NULL if no such route
+     */
+    static const ObjList* getNetRoutes(const SS7Layer3* network, SS7PointCode::Type type);
 };
 
 /**
@@ -5015,6 +5044,7 @@ protected:
 class YSIG_API SS7Layer3 : virtual public SignallingComponent
 {
     YCLASS(SS7Layer3,SignallingComponent)
+    friend class SS7L3User;
     friend class SS7Router;              // Access the data members to build the routing table
 public:
     /**
@@ -5045,6 +5075,14 @@ public:
      * @return True if the linkset is enabled and operational
      */
     virtual bool operational(int sls = -1) const = 0;
+
+    /**
+     * Get the sequence number of the last MSU received on a link
+     * @param sls Signalling Link to retrieve MSU number from
+     * @return Last FSN received, negative if not available
+     */
+    virtual int getSequence(int sls) const
+	{ return -1; }
 
     /**
      * Initiate a MTP restart procedure if supported by the network layer
@@ -6235,6 +6273,13 @@ public:
      * @return True if the linkset is enabled and operational
      */
     virtual bool operational(int sls = -1) const;
+
+    /**
+     * Get the sequence number of the last MSU received on a link
+     * @param sls Signalling Link to retrieve MSU number from
+     * @return Last FSN received, negative if not available
+     */
+    virtual int getSequence(int sls) const;
 
     /**
      * Execute a control operation on the linkset

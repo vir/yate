@@ -177,12 +177,14 @@ bool PgConn::initDb(int retry)
 // drop the connection
 void PgConn::dropDb()
 {
-    Lock lock(this);
+    if (!m_conn)
+	return;
+    Lock mylock(this);
     if (!m_conn)
 	return;
     PGconn* tmp = m_conn;
     m_conn = 0;
-    lock.drop();
+    mylock.drop();
     PQfinish(tmp);
 }
 
@@ -195,8 +197,8 @@ bool PgConn::testDb()
 // public, thread safe version
 bool PgConn::ok()
 {
-    Lock lock(this);
-    return testDb();
+    Lock mylock(this,m_timeout);
+    return mylock.locked() && testDb();
 }
 
 // try to get up the connection, retry if we have to
@@ -218,7 +220,12 @@ bool PgConn::startDb()
 //  return number of rows, -1 for non-retryable errors and -2 to retry
 int PgConn::queryDbInternal(const char* query, Message* dest)
 {
-    Lock lock(this);
+    Lock mylock(this,m_timeout);
+    if (!mylock.locked()) {
+	Debug(&module,DebugWarn,"Failed to lock '%s' for " FMT64U " usec",
+	    m_name.c_str(),m_timeout);
+	return -1;
+    }
     if (!startDb())
 	// no retry - startDb already tried and failed...
 	return -1;

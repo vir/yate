@@ -712,6 +712,10 @@ bool Transport::connectSocket()
 		DDebug(this,DebugInfo,"Failed to set sctp stream number");
 	    if (!socket->subscribeEvents())
 		DDebug(this,DebugInfo,"Unable to subscribe to Sctp events");
+	    int ppid = sigtran() ? sigtran()->payload() : 0;
+	    ppid = m_config.getIntValue("payload",ppid);
+	    if (ppid > 0)
+		socket->setPayload(ppid);
 	    break;
 	}
 	case Tcp :
@@ -846,6 +850,10 @@ bool Transport::addSocket(Socket* socket,SocketAddr& adress)
 		DDebug(this,DebugInfo,"Sctp set Streams failed");
 	    if (!soc->subscribeEvents())
 		DDebug(this,DebugInfo,"Sctp subscribe events failed");
+	    int ppid = sigtran() ? sigtran()->payload() : 0;
+	    ppid = m_config.getIntValue("payload",ppid);
+	    if (ppid > 0)
+		soc->setPayload(ppid);
 	    if (m_streamer)
 		m_reader = new StreamReader(this,soc);
 	    else

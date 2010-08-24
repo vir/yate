@@ -4965,7 +4965,7 @@ protected:
      * Constructor
      */
     inline SS7Layer2()
-	: m_lastSeqRx(-1),
+	: m_autoEmergency(true), m_lastSeqRx(-1),
 	  m_l2userMutex(true,"SS7Layer2::l2user"), m_l2user(0), m_sls(-1),
 	  m_check(0), m_inhibited(false)
 	{ }
@@ -5002,6 +5002,11 @@ protected:
      * @return True if emergency alignment should be used
      */
     bool getEmergency(NamedList* params = 0, bool emg = false) const;
+
+    /**
+     * Flag to automatically perform emergency alignment when linkset is down
+     */
+    bool m_autoEmergency;
 
     /**
      * Last received MSU sequence number, -1 if unknown, bit 24 set if long FSN

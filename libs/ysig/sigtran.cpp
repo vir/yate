@@ -847,6 +847,7 @@ bool SS7M2PA::initialize(const NamedList* config)
 #endif
     m_dumpMsg = config && config->getBoolValue("dumpMsg",false);
     m_autostart = !config || config->getBoolValue("autostart",true);
+    m_autoEmergency = !config || config->getBoolValue("autoemergency",true);
     if (config && !transport()) {
 	NamedString* name = config->getParam("sig");
 	if (!name)
@@ -1108,6 +1109,10 @@ void SS7M2PA::sendAck()
 
 bool SS7M2PA::control(Operation oper, NamedList* params)
 {
+    if (params) {
+	m_autostart = params->getBoolValue("autostart",m_autostart);
+	m_autoEmergency = params->getBoolValue("autoemergency",m_autoEmergency);
+    }
     switch (oper) {
 	case Pause:
 	    m_state = OutOfService;
@@ -1446,6 +1451,7 @@ bool SS7M2UA::initialize(const NamedList* config)
     Debug(this,DebugInfo,"SS7M2UA::initialize(%p) [%p]%s",config,this,tmp.c_str());
 #endif
     m_autostart = !config || config->getBoolValue("autostart",true);
+    m_autoEmergency = !config || config->getBoolValue("autoemergency",true);
     if (config && !adaptation()) {
 	m_iid = config->getIntValue("iid",m_iid);
 	NamedString* name = config->getParam("client");
@@ -1478,6 +1484,10 @@ bool SS7M2UA::initialize(const NamedList* config)
 
 bool SS7M2UA::control(Operation oper, NamedList* params)
 {
+    if (params) {
+	m_autostart = params->getBoolValue("autostart",m_autostart);
+	m_autoEmergency = params->getBoolValue("autoemergency",m_autoEmergency);
+    }
     switch (oper) {
 	case Pause:
 	    m_linkState = LinkDown;

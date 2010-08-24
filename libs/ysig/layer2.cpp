@@ -221,7 +221,7 @@ ObjList* SS7Layer2::recoverMSU()
 
 bool SS7Layer2::getEmergency(NamedList* params, bool emg) const
 {
-    if (!emg) {
+    if (m_autoEmergency && !emg) {
 	const SS7MTP3* mtp3 = YOBJECT(SS7MTP3,m_l2user);
 	if (mtp3 && !mtp3->linksActive())
 	    emg = true;
@@ -302,9 +302,11 @@ bool SS7MTP2::initialize(const NamedList* config)
 	config->dump(tmp,"\r\n  ",'\'',true);
     Debug(this,DebugInfo,"SS7MTP2::initialize(%p) [%p]%s",config,this,tmp.c_str());
 #endif
-    if (config)
+    if (config) {
 	debugLevel(config->getIntValue("debuglevel_mtp2",
 	    config->getIntValue("debuglevel",-1)));
+	m_autoEmergency = config->getBoolValue("autoemergency",true);
+    }
     bool noStart = true;
     if (config && !iface()) {
 	NamedString* name = config->getParam("sig");
@@ -343,6 +345,7 @@ bool SS7MTP2::control(Operation oper, NamedList* params)
     if (params) {
 	lock();
 	m_fillLink = params->getBoolValue("filllink",m_fillLink);
+	m_autoEmergency = params->getBoolValue("autoemergency",m_autoEmergency);
 	// The following are for test purposes
 	if (params->getBoolValue("toggle-bib"))
 	    m_bib = !m_bib;

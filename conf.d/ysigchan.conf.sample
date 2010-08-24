@@ -473,6 +473,9 @@
 ; emergency: boolean: Emergency align SS7 MTP2 layer at startup
 ;emergency=yes
 
+; autoemergency: boolean: Emergency align link if owner linkset is down
+;autoemergency=yes
+
 ; filllink: boolean: Configure MTP2 to request link fill (packet repeat) when
 ;  sending FISU or LSSU packets
 ;filllink=yes

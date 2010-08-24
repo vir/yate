@@ -219,6 +219,18 @@ ObjList* SS7Layer2::recoverMSU()
     return 0;
 }
 
+bool SS7Layer2::getEmergency(NamedList* params, bool emg) const
+{
+    if (!emg) {
+	const SS7MTP3* mtp3 = YOBJECT(SS7MTP3,m_l2user);
+	if (mtp3 && !mtp3->linksActive())
+	    emg = true;
+    }
+    if (params)
+	emg = params->getBoolValue("emergency",emg);
+    return emg;
+}
+
 
 SS7MTP2::SS7MTP2(const NamedList& params, unsigned int status)
     : SignallingComponent(params.safe("SS7MTP2"),&params),
@@ -357,7 +369,7 @@ bool SS7MTP2::control(Operation oper, NamedList* params)
 		return true;
 	    // fall-through
 	case Align:
-	    startAlignment(params && params->getBoolValue("emergency"));
+	    startAlignment(getEmergency(params));
 	    return true;
 	case Status:
 	    return operational();

@@ -4996,6 +4996,14 @@ protected:
     }
 
     /**
+     * Get a best guess of the emergency alignment requirement
+     * @param params Optional parameters whose "emergency" is used
+     * @param emg Default emergency state
+     * @return True if emergency alignment should be used
+     */
+    bool getEmergency(NamedList* params = 0, bool emg = false) const;
+
+    /**
      * Last received MSU sequence number, -1 if unknown, bit 24 set if long FSN
      */
     int m_lastSeqRx;

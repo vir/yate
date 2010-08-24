@@ -1119,7 +1119,7 @@ bool SS7M2PA::control(Operation oper, NamedList* params)
 		return true;
 	case Align:
 	{
-	    bool em = params && params->getBoolValue("emergency");
+	    bool em = getEmergency(params);
 	    m_state = em ? ProvingEmergency : ProvingNormal;
 	    startAlignment();
 	    return true;
@@ -1500,11 +1500,8 @@ bool SS7M2UA::control(Operation oper, NamedList* params)
 		    m_linkState = LinkDown;
 		    SS7Layer2::notify();
 		}
-		bool emg = false;
-		if (params)
-		    emg = params->getBoolValue("emergency");
-		else
-		    emg = (LinkUpEmg == m_linkState) || (LinkReqEmg == m_linkState);
+		bool emg = (LinkUpEmg == m_linkState) || (LinkReqEmg == m_linkState);
+		emg = getEmergency(params,emg);
 		m_linkState = emg ? LinkReqEmg : LinkReq;
 		DataBlock buf;
 		if (m_iid >= 0)

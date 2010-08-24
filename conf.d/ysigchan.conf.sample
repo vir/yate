@@ -443,8 +443,18 @@
 ; If no router is attached only a single User Part can be connected
 ;router=ss7router
 
+; link: string: Name of a SS7 Layer 2 link to create in the linkset
+; This parameter can be repeated to add more links to the linkset
+; An explicit SLS can be provided after a comma
+; Example: link=mtp2_to_hq,3
+;link=
+
 ; autostart: bool: Automatically enable the linkset at startup
 ;autostart=yes
+
+; maintenance: integer: Interval in msec for sending SLTM messages (Q.707 T2)
+; A value of zero disables sending SLTM else it is clamped to range 5s - 10m
+;maintenance=60000
 
 ; layer3dump: string: Filename to dump MTP3 packets to
 ;layer3dump=

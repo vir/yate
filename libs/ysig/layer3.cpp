@@ -490,7 +490,7 @@ SS7MTP3::SS7MTP3(const NamedList& params)
     : SignallingComponent(params.safe("SS7MTP3"),&params),
       SignallingDumpable(SignallingDumper::Mtp3),
       Mutex(true,"SS7MTP3"),
-      m_total(0), m_active(0), m_inhibit(false)
+      m_total(0), m_active(0), m_inhibit(false), m_check(0)
 {
 #ifdef DEBUG
     if (debugAt(DebugAll)) {
@@ -531,6 +531,14 @@ SS7MTP3::SS7MTP3(const NamedList& params)
     Debug(this,level,"Point code types are '%s' [%p]",stype.safe(),this);
 
     m_inhibit = !params.getBoolValue("autostart",true);
+    int check = params.getIntValue("maintenance",60000);
+    if (check > 0) {
+	if (check < 5000)
+	    check = 5000;
+	else if (check > 600000)
+	    check = 600000;
+	m_check = 1000 * check;
+    }
     buildRoutes(params);
     setDumper(params.getValue("layer3dump"));
 }
@@ -569,10 +577,29 @@ bool SS7MTP3::operational(int sls) const
 	L2Pointer* p = static_cast<L2Pointer*>(l->get());
 	if (!(p && *p))
 	    continue;
-	if ((*p)->sls() == sls)
+	if (sls < 0) {
+	    if ((*p)->operational() && !(*p)->inhibited())
+		return true;
+	}
+	else if ((*p)->sls() == sls)
 	    return (*p)->operational();
     }
     return false;
+}
+
+bool SS7MTP3::inhibited(int sls) const
+{
+    if (sls < 0)
+	return true;
+    const ObjList* l = &m_links;
+    for (; l; l = l->next()) {
+	L2Pointer* p = static_cast<L2Pointer*>(l->get());
+	if (!(p && *p))
+	    continue;
+	if ((*p)->sls() == sls)
+	    return (*p)->inhibited();
+    }
+    return true;
 }
 
 int SS7MTP3::getSequence(int sls) const
@@ -605,18 +632,36 @@ void SS7MTP3::attach(SS7Layer2* link)
 	    return;
 	}
     }
-    // Attach in the first free SLS
-    int sls = 0;
-    ObjList* before = m_links.skipNull();
-    for (; before; before = before->skipNext()) {
-	L2Pointer* p = static_cast<L2Pointer*>(before->get());
-	if (!*p)
-	    continue;
-	if (sls < (*p)->sls())
-	    break;
-	sls++;
+    ObjList* before = 0;
+    int sls = link->sls();
+    if (sls >= 0) {
+	before = m_links.skipNull();
+	for (; before; before = before->skipNext()) {
+	    L2Pointer* p = static_cast<L2Pointer*>(before->get());
+	    if (!*p)
+		continue;
+	    if (sls < (*p)->sls())
+		break;
+	    if (sls == (*p)->sls()) {
+		sls = -1;
+		break;
+	    }
+	}
     }
-    link->sls(sls);
+    if (sls < 0) {
+	// Attach in the first free SLS
+	sls = 0;
+	before = m_links.skipNull();
+	for (; before; before = before->skipNext()) {
+	    L2Pointer* p = static_cast<L2Pointer*>(before->get());
+	    if (!*p)
+		continue;
+	    if (sls < (*p)->sls())
+		break;
+	    sls++;
+	}
+	link->sls(sls);
+    }
     if (!before)
 	m_links.append(new L2Pointer(link));
     else
@@ -669,6 +714,18 @@ bool SS7MTP3::control(Operation oper, NamedList* params)
 		m_inhibit = false;
 		if (ok != operational())
 		    SS7Layer3::notify(-1);
+	    }
+	    if (params && params->getBoolValue("emergency")) {
+		unsigned int cnt = 0;
+		const ObjList* l = &m_links;
+		for (; l; l = l->next()) {
+		    L2Pointer* p = static_cast<L2Pointer*>(l->get());
+		    if (!(p && *p))
+			continue;
+		    cnt++;
+		    (*p)->control(SS7Layer2::Resume,params);
+		}
+		Debug(this,DebugNote,"Emergency resume attempt on %u links [%p]",cnt,this);
 	    }
 	    return true;
 	case Status:
@@ -724,8 +781,15 @@ bool SS7MTP3::initialize(const NamedList* config)
 		continue;
 	    NamedPointer* ptr = YOBJECT(NamedPointer,param);
 	    NamedList* linkConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
-	    NamedList params(param->c_str());
-	    params.addParam("basename",*param);
+	    String linkName(*param);
+	    int linkSls = -1;
+	    int sep = linkName.find(',');
+	    if (sep >= 0) {
+		linkSls = linkName.substr(sep + 1).toInteger(-1);
+		linkName = linkName.substr(0,sep);
+	    }
+	    NamedList params(linkName);
+	    params.addParam("basename",linkName);
 	    if (linkConfig)
 		params.copyParams(*linkConfig);
 	    else {
@@ -735,6 +799,8 @@ bool SS7MTP3::initialize(const NamedList* config)
 	    SS7Layer2* link = YSIGCREATE(SS7Layer2,&params);
 	    if (!link)
 		continue;
+	    if (linkSls >= 0)
+		link->sls(linkSls);
 	    attach(link);
 	    if (!link->initialize(linkConfig)) {
 		detach(link);
@@ -779,7 +845,7 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 	SS7Layer2* link = *p;
 	if (link->sls() == sls) {
 	    XDebug(this,DebugAll,"Found link %p for SLS=%d [%p]",link,sls,this);
-	    if (link->operational()) {
+	    if (link->operational() && !link->inhibited()) {
 		if (link->transmitMSU(msu)) {
 		    DDebug(this,DebugAll,"Sent MSU over link '%s' %p with SLS=%d%s [%p]",
 			link->toString().c_str(),link,sls,
@@ -801,7 +867,7 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 	if (!*p)
 	    continue;
 	SS7Layer2* link = *p;
-	if (link->operational() && link->transmitMSU(msu)) {
+	if (link->operational() && !link->inhibited() && link->transmitMSU(msu)) {
 	    sls = link->sls();
 	    DDebug(this,DebugAll,"Sent MSU over link '%s' %p with SLS=%d%s [%p]",
 		link->toString().c_str(),link,sls,
@@ -861,11 +927,57 @@ void SS7MTP3::notify(SS7Layer2* link)
 	tmp << "Link '" << link->toString() << "' is " << (link->operational()?"":"not ") << "operational. ";
     Debug(this,DebugInfo,"%sLinkset has %u/%u active links [%p]",tmp.null()?"":tmp.c_str(),m_active,m_total,this);
 #endif
+    if (link && link->operational())
+	link->m_check = Time::now() + 50000 + (::random() % 200000);
     // if operational status of a link changed notify upper layer
     if (act != m_active) {
 	Debug(this,DebugNote,"Linkset is%s operational [%p]",
 	    (operational() ? "" : " not"),this);
 	SS7Layer3::notify(link ? link->sls() : -1);
+    }
+}
+
+void SS7MTP3::timerTick(const Time& when)
+{
+    Lock lock(this);
+    if (!m_check)
+	return;
+    for (ObjList* o = m_links.skipNull(); o; o = o->skipNext()) {
+	L2Pointer* p = static_cast<L2Pointer*>(o->get());
+	if (!(p && *p && (*p)->m_check && (*p)->operational()))
+	    continue;
+	if ((*p)->m_check < when) {
+	    (*p)->m_check = when + m_check;
+	    for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
+		SS7PointCode::Type type = (SS7PointCode::Type)(i + 1);
+		unsigned int local = getLocal(type);
+		if (!local)
+		    continue;
+		ObjList* o = getRoutes(type);
+		if (!o)
+		    continue;
+		unsigned char sio = getNI(type) | SS7MSU::MTN;
+		for (o = o->skipNull(); o; o = o->skipNext()) {
+		    const SS7Route* r = static_cast<const SS7Route*>(o->get());
+		    if (r->priority())
+			continue;
+		    // build and send a SLTM to the adjacent node
+		    unsigned int len = 4;
+		    SS7Label lbl(type,r->packed(),local,(*p)->sls());
+		    SS7MSU sltm(sio,lbl,0,len+2);
+		    unsigned char* d = sltm.getData(lbl.length()+1,len+2);
+		    if (!d)
+			continue;
+		    *d++ = SS7MsgMTN::SLTM;
+		    *d++ = len << 4;
+		    unsigned char patt = (*p)->sls();
+		    patt = (patt << 4) | (patt & 0x0f);
+		    while (len--)
+			*d++ = patt++;
+		    (*p)->transmitMSU(sltm);
+		}
+	    }
+	}
     }
 }
 

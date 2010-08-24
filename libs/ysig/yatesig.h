@@ -4826,6 +4826,7 @@ protected:
 class YSIG_API SS7Layer2 : virtual public SignallingComponent
 {
     YCLASS(SS7Layer2,SignallingComponent)
+    friend class SS7MTP3;
 public:
     /**
      * LSSU Status Indications
@@ -4929,6 +4930,13 @@ public:
 	{ if ((m_sls < 0) || !m_l2user) m_sls = linkSel; }
 
     /**
+     * Check if the link is inhibited by MTP3 Management
+     * @return True if the link is inhibited and should not be used
+     */
+    inline bool inhibited() const
+	{ return m_inhibited; }
+
+    /**
      * Get the sequence number of the last MSU received
      * @return Last FSN received, negative if not available
      */
@@ -4958,7 +4966,8 @@ protected:
      */
     inline SS7Layer2()
 	: m_lastSeqRx(-1),
-	  m_l2userMutex(true,"SS7Layer2::l2user"), m_l2user(0), m_sls(-1)
+	  m_l2userMutex(true,"SS7Layer2::l2user"), m_l2user(0), m_sls(-1),
+	  m_check(0), m_inhibited(false)
 	{ }
 
     /**
@@ -4995,6 +5004,8 @@ private:
     Mutex m_l2userMutex;
     SS7L2User* m_l2user;
     int m_sls;
+    u_int64_t m_check;
+    bool m_inhibited;
 };
 
 /**
@@ -5230,6 +5241,14 @@ public:
      * @return True if the linkset is enabled and operational
      */
     virtual bool operational(int sls = -1) const = 0;
+
+    /**
+     * Check if a specific link is inhibited
+     * @param sls Signalling Link to check
+     * @return True if the specified link is inhibited and should not be used
+     */
+    virtual bool inhibited(int sls) const
+	{ return false; }
 
     /**
      * Get the sequence number of the last MSU received on a link
@@ -6430,6 +6449,13 @@ public:
     virtual bool operational(int sls = -1) const;
 
     /**
+     * Check if a specific link is inhibited
+     * @param sls Signalling Link to check
+     * @return True if the specified link is inhibited and should not be used
+     */
+    virtual bool inhibited(int sls) const;
+
+    /**
      * Get the sequence number of the last MSU received on a link
      * @param sls Signalling Link to retrieve MSU number from
      * @return Last FSN received, negative if not available
@@ -6485,6 +6511,12 @@ protected:
     virtual void destroyed();
 
     /**
+     * Periodical timer tick used to perform housekeeping and link checking
+     * @param when Time to use as computing base for events and timeouts
+     */
+    virtual void timerTick(const Time& when);
+
+    /**
      * Process a MSU received from the Layer 2 component
      * @param msu Message data, starting with Service Indicator Octet
      * @param link Data link that delivered the MSU
@@ -6514,6 +6546,8 @@ private:
     unsigned int m_active;
     // inhibited flag
     bool m_inhibit;
+    // maintenance check interval
+    u_int64_t m_check;
 };
 
 /**

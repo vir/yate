@@ -6108,7 +6108,7 @@ public:
      * Contructor of an empty IUA client
      */
     inline SS7M2UAClient(const NamedList& params)
-	: SIGAdaptClient("SS7M2UAClient",&params,2,2904)
+	: SIGAdaptClient(params.safe("SS7M2UAClient"),&params,2,2904)
 	{ }
     virtual bool processMSG(unsigned char msgVersion, unsigned char msgClass,
 	unsigned char msgType, const DataBlock& msg, int streamId);
@@ -9033,7 +9033,7 @@ public:
      * Contructor of an empty IUA client
      */
     inline ISDNIUAClient(const NamedList& params)
-	: SIGAdaptClient("ISDNIUAClient",&params,1,9900)
+	: SIGAdaptClient(params.safe("ISDNIUAClient"),&params,1,9900)
 	{ }
 
     virtual bool processMSG(unsigned char msgVersion, unsigned char msgClass,

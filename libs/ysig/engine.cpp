@@ -271,6 +271,8 @@ SignallingComponent* SignallingEngine::find(const String& name)
 
 SignallingComponent* SignallingEngine::find(const String& name, const String& type, const SignallingComponent* start)
 {
+    XDebug(this,DebugAll,"Engine finding '%s' of type %s from %p [%p]",
+	name.c_str(),type.c_str(),start,this);
     Lock mylock(this);
     ObjList* l = m_components.skipNull();
     if (start) {
@@ -299,6 +301,8 @@ bool SignallingEngine::find(const SignallingComponent* component)
 
 SignallingComponent* SignallingEngine::build(const String& type, const NamedList& params, bool init)
 {
+    XDebug(this,DebugAll,"Engine building '%s' of type %s [%p]",
+	params.c_str(),type.c_str(),this);
     Lock mylock(this);
     SignallingComponent* c = find(params,type);
     if (c && c->alive()) {
@@ -307,7 +311,8 @@ SignallingComponent* SignallingEngine::build(const String& type, const NamedList
 	return c;
     }
     c = SignallingFactory::build(type,&params);
-    XDebug(this,DebugAll,"Created component @%p [%p]",c,this);
+    DDebug(this,DebugAll,"Created new component '%s' @%p [%p]",
+	c->toString().c_str(),c,this);
     insert(c);
     if (init && c)
 	c->initialize(&params);

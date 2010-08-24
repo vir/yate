@@ -1452,7 +1452,8 @@ bool SS7M2UA::initialize(const NamedList* config)
 	if (!name)
 	    name = config->getParam("basename");
 	if (name) {
-	    DDebug(this,DebugInfo,"Creating adaptation for SS7 M2UA [%p]",this);
+	    DDebug(this,DebugInfo,"Creating adaptation '%s' for SS7 M2UA [%p]",
+		name->c_str(),this);
 	    NamedPointer* ptr = YOBJECT(NamedPointer,name);
 	    NamedList* adConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
 	    NamedList params(name->c_str());
@@ -1463,7 +1464,8 @@ bool SS7M2UA::initialize(const NamedList* config)
 		params.copySubParams(*config,params + ".");
 		adConfig = &params;
 	    }
-	    SS7M2UAClient* client = YSIGCREATE(SS7M2UAClient,&params);
+	    SS7M2UAClient* client =
+		YOBJECT(SS7M2UAClient,engine()->build("SS7M2UAClient",params,false));
 	    if (!client)
 		return false;
 	    adaptation(client);
@@ -1887,7 +1889,8 @@ bool ISDNIUA::initialize(const NamedList* config)
 	if (!name)
 	    name = config->getParam("basename");
 	if (name) {
-	    DDebug(this,DebugInfo,"Creating adaptation for ISDN UA [%p]",this);
+	    DDebug(this,DebugInfo,"Creating adaptation '%s' for ISDN UA [%p]",
+		name->c_str(),this);
 	    NamedPointer* ptr = YOBJECT(NamedPointer,name);
 	    NamedList* adConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
 	    NamedList params(name->c_str());
@@ -1898,7 +1901,8 @@ bool ISDNIUA::initialize(const NamedList* config)
 		params.copySubParams(*config,params + ".");
 		adConfig = &params;
 	    }
-	    ISDNIUAClient* client = YSIGCREATE(ISDNIUAClient,&params);
+	    ISDNIUAClient* client =
+		YOBJECT(ISDNIUAClient,engine()->build("ISDNIUAClient",params,false));
 	    if (!client)
 		return false;
 	    adaptation(client);

@@ -668,7 +668,7 @@ void* type::getObject(const String& name) const \
   tmp = base2::getObject(name); \
   return tmp ? tmp : base3::getObject(name); }
 
-#define YOBJECT(type,pntr) (static_cast<type*>((pntr) ? (pntr)->getObject(#type) : 0))
+#define YOBJECT(type,pntr) (static_cast<type*>(GenObject::getObject(#type,pntr)))
 
 #define YNOCOPY(type) private: \
 type(const type&); \
@@ -713,6 +713,15 @@ public:
      * @return Pointer to the requested class or NULL if this object doesn't implement it
      */
     virtual void* getObject(const String& name) const;
+
+    /**
+     * Helper method to get the pointer to a derived class
+     * @param name Name of the class we are asking for
+     * @param obj Pointer to the object to get derived class from
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    static inline void* getObject(const String& name, const GenObject* obj)
+	{ return obj ? obj->getObject(name) : 0; }
 };
 
 /**

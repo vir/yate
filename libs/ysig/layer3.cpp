@@ -662,6 +662,7 @@ void SS7MTP3::attach(SS7Layer2* link)
 	}
 	link->sls(sls);
     }
+    link->ref();
     if (!before)
 	m_links.append(new L2Pointer(link));
     else
@@ -682,10 +683,11 @@ void SS7MTP3::detach(SS7Layer2* link)
 	L2Pointer* p = static_cast<L2Pointer*>(o->get());
 	if (*p != link)
 	    continue;
-	m_links.remove(p,false);
+	m_links.remove(p);
 	Debug(this,DebugAll,"Detached link (%p,'%s') with SLS=%d [%p]",
 	    link,link->toString().safe(),link->sls(),this);
 	link->attach(0);
+	TelEngine::destruct(link);
 	countLinks();
 	return;
     }
@@ -802,10 +804,9 @@ bool SS7MTP3::initialize(const NamedList* config)
 	    if (linkSls >= 0)
 		link->sls(linkSls);
 	    attach(link);
-	    if (!link->initialize(linkConfig)) {
+	    if (!link->initialize(linkConfig))
 		detach(link);
-		TelEngine::destruct(link);
-	    }
+	    TelEngine::destruct(link);
 	}
 	m_inhibit = !config->getBoolValue("autostart",true);
     }

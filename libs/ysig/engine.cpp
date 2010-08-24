@@ -305,9 +305,9 @@ SignallingComponent* SignallingEngine::build(const String& type, const NamedList
 	params.c_str(),type.c_str(),this);
     Lock mylock(this);
     SignallingComponent* c = find(params,type);
-    if (c && c->alive()) {
-	DDebug(this,DebugAll,"Engine returning existing component '%s' @%p [%p]",
-	    c->toString().c_str(),c,this);
+    if (c && c->ref()) {
+	DDebug(this,DebugAll,"Engine returning existing component '%s' @%p (%d) [%p]",
+	    c->toString().c_str(),c,c->refcount(),this);
 	return c;
     }
     c = SignallingFactory::build(type,&params);

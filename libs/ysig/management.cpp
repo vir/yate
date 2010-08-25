@@ -198,6 +198,29 @@ SS7MsgSNM* SS7MsgSNM::parse(SS7Management* receiver, unsigned char type,
 	    if (slc >= 0)
 		msg->params().addParam("slc",String(slc));
 	}
+	// UPU: user part ID, unavailability cause
+	else if (type == UPU) {
+	    SS7PointCode pc;
+	    unsigned char spare;
+	    if (pc.assign(pcType,buf,len,&spare)) {
+		String tmp;
+		tmp << pc;
+		msg->params().addParam("destination",tmp);
+		if (spare) {
+		    tmp.hexify(&spare,1);
+		    msg->params().addParam("spare",tmp);
+		}
+		unsigned int dlen = SS7PointCode::length(pcType);
+		if (dlen < len) {
+		    msg->params().addParam("part",String((unsigned int)buf[dlen] & 0x0f));
+		    msg->params().addParam("cause",String((unsigned int)buf[dlen] >> 4));
+		}
+	    }
+	    else
+		Debug(receiver,DebugNote,
+		    "Failed to decode destination for msg=%s len=%u [%p]",
+		    msg->name(),len,receiver);
+	}
     } while (false);
     return msg;
 }
@@ -349,6 +372,12 @@ bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Lay
 	while (len--)
 	    *d++ = *s++;
 	return transmitMSU(answer,lbl,sls) >= 0;
+    }
+    else if (msg->type() == SS7MsgSNM::UPU) {
+	Debug(this,DebugNote,"Unavailable part %s at %s, cause %s",
+	    msg->params().getValue("part","?"),
+	    msg->params().getValue("destination","?"),
+	    msg->params().getValue("cause","?"));
     }
     else {
 	String tmp;

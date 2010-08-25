@@ -947,8 +947,11 @@ void SS7MTP3::notify(SS7Layer2* link)
     Debug(this,DebugInfo,"%sLinkset has %u/%u active links [%p]",tmp.null()?"":tmp.c_str(),m_active,m_total,this);
 #endif
     if (link) {
-	if (link->operational())
-	    link->m_check = Time::now() + 50000 + (::random() % 200000);
+	if (link->operational()) {
+	    u_int64_t t = Time::now() + 50000 + (::random() % 200000);
+	    if ((t < link->m_check) || (t - 4000000 > link->m_check))
+		link->m_check = t;
+	}
 	else
 	    link->m_unchecked = m_checklinks;
     }

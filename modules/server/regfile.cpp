@@ -215,8 +215,10 @@ bool RouteHandler::received(Message &msg)
     while (true) {
 	String data;
 	if (!ac) {
-	    if (s_cfg.getSection(username))
+	    if (s_cfg.getSection(username)) {
+		msg.setParam("error","offline");
 		break;
+	    }
 	    ObjList* o = s_expand.find(username);
 	    if (!o)
 		break;
@@ -248,7 +250,6 @@ bool RouteHandler::received(Message &msg)
 	Debug("RegFile",DebugInfo,"Routed '%s' via '%s'",username.c_str(),data.c_str());
 	return true;
     }
-    msg.setParam("error","offline");
     return false;
 }
 

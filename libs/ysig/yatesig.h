@@ -4934,7 +4934,7 @@ public:
      * @return True if the link is inhibited and should not be used
      */
     inline bool inhibited() const
-	{ return m_inhibited; }
+	{ return m_inhibited || m_unchecked; }
 
     /**
      * Get the sequence number of the last MSU received
@@ -4967,7 +4967,7 @@ protected:
     inline SS7Layer2()
 	: m_autoEmergency(true), m_lastSeqRx(-1),
 	  m_l2userMutex(true,"SS7Layer2::l2user"), m_l2user(0), m_sls(-1),
-	  m_check(0), m_inhibited(false)
+	  m_check(0), m_unchecked(true), m_inhibited(false)
 	{ }
 
     /**
@@ -5018,6 +5018,7 @@ private:
     SS7L2User* m_l2user;
     int m_sls;
     u_int64_t m_check;
+    bool m_unchecked;
     bool m_inhibited;
 };
 
@@ -6559,6 +6560,8 @@ private:
     unsigned int m_active;
     // inhibited flag
     bool m_inhibit;
+    // check the links before placing them in service
+    bool m_checklinks;
     // maintenance check interval
     u_int64_t m_check;
 };

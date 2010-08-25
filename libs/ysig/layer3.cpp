@@ -490,7 +490,7 @@ SS7MTP3::SS7MTP3(const NamedList& params)
     : SignallingComponent(params.safe("SS7MTP3"),&params),
       SignallingDumpable(SignallingDumper::Mtp3),
       Mutex(true,"SS7MTP3"),
-      m_total(0), m_active(0), m_inhibit(false), m_check(0)
+      m_total(0), m_active(0), m_inhibit(false), m_checklinks(true), m_check(0)
 {
 #ifdef DEBUG
     if (debugAt(DebugAll)) {
@@ -531,6 +531,7 @@ SS7MTP3::SS7MTP3(const NamedList& params)
     Debug(this,level,"Point code types are '%s' [%p]",stype.safe(),this);
 
     m_inhibit = !params.getBoolValue("autostart",true);
+    m_checklinks = params.getBoolValue("checklinks",true);
     int check = params.getIntValue("maintenance",60000);
     if (check > 0) {
 	if (check < 5000)
@@ -776,6 +777,7 @@ bool SS7MTP3::initialize(const NamedList* config)
 	    config->getIntValue("debuglevel",-1)));
     countLinks();
     if (config && (0 == m_total)) {
+	m_checklinks = config->getBoolValue("checklinks",m_checklinks);
 	unsigned int n = config->length();
 	for (unsigned int i = 0; i < n; i++) {
 	    NamedString* param = config->getParam(i);
@@ -803,6 +805,7 @@ bool SS7MTP3::initialize(const NamedList* config)
 		continue;
 	    if (linkSls >= 0)
 		link->sls(linkSls);
+	    link->m_unchecked = m_checklinks;
 	    attach(link);
 	    if (!link->initialize(linkConfig))
 		detach(link);
@@ -908,11 +911,21 @@ bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
     }
 #endif
     // first try to call the user part
-    if (SS7Layer3::receivedMSU(msu,label,sls))
+    if (SS7Layer3::receivedMSU(msu,label,sls)) {
+	if (link && link->m_unchecked) {
+	    link->m_unchecked = false;
+	    notify(link);
+	}
 	return true;
+    }
     // then try to minimally process MTN and SNM MSUs
-    if (maintenance(msu,label,sls) || management(msu,label,sls))
+    if (maintenance(msu,label,sls) || management(msu,label,sls)) {
+	if (link && link->m_unchecked) {
+	    link->m_unchecked = false;
+	    notify(link);
+	}
 	return true;
+    }
     // if nothing worked, report the unavailable user part
     return unavailable(msu,label,sls);
 }
@@ -928,8 +941,12 @@ void SS7MTP3::notify(SS7Layer2* link)
 	tmp << "Link '" << link->toString() << "' is " << (link->operational()?"":"not ") << "operational. ";
     Debug(this,DebugInfo,"%sLinkset has %u/%u active links [%p]",tmp.null()?"":tmp.c_str(),m_active,m_total,this);
 #endif
-    if (link && link->operational())
-	link->m_check = Time::now() + 50000 + (::random() % 200000);
+    if (link) {
+	if (link->operational())
+	    link->m_check = Time::now() + 50000 + (::random() % 200000);
+	else
+	    link->m_unchecked = m_checklinks;
+    }
     // if operational status of a link changed notify upper layer
     if (act != m_active) {
 	Debug(this,DebugNote,"Linkset is%s operational [%p]",

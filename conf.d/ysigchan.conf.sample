@@ -456,6 +456,10 @@
 ; A value of zero disables sending SLTM else it is clamped to range 5s - 10m
 ;maintenance=60000
 
+; checklinks: boolean: Check that the links answer to maintenance messages
+;  (SLTM/SLTA) before placing them into service (normal behavior)
+;checklinks=true
+
 ; layer3dump: string: Filename to dump MTP3 packets to
 ;layer3dump=
 

@@ -771,8 +771,11 @@ void SS7Router::notify(SS7Layer3* network, int sls)
 		Debug(this,DebugNote,"Isolation ended before shutting down [%p]",this);
 		m_isolate.stop();
 	    }
-	    if (m_started)
-		sendRestart(network);
+	    if (m_started) {
+		const SS7MTP3* mtp3 = YOBJECT(SS7MTP3,network);
+		if (!mtp3 || (mtp3->linksActive() <= 1))
+		    sendRestart(network);
+	    }
 	    else {
 		if (!m_restart.started())
 		    restart();

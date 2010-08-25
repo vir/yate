@@ -840,6 +840,7 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 	return -1;
     }
 
+    bool maint = (msu.getSIF() == SS7MSU::MTN) || (msu.getSIF() == SS7MSU::MTNS);
     // Try to find a link with the given SLS
     ObjList* l = (sls >= 0) ? &m_links : 0;
     for (; l; l = l->next()) {
@@ -849,7 +850,7 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 	SS7Layer2* link = *p;
 	if (link->sls() == sls) {
 	    XDebug(this,DebugAll,"Found link %p for SLS=%d [%p]",link,sls,this);
-	    if (link->operational() && !link->inhibited()) {
+	    if (link->operational() && (maint || !link->inhibited())) {
 		if (link->transmitMSU(msu)) {
 		    DDebug(this,DebugAll,"Sent MSU over link '%s' %p with SLS=%d%s [%p]",
 			link->toString().c_str(),link,sls,
@@ -857,6 +858,10 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 		    dump(msu,true,sls);
 		    return sls;
 		}
+		return -1;
+	    }
+	    if (maint) {
+		Debug(this,DebugNote,"Dropping maintenance MSU for SLS=%d, link is down",sls);
 		return -1;
 	    }
 	    // found link but is down - reroute

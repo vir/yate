@@ -2152,7 +2152,7 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 // Helper that copies all parameters starting with a capital letter
 static void copyUpper(NamedList& dest, const NamedList& src)
 {
-    static const Regexp r("^[A-Z][A-Za-z_.]\\+$");
+    static const Regexp r("^[A-Z][A-Za-z0-9_.]\\+$");
     unsigned int n = src.length();
     for (unsigned int i = 0; i < n; i++) {
 	const NamedString* p = src.getParam(i);

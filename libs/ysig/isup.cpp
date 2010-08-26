@@ -2759,7 +2759,8 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 	    }
 	    m_contTimer.stop();
 	    m_iamTimer.start();
-	    transmitMessage(new SS7MsgISUP(SS7MsgISUP::LPA,id()));
+	    if (isup()->m_confirmCCR)
+		transmitMessage(new SS7MsgISUP(SS7MsgISUP::LPA,id()));
 	    break;
 	case SS7MsgISUP::ACM:
 	    connectCircuit();
@@ -2859,6 +2860,7 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
       m_inn(false),
       m_defaultSls(SlsLatest),
       m_maxCalledDigits(16),
+      m_confirmCCR(true),
       m_l3LinkUp(false),
       m_t1Interval(15000),               // Q.764 T1 15..60 seconds
       m_t5Interval(300000),              // Q.764 T5 5..15 minutes
@@ -2950,6 +2952,7 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
 	m_lockTimer.start();
 
     m_continuity = params.getValue("continuity");
+    m_confirmCCR = params.getBoolValue("confirm_ccr",true);
     m_defaultSls = params.getIntValue("sls",s_dict_callSls,m_defaultSls);
     m_maxCalledDigits = params.getIntValue("maxcalleddigits",m_maxCalledDigits);
     if (m_maxCalledDigits < 1)
@@ -3010,6 +3013,7 @@ bool SS7ISUP::initialize(const NamedList* config)
 	m_lockGroup = config->getBoolValue("lockgroup",m_lockGroup);
 	m_earlyAcm = config->getBoolValue("earlyacm",m_earlyAcm);
 	m_continuity = config->getValue("continuity",m_continuity);
+	m_confirmCCR = config->getBoolValue("confirm_ccr",true);
 	m_defaultSls = config->getIntValue("sls",s_dict_callSls,m_defaultSls);
     }
     return SS7Layer4::initialize(config);

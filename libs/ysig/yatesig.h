@@ -7676,6 +7676,7 @@ private:
     String m_callerCat;                  // Caller party category
     String m_format;                     // Default format
     String m_continuity;                 // Continuity test type
+    bool m_confirmCCR;                   // Send LPA in response to CCR
     bool m_l3LinkUp;                     // Flag indicating the availability of a Layer3 data link
     u_int64_t m_t1Interval;              // Q.764 T1 timer interval
     u_int64_t m_t5Interval;              // Q.764 T5 timer interval

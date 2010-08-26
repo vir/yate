@@ -1624,16 +1624,18 @@ bool SS7M2UA::processMAUP(unsigned char msgType, const DataBlock& msg, int strea
 		bool oper = operational();
 		switch (evt) {
 		    case 1:
+			Debug(this,DebugInfo,"Remote entered Processor Outage");
 			m_rpo = true;
 			break;
 		    case 2:
+			Debug(this,DebugInfo,"Remote exited Processor Outage");
 			m_rpo = false;
 			break;
 		}
 		if (operational() != oper)
 		    SS7Layer2::notify();
 	    }
-	    break;
+	    return true;
     }
     Debug(this,DebugStub,"%s M2UA MAUP message type %u",err,msgType);
     return false;

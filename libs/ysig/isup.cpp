@@ -1943,6 +1943,22 @@ static inline bool isCalledIncomplete(const NamedList& l, const String& p = "Cal
     return !l[p].endsWith(".");
 }
 
+// Fill call release or cnf flags from message compatibility info
+static void getMsgCompat(SS7MsgISUP* msg, bool& release, bool& cnf)
+{
+    if (!msg)
+	return;
+    String* msgCompat = msg->params().getParam("MessageCompatInformation");
+    if (msgCompat) {
+	ObjList* l = msgCompat->split(',',false);
+	release = l->find("release") || l->find("nopass-release");
+	cnf = !release && l->find("cnf");
+	TelEngine::destruct(l);
+    }
+    else
+	cnf = true;
+}
+
 /**
  * SS7ISUPCall
  */
@@ -4545,9 +4561,24 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    impl = false;
 	    break;
 	default:
-	    // TODO: check MessageCompatInformation
 	    impl = false;
-	    reason = "service-not-implemented";
+	    bool cnf = false;
+	    bool release = false;
+	    getMsgCompat(msg,release,cnf);
+	    if (cnf || release) {
+		reason = "unknown-message";
+		unsigned char type = msg->type();
+		diagnostic.hexify(&type,1);
+		if (release) {
+		    SS7ISUPCall* call = findCall(msg->cic());
+		    if (call)
+			call->setTerminate(true,reason,diagnostic,m_location);
+		    else
+			transmitRLC(this,msg->cic(),label,true,reason,diagnostic,m_location);
+		    // Avoid sending CNF
+		    reason = 0;
+		}
+	    }
     }
     if (stopSGM) {
 	SS7ISUPCall* call = findCall(msg->cic());

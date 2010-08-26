@@ -2200,7 +2200,7 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 		m_iamMsg = new SS7MsgISUP(SS7MsgISUP::IAM,id());
 		copyParamIAM(m_iamMsg,true,event->message());
 		// Update overlap
-		setOverlapped(m_iamMsg->params());
+		setOverlapped(isCalledIncomplete(m_iamMsg->params()));
 		if (m_overlap) {
 		    // Check for maximum number of digits allowed
 		    String* called = m_iamMsg->params().getParam("CalledPartyNumber");

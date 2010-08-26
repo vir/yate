@@ -1437,7 +1437,7 @@ bool SS7M2UAClient::processMSG(unsigned char msgVersion, unsigned char msgClass,
 
 SS7M2UA::SS7M2UA(const NamedList& params)
     : SignallingComponent(params.safe("SS7M2UA"),&params),
-      m_iid(params.getIntValue("iid",-1)), m_linkState(LinkDown)
+      m_iid(params.getIntValue("iid",-1)), m_linkState(LinkDown), m_rpo(false)
 {
     Debug(DebugStub,"SS7M2UA");
 }
@@ -1604,6 +1604,7 @@ bool SS7M2UA::processMAUP(unsigned char msgType, const DataBlock& msg, int strea
 	    break;
 	case 3: // Establish Confirm
 	    m_linkState = LinkUp;
+	    m_rpo = false;
 	    SS7Layer2::notify();
 	    return true;
 	case 5: // Release Confirm
@@ -1611,8 +1612,27 @@ bool SS7M2UA::processMAUP(unsigned char msgType, const DataBlock& msg, int strea
 	    activeChange(false);
 	    return true;
 	case 8: // State Confirm
-	case 9: // State Indication
 	    err = "Ignoring";
+	    break;
+	case 9: // State Indication
+	    {
+		u_int32_t evt = 0;
+		if (!SIGAdaptation::getTag(msg,0x0303,evt)) {
+		    err = "Missing state event";
+		    break;
+		}
+		bool oper = operational();
+		switch (evt) {
+		    case 1:
+			m_rpo = true;
+			break;
+		    case 2:
+			m_rpo = false;
+			break;
+		}
+		if (operational() != oper)
+		    SS7Layer2::notify();
+	    }
 	    break;
     }
     Debug(this,DebugStub,"%s M2UA MAUP message type %u",err,msgType);
@@ -1622,6 +1642,7 @@ bool SS7M2UA::processMAUP(unsigned char msgType, const DataBlock& msg, int strea
 void SS7M2UA::activeChange(bool active)
 {
     if (!active) {
+	m_rpo = false;
 	switch (m_linkState) {
 	    case LinkUpEmg:
 		m_linkState = LinkReqEmg;
@@ -1643,7 +1664,7 @@ void SS7M2UA::activeChange(bool active)
 
 bool SS7M2UA::operational() const
 {
-    return m_linkState >= LinkUp;
+    return (m_linkState >= LinkUp) && !m_rpo;
 }
 
 

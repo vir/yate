@@ -6195,6 +6195,7 @@ protected:
     virtual bool processMAUP(unsigned char msgType, const DataBlock& msg, int streamId);
     int32_t m_iid;
     int m_linkState;
+    bool m_rpo;
 };
 
 /**

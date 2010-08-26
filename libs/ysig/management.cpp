@@ -25,6 +25,7 @@
 #include "yatesig.h"
 #include <yatephone.h>
 
+#include <string.h>
 
 using namespace TelEngine;
 
@@ -89,6 +90,40 @@ static const TokenDict s_snm_group[] = {
 };
 #undef MAKE_NAME
 
+namespace { //anonymous
+
+class SnmPending : public SignallingMessageTimer, public SS7Label
+{
+public:
+    inline SnmPending(SS7MSU* msg, const SS7Label& label, int txSls, u_int64_t interval, u_int64_t global = 0)
+	: SignallingMessageTimer(interval,global), SS7Label(label),
+	  m_msu(msg), m_txSls(txSls)
+	{ }
+
+    inline ~SnmPending()
+	{ TelEngine::destruct(m_msu); }
+
+    inline SS7MSU& msu() const
+	{ return *m_msu; }
+
+    inline int txSls() const
+	{ return m_txSls; }
+
+    inline SS7MsgSNM::Type snmType() const
+	{ return (SS7MsgSNM::Type)m_msu->at(length()+1,0); }
+
+    inline const char* snmName() const
+	{ return SS7MsgSNM::lookup(snmType(),"Unknown"); }
+
+    inline bool matches(const SS7Label& lbl) const
+	{ return opc() == lbl.dpc() && dpc() == lbl.opc() && sls() == lbl.sls(); }
+
+private:
+    SS7MSU* m_msu;
+    int m_txSls;
+};
+
+}; // anonymous namespace
 
 // Constructor
 SS7MsgSNM::SS7MsgSNM(unsigned char type)
@@ -287,8 +322,8 @@ bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Lay
 
     SS7Router* router = YOBJECT(SS7Router,SS7Layer4::network());
     // TODO: implement
-    String l;
-    l << label;
+    String addr;
+    addr << label;
     if (msg->type() == SS7MsgSNM::TFP ||
 	msg->type() == SS7MsgSNM::TFR ||
 	msg->type() == SS7MsgSNM::TFA) {
@@ -298,7 +333,7 @@ bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Lay
 		const char* status = (msg->type() == SS7MsgSNM::TFP) ? "prohibited" :
 		    ((msg->type() == SS7MsgSNM::TFA) ? "allowed" : "restricted");
 		Debug(this,DebugInfo,"%s (label=%s): Traffic is %s to dest=%s [%p]",
-		    msg->name(),l.c_str(),status,dest.c_str(),this);
+		    msg->name(),addr.c_str(),status,dest.c_str(),this);
 	    }
 	    if (router) {
 		NamedList* ctrl = router->controlCreate();
@@ -322,13 +357,13 @@ bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Lay
 	}
 	else
 	    Debug(this,DebugNote,"Received %s (label=%s) without destination [%p]",
-		    msg->name(),l.c_str(),this);
+		    msg->name(),addr.c_str(),this);
     }
     else if (msg->type() == SS7MsgSNM::TRA) {
 	String dest;
 	dest << label.opc();
 	Debug(this,DebugInfo,"%s (label=%s): Traffic can restart to dest=%s [%p]",
-	    msg->name(),l.c_str(),dest.c_str(),this);
+	    msg->name(),addr.c_str(),dest.c_str(),this);
 	if (router) {
 	    NamedList* ctrl = router->controlCreate("allowed");
 	    if (ctrl) {
@@ -380,6 +415,73 @@ bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Lay
 	    msg->params().getValue("destination","?"),
 	    msg->params().getValue("cause","?"));
     }
+    else if (msg->type() == SS7MsgSNM::CBA) {
+	if (!len--)
+	    return false;
+	Debug(this,DebugInfo,"%s (code len=%u) [%p]",msg->name(),len,this);
+	lock();
+	SnmPending* pend = 0;
+	for (ObjList* l = m_pending.skipNull(); l; l = l->skipNext()) {
+	    SnmPending* p = static_cast<SnmPending*>(l->get());
+	    if (p->msu().length() != msu.length())
+		continue;
+	    const unsigned char* ptr = p->msu().getData(p->length()+1,len+1);
+	    if (!ptr || (ptr[0] != SS7MsgSNM::CBD))
+		continue;
+	    if (::memcmp(ptr+1,buf+1,len) || !p->matches(label))
+		continue;
+	    pend = static_cast<SnmPending*>(m_pending.remove(p,false));
+	    break;
+	}
+	unlock();
+	if (pend) {
+	    String link;
+	    link << msg->params().getValue("pointcodetype") << "," << *pend;
+	    Debug(this,DebugNote,"Changeback acknowledged on %s",link.c_str());
+	    if (router) {
+		NamedList* ctrl = router->controlCreate("inservice");
+		if (ctrl) {
+		    ctrl->copyParams(msg->params());
+		    ctrl->setParam("address",link);
+		    ctrl->setParam("automatic",String::boolText(true));
+		    router->controlExecute(ctrl);
+		}
+	    }
+	}
+	TelEngine::destruct(pend);
+    }
+    else if (msg->type() == SS7MsgSNM::COA ||
+	msg->type() == SS7MsgSNM::XCA ||
+	msg->type() == SS7MsgSNM::ECA) {
+	if (!len--)
+	    return false;
+	Debug(this,DebugInfo,"%s (code len=%u) [%p]",msg->name(),len,this);
+	lock();
+	SnmPending* pend = 0;
+	for (ObjList* l = m_pending.skipNull(); l; l = l->skipNext()) {
+	    SnmPending* p = static_cast<SnmPending*>(l->get());
+	    const unsigned char* ptr = p->msu().getData(p->length()+1,len+1);
+	    if (!(ptr && p->matches(label)))
+		continue;
+	    switch (ptr[0]) {
+		case SS7MsgSNM::COO:
+		case SS7MsgSNM::XCO:
+		case SS7MsgSNM::ECO:
+		    break;
+		default:
+		    continue;
+	    }
+	    pend = static_cast<SnmPending*>(m_pending.remove(p,false));
+	    break;
+	}
+	unlock();
+	if (pend) {
+	    String link;
+	    link << msg->params().getValue("pointcodetype") << "," << *pend;
+	    Debug(this,DebugNote,"Changeover acknowledged on %s",link.c_str());
+	}
+	TelEngine::destruct(pend);
+    }
     else {
 	String tmp;
 	tmp.hexify((void*)buf,len,' ');
@@ -394,7 +496,7 @@ bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Lay
 	Debug(this,DebugMild,
 	    "Unhandled SNM type=%s group=%s label=%s params:%s len=%u: %s ",
 	    msg->name(),lookup(msg->group(),s_snm_group,"Spare"),
-	    l.c_str(),params.c_str(),len,tmp.c_str());
+	    addr.c_str(),params.c_str(),len,tmp.c_str());
     }
 
     TelEngine::destruct(msg);
@@ -525,7 +627,9 @@ bool SS7Management::control(NamedList& params)
 				Debug(DebugStub,"Please implement COO for type %u",t);
 				return false;
 			}
-			return transmitMSU(SS7MSU(txSio,lbl,&data,len),lbl,txSls) >= 0;
+			return (cmd == SS7MsgSNM::COA)
+			    ? transmitMSU(SS7MSU(txSio,lbl,&data,len),lbl,txSls) >= 0
+			    : postpone(new SS7MSU(txSio,lbl,&data,len),lbl,txSls,1800);
 		    }
 		// Changeback messages
 		case SS7MsgSNM::CBD:
@@ -548,7 +652,9 @@ bool SS7Management::control(NamedList& params)
 				Debug(DebugStub,"Please implement CBD for type %u",t);
 				return false;
 			}
-			return transmitMSU(SS7MSU(txSio,lbl,&data,len),lbl,txSls) >= 0;
+			return (cmd == SS7MsgSNM::CBA)
+			    ? transmitMSU(SS7MSU(txSio,lbl,&data,len),lbl,txSls) >= 0
+			    : postpone(new SS7MSU(txSio,lbl,&data,len),lbl,txSls,1000,2000);
 		    }
 		default:
 		    if (cmd >= 0)
@@ -609,6 +715,55 @@ void SS7Management::notify(SS7Layer3* network, int sls)
     }
 }
 
+bool SS7Management::postpone(SS7MSU* msu, const SS7Label& label, int txSls,
+	u_int64_t interval, u_int64_t global, const Time& when)
+{
+    if (transmitMSU(*msu,label,txSls) >= 0) {
+	lock();
+	m_pending.add(new SnmPending(msu,label,txSls,interval,global),when);
+	unlock();
+	return true;
+    }
+    TelEngine::destruct(msu);
+    return false;
+}
+
+bool SS7Management::timeout(const SS7MSU& msu, const SS7Label& label, int txSls, bool final)
+{
+    Debug(this,DebugStub,"Timeout %u%s [%p]",txSls,(final ? " final" : ""),this);
+    return true;
+}
+
+bool SS7Management::timeout(SignallingMessageTimer& timer, bool final)
+{
+    SnmPending& msg = static_cast<SnmPending&>(timer);
+    if (final) {
+	String addr;
+	addr << msg;
+	Debug(this,DebugNote,"Expired %s control sequence to %s [%p]",
+	    msg.snmName(),addr.c_str(),this);
+    }
+    return timeout(msg.msu(),msg,msg.txSls(),final);
+}
+
+void SS7Management::timerTick(const Time& when)
+{
+    for (;;) {
+	lock();
+	SnmPending* msg = static_cast<SnmPending*>(m_pending.timeout(when));
+	unlock();
+	if (!msg)
+	    break;
+	if (!msg->global().started() || msg->global().timeout(when.msec()))
+	    timeout(*msg,true);
+	else if (timeout(*msg,false)) {
+	    transmitMSU(msg->msu(),*msg,msg->txSls());
+	    m_pending.add(msg,when);
+	    msg = 0;
+	}
+	TelEngine::destruct(msg);
+    }
+}
 
 bool SS7Maintenance::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {

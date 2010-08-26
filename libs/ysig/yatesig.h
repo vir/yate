@@ -7021,7 +7021,7 @@ private:
  * Implementation of SS7 SNM User Part (Management) - Q.704
  * @short SS7 SNM implementation
  */
-class YSIG_API SS7Management : public SS7Layer4
+class YSIG_API SS7Management : public SS7Layer4, public Mutex
 {
     YCLASS(SS7Management,SS7Layer4)
 public:
@@ -7059,6 +7059,18 @@ protected:
      */
     virtual bool control(NamedList& params);
 
+    /**
+     * Method called periodically by the engine to retransmit messages
+     * @param when Time to use as computing base for timers
+     */
+    virtual void timerTick(const Time& when);
+
+private:
+    bool postpone(SS7MSU* msu, const SS7Label& label, int txSls,
+	u_int64_t interval, u_int64_t global = 0, const Time& when = Time());
+    bool timeout(const SS7MSU& msu, const SS7Label& label, int txSls, bool final);
+    bool timeout(SignallingMessageTimer& timer, bool final);
+    SignallingMessageTimerList m_pending;
 };
 
 /**

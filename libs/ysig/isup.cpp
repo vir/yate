@@ -4135,7 +4135,9 @@ void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 	// non IAM message. Drop it if there is no call for it
 	if ((msg->type() != SS7MsgISUP::IAM) && (msg->type() != SS7MsgISUP::CCR)) {
 	    if (!call) {
-	        if (msg->type() != SS7MsgISUP::RLC) {
+		if (msg->type() == SS7MsgISUP::REL)
+		    DROP_MSG("no call")
+		if (msg->type() != SS7MsgISUP::RLC) {
 		    // Initiate circuit reset
 		    SignallingCircuit* cic = 0;
 		    String s(msg->cic());

@@ -2686,14 +2686,14 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 		if (m_circuitTesting && !(isup() && isup()->m_continuity)) {
 		    Debug(isup(),DebugWarn,"Call(%u). Continuity check requested but not configured [%p]",
 			id(),this);
-		    setTerminate(false,"service-not-implemented");
 		    TelEngine::destruct(m_sgmMsg);
+		    setReason("service-not-implemented",0,0,isup()->location());
 		    release();
 		    return 0;
 		}
 		if (m_circuitTesting && !connectCircuit(isup()->m_continuity)) {
-		    setTerminate(false,"bearer-cap-not-available");
 		    TelEngine::destruct(m_sgmMsg);
+		    setReason("bearer-cap-not-available",0,0,isup()->location());
 		    release();
 		    return 0;
 		}
@@ -2715,15 +2715,15 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 		if (!(isup() && isup()->m_continuity)) {
 		    Debug(isup(),DebugWarn,"Call(%u). Continuity check requested but not configured [%p]",
 			id(),this);
-		    setTerminate(false,"service-not-implemented");
 		    TelEngine::destruct(m_sgmMsg);
+		    setReason("service-not-implemented",0,0,isup()->location());
 		    release();
 		    return 0;
 		}
 		m_circuitTesting = true;
 		if (!connectCircuit(isup()->m_continuity)) {
-		    setTerminate(false,"bearer-cap-not-available");
 		    TelEngine::destruct(m_sgmMsg);
+		    setReason("bearer-cap-not-available",0,0,isup()->location());
 		    release();
 		    return 0;
 		}
@@ -2732,8 +2732,8 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 		m_state = Testing;
 	    }
 	    else if (!m_circuitTesting) {
-		setTerminate(false,"wrong-state-message");
 		TelEngine::destruct(m_sgmMsg);
+		setReason("wrong-state-message",0,0,isup()->location());
 		release();
 		return 0;
 	    }

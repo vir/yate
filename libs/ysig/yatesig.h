@@ -5873,6 +5873,7 @@ private:
     void checkRoutes(const SS7Layer3* noResume = 0);
     int routeMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls, SS7Route::State states);
     bool m_checkRoutes;
+    bool m_sendUnavail;
     unsigned long m_rxMsu;
     unsigned long m_txMsu;
     unsigned long m_fwdMsu;

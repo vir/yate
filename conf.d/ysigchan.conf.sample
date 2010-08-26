@@ -533,3 +533,6 @@
 ; autostart: boolean: Perform MTP restart sequence at initialization
 ; According to the standard the restart is performed on first link activation
 ;autostart=no
+
+; sendupu: boolean: Send User Part Unavailable SNM messages
+;sendupu=yes

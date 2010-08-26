@@ -203,7 +203,7 @@ SS7Router::SS7Router(const NamedList& params)
     : SignallingComponent(params.safe("SS7Router"),&params),
       Mutex(true,"SS7Router"),
       m_changes(0), m_transfer(false), m_phase2(false), m_started(false),
-      m_restart(0), m_isolate(0), m_checkRoutes(false),
+      m_restart(0), m_isolate(0), m_checkRoutes(false), m_sendUnavail(true),
       m_rxMsu(0), m_txMsu(0), m_fwdMsu(0),
       m_mngmt(0), m_maint(0)
 {
@@ -216,6 +216,7 @@ SS7Router::SS7Router(const NamedList& params)
     }
 #endif
     m_transfer = params.getBoolValue("transfer");
+    m_sendUnavail = params.getBoolValue("sendupu",m_sendUnavail);
     m_restart.interval(params,"starttime",5000,(m_transfer ? 60000 : 10000),false);
     m_isolate.interval(params,"isolation",500,1000,false);
     loadLocalPC(params);
@@ -239,6 +240,7 @@ bool SS7Router::initialize(const NamedList* config)
 	debugLevel(config->getIntValue("debuglevel_router",
 	    config->getIntValue("debuglevel",-1)));
 	m_transfer = config->getBoolValue("transfer",m_transfer);
+	m_sendUnavail = config->getBoolValue("sendupu",m_sendUnavail);
 	const String* param = config->getParam("management");
 	const char* name = "ss7snm";
 	if (param) {
@@ -599,7 +601,7 @@ bool SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3*
 	}
     } while (l); // loop until the list was scanned to end
     unlock();
-    return m_transfer && (routeMSU(msu,label,network,sls,SS7Route::NotProhibited) >= 0);
+    return (m_transfer && (routeMSU(msu,label,network,sls,SS7Route::NotProhibited) >= 0)) || !m_sendUnavail;
 }
 
 void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type, GenObject* context)
@@ -829,6 +831,7 @@ bool SS7Router::control(NamedList& params)
     if (!(cmp && toString() == cmp))
 	return false;
 
+    m_sendUnavail = params.getBoolValue("sendupu",m_sendUnavail);
     String err;
     switch (cmd) {
 	case SS7Router::Pause:

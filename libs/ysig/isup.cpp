@@ -2055,7 +2055,16 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
     SS7MsgISUP* msg = 0;
     while (true) {
 	if (m_terminate) {
-	    m_lastEvent = releaseComplete(false,0);
+	    if (m_state < Releasing && m_state > Null)
+		if (m_gracefully)
+		    release();
+		else
+		    m_lastEvent = releaseComplete(false,0);
+	    else if (m_state == Null || m_state == Released) {
+		m_gracefully = false;
+		m_lastEvent = releaseComplete(false,0);
+	    }
+	    m_terminate = false;
 	    break;
 	}
 	// Check if waiting for SGM

@@ -381,6 +381,10 @@
 ; A default 'BI' will be used if not set or invalid
 ;location=
 
+; confirm_ccr: boolean: Send a Loopback Ack (national use) in response to Continuity Check Request message
+; Defaults to yes
+;confirm_ccr=yes
+
 ; print-messages: boolean: Print decoded protocol data units to output
 ; This option is applied on reload
 ; Defaults to no

@@ -2082,6 +2082,14 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 		    break;
 		case SS7MsgISUP::RLC:
 		    m_gracefully = false;
+		    if (m_state < Releasing) {
+			setReason(0,msg);
+			m_location = isup()->location();
+			release();
+			msg->params().addParam("reason",m_reason,false);
+			m_lastEvent = new SignallingEvent(SignallingEvent::Release,msg,this);
+			break;
+		    }
 		case SS7MsgISUP::REL:
 		    m_relTimer.stop();
 		    m_lastEvent = releaseComplete(false,msg);
@@ -2480,6 +2488,9 @@ bool SS7ISUPCall::validMsgState(bool send, SS7MsgISUP::Type type)
 		break;
 	    return true;
 	case SS7MsgISUP::REL:    // Release
+	    if (send && m_state >= Releasing)
+		break;
+	    // fall through
 	case SS7MsgISUP::RLC:    // Release complete
 	    if (m_state == Null || m_state == Released)
 		break;

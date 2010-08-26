@@ -1911,18 +1911,14 @@ static int transmitREL(SS7ISUP* isup, unsigned int cic, const SS7Label& label, b
 // Push down the protocol stack a RLC (Release Complete) message
 // @param msg Optional received message to copy release parameters. Ignored if reason is valid
 static int transmitRLC(SS7ISUP* isup, unsigned int cic, const SS7Label& label, bool recvLbl,
-    const char* reason = 0, const SS7MsgISUP* msg = 0, const char* diagnostic = 0,
-    const char* location = 0)
+    const char* reason = 0, const char* diagnostic = 0, const char* location = 0)
 {
     SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::RLC,cic);
-    if (reason && *reason)
+    if (!TelEngine::null(reason)) {
 	m->params().addParam("CauseIndicators",reason);
-    else if (msg)
-	m->params().copyParam(((SS7MsgISUP*)msg)->params(),"CauseIndicators",'.');
-    else
-	m->params().addParam("CauseIndicators","normal-clearing");
-    m->params().addParam("CauseIndicators.location",location,false);
-    m->params().addParam("CauseIndicators.diagnostic",diagnostic,false);
+	m->params().addParam("CauseIndicators.location",location,false);
+	m->params().addParam("CauseIndicators.diagnostic",diagnostic,false);
+    }
     return isup->transmitMessage(m,label,recvLbl);
 }
 
@@ -2333,7 +2329,7 @@ SignallingEvent* SS7ISUPCall::releaseComplete(bool final, SS7MsgISUP* msg, const
     if (m_state == Released)
 	return 0;
     if (isup() && m_gracefully) {
-	int sls = transmitRLC(isup(),id(),m_label,false,m_reason,0,0,isup()->location());
+	int sls = transmitRLC(isup(),id(),m_label,false,m_reason,0,isup()->location());
 	if (sls != -1 && m_label.sls() == 255)
 	    m_label.setSls(sls);
     }
@@ -3462,7 +3458,7 @@ bool SS7ISUP::control(NamedList& params)
 		TelEngine::destruct(pending);
 		SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
 		mylock.drop();
-		transmitRLC(this,code,label,false,0,0,0,m_location);
+		transmitRLC(this,code,label,false);
 	    }
 	    return true;
 
@@ -3864,7 +3860,7 @@ bool SS7ISUP::processParamCompat(const NamedList& list, unsigned int cic, bool* 
 	    SS7Label label(m_type,*m_remotePoint,*m_defPoint,
 		(m_defaultSls == SlsCircuit) ? cic : m_sls);
 	    lock.drop();
-	    transmitRLC(this,cic,label,false,"unknown-ie",0,diagnostic,m_location);
+	    transmitRLC(this,cic,label,false,"unknown-ie",diagnostic,m_location);
 	}
 	if (callReleased)
 	    *callReleased = true;
@@ -4164,12 +4160,8 @@ void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 	call->enqueue(msg);
     }
     else {
-	if (msg->type() != SS7MsgISUP::IAM && msg->type() != SS7MsgISUP::RLC) {
-	    if (msg->type() != SS7MsgISUP::REL)
-		transmitRLC(this,msg->cic(),label,true);
-	    else
-		transmitRLC(this,msg->cic(),label,true,0,msg);
-	}
+	if (msg->type() != SS7MsgISUP::IAM && msg->type() != SS7MsgISUP::RLC)
+	    transmitRLC(this,msg->cic(),label,true);
 	if (msg->type() != SS7MsgISUP::RLC)
 	    Debug(this,DebugNote,"'%s' with cic=%u: %s",msg->name(),msg->cic(),reason);
     }

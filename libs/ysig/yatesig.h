@@ -7355,6 +7355,7 @@ private:
     SignallingTimer m_relTimer;          // Send release
     SignallingTimer m_iamTimer;          // Send initial address
     SignallingTimer m_sgmRecvTimer;      // Receive segmented message
+    SignallingTimer m_contTimer;         // Continuity timer
 };
 
 /**

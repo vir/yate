@@ -1964,7 +1964,8 @@ SS7ISUPCall::SS7ISUPCall(SS7ISUP* controller, SignallingCircuit* cic,
     m_relTimer(300000),                  // Q.764: T5  - 5..15 minutes
     m_iamTimer(20000),                   // Setup, Testing: Q.764: T7  - 20..30 seconds
                                          // Releasing: Q.764: T1: 15..60 seconds
-    m_sgmRecvTimer(3000)                 // Q.764: T34 - 2..4 seconds
+    m_sgmRecvTimer(3000),                // Q.764: T34 - 2..4 seconds
+    m_contTimer(240000)                  // Q.764: T27 - 4 minutes
 {
     if (!(controller && m_circuit)) {
 	Debug(isup(),DebugWarn,
@@ -1986,15 +1987,20 @@ SS7ISUPCall::~SS7ISUPCall()
 {
     if (m_iamMsg)
 	m_iamMsg->deref();
-    releaseComplete(true,0,0,m_relTimer.started());
-    Debug(isup(),!m_relTimer.started() ? DebugAll : DebugNote,
+    const char* timeout = 0;
+    if (m_relTimer.started())
+	timeout = " (release timed out)";
+    else if (m_contTimer.started())
+	timeout = " (T27 timed out)";
+    releaseComplete(true,0,0,0 != timeout);
+    Debug(isup(),!timeout ? DebugAll : DebugNote,
 	"Call(%u) destroyed with reason='%s'%s [%p]",
-	id(),m_reason.safe(),!m_relTimer.started() ? "" : " (release timed out)",this);
+	id(),m_reason.safe(),TelEngine::c_safe(timeout),this);
     if (controller()) {
-	if (!m_relTimer.started())
+	if (!timeout)
 	    controller()->releaseCircuit(m_circuit);
 	else
-	    isup()->startCircuitReset(m_circuit,"T5");
+	    isup()->startCircuitReset(m_circuit,m_relTimer.started() ? "T5" : "T16");
     }
 }
 
@@ -2123,6 +2129,10 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 			}
 		    }
 		    release();
+		}
+		if (timeout(isup(),this,m_contTimer,when,"T27",false)) {
+		    m_gracefully = false;
+		    m_lastEvent = releaseComplete(false,0,0,true);
 		}
 		break;
 	    case Releasing:
@@ -2676,9 +2686,12 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 			id(),this);
 		    m_circuitTesting = false;
 		}
-		else
+		else {
 		    Debug(isup(),DebugWarn,"Call(%u). Continuity check failed [%p]",
 			id(),this);
+		    m_contTimer.start();
+		    break;
+		}
 		if (!(ok && m_iamMsg)) {
 		    m_lastEvent = new SignallingEvent(SignallingEvent::Info,m_sgmMsg,this);
 		    break;
@@ -2744,6 +2757,7 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 		release();
 		return 0;
 	    }
+	    m_contTimer.stop();
 	    m_iamTimer.start();
 	    transmitMessage(new SS7MsgISUP(SS7MsgISUP::LPA,id()));
 	    break;

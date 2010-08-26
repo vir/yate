@@ -281,7 +281,8 @@ bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Lay
     if (debugAt(DebugInfo)) {
 	String tmp;
 	msg->toString(tmp,label,debugAt(DebugAll));
-	Debug(this,DebugInfo,"Received message (%p)%s",msg,tmp.c_str());
+	Debug(this,DebugInfo,"Received %u bytes message (%p) on %d%s",
+	    len,msg,sls,tmp.c_str());
     }
 
     SS7Router* router = YOBJECT(SS7Router,SS7Layer4::network());
@@ -451,6 +452,15 @@ bool SS7Management::control(NamedList& params)
 		spare = l->at(4)->toString().toInteger(spare);
 	    TelEngine::destruct(l);
 	    SS7Label lbl(t,dpc,opc,sls,spare);
+	    int txSls = sls;
+	    switch (cmd) {
+		case SS7MsgSNM::COO:
+		case SS7MsgSNM::COA:
+		case SS7MsgSNM::CBD:
+		case SS7MsgSNM::CBA:
+		    txSls = (txSls + 1) & 0xff;
+	    }
+	    txSls = params.getIntValue("linksel",txSls);
 	    switch (cmd) {
 		// Messages containing a destination point code
 		case SS7MsgSNM::TFP:
@@ -467,7 +477,7 @@ bool SS7Management::control(NamedList& params)
 			    data[0] = cmd;
 			    return dest.store(t,data+1,spare) &&
 				(transmitMSU(SS7MSU(txSio,lbl,data,
-				    SS7PointCode::length(t)+1),lbl,sls) >= 0);
+				    SS7PointCode::length(t)+1),lbl,txSls) >= 0);
 			}
 		    }
 		    return false;
@@ -488,14 +498,14 @@ bool SS7Management::control(NamedList& params)
 		case SS7MsgSNM::CNP:
 		    {
 			unsigned char data = cmd;
-			return transmitMSU(SS7MSU(txSio,lbl,&data,1),lbl,sls) >= 0;
+			return transmitMSU(SS7MSU(txSio,lbl,&data,1),lbl,txSls) >= 0;
 		    }
 		// Changeover messages
 		case SS7MsgSNM::COO:
 		case SS7MsgSNM::COA:
 		    if (params.getBoolValue("emergency",false)) {
 			unsigned char data = (SS7MsgSNM::COO == cmd) ? SS7MsgSNM::ECO : SS7MsgSNM::ECA;
-			return transmitMSU(SS7MSU(txSio,lbl,&data,1),lbl,sls) >= 0;
+			return transmitMSU(SS7MSU(txSio,lbl,&data,1),lbl,txSls) >= 0;
 		    }
 		    else {
 			int seq = params.getIntValue("sequence",0) & 0x7f;
@@ -515,7 +525,7 @@ bool SS7Management::control(NamedList& params)
 				Debug(DebugStub,"Please implement COO for type %u",t);
 				return false;
 			}
-			return transmitMSU(SS7MSU(txSio,lbl,&data,len),lbl,sls) >= 0;
+			return transmitMSU(SS7MSU(txSio,lbl,&data,len),lbl,txSls) >= 0;
 		    }
 		// Changeback messages
 		case SS7MsgSNM::CBD:
@@ -538,7 +548,7 @@ bool SS7Management::control(NamedList& params)
 				Debug(DebugStub,"Please implement CBD for type %u",t);
 				return false;
 			}
-			return transmitMSU(SS7MSU(txSio,lbl,&data,len),lbl,sls) >= 0;
+			return transmitMSU(SS7MSU(txSio,lbl,&data,len),lbl,txSls) >= 0;
 		    }
 		default:
 		    if (cmd >= 0)
@@ -581,8 +591,9 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 			continue;
 		    String tmp = addr;
 		    tmp << "," << SS7PointCode(type,r->packed()) << "," << sls;
-		    DDebug(this,DebugAll,"Sending Link %s %s [%p]",oper,tmp.c_str(),this);
+		    Debug(this,DebugAll,"Sending Link %d %s %s [%p]",sls,oper,tmp.c_str(),this);
 		    ctl->setParam("address",tmp);
+		    ctl->setParam("slc",String(sls));
 		    if (!linkUp) {
 			int seq = network->getSequence(sls);
 			if (seq >= 0)

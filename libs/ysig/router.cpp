@@ -601,7 +601,7 @@ bool SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3*
 	}
     } while (l); // loop until the list was scanned to end
     unlock();
-    return (m_transfer && (routeMSU(msu,label,network,sls,SS7Route::NotProhibited) >= 0)) || !m_sendUnavail;
+    return (m_transfer && (routeMSU(msu,label,network,label.sls(),SS7Route::NotProhibited) >= 0)) || !m_sendUnavail;
 }
 
 void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type, GenObject* context)

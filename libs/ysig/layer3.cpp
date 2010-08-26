@@ -847,6 +847,11 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
     }
 
     bool maint = (msu.getSIF() == SS7MSU::MTN) || (msu.getSIF() == SS7MSU::MTNS);
+    bool mgmt = (msu.getSIF() == SS7MSU::SNM);
+    // TODO: support ranges with holes
+    if (!maint && !mgmt)
+	sls = sls % m_total;
+
     // Try to find a link with the given SLS
     ObjList* l = (sls >= 0) ? &m_links : 0;
     for (; l; l = l->next()) {
@@ -876,7 +881,6 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 	}
     }
 
-    bool mgmt = (msu.getSIF() == SS7MSU::SNM);
     // Link not found or not operational: choose another one
     for (l = m_links.skipNull(); l; l = l->skipNext()) {
 	L2Pointer* p = static_cast<L2Pointer*>(l->get());

@@ -4233,7 +4233,8 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		// Q.763 3.43 min=1 max=31
 		unsigned int n = getRangeAndStatus(msg->params(),1,31);
 		if (!n) {
-		    reason = "invalid-ie";
+		    Debug(this,DebugNote,"%s with invalid range %s",msg->name(),
+			msg->params().getValue("RangeAndStatus"));
 		    break;
 		}
 		String map('0',n);

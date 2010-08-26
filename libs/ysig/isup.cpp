@@ -4213,7 +4213,7 @@ void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 }
 
 unsigned int getRangeAndStatus(NamedList& nl, unsigned int minRange, unsigned int maxRange,
-    unsigned int maxMap = 0, String** map = 0, bool* hwFail = 0)
+    unsigned int maxMap = 0, String** map = 0, bool* hwFail = 0, unsigned int nCicsMax = 0)
 {
     unsigned int range = nl.getIntValue("RangeAndStatus");
     if (range < minRange || range > maxRange)
@@ -4223,8 +4223,19 @@ unsigned int getRangeAndStatus(NamedList& nl, unsigned int minRange, unsigned in
     NamedString* ns = nl.getParam("RangeAndStatus.map");
     if (!ns || ns->length() > maxMap || ns->length() < range)
 	return 0;
-    if (map)
+    if (map) {
+	if (nCicsMax) {
+	    // Check the number of bits set to 1 (circuits affected)
+	    for (unsigned int i = 0; i < ns->length(); i++) {
+		if ((*ns)[i] != '1')
+		    continue;
+		if (!nCicsMax)
+                   return 0;
+		nCicsMax--;
+           }
+	}
 	*map = ns;
+    }
     if (hwFail) {
 	ns = nl.getParam("GroupSupervisionTypeIndicator");
 	*hwFail = (ns && *ns == "hw-failure");
@@ -4326,20 +4337,13 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    break;
 	case SS7MsgISUP::CGA: // Circuit Group Blocking Acknowledgement
 	case SS7MsgISUP::CUA: // Circuit Group Unblocking Acknowledgement
-	    // Q.763 3.43 range can be 1..256
+	    // Q.763 3.43 range can be 1..256. Max bits set to 1 should be 32
 	    // Bit: 0-no indication 1-block/unblock
 	    {
 		String* srcMap = 0;
 		bool hwFail = false;
-		unsigned int nCics = getRangeAndStatus(msg->params(),1,256,256,&srcMap,&hwFail);
-		unsigned int count = 0;
-		if (nCics) {
-		    // Max bits set to 1 should be 32
-		    for (unsigned int i = 0; i < srcMap->length() && count < 33; i++)
-			if ((*srcMap)[i] == '1')
-			    count++;
-		}
-		if (!nCics || count > 32) {
+		unsigned int nCics = getRangeAndStatus(msg->params(),1,256,256,&srcMap,&hwFail,32);
+		if (!nCics) {
 		    Debug(this,DebugNote,"%s with invalid range %s or map=%s",msg->name(),
 			msg->params().getValue("RangeAndStatus"),
 			msg->params().getValue("RangeAndStatus.map"));
@@ -4391,20 +4395,21 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    break;
 	case SS7MsgISUP::CGB: // Circuit Group Blocking
 	case SS7MsgISUP::CGU: // Circuit Group Unblocking
-	    // Q.763 3.43 range can be 1..256
+	    // Q.763 3.43 range can be 1..256. Max bits set to 1 should be 32
 	    // Bit: 0-no indication 1-block/unblock
 	    {
 		String* srcMap = 0;
 		bool hwFail = false;
-		unsigned int nCics = getRangeAndStatus(msg->params(),1,256,256,&srcMap,&hwFail);
+		unsigned int nCics = getRangeAndStatus(msg->params(),1,256,256,&srcMap,&hwFail,32);
 		if (!nCics) {
-		    reason = "invalid-ie";
+		    Debug(this,DebugNote,"%s with invalid range %s or map=%s",msg->name(),
+			msg->params().getValue("RangeAndStatus"),
+			msg->params().getValue("RangeAndStatus.map"));
 		    break;
 		}
 	        bool block = (msg->type() == SS7MsgISUP::CGB);
 		String map('0',srcMap->length());
 		char* d = (char*)map.c_str();
-		// TODO: Max bits set to 1 should be 32
 		for (unsigned int i = 0; i < srcMap->length(); i++)
 		    if (srcMap->at(i) != '0' && blockCircuit(msg->cic()+i,block,true,hwFail,true,true))
 			d[i] = '1';

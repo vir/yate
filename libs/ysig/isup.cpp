@@ -3892,12 +3892,19 @@ bool SS7ISUP::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* n
 	return false;
     // we should have at least 2 bytes CIC and 1 byte message type
     const unsigned char* s = msu.getData(label.length()+1,3);
-    if (!s)
-	return false;
+    if (!s) {
+	Debug(this,DebugNote,"Got short MSU");
+	return true;
+    }
     unsigned int len = msu.length()-label.length()-1;
     unsigned int cic = s[0] | (s[1] << 8);
     SS7MsgISUP::Type type = (SS7MsgISUP::Type)s[2];
     const char* name = SS7MsgISUP::lookup(type);
+    if (!(circuits() && circuits()->find(cic))) {
+	Debug(this,DebugMild,"Received ISUP type 0x%02x (%s) for unknown cic=%u",
+	    type,name,cic);
+	return true;
+    }
     if (name) {
 	bool ok = processMSU(type,cic,s+3,len-3,label,network,sls);
 	if (!ok && debugAt(DebugMild)) {
@@ -3912,7 +3919,7 @@ bool SS7ISUP::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* n
     tmp.hexify((void*)s,len,' ');
     Debug(this,DebugMild,"Received unknown ISUP type 0x%02x, cic=%u, length %u: %s",
 	type,cic,len,tmp.c_str());
-    return false;
+    return true;
 }
 
 bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,

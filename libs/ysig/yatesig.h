@@ -5870,7 +5870,7 @@ private:
     void restart2();
     void disable();
     void sendRestart(const SS7Layer3* network = 0);
-    void checkRoutes();
+    void checkRoutes(const SS7Layer3* noResume = 0);
     int routeMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls, SS7Route::State states);
     bool m_checkRoutes;
     unsigned long m_rxMsu;

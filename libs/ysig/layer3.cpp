@@ -973,6 +973,20 @@ void SS7MTP3::notify(SS7Layer2* link)
     if (act != m_active) {
 	Debug(this,DebugNote,"Linkset is%s operational [%p]",
 	    (operational() ? "" : " not"),this);
+	// if we became inaccessible try to resume all other links
+	unsigned int cnt = 0;
+	for (const ObjList* l = &m_links; l && !(m_active || m_inhibit); l = l->next()) {
+	    L2Pointer* p = static_cast<L2Pointer*>(l->get());
+	    if (!p)
+		continue;
+	    SS7Layer2* l2 = *p;
+	    if ((l2 == link) || !l2)
+		continue;
+	    cnt++;
+	    l2->control(SS7Layer2::Resume);
+	}
+	if (cnt)
+	    Debug(this,DebugNote,"Attempted to resume %u links [%p]",cnt,this);
 	SS7Layer3::notify(link ? link->sls() : -1);
     }
 }

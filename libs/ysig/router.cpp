@@ -715,7 +715,7 @@ void SS7Router::sendRestart(const SS7Layer3* network)
     }
 }
 
-void SS7Router::checkRoutes()
+void SS7Router::checkRoutes(const SS7Layer3* noResume)
 {
     if (m_isolate.started())
 	return;
@@ -745,13 +745,14 @@ void SS7Router::checkRoutes()
 	// we are in an emergency - uninhibit any possible link
 	for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
 	    L3Pointer* p = static_cast<L3Pointer*>(o->get());
-	    if (!*p)
+	    SS7Layer3* l3 = *p;
+	    if ((l3 == noResume) || !l3)
 		continue;
-	    NamedList* ctl = (*p)->controlCreate("resume");
+	    NamedList* ctl = l3->controlCreate("resume");
 	    if (ctl) {
 		ctl->setParam("automatic",String::boolText(true));
 		ctl->setParam("emergency",String::boolText(true));
-		(*p)->controlExecute(ctl);
+		l3->controlExecute(ctl);
 	    }
 	    if (!m_isolate.started())
 		break;
@@ -791,7 +792,7 @@ void SS7Router::notify(SS7Layer3* network, int sls)
 	    }
 	}
 	else
-	    checkRoutes();
+	    checkRoutes(network);
     }
     // iterate and notify all user parts
     ObjList* l = &m_layer4;

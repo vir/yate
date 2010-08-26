@@ -2488,8 +2488,11 @@ bool SS7ISUPCall::validMsgState(bool send, SS7MsgISUP::Type type)
 	    if (m_state < Accepted || m_state >= Releasing)
 		break;
 	    return true;
-	case SS7MsgISUP::ANM:    // Answer
 	case SS7MsgISUP::CON:    // Connect
+	    // CON can be sent/received on not accepted calls
+	    if (m_state == Setup && send != outgoing())
+		return true;
+	case SS7MsgISUP::ANM:    // Answer
 	    if (m_state < Accepted || m_state >= Answered || send == outgoing())
 		break;
 	    return true;

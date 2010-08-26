@@ -385,6 +385,21 @@
 ; Defaults to yes
 ;confirm_ccr=yes
 
+; ignore-grs-single: boolean: Ignore (drop) circuit group reset messages with
+;  range 0 (1 circuit affected)
+; Defaults to no
+;ignore-grs-single=no
+
+; ignore-cgb-single: boolean: Ignore (drop) circuit group blocking requests with
+;  range 0 (1 circuit in map)
+; Defaults to no
+;ignore-cgb-single=no
+
+; ignore-cgu-single: boolean: Ignore (drop) circuit group unblocking requests with
+;  range 0 (1 circuit in map)
+; Defaults to no
+;ignore-cgu-single=no
+
 ; print-messages: boolean: Print decoded protocol data units to output
 ; This option is applied on reload
 ; Defaults to no

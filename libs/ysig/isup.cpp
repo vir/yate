@@ -2861,6 +2861,9 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
       m_defaultSls(SlsLatest),
       m_maxCalledDigits(16),
       m_confirmCCR(true),
+      m_ignoreGRSSingle(false),
+      m_ignoreCGBSingle(false),
+      m_ignoreCGUSingle(false),
       m_l3LinkUp(false),
       m_t1Interval(15000),               // Q.764 T1 15..60 seconds
       m_t5Interval(300000),              // Q.764 T5 5..15 minutes
@@ -2953,6 +2956,9 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
 
     m_continuity = params.getValue("continuity");
     m_confirmCCR = params.getBoolValue("confirm_ccr",true);
+    m_ignoreGRSSingle = params.getBoolValue("ignore-grs-single");
+    m_ignoreCGBSingle = params.getBoolValue("ignore-cgb-single");
+    m_ignoreCGUSingle = params.getBoolValue("ignore-cgu-single");
     m_defaultSls = params.getIntValue("sls",s_dict_callSls,m_defaultSls);
     m_maxCalledDigits = params.getIntValue("maxcalleddigits",m_maxCalledDigits);
     if (m_maxCalledDigits < 1)
@@ -3014,6 +3020,9 @@ bool SS7ISUP::initialize(const NamedList* config)
 	m_earlyAcm = config->getBoolValue("earlyacm",m_earlyAcm);
 	m_continuity = config->getValue("continuity",m_continuity);
 	m_confirmCCR = config->getBoolValue("confirm_ccr",true);
+	m_ignoreGRSSingle = config->getBoolValue("ignore-grs-single");
+	m_ignoreCGBSingle = config->getBoolValue("ignore-cgb-single");
+	m_ignoreCGUSingle = config->getBoolValue("ignore-cgu-single");
 	m_defaultSls = config->getIntValue("sls",s_dict_callSls,m_defaultSls);
     }
     return SS7Layer4::initialize(config);
@@ -4293,6 +4302,10 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 			msg->params().getValue("RangeAndStatus"));
 		    break;
 		}
+		else if (n == 1 && m_ignoreGRSSingle) {
+		    Debug(this,DebugAll,"Ignoring %s with range 1",msg->name());
+		    break;
+		}
 		String map('0',n);
 		char* d = (char*)map.c_str();
 		for (unsigned int i = 0; i < n; i++)
@@ -4398,6 +4411,7 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    // Q.763 3.43 range can be 1..256. Max bits set to 1 should be 32
 	    // Bit: 0-no indication 1-block/unblock
 	    {
+	        bool block = (msg->type() == SS7MsgISUP::CGB);
 		String* srcMap = 0;
 		bool hwFail = false;
 		unsigned int nCics = getRangeAndStatus(msg->params(),1,256,256,&srcMap,&hwFail,32);
@@ -4407,7 +4421,10 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 			msg->params().getValue("RangeAndStatus.map"));
 		    break;
 		}
-	        bool block = (msg->type() == SS7MsgISUP::CGB);
+		else if (nCics == 1 && ((block && m_ignoreCGBSingle) || (!block && m_ignoreCGUSingle))) {
+		    Debug(this,DebugAll,"Ignoring %s with range 1",msg->name());
+		    break;
+		}
 		String map('0',srcMap->length());
 		char* d = (char*)map.c_str();
 		for (unsigned int i = 0; i < srcMap->length(); i++)

@@ -218,6 +218,21 @@ static bool decodeRaw(const SS7ISUP* isup, NamedList& list, const IsupParam* par
     return true;
 }
 
+// Raw decoder for unknown/failed parameter, dumps raw octets
+static bool decodeRawParam(const SS7ISUP* isup, NamedList& list, unsigned char value,
+    const unsigned char* buf, unsigned int len, const String& prefix)
+{
+    String name(value);
+    IsupParam p;
+    p.type = (SS7MsgISUP::Parameters)value;
+    p.size = len;
+    p.name = name;
+    p.decoder = 0;
+    p.encoder = 0;
+    p.data = 0;
+    return decodeRaw(isup,list,&p,buf,len,prefix);
+};
+
 // Integer decoder, interprets data as little endian integer
 static bool decodeInt(const SS7ISUP* isup, NamedList& list, const IsupParam* param,
     const unsigned char* buf, unsigned int len, const String& prefix)
@@ -3731,7 +3746,7 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
     }
     msg.addParam(prefix+"message-type",msgName);
 
-    ObjList unsupported;
+    String unsupported;
     const SS7MsgISUP::Parameters* plist = params->params;
     SS7MsgISUP::Parameters ptype;
     // first decode any mandatory fixed parameters the message should have
@@ -3752,7 +3767,8 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	}
 	if (!decodeParam(this,msg,param,paramPtr,param->size,prefix)) {
 	    Debug(this,DebugWarn,"Could not decode fixed ISUP parameter %s [%p]",param->name,this);
-	    unsupported.append(new String(param->name));
+	    decodeRawParam(this,msg,param->type,paramPtr,param->size,prefix);
+	    unsupported.append(param->name,",");
 	}
 	paramPtr += param->size;
 	paramLen -= param->size;
@@ -3784,7 +3800,8 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	if (!decodeParam(this,msg,param,paramPtr+offs+1,size,prefix)) {
 	    Debug(this,DebugWarn,"Could not decode variable ISUP parameter %s (size=%u) [%p]",
 		param->name,size,this);
-	    unsupported.append(new String(param->name));
+	    decodeRawParam(this,msg,param->type,paramPtr+offs+1,size,prefix);
+	    unsupported.append(param->name,",");
 	}
 	paramPtr++;
 	paramLen--;
@@ -3826,11 +3843,13 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 		const IsupParam* param = getParamDesc(ptype);
 		if (!param) {
 		    Debug(this,DebugMild,"Unknown optional ISUP parameter 0x%02x (size=%u) [%p]",ptype,size,this);
-		    unsupported.append(new String((unsigned int)ptype));
+		    decodeRawParam(this,msg,ptype,paramPtr,size,prefix);
+		    unsupported.append(String((unsigned int)ptype),",");
 		}
 		else if (!decodeParam(this,msg,param,paramPtr,size,prefix)) {
 		    Debug(this,DebugWarn,"Could not decode optional ISUP parameter %s (size=%u) [%p]",param->name,size,this);
-		    unsupported.append(new String(param->name));
+		    decodeRawParam(this,msg,ptype,paramPtr,size,prefix);
+		    unsupported.append(param->name,",");
 		}
 		paramPtr += size;
 		paramLen -= size;
@@ -3839,39 +3858,34 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	else
 	    paramLen = 0;
     }
-    String pCompat(prefix + "ParameterCompatInformation.");
-    String unsupp;
+    if (unsupported)
+	msg.addParam(prefix + "parameters-unsupported",unsupported);
     String release;
     String cnf;
-    for (ObjList* o = unsupported.skipNull(); o; o = o->skipNext()) {
-	String* pName = static_cast<String*>(o->get());
-	const String& flags = msg[pCompat + *pName];
-	if (!flags)
+    String pCompat(prefix + "ParameterCompatInformation.");
+    unsigned int n = msg.length();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* ns = msg.getParam(i);
+	if (!(ns && ns->name().startsWith(pCompat) && !ns->name().endsWith(".more")))
 	    continue;
-	bool relCall = false;
-	bool sendCnf = false;
-	ObjList* l = flags.split(',',false);
+	ObjList* l = ns->split(',',false);
 	for (ObjList* ol = l->skipNull(); ol; ol = ol->skipNext()) {
 	    String* s = static_cast<String*>(ol->get());
-	    if (*s == "release")
-		relCall = true;
-	    else if (*s == "cnf")
-		sendCnf = true;
+	    if (*s == "release") {
+		release.append(ns->name().substr(pCompat.length()),",");
+		break;
+	    }
+	    if (*s == "cnf") {
+		cnf.append(ns->name().substr(pCompat.length()),",");
+		break;
+	    }
 	}
 	TelEngine::destruct(l);
-	if (relCall)
-	    release.append(*pName,",");
-	else if (sendCnf)
-	    cnf.append(*pName,",");
-	else
-	    unsupp.append(*pName,",");
     }
     if (release)
-	msg.setParam(prefix + "parameters-unsupported-releasecall",release);
+	msg.setParam(prefix + "parameters-unhandled-release",release);
     if (cnf)
-	msg.setParam(prefix + "parameters-unsupported-cnf",cnf);
-    if (unsupp)
-	msg.setParam(prefix + "parameters-unsupported",unsupp);
+	msg.setParam(prefix + "parameters-unhandled-cnf",cnf);
     if (paramLen && mustWarn)
 	Debug(this,DebugWarn,"Got %u garbage octets after message type 0x%02x [%p]",
 	    paramLen,msgType,this);
@@ -3903,7 +3917,7 @@ bool SS7ISUP::processParamCompat(const NamedList& list, unsigned int cic, bool* 
 	return true;
     const String& prefix = list["message-prefix"];
     // Release call params
-    const String& relCall = list[prefix + "parameters-unsupported-releasecall"];
+    const String& relCall = list[prefix + "parameters-unhandled-release"];
     if (relCall) {
 	Lock lock(this);
 	SS7ISUPCall* call = findCall(cic);
@@ -3912,16 +3926,8 @@ bool SS7ISUP::processParamCompat(const NamedList& list, unsigned int cic, bool* 
 	    call,cic,relCall.c_str(),this);
 	String diagnostic;
 	hexifyIsupParams(diagnostic,relCall);
-	if (call) {
-	    SignallingMessage* msg = new SignallingMessage;
-	    msg->params().addParam("CauseIndicators","unknown-ie");
-	    msg->params().addParam("CauseIndicators.diagnostic",diagnostic,false);
-	    msg->params().addParam("CauseIndicators.location",m_location,false);
-	    SignallingEvent* ev = new SignallingEvent(SignallingEvent::Release,msg,call);
-	    TelEngine::destruct(msg);
-	    if (!ev->sendEvent())
-		call->setTerminate(true,"unknown-ie",diagnostic,m_location);
-	}
+	if (call)
+	    call->setTerminate(true,"unknown-ie",diagnostic,m_location);
 	else {
 	    // No call: make sure the circuit is released at remote party
 	    SS7Label label(m_type,*m_remotePoint,*m_defPoint,
@@ -3934,7 +3940,7 @@ bool SS7ISUP::processParamCompat(const NamedList& list, unsigned int cic, bool* 
 	return true;
     }
     // Send CNF params
-    const String& cnf = list[prefix + "parameters-unsupported-cnf"];
+    const String& cnf = list[prefix + "parameters-unhandled-cnf"];
     if (!cnf)
 	return false;
     DDebug(this,DebugAll,"processParamCompat() cic=%u sending CNF for '%s' [%p]",

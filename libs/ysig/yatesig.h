@@ -7682,6 +7682,7 @@ private:
     u_int64_t m_t13Interval;             // Q.764 T13 BLK global timer interval
     u_int64_t m_t14Interval;             // Q.764 T14 UBL timer interval
     u_int64_t m_t15Interval;             // Q.764 T15 UBL global timer interval
+    u_int64_t m_t16Interval;             // Q.764 T16 RSC timer interval
     u_int64_t m_t17Interval;             // Q.764 T17 timer interval
     u_int64_t m_t18Interval;             // Q.764 T18 CGB timer interval
     u_int64_t m_t19Interval;             // Q.764 T19 CGB global timer interval

@@ -2852,6 +2852,7 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
       m_t13Interval(300000),             // Q.764 T13 (BLK global) 5..15 minutes
       m_t14Interval(20000),              // Q.764 T14 (UBL) 15..60 seconds
       m_t15Interval(300000),             // Q.764 T15 (UBL global) 5..15 minutes
+      m_t16Interval(20000),              // Q.764 T16 (RSC) 15..60 seconds
       m_t17Interval(300000),             // Q.764 T17 5..15 minutes
       m_t18Interval(20000),              // Q.764 T18 (CGB) 15..60 seconds
       m_t19Interval(300000),             // Q.764 T19 (CGB global) 5..15 minutes
@@ -4071,7 +4072,12 @@ bool SS7ISUP::startCircuitReset(SignallingCircuit*& cic, const String& timer)
 	    "Starting circuit %u reset on timer %s [%p]",
 	    cic->code(),timer.c_str(),this);
 	// TODO: alert maintenance if T5 timer expired
-	SignallingMessageTimer* m = m_pending.add(m_t17Interval);
+	SignallingMessageTimer* m = 0;
+	if (relTimeout)
+	    m = new SignallingMessageTimer(m_t17Interval);
+	else
+	    m = new SignallingMessageTimer(m_t16Interval,m_t17Interval);
+	m = m_pending.add(m);
 	if (m) {
 	    cic->setLock(SignallingCircuit::Resetting);
 	    SS7MsgISUP* msg = new SS7MsgISUP(SS7MsgISUP::RSC,cic->code());
@@ -4110,8 +4116,16 @@ void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 	    DROP_MSG("invalid CIC")
 	// non IAM message. Drop it if there is no call for it
 	if ((msg->type() != SS7MsgISUP::IAM) && (msg->type() != SS7MsgISUP::CCR)) {
-	    if (!call)
-		DROP_MSG("no call for this CIC")
+	    if (!call) {
+	        if (msg->type() != SS7MsgISUP::RLC) {
+		    // Initiate circuit reset
+		    SignallingCircuit* cic = 0;
+		    String s(msg->cic());
+		    if (reserveCircuit(cic,0,SignallingCircuit::LockLockedBusy,&s))
+			startCircuitReset(cic,"T16");
+		}
+		return;
+	    }
 	    break;
 	}
 	// IAM or CCR message

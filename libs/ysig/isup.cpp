@@ -3665,7 +3665,8 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
     SS7MsgISUP::Type msgType, SS7PointCode::Type pcType,
     const unsigned char* paramPtr, unsigned int paramLen)
 {
-    const char* msgName = SS7MsgISUP::lookup(msgType);
+    String msgTypeName((int)msgType);
+    const char* msgName = SS7MsgISUP::lookup(msgType,msgTypeName);
 #ifdef XDEBUG
     String tmp;
     tmp.hexify((void*)paramPtr,paramLen,' ');
@@ -3684,8 +3685,7 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	    params = &s_compatibility;
 	}
 	else {
-	    Debug(this,DebugWarn,"Unsupported message%s%s or point code type [%p]",
-		(msgName ? " " : ""),c_safe(msgName),this);
+	    Debug(this,DebugWarn,"Unsupported message %s or point code type [%p]",msgName,this);
 	    return false;
 	}
     }
@@ -3937,26 +3937,26 @@ bool SS7ISUP::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* n
     unsigned int len = msu.length()-label.length()-1;
     unsigned int cic = s[0] | (s[1] << 8);
     SS7MsgISUP::Type type = (SS7MsgISUP::Type)s[2];
-    const char* name = SS7MsgISUP::lookup(type);
+    String name = SS7MsgISUP::lookup(type);
+    if (!name) {
+        String tmp;
+	tmp.hexify((void*)s,len,' ');
+	Debug(this,DebugMild,"Received unknown ISUP type 0x%02x, cic=%u, length %u: %s",
+	    type,cic,len,tmp.c_str());
+	name = (int)type;
+    }
     if (!(circuits() && circuits()->find(cic))) {
 	Debug(this,DebugMild,"Received ISUP type 0x%02x (%s) for unknown cic=%u",
-	    type,name,cic);
+	    type,name.c_str(),cic);
 	return true;
     }
-    if (name) {
-	bool ok = processMSU(type,cic,s+3,len-3,label,network,sls);
-	if (!ok && debugAt(DebugMild)) {
-	    String tmp;
-	    tmp.hexify((void*)s,len,' ');
-	    Debug(this,DebugMild,"Unhandled ISUP type %s, cic=%u, length %u: %s",
-		name,cic,len,tmp.c_str());
-	}
-	return true;
+    bool ok = processMSU(type,cic,s+3,len-3,label,network,sls);
+    if (!ok && debugAt(DebugMild)) {
+	String tmp;
+	tmp.hexify((void*)s,len,' ');
+	Debug(this,DebugMild,"Unhandled ISUP type %s, cic=%u, length %u: %s",
+	    name.c_str(),cic,len,tmp.c_str());
     }
-    String tmp;
-    tmp.hexify((void*)s,len,' ');
-    Debug(this,DebugMild,"Received unknown ISUP type 0x%02x, cic=%u, length %u: %s",
-	type,cic,len,tmp.c_str());
     return true;
 }
 
@@ -3968,6 +3968,11 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
 	type,cic,paramPtr,paramLen,&label,network,sls,this);
 
     SS7MsgISUP* msg = new SS7MsgISUP(type,cic);
+    if (!SS7MsgISUP::lookup(type)) {
+	String tmp;
+	tmp.hexify(&type,1);
+	msg->params().assign("Message_" + tmp);
+    }
     if (!decodeMessage(msg->params(),type,label.type(),paramPtr,paramLen)) {
 	TelEngine::destruct(msg);
 	return false;

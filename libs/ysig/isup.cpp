@@ -4294,7 +4294,9 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 			    count++;
 		}
 		if (!nCics || count > 32) {
-		    setInvalidIE(SS7MsgISUP::RangeAndStatus,reason,diagnostic);
+		    Debug(this,DebugNote,"%s with invalid range %s or map=%s",msg->name(),
+			msg->params().getValue("RangeAndStatus"),
+			msg->params().getValue("RangeAndStatus.map"));
 		    break;
 		}
 		bool block = (msg->type() == SS7MsgISUP::CGA);
@@ -4330,7 +4332,9 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		}
 		unlock();
 		if (!map) {
-		    reason = "wrong-state-message";
+		    Debug(this,DebugNote,"%s with unnacceptable range %s or map=%s",msg->name(),
+			msg->params().getValue("RangeAndStatus"),
+			msg->params().getValue("RangeAndStatus.map"));
 		    break;
 		}
 		for (unsigned int i = 0; i < map.length(); i++)

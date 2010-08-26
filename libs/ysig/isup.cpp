@@ -4162,8 +4162,12 @@ void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 	// Check collision
 	if (call) {
 	    // If existing call is an incoming one, drop the message (retransmission ?)
-	    if (!call->outgoing())
-		DROP_MSG("retransmission")
+	    if (!call->outgoing()) {
+		if (msg->type() == SS7MsgISUP::CCR)
+		    break;
+		else
+		    DROP_MSG("retransmission")
+	    }
 	    Debug(this,DebugNote,"Incoming call %u collide with existing outgoing",msg->cic());
 	    // *** See Q.764 2.9.1.4
 	    // Drop the request if the outgoing call already received some response or

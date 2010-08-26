@@ -611,39 +611,53 @@ bool SS7Maintenance::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7La
     const unsigned char* s = msu.getData(label.length()+1,2);
     if (!s)
 	return false;
+    String addr;
+    addr << SS7PointCode::lookup(label.type()) << "," << label;
+    if (debugAt(DebugAll))
+	addr << " (" << label.opc().pack(label.type()) << ":" << label.dpc().pack(label.type()) << ":" << label.sls() << ")";
+    int level = DebugInfo;
+    if (label.sls() != sls) {
+	addr << " on " << sls;
+	level = DebugMild;
+    }
     unsigned char len = s[1] >> 4;
     // get a pointer to the test pattern
     const unsigned char* t = msu.getData(label.length()+3,len);
     if (!t) {
-	Debug(this,DebugMild,"Received MTN type %02X length %u with invalid pattern length %u [%p]",
-	    s[0],msu.length(),len,this);
+	Debug(this,DebugMild,"Received MTN %s type %02X length %u with invalid pattern length %u [%p]",
+	    addr.c_str(),s[0],msu.length(),len,this);
 	return false;
     }
     switch (s[0]) {
 	case SS7MsgMTN::SLTM:
 	    {
-		Debug(this,DebugNote,"Received SLTM with test pattern length %u",len);
+		Debug(this,level,"Received SLTM %s with %u bytes",addr.c_str(),len);
 		SS7Label lbl(label,label.sls(),0);
 		SS7MSU answer(msu.getSIO(),lbl,0,len+2);
 		unsigned char* d = answer.getData(lbl.length()+1,len+2);
 		if (!d)
-		    return false;
+		    return true;
+		addr.clear();
+		addr << SS7PointCode::lookup(lbl.type()) << "," << lbl;
+		if (debugAt(DebugAll))
+		    addr << " (" << lbl.opc().pack(lbl.type()) << ":" << lbl.dpc().pack(lbl.type()) << ":" << lbl.sls() << ")";
+		Debug(this,DebugInfo,"Sending SLTA %s with %u bytes",addr.c_str(),len);
 		*d++ = SS7MsgMTN::SLTA;
 		*d++ = len << 4;
 		while (len--)
 		    *d++ = *t++;
-		return transmitMSU(answer,lbl,sls) >= 0;
+		return transmitMSU(answer,lbl,lbl.sls()) >= 0;
 	    }
 	    return true;
 	case SS7MsgMTN::SLTA:
-	    Debug(this,DebugNote,"Received SLTA with test pattern length %u",len);
+	    Debug(this,level,"Received SLTA %s with %u bytes",addr.c_str(),len);
 	    return true;
     }
 
     String tmp;
     tmp.hexify((void*)s,mlen,' ');
-    Debug(this,DebugMild,"Unhandled MTN type %s length %u: %s",
-	SS7MsgMTN::lookup((SS7MsgMTN::Type)s[0],"unknown"),mlen,tmp.c_str());
+    Debug(this,DebugMild,"Unhandled MTN %s type %s length %u: %s",
+	addr.c_str(),SS7MsgMTN::lookup((SS7MsgMTN::Type)s[0],"unknown"),mlen,tmp.c_str());
     return false;
 }
 

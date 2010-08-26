@@ -269,24 +269,34 @@ bool SS7Layer3::maintenance(const SS7MSU& msu, const SS7Label& label, int sls)
     const unsigned char* s = msu.getData(label.length()+1,2);
     if (!s)
 	return false;
+    String addr;
+    addr << SS7PointCode::lookup(label.type()) << "," << label;
+    if (debugAt(DebugAll))
+	addr << " (" << label.opc().pack(label.type()) << ":" << label.dpc().pack(label.type()) << ":" << label.sls() << ")";
+    int level = DebugInfo;
+    if (label.sls() != sls) {
+	addr << " on " << sls;
+	level = DebugMild;
+    }
     unsigned char len = s[1] >> 4;
     // get a pointer to the test pattern
     const unsigned char* t = msu.getData(label.length()+3,len);
     if (!t) {
-	Debug(this,DebugMild,"Received MTN type %02X length %u with invalid pattern length %u [%p]",
-	    s[0],msu.length(),len,this);
+	Debug(this,DebugMild,"Received MTN %s type %02X length %u with invalid pattern length %u [%p]",
+	    addr.c_str(),s[0],msu.length(),len,this);
 	return false;
     }
     switch (s[0]) {
 	case SS7MsgMTN::SLTM:
 	    {
-		Debug(this,DebugAll,"Received SLTM with test pattern length %u",len);
+		Debug(this,level,"Received SLTM %s with %u bytes",addr.c_str(),len);
 		SS7Label lbl(label,label.sls(),0);
 		SS7MSU answer(msu.getSIO(),lbl,0,len+2);
 		unsigned char* d = answer.getData(lbl.length()+1,len+2);
 		if (!d)
 		    return false;
-		*d++ = 0x21;
+		Debug(this,DebugInfo,"Sending SLTA %s with %u bytes",addr.c_str(),len);
+		*d++ = SS7MsgMTN::SLTA;
 		*d++ = len << 4;
 		while (len--)
 		    *d++ = *t++;
@@ -294,11 +304,11 @@ bool SS7Layer3::maintenance(const SS7MSU& msu, const SS7Label& label, int sls)
 	    }
 	    return true;
 	case SS7MsgMTN::SLTA:
-	    Debug(this,DebugAll,"Received SLTA with test pattern length %u",len);
+	    Debug(this,level,"Received SLTM %s with %u bytes",addr.c_str(),len);
 	    return true;
     }
-    Debug(this,DebugMild,"Received MTN type %02X, length %u [%p]",
-	s[0],msu.length(),this);
+    Debug(this,DebugMild,"Received MTN %s type %02X, length %u [%p]",
+	addr.c_str(),s[0],msu.length(),this);
     return false;
 }
 
@@ -559,7 +569,7 @@ unsigned int SS7MTP3::countLinks()
 	if (!(p && *p))
 	    continue;
 	total++;
-	if ((*p)->operational())
+	if ((*p)->operational() && !(*p)->m_unchecked)
 	    active++;
     }
     m_total = total;
@@ -578,11 +588,7 @@ bool SS7MTP3::operational(int sls) const
 	L2Pointer* p = static_cast<L2Pointer*>(l->get());
 	if (!(p && *p))
 	    continue;
-	if (sls < 0) {
-	    if ((*p)->operational() && !(*p)->inhibited())
-		return true;
-	}
-	else if ((*p)->sls() == sls)
+	if ((*p)->sls() == sls)
 	    return (*p)->operational();
     }
     return false;
@@ -591,7 +597,7 @@ bool SS7MTP3::operational(int sls) const
 bool SS7MTP3::inhibited(int sls) const
 {
     if (sls < 0)
-	return true;
+	return m_inhibit;
     const ObjList* l = &m_links;
     for (; l; l = l->next()) {
 	L2Pointer* p = static_cast<L2Pointer*>(l->get());
@@ -870,13 +876,14 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 	}
     }
 
+    bool mgmt = (msu.getSIF() == SS7MSU::SNM);
     // Link not found or not operational: choose another one
     for (l = m_links.skipNull(); l; l = l->skipNext()) {
 	L2Pointer* p = static_cast<L2Pointer*>(l->get());
 	if (!*p)
 	    continue;
 	SS7Layer2* link = *p;
-	if (link->operational() && !link->inhibited() && link->transmitMSU(msu)) {
+	if (link->operational() && (mgmt || !link->inhibited()) && link->transmitMSU(msu)) {
 	    sls = link->sls();
 	    DDebug(this,DebugAll,"Sent MSU over link '%s' %p with SLS=%d%s [%p]",
 		link->toString().c_str(),link,sls,
@@ -915,24 +922,29 @@ bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
 	    link->toString().c_str(),link,sls,tmp.c_str());
     }
 #endif
+    bool maint = (msu.getSIF() == SS7MSU::MTN) || (msu.getSIF() == SS7MSU::MTNS);
+    if (link) {
+	if (link->m_unchecked) {
+	    if (!maint)
+		return false;
+	    if (label.sls() == sls) {
+		Debug(this,DebugNote,"Placing link '%s' %d in service [%p]",
+		    link->toString().c_str(),sls,this);
+		link->m_unchecked = false;
+		notify(link);
+	    }
+	}
+	if (!maint && (msu.getSIF() != SS7MSU::SNM) && link->inhibited())
+	    return false;
+    }
     // first try to call the user part
-    if (SS7Layer3::receivedMSU(msu,label,sls)) {
-	if (link && link->m_unchecked) {
-	    link->m_unchecked = false;
-	    notify(link);
-	}
+    if (SS7Layer3::receivedMSU(msu,label,sls))
 	return true;
-    }
     // then try to minimally process MTN and SNM MSUs
-    if (maintenance(msu,label,sls) || management(msu,label,sls)) {
-	if (link && link->m_unchecked) {
-	    link->m_unchecked = false;
-	    notify(link);
-	}
+    if (maintenance(msu,label,sls) || management(msu,label,sls))
 	return true;
-    }
-    // if nothing worked, report the unavailable user part
-    return unavailable(msu,label,sls);
+    // if nothing worked, report the unavailable regular user part
+    return (msu.getSIF() > SS7MSU::MTNS) && unavailable(msu,label,sls);
 }
 
 void SS7MTP3::notify(SS7Layer2* link)
@@ -948,9 +960,11 @@ void SS7MTP3::notify(SS7Layer2* link)
 #endif
     if (link) {
 	if (link->operational()) {
-	    u_int64_t t = Time::now() + 50000 + (::random() % 200000);
-	    if ((t < link->m_check) || (t - 4000000 > link->m_check))
-		link->m_check = t;
+	    if (link->m_unchecked) {
+		u_int64_t t = Time::now() + 50000 + (::random() % 100000);
+		if ((t < link->m_check) || (t - 4000000 > link->m_check))
+		    link->m_check = t;
+	    }
 	}
 	else
 	    link->m_unchecked = m_checklinks;
@@ -966,14 +980,13 @@ void SS7MTP3::notify(SS7Layer2* link)
 void SS7MTP3::timerTick(const Time& when)
 {
     Lock lock(this);
-    if (!m_check)
-	return;
     for (ObjList* o = m_links.skipNull(); o; o = o->skipNext()) {
 	L2Pointer* p = static_cast<L2Pointer*>(o->get());
-	if (!(p && *p && (*p)->m_check && (*p)->operational()))
+	if (!p)
 	    continue;
-	if ((*p)->m_check < when) {
-	    (*p)->m_check = when + m_check;
+	SS7Layer2* l2 = *p;
+	if (l2 && l2->m_check && (l2->m_check < when) && l2->operational()) {
+	    l2->m_check = m_check ? when + m_check : 0;
 	    for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
 		SS7PointCode::Type type = (SS7PointCode::Type)(i + 1);
 		unsigned int local = getLocal(type);
@@ -989,18 +1002,26 @@ void SS7MTP3::timerTick(const Time& when)
 			continue;
 		    // build and send a SLTM to the adjacent node
 		    unsigned int len = 4;
-		    SS7Label lbl(type,r->packed(),local,(*p)->sls());
+		    int sls = l2->sls();
+		    SS7Label lbl(type,r->packed(),local,sls);
 		    SS7MSU sltm(sio,lbl,0,len+2);
 		    unsigned char* d = sltm.getData(lbl.length()+1,len+2);
 		    if (!d)
 			continue;
+
+		    String addr;
+		    addr << SS7PointCode::lookup(type) << "," << lbl;
+		    if (debugAt(DebugAll))
+			addr << " (" << lbl.opc().pack(type) << ":" << lbl.dpc().pack(type) << ":" << sls << ")";
+		    Debug(this,DebugInfo,"Sending SLTM %s with %u bytes",addr.c_str(),len);
+
 		    *d++ = SS7MsgMTN::SLTM;
 		    *d++ = len << 4;
-		    unsigned char patt = (*p)->sls();
+		    unsigned char patt = sls;
 		    patt = (patt << 4) | (patt & 0x0f);
 		    while (len--)
 			*d++ = patt++;
-		    (*p)->transmitMSU(sltm);
+		    l2->transmitMSU(sltm);
 		}
 	    }
 	}

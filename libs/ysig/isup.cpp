@@ -2072,7 +2072,7 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 	if (m_terminate) {
 	    if (m_state < Releasing && m_state > Null)
 		if (m_gracefully)
-		    release();
+		    m_lastEvent = release();
 		else
 		    m_lastEvent = releaseComplete(false,0);
 	    else if (m_state == Null || m_state == Released) {
@@ -2131,9 +2131,7 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 		    if (m_state < Releasing) {
 			setReason(0,msg);
 			m_location = isup()->location();
-			release();
-			msg->params().addParam("reason",m_reason,false);
-			m_lastEvent = new SignallingEvent(SignallingEvent::Release,msg,this);
+			m_lastEvent = release(0,msg);
 			break;
 		    }
 		case SS7MsgISUP::REL:
@@ -2168,7 +2166,7 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 			    break;
 			}
 		    }
-		    release();
+		    m_lastEvent = release();
 		}
 		if (timeout(isup(),this,m_contTimer,when,"T27",false)) {
 		    m_gracefully = false;
@@ -2296,8 +2294,10 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 	    }
 	    break;
 	case SignallingEvent::Release:
-	    if (validMsgState(true,SS7MsgISUP::REL))
-		result = release(event);
+	    if (validMsgState(true,SS7MsgISUP::REL)) {
+		release(event);
+		result = true;
+	    }
 	    break;
 	case SignallingEvent::Generic:
 	    if (event->message()) {
@@ -2463,7 +2463,7 @@ bool SS7ISUPCall::copyParamIAM(SS7MsgISUP* msg, bool outgoing, SignallingMessage
 
 // If already releasing, set termination flag. Otherwise, send REL (Release) message
 // @param event Event with the parameters. 0 if release is started on some timeout
-bool SS7ISUPCall::release(SignallingEvent* event)
+SignallingEvent* SS7ISUPCall::release(SignallingEvent* event, SS7MsgISUP* msg)
 {
     m_iamTimer.stop();
     if (event)
@@ -2475,14 +2475,25 @@ bool SS7ISUPCall::release(SignallingEvent* event)
 	id(),m_reason.safe(),this);
     if (!isup() || m_state >= Releasing) {
 	m_terminate = true;
-	return false;
+	return 0;
     }
     m_iamTimer.interval(isup() ? isup()->m_t1Interval : 1);
     m_relTimer.interval(isup() ? isup()->m_t5Interval : 1);
     m_iamTimer.start();
     m_relTimer.start();
     m_state = Releasing;
-    return transmitREL();
+    transmitREL();
+    if (event)
+	return 0;
+    bool create = (msg == 0);
+    if (create)
+	msg = new SS7MsgISUP(SS7MsgISUP::REL,id());
+    msg->params().setParam("reason",m_reason);
+    SignallingEvent* ev = new SignallingEvent(SignallingEvent::Release,msg,this);
+    // deref() msg if created here. If received, it will be deref()'d in getEvent()
+    if (create)
+        TelEngine::destruct(msg);
+    return ev;
 }
 
 // Set termination reason from received text or message
@@ -2751,14 +2762,12 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 			id(),this);
 		    TelEngine::destruct(m_sgmMsg);
 		    setReason("service-not-implemented",0,0,isup()->location());
-		    release();
-		    return 0;
+		    return release();
 		}
 		if (m_circuitTesting && !connectCircuit(isup()->m_continuity)) {
 		    TelEngine::destruct(m_sgmMsg);
 		    setReason("bearer-cap-not-available",0,0,isup()->location());
-		    release();
-		    return 0;
+		    return release();
 		}
 		Debug(isup(),DebugNote,"Call(%u). Waiting for continuity check [%p]",
 		    id(),this);
@@ -2780,15 +2789,13 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 			id(),this);
 		    TelEngine::destruct(m_sgmMsg);
 		    setReason("service-not-implemented",0,0,isup()->location());
-		    release();
-		    return 0;
+		    return release();
 		}
 		m_circuitTesting = true;
 		if (!connectCircuit(isup()->m_continuity)) {
 		    TelEngine::destruct(m_sgmMsg);
 		    setReason("bearer-cap-not-available",0,0,isup()->location());
-		    release();
-		    return 0;
+		    return release();
 		}
 		Debug(isup(),DebugNote,"Call(%u). Continuity test only [%p]",
 		    id(),this);
@@ -2797,8 +2804,7 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 	    else if (!m_circuitTesting) {
 		TelEngine::destruct(m_sgmMsg);
 		setReason("wrong-state-message",0,0,isup()->location());
-		release();
-		return 0;
+		return release();
 	    }
 	    m_contTimer.stop();
 	    m_iamTimer.start();

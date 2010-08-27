@@ -7488,9 +7488,11 @@ private:
     // @param sigMsg Valid signalling message with parameters if outgoing
     bool copyParamIAM(SS7MsgISUP* msg, bool outgoing = false, SignallingMessage* sigMsg = 0);
     // If already releasing, set termination flag. Otherwise, send REL (Release) message
+    // Set m_lastEvent if event is 0 (the method is called internally)
     // @param event Event with the parameters. 0 if release is started on some timeout
-    // @return True if the message was pushed down the protocol stack
-    bool release(SignallingEvent* event = 0);
+    // @param msg Received message to put in release event
+    // @return Generated release event if any
+    SignallingEvent* release(SignallingEvent* event = 0, SS7MsgISUP* msg = 0);
     // Set termination reason from message or parameter
     void setReason(const char* reason, SignallingMessage* msg, const char* diagnostic = 0,
 	const char* location = 0);

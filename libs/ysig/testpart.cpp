@@ -50,13 +50,13 @@ HandledMSU SS7Testing::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7
     int lvl = DebugNote;
     if (m_lbl.type() != SS7PointCode::Other) {
 	if (label.type() != m_lbl.type())
-	    return HandledMSU::Unequipped;
+	    return HandledMSU::Rejected;
 	if (label.opc() == m_lbl.opc() && label.dpc() == m_lbl.dpc()) {
 	    src = "MYSELF!";
 	    lvl = DebugWarn;
 	}
 	else if (label.dpc() != m_lbl.opc())
-	    return HandledMSU::Unequipped;
+	    return HandledMSU::Rejected;
     }
     if (src.null())
 	src << SS7PointCode::lookup(label.type()) << ":" << label.opc();

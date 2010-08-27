@@ -580,7 +580,7 @@ HandledMSU SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7L
     lock();
     m_rxMsu++;
     ObjList* l;
-    HandledMSU ret(HandledMSU::Unequipped);
+    HandledMSU ret;
     do {
 	for (l = &m_layer4; l; l = l->next()) {
 	    L4Pointer* p = static_cast<L4Pointer*>(l->get());
@@ -600,7 +600,6 @@ HandledMSU SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7L
 		case HandledMSU::Accepted:
 		case HandledMSU::Failure:
 		    return handled;
-		case HandledMSU::Unequipped:
 		case HandledMSU::Rejected:
 		    break;
 		default:

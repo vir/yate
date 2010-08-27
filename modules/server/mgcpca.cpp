@@ -982,10 +982,14 @@ void MGCPSpan::operational(bool active)
     m_operational = active;
     if (!m_circuits)
 	return;
+    SignallingCircuitEvent::Type evType = active ? SignallingCircuitEvent::NoAlarm :
+	SignallingCircuitEvent::Alarm;
     for (unsigned int i = 0; i < m_count; i++) {
 	MGCPCircuit* circuit = m_circuits[i];
-	if (circuit)
+	if (circuit) {
 	    circuit->status((active ? SignallingCircuit::Idle : SignallingCircuit::Missing),true);
+	    circuit->addEvent(new SignallingCircuitEvent(circuit,evType));
+	}
     }
 }
 

@@ -303,6 +303,17 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 {
     if (msu.getSIF() != sif())
 	return HandledMSU::Rejected;
+    if (network) {
+	unsigned int local = network->getLocal(label.type());
+	if (local && label.dpc().pack(label.type()) != local)
+	    return HandledMSU::Rejected;
+    }
+    SS7Router* router = YOBJECT(SS7Router,SS7Layer4::network());
+    if (router && (router != network)) {
+	unsigned int local = network->getLocal(label.type());
+	if (local && label.dpc().pack(label.type()) != local)
+	    return HandledMSU::Rejected;
+    }
 
     unsigned int len = msu.length() - label.length() - 1;
     // according to Q.704 there should be at least the heading codes (8 bit)
@@ -320,7 +331,6 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	    len,msg,sls,tmp.c_str());
     }
 
-    SS7Router* router = YOBJECT(SS7Router,SS7Layer4::network());
     // TODO: implement
     String addr;
     addr << label;
@@ -440,6 +450,8 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	    Debug(this,DebugNote,"Changeback acknowledged on %s",link.c_str());
 	    inhibit(*pend,0,SS7Layer2::Inactive);
 	}
+	else
+	    Debug(this,DebugMild,"Unexpected %s %s [%p]",msg->name(),addr.c_str(),this);
 	TelEngine::destruct(pend);
     }
     else if (msg->type() == SS7MsgSNM::COA ||
@@ -473,7 +485,26 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	    Debug(this,DebugNote,"Changeover acknowledged on %s",link.c_str());
 	    inhibit(*pend,SS7Layer2::Inactive);
 	}
+	else
+	    Debug(this,DebugMild,"Unexpected %s %s [%p]",msg->name(),addr.c_str(),this);
 	TelEngine::destruct(pend);
+    }
+    else if (msg->type() == SS7MsgSNM::LIN) {
+	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
+	SS7Label lbl(label,label.sls(),0);
+	if (router) {
+	    unsigned char data = (router->inhibit(lbl,SS7Layer2::Remote,0,true))
+		? SS7MsgSNM::LIA : SS7MsgSNM::LID;
+	    return transmitMSU(SS7MSU(msu.getSIO(),lbl,&data,1),lbl,sls) >= 0;
+	}
+    }
+    else if (msg->type() == SS7MsgSNM::LUN || msg->type() == SS7MsgSNM::LFU) {
+	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
+	SS7Label lbl(label,label.sls(),0);
+	if (router && router->inhibit(lbl,0,SS7Layer2::Remote)) {
+	    static unsigned char lua = SS7MsgSNM::LUA;
+	    return transmitMSU(SS7MSU(msu.getSIO(),lbl,&lua,1),lbl,sls) >= 0;
+	}
     }
     else {
 	String tmp;
@@ -800,6 +831,11 @@ HandledMSU SS7Maintenance::receivedMSU(const SS7MSU& msu, const SS7Label& label,
 {
     if (msu.getSIF() != sif() && msu.getSIF() != SS7MSU::MTNS)
 	return HandledMSU::Rejected;
+    if (network) {
+	unsigned int local = network->getLocal(label.type());
+	if (local && label.dpc().pack(label.type()) != local)
+	    return HandledMSU::Rejected;
+    }
     XDebug(this,DebugStub,"Possibly incomplete SS7Maintenance::receivedMSU(%p,%p,%p,%d) [%p]",
 	&msu,&label,network,sls,this);
 

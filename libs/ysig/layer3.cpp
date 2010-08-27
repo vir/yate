@@ -569,7 +569,7 @@ unsigned int SS7MTP3::countLinks()
 	if (!(p && *p))
 	    continue;
 	total++;
-	if ((*p)->operational() && !((*p)->inhibited(SS7Layer2::Unchecked|SS7Layer2::Inactive)))
+	if ((*p)->operational() && !((*p)->inhibited()))
 	    active++;
     }
     m_total = total;
@@ -957,7 +957,8 @@ bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
 		notify(link);
 	    }
 	}
-	if (!maint && (msu.getSIF() != SS7MSU::SNM) && link->inhibited()) {
+	if (!maint && (msu.getSIF() != SS7MSU::SNM) &&
+	    link->inhibited(SS7Layer2::Unchecked|SS7Layer2::Inactive|SS7Layer2::Local)) {
 	    Debug(this,DebugMild,"Received MSU on inhibited link %d '%s' [%p]",
 		sls,link->toString().c_str(),this);
 	    return false;
@@ -1010,7 +1011,7 @@ void SS7MTP3::notify(SS7Layer2* link)
     if (act != m_active) {
 	Debug(this,DebugNote,"Linkset is%s operational [%p]",
 	    (operational() ? "" : " not"),this);
-	// if we became inaccessible try to resume all other links
+	// if we became inaccessible try to uninhibit or resume all other links
 	unsigned int cnt = 0;
 	for (const ObjList* l = &m_links; l && !(m_active || m_inhibit); l = l->next()) {
 	    L2Pointer* p = static_cast<L2Pointer*>(l->get());
@@ -1020,10 +1021,15 @@ void SS7MTP3::notify(SS7Layer2* link)
 	    if ((l2 == link) || !l2)
 		continue;
 	    cnt++;
-	    l2->control(SS7Layer2::Resume);
+	    if (l2->operational() &&
+		l2->inhibited(SS7Layer2::Local|SS7Layer2::Remote) &&
+		!l2->inhibited(SS7Layer2::Unchecked|SS7Layer2::Inactive))
+		l2->inhibit(0,SS7Layer2::Local|SS7Layer2::Remote);
+	    else
+		l2->control(SS7Layer2::Resume);
 	}
 	if (cnt)
-	    Debug(this,DebugNote,"Attempted to resume %u links [%p]",cnt,this);
+	    Debug(this,DebugNote,"Attempted to uninhibit/resume %u links [%p]",cnt,this);
 	SS7Layer3::notify(link ? link->sls() : -1);
     }
 }

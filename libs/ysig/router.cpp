@@ -784,7 +784,7 @@ void SS7Router::checkRoutes(const SS7Layer3* noResume)
     }
 }
 
-bool SS7Router::inhibit(const SS7Label& link, int setFlags, int clrFlags)
+bool SS7Router::inhibit(const SS7Label& link, int setFlags, int clrFlags, bool notLast)
 {
     int remote = link.dpc().pack(link.type());
     if (!remote)
@@ -796,6 +796,11 @@ bool SS7Router::inhibit(const SS7Label& link, int setFlags, int clrFlags)
 	    continue;
 	RefPointer<SS7Layer3> net = static_cast<SS7Layer3*>(*p);
 	mylock.drop();
+	if (notLast && setFlags) {
+	    const SS7MTP3* mtp3 = YOBJECT(SS7MTP3,net);
+	    if (mtp3 && (mtp3->linksActive() == 1) && !mtp3->inhibited(link.sls()))
+		return false;
+	}
 	return net->inhibit(link.sls(),setFlags,clrFlags);
     }
     return false;

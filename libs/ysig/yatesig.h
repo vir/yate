@@ -5923,9 +5923,10 @@ public:
      * @param link Signalling Link to modify identified by a routing label
      * @param setFlags Flag bits to set ORed together
      * @param clrFlags Flag bits to clear  ORed together (optional)
+     * @param notLast Do not apply inhibition to the last usable link
      * @return True if inhibition flags were set
      */
-    bool inhibit(const SS7Label& link, int setFlags, int clrFlags = 0);
+    bool inhibit(const SS7Label& link, int setFlags, int clrFlags = 0, bool notLast = false);
 
     /**
      * Check if the transfer function is enabled

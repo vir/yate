@@ -438,15 +438,7 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	    String link;
 	    link << msg->params().getValue("pointcodetype") << "," << *pend;
 	    Debug(this,DebugNote,"Changeback acknowledged on %s",link.c_str());
-	    if (router) {
-		NamedList* ctrl = router->controlCreate("inservice");
-		if (ctrl) {
-		    ctrl->copyParams(msg->params());
-		    ctrl->setParam("address",link);
-		    ctrl->setParam("automatic",String::boolText(true));
-		    router->controlExecute(ctrl);
-		}
-	    }
+	    inhibit(*pend,0,SS7Layer2::Inactive);
 	}
 	TelEngine::destruct(pend);
     }
@@ -479,6 +471,7 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	    String link;
 	    link << msg->params().getValue("pointcodetype") << "," << *pend;
 	    Debug(this,DebugNote,"Changeover acknowledged on %s",link.c_str());
+	    inhibit(*pend,SS7Layer2::Inactive);
 	}
 	TelEngine::destruct(pend);
     }
@@ -672,6 +665,10 @@ void SS7Management::notify(SS7Layer3* network, int sls)
     Debug(this,DebugStub,"Please implement SS7Management::notify(%p,%d) [%p]",
 	network,sls,this);
     if (network && (sls >= 0)) {
+	bool linkAvail[256];
+	int txSls;
+	for (txSls = 0; txSls < 256; txSls++)
+	    linkAvail[txSls] = (txSls != sls) && !network->inhibited(txSls) && network->operational(txSls);
 	bool linkUp = network->operational(sls);
 	for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
 	    SS7PointCode::Type type = static_cast<SS7PointCode::Type>(i+1);
@@ -684,31 +681,40 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 	    addr << SS7PointCode::lookup(type) << "," << SS7PointCode(type,local);
 	    Debug(this,DebugNote,"Link %s:%d is %s [%p]",addr.c_str(),sls,
 		(linkUp ? "up" : "down"),this);
+	    const char* oper = linkUp ? "changeback" : "changeover";
 	    ObjList* routes = getNetRoutes(network,type);
 	    if (routes)
 		routes = routes->skipNull();
 	    for (; routes; routes = routes->skipNext()) {
 		const SS7Route* r = static_cast<const SS7Route*>(routes->get());
 		if (r && !r->priority()) {
-		    // found adjacent node, emit change order to it
-		    const char* oper = linkUp ? "changeback" : "changeover";
-		    NamedList* ctl = controlCreate(oper);
-		    if (!ctl)
-			continue;
+		    // found adjacent node, emit change orders to it
 		    String tmp = addr;
 		    tmp << "," << SS7PointCode(type,r->packed()) << "," << sls;
-		    Debug(this,DebugAll,"Sending Link %d %s %s [%p]",sls,oper,tmp.c_str(),this);
-		    ctl->setParam("address",tmp);
-		    ctl->setParam("slc",String(sls));
-		    if (!linkUp) {
-			int seq = network->getSequence(sls);
-			if (seq >= 0)
-			    ctl->setParam("sequence",String(seq));
-			else
-			    ctl->setParam("emergency",String::boolText(true));
+		    String slc(sls);
+		    for (txSls = 0; txSls < 256; txSls++) {
+			if (!linkAvail[txSls])
+			    continue;
+			NamedList* ctl = controlCreate(oper);
+			if (!ctl)
+			    continue;
+			Debug(this,DebugAll,"Sending Link %d %s %s on %d [%p]",
+			    sls,oper,tmp.c_str(),txSls,this);
+			ctl->setParam("address",tmp);
+			ctl->setParam("slc",slc);
+			ctl->setParam("linksel",String(txSls));
+			if (linkUp)
+			    ctl->setParam("code",String(txSls));
+			else {
+			    int seq = network->getSequence(sls);
+			    if (seq >= 0)
+				ctl->setParam("sequence",String(seq));
+			    else
+				ctl->setParam("emergency",String::boolText(true));
+			}
+			ctl->setParam("automatic",String::boolText(true));
+			controlExecute(ctl);
 		    }
-		    ctl->setParam("automatic",String::boolText(true));
-		    controlExecute(ctl);
 		}
 	    }
 	}
@@ -731,6 +737,25 @@ bool SS7Management::postpone(SS7MSU* msu, const SS7Label& label, int txSls,
 bool SS7Management::timeout(const SS7MSU& msu, const SS7Label& label, int txSls, bool final)
 {
     Debug(this,DebugStub,"Timeout %u%s [%p]",txSls,(final ? " final" : ""),this);
+    if (!final)
+	return true;
+    const unsigned char* buf = msu.getData(label.length()+1,1);
+    if (!buf)
+	return false;
+    String link;
+    link << SS7PointCode::lookup(label.type()) << "," << label;
+    switch (buf[0]) {
+	case SS7MsgSNM::COO:
+	case SS7MsgSNM::XCO:
+	case SS7MsgSNM::ECO:
+	    Debug(this,DebugNote,"Changeover timed out on %s",link.c_str());
+	    inhibit(label,SS7Layer2::Inactive);
+	    break;
+	case SS7MsgSNM::CBD:
+	    Debug(this,DebugNote,"Changeback timed out on %s",link.c_str());
+	    inhibit(label,0,SS7Layer2::Inactive);
+	    break;
+    }
     return true;
 }
 
@@ -764,6 +789,13 @@ void SS7Management::timerTick(const Time& when)
 	TelEngine::destruct(msg);
     }
 }
+
+bool SS7Management::inhibit(const SS7Label& link, int setFlags, int clrFlags)
+{
+    SS7Router* router = YOBJECT(SS7Router,SS7Layer4::network());
+    return router && router->inhibit(link,setFlags,clrFlags);
+}
+
 
 HandledMSU SS7Maintenance::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {

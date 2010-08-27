@@ -609,6 +609,24 @@ int SS7MTP3::inhibited(int sls) const
     return SS7Layer2::Inactive;
 }
 
+bool SS7MTP3::inhibit(int sls, int setFlags, int clrFlags)
+{
+    if (sls < 0)
+	return false;
+    const ObjList* l = &m_links;
+    for (; l; l = l->next()) {
+	L2Pointer* p = static_cast<L2Pointer*>(l->get());
+	if (!(p && *p))
+	    continue;
+	if ((*p)->sls() == sls) {
+	    DDebug(this,DebugAll,"Setting inhibition +0x%02X -0x%02X on %d '%s' [%p]",
+		setFlags,clrFlags,sls,(*p)->toString().c_str(),this);
+	    return (*p)->inhibit(setFlags,clrFlags);
+	}
+    }
+    return false;
+}
+
 int SS7MTP3::getSequence(int sls) const
 {
     if (sls < 0)

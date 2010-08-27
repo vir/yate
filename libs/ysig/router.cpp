@@ -806,6 +806,7 @@ void SS7Router::notify(SS7Layer3* network, int sls)
     DDebug(this,DebugInfo,"Notified %s on %p sls %d [%p]",
 	(network ? (network->operational() ? "net-up" : "net-down") : "no-net"),
 	network,sls,this);
+    bool useMe = false;
     Lock lock(this);
     if (network) {
 	if (network->operational()) {
@@ -828,8 +829,7 @@ void SS7Router::notify(SS7Layer3* network, int sls)
 	    else {
 		if (!m_restart.started())
 		    restart();
-		network = this;
-		sls = -1;
+		useMe = true;
 	    }
 	}
 	else
@@ -839,8 +839,13 @@ void SS7Router::notify(SS7Layer3* network, int sls)
     ObjList* l = &m_layer4;
     for (; l; l = l->next()) {
 	L4Pointer* p = static_cast<L4Pointer*>(l->get());
-	if (p && *p)
-	    (*p)->notify(network,sls);
+	if (p && *p) {
+	    SS7Layer4* l4 = *p;
+	    if (useMe && (l4 != m_mngmt) && (l4 != m_maint))
+		l4->notify(this,-1);
+	    else
+		l4->notify(network,sls);
+	}
     }
 }
 

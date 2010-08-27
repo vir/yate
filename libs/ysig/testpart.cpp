@@ -105,8 +105,6 @@ bool SS7Testing::sendTraffic()
 
 void SS7Testing::notify(SS7Layer3* network, int sls)
 {
-    Debug(this,DebugStub,"Please implement SS7Testing::notify(%p,%d) [%p]",
-	network,sls,this);
 }
 
 void SS7Testing::timerTick(const Time& when)

@@ -235,10 +235,12 @@ bool SS7Layer2::inhibit(int setFlags, int clrFlags)
 {
     int old = m_inhibited;
     m_inhibited = (m_inhibited | setFlags) & ~clrFlags;
-    DDebug(this,DebugInfo,"Link inhibition changed 0x%02X -> 0x%02X [%p]",
-	old,m_inhibited,this);
-    if (((old != 0) ^ (m_inhibited != 0)) && operational())
-	notify();
+    if (old != m_inhibited) {
+	Debug(this,DebugNote,"Link inhibition changed 0x%02X -> 0x%02X [%p]",
+	    old,m_inhibited,this);
+	if (((old != 0) ^ (m_inhibited != 0)) && operational())
+	    notify();
+    }
     return true;
 }
 

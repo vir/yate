@@ -383,7 +383,7 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	const unsigned char* s = msu.getData(label.length()+2,len);
 	if (!s)
 	    return false;
-	Debug(this,DebugInfo,"%s (code len=%u) [%p]",msg->name(),len,this);
+	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
 	SS7Label lbl(label,label.sls(),0);
 	SS7MSU answer(msu.getSIO(),lbl,0,len+1);
 	unsigned char* d = answer.getData(lbl.length()+1,len+1);
@@ -418,7 +418,7 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
     else if (msg->type() == SS7MsgSNM::CBA) {
 	if (!len--)
 	    return false;
-	Debug(this,DebugInfo,"%s (code len=%u) [%p]",msg->name(),len,this);
+	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
 	lock();
 	SnmPending* pend = 0;
 	for (ObjList* l = m_pending.skipNull(); l; l = l->skipNext()) {
@@ -447,7 +447,7 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	msg->type() == SS7MsgSNM::ECA) {
 	if (!len--)
 	    return false;
-	Debug(this,DebugInfo,"%s (code len=%u) [%p]",msg->name(),len,this);
+	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
 	lock();
 	SnmPending* pend = 0;
 	for (ObjList* l = m_pending.skipNull(); l; l = l->skipNext()) {
@@ -662,8 +662,7 @@ bool SS7Management::control(NamedList& params)
 
 void SS7Management::notify(SS7Layer3* network, int sls)
 {
-    Debug(this,DebugStub,"Please implement SS7Management::notify(%p,%d) [%p]",
-	network,sls,this);
+    Debug(this,DebugAll,"SS7Management::notify(%p,%d) [%p]",network,sls,this);
     if (network && (sls >= 0)) {
 	bool linkAvail[256];
 	int txSls;
@@ -736,7 +735,7 @@ bool SS7Management::postpone(SS7MSU* msu, const SS7Label& label, int txSls,
 
 bool SS7Management::timeout(const SS7MSU& msu, const SS7Label& label, int txSls, bool final)
 {
-    Debug(this,DebugStub,"Timeout %u%s [%p]",txSls,(final ? " final" : ""),this);
+    Debug(this,DebugAll,"Timeout %u%s [%p]",txSls,(final ? " final" : ""),this);
     if (!final)
 	return true;
     const unsigned char* buf = msu.getData(label.length()+1,1);
@@ -834,7 +833,7 @@ HandledMSU SS7Maintenance::receivedMSU(const SS7MSU& msu, const SS7Label& label,
 		SS7MSU answer(msu.getSIO(),lbl,0,len+2);
 		unsigned char* d = answer.getData(lbl.length()+1,len+2);
 		if (!d)
-		    return true;
+		    return false;
 		addr.clear();
 		addr << SS7PointCode::lookup(lbl.type()) << "," << lbl;
 		if (debugAt(DebugAll))
@@ -861,8 +860,6 @@ HandledMSU SS7Maintenance::receivedMSU(const SS7MSU& msu, const SS7Label& label,
 
 void SS7Maintenance::notify(SS7Layer3* network, int sls)
 {
-    Debug(this,DebugStub,"Please implement SS7Maintenance::notify(%p,%d) [%p]",
-	network,sls,this);
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

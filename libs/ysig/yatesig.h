@@ -5057,6 +5057,14 @@ public:
 	{ return m_inhibited; }
 
     /**
+     * Check some of the inhibition flags set by MTP3 Management
+     * @params flags Flags to check for, ORed together
+     * @return True if any of the specified inhibition flags is active
+     */
+    inline bool inhibited(int flags) const
+	{ return (m_inhibited & flags) != 0; }
+
+    /**
      * Get the sequence number of the last MSU received
      * @return Last FSN received, negative if not available
      */

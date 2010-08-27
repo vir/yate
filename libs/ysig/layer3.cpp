@@ -569,7 +569,7 @@ unsigned int SS7MTP3::countLinks()
 	if (!(p && *p))
 	    continue;
 	total++;
-	if ((*p)->operational() && !((*p)->inhibited() & (SS7Layer2::Unchecked|SS7Layer2::Inactive)))
+	if ((*p)->operational() && !((*p)->inhibited(SS7Layer2::Unchecked|SS7Layer2::Inactive)))
 	    active++;
     }
     m_total = total;
@@ -829,7 +829,8 @@ bool SS7MTP3::initialize(const NamedList* config)
 		continue;
 	    if (linkSls >= 0)
 		link->sls(linkSls);
-	    link->m_inhibited = m_checklinks ? SS7Layer2::Unchecked : 0;
+	    if (m_checklinks)
+		link->inhibit(SS7Layer2::Unchecked);
 	    attach(link);
 	    if (!link->initialize(linkConfig))
 		detach(link);
@@ -940,24 +941,27 @@ bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
     if (debugAt(DebugInfo)) {
 	String tmp;
 	tmp << label << " (" << label.opc().pack(cpType) << ":" << label.dpc().pack(cpType) << ":" << label.sls() << ")";
-	Debug(this,DebugAll,"Received MSU from link '%s' %p with SLS=%d. Address: %s",
-	    link->toString().c_str(),link,sls,tmp.c_str());
+	Debug(this,DebugAll,"Received MSU from link %d '%s' %p. Address: %s",
+	    sls,link->toString().c_str(),link,tmp.c_str());
     }
 #endif
     bool maint = (msu.getSIF() == SS7MSU::MTN) || (msu.getSIF() == SS7MSU::MTNS);
     if (link) {
-	if (link->inhibited() & SS7Layer2::Unchecked) {
+	if (link->inhibited(SS7Layer2::Unchecked)) {
 	    if (!maint)
 		return false;
 	    if (label.sls() == sls) {
-		Debug(this,DebugNote,"Placing link '%s' %d in service [%p]",
-		    link->toString().c_str(),sls,this);
-		link->m_inhibited = 0;
+		Debug(this,DebugNote,"Placing link %d '%s' in service [%p]",
+		    sls,link->toString().c_str(),this);
+		link->m_inhibited &= ~SS7Layer2::Unchecked;
 		notify(link);
 	    }
 	}
-	if (!maint && (msu.getSIF() != SS7MSU::SNM) && link->inhibited())
+	if (!maint && (msu.getSIF() != SS7MSU::SNM) && link->inhibited()) {
+	    Debug(this,DebugMild,"Received MSU on inhibited link %d '%s' [%p]",
+		sls,link->toString().c_str(),this);
 	    return false;
+	}
     }
     // first try to call the user part
     HandledMSU handled = SS7Layer3::receivedMSU(msu,label,sls);
@@ -995,8 +999,12 @@ void SS7MTP3::notify(SS7Layer2* link)
 		    link->m_check = t;
 	    }
 	}
-	else
-	    link->m_inhibited = m_checklinks ? SS7Layer2::Unchecked : 0;
+	else {
+	    if (m_checklinks)
+		link->inhibit(SS7Layer2::Unchecked,0);
+	    else
+		link->inhibit(0,SS7Layer2::Unchecked);
+	}
     }
     // if operational status of a link changed notify upper layer
     if (act != m_active) {

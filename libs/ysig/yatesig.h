@@ -4862,6 +4862,20 @@ public:
     };
 
     /**
+     * Link inhibition reason bits
+     */
+    enum Inhibitions {
+	// basic maintenance checks not performed
+	Unchecked = 0x01,
+	// management inactivation
+	Inactive  = 0x02,
+	// locally inhibited
+	Local     = 0x04,
+	// remotely inhibited
+	Remote    = 0x08,
+    };
+
+    /**
      * Push a Message Signal Unit down the protocol stack
      * @param msu Message data, starting with Service Indicator Octet
      * @return True if message was successfully queued
@@ -4930,11 +4944,11 @@ public:
 	{ if ((m_sls < 0) || !m_l2user) m_sls = linkSel; }
 
     /**
-     * Check if the link is inhibited by MTP3 Management
-     * @return True if the link is inhibited and should not be used
+     * Retrieve the inhibition flags set by MTP3 Management
+     * @return Inhibition flags ORed together, zero if not inhibited
      */
-    inline bool inhibited() const
-	{ return m_inhibited || m_unchecked; }
+    inline int inhibited() const
+	{ return m_inhibited; }
 
     /**
      * Get the sequence number of the last MSU received
@@ -4967,7 +4981,7 @@ protected:
     inline SS7Layer2()
 	: m_autoEmergency(true), m_lastSeqRx(-1),
 	  m_l2userMutex(true,"SS7Layer2::l2user"), m_l2user(0), m_sls(-1),
-	  m_check(0), m_unchecked(true), m_inhibited(false)
+	  m_check(0), m_inhibited(Unchecked)
 	{ }
 
     /**
@@ -5018,8 +5032,7 @@ private:
     SS7L2User* m_l2user;
     int m_sls;
     u_int64_t m_check;
-    bool m_unchecked;
-    bool m_inhibited;
+    int m_inhibited;
 };
 
 /**
@@ -5257,12 +5270,12 @@ public:
     virtual bool operational(int sls = -1) const = 0;
 
     /**
-     * Check if a specific link is inhibited
+     * Retrieve inhibition flags of a specific link
      * @param sls Signalling Link to check
-     * @return True if the specified link is inhibited and should not be used
+     * @return Inhibitions of the specified link, zero if not inhibited
      */
-    virtual bool inhibited(int sls) const
-	{ return false; }
+    virtual int inhibited(int sls) const
+	{ return 0; }
 
     /**
      * Get the sequence number of the last MSU received on a link
@@ -6465,11 +6478,11 @@ public:
     virtual bool operational(int sls = -1) const;
 
     /**
-     * Check if a specific link is inhibited
+     * Retrieve inhibition flags of a specific link
      * @param sls Signalling Link to check
-     * @return True if the specified link is inhibited and should not be used
+     * @return Inhibitions of the specified link, zero if not inhibited
      */
-    virtual bool inhibited(int sls) const;
+    virtual int inhibited(int sls) const;
 
     /**
      * Get the sequence number of the last MSU received on a link

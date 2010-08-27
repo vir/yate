@@ -569,7 +569,7 @@ unsigned int SS7MTP3::countLinks()
 	if (!(p && *p))
 	    continue;
 	total++;
-	if ((*p)->operational() && !(*p)->m_unchecked)
+	if ((*p)->operational() && !((*p)->inhibited() & (SS7Layer2::Unchecked|SS7Layer2::Inactive)))
 	    active++;
     }
     m_total = total;
@@ -594,10 +594,10 @@ bool SS7MTP3::operational(int sls) const
     return false;
 }
 
-bool SS7MTP3::inhibited(int sls) const
+int SS7MTP3::inhibited(int sls) const
 {
     if (sls < 0)
-	return m_inhibit;
+	return m_inhibit ? SS7Layer2::Inactive : 0;
     const ObjList* l = &m_links;
     for (; l; l = l->next()) {
 	L2Pointer* p = static_cast<L2Pointer*>(l->get());
@@ -606,7 +606,7 @@ bool SS7MTP3::inhibited(int sls) const
 	if ((*p)->sls() == sls)
 	    return (*p)->inhibited();
     }
-    return true;
+    return SS7Layer2::Inactive;
 }
 
 int SS7MTP3::getSequence(int sls) const
@@ -811,7 +811,7 @@ bool SS7MTP3::initialize(const NamedList* config)
 		continue;
 	    if (linkSls >= 0)
 		link->sls(linkSls);
-	    link->m_unchecked = m_checklinks;
+	    link->m_inhibited = m_checklinks ? SS7Layer2::Unchecked : 0;
 	    attach(link);
 	    if (!link->initialize(linkConfig))
 		detach(link);
@@ -928,13 +928,13 @@ bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
 #endif
     bool maint = (msu.getSIF() == SS7MSU::MTN) || (msu.getSIF() == SS7MSU::MTNS);
     if (link) {
-	if (link->m_unchecked) {
+	if (link->inhibited() & SS7Layer2::Unchecked) {
 	    if (!maint)
 		return false;
 	    if (label.sls() == sls) {
 		Debug(this,DebugNote,"Placing link '%s' %d in service [%p]",
 		    link->toString().c_str(),sls,this);
-		link->m_unchecked = false;
+		link->m_inhibited = 0;
 		notify(link);
 	    }
 	}
@@ -964,14 +964,14 @@ void SS7MTP3::notify(SS7Layer2* link)
 #endif
     if (link) {
 	if (link->operational()) {
-	    if (link->m_unchecked) {
+	    if (link->inhibited() & SS7Layer2::Unchecked) {
 		u_int64_t t = Time::now() + 50000 + (::random() % 100000);
 		if ((t < link->m_check) || (t - 4000000 > link->m_check))
 		    link->m_check = t;
 	    }
 	}
 	else
-	    link->m_unchecked = m_checklinks;
+	    link->m_inhibited = m_checklinks ? SS7Layer2::Unchecked : 0;
     }
     // if operational status of a link changed notify upper layer
     if (act != m_active) {

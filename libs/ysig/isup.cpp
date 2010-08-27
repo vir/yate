@@ -2469,7 +2469,7 @@ SignallingEvent* SS7ISUPCall::release(SignallingEvent* event, SS7MsgISUP* msg)
     if (event)
 	setReason(0,event->message());
     else
-	setReason("noresponse",0);
+	setReason("interworking",0);
     stopWaitSegment(true);
     XDebug(isup(),DebugAll,"Call(%u). Releasing call with reason '%s' [%p]",
 	id(),m_reason.safe(),this);

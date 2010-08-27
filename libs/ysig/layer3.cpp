@@ -943,6 +943,7 @@ bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
     }
     // first try to call the user part
     HandledMSU handled = SS7Layer3::receivedMSU(msu,label,sls);
+    XDebug(this,DebugAll,"MSU handling result: %u [%p]",(unsigned int)handled,this);
     switch (handled) {
 	case HandledMSU::Accepted:
 	case HandledMSU::Failure:

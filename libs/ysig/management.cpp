@@ -768,7 +768,7 @@ void SS7Management::timerTick(const Time& when)
 HandledMSU SS7Maintenance::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
     if (msu.getSIF() != sif() && msu.getSIF() != SS7MSU::MTNS)
-	return false;
+	return HandledMSU::Rejected;
     XDebug(this,DebugStub,"Possibly incomplete SS7Maintenance::receivedMSU(%p,%p,%p,%d) [%p]",
 	&msu,&label,network,sls,this);
 

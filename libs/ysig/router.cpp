@@ -594,6 +594,8 @@ HandledMSU SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7L
 	    int chg = m_changes;
 	    unlock();
 	    HandledMSU handled = l4->receivedMSU(msu,label,network,sls);
+	    XDebug(this,DebugAll,"L4=%p '%s' returned %u [%p]",
+		(void*)l4,l4->toString().c_str(),(unsigned int)handled,this);
 	    switch (handled) {
 		case HandledMSU::Accepted:
 		    return handled;
@@ -613,17 +615,22 @@ HandledMSU SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7L
 	}
     } while (l); // loop until the list was scanned to end
     unlock();
-    if (!m_transfer)
-	return ret;
-    switch (ret) {
-	case HandledMSU::Unequipped:
-	case HandledMSU::Failure:
-	    return ret;
-	default:
-	    break;
+    if (m_transfer) {
+	switch (ret) {
+	    case HandledMSU::Unequipped:
+		if (!m_sendUnavail)
+		    return HandledMSU::Failure;
+		// fall through
+	    case HandledMSU::Failure:
+		return ret;
+	    default:
+		break;
+	}
+	if ((routeMSU(msu,label,network,label.sls(),SS7Route::NotProhibited) >= 0) || !m_sendUnavail)
+	    return HandledMSU::Accepted;
     }
-    if ((routeMSU(msu,label,network,label.sls(),SS7Route::NotProhibited) >= 0) || !m_sendUnavail)
-	return HandledMSU::Accepted;
+    else if (!m_sendUnavail)
+	return HandledMSU::Failure;
     unsigned int local = getLocal(label.type());
     if (local && label.dpc().pack(label.type()) == local)
 	return ret;

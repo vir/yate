@@ -299,10 +299,10 @@ static const TokenDict s_dict_control[] = {
     { 0, 0 }
 };
 
-bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
+HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
     if (msu.getSIF() != sif())
-	return false;
+	return HandledMSU::Rejected;
 
     unsigned int len = msu.length() - label.length() - 1;
     // according to Q.704 there should be at least the heading codes (8 bit)
@@ -765,7 +765,7 @@ void SS7Management::timerTick(const Time& when)
     }
 }
 
-bool SS7Maintenance::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
+HandledMSU SS7Maintenance::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
     if (msu.getSIF() != sif() && msu.getSIF() != SS7MSU::MTNS)
 	return false;

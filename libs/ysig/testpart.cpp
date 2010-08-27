@@ -42,21 +42,21 @@ static const TokenDict s_dict_control[] = {
     { 0, 0 }
 };
 
-bool SS7Testing::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
+HandledMSU SS7Testing::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
     if (msu.getSIF() != sif())
-	return false;
+	return HandledMSU::Unequipped;
     String src;
     int lvl = DebugNote;
     if (m_lbl.type() != SS7PointCode::Other) {
 	if (label.type() != m_lbl.type())
-	    return false;
+	    return HandledMSU::Unequipped;
 	if (label.opc() == m_lbl.opc() && label.dpc() == m_lbl.dpc()) {
 	    src = "MYSELF!";
 	    lvl = DebugWarn;
 	}
 	else if (label.dpc() != m_lbl.opc())
-	    return false;
+	    return HandledMSU::Unequipped;
     }
     if (src.null())
 	src << SS7PointCode::lookup(label.type()) << ":" << label.opc();

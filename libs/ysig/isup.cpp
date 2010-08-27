@@ -3955,15 +3955,15 @@ bool SS7ISUP::processParamCompat(const NamedList& list, unsigned int cic, bool* 
     return !diagnostic.null();
 }
 
-bool SS7ISUP::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
+HandledMSU SS7ISUP::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
     if (msu.getSIF() != sif() || !hasPointCode(label.dpc()) || !handlesRemotePC(label.opc()))
-	return false;
+	return HandledMSU::Unequipped;
     // we should have at least 2 bytes CIC and 1 byte message type
     const unsigned char* s = msu.getData(label.length()+1,3);
     if (!s) {
 	Debug(this,DebugNote,"Got short MSU");
-	return true;
+	return false;
     }
     unsigned int len = msu.length()-label.length()-1;
     unsigned int cic = s[0] | (s[1] << 8);
@@ -3979,7 +3979,7 @@ bool SS7ISUP::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* n
     if (!(circuits() && circuits()->find(cic))) {
 	Debug(this,DebugMild,"Received ISUP type 0x%02x (%s) for unknown cic=%u",
 	    type,name.c_str(),cic);
-	return true;
+	return false;
     }
     bool ok = processMSU(type,cic,s+3,len-3,label,network,sls);
     if (!ok && debugAt(DebugMild)) {
@@ -3988,7 +3988,7 @@ bool SS7ISUP::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* n
 	Debug(this,DebugMild,"Unhandled ISUP type %s, cic=%u, length %u: %s",
 	    name.c_str(),cic,len,tmp.c_str());
     }
-    return true;
+    return ok;
 }
 
 bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
@@ -4893,10 +4893,10 @@ SS7BICC::~SS7BICC()
     Debug(this,DebugInfo,"BICC Call Controller destroyed [%p]",this);
 }
 
-bool SS7BICC::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
+HandledMSU SS7BICC::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
     if (msu.getSIF() != sif() || !hasPointCode(label.dpc()) || !handlesRemotePC(label.opc()))
-	return false;
+	return HandledMSU::Unequipped;
     // we should have at least 4 bytes CIC and 1 byte message type
     const unsigned char* s = msu.getData(label.length()+1,5);
     if (!s)
@@ -4911,7 +4911,7 @@ bool SS7BICC::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* n
 	tmp.hexify((void*)s,len,' ');
 	Debug(this,ok ? DebugInfo : DebugMild,"Unhandled BICC type %s, cic=%u, length %u: %s",
 	    name,cic,len,tmp.c_str());
-	return true;
+	return ok;
     }
     String tmp;
     tmp.hexify((void*)s,len,' ');

@@ -942,13 +942,19 @@ bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
 	    return false;
     }
     // first try to call the user part
-    if (SS7Layer3::receivedMSU(msu,label,sls))
-	return true;
+    HandledMSU handled = SS7Layer3::receivedMSU(msu,label,sls);
+    switch (handled) {
+	case HandledMSU::Accepted:
+	case HandledMSU::Failure:
+	    return true;
+	default:
+	    break;
+    }
     // then try to minimally process MTN and SNM MSUs
     if (maintenance(msu,label,sls) || management(msu,label,sls))
 	return true;
     // if nothing worked, report the unavailable regular user part
-    return (msu.getSIF() > SS7MSU::MTNS) && unavailable(msu,label,sls);
+    return (msu.getSIF() > SS7MSU::MTNS) && unavailable(msu,label,sls,handled.upu());
 }
 
 void SS7MTP3::notify(SS7Layer2* link)

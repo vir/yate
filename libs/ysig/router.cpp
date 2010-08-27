@@ -573,13 +573,14 @@ int SS7Router::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
     return routeMSU(msu,label,0,sls,states);
 }
 
-bool SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
+HandledMSU SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
     XDebug(this,DebugStub,"Possibly incomplete SS7Router::receivedMSU(%p,%p,%p,%d)",
 	&msu,&label,network,sls);
     lock();
     m_rxMsu++;
     ObjList* l;
+    HandledMSU ret(HandledMSU::Unequipped);
     do {
 	for (l = &m_layer4; l; l = l->next()) {
 	    L4Pointer* p = static_cast<L4Pointer*>(l->get());
@@ -592,8 +593,19 @@ bool SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3*
 		(void*)l4,l4->toString().c_str(),this);
 	    int chg = m_changes;
 	    unlock();
-	    if (l4->receivedMSU(msu,label,network,sls))
-		return true;
+	    HandledMSU handled = l4->receivedMSU(msu,label,network,sls);
+	    switch (handled) {
+		case HandledMSU::Accepted:
+		    return handled;
+		case HandledMSU::Unequipped:
+		case HandledMSU::Rejected:
+		    break;
+		case HandledMSU::Failure:
+		    ret = handled;
+		    break;
+		default:
+		    ret = handled;
+	    }
 	    lock();
 	    // if list has changed break with l not null so repeat the scan
 	    if (chg != m_changes)
@@ -601,7 +613,21 @@ bool SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3*
 	}
     } while (l); // loop until the list was scanned to end
     unlock();
-    return (m_transfer && (routeMSU(msu,label,network,label.sls(),SS7Route::NotProhibited) >= 0)) || !m_sendUnavail;
+    if (!m_transfer)
+	return ret;
+    switch (ret) {
+	case HandledMSU::Unequipped:
+	case HandledMSU::Failure:
+	    return ret;
+	default:
+	    break;
+    }
+    if ((routeMSU(msu,label,network,label.sls(),SS7Route::NotProhibited) >= 0) || !m_sendUnavail)
+	return HandledMSU::Accepted;
+    unsigned int local = getLocal(label.type());
+    if (local && label.dpc().pack(label.type()) == local)
+	return ret;
+    return HandledMSU::Inaccessible;
 }
 
 void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type, GenObject* context)

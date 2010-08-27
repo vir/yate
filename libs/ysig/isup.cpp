@@ -4934,7 +4934,7 @@ bool SS7ISUP::handleCicBlockCommand(const NamedList& p, bool block)
 	}
 	if (count > 32) {
 	    Debug(this,DebugNote,"Circuit group '%s': too many circuits %u (max=32)",
-		p.getValue("operation"),param->c_str(),count);
+		p.getValue("operation"),count);
 	    delete[] cics;
 	    return false;
 	}

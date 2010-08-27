@@ -45,7 +45,7 @@ static const TokenDict s_dict_control[] = {
 HandledMSU SS7Testing::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
     if (msu.getSIF() != sif())
-	return HandledMSU::Unequipped;
+	return HandledMSU::Rejected;
     String src;
     int lvl = DebugNote;
     if (m_lbl.type() != SS7PointCode::Other) {

@@ -598,12 +598,10 @@ HandledMSU SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7L
 		(void*)l4,l4->toString().c_str(),(unsigned int)handled,this);
 	    switch (handled) {
 		case HandledMSU::Accepted:
+		case HandledMSU::Failure:
 		    return handled;
 		case HandledMSU::Unequipped:
 		case HandledMSU::Rejected:
-		    break;
-		case HandledMSU::Failure:
-		    ret = handled;
 		    break;
 		default:
 		    ret = handled;
@@ -616,16 +614,8 @@ HandledMSU SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7L
     } while (l); // loop until the list was scanned to end
     unlock();
     if (m_transfer) {
-	switch (ret) {
-	    case HandledMSU::Unequipped:
-		if (!m_sendUnavail)
-		    return HandledMSU::Failure;
-		// fall through
-	    case HandledMSU::Failure:
-		return ret;
-	    default:
-		break;
-	}
+	if (HandledMSU::Unequipped == ret)
+	    return m_sendUnavail ? ret : HandledMSU(HandledMSU::Failure);
 	if ((routeMSU(msu,label,network,label.sls(),SS7Route::NotProhibited) >= 0) || !m_sendUnavail)
 	    return HandledMSU::Accepted;
     }

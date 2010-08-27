@@ -3958,7 +3958,7 @@ bool SS7ISUP::processParamCompat(const NamedList& list, unsigned int cic, bool* 
 HandledMSU SS7ISUP::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
     if (msu.getSIF() != sif() || !hasPointCode(label.dpc()) || !handlesRemotePC(label.opc()))
-	return HandledMSU::Unequipped;
+	return HandledMSU::Rejected;
     // we should have at least 2 bytes CIC and 1 byte message type
     const unsigned char* s = msu.getData(label.length()+1,3);
     if (!s) {
@@ -4896,7 +4896,7 @@ SS7BICC::~SS7BICC()
 HandledMSU SS7BICC::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
     if (msu.getSIF() != sif() || !hasPointCode(label.dpc()) || !handlesRemotePC(label.opc()))
-	return HandledMSU::Unequipped;
+	return HandledMSU::Rejected;
     // we should have at least 4 bytes CIC and 1 byte message type
     const unsigned char* s = msu.getData(label.length()+1,5);
     if (!s)

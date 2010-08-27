@@ -3520,14 +3520,7 @@ bool SS7ISUP::control(NamedList& params)
 	    return true;
 	case SS7MsgISUP::BLK:
 	case SS7MsgISUP::UBL:
-	    {
-		int code = params.getIntValue("circuit");
-		if ((code < 1) || !blockCircuit(code,(SS7MsgISUP::BLK == cmd),
-		    false,false,true,true))
-		    return false;
-		sendLocalLock();
-	    }
-	    return true;
+	    return handleCicBlockCommand(params,cmd == SS7MsgISUP::BLK);
 	case SS7MsgISUP::RLC:
 	    {
 		int code = params.getIntValue("circuit");
@@ -4872,6 +4865,139 @@ bool SS7ISUP::transmitMessages(ObjList& list)
 	setLabel(label,msg->cic());
 	transmitMessage(msg,label,false);
     }
+    return true;
+}
+
+// Utility: check if a circuit exists and can be start an (un)block operation
+static const char* checkBlockCic(SignallingCircuit* cic, bool block, bool maint,
+    bool force)
+{
+    if (!cic)
+	return "not found";
+    int flg = cic->locked(maint ? SignallingCircuit::LockLocalMaint :
+	SignallingCircuit::LockLocalHWFail);
+    if ((block == (0 != flg)) && !force)
+	return "already in the same state";
+    flg = maint ? SignallingCircuit::LockingMaint : SignallingCircuit::LockLocalHWFail;
+    if (cic->locked(flg | SignallingCircuit::Resetting) && !force)
+	return "busy locking or resetting";
+    return 0;
+}
+
+// Handle circuit(s) (un)block command
+bool SS7ISUP::handleCicBlockCommand(const NamedList& p, bool block)
+{
+    if (!circuits())
+	return false;
+    SS7MsgISUP* msg = 0;
+    SignallingMessageTimer* t = 0;
+    bool force = p.getBoolValue("force");
+    String* param = p.getParam("circuit");
+    Lock mylock(this);
+    if (param) {
+	SignallingCircuit* cic = circuits()->find(param->toInteger());
+	const char* reason = checkBlockCic(cic,block,true,force);
+	if (reason) {
+	    Debug(this,DebugNote,"Circuit '%s' circuit=%s: %s",
+		p.getValue("operation"),param->c_str(),reason);
+	    return false;
+	}
+	blockCircuit(cic->code(),block,false,false,true,true);
+	cic->setLock(SignallingCircuit::LockingMaint);
+	msg = new SS7MsgISUP(block ? SS7MsgISUP::BLK : SS7MsgISUP::UBL,cic->code());
+	if (block)
+	    t = new SignallingMessageTimer(m_t12Interval,m_t13Interval);
+	else
+	    t = new SignallingMessageTimer(m_t14Interval,m_t15Interval);
+    }
+    else {
+	// NOTE: we assume the circuits belongs to the same span
+	param = p.getParam("circuits");
+	if (TelEngine::null(param)) {
+	    Debug(this,DebugNote,"Circuit '%s' missing circuit(s)",
+		p.getValue("operation"));
+	    return false;
+	}
+	// Parse the range
+	unsigned int count = 0;
+	unsigned int* cics = SignallingUtils::parseUIntArray(*param,1,0xffffffff,count,true);
+	if (!cics) {
+	    Debug(this,DebugNote,"Circuit group '%s': invalid circuits=%s",
+		p.getValue("operation"),param->c_str());
+	    return false;
+	}
+	if (count > 32) {
+	    Debug(this,DebugNote,"Circuit group '%s': too many circuits %u (max=32)",
+		p.getValue("operation"),param->c_str(),count);
+	    delete[] cics;
+	    return false;
+	}
+	// Check if all circuits can be (un)blocked
+	ObjList list;
+	bool maint = !p.getBoolValue("hwfail");
+	for (unsigned int i = 0; i < count; i++) {
+	    SignallingCircuit* c = circuits()->find(cics[i]);
+	    const char* reason = checkBlockCic(c,block,maint,force);
+	    if (reason) {
+		Debug(this,DebugNote,"Circuit group '%s' range=%s failed for cic=%u: %s",
+		    p.getValue("operation"),param->c_str(),cics[i],reason);
+		delete[] cics;
+		return false;
+	    }
+	    list.append(c)->setDelete(false);
+	}
+	// Retrieve the code: the lowest circuit code
+	unsigned int code = cics[0];
+	for (unsigned int i = 1; i < count; i++)
+	    if (cics[i] < code)
+		code = cics[i];
+	// Build the range. Fail if falling outside maximum range
+	char d[256];
+	::memset(d,'0',256);
+	d[0] = '1';
+	unsigned int lockRange = 1;
+	unsigned int nCics = 0;
+	for (; nCics < count; nCics++) {
+	    if (code == cics[nCics])
+		continue;
+	    unsigned int pos = cics[nCics] - code;
+	    if (pos > 255)
+		break;
+	    d[pos++] = '1';
+	    if (pos > lockRange)
+		lockRange = pos;
+	}
+	delete[] cics;
+	if (nCics != count) {
+	    Debug(this,DebugNote,"Circuit group '%s': invalid circuit map=%s",
+		p.getValue("operation"),param->c_str());
+	    return false;
+	}
+	// Ok: block circuits and send the request
+	int flg = maint ? SignallingCircuit::LockingMaint : SignallingCircuit::LockingHWFail;
+	for (ObjList* o = list.skipNull(); o ; o = o->skipNext()) {
+	    SignallingCircuit* c = static_cast<SignallingCircuit*>(o->get());
+	    blockCircuit(c->code(),block,false,!maint,true,true);
+	    c->setLock(flg);
+	}
+	String map(d,lockRange);
+        msg = new SS7MsgISUP(block ? SS7MsgISUP::CGB : SS7MsgISUP::CGU,code);
+	msg->params().addParam("GroupSupervisionTypeIndicator",
+	    (maint ? "maintenance" : "hw-failure"));
+	msg->params().addParam("RangeAndStatus",String(map.length()));
+	msg->params().addParam("RangeAndStatus.map",map);
+	if (block)
+	    t = new SignallingMessageTimer(m_t18Interval,m_t19Interval);
+	else
+	    t = new SignallingMessageTimer(m_t20Interval,m_t21Interval);
+    }
+    t->message(msg);
+    m_pending.add(t);
+    msg->ref();
+    SS7Label label;
+    setLabel(label,msg->cic());
+    mylock.drop();
+    transmitMessage(msg,label,false);
     return true;
 }
 

@@ -7837,6 +7837,8 @@ private:
 	bool remove = false);
     // Transmit a list of messages. Return true if at least 1 message was sent
     bool transmitMessages(ObjList& list);
+    // Handle circuit(s) (un)block command
+    bool handleCicBlockCommand(const NamedList& p, bool block);
 
     SS7PointCode::Type m_type;           // Point code type of this call controller
     ObjList m_pointCodes;                // Point codes serviced by this call controller

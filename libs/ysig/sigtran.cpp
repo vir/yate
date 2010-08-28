@@ -205,6 +205,12 @@ void SIGTransport::attach(SIGTRAN* sigtran)
     }
 }
 
+// Retrieve the default port to use
+u_int32_t SIGTransport::defPort() const
+{
+    return m_sigtran ? m_sigtran->defPort() : 0;
+}
+
 // Request processing from the adaptation layer
 bool SIGTransport::processMSG(unsigned char msgVersion, unsigned char msgClass,
     unsigned char msgType, const DataBlock& msg, int streamId) const

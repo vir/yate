@@ -4119,11 +4119,21 @@ public:
 	{ return m_sigtran; }
 
     /**
+     * Get the default SCTP/TCP/UDP port used
+     * @return Default protocol port, 0 if unknown, not set or no SIGTRAN attached
+     */
+    u_int32_t defPort() const;
+
+    /**
      * Check if transport layer is reliable
      * @return true if transport is reliable
      */
-     virtual bool reliable() const = 0;
+    virtual bool reliable() const = 0;
 
+    /**
+     * Notify the SIGTRAN layer about transport status changes
+     * @param status Status to notify
+     */
     void notifyLayer(SignallingInterface::Notification status);
 
     /**
@@ -5058,7 +5068,7 @@ public:
 
     /**
      * Check some of the inhibition flags set by MTP3 Management
-     * @params flags Flags to check for, ORed together
+     * @param flags Flags to check for, ORed together
      * @return True if any of the specified inhibition flags is active
      */
     inline bool inhibited(int flags) const

@@ -268,18 +268,20 @@ static const TokenDict s_transStatus[] = {
 static void resolveAddress(const String& addr, String& ip, int& port)
 {
     ObjList* o = addr.split(':');
-    if (o && o->count() < 2) {
+    if (!(o && o->count())) {
 	ip = "0.0.0.0";
-	port = 3565;
+	TelEngine::destruct(o);
 	return;
     }
-    String* host = static_cast<String*>(o->get());
-    if (host)
-	ip = *host;
+    const String* s = static_cast<const String*>(o->get());
+    if (TelEngine::null(s))
+	ip = "0.0.0.0";
+    else
+	ip = *s;
     o = o->skipNext();
-    String* p = static_cast<String*>(o->get());
-    if (p)
-	port = p->toInteger();
+    if (o)
+	port = o->get()->toString().toInteger(port);
+    TelEngine::destruct(o);
 }
 
 /** ListenerThread class */
@@ -351,7 +353,7 @@ bool ListenerThread::init(const NamedList& param)
     }
     SocketAddr addr(AF_INET);
     String address, adr = param.getValue("local");
-    int port;
+    int port = m_transport->defPort();
     resolveAddress(adr,address,port);
     addr.host(address);
     addr.port(port);
@@ -409,7 +411,7 @@ bool ListenerThread::addAddress(const NamedList &param)
 	if (!adr)
 	    break;
 	String address;
-	int port;
+	int port = m_transport ? m_transport->defPort() : 0;
 	resolveAddress(*adr,address,port);
 	addr->host(address);
 	addr->port(port);
@@ -571,7 +573,7 @@ bool Transport::initialize(const NamedList* params)
     else {
 	SocketAddr addr(AF_INET);
 	String address, adr = m_config.getValue("remote");
-	int port;
+	int port = defPort();
 	resolveAddress(adr,address,port);
 	addr.host(address);
 	addr.port(port);
@@ -638,12 +640,12 @@ bool Transport::bindSocket()
 	return false;
     }
     if (!socket->setBlocking(false)) {
-	DDebug(this,DebugWarn,"Unable to set listener to nonblocking mode");
+	Debug(this,DebugWarn,"Unable to set listener to nonblocking mode");
 	return false;
     }
     SocketAddr addr(AF_INET);
     String address, adr = m_config.getValue("local");
-    int port;
+    int port = defPort();
     resolveAddress(adr,address,port);
     addr.host(address);
     addr.port(port);
@@ -672,7 +674,7 @@ bool Transport::addAddress(const NamedList &param, Socket* socket)
 	if (!adr)
 	    break;
 	String address;
-	int port;
+	int port = defPort();
 	resolveAddress(*adr,address,port);
 	addr->host(address);
 	addr->port(port);
@@ -736,10 +738,11 @@ bool Transport::connectSocket()
 	    DDebug(this,DebugWarn,"Unknown type of socket %s",lookup(m_type,s_transType,"Unknown"));
 	    return false;
     }
-    if (!m_streamer) {
+    String adr = m_config.getValue("local");
+    if (adr || !m_streamer) {
 	SocketAddr addr(AF_INET);
-	String address, adr = m_config.getValue("local");
-	int port;
+	String address;
+	int port = m_streamer ? 0 : defPort();
 	resolveAddress(adr,address,port);
 	addr.host(address);
 	addr.port(port);
@@ -747,9 +750,10 @@ bool Transport::connectSocket()
 	    Debug(DebugNote,"Failed to bind Socket. [%p]",sock);
     }
     if (!m_config.getParam("remote1")) {
+	adr = m_config.getValue("remote");
 	SocketAddr addr(AF_INET);
-	String address, adr = m_config.getValue("remote");
-	int port;
+	String address;
+	int port = defPort();
 	resolveAddress(adr,address,port);
 	addr.host(address);
 	addr.port(port);
@@ -772,7 +776,7 @@ bool Transport::connectSocket()
 	    if (!adr)
 		break;
 	    String address;
-	    int port;
+	    int port = defPort();
 	    resolveAddress(*adr,address,port);
 	    addr->host(address);
 	    addr->port(port);
@@ -830,7 +834,7 @@ bool Transport::addSocket(Socket* socket,SocketAddr& adress)
 	return false;
     SocketAddr addr(AF_INET);
     String address, adr = m_config.getValue("remote");
-    int port;
+    int port = defPort();
     resolveAddress(adr,address,port);
     addr.host(address);
     addr.port(port);

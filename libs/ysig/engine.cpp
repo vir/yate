@@ -519,7 +519,7 @@ static TokenDict s_dict_causeCCITT[] = {
 	{"call-delivered",                 0x07}, // Call awarded and being delivered in an established channel
 	{"preemption",                     0x08}, // Preemption
 	{"preemption-circuit-reserved",    0x09}, // Preemption circuit reserved for re-use
-	{"excess-digits",                  0x0e}, // Excess digits received, call is proceeding
+	{"ported-number",                  0x0e}, // QoR: ported number Q.850 Addendum 1 (06/2000)
 	{"normal-clearing",                0x10}, // Normal Clearing
 	{"busy",                           0x11}, // User busy
 	{"noresponse",                     0x12}, // No user responding
@@ -527,6 +527,9 @@ static TokenDict s_dict_causeCCITT[] = {
 	{"offline",                        0x14}, // Subscriber absent
 	{"rejected",                       0x15}, // Call Rejected
 	{"moved",                          0x16}, // Number changed
+	{"redirection",                    0x17}, // Redirection to new destination Q.850 05/98
+	{"rejected-by-feature",            0x18}, // Call rejected due to feature at the destination Q.850 Amendment 1 (07/2001)
+	{"looping",                        0x19}, // Exchange routing error (hop counter) Q.850 05/98
 	{"answered",                       0x1a}, // Non-selected user clearing (answered elsewhere)
 	{"out-of-order",                   0x1b}, // Destination out of order
 	{"invalid-number",                 0x1c}, // Invalid number format
@@ -537,10 +540,13 @@ static TokenDict s_dict_causeCCITT[] = {
 	{"resource-unavailable",           0x20}, // Resource unavailable
 	{"congestion",                     0x22}, // No circuit/channel available
 	{"net-out-of-order",               0x26}, // Network out of order
+	{"frame-mode-conn-down",           0x27}, // Permanent frame mode connection out of service
+	{"frame-mode-conn-up",             0x28}, // Permanent frame mode connection operational
 	{"temporary-failure",              0x29}, // Temporary failure
 	{"congestion",                     0x2a}, // Switching equipment congestion
 	{"access-info-discarded",          0x2b}, // Access information discarded
 	{"noconn",                         0x2c}, // Requested channel not available
+	{"preemption-congestion",          0x2e}, // Precedence call blocked
 	{"noresource",                     0x2f}, // Resource unavailable, unspecified
 	{"service-unavailable",            0x30}, // Service or option not available
 	{"qos-unavailable",                0x31}, // Quality of service unavailable
@@ -550,6 +556,7 @@ static TokenDict s_dict_causeCCITT[] = {
 	{"bearer-cap-not-auth",            0x39}, // Bearer capability not authorized
 	{"bearer-cap-not-available",       0x3a}, // Bearer capability not presently available
 	{"nomedia",                        0x3a},
+	{"invalid-access-info-out",        0x3e}, // Inconsistency in designated outgoing access information and subscriber class
 	{"service-unavailable",            0x3f}, // Service or option not available
 	// service-not-implemented class
 	{"bearer-cap-not-implemented",     0x41}, // Bearer capability not implemented
@@ -564,7 +571,10 @@ static TokenDict s_dict_causeCCITT[] = {
 	{"duplicate-callid",               0x54}, // Call identity in use
 	{"no-call-suspended",              0x55}, // No call suspended
 	{"suspended-call-cleared",         0x56}, // Call having the requested call identity has been cleared
+	{"not-subscribed",                 0x57}, // User not member of CUG
 	{"incompatible-dest",              0x58}, // Incompatible destination
+	{"unknown-group",                  0x5a}, // Non-existent CUG
+	{"invalid-transit-net",            0x5b}, // Invalid transit network selection
 	{"invalid-message",                0x5f}, // Invalid message, unspecified
 	// protocol-error class 
 	{"missing-mandatory-ie",           0x60}, // Mandatory information element is missing
@@ -574,6 +584,8 @@ static TokenDict s_dict_causeCCITT[] = {
 	{"invalid-ie",                     0x64}, // Invalid information element contents
 	{"wrong-state-message",            0x65}, // Message not compatible with call state
 	{"timeout",                        0x66}, // Recovery on timer expiry
+	{"unknown-param-passed-on",        0x67}, // Parameter non-existent or not implemented, passed on
+	{"unknown-param-message-droppped", 0x6e}, // Message with unrecognized parameter, discarded
 	{"protocol-error",                 0x6f}, // Protocol error, unspecified
 	// interworking class
 	{"interworking",                   0x7f}, // Interworking, unspecified

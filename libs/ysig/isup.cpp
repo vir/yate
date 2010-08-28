@@ -1248,14 +1248,14 @@ static const IsupParam s_paramDefs[] = {
     MAKE_PARAM(ContinuityIndicators,           1,decodeFlags,   encodeFlags,   s_flags_continuity),   // 3.18
     MAKE_PARAM(EchoControlInformation,         0,0,             0,             0),                    // 3.19
     MAKE_PARAM(EventInformation,               1,decodeFlags,   encodeFlags,   s_flags_eventinfo),    // 3.21
-    MAKE_PARAM(FacilityIndicator,              0,0,             0,             0),                    // 3.22
+    MAKE_PARAM(FacilityIndicator,              1,0,             0,             0),                    // 3.22
     MAKE_PARAM(ForwardCallIndicators,          2,decodeFlags,   encodeFlags,   s_flags_fwcallind),    // 3.23
     MAKE_PARAM(GenericDigits,                  0,0,             0,             0),                    // 3.24
     MAKE_PARAM(GenericNotification,            0,decodeNotif,   encodeNotif,   s_dict_notifications), // 3.25
     MAKE_PARAM(GenericNumber,                  0,decodeDigits,  encodeDigits,  0),                    // 3.26
     MAKE_PARAM(GenericReference,               0,0,             0,             0),                    // 3.27
-    MAKE_PARAM(InformationIndicators,          0,0,             0,             0),                    // 3.28
-    MAKE_PARAM(InformationRequestIndicators,   0,0,             0,             0),                    // 3.29
+    MAKE_PARAM(InformationIndicators,          2,0,             0,             0),                    // 3.28
+    MAKE_PARAM(InformationRequestIndicators,   2,0,             0,             0),                    // 3.29
     MAKE_PARAM(LocationNumber,                 0,decodeDigits,  encodeDigits,  0),                    // 3.30
     MAKE_PARAM(MCID_RequestIndicator,          1,decodeFlags,   encodeFlags,   s_flags_mcid),         // 3.31
     MAKE_PARAM(MCID_ResponseIndicator,         1,decodeFlags,   encodeFlags,   s_flags_mcid),         // 3.32
@@ -1277,7 +1277,7 @@ static const IsupParam s_paramDefs[] = {
     MAKE_PARAM(ServiceActivation,              0,0,             0,             0),                    // 3.49
     MAKE_PARAM(SignallingPointCode,            0,0,             0,             0),                    // 3.50
     MAKE_PARAM(SubsequentNumber,               0,decodeSubseq,  encodeSubseq,  0),                    // 3.51
-    MAKE_PARAM(SuspendResumeIndicators,        0,0,             0,             0),                    // 3.52
+    MAKE_PARAM(SuspendResumeIndicators,        1,0,             0,             0),                    // 3.52
     MAKE_PARAM(TransitNetworkSelection,        0,0,             0,             0),                    // 3.53
     MAKE_PARAM(TransmissionMediumRequirement,  1,decodeInt,     encodeInt,     s_dict_mediumReq),     // 3.54
     MAKE_PARAM(TransMediumRequirementPrime,    1,decodeInt,     encodeInt,     s_dict_mediumReq),     // 3.55
@@ -1414,6 +1414,34 @@ static const MsgParams s_common_params[] = {
 	{
 	SS7MsgISUP::EndOfParameters,
 	    SS7MsgISUP::CauseIndicators,
+	SS7MsgISUP::EndOfParameters
+	}
+    },
+    { SS7MsgISUP::SUS, true,
+	{
+	    SS7MsgISUP::SuspendResumeIndicators,
+	SS7MsgISUP::EndOfParameters,
+	SS7MsgISUP::EndOfParameters
+	}
+    },
+    { SS7MsgISUP::RES, true,
+	{
+	    SS7MsgISUP::SuspendResumeIndicators,
+	SS7MsgISUP::EndOfParameters,
+	SS7MsgISUP::EndOfParameters
+	}
+    },
+    { SS7MsgISUP::INR, true,
+	{
+	    SS7MsgISUP::InformationRequestIndicators,
+	SS7MsgISUP::EndOfParameters,
+	SS7MsgISUP::EndOfParameters
+	}
+    },
+    { SS7MsgISUP::INF, true,
+	{
+	    SS7MsgISUP::InformationIndicators,
+	SS7MsgISUP::EndOfParameters,
 	SS7MsgISUP::EndOfParameters
 	}
     },
@@ -1560,6 +1588,37 @@ static const MsgParams s_common_params[] = {
     { SS7MsgISUP::APM, true,
 	{
 	SS7MsgISUP::EndOfParameters,
+	SS7MsgISUP::EndOfParameters
+	}
+    },
+    // facility
+    { SS7MsgISUP::FACR, true,
+	{
+	    SS7MsgISUP::FacilityIndicator,
+	SS7MsgISUP::EndOfParameters,
+	SS7MsgISUP::EndOfParameters
+	}
+    },
+    { SS7MsgISUP::FAA, true,
+	{
+	    SS7MsgISUP::FacilityIndicator,
+	SS7MsgISUP::EndOfParameters,
+	SS7MsgISUP::EndOfParameters
+	}
+    },
+    { SS7MsgISUP::FRJ, true,
+	{
+	    SS7MsgISUP::FacilityIndicator,
+	SS7MsgISUP::EndOfParameters,
+	    SS7MsgISUP::CauseIndicators,
+	SS7MsgISUP::EndOfParameters
+	}
+    },
+    // miscellaneous
+    { SS7MsgISUP::USR, true,
+	{
+	SS7MsgISUP::EndOfParameters,
+	    SS7MsgISUP::UserToUserInformation,
 	SS7MsgISUP::EndOfParameters
 	}
     },
@@ -3723,8 +3782,13 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	    Debug(this,DebugNote,"Unsupported message %s, decoding compatibility [%p]",msgName,this);
 	    params = &s_compatibility;
 	}
-	else {
+	else if (msgType != SS7MsgISUP::PAM) {
 	    Debug(this,DebugWarn,"Unsupported message %s or point code type [%p]",msgName,this);
+	    return false;
+	}
+	else if (!paramLen) {
+	    // PAM message must have at least 1 byte for message type
+	    Debug(this,DebugNote,"Empty %s [%p]",msgName,this);
 	    return false;
 	}
     }
@@ -3744,6 +3808,14 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	default: ;
     }
     msg.addParam(prefix+"message-type",msgName);
+
+    // Special decoder for PAM
+    if (msgType == SS7MsgISUP::PAM) {
+        String raw;
+	raw.hexify((void*)paramPtr,paramLen,' ');
+        msg.addParam(prefix + "PassAlong",raw);
+	return true;
+    }
 
     String unsupported;
     const SS7MsgISUP::Parameters* plist = params->params;

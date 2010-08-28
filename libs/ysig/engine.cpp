@@ -520,6 +520,7 @@ static TokenDict s_dict_causeCCITT[] = {
 	{"preemption",                     0x08}, // Preemption
 	{"preemption-circuit-reserved",    0x09}, // Preemption circuit reserved for re-use
 	{"ported-number",                  0x0e}, // QoR: ported number Q.850 Addendum 1 (06/2000)
+	{"excess-digits",                  0x0e}, // Excess digits received, call is proceeding
 	{"normal-clearing",                0x10}, // Normal Clearing
 	{"busy",                           0x11}, // User busy
 	{"noresponse",                     0x12}, // No user responding

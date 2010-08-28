@@ -2025,8 +2025,22 @@ static void getMsgCompat(SS7MsgISUP* msg, bool& release, bool& cnf)
     String* msgCompat = msg->params().getParam("MessageCompatInformation");
     if (msgCompat) {
 	ObjList* l = msgCompat->split(',',false);
-	release = l->find("release") || l->find("nopass-release");
-	cnf = !release && l->find("cnf");
+	// Use a while() to make sure the list is destroyed
+	// Assume we are not a transit network
+	while (l->find("end-node")) {
+	    release = (0 != l->find("release"));
+	    if (release)
+		break;
+	    // Discard the message (no pass on). Check if CNF should be sent
+	    if (l->find("discard")) {
+		cnf = (0 != l->find("cnf"));
+		break;
+	    }
+	    // Pass on set: we didn't passed on the message. Check REL/CNF
+	    release = (0 != l->find("nopass-release"));
+	    cnf = !release && l->find("cnf");
+	    break;
+	}
 	TelEngine::destruct(l);
     }
     else

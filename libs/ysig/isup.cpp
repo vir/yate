@@ -4350,7 +4350,7 @@ void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 }
 
 unsigned int getRangeAndStatus(NamedList& nl, unsigned int minRange, unsigned int maxRange,
-    unsigned int maxMap = 0, String** map = 0, bool* hwFail = 0, unsigned int nCicsMax = 0)
+    unsigned int maxMap = 0, String** map = 0, unsigned int nCicsMax = 0)
 {
     unsigned int range = nl.getIntValue("RangeAndStatus");
     if (range < minRange || range > maxRange)
@@ -4373,11 +4373,22 @@ unsigned int getRangeAndStatus(NamedList& nl, unsigned int minRange, unsigned in
 	}
 	*map = ns;
     }
-    if (hwFail) {
-	ns = nl.getParam("GroupSupervisionTypeIndicator");
-	*hwFail = (ns && *ns == "hw-failure");
-    }
     return range;
+}
+
+// Retrieve maintenance/hwfail type indicator
+// Return false if invalid
+static bool getGrpTypeInd(SS7ISUP* isup, SS7MsgISUP* msg, bool& hwFail)
+{
+    if (!msg)
+	return false;
+    const String& s = msg->params()["GroupSupervisionTypeIndicator"];
+    hwFail = (s == "hw-failure");
+    if (hwFail || (s == "maintenance"))
+	return true;
+    Debug(isup,DebugNote,"%s with unknown GroupSupervisionTypeIndicator=%s [%p]",
+	msg->name(),s.c_str());
+    return false;
 }
 
 // Utility: set invalid-ie reason and diagnostic
@@ -4481,9 +4492,11 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    // Q.763 3.43 range can be 1..256. Max bits set to 1 should be 32
 	    // Bit: 0-no indication 1-block/unblock
 	    {
-		String* srcMap = 0;
 		bool hwFail = false;
-		unsigned int nCics = getRangeAndStatus(msg->params(),1,256,256,&srcMap,&hwFail,32);
+		if (!getGrpTypeInd(this,msg,hwFail))
+		    break;
+		String* srcMap = 0;
+		unsigned int nCics = getRangeAndStatus(msg->params(),1,256,256,&srcMap,32);
 		if (!nCics) {
 		    Debug(this,DebugNote,"%s with invalid range %s or map=%s",msg->name(),
 			msg->params().getValue("RangeAndStatus"),
@@ -4539,10 +4552,12 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    // Q.763 3.43 range can be 1..256. Max bits set to 1 should be 32
 	    // Bit: 0-no indication 1-block/unblock
 	    {
+		bool hwFail = false;
+		if (!getGrpTypeInd(this,msg,hwFail))
+		    break;
 	        bool block = (msg->type() == SS7MsgISUP::CGB);
 		String* srcMap = 0;
-		bool hwFail = false;
-		unsigned int nCics = getRangeAndStatus(msg->params(),1,256,256,&srcMap,&hwFail,32);
+		unsigned int nCics = getRangeAndStatus(msg->params(),1,256,256,&srcMap,32);
 		if (!nCics) {
 		    Debug(this,DebugNote,"%s with invalid range %s or map=%s",msg->name(),
 			msg->params().getValue("RangeAndStatus"),

@@ -840,6 +840,27 @@ void SS7Router::recoverMSU(const SS7Label& link, int sequence)
     }
 }
 
+void SS7Router::receivedUPU(SS7PointCode::Type type, const SS7PointCode node,
+    SS7MSU::Services part, unsigned char cause, const SS7Label& label, int sls)
+{
+    // Iterate and notify all User Parts
+    lock();
+    ListIterator iter(m_layer4);
+    while (L4Pointer* p = static_cast<L4Pointer*>(iter.get())) {
+	if (p && *p) {
+	    RefPointer<SS7Layer4> l4 = static_cast<SS7Layer4*>(*p);
+	    if (!l4)
+		continue;
+	    unlock();
+	    l4->receivedUPU(type,node,part,cause,label,sls);
+	    l4 = 0;
+	    lock();
+	}
+    }
+    unlock();
+}
+
+
 void SS7Router::notify(SS7Layer3* network, int sls)
 {
     DDebug(this,DebugInfo,"Notified %s on %p sls %d [%p]",

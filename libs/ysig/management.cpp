@@ -520,6 +520,15 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	    msg->params().getValue("part","?"),
 	    msg->params().getValue("destination","?"),
 	    msg->params().getValue("cause","?"));
+	if (router) {
+	    unsigned char part = msg->params().getIntValue("part",-1);
+	    unsigned char cause = msg->params().getIntValue("cause",-1);
+	    SS7PointCode pc;
+	    if (part > SS7MSU::MTNS && part <= 0x0f && cause <= 0x0f &&
+		pc.assign(msg->params().getValue("destination"),label.type()))
+		router->receivedUPU(label.type(),pc,(SS7MSU::Services)part,
+		    cause,label,sls);
+	}
     }
     else {
 	String tmp;

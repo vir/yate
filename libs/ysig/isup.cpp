@@ -4169,6 +4169,14 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
     return true;
 }
 
+// MTP notification that remote user part is unavailable
+void SS7ISUP::receivedUPU(SS7PointCode::Type type, const SS7PointCode node,
+    SS7MSU::Services part, unsigned char cause, const SS7Label& label, int sls)
+{
+    if (part != sif() || !handlesRemotePC(node))
+	return;
+}
+
 // Process an event received from a non-reserved circuit
 SignallingEvent* SS7ISUP::processCircuitEvent(SignallingCircuitEvent*& event,
     SignallingCall* call)

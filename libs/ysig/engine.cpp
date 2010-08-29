@@ -242,7 +242,7 @@ unsigned long SignallingComponent::tickSleep(unsigned long usec) const
 
 SignallingEngine::SignallingEngine(const char* name)
     : Mutex(true,"SignallingEngine"),
-      m_thread(0), m_listChanged(true),
+      m_thread(0),
       m_usecSleep(DEF_TICK_SLEEP), m_tickSleep(0)
 {
     debugName(name);
@@ -438,18 +438,13 @@ unsigned long SignallingEngine::timerTick(const Time& when)
 {
     lock();
     m_tickSleep = m_usecSleep;
-    m_listChanged = false;
-    for (ObjList* l = &m_components; l; l = l->next()) {
-	SignallingComponent* c = static_cast<SignallingComponent*>(l->get());
-	if (c) {
-	    c->timerTick(when);
-	    // if the list was changed (can be only from this thread) we
-	    //  break out and get back later - cheaper than using a ListIterator
-	    if (m_listChanged)
-		break;
-	}
+    ListIterator iter(m_components);
+    while (SignallingComponent* c = static_cast<SignallingComponent*>(iter.get())) {
+	unlock();
+	c->timerTick(when);
+	lock();
     }
-    unsigned long rval = m_listChanged ? 0 : m_tickSleep;
+    unsigned long rval = m_tickSleep;
     m_tickSleep = m_usecSleep;
     unlock();
     return rval;

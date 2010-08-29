@@ -850,7 +850,6 @@ protected:
 
 private:
     SignallingThreadPrivate* m_thread;
-    bool m_listChanged;
     unsigned long m_usecSleep;
     unsigned long m_tickSleep;
 };

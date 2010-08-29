@@ -4197,6 +4197,11 @@ void SS7ISUP::receivedUPU(SS7PointCode::Type type, const SS7PointCode node,
 {
     if (part != sif() || !handlesRemotePC(node))
 	return;
+    if (!(m_userPartAvail && m_uptTimer.interval()))
+	return;
+    Debug(this,DebugNote,"Remote User Part is unavailable (received UPU)");
+    m_userPartAvail = false;
+    m_uptTimer.start();
 }
 
 // Process an event received from a non-reserved circuit

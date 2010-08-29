@@ -2205,11 +2205,19 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 			setReason(0,msg);
 			m_location = isup()->location();
 			m_lastEvent = release(0,msg);
-			break;
 		    }
+		    else {
+		        m_relTimer.stop();
+			m_lastEvent = releaseComplete(false,msg);
+		    }
+		    break;
 		case SS7MsgISUP::REL:
-		    m_relTimer.stop();
-		    m_lastEvent = releaseComplete(false,msg);
+		    if (m_state < Releasing) {
+		        m_relTimer.stop();
+			m_lastEvent = releaseComplete(false,msg);
+		    }
+		    else
+			transmitRLC(isup(),msg->cic(),m_label,false);
 		    break;
 		case SS7MsgISUP::SGM:
 		    DDebug(isup(),DebugInfo,"Call(%u). Received late 'SGM' [%p]",id(),this);

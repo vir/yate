@@ -4309,8 +4309,10 @@ void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 	    // The greater point code should have the even circuit
 	    unsigned int dpc = label.dpc().pack(label.type());
 	    unsigned int opc = label.opc().pack(label.type());
-	    if (dpc > opc && !(msg->cic() % 2))
-		DROP_MSG("collision - dpc greater then opc for even CIC")
+	    bool controlling = (dpc > opc);
+	    bool even = (0 == (msg->cic() % 2));
+	    if (controlling == even)
+		DROP_MSG("collision - we control the CIC")
 	    // Accept the incoming request. Change the call's circuit
 	    reserveCircuit(circuit,call->cicRange(),SignallingCircuit::LockLockedBusy);
 	    call->replaceCircuit(circuit);

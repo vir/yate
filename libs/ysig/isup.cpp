@@ -4182,9 +4182,13 @@ SignallingEvent* SS7ISUP::processCircuitEvent(SignallingCircuitEvent*& event,
 	    if (event->circuit()) {
 		lock();
 		bool block = (event->type() == SignallingCircuitEvent::Alarm);
-		bool changed = event->circuit()->hwLock(block,false,true,true);
-		if (changed && !m_lockTimer.started())
-		    m_lockTimer.start();
+		bool blocked = (0 != event->circuit()->locked(SignallingCircuit::LockLocalHWFail));
+		// Avoid notifying the same state
+		if (block != blocked) {
+		    event->circuit()->hwLock(block,false,true,true);
+		    if (!m_lockTimer.started())
+			m_lockTimer.start();
+		}
 		unlock();
 		ev = new SignallingEvent(event,call);
 	    }

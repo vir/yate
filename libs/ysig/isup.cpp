@@ -4787,9 +4787,13 @@ bool SS7ISUP::resetCircuit(unsigned int cic, bool remote, bool checkCall)
     if (checkCall) {
 	SS7ISUPCall* call = findCall(cic);
 	if (call) {
-	    SignallingCircuit* newCircuit = 0;
-	    reserveCircuit(newCircuit,call->cicRange(),SignallingCircuit::LockLockedBusy);
-	    call->replaceCircuit(newCircuit);
+	    if (call->outgoing() && call->state() == SS7ISUPCall::Setup) {
+	        SignallingCircuit* newCircuit = 0;
+		reserveCircuit(newCircuit,call->cicRange(),SignallingCircuit::LockLockedBusy);
+		call->replaceCircuit(newCircuit);
+	    }
+	    else
+		call->setTerminate(false,"normal");
 	}
     }
     // Remove remote lock flags (Q.764 2.9.3.1)

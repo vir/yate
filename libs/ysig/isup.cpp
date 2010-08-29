@@ -2430,19 +2430,22 @@ void* SS7ISUPCall::getObject(const String& name) const
 // Replace the circuit reserved for this call. Release the already reserved circuit.
 // Retransmit the initial IAM request on success.
 // On failure set the termination flag and release the new circuit if valid
-bool SS7ISUPCall::replaceCircuit(SignallingCircuit* circuit)
+bool SS7ISUPCall::replaceCircuit(SignallingCircuit* circuit, SS7MsgISUP* msg)
 {
     Lock mylock(this);
     clearQueue();
     if (m_state > Setup || !circuit || !outgoing()) {
+        Debug(isup(),DebugNote,"Call(%u). Failed to replace circuit [%p]",id(),this);
 	m_iamTimer.stop();
 	if (controller()) {
 	    controller()->releaseCircuit(m_circuit);
 	    controller()->releaseCircuit(circuit);
 	}
 	setTerminate(false,"congestion");
+	TelEngine::destruct(msg);
 	return false;
     }
+    transmitMessage(msg);
     unsigned int oldId = id();
     if (controller())
 	controller()->releaseCircuit(m_circuit);
@@ -3452,6 +3455,7 @@ void SS7ISUP::timerTick(const Time& when)
     // Pending messages
     ObjList reInsert;
     ObjList sendMsgs;
+    ObjList rsc;
     while (true) {
 	SignallingMessageTimer* m = m_pending.timeout(when);
 	if (!m)
@@ -3462,6 +3466,7 @@ void SS7ISUP::timerTick(const Time& when)
 	    continue;
 	}
 	if (msg->type() != SS7MsgISUP::RSC &&
+	    msg->type() != SS7MsgISUP::REL &&
 	    msg->type() != SS7MsgISUP::CGB &&
 	    msg->type() != SS7MsgISUP::CGU &&
 	    msg->type() != SS7MsgISUP::BLK &&
@@ -3472,10 +3477,21 @@ void SS7ISUP::timerTick(const Time& when)
 	}
 	// Global timer timed out: set retransmission timer from it
 	if (m->global().timeout(when.msec())) {
-	    m->interval(m->global().interval());
-	    m->global().stop();
-	    m->global().interval(0);
-	    msg->params().setParam("isup_alert_maint",String::boolText(true));
+	    if (msg->type() != SS7MsgISUP::REL) {
+		m->interval(m->global().interval());
+		m->global().stop();
+		m->global().interval(0);
+		msg->params().setParam("isup_alert_maint",String::boolText(true));
+	    }
+	    else {
+		Debug(this,DebugNote,"Pending operation '%s' cic=%u timed out",
+		    msg->name(),msg->cic());
+		SignallingCircuit* c = circuits() ? circuits()->find(msg->cic()) : 0;
+		TelEngine::destruct(m);
+		if (c && c->ref())
+		    rsc.append(c)->setDelete(false);
+		continue;
+	    }
 	}
 	bool alert = msg->params().getBoolValue("isup_alert_maint");
 	const char* reason = msg->params().getValue("isup_pending_reason","");
@@ -3491,11 +3507,17 @@ void SS7ISUP::timerTick(const Time& when)
     }
     // Re-insert
     ObjList* o = reInsert.skipNull();
-    if (o) {
+    ObjList* oRsc = rsc.skipNull();
+    if (o || oRsc) {
 	for (; o; o = o->skipNext())
 	    m_pending.add(static_cast<SignallingMessageTimer*>(o->get()),when);
 	mylock.drop();
 	transmitMessages(sendMsgs);
+	for (; oRsc; oRsc = oRsc->skipNext()) {
+	    SignallingCircuit* c = static_cast<SignallingCircuit*>(oRsc->get());
+	    c->resetLock(SignallingCircuit::Resetting);
+	    startCircuitReset(c,"T5");
+	}
 	return;
     }
 
@@ -4772,9 +4794,14 @@ bool SS7ISUP::resetCircuit(unsigned int cic, bool remote, bool checkCall)
 	circuit->maintLock(false,true,0!=circuit->locked(SignallingCircuit::LockRemoteMaint),false);
 	m_verifyEvent = true;
     }
-    // Remove pending RSC. Reset 'Resetting' flag'
+    // Remove pending RSC/REL. Reset 'Resetting' flag'
     SignallingMessageTimer* m = findPendingMessage(SS7MsgISUP::RSC,cic,true);
-    TelEngine::destruct(m);
+    if (!m)
+	m = findPendingMessage(SS7MsgISUP::REL,cic,true);
+    if (m) {
+	Debug(this,DebugAll,"Pending %s`cic=%u removed",m->message()->name(),cic);
+	TelEngine::destruct(m);
+    }
     circuit->resetLock(SignallingCircuit::Resetting);
     if (m_rscCic && m_rscCic->code() == cic)
 	releaseCircuit(m_rscCic);
@@ -5157,16 +5184,46 @@ SS7MsgISUP* SS7ISUP::buildCicBlock(SignallingCircuit* cic, bool block, bool forc
 // Replace circuit for outgoing calls in Setup state
 void SS7ISUP::replaceCircuit(unsigned int cic, const String& map)
 {
-    Lock lock(this);
+    ObjList calls;
+    lock();
     for (unsigned int i = 0; i < map.length(); i++) {
 	if (map[i] != '1')
 	    continue;
         // Replace circuit for call (Q.764 2.8.2.1)
 	SS7ISUPCall* call = findCall(cic + i);
         if (call && call->outgoing() && call->state() == SS7ISUPCall::Setup) {
-	    SignallingCircuit* newCircuit = 0;
-	    reserveCircuit(newCircuit,call->cicRange(),SignallingCircuit::LockLockedBusy);
-	    call->replaceCircuit(newCircuit);
+	    if (call->ref())
+		calls.append(call);
+	    else
+		call->setTerminate(true,"normal",0,m_location);
+	}
+    }
+    unlock();
+    for (ObjList* o = calls.skipNull(); o; o = o->skipNext()) {
+	SS7ISUPCall* call = static_cast<SS7ISUPCall*>(o->get());
+	Debug(this,DebugInfo,"Replacing remotely blocked cic=%u for existing call",call->id());
+	SignallingCircuit* newCircuit = 0;
+	reserveCircuit(newCircuit,call->cicRange(),SignallingCircuit::LockLockedBusy);
+	if (!newCircuit) {
+	    call->setTerminate(true,"congestion",0,m_location);
+	    continue;
+	}
+	lock();
+	SignallingCircuit* c = circuits()->find(call->id());
+	SS7MsgISUP* m = 0;
+	if (c && !c->locked(SignallingCircuit::Resetting)) {
+	    c->setLock(SignallingCircuit::Resetting);
+	    m = new SS7MsgISUP(SS7MsgISUP::REL,call->id());
+	    m->params().addParam("CauseIndicators","normal");
+	    m->params().addParam("CauseIndicators.location",m_location,false);
+	    m->ref();
+	}
+	unlock();
+	call->replaceCircuit(newCircuit,m);
+	if (m) {
+	    SignallingMessageTimer* t = new SignallingMessageTimer(m_t1Interval,m_t5Interval);
+	    t->message(m);
+	    m_pending.add(t);
 	}
     }
 }

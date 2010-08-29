@@ -7628,9 +7628,10 @@ protected:
      * If false is returned, the call is prepared to return a Release event.
      * This method is thread safe
      * @param circuit The new circuit reserved for this call
+     * @param msg Optional message to send before IAM (it will be consumed)
      * @return False if the state is greater then Setup, the call is not outgoing or the new circuit is 0
      */
-    bool replaceCircuit(SignallingCircuit* circuit);
+    bool replaceCircuit(SignallingCircuit* circuit, SS7MsgISUP* msg = 0);
 
     /**
      * Stop waiting for a SGM (Segmentation) message when another message is received by the controller.

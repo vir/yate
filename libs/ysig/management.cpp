@@ -331,7 +331,6 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	    len,msg,sls,tmp.c_str());
     }
 
-    // TODO: implement
     String addr;
     addr << label;
     if (msg->type() == SS7MsgSNM::TFP ||
@@ -386,8 +385,7 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
     }
     else if (msg->type() == SS7MsgSNM::COO ||
 	msg->type() == SS7MsgSNM::XCO ||
-	msg->type() == SS7MsgSNM::ECO ||
-	msg->type() == SS7MsgSNM::CBD) {
+	msg->type() == SS7MsgSNM::ECO) {
 	if (!len--)
 	    return false;
 	const unsigned char* s = msu.getData(label.length()+2,len);
@@ -395,64 +393,19 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	    return false;
 	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
 	SS7Label lbl(label,label.sls(),0);
-	SS7MSU answer(msu.getSIO(),lbl,0,len+1);
-	unsigned char* d = answer.getData(lbl.length()+1,len+1);
-	if (!d)
-	    return false;
-	switch (msg->type()) {
-	    case SS7MsgSNM::COO:
-		*d++ = SS7MsgSNM::COA;
-		break;
-	    case SS7MsgSNM::XCO:
-		*d++ = SS7MsgSNM::XCA;
-		break;
-	    case SS7MsgSNM::ECO:
-		*d++ = SS7MsgSNM::ECA;
-		break;
-	    case SS7MsgSNM::CBD:
-		*d++ = SS7MsgSNM::CBA;
-		break;
-	    default:
-		return false;
-	}
-	while (len--)
-	    *d++ = *s++;
-	return transmitMSU(answer,lbl,sls) >= 0;
-    }
-    else if (msg->type() == SS7MsgSNM::UPU) {
-	Debug(this,DebugNote,"Unavailable part %s at %s, cause %s",
-	    msg->params().getValue("part","?"),
-	    msg->params().getValue("destination","?"),
-	    msg->params().getValue("cause","?"));
-    }
-    else if (msg->type() == SS7MsgSNM::CBA) {
-	if (!len--)
-	    return false;
-	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
-	lock();
-	SnmPending* pend = 0;
-	for (ObjList* l = m_pending.skipNull(); l; l = l->skipNext()) {
-	    SnmPending* p = static_cast<SnmPending*>(l->get());
-	    if (p->msu().length() != msu.length())
-		continue;
-	    const unsigned char* ptr = p->msu().getData(p->length()+1,len+1);
-	    if (!ptr || (ptr[0] != SS7MsgSNM::CBD))
-		continue;
-	    if (::memcmp(ptr+1,buf+1,len) || !p->matches(label))
-		continue;
-	    pend = static_cast<SnmPending*>(m_pending.remove(p,false));
-	    break;
-	}
-	unlock();
-	if (pend) {
+	if (inhibit(lbl,SS7Layer2::Inactive)) {
 	    String link;
-	    link << msg->params().getValue("pointcodetype") << "," << *pend;
-	    Debug(this,DebugNote,"Changeback acknowledged on %s",link.c_str());
-	    inhibit(*pend,0,SS7Layer2::Inactive);
+	    link << msg->params().getValue("pointcodetype") << "," << lbl;
+	    Debug(this,DebugNote,"Changeover order on %s",link.c_str());
+	    int seq = msg->params().getIntValue("sequence",-1);
+	    if (seq >= 0)
+		recover(lbl,seq);
+	    // prepare an ECA in case we are unable to sena a COA/XCA
+	    static unsigned char data = SS7MsgSNM::ECA;
+	    return postpone(new SS7MSU(msu.getSIO(),lbl,&data,1),lbl,sls,0,200);
 	}
 	else
 	    Debug(this,DebugMild,"Unexpected %s %s [%p]",msg->name(),addr.c_str(),this);
-	TelEngine::destruct(pend);
     }
     else if (msg->type() == SS7MsgSNM::COA ||
 	msg->type() == SS7MsgSNM::XCA ||
@@ -484,6 +437,62 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	    link << msg->params().getValue("pointcodetype") << "," << *pend;
 	    Debug(this,DebugNote,"Changeover acknowledged on %s",link.c_str());
 	    inhibit(*pend,SS7Layer2::Inactive);
+	    int seq = msg->params().getIntValue("sequence",-1);
+	    if (seq >= 0)
+		recover(*pend,seq);
+	}
+	else
+	    Debug(this,DebugMild,"Unexpected %s %s [%p]",msg->name(),addr.c_str(),this);
+	TelEngine::destruct(pend);
+    }
+    else if (msg->type() == SS7MsgSNM::CBD) {
+	if (!len--)
+	    return false;
+	const unsigned char* s = msu.getData(label.length()+2,len);
+	if (!s)
+	    return false;
+	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
+	SS7Label lbl(label,label.sls(),0);
+	if (inhibit(lbl,0,SS7Layer2::Inactive)) {
+	    String link;
+	    link << msg->params().getValue("pointcodetype") << "," << lbl;
+	    Debug(this,DebugNote,"Changeback declaration on %s",link.c_str());
+	    SS7MSU answer(msu.getSIO(),lbl,0,len+1);
+	    unsigned char* d = answer.getData(lbl.length()+1,len+1);
+	    if (!d)
+		return false;
+	    *d++ = SS7MsgSNM::CBA;
+	    while (len--)
+		*d++ = *s++;
+	    return transmitMSU(answer,lbl,sls) >= 0;
+	}
+	else
+	    Debug(this,DebugMild,"Unexpected %s %s [%p]",msg->name(),addr.c_str(),this);
+    }
+    else if (msg->type() == SS7MsgSNM::CBA) {
+	if (!len--)
+	    return false;
+	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
+	lock();
+	SnmPending* pend = 0;
+	for (ObjList* l = m_pending.skipNull(); l; l = l->skipNext()) {
+	    SnmPending* p = static_cast<SnmPending*>(l->get());
+	    if (p->msu().length() != msu.length())
+		continue;
+	    const unsigned char* ptr = p->msu().getData(p->length()+1,len+1);
+	    if (!ptr || (ptr[0] != SS7MsgSNM::CBD))
+		continue;
+	    if (::memcmp(ptr+1,buf+1,len) || !p->matches(label))
+		continue;
+	    pend = static_cast<SnmPending*>(m_pending.remove(p,false));
+	    break;
+	}
+	unlock();
+	if (pend) {
+	    String link;
+	    link << msg->params().getValue("pointcodetype") << "," << *pend;
+	    Debug(this,DebugNote,"Changeback acknowledged on %s",link.c_str());
+	    inhibit(*pend,0,SS7Layer2::Inactive);
 	}
 	else
 	    Debug(this,DebugMild,"Unexpected %s %s [%p]",msg->name(),addr.c_str(),this);
@@ -505,6 +514,12 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	    static unsigned char lua = SS7MsgSNM::LUA;
 	    return transmitMSU(SS7MSU(msu.getSIO(),lbl,&lua,1),lbl,sls) >= 0;
 	}
+    }
+    else if (msg->type() == SS7MsgSNM::UPU) {
+	Debug(this,DebugNote,"Unavailable part %s at %s, cause %s",
+	    msg->params().getValue("part","?"),
+	    msg->params().getValue("destination","?"),
+	    msg->params().getValue("cause","?"));
     }
     else {
 	String tmp;
@@ -737,6 +752,7 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 			    ctl->setParam("code",String(txSls));
 			else {
 			    int seq = network->getSequence(sls);
+			    DDebug(this,DebugAll,"Got sequence number %d [%p]",seq,this);
 			    if (seq >= 0)
 				ctl->setParam("sequence",String(seq));
 			    else
@@ -754,7 +770,7 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 bool SS7Management::postpone(SS7MSU* msu, const SS7Label& label, int txSls,
 	u_int64_t interval, u_int64_t global, const Time& when)
 {
-    if (transmitMSU(*msu,label,txSls) >= 0) {
+    if ((interval == 0) || transmitMSU(*msu,label,txSls) >= 0) {
 	lock();
 	m_pending.add(new SnmPending(msu,label,txSls,interval,global),when);
 	unlock();
@@ -780,6 +796,10 @@ bool SS7Management::timeout(const SS7MSU& msu, const SS7Label& label, int txSls,
 	case SS7MsgSNM::ECO:
 	    Debug(this,DebugNote,"Changeover timed out on %s",link.c_str());
 	    inhibit(label,SS7Layer2::Inactive);
+	    break;
+	case SS7MsgSNM::ECA:
+	    Debug(this,DebugNote,"Emergency changeover acknowledge on %s",link.c_str());
+	    transmitMSU(msu,label,txSls);
 	    break;
 	case SS7MsgSNM::CBD:
 	    Debug(this,DebugNote,"Changeback timed out on %s",link.c_str());
@@ -824,6 +844,13 @@ bool SS7Management::inhibit(const SS7Label& link, int setFlags, int clrFlags)
 {
     SS7Router* router = YOBJECT(SS7Router,SS7Layer4::network());
     return router && router->inhibit(link,setFlags,clrFlags);
+}
+
+void SS7Management::recover(const SS7Label& link, int sequence)
+{
+    SS7Router* router = YOBJECT(SS7Router,SS7Layer4::network());
+    if (router)
+	router->recoverMSU(link,sequence);
 }
 
 

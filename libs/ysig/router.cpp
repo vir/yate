@@ -806,6 +806,40 @@ bool SS7Router::inhibit(const SS7Label& link, int setFlags, int clrFlags, bool n
     return false;
 }
 
+int SS7Router::getSequence(const SS7Label& link)
+{
+    int remote = link.dpc().pack(link.type());
+    if (!remote)
+	return false;
+    Lock mylock(this);
+    for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
+	L3Pointer* p = static_cast<L3Pointer*>(o->get());
+	if (!*p || (*p)->getRoutePriority(link.type(),remote))
+	    continue;
+	RefPointer<SS7Layer3> net = static_cast<SS7Layer3*>(*p);
+	mylock.drop();
+	return net->getSequence(link.sls());
+    }
+    return -1;
+}
+
+void SS7Router::recoverMSU(const SS7Label& link, int sequence)
+{
+    int remote = link.dpc().pack(link.type());
+    if (!remote)
+	return;
+    Lock mylock(this);
+    for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
+	L3Pointer* p = static_cast<L3Pointer*>(o->get());
+	if (!*p || (*p)->getRoutePriority(link.type(),remote))
+	    continue;
+	RefPointer<SS7Layer3> net = static_cast<SS7Layer3*>(*p);
+	mylock.drop();
+	net->recoverMSU(link.sls(),sequence);
+	break;
+    }
+}
+
 void SS7Router::notify(SS7Layer3* network, int sls)
 {
     DDebug(this,DebugInfo,"Notified %s on %p sls %d [%p]",

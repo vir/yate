@@ -642,6 +642,22 @@ int SS7MTP3::getSequence(int sls) const
     return false;
 }
 
+void SS7MTP3::recoverMSU(int sls, int sequence)
+{
+    if (sls < 0)
+	return;
+    const ObjList* l = &m_links;
+    for (; l; l = l->next()) {
+	L2Pointer* p = static_cast<L2Pointer*>(l->get());
+	if (!(p && *p))
+	    continue;
+	if ((*p)->sls() == sls) {
+	    (*p)->recoverMSU(sequence);
+	    break;
+	}
+    }
+}
+
 // Attach a link in the first free SLS
 void SS7MTP3::attach(SS7Layer2* link)
 {
@@ -979,6 +995,36 @@ bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
 	return true;
     // if nothing worked, report the unavailable regular user part
     return (msu.getSIF() > SS7MSU::MTNS) && unavailable(msu,label,sls,handled.upu());
+}
+
+bool SS7MTP3::recoveredMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
+{
+    int netType = msu.getNI();
+    SS7PointCode::Type cpType = type(netType);
+    unsigned int llen = SS7Label::length(cpType);
+    if (!llen) {
+	Debug(toString(),DebugWarn,"Recovered MSU but point code type is unconfigured [%p]",this);
+	return false;
+    }
+    // check MSU length against SIO + label length
+    if (msu.length() <= llen) {
+	Debug(this,DebugWarn,"Recovered short MSU of length %u [%p]",
+	    msu.length(),this);
+	return false;
+    }
+    SS7Label label(cpType,msu);
+#ifdef DEBUG
+    if (debugAt(DebugInfo)) {
+	String tmp;
+	tmp << label << " (" << label.opc().pack(cpType) << ":" << label.dpc().pack(cpType) << ":" << label.sls() << ")";
+	Debug(this,DebugAll,"Recovered MSU from link %d '%s' %p. Address: %s",
+	    sls,link->toString().c_str(),link,tmp.c_str());
+    }
+#endif
+    // first try to send on another active link in the linkset
+    if (transmitMSU(msu,label,sls % m_total) >= 0)
+	return true;
+    return SS7Layer3::recoveredMSU(msu,label,sls);
 }
 
 void SS7MTP3::notify(SS7Layer2* link)

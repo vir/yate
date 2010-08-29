@@ -214,11 +214,6 @@ bool SS7Layer2::control(NamedList& params)
     return (cmd >= 0) && control((Operation)cmd,&params);
 }
 
-ObjList* SS7Layer2::recoverMSU()
-{
-    return 0;
-}
-
 bool SS7Layer2::getEmergency(NamedList* params, bool emg) const
 {
     if (m_autoEmergency && !emg) {
@@ -568,24 +563,28 @@ bool SS7MTP2::transmitMSU(const SS7MSU& msu)
 }
 
 // Remove the MSUs in the queue, the upper layer will move them to another link
-ObjList* SS7MTP2::recoverMSU()
+void SS7MTP2::recoverMSU(int sequence)
 {
-    lock();
-    ObjList* lst = 0;
     for (;;) {
+	lock();
 	DataBlock* pkt = static_cast<DataBlock*>(m_queue.remove(false));
+	unlock();
 	if (!pkt)
 	    break;
-	if (pkt->length() > 3) {
-	    SS7MSU* msu = new SS7MSU(3 + (char*)pkt->data(),pkt->length() - 3);
-	    if (!lst)
-		lst = new ObjList;
-	    lst->append(msu);
+	unsigned char* head = pkt->data(0,4);
+	if (head) {
+	    int seq = head[1] & 0x7f;
+	    if (sequence < 0 || ((seq - sequence) & 0x7f) < 0x3f) {
+		sequence = -1;
+		SS7MSU msu(head + 3,pkt->length() - 3);
+		recoveredMSU(msu);
+	    }
+	    else
+		Debug(this,DebugAll,"Not recovering MSU with seq=%d, requested %d",
+		    seq,sequence);
 	}
 	TelEngine::destruct(pkt);
     }
-    unlock();
-    return lst;
 }
 
 // Decode a received packet into signalling units

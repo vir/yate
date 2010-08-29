@@ -1295,23 +1295,28 @@ bool SS7M2PA::processLinkStatus(DataBlock& data,int streamId)
     return true;
 }
 
-ObjList* SS7M2PA::recoverMSU()
+void SS7M2PA::recoverMSU(int sequence)
 {
-    Lock lock(m_mutex);
-    ObjList* lst = 0;
     for (;;) {
+	m_mutex.lock();
 	DataBlock* pkt = static_cast<DataBlock*>(m_ackList.remove(false));
+	m_mutex.unlock();
 	if (!pkt)
 	    break;
-	if (pkt->length() > 8) {
-	    SS7MSU* msu = new SS7MSU(8 + (char*)pkt->data(),pkt->length() - 8);
-	    if (!lst)
-		lst = new ObjList;
-	    lst->append(msu);
+	unsigned char* head = pkt->data(0,8);
+	if (head) {
+	    int seq = head[7] | ((int)head[6] << 8) | ((int)head[5] << 16);
+	    if (sequence < 0 || ((seq - sequence) & 0x00ffffff) < 0x007fffff) {
+		sequence = -1;
+		SS7MSU msu(head + 8,pkt->length() - 8);
+		recoveredMSU(msu);
+	    }
+	    else
+		Debug(this,DebugAll,"Not recovering MSU with seq=%d, requested %d",
+		    seq,sequence);
 	}
 	TelEngine::destruct(pkt);
     }
-    return lst;
 }
 
 void SS7M2PA::retransData()
@@ -1423,7 +1428,7 @@ bool SS7M2UAClient::processMSG(unsigned char msgVersion, unsigned char msgClass,
 	case 4: // Release Request
 	case 7: // State Request
 	case 10: // Data Retrieval Request
-	    Debug(this,DebugWarn,"Received M2UA SG request %u on APS side!",msgType);
+	    Debug(this,DebugWarn,"Received M2UA SG request %u on ASP side!",msgType);
 	    return false;
     }
     getTag(msg,0x0001,iid);
@@ -1443,9 +1448,11 @@ bool SS7M2UAClient::processMSG(unsigned char msgVersion, unsigned char msgClass,
 
 SS7M2UA::SS7M2UA(const NamedList& params)
     : SignallingComponent(params.safe("SS7M2UA"),&params),
+      m_retrieve(50),
       m_iid(params.getIntValue("iid",-1)), m_linkState(LinkDown), m_rpo(false)
 {
     Debug(DebugStub,"SS7M2UA");
+    m_retrieve.interval(params,"retrieve",5,200,true);
 }
 
 bool SS7M2UA::initialize(const NamedList* config)
@@ -1496,20 +1503,23 @@ bool SS7M2UA::control(Operation oper, NamedList* params)
     }
     switch (oper) {
 	case Pause:
-	    m_linkState = LinkDown;
-	    SS7Layer2::notify();
 	    if (aspActive()) {
 		DataBlock buf;
 		if (m_iid >= 0)
 		    SIGAdaptation::addTag(buf,0x0001,(u_int32_t)m_iid);
 		// Release Request
-		return adaptation()->transmitMSG(SIGTRAN::MAUP,4,buf,1);
+		if (!adaptation()->transmitMSG(SIGTRAN::MAUP,4,buf,1))
+		    return false;
+		getSequence();
 	    }
+	    m_linkState = LinkDown;
+	    if (!m_retrieve.started())
+		SS7Layer2::notify();
 	    return true;
 	case Resume:
 	    if (operational())
 		return true;
-	    if (!m_autostart)
+	    if (!m_autostart || m_retrieve.started())
 		return activate();
 	    // fall through
 	case Align:
@@ -1561,6 +1571,51 @@ bool SS7M2UA::transmitMSU(const SS7MSU& msu)
     return adaptation()->transmitMSG(SIGTRAN::MAUP,1,buf,1);
 }
 
+void SS7M2UA::recoverMSU(int sequence)
+{
+    Lock mylock(adaptation());
+    if (sequence >= 0 && aspUp() && transport()) {
+	Debug(this,DebugInfo,"Retrieving MSUs from sequence %d from M2UA SG",sequence);
+	DataBlock buf;
+	if (m_iid >= 0)
+	    SIGAdaptation::addTag(buf,0x0001,(u_int32_t)m_iid);
+	// Retrieve MSGS action
+	SIGAdaptation::addTag(buf,0x0306,(u_int32_t)0);
+	SIGAdaptation::addTag(buf,0x0307,(u_int32_t)sequence);
+	// Data Retrieval Request
+	adaptation()->transmitMSG(SIGTRAN::MAUP,10,buf,1);
+    }
+}
+
+int SS7M2UA::getSequence()
+{
+    if (m_lastSeqRx == -1) {
+	m_lastSeqRx = -2;
+	Lock mylock(adaptation());
+	if (aspUp() && transport()) {
+	    Debug(this,DebugInfo,"Requesting sequence number from M2UA SG");
+	    DataBlock buf;
+	    if (m_iid >= 0)
+		SIGAdaptation::addTag(buf,0x0001,(u_int32_t)m_iid);
+	    // Retrieve BSN action
+	    SIGAdaptation::addTag(buf,0x0306,(u_int32_t)1);
+	    // Data Retrieval Request
+	    if (adaptation()->transmitMSG(SIGTRAN::MAUP,10,buf,1))
+		m_retrieve.start();
+	}
+    }
+    return m_lastSeqRx;
+}
+
+void SS7M2UA::timerTick(const Time& when)
+{
+    if (m_retrieve.timeout(when.msec())) {
+	m_retrieve.stop();
+	SS7Layer2::notify();
+	control(Resume);
+    }
+}
+
 bool SS7M2UA::processMGMT(unsigned char msgType, const DataBlock& msg, int streamId)
 {
     const char* err = "Unhandled";
@@ -1603,12 +1658,13 @@ bool SS7M2UA::processMAUP(unsigned char msgType, const DataBlock& msg, int strea
 		    // Correlation ID present, send Data Ack
 		    DataBlock buf;
 		    SIGAdaptation::addTag(buf,0x0013,corrId);
-		    adaptation()->transmitMSG(SIGTRAN::MAUP,0x15,buf,streamId);
+		    adaptation()->transmitMSG(SIGTRAN::MAUP,15,buf,streamId);
 		}
 		return receivedMSU(data);
 	    }
 	    break;
 	case 3: // Establish Confirm
+	    m_lastSeqRx = -1;
 	    m_linkState = LinkUp;
 	    m_rpo = false;
 	    SS7Layer2::notify();
@@ -1642,6 +1698,53 @@ bool SS7M2UA::processMAUP(unsigned char msgType, const DataBlock& msg, int strea
 		    SS7Layer2::notify();
 	    }
 	    return true;
+	case 11: // Data Retrieval Confirm
+	    {
+		u_int32_t res = 0;
+		if (!SIGAdaptation::getTag(msg,0x0308,res)) {
+		    err = "Missing retrieval result";
+		    break;
+		}
+		if (res) {
+		    err = "Retrieval failed";
+		    break;
+		}
+		if (SIGAdaptation::getTag(msg,0x0306,res) && (res == 1)) {
+		    // Action was BSN retrieval
+		    res = (u_int32_t)-1;
+		    if (!SIGAdaptation::getTag(msg,0x0307,res)) {
+			err = "Missing BSN field in retrieval";
+			if (m_retrieve.started()) {
+			    m_retrieve.stop();
+			    SS7Layer2::notify();
+			}
+			break;
+		    }
+		    Debug(this,DebugInfo,"Recovered sequence number %u",res);
+		    if (res & 0xffffff80)
+			res = (res & 0x00ffffff) | 0x01000000;
+		    m_lastSeqRx = res;
+		    if (m_retrieve.started()) {
+			m_retrieve.stop();
+			SS7Layer2::notify();
+		    }
+		    return true;
+		}
+	    }
+	    break;
+	case 12: // Data Retrieval Indication
+	case 13: // Data Retrieval Complete Indication
+	    {
+		SS7MSU data;
+		if (!SIGAdaptation::getTag(msg,0x0300,data)) {
+		    if (msgType == 13)
+			return true;
+		    err = "Missing data in";
+		    break;
+		}
+		return recoveredMSU(data);
+	    }
+	    break;
     }
     Debug(this,DebugStub,"%s M2UA MAUP message type %u",err,msgType);
     return false;
@@ -1650,15 +1753,18 @@ bool SS7M2UA::processMAUP(unsigned char msgType, const DataBlock& msg, int strea
 void SS7M2UA::activeChange(bool active)
 {
     if (!active) {
+	getSequence();
 	m_rpo = false;
 	switch (m_linkState) {
 	    case LinkUpEmg:
 		m_linkState = LinkReqEmg;
-		SS7Layer2::notify();
+		if (!m_retrieve.started())
+		    SS7Layer2::notify();
 		break;
 	    case LinkUp:
 		m_linkState = LinkReq;
-		SS7Layer2::notify();
+		if (!m_retrieve.started())
+		    SS7Layer2::notify();
 		break;
 	    case LinkReqEmg:
 	    case LinkReq:
@@ -1700,7 +1806,7 @@ bool ISDNIUAClient::processMSG(unsigned char msgVersion, unsigned char msgClass,
 	case 3: // Unit Data Request Message
 	case 5: // Establish Request
 	case 8: // Release Request
-	    Debug(this,DebugWarn,"Received IUA SG request %u on APS side!",msgType);
+	    Debug(this,DebugWarn,"Received IUA SG request %u on ASP side!",msgType);
 	    return false;
     }
     getTag(msg,0x0001,iid);

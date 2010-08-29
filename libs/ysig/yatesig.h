@@ -7863,6 +7863,8 @@ private:
     // @param force True to ignore resetting/(un)blocking flags of the circuit
     // Return built message to be sent on success
     SS7MsgISUP* buildCicBlock(SignallingCircuit* cic, bool block, bool force = false);
+    // Replace circuit for outgoing calls in Setup state
+    void replaceCircuit(unsigned int cic, const String& map);
 
     SS7PointCode::Type m_type;           // Point code type of this call controller
     ObjList m_pointCodes;                // Point codes serviced by this call controller

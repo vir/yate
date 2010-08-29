@@ -4488,8 +4488,11 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		reason = "unknown-channel";
 	    break;
 	case SS7MsgISUP::BLK: // Blocking
-	    if (blockCircuit(msg->cic(),true,true,false,true,true))
+	    if (blockCircuit(msg->cic(),true,true,false,true,true)) {
 		transmitMessage(new SS7MsgISUP(SS7MsgISUP::BLA,msg->cic()),label,true);
+		// Replace circuit for outgoing call in initial state
+		replaceCircuit(msg->cic(),String('1'));
+	    }
 	    else
 		reason = "unknown-channel";
 	    break;
@@ -4603,6 +4606,9 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		m->params().addParam("RangeAndStatus",String(nCics));
 		m->params().addParam("RangeAndStatus.map",map);
 		transmitMessage(m,label,true);
+		// Replace circuits for outgoing calls in initial state
+		if (block)
+		    replaceCircuit(msg->cic(),map);
 	    }
 	    break;
 	case SS7MsgISUP::UEC: // Unequipped CIC (national use)
@@ -4779,14 +4785,6 @@ bool SS7ISUP::blockCircuit(unsigned int cic, bool block, bool remote, bool hwFai
     SignallingCircuit* circuit = circuits() ? circuits()->find(cic) : 0;
     if (!circuit)
 	return false;
-
-    // Replace circuit for call (Q.764 2.8.2.1)
-    SS7ISUPCall* call = findCall(cic);
-    if (call && call->outgoing() && call->state() == SS7ISUPCall::Setup) {
-	SignallingCircuit* newCircuit = 0;
-	reserveCircuit(newCircuit,call->cicRange(),SignallingCircuit::LockLockedBusy);
-	call->replaceCircuit(newCircuit);
-    }
 
     bool something = false;
     if (hwFail)
@@ -5146,6 +5144,23 @@ SS7MsgISUP* SS7ISUP::buildCicBlock(SignallingCircuit* cic, bool block, bool forc
     m_pending.add(t);
     m->ref();
     return m;
+}
+
+// Replace circuit for outgoing calls in Setup state
+void SS7ISUP::replaceCircuit(unsigned int cic, const String& map)
+{
+    Lock lock(this);
+    for (unsigned int i = 0; i < map.length(); i++) {
+	if (map[i] != '1')
+	    continue;
+        // Replace circuit for call (Q.764 2.8.2.1)
+	SS7ISUPCall* call = findCall(cic + i);
+        if (call && call->outgoing() && call->state() == SS7ISUPCall::Setup) {
+	    SignallingCircuit* newCircuit = 0;
+	    reserveCircuit(newCircuit,call->cicRange(),SignallingCircuit::LockLockedBusy);
+	    call->replaceCircuit(newCircuit);
+	}
+    }
 }
 
 

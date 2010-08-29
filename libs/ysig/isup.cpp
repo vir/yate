@@ -4387,7 +4387,7 @@ static bool getGrpTypeInd(SS7ISUP* isup, SS7MsgISUP* msg, bool& hwFail)
     if (hwFail || (s == "maintenance"))
 	return true;
     Debug(isup,DebugNote,"%s with unknown GroupSupervisionTypeIndicator=%s [%p]",
-	msg->name(),s.c_str());
+	msg->name(),s.c_str(),isup);
     return false;
 }
 

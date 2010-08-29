@@ -4993,7 +4993,7 @@ static const char* checkBlockCic(SignallingCircuit* cic, bool block, bool maint,
 	SignallingCircuit::LockLocalHWFail);
     if ((block == (0 != flg)) && !force)
 	return "already in the same state";
-    flg = maint ? SignallingCircuit::LockingMaint : SignallingCircuit::LockLocalHWFail;
+    flg = maint ? SignallingCircuit::LockingMaint : SignallingCircuit::LockingHWFail;
     if (cic->locked(flg | SignallingCircuit::Resetting) && !force)
 	return "busy locking or resetting";
     return 0;

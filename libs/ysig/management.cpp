@@ -400,7 +400,7 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	    int seq = msg->params().getIntValue("sequence",-1);
 	    if (seq >= 0)
 		recover(lbl,seq);
-	    // prepare an ECA in case we are unable to sena a COA/XCA
+	    // prepare an ECA in case we are unable to send a COA/XCA
 	    static unsigned char data = SS7MsgSNM::ECA;
 	    return postpone(new SS7MSU(msu.getSIO(),lbl,&data,1),lbl,sls,0,200);
 	}
@@ -737,6 +737,7 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 		    String tmp = addr;
 		    tmp << "," << SS7PointCode(type,r->packed()) << "," << sls;
 		    String slc(sls);
+		    int seq = -1;
 		    for (txSls = 0; txSls < 256; txSls++) {
 			if (!linkAvail[txSls])
 			    continue;
@@ -751,7 +752,8 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 			if (linkUp)
 			    ctl->setParam("code",String(txSls));
 			else {
-			    int seq = network->getSequence(sls);
+			    if (seq < 0)
+				seq = network->getSequence(sls);
 			    DDebug(this,DebugAll,"Got sequence number %d [%p]",seq,this);
 			    if (seq >= 0)
 				ctl->setParam("sequence",String(seq));
@@ -760,6 +762,42 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 			}
 			ctl->setParam("automatic",String::boolText(true));
 			controlExecute(ctl);
+		    }
+		    if (seq >= 0) {
+			// scan pending list for a matching ECA, turn it into COA/XCA
+			SS7Label label(type,r->packed(),local,sls);
+			lock();
+			SnmPending* pend = 0;
+			for (ObjList* l = m_pending.skipNull(); l; l = l->skipNext()) {
+			    SnmPending* p = static_cast<SnmPending*>(l->get());
+			    const unsigned char* ptr = p->msu().getData(p->length()+1,1);
+			    if (!(ptr && p->matches(label)))
+				continue;
+			    if (ptr[0] != SS7MsgSNM::ECA)
+				continue;
+			    pend = static_cast<SnmPending*>(m_pending.remove(p,false));
+			    break;
+			}
+			unlock();
+			if (pend) {
+			    const char* cmd = "COA";
+			    if (seq & 0xff000000) {
+				seq &= 0x00ffffff;
+				cmd = "XCA";
+			    }
+			    Debug(this,DebugInfo,"Turning pending ECA into %s with sequence %d [%p]",
+				cmd,seq,this);
+			    NamedList* ctl = controlCreate(cmd);
+			    if (ctl) {
+				ctl->setParam("address",tmp);
+				ctl->setParam("slc",slc);
+				ctl->setParam("linksel",String(pend->txSls()));
+				ctl->setParam("sequence",String(seq));
+				ctl->setParam("automatic",String::boolText(true));
+				controlExecute(ctl);
+			    }
+			}
+			TelEngine::destruct(pend);
 		    }
 		}
 	    }

@@ -7859,6 +7859,10 @@ private:
     bool transmitMessages(ObjList& list);
     // Handle circuit(s) (un)block command
     bool handleCicBlockCommand(const NamedList& p, bool block);
+    // Try to start single circuit (un)blocking. Set a pending operation on success 
+    // @param force True to ignore resetting/(un)blocking flags of the circuit
+    // Return built message to be sent on success
+    SS7MsgISUP* buildCicBlock(SignallingCircuit* cic, bool block, bool force = false);
 
     SS7PointCode::Type m_type;           // Point code type of this call controller
     ObjList m_pointCodes;                // Point codes serviced by this call controller

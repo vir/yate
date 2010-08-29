@@ -4433,8 +4433,19 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    releaseCircuit(m_rscCic);
 	    break;
 	case SS7MsgISUP::RSC: // Reset Circuit
-	    if (resetCircuit(msg->cic(),true,true))
+	    if (resetCircuit(msg->cic(),true,true)) {
+		// Send BLK on previously blocked cic: Q.764 2.9.3.1 c)
+		lock();
+		SignallingCircuit* cic = circuits() ? circuits()->find(msg->cic()) : 0;
+		SS7MsgISUP* m = 0;
+		if (cic && cic->locked(SignallingCircuit::LockLocalMaint) &&
+		    !cic->locked(SignallingCircuit::LockingMaint))
+		    m = buildCicBlock(cic,true,true);
+		unlock();
+		if (m)
+		    transmitMessage(m,label,true);
 		transmitRLC(this,msg->cic(),label,true);
+	    }
 	    else
 		reason = "unknown-channel";
 	    stopSGM = true;
@@ -5005,25 +5016,14 @@ bool SS7ISUP::handleCicBlockCommand(const NamedList& p, bool block)
     if (!circuits())
 	return false;
     SS7MsgISUP* msg = 0;
-    SignallingMessageTimer* t = 0;
     bool force = p.getBoolValue("force");
     String* param = p.getParam("circuit");
     Lock mylock(this);
     if (param) {
 	SignallingCircuit* cic = circuits()->find(param->toInteger());
-	const char* reason = checkBlockCic(cic,block,true,force);
-	if (reason) {
-	    Debug(this,DebugNote,"Circuit '%s' circuit=%s: %s",
-		p.getValue("operation"),param->c_str(),reason);
+	msg = buildCicBlock(cic,block,force);
+	if (!msg)
 	    return false;
-	}
-	blockCircuit(cic->code(),block,false,false,true,true);
-	cic->setLock(SignallingCircuit::LockingMaint);
-	msg = new SS7MsgISUP(block ? SS7MsgISUP::BLK : SS7MsgISUP::UBL,cic->code());
-	if (block)
-	    t = new SignallingMessageTimer(m_t12Interval,m_t13Interval);
-	else
-	    t = new SignallingMessageTimer(m_t14Interval,m_t15Interval);
     }
     else {
 	// NOTE: we assume the circuits belongs to the same span
@@ -5101,19 +5101,45 @@ bool SS7ISUP::handleCicBlockCommand(const NamedList& p, bool block)
 	    (maint ? "maintenance" : "hw-failure"));
 	msg->params().addParam("RangeAndStatus",String(map.length()));
 	msg->params().addParam("RangeAndStatus.map",map);
+	SignallingMessageTimer* t = 0;
 	if (block)
 	    t = new SignallingMessageTimer(m_t18Interval,m_t19Interval);
 	else
 	    t = new SignallingMessageTimer(m_t20Interval,m_t21Interval);
+        t->message(msg);
+	m_pending.add(t);
+	msg->ref();
     }
-    t->message(msg);
-    m_pending.add(t);
-    msg->ref();
     SS7Label label;
     setLabel(label,msg->cic());
     mylock.drop();
     transmitMessage(msg,label,false);
     return true;
+}
+
+// Try to start single circuit (un)blocking. Set a pending operation on success 
+// @param force True to ignore resetting/(un)blocking flags of the circuit
+// Return built message to be sent on success
+SS7MsgISUP* SS7ISUP::buildCicBlock(SignallingCircuit* cic, bool block, bool force)
+{
+    const char* reason = checkBlockCic(cic,block,true,force);
+    if (reason) {
+	Debug(this,DebugNote,"Failed to start circuit %sblocking for %u: %s",
+	    block ? "" : "un",cic ? cic->code() : 0,reason);
+	return 0;
+    }
+    blockCircuit(cic->code(),block,false,false,true,true);
+    cic->setLock(SignallingCircuit::LockingMaint);
+    SS7MsgISUP* m = new SS7MsgISUP(block ? SS7MsgISUP::BLK : SS7MsgISUP::UBL,cic->code());
+    SignallingMessageTimer* t = 0;
+    if (block)
+	t = new SignallingMessageTimer(m_t12Interval,m_t13Interval);
+    else
+        t = new SignallingMessageTimer(m_t14Interval,m_t15Interval);
+    t->message(m);
+    m_pending.add(t);
+    m->ref();
+    return m;
 }
 
 

@@ -1109,7 +1109,8 @@ void SS7M2PA::sendAck()
 {
     DataBlock data;
     setHeader(data);
-    dumpMsg(1,M2PA,UserData,data,1,true);
+    if (m_dumpMsg)
+	dumpMsg(1,M2PA,UserData,data,1,true);
     transmitMSG(1,M2PA,UserData,data,1);
 }
 

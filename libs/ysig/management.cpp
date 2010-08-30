@@ -853,7 +853,23 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 bool SS7Management::postpone(SS7MSU* msu, const SS7Label& label, int txSls,
 	u_int64_t interval, u_int64_t global, const Time& when)
 {
-    if ((interval == 0) || transmitMSU(*msu,label,txSls) >= 0) {
+    lock();
+    unsigned int len = msu->length();
+    for (ObjList* l = m_pending.skipNull(); l; l = l->skipNext()) {
+	SnmPending* p = static_cast<SnmPending*>(l->get());
+	if (p->txSls() != txSls || p->msu().length() != len)
+	    continue;
+	if (!p->matches(label))
+	    continue;
+	if (::memcmp(msu->data(),p->msu().data(),len))
+	    continue;
+	const unsigned char* buf = msu->getData(label.length()+1,1);
+	Debug(this,DebugMild,"Refusing to postpone duplicate %s on %d",
+	    SS7MsgSNM::lookup((SS7MsgSNM::Type)buf[0],"???"),txSls);
+	TelEngine::destruct(msu);
+    }
+    unlock();
+    if (msu && ((interval == 0) || (transmitMSU(*msu,label,txSls) >= 0))) {
 	lock();
 	m_pending.add(new SnmPending(msu,label,txSls,interval,global),when);
 	unlock();

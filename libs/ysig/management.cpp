@@ -542,9 +542,7 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	SnmPending* pend = 0;
 	for (ObjList* l = m_pending.skipNull(); l; l = l->skipNext()) {
 	    SnmPending* p = static_cast<SnmPending*>(l->get());
-	    if (p->msu().length() != msu.length())
-		continue;
-	    const unsigned char* ptr = p->msu().getData(p->length()+1,len+1);
+	    const unsigned char* ptr = p->msu().getData(p->length()+1,1);
 	    if (!(ptr && p->matches(label)))
 		continue;
 	    if (ptr[0] != test)
@@ -564,9 +562,7 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 		lock();
 		for (ObjList* l = m_pending.skipNull(); l; l = l->skipNext()) {
 		    SnmPending* p = static_cast<SnmPending*>(l->get());
-		    if (p->msu().length() != msu.length())
-			continue;
-		    const unsigned char* ptr = p->msu().getData(p->length()+1,len+1);
+		    const unsigned char* ptr = p->msu().getData(p->length()+1,1);
 		    if (!ptr || (ptr[0] != SS7MsgSNM::LLT))
 			continue;
 		    if (!p->matches(label))
@@ -587,9 +583,7 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	    lock();
 	    for (ObjList* l = m_pending.skipNull(); l; l = l->skipNext()) {
 		SnmPending* p = static_cast<SnmPending*>(l->get());
-		if (p->msu().length() != msu.length())
-		    continue;
-		const unsigned char* ptr = p->msu().getData(p->length()+1,len+1);
+		const unsigned char* ptr = p->msu().getData(p->length()+1,1);
 		if (!ptr || (ptr[0] != SS7MsgSNM::LRT))
 		    continue;
 		if (!p->matches(label))

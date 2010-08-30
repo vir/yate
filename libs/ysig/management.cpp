@@ -400,9 +400,31 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	    int seq = msg->params().getIntValue("sequence",-1);
 	    if (seq >= 0)
 		recover(lbl,seq);
-	    // prepare an ECA in case we are unable to send a COA/XCA
-	    static unsigned char data = SS7MsgSNM::ECA;
-	    return postpone(new SS7MSU(msu.getSIO(),lbl,&data,1),lbl,sls,0,200);
+	    seq = router ? router->getSequence(lbl) : -1;
+	    if (seq >= 0) {
+		int len = 2;
+		unsigned char data[3];
+		data[0] = SS7MsgSNM::COA;
+		switch (label.type()) {
+		    case SS7PointCode::ITU:
+			data[1] = (unsigned char)seq;
+			break;
+		    case SS7PointCode::ANSI:
+			data[1] = (unsigned char)((msg->params().getIntValue("slc",sls) & 0x0f) | (seq << 4));
+			data[2] = (unsigned char)(seq >> 4);
+			len = 3;
+			break;
+		    default:
+			Debug(DebugStub,"Please implement COO for type %u",label.type());
+			return false;
+		}
+		return transmitMSU(SS7MSU(msu.getSIO(),lbl,&data,len),lbl,sls) >= 0;
+	    }
+	    else {
+		// postpone an ECA in case we are unable to send a COA/XCA
+		static unsigned char data = SS7MsgSNM::ECA;
+		return postpone(new SS7MSU(msu.getSIO(),lbl,&data,1),lbl,sls,0,200);
+	    }
 	}
 	else
 	    Debug(this,DebugMild,"Unexpected %s %s [%p]",msg->name(),addr.c_str(),this);

@@ -6017,6 +6017,14 @@ public:
     bool inhibit(const SS7Label& link, int setFlags, int clrFlags = 0, bool notLast = false);
 
     /**
+     * Check inhibition flags on a link of a router attached network
+     * @param link Signalling Link to check identified by a routing label
+     * @param flags Flag bits to check ORed together
+     * @return True if any of the specified inhibition flags are set
+     */
+    bool inhibited(const SS7Label& link, int flags);
+
+    /**
      * Get the sequence number of the last MSU received on a link
      * @param link Routing label identifying the link to retrieve the sequence from
      * @return Last FSN received, negative if not available
@@ -7366,6 +7374,14 @@ protected:
      * @return True if inhibition flags were set
      */
     bool inhibit(const SS7Label& link, int setFlags, int clrFlags = 0);
+
+    /**
+     * Check inhibition flags on a link of a router attached network
+     * @param link Signalling Link to check identified by a routing label
+     * @param flags Flag bits to check ORed together
+     * @return True if any of the specified inhibition flags are set
+     */
+    bool inhibited(const SS7Label& link, int flags);
 
     /**
      * Recover MSUs from a link

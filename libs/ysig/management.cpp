@@ -90,6 +90,8 @@ static const TokenDict s_snm_group[] = {
 };
 #undef MAKE_NAME
 
+#define TIMER5M 300000
+
 namespace { //anonymous
 
 class SnmPending : public SignallingMessageTimer, public SS7Label
@@ -524,18 +526,97 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
 	SS7Label lbl(label,label.sls(),0);
 	if (router) {
-	    unsigned char data = (router->inhibit(lbl,SS7Layer2::Remote,0,true))
-		? SS7MsgSNM::LIA : SS7MsgSNM::LID;
+	    bool ok = router->inhibit(lbl,SS7Layer2::Remote,0,true);
+	    unsigned char data = ok ? SS7MsgSNM::LIA : SS7MsgSNM::LID;
+	    if (ok) {
+		static unsigned char lrt = SS7MsgSNM::LRT;
+		postpone(new SS7MSU(msu.getSIO(),lbl,&lrt,1),lbl,sls,0,TIMER5M);
+	    }
 	    return transmitMSU(SS7MSU(msu.getSIO(),lbl,&data,1),lbl,sls) >= 0;
 	}
     }
-    else if (msg->type() == SS7MsgSNM::LUN || msg->type() == SS7MsgSNM::LFU) {
+    else if (msg->type() == SS7MsgSNM::LIA || msg->type() == SS7MsgSNM::LUA) {
+	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
+	unsigned char test = (msg->type() == SS7MsgSNM::LIA) ? SS7MsgSNM::LIN : SS7MsgSNM::LUN;
+	lock();
+	SnmPending* pend = 0;
+	for (ObjList* l = m_pending.skipNull(); l; l = l->skipNext()) {
+	    SnmPending* p = static_cast<SnmPending*>(l->get());
+	    if (p->msu().length() != msu.length())
+		continue;
+	    const unsigned char* ptr = p->msu().getData(p->length()+1,len+1);
+	    if (!(ptr && p->matches(label)))
+		continue;
+	    if (ptr[0] != test)
+		continue;
+	    pend = static_cast<SnmPending*>(m_pending.remove(p,false));
+	    break;
+	}
+	unlock();
+	if (pend) {
+	    if (test == SS7MsgSNM::LIN) {
+		inhibit(*pend,SS7Layer2::Local);
+		static unsigned char llt = SS7MsgSNM::LLT;
+		postpone(new SS7MSU(msu.getSIO(),*pend,&llt,1),*pend,sls,0,TIMER5M);
+	    }
+	    else {
+		inhibit(*pend,0,SS7Layer2::Local);
+		lock();
+		for (ObjList* l = m_pending.skipNull(); l; l = l->skipNext()) {
+		    SnmPending* p = static_cast<SnmPending*>(l->get());
+		    if (p->msu().length() != msu.length())
+			continue;
+		    const unsigned char* ptr = p->msu().getData(p->length()+1,len+1);
+		    if (!ptr || (ptr[0] != SS7MsgSNM::LLT))
+			continue;
+		    if (!p->matches(label))
+			continue;
+		    m_pending.remove(p);
+		    break;
+		}
+		unlock();
+	    }
+	}
+	else
+	    Debug(this,DebugMild,"Unexpected %s %s [%p]",msg->name(),addr.c_str(),this);
+    }
+    else if (msg->type() == SS7MsgSNM::LUN) {
 	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
 	SS7Label lbl(label,label.sls(),0);
 	if (router && router->inhibit(lbl,0,SS7Layer2::Remote)) {
+	    lock();
+	    for (ObjList* l = m_pending.skipNull(); l; l = l->skipNext()) {
+		SnmPending* p = static_cast<SnmPending*>(l->get());
+		if (p->msu().length() != msu.length())
+		    continue;
+		const unsigned char* ptr = p->msu().getData(p->length()+1,len+1);
+		if (!ptr || (ptr[0] != SS7MsgSNM::LRT))
+		    continue;
+		if (!p->matches(label))
+		    continue;
+		m_pending.remove(p);
+		break;
+	    }
+	    unlock();
 	    static unsigned char lua = SS7MsgSNM::LUA;
 	    return transmitMSU(SS7MSU(msu.getSIO(),lbl,&lua,1),lbl,sls) >= 0;
 	}
+    }
+    else if (msg->type() == SS7MsgSNM::LRT) {
+	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
+	SS7Label lbl(label,label.sls(),0);
+	if (router && router->inhibited(lbl,SS7Layer2::Local))
+	    return true;
+	unsigned char data = SS7MsgSNM::LUN;
+	return postpone(new SS7MSU(msu.getSIO(),lbl,&data,1),lbl,sls,1200,2400);
+    }
+    else if (msg->type() == SS7MsgSNM::LLT) {
+	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
+	SS7Label lbl(label,label.sls(),0);
+	if (router && router->inhibited(lbl,SS7Layer2::Remote))
+	    return true;
+	unsigned char data = SS7MsgSNM::LFU;
+	return postpone(new SS7MSU(msu.getSIO(),lbl,&data,1),lbl,sls,1200,2400);
     }
     else if (msg->type() == SS7MsgSNM::UPU) {
 	Debug(this,DebugNote,"Unavailable part %s at %s, cause %s",
@@ -630,6 +711,12 @@ bool SS7Management::control(NamedList& params)
 		case SS7MsgSNM::COA:
 		case SS7MsgSNM::CBD:
 		case SS7MsgSNM::CBA:
+		case SS7MsgSNM::LIN:
+		case SS7MsgSNM::LIA:
+		case SS7MsgSNM::LID:
+		case SS7MsgSNM::LUN:
+		case SS7MsgSNM::LUA:
+		case SS7MsgSNM::LFU:
 		    txSls = (txSls + 1) & 0xff;
 	    }
 	    txSls = params.getIntValue("linksel",txSls);
@@ -653,11 +740,9 @@ bool SS7Management::control(NamedList& params)
 			}
 		    }
 		    return false;
-		// Messages with just the code
+		// Messages sent with just the code
 		case SS7MsgSNM::ECO:
 		case SS7MsgSNM::TRA:
-		case SS7MsgSNM::LIN:
-		case SS7MsgSNM::LUN:
 		case SS7MsgSNM::LIA:
 		case SS7MsgSNM::LUA:
 		case SS7MsgSNM::LID:
@@ -671,6 +756,17 @@ bool SS7Management::control(NamedList& params)
 		    {
 			unsigned char data = cmd;
 			return transmitMSU(SS7MSU(txSio,lbl,&data,1),lbl,txSls) >= 0;
+		    }
+		// Messages postponed with just the code
+		case SS7MsgSNM::LIN:
+		    {
+			unsigned char data = cmd;
+			return postpone(new SS7MSU(txSio,lbl,&data,1),lbl,txSls,2500,5000);
+		    }
+		case SS7MsgSNM::LUN:
+		    {
+			unsigned char data = cmd;
+			return postpone(new SS7MSU(txSio,lbl,&data,1),lbl,txSls,1200,2400);
 		    }
 		// Changeover messages
 		case SS7MsgSNM::COO:
@@ -919,6 +1015,20 @@ bool SS7Management::timeout(const SS7MSU& msu, const SS7Label& label, int txSls,
 	    Debug(this,DebugNote,"Changeback timed out on %s",link.c_str());
 	    inhibit(label,0,SS7Layer2::Inactive);
 	    break;
+	case SS7MsgSNM::LIN:
+	    Debug(this,DebugWarn,"Link inhibit timed out on %s",link.c_str());
+	    break;
+	case SS7MsgSNM::LUN:
+	    Debug(this,DebugWarn,"Link uninhibit timed out on %s",link.c_str());
+	    break;
+	case SS7MsgSNM::LRT:
+	    if (inhibited(label,SS7Layer2::Remote))
+		postpone(new SS7MSU(msu),label,txSls,TIMER5M);
+	    break;
+	case SS7MsgSNM::LLT:
+	    if (inhibited(label,SS7Layer2::Local))
+		postpone(new SS7MSU(msu),label,txSls,TIMER5M);
+	    break;
     }
     return true;
 }
@@ -958,6 +1068,12 @@ bool SS7Management::inhibit(const SS7Label& link, int setFlags, int clrFlags)
 {
     SS7Router* router = YOBJECT(SS7Router,SS7Layer4::network());
     return router && router->inhibit(link,setFlags,clrFlags);
+}
+
+bool SS7Management::inhibited(const SS7Label& link, int flags)
+{
+    SS7Router* router = YOBJECT(SS7Router,SS7Layer4::network());
+    return router && router->inhibited(link,flags);
 }
 
 void SS7Management::recover(const SS7Label& link, int sequence)

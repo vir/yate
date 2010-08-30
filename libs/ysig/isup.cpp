@@ -2030,8 +2030,7 @@ static void getMsgCompat(SS7MsgISUP* msg, bool& release, bool& cnf)
     if (msgCompat) {
 	ObjList* l = msgCompat->split(',',false);
 	// Use a while() to make sure the list is destroyed
-	// Assume we are not a transit network
-	while (l->find("end-node")) {
+	do {
 	    release = (0 != l->find("release"));
 	    if (release)
 		break;
@@ -2043,8 +2042,7 @@ static void getMsgCompat(SS7MsgISUP* msg, bool& release, bool& cnf)
 	    // Pass on set: we didn't passed on the message. Check REL/CNF
 	    release = (0 != l->find("nopass-release"));
 	    cnf = !release && l->find("cnf");
-	    break;
-	}
+	} while(false);
 	TelEngine::destruct(l);
     }
     else

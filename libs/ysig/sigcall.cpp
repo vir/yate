@@ -859,12 +859,17 @@ bool SignallingCircuitGroup::status(unsigned int cic, SignallingCircuit::Status 
     return circuit && circuit->status(newStat,sync);
 }
 
-inline void adjustParity(unsigned int& n, int strategy)
+inline void adjustParity(unsigned int& n, int strategy, bool up)
 {
-    if ((strategy & SignallingCircuitGroup::OnlyEven) && (n & 1))
-	n &= ~1;
-    else if ((strategy & SignallingCircuitGroup::OnlyOdd) && !(n & 1))
-	n |= 1;
+    if (((strategy & SignallingCircuitGroup::OnlyEven) && (n & 1)) ||
+	((strategy & SignallingCircuitGroup::OnlyOdd) && !(n & 1))) {
+	if (up)
+	    n++;
+	else if (n)
+	    n--;
+	else
+	    n = (strategy & SignallingCircuitGroup::OnlyEven) ? 0 : 1;
+    }
 }
 
 // Choose the next circuit code to check, depending on strategy
@@ -877,16 +882,18 @@ unsigned int SignallingCircuitGroup::advance(unsigned int n, int strategy,
 	case Increment:
 	case Lowest:
 	    n += delta;
-	    if (n >= range.m_last)
-		n = delta;
+	    if (n >= range.m_last) {
+		n = 0;
+		adjustParity(n,strategy,true);
+	    }
 	    break;
 	case Decrement:
 	case Highest:
 	    if (n >= delta)
 		n -= delta;
 	    else {
-		n = range.m_last - 1;
-		adjustParity(n,strategy);
+		n = range.m_last;
+		adjustParity(n,strategy,false);
 	    }
 	    break;
 	default:
@@ -909,7 +916,7 @@ SignallingCircuit* SignallingCircuitGroup::reserve(int checkLock, int strategy,
 	return 0;
     if (strategy < 0)
 	strategy = range->m_strategy;
-    int dir = 1;
+    bool up = true;
     unsigned int n = range->m_used;
     // first adjust the last used channel number
     switch (strategy & 0xfff) {
@@ -917,22 +924,25 @@ SignallingCircuit* SignallingCircuitGroup::reserve(int checkLock, int strategy,
 	    n = (n + 1) % range->m_last;
 	    break;
 	case Decrement:
-	    n = (n ? n : range->m_last) - 1;
-	    dir = -1;
+	    if (n < 2)
+		n = range->m_last;
+	    else
+		n--;
+	    up = false;
 	    break;
 	case Lowest:
 	    n = 0;
 	    break;
 	case Highest:
-	    n = range->m_last - 1;
-	    dir = -1;
+	    n = range->m_last;
+	    up = false;
 	    break;
 	default:
 	    while ((range->m_last > 1) && (n == range->m_used))
 		n = ::random() % range->m_last;
     }
     // then go to the proper even/odd start circuit
-    adjustParity(n,strategy);
+    adjustParity(n,strategy,up);
     // remember where the scan started
     unsigned int start = n;
     // try at most how many channels we have, halve that if we only scan even or odd

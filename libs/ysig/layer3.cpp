@@ -1040,11 +1040,13 @@ void SS7MTP3::notify(SS7Layer2* link)
 #endif
     if (link) {
 	if (link->operational()) {
-	    if (link->inhibited() & SS7Layer2::Unchecked) {
+	    if (link->inhibited(SS7Layer2::Unchecked)) {
 		u_int64_t t = Time::now() + 50000 + (::random() % 100000);
 		if ((t < link->m_check) || (t - 4000000 > link->m_check))
 		    link->m_check = t;
 	    }
+	    else if (link->inhibited(SS7Layer2::Inactive))
+		act = (unsigned int)-1;
 	}
 	else {
 	    if (m_checklinks)

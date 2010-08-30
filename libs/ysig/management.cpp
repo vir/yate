@@ -741,11 +741,13 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 {
     Debug(this,DebugAll,"SS7Management::notify(%p,%d) [%p]",network,sls,this);
     if (network && (sls >= 0)) {
+	bool linkUp = network->operational(sls);
+	if (linkUp && !network->inhibited(sls,SS7Layer2::Inactive))
+	    return;
 	bool linkAvail[256];
 	int txSls;
 	for (txSls = 0; txSls < 256; txSls++)
 	    linkAvail[txSls] = (txSls != sls) && !network->inhibited(txSls) && network->operational(txSls);
-	bool linkUp = network->operational(sls);
 	for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
 	    SS7PointCode::Type type = static_cast<SS7PointCode::Type>(i+1);
 	    unsigned int local = network->getLocal(type);
@@ -765,11 +767,21 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 		const SS7Route* r = static_cast<const SS7Route*>(routes->get());
 		if (r && !r->priority()) {
 		    // found adjacent node, emit change orders to it
+		    int seq = -1;
+		    txSls = 0;
+		    if (!linkUp && network->inhibited(sls,SS7Layer2::Inactive)) {
+			// already inactive, fix sequences if possible
+			seq = network->getSequence(sls);
+			DDebug(this,DebugAll,"Got sequence %d for link %s:%d [%p]",
+			    seq,addr.c_str(),sls,this);
+			if (seq < 0)
+			    return;
+			txSls = 256;
+		    }
 		    String tmp = addr;
 		    tmp << "," << SS7PointCode(type,r->packed()) << "," << sls;
 		    String slc(sls);
-		    int seq = -1;
-		    for (txSls = 0; txSls < 256; txSls++) {
+		    for (; txSls < 256; txSls++) {
 			if (!linkAvail[txSls])
 			    continue;
 			NamedList* ctl = controlCreate(oper);
@@ -794,9 +806,9 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 			ctl->setParam("automatic",String::boolText(true));
 			controlExecute(ctl);
 		    }
-		    if (seq >= 0) {
-			// scan pending list for a matching ECA, turn it into COA/XCA
-			SS7Label label(type,r->packed(),local,sls);
+		    while (seq >= 0) {
+			// scan pending list for matching ECA, turn them into COA/XCA
+			SS7Label label(type,local,r->packed(),sls);
 			lock();
 			SnmPending* pend = 0;
 			for (ObjList* l = m_pending.skipNull(); l; l = l->skipNext()) {
@@ -827,8 +839,10 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 				ctl->setParam("automatic",String::boolText(true));
 				controlExecute(ctl);
 			    }
+			    TelEngine::destruct(pend);
 			}
-			TelEngine::destruct(pend);
+			else
+			    break;
 		    }
 		}
 	    }

@@ -1612,6 +1612,7 @@ void SS7M2UA::timerTick(const Time& when)
 {
     if (m_retrieve.timeout(when.msec())) {
 	m_retrieve.stop();
+	Debug(this,DebugWarn,"Sequence retrieval from M2UA SG timed out");
 	SS7Layer2::notify();
 	control(Resume);
     }
@@ -1718,6 +1719,7 @@ bool SS7M2UA::processMAUP(unsigned char msgType, const DataBlock& msg, int strea
 			if (m_retrieve.started()) {
 			    m_retrieve.stop();
 			    SS7Layer2::notify();
+			    control(Resume);
 			}
 			break;
 		    }
@@ -1728,6 +1730,8 @@ bool SS7M2UA::processMAUP(unsigned char msgType, const DataBlock& msg, int strea
 		    if (m_retrieve.started()) {
 			m_retrieve.stop();
 			SS7Layer2::notify();
+			if (m_linkState != LinkDown)
+			    control(Resume);
 		    }
 		    return true;
 		}

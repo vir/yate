@@ -385,18 +385,11 @@ public:
      * @param sec True if the interval value if given in seconds
      */
     inline void interval(const NamedList& params, const char* param,
-	unsigned int minVal, unsigned int defVal, bool allowDisable, bool sec = false)
-    {
-	m_interval = (u_int64_t)params.getIntValue(param,defVal);
-	if (m_interval) {
-	    if (m_interval < minVal)
-		m_interval = minVal;
+	unsigned int minVal, unsigned int defVal, bool allowDisable, bool sec = false) {
+	    m_interval = getInterval(params,param,minVal,defVal,0,allowDisable);
+	    if (sec)
+		m_interval *= 1000;
 	}
-	else if (!allowDisable)
-	    m_interval = minVal;
-	if (sec)
-	    m_interval *= 1000;
-    }
 
     /**
      * Get the timeout interval
@@ -446,6 +439,20 @@ public:
      */
     inline bool timeout(u_int64_t time = Time::msecNow()) const
 	{ return started() && (m_timeout < time); }
+
+    /**
+     * Retrieve a timer interval from a list of parameters.
+     * @param params The list of parameters
+     * @param param The name of the parameter containing the timer interval value
+     * @param minVal Minimum value allowed for the timer interval
+     * @param defVal Default value if it fails to get one from the given parameter
+     * @param maxVal Optional interval maximum value
+     * @param allowDisable True to allow 0 for the timer interval
+     * @return The interval value
+     */
+    static unsigned int getInterval(const NamedList& params, const char* param,
+	unsigned int minVal, unsigned int defVal, unsigned int maxVal = 0,
+	bool allowDisable = false);
 
 private:
     u_int64_t m_interval;                // Timer interval
@@ -7719,6 +7726,7 @@ private:
     SignallingTimer m_iamTimer;          // Send initial address
     SignallingTimer m_sgmRecvTimer;      // Receive segmented message
     SignallingTimer m_contTimer;         // Continuity timer
+    SignallingTimer m_anmTimer;          // T9 ACM -> ANM timer
 };
 
 /**
@@ -8066,6 +8074,7 @@ private:
     bool m_l3LinkUp;                     // Flag indicating the availability of a Layer3 data link
     u_int64_t m_t1Interval;              // Q.764 T1 timer interval
     u_int64_t m_t5Interval;              // Q.764 T5 timer interval
+    u_int64_t m_t9Interval;              // Q.764 T9 AMM/CON recv timer interval
     u_int64_t m_t12Interval;             // Q.764 T12 BLK timer interval
     u_int64_t m_t13Interval;             // Q.764 T13 BLK global timer interval
     u_int64_t m_t14Interval;             // Q.764 T14 UBL timer interval

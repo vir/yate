@@ -475,6 +475,24 @@ void SignallingThreadPrivate::run()
 }
 
 
+/*
+ * SignallingTimer
+ */
+// Retrieve a timer interval from a list of parameters
+unsigned int SignallingTimer::getInterval(const NamedList& params, const char* param,
+    unsigned int minVal, unsigned int defVal, unsigned int maxVal, bool allowDisable)
+{
+    unsigned int val = (unsigned int)params.getIntValue(param,defVal);
+    if (!val)
+        return allowDisable ? 0 : minVal;
+    if (val < minVal)
+	return minVal;
+    if (maxVal && val > maxVal)
+	return maxVal;
+    return val;
+}
+
+
 /**
  * SignallingUtils
  */

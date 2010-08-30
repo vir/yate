@@ -31,6 +31,10 @@ using namespace TelEngine;
 // Maximum number of mandatory parameters including two terminators
 #define MAX_MANDATORY_PARAMS 16
 
+// T9 timer
+#define ISUP_T9_MINVAL 90000
+#define ISUP_T9_MAXVAL 180000
+
 // Description of each ISUP parameter
 struct IsupParam {
     // numeric type of the parameter
@@ -2069,7 +2073,8 @@ SS7ISUPCall::SS7ISUPCall(SS7ISUP* controller, SignallingCircuit* cic,
     m_iamTimer(20000),                   // Setup, Testing: Q.764: T7  - 20..30 seconds
                                          // Releasing: Q.764: T1: 15..60 seconds
     m_sgmRecvTimer(3000),                // Q.764: T34 - 2..4 seconds
-    m_contTimer(240000)                  // Q.764: T27 - 4 minutes
+    m_contTimer(240000),                 // Q.764: T27 - 4 minutes
+    m_anmTimer(0)                        // Q.764 T9 Q.118: 1.5 - 3 minutes
 {
     if (!(controller && m_circuit)) {
 	Debug(isup(),DebugWarn,
@@ -2130,7 +2135,7 @@ inline static bool timeout(SS7ISUP* isup, SS7ISUPCall* call, SignallingTimer& ti
 	return false;
     if (stop)
 	timer.stop();
-    DDebug(isup,DebugNote,"Call(%u). %s request timed out [%p]",call->id(),req,call);
+    Debug(isup,DebugNote,"Call(%u). %s timed out [%p]",call->id(),req,call);
     return true;
 }
 
@@ -2260,7 +2265,12 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 		else if (timeout(isup(),this,m_iamTimer,when,"T1"))
 		    transmitREL(true,when);
 		break;
-	    default: ;
+	    default:
+		if (outgoing() && m_anmTimer.started() && m_state >= Accepted &&
+		    m_state < Answered && timeout(isup(),this,m_anmTimer,when,"T9")) {
+		    setReason("noresponse",0,0,isup()->location());
+		    m_lastEvent = release();
+		}
 	}
     }
     // Reset overlapped if our state is greater then Setup
@@ -2915,6 +2925,11 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 		    m_sgmMsg->params().setParam("earlymedia",String::boolText(m_inbandAvailable));
 		    m_lastEvent = new SignallingEvent(SignallingEvent::Accept,m_sgmMsg,this);
 		}
+		// Start T9 timer
+		if (isup()->m_t9Interval) {
+		    m_anmTimer.interval(isup()->m_t9Interval);
+		    m_anmTimer.start();
+		}
 	    }
 	    break;
 	case SS7MsgISUP::CPR:
@@ -2933,6 +2948,7 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 	case SS7MsgISUP::CON:
 	    connectCircuit();
 	    m_state = Answered;
+	    m_anmTimer.stop();
 	    m_lastEvent = new SignallingEvent(SignallingEvent::Answer,m_sgmMsg,this);
 	    break;
 	default:
@@ -3000,6 +3016,7 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
       m_l3LinkUp(false),
       m_t1Interval(15000),               // Q.764 T1 15..60 seconds
       m_t5Interval(300000),              // Q.764 T5 5..15 minutes
+      m_t9Interval(0),                   // Q.764 T9 Q.118 1.5 - 3 minutes
       m_t12Interval(20000),              // Q.764 T12 (BLK) 15..60 seconds
       m_t13Interval(300000),             // Q.764 T13 (BLK global) 5..15 minutes
       m_t14Interval(20000),              // Q.764 T14 (UBL) 15..60 seconds
@@ -3087,6 +3104,9 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
     else
 	m_lockTimer.start();
 
+    // Timers
+    m_t9Interval = SignallingTimer::getInterval(params,"t9",ISUP_T9_MINVAL,0,ISUP_T9_MAXVAL,true);
+
     m_continuity = params.getValue("continuity");
     m_confirmCCR = params.getBoolValue("confirm_ccr",true);
     m_ignoreGRSSingle = params.getBoolValue("ignore-grs-single");
@@ -3157,6 +3177,8 @@ bool SS7ISUP::initialize(const NamedList* config)
 	m_ignoreCGBSingle = config->getBoolValue("ignore-cgb-single");
 	m_ignoreCGUSingle = config->getBoolValue("ignore-cgu-single");
 	m_defaultSls = config->getIntValue("sls",s_dict_callSls,m_defaultSls);
+        // Timers
+	m_t9Interval = SignallingTimer::getInterval(*config,"t9",ISUP_T9_MINVAL,0,ISUP_T9_MAXVAL,true);
     }
     return SS7Layer4::initialize(config);
 }

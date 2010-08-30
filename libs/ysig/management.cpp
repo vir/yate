@@ -844,7 +844,7 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 	DDebug(this,DebugInfo,"Link %d inhibitions: 0x%02X [%p]",
 	    sls,network->inhibited(sls),this);
 	bool linkUp = network->operational(sls);
-	if (linkUp != network->inhibited(sls,SS7Layer2::Inactive))
+	if (linkUp && !network->inhibited(sls,SS7Layer2::Inactive))
 	    return;
 	bool linkAvail[256];
 	bool force = true;

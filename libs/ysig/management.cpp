@@ -741,13 +741,13 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 {
     Debug(this,DebugAll,"SS7Management::notify(%p,%d) [%p]",network,sls,this);
     if (network && (sls >= 0)) {
-	if (network->inhibited(sls,SS7Layer2::Unchecked))
-	    return;
+	DDebug(this,DebugInfo,"Link %d inhibitions: 0x%02X [%p]",
+	    sls,network->inhibited(sls),this);
 	bool linkUp = network->operational(sls);
-	if (linkUp && !network->inhibited(sls,SS7Layer2::Inactive))
+	if (linkUp != network->inhibited(sls,SS7Layer2::Inactive))
 	    return;
 	bool linkAvail[256];
-	bool activate = linkUp;
+	bool force = true;
 	int txSls;
 	for (txSls = 0; txSls < 256; txSls++)
 	    linkAvail[txSls] = (txSls != sls) && !network->inhibited(txSls) && network->operational(txSls);
@@ -808,7 +808,7 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 			}
 			ctl->setParam("automatic",String::boolText(true));
 			controlExecute(ctl);
-			activate = false;
+			force = false;
 		    }
 		    while (seq >= 0) {
 			// scan pending list for matching ECA, turn them into COA/XCA
@@ -842,6 +842,7 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 				ctl->setParam("sequence",String(seq));
 				ctl->setParam("automatic",String::boolText(true));
 				controlExecute(ctl);
+				force = false;
 			    }
 			    TelEngine::destruct(pend);
 			}
@@ -851,9 +852,15 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 		}
 	    }
 	}
-	if (activate) {
-	    Debug(this,DebugWarn,"Could not send CBD for link %d, activating anyway [%p]",sls,this);
-	    network->inhibit(sls,0,SS7Layer2::Inactive);
+	if (force) {
+	    if (linkUp) {
+		Debug(this,DebugWarn,"Could not changeback link %d, activating anyway [%p]",sls,this);
+		network->inhibit(sls,0,SS7Layer2::Inactive);
+	    }
+	    else {
+		Debug(this,DebugWarn,"Could not changeover link %d, deactivating anyway [%p]",sls,this);
+		network->inhibit(sls,SS7Layer2::Inactive,0);
+	    }
 	}
     }
 }

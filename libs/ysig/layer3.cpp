@@ -846,7 +846,7 @@ bool SS7MTP3::initialize(const NamedList* config)
 	    if (linkSls >= 0)
 		link->sls(linkSls);
 	    if (m_checklinks)
-		link->inhibit(SS7Layer2::Unchecked);
+		link->inhibit(SS7Layer2::Unchecked|SS7Layer2::Inactive);
 	    attach(link);
 	    if (!link->initialize(linkConfig))
 		detach(link);
@@ -967,16 +967,16 @@ bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
 	    if (!maint)
 		return false;
 	    if (label.sls() == sls) {
-		Debug(this,DebugNote,"Placing link %d '%s' in service [%p]",
-		    sls,link->toString().c_str(),this);
+		Debug(this,DebugNote,"Placing link %d '%s' in service, inhibitions 0x%02X [%p]",
+		    sls,link->toString().c_str(),link->inhibited(),this);
 		link->m_inhibited &= ~SS7Layer2::Unchecked;
 		notify(link);
 	    }
 	}
 	if (!maint && (msu.getSIF() != SS7MSU::SNM) &&
 	    link->inhibited(SS7Layer2::Unchecked|SS7Layer2::Inactive|SS7Layer2::Local)) {
-	    Debug(this,DebugMild,"Received MSU on inhibited link %d '%s' [%p]",
-		sls,link->toString().c_str(),this);
+	    Debug(this,DebugMild,"Received MSU on inhibited 0x%02X link %d '%s' [%p]",
+		link->inhibited(),sls,link->toString().c_str(),this);
 	    return false;
 	}
     }

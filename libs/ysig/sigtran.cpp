@@ -1454,6 +1454,7 @@ SS7M2UA::SS7M2UA(const NamedList& params)
 {
     Debug(DebugStub,"SS7M2UA");
     m_retrieve.interval(params,"retrieve",5,200,true);
+    m_lastSeqRx = -2;
 }
 
 bool SS7M2UA::initialize(const NamedList* config)

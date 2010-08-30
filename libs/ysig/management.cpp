@@ -741,10 +741,13 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 {
     Debug(this,DebugAll,"SS7Management::notify(%p,%d) [%p]",network,sls,this);
     if (network && (sls >= 0)) {
+	if (network->inhibited(sls,SS7Layer2::Unchecked))
+	    return;
 	bool linkUp = network->operational(sls);
 	if (linkUp && !network->inhibited(sls,SS7Layer2::Inactive))
 	    return;
 	bool linkAvail[256];
+	bool activate = linkUp;
 	int txSls;
 	for (txSls = 0; txSls < 256; txSls++)
 	    linkAvail[txSls] = (txSls != sls) && !network->inhibited(txSls) && network->operational(txSls);
@@ -805,6 +808,7 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 			}
 			ctl->setParam("automatic",String::boolText(true));
 			controlExecute(ctl);
+			activate = false;
 		    }
 		    while (seq >= 0) {
 			// scan pending list for matching ECA, turn them into COA/XCA
@@ -846,6 +850,10 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 		    }
 		}
 	    }
+	}
+	if (activate) {
+	    Debug(this,DebugWarn,"Could not send CBD for link %d, activating anyway [%p]",sls,this);
+	    network->inhibit(sls,0,SS7Layer2::Inactive);
 	}
     }
 }

@@ -608,20 +608,28 @@ HandledMSU SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7L
 	}
     } while (l); // loop until the list was scanned to end
     unlock();
-    if (m_transfer) {
-	if (HandledMSU::Unequipped == ret)
-	    return m_sendUnavail ? ret : HandledMSU(HandledMSU::Failure);
-	if ((routeMSU(msu,label,network,label.sls(),SS7Route::NotProhibited) >= 0) || !m_sendUnavail)
-	    return HandledMSU::Accepted;
+    switch (ret) {
+	// these cases are explicitely set by the user parts
+	case HandledMSU::Unequipped:
+	case HandledMSU::Inaccessible:
+	    if (m_sendUnavail)
+		return ret;
+	    return HandledMSU::Failure;
+	default:
+	    break;
     }
-    else if (!m_sendUnavail)
-	return HandledMSU::Failure;
-    unsigned int local = getLocal(label.type());
-    if (local && label.dpc().pack(label.type()) == local)
-	return ret;
-    if (m_transfer)
+    unsigned int dpc = label.dpc().pack(label.type());
+    bool local = getLocal(label.type()) == dpc;
+    if (network && !local)
+	local = network->getLocal(label.type()) == dpc;
+    if (local)
+	return m_sendUnavail ? HandledMSU::Unequipped : HandledMSU::Failure;
+    if (m_transfer) {
+	if (routeMSU(msu,label,network,label.sls(),SS7Route::NotProhibited) >= 0)
+	    return HandledMSU::Accepted;
 	return m_sendProhibited ? HandledMSU::NoAddress : HandledMSU::Failure;
-    return HandledMSU::Inaccessible;
+    }
+    return HandledMSU::Failure;
 }
 
 void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type, GenObject* context)

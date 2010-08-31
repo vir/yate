@@ -1262,8 +1262,8 @@ void SigChannel::hangup(const char* reason, SignallingEvent* event)
 	ev->sendEvent();
     Message* m = message("chan.hangup",true);
     m->setParam("status",status());
-    m->setParam("reason",m_reason);
     plugin.copySigMsgParams(*m,event,&params);
+    m->setParam("reason",m_reason);
     Engine::enqueue(m);
 }
 

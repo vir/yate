@@ -263,10 +263,13 @@ static bool decodeFlags(const SS7ISUP* isup, NamedList& list, const IsupParam* p
 }
 
 // Utility function - extract just ISUP digits from a parameter
-static void getDigits(String& num, unsigned char oddNum, const unsigned char* buf, unsigned int len)
+static void getDigits(String& num, unsigned char oddNum, const unsigned char* buf, unsigned int len,
+    bool ignoreUnk)
 {
     bool odd = (oddNum & 0x80) != 0;
-    static const char digits[] = "0123456789\0BC\0\0.";
+    static const char digits1[] = "0123456789\0BC\0\0.";
+    static const char digits2[] = "0123456789?BC??.";
+    const char* digits = ignoreUnk ? digits1 : digits2;
     for (unsigned int i = 0; i < len; i++) {
 	num += digits[buf[i] & 0x0f];
 	if (odd && ((i+1) == len))
@@ -343,7 +346,7 @@ static bool decodeDigits(const SS7ISUP* isup, NamedList& list, const IsupParam* 
     unsigned char pres = (buf[1] >> 2) & 3;
     unsigned char scrn = buf[1] & 3;
     String tmp;
-    getDigits(tmp,buf[0],buf+2,len-2);
+    getDigits(tmp,buf[0],buf+2,len-2,isup && isup->ignoreUnknownAddrSignals());
     DDebug(isup,DebugAll,"decodeDigits decoded %s='%s' inn/ni=%u nai=%u plan=%u pres=%u scrn=%u",
 	param->name,tmp.c_str(),buf[1] >> 7,nai,plan,pres,scrn);
     String preName(prefix + param->name);
@@ -406,7 +409,7 @@ static bool decodeSubseq(const SS7ISUP* isup, NamedList& list, const IsupParam* 
     if (len < 1)
 	return false;
     String tmp;
-    getDigits(tmp,buf[0],buf+1,len-1);
+    getDigits(tmp,buf[0],buf+1,len-1,isup && isup->ignoreUnknownAddrSignals());
     DDebug(isup,DebugAll,"decodeSubseq decoded %s='%s'",param->name,tmp.c_str());
     list.addParam(prefix+param->name,tmp);
     return true;
@@ -3014,6 +3017,7 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
       m_ignoreGRSSingle(false),
       m_ignoreCGBSingle(false),
       m_ignoreCGUSingle(false),
+      m_ignoreUnkDigits(true),
       m_l3LinkUp(false),
       m_t1Interval(15000),               // Q.764 T1 15..60 seconds
       m_t5Interval(300000),              // Q.764 T5 5..15 minutes
@@ -3113,6 +3117,7 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
     m_ignoreGRSSingle = params.getBoolValue("ignore-grs-single");
     m_ignoreCGBSingle = params.getBoolValue("ignore-cgb-single");
     m_ignoreCGUSingle = params.getBoolValue("ignore-cgu-single");
+    m_ignoreUnkDigits = params.getBoolValue("ignore-unknown-digits",true);
     m_defaultSls = params.getIntValue("sls",s_dict_callSls,m_defaultSls);
     m_maxCalledDigits = params.getIntValue("maxcalleddigits",m_maxCalledDigits);
     if (m_maxCalledDigits < 1)
@@ -3177,6 +3182,7 @@ bool SS7ISUP::initialize(const NamedList* config)
 	m_ignoreGRSSingle = config->getBoolValue("ignore-grs-single");
 	m_ignoreCGBSingle = config->getBoolValue("ignore-cgb-single");
 	m_ignoreCGUSingle = config->getBoolValue("ignore-cgu-single");
+        m_ignoreUnkDigits = config->getBoolValue("ignore-unknown-digits",true);
 	m_defaultSls = config->getIntValue("sls",s_dict_callSls,m_defaultSls);
         // Timers
 	m_t9Interval = SignallingTimer::getInterval(*config,"t9",ISUP_T9_MINVAL,0,ISUP_T9_MAXVAL,true);

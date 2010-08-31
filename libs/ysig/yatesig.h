@@ -7802,6 +7802,13 @@ public:
 	{ return m_format; }
 
     /**
+     * Check if the message parser of this controller should ignore unknown digits encoding
+     * @return True if unknown digits are ignored
+     */
+    inline bool ignoreUnknownAddrSignals() const
+	{ return m_ignoreUnkDigits; }
+
+    /**
      * Append a point code to the list of point codes serviced by this controller
      *  if not already there. Set default point code if requested.
      * If the list is empty, the default point code is set to the first point code added
@@ -8095,6 +8102,7 @@ private:
     bool m_ignoreGRSSingle;              // Ignore (drop) GRS with range 0 (1 circuit affected)
     bool m_ignoreCGBSingle;              // Ignore (drop) CGB with range 0 (1 circuit in map)
     bool m_ignoreCGUSingle;              // Ignore (drop) CGU with range 0 (1 circuit in map)
+    bool m_ignoreUnkDigits;              // Check if the message parser should ignore unknown digits encoding
     bool m_l3LinkUp;                     // Flag indicating the availability of a Layer3 data link
     u_int64_t m_t1Interval;              // Q.764 T1 timer interval
     u_int64_t m_t5Interval;              // Q.764 T5 timer interval

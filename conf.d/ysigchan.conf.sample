@@ -555,3 +555,11 @@
 ; sendtfp: boolean: Send Transfer Prohibited (TFP) SNM messages
 ; This setting applies only to transfer function (STP operation mode)
 ;sendtfp=yes
+
+; testroutes: integer: Signaling Route Test timer (T10) in milliseconds
+; The minimum value is 10000 (10s), Q.704 recommends 30s to 60s
+; A value of zero disables periodical route tests
+; testroutes=50000
+
+; testrestricted: boolean: Test restricted routes too (national option)
+;testrestricted=no

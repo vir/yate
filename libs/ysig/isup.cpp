@@ -4674,9 +4674,13 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		m->params().addParam("RangeAndStatus.map",map);
 		transmitMessage(m,label,true);
 		// Replace circuits for outgoing calls in initial state
-		// Terminate incoming
-		if (block)
-		    cicHwBlocked(msg->cic(),map);
+		// Terminate all others when blocking for hw failure
+		if (block) {
+		    if (hwFail)
+			cicHwBlocked(msg->cic(),map);
+		    else
+			replaceCircuit(msg->cic(),map);
+		}
 	    }
 	    break;
 	case SS7MsgISUP::UEC: // Unequipped CIC (national use)

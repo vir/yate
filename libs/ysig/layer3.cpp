@@ -342,6 +342,9 @@ bool SS7Layer3::unavailable(const SS7MSU& msu, const SS7Label& label, int sls, u
     // send a SNM UPU (User Part Unavailable, Q.704 15.17.2)
     unsigned char llen = SS7PointCode::length(label.type());
     SS7Label lbl(label,label.sls(),0);
+    unsigned int local = getLocal(label.type());
+    if (local)
+	lbl.opc().unpack(label.type(),local);
     SS7MSU answer(SS7MSU::SNM,msu.getSSF(),lbl,0,llen+2);
     unsigned char* d = answer.getData(lbl.length()+1,llen+2);
     if (!d)

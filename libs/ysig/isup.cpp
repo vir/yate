@@ -2054,9 +2054,10 @@ static void getMsgCompat(SS7MsgISUP* msg, bool& release, bool& cnf)
  */
 SS7ISUPCall::SS7ISUPCall(SS7ISUP* controller, SignallingCircuit* cic,
 	const SS7PointCode& local, const SS7PointCode& remote, bool outgoing,
-	int sls, const char* range)
+	int sls, const char* range, bool testCall)
     : SignallingCall(controller,outgoing),
     m_state(Null),
+    m_testCall(testCall),
     m_circuit(cic),
     m_cicRange(range),
     m_terminate(false),
@@ -4397,7 +4398,8 @@ void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 	}
 	String s(msg->cic());
 	if (reserveCircuit(circuit,0,flags,&s,true)) {
-	    call = new SS7ISUPCall(this,circuit,label.dpc(),label.opc(),false,label.sls());
+	    call = new SS7ISUPCall(this,circuit,label.dpc(),label.opc(),false,label.sls(),
+		0,msg->type() == SS7MsgISUP::CCR);
 	    m_calls.append(call);
 	    break;
 	}
@@ -4763,23 +4765,46 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    break;
 	default:
 	    impl = false;
-	    bool cnf = false;
-	    bool release = false;
-	    getMsgCompat(msg,release,cnf);
-	    if (cnf || release) {
-		reason = "unknown-message";
-		unsigned char type = msg->type();
-		diagnostic.hexify(&type,1);
-		if (release) {
-		    SS7ISUPCall* call = findCall(msg->cic());
-		    if (call)
-			call->setTerminate(true,reason,diagnostic,m_location);
-		    else
-			transmitRLC(this,msg->cic(),label,true,reason,diagnostic,m_location);
-		    // Avoid sending CNF
-		    reason = 0;
+	    // Q.764 2.9.5.1: call in Setup state:
+	    // incoming: drop it and reset cic
+	    // outgoing: repeat IAM and reset cic
+	    lock();
+	    SS7ISUPCall* call = findCall(msg->cic());
+	    if (call)
+		call->ref();
+	    unlock();
+	    if (call && call->earlyState()) {
+		Debug(this,DebugNote,
+		    "Received unexpected message for call %u (%p) in initial state",
+		    msg->cic(),call);
+		if (call->outgoing())
+		    replaceCircuit(msg->cic(),String("1"),false);
+		else {
+		    call->setTerminate(false,"normal",0,m_location);
+		    SignallingCircuit* c = call->m_circuit;
+		    if (c && c->ref())
+			startCircuitReset(c,String::empty());
 		}
 	    }
+	    else {
+		bool cnf = false;
+		bool release = false;
+		getMsgCompat(msg,release,cnf);
+		if (cnf || release) {
+		    reason = "unknown-message";
+		    unsigned char type = msg->type();
+		    diagnostic.hexify(&type,1);
+		    if (release) {
+			if (call)
+			    call->setTerminate(true,reason,diagnostic,m_location);
+			else
+			    transmitRLC(this,msg->cic(),label,true,reason,diagnostic,m_location);
+			// Avoid sending CNF
+			reason = 0;
+		    }
+		}
+	    }
+	    TelEngine::destruct(call);
     }
     if (stopSGM) {
 	SS7ISUPCall* call = findCall(msg->cic());
@@ -5211,7 +5236,7 @@ SS7MsgISUP* SS7ISUP::buildCicBlock(SignallingCircuit* cic, bool block, bool forc
 }
 
 // Replace circuit for outgoing calls in Setup state
-void SS7ISUP::replaceCircuit(unsigned int cic, const String& map)
+void SS7ISUP::replaceCircuit(unsigned int cic, const String& map, bool rel)
 {
     ObjList calls;
     lock();
@@ -5234,7 +5259,12 @@ void SS7ISUP::replaceCircuit(unsigned int cic, const String& map)
 	SignallingCircuit* newCircuit = 0;
 	reserveCircuit(newCircuit,call->cicRange(),SignallingCircuit::LockLockedBusy);
 	if (!newCircuit) {
-	    call->setTerminate(true,"congestion",0,m_location);
+	    call->setTerminate(rel,"congestion",0,m_location);
+	    if (!rel) {
+		SignallingCircuit* c = call->m_circuit;
+		if (c && c->ref())
+		    startCircuitReset(c,String::empty());
+	    }
 	    continue;
 	}
 	lock();
@@ -5242,15 +5272,21 @@ void SS7ISUP::replaceCircuit(unsigned int cic, const String& map)
 	SS7MsgISUP* m = 0;
 	if (c && !c->locked(SignallingCircuit::Resetting)) {
 	    c->setLock(SignallingCircuit::Resetting);
-	    m = new SS7MsgISUP(SS7MsgISUP::REL,call->id());
-	    m->params().addParam("CauseIndicators","normal");
-	    m->params().addParam("CauseIndicators.location",m_location,false);
+	    m = new SS7MsgISUP(rel ? SS7MsgISUP::REL : SS7MsgISUP::RSC,call->id());
+	    if (rel) {
+		m->params().addParam("CauseIndicators","normal");
+		m->params().addParam("CauseIndicators.location",m_location,false);
+	    }
 	    m->ref();
 	}
 	unlock();
 	call->replaceCircuit(newCircuit,m);
 	if (m) {
-	    SignallingMessageTimer* t = new SignallingMessageTimer(m_t1Interval,m_t5Interval);
+	    SignallingMessageTimer* t = 0;
+	    if (rel)
+		t = new SignallingMessageTimer(m_t1Interval,m_t5Interval);
+	    else
+		t = new SignallingMessageTimer(m_t16Interval,m_t17Interval);
 	    t->message(m);
 	    m_pending.add(t);
 	}

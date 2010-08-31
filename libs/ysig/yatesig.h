@@ -7565,6 +7565,13 @@ public:
 	{ return m_state; }
 
     /**
+     * Check if the call is a not test one in early state
+     * @return True if this a non test call in early state 
+     */
+    inline bool earlyState() const
+	{ return m_state <= Setup && !m_testCall; }
+
+    /**
      * Get the call's circuit range
      * @return The call's circuit range
      */
@@ -7626,10 +7633,11 @@ protected:
      * @param outgoing Call direction
      * @param sls Optional link for the routing label
      * @param range Optional range used to re-allocate a circuit for this call if necessary
+     * @param testCall True if this is a test call
      */
     SS7ISUPCall(SS7ISUP* controller, SignallingCircuit* cic,
 	const SS7PointCode& local, const SS7PointCode& remote, bool outgoing,
-	int sls = -1, const char* range = 0);
+	int sls = -1, const char* range = 0, bool testCall = false);
 
     /**
      * Release call. Stop timers. Send a RLC (Release Complete) message if it should terminate gracefully
@@ -7704,6 +7712,7 @@ private:
     void setOverlapped(bool on, bool numberComplete = true);
 
     State m_state;                       // Call state
+    bool m_testCall;                     // Test only call
     SignallingCircuit* m_circuit;        // Circuit reserved for this call
     String m_cicRange;                   // The range used to re(alloc) a circuit
     SS7Label m_label;                    // The routing label for this call
@@ -8049,7 +8058,8 @@ private:
     // Return built message to be sent on success
     SS7MsgISUP* buildCicBlock(SignallingCircuit* cic, bool block, bool force = false);
     // Replace circuit for outgoing calls in Setup state
-    void replaceCircuit(unsigned int cic, const String& map);
+    // Send REL/RSC before repeat attempt
+    void replaceCircuit(unsigned int cic, const String& map, bool rel = true);
 
     SS7PointCode::Type m_type;           // Point code type of this call controller
     ObjList m_pointCodes;                // Point codes serviced by this call controller

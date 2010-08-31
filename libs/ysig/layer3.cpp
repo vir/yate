@@ -364,11 +364,13 @@ SS7Route* SS7Layer3::findRoute(SS7PointCode::Type type, unsigned int packed, SS7
     if (index >= YSS7_PCTYPE_COUNT)
 	return 0;
     Lock lock(m_routeMutex);
+    XDebug(this,DebugAll,"findRoute type=%s packed=%u states=0x%02x [%p]",
+	SS7PointCode::lookup(type),packed,states,this);
     for (ObjList* o = m_route[index].skipNull(); o; o = o->skipNext()) {
 	SS7Route* route = static_cast<SS7Route*>(o->get());
-	XDebug(this,DebugAll,"findRoute type=%s packed=%u. Check %u [%p]",
-	    SS7PointCode::lookup(type),packed,route->m_packed,this);
-	if (route->m_packed == packed && ((route->state() | states) != 0))
+	XDebug(this,DebugAll,"findRoute candidate %u state=0x%02X [%p]",
+	    route->packed(),route->state(),this);
+	if (route->packed() == packed && ((route->state() & states) != 0))
 	    return route;
     }
     return 0;

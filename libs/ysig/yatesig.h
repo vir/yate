@@ -5210,18 +5210,19 @@ public:
      * Route state
      */
     enum State {
-	Unknown       = 0x00,
+	Unknown       = 0x80,
 	// Standard route states
 	Prohibited    = 0x01,
 	Restricted    = 0x02,
 	Congestion    = 0x04,
 	Allowed       = 0x08,
 	// Masks for typical combinations
-	NotAllowed    = 0xf7,
-	NotCongested  = 0xf8,
-	NotRestricted = 0xfc,
-	NotProhibited = 0xfe,
-        AnyState      = 0xff
+	NotAllowed    = 0x77,
+	NotCongested  = 0x78,
+	NotRestricted = 0x7c,
+	NotProhibited = 0x7e,
+	KnownState    = 0x7f,
+	AnyState      = 0xff
     };
 
     /**

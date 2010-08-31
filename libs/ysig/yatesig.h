@@ -5723,6 +5723,15 @@ protected:
     virtual bool unavailable(const SS7MSU& msu, const SS7Label& label, int sls, unsigned char cause = 0);
 
     /**
+     * Send a Transfer Prohibited if an unexpected MSU is received in STP mode
+     * @param ssf Subservice Field of received MSU
+     * @param label Routing label of the received MSU
+     * @param sls Signalling Link the MSU was received from
+     * @return True if the TFP was sent
+     */
+    virtual bool prohibited(unsigned char ssf, const SS7Label& label, int sls);
+
+    /**
      * Find a route having the specified point code type and packed point code.
      * This method is thread safe
      * @param type The point code type used to choose the list of packed point codes
@@ -6159,6 +6168,7 @@ private:
     int routeMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls, SS7Route::State states);
     bool m_checkRoutes;
     bool m_sendUnavail;
+    bool m_sendProhibited;
     unsigned long m_rxMsu;
     unsigned long m_txMsu;
     unsigned long m_fwdMsu;

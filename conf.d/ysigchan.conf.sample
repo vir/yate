@@ -549,5 +549,9 @@
 ; According to the standard the restart is performed on first link activation
 ;autostart=no
 
-; sendupu: boolean: Send User Part Unavailable SNM messages
+; sendupu: boolean: Send User Part Unavailable (UPU) SNM messages
 ;sendupu=yes
+
+; sendtfp: boolean: Send Transfer Prohibited (TFP) SNM messages
+; This setting applies only to transfer function (STP operation mode)
+;sendtfp=yes

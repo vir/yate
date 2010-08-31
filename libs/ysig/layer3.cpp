@@ -355,6 +355,25 @@ bool SS7Layer3::unavailable(const SS7MSU& msu, const SS7Label& label, int sls, u
     return transmitMSU(answer,lbl,sls) >= 0;
 }
 
+bool SS7Layer3::prohibited(unsigned char ssf, const SS7Label& label, int sls)
+{
+    DDebug(this,DebugInfo,"SS7Layer3::prohibited(%u,%p,%d) [%p]",
+	ssf,&label,sls,this);
+    // send a SNM TFP (Transfer Prohibited, Q.704 13.2)
+    unsigned char llen = SS7PointCode::length(label.type());
+    SS7Label lbl(label,label.sls(),0);
+    unsigned int local = getLocal(label.type());
+    if (local)
+	lbl.opc().unpack(label.type(),local);
+    SS7MSU answer(SS7MSU::SNM,ssf,lbl,0,llen+1);
+    unsigned char* d = answer.getData(lbl.length()+1,llen+1);
+    if (!d)
+	return false;
+    d[0] = SS7MsgSNM::TFP;
+    label.dpc().store(label.type(),d+1);
+    return transmitMSU(answer,lbl,sls) >= 0;
+}
+
 // Find a route having the specified point code type and packed point code
 SS7Route* SS7Layer3::findRoute(SS7PointCode::Type type, unsigned int packed, SS7Route::State states)
 {
@@ -998,8 +1017,15 @@ bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
     // then try to minimally process MTN and SNM MSUs
     if (maintenance(msu,label,sls) || management(msu,label,sls))
 	return true;
-    // if nothing worked, report the unavailable regular user part
-    return (msu.getSIF() > SS7MSU::MTNS) && unavailable(msu,label,sls,handled.upu());
+    if (msu.getSIF() <= SS7MSU::MTNS)
+	return false;
+    switch (handled) {
+	case HandledMSU::NoAddress:
+	    return prohibited(msu.getSSF(),label,sls);
+	default:
+	    // if nothing worked, report the unavailable regular user part
+	    return unavailable(msu,label,sls,handled.upu());
+    }
 }
 
 bool SS7MTP3::recoveredMSU(const SS7MSU& msu, SS7Layer2* link, int sls)

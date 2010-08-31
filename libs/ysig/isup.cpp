@@ -2480,7 +2480,7 @@ SignallingEvent* SS7ISUPCall::releaseComplete(bool final, SS7MsgISUP* msg, const
     if (m_state == Released)
 	return 0;
     if (isup() && m_gracefully) {
-	int sls = transmitRLC(isup(),id(),m_label,false,m_reason,0,isup()->location());
+	int sls = transmitRLC(isup(),id(),m_label,false);
 	if (sls != -1 && m_label.sls() == 255)
 	    m_label.setSls(sls);
     }

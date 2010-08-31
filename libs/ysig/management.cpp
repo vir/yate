@@ -335,6 +335,19 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 
     String addr;
     addr << label;
+    SS7Label lbl(label,label.sls(),0);
+    switch (msg->group()) {
+	case SS7MsgSNM::CHM:
+	case SS7MsgSNM::ECM:
+	case SS7MsgSNM::MIM:
+	    // check if the addressed link exists
+	    if (router && !router->inhibit(lbl,0,0)) {
+		Debug(this,DebugMild,"Received %s for inexistent %s on SLS %d [%p]",
+		    msg->name(),addr.c_str(),sls,this);
+		return false;
+	    }
+    }
+
     if (msg->type() == SS7MsgSNM::TFP ||
 	msg->type() == SS7MsgSNM::TFR ||
 	msg->type() == SS7MsgSNM::TFA) {
@@ -396,7 +409,6 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
 	if (!m_changeMsgs)
 	    return true;
-	SS7Label lbl(label,label.sls(),0);
 	if (inhibit(lbl,SS7Layer2::Inactive)) {
 	    String link;
 	    link << msg->params().getValue("pointcodetype") << "," << lbl;
@@ -482,7 +494,6 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
 	if (!m_changeMsgs)
 	    return true;
-	SS7Label lbl(label,label.sls(),0);
 	if (inhibit(lbl,0,SS7Layer2::Inactive)) {
 	    String link;
 	    link << msg->params().getValue("pointcodetype") << "," << lbl;
@@ -532,7 +543,6 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
     }
     else if (msg->type() == SS7MsgSNM::LIN) {
 	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
-	SS7Label lbl(label,label.sls(),0);
 	if (router) {
 	    bool ok = router->inhibit(lbl,SS7Layer2::Remote,0,true);
 	    unsigned char data = ok ? SS7MsgSNM::LIA : SS7MsgSNM::LID;
@@ -586,7 +596,6 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
     }
     else if (msg->type() == SS7MsgSNM::LUN) {
 	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
-	SS7Label lbl(label,label.sls(),0);
 	if (router && router->inhibit(lbl,0,SS7Layer2::Remote)) {
 	    lock();
 	    for (ObjList* l = m_pending.skipNull(); l; l = l->skipNext()) {
@@ -606,7 +615,6 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
     }
     else if (msg->type() == SS7MsgSNM::LFU) {
 	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
-	SS7Label lbl(label,label.sls(),0);
 	static unsigned char data = SS7MsgSNM::LUN;
 	int global = 0;
 	// if link is locally inhibited execute the complete procedure
@@ -616,7 +624,6 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
     }
     else if (msg->type() == SS7MsgSNM::LRT) {
 	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
-	SS7Label lbl(label,label.sls(),0);
 	if (router && router->inhibited(lbl,SS7Layer2::Local))
 	    return true;
 	static unsigned char data = SS7MsgSNM::LUN;
@@ -624,7 +631,6 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
     }
     else if (msg->type() == SS7MsgSNM::LLT) {
 	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
-	SS7Label lbl(label,label.sls(),0);
 	if (router && router->inhibited(lbl,SS7Layer2::Remote))
 	    return true;
 	static unsigned char data = SS7MsgSNM::LFU;

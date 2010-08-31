@@ -6174,7 +6174,10 @@ private:
     void disable();
     void sendRestart(const SS7Layer3* network = 0);
     void checkRoutes(const SS7Layer3* noResume = 0);
+    void sendRouteTest();
     int routeMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls, SS7Route::State states);
+    SignallingTimer m_routeTest;
+    bool m_testRestricted;
     bool m_checkRoutes;
     bool m_sendUnavail;
     bool m_sendProhibited;

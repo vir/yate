@@ -41,6 +41,8 @@ static const TokenDict s_dict_control[] = {
     { "congest", SS7MsgSNM::TFC },
     { "allow", SS7MsgSNM::TFA },
     { "allowed", SS7MsgSNM::TRA },
+    { "test-prohibited", SS7MsgSNM::RST },
+    { "test-restricted", SS7MsgSNM::RSR },
     { 0, 0 }
 };
 
@@ -57,8 +59,10 @@ static SS7Route::State routeState(SS7MsgSNM::Type cmd)
 {
     switch (cmd) {
 	case SS7MsgSNM::TFP:
+	case SS7MsgSNM::RST:
 	    return SS7Route::Prohibited;
 	case SS7MsgSNM::TFR:
+	case SS7MsgSNM::RSR:
 	    return SS7Route::Restricted;
 	case SS7MsgSNM::TFC:
 	    return SS7Route::Congestion;
@@ -203,7 +207,7 @@ SS7Router::SS7Router(const NamedList& params)
     : SignallingComponent(params.safe("SS7Router"),&params),
       Mutex(true,"SS7Router"),
       m_changes(0), m_transfer(false), m_phase2(false), m_started(false),
-      m_restart(0), m_isolate(0),
+      m_restart(0), m_isolate(0), m_routeTest(0), m_testRestricted(false),
       m_checkRoutes(false), m_sendUnavail(true), m_sendProhibited(true),
       m_rxMsu(0), m_txMsu(0), m_fwdMsu(0),
       m_mngmt(0), m_maint(0)
@@ -221,6 +225,8 @@ SS7Router::SS7Router(const NamedList& params)
     m_sendProhibited = params.getBoolValue("sendtfp",m_sendProhibited);
     m_restart.interval(params,"starttime",5000,(m_transfer ? 60000 : 10000),false);
     m_isolate.interval(params,"isolation",500,1000,false);
+    m_routeTest.interval(params,"testroutes",10000,50000,true),
+    m_testRestricted = params.getBoolValue("testrestricted",m_testRestricted);
     loadLocalPC(params);
 }
 
@@ -376,6 +382,7 @@ bool SS7Router::restart()
     m_checkRoutes = true;
     m_isolate.stop();
     m_restart.start();
+    m_routeTest.stop();
     return true;
 }
 
@@ -388,6 +395,7 @@ void SS7Router::disable()
     m_checkRoutes = false;
     m_isolate.stop();
     m_restart.stop();
+    m_routeTest.stop();
 }
 
 // Attach a SS7 Layer 3 (network) to the router
@@ -495,7 +503,7 @@ void SS7Router::detach(SS7Layer4* service)
 void SS7Router::timerTick(const Time& when)
 {
     Lock mylock(this);
-    if (m_isolate.timeout(when.msecNow())) {
+    if (m_isolate.timeout(when.msec())) {
 	Debug(this,DebugWarn,"Node is isolated and down! [%p]",this);
 	m_phase2 = false;
 	m_started = false;
@@ -503,11 +511,17 @@ void SS7Router::timerTick(const Time& when)
 	m_restart.stop();
 	return;
     }
-    if (m_started)
+    if (m_started) {
+	if (m_routeTest.timeout(when.msec())) {
+	    m_routeTest.start(when.msec());
+	    mylock.drop();
+	    sendRouteTest();
+	}
 	return;
+    }
     // MTP restart actions
     if (m_transfer && !m_phase2) {
-	if (m_restart.timeout(when.msecNow() + 5000))
+	if (m_restart.timeout(when.msec() + 5000))
 	    restart2();
     }
     else if (m_restart.timeout(when.msecNow())) {
@@ -530,6 +544,8 @@ void SS7Router::timerTick(const Time& when)
 	    if (p && *p)
 		(*p)->notify(this,-1);
 	}
+	if (m_routeTest.interval())
+	    m_routeTest.start(when.msec());
     }
 }
 
@@ -739,6 +755,79 @@ void SS7Router::sendRestart(const SS7Layer3* network)
 		m_mngmt->controlExecute(ctl);
 		if (network)
 		    break;
+	    }
+	}
+    }
+}
+
+void SS7Router::sendRouteTest()
+{
+    if (!m_mngmt)
+	return;
+    Lock lock(m_routeMutex);
+    for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
+	SS7PointCode::Type type = static_cast<SS7PointCode::Type>(i+1);
+	const ObjList* l = getRoutes(type);
+	if (l)
+	    l = l->skipNull();
+	for (; l; l = l->skipNext()) {
+	    const SS7Route* r = static_cast<const SS7Route*>(l->get());
+	    // adjacent routes are not tested this way
+	    if (!r->priority())
+		continue;
+	    const char* oper = 0;
+	    switch (r->state()) {
+		case SS7Route::Prohibited:
+		    oper = "test-prohibited";
+		    break;
+		case SS7Route::Restricted:
+		    if (!m_testRestricted)
+			continue;
+		    oper = "test-restricted";
+		    break;
+		default:
+		    continue;
+	    }
+	    unsigned int local = getLocal(type);
+	    for (ObjList* nl = r->m_networks.skipNull(); nl; nl = nl->skipNext()) {
+		GenPointer<SS7Layer3>* n = static_cast<GenPointer<SS7Layer3>*>(nl->get());
+		if (!(*n)->operational())
+		    continue;
+		unsigned int netLocal = (*n)->getLocal(type);
+		if (!netLocal)
+		    netLocal = local;
+		if (!netLocal)
+		    continue;
+		unsigned int remote = 0;
+		for (ObjList* l2 = getRoutes(type); l2; l2 = l2->next()) {
+		    const SS7Route* r2 = static_cast<const SS7Route*>(l2->get());
+		    if (!r2)
+			continue;
+		    if (r2->priority() || !r2->hasNetwork(*n))
+			continue;
+		    remote = r2->packed();
+		    break;
+		}
+		if (!remote)
+		    continue;
+		// use the router's local address at most once
+		if (local == netLocal)
+		    local = 0;
+		NamedList* ctl = m_mngmt->controlCreate(oper);
+		if (!ctl)
+		    break;
+		String addr;
+		addr << SS7PointCode::lookup(type) <<
+		    "," << SS7PointCode(type,netLocal) <<
+		    "," << SS7PointCode(type,remote);
+		String dest;
+		dest << SS7PointCode(type,r->packed());
+		DDebug(this,DebugAll,"Sending %s %s %s [%p]",
+		    oper,dest.c_str(),addr.c_str(),this);
+		ctl->addParam("address",addr);
+		ctl->addParam("destination",dest);
+		ctl->setParam("automatic",String::boolText(true));
+		m_mngmt->controlExecute(ctl);
 	    }
 	}
     }
@@ -1019,6 +1108,8 @@ bool SS7Router::control(NamedList& params)
 	case SS7MsgSNM::TFP:
 	case SS7MsgSNM::TFR:
 	case SS7MsgSNM::TFA:
+	case SS7MsgSNM::RST:
+	case SS7MsgSNM::RSR:
 	    {
 		SS7PointCode::Type type = SS7PointCode::lookup(params.getValue("pointcodetype"));
 		if (SS7PointCode::length(type) == 0) {
@@ -1034,6 +1125,36 @@ bool SS7Router::control(NamedList& params)
 		if (!pc.assign(*dest,type)) {
 		    err << "invalid destination: " << *dest ;
 		    break;
+		}
+		if (SS7MsgSNM::RST == cmd || SS7MsgSNM::RSR == cmd) {
+		    SS7Route::State state = getRouteState(type,pc);
+		    if (SS7Route::Unknown == state)
+			return false;
+		    if (routeState(static_cast<SS7MsgSNM::Type>(cmd)) == state)
+			return true;
+		    // a route state changed, advertise to the adjacent node
+		    if (!(m_transfer && m_started && m_mngmt))
+			return false;
+		    const char* addr = params.getValue("back-address");
+		    if (!addr)
+			addr = params.getValue("address");
+		    if (!addr) {
+			err = "missing 'address'";
+			break;
+		    }
+		    const char* oper = lookup(state,s_dict_states);
+		    if (!oper)
+			return false;
+		    NamedList* ctl = m_mngmt->controlCreate(oper);
+		    if (!ctl)
+			return false;
+		    DDebug(this,DebugAll,"Advertising %s %s to %s [%p]",
+			dest->c_str(),oper,addr,this);
+		    ctl->addParam("address",addr);
+		    ctl->addParam("destination",*dest);
+		    ctl->setParam("automatic",String::boolText(true));
+		    m_mngmt->controlExecute(ctl);
+		    return true;
 		}
 		if (!setRouteState(type,pc,routeState(static_cast<SS7MsgSNM::Type>(cmd)))) {
 		    if (!params.getBoolValue("automatic"))

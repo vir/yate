@@ -746,6 +746,7 @@ unsigned int SignallingUtils::dumpDataExt(const SignallingComponent* comp, Named
 	Debug(comp,DebugMild,"Utils::dumpDataExt invalid ext bits for %s (len=%u)",param,len);
 	return 0;
     }
+    count++;
     dumpData(comp,list,param,buf,count,sep);
     return count;
 }

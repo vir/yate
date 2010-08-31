@@ -394,6 +394,8 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	if (!s)
 	    return false;
 	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
+	if (!m_changeMsgs)
+	    return true;
 	SS7Label lbl(label,label.sls(),0);
 	if (inhibit(lbl,SS7Layer2::Inactive)) {
 	    String link;
@@ -437,6 +439,8 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	if (!len--)
 	    return false;
 	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
+	if (!m_changeMsgs)
+	    return true;
 	lock();
 	SnmPending* pend = 0;
 	for (ObjList* l = m_pending.skipNull(); l; l = l->skipNext()) {
@@ -476,6 +480,8 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	if (!s)
 	    return false;
 	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
+	if (!m_changeMsgs)
+	    return true;
 	SS7Label lbl(label,label.sls(),0);
 	if (inhibit(lbl,0,SS7Layer2::Inactive)) {
 	    String link;
@@ -497,6 +503,8 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	if (!len--)
 	    return false;
 	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
+	if (!m_changeMsgs)
+	    return true;
 	lock();
 	SnmPending* pend = 0;
 	for (ObjList* l = m_pending.skipNull(); l; l = l->skipNext()) {
@@ -687,6 +695,7 @@ bool SS7Management::control(NamedList& params)
     if (!(cmp && toString() == cmp))
 	return false;
 
+    m_changeMsgs = params.getBoolValue("changemsgs",m_changeMsgs);
     const String* addr = params.getParam("address");
     if (cmd < 0 || TelEngine::null(addr))
 	return SignallingComponent::control(params);
@@ -849,9 +858,9 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 	bool linkAvail[256];
 	bool force = true;
 	int txSls;
-	for (txSls = 0; txSls < 256; txSls++)
+	for (txSls = 0; m_changeMsgs && (txSls < 256); txSls++)
 	    linkAvail[txSls] = (txSls != sls) && !network->inhibited(txSls) && network->operational(txSls);
-	for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
+	for (unsigned int i = 0; m_changeMsgs && (i < YSS7_PCTYPE_COUNT); i++) {
 	    SS7PointCode::Type type = static_cast<SS7PointCode::Type>(i+1);
 	    unsigned int local = network->getLocal(type);
 	    if (!local && SS7Layer4::network())

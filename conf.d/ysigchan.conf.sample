@@ -532,10 +532,6 @@
 ; A boolean false value will disable SS7 Management (unlikely)
 ;management=ss7snm
 
-; maintenance: string: Name of the SS7 Maintenance component to create
-; A boolean false value will disable SS7 Maintenance (unlikely)
-;maintenance=ss7mtn
-
 ; starttime: integer: MTP restart timer (T20) in milliseconds
 ; It is enforced to be at least 5000 (5s)
 ; Defaults to 60000 (Q.704 standard value) in STP mode or 10000 in SN mode

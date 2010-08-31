@@ -261,8 +261,12 @@ bool SS7Layer3::setRouteState(SS7PointCode::Type type, unsigned int packedPC, SS
 
 bool SS7Layer3::maintenance(const SS7MSU& msu, const SS7Label& label, int sls)
 {
-    if (msu.getSIF() != SS7MSU::MTN)
+    if (msu.getSIF() != SS7MSU::MTN && msu.getSIF() != SS7MSU::MTNS)
 	return false;
+    unsigned int local = getLocal(label.type());
+    if (local && label.dpc().pack(label.type()) != local)
+	return false;
+
     XDebug(this,DebugStub,"Possibly incomplete SS7Layer3::maintenance(%p,%p,%d) [%p]",
 	&msu,&label,sls,this);
     // Q.707 says test pattern length should be 1-15 but we accept 0 as well

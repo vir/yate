@@ -102,8 +102,6 @@ SignallingComponent* SignallingFactory::build(const String& type, const NamedLis
 	return new SS7Router(*name);
     else if (type == "SS7Management")
 	return new SS7Management(*name);
-    else if (type == "SS7Maintenance")
-	return new SS7Maintenance(*name);
     else if (type == "ISDNQ921")
 	return new ISDNQ921(*name,*name);
     else if (type == "ISDNQ931")

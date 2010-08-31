@@ -452,7 +452,6 @@ public:
 	SigSS7Layer3      = 0x12 | SigTopMost,
 	SigSS7Router      = 0x13 | SigDefaults,
 	SigSS7Management  = 0x14 | SigDefaults,
-	SigSS7Maintenance = 0x15 | SigDefaults,
 	SigSS7Testing     = 0x16 | SigTopMost,
 	SigSS7M2PA        = 0x21 | SigOnDemand,
 	SigSS7M2UA        = 0x22 | SigOnDemand,
@@ -638,7 +637,6 @@ const TokenDict SigFactory::s_compNames[] = {
     { "ss7-mtp2",         SigSS7Layer2 },
     { "ss7-mtp3",         SigSS7Layer3 },
     { "ss7-snm",          SigSS7Management },
-    { "ss7-mtn",          SigSS7Maintenance },
     { "ss7-test",         SigSS7Testing },
     { "ss7-m2pa",         SigSS7M2PA },
     { "ss7-m2ua",         SigSS7M2UA },
@@ -673,7 +671,6 @@ const TokenDict SigFactory::s_compClass[] = {
     MAKE_CLASS(SS7Layer2),
     MAKE_CLASS(SS7Layer3),
     MAKE_CLASS(SS7Management),
-    MAKE_CLASS(SS7Maintenance),
     MAKE_CLASS(SS7Testing),
     MAKE_CLASS(SS7M2PA),
     MAKE_CLASS(SS7M2UA),
@@ -746,8 +743,6 @@ SignallingComponent* SigFactory::create(const String& type, const NamedList& nam
 	    return new SS7Router(*config);
 	case SigSS7Management:
 	    return new SS7Management(*config);
-	case SigSS7Maintenance:
-	    return new SS7Maintenance(*config);
 	case SigSS7Testing:
 	    return new SS7Testing(*config);
     }

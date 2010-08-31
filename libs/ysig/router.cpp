@@ -210,7 +210,7 @@ SS7Router::SS7Router(const NamedList& params)
       m_restart(0), m_isolate(0), m_routeTest(0), m_testRestricted(false),
       m_checkRoutes(false), m_sendUnavail(true), m_sendProhibited(true),
       m_rxMsu(0), m_txMsu(0), m_fwdMsu(0),
-      m_mngmt(0), m_maint(0)
+      m_mngmt(0)
 {
 #ifdef DEBUG
     if (debugAt(DebugAll)) {
@@ -270,27 +270,6 @@ bool SS7Router::initialize(const NamedList* config)
 		mConfig = &params;
 	    }
 	    attach(m_mngmt = YSIGCREATE(SS7Management,&params));
-	}
-	param = config->getParam("maintenance");
-	name = "ss7mtn";
-	if (param) {
-	    if (*param && !param->toBoolean(false))
-		name = param->c_str();
-	}
-	else
-	    param = config;
-	if (param->toBoolean(true)) {
-	    NamedPointer* ptr = YOBJECT(NamedPointer,param);
-	    NamedList* mConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
-	    NamedList params(name);
-	    params.addParam("basename",name);
-	    if (mConfig)
-		params.copyParams(*mConfig);
-	    else {
-		params.copySubParams(*config,params + ".");
-		mConfig = &params;
-	    }
-	    attach(m_maint = YSIGCREATE(SS7Maintenance,&params));
 	}
     }
     return m_started || (config && !config->getBoolValue("autostart")) || restart();
@@ -487,8 +466,6 @@ void SS7Router::detach(SS7Layer4* service)
 	m_layer4.remove(p,false);
 	if (service == (SS7Layer4*)m_mngmt)
 	    m_mngmt = 0;
-	if (service == (SS7Layer4*)m_maint)
-	    m_maint = 0;
 	const char* name = 0;
 	if (engine() && engine()->find(service)) {
 	    name = service->toString().safe();
@@ -1047,7 +1024,7 @@ void SS7Router::notify(SS7Layer3* network, int sls)
 	L4Pointer* p = static_cast<L4Pointer*>(l->get());
 	if (p && *p) {
 	    SS7Layer4* l4 = *p;
-	    if (useMe && (l4 != m_mngmt) && (l4 != m_maint))
+	    if (useMe && (l4 != m_mngmt))
 		l4->notify(this,-1);
 	    else
 		l4->notify(network,sls);

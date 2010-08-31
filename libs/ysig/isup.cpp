@@ -2243,6 +2243,7 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 	    case Testing:
 	    case Setup:
 		if (timeout(isup(),this,m_iamTimer,when,"IAM")) {
+		    m_contTimer.stop();
 		    if (m_circuitTesting) {
 			if (m_iamMsg)
 			    setReason("bearer-cap-not-available",0);
@@ -2252,6 +2253,7 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 			}
 		    }
 		    m_lastEvent = release();
+		    break;
 		}
 		if (timeout(isup(),this,m_contTimer,when,"T27",false)) {
 		    m_gracefully = false;

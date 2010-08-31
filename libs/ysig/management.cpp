@@ -169,8 +169,10 @@ SS7MsgSNM* SS7MsgSNM::parse(SS7Management* receiver, unsigned char type,
     if (!(buf && len))
 	return msg;
     do {
-	// TFP,TFR,TFA: Q.704 15.7 The must be at lease 2 bytes in buffer
-	if (type == TFP || type == TFR || type == TFA) {
+	// TFP,TFR,TFA: Q.704 15.7, RST,RSR: Q.704 15.10
+	// There must be at least 2 bytes in buffer
+	if (type == TFP || type == TFR || type == TFA ||
+	    type == RST || type == RSR) {
 	    // 2 bytes destination
 	    SS7PointCode pc;
 	    unsigned char spare;
@@ -336,6 +338,23 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
     String addr;
     addr << label;
     SS7Label lbl(label,label.sls(),0);
+    {
+	String tmp;
+	tmp << SS7PointCode::lookup(label.type()) << "," << addr;
+	// put the addresses with commas as we need them
+	char* fix = const_cast<char*>(tmp.c_str());
+	for (; *fix; fix++)
+	    if (':' == *fix)
+		*fix = ',';
+	msg->params().addParam("address",tmp);
+	tmp.clear();
+	tmp << SS7PointCode::lookup(label.type()) << "," << lbl;
+	fix = const_cast<char*>(tmp.c_str());
+	for (; *fix; fix++)
+	    if (':' == *fix)
+		*fix = ',';
+	msg->params().addParam("back-address",tmp);
+    }
     switch (msg->group()) {
 	case SS7MsgSNM::CHM:
 	case SS7MsgSNM::ECM:
@@ -350,30 +369,18 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 
     if (msg->type() == SS7MsgSNM::TFP ||
 	msg->type() == SS7MsgSNM::TFR ||
-	msg->type() == SS7MsgSNM::TFA) {
+	msg->type() == SS7MsgSNM::TFA ||
+	msg->type() == SS7MsgSNM::RST ||
+	msg->type() == SS7MsgSNM::RSR) {
 	String dest = msg->params().getValue("destination");
 	if (!dest.null()) {
-	    if (debugAt(DebugInfo)) {
-		const char* status = (msg->type() == SS7MsgSNM::TFP) ? "prohibited" :
-		    ((msg->type() == SS7MsgSNM::TFA) ? "allowed" : "restricted");
-		Debug(this,DebugInfo,"%s (label=%s): Traffic is %s to dest=%s [%p]",
-		    msg->name(),addr.c_str(),status,dest.c_str(),this);
-	    }
-	    if (router) {
-		NamedList* ctrl = router->controlCreate();
+	    const char* oper = lookup(msg->type(),s_dict_control);
+	    Debug(this,DebugInfo,"%s (label=%s): Traffic %s to dest=%s [%p]",
+		    msg->name(),addr.c_str(),oper,dest.c_str(),this);
+	    if (router && oper) {
+		NamedList* ctrl = router->controlCreate(oper);
 		if (ctrl) {
 		    ctrl->copyParams(msg->params());
-		    switch (msg->type()) {
-			case SS7MsgSNM::TFP:
-			    ctrl->setParam("operation","prohibit");
-			    break;
-			case SS7MsgSNM::TFR:
-			    ctrl->setParam("operation","restrict");
-			    break;
-			case SS7MsgSNM::TFA:
-			    ctrl->setParam("operation","allow");
-			    break;
-		    }
 		    ctrl->setParam("automatic",String::boolText(true));
 		    router->controlExecute(ctrl);
 		}

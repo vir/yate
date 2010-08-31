@@ -586,6 +586,7 @@ SS7MTP3::~SS7MTP3()
 unsigned int SS7MTP3::countLinks()
 {
     unsigned int total = 0;
+    unsigned int checked = 0;
     unsigned int active = 0;
     ObjList* l = &m_links;
     for (; l; l = l->next()) {
@@ -593,10 +594,16 @@ unsigned int SS7MTP3::countLinks()
 	if (!(p && *p))
 	    continue;
 	total++;
-	if ((*p)->operational() && !((*p)->inhibited()))
-	    active++;
+	if ((*p)->operational()) {
+	    if (!((*p)->inhibited(SS7Layer2::Unchecked))) {
+		checked++;
+		if (!((*p)->inhibited()))
+		    active++;
+	    }
+	}
     }
     m_total = total;
+    m_checked = checked;
     m_active = active;
     return active;
 }
@@ -898,14 +905,14 @@ void SS7MTP3::destroyed()
 
 int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 {
+    bool maint = (msu.getSIF() == SS7MSU::MTN) || (msu.getSIF() == SS7MSU::MTNS);
     Lock lock(this);
-    if (!m_active) {
+    if (!(maint || m_active)) {
 	Debug(this,DebugMild,"Could not transmit MSU, %s [%p]",
 	    m_total ? "all links are down" : "no data links attached",this);
 	return -1;
     }
 
-    bool maint = (msu.getSIF() == SS7MSU::MTN) || (msu.getSIF() == SS7MSU::MTNS);
     bool mgmt = (msu.getSIF() == SS7MSU::SNM);
     // TODO: support ranges with holes
     if (!maint && !mgmt)
@@ -939,6 +946,8 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 	    break;
 	}
     }
+    if (maint)
+	return -1;
 
     // Link not found or not operational: choose another one
     for (l = m_links.skipNull(); l; l = l->skipNext()) {
@@ -993,8 +1002,7 @@ bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
 	    if (label.sls() == sls) {
 		Debug(this,DebugNote,"Placing link %d '%s' in service, inhibitions 0x%02X [%p]",
 		    sls,link->toString().c_str(),link->inhibited(),this);
-		link->m_inhibited &= ~SS7Layer2::Unchecked;
-		notify(link);
+		link->inhibit(0,SS7Layer2::Unchecked);
 	    }
 	}
 	if (!maint && (msu.getSIF() != SS7MSU::SNM) &&
@@ -1061,14 +1069,8 @@ bool SS7MTP3::recoveredMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
 void SS7MTP3::notify(SS7Layer2* link)
 {
     Lock lock(this);
+    unsigned int chk = m_checked;
     unsigned int act = m_active;
-    countLinks();
-#ifdef DEBUG
-    String tmp;
-    if (link)
-	tmp << "Link '" << link->toString() << "' is " << (link->operational()?"":"not ") << "operational. ";
-    Debug(this,DebugInfo,"%sLinkset has %u/%u active links [%p]",tmp.null()?"":tmp.c_str(),m_active,m_total,this);
-#endif
     if (link) {
 	if (link->operational()) {
 	    if (link->inhibited(SS7Layer2::Unchecked)) {
@@ -1086,8 +1088,17 @@ void SS7MTP3::notify(SS7Layer2* link)
 		link->inhibit(0,SS7Layer2::Unchecked);
 	}
     }
+    countLinks();
+#ifdef DEBUG
+    String tmp;
+    if (link)
+	tmp << "Link '" << link->toString() << "' is " << (link->operational()?"":"not ") << "operational. ";
+    Debug(this,DebugInfo,"%sLinkset has %u/%u/%u active/checked links [%p]",
+	tmp.null()?"":tmp.c_str(),
+	m_active,m_checked,m_total,this);
+#endif
     // if operational status of a link changed notify upper layer
-    if (act != m_active) {
+    if (act != m_active || chk != m_checked) {
 	Debug(this,DebugNote,"Linkset is%s operational [%p]",
 	    (operational() ? "" : " not"),this);
 	// if we became inaccessible try to uninhibit or resume all other links

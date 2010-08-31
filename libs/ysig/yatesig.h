@@ -6845,6 +6845,13 @@ public:
 	{ return m_total; }
 
     /**
+     * Get the number of links that are checked by maintenance
+     * @return Number of MTN checked data links
+     */
+    inline unsigned int linksChecked() const
+	{ return m_checked; }
+
+    /**
      * Get the number of links that are currently operational
      * @return Number of operational data links
      */
@@ -6898,6 +6905,8 @@ private:
     ObjList m_links;
     // total links in linkset
     unsigned int m_total;
+    // checked links in linkset
+    unsigned int m_checked;
     // currently active links
     unsigned int m_active;
     // inhibited flag

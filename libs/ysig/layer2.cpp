@@ -236,7 +236,7 @@ bool SS7Layer2::inhibit(int setFlags, int clrFlags)
 	    control(Pause);
 	Debug(this,DebugNote,"Link inhibition changed 0x%02X -> 0x%02X [%p]",
 	    old,m_inhibited,this);
-	if (((old != 0) ^ (m_inhibited != 0)) && operational())
+	if (operational())
 	    notify();
 	if (cycle)
 	    control(Resume);

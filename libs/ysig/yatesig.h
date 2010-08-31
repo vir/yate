@@ -8060,6 +8060,9 @@ private:
     // Replace circuit for outgoing calls in Setup state
     // Send REL/RSC before repeat attempt
     void replaceCircuit(unsigned int cic, const String& map, bool rel = true);
+    // Handle circuit hw-fail block
+    // Replace cics for outgoing calls. Terminate incoming
+    void cicHwBlocked(unsigned int cic, const String& map);
 
     SS7PointCode::Type m_type;           // Point code type of this call controller
     ObjList m_pointCodes;                // Point codes serviced by this call controller

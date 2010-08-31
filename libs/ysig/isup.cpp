@@ -4244,6 +4244,8 @@ SignallingEvent* SS7ISUP::processCircuitEvent(SignallingCircuitEvent*& event,
 		    event->circuit()->hwLock(block,false,true,true);
 		    if (!m_lockTimer.started())
 			m_lockTimer.start();
+		    if (block)
+			cicHwBlocked(event->circuit()->code(),String("1"));
 		}
 		unlock();
 		ev = new SignallingEvent(event,call);
@@ -4664,8 +4666,9 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		m->params().addParam("RangeAndStatus.map",map);
 		transmitMessage(m,label,true);
 		// Replace circuits for outgoing calls in initial state
+		// Terminate incoming
 		if (block)
-		    replaceCircuit(msg->cic(),map);
+		    cicHwBlocked(msg->cic(),map);
 	    }
 	    break;
 	case SS7MsgISUP::UEC: // Unequipped CIC (national use)
@@ -5290,6 +5293,24 @@ void SS7ISUP::replaceCircuit(unsigned int cic, const String& map, bool rel)
 	    t->message(m);
 	    m_pending.add(t);
 	}
+    }
+}
+
+// Handle circuit hw-fail block
+// Replace cics for outgoing calls. Terminate incoming
+void SS7ISUP::cicHwBlocked(unsigned int cic, const String& map)
+{
+    Debug(this,DebugNote,"Circuit(s) in HW failure cic=%u map=%s",cic,map.c_str());
+    replaceCircuit(cic,map,true);
+    Lock lock(this);
+    for (unsigned int i = 0; i < map.length(); i++) {
+	if (map[i] != '1')
+	    continue;
+	SS7ISUPCall* call = findCall(cic + i);
+	// We've made retransmit attempt for outgoing
+	bool processed = !call || (call->outgoing() && call->state() == SS7ISUPCall::Setup);
+        if (!processed)
+	    call->setTerminate(true,"normal",0,m_location);
     }
 }
 

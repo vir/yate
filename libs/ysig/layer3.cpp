@@ -906,14 +906,14 @@ void SS7MTP3::destroyed()
 int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 {
     bool maint = (msu.getSIF() == SS7MSU::MTN) || (msu.getSIF() == SS7MSU::MTNS);
+    bool mgmt = (msu.getSIF() == SS7MSU::SNM);
     Lock lock(this);
-    if (!(maint || m_active)) {
+    if (!(maint || m_active || (mgmt && m_checked))) {
 	Debug(this,DebugMild,"Could not transmit MSU, %s [%p]",
 	    m_total ? "all links are down" : "no data links attached",this);
 	return -1;
     }
 
-    bool mgmt = (msu.getSIF() == SS7MSU::SNM);
     // TODO: support ranges with holes
     if (!maint && !mgmt)
 	sls = sls % m_total;
@@ -1113,8 +1113,19 @@ void SS7MTP3::notify(SS7Layer2* link)
 	    cnt++;
 	    if (l2->operational() &&
 		l2->inhibited(SS7Layer2::Local|SS7Layer2::Remote) &&
-		!l2->inhibited(SS7Layer2::Unchecked|SS7Layer2::Inactive))
-		l2->inhibit(0,SS7Layer2::Local|SS7Layer2::Remote);
+		!l2->inhibited(SS7Layer2::Unchecked|SS7Layer2::Inactive)) {
+		SS7Router* router = YOBJECT(SS7Router,user());
+		if (!router) {
+		    Debug(this,DebugMild,"No router, uninhibiting link %d '%s' [%p]",
+			l2->sls(),l2->toString().c_str(),this);
+		    l2->inhibit(0,SS7Layer2::Local|SS7Layer2::Remote);
+		    continue;
+		}
+		if (l2->inhibited(SS7Layer2::Local))
+		    router->uninhibit(this,l2->sls(),false);
+		if (l2->inhibited(SS7Layer2::Remote))
+		    router->uninhibit(this,l2->sls(),true);
+	    }
 	    else
 		l2->control(SS7Layer2::Resume);
 	}

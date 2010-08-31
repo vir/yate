@@ -6024,6 +6024,15 @@ public:
     void detach(SS7Layer4* service);
 
     /**
+     * Management request uninhibiting a signaling link
+     * @param network SS7 Layer 3 owning the link to uninhibit
+     * @param sls Signalink Link Selection
+     * @param remote True to uninhibit the remote side of the link
+     * @return True if an uninhibition request was sent
+     */
+    bool uninhibit(SS7Layer3* network, int sls, bool remote);
+
+    /**
      * Set and clear inhibition flags on a link of an attached network
      * @param link Signalling Link to modify identified by a routing label
      * @param setFlags Flag bits to set ORed together

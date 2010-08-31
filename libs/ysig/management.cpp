@@ -601,7 +601,7 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	    for (ObjList* l = m_pending.skipNull(); l; l = l->skipNext()) {
 		SnmPending* p = static_cast<SnmPending*>(l->get());
 		const unsigned char* ptr = p->msu().getData(p->length()+1,1);
-		if (!ptr || (ptr[0] != SS7MsgSNM::LRT))
+		if (!ptr || ((ptr[0] != SS7MsgSNM::LRT) && (ptr[0] != SS7MsgSNM::LFU)))
 		    continue;
 		if (!p->matches(label))
 		    continue;

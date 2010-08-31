@@ -789,6 +789,41 @@ void SS7Router::checkRoutes(const SS7Layer3* noResume)
     }
 }
 
+bool SS7Router::uninhibit(SS7Layer3* network, int sls, bool remote)
+{
+    if (!(network && m_mngmt))
+	return false;
+    bool ok = false;
+    const char* cmd = remote ? "link-force-uninhibit" : "link-uninhibit";
+    for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
+	SS7PointCode::Type type = static_cast<SS7PointCode::Type>(i+1);
+	unsigned int local = network->getLocal(type);
+	if (!local)
+	    local = getLocal(type);
+	if (!local)
+	    continue;
+	for (const ObjList* o = network->getRoutes(type); o; o = o->next()) {
+	    const SS7Route* r = static_cast<const SS7Route*>(o->get());
+	    if (!r)
+		continue;
+	    NamedList* ctl = m_mngmt->controlCreate(cmd);
+	    if (!ctl)
+		return false;
+	    String addr;
+	    addr << SS7PointCode::lookup(type) <<
+		"," << SS7PointCode(type,local) <<
+		"," << SS7PointCode(type,r->packed()) <<
+		"," << sls;
+	    DDebug(this,DebugAll,"Requesting %s %s [%p]",cmd,addr.c_str(),this);
+	    ctl->addParam("address",addr);
+	    ctl->setParam("automatic",String::boolText(true));
+	    m_mngmt->controlExecute(ctl);
+	    ok = true;
+	}
+    }
+    return ok;
+}
+
 bool SS7Router::inhibit(const SS7Label& link, int setFlags, int clrFlags, bool notLast)
 {
     int remote = link.dpc().pack(link.type());

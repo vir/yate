@@ -613,6 +613,27 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	    return transmitMSU(SS7MSU(msu.getSIO(),lbl,&lua,1),lbl,sls) >= 0;
 	}
     }
+    else if (msg->type() == SS7MsgSNM::LID) {
+	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
+	bool found = false;
+	lock();
+	for (ObjList* l = m_pending.skipNull(); l; l = l->skipNext()) {
+	    SnmPending* p = static_cast<SnmPending*>(l->get());
+	    const unsigned char* ptr = p->msu().getData(p->length()+1,1);
+	    if (!ptr || (ptr[0] != SS7MsgSNM::LIN))
+		continue;
+	    if (!p->matches(label))
+		continue;
+	    m_pending.remove(p);
+	    found = true;
+	    break;
+	}
+	unlock();
+	if (found)
+	    Debug(this,DebugWarn,"Remote refused to inhibit link %d",label.sls());
+	else
+	    Debug(this,DebugMild,"Unexpected %s %s [%p]",msg->name(),addr.c_str(),this);
+    }
     else if (msg->type() == SS7MsgSNM::LFU) {
 	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
 	static unsigned char data = SS7MsgSNM::LUN;

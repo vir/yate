@@ -804,7 +804,7 @@ bool SS7Router::uninhibit(SS7Layer3* network, int sls, bool remote)
 	    continue;
 	for (const ObjList* o = network->getRoutes(type); o; o = o->next()) {
 	    const SS7Route* r = static_cast<const SS7Route*>(o->get());
-	    if (!r)
+	    if (!r || r->priority())
 		continue;
 	    NamedList* ctl = m_mngmt->controlCreate(cmd);
 	    if (!ctl)

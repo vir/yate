@@ -989,7 +989,7 @@ static unsigned char encodeRedir(const SS7ISUP* isup, SS7MSU& msu,
 	ri[2] = (extra->getIntValue(preName+".counter") & 0x07) |
 	    ((extra->getIntValue(preName+".reason",s_dict_redir_reason,0) & 0x0f) << 4);
     }
-    DataBlock tmp(ri,2,false);
+    DataBlock tmp(ri,3,false);
     msu += tmp;
     tmp.clear(false);
     return ri[0];

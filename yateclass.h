@@ -2474,18 +2474,20 @@ class YATE_API ListIterator
     YNOCOPY(ListIterator); // no automatic copies please
 public:
     /**
-     * Constructor used to iterate trough an ObjList.
+     * Constructor used to iterate through an ObjList.
      * The image of the list is frozen at the time the constructor executes
      * @param list List to get the objects from
+     * @param offset First list element to iterate, will wrap around
      */
-    ListIterator(ObjList& list);
+    ListIterator(ObjList& list, int offset = 0);
 
     /**
-     * Constructor used to iterate trough a HashList.
+     * Constructor used to iterate through a HashList.
      * The image of the list is frozen at the time the constructor executes
      * @param list List to get the objects from
+     * @param offset First list element to iterate, will wrap around
      */
-    ListIterator(HashList& list);
+    ListIterator(HashList& list, int offset = 0);
 
     /**
      * Destructor - frees the allocated memory

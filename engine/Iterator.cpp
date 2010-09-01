@@ -24,7 +24,7 @@
 
 using namespace TelEngine;
 
-ListIterator::ListIterator(ObjList& list)
+ListIterator::ListIterator(ObjList& list, int offset)
     : m_objList(&list), m_hashList(0),
       m_objects(0), m_length(0), m_current(0)
 {
@@ -32,17 +32,18 @@ ListIterator::ListIterator(ObjList& list)
     if (!m_length)
 	return;
     m_objects = new GenObject* [m_length];
+    offset = (m_length - offset) % m_length;
     unsigned int i = 0;
     for (ObjList* l = list.skipNull(); i < m_length; l = l->skipNext()) {
 	if (!l)
 	    break;
-	m_objects[i++] = l->get();
+	m_objects[((i++) + offset) % m_length] = l->get();
     }
     while (i < m_length)
-	m_objects[i++] = 0;
+	m_objects[((i++) + offset) % m_length] = 0;
 }
 
-ListIterator::ListIterator(HashList& list)
+ListIterator::ListIterator(HashList& list, int offset)
     : m_objList(0), m_hashList(&list),
       m_objects(0), m_length(0), m_current(0)
 {
@@ -50,6 +51,7 @@ ListIterator::ListIterator(HashList& list)
     if (!m_length)
 	return;
     m_objects = new GenObject* [m_length];
+    offset = (m_length - offset) % m_length;
     unsigned int i = 0;
     for (unsigned int n = 0; n < list.length(); n++) {
 	ObjList* l = list.getList(n);
@@ -58,11 +60,11 @@ ListIterator::ListIterator(HashList& list)
 	for (l = l->skipNull(); i < m_length; l = l->skipNext()) {
 	    if (!l)
 		break;
-	    m_objects[i++] = l->get();
+	    m_objects[((i++) + offset) % m_length] = l->get();
 	}
     }
     while (i < m_length)
-	m_objects[i++] = 0;
+	m_objects[((i++) + offset) % m_length] = 0;
 }
 
 ListIterator::~ListIterator()

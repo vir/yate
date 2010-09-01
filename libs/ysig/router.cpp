@@ -190,7 +190,7 @@ int SS7Route::transmitMSU(const SS7Router* router, const SS7MSU& msu,
     ListIterator iter(m_networks,offs);
     while (L3Pointer* p = static_cast<L3Pointer*>(iter.get())) {
 	RefPointer<SS7Layer3> l3 = static_cast<SS7Layer3*>(*p);
-	if (!l3)
+	if (!l3 || (l3 == source))
 	    continue;
 	unlock();
 	XDebug(router,DebugAll,"Attempting transmitMSU on L3=%p '%s' [%p]",

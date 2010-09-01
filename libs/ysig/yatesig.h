@@ -5229,10 +5229,12 @@ public:
      * Constructor
      * @param packed The packed value of the destination point code
      * @param priority Optional value of the network priority
+     * @param shift SLS right shift to apply for balancing between linksets
      */
-    inline SS7Route(unsigned int packed, unsigned int priority = 0)
+    inline SS7Route(unsigned int packed, unsigned int priority = 0, unsigned int shift = 0)
 	: Mutex(true,"SS7Route"),
-	  m_packed(packed), m_priority(priority), m_state(Unknown), m_changes(0)
+	  m_packed(packed), m_priority(priority), m_shift(shift),
+	  m_state(Unknown), m_changes(0)
 	{ m_networks.setDelete(false); }
 
     /**
@@ -5242,7 +5244,7 @@ public:
     inline SS7Route(const SS7Route& original)
 	: Mutex(true,"SS7Route"),
 	  m_packed(original.packed()), m_priority(original.priority()),
-	  m_state(original.state()), m_changes(0)
+	  m_shift(original.shift()), m_state(original.state()), m_changes(0)
 	{ m_networks.setDelete(false); }
 
     /**
@@ -5283,6 +5285,13 @@ public:
      */
     unsigned int packed() const
 	{ return m_packed; }
+
+    /**
+     * Get the SLS right shift for this route
+     * @return How many bits of SLS to shift off right when selecting linkset
+     */
+    unsigned int shift() const
+	{ return m_shift; }
 
     /**
      * Attach a network to use for this destination or change its priority.
@@ -5337,6 +5346,7 @@ public:
 private:
     unsigned int m_packed;               // Packed destination point code
     unsigned int m_priority;             // Network priority for the given destination (used by SS7Layer3)
+    unsigned int m_shift;                // SLS right shift when selecting linkset
     ObjList m_networks;                  // List of networks used to route to the given destination (used by SS7Router)
     State m_state;                       // State of the route
     int m_changes;                       // Counter used to spot changes in the list

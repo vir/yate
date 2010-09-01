@@ -170,6 +170,7 @@ bool SS7Layer3::buildRoutes(const NamedList& params)
 	if (!ns)
 	    continue;
 	unsigned int prio = 0;
+	unsigned int shift = 0;
 	bool local = false;
 	if (ns->name() == "local")
 	    local = true;
@@ -182,18 +183,22 @@ bool SS7Layer3::buildRoutes(const NamedList& params)
 	ObjList* obj = route->skipNull();
 	SS7PointCode pc;
 	SS7PointCode::Type type = SS7PointCode::Other;
-	while (true) {
+	do {
 	    if (!obj)
 		break;
 	    type = SS7PointCode::lookup(obj->get()->toString());
 	    obj = obj->skipNext();
 	    if (!(obj && pc.assign(obj->get()->toString(),type)))
 		break;
-	    obj = obj->skipNext();
-	    if (obj && prio)
+	    if (!(obj = obj->skipNext()))
+		break;
+	    if (prio) {
 		prio = obj->get()->toString().toInteger(prio);
-	    break;
-	}
+		obj = obj->skipNext();
+		if (obj)
+		    shift = obj->get()->toString().toInteger(0);
+	    }
+	} while (false);
 	TelEngine::destruct(route);
 	unsigned int packed = pc.pack(type);
 	if ((unsigned int)type > YSS7_PCTYPE_COUNT || !packed) {
@@ -208,7 +213,7 @@ bool SS7Layer3::buildRoutes(const NamedList& params)
 	if (findRoute(type,packed))
 	    continue;
 	added = true;
-	m_route[(unsigned int)type - 1].append(new SS7Route(packed,prio));
+	m_route[(unsigned int)type - 1].append(new SS7Route(packed,prio,shift));
 	DDebug(this,DebugAll,"Added route '%s'",ns->c_str());
     }
     if (!added)
@@ -526,7 +531,10 @@ void SS7Layer3::printRoutes()
 	    SS7Route* route = static_cast<SS7Route*>(o->get());
 	    tmp << sType << SS7PointCode(type,route->m_packed);
 	    if (!router) {
-		tmp << " " << route->m_priority << " (" << route->stateName() << ")\r\n";
+		tmp << " " << route->m_priority << " (" << route->stateName() << ")";
+		if (route->shift())
+		    tmp << " >> " << route->shift();
+		tmp << "\r\n";
 		continue;
 	    }
 	    tmp << " (" << route->stateName() << ")";
@@ -535,6 +543,8 @@ void SS7Layer3::printRoutes()
 		if (*d)
 		    tmp << " " << (*d)->toString() << "," << (*d)->getRoutePriority(type,route->m_packed);
 	    }
+	    if (route->shift())
+		tmp << " >> " << route->shift();
 	    tmp << "\r\n"; 
 	}
 	s << tmp;

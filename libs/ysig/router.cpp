@@ -181,7 +181,7 @@ bool SS7Route::congested()
 
 // Try to transmit a MSU through one of the attached networks
 int SS7Route::transmitMSU(const SS7Router* router, const SS7MSU& msu,
-	const SS7Label& label, int sls, const SS7Layer3* source)
+	const SS7Label& label, int sls, State states, const SS7Layer3* source)
 {
     lock();
     int offs = 0;
@@ -190,7 +190,8 @@ int SS7Route::transmitMSU(const SS7Router* router, const SS7MSU& msu,
     ListIterator iter(m_networks,offs);
     while (L3Pointer* p = static_cast<L3Pointer*>(iter.get())) {
 	RefPointer<SS7Layer3> l3 = static_cast<SS7Layer3*>(*p);
-	if (!l3 || (l3 == source))
+	if (!l3 || (l3 == source) ||
+	    !(l3->getRouteState(label.type(),label.dpc()) & states))
 	    continue;
 	unlock();
 	XDebug(router,DebugAll,"Attempting transmitMSU on L3=%p '%s' [%p]",
@@ -563,7 +564,7 @@ int SS7Router::routeMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* net
     lock();
     RefPointer<SS7Route> route = findRoute(label.type(),label.dpc().pack(label.type()),states);
     unlock();
-    int slsTx = route ? route->transmitMSU(this,msu,label,sls,network) : -1;
+    int slsTx = route ? route->transmitMSU(this,msu,label,sls,states,network) : -1;
     if (slsTx >= 0) {
 	bool cong = route->congested();
 	if (cong) {

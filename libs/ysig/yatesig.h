@@ -5351,10 +5351,11 @@ public:
      * @param label Routing label of the MSU
      * @param sls Signalling Link Selection, negative to choose best
      * @param source Avoided network where the packet was received from
+     * @param states The states a network can have to be a transmission candidate
      * @return Link the message was successfully queued to, negative for error
      */
     int transmitMSU(const SS7Router* router, const SS7MSU& msu,
-	const SS7Label& label, int sls, const SS7Layer3* source = 0);
+	const SS7Label& label, int sls, State states, const SS7Layer3* source = 0);
 
     /**
      * Check the current congestion status according to Q.704 11.2.3.1

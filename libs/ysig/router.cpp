@@ -184,7 +184,10 @@ int SS7Route::transmitMSU(const SS7Router* router, const SS7MSU& msu,
 	const SS7Label& label, int sls, const SS7Layer3* source)
 {
     lock();
-    ListIterator iter(m_networks,sls >> shift());
+    int offs = 0;
+    if (msu.getSIF() > SS7MSU::MTNS)
+	offs = sls >> shift();
+    ListIterator iter(m_networks,offs);
     while (L3Pointer* p = static_cast<L3Pointer*>(iter.get())) {
 	RefPointer<SS7Layer3> l3 = static_cast<SS7Layer3*>(*p);
 	if (!l3)
@@ -199,6 +202,13 @@ int SS7Route::transmitMSU(const SS7Router* router, const SS7MSU& msu,
 		m_congCount++;
 		m_congBytes += msu.length();
 	    }
+#ifdef DEBUG
+	    String addr;
+	    addr << label;
+	    Debug(router,DebugAll,"MSU %s size %u sent on '%s' SLS %d%s",
+		addr.c_str(),msu.length(),l3->toString().c_str(),res,
+		(cong ? " (congested)" : ""));
+#endif
 	    return res;
 	}
 	lock();
@@ -674,7 +684,7 @@ void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type, Gen
     if (dest.null())
 	return;
     const char* state = route->stateName();
-    Debug(this,DebugAll,"Destination %s:%s state changed to %s [%p]",
+    Debug(this,DebugAll,"Destination %s:%s state is %s [%p]",
 	pct,dest.c_str(),state,this);
     // only forward TRx if we are a STP and not in Restart Phase 1
     if (!(m_transfer && (m_started || m_phase2)))
@@ -735,6 +745,8 @@ bool SS7Router::setRouteSpecificState(SS7PointCode::Type type, unsigned int pack
 {
     if (type == SS7PointCode::Other || (unsigned int)type > YSS7_PCTYPE_COUNT || !packedPC || !srcPC)
 	return false;
+    DDebug(this,DebugAll,"setRouteSpecificState(%u,%u,%u,%u,%p) [%p]",
+	type,packedPC,srcPC,state,context,this);
     Lock lock(m_routeMutex);
     SS7Route* route = findRoute(type,packedPC);
     if (!route)
@@ -772,6 +784,7 @@ void SS7Router::sendRestart(const SS7Layer3* network)
 {
     if (!m_mngmt)
 	return;
+    DDebug(this,DebugAll,"sendRestart(%p) [%p]",network,this);
     Lock lock(m_routeMutex);
     for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
 	SS7PointCode::Type type = static_cast<SS7PointCode::Type>(i+1);
@@ -787,6 +800,8 @@ void SS7Router::sendRestart(const SS7Layer3* network)
 	    for (ObjList* nl = r->m_networks.skipNull(); nl; nl = nl->skipNext()) {
 		GenPointer<SS7Layer3>* n = static_cast<GenPointer<SS7Layer3>*>(nl->get());
 		if (network && (network != *n))
+		    continue;
+		if ((*n)->getRoutePriority(type,r->packed()))
 		    continue;
 		if (!(*n)->operational())
 		    continue;

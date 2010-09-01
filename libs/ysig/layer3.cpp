@@ -705,6 +705,25 @@ bool SS7MTP3::inhibit(int sls, int setFlags, int clrFlags)
     return false;
 }
 
+unsigned int SS7MTP3::congestion(int sls)
+{
+    unsigned int level = 0;
+    const ObjList* l = &m_links;
+    for (; l; l = l->next()) {
+	L2Pointer* p = static_cast<L2Pointer*>(l->get());
+	if (!(p && *p))
+	    continue;
+	if ((*p)->sls() == sls)
+	    return (*p)->congestion();
+	else if (sls >= 0) {
+	    unsigned int cong = (*p)->congestion();;
+	    if (level < cong)
+		level = cong;
+	}
+    }
+    return level;
+}
+
 int SS7MTP3::getSequence(int sls) const
 {
     if (sls < 0)

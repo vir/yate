@@ -5090,6 +5090,13 @@ public:
 	{ return (m_inhibited & flags) != 0; }
 
     /**
+     * Get the current congestion level of the link
+     * @return Congestion level, 0 if not congested, 3 if maximum congestion
+     */
+    virtual unsigned int congestion()
+	{ return m_congestion; }
+
+    /**
      * Get the sequence number of the last MSU received
      * @return Last FSN received, negative if not available
      */
@@ -5118,7 +5125,7 @@ protected:
      * Constructor
      */
     inline SS7Layer2()
-	: m_autoEmergency(true), m_lastSeqRx(-1),
+	: m_autoEmergency(true), m_lastSeqRx(-1), m_congestion(0),
 	  m_l2userMutex(true,"SS7Layer2::l2user"), m_l2user(0), m_sls(-1),
 	  m_checkTime(0), m_checkFail(false), m_inhibited(Unchecked)
 	{ }
@@ -5187,6 +5194,11 @@ protected:
      */
     int m_lastSeqRx;
 
+    /**
+     * Current congestion level
+     */
+    unsigned int m_congestion;
+
 private:
     Mutex m_l2userMutex;
     SS7L2User* m_l2user;
@@ -5234,7 +5246,7 @@ public:
     inline SS7Route(unsigned int packed, unsigned int priority = 0, unsigned int shift = 0)
 	: Mutex(true,"SS7Route"),
 	  m_packed(packed), m_priority(priority), m_shift(shift),
-	  m_state(Unknown)
+	  m_state(Unknown), m_congCount(0), m_congBytes(0)
 	{ m_networks.setDelete(false); }
 
     /**
@@ -5244,7 +5256,8 @@ public:
     inline SS7Route(const SS7Route& original)
 	: Mutex(true,"SS7Route"),
 	  m_packed(original.packed()), m_priority(original.priority()),
-	  m_shift(original.shift()), m_state(original.state())
+	  m_shift(original.shift()), m_state(original.state()),
+	  m_congCount(0), m_congBytes(0)
 	{ m_networks.setDelete(false); }
 
     /**
@@ -5343,12 +5356,20 @@ public:
     int transmitMSU(const SS7Router* router, const SS7MSU& msu,
 	const SS7Label& label, int sls, const SS7Layer3* source = 0);
 
+    /**
+     * Check the current congestion status according to Q.704 11.2.3.1
+     * @return True if a TFC should be sent
+     */
+    bool congested();
+
 private:
     unsigned int m_packed;               // Packed destination point code
     unsigned int m_priority;             // Network priority for the given destination (used by SS7Layer3)
     unsigned int m_shift;                // SLS right shift when selecting linkset
     ObjList m_networks;                  // List of networks used to route to the given destination (used by SS7Router)
     State m_state;                       // State of the route
+    unsigned int m_congCount;            // Congestion event count
+    unsigned int m_congBytes;            // Congestion MSU bytes count
 };
 
 /**
@@ -5490,6 +5511,14 @@ public:
      */
     virtual bool inhibit(int sls, int setFlags, int clrFlags = 0)
 	{ return false; }
+
+    /**
+     * Get the current congestion level of a link
+     * @param sls Signalling Link to check for congestion, -1 for maximum
+     * @return Congestion level, 0 if not congested, 3 if maximum congestion
+     */
+    virtual unsigned int congestion(int sls)
+	{ return 0; }
 
     /**
      * Get the sequence number of the last MSU received on a link
@@ -6206,6 +6235,7 @@ private:
     unsigned long m_rxMsu;
     unsigned long m_txMsu;
     unsigned long m_fwdMsu;
+    unsigned long m_congestions;
     SS7Management* m_mngmt;
 };
 
@@ -6827,6 +6857,13 @@ public:
      * @return True if inhibition flags were set
      */
     virtual bool inhibit(int sls, int setFlags, int clrFlags = 0);
+
+    /**
+     * Get the current congestion level of a link
+     * @param sls Signalling Link to check for congestion, -1 for maximum
+     * @return Congestion level, 0 if not congested, 3 if maximum congestion
+     */
+    virtual unsigned int congestion(int sls);
 
     /**
      * Get the sequence number of the last MSU received on a link

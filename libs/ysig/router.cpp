@@ -168,6 +168,17 @@ bool SS7Route::operational(int sls)
     return false;
 }
 
+// Check and reset congestion status
+bool SS7Route::congested()
+{
+    if (m_congCount >= 8 || m_congBytes >= 256) {
+	m_congCount = 0;
+	m_congBytes = 0;
+	return true;
+    }
+    return false;
+}
+
 // Try to transmit a MSU through one of the attached networks
 int SS7Route::transmitMSU(const SS7Router* router, const SS7MSU& msu,
 	const SS7Label& label, int sls, const SS7Layer3* source)
@@ -182,8 +193,14 @@ int SS7Route::transmitMSU(const SS7Router* router, const SS7MSU& msu,
 	XDebug(router,DebugAll,"Attempting transmitMSU on L3=%p '%s' [%p]",
 	    (void*)l3,l3->toString().c_str(),router);
 	int res = l3->transmitMSU(msu,label,sls);
-	if (res != -1)
+	if (res != -1) {
+	    unsigned int cong = l3->congestion(res);
+	    if (cong) {
+		m_congCount++;
+		m_congBytes += msu.length();
+	    }
 	    return res;
+	}
 	lock();
     }
     unlock();
@@ -200,7 +217,7 @@ SS7Router::SS7Router(const NamedList& params)
       m_changes(0), m_transfer(false), m_phase2(false), m_started(false),
       m_restart(0), m_isolate(0), m_routeTest(0), m_testRestricted(false),
       m_checkRoutes(false), m_sendUnavail(true), m_sendProhibited(true),
-      m_rxMsu(0), m_txMsu(0), m_fwdMsu(0),
+      m_rxMsu(0), m_txMsu(0), m_fwdMsu(0), m_congestions(0),
       m_mngmt(0)
 {
 #ifdef DEBUG
@@ -223,8 +240,8 @@ SS7Router::SS7Router(const NamedList& params)
 
 SS7Router::~SS7Router()
 {
-    Debug(this,DebugInfo,"SS7Router destroyed, rx=%lu, tx=%lu, fwd=%lu",
-	m_rxMsu,m_txMsu,m_fwdMsu);
+    Debug(this,DebugInfo,"SS7Router destroyed, rx=%lu, tx=%lu, fwd=%lu, cong=%lu",
+	m_rxMsu,m_txMsu,m_fwdMsu,m_congestions);
 }
 
 bool SS7Router::initialize(const NamedList* config)
@@ -538,10 +555,34 @@ int SS7Router::routeMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* net
     unlock();
     int slsTx = route ? route->transmitMSU(this,msu,label,sls,network) : -1;
     if (slsTx >= 0) {
+	bool cong = route->congested();
+	if (cong) {
+	    Debug(this,DebugMild,"Route to %u reports congestion",route->packed());
+	    while (m_mngmt) {
+		unsigned int local = getLocal(label.type());
+		if (!local)
+		    break;
+		NamedList* ctl = m_mngmt->controlCreate("congest");
+		if (!ctl)
+		    break;
+		String addr;
+		addr << SS7PointCode::lookup(label.type()) << ",";
+		addr << SS7PointCode(label.type(),local) << "," << label.opc();
+		String dest;
+		dest << SS7PointCode(label.type(),route->packed());
+		ctl->addParam("address",addr);
+		ctl->addParam("destination",dest);
+		ctl->setParam("automatic",String::boolText(true));
+		m_mngmt->controlExecute(ctl);
+		break;
+	    }
+	}
 	lock();
 	m_txMsu++;
 	if (network)
 	    m_fwdMsu++;
+	if (cong)
+	    m_congestions++;
 	unlock();
     }
     return slsTx;

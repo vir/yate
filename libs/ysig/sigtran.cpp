@@ -1669,6 +1669,7 @@ bool SS7M2UA::processMAUP(unsigned char msgType, const DataBlock& msg, int strea
 	case 3: // Establish Confirm
 	    m_lastSeqRx = -1;
 	    m_linkState = LinkUp;
+	    m_congestion = 0;
 	    m_rpo = false;
 	    SS7Layer2::notify();
 	    return true;
@@ -1751,6 +1752,20 @@ bool SS7M2UA::processMAUP(unsigned char msgType, const DataBlock& msg, int strea
 		return recoveredMSU(data);
 	    }
 	    break;
+	case 14: // Congestion Indication
+	    {
+		u_int32_t cong = 0;
+		if (!SIGAdaptation::getTag(msg,0x0304,cong)) {
+		    err = "Missing congestion state";
+		    break;
+		}
+		u_int32_t disc = 0;
+		SIGAdaptation::getTag(msg,0x0305,disc);
+		int level = disc ? DebugWarn : (cong ? DebugMild : DebugNote);
+		Debug(this,level,"Congestion level %u, discard level %u",cong,disc);
+		m_congestion = cong;
+	    }
+	    return true;
     }
     Debug(this,DebugStub,"%s M2UA MAUP message type %u",err,msgType);
     return false;
@@ -1760,6 +1775,7 @@ void SS7M2UA::activeChange(bool active)
 {
     if (!active) {
 	getSequence();
+	m_congestion = 0;
 	m_rpo = false;
 	switch (m_linkState) {
 	    case LinkUpEmg:

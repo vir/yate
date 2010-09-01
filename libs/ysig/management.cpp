@@ -171,7 +171,7 @@ SS7MsgSNM* SS7MsgSNM::parse(SS7Management* receiver, unsigned char type,
     do {
 	// TFP,TFR,TFA: Q.704 15.7, RST,RSR: Q.704 15.10
 	// There must be at least 2 bytes in buffer
-	if (type == TFP || type == TFR || type == TFA ||
+	if (type == TFP || type == TFR || type == TFA || type == TFC ||
 	    type == RST || type == RSR) {
 	    // 2 bytes destination
 	    SS7PointCode pc;
@@ -390,6 +390,7 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
     if (msg->type() == SS7MsgSNM::TFP ||
 	msg->type() == SS7MsgSNM::TFR ||
 	msg->type() == SS7MsgSNM::TFA ||
+	msg->type() == SS7MsgSNM::TFC ||
 	msg->type() == SS7MsgSNM::RST ||
 	msg->type() == SS7MsgSNM::RSR) {
 	String dest = msg->params().getValue("destination");

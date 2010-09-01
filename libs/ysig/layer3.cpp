@@ -277,10 +277,21 @@ bool SS7Layer3::maintenance(const SS7MSU& msu, const SS7Label& label, int sls)
     addr << SS7PointCode::lookup(label.type()) << "," << label;
     if (debugAt(DebugAll))
 	addr << " (" << label.opc().pack(label.type()) << ":" << label.dpc().pack(label.type()) << ":" << label.sls() << ")";
+    bool badLink = label.sls() != sls;
+    if (!badLink) {
+	unsigned int local = getLocal(label.type());
+	// maintenance messages must be addressed to us
+	if (local && label.dpc().pack(label.type()) != local)
+	    badLink = true;
+	// and come from an adjacent node
+	else if (getRoutePriority(label.type(),label.opc()))
+	    badLink = true;
+    }
     int level = DebugInfo;
-    if (label.sls() != sls) {
+    if (badLink) {
 	addr << " on " << sls;
 	level = DebugMild;
+	badLink = true;
     }
     unsigned char len = s[1] >> 4;
     // get a pointer to the test pattern
@@ -292,13 +303,16 @@ bool SS7Layer3::maintenance(const SS7MSU& msu, const SS7Label& label, int sls)
     }
     switch (s[0]) {
 	case SS7MsgMTN::SLTM:
+	    Debug(this,level,"Received SLTM %s with %u bytes",addr.c_str(),len);
+	    if (badLink)
+		return false;
 	    {
-		Debug(this,level,"Received SLTM %s with %u bytes",addr.c_str(),len);
 		SS7Label lbl(label,label.sls(),0);
 		SS7MSU answer(msu.getSIO(),lbl,0,len+2);
 		unsigned char* d = answer.getData(lbl.length()+1,len+2);
 		if (!d)
 		    return false;
+		linkChecked(sls,true);
 		Debug(this,DebugInfo,"Sending SLTA %s with %u bytes",addr.c_str(),len);
 		*d++ = SS7MsgMTN::SLTA;
 		*d++ = len << 4;
@@ -308,7 +322,17 @@ bool SS7Layer3::maintenance(const SS7MSU& msu, const SS7Label& label, int sls)
 	    }
 	    return true;
 	case SS7MsgMTN::SLTA:
-	    Debug(this,level,"Received SLTM %s with %u bytes",addr.c_str(),len);
+	    Debug(this,level,"Received SLTA %s with %u bytes",addr.c_str(),len);
+	    if (badLink)
+		return false;
+	    if (len != 4)
+		return false;
+	    unsigned char patt = sls;
+	    patt = (patt << 4) | (patt & 0x0f);
+	    while (len--)
+		if (*t++ != patt++)
+		    return false;
+	    linkChecked(sls,false);
 	    return true;
     }
     Debug(this,DebugMild,"Received MTN %s type %02X, length %u [%p]",
@@ -528,7 +552,8 @@ SS7MTP3::SS7MTP3(const NamedList& params)
     : SignallingComponent(params.safe("SS7MTP3"),&params),
       SignallingDumpable(SignallingDumper::Mtp3),
       Mutex(true,"SS7MTP3"),
-      m_total(0), m_active(0), m_inhibit(false), m_checklinks(true), m_check(0)
+      m_total(0), m_active(0), m_inhibit(false),
+      m_checklinks(true), m_checkT1(0), m_checkT2(0)
 {
 #ifdef DEBUG
     if (debugAt(DebugAll)) {
@@ -569,14 +594,22 @@ SS7MTP3::SS7MTP3(const NamedList& params)
     Debug(this,level,"Point code types are '%s' [%p]",stype.safe(),this);
 
     m_inhibit = !params.getBoolValue("autostart",true);
-    m_checklinks = params.getBoolValue("checklinks",true);
-    int check = params.getIntValue("maintenance",60000);
+    m_checklinks = params.getBoolValue("checklinks",m_checklinks);
+    int check = params.getIntValue("checkfails",5000);
     if (check > 0) {
-	if (check < 5000)
-	    check = 5000;
-	else if (check > 600000)
-	    check = 600000;
-	m_check = 1000 * check;
+	if (check < 4000)
+	    check = 4000;
+	else if (check > 12000)
+	    check = 12000;
+	m_checkT1 = 1000 * check;
+    }
+    check = params.getIntValue("maintenance",60000);
+    if (check > 0) {
+	if (check < 30000)
+	    check = 30000;
+	else if (check > 300000)
+	    check = 300000;
+	m_checkT2 = 1000 * check;
     }
     buildRoutes(params);
     setDumper(params.getValue("layer3dump"));
@@ -980,13 +1013,14 @@ bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
     SS7PointCode::Type cpType = type(netType);
     unsigned int llen = SS7Label::length(cpType);
     if (!llen) {
-	Debug(toString(),DebugWarn,"Received MSU but point code type is unconfigured [%p]",this);
+	Debug(toString(),DebugWarn,"Received %s MSU, point code type unknown [%p]",
+	    msu.getIndicatorName(),this);
 	return false;
     }
     // check MSU length against SIO + label length
     if (msu.length() <= llen) {
-	Debug(this,DebugMild,"Received short MSU of length %u [%p]",
-	    msu.length(),this);
+	Debug(this,DebugMild,"Received on %d short MSU of length %u [%p]",
+	    sls,msu.length(),this);
 	return false;
     }
     SS7Label label(cpType,msu);
@@ -1003,11 +1037,6 @@ bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
 	if (link->inhibited(SS7Layer2::Unchecked)) {
 	    if (!maint)
 		return false;
-	    if (label.sls() == sls) {
-		Debug(this,DebugNote,"Placing link %d '%s' in service, inhibitions 0x%02X [%p]",
-		    sls,link->toString().c_str(),link->inhibited(),this);
-		link->inhibit(0,SS7Layer2::Unchecked);
-	    }
 	}
 	if (!maint && (msu.getSIF() != SS7MSU::SNM) &&
 	    link->inhibited(SS7Layer2::Unchecked|SS7Layer2::Inactive|SS7Layer2::Local)) {
@@ -1078,9 +1107,10 @@ void SS7MTP3::notify(SS7Layer2* link)
     if (link) {
 	if (link->operational()) {
 	    if (link->inhibited(SS7Layer2::Unchecked)) {
-		u_int64_t t = Time::now() + 50000 + (::random() % 100000);
-		if ((t < link->m_check) || (t - 4000000 > link->m_check))
-		    link->m_check = t;
+		// initiate a slightly delayed SLTM check
+		u_int64_t t = Time::now() + 100000;
+		if ((link->m_checkTime > t) || (t - 2000000 > link->m_checkTime))
+		    link->m_checkTime = t;
 	    }
 	    else if (link->inhibited(SS7Layer2::Inactive))
 		act = (unsigned int)-1;
@@ -1147,8 +1177,27 @@ void SS7MTP3::timerTick(const Time& when)
 	if (!p)
 	    continue;
 	SS7Layer2* l2 = *p;
-	if (l2 && l2->m_check && (l2->m_check < when) && l2->operational()) {
-	    l2->m_check = m_check ? when + m_check : 0;
+	if (l2 && l2->m_checkTime && (l2->m_checkTime < when) && l2->operational()) {
+	    l2->m_checkTime = 0;
+	    u_int64_t check = m_checkT2;
+	    if (l2->m_checkFail) {
+		l2->m_checkFail = false;
+		if (!l2->inhibited(SS7Layer2::Unchecked)) {
+		    Debug(this,DebugWarn,"Taking link %d '%s' out of service [%p]",
+			l2->sls(),l2->toString().c_str(),this);
+		    l2->inhibit(SS7Layer2::Unchecked);
+		    if (m_checkT1)
+			check = m_checkT1;
+		}
+	    }
+	    else if (m_checkT1) {
+		l2->m_checkFail = true;
+		check = m_checkT1;
+	    }
+	    // if some action set a new timer bail out, we'll get back to it
+	    if (l2->m_checkTime)
+		continue;
+	    l2->m_checkTime = check ? when + check : 0;
 	    for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
 		SS7PointCode::Type type = (SS7PointCode::Type)(i + 1);
 		unsigned int local = getLocal(type);
@@ -1187,6 +1236,39 @@ void SS7MTP3::timerTick(const Time& when)
 		}
 	    }
 	}
+    }
+}
+
+void SS7MTP3::linkChecked(int sls, bool remote)
+{
+    if (sls < 0)
+	return;
+    const ObjList* l = &m_links;
+    for (; l; l = l->next()) {
+	L2Pointer* p = static_cast<L2Pointer*>(l->get());
+	if (!p)
+	    continue;
+	SS7Layer2* l2 = *p;
+	if (!l2 || (l2->sls() != sls))
+	    continue;
+	if (remote) {
+	    if (l2->inhibited(SS7Layer2::Unchecked)) {
+		// trigger a slightly delayed SLTM check
+		u_int64_t t = Time::now() + 100000;
+		if ((l2->m_checkTime > t) || (t - 4000000 > l2->m_checkTime))
+		    l2->m_checkTime = t;
+	    }
+	}
+	else {
+	    l2->m_checkFail = false;
+	    l2->m_checkTime = m_checkT2 ? Time::now() + m_checkT2 : 0;
+	    if (l2->inhibited(SS7Layer2::Unchecked)) {
+		Debug(this,DebugNote,"Placing link %d '%s' in service [%p]",
+		    sls,l2->toString().c_str(),this);
+		l2->inhibit(0,SS7Layer2::Unchecked);
+	    }
+	}
+	break;
     }
 }
 

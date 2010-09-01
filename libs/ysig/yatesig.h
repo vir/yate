@@ -5120,7 +5120,7 @@ protected:
     inline SS7Layer2()
 	: m_autoEmergency(true), m_lastSeqRx(-1),
 	  m_l2userMutex(true,"SS7Layer2::l2user"), m_l2user(0), m_sls(-1),
-	  m_check(0), m_inhibited(Unchecked)
+	  m_checkTime(0), m_checkFail(false), m_inhibited(Unchecked)
 	{ }
 
     /**
@@ -5191,7 +5191,8 @@ private:
     Mutex m_l2userMutex;
     SS7L2User* m_l2user;
     int m_sls;
-    u_int64_t m_check;
+    u_int64_t m_checkTime;
+    bool m_checkFail;
     int m_inhibited;
 };
 
@@ -5682,7 +5683,7 @@ protected:
 
     /**
      * Notify out user part about a status change
-     * @param sls Signallink Link that generated the notification, -1 if none
+     * @param sls Link that generated the notification, -1 if none
      */
     inline void notify(int sls = -1)
     {
@@ -5692,6 +5693,14 @@ protected:
 	if (tmp)
 	    tmp->notify(this,sls);
     }
+
+    /**
+     * Callback called from maintenance when valid SLTA or SLTM are received
+     * @param sls Link that was checked by maintenance
+     * @param remote True if remote checked the link, false if local success
+     */
+    virtual void linkChecked(int sls, bool remote)
+	{ }
 
     /**
      * Default processing of a MTN (Maintenance MSU)
@@ -6881,6 +6890,13 @@ protected:
     virtual void timerTick(const Time& when);
 
     /**
+     * Callback called from maintenance when valid SLTA or SLTM are received
+     * @param sls Link that was checked by maintenance
+     * @param remote True if remote checked the link, false if local success
+     */
+    virtual void linkChecked(int sls, bool remote);
+
+    /**
      * Process a MSU received from the Layer 2 component
      * @param msu Message data, starting with Service Indicator Octet
      * @param link Data link that delivered the MSU
@@ -6923,8 +6939,9 @@ private:
     bool m_inhibit;
     // check the links before placing them in service
     bool m_checklinks;
-    // maintenance check interval
-    u_int64_t m_check;
+    // maintenance check intervals (Q.707)
+    u_int64_t m_checkT1;
+    u_int64_t m_checkT2;
 };
 
 /**

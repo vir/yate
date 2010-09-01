@@ -471,13 +471,17 @@
 ; autostart: bool: Automatically enable the linkset at startup
 ;autostart=yes
 
-; maintenance: integer: Interval in msec for sending SLTM messages (Q.707 T2)
-; A value of zero disables sending SLTM else it is clamped to range 5s - 10m
-;maintenance=60000
-
 ; checklinks: boolean: Check that the links answer to maintenance messages
 ;  (SLTM/SLTA) before placing them into service (normal behavior)
 ;checklinks=true
+
+; checkfails: integer: Interval in msec for resending SLTM messages (Q.707 T1)
+; A value of zero disables link fail else the value is clamped between 4s - 12s
+;checkfails=5000
+
+; maintenance: integer: Interval in msec for sending SLTM messages (Q.707 T2)
+; A value of zero disables periodic SLTM else it is clamped to range 30s - 5m
+;maintenance=60000
 
 ; layer3dump: string: Filename to dump MTP3 packets to
 ;layer3dump=

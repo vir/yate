@@ -93,7 +93,6 @@ void SS7Route::attach(SS7Layer3* network, SS7PointCode::Type type)
     if (priority == (unsigned int)-1)
 	return;
     Lock lock(this);
-    m_changes++;
     // Remove from list if already there
     detach(network);
     // Insert
@@ -123,7 +122,6 @@ bool SS7Route::detach(SS7Layer3* network)
     for (; o; o = o->skipNext()) {
 	L3Pointer* p = static_cast<L3Pointer*>(o->get());
 	if (*p && *p == network) {
-	    m_changes++;
 	    m_networks.remove(p,false);
 	    break;
 	}
@@ -175,26 +173,19 @@ int SS7Route::transmitMSU(const SS7Router* router, const SS7MSU& msu,
 	const SS7Label& label, int sls, const SS7Layer3* source)
 {
     lock();
-    ObjList* o;
-    do {
-	for (o = m_networks.skipNull(); o; o = o->skipNext()) {
-	    L3Pointer* p = static_cast<L3Pointer*>(o->get());
-	    RefPointer<SS7Layer3> l3 = static_cast<SS7Layer3*>(*p);
-	    if (!l3 || (source == l3))
-		continue;
-	    XDebug(router,DebugAll,"Attempting transmitMSU on L3=%p '%s' [%p]",
-		(void*)l3,l3->toString().c_str(),router);
-	    int chg = m_changes;
-	    unlock();
-	    int res = l3->transmitMSU(msu,label,sls);
-	    if (res != -1)
-		return res;
-	    lock();
-	    // if list has changed break with o not null so repeat the scan
-	    if (chg != m_changes)
-		break;
-	}
-    } while (o);
+    ListIterator iter(m_networks,sls >> shift());
+    while (L3Pointer* p = static_cast<L3Pointer*>(iter.get())) {
+	RefPointer<SS7Layer3> l3 = static_cast<SS7Layer3*>(*p);
+	if (!l3)
+	    continue;
+	unlock();
+	XDebug(router,DebugAll,"Attempting transmitMSU on L3=%p '%s' [%p]",
+	    (void*)l3,l3->toString().c_str(),router);
+	int res = l3->transmitMSU(msu,label,sls);
+	if (res != -1)
+	    return res;
+	lock();
+    }
     unlock();
     return -1;
 }

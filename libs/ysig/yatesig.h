@@ -5234,7 +5234,7 @@ public:
     inline SS7Route(unsigned int packed, unsigned int priority = 0, unsigned int shift = 0)
 	: Mutex(true,"SS7Route"),
 	  m_packed(packed), m_priority(priority), m_shift(shift),
-	  m_state(Unknown), m_changes(0)
+	  m_state(Unknown)
 	{ m_networks.setDelete(false); }
 
     /**
@@ -5244,7 +5244,7 @@ public:
     inline SS7Route(const SS7Route& original)
 	: Mutex(true,"SS7Route"),
 	  m_packed(original.packed()), m_priority(original.priority()),
-	  m_shift(original.shift()), m_state(original.state()), m_changes(0)
+	  m_shift(original.shift()), m_state(original.state())
 	{ m_networks.setDelete(false); }
 
     /**
@@ -5349,7 +5349,6 @@ private:
     unsigned int m_shift;                // SLS right shift when selecting linkset
     ObjList m_networks;                  // List of networks used to route to the given destination (used by SS7Router)
     State m_state;                       // State of the route
-    int m_changes;                       // Counter used to spot changes in the list
 };
 
 /**

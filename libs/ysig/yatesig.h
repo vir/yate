@@ -7404,10 +7404,7 @@ public:
     /**
      * Constructor
      */
-    inline SS7Management(const NamedList& params, unsigned char sio = SS7MSU::SNM|SS7MSU::National)
-	: SignallingComponent(params.safe("SS7Management"),&params),
-	  SS7Layer4(sio,&params), m_changeMsgs(true)
-	{ m_changeMsgs = params.getBoolValue("changemsgs",m_changeMsgs); }
+    SS7Management(const NamedList& params, unsigned char sio = SS7MSU::SNM|SS7MSU::National);
 
 protected:
     /**
@@ -7472,6 +7469,7 @@ private:
     bool timeout(SignallingMessageTimer& timer, bool final);
     SignallingMessageTimerList m_pending;
     bool m_changeMsgs;
+    bool m_neighbours;
 };
 
 /**

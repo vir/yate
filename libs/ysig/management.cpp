@@ -303,6 +303,15 @@ static const TokenDict s_dict_control[] = {
     { 0, 0 }
 };
 
+SS7Management::SS7Management(const NamedList& params, unsigned char sio)
+    : SignallingComponent(params.safe("SS7Management"),&params),
+      SS7Layer4(sio,&params), m_changeMsgs(true), m_neighbours(true)
+{
+    m_changeMsgs = params.getBoolValue("changemsgs",m_changeMsgs);
+    m_neighbours = params.getBoolValue("neighbours",m_neighbours);
+}
+
+
 HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
     if (msu.getSIF() != sif())
@@ -314,7 +323,7 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
     }
     SS7Router* router = YOBJECT(SS7Router,SS7Layer4::network());
     if (router && (router != network)) {
-	unsigned int local = network->getLocal(label.type());
+	unsigned int local = router->getLocal(label.type());
 	if (local && label.dpc().pack(label.type()) != local)
 	    return HandledMSU::Rejected;
     }
@@ -337,6 +346,17 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 
     String addr;
     addr << label;
+    while (m_neighbours) {
+	if (router) {
+	    if (!router->getRoutePriority(label.type(),label.opc()))
+		break;
+	}
+	else if (!(network && network->getRoutePriority(label.type(),label.opc())))
+	    break;
+	Debug(this,DebugMild,"Refusing %s message from %s",msg->name(),addr.c_str());
+	return false;
+    }
+
     SS7Label lbl(label,label.sls(),0);
     {
 	String tmp;
@@ -730,6 +750,7 @@ bool SS7Management::control(NamedList& params)
 	return false;
 
     m_changeMsgs = params.getBoolValue("changemsgs",m_changeMsgs);
+    m_neighbours = params.getBoolValue("neighbours",m_neighbours);
     const String* addr = params.getParam("address");
     if (cmd < 0 || TelEngine::null(addr))
 	return SignallingComponent::control(params);

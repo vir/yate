@@ -188,7 +188,8 @@ bool SS7Testing::control(NamedList& params)
 
 void SS7Testing::setParams(const NamedList& params, bool setSeq)
 {
-    m_timer.interval(params,"interval",20,500,true);
+    if (!m_timer.interval() || params.getParam("interval"))
+	m_timer.interval(params,"interval",20,1000,true);
     m_len = params.getIntValue("length",m_len);
     m_sharing = params.getBoolValue("sharing",m_sharing);
     if (m_len > 1024)

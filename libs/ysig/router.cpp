@@ -688,6 +688,45 @@ void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type, Gen
     }
 }
 
+// Set the state of a route per source.
+bool SS7Router::setRouteSpecificState(SS7PointCode::Type type, unsigned int packedPC,
+    unsigned int srcPC, SS7Route::State state, GenObject* context)
+{
+    if (type == SS7PointCode::Other || (unsigned int)type > YSS7_PCTYPE_COUNT || !packedPC || !srcPC)
+	return false;
+    Lock lock(m_routeMutex);
+    SS7Route* route = findRoute(type,packedPC);
+    if (!route)
+	return false;
+    SS7Route::State best = state;
+    bool ok = false;
+    for (ObjList* nl = route->m_networks.skipNull(); nl; nl = nl->skipNext()) {
+	SS7Layer3* l3 = *static_cast<GenPointer<SS7Layer3>*>(nl->get());
+	if (!l3)
+	    continue;
+	SS7Route* r = l3->findRoute(type,packedPC);
+	if (!r)
+	    continue;
+	if (l3->getRoutePriority(type,srcPC)) {
+	    if (((r->state() & SS7Route::KnownState) > best) && l3->operational())
+		best = r->state();
+	}
+	else {
+	    ok = true;
+	    r->m_state = state;
+	}
+    }
+    if (!ok)
+	return false;
+    if (best != route->m_state) {
+	route->m_state = state;
+	if (state != SS7Route::Unknown)
+	    routeChanged(route,type,context);
+    }
+    return true;
+}
+
+
 void SS7Router::sendRestart(const SS7Layer3* network)
 {
     if (!m_mngmt)
@@ -1132,7 +1171,31 @@ bool SS7Router::control(NamedList& params)
 		    m_mngmt->controlExecute(ctl);
 		    return true;
 		}
-		if (!setRouteState(type,pc,routeState(static_cast<SS7MsgSNM::Type>(cmd)))) {
+		String src = params.getParam("source");
+		if (src.null()) {
+		    const String* addr = params.getParam("address");
+		    if (addr) {
+			ObjList* l = addr->split(',');
+			if (l && l->at(1))
+			    src = l->at(1)->toString();
+			TelEngine::destruct(l);
+		    }
+		}
+		if (src) {
+		    SS7PointCode opc;
+		    if (!opc.assign(src,type)) {
+			if (!params.getBoolValue("automatic"))
+			    err << "invalid source: " << src ;
+			break;
+		    }
+		    if (!setRouteSpecificState(type,pc,opc,routeState(static_cast<SS7MsgSNM::Type>(cmd)))) {
+			if (!params.getBoolValue("automatic"))
+			    err << "no such route: " << *dest << " from: " << src;
+			break;
+		    }
+		    return true;
+		}
+		else if (!setRouteState(type,pc,routeState(static_cast<SS7MsgSNM::Type>(cmd)))) {
 		    if (!params.getBoolValue("automatic"))
 			err << "no such route: " << *dest;
 		    break;

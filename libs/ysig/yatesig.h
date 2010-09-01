@@ -6191,6 +6191,11 @@ private:
     void disable();
     void sendRestart(const SS7Layer3* network = 0);
     void checkRoutes(const SS7Layer3* noResume = 0);
+    bool setRouteSpecificState(SS7PointCode::Type type, unsigned int packedPC,
+	unsigned int srcPC, SS7Route::State state, GenObject* context = 0);
+    inline bool setRouteSpecificState(SS7PointCode::Type type, const SS7PointCode& dest,
+	const SS7PointCode&src, SS7Route::State state, GenObject* context = 0)
+	{ return setRouteSpecificState(type,dest.pack(type),src.pack(type),state,context); }
     void sendRouteTest();
     int routeMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls, SS7Route::State states);
     SignallingTimer m_routeTest;

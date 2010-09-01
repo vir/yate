@@ -7538,7 +7538,7 @@ public:
 	: SignallingComponent(params.safe("SS7Testing"),&params),
 	  SS7Layer4(sio,&params),
 	  Mutex(true,"SS7Testing"),
-	  m_timer(0), m_seq(0), m_len(16)
+	  m_timer(0), m_exp(0), m_seq(0), m_len(16), m_sharing(false)
 	{ }
 
     /**
@@ -7585,8 +7585,10 @@ private:
     void setParams(const NamedList& params, bool setSeq = false);
     SignallingTimer m_timer;
     SS7Label m_lbl;
+    u_int32_t m_exp;
     u_int32_t m_seq;
     u_int16_t m_len;
+    bool m_sharing;
 };
 
 /**

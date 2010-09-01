@@ -59,10 +59,7 @@ HandledMSU SS7Testing::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7
 	    return HandledMSU::Rejected;
     }
     if (src.null())
-	src << SS7PointCode::lookup(label.type()) << ":" << label.opc();
-
-    XDebug(this,DebugStub,"Possibly incomplete SS7Testing::receivedMSU(%p,%p,%p,%d) [%p]",
-	&msu,&label,network,sls,this);
+	src << SS7PointCode::lookup(label.type()) << ":" << label.opc() << ":" << label.sls();
 
     // Q.782 2.3: 4 bytes message number, 2 bytes length (9 bits used), N bytes zeros
     const unsigned char* s = msu.getData(label,6);
@@ -80,8 +77,12 @@ HandledMSU SS7Testing::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7
 	    src.c_str(),seq,msu.length(),len,this);
 	return false;
     }
-    Debug(this,lvl,"Received MTP_T from %s, seq %u, test length %u",
-	src.c_str(),seq,len);
+    String exp;
+    if (m_exp && (seq != m_exp))
+	exp << " (" << m_exp << ")";
+    m_exp = seq + 1;
+    Debug(this,lvl,"Received MTP_T seq %u%s length %u from %s on %s:%d",seq,exp.safe(),len,
+	src.c_str(),(network ? network->toString().c_str() : "?"),sls);
     return true;
 }
 
@@ -91,6 +92,8 @@ bool SS7Testing::sendTraffic()
 	return false;
     u_int32_t seq = m_seq++;
     u_int16_t len = m_len + 6;
+    if (m_sharing)
+	m_lbl.setSls(seq & 0xff);
     SS7MSU msu(sio(),m_lbl,0,len);
     unsigned char* d = msu.getData(m_lbl,len);
     if (!d)
@@ -99,7 +102,9 @@ bool SS7Testing::sendTraffic()
 	*d++ = 0xff & (seq >> (8 * i));
     *d++ = m_len & 0xff;
     *d++ = (m_len >> 8) & 0xff;
-    Debug(this,DebugInfo,"Sending MTP_T seq %u, test length %u",seq,m_len);
+    String dest;
+    dest << SS7PointCode::lookup(m_lbl.type()) << ":" << m_lbl.dpc() << ":" << m_lbl.sls();
+    Debug(this,DebugInfo,"Sending MTP_T seq %u length %u to %s",seq,m_len,dest.c_str());
     return transmitMSU(msu,m_lbl,m_lbl.sls()) >= 0;
 }
 
@@ -185,6 +190,7 @@ void SS7Testing::setParams(const NamedList& params, bool setSeq)
 {
     m_timer.interval(params,"interval",20,500,true);
     m_len = params.getIntValue("length",m_len);
+    m_sharing = params.getBoolValue("sharing",m_sharing);
     if (m_len > 1024)
 	m_len = 1024;
     if (setSeq || !m_seq)

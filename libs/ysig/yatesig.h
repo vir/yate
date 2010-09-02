@@ -5281,9 +5281,18 @@ public:
 
     /**
      * Retrieve the name of the current state
+     * @return Name of the state, NULL if invalid
      */
     const char* stateName() const
 	{ return lookup(m_state,stateNames()); }
+
+    /**
+     * Retrieve the name of an arbitrary state
+     * @param state Route state whose name to return
+     * @return Name of the state, NULL if invalid
+     */
+    static const char* stateName(State state)
+	{ return lookup(state,stateNames()); }
 
     /**
      * Get the priority of this route
@@ -5640,29 +5649,6 @@ public:
 	{ return getRouteState(type,dest.pack(type)); }
 
     /**
-     * Set the current state of a route by packed Point Code.
-     * This method is thread safe
-     * @param type Destination point code type
-     * @param packedPC The packed point code
-     * @param state The new state of the route
-     * @param context Optional context to provide to notification method
-     * @return True if the route was found and its state changed
-     */
-    bool setRouteState(SS7PointCode::Type type, unsigned int packedPC, SS7Route::State state, GenObject* context = 0);
-
-    /**
-     * Set the current state of a route by unpacked Point Code.
-     * This method is thread safe
-     * @param type Destination point code type
-     * @param dest The destination point code
-     * @param state The new state of the route
-     * @param context Optional context to provide to notification method
-     * @return True if the route was found and its state changed
-     */
-    inline bool setRouteState(SS7PointCode::Type type, const SS7PointCode& dest, SS7Route::State state, GenObject* context = 0)
-	{ return setRouteState(type,dest.pack(type),state,context); }
-
-    /**
      * Print the destinations or routing table to output
      */
     void printRoutes();
@@ -5783,43 +5769,9 @@ protected:
      * This method is thread safe
      * @param type The point code type used to choose the list of packed point codes
      * @param packed The packed point code to find in the list
-     * @param states Mask of required states of the route
      * @return SS7Route pointer or 0 if type is invalid or the given packed point code was not found
      */
-    SS7Route* findRoute(SS7PointCode::Type type, unsigned int packed, SS7Route::State states = SS7Route::AnyState);
-
-    /**
-     * Add a network to the routing table. Clear all its routes before appending it to the table
-     * Used by a SS7 router. This method is thread safe
-     * @param network The network to add to the routing table
-     */
-    void updateRoutes(SS7Layer3* network);
-
-    /**
-     * Remove the given network from all destinations in the routing table.
-     * Remove the entry in the routing table if empty (no more routes to the point code).
-     * Used by a SS7 router. This method is thread safe
-     * @param context Optional context to provide to notification method
-     * @param network The network to remove
-     */
-    void removeRoutes(SS7Layer3* network, GenObject* context = 0);
-
-    /**
-     * Trigger the route changed notification for each route that is not Unknown
-     * @param network The network for which to notify, NULL to notify all routes
-     * @param states Mask of required states of the route
-     * @param context Optional context to provide to notification method
-     */
-    void notifyRoutes(const SS7Layer3* network = 0, SS7Route::State states = SS7Route::AnyState, GenObject* context = 0);
-
-    /**
-     * Notification callback when a route state changed to other than Unknown.
-     * Used by a SS7 router. This method is called with the route mutex locked
-     * @param route Pointer to the route whose state has changed
-     * @param type Type of the pointcode of the route
-     * @param context Optional context provided when route changed
-     */
-    virtual void routeChanged(const SS7Route* route, SS7PointCode::Type type, GenObject* context);
+    SS7Route* findRoute(SS7PointCode::Type type, unsigned int packed);
 
     /**
      * Retrieve the route table for a specific Point Code type
@@ -5837,12 +5789,16 @@ protected:
     inline const ObjList* getRoutes(SS7PointCode::Type type) const
 	{ return (type < SS7PointCode::DefinedTypes) ? &m_route[type-1] : 0; }
 
+    /** Mutex to lock routing list operations */
+    Mutex m_routeMutex;
+
+    /** Outgoing point codes serviced by a network (for each point code type) */
+    ObjList m_route[YSS7_PCTYPE_COUNT];
+
 private:
     Mutex m_l3userMutex;                 // Mutex to lock L3 user pointer
     SS7L3User* m_l3user;
     SS7PointCode::Type m_cpType[4];      // Map incoming MSUs net indicators to point code type
-    Mutex m_routeMutex;                  // Mutex to lock routing list operations
-    ObjList m_route[YSS7_PCTYPE_COUNT];  // Outgoing point codes serviced by a network (for each point code type)
                                          // or the routing table of a message router
     unsigned int m_local[YSS7_PCTYPE_COUNT];
 };
@@ -6154,6 +6110,49 @@ public:
 
 protected:
     /**
+     * Reset state of all routes of a network to Unknown
+     */
+    void clearView(const SS7Layer3* network);
+
+    /**
+     * Get the state of a route as seen from another network or adjacent point code
+     * @param type Point Code type to search for
+     * @param packedPC The packed point code whose state is viewed
+     * @param remotePC The point code of an adjacent viewer, its network is skipped
+     * @param network The network that will be not included in the view
+     * @return State of the route as viewed from the specified point code or network
+     */
+    SS7Route::State getRouteView(SS7PointCode::Type type, unsigned int packedPC,
+        unsigned int remotePC = 0, const SS7Layer3* network = 0);
+
+    /**
+     * Set the current state of a route by packed Point Code.
+     * This method is thread safe
+     * @param type Destination point code type
+     * @param packedPC The packed point code
+     * @param state The new state of the route
+     * @param remotePC The point code that caused the route change
+     * @param network The network that caused the route change
+     * @return True if the route was found and its state changed
+     */
+    bool setRouteState(SS7PointCode::Type type, unsigned int packedPC, SS7Route::State state,
+        unsigned int remotePC = 0, const SS7Layer3* network = 0);
+
+    /**
+     * Set the current state of a route by unpacked Point Code.
+     * This method is thread safe
+     * @param type Destination point code type
+     * @param dest The destination point code
+     * @param state The new state of the route
+     * @param remotePC The point code that caused the route change
+     * @param network The network that caused the route change
+     * @return True if the route was found and its state changed
+     */
+    inline bool setRouteState(SS7PointCode::Type type, const SS7PointCode& dest, SS7Route::State state,
+        unsigned int remotePC = 0, const SS7Layer3* network = 0)
+	{ return setRouteState(type,dest.pack(type),state,remotePC,network); }
+
+    /**
      * Load the default local Point Codes from a list of parameters
      * @param params List of parameters to load "local=" entries from
      */
@@ -6176,13 +6175,43 @@ protected:
     virtual HandledMSU receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls);
 
     /**
+     * Add a network to the routing table. Clear all its routes before appending it to the table
+     * This method is thread safe
+     * @param network The network to add to the routing table
+     */
+    void updateRoutes(SS7Layer3* network);
+
+    /**
+     * Remove the given network from all destinations in the routing table.
+     * Remove the entry in the routing table if empty (no more routes to the point code).
+     * This method is thread safe
+     * @param network The network to remove
+     */
+    void removeRoutes(SS7Layer3* network);
+
+    /**
+     * Trigger the route changed notification for each route that is not Unknown
+     * @param network The network for which to notify, NULL to notify all routes
+     * @param states Mask of required states of the route
+     * @param remotePC The point code that caused the route change
+     * @param changer The network that caused the route change
+     */
+    void notifyRoutes(const SS7Layer3* network = 0, SS7Route::State states = SS7Route::AnyState,
+        unsigned int remotePC = 0, const SS7Layer3* changer = 0);
+
+    /**
      * Notification callback when a route state changed to other than Unknown.
      * This method is called with the route mutex locked
      * @param route Pointer to the route whose state has changed
      * @param type Type of the pointcode of the route
-     * @param context Optional context provided when route changed
+     * @param remotePC The point code that caused the route change
+     * @param network The network that caused the route change
+     * @param onlyPC If set only advertise to this point code
+     * @param forced Notify even if the route view didn't change
      */
-    virtual void routeChanged(const SS7Route* route, SS7PointCode::Type type, GenObject* context);
+    virtual void routeChanged(const SS7Route* route, SS7PointCode::Type type,
+        unsigned int remotePC = 0, const SS7Layer3* network = 0,
+        unsigned int onlyPC = 0, bool forced = false);
 
     /**
      * Process a notification generated by the attached network layer
@@ -6221,13 +6250,16 @@ private:
     void disable();
     void sendRestart(const SS7Layer3* network = 0);
     void checkRoutes(const SS7Layer3* noResume = 0);
+    void clearRoutes(SS7Layer3* network);
     bool setRouteSpecificState(SS7PointCode::Type type, unsigned int packedPC,
-	unsigned int srcPC, SS7Route::State state, GenObject* context = 0);
+	unsigned int srcPC, SS7Route::State state, const SS7Layer3* changer = 0);
     inline bool setRouteSpecificState(SS7PointCode::Type type, const SS7PointCode& dest,
-	const SS7PointCode&src, SS7Route::State state, GenObject* context = 0)
-	{ return setRouteSpecificState(type,dest.pack(type),src.pack(type),state,context); }
+	const SS7PointCode&src, SS7Route::State state, const SS7Layer3* changer = 0)
+	{ return setRouteSpecificState(type,dest.pack(type),src.pack(type),state,changer); }
     void sendRouteTest();
     int routeMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls, SS7Route::State states);
+    void buildView(SS7PointCode::Type type, ObjList& view, SS7Layer3* network);
+    void buildViews();
     SignallingTimer m_routeTest;
     bool m_testRestricted;
     bool m_checkRoutes;

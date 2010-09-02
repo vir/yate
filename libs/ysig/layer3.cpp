@@ -57,9 +57,9 @@ const ObjList* SS7L3User::getNetRoutes(const SS7Layer3* network, SS7PointCode::T
 // Constructor
 SS7Layer3::SS7Layer3(SS7PointCode::Type type)
     : SignallingComponent("SS7Layer3"),
+      m_routeMutex(true,"SS7Layer3::route"),
       m_l3userMutex(true,"SS7Layer3::l3user"),
-      m_l3user(0),
-      m_routeMutex(true,"SS7Layer3::route")
+      m_l3user(0)
 {
     for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++)
 	m_local[i] = 0;
@@ -247,23 +247,6 @@ SS7Route::State SS7Layer3::getRouteState(SS7PointCode::Type type, unsigned int p
     return SS7Route::Unknown;
 }
 
-// Set the state of a route.
-bool SS7Layer3::setRouteState(SS7PointCode::Type type, unsigned int packedPC, SS7Route::State state, GenObject* context)
-{
-    if (type == SS7PointCode::Other || (unsigned int)type > YSS7_PCTYPE_COUNT || !packedPC)
-	return false;
-    Lock lock(m_routeMutex);
-    SS7Route* route = findRoute(type,packedPC);
-    if (!route)
-	return false;
-    if (state != route->m_state) {
-	route->m_state = state;
-	if (state != SS7Route::Unknown)
-	    routeChanged(route,type,context);
-    }
-    return true;
-}
-
 bool SS7Layer3::maintenance(const SS7MSU& msu, const SS7Label& label, int sls)
 {
     if (msu.getSIF() != SS7MSU::MTN && msu.getSIF() != SS7MSU::MTNS)
@@ -408,7 +391,7 @@ bool SS7Layer3::prohibited(unsigned char ssf, const SS7Label& label, int sls)
 }
 
 // Find a route having the specified point code type and packed point code
-SS7Route* SS7Layer3::findRoute(SS7PointCode::Type type, unsigned int packed, SS7Route::State states)
+SS7Route* SS7Layer3::findRoute(SS7PointCode::Type type, unsigned int packed)
 {
     if ((unsigned int)type == 0 || !packed)
 	return 0;
@@ -416,101 +399,12 @@ SS7Route* SS7Layer3::findRoute(SS7PointCode::Type type, unsigned int packed, SS7
     if (index >= YSS7_PCTYPE_COUNT)
 	return 0;
     Lock lock(m_routeMutex);
-    XDebug(this,DebugAll,"findRoute type=%s packed=%u states=0x%02x [%p]",
-	SS7PointCode::lookup(type),packed,states,this);
     for (ObjList* o = m_route[index].skipNull(); o; o = o->skipNext()) {
 	SS7Route* route = static_cast<SS7Route*>(o->get());
-	XDebug(this,DebugAll,"findRoute candidate %u state=0x%02X [%p]",
-	    route->packed(),route->state(),this);
-	if (route->packed() == packed && ((route->state() & states) != 0))
+	if (route->packed() == packed)
 	    return route;
     }
     return 0;
-}
-
-// Add a network to the routing table. Clear all its routes before appending it to the table
-void SS7Layer3::updateRoutes(SS7Layer3* network)
-{
-    if (!network)
-	return;
-    Lock lock(m_routeMutex);
-    removeRoutes(network);
-    for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
-	SS7PointCode::Type type = (SS7PointCode::Type)(i + 1);
-	for (ObjList* o = network->m_route[i].skipNull(); o; o = o->skipNext()) {
-	    SS7Route* src = static_cast<SS7Route*>(o->get());
-	    SS7Route* dest = findRoute(type,src->packed());
-	    if (dest) {
-		if (dest->priority() > src->priority())
-		    dest->m_priority = src->priority();
-	    }
-	    else {
-		dest = new SS7Route(*src);
-		m_route[i].append(dest);
-	    }
-	    DDebug(this,DebugAll,"Add route type=%s packed=%u for network (%p,'%s') [%p]",
-		SS7PointCode::lookup(type),src->m_packed,network,network->toString().safe(),this);
-	    dest->attach(network,type);
-	}
-    }
-}
-
-// Remove the given network from all destinations in the routing table.
-// Remove the entry in the routing table if empty (no more routes to the point code).
-void SS7Layer3::removeRoutes(SS7Layer3* network, GenObject* context)
-{
-    if (!network)
-	return;
-    Lock lock(m_routeMutex);
-    for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
-	ListIterator iter(m_route[i]);
-	while (true) {
-	    SS7Route* route = static_cast<SS7Route*>(iter.get());
-	    if (!route)
-		break;
-	    if (!route->detach(network)) {
-		SS7PointCode::Type type = static_cast<SS7PointCode::Type>(i+1);
-		DDebug(this,DebugAll,"Removing empty route type=%s packed=%u [%p]",
-		    SS7PointCode::lookup(type),route->m_packed,this);
-		switch (route->state()) {
-		    case SS7Route::Unknown:
-		    case SS7Route::Prohibited:
-			break;
-		    default:
-			route->m_state = SS7Route::Prohibited;
-			routeChanged(route,type,context);
-		}
-		m_route[i].remove(route,true);
-	    }
-	}
-    }
-    DDebug(this,DebugAll,"Removed network (%p,'%s') from routing table [%p]",
-	network,network->toString().safe(),this);
-}
-
-// Call the route changed notification for all known routes that match
-void SS7Layer3::notifyRoutes(const SS7Layer3* network, SS7Route::State states, GenObject* context)
-{
-    if (SS7Route::Unknown == states)
-	return;
-    Lock lock(m_routeMutex);
-    for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
-	ListIterator iter(m_route[i]);
-	while (true) {
-	    SS7Route* route = static_cast<SS7Route*>(iter.get());
-	    if (!route)
-		break;
-	    if ((route->state() & states) == 0)
-		continue;
-	    if (network && !route->hasNetwork(network))
-		continue;
-	    routeChanged(route,static_cast<SS7PointCode::Type>(i+1),context);
-	}
-    }
-}
-
-void SS7Layer3::routeChanged(const SS7Route* route, SS7PointCode::Type type, GenObject* context)
-{
 }
 
 void SS7Layer3::printRoutes()
@@ -541,7 +435,9 @@ void SS7Layer3::printRoutes()
 	    for (ObjList* oo = route->m_networks.skipNull(); oo; oo = oo->skipNext()) {
 		GenPointer<SS7Layer3>* d = static_cast<GenPointer<SS7Layer3>*>(oo->get());
 		if (*d)
-		    tmp << " " << (*d)->toString() << "," << (*d)->getRoutePriority(type,route->m_packed);
+		    tmp << " " << (*d)->toString() << "," <<
+			(*d)->getRoutePriority(type,route->m_packed) << "," <<
+			SS7Route::stateName((*d)->getRouteState(type,route->m_packed));
 	    }
 	    if (route->shift())
 		tmp << " >> " << route->shift();

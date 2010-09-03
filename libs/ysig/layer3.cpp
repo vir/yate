@@ -275,7 +275,7 @@ bool SS7Layer3::maintenance(const SS7MSU& msu, const SS7Label& label, int sls)
 	else if (getRoutePriority(label.type(),label.opc()))
 	    badLink = true;
     }
-    int level = DebugInfo;
+    int level = DebugAll;
     if (badLink) {
 	addr << " on " << sls;
 	level = DebugMild;
@@ -301,7 +301,7 @@ bool SS7Layer3::maintenance(const SS7MSU& msu, const SS7Label& label, int sls)
 		if (!d)
 		    return false;
 		linkChecked(sls,true);
-		Debug(this,DebugInfo,"Sending SLTA %s with %u bytes",addr.c_str(),len);
+		Debug(this,level,"Sending SLTA %s with %u bytes",addr.c_str(),len);
 		*d++ = SS7MsgMTN::SLTA;
 		*d++ = len << 4;
 		while (len--)
@@ -447,10 +447,10 @@ void SS7Layer3::printRoutes()
     }
     if (s) {
 	s = s.substr(0,s.length() - 2);
-	Debug(this,DebugAll,"%s: [%p]\r\n%s",router?"Routing table":"Destinations",this,s.c_str());
+	Debug(this,DebugInfo,"%s: [%p]\r\n%s",router?"Routing table":"Destinations",this,s.c_str());
     }
     else 
-	Debug(this,DebugAll,"No %s [%p]",router?"routes":"destinations",this);
+	Debug(this,DebugInfo,"No %s [%p]",router?"routes":"destinations",this);
 }
 
 
@@ -1149,7 +1149,7 @@ void SS7MTP3::timerTick(const Time& when)
 		    addr << SS7PointCode::lookup(type) << "," << lbl;
 		    if (debugAt(DebugAll))
 			addr << " (" << lbl.opc().pack(type) << ":" << lbl.dpc().pack(type) << ":" << sls << ")";
-		    Debug(this,DebugInfo,"Sending SLTM %s with %u bytes",addr.c_str(),len);
+		    Debug(this,DebugAll,"Sending SLTM %s with %u bytes",addr.c_str(),len);
 
 		    *d++ = SS7MsgMTN::SLTM;
 		    *d++ = len << 4;

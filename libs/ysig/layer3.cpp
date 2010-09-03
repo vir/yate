@@ -917,7 +917,7 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 	if (!*p)
 	    continue;
 	SS7Layer2* link = *p;
-	if (link->operational() && (mgmt || !link->inhibited()) && link->transmitMSU(msu)) {
+	if (link->operational() && !link->inhibited() && link->transmitMSU(msu)) {
 	    sls = link->sls();
 	    DDebug(this,DebugAll,"Sent MSU over link '%s' %p with SLS=%d%s [%p]",
 		link->toString().c_str(),link,sls,

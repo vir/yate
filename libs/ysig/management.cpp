@@ -911,11 +911,14 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 	bool linkUp = network->operational(sls);
 	if (linkUp && !network->inhibited(sls,SS7Layer2::Inactive))
 	    return;
-	bool linkAvail[256];
+	bool linkAvail[257];
 	bool force = true;
 	int txSls;
+	bool localLink = false;
 	for (txSls = 0; m_changeMsgs && (txSls < 256); txSls++)
-	    linkAvail[txSls] = (txSls != sls) && !network->inhibited(txSls) && network->operational(txSls);
+	    localLink = (linkAvail[txSls] = (txSls != sls) && network->inService(txSls)) || localLink;
+	// if no link is available in linkset rely on another linkset
+	linkAvail[256] = !localLink;
 	for (unsigned int i = 0; m_changeMsgs && (i < YSS7_PCTYPE_COUNT); i++) {
 	    SS7PointCode::Type type = static_cast<SS7PointCode::Type>(i+1);
 	    unsigned int local = network->getLocal(type);
@@ -949,7 +952,7 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 		    String tmp = addr;
 		    tmp << "," << SS7PointCode(type,r->packed()) << "," << sls;
 		    String slc(sls);
-		    for (; txSls < 256; txSls++) {
+		    for (; txSls <= 256; txSls++) {
 			if (!linkAvail[txSls])
 			    continue;
 			NamedList* ctl = controlCreate(oper);
@@ -959,9 +962,9 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 			    sls,oper,tmp.c_str(),txSls,this);
 			ctl->setParam("address",tmp);
 			ctl->setParam("slc",slc);
-			ctl->setParam("linksel",String(txSls));
+			ctl->setParam("linksel",String(txSls & 0xff));
 			if (linkUp)
-			    ctl->setParam("code",String(txSls));
+			    ctl->setParam("code",String((txSls + sls) & 0xff));
 			else {
 			    if (seq < 0)
 				seq = network->getSequence(sls);

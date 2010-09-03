@@ -394,10 +394,19 @@ bool SS7Router::restart()
     Lock mylock(this);
     m_phase2 = false;
     m_started = false;
-    m_checkRoutes = true;
     m_isolate.stop();
-    m_restart.start();
     m_routeTest.stop();
+    m_restart.stop();
+    for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
+	L3Pointer* p = static_cast<L3Pointer*>(o->get());
+	if (!(*p)->operational()) {
+	    clearView(*p);
+	    clearRoutes(*p);
+	}
+    }
+    checkRoutes();
+    m_checkRoutes = true;
+    m_restart.start();
     return true;
 }
 
@@ -547,8 +556,11 @@ void SS7Router::buildView(SS7PointCode::Type type, ObjList& view, SS7Layer3* net
 		if (r->packed() == route->packed())
 		    break;
 	    }
-	    if (!v)
+	    if (!v) {
+		DDebug(this,DebugAll,"Creating route to %u from %s in view of %s",
+		    route->packed(),(*p)->toString().c_str(),network->toString().c_str());
 		view.append(new SS7Route(route->packed()));
+	    }
 	}
     }
 }
@@ -730,8 +742,8 @@ HandledMSU SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7L
     return HandledMSU::Failure;
 }
 
-// Call the route changed notification for all known routes that match
-void SS7Router::notifyRoutes(SS7Route::State states, unsigned int remotePC)
+// Call the route changed notification for all known routes
+void SS7Router::notifyRoutes(SS7Route::State states, unsigned int onlyPC)
 {
     if (SS7Route::Unknown == states)
 	return;
@@ -744,7 +756,7 @@ void SS7Router::notifyRoutes(SS7Route::State states, unsigned int remotePC)
 		break;
 	    if ((route->state() & states) == 0)
 		continue;
-	    routeChanged(route,static_cast<SS7PointCode::Type>(i+1),0,0,remotePC,true);
+	    routeChanged(route,static_cast<SS7PointCode::Type>(i+1),0,0,onlyPC,true);
 	}
     }
 }
@@ -823,8 +835,8 @@ void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type,
     dest << SS7PointCode(type,route->packed());
     if (dest.null())
 	return;
-    Debug(this,DebugAll,"Destination %s:%s state: %s [%p]",
-	pct,dest.c_str(),route->stateName(),this);
+    DDebug(this,DebugAll,"Destination %s:%u state: %s set by %u only to %u [%p]",
+	pct,route->packed(),route->stateName(),remotePC,onlyPC,this);
     // only forward TRx if we are a STP and not in Restart Phase 1
     if (!(m_transfer && (m_started || m_phase2)))
 	return;
@@ -836,15 +848,20 @@ void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type,
 	    L3Pointer* l3p = static_cast<L3Pointer*>(o->get());
 	    if (!l3p || ((*l3p) == network))
 		continue;
+	    if (!(*l3p)->operational())
+		continue;
 	    if (!(*l3p)->getRoutePriority(type,remotePC))
 		continue;
 	    for (ObjList* v = l3p->view(type).skipNull(); v; v = v->skipNext()) {
 		SS7Route* r = static_cast<const SS7Route*>(v->get());
 		if (r->packed() != route->packed())
 		    continue;
-		SS7Route::State state = getRouteView(type,r->packed(),remotePC,*l3p);
+		SS7Route::State state = getRouteView(type,r->packed(),0,*l3p);
 		if ((r->state() == state) && !forced)
 		    break;
+		DDebug(this,DebugAll,"Route %u of view '%s' changed: %s -> %s",
+		    r->packed(),(*l3p)->toString().c_str(),
+		    SS7Route::stateName(r->state()),SS7Route::stateName(state));
 		r->m_state = state;
 		unsigned int local = (*l3p)->getLocal(type);
 		if (!local)
@@ -857,7 +874,7 @@ void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type,
 		    v = v->skipNull();
 		for (; v; v = v->skipNext()) {
 		    r = static_cast<const SS7Route*>(v->get());
-		    if (r->priority())
+		    if (r->priority() || (r->state() == SS7Route::Prohibited))
 			continue;
 		    if (onlyPC && (r->packed() != onlyPC))
 			continue;
@@ -867,7 +884,7 @@ void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type,
 		    String addr;
 		    addr << pct << "," << SS7PointCode(type,local) << ","
 			<< SS7PointCode(type,r->packed());
-		    Debug(this,DebugAll,"Advertising Route %s %s %s [%p]",
+		    Debug(this,DebugInfo,"Advertising Route %s %s %s [%p]",
 			dest.c_str(),cmd,addr.c_str(),this);
 		    ctl->addParam("address",addr);
 		    ctl->addParam("destination",dest);
@@ -912,8 +929,9 @@ SS7Route::State SS7Router::getRouteView(SS7PointCode::Type type, unsigned int pa
 	if ((state & SS7Route::KnownState) > (best & SS7Route::KnownState))
 	    best = state;
     }
-    DDebug(this,DebugInfo,"Route view of %u from %u: %s",
-	packedPC,remotePC,SS7Route::stateName(best));
+    DDebug(this,DebugInfo,"Route view of %u from %u%s%s: %s",
+	packedPC,remotePC,(network ? " on " : ""),
+	(network ? network->toString().c_str() : ""),SS7Route::stateName(best));
     return best;
 }
 
@@ -921,16 +939,19 @@ void SS7Router::clearView(const SS7Layer3* network)
 {
     for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
 	L3Pointer* p = static_cast<L3Pointer*>(o->get());
-	if (!*p || ((*p) == network))
+	if (!*p || ((*p) != network))
 	    continue;
 	for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
 	    SS7PointCode::Type type = static_cast<SS7PointCode::Type>(i+1);
 	    for (ObjList* v = p->view(type).skipNull(); v; v = v->skipNext()) {
 		SS7Route* r = static_cast<const SS7Route*>(v->get());
+		DDebug(this,DebugAll,"Route %u of view '%s' cleared: %s -> Prohibited",
+		    r->packed(),network->toString().c_str(),
+		    SS7Route::stateName(r->state()));
 		r->m_state = SS7Route::Unknown;
-		routeChanged(r,type);
 	    }
 	}
+	break;
     }
 }
 
@@ -945,6 +966,9 @@ bool SS7Router::setRouteState(SS7PointCode::Type type, unsigned int packedPC, SS
     if (!route)
 	return false;
     if (state != route->m_state) {
+	DDebug(this,DebugAll,"Local route %u/%u changed by %u: %s -> %s",
+	packedPC,route->priority(),remotePC,
+	    SS7Route::stateName(route->state()),SS7Route::stateName(state));
 	route->m_state = state;
 	if (state != SS7Route::Unknown)
 	    routeChanged(route,type,remotePC,network);
@@ -982,6 +1006,9 @@ bool SS7Router::setRouteSpecificState(SS7PointCode::Type type, unsigned int pack
 	}
 	else {
 	    ok = true;
+	    DDebug(this,DebugAll,"Route %u/%u of network '%s' changed: %s -> %s",
+		r->packed(),r->priority(),l3->toString().c_str(),
+		SS7Route::stateName(r->state()),SS7Route::stateName(state));
 	    r->m_state = state;
 	}
     }
@@ -989,6 +1016,8 @@ bool SS7Router::setRouteSpecificState(SS7PointCode::Type type, unsigned int pack
 	Debug(this,DebugWarn,"Route to %u advertised by %u not found in any network",packedPC,srcPC);
 	return false;
     }
+    DDebug(this,DebugAll,"Local best route %u/%u changed by %u: %s -> %s",packedPC,
+	route->priority(),srcPC,SS7Route::stateName(route->state()),SS7Route::stateName(best));
     route->m_state = best;
     routeChanged(route,type,srcPC,changer);
     return true;
@@ -1134,9 +1163,12 @@ void SS7Router::checkRoutes(const SS7Layer3* noResume)
 	for (; l; l = l->skipNext()) {
 	    SS7Route* r = static_cast<SS7Route*>(l->get());
 	    SS7Route::State state = getRouteView(type,r->packed());
-	    if (state & SS7Route::NotProhibited)
+	    if ((state & (SS7Route::NotProhibited|SS7Route::Unknown)) && !r->priority())
 		isolated = false;
 	    if (r->state() != state) {
+		DDebug(this,DebugAll,"Local route %u/%u changed during check: %s -> %s",
+		    r->packed(),r->priority(),
+		    SS7Route::stateName(r->state()),SS7Route::stateName(state));
 		r->m_state = state;
 		routeChanged(r,type,0);
 	    }
@@ -1167,17 +1199,21 @@ void SS7Router::clearRoutes(SS7Layer3* network)
 {
     if (!network)
 	return;
+    // if an adjacent node is operational but not in service we may have a chance
+    SS7Route::State adjacentState = network->operational() ?
+	SS7Route::Unknown : SS7Route::Prohibited;
     for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
 	SS7PointCode::Type type = static_cast<SS7PointCode::Type>(i+1);
-	const ObjList* l = getRoutes(type);
+	const ObjList* l = network->getRoutes(type);
 	if (l)
 	    l = l->skipNull();
 	for (; l; l = l->skipNext()) {
 	    SS7Route* r = static_cast<SS7Route*>(l->get());
-	    DDebug(DebugInfo,"Clearing route %u of %s",
-		r->packed(),network->toString().c_str());
 	    SS7Route::State state = r->priority() ?
-		SS7Route::Unknown : SS7Route::Prohibited;
+		SS7Route::Unknown : adjacentState;
+	    DDebug(DebugInfo,"Clearing route %u/%u of %s to %s",
+		r->packed(),r->priority(),network->toString().c_str(),
+		SS7Route::stateName(state));
 	    setRouteSpecificState(type,r->packed(),0,state,network);
 	}
     }
@@ -1208,7 +1244,7 @@ bool SS7Router::uninhibit(SS7Layer3* network, int sls, bool remote)
 		"," << SS7PointCode(type,local) <<
 		"," << SS7PointCode(type,r->packed()) <<
 		"," << sls;
-	    DDebug(this,DebugAll,"Requesting %s %s [%p]",cmd,addr.c_str(),this);
+	    DDebug(this,DebugInfo,"Requesting %s %s [%p]",cmd,addr.c_str(),this);
 	    ctl->addParam("address",addr);
 	    ctl->setParam("automatic",String::boolText(true));
 	    m_mngmt->controlExecute(ctl);
@@ -1320,7 +1356,7 @@ void SS7Router::notify(SS7Layer3* network, int sls)
     bool useMe = false;
     Lock lock(this);
     if (network) {
-	if (network->operational()) {
+	if (network->inService(sls)) {
 	    if (m_isolate.started()) {
 		Debug(this,DebugNote,"Isolation ended before shutting down [%p]",this);
 		m_isolate.stop();
@@ -1457,7 +1493,7 @@ bool SS7Router::control(NamedList& params)
 		    NamedList* ctl = m_mngmt->controlCreate(oper);
 		    if (!ctl)
 			return false;
-		    DDebug(this,DebugAll,"Advertising %s %s to %s [%p]",
+		    Debug(this,DebugInfo,"Requesting %s %s to %s [%p]",
 			dest->c_str(),oper,addr,this);
 		    ctl->addParam("address",addr);
 		    ctl->addParam("destination",*dest);

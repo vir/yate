@@ -6208,9 +6208,9 @@ protected:
     /**
      * Trigger the route changed notification for each route that is not Unknown
      * @param states Mask of required states of the route
-     * @param remotePC The point code that caused the route change
+     * @param onlyPC The only point code that should receive notifications
      */
-    void notifyRoutes(SS7Route::State states = SS7Route::AnyState, unsigned int remotePC = 0);
+    void notifyRoutes(SS7Route::State states = SS7Route::AnyState, unsigned int onlyPC = 0);
 
     /**
      * Notification callback when a route state changed to other than Unknown.

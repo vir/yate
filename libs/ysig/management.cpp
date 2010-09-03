@@ -864,7 +864,7 @@ bool SS7Management::control(NamedList& params)
 			}
 			return (cmd == SS7MsgSNM::COA)
 			    ? transmitMSU(SS7MSU(txSio,lbl,&data,len),lbl,txSls) >= 0
-			    : postpone(new SS7MSU(txSio,lbl,&data,len),lbl,txSls,1800);
+			    : postpone(new SS7MSU(txSio,lbl,&data,len),lbl,txSls,1800,0,true);
 		    }
 		// Changeback messages
 		case SS7MsgSNM::CBD:
@@ -889,7 +889,7 @@ bool SS7Management::control(NamedList& params)
 			}
 			return (cmd == SS7MsgSNM::CBA)
 			    ? transmitMSU(SS7MSU(txSio,lbl,&data,len),lbl,txSls) >= 0
-			    : postpone(new SS7MSU(txSio,lbl,&data,len),lbl,txSls,1000,2000);
+			    : postpone(new SS7MSU(txSio,lbl,&data,len),lbl,txSls,1000,2000,true);
 		    }
 		default:
 		    if (cmd >= 0)
@@ -1034,7 +1034,7 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 }
 
 bool SS7Management::postpone(SS7MSU* msu, const SS7Label& label, int txSls,
-	u_int64_t interval, u_int64_t global, const Time& when)
+	u_int64_t interval, u_int64_t global, bool force, const Time& when)
 {
     lock();
     unsigned int len = msu->length();
@@ -1052,7 +1052,7 @@ bool SS7Management::postpone(SS7MSU* msu, const SS7Label& label, int txSls,
 	TelEngine::destruct(msu);
     }
     unlock();
-    if (msu && ((interval == 0) || (transmitMSU(*msu,label,txSls) >= 0))) {
+    if (msu && ((interval == 0) || (transmitMSU(*msu,label,txSls) >= 0) || force)) {
 	lock();
 	m_pending.add(new SnmPending(msu,label,txSls,interval,global),when);
 	unlock();
@@ -1064,7 +1064,7 @@ bool SS7Management::postpone(SS7MSU* msu, const SS7Label& label, int txSls,
 
 bool SS7Management::timeout(const SS7MSU& msu, const SS7Label& label, int txSls, bool final)
 {
-    Debug(this,DebugAll,"Timeout %u%s [%p]",txSls,(final ? " final" : ""),this);
+    DDebug(this,DebugAll,"Timeout %u%s [%p]",txSls,(final ? " final" : ""),this);
     if (!final)
 	return true;
     const unsigned char* buf = msu.getData(label.length()+1,1);

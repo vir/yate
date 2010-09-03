@@ -7568,7 +7568,7 @@ protected:
 
 private:
     bool postpone(SS7MSU* msu, const SS7Label& label, int txSls,
-	u_int64_t interval, u_int64_t global = 0, const Time& when = Time());
+	u_int64_t interval, u_int64_t global = 0, bool force = false, const Time& when = Time());
     bool timeout(const SS7MSU& msu, const SS7Label& label, int txSls, bool final);
     bool timeout(SignallingMessageTimer& timer, bool final);
     SignallingMessageTimerList m_pending;

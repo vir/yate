@@ -5127,7 +5127,7 @@ protected:
     inline SS7Layer2()
 	: m_autoEmergency(true), m_lastSeqRx(-1), m_congestion(0),
 	  m_l2userMutex(true,"SS7Layer2::l2user"), m_l2user(0), m_sls(-1),
-	  m_checkTime(0), m_checkFail(false), m_inhibited(Unchecked)
+	  m_checkTime(0), m_checkFail(0), m_inhibited(Unchecked)
 	{ }
 
     /**
@@ -5204,7 +5204,7 @@ private:
     SS7L2User* m_l2user;
     int m_sls;
     u_int64_t m_checkTime;
-    bool m_checkFail;
+    int m_checkFail;
     int m_inhibited;
 };
 

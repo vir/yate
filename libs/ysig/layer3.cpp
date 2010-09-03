@@ -294,7 +294,7 @@ bool SS7Layer3::maintenance(const SS7MSU& msu, const SS7Label& label, int sls)
 	    Debug(this,level,"Received SLTM %s with %u bytes",addr.c_str(),len);
 	    if (badLink)
 		return false;
-	    {
+	    if (operational()) {
 		SS7Label lbl(label,label.sls(),0);
 		SS7MSU answer(msu.getSIO(),lbl,0,len+2);
 		unsigned char* d = answer.getData(lbl.length()+1,len+2);
@@ -1104,9 +1104,9 @@ void SS7MTP3::timerTick(const Time& when)
 	SS7Layer2* l2 = *p;
 	if (l2 && l2->m_checkTime && (l2->m_checkTime < when) && l2->operational()) {
 	    l2->m_checkTime = 0;
+	    int level = DebugAll;
 	    u_int64_t check = m_checkT2;
-	    if (l2->m_checkFail) {
-		l2->m_checkFail = false;
+	    if (l2->m_checkFail > 1) {
 		if (!l2->inhibited(SS7Layer2::Unchecked)) {
 		    Debug(this,DebugWarn,"Taking link %d '%s' out of service [%p]",
 			l2->sls(),l2->toString().c_str(),this);
@@ -1116,11 +1116,12 @@ void SS7MTP3::timerTick(const Time& when)
 		}
 	    }
 	    else if (m_checkT1) {
-		l2->m_checkFail = true;
+		if (l2->m_checkFail++)
+		    level = DebugInfo;
 		check = m_checkT1;
 	    }
 	    // if some action set a new timer bail out, we'll get back to it
-	    if (l2->m_checkTime)
+	    if (l2->m_checkTime || !l2->operational())
 		continue;
 	    l2->m_checkTime = check ? when + check : 0;
 	    for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
@@ -1149,7 +1150,7 @@ void SS7MTP3::timerTick(const Time& when)
 		    addr << SS7PointCode::lookup(type) << "," << lbl;
 		    if (debugAt(DebugAll))
 			addr << " (" << lbl.opc().pack(type) << ":" << lbl.dpc().pack(type) << ":" << sls << ")";
-		    Debug(this,DebugAll,"Sending SLTM %s with %u bytes",addr.c_str(),len);
+		    Debug(this,level,"Sending SLTM %s with %u bytes",addr.c_str(),len);
 
 		    *d++ = SS7MsgMTN::SLTM;
 		    *d++ = len << 4;
@@ -1185,7 +1186,7 @@ void SS7MTP3::linkChecked(int sls, bool remote)
 	    }
 	}
 	else {
-	    l2->m_checkFail = false;
+	    l2->m_checkFail = 0;
 	    l2->m_checkTime = m_checkT2 ? Time::now() + m_checkT2 : 0;
 	    if (l2->inhibited(SS7Layer2::Unchecked)) {
 		Debug(this,DebugNote,"Placing link %d '%s' in service [%p]",

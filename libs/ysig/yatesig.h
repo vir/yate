@@ -6207,13 +6207,10 @@ protected:
 
     /**
      * Trigger the route changed notification for each route that is not Unknown
-     * @param network The network for which to notify, NULL to notify all routes
      * @param states Mask of required states of the route
      * @param remotePC The point code that caused the route change
-     * @param changer The network that caused the route change
      */
-    void notifyRoutes(const SS7Layer3* network = 0, SS7Route::State states = SS7Route::AnyState,
-        unsigned int remotePC = 0, const SS7Layer3* changer = 0);
+    void notifyRoutes(SS7Route::State states = SS7Route::AnyState, unsigned int remotePC = 0);
 
     /**
      * Notification callback when a route state changed to other than Unknown.

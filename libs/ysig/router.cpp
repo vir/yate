@@ -48,6 +48,7 @@ private:
 
 // Control operations
 static const TokenDict s_dict_control[] = {
+    { "show", SS7Router::Status },
     { "pause", SS7Router::Pause },
     { "resume", SS7Router::Resume },
     { "traffic", SS7Router::Traffic },
@@ -588,7 +589,7 @@ void SS7Router::timerTick(const Time& when)
 	    checkRoutes();
 	// advertise all non-Prohibited routes we learned about
 	if (m_transfer)
-	    notifyRoutes(0,SS7Route::NotProhibited);
+	    notifyRoutes(SS7Route::NotProhibited);
 	// iterate and notify all user parts
 	ObjList* l = &m_layer4;
 	for (; l; l = l->next()) {
@@ -610,7 +611,7 @@ void SS7Router::restart2()
     m_phase2 = true;
     mylock.drop();
     // advertise Prohibited routes we learned until now
-    notifyRoutes(0,SS7Route::Prohibited);
+    notifyRoutes(SS7Route::Prohibited);
 }
 
 int SS7Router::routeMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls, SS7Route::State states)
@@ -730,8 +731,7 @@ HandledMSU SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7L
 }
 
 // Call the route changed notification for all known routes that match
-void SS7Router::notifyRoutes(const SS7Layer3* network, SS7Route::State states,
-    unsigned int remotePC, const SS7Layer3* changer)
+void SS7Router::notifyRoutes(SS7Route::State states, unsigned int remotePC)
 {
     if (SS7Route::Unknown == states)
 	return;
@@ -744,10 +744,7 @@ void SS7Router::notifyRoutes(const SS7Layer3* network, SS7Route::State states,
 		break;
 	    if ((route->state() & states) == 0)
 		continue;
-	    if (network && !route->hasNetwork(network))
-		continue;
-	    routeChanged(route,static_cast<SS7PointCode::Type>(i+1),0,
-		changer,remotePC,true);
+	    routeChanged(route,static_cast<SS7PointCode::Type>(i+1),0,0,remotePC,true);
 	}
     }
 }
@@ -915,7 +912,8 @@ SS7Route::State SS7Router::getRouteView(SS7PointCode::Type type, unsigned int pa
 	if ((state & SS7Route::KnownState) > (best & SS7Route::KnownState))
 	    best = state;
     }
-    DDebug(this,DebugInfo,"Route view of %u: %s",packedPC,SS7Route::stateName(best));
+    DDebug(this,DebugInfo,"Route view of %u from %u: %s",
+	packedPC,remotePC,SS7Route::stateName(best));
     return best;
 }
 
@@ -988,7 +986,7 @@ bool SS7Router::setRouteSpecificState(SS7PointCode::Type type, unsigned int pack
 	}
     }
     if (srcPC && !ok) {
-	Debug(this,DebugGoOn,"Route to %u advertised by %u not found in any network",packedPC,srcPC);
+	Debug(this,DebugWarn,"Route to %u advertised by %u not found in any network",packedPC,srcPC);
 	return false;
     }
     route->m_state = best;
@@ -1179,7 +1177,7 @@ void SS7Router::clearRoutes(SS7Layer3* network)
 	    DDebug(DebugInfo,"Clearing route %u of %s",
 		r->packed(),network->toString().c_str());
 	    SS7Route::State state = r->priority() ?
-		SS7Route::Prohibited : SS7Route::Unknown;
+		SS7Route::Unknown : SS7Route::Prohibited;
 	    setRouteSpecificState(type,r->packed(),0,state,network);
 	}
     }
@@ -1408,6 +1406,7 @@ bool SS7Router::control(NamedList& params)
 	    sendRestart();
 	    // fall through
 	case SS7Router::Status:
+	    printRoutes();
 	    return operational();
 	case SS7Router::Advertise:
 	    if (!(m_transfer && (m_started || m_phase2)))
@@ -1497,7 +1496,7 @@ bool SS7Router::control(NamedList& params)
 		}
 		// if STP is started advertise routes to just restarted node
 		if ((SS7MsgSNM::TRA == cmd) && m_transfer && m_started)
-		    notifyRoutes(0,SS7Route::AnyState,pc.pack(type));
+		    notifyRoutes(SS7Route::AnyState,pc.pack(type));
 		return true;
 	    }
 	    break;

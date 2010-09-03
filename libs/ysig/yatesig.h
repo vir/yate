@@ -5516,11 +5516,20 @@ public:
      * Set and clear inhibition flags on the links
      * @param sls Signalling Link to modify
      * @param setFlags Flag bits to set ORed together
-     * @param clrFlags Flag bits to clear  ORed together (optional)
+     * @param clrFlags Flag bits to clear ORed together (optional)
      * @return True if inhibition flags were set
      */
     virtual bool inhibit(int sls, int setFlags, int clrFlags = 0)
 	{ return false; }
+
+    /**
+     * Check if a link is operational and not inhibited
+     * @param sls Signalling Link to check
+     * @param ignore Inhibition flags to ignore, ORed together
+     * @return True if the link is operational and not inhibited
+     */
+    inline bool inService(int sls, int ignore = 0)
+	{ return operational(sls) && !inhibited(sls,~ignore); }
 
     /**
      * Get the current congestion level of a link
@@ -5763,6 +5772,13 @@ protected:
      * @return True if the TFP was sent
      */
     virtual bool prohibited(unsigned char ssf, const SS7Label& label, int sls);
+
+    /**
+     * Check if we should answer with SLTA to received SLTM in maintenance()
+     * @return True to send a SLTA for each good received SLTM
+     */
+    virtual bool responder() const
+	{ return true; }
 
     /**
      * Find a route having the specified point code type and packed point code.
@@ -6979,6 +6995,13 @@ protected:
      * @param remote True if remote checked the link, false if local success
      */
     virtual void linkChecked(int sls, bool remote);
+
+    /**
+     * Check if we should answer with SLTA to received SLTM in maintenance()
+     * @return True to send a SLTA for each good received SLTM
+     */
+    virtual bool responder() const
+	{ return !m_inhibit; }
 
     /**
      * Process a MSU received from the Layer 2 component

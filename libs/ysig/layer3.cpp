@@ -294,7 +294,7 @@ bool SS7Layer3::maintenance(const SS7MSU& msu, const SS7Label& label, int sls)
 	    Debug(this,level,"Received SLTM %s with %u bytes",addr.c_str(),len);
 	    if (badLink)
 		return false;
-	    if (operational()) {
+	    if (responder()) {
 		SS7Label lbl(label,label.sls(),0);
 		SS7MSU answer(msu.getSIO(),lbl,0,len+2);
 		unsigned char* d = answer.getData(lbl.length()+1,len+2);

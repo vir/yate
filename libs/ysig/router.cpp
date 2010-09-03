@@ -916,15 +916,10 @@ SS7Route::State SS7Router::getRouteView(SS7PointCode::Type type, unsigned int pa
 	    DDebug(this,DebugAll,"Operational '%s' contributed state %s",
 		l3->toString().c_str(),SS7Route::stateName(state));
 	}
-	else if (!l3->getRoutePriority(type,packedPC)) {
-	    state = SS7Route::Prohibited;
-	    DDebug(this,DebugAll,"Non-operational '%s' of adjacent %u got %s",
-		l3->toString().c_str(),packedPC,SS7Route::stateName(state));
-	}
 	else {
-	    DDebug(this,DebugAll,"Skipping non-operational %p '%s'",
-		l3,l3->toString().c_str());
-	    continue;
+	    state = SS7Route::Prohibited;
+	    DDebug(this,DebugAll,"Non-operational '%s' contributed state %s",
+		l3->toString().c_str(),SS7Route::stateName(state));
 	}
 	if ((state & SS7Route::KnownState) > (best & SS7Route::KnownState))
 	    best = state;
@@ -1079,6 +1074,7 @@ void SS7Router::sendRouteTest()
 {
     if (!m_mngmt)
 	return;
+    int cnt = 0;
     Lock lock(m_routeMutex);
     for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
 	SS7PointCode::Type type = static_cast<SS7PointCode::Type>(i+1);
@@ -1092,6 +1088,7 @@ void SS7Router::sendRouteTest()
 		continue;
 	    const char* oper = 0;
 	    switch (r->state()) {
+		case SS7Route::Unknown:
 		case SS7Route::Prohibited:
 		    oper = "test-prohibited";
 		    break;
@@ -1108,17 +1105,19 @@ void SS7Router::sendRouteTest()
 		GenPointer<SS7Layer3>* n = static_cast<GenPointer<SS7Layer3>*>(nl->get());
 		if (!(*n)->operational())
 		    continue;
+		if ((*n)->getRoutePriority(type,r->packed()) == (unsigned int)-1)
+		    continue;
 		unsigned int netLocal = (*n)->getLocal(type);
 		if (!netLocal)
 		    netLocal = local;
 		if (!netLocal)
 		    continue;
 		unsigned int remote = 0;
-		for (ObjList* l2 = getRoutes(type); l2; l2 = l2->next()) {
+		for (ObjList* l2 = (*n)->getRoutes(type); l2; l2 = l2->next()) {
 		    const SS7Route* r2 = static_cast<const SS7Route*>(l2->get());
 		    if (!r2)
 			continue;
-		    if (r2->priority() || !r2->hasNetwork(*n))
+		    if (r2->priority() || (r2->state() != SS7Route::Allowed))
 			continue;
 		    remote = r2->packed();
 		    break;
@@ -1142,10 +1141,13 @@ void SS7Router::sendRouteTest()
 		ctl->addParam("address",addr);
 		ctl->addParam("destination",dest);
 		ctl->setParam("automatic",String::boolText(true));
-		m_mngmt->controlExecute(ctl);
+		if (m_mngmt->controlExecute(ctl))
+		    cnt++;
 	    }
 	}
     }
+    if (cnt)
+	Debug(this,DebugInfo,"Sent %d Route Test messages [%p]",cnt,this);
 }
 
 void SS7Router::checkRoutes(const SS7Layer3* noResume)
@@ -1210,7 +1212,7 @@ void SS7Router::clearRoutes(SS7Layer3* network)
 	for (; l; l = l->skipNext()) {
 	    SS7Route* r = static_cast<SS7Route*>(l->get());
 	    SS7Route::State state = r->priority() ?
-		SS7Route::Unknown : adjacentState;
+		SS7Route::Prohibited : adjacentState;
 	    DDebug(DebugInfo,"Clearing route %u/%u of %s to %s",
 		r->packed(),r->priority(),network->toString().c_str(),
 		SS7Route::stateName(state));

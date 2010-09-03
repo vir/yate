@@ -1037,8 +1037,6 @@ void SS7MTP3::notify(SS7Layer2* link)
 		if ((link->m_checkTime > t) || (t - 2000000 > link->m_checkTime))
 		    link->m_checkTime = t;
 	    }
-	    else if (link->inhibited(SS7Layer2::Inactive))
-		act = (unsigned int)-1;
 	}
 	else {
 	    if (m_checklinks)
@@ -1061,8 +1059,12 @@ void SS7MTP3::notify(SS7Layer2* link)
 	Debug(this,DebugNote,"Linkset is%s operational [%p]",
 	    (operational() ? "" : " not"),this);
 	// if we became inaccessible try to uninhibit or resume all other links
+	const ObjList* l = 0;
+	// if a link became inactive or unchecked start emergency procedures
+	if (!m_active && (act || (m_checked < chk)))
+	    l = &m_links;
 	unsigned int cnt = 0;
-	for (const ObjList* l = &m_links; l && !(m_active || m_inhibit); l = l->next()) {
+	for (; l && !(m_active || m_inhibit); l = l->next()) {
 	    L2Pointer* p = static_cast<L2Pointer*>(l->get());
 	    if (!p)
 		continue;

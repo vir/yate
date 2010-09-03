@@ -788,7 +788,7 @@ bool SS7Management::control(NamedList& params)
 		case SS7MsgSNM::LFU:
 		    txSls = (txSls + 1) & 0xff;
 	    }
-	    txSls = params.getIntValue("linksel",txSls);
+	    txSls = params.getIntValue("linksel",txSls) & 0xff;
 	    switch (cmd) {
 		// Messages containing a destination point code
 		case SS7MsgSNM::TFP:
@@ -802,10 +802,12 @@ bool SS7Management::control(NamedList& params)
 			SS7PointCode dest(opc);
 			if (TelEngine::null(addr) || dest.assign(*addr,t)) {
 			    unsigned char data[5];
+			    int len = SS7PointCode::length(t)+1;
 			    data[0] = cmd;
 			    return dest.store(t,data+1,spare) &&
-				(transmitMSU(SS7MSU(txSio,lbl,data,
-				    SS7PointCode::length(t)+1),lbl,txSls) >= 0);
+				((cmd == SS7MsgSNM::TFP) ?
+				    postpone(new SS7MSU(txSio,lbl,data,len),lbl,txSls,1000) :
+				    (transmitMSU(SS7MSU(txSio,lbl,data,len),lbl,txSls) >= 0));
 			}
 		    }
 		    return false;
@@ -1042,14 +1044,13 @@ bool SS7Management::postpone(SS7MSU* msu, const SS7Label& label, int txSls,
 	SnmPending* p = static_cast<SnmPending*>(l->get());
 	if (p->txSls() != txSls || p->msu().length() != len)
 	    continue;
-	if (!p->matches(label))
-	    continue;
 	if (::memcmp(msu->data(),p->msu().data(),len))
 	    continue;
 	const unsigned char* buf = msu->getData(label.length()+1,1);
-	Debug(this,DebugMild,"Refusing to postpone duplicate %s on %d",
+	Debug(this,DebugAll,"Refusing to postpone duplicate %s on %d",
 	    SS7MsgSNM::lookup((SS7MsgSNM::Type)buf[0],"???"),txSls);
 	TelEngine::destruct(msu);
+	break;
     }
     unlock();
     if (msu && ((interval == 0) || (transmitMSU(*msu,label,txSls) >= 0) || force)) {
@@ -1101,6 +1102,8 @@ bool SS7Management::timeout(const SS7MSU& msu, const SS7Label& label, int txSls,
 	    if (inhibited(label,SS7Layer2::Local))
 		postpone(new SS7MSU(msu),label,txSls,TIMER5M);
 	    break;
+	case SS7MsgSNM::TFP:
+	    return false;
     }
     return true;
 }
@@ -1111,7 +1114,7 @@ bool SS7Management::timeout(SignallingMessageTimer& timer, bool final)
     if (final) {
 	String addr;
 	addr << msg;
-	Debug(this,DebugNote,"Expired %s control sequence to %s [%p]",
+	Debug(this,DebugInfo,"Expired %s control sequence to %s [%p]",
 	    msg.snmName(),addr.c_str(),this);
     }
     return timeout(msg.msu(),msg,msg.txSls(),final);

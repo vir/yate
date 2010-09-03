@@ -6110,6 +6110,13 @@ public:
 	{ return !m_started; }
 
     /**
+     * Get access to the Management component if available
+     * @return A pointer to the SS7Management or NULL if not created
+     */
+    inline SS7Management* getManagement() const
+	{ return m_mngmt; }
+
+    /**
      * Get the Network Indicator bits that would match a Point Code type
      * @param pcType Point Code type to search for
      * @param defNI Default Network Indicator bits to use

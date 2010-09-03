@@ -987,6 +987,26 @@ bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
 	return false;
     switch (handled) {
 	case HandledMSU::NoAddress:
+	    while (SS7Router* router = YOBJECT(SS7Router,user())) {
+		RefPointer<SS7Management> mngmt = router->getManagement();
+		if (!mngmt)
+		    break;
+		NamedList* ctl = mngmt->controlCreate("prohibit");
+		if (!ctl)
+		    break;
+		unsigned int local = getLocal(cpType);
+		if (!local)
+		    local = label.dpc().pack(cpType);
+		String addr;
+		addr << SS7PointCode::lookup(cpType) << ",";
+		addr << SS7PointCode(cpType,local) << "," << label.opc();
+		String dest;
+		dest << label.dpc();
+		ctl->addParam("address",addr);
+		ctl->addParam("destination",dest);
+		ctl->setParam("automatic",String::boolText(true));
+		return mngmt->controlExecute(ctl);
+	    }
 	    return prohibited(msu.getSSF(),label,sls);
 	default:
 	    // if nothing worked, report the unavailable regular user part

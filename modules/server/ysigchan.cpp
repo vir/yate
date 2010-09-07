@@ -2336,7 +2336,7 @@ void SigDriver::initialize()
 	installRelay(Route);
 	Engine::install(new IsupDecodeHandler);
 	Engine::install(new IsupEncodeHandler);
-	m_engine = new SignallingEngine;
+	m_engine = SignallingEngine::self(true);
 	m_engine->debugChain(this);
 	m_engine->start();
     }

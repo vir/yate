@@ -238,6 +238,8 @@ unsigned long SignallingComponent::tickSleep(unsigned long usec) const
 }
 
 
+static SignallingEngine* s_self = 0;
+
 SignallingEngine::SignallingEngine(const char* name)
     : Mutex(true,"SignallingEngine"),
       m_thread(0),
@@ -254,11 +256,20 @@ SignallingEngine::~SignallingEngine()
 	stop();
     }
     lock();
+    if (s_self == this)
+	s_self = 0;
     unsigned int n = m_components.count();
     if (n)
 	Debug(this,DebugNote,"Cleaning up %u components [%p]",n,this);
     m_components.clear();
     unlock();
+}
+
+SignallingEngine* SignallingEngine::self(bool create)
+{
+    if (create && !s_self)
+	s_self = new SignallingEngine;
+    return s_self;
 }
 
 SignallingComponent* SignallingEngine::find(const String& name)

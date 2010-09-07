@@ -735,6 +735,13 @@ public:
     virtual ~SignallingEngine();
 
     /**
+     * Get a pointer to the first (and usually only) instance created
+     * @param create Create the instance if it doesn't exist
+     * @return Pointer to first engine, NULL if not created
+     */
+    static SignallingEngine* self(bool create = false);
+
+    /**
      * Insert a component in the engine, lock the list while doing so
      * @param component Pointer to component to insert in engine
      */

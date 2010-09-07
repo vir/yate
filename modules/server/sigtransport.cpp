@@ -311,7 +311,7 @@ bool ListenerThread::init(const NamedList& param)
     bool multi = param.getParam("local1") != 0;
     m_stream = param.getBoolValue("stream",m_transport->streamDefault());
     if (multi && m_transport->transType() != Transport::Sctp) {
-	Debug("ListenerThread",DebugWarn,"Socket %s does not suport multihomed",
+	Debug("ListenerThread",DebugWarn,"Socket %s does not support multihomed",
 	    lookup(m_transport->transType(),s_transType));
 	return false;
     }
@@ -340,7 +340,7 @@ bool ListenerThread::init(const NamedList& param)
 	    m_socket->create(AF_UNIX,SOCK_STREAM);
 	    break;
 	default:
-	    Debug("ListenerThread",DebugWarn,"Unknown type of socket");
+	    Debug("ListenerThread",DebugWarn,"Unknown type of socket %d",m_transport->transType());
     }
     if (!m_socket->valid()) {
 	Debug("ListenerThread",DebugWarn,"Unable to create listener socket: %s",
@@ -358,7 +358,8 @@ bool ListenerThread::init(const NamedList& param)
     addr.host(address);
     addr.port(port);
     if (!m_socket->bind(addr)) {
-	Debug(DebugWarn,"Unable to bind to %s:%u %s",addr.host().c_str(),addr.port(),strerror(errno));
+	Debug(DebugWarn,"Unable to bind to %s:%u: %d %s",
+	    addr.host().c_str(),addr.port(),errno,strerror(errno));
 	return false;
     } else
 	DDebug("ListenerThread",DebugAll,"Socket bound to %s:%u",
@@ -366,7 +367,8 @@ bool ListenerThread::init(const NamedList& param)
     if (multi && !addAddress(param))
 	return false;
     if (!m_socket->listen(3)) {
-	DDebug("ListenerThread",DebugWarn,"Unable to listen on socket: %s", strerror(m_socket->error()));
+	Debug("ListenerThread",DebugWarn,"Unable to listen on socket: %d %s",
+	    m_socket->error(),strerror(m_socket->error()));
 	return false;
     }
     return true;
@@ -423,7 +425,7 @@ bool ListenerThread::addAddress(const NamedList &param)
 	return false;
     }
     if (!s->bindx(o)) {
-	DDebug("ListenerThread",DebugNote,"Failed to bindx sctp socket [%p] %s",s,strerror(errno));
+	Debug("ListenerThread",DebugWarn,"Failed to bindx sctp socket: %d: %s",errno,strerror(errno));
 	return false;
     } else
 	Debug(DebugNote,"Socket bound to %d auxiliary addresses",o.count());
@@ -538,7 +540,7 @@ bool Transport::control(const NamedList &param)
 	return initialize(&param);
     else if (oper == "add_addr") {
 	if (!m_listener) {
-	    Debug(this,DebugWarn,"Unable to listen on another address ,listener is missing");
+	    Debug(this,DebugWarn,"Unable to listen on another address, listener is missing");
 	    return false;
 	}
 	return m_listener->addAddress(param);
@@ -618,9 +620,9 @@ bool Transport::bindSocket()
 	    socket->create(AF_INET,SOCK_SEQPACKET,IPPROTO_SCTP);
 	    SctpSocket* sctp = static_cast<SctpSocket*>(socket); 
 	    if (!sctp->setStreams(2,2))
-		DDebug(this,DebugInfo,"Failed to set sctp stream number");
+		Debug(this,DebugInfo,"Failed to set sctp streams number");
 	    if (!sctp->subscribeEvents())
-		DDebug(this,DebugInfo,"Unable to subscribe to Sctp events");
+		Debug(this,DebugWarn,"Unable to subscribe to Sctp events");
 	    int ppid = sigtran() ? sigtran()->payload() : 0;
 	    ppid = m_config.getIntValue("payload",ppid);
 	    if (ppid > 0)
@@ -650,11 +652,11 @@ bool Transport::bindSocket()
     addr.host(address);
     addr.port(port);
     if (!socket->bind(addr)) {
-	Debug(DebugNote,"Unable to bind to %s:%u %s",addr.host().c_str(),addr.port(),strerror(errno));
+	Debug(DebugNote,"Unable to bind to %s:%u: %d: %s",
+	    addr.host().c_str(),addr.port(),errno,strerror(errno));
 	return false;
     } else
-	DDebug(this,DebugAll,"Socket bind to %s:%u",
-	    addr.host().c_str(),addr.port());
+	Debug(this,DebugAll,"Socket bound to %s:%u",addr.host().c_str(),addr.port());
     if (multi && !addAddress(m_config,socket))
 	return false;
     m_reader->setSocket(socket);
@@ -686,10 +688,10 @@ bool Transport::addAddress(const NamedList &param, Socket* socket)
 	return false;
     }
     if (!s->bindx(o)) {
-	DDebug(this,DebugNote,"Failed to bindx sctp socket [%p] %s",s,strerror(errno));
+	Debug(this,DebugWarn,"Failed to bindx sctp socket: %d: %s",errno,strerror(errno));
 	return false;
     } else
-	Debug(DebugNote,"Socket binded to %d auxiliar addresses",o.count());
+	Debug(DebugNote,"Socket bound to %d auxiliary addresses",o.count());
     return true;
 }
 
@@ -712,9 +714,9 @@ bool Transport::connectSocket()
 	    sock->create(AF_INET,m_streamer ? SOCK_STREAM : SOCK_SEQPACKET,IPPROTO_SCTP);
 	    SctpSocket* socket = static_cast<SctpSocket*>(sock);
 	    if (!socket->setStreams(2,2))
-		DDebug(this,DebugInfo,"Failed to set sctp stream number");
+		Debug(this,DebugInfo,"Failed to set sctp streams number");
 	    if (!socket->subscribeEvents())
-		DDebug(this,DebugInfo,"Unable to subscribe to Sctp events");
+		Debug(this,DebugWarn,"Unable to subscribe to Sctp events");
 	    int ppid = sigtran() ? sigtran()->payload() : 0;
 	    ppid = m_config.getIntValue("payload",ppid);
 	    if (ppid > 0)
@@ -747,7 +749,8 @@ bool Transport::connectSocket()
 	addr.host(address);
 	addr.port(port);
 	if (!sock->bind(addr))
-	    Debug(DebugNote,"Failed to bind Socket. [%p]",sock);
+	    Debug(this,DebugWarn,"Failed to bind socket to %s:%d: %d: %s",
+		address.c_str(),port,sock->error(),strerror(sock->error()));
     }
     if (!m_config.getParam("remote1")) {
 	adr = m_config.getValue("remote");
@@ -758,8 +761,8 @@ bool Transport::connectSocket()
 	addr.host(address);
 	addr.port(port);
 	if (m_endpoint && !sock->connect(addr)) {
-	    Debug(this,DebugNote,"Unable to connect to %s:%u. %s",
-		addr.host().c_str(),addr.port(),strerror(errno));
+	    Debug(this,DebugWarn,"Unable to connect to %s:%u: %d: %s",
+		addr.host().c_str(),addr.port(),errno,strerror(errno));
 	    sock->terminate();
 	    delete sock;
 	    return false;
@@ -788,7 +791,8 @@ bool Transport::connectSocket()
 	    return false;
 	}
 	if (!s->connectx(o)) {
-	    DDebug(this,DebugNote,"Failed to connectx sctp socket [%p]",s);
+	    Debug(this,DebugNote,"Failed to connectx sctp socket: %d: %s",
+		errno,strerror(errno));
 	    s->terminate();
 	    delete s;
 	    return false;
@@ -873,7 +877,7 @@ bool Transport::addSocket(Socket* socket,SocketAddr& adress)
 	    m_reader = new MessageReader(this,socket,addr);
 	    break;
 	default:
-	    Debug(this,DebugNote,"Unknown socket type ");
+	    Debug(this,DebugWarn,"Unknown socket type %d",m_type);
 	    return false;
     }
     m_reader->start();
@@ -948,7 +952,7 @@ bool StreamReader::sendBuffer(int streamId)
     if (m_transport->transType() == Transport::Sctp) {
 	SctpSocket* s = static_cast<SctpSocket*>(m_socket);
 	if (!s) {
-	    DDebug(m_transport,DebugGoOn,"Sctp conversion failed");
+	    Debug(m_transport,DebugGoOn,"Sctp conversion failed");
 	    return false;
 	}
 	int flags = 0;
@@ -1004,7 +1008,7 @@ bool StreamReader::readData()
 	if (m_transport->transType() == Transport::Sctp) {
 	    SctpSocket* s = static_cast<SctpSocket*>(m_socket);
 	    if (!s) {
-		DDebug(m_transport,DebugGoOn,"Sctp conversion failed");
+		Debug(m_transport,DebugGoOn,"Sctp conversion failed");
 		return false;
 	    }
 	    len = s->recvMsg((void*)buf,m_headerLen,addr,stream,flags);
@@ -1065,7 +1069,7 @@ bool StreamReader::readData()
 	if (m_transport->transType() == Transport::Sctp) {
 	    SctpSocket* s = static_cast<SctpSocket*>(m_socket);
 	    if (!s) {
-		DDebug(m_transport,DebugGoOn,"Sctp conversion failed");
+		Debug(m_transport,DebugGoOn,"Sctp conversion failed");
 		return false;
 	    }
 	    len = s->recvMsg((void*)buf1,m_totalPacketLen,addr,stream,flags);
@@ -1161,7 +1165,7 @@ bool MessageReader::sendMSG(const DataBlock& header, const DataBlock& msg, int s
 	if (m_transport->transType() == Transport::Sctp) {
 	    SctpSocket* s = static_cast<SctpSocket*>(m_socket);
 	    if (!s) {
-		DDebug(m_transport,DebugGoOn,"Sctp conversion failed");
+		Debug(m_transport,DebugGoOn,"Sctp conversion failed");
 		break;
 	    }
 	    int flags = 0;
@@ -1203,7 +1207,7 @@ bool MessageReader::readData()
 	int flags = 0;
 	SctpSocket* s = static_cast<SctpSocket*>(m_socket);
 	if (!s) {
-	    DDebug(m_transport,DebugGoOn,"Sctp conversion failed");
+	    Debug(m_transport,DebugGoOn,"Sctp conversion failed");
 	    return false;
 	}
 	SocketAddr addr;

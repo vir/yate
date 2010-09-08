@@ -542,7 +542,8 @@
 ;starttime=
 
 ; isolation: integer: MTP isolation timer (T1) in milliseconds
-; It is enforced to be at least 500 (0.5s)
+; The minimum value is 500 (0.5s), default 1000 (1s)
+; A value of zero disables isolation checks entirely
 ;isolation=1000
 
 ; autostart: boolean: Perform MTP restart sequence at initialization

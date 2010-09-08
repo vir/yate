@@ -260,7 +260,7 @@ SS7Router::SS7Router(const NamedList& params)
     m_sendUnavail = params.getBoolValue("sendupu",m_sendUnavail);
     m_sendProhibited = params.getBoolValue("sendtfp",m_sendProhibited);
     m_restart.interval(params,"starttime",5000,(m_transfer ? 60000 : 10000),false);
-    m_isolate.interval(params,"isolation",500,1000,false);
+    m_isolate.interval(params,"isolation",500,1000,true);
     m_routeTest.interval(params,"testroutes",10000,50000,true),
     m_testRestricted = params.getBoolValue("testrestricted",m_testRestricted);
     loadLocalPC(params);
@@ -747,6 +747,8 @@ void SS7Router::notifyRoutes(SS7Route::State states, unsigned int onlyPC)
 {
     if (SS7Route::Unknown == states)
 	return;
+    DDebug(this,DebugAll,"Notifying routes with states 0x%02X only to %u [%p]",
+	states,onlyPC,this);
     Lock lock(m_routeMutex);
     for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
 	ListIterator iter(m_route[i]);
@@ -994,7 +996,10 @@ bool SS7Router::setRouteSpecificState(SS7PointCode::Type type, unsigned int pack
 	    Debug(this,DebugGoOn,"Route to %u not found in network '%s'",packedPC,l3->toString().c_str());
 	    continue;
 	}
-	if (l3->getRoutePriority(type,srcPC)) {
+	unsigned int srcPrio = 0;
+	if (srcPC && (srcPrio = l3->getRoutePriority(type,srcPC))) {
+	    DDebug(this,DebugAll,"Route %u/%u of network '%s' is: %s",
+		srcPC,srcPrio,l3->toString().c_str(),SS7Route::stateName(r->state()));
 	    if (((r->state() & SS7Route::KnownState) > (best & SS7Route::KnownState)) &&
 		l3->operational())
 		best = r->state();
@@ -1152,7 +1157,7 @@ void SS7Router::sendRouteTest()
 
 void SS7Router::checkRoutes(const SS7Layer3* noResume)
 {
-    if (m_isolate.started())
+    if (m_isolate.started() || !m_isolate.interval())
 	return;
     bool isolated = true;
     Lock lock(m_routeMutex);
@@ -1176,7 +1181,7 @@ void SS7Router::checkRoutes(const SS7Layer3* noResume)
 	    }
 	}
     }
-    if (isolated && (m_started || m_restart.started())) {
+    if (isolated && noResume && (m_started || m_restart.started())) {
 	Debug(this,DebugMild,"Node has become isolated! [%p]",this);
 	m_isolate.start();
 	// we are in an emergency - uninhibit any possible link
@@ -1525,7 +1530,6 @@ bool SS7Router::control(NamedList& params)
 			    err << "no such route: " << *dest << " from: " << src;
 			break;
 		    }
-		    return true;
 		}
 		else if (!setRouteState(type,pc,routeState(static_cast<SS7MsgSNM::Type>(cmd)))) {
 		    if (!params.getBoolValue("automatic"))
@@ -1534,7 +1538,7 @@ bool SS7Router::control(NamedList& params)
 		}
 		// if STP is started advertise routes to just restarted node
 		if ((SS7MsgSNM::TRA == cmd) && m_transfer && m_started)
-		    notifyRoutes(SS7Route::AnyState,pc.pack(type));
+		    notifyRoutes(SS7Route::KnownState,pc.pack(type));
 		return true;
 	    }
 	    break;

@@ -278,9 +278,9 @@ static void resolveAddress(const String& addr, String& ip, int& port)
 	ip = "0.0.0.0";
     else
 	ip = *s;
-    o = o->skipNext();
-    if (o)
-	port = o->get()->toString().toInteger(port);
+    ObjList* p = o->skipNext();
+    if (p)
+	port = p->get()->toString().toInteger(port);
     TelEngine::destruct(o);
 }
 
@@ -322,6 +322,7 @@ bool ListenerThread::init(const NamedList& param)
 	    Message m("socket.sctp");
 	    SockRef* s = new SockRef(&soc);
 	    m.userData(s);
+	    TelEngine::destruct(s);
 	    if (!(Engine::dispatch(m) && soc)) {
 		DDebug("ListenerThread",DebugWarn,"Could not obtain SctpSocket");
 		return false;
@@ -406,7 +407,6 @@ bool ListenerThread::addAddress(const NamedList &param)
 {
     ObjList o;
     for (int i = 1; ; i++) {
-	SocketAddr* addr = new SocketAddr(AF_INET);
 	String temp = "local";
 	temp += i;
 	const String* adr = param.getParam(temp);
@@ -415,6 +415,7 @@ bool ListenerThread::addAddress(const NamedList &param)
 	String address;
 	int port = m_transport ? m_transport->defPort() : 0;
 	resolveAddress(*adr,address,port);
+	SocketAddr* addr = new SocketAddr(AF_INET);
 	addr->host(address);
 	addr->port(port);
 	o.append(addr);
@@ -598,13 +599,13 @@ bool Transport::initialize(const NamedList* params)
 
 bool Transport::bindSocket()
 {
-    Socket* socket = new Socket();
     bool multi = m_config.getParam("local1") != 0;
     if (multi && transType() != Transport::Sctp) {
 	Debug(this,DebugWarn,"Sockets type %s do not suport multihomed",
 	    lookup(transType(),s_transType));
 	return false;
     }
+    Socket* socket = 0;
     switch (m_type) {
 	case Transport::Sctp:
 	{
@@ -612,6 +613,7 @@ bool Transport::bindSocket()
 	    Message m("socket.sctp");
 	    SockRef* s = new SockRef(&soc);
 	    m.userData(s);
+	    TelEngine::destruct(s);
 	    if (!(Engine::dispatch(m) && soc)) {
 		DDebug("ListenerThread",DebugWarn,"Could not obtain SctpSocket");
 		return false;
@@ -630,12 +632,15 @@ bool Transport::bindSocket()
 	    break;
 	}
 	case Transport::Udp:
+	    socket = new Socket();
 	    socket->create(AF_INET,SOCK_DGRAM);
 	    break;
 	default:
 	    DDebug(this,DebugWarn,"Unknown/unwanted type of socket %s",
 		lookup(transType(),s_transType,"Unknown"));
     }
+    if (!socket)
+	return false;
     if (!socket->valid()) {
 	Debug(this,DebugWarn,"Unable to create listener socket: %s",
 	    strerror(socket->error()));
@@ -669,7 +674,6 @@ bool Transport::addAddress(const NamedList &param, Socket* socket)
 {
     ObjList o;
     for (int i = 1; ; i++) {
-	SocketAddr* addr = new SocketAddr(AF_INET);
 	String temp = "local";
 	temp << i;
 	const String* adr = param.getParam(temp);
@@ -678,6 +682,7 @@ bool Transport::addAddress(const NamedList &param, Socket* socket)
 	String address;
 	int port = defPort();
 	resolveAddress(*adr,address,port);
+	SocketAddr* addr = new SocketAddr(AF_INET);
 	addr->host(address);
 	addr->port(port);
 	o.append(addr);
@@ -707,6 +712,7 @@ bool Transport::connectSocket()
 	    Message m("socket.sctp");
 	    SockRef* s = new SockRef(&sock);
 	    m.userData(s);
+	    TelEngine::destruct(s);
 	    if (!(Engine::dispatch(m) && sock)) {
 		DDebug(this,DebugNote,"Could not obtain SctpSocket");
 		return false;
@@ -771,7 +777,6 @@ bool Transport::connectSocket()
     else {
 	ObjList o;
 	for (unsigned int i = 0; ; i++) {
-	    SocketAddr* addr = new SocketAddr(AF_INET);
 	    String aux = "remote";
 	    if (i)
 		aux << i;
@@ -781,6 +786,7 @@ bool Transport::connectSocket()
 	    String address;
 	    int port = defPort();
 	    resolveAddress(*adr,address,port);
+	    SocketAddr* addr = new SocketAddr(AF_INET);
 	    addr->host(address);
 	    addr->port(port);
 	    o.append(addr);
@@ -850,6 +856,7 @@ bool Transport::addSocket(Socket* socket,SocketAddr& adress)
 	    m.addParam("handle",String(socket->handle()));
 	    SockRef* s = new SockRef(&sock);
 	    m.userData(s);
+	    TelEngine::destruct(s);
 	    if (!(Engine::dispatch(m) && sock)) {
 		DDebug(this,DebugNote,"Could not obtain SctpSocket");
 		return false;

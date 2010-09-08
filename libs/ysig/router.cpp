@@ -510,7 +510,7 @@ void SS7Router::detach(SS7Layer4* service)
 	if (*p != service)
 	    continue;
 	m_changes++;
-	m_layer4.remove(p,false);
+	m_layer4.remove(p);
 	if (service == (SS7Layer4*)m_mngmt)
 	    m_mngmt = 0;
 	const char* name = 0;

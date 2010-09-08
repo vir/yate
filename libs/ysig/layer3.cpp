@@ -1180,7 +1180,8 @@ void SS7MTP3::timerTick(const Time& when)
 		    patt = (patt << 4) | (patt & 0x0f);
 		    while (len--)
 			*d++ = patt++;
-		    l2->transmitMSU(sltm);
+		    if (l2->transmitMSU(sltm))
+			dump(sltm,true,sls);
 		}
 	    }
 	}

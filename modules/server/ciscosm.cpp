@@ -1606,6 +1606,7 @@ void SLT::destroyed()
     m_session->remove(this);
     RefPointer<SessionManager> tmp = m_session;
     m_session = 0;
+    SignallingComponent::destroyed();
 }
 
 unsigned int SLT::status() const

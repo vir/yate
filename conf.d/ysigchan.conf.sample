@@ -550,6 +550,10 @@
 ; According to the standard the restart is performed on first link activation
 ;autostart=no
 
+; autoallow: boolean: Turn adjacent routes Allowed on first received regular MSU
+; Should be used only to interoperate with broken implementations
+;autoallow=no
+
 ; sendupu: boolean: Send User Part Unavailable (UPU) SNM messages
 ;sendupu=yes
 

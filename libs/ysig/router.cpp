@@ -244,7 +244,8 @@ SS7Router::SS7Router(const NamedList& params)
       Mutex(true,"SS7Router"),
       m_changes(0), m_transfer(false), m_phase2(false), m_started(false),
       m_restart(0), m_isolate(0), m_routeTest(0), m_testRestricted(false),
-      m_checkRoutes(false), m_sendUnavail(true), m_sendProhibited(true),
+      m_checkRoutes(false), m_autoAllowed(false),
+      m_sendUnavail(true), m_sendProhibited(true),
       m_rxMsu(0), m_txMsu(0), m_fwdMsu(0), m_congestions(0),
       m_mngmt(0)
 {
@@ -257,6 +258,7 @@ SS7Router::SS7Router(const NamedList& params)
     }
 #endif
     m_transfer = params.getBoolValue("transfer");
+    m_autoAllowed = params.getBoolValue("autoallow",m_autoAllowed);
     m_sendUnavail = params.getBoolValue("sendupu",m_sendUnavail);
     m_sendProhibited = params.getBoolValue("sendtfp",m_sendProhibited);
     m_restart.interval(params,"starttime",5000,(m_transfer ? 60000 : 10000),false);
@@ -284,6 +286,7 @@ bool SS7Router::initialize(const NamedList* config)
 	debugLevel(config->getIntValue("debuglevel_router",
 	    config->getIntValue("debuglevel",-1)));
 	m_transfer = config->getBoolValue("transfer",m_transfer);
+	m_autoAllowed = config->getBoolValue("autoallow",m_autoAllowed);
 	m_sendUnavail = config->getBoolValue("sendupu",m_sendUnavail);
 	m_sendProhibited = config->getBoolValue("sendtfp",m_sendProhibited);
 	const String* param = config->getParam("management");
@@ -683,6 +686,18 @@ int SS7Router::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 
 HandledMSU SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
+    if (m_autoAllowed && (msu.getSIF() > SS7MSU::MTNS)) {
+	unsigned int src = label.opc().pack(label.type());
+	Lock mylock(m_routeMutex);
+	SS7Route* route = findRoute(label.type(),src);
+	if (route && !route->priority() && (route->state() & (SS7Route::Unknown|SS7Route::Prohibited))) {
+	    Debug(this,DebugNote,"Auto activating adjacent route %u on '%s' [%p]",
+		src,(network ? network->toString().c_str() : (const char*)0),this);
+	    setRouteSpecificState(label.type(),src,src,SS7Route::Allowed,network);
+	    if (m_transfer && m_started)
+		notifyRoutes(SS7Route::KnownState,src);
+	}
+    }
     lock();
     m_rxMsu++;
     ObjList* l;
@@ -1432,6 +1447,7 @@ bool SS7Router::control(NamedList& params)
     if (!(cmp && toString() == cmp))
 	return false;
 
+    m_autoAllowed = params.getBoolValue("autoallow",m_autoAllowed);
     m_sendUnavail = params.getBoolValue("sendupu",m_sendUnavail);
     m_sendProhibited = params.getBoolValue("sendtfp",m_sendProhibited);
     String err;

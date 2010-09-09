@@ -870,7 +870,7 @@ void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type,
 	    if (!(*l3p)->getRoutePriority(type,remotePC))
 		continue;
 	    for (ObjList* v = l3p->view(type).skipNull(); v; v = v->skipNext()) {
-		SS7Route* r = static_cast<const SS7Route*>(v->get());
+		SS7Route* r = static_cast<SS7Route*>(v->get());
 		if (r->packed() != route->packed())
 		    continue;
 		SS7Route::State state = getRouteView(type,r->packed(),0,*l3p);
@@ -890,7 +890,7 @@ void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type,
 		if (v)
 		    v = v->skipNull();
 		for (; v; v = v->skipNext()) {
-		    r = static_cast<const SS7Route*>(v->get());
+		    r = static_cast<SS7Route*>(v->get());
 		    if (r->priority() || (r->state() == SS7Route::Prohibited))
 			continue;
 		    if (onlyPC && (r->packed() != onlyPC))
@@ -956,7 +956,7 @@ void SS7Router::clearView(const SS7Layer3* network)
 	for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
 	    SS7PointCode::Type type = static_cast<SS7PointCode::Type>(i+1);
 	    for (ObjList* v = p->view(type).skipNull(); v; v = v->skipNext()) {
-		SS7Route* r = static_cast<const SS7Route*>(v->get());
+		SS7Route* r = static_cast<SS7Route*>(v->get());
 		DDebug(this,DebugAll,"Route %u of view '%s' cleared: %s -> Prohibited",
 		    r->packed(),network->toString().c_str(),
 		    SS7Route::stateName(r->state()));

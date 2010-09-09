@@ -418,7 +418,7 @@ bool ETSIModem::decode(MsgType msg, const DataBlock& buffer)
 	    case VisualIndicator:        // 5.4.7
 		CHECK_LEN(1)
 		if (*pdata == 0 || *pdata == 255)
-		    tmp = String::boolText(*pdata);
+		    tmp = String::boolText(*pdata != 0);
 		else
 		    tmp = (int)(*pdata);
 		params.addParam("visualindicator",tmp);

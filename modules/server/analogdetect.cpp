@@ -338,7 +338,7 @@ bool ADModule::attachETSI(Message& msg, DataSource* src, String& type, const cha
 	id << nextId();
 	DataConsumer* cons = new ETSIConsumer(id,notify,msg);;
 	DataTranslator::attachChain(src,cons);
-	bool ok = cons->getConnSource();
+	bool ok = (cons->getConnSource() != 0);
 	if (ok)
 	    msg.userData(cons);
 	else

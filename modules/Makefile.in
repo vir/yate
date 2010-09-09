@@ -26,6 +26,10 @@ MODRELAX:= @MODULE_LDRELAX@
 MODSTRIP:= @MODULE_SYMBOLS@
 INCFILES := @top_srcdir@/yateclass.h @top_srcdir@/yatengine.h @top_srcdir@/yatephone.h ../yateversn.h
 
+JUSTSIG := server/ysigchan.yate server/analog.yate \
+	server/ciscosm.yate server/sigtransport.yate \
+	server/isupmangler.yate
+
 SUBDIRS :=
 MKDEPS  := ../config.status
 PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
@@ -47,11 +51,10 @@ PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 	server/heartbeat.yate server/clustering.yate \
 	server/mgcpgw.yate server/mgcpca.yate \
 	server/mrcpspeech.yate \
-	server/ysigchan.yate \
-	server/ciscosm.yate server/sigtransport.yate \
 	server/presence.yate server/subscription.yate \
 	server/users.yate \
-	server/analog.yate server/analogdetect.yate \
+	$(JUSTSIG) \
+	server/analogdetect.yate \
 	client/jabberclient.yate \
 	callgen.yate analyzer.yate rmanager.yate msgsniff.yate
 LIBS :=
@@ -239,11 +242,11 @@ qt4/%.moc: @srcdir@/qt4/%.h $(MKDEPS) $(INCFILES)
 
 # Take special care of the modules that depend on optional libs
 
-server/ysigchan.yate server/wpcard.yate server/tdmcard.yate server/zapcard.yate server/analog.yate server/ciscosm.yate server/sigtransport.yate: ../libyatesig.so
-server/ysigchan.yate server/analog.yate server/ciscosm.yate server/sigtransport.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig
+$(JUSTSIG) server/wpcard.yate server/tdmcard.yate server/zapcard.yate: ../libyatesig.so
+$(JUSTSIG): LOCALFLAGS = -I@top_srcdir@/libs/ysig
 server/wpcard.yate server/tdmcard.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig @WANPIPE_FLAGS@
 server/zapcard.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig @ZAP_FLAGS@
-server/ysigchan.yate server/wpcard.yate server/tdmcard.yate server/zapcard.yate server/analog.yate server/ciscosm.yate server/sigtransport.yate: LOCALLIBS = -lyatesig
+$(JUSTSIG) server/wpcard.yate server/tdmcard.yate server/zapcard.yate: LOCALLIBS = -lyatesig
 
 server/analogdetect.yate: ../libs/ymodem/libyatemodem.a
 server/analogdetect.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymodem

@@ -1,0 +1,30 @@
+; Each section in this file describe an ISUP interceptor/mangler
+; You can add, remove or disable sections and reload to apply the changes
+
+
+;[mangler_name]
+; The name of the mangler is reported in the address parameter with the CIC
+
+; enable: boolean: Enable the mangler (default)
+;enable=yes
+
+; service: int: Service Information Field (protocol number)
+; It is unlikely you will ever need to modify it
+;service=5
+
+; netindicator: keyword: Value of Network Indicator bits in the SIO
+; Allowed values: international, spareinternational, national, reservednational
+;netindicator=national
+
+; pointcodetype: string: SS7 point code type (required)
+; Can be one of ITU,ANSI,ANSI8,China,Japan,Japan5
+;pointcodetype=
+
+; defaultpointcode: string: DPC of the ISUP messages to intercept
+;defaultpointcode=
+
+; remotepointcode: string: OPC of the ISUP messages to intercept
+;remotepointcode=
+
+; symmetric: boolean: Intercept and mangle messages in the opposite direction too
+;symmetric=no

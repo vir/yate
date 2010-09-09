@@ -134,6 +134,7 @@ for small to large scale projects.
 %{_libdir}/yate/server/ysigchan.yate
 %{_libdir}/yate/server/ciscosm.yate
 %{_libdir}/yate/server/sigtransport.yate
+%{_libdir}/yate/server/isupmangler.yate
 %{_libdir}/yate/server/analog.yate
 %{_libdir}/yate/server/analogdetect.yate
 %{_libdir}/yate/server/users.yate
@@ -180,6 +181,7 @@ for small to large scale projects.
 %config(noreplace) %{_sysconfdir}/yate/ysigchan.conf
 %config(noreplace) %{_sysconfdir}/yate/ciscosm.conf
 %config(noreplace) %{_sysconfdir}/yate/sigtransport.conf
+%config(noreplace) %{_sysconfdir}/yate/isupmangler.conf
 %config(noreplace) %{_sysconfdir}/yate/jabberclient.conf
 %config(noreplace) %{_sysconfdir}/yate/jabberserver.conf
 %config(noreplace) %{_sysconfdir}/yate/jbfeatures.conf
@@ -549,6 +551,9 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Thu Sep 09 2010 Paul Chitescu <paulc@voip.null.ro>
+- Added isupmangler to packaging
+
 * Fri Jul 16 2010 Paul Chitescu <paulc@voip.null.ro>
 - Added zlib subpackage
 

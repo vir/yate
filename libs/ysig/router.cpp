@@ -34,12 +34,10 @@ namespace { //anonymous
 
 class L3ViewPtr : public L3Pointer
 {
-    friend class SS7Router;
 public:
     inline L3ViewPtr(SS7Layer3* l3)
 	: L3Pointer(l3)
 	{ }
-protected:
     inline ObjList& view(SS7PointCode::Type type)
 	{ return m_views[type-1]; }
 private:
@@ -245,7 +243,8 @@ SS7Router::SS7Router(const NamedList& params)
     : SignallingComponent(params.safe("SS7Router"),&params),
       Mutex(true,"SS7Router"),
       m_changes(0), m_transfer(false), m_phase2(false), m_started(false),
-      m_restart(0), m_isolate(0), m_routeTest(0), m_testRestricted(false),
+      m_restart(0), m_isolate(0),
+      m_trafficOk(0), m_routeTest(0), m_testRestricted(false),
       m_checkRoutes(false), m_autoAllowed(false),
       m_sendUnavail(true), m_sendProhibited(true),
       m_rxMsu(0), m_txMsu(0), m_fwdMsu(0), m_congestions(0),
@@ -406,7 +405,7 @@ bool SS7Router::restart()
 	L3ViewPtr* p = static_cast<L3ViewPtr*>(o->get());
 	if (!(*p)->operational()) {
 	    clearView(*p);
-	    clearRoutes(*p);
+	    clearRoutes(*p,false);
 	}
     }
     checkRoutes();
@@ -587,6 +586,10 @@ void SS7Router::timerTick(const Time& when)
 	    mylock.drop();
 	    sendRouteTest();
 	}
+	else if (m_trafficOk.timeout(when.msec())) {
+	    m_trafficOk.stop();
+	    silentAllow();
+	}
 	return;
     }
     // MTP restart actions
@@ -616,6 +619,8 @@ void SS7Router::timerTick(const Time& when)
 	}
 	if (m_routeTest.interval())
 	    m_routeTest.start(when.msec());
+	m_trafficOk.interval(5000);
+	m_trafficOk.start(when.msec());
     }
 }
 
@@ -688,14 +693,18 @@ int SS7Router::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 
 HandledMSU SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
-    if (m_autoAllowed && (msu.getSIF() > SS7MSU::MTNS)) {
+    if (m_autoAllowed && network && (msu.getSIF() > SS7MSU::MTNS)) {
 	unsigned int src = label.opc().pack(label.type());
 	Lock mylock(m_routeMutex);
 	SS7Route* route = findRoute(label.type(),src);
 	if (route && !route->priority() && (route->state() & (SS7Route::Unknown|SS7Route::Prohibited))) {
-	    Debug(this,DebugNote,"Auto activating adjacent route %u on '%s' [%p]",
-		src,(network ? network->toString().c_str() : (const char*)0),this);
-	    setRouteSpecificState(label.type(),src,src,SS7Route::Allowed,network);
+	    if (route->priority())
+		silentAllow(network);
+	    else {
+		Debug(this,DebugNote,"Auto activating adjacent route %u on '%s' [%p]",
+		    src,network->toString().c_str(),this);
+		setRouteSpecificState(label.type(),src,src,SS7Route::Allowed,network);
+	    }
 	    if (m_transfer && m_started)
 		notifyRoutes(SS7Route::KnownState,src);
 	}
@@ -1013,6 +1022,7 @@ bool SS7Router::setRouteSpecificState(SS7PointCode::Type type, unsigned int pack
 	    Debug(this,DebugGoOn,"Route to %u not found in network '%s'",packedPC,l3->toString().c_str());
 	    continue;
 	}
+	ok = true;
 	unsigned int srcPrio = 0;
 	if (srcPC && (srcPrio = l3->getRoutePriority(type,srcPC))) {
 	    DDebug(this,DebugAll,"Route %u/%u of network '%s' is: %s",
@@ -1022,7 +1032,6 @@ bool SS7Router::setRouteSpecificState(SS7PointCode::Type type, unsigned int pack
 		best = r->state();
 	}
 	else {
-	    ok = true;
 	    DDebug(this,DebugAll,"Route %u/%u of network '%s' changed: %s -> %s",
 		r->packed(),r->priority(),l3->toString().c_str(),
 		SS7Route::stateName(r->state()),SS7Route::stateName(state));
@@ -1040,6 +1049,7 @@ bool SS7Router::setRouteSpecificState(SS7PointCode::Type type, unsigned int pack
     return true;
 }
 
+// Send TRA to all or just one network
 void SS7Router::sendRestart(const SS7Layer3* network)
 {
     if (!m_mngmt)
@@ -1092,6 +1102,47 @@ void SS7Router::sendRestart(const SS7Layer3* network)
     }
 }
 
+// Mark Allowed routes from which we didn't receive even a TRA
+void SS7Router::silentAllow(const SS7Layer3* network)
+{
+    DDebug(this,DebugInfo,"Trying to silently allow %s%s%s [%p]",
+	(network ? "'" : "all linksets"),
+	(network ? network->toString().c_str() : ""),(network ? "'" : ""),this);
+    for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
+	SS7Layer3* l3 = *static_cast<L3ViewPtr*>(o->get());
+	if (!l3)
+	    continue;
+	if (network && (network != l3))
+	    continue;
+	if (!l3->operational())
+	    continue;
+	SS7MTP3* mtp3 = YOBJECT(SS7MTP3,l3);
+	if (mtp3 && !mtp3->linksChecked())
+	    continue;
+	bool noisy = true;
+	for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
+	    SS7PointCode::Type type = static_cast<SS7PointCode::Type>(i+1);
+	    unsigned int adjacent = 0;
+	    for (ObjList* l = l3->getRoutes(type); l; l = l->next()) {
+		SS7Route* r = static_cast<SS7Route*>(l->get());
+		if (!r)
+		    continue;
+		if (!r->priority())
+		    adjacent = r->packed();
+		if (r->state() != SS7Route::Unknown)
+		    continue;
+		if (noisy) {
+		    Debug(this,DebugNote,"Allowing unknown state routes of '%s' from %u [%p]",
+			l3->toString().c_str(),adjacent,this);
+		    noisy = false;
+		}
+		setRouteSpecificState(type,r->packed(),adjacent,SS7Route::Allowed,l3);
+	    }
+	}
+    }
+}
+
+// Send RST and/or RSR to probe for routes left prohibited/restricted
 void SS7Router::sendRouteTest()
 {
     if (!m_mngmt)
@@ -1172,6 +1223,7 @@ void SS7Router::sendRouteTest()
 	Debug(this,DebugInfo,"Sent %d Route Test messages [%p]",cnt,this);
 }
 
+// Check if at least one adjacent route is available, start isolation if not
 void SS7Router::checkRoutes(const SS7Layer3* noResume)
 {
     if (m_isolate.started() || !m_isolate.interval())
@@ -1219,13 +1271,13 @@ void SS7Router::checkRoutes(const SS7Layer3* noResume)
     }
 }
 
-void SS7Router::clearRoutes(SS7Layer3* network)
+// Clear the routes of a linkset that's not in service
+void SS7Router::clearRoutes(SS7Layer3* network, bool ok)
 {
     if (!network)
 	return;
     // if an adjacent node is operational but not in service we may have a chance
-    SS7Route::State adjacentState = network->operational() ?
-	SS7Route::Unknown : SS7Route::Prohibited;
+    SS7Route::State state = ok ? SS7Route::Unknown : SS7Route::Prohibited;
     for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
 	SS7PointCode::Type type = static_cast<SS7PointCode::Type>(i+1);
 	const ObjList* l = network->getRoutes(type);
@@ -1233,8 +1285,8 @@ void SS7Router::clearRoutes(SS7Layer3* network)
 	    l = l->skipNull();
 	for (; l; l = l->skipNext()) {
 	    SS7Route* r = static_cast<SS7Route*>(l->get());
-	    SS7Route::State state = r->priority() ?
-		SS7Route::Prohibited : adjacentState;
+	    if (ok && (r->state() != SS7Route::Prohibited))
+		continue;
 	    DDebug(DebugInfo,"Clearing route %u/%u of %s to %s",
 		r->packed(),r->priority(),network->toString().c_str(),
 		SS7Route::stateName(state));
@@ -1385,27 +1437,36 @@ void SS7Router::notify(SS7Layer3* network, int sls)
 		Debug(this,DebugNote,"Isolation ended before shutting down [%p]",this);
 		m_isolate.stop();
 	    }
+	    bool tra = true;
+	    // send TRA only if a link become operational
+	    if (sls >= 0)
+		tra = network->operational(sls);
 	    if (m_started) {
-		bool restart = true;
-		// send TRA only if a link become operational
-		if (sls >= 0)
-		    restart = network->operational(sls);
-		if (restart) {
+		if (tra) {
 		    // send TRA only for the first activated link
 		    const SS7MTP3* mtp3 = YOBJECT(SS7MTP3,network);
-		    if (!mtp3 || (mtp3->linksActive() <= 1))
+		    if (!mtp3 || (mtp3->linksActive() <= 1)) {
+			clearRoutes(network,true);
 			sendRestart(network);
+		    }
+		    m_trafficOk.interval(m_restart.interval() + 4000);
+		    m_trafficOk.start();
 		}
 	    }
 	    else {
 		if (!m_restart.started())
 		    restart();
+		else if (tra)
+		    clearRoutes(network,true);
 		useMe = true;
 	    }
 	}
 	else {
 	    clearView(network);
-	    clearRoutes(network);
+	    bool oper = network->operational(sls);
+	    if (sls >= 0)
+		oper = oper || network->operational();
+	    clearRoutes(network,oper);
 	    checkRoutes(network);
 	}
     }

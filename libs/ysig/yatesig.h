@@ -6276,8 +6276,9 @@ private:
     void restart2();
     void disable();
     void sendRestart(const SS7Layer3* network = 0);
+    void silentAllow(const SS7Layer3* network = 0);
     void checkRoutes(const SS7Layer3* noResume = 0);
-    void clearRoutes(SS7Layer3* network);
+    void clearRoutes(SS7Layer3* network, bool ok);
     bool setRouteSpecificState(SS7PointCode::Type type, unsigned int packedPC,
 	unsigned int srcPC, SS7Route::State state, const SS7Layer3* changer = 0);
     inline bool setRouteSpecificState(SS7PointCode::Type type, const SS7PointCode& dest,
@@ -6287,6 +6288,7 @@ private:
     int routeMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls, SS7Route::State states);
     void buildView(SS7PointCode::Type type, ObjList& view, SS7Layer3* network);
     void buildViews();
+    SignallingTimer m_trafficOk;
     SignallingTimer m_routeTest;
     bool m_testRestricted;
     bool m_checkRoutes;

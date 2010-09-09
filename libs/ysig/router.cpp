@@ -27,17 +27,19 @@
 
 using namespace TelEngine;
 
-//typedef GenPointer<SS7Layer3> L3Pointer;
+typedef GenPointer<SS7Layer3> L3Pointer;
 typedef GenPointer<SS7Layer4> L4Pointer;
 
 namespace { //anonymous
 
-class L3Pointer : public GenPointer<SS7Layer3>
+class L3ViewPtr : public L3Pointer
 {
+    friend class SS7Router;
 public:
-    inline L3Pointer(SS7Layer3* l3)
-	: GenPointer<SS7Layer3>(l3)
+    inline L3ViewPtr(SS7Layer3* l3)
+	: L3Pointer(l3)
 	{ }
+protected:
     inline ObjList& view(SS7PointCode::Type type)
 	{ return m_views[type-1]; }
 private:
@@ -356,7 +358,7 @@ unsigned char SS7Router::getNI(SS7PointCode::Type pcType, unsigned char defNI) c
     if (SS7Layer3::hasType(pcType))
 	return SS7Layer3::getNI(pcType,defNI);
     for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
-	L3Pointer* p = static_cast<L3Pointer*>(o->get());
+	L3ViewPtr* p = static_cast<L3ViewPtr*>(o->get());
 	if ((*p)->hasType(pcType))
 	    return (*p)->getNI(pcType,defNI);
     }
@@ -368,7 +370,7 @@ unsigned int SS7Router::getDefaultLocal(SS7PointCode::Type type) const
     unsigned int local = getLocal(type);
     if (!local) {
 	for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
-	    L3Pointer* p = static_cast<L3Pointer*>(o->get());
+	    L3ViewPtr* p = static_cast<L3ViewPtr*>(o->get());
 	    unsigned int l = (*p)->getLocal(type);
 	    if (l && local && (l != local))
 		return 0;
@@ -383,7 +385,7 @@ bool SS7Router::operational(int sls) const
     if (!m_started || m_isolate.started())
 	return false;
     for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
-	L3Pointer* p = static_cast<L3Pointer*>(o->get());
+	L3ViewPtr* p = static_cast<L3ViewPtr*>(o->get());
 	if ((*p)->operational(sls))
 	    return true;
     }
@@ -401,7 +403,7 @@ bool SS7Router::restart()
     m_routeTest.stop();
     m_restart.stop();
     for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
-	L3Pointer* p = static_cast<L3Pointer*>(o->get());
+	L3ViewPtr* p = static_cast<L3ViewPtr*>(o->get());
 	if (!(*p)->operational()) {
 	    clearView(*p);
 	    clearRoutes(*p);
@@ -434,7 +436,7 @@ void SS7Router::attach(SS7Layer3* network)
     lock();
     bool add = true;
     for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
-	L3Pointer* p = static_cast<L3Pointer*>(o->get());
+	L3ViewPtr* p = static_cast<L3ViewPtr*>(o->get());
 	if (*p == network) {
 	    add = false;
 	    break;
@@ -442,7 +444,7 @@ void SS7Router::attach(SS7Layer3* network)
     }
     if (add) {
 	m_changes++;
-	m_layer3.append(new L3Pointer(network));
+	m_layer3.append(new L3ViewPtr(network));
 	Debug(this,DebugAll,"Attached network (%p,'%s') [%p]",
 	    network,network->toString().safe(),this);
     }
@@ -460,7 +462,7 @@ void SS7Router::detach(SS7Layer3* network)
     Lock lock(this);
     const char* name = 0;
     for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
-	L3Pointer* p = static_cast<L3Pointer*>(o->get());
+	L3ViewPtr* p = static_cast<L3ViewPtr*>(o->get());
 	if (*p != network)
 	    continue;
 	m_changes++;
@@ -530,7 +532,7 @@ void SS7Router::detach(SS7Layer4* service)
 void SS7Router::buildViews()
 {
     for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
-	L3Pointer* p = static_cast<L3Pointer*>(o->get());
+	L3ViewPtr* p = static_cast<L3ViewPtr*>(o->get());
 	if (!*p)
 	    continue;
 	for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
@@ -544,7 +546,7 @@ void SS7Router::buildView(SS7PointCode::Type type, ObjList& view, SS7Layer3* net
 {
     view.clear();
     for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
-	L3Pointer* p = static_cast<L3Pointer*>(o->get());
+	L3ViewPtr* p = static_cast<L3ViewPtr*>(o->get());
 	if (!*p || ((*p) == network))
 	    continue;
 	for (ObjList* r = (*p)->getRoutes(type); r; r = r->next()) {
@@ -862,7 +864,7 @@ void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type,
 	return;
     if (m_mngmt && (route->state() != SS7Route::Unknown)) {
 	for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
-	    L3Pointer* l3p = static_cast<L3Pointer*>(o->get());
+	    L3ViewPtr* l3p = static_cast<L3ViewPtr*>(o->get());
 	    if (!l3p || ((*l3p) == network))
 		continue;
 	    if (!(*l3p)->operational())
@@ -922,7 +924,7 @@ SS7Route::State SS7Router::getRouteView(SS7PointCode::Type type, unsigned int pa
 	return SS7Route::Unknown;
     SS7Route::State best = SS7Route::Unknown;
     for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
-	SS7Layer3* l3 = *static_cast<L3Pointer*>(o->get());
+	SS7Layer3* l3 = *static_cast<L3ViewPtr*>(o->get());
 	if (!l3 || (l3 == network))
 	    continue;
 	if (!l3->getRoutePriority(type,remotePC))
@@ -950,14 +952,14 @@ SS7Route::State SS7Router::getRouteView(SS7PointCode::Type type, unsigned int pa
 void SS7Router::clearView(const SS7Layer3* network)
 {
     for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
-	L3Pointer* p = static_cast<L3Pointer*>(o->get());
+	L3ViewPtr* p = static_cast<L3ViewPtr*>(o->get());
 	if (!*p || ((*p) != network))
 	    continue;
 	for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
 	    SS7PointCode::Type type = static_cast<SS7PointCode::Type>(i+1);
 	    for (ObjList* v = p->view(type).skipNull(); v; v = v->skipNext()) {
 		SS7Route* r = static_cast<SS7Route*>(v->get());
-		DDebug(this,DebugAll,"Route %u of view '%s' cleared: %s -> Prohibited",
+		DDebug(this,DebugAll,"Route %u of view '%s' cleared: %s -> Unknown",
 		    r->packed(),network->toString().c_str(),
 		    SS7Route::stateName(r->state()));
 		r->m_state = SS7Route::Unknown;
@@ -1003,7 +1005,7 @@ bool SS7Router::setRouteSpecificState(SS7PointCode::Type type, unsigned int pack
     SS7Route::State best = state;
     bool ok = false;
     for (ObjList* nl = route->m_networks.skipNull(); nl; nl = nl->skipNext()) {
-	SS7Layer3* l3 = *static_cast<GenPointer<SS7Layer3>*>(nl->get());
+	SS7Layer3* l3 = *static_cast<L3Pointer*>(nl->get());
 	if (!l3)
 	    continue;
 	SS7Route* r = l3->findRoute(type,packedPC);
@@ -1057,7 +1059,7 @@ void SS7Router::sendRestart(const SS7Layer3* network)
 	    unsigned int adjacent = r->packed();
 	    unsigned int local = getLocal(type);
 	    for (ObjList* nl = r->m_networks.skipNull(); nl; nl = nl->skipNext()) {
-		SS7Layer3* l3 = *static_cast<GenPointer<SS7Layer3>*>(nl->get());
+		SS7Layer3* l3 = *static_cast<L3Pointer*>(nl->get());
 		if (network && (network != l3))
 		    continue;
 		if (l3->getRoutePriority(type,adjacent))
@@ -1122,7 +1124,7 @@ void SS7Router::sendRouteTest()
 	    }
 	    unsigned int local = getLocal(type);
 	    for (ObjList* nl = r->m_networks.skipNull(); nl; nl = nl->skipNext()) {
-		GenPointer<SS7Layer3>* n = static_cast<GenPointer<SS7Layer3>*>(nl->get());
+		L3Pointer* n = static_cast<L3Pointer*>(nl->get());
 		if (!(*n)->operational())
 		    continue;
 		if ((*n)->getRoutePriority(type,r->packed()) == (unsigned int)-1)
@@ -1201,7 +1203,7 @@ void SS7Router::checkRoutes(const SS7Layer3* noResume)
 	m_isolate.start();
 	// we are in an emergency - uninhibit any possible link
 	for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
-	    L3Pointer* p = static_cast<L3Pointer*>(o->get());
+	    L3ViewPtr* p = static_cast<L3ViewPtr*>(o->get());
 	    SS7Layer3* l3 = *p;
 	    if ((l3 == noResume) || !l3)
 		continue;
@@ -1283,7 +1285,7 @@ bool SS7Router::inhibit(const SS7Label& link, int setFlags, int clrFlags, bool n
 	return false;
     Lock mylock(this);
     for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
-	L3Pointer* p = static_cast<L3Pointer*>(o->get());
+	L3ViewPtr* p = static_cast<L3ViewPtr*>(o->get());
 	if (!*p || (*p)->getRoutePriority(link.type(),remote))
 	    continue;
 	RefPointer<SS7Layer3> net = static_cast<SS7Layer3*>(*p);
@@ -1305,7 +1307,7 @@ bool SS7Router::inhibited(const SS7Label& link, int flags)
 	return false;
     Lock mylock(this);
     for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
-	L3Pointer* p = static_cast<L3Pointer*>(o->get());
+	L3ViewPtr* p = static_cast<L3ViewPtr*>(o->get());
 	if (!*p || (*p)->getRoutePriority(link.type(),remote))
 	    continue;
 	RefPointer<SS7Layer3> net = static_cast<SS7Layer3*>(*p);
@@ -1322,7 +1324,7 @@ int SS7Router::getSequence(const SS7Label& link)
 	return false;
     Lock mylock(this);
     for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
-	L3Pointer* p = static_cast<L3Pointer*>(o->get());
+	L3ViewPtr* p = static_cast<L3ViewPtr*>(o->get());
 	if (!*p || (*p)->getRoutePriority(link.type(),remote))
 	    continue;
 	RefPointer<SS7Layer3> net = static_cast<SS7Layer3*>(*p);
@@ -1339,7 +1341,7 @@ void SS7Router::recoverMSU(const SS7Label& link, int sequence)
 	return;
     Lock mylock(this);
     for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
-	L3Pointer* p = static_cast<L3Pointer*>(o->get());
+	L3ViewPtr* p = static_cast<L3ViewPtr*>(o->get());
 	if (!*p || (*p)->getRoutePriority(link.type(),remote))
 	    continue;
 	RefPointer<SS7Layer3> net = static_cast<SS7Layer3*>(*p);

@@ -852,8 +852,10 @@ if [[ "x$ac_cv_use_pwlib" = "x/usr" -a ! -f "$ac_cv_use_pwlib/include/ptlib.h" ]
 fi
 AC_MSG_CHECKING([for Pwlib in $ac_cv_use_pwlib])
 local_lib="$ARCHLIB"
-verpw=`$ac_cv_use_pwlib/bin/ptlib-config --version 2>/dev/null`
-prtti=`$ac_cv_use_pwlib/bin/ptlib-config --ccflags 2>/dev/null | sed -n 's/^.*\(-f[[^ ]]*rtti\).*$/\1/p'`
+ptconfig="$ac_cv_use_pwlib/bin/ptlib-config"
+test -x "$ptconfig" || ptconfig="$ac_cv_use_pwlib/make/ptlib-config"
+verpw=`$ptconfig --version 2>/dev/null`
+prtti=`$ptconfig --ccflags 2>/dev/null | sed -n 's/^.*\(-f[[^ ]]*rtti\).*$/\1/p'`
 # try first installed directory
 incpw="$ac_cv_use_pwlib/include/ptlib.h"
 libpw="$ac_cv_use_pwlib/$local_lib/libpt.so"
@@ -864,11 +866,20 @@ fi
 if [[ "x$verpw" = "x" ]]; then
     verpw=`cat "$ac_cv_use_pwlib/include/ptbuildopts.h" 2>/dev/null | sed -n 's/^.*PWLIB_VERSION "\([[^"]]*\)".*$/\1/p'`
 fi
-PWLIB_INC="-I$ac_cv_use_pwlib/include/ptlib"
 vpw=`echo "$verpw" | $csed "$vsed" | $csed "$vsed"`
-if [[ "$vpw" '<' "01.06.00" ]]; then
-    PWLIB_INC="$PWLIB_INC/unix/ptlib $PWLIB_INC/unix $PWLIB_INC"
+PWLIB_INC="-I$ac_cv_use_pwlib/include" # Base dir, ok for ptlib
+if [[ "$vpw" '<' "02.00.00" ]]; then
+    # Pwlib-1.xm no ptlib (2.x) install into ptlib
+    PWLIB_INC="$PWLIB_INC/ptlib"
+    if [[ "$vpw" '<' "01.06.00" ]]; then
+        # Very old pwlib needs more includes.
+        PWLIB_INC="$PWLIB_INC/unix/ptlib $PWLIB_INC/unix $PWLIB_INC"
+    fi
+else
+    #Grab cflags for PTLIB 2.x
+    PWLIB_INC="$PWLIB_INC `$ptconfig --ccflags 2>/dev/null`"
 fi
+
 if [[ -f "$incpw" -a -f "$libpw" ]]; then
     HAVE_PWLIB=installed
     PWLIB_LIB="-L$ac_cv_use_pwlib/$local_lib -lpt"
@@ -883,12 +894,13 @@ if [[ -f "$incpw" -a -f "$libpw" ]]; then
 else
 # try source directory style
     libpw=`echo "$ac_cv_use_pwlib/lib/"libpt*r.so`
+    test -f "$libpw" || libpw=`echo "$ac_cv_use_pwlib/"lib*/libpt.so`
     if [[ -f "$incpw" -a -f "$libpw" ]]; then
-	prtti=`"$ac_cv_use_pwlib/make/ptlib-config" --ccflags 2>/dev/null | sed -n 's/^.*\(-f[[^ ]]*rtti\).*$/\1/p'`
+	prtti=`"$ptconfig" --ccflags 2>/dev/null | sed -n 's/^.*\(-f[[^ ]]*rtti\).*$/\1/p'`
         HAVE_PWLIB=sources
 	PWLIB_INC="-I$ac_cv_use_pwlib/include $PWLIB_INC"
-        PWLIB_LIB="-L$ac_cv_use_pwlib/lib -l`echo "$libpw"|sed 's,^.*/lib,,; s,\.so$,,'`"
-        PWLIB_RUN=":$ac_cv_use_pwlib/lib"
+        PWLIB_LIB=`echo "$libpw"|sed 's,^\(.*\)/lib,-L\1 -l,; s,\.so$,,'`
+        PWLIB_RUN=":"`echo "$libpw"|sed 's,/[[^/]]*$,,'`
 	case "x$prtti" in
 	    x-frtti)
 		PWLIB_RTTI=yes
@@ -932,6 +944,7 @@ else
 # try source directory style
     inc323="$ac_cv_use_openh323/include/h323.h"
     lib323=`echo "$ac_cv_use_openh323/lib/"libh323*r.so`
+    test -f "$lib323" || lib323=`echo "$ac_cv_use_openh323/lib/"libh323*_.so`
     if [[ -f "$inc323" -a -f "$lib323" ]]; then
 	ver323=`sed -n 's/^.*OPENH323_VERSION.*"\([[^"]]\+\)".*$/\1/p' "$ac_cv_use_openh323/include/openh323buildopts.h" 2>/dev/null`
         HAVE_H323=sources

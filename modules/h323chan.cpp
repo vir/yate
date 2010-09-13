@@ -78,6 +78,10 @@
 #define USE_CAPABILITY_FACTORY
 #endif
 
+#if (OPENH323_NUMVERSION >= 12000)
+typedef PBoolean BOOL;
+#endif
+
 #include <yatephone.h>
 #include <yateversn.h>
 
@@ -637,8 +641,13 @@ DEFINE_YATE_CAPAB(YateG729AB,BaseG729Capab,H245_AudioCapability::e_g729AnnexAwAn
 static void ListRegisteredCaps(int level)
 {
     PFactory<H323Capability>::KeyList_T list = PFactory<H323Capability>::GetKeyList();
+#if (OPENH323_NUMVERSION >= 12000)
+    for (PFactory<H323Capability>::KeyList_T::const_iterator find = list.begin(); find != list.end(); ++find)
+      Debug(level,"Registed capability: '%s'",find->c_str());
+#else
     for (std::vector<PString>::const_iterator find = list.begin(); find != list.end(); ++find)
 	Debug(level,"Registed capability: '%s'",(const char*)*find);
+#endif
 }
 #else
 // This class is used just to find out if a capability is registered
@@ -2349,9 +2358,11 @@ bool H323Driver::hasLine(const String& line) const
 {
     return line && hplugin.findEndpoint(line);
 }
-    
+
 bool H323Driver::msgRoute(Message& msg)
 {
+    if (!s_process)
+	return false;
     String* called = msg.getParam("called");
     if (!called || (called->find('@') >= 0))
 	return false;
@@ -2360,6 +2371,8 @@ bool H323Driver::msgRoute(Message& msg)
 
 bool H323Driver::msgExecute(Message& msg, String& dest)
 {
+    if (!s_process)
+	return false;
     if (dest.null())
         return false;
     if (!msg.userData()) {
@@ -2388,7 +2401,7 @@ void H323Driver::msgTimer(Message& msg)
     for (; l; l = l->skipNext())
 	static_cast<YateH323EndPoint*>(l->get())->checkGkClient();
 }
-		    
+
 YateH323EndPoint* H323Driver::findEndpoint(const String& ep) const
 {
     ObjList* l = m_endpoints.find(ep);

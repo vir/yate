@@ -33,10 +33,15 @@ class IsupIntercept : public SS7ISUP
     friend class IsupMangler;
     YCLASS(IsupIntercept,SS7ISUP)
 public:
+    enum What {
+	Iam,    // IAM only
+	Cdr,    // IAM,SAM,ACM,CPG,ANM,CON,SUS,RES,REL,RLC
+	All
+    };
     inline IsupIntercept(const NamedList& params)
 	: SignallingComponent(params,&params), SS7ISUP(params),
-	  m_used(true), m_symmetric(false)
-	{ m_symmetric = params.getBoolValue("symmetric",m_symmetric); }
+	  m_used(true), m_symmetric(false), m_what(Iam)
+	{ }
     virtual bool initialize(const NamedList* config);
     void dispatched(SS7MsgISUP& isup, const Message& msg, const SS7Label& label, int sls, bool accepted);
 protected:
@@ -48,6 +53,7 @@ protected:
 private:
     bool m_used;
     bool m_symmetric;
+    What m_what;
 };
 
 class IsupMessage : public Message
@@ -82,6 +88,16 @@ public:
     virtual void initialize();
 };
 
+static const TokenDict s_dict_what[] = {
+    { "IAM", IsupIntercept::Iam },
+    { "iam", IsupIntercept::Iam },
+    { "CDR", IsupIntercept::Cdr },
+    { "cdr", IsupIntercept::Cdr },
+    { "All", IsupIntercept::All },
+    { "all", IsupIntercept::All },
+    { 0, 0 }
+};
+
 static ObjList s_manglers;
 
 INIT_PLUGIN(IsupMangler);
@@ -93,7 +109,10 @@ bool IsupIntercept::initialize(const NamedList* config)
 	return false;
     SS7ISUP::initialize(config);
     m_symmetric = config->getBoolValue("symmetric",m_symmetric);
-    Debug(this,DebugAll,"Added %u Point Codes",setPointCode(*config));
+    m_what = (What)config->getIntValue("intercept",s_dict_what,m_what);
+    Debug(this,DebugAll,"Added %u Point Codes, intercepts %s %s",
+	setPointCode(*config),lookup(m_what,s_dict_what,"???"),
+	(m_symmetric) ? "both ways" : "one way");
     return true;
 }
 
@@ -123,13 +142,39 @@ HandledMSU IsupIntercept::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	name = (int)type;
     }
     switch (type) {
+	// always intercept IAM
 	case SS7MsgISUP::IAM:
-	    return processMSU(type,cic,s+3,len-3,label,network,sls) ?
-		HandledMSU::Accepted : HandledMSU::Rejected;
+	    break;
+	// other CDR relevant messages
+	case SS7MsgISUP::SAM:
+	case SS7MsgISUP::ACM:
+	case SS7MsgISUP::CPG:
+	case SS7MsgISUP::ANM:
+	case SS7MsgISUP::CON:
+	case SS7MsgISUP::SUS:
+	case SS7MsgISUP::RES:
+	case SS7MsgISUP::REL:
+	case SS7MsgISUP::RLC:
+	    if (m_what >= Cdr)
+		break;
+	    return HandledMSU::Rejected;
+	// we shouldn't mess with these messages
+	case SS7MsgISUP::UPT:
+	case SS7MsgISUP::UPA:
+	case SS7MsgISUP::NRM:
+	case SS7MsgISUP::PAM:
+	case SS7MsgISUP::CNF:
+	case SS7MsgISUP::USR:
+	    return HandledMSU::Rejected;
+	// intercepting all messages is risky
 	default:
+	    if (m_what >= All)
+		break;
 	    // let the message pass through
 	    return HandledMSU::Rejected;
     }
+    return processMSU(type,cic,s+3,len-3,label,network,sls) ?
+	HandledMSU::Accepted : HandledMSU::Rejected;
 }
 
 bool IsupIntercept::processMSU(SS7MsgISUP::Type type, unsigned int cic,
@@ -160,7 +205,11 @@ bool IsupIntercept::processMSU(SS7MsgISUP::Type type, unsigned int cic,
     String addr;
     addr << toString() << "/" << cic;
     m->addParam("address",addr);
-    m->addParam("sls",String(sls));
+    m->addParam("dpc",String(label.dpc().pack(label.type())));
+    m->addParam("opc",String(label.opc().pack(label.type())));
+    m->addParam("sls",String(label.sls()));
+    m->addParam("slc",String(sls));
+    m->addParam("cic",String(cic));
     m->copyParams(msg->params());
     TelEngine::destruct(msg);
     return Engine::enqueue(m);

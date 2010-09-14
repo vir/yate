@@ -27,4 +27,11 @@
 ;remotepointcode=
 
 ; symmetric: boolean: Intercept and mangle messages in the opposite direction too
+; Symmetric should be enabled if intercepting more than just IAM
 ;symmetric=no
+
+; intercept: keyword: What class of messages to intercept
+;  iam: Only intercept IAM
+;  cdr: Intercept most CDR related messages: IAM,SAM,ACM,CPG,ANM,CON,SUS,RES,REL,RLC
+;  all: Intercept almost all messages, except UPT,UPA,NRM,PAM,CNF,USR
+;intercept=iam

@@ -314,6 +314,7 @@ private:
     SocketAddr m_localAddr;
     SocketAddr m_remoteAddr;
     SocketAddr m_remoteRTCP;
+    SocketAddr m_remotePref;
     bool m_autoRemote;
 };
 

@@ -200,11 +200,16 @@ void RTPTransport::timerTick(const Time& when)
 	    }
 	    if (!m_remoteAddr.valid())
 		continue;
-	    // looks like it's RTP, at least by version
-	    if (m_autoRemote && (addr != m_remoteAddr)) {
-		Debug(DebugInfo,"Auto changing RTP address from %s:%d to %s:%d",
+	    // looks like it's RTP or UDPTL, at least by length and version
+	    bool preferred = false;
+	    if ((m_autoRemote || (preferred = (addr == m_remotePref))) && (addr != m_remoteAddr)) {
+		Debug(DebugInfo,"Auto changing RTP address from %s:%d to%s %s:%d",
 		    m_remoteAddr.host().c_str(),m_remoteAddr.port(),
+		    (preferred ? " preferred" : ""),
 		    addr.host().c_str(),addr.port());
+		// if we received from the preferred address don't auto change any more
+		if (preferred)
+		    m_remotePref.clear();
 		remoteAddr(addr);
 	    }
 	    m_autoRemote = false;
@@ -343,6 +348,9 @@ bool RTPTransport::remoteAddr(SocketAddr& addr, bool sniff)
 	m_remoteAddr = addr;
 	m_remoteRTCP = addr;
 	m_remoteRTCP.port(addr.port()+1);
+	// if sniffing packets from other sources remember preferred address
+	if (sniff)
+	    m_remotePref = addr;
 	return true;
     }
     return false;

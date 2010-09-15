@@ -1013,7 +1013,7 @@ bool RecordHandler::received(Message &msg)
     unsigned int maxlen = msg.getIntValue("maxlen");
 
     CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
-    DataEndpoint *de = static_cast<DataEndpoint*>(msg.userObject("DataEndpoint"));
+    RefPointer<DataEndpoint> de = static_cast<DataEndpoint*>(msg.userObject("DataEndpoint"));
     if (ch && !de)
 	de = ch->setEndpoint();
 

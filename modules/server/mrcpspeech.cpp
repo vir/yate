@@ -239,7 +239,7 @@ bool AttachHandler::received(Message& msg)
 	    c->deref();
 	}
 	if (snif) {
-	    DataEndpoint* de = ch->setEndpoint();
+	    RefPointer<DataEndpoint> de = ch->setEndpoint();
 	    // try to reinit sniffer if one already exists
 	    MrcpConsumer* c = static_cast<MrcpConsumer*>(de->getSniffer(snif));
 	    if (c)
@@ -266,8 +266,8 @@ bool RecordHandler::received(Message& msg)
     String id(msg.getValue("id"));
     if (!src.startsWith("mrcp/"))
 	return false;
-    DataEndpoint* de = static_cast<DataEndpoint *>(msg.userObject("DataEndpoint"));
     CallEndpoint* ch = static_cast<CallEndpoint *>(msg.userObject("CallEndpoint"));
+    RefPointer<DataEndpoint> de = static_cast<DataEndpoint *>(msg.userObject("DataEndpoint"));
     if (ch) {
 	id = ch->id();
 	if (!de)

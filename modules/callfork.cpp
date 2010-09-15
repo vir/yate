@@ -429,7 +429,7 @@ bool ForkMaster::msgProgress(Message& msg, const String& dest)
     RefPointer<CallEndpoint> peer = getPeer();
     if (!peer)
 	return false;
-    DataEndpoint* dataEp = getEndpoint();
+    RefPointer<DataEndpoint> dataEp = getEndpoint();
     if (m_ringing.null())
 	m_ringing = dest;
     if (m_fake || !dataEp) {

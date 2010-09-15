@@ -540,7 +540,7 @@ bool AttachHandler::received(Message& msg)
     if (cons.null() && snif.null())
 	return false;
     CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
-    DataEndpoint* de = static_cast<DataEndpoint*>(msg.userObject("DataEndpoint"));
+    RefPointer<DataEndpoint> de = static_cast<DataEndpoint*>(msg.userObject("DataEndpoint"));
     DataSource* ds = static_cast<DataSource*>(msg.userObject("DataSource"));
     if (ch) {
 	if (cons) {
@@ -597,8 +597,8 @@ bool RecordHandler::received(Message& msg)
     String id(msg.getValue("id"));
     if (!src.startsWith("tone/"))
 	return false;
-    DataEndpoint* de = static_cast<DataEndpoint *>(msg.userObject("DataEndpoint"));
     CallEndpoint* ch = static_cast<CallEndpoint *>(msg.userObject("CallEndpoint"));
+    RefPointer<DataEndpoint> de = static_cast<DataEndpoint *>(msg.userObject("DataEndpoint"));
     if (ch) {
 	id = ch->id();
 	if (!de)

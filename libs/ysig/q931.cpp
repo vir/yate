@@ -789,6 +789,7 @@ bool ISDNQ931Call::sendEvent(SignallingEvent* event)
     DDebug(q931(),DebugAll,"Call(%u,%u). sendEvent(%s) state=%s [%p]",
 	Q931_CALL_ID,event->name(),stateName(state()),this);
     if (m_terminate || state() == CallAbort) {
+	mylock.drop();
 	delete event;
 	return false;
     }
@@ -832,6 +833,7 @@ bool ISDNQ931Call::sendEvent(SignallingEvent* event)
 		case CallAbort:
 		    // Schedule destroy
 		    m_terminate = m_destroy = true;
+		    mylock.drop();
 		    delete event;
 		    return false;
 		default:
@@ -852,6 +854,7 @@ bool ISDNQ931Call::sendEvent(SignallingEvent* event)
 		"Call(%u,%u). sendEvent not implemented for event '%s' [%p]",
 		Q931_CALL_ID,event->name(),this);
     }
+    mylock.drop();
     delete event;
     return retVal;
 }

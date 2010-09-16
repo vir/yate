@@ -121,6 +121,8 @@
 ;[listener name]
 ; This section configures a connection listener
 ; This section may repeat to configure more listeners
+; Section name must start with 'listener' keyword folowed by a space (not TAB) character
+;  E.g. for a listener named 'serverconn' the section name must be 'listener serverconn'
 
 ; enable: boolean: Enable or disable this listener
 ; Defaults to false if missing or invalid

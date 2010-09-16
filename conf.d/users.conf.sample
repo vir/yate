@@ -1,0 +1,24 @@
+; This file configures the users management module
+
+[database]
+; This section configures user management database access
+
+; account: string: The name of the database account
+;account=
+
+; add_user: string: Database query used to add a new user
+; The query should fail if the user already exists
+; Extra care must be taken when building this query: undesirable things may happen
+;  like replacing an existing user's password or adding a duplicate, unreachable,
+;  entry in the users table
+;add_user=SELECT * FROM user_add('${user}','${password}')
+
+; update_user: string: Database query used to update an existing user
+;update_user=UPDATE users SET password='${password}' WHERE username='${user}'
+
+; remove_user: string: Database query used to delete an existing user
+;remove_user=DELETE FROM users WHERE username='${user}'
+
+; select_user: string: Database query used to retrieve user's data
+;select_user=SELECT * FROM users WHERE username='${user}'
+

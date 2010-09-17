@@ -588,28 +588,50 @@ void PresenceModule::initialize()
 	m_listCount = getCfgUInt(cfg,"listcount",MIN_COUNT,MIN_COUNT,MAX_COUNT);
 	m_list = new PresenceList[m_listCount];
 
+	// database connection init
+	m_accountDB = cfg.getValue("database","account");
+	if (m_accountDB)
+	    m_removeAllDB = cfg.getValue("database","remove_all");
+
 	// expire thread?
 	unsigned int chk = getCfgUInt(cfg,"expirecheck",0,1000,EXPIRE_CHECK_MAX,true);
-	if (chk) {
+	String disable;
+	while (chk) {
+	    if (!m_accountDB) {
+		disable = "database account not set";
+		break;
+	    }
+#define GET_QUERY(var,param) { \
+    var = cfg.getValue("database",param); \
+    if (!var) { \
+	disable << "'" << param << "' is empty"; \
+	break; \
+    } \
+}
+	    // Init database queries
+	    GET_QUERY(m_insertDB,"insert_presence");
+	    GET_QUERY(m_updateDB,"update_presence");
+	    GET_QUERY(m_removeResDB,"remove_instance");
+	    GET_QUERY(m_removePresDB,"remove_presence");
+	    GET_QUERY(m_selectResDB,"select_instance");
+	    GET_QUERY(m_selectPresDB,"select_presence");
+#undef GET_QUERY
 	    s_presExpire = getCfgUInt(cfg,"expiretime",TIME_TO_KEEP,TIME_TO_KEEP_MIN,
 		TIME_TO_KEEP_MAX);
 	    if (s_presExpire < chk)
 		s_presExpire = chk;
 	    (new ExpirePresence(chk))->startup();
+	    break;
 	}
-
-	// queries init
-	m_insertDB = cfg.getValue("database", "insert_presence", "");
-	m_updateDB = cfg.getValue("database", "update_presence", "");
-	m_removeResDB = cfg.getValue("database", "remove_instance", "");
-	m_removePresDB = cfg.getValue("database", "remove_presence", "");
-	m_removeAllDB = cfg.getValue("database", "remove_all", "");
-	m_selectResDB = cfg.getValue("database", "select_instance", "");
-	m_selectPresDB = cfg.getValue("database", "select_presence", "");
-
-	// database connection init
-	m_accountDB = cfg.getValue("database", "account");
-
+	if (disable) {
+	    Debug(this,DebugNote,"Disabled presence expiring: %s",disable.c_str());
+	    m_insertDB.clear();
+	    m_updateDB.clear();
+	    m_removeResDB.clear();
+	    m_removePresDB.clear();
+	    m_selectResDB.clear();
+	    m_selectPresDB.clear();
+	}
 	Debug(this,DebugAll,"Initialized lists=%u expirecheck=%u expiretime=%u account=%s",
 	      m_listCount,chk,s_presExpire,m_accountDB.c_str());
     }

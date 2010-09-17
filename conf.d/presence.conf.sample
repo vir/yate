@@ -1,0 +1,58 @@
+; This file configures the presence module
+
+[general]
+
+; listcount: integer: The number of lists created to store presence information
+; The entities advertising presence will be distributed by hash in the apropriate list
+; A larger value will lead to a faster search at the expense of used memory
+; Minimum (default) allowed value is 16
+; Maximum allowed value is 256
+;listcount=16
+
+; expirecheck: integer: The interval (in miliseconds) at which the module will
+;  check for presence expiring
+; Minimum allowed value is 1000
+; Maximum allowed value is 10000
+; Defaults to 0 (no check)
+;expirecheck=0
+
+; expiretime: integer: The time to live (in miliseconds) of a presence entry
+; This parameter is ignored if expirecheck is 0
+; Minimum allowed value is 10000
+; Maximum allowed value is 300000
+; Defaults to 60000
+;expiretime=60000
+
+
+[database]
+; This section configures presence database access
+; All queries, except for 'remove_all', will be ignored if presence expiring is disabled
+; All queries will be ignored if database account is empty
+; All queries, except for 'remove_all', must be set if presence expiring is enabled
+;  Presence expiring will be automatically disabled otherwise
+
+; account: string: The name of the database account
+;account=
+
+; remove_all: string: Database query used to remove all presences belonging to this node
+; This query is run on startup
+;remove_all=DELETE FROM presence WHERE nodename='${nodename}'
+
+; insert_presence: string: Database query used to add a new contact instance
+;insert_presence=INSERT INTO presence (nodename,contact,instance,data) \
+;VALUES('${nodename}','${contact}','${instance}','${data}')
+
+; update_presence: string: Database query used to update a contact's instance
+;update_presence=UPDATE presence SET data='${data}' WHERE contact='${contact}' AND instance='${instance}'
+
+; remove_instance: string: Database query used to remove a contact's instance presence
+;remove_instance=DELETE FROM presence WHERE contact='${contact}' AND instance='${instance}'
+
+; remove_presence: string: Database query used to remove all instances belonging to a contact
+;remove_presence=DELETE FROM presence WHERE contact='${contact}'
+
+; select_instance: string: Database query used to load a specific instance
+;select_instance=SELECT * FROM presence WHERE contact='${contact}' AND instance='${instance}'
+
+; select_presence: string: Database query used to load all instances belonging to a given contact
+;select_presence=SELECT * FROM presence WHERE contact='${contact}'

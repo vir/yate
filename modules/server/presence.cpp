@@ -32,9 +32,12 @@ using namespace TelEngine;
 
 namespace {
 
-#define MIN_COUNT		16	// number of lists for holding presences
-#define EXPIRE_CHECK_MAX	10000 	// interval in miliseconds for checking object for expiring
-#define TIME_TO_KEEP		30000	// interval in miliseconds for keeping an object in memory
+#define MIN_COUNT               16      // Minimum allowed value for presence list count
+#define MAX_COUNT               256     // Maximum allowed value for presence list count
+#define EXPIRE_CHECK_MAX        10000   // interval in miliseconds for checking object for expiring
+#define TIME_TO_KEEP            60000   // interval in miliseconds for keeping an object in memory
+#define TIME_TO_KEEP_MIN        10000   // Minimum allowed value for presence expiry interval
+#define TIME_TO_KEEP_MAX        300000  // Maximum allowed value for presence expiry interval
 
 class PresenceList;
 class Presence;
@@ -252,8 +255,7 @@ private:
 };
 
 static String s_msgPrefix = "presence";
-static unsigned int s_presExpire;        // Presence expire interval (relese memory only)
-static unsigned int s_presExpireCheck;   // Presence expire check interval
+static unsigned int s_presExpire = 0;            // Presence expire interval (relese memory only)
 unsigned int ExpirePresence::s_expireTime = 0;
 INIT_PLUGIN(PresenceModule);
 
@@ -551,6 +553,23 @@ PresenceModule::~PresenceModule()
 	delete[] m_list;
 }
 
+// Retrieve an integer value from config
+// Check bounds
+static unsigned int getCfgUInt(Configuration& cfg, const char* par, int def, int min, int max,
+    bool allowZero = false, const char* sect = "general")
+{
+    int i = cfg.getIntValue(sect,par,def);
+    if (i < 0)
+	i = 0;
+    if (!i && allowZero)
+	return 0;
+    if (i < min)
+	return min;
+    if (i > max)
+	return max;
+    return i;
+}
+
 void PresenceModule::initialize()
 {
     Output("Initializing module Presence");
@@ -566,21 +585,17 @@ void PresenceModule::initialize()
 	m_engineStartHandler = new EngineStartHandler();
 	Engine::install(m_engineStartHandler);
 
-	m_listCount = cfg.getIntValue("general", "listcount", MIN_COUNT);
-	if (m_listCount < MIN_COUNT)
-	    m_listCount = MIN_COUNT;
+	m_listCount = getCfgUInt(cfg,"listcount",MIN_COUNT,MIN_COUNT,MAX_COUNT);
 	m_list = new PresenceList[m_listCount];
 
 	// expire thread?
-	// TODO: Make sure these values are correct
-	s_presExpireCheck = cfg.getIntValue("general", "expirecheck");
-	if (s_presExpireCheck < 0)
-	    s_presExpireCheck = 0;
-	if (s_presExpireCheck) {
-	    if (s_presExpireCheck > EXPIRE_CHECK_MAX)
-		s_presExpireCheck = EXPIRE_CHECK_MAX;
-	    s_presExpire = cfg.getIntValue("general", "expiretime", TIME_TO_KEEP);
-	    (new ExpirePresence(s_presExpireCheck))->startup();
+	unsigned int chk = getCfgUInt(cfg,"expirecheck",0,1000,EXPIRE_CHECK_MAX,true);
+	if (chk) {
+	    s_presExpire = getCfgUInt(cfg,"expiretime",TIME_TO_KEEP,TIME_TO_KEEP_MIN,
+		TIME_TO_KEEP_MAX);
+	    if (s_presExpire < chk)
+		s_presExpire = chk;
+	    (new ExpirePresence(chk))->startup();
 	}
 
 	// queries init
@@ -594,6 +609,9 @@ void PresenceModule::initialize()
 
 	// database connection init
 	m_accountDB = cfg.getValue("database", "account");
+
+	Debug(this,DebugAll,"Initialized lists=%u expirecheck=%u expiretime=%u account=%s",
+	      m_listCount,chk,s_presExpire,m_accountDB.c_str());
     }
 }
 

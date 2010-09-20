@@ -58,5 +58,9 @@
 ; Usually it should be chan.notify or call.drop, empty disables the message
 ;notifymsg=
 
+; warnfirst: bool: Emit timeout warnings if no RTP packet was received
+; Once a packet is received further timeouts are controlled by warnlater
+;warnfirst=yes
+
 ; warnlater: bool: Emit timeout warnings even if there was initially some RTP
 ;warnlater=no

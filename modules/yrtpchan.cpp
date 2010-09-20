@@ -92,6 +92,7 @@ static String s_localip;
 static String s_notifyMsg;
 static bool s_autoaddr  = true;
 static bool s_anyssrc   = false;
+static bool s_warnFirst = false;
 static bool s_warnLater = false;
 static bool s_rtcp  = true;
 static bool s_drill = false;
@@ -821,7 +822,7 @@ void YRTPWrapper::gotFax()
 
 void YRTPWrapper::timeout(bool initial)
 {
-    if (!(initial || s_warnLater))
+    if (!(initial ? s_warnFirst : s_warnLater))
 	return;
     Debug(&splugin,DebugWarn,"%s timeout in%s%s wrapper [%p]",
 	(initial ? "Initial" : "Later"),
@@ -1164,7 +1165,7 @@ void YRTPMonitor::timeout(bool initial)
 {
     if (null(m_id))
 	return;
-    if (!(initial || s_warnLater))
+    if (!(initial ? s_warnFirst : s_warnLater))
 	return;
     Debug(&splugin,DebugWarn,"%s timeout in '%s' reflector [%p]",
 	(initial ? "Initial" : "Later"),m_id->c_str(),this);
@@ -1747,6 +1748,7 @@ void YRTPPlugin::initialize()
     s_priority = Thread::priority(cfg.getValue("general","thread"));
     s_timeout = cfg.getIntValue("timeouts","timeout",3000);
     s_notifyMsg = cfg.getValue("timeouts","notifymsg");
+    s_warnFirst = cfg.getBoolValue("timeouts","warnfirst",true);
     s_warnLater = cfg.getBoolValue("timeouts","warnlater",false);
     setup();
     if (m_first) {

@@ -1142,6 +1142,19 @@ void XMPPUtils::decodeError(XmlElement* xml, String& error, String& text)
 		ns == XMPPNamespace::ComponentAccept)
 		decodeError(xml,XMPPNamespace::StanzaError,&error,&text);
 	    break;
+	case XmlTag::Failure:
+	    if (ns != XMPPNamespace::Count) {
+		// Find the first error condition in element's namespace
+		XmlElement* ch = 0;
+		while (0 != (ch = findNextChild(*xml,ch,XmlTag::Count,ns))) {
+		    const String& err = ch->unprefixedTag();
+		    if (s_error[err] < XMPPError::TypeCount) {
+			error = err;
+			return;
+		    }
+		}
+	    }
+	    break;
     }
 }
 

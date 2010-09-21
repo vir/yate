@@ -494,8 +494,7 @@ public:
 	Challenge,                       // 'challenge' element sent/received
 	Compressing,                     // Stream is negotiating compression
 	                                 // outgoing: compress element sent, wait for response
-	                                 // incoming: waiting for <compressed> element to be sent or
-	                                 //  s2s still waiting for compress
+	                                 // incoming: waiting for <compressed> element to be sent
 	Register,                        // A new user is currently registering
 	// Keep Running state here: we expect all other states
 	//  (except for Destroy) to have lower values
@@ -534,6 +533,7 @@ public:
 	StreamWaitChgRsp    = 0x08000000,// Outgoing waiting challenge response confirmation
 	StreamRfc3920Chg    = 0x10000000,// Outgoing sent empty response to challenge with rspauth (RFC3920)
 	StreamCompressed    = 0x20000000,// The stream is using compression
+	StreamCanCompress   = 0x40000000,// Incoming s2s may still be compressed
 	// Flag masks
 	StreamFlags         = 0x000000ff,
 	InternalFlags       = 0xffff0000,

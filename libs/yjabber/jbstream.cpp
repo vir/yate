@@ -121,6 +121,7 @@ const TokenDict JBStream::s_flagName[] = {
     {"waitchallengersp", StreamWaitChgRsp},
     {"version1",         StreamRemoteVer1},
     {"compressed",       StreamCompressed},
+    {"cancompress",      StreamCanCompress},
     {0,0}
 };
 
@@ -606,6 +607,11 @@ void JBStream::start(XMPPFeatureList* features, XmlElement* caps, bool useVer1)
 	// Change stream state to Running if authenticated and there is no required
 	// feature to negotiate
 	if (flag(StreamAuthenticated) && !firstRequiredFeature())
+	    newState = Running;
+    }
+    else if (m_type == s2s) {
+	// Change stream state to Running if authenticated and features list is empty
+	if (flag(StreamAuthenticated) && !m_features.skipNull())
 	    newState = Running;
     }
     sendStreamXml(newState,s,f);
@@ -1130,9 +1136,9 @@ bool JBStream::processCompressing(XmlElement* xml, const JabberID& from,
     int t = XmlTag::Count;
     int n = XMPPNamespace::Count;
     XMPPUtils::getTag(*xml,t,n);
-    if (n != XMPPNamespace::Compress)
-	return dropXml(xml,"expecting compression namespace");
     if (outgoing()) {
+	if (n != XMPPNamespace::Compress)
+	    return dropXml(xml,"expecting compression namespace");
 	// Expecting: compressed/failure
 	bool ok = (t == XmlTag::Compressed);
 	if (!ok && t != XmlTag::Failure)
@@ -1166,7 +1172,7 @@ bool JBStream::processCompressing(XmlElement* xml, const JabberID& from,
 	terminate(0,true,0,XMPPError::Internal);
 	return true;
     }
-    // Incoming s2s waiting for compression or any other element
+    // Authenticated incoming s2s waiting for compression or any other element
     if (type() == s2s && m_features.get(XMPPNamespace::CompressFeature)) {
 	if (t == XmlTag::Compress && n == XMPPNamespace::Compress)
 	    return handleCompressReq(xml);
@@ -2075,7 +2081,9 @@ bool JBStream::processFeaturesIn(XmlElement* xml, const JabberID& from, const Ja
 	if (m_type == s2s) {
 	    if (isDbResult(*xml))
 		return serverStream()->processDbResult(xml,from,to);
-	    return dropXml(xml,"expecting dialback result");
+	    // Drop the element if not authenticated
+	    if (!flag(StreamAuthenticated))
+		return dropXml(xml,"expecting dialback result");
 	}
 	// Check if all remaining features are optional
 	XMPPFeature* req = firstRequiredFeature();
@@ -2839,18 +2847,17 @@ bool JBServerStream::sendDbResult(const JabberID& from, const JabberID& to, XMPP
     DDebug(this,DebugAll,"Sending '%s' db:result response from %s to %s [%p]",
 	result->attribute("type"),from.c_str(),to.c_str(),this);
     if (m_state < Running) {
-	// Authenticated, incoming, not compressed which might still be compressed:
-	// change state to Compressing
-	if (valid && !flag(StreamCompressed) &&
-	    m_features.get(XMPPNamespace::CompressFeature))
-	    ok = sendStreamXml(Compressing,result);
-	else
-	    ok = sendStreamXml(Running,result);
+	ok = sendStreamXml(Running,result);
 	// Remove features and set the authenticated flag
 	if (ok && valid) {
 	    m_features.remove(XMPPNamespace::Sasl);
 	    m_features.remove(XMPPNamespace::IqAuth);
 	    setFlags(StreamAuthenticated);
+	    // Compression can still be set
+	    if (!flag(StreamCompressed) && m_features.get(XMPPNamespace::CompressFeature))
+		setFlags(StreamCanCompress);
+	    else
+		resetFlags(StreamCanCompress);
 	}
     }
     else if (m_state == Running)
@@ -2910,6 +2917,20 @@ bool JBServerStream::processRunning(XmlElement* xml, const JabberID& from,
 {
     if (!xml)
 	return true;
+    // Incoming, authenticated stream which might still request compression
+    // Any other element will reset compression offer
+    if (flag(StreamCanCompress)) {
+	if (incoming() && !flag(StreamCompressed) &&
+	    m_features.get(XMPPNamespace::CompressFeature)) {
+	    int t = XmlTag::Count;
+	    int n = XMPPNamespace::Count;
+	    XMPPUtils::getTag(*xml,t,n);
+	    if (t == XmlTag::Compress && n == XMPPNamespace::Compress)
+		return handleCompressReq(xml);
+	}
+	resetFlags(StreamCanCompress);
+	m_features.remove(XMPPNamespace::CompressFeature);
+    }
     // Check the tags of known dialback elements:
     //  there are servers who don't stamp them with the namespace
     // Let other elements stamped with dialback namespace go the upper layer

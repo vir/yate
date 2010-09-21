@@ -366,6 +366,8 @@ public:
     };
     YateH323EndPoint(const NamedList* params = 0, const char* name = 0);
     ~YateH323EndPoint();
+    // Make an outgoing call
+    H323Connection* yateMakeCall(const PString& remoteParty, PString& token, void* userData);
     virtual H323Connection* CreateConnection(unsigned callReference, void* userData,
 	H323Transport* transport, H323SignalPDU* setupPDU);
     bool Init(const NamedList* params = 0);
@@ -738,6 +740,17 @@ YateH323EndPoint::~YateH323EndPoint()
 	    safe(),m_thread,this);
 }
 
+H323Connection* YateH323EndPoint::yateMakeCall(const PString& remoteParty,
+    PString& token, void* userData)
+{
+    token = PString::Empty();
+    H323Connection* conn = InternalMakeCall(PString::Empty(),PString::Empty(),
+	UINT_MAX,remoteParty,NULL,token,userData);
+    if (conn != NULL)
+        conn->Unlock();
+    return conn;
+}
+
 H323Connection* YateH323EndPoint::CreateConnection(unsigned callReference,
     void* userData, H323Transport* transport, H323SignalPDU* setupPDU)
 {
@@ -990,7 +1003,7 @@ bool YateCallThread::makeCall(YateH323EndPoint* ep, const char* remoteParty, voi
 {
     if (!newThread) {
 	PString token;
-	return ep->MakeCall(remoteParty,token,userData) != 0;
+	return ep->yateMakeCall(remoteParty,token,userData) != 0;
     }
     int status = 0;
     YateCallThread* call = new YateCallThread(ep,remoteParty,userData,status);
@@ -1006,7 +1019,7 @@ bool YateCallThread::makeCall(YateH323EndPoint* ep, const char* remoteParty, voi
 void YateCallThread::Main()
 {
     PString token;
-    if (m_ep->MakeCall(m_remoteParty,token,m_userData))
+    if (m_ep->yateMakeCall(m_remoteParty,token,m_userData))
 	m_status = 1;
     else
 	m_status = -1;

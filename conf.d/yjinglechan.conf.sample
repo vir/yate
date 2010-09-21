@@ -19,6 +19,11 @@
 ; If this parameter is empty the module will handle all resources
 ;resources=
 
+; resource_priority: integer: Resource priority for presence sent by the module
+; Interval allowed -128..127
+; Defaults to 0
+;resource_priority=0
+
 ; jingle_version: integer: Jingle session version to use for outgoing calls
 ; Defaults to the newest version if missing or invalid
 ; Allowed values are 0 or 1

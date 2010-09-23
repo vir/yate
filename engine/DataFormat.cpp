@@ -640,6 +640,7 @@ bool DataSource::detachInternal(DataConsumer* consumer)
 
 void DataSource::destroyed()
 {
+    m_translator = 0;
     clear();
     DataNode::destroyed();
 }
@@ -1554,7 +1555,7 @@ bool DataTranslator::detachChain(DataSource* source, DataConsumer* consumer)
     if (!source || !consumer)
 	return false;
 
-    DataSource *tsource = consumer->getConnSource();
+    RefPointer<DataSource> tsource = consumer->getConnSource();
     if (tsource) {
 	if (source->detach(consumer))
 	    return true;

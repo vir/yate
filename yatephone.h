@@ -560,12 +560,12 @@ public:
 
 protected:
     unsigned long m_nextStamp;
-    DataTranslator* m_translator;
     ObjList m_consumers;
 private:
     inline void setTranslator(DataTranslator* translator)
 	{ m_translator = translator; }
     bool detachInternal(DataConsumer* consumer);
+    DataTranslator* m_translator;
 };
 
 /**

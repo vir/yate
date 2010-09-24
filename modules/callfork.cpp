@@ -161,14 +161,10 @@ bool ForkMaster::forkSlave(const char* dest)
     bool ok = false;
     m_exec->clearParam("error");
     m_exec->clearParam("reason");
-    m_exec->clearParam("peerid");
-    m_exec->clearParam("targetid");
-    m_exec->clearParam("fork.ringer");
-    m_exec->clearParam("fork.autoring");
-    m_exec->clearParam("fork.calltype");
-    m_exec->setParam("callto",dest);
-    m_exec->setParam("rtp_forward",String::boolText(m_rtpForward));
-    m_exec->msgTime() = Time::now();
+    Message msgCopy(*m_exec);
+    msgCopy.setParam("callto",dest);
+    msgCopy.setParam("rtp_forward",String::boolText(m_rtpForward));
+    msgCopy.setParam("cdrtrack",String::boolText(false));
     if (m_execNext) {
 	RefPointer<CallEndpoint> peer = getPeer();
 	if (!peer) {
@@ -177,31 +173,30 @@ bool ForkMaster::forkSlave(const char* dest)
 	}
 	Debug(&__plugin,DebugCall,"Call '%s' directly to target '%s'",
 	    peer->id().c_str(),dest);
-	m_exec->userData(peer);
-	m_exec->setParam("id",peer->id());
-	m_exec->clearParam("cdrtrack");
-	if (!Engine::dispatch(m_exec))
+	msgCopy.userData(peer);
+	msgCopy.setParam("id",peer->id());
+	msgCopy.clearParam("cdrtrack");
+	if (!Engine::dispatch(msgCopy))
 	    return false;
 	clear(false);
 	return true;
     }
-    m_exec->setParam("cdrtrack",String::boolText(false));
     String tmp(id());
     tmp << "/" << ++m_index;
     ForkSlave* slave = new ForkSlave(this,tmp);
-    m_exec->setParam("id",tmp);
-    m_exec->userData(slave);
+    msgCopy.setParam("id",tmp);
+    msgCopy.userData(slave);
     const char* error = "failure";
     bool autoring = false;
-    if (Engine::dispatch(m_exec)) {
+    if (Engine::dispatch(msgCopy)) {
 	ok = true;
-	autoring = m_exec->getBoolValue("fork.autoring");
-	if (m_ringing.null() && (autoring || m_exec->getBoolValue("fork.ringer")))
+	autoring = msgCopy.getBoolValue("fork.autoring");
+	if (m_ringing.null() && (autoring || msgCopy.getBoolValue("fork.ringer")))
 	    m_ringing = tmp;
 	else
 	    autoring = false;
 	if (m_rtpForward) {
-	    String rtp(m_exec->getValue("rtp_forward"));
+	    String rtp(msgCopy.getValue("rtp_forward"));
 	    if (rtp != "accepted") {
 		error = "nomedia";
 		int level = DebugWarn;
@@ -213,18 +208,19 @@ bool ForkMaster::forkSlave(const char* dest)
 		    getPeerId().c_str(),slave->getPeerId().c_str(),dest);
 	    }
 	}
+	m_exec->copyParams(msgCopy,"error,reason,rtp_forward");
     }
     else
-	error = m_exec->getValue("error",error);
-    m_exec->userData(0);
+	error = msgCopy.getValue("error",error);
+    msgCopy.userData(0);
     if (ok) {
-	ForkSlave::Type type = static_cast<ForkSlave::Type>(m_exec->getIntValue("fork.calltype",s_calltypes,ForkSlave::Regular));
+	ForkSlave::Type type = static_cast<ForkSlave::Type>(msgCopy.getIntValue("fork.calltype",s_calltypes,ForkSlave::Regular));
 	Debug(&__plugin,DebugCall,"Call '%s' calling on %s '%s' target '%s'",
 	    getPeerId().c_str(),lookup(type,s_calltypes),tmp.c_str(),dest);
 	slave->setType(type);
 	m_slaves.append(slave);
 	if (autoring) {
-	    Message* ring = new Message(m_exec->getValue("fork.automessage","call.ringing"));
+	    Message* ring = new Message(msgCopy.getValue("fork.automessage","call.ringing"));
 	    ring->addParam("id",slave->getPeerId());
 	    ring->addParam("peerid",tmp);
 	    ring->addParam("targetid",tmp);

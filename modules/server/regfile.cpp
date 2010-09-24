@@ -172,7 +172,7 @@ bool UnRegistHandler::received(Message &msg)
     NamedList* nl = s_accounts.getSection(username);
     if (!nl)
 	return false;
-    Debug("RegFile",DebugAll,"Removing user %s, reson unregistered",username.c_str());
+    Debug("RegFile",DebugAll,"Removing user %s, reason unregistered",username.c_str());
     s_accounts.clearSection(username);
     return true;
 }
@@ -241,6 +241,10 @@ bool RouteHandler::received(Message &msg)
 	    }
 	    if (count > 1)
 		data = "fork ";
+	    if (count == 0) {
+		msg.setParam("error","offline");
+		break;
+	    }
 	    data << d;
 	} else {
 	    data = ac->getValue("data");

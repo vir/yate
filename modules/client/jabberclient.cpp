@@ -254,6 +254,8 @@ public:
     bool handleMsgExecute(Message& msg, const String& line);
     // Process 'user.login' messages
     bool handleUserLogin(Message& msg, const String& line);
+    // Process 'muc.room' messages
+    bool handleMucRoom(Message& msg, const String& line);
     // Process 'engine.start' messages
     void handleEngineStart(Message& msg);
     // Handle 'presence' stanzas
@@ -302,6 +304,7 @@ public:
 	UserLogin      = -5,           // YJBEngine::handleUserLogin()
 	JabberAccount  = -6,           // YJBEngine::handleJabberAccount()
 	ContactInfo    = -7,           // YJBEngine::handleContactInfo()
+	MucRoom        = -8,           // YJBEngine::handleMucRoom()
 	JabberIq       = 150,          // YJBEngine::handleJabberIq()
     };
     JBMessageHandler(int handler);
@@ -398,7 +401,29 @@ static const TokenDict s_msgHandler[] = {
     {"user.login",          JBMessageHandler::UserLogin},
     {"jabber.account",      JBMessageHandler::JabberAccount},
     {"contact.info",        JBMessageHandler::ContactInfo},
+    {"muc.room",            JBMessageHandler::MucRoom},
     {"jabber.iq",           JBMessageHandler::JabberIq},
+    {0,0}
+};
+
+// MUC user status parameter translation table
+// XEP0045 Section 15.6.2
+static const TokenDict s_mucUserStatus[] = {
+    {"nonanonymous",        100},        // The room is non anonymous
+    {"ownuser",             110},        // Presence from room on behalf of user itself
+    {"publiclog",           170},        // Room chat is logged to a public archive
+    {"nopubliclog",         171},        // Room chat is not logged to a public archive
+    {"nonanonymous",        172},        // The room is non anonymous
+    {"semianonymous",       173},        // The room is semi anonymous
+    {"fullanonymous",       174},        // The room is fully anonymous
+    {"newroom",             201},        // A new room has been created (initial accept)
+    {"nickchanged",         210},        // Nick changed (initial accept)
+    {"userbanned",          301},        // User banned
+    {"nickchanged",         303},        // User nick changed (unavailable)
+    {"userkicked",          307},        // User kicked
+    {"userremoved",         321},        // User lost affiliation in a members only room
+    {"userremoved",         322},        // Room changed to members only and user is not a member
+    {"serviceshutdown",     332},        // The system hosting the service is shutting down
     {0,0}
 };
 
@@ -410,6 +435,15 @@ static inline const String& getChildText(XmlElement& xml, const String& name,
     return child ? child->getText() : String::empty();
 }
  
+// Add a child element text to a list of parameters
+static inline void addChildText(NamedList& list, XmlElement& parent,
+    int tag, int ns, const char* param = 0, bool emptyOk = false)
+{
+    XmlElement* r = XMPPUtils::findFirstChild(parent,tag,ns);
+    if (r)
+	list.addParam(param ? param : r->unprefixedTag().c_str(),r->getText(),emptyOk);
+}
+
 // Get a space separated word from a buffer
 // Return false if empty
 static inline bool getWord(String& buf, String& word)
@@ -455,6 +489,107 @@ static bool sendPresence(JBStream* stream, bool ok, XmlElement* xml)
 	return true;
     }
     return false;
+}
+
+// Process MUC user child. Add list parameters
+static void fillMucUser(NamedList& list, XmlElement& xml, XMPPUtils::Presence pres)
+{
+    list.addParam("muc",String::boolText(true));
+    bool kicked = false;
+    bool banned = false;
+    // Fill user status flags
+    String s("status");
+    const String& ns = XMPPUtils::s_ns[XMPPNamespace::MucUser];
+    String flags;
+    for (XmlElement* c = 0; 0 != (c = xml.findNextChild(c,&s,&ns));) {
+	String* str = c->getAttribute("code");
+	if (TelEngine::null(str))
+	    continue;
+	int code = str->toInteger();
+	if (code < 100 || code > 999)
+	    continue;
+	if (code == 307)
+	    kicked = true;
+	if (code == 301)
+	    banned = true;
+	flags.append(lookup(code,s_mucUserStatus,*str),",");
+    }
+    list.addParam("muc.userstatus",flags,false);
+    // Process the 'item' child
+    XmlElement* item = XMPPUtils::findFirstChild(xml,XmlTag::Item,XMPPNamespace::MucUser);
+    if (item) {
+	list.addParam("muc.affiliation",item->attribute("affiliation"),false);
+	list.addParam("muc.role",item->attribute("role"),false);
+	list.addParam("muc.nick",item->attribute("nick"),false);
+	JabberID jid(item->attribute("jid"));
+	if (jid.node()) {
+	    list.addParam("muc.contact",jid.bare(),false);
+	    list.addParam("muc.contactinstance",jid.resource(),false);
+	}
+    }
+    // Specific type processing
+    if (pres != XMPPUtils::Unavailable)
+	return;
+    String sname;
+    // Occupant kicked or banned
+    if (item && (kicked || banned)) {
+	String pref("muc.");
+	pref << lookup(kicked ? 307 : 301,s_mucUserStatus);
+	sname = "actor";
+	XmlElement* actor = item->findFirstChild(&sname,&ns);
+	if (actor) {
+	    JabberID jid(actor->attribute("jid"));
+	    if (jid) {
+		list.addParam(pref + ".by",jid.bare());
+		list.addParam(pref + ".byinstance",jid.resource(),false);
+	    }
+	}
+	addChildText(list,*item,XmlTag::Reason,XMPPNamespace::MucUser,pref + ".reason");
+    }
+    // XEP0045 10.9 room destroyed
+    sname = "destroy";
+    XmlElement* destroy = xml.findFirstChild(&sname,&ns);
+    if (destroy) {
+	list.addParam("muc.destroyed",String::boolText(true));
+	JabberID jid(destroy->attribute("jid"));
+	if (jid)
+	    list.addParam("muc.alternateroom",jid.bare());
+	addChildText(list,*destroy,XmlTag::Reason,XMPPNamespace::MucUser,"muc.destroyreason");
+    }
+}
+
+// Build a muc admin set iq element
+static XmlElement* buildMucAdmin(const char* room, const char* nick, const char* jid,
+    const char* role, const char* aff,
+    const char* xmlId, const char* reason = 0)
+{
+    XmlElement* xml = XMPPUtils::createIq(XMPPUtils::IqSet,0,room,xmlId);
+    XmlElement* query = XMPPUtils::createElement(XmlTag::Query,XMPPNamespace::MucAdmin);
+    xml->addChild(query);
+    XmlElement* item = XMPPUtils::createElement(XmlTag::Item);
+    query->addChild(item);
+    item->setAttributeValid("nick",nick);
+    item->setAttributeValid("jid",jid);
+    item->setAttributeValid("role",role);
+    item->setAttributeValid("affiliation",aff);
+    if (!TelEngine::null(reason))
+	item->addChild(XMPPUtils::createElement(XmlTag::Reason,reason));
+    return xml;
+}
+
+// Build a muc owner iq element containing a form
+static XmlElement* buildMucOwnerForm(const char* room, bool set, Message& msg, const char* id)
+{
+    XmlElement* xml = XMPPUtils::createIq(set ? XMPPUtils::IqSet : XMPPUtils::IqGet,0,room,id);
+    XmlElement* query = XMPPUtils::createElement(XmlTag::Query,XMPPNamespace::MucOwner);
+    xml->addChild(query);
+    if (set) {
+	XmlElement* x = XMPPUtils::createElement(XmlTag::X,XMPPNamespace::XData);
+	x->setAttribute("type","submit");
+	query->addChild(x);
+	// TODO: Check if we can build a form from the message
+    }
+    return xml;
 }
 
 
@@ -1027,6 +1162,126 @@ bool YJBEngine::handleUserLogin(Message& msg, const String& line)
     return ok;
 }
 
+// Utility: add an integer muc history limit attribute
+static void addHistory(XmlElement*& h, const char* attr, NamedList& list,
+    const char* param, bool time = false)
+{
+    unsigned int tmp = (unsigned int)list.getIntValue(param,-1);
+    if (tmp == (unsigned int)-1 || (time && !tmp))
+	return;
+    String s;
+    if (!time)
+	s = tmp;
+    else {
+	XMPPUtils::encodeDateTimeSec(s,tmp);
+	if (!s)
+	    return;
+    }
+    if (!h)
+	h = new XmlElement("history");
+    h->setAttribute(attr,s);
+}
+
+// Process 'muc.room' messages
+bool YJBEngine::handleMucRoom(Message& msg, const String& line)
+{
+    const String& oper = msg["operation"];
+    if (!oper)
+	return false;
+    JBClientStream* s = s_jabber->findAccount(line);
+    if (!s)
+	return false;
+    JabberID room(msg.getValue("room"));
+    Debug(&__plugin,DebugAll,"handleMucRoom() account=%s oper=%s room=%s",
+	line.c_str(),oper.c_str(),room.c_str());
+    bool ok = false;
+    const String& id = msg["id"];
+    bool login = (oper == "login" || oper == "create");
+    if (login || oper == "logout" || oper == "delete") {
+	if (room.node() && !room.resource())
+	    room.resource(msg["nick"]);
+	if (!room.isFull()) {
+	    TelEngine::destruct(s);
+	    return false;
+	}
+	XmlElement* xml = XMPPUtils::getPresenceXml(msg);
+	xml->setAttribute("to",room);
+	xml->setAttributeValid("id",id);
+	XmlElement* m = XMPPUtils::createElement(XmlTag::X,XMPPNamespace::Muc);
+	xml->addChild(m);
+	if (login) {
+	    // Password
+	    const String& pwd = msg["password"];
+	    if (pwd)
+		m->addChild(XMPPUtils::createElement(XmlTag::Password,pwd));
+	    // Chat history limits
+	    XmlElement* h = 0;
+	    if (msg.getBoolValue("history",true)) {
+		addHistory(h,"maxchars",msg,"history.maxchars");
+		addHistory(h,"maxstanzas",msg,"history.maxmsg");
+		addHistory(h,"seconds",msg,"history.newer");
+		addHistory(h,"since",msg,"history.after",true);
+	    }
+	    else {
+		h = new XmlElement("history");
+		h->setAttribute("maxchars","0");
+	    }
+	    if (h)
+		m->addChild(h);
+	}
+	// Make sure we have the correct type
+	if (login)
+	    xml->removeAttribute("type");
+	else
+	    xml->setAttribute("type",XMPPUtils::presenceText(XMPPUtils::Unavailable));
+	ok = s->sendStanza(xml);
+    }
+    else if (oper == "setsubject") {
+	String* subject = room ? msg.getParam("subject") : 0;
+	if (subject) {
+	    XmlElement* xml = XMPPUtils::createMessage(XMPPUtils::GroupChat,0,room.bare(),0,0);
+	    xml->addChild(XMPPUtils::createElement(XmlTag::Subject,*subject));
+	    ok = s->sendStanza(xml);
+	}
+    }
+    else if (oper == "setnick") {
+	room.resource(msg["nick"]);
+	if (room.isFull()) {
+	    XmlElement* xml = XMPPUtils::getPresenceXml(msg);
+	    xml->setAttribute("to",room);
+	    xml->removeAttribute("type");
+	    xml->addChild(XMPPUtils::createElement(XmlTag::X,XMPPNamespace::Muc));
+	    ok = s->sendStanza(xml);
+	}
+    }
+    else if (oper == "querymembers") {
+	XmlElement* xml = XMPPUtils::createIqDisco(false,true,0,room,id);
+	ok = s->sendStanza(xml);
+    }
+    else if (oper == "kick") {
+	const String& nick = msg["nick"];
+	if (nick) {
+	    XmlElement* xml = buildMucAdmin(room,nick,0,"none",0,id,
+		msg.getValue("reason"));
+	    ok = s->sendStanza(xml);
+	}
+    }
+    else if (oper == "ban") {
+	const String& contact = msg["contact"];
+	if (contact) {
+	    XmlElement* xml = buildMucAdmin(room,0,contact,0,"outcast",id,
+		msg.getValue("reason"));
+	    ok = s->sendStanza(xml);
+	}
+    }
+    else if (oper == "setconfig") {
+	XmlElement* xml = buildMucOwnerForm(room,true,msg,id);
+	ok = s->sendStanza(xml);
+    }
+    TelEngine::destruct(s);
+    return ok;
+}
+
 // Process 'engine.start' messages
 void YJBEngine::handleEngineStart(Message& msg)
 {
@@ -1048,6 +1303,15 @@ void YJBEngine::processPresenceStanza(JBEvent* ev)
     if (!ev->from())
 	return;
     XMPPUtils::Presence pres = XMPPUtils::presenceType(ev->stanzaType());
+    // Handle MUC online/offline/error
+    XmlElement* xMucUser = 0;
+    XmlElement* xMuc = 0;
+    if (pres == XMPPUtils::PresenceNone || pres == XMPPUtils::Unavailable ||
+	pres == XMPPUtils::PresenceError) {
+	// Handle 'x' elements in MUC user namespace(s)
+	xMucUser = XMPPUtils::findFirstChild(*ev->element(),XmlTag::X,XMPPNamespace::MucUser);
+	xMuc = XMPPUtils::findFirstChild(*ev->element(),XmlTag::X,XMPPNamespace::Muc);
+    }
     bool online = pres == XMPPUtils::PresenceNone;
     if (online || pres == XMPPUtils::Unavailable) {
 	String capsId;
@@ -1057,15 +1321,16 @@ void YJBEngine::processPresenceStanza(JBEvent* ev)
 	    s_entityCaps.processCaps(capsId,ev->element(),ev->stream(),ev->to(),ev->from());
 	}
 	// Update contact list resources
-	Lock lock(ev->stream());
-	StreamData* sdata = streamData(ev);
-	if (!sdata)
-	    return;
-	if (online)
-	    sdata->setResource(ev->from().bare(),ev->from().resource(),capsId);
-	else
-	    sdata->removeResource(ev->from().bare(),ev->from().resource());
-	lock.drop();
+	if (!xMucUser) {
+	    Lock lock(ev->stream());
+	    StreamData* sdata = streamData(ev);
+	    if (sdata) {
+		if (online)
+		    sdata->setResource(ev->from().bare(),ev->from().resource(),capsId);
+		else
+		    sdata->removeResource(ev->from().bare(),ev->from().resource());
+	    }
+	}
 	// Notify
 	Message* m = __plugin.message("resource.notify",ev->clientStream());
 	m->addParam("operation",online ? "online" : "offline");
@@ -1099,6 +1364,8 @@ void YJBEngine::processPresenceStanza(JBEvent* ev)
 	    if (capsId)
 		s_entityCaps.addCaps(*m,capsId);
 	}
+	if (xMucUser)
+	    fillMucUser(*m,*xMucUser,pres);
 	Engine::enqueue(m);
 	return;
     }
@@ -1110,8 +1377,23 @@ void YJBEngine::processPresenceStanza(JBEvent* ev)
 	Engine::enqueue(m);
 	return;
     }
+    if (pres == XMPPUtils::PresenceError) {
+	Message* m = __plugin.message("resource.notify",ev->clientStream());
+	m->addParam("operation","error");
+	m->addParam("contact",ev->from().bare());
+	if (ev->from().resource())
+	    m->addParam("instance",ev->from().resource());
+	String error, reason;
+	XMPPUtils::decodeError(ev->element(),reason,error);
+	m->addParam("reason",reason,false);
+	m->addParam("error",error,false);
+	if (xMucUser)
+	    fillMucUser(*m,*xMucUser,pres);
+	else if (xMuc)
+	    m->addParam("muc",String::boolText(true));
+	Engine::enqueue(m);
+    }
     // Ignore XMPPUtils::Subscribed, XMPPUtils::Unsubscribed, XMPPUtils::Probe,
-    //  XMPPUtils::PresenceError
 }
 
 // Handle 'iq' stanzas
@@ -1693,6 +1975,8 @@ bool JBMessageHandler::received(Message& msg)
 	    return s_jabber->handleJabberAccount(msg,*line);
 	case ContactInfo:
 	    return s_jabber->handleContactInfo(msg,*line);
+	case MucRoom:
+	    return s_jabber->handleMucRoom(msg,*line);
 	default:
 	    Debug(&__plugin,DebugStub,"JBMessageHandler(%s) not handled!",msg.c_str());
     }

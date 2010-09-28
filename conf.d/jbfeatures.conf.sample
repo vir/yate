@@ -4,6 +4,19 @@
 ; This parameter can be overridden in section using the database
 ;account=
 
+; groups_separator: string: Roster item groups list separator
+; This parameter is used as groups list separator in messages dispatched by the module
+; Two hexadecimal digits can be specified (like 09 for TAB or 20 for SPACE)
+; If a longer string is set, only the first character will be handled
+; Defaults to comma (,) if missing, empty or invalid
+;groups_separator=,
+
+; ignore_invalid_groups: boolean: Ignore group names containing the groups separator
+; Roster updates received from users will be refused if a group contains the separator and
+;  ignore_invalid_groups is disabled
+; This parameter is applied on reload
+; Default to yes
+;ignore_invalid_groups=yes
 
 [register]
 ; This section configures in stream user management (add, change, delete)

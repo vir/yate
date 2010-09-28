@@ -722,7 +722,7 @@ static inline void addSubscription(XmlElement& dest, const String& sub)
     dest.setAttribute("subscription",tmp);
 }
 
-// Build a roster item XML element from an array row
+// Build a roster item XML element from parameter list and contact index
 static XmlElement* buildRosterItem(NamedList& list, unsigned int index)
 {
     String prefix("contact.");
@@ -732,6 +732,9 @@ static XmlElement* buildRosterItem(NamedList& list, unsigned int index)
 	list.c_str(),index,contact);
     if (TelEngine::null(contact))
 	return 0;
+    const char* grpSep = list.getValue("groups_separator",",");
+    if (TelEngine::null(grpSep))
+	grpSep = ",";
     XmlElement* item = new XmlElement("item");
     item->setAttribute("jid",contact);
     prefix << ".";
@@ -749,7 +752,7 @@ static XmlElement* buildRosterItem(NamedList& list, unsigned int index)
 	    addSubscription(*item,*param);
 	else if (name == "groups") {
 	    if (!groups)
-		groups = param->split(',',false);
+		groups = param->split(*grpSep,false);
 	}
 	else
 	    item->addChild(XMPPUtils::createElement(name,*param));

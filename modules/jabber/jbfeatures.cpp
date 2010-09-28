@@ -107,6 +107,8 @@ private:
  * Local data
  */
 INIT_PLUGIN(JBFeaturesModule);           // The module
+static String s_groupSeparator = ",";    // Roster item list grup separator
+static bool s_ignoreGrp = true;          // Ignore invalid groups or refuse roster update
 
 // Return a safe pointer to config section
 static inline const NamedList* getSection(Configuration& cfg, const char* name)
@@ -155,7 +157,7 @@ static XmlElement* buildRosterItem(NamedList& list, unsigned int index)
 	    addSubscription(*item,*param);
 	else if (name == "groups") {
 	    if (!groups)
-		groups = param->split(',',false);
+		groups = param->split(s_groupSeparator[0],false);
 	}
 	else
 	    item->addChild(XMPPUtils::createElement(name,*param));
@@ -189,7 +191,7 @@ static bool buildResult(Message& msg, XmlElement*& xml, XmlElement* child = 0)
 // Return false
 static bool buildError(Message& msg, XmlElement*& xml,
     XMPPError::Type error = XMPPError::ServiceUnavailable,
-    XMPPError::ErrorType type = XMPPError::TypeModify)
+    XMPPError::ErrorType type = XMPPError::TypeModify, const char* text = 0)
 {
     const char* id = xml ? xml->attribute("id") : 0;
     XmlElement* rsp = XMPPUtils::createIq(XMPPUtils::IqError,0,0,id);
@@ -199,7 +201,7 @@ static bool buildError(Message& msg, XmlElement*& xml,
     }
     else
 	TelEngine::destruct(xml);
-    rsp->addChild(XMPPUtils::createError(type,error));
+    rsp->addChild(XMPPUtils::createError(type,error,text));
     msg.setParam(new NamedPointer("response",rsp));
     return false;
 }
@@ -261,13 +263,26 @@ void JBFeaturesModule::initialize()
     }
     else
 	m_nextCheck = 0;
+    const NamedList* general = getSection(cfg,"general");
+    s_ignoreGrp = general->getBoolValue("ignore_invalid_groups",true);
 
     if (m_init)
 	return;
 
     m_init = true;
-    const NamedList* general = getSection(cfg,"general");
     m_defAccount = general->getValue("account");
+    s_groupSeparator = general->getValue("groups_separator");
+    if (s_groupSeparator.length() == 2) {
+	DataBlock d;
+	d.unHexify(s_groupSeparator.c_str(),2);
+	s_groupSeparator.clear();
+	if (d.length() && d[0])
+	    s_groupSeparator = (char)d[0];
+    }
+    if (!s_groupSeparator)
+	s_groupSeparator = ",";
+    else
+	s_groupSeparator = s_groupSeparator.substr(0,1);
     const NamedList* vcard = getSection(cfg,"vcard");
     m_vcardAccount = vcard->getValue("account");
     m_vcardQueryGet = vcard->getValue("get");
@@ -344,8 +359,19 @@ bool JBFeaturesModule::handleFeatureRoster(JabberID& from, Message& msg)
 	    // Groups and other children
 	    const String* ns = &XMPPUtils::s_ns[XMPPNamespace::Roster];
 	    for (XmlElement* c = item->findFirstChild(0,ns); c; c = item->findNextChild(c,0,ns)) {
-		if (XMPPUtils::isUnprefTag(*c,XmlTag::Group))
-		    groups->append(c->getText(),",");
+		if (XMPPUtils::isUnprefTag(*c,XmlTag::Group)) {
+		    const String& grp = c->getText();
+		    if (!grp)
+			continue;
+		    // Check for forbidden separator
+		    if (0 > grp.find(s_groupSeparator[0]))
+			groups->append(grp,s_groupSeparator);
+		    else if (!s_ignoreGrp) {
+			String text;
+			text << "Group '" << grp << "' contains unacceptable character";
+			return buildError(msg,xml,XMPPError::Policy,XMPPError::TypeModify,text);
+		    }
+		}
 		else {
 		    params->append(c->tag(),",");
 		    m.addParam(c->tag(),c->getText());
@@ -363,6 +389,7 @@ bool JBFeaturesModule::handleFeatureRoster(JabberID& from, Message& msg)
 	    for (unsigned int i = 1; i <= n; i++)
 		child->addChild(buildRosterItem(m,i));
 	}
+	msg.setParam("groups_separator",s_groupSeparator);
 	return buildResult(msg,xml,child);
     }
     if (m.getParam("error"))

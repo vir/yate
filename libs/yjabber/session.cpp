@@ -1390,16 +1390,13 @@ JGEvent* JGSession::processJabberIqResponse(bool result, XmlElement*& xml)
     // Generate event
     JGEvent* ev = 0;
     String text;
-    if (!result) {
-	String tmp;
-	XMPPUtils::decodeError(xml,tmp,text);
-	if (!text)
-	    text = tmp;
-    }
+    String reason;
+    if (!result)
+	XMPPUtils::decodeError(xml,reason,text);
     if (terminateEnding)
-	ev = new JGEvent(JGEvent::Destroy,this,xml,text);
+	ev = new JGEvent(JGEvent::Destroy,this,xml,reason,text);
     else if (terminatePending)
-	ev = new JGEvent(JGEvent::Terminated,this,xml,text);
+	ev = new JGEvent(JGEvent::Terminated,this,xml,reason,text);
     else if (sent->notify())
 	if (result)
 	    ev = new JGEvent(JGEvent::ResultOk,this,xml);
@@ -1417,8 +1414,12 @@ JGEvent* JGSession::processJabberIqResponse(bool result, XmlElement*& xml)
 
     String error;
 #ifdef DEBUG
-    if (text)
-	error << " '" << text << "')";
+    if (reason || text) {
+	error << " (";
+	error << reason;
+	error.append(text,reason ? ": " : "");
+	error << ")";
+    }
 #endif
     bool terminate = (ev && ev->final());
     Debug(m_engine,terminatePending ? DebugNote : DebugAll,

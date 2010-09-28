@@ -1103,12 +1103,18 @@ void XMPPUtils::decodeError(XmlElement* xml, int ns, String* error, String* text
     }
     // Retrieve the first error condition and text
     if (error) {
-	XmlElement* ch = findFirstChild(*errParent,XmlTag::Count,ns);
-	for (; ch; ch = findNextChild(*errParent,ch,XmlTag::Count,ns))
-	    if (ch->unprefixedTag() != s_tag[XmlTag::Text]) {
-		*error = ch->unprefixedTag();
-		break;
+	XmlElement* ch = XMPPUtils::findFirstChild(*errParent,XmlTag::Count,ns);
+	for (; ch; ch = XMPPUtils::findNextChild(*errParent,ch,XmlTag::Count,ns)) {
+	    if (ch->unprefixedTag() == XMPPUtils::s_tag[XmlTag::Text])
+		continue;
+	    *error = ch->unprefixedTag();
+	    if (text) {
+		*text = ch->getText();
+		if (!TelEngine::null(text))
+		    return;
 	    }
+	    break;
+	}
     }
     if (text) {
 	XmlElement* ch = findFirstChild(*errParent,XmlTag::Text,XMPPNamespace::Count);

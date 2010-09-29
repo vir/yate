@@ -29,12 +29,12 @@ namespace { // anonymous
 
 static ObjList s_queues;
 
-class QueuedCall : public String
+class QueuedCall : public NamedList
 {
 public:
-    inline QueuedCall(const String& id, const char* caller, const char* billid, const char* callerName = 0)
-	: String(id), m_caller(caller), m_billid(billid), m_callerName(callerName)
-	{ m_last = m_time = Time::now(); }
+    inline QueuedCall(const String& id, const NamedList& params, const String& copyNames)
+	: NamedList(id)
+	{ copyParams(params,copyNames); m_last = m_time = Time::now(); }
     inline int waitingTime(u_int64_t when = Time::now())
 	{ return (int)(when - m_time); }
     inline int waitingLast(u_int64_t when = Time::now())
@@ -160,17 +160,12 @@ static void copyArrayParams(NamedList& params, Array* a, int row)
 // Fill message with parameters about the call
 void QueuedCall::complete(Message& msg, bool addId) const
 {
+    msg.copyParams(*this);
     if (addId) {
-	msg.addParam("id",c_str());
+	msg.setParam("id",c_str());
 	if (m_marked)
-	    msg.addParam("operator",m_marked);
+	    msg.setParam("operator",m_marked);
     }
-    if (m_caller)
-	msg.addParam("caller",m_caller);
-    if (m_callerName)
-	msg.addParam("callername",m_callerName);
-    if (m_billid)
-	msg.addParam("billid",m_billid);
 }
 
 
@@ -274,7 +269,8 @@ bool CallsQueue::addCall(Message& msg)
     msg.setParam("source",tmp);
     msg.setParam("callto",s_chanIncoming);
     int pos = -1;
-    QueuedCall* call = new QueuedCall(msg.getValue("id"),msg.getValue("caller"),msg.getValue("billid"),msg.getValue("callername"));
+    QueuedCall* call = new QueuedCall(msg.getValue("id"),msg,
+	msg.getValue("copyparams",getValue("copyparams","caller,callername,billid")));
     // high priority calls will go in queue's head instead of tail
     if (msg.getBoolValue("priority")) {
 	m_calls.insert(call);
@@ -463,19 +459,19 @@ void CallsQueue::startACD()
 	Debug(&__plugin,DebugInfo,"Distributing call '%s' to '%s' in group '%s'",
 	    call->c_str(),user,c_str());
 	Message* ex = new Message("call.execute");
-	call->complete(*ex,false);
-	ex->addParam("direct",callto);
-	ex->addParam("target",user);
 	ex->addParam("called",user);
-	ex->addParam("callto",s_chanOutgoing);
-	ex->addParam("notify",*call);
-	ex->addParam("queue",c_str());
+	call->complete(*ex,false);
+	ex->setParam("direct",callto);
+	ex->setParam("target",user);
+	ex->setParam("callto",s_chanOutgoing);
+	ex->setParam("notify",*call);
+	ex->setParam("queue",c_str());
 	const char* tmp = params.getValue("maxcall",getValue("maxcall"));
 	if (tmp)
-	    ex->addParam("maxcall",tmp);
+	    ex->setParam("maxcall",tmp);
 	tmp = params.getValue("prompt",getValue("prompt"));
 	if (tmp)
-	    ex->addParam("prompt",tmp);
+	    ex->setParam("prompt",tmp);
 	Engine::enqueue(ex);
     }
 }

@@ -2306,7 +2306,6 @@ void SigDriver::saveConf(Configuration* cfg)
 void SigDriver::getCfg(NamedList& params, Configuration& cfg)
 {
     String trunk = params.getValue("section");
-    String voice = params.getValue("voice");
     unsigned int n = params.count();
     for (unsigned int i = 0;i <= n;i ++) {
 	NamedString* ns = params.getParam(i);
@@ -2626,7 +2625,8 @@ bool SigSS7Isup::create(NamedList& params, String& error)
     // Voice transfer: circuit group, spans, circuits
     // Use the same span as the signalling channel if missing
     buildName(compName,"L1/Data");
-    SignallingCircuitGroup* group = buildCircuits(params,params.getValue("voice",name()),compName,error);
+    SignallingCircuitGroup* group = buildCircuits(params,
+	params.getValue("voice",name()),compName,error);
     if (!group)
 	return false;
 
@@ -2828,7 +2828,8 @@ bool SigIsdn::create(NamedList& params, String& error)
     // Voice transfer: circuit group, spans, circuits
     // Use the same span as the signalling channel if missing
     buildName(compName,"B");
-    SignallingCircuitGroup* group = buildCircuits(params,params.getValue("voice",name()),compName,error);
+    SignallingCircuitGroup* group = buildCircuits(params,
+	params.getValue("voice",params.getValue("sig",name())),compName,error);
     if (!group)
 	return false;
 

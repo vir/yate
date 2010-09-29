@@ -5,6 +5,11 @@
 ;  outgoing calls
 
 
+; IMPORTANT:
+;  The configuration has changed between Yate 2 and 3, you must check the
+;  configuration against the relevant sample if upgrading.
+
+
 [general]
 ; This section keep general or default settings for the signalling module:
 
@@ -64,7 +69,9 @@
 ; voice: string: Specify the span(s) containing the voice channels (B)
 ; Multiple cards may be specified by simply separating them with a comma (',')
 ;  character
-; Defaults to the trunk name if missing
+; Defaults to the value of "sig" and then to trunk name if missing
+; It is mandatory to have voice circuits configured
+; NOTE: The default has changed from Yate 2 because of architecture differences
 ;voice=
 
 ; offset: int: Offset of voice circuit codes relative to low level circuit number
@@ -286,6 +293,7 @@
 ; voice: string: Specify the span(s) containing the voice channels (L1)
 ; Multiple cards may be specified by simply separating them with a comma (',')
 ;  character
+; It is mandatory to have voice circuits configured
 ; Defaults to the trunk name if missing
 ;voice=
 
@@ -329,6 +337,7 @@
 ;    last    Last SLS used (default for non-ITU)
 ;    cic     Use the circuit number as SLS (ITU style)
 ;    0..255  Explicit numeric value, gets truncated to the SLS bit range
+; NOTE: The default has changed from Yate 2
 ;sls=last (cic if pointcodetype is ITU)
 
 ; maxcalleddigits: integer: Maximum number of digits in an IAM Called Party Number

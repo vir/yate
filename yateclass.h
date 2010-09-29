@@ -218,6 +218,7 @@ YATE_API bool abortOnBug(bool doAbort);
 enum DebugLevel {
     DebugFail = 0,
     DebugGoOn = 2,
+    DebugConf = 3,
     DebugStub = 4,
     DebugWarn = 5,
     DebugMild = 6,

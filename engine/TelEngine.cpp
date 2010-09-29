@@ -75,7 +75,7 @@ int _gmtime_s(struct tm* _tm, const time_t* time)
 
 namespace TelEngine {
 
-#define DebugMin DebugFail
+#define DebugMin DebugConf
 #define DebugMax DebugAll
 
 #define OUT_BUFFER_SIZE 8192
@@ -92,7 +92,7 @@ static const char* const s_colors[11] = {
     "\033[5;41;1;33m\033[K",// DebugFail - blinking yellow on red
     "\033[41;1;33m\033[K",  // Unnamed   - yellow on red
     "\033[41;1;37m\033[K",  // DebugGoOn - white on red
-    "\033[41;37m\033[K",    // Unnamed   - gray on red
+    "\033[41;37m\033[K",    // DebugConf - gray on red
     "\033[40;31m\033[K",    // DebugStub - red on black
     "\033[40;1;31m\033[K",  // DebugWarn - light red on black
     "\033[40;1;33m\033[K",  // DebugMild - yellow on black
@@ -106,7 +106,7 @@ static const char* const s_levels[11] = {
     "FAIL",
     "FAIL",
     "GOON",
-    "GOON",
+    "CONF",
     "STUB",
     "WARN",
     "MILD",

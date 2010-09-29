@@ -838,6 +838,14 @@ bool YJBEngine::handleUserRoster(Message& msg, const String& line)
 		item->addChild(XMPPUtils::createElement(XmlTag::Group,o->get()->toString()));
 	    TelEngine::destruct(list);
 	}
+	else {
+	    unsigned int n = msg.length();
+	    for (unsigned int i = 0; i < n; i++) {
+		NamedString* ns = msg.getParam(i);
+		if (ns && ns->name() == "group" && *ns)
+		    item->addChild(XMPPUtils::createElement(XmlTag::Group,*ns));
+	    }
+	}
 	// Arbitrary children
 	String* tmp = msg.getParam("extra");
 	if (tmp) {
@@ -1622,8 +1630,11 @@ static void addRosterItem(NamedList& list, XmlElement& x, const String& id,
     // Groups and other children
     const String* ns = &XMPPUtils::s_ns[XMPPNamespace::Roster];
     for (XmlElement* c = x.findFirstChild(0,ns); c; c = x.findNextChild(c,0,ns)) {
-	if (XMPPUtils::isUnprefTag(*c,XmlTag::Group))
-	    groups->append(c->getText(),",");
+	if (XMPPUtils::isUnprefTag(*c,XmlTag::Group)) {
+	    const String& grp = c->getText();
+	    groups->append(grp,",");
+	    list.addParam(pref + "group",grp,false);
+	}
 	else
 	    list.addParam(pref + c->unprefixedTag(),c->getText());
     }

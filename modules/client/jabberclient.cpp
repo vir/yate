@@ -258,6 +258,10 @@ public:
     bool handleMucRoom(Message& msg, const String& line);
     // Process 'engine.start' messages
     void handleEngineStart(Message& msg);
+    // Handle muc 'message' stanzas (not related to chat)
+    // The given event is always valid and carry a valid stream and xml element
+    // Return true if the event was handled
+    bool processMucMessage(JBEvent* ev);
     // Handle 'presence' stanzas
     // The given event is always valid and carry a valid stream and xml element
     void processPresenceStanza(JBEvent* ev);
@@ -592,6 +596,17 @@ static XmlElement* buildMucOwnerForm(const char* room, bool set, Message& msg, c
     return xml;
 }
 
+// Build a muc.room message
+static Message* buildMucRoom(JBEvent& ev, const char* oper, const JabberID& contact)
+{
+    Message* m = __plugin.message("muc.room",ev.clientStream());
+    m->addParam("operation",oper);
+    m->addParam("room",ev.from().bare());
+    m->addParam("contact",contact.bare(),false);
+    m->addParam("contact_instance",contact.resource(),false);
+    return m;
+}
+
 
 /*
  * YJBEntityCapsList
@@ -690,6 +705,8 @@ void YJBEngine::processEvent(JBEvent* ev)
     switch (ev->type()) {
 	case JBEvent::Message:
 	    if (ev->element()) {
+		if (processMucMessage(ev))
+		    break;
 		Message* m = __plugin.message("msg.execute",ev->clientStream());
 		m->addParam("type",ev->stanzaType());
 		m->addParam("id",ev->id(),false);
@@ -1286,6 +1303,20 @@ bool YJBEngine::handleMucRoom(Message& msg, const String& line)
 	XmlElement* xml = buildMucOwnerForm(room,true,msg,id);
 	ok = s->sendStanza(xml);
     }
+    else if (oper == "decline" || oper == "invite") {
+	XmlElement* xml = XMPPUtils::createMessage(XMPPUtils::Normal,0,room.bare(),0,0);
+	XmlElement* x = XMPPUtils::createElement(XmlTag::X,XMPPNamespace::MucUser);
+	xml->addChild(x);
+	XmlElement* element = new XmlElement(oper);
+	x->addChild(element);
+	JabberID contact(msg.getValue("contact"));
+	contact.resource(msg.getValue("contact_instance"));
+	element->setAttributeValid("to",contact);
+	const String& reason = msg["reason"];
+	if (reason)
+	    element->addChild(XMPPUtils::createElement(XmlTag::Reason,reason));
+	ok = s->sendStanza(xml);
+    }
     TelEngine::destruct(s);
     return ok;
 }
@@ -1300,6 +1331,47 @@ void YJBEngine::handleEngineStart(Message& msg)
     m_hasClientTls = Engine::dispatch(m);
     if (!m_hasClientTls)
 	Debug(this,DebugNote,"TLS not available for outgoing streams");
+}
+
+// Handle muc 'message' stanzas (not related to chat)
+// The given event is always valid and carry a valid stream and xml element
+// Return true if the event was handled
+bool YJBEngine::processMucMessage(JBEvent* ev)
+{
+    // We handle only 'normal'
+    XMPPUtils::MsgType t = XMPPUtils::msgType(ev->stanzaType());
+    if (t != XMPPUtils::Normal)
+	return false;
+    // Handle 'x' elements in MUC user namespace
+    XmlElement* c = XMPPUtils::findFirstChild(*ev->element(),XmlTag::X,XMPPNamespace::MucUser);
+    if (!c)
+	return false;
+    DDebug(this,DebugAll,"Processing MUC message type=%s from=%s",
+	ev->stanzaType().c_str(),ev->from().c_str());
+    const String& ns = XMPPUtils::s_ns[XMPPNamespace::MucUser];
+    // XEP 0045 7.5 invite user into conference
+    String tmp("invite");
+    XmlElement* invite = c->findFirstChild(&tmp,&ns);
+    if (invite) {
+	JabberID from(invite->getAttribute("from"));
+	Message* m = buildMucRoom(*ev,"invite",from);
+	addChildText(*m,*invite,XmlTag::Reason,XMPPNamespace::MucUser);
+	addChildText(*m,*c,XmlTag::Password,XMPPNamespace::MucUser);
+	Engine::enqueue(m);
+	return true;
+    }
+    // XEP 0045 7.5 invitation declined
+    tmp = "decline";
+    XmlElement* decline = c->findFirstChild(&tmp,&ns);
+    if (decline) {
+	JabberID from(decline->getAttribute("from"));
+	Message* m = buildMucRoom(*ev,"decline",from);
+	addChildText(*m,*decline,XmlTag::Reason,XMPPNamespace::MucUser);
+	Engine::enqueue(m);
+	return true;
+    }
+    // TODO: handle XEP0249 direct muc invitation
+    return false;
 }
 
 // Handle 'presence' stanzas

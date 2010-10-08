@@ -1494,8 +1494,6 @@ bool YJBEngine::handleResNotify(Message& msg)
 		from.resource(msg.getValue("from_instance"));
 	    if (!to.resource())
 		to.resource(msg.getValue("to_instance"));
-	    if (!(from.resource() && to.resource()))
-		return false;
 	    xml = getPresenceXml(msg,from,XMPPUtils::PresenceError);
 	}
 	else

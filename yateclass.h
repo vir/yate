@@ -162,6 +162,10 @@ typedef int HANDLE;
 
 #endif /* ! _WINDOWS */
 
+#ifndef O_LARGEFILE
+#define O_LARGEFILE 0
+#endif
+
 #ifndef IPTOS_LOWDELAY
 #define IPTOS_LOWDELAY      0x10
 #define IPTOS_THROUGHPUT    0x08

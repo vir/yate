@@ -550,7 +550,7 @@ void EnginePrivate::run()
 static bool logFileOpen()
 {
     if (s_logfile) {
-	int flags = O_WRONLY|O_CREAT;
+	int flags = O_WRONLY|O_CREAT|O_LARGEFILE;
 	if (s_logtruncate) {
 	    s_logtruncate = false;
 	    flags |= O_TRUNC;

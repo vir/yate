@@ -1138,7 +1138,7 @@ bool WpSpan::createCircuits(unsigned int delta, const String& cicList)
 	ok = false;
 	break;
     }
-    delete cicCodes;
+    delete[] cicCodes;
     return ok;
 }
 

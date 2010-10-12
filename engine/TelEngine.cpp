@@ -75,7 +75,8 @@ int _gmtime_s(struct tm* _tm, const time_t* time)
 
 namespace TelEngine {
 
-#define DebugMin DebugConf
+#define DebugMin DebugFail
+#define DebugVis DebugConf
 #define DebugMax DebugAll
 
 #define OUT_BUFFER_SIZE 8192
@@ -333,8 +334,8 @@ int debugLevel()
 
 int debugLevel(int level)
 {
-    if (level < DebugMin)
-	level = DebugMin;
+    if (level < DebugVis)
+	level = DebugVis;
     if (level > DebugMax)
 	level = DebugMax;
     return (s_debug = level);
@@ -356,8 +357,8 @@ const char* debugColor(int level)
 
 int DebugEnabler::debugLevel(int level)
 {
-    if (level < DebugMin)
-	level = DebugMin;
+    if (level < DebugVis)
+	level = DebugVis;
     if (level > DebugMax)
 	level = DebugMax;
     m_chain = 0;

@@ -121,13 +121,12 @@ SocketAddr::~SocketAddr()
 
 void SocketAddr::clear()
 {
-    m_host.clear();
     m_length = 0;
-    if (m_address) {
-	void* tmp = m_address;
-	m_address = 0;
+    m_host.clear();
+    void* tmp = m_address;
+    m_address = 0;
+    if (tmp)
 	::free(tmp);
-    }
 }
 
 bool SocketAddr::assign(int family)
@@ -161,7 +160,6 @@ void SocketAddr::assign(const struct sockaddr* addr, socklen_t len)
 {
     if (addr == m_address)
 	return;
-    clear();
     if (addr && !len) {
 	switch (addr->sa_family) {
 	    case AF_INET:
@@ -179,6 +177,9 @@ void SocketAddr::assign(const struct sockaddr* addr, socklen_t len)
 #endif
 	}
     }
+    if (addr && m_address && (len == m_length) && !::memcmp(addr,m_address,len))
+	return;
+    clear();
     if (addr && (len >= (socklen_t)sizeof(struct sockaddr))) {
 	void* tmp = ::malloc(len);
 	::memcpy(tmp,addr,len);
@@ -267,6 +268,9 @@ bool SocketAddr::host(const String& name)
 
 void SocketAddr::stringify()
 {
+    m_host.clear();
+    if (!(m_length && m_address))
+	return;
     switch (family()) {
 	case AF_INET:
 #ifdef HAVE_NTOP

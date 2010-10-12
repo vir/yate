@@ -380,6 +380,7 @@ static YRTPPlugin splugin;
 static ObjList s_calls;
 static ObjList s_mirrors;
 static Mutex s_mutex(false,"YRTPChan");
+static Mutex s_refMutex(false,"YRTPChan::reflect");
 static Mutex s_srcMutex(false,"YRTPChan::source");
 
 
@@ -1464,8 +1465,10 @@ void YRTPPlugin::statusParams(String& str)
 {
     s_mutex.lock();
     str.append("chans=",",") << s_calls.count();
-    str.append("mirrors=",",") << s_mirrors.count();
     s_mutex.unlock();
+    s_refMutex.lock();
+    str.append("mirrors=",",") << s_mirrors.count();
+    s_refMutex.unlock();
 }
 
 void YRTPPlugin::statusDetail(String& str)
@@ -1476,11 +1479,13 @@ void YRTPPlugin::statusDetail(String& str)
 	YRTPWrapper* w = static_cast<YRTPWrapper*>(l->get());
         str.append(w->id(),",") << "=" << w->callId();
     }
+    s_mutex.unlock();
+    s_refMutex.lock();
     for (l = s_mirrors.skipNull(); l; l=l->skipNext()) {
 	YRTPReflector* r = static_cast<YRTPReflector*>(l->get());
         str.append(r->idA(),",") << "=" << r->idB().safe("?");
     }
-    s_mutex.unlock();
+    s_refMutex.unlock();
 }
 
 static Regexp s_reflectMatch(
@@ -1599,9 +1604,9 @@ void YRTPPlugin::reflectExecute(Message& msg)
     templ << "\\3" << r->rtpB().localAddr().host();
     templ << "\\5" << r->rtpB().localAddr().port() << "\\7";
     *sdp = sdp->replaceMatches(templ);
-    s_mutex.lock();
+    s_refMutex.lock();
     s_mirrors.append(r);
-    s_mutex.unlock();
+    s_refMutex.unlock();
 }
 
 void YRTPPlugin::reflectAnswer(Message& msg, bool ignore)
@@ -1610,7 +1615,7 @@ void YRTPPlugin::reflectAnswer(Message& msg, bool ignore)
     if (null(peerid))
 	return;
     YRTPReflector* r = 0;
-    Lock mylock(s_mutex);
+    Lock mylock(s_refMutex);
     ObjList* l = s_mirrors.skipNull();
     for (; l; l=l->skipNext()) {
 	r = static_cast<YRTPReflector*>(l->get());
@@ -1676,7 +1681,7 @@ void YRTPPlugin::reflectHangup(Message& msg)
     const String* id = msg.getParam("id");
     if (null(id))
 	return;
-    Lock mylock(s_mutex);
+    Lock mylock(s_refMutex);
     ObjList* l = s_mirrors.skipNull();
     for (; l; l=l->skipNext()) {
 	YRTPReflector* r = static_cast<YRTPReflector*>(l->get());

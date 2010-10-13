@@ -181,9 +181,8 @@ void RTPTransport::timerTick(const Time& when)
     XDebug(DebugAll,"RTPTransport::timerTick() group=%p [%p]",group(),this);
     if (m_rtpSock.valid()) {
 	char buf[BUF_SIZE];
-	SocketAddr addr;
 	int len;
-	while ((len = m_rtpSock.recvFrom(buf,sizeof(buf),addr)) > 0) {
+	while ((len = m_rtpSock.recvFrom(buf,sizeof(buf),m_rxAddrRTP)) > 0) {
 	    switch (m_type) {
 		case RTP:
 		    if (len < 12)
@@ -202,18 +201,18 @@ void RTPTransport::timerTick(const Time& when)
 		continue;
 	    // looks like it's RTP or UDPTL, at least by length and version
 	    bool preferred = false;
-	    if ((m_autoRemote || (preferred = (addr == m_remotePref))) && (addr != m_remoteAddr)) {
+	    if ((m_autoRemote || (preferred = (m_rxAddrRTP == m_remotePref))) && (m_rxAddrRTP != m_remoteAddr)) {
 		Debug(DebugInfo,"Auto changing RTP address from %s:%d to%s %s:%d",
 		    m_remoteAddr.host().c_str(),m_remoteAddr.port(),
 		    (preferred ? " preferred" : ""),
-		    addr.host().c_str(),addr.port());
+		    m_rxAddrRTP.host().c_str(),m_rxAddrRTP.port());
 		// if we received from the preferred address don't auto change any more
 		if (preferred)
 		    m_remotePref.clear();
-		remoteAddr(addr);
+		remoteAddr(m_rxAddrRTP);
 	    }
 	    m_autoRemote = false;
-	    if (addr == m_remoteAddr) {
+	    if (m_rxAddrRTP == m_remoteAddr) {
 		if (m_processor)
 		    m_processor->rtpData(buf,len);
 		if (m_monitor)
@@ -224,9 +223,8 @@ void RTPTransport::timerTick(const Time& when)
     }
     if (m_rtcpSock.valid()) {
 	char buf[BUF_SIZE];
-	SocketAddr addr;
 	int len;
-	while (((len = m_rtcpSock.recvFrom(buf,sizeof(buf),addr)) >= 8) && (addr == m_remoteRTCP)) {
+	while (((len = m_rtcpSock.recvFrom(buf,sizeof(buf),m_rxAddrRTCP)) >= 8) && (m_rxAddrRTCP == m_remoteRTCP)) {
 	    if (m_processor)
 		m_processor->rtcpData(buf,len);
 	    if (m_monitor)

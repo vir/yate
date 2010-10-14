@@ -14,6 +14,21 @@ QT4_INC := @QT4_INC@
 QT4_LIB := @QT4_LIB@
 QT4_INC_NET := @QT4_INC_NET@
 QT4_LIB_NET := @QT4_LIB_NET@
+HAVE_PGSQL := @HAVE_PGSQL@
+PGSQL_INC := @PGSQL_INC@
+PGSQL_LIB := -lpq
+HAVE_MYSQL := @HAVE_MYSQL@
+MYSQL_INC := @MYSQL_INC@
+MYSQL_LIB := @MYSQL_LIB@
+HAVE_SPANDSP := @HAVE_SPANDSP@
+SPANDSP_INC := @SPANDSP_INC@
+SPANDSP_LIB := @SPANDSP_LIB@
+HAVE_OPENSSL := @HAVE_OPENSSL@
+OPENSSL_INC := @OPENSSL_INC@
+OPENSSL_LIB := @OPENSSL_LIB@
+HAVE_ZLIB := @HAVE_ZLIB@
+ZLIB_INC := @ZLIB_INC@
+ZLIB_LIB := @ZLIB_LIB@
 SED := sed
 DEFS :=
 INCLUDES := -I.. -I@top_srcdir@
@@ -60,11 +75,11 @@ PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 LIBS :=
 DIRS := client server jabber qt4
 
-ifneq (@HAVE_PGSQL@,no)
+ifneq ($(HAVE_PGSQL),no)
 PROGS := $(PROGS) server/pgsqldb.yate
 endif
 
-ifneq (@HAVE_MYSQL@,no)
+ifneq ($(HAVE_MYSQL),no)
 PROGS := $(PROGS) server/mysqldb.yate
 endif
 
@@ -107,7 +122,7 @@ ifneq (@HAVE_SCTP_NETINET@,no)
 PROGS := $(PROGS) server/lksctp.yate
 endif
 
-ifneq (@HAVE_SPANDSP@,no)
+ifneq ($(HAVE_SPANDSP),no)
 PROGS := $(PROGS) faxchan.yate
 endif
 
@@ -131,11 +146,11 @@ ifneq (@HAVE_AMRNB@,no)
 PROGS := $(PROGS) amrnbcodec.yate
 endif
 
-ifneq (@HAVE_OPENSSL@,no)
+ifneq ($(HAVE_OPENSSL),no)
 PROGS := $(PROGS) openssl.yate
 endif
 
-ifneq (@HAVE_ZLIB@,no)
+ifneq ($(HAVE_ZLIB),no)
 PROGS := $(PROGS) zlibcompress.yate
 endif
 
@@ -255,11 +270,11 @@ server/analogdetect.yate: LOCALLIBS = -L../libs/ymodem -lyatemodem
 h323chan.yate: LOCALFLAGS = -DPHAS_TEMPLATES -D_REENTRANT -DP_HAS_SEMAPHORES @H323_INC@
 h323chan.yate: LOCALLIBS = @H323_LIB@
 
-server/pgsqldb.yate: LOCALFLAGS = @PGSQL_INC@
-server/pgsqldb.yate: LOCALLIBS = -lpq
+server/pgsqldb.yate: LOCALFLAGS = $(PGSQL_INC)
+server/pgsqldb.yate: LOCALLIBS = $(PGSQL_LIB)
 
-server/mysqldb.yate: LOCALFLAGS = @MYSQL_INC@
-server/mysqldb.yate: LOCALLIBS = @MYSQL_LIB@
+server/mysqldb.yate: LOCALFLAGS = $(MYSQL_INC)
+server/mysqldb.yate: LOCALLIBS = $(MYSQL_LIB)
 
 enumroute.yate: LOCALLIBS = @RESOLV_LIB@
 
@@ -291,20 +306,20 @@ server/lksctp.yate: LOCALFLAGS = @SCTP_FLAGS@
 server/lksctp.yate: LOCALLIBS = -lsctp
 
 ilbccodec.yate: ../libs/ilbc/libilbc.a
-ilbccodec.yate: LOCALLIBS = -L../libs/ilbc -lilbc
 ilbccodec.yate: LOCALFLAGS = @ILBC_INC@
+ilbccodec.yate: LOCALLIBS = -L../libs/ilbc -lilbc
 
-gsmcodec.yate: LOCALLIBS = @GSM_LIB@
 gsmcodec.yate: LOCALFLAGS = @GSM_INC@
+gsmcodec.yate: LOCALLIBS = @GSM_LIB@
 
-speexcodec.yate: LOCALLIBS = @SPEEX_LIB@
 speexcodec.yate: LOCALFLAGS = @SPEEX_INC@
+speexcodec.yate: LOCALLIBS = @SPEEX_LIB@
 
 amrnbcodec.yate: LOCALFLAGS = @AMRNB_INC@
 amrnbcodec.yate: LOCALLIBS = @AMRNB_LIB@
 
-faxchan.yate: LOCALLIBS = @SPANDSP_LIB@
-faxchan.yate: LOCALFLAGS = @SPANDSP_INC@
+faxchan.yate: LOCALFLAGS = $(SPANDSP_INC)
+faxchan.yate: LOCALLIBS = $(SPANDSP_LIB)
 
 ysipchan.yate: ../libs/ysip/libyatesip.a ../libs/ysdp/libyatesdp.a
 ysipchan.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysip -I@top_srcdir@/libs/ysdp
@@ -314,8 +329,8 @@ yrtpchan.yate: ../libs/yrtp/libyatertp.a
 yrtpchan.yate: LOCALFLAGS = -I@top_srcdir@/libs/yrtp
 yrtpchan.yate: LOCALLIBS = -L../libs/yrtp -lyatertp
 
-openssl.yate: LOCALFLAGS = @OPENSSL_INC@
-openssl.yate: LOCALLIBS = @OPENSSL_LIB@
+openssl.yate: LOCALFLAGS = $(OPENSSL_INC)
+openssl.yate: LOCALLIBS = $(OPENSSL_LIB)
 
 rmanager.yate: LOCALFLAGS = $(COREDUMP_INC)
 rmanager.yate: LOCALLIBS = $(COREDUMP_LIB)
@@ -328,8 +343,8 @@ server/sipfeatures.yate: ../libs/yxml/libyatexml.a
 server/sipfeatures.yate: LOCALFLAGS = -I@top_srcdir@/libs/yxml
 server/sipfeatures.yate: LOCALLIBS = -L../libs/yxml -lyatexml
 
-zlibcompress.yate: LOCALFLAGS = @ZLIB_INC@
-zlibcompress.yate: LOCALLIBS = @ZLIB_LIB@
+zlibcompress.yate: LOCALFLAGS = $(ZLIB_INC)
+zlibcompress.yate: LOCALLIBS = $(ZLIB_LIB)
 
 ../libyatesig.so ../libs/ysig/libyatesig.a:
 	$(MAKE) -C ../libs/ysig

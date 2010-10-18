@@ -1135,9 +1135,11 @@ void SS7MTP3::timerTick(const Time& when)
 	    int level = DebugAll;
 	    u_int64_t check = m_checkT2;
 	    if (l2->m_checkFail > 1) {
-		if (!l2->inhibited(SS7Layer2::Unchecked)) {
-		    Debug(this,DebugWarn,"Taking link %d '%s' out of service [%p]",
-			l2->sls(),l2->toString().c_str(),this);
+		bool takeOOS = !l2->inhibited(SS7Layer2::Unchecked);
+		if (takeOOS || m_forcealign) {
+		    if (takeOOS)
+			Debug(this,DebugWarn,"Taking link %d '%s' out of service [%p]",
+			    l2->sls(),l2->toString().c_str(),this);
 		    if (m_checkT1)
 			check = m_checkT1;
 		    int inhFlags = SS7Layer2::Unchecked;

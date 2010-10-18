@@ -1234,12 +1234,18 @@ bool SS7M2PA::processLinkStatus(DataBlock& data,int streamId)
 		return false;
 	    if (m_t3.started()) {
 		m_t3.stop();
-		m_t4.start();
+		if (status == ProvingEmergency || m_state == ProvingEmergency)
+		    m_t4.fire(Time::msecNow() + (m_t4.interval() / 16));
+		else
+		    m_t4.start();
 	    }
 	    else if (m_state == ProvingNormal || m_state == ProvingEmergency) {
 		setLocalStatus(status);
 		transmitLS();
-		m_t4.start();
+		if (status == ProvingEmergency || m_state == ProvingEmergency)
+		    m_t4.fire(Time::msecNow() + (m_t4.interval() / 16));
+		else
+		    m_t4.start();
 	    }
 	    setRemoteStatus(status);
 	    break;

@@ -484,6 +484,9 @@
 ;  (SLTM/SLTA) before placing them into service (normal behavior)
 ;checklinks=true
 
+; forcealign: boolean: Realign links that are no longer responding to SLTM
+;forcealign=true
+
 ; checkfails: integer: Interval in msec for resending SLTM messages (Q.707 T1)
 ; A value of zero disables link fail else the value is clamped between 4s - 12s
 ;checkfails=5000

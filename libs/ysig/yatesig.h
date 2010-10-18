@@ -7060,6 +7060,8 @@ private:
     bool m_inhibit;
     // check the links before placing them in service
     bool m_checklinks;
+    // realign links that don't respond to test messages anymore
+    bool m_forcealign;
     // maintenance check intervals (Q.707)
     u_int64_t m_checkT1;
     u_int64_t m_checkT2;

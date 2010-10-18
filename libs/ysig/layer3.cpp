@@ -459,7 +459,7 @@ SS7MTP3::SS7MTP3(const NamedList& params)
       SignallingDumpable(SignallingDumper::Mtp3),
       Mutex(true,"SS7MTP3"),
       m_total(0), m_active(0), m_inhibit(false),
-      m_checklinks(true), m_checkT1(0), m_checkT2(0)
+      m_checklinks(true), m_forcealign(true), m_checkT1(0), m_checkT2(0)
 {
 #ifdef DEBUG
     if (debugAt(DebugAll)) {
@@ -501,6 +501,7 @@ SS7MTP3::SS7MTP3(const NamedList& params)
 
     m_inhibit = !params.getBoolValue("autostart",true);
     m_checklinks = params.getBoolValue("checklinks",m_checklinks);
+    m_forcealign = params.getBoolValue("forcealign",m_forcealign);
     int check = params.getIntValue("checkfails",5000);
     if (check > 0) {
 	if (check < 4000)
@@ -730,6 +731,10 @@ void SS7MTP3::detach(SS7Layer2* link)
 bool SS7MTP3::control(Operation oper, NamedList* params)
 {
     bool ok = operational();
+    if (params) {
+	m_checklinks = params->getBoolValue("checklinks",m_checklinks);
+	m_forcealign = params->getBoolValue("forcealign",m_forcealign);
+    }
     switch (oper) {
 	case Pause:
 	    if (!m_inhibit) {
@@ -811,6 +816,7 @@ bool SS7MTP3::initialize(const NamedList* config)
     countLinks();
     if (config && (0 == m_total)) {
 	m_checklinks = config->getBoolValue("checklinks",m_checklinks);
+	m_forcealign = config->getBoolValue("forcealign",m_forcealign);
 	unsigned int n = config->length();
 	for (unsigned int i = 0; i < n; i++) {
 	    NamedString* param = config->getParam(i);
@@ -1132,9 +1138,14 @@ void SS7MTP3::timerTick(const Time& when)
 		if (!l2->inhibited(SS7Layer2::Unchecked)) {
 		    Debug(this,DebugWarn,"Taking link %d '%s' out of service [%p]",
 			l2->sls(),l2->toString().c_str(),this);
-		    l2->inhibit(SS7Layer2::Unchecked);
 		    if (m_checkT1)
 			check = m_checkT1;
+		    int inhFlags = SS7Layer2::Unchecked;
+		    if (m_forcealign) {
+			check = 0;
+			inhFlags |= SS7Layer2::Inactive;
+		    }
+		    l2->inhibit(inhFlags);
 		}
 	    }
 	    else if (m_checkT1) {

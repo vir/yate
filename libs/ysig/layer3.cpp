@@ -989,7 +989,8 @@ bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
     // then try to minimally process MTN and SNM MSUs
     if (maintenance(msu,label,sls) || management(msu,label,sls))
 	return true;
-    if (msu.getSIF() <= SS7MSU::MTNS)
+    // either maintenance type cannot be processed more
+    if (maint)
 	return false;
     switch (handled) {
 	case HandledMSU::NoAddress:
@@ -1016,7 +1017,7 @@ bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
 	    return prohibited(msu.getSSF(),label,sls);
 	default:
 	    // if nothing worked, report the unavailable regular user part
-	    return unavailable(msu,label,sls,handled.upu());
+	    return (msu.getSIF() != SS7MSU::SNM) && unavailable(msu,label,sls,handled.upu());
     }
 }
 

@@ -1122,15 +1122,15 @@ bool SS7Router::setRouteSpecificState(SS7PointCode::Type type, unsigned int pack
 	    continue;
 	}
 	ok = true;
-	unsigned int srcPrio = 0;
-	if (srcPC && (srcPrio = l3->getRoutePriority(type,srcPC))) {
+	if (l3->getRoutePriority(type,srcPC)) {
 	    DDebug(this,DebugAll,"Route %u/%u of network '%s' is: %s",
-		srcPC,srcPrio,l3->toString().c_str(),SS7Route::stateName(r->state()));
+		r->packed(),r->priority(),l3->toString().c_str(),SS7Route::stateName(r->state()));
 	    if (((r->state() & SS7Route::KnownState) > (best & SS7Route::KnownState)) &&
 		l3->operational())
 		best = r->state();
 	}
 	else {
+	    // srcPC is adjacent STP on this network
 	    DDebug(this,DebugAll,"Route %u/%u of network '%s' changed: %s -> %s",
 		r->packed(),r->priority(),l3->toString().c_str(),
 		SS7Route::stateName(r->state()),SS7Route::stateName(state));
@@ -1703,7 +1703,19 @@ bool SS7Router::control(NamedList& params)
 		    break;
 		}
 		if (SS7MsgSNM::RST == cmd || SS7MsgSNM::RSR == cmd) {
-		    SS7Route::State state = getRouteState(type,pc);
+		    const String* addr = params.getParam("back-address");
+		    if (TelEngine::null(addr))
+			addr = params.getParam("address");
+		    if (TelEngine::null(addr)) {
+			err = "missing 'address'";
+			break;
+		    }
+		    SS7PointCode opc;
+		    ObjList* l = addr->split(',');
+		    if (l->at(2))
+			opc.assign(l->at(2)->toString(),type);
+		    TelEngine::destruct(l);
+		    SS7Route::State state = getRouteView(type,pc.pack(type),opc.pack(type));
 		    if (SS7Route::Unknown == state)
 			return false;
 		    if (routeState(static_cast<SS7MsgSNM::Type>(cmd)) == state)
@@ -1711,13 +1723,6 @@ bool SS7Router::control(NamedList& params)
 		    // a route state changed, advertise to the adjacent node
 		    if (!(m_transfer && m_started && m_mngmt))
 			return false;
-		    const char* addr = params.getValue("back-address");
-		    if (!addr)
-			addr = params.getValue("address");
-		    if (!addr) {
-			err = "missing 'address'";
-			break;
-		    }
 		    const char* oper = lookup(state,s_dict_states);
 		    if (!oper)
 			return false;
@@ -1725,8 +1730,8 @@ bool SS7Router::control(NamedList& params)
 		    if (!ctl)
 			return false;
 		    Debug(this,DebugInfo,"Requesting %s %s to %s [%p]",
-			dest->c_str(),oper,addr,this);
-		    ctl->addParam("address",addr);
+			dest->c_str(),oper,addr->c_str(),this);
+		    ctl->addParam("address",addr->c_str());
 		    ctl->addParam("destination",*dest);
 		    ctl->setParam("automatic",String::boolText(true));
 		    m_mngmt->controlExecute(ctl);

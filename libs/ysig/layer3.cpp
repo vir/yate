@@ -923,7 +923,9 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 	if (!*p)
 	    continue;
 	SS7Layer2* link = *p;
-	if (link->operational() && !link->inhibited() && link->transmitMSU(msu)) {
+	// if we are desperate use even inhibited (but checked) links
+	bool inh = (mgmt && (sls == -2)) ? link->inhibited(SS7Layer2::Unchecked) : link->inhibited();
+	if (link->operational() && !inh && link->transmitMSU(msu)) {
 	    sls = link->sls();
 	    DDebug(this,DebugAll,"Sent MSU over link '%s' %p with SLS=%d%s [%p]",
 		link->toString().c_str(),link,sls,
@@ -933,7 +935,8 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 	}
     }
 
-    Debug(this,DebugWarn,"Could not find any link to send MSU [%p]",this);
+    Debug(this,((sls == -2) ? DebugWarn : DebugMild),
+	"Could not find any link to send %s MSU [%p]",msu.getServiceName(),this);
     return -1;
 }
 

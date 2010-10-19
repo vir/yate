@@ -683,6 +683,13 @@ int SS7Router::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
     SS7Route::State states = SS7Route::NotProhibited;
     switch (msu.getSIF()) {
 	case SS7MSU::SNM:
+	    if ((msu.at(label.length()+1) & 0x0f) == SS7MsgSNM::MIM) {
+		int res = routeMSU(msu,label,0,sls,SS7Route::AnyState);
+		if (res >= 0)
+		    return res;
+		// now we are desperate to send a link management packet
+		sls = -2;
+	    }
 	case SS7MSU::MTN:
 	case SS7MSU::MTNS:
 	    // Management and Maintenance can be sent even on prohibited routes

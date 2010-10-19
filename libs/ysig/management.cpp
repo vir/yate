@@ -626,15 +626,15 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	Debug(this,DebugAll,"%s (code len=%u) [%p]",msg->name(),len,this);
 	if (router && router->inhibit(lbl,0,SS7Layer2::Remote)) {
 	    lock();
-	    for (ObjList* l = m_pending.skipNull(); l; l = l->skipNext()) {
+	    for (ObjList* l = m_pending.skipNull(); l; ) {
 		SnmPending* p = static_cast<SnmPending*>(l->get());
 		const unsigned char* ptr = p->msu().getData(p->length()+1,1);
-		if (!ptr || ((ptr[0] != SS7MsgSNM::LRT) && (ptr[0] != SS7MsgSNM::LFU)))
-		    continue;
-		if (!p->matches(label))
-		    continue;
-		m_pending.remove(p);
-		break;
+		if (ptr && ((ptr[0] == SS7MsgSNM::LRT) || (ptr[0] == SS7MsgSNM::LFU)) && p->matches(label)) {
+		    m_pending.remove(p);
+		    l = m_pending.skipNull();
+		}
+		else
+		    l = m_pending.skipNext();
 	    }
 	    unlock();
 	    static unsigned char lua = SS7MsgSNM::LUA;

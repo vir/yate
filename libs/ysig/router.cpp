@@ -674,6 +674,7 @@ void SS7Router::timerTick(const Time& when)
 	    m_trafficOk.stop();
 	    silentAllow();
 	}
+	mylock.drop();
 	rerouteCheck(when);
 	return;
     }

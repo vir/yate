@@ -877,8 +877,9 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
     bool mgmt = (msu.getSIF() == SS7MSU::SNM);
     Lock lock(this);
     if (!(maint || m_active || (mgmt && m_checked))) {
-	Debug(this,DebugMild,"Could not transmit MSU, %s [%p]",
-	    m_total ? "all links are down" : "no data links attached",this);
+	Debug(this,DebugMild,"Could not transmit %s MSU, %s",
+	    msu.getServiceName(),
+	    m_total ? "all links are down" : "no data links attached");
 	return -1;
     }
 
@@ -910,7 +911,8 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 		return -1;
 	    }
 	    // found link but is down - reroute
-	    Debug(this,DebugMild,"Rerouting MSU for SLS=%d, link is down",sls);
+	    Debug(this,DebugAll,"Rerouting %s MSU for SLS=%d, link is down",
+		msu.getServiceName(),sls);
 	    break;
 	}
     }
@@ -936,7 +938,7 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
     }
 
     Debug(this,((sls == -2) ? DebugWarn : DebugMild),
-	"Could not find any link to send %s MSU [%p]",msu.getServiceName(),this);
+	"Could not find any link to send %s MSU",msu.getServiceName());
     return -1;
 }
 
@@ -974,8 +976,8 @@ bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
 	}
 	if (!maint && (msu.getSIF() != SS7MSU::SNM) &&
 	    link->inhibited(SS7Layer2::Unchecked|SS7Layer2::Inactive|SS7Layer2::Local)) {
-	    Debug(this,DebugMild,"Received MSU on inhibited 0x%02X link %d '%s' [%p]",
-		link->inhibited(),sls,link->toString().c_str(),this);
+	    Debug(this,DebugMild,"Received MSU on inhibited 0x%02X link %d '%s'",
+		link->inhibited(),sls,link->toString().c_str());
 	    return false;
 	}
     }

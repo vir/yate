@@ -5253,7 +5253,7 @@ public:
     inline SS7Route(unsigned int packed, unsigned int priority = 0, unsigned int shift = 0)
 	: Mutex(true,"SS7Route"),
 	  m_packed(packed), m_priority(priority), m_shift(shift),
-	  m_state(Unknown), m_congCount(0), m_congBytes(0)
+	  m_state(Unknown), m_buffering(0), m_congCount(0), m_congBytes(0)
 	{ m_networks.setDelete(false); }
 
     /**
@@ -5264,7 +5264,7 @@ public:
 	: Mutex(true,"SS7Route"),
 	  m_packed(original.packed()), m_priority(original.priority()),
 	  m_shift(original.shift()), m_state(original.state()),
-	  m_congCount(0), m_congBytes(0)
+	  m_buffering(0), m_congCount(0), m_congBytes(0)
 	{ m_networks.setDelete(false); }
 
     /**
@@ -5379,12 +5379,23 @@ public:
      */
     bool congested();
 
+    /**
+     * Initiate controlled rerouting procedure, buffer user part messages for T6
+     */
+    void reroute();
+
 private:
+    int transmitInternal(const SS7Router* router, const SS7MSU& msu,
+	const SS7Label& label, int sls, State states, const SS7Layer3* source);
+    void rerouteCheck(u_int64_t when);
+    void rerouteFlush();
     unsigned int m_packed;               // Packed destination point code
     unsigned int m_priority;             // Network priority for the given destination (used by SS7Layer3)
     unsigned int m_shift;                // SLS right shift when selecting linkset
     ObjList m_networks;                  // List of networks used to route to the given destination (used by SS7Router)
     State m_state;                       // State of the route
+    u_int64_t m_buffering;               // Time when controlled rerouting ends
+    ObjList m_reroute;                   // Controlled rerouting buffer
     unsigned int m_congCount;            // Congestion event count
     unsigned int m_congBytes;            // Congestion MSU bytes count
 };
@@ -6279,6 +6290,9 @@ private:
     void silentAllow(const SS7Layer3* network = 0);
     void checkRoutes(const SS7Layer3* noResume = 0);
     void clearRoutes(SS7Layer3* network, bool ok);
+    void reroute(const SS7Layer3* network);
+    void rerouteCheck(const Time& when);
+    void rerouteFlush();
     bool setRouteSpecificState(SS7PointCode::Type type, unsigned int packedPC,
 	unsigned int srcPC, SS7Route::State state, const SS7Layer3* changer = 0);
     inline bool setRouteSpecificState(SS7PointCode::Type type, const SS7PointCode& dest,

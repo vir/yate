@@ -44,6 +44,24 @@ private:
     ObjList m_views[YSS7_PCTYPE_COUNT];
 };
 
+class HeldMSU : public SS7MSU
+{
+    friend class TelEngine::SS7Route;
+private:
+    inline HeldMSU(const SS7Router* router, const SS7MSU& msu,
+        const SS7Label& label, int sls, SS7Route::State states, const SS7Layer3* source)
+	: SS7MSU(msu),
+	  m_router(router), m_label(label), m_sls(sls),
+	  m_states(states), m_source(source)
+	{ }
+
+    const SS7Router* m_router;
+    const SS7Label m_label;
+    int m_sls;
+    SS7Route::State m_states;
+    const SS7Layer3* m_source;
+};
+
 }; // anonymous namespace
 
 // Control operations
@@ -201,6 +219,27 @@ int SS7Route::transmitMSU(const SS7Router* router, const SS7MSU& msu,
 	const SS7Label& label, int sls, State states, const SS7Layer3* source)
 {
     lock();
+    if (msu.getSIF() > SS7MSU::MTNS && m_buffering) {
+	if (m_state & states) {
+	    // Store User Part messages in the controlled rerouting buffer
+	    DDebug(router,DebugInfo,"Storing %s MSU in reroute buffer of %u",
+		msu.getServiceName(),packed());
+	    m_reroute.append(new HeldMSU(router,msu,label,sls,states,source));
+	    sls = 0;
+	}
+	else
+	    sls = -1;
+    }
+    else
+	sls = transmitInternal(router,msu,label,sls,states,source);
+    unlock();
+    return sls;
+}
+
+// Transmit the MSU, called with the route locked
+int SS7Route::transmitInternal(const SS7Router* router, const SS7MSU& msu,
+    const SS7Label& label, int sls, State states, const SS7Layer3* source)
+{
     int offs = 0;
     if (msu.getSIF() > SS7MSU::MTNS)
 	offs = sls >> shift();
@@ -214,6 +253,7 @@ int SS7Route::transmitMSU(const SS7Router* router, const SS7MSU& msu,
 	XDebug(router,DebugAll,"Attempting transmitMSU on L3=%p '%s' [%p]",
 	    (void*)l3,l3->toString().c_str(),router);
 	int res = l3->transmitMSU(msu,label,sls);
+	lock();
 	if (res != -1) {
 	    unsigned int cong = l3->congestion(res);
 	    if (cong) {
@@ -229,10 +269,48 @@ int SS7Route::transmitMSU(const SS7Router* router, const SS7MSU& msu,
 #endif
 	    return res;
 	}
-	lock();
+    }
+    return -1;
+}
+
+void SS7Route::rerouteCheck(u_int64_t when)
+{
+    lock();
+    if (m_buffering && m_buffering <= when) {
+	if (m_state & Prohibited)
+	    rerouteFlush();
+	unsigned int c = 0;
+	while (HeldMSU* msu = static_cast<HeldMSU*>(m_reroute.remove(false))) {
+	    transmitInternal(msu->m_router,*msu,msu->m_label,msu->m_sls,
+		msu->m_states,msu->m_source);
+	    c++;
+	}
+	if (c)
+	    Debug(DebugNote,"Released %u MSUs from reroute buffer of %u",c,packed());
+	m_buffering = 0;
     }
     unlock();
-    return -1;
+}
+
+void SS7Route::rerouteFlush()
+{
+    if (!m_buffering)
+	return;
+    lock();
+    unsigned int c = m_reroute.count();
+    if (c)
+	Debug(DebugMild,"Flushed %u MSUs from reroute buffer of %u",c,packed());
+    m_reroute.clear();
+    m_buffering = 0;
+    unlock();
+}
+
+void SS7Route::reroute()
+{
+    XDebug(DebugAll,"Initiating controlled rerouting to %u",packed());
+    lock();
+    m_buffering = Time::now() + 800000;
+    unlock();
 }
 
 
@@ -395,7 +473,7 @@ bool SS7Router::restart()
 {
     Debug(this,DebugNote,"Restart of %s initiated [%p]",
 	(m_transfer ? "STP" : "SN"),this);
-    Lock mylock(this);
+    lock();
     m_phase2 = false;
     m_started = false;
     m_isolate.stop();
@@ -411,19 +489,23 @@ bool SS7Router::restart()
     checkRoutes();
     m_checkRoutes = true;
     m_restart.start();
+    unlock();
+    rerouteFlush();
     return true;
 }
 
 void SS7Router::disable()
 {
     Debug(this,DebugNote,"MTP operation is disabled [%p]",this);
-    Lock mylock(this);
+    lock();
     m_phase2 = false;
     m_started = false;
     m_checkRoutes = false;
     m_isolate.stop();
     m_restart.stop();
     m_routeTest.stop();
+    unlock();
+    rerouteFlush();
 }
 
 // Attach a SS7 Layer 3 (network) to the router
@@ -578,6 +660,8 @@ void SS7Router::timerTick(const Time& when)
 	m_started = false;
 	m_isolate.stop();
 	m_restart.stop();
+	mylock.drop();
+	rerouteFlush();
 	return;
     }
     if (m_started) {
@@ -590,6 +674,7 @@ void SS7Router::timerTick(const Time& when)
 	    m_trafficOk.stop();
 	    silentAllow();
 	}
+	rerouteCheck(when);
 	return;
     }
     // MTP restart actions
@@ -694,6 +779,10 @@ int SS7Router::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 	case SS7MSU::MTNS:
 	    // Management and Maintenance can be sent even on prohibited routes
 	    states = SS7Route::AnyState;
+	    break;
+	default:
+	    if (!m_started)
+		return -1;
     }
     return routeMSU(msu,label,0,sls,states);
 }
@@ -716,6 +805,8 @@ HandledMSU SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7L
 		notifyRoutes(SS7Route::KnownState,src);
 	}
     }
+    if ((msu.getSIF() > SS7MSU::MTNS) && !m_started)
+	return HandledMSU::Failure;
     lock();
     m_rxMsu++;
     ObjList* l;
@@ -1302,6 +1393,51 @@ void SS7Router::clearRoutes(SS7Layer3* network, bool ok)
     }
 }
 
+// Initiate controlled rerouting on all routes including a linkset
+void SS7Router::reroute(const SS7Layer3* network)
+{
+    Lock lock(m_routeMutex);
+    for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
+	SS7PointCode::Type type = static_cast<SS7PointCode::Type>(i+1);
+	const ObjList* l = getRoutes(type);
+	if (l)
+	    l = l->skipNull();
+	for (; l; l = l->skipNext()) {
+	    SS7Route* r = static_cast<SS7Route*>(l->get());
+	    if (r->hasNetwork(network))
+		r->reroute();
+	}
+    }
+}
+
+// Check if routes have finished controlled rerouting
+void SS7Router::rerouteCheck(const Time& when)
+{
+    Lock lock(m_routeMutex);
+    for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
+	SS7PointCode::Type type = static_cast<SS7PointCode::Type>(i+1);
+	const ObjList* l = getRoutes(type);
+	if (l)
+	    l = l->skipNull();
+	for (; l; l = l->skipNext())
+	    static_cast<SS7Route*>(l->get())->rerouteCheck(when);
+    }
+}
+
+// Flush the controlled rerouting buffer of all routes
+void SS7Router::rerouteFlush()
+{
+    Lock lock(m_routeMutex);
+    for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
+	SS7PointCode::Type type = static_cast<SS7PointCode::Type>(i+1);
+	const ObjList* l = getRoutes(type);
+	if (l)
+	    l = l->skipNull();
+	for (; l; l = l->skipNext())
+	    static_cast<SS7Route*>(l->get())->rerouteFlush();
+    }
+}
+
 bool SS7Router::uninhibit(SS7Layer3* network, int sls, bool remote)
 {
     if (!(network && m_mngmt))
@@ -1476,6 +1612,7 @@ void SS7Router::notify(SS7Layer3* network, int sls)
 	    clearRoutes(network,oper);
 	    checkRoutes(network);
 	}
+	reroute(network);
     }
     // iterate and notify all user parts
     ObjList* l = &m_layer4;

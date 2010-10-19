@@ -789,6 +789,10 @@ bool SS7Management::control(NamedList& params)
 		    txSls = (txSls + 1) & 0xff;
 	    }
 	    txSls = params.getIntValue("linksel",txSls) & 0xff;
+	    String tmp;
+	    tmp << SS7PointCode::lookup(lbl.type()) << "," << lbl;
+	    Debug(this,DebugAll,"Sending %s to %s on %d [%p]",
+		SS7MsgSNM::lookup((SS7MsgSNM::Type)cmd),tmp.c_str(),txSls,this);
 	    switch (cmd) {
 		// Messages containing a destination point code
 		case SS7MsgSNM::TFP:

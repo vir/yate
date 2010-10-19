@@ -1144,6 +1144,9 @@ void SS7MTP3::timerTick(const Time& when)
 		    if (takeOOS)
 			Debug(this,DebugWarn,"Taking link %d '%s' out of service [%p]",
 			    l2->sls(),l2->toString().c_str(),this);
+		    else if (m_forcealign)
+			Debug(this,DebugNote,"Cycling not in service link %d '%s' [%p]",
+			    l2->sls(),l2->toString().c_str(),this);
 		    if (m_checkT1)
 			check = m_checkT1;
 		    int cycle = 0;

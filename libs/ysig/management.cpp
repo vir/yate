@@ -817,7 +817,6 @@ bool SS7Management::control(NamedList& params)
 		case SS7MsgSNM::LIA:
 		case SS7MsgSNM::LUA:
 		case SS7MsgSNM::LID:
-		case SS7MsgSNM::LFU:
 		case SS7MsgSNM::LLT:
 		case SS7MsgSNM::LRT:
 		case SS7MsgSNM::RCT:
@@ -835,6 +834,7 @@ bool SS7Management::control(NamedList& params)
 			return postpone(new SS7MSU(txSio,lbl,&data,1),lbl,txSls,2500,5000);
 		    }
 		case SS7MsgSNM::LUN:
+		case SS7MsgSNM::LFU:
 		    {
 			unsigned char data = cmd;
 			return postpone(new SS7MSU(txSio,lbl,&data,1),lbl,txSls,1200,2400);

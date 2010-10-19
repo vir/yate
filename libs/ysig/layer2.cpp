@@ -230,7 +230,7 @@ bool SS7Layer2::inhibit(int setFlags, int clrFlags)
 {
     int old = m_inhibited;
     m_inhibited = (m_inhibited | setFlags) & ~clrFlags;
-    if (old != m_inhibited) {
+    if (old != m_inhibited || (setFlags & clrFlags)) {
 	bool cycle = (setFlags & Inactive) && operational();
 	if (cycle)
 	    control(Pause);

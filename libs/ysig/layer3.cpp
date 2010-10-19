@@ -1143,12 +1143,12 @@ void SS7MTP3::timerTick(const Time& when)
 			    l2->sls(),l2->toString().c_str(),this);
 		    if (m_checkT1)
 			check = m_checkT1;
-		    int inhFlags = SS7Layer2::Unchecked;
+		    int cycle = 0;
 		    if (m_forcealign) {
-			check = 0;
-			inhFlags |= SS7Layer2::Inactive;
+			cycle = SS7Layer2::Inactive;
+			l2->m_checkFail = 0;
 		    }
-		    l2->inhibit(inhFlags);
+		    l2->inhibit(SS7Layer2::Unchecked | cycle,cycle);
 		}
 	    }
 	    else if (m_checkT1) {
@@ -1218,7 +1218,7 @@ void SS7MTP3::linkChecked(int sls, bool remote)
 	    if (l2->inhibited(SS7Layer2::Unchecked)) {
 		// trigger a slightly delayed SLTM check
 		u_int64_t t = Time::now() + 100000;
-		if ((l2->m_checkTime > t) || (t - 4000000 > l2->m_checkTime))
+		if ((l2->m_checkTime > t + m_checkT1) || (t - 4000000 > l2->m_checkTime))
 		    l2->m_checkTime = t;
 	    }
 	}

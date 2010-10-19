@@ -1527,8 +1527,13 @@ bool SS7M2UA::control(Operation oper, NamedList* params)
 	case Resume:
 	    if (operational())
 		return true;
-	    if (!m_autostart || m_retrieve.started())
+	    if (!m_autostart)
 		return activate();
+	    if (m_retrieve.started()) {
+		if (LinkDown == m_linkState)
+		    m_linkState = getEmergency(params,false) ? LinkReqEmg : LinkReq;
+		return activate();
+	    }
 	    // fall through
 	case Align:
 	    if (aspActive()) {
@@ -1619,9 +1624,12 @@ void SS7M2UA::timerTick(const Time& when)
 {
     if (m_retrieve.timeout(when.msec())) {
 	m_retrieve.stop();
-	Debug(this,DebugWarn,"Sequence retrieval from M2UA SG timed out");
-	SS7Layer2::notify();
-	control(Resume);
+	if (m_lastSeqRx == -2) {
+	    Debug(this,DebugWarn,"Sequence retrieval from M2UA SG timed out");
+	    SS7Layer2::notify();
+	}
+	if (m_linkState != LinkDown)
+	    control(Resume);
     }
 }
 
@@ -1724,23 +1732,15 @@ bool SS7M2UA::processMAUP(unsigned char msgType, const DataBlock& msg, int strea
 		    res = (u_int32_t)-1;
 		    if (!SIGAdaptation::getTag(msg,0x0307,res)) {
 			err = "Missing BSN field in retrieval";
-			if (m_retrieve.started()) {
-			    m_retrieve.stop();
-			    SS7Layer2::notify();
-			    control(Resume);
-			}
+			m_lastSeqRx = -3;
+			postRetrieve();
 			break;
 		    }
 		    Debug(this,DebugInfo,"Recovered sequence number %u",res);
 		    if (res & 0xffffff80)
 			res = (res & 0x00ffffff) | 0x01000000;
 		    m_lastSeqRx = res;
-		    if (m_retrieve.started()) {
-			m_retrieve.stop();
-			SS7Layer2::notify();
-			if (m_linkState != LinkDown)
-			    control(Resume);
-		    }
+		    postRetrieve();
 		    return true;
 		}
 	    }
@@ -1775,6 +1775,15 @@ bool SS7M2UA::processMAUP(unsigned char msgType, const DataBlock& msg, int strea
     }
     Debug(this,DebugStub,"%s M2UA MAUP message type %u",err,msgType);
     return false;
+}
+
+void SS7M2UA::postRetrieve()
+{
+    if (!m_retrieve.started())
+	return;
+    m_retrieve.stop();
+    SS7Layer2::notify();
+    m_retrieve.fire(Time::msecNow()+100);
 }
 
 void SS7M2UA::activeChange(bool active)

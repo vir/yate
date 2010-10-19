@@ -6647,6 +6647,7 @@ protected:
 	{ return static_cast<SS7M2UAClient*>(adaptation()); }
     virtual bool processMGMT(unsigned char msgType, const DataBlock& msg, int streamId);
     virtual bool processMAUP(unsigned char msgType, const DataBlock& msg, int streamId);
+    void postRetrieve();
     SignallingTimer m_retrieve;
     int32_t m_iid;
     int m_linkState;

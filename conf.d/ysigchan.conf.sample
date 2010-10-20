@@ -580,3 +580,30 @@
 
 ; testrestricted: boolean: Test restricted routes too (national option)
 ;testrestricted=no
+
+
+; Example of a SS7 Management Part
+; This component is created by the SS7 router, see its "management" setting
+; A management named 'ss7snm' is implicitely declared with default parameters
+;[ss7snm]
+; type: keyword: identifies the component as a SS7 Management Part
+;type=ss7-snm
+
+; local: string: Declare a default local pointcode for messages to send
+; The format of this option is pointcodetype,label
+; This parameter can be repeated to declare a local point codes per type
+; If missing the local address of the attached router is used
+; Example: local=ITU,2-2-4
+;local=
+
+; changemsgs: boolean: Emit and process changeover and changeback messages
+; Disabling these messages forces always using time controlled diversion
+;changemsgs=yes
+
+; changesets: boolean: Emit changeover and changeback between linksets
+; Requires "changemsgs" to be enabled to allow sequence controlled diversion
+;  procedures to be used on another linkset if the controlled one is unavaliable
+;changesets=no
+
+; neighbours: boolean: Only accept management messages from adjacent nodes
+;neighbours=yes

@@ -1393,7 +1393,8 @@ void SS7Router::clearRoutes(SS7Layer3* network, bool ok)
 	    DDebug(DebugInfo,"Clearing route %u/%u of %s to %s",
 		r->packed(),r->priority(),network->toString().c_str(),
 		SS7Route::stateName(state));
-	    setRouteSpecificState(type,r->packed(),0,state,network);
+	    setRouteSpecificState(type,r->packed(),
+		(r->priority() ? 0 : r->packed()),state,network);
 	}
     }
 }

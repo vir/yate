@@ -458,7 +458,7 @@ SS7MTP3::SS7MTP3(const NamedList& params)
     : SignallingComponent(params.safe("SS7MTP3"),&params),
       SignallingDumpable(SignallingDumper::Mtp3),
       Mutex(true,"SS7MTP3"),
-      m_total(0), m_active(0), m_inhibit(false),
+      m_total(0), m_active(0), m_inhibit(false), m_warnDown(true),
       m_checklinks(true), m_forcealign(true), m_checkT1(0), m_checkT2(0)
 {
 #ifdef DEBUG
@@ -756,6 +756,7 @@ bool SS7MTP3::control(Operation oper, NamedList* params)
 		if (ok != operational())
 		    SS7Layer3::notify(-1);
 	    }
+	    m_warnDown = true;
 	    if (params && params->getBoolValue("emergency")) {
 		unsigned int cnt = 0;
 		const ObjList* l = &m_links;
@@ -814,6 +815,7 @@ bool SS7MTP3::initialize(const NamedList* config)
 	debugLevel(config->getIntValue("debuglevel_mtp3",
 	    config->getIntValue("debuglevel",-1)));
     countLinks();
+    m_warnDown = true;
     if (config && (0 == m_total)) {
 	m_checklinks = config->getBoolValue("checklinks",m_checklinks);
 	m_forcealign = config->getBoolValue("forcealign",m_forcealign);
@@ -877,9 +879,12 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
     bool mgmt = (msu.getSIF() == SS7MSU::SNM);
     Lock lock(this);
     if (!(maint || m_active || (mgmt && m_checked))) {
-	Debug(this,DebugMild,"Could not transmit %s MSU, %s",
-	    msu.getServiceName(),
-	    m_total ? "all links are down" : "no data links attached");
+	if (m_warnDown) {
+	    m_warnDown = false;
+	    Debug(this,DebugMild,"Could not transmit %s MSU, %s",
+		msu.getServiceName(),
+		m_total ? "all links are down" : "no data links attached");
+	}
 	return -1;
     }
 
@@ -902,6 +907,7 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 			link->toString().c_str(),link,sls,
 			(m_inhibit ? " while inhibited" : ""),this);
 		    dump(msu,true,sls);
+		    m_warnDown = true;
 		    return sls;
 		}
 		return -1;
@@ -933,6 +939,7 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 		link->toString().c_str(),link,sls,
 		(m_inhibit ? " while inhibited" : ""),this);
 	    dump(msu,true,sls);
+	    m_warnDown = true;
 	    return sls;
 	}
     }

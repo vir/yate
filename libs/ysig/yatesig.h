@@ -7073,6 +7073,8 @@ private:
     unsigned int m_active;
     // inhibited flag
     bool m_inhibit;
+    // warn if all links are down
+    bool m_warnDown;
     // check the links before placing them in service
     bool m_checklinks;
     // realign links that don't respond to test messages anymore

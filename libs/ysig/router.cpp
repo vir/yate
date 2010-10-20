@@ -705,7 +705,7 @@ void SS7Router::timerTick(const Time& when)
 	}
 	if (m_routeTest.interval())
 	    m_routeTest.start(when.msec());
-	m_trafficOk.interval(5000);
+	m_trafficOk.interval(4000);
 	m_trafficOk.start(when.msec());
     }
 }

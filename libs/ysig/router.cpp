@@ -1386,15 +1386,17 @@ void SS7Router::clearRoutes(SS7Layer3* network, bool ok)
 	const ObjList* l = network->getRoutes(type);
 	if (l)
 	    l = l->skipNull();
+	unsigned int adjacent = 0;
 	for (; l; l = l->skipNext()) {
 	    SS7Route* r = static_cast<SS7Route*>(l->get());
 	    if (ok && (r->state() != SS7Route::Prohibited))
 		continue;
+	    if (!r->priority())
+		adjacent = r->packed();
 	    DDebug(DebugInfo,"Clearing route %u/%u of %s to %s",
 		r->packed(),r->priority(),network->toString().c_str(),
 		SS7Route::stateName(state));
-	    setRouteSpecificState(type,r->packed(),
-		(r->priority() ? 0 : r->packed()),state,network);
+	    setRouteSpecificState(type,r->packed(),adjacent,state,network);
 	}
     }
 }

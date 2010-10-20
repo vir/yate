@@ -1091,6 +1091,7 @@ bool SS7Router::setRouteState(SS7PointCode::Type type, unsigned int packedPC, SS
 	DDebug(this,DebugAll,"Local route %u/%u changed by %u: %s -> %s",
 	packedPC,route->priority(),remotePC,
 	    SS7Route::stateName(route->state()),SS7Route::stateName(state));
+	route->reroute();
 	route->m_state = state;
 	if (state != SS7Route::Unknown)
 	    routeChanged(route,type,remotePC,network);
@@ -1134,7 +1135,10 @@ bool SS7Router::setRouteSpecificState(SS7PointCode::Type type, unsigned int pack
 	    DDebug(this,DebugAll,"Route %u/%u of network '%s' changed: %s -> %s",
 		r->packed(),r->priority(),l3->toString().c_str(),
 		SS7Route::stateName(r->state()),SS7Route::stateName(state));
-	    r->m_state = state;
+	    if (r->m_state != state) {
+		route->reroute();
+		r->m_state = state;
+	    }
 	}
     }
     if (srcPC && !ok) {

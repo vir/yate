@@ -1245,6 +1245,22 @@ void SS7Router::silentAllow(const SS7Layer3* network)
     }
 }
 
+// Mark Allowed routes by point code
+void SS7Router::silentAllow(SS7PointCode::Type type, unsigned int packedPC)
+{
+    if (!packedPC)
+	return;
+    for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
+	SS7Layer3* l3 = *static_cast<L3ViewPtr*>(o->get());
+	if (!l3)
+	    continue;
+	if (!l3->getRoutePriority(type,packedPC)) {
+	    silentAllow(l3);
+	    return;
+	}
+    }
+}
+
 // Send RST and/or RSR to probe for routes left prohibited/restricted
 void SS7Router::sendRouteTest()
 {
@@ -1775,9 +1791,13 @@ bool SS7Router::control(NamedList& params)
 			err << "no such route: " << *dest;
 		    break;
 		}
-		// if STP is started advertise routes to just restarted node
-		if ((SS7MsgSNM::TRA == cmd) && m_transfer && m_started)
-		    notifyRoutes(SS7Route::KnownState,pc.pack(type));
+		if (m_started && (SS7MsgSNM::TRA == cmd)) {
+		    // allow all routes for which TFx was not received before TRA
+		    silentAllow(type,pc.pack(type));
+		    // if STP is started advertise routes to just restarted node
+		    if (m_transfer)
+			notifyRoutes(SS7Route::KnownState,pc.pack(type));
+		}
 		return true;
 	    }
 	    break;

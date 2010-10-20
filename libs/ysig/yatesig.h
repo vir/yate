@@ -6288,6 +6288,7 @@ private:
     void disable();
     void sendRestart(const SS7Layer3* network = 0);
     void silentAllow(const SS7Layer3* network = 0);
+    void silentAllow(SS7PointCode::Type type, unsigned int packedPC);
     void checkRoutes(const SS7Layer3* noResume = 0);
     void clearRoutes(SS7Layer3* network, bool ok);
     void reroute(const SS7Layer3* network);

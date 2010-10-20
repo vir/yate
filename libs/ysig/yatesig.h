@@ -7607,6 +7607,7 @@ private:
     bool timeout(SignallingMessageTimer& timer, bool final);
     SignallingMessageTimerList m_pending;
     bool m_changeMsgs;
+    bool m_changeSets;
     bool m_neighbours;
 };
 

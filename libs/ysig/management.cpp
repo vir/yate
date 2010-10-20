@@ -305,9 +305,11 @@ static const TokenDict s_dict_control[] = {
 
 SS7Management::SS7Management(const NamedList& params, unsigned char sio)
     : SignallingComponent(params.safe("SS7Management"),&params),
-      SS7Layer4(sio,&params), m_changeMsgs(true), m_neighbours(true)
+      SS7Layer4(sio,&params),
+      m_changeMsgs(true), m_changeSets(false), m_neighbours(true)
 {
     m_changeMsgs = params.getBoolValue("changemsgs",m_changeMsgs);
+    m_changeSets = params.getBoolValue("changesets",m_changeSets);
     m_neighbours = params.getBoolValue("neighbours",m_neighbours);
 }
 
@@ -751,6 +753,7 @@ bool SS7Management::control(NamedList& params)
 	return false;
 
     m_changeMsgs = params.getBoolValue("changemsgs",m_changeMsgs);
+    m_changeSets = params.getBoolValue("changesets",m_changeSets);
     m_neighbours = params.getBoolValue("neighbours",m_neighbours);
     const String* addr = params.getParam("address");
     if (cmd < 0 || TelEngine::null(addr))
@@ -924,7 +927,7 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 	for (txSls = 0; m_changeMsgs && (txSls < 256); txSls++)
 	    localLink = (linkAvail[txSls] = (txSls != sls) && network->inService(txSls)) || localLink;
 	// if no link is available in linkset rely on another linkset
-	linkAvail[256] = !localLink;
+	linkAvail[256] = m_changeSets && !localLink;
 	for (unsigned int i = 0; m_changeMsgs && (i < YSS7_PCTYPE_COUNT); i++) {
 	    SS7PointCode::Type type = static_cast<SS7PointCode::Type>(i+1);
 	    unsigned int local = network->getLocal(type);
@@ -1028,11 +1031,11 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 	}
 	if (force) {
 	    if (linkUp) {
-		Debug(this,DebugWarn,"Could not changeback link %d, activating anyway [%p]",sls,this);
+		Debug(this,DebugMild,"Could not changeback link %d, activating anyway [%p]",sls,this);
 		network->inhibit(sls,0,SS7Layer2::Inactive);
 	    }
 	    else {
-		Debug(this,DebugWarn,"Could not changeover link %d, deactivating anyway [%p]",sls,this);
+		Debug(this,DebugMild,"Could not changeover link %d, deactivating anyway [%p]",sls,this);
 		network->inhibit(sls,SS7Layer2::Inactive,0);
 	    }
 	}

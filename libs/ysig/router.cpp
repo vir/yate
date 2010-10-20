@@ -1685,12 +1685,15 @@ bool SS7Router::control(NamedList& params)
 		return false;
 	    notifyRoutes();
 	    return true;
+	case SS7MsgSNM::RST:
+	case SS7MsgSNM::RSR:
+	    if (!m_started)
+		return false;
+	    // fall through
 	case SS7MsgSNM::TRA:
 	case SS7MsgSNM::TFP:
 	case SS7MsgSNM::TFR:
 	case SS7MsgSNM::TFA:
-	case SS7MsgSNM::RST:
-	case SS7MsgSNM::RSR:
 	    {
 		SS7PointCode::Type type = SS7PointCode::lookup(params.getValue("pointcodetype"));
 		if (SS7PointCode::length(type) == 0) {

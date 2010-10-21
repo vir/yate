@@ -241,13 +241,14 @@ int SS7Route::transmitInternal(const SS7Router* router, const SS7MSU& msu,
     const SS7Label& label, int sls, State states, const SS7Layer3* source)
 {
     int offs = 0;
-    if (msu.getSIF() > SS7MSU::MTNS)
+    bool userPart = (msu.getSIF() > SS7MSU::MTNS);
+    if (userPart)
 	offs = sls >> shift();
     ListIterator iter(m_networks,offs);
     while (L3Pointer* p = static_cast<L3Pointer*>(iter.get())) {
 	RefPointer<SS7Layer3> l3 = static_cast<SS7Layer3*>(*p);
 	if (!l3 || (l3 == source) ||
-	    !(l3->getRouteState(label.type(),label.dpc()) & states))
+	    !(l3->getRouteState(label.type(),label.dpc(),userPart) & states))
 	    continue;
 	unlock();
 	XDebug(router,DebugAll,"Attempting transmitMSU on L3=%p '%s' [%p]",
@@ -1156,7 +1157,11 @@ bool SS7Router::setRouteSpecificState(SS7PointCode::Type type, unsigned int pack
 		r->packed(),r->priority(),l3->toString().c_str(),
 		SS7Route::stateName(r->state()),SS7Route::stateName(state));
 	    if (r->m_state != state) {
-		route->reroute();
+		// controlled reroute for the entire linkset if node is adjacent
+		if (!r->priority())
+		    reroute(l3);
+		else
+		    route->reroute();
 		r->m_state = state;
 	    }
 	}

@@ -5661,19 +5661,21 @@ public:
      * This method is thread safe
      * @param type Destination point code type
      * @param packedPC The packed point code
+     * @param checkAdjacent True to take into account the adjacent STP
      * @return The state of the route, SS7Route::Unknown if no route to the given point code
      */
-    SS7Route::State getRouteState(SS7PointCode::Type type, unsigned int packedPC);
+    SS7Route::State getRouteState(SS7PointCode::Type type, unsigned int packedPC, bool checkAdjacent = false);
 
     /**
      * Get the current state of a route by unpacked Point Code.
      * This method is thread safe
      * @param type Destination point code type
      * @param dest The destination point code
+     * @param checkAdjacent True to take into account the adjacent STP
      * @return The state of the route, SS7Route::Unknown if no route to the given point code
      */
-    inline SS7Route::State getRouteState(SS7PointCode::Type type, const SS7PointCode& dest)
-	{ return getRouteState(type,dest.pack(type)); }
+    inline SS7Route::State getRouteState(SS7PointCode::Type type, const SS7PointCode& dest, bool checkAdjacent = false)
+	{ return getRouteState(type,dest.pack(type),checkAdjacent); }
 
     /**
      * Check if access to a specific Point Code is allowed from this network

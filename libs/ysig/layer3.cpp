@@ -236,14 +236,18 @@ unsigned int SS7Layer3::getRoutePriority(SS7PointCode::Type type, unsigned int p
 }
 
 // Get the state of a route.
-SS7Route::State SS7Layer3::getRouteState(SS7PointCode::Type type, unsigned int packedPC)
+SS7Route::State SS7Layer3::getRouteState(SS7PointCode::Type type, unsigned int packedPC, bool checkAdjacent)
 {
     if (type == SS7PointCode::Other || (unsigned int)type > YSS7_PCTYPE_COUNT || !packedPC)
 	return SS7Route::Unknown;
     Lock lock(m_routeMutex);
-    SS7Route* route = findRoute(type,packedPC);
-    if (route)
-	return route->state();
+    for (ObjList* o = m_route[type-1].skipNull(); o; o = o->skipNext()) {
+	SS7Route* route = static_cast<SS7Route*>(o->get());
+	if (route->packed() == packedPC)
+	    return route->state();
+	if (checkAdjacent && !route->priority() && !(route->state() & SS7Route::NotProhibited))
+	    return route->state();
+    }
     return SS7Route::Unknown;
 }
 

@@ -5676,6 +5676,15 @@ public:
 	{ return getRouteState(type,dest.pack(type)); }
 
     /**
+     * Check if access to a specific Point Code is allowed from this network
+     * @param type Destination point code type
+     * @param packedPC The destination point code
+     * @return True if access to the specified Point Code is allowed
+     */
+    virtual bool allowedTo(SS7PointCode::Type type, unsigned int packedPC) const
+	{ return true; }
+
+    /**
      * Print the destinations or routing table to output
      */
     void printRoutes();
@@ -6989,6 +6998,14 @@ public:
     virtual bool control(NamedList& params);
 
     /**
+     * Check if access to a specific Point Code is allowed from this network
+     * @param type Destination point code type
+     * @param packedPC The destination point code
+     * @return True if access to the specified Point Code is allowed
+     */
+    virtual bool allowedTo(SS7PointCode::Type type, unsigned int packedPC) const;
+
+    /**
      * Get the total number of links attached
      * @return Number of attached data links
      */
@@ -7085,6 +7102,8 @@ private:
     // maintenance check intervals (Q.707)
     u_int64_t m_checkT1;
     u_int64_t m_checkT2;
+    // list of allowed point codes seen from this network
+    unsigned int* m_allowed[YSS7_PCTYPE_COUNT];
 };
 
 /**

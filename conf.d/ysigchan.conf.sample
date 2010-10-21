@@ -466,6 +466,11 @@
 ; Example: local=ITU,2-2-4
 ;local=
 
+; allowed: string: List of point codes explicitely allowed from this SS7 network
+; An empty or missing list will allow access to all known routes
+; Example: allowed=ITU,2-2-2,2-2-3,1001,2001,2002
+;allowed=
+
 ; router: string: Name of the SS7 Router to attach to
 ; A boolean false value disables attaching a router (unlikely)
 ; If no router is attached only a single User Part can be connected

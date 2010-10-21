@@ -469,6 +469,8 @@ SS7MTP3::SS7MTP3(const NamedList& params)
 	    &params,this,tmp.c_str());
     }
 #endif
+    for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++)
+	m_allowed[i] = 0;
     // Set point code type for each network indicator
     static const unsigned char ni[4] = { SS7MSU::International,
 	SS7MSU::SpareInternational, SS7MSU::National, SS7MSU::ReservedNational };
@@ -519,12 +521,35 @@ SS7MTP3::SS7MTP3(const NamedList& params)
 	m_checkT2 = 1000 * check;
     }
     buildRoutes(params);
+    unsigned int n = params.length();
+    for (unsigned int p = 0; p < n; p++) {
+	NamedString* ns = params.getParam(p);
+	if (!ns || (ns->name() != "allowed"))
+	    continue;
+	ObjList* l = ns->split(',',false);
+	ObjList* o = l->skipNull();
+	if (o) {
+	    SS7PointCode::Type type = SS7PointCode::lookup(o->get()->toString());
+	    o = o->skipNext();
+	    if (o && (SS7PointCode::Other != type)) {
+		unsigned int a = o->count();
+		delete[] m_allowed[type-1];
+		m_allowed[type-1] = new unsigned int[a+1];
+		for (a = 0; o; o = o->skipNext())
+		    m_allowed[type-1][a++] = o->get()->toString().toInteger(-1);
+		m_allowed[type-1][a] = 0;
+	    }
+	}
+	TelEngine::destruct(l);
+    }
     setDumper(params.getValue("layer3dump"));
 }
 
 SS7MTP3::~SS7MTP3()
 {
     setDumper();
+    for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++)
+	delete[] m_allowed[i];
 }
 
 unsigned int SS7MTP3::countLinks()
@@ -726,6 +751,19 @@ void SS7MTP3::detach(SS7Layer2* link)
 	countLinks();
 	return;
     }
+}
+
+bool SS7MTP3::allowedTo(SS7PointCode::Type type, unsigned int packedPC) const
+{
+    if (type >= SS7PointCode::DefinedTypes)
+	return false;
+    if (!m_allowed[type-1])
+	return true;
+    for (int i = 0; m_allowed[type-1][i]; i++) {
+	if (packedPC == m_allowed[type-1][i])
+	    return true;
+    }
+    return false;
 }
 
 bool SS7MTP3::control(Operation oper, NamedList* params)

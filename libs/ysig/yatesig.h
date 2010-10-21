@@ -6287,6 +6287,7 @@ private:
     void restart2();
     void disable();
     void sendRestart(const SS7Layer3* network = 0);
+    void sendRestart(SS7PointCode::Type type, unsigned int packedPC);
     void silentAllow(const SS7Layer3* network = 0);
     void silentAllow(SS7PointCode::Type type, unsigned int packedPC);
     void checkRoutes(const SS7Layer3* noResume = 0);
@@ -6304,6 +6305,7 @@ private:
     void buildView(SS7PointCode::Type type, ObjList& view, SS7Layer3* network);
     void buildViews();
     SignallingTimer m_trafficOk;
+    SignallingTimer m_trafficSent;
     SignallingTimer m_routeTest;
     bool m_testRestricted;
     bool m_checkRoutes;

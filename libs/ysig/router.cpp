@@ -322,7 +322,7 @@ SS7Router::SS7Router(const NamedList& params)
       Mutex(true,"SS7Router"),
       m_changes(0), m_transfer(false), m_phase2(false), m_started(false),
       m_restart(0), m_isolate(0),
-      m_trafficOk(0), m_routeTest(0), m_testRestricted(false),
+      m_trafficOk(0), m_trafficSent(0), m_routeTest(0), m_testRestricted(false),
       m_checkRoutes(false), m_autoAllowed(false),
       m_sendUnavail(true), m_sendProhibited(true),
       m_rxMsu(0), m_txMsu(0), m_fwdMsu(0), m_congestions(0),
@@ -343,6 +343,8 @@ SS7Router::SS7Router(const NamedList& params)
     m_restart.interval(params,"starttime",5000,(m_transfer ? 60000 : 10000),false);
     m_isolate.interval(params,"isolation",500,1000,true);
     m_routeTest.interval(params,"testroutes",10000,50000,true),
+    m_trafficOk.interval(m_restart.interval() + 4000);
+    m_trafficSent.interval(m_restart.interval() + 8000);
     m_testRestricted = params.getBoolValue("testrestricted",m_testRestricted);
     loadLocalPC(params);
 }
@@ -478,6 +480,8 @@ bool SS7Router::restart()
     m_started = false;
     m_isolate.stop();
     m_routeTest.stop();
+    m_trafficOk.stop();
+    m_trafficSent.stop();
     m_restart.stop();
     for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
 	L3ViewPtr* p = static_cast<L3ViewPtr*>(o->get());
@@ -489,6 +493,7 @@ bool SS7Router::restart()
     checkRoutes();
     m_checkRoutes = true;
     m_restart.start();
+    m_trafficOk.start();
     unlock();
     rerouteFlush();
     return true;
@@ -504,6 +509,8 @@ void SS7Router::disable()
     m_isolate.stop();
     m_restart.stop();
     m_routeTest.stop();
+    m_trafficOk.stop();
+    m_trafficSent.stop();
     unlock();
     rerouteFlush();
 }
@@ -660,6 +667,8 @@ void SS7Router::timerTick(const Time& when)
 	m_started = false;
 	m_isolate.stop();
 	m_restart.stop();
+	m_trafficOk.stop();
+	m_trafficSent.stop();
 	mylock.drop();
 	rerouteFlush();
 	return;
@@ -674,6 +683,8 @@ void SS7Router::timerTick(const Time& when)
 	    m_trafficOk.stop();
 	    silentAllow();
 	}
+	else if (m_trafficSent.timeout(when.msec()))
+	    m_trafficSent.stop();
 	mylock.drop();
 	rerouteCheck(when);
 	return;
@@ -705,8 +716,6 @@ void SS7Router::timerTick(const Time& when)
 	}
 	if (m_routeTest.interval())
 	    m_routeTest.start(when.msec());
-	m_trafficOk.interval(4000);
-	m_trafficOk.start(when.msec());
     }
 }
 
@@ -1205,6 +1214,22 @@ void SS7Router::sendRestart(const SS7Layer3* network)
     }
 }
 
+// Send TRA by point code
+void SS7Router::sendRestart(SS7PointCode::Type type, unsigned int packedPC)
+{
+    if (!packedPC)
+	return;
+    for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
+	SS7Layer3* l3 = *static_cast<L3ViewPtr*>(o->get());
+	if (!l3)
+	    continue;
+	if (!l3->getRoutePriority(type,packedPC)) {
+	    sendRestart(l3);
+	    return;
+	}
+    }
+}
+
 // Mark Allowed routes from which we didn't receive even a TRA
 void SS7Router::silentAllow(const SS7Layer3* network)
 {
@@ -1372,6 +1397,7 @@ void SS7Router::checkRoutes(const SS7Layer3* noResume)
     if (isolated && noResume && (m_started || m_restart.started())) {
 	Debug(this,DebugMild,"Node has become isolated! [%p]",this);
 	m_isolate.start();
+	m_trafficSent.stop();
 	// we are in an emergency - uninhibit any possible link
 	for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
 	    L3ViewPtr* p = static_cast<L3ViewPtr*>(o->get());
@@ -1614,10 +1640,11 @@ void SS7Router::notify(SS7Layer3* network, int sls)
 		    const SS7MTP3* mtp3 = YOBJECT(SS7MTP3,network);
 		    if (!mtp3 || (mtp3->linksActive() <= 1)) {
 			clearRoutes(network,true);
+			// adjacent point restart
 			sendRestart(network);
+			if (!m_trafficOk.started())
+			    m_trafficOk.start();
 		    }
-		    m_trafficOk.interval(m_restart.interval() + 4000);
-		    m_trafficOk.start();
 		}
 	    }
 	    else {
@@ -1795,8 +1822,11 @@ bool SS7Router::control(NamedList& params)
 		    // allow all routes for which TFx was not received before TRA
 		    silentAllow(type,pc.pack(type));
 		    // if STP is started advertise routes to just restarted node
-		    if (m_transfer)
+		    if (m_transfer && !m_trafficSent.started()) {
+			m_trafficSent.start();
 			notifyRoutes(SS7Route::KnownState,pc.pack(type));
+			sendRestart(type,pc.pack(type));
+		    }
 		}
 		return true;
 	    }

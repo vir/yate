@@ -1281,6 +1281,10 @@ void SS7Router::silentAllow(const SS7Layer3* network)
 		    noisy = false;
 		}
 		setRouteSpecificState(type,r->packed(),adjacent,SS7Route::Allowed,l3);
+		if (!r->priority()) {
+		    notifyRoutes(SS7Route::KnownState,r->packed());
+		    sendRestart(l3);
+		}
 	    }
 	}
     }

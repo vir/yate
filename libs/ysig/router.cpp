@@ -1662,8 +1662,7 @@ void SS7Router::notify(SS7Layer3* network, int sls)
 			clearRoutes(network,true);
 			// adjacent point restart
 			sendRestart(network);
-			if (!m_trafficOk.started())
-			    m_trafficOk.start();
+			m_trafficOk.start();
 		    }
 		}
 	    }

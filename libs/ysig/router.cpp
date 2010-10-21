@@ -324,7 +324,7 @@ SS7Router::SS7Router(const NamedList& params)
       m_changes(0), m_transfer(false), m_phase2(false), m_started(false),
       m_restart(0), m_isolate(0),
       m_trafficOk(0), m_trafficSent(0), m_routeTest(0), m_testRestricted(false),
-      m_checkRoutes(false), m_autoAllowed(false),
+      m_checkRoutes(false), m_autoAllowed(false), m_earlyRestart(false),
       m_sendUnavail(true), m_sendProhibited(true),
       m_rxMsu(0), m_txMsu(0), m_fwdMsu(0), m_congestions(0),
       m_mngmt(0)
@@ -347,6 +347,7 @@ SS7Router::SS7Router(const NamedList& params)
     m_trafficOk.interval(m_restart.interval() + 4000);
     m_trafficSent.interval(m_restart.interval() + 8000);
     m_testRestricted = params.getBoolValue("testrestricted",m_testRestricted);
+    m_earlyRestart = params.getBoolValue("earlyrestart",m_earlyRestart);
     loadLocalPC(params);
 }
 
@@ -371,6 +372,7 @@ bool SS7Router::initialize(const NamedList* config)
 	m_autoAllowed = config->getBoolValue("autoallow",m_autoAllowed);
 	m_sendUnavail = config->getBoolValue("sendupu",m_sendUnavail);
 	m_sendProhibited = config->getBoolValue("sendtfp",m_sendProhibited);
+	m_earlyRestart = config->getBoolValue("earlyrestart",m_earlyRestart);
 	const String* param = config->getParam("management");
 	const char* name = "ss7snm";
 	if (param) {
@@ -1659,9 +1661,10 @@ void SS7Router::notify(SS7Layer3* network, int sls)
 		    // send TRA only for the first activated link
 		    const SS7MTP3* mtp3 = YOBJECT(SS7MTP3,network);
 		    if (!mtp3 || (mtp3->linksActive() <= 1)) {
-			clearRoutes(network,true);
 			// adjacent point restart
-			sendRestart(network);
+			clearRoutes(network,true);
+			if (m_earlyRestart)
+			    sendRestart(network);
 			m_trafficOk.start();
 		    }
 		}

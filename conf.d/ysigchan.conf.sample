@@ -586,6 +586,10 @@
 ; testrestricted: boolean: Test restricted routes too (national option)
 ;testrestricted=no
 
+; earlyrestart: boolean: Send a TRA soon after the first link is checked
+; This setting should not be used in STP mode as it interferes with routing
+;earlyrestart=no
+
 
 ; Example of a SS7 Management Part
 ; This component is created by the SS7 router, see its "management" setting

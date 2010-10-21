@@ -206,6 +206,7 @@ static const TokenDict s_dict_control[] = {
     { "block", SS7MsgISUP::BLK },
     { "unblock", SS7MsgISUP::UBL },
     { "release", SS7MsgISUP::RLC },
+    { "available", SS7MsgISUP::UPA },
     { 0, 0 }
 };
 
@@ -3674,7 +3675,13 @@ bool SS7ISUP::control(NamedList& params)
 		transmitRLC(this,code,label,false);
 	    }
 	    return true;
-
+	case SS7MsgISUP::UPA:
+	    if (!m_userPartAvail) {
+		m_uptTimer.stop();
+		m_userPartAvail = true;
+		m_lockTimer.start();
+	    }
+	    return true;
     }
     mylock.drop();
     return SignallingComponent::control(params);

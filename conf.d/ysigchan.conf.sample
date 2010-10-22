@@ -590,6 +590,10 @@
 ; This setting should not be used in STP mode as it interferes with routing
 ;earlyrestart=no
 
+; earlyprohibit: boolean: Send all TFPs soon after the first link is checked
+; This setting applies only when STP operation mode is enabled
+;earlyprohibit=yes
+
 
 ; Example of a SS7 Management Part
 ; This component is created by the SS7 router, see its "management" setting

@@ -6249,6 +6249,13 @@ protected:
     void notifyRoutes(SS7Route::State states = SS7Route::AnyState, unsigned int onlyPC = 0);
 
     /**
+     * Trigger the route changed notification for each route that is not Unknown
+     * @param states Mask of required states of the route
+     * @param network Notify to adjacent nodes of this network
+     */
+    void notifyRoutes(SS7Route::State states, const SS7Layer3* network);
+
+    /**
      * Notification callback when a route state changed to other than Unknown.
      * This method is called with the route mutex locked
      * @param route Pointer to the route whose state has changed
@@ -6322,6 +6329,7 @@ private:
     bool m_checkRoutes;
     bool m_autoAllowed;
     bool m_earlyRestart;
+    bool m_earlyProhibit;
     bool m_sendUnavail;
     bool m_sendProhibited;
     unsigned long m_rxMsu;

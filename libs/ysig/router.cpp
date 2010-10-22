@@ -324,7 +324,8 @@ SS7Router::SS7Router(const NamedList& params)
       m_changes(0), m_transfer(false), m_phase2(false), m_started(false),
       m_restart(0), m_isolate(0),
       m_trafficOk(0), m_trafficSent(0), m_routeTest(0), m_testRestricted(false),
-      m_checkRoutes(false), m_autoAllowed(false), m_earlyRestart(false),
+      m_checkRoutes(false), m_autoAllowed(false),
+      m_earlyRestart(false), m_earlyProhibit(true),
       m_sendUnavail(true), m_sendProhibited(true),
       m_rxMsu(0), m_txMsu(0), m_fwdMsu(0), m_congestions(0),
       m_mngmt(0)
@@ -348,6 +349,7 @@ SS7Router::SS7Router(const NamedList& params)
     m_trafficSent.interval(m_restart.interval() + 8000);
     m_testRestricted = params.getBoolValue("testrestricted",m_testRestricted);
     m_earlyRestart = params.getBoolValue("earlyrestart",m_earlyRestart);
+    m_earlyProhibit = params.getBoolValue("earlyprohibit",m_earlyProhibit);
     loadLocalPC(params);
 }
 
@@ -373,6 +375,7 @@ bool SS7Router::initialize(const NamedList* config)
 	m_sendUnavail = config->getBoolValue("sendupu",m_sendUnavail);
 	m_sendProhibited = config->getBoolValue("sendtfp",m_sendProhibited);
 	m_earlyRestart = config->getBoolValue("earlyrestart",m_earlyRestart);
+	m_earlyProhibit = config->getBoolValue("earlyprohibit",m_earlyProhibit);
 	const String* param = config->getParam("management");
 	const char* name = "ss7snm";
 	if (param) {
@@ -900,6 +903,23 @@ void SS7Router::notifyRoutes(SS7Route::State states, unsigned int onlyPC)
     }
 }
 
+// Call the route changed notification for all known routes on a network
+void SS7Router::notifyRoutes(SS7Route::State states, const SS7Layer3* network)
+{
+    if (SS7Route::Unknown == states || !network)
+	return;
+    DDebug(this,DebugAll,"Notifying routes with states 0x%02X only to '%s' [%p]",
+	states,network->toString().c_str(),this);
+    for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
+	const ObjList* l = network->getRoutes(static_cast<SS7PointCode::Type>(i+1));
+	for (; l; l = l->next()) {
+	    const SS7Route* r = static_cast<const SS7Route*>(l->get());
+	    if (r && !r->priority())
+		notifyRoutes(states,r->packed());
+	}
+    }
+}
+
 // Add a network to the routing table. Clear all its routes before appending it to the table
 void SS7Router::updateRoutes(SS7Layer3* network)
 {
@@ -987,7 +1007,7 @@ void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type,
 	    L3ViewPtr* l3p = static_cast<L3ViewPtr*>(o->get());
 	    if (!l3p || ((*l3p) == network))
 		continue;
-	    if (!(*l3p)->operational())
+	    if (!((forced && onlyPC) || (*l3p)->operational()))
 		continue;
 	    if (!(*l3p)->getRoutePriority(type,remotePC))
 		continue;
@@ -1174,8 +1194,15 @@ bool SS7Router::setRouteSpecificState(SS7PointCode::Type type, unsigned int pack
     }
     DDebug(this,DebugAll,"Local best route %u/%u changed by %u: %s -> %s",packedPC,
 	route->priority(),srcPC,SS7Route::stateName(route->state()),SS7Route::stateName(best));
+    // check if an adjacent node has been seen restarting elsewhere
+    bool restartElsewhere = srcPC && (srcPC != packedPC) && !route->priority() &&
+	(route->state() == SS7Route::Prohibited) && (best & SS7Route::NotProhibited);
     route->m_state = best;
     routeChanged(route,type,srcPC,changer);
+    if (restartElsewhere && m_transfer && m_started) {
+	DDebug(this,DebugInfo,"Adjacent node %u seen started by %u, sending TFPs",packedPC,srcPC);
+	notifyRoutes(SS7Route::Prohibited,packedPC);
+    }
     return true;
 }
 
@@ -1284,7 +1311,7 @@ void SS7Router::silentAllow(const SS7Layer3* network)
 		}
 		setRouteSpecificState(type,r->packed(),adjacent,SS7Route::Allowed,l3);
 		if (!r->priority()) {
-		    notifyRoutes(SS7Route::KnownState,r->packed());
+		    notifyRoutes(m_earlyProhibit ? SS7Route::NotProhibited : SS7Route::KnownState,r->packed());
 		    sendRestart(l3);
 		}
 	    }
@@ -1443,8 +1470,6 @@ void SS7Router::clearRoutes(SS7Layer3* network, bool ok)
 {
     if (!network)
 	return;
-    // if an adjacent node is operational but not in service we may have a chance
-    SS7Route::State state = ok ? SS7Route::Unknown : SS7Route::Prohibited;
     for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
 	SS7PointCode::Type type = static_cast<SS7PointCode::Type>(i+1);
 	const ObjList* l = network->getRoutes(type);
@@ -1457,6 +1482,8 @@ void SS7Router::clearRoutes(SS7Layer3* network, bool ok)
 		continue;
 	    if (!r->priority())
 		adjacent = r->packed();
+	    // if an adjacent node is operational but not in service we may have a chance
+	    SS7Route::State state = (ok || !r->priority()) ? SS7Route::Unknown : SS7Route::Prohibited;
 	    DDebug(DebugInfo,"Clearing route %u/%u of %s to %s",
 		r->packed(),r->priority(),network->toString().c_str(),
 		SS7Route::stateName(state));
@@ -1663,6 +1690,8 @@ void SS7Router::notify(SS7Layer3* network, int sls)
 		    if (!mtp3 || (mtp3->linksActive() <= 1)) {
 			// adjacent point restart
 			clearRoutes(network,true);
+			if (m_transfer && m_earlyProhibit)
+			    notifyRoutes(SS7Route::Prohibited,network);
 			if (m_earlyRestart)
 			    sendRestart(network);
 			m_trafficOk.start();

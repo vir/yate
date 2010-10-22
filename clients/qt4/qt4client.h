@@ -705,7 +705,6 @@ protected:
 
     String m_description;
     String m_oldId;                      // Old id used to retreive the config section in .rc
-    bool m_keysVisible;
     int m_x;
     int m_y;
     int m_width;

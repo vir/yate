@@ -1062,27 +1062,51 @@ SS7Route::State SS7Router::getRouteView(SS7PointCode::Type type, unsigned int pa
 {
     if (type == SS7PointCode::Other || (unsigned int)type > YSS7_PCTYPE_COUNT || !packedPC)
 	return SS7Route::Unknown;
+    if (remotePC && !network) {
+	for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
+	    SS7Layer3* l3 = *static_cast<L3ViewPtr*>(o->get());
+	    if (l3 && !l3->getRoutePriority(type,remotePC)) {
+		network = l3;
+		break;
+	    }
+	}
+    }
     if (network && !network->allowedTo(type,packedPC)) {
 	DDebug(this,DebugInfo,"View of %u from %u on %s is Prohibited",
 	    packedPC,remotePC,network->toString().c_str());
 	return SS7Route::Prohibited;
     }
+    SS7Route* route = 0;
+    if (network)
+	route = const_cast<SS7Layer3*>(network)->findRoute(type,packedPC);
+    SS7Route::State routeState = route ? route->state() : SS7Route::Unknown;
+    unsigned int routePrio = route ? route->priority() : (unsigned int)-1;
+    // combine all matching routes not on current network
     SS7Route::State best = SS7Route::Unknown;
     for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
 	SS7Layer3* l3 = *static_cast<L3ViewPtr*>(o->get());
 	if (!l3 || (l3 == network))
 	    continue;
-	if (!l3->getRoutePriority(type,remotePC)) {
-	    if (!l3->allowedTo(type,packedPC)) {
-		DDebug(this,DebugInfo,"View of %u from %u on %s is Prohibited",
-		    packedPC,remotePC,l3->toString().c_str());
-		return SS7Route::Prohibited;
-	    }
-	    continue;
-	}
 	SS7Route::State state;
 	if (l3->operational()) {
-	    state = l3->getRouteState(type,packedPC);
+	    SS7Route* r = l3->findRoute(type,packedPC);
+	    if (!r)
+		continue;
+	    if (r->priority() == routePrio) {
+		// sharing - neither is allowed to send through us to the route
+		DDebug(this,DebugAll,"Operational '%s' is load sharing with '%s'",
+		    l3->toString().c_str(),network->toString().c_str());
+		best = SS7Route::Prohibited;
+		break;
+	    }
+	    if ((r->priority() > routePrio) && (routeState & SS7Route::NotProhibited)) {
+		// alternate - current is not allowed to send through us
+		DDebug(this,DebugAll,"Operational '%s' is alternate to %s '%s'",
+		    l3->toString().c_str(),SS7Route::stateName(routeState),network->toString().c_str());
+		best = SS7Route::Prohibited;
+		break;
+	    }
+	    state = r->state();
 	    DDebug(this,DebugAll,"Operational '%s' contributed state %s",
 		l3->toString().c_str(),SS7Route::stateName(state));
 	}

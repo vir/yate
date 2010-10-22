@@ -1771,6 +1771,8 @@ bool SS7Router::control(NamedList& params)
 	case SS7Router::Restart:
 	    return restart();
 	case SS7Router::Traffic:
+	    if (!m_trafficSent.started())
+		m_trafficSent.start();
 	    sendRestart();
 	    // fall through
 	case SS7Router::Status:
@@ -1872,10 +1874,11 @@ bool SS7Router::control(NamedList& params)
 		if (m_started && (SS7MsgSNM::TRA == cmd)) {
 		    // allow all routes for which TFx was not received before TRA
 		    silentAllow(type,pc.pack(type));
-		    // if STP is started advertise routes to just restarted node
-		    if (m_transfer && !m_trafficSent.started()) {
+		    // advertise routes and availability to just restarted node
+		    if (!m_trafficSent.started()) {
 			m_trafficSent.start();
-			notifyRoutes(SS7Route::KnownState,pc.pack(type));
+			if (m_transfer)
+			    notifyRoutes(SS7Route::KnownState,pc.pack(type));
 			sendRestart(type,pc.pack(type));
 		    }
 		}

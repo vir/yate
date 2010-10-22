@@ -6328,8 +6328,6 @@ private:
     bool m_testRestricted;
     bool m_checkRoutes;
     bool m_autoAllowed;
-    bool m_earlyRestart;
-    bool m_earlyProhibit;
     bool m_sendUnavail;
     bool m_sendProhibited;
     unsigned long m_rxMsu;

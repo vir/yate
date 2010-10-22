@@ -325,7 +325,6 @@ SS7Router::SS7Router(const NamedList& params)
       m_restart(0), m_isolate(0),
       m_trafficOk(0), m_trafficSent(0), m_routeTest(0), m_testRestricted(false),
       m_checkRoutes(false), m_autoAllowed(false),
-      m_earlyRestart(false), m_earlyProhibit(true),
       m_sendUnavail(true), m_sendProhibited(true),
       m_rxMsu(0), m_txMsu(0), m_fwdMsu(0), m_congestions(0),
       m_mngmt(0)
@@ -348,8 +347,6 @@ SS7Router::SS7Router(const NamedList& params)
     m_trafficOk.interval(m_restart.interval() + 4000);
     m_trafficSent.interval(m_restart.interval() + 8000);
     m_testRestricted = params.getBoolValue("testrestricted",m_testRestricted);
-    m_earlyRestart = params.getBoolValue("earlyrestart",m_earlyRestart);
-    m_earlyProhibit = params.getBoolValue("earlyprohibit",m_earlyProhibit);
     loadLocalPC(params);
 }
 
@@ -374,8 +371,6 @@ bool SS7Router::initialize(const NamedList* config)
 	m_autoAllowed = config->getBoolValue("autoallow",m_autoAllowed);
 	m_sendUnavail = config->getBoolValue("sendupu",m_sendUnavail);
 	m_sendProhibited = config->getBoolValue("sendtfp",m_sendProhibited);
-	m_earlyRestart = config->getBoolValue("earlyrestart",m_earlyRestart);
-	m_earlyProhibit = config->getBoolValue("earlyprohibit",m_earlyProhibit);
 	const String* param = config->getParam("management");
 	const char* name = "ss7snm";
 	if (param) {
@@ -708,6 +703,8 @@ void SS7Router::timerTick(const Time& when)
 	m_phase2 = false;
 	// send TRA to all operational adjacent nodes
 	sendRestart();
+	if (!m_trafficSent.started())
+	    m_trafficSent.start();
 	if (m_checkRoutes)
 	    checkRoutes();
 	// advertise all non-Prohibited routes we learned about
@@ -810,13 +807,9 @@ HandledMSU SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7L
 	Lock mylock(m_routeMutex);
 	SS7Route* route = findRoute(label.type(),src);
 	if (route && !route->priority() && (route->state() & (SS7Route::Unknown|SS7Route::Prohibited))) {
-	    if (route->priority())
-		silentAllow(network);
-	    else {
-		Debug(this,DebugNote,"Auto activating adjacent route %u on '%s' [%p]",
-		    src,network->toString().c_str(),this);
-		setRouteSpecificState(label.type(),src,src,SS7Route::Allowed,network);
-	    }
+	    Debug(this,DebugNote,"Auto activating adjacent route %u on '%s' [%p]",
+		src,network->toString().c_str(),this);
+	    setRouteSpecificState(label.type(),src,src,SS7Route::Allowed,network);
 	    if (m_transfer && m_started)
 		notifyRoutes(SS7Route::KnownState,src);
 	}
@@ -1335,7 +1328,7 @@ void SS7Router::silentAllow(const SS7Layer3* network)
 		}
 		setRouteSpecificState(type,r->packed(),adjacent,SS7Route::Allowed,l3);
 		if (!r->priority()) {
-		    notifyRoutes(m_earlyProhibit ? SS7Route::NotProhibited : SS7Route::KnownState,r->packed());
+		    notifyRoutes(SS7Route::NotProhibited,r->packed());
 		    sendRestart(l3);
 		}
 	    }
@@ -1714,10 +1707,9 @@ void SS7Router::notify(SS7Layer3* network, int sls)
 		    if (!mtp3 || (mtp3->linksActive() <= 1)) {
 			// adjacent point restart
 			clearRoutes(network,true);
-			if (m_transfer && m_earlyProhibit)
+			if (m_transfer)
 			    notifyRoutes(SS7Route::Prohibited,network);
-			if (m_earlyRestart)
-			    sendRestart(network);
+			sendRestart(network);
 			m_trafficOk.start();
 		    }
 		}

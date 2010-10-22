@@ -814,7 +814,7 @@ QtWindow::QtWindow(const char* name, const char* description, const char* alias,
     : QWidget(parent, Qt::Window),
     Window(alias ? alias : name), m_description(description), m_oldId(name),
     m_x(0), m_y(0), m_width(0), m_height(0),
-    m_maximized(false), m_mainWindow(false)
+    m_maximized(false), m_mainWindow(false), m_moving(false)
 {
     setObjectName(QtClient::setUtf8(m_id));
 }

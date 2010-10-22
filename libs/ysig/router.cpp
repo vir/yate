@@ -1002,8 +1002,6 @@ void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type,
 		continue;
 	    if (!((forced && onlyPC) || (*l3p)->operational()))
 		continue;
-	    if (!(*l3p)->getRoutePriority(type,remotePC))
-		continue;
 	    for (ObjList* v = l3p->view(type).skipNull(); v; v = v->skipNext()) {
 		SS7Route* r = static_cast<SS7Route*>(v->get());
 		if (r->packed() != route->packed())
@@ -1076,6 +1074,7 @@ SS7Route::State SS7Router::getRouteView(SS7PointCode::Type type, unsigned int pa
     unsigned int routePrio = route ? route->priority() : (unsigned int)-1;
     // combine all matching routes not on current network
     SS7Route::State best = SS7Route::Unknown;
+    bool thisIsCurrent = (routeState & (SS7Route::NotProhibited|SS7Route::Unknown)) != 0;
     for (ObjList* o = m_layer3.skipNull(); o; o = o->skipNext()) {
 	SS7Layer3* l3 = *static_cast<L3ViewPtr*>(o->get());
 	if (!l3 || (l3 == network))
@@ -1090,16 +1089,12 @@ SS7Route::State SS7Router::getRouteView(SS7PointCode::Type type, unsigned int pa
 		DDebug(this,DebugAll,"Operational '%s' is load sharing with '%s'",
 		    l3->toString().c_str(),network->toString().c_str());
 		best = SS7Route::Prohibited;
-		break;
-	    }
-	    if ((r->priority() > routePrio) && (routeState & SS7Route::NotProhibited)) {
-		// alternate - current is not allowed to send through us
-		DDebug(this,DebugAll,"Operational '%s' is alternate to %s '%s'",
-		    l3->toString().c_str(),SS7Route::stateName(routeState),network->toString().c_str());
-		best = SS7Route::Prohibited;
+		thisIsCurrent = false;
 		break;
 	    }
 	    state = r->state();
+	    if ((r->priority() < routePrio || SS7Route::Unknown == routeState) && (state & SS7Route::NotProhibited))
+		thisIsCurrent = false;
 	    DDebug(this,DebugAll,"Operational '%s' contributed state %s",
 		l3->toString().c_str(),SS7Route::stateName(state));
 	}
@@ -1110,6 +1105,10 @@ SS7Route::State SS7Router::getRouteView(SS7PointCode::Type type, unsigned int pa
 	}
 	if ((state & SS7Route::KnownState) > (best & SS7Route::KnownState))
 	    best = state;
+    }
+    if (thisIsCurrent && (routePrio != (unsigned int)-1)) {
+	DDebug(this,DebugAll,"Route is current in an alternative set");
+	best = SS7Route::Prohibited;
     }
     DDebug(this,DebugInfo,"Route view of %u from %u%s%s: %s",
 	packedPC,remotePC,(network ? " on " : ""),
@@ -1495,15 +1494,15 @@ void SS7Router::clearRoutes(SS7Layer3* network, bool ok)
 	unsigned int adjacent = 0;
 	for (; l; l = l->skipNext()) {
 	    SS7Route* r = static_cast<SS7Route*>(l->get());
-	    if (ok && (r->state() != SS7Route::Prohibited))
-		continue;
 	    if (!r->priority())
 		adjacent = r->packed();
+	    if (ok && (r->state() != SS7Route::Prohibited))
+		continue;
 	    // if an adjacent node is operational but not in service we may have a chance
 	    SS7Route::State state = (ok || !r->priority()) ? SS7Route::Unknown : SS7Route::Prohibited;
-	    DDebug(DebugInfo,"Clearing route %u/%u of %s to %s",
+	    DDebug(DebugInfo,"Clearing route %u/%u of %s by %u to %s",
 		r->packed(),r->priority(),network->toString().c_str(),
-		SS7Route::stateName(state));
+		adjacent,SS7Route::stateName(state));
 	    setRouteSpecificState(type,r->packed(),adjacent,state,network);
 	}
     }

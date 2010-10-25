@@ -13,6 +13,12 @@
 ; buffer: int: Requested size of socket's receive buffer, 0 to use default
 ;buffer=0
 
+; thread: keyword: Default priority of the SIP handling threads
+; Can be one of: lowest, low, normal, high, highest
+; High priorities need superuser privileges on POSIX operating systems
+; Low priorities are not recommended except for debugging
+;thread=normal
+
 ; floodevents: int: How many SIP events retrieved in a row trigger flood warning
 ;floodevents=20
 

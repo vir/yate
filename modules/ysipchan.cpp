@@ -182,7 +182,7 @@ private:
 class YateSIPEndPoint : public Thread
 {
 public:
-    YateSIPEndPoint();
+    YateSIPEndPoint(Thread::Priority prio = Thread::Normal);
     ~YateSIPEndPoint();
     bool Init(void);
     void run(void);
@@ -994,10 +994,12 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
     return (res == response) && copyAuthParams(params,m);
 }
 
-YateSIPEndPoint::YateSIPEndPoint()
-    : Thread("YSIP EndPoint"), m_sock(0), m_engine(0)
+YateSIPEndPoint::YateSIPEndPoint(Thread::Priority prio)
+    : Thread("YSIP EndPoint",prio),
+      m_sock(0), m_engine(0)
 {
-    Debug(&plugin,DebugAll,"YateSIPEndPoint::YateSIPEndPoint() [%p]",this);
+    Debug(&plugin,DebugAll,"YateSIPEndPoint::YateSIPEndPoint(%s) [%p]",
+	Thread::priority(prio),this);
 }
 
 YateSIPEndPoint::~YateSIPEndPoint()
@@ -4192,7 +4194,7 @@ void SIPDriver::initialize()
     s_1xx_formats = s_cfg.getBoolValue("hacks","1xx_change_formats",true);
     m_parser.initialize(s_cfg.getSection("codecs"),s_cfg.getSection("hacks"),s_cfg.getSection("general"));
     if (!m_endpoint) {
-	m_endpoint = new YateSIPEndPoint();
+	m_endpoint = new YateSIPEndPoint(Thread::priority(s_cfg.getValue("general","thread")));
 	if (!(m_endpoint->Init())) {
 	    delete m_endpoint;
 	    m_endpoint = 0;

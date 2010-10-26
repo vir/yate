@@ -1052,6 +1052,9 @@ bool YJGConnection::msgUpdate(Message& msg)
 	return false;
 
     NamedString* oper = msg.getParam("operation");
+    if (TelEngine::null(oper))
+	return false;
+
     bool req = (*oper == "request");
     bool notify = !req && (*oper == "notify");
 

@@ -432,9 +432,16 @@ void Channel::zeroRefs()
 void Channel::connected(const char* reason)
 {
     CallEndpoint::connected(reason);
-    Channel* peer = YOBJECT(Channel,getPeer());
-    if (peer && peer->billid() && m_billid.null())
-	m_billid = peer->billid();
+    if (m_billid.null()) {
+	Channel* peer = YOBJECT(Channel,getPeer());
+	if (peer && peer->billid())
+	    m_billid = peer->billid();
+    }
+    Message* m = message("chan.connected",false,true);
+    if (reason)
+	m->setParam("reason",reason);
+    if (!Engine::enqueue(m))
+	TelEngine::destruct(m);
     getPeerId(m_lastPeerId);
 }
 

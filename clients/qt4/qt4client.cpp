@@ -395,6 +395,9 @@ static TokenDict s_windowFlags[] = {
     {"help",               Qt::WindowContextHelpButtonHint},
     {"stayontop",          Qt::WindowStaysOnTopHint},
     {"frameless",          Qt::FramelessWindowHint},
+#if QT_VERSION >= 0x040500
+    {"close",              Qt::WindowCloseButtonHint},
+#endif
     {0,0}
 };
 
@@ -2289,8 +2292,7 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 	    // Set window flags from enclosed widget:
 	    //  custom window title/border/sysmenu config
 	    ObjList* f = value.split(',',false);
-	    wid->setWindowFlags(Qt::CustomizeWindowHint);
-	    int flags = wid->windowFlags();
+	    int flags = Qt::CustomizeWindowHint | wid->windowFlags();
 	    // Clear settable flags
 	    TokenDict* dict = s_windowFlags;
 	    for (int i = 0; dict[i].token; i++)

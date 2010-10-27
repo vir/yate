@@ -1562,7 +1562,7 @@ bool SubMessageHandler::received(Message& msg)
     }
     if (m_handler == Mwi) {
 	String* oper = msg.getParam("operation");
-	if (*oper != "notify")
+	if (!oper || *oper != "notify")
 	    return false;
 	__plugin.handleMwi(msg);
 	return true;

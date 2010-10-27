@@ -110,6 +110,7 @@ static TranslatorCaps s_stereoCaps[] = {
 };
 
 static Mutex s_dataMutex(true,"DataEndpoint");
+static Mutex s_consSrcMutex(false,"DataConsumer::Source");
 
 class ThreadedSourcePrivate : public Thread
 {
@@ -594,10 +595,22 @@ bool DataSource::attach(DataConsumer* consumer, bool override)
     Lock mylock(this);
     DataSource*& src = override ? consumer->m_override : consumer->m_source;
     if (src != this) {
+	s_consSrcMutex.lock();
 	RefPointer<DataSource> src2(src);
-	if (src2)
+	if (src2 && (this != src2)) {
+	    s_consSrcMutex.unlock();
 	    src2->detach(consumer);
+	    s_consSrcMutex.lock();
+	    if (src) {
+		Debug(DebugGoOn,"DataSource %p raced us attaching consumer %p [%p]",
+		    src,consumer,this);
+		s_consSrcMutex.unlock();
+		consumer->deref();
+		return false;
+	    }
+	}
 	src = this;
+	s_consSrcMutex.unlock();
     }
     consumer->synchronize(this);
     m_consumers.append(consumer);
@@ -627,10 +640,12 @@ bool DataSource::detachInternal(DataConsumer* consumer)
 	return false;
     DataConsumer *temp = static_cast<DataConsumer *>(m_consumers.remove(consumer,false));
     if (temp) {
+	s_consSrcMutex.lock();
 	if (temp->m_source == this)
 	    temp->m_source = 0;
 	if (temp->m_override == this)
 	    temp->m_override = 0;
+	s_consSrcMutex.unlock();
 	temp->deref();
 	return true;
     }
@@ -1555,7 +1570,9 @@ bool DataTranslator::detachChain(DataSource* source, DataConsumer* consumer)
     if (!source || !consumer)
 	return false;
 
+    s_consSrcMutex.lock();
     RefPointer<DataSource> tsource = consumer->getConnSource();
+    s_consSrcMutex.unlock();
     if (tsource) {
 	if (source->detach(consumer))
 	    return true;

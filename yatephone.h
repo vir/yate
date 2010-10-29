@@ -562,8 +562,10 @@ protected:
     unsigned long m_nextStamp;
     ObjList m_consumers;
 private:
-    inline void setTranslator(DataTranslator* translator)
-	{ m_translator = translator; }
+    inline void setTranslator(DataTranslator* translator) {
+	    Lock mylock(this);
+	    m_translator = translator;
+	}
     bool detachInternal(DataConsumer* consumer);
     DataTranslator* m_translator;
 };

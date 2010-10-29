@@ -1576,7 +1576,9 @@ bool DataTranslator::detachChain(DataSource* source, DataConsumer* consumer)
     if (tsource) {
 	if (source->detach(consumer))
 	    return true;
-	DataTranslator *trans = tsource->getTranslator();
+	tsource->lock();
+	RefPointer<DataTranslator> trans = tsource->getTranslator();
+	tsource->unlock();
 	if (trans && detachChain(source,trans))
 	    return true;
 	Debug(DebugWarn,"DataTranslator failed to detach chain [%p] -> [%p]",source,consumer);

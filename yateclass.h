@@ -758,8 +758,7 @@ public:
      * The constructor initializes the reference counter to 1!
      * Use deref() to destruct the object when safe
      */
-    RefObject()
-	: m_refcount(1) { }
+    RefObject();
 
     /**
      * Destructor.
@@ -804,10 +803,11 @@ public:
     virtual void destruct();
 
     /**
-     * Retrieve the mutex that protects ref() and deref() for all objects
-     * @return Reference to the global mutex used for all counter operations
+     * Retrieve the mutex that protects ref() and deref() for this object
+     * @return Reference to the mutex used for counter operations
      */
-    static Mutex& refMutex();
+    inline Mutex& refMutex()
+	{ return *m_mutex; }
 
 protected:
     /**
@@ -850,6 +850,7 @@ protected:
 
 private:
     int m_refcount;
+    Mutex* m_mutex;
 };
 
 /**
@@ -4318,6 +4319,66 @@ public:
 private:
     MutexPrivate* privDataCopy() const;
     MutexPrivate* m_private;
+};
+
+/**
+ * This class holds a Mutex array. Mutexes can be retrieved based on object pointers.
+ * A mutex pool can be used to associate a smaller set of Mutex objects with a much
+ *  larger set of objects needing lock.
+ * @short A Mutex pool
+ */
+class MutexPool
+{
+public:
+    /**
+     * Build the mutex pool
+     * @param len The number of mutex objects to build. The length should be an
+     *  odd number to obtain an optimal distribution of pointer based mutexes
+     *  (usually pointers are aligned at even addresses): some mutexes might never
+     *  get used if the length is an even number
+     * @param recursive True if the mutex has to be recursive (reentrant),
+     *  false for a normal fast mutex
+     * @param name Static name of the mutex (for debugging purpose only)
+     */
+    MutexPool(unsigned int len = 13, bool recursive = false, const char* name = 0);
+
+    /**
+     * Destructor. Release data
+     */
+    ~MutexPool();
+
+    /**
+     * Build an index from object pointer (pointer value modulo array length).
+     * Always cast the pointer to the same type when calling this method to
+     *  make sure the same index is returned for a given object
+     * @param ptr The pointer to object
+     * @return Valid array index
+     */
+    inline unsigned int index(void* ptr) const
+	{ return ((unsigned int)ptr) % m_length; }
+
+    /**
+     * Retrieve the mutex associated with a given pointer.
+     * Always cast the pointer to the same type when calling this method to
+     *  make sure the same mutex is returned for a given object
+     * @param ptr The pointer to object
+     * @return Valid Mutex pointer
+     */
+    inline Mutex* mutex(void* ptr) const
+	{ return m_data[index(ptr)]; }
+
+    /**
+     * Retrieve the mutex at a given index modulo array length
+     * @param idx The index
+     * @return Valid Mutex pointer
+     */
+    inline Mutex* mutex(unsigned int idx) const
+	{ return m_data[idx % m_length]; }
+
+private:
+    String* m_name;                      // Mutex names
+    Mutex** m_data;                      // The array
+    unsigned int m_length;               // Array length
 };
 
 /**

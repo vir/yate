@@ -601,6 +601,31 @@ bool Mutex::efficientTimedLock()
 }
 
 
+MutexPool::MutexPool(unsigned int len, bool recursive, const char* name)
+    : m_name(0), m_data(0), m_length(len ? len : 1)
+{
+    if (TelEngine::null(name))
+	name = "Pool";
+    m_name = new String[m_length];
+    for (unsigned int i = 0; i < m_length; i++)
+	m_name[i] << name << "::" << (i + 1);
+    m_data = new Mutex*[m_length];
+    for (unsigned int i = 0; i < m_length; i++)
+	m_data[i] = new Mutex(recursive,m_name[i]);
+}
+
+MutexPool::~MutexPool()
+{
+    if (m_data) {
+	for (unsigned int i = 0; i < m_length; i++)
+	    delete m_data[i];
+	delete[] m_data;
+    }
+    if (m_name)
+	delete[] m_name;
+}
+
+
 Semaphore::Semaphore(unsigned int maxcount, const char* name)
     : m_private(0)
 {

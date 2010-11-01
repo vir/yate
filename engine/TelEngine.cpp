@@ -81,6 +81,11 @@ namespace TelEngine {
 
 #define OUT_BUFFER_SIZE 8192
 
+// RefObject mutex pool array size
+#ifndef REFOBJECT_MUTEX_COUNT
+#define REFOBJECT_MUTEX_COUNT 47
+#endif
+
 static int s_debug = DebugWarn;
 static int s_indent = 0;
 static bool s_debugging = true;
@@ -610,8 +615,12 @@ void GenObject::destruct()
     delete this;
 }
 
+static MutexPool s_refMutex(REFOBJECT_MUTEX_COUNT,false,"RefObject");
 
-static Mutex s_refmutex(false,"RefObject");
+RefObject::RefObject()
+    : m_refcount(1), m_mutex(s_refMutex.mutex(this))
+{
+}
 
 RefObject::~RefObject()
 {
@@ -640,20 +649,20 @@ bool RefObject::refInternal()
 
 bool RefObject::ref()
 {
-    Lock lock(s_refmutex);
+    Lock lock(m_mutex);
     return refInternal();
 }
 
 bool RefObject::deref()
 {
     bool zeroCall = false;
-    s_refmutex.lock();
+    m_mutex->lock();
     int i = m_refcount;
     if (i > 0)
 	--m_refcount;
     if (i == 1)
 	zeroCall = zeroRefsTest();
-    s_refmutex.unlock();
+    m_mutex->unlock();
     if (zeroCall)
 	zeroRefs();
     else if (i <= 0)
@@ -674,21 +683,16 @@ bool RefObject::zeroRefsTest()
 
 bool RefObject::resurrect()
 {
-    s_refmutex.lock();
+    m_mutex->lock();
     bool ret = (0 == m_refcount);
     if (ret)
 	m_refcount = 1;
-    s_refmutex.unlock();
+    m_mutex->unlock();
     return ret;
 }
 
 void RefObject::destroyed()
 {
-}
-
-Mutex& RefObject::refMutex()
-{
-    return s_refmutex;
 }
 
 void RefPointerBase::assign(RefObject* oldptr, RefObject* newptr, void* pointer)

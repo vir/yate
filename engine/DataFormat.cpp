@@ -144,39 +144,44 @@ class SimpleTranslator : public DataTranslator
 {
 public:
     SimpleTranslator(const DataFormat& sFormat, const DataFormat& dFormat)
-	: DataTranslator(sFormat,dFormat) { }
+	: DataTranslator(sFormat,dFormat), m_valid(false) {
+	    if (!getTransSource())
+		return;
+	    int nchan = m_format.numChannels();
+	    if (nchan != getTransSource()->getFormat().numChannels())
+		return;
+	    m_valid = true;
+	    m_sFmt = m_format;
+	    m_dFmt = getTransSource()->getFormat();
+	    if (nchan != 1) {
+		// get rid of the channel prefix
+		m_sFmt >> "*";
+		m_dFmt >> "*";
+	    }
+	}
     virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 	{
 	    if (!ref())
 		return 0;
 	    unsigned long len = 0;
-	    while (getTransSource()) {
-		int nchan = m_format.numChannels();
-		if (nchan != getTransSource()->getFormat().numChannels())
-		    break;
-		String sFmt = m_format;
-		String dFmt = getTransSource()->getFormat();
-		if (nchan != 1) {
-		    // get rid of the channel prefix
-		    sFmt >> "*";
-		    dFmt >> "*";
+	    DataBlock oblock;
+	    if (m_valid && getTransSource() && oblock.convert(data,m_sFmt,m_dFmt)) {
+		if (tStamp == invalidStamp()) {
+		    unsigned int delta = data.length();
+		    if (delta > oblock.length())
+			delta = oblock.length();
+		    tStamp = m_timestamp + delta;
 		}
-		DataBlock oblock;
-		if (oblock.convert(data, sFmt, dFmt)) {
-		    if (tStamp == invalidStamp()) {
-			unsigned int delta = data.length();
-			if (delta > oblock.length())
-			    delta = oblock.length();
-			tStamp = m_timestamp + delta;
-		    }
-		    m_timestamp = tStamp;
-		    len = getTransSource()->Forward(oblock, tStamp, flags);
-		}
-		break;
+		m_timestamp = tStamp;
+		len = getTransSource()->Forward(oblock, tStamp, flags);
 	    }
 	    deref();
 	    return len;
 	}
+private:
+    bool m_valid;
+    String m_sFmt;
+    String m_dFmt;
 };
 
 // slin basic mono resampler

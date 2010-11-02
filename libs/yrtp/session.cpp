@@ -417,8 +417,8 @@ bool RTPSender::rtpSend(bool marker, int payload, unsigned int timestamp, const 
 	}
     }
 
-    DataBlock buf(0,len+padding+m_secLen+12);
-    unsigned char* pc = (unsigned char*)buf.data();
+    m_buffer.resize(len + padding + m_secLen + 12);
+    unsigned char* pc = (unsigned char*)m_buffer.data();
     if (padding)
 	pc[len + padding + 11] = padding;
     *pc++ = byte1;
@@ -438,8 +438,8 @@ bool RTPSender::rtpSend(bool marker, int payload, unsigned int timestamp, const 
 	rtpEncipher(pc,len + padding);
     }
     if (m_secLen)
-	rtpAddIntegrity((const unsigned char*)buf.data(),len + padding + 12,pc + (len + padding + m_mkiLen));
-    static_cast<RTPProcessor*>(m_session->UDPSession::transport())->rtpData(buf.data(),buf.length());
+	rtpAddIntegrity((const unsigned char*)m_buffer.data(),len + padding + 12,pc + (len + padding + m_mkiLen));
+    static_cast<RTPProcessor*>(m_session->UDPSession::transport())->rtpData(m_buffer.data(),m_buffer.length());
     return true;
 }
 

@@ -814,6 +814,7 @@ protected:
 private:
     int m_evTime;
     unsigned char m_padding;
+    DataBlock m_buffer;
     bool sendEventData(unsigned int timestamp);
 };
 

@@ -82,10 +82,7 @@ public:
     MOHChan(String& name, const NamedList& params);
     ~MOHChan();
     virtual void disconnected(bool final, const char *reason);
-    inline const String &id() const
-	{ return m_id; }
 private:
-    String m_id;
     static int s_nextid;
 };
 
@@ -283,7 +280,9 @@ MOHChan::MOHChan(String& name, const NamedList& params)
 {
     Debug(DebugAll,"MOHChan::MOHChan(\"%s\") [%p]",name.c_str(),this);
     Lock lock(s_mutex);
-    m_id << "moh/" << s_nextid++;
+    String tmp;
+    tmp << "moh/" << s_nextid++;
+    setId(tmp);
     chans.append(this);
     MOHSource *s = MOHSource::getSource(name,params);
     if (s) {
@@ -296,7 +295,7 @@ MOHChan::MOHChan(String& name, const NamedList& params)
 
 MOHChan::~MOHChan()
 {
-    Debug(DebugAll,"MOHChan::~MOHChan() %s [%p]",m_id.c_str(),this);
+    Debug(DebugAll,"MOHChan::~MOHChan() %s [%p]",id().c_str(),this);
     s_mutex.lock();
     chans.remove(this,false);
     s_mutex.unlock();

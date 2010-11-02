@@ -62,6 +62,7 @@ private:
     bool m_encoding;
     gsm m_gsm;
     DataBlock m_data;
+    DataBlock m_outdata;
 };
 
 GsmCodec::GsmCodec(const char* sFormat, const char* dFormat, bool encoding)
@@ -92,17 +93,16 @@ unsigned long GsmCodec::Consume(const DataBlock& data, unsigned long tStamp, uns
 	return getTransSource()->Forward(data,tStamp,flags);
     ref();
     m_data += data;
-    DataBlock outdata;
     int frames,consumed;
     if (m_encoding) {
 	frames = m_data.length() / sizeof(gsm_block);
 	consumed = frames * sizeof(gsm_block);
 	if (frames) {
-	    outdata.assign(0,frames*sizeof(gsm_frame));
+	    m_outdata.resize(frames * sizeof(gsm_frame));
 	    for (int i=0; i<frames; i++)
 		::gsm_encode(m_gsm,
 		    (gsm_signal*)(((gsm_block *)m_data.data())+i),
-		    (gsm_byte*)(((gsm_frame *)outdata.data())+i));
+		    (gsm_byte*)(((gsm_frame *)m_outdata.data())+i));
 	}
 	if (!tStamp)
 	    tStamp = timeStamp() + (consumed / 2);
@@ -111,21 +111,21 @@ unsigned long GsmCodec::Consume(const DataBlock& data, unsigned long tStamp, uns
 	frames = m_data.length() / sizeof(gsm_frame);
 	consumed = frames * sizeof(gsm_frame);
 	if (frames) {
-	    outdata.assign(0,frames*sizeof(gsm_block));
+	    m_outdata.resize(frames * sizeof(gsm_block));
 	    for (int i=0; i<frames; i++)
 		::gsm_decode(m_gsm,
 		    (gsm_byte*)(((gsm_frame *)m_data.data())+i),
-		    (gsm_signal*)(((gsm_block *)outdata.data())+i));
+		    (gsm_signal*)(((gsm_block *)m_outdata.data())+i));
 	}
 	if (!tStamp)
 	    tStamp = timeStamp() + (frames*sizeof(gsm_block) / 2);
     }
     XDebug("GsmCodec",DebugAll,"%scoding %d frames of %d input bytes (consumed %d) in %d output bytes",
-	m_encoding ? "en" : "de",frames,m_data.length(),consumed,outdata.length());
+	m_encoding ? "en" : "de",frames,m_data.length(),consumed,m_outdata.length());
     unsigned long len = 0;
     if (frames) {
 	m_data.cut(-consumed);
-	len = getTransSource()->Forward(outdata,tStamp,flags);
+	len = getTransSource()->Forward(m_outdata,tStamp,flags);
     }
     deref();
     return len;

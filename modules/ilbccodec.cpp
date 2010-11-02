@@ -84,6 +84,7 @@ public:
 private:
     bool m_encoding;
     DataBlock m_data;
+    DataBlock m_outdata;
     iLBC_Enc_Inst_t m_enc;
     iLBC_Dec_Inst_t m_dec;
     int m_mode;
@@ -134,14 +135,13 @@ unsigned long iLBCCodec::Consume(const DataBlock& data, unsigned long tStamp, un
 	no_bytes=NO_OF_BYTES_30MS;
     }
     m_data += data;
-    DataBlock outdata;
     int frames,consumed;
     if (m_encoding) {
 	frames = m_data.length() / (2 * block);
 	consumed = frames * 2 * block;
 	if (frames) {
-	    outdata.assign(0,frames*no_bytes);
-	    unsigned char* d = (unsigned char*)outdata.data();
+	    m_outdata.resize(frames * no_bytes);
+	    unsigned char* d = (unsigned char*)m_outdata.data();
 	    const short* s = (const short*)m_data.data();
 	    for (int i=0; i<frames; i++) {
 		// convert one frame data from 16 bit signed linear to float
@@ -158,8 +158,8 @@ unsigned long iLBCCodec::Consume(const DataBlock& data, unsigned long tStamp, un
 	frames = m_data.length() / no_bytes;
 	consumed = frames * no_bytes;
 	if (frames) {
-	    outdata.assign(0,frames * 2 * block);
-	    short* d = (short*)outdata.data();
+	    m_outdata.resize(frames * 2 * block);
+	    short* d = (short*)m_outdata.data();
 	    unsigned char* s = (unsigned char*)m_data.data();
 	    for (int i=0; i<frames; i++) {
 		// decode to a float values buffer
@@ -176,11 +176,11 @@ unsigned long iLBCCodec::Consume(const DataBlock& data, unsigned long tStamp, un
 	tStamp = timeStamp() + (frames * block);
 
     XDebug("iLBCCodec",DebugAll,"%scoding %d frames of %d input bytes (consumed %d) in %d output bytes",
-	m_encoding ? "en" : "de",frames,m_data.length(),consumed,outdata.length());
+	m_encoding ? "en" : "de",frames,m_data.length(),consumed,m_outdata.length());
     unsigned long len = 0;
     if (frames) {
 	m_data.cut(-consumed);
-	len = getTransSource()->Forward(outdata,tStamp,flags);
+	len = getTransSource()->Forward(m_outdata,tStamp,flags);
     }
     deref();
     return len;

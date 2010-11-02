@@ -164,16 +164,15 @@ public:
 	    if (!ref())
 		return 0;
 	    unsigned long len = 0;
-	    DataBlock oblock;
-	    if (m_valid && getTransSource() && oblock.convert(data,m_sFmt,m_dFmt)) {
+	    if (m_valid && getTransSource() && m_buffer.convert(data,m_sFmt,m_dFmt)) {
 		if (tStamp == invalidStamp()) {
 		    unsigned int delta = data.length();
-		    if (delta > oblock.length())
-			delta = oblock.length();
+		    if (delta > m_buffer.length())
+			delta = m_buffer.length();
 		    tStamp = m_timestamp + delta;
 		}
 		m_timestamp = tStamp;
-		len = getTransSource()->Forward(oblock, tStamp, flags);
+		len = getTransSource()->Forward(m_buffer,tStamp,flags);
 	    }
 	    deref();
 	    return len;
@@ -182,6 +181,7 @@ private:
     bool m_valid;
     String m_sFmt;
     String m_dFmt;
+    DataBlock m_buffer;
 };
 
 // slin basic mono resampler

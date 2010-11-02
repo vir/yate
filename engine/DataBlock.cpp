@@ -238,16 +238,19 @@ bool DataBlock::convert(const DataBlock& src, const String& sFormat,
 	    ctable = u2s;
 	}
     }
-    clear();
-    if (!ctable)
+    if (!ctable) {
+	clear();
 	return false;
+    }
     unsigned len = src.length();
     if (maxlen && (maxlen < len))
 	len = maxlen;
     len /= sl;
-    if (!len)
+    if (!len) {
+	clear();
 	return true;
-    assign(0,len*dl);
+    }
+    resize(len * dl);
     if ((sl == 1) && (dl == 1)) {
 	unsigned char *s = (unsigned char *) src.data();
 	unsigned char *d = (unsigned char *) data();

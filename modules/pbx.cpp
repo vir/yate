@@ -82,10 +82,10 @@ bool ConnHandler::received(Message &msg)
     const char* id = msg.getValue("id");
     bool idPeer = msg.getBoolValue("id_peer");
     RefPointer<CallEndpoint> c1;
-    if (id && !idPeer) {
+    if (id) {
 	CallEndpoint* c = YOBJECT(CallEndpoint,msg.userData());
 	if (c && (c->id() == id))
-	    c1 = c;
+	    c1 = idPeer ? c->getPeer() : c;
     }
     if (!c1)
 	c1 = locateChan(id,idPeer);

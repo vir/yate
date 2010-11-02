@@ -79,7 +79,16 @@ static CallEndpoint* locateChan(const String& id, bool peer = false)
 
 bool ConnHandler::received(Message &msg)
 {
-    RefPointer<CallEndpoint> c1(locateChan(msg.getValue("id"),msg.getBoolValue("id_peer")));
+    const char* id = msg.getValue("id");
+    bool idPeer = msg.getBoolValue("id_peer");
+    RefPointer<CallEndpoint> c1;
+    if (id && !idPeer) {
+	CallEndpoint* c = YOBJECT(CallEndpoint,msg.userData());
+	if (c && (c->id() == id))
+	    c1 = c;
+    }
+    if (!c1)
+	c1 = locateChan(id,idPeer);
     RefPointer<CallEndpoint> c2(locateChan(msg.getValue("targetid"),msg.getBoolValue("targetid_peer")));
     if (!(c1 && c2))
 	return false;

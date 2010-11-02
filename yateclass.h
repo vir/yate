@@ -2855,6 +2855,15 @@ public:
     void insert(const DataBlock& value);
 
     /**
+     * Resize (re-alloc or free) this block if required size is not the same as the current one
+     * @param len Required block size
+     */
+    inline void resize(unsigned int len) {
+	    if (len != length())
+		assign(0,len);
+	}
+
+    /**
      * Truncate the data block
      * @param len The maximum length to keep
      */

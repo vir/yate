@@ -241,7 +241,6 @@ unsigned long SpeexCodec::Consume(const DataBlock& data, unsigned long tStamp, u
     if (!tStamp)
 	tStamp = timeStamp() + frames * m_bsamples;
 
-    if (!m_encoding)
     XDebug("SpeexCodec", DebugAll,
 	    "%scoding %d frames of %d input bytes (consumed %d) in %d output bytes, frame size %d, time %lu, ret %d",
 	   m_encoding ? "en" : "de", frames, m_data.length(), consumed, outdata.length(), frame_size, tStamp, ret);

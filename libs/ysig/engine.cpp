@@ -129,10 +129,11 @@ void* SignallingFactory::buildInternal(const String& type, const NamedList* name
 
 
 SignallingComponent::SignallingComponent(const char* name, const NamedList* params)
-    : m_engine(0)
+    : m_engine(0), m_compType("unknown")
 {
     if (params) {
 	name = params->getValue("debugname",name);
+	m_compType = params->getValue("type",m_compType);
 	debugLevel(params->getIntValue("debuglevel",-1));
     }
     DDebug(engine(),DebugAll,"Component '%s' created [%p]",name,this);
@@ -237,6 +238,15 @@ unsigned long SignallingComponent::tickSleep(unsigned long usec) const
     return m_engine ? m_engine->tickSleep(usec) : 0;
 }
 
+void SignallingNotifier::notify(NamedList& notifs)
+{
+    DDebug(DebugInfo,"SignallingNotifier::notify() [%p] stub",this);
+}
+
+void SignallingNotifier::cleanup()
+{
+    DDebug(DebugInfo,"SignallingNotifier::cleanup() [%p] stub",this);
+}
 
 static SignallingEngine* s_self = 0;
 
@@ -374,6 +384,14 @@ bool SignallingEngine::remove(const String& name)
     component->detach();
     m_components.remove(component);
     return true;
+}
+
+void SignallingEngine::notify(SignallingComponent* component, NamedList notifs)
+{
+    if (!(m_notifier && component))
+	return;
+    Debug(this,DebugAll,"Engine [%p] sending notify from '%s' [%p]",this,component->toString().c_str(),component);
+    m_notifier->notify(notifs);
 }
 
 bool SignallingEngine::control(NamedList& params)

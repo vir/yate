@@ -1015,6 +1015,13 @@ public:
 	{ return gateway ? 2427 : 2727; }
 
     /**
+     * Handle a transaction that has timed out
+     * @param tr The transaction that has timed out
+     */
+    virtual void timeout(MGCPTransaction* tr)
+	{ }
+
+    /**
      * The list of commands defined in RFC 3435
      */
     static TokenDict mgcp_commands[];

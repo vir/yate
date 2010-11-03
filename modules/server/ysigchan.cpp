@@ -44,7 +44,7 @@ class SigIsdnCallRecord;                 // Record an ISDN call monitor
 class SigTrunkThread;                    // Get events and check timeout for trunks that have a call controller
 class IsupDecodeHandler;                 // Handler for "isup.decode" message
 class IsupEncodeHandler;                 // Handler for "isup.encode" message
-
+class SigNotifier;                       // Class for handling received notifications
 
 // The signalling channel
 class SigChannel : public Channel, public MessageNotifier
@@ -247,6 +247,15 @@ class SigTopmost : public TopMost
 {
 public:
     SigTopmost(const char* name);
+    // Return the status of this component
+    virtual inline void status(String& retVal)
+	{ }
+    // Return the status of a signalling interface
+    virtual inline void ifStatus(String& status)
+	{ }
+    // Return the status of a link
+    virtual inline void linkStatus(String& status)
+	{ }
 protected:
     virtual void destroyed();
 };
@@ -261,6 +270,10 @@ public:
     // Initialize (create or reload) the linkset
     // Return false on failure
     virtual bool initialize(NamedList& params);
+    // Return the status of this component
+    virtual void status(String& retVal);
+    virtual void ifStatus(String& status);
+    virtual void linkStatus(String& status);
 protected:
     virtual void destroyed();
 private:
@@ -338,6 +351,10 @@ public:
     void cleanup();
     // Type names
     static const TokenDict s_type[];
+    virtual inline void ifStatus(String& status)
+	{ }
+    virtual inline void linkStatus(String& status)
+	{ }
 protected:
     // Cancel thread. Cleanup. Remove from plugin list
     virtual void destroyed();
@@ -390,6 +407,8 @@ class SigIsdn : public SigTrunk
 public:
     SigIsdn(const char* name, Type type);
     virtual ~SigIsdn();
+    virtual void ifStatus(String& status);
+    virtual void linkStatus(String& status);
 protected:
     virtual bool create(NamedList& params, String& error);
     virtual bool reload(NamedList& params);
@@ -618,8 +637,18 @@ public:
     virtual bool received(Message& msg);
 };
 
+class SigNotifier : public SignallingNotifier
+{
+public:
+    inline ~SigNotifier()
+	{ }
+    virtual void notify(NamedList& params);
+    virtual void cleanup();
+};
+
 static SigDriver plugin;
 static SigFactory factory;
+static SigNotifier s_notifier;
 static Configuration s_cfg;
 static Configuration s_cfgData;
 static const String s_noPrefixParams = "format,earlymedia";
@@ -714,8 +743,11 @@ SignallingComponent* SigFactory::create(const String& type, const NamedList& nam
 	case SigISDNLayer2:
 	    if (ty && *ty == "isdn-iua")
 		return new ISDNIUA(*config);
-	    if (name.getBoolValue("primary",true))
-		return new ISDNQ921(*config,name);
+	    if (name.getBoolValue("primary",true)) {
+		NamedList cfg(*config);
+		cfg.setParam("type",lookup(compType,s_compNames));
+		return new ISDNQ921(cfg,name);
+	    }
 	    return new ISDNQ921Management(*config,name,name.getBoolValue("network",true));
 	case SigISDNLayer3:
 	    return new ISDNQ931(*config,name);
@@ -1686,6 +1718,46 @@ bool SigDriver::received(Message& msg, int id)
 
     if (!target.startSkip(name()))
 	return false;
+    if (target.startSkip("links")) {
+	msg.retValue() << "module=" << name();
+	msg.retValue() << ",format=Type|Status";
+	String ret = "";
+	m_trunksMutex.lock();
+	for (ObjList* o = m_trunks.skipNull(); o; o = o->skipNext()) {
+	    SigTrunk* trunk = static_cast<SigTrunk*>(o->get());
+	    trunk->linkStatus(ret);
+	}
+	m_trunksMutex.unlock();
+	m_topmostMutex.lock();
+	for (ObjList* o = m_topmost.skipNull(); o; o = o->skipNext()) {
+	    SigTopmost* top = static_cast<SigTopmost*>(o->get());
+	    top->linkStatus(ret);
+	}
+	m_topmostMutex.unlock();
+	if (!ret.null())
+	    msg.retValue() << ";" << ret;
+	msg.retValue() <<  "\r\n";
+    }
+    if (target.startSkip("ifaces")) {
+	msg.retValue() << "module=" << name();
+	msg.retValue() << ",format=Status";
+	String ret = "";
+	m_trunksMutex.lock();
+	for (ObjList* o = m_trunks.skipNull(); o; o = o->skipNext()) {
+	    SigTrunk* trunk = static_cast<SigTrunk*>(o->get());
+	    trunk->ifStatus(ret);
+	}
+	m_trunksMutex.unlock();
+	m_topmostMutex.lock();
+	for (ObjList* o = m_topmost.skipNull(); o; o = o->skipNext()) {
+	    SigTopmost* top = static_cast<SigTopmost*>(o->get());
+	    top->ifStatus(ret);
+	}
+	m_topmostMutex.unlock();
+	if (!ret.null())
+	    msg.retValue() << ";" << ret;
+	msg.retValue() <<  "\r\n";
+    }
 
     // Status target=trunk[/cic|/range]
     int pos = target.find("/");
@@ -1762,6 +1834,10 @@ void SigDriver::status(SigTopmost* topmost, String& retVal)
     retVal.clear();
     retVal << "module=" << name();
     retVal << ",component=" << topmost->name();
+    String details = "";
+    topmost->status(details);
+    if (!details.null())
+	retVal << "," << details;
     retVal << "\r\n";
 }
 
@@ -1984,6 +2060,8 @@ bool SigDriver::commandComplete(Message& msg, const String& partLine,
     Lock lock(this);
     // line='status sig': add trunks and topmost components
     if (partLine == m_statusCmd) {
+	itemComplete(msg.retValue(),"links",partWord);
+	itemComplete(msg.retValue(),"ifaces",partWord);
 	ObjList* o;
 	m_trunksMutex.lock();
 	for (o = m_trunks.skipNull(); o; o = o->skipNext())
@@ -2338,6 +2416,7 @@ void SigDriver::initialize()
 	m_engine = SignallingEngine::self(true);
 	m_engine->debugChain(this);
 	m_engine->start();
+	m_engine->setNotifier(&s_notifier);
     }
     // Apply debug levels to driver and engine
     int level = s_cfg.getIntValue("general","debuglevel",-1);
@@ -2413,6 +2492,54 @@ bool SigLinkSet::initialize(NamedList& params)
     return m_linkset && m_linkset->initialize(&params);
 }
 
+void SigLinkSet::status(String& retVal)
+{
+    retVal << "type=" << (m_linkset ? m_linkset->componentType() : "");
+    retVal << ",status=" << (m_linkset && m_linkset->operational() ? "" : "non-") << "operational";
+}
+
+void SigLinkSet::ifStatus(String& status)
+{
+    SS7MTP3* mtp3 = static_cast<SS7MTP3*>(m_linkset);
+    if (mtp3) {
+	const ObjList* list = mtp3->links();
+	for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
+	    GenPointer<SS7Layer2>* p = static_cast<GenPointer<SS7Layer2>*>(o->get());
+	    if (!*p)
+		continue;
+	    SS7Layer2* link = *p;
+	    SS7MTP2* mtp2 = static_cast<SS7MTP2*>(link->getObject("SS7MTP2"));
+	    if (mtp2) {
+		SignallingInterface* sigIface = mtp2->iface();
+		if (sigIface) {
+		    status.append(sigIface->toString(),",");
+		    status << "=" << (sigIface->control(SignallingInterface::Query) ? "" : "non-");
+		    status << "operational";
+		}
+	    }
+	}
+    }
+}
+
+void SigLinkSet::linkStatus(String& status)
+{
+    SS7MTP3* mtp3 = static_cast<SS7MTP3*>(m_linkset);
+    if (mtp3) {
+	const ObjList* list = mtp3->links();
+	for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
+	    GenPointer<SS7Layer2>* p = static_cast<GenPointer<SS7Layer2>*>(o->get());
+	    if (!*p)
+		continue;
+	    SS7Layer2* link = *p;
+	    if (link) {
+		status.append(link->toString(),",") << "=";
+		status << link->componentType() ;
+		status << "|" << link->statusName();
+
+	    }
+	}
+    }
+}
 
 /**
  * SigTesting
@@ -2871,6 +2998,31 @@ void SigIsdn::release()
     XDebug(&plugin,DebugAll,"SigIsdn('%s'). Released [%p]",name().c_str(),this);
 }
 
+void SigIsdn::ifStatus(String& status)
+{
+    if (m_controller) {
+	const ISDNQ921* l2 = static_cast<const ISDNQ921*>(q931()->layer2());
+	if (l2) {
+	    SignallingInterface* sigIface = l2->iface();
+	    if (sigIface) {
+		status.append(sigIface->toString(),",");
+		status << "=" << (sigIface->control(SignallingInterface::Query) ? "" : "non-") << "operational";
+	    }
+	}
+    }
+}
+
+void SigIsdn::linkStatus(String& status)
+{
+    if (m_controller) {
+	const ISDNLayer2* l2 = static_cast<const ISDNLayer2*>(q931()->layer2());
+	if (l2) {
+	    status.append(l2->toString(),",") << "=";
+	    status << l2->componentType();
+	    status << "|" << l2->stateName(l2->state());
+	}
+    }
+}
 
 /**
  * SigIsdnMonitor
@@ -3687,6 +3839,26 @@ bool IsupEncodeHandler::received(Message& msg)
     TelEngine::destruct(data);
     msg.setParam("error","Encoder failure");
     return false;
+}
+
+/**
+  * SigNotifier
+  */
+void SigNotifier::notify(NamedList& notifs)
+{
+    Debug(&plugin,DebugInfo,"SigNotifier [%p] received a notify ",this);
+    Message* msg = new Message("module.update");
+    msg->addParam("module",plugin.name());
+    msg->copyParams(notifs);
+    Engine::enqueue(msg);
+}
+
+void SigNotifier::cleanup()
+{
+    DDebug(&plugin,DebugInfo,"SigNotifier [%p] cleanup()",this);
+    SignallingEngine* engine = plugin.engine();
+    if (engine)
+	engine->removeNotifier(this);
 }
 
 }; // anonymous namespace

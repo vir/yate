@@ -188,6 +188,9 @@ private:
     unsigned int m_port;
     bool m_audio;
     bool m_valid;
+
+    unsigned int m_noAudio;
+    unsigned int m_lostAudio;
 };
 
 class YRTPSession : public RTPSession
@@ -366,6 +369,10 @@ public:
     virtual bool received(Message& msg, int id);
     virtual void statusParams(String& str);
     virtual void statusDetail(String& str);
+
+    void addStats(const NamedList& stats);
+    void genUpdate(Message& msg);
+
 private:
     bool reflectSetup(Message& msg, const char* id, RTPTransport& rtp, const char* rHost, const char* leg);
     bool reflectStart(Message& msg, const char* id, RTPTransport& rtp, SocketAddr& rAddr);
@@ -374,6 +381,7 @@ private:
     void reflectAnswer(Message& msg, bool ignore);
     void reflectHangup(Message& msg);
     bool m_first;
+    ObjList m_updates;
 };
 
 static YRTPPlugin splugin;
@@ -387,7 +395,7 @@ static Mutex s_srcMutex(false,"YRTPChan::source");
 YRTPWrapper::YRTPWrapper(const char* localip, CallEndpoint* conn, const char* media, RTPSession::Direction direction, Message& msg, bool udptl)
     : m_rtp(0), m_udptl(0), m_dir(direction), m_conn(conn),
       m_source(0), m_consumer(0), m_media(media),
-      m_bufsize(0), m_port(0), m_valid(true)
+      m_bufsize(0), m_port(0), m_valid(true), m_noAudio(0), m_lostAudio(0)
 {
     Debug(&splugin,DebugAll,"YRTPWrapper::YRTPWrapper('%s',%p,'%s',%s,%p,%s) [%p]",
 	localip,conn,media,lookup(direction,dict_yrtp_dir),
@@ -825,6 +833,10 @@ void YRTPWrapper::timeout(bool initial)
 {
     if (!(initial ? s_warnFirst : s_warnLater))
 	return;
+    if (initial)
+	m_noAudio++;
+    else 
+	m_lostAudio++;
     Debug(&splugin,DebugWarn,"%s timeout in%s%s wrapper [%p]",
 	(initial ? "Initial" : "Later"),
 	(m_master ? " channel " : ""),
@@ -885,8 +897,15 @@ void YRTPWrapper::terminate(Message& msg)
 {
     Debug(&splugin,DebugInfo,"YRTPWrapper::terminate() [%p]",this);
     String stats;
-    if (m_rtp)
+    if (m_rtp) {
+	NamedList nl("");
+	m_rtp->getStats(nl);
+	nl.setParam("noaudio",String(m_noAudio));
+	nl.setParam("lostaudio",String(m_lostAudio));
+    	splugin.addStats(nl);
+    	splugin.changed();
 	m_rtp->getStats(stats);
+    }
     if (m_udptl)
 	m_udptl->getStats(stats);
     if (stats)
@@ -1459,6 +1478,25 @@ YRTPPlugin::~YRTPPlugin()
     Output("Unloading module YRTP");
     s_calls.clear();
     s_mirrors.clear();
+}
+
+void YRTPPlugin::addStats(const NamedList& stats)
+{
+    DDebug(this,DebugAll,"Add updates");
+    s_mutex.lock();
+    m_updates.append(new NamedList(stats));
+    s_mutex.unlock();
+}
+
+void YRTPPlugin::genUpdate(Message& msg)
+{
+    DDebug(this,DebugAll,"::genUpdate() [%p] updates=%d",this,m_updates.count());
+    Lock l(s_mutex);
+    if (m_updates.count() == 0)
+	return;
+    NamedList* updateParams = static_cast<NamedList*>(m_updates.remove(false));
+    msg.copyParams(*updateParams);
+    TelEngine::destruct(updateParams);
 }
 
 void YRTPPlugin::statusParams(String& str)

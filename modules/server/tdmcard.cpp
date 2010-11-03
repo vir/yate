@@ -200,6 +200,7 @@ private:
     u_int64_t m_sent;
     u_int64_t m_received;
     struct timeval m_tv;
+    bool m_down;
 };
 
 class TdmInterface : public SignallingInterface, public TdmWorker
@@ -456,6 +457,25 @@ static inline bool getBoolValue(const char* param, const NamedList& config,
 }
 
 
+static void sendModuleUpdate(const String& notif,  const String& device, bool& notifStat, int status = 0)
+{
+    Message* msg = new Message("module.update");
+    msg->addParam("module",plugin.name());
+    msg->addParam("interface",device);
+    msg->addParam("notify",notif);
+    if(notifStat && status == SignallingInterface::LinkUp) {
+	notifStat = false;
+	Engine::enqueue(msg);
+	return;
+    }
+    if (!notifStat && status == SignallingInterface::LinkDown) {
+	notifStat = true;
+	Engine::enqueue(msg);
+	return;
+    }
+    TelEngine::destruct(msg);
+}
+
 bool TdmWorker::running() const
 {
     return m_thread && m_thread->running();
@@ -556,6 +576,7 @@ TdmDevice::TdmDevice(Type t, SignallingComponent* dbg, unsigned int chan,
 	return;
     }
     m_sent = m_received = 0;
+    m_down = false;
     plugin.append(this);
 }
 
@@ -1009,9 +1030,11 @@ bool TdmDevice::checkEvents()
 	case WP_TDMAPI_EVENT_ALARM:
 	    if (!rx_event->wp_tdm_api_event_alarm) {
 		DDebug(m_owner,DebugWarn,"%s: Link is disconnected",tdmName().c_str());
+		sendModuleUpdate("interfaceDown",tdmName(),m_down,SignallingInterface::LinkDown);
 	    }
 	    else {
 		DDebug(m_owner,DebugInfo,"%s: Link is connected",tdmName().c_str());
+		sendModuleUpdate("interfaceUp",tdmName(),m_down,SignallingInterface::LinkUp);
 	    }
 	    decode_alarms(rx_event->wp_tdm_api_event_alarm);
 	    break;
@@ -1800,6 +1823,7 @@ bool TdmInterface::process()
 	return false;
     if (!m_device.canRead())
 	return false;
+    m_device.checkEvents();
     int r = m_device.receiveData(m_buffer,m_bufsize);
     if (r <= 0)
 	return false;

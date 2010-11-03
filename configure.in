@@ -1272,11 +1272,14 @@ AC_CONFIG_FILES([packing/rpm/yate.spec
 		 libs/ysig/Makefile
                  libs/ypbx/Makefile
                  libs/ymodem/Makefile
+		 libs/yasn/Makefile
+	         libs/ysnmp/Makefile
                  share/Makefile
                  share/scripts/Makefile
                  share/skins/Makefile
                  share/sounds/Makefile
                  share/help/Makefile
+                 share/data/Makefile
                  conf.d/Makefile])
 AC_CONFIG_FILES([yate-config],[chmod +x yate-config])
 AC_CONFIG_FILES([run],[chmod +x run])

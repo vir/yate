@@ -1,0 +1,1773 @@
+YATE-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+	OBJECT-TYPE, MODULE-IDENTITY, Integer32, Counter32, TimeTicks,
+	Unsigned32, Gauge32
+		FROM SNMPv2-SMI
+
+	DisplayString, TruthValue
+		FROM SNMPv2-TC
+
+	null-team
+		FROM NULL-TEAM-MIB;
+
+yate MODULE-IDENTITY
+	LAST-UPDATED	"201009281300Z"
+	ORGANIZATION	"S.C. Null Team Impex S.R.L."
+	CONTACT-INFO
+		"Diana Cionoiu
+		  phone:	+40726088939
+		  office:	+40316201400
+		  Email: office@null.ro"
+	DESCRIPTION
+		"The MIB module for Yate."
+	REVISION	"201009281300Z"
+	DESCRIPTION
+		"Initial published revision."
+	::= { null-team 1 }
+
+yateMIBRevision OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"YATE MIB Revision."
+	::= { yate 1 }
+
+-- yateVersion
+
+version OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"String form for the YATE version."
+	::= { yate 2 }
+
+status			OBJECT IDENTIFIER ::= { yate 3 }
+moduleInfo		OBJECT IDENTIFIER ::= { yate 4 }
+activeCalls 	 	OBJECT IDENTIFIER ::= { yate 5 }
+connections		OBJECT IDENTIFIER ::= { yate 6 }
+statistics		OBJECT IDENTIFIER ::= { yate 7 }
+alarms			OBJECT IDENTIFIER ::= { yate 8 }
+commands		OBJECT IDENTIFIER ::= { yate 9 }
+
+
+
+-- status BEGIN
+
+engine		OBJECT IDENTIFIER ::= { status 1 }
+
+plugins OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of plugins loaded by the engine."
+	::= { engine 1 }
+
+handlers OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of message handlers installed by the engine."
+	::= { engine 2 }
+
+messages OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Engine number of messages waiting to be handled."
+	::= { engine 3 }
+
+threads OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Engine number of threads."
+	::= { engine 4 }
+
+workers OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Engine number of workers."
+	::= { engine 5 }
+
+mutexes OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Engine total number of mutexes."
+	::= { engine 6 }
+
+locks OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Engine number of locked mutexes."
+	::= { mutexes 1 }
+
+semaphores OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Engine total number of semaphores."
+	::= { engine 7 }
+
+waitingSemaphores OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Engine number of waiting semaphores."
+	::= { semaphores 1 }
+
+-- engine END
+-- nodeInfo BEGIN
+
+nodeInfo 	OBJECT IDENTIFIER ::= { status 2 }
+
+name OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Name of the node on which YATE runs."
+	::= { nodeInfo 1 }
+
+runAttempt OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of times Yate has been restarted by the supervisor."
+	::= { nodeInfo 2 }
+
+state OBJECT-TYPE
+	SYNTAX 		DisplayString
+	MAX-ACCESS 	read-only
+	STATUS 		current
+	DESCRIPTION
+		"The state of the YATE node."
+	::= { nodeInfo 3 }
+
+-- nodeInfo END
+-- databaseInfo BEGIN
+
+databaseInfo 	OBJECT IDENTIFIER ::= { status 3 }
+
+successfulConnections OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of succesful connections made to the database."
+	::= { databaseInfo 1 }
+
+failedConnections OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of failed connections to the database."
+	::= { databaseInfo 2 }
+
+-- databaseInfo END
+-- moduleInfo BEGIN
+
+moduleCount OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of loaded modules."
+	::= { moduleInfo 1 }
+
+moduleTable  OBJECT-TYPE
+	SYNTAX		SEQUENCE OF ModuleEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Module information table."
+	::= { moduleInfo 2 }
+
+moduleEntry OBJECT-TYPE
+	SYNTAX		ModuleEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Module information table entry."
+	::= { moduleTable 1 }
+
+ModuleEntry ::= SEQUENCE {
+	moduleIndex	Counter32,
+	moduleName	DisplayString,
+	moduleType	DisplayString,
+	moduleInfo	DisplayString
+}
+
+moduleIndex OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Module table index."
+	::= { moduleEntry 1 }
+
+moduleName OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Module name."
+	::= { moduleEntry 2 }
+
+moduleType OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Module type."
+	::= { moduleEntry 3 }
+
+moduleInfo OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Module additional information."
+	::= { moduleEntry 4 }
+
+-- moduleInfo END
+-- activeCalls BEGIN
+
+activeCallsCount OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of active calls."
+	::= { activeCalls 1 }
+
+activeCallsTable  OBJECT-TYPE
+	SYNTAX		SEQUENCE OF ActiveCallEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Table containing information about current calls."
+	::= { activeCalls 2 }
+
+activeCallEntry OBJECT-TYPE
+	SYNTAX		ActiveCallEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Table entry containing information about a current call."
+	::= { activeCallsTable 1 }
+
+ActiveCallEntry ::= SEQUENCE {
+	callEntryIndex		Counter32,
+	callEntryID		DisplayString,
+	callEntryStatus		DisplayString,
+	callEntryCaller		DisplayString,
+	callEntryCalled		DisplayString,
+	callEntryDuration	Counter32,
+	callEntryPeerChan	DisplayString
+}
+
+callEntryIndex OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Active call index."
+	::= { activeCallEntry 1 }
+
+callEntryID OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Active call identification."
+	::= { activeCallEntry 2 }
+
+callEntryStatus OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Active call status."
+	::= { activeCallEntry 3 }
+
+callEntryCaller OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Name of the caller of this active call."
+	::= { activeCallEntry 4 }
+
+callEntryCalled OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Name of the called party of this active call."
+	::= { activeCallEntry 5 }
+
+callEntryDuration OBJECT-TYPE
+	SYNTAX		DisplayString
+	UNITS		"seconds"
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Duration of this active call in seconds."
+	::= { activeCallEntry 6 }
+
+callEntryPeerChan OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The peer of this active call."
+	::= { activeCallEntry 7 }
+
+-- activeCalls END
+-- connections BEGIN
+
+trunks 		OBJECT IDENTIFIER ::= { connections 1 }
+
+trunksCount OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of configured PSTN trunks."
+	::= { trunks 1 }
+
+trunkTable  OBJECT-TYPE
+	SYNTAX		SEQUENCE OF TrunkEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Table containing information about configured PSTN trunks."
+	::= { trunks 2 }
+
+trunkEntry OBJECT-TYPE
+	SYNTAX		TrunkEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Table entry containing information about a configured PSTN trunk."
+	::= { trunkTable 1 }
+
+TrunkEntry ::= SEQUENCE {
+	trunkIndex		Counter32,
+	trunkID			DisplayString,
+	trunkType		DisplayString,
+	trunkCircuitCount	Counter32,
+	trunkCurrentCallsCount	Counter32,
+	trunkDownAlarms		Counter32
+}
+
+trunkIndex OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Index of the PSTN trunk in the table."
+	::= { trunkEntry 1 }
+
+trunkID OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The name of the PSTN trunk."
+	::= { trunkEntry 2 }
+
+trunkType OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"PSTN trunk type."
+	::= { trunkEntry 3 }
+
+trunkCircuitCount OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of circuits of the PSTN trunk."
+	::= { trunkEntry 4 }
+
+trunkCurrentCallsCount OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of calls of the PSTN trunk."
+	::= { trunkEntry 5 }
+
+trunkDownAlarms OBJECT-TYPE
+	SYNTAX 		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of times an alarm that signals that a trunk is down alarm has been sent."
+	::= { trunkEntry 6 }
+
+-- trunks END
+-- linksets BEGIN
+
+linksets 	OBJECT IDENTIFIER ::= { connections 2 }
+
+linksetCount OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of configured linksets."
+	::= { linksets 1 }
+
+linksetTable  OBJECT-TYPE
+	SYNTAX		SEQUENCE OF LinksetEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Table containing information about configured linksets."
+	::= { linksets 2 }
+
+linksetEntry OBJECT-TYPE
+	SYNTAX		LinksetEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Table entry containing information about a configured linkset."
+	::= { linksetTable 1 }
+
+LinksetEntry ::= SEQUENCE {
+	linksetIndex		Counter32,
+	linksetID		DisplayString,
+	linksetType		DisplayString,
+	linksetStatus		DisplayString,
+	linksetDownAlarms 	Counter32
+}
+
+linksetIndex OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Index of the linkset in the table."
+	::= { linksetEntry 1 }
+
+linksetID OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The name of the linkset."
+	::= { linksetEntry 2 }
+
+linksetType OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The type of the linkset."
+	::= { linksetEntry 3 }
+
+linksetStatus OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The status of the linkset."
+	::= { linksetEntry 4 }
+
+linksetDownAlarms OBJECT-TYPE
+	SYNTAX 		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of times an alarm that signals that this linkset is down alarm has been sent."
+	::= { linksetEntry 5 }
+
+
+-- linksets END
+-- links BEGIN
+
+links		OBJECT IDENTIFIER ::= { connections 3 }
+
+linkCount OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of configured links."
+	::= { links 1 }
+
+linksTable  OBJECT-TYPE
+	SYNTAX		SEQUENCE OF LinkEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Table containing information about configured links."
+	::= { links 2 }
+
+linkEntry OBJECT-TYPE
+	SYNTAX		LinkEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Table entry containing information about a configured link."
+	::= { linksTable 1 }
+
+LinkEntry ::= SEQUENCE {
+	linkIndex	Counter32,
+	linkID		DisplayString,
+	linkType	DisplayString,
+	linkStatus	DisplayString,
+	linkDownAlarms	Counter32
+}
+
+linkIndex OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The index of the link in the table."
+	::= { linkEntry 1 }
+
+linkID OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The name of the link."
+	::= { linkEntry 2 }
+
+linkType OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The type of the link."
+	::= { linkEntry 3 }
+
+linkStatus OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The status of the link."
+	::= { linkEntry 4 }
+
+linkDownAlarms OBJECT-TYPE
+	SYNTAX 		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of times an alarm that signals that this link is down alarm has been sent."
+	::= { linkEntry 5 }
+
+-- links END
+-- interfaces BEGIN
+
+interfaces	OBJECT IDENTIFIER ::= { connections 4 }
+
+interfacesCount OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of configured interfaces."
+	::= { interfaces 1 }
+
+interfacesTable  OBJECT-TYPE
+	SYNTAX		SEQUENCE OF InterfaceEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Table containing information about configured interfaces."
+	::= { interfaces 2 }
+
+interfaceEntry OBJECT-TYPE
+	SYNTAX		InterfaceEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Table entry containing information about a interface."
+	::= { interfacesTable 1 }
+
+InterfaceEntry ::= SEQUENCE {
+	interfaceIndex		Counter32,
+	interfaceID		DisplayString,
+	interfaceStatus		DisplayString,
+	interfaceDownAlarms	Counter32
+}
+
+interfaceIndex OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The index of this interface in the table."
+	::= { interfaceEntry 1 }
+
+interfaceID OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The name of the link."
+	::= { interfaceEntry 2 }
+
+interfaceStatus OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The status of the link."
+	::= { interfaceEntry 3}
+
+interfaceDownAlarms OBJECT-TYPE
+	SYNTAX 		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of times an alarm that signals that this interface is down has been sent."
+	::= { interfaceEntry 4 }
+
+-- interfaces END
+-- isdnQ921 BEGIN
+isdnQ921	OBJECT IDENTIFIER ::= { connections 5 }
+-- isdnQ921 END
+
+-- accounts begin
+accounts	OBJECT IDENTIFIER ::= { connections 6 }
+
+accountsCount OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of accounts."
+	::= { accounts 1 }
+
+accountsTable  OBJECT-TYPE
+	SYNTAX		SEQUENCE OF AccountEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Table containing information about configured accounts."
+	::= { accounts 2 }
+
+accountEntry OBJECT-TYPE
+	SYNTAX		AccountEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Table entry containing information about an account."
+	::= { accountsTable 1 }
+
+AccountEntry ::= SEQUENCE {
+	accountIndex		Counter32,
+	accountID		DisplayString,
+	accountStatus		DisplayString,
+	accountProtocol		DisplayString
+}
+
+accountIndex OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The index of the account in the table."
+	::= { accountEntry 1 }
+
+accountID OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The name of the account."
+	::= { accountEntry 2 }
+
+accountStatus OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The status of the account."
+	::= { accountEntry 3 }
+
+accountProtocol OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The protocol used for this account."
+	::= { accountEntry 4 }
+
+-- accounts end
+
+-- connections END
+
+-- statistics BEGIN
+
+calls 			OBJECT IDENTIFIER ::= { statistics 1 }
+
+-- callCounters BEGIN
+
+callCounters		OBJECT IDENTIFIER ::= { calls 1 }
+
+incomingCalls OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of incoming calls."
+	::= { callCounters 1 }
+
+outgoingCalls  OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of outgoing calls."
+	::= { callCounters 2 }
+
+-- callCounters END
+
+-- serviceQuality BEGIN
+
+serviceQuality 		OBJECT IDENTIFIER ::= { calls 2 }
+
+qosDirectionsCount  OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of monitored for service quality directions."
+	::= { serviceQuality 1 }
+
+qosDirectionsTable  OBJECT-TYPE
+	SYNTAX		SEQUENCE OF QOSEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Table containing service quality information about configured directions."
+	::= { serviceQuality 2 }
+
+qosEntry OBJECT-TYPE
+	SYNTAX		QOSEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Table entry containing service quality information about a direction."
+	::= { qosDirectionsTable 1 }
+
+QOSEntry ::= SEQUENCE {
+	qosEntryIndex		Counter32,
+	qosEntryDirection	DisplayString,
+	asrData			ASRData,
+	nerData			NERData,
+	callEndCauseCounters	EndCauseCounters
+}
+
+qosEntryIndex OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The index for a monitored direction."
+	::= { qosEntry 1 }
+
+qosEntryDirection OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The name of the monitored direction."
+	::= { qosEntry 2 }
+
+asrData OBJECT-TYPE
+	SYNTAX		ASRData
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"ASR information for this direction."
+	::= { qosEntry 3 }
+
+ASRData ::= SEQUENCE {
+	lowASRThreshold		INTEGER (1..100),
+	highASRThreshold	INTEGER	(1..100),
+	currentASR		INTEGER (1..100),
+	overallASR		INTEGER (1..100),
+	currentLowASRAlarmCount		Counter32,
+	currentHighASRAlarmCount	Counter32,
+	overallLowASRAlarmCount		Counter32,
+	overallHighASRAlarmCount	Counter32
+}
+
+lowASRThreshold OBJECT-TYPE
+	SYNTAX		INTEGER (1..100)
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The lower threshold for triggering an ASR alarm."
+	::= { asrData 1 }
+
+highASRThreshold OBJECT-TYPE
+	SYNTAX		INTEGER (1..100)
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The upper threshold for triggering an ASR alarm."
+	::= { asrData 2 }
+
+currentASR OBJECT-TYPE
+	SYNTAX		INTEGER (1..100)
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The ASR value for the configured time interval."
+	::= { asrData 3 }
+
+overallASR OBJECT-TYPE
+	SYNTAX		INTEGER (1..100)
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The ASR value since YATE started."
+	::= { asrData 4 }
+
+currentLowASRAlarmCount OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of times a low ASR alarm has been sent."
+	::= { asrData 5 }
+
+currentHighASRAlarmCount OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of times a high ASR alarm has been sent since Yate started."
+	::= { asrData 6 }
+
+overallLowASRAlarmCount OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of times a low ASR alarm has been sent."
+	::= { asrData 7 }
+
+overallHighASRAlarmCount OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of times a high ASR alarm has been sent since Yate started."
+	::= { asrData 8 }
+
+nerData OBJECT-TYPE
+	SYNTAX		NERData
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"NER information about this direction."
+	::= { qosEntry 4 }
+
+NERData ::= SEQUENCE {
+	lowNERThreshold		INTEGER (1..100),
+	currentNER		INTEGER (1..100),
+	overallNER		INTEGER (1..100),
+	currentLowNERAlarmCount	Counter32,
+	overallLowNERAlarmCount	Counter32
+}
+
+lowNERThreshold OBJECT-TYPE
+	SYNTAX		INTEGER (1..100)
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The lower threshold for triggering a NER alarm."
+	::= { nerData 1 }
+
+currentNER OBJECT-TYPE
+	SYNTAX		INTEGER (1..100)
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The NER value for the configured time interval."
+	::= { nerData 2 }
+
+overallNER OBJECT-TYPE
+	SYNTAX		INTEGER (1..100)
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The NER value since YATE started."
+	::= { nerData 3 }
+
+currentLowNERAlarmCount OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of times a low NER alarm has been sent."
+	::= { nerData 4 }
+
+overallLowNERAlarmCount OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of times a low NER alarm has been sent since YATE started."
+	::= { nerData 5 }
+
+callEndCauseCounters OBJECT-TYPE
+	SYNTAX		EndCauseCounters
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Counters for call end reasons."
+	::= { qosEntry 5 }
+
+EndCauseCounters ::= SEQUENCE {
+	currentHangupEndCause		Counter32,
+	overallHangupEndCause		Counter32,
+	currentRejectedEndCause		Counter32,
+	overallRejectedEndCause		Counter32,
+	currentBusyEndCause		Counter32,
+	overallBusyEndCause		Counter32,
+	currentCancelledEndCause	Counter32,
+	overallCancelledEndCause	Counter32,
+	currentNoAnswerEndCause		Counter32,
+	overallNoAnswerEndCause		Counter32,
+	currentNoRouteEndCause		Counter32,
+	overallNoRouteEndCause		Counter32,
+	currentNoConnectionEndCause	Counter32,
+	overallNoConnectionEndCause	Counter32,
+	currentNoAuthEndCause		Counter32,
+	overallNoAuthEndCause		Counter32,
+	currentCongestionEndCause	Counter32,
+	overallCongestionEndCause	Counter32
+}
+
+currentHangupEndCause OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of calls ended with hangup in the configured time interval."
+	::= { callEndCauseCounters 1 }
+
+overallHangupEndCause OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of calls ended with hangup since YATE started."
+	::= { callEndCauseCounters 2 }
+
+currentRejectedEndCause OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of calls ended by being rejected in the configured time interval."
+	::= { callEndCauseCounters 3 }
+
+overallRejectedEndCause OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of calls ended by being rejected since YATE started."
+	::= { callEndCauseCounters 4 }
+
+currentBusyEndCause OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of calls ended because of busy in the configured time interval."
+	::= { callEndCauseCounters 5 }
+
+overallBusyEndCause OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of calls ended because of busy since YATE started."
+	::= { callEndCauseCounters 6 }
+
+currentCancelledEndCause OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of calls cancelled in the configured time interval."
+	::= { callEndCauseCounters 7 }
+
+overallCancelledEndCause OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of calls cancelled since YATE started."
+	::= { callEndCauseCounters 8 }
+
+currentNoAnswerEndCause OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of calls ended because of no answer in the configured time interval."
+	::= { callEndCauseCounters 9 }
+
+overallNoAnswerEndCause OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of calls ended because of no answer since YATE started."
+	::= { callEndCauseCounters 10 }
+
+currentNoRouteEndCause OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of calls ended due to a lack of route in the configured time interval."
+	::= { callEndCauseCounters 11 }
+
+overallNoRouteEndCause OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of calls ended due to a lack of route since YATE started."
+	::= { callEndCauseCounters 12 }
+
+currentNoConnectionEndCause OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of calls ended with service unavailable in the configured time interval."
+	::= { callEndCauseCounters 13 }
+
+overallNoConnectionEndCause OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of calls ended with service unavailable since YATE started."
+	::= { callEndCauseCounters 14 }
+
+currentNoAuthEndCause OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of calls ended due to a lack of authorization in the configured time interval."
+	::= { callEndCauseCounters 15 }
+
+overallNoAuthEndCause OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of calls ended due to a lack of authorization since YATE started."
+	::= { callEndCauseCounters 16 }
+
+currentCongestionEndCause OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of calls ended with congestion in the configured time interval."
+	::= { callEndCauseCounters 17 }
+
+overallCongestionEndCause OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of calls ended due with congestion since YATE started."
+	::= { callEndCauseCounters 18 }
+
+-- serviceQuality END
+-- calls END
+
+-- database BEGIN
+
+database  		OBJECT IDENTIFIER ::= { statistics 2 }
+
+databaseCount  OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of configured database accounts."
+	::= { database 1 }
+
+databaseTable  OBJECT-TYPE
+	SYNTAX		SEQUENCE OF DatabaseEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Table containing service quality information about configured database accounts."
+	::= { database 2 }
+
+databaseEntry OBJECT-TYPE
+	SYNTAX		DatabaseEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Table entry containing information about a database account."
+	::= { databaseTable 1 }
+
+DatabaseEntry ::= SEQUENCE {
+	databaseIndex			Counter32,
+	databaseAccount			DisplayString,
+	queriesCount			Counter32,
+	failedQueries			Counter32,
+	errorQueries			Counter32,
+	queryExecTime			INTEGER,
+	databaseAlarmCounters		DatabaseAlarmCounters,
+	databaseThresholds		DatabaseThresholds
+}
+
+databaseIndex OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The index of a database account."
+	::= { databaseEntry 1 }
+
+databaseAccount OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The name of a database account."
+	::= { databaseEntry 2 }
+
+queriesCount OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of queries requested to be executed in a configured time interval."
+	::= { databaseEntry 3 }
+
+failedQueries   OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of queries that failed to be executed in a configured time interval."
+	::= { databaseEntry 4 }
+
+errorQueries   OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of queries that return from execution with an error status in a configured time interval."
+	::= { databaseEntry 5 }
+
+queryExecTime  OBJECT-TYPE
+	SYNTAX		INTEGER
+	UNITS		"miliseconds"
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Report the average time spent executing a database query received in a configured time interval."
+	::= { databaseEntry 6 }
+
+databaseAlarmCounters OBJECT-TYPE
+	SYNTAX		DatabaseAlarmCounters
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Alarm counters for this database account."
+	::= { databaseEntry 7 }
+
+DatabaseAlarmCounters ::= SEQUENCE {
+	tooManyQueriesAlarms		Counter32,
+	tooManyFailedQueriesAlarms	Counter32,
+	tooManyErrorQueriesAlarms	Counter32,
+	queryExecTooLongAlarms		Counter32,
+	noConnectionAlarms		Counter32
+}
+
+tooManyQueriesAlarms OBJECT-TYPE
+	SYNTAX 		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of times an alarm that signals that too many database queries were requested has been sent."
+	::= { databaseAlarmCounters 1 }
+
+tooManyFailedQueriesAlarms OBJECT-TYPE
+	SYNTAX 		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of times an alarm that signals that too many database queries failed to be executed has been sent."
+	::= { databaseAlarmCounters 2 }
+
+tooManyErrorQueriesAlarms OBJECT-TYPE
+	SYNTAX 		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of times an alarm that signals that too many database queries returned with an error status has been sent."
+	::= { databaseAlarmCounters 3 }
+
+queryExecTooLongAlarms  OBJECT-TYPE
+	SYNTAX 		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of times an alarm that signals that a query is taking too long to be executed has been sent."
+	::= { databaseAlarmCounters 4 }
+
+noConnectionAlarms   OBJECT-TYPE
+	SYNTAX 		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of times an alarm that signals that a connection to the database could not be established has been sent."
+	::= { databaseAlarmCounters 5 }
+
+databaseThresholds  OBJECT-TYPE
+	SYNTAX		DatabaseThresholds
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Alarm thresholds for this database account."
+	::= { databaseEntry 8 }
+
+DatabaseAlarmCounters ::= SEQUENCE {
+	queriesCountThreshold		Counter32,
+	failedQueriesThreshold		Counter32,
+	errorQueriesThreshold		Counter32,
+	queryExecTimeThreshold		Counter32
+}
+
+queriesCountThreshold OBJECT-TYPE
+	SYNTAX 		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Threshold for triggering a alarm that too many queries were requested to be executed."
+	::= { databaseThresholds 1 }
+
+failedQueriesThreshold OBJECT-TYPE
+	SYNTAX 		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Threshold for triggering a alarm that too many queries failed to be executed."
+	::= { databaseThresholds 2 }
+
+errorQueriesThreshold OBJECT-TYPE
+	SYNTAX 		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Threshold for triggering a alarm that too many queries returned with an error."
+	::= { databaseThresholds 3 }
+
+queryExecTimeThreshold OBJECT-TYPE
+	SYNTAX 		Counter32
+	UNITS		"miliseconds"
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Threshold for triggering a alarm that queries take too long to be executed."
+	::= { databaseThresholds 4 }
+
+-- database END
+-- rtp BEGIN
+
+rtpData			OBJECT IDENTIFIER ::= { statistics 3}
+
+rtpDirectionsCount OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of RTP directions."
+	::= { rtpData 1 }
+
+rtpDirectionsTable   OBJECT-TYPE
+	SYNTAX		SEQUENCE OF RTPEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Table containing information about RTP directions."
+	::= { rtpData 2 }
+
+rtpEntry OBJECT-TYPE
+	SYNTAX		RTPEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Table entry containing information about an account."
+	::= { rtpDirectionsTable 1 }
+
+RTPEntry ::= SEQUENCE {
+	rtpEntryIndex		Counter32,
+	rtpDirection		DisplayString,
+	noAudioCounter		Counter32,
+	lostAudioCounter	Counter32,
+	packetsLost		Counter32,
+	syncLost		Counter32,
+	sequenceNumberLost	Counter32,
+	wrongSRC		Counter32,
+	wrongSSRC		Counter32
+}
+
+rtpEntryIndex  OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Index of the RTP direction in the table."
+	::= { rtpEntry 1 }
+
+rtpDirection  OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The name for the RTP direction."
+	::= { rtpEntry 2 }
+
+noAudioCounter OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of times lack of audio has been detected on RTP."
+	::= { rtpEntry 3 }
+
+lostAudioCounter OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of times a loss of audio has been detected on RTP."
+	::= { rtpEntry 4 }
+
+packetsLost OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of RTP packets lost."
+	::= { rtpEntry 5 }
+
+syncLost OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of times synchronization has been lost on RTP."
+	::= { rtpEntry 6 }
+
+sequenceNumberLost  OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of times the sequence number has been lost on RTP."
+	::= { rtpEntry 7 }
+
+wrongSRC  OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of received RTP packets with wrong SRC in packet."
+	::= { rtpEntry 8 }
+
+wrongSSRC OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of received RTP packets with wrong SSRC in packet."
+	::= { rtpEntry 9 }
+
+-- rtp END
+-- requests BEGIN
+
+requests 		OBJECT IDENTIFIER ::= { statistics 4 }
+
+authenticationRequests  OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of received authentication requests."
+	::= { requests 1 }
+
+registerRequests  OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of received register requests."
+	::= { requests 2 }
+
+-- requests END
+-- statistics END
+
+-- alarms BEGIN
+
+-- databaseAlarms BEGIN
+
+databaseAlarms		OBJECT IDENTIFIER ::= { alarms 1 }
+
+tooManyQueries   OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	accessible-for-notify
+	STATUS		current
+	DESCRIPTION
+		"Notification that signals that the number of queries requested to be executed
+			in a set time interval surpassed a configured threshold."
+	::= { databaseAlarms 1 }
+
+tooManyFailedQueries OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	accessible-for-notify
+	STATUS		current
+	DESCRIPTION
+		"Notification that signals that the number of queries that could not be executed
+			in a set time interval surpassed a configured threshold."
+	::= { databaseAlarms 2 }
+
+tooManyErrorQueries  OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	accessible-for-notify
+	STATUS		current
+	DESCRIPTION
+		"Notification that signals that the number of queries that returned with an error status
+			in a set time interval surpassed a configured threshold."
+	::= { databaseAlarms 3 }
+
+queryExecTimeTooLong OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	accessible-for-notify
+	STATUS		current
+	DESCRIPTION
+		"Notification that signals that the average time for executing a query has surpassed
+			a configured threshold."
+	::= { databaseAlarms 4 }
+
+noConnection OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	accessible-for-notify
+	STATUS		current
+	DESCRIPTION
+		"Notify that Yate has failed to establish a connection to this database."
+	::= { databaseAlarms 5 }
+
+-- databaseAlarms END
+
+-- serviceQualityAlarms BEGIN
+
+serviceQualityAlarms 		OBJECT IDENTIFIER ::= { alarms 2 }
+
+asrAlarms			OBJECT IDENTIFIER ::= { serviceQualityAlarms 1 }
+
+lowASRAlarms			OBJECT IDENTIFIER ::= { asrAlarms 1 }
+
+currentLowASR OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	accessible-for-notify
+	STATUS		current
+	DESCRIPTION
+		"Alarm that signals that the ASR value is bellow a set threshold for a configured time interval."
+	::= { lowASRAlarms 1 }
+
+overallLowASR OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Alarm that signals that the ASR value since Yate started is bellow a set threshold."
+	::= { lowASRAlarms 2 }
+
+highASRAlarms			OBJECT IDENTIFIER ::= { asrAlarms 2 }
+
+currentHighASR OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Alarm that signals that the ASR value for a configured time interval has surpassed a set threshold."
+	::= { highASRAlarms 1 }
+
+overallHighASR OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Alarm that signals that the overall ASR value has surpassed a set threshold."
+	::= { highASRAlarms 2 }
+
+lowNERAlarms			OBJECT IDENTIFIER ::= { serviceQualityAlarms 2 }
+
+currentLowNER OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Alarm that signals that the NER value for a configured time interval is bellow a set threshold."
+	::= { lowNERAlarms 1 }
+
+overallLowNER OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Alarm that signals that the overall NER value is bellow a set threshold."
+	::= { lowNERAlarms 2 }
+
+-- serviceQualityAlarms END
+
+-- connectionAlarms BEGIN
+
+connectionAlarms		OBJECT IDENTIFIER ::= { alarms 3 }
+
+trunkDown OBJECT-TYPE
+	SYNTAX 		DisplayString
+	MAX-ACCESS	accessible-for-notify
+	STATUS		current
+	DESCRIPTION
+		"Notification that this trunk is down."
+	::= { connectionAlarms 1 }
+
+trunkUp OBJECT-TYPE
+	SYNTAX 		DisplayString
+	MAX-ACCESS	accessible-for-notify
+	STATUS		current
+	DESCRIPTION
+		"Notification that this trunk is up."
+	::= { connectionAlarms 2 }
+
+linksetDown OBJECT-TYPE
+	SYNTAX 		DisplayString
+	MAX-ACCESS	accessible-for-notify
+	STATUS		current
+	DESCRIPTION
+		"Notification that this linkset component is down."
+	::= { connectionAlarms 3 }
+
+linksetUp OBJECT-TYPE
+	SYNTAX 		DisplayString
+	MAX-ACCESS	accessible-for-notify
+	STATUS		current
+	DESCRIPTION
+		"Notification that this linkset component is up."
+	::= { connectionAlarms 4 }
+
+linkDown OBJECT-TYPE
+	SYNTAX 		DisplayString
+	MAX-ACCESS	accessible-for-notify
+	STATUS		current
+	DESCRIPTION
+		"Notification that this link is down."
+	::= { connectionAlarms 5 }
+
+linkUp OBJECT-TYPE
+	SYNTAX 		DisplayString
+	MAX-ACCESS	accessible-for-notify
+	STATUS		current
+	DESCRIPTION
+		"Notification that this link is up."
+	::= { connectionAlarms 6 }
+
+interfaceDown OBJECT-TYPE
+	SYNTAX 		DisplayString
+	MAX-ACCESS	accessible-for-notify
+	STATUS		current
+	DESCRIPTION
+		"Notification that signals that this interface is down."
+	::= { connectionAlarms 7 }
+
+interfaceUp OBJECT-TYPE
+	SYNTAX 		DisplayString
+	MAX-ACCESS	accessible-for-notify
+	STATUS		current
+	DESCRIPTION
+		"Notification that signals that this interface is up."
+	::= { connectionAlarms 8 }
+
+isdnQ921Down OBJECT-TYPE
+	SYNTAX 		DisplayString
+	MAX-ACCESS	accessible-for-notify
+	STATUS		current
+	DESCRIPTION
+		"Notification that this ISDN Q921 component is down."
+	::= { connectionAlarms 9 }
+
+isdnQ921Up OBJECT-TYPE
+	SYNTAX 		DisplayString
+	MAX-ACCESS	accessible-for-notify
+	STATUS		current
+	DESCRIPTION
+		"Notification that this ISDN Q921 component is up."
+	::= { connectionAlarms 10 }
+
+routeDown OBJECT-TYPE
+	SYNTAX 		DisplayString
+	MAX-ACCESS	accessible-for-notify
+	STATUS		current
+	DESCRIPTION
+		"Notification that this route is down."
+	::= { connectionAlarms 11 }
+
+routeUp OBJECT-TYPE
+	SYNTAX 		DisplayString
+	MAX-ACCESS	accessible-for-notify
+	STATUS		current
+	DESCRIPTION
+		"Notification that this route is up."
+	::= { connectionAlarms 12 }
+
+-- connectionAlarms END
+
+-- sipAlarms BEGIN
+
+sipAlarms		OBJECT IDENTIFIER ::= { alarms 4 }
+
+transactionsTimedOut OBJECT-TYPE
+	SYNTAX 		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of SIP transactions that have timed out."
+	::= { sipAlarms 1 }
+
+failedAuths OBJECT-TYPE
+	SYNTAX 		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of failed SIP authentications."
+	::= { sipAlarms 2 }
+
+byesTimedOut OBJECT-TYPE
+	SYNTAX 		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of BYE tranctions that timed out."
+	::= { sipAlarms 3 }
+
+gatewayAlarms 		OBJECT IDENTIFIER ::= { sipAlarms 4 }
+
+gatewayTimeout OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS 	accessible-for-notify
+	STATUS		current
+	DESCRIPTION
+		"Notify that a monitored SIP gateway timed out."
+	::= { gatewayAlarms 1 }
+
+gatewayUp OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	accessible-for-notify
+	STATUS		current
+	DESCRIPTION
+		"Notify that a previously timed out SIP gateway went back online."
+	::= { gatewayAlarms 2 }
+
+-- sipAlarms END
+-- mgcpAlarms BEGIN
+
+mgcpAlarms		OBJECT IDENTIFIER ::= { alarms 5 }
+
+mgcpTransactionsTimedOut OBJECT-TYPE
+	SYNTAX 		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of MGCP transactions that have timed out."
+	::= { mgcpAlarms 1 }
+
+deleteTransactionsTimedOut OBJECT-TYPE
+	SYNTAX 		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of DELETE transactions that have timed out."
+	::= { mgcpAlarms 2 }
+
+mgcpGatewayTimedOut OBJECT-TYPE
+	SYNTAX 		DisplayString
+	MAX-ACCESS	accessible-for-notify
+	STATUS		current
+	DESCRIPTION
+		"Notify that this MGCP gateway has timed out."
+	::= { mgcpAlarms 3 }
+
+mgcpGatewayUp OBJECT-TYPE
+	SYNTAX 		DisplayString
+	MAX-ACCESS	accessible-for-notify
+	STATUS		current
+	DESCRIPTION
+		"Notify that this MGCP gateway is online."
+	::= { mgcpAlarms 4 }
+
+-- mgcpAlarms END
+
+-- alarms END
+
+
+-- commands BEGIN
+
+enableTrap OBJECT-TYPE
+	SYNTAX		OBJECT IDENTIFIER
+	MAX-ACCESS	read-write
+	STATUS		current
+	DESCRIPTION
+		"Activate the trap with the given object identifier."
+	::= { commands 1 }
+
+disableTrap OBJECT-TYPE
+	SYNTAX		OBJECT IDENTIFIER
+	MAX-ACCESS	read-write
+	STATUS		current
+	DESCRIPTION
+		"Deactivate trap with the given object identifier."
+	::= { commands 2 }
+
+-- yateCommands END
+
+END

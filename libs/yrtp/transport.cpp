@@ -126,7 +126,7 @@ void RTPGroup::setMinSleep(int msec)
 
 
 RTPProcessor::RTPProcessor()
-    : m_group(0)
+    : m_wrongSrc(0), m_group(0) 
 {
     DDebug(DebugAll,"RTPProcessor::RTPProcessor() [%p]",this);
 }
@@ -218,6 +218,8 @@ void RTPTransport::timerTick(const Time& when)
 		if (m_monitor)
 		    m_monitor->rtpData(buf,len);
 	    }
+	    else
+		m_processor->incWrongSrc();
 	}
 	m_rtpSock.timerTick(when);
     }

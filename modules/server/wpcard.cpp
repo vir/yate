@@ -263,6 +263,7 @@ private:
     bool m_repeatCapable;                // HW repeat available
     Mutex m_repeatMutex;                 // Lock repeat buffer
     DataBlock m_repeatPacket;            // Packet to repeat
+    bool m_down;
 };
 
 // Read signalling data for WpInterface
@@ -444,6 +445,26 @@ static Mutex s_ifaceNotify(true,"WPCard::notify"); // WpInterface: lock recv dat
 static bool s_repeatCapable = true;      // Global repeat packet capability
 static WpModule driver;
 
+
+static void sendModuleUpdate(bool& notifStat, int status, const String& device)
+{
+    Message* msg = new Message("module.update");
+    msg->addParam("module",driver.name());
+    msg->addParam("interface",device);
+    if(notifStat && status == SignallingInterface::LinkUp) {
+	msg->addParam("notify","interfaceUp");
+	notifStat = false;
+	Engine::enqueue(msg);
+	return;
+    }
+    if (!notifStat && status == SignallingInterface::LinkDown) {
+	msg->addParam("notify","interfaceDown");
+	notifStat = true;
+	Engine::enqueue(msg);
+	return;
+    }
+    TelEngine::destruct(msg);
+}
 
 /**
  * Fifo
@@ -849,6 +870,7 @@ bool WpInterface::init(const NamedList& config, NamedList& params)
 	s << " hwrepeatcapable=" << String::boolText(m_repeatCapable);
 	Debug(this,DebugInfo,"D-channel: %s [%p]",s.c_str(),this);
     }
+    m_down = false;
     return true;
 }
 
@@ -1038,10 +1060,14 @@ bool WpInterface::updateStatus()
 	return false;
     Debug(this,DebugNote,"Link status changed to %s [%p]",
 	lookup(m_socket.status(),s_linkStatus),this);
-    if (m_socket.status() == WpSocket::Connected)
+    if (m_socket.status() == WpSocket::Connected) {
 	notify(LinkUp);
-    else
+	sendModuleUpdate(m_down,LinkUp,m_socket.card());
+    }
+    else {
 	notify(LinkDown);
+	sendModuleUpdate(m_down,LinkDown,m_socket.card());
+    }
     return true;
 }
 

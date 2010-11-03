@@ -4,7 +4,7 @@
 # override DESTDIR at install time to prefix the install directory
 DESTDIR :=
 
-SUBDIRS := help skins scripts sounds
+SUBDIRS := data help skins scripts sounds
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@

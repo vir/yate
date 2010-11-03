@@ -32,6 +32,7 @@ namespace { // anonymous
 
 static ObjList s_conns;
 Mutex s_conmutex(false,"PgSQL::conn");
+static unsigned int s_failedConns;
 
 class PgConn : public RefObject, public Mutex
 {
@@ -46,6 +47,19 @@ public:
     int queryDb(const char* query, Message* dest = 0);
     bool initDb(int retry = 0);
 
+    inline unsigned int total()
+	{ return m_totalQueries; }
+    inline unsigned int failed()
+	{ return m_failedQueries; }
+    inline unsigned int errorred()
+	{ return m_errorQueries; }
+    inline unsigned int queryTime()
+        { return (unsigned int) m_queryTime; }
+    inline void setConn(bool conn = true)
+	{ m_hasConn = conn; }
+    inline bool hasConn()
+	{ return m_hasConn; }
+
 private:
     void dropDb();
     bool testDb();
@@ -56,6 +70,13 @@ private:
     int m_retry;
     u_int64_t m_timeout;
     PGconn *m_conn;
+
+    // stat counters
+    unsigned int m_totalQueries;
+    unsigned int m_failedQueries;
+    unsigned int m_errorQueries;
+    u_int64_t m_queryTime;
+    bool m_hasConn;
 };
 
 class PgHandler : public MessageHandler
@@ -74,7 +95,10 @@ public:
     ~PgModule();
 protected:
     virtual void initialize();
+    virtual void statusModule(String& str);
     virtual void statusParams(String& str);
+    virtual void statusDetail(String& str);
+    virtual void genUpdate(Message& msg);
 private:
     bool m_init;
 };
@@ -83,7 +107,9 @@ static PgModule module;
 
 PgConn::PgConn(const NamedList* sect)
     : Mutex(true,"PgConn"),
-      m_name(*sect), m_conn(0)
+      m_name(*sect), m_conn(0),
+      m_totalQueries(0), m_failedQueries(0),
+      m_errorQueries(0), m_queryTime(0), m_hasConn(false)
 {
     m_connection = sect->getValue("connection");
     if (m_connection.null()) {
@@ -204,6 +230,7 @@ bool PgConn::ok()
 // try to get up the connection, retry if we have to
 bool PgConn::startDb()
 {
+    setConn(true);
     if (testDb())
 	return true;
     for (int i = 0; i < m_retry; i++) {
@@ -213,6 +240,7 @@ bool PgConn::startDb()
 	if (testDb())
 	    return true;
     }
+    setConn(false);
     return false;
 }
 
@@ -313,6 +341,8 @@ int PgConn::queryDbInternal(const char* query, Message* dest)
 	    default:
 		Debug(&module,DebugWarn,"Query error: %s",PQresultErrorMessage(res));
 		dest->setParam("error",PQresultErrorMessage(res));
+		m_errorQueries++;
+		module.changed();
 	}
 	PQclear(res);
     }
@@ -335,19 +365,27 @@ int PgConn::queryDb(const char* query, Message* dest)
 	return -1;
     Debug(&module,DebugAll,"Performing query \"%s\" for '%s'",
 	query,m_name.c_str());
+    m_totalQueries++;
+    module.changed();
+    u_int64_t start = Time::now();
     for (int i = 0; i < m_retry; i++) {
 	int res = queryDbInternal(query,dest);
 	if (res > -2) {
-	    if (res < 0)
+	    if (res < 0) {
 		failure(dest);
+		m_failedQueries++;
+		module.changed();
+	    }
 	    // ok or non-retryable error, get out of here
+	    u_int64_t finish = Time::now() - start;
+	    m_queryTime += finish;
+	    module.changed();
 	    return res;
 	}
     }
     failure(dest);
     return -2;
 }
-
 
 static PgConn* findDb(const String& account)
 {
@@ -385,10 +423,32 @@ PgModule::~PgModule()
     s_conns.clear();
 }
 
+void PgModule::statusModule(String& str)
+{
+    Module::statusModule(str);
+    str.append("format=Total|Failed|Errors|AvgExecTime",",");
+}
+
 void PgModule::statusParams(String& str)
 {
     s_conmutex.lock();
     str.append("conns=",",") << s_conns.count();
+    str.append("failed=",",") << s_failedConns;
+    s_conmutex.unlock();
+}
+
+void PgModule::statusDetail(String& str)
+{
+    s_conmutex.lock();
+    for (unsigned int i = 0; i < s_conns.count(); i++) {
+	PgConn* conn = static_cast<PgConn*>(s_conns[i]);
+	str.append(conn->toString().c_str(),",") << "=" << conn->total() << "|" << conn->failed()
+			<< "|" << conn->errorred() << "|";
+	if (conn->total() - conn->failed() > 0)
+	    str << (conn->queryTime() / (conn->total() - conn->failed()) / 1000); //miliseconds
+        else
+	    str << "0";
+    }
     s_conmutex.unlock();
 }
 
@@ -410,12 +470,36 @@ void PgModule::initialize()
 	if (sec->getBoolValue("autostart",true))
 	    conn->initDb();
 	s_conmutex.lock();
-	s_conns.insert(conn);
+	if (conn->ok())
+	    s_conns.insert(conn);
+	else
+	    s_failedConns++;
 	s_conmutex.unlock();
     }
 
 }
 
+void PgModule::genUpdate(Message& msg)
+{
+    unsigned int index = 0;
+    String db = "database.";
+    String total = "total.";
+    String failed = "failed.";
+    String error = "errorred.";
+    String hasconn = "hasconn.";
+    String time = "querytime.";
+    for (ObjList* o = s_conns.skipNull(); o; o = o->next()) {
+	PgConn* conn = static_cast<PgConn*>(o->get());
+	msg.setParam(db << index,conn->toString());
+	msg.setParam(total << index,String(conn->total()));
+	msg.setParam(failed << index,String(conn->failed()));
+	msg.setParam(error << index,String(conn->errorred()));
+	msg.setParam(hasconn << index,String::boolText(conn->hasConn()));
+	msg.setParam(time << index,String(conn->queryTime()));
+	index++;
+    }
+    msg.setParam("count",String(index));
+}
 }; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

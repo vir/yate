@@ -1174,6 +1174,16 @@ void SS7MTP3::notify(SS7Layer2* link)
 	if (cnt)
 	    Debug(this,DebugNote,"Attempted to uninhibit/resume %u links [%p]",cnt,this);
 	SS7Layer3::notify(link ? link->sls() : -1);
+
+	NamedList notif("");
+	notif.addParam("from", toString());
+	notif.addParam("type","ss7-mtp3");
+	notif.addParam("operational",String::boolText(operational()));
+	notif.addParam("active",String(m_active));
+	notif.addParam("total",String(m_total));
+	notif.addParam("link", link ? link->toString() : "");
+	notif.addParam("linkup", link ? String::boolText(link->operational()) : "");
+	engine()->notify(this,notif);
     }
 }
 

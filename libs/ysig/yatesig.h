@@ -51,6 +51,7 @@ namespace TelEngine {
 // Signalling classes
 class SignallingDumper;                  // A generic data dumper
 class SignallingDumpable;                // A component that can dump data
+class SignallingNotifier;                // A signalling notifier
 class SignallingTimer;                   // A signalling timer
 class SignallingCounter;                 // A signalling counter
 class SignallingFactory;                 // A signalling component factory
@@ -348,6 +349,30 @@ private:
     SignallingDumper::Type m_type;
     bool m_dumpNet;
     SignallingDumper* m_dumper;
+};
+
+/**
+ * Notifying class. Used to handle notifications.
+ * @short Notifier class
+ */
+
+class YSIG_API SignallingNotifier
+{
+public:
+    /**
+     * Destructor.
+     */
+    inline ~SignallingNotifier()
+	{ cleanup(); }
+    /**
+     * Handle the received notifications
+     * @param notifs Received notifications
+     */
+    virtual void notify(NamedList& notifs);
+    /**
+     * Handle necessary clean up
+     */
+    virtual void cleanup();
 };
 
 /**
@@ -659,6 +684,13 @@ public:
     inline int debugLevel(int level)
 	{ return (level >= 0) ? DebugEnabler::debugLevel(level) : DebugEnabler::debugLevel(); }
 
+    /**
+     * Return the type of this component
+     * @return A string version of the component type
+     */
+    inline const String& componentType() const
+	{ return m_compType; }
+
 protected:
     /**
      * Constructor with a default empty component name
@@ -711,6 +743,7 @@ protected:
 private:
     SignallingEngine* m_engine;
     String m_name;
+    String m_compType;
 };
 
 /**
@@ -800,6 +833,13 @@ public:
     bool find(const SignallingComponent* component);
 
     /**
+     * Handle notifications from a SignallingComponent
+     * @param component The SignallingComponent from which the notifications were received
+     * @param notifs The notifications sent by this SignallingComponent
+     */
+    void notify(SignallingComponent* component, NamedList notifs);
+
+    /**
      * Starts the worker thread that keeps components alive
      * @param name Static name of the thread
      * @param prio Thread's priority
@@ -812,6 +852,23 @@ public:
      * Stops and destroys the worker thread if running
      */
     void stop();
+
+    /**
+     * Add to this engine a notifier object
+     * @param notifier The SignallingNotifier object to be added to the engine
+     */
+    inline void setNotifier(SignallingNotifier* notifier)
+	{ m_notifier = notifier; }
+
+    /**
+     * Remove from this engine a notifier object
+     * @param notifier The SignallingNotifier object to be removed from the engine
+     */
+    inline void removeNotifier(SignallingNotifier* notifier)
+    {
+	if (m_notifier == notifier)
+	    m_notifier = 0;
+    }
 
     /**
      * Return a pointer to the worker thread
@@ -863,6 +920,7 @@ protected:
 
 private:
     SignallingThreadPrivate* m_thread;
+    SignallingNotifier* m_notifier;
     unsigned long m_usecSleep;
     unsigned long m_tickSleep;
 };
@@ -7034,6 +7092,13 @@ public:
      */
     inline unsigned int linksActive() const
 	{ return m_active; }
+
+    /**
+     * Get a list of the links held by this linkset
+     * @return A list containing the links
+     */
+    inline const ObjList* links() const
+	{ return &m_links; }
 
 protected:
     /**

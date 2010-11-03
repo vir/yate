@@ -1,0 +1,154 @@
+; configure monitor module
+
+[general]
+
+; restart_alarm=
+; after how many Yate restarts should the monitor send an alarm.
+; default is 1
+;restart_alarm=1
+
+; time (in seconds) for specifying for how long cached data should be kept or with which the cache time is increased on each access
+;cache=1
+
+
+[database]
+; enable or disable database monitoring. Default is false
+;monitor=false
+
+
+;[yate]
+; this section is an example on how to configure a database account to be monitored
+; name of the section is the database account
+ 
+; type=
+; specify that this section is for database monitoring
+;type=database
+
+;interval in seconds at which statistic data should be sent. Defaults to 3600 (1 hour) 
+;notiftime=3600
+
+; alarm threshold for maximum number of queries. Defaults to 1000
+;maxqueries=1000
+
+; alarm threshold for maximum number of failed queries. Defaults to 500
+;maxfailed=500
+
+; alarm threshold for maximum number of queries returned with an error status. Defaults to 500
+;maxerrors=500
+
+; alarm threshold for time took to execute a query. In miliseconds, defaults to 10 seconds.
+;maxtimeperquery=10000
+
+
+
+[call_qos]
+; this is the configuration section for call monitoring
+; to disable call monitoring comment this entire section or set monitor to false. Defaults to false.
+;monitor=false
+
+; specify the call.cdr parameter based on which route monitoring should be done. Defaults to address.
+;route=address
+
+; time_interval=
+; Time interval in seconds at which the monitored values should be sent as notifications.
+; Default value is 3600 (1 hour)
+;time_interval=3600
+
+;[192.168.168.185]
+; this section is an example on how to configure a routing direction to be monitor for ASR/NER values and call statistics
+; name of this section is the routing direction name. It should match the value of the route param from the call.cdr message
+
+; specify that this section is for call QOS monitoring on a given route
+;type=call_qos
+
+; minASR=
+; lower threshold at which the low ASR alarm is set for the current time interval. Value can be 0..100
+; Default is 0 ( to mean that no low ASR alarm will be sent)
+;minASR=0
+
+; maxASR=
+; upper threshold at which the high ASR alarm is set for the current time interval.
+; Default is 101 ( to mean that no high ASR alarm will be sent)
+;maxASR=101
+
+; minNER=
+; threshold at which the low NER alarm should be set.
+; Defaults to 0
+;minNER=0
+
+; minimum number of calls received before calculating ASR and NER
+; Defaults to 1
+;mincalls=1
+
+
+[sip]
+; monitoring SIP parameters
+
+; list of gateways of which state to monitor
+; It is a list of IP:port addresses separated by ';'
+; If port is not present, the default SIP (5060) port will be added
+;gateways=
+
+; threshold for sending an alarm signalling to many failed SIP authentications. Default is 0 (no alarm)
+;max_failed_auths=0
+
+; threshold for sending an alarm signalling that too many SIP transactions have timed out. Default is 0 (no alarm)
+;max_transaction_timeouts=0
+
+;threshold for sending an alarm signalling that too many SIP BYE transactions have not been acknowledged. Default is 0 (no alarm)
+;max_byes_timeouts=0
+
+; reset interval for alarms in seconds. Default is 0 (meaning alarms are not reset)
+;reset_time=0
+
+
+
+[sig]
+
+; enable  monitoring for signalling components. Defaults to false.
+;monitor=false
+
+; monitor trunks. Overrides the monitor value. Defaults to the monitor value.
+;trunk=
+
+; monitor linkset. Overrides the monitor value. Defaults to the monitor value.
+;linkset=
+
+; monitor links. Overrides the monitor value. Defaults to the monitor value.
+;link=
+
+; monitor physical interfaces. Overrides the monitor value. Defaults to the monitor value.
+;interface=
+
+; monitor ISDN.  Overrides the monitor value. Defaults to the monitor value.
+;isdn=
+
+
+
+[rtp]
+; enable RTP monitoring? Defaults to false.
+;monitor=false
+
+; RTP destinations to be monitored. Should be a comma separated list.
+; i.e. rtp_directions=192.168.168.185,127.0.0.1
+;rtp_directions=
+
+; interval in secconds at which collected data should be reset. Defaults to 3600 seconds.
+;reset_interval=3600
+
+
+
+[mgcp]
+; send notification if a MGCP gateway goes offline/back online? Defaults to false.
+;gw_monitor=false
+
+; threshold for sending an alarm signalling that too many MGCP transactions have timed out. Default is 0 (no alarm)
+;max_transaction_timeouts=0
+
+; threshold for sending an alarm signalling that too many MGCP DLCX transactions have timed out. Default is 0 (no alarm)
+;max_deletes_timeouts=0
+
+; reset interval in seconds. Defaults to 0 (no reset)
+;reset_time=0
+
+

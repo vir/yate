@@ -199,6 +199,26 @@ public:
 	{ return m_port; }
     inline Socket* socket() const
 	{ return m_sock; }
+    inline void incFailedAuths() 
+	{ m_failedAuths++; }
+    inline unsigned int failedAuths()
+    {
+	unsigned int tmp = m_failedAuths;
+	m_failedAuths = 0;
+	return tmp;
+    }
+    inline unsigned int timedOutTrs()
+    {
+	unsigned int tmp = m_timedOutTrs;
+	m_timedOutTrs = 0;
+	return tmp;
+    }
+    inline unsigned int timedOutByes()
+    {
+	unsigned int tmp = m_timedOutByes;
+	m_timedOutByes = 0;
+	return tmp;
+    }
 private:
     void addMessage(const char* buf, int len, const SocketAddr& addr, int port);
     int m_port;
@@ -207,6 +227,10 @@ private:
     SocketAddr m_addr;
     YateSIPEngine *m_engine;
     DataBlock m_buffer;
+
+    unsigned int m_failedAuths;
+    unsigned int m_timedOutTrs;
+    unsigned int m_timedOutByes;
 };
 
 // Handle transfer requests
@@ -460,6 +484,10 @@ public:
     YateSIPLine* findLine(const String& line) const;
     YateSIPLine* findLine(const String& addr, int port, const String& user = String::empty());
     bool validLine(const String& line);
+    bool commandComplete(Message& msg, const String& partLine, const String& partWord);
+    void msgStatus(Message& msg);
+protected:
+    virtual void genUpdate(Message& msg);
 private:
     SDPParser m_parser;
     YateSIPEndPoint *m_endpoint;
@@ -490,6 +518,8 @@ static bool s_sipt_isup = false;         // Control the application/isup body pr
 static int s_expires_min = EXPIRES_MIN;
 static int s_expires_def = EXPIRES_DEF;
 static int s_expires_max = EXPIRES_MAX;
+
+static String s_statusCmd = "status";
 
 // Check if an IPv4 address belongs to one of the non-routable blocks
 static bool isPrivateAddr(const String& host)
@@ -988,15 +1018,24 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
 	return copyAuthParams(params,m);
     // if the URI included some parameters retry after stripping them off
     int sc = uri.find(';');
-    if (sc < 0)
-	return false;
-    buildAuth(username,realm,m.retValue(),nonce,method,uri.substr(0,sc),res);
-    return (res == response) && copyAuthParams(params,m);
+    bool ok = false;
+    if (sc >= 0) {
+	buildAuth(username,realm,m.retValue(),nonce,method,uri.substr(0,sc),res);
+	ok = (res == response) && copyAuthParams(params,m);
+    }
+
+    if (!ok && !response.null()) {
+	DDebug(&plugin,DebugNote,"Failed authentication for username='%s'",username.c_str());
+	m_ep->incFailedAuths();
+	plugin.changed();
+    }
+    return ok;
 }
 
 YateSIPEndPoint::YateSIPEndPoint(Thread::Priority prio)
     : Thread("YSIP EndPoint",prio),
-      m_sock(0), m_engine(0)
+      m_sock(0), m_engine(0),
+      m_failedAuths(0),m_timedOutTrs(0), m_timedOutByes(0)
 {
     Debug(&plugin,DebugAll,"YateSIPEndPoint::YateSIPEndPoint(%s) [%p]",
 	Thread::priority(prio),this);
@@ -1215,10 +1254,25 @@ void YateSIPEndPoint::run()
 	    evCount = 0;
 	// hack: use a loop so we can use break and continue
 	for (; e; m_engine->processEvent(e),e = 0) {
-	    if (!e->getTransaction())
+	    SIPTransaction* t = e->getTransaction();
+	    if (!t)
 		continue;
 	    plugin.lock();
-	    GenObject* obj = static_cast<GenObject*>(e->getTransaction()->getUserData());
+
+	    if (t->isOutgoing() && t->getResponseCode() == 408) {
+	    	if (t->getMethod() == "BYE") {
+		    DDebug(&plugin,DebugInfo,"BYE for transaction %p has timed out",t);
+		    m_timedOutByes++;
+		    plugin.changed();
+		}
+		if (e->getState() == SIPTransaction::Cleared && e->getUserData()) {
+		    DDebug(&plugin,DebugInfo,"Transaction %p has timed out",t);
+		    m_timedOutTrs++;
+		    plugin.changed();
+		}
+	    }
+
+	    GenObject* obj = static_cast<GenObject*>(t->getUserData());
 	    RefPointer<YateSIPConnection> conn = YOBJECT(YateSIPConnection,obj);
 	    YateSIPLine* line = YOBJECT(YateSIPLine,obj);
 	    YateSIPGenerate* gen = YOBJECT(YateSIPGenerate,obj);
@@ -4117,6 +4171,13 @@ bool SIPDriver::received(Message& msg, int id)
 	channels().clear();
 	s_lines.clear();
     }
+    else if (id == Status) {
+	String target = msg.getValue("module");
+	if (target && target.startsWith(name()) && !target.startsWith(prefix())) {
+	    msgStatus(msg);
+	    return true;
+	}
+    }
     return Driver::received(msg,id);
 }
 
@@ -4206,9 +4267,56 @@ void SIPDriver::initialize()
 	installRelay(Progress);
 	installRelay(Update);
 	installRelay(Route);
+	installRelay(Status);
 	Engine::install(new UserHandler);
 	if (s_cfg.getBoolValue("general","generate"))
 	    Engine::install(new SipHandler);
+    }
+}
+
+void SIPDriver::genUpdate(Message& msg)
+{
+    DDebug(this,DebugInfo,"fill module.update message");
+    Lock l(this);
+    if (m_endpoint) {
+	msg.setParam("failed_auths",String(m_endpoint->failedAuths()));
+	msg.setParam("transaction_timeouts",String(m_endpoint->timedOutTrs()));
+	msg.setParam("bye_timeouts",String(m_endpoint->timedOutByes()));
+    }
+}
+
+bool SIPDriver::commandComplete(Message& msg, const String& partLine, const String& partWord)
+{
+    String cmd = s_statusCmd;
+    cmd << " " << name();
+    if (partLine == cmd)
+	itemComplete(msg.retValue(),"accounts",partWord);
+    else 
+    	return Driver::commandComplete(msg,partLine,partWord);
+    return false;
+}
+
+void SIPDriver::msgStatus(Message& msg)
+{
+    String str = msg.getValue("module");
+    while (str.startSkip(name())) {
+	str.trimBlanks();
+	if (str.null())
+	    Module::msgStatus(msg);
+	else if (str.startSkip("accounts")) {
+	    msg.retValue().clear();
+	    msg.retValue() << "module=" << name();
+	    msg.retValue() << ",format=Protocol|Status";
+	    String accounts = "";
+	    for (ObjList* o = s_lines.skipNull(); o; o = o->skipNext()) {
+		YateSIPLine* line = static_cast<YateSIPLine*>(o->get());
+		accounts.append(line->getUserName(),",") << "=SIP|";
+		accounts << (line->valid() ? "online" : "offline");
+	    }
+	    msg.retValue().append(accounts,";"); 
+	    msg.retValue() << "\r\n";
+	    return;
+	}
     }
 }
 

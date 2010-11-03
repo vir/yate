@@ -53,6 +53,7 @@ class MySqlConn;
 class MyAcct;
 
 static ObjList s_conns;
+static unsigned int s_failedConns;
 Mutex s_acctMutex(false,"MySQL::accts");
 
 /**
@@ -110,6 +111,23 @@ public:
 
     void appendQuery(DbQuery* query);
 
+    void incTotal();
+    void incFailed();
+    void incErrorred();
+    void incQueryTime(u_int64_t with);
+    void lostConn();
+    void resetConn();
+    inline unsigned int total()
+	{ return m_totalQueries; }
+    inline unsigned int failed()
+	{ return m_failedQueries; }
+    inline unsigned int errorred()
+	{ return m_errorQueries; }
+    inline bool hasConn()
+	{ return ((int)(m_poolSize - m_failedConns) > 0 ? true : false); }
+    inline unsigned int queryTime()
+        { return (unsigned int) m_queryTime; } //microseconds
+
 private:
     unsigned int m_timeout;
 
@@ -128,6 +146,14 @@ private:
 
     Semaphore m_queueSem;
     Mutex m_queueMutex;
+
+    // stats counters
+    unsigned int m_totalQueries;
+    unsigned int m_failedQueries;
+    unsigned int m_errorQueries;
+    u_int64_t m_queryTime;
+    unsigned int m_failedConns;
+    Mutex m_incMutex;
 };
 
 /**
@@ -168,9 +194,12 @@ class MyModule : public Module
 public:
     MyModule();
     ~MyModule();
+    void statusModule(String& str);
 protected:
     virtual void initialize();
     virtual void statusParams(String& str);
+    virtual void statusDetail(String& str);
+    virtual void genUpdate(Message& msg);
 private:
     bool m_init;
 };
@@ -229,7 +258,7 @@ void MyConn::closeConn()
     MYSQL* tmp = m_conn;
     m_conn = 0;
     mysql_close(tmp);
-    if(m_owner)
+    if (m_owner)
 	m_owner->m_connections.remove(this);
     Debug(&module,DebugInfo,"Database connection '%s' closed",c_str());
 }
@@ -244,6 +273,7 @@ void MyConn::runQueries()
 	DbQuery* query = static_cast<DbQuery*>(m_owner->m_queryQueue.remove(false));
 	if (!query)
 	    continue;
+	m_owner->incTotal();
 	mylock.drop();
 
 	DDebug(&module,DebugAll,"Connection '%s' will try to execute '%s'",
@@ -268,11 +298,19 @@ bool MyConn::testDb()
 //  return number of rows, -1 for error
 int MyConn::queryDbInternal(DbQuery* query)
 {
-    if (!testDb())
+    if (!testDb()) {
+ 	m_owner->lostConn();
+ 	m_owner->incFailed();
 	return -1;
+    }
+    m_owner->resetConn();
+    u_int64_t start = Time::now();
 
     if (mysql_real_query(m_conn,query->safe(),query->length())) {
 	Debug(&module,DebugWarn,"Query for '%s' failed: %s",c_str(),mysql_error(m_conn));
+	u_int64_t duration = Time::now() - start;
+	m_owner->incQueryTime(duration);
+	m_owner->incErrorred();
 	return -1;
     }
 
@@ -332,6 +370,9 @@ int MyConn::queryDbInternal(DbQuery* query)
 	}
     } while (!mysql_next_result(m_conn));
 
+    u_int64_t finish = Time::now();
+    m_owner->incQueryTime(finish - start);
+
     if (query->m_msg) {
 	query->m_msg->setParam("affected",String(affected));
 	if (warns)
@@ -347,7 +388,10 @@ MyAcct::MyAcct(const NamedList* sect)
     : String(*sect),
       Mutex(true,"MySQL::acct"),
       m_queueSem(MAX_CONNECTIONS,"MySQL::queue"),
-      m_queueMutex(false,"MySQL::queue")
+      m_queueMutex(false,"MySQL::queue"),
+      m_totalQueries(0), m_failedQueries(0), m_errorQueries(0),
+      m_queryTime(0), m_failedConns(0),
+      m_incMutex(false,"MySQL::inc")
 {
     int tout = sect->getIntValue("timeout",10000);
     // round to seconds
@@ -487,6 +531,60 @@ void MyAcct::dropDb()
     s_libMutex.unlock();
 }
 
+void MyAcct::incTotal()
+{
+    XDebug(&module,DebugAll,"MyAcct::incTotal() [%p] - currently there have been %d queries",this,m_totalQueries);
+    m_incMutex.lock();
+    m_totalQueries++;
+    m_incMutex.unlock();
+    module.changed();
+}
+
+void MyAcct::incFailed()
+{
+    XDebug(&module,DebugAll,"MyAcct::incfailed() [%p] - currently there have been %d failed queries",this,m_failedQueries);
+    m_incMutex.lock();
+    m_failedQueries++;
+    m_incMutex.unlock();
+    module.changed();
+}
+
+void MyAcct::incErrorred()
+{
+    XDebug(&module,DebugAll,"MyAcct::incErrorred() [%p] - currently there have been %d errorred queries",this,m_errorQueries);
+    m_incMutex.lock();
+    m_errorQueries++;
+    m_incMutex.unlock();
+    module.changed();
+}
+
+void MyAcct::incQueryTime(u_int64_t with)
+{
+    XDebug(&module,DebugAll,"MyAcct::incQueryTime(with=" FMT64 ") [%p]",with,this);
+    m_incMutex.lock();
+    m_queryTime += with;
+    m_incMutex.unlock();
+    module.changed();
+}
+
+void MyAcct::lostConn()
+{
+    DDebug(&module,DebugAll,"MyAcct::lostConn() [%p]",this);
+    m_incMutex.lock();
+    if (m_failedConns < (unsigned int) m_poolSize)
+	m_failedConns++;
+    m_incMutex.unlock();
+    module.changed();
+}
+
+void MyAcct::resetConn()
+{
+    DDebug(&module,DebugAll,"MyAcct::hasConn() [%p]",this);
+    m_incMutex.lock();
+    m_failedConns = 0;
+    m_incMutex.unlock();
+}
+
 void MyAcct::appendQuery(DbQuery* query)
 {
     DDebug(&module, DebugAll, "Account '%s' received a new query %p",c_str(),query);
@@ -574,11 +672,31 @@ MyModule::~MyModule()
 {
     Output("Unloading module MySQL");
     s_conns.clear();
+    s_failedConns = 0;
+}
+
+void MyModule::statusModule(String& str)
+{
+    Module::statusModule(str);
+    str.append("format=Total|Failed|Errors|AvgExecTime",",");
 }
 
 void MyModule::statusParams(String& str)
 {
     str.append("conns=",",") << s_conns.count();
+    str.append("failed=",",") << s_failedConns;
+}
+
+void MyModule::statusDetail(String& str)
+{
+    for (unsigned int i = 0; i < s_conns.count(); i++) {
+	MyAcct* acc = static_cast<MyAcct*>(s_conns[i]);
+	str.append(acc->c_str(),",") << "=" << acc->total() << "|" << acc->failed() << "|" << acc->errorred() << "|";
+	if (acc->total() - acc->failed() > 0)
+	    str << (acc->queryTime() / (acc->total() - acc->failed()) / 1000); //miliseconds
+        else
+	    str << "0";
+    }
 }
 
 void MyModule::initialize()
@@ -589,6 +707,7 @@ void MyModule::initialize()
     if (m_init)
 	Engine::install(new MyHandler(cfg.getIntValue("general","priority",100)));
     m_init = false;
+    s_failedConns = 0;
     for (unsigned int i = 0; i < cfg.sections(); i++) {
 	NamedList* sec = cfg.getSection(i);
 	if (!sec || (*sec == "general"))
@@ -604,9 +723,34 @@ void MyModule::initialize()
 
 	conn = new MyAcct(sec);
 	s_conns.insert(conn);
-	if (!conn->initDb())
+	if (!conn->initDb()) {
 	    s_conns.remove(conn);
+	    s_failedConns++;
+	}
     }
+}
+
+void MyModule::genUpdate(Message& msg)
+{
+    Lock lock(this);
+    unsigned int index = 0;
+    String db = "database.";
+    String total = "total.";
+    String failed = "failed.";
+    String error = "errorred.";
+    String conn = "hasconn.";
+    String time = "querytime.";
+    for (ObjList* o = s_conns.skipNull(); o; o = o->next()) {
+	MyAcct* acc = static_cast<MyAcct*>(o->get());
+	msg.setParam(db << index,acc->toString());
+	msg.setParam(total << index,String(acc->total()));
+	msg.setParam(failed << index,String(acc->failed()));
+	msg.setParam(error << index,String(acc->errorred()));
+	msg.setParam(conn << index,String::boolText(acc->hasConn()));
+	msg.setParam(time << index,String(acc->queryTime()));
+	index++;
+    }
+    msg.setParam("count",String(index));
 }
 
 }; // anonymous namespace

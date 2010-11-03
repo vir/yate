@@ -555,6 +555,7 @@ private:
     bool m_sendReadOnly;                 // Print send attempt on readonly interface error
     int m_notify;                        // Notify receiver on channel non idle (0: success. 1: not notified. 2: notified)
     SignallingTimer m_timerRxUnder;      // RX underrun notification
+    bool m_down;			 // Interface status
 };
 
 // Signalling span used to create voice circuits
@@ -775,6 +776,32 @@ static inline bool getBoolValue(const char* param, const NamedList& config,
     return params.getBoolValue(param,defVal);
 }
 
+static void sendModuleUpdate(const String& notif, const String& device, bool& notifStat, int status = 0)
+{
+    Message* msg = new Message("module.update");
+    msg->addParam("module",plugin.name());
+    msg->addParam("interface",device);
+    msg->addParam("notify",notif);
+    if(notifStat && status == SignallingInterface::LinkUp) {
+	notifStat = false;
+	Engine::enqueue(msg);
+	return;
+    }
+    if (!notifStat && status == SignallingInterface::LinkDown) {
+	notifStat = true;
+	Engine::enqueue(msg);
+	return;
+    }
+    if (notif == "alarm") {
+	if (status == ZapDevice::Yellow)
+	    msg->addParam("notify","RAI");
+	if (status == ZapDevice::Blue)
+	    msg->addParam("notify","AIS");
+	Engine::enqueue(msg);
+	return;
+    }
+    TelEngine::destruct(msg);
+}
 
 /**
  * ZapWorkerClient
@@ -1363,8 +1390,13 @@ bool ZapDevice::checkAlarms()
     m_alarmsText = "";
     if (m_alarms) {
 	for(int i = 0; s_alarms[i].token; i++)
-	    if (m_alarms & s_alarms[i].value)
+	    if (m_alarms & s_alarms[i].value) {
 		m_alarmsText.append(s_alarms[i].token,",");
+		if (s_alarms[i].value == ZapDevice::Yellow || s_alarms[i].value == ZapDevice::Blue) {
+		    bool notifStat = false;
+		    sendModuleUpdate("alarm",zapName(),notifStat,s_alarms[i].value);
+		}
+	    }
 	Debug(m_owner,DebugNote,"%sAlarms changed (%d,'%s') on channel %u [%p]",
 	    m_name.safe(),m_alarms,m_alarmsText.safe(),m_channel,m_owner);
     }
@@ -1788,6 +1820,7 @@ bool ZapInterface::init(ZapDevice::Type type, unsigned int code, unsigned int ch
 	s << " priority=" << Thread::priority(m_priority);
 	Debug(this,DebugInfo,"D-channel: %s [%p]",s.c_str(),this);
     }
+    m_down = false;
     return true;
 }
 
@@ -1941,11 +1974,13 @@ void ZapInterface::checkEvents()
 		Debug(this,DebugNote,"Alarms changed '%s' [%p]",
 		    m_device.alarmsText().safe(),this);
 		notify(LinkDown);
+		sendModuleUpdate("interfaceDown",m_device.zapName(),m_down,LinkDown);
 	    }
 	    else {
 		m_device.resetAlarms();
 		DDebug(this,DebugInfo,"No more alarms [%p]",this);
 		notify(LinkUp);
+		sendModuleUpdate("interfaceUp",m_device.zapName(),m_down,LinkUp);
 	    }
 	    return;
 	case ZapDevice::HdlcAbort:

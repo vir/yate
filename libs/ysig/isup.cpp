@@ -3693,7 +3693,15 @@ void SS7ISUP::notify(SS7Layer3* link, int sls)
     if (!link)
 	return;
     Lock mylock(this);
-    m_l3LinkUp = link->operational(-1);
+    // Ignore links not routing our remote point code
+    if ((unsigned int)-1 == link->getRoutePriority(m_type,m_remotePoint->pack(m_type)))
+	return;
+    bool linkTmp = m_l3LinkUp;
+    // Link is not operational
+    if (link->operational())
+	m_l3LinkUp = true;
+    else
+	m_l3LinkUp = false;
     // Reset remote user part's availability state if supported
     // Force UPT re-send
     if (m_uptTimer.interval() && !m_l3LinkUp) {
@@ -3705,6 +3713,13 @@ void SS7ISUP::notify(SS7Layer3* link, int sls)
 	link,link->toString().safe(),
 	(m_l3LinkUp ? "" : "not "),sls,
 	(m_userPartAvail ? "" : "un"));
+    if (linkTmp != m_l3LinkUp) {
+	NamedList params("");
+	params.addParam("type","trunk");
+	params.addParam("operational",String::boolText(m_l3LinkUp));
+	params.addParam("from",link->toString());
+	engine()->notify(this,params);
+    }
 }
 
 SS7MSU* SS7ISUP::buildMSU(SS7MsgISUP::Type type, unsigned char sio,

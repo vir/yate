@@ -105,6 +105,19 @@ public:
      */
     virtual void getStats(String& stats) const;
 
+    /**
+     * Increase the counter for number of RTP packets received from a wrong source
+     */
+    virtual inline void incWrongSrc()
+	{  }
+
+    /**
+     * Get the number of RTP packets that were received from a wrong source
+     * @return Number of RTP packets received from a wrong source
+     */
+    inline unsigned int wrongSrc()
+	{ return m_wrongSrc; }
+
 protected:
     /**
      * Set a new RTP group for this processor
@@ -117,6 +130,8 @@ protected:
      * @param when Time to use as base in all computing
      */
     virtual void timerTick(const Time& when) = 0;
+
+    unsigned int m_wrongSrc;
 
 private:
     RTPGroup* m_group;
@@ -578,7 +593,8 @@ public:
     inline RTPReceiver(RTPSession* session = 0)
 	: RTPBaseIO(session),
 	  m_ioLostPkt(0), m_dejitter(0),
-	  m_seqSync(0), m_seqCount(0), m_warn(true)
+	  m_seqSync(0), m_seqCount(0), m_warn(true),
+	  m_seqLost(0), m_wrongSSRC(0), m_syncLost(0)
 	{ }
 
     /**
@@ -662,6 +678,12 @@ public:
     */
     virtual void rtpNewSSRC(u_int32_t newSsrc, bool marker);
 
+    /**
+     * Retrieve the statistical data from this receiver in a NamedList. Reset all the data.
+     * @param NamedList to populate with the values for different counters
+     */
+    virtual void stats(NamedList& stat) const;
+
 protected:
     /**
      * Method called periodically to finish lingering events
@@ -706,6 +728,9 @@ private:
     u_int16_t m_seqSync;
     u_int16_t m_seqCount;
     bool m_warn;
+    unsigned int m_seqLost;
+    unsigned int m_wrongSSRC;
+    unsigned int m_syncLost;
 };
 
 /**
@@ -785,6 +810,12 @@ public:
      * @return True if the new chunk size is valid
      */
     bool padding(int chunk);
+
+    /**
+     * Retrieve the statistical data from this receiver in a NamedList. Reset all the data.
+     * @param NamedList to populate with the values for different counters
+     */
+    virtual void stats(NamedList& stat) const;
 
 protected:
     /**
@@ -1218,6 +1249,17 @@ public:
      * @param interval Average interval between reports in msec, zero to disable
      */
     void setReports(int interval);
+
+    /**
+     * Put the collected statistical data 
+     * @param stats NamedList to populate with the data
+     */
+    virtual void getStats(NamedList& stats) const;
+
+    /**
+     * Increase the counter for number of RTP packets received from a wrong source
+     */
+    virtual void incWrongSrc();
 
 protected:
     /**

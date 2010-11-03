@@ -2570,7 +2570,15 @@ bool ISDNQ931::sendMessage(ISDNQ931Message* msg, u_int8_t tei, String* reason)
 void ISDNQ931::multipleFrameEstablished(u_int8_t tei, bool confirmation, bool timeout, ISDNLayer2* layer2)
 {
     l3Mutex().lock();
+    bool q921Tmp = m_q921Up;
     m_q921Up = true;
+    if (m_q921Up != q921Tmp) {
+	NamedList p("");
+	p.addParam("type","isdn-q921");
+	p.addParam("operational",String::boolText(m_q921Up));
+	p.addParam("from",m_q921->toString());
+	engine()->notify(this,p);
+    }
     DDebug(this,DebugNote,"'Established' %s TEI %u",
 	confirmation ? "confirmation" :"indication",tei);
     endReceiveSegment("Data link is up");
@@ -2590,7 +2598,15 @@ void ISDNQ931::multipleFrameEstablished(u_int8_t tei, bool confirmation, bool ti
 void ISDNQ931::multipleFrameReleased(u_int8_t tei, bool confirmation, bool timeout, ISDNLayer2* layer2)
 {
     Lock lockLayer(l3Mutex());
+    bool q921Tmp = m_q921Up;
     m_q921Up = false;
+    if (m_q921Up != q921Tmp) {
+	NamedList p("");
+	p.addParam("type","isdn-q921");
+	p.addParam("operational",String::boolText(m_q921Up));
+	p.addParam("from",m_q921->toString());
+	engine()->notify(this,p);
+    }
     DDebug(this,DebugNote,"'Released' %s TEI %u. Timeout: %s",
 	confirmation ? "confirmation" :"indication",tei,String::boolText(timeout));
     endReceiveSegment("Data link is down");

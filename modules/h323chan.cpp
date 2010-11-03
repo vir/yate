@@ -275,12 +275,16 @@ public:
     virtual void statusParams(String& str);
     void cleanup();
     YateH323EndPoint* findEndpoint(const String& ep) const;
+    bool commandComplete(Message& msg, const String& partLine, const String& partWord);
+    void msgStatus(Message& msg);
 private:
     ObjList m_endpoints;
 };
 
 H323Process* s_process = 0;
 static H323Driver hplugin;
+
+static String s_statusCmd = "status";
 
 class YateGatekeeperCall : public H323GatekeeperCall
 {
@@ -2340,6 +2344,12 @@ H323Driver::~H323Driver()
 
 bool H323Driver::received(Message &msg, int id)
 {
+    if (id == Status) {
+	String target = msg.getValue("module");
+	if (target && target.startsWith(name()) && !target.startsWith(prefix()))
+	    msgStatus(msg);
+	return false;
+    }
     bool ok = Driver::received(msg,id);
     if (id == Halt)
         cleanup();
@@ -2442,6 +2452,7 @@ void H323Driver::initialize()
 	s_process = new H323Process;
 	installRelay(Progress);
 	installRelay(Route);
+	installRelay(Status);
 	Engine::install(new UserHandler);
     }
     int dbg = s_cfg.getIntValue("general","debug");
@@ -2467,6 +2478,41 @@ void H323Driver::initialize()
 	    }
 	}
     }
+}
+
+bool H323Driver::commandComplete(Message& msg, const String& partLine, const String& partWord)
+{
+    String cmd = s_statusCmd;
+    cmd << " " << name();
+    if (partLine == cmd)
+	itemComplete(msg.retValue(),"accounts",partWord);
+    else 
+    	return Driver::commandComplete(msg,partLine,partWord);
+    return false;
+}
+
+void H323Driver::msgStatus(Message& msg)
+{
+    String str = msg.getValue("module");
+    while (str.startSkip(name())) {
+	str.trimBlanks();
+	if (str.null())
+	    break;
+	if (str.startSkip("accounts")) {
+	    msg.retValue().clear();
+	    msg.retValue() << "module=" << name();
+	    msg.retValue() << ",format=Protocol|Status";
+	    for (ObjList* o = m_endpoints.skipNull(); o; o = o->skipNext()) {
+		YateH323EndPoint* ep = static_cast<YateH323EndPoint*>(o->get());
+		str.append(ep->c_str(),",") << "=H323|";
+		str << (ep->IsRegisteredWithGatekeeper() ? "registered" : "not-registered");
+	    }
+	    msg.retValue().append(str,";"); 
+    	    msg.retValue() << "\r\n";
+	    return;
+	}
+    }
+    Driver::msgStatus(msg);
 }
 
 }; // anonymous namespace

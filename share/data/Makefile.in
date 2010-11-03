@@ -1,17 +1,18 @@
 # Makefile
-# This file holds the make rules for Yate sound files
+# This file holds the make rules for miscellaneous Yate data files
 
 # override DESTDIR at install time to prefix the install directory
 DESTDIR :=
 
-SOUNDS := ring.wav tone.wav
+DATA := snmp_mib.conf \
+	NULL-TEAM-MIB.txt YATE-MIB.txt
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 datarootdir = @datarootdir@
 datadir = @datadir@
 shrdir = $(datadir)/yate
-snddir = $(shrdir)/sounds
+datdir = $(shrdir)/data
 
 # include optional local make rules
 -include YateLocal.mak
@@ -21,17 +22,17 @@ all:
 
 .PHONY: install
 install:
-	@cd @srcdir@ && mkdir -p "$(DESTDIR)$(snddir)/" && \
-	test -z "$(SOUNDS)" || \
-	install -m 0644 $(SOUNDS) "$(DESTDIR)$(snddir)/"
+	@cd @srcdir@ && mkdir -p "$(DESTDIR)$(datdir)/" && \
+	test -z "$(DATA)" || \
+	install -m 0644 $(DATA) "$(DESTDIR)$(datdir)/"
 
 .PHONY: uninstall
 uninstall:
-	@-for i in $(SOUNDS) ; do \
-	    rm "$(DESTDIR)$(snddir)/$$i" ; \
+	@-for i in $(DATA) ; do \
+	    rm "$(DESTDIR)$(datdir)/$$i" ; \
 	done;
-	@-rmdir "$(DESTDIR)$(snddir)"
-	@-rmdir "$(DESTDIR)$(shrdir)"
+	@-rmdir "$(DESTDIR)$(datdir)"
+	@-rmdir "$(DESTDIR)$(datdir)"
 
 Makefile: @srcdir@/Makefile.in ../../config.status
 	cd ../.. && ./config.status

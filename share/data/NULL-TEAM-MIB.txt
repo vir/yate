@@ -1,0 +1,24 @@
+NULL-TEAM-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+	enterprises, MODULE-IDENTITY
+		FROM SNMPv2-SMI;
+
+null-team MODULE-IDENTITY
+	  LAST-UPDATED	"200910201200Z"
+	  ORGANIZATION	"S.C. Null Team Impex S.R.L."
+	  CONTACT-INFO
+		"Diana Cionoiu
+		  phone:	+40726088939
+		  office:	+40316201400
+		  Email: office@null.ro"
+
+	DESCRIPTION
+		"Null Team's private-enterprise MIB."
+	REVISION	"200910201200Z"
+	DESCRIPTION
+		"Initial revision."
+
+	::= { enterprises 34501 }
+
+END

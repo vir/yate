@@ -182,6 +182,12 @@ public:
     inline bool hasLine(const String& line)
 	{ Lock lock(this); return findLine(line) != 0; }
 
+    /**
+     * Get a copy of the lines list
+     */
+    inline ObjList* lines()
+	{ Lock lock(this); return m_lines.skipNull();}
+
 protected:
     bool updateLine(YIAXLine* line, Message &msg);
     bool addLine(Message &msg);
@@ -384,6 +390,9 @@ public:
     bool userAuth(IAXTransaction* tr, bool response, bool& requestAuth,
 	bool& invalidAuth);
 
+    bool commandComplete(Message& msg, const String& partLine, const String& partWord);
+    void msgStatus(Message& msg);
+
 protected:
     YIAXEngine* m_iaxEngine;
     u_int32_t m_defaultCodec;
@@ -528,6 +537,7 @@ static YIAXLineContainer s_lines;	// Lines
 static Thread::Priority s_priority = Thread::Normal;  // Threads priority
 static YIAXDriver iplugin;		// Init the driver
 
+static String s_statusCmd = "status";
 
 /*
  * Class definitions
@@ -1151,6 +1161,7 @@ void YIAXDriver::initialize()
     installRelay(Halt);
     installRelay(Route);
     installRelay(Progress);
+    installRelay(Status);
     Engine::install(new YIAXRegDataHandler);
     // Init IAX engine
     u_int16_t transListCount = 64;
@@ -1261,6 +1272,12 @@ bool YIAXDriver::received(Message& msg, int id)
 	    channels().clear();
 	    s_lines.clear();
 	}
+    else
+	if (id == Status) {
+	    String target = msg.getValue("module");
+	    if (target && target.startsWith(name()) && !target.startsWith(prefix()))
+		msgStatus(msg);
+	}
     return Driver::received(msg,id);
 }
 
@@ -1341,6 +1358,41 @@ bool YIAXDriver::userAuth(IAXTransaction* tr, bool response, bool& requestAuth,
 	}
     }
     return true;
+}
+
+bool YIAXDriver::commandComplete(Message& msg, const String& partLine, const String& partWord)
+{
+    String cmd = s_statusCmd;
+    cmd << " " << name();
+    if (partLine == cmd)
+	itemComplete(msg.retValue(),"accounts",partWord);
+    else 
+    	return Driver::commandComplete(msg,partLine,partWord);
+    return false;
+}
+
+void YIAXDriver::msgStatus(Message& msg)
+{
+    String str = msg.getValue("module");
+    while (str.startSkip(name())) {
+	str.trimBlanks();
+	if (str.null())
+	    break;
+	if (str.startSkip("accounts")) {
+	    msg.retValue().clear();
+	    msg.retValue() << "module=" << name();
+	    msg.retValue() << ",format=Protocol|Status";
+	    for (ObjList* o = s_lines.lines(); o; o = o->skipNext()) {
+		YIAXLine* line = static_cast<YIAXLine*>(o->get());
+		str.append(line->username(),",") << "=IAX|";
+		str << (line-> registered() ? "online" : "offline");
+	    }
+	    msg.retValue().append(str,";"); 
+	    msg.retValue() << "\r\n";
+	    return;
+	}
+    }
+    Driver::msgStatus(msg);
 }
 
 /**

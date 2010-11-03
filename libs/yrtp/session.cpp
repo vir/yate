@@ -184,6 +184,7 @@ void RTPReceiver::rtpData(const void* data, int len)
 		Debug(DebugWarn,"RTP Received SSRC %08X but expecting %08X [%p]",
 		    ss,m_ssrc,this);
 	    }
+	    m_wrongSSRC++;
 	    return;
 	}
 	// SSRC accepted, sync sequence and resync the timestamp offset
@@ -196,6 +197,8 @@ void RTPReceiver::rtpData(const void* data, int len)
 
     // substraction with overflow
     int16_t ds = seq - m_seq;
+    if (ds != 1)
+	m_seqLost++;
     // check if we received duplicate or delayed packet
     // be much more tolerant when authenticating as we cannot resync
     if ((ds <= 0) || ((ds > SEQ_DESYNC_COUNT) && !secPtr)) {
@@ -212,6 +215,7 @@ void RTPReceiver::rtpData(const void* data, int len)
 			m_ts = ts - m_tsLast;
 			m_seqCount = 0;
 			m_warn = true;
+			m_syncLost++;
 			// drop this packet, next packet will come in correctly
 			return;
 		    }
@@ -377,6 +381,15 @@ bool RTPReceiver::rtpCheckIntegrity(const unsigned char* data, int len, const vo
 	: true;
 }
 
+void RTPReceiver::stats(NamedList& stat) const
+{
+    if (m_session)
+	stat.setParam("remoteip",m_session->UDPSession::transport()->remoteAddr().host());
+    stat.setParam("lostpkts",String(m_ioLostPkt));
+    stat.setParam("synclost",String(m_syncLost));
+    stat.setParam("wrongssrc",String(m_wrongSSRC));
+    stat.setParam("seqslost",String(m_seqLost));
+}
 
 RTPSender::RTPSender(RTPSession* session, bool randomTs)
     : RTPBaseIO(session), m_evTime(0), m_padding(0)
@@ -551,6 +564,9 @@ void RTPSender::rtpAddIntegrity(const unsigned char* data, int len, unsigned cha
 	m_secure->rtpAddIntegrity(data,len,authData);
 }
 
+void RTPSender::stats(NamedList& stat) const
+{
+}
 
 UDPSession::UDPSession()
     : m_transport(0), m_timeoutTime(0), m_timeoutInterval(0)
@@ -872,6 +888,15 @@ void RTPSession::setReports(int interval)
     m_reportTime = 0;
 }
 
+void RTPSession::getStats(NamedList& stats) const
+{
+    if (m_send)
+	m_send->stats(stats);
+    if (m_recv)
+	m_recv->stats(stats);
+    stats.setParam("wrongsrc",String(m_wrongSrc));
+}
+
 static void store32(unsigned char* buf, unsigned int& len, u_int32_t val)
 {
     buf[len++] = (unsigned char)(val >> 24);
@@ -945,6 +970,11 @@ void RTPSession::sendRtcpBye()
     static_cast<RTPProcessor*>(m_transport)->rtcpData(buf,8);
 }
 
+void RTPSession::incWrongSrc() 
+{
+    Debug(DebugAll,"RTPSession::incWrongSrc() [%p]",this);
+    m_wrongSrc++;
+}
 
 UDPTLSession::UDPTLSession(u_int16_t maxLen, u_int8_t maxSec)
     : m_rxSeq(0xffff), m_txSeq(0xffff),

@@ -41,10 +41,26 @@ class YMGCPEngine : public MGCPEngine
 {
 public:
     inline YMGCPEngine(const NamedList* params)
-	: MGCPEngine(false,0,params)
+	: MGCPEngine(false,0,params), m_timedOutTrans(0), m_timedOutDels(0)
 	{ }
     virtual ~YMGCPEngine();
     virtual bool processEvent(MGCPTransaction* trans, MGCPMessage* msg, void* data);
+    virtual void timeout(MGCPTransaction* trans);
+    inline unsigned int trTimeouts()
+    {
+	unsigned int tmp = m_timedOutTrans;
+	m_timedOutTrans = 0;
+	return tmp;
+    }
+    inline unsigned int delTimeouts()
+    {
+	unsigned int tmp = m_timedOutDels;
+	m_timedOutDels = 0;
+	return tmp;
+    }
+private:
+    unsigned int m_timedOutTrans;
+    unsigned int m_timedOutDels;
 };
 
 class MGCPWrapper : public DataEndpoint
@@ -270,8 +286,11 @@ public:
     virtual void statusDetail(String& str);
     inline SDPParser& parser()
 	{ return m_parser; }
+    virtual void genUpdate(Message& msg);
+    virtual void appendNotif(NamedString* notif);
 private:
     SDPParser m_parser;
+    NamedList m_notifs;
 };
 
 YSIGFACTORY2(MGCPSpan);
@@ -488,6 +507,24 @@ bool YMGCPEngine::processEvent(MGCPTransaction* trans, MGCPMessage* msg, void* d
     return false;
 }
 
+void YMGCPEngine::timeout(MGCPTransaction* tr)
+{
+    DDebug(&splugin,DebugInfo,"Handle timed out transaction [%p]",tr);
+    if (!tr)
+	return;
+    if (tr->timeout()) {
+	const MGCPMessage* cmd = tr->initial();
+	if (!cmd || !cmd->isCommand())
+	    return;
+	if (cmd->name() != "DLCX")
+	    m_timedOutTrans++;
+	else
+	    m_timedOutDels++;
+	MGCPEndpointId epId(tr->ep());
+	splugin.appendNotif(new NamedString("mgcp_gw_down",epId.host()));
+	splugin.changed();
+    }
+}
 
 MGCPWrapper::MGCPWrapper(CallEndpoint* conn, const char* media, Message& msg, const char* epId)
     : DataEndpoint(conn,media),
@@ -1830,7 +1867,8 @@ bool DTMFHandler::received(Message& msg)
 
 MGCPPlugin::MGCPPlugin()
     : Module("mgcpca","misc",true),
-      m_parser("mgcpca","PSTN Circuit")
+      m_parser("mgcpca","PSTN Circuit"),
+      m_notifs("notifs")
 {
     Output("Loaded module MGCP-CA");
     m_parser.debugChain(this);
@@ -1942,6 +1980,21 @@ void MGCPPlugin::initialize()
 	}
     }
     m_parser.initialize(cfg.getSection("codecs"),cfg.getSection("hacks"));
+}
+
+void MGCPPlugin::genUpdate(Message& msg)
+{
+    Lock l(this);
+    msg.copyParams(m_notifs);
+    msg.setParam("tr_timedout",String(s_engine->trTimeouts()));
+    msg.setParam("del_timedout",String(s_engine->delTimeouts()));
+    m_notifs.clearParams();
+}
+
+void MGCPPlugin::appendNotif(NamedString* notif)
+{
+    Lock l(this);
+    m_notifs.addParam(notif);
 }
 
 }; // anonymous namespace

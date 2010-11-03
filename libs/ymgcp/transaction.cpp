@@ -394,6 +394,8 @@ MGCPEvent* MGCPTransaction::checkTimeout(u_int64_t time)
     }
 
     m_timeout = (state() == Initiated || state() == Trying);
+    if (m_timeout)
+	engine()->timeout(this);
     return terminate();
 }
 

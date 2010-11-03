@@ -2151,6 +2151,13 @@ public:
     JBClientStream* create(const String& account, const NamedList& params,
 	const String& name = String::empty());
 
+    /**
+     * Retrieve the list of streams of a given type
+     * @param list The destination list to set
+     * @param type Stream type
+     */
+    virtual void getStreamList(RefPointer<JBStreamSetList>& list, int type);
+
 protected:
     /**
      * Add a stream to one of the stream lists
@@ -2171,13 +2178,6 @@ protected:
      * @param waitTerminate True to wait for all streams to terminate
      */
     virtual void stopStreamSets(bool waitTerminate = true);
-
-    /**
-     * Retrieve the list of streams of a given type
-     * @param list The destination list to set
-     * @param type Stream type
-     */
-    virtual void getStreamList(RefPointer<JBStreamSetList>& list, int type);
 
     JBStreamSetList* m_receive;          // Streams receive list
     JBStreamSetList* m_process;          // Streams process list

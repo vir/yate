@@ -1,0 +1,86 @@
+[general]
+; general SNMP configuration
+
+; port on which the module listens for SNMP messages. Defaults to 161.
+;port=161
+
+;thread priority for SNMP message processing. Defaults to normal.
+;thread=normal
+
+[snmp_v2]
+; SNMPv2 configuration
+
+; read only access community string. Mandatory.
+ro_community=
+; read write access community string. Mandatory.
+rw_community=
+; read create access community string.
+rc_community=
+
+
+[snmp_v3]
+; SNMPv3 configuration
+
+; format for generating the snmpEngineID
+; values are
+;	1 		= IPv4 address format,
+;	2		= IPv6 address format,
+;	3		= MAC address format,
+;	4		= TEXT format,
+;	5		= OCTETS format,
+;	128 		= ENTERPRISE specific format
+; Defaults to 4 (TEXT)
+;engine_format=4
+
+; information for generating the snmpEngineID. Must correspond to the format set (i.e. if engine_format=1, engine_info must be a IPv4 address)
+; NOTE! IPv6 address must not use the IPv6 short format. Mandatory.
+; NOTE! OCTETS format must be a hexified string
+engine_info=
+
+[traps]
+; SNMP traps configuration
+
+;enable or disable all_notifications. Defaults to true.
+;enable_traps=true
+
+; list traps to disable. Must be separated by ','.
+; An entire substree of traps can be disabled by ending the name of the trap with ".*"
+; (e.g. disable the whole database status traps by adding database.*) 
+disable_traps=
+
+; IP address to which the traps are sent. Defaults to localhost.
+;remote_ip=localhost
+
+; port for the remote IP. Defaults to 162.
+;remote_port=162
+
+;SNMP protocol version to use for sending traps (values are SNMPv2c or SNMPv3). Defaults to SNMPv2c.
+;proto_version=SNMPv2c
+
+; if SNMPv2 is used, set the community string used for the remote SNMP entity. Mandatory if SNMPv2c traps are used.
+community=
+
+; if SNMPv3 is used, specify which configured user should be used for sending traps (there must be a section named like the given value to trap_user)
+; see the example bellow (section [userV3]) for configuring a SNMPv3 user
+; the specified user will not allowed to interrogate this SNMP agent, it will only be used to send traps to the configured traps receiver
+;trap_user=
+
+;[userV3]
+; Configure a section for a SNMPv3 user. The name of the user is the name of the section.
+; To allow SNMPv3 interrogation, at least one SNMPv3 user must be configured 
+
+; authentication pass phrase. If it is not set, authentication will not be required
+;auth_password=
+
+; authentication method ( MD5 | SHA1 ) in case it is used.
+;auth_protocol=MD5
+
+; privacy pass phrase. If it is not set, encryption will not be required
+;priv_password=
+
+; privacy encryption method ( DES | AES). Default is DES.
+;priv_protocol=DES
+
+; user access level. Mandatory. Acceptable values are: readonly, readwrite, readcreate.
+;access=
+

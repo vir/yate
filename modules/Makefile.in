@@ -62,6 +62,8 @@ PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 	server/callcounters.yate \
 	server/dbwave.yate \
 	server/yradius.yate \
+	server/ysnmpagent.yate \
+	server/monitoring.yate \
 	server/sipfeatures.yate \
 	server/heartbeat.yate server/clustering.yate \
 	server/mgcpgw.yate server/mgcpca.yate \
@@ -72,6 +74,7 @@ PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 	server/analogdetect.yate \
 	client/jabberclient.yate \
 	callgen.yate analyzer.yate rmanager.yate msgsniff.yate
+
 LIBS :=
 DIRS := client server jabber qt4
 
@@ -346,6 +349,10 @@ server/sipfeatures.yate: LOCALLIBS = -L../libs/yxml -lyatexml
 zlibcompress.yate: LOCALFLAGS = $(ZLIB_INC)
 zlibcompress.yate: LOCALLIBS = $(ZLIB_LIB)
 
+server/ysnmpagent.yate: ../libs/yasn/libyasn.a ../libs/ysnmp/libysnmp.a
+server/ysnmpagent.yate: LOCALFLAGS = -I@top_srcdir@/libs/yasn -I@top_srcdir@/libs/ysnmp
+server/ysnmpagent.yate: LOCALLIBS = -L../libs/yasn -lyasn -L../libs/ysnmp -lysnmp
+
 ../libyatesig.so ../libs/ysig/libyatesig.a:
 	$(MAKE) -C ../libs/ysig
 
@@ -378,3 +385,9 @@ zlibcompress.yate: LOCALLIBS = $(ZLIB_LIB)
 
 ../libs/ypbx/libyatepbx.a:
 	$(MAKE) -C ../libs/ypbx
+
+../libs/yasn/libyasn.a:
+	$(MAKE) -C ../libs/yasn
+
+../libs/ysnmp/libysnmp.a:
+	$(MAKE) -C ../libs/ysnmp

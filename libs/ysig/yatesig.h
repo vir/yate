@@ -362,7 +362,7 @@ public:
     /**
      * Destructor.
      */
-    inline ~SignallingNotifier()
+    virtual inline ~SignallingNotifier()
 	{ cleanup(); }
     /**
      * Handle the received notifications

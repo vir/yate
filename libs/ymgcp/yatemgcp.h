@@ -868,7 +868,7 @@ public:
      * @param cmd The command name to check
      * @return True if the given command is known by this engine
      */
-    inline bool knownCommand(const char* cmd)
+    inline bool knownCommand(const String& cmd)
 	{ Lock lock(this); return (m_knownCommands.find(cmd) != 0); }
 
     /**

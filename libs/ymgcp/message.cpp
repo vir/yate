@@ -52,7 +52,7 @@ MGCPMessage::MGCPMessage(MGCPEngine* engine, const char* name, const char* ep, c
     m_endpoint(ep),
     m_version(ver)
 {
-    if (!(engine && (engine->allowUnkCmd() || engine->knownCommand(name)))) {
+    if (!(engine && (engine->allowUnkCmd() || engine->knownCommand(m_name)))) {
 	Debug(engine,DebugNote,"MGCPMessage. Unknown cmd=%s [%p]",name,this);
 	return;
     }

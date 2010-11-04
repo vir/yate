@@ -137,7 +137,7 @@ public:
 	};
 	int m_choiceType;
 	int32_t m_integer_value;
-	static const int32_t s_integer_valueMinSize = -0x80000000;
+	static const int32_t s_integer_valueMinSize = 0x80000000;
 	static const int32_t s_integer_valueMaxSize = 0x7fffffff;
 
 	static const u_int16_t s_string_valueSizeMinSize = 0x0;

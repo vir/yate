@@ -974,7 +974,7 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 	    continue;
 	SS7Layer2* link = *p;
 	// if we are desperate use even inhibited (but checked) links
-	bool inh = (mgmt && (sls == -2)) ? link->inhibited(SS7Layer2::Unchecked) : link->inhibited();
+	bool inh = (mgmt && (sls == -2)) ? link->inhibited(SS7Layer2::Unchecked) : (link->inhibited() != 0);
 	if (link->operational() && !inh && link->transmitMSU(msu)) {
 	    sls = link->sls();
 	    DDebug(this,DebugAll,"Sent MSU over link '%s' %p with SLS=%d%s [%p]",

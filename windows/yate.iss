@@ -111,6 +111,8 @@ Source: "Release\server\queues.yate"; DestDir: "{app}\modules\server"; Flags: re
 Source: "Release\server\queuesnotify.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
 Source: "Release\server\lateroute.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
 Source: "Release\server\sipfeatures.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
+Source: "Release\server\monitoring.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
+Source: "Release\server\ysnmpagent.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
 
 Source: "Release\server\heartbeat.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\cluster
 Source: "Release\server\clustering.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\cluster
@@ -170,6 +172,9 @@ Source: "..\share\skins\default\message.ui"; DestDir: "{app}\share\skins\default
 Source: "..\share\skins\default\*.png"; DestDir: "{app}\share\skins\default"; Components: client
 
 Source: "..\conf.d\yate-qt4.conf.default"; DestName: "yate-qt4.conf"; DestDir: "{app}\conf.d"; Components: client\qt; Flags: skipifsourcedoesntexist
+
+Source: "..\share\data\*.txt"; DestDir: "{app}\share\data"; Components: server
+Source: "..\share\data\*.conf"; DestDir: "{app}\share\data"; Components: server
 
 Source: "..\share\scripts\*.php"; DestDir: "{app}\share\scripts"; Components: external\php
 

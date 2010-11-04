@@ -390,7 +390,7 @@ public:
     // get the salt used for security. Change it's value with each call.
     inline u_int32_t getEngineSalt()
     {
-	u_int32_t tmp = m_salt++;
+	u_int32_t tmp = (u_int32_t)(m_salt++);
 	m_salt = (m_salt == SALT_MAX_VAL ? 0 : m_salt);
 	return tmp;
     }
@@ -630,7 +630,7 @@ static DataBlock toNetworkOrder(u_int64_t val, unsigned int size)
     DataBlock res;
     for (unsigned int i = 0; i < size; i++) {
 	DataBlock aux;
-	u_int8_t auxInt = val >> (8 * i);
+	u_int8_t auxInt = (u_int8_t)(val >> (8 * i));
 	aux.append(&auxInt,1);
 	res.insert(aux);
     }
@@ -1007,7 +1007,7 @@ int SnmpV3MsgContainer::validate(Snmp::SNMPv3Message& msg)
     // if the privacy flag is set, decrypt the message
     if (m_privFlag) {
 	res = decrypt(msg);
-	if (res != SnmpAgent::SUCCESS);
+	if (res != SnmpAgent::SUCCESS)
 	    return res;
     }
     Debug(&__plugin,DebugAll,"SnmpV3MsgContainer::validate() [%p] - message %p validated",this,&msg);

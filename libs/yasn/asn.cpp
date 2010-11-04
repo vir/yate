@@ -126,8 +126,10 @@ int ASNLib::decodeBoolean(DataBlock& data, bool* val, bool tagCheck)
     if ((data[0] & 0xFF) != 0)
 	*val = true;
     data.cut(-1);
-    DDebug(s_libName.c_str(),DebugAll,"::decodeBoolean() - decoded boolean value from data='%p', consumed %u bytes",
-    		&data, initLen - data.length());
+#ifdef DEBUG
+    Debug(s_libName.c_str(),DebugAll,"::decodeBoolean() - decoded boolean value from data='%p', consumed %u bytes",
+    	&data, initLen - data.length());
+#endif
     return length;
 }
 
@@ -171,8 +173,10 @@ int ASNLib::decodeInteger(DataBlock& data, u_int64_t& intVal, unsigned int bytes
     }
     intVal = value;
     data.cut(-length);
-    DDebug(s_libName.c_str(),DebugAll,"::decodeInteger() - decoded integer value from  data='%p', consumed %u bytes",
-    		&data, initLen - data.length());
+#ifdef DEBUG
+    Debug(s_libName.c_str(),DebugAll,"::decodeInteger() - decoded integer value from  data='%p', consumed %u bytes",
+    	&data, initLen - data.length());
+#endif
     return length;
 }
 
@@ -334,8 +338,10 @@ int ASNLib::decodeBitString(DataBlock& data, String* val, bool tagCheck)
     }
     *val = val->substr(0, length * 8 - unused);
     data.cut(-length);
-    DDebug(s_libName.c_str(),DebugAll,"::decodeBitString() - decoded bit string value from  data='%p', consumed %u bytes",
-    		&data, initLen - data.length());
+#ifdef DEBUG
+    Debug(s_libName.c_str(),DebugAll,"::decodeBitString() - decoded bit string value from  data='%p', consumed %u bytes",
+    	&data, initLen - data.length());
+#endif
     return length;
 }
 
@@ -373,8 +379,10 @@ int ASNLib::decodeOctetString(DataBlock& db, OctetString* strVal, bool tagCheck)
     }
     strVal->assign((void*)db.data(0,length),length);
     db.cut(-length);
-    DDebug(s_libName.c_str(),DebugAll,"::decodeOctetString() - decoded octet string value from  data='%p', consumed %u bytes",
-    		&db, initLen - db.length());
+#ifdef DEBUG
+    Debug(s_libName.c_str(),DebugAll,"::decodeOctetString() - decoded octet string value from  data='%p', consumed %u bytes",
+    	&db, initLen - db.length());
+#endif
     return length;
 }
 
@@ -467,8 +475,10 @@ int ASNLib::decodeOID(DataBlock& data, ASNObjId* obj, bool tagCheck)
         return InvalidContentsError;
     }
     *obj = oid;
-    DDebug(s_libName.c_str(),DebugAll,"::decodeOID() - decoded object ID from  data='%p', consumed %u bytes",
-    		&data, initLen - data.length());
+#ifdef DEBUG
+    Debug(s_libName.c_str(),DebugAll,"::decodeOID() - decoded object ID from  data='%p', consumed %u bytes",
+    	&data, initLen - data.length());
+#endif
     return length;
 }
 
@@ -540,8 +550,10 @@ int ASNLib::decodeString(DataBlock& data, String* str, int* type, bool tagCheck)
         return InvalidContentsError;
     }
     *str = var;
-    DDebug(s_libName.c_str(),DebugInfo,"::decodeString() - decode string value from data='%p', consumed %u bytes",
-    		&data,initLen - data.length());
+#ifdef DEBUG
+    Debug(s_libName.c_str(),DebugInfo,"::decodeString() - decode string value from data='%p', consumed %u bytes",
+    	&data,initLen - data.length());
+#endif
     return length;
 }
 
@@ -583,7 +595,9 @@ int ASNLib::decodeUtf8(DataBlock& data, String* str, bool tagCheck)
         return InvalidContentsError;
     }
     *str = var;
-    DDebug(s_libName.c_str(),DebugAll,"::decodeUtf8() - decoded an UTF8 string value from data='%p', consumed %u bytes",&data,initLen - data.length());
+#ifdef DEBUG
+    Debug(s_libName.c_str(),DebugAll,"::decodeUtf8() - decoded an UTF8 string value from data='%p', consumed %u bytes",&data,initLen - data.length());
+#endif
     return length;
 }
 
@@ -677,7 +691,9 @@ int ASNLib::decodeGenTime(DataBlock& data, unsigned int* time, unsigned int* fra
     if (epochTime == (unsigned int) -1)
 	return InvalidContentsError;
     *time = epochTime + timeDiff;
-    DDebug(s_libName.c_str(),DebugAll,"::decodeGenTime() - decoded time value from data='%p', consumed %u bytes",&data,initLen - data.length());
+#ifdef DEBUG
+    Debug(s_libName.c_str(),DebugAll,"::decodeGenTime() - decoded time value from data='%p', consumed %u bytes",&data,initLen - data.length());
+#endif
     return length;
 }
 
@@ -758,7 +774,9 @@ int ASNLib::decodeUTCTime(DataBlock& data, unsigned int* time, bool tagCheck)
     if (epochTime == (unsigned int) -1)
 	return InvalidContentsError;
     *time = epochTime + timeDiff;
-    DDebug(s_libName.c_str(),DebugAll,"::decodeUTCTime() - decoded time value from data='%p', consumed %u bytes",&data,initLen - data.length());
+#ifdef DEBUG
+    Debug(s_libName.c_str(),DebugAll,"::decodeUTCTime() - decoded time value from data='%p', consumed %u bytes",&data,initLen - data.length());
+#endif
     return length;
 }
 
@@ -791,7 +809,9 @@ int ASNLib::decodeSequence(DataBlock& data, bool tagCheck)
     int length = decodeLength(data);
     if (length < 0)
 	Debug(s_libName.c_str(),DebugAll,"::decodeSequence() - Invalid Length in data='%p'",&data);
-    DDebug(s_libName.c_str(),DebugAll,"::decodeSequence() - decoded sequence tags from data='%p', consumed %u bytes",&data,initLen - data.length());
+#ifdef DEBUG
+    Debug(s_libName.c_str(),DebugAll,"::decodeSequence() - decoded sequence tags from data='%p', consumed %u bytes",&data,initLen - data.length());
+#endif
     return length;
 }
 
@@ -811,9 +831,12 @@ int ASNLib::decodeSet(DataBlock& data, bool tagCheck)
 	data.cut(-1);
     }
     int length = decodeLength(data);
+#ifdef DEBUG
     if (length < 0)
-	DDebug(s_libName.c_str(),DebugAll,"::decodeSet() - Invalid Length in data='%p'",&data);
-    DDebug(s_libName.c_str(),DebugAll,"::decodeSet() - decoded set tags from data='%p', consumed %u bytes",&data,initLen - data.length());
+	Debug(s_libName.c_str(),DebugAll,"::decodeSet() - Invalid Length in data='%p'",&data);
+    else
+	Debug(s_libName.c_str(),DebugAll,"::decodeSet() - decoded set tags from data='%p', consumed %u bytes",&data,initLen - data.length());
+#endif
     return length;
 }
 
@@ -845,18 +868,18 @@ DataBlock ASNLib::encodeInteger(u_int64_t intVal, bool tagCheck)
 
     // 9 consecutive ones or zeros are not allowed at the beginning of an integer
     int size = sizeof(u_int64_t);
-    uint16_t msb = intVal >> ((size - 1) * 8 - 1);
+    uint16_t msb = (uint16_t)(intVal >> ((size - 1) * 8 - 1));
 
     while (((msb & 0x1FF) == 0 || (msb & 0x1FF) == 0xFF) && (size - 1 >= 1)) {
 	size--;
-	msb = intVal >> ((size - 1) * 8 - 1);
+	msb = (uint16_t)(intVal >> ((size - 1) * 8 - 1));
     }
     if (size == 0)
 	return data;
 
     DataBlock contents;
     while(size) {
-	uint8_t byte = intVal >> ((size - 1) * 8);
+	uint8_t byte = (uint8_t)(intVal >> ((size - 1) * 8));
 	contents.append(&byte, 1);
 	size--;
     }

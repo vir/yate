@@ -662,8 +662,11 @@ bool IAXTransaction::abortReg()
     if (!(type() == RegReq || type() == RegRel) ||
 	state() == Terminating || state() == Terminated)
 	return false;
+    lock();
     m_userdata = 0;
-    sendReject();
+    m_outFrames.clear();
+    unlock();
+    sendReject("Aborted");
     return true;
 }
 

@@ -680,7 +680,7 @@ public:
 
     /**
      * Retrieve the statistical data from this receiver in a NamedList. Reset all the data.
-     * @param NamedList to populate with the values for different counters
+     * @param stat NamedList to populate with the values for different counters
      */
     virtual void stats(NamedList& stat) const;
 
@@ -813,7 +813,7 @@ public:
 
     /**
      * Retrieve the statistical data from this receiver in a NamedList. Reset all the data.
-     * @param NamedList to populate with the values for different counters
+     * @param stat NamedList to populate with the values for different counters
      */
     virtual void stats(NamedList& stat) const;
 

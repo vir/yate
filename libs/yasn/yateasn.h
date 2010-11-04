@@ -61,7 +61,7 @@ class ASNError;
  * Helper class for operations with octet strings. Helps with conversions from String to/from DataBlock
  * @short Helper class for operations with octet strings
  */
-class OctetString : public DataBlock
+class YASN_API OctetString : public DataBlock
 {
 public:
     /**
@@ -90,7 +90,7 @@ public:
      * @return Hexified string
      */
     inline const String toHexString() const
-    { 
+    {
 	String str;
 	str = str.hexify(data(),length());
 	return str;
@@ -100,7 +100,7 @@ public:
      * @return The DataBlock built from the given hexified string
      */
     inline DataBlock& fromHexString(const String& value)
-    { 
+    {
 	unHexify(value,value.length());
 	return *this;
     }

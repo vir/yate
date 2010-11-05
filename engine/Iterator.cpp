@@ -25,9 +25,38 @@
 using namespace TelEngine;
 
 ListIterator::ListIterator(ObjList& list, int offset)
-    : m_objList(&list), m_hashList(0),
-      m_objects(0), m_length(0), m_current(0)
+    : m_objects(0)
 {
+    assign(list,offset);
+}
+
+ListIterator::ListIterator(HashList& list, int offset)
+    : m_objects(0)
+{
+    assign(list,offset);
+}
+
+ListIterator::~ListIterator()
+{
+    m_length = 0;
+    delete[] m_objects;
+}
+
+void ListIterator::clear()
+{
+    m_length = 0;
+    m_current = 0;
+    m_objList = 0;
+    m_hashList = 0;
+    GenObject** tmp = m_objects;
+    m_objects = 0;
+    delete[] tmp;
+}
+
+void ListIterator::assign(ObjList& list, int offset)
+{
+    clear();
+    m_objList = &list;
     m_length = list.count();
     if (!m_length)
 	return;
@@ -43,10 +72,10 @@ ListIterator::ListIterator(ObjList& list, int offset)
 	m_objects[((i++) + offset) % m_length] = 0;
 }
 
-ListIterator::ListIterator(HashList& list, int offset)
-    : m_objList(0), m_hashList(&list),
-      m_objects(0), m_length(0), m_current(0)
+void ListIterator::assign(HashList& list, int offset)
 {
+    clear();
+    m_hashList = &list;
     m_length = list.count();
     if (!m_length)
 	return;
@@ -65,12 +94,6 @@ ListIterator::ListIterator(HashList& list, int offset)
     }
     while (i < m_length)
 	m_objects[((i++) + offset) % m_length] = 0;
-}
-
-ListIterator::~ListIterator()
-{
-    m_length = 0;
-    delete[] m_objects;
 }
 
 GenObject* ListIterator::get(unsigned int index) const

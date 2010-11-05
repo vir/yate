@@ -2508,6 +2508,25 @@ public:
 	{ return m_length; }
 
     /**
+     * Clear the iterator, disconnect from any list
+     */
+    void clear();
+
+    /**
+     * Assign an ObjList to the iterator, build a frozen image of the list
+     * @param list List to get the objects from
+     * @param offset First list element to iterate, will wrap around
+     */
+    void assign(ObjList& list, int offset = 0);
+
+    /**
+     * Assign a HashList to the iterator, build a frozen image of the list
+     * @param list List to get the objects from
+     * @param offset First list element to iterate, will wrap around
+     */
+    void assign(HashList& list, int offset = 0);
+
+    /**
      * Get an arbitrary element in the iterator's list image.
      * Items that were removed from list or are not alive are not returned.
      * @param index Position to get the item from

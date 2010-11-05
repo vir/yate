@@ -1072,6 +1072,11 @@ protected:
      */
     ObjList m_transactions;
 
+    /**
+     * The transaction list iterator used to get events
+     */
+    ListIterator m_iterator;
+
 private:
     // Append a private thread to the list
     void appendThread(MGCPPrivateThread* thread);

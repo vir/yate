@@ -102,6 +102,7 @@ void MGCPPrivateThread::run()
  */
 MGCPEngine::MGCPEngine(bool gateway, const char* name, const NamedList* params)
     : Mutex(true,"MGCPEngine"),
+    m_iterator(m_transactions),
     m_gateway(gateway),
     m_initialized(false),
     m_nextId(1),
@@ -481,14 +482,15 @@ void MGCPEngine::runProcess()
 MGCPEvent* MGCPEngine::getEvent(u_int64_t time)
 {
     lock();
-    ListIterator iter(m_transactions);
     while (true) {
 	if (Thread::check(false))
 	    break;
-	MGCPTransaction* tr = static_cast<MGCPTransaction*>(iter.get());
+	MGCPTransaction* tr = static_cast<MGCPTransaction*>(m_iterator.get());
         // End of iteration? NO: get a reference to the transaction
-	if (!tr)
+	if (!tr) {
+	    m_iterator.assign(m_transactions);
 	    break;
+	}
 	RefPointer<MGCPTransaction> sref = tr;
 	if (!sref)
 	    continue;

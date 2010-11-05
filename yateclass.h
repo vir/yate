@@ -5772,6 +5772,12 @@ public:
     SOCKET acceptHandle(struct sockaddr* addr = 0, socklen_t* addrlen = 0);
 
     /**
+     * Check if select() is efficient on this platform and worth using frequently
+     * @return True if select() is efficiently implemented
+     */
+    static bool efficientSelect();
+
+    /**
      * Check if a socket handle can be used in select
      * @param handle The socket handle to check
      * @return True if the socket handle can be safely used in select

@@ -335,6 +335,11 @@ bool MGCPEngine::receive(unsigned char* buffer, SocketAddr& addr)
 {
     if (!m_socket.valid())
 	return false;
+    if (Socket::efficientSelect() && m_socket.canSelect()) {
+	bool canRead = false;
+	if (m_socket.select(&canRead,0,0,Thread::idleUsec()) && !canRead)
+	    return false;
+    }
     int len = maxRecvPacket();
     int rd = m_socket.recvFrom(buffer,len,addr);
     if (rd == Socket::socketError()) {

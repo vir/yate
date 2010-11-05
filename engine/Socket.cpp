@@ -1503,6 +1503,15 @@ int Socket::readData(void* buffer, int length)
 #endif
 }
 
+bool Socket::efficientSelect()
+{
+#if defined(_WINDOWS) || defined(HAVE_POLL)
+    return true;
+#else
+    return false;
+#endif
+}
+
 bool Socket::canSelect(SOCKET handle)
 {
     if (handle == invalidHandle())

@@ -35,6 +35,13 @@
 
 #include <string.h>
 
+#ifdef HAVE_POLL
+#include <poll.h>
+#ifndef POLLRDHUP
+#define POLLRDHUP 0
+#endif
+#endif
+
 #undef HAS_AF_UNIX
 
 #ifndef _WINDOWS
@@ -1502,8 +1509,10 @@ bool Socket::canSelect(SOCKET handle)
 	return false;
 #ifdef FD_SETSIZE
 #ifndef _WINDOWS
+#ifndef HAVE_POLL
     if (handle >= (SOCKET)FD_SETSIZE)
 	return false;
+#endif
 #endif
 #endif
     return true;
@@ -1514,6 +1523,33 @@ bool Socket::select(bool* readok, bool* writeok, bool* except, struct timeval* t
     SOCKET tmp = m_handle;
     if (!valid())
 	return false;
+
+#ifdef HAVE_POLL
+    struct pollfd fds;
+    fds.fd = tmp;
+    fds.events = 0;
+    fds.revents = 0;
+    if (readok)
+	fds.events |= POLLIN;
+    if (writeok)
+	fds.events |= POLLOUT;
+    if (except)
+	fds.events |= POLLRDHUP;
+    int tout = -1;
+    if (timeout)
+	tout = (timeout->tv_sec * 1000) + (timeout->tv_usec / 1000);
+    if (checkError(::poll(&fds,1,tout),true)) {
+	if (readok)
+	    *readok = (fds.revents & POLLIN) != 0;
+	if (writeok)
+	    *writeok = (fds.revents & POLLOUT) != 0;
+	if (except)
+	    *except = (fds.revents & (POLLRDHUP|POLLERR|POLLHUP|POLLNVAL)) != 0;
+	return true;
+    }
+
+#else // HAVE_POLL
+
 #ifdef FD_SETSIZE
 #ifndef _WINDOWS
     static bool localFail = true;
@@ -1555,6 +1591,8 @@ bool Socket::select(bool* readok, bool* writeok, bool* except, struct timeval* t
 	    *except = (FD_ISSET(tmp,efds) != 0);
 	return true;
     }
+#endif // HAVE_POLL
+
     if (tmp != m_handle) {
 	if (except)
 	    *except = true;

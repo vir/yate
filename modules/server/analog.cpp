@@ -3159,7 +3159,7 @@ void AnalogWorkerThread::run()
 	AnalogLineEvent* event = m_client->getEvent(t);
 	if (!event) {
 	    m_client->checkTimers(t);
-	    Thread::yield(true);
+	    Thread::idle(true);
 	    continue;
 	}
 	ModuleLine* line = static_cast<ModuleLine*>(event->line());

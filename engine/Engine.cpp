@@ -1490,6 +1490,7 @@ static void usage(bool client, FILE* f)
 "   -D[options]    Special debugging options\n"
 "     a            Abort if bugs are encountered\n"
 "     m            Attempt to debug mutex deadlocks\n"
+"     d            Disable locking debugging and safety features\n"
 #ifdef RTLD_GLOBAL
 "     l            Try to keep module symbols local\n"
 #endif
@@ -1744,6 +1745,9 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 					    lockWait = 10000000;
 					Lockable::wait(lockWait);
 				    }
+				    break;
+				case 'd':
+				    Lockable::disableSafety();
 				    break;
 #ifdef RTLD_GLOBAL
 				case 'l':

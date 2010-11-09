@@ -4259,6 +4259,13 @@ public:
      *  before creating any threads and without holding any object locked.
      */
     static void startUsingNow();
+
+    /**
+     * Disable some safety and sanity check features.
+     * This provides a performance improvement but makes the code less safe and
+     *  more difficult to debug locking issues.
+     */
+    static void disableSafety();
 };
 
 /**

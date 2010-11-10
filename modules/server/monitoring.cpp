@@ -2672,17 +2672,17 @@ void CallRouteQoS::updateQoS()
     int realASR, totalASR;
     if ((m_totalCalls[CURRENT_IDX] != m_totalCalls[PREVIOUS_IDX]) && (m_totalCalls[CURRENT_IDX] >= m_minCalls)) {
 
-	realASR = (double) m_answeredCalls[CURRENT_IDX]  / m_totalCalls[CURRENT_IDX]  * 100;
+	realASR = (int) (m_answeredCalls[CURRENT_IDX] * 100.0 / m_totalCalls[CURRENT_IDX]);
 	checkForAlarm(realASR,m_alarms,m_minASR,m_maxASR,LOW_ASR,HIGH_ASR);
 	m_totalCalls[PREVIOUS_IDX] = m_totalCalls[CURRENT_IDX];
 
-	totalASR = (double) m_answeredCalls[TOTAL_IDX]  / m_totalCalls[TOTAL_IDX]  * 100;
+	totalASR = (int) (m_answeredCalls[TOTAL_IDX] * 100.0 / m_totalCalls[TOTAL_IDX]);
 	checkForAlarm(totalASR,m_overallAlarms,m_minASR,m_maxASR,LOW_ASR,HIGH_ASR);
 
-	int ner = (double) (m_answeredCalls[CURRENT_IDX] + m_delivCalls[CURRENT_IDX]) / m_totalCalls[CURRENT_IDX]  * 100;
+	int ner = (int) ((m_answeredCalls[CURRENT_IDX] + m_delivCalls[CURRENT_IDX]) * 100.0 / m_totalCalls[CURRENT_IDX]);
 	checkForAlarm(ner,m_alarms,m_minNER,-1,LOW_NER);
 
-	ner = (double) (m_answeredCalls[TOTAL_IDX] + m_delivCalls[TOTAL_IDX]) / m_totalCalls[TOTAL_IDX]  * 100;
+	ner = (int) ((m_answeredCalls[TOTAL_IDX] + m_delivCalls[TOTAL_IDX]) * 100.0 / m_totalCalls[TOTAL_IDX]);
 	checkForAlarm(ner,m_overallAlarms,m_minNER,-1,LOW_NER);
     }
 }
@@ -2824,7 +2824,7 @@ bool CallRouteQoS::get(int query, String& result)
 	switch (query) {
 	    case ASR:
 		if (m_totalCalls[CURRENT_IDX]) {
-		    val = (double) m_answeredCalls[CURRENT_IDX]  / m_totalCalls[CURRENT_IDX]  * 100;
+		    val = (int) (m_answeredCalls[CURRENT_IDX] * 100.0 / m_totalCalls[CURRENT_IDX]);
 		    result = String( val);
 		}
 		else
@@ -2832,7 +2832,7 @@ bool CallRouteQoS::get(int query, String& result)
 		return true;
 	    case NER:
 	    	if (m_totalCalls[CURRENT_IDX]) {
-	    	    val = (double) (m_answeredCalls[CURRENT_IDX] + m_delivCalls[CURRENT_IDX]) / m_totalCalls[CURRENT_IDX]  * 100;
+	    	    val = (int) ((m_answeredCalls[CURRENT_IDX] + m_delivCalls[CURRENT_IDX]) * 100.0 / m_totalCalls[CURRENT_IDX]);
 		    result = String(val);
 		}
 		else
@@ -2840,7 +2840,7 @@ bool CallRouteQoS::get(int query, String& result)
 		return true;
 	    case ASR_ALL:
 		if (m_totalCalls[TOTAL_IDX]) {
-		    val = (double) m_answeredCalls[TOTAL_IDX]  / m_totalCalls[TOTAL_IDX]  * 100;
+		    val = (int) (m_answeredCalls[TOTAL_IDX] * 100.0 / m_totalCalls[TOTAL_IDX]);
 		    result = String(val);
 		}
 		else
@@ -2848,7 +2848,7 @@ bool CallRouteQoS::get(int query, String& result)
 		return true;
 	    case NER_ALL:
 	    	if (m_totalCalls[TOTAL_IDX]) {
-	    	    val = (double) (m_answeredCalls[TOTAL_IDX] + m_delivCalls[TOTAL_IDX]) / m_totalCalls[TOTAL_IDX]  * 100;
+	    	    val = (int) ((m_answeredCalls[TOTAL_IDX] + m_delivCalls[TOTAL_IDX]) * 100.0 / m_totalCalls[TOTAL_IDX]);
 	    	    result = String(val);
 	    	}
 		else

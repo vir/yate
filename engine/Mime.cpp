@@ -490,7 +490,7 @@ String* MimeBody::getUnfoldedLine(const char*& buf, int& len)
 		}
 		// Skip over any continuation characters at start of next line
 		goOut = true;
-		while ((l > 0) && isContinuationBlank(b[0])) {
+		while ((l > 0) && *res && isContinuationBlank(b[0])) {
 		    ++b;
 		    --l;
 		    goOut = false;

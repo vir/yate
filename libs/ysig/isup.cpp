@@ -1713,6 +1713,8 @@ static unsigned char encodeParam(const SS7ISUP* isup, SS7MSU& msu,
     const IsupParam* param, const NamedList* params, ObjList& exclude,
     const String& prefix, unsigned char* buf = 0)
 {
+    DDebug(isup,DebugAll,"encodeParam (mand) (%p,%p,%p,%p) type=0x%02x, size=%u, name='%s'",
+	&msu,param,params,buf,param->type,param->size,param->name);
     // variable length must not receive fixed buffer
     if (buf && !param->size)
 	return 0;
@@ -1729,6 +1731,8 @@ static unsigned char encodeParam(const SS7ISUP* isup, SS7MSU& msu,
     const IsupParam* param, const NamedString* val,
     const NamedList* extra, const String& prefix)
 {
+    DDebug(isup,DebugAll,"encodeParam (opt) (%p,%p,%p,%p) type=0x%02x, size=%u, name='%s'",
+	&msu,param,val,extra,param->type,param->size,param->name);
     // add the parameter type now but remember the old length
     unsigned int len = msu.length();
     unsigned char tmp = param->type;
@@ -3832,7 +3836,11 @@ SS7MSU* SS7ISUP::buildMSU(SS7MsgISUP::Type type, unsigned char sio,
 	    NamedString* ns = params->getParam(i);
 	    if (!ns || exclude.find(ns))
 		continue;
-	    const IsupParam* param = getParamDesc(ns->name());
+	    if (prefix && !ns->name().startsWith(prefix))
+		continue;
+	    String tmp(ns->name());
+	    tmp >> prefix.c_str();
+	    const IsupParam* param = getParamDesc(tmp);
 	    if (!param)
 		continue;
 	    unsigned char size = encodeParam(this,*msu,param,ns,params,prefix);

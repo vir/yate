@@ -252,7 +252,6 @@ bool MutexPrivate::lock(long maxwait)
     }
     if (s_safety)
 	GlobalMutex::lock();
-    ref();
     Thread* thr = Thread::current();
     if (thr)
 	thr->m_locking = true;
@@ -317,8 +316,6 @@ bool MutexPrivate::lock(long maxwait)
 	else
 	    m_owner = 0;
     }
-    else
-	deref();
     if (s_safety)
 	GlobalMutex::unlock();
     if (warn && !rval)
@@ -359,7 +356,6 @@ bool MutexPrivate::unlock()
 #else
 	    ::pthread_mutex_unlock(&m_mutex);
 #endif
-	deref();
 	ok = true;
     }
     else
@@ -410,7 +406,6 @@ bool SemaphorePrivate::lock(long maxwait)
     }
     if (s_safety)
 	GlobalMutex::lock();
-    ref();
     Thread* thr = Thread::current();
     if (thr)
 	thr->m_locking = true;
@@ -472,7 +467,6 @@ bool SemaphorePrivate::lock(long maxwait)
     }
     if (thr)
 	thr->m_locking = false;
-    deref();
     if (s_safety)
 	GlobalMutex::unlock();
     if (warn && !rval)
@@ -483,10 +477,9 @@ bool SemaphorePrivate::lock(long maxwait)
 
 bool SemaphorePrivate::unlock()
 {
-    if (s_safety)
-	GlobalMutex::lock();
-    ref();
     if (!s_unsafe) {
+	if (s_safety)
+	    GlobalMutex::lock();
 #ifdef _WINDOWS
 	::ReleaseSemaphore(m_semaphore,1,NULL);
 #else
@@ -494,10 +487,9 @@ bool SemaphorePrivate::unlock()
 	if (!::sem_getvalue(&m_semaphore,&val) && (val < (int)m_maxcount))
 	    ::sem_post(&m_semaphore);
 #endif
+	if (s_safety)
+	    GlobalMutex::unlock();
     }
-    deref();
-    if (s_safety)
-	GlobalMutex::unlock();
     return true;
 }
 
@@ -543,6 +535,7 @@ unsigned long Lockable::wait()
 {
     return s_maxwait;
 }
+
 
 Mutex::Mutex(bool recursive, const char* name)
     : m_private(0)

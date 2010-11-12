@@ -210,6 +210,43 @@ public:
 	{ return lookup(code,s_errorString,defVal); }
 
     /**
+     * Check if the given character is blank
+     * @param c The character to verify
+     * @return True if c is blank
+     */
+    static inline bool blank(char c)
+	{ return (c == 0x20) || (c == 0x09) || (c == 0x0d) || (c == 0x0a); }
+
+    /**
+     * Verify if the given character is in the range allowed
+     * to be first character from a xml tag
+     * @param ch The character to check
+     * @return True if the character is in range
+     */
+    static bool checkFirstNameCharacter(unsigned char ch);
+
+    /**
+     * Check if the given character is in the range allowed for an xml char
+     * @param c The character to check
+     * @return True if the character is in range
+     */
+    static bool checkDataChar(unsigned char c);
+
+    /**
+     * Verify if the given character is in the range allowed for a xml name
+     * @param ch The character to check
+     * @return True if the character is in range
+     */
+    static bool checkNameCharacter(unsigned char ch);
+
+    /**
+     * Check if a given string is a valid xml tag name
+     * @param buf The string to check
+     * @return True if the string is a valid xml tag name
+     */
+    static bool validTag(const String& buf);
+
+    /**
      * XmlEscape the given text
      * @param buf Destination buffer
      * @param text The text to escape
@@ -306,14 +343,6 @@ protected:
     void unEscape(String& text);
 
     /**
-     * Check if the given character is blank
-     * @param c The character to verify
-     * @return True if c is blank
-     */
-    inline bool blank(char c)
-	{ return (c == 0x20) || (c == 0x09) || (c == 0x0d) || (c == 0x0a); }
-
-    /**
      * Remove blank characters from the begining of the buffer 
      */
     void skipBlanks();
@@ -349,28 +378,6 @@ protected:
      * @return The attribute value or 0
      */
     NamedString* getAttribute();
-
-    /**
-     * Verify if the given character is in the range allowed
-     * to be first character from a xml tag
-     * @param ch The character to check
-     * @return True if the character is in range
-     */
-    bool checkFirstNameCharacter(unsigned char ch);
-
-    /**
-     * Check if the given character is in the range allowed for an xml char
-     * @param c The character to check
-     * @return True if the character is in range
-     */
-    bool checkDataChar(unsigned char c);
-
-    /**
-     * Verify if the given character is in the range allowed for a xml name
-     * @param ch The character to check
-     * @return True if the character is in range
-     */
-    bool checkNameCharacter(unsigned char ch);
 
     /**
      * Callback method. Is called when a comment was successfully parsed.

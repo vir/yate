@@ -1003,6 +1003,17 @@ void XmlSaxParser::unEscape(String& text)
 	text = buf;
 }
 
+// Check if a given string is a valid xml tag name
+bool XmlSaxParser::validTag(const String& buf)
+{
+    if (!(buf && checkFirstNameCharacter(buf[0])))
+	return false;
+    for (unsigned int i = 1; i < buf.length(); i++)
+	if (!checkNameCharacter(buf[i]))
+	    return false;
+    return true;
+}
+
 // XmlEscape the given text
 void XmlSaxParser::escape(String& buf, const String& text)
 {

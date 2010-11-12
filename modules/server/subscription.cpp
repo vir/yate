@@ -888,7 +888,7 @@ void EventContact::notifyMwi(const Message& msg)
 {
     Message* m = __plugin.message("resource.notify");
     m->copyParams(*this);
-    if (msg == "mwi")
+    if (msg == "mwi" || msg == "mwi.query")
 	m->copyParams(msg);
     else {
 	m->addParam("message-summary.voicenew","0");

@@ -640,6 +640,7 @@ TempSource::TempSource(String& desc, DataBlock* rawdata)
     Debug(&__plugin,DebugAll,"TempSource::TempSource(\"%s\") [%p]",desc.c_str(),this);
     if (desc.null())
 	return;
+    m_name = desc;
     if (desc.startSkip("*",false))
 	m_repeat = 0;
     // Build a source used to send raw linear data
@@ -650,7 +651,6 @@ TempSource::TempSource(String& desc, DataBlock* rawdata)
 		desc.c_str(),m_rawdata?m_rawdata->length():0,this);
 	    return;
 	}
-	m_name = "rawdata";
 	m_tone = m_single = (Tone*)::malloc(2*sizeof(Tone));
 	m_single[0].nsamples = m_rawdata->length() / sizeof(short);
 	m_single[0].data = (short*)m_rawdata->data();

@@ -198,6 +198,7 @@ bool YSipSubscribeHandler::received(Message &msg)
 
     URI uriRequest(msg.getValue("sip_uri"));
     m.addParam("notifier",uriRequest.getUser());
+    m.addParam("notifier_domain",uriRequest.getHost(),false);
     // Pack data parameters
     String data;
     appendEsc(data,"host",msg.getValue("ip_host"));

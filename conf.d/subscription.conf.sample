@@ -7,9 +7,8 @@
 
 ; user_event_auth: string: Database query used to authenticate specific event
 ;  (other then presence) subscriptions e.g. SIP 'dialog' or 'message-summary'
-; The operation parameter is the event name
 ;user_event_auth=SELECT * FROM subscriptions WHERE notifier='${notifier}' AND \
-;subscriber='${subscriber}' AND operation='${operation}'
+;subscriber='${subscriber}' AND event='${event}'
 
 ; user_roster_load_all: string: Database query used to load all users' roster when starting
 ; If not set user rosters will be loaded when needed

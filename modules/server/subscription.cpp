@@ -469,7 +469,8 @@ public:
     // Handle 'resource.subscribe' messages with (un)subscribe operation
     bool handleResSubscribe(bool sub, const String& subscriber, const String& notifier,
 	Message& msg);
-    bool askDB(const String& subscriber, const String& notifier, const String& oper);
+    // Query database for event subscription authorization
+    bool askDB(const NamedList& params);
     // Retrieve an event notifier
     // Valid objects are returned with reference counter increased
     EventUser* getEventUser(bool create, const String& notifier, const String& oper);
@@ -1751,7 +1752,7 @@ bool SubscriptionModule::handleResSubscribe(const String& event, const String& s
 	event.c_str(),subscriber.c_str(),notifier.c_str(),oper.c_str());
     if (oper != "subscribe")
 	return removeEventUserContact(notifier,subscriber,event);
-    if (!askDB(notifier,subscriber,event)) {
+    if (!askDB(msg)) {
 	// Remove subscriber if no longer allowed
 	removeEventUserContact(notifier,subscriber,event);
 	return false;
@@ -1839,15 +1840,11 @@ bool SubscriptionModule::removeEventUserContact(const String& user, const String
     }
     return true;
 }
-    
-bool SubscriptionModule::askDB(const String& subscriber, const String& notifier,
-    const String& oper)
+
+// Query database for event subscription authorization
+bool SubscriptionModule::askDB(const NamedList& params)
 {
-    NamedList nl("");
-    nl.setParam("subscriber",subscriber);
-    nl.setParam("notifier",notifier);
-    nl.setParam("operation",oper);
-    Message* m = buildDb(m_account,m_userEventQuery,nl);
+    Message* m = buildDb(m_account,m_userEventQuery,params);
     if (!m)
 	return false;
     m = queryDb(m);

@@ -714,11 +714,42 @@ String& String::append(const char* value, const char* separator, bool force)
 
 String& String::append(const ObjList* list, const char* separator, bool force)
 {
-    for (; list; list = list->next()) {
-	const GenObject* obj = list->get();
-	if (obj)
-	    append(obj->toString().c_str(),separator,force);
+    if (!list)
+	return *this;
+    int olen = length();
+    int sepLen = 0;
+    if (!TelEngine::null(separator))
+	sepLen = ::strlen(separator);
+    int len = 0;
+    for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
+	const String& src = o->get()->toString();
+	if (sepLen && (len || olen) && (src.length() || force))
+	    len += sepLen;
+	len += src.length();
     }
+    if (!len)
+	return *this;
+    char* oldStr = m_string;
+    char* newStr = (char*)::malloc(olen + len + 1);
+    if (!newStr) {
+	Debug("String",DebugFail,"malloc(%d) returned NULL!",olen + len + 1);
+	return *this;
+    }
+    if (m_string)
+	::memcpy(newStr,m_string,olen);
+    for (list = list->skipNull(); list; list = list->skipNext()) {
+	const String& src = list->get()->toString();
+	if (sepLen && olen && (src.length() || force)) {
+	    ::memcpy(newStr + olen,separator,sepLen);
+	    olen += sepLen;
+	}
+	::memcpy(newStr + olen,src.c_str(),src.length());
+	olen += src.length();
+    }
+    newStr[olen] = 0;
+    m_string = newStr;
+    ::free(oldStr);
+    changed();
     return *this;
 }
 

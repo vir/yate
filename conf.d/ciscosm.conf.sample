@@ -63,6 +63,9 @@
 ; autostart: bool: Automatically try to align the remote MTP2 at startup
 ;autostart=yes
 
+; autoemergency: boolean: Emergency align link if owner linkset is down
+;autoemergency=yes
+
 ; configuration: int: Configuration request retransmission interval in ms, 250+
 ; A zero value disables configuration step and jumps directly to connect request
 ;configuration=5000

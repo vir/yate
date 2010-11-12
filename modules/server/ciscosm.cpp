@@ -1591,6 +1591,7 @@ SLT::SLT(const String& name, const NamedList& param)
     }
     m_confReqTimer.interval(param,"configuration",250,5000,true);
     m_printMsg = param.getBoolValue("printslt",false);
+    m_autoEmergency = param.getBoolValue("autoemergency",true);
     if (param.getBoolValue("autostart",true))
 	m_reqStatus = NormalAlignment;
 }
@@ -1658,8 +1659,10 @@ void SLT::notify(bool up)
 
 bool SLT::control(Operation oper, NamedList* params)
 {
-    if (params)
+    if (params) {
+	m_autoEmergency = params->getBoolValue("autoemergency",m_autoEmergency);
 	m_printMsg = params->getBoolValue("printslt",m_printMsg);
+    }
     switch (oper) {
 	case Pause:
 	    setReqStatus(OutOfService);
@@ -1670,7 +1673,7 @@ bool SLT::control(Operation oper, NamedList* params)
 		return true;
 	case Align:
 	    {
-		bool emg = params->getBoolValue("emergency");
+		bool emg = getEmergency(params);
 		setReqStatus(emg ? EmergencyAlignment : NormalAlignment);
 		switch (m_status) {
 		    case Configured:

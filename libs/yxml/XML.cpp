@@ -1360,23 +1360,30 @@ void XmlFragment::toString(String& dump, bool escape, const String& indent,
     ObjList* ob = m_list.skipNull();
     if (!ob)
 	return;
+    ObjList buffers;
     for (;ob;ob = ob->skipNext()) {
+	String* s = new String;
 	XmlChild* obj = static_cast<XmlChild*>(ob->get());
 	if (obj->xmlElement())
-	    obj->xmlElement()->toString(dump,escape,indent,origIndent,completeOnly,auth);
+	    obj->xmlElement()->toString(*s,escape,indent,origIndent,completeOnly,auth);
 	else if (obj->xmlText())
-	    obj->xmlText()->toString(dump,escape,indent,auth,parent);
+	    obj->xmlText()->toString(*s,escape,indent,auth,parent);
 	else if (obj->xmlCData())
-	    obj->xmlCData()->toString(dump,indent);
+	    obj->xmlCData()->toString(*s,indent);
 	else if (obj->xmlComment())
-	    obj->xmlComment()->toString(dump,indent);
+	    obj->xmlComment()->toString(*s,indent);
 	else if (obj->xmlDeclaration())
-	    obj->xmlDeclaration()->toString(dump,escape);
+	    obj->xmlDeclaration()->toString(*s,escape);
 	else if (obj->xmlDoctype())
-	    obj->xmlDoctype()->toString(dump,origIndent);
+	    obj->xmlDoctype()->toString(*s,origIndent);
 	else
 	    Debug(DebugStub,"XmlFragment::toString() unhandled element type!");
+	if (!TelEngine::null(s))
+	    buffers.append(s);
+	else
+	    TelEngine::destruct(s);
     }
+    dump.append(buffers);
 }
 
 // Find a completed xml element in a list

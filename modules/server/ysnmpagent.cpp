@@ -1556,8 +1556,10 @@ void SnmpAgent::initialize()
 	setup();
 	installRelay(Halt);
 	m_msgQueue = new SnmpMsgQueue(this,threadPrio,snmpPort);
-	if (!m_msgQueue->init())
+	if (!m_msgQueue->init()) {
+	    delete m_msgQueue;
 	    m_msgQueue = 0;
+	}
 	if (m_trapHandler)
 	    return;
 	m_trapHandler = new TrapHandler();

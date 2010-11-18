@@ -2408,7 +2408,7 @@ bool SnmpAgent::trapDisabled(String& name)
 	return true;
     AsnMib* mib = m_mibTree->find(name);
     if (!mib) {
-	Debug(&__plugin,DebugMild,"Notification '%s' does not exist",name.c_str());
+	DDebug(&__plugin,DebugInfo,"Notification '%s' does not exist",name.c_str());
 	return true;
     }
     String trapOid;
@@ -2435,8 +2435,6 @@ bool SnmpAgent::trapDisabled(String& name)
 // send a trap from a received notification
 int SnmpAgent::sendNotification(String& name, String& value, unsigned int index)
 {
-    Debug(&__plugin,DebugAll,"::sendNotification('%s', '%s')",name.c_str(),value.c_str());
-
     if (!m_enabledTraps)
 	return -1;
     // check to see if the trap is enabled
@@ -2449,6 +2447,7 @@ int SnmpAgent::sendNotification(String& name, String& value, unsigned int index)
 	      " traps have not been configured",name.c_str(),value.c_str());
 	return -1;
     }
+    DDebug(&__plugin,DebugAll,"::sendNotification('%s', '%s')",name.c_str(),value.c_str());
 
     // build a new SNMP message wrapper
     SnmpMessage* msgContainer = new SnmpMessage();

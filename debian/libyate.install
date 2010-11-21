@@ -59,7 +59,10 @@ debian/tmp/usr/share/yate/sounds/tone.wav
 debian/tmp/usr/lib/libyatejabber.so.3.0.0
 debian/tmp/usr/lib/yate/yjinglechan.yate
 
-#debian/tmp/etc/yate/jabberclient.conf
-#debian/tmp/usr/lib/yate/jabberclient.yate
+debian/tmp/etc/yate/zlibcompress.conf
+debian/tmp/usr/lib/yate/zlibcompress.yate
 
-debian/tmp/usr/lib/yate/udptlchan.yate
+debian/tmp/etc/yate/jabberclient.conf
+debian/tmp/usr/lib/yate/client/jabberclient.yate
+
+

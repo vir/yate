@@ -43,7 +43,6 @@ debian/tmp/etc/yate/mgcpgw.conf
 debian/tmp/usr/lib/yate/server/mgcpgw.yate
 debian/tmp/usr/lib/yate/server/mrcpspeech.yate
 debian/tmp/usr/lib/yate/server/analogdetect.yate
-debian/tmp/usr/lib/yate/server/overlapdial.yate
 debian/tmp/usr/lib/yate/server/dbwave.yate
 
 debian/tmp/etc/yate/queuesnotify.conf
@@ -52,12 +51,27 @@ debian/tmp/usr/lib/yate/server/queuesnotify.yate
 debian/tmp/etc/yate/callcounters.conf
 debian/tmp/usr/lib/yate/server/callcounters.yate
 
+debian/tmp/etc/yate/presence.conf
 debian/tmp/usr/lib/yate/server/presence.yate
+
+debian/tmp/etc/yate/subscription.conf
 debian/tmp/usr/lib/yate/server/subscription.yate
+
+debian/tmp/etc/yate/users.conf
 debian/tmp/usr/lib/yate/server/users.yate
 
 debian/tmp/etc/yate/jabberserver.conf
 debian/tmp/usr/lib/yate/jabber/jabberserver.yate
 debian/tmp/etc/yate/jbfeatures.conf
 debian/tmp/usr/lib/yate/jabber/jbfeatures.yate
+
+debian/tmp/etc/yate/ysnmpagent.conf
+debian/tmp/usr/lib/yate/server/ysnmpagent.yate
+debian/tmp/usr/share/yate/data/snmp_mib.conf
+debian/tmp/usr/share/yate/data/NULL-TEAM-MIB.txt
+debian/tmp/usr/share/yate/data/YATE-MIB.txt
+
+debian/tmp/etc/yate/monitoring.conf
+debian/tmp/usr/lib/yate/server/monitoring.yate
+
 

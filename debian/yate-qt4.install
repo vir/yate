@@ -11,6 +11,7 @@ debian/tmp/usr/share/yate/help/3.yhlp
 debian/tmp/usr/share/yate/help/4.yhlp
 debian/tmp/usr/share/yate/help/99.yhlp
 debian/tmp/usr/share/yate/skins/default/account.ui
+debian/tmp/usr/share/yate/skins/default/accountlist.ui
 debian/tmp/usr/share/yate/skins/default/addrbook.ui
 debian/tmp/usr/share/yate/skins/default/book.png
 debian/tmp/usr/share/yate/skins/default/close.png
@@ -24,6 +25,7 @@ debian/tmp/usr/share/yate/skins/default/phone.png
 debian/tmp/usr/share/yate/skins/default/qt4client.rc
 debian/tmp/usr/share/yate/skins/default/qt4client.ui
 debian/tmp/usr/share/yate/skins/default/quest.png
+debian/tmp/usr/share/yate/skins/default/settings.ui
 debian/tmp/usr/share/yate/skins/default/up.png
 debian/tmp/usr/share/yate/skins/default/user.png
 debian/tmp/usr/share/yate/skins/default/answer.png
@@ -59,5 +61,6 @@ debian/tmp/usr/share/yate/skins/default/update.png
 debian/tmp/usr/share/yate/skins/default/updater.ui
 debian/tmp/etc/yate/yate-qt4.conf
 debian/tmp/usr/lib/yate/qt4/updater.yate
+
 
 

@@ -1,0 +1,23 @@
+yate (3.0.0.vir12647) unstable; urgency=low
+
+  * Fixed dependency packages versions
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Thu, 29 Apr 2010 13:17:26 +0400
+
+yate (3.0.0.vir12646) unstable; urgency=low
+
+  * Changed version scheme to include svk revision
+
+ -- Vasily i. Redkin <vir@vir.ctm.ru>  Thu, 29 Apr 2010 10:52:57 +0400
+
+yate (3.0.0) unstable; urgency=low
+
+  * Updated to new version
+
+ -- Vasily i. Redkin <vir@vir.ctm.ru>  Fri, 23 Apr 2010 17:46:14 +0400
+
+yate (2.0.0) unstable; urgency=low
+
+  * Initial Release.
+
+ -- Vasily i. Redkin <vir@ctm.ru>  Mon, 06 Oct 2008 13:28:44 +0400

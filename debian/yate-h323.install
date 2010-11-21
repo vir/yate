@@ -1,0 +1,3 @@
+debian/tmp/etc/yate/h323chan.conf
+debian/tmp/usr/lib/yate/h323chan.yate
+

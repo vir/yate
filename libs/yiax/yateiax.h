@@ -100,21 +100,21 @@ public:
         MUSICONHOLD = 0x1a,      // Text
         TRANSFERID = 0x1b,       // DW
         RDNIS = 0x1c,            // Text
-        PROVISIONING = 0x1d,     // BIN
-        AESPROVISIONING = 0x1e,  // BIN
+        PROVISIONING = 0x1d,     // BIN *
+        AESPROVISIONING = 0x1e,  // BIN *
         DATETIME = 0x1f,         // DW
-        DEVICETYPE = 0x20,       // Text
-        SERVICEIDENT = 0x21,     // BIN
-        FIRMWAREVER = 0x22,      // W
-        FWBLOCKDESC = 0x23,      // DW
-        FWBLOCKDATA = 0x24,      // BIN
-        PROVVER = 0x25,          // DW
+        DEVICETYPE = 0x20,       // Text *
+        SERVICEIDENT = 0x21,     // BIN *
+        FIRMWAREVER = 0x22,      // W *
+        FWBLOCKDESC = 0x23,      // DW *
+        FWBLOCKDATA = 0x24,      // BIN *
+        PROVVER = 0x25,          // DW *
         CALLINGPRES = 0x26,      // B
         CALLINGTON = 0x27,       // B
         CALLINGTNS = 0x28,       // W
         SAMPLINGRATE = 0x29,     // DW
         CAUSECODE = 0x2a,        // B
-        ENCRYPTION = 0x2b,       // B
+        ENCRYPTION = 0x2b,       // W (it is B in rfc, but W on iana and in real life)
         ENKEY = 0x2c,            // BIN
         CODEC_PREFS = 0x2d,      // Text
         RR_JITTER = 0x2e,        // DW
@@ -123,6 +123,8 @@ public:
         RR_DELAY = 0x31,         // W
         RR_DROPPED = 0x32,       // DW
         RR_OOO = 0x33,           // DW
+	OSPTOKEN = 0x34,         // ?
+	// * - "Reserved" in http://www.iana.org/assignments/iax-parameters/iax-parameters.xhtml#iax-parameters-7
     };
 
     /**
@@ -542,13 +544,16 @@ public:
         GSM    = (1 <<  1),
         ULAW   = (1 <<  2),
         ALAW   = (1 <<  3),
-        MP3    = (1 <<  4),
+        G726   = (1 <<  4),
         ADPCM  = (1 <<  5),
         SLIN   = (1 <<  6),
         LPC10  = (1 <<  7),
         G729A  = (1 <<  8),
         SPEEX  = (1 <<  9),
         ILBC   = (1 << 10),
+	G726AAL2 = (1 << 11),
+	G722   = (1 << 12),
+	AMR    = (1 << 13),
     };
 
     /**
@@ -559,6 +564,8 @@ public:
         PNG    = (1 << 17),
         H261   = (1 << 18),
         H263   = (1 << 19),
+	H263P  = (1 << 20),
+	H264   = (1 << 21),
     };
 
     /**

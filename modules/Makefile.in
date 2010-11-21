@@ -77,6 +77,7 @@ PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 
 LIBS :=
 DIRS := client server jabber qt4
+PROGS := $(PROGS) server/overlapdial.yate
 
 ifneq ($(HAVE_PGSQL),no)
 PROGS := $(PROGS) server/pgsqldb.yate

@@ -49,3 +49,54 @@
 
 ; lpc10: bool: LPC 10
 ;lpc10=enable
+
+; ilbc30: bool: ilbc30
+;ilbc30=enable
+
+; speex: bool: SpeeX
+;speex=enable
+
+; g723: bool: g723
+;g723=enable
+
+; g729: bool: g729
+;g729=enable
+
+; adpcm: bool: adpcm
+;adpcm=enable
+
+; g726: bool: G.726 RFC3551
+;g726=enable
+
+; g726aal2: bool: G.726 AAL2
+;g726aal2=enable
+
+; g722: bool: g722
+;g722=enable
+
+; amr: bool: amr
+;amr=enable
+
+; Video formats
+
+; jpeg: bool: JPEG
+;jpeg=enable
+
+; png: bool: PNG
+;png=enable
+
+; h261: bool: H.261
+;h261=enable
+
+; h263: bool: H.263
+;h263=enable
+
+; h263p: bool: H.263+
+;h263p=enable
+
+; h264: bool: H.264
+;h264=enable
+
+
+
+

@@ -519,7 +519,7 @@ bool RouteHandler::received(Message &msg)
     u_int64_t tmr = Time::now();
     String called(msg.getValue("called"));
     if (called.null())
-	return false;
+	called = "";
     const char *context = msg.getValue("context","default");
     Lock lock(s_mutex);
     if (oneContext(msg,called,context,msg.retValue())) {
@@ -549,8 +549,15 @@ bool PrerouteHandler::received(Message &msg)
 	return false;
 
     String caller(msg.getValue("caller"));
+#if 1
+    if (caller.null()) {
+	Debug(DebugInfo,"No caller number, using empty one for prerouting");
+	caller = "";
+    }
+#else
     if (!s_prerouteall && caller.null())
 	return false;
+#endif
 
     String ret;
     Lock lock(s_mutex);

@@ -1,0 +1,102 @@
+Source: yate
+Section: comm
+Priority: optional
+Maintainer: Vasily i. Redkin <vir@ctm.ru>
+Build-Depends: debhelper (>= 7), libasound2-dev, pkg-config, libqt4-dev, libopenh323-dev, libpt-dev, libpq-dev, libmysqlclient15-dev, libssl-dev, zaptel-source
+Standards-Version: 3.7.3
+Homepage: http://yate.null.ro/
+
+Package: yate
+Architecture: any
+Suggests: yate-pgsql, yate-h323, yate-freesentral
+Depends: libyate (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
+Description: The YATE project aims to be a fully featured software PBX.
+ .
+ This is version 3 or YATE.
+ .
+ This most recent version from the Yate software has bring several improvements
+ over the previous versions:
+ .
+    * Support for more hardware interfaces and protocols - added SS7, analogic
+    * support, RBS, better ISDN, passive recording
+    * Clustering, balancing and failover support, Linux-HA integration
+    * Improved client functionality - switched from GTK to Qt
+    * Easier involvement of the Yate community - swtched from CVS to SVN
+    * Added MGCP and Jingle support 
+
+Package: libyate
+Section: libs
+Conflicts: yate (<< ${binary:Version}), libyate (<< ${binary:Version})
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: YATE shared library
+
+Package: yate-dev
+Section: libdevel
+Architecture: any
+Suggests: libyate-dbg, yate-dbg, hate-telhw-dbg
+Depends:  libyate (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
+Description: YATE library development files
+
+Package: yate-qt4
+Architecture: any
+Recommends: yate-alsa
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Qt4 software VoIP client, based on YATE
+
+Package: yate-alsa
+Architecture: any
+Recommends: yate (= ${binary:Version}) | yate-qt4 (= ${binary:Version})
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: ALSA channel driver for YATE
+
+Package: yate-h323
+Architecture: any
+Recommends: yate (= ${binary:Version}) | yate-qt4 (= ${binary:Version})
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Yate h323 module
+
+Package: yate-mysql
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: MySQL support for yate
+
+Package: yate-pgsql
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Postgres support for yate
+
+Package: yate-telhw
+Architecture: any
+Recommends: yate (= ${binary:Version}) | yate-qt4 (= ${binary:Version})
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Telephony hardware support for yate server
+ Also MGCP CA module.
+
+Package: yate-doc
+Section: doc
+Architecture: all
+Description: Documentation for yate
+
+Package: libyate-dbg
+Section: libdevel
+Architecture: any
+Depends: libyate (= ${Source-Version})
+Recommends: gdb
+Description: Debug symbols for the yate library
+
+Package: yate-dbg
+Section: devel
+Architecture: any
+Depends: yate (= ${Source-Version})
+Recommends: gdb
+Description: Debug symbols for the yate application
+
+Package: yate-telhw-dbg
+Section: devel
+Architecture: any
+Depends: yate-telhw (= ${Source-Version})
+Recommends: gdb
+Description: Debug symbols for the yate telephony hardware modules
+
+

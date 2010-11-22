@@ -1977,22 +1977,6 @@ void SS7MsgISUP::toString(String& dest, const SS7Label& label, bool params,
 /**
  * Helper functions used to transmit responses
  */
-// Push down the protocol stack a REL (Release) message
-// @param cic The message CIC
-// @param label The routing label for the message
-// @param recvLbl True if the given label is from a received message. If true, a new routing
-//   label will be created from the received one
-// @return Link the message was successfully queued to, negative for error
-static int transmitREL(SS7ISUP* isup, unsigned int cic, const SS7Label& label, bool recvLbl,
-    const char* reason, const char* diagnostic = 0, const char* location = 0)
-{
-    SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::REL,cic);
-    if (reason)
-	m->params().addParam("CauseIndicators",reason);
-    m->params().addParam("CauseIndicators.location",location,false);
-    m->params().addParam("CauseIndicators.diagnostic",diagnostic,false);
-    return isup->transmitMessage(m,label,recvLbl);
-}
 
 // Push down the protocol stack a RLC (Release Complete) message
 // @param msg Optional received message to copy release parameters. Ignored if reason is valid
@@ -2075,6 +2059,7 @@ SS7ISUPCall::SS7ISUPCall(SS7ISUP* controller, SignallingCircuit* cic,
     m_inbandAvailable(false),
     m_iamMsg(0),
     m_sgmMsg(0),
+    m_relMsg(0),
     m_sentSamDigits(0),
     m_relTimer(300000),                  // Q.764: T5  - 5..15 minutes
     m_iamTimer(20000),                   // Setup, Testing: Q.764: T7  - 20..30 seconds
@@ -2101,8 +2086,8 @@ SS7ISUPCall::SS7ISUPCall(SS7ISUP* controller, SignallingCircuit* cic,
 
 SS7ISUPCall::~SS7ISUPCall()
 {
-    if (m_iamMsg)
-	m_iamMsg->deref();
+    TelEngine::destruct(m_iamMsg);
+    TelEngine::destruct(m_sgmMsg);
     const char* timeout = 0;
     if (m_relTimer.started())
 	timeout = " (release timed out)";
@@ -2112,6 +2097,7 @@ SS7ISUPCall::~SS7ISUPCall()
     Debug(isup(),!timeout ? DebugAll : DebugNote,
 	"Call(%u) destroyed with reason='%s'%s [%p]",
 	id(),m_reason.safe(),TelEngine::c_safe(timeout),this);
+    TelEngine::destruct(m_relMsg);
     if (controller()) {
 	if (!timeout)
 	    controller()->releaseCircuit(m_circuit);
@@ -2128,10 +2114,8 @@ void SS7ISUPCall::stopWaitSegment(bool discard)
     if (!m_sgmMsg)
 	return;
     m_sgmRecvTimer.stop();
-    if (discard) {
-	m_sgmMsg->deref();
-	m_sgmMsg = 0;
-    }
+    if (discard)
+	TelEngine::destruct(m_sgmMsg);
 }
 
 // Helper functions called in getEvent
@@ -2271,8 +2255,11 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 	    case Releasing:
 		if (timeout(isup(),this,m_relTimer,when,"REL",false))
 		    m_lastEvent = releaseComplete(false,0,"noresponse",true);
-		else if (timeout(isup(),this,m_iamTimer,when,"T1"))
-		    transmitREL(true,when);
+		else if (timeout(isup(),this,m_iamTimer,when,"T1")) {
+		    m_iamTimer.stop();
+		    m_iamTimer.start(when.msec());
+		    transmitREL();
+		}
 		break;
 	    default:
 		if (outgoing() && m_anmTimer.started() && m_state >= Accepted &&
@@ -2585,7 +2572,7 @@ SignallingEvent* SS7ISUPCall::release(SignallingEvent* event, SS7MsgISUP* msg)
     m_iamTimer.start();
     m_relTimer.start();
     m_state = Releasing;
-    transmitREL();
+    transmitREL((event && event->message()) ? &(event->message()->params()) : 0);
     if (event)
 	return 0;
     bool create = (msg == 0);
@@ -2774,17 +2761,24 @@ bool SS7ISUPCall::transmitSAM(const char* extra)
     return true;
 }
 
-// (Re)transmit REL. Restart initial release timer if retransmission
+// (Re)transmit REL. Create and populate the message if needed
 // Remember sls
-bool SS7ISUPCall::transmitREL(bool retrans, const Time& time)
+bool SS7ISUPCall::transmitREL(const NamedList* params)
 {
-    if (retrans) {
-	m_iamTimer.stop();
-	m_iamTimer.start(time.msec());
-    }
     if (!isup())
 	return false;
-    int sls = ::transmitREL(isup(),id(),m_label,false,m_reason,m_diagnostic,m_location);
+    if (!m_relMsg) {
+	m_relMsg = new SS7MsgISUP(SS7MsgISUP::REL,id());
+	if (m_reason)
+	    m_relMsg->params().addParam("CauseIndicators",m_reason);
+	m_relMsg->params().addParam("CauseIndicators.diagnostic",m_diagnostic,false);
+	m_relMsg->params().addParam("CauseIndicators.location",m_location,false);
+	if (params)
+	    copyUpper(m_relMsg->params(),*params);
+    }
+    // transmitMessage will dereference message so make sure we preserve it
+    m_relMsg->ref();
+    int sls = isup()->transmitMessage(m_relMsg,m_label,false);
     if (sls != -1 && m_label.sls() == 255)
 	m_label.setSls(sls);
     return sls != -1;
@@ -3782,6 +3776,14 @@ SS7MSU* SS7ISUP::buildMSU(SS7MsgISUP::Type type, unsigned char sio,
 	cic >>= 8;
     }
     *d++ = type;
+#ifdef XDEBUG
+    if (params && debugAt(DebugAll)) {
+	String tmp;
+	params->dump(tmp,"\r\n  ",'\'',true);
+	Debug(this,DebugAll,"SS7ISUP::buildMSU params:%s",
+	    tmp.c_str());
+    }
+#endif
     ObjList exclude;
     plist = msgParams->params;
     String prefix = params->getValue("message-prefix");
@@ -4444,7 +4446,9 @@ void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 	    break;
 	}
 	// Congestion: send REL
-	transmitREL(this,msg->cic(),label,true,"congestion");
+	SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::REL,msg->cic());
+	m->params().addParam("CauseIndicators","congestion");
+	transmitMessage(m,label,true);
 	DROP_MSG("can't reserve circuit")
 	#undef DROP_MSG
     }

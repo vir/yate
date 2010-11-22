@@ -7943,8 +7943,8 @@ private:
     bool transmitIAM();
     // Transmit SAM digits
     bool transmitSAM(const char* extra = 0);
-    // (Re)transmit REL. Restart initial release timer if retransmission. Remember sls
-    bool transmitREL(bool retrans = false, const Time& time = Time());
+    // (Re)transmit REL. Create and populate message if needed. Remember sls
+    bool transmitREL(const NamedList* params = 0);
     // Check if the circuit needs continuity testing
     bool needsTesting(const SS7MsgISUP* msg);
     // Stop waiting for a SGM (Segmentation) message. Copy parameters to the pending segmented message if sgm is valid.
@@ -7976,6 +7976,7 @@ private:
     String m_location;                   // Termination location
     SS7MsgISUP* m_iamMsg;                // Message with the call parameters for outgoing calls
     SS7MsgISUP* m_sgmMsg;                // Pending received message with segmentation flag set
+    SS7MsgISUP* m_relMsg;                // Release message preserved for retransmissions
     // Overlapped
     String m_samDigits;                  // SAM digits
     unsigned int m_sentSamDigits;        // The number of sent SAM digits

@@ -84,7 +84,9 @@ typedef unsigned long in_addr_t;
 #define strncasecmp _strnicmp
 #endif
 
+#if _MSC_VER < 1500 /* pre VS2008 */
 #define vsnprintf _vsnprintf
+#endif
 #define snprintf _snprintf
 #define strdup _strdup
 #define open _open

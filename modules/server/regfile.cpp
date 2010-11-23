@@ -382,6 +382,7 @@ void RegfilePlugin::populate()
 		eu = static_cast<ExpandedUser*>(ret->get());
 	    eu->append(new String(*nl));
 	}
+	TelEngine::destruct(ob);
     }
     if (s_create)
 	return;

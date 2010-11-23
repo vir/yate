@@ -767,6 +767,8 @@ bool PBXAssist::operSecondCall(Message& msg)
     m.copyParam(m_keep,"caller");
     m.addParam("called",msg.getValue("target"));
     m.addParam("pbxstate",state());
+    m.addParam("pbxoper",msg.getValue("operation"),false);
+    m.addParam("reason",msg.getValue("reason"),false);
     copyParams(m,msg,&m_keep);
     // no error check as handling preroute is optional
     Engine::dispatch(m);
@@ -823,7 +825,7 @@ bool PBXAssist::operOnHold(Message& msg)
 	m->addParam("id",id());
 	m->addParam("callto","tone/dial");
 	m->addParam("message","call.execute");
-	m->addParam("reason",reason);
+	m->addParam("reason",reason,false);
 	copyParams(*m,msg);
 	setState("dial");
     }
@@ -919,7 +921,10 @@ bool PBXAssist::operTransfer(Message& msg)
     // make call appear as from the other party
     m.addParam("caller",m_keep.getValue("called"));
     m.addParam("called",msg.getValue("target"));
+    m.addParam("diverter",m_keep.getValue("caller"),false);
     m.addParam("pbxstate",state());
+    m.addParam("pbxoper",msg.getValue("operation"),false);
+    m.addParam("reason",msg.getValue("reason"),false);
     copyParams(m,msg,&m_keep);
     // no error check as handling preroute is optional
     Engine::dispatch(m);
@@ -984,6 +989,8 @@ bool PBXAssist::operForTransfer(Message& msg)
     m.copyParam(m_keep,"caller");
     m.addParam("called",msg.getValue("target"));
     m.addParam("pbxstate",state());
+    m.addParam("pbxoper",msg.getValue("operation"),false);
+    m.addParam("reason",msg.getValue("reason"),false);
     copyParams(m,msg,&m_keep);
     // no error check as handling preroute is optional
     Engine::dispatch(m);
@@ -1054,11 +1061,10 @@ void PBXAssist::msgHangup(Message& msg)
 		m = new Message("call.route");
 		m->addParam("id",m_peer1);
 		m->copyParam(m_keep,"billid");
+		m->addParam("caller",m_keep.getValue("called"),false);
 		m->addParam("called",tmp);
-		tmp = m_keep.getValue("called");
-		if (tmp)
-		    m->addParam("caller",tmp);
 		m->addParam("pbxstate",state());
+		m->addParam("reason","onhold");
 		if (!Engine::dispatch(m) || m->retValue().null() || (m->retValue() == "-") || (m->retValue() == "error"))
 		    TelEngine::destruct(m);
 		else {

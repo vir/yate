@@ -135,13 +135,7 @@ public:
 	{ }
     virtual ~AuthHandler()
 	{ }
-    virtual inline bool received(Message& msg)
-    {
-	String user = msg.getValue("username","");
-	if (!user.null())
-	    m_count++;
-	return false;
-    }
+    virtual bool received(Message& msg);
     // return the number of authentication requests
     inline unsigned int getCount()
 	{ return m_count; }
@@ -162,11 +156,7 @@ public:
 	{ }
     virtual ~RegisterHandler()
 	{ }
-    virtual inline bool received(Message& msg)
-    {
-	m_count++;
-	return false;
-    }
+    virtual bool received(Message& msg);
     // return the count
     inline unsigned int getCount()
 	{ return m_count; }
@@ -209,8 +199,7 @@ public:
 
 protected:
     // load data into this object from a engine.status message
-    virtual inline bool load()
-	{ return false; }
+    virtual bool load();
     // discard the cached data
     virtual void discard();
     // table containing information about modules obtained from an engine.status message
@@ -1546,11 +1535,36 @@ bool EngineStartHandler::received(Message& msg)
 };
 
 /**
+ * AuthHandler
+ */
+bool AuthHandler::received(Message& msg)
+{
+    String user = msg.getValue("username","");
+    if (!user.null())
+        m_count++;
+    return false;
+}
+
+/**
+ * RegisterHandler
+ */
+bool RegisterHandler::received(Message& msg)
+{
+    m_count++;
+    return false;
+}
+
+/**
  * Cache
  */
 Cache::~Cache()
 {
     discard();
+}
+
+bool Cache::load()
+{ 
+    return false; 
 }
 
 // discard cached data
@@ -1715,7 +1729,7 @@ void SigInfo::discard()
 {
     if (!m_dictionary)
 	return;
-    DDebug(&__plugin,DebugInfo,"SigInfo::discard() [%p] - dropping cached data",this);
+    DDebug(&__plugin,DebugAll,"SigInfo::discard() [%p] - dropping cached data",this);
     for (ObjList* o = m_table.skipNull(); o; o = o->skipNext()) {
 	NamedList* nl = static_cast<NamedList*>(o->get());
         nl->setParam(lookup(STATUS,m_dictionary,""),"unknown");
@@ -1903,6 +1917,7 @@ NamedList* LinksetInfo::parseLinksetInfo(String& info,const String& link, NamedL
 	int type = lookup(nameParam,s_linksetStatus,0);
 	if (type == 0) {
 	    TelEngine::destruct(params);
+	    TelEngine::destruct(nl);
 	    return 0;
 	}
 	nl->setParam(lookup(type,s_linksetInfo,""),valParam);
@@ -1987,6 +2002,7 @@ NamedList* TrunkInfo::parseTrunkInfo(String& info, const String& trunk, NamedLis
 	int type = lookup(nameParam,s_trunkStatus,0);
 	if (type == 0) {
 	    TelEngine::destruct(params);
+	    TelEngine::destruct(nl);
 	    return 0;
 	}
 	nl->setParam(lookup(type,s_trunkInfo,""),valParam);
@@ -2175,8 +2191,10 @@ bool ModuleInfo::load()
 	    TelEngine::destruct(paramVal);
 	}
 	TelEngine::destruct(parts);
-	if ( String("engine") == nl->getValue(lookup(MODULE_NAME,s_moduleQuery,""),""))
+	if ( String("engine") == nl->getValue(lookup(MODULE_NAME,s_moduleQuery,""),"")) {
+	    TelEngine::destruct(nl);
 	    continue;
+	}
         m_table.append(nl);
 
     }
@@ -2192,7 +2210,7 @@ bool ModuleInfo::load()
 DatabaseAccount::DatabaseAccount(const NamedList* cfg)
 {
     if (cfg) {
-	Debug(&__plugin,DebugInfo,"DatabaseAccount('%s') created for monitoring [%p]",cfg->c_str(),this);
+	Debug(&__plugin,DebugAll,"DatabaseAccount('%s') created for monitoring [%p]",cfg->c_str(),this);
 	m_name = cfg->c_str();
 	m_alarms = 0;
 	for (int i = 0; i < ExecTime; i++) {
@@ -3090,6 +3108,7 @@ Monitor::Monitor()
       : Module("monitoring","misc"),
 	m_msgUpdateHandler(0),
 	m_snmpMsgHandler(0),
+	m_hangupHandler(0),
 	m_startHandler(0),
 	m_callMonitor(0),
 	m_authHandler(0),
@@ -3131,6 +3150,11 @@ bool Monitor::unload()
     TelEngine::destruct(m_linkInfo);
     TelEngine::destruct(m_linksetInfo);
     TelEngine::destruct(m_trunkInfo);
+    TelEngine::destruct(m_dbInfo);
+    TelEngine::destruct(m_rtpInfo);
+    TelEngine::destruct(m_ifaceInfo);
+    TelEngine::destruct(m_accountsInfo);
+    TelEngine::destruct(m_sipMonitoredGws);
     Engine::uninstall(m_msgUpdateHandler);
     Engine::uninstall(m_snmpMsgHandler);
     Engine::uninstall(m_startHandler);
@@ -3256,11 +3280,8 @@ void Monitor::readConfig(const Configuration& cfg)
 	for (ObjList* o = m_sipMonitoredGws->skipNull(); o; o = o->skipNext()) {
 	    String* addr = static_cast<String*>(o->get());
 	    int pos = addr->find(":");
-	    if (pos == -1) {
+	    if (pos == -1) 
 	        addr->append(":" + String(SIP_PORT));
-	        m_sipMonitoredGws->remove(o);
-	        m_sipMonitoredGws->set(addr);
-	    }
 	    else {
 	        String tmp = addr->substr(pos+1);
 	        if (tmp.null())
@@ -3306,16 +3327,22 @@ bool Monitor::received(Message& msg, int id)
 	DDebug(this,DebugInfo,"::received() - Halt Message");
 	s_nodeState = "exiting";
 	unload();
+	TelEngine::destruct(m_msgUpdateHandler);
+	TelEngine::destruct(m_snmpMsgHandler);
+	TelEngine::destruct(m_hangupHandler);
+	TelEngine::destruct(m_startHandler);
+	TelEngine::destruct(m_authHandler);
+	TelEngine::destruct(m_registerHandler);
     }
     if (id == Timer) {
 	if (m_rtpInfo && m_rtpInfo->shouldReset())
 	    m_rtpInfo->reset();
-	if (s_sipInfo.resetTime && s_sipInfo.resetTime > Time::secNow()) {
+	if (s_sipInfo.resetTime && Time::secNow() > s_sipInfo.resetTime) {
 	    s_sipInfo.auths.counter = s_sipInfo.transactions.counter = s_sipInfo.byes.counter = 0;
 	    s_sipInfo.auths.alarm = s_sipInfo.transactions.alarm = s_sipInfo.byes.alarm = false;
 	    s_sipInfo.resetTime = Time::secNow() + s_sipInfo.reset;
 	}
-	if (s_mgcpInfo.resetTime && s_mgcpInfo.resetTime > Time::secNow()) {
+	if (s_mgcpInfo.resetTime && Time::secNow() > s_mgcpInfo.resetTime) {
 	    s_mgcpInfo.transactions.counter = s_mgcpInfo.deletes.counter = 0;
 	    s_mgcpInfo.transactions.alarm = s_mgcpInfo.deletes.alarm = false;
 	    s_mgcpInfo.resetTime = Time::secNow() + s_mgcpInfo.reset;

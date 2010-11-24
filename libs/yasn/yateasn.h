@@ -282,7 +282,7 @@ public:
      * Constructor
      * @param params NamedList containing data for building this object, it should contain name, access level, value type
      */
-    AsnMib(NamedList* params);
+    AsnMib(NamedList& params);
 
     /**
      * Destructor
@@ -453,7 +453,7 @@ public:
     String findRevision(const String& name);
 
 private:
-    Configuration m_treeConf;
+    String m_treeConf;
     ObjList m_mibs;
 };
 

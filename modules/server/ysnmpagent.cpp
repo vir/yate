@@ -237,7 +237,7 @@ public:
     {}
     // Destructor
     inline ~SnmpV3MsgContainer()
-    {}
+	{ TelEngine::destruct(m_scopedPdu);}
 
     // Return the security parameters from the message
     inline Snmp::UsmSecurityParameters& getSecurity()
@@ -1207,7 +1207,7 @@ int SnmpV3MsgContainer::processScopedPdu()
     __plugin.decodePDU(type,decodedPdu,m_user->accessLevel());
     pdus.m_choiceType = type;
     if (type == Snmp::PDUs::RESPONSE) {
-	pdus.m_response = new Snmp::Response_PDU();
+	TelEngine::destruct(pdus.m_response->m_Response_PDU);
 	pdus.m_response->m_Response_PDU = (decodedPdu ? decodedPdu : new Snmp::PDU());
     }
 
@@ -1470,6 +1470,8 @@ void SnmpAgent::initialize()
     if (treeConf.null())
 	treeConf << Engine::sharedPath() << Engine::pathSeparator() <<
 	    "data" << Engine::pathSeparator() << "snmp_mib.conf";
+    // in case of reinitialization, first destroy the previously allocated object      
+    TelEngine::destruct(m_mibTree);
     m_mibTree = new AsnMibTree(treeConf);
 
     // get information needed for the computation of the agents' engine id (SNMPv3)
@@ -1486,6 +1488,7 @@ void SnmpAgent::initialize()
 	m_enabledTraps = false;
     // initiate the user for sending SNMPv3 traps
     String trapUser = s_cfg.getValue("traps","trap_user","");
+    TelEngine::destruct(m_trapUser);
     if (!TelEngine::null(trapUser) && s_cfg.getSection(trapUser))
 	m_trapUser = new SnmpUser(s_cfg.getSection(trapUser));
 
@@ -1524,6 +1527,7 @@ void SnmpAgent::initialize()
 
     // load disabled traps
     String traps = s_saveCfg.getValue("traps_conf","traps_disabled","");
+    TelEngine::destruct(m_traps);
     m_traps = traps.split(',',false);
 
     //	USM inits
@@ -1579,13 +1583,14 @@ bool SnmpAgent::received(Message& msg, int id)
 	}
 	s_saveCfg.setValue("traps_conf","traps_disable",traps);
 	s_saveCfg.save();
-	if (m_traps)
-	    TelEngine::destruct(m_traps);
+        
+	TelEngine::destruct(m_traps);
 	Engine::uninstall(m_trapHandler);
-	if (m_cipherAES)
-	    TelEngine::destruct(m_cipherAES);
-	if (m_cipherDES)
-	    TelEngine::destruct(m_cipherDES);
+	TelEngine::destruct(m_cipherAES);
+	TelEngine::destruct(m_cipherDES);
+	TelEngine::destruct(m_mibTree);
+	TelEngine::destruct(m_trapUser);
+	TelEngine::destruct(m_trapHandler);
     }
     return Module::received(msg,id);
 }
@@ -1669,17 +1674,23 @@ int SnmpAgent::processSnmpV2Msg(Snmp::Message& msg)
 	    return MESSAGE_DROP;
 	Snmp::BulkPDU* bulkReq = 0;
 	Snmp::PDU* req = getPDU(chosen);
+	Snmp::PDU* tmp = chosen.m_response->m_Response_PDU;
 	if (req) {
 	    // handle received pdu according to type
 	    decodePDU(chosen.m_choiceType,req,access);
-	    if (chosen.m_choiceType == Snmp::PDUs::RESPONSE)
+	    if (chosen.m_choiceType == Snmp::PDUs::RESPONSE) {
+		if (req != tmp)
+		    TelEngine::destruct(tmp);
 		chosen.m_response->m_Response_PDU = (req ? req : new Snmp::PDU());
+	    }
 	}
 	else if (chosen.m_choiceType == Snmp::PDUs::GET_BULK_REQUEST) {
 	    bulkReq = chosen.m_get_bulk_request->m_GetBulkRequest_PDU;
 	    if (bulkReq) {
 		// handle bulk request
 		Snmp::PDU* responsePDU = decodeBulkPDU(chosen.m_choiceType,bulkReq,access);
+		if (tmp != responsePDU)
+		    TelEngine::destruct(tmp);
 		chosen.m_response->m_Response_PDU = (responsePDU ? responsePDU : new Snmp::PDU());
 		chosen.m_choiceType = Snmp::PDUs::RESPONSE;
 	    }
@@ -1705,7 +1716,6 @@ void SnmpAgent::decodePDU(int& reqType, Snmp::PDU* obj, const int& access)
     Snmp::VarBindList* list = obj->m_variable_bindings;
     if (!list)
 	return;
-    obj->m_variable_bindings = new Snmp::VarBindList();
 
     for (unsigned int i = 0; i < list->m_list.count(); i++) {
 	Snmp::VarBind* obji = static_cast<Snmp::VarBind*>(list->m_list[i]);
@@ -1742,7 +1752,6 @@ void SnmpAgent::decodePDU(int& reqType, Snmp::PDU* obj, const int& access)
 		break;
 	    }
 	    assignValue(obji,&val);
-	    obj->m_variable_bindings->m_list.append(obji);
 	}
     }
     reqType = Snmp::PDUs::RESPONSE;
@@ -1953,9 +1962,11 @@ Snmp::PDU* SnmpAgent::decodeBulkPDU(int& reqType, Snmp::BulkPDU* pdu, const int&
 	pdu,list->m_list.count(),nonRepeaters,maxRepetitions);
 
     Snmp::PDU* retPdu = new Snmp::PDU();
+    retPdu->m_request_id = pdu->m_request_id;
     int i = 0;
     int error = 0;
-
+    AsnValue val;
+    
     // handle non-repeaters
     ObjList* o = list->m_list.skipNull();
     for (; o; o = o->skipNext()) {
@@ -1963,8 +1974,9 @@ Snmp::PDU* SnmpAgent::decodeBulkPDU(int& reqType, Snmp::BulkPDU* pdu, const int&
 	    break;
 	Snmp::VarBind* var = static_cast<Snmp::VarBind*>(o->get());
 	if (var) {
-	    AsnValue* val = 0;
-	    int res = processGetNextReq(var,val,error,access);
+	    Snmp::VarBind* newVar = new Snmp::VarBind();
+	    newVar->m_name->m_ObjectName = var->m_name->m_ObjectName; 
+	    int res = processGetNextReq(newVar,&val,error,access);
 	    if (res == 1 && error) {
 		retPdu->m_error_index = i + 1;
 		retPdu->m_error_status = error;
@@ -1975,35 +1987,41 @@ Snmp::PDU* SnmpAgent::decodeBulkPDU(int& reqType, Snmp::BulkPDU* pdu, const int&
 		retPdu->m_error_index = i + 1;
 		break;
 	    }
-	    assignValue(var,val);
-	    retPdu->m_variable_bindings->m_list.append(var);
+	    assignValue(newVar,&val);
+	    retPdu->m_variable_bindings->m_list.append(newVar);
 	    i++;
 	}
+	if (retPdu->m_error_status)
+	    break;
     }
     // handle repeaters
     int j = 0;
     while (j < maxRepetitions) {
+	int k = i;
 	for (ObjList* l = o->skipNull(); l; l = l->skipNext()) {
 	    Snmp::VarBind* var = static_cast<Snmp::VarBind*>(l->get());
+	    k++;
 	    if (var) {
-		AsnValue* val = 0;
-		int res = processGetNextReq(var,val,error,access);
+		Snmp::VarBind* newVar = new Snmp::VarBind();
+		newVar->m_name->m_ObjectName = var->m_name->m_ObjectName;
+		int res = processGetNextReq(newVar,&val,error,access);
 		if (res == 1 && error) {
-		    retPdu->m_error_index = i + 1;
+		    retPdu->m_error_index = k;
 		    retPdu->m_error_status = error;
 		    break;
 		}
 		if (!res) {
 		    retPdu->m_error_status =  Snmp::PDU::s_genErr_error_status;
-		    retPdu->m_error_index = i + 1;
+		    retPdu->m_error_index = k;
 		    break;
 		}
-		assignValue(var,val);
-		retPdu->m_variable_bindings->m_list.append(var);
+		assignValue(newVar,&val);
+		retPdu->m_variable_bindings->m_list.append(newVar);
+		var->m_name->m_ObjectName = newVar->m_name->m_ObjectName;
 		l->set(var,false);
 	    }
 	}
-	if (error)
+	if (retPdu->m_error_status)
 	    break;
 	j++;
     }
@@ -2020,8 +2038,7 @@ void SnmpAgent::assignValue(Snmp::VarBind* varBind, AsnValue* val)
 
     // set the type of the varbind and assign a value object for it
     varBind->m_choiceType = Snmp::VarBind::VALUE;
-    Snmp::ObjectSyntax* objSyn = new Snmp::ObjectSyntax();
-    varBind->m_value = objSyn;
+    Snmp::ObjectSyntax* objSyn = varBind->m_value;
 
     Snmp::SimpleSyntax* simple = objSyn->m_simple;
     Snmp::ApplicationSyntax* app = objSyn->m_application_wide;
@@ -2156,7 +2173,8 @@ int SnmpAgent::generateReport(Snmp::SNMPv3Message& msg, const int& secRes, SnmpV
     data->m_choiceType = Snmp::ScopedPduData::PLAINTEXT;
     Snmp::ScopedPDU* pdu = 0;
     Snmp::PDUs p;
-    if (choice == Snmp::ScopedPduData::PLAINTEXT) {
+    TelEngine::destruct(p.m_report->m_Report_PDU);
+    if (choice == Snmp::ScopedPduData::PLAINTEXT && data->m_plaintext) {
 	pdu = data->m_plaintext;
 	p.decode(pdu->m_data);
 	p.m_report->m_Report_PDU = getPDU(p);
@@ -2335,6 +2353,7 @@ Snmp::SNMPv2_Trap_PDU SnmpAgent::buildTrapPDU(const String& name, const String& 
     // add the mandatory OIDs
     notifMib->setIndex(index);
     String oid = notifMib->getOID();
+    TelEngine::destruct(pdu->m_variable_bindings);
     pdu->m_variable_bindings = addTrapOIDs(oid);
     if (!pdu->m_variable_bindings) {
 	Debug(&__plugin,DebugInfo,"::buildTrapPDU() - could not set sysUpTime and/or trapOID");
@@ -2349,6 +2368,7 @@ Snmp::SNMPv2_Trap_PDU SnmpAgent::buildTrapPDU(const String& name, const String& 
     AsnValue* v = new AsnValue(value,type);
     assignValue(trapVal,v);
     pdu->m_variable_bindings->m_list.append(trapVal);
+    TelEngine::destruct(v);
     // return the trapPDU
     return trapPDU;
 }
@@ -2398,6 +2418,7 @@ int SnmpAgent::buildTrapMsgV3(Snmp::SNMPv3Message& msg, DataBlock d)
     sec.m_msgAuthenticationParameters = s_zeroKey;
 
     msgWrapper.prepareForSend(msg);
+    msgWrapper.setScopedPdu(0);
     return 0;
 }
 
@@ -2429,6 +2450,7 @@ bool SnmpAgent::trapDisabled(String& name)
 	    return true;
 	}
     }
+    TelEngine::destruct(list);
     return false;
 }
 
@@ -2477,6 +2499,7 @@ int SnmpAgent::sendNotification(String& name, String& value, unsigned int index)
     // build pdus
     Snmp::PDUs pdus;
     pdus.m_choiceType = Snmp::PDUs::SNMPV2_TRAP;
+    TelEngine::destruct(pdus.m_snmpV2_trap);
     pdus.m_snmpV2_trap = &trapPDU;
     DataBlock d;
     pdus.encode(d);
@@ -2502,6 +2525,7 @@ int SnmpAgent::sendNotification(String& name, String& value, unsigned int index)
     msgContainer->setData(data);
     if (m_msgQueue)
 	m_msgQueue->sendMsg(msgContainer);
+    TelEngine::destruct(msgContainer);
     return 0;
 }
 
@@ -2512,6 +2536,12 @@ Cipher* SnmpAgent::getCipher(int cryptoType)
     if (cryptoType != SnmpUser::AES_ENCRYPT && cryptoType != SnmpUser::DES_ENCRYPT)
 	return 0;
 
+    if (cryptoType == SnmpUser::AES_ENCRYPT && m_cipherAES)
+	return m_cipherAES;
+    if (cryptoType == SnmpUser::DES_ENCRYPT && m_cipherDES)
+	return m_cipherDES;
+	
+    Cipher* ret = 0;
     Message msg("engine.cipher");
     if (cryptoType == SnmpUser::AES_ENCRYPT)
 	msg.addParam("cipher","aes_cfb");
@@ -2520,7 +2550,15 @@ Cipher* SnmpAgent::getCipher(int cryptoType)
     CipherHolder* cHold = new CipherHolder;
     msg.userData(cHold);
     cHold->deref();
-    return Engine::dispatch(msg) ? cHold->cipher() : 0;
+
+    if (Engine::dispatch(msg)) {
+	ret = cHold->cipher();
+	if (cryptoType == SnmpUser::AES_ENCRYPT)
+	    m_cipherAES = ret;
+	if (cryptoType == SnmpUser::DES_ENCRYPT)
+	    m_cipherDES = ret;
+    }
+    return ret;        
 }
 
 // get the value from a variable binding

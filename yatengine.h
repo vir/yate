@@ -832,6 +832,9 @@ public:
     static int main(int argc, const char** argv, const char** env,
 	RunMode mode = Console, bool fail = false);
 
+#ifdef _WINDOWS
+    static void fixWin32Paths();
+#endif
     /**
      * Display the help information on console
      * @param client Display help for client running mode

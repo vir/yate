@@ -2061,7 +2061,7 @@ SignallingComponent* SLT::create(const String& type, const NamedList& name)
     if (!layer) {
 	return 0;
     }
-    String confSec = layer->getValue("session","default");
+    String confSec = layer->getValue("session","session");
     NamedList recvSec(confSec);
     recvSec.copySubParams(*layer,confSec + ".");
     NamedList* section = cfg.getSection(confSec);
@@ -2076,7 +2076,7 @@ SignallingComponent* SLT::create(const String& type, const NamedList& name)
 	cfg.save();
     }
     if (!section) {
-	Debug(DebugWarn,"Session '%s' does not exist in configuration",confSec.c_str());
+	Debug(&plugin,DebugConf,"Session '%s' does not exist in configuration",confSec.c_str());
 	return 0;
     }
     layer->copyParams(*section);

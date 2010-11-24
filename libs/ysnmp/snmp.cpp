@@ -63,10 +63,8 @@ ObjectSyntax::ObjectSyntax(void* data, int len)
 
 ObjectSyntax::~ObjectSyntax()
 {
-	if (m_simple)
-		TelEngine::destruct(m_simple);
-	if (m_application_wide)
-		TelEngine::destruct(m_application_wide);
+	TelEngine::destruct(m_simple);
+	TelEngine::destruct(m_application_wide);
 }
 
 int ObjectSyntax::decode(DataBlock& data)
@@ -204,18 +202,12 @@ ApplicationSyntax::ApplicationSyntax(void* data, int len)
 
 ApplicationSyntax::~ApplicationSyntax()
 {
-	if (m_ipAddress_value)
-		TelEngine::destruct(m_ipAddress_value);
-	if (m_counter_value)
-		TelEngine::destruct(m_counter_value);
-	if (m_timeticks_value)
-		TelEngine::destruct(m_timeticks_value);
-	if (m_arbitrary_value)
-		TelEngine::destruct(m_arbitrary_value);
-	if (m_big_counter_value)
-		TelEngine::destruct(m_big_counter_value);
-	if (m_unsigned_integer_value)
-		TelEngine::destruct(m_unsigned_integer_value);
+	TelEngine::destruct(m_ipAddress_value);
+	TelEngine::destruct(m_counter_value);
+	TelEngine::destruct(m_timeticks_value);
+	TelEngine::destruct(m_arbitrary_value);
+	TelEngine::destruct(m_big_counter_value);
+	TelEngine::destruct(m_unsigned_integer_value);
 }
 
 int ApplicationSyntax::decode(DataBlock& data)
@@ -465,8 +457,7 @@ Gauge32::Gauge32(void* data, int len)
 
 Gauge32::~Gauge32()
 {
-	if (m_Gauge32)
-		TelEngine::destruct(m_Gauge32);
+	TelEngine::destruct(m_Gauge32);
 }
 
 int Gauge32::decode(DataBlock& data)
@@ -682,22 +673,14 @@ PDUs::PDUs(void* data, int len)
 
 PDUs::~PDUs()
 {
-	if (m_get_request)
-		TelEngine::destruct(m_get_request);
-	if (m_get_next_request)
-		TelEngine::destruct(m_get_next_request);
-	if (m_get_bulk_request)
-		TelEngine::destruct(m_get_bulk_request);
-	if (m_response)
-		TelEngine::destruct(m_response);
-	if (m_set_request)
-		TelEngine::destruct(m_set_request);
-	if (m_inform_request)
-		TelEngine::destruct(m_inform_request);
-	if (m_snmpV2_trap)
-		TelEngine::destruct(m_snmpV2_trap);
-	if (m_report)
-		TelEngine::destruct(m_report);
+	TelEngine::destruct(m_get_request);
+	TelEngine::destruct(m_get_next_request);
+	TelEngine::destruct(m_get_bulk_request);
+	TelEngine::destruct(m_response);
+	TelEngine::destruct(m_set_request);
+	TelEngine::destruct(m_inform_request);
+	TelEngine::destruct(m_snmpV2_trap);
+	TelEngine::destruct(m_report);
 }
 
 int PDUs::decode(DataBlock& data)
@@ -799,8 +782,7 @@ GetRequest_PDU::GetRequest_PDU(void* data, int len)
 
 GetRequest_PDU::~GetRequest_PDU()
 {
-	if (m_GetRequest_PDU)
-		TelEngine::destruct(m_GetRequest_PDU);
+	TelEngine::destruct(m_GetRequest_PDU);
 }
 
 int GetRequest_PDU::decode(DataBlock& data)
@@ -852,8 +834,7 @@ GetNextRequest_PDU::GetNextRequest_PDU(void* data, int len)
 
 GetNextRequest_PDU::~GetNextRequest_PDU()
 {
-	if (m_GetNextRequest_PDU)
-		TelEngine::destruct(m_GetNextRequest_PDU);
+	TelEngine::destruct(m_GetNextRequest_PDU);
 }
 
 int GetNextRequest_PDU::decode(DataBlock& data)
@@ -905,8 +886,7 @@ Response_PDU::Response_PDU(void* data, int len)
 
 Response_PDU::~Response_PDU()
 {
-	if (m_Response_PDU)
-		TelEngine::destruct(m_Response_PDU);
+	TelEngine::destruct(m_Response_PDU);
 }
 
 int Response_PDU::decode(DataBlock& data)
@@ -958,8 +938,7 @@ SetRequest_PDU::SetRequest_PDU(void* data, int len)
 
 SetRequest_PDU::~SetRequest_PDU()
 {
-	if (m_SetRequest_PDU)
-		TelEngine::destruct(m_SetRequest_PDU);
+	TelEngine::destruct(m_SetRequest_PDU);
 }
 
 int SetRequest_PDU::decode(DataBlock& data)
@@ -1011,8 +990,7 @@ GetBulkRequest_PDU::GetBulkRequest_PDU(void* data, int len)
 
 GetBulkRequest_PDU::~GetBulkRequest_PDU()
 {
-	if (m_GetBulkRequest_PDU)
-		TelEngine::destruct(m_GetBulkRequest_PDU);
+	TelEngine::destruct(m_GetBulkRequest_PDU);
 }
 
 int GetBulkRequest_PDU::decode(DataBlock& data)
@@ -1064,8 +1042,7 @@ InformRequest_PDU::InformRequest_PDU(void* data, int len)
 
 InformRequest_PDU::~InformRequest_PDU()
 {
-	if (m_InformRequest_PDU)
-		TelEngine::destruct(m_InformRequest_PDU);
+	TelEngine::destruct(m_InformRequest_PDU);
 }
 
 int InformRequest_PDU::decode(DataBlock& data)
@@ -1117,8 +1094,7 @@ SNMPv2_Trap_PDU::SNMPv2_Trap_PDU(void* data, int len)
 
 SNMPv2_Trap_PDU::~SNMPv2_Trap_PDU()
 {
-	if (m_SNMPv2_Trap_PDU)
-		TelEngine::destruct(m_SNMPv2_Trap_PDU);
+	TelEngine::destruct(m_SNMPv2_Trap_PDU);
 }
 
 int SNMPv2_Trap_PDU::decode(DataBlock& data)
@@ -1170,8 +1146,7 @@ Report_PDU::Report_PDU(void* data, int len)
 
 Report_PDU::~Report_PDU()
 {
-	if (m_Report_PDU)
-		TelEngine::destruct(m_Report_PDU);
+	TelEngine::destruct(m_Report_PDU);
 }
 
 int Report_PDU::decode(DataBlock& data)
@@ -1223,8 +1198,7 @@ PDU::PDU(void* data, int len)
 
 PDU::~PDU()
 {
-	if (m_variable_bindings)
-		TelEngine::destruct(m_variable_bindings);
+	TelEngine::destruct(m_variable_bindings);
 }
 
 int PDU::decode(DataBlock& data)
@@ -1291,8 +1265,7 @@ BulkPDU::BulkPDU(void* data, int len)
 
 BulkPDU::~BulkPDU()
 {
-	if (m_variable_bindings)
-		TelEngine::destruct(m_variable_bindings);
+	TelEngine::destruct(m_variable_bindings);
 }
 
 int BulkPDU::decode(DataBlock& data)
@@ -1363,10 +1336,8 @@ VarBind::VarBind(void* data, int len)
 
 VarBind::~VarBind()
 {
-	if (m_name)
-		TelEngine::destruct(m_name);
-	if (m_value)
-		TelEngine::destruct(m_value);
+	TelEngine::destruct(m_name);
+	TelEngine::destruct(m_value);
 }
 
 int VarBind::decode(DataBlock& data)
@@ -1515,6 +1486,8 @@ int VarBindList::decode(DataBlock& data)
 			length += l;
 			m_list.append(obj);
 		}
+		else
+			TelEngine::destruct(obj);
 	}
 	return length;
 }
@@ -2214,10 +2187,8 @@ SNMPv3Message::SNMPv3Message(void* data, int len)
 
 SNMPv3Message::~SNMPv3Message()
 {
-	if (m_msgGlobalData)
-		TelEngine::destruct(m_msgGlobalData);
-	if (m_msgData)
-		TelEngine::destruct(m_msgData);
+	TelEngine::destruct(m_msgGlobalData);
+	TelEngine::destruct(m_msgData);
 }
 
 int SNMPv3Message::decode(DataBlock& data)
@@ -2346,8 +2317,7 @@ ScopedPduData::ScopedPduData(void* data, int len)
 
 ScopedPduData::~ScopedPduData()
 {
-	if (m_plaintext)
-		TelEngine::destruct(m_plaintext);
+	TelEngine::destruct(m_plaintext);
 }
 
 int ScopedPduData::decode(DataBlock& data)
@@ -2575,30 +2545,18 @@ UsmUserEntry::UsmUserEntry(void* data, int len)
 
 UsmUserEntry::~UsmUserEntry()
 {
-	if (m_usmUserEngineID)
-		TelEngine::destruct(m_usmUserEngineID);
-	if (m_usmUserName)
-		TelEngine::destruct(m_usmUserName);
-	if (m_usmUserSecurityName)
-		TelEngine::destruct(m_usmUserSecurityName);
-	if (m_usmUserCloneFrom)
-		TelEngine::destruct(m_usmUserCloneFrom);
-	if (m_usmUserAuthProtocol)
-		TelEngine::destruct(m_usmUserAuthProtocol);
-	if (m_usmUserAuthKeyChange)
-		TelEngine::destruct(m_usmUserAuthKeyChange);
-	if (m_usmUserOwnAuthKeyChange)
-		TelEngine::destruct(m_usmUserOwnAuthKeyChange);
-	if (m_usmUserPrivProtocol)
-		TelEngine::destruct(m_usmUserPrivProtocol);
-	if (m_usmUserPrivKeyChange)
-		TelEngine::destruct(m_usmUserPrivKeyChange);
-	if (m_usmUserOwnPrivKeyChange)
-		TelEngine::destruct(m_usmUserOwnPrivKeyChange);
-	if (m_usmUserStorageType)
-		TelEngine::destruct(m_usmUserStorageType);
-	if (m_usmUserStatus)
-		TelEngine::destruct(m_usmUserStatus);
+	TelEngine::destruct(m_usmUserEngineID);
+	TelEngine::destruct(m_usmUserName);
+	TelEngine::destruct(m_usmUserSecurityName);
+	TelEngine::destruct(m_usmUserCloneFrom);
+	TelEngine::destruct(m_usmUserAuthProtocol);
+	TelEngine::destruct(m_usmUserAuthKeyChange);
+	TelEngine::destruct(m_usmUserOwnAuthKeyChange);
+	TelEngine::destruct(m_usmUserPrivProtocol);
+	TelEngine::destruct(m_usmUserPrivKeyChange);
+	TelEngine::destruct(m_usmUserOwnPrivKeyChange);
+	TelEngine::destruct(m_usmUserStorageType);
+	TelEngine::destruct(m_usmUserStatus);
 }
 
 int UsmUserEntry::decode(DataBlock& data)
@@ -2960,10 +2918,8 @@ SysOREntry::SysOREntry(void* data, int len)
 
 SysOREntry::~SysOREntry()
 {
-	if (m_sysORDescr)
-		TelEngine::destruct(m_sysORDescr);
-	if (m_sysORUpTime)
-		TelEngine::destruct(m_sysORUpTime);
+	TelEngine::destruct(m_sysORDescr);
+	TelEngine::destruct(m_sysORUpTime);
 }
 
 int SysOREntry::decode(DataBlock& data)

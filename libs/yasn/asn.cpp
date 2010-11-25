@@ -1253,20 +1253,19 @@ TokenDict AsnMib::s_access[] = {
     {0,0}
 };
 
-AsnMib::AsnMib(NamedList* params)
+AsnMib::AsnMib(NamedList& params)
 {
     if (!params)
 	return;
     m_index = 0;
-    m_oid = *params;
-    m_name = params->getValue("name","");
-    m_access = params->getValue("access","");
+    m_oid = params;
+    m_name = params.getValue("name","");
+    m_access = params.getValue("access","");
     m_accessVal = lookup(m_access,s_access,0);
-    m_type = params->getValue("type","");
-    m_revision = params->getValue("revision","");
+    m_type = params.getValue("type","");
+    m_revision = params.getValue("revision","");
     XDebug(s_libName.c_str(),DebugAll,"new AsnMib created with oid : '%s', access : '%s', type : '%s'",
 	    m_oid.c_str(),m_access.c_str(),m_type.c_str());
-    TelEngine::destruct(params);
 }
 
 int AsnMib::compareTo(AsnMib* mib)
@@ -1322,10 +1321,7 @@ AsnMibTree::AsnMibTree(const String& fileName)
 {
     DDebug(s_libName.c_str(),DebugAll,"AsnMibTree object created from %s", fileName.c_str());
     m_treeConf = fileName;
-    if(!m_treeConf.load())
-	Debug(s_libName.c_str(),DebugWarn,"Failed to load MIB tree");
-    else
-	buildTree();
+    buildTree();
 }
 
 AsnMibTree::~AsnMibTree()
@@ -1335,9 +1331,18 @@ AsnMibTree::~AsnMibTree()
 
 void AsnMibTree::buildTree()
 {
-    for (unsigned int i = 0; i < m_treeConf.sections(); i++) {
-	AsnMib* mib = new AsnMib(m_treeConf.getSection(i));
-	m_mibs.append(mib);
+    Configuration cfgTree;
+    cfgTree = m_treeConf;
+    if(!cfgTree.load())
+	Debug(s_libName.c_str(),DebugWarn,"Failed to load MIB tree");
+    else {
+    	for (unsigned int i = 0; i < cfgTree.sections(); i++) {
+    	    NamedList* sect = cfgTree.getSection(i);
+    	    if (sect) {
+	    	AsnMib* mib = new AsnMib(*sect);
+	    	m_mibs.append(mib);
+	    }
+    	}
     }
 }
 

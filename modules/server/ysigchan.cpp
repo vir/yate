@@ -83,7 +83,7 @@ public:
     bool disconnect()
 	{ return Channel::disconnect(m_reason); }
     void handleEvent(SignallingEvent* event);
-    void hangup(const char* reason = 0, SignallingEvent* event = 0);
+    void hangup(const char* reason = 0, SignallingEvent* event = 0, const NamedList* extra = 0);
     // Notifier message dispatched handler
     virtual void dispatched(const Message& msg, bool handled);
 private:
@@ -1161,7 +1161,7 @@ bool SigChannel::msgUpdate(Message& msg)
 
 bool SigChannel::msgDrop(Message& msg, const char* reason)
 {
-    hangup(reason ? reason : "dropped");
+    hangup(reason ? reason : "dropped",0,&msg);
     return Channel::msgDrop(msg,m_reason);
 }
 
@@ -1241,7 +1241,7 @@ void SigChannel::callRejected(const char* error, const char* reason, const Messa
     if (m_reason.null())
 	m_reason = error ? error : reason;
     setState("rejected",false,true);
-    hangup();
+    hangup(0,0,msg);
 }
 
 void SigChannel::connected(const char *reason)
@@ -1259,7 +1259,7 @@ void SigChannel::disconnected(bool final, const char* reason)
     Channel::disconnected(final,m_reason);
 }
 
-void SigChannel::hangup(const char* reason, SignallingEvent* event)
+void SigChannel::hangup(const char* reason, SignallingEvent* event, const NamedList* extra)
 {
     static String params = "reason";
     Lock lock(m_mutex);
@@ -1282,6 +1282,8 @@ void SigChannel::hangup(const char* reason, SignallingEvent* event)
 	ev = new SignallingEvent(SignallingEvent::Release,msg,m_call);
 	TelEngine::destruct(msg);
 	TelEngine::destruct(m_call);
+	if (extra)
+	    plugin.copySigMsgParams(ev,*extra,"i");
     }
     lock2.drop();
     lock.drop();

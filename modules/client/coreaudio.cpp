@@ -587,7 +587,7 @@ CoreAudioConsumer::CoreAudioConsumer(unsigned int rate)
     : Mutex(false,"CoreAudioConsumer"),
       m_total(0), m_volSettable(false), fOutputDevID(0), m_rate(rate)
 {
-    Debug(DebugAll,"AudioSystemConsumer::AudioSystemConsumer() [%p]",this);
+    Debug(DebugAll,"CoreAudioConsumer::CoreAudioConsumer() [%p]",this);
     if (m_rate != DEFAULT_SAMPLE_RATE)
 	m_format << "/" << m_rate;
 }

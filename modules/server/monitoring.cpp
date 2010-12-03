@@ -419,6 +419,7 @@ public:
 	ENGINE_RUNATTEMPT   = 11,
 	ENGINE_NODENAME     = 12,
 	ENGINE_STATE	    = 13,
+	ENGINE_CALL_ACCEPT  = 14,
     };
     // Constructor
     inline EngineInfo()
@@ -1099,6 +1100,7 @@ static TokenDict s_categories[] = {
     {"locks",			Monitor::ENGINE},
     {"semaphores",		Monitor::ENGINE},
     {"waitingSemaphores",       Monitor::ENGINE},
+    {"acceptStatus",		Monitor::ENGINE},
     // node info
     {"runAttempt",		Monitor::ENGINE},
     {"name",			Monitor::ENGINE},
@@ -1255,6 +1257,7 @@ static TokenDict s_engineQuery[] = {
     {"locks",		    EngineInfo::ENGINE_LOCKS},
     {"semaphores",	    EngineInfo::ENGINE_SEMAPHORES},
     {"waitingSemaphores",   EngineInfo::ENGINE_WAITING},
+    {"acceptStatus",	    EngineInfo::ENGINE_CALL_ACCEPT},
     // node info
     {"runAttempt",	    EngineInfo::ENGINE_RUNATTEMPT},
     {"name",		    EngineInfo::ENGINE_NODENAME},
@@ -1275,6 +1278,7 @@ TokenDict EngineInfo::s_engineInfo[] = {
     {"waiting",	    EngineInfo::ENGINE_WAITING},
     {"runattempt",  EngineInfo::ENGINE_RUNATTEMPT},
     {"nodename",    EngineInfo::ENGINE_NODENAME},
+    {"acceptcalls", EngineInfo::ENGINE_CALL_ACCEPT},
     {0,0}
 };
 
@@ -1499,8 +1503,7 @@ bool MsgUpdateHandler::received(Message& msg)
 bool SnmpMsgHandler::received(Message& msg)
 {
     DDebug(__plugin.name(),DebugAll,"SnmpMsgHandler::received()");
-    __plugin.solveQuery(msg);
-    return true;
+    return __plugin.solveQuery(msg);
 }
 
 /**
@@ -2114,6 +2117,7 @@ bool EngineInfo::load()
     String& status = m.retValue();
     if (TelEngine::null(status))
 	return false;
+    cutNewLine(status);
 
     Lock l(this);
     m_table.clear();

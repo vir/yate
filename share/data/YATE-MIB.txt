@@ -130,6 +130,48 @@ waitingSemaphores OBJECT-TYPE
 		"Engine number of waiting semaphores."
 	::= { semaphores 1 }
 
+acceptStatus OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The call accept status of the YATE engine."
+	::= { engine 8 }
+
+cpuLoad		OBJECT IDENTIFIER ::= { engine 9 }
+
+kernelLoad OBJECT-TYPE
+	SYNTAX		INTEGER (1..100)
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"CPU load of YATE in kernel space."
+	::= { cpuLoad 1 }
+
+userLoad OBJECT-TYPE
+	SYNTAX		INTEGER (1..100)
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"CPU load of YATE in user space."
+	::= { cpuLoad 2 }
+
+totalLoad OBJECT-TYPE
+	SYNTAX		INTEGER (1..100)
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Total CPU load for YATE."
+	::= { cpuLoad 3 }
+
+systemLoad OBJECT-TYPE
+	SYNTAX		INTEGER (1..100)
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The CPU load of the host system."
+	::= { cpuLoad 4 }
+
 -- engine END
 -- nodeInfo BEGIN
 

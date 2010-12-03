@@ -1,0 +1,84 @@
+
+; NOTE this file is used to setup CPU load information's
+; The cpuload module inform YATE about system total CPU load and YATE CPU load
+
+;[general]
+
+; This section keeps the settings for system and Yate.
+
+; interval: int: The interval in milliseconds for CPU load check.
+; Note: Minimum value is 1s.
+; Default value 1s
+; interval=1000
+
+; oscillate_interval : int: Time in milliseconds that stop this module from notifying about CPU load,
+; if the CPU load is oscillating between consecutive intervals
+; NOTE! oscillate_interval value should be at least 2 * interval
+; oscillate_interval=5000
+
+; core_number: integer: The number of CPU cores
+; NOTE! Yate will detect the number of cores from "/proc/stat". If the file does not exists you should
+; set the core number to avoid that yate CPU load to be bigger than 100%
+; core_number=1
+
+; smooth : integer between 5 and 50 : Value used to smooth the CPU loading.
+; smooth = 33
+
+;The following sections represent the CPU load managers.
+
+; NOTE!!! Each parameter form the following sections need to match this type:
+; target_name=interval_name,threshold_value,hysteresis_value;......
+; target_name: string: The name if the target.
+; interval_name : string: The name of the interval.
+; threshold_value: int: The upper value of the interval.
+; hysteresis_value: int.
+
+; Examples: engine=accept,50,4;partial,65,2;congestion,80,2;reject
+; The target is "engine";
+; Interval names: all, partial,congestion,none;
+; Threshold value: 50, 65, 80
+; from this results two sets of intervals:
+
+; one when the CPU load is growing :
+; accept = 0-54
+; partial = 54 - 67
+; congestion = 67 - 82
+; reject = 82 - 100
+
+; two when CPU load is lowering
+; accept = 0-46
+; partial = 46 - 63
+; congestion = 63 - 78
+; reject = 78 - 100
+
+; NOTE! : Parameters can be appended with chan.control message and with rmanager command
+; Example: rmanager
+;  "control cpuload section target_name=interval_name,threshold_value,hysteresis_value;......"
+; where "section" represents one from the sections above
+; Example: chan.control
+; Message* m = new Message("chan.control");
+; m->addParam("targetid","cpuload");
+; m->addParam("component","cpuload");
+; m->addParam("operation",monitor); // One of the following : kernelLoad,userLoad,totalLoad,systemLoad
+; m->addParam("engine","interval_name,threshold_value,hysteresis_value;...... ");
+; Engine::enqueue(m); // Engine::dispatch(m);
+
+; NOTE! : Target "engine" is reserved for engine call accept. If you want to modify engine monitors
+; or intervals please do it form manager.conf
+
+;[kernelLoad]
+; YATE CPU kernel-space load settings
+
+
+;[userLoad]
+; YATE CPU user-space load settings
+
+
+;[totalLoad]
+; YATE CPU load settings
+
+
+;[systemLoad]
+; System CPU load settings
+
+

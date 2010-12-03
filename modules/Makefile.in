@@ -59,7 +59,7 @@ PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 	server/pbxassist.yate server/dbpbx.yate server/lateroute.yate \
 	server/park.yate server/queues.yate server/queuesnotify.yate \
 	server/regfile.yate server/accfile.yate server/register.yate \
-	server/callcounters.yate \
+	server/callcounters.yate server/cpuload.yate server/ccongestion.yate \
 	server/dbwave.yate \
 	server/yradius.yate \
 	server/ysnmpagent.yate \

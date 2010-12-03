@@ -807,6 +807,13 @@ public:
 	Client = 3,
 	ClientProxy = 4,
     };
+    
+    enum CallAccept {
+	Accept = 0,
+	Partial = 1,
+	Congestion = 2,
+	Reject = 3,
+    };
 
     /**
      * Plugin load and initialization modes.
@@ -857,6 +864,30 @@ public:
      */
     static RunMode mode()
 	{ return s_mode; }
+
+    /**
+     * Get call accept status
+     * @return Engine's call accept status as enumerated value
+     */
+    inline static CallAccept accept() {
+	return s_accept;
+    }
+
+    /**
+     * Set call accept status
+     * @param ca New call accept status as enumerated value
+     */
+    inline static void setAccept(CallAccept ca) {
+	s_accept = ca;
+    }
+
+    /**
+     * Get call accept states
+     * @return states Pointer to the call accept states TokenDict
+     */
+    inline static const TokenDict* getCallAcceptStates() {
+	return s_callAccept;
+    }
 
     /**
      * Check if the engine is running as telephony client
@@ -1126,6 +1157,8 @@ private:
     static NamedList s_params;
     static int s_haltcode;
     static RunMode s_mode;
+    static CallAccept s_accept;
+    static const TokenDict s_callAccept[];
 };
 
 }; // namespace TelEngine

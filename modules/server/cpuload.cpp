@@ -34,6 +34,7 @@ class Cpu
 {
 public:
     Cpu();
+    inline virtual ~Cpu() {} 
     // Default implementation updates system load from "/proc/stat"
     inline virtual int getSystemLoad()
 	{
@@ -358,7 +359,7 @@ void CpuUpdater::initialize(const Configuration& params)
 
 Cpu::Cpu()
     : m_yateUser(0), m_yateSystem(0), m_sysUser(0), m_sysKer(0), m_sysNice(0),
-    m_loadYU(0), m_loadYS(0), m_loadY(0), m_coreNumber(1), m_lastYateCheck (0),
+    m_loadYU(0), m_loadYS(0), m_loadY(0), m_loadSystem(0), m_coreNumber(1), m_lastYateCheck (0),
     m_lastSystemCheck(0), m_cpuDiscovered(false)
 {
     SysUsage::init();

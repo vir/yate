@@ -6384,6 +6384,7 @@ private:
     SignallingTimer m_trafficSent;
     SignallingTimer m_routeTest;
     bool m_testRestricted;
+    bool m_transferSilent;
     bool m_checkRoutes;
     bool m_autoAllowed;
     bool m_sendUnavail;

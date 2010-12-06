@@ -908,9 +908,9 @@ int CpuPlatform::getSystemLoad()
 {
 #if defined(_WINDOWS)
     // Windows implementation
-#elseif defined(__FreeBSD__)
+#elif defined(__FreeBSD__)
     // FreeBSD implementation
-#elseif defined(_MAC)
+#elif defined(_MAC)
     // MAC OS implementation
 #endif
     return -1;

@@ -324,7 +324,7 @@ SS7Router::SS7Router(const NamedList& params)
       m_changes(0), m_transfer(false), m_phase2(false), m_started(false),
       m_restart(0), m_isolate(0),
       m_trafficOk(0), m_trafficSent(0), m_routeTest(0), m_testRestricted(false),
-      m_checkRoutes(false), m_autoAllowed(false),
+      m_transferSilent(false), m_checkRoutes(false), m_autoAllowed(false),
       m_sendUnavail(true), m_sendProhibited(true),
       m_rxMsu(0), m_txMsu(0), m_fwdMsu(0), m_congestions(0),
       m_mngmt(0)
@@ -337,7 +337,11 @@ SS7Router::SS7Router(const NamedList& params)
 	    &params,this,tmp.c_str());
     }
 #endif
-    m_transfer = params.getBoolValue("transfer");
+    const String* tr = params.getParam("transfer");
+    if (!TelEngine::null(tr)) {
+	m_transferSilent = (*tr == "silent");
+	m_transfer = !m_transferSilent && tr->toBoolean();
+    }
     m_autoAllowed = params.getBoolValue("autoallow",m_autoAllowed);
     m_sendUnavail = params.getBoolValue("sendupu",m_sendUnavail);
     m_sendProhibited = params.getBoolValue("sendtfp",m_sendProhibited);
@@ -367,7 +371,11 @@ bool SS7Router::initialize(const NamedList* config)
     if (config) {
 	debugLevel(config->getIntValue("debuglevel_router",
 	    config->getIntValue("debuglevel",-1)));
-	m_transfer = config->getBoolValue("transfer",m_transfer);
+	const String* tr = config->getParam("transfer");
+	if (!TelEngine::null(tr)) {
+	    m_transferSilent = (*tr == "silent");
+	    m_transfer = !m_transferSilent && tr->toBoolean(m_transfer);
+	}
 	m_autoAllowed = config->getBoolValue("autoallow",m_autoAllowed);
 	m_sendUnavail = config->getBoolValue("sendupu",m_sendUnavail);
 	m_sendProhibited = config->getBoolValue("sendtfp",m_sendProhibited);
@@ -863,11 +871,11 @@ HandledMSU SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7L
     }
     unsigned int dpc = label.dpc().pack(label.type());
     bool local = getLocal(label.type()) == dpc;
-    if (network && !local)
+    if (network && !local && (ret != HandledMSU::NoCircuit))
 	local = network->getLocal(label.type()) == dpc;
     if (local)
 	return m_sendUnavail ? HandledMSU::Unequipped : HandledMSU::Failure;
-    if (m_transfer) {
+    if (m_transfer || m_transferSilent) {
 	if (routeMSU(msu,label,network,label.sls(),SS7Route::NotProhibited) >= 0)
 	    return HandledMSU::Accepted;
 	return m_sendProhibited ? HandledMSU::NoAddress : HandledMSU::Failure;

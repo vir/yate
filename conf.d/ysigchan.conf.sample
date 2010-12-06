@@ -541,6 +541,7 @@
 ; transfer: boolean: Enable the Transfer function (STP mode)
 ; Enabling STP allows routing messages between adjacent networks
 ; By default only the SN and discrimination functions are enabled
+; The special "silent" value performs message transfer without advertising
 ;transfer=no
 
 ; local: string: Declare a default local pointcode for the attached SS7 networks

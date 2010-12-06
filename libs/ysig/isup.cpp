@@ -3034,6 +3034,7 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
       m_uptTimer(0),
       m_userPartAvail(true),
       m_uptCicCode(0),
+      m_cicWarnLevel(DebugMild),
       m_rscTimer(0),
       m_rscCic(0),
       m_rscSpeedup(0),
@@ -3186,6 +3187,7 @@ bool SS7ISUP::initialize(const NamedList* config)
         // Timers
 	m_t9Interval = SignallingTimer::getInterval(*config,"t9",ISUP_T9_MINVAL,0,ISUP_T9_MAXVAL,true);
     }
+    m_cicWarnLevel = DebugMild;
     return SS7Layer4::initialize(config);
 }
 
@@ -4153,9 +4155,10 @@ HandledMSU SS7ISUP::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Lay
 	name = (int)type;
     }
     if (!(circuits() && circuits()->find(cic))) {
-	Debug(this,DebugMild,"Received ISUP type 0x%02x (%s) for unknown cic=%u",
+	Debug(this,m_cicWarnLevel,"Received ISUP type 0x%02x (%s) for unknown cic=%u",
 	    type,name.c_str(),cic);
-	return false;
+	m_cicWarnLevel = DebugAll;
+	return HandledMSU::NoCircuit;
     }
     bool ok = processMSU(type,cic,s+3,len-3,label,network,sls);
     if (!ok && debugAt(DebugMild)) {

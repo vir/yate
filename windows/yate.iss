@@ -31,6 +31,7 @@ Name: "client\qt\run"; Description: "Qt runtime libraries"; Types: full client
 Name: "server"; Description: "Server files"; Types: full server
 Name: "server\pstn"; Description: "Server PSTN support"; Types: full
 Name: "server\cluster"; Description: "Server clustering modules"; Types: full
+Name: "server\monitor"; Description: "Server monitoring support"; Types: full
 Name: "driver"; Description: "Protocol drivers"; Types: full client server
 Name: "driver\base"; Description: "Files, tones, mixers"; Types: full client server custom
 Name: "driver\openssl"; Description: "SSL/TLS encryption support"; Types: full client server
@@ -111,8 +112,10 @@ Source: "Release\server\queues.yate"; DestDir: "{app}\modules\server"; Flags: re
 Source: "Release\server\queuesnotify.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
 Source: "Release\server\lateroute.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
 Source: "Release\server\sipfeatures.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
-Source: "Release\server\monitoring.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
-Source: "Release\server\ysnmpagent.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
+Source: "Release\server\cpuload.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor
+Source: "Release\server\ccongestion.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor
+Source: "Release\server\monitoring.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor
+Source: "Release\server\ysnmpagent.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor
 
 Source: "Release\server\heartbeat.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\cluster
 Source: "Release\server\clustering.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\cluster

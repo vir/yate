@@ -3537,7 +3537,7 @@ String Monitor::getTransactionsInfo(const String& query, const int who)
 void Monitor::sendTrap(const String& trap, const String& value, unsigned int index)
 {
     DDebug(&__plugin,DebugAll,"Monitor::sendtrap(trap='%s',value='%s',index='%d') [%p]",trap.c_str(),value.c_str(),index,this);
-    Message* msg = new Message("monitor.notify");
+    Message* msg = new Message("monitor.notify",0,true);
     msg->addParam("notify.0",trap);
     msg->addParam("value.0",value);
     msg->addParam("index",String(index));
@@ -3548,7 +3548,7 @@ void Monitor::sendTrap(const String& trap, const String& value, unsigned int ind
 // build a notification message. Increase the alarm counters if the notification was an alarm
 void Monitor::sendTraps(const NamedList& traps)
 {
-    Message* msg = new Message("monitor.notify");
+    Message* msg = new Message("monitor.notify",0,true);
     msg->copyParams(traps);
     Engine::enqueue(msg);
 }

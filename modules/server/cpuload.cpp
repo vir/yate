@@ -54,7 +54,7 @@ public:
     inline int getYateKernelLoad()
 	{ return (m_loadYS + 50) / 100; }
     inline int getSLoad()
-	{ return (m_loadSystem + 50) / 100; }
+	{ return m_loadSystem < 0? m_loadSystem : (m_loadSystem + 50) / 100; }
 	
 protected:
     u_int64_t m_yateUser;      // Yate last time counter spend in user mode
@@ -359,7 +359,7 @@ void CpuUpdater::initialize(const Configuration& params)
 
 Cpu::Cpu()
     : m_yateUser(0), m_yateSystem(0), m_sysUser(0), m_sysKer(0), m_sysNice(0),
-    m_loadYU(0), m_loadYS(0), m_loadY(0), m_loadSystem(0), m_coreNumber(1), m_lastYateCheck (0),
+    m_loadYU(0), m_loadYS(0), m_loadY(0), m_loadSystem(-1), m_coreNumber(1), m_lastYateCheck (0),
     m_lastSystemCheck(0), m_cpuDiscovered(false)
 {
     SysUsage::init();
@@ -864,7 +864,8 @@ int CpuStat::getSystemLoad()
 		loading = ((loading *100) * (1000 / user_hz)) / t;
 		loading /= m_coreNumber;
 		m_loadSystem = (100 - s_smooth) * m_loadSystem/100 + s_smooth*loading;
-	    }
+	    } else 
+		m_loadSystem = 0;
 	    m_sysUser = user;
 	    m_sysNice = nice;
 	    m_sysKer = kernel;

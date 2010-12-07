@@ -139,7 +139,7 @@ int ASNLib::decodeInteger(DataBlock& data, u_int64_t& intVal, unsigned int bytes
      * integer = 0x02 length byte {byte}*
      */
     XDebug(s_libName.c_str(),DebugAll,"::decodeInteger() from  data='%p'",&data);
-    u_int64_t value = 0;
+    int64_t value = 0;
     if (data.length() < 2)
 	return InvalidLengthOrTag;
 #ifdef DEBUG
@@ -164,6 +164,12 @@ int ASNLib::decodeInteger(DataBlock& data, u_int64_t& intVal, unsigned int bytes
 	return InvalidLengthOrTag;
     }
 
+    if ((unsigned int)length > bytes) {
+    	DDebug(s_libName.c_str(),DebugAll,"::decodeInteger() - Invalid Length: decoded length=%d greater than requested length=%u in data='%p'",
+    			length,bytes,&data);
+    	return InvalidLengthOrTag;
+    }
+
     if (data[0] & 0x80)
 	value = -1; /* integer is negative */
     int j = 0;
@@ -171,7 +177,7 @@ int ASNLib::decodeInteger(DataBlock& data, u_int64_t& intVal, unsigned int bytes
 	value = (value << 8) | data[j];
 	j++;
     }
-    intVal = value;
+    intVal = (u_int64_t) value;
     data.cut(-length);
 #ifdef DEBUG
     Debug(s_libName.c_str(),DebugAll,"::decodeInteger() - decoded integer value from  data='%p', consumed %u bytes",
@@ -870,7 +876,7 @@ DataBlock ASNLib::encodeInteger(u_int64_t intVal, bool tagCheck)
     int size = sizeof(u_int64_t);
     uint16_t msb = (uint16_t)(intVal >> ((size - 1) * 8 - 1));
 
-    while (((msb & 0x1FF) == 0 || (msb & 0x1FF) == 0xFF) && (size - 1 >= 1)) {
+    while (((msb & 0x1FF) == 0 || (msb & 0x1FF) == 0x1FF) && (size - 1 >= 1)) {
 	size--;
 	msb = (uint16_t)(intVal >> ((size - 1) * 8 - 1));
     }

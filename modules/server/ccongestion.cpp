@@ -94,7 +94,7 @@ bool CpuNotify::received(Message& msg)
     }
     s_module.updateMonitor(params.getValue("monitor"),params.getValue("new"));
     s_module.updateEngine();
-    return true;
+    return false;
 }
 
 /**

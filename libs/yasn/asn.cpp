@@ -1438,6 +1438,7 @@ AsnMib* AsnMibTree::findNext(const ASNObjId& id)
 			return mib;
 		    aux = aux->skipNext();
 	    	}
+		return 0;
 	    }
 	    else {
 	    	searched->setIndex(index + 1);

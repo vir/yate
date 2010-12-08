@@ -220,6 +220,9 @@ class YJBEngine : public JBClientEngine
 public:
     YJBEngine();
     ~YJBEngine();
+    // Retrieve features
+    const XMPPFeatureList& features() const
+	{ return m_features; }
     // Retrieve stream data from a stream
     inline StreamData* streamData(JBClientStream* s)
 	{ return s ? static_cast<StreamData*>(s->userData()) : 0; }
@@ -386,6 +389,7 @@ YJBEntityCapsList s_entityCaps;
 static YJBEngine* s_jabber = 0;
 static String s_priority = "20";         // Default priority for generated presence
 static String s_rosterQueryId = "roster-query";
+static String s_capsNode = "http://yate.null.ro/yate/client/caps"; // Node for entity capabilities
 
 // Commands help
 static const char* s_cmdStatus = "  status jabberclient stream_name";
@@ -664,8 +668,6 @@ YJBEngine::YJBEngine()
     m_features.add(XMPPNamespace::IqPrivate);
     m_features.add(XMPPNamespace::VCard);
     m_features.add(XMPPNamespace::IqVersion);
-    m_features.add(XMPPNamespace::Session);
-    m_features.add(XMPPNamespace::Register);
     m_features.add(XMPPNamespace::EntityCaps);
     m_features.m_identities.append(new JIDIdentity("client","im"));
     m_features.updateEntityCaps();
@@ -718,6 +720,10 @@ void YJBEngine::processEvent(JBEvent* ev)
 		XmlElement* xml = ev->releaseXml();
 		m->addParam("subject",XMPPUtils::subject(*xml),false);
 		m->addParam("body",XMPPUtils::body(*xml),false);
+		XmlElement* state = xml->findFirstChild(0,
+		    &XMPPUtils::s_ns[XMPPNamespace::ChatStates]);
+		if (state)
+		    m->addParam("chatstate",state->unprefixedTag());
 		String tmp("delay");
 		XmlElement* delay = xml->findFirstChild(&tmp,&XMPPUtils::s_ns[XMPPNamespace::Delay]);
 		if (!delay) {
@@ -1398,11 +1404,8 @@ void YJBEngine::processPresenceStanza(JBEvent* ev)
     bool online = pres == XMPPUtils::PresenceNone;
     if (online || pres == XMPPUtils::Unavailable) {
 	String capsId;
-	if (online) {
-	    if (!ev->from().resource())
-		return;
-	    s_entityCaps.processCaps(capsId,ev->element(),ev->stream(),ev->to(),ev->from());
-	}
+	if (online && ev->from().resource())
+	    s_entityCaps.processCaps(capsId,ev->element(),ev->stream(),0,ev->from());
 	// Update contact list resources
 	if (!xMucUser) {
 	    Lock lock(ev->stream());
@@ -1505,7 +1508,8 @@ void YJBEngine::processIqStanza(JBEvent* ev)
 	    return;
     }
 
-    bool fromServer = (!ev->from() || ev->from() == ev->stream()->local().bare());
+    bool fromServer = (!ev->from() || ev->from() == ev->stream()->local().bare() ||
+	ev->from() == ev->stream()->local().domain());
     if (fromServer) {
 	switch (n) {
 	    case XMPPNamespace::Roster:
@@ -1516,6 +1520,42 @@ void YJBEngine::processIqStanza(JBEvent* ev)
 	if (rsp) {
 	    if (ev->id() == s_rosterQueryId) {
 		processRoster(ev,service,t,type);
+		return;
+	    }
+	}
+    }
+    // Disco info requests
+    if (n == XMPPNamespace::DiscoInfo && type == XMPPUtils::IqGet) {
+	bool rsp = fromServer;
+	if (!rsp) {
+	    // Respond to users subscribed to our presence
+	    Lock lock(ev->stream());
+	    StreamData* sdata = streamData(ev);
+	    if (sdata) {
+		NamedList* c = sdata->contact(ev->from().bare());
+		if (c) {
+		    const String& sub = (*c)["subscription"];
+		    rsp = (sub == "both" || sub == "from");
+		}
+	    }
+	}
+	if (rsp) {
+	    XmlElement* xml = 0;
+	    String* node = service->getAttribute("node");
+	    const char* from = !fromServer ? ev->from().c_str() : 0;
+	    if (TelEngine::null(node))
+		xml = m_features.buildDiscoInfo(0,from,ev->id());
+	    else if (*node == s_capsNode)
+		xml = m_features.buildDiscoInfo(0,from,ev->id(),s_capsNode);
+	    else {
+		// Disco info to our node#hash
+		int pos = node->find("#");
+		if (pos > 0 && node->substr(0,pos) == s_capsNode &&
+		    node->substr(pos + 1) == m_features.m_entityCapsHash)
+		    xml = m_features.buildDiscoInfo(0,from,ev->id(),*node);
+	    }
+	    if (xml) {
+		ev->stream()->sendStanza(xml);
 		return;
 	    }
 	}
@@ -1739,8 +1779,10 @@ void YJBEngine::processRoster(JBEvent* ev, XmlElement* service, int tag, int iqT
 	StreamData* sdata = streamData(ev);
 	if (sdata) {
 	    if (*jid != ev->stream()->local().bare()) {
-		if (upd)
-		    sdata->addContact(*jid);
+		if (upd) {
+		    NamedList* c = sdata->addContact(*jid);
+		    c->setParam("subscription",TelEngine::c_safe(sub));
+		}
 		else
 		    sdata->removeContact(*jid);
 		Debug(this,DebugAll,"Account(%s) %s roster item '%s'",
@@ -1772,7 +1814,8 @@ void YJBEngine::processRoster(JBEvent* ev, XmlElement* service, int tag, int iqT
 	    String* jid = x->getAttribute("jid");
 	    if (!TelEngine::null(jid)) {
 		if (sdata && *jid != ev->stream()->local().bare()) {
-		    sdata->addContact(*jid);
+		    NamedList* c = sdata->addContact(*jid);
+		    c->setParam("subscription",x->attribute("subscription"));
 		    Debug(this,DebugAll,"Account(%s) updated roster item '%s'",
 			m->getValue("account"),jid->c_str());
 		}
@@ -2023,6 +2066,8 @@ XmlElement* StreamData::buildPresence(StreamData* d, const char* to)
 	// TODO: Build module default caps
     }
     xml->addChild(XMPPUtils::createEntityCapsGTalkV1());
+    xml->addChild(XMPPUtils::createEntityCaps(s_jabber->features().m_entityCapsHash,
+	s_capsNode));
     return xml;
 }
 

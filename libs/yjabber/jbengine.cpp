@@ -2319,14 +2319,38 @@ bool JBEntityCapsList::saveXmlDoc(const char* file, DebugEnabler* enabler)
 bool JBEntityCapsList::decodeCaps(const XmlElement& xml, char& version, String*& node,
     String*& ver, String*& ext)
 {
-    XmlElement* c = XMPPUtils::findFirstChild(xml,XmlTag::EntityCapsTag,
-	XMPPNamespace::EntityCaps);
+    // Find the first entity caps child with valid node and ext
+    XmlElement* c = 0;
+    while (true) {
+	c = XMPPUtils::findNextChild(xml,c,XmlTag::EntityCapsTag,
+	    XMPPNamespace::EntityCaps);
+	if (!c)
+	    break;
+	if (TelEngine::null(c->getAttribute("node")) ||
+	    TelEngine::null(c->getAttribute("ver")))
+	    continue;
+	break;
+    }
     if (!c)
 	return false;
+    // Check for a subsequent child with new entity caps if the first one is an old version
+    if (!c->getAttribute("hash")) {
+	XmlElement* s = c;
+	while (true) {
+	    s = XMPPUtils::findNextChild(xml,s,XmlTag::EntityCapsTag,
+		XMPPNamespace::EntityCaps);
+	    if (!s)
+		break;
+	    if (!s->getAttribute("hash") ||
+		TelEngine::null(s->getAttribute("node")) ||
+		TelEngine::null(s->getAttribute("ver")))
+		continue;
+	    c = s;
+	    break;
+	}
+    }
     node = c->getAttribute("node");
     ver = c->getAttribute("ver");
-    if (TelEngine::null(node) || TelEngine::null(ver))
-	return false;
     String* hash = c->getAttribute("hash");
     if (hash) {
 	// Version 1.4 or greater

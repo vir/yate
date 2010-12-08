@@ -459,8 +459,19 @@ int ASNLib::decodeOID(DataBlock& data, ASNObjId* obj, bool tagCheck)
     String oid = "";
     unsigned int longNo = 0;
     while (j < length) {
-	if (j == 0 && data[j] == 0x2b) // iso.3 identifier
-	    oid += "1.3.";
+    // first byte contains 2 identifiers : x,y. The byte is 40 * x + y . x can only be 0,1,2 so if x > 2, x stays 2 and the rest goes into y
+	if (j == 0) {
+	    unsigned int x = data[j] / 40;
+	    unsigned int y = data[j] % 40;
+	    if (x > 2) {
+		y = (x - 2) * 40 + y;
+		x = 2;
+	    }
+	    oid += x;
+	    oid += ".";
+	    oid += y;
+	    oid += ".";
+	}
 	else {
 	    uint8_t byte = data[j];
 	    longNo += byte & ~ASN_BIT8;
@@ -980,11 +991,26 @@ DataBlock ASNLib::encodeOID(ASNObjId obj, bool tagCheck)
     if (cont.length() == 0)
 	return data;
 
-    if (cont[0] == 1 && cont[1] == 3) {
-	cont.cut(-2);
-	uint8_t first = 0x2b;
-	contents.append(&first, 1);
+    // first byte is built following the rule first = 40 * x + y
+    // x must not be greater than 2 (joint-iso-ccitt identifier)
+    if (cont[0] > 2) {
+    	Debug(s_libName.c_str(),DebugAll,"::encodeOID('%s') - first identifier is greater than the maximum allowed identifier 'joint-iso-ccitt'(2)",
+    			obj.toString().c_str());
+    	return data;
     }
+    uint8_t first = 40 * cont[0];
+    if (cont.length() > 1) {
+    	// y must not be greater than 39 if x < 2
+    	if (cont[0] < 2 && cont[1] > 39) {
+    	    Debug(s_libName.c_str(),DebugAll,"::encodeOID('%s') - cannot encode second identifier, its value is not allowed for the first identifier",
+    			obj.toString().c_str());
+    	    return data;
+    	}
+    	first += cont[1];
+    	cont.cut(-1);
+    }
+    contents.append(&first, 1);
+    cont.cut(-1);
 
     contents.append(cont);
     if (tagCheck) {
@@ -1413,7 +1439,19 @@ AsnMib* AsnMibTree::find(const ASNObjId& id)
 AsnMib* AsnMibTree::findNext(const ASNObjId& id)
 {
     DDebug(s_libName.c_str(),DebugAll,"AsnMibTree::findNext('%s')",id.toString().c_str());
-    AsnMib* searched = static_cast<AsnMib*>(m_mibs[id.toString()]);
+    String searchID = id.toString();
+    // check it the oid is in our known tree
+    AsnMib* root = static_cast<AsnMib*>(m_mibs.get());
+    if (root && !(id.toString().startsWith(root->toString()))) {
+    	NamedList p(id.toString());
+    	AsnMib oid(p);
+    	int comp = oid.compareTo(root);
+    	if (comp < 0)
+    	    searchID = root->toString();
+    	else if (comp > 0)
+    	    return 0;
+    }
+    AsnMib* searched = static_cast<AsnMib*>(m_mibs[searchID.toString()]);
     if (searched) {
     	if (searched->getAccessValue() > AsnMib::accessibleForNotify) {
 	    DDebug(s_libName.c_str(),DebugInfo,"AsnMibTree::findNext('%s') - found an exact match to be '%s'",
@@ -1421,7 +1459,7 @@ AsnMib* AsnMibTree::findNext(const ASNObjId& id)
 	    return searched;
 	}
     }
-    String value = id.toString();
+    String value = searchID.toString();
     int pos = 0;
     int index = 0;
     while (true) {

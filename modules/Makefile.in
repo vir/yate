@@ -103,7 +103,7 @@ PROGS := $(PROGS) client/coreaudio.yate
 endif
 
 ifneq (@HAVE_QT4@,no)
-PROGS := $(PROGS) qt4/updater.yate
+PROGS := $(PROGS) qt4/updater.yate qt4/customtable.yate qt4/customtext.yate qt4/customtree.yate qt4/widgetlist.yate
 endif
 
 ifneq (@HAVE_ZAP@,no)
@@ -342,6 +342,14 @@ qt4/updater.yate: qt4/updater.moc
 qt4/updater.yate: LOCALFLAGS = $(QT4_INC_NET)
 qt4/updater.yate: LOCALLIBS = $(QT4_LIB_NET)
 
+qt4/customtable.yate: qt4/customtable.moc
+qt4/customtext.yate: qt4/customtext.moc
+qt4/customtree.yate: qt4/customtree.moc
+qt4/widgetlist.yate: qt4/widgetlist.moc
+qt4/customtable.yate qt4/customtext.yate qt4/customtree.yate qt4/widgetlist.yate: ../libyateqt4.so
+qt4/customtable.yate qt4/customtext.yate qt4/customtree.yate qt4/widgetlist.yate: LOCALFLAGS = $(QT4_INC_NET)
+qt4/customtable.yate qt4/customtext.yate qt4/customtree.yate qt4/widgetlist.yate: LOCALLIBS = $(QT4_LIB_NET) -lyateqt4
+
 server/sipfeatures.yate: ../libs/yxml/libyatexml.a
 server/sipfeatures.yate: LOCALFLAGS = -I@top_srcdir@/libs/yxml
 server/sipfeatures.yate: LOCALLIBS = -L../libs/yxml -lyatexml
@@ -385,6 +393,9 @@ server/ysnmpagent.yate: LOCALLIBS = -L../libs/yasn -lyasn -L../libs/ysnmp -lysnm
 
 ../libs/ypbx/libyatepbx.a:
 	$(MAKE) -C ../libs/ypbx
+
+../libyateqt4.so:
+	$(MAKE) -C ../clients/qt4
 
 ../libs/yasn/libyasn.a:
 	$(MAKE) -C ../libs/yasn

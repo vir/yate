@@ -71,7 +71,7 @@
        <number>8</number>
       </property>
       <property name="bottomMargin" >
-       <number>8</number>
+       <number>6</number>
       </property>
       <item>
        <widget class="QLabel" name="label" >
@@ -125,19 +125,7 @@
          <number>0</number>
         </property>
         <item>
-         <widget class="QToolButton" name="abk_accept" >
-          <property name="minimumSize" >
-           <size>
-            <width>0</width>
-            <height>26</height>
-           </size>
-          </property>
-          <property name="maximumSize" >
-           <size>
-            <width>16777215</width>
-            <height>26</height>
-           </size>
-          </property>
+         <widget class="QPushButton" name="abk_accept" >
           <property name="toolTip" >
            <string>Update the contact data</string>
           </property>
@@ -147,25 +135,10 @@
           <property name="icon" >
            <iconset>ok.png</iconset>
           </property>
-          <property name="toolButtonStyle" >
-           <enum>Qt::ToolButtonTextBesideIcon</enum>
-          </property>
          </widget>
         </item>
         <item>
-         <widget class="QToolButton" name="button_hide" >
-          <property name="minimumSize" >
-           <size>
-            <width>0</width>
-            <height>26</height>
-           </size>
-          </property>
-          <property name="maximumSize" >
-           <size>
-            <width>16777215</width>
-            <height>26</height>
-           </size>
-          </property>
+         <widget class="QPushButton" name="button_hide" >
           <property name="toolTip" >
            <string>Abandon changes and exit</string>
           </property>
@@ -174,15 +147,6 @@
           </property>
           <property name="icon" >
            <iconset>close.png</iconset>
-          </property>
-          <property name="iconSize" >
-           <size>
-            <width>20</width>
-            <height>20</height>
-           </size>
-          </property>
-          <property name="toolButtonStyle" >
-           <enum>Qt::ToolButtonTextBesideIcon</enum>
           </property>
          </widget>
         </item>
@@ -221,12 +185,6 @@
           </property>
           <property name="icon" >
            <iconset>quest.png</iconset>
-          </property>
-          <property name="iconSize" >
-           <size>
-            <width>16</width>
-            <height>16</height>
-           </size>
           </property>
           <property name="checkable" >
            <bool>true</bool>

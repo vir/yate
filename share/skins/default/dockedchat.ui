@@ -1,0 +1,94 @@
+<ui version="4.0" >
+ <class>dockedchat</class>
+ <widget class="QWidget" name="dockedchat" >
+  <property name="geometry" >
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>505</width>
+    <height>326</height>
+   </rect>
+  </property>
+  <property name="sizePolicy" >
+   <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
+  <property name="minimumSize" >
+   <size>
+    <width>500</width>
+    <height>300</height>
+   </size>
+  </property>
+  <property name="maximumSize" >
+   <size>
+    <width>16777215</width>
+    <height>16777215</height>
+   </size>
+  </property>
+  <property name="focusPolicy" >
+   <enum>Qt::WheelFocus</enum>
+  </property>
+  <property name="contextMenuPolicy" >
+   <enum>Qt::DefaultContextMenu</enum>
+  </property>
+  <property name="windowTitle" >
+   <string comment="VoIP Client" >Chat</string>
+  </property>
+  <property name="windowIcon" >
+   <iconset>chat.png</iconset>
+  </property>
+  <property name="styleSheet" >
+   <string>QLabel {&#xd;
+  background:none;&#xd;
+  font-size: 11px;&#xd;
+}&#xd;
+</string>
+  </property>
+  <layout class="QVBoxLayout" >
+   <property name="spacing" >
+    <number>2</number>
+   </property>
+   <property name="leftMargin" >
+    <number>4</number>
+   </property>
+   <property name="topMargin" >
+    <number>2</number>
+   </property>
+   <property name="rightMargin" >
+    <number>4</number>
+   </property>
+   <property name="bottomMargin" >
+    <number>4</number>
+   </property>
+   <item>
+    <widget class="QFrame" name="frame_dockedchat" >
+     <property name="_yate_uiwidget" stdset="0" >
+      <bool>true</bool>
+     </property>
+     <property name="_yate_uiwidget_name" stdset="0" >
+      <string>dockedchatwidget</string>
+     </property>
+     <property name="_yate_uiwidget_class" stdset="0" >
+      <string>WidgetList</string>
+     </property>
+     <property name="_yate_uiwidget_params" stdset="0" >
+      <stringlist>
+       <string>type=tabs</string>
+       <string>delete_item_action=deleteitem</string>
+       <string>delete_item_type=native</string>
+       <string>delete_item_property:styleSheet=QToolButton{qproperty-icon:url(close.png);qproperty-toolTip:"Close chat";qproperty-arrowType:"Qt::NoArrow";background:transparent;}QToolButton:hover{background:lightgrey;}</string>
+       <string>property:_yate_hidewndwhenempty=true</string>
+       <string>property:_yate_itemui=chat.ui</string>
+       <string>property:_yate_itemtextparam=name</string>
+       <string>property:_yate_itemimageparam=status_image</string>
+      </stringlist>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

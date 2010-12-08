@@ -16,239 +16,140 @@
    <iconset>user.png</iconset>
   </property>
   <layout class="QVBoxLayout" >
+   <property name="spacing" >
+    <number>0</number>
+   </property>
    <property name="leftMargin" >
-    <number>6</number>
+    <number>0</number>
    </property>
    <property name="topMargin" >
-    <number>6</number>
+    <number>0</number>
    </property>
    <property name="rightMargin" >
-    <number>6</number>
+    <number>0</number>
    </property>
    <property name="bottomMargin" >
-    <number>6</number>
+    <number>0</number>
    </property>
    <item>
-    <widget class="QTableWidget" name="accounts" >
-     <property name="editTriggers" >
-      <set>QAbstractItemView::NoEditTriggers</set>
-     </property>
-     <property name="alternatingRowColors" >
-      <bool>true</bool>
-     </property>
-     <property name="selectionMode" >
-      <enum>QAbstractItemView::SingleSelection</enum>
-     </property>
-     <property name="selectionBehavior" >
-      <enum>QAbstractItemView::SelectRows</enum>
-     </property>
-     <property name="columnCount" >
-      <number>3</number>
-     </property>
-     <column>
-      <property name="text" >
-       <string>Account</string>
-      </property>
-     </column>
-     <column>
-      <property name="text" >
-       <string>Protocol</string>
-      </property>
-     </column>
-     <column>
-      <property name="text" >
-       <string>Status</string>
-      </property>
-     </column>
-    </widget>
-   </item>
-   <item>
-    <layout class="QHBoxLayout" >
+    <layout class="QVBoxLayout" >
      <property name="spacing" >
-      <number>2</number>
+      <number>6</number>
+     </property>
+     <property name="leftMargin" >
+      <number>6</number>
+     </property>
+     <property name="topMargin" >
+      <number>6</number>
+     </property>
+     <property name="rightMargin" >
+      <number>6</number>
+     </property>
+     <property name="bottomMargin" >
+      <number>6</number>
      </property>
      <item>
-      <widget class="QPushButton" name="acc_login" >
-       <property name="enabled" >
-        <bool>false</bool>
-       </property>
+      <widget class="QFrame" name="frame_accounts" >
        <property name="sizePolicy" >
-        <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+        <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
          <horstretch>0</horstretch>
          <verstretch>0</verstretch>
         </sizepolicy>
        </property>
-       <property name="minimumSize" >
-        <size>
-         <width>30</width>
-         <height>25</height>
-        </size>
+       <property name="_yate_uiwidget" stdset="0" >
+        <bool>true</bool>
        </property>
-       <property name="maximumSize" >
-        <size>
-         <width>30</width>
-         <height>25</height>
-        </size>
+       <property name="_yate_uiwidget_name" stdset="0" >
+        <string>accounts</string>
        </property>
-       <property name="toolTip" >
-        <string>Login the selected account</string>
+       <property name="_yate_uiwidget_class" stdset="0" >
+        <string>CustomTable</string>
        </property>
-       <property name="text" >
-        <string/>
-       </property>
-       <property name="icon" >
-        <iconset>handshake.png</iconset>
-       </property>
-       <property name="iconSize" >
-        <size>
-         <width>20</width>
-         <height>20</height>
-        </size>
+       <property name="_yate_uiwidget_params" stdset="0" >
+        <stringlist>
+         <string>property:sortingEnabled=true</string>
+         <string>property:styleSheet=QTableWidget{background:white; selection-background-color: lightblue;}</string>
+         <string>property:tabKeyNavigation=false</string>
+         <string>property:_yate_horizontalheader=true</string>
+         <string>property:_yate_notifyonenterpressed=true</string>
+         <string>property:_yate_notifyitemchanged=true</string>
+         <string>property:_yate_itemheight=0</string>
+         <string>property:_yate_sorting=2,true</string>
+         <string>hheader_columns=Enabled,Account,Status</string>
+         <string>hheader_columns_check=enabled</string>
+         <string>hheader_columns_size=60</string>
+         <string>hheader_columns_resize=contents</string>
+        </stringlist>
        </property>
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="acc_logout" >
-       <property name="enabled" >
-        <bool>false</bool>
+      <layout class="QHBoxLayout" >
+       <property name="spacing" >
+        <number>2</number>
        </property>
-       <property name="minimumSize" >
-        <size>
-         <width>30</width>
-         <height>25</height>
-        </size>
-       </property>
-       <property name="maximumSize" >
-        <size>
-         <width>30</width>
-         <height>25</height>
-        </size>
-       </property>
-       <property name="toolTip" >
-        <string>Logout the selected account</string>
-       </property>
-       <property name="text" >
-        <string/>
-       </property>
-       <property name="icon" >
-        <iconset>handshake_x.png</iconset>
-       </property>
-       <property name="iconSize" >
-        <size>
-         <width>20</width>
-         <height>20</height>
-        </size>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <spacer>
-       <property name="orientation" >
-        <enum>Qt::Horizontal</enum>
-       </property>
-       <property name="sizeHint" >
-        <size>
-         <width>40</width>
-         <height>20</height>
-        </size>
-       </property>
-      </spacer>
-     </item>
-     <item>
-      <widget class="QPushButton" name="acc_new" >
-       <property name="minimumSize" >
-        <size>
-         <width>70</width>
-         <height>25</height>
-        </size>
-       </property>
-       <property name="maximumSize" >
-        <size>
-         <width>70</width>
-         <height>25</height>
-        </size>
-       </property>
-       <property name="toolTip" >
-        <string>Create a new account</string>
-       </property>
-       <property name="text" >
-        <string>New</string>
-       </property>
-       <property name="icon" >
-        <iconset>user.png</iconset>
-       </property>
-       <property name="iconSize" >
-        <size>
-         <width>16</width>
-         <height>16</height>
-        </size>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="acc_del" >
-       <property name="enabled" >
-        <bool>false</bool>
-       </property>
-       <property name="minimumSize" >
-        <size>
-         <width>70</width>
-         <height>25</height>
-        </size>
-       </property>
-       <property name="maximumSize" >
-        <size>
-         <width>70</width>
-         <height>25</height>
-        </size>
-       </property>
-       <property name="toolTip" >
-        <string>Delete the selected account</string>
-       </property>
-       <property name="text" >
-        <string>Delete</string>
-       </property>
-       <property name="icon" >
-        <iconset>close.png</iconset>
-       </property>
-       <property name="iconSize" >
-        <size>
-         <width>20</width>
-         <height>20</height>
-        </size>
-       </property>
-       <property name="_yate_identity" stdset="0" >
-        <string>deleteselecteditem:accounts:</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="acc_edit" >
-       <property name="enabled" >
-        <bool>false</bool>
-       </property>
-       <property name="minimumSize" >
-        <size>
-         <width>70</width>
-         <height>25</height>
-        </size>
-       </property>
-       <property name="maximumSize" >
-        <size>
-         <width>70</width>
-         <height>25</height>
-        </size>
-       </property>
-       <property name="toolTip" >
-        <string>Edit the selected account</string>
-       </property>
-       <property name="text" >
-        <string>Edit</string>
-       </property>
-       <property name="icon" >
-        <iconset>edit.png</iconset>
-       </property>
-      </widget>
+       <item>
+        <spacer>
+         <property name="orientation" >
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeHint" >
+          <size>
+           <width>40</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QPushButton" name="acc_new" >
+         <property name="toolTip" >
+          <string>Create a new account</string>
+         </property>
+         <property name="text" >
+          <string>New</string>
+         </property>
+         <property name="icon" >
+          <iconset>user.png</iconset>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="acc_del" >
+         <property name="enabled" >
+          <bool>false</bool>
+         </property>
+         <property name="toolTip" >
+          <string>Delete the selected account</string>
+         </property>
+         <property name="text" >
+          <string>Delete</string>
+         </property>
+         <property name="icon" >
+          <iconset>close.png</iconset>
+         </property>
+         <property name="_yate_identity" stdset="0" >
+          <string>deleteselecteditem:accounts:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="acc_edit" >
+         <property name="enabled" >
+          <bool>false</bool>
+         </property>
+         <property name="toolTip" >
+          <string>Edit the selected account</string>
+         </property>
+         <property name="text" >
+          <string>Edit</string>
+         </property>
+         <property name="icon" >
+          <iconset>edit.png</iconset>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </item>
     </layout>
    </item>

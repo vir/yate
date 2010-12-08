@@ -68,6 +68,8 @@ class QtClient;                          // The QT based client
 class QtDriver;                          // The QT based telephony driver
 class QtWindow;                          // A QT window
 class QtDialog;                          // A custom modal dialog
+class QtUIWidgetItemProps;               // Widget container item properties
+class QtUIWidget;                        // A widget container
 class QtCustomObject;                    // A custom QT object
 class QtCustomWidget;                    // A custom QT widget
 class QtTable;                           // A custom QT table widget
@@ -120,6 +122,22 @@ class YQT4_API QtClient : public Client
 {
     friend class QtWindow;
 public:
+    /**
+     * Generic position flags
+     */
+    enum QtClientPos {
+	PosNone   = 0,
+	PosLeft   = 0x01,
+	PosRight  = 0x02,
+	PosTop    = 0x04,
+	PosBottom = 0x08,
+	// Corners
+	CornerTopLeft = PosTop | PosLeft,
+	CornerTopRight = PosTop | PosRight,
+	CornerBottomLeft = PosBottom | PosLeft,
+	CornerBottomRight = PosBottom | PosRight,
+    };
+
     QtClient();
     virtual ~QtClient();
     virtual void run();
@@ -325,6 +343,13 @@ public:
     static void copyParams(QStringList& dest, const NamedList& src);
 
     /**
+     * Build QObject properties from list
+     * @param obj The object
+     * @param props Comma separated list of properties. Format: name=type
+     */
+    static void buildProps(QObject* obj, const String& props);
+
+    /**
      * Build custom UI widgets from frames owned by a widget
      * @param parent Parent widget
      */
@@ -410,6 +435,28 @@ public:
      */
     static bool connectObjects(QObject* sender, const char* signal,
 	 QObject* receiver, const char* slot);
+
+    /**
+     * Safely delete a QObject. Disconnect it, reset its parent, calls its deleteLater() method
+     * @param obj The object to delete
+     */
+    static void deleteLater(QObject* obj);
+
+    /**
+     * Retrieve unavailable space position (if any) in the screen containing a given widget.
+     * The positions are set using the difference between screen geometry and available geometry
+     * @param w The widget
+     * @param pos Unavailable screen space if any (QtClientPos combination)
+     * @return Valid pointer to global desktop widget on success
+     */
+    static QDesktopWidget* getScreenUnavailPos(QWidget* w, int& pos);
+
+    /**
+     * Move a window to a specified position
+     * @param w The window to move
+     * @param pos A corner position
+     */
+    static void moveWindow(QtWindow* w, int pos);
 
 protected:
     virtual void loadWindows(const char* file = 0);
@@ -618,6 +665,20 @@ public:
 	}
 
     /**
+     * Connect an object's text changed signal to window's slot
+     * @param obj The object to connect
+     * @return True on success
+     */
+    bool connectTextChanged(QObject* obj);
+
+    /**
+     * Notify text changed to the client
+     * @param obj The object sending the notification
+     * @param text Optional object text
+     */
+    void notifyTextChanged(QObject* obj, const QString& text = QString());
+
+    /**
      * Load a widget from file
      * @param fileName UI filename to load
      * @param parent The widget holding the loaded widget's contents
@@ -640,6 +701,13 @@ public:
      */
     inline QtWindow* parentWindow() const
 	{ return qobject_cast<QtWindow*>(parentWidget() ? parentWidget()->window() : 0); }
+
+    /**
+     * Check if this window is shown normal (not maximixed, minimized or full screen)
+     * @return True if the window is not maximixed, minimized or full screen
+     */
+    inline bool isShownNormal() const
+	{ return !(isMaximized() || isMinimized() || isFullScreen()); }
 
 protected:
     // Notify client on selection changes
@@ -672,7 +740,10 @@ public slots:
     // Choose file window was cancelled
     void chooseFileRejected();
     // Text changed slot. Notify the client
-    void textChanged(const QString& text);
+    void textChanged(const QString& text)
+	{ notifyTextChanged(sender(),text); }
+    void textChanged()
+	{ notifyTextChanged(sender()); }
 
 private slots:
     void openUrl(const QString& link);
@@ -681,10 +752,8 @@ protected:
     virtual void doPopulate();
     virtual void doInit();
     // Methods inherited from QWidget
-    virtual void moveEvent(QMoveEvent* event)
-	{ updatePosSize(); }
-    virtual void resizeEvent(QResizeEvent* event)
-	{ updatePosSize(); }
+    virtual void moveEvent(QMoveEvent* event);
+    virtual void resizeEvent(QResizeEvent* event);
     virtual bool event(QEvent* ev);
     virtual void mousePressEvent(QMouseEvent* event);
     virtual void mouseReleaseEvent(QMouseEvent* event);
@@ -695,8 +764,6 @@ protected:
 	    if (handleContextMenuEvent(ev,wndWidget()))
 		ev->accept();
 	}
-    // Update window position and size
-    void updatePosSize();
     // Get the widget with this window's content
     inline QWidget* wndWidget()
 	{ return findChild<QWidget*>(m_widget); }
@@ -707,8 +774,8 @@ protected:
     String m_oldId;                      // Old id used to retreive the config section in .rc
     int m_x;
     int m_y;
-    int m_width;
-    int m_height;
+    int m_width;                         // Client area width
+    int m_height;                        // Client area height
     bool m_maximized;
     bool m_mainWindow;                   // Main window flag: close app when this window is closed
     QString m_widget;                    // The widget with window's content
@@ -795,18 +862,399 @@ protected slots:
 protected:
     // Destroy the dialog
     virtual void closeEvent(QCloseEvent* event);
+    // Destroy the dialog
+    virtual void reject();
 
     String m_notifyOnClose;              // Action to notify when closed
     QString m_context;                   // Dialog context
 };
 
 /**
+ * This class holds data about a widget container item
+ * @short Widget container item properties
+ */
+class QtUIWidgetItemProps : public String
+{
+public:
+    /**
+     * Constructor
+     * @param type Item type
+     */
+    explicit inline QtUIWidgetItemProps(const String& type)
+	: String(type)
+	{}
+
+    String m_ui;                         // Item UI file
+    String m_styleSheet;                 // Item style sheet when not selected
+    String m_selStyleSheet;              // Item selected style
+};
+
+/**
+ * This class holds a basic widget container with functions to rename children
+ * @short A widget container
+ */
+class YQT4_API QtUIWidget : public UIWidget
+{
+    YCLASS(QtUIWidget,UIWidget)
+public:
+    /**
+     * Constructor
+     * @param name Object name
+     * @param params Object parameters
+     * @param parent Optional parent
+     */
+    inline QtUIWidget(const char* name)
+	: UIWidget(name)
+	{}
+
+    /**
+     * Build a child name from this one
+     * @param buf Destination buffer
+     * @param item Child name
+     * @return The destination buffer
+     */
+    inline String& buildChildName(String& buf, const String& item)
+	{ return buildChildName(buf,name(),item); }
+
+    /**
+     * Build a container QString child name
+     * @param item Child name
+     * @return QString child name
+     */
+    inline QString buildQChildName(const String& item)
+	{ return buildQChildName(name(),item); }
+
+    /**
+     * Retrieve item type definition
+     * @param type Item type name
+     * @return QtUIWidgetItemProps pointer or 0
+     */
+    inline QtUIWidgetItemProps* getItemProps(const String& type) {
+	    ObjList* o = m_itemProps.find(type);
+	    return o ? static_cast<QtUIWidgetItemProps*>(o->get()) : 0;
+	}
+
+    /**
+     * Retrieve item type definition from [type:]value. Create it if not found
+     * @param in Input string
+     * @param value Item property value
+     * @return QtUIWidgetItemProps pointer or 0
+     */
+    virtual QtUIWidgetItemProps* getItemProps(QString& in, String& value);
+
+    /**
+     * Retrieve the list of properties to save
+     * @return The list of properties to save
+     */
+    QStringList saveProps()
+	{ return m_saveProps; }
+
+    /**
+     * Set the list of properties to save
+     * @param list The new list of properties to save
+     */
+    void setSaveProps(QStringList list)
+	{ m_saveProps = list; }
+
+    /**
+     * Retrieve a QObject descendent of this object
+     * @return QObject pointer or 0
+     */
+    virtual QObject* getQObject()
+	{ return 0; }
+
+    /**
+     * Retrieve the window owning this object
+     * @return QtWindow pointer or 0
+     */
+    virtual QtWindow* getWindow()
+	{ return QtClient::parentWindow(getQObject()); }
+
+    /**
+     * Set widget's parameters.
+     * Handle an 'applyall' parameter carrying a NamedList to apply to all items
+     * @param params List of parameters
+     * @return True if all parameters could be set
+     */
+    virtual bool setParams(const NamedList& params);
+
+    /**
+     * Retrieve a QObject list containing container items
+     * @return The list of container items
+     */
+    virtual QList<QObject*> getContainerItems()
+	{ return QList<QObject*>(); }
+
+    /**
+     * Find an item widget by id
+     * @param id Item id
+     * @return QWidget pointer or 0
+     */
+    virtual QWidget* findItem(const String& id);
+
+    /**
+     * Apply a list of parameters to all container items
+     * @return The list of parameters to apply
+     */
+    virtual void applyAllParams(const NamedList& params);
+
+    /**
+     * Retrieve the object identity from '_yate_identity' property or name
+     * Retrieve the object item from '_yate_widgetlistitem' property.
+     * Set 'identity' to object_identity[:item_name]
+     * @param obj The object
+     * @param identiy Destination buffer
+     */
+    virtual void getIdentity(QObject* obj, String& identity);
+
+    /**
+     * Update an item object and children from a list a parameters
+     * @param parent Parent object
+     * @param params The list of parameters
+     * @return True on success
+     */
+    virtual bool setParams(QObject* parent, const NamedList& params);
+
+    /**
+     * Get an item object's parameters
+     * @param parent The object
+     * @param params Parameter list
+     * @return True on success
+     */
+    virtual bool getParams(QObject* parent, NamedList& params);
+
+    /**
+     * Retrieve object slots
+     * @param actionSlot Action (triggerred) slot
+     * @param toggleSlot Toggled slot
+     * @param selectSlot Selection change slot
+     */
+    virtual void getSlots(String& actionSlot, String& toggleSlot, String& selectSlot) {
+	    actionSlot = SLOT(itemChildAction());
+	    toggleSlot = SLOT(itemChildToggle(bool));
+	    selectSlot = SLOT(itemChildSelect());
+	}
+
+    /**
+     * Select an item by its index
+     * @param index Item index to select
+     * @return True on success
+     */
+    virtual bool setSelectIndex(int index)
+	{ return false; }
+
+    /**
+     * Retrieve the 0 based index of the current item
+     * @return The index of the current item (-1 on error or container empty)
+     */
+    virtual int currentItemIndex()
+	{ return -1; }
+
+    /**
+     * Retrieve the number of items in container
+     * @return The number of items in container (-1 on error)
+     */
+    virtual int itemCount()
+	{ return -1; }
+
+    /**
+     * Build a child's widget menu. Connect actions to container slots
+     * @param w The widget
+     * @param params Menu params
+     * @param child Optional widget child target
+     * @param set True to set the menu, false to build it and just return it
+     * @return QMenu pointer or 0
+     */
+    QMenu* buildWidgetItemMenu(QWidget* w, const NamedList* params,
+	const String& child = String::empty(), bool set = true);
+
+    /**
+     * Build a container child name
+     * @param buf Destination buffer
+     * @param name Container widget name
+     * @param item Child name
+     * @return The destination buffer
+     */
+    static inline String& buildChildName(String& buf, const String& name,
+	const String& item) {
+	    buf = name + "_" + item;
+	    return buf;
+	}
+
+    /**
+     * Build a container child name
+     * @param name Container widget name
+     * @param item Child name
+     * @return QString child name
+     */
+    static inline QString buildQChildName(const QString& name, const QString& item)
+	{ return name + "_" + item; }
+
+    /**
+     * Build a container QString child name
+     * @param name Container widget name
+     * @param item Child name
+     * @return QString child name
+     */
+    static inline QString buildQChildName(const String& name, const String& item) {
+	    String buf;
+	    return QtClient::setUtf8(buildChildName(buf,name,item));
+	}
+
+    /**
+     * Set the list item id property to a list item object
+     * @param obj The object
+     * @param item Item id property value
+     */
+    static inline void setListItemIdProp(QObject* obj, const QString& item)
+	{ obj->setProperty("_yate_widgetlistitemid",QVariant(item)); }
+
+    /**
+     * Retrieve the list item id property from a list item object
+     * @param obj The object
+     * @param item Destination string
+     */
+    static inline void getListItemIdProp(QObject* obj, String& item)
+	{ QtClient::getProperty(obj,"_yate_widgetlistitemid",item); }
+
+    /**
+     * Set the list item property for an item's child object
+     * @param obj The object
+     * @param item Item property value
+     */
+    static inline void setListItemProp(QObject* obj, const QString& item)
+	{ obj->setProperty("_yate_widgetlistitem",QVariant(item)); }
+	
+    /**
+     * Retrieve the list item property from an item's child object
+     * @param obj The object
+     * @param item Destination string
+     */
+    static inline void getListItemProp(QObject* obj, String& item)
+	{ QtClient::getProperty(obj,"_yate_widgetlistitem",item); }
+
+    /**
+     * Retrieve the top level QtUIWidget container parent of an object
+     * @param obj The object
+     * @return QtUIWidget pointer or 0 if not found
+     */
+    static QtUIWidget* container(QObject* obj);
+
+protected:
+    /**
+     * Default constructor
+     */
+    QtUIWidget()
+	{}
+
+    /**
+     * Initialize navigation controls
+     * @param params Parameter list
+     */
+    void initNavigation(const NamedList& params);
+
+    /**
+     * Update navigation controls
+     */
+    void updateNavigation();
+
+    /**
+     * Trigger a custom action from an item. Build a list of parameters containing
+     *  the 'item' and the 'list' object identity
+     * @param item The item id
+     * @param action The action name to trigger
+     * @param sender Optional sender (set it to 0 to use getQObject())
+     */
+    void triggerAction(const String& item, const String& action, QObject* sender = 0);
+
+    /**
+     * Handle a child's action. Retrieve the object identity (using getIdentity()) and
+     *  notify the action 'sender_identity:sender_item_name' to the client
+     * Internally handle next/prev actions if set
+     * @param sender The sender
+     */
+    virtual void onAction(QObject* sender);
+
+    /**
+     * Handle a child's action. Retrieve the object identity (using getIdentity()) and
+     *  notify the toggled 'sender_identity:sender_item_name' event to the client
+     * @param sender The sender
+     * @param on Toggle status
+     */
+    virtual void onToggle(QObject* sender, bool on);
+
+    /**
+     * Handle a child's selection change. Retrieve the object identity and
+     *  notify the select 'sender_identity:sender_item_name' event to the client.
+     * @param sender The sender
+     * @param item Optional selected item if any. Set it to 0 to detect it
+     */
+    virtual void onSelect(QObject* sender, const String* item = 0);
+
+    /**
+     * Load an item's widget. Rename children.
+     * Set '_yate_widgetlistitemid' widget property to given name.
+     * Set '_yate_widgetlistitem' to item for each child.
+     * Connect signals for children not having a '_yate_autoconnect' property set to false.
+     * Install event filter for children with '_yate_filterevents' property set to true.
+     * @param parent Parent widget
+     * @param name Widget name
+     * @param ui UI file to load
+     * @return QWidget pointer or 0
+     */
+    QWidget* loadWidget(QWidget* parent, const String& name, const String& ui);
+
+    /**
+     * Load an item's widget using a given type
+     * @param parent Parent widget
+     * @param name Widget name
+     * @param type Item type
+     * @return QWidget pointer or 0
+     */
+    inline QWidget* loadWidgetType(QWidget* parent, const String& name, const String& type) {
+	    QtUIWidgetItemProps* p = getItemProps(type);
+	    if (p && p->m_ui)
+		return loadWidget(parent,name,p->m_ui);
+	    return 0;
+	}
+
+    /**
+     * Apply a QWidget style sheet. Replace ${name} with widget name in style
+     * @param name The widget
+     * @param style The style sheet to apply
+     */
+    void applyWidgetStyle(QWidget* w, const String& style);
+
+    /**
+     * Filter key press events. Retrieve an action associated with the key.
+     * Check if the object is allowed to process the key.
+     * Raise the action
+     * @param obj The object
+     * @param event QKeyEvent event to process
+     * @param filter Filter key or let the object process it
+     * @return True if processed, false if no key was filtered
+     */
+    bool filterKeyEvent(QObject* watched, QKeyEvent* event, bool& filter);
+
+    ObjList m_itemProps;
+    QStringList m_saveProps;             // List of properties to be automatically
+                                         //  saved/restored when window owning
+                                         //  this object is initialized/destroyed
+    // Navigation
+    String m_prev;                       // Goto previous item action
+    String m_next;                       // Goto next item action
+    String m_info;                       // Info widget: current index, total ...
+    String m_infoFormat;                 // Data to be displayed in info
+    String m_title;                      // Current item title widget name
+};
+
+/**
  * This class encapsulates a custom QT object
  * @short A custom QT object
  */
-class YQT4_API QtCustomObject : public QObject, public UIWidget
+class YQT4_API QtCustomObject : public QObject, public QtUIWidget
 {
-    YCLASS(QtCustomObject,UIWidget)
+    YCLASS(QtCustomObject,QtUIWidget)
     Q_CLASSINFO("QtCustomObject","Yate")
     Q_OBJECT
 public:
@@ -816,8 +1264,15 @@ public:
      * @param parent Optional parent object
      */
     inline QtCustomObject(const char* name, QObject* parent = 0)
-	: QObject(parent), UIWidget(name)
+	: QObject(parent), QtUIWidget(name)
 	{ setObjectName(name);	}
+
+    /**
+     * Retrieve a QObject from this one
+     * @return QObject pointer
+     */
+    virtual QObject* getQObject()
+	{ return static_cast<QObject*>(this); }
 
     /**
      * Parent changed notification
@@ -833,9 +1288,9 @@ private:
  * This class encapsulates a custom QT widget
  * @short A custom QT widget
  */
-class YQT4_API QtCustomWidget : public QWidget, public UIWidget
+class YQT4_API QtCustomWidget : public QWidget, public QtUIWidget
 {
-    YCLASS(QtCustomWidget,UIWidget)
+    YCLASS(QtCustomWidget,QtUIWidget)
     Q_CLASSINFO("QtCustomWidget","Yate")
     Q_OBJECT
 public:
@@ -845,8 +1300,15 @@ public:
      * @param parent Optional parent widget
      */
     inline QtCustomWidget(const char* name, QWidget* parent = 0)
-	: QWidget(parent), UIWidget(name)
+	: QWidget(parent), QtUIWidget(name)
 	{ setObjectName(name);	}
+
+    /**
+     * Retrieve a QObject from this one
+     * @return QObject pointer
+     */
+    virtual QObject* getQObject()
+	{ return static_cast<QObject*>(this); }
 
 private:
     QtCustomWidget() {}                  // No default constructor
@@ -856,9 +1318,9 @@ private:
  * This class encapsulates a custom QT table
  * @short A custom QT table widget
  */
-class YQT4_API QtTable : public QTableWidget, public UIWidget
+class YQT4_API QtTable : public QTableWidget, public QtUIWidget
 {
-    YCLASS(QtTable,UIWidget)
+    YCLASS(QtTable,QtUIWidget)
     Q_CLASSINFO("QtTable","Yate")
     Q_OBJECT
 public:
@@ -868,11 +1330,48 @@ public:
      * @param parent Optional parent widget
      */
     inline QtTable(const char* name, QWidget* parent = 0)
-	: QTableWidget(parent), UIWidget(name)
+	: QTableWidget(parent), QtUIWidget(name)
 	{ setObjectName(name); }
+
+    /**
+     * Retrieve a QObject from this one
+     * @return QObject pointer
+     */
+    virtual QObject* getQObject()
+	{ return static_cast<QObject*>(this); }
 
 private:
     QtTable() {}                         // No default constructor
+};
+
+/**
+ * This class encapsulates a custom QT tree
+ * @short A custom QT tree widget
+ */
+class YQT4_API QtTree : public QTreeWidget, public QtUIWidget
+{
+    YCLASS(QtTree,QtUIWidget)
+    Q_CLASSINFO("QtTree","Yate")
+    Q_OBJECT
+public:
+    /**
+     * Constructor
+     * @param name Tree's name
+     * @param parent Optional parent widget
+     */
+    inline QtTree(const char* name, QWidget* parent = 0)
+	: QTreeWidget(parent), QtUIWidget(name)
+	{ setObjectName(name); }
+
+    /**
+     * Retrieve a QObject from this one
+     * @return QObject pointer
+     */
+    virtual QObject* getQObject()
+	{ return static_cast<QObject*>(this); }
+
+private:
+    QtTree() {}                          // No default constructor
 };
 
 /**
@@ -891,7 +1390,7 @@ public:
      */
     inline QtSound(const char* name, const char* file, const char* device = 0)
 	: ClientSound(name,file,device), m_sound(0)
-	{}
+	{ m_native = true; }
 
 protected:
     virtual bool doStart();

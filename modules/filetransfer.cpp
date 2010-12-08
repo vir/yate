@@ -114,6 +114,8 @@ private:
     String m_notify;                     // Target id to notify
     String m_dropChan;                   // Channel to drop on termination
     bool m_notifyProgress;               // Notify file transfer progress
+    bool m_notifyPercent;                // Notify percent changes only
+    int m_percent;                       // Notify current percent
     unsigned int m_buflen;               // Transfer buffer length
     unsigned int m_sleepMs;              // Sleep between data transfer
     unsigned int m_retryableReadErrors;  // How many retryable read erros occured
@@ -150,6 +152,8 @@ private:
     String m_tmpFileName;
     String m_dropChan;                   // Channel to drop on termination
     bool m_notifyProgress;               // Notify file transfer progress
+    bool m_notifyPercent;                // Notify percent changes only
+    int m_percent;                       // Notify current percent
     MD5 m_md5;                           // Calculate the MD5 if used
     u_int64_t m_startTime;
     bool m_terminated;
@@ -173,7 +177,7 @@ class FileChan : public Channel
 {
 public:
     // Build a file transfer channel
-    FileChan(FileSource* src, FileConsumer* cons);
+    FileChan(FileSource* src, FileConsumer* cons, bool autoclose);
     ~FileChan();
 };
 
@@ -259,6 +263,7 @@ static unsigned int s_srcLingerIntervals = 10;           // How many intervals t
 static int s_retryableReadErrors = 1000;     // How many retryable read errors are
                                              //  allowed when sending a file (-1 to retry forever)
 static bool s_notifyProgress = true;         // Notify file transfer progress
+static bool s_notifyPercent = true;          // Notify transfer percent
 static bool s_srcFileInfo = true;            // Set file info params in call.execute
 static bool s_srcFileMd5 = true;             // Set file MD5 call.execute
 static String s_path;                        // Default path to save files
@@ -337,6 +342,8 @@ FileSource::FileSource(const String& file, NamedList* params, const char* chan,
     FileHolder(file),
     m_dropChan(chan),
     m_notifyProgress(s_notifyProgress),
+    m_notifyPercent(s_notifyPercent),
+    m_percent(0),
     m_buflen(s_sendChunk), m_sleepMs(s_sendIntervalMs),
     m_retryableReadErrors(0), m_worker(0)
 {
@@ -448,9 +455,18 @@ void FileSource::run()
 	    tmp.clear(false);
 	    if (sent && sent != invalidStamp()) {
 		m_transferred += sent;
-		if (m_notifyProgress)
-		    FileDriver::notifyStatus(true,m_notify,"progressing",m_fileName,
-			m_transferred,m_fileSize);
+		if (m_notifyProgress) {
+		    bool notif = true;
+		    if (m_notifyPercent) {
+			int tmp = (int)((int64_t)m_transferred * 100 / m_fileSize);
+			notif = (m_percent != tmp);
+			if (notif)
+			    m_percent = tmp;
+		    }
+		    if (notif)
+			FileDriver::notifyStatus(true,m_notify,"progressing",m_fileName,
+			    m_transferred,m_fileSize);
+		}
 		if (sent == len) {
 		    buf = 0;
 		    len = 0;
@@ -540,6 +556,8 @@ FileConsumer::FileConsumer(const String& file, NamedList* params, const char* ch
     FileHolder(file),
     m_dropChan(chan),
     m_notifyProgress(s_notifyProgress),
+    m_notifyPercent(s_notifyPercent),
+    m_percent(0),
     m_startTime(0), m_terminated(false), m_delTemp(true)
 {
     __plugin.getPath(m_fileName);
@@ -596,9 +614,18 @@ unsigned long FileConsumer::Consume(const DataBlock& data, unsigned long tStamp,
 	if (m_file.writeData(data.data(),data.length())) {
 	    if (m_md5HexDigest)
 		m_md5 << data;
-	    if (m_notifyProgress)
-		FileDriver::notifyStatus(false,m_notify,"progressing",m_fileName,
-		    m_transferred,m_fileSize);
+	    if (m_notifyProgress) {
+		bool notif = true;
+		if (m_notifyPercent) {
+		    int tmp = (int)((int64_t)m_transferred * 100 / m_fileSize);
+		    notif = (m_percent != tmp);
+		    if (notif)
+			m_percent = tmp;
+		}
+		if (notif)
+		    FileDriver::notifyStatus(false,m_notify,"progressing",m_fileName,
+			m_transferred,m_fileSize);
+	    }
 	}
 	else {
 	    String error;
@@ -704,7 +731,7 @@ void FileSourceWorker::run()
 /*
  * FileChan
  */
-FileChan::FileChan(FileSource* src, FileConsumer* cons)
+FileChan::FileChan(FileSource* src, FileConsumer* cons, bool autoclose)
     : Channel(__plugin,0,src != 0)
 {
     if (src)
@@ -717,10 +744,12 @@ FileChan::FileChan(FileSource* src, FileConsumer* cons)
 	setSource(src,src->getFormat());
     else
 	setConsumer(cons,cons->getFormat());
-    if (src)
-	src->setDropChan(id());
-    else if (cons)
-	cons->setDropChan(id());
+    if (autoclose) {
+	if (src)
+	    src->setDropChan(id());
+	else if (cons)
+	    cons->setDropChan(id());
+    }
     TelEngine::destruct(src);
     TelEngine::destruct(cons);
 }
@@ -800,7 +829,7 @@ bool FileDriver::msgExecute(Message& msg, String& dest)
 	}
 
 	// Build channel
-	FileChan* c = new FileChan(src,cons);
+	FileChan* c = new FileChan(src,cons,msg.getBoolValue("autoclose"));
 	c->initChan();
 	ok = ch->connect(c,msg.getValue("reason"));
 	if (ok) {
@@ -869,7 +898,7 @@ bool FileDriver::msgExecute(Message& msg, String& dest)
     }
 
     // Build message and dispatch it
-    FileChan* c = new FileChan(src,cons);
+    FileChan* c = new FileChan(src,cons,msg.getBoolValue("autoclose"));
     c->initChan();
     m.setParam("id",c->id());
     m.userData(c);

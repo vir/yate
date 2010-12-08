@@ -653,6 +653,7 @@ YJBEngine::YJBEngine()
     m_features.add(XMPPNamespace::Jingle);
     m_features.add(XMPPNamespace::JingleError);
     m_features.add(XMPPNamespace::JingleAppsRtp);
+    m_features.add(XMPPNamespace::JingleAppsRtpAudio);
     m_features.add(XMPPNamespace::JingleAppsRtpInfo);
     m_features.add(XMPPNamespace::JingleAppsRtpError);
     m_features.add(XMPPNamespace::JingleTransportIceUdp);

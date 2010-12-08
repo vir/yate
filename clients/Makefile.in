@@ -29,8 +29,6 @@ LIBS :=
 MENUFILES :=
 DESKFILES :=
 
-QTCLIENT := qt4/libqt4client.a
-
 ifneq (@HAVE_QT4@,no)
 SUBDIRS := $(SUBDIRS) qt4
 PROGS := $(PROGS) yate-qt4
@@ -147,12 +145,9 @@ do-all do-strip do-clean do-install do-uninstall:
 Makefile: @srcdir@/Makefile.in $(MKDEPS)
 	cd .. && ./config.status
 
-yate-%: @srcdir@/main-%.cpp $(MKDEPS) ../libyate.so $(INCFILES)
+yate-%: @srcdir@/main-%.cpp $(MKDEPS) ../libyate.so ../libyateqt4.so $(INCFILES)
 	$(COMPILE) -o $@ $(LOCALFLAGS) $< $(LDFLAGS) $(LIBTHR) $(LOCALLIBS) $(YATELIBS)
 
-yate-qt4: $(QTCLIENT)
+yate-qt4:
 yate-qt4: LOCALFLAGS = $(QT4_INC)
-yate-qt4: LOCALLIBS = $(QTCLIENT) $(QT4_LIB)
-
-$(QTCLIENT):
-	$(MAKE) -C qt4
+yate-qt4: LOCALLIBS = -lyateqt4 $(QT4_LIB)

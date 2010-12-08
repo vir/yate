@@ -72,6 +72,7 @@ public:
 	Unknown        = 15,             // Unknown type
 	Action,                          // QAction descendant
 	CustomTable,                     // QtTable descendant
+	CustomTree,                      // QtTree descendant
 	CustomWidget,                    // QtCustomWidget descendant
 	CustomObject,                    // QtCustomObject descendant
 	Missing                          // Invalid pointer
@@ -94,14 +95,14 @@ public:
 		m_type = Missing;
 	}
     // Set widget/action from object and name
-    inline QtWidget(QWidget* wid, const String& name)
+    inline QtWidget(QObject* parent, const String& name)
 	: m_widget(0), m_action(0), m_object(0), m_type(Missing) {
 	    QString what = QtClient::setUtf8(name);
-	    m_widget = qFindChild<QWidget*>(wid,what);
+	    m_widget = qFindChild<QWidget*>(parent,what);
 	    if (!m_widget) {
-		m_action = qFindChild<QAction*>(wid,what);
+		m_action = qFindChild<QAction*>(parent,what);
 		if (!m_action)
-		    m_object = qFindChild<QObject*>(wid,what);
+		    m_object = qFindChild<QObject*>(parent,what);
 	    }
 	    m_type = getType();
 	}
@@ -154,6 +155,8 @@ public:
 	{ return static_cast<QCalendarWidget*>(m_widget); }
     inline QtTable* customTable()
 	{ return qobject_cast<QtTable*>(m_widget); }
+    inline QtTree* customTree()
+	{ return qobject_cast<QtTree*>(m_widget); }
     inline QtCustomWidget* customWidget()
 	{ return qobject_cast<QtCustomWidget*>(m_widget); }
     inline QtCustomObject* customObject()
@@ -166,6 +169,8 @@ public:
 		    return static_cast<UIWidget*>(customWidget());
 		case CustomObject:
 		    return static_cast<UIWidget*>(customObject());
+		case CustomTree:
+		    return static_cast<UIWidget*>(customTree());
 	    }
 	    return 0;
 	}
@@ -226,6 +231,8 @@ public:
 		    return CustomTable;
 		if (customWidget())
 		    return CustomWidget;
+		if (customTree())
+		    return CustomTree;
 		return Unknown;
 	    }
 	    if (m_action && m_action->inherits("QAction"))
@@ -417,6 +424,20 @@ String QtWidget::s_types[QtWidget::Unknown] = {
     "QProgressBar",
     "QSpinBox",
     "QCalendarWidget"
+};
+
+// QVariant type translation dictionary
+static const TokenDict s_qVarType[] = {
+    {"string",       QVariant::String},
+    {"bool",         QVariant::Bool},
+    {"int",          QVariant::Int},
+    {"uint",         QVariant::UInt},
+    {"stringlist",   QVariant::StringList},
+    {"icon",         QVariant::Icon},
+    {"pixmap",       QVariant::Pixmap},
+    {"double",       QVariant::Double},
+    {"keysequence",  QVariant::KeySequence},
+    {0,0}
 };
 
 // Handler for QT library messages
@@ -955,7 +976,7 @@ bool QtWindow::setParams(const NamedList& params)
 			Debug(QtDriver::self(),DebugFail,
 			    "QtWindow(%s) all hidden counter is 0 while deleting '%s' tray icon [%p]",
 			    m_id.c_str(),YQT_OBJECT_NAME(trayIcon),this);
-		    delete trayIcon;
+		    QtClient::deleteLater(trayIcon);
 		}
 		continue;
 	    }
@@ -1974,7 +1995,7 @@ bool QtWindow::removeMenu(const NamedList& params)
     QMenu* menu = qFindChild<QMenu*>(parent,QtClient::setUtf8(params));
     if (!menu)
 	return false;
-    delete menu;
+    QtClient::deleteLater(menu);
     return true;
 }
 
@@ -2005,6 +2026,30 @@ bool QtWindow::getProperty(const String& name, const String& item, String& value
 	return QtClient::getProperty(wndWidget(),item,value);
     QObject* obj = qFindChild<QObject*>(wndWidget(),QtClient::setUtf8(name));
     return obj ? QtClient::getProperty(obj,item,value) : false;
+}
+
+void QtWindow::moveEvent(QMoveEvent* event)
+{
+    QWidget::moveEvent(event);
+    // Don't update pos if not shown normal
+    if (!isShownNormal())
+	return;
+    m_x = pos().x();
+    m_y = pos().y();
+    DDebug(QtDriver::self(),DebugAll,"QtWindow(%s) moved x=%d y=%d [%p]",
+	m_id.c_str(),m_x,m_y,this);
+}
+
+void QtWindow::resizeEvent(QResizeEvent* event) 
+{
+    QWidget::resizeEvent(event);
+    // Don't update size if not shown normal
+    if (!isShownNormal())
+	return;
+    m_width = width();
+    m_height = height();
+    DDebug(QtDriver::self(),DebugAll,"QtWindow(%s) resized width=%d height=%d [%p]",
+	m_id.c_str(),m_width,m_height,this);
 }
 
 bool QtWindow::event(QEvent* ev)
@@ -2066,10 +2111,15 @@ void QtWindow::action()
 	m_id.c_str(),YQT_OBJECT_NAME(sender()),this);
     if (!QtClient::self() || QtClient::changing())
 	return;
-    QtWidget w(sender());
     String name;
     NamedList* params = 0;
-    if (translateName(w,name,&params))
+    if (!QtClient::getBoolProperty(sender(),"_yate_translateidentity"))
+	QtClient::getIdentity(sender(),name);
+    else {
+	QtWidget w(sender());
+	translateName(w,name,&params);
+    }
+    if (name)
 	QtClient::self()->action(this,name,params);
     TelEngine::destruct(params);
 }
@@ -2150,17 +2200,6 @@ void QtWindow::chooseFileRejected()
     Client::self()->action(this,action,0);
 }
 
-// Text changed slot. Notify the client
-void QtWindow::textChanged(const QString& text)
-{
-    if (!sender())
-	return;
-    NamedList params("");
-    QtClient::getUtf8(params,"sender",sender()->objectName());
-    QtClient::getUtf8(params,"text",text);
-    Client::self()->action(this,"textchanged",&params);
-}
-
 void QtWindow::openUrl(const QString& link)
 {
     QDesktopServices::openUrl(QUrl(link));
@@ -2196,6 +2235,52 @@ void QtWindow::selectionChanged()
 	p.addParam("day",String(d.day()));
 	Client::self()->action(this,name,&p);
     }
+}
+
+// Connect an object's text changed signal to window's slot
+bool QtWindow::connectTextChanged(QObject* obj)
+{
+    if (!(obj && QtClient::getBoolProperty(obj,"_yate_textchangednotify")))
+	return false;
+    QComboBox* combo = qobject_cast<QComboBox*>(obj);
+    if (combo)
+	return QtClient::connectObjects(combo,SIGNAL(editTextChanged(const QString&)),
+	    this,SLOT(textChanged(const QString&)));
+    QLineEdit* lineEdit = qobject_cast<QLineEdit*>(obj);
+    if (lineEdit)
+	return QtClient::connectObjects(lineEdit,SIGNAL(textChanged(const QString&)),
+	    this,SLOT(textChanged(const QString&)));
+    QTextEdit* textEdit = qobject_cast<QTextEdit*>(obj);
+    if (textEdit)
+	return QtClient::connectObjects(textEdit,SIGNAL(textChanged()),
+	    this,SLOT(textChanged()));
+    const QMetaObject* meta = obj->metaObject();
+    Debug(DebugStub,"connectTextChanged() not implemented for class '%s'",
+	meta ? meta->className() :  "");
+    return false;
+}
+
+// Notify text changed to the client
+void QtWindow::notifyTextChanged(QObject* obj, const QString& text)
+{
+    if (!(obj && QtClient::getBoolProperty(obj,"_yate_textchangednotify")))
+	return;
+    // Detect QtUIWidget item. Get its container identity if found
+    String item;
+    QtUIWidget::getListItemProp(obj,item);
+    QtUIWidget* uiw = item ? QtUIWidget::container(obj) : 0;
+    String name;
+    if (!uiw)
+	QtClient::getIdentity(obj,name);
+    else
+	uiw->getIdentity(obj,name);
+    if (!name)
+	return;
+    NamedList p("");
+    p.addParam("sender",name);
+    if (text.size())
+	QtClient::getUtf8(p,"text",text);
+    Client::self()->action(this,"textchanged",&p);
 }
 
 // Load a widget from file
@@ -2353,20 +2438,22 @@ void QtWindow::keyPressEvent(QKeyEvent* event)
 // Show hide window. Notify the client
 void QtWindow::setVisible(bool visible)
 {
-    if (visible && !isMaximized()) {
-	// Override position for notification windows
-	if (QtClient::getBoolProperty(wndWidget(),"_yate_notificationwindow")) {
-	    QDesktopWidget* d = QApplication::desktop();
-	    if (d) {
-		QRect r = d->availableGeometry(this);
-		if (r.width() > m_width)
-		    m_x = r.width() - m_width;
-		if (r.height() > m_height)
-		    m_y = r.height() - m_height;
-	    }
+    // Override position for notification windows
+    if (visible && isShownNormal() &&
+	QtClient::getBoolProperty(wndWidget(),"_yate_notificationwindow")) {
+	// Detect unavailable screen space position and move the window in the apropriate position
+	// bottom/right/none: move it in the right/bottom corner.
+	// top: move it in the right/top corner.
+	// left: move it in the left/bottom corner.
+	int pos = QtClient::PosNone;
+	if (QtClient::getScreenUnavailPos(this,pos)) {
+	    if (0 != (pos & (QtClient::PosBottom | QtClient::PosRight)) || pos == QtClient::PosNone)
+		QtClient::moveWindow(this,QtClient::CornerBottomRight);
+	    else if (0 != (pos & QtClient::PosTop))
+		QtClient::moveWindow(this,QtClient::CornerTopRight);
+	    else
+		QtClient::moveWindow(this,QtClient::CornerBottomLeft);
 	}
-	QWidget::move(m_x,m_y);
-	resize(m_width,m_height);
     }
     if (visible && isMinimized())
 	showNormal();
@@ -2390,7 +2477,7 @@ void QtWindow::setVisible(bool visible)
 	}
     }
     if (!m_visible && QtClient::getBoolProperty(wndWidget(),"_yate_destroyonhide")) {
-	XDebug(QtDriver::self(),DebugAll,
+	DDebug(QtDriver::self(),DebugAll,
 	    "Window(%s) setVisible(false) set delete later [%p]",m_id.c_str(),this);
 	QObject::deleteLater();
     }
@@ -2419,15 +2506,13 @@ void QtWindow::hide()
 
 void QtWindow::size(int width, int height)
 {
-    DDebug(QtDriver::self(),DebugAll,"QtWindow::size(%d,%d) [%p]",width,height,this);
+    Debug(QtDriver::self(),DebugStub,"QtWindow(%s)::size(%d,%d) [%p]",m_id.c_str(),width,height,this);
 }
 
 void QtWindow::move(int x, int y)
 {
-    DDebug(QtDriver::self(),DebugAll,"QtWindow::move(%d,%d) [%p]",x,y,this);
-    m_x = x;
-    m_y = y;
-    QWidget::move(x, y);
+    DDebug(QtDriver::self(),DebugAll,"QtWindow(%s)::move(%d,%d) [%p]",m_id.c_str(),x,y,this);
+    QWidget::move(x,y);
 }
 
 void QtWindow::moveRel(int dx, int dy)
@@ -2474,10 +2559,24 @@ void QtWindow::doPopulate()
     QWidget* formWidget = loadUI(m_description,this,m_id);
     if (!formWidget)
 	return;
-    QSize frame = frameSize();
+    // Set window title decoration flags to avoid pos/size troubles with late decoration
+    QVariant var = formWidget->property(s_propWindowFlags);
+    if (var.type() == QVariant::Invalid) {
+	String flgs = "title,sysmenu,minimize,close";
+	// Add maximize only if allowed
+	if (formWidget->maximumWidth() == QWIDGETSIZE_MAX ||
+	    formWidget->maximumHeight() == QWIDGETSIZE_MAX)
+	    flgs.append("maximize",",");
+	formWidget->setProperty(s_propWindowFlags,QVariant(QtClient::setUtf8(flgs)));
+    }
     setMinimumSize(formWidget->minimumSize().width(),formWidget->minimumSize().height());
     setMaximumSize(formWidget->maximumSize().width(),formWidget->maximumSize().height());
-    resize(formWidget->width(),formWidget->height());
+    m_x = formWidget->pos().x();
+    m_y = formWidget->pos().y();
+    m_width = formWidget->width();
+    m_height = formWidget->height();
+    move(m_x,m_y);
+    QWidget::resize(m_width,m_height);
     QtClient::setWidget(this,formWidget);
     m_widget = YQT_OBJECT_NAME(formWidget);
     String wTitle;
@@ -2502,13 +2601,15 @@ void QtWindow::doInit()
     // Load window data
     m_mainWindow = s_cfg.getBoolValue(m_oldId,"mainwindow");
     m_saveOnClose = s_cfg.getBoolValue(m_oldId,"save",true);
+    if (m_id != m_oldId)
+	m_saveOnClose = s_cfg.getBoolValue(m_oldId,"savealias",m_saveOnClose);
     NamedList* sect = s_save.getSection(m_id);
     if (sect) {
 	m_maximized = sect->getBoolValue("maximized");
-	m_x = sect->getIntValue("x",pos().x());
-	m_y = sect->getIntValue("y",pos().y());
-	m_width = sect->getIntValue("width",width());
-	m_height = sect->getIntValue("height",height());
+	m_x = sect->getIntValue("x",m_x);
+	m_y = sect->getIntValue("y",m_y);
+	m_width = sect->getIntValue("width",m_width);
+	m_height = sect->getIntValue("height",m_height);
 	m_visible = sect->getBoolValue("visible");
     }
     else {
@@ -2516,12 +2617,21 @@ void QtWindow::doInit()
 	    Debug(QtDriver::self(),DebugNote,"Window(%s) not found in config [%p]",
 		m_id.c_str(),this);
 	m_visible = s_cfg.getBoolValue(m_oldId,"visible");
+	// Make sure the window is shown in the available geometry
+	QDesktopWidget* d = QApplication::desktop();
+	if (d) {
+	    QRect r = d->availableGeometry(this);
+	    m_x = r.x();
+	    m_y = r.y();
+	}
     }
     m_visible = m_mainWindow || m_visible;
     if (!m_width)
 	m_width = wndWidget()->width();
     if (!m_height)
 	m_height = wndWidget()->height();
+    move(m_x,m_y);
+    QWidget::resize(m_width,m_height);
 
     // Build custom UI widgets from frames owned by this widget
     QtClient::buildFrameUiWidgets(this);
@@ -2579,6 +2689,19 @@ void QtWindow::doInit()
 	}
     }
 
+    // Add the first menubar to layout
+    QList<QMenuBar*> menuBars = qFindChildren<QMenuBar*>(wndWidget());
+    if (menuBars.size() && layout()) {
+	layout()->setMenuBar(menuBars[0]);
+	// Decrease minimum size policy to make sure the layout is made properly
+	int h = menuBars[0]->height();
+	int min = wndWidget()->minimumHeight();
+	if (min > h)
+	    wndWidget()->setMinimumHeight(min - h);
+	else
+	    wndWidget()->setMinimumHeight(0);
+    }
+
     // Create window's children dynamic properties from config
     unsigned int n = cfg.sections();
     for (unsigned int i = 0; i < n; i++) {
@@ -2607,9 +2730,7 @@ void QtWindow::doInit()
     QList<QComboBox*> combos = qFindChildren<QComboBox*>(wndWidget());
     for (int i = 0; i < combos.size(); i++) {
 	QtClient::connectObjects(combos[i],SIGNAL(activated(int)),this,SLOT(selectionChanged()));
-	if (QtClient::getBoolProperty(combos[i],"_yate_textchangednotify"))
-	    QtClient::connectObjects(combos[i],SIGNAL(editTextChanged(const QString&)),this,
-				     SLOT(textChanged(const QString&)));
+    	connectTextChanged(combos[i]);
     }
 
     // Connect abstract buttons (check boxes and radio/push/tool buttons) signals
@@ -2657,11 +2778,13 @@ void QtWindow::doInit()
 
     // Connect line edit signals
     QList<QLineEdit*> le = qFindChildren<QLineEdit*>(wndWidget());
-    for (int i = 0; i < le.size(); i++) {
-	if (QtClient::getBoolProperty(le[i],"_yate_textchangednotify"))
-	    QtClient::connectObjects(le[i],SIGNAL(textChanged(const QString&)),this,
-		SLOT(textChanged(const QString&)));
-    }
+    for (int i = 0; i < le.size(); i++)
+	connectTextChanged(le[i]);
+
+    // Connect text edit signals
+    QList<QTextEdit*> te = qFindChildren<QTextEdit*>(wndWidget());
+    for (int i = 0; i < te.size(); i++)
+	connectTextChanged(te[i]);
 
     // Process tables:
     // Insert a column and connect signals
@@ -2773,6 +2896,7 @@ void QtWindow::doInit()
 
     // Install event filter and apply dynamic properties
     QList<QObject*> w = qFindChildren<QObject*>(wndWidget());
+    w.append(wndWidget());
     for (int i = 0; i < w.size(); i++) {
 	QList<QByteArray> props = w[i]->dynamicPropertyNames();
 	// Check for our dynamic properties
@@ -2816,7 +2940,7 @@ void QtWindow::doInit()
 // Mouse button pressed notification
 void QtWindow::mousePressEvent(QMouseEvent* event)
 {
-    if (Qt::LeftButton == event->button() && !isMaximized()) {
+    if (Qt::LeftButton == event->button() && isShownNormal()) {
 	m_movePos = event->globalPos();
 	m_moving = true;
     }
@@ -2832,7 +2956,7 @@ void QtWindow::mouseReleaseEvent(QMouseEvent* event)
 // Move the window if the moving flag is set
 void QtWindow::mouseMoveEvent(QMouseEvent* event)
 {
-    if (!m_moving || Qt::LeftButton != event->buttons() || isMaximized())
+    if (!m_moving || Qt::LeftButton != event->buttons() || !isShownNormal())
 	return;
     int cx = event->globalPos().x() - m_movePos.x();
     int cy = event->globalPos().y() - m_movePos.y();
@@ -2840,16 +2964,6 @@ void QtWindow::mouseMoveEvent(QMouseEvent* event)
 	m_movePos = event->globalPos();
 	QWidget::move(x() + cx,y() + cy);
     }
-}
-
-// Update window position and size
-void QtWindow::updatePosSize()
-{
-    QPoint point = pos();
-    m_x = point.x();
-    m_y = point.y();
-    m_width = width();
-    m_height = height();
 }
 
 // Handle context menu events. Return true if handled
@@ -2954,6 +3068,13 @@ void QtDialog::action()
 void QtDialog::closeEvent(QCloseEvent* event)
 {
     QDialog::closeEvent(event);
+    deleteLater();
+}
+
+// Destroy the dialog
+void QtDialog::reject()
+{
+    QDialog::reject();
     deleteLater();
 }
 
@@ -3149,7 +3270,7 @@ bool QtClient::action(Window* wnd, const String& name, NamedList* params)
 // Create a sound object. Append it to the global list
 bool QtClient::createSound(const char* name, const char* file, const char* device)
 {
-    if (!(name && *name && file && *file))
+    if (!(QSound::isAvailable() && name && *name && file && *file))
 	return false;
     Lock lock(ClientSound::s_soundsMutex);
     if (ClientSound::s_sounds.find(name))
@@ -3317,6 +3438,37 @@ void QtClient::copyParams(QStringList& dest, const NamedList& src)
 	if (ns)
 	    dest.append(setUtf8(ns->name() + "=" + *ns));
     }
+}
+
+// Build QObject properties from list
+void QtClient::buildProps(QObject* obj, const String& props)
+{
+    if (!(obj && props))
+	return;
+    ObjList* list = props.split(',',false);
+    for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
+	String* s = static_cast<String*>(o->get());
+	int pos = s->find('=');
+	if (pos < 1)
+	    continue;
+	String ptype = s->substr(pos + 1);
+	QVariant::Type t = (QVariant::Type)lookup(ptype,s_qVarType,QVariant::Invalid);
+	if (t == QVariant::Invalid) {
+	    Debug(ClientDriver::self(),DebugStub,
+		"QtClient::buildProps() unhandled type '%s'",ptype.c_str());
+	    continue;
+	}
+	String pname = s->substr(0,pos);
+	QVariant existing = obj->property(pname);
+	if (existing.type() == QVariant::Invalid) {
+	    obj->setProperty(pname,QVariant(t));
+	    continue;
+	}
+	Debug(ClientDriver::self(),DebugNote,
+	    "Can't create property '%s' type=%s for object (%p,%s): already exists",
+	    pname.c_str(),ptype.c_str(),obj,YQT_OBJECT_NAME(obj));
+    }
+    TelEngine::destruct(list);
 }
 
 // Build custom UI widgets from frames owned by a widget
@@ -3597,6 +3749,76 @@ bool QtClient::filterKeyEvent(QObject* obj, QKeyEvent* event, String& action,
     return true;
 }
 
+// Safely delete a QObject (reset its parent, calls it's deleteLater() method)
+void QtClient::deleteLater(QObject* obj)
+{
+    if (!obj)
+	return;
+    obj->disconnect();
+    if (obj->isWidgetType())
+	(static_cast<QWidget*>(obj))->setParent(0);
+    else
+	obj->setParent(0);
+    obj->deleteLater();
+}
+
+// Retrieve unavailable space position (if any) in the screen containing a given widget.
+QDesktopWidget* QtClient::getScreenUnavailPos(QWidget* w, int& pos)
+{
+    if (!w)
+	return 0;
+    QDesktopWidget* d = QApplication::desktop();
+    if (!d)
+	return 0;
+    pos = PosNone;
+    QRect rScreen = d->screenGeometry(w);
+    QRect rClient = d->availableGeometry(w);
+    int dx = rClient.x() - rScreen.x();
+    if (dx > 0)
+	pos |= PosLeft;
+    int dy = rClient.y() - rScreen.y();
+    if (dy > 0)
+	pos |= PosTop;
+    int dw = rScreen.width() - rClient.width();
+    if (dw > 0 && (!dx || (dx > 0 && dw > dx)))
+	pos |= PosRight;
+    int dh = rScreen.height() - rClient.height();
+    if (dh > 0 && (!dy || (dy > 0 && dh > dy)))
+	pos |= PosBottom;
+    return d;
+}
+
+// Move a window to a specified position
+void QtClient::moveWindow(QtWindow* w, int pos)
+{
+    if (!w)
+	return;
+    QDesktopWidget* d = QApplication::desktop();
+    if (!d)
+	return;
+    QRect r = d->availableGeometry(w);
+    int x = r.x();
+    int y = r.y();
+    QSize sz = w->frameSize();
+    if (pos == CornerBottomRight) {
+        if (r.width() > sz.width())
+	    x += r.width() - sz.width();
+	if (r.height() > sz.height())
+	    y += r.height() - sz.height();
+    }
+    else if (pos == CornerTopRight) {
+        if (r.width() > sz.width())
+	    x += r.width() - sz.width();
+    }
+    else if (pos == CornerBottomLeft) {
+	if (r.height() > sz.height())
+	    y += r.height() - sz.height();
+    }
+    else if (pos != CornerTopLeft)
+	return;
+    w->move(x,y);
+}
+
 
 /**
  * QtDriver
@@ -3666,6 +3888,750 @@ void QtEventProxy::allHidden()
     if (Client::self())
 	Client::self()->allHidden();
 }
+
+/*
+ * QtUIWidget
+ */
+// Retrieve item type definition from [type:]value. Create it if not found
+QtUIWidgetItemProps* QtUIWidget::getItemProps(QString& in, String& value)
+{
+    String type;
+    int pos = in.indexOf(':');
+    if (pos >= 0) {
+	QtClient::getUtf8(type,in.left(pos));
+	QtClient::getUtf8(value,in.right(in.length() - pos - 1));
+    }
+    else
+	QtClient::getUtf8(value,in);
+    QtUIWidgetItemProps* p = QtUIWidget::getItemProps(type);
+    if (!p) {
+	p = new QtUIWidgetItemProps(type);
+	m_itemProps.append(p);
+    }
+    DDebug(ClientDriver::self(),DebugAll,"QtUIWidget(%s) getItemProps(%s,%s) got (%p) ui=%s [%p]",
+	name().c_str(),in.toUtf8().constData(),value.c_str(),p,p->m_ui.c_str(),this);
+    return p;
+}
+
+// Set widget's parameters.
+// Handle an 'applyall' parameter carrying a NamedList to apply to all items
+bool QtUIWidget::setParams(const NamedList& params)
+{
+    bool ok = false;
+    NamedString* ns = params.getParam("applyall");
+    if (ns) {
+	NamedList* list = YOBJECT(NamedList,ns);
+	if (list) {
+	    ok = true;
+	    applyAllParams(*list);
+	}
+    }
+    return ok;
+}
+
+// Apply a list of parameters to all container items
+void QtUIWidget::applyAllParams(const NamedList& params)
+{
+    QList<QObject*> list = getContainerItems();
+    for (int i = 0; i < list.size(); i++)
+	setParams(list[i],params);
+}
+
+// Find an item widget by id
+QWidget* QtUIWidget::findItem(const String& id)
+{
+    QString item = QtClient::setUtf8(id);
+    QList<QObject*> list = getContainerItems();
+    for (int i = 0; i < list.size(); i++) {
+	if (!list[i]->isWidgetType())
+	    continue;
+	String item;
+	getListItemIdProp(list[i],item);
+	if (id == item)
+	    return static_cast<QWidget*>(list[i]);
+    }
+    return 0;
+}
+
+// Retrieve the object identity from '_yate_identity' property or name
+// Retrieve the object item from '_yate_widgetlistitem' property.
+// Set 'identity' to object_identity[:item_name]
+void QtUIWidget::getIdentity(QObject* obj, String& identity)
+{
+    if (!obj)
+	return;
+    String ident;
+    QtClient::getIdentity(obj,ident);
+    if (!ident)
+	return;
+    String item;
+    getListItemProp(obj,item);
+    identity.append(ident,":");
+    identity.append(item,":");
+}
+
+// Update a widget and children from a list a parameters
+bool QtUIWidget::setParams(QObject* parent, const NamedList& params)
+{
+    static const String s_property = "property";
+    static const String s_active = "active";
+    static const String s_image = "image";
+    static const String s_show = "show";
+    static const String s_display = "display";
+    static const String s_check = "check";
+    static const String s_select = "select";
+    static const String s_addlines = "addlines";
+    static const String s_setrichtext = "setrichtext";
+    static const String s_updatetablerows = "updatetablerows";
+    static const String s_rawimage = "rawimage";
+    static const String s_setparams = "setparams";
+    static const String s_setmenu = "setmenu";
+
+    if (!parent)
+	return false;
+    QtWindow* wnd = QtClient::parentWindow(parent);
+    if (!wnd)
+	return false;
+#ifdef DEBUG
+    String tmp;
+    params.dump(tmp," ");
+    Debug(ClientDriver::self(),DebugAll,"QtUIWidget(%s)::setParams(%p,%s) %s",
+	name().c_str(),parent,YQT_OBJECT_NAME(parent),tmp.c_str());
+#endif
+    String pName(YQT_OBJECT_NAME(parent));
+    bool ok = true;
+    unsigned int n = params.length();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* ns = params.getParam(i);
+	if (!ns)
+	    continue;
+	XDebug(ClientDriver::self(),DebugInfo,"QtUIWidget(%s)::setParams() %s=%s",
+	    name().c_str(),ns->name().c_str(),ns->c_str());
+	String buf;
+	int pos = ns->name().find(':');
+	if (pos < 0) {
+	    if (ns->name() != s_setmenu)
+		ok = wnd->setText(buildChildName(buf,pName,ns->name()),*ns,false) && ok;
+	    else
+		buildWidgetItemMenu(qobject_cast<QWidget*>(parent),YOBJECT(NamedList,ns));
+	    continue;
+	}
+	String n(ns->name().substr(0,pos));
+	String cName = ns->name().substr(pos + 1);
+	if (n == s_property) {
+	    // Handle property[:child]:property_name
+	    int pos = cName.find(':');
+	    if (pos >= 0) {
+		QString tmp = buildQChildName(pName,cName.substr(0,pos));
+		QObject* c = qFindChild<QObject*>(parent,tmp);
+		ok = c && QtClient::setProperty(c,cName.substr(pos + 1),*ns) && ok;
+	    }
+	    else
+		ok = QtClient::setProperty(parent,cName,*ns) && ok;
+	}
+	else if (n == s_active)
+	    ok = wnd->setActive(buildChildName(buf,pName,cName),ns->toBoolean()) && ok;
+	else if (n == s_image)
+	    ok = wnd->setImage(buildChildName(buf,pName,cName),*ns) && ok;
+	else if (n == s_show || n == s_display)
+	    ok = wnd->setShow(buildChildName(buf,pName,cName),ns->toBoolean()) && ok;
+	else if (n == s_check)
+	    ok = wnd->setCheck(buildChildName(buf,pName,cName),ns->toBoolean()) && ok;
+	else if (n == s_select)
+	    ok = wnd->setSelect(buildChildName(buf,pName,cName),*ns) && ok;
+	if (n == s_setparams) {
+	    NamedList* p = YOBJECT(NamedList,ns);
+	    if (!p)
+		continue;
+	    QtWidget w(parent,buildChildName(buf,pName,cName));
+	    UIWidget* uiw = w.uiWidget();
+	    ok = uiw && uiw->setParams(*p) && ok;
+	}
+	else if (n == s_addlines) {
+	    NamedList* p = YOBJECT(NamedList,ns);
+	    if (p)
+		ok = wnd->addLines(buildChildName(buf,pName,cName),p,0,ns->toBoolean()) && ok;
+	}
+	else if (n == s_setrichtext)
+	    ok = wnd->setText(buildChildName(buf,pName,cName),*ns,true) && ok;
+	else if (n == s_updatetablerows) {
+	    NamedList* p = YOBJECT(NamedList,ns);
+	    if (p)
+		ok = wnd->updateTableRows(buildChildName(buf,pName,cName),p,ns->toBoolean()) && ok;
+	}
+	else if (n == s_rawimage) {
+	    DataBlock* data = YOBJECT(DataBlock,ns);
+	    if (data) {
+		QString tmp = buildQChildName(pName,cName.substr(0,pos));
+		QObject* c = qFindChild<QObject*>(parent,tmp);
+		ok = c && QtClient::setImage(c,*data,*ns) && ok;
+	    }
+	}
+	else if (n == s_setmenu) {
+	    buildWidgetItemMenu(qobject_cast<QWidget*>(parent),YOBJECT(NamedList,ns),cName);
+	    continue;
+	}
+	else 
+	    ok = wnd->setText(buildChildName(buf,pName,ns->name()),*ns,false) && ok;
+    }
+    // Set item parameters
+    NamedString* yparams = params.getParam("_yate_itemparams");
+    if (!TelEngine::null(yparams)) {
+	QVariant var = parent->property(yparams->name().c_str());
+	if (var.type() == QVariant::Invalid || var.type() == QVariant::StringList) {
+	    QStringList list;
+	    if (var.type() == QVariant::StringList)
+		list = var.toStringList();
+	    NamedList tmp("");
+	    tmp.copyParams(params,*yparams);
+	    QtClient::copyParams(list,tmp);
+	    parent->setProperty(yparams->name().c_str(),QVariant(list));
+	}
+	else
+	    ok = false;
+    }
+    return ok;
+}
+
+// Get an item object's parameters
+bool QtUIWidget::getParams(QObject* parent, NamedList& params)
+{
+    static const String s_property = "property";
+    static const String s_getselect = "getselect";
+    static const String s_getrichtext = "getrichtext";
+
+    if (!parent)
+	return false;
+    QtWindow* wnd = QtClient::parentWindow(parent);
+    if (!wnd)
+	return false;
+    DDebug(ClientDriver::self(),DebugAll,"QtUIWidget(%s)::getParams(%p,%s)",
+	name().c_str(),parent,YQT_OBJECT_NAME(parent));
+    String pName;
+    QtClient::getUtf8(pName,parent->objectName());
+    bool ok = true;
+    unsigned int n = params.length();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* ns = params.getParam(i);
+	if (!ns)
+	    continue;
+	String buf;
+	int pos = ns->name().find(':');
+	if (pos < 0) {
+	    ok = wnd->getText(buildChildName(buf,pName,ns->name()),*ns,false) && ok;
+	    continue;
+	}
+	String n(ns->name().substr(0,pos));
+	String cName = ns->name().substr(pos + 1);
+	if (n == s_property) {
+	    // Handle property[:child]:property_name
+	    int pos = cName.find(':');
+	    if (pos >= 0) {
+		QString tmp = buildQChildName(pName,cName.substr(0,pos));
+		QObject* c = qFindChild<QObject*>(parent,tmp);
+		ok = c && QtClient::getProperty(c,cName.substr(pos + 1),*ns) && ok;
+	    }
+	    else
+		ok = QtClient::getProperty(parent,cName,*ns) && ok;
+	}
+	else if (n == s_getselect)
+	    ok = wnd->getSelect(buildChildName(buf,pName,cName),*ns) && ok;
+	else if (n == s_getrichtext)
+	    ok = wnd->getText(buildChildName(buf,pName,cName),*ns,true) && ok;
+	else
+	    ok = wnd->getText(buildChildName(buf,pName,ns->name()),*ns,false) && ok;
+    }
+    // Get item parameters
+    QtClient::getProperty(parent,"_yate_itemparams",params);
+    return ok;
+}
+
+// Build item widget menu
+QMenu* QtUIWidget::buildWidgetItemMenu(QWidget* w, const NamedList* params,
+    const String& child, bool set)
+{
+    if (!(w && params))
+	return 0;
+    QWidget* parent = w;
+    // Retrieve the item owner
+    QWidget* pItem = 0;
+    String item;
+    getListItemIdProp(w,item);
+    if (item)
+	pItem = findItem(item);
+    else {
+	getListItemProp(w,item);
+	pItem = item ? findItem(item) : 0;
+    }
+    XDebug(ClientDriver::self(),DebugAll,
+	"QtUIWidget(%s)::buildMenu() widget=%s item=%s [%p]",
+	this->name().c_str(),YQT_OBJECT_NAME(w),item.c_str(),this);
+    String pName(YQT_OBJECT_NAME(w));
+    const String& owner = (*params)["owner"];
+    if (owner && owner != item) {
+	QString tmp = buildQChildName(pName,owner);
+	parent = qFindChild<QWidget*>(w,tmp);
+	if (!parent) {
+	    Debug(QtDriver::self(),DebugNote,
+		"QtUIWidget(%s) buildMenu() owner '%s' not found [%p]",
+		name().c_str(),owner.c_str(),this);
+	    return 0;
+	}
+    }
+    QWidget* target = parent;
+    String t = child ? child : (*params)["target"];
+    if (t) {
+	QString tmp = buildQChildName(pName,t);
+	target = qFindChild<QWidget*>(w,tmp);
+	if (!target) {
+	    Debug(QtDriver::self(),DebugNote,
+		"QtUIWidget(%s) buildMenu() target '%s' not found [%p]",
+		name().c_str(),t.c_str(),this);
+	    return 0;
+	}
+    }
+    QString menuName = buildQChildName(pName,t + "_menu");
+    // Remove existing menu
+    QMenu* menu = qFindChild<QMenu*>(parent,menuName);
+    if (menu) {
+	delete menu;
+	menu = 0;
+    }
+    // Build the menu
+    QObject* thisObj = getQObject();
+    if (!thisObj)
+	return 0;
+    String actionSlot;
+    String toggleSlot;
+    String selectSlot;
+    getSlots(actionSlot,toggleSlot,selectSlot);
+    if (!(actionSlot || toggleSlot))
+	return 0;
+    bool addActions = set && target->contextMenuPolicy() == Qt::ActionsContextMenu;
+    unsigned int n = params->length();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* param = params->getParam(i);
+	if (!(param && param->name().startsWith("item:")))
+	    continue;
+	if (!menu)
+	    menu = new QMenu(QtClient::setUtf8(params->getValue("title")),parent);
+	NamedList* p = YOBJECT(NamedList,param);
+	if (p)  {
+	    QMenu* subMenu = QtClient::buildMenu(*p,
+		*param ? param->c_str() : p->getValue("title",*p),
+		thisObj,actionSlot,toggleSlot,menu);
+	    if (subMenu) {
+		menu->addMenu(subMenu);
+		if (addActions)
+		    target->addAction(subMenu->menuAction());
+	    }
+	    continue;
+	}
+	QAction* a = 0;
+	String name = param->name().substr(5);
+	if (*param) {
+	    a = menu->addAction(QtClient::setUtf8(*param));
+	    a->setObjectName(buildQChildName(pName,name));
+	    a->setParent(menu);
+	    QtClient::setImage(a,(*params)["image:" + name]);
+	}
+	else if (!name) {
+	    a = menu->addSeparator();
+	    a->setParent(menu);
+	}
+	else if (pItem) {
+	    // Check if the action is already there
+	    QString aName = buildQChildName(pItem->objectName(),QtClient::setUtf8(name));
+	    a = qFindChild<QAction*>(pItem,aName);
+	    if (a)
+		menu->addAction(a);
+	}
+	if (a) {
+	    if (addActions)
+		target->addAction(a);
+	}
+	else
+	    Debug(ClientDriver::self(),DebugNote,
+		"QtUIWidget(%s)::buildMenu() action '%s' not found for item=%s [%p]",
+		this->name().c_str(),name.c_str(),item.c_str(),this);
+    }
+    if (!menu)
+	return 0;
+    // Set name
+    menu->setObjectName(menuName);
+    // Apply properties
+    // Format: property:object_name:property_name=value
+    if (parent)
+	for (unsigned int i = 0; i < n; i++) {
+	    NamedString* param = params->getParam(i);
+	    if (!(param && param->name().startsWith("property:")))
+		continue;
+	    int pos = param->name().find(':',9);
+	    if (pos < 9)
+		continue;
+	    QString n = buildQChildName(pName,param->name().substr(9,pos - 9));
+	    QObject* obj = qFindChild<QObject*>(parent,n);
+	    if (obj)
+		QtClient::setProperty(obj,param->name().substr(pos + 1),*param);
+	}
+    // Connect signals (direct children only: actions from sub-menus are already connected)
+    QList<QAction*> list = qFindChildren<QAction*>(menu);
+    for (int i = 0; i < list.size(); i++) {
+	if (list[i]->isSeparator() || list[i]->parent() != menu)
+	    continue;
+	if (list[i]->isCheckable())
+	    QtClient::connectObjects(list[i],SIGNAL(toggled(bool)),thisObj,toggleSlot);
+	else
+	    QtClient::connectObjects(list[i],SIGNAL(triggered()),thisObj,actionSlot);
+    }
+    if (addActions)
+	return menu;
+    QMenu* mOwner = qobject_cast<QMenu*>(target);
+    if (mOwner)
+	mOwner->insertMenu(0,menu);
+    else {
+	QToolButton* tb = qobject_cast<QToolButton*>(target);
+	if (tb)
+	    tb->setMenu(menu);
+	else {
+	    QPushButton* pb = qobject_cast<QPushButton*>(target);
+	    if (pb)
+		pb->setMenu(menu);
+	    else if (!QtClient::setProperty(target,s_propContextMenu,params))
+		target->addAction(menu->menuAction());
+	}
+    }
+    return menu;
+}
+
+// Retrieve the top level QtUIWidget container parent of an object
+QtUIWidget* QtUIWidget::container(QObject* obj)
+{
+    if (!obj)
+	return 0;
+    QtUIWidget* uiw = 0;
+    while (0 != (obj = obj->parent())) {
+	QtWidget w(obj);
+	UIWidget* u = w.uiWidget();
+	if (u)
+	    uiw = static_cast<QtUIWidget*>(u);
+    }
+    return uiw;
+}
+
+// Utility used in QtUIWidget::initNavigation
+static bool initNavAction(QObject* obj, const String& name, const String& actionSlot)
+{
+    if (!(obj && name))
+	return false;
+    QtWindow* wnd = QtClient::parentWindow(obj);
+    QObject* child = qFindChild<QObject*>(wnd,QtClient::setUtf8(name));
+    if (!child)
+	return false;
+    QAbstractButton* b = 0;
+    QAction* a = 0;
+    if (child->isWidgetType())
+	b = qobject_cast<QAbstractButton*>(child);
+    else
+	a = qobject_cast<QAction*>(child);
+    if (b || a) {
+	if (b)
+	    QtClient::connectObjects(b,SIGNAL(clicked()),obj,actionSlot);
+	else
+	    QtClient::connectObjects(a,SIGNAL(triggered()),obj,actionSlot);
+    }
+    return b || a;
+}
+
+// Initialize navigation controls
+void QtUIWidget::initNavigation(const NamedList& params)
+{
+    String actionSlot;
+    String toggleSlot;
+    String selectSlot;
+    getSlots(actionSlot,toggleSlot,selectSlot);
+    QObject* qObj = getQObject();
+    if (qObj && actionSlot) {
+	m_prev = params.getValue("navigate_prev");
+	if (!initNavAction(qObj,m_prev,actionSlot))
+	    m_prev = "";
+	m_next = params.getValue("navigate_next");
+	if (!initNavAction(qObj,m_next,actionSlot))
+	    m_next = "";
+    }
+    m_info = params.getValue("navigate_info");
+    m_infoFormat = params.getValue("navigate_info_format");
+    m_title = params.getValue("navigate_title");
+    updateNavigation();
+}
+
+// Update navigation controls
+void QtUIWidget::updateNavigation()
+{
+    if (!(m_prev || m_next || m_info || m_title))
+	return;
+    QtWindow* wnd = QtClient::parentWindow(getQObject());
+    if (!wnd)
+	return;
+    NamedList p("");
+    int crt = currentItemIndex();
+    if (crt < 0)
+	crt = 0;
+    else
+	crt++;
+    int n = itemCount();
+    if (n < crt)
+	n = crt;
+    if (m_prev || m_next) {
+	if (m_prev)
+	    p.addParam("active:" + m_prev,String::boolText(crt > 1));
+	if (m_next)
+	    p.addParam("active:" + m_next,String::boolText(crt < n));
+    }
+    if (m_info) {
+	String tmp = m_infoFormat;
+	NamedList pp("");
+	pp.addParam("index",String(crt));
+	pp.addParam("count",String(n));
+	pp.replaceParams(tmp);
+	p.addParam(m_info,tmp);
+    }
+    if (m_title) {
+	String crt;
+	getSelect(crt);
+	NamedList pp("");
+	if (crt)
+	    getTableRow(crt,&pp);
+	p.addParam(m_title,pp["title"]);
+    }
+    wnd->setParams(p);
+}
+
+// Trigger a custom action from an item
+void QtUIWidget::triggerAction(const String& item, const String& action, QObject* sender)
+{
+    if (!(Client::self() && action))
+	return;
+    if (!sender)
+	sender = getQObject();
+    String s;
+    getIdentity(sender,s);
+    if (!s)
+	return;
+    NamedList params("");
+    params.addParam("item",item);
+    params.addParam("list",s);
+    QtClient::self()->action(QtClient::parentWindow(sender),action,&params);
+}
+
+// Handle a child's action
+void QtUIWidget::onAction(QObject* sender)
+{
+    if (!Client::self())
+	return;
+    String s;
+    getIdentity(sender,s);
+    if (!s)
+	return;
+    int dir = 0;
+    if (s == m_next)
+	dir = 1;
+    else if (s == m_prev)
+	dir = -1;
+    if (dir) {
+	int crt = currentItemIndex();
+	if (crt >= 0)
+	    setSelectIndex(crt + dir);
+	return;
+    }
+    DDebug(ClientDriver::self(),DebugAll,"QtUIWidget(%s) raising action %s",
+	name().c_str(),s.c_str());
+    Client::self()->action(QtClient::parentWindow(sender),s);
+}
+
+// Handle a child's toggle notification
+void QtUIWidget::onToggle(QObject* sender, bool on)
+{
+    if (!Client::self())
+	return;
+    String s;
+    getIdentity(sender,s);
+    if (!s)
+	return;
+    DDebug(ClientDriver::self(),DebugAll,"QtUIWidget(%s) raising toggle %s",
+	name().c_str(),s.c_str());
+    Client::self()->toggle(QtClient::parentWindow(sender),s,on);
+}
+
+// Handle a child's selection change
+void QtUIWidget::onSelect(QObject* sender, const String* item)
+{
+    if (!Client::self())
+	return;
+    String s;
+    getIdentity(sender,s);
+    if (!s)
+	return;
+    QtWindow* wnd = QtClient::parentWindow(sender);
+    String tmp;
+    if (!item) {
+	item = &tmp;
+	if (wnd)
+	    wnd->getSelect(YQT_OBJECT_NAME(sender),tmp);
+    }
+    DDebug(ClientDriver::self(),DebugAll,"QtUIWidget(%s) raising select %s",
+	name().c_str(),s.c_str());
+    Client::self()->select(wnd,s,*item);
+}
+
+// Load an item's widget. Rename children. Connect actions
+QWidget* QtUIWidget::loadWidget(QWidget* parent, const String& name, const String& ui)
+{
+    // Build a new widget name to make sure there are no duplicates:
+    //   Some containers (like QTreeWidget) calls deleteLater() for widget's
+    //   set to items which might lead to wrong widget update
+    // Make sure the widget name contains only 'standard' characters
+    //   to avoid errors when replaced in style sheets
+    MD5 md5(name);
+    String wName;
+    buildChildName(wName,md5.hexDigest());
+    wName << "_" << (unsigned int)Time::now();
+    QWidget* w = QtWindow::loadUI(Client::s_skinPath + ui,parent,ui);
+    DDebug(ClientDriver::self(),w ? DebugAll : DebugNote,
+	"QtUIWidget(%s)::loadWidget(%p,%s,%s) widget=%p",
+	this->name().c_str(),parent,wName.c_str(),ui.c_str(),w);
+    if (!w)
+	return 0;
+    QObject* qObj = getQObject();
+    QtWindow* wnd = getWindow();
+    String actionSlot;
+    String toggleSlot;
+    String selectSlot;
+    getSlots(actionSlot,toggleSlot,selectSlot);
+    QString wListItem = QtClient::setUtf8(name);
+    w->setObjectName(QtClient::setUtf8(wName));
+    setListItemIdProp(w,wListItem);
+    // Build custom UI widgets
+    QtClient::buildFrameUiWidgets(w);
+    // Process "_yate_setaction" property before changing names
+    QtClient::setAction(w);
+    // Process children
+    QList<QObject*> c = qFindChildren<QObject*>(w);
+    for (int i = 0; i < c.size(); i++) {
+	// Set object item owner name
+	setListItemProp(c[i],wListItem);
+	// Rename child
+	String n;
+	QtClient::getUtf8(n,c[i]->objectName());
+	c[i]->setObjectName(buildQChildName(wName,n));
+	// Install event filters
+	if (qObj && QtClient::getBoolProperty(c[i],"_yate_filterevents"))
+	    c[i]->installEventFilter(qObj);
+	// Connect text changed to window's slot
+	bool connect = QtClient::autoConnect(c[i]);
+	if (wnd && connect)
+	    wnd->connectTextChanged(c[i]);
+	// Connect signals
+	if (!(qObj && connect && (actionSlot || toggleSlot || selectSlot)))
+	    continue;
+	// Use isWidgetType() (faster then qobject_cast)
+	if (c[i]->isWidgetType()) {
+	    // Connect abstract buttons (check boxes and radio/push/tool buttons) signals
+	    QAbstractButton* b = qobject_cast<QAbstractButton*>(c[i]);
+	    if (b) {
+		if (!b->isCheckable())
+		    QtClient::connectObjects(b,SIGNAL(clicked()),qObj,actionSlot);
+		else
+		    QtClient::connectObjects(b,SIGNAL(toggled(bool)),qObj,toggleSlot);
+		continue;
+	    }
+	    // Connect group boxes
+	    QGroupBox* gb = qobject_cast<QGroupBox*>(c[i]);
+	    if (gb) {
+		if (gb->isCheckable())
+		    QtClient::connectObjects(gb,SIGNAL(toggled(bool)),qObj,toggleSlot);
+		continue;
+	    }
+	    // Connect combo boxes
+	    QComboBox* combo = qobject_cast<QComboBox*>(c[i]);
+	    if (combo) {
+		QtClient::connectObjects(combo,SIGNAL(activated(int)),qObj,selectSlot);
+		continue;
+	    }
+	    // Connect list boxes
+	    QListWidget* lst = qobject_cast<QListWidget*>(c[i]);
+	    if (lst) {
+		QtClient::connectObjects(lst,SIGNAL(currentRowChanged(int)),qObj,selectSlot);
+		continue;
+	    }
+	    // Connect sliders
+	    QSlider* sld = qobject_cast<QSlider*>(c[i]);
+	    if (sld) {
+		QtClient::connectObjects(sld,SIGNAL(valueChanged(int)),qObj,selectSlot);
+		continue;
+	    }
+	    continue;
+	}
+	// Connect actions signals
+	QAction* a = qobject_cast<QAction*>(c[i]);
+	if (a) {
+	    if (!a->isCheckable())
+		QtClient::connectObjects(a,SIGNAL(triggered()),qObj,actionSlot);
+	    else
+		QtClient::connectObjects(a,SIGNAL(toggled(bool)),qObj,toggleSlot);
+	    continue;
+	}
+    }
+    return w;
+}
+
+// Apply a QWidget style sheet. Replace ${name} with widget name in style
+void QtUIWidget::applyWidgetStyle(QWidget* w, const String& style)
+{
+    if (!(w && style))
+	return;
+    QString s = QtClient::setUtf8(style);
+    s.replace("${name}",w->objectName());
+    w->setStyleSheet(s);
+}
+
+// Filter key press events. Retrieve an action associated with the key.
+// Check if the object is allowed to process the key.
+// Raise the action
+bool QtUIWidget::filterKeyEvent(QObject* watched, QKeyEvent* event, bool& filter)
+{
+    String action;
+    if (!QtClient::filterKeyEvent(watched,event,action,filter))
+	return false;
+    if (!action)
+	return true;
+    String item;
+    getListItemProp(watched,item);
+    // Avoid raising a disabled actions
+    if (item) {
+	bool ok = true;
+	QWidget* w = findItem(item);
+	if (w) {
+	    QString n = buildQChildName(w->objectName(),QtClient::setUtf8(action));
+	    QObject* act = qFindChild<QObject*>(w,n);
+	    if (act) {
+		if (act->isWidgetType())
+		    ok = (qobject_cast<QWidget*>(act))->isEnabled();
+		else {
+		    QAction* a = qobject_cast<QAction*>(act);
+		    ok = !a || a->isEnabled();
+		}
+	    }
+	}
+	if (!ok)
+	    return true;
+	// Append container item to action
+	action.append(item,":");
+    }
+    Client::self()->action(QtClient::parentWindow(getQObject()),action);
+    return true;
+}
+
 
 /**
  * QtSound

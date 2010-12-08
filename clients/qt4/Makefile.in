@@ -14,16 +14,24 @@ QT4_LIB_NET := @QT4_LIB_NET@
 DEFS:=
 
 INCLUDES:=-I. -I@srcdir@ -I@top_srcdir@ $(QT4_INC)
-CXXFLAGS:=$(CXXFLAGS) @MODULE_CPPFLAGS@ @INLINE_FLAGS@
+CFLAGS := @CFLAGS@ @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= @LDFLAGS@
+SONAME_OPT := @SONAME_OPT@
 YATELIBS := -L../.. -lyate @LIBS@
 INCFILES := @top_srcdir@/yateclass.h @top_srcdir@/yatecbase.h @srcdir@/qt4client.h
 
-PROJECT = libqt4client.a
+PROGS=
+LIBS =
 SOURCES = qt4client.cpp
-OBJECTS = $(SOURCES:.cpp=.o) qt4client.moc.o
+OBJS = $(SOURCES:.cpp=.o) qt4client.moc.o
+LIBD_DEV:= libyateqt4.so
+LIBD_VER:= $(LIBD_DEV).@PACKAGE_VERSION@
+LIBD:= ../../$(LIBD_VER) ../../$(LIBD_DEV)
 
-COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CXXFLAGS)
+LOCALFLAGS =
+LOCALLIBS =
+COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
+LINK = $(CXX) $(LDFLAGS)
 
 ifneq (x@QT4_VER@,x)
 DEFS := $(DEFS) -DQT4_VER=@QT4_VER@
@@ -35,23 +43,25 @@ exec_prefix = @exec_prefix@
 # include optional local make rules
 -include YateLocal.mak
 
-.PHONY: all debug ddebug xdebug clean install uninstall
-all: $(PROJECT)
+.PHONY: all debug ddebug xdebug
+all: $(LIBS) $(LIBD) $(PROGS)
 
 debug:
-	$(MAKE) all DEBUG=-g3
+	$(MAKE) all DEBUG=-g3 MODSTRIP=
 
 ddebug:
-	$(MAKE) all DEBUG='-g3 -DDEBUG'
+	$(MAKE) all DEBUG='-g3 -DDEBUG' MODSTRIP=
 
 xdebug:
-	$(MAKE) all DEBUG='-g3 -DXDEBUG'
+	$(MAKE) all DEBUG='-g3 -DXDEBUG' MODSTRIP=
 
+.PHONY: strip
+strip: all
+	strip --strip-debug --discard-locals $(PROGS)
+
+.PHONY: clean
 clean:
-	@-$(RM) $(PROJECT) $(OBJECTS) 
-
-$(PROJECT): $(OBJECTS)
-	$(AR) rcs $@ $^
+	@-$(RM) $(PROGS) $(LIBS) $(LIBD) $(OBJS) core 2>/dev/null
 
 %.o: @srcdir@/%.cpp $(INCFILES)
 	$(COMPILE) -c $<
@@ -64,3 +74,9 @@ $(PROJECT): $(OBJECTS)
 
 Makefile: @srcdir@/Makefile.in ../../config.status
 	cd ../.. && ./config.status
+
+../../$(LIBD_VER): $(OBJS)
+	$(LINK) -o $@ $(SONAME_OPT)$(LIBD_VER) $^ $(QT4_LIB) $(YATELIBS)
+
+../../$(LIBD_DEV): ../../$(LIBD_VER)
+	cd ../.. && ln -sf $(LIBD_VER) $(LIBD_DEV)

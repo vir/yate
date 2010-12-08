@@ -1,0 +1,405 @@
+<ui version="4.0" >
+ <class>mucprivchat</class>
+ <widget class="QWidget" name="mucprivchat" >
+  <property name="geometry" >
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>567</width>
+    <height>352</height>
+   </rect>
+  </property>
+  <property name="sizePolicy" >
+   <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
+  <property name="focusPolicy" >
+   <enum>Qt::StrongFocus</enum>
+  </property>
+  <layout class="QVBoxLayout" >
+   <property name="spacing" >
+    <number>4</number>
+   </property>
+   <property name="leftMargin" >
+    <number>4</number>
+   </property>
+   <property name="topMargin" >
+    <number>4</number>
+   </property>
+   <property name="rightMargin" >
+    <number>4</number>
+   </property>
+   <property name="bottomMargin" >
+    <number>4</number>
+   </property>
+   <item>
+    <widget class="QFrame" name="frame_history" >
+     <property name="sizePolicy" >
+      <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="minimumSize" >
+      <size>
+       <width>0</width>
+       <height>0</height>
+      </size>
+     </property>
+     <property name="maximumSize" >
+      <size>
+       <width>16777215</width>
+       <height>16777215</height>
+      </size>
+     </property>
+     <property name="styleSheet" >
+      <string>QTextEdit {
+  background-color: #ffffff;
+  border: 1px solid #b3b6b0;
+  color: #666666;
+  font-family: Arial;
+  font-size: 12px;
+}</string>
+     </property>
+     <property name="_yate_uiwidget" stdset="0" >
+      <bool>true</bool>
+     </property>
+     <property name="_yate_uiwidget_name" stdset="0" >
+      <string>history</string>
+     </property>
+     <property name="_yate_uiwidget_class" stdset="0" >
+      <string>CustomTextEdit</string>
+     </property>
+     <property name="_yate_uiwidget_params" stdset="0" >
+      <stringlist>
+       <string>property:readOnly=true</string>
+       <string>property:history:_yate_tempitemname=tempnotify</string>
+       <string>set_richtext_item=chat_in:&lt;font color="red">[${time}] ${sender}:&lt;/font>&lt;font color="black"> ${text}&lt;/font></string>
+       <string>set_richtext_item=chat_out:&lt;font color="blue">[${time}] ${sender}:&lt;/font>&lt;font color="black"> ${text}&lt;/font></string>
+       <string>set_richtext_item=chat_delayed:&lt;font color="darkgreen">[${time}] ${sender}:&lt;/font>&lt;font color="black"> ${text}&lt;/font>&lt;font color="darkgreen">${delayed_by}&lt;/font></string>
+       <string>set_richtext_item=notify:&lt;font color="grey">[${time}] ${text}&lt;/font></string>
+       <string>set_richtext_item=tempnotify:&lt;font color="grey">${text}&lt;/font></string>
+      </stringlist>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QFrame" name="frame_edit" >
+     <property name="sizePolicy" >
+      <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="minimumSize" >
+      <size>
+       <width>16</width>
+       <height>60</height>
+      </size>
+     </property>
+     <property name="maximumSize" >
+      <size>
+       <width>16777215</width>
+       <height>60</height>
+      </size>
+     </property>
+     <property name="frameShape" >
+      <enum>QFrame::NoFrame</enum>
+     </property>
+     <property name="frameShadow" >
+      <enum>QFrame::Plain</enum>
+     </property>
+     <layout class="QHBoxLayout" >
+      <property name="leftMargin" >
+       <number>0</number>
+      </property>
+      <property name="topMargin" >
+       <number>0</number>
+      </property>
+      <property name="rightMargin" >
+       <number>0</number>
+      </property>
+      <property name="bottomMargin" >
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QTextEdit" name="message" >
+        <property name="sizePolicy" >
+         <sizepolicy vsizetype="MinimumExpanding" hsizetype="Expanding" >
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="maximumSize" >
+         <size>
+          <width>16777215</width>
+          <height>100</height>
+         </size>
+        </property>
+        <property name="focusPolicy" >
+         <enum>Qt::StrongFocus</enum>
+        </property>
+        <property name="styleSheet" >
+         <string>QTextEdit {background-color: #ffffff; border: 1px solid #b3b6b0; color: #666666; font-family: Arial; font-size: 12px;}</string>
+        </property>
+        <property name="tabChangesFocus" >
+         <bool>true</bool>
+        </property>
+        <property name="textInteractionFlags" >
+         <set>Qt::LinksAccessibleByKeyboard|Qt::LinksAccessibleByMouse|Qt::NoTextInteraction|Qt::TextBrowserInteraction|Qt::TextEditable|Qt::TextEditorInteraction|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
+        </property>
+        <property name="_yate_filterevents" stdset="0" >
+         <bool>true</bool>
+        </property>
+        <property name="dynamicActionEnter" stdset="0" >
+         <string>send_chat</string>
+        </property>
+        <property name="dynamicActionEnterModifiers" stdset="0" >
+         <string>Ctrl+, Shift+</string>
+        </property>
+        <property name="dynamicActionReturn" stdset="0" >
+         <string>send_chat</string>
+        </property>
+        <property name="dynamicActionReturnFilter" stdset="0" >
+         <bool>true</bool>
+        </property>
+        <property name="_yate_textchangednotify" stdset="0" >
+         <bool>true</bool>
+        </property>
+        <property name="_yate_identity" stdset="0" >
+         <string>message</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QVBoxLayout" >
+        <property name="rightMargin" >
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QToolButton" name="send_chat_button" >
+          <property name="minimumSize" >
+           <size>
+            <width>60</width>
+            <height>50</height>
+           </size>
+          </property>
+          <property name="maximumSize" >
+           <size>
+            <width>60</width>
+            <height>50</height>
+           </size>
+          </property>
+          <property name="focusPolicy" >
+           <enum>Qt::NoFocus</enum>
+          </property>
+          <property name="toolTip" >
+           <string>Send chat</string>
+          </property>
+          <property name="iconSize" >
+           <size>
+            <width>32</width>
+            <height>32</height>
+           </size>
+          </property>
+          <property name="autoRaise" >
+           <bool>true</bool>
+          </property>
+          <property name="_yate_noautoconnect" stdset="0" >
+           <bool>true</bool>
+          </property>
+          <property name="_yate_setaction" stdset="0" >
+           <string>send_chat</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer>
+          <property name="orientation" >
+           <enum>Qt::Vertical</enum>
+          </property>
+          <property name="sizeHint" >
+           <size>
+            <width>0</width>
+            <height>0</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QFrame" name="frameStatus" >
+     <property name="sizePolicy" >
+      <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="minimumSize" >
+      <size>
+       <width>16</width>
+       <height>24</height>
+      </size>
+     </property>
+     <property name="maximumSize" >
+      <size>
+       <width>16777215</width>
+       <height>24</height>
+      </size>
+     </property>
+     <property name="frameShape" >
+      <enum>QFrame::NoFrame</enum>
+     </property>
+     <property name="frameShadow" >
+      <enum>QFrame::Plain</enum>
+     </property>
+     <layout class="QHBoxLayout" >
+      <property name="spacing" >
+       <number>0</number>
+      </property>
+      <property name="leftMargin" >
+       <number>1</number>
+      </property>
+      <property name="topMargin" >
+       <number>1</number>
+      </property>
+      <property name="rightMargin" >
+       <number>1</number>
+      </property>
+      <property name="bottomMargin" >
+       <number>1</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="status_image" >
+        <property name="sizePolicy" >
+         <sizepolicy vsizetype="Expanding" hsizetype="Fixed" >
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize" >
+         <size>
+          <width>32</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="maximumSize" >
+         <size>
+          <width>32</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="alignment" >
+         <set>Qt::AlignCenter</set>
+        </property>
+        <property name="indent" >
+         <number>5</number>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="status_text" >
+        <property name="sizePolicy" >
+         <sizepolicy vsizetype="Preferred" hsizetype="Expanding" >
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="styleSheet" >
+         <string/>
+        </property>
+        <property name="text" >
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="image_account" >
+        <property name="sizePolicy" >
+         <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize" >
+         <size>
+          <width>16</width>
+          <height>16</height>
+         </size>
+        </property>
+        <property name="maximumSize" >
+         <size>
+          <width>16</width>
+          <height>16</height>
+         </size>
+        </property>
+        <property name="toolTip" >
+         <string>Account</string>
+        </property>
+        <property name="pixmap" >
+         <pixmap>user.png</pixmap>
+        </property>
+        <property name="scaledContents" >
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="account" >
+        <property name="sizePolicy" >
+         <sizepolicy vsizetype="Expanding" hsizetype="Preferred" >
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize" >
+         <size>
+          <width>140</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="maximumSize" >
+         <size>
+          <width>200</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="toolTip" >
+         <string>Account</string>
+        </property>
+        <property name="text" >
+         <string/>
+        </property>
+        <property name="indent" >
+         <number>5</number>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+  <action name="send_chat" >
+   <property name="icon" >
+    <iconset>sendchat_32.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Send</string>
+   </property>
+   <property name="_yate_identity" stdset="0" >
+    <string>send_chat</string>
+   </property>
+  </action>
+ </widget>
+ <tabstops>
+  <tabstop>message</tabstop>
+ </tabstops>
+ <resources/>
+ <connections/>
+</ui>

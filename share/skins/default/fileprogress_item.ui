@@ -1,0 +1,469 @@
+<ui version="4.0" >
+ <class>fileprogress_item</class>
+ <widget class="QWidget" name="fileprogress_item" >
+  <property name="geometry" >
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>500</width>
+    <height>74</height>
+   </rect>
+  </property>
+  <property name="sizePolicy" >
+   <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
+  <property name="minimumSize" >
+   <size>
+    <width>0</width>
+    <height>74</height>
+   </size>
+  </property>
+  <property name="maximumSize" >
+   <size>
+    <width>16777215</width>
+    <height>74</height>
+   </size>
+  </property>
+  <layout class="QVBoxLayout" >
+   <property name="spacing" >
+    <number>0</number>
+   </property>
+   <property name="leftMargin" >
+    <number>4</number>
+   </property>
+   <property name="topMargin" >
+    <number>2</number>
+   </property>
+   <property name="rightMargin" >
+    <number>4</number>
+   </property>
+   <property name="bottomMargin" >
+    <number>2</number>
+   </property>
+   <item>
+    <widget class="QTextEdit" name="text" >
+     <property name="sizePolicy" >
+      <sizepolicy vsizetype="Minimum" hsizetype="Expanding" >
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="maximumSize" >
+      <size>
+       <width>16777215</width>
+       <height>38</height>
+      </size>
+     </property>
+     <property name="styleSheet" >
+      <string>QTextEdit {
+  background: transparent;
+  font-size: 11px;
+}
+</string>
+     </property>
+     <property name="frameShape" >
+      <enum>QFrame::NoFrame</enum>
+     </property>
+     <property name="tabChangesFocus" >
+      <bool>true</bool>
+     </property>
+     <property name="readOnly" >
+      <bool>true</bool>
+     </property>
+     <property name="html" >
+      <string>&lt;html>&lt;head>&lt;meta name="qrichtext" content="1" />&lt;style type="text/css">
+p, li { white-space: pre-wrap; }
+&lt;/style>&lt;/head>&lt;body style=" font-family:'MS Shell Dlg 2'; font-weight:400; font-style:normal;">
+&lt;p style="-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">&lt;/p>&lt;/body>&lt;/html></string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" >
+     <property name="spacing" >
+      <number>6</number>
+     </property>
+     <property name="bottomMargin" >
+      <number>4</number>
+     </property>
+     <item>
+      <widget class="QProgressBar" name="progress" >
+       <property name="minimumSize" >
+        <size>
+         <width>0</width>
+         <height>24</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>16777215</width>
+         <height>24</height>
+        </size>
+       </property>
+       <property name="styleSheet" >
+        <string>QProgressBar::chunk {
+	background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #dce5ee,  stop:1#aeb9cf );
+	width: 3px;
+	border-left: 1.5px solid  #dce5ee;
+}
+
+QProgressBar {
+	border: 1px solid darkblue; 
+	border-radius: 3px;
+	color: darkgreen;
+	background-color: lightblue;
+}</string>
+       </property>
+       <property name="value" >
+        <number>33</number>
+       </property>
+       <property name="alignment" >
+        <set>Qt::AlignCenter</set>
+       </property>
+       <property name="textDirection" >
+        <enum>QProgressBar::TopToBottom</enum>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QToolButton" name="cancel" >
+       <property name="minimumSize" >
+        <size>
+         <width>80</width>
+         <height>24</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>80</width>
+         <height>24</height>
+        </size>
+       </property>
+       <property name="text" >
+        <string>Cancel</string>
+       </property>
+       <property name="icon" >
+        <iconset>close.png</iconset>
+       </property>
+       <property name="toolButtonStyle" >
+        <enum>Qt::ToolButtonTextBesideIcon</enum>
+       </property>
+       <property name="_yate_identity" stdset="0" >
+        <string>fileprogress_close</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="Line" name="line" >
+     <property name="sizePolicy" >
+      <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="minimumSize" >
+      <size>
+       <width>0</width>
+       <height>3</height>
+      </size>
+     </property>
+     <property name="maximumSize" >
+      <size>
+       <width>16777215</width>
+       <height>3</height>
+      </size>
+     </property>
+     <property name="frameShadow" >
+      <enum>QFrame::Sunken</enum>
+     </property>
+     <property name="orientation" >
+      <enum>Qt::Horizontal</enum>
+     </property>
+    </widget>
+   </item>
+  </layout>
+  <action name="actionProfile" >
+   <property name="enabled" >
+    <bool>true</bool>
+   </property>
+   <property name="text" >
+    <string>My profile</string>
+   </property>
+   <property name="menuRole" >
+    <enum>QAction::TextHeuristicRole</enum>
+   </property>
+  </action>
+  <action name="actionLogout" >
+   <property name="checkable" >
+    <bool>false</bool>
+   </property>
+   <property name="enabled" >
+    <bool>false</bool>
+   </property>
+   <property name="icon" >
+    <iconset>../../../../../../private/changenetworks/clients/share/skins/reception/antenax.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Logout</string>
+   </property>
+   <property name="toolTip" >
+    <string>Logout the current user</string>
+   </property>
+   <property name="statusTip" >
+    <string>Logout the current user</string>
+   </property>
+   <property name="shortcutContext" >
+    <enum>Qt::ApplicationShortcut</enum>
+   </property>
+   <property name="autoRepeat" >
+    <bool>false</bool>
+   </property>
+  </action>
+  <action name="actionExit" >
+   <property name="icon" >
+    <iconset>../../../../../../private/changenetworks/clients/share/skins/reception/stop.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Close</string>
+   </property>
+   <property name="shortcutContext" >
+    <enum>Qt::ApplicationShortcut</enum>
+   </property>
+   <property name="menuRole" >
+    <enum>QAction::QuitRole</enum>
+   </property>
+  </action>
+  <action name="actionLogin" >
+   <property name="icon" >
+    <iconset>../../../../../../private/changenetworks/clients/share/skins/reception/antena.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Login</string>
+   </property>
+  </action>
+  <action name="actionSettings" >
+   <property name="icon" >
+    <iconset>../../../../../../private/changenetworks/clients/share/skins/reception/configure.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Settings</string>
+   </property>
+  </action>
+  <action name="actionEditAccounts" >
+   <property name="text" >
+    <string>Edit accounts</string>
+   </property>
+  </action>
+  <action name="actionShowIncomingCalls" >
+   <property name="text" >
+    <string>Show incoming calls</string>
+   </property>
+  </action>
+  <action name="actionAbout" >
+   <property name="icon" >
+    <iconset>../../../../../../private/changenetworks/clients/share/skins/reception/Reception.png</iconset>
+   </property>
+   <property name="text" >
+    <string>About</string>
+   </property>
+  </action>
+  <action name="actionHelp" >
+   <property name="enabled" >
+    <bool>false</bool>
+   </property>
+   <property name="text" >
+    <string>Help</string>
+   </property>
+  </action>
+  <action name="actionSettingsAlerts" >
+   <property name="text" >
+    <string>Alerts</string>
+   </property>
+  </action>
+  <action name="actionSettingsNotifications" >
+   <property name="text" >
+    <string>Notifications and sounds</string>
+   </property>
+  </action>
+  <action name="actionSettingsMoh" >
+   <property name="text" >
+    <string>MOH</string>
+   </property>
+  </action>
+  <action name="actionUrlLearn" >
+   <property name="text" >
+    <string>Learn more about this application</string>
+   </property>
+   <property name="accessibleName" stdset="0" >
+    <string>openurl:http://yate.null.ro</string>
+   </property>
+  </action>
+  <action name="actionMenuShortkey" >
+   <property name="enabled" >
+    <bool>true</bool>
+   </property>
+   <property name="text" >
+    <string>Change shortkey</string>
+   </property>
+  </action>
+  <action name="actionAudio" >
+   <property name="enabled" >
+    <bool>false</bool>
+   </property>
+   <property name="text" >
+    <string>Audio</string>
+   </property>
+  </action>
+  <action name="actionMenuNewCall" >
+   <property name="enabled" >
+    <bool>true</bool>
+   </property>
+   <property name="icon" >
+    <iconset>../../../../../../private/changenetworks/clients/share/skins/reception/new_call.png</iconset>
+   </property>
+   <property name="text" >
+    <string>New call</string>
+   </property>
+   <property name="shortcutContext" >
+    <enum>Qt::WidgetShortcut</enum>
+   </property>
+   <property name="accessibleName" stdset="0" >
+    <string>actionNewCall</string>
+   </property>
+  </action>
+  <action name="actionStart_conference" >
+   <property name="text" >
+    <string>Start conference</string>
+   </property>
+  </action>
+  <action name="actionMenuNewMessage" >
+   <property name="enabled" >
+    <bool>false</bool>
+   </property>
+   <property name="icon" >
+    <iconset>../../../../../../private/changenetworks/clients/share/skins/reception/new_message.png</iconset>
+   </property>
+   <property name="text" >
+    <string>New message</string>
+   </property>
+   <property name="shortcutContext" >
+    <enum>Qt::WidgetShortcut</enum>
+   </property>
+   <property name="accessibleName" stdset="0" >
+    <string>actionNewMessage</string>
+   </property>
+  </action>
+  <action name="actionChangeLanguage" >
+   <property name="enabled" >
+    <bool>false</bool>
+   </property>
+   <property name="text" >
+    <string>Change language</string>
+   </property>
+  </action>
+  <action name="actionViewStatistics" >
+   <property name="enabled" >
+    <bool>true</bool>
+   </property>
+   <property name="text" >
+    <string>View statistics</string>
+   </property>
+   <property name="accessibleName" stdset="0" >
+    <string>openurl:http://yate.null.ro</string>
+   </property>
+  </action>
+  <action name="actionMenuMakeTestCall" >
+   <property name="text" >
+    <string>Make a test call</string>
+   </property>
+  </action>
+  <action name="actionAddrbookAdd" >
+   <property name="enabled" >
+    <bool>false</bool>
+   </property>
+   <property name="text" >
+    <string>Add address book entry</string>
+   </property>
+   <property name="toolTip" >
+    <string>Add a contact in the address book</string>
+   </property>
+  </action>
+  <action name="actionAddrbookRemove" >
+   <property name="enabled" >
+    <bool>false</bool>
+   </property>
+   <property name="icon" >
+    <iconset>../../../../../../private/changenetworks/clients/share/skins/reception/minus.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Remove</string>
+   </property>
+   <property name="toolTip" >
+    <string>Remove the currently selected contact</string>
+   </property>
+  </action>
+  <action name="actionAddrbookEdit" >
+   <property name="enabled" >
+    <bool>false</bool>
+   </property>
+   <property name="icon" >
+    <iconset>../../../../../../private/changenetworks/clients/share/skins/reception/pencil.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Edit</string>
+   </property>
+   <property name="toolTip" >
+    <string>Change the currently selected contact</string>
+   </property>
+  </action>
+  <action name="actionAddrbookChat" >
+   <property name="enabled" >
+    <bool>false</bool>
+   </property>
+   <property name="icon" >
+    <iconset>../../../../../../private/changenetworks/clients/share/skins/reception/sendmsg.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Chat</string>
+   </property>
+  </action>
+  <action name="actionChatContactAdd" >
+   <property name="text" >
+    <string>Add chat contact</string>
+   </property>
+  </action>
+  <action name="actionEditIdentity" >
+   <property name="text" >
+    <string>Identity</string>
+   </property>
+  </action>
+  <action name="actionImportAbkOutlook" >
+   <property name="text" >
+    <string>Import contacts from MS Outlook</string>
+   </property>
+  </action>
+  <action name="actionMenuNewFax" >
+   <property name="icon" >
+    <iconset>../../../../../../private/changenetworks/clients/share/skins/reception/fax.png</iconset>
+   </property>
+   <property name="text" >
+    <string>New fax</string>
+   </property>
+  </action>
+  <action name="actionMenuViewFaxes" >
+   <property name="icon" >
+    <iconset>../../../../../../private/changenetworks/clients/share/skins/reception/fax_show.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Show faxes</string>
+   </property>
+  </action>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

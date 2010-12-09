@@ -1725,8 +1725,9 @@ bool SigDriver::received(Message& msg, int id)
 	return false;
     if (target.startSkip("links")) {
 	msg.retValue() << "module=" << name();
-	msg.retValue() << ",format=Type|Status";
-	String ret = "";
+	msg.retValue() << ",format=Type|Status;";
+
+	String ret;
 	m_trunksMutex.lock();
 	for (ObjList* o = m_trunks.skipNull(); o; o = o->skipNext()) {
 	    SigTrunk* trunk = static_cast<SigTrunk*>(o->get());
@@ -1739,14 +1740,20 @@ bool SigDriver::received(Message& msg, int id)
 	    top->linkStatus(ret);
 	}
 	m_topmostMutex.unlock();
-	if (!ret.null())
-	    msg.retValue() << ";" << ret;
+
+	ObjList* l = ret.split(',',false);
+	msg.retValue() << "count=" << l->count();
+	TelEngine::destruct(l);
+	if (msg.getBoolValue("details",true))
+	    msg.retValue().append(ret,";");
+
 	msg.retValue() <<  "\r\n";
     }
     if (target.startSkip("ifaces")) {
 	msg.retValue() << "module=" << name();
-	msg.retValue() << ",format=Status";
-	String ret = "";
+	msg.retValue() << ",format=Status;";
+
+	String ret;
 	m_trunksMutex.lock();
 	for (ObjList* o = m_trunks.skipNull(); o; o = o->skipNext()) {
 	    SigTrunk* trunk = static_cast<SigTrunk*>(o->get());
@@ -1759,8 +1766,13 @@ bool SigDriver::received(Message& msg, int id)
 	    top->ifStatus(ret);
 	}
 	m_topmostMutex.unlock();
-	if (!ret.null())
-	    msg.retValue() << ";" << ret;
+
+	ObjList* l = ret.split(',',false);
+	msg.retValue() << "count=" << l->count();
+	TelEngine::destruct(l);
+	if (msg.getBoolValue("details",true))
+	    msg.retValue().append(ret,";");
+
 	msg.retValue() <<  "\r\n";
     }
 
@@ -2061,6 +2073,12 @@ bool SigDriver::commandComplete(Message& msg, const String& partLine,
     bool drop = !status && partLine.startsWith("drop");
     if (!(status || drop))
 	return Driver::commandComplete(msg,partLine,partWord);
+    String overviewCmd = "status overview " + name();
+    if (partLine == overviewCmd) {
+    	itemComplete(msg.retValue(),"links",partWord);
+	itemComplete(msg.retValue(),"ifaces",partWord);
+	return true;
+    }
 
     Lock lock(this);
     // line='status sig': add trunks and topmost components

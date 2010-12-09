@@ -1444,9 +1444,9 @@ bool YIAXDriver::userAuth(IAXTransaction* tr, bool response, bool& requestAuth,
 
 bool YIAXDriver::commandComplete(Message& msg, const String& partLine, const String& partWord)
 {
-    String cmd = s_statusCmd;
-    cmd << " " << name();
-    if (partLine == cmd)
+    String cmd = s_statusCmd + " " + name();
+    String overviewCmd = s_statusCmd + " overview " + name();
+    if (partLine == cmd || partLine == overviewCmd)
 	itemComplete(msg.retValue(),"accounts",partWord);
     else 
     	return Driver::commandComplete(msg,partLine,partWord);
@@ -1463,10 +1463,17 @@ void YIAXDriver::msgStatus(Message& msg)
 	if (str.startSkip("accounts")) {
 	    msg.retValue().clear();
 	    msg.retValue() << "module=" << name();
-	    msg.retValue() << ",format=Protocol|Status";
+	    msg.retValue() << ",protocol=IAX";
+	    msg.retValue() << ",format=Username|Status;";
+	    msg.retValue() << "accounts=" << s_lines.lines()->count();
+	    if (!msg.getBoolValue("details",true)) {
+		msg.retValue() << "\r\n";
+		return;
+	    }
 	    for (ObjList* o = s_lines.lines(); o; o = o->skipNext()) {
 		YIAXLine* line = static_cast<YIAXLine*>(o->get());
-		str.append(line->username(),",") << "=IAX|";
+		str.append(line->toString(),",") << "=";
+		str.append(line->username()) << "|";
 		str << (line-> registered() ? "online" : "offline");
 	    }
 	    msg.retValue().append(str,";"); 

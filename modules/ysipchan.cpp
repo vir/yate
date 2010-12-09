@@ -4287,9 +4287,9 @@ void SIPDriver::genUpdate(Message& msg)
 
 bool SIPDriver::commandComplete(Message& msg, const String& partLine, const String& partWord)
 {
-    String cmd = s_statusCmd;
-    cmd << " " << name();
-    if (partLine == cmd)
+    String cmd = s_statusCmd + " " + name();
+    String overviewCmd = s_statusCmd + " overview " + name();
+    if (partLine == cmd || partLine == overviewCmd)
 	itemComplete(msg.retValue(),"accounts",partWord);
     else 
     	return Driver::commandComplete(msg,partLine,partWord);
@@ -4306,11 +4306,18 @@ void SIPDriver::msgStatus(Message& msg)
 	else if (str.startSkip("accounts")) {
 	    msg.retValue().clear();
 	    msg.retValue() << "module=" << name();
-	    msg.retValue() << ",format=Protocol|Status";
+	    msg.retValue() << ",protocol=SIP";
+	    msg.retValue() << ",format=Username|Status;";
+	    msg.retValue() << "accounts=" << s_lines.count();
+	    if (!msg.getBoolValue("details",true)) {
+		msg.retValue() << "\r\n";
+		return;
+	    }
 	    String accounts = "";
 	    for (ObjList* o = s_lines.skipNull(); o; o = o->skipNext()) {
 		YateSIPLine* line = static_cast<YateSIPLine*>(o->get());
-		accounts.append(line->getUserName(),",") << "=SIP|";
+		accounts.append(line->c_str(),",") << "=";
+		accounts.append(line->getUserName()) << "|";
 		accounts << (line->valid() ? "online" : "offline");
 	    }
 	    msg.retValue().append(accounts,";"); 

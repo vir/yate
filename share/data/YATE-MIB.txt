@@ -727,7 +727,8 @@ AccountEntry ::= SEQUENCE {
 	accountIndex		Counter32,
 	accountID		DisplayString,
 	accountStatus		DisplayString,
-	accountProtocol		DisplayString
+	accountProtocol		DisplayString,
+	accountUsername		DisplayString
 }
 
 accountIndex OBJECT-TYPE
@@ -761,6 +762,14 @@ accountProtocol OBJECT-TYPE
 	DESCRIPTION
 		"The protocol used for this account."
 	::= { accountEntry 4 }
+
+accountUsername OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The username used by this account."
+	::= { accountEntry 5 }
 
 -- accounts end
 

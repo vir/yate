@@ -228,7 +228,7 @@ public:
 	CALLER      = 5,    // caller party
 	CALLED      = 6,    // called party
 	PEER	    = 7,    // peer(s) channel of a call
-	DURATION    = 8     // call duration
+	DURATION    = 8,     // call duration
     };
     // Constructor
     inline ActiveCallsInfo()
@@ -260,7 +260,7 @@ public:
 	STATUS      = 4,    // status of a component
 	TYPE	    = 5,    // the type of the component
 	ALARMS_COUNT = 6,   // alarm counter for the component
-	SKIP	    = 7     // helper value to skip unnecessary information when parsing the status string
+	SKIP	    = 7,     // helper value to skip unnecessary information when parsing the status string
     };
     // Constructor
     inline SigInfo(const char* name, const TokenDict* dict)
@@ -385,7 +385,8 @@ public:
 	INDEX       = 2,
 	ID	    = 3,
 	STATUS      = 4,
-	PROTO	    = 5
+	PROTO	    = 5,
+	USERNAME    = 6,
     };
     // Constructor
     inline AccountsInfo()
@@ -671,7 +672,7 @@ class CallRouteQoS : public GenObject
 public:
     enum CallStatus {
 	ANSWERED    = 1,
-	DELIVERED   = 2
+	DELIVERED   = 2,
     };
     enum Indexes {
 	CURRENT_IDX     = 0,
@@ -793,13 +794,13 @@ public:
 	IN_ASR_Idx	= 0,
 	OUT_ASR_Idx	= 1,
 	IN_NER_Idx	= 2,
-	OUT_NER_Idx	= 3
+	OUT_NER_Idx	= 3,
     };
 
     enum Queries {
 	INCOMING_CALLS    = 9,
 	OUTGOING_CALLS    = 10,
-	ROUTES_COUNT	  = 11
+	ROUTES_COUNT	  = 11,
     };
 
     // constructor
@@ -867,7 +868,7 @@ public:
 	LINKS		  = 15,
 	IFACES		  = 16,
 	ACCOUNTS	  = 17,
-	MGCP		  = 18
+	MGCP		  = 18,
     };
 
      enum SigTypes {
@@ -889,7 +890,7 @@ public:
 	LinkDown,
 	LinkUp,
 	IsdnQ921Down,
-	IsdnQ921Up
+	IsdnQ921Up,
     };
 
     enum SipNotifs {
@@ -898,7 +899,7 @@ public:
 	ByesTimedOut,
 	GWTimeout,
 	GWUp,
-	DeletesTimedOut
+	DeletesTimedOut,
     };
     Monitor();
     virtual ~Monitor();
@@ -1073,6 +1074,7 @@ static TokenDict s_categories[] = {
     {"accountID",		Monitor::ACCOUNTS},
     {"accountStatus",		Monitor::ACCOUNTS},
     {"accountProtocol",		Monitor::ACCOUNTS},
+    {"accountUsername",		Monitor::ACCOUNTS},
     // active calls info
     {"activeCallsCount",	Monitor::ACTIVE_CALLS},
     {"callEntryIndex",		Monitor::ACTIVE_CALLS},
@@ -1243,6 +1245,7 @@ static TokenDict s_accountInfo[] = {
     {"accountID",       AccountsInfo::ID},
     {"accountStatus",   AccountsInfo::STATUS},
     {"accountProtocol", AccountsInfo::PROTO},
+    {"accountUsername", AccountsInfo::USERNAME},
     {0,0}
 };
 
@@ -2036,7 +2039,17 @@ bool AccountsInfo::load()
 	    continue;
 
 	cutNewLine(status);
-	int pos = status.rfind(';');
+	//find protocol
+	String protoParam = "protocol=";
+	int pos = status.find(protoParam);
+	if (pos < 0)
+	    continue;
+	int auxPos = status.find(",",pos);
+	if (auxPos < pos + (int)protoParam.length())
+	    continue;
+	String proto = status.substr(pos + protoParam.length(),auxPos - (pos + protoParam.length()));
+
+	pos = status.rfind(';');
 	if (pos < 0)
 	    continue;
 	status = status.substr(pos + 1);
@@ -2049,13 +2062,14 @@ bool AccountsInfo::load()
 	    if (pos1 < 0 || pos2 < 0)
 		continue;
 	    String name = account->substr(0,pos1);
-	    String proto = account->substr(pos1 + 1,pos2 - pos1 -1);
+	    String username = account->substr(pos1 + 1,pos2 - pos1 -1);
 	    String status = account->substr(pos2 + 1);
 
 	    if (name.null())
 		continue;
 	    NamedList* nl = new NamedList("");
 	    nl->setParam(lookup(ID,s_accountInfo,""),name);
+	    nl->setParam(lookup(USERNAME,s_accountInfo,""),username);
 	    nl->setParam(lookup(STATUS,s_accountInfo,""),status);
 	    nl->setParam(lookup(PROTO,s_accountInfo,""),proto);
 	    m_table.append(nl);

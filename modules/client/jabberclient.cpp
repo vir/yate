@@ -365,7 +365,7 @@ public:
     inline bool canHandleProtocol(const String& proto)
 	{ return proto == "jabber"; }
     // List accounts
-    void statusAccounts(String& retVal);
+    void statusAccounts(String& retVal, bool details = true);
 
 protected:
     // Inherited methods
@@ -2186,7 +2186,7 @@ bool JBModule::received(Message& msg, int id)
 	    return Module::received(msg,id);
 	// Handle: status jabberclient stream_name
 	if (target == "accounts")
-	    statusAccounts(msg.retValue());
+	    statusAccounts(msg.retValue(),msg.getBoolValue("details",true));
 	else {
 	    statusModule(msg.retValue());
 	    s_jabber->statusDetail(msg.retValue(),target);
@@ -2296,8 +2296,14 @@ bool JBModule::commandComplete(Message& msg, const String& partLine,
     if (word == "status") {
 	// Handle: status jabberclient stream_name
 	getWord(line,word);
-	if (word != name())
+	if (word != name()) {
+	    if (word == "overview") {
+		getWord(line,word);
+		if (word == name() && line.null())
+		    itemComplete(msg.retValue(),"accounts",partWord);
+	    }
 	    return Module::commandComplete(msg,partLine,partWord);
+	}
 	getWord(line,word);
 	if (word == "accounts")
 	    return false;
@@ -2371,13 +2377,24 @@ bool JBModule::commandExecute(String& retVal, const String& line)
     return true;
 }
 
-void JBModule::statusAccounts(String& retVal)
+void JBModule::statusAccounts(String& retVal, bool details)
 {
     DDebug(this,DebugAll,"List the status of all accounts");
     RefPointer<JBStreamSetList> list;
     s_jabber->getStreamList(list,JBStream::c2s);
+
+    retVal.clear();
+    retVal << "module=" << name();
+    retVal << ",protocol=Jabber";
+    retVal << ",format=Username|Status;";
+    retVal << "accounts=";
     if (!list)
+	retVal << 0;
+    else
+	retVal << list->sets().count();
+    if (!details)
 	return;
+
     String str = "";
     list->lock();
     for (ObjList* o = list->sets().skipNull(); o; o = o->skipNext()) {
@@ -2385,19 +2402,15 @@ void JBModule::statusAccounts(String& retVal)
 	for (ObjList* s = set->clients().skipNull(); s; s = s->skipNext()) {
 	    JBClientStream* stream = static_cast<JBClientStream*>(s->get());
 	    stream->lock();
-	    str.append(stream->local().bare(),",");
-	    str << "=Jabber|";
+	    str.append(stream->account(),",") << "=";
+	    str.append(stream->local().bare()) << "|";
 	    str << stream->stateName();
 	    stream->unlock();
 	}
     }
     list->unlock();
     list = 0;
-    if (retVal.null()) {
-    	retVal << "module=" << name();
-    	retVal << ",format=Protocol|Status;";
-    }
-    retVal << str;
+    retVal.append(str,";");
 }
 
 }; // anonymous namespace

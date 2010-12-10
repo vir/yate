@@ -2673,6 +2673,8 @@ void SubscriptionModule::expireSubscriptions()
 	ObjList remove;
 	for (unsigned int i = 0; i < n ; i++) {
 	    NamedString* ns = nl->getParam(i);
+	    if (!ns)
+		continue;
 	    NamedPointer* np = static_cast<NamedPointer*>(ns);
 	    EventUser* eu = static_cast<EventUser*>(np->userData());
 	    if (!eu)
@@ -2777,7 +2779,7 @@ bool SubscriptionModule::commandExecute(String& retVal, const String& line)
 	String contact = "";
 //	extractName(l.substr(user.length() + 2,-1),contact);
 	if (user.null() || contact.null()) {
-	    retVal << "Espected <PresenceUser,Contact> pair";
+	    retVal << "Expected <PresenceUser,Contact> pair";
 	    DDebug(this,DebugInfo,"Command Execute 2 : return false user->null() || contact->null()");
 	    return false;
 	}
@@ -2801,17 +2803,17 @@ bool SubscriptionModule::commandExecute(String& retVal, const String& line)
 		    contact = static_cast<String*>(o->get());
 		    break;
 		default:
-		    retVal << "Espected <PresenceUser,Contact> pair";
+		    retVal << "Expected <PresenceUser,Contact> pair";
 		    return false;
 	    }
 	    counter += 1;	
 	}
 	if (user->null() || contact->null()) {
-	    retVal << "Espected <PresenceUser,Contact> pair";
+	    retVal << "Expected <PresenceUser,Contact> pair";
 	    return false;
 	}
 	// TODO unsubscribe the user
-	retVal << "PresenceUser: " << *user << " succesfuly unsubscribed from " << *contact << "'s presence";
+	retVal << "PresenceUser: " << *user << " successfully unsubscribed from " << *contact << "'s presence";
     }
     return false;
 }

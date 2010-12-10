@@ -39,6 +39,11 @@ endif
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
+datarootdir = @datarootdir@
+
+bindir = @bindir@
+libdir = @libdir@
+incdir = @includedir@/yate
 
 # include optional local make rules
 -include YateLocal.mak
@@ -62,6 +67,26 @@ strip: all
 .PHONY: clean
 clean:
 	@-$(RM) $(PROGS) $(LIBS) $(LIBD) $(OBJS) core 2>/dev/null
+
+.PHONY: install uninstall
+install: all
+	@mkdir -p "$(DESTDIR)$(libdir)" && \
+	for i in $(LIBD_VER) $(LIBD_DEV) ; do \
+	    if [ -h "../../$$i" ]; then \
+		f=`readlink "../../$$i"` ; \
+		ln -sf "$$f" "$(DESTDIR)$(libdir)/$$i" ; \
+	    else \
+		install ../../$$i "$(DESTDIR)$(libdir)/" ; \
+	    fi \
+	done
+	@mkdir -p "$(DESTDIR)$(incdir)" && \
+	install -m 0644 @srcdir@/qt4client.h "$(DESTDIR)$(incdir)/"
+
+uninstall:
+	@-for i in $(LIBD_VER) $(LIBD_DEV) ; do \
+	    rm "$(DESTDIR)$(libdir)/$$i" ; \
+	done
+	@-rm "$(DESTDIR)$(incdir)/qt4client.h" && rmdir "$(DESTDIR)$(libdir)"
 
 %.o: @srcdir@/%.cpp $(INCFILES)
 	$(COMPILE) -c $<

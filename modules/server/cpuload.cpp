@@ -885,7 +885,7 @@ int CpuStat::getSystemLoad()
 	}
 	m_cpuDiscovered = true;
 	if (m_coreNumber != counter && counter > 0) {
-	    Debug(&s_module,DebugMild,"Updating CPU core number from %d to %d",
+	    Debug(&s_module,(m_coreNumber == 1) ? DebugNote:DebugWarn,"Updating CPU core number from %d to %d",
 		    m_coreNumber,counter);
 	    m_coreNumber = counter;
 	}

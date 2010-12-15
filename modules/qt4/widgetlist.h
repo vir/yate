@@ -117,6 +117,13 @@ public:
     virtual bool setParams(const NamedList& params);
 
     /**
+     * Get widget's items
+     * @param items List to fill with widget's items
+     * @return True
+     */
+    virtual bool getOptions(NamedList& items);
+
+    /**
      * Retrieve item parameters
      * @param item Item id
      * @param data List to be filled with parameters

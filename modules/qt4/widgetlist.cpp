@@ -196,6 +196,19 @@ bool WidgetList::setParams(const NamedList& params)
     return ok;
 }
 
+// Get widget's items
+bool WidgetList::getOptions(NamedList& items)
+{
+    QList<QObject*> list = getContainerItems();
+    for (int i = 0; i < list.size(); i++)
+	if (list[i]->isWidgetType()) {
+	    String id;
+	    getListItemIdProp(list[i],id);
+	    items.addParam(id,"");
+	}
+    return true;
+}
+
 // Retrieve item parameters
 bool WidgetList::getTableRow(const String& item, NamedList* data)
 {

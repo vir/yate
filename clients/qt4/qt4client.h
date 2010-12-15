@@ -458,6 +458,22 @@ public:
      */
     static void moveWindow(QtWindow* w, int pos);
 
+    /**
+     * Split an integer string list
+     * @param str The string
+     * @param defVal Default value for failed items
+     * @param emptyOk True to process empty string items
+     * @return A list of integers
+     */
+    static QList<int> str2IntList(const String& str, int defVal = 0, bool emptyOk = true);
+
+    /**
+     * Build a comma separated list of integers
+     * @param str The destination string
+     * @param list The source integer list
+     */
+    static void intList2str(String& str, QList<int> list);
+
 protected:
     virtual void loadWindows(const char* file = 0);
 private:

@@ -69,7 +69,8 @@ public:
 	ProgressBar    = 12,
 	SpinBox        = 13,
 	Calendar       = 14,
-	Unknown        = 15,             // Unknown type
+	Splitter       = 15,
+	Unknown        = 16,             // Unknown type
 	Action,                          // QAction descendant
 	CustomTable,                     // QtTable descendant
 	CustomTree,                      // QtTree descendant
@@ -153,6 +154,8 @@ public:
 	{ return static_cast<QSpinBox*>(m_widget); }
     inline QCalendarWidget* calendar()
 	{ return static_cast<QCalendarWidget*>(m_widget); }
+    inline QSplitter* splitter()
+	{ return static_cast<QSplitter*>(m_widget); }
     inline QtTable* customTable()
 	{ return qobject_cast<QtTable*>(m_widget); }
     inline QtTree* customTree()
@@ -381,6 +384,7 @@ using namespace TelEngine;
 static const String s_propsSave = "_yate_save_props"; // Save properties property name
 static const String s_propColWidths = "_yate_col_widths"; // Column widths
 static const String s_propSorting = "_yate_sorting";  // Table/List sorting
+static const String s_propSizes = "_yate_sizes";      // Size int array
 static String s_propHHeader = "dynamicHHeader";       // Tables: show/hide the horizontal header
 static String s_propAction = "dynamicAction";         // Prefix for properties that would trigger some action
 static String s_propWindowFlags = "_yate_windowflags"; // Window flags
@@ -423,7 +427,8 @@ String QtWidget::s_types[QtWidget::Unknown] = {
     "QSlider",
     "QProgressBar",
     "QSpinBox",
-    "QCalendarWidget"
+    "QCalendarWidget",
+    "QSplitter",
 };
 
 // QVariant type translation dictionary
@@ -891,6 +896,12 @@ QtWindow::~QtWindow()
 			String::boolText(Qt::AscendingOrder == h->sortIndicatorOrder());
 	    }
 	    tables[i]->setProperty(s_propSorting,QVariant(QtClient::setUtf8(sorting)));
+	}
+	QList<QSplitter*> spl = qFindChildren<QSplitter*>(wndWidget());
+	for (int i = 0; i < spl.size(); i++) {
+	    String sizes;
+	    QtClient::intList2str(sizes,spl[i]->sizes());
+	    QtClient::setProperty(spl[i],s_propSizes,sizes);
 	}
 	// Save child objects properties
 	QList<QObject*> child = qFindChildren<QObject*>(wndWidget());
@@ -2376,6 +2387,12 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 		TelEngine::destruct(list);
 	    }
 	}
+	else if (prop == s_propSizes) {
+	    if (w.type() == QtWidget::Splitter) {
+		QList<int> list = QtClient::str2IntList(value);
+		w.splitter()->setSizes(list);
+	    }
+	}
 	else if (prop == s_propWindowFlags) {
 	    QWidget* wid = (name == m_id || name == m_oldId) ? this : w.widget();
 	    // Set window flags from enclosed widget:
@@ -3821,6 +3838,24 @@ void QtClient::moveWindow(QtWindow* w, int pos)
     else if (pos != CornerTopLeft)
 	return;
     w->move(x,y);
+}
+
+// Split a string. Returns a list of int values
+QList<int> QtClient::str2IntList(const String& str, int defVal, bool emptyOk)
+{
+    QList<int> list;
+    ObjList* l = str.split(',',emptyOk);
+    for (ObjList* o = l->skipNull(); o; o = o->skipNext())
+	list.append(o->get()->toString().toInteger(defVal));
+    TelEngine::destruct(l);
+    return list;
+}
+
+// Build a comma separated list of integers
+void QtClient::intList2str(String& str, QList<int> list)
+{
+    for (int i = 0; i < list.size(); i++)
+	str.append(String(list[i]),",");
 }
 
 

@@ -511,14 +511,6 @@ protected:
     bool buildMenu(QMenu*& menu, NamedString* ns);
 
     /**
-     * Retrieve all items' id
-     * @param items List to fill with widget's items
-     * @param parent Optional parent
-     * @param recursive True to retrieve parent children
-     */
-    void getOptions(NamedList& items, QtTreeItem* parent = 0, bool recursive = true);
-
-    /**
      * Apply item widget style sheet
      * @param item Target item
      * @param selected True to apply selected item style

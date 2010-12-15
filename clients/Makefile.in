@@ -15,6 +15,8 @@ QT4_INC := @QT4_INC@
 QT4_LIB := @QT4_LIB@
 QT4_INC_NET := @QT4_INC_NET@
 QT4_LIB_NET := @QT4_LIB_NET@
+QT4_CLIENT_DEPS := ../libyateqt4.so
+QT4_CLIENT_LIBS := -lyateqt4
 LIBTHR:= @THREAD_LIB@
 INCLUDES := -I.. -I@top_srcdir@
 CFLAGS := @CFLAGS@ @MODULE_CPPFLAGS@ @INLINE_FLAGS@
@@ -34,10 +36,18 @@ SUBDIRS := $(SUBDIRS) qt4
 PROGS := $(PROGS) yate-qt4
 MENUFILES := $(MENUFILES) yate-qt4.menu
 DESKFILES := $(DESKFILES) yate-qt4.desktop
+ICONFILES := $(ICONFILES) null_team-16.png null_team-32.png null_team-48.png
+
+ifneq (@QT4_STATIC_MODULES@,no)
+ifeq (@QT4_STATIC_MODULES@,yes)
+QT4_CLIENT_LIBS := customtable customtext customtree widgetlist
+else
+QT4_CLIENT_LIBS := $(strip @QT4_STATIC_MODULES@)
+endif
+QT4_CLIENT_LIBS := $(foreach mod,$(QT4_CLIENT_LIBS),../modules/qt4/$(mod).o) qt4/qt4client.a
+QT4_CLIENT_DEPS := $(QT4_CLIENT_LIBS)
 endif
 
-ifneq (@HAVE_QT4@,no)
-ICONFILES := $(ICONFILES) null_team-16.png null_team-32.png null_team-48.png
 endif
 
 LOCALFLAGS =
@@ -123,6 +133,9 @@ uninstall: do-uninstall
 	rmdir "$(DESTDIR)$(icondir)" \
 	)
 
+../modules/qt4/%.o: @top_srcdir@/modules/qt4/%.cpp
+	$(MAKE) -C ../modules qt4/$(notdir $@)
+
 %.o: @srcdir@/%.cpp $(MKDEPS) $(INCFILES)
 	$(COMPILE) -c $<
 
@@ -145,9 +158,12 @@ do-all do-strip do-clean do-install do-uninstall:
 Makefile: @srcdir@/Makefile.in $(MKDEPS)
 	cd .. && ./config.status
 
-yate-%: @srcdir@/main-%.cpp $(MKDEPS) ../libyate.so ../libyateqt4.so $(INCFILES)
-	$(COMPILE) -o $@ $(LOCALFLAGS) $< $(LDFLAGS) $(LIBTHR) $(LOCALLIBS) $(YATELIBS)
-
-yate-qt4:
+yate-qt4: $(QT4_CLIENT_DEPS)
 yate-qt4: LOCALFLAGS = $(QT4_INC)
-yate-qt4: LOCALLIBS = -lyateqt4 $(QT4_LIB)
+yate-qt4: LOCALLIBS = $(QT4_CLIENT_LIBS) $(QT4_LIB)
+
+qt4/qt4client.a: @srcdir@/qt4/qt4client.h @srcdir@/qt4/qt4client.cpp
+	$(MAKE) -C qt4 $(notdir $@)
+
+yate-%: @srcdir@/main-%.cpp $(MKDEPS) ../libyate.so $(INCFILES)
+	$(COMPILE) -o $@ $(LOCALFLAGS) $< $(LDFLAGS) $(LIBTHR) $(LOCALLIBS) $(YATELIBS)

@@ -14,6 +14,7 @@ QT4_INC := @QT4_INC@
 QT4_LIB := @QT4_LIB@
 QT4_INC_NET := @QT4_INC_NET@
 QT4_LIB_NET := @QT4_LIB_NET@
+QT4_STATIC_MODULES :=
 HAVE_PGSQL := @HAVE_PGSQL@
 PGSQL_INC := @PGSQL_INC@
 PGSQL_LIB := -lpq
@@ -103,7 +104,9 @@ PROGS := $(PROGS) client/coreaudio.yate
 endif
 
 ifneq (@HAVE_QT4@,no)
+ifeq (@QT4_STATIC_MODULES@,no)
 PROGS := $(PROGS) qt4/updater.yate qt4/customtable.yate qt4/customtext.yate qt4/customtree.yate qt4/widgetlist.yate
+endif
 endif
 
 ifneq (@HAVE_ZAP@,no)
@@ -195,7 +198,7 @@ strip: all do-strip
 
 .PHONY: clean
 clean: do-clean
-	@-$(RM) $(PROGS) $(LIBS) *.o qt4/*.moc core 2>/dev/null
+	@-$(RM) $(PROGS) $(LIBS) *.o qt4/*.o qt4/*.moc core 2>/dev/null
 	@-for i in $(PROGS) ; do \
 	    $(RM) -rf $$i.dSYM 2>/dev/null; \
 	done;
@@ -223,6 +226,10 @@ uninstall: do-uninstall
 .PHONY: subdirs
 subdirs:
 	@mkdir -p $(DIRS)
+
+qt4/%.o: @srcdir@/qt4/%.cpp $(MKDEPS) $(INCFILES)
+	$(MAKE) $(patsubst %.o,%.moc,$@)
+	$(COMPILE) -c -o $@ $(QT4_INC) -I@top_srcdir@/clients/qt4 -I@srcdir@/qt4 $<
 
 %.o: @srcdir@/%.cpp $(MKDEPS) $(INCFILES)
 	$(COMPILE) -c $<

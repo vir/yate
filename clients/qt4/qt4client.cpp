@@ -2349,9 +2349,13 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 	bool handled = true;
 	if (prop == s_propColWidths) {
 	    if (w.type() == QtWidget::Table) {
+		QHeaderView* hdr = w.table()->horizontalHeader();
+		bool skipLast = hdr && hdr->stretchLastSection();
 		ObjList* list = value.split(',',false);
 		unsigned int col = 0;
 		for (ObjList* o = list->skipNull(); o; o = o->skipNext(), col++) {
+		    if (skipLast && col == w.table()->columnCount() - 1)
+			break;
 		    int width = (static_cast<String*>(o->get()))->toInteger(-1);
 		    if (width >= 0)
 			w.table()->setColumnWidth(col,width);

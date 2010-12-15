@@ -472,8 +472,12 @@ QString CustomTable::getColWidths()
 // Set the table columns widths string
 void CustomTable::setColWidths(QString value)
 {
+    QHeaderView* hdr = horizontalHeader();
+    bool skipLast = hdr && hdr->stretchLastSection();
     QStringList list = value.split(',');
     for (int i = 0; i < list.size(); i++) {
+	if (skipLast && i == columnCount() - 1)
+	    break;
 	bool ok = true;
 	int w = list[i].toInt(&ok);
 	if (ok && w >= 0)

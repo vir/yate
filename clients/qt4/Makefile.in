@@ -21,12 +21,16 @@ YATELIBS := -L../.. -lyate @LIBS@
 INCFILES := @top_srcdir@/yateclass.h @top_srcdir@/yatecbase.h @srcdir@/qt4client.h
 
 PROGS=
-LIBS =
+LIBS = qt4client.a
 SOURCES = qt4client.cpp
 OBJS = $(SOURCES:.cpp=.o) qt4client.moc.o
+INST:=
 LIBD_DEV:= libyateqt4.so
 LIBD_VER:= $(LIBD_DEV).@PACKAGE_VERSION@
+ifeq (@QT4_STATIC_MODULES@,no)
 LIBD:= ../../$(LIBD_VER) ../../$(LIBD_DEV)
+INST:= $(LIBD_VER) $(LIBD_DEV)
+endif
 
 LOCALFLAGS =
 LOCALLIBS =
@@ -70,23 +74,27 @@ clean:
 
 .PHONY: install uninstall
 install: all
+	$(if $(INST),\
 	@mkdir -p "$(DESTDIR)$(libdir)" && \
-	for i in $(LIBD_VER) $(LIBD_DEV) ; do \
+	for i in $(INST) ; do \
 	    if [ -h "../../$$i" ]; then \
 		f=`readlink "../../$$i"` ; \
 		ln -sf "$$f" "$(DESTDIR)$(libdir)/$$i" ; \
 	    else \
 		install ../../$$i "$(DESTDIR)$(libdir)/" ; \
 	    fi \
-	done
-	@mkdir -p "$(DESTDIR)$(incdir)" && \
-	install -m 0644 @srcdir@/qt4client.h "$(DESTDIR)$(incdir)/"
+	done; \
+	mkdir -p "$(DESTDIR)$(incdir)" && \
+	install -m 0644 @srcdir@/qt4client.h "$(DESTDIR)$(incdir)/" \
+	)
 
 uninstall:
-	@-for i in $(LIBD_VER) $(LIBD_DEV) ; do \
+	$(if $(INST),\
+	@-for i in $(INST) ; do \
 	    rm "$(DESTDIR)$(libdir)/$$i" ; \
-	done
-	@-rm "$(DESTDIR)$(incdir)/qt4client.h" && rmdir "$(DESTDIR)$(libdir)"
+	done; \
+	rm "$(DESTDIR)$(incdir)/qt4client.h" && rmdir "$(DESTDIR)$(libdir)" \
+	)
 
 %.o: @srcdir@/%.cpp $(INCFILES)
 	$(COMPILE) -c $<
@@ -105,3 +113,6 @@ Makefile: @srcdir@/Makefile.in ../../config.status
 
 ../../$(LIBD_DEV): ../../$(LIBD_VER)
 	cd ../.. && ln -sf $(LIBD_VER) $(LIBD_DEV)
+
+$(LIBS): $(OBJS)
+	$(AR) rcs $@ $^

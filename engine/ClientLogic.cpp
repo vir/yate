@@ -305,6 +305,7 @@ static const String s_accProviders = "acc_providers";       // List of providers
 static const String s_accWizProviders = "accwiz_providers"; // List of providers in account wizard
 static const String s_inviteContacts = "invite_contacts";   // List of contacts in muc invite
 // Actions
+static const String s_actionShowCallsList = "showCallsList";
 static const String s_actionCall = "call";
 static const String s_actionAnswer = "answer";
 static const String s_actionHangup = "hangup";
@@ -1979,6 +1980,53 @@ static bool dropFileTransferItem(const String& id)
     if (!items.getParam(0))
 	Client::self()->setVisible(s_wndFileTransfer,false);
     return ok;
+}
+
+// Add a tray icon to the mainwindow stack
+static bool addTrayIcon(const String& type)
+{
+    int prio = 0;
+    String triggerAction;
+    NamedList* iconParams = 0;
+    String name;
+    name << "mainwindow_" << type << "_icon";
+    const char* specific = 0;
+    if (type == "main") {
+	prio = Client::TrayIconMain;
+	iconParams = new NamedList(name);
+	iconParams->addParam("icon",Client::s_skinPath + "null_team-32.png");
+	iconParams->addParam("tooltip","Yate Client");
+	triggerAction = "action_show_mainwindow";
+    }
+    else if (type == "incomingcall") {
+	prio = Client::TrayIconIncomingCall;
+	iconParams = new NamedList(name);
+	iconParams->addParam("icon",Client::s_skinPath + "tray_incomingcall.png");
+	iconParams->addParam("tooltip","Yate Client");
+	triggerAction = s_actionShowCallsList;
+	specific = "View calls";
+    }
+    if (!iconParams)
+	return false;
+    iconParams->addParam("dynamicActionTrigger:string",triggerAction,false);
+    iconParams->addParam("dynamicActionDoubleClick:string",triggerAction,false);
+    // Add the menu
+    NamedList* pMenu = new NamedList("menu_" + type);
+    pMenu->addParam("item:quit","Quit");
+    pMenu->addParam("item:","");
+    pMenu->addParam("item:action_show_mainwindow","Show application");
+    if (prio != Client::TrayIconMain && triggerAction && specific) {
+	pMenu->addParam("item:","");
+	pMenu->addParam("item:" + triggerAction,specific);
+    }
+    iconParams->addParam(new NamedPointer("menu",pMenu));
+    return Client::addTrayIcon("mainwindow",prio,iconParams);
+}
+
+// Remove a tray icon from mainwindow stack
+static inline bool removeTrayIcon(const String& type)
+{
+    return Client::removeTrayIcon("mainwindow","mainwindow_" + type + "_icon");
 }
 
 
@@ -3672,6 +3720,13 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
 	}
 	return ::loginAccount(this,acc->params(),true,false);
     }
+    if (name == s_actionShowCallsList) {
+	if (Client::valid()) {
+	    Client::self()->setVisible("mainwindow",true,true);
+	    activatePageCalls();
+	}
+	return true;
+    }
     // Quit
     if (name == "quit") {
 	if (!Client::valid())
@@ -5223,17 +5278,20 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	if (m_transferInitiated && m_transferInitiated == id)
 	    m_transferInitiated = "";
 	// Stop incoming ringer if there are no more incoming channels
-	if (ClientSound::started(Client::s_ringInName) && ClientDriver::self()) {
-	    ClientDriver::self()->lock();
+	bool haveIncoming = false;
+	if (ClientDriver::self()) {
+	    Lock lock(ClientDriver::self());
 	    ObjList* o = ClientDriver::self()->channels().skipNull();
 	    for (; o; o = o->skipNext())
-		if ((static_cast<Channel*>(o->get()))->isOutgoing())
+		if ((static_cast<Channel*>(o->get()))->isOutgoing()) {
+		    haveIncoming = true;
 		    break;
-	    ClientDriver::self()->unlock();
-	    if (!o) {
-		Client::self()->ringer(true,false);
-		Client::self()->ringer(false,false);
-	    }
+		}
+	}
+	if (!haveIncoming) {
+	    removeTrayIcon("incomingcall");
+	    Client::self()->ringer(true,false);
+	    Client::self()->ringer(false,false);
 	}
 	Client::self()->delTableRow(s_channelList,id);
 	enableCallActions(m_selectedChannel);
@@ -5321,8 +5379,10 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	    }
 	    else
 		return false;
-	    if (outgoing)
+	    if (outgoing) {
+		addTrayIcon("incomingcall");
 		Client::self()->setUrgent(s_wndMain,true,Client::self()->getWindow(s_wndMain));
+	    }
 	    setImageParam(p,"party",chan ? chan->party() : "",outgoing ? "down.png" : "up.png");
 	    setImageParam(p,"time","",outgoing ? "chan_ringing.png" : "chan_idle.png");
 	    // Start incoming ringer if there is no active channel
@@ -5340,6 +5400,8 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	    buildStatus(status,"Calling target",0,0);
 	    break;
 	case ClientChannel::Answered:
+	    if (outgoing)
+		removeTrayIcon("incomingcall");
 	    enableActions = true;
 	    buildStatus(status,"Call answered",CHANUPD_ADDR,CHANUPD_ID);
 	    setImageParam(p,"time","answer.png");
@@ -5655,6 +5717,8 @@ bool DefaultLogic::initializedClient()
 {
     if (!Client::self())
 	return false;
+
+    addTrayIcon("main");
 
     // Load postponed contact update
     s_postponedContacts = Engine::configFile("contactupd",true);

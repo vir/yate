@@ -138,6 +138,21 @@ public:
 	}
 };
 
+// System tray icon definition.
+// The NamedPointer keeps the icon parameter list in its data
+class TrayIconDef : public NamedPointer
+{
+    YNOCOPY(TrayIconDef);                // No automatic copies please
+public:
+    inline TrayIconDef(int prio, NamedList* params)
+	: NamedPointer(params ? params->c_str() : "",params),
+	m_priority(prio)
+	{}
+    int m_priority;
+private:
+    TrayIconDef() : NamedPointer("") {}  // No default constructor
+};
+
 
 /**
  * Static classes/function/data
@@ -201,6 +216,9 @@ String ClientDriver::s_device;                   // Currently used audio device
 ObjList ClientSound::s_sounds;                   // ClientSound's list
 Mutex ClientSound::s_soundsMutex(true,"ClientSound"); // ClientSound's list lock mutex
 String ClientSound::s_calltoPrefix = "wave/play/"; // Client sound target prefix
+static NamedList s_trayIcons("");                // Tray icon stacks. This list is managed in the client's thread
+                                                 // Each item is a NamedPointer whose name is the window name
+                                                 // and with ObjList data containing item defs
 
 // Client relays
 static const MsgRelay s_relays[] = {
@@ -937,6 +955,9 @@ void Client::run()
     ClientLogic::initStaticData();
     m_defaultLogic = createDefaultLogic();
     loadUI();
+    // Update icons
+    for (ObjList* o = m_windows.skipNull(); o; o = o->skipNext())
+	Client::updateTrayIcon(o->get()->toString());
     // Run
     main();
     s_exiting = true;
@@ -2749,6 +2770,113 @@ void Client::fixPhoneNumber(String& number, const char* chars)
     }
     if (number && plus)
 	number = "+" + number;
+}
+
+// Add a tray icon to a window's stack.
+bool Client::addTrayIcon(const String& wndName, int prio, NamedList* params)
+{
+    if (!params)
+	return false;
+    if (!(wndName && valid())) {
+	TelEngine::destruct(params);
+	return false;
+    }
+    NamedPointer* wnd = YOBJECT(NamedPointer,s_trayIcons.getParam(wndName));
+    if (!wnd) {
+	wnd = new NamedPointer(wndName);
+	s_trayIcons.addParam(wnd);
+    }
+    ObjList* list = YOBJECT(ObjList,wnd);
+    if (!list) {
+	list = new ObjList;
+	wnd->userData(list);
+    }
+    ObjList* trayIcon = list->find(*params);
+    TrayIconDef* def = 0;
+    if (!trayIcon) {
+	ObjList* o = list->skipNull();
+	for (; o; o = o->skipNext()) {
+	    TrayIconDef* d = static_cast<TrayIconDef*>(o->get());
+	    if (d->m_priority < prio)
+		break;
+	}
+	def = new TrayIconDef(prio,params);
+	if (o)
+	    trayIcon = o->insert(def);
+	else
+	    trayIcon = list->append(def);
+    }
+    else {
+	def = static_cast<TrayIconDef*>(trayIcon->get());
+	def->userData(params);
+    }
+    // Update
+    if (Client::self()->initialized() && (trayIcon == list->skipNull()))
+	return updateTrayIcon(wndName);
+    return true;
+}
+
+// Remove a tray icon from a window's stack.
+// Show the next one if it's the first
+bool Client::removeTrayIcon(const String& wndName, const String& name)
+{
+    if (!(wndName && name && valid()))
+	return false;
+    NamedPointer* wnd = YOBJECT(NamedPointer,s_trayIcons.getParam(wndName));
+    if (!wnd)
+	return false;
+    ObjList* list = YOBJECT(ObjList,wnd);
+    if (!list)
+	return false;
+    ObjList* trayIcon = list->find(name);
+    if (!trayIcon)
+	return false;
+    bool upd = Client::self()->initialized() && (trayIcon == list->skipNull());
+    trayIcon->remove();
+    if (!upd)
+	return false;
+    if (list->skipNull())
+	return updateTrayIcon(wndName);
+    // Remove the old one and update the icon
+    Window* w = Client::self()->getWindow(wndName);
+    if (w) {
+	NamedList p("systemtrayicon");
+	p.addParam("stackedicon","");
+	Client::self()->setParams(&p,w);
+    }
+    return true;
+}
+
+// Update the first tray icon in a window's stack.
+// Remove any existing icon the the stack is empty
+bool Client::updateTrayIcon(const String& wndName)
+{
+    if (!(wndName && valid()))
+	return false;
+    Window* w = Client::self()->getWindow(wndName);
+    if (!w)
+	return false;
+    NamedPointer* wnd = YOBJECT(NamedPointer,s_trayIcons.getParam(wndName));
+    if (!wnd)
+	return false;
+    ObjList* list = YOBJECT(ObjList,wnd);
+    if (!list)
+	return false;
+    ObjList* o = list->skipNull();
+    TrayIconDef* def = o ? static_cast<TrayIconDef*>(o->get()) : 0;
+    NamedList p("systemtrayicon");
+    // Remove the old one
+    p.addParam("stackedicon","");
+    NamedPointer* np = 0;
+    if (def) {
+	NamedList* nl = YOBJECT(NamedList,def);
+	np = new NamedPointer("stackedicon",nl,String::boolText(true));
+	p.addParam(np);
+    }
+    bool ok = Client::self()->setParams(&p,w);
+    if (np)
+	np->takeData();
+    return ok;
 }
 
 // Build an 'ui.event' message

@@ -258,7 +258,8 @@ client/%.yate: @srcdir@/client/%.cpp $(MKDEPS) $(INCFILES)
 	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS) $(YATELIBS)
 
 qt4/%.yate: @srcdir@/qt4/%.cpp $(MKDEPS) $(INCFILES)
-	$(MODCOMP) -o $@ $(LOCALFLAGS) $(QT4_INC) -I@top_srcdir@/clients/qt4 $< $(LOCALLIBS) $(QT4_LIB) $(YATELIBS)
+	$(MAKE) $(patsubst %.yate,%.moc,$@)
+	$(MODCOMP) -o $@ $(LOCALFLAGS) $(QT4_INC) -I@top_srcdir@/clients/qt4 $< $(LOCALLIBS) ../libyateqt4.so $(QT4_LIB) $(YATELIBS)
 
 qt4/%.moc: @srcdir@/qt4/%.h $(MKDEPS) $(INCFILES)
 	mkdir -p qt4 && $(MOC) $(DEFS) $(INCLUDES) $(QT4_INC) -I@top_srcdir@/clients/qt4 -I@srcdir@/qt4 -o $@ $<
@@ -346,17 +347,8 @@ openssl.yate: LOCALLIBS = $(OPENSSL_LIB)
 rmanager.yate: LOCALFLAGS = $(COREDUMP_INC)
 rmanager.yate: LOCALLIBS = $(COREDUMP_LIB)
 
-qt4/updater.yate: qt4/updater.moc
 qt4/updater.yate: LOCALFLAGS = $(QT4_INC_NET)
 qt4/updater.yate: LOCALLIBS = $(QT4_LIB_NET)
-
-qt4/customtable.yate: qt4/customtable.moc
-qt4/customtext.yate: qt4/customtext.moc
-qt4/customtree.yate: qt4/customtree.moc
-qt4/widgetlist.yate: qt4/widgetlist.moc
-qt4/customtable.yate qt4/customtext.yate qt4/customtree.yate qt4/widgetlist.yate qt4/clientarchive.yate: ../libyateqt4.so
-qt4/customtable.yate qt4/customtext.yate qt4/customtree.yate qt4/widgetlist.yate qt4/clientarchive.yate: LOCALFLAGS = $(QT4_INC_NET)
-qt4/customtable.yate qt4/customtext.yate qt4/customtree.yate qt4/widgetlist.yate qt4/clientarchive.yate: LOCALLIBS = $(QT4_LIB_NET) -lyateqt4
 
 server/sipfeatures.yate: ../libs/yxml/libyatexml.a
 server/sipfeatures.yate: LOCALFLAGS = -I@top_srcdir@/libs/yxml

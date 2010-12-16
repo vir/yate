@@ -1458,7 +1458,7 @@ SS7M2UA::SS7M2UA(const NamedList& params)
       m_retrieve(50),
       m_iid(params.getIntValue("iid",-1)), m_linkState(LinkDown), m_rpo(false)
 {
-    Debug(DebugStub,"SS7M2UA");
+    DDebug(DebugInfo,"Creating SS7M2UA [%p]",this);
     m_retrieve.interval(params,"retrieve",5,200,true);
     m_lastSeqRx = -2;
 }
@@ -1866,7 +1866,7 @@ ISDNIUA::ISDNIUA(const NamedList& params, const char *name, u_int8_t tei)
       ISDNLayer2(params,name,tei),
       m_iid(params.getIntValue("iid",-1))
 {
-    Debug(DebugStub,"ISDNIUA");
+    DDebug(DebugInfo,"Creating ISDNIUA [%p]",this);
 }
 
 ISDNIUA::~ISDNIUA()

@@ -130,3 +130,8 @@ description=fileprogress.ui
 [fileprogress_item]
 enabled=no
 description=fileprogress_item.ui
+
+[archive]
+enabled=yes
+visible=false
+description=archive.ui

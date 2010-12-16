@@ -116,6 +116,7 @@ Source: "Release\server\cpuload.yate"; DestDir: "{app}\modules\server"; Flags: r
 Source: "Release\server\ccongestion.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor
 Source: "Release\server\monitoring.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor
 Source: "Release\server\ysnmpagent.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor
+Source: "Release\qt4\clientarchive.yate"; DestDir: "{app}\modules\qt4"; Flags: replacesameversion; Components: client
 Source: "Release\qt4\customtable.yate"; DestDir: "{app}\modules\qt4"; Flags: replacesameversion; Components: client
 Source: "Release\qt4\customtree.yate"; DestDir: "{app}\modules\qt4"; Flags: replacesameversion; Components: client
 Source: "Release\qt4\customtext.yate"; DestDir: "{app}\modules\qt4"; Flags: replacesameversion; Components: client
@@ -174,6 +175,9 @@ Source: "..\share\skins\default\account.ui"; DestDir: "{app}\share\skins\default
 Source: "..\share\skins\default\accountlist.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
 Source: "..\share\skins\default\accountwizard.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
 Source: "..\share\skins\default\addrbook.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\archive.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\arch_contact_item.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\arch_session_item.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
 Source: "..\share\skins\default\chat.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
 Source: "..\share\skins\default\confirm.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
 Source: "..\share\skins\default\contactedit.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt

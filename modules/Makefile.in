@@ -105,7 +105,8 @@ endif
 
 ifneq (@HAVE_QT4@,no)
 ifeq (@QT4_STATIC_MODULES@,no)
-PROGS := $(PROGS) qt4/updater.yate qt4/customtable.yate qt4/customtext.yate qt4/customtree.yate qt4/widgetlist.yate
+PROGS := $(PROGS) qt4/updater.yate qt4/customtable.yate qt4/customtext.yate \
+	qt4/customtree.yate qt4/widgetlist.yate qt4/clientarchive.yate
 endif
 endif
 
@@ -353,9 +354,9 @@ qt4/customtable.yate: qt4/customtable.moc
 qt4/customtext.yate: qt4/customtext.moc
 qt4/customtree.yate: qt4/customtree.moc
 qt4/widgetlist.yate: qt4/widgetlist.moc
-qt4/customtable.yate qt4/customtext.yate qt4/customtree.yate qt4/widgetlist.yate: ../libyateqt4.so
-qt4/customtable.yate qt4/customtext.yate qt4/customtree.yate qt4/widgetlist.yate: LOCALFLAGS = $(QT4_INC_NET)
-qt4/customtable.yate qt4/customtext.yate qt4/customtree.yate qt4/widgetlist.yate: LOCALLIBS = $(QT4_LIB_NET) -lyateqt4
+qt4/customtable.yate qt4/customtext.yate qt4/customtree.yate qt4/widgetlist.yate qt4/clientarchive.yate: ../libyateqt4.so
+qt4/customtable.yate qt4/customtext.yate qt4/customtree.yate qt4/widgetlist.yate qt4/clientarchive.yate: LOCALFLAGS = $(QT4_INC_NET)
+qt4/customtable.yate qt4/customtext.yate qt4/customtree.yate qt4/widgetlist.yate qt4/clientarchive.yate: LOCALLIBS = $(QT4_LIB_NET) -lyateqt4
 
 server/sipfeatures.yate: ../libs/yxml/libyatexml.a
 server/sipfeatures.yate: LOCALFLAGS = -I@top_srcdir@/libs/yxml

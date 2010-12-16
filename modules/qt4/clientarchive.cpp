@@ -31,7 +31,7 @@
  *   item_time{MARKUP_SENT|MARKUP_RECEIVED|MARKUP_DELAYED}sender_nameNULLchat_textNULLNULL
 */
 
-#include "qt4client.h"
+#include "clientarchive.h"
 
 namespace { //anonymous
 using namespace TelEngine;
@@ -2053,5 +2053,7 @@ void CARefreshThread::run()
 }
 
 } // namespace anonymous
+
+#include "clientarchive.moc"
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

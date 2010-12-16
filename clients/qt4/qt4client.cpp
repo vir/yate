@@ -1021,6 +1021,8 @@ bool QtWindow::setParams(const NamedList& params)
 		trayIcon->setContextMenu(nlMenu ? QtClient::buildMenu(*nlMenu,*menu,this,
 		    SLOT(action()),SLOT(toggled(bool)),this) : 0);
 	    }
+	    if (nl->getBoolValue("show",true))
+		trayIcon->setVisible(true);
 	}
 	setUpdatesEnabled(true);
 	return ok;

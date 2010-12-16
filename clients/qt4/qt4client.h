@@ -474,6 +474,13 @@ public:
      */
     static void intList2str(String& str, QList<int> list);
 
+    /**
+     * Apply a comma separated list of window flags to a widget
+     * @param wid The widget
+     * @param str The list of flags
+     */
+    static void applyWindowFlags(QWidget* w, const String& value);
+
 protected:
     virtual void loadWindows(const char* file = 0);
 private:
@@ -817,7 +824,7 @@ public:
      * @param parent Parent widget
      */
     inline QtDialog(QWidget* parent)
-	: QDialog(parent)
+	: QDialog(parent), m_closable(true)
 	{}
 
     /**
@@ -883,6 +890,7 @@ protected:
 
     String m_notifyOnClose;              // Action to notify when closed
     QString m_context;                   // Dialog context
+    bool m_closable;                     // Allow the dialog to be closed by the user
 };
 
 /**

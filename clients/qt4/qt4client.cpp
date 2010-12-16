@@ -972,10 +972,8 @@ bool QtWindow::setParams(const NamedList& params)
 	bool ok = false;
 	for (unsigned int i = 0; i < n; i++) {
 	    NamedString* ns = params.getParam(i);
-	    NamedList* nl = static_cast<NamedList*>(ns ? ns->getObject("NamedList") : 0);
-	    if (!(nl && ns->name()))
+	    if (!(ns && ns->name()))
 		continue;
-
 	    QSystemTrayIcon* trayIcon = findSysTrayIcon(wndWidget(),ns->name());
 	    // Delete
 	    if (ns->null()) {
@@ -991,6 +989,9 @@ bool QtWindow::setParams(const NamedList& params)
 		}
 		continue;
 	    }
+	    NamedList* nl = static_cast<NamedList*>(ns ? ns->getObject("NamedList") : 0);
+	    if (!nl)
+		continue;
 	    // Create a new one
 	    bool newObj = !trayIcon;
 	    if (newObj) {

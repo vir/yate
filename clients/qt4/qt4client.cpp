@@ -2363,7 +2363,7 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 		QHeaderView* hdr = w.table()->horizontalHeader();
 		bool skipLast = hdr && hdr->stretchLastSection();
 		ObjList* list = value.split(',',false);
-		unsigned int col = 0;
+		int col = 0;
 		for (ObjList* o = list->skipNull(); o; o = o->skipNext(), col++) {
 		    if (skipLast && col == w.table()->columnCount() - 1)
 			break;

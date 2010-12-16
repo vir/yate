@@ -176,11 +176,13 @@ int CustomTextFormat::insertText(QTextEdit* edit, const String& text, bool atSta
 
 // Set text from value. Replace text parameters if not empty
 void CustomTextFormat::buildText(String& text, const NamedList* params,
-    CustomTextEdit* owner)
+    CustomTextEdit* owner, bool lineBrBefore)
 {
     if (null())
 	return;
-    text = *this;
+    if (lineBrBefore)
+	text = ((type() == Html) ? "<br>" : "\r\n");
+    text << *this;
     NamedList dummy("");
     const NamedList* repl = &dummy;
     if (params) {
@@ -206,6 +208,27 @@ void CustomTextFormat::buildText(String& text, const NamedList* params,
 
 
 /*
+ * TextFragmentList
+ */
+// Restore this list in the document
+void TextFragmentList::restore(QTextDocument* doc)
+{
+    if (doc) {
+	for (int i = 0; i < m_list.size(); i++) {
+	    QTextCursor c(doc);
+	    c.movePosition(QTextCursor::NextCharacter,QTextCursor::MoveAnchor,
+		m_list[i].m_docPos);
+	    c.movePosition(QTextCursor::NextCharacter,QTextCursor::KeepAnchor,
+		m_list[i].toPlainText().length());
+	    c.removeSelectedText();
+	    c.insertHtml(m_list[i].toHtml());
+	}
+    }
+    m_list.clear();
+};
+
+
+/*
  * CustomTextEdit
  */
 // Constructor
@@ -218,7 +241,8 @@ CustomTextEdit::CustomTextEdit(const char* name, const NamedList& params, QWidge
     m_followUrl(true),
     m_urlHandlers(""),
     m_tempItemCount(0),
-    m_tempItemReplace(true)
+    m_tempItemReplace(true),
+    m_lastFoundPos(-1)
 {
     // Build properties
     QtClient::buildProps(this,params["buildprops"]);
@@ -228,6 +252,8 @@ CustomTextEdit::CustomTextEdit(const char* name, const NamedList& params, QWidge
     m_edit->setOpenExternalLinks(false);
     m_edit->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Expanding);
     QtClient::setWidget(this,m_edit);
+    m_searchFoundFormat.setBackground(QBrush(QColor("darkgreen")));
+    m_searchFoundFormat.setForeground(QBrush(QColor("white")));
     m_debug = params.getBoolValue("_yate_debug_widget");
     if (m_debug) {
 	m_items.addParam(new CustomTextFormat(String(-1),"white"));       // Output() or client set status
@@ -253,6 +279,7 @@ bool CustomTextEdit::setParams(const NamedList& params)
 {
     static const String s_setRichItem = "set_richtext_item";
     static const String s_setPlainItem = "set_plaintext_item";
+    static const String s_search = "search";
     unsigned int n = params.length();
     bool ok = true;
     for (unsigned int i = 0; i < n; i++) {
@@ -263,6 +290,8 @@ bool CustomTextEdit::setParams(const NamedList& params)
 	    setItem(*ns,true);
 	else if (ns->name() == s_setPlainItem)
 	    setItem(*ns,false);
+	else if (ns->name() == s_search)
+	    ok = setSearchHighlight(ns->toBoolean(),YOBJECT(NamedList,ns)) && ok;
 	else {
 	    // Prefixed parameters
 	    String tmp(ns->name());
@@ -324,7 +353,7 @@ bool CustomTextEdit::addLines(const NamedList& lines, unsigned int max, bool atS
 	    last = crt;
 	    if (last != &m_defItem) {
 		String tmp;
-		last->buildText(tmp,YOBJECT(NamedList,ns),this);
+		last->buildText(tmp,YOBJECT(NamedList,ns),this,!text.null());
 		text << tmp;
 	    }
 	    else
@@ -414,6 +443,70 @@ void CustomTextEdit::setItem(const String& value, bool html)
 	m_items.clearParam(value);
     else if (pos > 0)
 	m_items.clearParam(value.substr(0,pos));
+}
+
+// Set/reset text highlight
+bool CustomTextEdit::setSearchHighlight(bool on, NamedList* params)
+{
+    if (!on) {
+	m_lastFoundPos = -1;
+	if (params && params->getBoolValue("reset",true))
+	    m_searchFound.restore(m_edit->document());
+	else
+	    m_searchFound.m_list.clear();
+	return true;
+    }
+    if (!params)
+	return false;
+    QTextDocument* doc = m_edit->document();
+    if (!doc)
+	return false;
+    QString find = QtClient::setUtf8(params->getValue("find"));
+    if (!find.length())
+	return false;
+    Qt::CaseSensitivity cs = params->getBoolValue("matchcase") ?
+	Qt::CaseSensitive : Qt::CaseInsensitive;
+    bool found = false;
+    QString text = doc->toPlainText();
+    if (params->getBoolValue("all")) {
+	m_lastFoundPos = -1;
+	m_searchFound.restore(doc);
+	int pos = -1;
+	do {
+	    pos = text.indexOf(find,pos + 1,cs);
+	    if (pos >= 0)
+		handleFound(pos,find.length());
+	}
+	while (pos >= 0);
+	if (m_searchFound.m_list.size()) {
+	    found = true;
+	    ensureCharVisible(m_searchFound.m_list[0].m_docPos);
+	}
+    }
+    else {
+	if (params->getBoolValue("next"))
+	    m_lastFoundPos = text.indexOf(find,m_lastFoundPos >= 0 ? m_lastFoundPos + 1 : 0,cs);
+	else if (m_lastFoundPos < 0)
+	    m_lastFoundPos = text.lastIndexOf(find,-1,cs);
+	else if (m_lastFoundPos)
+	    m_lastFoundPos = text.lastIndexOf(find,m_lastFoundPos - 1,cs);
+	if (m_lastFoundPos >= 0) {
+	    found = true;
+	    m_searchFound.restore(doc);
+	    handleFound(m_lastFoundPos,find.length());
+	    ensureCharVisible(m_lastFoundPos);
+	}
+    }
+    return found;
+}
+
+// Ensure the character at a given position is visible
+void CustomTextEdit::ensureCharVisible(int pos)
+{
+    QTextCursor show(m_edit->document());
+    show.movePosition(QTextCursor::NextCharacter,QTextCursor::MoveAnchor,pos);
+    m_edit->setTextCursor(show);
+    m_edit->ensureCursorVisible();
 }
 
 // Replace string sequences with formatted text
@@ -506,6 +599,18 @@ void CustomTextEdit::urlTrigerred(const QUrl& url)
     XDebug(ClientDriver::self(),DebugAll,"CustomTextEdit(%s)::urlTrigerred(%s)",
 	name().c_str(),tmp.c_str());
     Client::self()->openUrl(tmp);
+}
+
+// Handle found item. Add data to found items. Set formatting
+void CustomTextEdit::handleFound(int pos, int len)
+{
+    QTextCursor c(m_edit->document());
+    c.movePosition(QTextCursor::NextCharacter,QTextCursor::MoveAnchor,pos);
+    c.movePosition(QTextCursor::NextCharacter,QTextCursor::KeepAnchor,len);
+    m_searchFound.add(c);
+    QString sel = c.selectedText();
+    c.removeSelectedText();
+    c.insertText(sel,m_searchFoundFormat);
 }
 
 

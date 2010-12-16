@@ -32,6 +32,8 @@ namespace { // anonymous
 
 class CustomTextFormat;                  // Custom QTextEdit format entry
 class CustomTextEditUrl;                 // Custom text edit url
+class TextFragment;                      // A formatted text document fragment
+class TextFragmentList;                  // A text fragment container
 class CustomTextEdit;                    // Custom QTextEdit
 
 /**
@@ -88,8 +90,10 @@ public:
      * @param text Text buffer
      * @param params Parameters to replace
      * @param owner Text edit owner
+     * @param lineBrBefore True to append a libe break before it
      */
-    void buildText(String& text, const NamedList* params, CustomTextEdit* owner);
+    void buildText(String& text, const NamedList* params, CustomTextEdit* owner,
+	bool lineBrBefore);
 
 private:
     Type m_type;
@@ -110,6 +114,66 @@ public:
 	m_scheme(scheme)
 	{}
     String m_scheme;
+};
+
+/**
+ * This class keeps a formatted text document fragment along
+ *  with document position
+ * @short A formatted text document fragment
+ */
+class TextFragment : public QTextDocumentFragment
+{
+public:
+    /**
+     * Constructor. Build a text fragment from a cursor's selection
+     * @param c The cursor
+     */
+    inline TextFragment(const QTextCursor& c)
+	: QTextDocumentFragment(c),
+	m_docPos(c.selectionStart())
+	{}
+
+    /**
+     * Copy constructor
+     * @param other Source text fragment
+     */
+    inline TextFragment(const TextFragment& other)
+	: QTextDocumentFragment(other), m_docPos(other.m_docPos)
+	{}
+
+    /**
+     * The position of this fragment in the document
+     */
+    int m_docPos;
+
+private:
+    TextFragment() {};
+};
+
+/**
+ * This class implements a TextFragment container
+ * @short A text fragment container
+ */
+class TextFragmentList
+{
+public:
+    /**
+     * Restore all fragments in the document. Clear the list
+     * @param doc The document
+     */
+    void restore(QTextDocument* doc);
+
+    /**
+     * Build and append a text fragment from a cursor's selection
+     * @param c The cursor
+     */
+    inline void add(QTextCursor& c)
+	{ m_list.append(TextFragment(c)); }
+
+    /**
+     * The fragments owned by this container
+     */
+    QList<TextFragment> m_list;
 };
 
 /**
@@ -183,6 +247,20 @@ public:
      * @param html True to add rich text, false to add plain text
      */
     void setItem(const String& value, bool html);
+
+    /**
+     * Set/reset search text highlight
+     * @param on True to set, false to reset
+     * @param params Parameters. Ignored it reset
+     * @return True if reset or a match was found. False otherwise
+     */
+    bool setSearchHighlight(bool on, NamedList* params);
+
+    /**
+     * Ensure the character at a given position is visible
+     * @param pos The position in the document
+     */
+    void ensureCharVisible(int pos);
 
     /**
      * Replace string sequences with formatted text
@@ -273,6 +351,13 @@ public slots:
 
 protected:
     /**
+     * Handle found item. Add data to found items. Set formatting
+     * @param pos The position in document
+     * @param len Found text length
+     */
+    void handleFound(int pos, int len);
+
+    /**
      * Retrieve a custom text format object
      * @param name Item name
      * @return CustomTextFormat pointer or 0 if not found
@@ -291,6 +376,10 @@ protected:
     int m_tempItemCount;                 // Temporary last item count
                                          //  negative: start, positive: end, 0: none
     bool m_tempItemReplace;              // Replace (delete) temporary item(s)
+    // Search
+    TextFragmentList m_searchFound;      // Last found data: restore it on request
+    QTextCharFormat m_searchFoundFormat; // Found item(s) formatting
+    int m_lastFoundPos;                  // Last found position in document
 };
 
 }; // anonymous namespace

@@ -192,6 +192,8 @@ public:
     static void load();
     // Initialize the list
     static void init();
+    // Update current status in UI
+    static void updateUi();
 private:
     static ObjList s_items;              // Items
     static AccountStatus* s_current;     // Current status
@@ -1339,18 +1341,7 @@ static void setAccountsStatus(ClientAccountList* accounts)
 	return;
     // Update UI
     AccountStatus* stat = AccountStatus::current();
-    if (stat) {
-	//
-	NamedList p("");
-	p.addParam("image:global_account_status",resStatusImage(stat->status()));
-	String info("Current status: ");
-	if (stat->text())
-	    info << stat->text();
-	else
-	    info << ClientResource::statusDisplayText(stat->status());
-	p.addParam("property:global_account_status:toolTip",info);
-	Client::self()->setParams(&p);
-    }
+    AccountStatus::updateUi();
     NamedList upd("");
     for (ObjList* o = accounts->accounts().skipNull(); o; o = o->skipNext()) {
 	ClientAccount* acc = static_cast<ClientAccount*>(o->get());
@@ -2851,6 +2842,7 @@ bool AccountStatus::setCurrent(const String& name)
     if (!s)
 	return false;
     s_current = s;
+    updateUi();
     Client::s_settings.setValue("accountstatus","default",s_current->toString());
     Client::s_settings.save();
     return true;
@@ -2917,8 +2909,25 @@ void AccountStatus::init()
     const TokenDict* d = ClientResource::s_statusName;
     for (; d && d->token; d++)
 	set(d->token,d->value,String::empty());
-    setCurrent(lookup(ClientResource::Offline,ClientResource::s_statusName));
+    setCurrent(lookup(ClientResource::Online,ClientResource::s_statusName));
 }
+
+// Update 
+void AccountStatus::updateUi()
+{
+    if (!(s_current && Client::self()))
+	return;
+    NamedList p("");
+    p.addParam("image:global_account_status",resStatusImage(s_current->status()));
+    String info("Current status: ");
+    if (s_current->text())
+	info << s_current->text();
+    else
+	info << ClientResource::statusDisplayText(s_current->status());
+    p.addParam("property:global_account_status:toolTip",info);
+    Client::self()->setParams(&p);
+}
+
 
 /*
  * PendingRequest
@@ -5653,6 +5662,7 @@ bool DefaultLogic::initializedClient()
 
     // Load account status
     AccountStatus::load();
+    AccountStatus::updateUi();
 
     // Load muc rooms
     s_mucRooms = Engine::configFile("client_mucrooms",true);

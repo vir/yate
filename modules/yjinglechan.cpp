@@ -449,6 +449,12 @@ public:
     //  is not subscribed to the remote user (or the remote user is not found).
     // Return false if user or resource is not found
     bool getClientTargetResource(JBClientStream* stream, JabberID& target, bool* noSub = 0);
+    // Find a channel by id. Return a referenced pointer
+    inline YJGConnection* findChan(const String& id) {
+	    Lock lock(this);
+	    YJGConnection* ch = static_cast<YJGConnection*>(find(id));
+	    return (ch && ch->ref()) ? ch : 0;
+	}
     // Find a connection by local and remote jid, optionally ignore local
     // resource (always ignore if local has no resource)
     YJGConnection* findByJid(const JabberID& local, const JabberID& remote,
@@ -3747,14 +3753,13 @@ bool YJGDriver::handleUserNotify(Message& msg)
 bool YJGDriver::handleChanNotify(Message& msg)
 {
     String* chan = msg.getParam("notify");
-    if (!chan)
-	return false;
-    YJGConnection* ch = static_cast<YJGConnection*>(find(*chan));
+    YJGConnection* ch = chan ? findChan(*chan) : 0;
     if (!ch)
 	return false;
     ch->processChanNotify(msg);
     if (ch->state() == YJGConnection::Terminated)
 	ch->disconnect(0);
+    TelEngine::destruct(ch);
     return true;
 }
 

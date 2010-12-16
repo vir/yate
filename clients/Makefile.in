@@ -40,7 +40,7 @@ ICONFILES := $(ICONFILES) null_team-16.png null_team-32.png null_team-48.png
 
 ifneq (@QT4_STATIC_MODULES@,no)
 ifeq (@QT4_STATIC_MODULES@,yes)
-QT4_CLIENT_LIBS := customtable customtext customtree widgetlist
+QT4_CLIENT_LIBS := customtable customtext customtree widgetlist clientarchive
 else
 QT4_CLIENT_LIBS := $(strip @QT4_STATIC_MODULES@)
 endif

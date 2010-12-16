@@ -267,6 +267,28 @@
 			Name="Header Files"
 			Filter="h;hpp;hxx;hm;inl"
 			>
+			<File
+				RelativePath="..\modules\qt4\clientarchive.h"
+				>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+						CommandLine="moc.exe  -DUNICODE -DWIN32  -DQT_NO_DEBUG -DQT_GUI_LIB -DQT_CORE_LIB -DQT_THREAD_SUPPORT -I..\..\mkspecs\win32-msvc2005 -D_MSC_VER=1400 -DWIN32 -o Release\clientarchive.moc ..\modules\qt4\clientarchive.h"
+						Outputs="Release\clientarchive.moc"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+						CommandLine="moc.exe  -DUNICODE -DWIN32  -DQT_NO_DEBUG -DQT_GUI_LIB -DQT_CORE_LIB -DQT_THREAD_SUPPORT -I..\..\mkspecs\win32-msvc2005 -D_MSC_VER=1400 -DWIN32 -o Debug\clientarchive.moc ..\modules\qt4\clientarchive.h"
+						Outputs="Debug\clientarchive.moc"
+					/>
+				</FileConfiguration>
+			</File>
 		</Filter>
 	</Files>
 	<Globals>

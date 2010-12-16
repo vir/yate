@@ -2395,19 +2395,7 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 	}
 	else if (prop == s_propWindowFlags) {
 	    QWidget* wid = (name == m_id || name == m_oldId) ? this : w.widget();
-	    // Set window flags from enclosed widget:
-	    //  custom window title/border/sysmenu config
-	    ObjList* f = value.split(',',false);
-	    int flags = Qt::CustomizeWindowHint | wid->windowFlags();
-	    // Clear settable flags
-	    TokenDict* dict = s_windowFlags;
-	    for (int i = 0; dict[i].token; i++)
-		flags &= ~dict[i].value;
-	    // Set flags
-	    for (ObjList* o = f->skipNull(); o; o = o->skipNext())
-		flags |= lookup(o->get()->toString(),s_windowFlags,0);
-	    TelEngine::destruct(f);
-	    wid->setWindowFlags((Qt::WindowFlags)flags);
+	    QtClient::applyWindowFlags(wid,value);
 	}
 	else if (prop == s_propHHeader) {
 	    // Show/hide the horizontal header
@@ -3062,8 +3050,19 @@ bool QtDialog::show(const String& name, const String& title, const String& alias
 	else
 	    QtClient::connectObjects(actions[i],SIGNAL(toggled(bool)),w,SLOT(toggled(bool)));
     }
-    if (params)
+    String* flags = 0;
+    String tmp;
+    QtClient::getProperty(widget,s_propWindowFlags,tmp);
+    if (tmp)
+	flags = &tmp;
+    if (params) {
+	if (!flags)
+	    flags = params->getParam(s_propWindowFlags);
+	m_closable = params->getBoolValue("closable","true");
 	w->setParams(*params);
+    }
+    if (flags)
+	QtClient::applyWindowFlags(this,*flags);
     setWindowModality(Qt::WindowModal);
     QDialog::show();
     return true;
@@ -3088,13 +3087,19 @@ void QtDialog::action()
 // Delete the dialog
 void QtDialog::closeEvent(QCloseEvent* event)
 {
-    QDialog::closeEvent(event);
-    deleteLater();
+    if (m_closable) {
+	QDialog::closeEvent(event);
+	deleteLater();
+    }
+    else
+	event->ignore();
 }
 
 // Destroy the dialog
 void QtDialog::reject()
 {
+    if (!m_closable)
+	return;
     QDialog::reject();
     deleteLater();
 }
@@ -3856,6 +3861,26 @@ void QtClient::intList2str(String& str, QList<int> list)
 {
     for (int i = 0; i < list.size(); i++)
 	str.append(String(list[i]),",");
+}
+
+// Apply a comma separated list of window flags to a widget
+void QtClient::applyWindowFlags(QWidget* w, const String& value)
+{
+    if (!w)
+	return;
+    // Set window flags from enclosed widget:
+    //  custom window title/border/sysmenu config
+    ObjList* f = value.split(',',false);
+    int flags = Qt::CustomizeWindowHint | w->windowFlags();
+    // Clear settable flags
+    TokenDict* dict = s_windowFlags;
+    for (int i = 0; dict[i].token; i++)
+	flags &= ~dict[i].value;
+    // Set flags
+    for (ObjList* o = f->skipNull(); o; o = o->skipNext())
+	flags |= lookup(o->get()->toString(),s_windowFlags,0);
+    TelEngine::destruct(f);
+    w->setWindowFlags((Qt::WindowFlags)flags);
 }
 
 

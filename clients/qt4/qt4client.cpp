@@ -2088,9 +2088,7 @@ void QtWindow::closeEvent(QCloseEvent* event)
 	Client::self()->action(this,tmp);
 
     // Hide the window when requested
-    String hideWnd;
-    if (QtClient::getProperty(wndWidget(),"dynamicHideOnClose",hideWnd)	&&
-	hideWnd.toBoolean()) {
+    if (QtClient::getBoolProperty(wndWidget(),"_yate_hideonclose")) {
 	event->ignore();
 	hide();
 	return;

@@ -314,6 +314,7 @@ static const String s_actionLogout = "acc_logout";
 static const String s_chat = "chatcontact_chat";
 static const String s_chatCall = "chatcontact_call";
 static const String s_chatNew = "chatcontact_new";
+static const String s_chatShowLog = "chatcontact_showlog";
 static const String s_chatEdit = "chatcontact_edit";
 static const String s_chatDel = "chatcontact_del";
 static const String s_chatInfo = "chatcontact_info";
@@ -412,12 +413,27 @@ static const TokenDict s_notifPrefix[] = {
     {"messages_accounts:",    PrivNotificationAccounts},
     {0,0,}
 };
+enum ChatLogEnum {
+    ChatLogSaveAll = 1,
+    ChatLogSaveUntilLogout,
+    ChatLogNoSave
+};
+// Archive save data
+const TokenDict s_chatLogDict[] = {
+    {"chat_save_all",         ChatLogSaveAll},
+    {"chat_save_untillogout", ChatLogSaveUntilLogout},
+    {"chat_nosave",           ChatLogNoSave},
+    {0,0}
+};
+static ChatLogEnum s_chatLog = ChatLogSaveAll;
 // Posponed contact update
 static Configuration s_postponedContacts;
 // Temporary wizards
 static ObjList s_tempWizards;
 // Chat state templates
 static NamedList s_chatStates("");
+// Changing docked chat state
+static bool s_changingDockedChat = false;
 // Miscellaneous
 static const String s_jabber = "jabber";
 static const String s_gmailDomain = "gmail.com";
@@ -583,6 +599,61 @@ static inline void setImageParam(NamedList& p, const char* param,
 {
     p.setParam(param,value);
     setImageParam(p,param,image);
+}
+
+// Request to the client to log a chat entry
+static bool logChat(ClientContact* c, unsigned int time, bool send, bool delayed,
+    const String& body)
+{
+    if (!c)
+	return false;
+    if (s_chatLog != ChatLogSaveAll && s_chatLog != ChatLogSaveUntilLogout)
+	return false;
+    if (!Client::self())
+	return false;
+    NamedList p("");
+    p.addParam("account",c->accountName());
+    p.addParam("contact",c->uri());
+    p.addParam("contactname",c->m_name);
+    p.addParam("sender",send ? "" : c->m_name.c_str());
+    p.addParam("time",String(time));
+    p.addParam("send",String::boolText(send));
+    if (!send && delayed)
+	p.addParam("delayed",String::boolText(true));
+    p.addParam("text",body);
+    return Client::self()->action(0,"archive:logchat",&p);
+}
+
+// Show contact archive log
+static bool logShow(ClientContact* c)
+{
+    if (!(c && Client::self()))
+	return false;
+    NamedList p("");
+    p.addParam("account",c->accountName());
+    p.addParam("contact",c->uri());
+    return Client::self()->action(0,"archive:showchat",&p);
+}
+
+// Close archive session
+static bool logCloseSession(ClientContact* c)
+{
+    if (!(c && Client::self()))
+	return false;
+    NamedList p("");
+    p.addParam("account",c->accountName());
+    p.addParam("contact",c->uri());
+    return Client::self()->action(0,"archive:closechatsession",&p);
+}
+
+// Clear an account's log
+static bool logClearAccount(const String& account)
+{
+    if (!Client::self())
+	return false;
+    NamedList p("");
+    p.addParam("account",account);
+    return Client::self()->action(0,"archive:clearaccountnow",&p);
 }
 
 // Update protocol related page(s) in account edit/add or wizard
@@ -937,6 +1008,8 @@ static void contactDeleted(ClientContact& c)
     // Remove instances from contacts list
     String instid;
     removeContacts(c.buildInstanceId(instid));
+    // Close chat session
+    logCloseSession(&c);
 }
 
 // Remove all account contacts from UI
@@ -1350,6 +1423,7 @@ static void enableChatActions(ClientContact* c, bool checkVisible = true)
     p.addParam("active:" + s_chat,s);
     p.addParam("active:" + s_chatCall,String::boolText(c && c->findAudioResource()));
     p.addParam("active:" + s_fileSend,String::boolText(c && c->findFileTransferResource()));
+    p.addParam("active:" + s_chatShowLog,s);
     p.addParam("active:" + s_chatEdit,s);
     p.addParam("active:" + s_chatDel,s);
     p.addParam("active:" + s_chatInfo,s);
@@ -3721,8 +3795,26 @@ bool DefaultLogic::toggle(Window* wnd, const String& name, bool active)
 	}
 	else if (wnd->id() == ClientContact::s_dockedChatWnd) {
 	    // Clear chat pages when hidden
-	    if (!active)
+	    // Close chat sessions
+	    if (!active) {
+		if (!s_changingDockedChat) {
+		    NamedList p("");
+		    Client::self()->getOptions(ClientContact::s_dockedChatWidget,&p,wnd);
+		    unsigned int n = p.length();
+		    for (unsigned int i = 0; i < n; i++) {
+			NamedString* ns = p.getParam(i);
+			if (ns && ns->name())
+			    logCloseSession(m_accounts->findContact(ns->name()));
+		    }
+		}
 		Client::self()->clearTable(ClientContact::s_dockedChatWidget,wnd);
+	    }
+	}
+	else if (wnd->id().startsWith(ClientContact::s_chatPrefix)) {
+	    // Close chat session if not active and not destroyed due
+	    //  to docked chat changes
+	    if (!(active || s_changingDockedChat))
+		logCloseSession(m_accounts->findContact(wnd->context()));
 	}
 	else {
 	    ClientWizard* wiz = !active ? findTempWizard(wnd) : 0;
@@ -3805,6 +3897,16 @@ bool DefaultLogic::toggle(Window* wnd, const String& name, bool active)
     // Handle show window actions
     if (name.startsWith("action_show_"))
 	Client::self()->setVisible(name.substr(12),active,true);
+
+    // Chat log options
+    if (active) {
+	int v = lookup(name,s_chatLogDict);
+	if (v == ChatLogSaveAll || v == ChatLogSaveUntilLogout || v == ChatLogNoSave) {
+	    s_chatLog = (ChatLogEnum)v;
+	    Client::s_settings.setValue("client","logchat",name);
+	    Client::s_settings.save();
+	}
+    }
 
     return false;
 }
@@ -3930,6 +4032,7 @@ bool DefaultLogic::setClientParam(const String& param, const String& value,
 		    Client::self()->setShow("keypad",ok);
 		if (changed && opt == Client::OptDockedChat) {
 		    // Change contacts docked chat
+		    s_changingDockedChat = true;
 		    for (ObjList* o = m_accounts->accounts().skipNull(); o; o = o->skipNext()) {
 			ClientAccount* a = static_cast<ClientAccount*>(o->get());
 			if (!a->hasChat())
@@ -3939,6 +4042,7 @@ bool DefaultLogic::setClientParam(const String& param, const String& value,
 			    changeDockedChat(*c,ok);
 			}
 		    }
+		    s_changingDockedChat = false;
 		}
 		// Clear notifications if disabled
 		if (opt == Client::OptNotifyChatState && !ok)
@@ -4819,8 +4923,11 @@ bool DefaultLogic::handleUserNotify(Message& msg, bool& stopLogic)
 	if (msg.getBoolValue("autorestart"))
 	    stat = ClientResource::Connecting;
 	else {
-	    if (!reConn)
+	    if (!reConn) {
 		stat = ClientResource::Offline;
+		if (s_chatLog == ChatLogSaveUntilLogout)
+		    logClearAccount(account);
+	    }
 	    else {
 		stat = ClientResource::Connecting;
 		acc->m_params.clearParam("internal.reconnect");
@@ -5387,6 +5494,7 @@ bool DefaultLogic::defaultMsgHandler(Message& msg, int id, bool& stopLogic)
 		    if (chatState)
 			addChatNotify(*c,chatState,msg.msgTime().sec(),"tempnotify");
 		    if (p) {
+			logChat(c,time,false,delay != 0,body);
 			c->addChatHistory(!delay ? "chat_in" : "chat_delayed",p);
 			c->flashChat();
 		    }
@@ -5616,6 +5724,11 @@ bool DefaultLogic::initializedClient()
     s_lastFileDir = Client::s_settings.getValue("filetransfer","dir");
     s_lastFileFilter = Client::s_settings.getValue("filetransfer","filter");
 
+    // Chat log
+    int v = lookup(cSect->getValue("logchat"),s_chatLogDict);
+    if (v == ChatLogSaveAll || v == ChatLogSaveUntilLogout || v == ChatLogNoSave)
+	s_chatLog = (ChatLogEnum)v;
+
     // Update settings
     NamedList p("");
     // Chat contacts list options
@@ -5630,6 +5743,8 @@ bool DefaultLogic::initializedClient()
     p.addParam("check:chatcontact_hideemptygroups",String(tmp.toBoolean(true)));
     // Show last page in main tab
     p.addParam("select:" + s_mainwindowTabs,cSect->getValue("main_active_page","tabChat"));
+    // Settings
+    p.addParam("check:" + String(lookup(s_chatLog,s_chatLogDict)),String::boolText(true));
     // Account edit defaults
     setCheck(p,*cSect,"acc_showadvanced");
     setCheck(p,*cSect,"acc_enabled");
@@ -5647,6 +5762,7 @@ bool DefaultLogic::initializedClient()
     pChatMenu->addParam("item:" + s_chat,"");
     pChatMenu->addParam("item:" + s_chatCall,"");
     pChatMenu->addParam("item:" + s_fileSend,"");
+    pChatMenu->addParam("item:" + s_chatShowLog,"");
     pChatMenu->addParam("item:" + s_chatInfo,"");
     pChatMenu->addParam("item:" + s_chatEdit,"");
     pChatMenu->addParam("item:" + s_chatDel,"");
@@ -6013,6 +6129,12 @@ bool DefaultLogic::deleteItem(const String& list, const String& item, Window* wn
 		TelEngine::destruct(room);
 		return true;
 	    }
+	}
+	if (wnd && wnd->id() == ClientContact::s_dockedChatWnd) {
+	    if (!s_changingDockedChat)
+		logCloseSession(m_accounts->findContact(item));
+	    Client::self()->delTableRow(ClientContact::s_dockedChatWidget,item,wnd);
+	    return true;
 	}
     }
     // Remove table row
@@ -6503,7 +6625,7 @@ bool DefaultLogic::handleDialogAction(const String& name, bool& retVal, Window* 
 	}
     }
     else
-	retVal = context && action(wnd,context);
+	retVal = context && Client::self()->action(wnd,context);
     return true;
 }
 
@@ -6525,11 +6647,13 @@ bool DefaultLogic::handleChatContactAction(const String& name, Window* wnd)
 	    String text;
 	    c->getChatInput(text);
 	    if (text && c->sendChat(text)) {
-		NamedList* tmp = buildChatParams(text,"me",Time::secNow());
+		unsigned int time = Time::secNow();
+		NamedList* tmp = buildChatParams(text,"me",time);
 		c->setChatProperty("history","_yate_tempitemreplace",String(false));
 		c->addChatHistory("chat_out",tmp);
 		c->setChatProperty("history","_yate_tempitemreplace",String(true));
 		c->setChatInput();
+		logChat(c,time,true,false,text);
 	    }
 	}
 	else if (room) {
@@ -6590,6 +6714,11 @@ bool DefaultLogic::handleChatContactAction(const String& name, Window* wnd)
 	if (c->account())
 	    p.addParam("protocol",c->account()->protocol(),false);
 	return callStart(p);
+    }
+    // Show chat contact log
+    if (name == s_chatShowLog) {
+	ClientContact* c = selectedChatContact(*m_accounts,wnd);
+	return logShow(c);
     }
     // Edit chat contact
     if (name == s_chatEdit) {

@@ -67,6 +67,9 @@
       <addaction name="separator" />
       <addaction name="joinmuc_wizard" />
       <addaction name="separator" />
+      <addaction name="separator" />
+      <addaction name="action_show_archive" />
+      <addaction name="separator" />
       <addaction name="acc_new" />
       <addaction name="acc_new_wizard" />
       <addaction name="separator" />
@@ -115,6 +118,7 @@
       <addaction name="chatcontact_chat" />
       <addaction name="chatcontact_call" />
       <addaction name="send_file" />
+      <addaction name="chatcontact_showlog" />
       <addaction name="chatcontact_info" />
       <addaction name="chatcontact_edit" />
       <addaction name="chatcontact_del" />
@@ -2345,6 +2349,22 @@ QTextEdit {
   <action name="action_show_fileprogress" >
    <property name="text" >
     <string>File transfer</string>
+   </property>
+  </action>
+  <action name="action_show_archive" >
+   <property name="icon" >
+    <iconset>archive.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Archive</string>
+   </property>
+  </action>
+  <action name="chatcontact_showlog" >
+   <property name="icon" >
+    <iconset>archive.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Show log</string>
    </property>
   </action>
  </widget>

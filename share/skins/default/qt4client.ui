@@ -39,6 +39,9 @@
 }
 </string>
   </property>
+  <property name="_yate_hideonclose" stdset="0" >
+   <bool>true</bool>
+  </property>
   <layout class="QVBoxLayout" >
    <property name="spacing" >
     <number>0</number>

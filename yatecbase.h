@@ -809,6 +809,14 @@ public:
     };
 
     /**
+     * Tray icon valuers used in stack
+     */
+    enum TrayIconType {
+	TrayIconMain = 0,
+	TrayIconIncomingCall = 10000,
+    };
+
+    /**
      * Constructor
      * @param name The client's name
      */
@@ -1582,6 +1590,36 @@ public:
      * @param chars Optional characters to remove from number
      */
     static void fixPhoneNumber(String& number, const char* chars = 0);
+
+    /**
+     * Add a tray icon to a window's stack. Update it if already there.
+     * Show it if it's the first one and the client is started.
+     * This method must be called from client's thread
+     * @param wndName The window owning the icon
+     * @param prio Tray icon priority. The list is kept in ascending order
+     * @param params Tray icon parameters. It will be consumed
+     * @return True on success
+     */
+    static bool addTrayIcon(const String& wndName, int prio, NamedList* params);
+
+    /**
+     * Remove a tray icon from a window's stack.
+     * Show the next one if it's the first
+     * This method must be called from client's thread
+     * @param wndName The window owning the icon
+     * @param name Tray icon name
+     * @return True on success
+     */
+    static bool removeTrayIcon(const String& wndName, const String& name);
+
+    /**
+     * Update the first tray icon in a window's stack.
+     * Remove any existing icon the the stack is empty
+     * This method must be called from client's thread
+     * @param wndName The window owning the icon
+     * @return True on success
+     */
+    static bool updateTrayIcon(const String& wndName);
 
     static Configuration s_settings;     // Client settings
     static Configuration s_actions;      // Logic preferrences

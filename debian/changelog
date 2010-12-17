@@ -1,3 +1,192 @@
+yate (3.0.0.svn3965) unstable; urgency=low
+
+  * Updated to SVN revision 3965: + Implemented per window tray icon
+    stack. An icon is now shown. The main window is now hidden when
+    close button is pressed. Change the tray icon when an incoming call
+    is received.  + Don't require a list of parameters when deleting a
+    tray icon.  + Changed handled hide on close property name.  + Handle
+    an optional "show" attribute when updating a system tray icon.  +
+    Got rid of two leftover DebugStub.  + Fixed bug: make sure the
+    channel is alive while calling its method.  + Added missing
+    dependency of modules qt4/*.yate to the yateqt4 library.  + Added a
+    generic make rule that builds MOCs for all modules/qt4.  + Added
+    client archive header to Windows project.  + Fixed ui spacing.  +
+    Added client archive to make files. Added client archive header
+    file.  + Changed default account status to online. Update UI status
+    at startup.  + Added missing SVN EOL property to a number of files.
+    + Fixed signed unsigned comparison.  + Added missing client archive
+    Windows project.  + Implemented chat log (archive).  + Added search
+    and highlight/restore found text feature to custom text widget.  +
+    Allow window flags to be specified for dialogs. Added optional
+    dialog closable flag to prevent a dialog to be closed by the user.
+    + Added new configure --with-qtstatic to accomodate linking to a
+    static Qt.  + Implemented getOptions() for widget list.  + Removed
+    unused method declaration.  + Save/restore splitter widget sizes.  +
+    Fixed bug: don't set the width if the last table column if set to be
+    stretched.  + Fixed debug level for cpu core number update.  +
+    Properly RPM package the new dynamic Qt client library and modules.
+    + Added missing CPU load and congestion control modules to specfile.
+    + Fixed make install and uninstall targets for the new libyateqt4.so
+    and qt4client.h  + Bug fix: check pointer before using it. Fixed
+    some spelling errors in messages presented to the user.  + Changed
+    the format of the accounts, links and interfaces status reported
+    through engine.status. Added accountUsername OID. Modified the
+    monitoring module to deal with the status change and the need to
+    handle the accountUsername OID information.  + Added custom widgets
+    to windows solution and setup script. Changed windows application
+    icon.  + Fixed handling of GetBulkRequest-PDU when it encounters an
+    endOfMibView in the repeating OIDs. Added checks for previously
+    unverified pointers. Fixed some code identation issues.  + Merged
+    providers.conf.default from client branch into trunk.  + Fixed OID
+    encoding/decoding for itu-t, iso and joint-iso-itu-t identifiers.
+    Added check to see if an interrogated OID is part of the known OID
+    tree.  + Merged client logic, qt library and ui changes from client
+    branch into trunk.  + Added jingle rtp audio feature to be
+    advertised in disco info responses.  + Merged socks and file
+    transfer modules changes from client branch into trunk.  + Merged
+    jabber changes from client branch into trunk.  + Broadcast
+    monitor.notify messages.  + Return false after processing
+    monitor.notify message.  + Fixed bug.  + Stop responding to
+    monitor.query messages with name=systemLoad if system cpu load is
+    not supported.  + Added batch files to help developers running Yate
+    from build directory.  + Fixed the OID interrogation for the
+    successor of a given OID.  + Fixed negative integer ASN.1 encoding
+    and decoding.  + Added new modules to Windows build and installer.
+    + Fixed EOL style in SVN.  + Fixed building with Visual Studio.  +
+    Fixed variabile initialization.  + Implemented destructor.  + Made
+    ISUP return properly HandledMSU::NoCircuit when it does not handle
+    the circuit code and only warn the first time.  + Added silent MSU
+    transfer mode (STP without route advertising).  + Fixed SVN eol
+    style for newly added files.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 17 Dec 2010 16:22:53 +0300
+
+yate (3.0.0.svn3965) unstable; urgency=low
+
+  * Updated to SVN revision 3965: + Implemented per window tray icon
+    stack. An icon is now shown. The main window is now hidden when
+    close button is pressed. Change the tray icon when an incoming call
+    is received.  + Don't require a list of parameters when deleting a
+    tray icon.  + Changed handled hide on close property name.  + Handle
+    an optional "show" attribute when updating a system tray icon.  +
+    Got rid of two leftover DebugStub.  + Fixed bug: make sure the
+    channel is alive while calling its method.  + Added missing
+    dependency of modules qt4/*.yate to the yateqt4 library.  + Added a
+    generic make rule that builds MOCs for all modules/qt4.  + Added
+    client archive header to Windows project.  + Fixed ui spacing.  +
+    Added client archive to make files. Added client archive header
+    file.  + Changed default account status to online. Update UI status
+    at startup.  + Added missing SVN EOL property to a number of files.
+    + Fixed signed unsigned comparison.  + Added missing client archive
+    Windows project.  + Implemented chat log (archive).  + Added search
+    and highlight/restore found text feature to custom text widget.  +
+    Allow window flags to be specified for dialogs. Added optional
+    dialog closable flag to prevent a dialog to be closed by the user.
+    + Added new configure --with-qtstatic to accomodate linking to a
+    static Qt.  + Implemented getOptions() for widget list.  + Removed
+    unused method declaration.  + Save/restore splitter widget sizes.  +
+    Fixed bug: don't set the width if the last table column if set to be
+    stretched.  + Fixed debug level for cpu core number update.  +
+    Properly RPM package the new dynamic Qt client library and modules.
+    + Added missing CPU load and congestion control modules to specfile.
+    + Fixed make install and uninstall targets for the new libyateqt4.so
+    and qt4client.h  + Bug fix: check pointer before using it. Fixed
+    some spelling errors in messages presented to the user.  + Changed
+    the format of the accounts, links and interfaces status reported
+    through engine.status. Added accountUsername OID. Modified the
+    monitoring module to deal with the status change and the need to
+    handle the accountUsername OID information.  + Added custom widgets
+    to windows solution and setup script. Changed windows application
+    icon.  + Fixed handling of GetBulkRequest-PDU when it encounters an
+    endOfMibView in the repeating OIDs. Added checks for previously
+    unverified pointers. Fixed some code identation issues.  + Merged
+    providers.conf.default from client branch into trunk.  + Fixed OID
+    encoding/decoding for itu-t, iso and joint-iso-itu-t identifiers.
+    Added check to see if an interrogated OID is part of the known OID
+    tree.  + Merged client logic, qt library and ui changes from client
+    branch into trunk.  + Added jingle rtp audio feature to be
+    advertised in disco info responses.  + Merged socks and file
+    transfer modules changes from client branch into trunk.  + Merged
+    jabber changes from client branch into trunk.  + Broadcast
+    monitor.notify messages.  + Return false after processing
+    monitor.notify message.  + Fixed bug.  + Stop responding to
+    monitor.query messages with name=systemLoad if system cpu load is
+    not supported.  + Added batch files to help developers running Yate
+    from build directory.  + Fixed the OID interrogation for the
+    successor of a given OID.  + Fixed negative integer ASN.1 encoding
+    and decoding.  + Added new modules to Windows build and installer.
+    + Fixed EOL style in SVN.  + Fixed building with Visual Studio.  +
+    Fixed variabile initialization.  + Implemented destructor.  + Made
+    ISUP return properly HandledMSU::NoCircuit when it does not handle
+    the circuit code and only warn the first time.  + Added silent MSU
+    transfer mode (STP without route advertising).  + Fixed SVN eol
+    style for newly added files.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 17 Dec 2010 16:22:09 +0300
+
+yate (3.0.0.svn3965) unstable; urgency=low
+
+  * Updated to SVN revision 3965: + Implemented per window tray icon
+    stack. An icon is now shown. The main window is now hidden when
+    close button is pressed. Change the tray icon when an incoming call
+    is received.  + Don't require a list of parameters when deleting a
+    tray icon.  + Changed handled hide on close property name.  + Handle
+    an optional "show" attribute when updating a system tray icon.  +
+    Got rid of two leftover DebugStub.  + Fixed bug: make sure the
+    channel is alive while calling its method.  + Added missing
+    dependency of modules qt4/*.yate to the yateqt4 library.  + Added a
+    generic make rule that builds MOCs for all modules/qt4.  + Added
+    client archive header to Windows project.  + Fixed ui spacing.  +
+    Added client archive to make files. Added client archive header
+    file.  + Changed default account status to online. Update UI status
+    at startup.  + Added missing SVN EOL property to a number of files.
+    + Fixed signed unsigned comparison.  + Added missing client archive
+    Windows project.  + Implemented chat log (archive).  + Added search
+    and highlight/restore found text feature to custom text widget.  +
+    Allow window flags to be specified for dialogs. Added optional
+    dialog closable flag to prevent a dialog to be closed by the user.
+    + Added new configure --with-qtstatic to accomodate linking to a
+    static Qt.  + Implemented getOptions() for widget list.  + Removed
+    unused method declaration.  + Save/restore splitter widget sizes.  +
+    Fixed bug: don't set the width if the last table column if set to be
+    stretched.  + Fixed debug level for cpu core number update.  +
+    Properly RPM package the new dynamic Qt client library and modules.
+    + Added missing CPU load and congestion control modules to specfile.
+    + Fixed make install and uninstall targets for the new libyateqt4.so
+    and qt4client.h  + Bug fix: check pointer before using it. Fixed
+    some spelling errors in messages presented to the user.  + Changed
+    the format of the accounts, links and interfaces status reported
+    through engine.status. Added accountUsername OID. Modified the
+    monitoring module to deal with the status change and the need to
+    handle the accountUsername OID information.  + Added custom widgets
+    to windows solution and setup script. Changed windows application
+    icon.  + Fixed handling of GetBulkRequest-PDU when it encounters an
+    endOfMibView in the repeating OIDs. Added checks for previously
+    unverified pointers. Fixed some code identation issues.  + Merged
+    providers.conf.default from client branch into trunk.  + Fixed OID
+    encoding/decoding for itu-t, iso and joint-iso-itu-t identifiers.
+    Added check to see if an interrogated OID is part of the known OID
+    tree.  + Merged client logic, qt library and ui changes from client
+    branch into trunk.  + Added jingle rtp audio feature to be
+    advertised in disco info responses.  + Merged socks and file
+    transfer modules changes from client branch into trunk.  + Merged
+    jabber changes from client branch into trunk.  + Broadcast
+    monitor.notify messages.  + Return false after processing
+    monitor.notify message.  + Fixed bug.  + Stop responding to
+    monitor.query messages with name=systemLoad if system cpu load is
+    not supported.  + Added batch files to help developers running Yate
+    from build directory.  + Fixed the OID interrogation for the
+    successor of a given OID.  + Fixed negative integer ASN.1 encoding
+    and decoding.  + Added new modules to Windows build and installer.
+    + Fixed EOL style in SVN.  + Fixed building with Visual Studio.  +
+    Fixed variabile initialization.  + Implemented destructor.  + Made
+    ISUP return properly HandledMSU::NoCircuit when it does not handle
+    the circuit code and only warn the first time.  + Added silent MSU
+    transfer mode (STP without route advertising).  + Fixed SVN eol
+    style for newly added files.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 17 Dec 2010 16:16:09 +0300
+
 yate (3.0.0.vir12647) unstable; urgency=low
 
   * Fixed dependency packages versions

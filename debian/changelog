@@ -1,5 +1,12 @@
 yate (3.0.0.svn) unstable; urgency=low
 
+  * Updated to SVN revision : + Updated debian packaging info  + Updated
+    debian packaging info
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 17 Dec 2010 16:25:04 +0300
+
+yate (3.0.0.svn) unstable; urgency=low
+
   * Updated to SVN revision : + Updated debian packaging info
 
  -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 17 Dec 2010 16:23:10 +0300

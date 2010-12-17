@@ -2086,6 +2086,12 @@ bool QtWindow::event(QEvent* ev)
 	m_active = true;
 	Client::self()->toggle(this,"window_active_changed",true);
     }
+    else if (ev->type() == QEvent::ApplicationDeactivate) {
+	if (m_active) {
+	    m_active = false;
+	    Client::self()->toggle(this,"window_active_changed",true);
+	}
+    }
     return QWidget::event(ev);
 }
 

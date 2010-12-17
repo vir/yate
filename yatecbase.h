@@ -2388,9 +2388,10 @@ public:
     /**
      * Make an outgoing call to a target picked from the call log
      * @param billid The bill id of the call
+     * @param wnd Optional window starting the action
      * @return True on success (call initiated)
     */
-    virtual bool callLogCall(const String& billid)
+    virtual bool callLogCall(const String& billid, Window* wnd = 0)
 	{ return false; }
 
     /**
@@ -2870,9 +2871,10 @@ public:
     /**
      * Make an outgoing call to a target picked from the call log
      * @param billid The bill id of the call
+     * @param wnd Optional window starting the action
      * @return True on success (call initiated)
     */
-    virtual bool callLogCall(const String& billid);
+    virtual bool callLogCall(const String& billid, Window* wnd = 0);
 
     /**
      * Create a contact from a call log entry

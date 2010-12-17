@@ -306,6 +306,7 @@ static const String s_accWizProviders = "accwiz_providers"; // List of providers
 static const String s_inviteContacts = "invite_contacts";   // List of contacts in muc invite
 // Actions
 static const String s_actionShowCallsList = "showCallsList";
+static const String s_actionShowNotification = "showNotification";
 static const String s_actionCall = "call";
 static const String s_actionAnswer = "answer";
 static const String s_actionHangup = "hangup";
@@ -2022,6 +2023,14 @@ static bool addTrayIcon(const String& type)
 	triggerAction = s_actionShowCallsList;
 	specific = "View calls";
     }
+    else if (type == "notification") {
+	prio = Client::TrayIconNotification;
+	iconParams = new NamedList(name);
+	iconParams->addParam("icon",Client::s_skinPath + "tray_notification.png");
+	info << "\r\nA notification is requiring your attention";
+	triggerAction = s_actionShowNotification;
+	specific = "View notifications";
+    }
     if (!iconParams)
 	return false;
     iconParams->addParam("tooltip",info);
@@ -3703,9 +3712,16 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
     if (name == "button_hide" && wnd)
 	return Client::self() && Client::self()->setVisible(wnd->toString(),false);
     // Show/hide messages
-    bool showMsgs = (name == "messages_show");
-    if (showMsgs || name == "messages_close")
+    bool showMsgs = (name == "messages_show" || name == s_actionShowNotification);
+    if (showMsgs || name == "messages_close") {
+	if (name == s_actionShowNotification) {
+	    removeTrayIcon("notification");
+	    if (wnd && Client::valid())
+		Client::self()->setVisible(wnd->id(),true,true);
+	}
 	return showNotificationArea(showMsgs,wnd);
+    }
+  
     // Dialog actions
     // Return 'true' to close the dialog
     bool dlgRet = false;
@@ -4092,6 +4108,13 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
     // Specific select handlers
     if (handleMucsSelect(name,item,wnd,text))
 	return true;
+
+    // No more notifications: remove the tray icon
+    if (name == "messages") {
+	if (!item)
+	    removeTrayIcon("notification");
+	return true;
+    }
 
     // Selection changed in 'callto': do nothing. Just return true to avoid enqueueing ui.event
     if (name == "callto")
@@ -7225,8 +7248,12 @@ bool DefaultLogic::showNotificationArea(bool show, Window* wnd, NamedList* upd)
 {
     if (!Client::self())
 	return false;
-    if (upd)
+    if (upd) {
 	Client::self()->updateTableRows("messages",upd,false,wnd);
+	addTrayIcon("notification");
+    }
+    else if (!show)
+	removeTrayIcon("notification");
     NamedList p("");
     const char* ok = String::boolText(show);
     p.addParam("check:messages_show",ok);

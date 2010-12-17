@@ -813,6 +813,7 @@ public:
      */
     enum TrayIconType {
 	TrayIconMain = 0,
+	TrayIconNotification = 5000,
 	TrayIconIncomingCall = 10000,
     };
 
@@ -3124,7 +3125,7 @@ private:
     // The account was already checked
     bool handleMucResNotify(Message& msg, ClientAccount* acc, const String& contact,
 	const String& instance, const String& operation);
-    // Show/hide the notification area (messages)
+    // Show/hide the notification area (messages).
     // Update rows if requested
     bool showNotificationArea(bool show, Window* wnd, NamedList* upd = 0);
     // Handle actions from notification area. Return true if handled

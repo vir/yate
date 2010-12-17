@@ -2073,7 +2073,10 @@ bool QtWindow::event(QEvent* ev)
 	QtClient::getProperty(wndWidget(),s_propHideInactive,hideProp);
 	if (hideProp && hideProp.toBoolean())
 	    setVisible(false);
+	Client::self()->toggle(this,"window_active_changed",false);
     }
+    else if (ev->type() == QEvent::WindowActivate)
+	Client::self()->toggle(this,"window_active_changed",true);
     return QWidget::event(ev);
 }
 

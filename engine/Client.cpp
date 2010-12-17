@@ -388,7 +388,7 @@ static void flashItem(const String& name, const String& item, Window* w)
  */
 // Constructor with the specified id
 Window::Window(const char* id)
-    : m_id(id), m_visible(false), m_master(false), m_popup(false),
+    : m_id(id), m_visible(false), m_active(false), m_master(false), m_popup(false),
     m_saveOnClose(true), m_populated(false), m_initialized(false)
 {
     DDebug(ClientDriver::self(),DebugAll,"Window(%s) created",m_id.c_str());
@@ -1048,6 +1048,13 @@ bool Client::getVisible(const String& name)
 {
     Window* w = getWindow(name);
     return w && w->visible();
+}
+
+// Retrieve the active state of a window
+bool Client::getActive(const String& name)
+{
+    Window* w = Client::self() ? Client::self()->getWindow(name) : 0;
+    return w && w->active();
 }
 
 // Create the default logic

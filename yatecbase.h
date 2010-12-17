@@ -479,6 +479,13 @@ public:
 	{ if (yes) show(); else hide(); }
 
     /**
+     * Check if this window is the active one
+     * @return True if window is active
+     */
+    inline bool active() const
+	{ return m_active; }
+
+    /**
      * Check if this window is a master (topmost) window
      * @return True if this window is topmost
      */
@@ -526,6 +533,7 @@ protected:
     String m_title;
     String m_context;
     bool m_visible;
+    bool m_active;
     bool m_master;
     bool m_popup;
     bool m_saveOnClose;                  // Save window's data when destroyed
@@ -1458,6 +1466,13 @@ public:
      */
     static inline bool exiting()
 	{ return s_exiting; }
+
+    /**
+     * Retrieve the active state of a window
+     * @param name Window name
+     * @return True if the window is found and it's active
+     */
+    static bool getActive(const String& name);
 
     /**
      * Build a message to be sent by the client.

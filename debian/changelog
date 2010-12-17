@@ -1,3 +1,23 @@
+yate (3.0.0.svn3973) unstable; urgency=low
+
+  * Updated to SVN revision 3973: + Updated debian packaging info  +
+    Updated debian packaging info  + Updated debian packaging info  +
+    Added active flag the Window class. Update it when window active
+    state changes. Added client method used to retrieve the active state
+    of a window.  + Add a tray icon to the main window stack when a
+    notification is shown in it. Remove the tray icon when the
+    notifications list is empty, the user clicked the icon or the
+    notification area is hidden due to user actions.  + The custom
+    widget list is now notifying selection changes.  + Changed incoming
+    call tray icon.  + Notify window_active_changed toggle to the client
+    when a window's active state changes.  + Remove incoming call icon
+    when selection changed in the calls list. Add extra text to icon
+    tool tip.  + Show contact status, URI and account in contact list
+    item tool tip.  + Always remove the incoming call icon when the
+    calls page become active.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 17 Dec 2010 16:29:14 +0300
+
 yate (3.0.0.svn) unstable; urgency=low
 
   * Updated to SVN revision : + Updated debian packaging info  + Updated

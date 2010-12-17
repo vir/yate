@@ -54,6 +54,7 @@ public:
     String m_stateWidget;                // Item widget showing the state
     String m_stateExpandedImg;           // Image to show when expanded
     String m_stateCollapsedImg;          // Image to show when collapsed
+    String m_toolTip;                    // Tooltip template
 };
 
 
@@ -104,6 +105,7 @@ class QtCustomTree : public QtTree
     Q_PROPERTY(QString _yate_itemstatewidget READ itemStateWidget WRITE setItemStateWidget(QString))
     Q_PROPERTY(QString _yate_itemexpandedimage READ itemExpandedImage WRITE setExpandedImage(QString))
     Q_PROPERTY(QString _yate_itemcollapsedimage READ itemCollapsedImage WRITE setItemCollapsedImage(QString))
+    Q_PROPERTY(QString _yate_itemtooltip READ itemTooltip WRITE setItemTooltip(QString))
     Q_PROPERTY(QString _yate_col_widths READ colWidths WRITE setColWidths(QString))
     Q_PROPERTY(QString _yate_sorting READ sorting WRITE setSorting(QString))
 public:
@@ -421,6 +423,19 @@ public:
     void setItemCollapsedImage(QString value);
 
     /**
+     * Read _yate_itemtooltip property accessor: does nothing
+     * This method is here to stop MOC compiler complaining about missing READ accessor function
+     */
+    QString itemTooltip()
+	{ return QString(); }
+
+    /**
+     * Set an item's tooltip template
+     * @param value Item props tooltip template. Format [type:]imagefile
+     */
+    void setItemTooltip(QString value);
+
+    /**
      * Retrieve a comma separated list with column widths
      * @return Comma separated list containing column widths
      */
@@ -563,6 +578,12 @@ protected:
      * @param item Added item
      */
     virtual void itemAdded(QtTreeItem& item);
+
+    /**
+     * Update a tree item's tooltip
+     * @param item Item to update
+     */
+    virtual void applyItemTooltip(QtTreeItem& item);
 
     QMenu* m_menu;                       // Tree context menu
     bool m_autoExpand;                   // Items are expanded when added

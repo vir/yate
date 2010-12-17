@@ -3741,7 +3741,7 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
 	if (!billid)
 	    return false;
 	if (logCall)
-	    return callLogCall(billid);
+	    return callLogCall(billid,wnd);
 	return callLogCreateContact(billid);
     }
     if (name == "log_clear")
@@ -4853,13 +4853,13 @@ bool DefaultLogic::callLogClear(const String& table, const String& direction)
 }
 
 // Make an outgoing call to a target picked from the call log
-bool DefaultLogic::callLogCall(const String& billid)
+bool DefaultLogic::callLogCall(const String& billid, Window* wnd)
 {
     NamedList* sect = Client::s_history.getSection(billid);
     if (!sect)
 	return false;
     const String& party = cdrRemoteParty(*sect);
-    return party && Client::openConfirm("Call to '" + party + "'?",0,"callto:" + party);
+    return party && action(wnd,"callto:" + party);
 }
 
 // Create a contact from a call log entry

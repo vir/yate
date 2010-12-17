@@ -458,6 +458,30 @@ void WidgetList::setHideWidgetWhenEmpty(QString value)
     hideEmpty();
 }
 
+// Start/stop item flash
+void WidgetList::setFlashItem(QString value)
+{
+    if (!m_tab)
+	return;
+    String on;
+    String item;
+    int pos = value.indexOf(':');
+    if (pos > 0) {
+	QtClient::getUtf8(on,value.left(pos));
+	QtClient::getUtf8(item,value.right(value.length() - pos - 1));
+    }
+    else
+	return;
+    QWidget* w = findItem(item);
+    if (!w)
+	return;
+    int index = m_tab->indexOf(w);
+    if (on.toBoolean())
+	m_tab->setTabTextColor(index,QColor("green"));
+    else
+	m_tab->setTabTextColor(index,QColor("black"));
+}
+
 // Handle selection changes
 void WidgetList::currentChanged(int index)
 {

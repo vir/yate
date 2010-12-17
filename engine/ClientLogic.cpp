@@ -307,6 +307,7 @@ static const String s_inviteContacts = "invite_contacts";   // List of contacts 
 // Actions
 static const String s_actionShowCallsList = "showCallsList";
 static const String s_actionShowNotification = "showNotification";
+static const String s_actionPendingChat = "showPendingChat";
 static const String s_actionCall = "call";
 static const String s_actionAnswer = "answer";
 static const String s_actionHangup = "hangup";
@@ -438,6 +439,8 @@ static ObjList s_tempWizards;
 static NamedList s_chatStates("");
 // Changing docked chat state
 static bool s_changingDockedChat = false;
+// Pending chat items managed in the client's thread
+static ObjList s_pendingChat;
 // Miscellaneous
 static const String s_jabber = "jabber";
 static const String s_gmailDomain = "gmail.com";
@@ -2031,6 +2034,14 @@ static bool addTrayIcon(const String& type)
 	triggerAction = s_actionShowNotification;
 	specific = "View notifications";
     }
+    else if (type == "incomingchat") {
+	prio = Client::TrayIconIncomingChat;
+	iconParams = new NamedList(name);
+	iconParams->addParam("icon",Client::s_skinPath + "tray_incomingchat.png");
+	info << "\r\nYou have unread chat";
+	triggerAction = s_actionPendingChat;
+	specific = "View chat";
+    }
     if (!iconParams)
 	return false;
     iconParams->addParam("tooltip",info);
@@ -2053,6 +2064,85 @@ static bool addTrayIcon(const String& type)
 static inline bool removeTrayIcon(const String& type)
 {
     return Client::removeTrayIcon("mainwindow","mainwindow_" + type + "_icon");
+}
+
+// Notify incoming chat to the user
+static void notifyIncomingChat(ClientContact* c, const String& id = String::empty())
+{
+    if (!(c && Client::valid()))
+	return;
+    String* add = 0;
+    MucRoom* room = c->mucRoom();
+    if (!room) {
+	if (c->isChatActive())
+	    return;
+	c->flashChat();
+    }
+    else {
+	if (!id || room->isChatActive(id))
+	    return;
+	room->flashChat(id);
+    }
+    const String& str = !room ? c->toString() : id;
+    if (!s_pendingChat.find(str))
+	s_pendingChat.append(new String(str));
+    addTrayIcon("incomingchat");
+}
+
+// Show the first chat item in pending chat
+static void showPendingChat(ClientAccountList* accounts)
+{
+    if (!(accounts && Client::valid()))
+	return;
+    bool tryAgain = true;
+    while (tryAgain) {
+	String* id = static_cast<String*>(s_pendingChat.remove(false));
+	if (!s_pendingChat.skipNull()) {
+	    removeTrayIcon("incomingchat");
+	    tryAgain = false;
+	}
+	if (!id)
+	    break;
+	ClientContact* c = accounts->findContact(*id);
+	MucRoom* room = !c ? accounts->findRoomByMember(*id) : 0;
+	if (c) {
+	    if (c->hasChat()) {
+		c->flashChat(false);
+		c->showChat(true,true);
+	    }
+	    else
+		c = 0;
+	}
+	else if (room) {
+	    if (room->hasChat(*id)) {
+		room->flashChat(*id,false);
+		room->showChat(*id,true,true);
+	    }
+	    else
+		room = 0;
+	}
+	TelEngine::destruct(id);
+	tryAgain = !(c || room);
+    }
+}
+
+// Remove an item from pending chat
+// Stop flashing it if a list is given
+static void removePendingChat(const String& id, ClientAccountList* accounts = 0)
+{
+    if (!(id && Client::valid()))
+	return;
+    s_pendingChat.remove(id);
+    if (!s_pendingChat.skipNull())
+	removeTrayIcon("incomingchat");
+    if (!accounts)
+	return;
+    ClientContact* c = accounts->findContact(id);
+    MucRoom* room = !c ? accounts->findRoomByMember(id) : 0;
+    if (c)
+	c->flashChat(false);
+    else if (room)
+	room->flashChat(id,false);
 }
 
 
@@ -3761,6 +3851,10 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
 	}
 	return true;
     }
+    if (name == s_actionPendingChat) {
+	showPendingChat(m_accounts);
+	return true;
+    }
     // Quit
     if (name == "quit") {
 	if (!Client::valid())
@@ -3889,6 +3983,15 @@ bool DefaultLogic::toggle(Window* wnd, const String& name, bool active)
 		    ClientAccount* acc = static_cast<ClientAccount*>(o->get());
 		    acc->mucs().clear();
 		}
+		// Remove from pending chat
+		NamedList p("");
+		Client::self()->getOptions(ClientContact::s_dockedChatWidget,&p,wnd);
+		unsigned int n = p.length();
+		for (unsigned int i = 0; i < n; i++) {
+		    NamedString* ns = p.getParam(i);
+		    if (ns && ns->name())
+			removePendingChat(ns->name());
+		}
 	    }
 	}
 	else if (wnd->id() == ClientContact::s_dockedChatWnd) {
@@ -3901,8 +4004,10 @@ bool DefaultLogic::toggle(Window* wnd, const String& name, bool active)
 		    unsigned int n = p.length();
 		    for (unsigned int i = 0; i < n; i++) {
 			NamedString* ns = p.getParam(i);
-			if (ns && ns->name())
+			if (ns && ns->name()) {
+			    removePendingChat(ns->name());
 			    logCloseSession(m_accounts->findContact(ns->name()));
+			}
 		    }
 		}
 		Client::self()->clearTable(ClientContact::s_dockedChatWidget,wnd);
@@ -3920,6 +4025,15 @@ bool DefaultLogic::toggle(Window* wnd, const String& name, bool active)
 		s_tempWizards.remove(wnd->id());
 	}
 	Client::self()->setParams(&p);
+	return true;
+    }
+    // Window active changed
+    if (wnd && name == "window_active_changed") {
+	if (wnd->id().startsWith(ClientContact::s_chatPrefix)) {
+	    // Remove contact from pending when activated
+	    if (active)
+		removePendingChat(wnd->context());
+	}
 	return true;
     }
 
@@ -4108,6 +4222,13 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
     // Specific select handlers
     if (handleMucsSelect(name,item,wnd,text))
 	return true;
+
+    // Selection changed in docked (room) chat
+    if (name == ClientContact::s_dockedChatWidget) {
+	if (item)
+	    removePendingChat(item,m_accounts);
+	return true;
+    }
 
     // No more notifications: remove the tray icon
     if (name == "messages") {
@@ -5619,7 +5740,7 @@ bool DefaultLogic::defaultMsgHandler(Message& msg, int id, bool& stopLogic)
 		    if (p) {
 			logChat(c,time,false,delay != 0,body);
 			c->addChatHistory(!delay ? "chat_in" : "chat_delayed",p);
-			c->flashChat();
+			notifyIncomingChat(c);
 		    }
 		    if (resetNotif)
 			c->setChatProperty("history","_yate_tempitemcount",String((int)0));
@@ -5661,7 +5782,7 @@ bool DefaultLogic::defaultMsgHandler(Message& msg, int id, bool& stopLogic)
 	    if (delay) {
 		NamedList* p = buildChatParams(text,"",time,0,0);
 		room->addChatHistory(room->resource().toString(),"chat_delayed",p);
-		room->flashChat(room->resource().toString());
+		notifyIncomingChat(room,room->resource().toString());
 	    }
 	    else
 		addChatNotify(*room,text,msg.msgTime().sec());
@@ -5685,6 +5806,7 @@ bool DefaultLogic::defaultMsgHandler(Message& msg, int id, bool& stopLogic)
 		addChatNotify(*room,chatState,msg.msgTime().sec(),"tempnotify",id);
 	    if (p) {
 		room->addChatHistory(id,!delay ? "chat_in" : "chat_delayed",p);
+		notifyIncomingChat(room,id);
 		room->flashChat(id);
 	    }
 	    if (resetNotif)

@@ -7,4 +7,5 @@ debian/tmp/usr/include/yate/yatengine.h
 debian/tmp/usr/include/yate/yatephone.h
 debian/tmp/usr/include/yate/yatecbase.h
 debian/tmp/usr/include/yate/yateversn.h
+debian/tmp/usr/include/yate/qt4client.h
 

@@ -74,4 +74,8 @@ debian/tmp/usr/share/yate/data/YATE-MIB.txt
 debian/tmp/etc/yate/monitoring.conf
 debian/tmp/usr/lib/yate/server/monitoring.yate
 
+debian/tmp/etc/yate/cpuload.conf
+debian/tmp/usr/lib/yate/server/cpuload.yate
+debian/tmp/etc/yate/ccongestion.conf
+debian/tmp/usr/lib/yate/server/ccongestion.yate
 

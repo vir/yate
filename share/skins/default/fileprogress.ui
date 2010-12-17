@@ -1,0 +1,65 @@
+<ui version="4.0" >
+ <class>fileprogress</class>
+ <widget class="QWidget" name="fileprogress" >
+  <property name="geometry" >
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>493</width>
+    <height>459</height>
+   </rect>
+  </property>
+  <property name="windowTitle" >
+   <string>File transfer</string>
+  </property>
+  <layout class="QVBoxLayout" >
+   <property name="leftMargin" >
+    <number>6</number>
+   </property>
+   <property name="topMargin" >
+    <number>6</number>
+   </property>
+   <property name="rightMargin" >
+    <number>6</number>
+   </property>
+   <property name="bottomMargin" >
+    <number>6</number>
+   </property>
+   <item>
+    <widget class="QFrame" name="frame_chat_contacts" >
+     <property name="sizePolicy" >
+      <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="styleSheet" >
+      <string/>
+     </property>
+     <property name="_yate_uiwidget" stdset="0" >
+      <bool>true</bool>
+     </property>
+     <property name="_yate_uiwidget_name" stdset="0" >
+      <string>fileprogresslist</string>
+     </property>
+     <property name="_yate_uiwidget_class" stdset="0" >
+      <string>ContactList</string>
+     </property>
+     <property name="_yate_uiwidget_params" stdset="0" >
+      <stringlist>
+       <string>property:_yate_flatlist=true</string>
+       <string>property:itemsExpandable=false</string>
+       <string>property:autoExpand=false</string>
+       <string>property:styleSheet=QTreeWidget {border-image: none;font-size: 11px;background:white;border: 0px solid #97acbc;border-radius:2px;}</string>
+       <string>property:_yate_itemui=contact:fileprogress_item.ui</string>
+       <string>property:_yate_itemstyle=contact:QWidget#${name}{background:white;}</string>
+       <string>property:_yate_itemselectedstyle=contact:QWidget#${name}{background:lightblue;}</string>
+      </stringlist>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

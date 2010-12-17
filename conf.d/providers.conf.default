@@ -44,3 +44,9 @@ description=Google Talk
 protocol=jabber
 domain=gmail.com
 options=allowplainauth
+
+[Facebook]
+enabled=yes
+description=Facebook
+protocol=jabber
+domain=chat.facebook.com

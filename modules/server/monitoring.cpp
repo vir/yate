@@ -228,7 +228,7 @@ public:
 	CALLER      = 5,    // caller party
 	CALLED      = 6,    // called party
 	PEER	    = 7,    // peer(s) channel of a call
-	DURATION    = 8     // call duration
+	DURATION    = 8,     // call duration
     };
     // Constructor
     inline ActiveCallsInfo()
@@ -260,7 +260,7 @@ public:
 	STATUS      = 4,    // status of a component
 	TYPE	    = 5,    // the type of the component
 	ALARMS_COUNT = 6,   // alarm counter for the component
-	SKIP	    = 7     // helper value to skip unnecessary information when parsing the status string
+	SKIP	    = 7,     // helper value to skip unnecessary information when parsing the status string
     };
     // Constructor
     inline SigInfo(const char* name, const TokenDict* dict)
@@ -385,7 +385,8 @@ public:
 	INDEX       = 2,
 	ID	    = 3,
 	STATUS      = 4,
-	PROTO	    = 5
+	PROTO	    = 5,
+	USERNAME    = 6,
     };
     // Constructor
     inline AccountsInfo()
@@ -419,6 +420,7 @@ public:
 	ENGINE_RUNATTEMPT   = 11,
 	ENGINE_NODENAME     = 12,
 	ENGINE_STATE	    = 13,
+	ENGINE_CALL_ACCEPT  = 14,
     };
     // Constructor
     inline EngineInfo()
@@ -670,7 +672,7 @@ class CallRouteQoS : public GenObject
 public:
     enum CallStatus {
 	ANSWERED    = 1,
-	DELIVERED   = 2
+	DELIVERED   = 2,
     };
     enum Indexes {
 	CURRENT_IDX     = 0,
@@ -792,13 +794,13 @@ public:
 	IN_ASR_Idx	= 0,
 	OUT_ASR_Idx	= 1,
 	IN_NER_Idx	= 2,
-	OUT_NER_Idx	= 3
+	OUT_NER_Idx	= 3,
     };
 
     enum Queries {
 	INCOMING_CALLS    = 9,
 	OUTGOING_CALLS    = 10,
-	ROUTES_COUNT	  = 11
+	ROUTES_COUNT	  = 11,
     };
 
     // constructor
@@ -866,7 +868,7 @@ public:
 	LINKS		  = 15,
 	IFACES		  = 16,
 	ACCOUNTS	  = 17,
-	MGCP		  = 18
+	MGCP		  = 18,
     };
 
      enum SigTypes {
@@ -888,7 +890,7 @@ public:
 	LinkDown,
 	LinkUp,
 	IsdnQ921Down,
-	IsdnQ921Up
+	IsdnQ921Up,
     };
 
     enum SipNotifs {
@@ -897,7 +899,7 @@ public:
 	ByesTimedOut,
 	GWTimeout,
 	GWUp,
-	DeletesTimedOut
+	DeletesTimedOut,
     };
     Monitor();
     virtual ~Monitor();
@@ -1072,6 +1074,7 @@ static TokenDict s_categories[] = {
     {"accountID",		Monitor::ACCOUNTS},
     {"accountStatus",		Monitor::ACCOUNTS},
     {"accountProtocol",		Monitor::ACCOUNTS},
+    {"accountUsername",		Monitor::ACCOUNTS},
     // active calls info
     {"activeCallsCount",	Monitor::ACTIVE_CALLS},
     {"callEntryIndex",		Monitor::ACTIVE_CALLS},
@@ -1099,6 +1102,7 @@ static TokenDict s_categories[] = {
     {"locks",			Monitor::ENGINE},
     {"semaphores",		Monitor::ENGINE},
     {"waitingSemaphores",       Monitor::ENGINE},
+    {"acceptStatus",		Monitor::ENGINE},
     // node info
     {"runAttempt",		Monitor::ENGINE},
     {"name",			Monitor::ENGINE},
@@ -1241,6 +1245,7 @@ static TokenDict s_accountInfo[] = {
     {"accountID",       AccountsInfo::ID},
     {"accountStatus",   AccountsInfo::STATUS},
     {"accountProtocol", AccountsInfo::PROTO},
+    {"accountUsername", AccountsInfo::USERNAME},
     {0,0}
 };
 
@@ -1255,6 +1260,7 @@ static TokenDict s_engineQuery[] = {
     {"locks",		    EngineInfo::ENGINE_LOCKS},
     {"semaphores",	    EngineInfo::ENGINE_SEMAPHORES},
     {"waitingSemaphores",   EngineInfo::ENGINE_WAITING},
+    {"acceptStatus",	    EngineInfo::ENGINE_CALL_ACCEPT},
     // node info
     {"runAttempt",	    EngineInfo::ENGINE_RUNATTEMPT},
     {"name",		    EngineInfo::ENGINE_NODENAME},
@@ -1275,6 +1281,7 @@ TokenDict EngineInfo::s_engineInfo[] = {
     {"waiting",	    EngineInfo::ENGINE_WAITING},
     {"runattempt",  EngineInfo::ENGINE_RUNATTEMPT},
     {"nodename",    EngineInfo::ENGINE_NODENAME},
+    {"acceptcalls", EngineInfo::ENGINE_CALL_ACCEPT},
     {0,0}
 };
 
@@ -1499,8 +1506,7 @@ bool MsgUpdateHandler::received(Message& msg)
 bool SnmpMsgHandler::received(Message& msg)
 {
     DDebug(__plugin.name(),DebugAll,"SnmpMsgHandler::received()");
-    __plugin.solveQuery(msg);
-    return true;
+    return __plugin.solveQuery(msg);
 }
 
 /**
@@ -2033,7 +2039,17 @@ bool AccountsInfo::load()
 	    continue;
 
 	cutNewLine(status);
-	int pos = status.rfind(';');
+	//find protocol
+	String protoParam = "protocol=";
+	int pos = status.find(protoParam);
+	if (pos < 0)
+	    continue;
+	int auxPos = status.find(",",pos);
+	if (auxPos < pos + (int)protoParam.length())
+	    continue;
+	String proto = status.substr(pos + protoParam.length(),auxPos - (pos + protoParam.length()));
+
+	pos = status.rfind(';');
 	if (pos < 0)
 	    continue;
 	status = status.substr(pos + 1);
@@ -2046,13 +2062,14 @@ bool AccountsInfo::load()
 	    if (pos1 < 0 || pos2 < 0)
 		continue;
 	    String name = account->substr(0,pos1);
-	    String proto = account->substr(pos1 + 1,pos2 - pos1 -1);
+	    String username = account->substr(pos1 + 1,pos2 - pos1 -1);
 	    String status = account->substr(pos2 + 1);
 
 	    if (name.null())
 		continue;
 	    NamedList* nl = new NamedList("");
 	    nl->setParam(lookup(ID,s_accountInfo,""),name);
+	    nl->setParam(lookup(USERNAME,s_accountInfo,""),username);
 	    nl->setParam(lookup(STATUS,s_accountInfo,""),status);
 	    nl->setParam(lookup(PROTO,s_accountInfo,""),proto);
 	    m_table.append(nl);
@@ -2114,6 +2131,7 @@ bool EngineInfo::load()
     String& status = m.retValue();
     if (TelEngine::null(status))
 	return false;
+    cutNewLine(status);
 
     Lock l(this);
     m_table.clear();
@@ -3533,7 +3551,7 @@ String Monitor::getTransactionsInfo(const String& query, const int who)
 void Monitor::sendTrap(const String& trap, const String& value, unsigned int index)
 {
     DDebug(&__plugin,DebugAll,"Monitor::sendtrap(trap='%s',value='%s',index='%d') [%p]",trap.c_str(),value.c_str(),index,this);
-    Message* msg = new Message("monitor.notify");
+    Message* msg = new Message("monitor.notify",0,true);
     msg->addParam("notify.0",trap);
     msg->addParam("value.0",value);
     msg->addParam("index",String(index));
@@ -3544,7 +3562,7 @@ void Monitor::sendTrap(const String& trap, const String& value, unsigned int ind
 // build a notification message. Increase the alarm counters if the notification was an alarm
 void Monitor::sendTraps(const NamedList& traps)
 {
-    Message* msg = new Message("monitor.notify");
+    Message* msg = new Message("monitor.notify",0,true);
     msg->copyParams(traps);
     Engine::enqueue(msg);
 }

@@ -14,16 +14,28 @@ QT4_LIB_NET := @QT4_LIB_NET@
 DEFS:=
 
 INCLUDES:=-I. -I@srcdir@ -I@top_srcdir@ $(QT4_INC)
-CXXFLAGS:=$(CXXFLAGS) @MODULE_CPPFLAGS@ @INLINE_FLAGS@
+CFLAGS := @CFLAGS@ @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= @LDFLAGS@
+SONAME_OPT := @SONAME_OPT@
 YATELIBS := -L../.. -lyate @LIBS@
 INCFILES := @top_srcdir@/yateclass.h @top_srcdir@/yatecbase.h @srcdir@/qt4client.h
 
-PROJECT = libqt4client.a
+PROGS=
+LIBS = qt4client.a
 SOURCES = qt4client.cpp
-OBJECTS = $(SOURCES:.cpp=.o) qt4client.moc.o
+OBJS = $(SOURCES:.cpp=.o) qt4client.moc.o
+INST:=
+LIBD_DEV:= libyateqt4.so
+LIBD_VER:= $(LIBD_DEV).@PACKAGE_VERSION@
+ifeq (@QT4_STATIC_MODULES@,no)
+LIBD:= ../../$(LIBD_VER) ../../$(LIBD_DEV)
+INST:= $(LIBD_VER) $(LIBD_DEV)
+endif
 
-COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CXXFLAGS)
+LOCALFLAGS =
+LOCALLIBS =
+COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
+LINK = $(CXX) $(LDFLAGS)
 
 ifneq (x@QT4_VER@,x)
 DEFS := $(DEFS) -DQT4_VER=@QT4_VER@
@@ -31,27 +43,58 @@ endif
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
+datarootdir = @datarootdir@
+
+bindir = @bindir@
+libdir = @libdir@
+incdir = @includedir@/yate
 
 # include optional local make rules
 -include YateLocal.mak
 
-.PHONY: all debug ddebug xdebug clean install uninstall
-all: $(PROJECT)
+.PHONY: all debug ddebug xdebug
+all: $(LIBS) $(LIBD) $(PROGS)
 
 debug:
-	$(MAKE) all DEBUG=-g3
+	$(MAKE) all DEBUG=-g3 MODSTRIP=
 
 ddebug:
-	$(MAKE) all DEBUG='-g3 -DDEBUG'
+	$(MAKE) all DEBUG='-g3 -DDEBUG' MODSTRIP=
 
 xdebug:
-	$(MAKE) all DEBUG='-g3 -DXDEBUG'
+	$(MAKE) all DEBUG='-g3 -DXDEBUG' MODSTRIP=
 
+.PHONY: strip
+strip: all
+	strip --strip-debug --discard-locals $(PROGS)
+
+.PHONY: clean
 clean:
-	@-$(RM) $(PROJECT) $(OBJECTS) 
+	@-$(RM) $(PROGS) $(LIBS) $(LIBD) $(OBJS) core 2>/dev/null
 
-$(PROJECT): $(OBJECTS)
-	$(AR) rcs $@ $^
+.PHONY: install uninstall
+install: all
+	$(if $(INST),\
+	@mkdir -p "$(DESTDIR)$(libdir)" && \
+	for i in $(INST) ; do \
+	    if [ -h "../../$$i" ]; then \
+		f=`readlink "../../$$i"` ; \
+		ln -sf "$$f" "$(DESTDIR)$(libdir)/$$i" ; \
+	    else \
+		install ../../$$i "$(DESTDIR)$(libdir)/" ; \
+	    fi \
+	done; \
+	mkdir -p "$(DESTDIR)$(incdir)" && \
+	install -m 0644 @srcdir@/qt4client.h "$(DESTDIR)$(incdir)/" \
+	)
+
+uninstall:
+	$(if $(INST),\
+	@-for i in $(INST) ; do \
+	    rm "$(DESTDIR)$(libdir)/$$i" ; \
+	done; \
+	rm "$(DESTDIR)$(incdir)/qt4client.h" && rmdir "$(DESTDIR)$(libdir)" \
+	)
 
 %.o: @srcdir@/%.cpp $(INCFILES)
 	$(COMPILE) -c $<
@@ -64,3 +107,12 @@ $(PROJECT): $(OBJECTS)
 
 Makefile: @srcdir@/Makefile.in ../../config.status
 	cd ../.. && ./config.status
+
+../../$(LIBD_VER): $(OBJS)
+	$(LINK) -o $@ $(SONAME_OPT)$(LIBD_VER) $^ $(QT4_LIB) $(YATELIBS)
+
+../../$(LIBD_DEV): ../../$(LIBD_VER)
+	cd ../.. && ln -sf $(LIBD_VER) $(LIBD_DEV)
+
+$(LIBS): $(OBJS)
+	$(AR) rcs $@ $^

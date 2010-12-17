@@ -72,6 +72,8 @@ public:
 	openUrl
     };
     ClientThreadProxy(int func, const String& name, bool show, Window* wnd = 0, Window* skip = 0);
+    ClientThreadProxy(int func, const String& name, bool show, bool activate,
+	Window* wnd = 0, Window* skip = 0);
     ClientThreadProxy(int func, const String& name, const String& text, Window* wnd, Window* skip);
     ClientThreadProxy(int func, const String& name, const String& text,
 	const String& item, bool show, Window* wnd, Window* skip);
@@ -136,6 +138,21 @@ public:
 	}
 };
 
+// System tray icon definition.
+// The NamedPointer keeps the icon parameter list in its data
+class TrayIconDef : public NamedPointer
+{
+    YNOCOPY(TrayIconDef);                // No automatic copies please
+public:
+    inline TrayIconDef(int prio, NamedList* params)
+	: NamedPointer(params ? params->c_str() : "",params),
+	m_priority(prio)
+	{}
+    int m_priority;
+private:
+    TrayIconDef() : NamedPointer("") {}  // No default constructor
+};
+
 
 /**
  * Static classes/function/data
@@ -150,7 +167,7 @@ struct MsgRelay
 };
 
 // List of window params prefix handled in setParams()
-static String s_wndParamPrefix[] = {"show:","active:","focus:","check:","select:","display:",""};
+static const String s_wndParamPrefix[] = {"show:","active:","focus:","check:","select:","display:",""};
 // Error messages returned by channels
 static String s_userBusy = "User busy";
 static String s_rejectReason = "Rejected";
@@ -186,7 +203,8 @@ String Client::s_debugWidget = "log_events";     // Default widget displaying th
 String Client::s_toggles[OptCount] = {
     "multilines", "autoanswer", "ringincoming", "ringoutgoing",
     "activatelastoutcall", "activatelastincall", "activatecallonselect",
-    "display_keypad", "openincomingurl", "addaccountonstartup"
+    "display_keypad", "openincomingurl", "addaccountonstartup",
+    "dockedchat", "destroychat", "notifychatstate"
 };
 bool Client::s_engineStarted = false;            // Engine started flag
 bool Client::s_idleLogicsTick = false;           // Call logics' timerTick()
@@ -198,9 +216,12 @@ String ClientDriver::s_device;                   // Currently used audio device
 ObjList ClientSound::s_sounds;                   // ClientSound's list
 Mutex ClientSound::s_soundsMutex(true,"ClientSound"); // ClientSound's list lock mutex
 String ClientSound::s_calltoPrefix = "wave/play/"; // Client sound target prefix
+static NamedList s_trayIcons("");                // Tray icon stacks. This list is managed in the client's thread
+                                                 // Each item is a NamedPointer whose name is the window name
+                                                 // and with ObjList data containing item defs
 
 // Client relays
-static MsgRelay s_relays[] = {
+static const MsgRelay s_relays[] = {
     {"call.cdr",           Client::CallCdr,           90},
     {"ui.action",          Client::UiAction,          150},
     {"user.login",         Client::UserLogin,         50},
@@ -209,6 +230,7 @@ static MsgRelay s_relays[] = {
     {"resource.subscribe", Client::ResourceSubscribe, 50},
     {"clientchan.update",  Client::ClientChanUpdate,  50},
     {"user.roster",        Client::UserRoster,        50},
+    {"contact.info",       Client::ContactInfo,       50},
     {0,0,0},
 };
 
@@ -243,8 +265,30 @@ const TokenDict ClientResource::s_statusName[] = {
     {0,0}
 };
 
-String ClientContact::s_chatPrefix = "chat";     // Client contact chat window prefix
+// MucRoomMember affiliations
+const TokenDict MucRoomMember::s_affName[] = {
+    {"owner",   MucRoomMember::Owner},
+    {"admin",   MucRoomMember::Admin},
+    {"member",  MucRoomMember::Member},
+    {"outcast", MucRoomMember::Outcast},
+    {"none",    MucRoomMember::AffNone},
+    {0,0}
+};
 
+// MucRoomMember roles
+const TokenDict MucRoomMember::s_roleName[] = {
+    {"moderator",   MucRoomMember::Moderator},
+    {"participant", MucRoomMember::Participant},
+    {"visitor",     MucRoomMember::Visitor},
+    {"none",        MucRoomMember::RoleNone},
+    {0,0}
+};
+
+String ClientContact::s_chatPrefix = "chat";     // Client contact chat window prefix
+String ClientContact::s_dockedChatWnd= "dockedchat";            // Docked chat window name
+String ClientContact::s_dockedChatWidget = "dockedchatwidget";  // Docked chat widget name
+String ClientContact::s_mucsWnd = "mucs";        // MUC rooms window name
+String ClientContact::s_chatInput = "message";   // Chat input widget name
 
 // Debug output handler
 static void dbg_client_func(const char* buf, int level)
@@ -298,8 +342,8 @@ static inline bool callLogicSelect(ClientLogic* logic, Window* wnd, const String
 
 // Utility function used to check for action/toggle/select preferences
 // Check for a substitute
-// Check if only a logic should process the action 
-// Check for a preffered logic to process the action 
+// Check if only a logic should process the action
+// Check for a preffered logic to process the action
 // Check if a logic should be ignored (not notified)
 // Otherwise: check if the action should be ignored
 static inline bool hasOverride(const NamedList* params, String& name, String& handle,
@@ -332,6 +376,12 @@ static inline bool hasOverride(const NamedList* params, String& name, String& ha
     return true;
 }
 
+// Utility: request to client to flash a widget's item (page, list item ...)
+static void flashItem(const String& name, const String& item, Window* w)
+{
+    // TODO: implement
+    DDebug(ClientDriver::self(),DebugStub,"flashItem() not implemented!");
+}
 
 /**
  * Window
@@ -568,6 +618,14 @@ ClientThreadProxy::ClientThreadProxy(int func, const String& name, bool show,
 {
 }
 
+ClientThreadProxy::ClientThreadProxy(int func, const String& name, bool show,
+	bool activate, Window* wnd, Window* skip)
+    : m_func(func), m_rval(activate),
+      m_name(name), m_bool(show), m_rtext(0), m_rbool(0),
+      m_wnd(wnd), m_skip(skip), m_params(0), m_uint(0), m_pointer(0)
+{
+}
+
 ClientThreadProxy::ClientThreadProxy(int func, const String& name, const String& text,
 	Window* wnd, Window* skip)
     : m_func(func), m_rval(false),
@@ -651,7 +709,7 @@ void ClientThreadProxy::process()
     }
     switch (m_func) {
 	case setVisible:
-	    m_rval = Client::setVisible(m_name,m_bool);
+	    m_rval = Client::setVisible(m_name,m_bool,m_rval);
 	    break;
 	case openPopup:
 	    m_rval = Client::openPopup(m_name,m_params,m_wnd);
@@ -802,6 +860,7 @@ Client::Client(const char *name)
     m_toggles[OptMultiLines] = true;
     m_toggles[OptKeypadVisible] = true;
     m_toggles[OptAddAccountOnStartup] = true;
+    m_toggles[OptNotifyChatState] = true;
     s_incomingUrlParam = Engine::config().getValue("client","incomingcallurlparam",
 	"caller_info_uri");
 
@@ -814,7 +873,7 @@ Client::Client(const char *name)
     if (!s_skinPath)
 	s_skinPath << Engine::sharedPath() << Engine::pathSeparator() << "skins";
     s_skinPath << Engine::pathSeparator();
-    String skin(Engine::config().getValue("client","skin","default")); 
+    String skin(Engine::config().getValue("client","skin","default"));
     if (skin)
 	s_skinPath << skin;
     if (!s_skinPath.endsWith(Engine::pathSeparator()))
@@ -896,6 +955,9 @@ void Client::run()
     ClientLogic::initStaticData();
     m_defaultLogic = createDefaultLogic();
     loadUI();
+    // Update icons
+    for (ObjList* o = m_windows.skipNull(); o; o = o->skipNext())
+	Client::updateTrayIcon(o->get()->toString());
     // Run
     main();
     s_exiting = true;
@@ -924,7 +986,7 @@ bool Client::isClientMsg(Message& msg)
 	ClientDriver::self()->name() == *module;
 }
 
-// retrieve the window named by the value of "name" from the client's list of windows 
+// retrieve the window named by the value of "name" from the client's list of windows
 Window* Client::getWindow(const String& name)
 {
     if (!valid())
@@ -964,18 +1026,20 @@ bool Client::openUrlSafe(const String& url)
 }
 
 // function for setting the visibility attribute of the "name" window
-bool Client::setVisible(const String& name, bool show)
+bool Client::setVisible(const String& name, bool show, bool activate)
 {
     if (!valid())
 	return false;
     if (s_client->needProxy()) {
-	ClientThreadProxy proxy(ClientThreadProxy::setVisible,name,show);
+	ClientThreadProxy proxy(ClientThreadProxy::setVisible,name,show,activate);
 	return proxy.execute();
     }
     Window* w = getWindow(name);
     if (!w)
 	return false;
     w->visible(show);
+    if (show && activate)
+	w->setActive(w->id(),true);
     return true;
 }
 
@@ -1003,7 +1067,7 @@ void Client::initWindows()
     }
 }
 
-// function for initializing the client
+// function for inaitializing the client
 void Client::initClient()
 {
     s_eventLen = Engine::config().getIntValue("client","eventlen",10240);
@@ -1096,7 +1160,7 @@ void Client::moveRelated(const Window* wnd, int dx, int dy)
 
 // function for opening the pop-up window that has the id "name" with the given parameters
 bool Client::openPopup(const String& name, const NamedList* params, const Window* parent)
-{   
+{
     if (!valid())
 	return false;
     if (s_client->needProxy()) {
@@ -1156,7 +1220,7 @@ bool Client::hasElement(const String& name, Window* wnd, Window* skip)
 }
 
 // function for controlling the visibility attribute of the "name" widget from the window given as a parameter
-// if no window is given, we search for it 
+// if no window is given, we search for it
 bool Client::setShow(const String& name, bool visible, Window* wnd, Window* skip)
 {
     if (!valid())
@@ -1269,7 +1333,7 @@ bool Client::setCheck(const String& name, bool checked, Window* wnd, Window* ski
     }
     --s_changing;
     return ok;
-}	    
+}
 
 // function for selecting the widget named "name" from the "wnd" window if given, else look for the widget
 bool Client::setSelect(const String& name, const String& item, Window* wnd, Window* skip)
@@ -1408,7 +1472,7 @@ bool Client::getOptions(const String& name, NamedList* items,
 }
 
 // Append or insert text lines to a widget
-bool Client::addLines(const String& name, const NamedList* lines, unsigned int max, 
+bool Client::addLines(const String& name, const NamedList* lines, unsigned int max,
 	bool atStart, Window* wnd, Window* skip)
 {
     if (!(lines && valid()))
@@ -1879,7 +1943,7 @@ bool Client::closeDialog(const String& name, Window* wnd, Window* skip)
     if (!valid())
 	return false;
     if (needProxy()) {
-	ClientThreadProxy proxy(ClientThreadProxy::closeDialog,name,0,0,wnd,skip);
+	ClientThreadProxy proxy(ClientThreadProxy::closeDialog,name,(String*)0,0,wnd,skip);
 	return proxy.execute();
     }
     if (wnd)
@@ -1983,6 +2047,9 @@ bool Client::received(Message& msg, int id)
 	    case UserRoster:
 		processed = logic->handleUserRoster(msg,stop) || processed;
 		break;
+	    case ContactInfo:
+		processed = logic->handleContactInfo(msg,stop) || processed;
+		break;
 	    case EngineStart:
 		logic->engineStart(msg);
 		break;
@@ -2070,7 +2137,7 @@ bool Client::toggle(Window* wnd, const String& name, bool active)
     return false;
 }
 
-// Handle selection changes (list selection changes, focus changes ...) 
+// Handle selection changes (list selection changes, focus changes ...)
 bool Client::select(Window* wnd, const String& name, const String& item, const String& text)
 {
     static const String sect = "select";
@@ -2308,9 +2375,9 @@ bool Client::buildIncomingChannel(Message& msg, const String& dest)
 bool Client::buildOutgoingChannel(NamedList& params)
 {
     String tmp;
-//#ifdef DEBUG
+#ifdef DEBUG
     params.dump(tmp," ");
-//#endif
+#endif
     Debug(ClientDriver::self(),DebugAll,"Client::buildOutgoingChannel(%s) [%p]",tmp.safe(),this);
     // get the target of the call
     NamedString* target = params.getParam("target");
@@ -2540,7 +2607,7 @@ Message* Client::buildUserRoster(bool update, const String& account,
 // Add a new module for handling actions
 bool Client::addLogic(ClientLogic* logic)
 {
-    static NamedList* s_load = 0;
+    static const NamedList* s_load = 0;
 
     // Load logic actions file
     if (!s_actions.getSection(0)) {
@@ -2627,6 +2694,189 @@ Client::ClientToggle Client::getBoolOpt(const String& name)
 	if (s_toggles[i] == name)
 	    return (ClientToggle)i;
     return OptCount;
+}
+
+// Append URI escaped String items to a String buffer
+void Client::appendEscape(String& buf, ObjList& list, char sep, bool force)
+{
+    String tmp(sep);
+    for (ObjList* o = list.skipNull(); o; o = o->skipNext())
+	buf.append(o->get()->toString().uriEscape(sep),tmp,force);
+}
+
+// Splits a string at a delimiter character. URI unescape each string in result
+ObjList* Client::splitUnescape(const String& buf, char sep, bool emptyOk)
+{
+    ObjList* list = buf.split(sep,emptyOk);
+    for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
+	String* s = static_cast<String*>(o->get());
+	*s = s->uriUnescape();
+    }
+    return list;
+}
+
+// Remove characters from a given string
+void Client::removeChars(String& buf, const char* chars)
+{
+    if (TelEngine::null(chars))
+	return;
+    int pos = 0;
+    while (*chars) {
+	pos = buf.find(*chars,pos);
+	if (pos == -1) {
+	    chars++;
+	    pos = 0;
+	}
+	else
+	    buf = buf.substr(0,pos) + buf.substr(pos + 1);
+    }
+}
+
+// Fix a phone number. Remove extra '+' from begining.
+// Remove requested characters.
+// Clear the number if a non digit char is found
+void Client::fixPhoneNumber(String& number, const char* chars)
+{
+    if (!number)
+	return;
+    unsigned int n = 0;
+    // Remove extra '+' from begining
+    while (n < number.length() && number[n] == '+')
+	n++;
+    bool plus = false;
+    if (n) {
+	plus = true;
+	number = number.substr(n);
+    }
+    // Remove requested chars
+    removeChars(number,chars);
+    // Check for valid number (digits only)
+    for (n = 0; n < number.length(); n++) {
+	switch (number[n]) {
+	    case '0':
+	    case '1':
+	    case '2':
+	    case '3':
+	    case '4':
+	    case '5':
+	    case '6':
+	    case '7':
+	    case '8':
+	    case '9':
+		continue;
+	}
+	number.clear();
+	break;
+    }
+    if (number && plus)
+	number = "+" + number;
+}
+
+// Add a tray icon to a window's stack.
+bool Client::addTrayIcon(const String& wndName, int prio, NamedList* params)
+{
+    if (!params)
+	return false;
+    if (!(wndName && valid())) {
+	TelEngine::destruct(params);
+	return false;
+    }
+    NamedPointer* wnd = YOBJECT(NamedPointer,s_trayIcons.getParam(wndName));
+    if (!wnd) {
+	wnd = new NamedPointer(wndName);
+	s_trayIcons.addParam(wnd);
+    }
+    ObjList* list = YOBJECT(ObjList,wnd);
+    if (!list) {
+	list = new ObjList;
+	wnd->userData(list);
+    }
+    ObjList* trayIcon = list->find(*params);
+    TrayIconDef* def = 0;
+    if (!trayIcon) {
+	ObjList* o = list->skipNull();
+	for (; o; o = o->skipNext()) {
+	    TrayIconDef* d = static_cast<TrayIconDef*>(o->get());
+	    if (d->m_priority < prio)
+		break;
+	}
+	def = new TrayIconDef(prio,params);
+	if (o)
+	    trayIcon = o->insert(def);
+	else
+	    trayIcon = list->append(def);
+    }
+    else {
+	def = static_cast<TrayIconDef*>(trayIcon->get());
+	def->userData(params);
+    }
+    // Update
+    if (Client::self()->initialized() && (trayIcon == list->skipNull()))
+	return updateTrayIcon(wndName);
+    return true;
+}
+
+// Remove a tray icon from a window's stack.
+// Show the next one if it's the first
+bool Client::removeTrayIcon(const String& wndName, const String& name)
+{
+    if (!(wndName && name && valid()))
+	return false;
+    NamedPointer* wnd = YOBJECT(NamedPointer,s_trayIcons.getParam(wndName));
+    if (!wnd)
+	return false;
+    ObjList* list = YOBJECT(ObjList,wnd);
+    if (!list)
+	return false;
+    ObjList* trayIcon = list->find(name);
+    if (!trayIcon)
+	return false;
+    bool upd = Client::self()->initialized() && (trayIcon == list->skipNull());
+    trayIcon->remove();
+    if (!upd)
+	return false;
+    if (list->skipNull())
+	return updateTrayIcon(wndName);
+    // Remove the old one and update the icon
+    Window* w = Client::self()->getWindow(wndName);
+    if (w) {
+	NamedList p("systemtrayicon");
+	p.addParam("stackedicon","");
+	Client::self()->setParams(&p,w);
+    }
+    return true;
+}
+
+// Update the first tray icon in a window's stack.
+// Remove any existing icon the the stack is empty
+bool Client::updateTrayIcon(const String& wndName)
+{
+    if (!(wndName && valid()))
+	return false;
+    Window* w = Client::self()->getWindow(wndName);
+    if (!w)
+	return false;
+    NamedPointer* wnd = YOBJECT(NamedPointer,s_trayIcons.getParam(wndName));
+    if (!wnd)
+	return false;
+    ObjList* list = YOBJECT(ObjList,wnd);
+    if (!list)
+	return false;
+    ObjList* o = list->skipNull();
+    TrayIconDef* def = o ? static_cast<TrayIconDef*>(o->get()) : 0;
+    NamedList p("systemtrayicon");
+    // Remove the old one
+    p.addParam("stackedicon","");
+    NamedPointer* np = 0;
+    if (def) {
+	NamedList* nl = YOBJECT(NamedList,def);
+	np = new NamedPointer("stackedicon",nl,String::boolText(true));
+	p.addParam(np);
+    }
+    bool ok = Client::self()->setParams(&p,w);
+    if (np)
+	np->takeData();
+    return ok;
 }
 
 // Build an 'ui.event' message
@@ -3486,8 +3736,12 @@ void ClientAccount::setContact(ClientContact* contact)
     Lock lock(this);
     if (m_contact == contact)
 	return;
+    if (m_contact)
+	m_contact->m_owner = 0;
     TelEngine::destruct(m_contact);
     m_contact = contact;
+    if (m_contact)
+	m_contact->m_owner = this;
 }
 
 // Get this account's resource
@@ -3511,25 +3765,42 @@ void ClientAccount::setResource(ClientResource* res)
     m_resource = res;
 }
 
-// Save this account to client accounts file
+// Save this account to client accounts file or remove it
 bool ClientAccount::save(bool ok, bool savePwd)
 {
+    bool changed = false;
+    // Handle id changes (new version generate an internal id)
+    String old = m_params["old_id"];
+    NamedList* oldSect = old ? Client::s_accounts.getSection(old) : 0;
+    if (oldSect) {
+	changed = true;
+	Client::s_accounts.clearSection(old);
+    }
+    m_params.clearParam("old_id");
     NamedList* sect = Client::s_accounts.getSection(toString());
     if (ok) {
 	if (!sect)
 	    sect = Client::s_accounts.createSection(toString());
-	if (!sect)
-	    return false;
-	*sect = m_params;
-	if (!savePwd)
-	    sect->clearParam("password");
-	sect->assign(toString());
+	if (sect) {
+	    changed = true;
+	    *sect = m_params;
+	    if (!savePwd)
+		sect->clearParam("password");
+	    // Don't save internal (temporary parameters)
+	    sect->clearParam("internal",'.');
+	    sect->assign(toString());
+	}
     }
-    else if (sect)
+    else if (sect) {
+	changed = true;
 	Client::s_accounts.clearSection(toString());
-    else
+    }
+    if (!changed)
 	return true;
-    return Client::save(Client::s_accounts);
+    bool saved = Client::save(Client::s_accounts);
+    if (ok && !saved)
+	m_params.addParam("old_id",old,false);
+    return saved;
 }
 
 // Find a contact by its id
@@ -3540,9 +3811,7 @@ ClientContact* ClientAccount::findContact(const String& id, bool ref)
     Lock lock(this);
     ClientContact* c = 0;
     if (!m_contact || id != m_contact->toString()) {
-	ObjList* o = m_contacts.skipNull();
-	while (o && o->get()->toString() != id)
-	    o = o->skipNext();
+	ObjList* o = m_contacts.find(id);
 	c = o ? static_cast<ClientContact*>(o->get()) : 0;
     }
     else
@@ -3581,19 +3850,44 @@ ClientContact* ClientAccount::findContact(const String& id, const String& resid,
 // Find a contact by its URI (build an id from account and uri)
 ClientContact* ClientAccount::findContactByUri(const String& uri, bool ref)
 {
+    if (!uri)
+	return 0;
     Lock lock(this);
     String id;
     ClientContact::buildContactId(id,toString(),uri);
     return findContact(id,ref);
 }
 
+// Find a MUC room by its id
+MucRoom* ClientAccount::findRoom(const String& id, bool ref)
+{
+    if (!id)
+	return 0;
+    Lock lock(this);
+    ObjList* o = m_mucs.find(id);
+    if (!o)
+	return 0;
+    MucRoom* r = static_cast<MucRoom*>(o->get());
+    return (!ref || r->ref()) ? r : 0;
+}
+
+// Find a MUC room by its uri
+MucRoom* ClientAccount::findRoomByUri(const String& uri, bool ref)
+{
+    Lock lock(this);
+    String id;
+    ClientContact::buildContactId(id,toString(),uri);
+    return findRoom(id,ref);
+}
+
 // Build a contact and append it to the list
-ClientContact* ClientAccount::appendContact(const String& id, const char* name)
+ClientContact* ClientAccount::appendContact(const String& id, const char* name,
+    const char* uri)
 {
     Lock lock(this);
     if (!id || findContact(id))
 	return 0;
-    ClientContact* c = new ClientContact(this,id,name);
+    ClientContact* c = new ClientContact(this,id,name,uri);
     return c;
 }
 
@@ -3612,15 +3906,21 @@ ClientContact* ClientAccount::removeContact(const String& id, bool delObj)
 {
     Lock lock(this);
     ClientContact* c = findContact(id);
+    if (!c)
+	c = findRoom(id);
     if (!c || c == m_contact)
 	return 0;
-    m_contacts.remove(c,false);
     c->m_owner = 0;
+    bool regular = !c->mucRoom();
+    if (regular)
+	m_contacts.remove(c,false);
+    else
+	m_mucs.remove(c,false);
     lock.drop();
     Debug(ClientDriver::self(),DebugAll,
-	"Account(%s) removed contact '%s' name='%s' uri='%s' delObj=%u [%p]",
-	toString().c_str(),c->toString().c_str(),c->m_name.c_str(),c->uri().c_str(),
-	delObj,this);
+	"Account(%s) removed %s '%s' uri='%s' delObj=%u [%p]",
+	toString().c_str(),regular ? "contact" : "MUC room",
+	c->toString().c_str(),c->uri().c_str(),delObj,this);
     if (delObj)
 	TelEngine::destruct(c);
     return c;
@@ -3630,8 +3930,10 @@ ClientContact* ClientAccount::removeContact(const String& id, bool delObj)
 Message* ClientAccount::userlogin(bool login, const char* msg)
 {
     Message* m = Client::buildMessage(msg,toString(),login ? "login" : "logout");
-    if (login)
+    if (login) {
 	m->copyParams(m_params);
+	m->clearParam("internal",'.');
+    }
     else
 	m->addParam("protocol",protocol(),false);
     return m;
@@ -3658,6 +3960,9 @@ void ClientAccount::destroyed()
     for (ObjList* o = m_contacts.skipNull(); o; o = o->skipNext())
 	(static_cast<ClientContact*>(o->get()))->m_owner = 0;
     m_contacts.clear();
+    for (ObjList* o = m_mucs.skipNull(); o; o = o->skipNext())
+	(static_cast<ClientContact*>(o->get()))->m_owner = 0;
+    m_mucs.clear();
     unlock();
     Debug(ClientDriver::self(),DebugAll,"Destroyed client account=%s [%p]",
 	toString().c_str(),this);
@@ -3665,17 +3970,20 @@ void ClientAccount::destroyed()
 }
 
 // Method used by the contact to append itself to this account's list
-void ClientAccount::appendContact(ClientContact* contact)
+void ClientAccount::appendContact(ClientContact* contact, bool muc)
 {
     if (!contact)
 	return;
     Lock lock(this);
-    m_contacts.append(contact);
+    if (!muc)
+	m_contacts.append(contact);
+    else
+	m_mucs.append(contact);
     contact->m_owner = this;
     Debug(ClientDriver::self(),DebugAll,
-	"Account(%s) added contact '%s' name='%s' uri='%s' [%p]",
+	"Account(%s) added contact '%s' name='%s' uri='%s' muc=%s [%p]",
 	toString().c_str(),contact->toString().c_str(),contact->m_name.c_str(),
-	contact->uri().c_str(),this);
+	contact->uri().c_str(),String::boolText(muc),this);
 }
 
 
@@ -3702,10 +4010,10 @@ ClientAccount* ClientAccountList::findAccount(const String& id, bool ref)
 	return (!ref || m_localContacts->ref()) ? m_localContacts : 0;
     if (!id)
 	return 0;
-    for (ObjList* o = m_accounts.skipNull(); o; o = o->skipNext()) {
+    ObjList* o = m_accounts.find(id);
+    if (o) {
 	ClientAccount* a = static_cast<ClientAccount*>(o->get());
-	if (a->toString() == id)
-	    return (!ref || a->ref()) ? a : 0;
+	return (!ref || a->ref()) ? a : 0;
     }
     return 0;
 }
@@ -3743,6 +4051,26 @@ ClientContact* ClientAccountList::findContactByInstance(const String& id, String
     String account,contact;
     ClientContact::splitContactInstanceId(id,account,contact,instance);
     return findContact(account,contact,ref);
+}
+
+// Find a MUC room by its id
+MucRoom* ClientAccountList::findRoom(const String& id, bool ref)
+{
+    String account;
+    ClientContact::splitContactId(id,account);
+    Lock lock(this);
+    ClientAccount* acc = findAccount(account);
+    return acc ? acc->findRoom(id,ref) : 0;
+}
+
+// Find a MUC room by member id
+MucRoom* ClientAccountList::findRoomByMember(const String& id, bool ref)
+{
+    String account,contact;
+    ClientContact::splitContactInstanceId(id,account,contact);
+    Lock lock(this);
+    ClientAccount* acc = findAccount(account);
+    return acc ? acc->findRoom(contact,ref) : 0;
 }
 
 // Check if there is a single registered account and return it
@@ -3793,60 +4121,242 @@ void ClientAccountList::removeAccount(const String& id)
  */
 // Constructor. Append itself to the owner's list
 ClientContact::ClientContact(ClientAccount* owner, const char* id, const char* name,
-    bool chat)
-    : m_name(name ? name : id), m_owner(owner), m_uri(id)
+    const char* uri)
+    : m_name(name ? name : id), m_owner(owner), m_online(false), m_uri(uri),
+    m_dockedChat(false)
 {
-    m_id = m_uri;
-    m_id.toLower();
-    XDebug(ClientDriver::self(),DebugAll,"ClientContact(%p,%s) [%p]",
-	owner,m_uri.c_str(),this);
+    m_dockedChat = Client::valid() && Client::self()->getBoolOpt(Client::OptDockedChat);
+    m_id = id ? id : uri;
+    XDebug(ClientDriver::self(),DebugAll,"ClientContact(%p) id=%s uri=%s [%p]",
+	owner,m_id.c_str(),m_uri.c_str(),this);
     if (m_owner)
 	m_owner->appendContact(this);
-    if (chat)
-	createChatWindow();
+    // Generate chat window name
+    buildIdHash(m_chatWndName,s_chatPrefix);
 }
 
 // Constructor. Build a contact from a list of parameters.
 ClientContact::ClientContact(ClientAccount* owner, const NamedList& params, const char* id,
-    const char* uri, bool chat)
-    : m_name(params.getValue("name",params)), m_owner(owner), m_uri(uri)
+    const char* uri)
+    : m_name(params.getValue("name",params)),
+    m_owner(owner), m_online(false), m_uri(uri), m_dockedChat(false)
 {
+    m_dockedChat = Client::valid() && Client::self()->getBoolOpt(Client::OptDockedChat);
     m_id = id ? id : params.c_str();
-    XDebug(ClientDriver::self(),DebugAll,"ClientContact(%p,%s) [%p]",
-	owner,m_uri.c_str(),this);
+    XDebug(ClientDriver::self(),DebugAll,"ClientContact(%p) id=%s uri=%s [%p]",
+	owner,m_id.c_str(),m_uri.c_str(),this);
     if (m_owner)
 	m_owner->appendContact(this);
-    if (chat)
-	createChatWindow();
+    // Generate chat window name
+    buildIdHash(m_chatWndName,s_chatPrefix);
 }
 
-// Send chat to contact (enqueue a msg.execute message)
-bool ClientContact::sendChat(const char* body, const String& res, const char* type)
+// Constructor. Append itself to the owner's list
+ClientContact::ClientContact(ClientAccount* owner, const char* id, bool mucRoom)
+    : m_owner(owner), m_online(false), m_id(id), m_dockedChat(false)
 {
-    Message* m = Client::buildMessage("msg.execute",accountName());
-    if (!TelEngine::null(type))
-	m->addParam("type",type);
-    m->addParam("called",m_uri);
-    if (res)
-	m->addParam("called_instance",res);
-    m->addParam("body",body);
-    return Engine::enqueue(m);
+    if (m_owner)
+	m_owner->appendContact(this,mucRoom);
+    if (!mucRoom) {
+	m_dockedChat = Client::valid() && Client::self()->getBoolOpt(Client::OptDockedChat);
+	buildIdHash(m_chatWndName,s_chatPrefix);
+    }
 }
 
-// Show or hide this contact's chat window
-bool ClientContact::showChat(bool visible, bool active)
+// Check if this contact has a chat widget (window or docked item)
+bool ClientContact::hasChat()
 {
-    if (!Client::self())
-	return false;
     Window* w = getChatWnd();
     if (!w)
 	return false;
-    if (!visible)
+    if (m_dockedChat)
+	return Client::self()->getTableRow(s_dockedChatWidget,toString(),0,w);
+    return true;
+}
+
+// Flash chat window/item to notify the user
+void ClientContact::flashChat()
+{
+    Window* w = getChatWnd();
+    if (!w)
+	return;
+    Client::self()->setUrgent(w->id(),true,w);
+    if (m_dockedChat)
+	flashItem(s_dockedChatWidget,toString(),w);
+}
+
+// Send chat to contact (enqueue a msg.execute message)
+bool ClientContact::sendChat(const char* body, const String& res,
+    const String& type, const char* state)
+{
+    Message* m = Client::buildMessage("msg.execute",accountName());
+    m->addParam("type",type,false);
+    m->addParam("called",m_uri);
+    m->addParam("called_instance",res,false);
+    m->addParam("body",body);
+    if (mucRoom())
+	m->addParam("muc",String::boolText(true));
+    if (!TelEngine::null(state) && (!type || type == "chat" || type == "groupchat"))
+	m->addParam("chatstate",state);
+    return Engine::enqueue(m);
+}
+
+// Retrieve the contents of the chat input widget
+void ClientContact::getChatInput(String& text, const String& name)
+{
+    Window* w = getChatWnd();
+    if (!(w && name))
+	return;
+    if (m_dockedChat) {
+	NamedList p("");
+	p.addParam(name,"");
+	Client::self()->getTableRow(s_dockedChatWidget,toString(),&p,w);
+	text = p[name];
+    }
+    else
+	Client::self()->getText(name,text,false,w);
+}
+
+// Set the chat input widget text
+void ClientContact::setChatInput(const String& text, const String& name)
+{
+    Window* w = getChatWnd();
+    if (!(w && name))
+	return;
+    if (m_dockedChat) {
+	NamedList p("");
+	p.addParam(name,text);
+	Client::self()->setTableRow(s_dockedChatWidget,toString(),&p,w);
+    }
+    else
+	Client::self()->setText(name,text,false,w);
+}
+
+// Retrieve the contents of the chat history widget
+void ClientContact::getChatHistory(String& text, bool richText, const String& name)
+{
+    Window* w = getChatWnd();
+    if (!(w && name))
+	return;
+    if (m_dockedChat) {
+	String param;
+	if (richText)
+	    param << "getrichtext:";
+	param << name;
+	NamedList p("");
+	p.addParam(param,"");
+	Client::self()->getTableRow(s_dockedChatWidget,toString(),&p,w);
+	text = p[param];
+    }
+    else
+	Client::self()->getText(name,text,richText,w);
+}
+
+// Set the contents of the chat history widget
+void ClientContact::setChatHistory(const String& text, bool richText, const String& name)
+{
+    Window* w = getChatWnd();
+    if (!(w && name))
+	return;
+    if (m_dockedChat) {
+	NamedList p("");
+	if (richText)
+	    p.addParam("setrichtext:" + name,text);
+	else
+	    p.addParam(name,text);
+	Client::self()->setTableRow(s_dockedChatWidget,toString(),&p,w);
+    }
+    else
+	Client::self()->setText(name,text,richText,w);
+}
+
+// Add an entry to chat history
+void ClientContact::addChatHistory(const String& what, NamedList*& params, const String& name)
+{
+    Window* w = getChatWnd();
+    if (!(w && name && params)) {
+	TelEngine::destruct(params);
+	return;
+    }
+    NamedList* lines = new NamedList("");
+    lines->addParam(new NamedPointer(what,params,String::boolText(true)));
+    if (m_dockedChat) {
+	NamedList p("");
+	p.addParam(new NamedPointer("addlines:" + name,lines));
+	Client::self()->setTableRow(s_dockedChatWidget,toString(),&p,w);
+    }
+    else {
+	Client::self()->addLines(name,lines,0,false,w);
+	TelEngine::destruct(lines);
+    }
+    params = 0;
+}
+
+// Retrieve a chat widget' property
+void ClientContact::getChatProperty(const String& name, const String& prop,
+    String& value)
+{
+    Window* w = getChatWnd();
+    if (!(w && name && prop))
+	return;
+    if (m_dockedChat) {
+	String param;
+	param << "property:" << name << ":" << prop;
+	NamedList p("");
+	p.addParam(param,"");
+	Client::self()->getTableRow(s_dockedChatWidget,toString(),&p,w);
+	value = p[param];
+    }
+    else
+	Client::self()->getProperty(name,prop,value,w);
+}
+
+// Set a chat widget' property
+void ClientContact::setChatProperty(const String& name, const String& prop,
+    const String& value)
+{
+    Window* w = getChatWnd();
+    if (!(w && name && prop))
+	return;
+    if (m_dockedChat) {
+	NamedList p("");
+	p.addParam("property:" + name + ":" + prop,value);
+	Client::self()->setTableRow(s_dockedChatWidget,toString(),&p,w);
+    }
+    else
+	Client::self()->setProperty(name,prop,value,w);
+}
+
+// Show or hide this contact's chat window or docked item
+bool ClientContact::showChat(bool visible, bool active)
+{
+    Window* w = getChatWnd();
+    if (!w)
+	return false;
+    if (!visible) {
+	if (m_dockedChat)
+	    return Client::self()->delTableRow(s_dockedChatWidget,toString(),w);
 	return Client::self()->setVisible(m_chatWndName,false);
+    }
     bool ok = Client::self()->setVisible(w->id(),true);
-    if (active)
+    if (active) {
+	if (m_dockedChat)
+	    Client::self()->setSelect(s_dockedChatWidget,toString(),w);
 	Client::self()->setActive(w->id(),true,w);
+    }
     return ok;
+}
+
+// Get the chat window
+Window* ClientContact::getChatWnd()
+{
+    if (!Client::valid())
+	return 0;
+    if (mucRoom())
+	return Client::self()->getWindow(s_mucsWnd);
+    if (m_dockedChat)
+	return Client::self()->getWindow(s_dockedChatWnd);
+    return Client::self()->getWindow(m_chatWndName);
 }
 
 // Create the chat window
@@ -3856,18 +4366,53 @@ void ClientContact::createChatWindow(bool force, const char* name)
 	destroyChatWindow();
     if (hasChat())
 	return;
-    // Generate chat window name and create the window
-    buildIdHash(m_chatWndName,s_chatPrefix);
-    if (Client::self())
-	Client::self()->createWindowSafe(name,m_chatWndName);
-    Window* w = Client::self()->getWindow(m_chatWndName);
+    if (!Client::valid())
+	return;
+    if (m_dockedChat) {
+	Window* w = getChatWnd();
+	if (!w)
+	    return;
+	Client::self()->addTableRow(s_dockedChatWidget,toString(),0,false,w);
+	return;
+    }
+    if (TelEngine::null(name))
+	name = s_chatPrefix;
+    Client::self()->createWindowSafe(name,m_chatWndName);
+    Window* w = getChatWnd();
     if (!w)
 	return;
-    w->context(toString());
-    NamedList tmp("");
-    tmp.addParam("contactname",m_name);
-    Client::self()->setParams(&tmp,w);
-    return;
+    NamedList p("");
+    p.addParam("context",toString());
+    updateChatWindow(p);
+}
+
+// Update the chat window
+void ClientContact::updateChatWindow(const NamedList& params, const char* title,
+    const char* icon)
+{
+    Window* w = getChatWnd();
+    if (!w)
+	return;
+    if (m_dockedChat) {
+	Client::self()->setTableRow(s_dockedChatWidget,toString(),&params,w);
+	return;
+    }
+    NamedList p(params);
+    p.addParam("title",title,false);
+    p.addParam("image:" + m_chatWndName,icon,false);
+    Client::self()->setParams(&p,w);
+}
+
+// Close the chat window or destroy docked chat item
+void ClientContact::destroyChatWindow()
+{
+    Window* w = getChatWnd();
+    if (!w)
+	return;
+    if (m_dockedChat)
+	Client::self()->delTableRow(s_dockedChatWidget,toString(),w);
+    else
+	Client::self()->closeWindow(m_chatWndName,false);
 }
 
 // Find a group this contact might belong to
@@ -3905,6 +4450,55 @@ bool ClientContact::removeGroup(const String& group)
     return true;
 }
 
+// Replace contact's groups from a list of parameters (handle 'group' parameters)
+bool ClientContact::setGroups(const NamedList& list, const String& param)
+{
+    Lock lock(m_owner);
+    ObjList* grps = 0;
+    unsigned int n = list.length();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* ns = list.getParam(i);
+	if (TelEngine::null(ns) || ns->name() != param)
+	    continue;
+	if (!grps)
+	    grps = new ObjList;
+	grps->append(new String(*ns));
+    }
+    if (grps) {
+	bool changed = false;
+	String oldGrps, newGrps;
+	oldGrps.append(m_groups,",");
+	newGrps.append(grps,",");
+	changed = (oldGrps != newGrps);
+	if (changed) {
+	    m_groups.clear();
+	    for (ObjList* o = grps->skipNull(); o; o = o->skipNext())
+		appendGroup(o->get()->toString());
+	}
+	TelEngine::destruct(grps);
+	return changed;
+    }
+    if (m_groups.skipNull()) {
+	m_groups.clear();
+	return true;
+    }
+    return false;
+}
+
+// Find the resource with the lowest status
+ClientResource* ClientContact::status(bool ref)
+{
+    ClientResource* res = 0;
+    for (ObjList* o = resources().skipNull(); o; o = o->skipNext()) {
+	ClientResource* r = static_cast<ClientResource*>(o->get());
+	if (!res || res->m_status > r->m_status)
+	    res = r;
+	if (res->m_status == ClientResource::Online)
+	    break;
+    }
+    return (res && (!ref || res->ref())) ? res : 0;
+}
+
 // Find a resource having a given id
 ClientResource* ClientContact::findResource(const String& id, bool ref)
 {
@@ -3923,6 +4517,20 @@ ClientResource* ClientContact::findAudioResource(bool ref)
     ObjList* o = m_resources.skipNull();
     for (; o; o = o->skipNext())
 	if ((static_cast<ClientResource*>(o->get()))->m_audio)
+	    break;
+    if (!o)
+	return 0;
+    ClientResource* r = static_cast<ClientResource*>(o->get());
+    return (!ref || r->ref()) ? r : 0;
+}
+
+// Get the first resource with file transfer capability capability
+ClientResource* ClientContact::findFileTransferResource(bool ref)
+{
+    Lock lock(m_owner);
+    ObjList* o = m_resources.skipNull();
+    for (; o; o = o->skipNext())
+	if ((static_cast<ClientResource*>(o->get()))->m_fileTransfer)
 	    break;
     if (!o)
 	return 0;
@@ -4003,16 +4611,317 @@ void ClientContact::splitContactInstanceId(const String& src, String& account,
 	contact = src;
 }
 
+// Remove from owner
+void ClientContact::removeFromOwner()
+{
+    if (!m_owner)
+	return;
+    Lock lock(m_owner);
+    m_owner->removeContact(m_id,false);
+    m_owner = 0;
+}
+
 // Remove from owner. Release data
 void ClientContact::destroyed()
 {
-    destroyChatWindow();
-    if (m_owner) {
-	Lock lock(m_owner);
-	m_owner->removeContact(m_id,false);
-	m_owner = 0;
-    }
+    // Remove from owner now to make sure the contact is not deleted
+    // from owner while beeing destroyed
+    removeFromOwner();
+    if (!mucRoom() && Client::valid() &&
+	Client::self()->getBoolOpt(Client::OptDestroyChat))
+	destroyChatWindow();
     RefObject::destroyed();
+}
+
+
+/*
+ * MucRoom
+ */
+// Constructor
+MucRoom::MucRoom(ClientAccount* owner, const char* id, const char* name,
+    const char* uri, const char* nick)
+    : ClientContact(owner,id,true),
+    m_index(0),
+    m_resource(0)
+{
+    String rid;
+    buildInstanceId(rid,m_id);
+    m_resource = new MucRoomMember(rid,nick);
+    m_name = name;
+    m_uri = uri;
+    if (!owner)
+	return;
+    if (owner->contact())
+	m_resource->m_uri = owner->contact()->uri();
+    m_resource->m_instance = owner->resource().toString();
+}
+
+// Check if the user can kick a given room member
+bool MucRoom::canKick(MucRoomMember* member) const
+{
+    if (!(member && available()) || ownMember(member))
+	return false;
+    return m_resource->m_role == MucRoomMember::Moderator &&
+	member->m_role > MucRoomMember::RoleNone &&
+	member->m_role < MucRoomMember::Moderator;
+}
+
+// Check if the user can ban a given room member
+bool MucRoom::canBan(MucRoomMember* member) const
+{
+    if (!(member && available()) || ownMember(member))
+	return false;
+    // Only admins and owners are allowed to ban non admin/owners
+    return m_resource->m_affiliation >= MucRoomMember::Admin &&
+	member->m_affiliation < MucRoomMember::Admin;
+}
+
+// Build a muc.room message used to login/logoff
+Message* MucRoom::buildJoin(bool join, bool history, unsigned int sNewer)
+{
+    Message* m = buildMucRoom(join ? "login" : "logout");
+    m->addParam("nick",m_resource->m_name,false);
+    if (!join)
+	return m;
+    m->addParam("password",m_password,false);
+    m->addParam("history",String::boolText(history));
+    if (history) {
+	if (sNewer)
+	    m->addParam("history.newer",String(sNewer));
+    }
+    return m;
+}
+
+// Retrieve a room member (or own member) by its nick
+MucRoomMember* MucRoom::findMember(const String& nick)
+{
+    if (nick == m_resource->m_name)
+	return m_resource;
+    for (ObjList* o = m_resources.skipNull(); o; o = o->skipNext()) {
+	MucRoomMember* r = static_cast<MucRoomMember*>(o->get());
+	if (nick == r->m_name)
+	    return r;
+    }
+    return 0;
+}
+
+// Retrieve a room member (or own member) by its id
+MucRoomMember* MucRoom::findMemberById(const String& id)
+{
+    if (ownMember(id))
+	return m_resource;
+    return static_cast<MucRoomMember*>(findResource(id));
+}
+
+// Check if a given member has chat displayed
+bool MucRoom::hasChat(const String& id)
+{
+    Window* w = getChatWnd();
+    return w && Client::self()->getTableRow(s_dockedChatWidget,id,0,w);
+}
+
+// Flash chat window/item to notify the user
+void MucRoom::flashChat(const String& id)
+{
+    Window* w = getChatWnd();
+    if (!w)
+	return;
+    Client::self()->setUrgent(w->id(),true,w);
+    flashItem(s_dockedChatWidget,id,w);
+}
+
+// Retrieve the contents of the chat input widget
+void MucRoom::getChatInput(const String& id, String& text, const String& name)
+{
+    Window* w = getChatWnd();
+    if (!(w && name))
+	return;
+    NamedList p("");
+    p.addParam(name,"");
+    Client::self()->getTableRow(s_dockedChatWidget,id,&p,w);
+    text = p[name];
+}
+
+// Set the chat input widget text
+void MucRoom::setChatInput(const String& id, const String& text, const String& name)
+{
+    Window* w = getChatWnd();
+    if (!(w && name))
+	return;
+    NamedList p("");
+    p.addParam(name,text);
+    Client::self()->setTableRow(s_dockedChatWidget,id,&p,w);
+}
+
+// Retrieve the contents of the chat history widget
+void MucRoom::getChatHistory(const String& id, String& text, bool richText,
+    const String& name)
+{
+    Window* w = getChatWnd();
+    if (!(w && name))
+	return;
+    String param;
+    if (richText)
+	param << "getrichtext:";
+    param << name;
+    NamedList p("");
+    p.addParam(param,"");
+    Client::self()->getTableRow(s_dockedChatWidget,id,&p,w);
+    text = p[param];
+}
+
+// Set the contents of the chat history widget
+void MucRoom::setChatHistory(const String& id, const String& text, bool richText,
+    const String& name)
+{
+    Window* w = getChatWnd();
+    if (!(w && name))
+	return;
+    NamedList p("");
+    if (richText)
+	p.addParam("setrichtext:" + name,text);
+    else
+	p.addParam(name,text);
+    Client::self()->setTableRow(s_dockedChatWidget,id,&p,w);
+}
+
+// Add an entry to chat history
+void MucRoom::addChatHistory(const String& id, const String& what, NamedList*& params,
+    const String& name)
+{
+    Window* w = getChatWnd();
+    if (!(w && name && params)) {
+	TelEngine::destruct(params);
+	return;
+    }
+    NamedList* lines = new NamedList("");
+    lines->addParam(new NamedPointer(what,params,String::boolText(true)));
+    NamedList p("");
+    p.addParam(new NamedPointer("addlines:" + name,lines));
+    Client::self()->setTableRow(s_dockedChatWidget,id,&p,w);
+    params = 0;
+}
+
+// Set a chat widget' property
+void MucRoom::setChatProperty(const String& id, const String& name, const String& prop,
+    const String& value)
+{
+    Window* w = getChatWnd();
+    if (!(w && name && prop))
+	return;
+    NamedList p("");
+    p.addParam("property:" + name + ":" + prop,value);
+    Client::self()->setTableRow(s_dockedChatWidget,id,&p,w);
+}
+
+// Show or hide a member's chat
+bool MucRoom::showChat(const String& id, bool visible, bool active)
+{
+    Window* w = getChatWnd();
+    if (!w)
+	return false;
+    if (!visible)
+	return Client::self()->delTableRow(s_dockedChatWidget,id,w);
+    bool ok = Client::self()->setVisible(w->id(),true);
+    if (active) {
+	Client::self()->setSelect(s_dockedChatWidget,id,w);
+	Client::self()->setActive(w->id(),true,w);
+    }
+    return ok;
+}
+
+// Create a member's chat
+void MucRoom::createChatWindow(const String& id, bool force, const char* name)
+{
+    if (force)
+	destroyChatWindow(id);
+    if (hasChat(id))
+	return;
+    if (!Client::valid())
+	return;
+    MucRoomMember* m = static_cast<MucRoomMember*>(findResource(id,true));
+    Window* w = m ? getChatWnd() : 0;
+    if (w) {
+	NamedList p("");
+	p.addParam("item_type",ownMember(m) ? "mucroom" : "mucprivchat");
+	Client::self()->addTableRow(s_dockedChatWidget,id,&p,false,w);
+    }
+    TelEngine::destruct(m);
+}
+
+// Update member parameters in chat window
+void MucRoom::updateChatWindow(const String& id, const NamedList& params)
+{
+    Window* w = getChatWnd();
+    if (w)
+	Client::self()->setTableRow(s_dockedChatWidget,id,&params,w);
+}
+
+// Close a member's chat
+void MucRoom::destroyChatWindow(const String& id)
+{
+    Window* w = getChatWnd();
+    if (!w)
+	return;
+    if (id)
+	Client::self()->delTableRow(s_dockedChatWidget,id,w);
+    else {
+	NamedList tmp("");
+	tmp.addParam(m_resource->toString(),"");
+	for (ObjList* o = m_resources.skipNull(); o; o = o->skipNext())
+	    tmp.addParam(o->get()->toString(),"");
+	Client::self()->updateTableRows(s_dockedChatWidget,&tmp,false,w);
+    }
+}
+
+// Retrieve a room member (or own member) by its id
+ClientResource* MucRoom::findResource(const String& id, bool ref)
+{
+    ClientResource* res = 0;
+    if (m_resource->toString() == id)
+	res = static_cast<ClientResource*>(m_resource);
+    else
+	res = ClientContact::findResource(id,false);
+    return (res && (!ref || res->ref())) ? res : 0;
+}
+
+// Append a member having a given nick
+ClientResource* MucRoom::appendResource(const String& nick)
+{
+    if (!nick || findMember(nick))
+	return 0;
+    String id;
+    buildInstanceId(id,String(++m_index));
+    MucRoomMember* m = new MucRoomMember(id,nick);
+    m_resources.append(m);
+    return static_cast<ClientResource*>(m);
+}
+
+// Remove a contact having a given nick
+bool MucRoom::removeResource(const String& nick, bool delChat)
+{
+    MucRoomMember* member = findMember(nick);
+    if (!member || ownMember(member))
+	return false;
+    if (delChat)
+	destroyChatWindow(member->toString());
+    m_resources.remove(member);
+    return true;
+}
+
+// Release data
+void MucRoom::destroyed()
+{
+    Debug(ClientDriver::self(),DebugAll,"MucRoom(%s) account=%s destroyed [%p]",
+	uri().c_str(),accountName().c_str(),this);
+    if (!m_resource->offline() && m_owner)
+	Engine::enqueue(buildJoin(false));
+    // Remove from owner now to make sure the contact is not deleted
+    // from owner while beeing destroyed
+    removeFromOwner();
+    destroyChatWindow();
+    TelEngine::destruct(m_resource);
+    ClientContact::destroyed();
 }
 
 

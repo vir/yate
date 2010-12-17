@@ -6384,6 +6384,7 @@ private:
     SignallingTimer m_trafficSent;
     SignallingTimer m_routeTest;
     bool m_testRestricted;
+    bool m_transferSilent;
     bool m_checkRoutes;
     bool m_autoAllowed;
     bool m_sendUnavail;
@@ -8361,6 +8362,7 @@ private:
     SignallingTimer m_uptTimer;          // Timer for UPT
     bool m_userPartAvail;                // Flag indicating the remote User Part availability
     unsigned int m_uptCicCode;           // The circuit code sent with UPT
+    int m_cicWarnLevel;                  // Wrong CIC warn level
     // Circuit reset
     SignallingTimer m_rscTimer;          // RSC message or idle timeout
     SignallingCircuit* m_rscCic;         // Circuit currently beeing reset

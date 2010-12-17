@@ -235,6 +235,7 @@ const String XMPPNamespace::s_array[Count] = {
     "http://jabber.org/protocol/compress",                 // Compress
     "http://jabber.org/features/compress",                 // CompressFeature
     "jabber:x:data",                                       // XData
+    "http://jabber.org/protocol/chatstates",               // ChatStates
 };
 
 const String XMPPError::s_array[Count] = {
@@ -1731,6 +1732,9 @@ XmlElement* XMPPUtils::getChatXml(NamedList& list, const char* param,
     const char* body = list.getValue("body");
     if (!TelEngine::null(body))
 	xml->addChild(createBody(body));
+    const String& state = list["chatstate"];
+    if (state && XmlSaxParser::validTag(state))
+	xml->addChild(createElement(state,XMPPNamespace::ChatStates));
     return xml;
 }
 

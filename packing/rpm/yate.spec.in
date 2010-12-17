@@ -82,7 +82,10 @@ for small to large scale projects.
 %doc %{_defaultdocdir}/yate-%{version}/README
 %doc %{_defaultdocdir}/yate-%{version}/COPYING
 %doc %{_defaultdocdir}/yate-%{version}/ChangeLog
-%{_libdir}/lib*.so.*
+%{_libdir}/libyate.so.*
+%{_libdir}/libyatejabber.so.*
+%{_libdir}/libyatesig.so.*
+%{_libdir}/libyatemgcp.so.*
 %{_bindir}/yate
 %{_mandir}/*/yate.*
 %{_initrddir}/yate
@@ -142,6 +145,8 @@ for small to large scale projects.
 %{_libdir}/yate/server/users.yate
 %{_libdir}/yate/server/presence.yate
 %{_libdir}/yate/server/subscription.yate
+%{_libdir}/yate/server/cpuload.yate
+%{_libdir}/yate/server/ccongestion.yate
 %{_libdir}/yate/server/monitoring.yate
 %{_libdir}/yate/server/ysnmpagent.yate
 %{_libdir}/yate/client/osschan.yate
@@ -186,6 +191,8 @@ for small to large scale projects.
 %config(noreplace) %{_sysconfdir}/yate/ciscosm.conf
 %config(noreplace) %{_sysconfdir}/yate/sigtransport.conf
 %config(noreplace) %{_sysconfdir}/yate/isupmangler.conf
+%config(noreplace) %{_sysconfdir}/yate/cpuload.conf
+%config(noreplace) %{_sysconfdir}/yate/ccongestion.conf
 %config(noreplace) %{_sysconfdir}/yate/monitoring.conf
 %config(noreplace) %{_sysconfdir}/yate/ysnmpagent.conf
 %config(noreplace) %{_sysconfdir}/yate/users.conf
@@ -409,7 +416,8 @@ with a Qt version 4 graphical interface.
 %files qt4
 %defattr(-, root, root)
 %{_bindir}/yate-qt4
-%{_libdir}/yate/qt4/updater.yate
+%{_libdir}/libyateqt4.so.*
+%{_libdir}/yate/qt4/*.yate
 %{_menudir}/yate-qt4.menu
 %{_datadir}/applications/yate-qt4.desktop
 %config(noreplace) %{_sysconfdir}/yate/yate-qt4.conf
@@ -560,6 +568,13 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Fri Dec 10 2010 Paul Chitescu <paulc@voip.null.ro>
+- Properly pack the new dynamic Qt client library and modules
+- Added missing CPU load and congestion control modules
+
+* Wed Nov 03 2010 Ioana Stanciu <oana@voip.null.ro>
+- Added SNMP support
+
 * Thu Sep 09 2010 Paul Chitescu <paulc@voip.null.ro>
 - Added isupmangler to packaging
 

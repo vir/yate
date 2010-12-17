@@ -44,10 +44,13 @@ class ClientChannel;                     // A client telephony channel
 class ClientDriver;                      // The client telephony driver
 class ClientLogic;                       // Base class for all client logics
 class DefaultLogic;                      // The client's default logic
+class ClientWizard;                      // A client wizard
 class ClientAccount;                     // A client account
 class ClientAccountList;                 // A client account list
 class ClientContact;                     // A client contact
 class ClientResource;                    // A client contact's resource
+class MucRoomMember;                     // A MUC room member
+class MucRoom;                           // An account's MUC room contact
 class DurationUpdate;                    // Class used to update UI durations
 class ClientSound;                       // A sound file
 
@@ -212,7 +215,7 @@ public:
      * @param atStart True to insert, false to append
      * @return True on success
      */
-    virtual bool addLines(const String& name, const NamedList* lines, unsigned int max, 
+    virtual bool addLines(const String& name, const NamedList* lines, unsigned int max,
 	bool atStart = false);
 
     /**
@@ -696,7 +699,7 @@ public:
 
 /**
  * Each instance of UIFactory creates special user interface elements by type.
- * Keeps a global list with all factories. The list doesn't own the facotries 
+ * Keeps a global list with all factories. The list doesn't own the facotries
  * @short A static user interface creator
  */
 class YATE_API UIFactory : public String
@@ -764,38 +767,53 @@ public:
      * Message relays installed by this receiver.
      */
     enum MsgID {
-	CallCdr            = 0,
-	UiAction           = 1,
-	UserLogin          = 2,
-	UserNotify         = 3,
-	ResourceNotify     = 4,
-	ResourceSubscribe  = 5,
-	ClientChanUpdate   = 7,
-	UserRoster         = 8,
+	CallCdr = 0,
+	UiAction,
+	UserLogin,
+	UserNotify,
+	ResourceNotify,
+	ResourceSubscribe,
+	ClientChanUpdate,
+	UserRoster,
+	ContactInfo,
 	// Handlers not automatically installed
-	ChanNotify         = 10,
+	ChanNotify,
+	MucRoom,
 	// IDs used only to postpone messages
-	MsgExecute         = 11,
-	EngineStart        = 12,
+	MsgExecute,
+	EngineStart,
+	TransferNotify,
 	// Starting value for custom relays
-	MsgIdCount         = 100
+	MsgIdCount
     };
 
     /**
      * Client boolean options mapped to UI toggles
      */
     enum ClientToggle {
-	OptMultiLines             = 0,   // Accept incoming calls
-	OptAutoAnswer             = 1,   // Auto answer incoming calls
-	OptRingIn                 = 2,   // Enable/disable incoming ringer
-	OptRingOut                = 3,   // Enable/disable outgoing ringer
-	OptActivateLastOutCall    = 4,   // Set the last outgoing call active
-	OptActivateLastInCall     = 5,   // Set the last incoming call active
-	OptActivateCallOnSelect   = 6,   // Set the active call when selected in channel list (don't require double click)
-	OptKeypadVisible          = 7,   // Show/hide keypad
-	OptOpenIncomingUrl        = 8,   // Open an incoming URL in call.execute message
-	OptAddAccountOnStartup    = 9,   // Open account add window on startup
-	OptCount                  = 10
+	OptMultiLines = 0,               // Accept incoming calls
+	OptAutoAnswer,                   // Auto answer incoming calls
+	OptRingIn,                       // Enable/disable incoming ringer
+	OptRingOut,                      // Enable/disable outgoing ringer
+	OptActivateLastOutCall,          // Set the last outgoing call active
+	OptActivateLastInCall,           // Set the last incoming call active
+	OptActivateCallOnSelect,         // Set the active call when selected in channel
+	                                 //  list (don't require double click)
+	OptKeypadVisible,                // Show/hide keypad
+	OptOpenIncomingUrl,              // Open an incoming URL in call.execute message
+	OptAddAccountOnStartup,          // Open account add window on startup
+	OptDockedChat,                   // Show all contacts chat in the same window
+	OptDestroyChat,                  // Destroy contact chat when contact is removed/destroyed
+	OptNotifyChatState,              // Notify chat states
+	OptCount
+    };
+
+    /**
+     * Tray icon valuers used in stack
+     */
+    enum TrayIconType {
+	TrayIconMain = 0,
+	TrayIconIncomingCall = 10000,
     };
 
     /**
@@ -969,7 +987,7 @@ public:
      * Set multiple window parameters
      * @param params The parameter list
      * @param wnd Optional window whose params are to be set
-     * @param skip Optional window to skip if wnd is 0 
+     * @param skip Optional window to skip if wnd is 0
      * @return True on success
      */
     bool setParams(const NamedList* params, Window* wnd = 0, Window* skip = 0);
@@ -1029,7 +1047,7 @@ public:
     bool setActive(const String& name, bool active, Window* wnd = 0, Window* skip = 0);
     bool setFocus(const String& name, bool select = false, Window* wnd = 0, Window* skip = 0);
     bool setShow(const String& name, bool visible, Window* wnd = 0, Window* skip = 0);
-    bool setText(const String& name, const String& text, bool richText = false, 
+    bool setText(const String& name, const String& text, bool richText = false,
 	Window* wnd = 0, Window* skip = 0);
     bool setCheck(const String& name, bool checked, Window* wnd = 0, Window* skip = 0);
     bool setSelect(const String& name, const String& item, Window* wnd = 0, Window* skip = 0);
@@ -1061,7 +1079,7 @@ public:
      * @param skip Optional window to skip if wnd is 0
      * @return True on success
      */
-    bool addLines(const String& name, const NamedList* lines, unsigned int max, 
+    bool addLines(const String& name, const NamedList* lines, unsigned int max,
 	bool atStart = false, Window* wnd = 0, Window* skip = 0);
 
     bool addTableRow(const String& name, const String& item, const NamedList* data = 0,
@@ -1237,7 +1255,7 @@ public:
     inline static bool changing()
 	{ return (s_changing > 0); }
     static Window* getWindow(const String& name);
-    static bool setVisible(const String& name, bool show = true);
+    static bool setVisible(const String& name, bool show = true, bool activate = false);
     static bool getVisible(const String& name);
     static bool openPopup(const String& name, const NamedList* params = 0, const Window* parent = 0);
     static bool openMessage(const char* text, const Window* parent = 0, const char* context = 0);
@@ -1272,7 +1290,7 @@ public:
      * @param value The value of the parameter
      * @param save True to save the configuration file
      * @param update True to update the interface
-     * @return True on success, false if the parameter doesn't exist, the value 
+     * @return True on success, false if the parameter doesn't exist, the value
      *  is incorrect or failed to save the file
      */
     virtual bool setClientParam(const String& param, const String& value,
@@ -1400,7 +1418,7 @@ public:
      * @return True on success
      */
     inline bool emitDigit(char digit, const String& id = String::empty()) {
-	    char s[2] = {digit,0}; 
+	    char s[2] = {digit,0};
 	    return emitDigits(s,id);
 	}
 
@@ -1486,7 +1504,7 @@ public:
 	const String& contact, const char* proto = 0);
 
     /**
-     * Add a logic to the list. The added object is not owned by the client  
+     * Add a logic to the list. The added object is not owned by the client
      * @param logic Pointer to the logic to add
      * @return True on success. False if the pointer is 0 or already added
      */
@@ -1537,6 +1555,71 @@ public:
      */
     static inline void setLogicsTick()
 	{ s_idleLogicsTick = true; }
+
+    /**
+     * Append URI escaped String items to a String buffer
+     * @param buf Destination string
+     * @param list Source list
+     * @param sep Destination list separator. It will be escaped in each added string
+     * @param force True to allow appending empty strings
+     */
+    static void appendEscape(String& buf, ObjList& list, char sep = ',', bool force = false);
+
+    /**
+     * Splits a string at a delimiter character. URI unescape each string in result
+     * @param buf Source string
+     * @param sep Character where to split the string. It will be unescaped in each string
+     * @param emptyOk True if empty strings should be inserted in list
+     * @return A newly allocated list of strings, must be deleted after use
+     */
+    static ObjList* splitUnescape(const String& buf, char sep = ',', bool emptyOk = false);
+
+    /**
+     * Remove characters from a given string
+     * @param buf Source string
+     * @param chars Characters to remove from input string
+     */
+    static void removeChars(String& buf, const char* chars);
+
+    /**
+     * Fix a phone number. Remove extra '+' from begining.
+     * Remove requested characters. Adding '+' to characters to remove won't remove
+     *  the plus sign from the begining.
+     * Clear the number if a non digit char is found
+     * @param number Phone number to fix
+     * @param chars Optional characters to remove from number
+     */
+    static void fixPhoneNumber(String& number, const char* chars = 0);
+
+    /**
+     * Add a tray icon to a window's stack. Update it if already there.
+     * Show it if it's the first one and the client is started.
+     * This method must be called from client's thread
+     * @param wndName The window owning the icon
+     * @param prio Tray icon priority. The list is kept in ascending order
+     * @param params Tray icon parameters. It will be consumed
+     * @return True on success
+     */
+    static bool addTrayIcon(const String& wndName, int prio, NamedList* params);
+
+    /**
+     * Remove a tray icon from a window's stack.
+     * Show the next one if it's the first
+     * This method must be called from client's thread
+     * @param wndName The window owning the icon
+     * @param name Tray icon name
+     * @return True on success
+     */
+    static bool removeTrayIcon(const String& wndName, const String& name);
+
+    /**
+     * Update the first tray icon in a window's stack.
+     * Remove any existing icon the the stack is empty
+     * This method must be called from client's thread
+     * @param wndName The window owning the icon
+     * @return True on success
+     */
+    static bool updateTrayIcon(const String& wndName);
 
     static Configuration s_settings;     // Client settings
     static Configuration s_actions;      // Logic preferrences
@@ -2099,9 +2182,11 @@ public:
      * The default logic fill the parameter list and ask the client to create an outgoing channel
      * @param params List of call parameters
      * @param wnd Optional window containing the widget that triggered the action
+     * @param cmd Optional command (widget name)
      * @return True on success
      */
-    virtual bool callStart(NamedList& params, Window* wnd = 0)
+    virtual bool callStart(NamedList& params, Window* wnd = 0,
+	const String& cmd = String::empty())
 	{ return false; }
 
     /**
@@ -2122,7 +2207,7 @@ public:
     virtual bool display(NamedList& params, bool widget, Window* wnd = 0);
 
     /**
-     * Erase the last digit from the given widget and set focus on it 
+     * Erase the last digit from the given widget and set focus on it
      * @param name The widget (it might be the window itself)
      * @param wnd Optional window containing the widget that triggered the action
      * @return True on success
@@ -2299,7 +2384,7 @@ public:
     virtual bool callLogCreateContact(const String& billid)
 	{ return false; }
 
-    /** 
+    /**
      * Process help related actions
      * @param action The action's name
      * @param wnd The window owning the control
@@ -2416,6 +2501,15 @@ public:
 	{ return false; }
 
     /**
+     * Process contact.info message
+     * @param msg Received message
+     * @param stopLogic Set to true on exit to tell the client to stop asking other logics
+     * @return True to stop further processing by the engine
+     */
+    virtual bool handleContactInfo(Message& msg, bool& stopLogic)
+	{ return false; }
+
+    /**
      * Default message processor called for id's not defined in client.
      * Descendants may override it to process custom messages installed by
      *  them and relayed through the client
@@ -2438,7 +2532,7 @@ public:
      * Add a duration object to this client's list
      * @param duration The object to add
      * @param autoDelete True to delete the object when the list is cleared
-     * @return True on success 
+     * @return True on success
      */
     virtual bool addDurationUpdate(DurationUpdate* duration, bool autoDelete = false);
 
@@ -2446,7 +2540,7 @@ public:
      * Remove a duration object from list
      * @param name The name of the object to remove
      * @param delObj True to destroy the object, false to remove it
-     * @return True on success 
+     * @return True on success
      */
     virtual bool removeDurationUpdate(const String& name, bool delObj = false);
 
@@ -2454,7 +2548,7 @@ public:
      * Remove a duration object from list
      * @param duration The object to remove
      * @param delObj True to destroy the object, false to remove it
-     * @return True on success 
+     * @return True on success
      */
     virtual bool removeDurationUpdate(DurationUpdate* duration, bool delObj = false);
 
@@ -2509,6 +2603,10 @@ public:
     static ObjList s_accOptions;
     // Parameters that are applied from provider template
     static const char* s_provParams[];
+    // The list of protocols supported by the client
+    static ObjList s_protocols;
+    // Mutext used to lock protocol list
+    static Mutex s_protocolsMutex;
 
 protected:
     /**
@@ -2525,11 +2623,6 @@ protected:
      */
     virtual void idleTimerTick(Time& time)
 	{}
-
-    // The list of protocols supported by the client
-    static ObjList s_protocols;
-    // Mutext used to lock protocol list
-    static Mutex s_protocolsMutex;
 
     ObjList m_durationUpdate;            // Duration updates
     Mutex m_durationMutex;               // Lock duration operations
@@ -2606,8 +2699,7 @@ public:
      * Process an IM message
      * @param msg The im.execute of chan.text message
      */
-    virtual bool imIncoming(Message& msg)
-	{ return false; }
+    virtual bool imIncoming(Message& msg);
 
     /**
      * Call execute handler called by the client.
@@ -2616,17 +2708,18 @@ public:
      * @param dest The destination (target)
      * @return True if a channel was created and connected
      */
-    virtual bool callIncoming(Message& msg, const String& dest)
-	{ return Client::self() && Client::self()->buildIncomingChannel(msg,dest); }
+    virtual bool callIncoming(Message& msg, const String& dest);
 
     /**
      * Called when the user trigger a call start action
      * The default logic fill the parameter list and ask the client to create an outgoing channel
      * @param params List of call parameters
      * @param wnd Optional window containing the widget that triggered the action
+     * @param cmd Optional command (widget name)
      * @return True on success
      */
-    virtual bool callStart(NamedList& params, Window* wnd = 0);
+    virtual bool callStart(NamedList& params, Window* wnd = 0,
+	const String& cmd = String::empty());
 
     /**
      * Called when a digit is pressed. The default logic will send the digit(s)
@@ -2663,7 +2756,7 @@ public:
     virtual bool delAccount(const String& account, Window* wnd = 0);
 
     /**
-     * Add/set an account. Login if required
+     * Add/set an account
      * @param account The account's parameters. The name of the list must be the account's name
      * @param login True to login the account
      * @param save True to save the accounts file. If true and file save fails the method will fail
@@ -2771,7 +2864,7 @@ public:
     */
     virtual bool callLogCreateContact(const String& billid);
 
-    /** 
+    /**
      * Process help related actions
      * @param action The action's name
      * @param wnd The window owning the control
@@ -2875,6 +2968,14 @@ public:
     virtual bool handleClientChanUpdate(Message& msg, bool& stopLogic);
 
     /**
+     * Process contact.info message
+     * @param msg Received message
+     * @param stopLogic Set to true on exit to tell the client to stop asking other logics
+     * @return True to stop further processing by the engine
+     */
+    virtual bool handleContactInfo(Message& msg, bool& stopLogic);
+
+    /**
      * Default message processor called for id's not defined in client.
      * Descendants may override it to process custom messages installed by
      *  them and relayed through the client
@@ -2954,13 +3055,15 @@ protected:
     virtual bool clearList(const String& action, Window* wnd);
 
     /**
-     * Delete a list/table item. Handle specific lists like CDR, accounts, contacts
+     * Delete a list/table item. Handle specific lists like CDR, accounts, contacts, mucs
      * @param list The list
      * @param item Item to delete
      * @param wnd Window owning the list/table
+     * @param confirm Request confirmation for known list
      * @return True on success
      */
-    virtual bool deleteItem(const String& list, const String& item, Window* wnd);
+    virtual bool deleteItem(const String& list, const String& item, Window* wnd,
+	bool confirm);
 
     /**
      * Handle list/table selection deletion.
@@ -2972,10 +3075,61 @@ protected:
      */
     virtual bool deleteSelectedItem(const String& action, Window* wnd);
 
+    /**
+     * Handle text changed notification
+     * @param params Notification parameters
+     * @param wnd Window notifying the event
+     * @return True if handled
+     */
+    virtual bool handleTextChanged(NamedList* params, Window* wnd);
+
+    /**
+     * Handle file transfer actions
+     * @param name Action name
+     * @param wnd Window notifying the event
+     * @param params Optional action parameters
+     * @return True if handled
+     */
+    virtual bool handleFileTransferAction(const String& name, Window* wnd, NamedList* params = 0);
+
+    /**
+     * Handle file transfer notifications.
+     * This method is called from logic message handler
+     * @param msg Notification message
+     * @param stopLogic Stop notifying other logics if set to true on return
+     * @return True if handled
+     */
+    virtual bool handleFileTransferNotify(Message& msg, bool& stopLogic);
+
     String m_selectedChannel;            // The currently selected channel
     String m_transferInitiated;          // Tranfer initiated id
 
 private:
+    // Add/set an account changed in UI
+    // replace: Optional editing account to replace
+    bool updateAccount(const NamedList& account, bool save,
+	const String& replace = String::empty(), bool loaded = false);
+    // Add/edit an account
+    bool internalEditAccount(bool newAcc, const String* account, NamedList* params, Window* wnd);
+    // Handle dialog actions. Return true if handled
+    bool handleDialogAction(const String& name, bool& retVal, Window* wnd);
+    // Handle chat and contact related actions. Return true if handled
+    bool handleChatContactAction(const String& name, Window* wnd);
+    // Handle actions from MUCS window. Return true if handled
+    bool handleMucsAction(const String& name, Window* wnd, NamedList* params);
+    // Handle select from MUCS window. Return true if handled
+    bool handleMucsSelect(const String& name, const String& item, Window* wnd,
+	const String& text = String::empty());
+    // Handle resource.notify messages from MUC rooms
+    // The account was already checked
+    bool handleMucResNotify(Message& msg, ClientAccount* acc, const String& contact,
+	const String& instance, const String& operation);
+    // Show/hide the notification area (messages)
+    // Update rows if requested
+    bool showNotificationArea(bool show, Window* wnd, NamedList* upd = 0);
+    // Handle actions from notification area. Return true if handled
+    bool handleNotificationAreaAction(const String& action, Window* wnd);
+
     ClientAccountList* m_accounts;       // Accounts list (always valid)
 };
 
@@ -2987,6 +3141,7 @@ private:
 class YATE_API ClientAccount : public RefObject, public Mutex
 {
     friend class ClientContact;
+    friend class MucRoom;
     YNOCOPY(ClientAccount); // no automatic copies please
 public:
     /**
@@ -2997,7 +3152,7 @@ public:
      * @param startup True if the account should login at startup
      * @param contact Optional account's own contact
      */
-    ClientAccount(const char* proto, const char* user, const char* host,
+    explicit ClientAccount(const char* proto, const char* user, const char* host,
 	bool startup, ClientContact* contact = 0);
 
     /**
@@ -3023,6 +3178,13 @@ public:
 	{ return m_contacts; }
 
     /**
+     * Get this account's muc rooms. The caller should lock the account while browsing the list
+     * @return This account's mucs list
+     */
+    inline ObjList& mucs()
+	{ return m_mucs; }
+
+    /**
      * Retrieve account own contact
      * @return ClientContact pointer
      */
@@ -3041,6 +3203,20 @@ public:
      */
     inline const String& protocol() const
 	{ return m_params["protocol"]; }
+
+    /**
+     * Check if the account's protocol has chat support
+     * @return True if this account has chat support
+     */
+    inline bool hasChat() const
+	{ return protocol() == "jabber"; }
+
+    /**
+     * Check if the account's protocol has presence support
+     * @return True if this account has presence support
+     */
+    inline bool hasPresence() const
+	{ return protocol() == "jabber"; }
 
     /**
      * Check if the account should be logged in at startup
@@ -3083,7 +3259,8 @@ public:
     void setResource(ClientResource* res);
 
     /**
-     * Save or remove this account to/from client accounts file
+     * Save or remove this account to/from client accounts file.
+     * Parameters starting with "internal." are not saved
      * @param ok True to save, false to remove
      * @param savePwd True to save the password
      * @return True on success
@@ -3128,12 +3305,30 @@ public:
     virtual ClientContact* findContactByUri(const String& uri, bool ref = false);
 
     /**
+     * Find a MUC room by its id
+     * @param id Room id
+     * @param ref True to obtain a referenced pointer
+     * @return MucRoom pointer or 0 if not found
+     */
+    virtual MucRoom* findRoom(const String& id, bool ref = false);
+
+    /**
+     * Find a MUC room by its uri
+     * @param uri Room uri
+     * @param ref True to obtain a referenced pointer
+     * @return MucRoom pointer or 0 if not found
+     */
+    virtual MucRoom* findRoomByUri(const String& uri, bool ref = false);
+
+    /**
      * Build a contact and append it to the list
      * @param id The contact's id
      * @param name The contact's name
+     * @param uri Optional contact URI
      * @return ClientContact pointer or 0 if a contact with the given id already exists
      */
-    virtual ClientContact* appendContact(const String& id, const char* name);
+    virtual ClientContact* appendContact(const String& id, const char* name,
+	const char* uri = 0);
 
     /**
      * Build a contact and append it to the list
@@ -3170,9 +3365,10 @@ protected:
     // Remove from owner. Release data
     virtual void destroyed();
     // Method used by the contact to append itself to this account's list
-    virtual void appendContact(ClientContact* contact);
+    virtual void appendContact(ClientContact* contact, bool muc = false);
 
     ObjList m_contacts;                  // Account's contacts
+    ObjList m_mucs;                      // Account's MUC contacts
 
 private:
     ClientResource* m_resource;          // Account's resource
@@ -3277,6 +3473,22 @@ public:
 	bool ref = false);
 
     /**
+     * Find a MUC room by its id
+     * @param id Room id
+     * @param ref True to obtain a referenced pointer
+     * @return MucRoom pointer or 0 if not found
+     */
+    virtual MucRoom* findRoom(const String& id, bool ref = false);
+
+    /**
+     * Find a MUC room by member id
+     * @param id Room member id
+     * @param ref True to obtain a referenced pointer
+     * @return MucRoom pointer or 0 if not found
+     */
+    virtual MucRoom* findRoomByMember(const String& id, bool ref = false);
+
+    /**
      * Check if there is a single registered account and return it
      * @param skipProto Optional account protocol to skip
      * @param ref True to get a referenced pointer
@@ -3321,10 +3533,10 @@ public:
      * @param owner The contact's owner
      * @param id The contact's id
      * @param name Optional display name. Defaults to the id's value if 0
-     * @param chat True to create the chat window
+     * @param uri Optional contact URI
      */
-    ClientContact(ClientAccount* owner, const char* id, const char* name = 0,
-	bool chat = false);
+    explicit ClientContact(ClientAccount* owner, const char* id, const char* name = 0,
+	const char* uri = 0);
 
     /**
      * Constructor. Build a contact from a list of parameters.
@@ -3333,10 +3545,9 @@ public:
      * @param params The list of parameters used to build this contact
      * @param id Optional contact id
      * @param uri Optional contact URI
-     * @param chat True to create the chat window
      */
-    ClientContact(ClientAccount* owner, const NamedList& params, const char* id = 0,
-	const char* uri = 0, bool chat = false);
+    explicit ClientContact(ClientAccount* owner, const NamedList& params, const char* id = 0,
+	const char* uri = 0);
 
     /**
      * Get this contact's account
@@ -3374,11 +3585,18 @@ public:
 	{ return m_resources; }
 
     /**
-     * Check if the contact is online (has at least 1 resource in list)
+     * Check if the contact is online (the online flag is set or has at least 1 resource in list)
      * @return True if the contact is online
      */
     inline bool online() const
-	{ return 0 != m_resources.skipNull(); }
+	{ return m_online || 0 != m_resources.skipNull(); }
+
+    /**
+     * Set the online flag
+     * @param on The new value for online flag
+     */
+    inline void setOnline(bool on)
+	{ m_online = on; }
 
     /**
      * Get the group list of this contact
@@ -3386,6 +3604,16 @@ public:
      */
     inline ObjList& groups()
 	{ return m_groups; }
+
+
+    /**
+     * Set/reset the docked chat flag for non MucRoom contact
+     * @param on The new value for docked chat flag
+     */
+    inline void setDockedChat(bool on) {
+	    if (!mucRoom())
+		m_dockedChat = on;
+	}
 
     /**
      * Remove account prefix from contact id and URI unescape the result
@@ -3404,6 +3632,13 @@ public:
      */
     virtual const String& toString() const
 	{ return m_id; }
+
+    /**
+     * Return a MucRoom contact from this one
+     * @return MucRoom pointer or 0
+     */
+    virtual MucRoom* mucRoom()
+	{ return 0; }
 
     /**
      * Build a contact instance id to be used in UI
@@ -3435,21 +3670,84 @@ public:
 	{ return wnd && wnd->toString() == m_chatWndName; }
 
     /**
-     * Check if this contact has a chat window
-     * @return True if this contact has a chat window
+     * Check if this contact has a chat widget (window or docked item)
+     * @return True if this contact has a chat window or docked item
      */
-    inline bool hasChat()
-	{ return Client::self() && Client::self()->getWindow(m_chatWndName); }
+    bool hasChat();
+
+    /**
+     * Flash chat window/item to notify the user
+     */
+    virtual void flashChat();
 
     /**
      * Send chat to contact (enqueue a msg.execute message)
      * @param body Chat body
      * @param res Optional target instance
      * @param type Optional message type parameter
+     * @param state Optional chat state
      * @return True on success
      */
     virtual bool sendChat(const char* body, const String& res = String::empty(),
-	const char* type = 0);
+	const String& type = String::empty(), const char* state = "active");
+
+    /**
+     * Retrieve the contents of the chat input widget
+     * @param text Chat input text
+     * @param name Chat input widget name
+     */
+    virtual void getChatInput(String& text, const String& name = "message");
+
+    /**
+     * Set the chat input widget text
+     * @param text Chat input text
+     * @param name Chat input widget name
+     */
+    virtual void setChatInput(const String& text = String::empty(),
+	const String& name = "message");
+
+    /**
+     * Retrieve the contents of the chat history widget
+     * @param text Chat history text
+     * @param richText Retrieve rich/plain text flag
+     * @param name Chat history widget name
+     */
+    virtual void getChatHistory(String& text, bool richText = false,
+	const String& name = "history");
+
+    /**
+     * Set the contents of the chat history widget
+     * @param text Chat history text
+     * @param richText Set rich/plain text flag
+     * @param name Chat history widget name
+     */
+    virtual void setChatHistory(const String& text, bool richText = false,
+	const String& name = "history");
+
+    /**
+     * Add an entry to chat history
+     * @param what Item to add (chat_in, chat_out, ...)
+     * @param params Chat history item parameters (it will be consumed and zeroed)
+     * @param name Chat history widget name
+     */
+    virtual void addChatHistory(const String& what, NamedList*& params,
+	const String& name = "history");
+
+    /**
+     * Retrieve a chat widget' property
+     * @param name Widget name
+     * @param prop Property name
+     * @param value Destination buffer
+     */
+    virtual void getChatProperty(const String& name, const String& prop, String& value);
+
+    /**
+     * Set a chat widget' property
+     * @param name Widget name
+     * @param prop Property name
+     * @param value Property value
+     */
+    virtual void setChatProperty(const String& name, const String& prop, const String& value);
 
     /**
      * Check if this contact's chat window is visible
@@ -3459,9 +3757,9 @@ public:
 	{ return Client::self() && Client::self()->getVisible(m_chatWndName); }
 
     /**
-     * Show or hide this contact's chat window
-     * @param visible True to show, false to hide
-     * @param active True to activate the window if shown
+     * Show or hide this contact's chat window or docked item
+     * @param visible True to show, false to hide the window or destroy the docked item
+     * @param active True to activate the window or select the docked item if shown
      * @return True on success
      */
     virtual bool showChat(bool visible, bool active = false);
@@ -3470,23 +3768,28 @@ public:
      * Get the chat window
      * @return Valid Window pointer or 0
      */
-    inline Window* getChatWnd() const
-	{ return Client::self() ? Client::self()->getWindow(m_chatWndName) : 0; }
+    Window* getChatWnd();
 
     /**
      * Create the chat window
      * @param force True to destroy the current one if any
-     * @param name The window's name
+     * @param name The window's name. Defaults to global name if empty
      */
-    void createChatWindow(bool force = false, const char* name = "chat");
+    virtual void createChatWindow(bool force = false, const char* name = 0);
 
     /**
-     * Close (desrtoy) the chat window
+     * Update contact parameters in chat window
+     * @param params Parameters to set
+     * @param title Optional window title to set (ignored if docked)
+     * @param icon Optional window icon to set (ignored if docked)
      */
-    inline void destroyChatWindow() {
-	    if (m_chatWndName && Client::self())
-		Client::self()->closeWindow(m_chatWndName,false);
-	}
+    virtual void updateChatWindow(const NamedList& params, const char* title = 0,
+	const char* icon = 0);
+
+    /**
+     * Close the chat window or destroy docked chat item
+     */
+    void destroyChatWindow();
 
     /**
      * Find a group this contact might belong to
@@ -3510,6 +3813,21 @@ public:
     virtual bool removeGroup(const String& group);
 
     /**
+     * Replace contact's groups from a list of parameters
+     * @param list The list of parameters
+     * @param param The parameter name to handle
+     * @return True if the list changed
+     */
+    virtual bool setGroups(const NamedList& list, const String& param);
+
+    /**
+     * Find the resource with the lowest status
+     * @param ref True to obtain a referenced pointer
+     * @return ClientResource pointer or 0 if not found
+     */
+    virtual ClientResource* status(bool ref = false);
+
+    /**
      * Find a resource having a given id
      * @param id The id of the desired resource
      * @param ref True to obtain a referenced pointer
@@ -3523,6 +3841,13 @@ public:
      * @return ClientResource pointer or 0 if not found
      */
     virtual ClientResource* findAudioResource(bool ref = false);
+
+    /**
+     * Get the first resource with file transfer capability capability
+     * @param ref True to obtain a referenced pointer
+     * @return ClientResource pointer or 0 if not found
+     */
+    virtual ClientResource* findFileTransferResource(bool ref = false);
 
     /**
      * Append a resource having a given id
@@ -3545,14 +3870,6 @@ public:
      * @return True if the resource was removed
      */
     virtual bool removeResource(const String& id);
-
-    /**
-     * Check if a window is a chat one
-     * @param wnd The window to check
-     * @return True if the given window's name starts with the chat refix
-     */
-    static inline bool isChatWndPrefix(Window* wnd)
-	{ return wnd && wnd->toString().startsWith(s_chatPrefix); }
 
     /**
      * Build a contact id to be used in UI (all strings are URI escaped using extra '|' character)
@@ -3592,21 +3909,44 @@ public:
 
     // Chat window prefix
     static String s_chatPrefix;
+    // Docked chat window name
+    static String s_dockedChatWnd;
+    // Docked chat widget name
+    static String s_dockedChatWidget;
+    // MUC rooms window name
+    static String s_mucsWnd;
+    // Chat input widget name
+    static String s_chatInput;
 
     String m_name;                       // Contact's display name
     String m_subscription;               // Presence subscription state
 
 protected:
-    // Remove from owner. Destroy the chat window. Release data
+    /**
+     * Constructor. Append itself to the owner's list
+     * @param owner The contact's owner
+     * @param id The contact's id
+     * @param mucRoom True if this contact is a MUC room
+     */
+    explicit ClientContact(ClientAccount* owner, const char* id, bool mucRoom);
+
+    /**
+     * Remove from owner
+     */
+    void removeFromOwner();
+
+    /**
+     * Remove from owner. Destroy the chat window. Release data
+     */
     virtual void destroyed();
 
     ClientAccount* m_owner;              // The account owning this contact
+    bool m_online;                       // Online flag
     String m_id;                         // The contact's id
     URI m_uri;                           // The contact's URI
     ObjList m_resources;                 // The contact's resource list
-    ObjList m_groups;                    // The group(s) this contract belongs to 
-
-private:
+    ObjList m_groups;                    // The group(s) this contact belongs to
+    bool m_dockedChat;                   // Docked chat flag
     String m_chatWndName;                // Chat window name if any
 };
 
@@ -3640,8 +3980,8 @@ public:
      * @param audio True (default) if the resource has audio capability
      */
     inline explicit ClientResource(const char* id, const char* name = 0, bool audio = true)
-	: m_id(id), m_name(name ? name : id), m_audio(audio), m_priority(0),
-	  m_status(Offline)
+	: m_id(id), m_name(name ? name : id), m_audio(audio), m_fileTransfer(false),
+	m_priority(0), m_status(Offline)
 	{ }
 
     /**
@@ -3673,11 +4013,11 @@ public:
 	{ return lookup(m_status,s_statusName); }
 
     /**
-     * Retrieve resource status text or associated status name if text is empty
+     * Retrieve resource status text or associated status display text
      * @return Resource status text
      */
     inline const char* text() const
-	{ return m_text ? m_text.c_str() : statusName(); }
+	{ return m_text ? m_text.c_str() : statusDisplayText(m_status); }
 
     /**
      * Update resource audio capability
@@ -3688,6 +4028,18 @@ public:
 	    if (m_audio == ok)
 		return false;
 	    m_audio = ok;
+	    return true;
+	}
+
+    /**
+     * Update resource file transfer capability
+     * @param ok The new file transfer value
+     * @return True if changed
+     */
+    inline bool setFileTransfer(bool ok) {
+	    if (m_fileTransfer == ok)
+		return false;
+	    m_fileTransfer = ok;
 	    return true;
 	}
 
@@ -3728,6 +4080,15 @@ public:
 	}
 
     /**
+     * Retrieve the status display text associated with a given resource status
+     * @param status The status to find
+     * @param defVal Text to return if none found
+     * @return Status display text or the default value if not found
+     */
+    static inline const char* statusDisplayText(int status, const char* defVal = 0)
+	{ return lookup(status,s_statusName,defVal); }
+
+    /**
      * Resource status names
      */
     static const TokenDict s_statusName[];
@@ -3735,9 +4096,364 @@ public:
     String m_id;                         // The resource id
     String m_name;                       // Resource display name
     bool m_audio;                        // Audio capability flag
+    bool m_fileTransfer;                 // File transfer capability flag
     int m_priority;                      // Resource priority
     int m_status;                        // Resource status
     String m_text;                       // Resource status text
+};
+
+/**
+ * This class holds data about a MUC room member.
+ * The resource name holds the nickname
+ * @short A MUC room member
+ */
+class YATE_API MucRoomMember : public ClientResource
+{
+    YCLASS(MucRoomMember,ClientResource)
+    YNOCOPY(MucRoomMember); // no automatic copies please
+public:
+    /**
+     * Member affiliation to the room
+     */
+    enum Affiliation {
+	AffUnknown = 0,
+	AffNone,
+	Outcast,
+	Member,
+	Admin,
+	Owner
+    };
+
+    /**
+     * Member role after joining the room
+     */
+    enum Role {
+	RoleUnknown = 0,
+	RoleNone,                        // No role (out of room)
+	Visitor,                         // Can view room chat
+	Participant,                     // Can only send chat
+	Moderator                        // Room moderator: can kick members
+    };
+
+    /**
+     * Constructor
+     * @param id Member internal id
+     * @param nick Member nickname
+     * @param uri Member uri
+     */
+    inline explicit MucRoomMember(const char* id, const char* nick, const char* uri = 0)
+	: ClientResource(id,nick),
+	m_uri(uri), m_affiliation(AffNone), m_role(RoleNone)
+	{}
+
+    /**
+     * Affiliation names
+     */
+    static const TokenDict s_affName[];
+
+    /**
+     * Role names
+     */
+    static const TokenDict s_roleName[];
+
+    String m_uri;                        // Member uri, if known
+    String m_instance;                   // Member instance, if known
+    int m_affiliation;                   // Member affiliation to the room
+    int m_role;                          // Member role when present in room ('none' means not present)
+};
+
+/**
+ * This class holds a client account's MUC room contact.
+ * The list of resources contains MucRoomMember items.
+ * Contact nick is held by own MucRoomMember name
+ * The contact uri is the room uri
+ * The contact name is the room name
+ * The contact resource member uri is the account's uri
+ * @short An account's MUC room contact
+ */
+class YATE_API MucRoom : public ClientContact
+{
+    YCLASS(MucRoom,ClientContact)
+    YNOCOPY(MucRoom); // no automatic copies please
+public:
+    /**
+     * Constructor. Append itself to the owner's list
+     * @param owner The contact's owner
+     * @param id The contact's id
+     * @param name Room name
+     * @param uri Room uri
+     * @param nick Optional room nick
+     */
+    explicit MucRoom(ClientAccount* owner, const char* id, const char* name, const char* uri,
+	const char* nick = 0);
+
+    /**
+     * Retrieve room resource
+     * @return Room resource
+     */
+    inline MucRoomMember& resource()
+	{ return *m_resource; }
+
+    /**
+     * Check if a given resource is the contact's member
+     * @param item Member pointer to check
+     * @return True if the given resource member is the contact itself
+     */
+    inline bool ownMember(MucRoomMember* item) const
+	{ return m_resource == item; }
+
+    /**
+     * Check if a given resource is the contact's member
+     * @param item Member id to check
+     * @return True if the given resource member is the contact itself
+     */
+    inline bool ownMember(const String& item) const
+	{ return m_resource->toString() == item; }
+
+    /**
+     * Check if the user has joined the room
+     * @return True if the user is in the room
+     */
+    inline bool available() const {
+	    return m_resource->online() &&
+		m_resource->m_role > MucRoomMember::RoleNone;
+	}
+
+    /**
+     * Check if room chat can be sent
+     * @return True if the user is allowed to send chat to room
+     */
+    inline bool canChat() const
+	{ return available() && m_resource->m_role >= MucRoomMember::Visitor; }
+
+    /**
+     * Check if private chat can be sent
+     * @return True if the user is allowed to send private chat
+     */
+    inline bool canChatPrivate() const
+	{ return available(); }
+
+    /**
+     * Check if the user can change room subject
+     * @return True if the user can change room subject
+     */
+    inline bool canChangeSubject() const
+	{ return available() && m_resource->m_role == MucRoomMember::Moderator; }
+
+    /**
+     * Check if join invitations can be sent
+     * @return True if the user is allowed to invite contacts
+     */
+    inline bool canInvite() const
+	{ return available(); }
+
+    /**
+     * Check if the user can kick a given room member
+     * @param member Room member
+     * @return True if the user can kick the member
+     */
+    bool canKick(MucRoomMember* member) const;
+
+    /**
+     * Check if the user can ban a given room member
+     * @param member Room member
+     * @return True if the user can ban the member
+     */
+    bool canBan(MucRoomMember* member) const;
+
+    /**
+     * Build a muc.room message. Add the room parameter
+     * @param oper Operation parameter
+     * @return Message pointer
+     */
+    inline Message* buildMucRoom(const char* oper) {
+	    Message* m = Client::buildMessage("muc.room",accountName(),oper);
+	    m->addParam("room",uri());
+	    return m;
+	}
+
+    /**
+     * Build a muc.room message used to login/logoff
+     * @param join True to login, false to logoff
+     * @param history True to request room history. Ignored if join is false
+     * @param sNewer Request history newer then given seconds. Ignored if 0 or history is false
+     * @return Message pointer
+     */
+    Message* buildJoin(bool join, bool history = true, unsigned int sNewer = 0);
+
+    /**
+     * Return a MucRoom contact from this one
+     * @return MucRoom pointer or 0
+     */
+    virtual MucRoom* mucRoom()
+	{ return this; }
+
+    /**
+     * Find the resource with the lowest status (room resource)
+     * @param ref True to obtain a referenced pointer
+     * @return ClientResource pointer or 0 if not found
+     */
+    virtual ClientResource* status(bool ref = false)
+	{ return (!ref || m_resource->ref()) ? m_resource : 0; }
+
+    /**
+     * Retrieve a room member (or own member) by its nick
+     * @param nick Nick to find
+     * @return MucRoomMember pointer or 0 if not found
+     */
+    MucRoomMember* findMember(const String& nick);
+
+    /**
+     * Retrieve a room member (or own member) by its id
+     * @param id Member id to find
+     * @return MucRoomMember pointer or 0 if not found
+     */
+    MucRoomMember* findMemberById(const String& id);
+
+    /**
+     * Check if a given member has chat displayed
+     * @param id Member id
+     * @return True if the member has chat displayed
+     */
+    bool hasChat(const String& id);
+
+    /**
+     * Flash chat window/item to notify the user
+     * @param id Member id
+     */
+    virtual void flashChat(const String& id);
+
+    /**
+     * Retrieve the contents of the chat input widget
+     * @param id Member id
+     * @param text Chat input text
+     * @param name Chat input widget name
+     */
+    virtual void getChatInput(const String& id, String& text, const String& name = "message");
+
+    /**
+     * Set the chat input widget text
+     * @param id Member id
+     * @param text Chat input text
+     * @param name Chat input widget name
+     */
+    virtual void setChatInput(const String& id, const String& text = String::empty(),
+	const String& name = "message");
+
+    /**
+     * Retrieve the contents of the chat history widget
+     * @param id Member id
+     * @param text Chat history text
+     * @param richText Retrieve rich/plain text flag
+     * @param name Chat history widget name
+     */
+    virtual void getChatHistory(const String& id, String& text, bool richText = false,
+	const String& name = "history");
+
+    /**
+     * Set the contents of the chat history widget
+     * @param id Member id
+     * @param text Chat history text
+     * @param richText Set rich/plain text flag
+     * @param name Chat history widget name
+     */
+    virtual void setChatHistory(const String& id, const String& text, bool richText = false,
+	const String& name = "history");
+
+    /**
+     * Add an entry to chat history
+     * @param id Member id
+     * @param what Item to add (chat_in, chat_out, ...)
+     * @param params Chat history item parameters (it will be consumed and zeroed)
+     * @param name Chat history widget name
+     */
+    virtual void addChatHistory(const String& id, const String& what, NamedList*& params,
+	const String& name = "history");
+
+    /**
+     * Set a chat widget' property
+     * @param id Member id
+     * @param name Widget name
+     * @param prop Property name
+     * @param value Property value
+     */
+    virtual void setChatProperty(const String& id, const String& name, const String& prop,
+	const String& value);
+
+    /**
+     * Show or hide a member's chat
+     * @param id Member id
+     * @param visible True to show, false to hide
+     * @param active True to activate the chat
+     * @return True on success
+     */
+    virtual bool showChat(const String& id, bool visible, bool active = false);
+
+    /**
+     * Create a member's chat
+     * @param id Member id
+     * @param force True to destroy the current one if any
+     * @param name The window's name. Defaults to global name if empty
+     */
+    virtual void createChatWindow(const String& id, bool force = false, const char* name = 0);
+
+    /**
+     * Update member parameters in chat window
+     * @param id Member id
+     * @param params Parameters to set
+     */
+    virtual void updateChatWindow(const String& id, const NamedList& params);
+
+    /**
+     * Close a member's chat or all chats
+     * @param id Member id. Let it empty to clear all chats
+     */
+    void destroyChatWindow(const String& id = String::empty());
+
+    /**
+     * Retrieve a room member (or own member) by its id
+     * @param id The id of the desired member
+     * @param ref True to obtain a referenced pointer
+     * @return ClientResource pointer or 0 if not found
+     */
+    virtual ClientResource* findResource(const String& id, bool ref = false);
+
+    /**
+     * Append a member having a given nick
+     * @param nick Member nick
+     * @return ClientResource pointer or 0 if a resource with the given name already exists
+     */
+    virtual ClientResource* appendResource(const String& nick);
+
+    /**
+     * Insert a resource in the list by its priority.
+     * If the resource is already there it will be extracted and re-inserted
+     * @param res The resource to insert
+     * @return True on success, false a resource with the same name already exists
+     */
+    virtual bool insertResource(ClientResource* res)
+	{ return false; }
+
+    /**
+     * Remove a contact having a given nick
+     * @param nick The contact nick
+     * @param delChat True to delete the chat
+     * @return True if the contact was removed
+     */
+    virtual bool removeResource(const String& nick, bool delChat = false);
+
+    /**
+     * Room password
+     */
+    String m_password;
+
+protected:
+    // Release data. Destroy all chats
+    virtual void destroyed();
+
+private:
+    unsigned int m_index;                // Index used to build member id
+    MucRoomMember* m_resource;           // Account room identity and status
 };
 
 /**
@@ -3862,7 +4578,7 @@ public:
      * @param device Optional device used to play the file. Set to 0 to use the default one
      */
     inline ClientSound(const char* name, const char* file, const char* device = 0)
-	: String(name), m_file(file), m_device(device), m_repeat(0),
+	: String(name), m_native(false), m_file(file), m_device(device), m_repeat(0),
 	m_started(false), m_stereo(false)
 	{ }
 
@@ -3879,6 +4595,14 @@ public:
 	    stop();
 	    String::destruct();
 	}
+
+    /**
+     * Check if this sound is a system dependent one
+     * @return True if the sound is played using a system dependent method,
+     *  false if played using a yate module (like wavefile)
+     */
+    inline bool native() const
+	{ return m_native; }
 
     /**
      * Check if this sound is started
@@ -4021,6 +4745,7 @@ protected:
     virtual bool doStart();
     virtual void doStop();
 
+    bool m_native;                       // Native (system dependent) sound
     String m_file;
     String m_device;
     unsigned int m_repeat;

@@ -31,6 +31,7 @@ Name: "client\qt\run"; Description: "Qt runtime libraries"; Types: full client
 Name: "server"; Description: "Server files"; Types: full server
 Name: "server\pstn"; Description: "Server PSTN support"; Types: full
 Name: "server\cluster"; Description: "Server clustering modules"; Types: full
+Name: "server\monitor"; Description: "Server monitoring support"; Types: full
 Name: "driver"; Description: "Protocol drivers"; Types: full client server
 Name: "driver\base"; Description: "Files, tones, mixers"; Types: full client server custom
 Name: "driver\openssl"; Description: "SSL/TLS encryption support"; Types: full client server
@@ -111,8 +112,15 @@ Source: "Release\server\queues.yate"; DestDir: "{app}\modules\server"; Flags: re
 Source: "Release\server\queuesnotify.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
 Source: "Release\server\lateroute.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
 Source: "Release\server\sipfeatures.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
-Source: "Release\server\monitoring.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
-Source: "Release\server\ysnmpagent.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
+Source: "Release\server\cpuload.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor
+Source: "Release\server\ccongestion.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor
+Source: "Release\server\monitoring.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor
+Source: "Release\server\ysnmpagent.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor
+Source: "Release\qt4\clientarchive.yate"; DestDir: "{app}\modules\qt4"; Flags: replacesameversion; Components: client
+Source: "Release\qt4\customtable.yate"; DestDir: "{app}\modules\qt4"; Flags: replacesameversion; Components: client
+Source: "Release\qt4\customtree.yate"; DestDir: "{app}\modules\qt4"; Flags: replacesameversion; Components: client
+Source: "Release\qt4\customtext.yate"; DestDir: "{app}\modules\qt4"; Flags: replacesameversion; Components: client
+Source: "Release\qt4\widgetlist.yate"; DestDir: "{app}\modules\qt4"; Flags: replacesameversion; Components: client
 
 Source: "Release\server\heartbeat.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\cluster
 Source: "Release\server\clustering.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\cluster
@@ -164,11 +172,36 @@ Source: "..\share\sounds\*.wav"; DestDir: "{app}\share\sounds"; Components: clie
 Source: "..\conf.d\providers.conf.default"; DestName: "providers.conf"; DestDir: "{app}\conf.d"; Components: client
 Source: "..\share\skins\default\qt4client.??"; DestDir: "{app}\share\skins\default"; Components: client\qt
 Source: "..\share\skins\default\account.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\accountlist.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\accountwizard.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
 Source: "..\share\skins\default\addrbook.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
-Source: "..\share\skins\default\events.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
-Source: "..\share\skins\default\help.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\archive.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\arch_contact_item.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\arch_session_item.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\chat.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
 Source: "..\share\skins\default\confirm.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\contactedit.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\contactinfo.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\contactlist_contact.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\contactlist_group.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\dockedchat.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\events.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\fileprogress.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\fileprogress_item.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\help.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\input.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\inputpwd.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\joinmucwizard.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
 Source: "..\share\skins\default\message.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\messages_header.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\messages_loginfail.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\messages_okrejignore.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\mucchat.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\mucinvite.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\mucprivchat.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\mucs.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\room_member.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\settings.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
 Source: "..\share\skins\default\*.png"; DestDir: "{app}\share\skins\default"; Components: client
 
 Source: "..\conf.d\yate-qt4.conf.default"; DestName: "yate-qt4.conf"; DestDir: "{app}\conf.d"; Components: client\qt; Flags: skipifsourcedoesntexist

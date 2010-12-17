@@ -1,0 +1,642 @@
+<ui version="4.0" >
+ <class>archive</class>
+ <widget class="QWidget" name="archive" >
+  <property name="geometry" >
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>574</width>
+    <height>412</height>
+   </rect>
+  </property>
+  <property name="sizePolicy" >
+   <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
+  <property name="minimumSize" >
+   <size>
+    <width>540</width>
+    <height>360</height>
+   </size>
+  </property>
+  <property name="windowTitle" >
+   <string>Archive</string>
+  </property>
+  <property name="windowIcon" >
+   <iconset>archive.png</iconset>
+  </property>
+  <layout class="QVBoxLayout" >
+   <property name="spacing" >
+    <number>2</number>
+   </property>
+   <property name="leftMargin" >
+    <number>0</number>
+   </property>
+   <property name="topMargin" >
+    <number>0</number>
+   </property>
+   <property name="rightMargin" >
+    <number>0</number>
+   </property>
+   <property name="bottomMargin" >
+    <number>0</number>
+   </property>
+   <item>
+    <widget class="QMenuBar" name="menu" >
+     <property name="styleSheet" >
+      <string/>
+     </property>
+     <widget class="QMenu" name="menuFile" >
+      <property name="title" >
+       <string>File</string>
+      </property>
+      <addaction name="archive_refresh" />
+      <addaction name="separator" />
+      <addaction name="archive_save_session" />
+      <addaction name="separator" />
+      <addaction name="archive_del_contact" />
+      <addaction name="archive_clear" />
+      <addaction name="separator" />
+      <addaction name="archive_hide" />
+     </widget>
+     <widget class="QMenu" name="menuEdit" >
+      <property name="title" >
+       <string>Edit</string>
+      </property>
+      <addaction name="archive_search_show" />
+      <addaction name="separator" />
+     </widget>
+     <addaction name="menuFile" />
+     <addaction name="menuEdit" />
+    </widget>
+   </item>
+   <item>
+    <widget class="QSplitter" name="splitter_vertical" >
+     <property name="sizePolicy" >
+      <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="orientation" >
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="childrenCollapsible" >
+      <bool>false</bool>
+     </property>
+     <property name="_yate_save_props" stdset="0" >
+      <stringlist>
+       <string>_yate_sizes</string>
+      </stringlist>
+     </property>
+     <property name="_yate_sizes" stdset="0" >
+      <string>160,400</string>
+     </property>
+     <widget class="QFrame" name="frame_logs_list" >
+      <property name="sizePolicy" >
+       <sizepolicy vsizetype="Expanding" hsizetype="Minimum" >
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="minimumSize" >
+       <size>
+        <width>140</width>
+        <height>160</height>
+       </size>
+      </property>
+      <property name="maximumSize" >
+       <size>
+        <width>16777215</width>
+        <height>16777215</height>
+       </size>
+      </property>
+      <property name="_yate_uiwidget" stdset="0" >
+       <bool>true</bool>
+      </property>
+      <property name="_yate_uiwidget_name" stdset="0" >
+       <string>archive_logs_list</string>
+      </property>
+      <property name="_yate_uiwidget_class" stdset="0" >
+       <string>ContactList</string>
+      </property>
+      <property name="_yate_uiwidget_params" stdset="0" >
+       <stringlist>
+        <string>property:_yate_flatlist=true</string>
+        <string>property:_yate_showofflinecontacts=true</string>
+        <string>property:_yate_hideemptygroups=true</string>
+        <string>property:itemsExpandable=true</string>
+        <string>property:autoExpand=true</string>
+        <string>property:styleSheet=QTreeWidget {border-image: none;font-size: 11px;background:white;border: 1px solid #97acbc;}</string>
+        <string>property:_yate_nogroup_caption=Not set</string>
+        <string>property:_yate_itemui=contact:arch_contact_item.ui</string>
+        <string>property:_yate_itemui=group:arch_account_item.ui</string>
+        <string>property:_yate_itemstyle=contact:QWidget#${name}{background:white;}</string>
+        <string>property:_yate_itemstyle=group:QWidget#${name}{background:lightgrey;}</string>
+        <string>property:_yate_itemselectedstyle=contact:QWidget#${name}{background:lightblue;}</string>
+        <string>property:_yate_itemselectedstyle=group:QWidget#${name}{background:lightgrey;}</string>
+        <string>property:_yate_itemstatewidget=group:state</string>
+        <string>property:_yate_itemexpandedimage=group:expanded.png</string>
+        <string>property:_yate_itemcollapsedimage=group:collapsed.png</string>
+        <string>groupcount=count</string>
+       </stringlist>
+      </property>
+     </widget>
+     <widget class="QFrame" name="frame" >
+      <layout class="QVBoxLayout" >
+       <property name="spacing" >
+        <number>0</number>
+       </property>
+       <property name="leftMargin" >
+        <number>0</number>
+       </property>
+       <property name="topMargin" >
+        <number>0</number>
+       </property>
+       <property name="rightMargin" >
+        <number>0</number>
+       </property>
+       <property name="bottomMargin" >
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QSplitter" name="splitter_horizontal" >
+         <property name="sizePolicy" >
+          <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize" >
+          <size>
+           <width>100</width>
+           <height>16</height>
+          </size>
+         </property>
+         <property name="orientation" >
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="childrenCollapsible" >
+          <bool>false</bool>
+         </property>
+         <property name="_yate_save_props" stdset="0" >
+          <stringlist>
+           <string>_yate_sizes</string>
+          </stringlist>
+         </property>
+         <property name="_yate_sizes" stdset="0" >
+          <string>100,220</string>
+         </property>
+         <widget class="QFrame" name="frame_sessions_list" >
+          <property name="sizePolicy" >
+           <sizepolicy vsizetype="Minimum" hsizetype="Expanding" >
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="minimumSize" >
+           <size>
+            <width>0</width>
+            <height>80</height>
+           </size>
+          </property>
+          <property name="maximumSize" >
+           <size>
+            <width>16777215</width>
+            <height>16777215</height>
+           </size>
+          </property>
+          <property name="_yate_uiwidget" stdset="0" >
+           <bool>true</bool>
+          </property>
+          <property name="_yate_uiwidget_name" stdset="0" >
+           <string>archive_session_list</string>
+          </property>
+          <property name="_yate_uiwidget_class" stdset="0" >
+           <string>ContactList</string>
+          </property>
+          <property name="_yate_uiwidget_params" stdset="0" >
+           <stringlist>
+            <string>property:_yate_flatlist=true</string>
+            <string>property:_yate_showofflinecontacts=true</string>
+            <string>property:_yate_hideemptygroups=true</string>
+            <string>property:itemsExpandable=true</string>
+            <string>property:autoExpand=true</string>
+            <string>property:styleSheet=QTreeWidget {border-image: none;font-size: 11px;background:white;border: 1px solid #97acbc;}</string>
+            <string>property:_yate_nogroup_caption=Not set</string>
+            <string>property:_yate_itemui=contact:arch_session_item.ui</string>
+            <string>property:_yate_itemstyle=contact:QWidget#${name}{background:white;}</string>
+            <string>property:_yate_itemselectedstyle=contact:QWidget#${name}{background:lightblue;}</string>
+           </stringlist>
+          </property>
+         </widget>
+         <widget class="QFrame" name="frame_session_history" >
+          <property name="styleSheet" >
+           <string>QTextEdit {
+  background-color: #ffffff;
+  border: 1px solid #b3b6b0;
+  color: #666666;
+  font-family: Arial;
+  font-size: 12px;
+}</string>
+          </property>
+          <property name="_yate_uiwidget" stdset="0" >
+           <bool>true</bool>
+          </property>
+          <property name="_yate_uiwidget_name" stdset="0" >
+           <string>archive_session_history</string>
+          </property>
+          <property name="_yate_uiwidget_class" stdset="0" >
+           <string>CustomTextEdit</string>
+          </property>
+          <property name="_yate_uiwidget_params" stdset="0" >
+           <stringlist>
+            <string>property:readOnly=true</string>
+            <string>property:history:_yate_tempitemname=tempnotify</string>
+            <string>set_richtext_item=chat_in:&lt;font color="red">[${time}] ${sender}:&lt;/font>&lt;font color="black"> ${text}&lt;/font></string>
+            <string>set_richtext_item=chat_out:&lt;font color="blue">[${time}] ${sender}:&lt;/font>&lt;font color="black"> ${text}&lt;/font></string>
+            <string>set_richtext_item=chat_delayed:&lt;font color="darkgreen">[${time}] ${sender}:&lt;/font>&lt;font color="black"> ${text}&lt;/font>&lt;font color="darkgreen">${delayed_by}&lt;/font></string>
+            <string>set_richtext_item=notify:&lt;font color="grey">[${time}] ${text}&lt;/font></string>
+            <string>set_richtext_item=tempnotify:&lt;font color="grey">${text}&lt;/font></string>
+           </stringlist>
+          </property>
+         </widget>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+   <item>
+    <widget class="QFrame" name="archive_frame_search" >
+     <property name="sizePolicy" >
+      <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="minimumSize" >
+      <size>
+       <width>100</width>
+       <height>24</height>
+      </size>
+     </property>
+     <property name="maximumSize" >
+      <size>
+       <width>16777215</width>
+       <height>24</height>
+      </size>
+     </property>
+     <layout class="QHBoxLayout" >
+      <property name="spacing" >
+       <number>6</number>
+      </property>
+      <property name="leftMargin" >
+       <number>2</number>
+      </property>
+      <property name="topMargin" >
+       <number>2</number>
+      </property>
+      <property name="rightMargin" >
+       <number>2</number>
+      </property>
+      <property name="bottomMargin" >
+       <number>2</number>
+      </property>
+      <item>
+       <widget class="QToolButton" name="archive_search_hide_button" >
+        <property name="minimumSize" >
+         <size>
+          <width>20</width>
+          <height>20</height>
+         </size>
+        </property>
+        <property name="maximumSize" >
+         <size>
+          <width>20</width>
+          <height>20</height>
+         </size>
+        </property>
+        <property name="focusPolicy" >
+         <enum>Qt::StrongFocus</enum>
+        </property>
+        <property name="autoRaise" >
+         <bool>true</bool>
+        </property>
+        <property name="_yate_setaction" stdset="0" >
+         <string>archive_search_hide</string>
+        </property>
+        <property name="_yate_noautoconnect" stdset="0" >
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLineEdit" name="archive_search_edit" >
+        <property name="sizePolicy" >
+         <sizepolicy vsizetype="Expanding" hsizetype="Fixed" >
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize" >
+         <size>
+          <width>180</width>
+          <height>16</height>
+         </size>
+        </property>
+        <property name="maximumSize" >
+         <size>
+          <width>180</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="toolTip" >
+         <string>Edit search</string>
+        </property>
+        <property name="styleSheet" >
+         <string>QLineEdit {
+  font-size: 11px;
+}</string>
+        </property>
+        <property name="dynamicActionEnter" stdset="0" >
+         <string>archive_search_start</string>
+        </property>
+        <property name="dynamicActionEnterModifiers" stdset="0" >
+         <string/>
+        </property>
+        <property name="dynamicActionReturn" stdset="0" >
+         <string>archive_search_start</string>
+        </property>
+        <property name="dynamicActionReturnFilter" stdset="0" >
+         <string/>
+        </property>
+        <property name="dynamicActionEsc" stdset="0" >
+         <string>archive_search_hide</string>
+        </property>
+        <property name="_yate_filterevents" stdset="0" >
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QToolButton" name="archive_search_start_button" >
+        <property name="minimumSize" >
+         <size>
+          <width>20</width>
+          <height>20</height>
+         </size>
+        </property>
+        <property name="maximumSize" >
+         <size>
+          <width>20</width>
+          <height>20</height>
+         </size>
+        </property>
+        <property name="focusPolicy" >
+         <enum>Qt::StrongFocus</enum>
+        </property>
+        <property name="autoRaise" >
+         <bool>true</bool>
+        </property>
+        <property name="_yate_noautoconnect" stdset="0" >
+         <bool>true</bool>
+        </property>
+        <property name="_yate_setaction" stdset="0" >
+         <string>archive_search_start</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QToolButton" name="archive_search_prev_button" >
+        <property name="minimumSize" >
+         <size>
+          <width>20</width>
+          <height>20</height>
+         </size>
+        </property>
+        <property name="maximumSize" >
+         <size>
+          <width>20</width>
+          <height>20</height>
+         </size>
+        </property>
+        <property name="focusPolicy" >
+         <enum>Qt::StrongFocus</enum>
+        </property>
+        <property name="autoRaise" >
+         <bool>true</bool>
+        </property>
+        <property name="_yate_noautoconnect" stdset="0" >
+         <bool>true</bool>
+        </property>
+        <property name="_yate_setaction" stdset="0" >
+         <string>archive_search_prev</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QToolButton" name="archive_search_next_button" >
+        <property name="minimumSize" >
+         <size>
+          <width>20</width>
+          <height>20</height>
+         </size>
+        </property>
+        <property name="maximumSize" >
+         <size>
+          <width>20</width>
+          <height>20</height>
+         </size>
+        </property>
+        <property name="focusPolicy" >
+         <enum>Qt::StrongFocus</enum>
+        </property>
+        <property name="autoRaise" >
+         <bool>true</bool>
+        </property>
+        <property name="_yate_noautoconnect" stdset="0" >
+         <bool>true</bool>
+        </property>
+        <property name="_yate_setaction" stdset="0" >
+         <string>archive_search_next</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Line" name="line" >
+        <property name="orientation" >
+         <enum>Qt::Vertical</enum>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QComboBox" name="archive_search_range" >
+        <property name="sizePolicy" >
+         <sizepolicy vsizetype="Expanding" hsizetype="Fixed" >
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize" >
+         <size>
+          <width>140</width>
+          <height>16</height>
+         </size>
+        </property>
+        <property name="maximumSize" >
+         <size>
+          <width>140</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="focusPolicy" >
+         <enum>Qt::StrongFocus</enum>
+        </property>
+        <property name="styleSheet" >
+         <string>QComboBox {
+  font-size: 11px;
+}</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Line" name="line_2" >
+        <property name="orientation" >
+         <enum>Qt::Vertical</enum>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="archive_search_opt_highlightall" >
+        <property name="sizePolicy" >
+         <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="focusPolicy" >
+         <enum>Qt::StrongFocus</enum>
+        </property>
+        <property name="toolTip" >
+         <string>Highlight all found items</string>
+        </property>
+        <property name="styleSheet" >
+         <string>QCheckBox {
+  font-size: 11px;
+}</string>
+        </property>
+        <property name="text" >
+         <string>Highlight all</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer>
+        <property name="orientation" >
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" >
+         <size>
+          <width>16</width>
+          <height>30</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+  <action name="archive_hide" >
+   <property name="text" >
+    <string>Close</string>
+   </property>
+   <property name="_yate_identity" stdset="0" >
+    <string>button_hide</string>
+   </property>
+  </action>
+  <action name="archive_search_show" >
+   <property name="text" >
+    <string>Find</string>
+   </property>
+   <property name="shortcut" >
+    <string>Ctrl+F</string>
+   </property>
+  </action>
+  <action name="archive_search_hide" >
+   <property name="icon" >
+    <iconset>close.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Close find</string>
+   </property>
+  </action>
+  <action name="archive_search_prev" >
+   <property name="icon" >
+    <iconset>findprev.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Previous</string>
+   </property>
+   <property name="toolTip" >
+    <string>Find previous</string>
+   </property>
+  </action>
+  <action name="archive_search_next" >
+   <property name="icon" >
+    <iconset>findnext.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Next</string>
+   </property>
+   <property name="toolTip" >
+    <string>Find next (F3)</string>
+   </property>
+   <property name="shortcut" >
+    <string>F3</string>
+   </property>
+  </action>
+  <action name="archive_refresh" >
+   <property name="text" >
+    <string>Refresh</string>
+   </property>
+  </action>
+  <action name="archive_search_start" >
+   <property name="icon" >
+    <iconset>find.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Search</string>
+   </property>
+   <property name="toolTip" >
+    <string>Search from the begining of the selected range</string>
+   </property>
+  </action>
+  <action name="archive_del_contact" >
+   <property name="text" >
+    <string>Delete contact log</string>
+   </property>
+   <property name="_yate_identity" stdset="0" >
+    <string>archive:delcontact</string>
+   </property>
+  </action>
+  <action name="archive_clear" >
+   <property name="text" >
+    <string>Clear all logs</string>
+   </property>
+   <property name="_yate_identity" stdset="0" >
+    <string>archive:clear</string>
+   </property>
+  </action>
+  <action name="archive_save_session" >
+   <property name="text" >
+    <string>Save current session</string>
+   </property>
+  </action>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

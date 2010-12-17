@@ -5,33 +5,24 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>430</width>
-    <height>480</height>
+    <width>304</width>
+    <height>560</height>
    </rect>
   </property>
   <property name="sizePolicy" >
-   <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+   <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
     <horstretch>0</horstretch>
     <verstretch>0</verstretch>
    </sizepolicy>
   </property>
   <property name="minimumSize" >
    <size>
-    <width>430</width>
-    <height>480</height>
-   </size>
-  </property>
-  <property name="maximumSize" >
-   <size>
-    <width>430</width>
-    <height>640</height>
+    <width>300</width>
+    <height>500</height>
    </size>
   </property>
   <property name="focusPolicy" >
-   <enum>Qt::WheelFocus</enum>
-  </property>
-  <property name="contextMenuPolicy" >
-   <enum>Qt::DefaultContextMenu</enum>
+   <enum>Qt::StrongFocus</enum>
   </property>
   <property name="windowTitle" >
    <string comment="VoIP Client" >Yate Client</string>
@@ -41,6 +32,15 @@
   </property>
   <property name="toolTip" >
    <string>Yate Client - Telephony Client</string>
+  </property>
+  <property name="styleSheet" >
+   <string>QToolButton {
+   font-size: 11px;
+}
+</string>
+  </property>
+  <property name="_yate_hideonclose" stdset="0" >
+   <bool>true</bool>
   </property>
   <layout class="QVBoxLayout" >
    <property name="spacing" >
@@ -59,389 +59,1339 @@
     <number>0</number>
    </property>
    <item>
-    <widget class="QFrame" name="frameCentral" >
-     <property name="sizePolicy" >
-      <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
+    <widget class="QMenuBar" name="menubar" >
+     <widget class="QMenu" name="menuYate" >
+      <property name="title" >
+       <string>&amp;Yate</string>
+      </property>
+      <property name="separatorsCollapsible" >
+       <bool>true</bool>
+      </property>
+      <addaction name="separator" />
+      <addaction name="joinmuc_wizard" />
+      <addaction name="separator" />
+      <addaction name="separator" />
+      <addaction name="action_show_archive" />
+      <addaction name="separator" />
+      <addaction name="acc_new" />
+      <addaction name="acc_new_wizard" />
+      <addaction name="separator" />
+      <addaction name="separator" />
+      <addaction name="advanced_mode" />
+      <addaction name="separator" />
+      <addaction name="quit" />
+     </widget>
+     <widget class="QMenu" name="menuSettings" >
+      <property name="title" >
+       <string>&amp;Settings</string>
+      </property>
+      <property name="separatorsCollapsible" >
+       <bool>true</bool>
+      </property>
+      <addaction name="action_show_settings" />
+      <addaction name="action_show_accountlist" />
+      <addaction name="toggle_show_events" />
+      <addaction name="action_show_fileprogress" />
+      <addaction name="messages_show" />
+     </widget>
+     <widget class="QMenu" name="menuStatus" >
+      <property name="title" >
+       <string>S&amp;tatus</string>
+      </property>
+      <addaction name="setStatusOnline" />
+      <addaction name="setStatusBusy" />
+      <addaction name="setStatusAway" />
+      <addaction name="setStatusXa" />
+      <addaction name="setStatusDnd" />
+      <addaction name="separator" />
+      <addaction name="setStatusOffline" />
+     </widget>
+     <widget class="QMenu" name="menuFriends" >
+      <property name="title" >
+       <string>&amp;Friends</string>
+      </property>
+      <widget class="QMenu" name="menuSubscription" >
+       <property name="title" >
+        <string>Subscription</string>
+       </property>
+       <addaction name="chatcontact_subscribe" />
+       <addaction name="chatcontact_unsubscribe" />
+       <addaction name="chatcontact_unsubscribed" />
+      </widget>
+      <addaction name="chatcontact_chat" />
+      <addaction name="chatcontact_call" />
+      <addaction name="send_file" />
+      <addaction name="chatcontact_showlog" />
+      <addaction name="chatcontact_info" />
+      <addaction name="chatcontact_edit" />
+      <addaction name="chatcontact_del" />
+      <addaction name="separator" />
+      <addaction name="menuSubscription" />
+      <addaction name="separator" />
+      <addaction name="chatcontact_new" />
+      <addaction name="separator" />
+      <addaction name="chatcontact_showoffline" />
+      <addaction name="chatcontact_flatlist" />
+     </widget>
+     <addaction name="menuYate" />
+     <addaction name="menuSettings" />
+     <addaction name="menuFriends" />
+     <addaction name="menuStatus" />
+    </widget>
+   </item>
+   <item>
+    <widget class="QTabWidget" name="mainwindowTabs" >
+     <property name="minimumSize" >
+      <size>
+       <width>0</width>
+       <height>200</height>
+      </size>
      </property>
-     <property name="frameShape" >
-      <enum>QFrame::NoFrame</enum>
+     <property name="styleSheet" >
+      <string/>
      </property>
-     <property name="frameShadow" >
-      <enum>QFrame::Raised</enum>
+     <property name="currentIndex" >
+      <number>0</number>
      </property>
-     <layout class="QHBoxLayout" >
-      <property name="spacing" >
-       <number>0</number>
-      </property>
-      <property name="leftMargin" >
-       <number>4</number>
-      </property>
-      <property name="topMargin" >
-       <number>4</number>
-      </property>
-      <property name="rightMargin" >
-       <number>4</number>
-      </property>
-      <property name="bottomMargin" >
-       <number>4</number>
-      </property>
-      <item>
-       <widget class="QFrame" name="frameButtons" >
-        <property name="sizePolicy" >
-         <sizepolicy vsizetype="Expanding" hsizetype="Fixed" >
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-        <property name="frameShape" >
-         <enum>QFrame::NoFrame</enum>
-        </property>
-        <property name="frameShadow" >
-         <enum>QFrame::Raised</enum>
-        </property>
-        <layout class="QVBoxLayout" >
-         <property name="spacing" >
-          <number>0</number>
-         </property>
-         <property name="leftMargin" >
-          <number>1</number>
-         </property>
-         <property name="topMargin" >
-          <number>1</number>
-         </property>
-         <property name="rightMargin" >
-          <number>1</number>
-         </property>
-         <property name="bottomMargin" >
-          <number>1</number>
-         </property>
-         <item>
-          <widget class="QToolButton" name="ctrlCalls" >
-           <property name="minimumSize" >
-            <size>
-             <width>60</width>
-             <height>60</height>
-            </size>
-           </property>
-           <property name="maximumSize" >
-            <size>
-             <width>60</width>
-             <height>60</height>
-            </size>
-           </property>
-           <property name="text" >
-            <string>Calls</string>
-           </property>
-           <property name="icon" >
-            <iconset>phone.png</iconset>
-           </property>
-           <property name="iconSize" >
-            <size>
-             <width>32</width>
-             <height>32</height>
-            </size>
-           </property>
-           <property name="checkable" >
-            <bool>true</bool>
-           </property>
-           <property name="checked" >
-            <bool>true</bool>
-           </property>
-           <property name="autoRepeat" >
-            <bool>true</bool>
-           </property>
-           <property name="autoExclusive" >
-            <bool>true</bool>
-           </property>
-           <property name="popupMode" >
-            <enum>QToolButton::InstantPopup</enum>
-           </property>
-           <property name="toolButtonStyle" >
-            <enum>Qt::ToolButtonTextUnderIcon</enum>
-           </property>
-           <property name="_yate_identity" stdset="0" >
-            <string>selectitem:framePages:PageCalls</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QToolButton" name="ctrlCDR" >
-           <property name="minimumSize" >
-            <size>
-             <width>60</width>
-             <height>60</height>
-            </size>
-           </property>
-           <property name="maximumSize" >
-            <size>
-             <width>60</width>
-             <height>60</height>
-            </size>
-           </property>
-           <property name="text" >
-            <string>Call Log</string>
-           </property>
-           <property name="icon" >
-            <iconset>cdr.png</iconset>
-           </property>
-           <property name="iconSize" >
-            <size>
-             <width>32</width>
-             <height>32</height>
-            </size>
-           </property>
-           <property name="checkable" >
-            <bool>true</bool>
-           </property>
-           <property name="checked" >
-            <bool>false</bool>
-           </property>
-           <property name="autoRepeat" >
-            <bool>true</bool>
-           </property>
-           <property name="autoExclusive" >
-            <bool>true</bool>
-           </property>
-           <property name="toolButtonStyle" >
-            <enum>Qt::ToolButtonTextUnderIcon</enum>
-           </property>
-           <property name="_yate_identity" stdset="0" >
-            <string>selectitem:framePages:PageCDR</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QToolButton" name="ctrlAccounts" >
-           <property name="minimumSize" >
-            <size>
-             <width>60</width>
-             <height>60</height>
-            </size>
-           </property>
-           <property name="maximumSize" >
-            <size>
-             <width>60</width>
-             <height>60</height>
-            </size>
-           </property>
-           <property name="text" >
-            <string>Accounts</string>
-           </property>
-           <property name="icon" >
-            <iconset>user.png</iconset>
-           </property>
-           <property name="iconSize" >
-            <size>
-             <width>32</width>
-             <height>32</height>
-            </size>
-           </property>
-           <property name="checkable" >
-            <bool>true</bool>
-           </property>
-           <property name="checked" >
-            <bool>false</bool>
-           </property>
-           <property name="autoRepeat" >
-            <bool>true</bool>
-           </property>
-           <property name="autoExclusive" >
-            <bool>true</bool>
-           </property>
-           <property name="toolButtonStyle" >
-            <enum>Qt::ToolButtonTextUnderIcon</enum>
-           </property>
-           <property name="_yate_identity" stdset="0" >
-            <string>selectitem:framePages:PageAccounts</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QToolButton" name="ctrlContacts" >
-           <property name="minimumSize" >
-            <size>
-             <width>60</width>
-             <height>60</height>
-            </size>
-           </property>
-           <property name="maximumSize" >
-            <size>
-             <width>60</width>
-             <height>60</height>
-            </size>
-           </property>
-           <property name="text" >
-            <string>Contacts</string>
-           </property>
-           <property name="icon" >
-            <iconset>book.png</iconset>
-           </property>
-           <property name="iconSize" >
-            <size>
-             <width>32</width>
-             <height>32</height>
-            </size>
-           </property>
-           <property name="checkable" >
-            <bool>true</bool>
-           </property>
-           <property name="checked" >
-            <bool>false</bool>
-           </property>
-           <property name="autoRepeat" >
-            <bool>true</bool>
-           </property>
-           <property name="autoExclusive" >
-            <bool>true</bool>
-           </property>
-           <property name="toolButtonStyle" >
-            <enum>Qt::ToolButtonTextUnderIcon</enum>
-           </property>
-           <property name="_yate_identity" stdset="0" >
-            <string>selectitem:framePages:PageContacts</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QToolButton" name="ctrlSettings" >
-           <property name="minimumSize" >
-            <size>
-             <width>60</width>
-             <height>60</height>
-            </size>
-           </property>
-           <property name="maximumSize" >
-            <size>
-             <width>60</width>
-             <height>60</height>
-            </size>
-           </property>
-           <property name="text" >
-            <string>Settings</string>
-           </property>
-           <property name="icon" >
-            <iconset>configure.png</iconset>
-           </property>
-           <property name="iconSize" >
-            <size>
-             <width>32</width>
-             <height>32</height>
-            </size>
-           </property>
-           <property name="checkable" >
-            <bool>true</bool>
-           </property>
-           <property name="checked" >
-            <bool>false</bool>
-           </property>
-           <property name="autoRepeat" >
-            <bool>true</bool>
-           </property>
-           <property name="autoExclusive" >
-            <bool>true</bool>
-           </property>
-           <property name="toolButtonStyle" >
-            <enum>Qt::ToolButtonTextUnderIcon</enum>
-           </property>
-           <property name="autoRaise" >
-            <bool>false</bool>
-           </property>
-           <property name="_yate_identity" stdset="0" >
-            <string>selectitem:framePages:PageSettings</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <spacer>
-           <property name="orientation" >
-            <enum>Qt::Vertical</enum>
-           </property>
-           <property name="sizeHint" >
-            <size>
-             <width>20</width>
-             <height>100</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-        </layout>
-       </widget>
-      </item>
-      <item>
-       <widget class="QStackedWidget" name="framePages" >
-        <property name="sizePolicy" >
-         <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
-          <horstretch>0</horstretch>
-          <verstretch>1</verstretch>
-         </sizepolicy>
-        </property>
-        <property name="minimumSize" >
-         <size>
-          <width>350</width>
-          <height>200</height>
-         </size>
-        </property>
-        <property name="maximumSize" >
-         <size>
-          <width>16777215</width>
-          <height>16777215</height>
-         </size>
-        </property>
-        <property name="frameShape" >
-         <enum>QFrame::WinPanel</enum>
-        </property>
-        <property name="frameShadow" >
-         <enum>QFrame::Raised</enum>
-        </property>
-        <property name="currentIndex" >
-         <number>1</number>
-        </property>
-        <widget class="QWidget" name="PageCalls" >
+     <widget class="QWidget" name="tabChat" >
+      <attribute name="title" >
+       <string>Chat</string>
+      </attribute>
+      <attribute name="icon" >
+       <iconset>chat.png</iconset>
+      </attribute>
+      <layout class="QVBoxLayout" >
+       <property name="leftMargin" >
+        <number>0</number>
+       </property>
+       <property name="topMargin" >
+        <number>2</number>
+       </property>
+       <property name="rightMargin" >
+        <number>0</number>
+       </property>
+       <property name="bottomMargin" >
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QFrame" name="frame_chat_contacts" >
          <property name="sizePolicy" >
           <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
          </property>
+         <property name="styleSheet" >
+          <string/>
+         </property>
+         <property name="_yate_uiwidget" stdset="0" >
+          <bool>true</bool>
+         </property>
+         <property name="_yate_uiwidget_name" stdset="0" >
+          <string>chat_contacts</string>
+         </property>
+         <property name="_yate_uiwidget_class" stdset="0" >
+          <string>ContactList</string>
+         </property>
+         <property name="_yate_uiwidget_params" stdset="0" >
+          <stringlist>
+           <string>property:_yate_save_props=_yate_flatlist,_yate_showofflinecontacts,_yate_hideemptygroups</string>
+           <string>property:_yate_flatlist=false</string>
+           <string>property:_yate_showofflinecontacts=true</string>
+           <string>property:_yate_hideemptygroups=true</string>
+           <string>property:itemsExpandable=true</string>
+           <string>property:autoExpand=true</string>
+           <string>property:styleSheet=QTreeWidget {border-image: none;font-size: 11px;background:white;border: 0px solid #97acbc;border-radius:2px;}</string>
+           <string>property:_yate_nogroup_caption=Not set</string>
+           <string>property:_yate_itemui=contact:contactlist_contact.ui</string>
+           <string>property:_yate_itemui=group:contactlist_group.ui</string>
+           <string>property:_yate_itemstyle=contact:QWidget#${name}{background:white;}</string>
+           <string>property:_yate_itemstyle=group:QWidget#${name}{background:lightgrey;}</string>
+           <string>property:_yate_itemselectedstyle=contact:QWidget#${name}{background:lightblue;}</string>
+           <string>property:_yate_itemselectedstyle=group:QWidget#${name}{background:lightgrey;}</string>
+           <string>property:_yate_itemstatewidget=group:state</string>
+           <string>property:_yate_itemexpandedimage=group:expanded.png</string>
+           <string>property:_yate_itemcollapsedimage=group:collapsed.png</string>
+           <string>groupcount=count</string>
+          </stringlist>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="tabTelephony" >
+      <attribute name="title" >
+       <string>Telephony</string>
+      </attribute>
+      <attribute name="icon" >
+       <iconset>phone.png</iconset>
+      </attribute>
+      <layout class="QVBoxLayout" >
+       <property name="leftMargin" >
+        <number>0</number>
+       </property>
+       <property name="topMargin" >
+        <number>0</number>
+       </property>
+       <property name="rightMargin" >
+        <number>0</number>
+       </property>
+       <property name="bottomMargin" >
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QFrame" name="frameButtons" >
+         <property name="sizePolicy" >
+          <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize" >
+          <size>
+           <width>16</width>
+           <height>44</height>
+          </size>
+         </property>
+         <property name="maximumSize" >
+          <size>
+           <width>16777215</width>
+           <height>44</height>
+          </size>
+         </property>
          <layout class="QHBoxLayout" >
           <property name="spacing" >
-           <number>0</number>
+           <number>1</number>
           </property>
           <property name="leftMargin" >
-           <number>9</number>
+           <number>4</number>
           </property>
           <property name="topMargin" >
-           <number>9</number>
+           <number>4</number>
           </property>
           <property name="rightMargin" >
-           <number>9</number>
+           <number>4</number>
           </property>
           <property name="bottomMargin" >
-           <number>9</number>
+           <number>6</number>
           </property>
           <item>
-           <widget class="QFrame" name="framePageCalls" >
-            <property name="sizePolicy" >
-             <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
+           <widget class="QToolButton" name="ctrlCalls" >
             <property name="minimumSize" >
              <size>
-              <width>320</width>
-              <height>16</height>
+              <width>40</width>
+              <height>40</height>
              </size>
             </property>
-            <property name="frameShape" >
-             <enum>QFrame::NoFrame</enum>
+            <property name="maximumSize" >
+             <size>
+              <width>40</width>
+              <height>40</height>
+             </size>
             </property>
-            <property name="frameShadow" >
-             <enum>QFrame::Raised</enum>
+            <property name="toolTip" >
+             <string>Calls</string>
             </property>
+            <property name="icon" >
+             <iconset>phone_32.png</iconset>
+            </property>
+            <property name="iconSize" >
+             <size>
+              <width>32</width>
+              <height>32</height>
+             </size>
+            </property>
+            <property name="checkable" >
+             <bool>true</bool>
+            </property>
+            <property name="autoExclusive" >
+             <bool>true</bool>
+            </property>
+            <property name="autoRaise" >
+             <bool>true</bool>
+            </property>
+            <property name="_yate_identity" stdset="0" >
+             <string>selectitem:framePages:PageCalls</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QToolButton" name="ctrlCDR" >
+            <property name="minimumSize" >
+             <size>
+              <width>40</width>
+              <height>40</height>
+             </size>
+            </property>
+            <property name="maximumSize" >
+             <size>
+              <width>40</width>
+              <height>40</height>
+             </size>
+            </property>
+            <property name="toolTip" >
+             <string>History</string>
+            </property>
+            <property name="icon" >
+             <iconset>cdr_32.png</iconset>
+            </property>
+            <property name="iconSize" >
+             <size>
+              <width>32</width>
+              <height>32</height>
+             </size>
+            </property>
+            <property name="checkable" >
+             <bool>true</bool>
+            </property>
+            <property name="checked" >
+             <bool>false</bool>
+            </property>
+            <property name="autoExclusive" >
+             <bool>true</bool>
+            </property>
+            <property name="autoRaise" >
+             <bool>true</bool>
+            </property>
+            <property name="_yate_identity" stdset="0" >
+             <string>selectitem:framePages:PageCDR</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QToolButton" name="ctrlContacts" >
+            <property name="minimumSize" >
+             <size>
+              <width>40</width>
+              <height>40</height>
+             </size>
+            </property>
+            <property name="maximumSize" >
+             <size>
+              <width>40</width>
+              <height>40</height>
+             </size>
+            </property>
+            <property name="toolTip" >
+             <string>Address Book</string>
+            </property>
+            <property name="icon" >
+             <iconset>book_32.png</iconset>
+            </property>
+            <property name="iconSize" >
+             <size>
+              <width>32</width>
+              <height>32</height>
+             </size>
+            </property>
+            <property name="checkable" >
+             <bool>true</bool>
+            </property>
+            <property name="checked" >
+             <bool>false</bool>
+            </property>
+            <property name="autoExclusive" >
+             <bool>true</bool>
+            </property>
+            <property name="autoRaise" >
+             <bool>true</bool>
+            </property>
+            <property name="_yate_identity" stdset="0" >
+             <string>selectitem:framePages:PageContacts</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer>
+            <property name="orientation" >
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" >
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QStackedWidget" name="framePages" >
+         <property name="sizePolicy" >
+          <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+           <horstretch>0</horstretch>
+           <verstretch>1</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize" >
+          <size>
+           <width>0</width>
+           <height>200</height>
+          </size>
+         </property>
+         <property name="currentIndex" >
+          <number>0</number>
+         </property>
+         <widget class="QWidget" name="PageCalls" >
+          <property name="sizePolicy" >
+           <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <layout class="QHBoxLayout" >
+           <property name="spacing" >
+            <number>0</number>
+           </property>
+           <property name="leftMargin" >
+            <number>4</number>
+           </property>
+           <property name="topMargin" >
+            <number>4</number>
+           </property>
+           <property name="rightMargin" >
+            <number>4</number>
+           </property>
+           <property name="bottomMargin" >
+            <number>4</number>
+           </property>
+           <item>
+            <widget class="QFrame" name="framePageCalls" >
+             <property name="sizePolicy" >
+              <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="frameShape" >
+              <enum>QFrame::NoFrame</enum>
+             </property>
+             <property name="frameShadow" >
+              <enum>QFrame::Raised</enum>
+             </property>
+             <layout class="QVBoxLayout" >
+              <property name="spacing" >
+               <number>4</number>
+              </property>
+              <property name="leftMargin" >
+               <number>0</number>
+              </property>
+              <property name="topMargin" >
+               <number>0</number>
+              </property>
+              <property name="rightMargin" >
+               <number>0</number>
+              </property>
+              <property name="bottomMargin" >
+               <number>0</number>
+              </property>
+              <item>
+               <layout class="QHBoxLayout" >
+                <property name="spacing" >
+                 <number>2</number>
+                </property>
+                <item>
+                 <widget class="QFrame" name="frame_call_protocol" >
+                  <property name="sizePolicy" >
+                   <sizepolicy vsizetype="Minimum" hsizetype="Fixed" >
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="minimumSize" >
+                   <size>
+                    <width>80</width>
+                    <height>16</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize" >
+                   <size>
+                    <width>80</width>
+                    <height>16777215</height>
+                   </size>
+                  </property>
+                  <layout class="QVBoxLayout" >
+                   <property name="spacing" >
+                    <number>0</number>
+                   </property>
+                   <property name="leftMargin" >
+                    <number>0</number>
+                   </property>
+                   <property name="topMargin" >
+                    <number>0</number>
+                   </property>
+                   <property name="rightMargin" >
+                    <number>0</number>
+                   </property>
+                   <property name="bottomMargin" >
+                    <number>0</number>
+                   </property>
+                   <item>
+                    <widget class="QLabel" name="protocolLabel" >
+                     <property name="sizePolicy" >
+                      <sizepolicy vsizetype="Preferred" hsizetype="Fixed" >
+                       <horstretch>0</horstretch>
+                       <verstretch>0</verstretch>
+                      </sizepolicy>
+                     </property>
+                     <property name="minimumSize" >
+                      <size>
+                       <width>80</width>
+                       <height>0</height>
+                      </size>
+                     </property>
+                     <property name="maximumSize" >
+                      <size>
+                       <width>80</width>
+                       <height>16777215</height>
+                      </size>
+                     </property>
+                     <property name="text" >
+                      <string>Protocol</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QComboBox" name="protocol" >
+                     <property name="sizePolicy" >
+                      <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+                       <horstretch>0</horstretch>
+                       <verstretch>0</verstretch>
+                      </sizepolicy>
+                     </property>
+                     <property name="minimumSize" >
+                      <size>
+                       <width>80</width>
+                       <height>25</height>
+                      </size>
+                     </property>
+                     <property name="maximumSize" >
+                      <size>
+                       <width>80</width>
+                       <height>25</height>
+                      </size>
+                     </property>
+                     <property name="toolTip" >
+                      <string>VoIP protocol used to make a direct call</string>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QFrame" name="frame_call_account" >
+                  <property name="sizePolicy" >
+                   <sizepolicy vsizetype="Minimum" hsizetype="Expanding" >
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <layout class="QVBoxLayout" >
+                   <property name="spacing" >
+                    <number>0</number>
+                   </property>
+                   <property name="leftMargin" >
+                    <number>0</number>
+                   </property>
+                   <property name="topMargin" >
+                    <number>0</number>
+                   </property>
+                   <property name="rightMargin" >
+                    <number>0</number>
+                   </property>
+                   <property name="bottomMargin" >
+                    <number>0</number>
+                   </property>
+                   <item>
+                    <widget class="QLabel" name="accountLabel" >
+                     <property name="sizePolicy" >
+                      <sizepolicy vsizetype="Preferred" hsizetype="Expanding" >
+                       <horstretch>0</horstretch>
+                       <verstretch>0</verstretch>
+                      </sizepolicy>
+                     </property>
+                     <property name="text" >
+                      <string>Account</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QComboBox" name="account" >
+                     <property name="sizePolicy" >
+                      <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+                       <horstretch>0</horstretch>
+                       <verstretch>0</verstretch>
+                      </sizepolicy>
+                     </property>
+                     <property name="minimumSize" >
+                      <size>
+                       <width>0</width>
+                       <height>25</height>
+                      </size>
+                     </property>
+                     <property name="maximumSize" >
+                      <size>
+                       <width>16777215</width>
+                       <height>25</height>
+                      </size>
+                     </property>
+                     <property name="toolTip" >
+                      <string>Account used to call through a server</string>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </widget>
+                </item>
+               </layout>
+              </item>
+              <item>
+               <layout class="QHBoxLayout" >
+                <property name="spacing" >
+                 <number>2</number>
+                </property>
+                <property name="leftMargin" >
+                 <number>0</number>
+                </property>
+                <property name="topMargin" >
+                 <number>0</number>
+                </property>
+                <property name="rightMargin" >
+                 <number>0</number>
+                </property>
+                <property name="bottomMargin" >
+                 <number>0</number>
+                </property>
+                <item>
+                 <widget class="QComboBox" name="callto" >
+                  <property name="sizePolicy" >
+                   <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="minimumSize" >
+                   <size>
+                    <width>0</width>
+                    <height>25</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize" >
+                   <size>
+                    <width>16777215</width>
+                    <height>25</height>
+                   </size>
+                  </property>
+                  <property name="focusPolicy" >
+                   <enum>Qt::WheelFocus</enum>
+                  </property>
+                  <property name="acceptDrops" >
+                   <bool>true</bool>
+                  </property>
+                  <property name="editable" >
+                   <bool>true</bool>
+                  </property>
+                  <property name="maxCount" >
+                   <number>20</number>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QToolButton" name="call" >
+                  <property name="sizePolicy" >
+                   <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="minimumSize" >
+                   <size>
+                    <width>0</width>
+                    <height>25</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize" >
+                   <size>
+                    <width>16777215</width>
+                    <height>25</height>
+                   </size>
+                  </property>
+                  <property name="toolTip" >
+                   <string>Make a new call</string>
+                  </property>
+                  <property name="text" >
+                   <string>Call</string>
+                  </property>
+                  <property name="icon" >
+                   <iconset>phone.png</iconset>
+                  </property>
+                  <property name="toolButtonStyle" >
+                   <enum>Qt::ToolButtonTextBesideIcon</enum>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QToolButton" name="display_keypad" >
+                  <property name="minimumSize" >
+                   <size>
+                    <width>25</width>
+                    <height>25</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize" >
+                   <size>
+                    <width>25</width>
+                    <height>25</height>
+                   </size>
+                  </property>
+                  <property name="toolTip" >
+                   <string>Show or hide the keypad</string>
+                  </property>
+                  <property name="icon" >
+                   <iconset>keyboard.png</iconset>
+                  </property>
+                  <property name="checkable" >
+                   <bool>true</bool>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </item>
+              <item>
+               <widget class="QFrame" name="keypad" >
+                <property name="sizePolicy" >
+                 <sizepolicy vsizetype="Fixed" hsizetype="Preferred" >
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="minimumSize" >
+                 <size>
+                  <width>0</width>
+                  <height>112</height>
+                 </size>
+                </property>
+                <property name="maximumSize" >
+                 <size>
+                  <width>16777215</width>
+                  <height>112</height>
+                 </size>
+                </property>
+                <property name="frameShape" >
+                 <enum>QFrame::NoFrame</enum>
+                </property>
+                <property name="frameShadow" >
+                 <enum>QFrame::Raised</enum>
+                </property>
+                <layout class="QHBoxLayout" >
+                 <property name="topMargin" >
+                  <number>2</number>
+                 </property>
+                 <property name="bottomMargin" >
+                  <number>2</number>
+                 </property>
+                 <item>
+                  <layout class="QGridLayout" >
+                   <property name="horizontalSpacing" >
+                    <number>1</number>
+                   </property>
+                   <property name="verticalSpacing" >
+                    <number>1</number>
+                   </property>
+                   <item row="0" column="0" >
+                    <widget class="QToolButton" name="digit_1" >
+                     <property name="minimumSize" >
+                      <size>
+                       <width>40</width>
+                       <height>26</height>
+                      </size>
+                     </property>
+                     <property name="maximumSize" >
+                      <size>
+                       <width>40</width>
+                       <height>26</height>
+                      </size>
+                     </property>
+                     <property name="styleSheet" >
+                      <string>QToolButton {border: 0px; image:url(digit1.png);}
+QToolButton::hover {image:url(digit1_hover.png);}
+QToolButton::hover:pressed {image:url(digit1_pressed.png);}
+QToolButton:pressed {image:url(digit1.png);}
+QToolButton:!enabled {image:url(digit1.png);}
+</string>
+                     </property>
+                     <property name="_yate_identity" stdset="0" >
+                      <string>digit:1</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="0" column="1" >
+                    <widget class="QToolButton" name="digit_2" >
+                     <property name="minimumSize" >
+                      <size>
+                       <width>40</width>
+                       <height>26</height>
+                      </size>
+                     </property>
+                     <property name="maximumSize" >
+                      <size>
+                       <width>40</width>
+                       <height>26</height>
+                      </size>
+                     </property>
+                     <property name="styleSheet" >
+                      <string>QToolButton {border: 0px; image:url(digit2.png);}
+QToolButton::hover {image:url(digit2_hover.png);}
+QToolButton::hover:pressed {image:url(digit2_pressed.png);}
+QToolButton:pressed {image:url(digit2.png);}
+QToolButton:!enabled {image:url(digit2.png);}
+</string>
+                     </property>
+                     <property name="_yate_identity" stdset="0" >
+                      <string>digit:2</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="0" column="2" >
+                    <widget class="QToolButton" name="digit_3" >
+                     <property name="minimumSize" >
+                      <size>
+                       <width>40</width>
+                       <height>26</height>
+                      </size>
+                     </property>
+                     <property name="maximumSize" >
+                      <size>
+                       <width>40</width>
+                       <height>26</height>
+                      </size>
+                     </property>
+                     <property name="styleSheet" >
+                      <string>QToolButton {border: 0px; image:url(digit3.png);}
+QToolButton::hover {image:url(digit3_hover.png);}
+QToolButton::hover:pressed {image:url(digit3_pressed.png);}
+QToolButton:pressed {image:url(digit3.png);}
+QToolButton:!enabled {image:url(digit3.png);}
+</string>
+                     </property>
+                     <property name="_yate_identity" stdset="0" >
+                      <string>digit:3</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="1" column="0" >
+                    <widget class="QToolButton" name="digit_4" >
+                     <property name="minimumSize" >
+                      <size>
+                       <width>40</width>
+                       <height>26</height>
+                      </size>
+                     </property>
+                     <property name="maximumSize" >
+                      <size>
+                       <width>40</width>
+                       <height>26</height>
+                      </size>
+                     </property>
+                     <property name="styleSheet" >
+                      <string>QToolButton {border: 0px; image:url(digit4.png);}
+QToolButton::hover {image:url(digit4_hover.png);}
+QToolButton::hover:pressed {image:url(digit4_pressed.png);}
+QToolButton:pressed {image:url(digit4.png);}
+QToolButton:!enabled {image:url(digit4.png);}
+</string>
+                     </property>
+                     <property name="_yate_identity" stdset="0" >
+                      <string>digit:4</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="1" column="1" >
+                    <widget class="QToolButton" name="digit_5" >
+                     <property name="minimumSize" >
+                      <size>
+                       <width>40</width>
+                       <height>26</height>
+                      </size>
+                     </property>
+                     <property name="maximumSize" >
+                      <size>
+                       <width>40</width>
+                       <height>26</height>
+                      </size>
+                     </property>
+                     <property name="styleSheet" >
+                      <string>QToolButton {border: 0px; image:url(digit5.png);}
+QToolButton::hover {image:url(digit5_hover.png);}
+QToolButton::hover:pressed {image:url(digit5_pressed.png);}
+QToolButton:pressed {image:url(digit5.png);}
+QToolButton:!enabled {image:url(digit5.png);}
+</string>
+                     </property>
+                     <property name="_yate_identity" stdset="0" >
+                      <string>digit:5</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="1" column="2" >
+                    <widget class="QToolButton" name="digit_6" >
+                     <property name="minimumSize" >
+                      <size>
+                       <width>40</width>
+                       <height>26</height>
+                      </size>
+                     </property>
+                     <property name="maximumSize" >
+                      <size>
+                       <width>40</width>
+                       <height>26</height>
+                      </size>
+                     </property>
+                     <property name="styleSheet" >
+                      <string>QToolButton {border: 0px; image:url(digit6.png);}
+QToolButton::hover {image:url(digit6_hover.png);}
+QToolButton::hover:pressed {image:url(digit6_pressed.png);}
+QToolButton:pressed {image:url(digit6.png);}
+QToolButton:!enabled {image:url(digit6.png);}
+</string>
+                     </property>
+                     <property name="_yate_identity" stdset="0" >
+                      <string>digit:6</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="2" column="0" >
+                    <widget class="QToolButton" name="digit_7" >
+                     <property name="minimumSize" >
+                      <size>
+                       <width>40</width>
+                       <height>26</height>
+                      </size>
+                     </property>
+                     <property name="maximumSize" >
+                      <size>
+                       <width>40</width>
+                       <height>26</height>
+                      </size>
+                     </property>
+                     <property name="styleSheet" >
+                      <string>QToolButton {border: 0px; image:url(digit7.png);}
+QToolButton::hover {image:url(digit7_hover.png);}
+QToolButton::hover:pressed {image:url(digit7_pressed.png);}
+QToolButton:pressed {image:url(digit7.png);}
+QToolButton:!enabled {image:url(digit7.png);}
+</string>
+                     </property>
+                     <property name="_yate_identity" stdset="0" >
+                      <string>digit:7</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="2" column="1" >
+                    <widget class="QToolButton" name="digit_8" >
+                     <property name="minimumSize" >
+                      <size>
+                       <width>40</width>
+                       <height>26</height>
+                      </size>
+                     </property>
+                     <property name="maximumSize" >
+                      <size>
+                       <width>40</width>
+                       <height>26</height>
+                      </size>
+                     </property>
+                     <property name="styleSheet" >
+                      <string>QToolButton {border: 0px; image:url(digit8.png);}
+QToolButton::hover {image:url(digit8_hover.png);}
+QToolButton::hover:pressed {image:url(digit8_pressed.png);}
+QToolButton:pressed {image:url(digit8.png);}
+QToolButton:!enabled {image:url(digit8.png);}
+</string>
+                     </property>
+                     <property name="_yate_identity" stdset="0" >
+                      <string>digit:8</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="2" column="2" >
+                    <widget class="QToolButton" name="digit_9" >
+                     <property name="minimumSize" >
+                      <size>
+                       <width>40</width>
+                       <height>26</height>
+                      </size>
+                     </property>
+                     <property name="maximumSize" >
+                      <size>
+                       <width>40</width>
+                       <height>26</height>
+                      </size>
+                     </property>
+                     <property name="styleSheet" >
+                      <string>QToolButton {border: 0px; image:url(digit9.png);}
+QToolButton::hover {image:url(digit9_hover.png);}
+QToolButton::hover:pressed {image:url(digit9_pressed.png);}
+QToolButton:pressed {image:url(digit9.png);}
+QToolButton:!enabled {image:url(digit9.png);}
+</string>
+                     </property>
+                     <property name="_yate_identity" stdset="0" >
+                      <string>digit:9</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="3" column="0" >
+                    <widget class="QToolButton" name="digit_star" >
+                     <property name="minimumSize" >
+                      <size>
+                       <width>40</width>
+                       <height>26</height>
+                      </size>
+                     </property>
+                     <property name="maximumSize" >
+                      <size>
+                       <width>40</width>
+                       <height>26</height>
+                      </size>
+                     </property>
+                     <property name="styleSheet" >
+                      <string>QToolButton {border: 0px; image:url(digitstar.png);}
+QToolButton::hover {image:url(digitstar_hover.png);}
+QToolButton::hover:pressed {image:url(digitstar_pressed.png);}
+QToolButton:pressed {image:url(digitstar.png);}
+QToolButton:!enabled {image:url(digitstar.png);}
+</string>
+                     </property>
+                     <property name="_yate_identity" stdset="0" >
+                      <string>digit:*</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="3" column="1" >
+                    <widget class="QToolButton" name="digit_0" >
+                     <property name="minimumSize" >
+                      <size>
+                       <width>40</width>
+                       <height>26</height>
+                      </size>
+                     </property>
+                     <property name="maximumSize" >
+                      <size>
+                       <width>40</width>
+                       <height>26</height>
+                      </size>
+                     </property>
+                     <property name="styleSheet" >
+                      <string>QToolButton {border: 0px; image:url(digit0.png);}
+QToolButton::hover {image:url(digit0_hover.png);}
+QToolButton::hover:pressed {image:url(digit0_pressed.png);}
+QToolButton:pressed {image:url(digit0.png);}
+QToolButton:!enabled {image:url(digit0.png);}
+</string>
+                     </property>
+                     <property name="_yate_identity" stdset="0" >
+                      <string>digit:0</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="3" column="2" >
+                    <widget class="QToolButton" name="digit_pound" >
+                     <property name="minimumSize" >
+                      <size>
+                       <width>40</width>
+                       <height>26</height>
+                      </size>
+                     </property>
+                     <property name="maximumSize" >
+                      <size>
+                       <width>40</width>
+                       <height>26</height>
+                      </size>
+                     </property>
+                     <property name="styleSheet" >
+                      <string>QToolButton {border: 0px; image:url(digitpound.png);}
+QToolButton::hover {image:url(digitpound_hover.png);}
+QToolButton::hover:pressed {image:url(digitpound_pressed.png);}
+QToolButton:pressed {image:url(digitpound.png);}
+QToolButton:!enabled {image:url(digitpound.png);}
+</string>
+                     </property>
+                     <property name="_yate_identity" stdset="0" >
+                      <string>digit:#</string>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </item>
+                </layout>
+               </widget>
+              </item>
+              <item>
+               <layout class="QHBoxLayout" >
+                <property name="spacing" >
+                 <number>2</number>
+                </property>
+                <property name="leftMargin" >
+                 <number>0</number>
+                </property>
+                <property name="topMargin" >
+                 <number>0</number>
+                </property>
+                <property name="rightMargin" >
+                 <number>0</number>
+                </property>
+                <property name="bottomMargin" >
+                 <number>0</number>
+                </property>
+                <item>
+                 <widget class="QToolButton" name="answer" >
+                  <property name="minimumSize" >
+                   <size>
+                    <width>30</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize" >
+                   <size>
+                    <width>30</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip" >
+                   <string>Take the current call</string>
+                  </property>
+                  <property name="icon" >
+                   <iconset>answer_20.png</iconset>
+                  </property>
+                  <property name="iconSize" >
+                   <size>
+                    <width>20</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QToolButton" name="hangup" >
+                  <property name="minimumSize" >
+                   <size>
+                    <width>30</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize" >
+                   <size>
+                    <width>30</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip" >
+                   <string>Hangup/reject the current call</string>
+                  </property>
+                  <property name="icon" >
+                   <iconset>hangup_20.png</iconset>
+                  </property>
+                  <property name="iconSize" >
+                   <size>
+                    <width>20</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QToolButton" name="transfer" >
+                  <property name="minimumSize" >
+                   <size>
+                    <width>30</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize" >
+                   <size>
+                    <width>30</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip" >
+                   <string>Transfer the selected call or pick it up</string>
+                  </property>
+                  <property name="icon" >
+                   <iconset>transfer_20.png</iconset>
+                  </property>
+                  <property name="iconSize" >
+                   <size>
+                    <width>20</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                  <property name="checkable" >
+                   <bool>true</bool>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QToolButton" name="conference" >
+                  <property name="minimumSize" >
+                   <size>
+                    <width>30</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize" >
+                   <size>
+                    <width>30</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip" >
+                   <string>Enter the selected call in conference room or pick it up from there</string>
+                  </property>
+                  <property name="icon" >
+                   <iconset>conference_20.png</iconset>
+                  </property>
+                  <property name="iconSize" >
+                   <size>
+                    <width>20</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                  <property name="checkable" >
+                   <bool>true</bool>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QToolButton" name="hold" >
+                  <property name="minimumSize" >
+                   <size>
+                    <width>30</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize" >
+                   <size>
+                    <width>30</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip" >
+                   <string>Activate/deactivate the currently selected channel</string>
+                  </property>
+                  <property name="icon" >
+                   <iconset>hold_20.png</iconset>
+                  </property>
+                  <property name="iconSize" >
+                   <size>
+                    <width>20</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                  <property name="checkable" >
+                   <bool>true</bool>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <spacer>
+                  <property name="orientation" >
+                   <enum>Qt::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" >
+                   <size>
+                    <width>40</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+               </layout>
+              </item>
+              <item>
+               <widget class="QTableWidget" name="channels" >
+                <property name="sizePolicy" >
+                 <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="styleSheet" >
+                 <string>QHeaderView {
+  qproperty-highlightSections: false;
+}
+</string>
+                </property>
+                <property name="editTriggers" >
+                 <set>QAbstractItemView::NoEditTriggers</set>
+                </property>
+                <property name="tabKeyNavigation" >
+                 <bool>false</bool>
+                </property>
+                <property name="alternatingRowColors" >
+                 <bool>true</bool>
+                </property>
+                <property name="selectionMode" >
+                 <enum>QAbstractItemView::ContiguousSelection</enum>
+                </property>
+                <property name="selectionBehavior" >
+                 <enum>QAbstractItemView::SelectRows</enum>
+                </property>
+                <property name="rowCount" >
+                 <number>0</number>
+                </property>
+                <property name="columnCount" >
+                 <number>3</number>
+                </property>
+                <column>
+                 <property name="text" >
+                  <string>Party</string>
+                 </property>
+                </column>
+                <column>
+                 <property name="text" >
+                  <string>Time</string>
+                 </property>
+                </column>
+                <column>
+                 <property name="text" >
+                  <string>Status</string>
+                 </property>
+                </column>
+               </widget>
+              </item>
+             </layout>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+         <widget class="QWidget" name="PageCDR" >
+          <property name="sizePolicy" >
+           <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <layout class="QVBoxLayout" >
+           <property name="spacing" >
+            <number>0</number>
+           </property>
+           <property name="leftMargin" >
+            <number>4</number>
+           </property>
+           <property name="topMargin" >
+            <number>4</number>
+           </property>
+           <property name="rightMargin" >
+            <number>4</number>
+           </property>
+           <property name="bottomMargin" >
+            <number>4</number>
+           </property>
+           <item>
             <layout class="QVBoxLayout" >
              <property name="spacing" >
               <number>4</number>
@@ -459,848 +1409,49 @@
               <number>0</number>
              </property>
              <item>
-              <layout class="QHBoxLayout" >
-               <property name="spacing" >
-                <number>2</number>
+              <widget class="QTableWidget" name="log" >
+               <property name="styleSheet" >
+                <string>QHeaderView {
+  qproperty-highlightSections: false;
+}
+</string>
                </property>
-               <property name="leftMargin" >
-                <number>0</number>
+               <property name="editTriggers" >
+                <set>QAbstractItemView::NoEditTriggers</set>
                </property>
-               <property name="topMargin" >
-                <number>0</number>
+               <property name="tabKeyNavigation" >
+                <bool>false</bool>
                </property>
-               <property name="rightMargin" >
-                <number>0</number>
+               <property name="selectionMode" >
+                <enum>QAbstractItemView::SingleSelection</enum>
                </property>
-               <property name="bottomMargin" >
-                <number>0</number>
+               <property name="selectionBehavior" >
+                <enum>QAbstractItemView::SelectRows</enum>
                </property>
-               <item>
-                <layout class="QVBoxLayout" >
-                 <property name="spacing" >
-                  <number>0</number>
-                 </property>
-                 <property name="leftMargin" >
-                  <number>0</number>
-                 </property>
-                 <property name="topMargin" >
-                  <number>0</number>
-                 </property>
-                 <property name="rightMargin" >
-                  <number>0</number>
-                 </property>
-                 <property name="bottomMargin" >
-                  <number>0</number>
-                 </property>
-                 <item>
-                  <widget class="QLabel" name="protocolLabel" >
-                   <property name="text" >
-                    <string>Protocol</string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QComboBox" name="protocol" >
-                   <property name="sizePolicy" >
-                    <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
-                     <horstretch>0</horstretch>
-                     <verstretch>0</verstretch>
-                    </sizepolicy>
-                   </property>
-                   <property name="minimumSize" >
-                    <size>
-                     <width>0</width>
-                     <height>25</height>
-                    </size>
-                   </property>
-                   <property name="maximumSize" >
-                    <size>
-                     <width>16777215</width>
-                     <height>25</height>
-                    </size>
-                   </property>
-                   <property name="toolTip" >
-                    <string>VoIP protocol used to make a direct call</string>
-                   </property>
-                  </widget>
-                 </item>
-                </layout>
-               </item>
-               <item>
-                <layout class="QVBoxLayout" >
-                 <property name="spacing" >
-                  <number>0</number>
-                 </property>
-                 <property name="leftMargin" >
-                  <number>0</number>
-                 </property>
-                 <property name="topMargin" >
-                  <number>0</number>
-                 </property>
-                 <property name="rightMargin" >
-                  <number>0</number>
-                 </property>
-                 <property name="bottomMargin" >
-                  <number>0</number>
-                 </property>
-                 <item>
-                  <widget class="QLabel" name="accountLabel" >
-                   <property name="text" >
-                    <string>Account</string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QComboBox" name="account" >
-                   <property name="sizePolicy" >
-                    <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
-                     <horstretch>0</horstretch>
-                     <verstretch>0</verstretch>
-                    </sizepolicy>
-                   </property>
-                   <property name="minimumSize" >
-                    <size>
-                     <width>0</width>
-                     <height>25</height>
-                    </size>
-                   </property>
-                   <property name="maximumSize" >
-                    <size>
-                     <width>16777215</width>
-                     <height>25</height>
-                    </size>
-                   </property>
-                   <property name="toolTip" >
-                    <string>Account used to call through a server</string>
-                   </property>
-                  </widget>
-                 </item>
-                </layout>
-               </item>
-              </layout>
-             </item>
-             <item>
-              <layout class="QHBoxLayout" >
-               <property name="spacing" >
-                <number>2</number>
+               <property name="sortingEnabled" >
+                <bool>true</bool>
                </property>
-               <property name="sizeConstraint" >
-                <enum>QLayout::SetNoConstraint</enum>
+               <property name="columnCount" >
+                <number>3</number>
                </property>
-               <property name="leftMargin" >
-                <number>0</number>
+               <property name="_yate_sorting" stdset="0" >
+                <string>2,false</string>
                </property>
-               <property name="topMargin" >
-                <number>0</number>
-               </property>
-               <property name="rightMargin" >
-                <number>0</number>
-               </property>
-               <property name="bottomMargin" >
-                <number>0</number>
-               </property>
-               <item>
-                <widget class="QComboBox" name="callto" >
-                 <property name="sizePolicy" >
-                  <sizepolicy vsizetype="Fixed" hsizetype="Ignored" >
-                   <horstretch>0</horstretch>
-                   <verstretch>0</verstretch>
-                  </sizepolicy>
-                 </property>
-                 <property name="minimumSize" >
-                  <size>
-                   <width>0</width>
-                   <height>26</height>
-                  </size>
-                 </property>
-                 <property name="maximumSize" >
-                  <size>
-                   <width>16777215</width>
-                   <height>26</height>
-                  </size>
-                 </property>
-                 <property name="focusPolicy" >
-                  <enum>Qt::WheelFocus</enum>
-                 </property>
-                 <property name="acceptDrops" >
-                  <bool>true</bool>
-                 </property>
-                 <property name="editable" >
-                  <bool>true</bool>
-                 </property>
-                 <property name="maxCount" >
-                  <number>20</number>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QToolButton" name="call" >
-                 <property name="sizePolicy" >
-                  <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
-                   <horstretch>0</horstretch>
-                   <verstretch>0</verstretch>
-                  </sizepolicy>
-                 </property>
-                 <property name="minimumSize" >
-                  <size>
-                   <width>0</width>
-                   <height>26</height>
-                  </size>
-                 </property>
-                 <property name="maximumSize" >
-                  <size>
-                   <width>60</width>
-                   <height>16777215</height>
-                  </size>
-                 </property>
-                 <property name="font" >
-                  <font>
-                   <pointsize>10</pointsize>
-                  </font>
-                 </property>
-                 <property name="toolTip" >
-                  <string>Make a new call</string>
-                 </property>
-                 <property name="styleSheet" >
-                  <string/>
-                 </property>
-                 <property name="text" >
-                  <string>Call</string>
-                 </property>
-                 <property name="icon" >
-                  <iconset>phone.png</iconset>
-                 </property>
-                 <property name="iconSize" >
-                  <size>
-                   <width>22</width>
-                   <height>22</height>
-                  </size>
-                 </property>
-                 <property name="toolButtonStyle" >
-                  <enum>Qt::ToolButtonTextBesideIcon</enum>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QToolButton" name="display_keypad" >
-                 <property name="sizePolicy" >
-                  <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
-                   <horstretch>0</horstretch>
-                   <verstretch>0</verstretch>
-                  </sizepolicy>
-                 </property>
-                 <property name="minimumSize" >
-                  <size>
-                   <width>26</width>
-                   <height>26</height>
-                  </size>
-                 </property>
-                 <property name="maximumSize" >
-                  <size>
-                   <width>26</width>
-                   <height>26</height>
-                  </size>
-                 </property>
-                 <property name="toolTip" >
-                  <string>Show or hide the keypad</string>
-                 </property>
-                 <property name="text" >
-                  <string/>
-                 </property>
-                 <property name="icon" >
-                  <iconset>keyboard.png</iconset>
-                 </property>
-                 <property name="iconSize" >
-                  <size>
-                   <width>20</width>
-                   <height>20</height>
-                  </size>
-                 </property>
-                 <property name="checkable" >
-                  <bool>true</bool>
-                 </property>
-                 <property name="checked" >
-                  <bool>true</bool>
-                 </property>
-                 <property name="_yate_identity" stdset="0" >
-                  <string/>
-                 </property>
-                </widget>
-               </item>
-              </layout>
-             </item>
-             <item>
-              <widget class="QFrame" name="keypad" >
-               <property name="sizePolicy" >
-                <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
-                 <horstretch>0</horstretch>
-                 <verstretch>0</verstretch>
-                </sizepolicy>
-               </property>
-               <property name="minimumSize" >
-                <size>
-                 <width>16</width>
-                 <height>136</height>
-                </size>
-               </property>
-               <property name="maximumSize" >
-                <size>
-                 <width>16777215</width>
-                 <height>160</height>
-                </size>
-               </property>
-               <property name="frameShape" >
-                <enum>QFrame::NoFrame</enum>
-               </property>
-               <property name="frameShadow" >
-                <enum>QFrame::Raised</enum>
-               </property>
-               <layout class="QVBoxLayout" >
-                <property name="spacing" >
-                 <number>0</number>
+               <column>
+                <property name="text" >
+                 <string>Party</string>
                 </property>
-                <property name="leftMargin" >
-                 <number>9</number>
+               </column>
+               <column>
+                <property name="text" >
+                 <string>Time</string>
                 </property>
-                <property name="topMargin" >
-                 <number>9</number>
+               </column>
+               <column>
+                <property name="text" >
+                 <string>Duration</string>
                 </property>
-                <property name="rightMargin" >
-                 <number>9</number>
-                </property>
-                <property name="bottomMargin" >
-                 <number>9</number>
-                </property>
-                <item>
-                 <layout class="QHBoxLayout" >
-                  <property name="spacing" >
-                   <number>0</number>
-                  </property>
-                  <property name="leftMargin" >
-                   <number>0</number>
-                  </property>
-                  <property name="topMargin" >
-                   <number>0</number>
-                  </property>
-                  <property name="rightMargin" >
-                   <number>0</number>
-                  </property>
-                  <property name="bottomMargin" >
-                   <number>0</number>
-                  </property>
-                  <item>
-                   <spacer>
-                    <property name="orientation" >
-                     <enum>Qt::Horizontal</enum>
-                    </property>
-                    <property name="sizeHint" >
-                     <size>
-                      <width>30</width>
-                      <height>20</height>
-                     </size>
-                    </property>
-                   </spacer>
-                  </item>
-                  <item>
-                   <layout class="QVBoxLayout" >
-                    <property name="spacing" >
-                     <number>0</number>
-                    </property>
-                    <property name="leftMargin" >
-                     <number>0</number>
-                    </property>
-                    <property name="topMargin" >
-                     <number>0</number>
-                    </property>
-                    <property name="rightMargin" >
-                     <number>0</number>
-                    </property>
-                    <property name="bottomMargin" >
-                     <number>0</number>
-                    </property>
-                    <item>
-                     <widget class="QPushButton" name="digit_5" >
-                      <property name="sizePolicy" >
-                       <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
-                        <horstretch>0</horstretch>
-                        <verstretch>0</verstretch>
-                       </sizepolicy>
-                      </property>
-                      <property name="minimumSize" >
-                       <size>
-                        <width>32</width>
-                        <height>32</height>
-                       </size>
-                      </property>
-                      <property name="maximumSize" >
-                       <size>
-                        <width>32</width>
-                        <height>32</height>
-                       </size>
-                      </property>
-                      <property name="font" >
-                       <font>
-                        <pointsize>10</pointsize>
-                        <weight>75</weight>
-                        <bold>true</bold>
-                       </font>
-                      </property>
-                      <property name="text" >
-                       <string>1</string>
-                      </property>
-                      <property name="_yate_identity" stdset="0" >
-                       <string>digit:1</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QPushButton" name="digit_6" >
-                      <property name="sizePolicy" >
-                       <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
-                        <horstretch>0</horstretch>
-                        <verstretch>0</verstretch>
-                       </sizepolicy>
-                      </property>
-                      <property name="minimumSize" >
-                       <size>
-                        <width>32</width>
-                        <height>32</height>
-                       </size>
-                      </property>
-                      <property name="maximumSize" >
-                       <size>
-                        <width>32</width>
-                        <height>32</height>
-                       </size>
-                      </property>
-                      <property name="font" >
-                       <font>
-                        <pointsize>11</pointsize>
-                        <weight>75</weight>
-                        <bold>true</bold>
-                       </font>
-                      </property>
-                      <property name="text" >
-                       <string>4</string>
-                      </property>
-                      <property name="_yate_identity" stdset="0" >
-                       <string>digit:4</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QPushButton" name="digit_7" >
-                      <property name="sizePolicy" >
-                       <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
-                        <horstretch>0</horstretch>
-                        <verstretch>0</verstretch>
-                       </sizepolicy>
-                      </property>
-                      <property name="minimumSize" >
-                       <size>
-                        <width>32</width>
-                        <height>32</height>
-                       </size>
-                      </property>
-                      <property name="maximumSize" >
-                       <size>
-                        <width>32</width>
-                        <height>32</height>
-                       </size>
-                      </property>
-                      <property name="font" >
-                       <font>
-                        <pointsize>11</pointsize>
-                        <weight>75</weight>
-                        <bold>true</bold>
-                       </font>
-                      </property>
-                      <property name="text" >
-                       <string>7</string>
-                      </property>
-                      <property name="_yate_identity" stdset="0" >
-                       <string>digit:7</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QPushButton" name="digit_8" >
-                      <property name="sizePolicy" >
-                       <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
-                        <horstretch>0</horstretch>
-                        <verstretch>0</verstretch>
-                       </sizepolicy>
-                      </property>
-                      <property name="minimumSize" >
-                       <size>
-                        <width>32</width>
-                        <height>32</height>
-                       </size>
-                      </property>
-                      <property name="maximumSize" >
-                       <size>
-                        <width>32</width>
-                        <height>32</height>
-                       </size>
-                      </property>
-                      <property name="font" >
-                       <font>
-                        <pointsize>11</pointsize>
-                        <weight>75</weight>
-                        <bold>true</bold>
-                       </font>
-                      </property>
-                      <property name="text" >
-                       <string>*</string>
-                      </property>
-                      <property name="_yate_identity" stdset="0" >
-                       <string>digit:*</string>
-                      </property>
-                     </widget>
-                    </item>
-                   </layout>
-                  </item>
-                  <item>
-                   <layout class="QVBoxLayout" >
-                    <property name="spacing" >
-                     <number>0</number>
-                    </property>
-                    <property name="leftMargin" >
-                     <number>0</number>
-                    </property>
-                    <property name="topMargin" >
-                     <number>0</number>
-                    </property>
-                    <property name="rightMargin" >
-                     <number>0</number>
-                    </property>
-                    <property name="bottomMargin" >
-                     <number>0</number>
-                    </property>
-                    <item>
-                     <widget class="QPushButton" name="digit_9" >
-                      <property name="sizePolicy" >
-                       <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
-                        <horstretch>0</horstretch>
-                        <verstretch>0</verstretch>
-                       </sizepolicy>
-                      </property>
-                      <property name="minimumSize" >
-                       <size>
-                        <width>32</width>
-                        <height>32</height>
-                       </size>
-                      </property>
-                      <property name="maximumSize" >
-                       <size>
-                        <width>32</width>
-                        <height>32</height>
-                       </size>
-                      </property>
-                      <property name="font" >
-                       <font>
-                        <pointsize>11</pointsize>
-                        <weight>75</weight>
-                        <bold>true</bold>
-                       </font>
-                      </property>
-                      <property name="text" >
-                       <string>2</string>
-                      </property>
-                      <property name="_yate_identity" stdset="0" >
-                       <string>digit:2</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QPushButton" name="digit_10" >
-                      <property name="sizePolicy" >
-                       <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
-                        <horstretch>0</horstretch>
-                        <verstretch>0</verstretch>
-                       </sizepolicy>
-                      </property>
-                      <property name="minimumSize" >
-                       <size>
-                        <width>32</width>
-                        <height>32</height>
-                       </size>
-                      </property>
-                      <property name="maximumSize" >
-                       <size>
-                        <width>32</width>
-                        <height>32</height>
-                       </size>
-                      </property>
-                      <property name="font" >
-                       <font>
-                        <pointsize>11</pointsize>
-                        <weight>75</weight>
-                        <bold>true</bold>
-                       </font>
-                      </property>
-                      <property name="text" >
-                       <string>5</string>
-                      </property>
-                      <property name="_yate_identity" stdset="0" >
-                       <string>digit:5</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QPushButton" name="digit_11" >
-                      <property name="sizePolicy" >
-                       <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
-                        <horstretch>0</horstretch>
-                        <verstretch>0</verstretch>
-                       </sizepolicy>
-                      </property>
-                      <property name="minimumSize" >
-                       <size>
-                        <width>32</width>
-                        <height>32</height>
-                       </size>
-                      </property>
-                      <property name="maximumSize" >
-                       <size>
-                        <width>32</width>
-                        <height>32</height>
-                       </size>
-                      </property>
-                      <property name="font" >
-                       <font>
-                        <pointsize>11</pointsize>
-                        <weight>75</weight>
-                        <bold>true</bold>
-                       </font>
-                      </property>
-                      <property name="text" >
-                       <string>8</string>
-                      </property>
-                      <property name="_yate_identity" stdset="0" >
-                       <string>digit:8</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QPushButton" name="digit_12" >
-                      <property name="sizePolicy" >
-                       <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
-                        <horstretch>0</horstretch>
-                        <verstretch>0</verstretch>
-                       </sizepolicy>
-                      </property>
-                      <property name="minimumSize" >
-                       <size>
-                        <width>32</width>
-                        <height>32</height>
-                       </size>
-                      </property>
-                      <property name="maximumSize" >
-                       <size>
-                        <width>32</width>
-                        <height>32</height>
-                       </size>
-                      </property>
-                      <property name="font" >
-                       <font>
-                        <pointsize>11</pointsize>
-                        <weight>75</weight>
-                        <bold>true</bold>
-                       </font>
-                      </property>
-                      <property name="text" >
-                       <string>0</string>
-                      </property>
-                      <property name="_yate_identity" stdset="0" >
-                       <string>digit:0</string>
-                      </property>
-                     </widget>
-                    </item>
-                   </layout>
-                  </item>
-                  <item>
-                   <layout class="QVBoxLayout" >
-                    <property name="spacing" >
-                     <number>0</number>
-                    </property>
-                    <property name="leftMargin" >
-                     <number>0</number>
-                    </property>
-                    <property name="topMargin" >
-                     <number>0</number>
-                    </property>
-                    <property name="rightMargin" >
-                     <number>0</number>
-                    </property>
-                    <property name="bottomMargin" >
-                     <number>0</number>
-                    </property>
-                    <item>
-                     <widget class="QPushButton" name="digit_13" >
-                      <property name="sizePolicy" >
-                       <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
-                        <horstretch>0</horstretch>
-                        <verstretch>0</verstretch>
-                       </sizepolicy>
-                      </property>
-                      <property name="minimumSize" >
-                       <size>
-                        <width>32</width>
-                        <height>32</height>
-                       </size>
-                      </property>
-                      <property name="maximumSize" >
-                       <size>
-                        <width>32</width>
-                        <height>32</height>
-                       </size>
-                      </property>
-                      <property name="font" >
-                       <font>
-                        <pointsize>11</pointsize>
-                        <weight>75</weight>
-                        <bold>true</bold>
-                       </font>
-                      </property>
-                      <property name="text" >
-                       <string>3</string>
-                      </property>
-                      <property name="_yate_identity" stdset="0" >
-                       <string>digit:3</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QPushButton" name="digit_14" >
-                      <property name="sizePolicy" >
-                       <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
-                        <horstretch>0</horstretch>
-                        <verstretch>0</verstretch>
-                       </sizepolicy>
-                      </property>
-                      <property name="minimumSize" >
-                       <size>
-                        <width>32</width>
-                        <height>32</height>
-                       </size>
-                      </property>
-                      <property name="maximumSize" >
-                       <size>
-                        <width>32</width>
-                        <height>32</height>
-                       </size>
-                      </property>
-                      <property name="font" >
-                       <font>
-                        <pointsize>11</pointsize>
-                        <weight>75</weight>
-                        <bold>true</bold>
-                       </font>
-                      </property>
-                      <property name="text" >
-                       <string>6</string>
-                      </property>
-                      <property name="_yate_identity" stdset="0" >
-                       <string>digit:6</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QPushButton" name="digit_15" >
-                      <property name="sizePolicy" >
-                       <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
-                        <horstretch>0</horstretch>
-                        <verstretch>0</verstretch>
-                       </sizepolicy>
-                      </property>
-                      <property name="minimumSize" >
-                       <size>
-                        <width>32</width>
-                        <height>32</height>
-                       </size>
-                      </property>
-                      <property name="maximumSize" >
-                       <size>
-                        <width>32</width>
-                        <height>32</height>
-                       </size>
-                      </property>
-                      <property name="sizeIncrement" >
-                       <size>
-                        <width>0</width>
-                        <height>0</height>
-                       </size>
-                      </property>
-                      <property name="font" >
-                       <font>
-                        <pointsize>11</pointsize>
-                        <weight>75</weight>
-                        <bold>true</bold>
-                       </font>
-                      </property>
-                      <property name="text" >
-                       <string>9</string>
-                      </property>
-                      <property name="_yate_identity" stdset="0" >
-                       <string>digit:9</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QPushButton" name="digit_16" >
-                      <property name="sizePolicy" >
-                       <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
-                        <horstretch>0</horstretch>
-                        <verstretch>0</verstretch>
-                       </sizepolicy>
-                      </property>
-                      <property name="minimumSize" >
-                       <size>
-                        <width>32</width>
-                        <height>32</height>
-                       </size>
-                      </property>
-                      <property name="maximumSize" >
-                       <size>
-                        <width>32</width>
-                        <height>32</height>
-                       </size>
-                      </property>
-                      <property name="font" >
-                       <font>
-                        <pointsize>11</pointsize>
-                        <weight>75</weight>
-                        <bold>true</bold>
-                        <kerning>true</kerning>
-                       </font>
-                      </property>
-                      <property name="text" >
-                       <string>#</string>
-                      </property>
-                      <property name="_yate_identity" stdset="0" >
-                       <string>digit:#</string>
-                      </property>
-                     </widget>
-                    </item>
-                   </layout>
-                  </item>
-                  <item>
-                   <spacer>
-                    <property name="orientation" >
-                     <enum>Qt::Horizontal</enum>
-                    </property>
-                    <property name="sizeHint" >
-                     <size>
-                      <width>40</width>
-                      <height>20</height>
-                     </size>
-                    </property>
-                   </spacer>
-                  </item>
-                 </layout>
-                </item>
-               </layout>
+               </column>
               </widget>
              </item>
              <item>
@@ -1312,7 +1463,7 @@
                 <number>0</number>
                </property>
                <property name="topMargin" >
-                <number>0</number>
+                <number>4</number>
                </property>
                <property name="rightMargin" >
                 <number>0</number>
@@ -1320,175 +1471,6 @@
                <property name="bottomMargin" >
                 <number>0</number>
                </property>
-               <item>
-                <widget class="QToolButton" name="answer" >
-                 <property name="enabled" >
-                  <bool>false</bool>
-                 </property>
-                 <property name="sizePolicy" >
-                  <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
-                   <horstretch>0</horstretch>
-                   <verstretch>0</verstretch>
-                  </sizepolicy>
-                 </property>
-                 <property name="minimumSize" >
-                  <size>
-                   <width>30</width>
-                   <height>30</height>
-                  </size>
-                 </property>
-                 <property name="maximumSize" >
-                  <size>
-                   <width>30</width>
-                   <height>30</height>
-                  </size>
-                 </property>
-                 <property name="contextMenuPolicy" >
-                  <enum>Qt::DefaultContextMenu</enum>
-                 </property>
-                 <property name="toolTip" >
-                  <string>Take the current call</string>
-                 </property>
-                 <property name="text" >
-                  <string/>
-                 </property>
-                 <property name="icon" >
-                  <iconset>answer.png</iconset>
-                 </property>
-                 <property name="iconSize" >
-                  <size>
-                   <width>20</width>
-                   <height>20</height>
-                  </size>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QToolButton" name="hangup" >
-                 <property name="enabled" >
-                  <bool>false</bool>
-                 </property>
-                 <property name="sizePolicy" >
-                  <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
-                   <horstretch>0</horstretch>
-                   <verstretch>0</verstretch>
-                  </sizepolicy>
-                 </property>
-                 <property name="minimumSize" >
-                  <size>
-                   <width>30</width>
-                   <height>30</height>
-                  </size>
-                 </property>
-                 <property name="maximumSize" >
-                  <size>
-                   <width>30</width>
-                   <height>30</height>
-                  </size>
-                 </property>
-                 <property name="toolTip" >
-                  <string>Hangup/reject the current call</string>
-                 </property>
-                 <property name="text" >
-                  <string/>
-                 </property>
-                 <property name="icon" >
-                  <iconset>hangup.png</iconset>
-                 </property>
-                 <property name="iconSize" >
-                  <size>
-                   <width>26</width>
-                   <height>26</height>
-                  </size>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QToolButton" name="transfer" >
-                 <property name="enabled" >
-                  <bool>false</bool>
-                 </property>
-                 <property name="minimumSize" >
-                  <size>
-                   <width>30</width>
-                   <height>30</height>
-                  </size>
-                 </property>
-                 <property name="maximumSize" >
-                  <size>
-                   <width>30</width>
-                   <height>30</height>
-                  </size>
-                 </property>
-                 <property name="toolTip" >
-                  <string>Transfer the selected call or pick it up</string>
-                 </property>
-                 <property name="text" >
-                  <string/>
-                 </property>
-                 <property name="icon" >
-                  <iconset>transfer.png</iconset>
-                 </property>
-                 <property name="iconSize" >
-                  <size>
-                   <width>24</width>
-                   <height>24</height>
-                  </size>
-                 </property>
-                 <property name="checkable" >
-                  <bool>true</bool>
-                 </property>
-                 <property name="autoRepeat" >
-                  <bool>true</bool>
-                 </property>
-                 <property name="autoRaise" >
-                  <bool>false</bool>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QToolButton" name="conference" >
-                 <property name="enabled" >
-                  <bool>false</bool>
-                 </property>
-                 <property name="minimumSize" >
-                  <size>
-                   <width>30</width>
-                   <height>30</height>
-                  </size>
-                 </property>
-                 <property name="maximumSize" >
-                  <size>
-                   <width>30</width>
-                   <height>30</height>
-                  </size>
-                 </property>
-                 <property name="toolTip" >
-                  <string>Enter the selected call in conference room or pick it up from there</string>
-                 </property>
-                 <property name="text" >
-                  <string/>
-                 </property>
-                 <property name="icon" >
-                  <iconset>conference.png</iconset>
-                 </property>
-                 <property name="iconSize" >
-                  <size>
-                   <width>24</width>
-                   <height>24</height>
-                  </size>
-                 </property>
-                 <property name="checkable" >
-                  <bool>true</bool>
-                 </property>
-                 <property name="autoRepeat" >
-                  <bool>true</bool>
-                 </property>
-                 <property name="autoRaise" >
-                  <bool>false</bool>
-                 </property>
-                </widget>
-               </item>
                <item>
                 <spacer>
                  <property name="orientation" >
@@ -1503,207 +1485,191 @@
                 </spacer>
                </item>
                <item>
-                <widget class="QToolButton" name="hold" >
+                <widget class="QToolButton" name="log_call" >
                  <property name="enabled" >
                   <bool>false</bool>
                  </property>
+                 <property name="sizePolicy" >
+                  <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
                  <property name="minimumSize" >
                   <size>
-                   <width>30</width>
-                   <height>30</height>
+                   <width>0</width>
+                   <height>25</height>
                   </size>
                  </property>
                  <property name="maximumSize" >
                   <size>
-                   <width>30</width>
-                   <height>30</height>
+                   <width>16777215</width>
+                   <height>25</height>
                   </size>
                  </property>
                  <property name="toolTip" >
-                  <string>Activate/deactivate the currently selected channel</string>
-                 </property>
-                 <property name="styleSheet" >
-                  <string/>
+                  <string>Call back this number</string>
                  </property>
                  <property name="text" >
-                  <string/>
+                  <string>Call</string>
                  </property>
                  <property name="icon" >
-                  <iconset>speaker.png</iconset>
+                  <iconset>phone.png</iconset>
                  </property>
-                 <property name="iconSize" >
+                 <property name="toolButtonStyle" >
+                  <enum>Qt::ToolButtonTextBesideIcon</enum>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QToolButton" name="log_clear" >
+                 <property name="sizePolicy" >
+                  <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="minimumSize" >
                   <size>
-                   <width>26</width>
-                   <height>26</height>
+                   <width>0</width>
+                   <height>25</height>
                   </size>
                  </property>
-                 <property name="checkable" >
-                  <bool>true</bool>
+                 <property name="maximumSize" >
+                  <size>
+                   <width>16777215</width>
+                   <height>25</height>
+                  </size>
                  </property>
-                 <property name="autoRepeat" >
-                  <bool>true</bool>
+                 <property name="toolTip" >
+                  <string>Clear all calls log</string>
                  </property>
-                 <property name="autoRaise" >
+                 <property name="text" >
+                  <string>Clear</string>
+                 </property>
+                 <property name="icon" >
+                  <iconset>clear.png</iconset>
+                 </property>
+                 <property name="toolButtonStyle" >
+                  <enum>Qt::ToolButtonTextBesideIcon</enum>
+                 </property>
+                 <property name="_yate_identity" stdset="0" >
+                  <string>clear:log:</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QToolButton" name="log_del" >
+                 <property name="enabled" >
                   <bool>false</bool>
+                 </property>
+                 <property name="sizePolicy" >
+                  <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="minimumSize" >
+                  <size>
+                   <width>0</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize" >
+                  <size>
+                   <width>16777215</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="toolTip" >
+                  <string>Delete the selected call log</string>
+                 </property>
+                 <property name="text" >
+                  <string>Delete</string>
+                 </property>
+                 <property name="icon" >
+                  <iconset>close.png</iconset>
+                 </property>
+                 <property name="toolButtonStyle" >
+                  <enum>Qt::ToolButtonTextBesideIcon</enum>
+                 </property>
+                 <property name="_yate_identity" stdset="0" >
+                  <string>deleteselecteditem:log:</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QToolButton" name="log_contact" >
+                 <property name="sizePolicy" >
+                  <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="minimumSize" >
+                  <size>
+                   <width>0</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize" >
+                  <size>
+                   <width>16777215</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="toolTip" >
+                  <string>Turn this number into a contact</string>
+                 </property>
+                 <property name="text" >
+                  <string>Contact</string>
+                 </property>
+                 <property name="icon" >
+                  <iconset>book.png</iconset>
+                 </property>
+                 <property name="toolButtonStyle" >
+                  <enum>Qt::ToolButtonTextBesideIcon</enum>
                  </property>
                 </widget>
                </item>
               </layout>
              </item>
-             <item>
-              <widget class="QTableWidget" name="channels" >
-               <property name="sizePolicy" >
-                <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
-                 <horstretch>0</horstretch>
-                 <verstretch>0</verstretch>
-                </sizepolicy>
-               </property>
-               <property name="minimumSize" >
-                <size>
-                 <width>320</width>
-                 <height>0</height>
-                </size>
-               </property>
-               <property name="autoFillBackground" >
-                <bool>false</bool>
-               </property>
-               <property name="lineWidth" >
-                <number>1</number>
-               </property>
-               <property name="editTriggers" >
-                <set>QAbstractItemView::NoEditTriggers</set>
-               </property>
-               <property name="showDropIndicator" stdset="0" >
-                <bool>false</bool>
-               </property>
-               <property name="dragEnabled" >
-                <bool>false</bool>
-               </property>
-               <property name="alternatingRowColors" >
-                <bool>true</bool>
-               </property>
-               <property name="selectionMode" >
-                <enum>QAbstractItemView::SingleSelection</enum>
-               </property>
-               <property name="selectionBehavior" >
-                <enum>QAbstractItemView::SelectRows</enum>
-               </property>
-               <property name="textElideMode" >
-                <enum>Qt::ElideLeft</enum>
-               </property>
-               <property name="showGrid" >
-                <bool>true</bool>
-               </property>
-               <property name="sortingEnabled" >
-                <bool>false</bool>
-               </property>
-               <property name="rowCount" >
-                <number>0</number>
-               </property>
-               <property name="columnCount" >
-                <number>3</number>
-               </property>
-               <column>
-                <property name="text" >
-                 <string>Party</string>
-                </property>
-               </column>
-               <column>
-                <property name="text" >
-                 <string>Time</string>
-                </property>
-               </column>
-               <column>
-                <property name="text" >
-                 <string>Status</string>
-                </property>
-               </column>
-              </widget>
-             </item>
             </layout>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-        <widget class="QWidget" name="PageCDR" >
-         <property name="sizePolicy" >
-          <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <layout class="QVBoxLayout" >
-          <property name="spacing" >
-           <number>0</number>
+           </item>
+          </layout>
+         </widget>
+         <widget class="QWidget" name="PageContacts" >
+          <property name="sizePolicy" >
+           <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
           </property>
-          <property name="leftMargin" >
-           <number>9</number>
-          </property>
-          <property name="topMargin" >
-           <number>9</number>
-          </property>
-          <property name="rightMargin" >
-           <number>9</number>
-          </property>
-          <property name="bottomMargin" >
-           <number>9</number>
-          </property>
-          <item>
-           <layout class="QVBoxLayout" >
-            <property name="spacing" >
-             <number>4</number>
-            </property>
-            <property name="leftMargin" >
-             <number>0</number>
-            </property>
-            <property name="topMargin" >
-             <number>0</number>
-            </property>
-            <property name="rightMargin" >
-             <number>0</number>
-            </property>
-            <property name="bottomMargin" >
-             <number>0</number>
-            </property>
-            <item>
-             <widget class="QTableWidget" name="log" >
-              <property name="editTriggers" >
-               <set>QAbstractItemView::NoEditTriggers</set>
-              </property>
-              <property name="selectionMode" >
-               <enum>QAbstractItemView::SingleSelection</enum>
-              </property>
-              <property name="selectionBehavior" >
-               <enum>QAbstractItemView::SelectRows</enum>
-              </property>
-              <property name="sortingEnabled" >
-               <bool>true</bool>
-              </property>
-              <property name="columnCount" >
-               <number>3</number>
-              </property>
-              <property name="_yate_sorting" stdset="0" >
-               <string>2,false</string>
-              </property>
-              <column>
-               <property name="text" >
-                <string>Party</string>
-               </property>
-              </column>
-              <column>
-               <property name="text" >
-                <string>Time</string>
-               </property>
-              </column>
-              <column>
-               <property name="text" >
-                <string>Duration</string>
-               </property>
-              </column>
-             </widget>
-            </item>
-            <item>
-             <layout class="QHBoxLayout" >
+          <layout class="QVBoxLayout" >
+           <property name="spacing" >
+            <number>0</number>
+           </property>
+           <property name="leftMargin" >
+            <number>4</number>
+           </property>
+           <property name="topMargin" >
+            <number>4</number>
+           </property>
+           <property name="rightMargin" >
+            <number>4</number>
+           </property>
+           <property name="bottomMargin" >
+            <number>4</number>
+           </property>
+           <item>
+            <widget class="QFrame" name="framePageContacts" >
+             <property name="frameShape" >
+              <enum>QFrame::NoFrame</enum>
+             </property>
+             <property name="frameShadow" >
+              <enum>QFrame::Raised</enum>
+             </property>
+             <layout class="QVBoxLayout" >
               <property name="spacing" >
                <number>2</number>
               </property>
@@ -1711,7 +1677,7 @@
                <number>0</number>
               </property>
               <property name="topMargin" >
-               <number>4</number>
+               <number>0</number>
               </property>
               <property name="rightMargin" >
                <number>0</number>
@@ -1720,1067 +1686,298 @@
                <number>0</number>
               </property>
               <item>
-               <spacer>
-                <property name="orientation" >
-                 <enum>Qt::Horizontal</enum>
+               <widget class="QTableWidget" name="contacts" >
+                <property name="styleSheet" >
+                 <string>QHeaderView {
+  qproperty-highlightSections: false;
+}
+</string>
                 </property>
-                <property name="sizeHint" >
-                 <size>
-                  <width>40</width>
-                  <height>20</height>
-                 </size>
+                <property name="editTriggers" >
+                 <set>QAbstractItemView::NoEditTriggers</set>
                 </property>
-               </spacer>
-              </item>
-              <item>
-               <widget class="QToolButton" name="log_call" >
-                <property name="enabled" >
+                <property name="tabKeyNavigation" >
                  <bool>false</bool>
                 </property>
-                <property name="sizePolicy" >
-                 <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
+                <property name="dragEnabled" >
+                 <bool>false</bool>
                 </property>
-                <property name="minimumSize" >
-                 <size>
-                  <width>70</width>
-                  <height>26</height>
-                 </size>
+                <property name="selectionMode" >
+                 <enum>QAbstractItemView::SingleSelection</enum>
                 </property>
-                <property name="maximumSize" >
-                 <size>
-                  <width>70</width>
-                  <height>26</height>
-                 </size>
+                <property name="selectionBehavior" >
+                 <enum>QAbstractItemView::SelectRows</enum>
                 </property>
-                <property name="toolTip" >
-                 <string>Call back this number</string>
+                <property name="sortingEnabled" >
+                 <bool>true</bool>
                 </property>
-                <property name="text" >
-                 <string>Call</string>
+                <property name="columnCount" >
+                 <number>2</number>
                 </property>
-                <property name="icon" >
-                 <iconset>phone.png</iconset>
+                <property name="_yate_sorting" stdset="0" >
+                 <string>1,true</string>
                 </property>
-                <property name="iconSize" >
-                 <size>
-                  <width>20</width>
-                  <height>20</height>
-                 </size>
-                </property>
-                <property name="toolButtonStyle" >
-                 <enum>Qt::ToolButtonTextBesideIcon</enum>
-                </property>
+                <column>
+                 <property name="text" >
+                  <string>Name</string>
+                 </property>
+                </column>
+                <column>
+                 <property name="text" >
+                  <string>Number/URI</string>
+                 </property>
+                </column>
                </widget>
               </item>
               <item>
-               <widget class="QToolButton" name="log_clear" >
-                <property name="sizePolicy" >
-                 <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
+               <widget class="QFrame" name="frameContactBtns" >
+                <property name="frameShape" >
+                 <enum>QFrame::NoFrame</enum>
                 </property>
-                <property name="minimumSize" >
-                 <size>
-                  <width>70</width>
-                  <height>26</height>
-                 </size>
+                <property name="frameShadow" >
+                 <enum>QFrame::Raised</enum>
                 </property>
-                <property name="maximumSize" >
-                 <size>
-                  <width>16777215</width>
-                  <height>26</height>
-                 </size>
-                </property>
-                <property name="toolTip" >
-                 <string>Clear all calls log</string>
-                </property>
-                <property name="text" >
-                 <string>Clear</string>
-                </property>
-                <property name="icon" >
-                 <iconset>cdr_clear.png</iconset>
-                </property>
-                <property name="iconSize" >
-                 <size>
-                  <width>20</width>
-                  <height>20</height>
-                 </size>
-                </property>
-                <property name="toolButtonStyle" >
-                 <enum>Qt::ToolButtonTextBesideIcon</enum>
-                </property>
-                <property name="_yate_identity" stdset="0" >
-                 <string>clear:log:</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QToolButton" name="log_del" >
-                <property name="enabled" >
-                 <bool>false</bool>
-                </property>
-                <property name="sizePolicy" >
-                 <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
-                </property>
-                <property name="minimumSize" >
-                 <size>
-                  <width>74</width>
-                  <height>26</height>
-                 </size>
-                </property>
-                <property name="maximumSize" >
-                 <size>
-                  <width>74</width>
-                  <height>26</height>
-                 </size>
-                </property>
-                <property name="toolTip" >
-                 <string>Delete the selected call log</string>
-                </property>
-                <property name="text" >
-                 <string>Delete</string>
-                </property>
-                <property name="icon" >
-                 <iconset>close.png</iconset>
-                </property>
-                <property name="iconSize" >
-                 <size>
-                  <width>20</width>
-                  <height>20</height>
-                 </size>
-                </property>
-                <property name="toolButtonStyle" >
-                 <enum>Qt::ToolButtonTextBesideIcon</enum>
-                </property>
-                <property name="_yate_identity" stdset="0" >
-                 <string>deleteselecteditem:log:</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QToolButton" name="log_contact" >
-                <property name="enabled" >
-                 <bool>false</bool>
-                </property>
-                <property name="sizePolicy" >
-                 <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
-                </property>
-                <property name="minimumSize" >
-                 <size>
-                  <width>78</width>
-                  <height>26</height>
-                 </size>
-                </property>
-                <property name="maximumSize" >
-                 <size>
-                  <width>78</width>
-                  <height>26</height>
-                 </size>
-                </property>
-                <property name="toolTip" >
-                 <string>Turn this number into a contact</string>
-                </property>
-                <property name="text" >
-                 <string>Contact</string>
-                </property>
-                <property name="icon" >
-                 <iconset>book.png</iconset>
-                </property>
-                <property name="iconSize" >
-                 <size>
-                  <width>16</width>
-                  <height>16</height>
-                 </size>
-                </property>
-                <property name="toolButtonStyle" >
-                 <enum>Qt::ToolButtonTextBesideIcon</enum>
-                </property>
+                <layout class="QHBoxLayout" >
+                 <property name="spacing" >
+                  <number>2</number>
+                 </property>
+                 <property name="leftMargin" >
+                  <number>0</number>
+                 </property>
+                 <property name="topMargin" >
+                  <number>6</number>
+                 </property>
+                 <property name="rightMargin" >
+                  <number>0</number>
+                 </property>
+                 <property name="bottomMargin" >
+                  <number>0</number>
+                 </property>
+                 <item>
+                  <spacer>
+                   <property name="orientation" >
+                    <enum>Qt::Horizontal</enum>
+                   </property>
+                   <property name="sizeHint" >
+                    <size>
+                     <width>40</width>
+                     <height>20</height>
+                    </size>
+                   </property>
+                  </spacer>
+                 </item>
+                 <item>
+                  <widget class="QToolButton" name="abk_call" >
+                   <property name="enabled" >
+                    <bool>false</bool>
+                   </property>
+                   <property name="sizePolicy" >
+                    <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="minimumSize" >
+                    <size>
+                     <width>0</width>
+                     <height>25</height>
+                    </size>
+                   </property>
+                   <property name="maximumSize" >
+                    <size>
+                     <width>16777215</width>
+                     <height>25</height>
+                    </size>
+                   </property>
+                   <property name="toolTip" >
+                    <string>Call this contact</string>
+                   </property>
+                   <property name="text" >
+                    <string>Call</string>
+                   </property>
+                   <property name="icon" >
+                    <iconset>phone.png</iconset>
+                   </property>
+                   <property name="toolButtonStyle" >
+                    <enum>Qt::ToolButtonTextBesideIcon</enum>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QToolButton" name="abk_new" >
+                   <property name="sizePolicy" >
+                    <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="minimumSize" >
+                    <size>
+                     <width>0</width>
+                     <height>25</height>
+                    </size>
+                   </property>
+                   <property name="maximumSize" >
+                    <size>
+                     <width>16777215</width>
+                     <height>25</height>
+                    </size>
+                   </property>
+                   <property name="toolTip" >
+                    <string>Create new contact</string>
+                   </property>
+                   <property name="text" >
+                    <string>New</string>
+                   </property>
+                   <property name="icon" >
+                    <iconset>book.png</iconset>
+                   </property>
+                   <property name="toolButtonStyle" >
+                    <enum>Qt::ToolButtonTextBesideIcon</enum>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QToolButton" name="abk_del" >
+                   <property name="sizePolicy" >
+                    <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="minimumSize" >
+                    <size>
+                     <width>0</width>
+                     <height>25</height>
+                    </size>
+                   </property>
+                   <property name="maximumSize" >
+                    <size>
+                     <width>16777215</width>
+                     <height>25</height>
+                    </size>
+                   </property>
+                   <property name="toolTip" >
+                    <string>Delete this contact</string>
+                   </property>
+                   <property name="text" >
+                    <string>Delete</string>
+                   </property>
+                   <property name="icon" >
+                    <iconset>close.png</iconset>
+                   </property>
+                   <property name="toolButtonStyle" >
+                    <enum>Qt::ToolButtonTextBesideIcon</enum>
+                   </property>
+                   <property name="_yate_identity" stdset="0" >
+                    <string>deleteselecteditem:contacts:</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QToolButton" name="abk_edit" >
+                   <property name="sizePolicy" >
+                    <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="minimumSize" >
+                    <size>
+                     <width>0</width>
+                     <height>25</height>
+                    </size>
+                   </property>
+                   <property name="maximumSize" >
+                    <size>
+                     <width>16777215</width>
+                     <height>25</height>
+                    </size>
+                   </property>
+                   <property name="toolTip" >
+                    <string>Edit this contact</string>
+                   </property>
+                   <property name="text" >
+                    <string>Edit</string>
+                   </property>
+                   <property name="icon" >
+                    <iconset>edit.png</iconset>
+                   </property>
+                   <property name="toolButtonStyle" >
+                    <enum>Qt::ToolButtonTextBesideIcon</enum>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
                </widget>
               </item>
              </layout>
-            </item>
-           </layout>
-          </item>
-         </layout>
+            </widget>
+           </item>
+          </layout>
+         </widget>
         </widget>
-        <widget class="QWidget" name="PageAccounts" >
-         <property name="sizePolicy" >
-          <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <layout class="QVBoxLayout" >
-          <property name="spacing" >
-           <number>2</number>
-          </property>
-          <property name="leftMargin" >
-           <number>9</number>
-          </property>
-          <property name="topMargin" >
-           <number>9</number>
-          </property>
-          <property name="rightMargin" >
-           <number>9</number>
-          </property>
-          <property name="bottomMargin" >
-           <number>9</number>
-          </property>
-          <item>
-           <widget class="QTableWidget" name="accounts" >
-            <property name="editTriggers" >
-             <set>QAbstractItemView::NoEditTriggers</set>
-            </property>
-            <property name="alternatingRowColors" >
-             <bool>true</bool>
-            </property>
-            <property name="selectionMode" >
-             <enum>QAbstractItemView::SingleSelection</enum>
-            </property>
-            <property name="selectionBehavior" >
-             <enum>QAbstractItemView::SelectRows</enum>
-            </property>
-            <property name="showGrid" >
-             <bool>true</bool>
-            </property>
-            <property name="columnCount" >
-             <number>3</number>
-            </property>
-            <column>
-             <property name="text" >
-              <string>Account</string>
-             </property>
-            </column>
-            <column>
-             <property name="text" >
-              <string>Protocol</string>
-             </property>
-            </column>
-            <column>
-             <property name="text" >
-              <string>Status</string>
-             </property>
-            </column>
-           </widget>
-          </item>
-          <item>
-           <widget class="QFrame" name="frameAccountsBtns" >
-            <property name="frameShape" >
-             <enum>QFrame::NoFrame</enum>
-            </property>
-            <property name="frameShadow" >
-             <enum>QFrame::Raised</enum>
-            </property>
-            <layout class="QHBoxLayout" >
-             <property name="spacing" >
-              <number>2</number>
-             </property>
-             <property name="leftMargin" >
-              <number>0</number>
-             </property>
-             <property name="topMargin" >
-              <number>12</number>
-             </property>
-             <property name="rightMargin" >
-              <number>0</number>
-             </property>
-             <property name="bottomMargin" >
-              <number>12</number>
-             </property>
-             <item>
-              <widget class="QToolButton" name="acc_login" >
-               <property name="enabled" >
-                <bool>false</bool>
-               </property>
-               <property name="minimumSize" >
-                <size>
-                 <width>40</width>
-                 <height>26</height>
-                </size>
-               </property>
-               <property name="maximumSize" >
-                <size>
-                 <width>40</width>
-                 <height>26</height>
-                </size>
-               </property>
-               <property name="toolTip" >
-                <string>Login the selected account</string>
-               </property>
-               <property name="text" >
-                <string/>
-               </property>
-               <property name="icon" >
-                <iconset>handshake.png</iconset>
-               </property>
-               <property name="iconSize" >
-                <size>
-                 <width>20</width>
-                 <height>20</height>
-                </size>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QToolButton" name="acc_logout" >
-               <property name="enabled" >
-                <bool>false</bool>
-               </property>
-               <property name="minimumSize" >
-                <size>
-                 <width>40</width>
-                 <height>26</height>
-                </size>
-               </property>
-               <property name="maximumSize" >
-                <size>
-                 <width>40</width>
-                 <height>26</height>
-                </size>
-               </property>
-               <property name="toolTip" >
-                <string>Logout the selected account</string>
-               </property>
-               <property name="text" >
-                <string/>
-               </property>
-               <property name="icon" >
-                <iconset>handshake_x.png</iconset>
-               </property>
-               <property name="iconSize" >
-                <size>
-                 <width>20</width>
-                 <height>18</height>
-                </size>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <spacer>
-               <property name="orientation" >
-                <enum>Qt::Horizontal</enum>
-               </property>
-               <property name="sizeHint" >
-                <size>
-                 <width>40</width>
-                 <height>20</height>
-                </size>
-               </property>
-              </spacer>
-             </item>
-             <item>
-              <widget class="QToolButton" name="acc_new" >
-               <property name="minimumSize" >
-                <size>
-                 <width>60</width>
-                 <height>26</height>
-                </size>
-               </property>
-               <property name="maximumSize" >
-                <size>
-                 <width>59</width>
-                 <height>26</height>
-                </size>
-               </property>
-               <property name="toolTip" >
-                <string>Create new account</string>
-               </property>
-               <property name="text" >
-                <string>New</string>
-               </property>
-               <property name="icon" >
-                <iconset>user.png</iconset>
-               </property>
-               <property name="iconSize" >
-                <size>
-                 <width>16</width>
-                 <height>16</height>
-                </size>
-               </property>
-               <property name="toolButtonStyle" >
-                <enum>Qt::ToolButtonTextBesideIcon</enum>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QToolButton" name="acc_del" >
-               <property name="enabled" >
-                <bool>false</bool>
-               </property>
-               <property name="minimumSize" >
-                <size>
-                 <width>0</width>
-                 <height>26</height>
-                </size>
-               </property>
-               <property name="maximumSize" >
-                <size>
-                 <width>74</width>
-                 <height>26</height>
-                </size>
-               </property>
-               <property name="toolTip" >
-                <string>Delete this account</string>
-               </property>
-               <property name="text" >
-                <string>Delete</string>
-               </property>
-               <property name="icon" >
-                <iconset>close.png</iconset>
-               </property>
-               <property name="iconSize" >
-                <size>
-                 <width>20</width>
-                 <height>20</height>
-                </size>
-               </property>
-               <property name="toolButtonStyle" >
-                <enum>Qt::ToolButtonTextBesideIcon</enum>
-               </property>
-               <property name="_yate_identity" stdset="0" >
-                <string>deleteselecteditem:accounts:</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QToolButton" name="acc_edit" >
-               <property name="enabled" >
-                <bool>false</bool>
-               </property>
-               <property name="minimumSize" >
-                <size>
-                 <width>0</width>
-                 <height>26</height>
-                </size>
-               </property>
-               <property name="maximumSize" >
-                <size>
-                 <width>70</width>
-                 <height>26</height>
-                </size>
-               </property>
-               <property name="toolTip" >
-                <string>Edit this account</string>
-               </property>
-               <property name="text" >
-                <string>Edit</string>
-               </property>
-               <property name="icon" >
-                <iconset>edit.png</iconset>
-               </property>
-               <property name="toolButtonStyle" >
-                <enum>Qt::ToolButtonTextBesideIcon</enum>
-               </property>
-              </widget>
-             </item>
-            </layout>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-        <widget class="QWidget" name="PageContacts" >
-         <property name="sizePolicy" >
-          <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <layout class="QVBoxLayout" >
-          <property name="spacing" >
-           <number>0</number>
-          </property>
-          <property name="leftMargin" >
-           <number>9</number>
-          </property>
-          <property name="topMargin" >
-           <number>9</number>
-          </property>
-          <property name="rightMargin" >
-           <number>9</number>
-          </property>
-          <property name="bottomMargin" >
-           <number>9</number>
-          </property>
-          <item>
-           <widget class="QFrame" name="framePageContacts" >
-            <property name="frameShape" >
-             <enum>QFrame::NoFrame</enum>
-            </property>
-            <property name="frameShadow" >
-             <enum>QFrame::Raised</enum>
-            </property>
-            <layout class="QVBoxLayout" >
-             <property name="spacing" >
-              <number>2</number>
-             </property>
-             <property name="leftMargin" >
-              <number>0</number>
-             </property>
-             <property name="topMargin" >
-              <number>0</number>
-             </property>
-             <property name="rightMargin" >
-              <number>0</number>
-             </property>
-             <property name="bottomMargin" >
-              <number>0</number>
-             </property>
-             <item>
-              <widget class="QTableWidget" name="contacts" >
-               <property name="maximumSize" >
-                <size>
-                 <width>16777215</width>
-                 <height>16777215</height>
-                </size>
-               </property>
-               <property name="editTriggers" >
-                <set>QAbstractItemView::NoEditTriggers</set>
-               </property>
-               <property name="dragEnabled" >
-                <bool>false</bool>
-               </property>
-               <property name="selectionMode" >
-                <enum>QAbstractItemView::SingleSelection</enum>
-               </property>
-               <property name="selectionBehavior" >
-                <enum>QAbstractItemView::SelectRows</enum>
-               </property>
-               <property name="columnCount" >
-                <number>2</number>
-               </property>
-               <column>
-                <property name="text" >
-                 <string>Name</string>
-                </property>
-               </column>
-               <column>
-                <property name="text" >
-                 <string>Number/URI</string>
-                </property>
-               </column>
-              </widget>
-             </item>
-             <item>
-              <widget class="QFrame" name="frameContactBtns" >
-               <property name="frameShape" >
-                <enum>QFrame::NoFrame</enum>
-               </property>
-               <property name="frameShadow" >
-                <enum>QFrame::Raised</enum>
-               </property>
-               <layout class="QHBoxLayout" >
-                <property name="spacing" >
-                 <number>2</number>
-                </property>
-                <property name="leftMargin" >
-                 <number>0</number>
-                </property>
-                <property name="topMargin" >
-                 <number>9</number>
-                </property>
-                <property name="rightMargin" >
-                 <number>0</number>
-                </property>
-                <property name="bottomMargin" >
-                 <number>9</number>
-                </property>
-                <item>
-                 <spacer>
-                  <property name="orientation" >
-                   <enum>Qt::Horizontal</enum>
-                  </property>
-                  <property name="sizeHint" >
-                   <size>
-                    <width>40</width>
-                    <height>20</height>
-                   </size>
-                  </property>
-                 </spacer>
-                </item>
-                <item>
-                 <widget class="QToolButton" name="abk_call" >
-                  <property name="enabled" >
-                   <bool>false</bool>
-                  </property>
-                  <property name="minimumSize" >
-                   <size>
-                    <width>0</width>
-                    <height>26</height>
-                   </size>
-                  </property>
-                  <property name="maximumSize" >
-                   <size>
-                    <width>64</width>
-                    <height>26</height>
-                   </size>
-                  </property>
-                  <property name="toolTip" >
-                   <string>Call this contact</string>
-                  </property>
-                  <property name="text" >
-                   <string>Call</string>
-                  </property>
-                  <property name="icon" >
-                   <iconset>phone.png</iconset>
-                  </property>
-                  <property name="iconSize" >
-                   <size>
-                    <width>20</width>
-                    <height>20</height>
-                   </size>
-                  </property>
-                  <property name="toolButtonStyle" >
-                   <enum>Qt::ToolButtonTextBesideIcon</enum>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QToolButton" name="abk_new" >
-                  <property name="minimumSize" >
-                   <size>
-                    <width>0</width>
-                    <height>26</height>
-                   </size>
-                  </property>
-                  <property name="maximumSize" >
-                   <size>
-                    <width>64</width>
-                    <height>26</height>
-                   </size>
-                  </property>
-                  <property name="toolTip" >
-                   <string>Create new contact</string>
-                  </property>
-                  <property name="text" >
-                   <string>New</string>
-                  </property>
-                  <property name="icon" >
-                   <iconset>book.png</iconset>
-                  </property>
-                  <property name="iconSize" >
-                   <size>
-                    <width>16</width>
-                    <height>16</height>
-                   </size>
-                  </property>
-                  <property name="toolButtonStyle" >
-                   <enum>Qt::ToolButtonTextBesideIcon</enum>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QToolButton" name="abk_del" >
-                  <property name="enabled" >
-                   <bool>false</bool>
-                  </property>
-                  <property name="minimumSize" >
-                   <size>
-                    <width>0</width>
-                    <height>26</height>
-                   </size>
-                  </property>
-                  <property name="maximumSize" >
-                   <size>
-                    <width>74</width>
-                    <height>26</height>
-                   </size>
-                  </property>
-                  <property name="toolTip" >
-                   <string>Delete this contact</string>
-                  </property>
-                  <property name="text" >
-                   <string>Delete</string>
-                  </property>
-                  <property name="icon" >
-                   <iconset>close.png</iconset>
-                  </property>
-                  <property name="iconSize" >
-                   <size>
-                    <width>20</width>
-                    <height>20</height>
-                   </size>
-                  </property>
-                  <property name="toolButtonStyle" >
-                   <enum>Qt::ToolButtonTextBesideIcon</enum>
-                  </property>
-                  <property name="_yate_identity" stdset="0" >
-                   <string>deleteselecteditem:contacts:</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QToolButton" name="abk_edit" >
-                  <property name="enabled" >
-                   <bool>false</bool>
-                  </property>
-                  <property name="minimumSize" >
-                   <size>
-                    <width>0</width>
-                    <height>26</height>
-                   </size>
-                  </property>
-                  <property name="maximumSize" >
-                   <size>
-                    <width>70</width>
-                    <height>26</height>
-                   </size>
-                  </property>
-                  <property name="toolTip" >
-                   <string>Edit this contact</string>
-                  </property>
-                  <property name="text" >
-                   <string>Edit</string>
-                  </property>
-                  <property name="icon" >
-                   <iconset>edit.png</iconset>
-                  </property>
-                  <property name="toolButtonStyle" >
-                   <enum>Qt::ToolButtonTextBesideIcon</enum>
-                  </property>
-                 </widget>
-                </item>
-               </layout>
-              </widget>
-             </item>
-            </layout>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-        <widget class="QWidget" name="PageSettings" >
-         <layout class="QVBoxLayout" >
-          <property name="spacing" >
-           <number>2</number>
-          </property>
-          <property name="leftMargin" >
-           <number>9</number>
-          </property>
-          <property name="topMargin" >
-           <number>9</number>
-          </property>
-          <property name="rightMargin" >
-           <number>9</number>
-          </property>
-          <property name="bottomMargin" >
-           <number>9</number>
-          </property>
-          <item>
-           <widget class="QFrame" name="framePageSettings" >
-            <property name="frameShape" >
-             <enum>QFrame::NoFrame</enum>
-            </property>
-            <property name="frameShadow" >
-             <enum>QFrame::Raised</enum>
-            </property>
-            <layout class="QVBoxLayout" >
-             <property name="spacing" >
-              <number>6</number>
-             </property>
-             <property name="leftMargin" >
-              <number>0</number>
-             </property>
-             <property name="topMargin" >
-              <number>0</number>
-             </property>
-             <property name="rightMargin" >
-              <number>0</number>
-             </property>
-             <property name="bottomMargin" >
-              <number>0</number>
-             </property>
-             <item>
-              <widget class="QGroupBox" name="grpOptions" >
-               <property name="title" >
-                <string/>
-               </property>
-               <layout class="QVBoxLayout" >
-                <property name="spacing" >
-                 <number>2</number>
-                </property>
-                <property name="leftMargin" >
-                 <number>9</number>
-                </property>
-                <property name="topMargin" >
-                 <number>9</number>
-                </property>
-                <property name="rightMargin" >
-                 <number>9</number>
-                </property>
-                <property name="bottomMargin" >
-                 <number>9</number>
-                </property>
-                <item>
-                 <widget class="QCheckBox" name="toggle_show_events" >
-                  <property name="toolTip" >
-                   <string>Show or hide the events window</string>
-                  </property>
-                  <property name="text" >
-                   <string>Show log/events window</string>
-                  </property>
-                  <property name="_yate_identity" stdset="0" >
-                   <string>showwindow:events</string>
-                  </property>
-                 </widget>
-                </item>
-               </layout>
-              </widget>
-             </item>
-             <item>
-              <widget class="QGroupBox" name="grpClientOptions" >
-               <property name="title" >
-                <string/>
-               </property>
-               <layout class="QVBoxLayout" >
-                <property name="spacing" >
-                 <number>1</number>
-                </property>
-                <property name="leftMargin" >
-                 <number>9</number>
-                </property>
-                <property name="topMargin" >
-                 <number>9</number>
-                </property>
-                <property name="rightMargin" >
-                 <number>9</number>
-                </property>
-                <property name="bottomMargin" >
-                 <number>9</number>
-                </property>
-                <item>
-                 <widget class="QCheckBox" name="multilines" >
-                  <property name="toolTip" >
-                   <string>Allow having more one simultaneously open connections</string>
-                  </property>
-                  <property name="text" >
-                   <string>Multiple Lines</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QCheckBox" name="autoanswer" >
-                  <property name="toolTip" >
-                   <string>Automatically answer incoming calls</string>
-                  </property>
-                  <property name="text" >
-                   <string>Auto Answer</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QCheckBox" name="ringincoming" >
-                  <property name="toolTip" >
-                   <string>Enable/disable ringer</string>
-                  </property>
-                  <property name="text" >
-                   <string>Ringer</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QCheckBox" name="ringoutgoing" >
-                  <property name="toolTip" >
-                   <string>Locally generate ring tone if missing</string>
-                  </property>
-                  <property name="text" >
-                   <string>Generate ringing on outgoing calls</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QCheckBox" name="activatelastoutcall" >
-                  <property name="toolTip" >
-                   <string>Force the last outgoing call to be the active one</string>
-                  </property>
-                  <property name="text" >
-                   <string>Force active the last outgoing call</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QCheckBox" name="activatecallonselect" >
-                  <property name="toolTip" >
-                   <string>Set the selected call active (need double click if unchecked)</string>
-                  </property>
-                  <property name="text" >
-                   <string>Set call active when selected in channel list</string>
-                  </property>
-                 </widget>
-                </item>
-               </layout>
-              </widget>
-             </item>
-             <item>
-              <widget class="QGroupBox" name="grpCallerId" >
-               <property name="maximumSize" >
-                <size>
-                 <width>16777215</width>
-                 <height>180</height>
-                </size>
-               </property>
-               <property name="title" >
-                <string>Caller identity</string>
-               </property>
-               <property name="flat" >
-                <bool>false</bool>
-               </property>
-               <layout class="QVBoxLayout" >
-                <property name="spacing" >
-                 <number>4</number>
-                </property>
-                <property name="leftMargin" >
-                 <number>9</number>
-                </property>
-                <property name="topMargin" >
-                 <number>9</number>
-                </property>
-                <property name="rightMargin" >
-                 <number>9</number>
-                </property>
-                <property name="bottomMargin" >
-                 <number>9</number>
-                </property>
-                <item>
-                 <widget class="QLabel" name="label_6" >
-                  <property name="toolTip" >
-                   <string>Phone number, user identifier or alias</string>
-                  </property>
-                  <property name="text" >
-                   <string>Username or number</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QLineEdit" name="def_username" >
-                  <property name="sizePolicy" >
-                   <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
-                  </property>
-                  <property name="minimumSize" >
-                   <size>
-                    <width>175</width>
-                    <height>25</height>
-                   </size>
-                  </property>
-                  <property name="maximumSize" >
-                   <size>
-                    <width>175</width>
-                    <height>25</height>
-                   </size>
-                  </property>
-                  <property name="toolTip" >
-                   <string>Phone number, user identifier or alias</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QLabel" name="label_7" >
-                  <property name="toolTip" >
-                   <string>Caller ID to insert in outgoing calls</string>
-                  </property>
-                  <property name="text" >
-                   <string>Caller Name</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QLineEdit" name="def_callerid" >
-                  <property name="sizePolicy" >
-                   <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
-                  </property>
-                  <property name="minimumSize" >
-                   <size>
-                    <width>175</width>
-                    <height>25</height>
-                   </size>
-                  </property>
-                  <property name="maximumSize" >
-                   <size>
-                    <width>175</width>
-                    <height>25</height>
-                   </size>
-                  </property>
-                  <property name="toolTip" >
-                   <string>Caller ID to insert in outgoing calls</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QLabel" name="label_8" >
-                  <property name="mouseTracking" >
-                   <bool>false</bool>
-                  </property>
-                  <property name="toolTip" >
-                   <string>Domain name to use in VoIP addresses</string>
-                  </property>
-                  <property name="text" >
-                   <string>Domain</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QLineEdit" name="def_domain" >
-                  <property name="sizePolicy" >
-                   <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
-                  </property>
-                  <property name="minimumSize" >
-                   <size>
-                    <width>175</width>
-                    <height>25</height>
-                   </size>
-                  </property>
-                  <property name="maximumSize" >
-                   <size>
-                    <width>175</width>
-                    <height>25</height>
-                   </size>
-                  </property>
-                  <property name="toolTip" >
-                   <string>Domain name to use in VoIP addresses</string>
-                  </property>
-                 </widget>
-                </item>
-               </layout>
-              </widget>
-             </item>
-             <item>
-              <spacer>
-               <property name="orientation" >
-                <enum>Qt::Vertical</enum>
-               </property>
-               <property name="sizeHint" >
-                <size>
-                 <width>20</width>
-                 <height>40</height>
-                </size>
-               </property>
-              </spacer>
-             </item>
-            </layout>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </widget>
-      </item>
-     </layout>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+   <item>
+    <widget class="QFrame" name="frame_messages" >
+     <property name="sizePolicy" >
+      <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="minimumSize" >
+      <size>
+       <width>16</width>
+       <height>110</height>
+      </size>
+     </property>
+     <property name="maximumSize" >
+      <size>
+       <width>16777215</width>
+       <height>110</height>
+      </size>
+     </property>
+     <property name="styleSheet" >
+      <string>QLabel {
+  font-size: 11px;
+}
+QTextEdit {
+  font-size: 11px;
+}</string>
+     </property>
+     <property name="_yate_uiwidget" stdset="0" >
+      <bool>true</bool>
+     </property>
+     <property name="_yate_uiwidget_name" stdset="0" >
+      <string>messages</string>
+     </property>
+     <property name="_yate_uiwidget_class" stdset="0" >
+      <string>WidgetList</string>
+     </property>
+     <property name="_yate_uiwidget_params" stdset="0" >
+      <stringlist>
+       <string>type=pages</string>
+       <string>header=messages_header.ui</string>
+       <string>navigate_prev=messages_prev</string>
+       <string>navigate_next=messages_next</string>
+       <string>navigate_info=messages_counter</string>
+       <string>navigate_info_format=${index}/${count}</string>
+       <string>navigate_title=messages_title</string>
+       <string>delete_item_action=deleteitem</string>
+       <string>property:_yate_hidewndwhenempty=false</string>
+       <string>property:_yate_hidewidgetwhenempty=frame_messages</string>
+       <string>property:_yate_itemui=subscription:messages_okrejignore.ui</string>
+       <string>property:_yate_itemui=mucinvite:messages_okrejignore.ui</string>
+       <string>property:_yate_itemui=loginfail:messages_loginfail.ui</string>
+       <string>property:_yate_itemui=incomingcall:messages_okrejignore.ui</string>
+       <string>property:_yate_itemui=incomingfile:messages_okrejignore.ui</string>
+      </stringlist>
+     </property>
     </widget>
    </item>
    <item>
@@ -2793,36 +1990,67 @@
      </property>
      <property name="minimumSize" >
       <size>
-       <width>25</width>
+       <width>16</width>
        <height>32</height>
       </size>
      </property>
-     <property name="frameShape" >
-      <enum>QFrame::NoFrame</enum>
-     </property>
-     <property name="frameShadow" >
-      <enum>QFrame::Sunken</enum>
+     <property name="maximumSize" >
+      <size>
+       <width>16777215</width>
+       <height>32</height>
+      </size>
      </property>
      <layout class="QHBoxLayout" >
       <property name="spacing" >
-       <number>1</number>
+       <number>4</number>
       </property>
       <property name="leftMargin" >
-       <number>4</number>
+       <number>2</number>
       </property>
       <property name="topMargin" >
        <number>4</number>
       </property>
       <property name="rightMargin" >
-       <number>4</number>
+       <number>2</number>
       </property>
       <property name="bottomMargin" >
        <number>4</number>
       </property>
       <item>
+       <widget class="QToolButton" name="global_account_status" >
+        <property name="sizePolicy" >
+         <sizepolicy vsizetype="Expanding" hsizetype="Fixed" >
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize" >
+         <size>
+          <width>26</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="maximumSize" >
+         <size>
+          <width>26</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="icon" >
+         <iconset>status_offline.png</iconset>
+        </property>
+        <property name="popupMode" >
+         <enum>QToolButton::InstantPopup</enum>
+        </property>
+        <property name="autoRaise" >
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QLabel" name="status" >
         <property name="sizePolicy" >
-         <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+         <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
           <horstretch>0</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
@@ -2839,22 +2067,9 @@
        </widget>
       </item>
       <item>
-       <spacer>
-        <property name="orientation" >
-         <enum>Qt::Horizontal</enum>
-        </property>
-        <property name="sizeHint" >
-         <size>
-          <width>190</width>
-          <height>20</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
-      <item>
        <widget class="QToolButton" name="toggle_show_help" >
         <property name="sizePolicy" >
-         <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+         <sizepolicy vsizetype="Expanding" hsizetype="Fixed" >
           <horstretch>0</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
@@ -2862,29 +2077,20 @@
         <property name="minimumSize" >
          <size>
           <width>26</width>
-          <height>26</height>
+          <height>0</height>
          </size>
         </property>
         <property name="maximumSize" >
          <size>
-          <width>16777215</width>
-          <height>26</height>
+          <width>26</width>
+          <height>16777215</height>
          </size>
         </property>
         <property name="toolTip" >
          <string>Show or hide the Help window</string>
         </property>
-        <property name="text" >
-         <string/>
-        </property>
         <property name="icon" >
          <iconset>quest.png</iconset>
-        </property>
-        <property name="iconSize" >
-         <size>
-          <width>20</width>
-          <height>20</height>
-         </size>
         </property>
         <property name="checkable" >
          <bool>true</bool>
@@ -2898,6 +2104,272 @@
     </widget>
    </item>
   </layout>
+  <action name="quit" >
+   <property name="text" >
+    <string>Quit</string>
+   </property>
+   <property name="menuRole" >
+    <enum>QAction::QuitRole</enum>
+   </property>
+  </action>
+  <action name="acc_new" >
+   <property name="icon" >
+    <iconset>addaccount.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Add account</string>
+   </property>
+  </action>
+  <action name="action_show_accountlist" >
+   <property name="icon" >
+    <iconset>user.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Accounts</string>
+   </property>
+  </action>
+  <action name="action_show_settings" >
+   <property name="icon" >
+    <iconset>configure.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Options</string>
+   </property>
+   <property name="menuRole" >
+    <enum>QAction::PreferencesRole</enum>
+   </property>
+  </action>
+  <action name="chatcontact_chat" >
+   <property name="icon" >
+    <iconset>chat.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Chat</string>
+   </property>
+  </action>
+  <action name="chatcontact_subscribe" >
+   <property name="text" >
+    <string>Request subscription</string>
+   </property>
+  </action>
+  <action name="chatcontact_unsubscribe" >
+   <property name="text" >
+    <string>Request subscription removal</string>
+   </property>
+  </action>
+  <action name="chatcontact_unsubscribed" >
+   <property name="text" >
+    <string>Remove subscription</string>
+   </property>
+  </action>
+  <action name="chatcontact_call" >
+   <property name="icon" >
+    <iconset>phone.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Call</string>
+   </property>
+  </action>
+  <action name="chatcontact_new" >
+   <property name="icon" >
+    <iconset>addcontact.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Add</string>
+   </property>
+  </action>
+  <action name="chatcontact_edit" >
+   <property name="icon" >
+    <iconset>edit.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Edit</string>
+   </property>
+   <property name="toolTip" >
+    <string>Edit contact</string>
+   </property>
+  </action>
+  <action name="chatcontact_del" >
+   <property name="icon" >
+    <iconset>close.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Remove</string>
+   </property>
+   <property name="toolTip" >
+    <string>Remove contact</string>
+   </property>
+  </action>
+  <action name="chatcontact_showoffline" >
+   <property name="checkable" >
+    <bool>true</bool>
+   </property>
+   <property name="checked" >
+    <bool>true</bool>
+   </property>
+   <property name="text" >
+    <string>Show offline friends</string>
+   </property>
+   <property name="_yate_identity" stdset="0" >
+    <string>setparams:property:chat_contacts:_yate_showofflinecontacts</string>
+   </property>
+  </action>
+  <action name="chatcontact_flatlist" >
+   <property name="checkable" >
+    <bool>true</bool>
+   </property>
+   <property name="text" >
+    <string>Flat list</string>
+   </property>
+   <property name="_yate_identity" stdset="0" >
+    <string>setparams:property:chat_contacts:_yate_flatlist</string>
+   </property>
+  </action>
+  <action name="setStatusOnline" >
+   <property name="icon" >
+    <iconset>status_online.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Online</string>
+   </property>
+  </action>
+  <action name="setStatusBusy" >
+   <property name="icon" >
+    <iconset>status_busy.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Busy</string>
+   </property>
+  </action>
+  <action name="setStatusAway" >
+   <property name="icon" >
+    <iconset>status_away.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Away</string>
+   </property>
+  </action>
+  <action name="setStatusXa" >
+   <property name="icon" >
+    <iconset>status_xa.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Extended away</string>
+   </property>
+  </action>
+  <action name="setStatusDnd" >
+   <property name="icon" >
+    <iconset>status_dnd.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Do Not Disturb</string>
+   </property>
+  </action>
+  <action name="setStatusOffline" >
+   <property name="icon" >
+    <iconset>status_offline.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Offline</string>
+   </property>
+  </action>
+  <action name="joinmuc_wizard" >
+   <property name="icon" >
+    <iconset>muc.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Join chat room</string>
+   </property>
+  </action>
+  <action name="acc_new_wizard" >
+   <property name="icon" >
+    <iconset>addaccountwiz.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Add account wizard</string>
+   </property>
+  </action>
+  <action name="messages_show" >
+   <property name="text" >
+    <string>Show notifications</string>
+   </property>
+  </action>
+  <action name="chatcontact_info" >
+   <property name="icon" >
+    <iconset>info.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Info</string>
+   </property>
+  </action>
+  <action name="toggle_show_events" >
+   <property name="checkable" >
+    <bool>true</bool>
+   </property>
+   <property name="icon" >
+    <iconset>events.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Debug window</string>
+   </property>
+   <property name="_yate_identity" stdset="0" >
+    <string>showwindow:events</string>
+   </property>
+  </action>
+  <action name="chatcontact_hideemptygroups" >
+   <property name="checkable" >
+    <bool>true</bool>
+   </property>
+   <property name="checked" >
+    <bool>true</bool>
+   </property>
+   <property name="text" >
+    <string>Hide empty groups</string>
+   </property>
+   <property name="_yate_identity" stdset="0" >
+    <string>setparams:property:chat_contacts:_yate_hideemptygroups</string>
+   </property>
+  </action>
+  <action name="advanced_mode" >
+   <property name="checkable" >
+    <bool>true</bool>
+   </property>
+   <property name="checked" >
+    <bool>true</bool>
+   </property>
+   <property name="text" >
+    <string>Advanced mode</string>
+   </property>
+  </action>
+  <action name="send_file" >
+   <property name="icon" >
+    <iconset>sendfile.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Send file</string>
+   </property>
+  </action>
+  <action name="action_show_fileprogress" >
+   <property name="text" >
+    <string>File transfer</string>
+   </property>
+  </action>
+  <action name="action_show_archive" >
+   <property name="icon" >
+    <iconset>archive.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Archive</string>
+   </property>
+  </action>
+  <action name="chatcontact_showlog" >
+   <property name="icon" >
+    <iconset>archive.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Show log</string>
+   </property>
+  </action>
  </widget>
  <resources/>
  <connections/>

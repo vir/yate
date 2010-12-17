@@ -198,6 +198,7 @@ ObjList Engine::s_extramod;
 NamedList Engine::s_params("");
 
 Engine::RunMode Engine::s_mode = Engine::Stopped;
+Engine::CallAccept Engine::s_accept = Engine::Accept;
 Engine* Engine::s_self = 0;
 int Engine::s_haltcode = -1;
 int EnginePrivate::count = 0;
@@ -209,6 +210,14 @@ static bool s_dynplugin = false;
 static Engine::PluginMode s_loadMode = Engine::LoadFail;
 static int s_maxworkers = 10;
 static bool s_debug = true;
+
+const TokenDict Engine::s_callAccept[] = {
+    {"accept",      Engine::Accept},
+    {"partial",     Engine::Partial},
+    {"congestion",  Engine::Congestion},
+    {"reject",      Engine::Reject},
+    {0,0}
+};
 
 #ifdef RLIMIT_CORE
 static bool s_coredump = false;
@@ -324,6 +333,7 @@ bool EngineStatusHandler::received(Message &msg)
     msg.retValue() << ",locks=" << Mutex::locks();
     msg.retValue() << ",semaphores=" << Semaphore::count();
     msg.retValue() << ",waiting=" << Semaphore::locks();
+    msg.retValue() << ",acceptcalls=" << lookup(Engine::accept(),Engine::getCallAcceptStates());
     msg.retValue() << "\r\n";
     return false;
 }

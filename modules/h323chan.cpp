@@ -2482,9 +2482,9 @@ void H323Driver::initialize()
 
 bool H323Driver::commandComplete(Message& msg, const String& partLine, const String& partWord)
 {
-    String cmd = s_statusCmd;
-    cmd << " " << name();
-    if (partLine == cmd)
+    String cmd = s_statusCmd + " " + name();
+    String overviewCmd = s_statusCmd + " overview " + name();
+    if (partLine == cmd || partLine == overviewCmd)
 	itemComplete(msg.retValue(),"accounts",partWord);
     else 
     	return Driver::commandComplete(msg,partLine,partWord);
@@ -2501,10 +2501,17 @@ void H323Driver::msgStatus(Message& msg)
 	if (str.startSkip("accounts")) {
 	    msg.retValue().clear();
 	    msg.retValue() << "module=" << name();
-	    msg.retValue() << ",format=Protocol|Status";
+	    msg.retValue() << ",protocol=H323";
+	    msg.retValue() << ",format=Username|Status;";
+	    msg.retValue() << "accounts=" << m_endpoints.count();
+	    if (!msg.getBoolValue("details",true)) {
+		msg.retValue() << "\r\n";
+		return;
+	    }
 	    for (ObjList* o = m_endpoints.skipNull(); o; o = o->skipNext()) {
 		YateH323EndPoint* ep = static_cast<YateH323EndPoint*>(o->get());
-		str.append(ep->c_str(),",") << "=H323|";
+		str.append(ep->c_str(),",") << "=";
+		str.append("") << "|";
 		str << (ep->IsRegisteredWithGatekeeper() ? "registered" : "not-registered");
 	    }
 	    msg.retValue().append(str,";"); 

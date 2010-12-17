@@ -330,6 +330,7 @@ private:
     String m_dstAddrDomain;              // SHA1(SID + local + remote) used by SOCKS
     ObjList m_ftContents;                // The list of negotiated file transfer contents
     ObjList m_streamHosts;               // The list of negotiated SOCKS stream hosts
+    bool m_connSocksServer;              // Try to build a socks listener if not configured
 };
 
 /*
@@ -448,6 +449,12 @@ public:
     //  is not subscribed to the remote user (or the remote user is not found).
     // Return false if user or resource is not found
     bool getClientTargetResource(JBClientStream* stream, JabberID& target, bool* noSub = 0);
+    // Find a channel by id. Return a referenced pointer
+    inline YJGConnection* findChan(const String& id) {
+	    Lock lock(this);
+	    YJGConnection* ch = static_cast<YJGConnection*>(find(id));
+	    return (ch && ch->ref()) ? ch : 0;
+	}
     // Find a connection by local and remote jid, optionally ignore local
     // resource (always ignore if local has no resource)
     YJGConnection* findByJid(const JabberID& local, const JabberID& remote,
@@ -695,7 +702,8 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
     m_offerRawTransport(true), m_offerIceTransport(true),
     m_secure(s_useCrypto), m_secureRequired(s_cryptoMandatory),
     m_hangup(false), m_timeout(0), m_transferring(false), m_recvTransferStanza(0),
-    m_dataFlags(0), m_ftStatus(FTNone), m_ftHostDirection(FTHostNone)
+    m_dataFlags(0), m_ftStatus(FTNone), m_ftHostDirection(FTHostNone),
+    m_connSocksServer(msg.getBoolValue("socksserver",true))
 {
     m_secure = msg.getBoolValue("secure",m_secure);
     m_secureRequired = msg.getBoolValue("secure_required",m_secureRequired);
@@ -785,7 +793,8 @@ YJGConnection::YJGConnection(JGEvent* event)
     m_offerRawTransport(true), m_offerIceTransport(true),
     m_secure(s_useCrypto), m_secureRequired(s_cryptoMandatory),
     m_hangup(false), m_timeout(0), m_transferring(false), m_recvTransferStanza(0),
-    m_dataFlags(0), m_ftStatus(FTNone), m_ftHostDirection(FTHostNone)
+    m_dataFlags(0), m_ftStatus(FTNone), m_ftHostDirection(FTHostNone),
+    m_connSocksServer(false)
 {
     m_line = m_session->line();
     // Update local ip in non server mode
@@ -913,9 +922,7 @@ bool YJGConnection::route()
 {
     Message* m = message("call.preroute",false,true);
     m->addParam("username",m_remote.node());
-//    if (m_session && m_session->stream() &&
-//	m_session->stream()->type() == JBEngine::Client)
-//	m->addParam("in_line",m_session->stream()->name());
+    m->addParam("in_line",m_line,false);
     m->addParam("called",m_local.node());
     m->addParam("calleduri",BUILD_XMPP_URI(m_local));
     m->addParam("caller",m_remote.node());
@@ -2637,6 +2644,8 @@ bool YJGConnection::setupSocksFileTransfer(bool start)
 		m.addParam("dst_addr_domain",m_dstAddrDomain);
 		m.addParam("direction",dir);
 		m.addParam("client",String::boolText(false));
+		if (m_localip && !s_serverMode && m_connSocksServer)
+		    m.addParam("localip",m_localip);
 		DDebug(this,DebugAll,"Trying to setup local SOCKS server [%p]",this);
 		clearEndpoint("data");
 		if (Engine::dispatch(m)) {
@@ -3744,14 +3753,13 @@ bool YJGDriver::handleUserNotify(Message& msg)
 bool YJGDriver::handleChanNotify(Message& msg)
 {
     String* chan = msg.getParam("notify");
-    if (!chan)
-	return false;
-    YJGConnection* ch = static_cast<YJGConnection*>(find(*chan));
+    YJGConnection* ch = chan ? findChan(*chan) : 0;
     if (!ch)
 	return false;
     ch->processChanNotify(msg);
     if (ch->state() == YJGConnection::Terminated)
 	ch->disconnect(0);
+    TelEngine::destruct(ch);
     return true;
 }
 

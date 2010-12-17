@@ -14,6 +14,7 @@ QT4_INC := @QT4_INC@
 QT4_LIB := @QT4_LIB@
 QT4_INC_NET := @QT4_INC_NET@
 QT4_LIB_NET := @QT4_LIB_NET@
+QT4_STATIC_MODULES :=
 HAVE_PGSQL := @HAVE_PGSQL@
 PGSQL_INC := @PGSQL_INC@
 PGSQL_LIB := -lpq
@@ -59,7 +60,7 @@ PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 	server/pbxassist.yate server/dbpbx.yate server/lateroute.yate \
 	server/park.yate server/queues.yate server/queuesnotify.yate \
 	server/regfile.yate server/accfile.yate server/register.yate \
-	server/callcounters.yate \
+	server/callcounters.yate server/cpuload.yate server/ccongestion.yate \
 	server/dbwave.yate \
 	server/yradius.yate \
 	server/ysnmpagent.yate \
@@ -103,7 +104,10 @@ PROGS := $(PROGS) client/coreaudio.yate
 endif
 
 ifneq (@HAVE_QT4@,no)
-PROGS := $(PROGS) qt4/updater.yate
+ifeq (@QT4_STATIC_MODULES@,no)
+PROGS := $(PROGS) qt4/updater.yate qt4/customtable.yate qt4/customtext.yate \
+	qt4/customtree.yate qt4/widgetlist.yate qt4/clientarchive.yate
+endif
 endif
 
 ifneq (@HAVE_ZAP@,no)
@@ -195,7 +199,7 @@ strip: all do-strip
 
 .PHONY: clean
 clean: do-clean
-	@-$(RM) $(PROGS) $(LIBS) *.o qt4/*.moc core 2>/dev/null
+	@-$(RM) $(PROGS) $(LIBS) *.o qt4/*.o qt4/*.moc core 2>/dev/null
 	@-for i in $(PROGS) ; do \
 	    $(RM) -rf $$i.dSYM 2>/dev/null; \
 	done;
@@ -224,6 +228,10 @@ uninstall: do-uninstall
 subdirs:
 	@mkdir -p $(DIRS)
 
+qt4/%.o: @srcdir@/qt4/%.cpp $(MKDEPS) $(INCFILES)
+	$(MAKE) $(patsubst %.o,%.moc,$@)
+	$(COMPILE) -c -o $@ $(QT4_INC) -I@top_srcdir@/clients/qt4 -I@srcdir@/qt4 $<
+
 %.o: @srcdir@/%.cpp $(MKDEPS) $(INCFILES)
 	$(COMPILE) -c $<
 
@@ -249,8 +257,9 @@ server/%.yate: @srcdir@/server/%.cpp $(MKDEPS) $(INCFILES)
 client/%.yate: @srcdir@/client/%.cpp $(MKDEPS) $(INCFILES)
 	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS) $(YATELIBS)
 
-qt4/%.yate: @srcdir@/qt4/%.cpp $(MKDEPS) $(INCFILES)
-	$(MODCOMP) -o $@ $(LOCALFLAGS) $(QT4_INC) -I@top_srcdir@/clients/qt4 $< $(LOCALLIBS) $(QT4_LIB) $(YATELIBS)
+qt4/%.yate: @srcdir@/qt4/%.cpp ../libyateqt4.so $(MKDEPS) $(INCFILES)
+	$(MAKE) $(patsubst %.yate,%.moc,$@)
+	$(MODCOMP) -o $@ $(LOCALFLAGS) $(QT4_INC) -I@top_srcdir@/clients/qt4 $< $(LOCALLIBS) ../libyateqt4.so $(QT4_LIB) $(YATELIBS)
 
 qt4/%.moc: @srcdir@/qt4/%.h $(MKDEPS) $(INCFILES)
 	mkdir -p qt4 && $(MOC) $(DEFS) $(INCLUDES) $(QT4_INC) -I@top_srcdir@/clients/qt4 -I@srcdir@/qt4 -o $@ $<
@@ -338,7 +347,6 @@ openssl.yate: LOCALLIBS = $(OPENSSL_LIB)
 rmanager.yate: LOCALFLAGS = $(COREDUMP_INC)
 rmanager.yate: LOCALLIBS = $(COREDUMP_LIB)
 
-qt4/updater.yate: qt4/updater.moc
 qt4/updater.yate: LOCALFLAGS = $(QT4_INC_NET)
 qt4/updater.yate: LOCALLIBS = $(QT4_LIB_NET)
 
@@ -385,6 +393,9 @@ server/ysnmpagent.yate: LOCALLIBS = -L../libs/yasn -lyasn -L../libs/ysnmp -lysnm
 
 ../libs/ypbx/libyatepbx.a:
 	$(MAKE) -C ../libs/ypbx
+
+../libyateqt4.so:
+	$(MAKE) -C ../clients/qt4
 
 ../libs/yasn/libyasn.a:
 	$(MAKE) -C ../libs/yasn

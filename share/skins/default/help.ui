@@ -77,25 +77,7 @@
          <number>2</number>
         </property>
         <item>
-         <widget class="QToolButton" name="help_prev" >
-          <property name="sizePolicy" >
-           <sizepolicy vsizetype="Fixed" hsizetype="Preferred" >
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="minimumSize" >
-           <size>
-            <width>26</width>
-            <height>26</height>
-           </size>
-          </property>
-          <property name="maximumSize" >
-           <size>
-            <width>100</width>
-            <height>26</height>
-           </size>
-          </property>
+         <widget class="QPushButton" name="help_prev" >
           <property name="toolTip" >
            <string/>
           </property>
@@ -105,34 +87,13 @@
           <property name="icon" >
            <iconset>prev.png</iconset>
           </property>
-          <property name="toolButtonStyle" >
-           <enum>Qt::ToolButtonTextBesideIcon</enum>
-          </property>
           <property name="_yate_identity" stdset="0" >
            <string>help:prev</string>
           </property>
          </widget>
         </item>
         <item>
-         <widget class="QToolButton" name="help_home" >
-          <property name="sizePolicy" >
-           <sizepolicy vsizetype="Fixed" hsizetype="Preferred" >
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="minimumSize" >
-           <size>
-            <width>26</width>
-            <height>26</height>
-           </size>
-          </property>
-          <property name="maximumSize" >
-           <size>
-            <width>100</width>
-            <height>26</height>
-           </size>
-          </property>
+         <widget class="QPushButton" name="help_home" >
           <property name="toolTip" >
            <string>Home</string>
           </property>
@@ -142,42 +103,18 @@
           <property name="icon" >
            <iconset>home.png</iconset>
           </property>
-          <property name="toolButtonStyle" >
-           <enum>Qt::ToolButtonTextBesideIcon</enum>
-          </property>
           <property name="_yate_identity" stdset="0" >
            <string>help:home</string>
           </property>
          </widget>
         </item>
         <item>
-         <widget class="QToolButton" name="help_next" >
-          <property name="sizePolicy" >
-           <sizepolicy vsizetype="Fixed" hsizetype="Preferred" >
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="minimumSize" >
-           <size>
-            <width>26</width>
-            <height>26</height>
-           </size>
-          </property>
-          <property name="maximumSize" >
-           <size>
-            <width>100</width>
-            <height>26</height>
-           </size>
-          </property>
+         <widget class="QPushButton" name="help_next" >
           <property name="text" >
            <string>Next</string>
           </property>
           <property name="icon" >
            <iconset>next.png</iconset>
-          </property>
-          <property name="toolButtonStyle" >
-           <enum>Qt::ToolButtonTextBesideIcon</enum>
           </property>
           <property name="_yate_identity" stdset="0" >
            <string>help:next</string>
@@ -198,39 +135,12 @@
          </spacer>
         </item>
         <item>
-         <widget class="QToolButton" name="button_hide" >
-          <property name="sizePolicy" >
-           <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="minimumSize" >
-           <size>
-            <width>75</width>
-            <height>26</height>
-           </size>
-          </property>
-          <property name="maximumSize" >
-           <size>
-            <width>100</width>
-            <height>26</height>
-           </size>
-          </property>
+         <widget class="QPushButton" name="button_hide" >
           <property name="text" >
            <string>Close</string>
           </property>
           <property name="icon" >
            <iconset>close.png</iconset>
-          </property>
-          <property name="iconSize" >
-           <size>
-            <width>20</width>
-            <height>20</height>
-           </size>
-          </property>
-          <property name="toolButtonStyle" >
-           <enum>Qt::ToolButtonTextBesideIcon</enum>
           </property>
          </widget>
         </item>

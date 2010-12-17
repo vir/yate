@@ -206,13 +206,14 @@ install-noapi: all
 	    else \
 		install $$i "$(DESTDIR)$(libdir)/" ; \
 	    fi \
-	done && $(LDCONFIG)
+	done
 	@mkdir -p "$(DESTDIR)$(bindir)/" && \
 	install $(PROGS) yate-config "$(DESTDIR)$(bindir)/"
 	$(MAKE) -C ./modules install
 	$(MAKE) -C ./clients install
 	$(MAKE) -C ./share install
 	$(MAKE) -C ./conf.d install
+	@$(LDCONFIG)
 	@mkdir -p "$(DESTDIR)$(mandir)/man8/" && \
 	for i in $(MAN8) ; do \
 	    install -m 0644 @srcdir@/docs/man/$$i "$(DESTDIR)$(mandir)/man8/" ; \

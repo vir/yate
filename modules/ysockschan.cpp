@@ -23,6 +23,7 @@
  */
 
 #include <yatephone.h>
+#include <stdlib.h>
 
 using namespace TelEngine;
 namespace { // anonymous
@@ -997,6 +998,14 @@ public:
     virtual void removeListener(SOCKSListener* listener);
 
     /**
+     * Check if a listener exists
+     * @param listener The listener to find
+     * @param status Set to listener status on exit, if found
+     * @return False if not found
+     */
+    virtual bool hasListener(SOCKSListener* listener, int& status);
+
+    /**
      * Stop socket listeners
      * @param wait True to wait for all listeners to remove themselves from the list
      * @param hard Parameter to be passed to listener's stop() method
@@ -1299,6 +1308,8 @@ private:
 INIT_PLUGIN(YSocksPlugin);
 static YSocksEngine* s_engine = 0;
 static unsigned int s_bufLen = 4096;     // Read buffer length
+static int s_minPort = 16384;            // Min port value used to create temporary listeners
+static int s_maxPort = 32768;            // Max port value used to create temporary listeners
 static Mutex s_srcMutex(true,"YSocksChan::source"); // Protect source/wrapper association
 
 // Data transfer directions
@@ -2755,6 +2766,22 @@ void SOCKSEngine::removeListener(SOCKSListener* listener)
     }
 }
 
+// Check if a listener exists
+bool SOCKSEngine::hasListener(SOCKSListener* listener, int& status)
+{
+    if (!listener)
+	return false;
+    Lock lock(this);
+    for (ObjList* o = m_listeners.skipNull(); o; o = o->skipNext()) {
+	ListenerPointer* p = static_cast<ListenerPointer*>(o->get());
+	if (*p != listener)
+	    continue;
+	status = listener->status();
+	return true;
+    }
+    return false;
+}
+
 // Stop socket listeners
 void SOCKSEngine::stopListeners(bool wait, bool hard)
 {
@@ -3009,6 +3036,35 @@ YSocksWrapper::YSocksWrapper(const char* id, YSocksEngine* engine, CallEndpoint*
 	    SOCKSPacket::Domain,m_dstAddr,m_dstPort);
     else if (m_engine) {
 	SOCKSEndpointDef* srv = m_engine->findEpDef("server");
+	if (!srv) {
+	    const char* lip = params.getValue("localip");
+	    int attempts = lip ? 10 : 0;
+	    // Try to build our own listener
+	    for (int i = 0; i < attempts; i++) {
+		int port = (s_minPort + (::random() % (s_maxPort - s_minPort))) & 0xfffe;
+		srv = new SOCKSEndpointDef(m_id,false,lip,port,0,
+		    params.getValue("username"),params.getValue("password"));
+		YSocksListenerThread* th = new YSocksListenerThread(m_engine,srv,1);
+		th->addAndStart();
+		// Wait for the thread to init and start or terminate
+		bool ok = false;
+		int status = SOCKSListener::Created;
+		while (m_engine->hasListener(th,status)) {
+		    if (status < SOCKSListener::Listening) {
+			Thread::yield();
+			continue;
+		    }
+		    ok = status < SOCKSListener::Terminated;
+		    break;
+		}
+		if (ok) {
+		    srv->ref();
+		    m_engine->addEpDef(srv);
+		    break;
+		}
+		TelEngine::destruct(srv);
+	    }
+	}
 	if (srv) {
 	    m_srvAddr = srv->externalAddr() ? srv->externalAddr() : srv->address();
 	    m_srvPort = srv->port();
@@ -3091,6 +3147,10 @@ bool YSocksWrapper::setConn(SOCKSConn* conn)
     m_conn->sendReply(m_conn->reqAddrType(),m_dstAddr,m_dstPort);
     if (m_autoStart)
 	enableDataTransfer();
+    lock.drop();
+    // Stop listener
+    if (m_engine)
+	m_engine->removeEpDef(m_id);
     return true;
 }
 
@@ -3116,7 +3176,7 @@ bool YSocksWrapper::recvData()
 	return false;
     DataBlock block;
     block.assign(m_recvBuffer.data(),len,false);
-    Debug(this,DebugAll,"Forwarding %u bytes [%p]",len,this);
+    DDebug(this,DebugAll,"Forwarding %u bytes [%p]",len,this);
     source->Forward(block);
     block.clear(false);
     source->busy(false);
@@ -3239,8 +3299,12 @@ void YSocksWrapper::notify(const char* status) const
 // Release memory
 void YSocksWrapper::destroyed()
 {
-    if (m_engine)
+    if (m_engine) {
 	m_engine->removeWrapper(this,false);
+	// Stop listener
+	if (!m_client)
+	    m_engine->removeEpDef(m_id);
+    }
     stopWorker();
     lock();
     if (m_source && m_source->alive())
@@ -3456,7 +3520,7 @@ bool YSocksPlugin::handleChanSocks(Message& msg)
 	}
 	else {
 	    epDef = s_engine->findEpDef("server");
-	    if (!epDef) {
+	    if (!(epDef || msg.getValue("localip"))) {
 		Debug(&__plugin,DebugNote,"%s: No server defined",msg.c_str());
 		return false;
 	    }

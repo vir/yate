@@ -225,6 +225,7 @@ public:
 	Compress,                        // http://jabber.org/protocol/compress
 	CompressFeature,                 // http://jabber.org/features/compress
 	XData,                           // jabber:x:data
+	ChatStates,                      // http://jabber.org/protocol/chatstates
 	// This value MUST be the last one: it's used as array bound
 	Count,
     };

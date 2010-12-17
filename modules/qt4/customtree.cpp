@@ -597,6 +597,15 @@ void QtCustomTree::setItemCollapsedImage(QString value)
 	p->m_stateCollapsedImg = Client::s_skinPath + tmp;
 }
 
+// Set an item's tooltip template
+void QtCustomTree::setItemTooltip(QString value)
+{
+    String tmp;
+    QtTreeItemProps* p = YOBJECT(QtTreeItemProps,getItemProps(value,tmp));
+    if (p)
+	p->m_toolTip = tmp;
+}
+
 // Retrieve a comma separated list with column widths
 QString QtCustomTree::colWidths()
 {
@@ -729,6 +738,25 @@ QMenu* QtCustomTree::contextMenu(QtTreeItem* item)
 void QtCustomTree::itemAdded(QtTreeItem& item)
 {
     setStateImage(item);
+    applyItemTooltip(item);
+}
+
+// Update a tree item's tooltip
+void QtCustomTree::applyItemTooltip(QtTreeItem& item)
+{
+    QtUIWidgetItemProps* pt = QtUIWidget::getItemProps(itemPropsName(item.type()));
+    QtTreeItemProps* p = YOBJECT(QtTreeItemProps,pt);
+    String tooltip;
+    if (p)
+	tooltip = p->m_toolTip;
+    if (!tooltip)
+	return;
+    item.replaceParams(tooltip);
+    QWidget* w = itemWidget(&item,0);
+    if (w)
+	w->setToolTip(QtClient::setUtf8(tooltip));
+    else
+	item.setToolTip(0,QtClient::setUtf8(tooltip));
 }
 
 
@@ -1184,6 +1212,7 @@ bool ContactList::updateContact(ContactItem& c, const NamedList& params, bool al
 	    c.setText(0,QtClient::setUtf8(*name));
 	// TODO: update status, image ...
     }
+    applyItemTooltip(c);
     // Show/hide
     if (!m_showOffline)
 	c.setHidden(c.offline());

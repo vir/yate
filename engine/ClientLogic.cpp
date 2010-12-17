@@ -2007,23 +2007,24 @@ static bool addTrayIcon(const String& type)
     String name;
     name << "mainwindow_" << type << "_icon";
     const char* specific = 0;
+    String info = "Yate Client";
     if (type == "main") {
 	prio = Client::TrayIconMain;
 	iconParams = new NamedList(name);
 	iconParams->addParam("icon",Client::s_skinPath + "null_team-32.png");
-	iconParams->addParam("tooltip","Yate Client");
 	triggerAction = "action_show_mainwindow";
     }
     else if (type == "incomingcall") {
 	prio = Client::TrayIconIncomingCall;
 	iconParams = new NamedList(name);
 	iconParams->addParam("icon",Client::s_skinPath + "tray_incomingcall.png");
-	iconParams->addParam("tooltip","Yate Client");
+	info << "\r\nAn incoming call is waiting";
 	triggerAction = s_actionShowCallsList;
 	specific = "View calls";
     }
     if (!iconParams)
 	return false;
+    iconParams->addParam("tooltip",info);
     iconParams->addParam("dynamicActionTrigger:string",triggerAction,false);
     iconParams->addParam("dynamicActionDoubleClick:string",triggerAction,false);
     // Add the menu
@@ -3740,6 +3741,7 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
 	if (Client::valid()) {
 	    Client::self()->setVisible("mainwindow",true,true);
 	    activatePageCalls();
+	    removeTrayIcon("incomingcall");
 	}
 	return true;
     }
@@ -4062,6 +4064,8 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
 
     // Enable specific actions when a channel is selected
     if (name == s_channelList) {
+    	if (isPageCallsActive(wnd,true))
+	    removeTrayIcon("incomingcall");
 	updateSelectedChannel(&item);
 	return true;
     }

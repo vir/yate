@@ -122,6 +122,14 @@ void WidgetListTabWidget::tabInserted(int index)
     QTabWidget::tabInserted(index);
 }
 
+// Tab removed. Notify the parent
+void WidgetListTabWidget::tabRemoved(int index)
+{
+    WidgetList* list = static_cast<WidgetList*>(parent());
+    if (list)
+	list->itemRemoved(index);
+}
+
 /*
  * WidgetListStackedWidget
  */
@@ -151,6 +159,8 @@ WidgetList::WidgetList(const char* name, const NamedList& params, QWidget* paren
     if (type == "tabs") {
 	m_tab = new WidgetListTabWidget(this,params);
 	QtClient::setWidget(this,m_tab);
+	QtClient::connectObjects(m_tab,SIGNAL(currentChanged(int)),
+	    this,SLOT(currentChanged(int)));
     }
     else if (type == "pages") {
 	QWidget* hdr = 0;
@@ -170,6 +180,10 @@ WidgetList::WidgetList(const char* name, const NamedList& params, QWidget* paren
 	if (l)
 	    delete l;
 	setLayout(newLayout);
+	QtClient::connectObjects(m_pages,SIGNAL(currentChanged(int)),
+	    this,SLOT(currentChanged(int)));
+	QtClient::connectObjects(m_pages,SIGNAL(widgetRemoved(int)),
+	    this,SLOT(itemRemoved(int)));
     }
     // Set navigation
     QtUIWidget::initNavigation(params);
@@ -442,6 +456,33 @@ void WidgetList::setHideWidgetWhenEmpty(QString value)
 	return;
     m_hideWidgetWhenEmpty = s;
     hideEmpty();
+}
+
+// Handle selection changes
+void WidgetList::currentChanged(int index)
+{
+    String item;
+    if (index >= 0 && index < itemCount()) {
+	QWidget* w = findItemByIndex(index);
+	if (w)
+	    QtUIWidget::getListItemIdProp(w,item);
+	// Avoid notifying no selection
+	if (!item)
+	    return;
+    }
+    QtWindow* wnd = item ? QtClient::parentWindow(this) : 0;
+    if (wnd)
+	Client::self()->select(wnd,name(),item);
+}
+
+// Item removed slot. Notify the client when empty
+void WidgetList::itemRemoved(int index)
+{
+    if (itemCount())
+	return;
+    QtWindow* wnd = QtClient::parentWindow(this);
+    if (wnd)
+	Client::self()->select(wnd,name(),String::empty());
 }
 
 // Handle current item close action

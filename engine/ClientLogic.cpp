@@ -306,6 +306,7 @@ static const String s_accWizProviders = "accwiz_providers"; // List of providers
 static const String s_inviteContacts = "invite_contacts";   // List of contacts in muc invite
 // Actions
 static const String s_actionShowCallsList = "showCallsList";
+static const String s_actionShowNotification = "showNotification";
 static const String s_actionCall = "call";
 static const String s_actionAnswer = "answer";
 static const String s_actionHangup = "hangup";
@@ -838,6 +839,22 @@ static void activatePageCalls(Window* wnd = 0, bool selTab = true)
     if (selTab)
 	p.addParam("select:" + s_mainwindowTabs,"tabTelephony");
     Client::self()->setParams(&p,wnd);
+}
+
+// Check if the calls page is active
+static bool isPageCallsActive(Window* wnd, bool checkTab)
+{
+    if (!Client::valid())
+	return false;
+    String sel;
+    if (checkTab) {
+	Client::self()->getSelect(s_mainwindowTabs,sel,wnd);
+	if (sel != "tabTelephony")
+	    return false;
+	sel.clear();
+    }
+    Client::self()->getSelect("framePages",sel,wnd);
+    return sel == "PageCalls";
 }
 
 // Retrieve a contact edit/info window.
@@ -1991,23 +2008,32 @@ static bool addTrayIcon(const String& type)
     String name;
     name << "mainwindow_" << type << "_icon";
     const char* specific = 0;
+    String info = "Yate Client";
     if (type == "main") {
 	prio = Client::TrayIconMain;
 	iconParams = new NamedList(name);
 	iconParams->addParam("icon",Client::s_skinPath + "null_team-32.png");
-	iconParams->addParam("tooltip","Yate Client");
 	triggerAction = "action_show_mainwindow";
     }
     else if (type == "incomingcall") {
 	prio = Client::TrayIconIncomingCall;
 	iconParams = new NamedList(name);
 	iconParams->addParam("icon",Client::s_skinPath + "tray_incomingcall.png");
-	iconParams->addParam("tooltip","Yate Client");
+	info << "\r\nAn incoming call is waiting";
 	triggerAction = s_actionShowCallsList;
 	specific = "View calls";
     }
+    else if (type == "notification") {
+	prio = Client::TrayIconNotification;
+	iconParams = new NamedList(name);
+	iconParams->addParam("icon",Client::s_skinPath + "tray_notification.png");
+	info << "\r\nA notification is requiring your attention";
+	triggerAction = s_actionShowNotification;
+	specific = "View notifications";
+    }
     if (!iconParams)
 	return false;
+    iconParams->addParam("tooltip",info);
     iconParams->addParam("dynamicActionTrigger:string",triggerAction,false);
     iconParams->addParam("dynamicActionDoubleClick:string",triggerAction,false);
     // Add the menu
@@ -3686,9 +3712,16 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
     if (name == "button_hide" && wnd)
 	return Client::self() && Client::self()->setVisible(wnd->toString(),false);
     // Show/hide messages
-    bool showMsgs = (name == "messages_show");
-    if (showMsgs || name == "messages_close")
+    bool showMsgs = (name == "messages_show" || name == s_actionShowNotification);
+    if (showMsgs || name == "messages_close") {
+	if (name == s_actionShowNotification) {
+	    removeTrayIcon("notification");
+	    if (wnd && Client::valid())
+		Client::self()->setVisible(wnd->id(),true,true);
+	}
 	return showNotificationArea(showMsgs,wnd);
+    }
+  
     // Dialog actions
     // Return 'true' to close the dialog
     bool dlgRet = false;
@@ -3724,6 +3757,7 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
 	if (Client::valid()) {
 	    Client::self()->setVisible("mainwindow",true,true);
 	    activatePageCalls();
+	    removeTrayIcon("incomingcall");
 	}
 	return true;
     }
@@ -4013,6 +4047,8 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
 	ClientContact* c = 0;
 	if (item == "tabChat")
 	    c = selectedChatContact(*m_accounts,wnd);
+	else if (isPageCallsActive(wnd,false))
+	    removeTrayIcon("incomingcall");
 	enableChatActions(c,false);
 	return true;
     }
@@ -4030,6 +4066,13 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
 	return true;
     }
 
+    // Page changed in telephony tab
+    if (name == "framePages") {
+    	if (isPageCallsActive(wnd,true))
+	    removeTrayIcon("incomingcall");
+	return false;
+    }
+
     // keep the item in sync in all windows
     // if the same object is present in more windows, we will synchronise all of them
     if (Client::self())
@@ -4037,6 +4080,8 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
 
     // Enable specific actions when a channel is selected
     if (name == s_channelList) {
+    	if (isPageCallsActive(wnd,true))
+	    removeTrayIcon("incomingcall");
 	updateSelectedChannel(&item);
 	return true;
     }
@@ -4063,6 +4108,13 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
     // Specific select handlers
     if (handleMucsSelect(name,item,wnd,text))
 	return true;
+
+    // No more notifications: remove the tray icon
+    if (name == "messages") {
+	if (!item)
+	    removeTrayIcon("notification");
+	return true;
+    }
 
     // Selection changed in 'callto': do nothing. Just return true to avoid enqueueing ui.event
     if (name == "callto")
@@ -7196,8 +7248,12 @@ bool DefaultLogic::showNotificationArea(bool show, Window* wnd, NamedList* upd)
 {
     if (!Client::self())
 	return false;
-    if (upd)
+    if (upd) {
 	Client::self()->updateTableRows("messages",upd,false,wnd);
+	addTrayIcon("notification");
+    }
+    else if (!show)
+	removeTrayIcon("notification");
     NamedList p("");
     const char* ok = String::boolText(show);
     p.addParam("check:messages_show",ok);

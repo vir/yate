@@ -55,6 +55,11 @@ protected:
      * Tab inserted. Set tab close button if needed
      */
     virtual void tabInserted(int index);
+
+    /**
+     * Tab removed. Notify the parent
+     */
+    virtual void tabRemoved(int index);
 };
 
 class WidgetListStackedWidget : public QStackedWidget
@@ -297,7 +302,7 @@ public:
     void setItemImageParam(QString value)
 	{ QtClient::getUtf8(m_itemImgParam,value); }
 
-protected slots:
+public slots:
     /**
      * Handle item children actions
      */
@@ -309,6 +314,16 @@ protected slots:
      */
     void itemChildToggle(bool on)
 	{ onToggle(sender(),on); }
+
+    /**
+     * Handle selection changes
+     */
+    void currentChanged(int index);
+
+    /**
+     * Item removed slot. Notify the client when empty
+     */
+    void itemRemoved(int index);
 
     /**
      * Handle item children select

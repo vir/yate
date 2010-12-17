@@ -821,6 +821,7 @@ public:
      */
     enum TrayIconType {
 	TrayIconMain = 0,
+	TrayIconIncomingChat = 3000,
 	TrayIconNotification = 5000,
 	TrayIconIncomingCall = 10000,
     };
@@ -3693,8 +3694,9 @@ public:
 
     /**
      * Flash chat window/item to notify the user
+     * @param on True to start, false to stop flashing
      */
-    virtual void flashChat();
+    virtual void flashChat(bool on = true);
 
     /**
      * Send chat to contact (enqueue a msg.execute message)
@@ -3801,6 +3803,12 @@ public:
      */
     virtual void updateChatWindow(const NamedList& params, const char* title = 0,
 	const char* icon = 0);
+
+    /**
+     * Check if the contact chat is active
+     * @return True if the contact's chat window/page is active
+     */
+    virtual bool isChatActive();
 
     /**
      * Close the chat window or destroy docked chat item
@@ -4336,8 +4344,9 @@ public:
     /**
      * Flash chat window/item to notify the user
      * @param id Member id
+     * @param on True to start, false to stop flashing
      */
-    virtual void flashChat(const String& id);
+    virtual void flashChat(const String& id, bool on = true);
 
     /**
      * Retrieve the contents of the chat input widget
@@ -4419,6 +4428,12 @@ public:
      * @param params Parameters to set
      */
     virtual void updateChatWindow(const String& id, const NamedList& params);
+
+    /**
+     * Check if a member's chat is active
+     * @return True if the members's chat page is active
+     */
+    virtual bool isChatActive(const String& id);
 
     /**
      * Close a member's chat or all chats

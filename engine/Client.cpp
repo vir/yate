@@ -377,11 +377,15 @@ static inline bool hasOverride(const NamedList* params, String& name, String& ha
 }
 
 // Utility: request to client to flash a widget's item (page, list item ...)
-static void flashItem(const String& name, const String& item, Window* w)
+static inline void flashItem(bool on, const String& name, const String& item,
+    Window* w)
 {
-    // TODO: implement
-    DDebug(ClientDriver::self(),DebugStub,"flashItem() not implemented!");
+    if (!Client::self())
+	return;
+    Client::self()->setProperty(name,"_yate_flashitem",
+	String(on) + ":" + item,w);
 }
+
 
 /**
  * Window
@@ -4182,14 +4186,15 @@ bool ClientContact::hasChat()
 }
 
 // Flash chat window/item to notify the user
-void ClientContact::flashChat()
+void ClientContact::flashChat(bool on)
 {
     Window* w = getChatWnd();
     if (!w)
 	return;
-    Client::self()->setUrgent(w->id(),true,w);
+    if (on)
+	Client::self()->setUrgent(w->id(),true,w);
     if (m_dockedChat)
-	flashItem(s_dockedChatWidget,toString(),w);
+	flashItem(on,s_dockedChatWidget,toString(),w);
 }
 
 // Send chat to contact (enqueue a msg.execute message)
@@ -4408,6 +4413,22 @@ void ClientContact::updateChatWindow(const NamedList& params, const char* title,
     p.addParam("title",title,false);
     p.addParam("image:" + m_chatWndName,icon,false);
     Client::self()->setParams(&p,w);
+}
+
+// Check if the contact chat is active
+bool ClientContact::isChatActive()
+{
+    Window* w = getChatWnd();
+    if (!w)
+	return false;
+    // We are in the client's thread: use the Window's method
+    if (!w->active())
+	return false;
+    if (!m_dockedChat)
+	return true;
+    String sel;
+    Client::self()->getSelect(s_dockedChatWidget,sel,w);
+    return sel == toString();
 }
 
 // Close the chat window or destroy docked chat item
@@ -4728,13 +4749,14 @@ bool MucRoom::hasChat(const String& id)
 }
 
 // Flash chat window/item to notify the user
-void MucRoom::flashChat(const String& id)
+void MucRoom::flashChat(const String& id, bool on)
 {
     Window* w = getChatWnd();
     if (!w)
 	return;
-    Client::self()->setUrgent(w->id(),true,w);
-    flashItem(s_dockedChatWidget,id,w);
+    if (on)
+	Client::self()->setUrgent(w->id(),true,w);
+    flashItem(on,s_dockedChatWidget,id,w);
 }
 
 // Retrieve the contents of the chat input widget
@@ -4862,6 +4884,20 @@ void MucRoom::updateChatWindow(const String& id, const NamedList& params)
     Window* w = getChatWnd();
     if (w)
 	Client::self()->setTableRow(s_dockedChatWidget,id,&params,w);
+}
+
+// Check if the contact chat is active
+bool MucRoom::isChatActive(const String& id)
+{
+    Window* w = getChatWnd();
+    if (!w)
+	return false;
+    // We are in the client's thread: use the Window's method
+    if (!w->active())
+	return false;
+    String sel;
+    Client::self()->getSelect(s_dockedChatWidget,sel,w);
+    return sel == id;
 }
 
 // Close a member's chat

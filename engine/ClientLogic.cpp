@@ -840,6 +840,22 @@ static void activatePageCalls(Window* wnd = 0, bool selTab = true)
     Client::self()->setParams(&p,wnd);
 }
 
+// Check if the calls page is active
+static bool isPageCallsActive(Window* wnd, bool checkTab)
+{
+    if (!Client::valid())
+	return false;
+    String sel;
+    if (checkTab) {
+	Client::self()->getSelect(s_mainwindowTabs,sel,wnd);
+	if (sel != "tabTelephony")
+	    return false;
+	sel.clear();
+    }
+    Client::self()->getSelect("framePages",sel,wnd);
+    return sel == "PageCalls";
+}
+
 // Retrieve a contact edit/info window.
 // Create it if requested and not found.
 // Set failExists to true to return 0 if already exists
@@ -4013,6 +4029,8 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
 	ClientContact* c = 0;
 	if (item == "tabChat")
 	    c = selectedChatContact(*m_accounts,wnd);
+	else if (isPageCallsActive(wnd,false))
+	    removeTrayIcon("incomingcall");
 	enableChatActions(c,false);
 	return true;
     }
@@ -4028,6 +4046,13 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
 	fillLogContactActive(p,true,&item);
 	Client::self()->setParams(&p,wnd);
 	return true;
+    }
+
+    // Page changed in telephony tab
+    if (name == "framePages") {
+    	if (isPageCallsActive(wnd,true))
+	    removeTrayIcon("incomingcall");
+	return false;
     }
 
     // keep the item in sync in all windows

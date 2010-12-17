@@ -865,6 +865,7 @@ Client::Client(const char *name)
     m_toggles[OptKeypadVisible] = true;
     m_toggles[OptAddAccountOnStartup] = true;
     m_toggles[OptNotifyChatState] = true;
+    m_toggles[OptDockedChat] = true;
     s_incomingUrlParam = Engine::config().getValue("client","incomingcallurlparam",
 	"caller_info_uri");
 

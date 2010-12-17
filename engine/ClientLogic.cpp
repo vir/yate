@@ -2071,7 +2071,6 @@ static void notifyIncomingChat(ClientContact* c, const String& id = String::empt
 {
     if (!(c && Client::valid()))
 	return;
-    String* add = 0;
     MucRoom* room = c->mucRoom();
     if (!room) {
 	if (c->isChatActive())

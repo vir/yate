@@ -4373,8 +4373,13 @@ bool DefaultLogic::callStart(NamedList& params, Window* wnd, const String& cmd)
 	// Check google voice target on gmail accounts
 	String account = params.getValue("account",params.getValue("line"));
 	if (account && isGmailAccount(m_accounts->findAccount(account))) {
-	    target = ns;
-	    Client::fixPhoneNumber(target,"().- ");
+	    // Allow calling user@domain
+	    int pos = ns.find('@');
+	    bool valid = (pos > 0) && (ns.find('.',pos + 2) >= pos);
+	    if (!valid) {
+		target = ns;
+		Client::fixPhoneNumber(target,"().- ");
+	    }
 	    if (target) {
 		target = target + "@voice.google.com/phone";
 		params.addParam("ojingle_version","0");
@@ -4382,7 +4387,7 @@ bool DefaultLogic::callStart(NamedList& params, Window* wnd, const String& cmd)
 		callParams.append("ojingle_version",",");
 		params.setParam("call_parameters",callParams);
 	    }
-	    else {
+	    else if (!valid) {
 		showError(wnd,"Incorrect number");
 		Debug(ClientDriver::self(),DebugNote,
 		    "Failed to call: invalid gmail number '%s'",params.getValue("target"));

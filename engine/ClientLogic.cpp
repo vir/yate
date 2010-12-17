@@ -5994,7 +5994,7 @@ bool DefaultLogic::initializedClient()
     // Settings
     p.addParam("check:" + String(lookup(s_chatLog,s_chatLogDict)),String::boolText(true));
     // Account edit defaults
-    setCheck(p,*cSect,"acc_showadvanced");
+    setCheck(p,*cSect,"acc_showadvanced",false);
     setCheck(p,*cSect,"acc_enabled");
     Client::self()->setParams(&p);
 

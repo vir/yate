@@ -5738,6 +5738,7 @@ bool DefaultLogic::defaultMsgHandler(Message& msg, int id, bool& stopLogic)
 			c->updateChatWindow(p,"Chat [" + c->m_name + "]",
 			    resStatusImage(res ? res->m_status : ClientResource::Offline));
 		    }
+		    c->showChat(true);
 		    if (chatState)
 			addChatNotify(*c,chatState,msg.msgTime().sec(),"tempnotify");
 		    if (p) {

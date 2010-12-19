@@ -4028,9 +4028,14 @@ bool DefaultLogic::toggle(Window* wnd, const String& name, bool active)
     }
     // Window active changed
     if (wnd && name == "window_active_changed") {
-	if (wnd->id().startsWith(ClientContact::s_chatPrefix)) {
+	if (active) {
 	    // Remove contact from pending when activated
-	    if (active)
+	    if (wnd->id() == ClientContact::s_dockedChatWnd) {
+		String sel;
+		if (Client::self()->getSelect(ClientContact::s_dockedChatWidget,sel,wnd))
+		    removePendingChat(sel,m_accounts);
+	    }
+	    else if (wnd->id().startsWith(ClientContact::s_chatPrefix))
 		removePendingChat(wnd->context());
 	}
 	return true;

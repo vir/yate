@@ -1,3 +1,22 @@
+yate (3.0.0.svn3986) unstable; urgency=low
+
+  * Updated to SVN revision 3986: + Don't force show chat window when
+    incoming chat is received: it will activate the window.  + Allow
+    calling user@domain from telephony tab on gmail accounts.  + Removed
+    unused variable.  + Don't request confirmation when calling a call
+    log item. Pass the window pointer to the method implementing call
+    log calling.  + Added facebook url in account wizard.  + Changed
+    image.  + Hide advanced account setup controls by default.  + Show
+    docked chat by default.  + Implemented tray icon incoming chat
+    notification.  + Added flash item feature to the widget list (change
+    tab text color).  + Update active flag and notify
+    "window_active_changed" to the client when the application is
+    deactivated.  + Replaced QTextEdit with QTextBrowser in help window.
+    + Handle QTextBrowser widget class when set/get widget text.  +
+    Added packaging of recently added files
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sun, 19 Dec 2010 14:30:41 +0300
+
 yate (3.0.0.svn3973) unstable; urgency=low
 
   * Updated to SVN revision 3973: + Updated debian packaging info  +

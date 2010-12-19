@@ -59,14 +59,8 @@
      </property>
      <layout class="QVBoxLayout" >
       <item>
-       <widget class="QTextEdit" name="help_text" >
-        <property name="undoRedoEnabled" >
-         <bool>false</bool>
-        </property>
-        <property name="readOnly" >
-         <bool>true</bool>
-        </property>
-        <property name="overwriteMode" >
+       <widget class="QTextBrowser" name="help_text" >
+        <property name="openExternalLinks" >
          <bool>true</bool>
         </property>
        </widget>

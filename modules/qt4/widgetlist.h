@@ -43,6 +43,27 @@ public:
      */
     WidgetListTabWidget(WidgetList* parent, const NamedList& params);
 
+    /**
+     * Set tab text color
+     * @param index Tab index
+     * @param color Tab text color
+     */
+    inline void setTabTextColor(int index, QColor color) {
+	    QTabBar* bar = tabBar();
+	    if (bar)
+		bar->setTabTextColor(index,color);
+	}
+
+    /**
+     * Retrieve the tab text color
+     * @param index Tab index
+     * @return Text color of the given index
+     */
+    inline QColor tabTextColor(int index) {
+	    QTabBar* bar = tabBar();
+	    return bar ? bar->tabTextColor(index) : QColor();
+	}
+
 protected:
     /**
      * Build and set a close button for a given tab or a global close if index is negative
@@ -88,6 +109,7 @@ class WidgetList : public QtCustomWidget
     Q_PROPERTY(QString _yate_itemstyle READ itemStyle WRITE setItemStyle(QString))
     Q_PROPERTY(QString _yate_itemtextparam READ itemTextParam WRITE setItemTextParam(QString))
     Q_PROPERTY(QString _yate_itemimageparam READ itemImageParam WRITE setItemImageParam(QString))
+    Q_PROPERTY(QString _yate_flashitem READ flashItem WRITE setFlashItem(QString))
 public:
     /**
      * Delete item button type
@@ -301,6 +323,19 @@ public:
      */
     void setItemImageParam(QString value)
 	{ QtClient::getUtf8(m_itemImgParam,value); }
+
+    /**
+     * Read _yate_flashitem property accessor: does nothing
+     * This method is here to stop MOC compiler complaining about missing READ accessor function
+     */
+    QString flashItem()
+	{ return QString(); }
+
+    /**
+     * Start/stop item flash
+     * @param value Item value. Format bool_value:item_id
+     */
+    void setFlashItem(QString value);
 
 public slots:
     /**

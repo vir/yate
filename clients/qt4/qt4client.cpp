@@ -70,7 +70,8 @@ public:
 	SpinBox        = 13,
 	Calendar       = 14,
 	Splitter       = 15,
-	Unknown        = 16,             // Unknown type
+	TextBrowser    = 16,
+	Unknown,                         // Unknown type
 	Action,                          // QAction descendant
 	CustomTable,                     // QtTable descendant
 	CustomTree,                      // QtTree descendant
@@ -429,6 +430,7 @@ String QtWidget::s_types[QtWidget::Unknown] = {
     "QSpinBox",
     "QCalendarWidget",
     "QSplitter",
+    "QTextBrowser",
 };
 
 // QVariant type translation dictionary
@@ -1154,6 +1156,7 @@ bool QtWindow::setText(const String& name, const String& text,
 	case QtWidget::LineEdit:
 	    w.lineEdit()->setText(QtClient::setUtf8(text));
 	    return true;
+	case QtWidget::TextBrowser:
 	case QtWidget::TextEdit:
 	    if (richText) {
 		w.textEdit()->clear();
@@ -1418,6 +1421,7 @@ bool QtWindow::addLines(const String& name, const NamedList* lines, unsigned int
 	return true;
 
     switch (w.type()) {
+	case QtWidget::TextBrowser:
 	case QtWidget::TextEdit:
 	    // Limit the maximum number of paragraphs
 	    if (max) {
@@ -1787,6 +1791,7 @@ bool QtWindow::clearTable(const String& name)
 	case QtWidget::Table:
 	    w.table()->setRowCount(0);
 	    break;
+	case QtWidget::TextBrowser:
 	case QtWidget::TextEdit:
 	    w.textEdit()->clear();
 	    break;
@@ -1821,6 +1826,7 @@ bool QtWindow::getText(const String& name, String& text, bool richText)
 	case QtWidget::LineEdit:
 	    QtClient::getUtf8(text,w.lineEdit()->text());
 	    return true;
+	case QtWidget::TextBrowser:
 	case QtWidget::TextEdit:
 	    if (!richText)
 		QtClient::getUtf8(text,w.textEdit()->toPlainText());
@@ -2079,6 +2085,12 @@ bool QtWindow::event(QEvent* ev)
     else if (ev->type() == QEvent::WindowActivate) {
 	m_active = true;
 	Client::self()->toggle(this,"window_active_changed",true);
+    }
+    else if (ev->type() == QEvent::ApplicationDeactivate) {
+	if (m_active) {
+	    m_active = false;
+	    Client::self()->toggle(this,"window_active_changed",true);
+	}
     }
     return QWidget::event(ev);
 }

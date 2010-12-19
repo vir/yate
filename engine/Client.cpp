@@ -4353,7 +4353,7 @@ bool ClientContact::showChat(bool visible, bool active)
 	    return Client::self()->delTableRow(s_dockedChatWidget,toString(),w);
 	return Client::self()->setVisible(m_chatWndName,false);
     }
-    bool ok = Client::self()->setVisible(w->id(),true);
+    bool ok = Client::self()->getVisible(w->id()) || Client::self()->setVisible(w->id(),true);
     if (active) {
 	if (m_dockedChat)
 	    Client::self()->setSelect(s_dockedChatWidget,toString(),w);

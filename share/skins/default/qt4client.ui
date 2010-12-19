@@ -68,6 +68,7 @@
        <bool>true</bool>
       </property>
       <addaction name="separator" />
+      <addaction name="setStatusOnline" />
       <addaction name="joinmuc_wizard" />
       <addaction name="separator" />
       <addaction name="separator" />

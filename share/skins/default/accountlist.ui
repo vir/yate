@@ -67,14 +67,12 @@
        </property>
        <property name="_yate_uiwidget_params" stdset="0" >
         <stringlist>
-         <string>property:sortingEnabled=true</string>
          <string>property:styleSheet=QTableWidget{background:white; selection-background-color: lightblue;}</string>
          <string>property:tabKeyNavigation=false</string>
          <string>property:_yate_horizontalheader=true</string>
          <string>property:_yate_notifyonenterpressed=true</string>
          <string>property:_yate_notifyitemchanged=true</string>
          <string>property:_yate_itemheight=0</string>
-         <string>property:_yate_sorting=2,true</string>
          <string>hheader_columns=Enabled,Account,Status</string>
          <string>hheader_columns_check=enabled</string>
          <string>hheader_columns_size=60</string>

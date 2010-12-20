@@ -387,6 +387,7 @@ that support database access will be able to use MySQL.
 %package client-common
 Summary:	Common files for all Yate clients
 Group:		Applications/Communication
+Requires:	%{name} = %{version}-%{release}
 
 %description client-common
 This package includes the common files needed to use Yate as a VoIP client.

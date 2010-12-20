@@ -2877,14 +2877,16 @@ bool Client::updateTrayIcon(const String& wndName)
     ObjList* o = list->skipNull();
     TrayIconDef* def = o ? static_cast<TrayIconDef*>(o->get()) : 0;
     NamedList p("systemtrayicon");
-    // Remove the old one
-    p.addParam("stackedicon","");
     NamedPointer* np = 0;
     if (def) {
+	// Add or replace
 	NamedList* nl = YOBJECT(NamedList,def);
 	np = new NamedPointer("stackedicon",nl,String::boolText(true));
 	p.addParam(np);
     }
+    else
+	// Remove the old one
+	p.addParam("stackedicon","");
     bool ok = Client::self()->setParams(&p,w);
     if (np)
 	np->takeData();
@@ -4351,7 +4353,7 @@ bool ClientContact::showChat(bool visible, bool active)
 	    return Client::self()->delTableRow(s_dockedChatWidget,toString(),w);
 	return Client::self()->setVisible(m_chatWndName,false);
     }
-    bool ok = Client::self()->setVisible(w->id(),true);
+    bool ok = Client::self()->getVisible(w->id()) || Client::self()->setVisible(w->id(),true);
     if (active) {
 	if (m_dockedChat)
 	    Client::self()->setSelect(s_dockedChatWidget,toString(),w);

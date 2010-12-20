@@ -545,7 +545,7 @@ static bool translateName(QtWidget& w, String& name, NamedList** params = 0)
 }
 
 // Utility: raise a select event if a list is empty
-inline void raiseSelectIfEmpty(int count, Window* wnd, const String& name)
+static inline void raiseSelectIfEmpty(int count, Window* wnd, const String& name)
 {
     if (!Client::exiting() && count <= 0 && Client::self())
 	Client::self()->select(wnd,name,String::empty());
@@ -595,7 +595,7 @@ static void addDynamicProps(QObject* obj, NamedList& props)
 }
 
 // Find a QSystemTrayIcon child of an object
-inline QSystemTrayIcon* findSysTrayIcon(QObject* obj, const char* name)
+static inline QSystemTrayIcon* findSysTrayIcon(QObject* obj, const char* name)
 {
     return qFindChild<QSystemTrayIcon*>(obj,QtClient::setUtf8(name));
 }
@@ -994,9 +994,8 @@ bool QtWindow::setParams(const NamedList& params)
 	    NamedList* nl = static_cast<NamedList*>(ns ? ns->getObject("NamedList") : 0);
 	    if (!nl)
 		continue;
-	    // Create a new one
-	    bool newObj = !trayIcon;
-	    if (newObj) {
+	    // Create a new one if needed
+	    if (!trayIcon) {
 		if (!ns->toBoolean())
 		    continue;
 		trayIcon = new QSystemTrayIcon(wndWidget());
@@ -1007,9 +1006,9 @@ bool QtWindow::setParams(const NamedList& params)
 		s_allHiddenQuit++;
 	    }
 	    ok = true;
-	    // Add dynamic properties on creation
-	    if (newObj)
-		addDynamicProps(trayIcon,*nl);
+	    // Add dynamic properties
+	    // TODO: track the properties, clear the old ones if needed
+	    addDynamicProps(trayIcon,*nl);
 	    // Set icon and tooltip
 	    NamedString* tmp = nl->getParam("icon");
 	    if (tmp && *tmp)

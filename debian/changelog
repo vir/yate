@@ -1,3 +1,22 @@
+yate (3.0.0.svn3995) unstable; urgency=low
+
+  * Updated to SVN revision 3995: + Added missed build dependency  +
+    Bumped version - 3.0.0 release 1.  + Added new file to yate-qt4
+    debian package  + Help file changes by Diana, links point to
+    yateclient.yate.ro  + Added missing Windows Qt modules to new
+    utility project.  + Simplified and corrected the .iss file.  + Added
+    a copy of Online as the 1st menu entry.  + Disabled sorting in the
+    account list to prevent accidentally selecting an irrelevant column.
+    + Remove pending chat notification from chat tabs on docked window
+    activation.  + Set a minimum vertical size to the Account Wizard's
+    buttons.  + Undid Rev 3986 as it prevented the chat window from
+    popping up.  + Make the chat window visible only if not already so
+    to prevent restoring if minimized.  + Changed the tray icon updating
+    logic so existing icons can be reused.  + This prevents the tray
+    icon from being repeatedly deleted and inserted.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Mon, 20 Dec 2010 12:56:00 +0300
+
 yate (3.0.0.svn3986) unstable; urgency=low
 
   * Updated to SVN revision 3986: + Don't force show chat window when

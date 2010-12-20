@@ -19,11 +19,11 @@
 #define YATE_MINOR_S "0"
 #define YATE_BUILD_S "0"
 #define YATE_VERSION "3.0.0"
-#define YATE_RELEASE "3"
-#define YATE_STATUS  "alpha"
+#define YATE_RELEASE "1"
+#define YATE_STATUS  ""
 
 /* Windows version resource - file and string style */
-#define YATE_WINVER_F 3,0,0,3
-#define YATE_WINVER_S "3, 0, 0, 3\0"
+#define YATE_WINVER_F 3,0,0,1
+#define YATE_WINVER_S "3, 0, 0, 1\0"
 
 #endif /* __YATEVERSN_H */

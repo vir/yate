@@ -1,3 +1,11 @@
+yate (3.0.0.svn3996) unstable; urgency=low
+
+  * Updated to SVN revision 3996: + Added missed dependencyes (codecs)
+    + Added missed build dependency  + Added yate as dependency of yate-
+    client-common, fixed icon in menus.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Mon, 20 Dec 2010 17:47:31 +0300
+
 yate (3.0.0.svn3995) unstable; urgency=low
 
   * Updated to SVN revision 3995: + Added missed build dependency  +

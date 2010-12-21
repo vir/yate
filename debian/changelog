@@ -1,3 +1,17 @@
+yate (3.0.1.svn4001) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4001: + Added missed build dependency  +
+    Added missed dependencyes (codecs)  + Updated building deps for
+    testing/unstable (dahdi)  + Merge branch 'deb' of
+    github.com:vir/yate into deb  + Changed call on hold string shown in
+    status bar.  + Development will go on in 3.0.x, next release will be
+    3.1.0  + Bumped version to 3.0.1 alpha 1.  + Handle jingle session
+    redirect. Don't check the called party jid if requested in
+    call.execute message.  + Don't add a resource when calling a google
+    voice target. Let the jingle channel to redirect the call.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 21 Dec 2010 17:41:25 +0300
+
 yate (3.0.0.svn3996) UNRELEASED; urgency=low
 
   * Updated to SVN revision 3996: + Added missed dependencyes (codecs)

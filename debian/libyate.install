@@ -56,7 +56,7 @@ debian/tmp/usr/lib/yate/filetransfer.yate
 debian/tmp/usr/share/yate/sounds/ring.wav
 debian/tmp/usr/share/yate/sounds/tone.wav
 
-debian/tmp/usr/lib/libyatejabber.so.3.0.0
+debian/tmp/usr/lib/libyatejabber.so.*
 debian/tmp/usr/lib/yate/yjinglechan.yate
 
 debian/tmp/etc/yate/zlibcompress.conf

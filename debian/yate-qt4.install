@@ -4,7 +4,7 @@ debian/tmp/usr/lib/yate/qt4/customtext.yate
 debian/tmp/usr/lib/yate/qt4/customtree.yate
 debian/tmp/usr/lib/yate/qt4/widgetlist.yate
 debian/tmp/usr/lib/yate/qt4/clientarchive.yate
-debian/tmp/usr/lib/libyateqt4.so.3.0.0
+debian/tmp/usr/lib/libyateqt4.so.*
 debian/tmp/usr/share/pixmaps/null_team-16.png
 debian/tmp/usr/share/pixmaps/null_team-32.png
 debian/tmp/usr/share/pixmaps/null_team-48.png

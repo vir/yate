@@ -133,7 +133,7 @@ public:
      * @return JGRtpMedia pointer
      */
     static inline JGRtpMedia* telEvent()
-	{ return new JGRtpMedia("106","telephone-event","8000",""); }
+	{ return new JGRtpMedia("101","telephone-event","8000",""); }
 
     /**
      * The numeric id of this payload

@@ -4386,10 +4386,12 @@ bool DefaultLogic::callStart(NamedList& params, Window* wnd, const String& cmd)
 		Client::fixPhoneNumber(target,"().- ");
 	    }
 	    if (target) {
-		target = target + "@voice.google.com/phone";
+		target = target + "@voice.google.com";
 		params.addParam("ojingle_version","0");
+		params.addParam("redirectcount","5");
+		params.addParam("checkcalled",String::boolText(false));
 		String callParams = params["call_parameters"];
-		callParams.append("ojingle_version",",");
+		callParams.append("redirectcount,checkcalled,ojingle_version",",");
 		params.setParam("call_parameters",callParams);
 	    }
 	    else if (!valid) {
@@ -5525,7 +5527,7 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	    break;
 	case ClientChannel::OnHold:
 	    enableActions = true;
-	    buildStatus(status,"Call on hold",CHANUPD_ADDR,CHANUPD_ID);
+	    buildStatus(status,"Call inactive",CHANUPD_ADDR,CHANUPD_ID);
 	    setImageParam(p,"party",outgoing ? "down.png" : "up.png");
 	    if (outgoing) {
 		if (noticed)

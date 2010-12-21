@@ -95,6 +95,17 @@
 ; resource.notify: integer: Override the priority of module's resource.notify message handler
 ;resource.notify=
 
+; redirectcount: integer: Default value for outgoing calls redirect counter
+; This parameter controls the behaviour of an outgoing call terminated
+;  with 'redirect' reason containing a non empty target
+; If non 0 the counter is decreased. If the target is an XMPP uri the call will
+;  be re-executed internally.
+; If the counter is 0 when terminated, the call parameters list will be filled with
+;  session parameters to let the PBX deal with it.
+; This parameter can be overridden from routing
+;redirectcount=0
+
+
 [codecs]
 ; This section allows to individually enable or disable the codecs
 

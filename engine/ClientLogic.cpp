@@ -5525,7 +5525,7 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	    break;
 	case ClientChannel::OnHold:
 	    enableActions = true;
-	    buildStatus(status,"Call on hold",CHANUPD_ADDR,CHANUPD_ID);
+	    buildStatus(status,"Call inactive",CHANUPD_ADDR,CHANUPD_ID);
 	    setImageParam(p,"party",outgoing ? "down.png" : "up.png");
 	    if (outgoing) {
 		if (noticed)

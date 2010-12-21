@@ -1,3 +1,10 @@
+yate (3.0.1.svn4002) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4002: + Fixed shared libs packaging  + Fixed
+    bug: set the telephone-event payload type to 101 instead of 106.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 22 Dec 2010 02:19:13 +0300
+
 yate (3.0.1.svn4001) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4001: + Added missed build dependency  +

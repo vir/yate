@@ -2201,6 +2201,22 @@ static void removePendingChat(const String& id, ClientAccountList* accounts = 0)
 	room->flashChat(id,false);
 }
 
+// Set offline to MUCs belonging to a given account
+static void setOfflineMucs(ClientAccount* acc)
+{
+    if (!acc || Client::exiting())
+	return;
+    for (ObjList* o = acc->mucs().skipNull(); o; o = o->skipNext()) {
+	MucRoom* room = static_cast<MucRoom*>(o->get());
+	if (room->resource().offline())
+	    continue;
+	room->resource().m_status = ClientResource::Offline;
+	room->resource().m_affiliation = MucRoomMember::AffNone;
+	room->resource().m_role = MucRoomMember::RoleNone;
+	updateMucRoomMember(*room,room->resource());
+    }
+}
+
 
 /**
  * ClientWizard
@@ -5257,6 +5273,7 @@ bool DefaultLogic::handleUserNotify(Message& msg, bool& stopLogic)
 	    acc->resource().m_id = acc->m_params.getValue("resource");
 	}
 	clearAccountContacts(*acc);
+	setOfflineMucs(acc);
     }
     // Clear some internal params
     acc->m_params.clearParam("internal.nologinfail");

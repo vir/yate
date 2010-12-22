@@ -812,7 +812,7 @@ void SignallingCircuitGroup::insertRange(const String& range, const char* name,
     if (strategy < 0)
 	strategy = m_range.m_strategy;
     m_ranges.append(new SignallingCircuitRange(range,name,strategy));
-    Debug(this,DebugAll,"Added range %s: %s [%p]",name,range.c_str(),this);
+    Debug(this,DebugNote,"Added range %s: %s [%p]",name,range.c_str(),this);
 }
 
 // Remove a span from list

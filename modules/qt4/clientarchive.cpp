@@ -803,7 +803,7 @@ bool ChatFile::loadSession(const String& id, ObjList& list, String* error,
 	    if (exiting())
 		break;
 	    if (hdrFound) {
-		ChatItem* entry = decodeChat(find,s->m_offset,buf.data(),n);
+		ChatItem* entry = decodeChat(find,s->m_offset + processed,buf.data(),n);
 		if (entry) {
 		    if (!find)
 			list.append(entry);
@@ -833,7 +833,7 @@ bool ChatFile::loadSession(const String& id, ObjList& list, String* error,
 	if (hdrFound && buf.length() && processed < s->m_length) {
 	    ChatItem* entry = 0;
 	    if (!(find && ok))
-		entry = decodeChat(find,s->m_offset,buf.data(),buf.length());
+		entry = decodeChat(find,s->m_offset + processed,buf.data(),buf.length());
 	    if (entry) {
 		if (!find)
 		    list.append(entry);

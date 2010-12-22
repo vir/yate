@@ -337,6 +337,8 @@ static const String s_mucInvite = "room_invite_contacts";
 static const String s_mucPrivChat = "room_member_chat";
 static const String s_mucKick = "room_member_kick";
 static const String s_mucBan = "room_member_ban";
+static const String s_mucRoomShowLog = "room_showlog";
+static const String s_mucMemberShowLog = "room_member_showlog";
 // Not selected string(s)
 static String s_notSelected = "-none-";
 // Maximum number of call log entries
@@ -610,7 +612,7 @@ static inline void setImageParam(NamedList& p, const char* param,
 
 // Request to the client to log a chat entry
 static bool logChat(ClientContact* c, unsigned int time, bool send, bool delayed,
-    const String& body)
+    const String& body, bool roomChat = true, const String& nick = String::empty())
 {
     if (!c)
 	return false;
@@ -618,11 +620,20 @@ static bool logChat(ClientContact* c, unsigned int time, bool send, bool delayed
 	return false;
     if (!Client::self())
 	return false;
+    MucRoom* room = c->mucRoom();
     NamedList p("");
     p.addParam("account",c->accountName());
     p.addParam("contact",c->uri());
-    p.addParam("contactname",c->m_name);
-    p.addParam("sender",send ? "" : c->m_name.c_str());
+    if (!room) {
+	p.addParam("contactname",c->m_name);
+	p.addParam("sender",send ? "" : c->m_name.c_str());
+    }
+    else {
+	p.addParam("muc",String::boolText(true));
+	p.addParam("roomchat",String::boolText(roomChat));
+	p.addParam("contactname",roomChat ? room->resource().m_name : nick);
+	p.addParam("sender",send ? "" : nick.c_str());
+    }
     p.addParam("time",String(time));
     p.addParam("send",String::boolText(send));
     if (!send && delayed)
@@ -632,24 +643,38 @@ static bool logChat(ClientContact* c, unsigned int time, bool send, bool delayed
 }
 
 // Show contact archive log
-static bool logShow(ClientContact* c)
+static bool logShow(ClientContact* c, bool roomChat = true,
+    const String& nick = String::empty())
 {
     if (!(c && Client::self()))
 	return false;
+    MucRoom* room = c->mucRoom();
     NamedList p("");
     p.addParam("account",c->accountName());
     p.addParam("contact",c->uri());
+    if (room) {
+	p.addParam("muc",String::boolText(true));
+	p.addParam("roomchat",String::boolText(roomChat));
+	p.addParam("contactname",nick,false);
+    }
     return Client::self()->action(0,"archive:showchat",&p);
 }
 
 // Close archive session
-static bool logCloseSession(ClientContact* c)
+static bool logCloseSession(ClientContact* c, bool roomChat = true,
+    const String& nick = String::empty())
 {
     if (!(c && Client::self()))
 	return false;
+    MucRoom* room = c->mucRoom();
     NamedList p("");
     p.addParam("account",c->accountName());
     p.addParam("contact",c->uri());
+    if (room) {
+	p.addParam("muc",String::boolText(true));
+	p.addParam("roomchat",String::boolText(roomChat));
+	p.addParam("contactname",nick,false);
+    }
     return Client::self()->action(0,"archive:closechatsession",&p);
 }
 
@@ -661,6 +686,34 @@ static bool logClearAccount(const String& account)
     NamedList p("");
     p.addParam("account",account);
     return Client::self()->action(0,"archive:clearaccountnow",&p);
+}
+
+// Close all MUC log sessions of a room
+static void logCloseMucSessions(MucRoom* room)
+{
+    if (!room)
+	return;
+    Window* w = room->getChatWnd();
+    if (w) {
+	NamedList p("");
+	Client::self()->getOptions(ClientContact::s_dockedChatWidget,&p,w);
+	unsigned int n = p.length();
+	for (unsigned int i = 0; i < n; i++) {
+	    NamedString* ns = p.getParam(i);
+	    if (!(ns && ns->name()))
+		continue;
+	    MucRoomMember* m = room->findMemberById(ns->name());
+	    if (m)
+		logCloseSession(room,false,m->m_name);
+	}
+    }
+    else {
+	for (ObjList* o = room->resources().skipNull(); o; o = o->skipNext()) {
+	    MucRoomMember* m = static_cast<MucRoomMember*>(o->get());
+	    logCloseSession(room,false,m->m_name);
+	}
+    }
+    logCloseSession(room);
 }
 
 // Update protocol related page(s) in account edit/add or wizard
@@ -1615,6 +1668,8 @@ static void createRoomChat(MucRoom& room, MucRoomMember* member = 0, bool active
     pRoom->addParam("item:" + s_mucChgSubject,"");
     pRoom->addParam("item:","");
     pRoom->addParam("item:" + s_mucInvite,"");
+    pRoom->addParam("item:","");
+    pRoom->addParam("item:" + s_mucRoomShowLog,"");
     tmp.addParam(new NamedPointer("setmenu",pRoom,""));
     // Members context menu
     menuName << "_" << s_mucMembers;
@@ -1623,6 +1678,8 @@ static void createRoomChat(MucRoom& room, MucRoomMember* member = 0, bool active
     pMembers->addParam("item:","");
     pMembers->addParam("item:" + s_mucKick,"");
     pMembers->addParam("item:" + s_mucBan,"");
+    pMembers->addParam("item:","");
+    pMembers->addParam("item:" + s_mucMemberShowLog,"");
     NamedList* p = new NamedList("");
     p->addParam(new NamedPointer("contactmenu",pMembers));
     tmp.addParam(new NamedPointer("setparams:" + s_mucMembers,p));
@@ -3980,6 +4037,8 @@ bool DefaultLogic::toggle(Window* wnd, const String& name, bool active)
 		ObjList* o = m_accounts->accounts().skipNull();
 		for (; o; o = o->skipNext()) {
 		    ClientAccount* acc = static_cast<ClientAccount*>(o->get());
+		    for (ObjList* l = acc->mucs().skipNull(); l; l = l->skipNext())
+			logCloseMucSessions(static_cast<MucRoom*>(l->get()));
 		    acc->mucs().clear();
 		}
 		// Remove from pending chat
@@ -5819,7 +5878,8 @@ bool DefaultLogic::defaultMsgHandler(Message& msg, int id, bool& stopLogic)
 	    if (p) {
 		room->addChatHistory(id,!delay ? "chat_in" : "chat_delayed",p);
 		notifyIncomingChat(room,id);
-		room->flashChat(id);
+		if (body)
+		    logChat(room,time,false,delay != 0,body,mucChat,nick);
 	    }
 	    if (resetNotif)
 		room->setChatProperty(id,"history","_yate_tempitemcount",String((int)0));
@@ -6386,8 +6446,14 @@ bool DefaultLogic::deleteItem(const String& list, const String& item, Window* wn
 			}
 		    }
 		}
+		logCloseMucSessions(room);
 		TelEngine::destruct(room);
 		return true;
+	    }
+	    else if (room) {
+		MucRoomMember* m = room->findMemberById(item);
+		if (m)
+		    logCloseSession(room,false,m->m_name);
 	    }
 	}
 	if (wnd && wnd->id() == ClientContact::s_dockedChatWnd) {
@@ -6931,11 +6997,13 @@ bool DefaultLogic::handleChatContactAction(const String& name, Window* wnd)
 	    else
 		ok = text && room->sendChat(text,m->m_name);
 	    if (ok) {
-		NamedList* tmp = buildChatParams(text,"me",Time::secNow());
+		unsigned int time = Time::secNow();
+		NamedList* tmp = buildChatParams(text,"me",time);
 		room->setChatProperty(id,"history","_yate_tempitemreplace",String(false));
 		room->addChatHistory(id,"chat_out",tmp);
 		room->setChatProperty(id,"history","_yate_tempitemreplace",String(true));
 		room->setChatInput(id);
+		logChat(room,time,true,false,text,room->ownMember(m),m->m_name);
 	    }
 	}
 	else
@@ -7171,6 +7239,21 @@ bool DefaultLogic::handleMucsAction(const String& name, Window* wnd, NamedList* 
 	showMucInvite(*room,m_accounts);
 	return true;
     }
+    if (getPrefixedContact(name,s_mucRoomShowLog,id,m_accounts,0,&room)) {
+	// Show MUC room log
+	if (!room)
+	    return false;
+	logShow(room,true);
+	return true;
+    }
+    if (getPrefixedContact(name,s_mucMemberShowLog,id,m_accounts,0,&room)) {
+	// Show MUC room member log
+	MucRoomMember* member = room ? selectedRoomMember(*room) : 0;
+	if (!member)
+	    return false;
+	logShow(room,room->ownMember(member),member->m_name);
+	return true;
+    }
     bool kick = getPrefixedContact(name,s_mucKick,id,m_accounts,0,&room);
     if (kick || getPrefixedContact(name,s_mucBan,id,m_accounts,0,&room)) {
 	MucRoomMember* member = room ? selectedRoomMember(*room) : 0;
@@ -7364,8 +7447,11 @@ bool DefaultLogic::handleMucResNotify(Message& msg, ClientAccount* acc, const St
 	String text;
 	if (room->ownMember(member))
 	    text << "You are";
-	else
+	else {
 	    text << member->m_name << " is";
+	    // Close old member's chat log
+	    logCloseSession(room,false,member->m_name);
+	}
 	text << " now known as " << nick;
 	addChatNotify(*room,text,msg.msgTime().sec());
 	member->m_name = nick;

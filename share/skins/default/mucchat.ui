@@ -127,6 +127,34 @@
       </widget>
      </item>
      <item>
+      <widget class="QToolButton" name="room_showlog_btn" >
+       <property name="minimumSize" >
+        <size>
+         <width>30</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>30</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="autoRaise" >
+        <bool>true</bool>
+       </property>
+       <property name="_yate_identity" stdset="0" >
+        <string>room_showlog</string>
+       </property>
+       <property name="_yate_setaction" stdset="0" >
+        <string>room_showlog</string>
+       </property>
+       <property name="_yate_noautoconnect" stdset="0" >
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
       <spacer>
        <property name="orientation" >
         <enum>Qt::Horizontal</enum>
@@ -629,6 +657,28 @@
    </property>
    <property name="_yate_identity" stdset="0" >
     <string>room_member_chat</string>
+   </property>
+  </action>
+  <action name="room_member_showlog" >
+   <property name="icon" >
+    <iconset>archive.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Show log</string>
+   </property>
+   <property name="_yate_identity" stdset="0" >
+    <string>room_member_showlog</string>
+   </property>
+  </action>
+  <action name="room_showlog" >
+   <property name="icon" >
+    <iconset>archive.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Show log</string>
+   </property>
+   <property name="_yate_identity" stdset="0" >
+    <string>room_showlog</string>
    </property>
   </action>
  </widget>

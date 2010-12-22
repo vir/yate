@@ -136,6 +136,9 @@ public:
     };
     // Init object
     ChatFile(const String& dir, const String& fileName);
+    // Retrieve the file type
+    inline char type() const
+	{ return m_type; }
     // Retrieve the file account. Lock it before use
     inline const String& account() const
 	{ return m_account; }
@@ -148,6 +151,9 @@ public:
     // Retrieve the file contact display name. Lock it before use
     inline const String& contactDisplayName() const
 	{ return m_contactName ? m_contactName : m_contact; }
+    // Retrieve the id of the room owning a private chat. Lock it before use
+    inline const String& roomId() const
+	{ return m_roomId; }
     // Retrieve the file sessions. Lock it before use
     inline const ObjList& sessions() const
 	{ return m_sessions; }
@@ -207,6 +213,7 @@ protected:
     String m_account;
     String m_contact;
     String m_contactName;
+    String m_roomId;                     // Parent room id if this is a private room chat
     String m_fileName;
     String m_full;
     File m_file;
@@ -232,7 +239,7 @@ public:
     // Refresh the list. Re-load all archive
     void refresh();
     // Clear all
-    void clear();
+    void clear(bool memoryOnly);
     // Clear all logs belonging to a given account
     void clearAccount(const String& account, ObjList& removedItems);
     // Remove an item and it's file
@@ -260,6 +267,9 @@ public:
     // Close a chat session. Return a referenced pointer if the item's last
     //  session was loaded into memory
     ChatFile* closeChat(const NamedList& params);
+    // Build a file name from a list of parameters
+    static inline void buildChatFileName(String& buf, char type, const String& account,
+	const String& contact, const String& nick = String::empty());
     // Build a file name from a list of parameters
     static inline bool buildChatFileName(String& buf, const NamedList& params);
 protected:
@@ -467,6 +477,16 @@ inline const String& chatType(int type)
     return String::empty();
 }
 
+// Retrieve the UI item type from chat file type
+static inline const char* uiItemType(char type)
+{
+    if (type == MARKUP_CHAT)
+	return "chat";
+    if (type == MARKUP_ROOMCHAT)
+	return "roomchat";
+    return "roomprivchat";
+}
+
 // Find 2 NULL values in a buffer. Return buffer len if not found
 unsigned int find2Null(unsigned char* buf, unsigned int len)
 {
@@ -520,6 +540,27 @@ static inline void appendInt(DataBlock& buf, int value)
 {
     String tmp(value);
     appendString(buf,tmp);
+}
+
+// Build chat file UI params
+static NamedList* chatFileUiParams(ChatFile* f)
+{
+    if (!f)
+	return 0;
+    Lock lock(f);
+    NamedList* upd = new NamedList(f->toString());
+    upd->addParam("item_type",uiItemType(f->type()));
+    upd->addParam("account",f->account());
+    upd->addParam("contact",f->contact());
+    if (f->type() == MARKUP_CHAT)
+	upd->addParam("name",f->contactDisplayName());
+    else if (f->type() == MARKUP_ROOMCHAT)
+	upd->addParam("name",f->contact());
+    else {
+        upd->addParam("parent",f->roomId());
+	upd->addParam("name",f->contactDisplayName());
+    }
+    return upd;
 }
 
 // Build a chat session UI params
@@ -615,6 +656,10 @@ bool ChatFile::loadFile(const NamedList* params, String* error)
     }
     else if (!(params && writeFileHeader(*params,error)))
 	return false;
+    m_roomId.clear();
+    // Build the room id if this is a private chat
+    if (m_type == MARKUP_ROOMCHATPRIVATE)
+	ChatArchive::buildChatFileName(m_roomId,MARKUP_ROOMCHAT,m_account,m_contact);
     return true;
 }
 
@@ -1070,7 +1115,6 @@ void ChatArchive::refresh()
 {
     Lock lock(this);
     m_loaded = true;
-    m_items.clear();
     unsigned int n = m_index.sections();
     for (unsigned int i = 0; i < n; i++) {
 	if (exiting())
@@ -1090,10 +1134,12 @@ void ChatArchive::refresh()
 }
 
 // Clear all
-void ChatArchive::clear()
+void ChatArchive::clear(bool memoryOnly)
 {
     Lock lock(this);
     m_items.clear();
+    if (memoryOnly)
+	return;
     unsigned int n = m_index.sections();
     for (unsigned int i = 0; i < n; i++) {
 	NamedList* f = m_index.getSection(i);
@@ -1184,11 +1230,15 @@ ChatFile* ChatArchive::getChatFile(const NamedList& params,
 	return 0;
     }
     f->lock();
-    m_index.setValue(fn,"type",String(f->m_type));
+    m_index.setValue(fn,"type",String(f->type()));
     m_index.setValue(fn,"account",f->account());
     m_index.setValue(fn,"contact",f->contact());
     if (f->contactName() && f->contactName() != m_index.getValue(fn,"contactname"))
 	m_index.setValue(fn,"contactname",f->m_contactName);
+    if (f->type() != MARKUP_ROOMCHATPRIVATE)
+	m_index.clearKey(fn,"room");
+    else
+	m_index.setValue(fn,"room",f->roomId());
     f->unlock();
     m_index.save();
     m_items.append(f);
@@ -1216,18 +1266,29 @@ ChatFile* ChatArchive::closeChat(const NamedList& params)
 }
 
 // Build a file name from a list of parameters
+void ChatArchive::buildChatFileName(String& buf, char type, const String& account,
+    const String& contact, const String& nick)
+{
+    buf = "chat_";
+    buf << account.hash() << "_" << String(contact).toLower().hash();
+    if (type == MARKUP_ROOMCHATPRIVATE)
+	buf << "_" << nick.hash();
+    buf << "_" << type;
+}
+
+// Build a file name from a list of parameters
 bool ChatArchive::buildChatFileName(String& buf, const NamedList& params)
 {
     const String& account = params["account"];
-    String contact = params["contact"];
+    const String& contact = params["contact"];
     if (!(account && contact))
 	return false;
-    buf = "chat_";
-    buf << String(account.hash()) << "_" << contact.toLower().hash();
     char type = chatType(params);
-    if (type == MARKUP_ROOMCHATPRIVATE)
-	buf << "_" << params["nick"].hash();
-    buf << "_" << type;
+    const String& nick = (type != MARKUP_ROOMCHATPRIVATE) ?
+	String::empty() : params["contactname"];
+    if (type == MARKUP_ROOMCHATPRIVATE && !nick)
+	return false;
+    buildChatFileName(buf,type,account,contact,nick);
     return true;
 }
 
@@ -1264,7 +1325,6 @@ bool CALogic::initializedClient()
 	const char* no = String::boolText(false);
 	NamedList p("");
 	p.addParam("show:archive_frame_search",no);
-	p.addParam("property:" + s_logList + ":_yate_flatlist",String::boolText(true));
 	Client::self()->setParams(&p,w);
     }
     return false;
@@ -1273,6 +1333,8 @@ bool CALogic::initializedClient()
 void CALogic::exitingClient()
 {
     Client::self()->setVisible(s_wndArch,false);
+    // Clear data now: close sessions
+    s_chatArchive.clear(true);
     // Stop workers
     searchStop();
     refreshStop();
@@ -1289,10 +1351,6 @@ bool CALogic::action(Window* wnd, const String& name, NamedList* params)
     if (act.startSkip(s_archPrefix,false)) {
 	// Chat log actions nedding parameters
 	if (params) {
-	    if (params->getBoolValue("muc")) {
-		Debug(DebugStub,"Client archive: MUC not implemented");
-		return false;
-	    }
 	    if (act == s_actionLogChat)
 		return s_chatArchive.logChat(*params);
 	    if (act == s_actionCloseChat)
@@ -1467,12 +1525,25 @@ void CALogic::refreshTerminated()
 	ChatFile* f = static_cast<ChatFile*>(o->get());
 	Lock lock(f);
 	f->loadSessions();
-	NamedList* upd = new NamedList(f->toString());
-	upd->addParam("contact",f->contactDisplayName());
-	upd->addParam("account",f->account());
-	String info(f->contact());
-	info << "\r\nAccount: " << f->account();
-	upd->addParam("property:toolTip",info);
+	NamedList* upd = chatFileUiParams(f);
+	// Check if the room is already displayed. Create it if not found
+	if (f->type() == MARKUP_ROOMCHATPRIVATE && f->roomId() &&
+	    !(p.getParam(f->roomId()) ||
+	    Client::self()->getTableRow(s_logList,f->roomId(),0,w))) {
+	    NamedList* upd2 = 0;
+	    ChatFile* parent = s_chatArchive.getChatFile(f->roomId());
+	    if (parent)
+		upd2 = chatFileUiParams(parent);
+	    else {
+		upd2 = new NamedList("");
+		upd2->addParam("item_type",uiItemType(MARKUP_ROOMCHAT));
+		upd2->addParam("account",f->account());
+		upd2->addParam("contact",f->contact());
+		upd2->addParam("name",f->contact());
+	    }
+	    p.addParam(new NamedPointer(f->roomId(),upd2,String::boolText(true)));
+	    TelEngine::destruct(parent);
+	}
 	p.addParam(new NamedPointer(f->toString(),upd,String::boolText(true)));
 	count--;
 	if (!count) {
@@ -1744,7 +1815,7 @@ bool CALogic::clearLog(Window* wnd)
 	Client::self()->clearTable(s_sessList,w);
 	Client::self()->clearTable(s_sessHistory,w);
     }
-    s_chatArchive.clear();
+    s_chatArchive.clear(false);
     return true;
 }
 

@@ -1,3 +1,23 @@
+yate (3.0.1.svn4015) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4015: + Moved jabberclient module into yate-
+    qt4 package  + Added support to add custom item types and item
+    statistics (like child count). Added support to add an item
+    indicating its parent. Allow building custom trees.  + Fixed memory
+    leak: remove the old tray icon menu before set a new one.  +
+    Implemented room chat logging.  + Fixed bug: return the buffer
+    length if 2 NULL values are not found in it.  + Conditionally build
+    debug message.  + Pass the correct file offset when decoding a chat
+    entry to see it in debug messages.  + Re-use existing offline chat
+    room data and UI when the user wants to re-join it.  + Change status
+    to offline for all chat rooms belonging to a given account when it
+    goes offline.  + The jabber client engine default value for
+    'printxml' is now 'verbose'.  + Set the correct base class when
+    calling the YCLASS macro in JBEngine descendants.  + Raised the
+    debug level of adding a circuit range.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 23 Dec 2010 02:19:20 +0300
+
 yate (3.0.1.svn4004) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4004: + Implemented configurable method to

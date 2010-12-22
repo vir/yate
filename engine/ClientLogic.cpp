@@ -2949,20 +2949,27 @@ void JoinMucWizard::joinRoom()
     String uri(room + "@" + server);
     ClientContact::buildContactId(id,acc->toString(),uri);
     MucRoom* r = acc->findRoom(id);
-    if (r) {
+    if (r && !r->resource().offline()) {
 	Client::self()->setVisible(toString(),false);
 	createRoomChat(*r);
 	return;
     }
     String nick;
     Client::self()->getText("room_nick",nick,false,w);
-    if (!nick && acc->contact())
-	nick = acc->contact()->uri().getUser();
+    if (!nick) {
+	if (r)
+	    nick = r->resource().m_name;
+	if (!nick && acc->contact())
+	    nick = acc->contact()->uri().getUser();
+    }
     if (!nick) {
 	showError(w,"No available nick name");
 	return;
     }
-    r = new MucRoom(acc,id,room,uri,nick);
+    if (!r)
+	r = new MucRoom(acc,id,room,uri,nick);
+    else
+	r->resource().m_name = nick;
     bool history = false;
     String lastHist;
     // Get password and history

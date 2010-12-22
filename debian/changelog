@@ -1,3 +1,12 @@
+yate (3.0.1.svn4004) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4004: + Implemented configurable method to
+    send DTMFs: using the protocol, inband, rfc2833 or chat message.  +
+    Send DTMFs using rfc 2833 on calls to google voice.  + Moved
+    jabberclient module into yate-qt4 package
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 22 Dec 2010 12:53:19 +0300
+
 yate (3.0.1.svn4002) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4002: + Fixed shared libs packaging  + Fixed

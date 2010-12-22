@@ -32,8 +32,10 @@ class CustomTreeFactory : public UIFactory
 {
 public:
     inline CustomTreeFactory(const char* name = "CustomTreeFactory")
-	: UIFactory(name)
-	{ m_types.append(new String("ContactList")); }
+	: UIFactory(name) {
+	    m_types.append(new String("ContactList"));
+	    m_types.append(new String("QtCustomTree"));
+	}
     virtual void* create(const String& type, const char* name, NamedList* params = 0);
 };
 
@@ -104,6 +106,13 @@ QtCustomTree::QtCustomTree(const char* name, const NamedList& params, QWidget* p
     QtClient::buildProps(this,params["buildprops"]);
     // Add item props translation
     m_itemPropsType.addParam(String((int)QTreeWidgetItem::Type),"default");
+    // Add item types
+    unsigned int n = params.length();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* ns = params.getParam(i);
+	if (ns && ns->name() == "_yate_tree_additemtype" && ns->c_str())
+	    m_itemPropsType.setParam(String(TypeCount + i),*ns);
+    }
     setIndentation(0);
     setUniformRowHeights(false);
     QTreeWidget::setFrameShape(QFrame::NoFrame);
@@ -224,9 +233,26 @@ bool QtCustomTree::addTableRow(const String& item, const NamedList* data, bool a
     if (find(item))
 	return false;
     SafeTree tree(this);
-    QtTreeItem* it = new QtTreeItem(item);
-    if (addChild(it,atStart))
-	return !data || updateItem(*it,*data);
+    QtTreeItem* parent = 0;
+    int type = QTreeWidgetItem::Type;
+    if (data) {
+	type = itemType((*data)["item_type"]);
+	const String& pName = (*data)["parent"];
+	if (pName) {
+	    parent = find(pName);
+	    if (!parent) {
+		Debug(ClientDriver::self(),DebugAll,
+		    "QtCustomTree(%s)::addTableRow(%s,%p,%u) parent '%s' not found",
+		    name().c_str(),item.c_str(),data,atStart,pName.c_str());
+		return false;
+	    }
+	}
+    }
+    QtTreeItem* it = new QtTreeItem(item,type);
+    if (data)
+	it->copyParams(*data);
+    if (addChild(it,atStart,parent))
+	return !data || updateItem(*it,*it);
     TelEngine::destruct(it);
     return false;
 }
@@ -239,8 +265,17 @@ bool QtCustomTree::delTableRow(const String& item)
     QtTreeItem* it = find(item);
     DDebug(ClientDriver::self(),DebugAll,"QtCustomTree(%s)::delTableRow(%s) found=%p",
 	name().c_str(),item.c_str(),it);
-    if (it)
+    if (it) {
+	QTreeWidgetItem* parent = it->parent();
+	if (parent) {
+	    parent->removeChild(it);
+	    QtTreeItem* p = 0;
+	    if (parent != invisibleRootItem())
+		p = static_cast<QtTreeItem*>(parent);
+	    itemRemoved(*it,p);
+	}
 	delete it;
+    }
     return it != 0;
 }
 
@@ -308,9 +343,21 @@ bool QtCustomTree::getSelect(String& item)
 // Remove all items from tree
 bool QtCustomTree::clearTable()
 {
-    Debug(ClientDriver::self(),DebugAll,"QtCustomTree(%s)::clearTable()",name().c_str());
+    DDebug(ClientDriver::self(),DebugAll,"QtCustomTree(%s)::clearTable()",name().c_str());
     QTreeWidget::clear();
     return true;
+}
+
+// Retrieve the item type integer value from associated string (name)
+int QtCustomTree::itemType(const String& name) const
+{
+    unsigned int n = m_itemPropsType.length();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* ns = m_itemPropsType.getParam(i);
+	if (ns && *ns == name)
+	    return ns->name().toInteger(QTreeWidgetItem::Type);
+    }
+    return QTreeWidgetItem::Type;
 }
 
 // Build a tree context menu
@@ -501,7 +548,7 @@ QtTreeItem* QtCustomTree::addChild(QtTreeItem* child, int pos, QtTreeItem* paren
     }
     if (m_autoExpand)
 	child->setExpanded(true);
-    itemAdded(*child);
+    itemAdded(*child,parent);
     return child;
 }
 
@@ -606,6 +653,24 @@ void QtCustomTree::setItemTooltip(QString value)
 	p->m_toolTip = tmp;
 }
 
+// Set an item's statistics widget name
+void QtCustomTree::setItemStatsWidget(QString value)
+{
+    String tmp;
+    QtTreeItemProps* p = YOBJECT(QtTreeItemProps,getItemProps(value,tmp));
+    if (p)
+	p->m_statsWidget = tmp;
+}
+
+// Set an item's statistics template
+void QtCustomTree::setItemStatsTemplate(QString value)
+{
+    String tmp;
+    QtTreeItemProps* p = YOBJECT(QtTreeItemProps,getItemProps(value,tmp));
+    if (p)
+	p->m_statsTemplate = tmp;
+}
+
 // Retrieve a comma separated list with column widths
 QString QtCustomTree::colWidths()
 {
@@ -698,8 +763,10 @@ void QtCustomTree::onItemDoubleClicked(QtTreeItem* item, int column)
 // Item expanded/collapsed notification
 void QtCustomTree::onItemExpandedChanged(QtTreeItem* item)
 {
-    if (item)
-	setStateImage(*item);
+    if (!item)
+	return;
+    setStateImage(*item);
+    applyItemStatistics(*item);
 }
 
 // Catch a context menu event and show the context menu
@@ -725,6 +792,7 @@ bool QtCustomTree::updateItem(QtTreeItem& item, const NamedList& params)
     QWidget* w = itemWidget(&item,0);
     if (w)
 	QtUIWidget::setParams(w,all ? (const NamedList&)item : params);
+    applyItemTooltip(item);
     return true;
 }
 
@@ -735,10 +803,21 @@ QMenu* QtCustomTree::contextMenu(QtTreeItem* item)
 }
 
 // Item added notification
-void QtCustomTree::itemAdded(QtTreeItem& item)
+void QtCustomTree::itemAdded(QtTreeItem& item, QtTreeItem* parent)
 {
     setStateImage(item);
     applyItemTooltip(item);
+    applyItemStatistics(item);
+    if (parent)
+	applyItemStatistics(*parent);
+}
+
+// Item removed notification
+// The item will be deleted after returning from this notification
+void QtCustomTree::itemRemoved(QtTreeItem& item, QtTreeItem* parent)
+{
+    if (parent)
+	applyItemStatistics(*parent);
 }
 
 // Update a tree item's tooltip
@@ -757,6 +836,31 @@ void QtCustomTree::applyItemTooltip(QtTreeItem& item)
 	w->setToolTip(QtClient::setUtf8(tooltip));
     else
 	item.setToolTip(0,QtClient::setUtf8(tooltip));
+}
+
+// Fill a list with item statistics.
+void QtCustomTree::fillItemStatistics(QtTreeItem& item, NamedList& list)
+{
+    list.addParam("count",String(item.childCount()));
+}
+
+// Update a tree item's statistics
+void QtCustomTree::applyItemStatistics(QtTreeItem& item)
+{
+    QtUIWidgetItemProps* pt = QtUIWidget::getItemProps(itemPropsName(item.type()));
+    QtTreeItemProps* p = YOBJECT(QtTreeItemProps,pt);
+    if (!(p && p->m_statsWidget))
+	return;
+    String text;
+    if (!item.isExpanded()) {
+	text = p->m_statsTemplate;
+	NamedList list("");
+	fillItemStatistics(item,list);
+	list.replaceParams(text);
+    }
+    NamedList params("");
+    params.addParam(p->m_statsWidget,text);
+    updateItem(item,params);
 }
 
 
@@ -1251,11 +1355,11 @@ QMenu* ContactList::contextMenu(QtTreeItem* item)
 }
 
 // Item added notification
-void ContactList::itemAdded(QtTreeItem& item)
+void ContactList::itemAdded(QtTreeItem& item, QtTreeItem* parent)
 {
-    QtCustomTree::itemAdded(item);
-    DDebug(ClientDriver::self(),DebugAll,"ContactList(%s)::itemAdded(%p) type=%d id=%s",
-	name().c_str(),&item,item.type(),item.id().c_str());
+    QtCustomTree::itemAdded(item,parent);
+    DDebug(ClientDriver::self(),DebugAll,"ContactList(%s)::itemAdded(%p,%p) type=%d id=%s",
+	name().c_str(),&item,parent,item.type(),item.id().c_str(),parent);
     if (item.type() == TypeContact) {
 	ContactItem* c = static_cast<ContactItem*>(&item);
 	updateContact(*c,*c);
@@ -1407,6 +1511,8 @@ void* CustomTreeFactory::create(const String& type, const char* name, NamedList*
     }
     if (type == "ContactList")
         return new ContactList(name,*params,parentWidget);
+    if (type == "QtCustomTree")
+        return new QtCustomTree(name,*params,parentWidget);
     return 0;
 }
 

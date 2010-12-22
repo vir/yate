@@ -1019,6 +1019,9 @@ bool QtWindow::setParams(const NamedList& params)
 	    // Check context menu
 	    NamedString* menu = nl->getParam("menu");
 	    if (menu) {
+		QMenu* oldMenu = trayIcon->contextMenu();
+		if (oldMenu)
+		    delete oldMenu;
 		NamedList* nlMenu = static_cast<NamedList*>(menu->getObject("NamedList"));
 		trayIcon->setContextMenu(nlMenu ? QtClient::buildMenu(*nlMenu,*menu,this,
 		    SLOT(action()),SLOT(toggled(bool)),this) : 0);

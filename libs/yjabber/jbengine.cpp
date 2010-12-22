@@ -748,7 +748,10 @@ void JBEngine::initialize(const NamedList& params)
     int lvl = params.getIntValue("debug_level",-1);
     if (lvl != -1)
 	debugLevel(lvl);
+    JBClientEngine* client = YOBJECT(JBClientEngine,this);
     String tmp = params.getValue("printxml");
+    if (!tmp && client)
+	tmp = "verbose";
     m_printXml = tmp.toBoolean() ? -1: ((tmp == "verbose") ? 1 : 0);
 
     m_streamReadBuffer = fixValue(params,"stream_readbuffer",

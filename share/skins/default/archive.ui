@@ -120,27 +120,33 @@
        <string>archive_logs_list</string>
       </property>
       <property name="_yate_uiwidget_class" stdset="0" >
-       <string>ContactList</string>
+       <string>QtCustomTree</string>
       </property>
       <property name="_yate_uiwidget_params" stdset="0" >
        <stringlist>
-        <string>property:_yate_flatlist=true</string>
-        <string>property:_yate_showofflinecontacts=true</string>
-        <string>property:_yate_hideemptygroups=true</string>
+        <string>_yate_tree_additemtype=chat</string>
+        <string>_yate_tree_additemtype=roomchat</string>
+        <string>_yate_tree_additemtype=roomprivchat</string>
         <string>property:itemsExpandable=true</string>
-        <string>property:autoExpand=true</string>
+        <string>property:autoExpand=false</string>
         <string>property:styleSheet=QTreeWidget {border-image: none;font-size: 11px;background:white;border: 1px solid #97acbc;}</string>
-        <string>property:_yate_nogroup_caption=Not set</string>
-        <string>property:_yate_itemui=contact:arch_contact_item.ui</string>
-        <string>property:_yate_itemui=group:arch_account_item.ui</string>
-        <string>property:_yate_itemstyle=contact:QWidget#${name}{background:white;}</string>
-        <string>property:_yate_itemstyle=group:QWidget#${name}{background:lightgrey;}</string>
-        <string>property:_yate_itemselectedstyle=contact:QWidget#${name}{background:lightblue;}</string>
-        <string>property:_yate_itemselectedstyle=group:QWidget#${name}{background:lightgrey;}</string>
-        <string>property:_yate_itemstatewidget=group:state</string>
-        <string>property:_yate_itemexpandedimage=group:expanded.png</string>
-        <string>property:_yate_itemcollapsedimage=group:collapsed.png</string>
-        <string>groupcount=count</string>
+        <string>property:_yate_itemui=chat:arch_contact_item.ui</string>
+        <string>property:_yate_itemui=roomchat:arch_room_item.ui</string>
+        <string>property:_yate_itemui=roomprivchat:arch_roompriv_item.ui</string>
+        <string>property:_yate_itemstyle=chat:QWidget#${name}{background:white;}</string>
+        <string>property:_yate_itemstyle=roomchat:QWidget#${name}{background:white;}</string>
+        <string>property:_yate_itemstyle=roomprivchat:QWidget#${name}{background:white;}</string>
+        <string>property:_yate_itemselectedstyle=chat:QWidget#${name}{background:lightblue;}</string>
+        <string>property:_yate_itemselectedstyle=roomchat:QWidget#${name}{background:lightblue;}</string>
+        <string>property:_yate_itemselectedstyle=roomprivchat:QWidget#${name}{background:lightblue;}</string>
+        <string>property:_yate_itemtooltip=chat:&lt;html>&lt;head>&lt;meta name="qrichtext" content="1" />&lt;style type="text/css">\np, li { white-space: pre-wrap; }\n&lt;/style>&lt;/head>&lt;body style=" font-family:'Arial'; font-size:10pt; font-weight:400; font-style:normal;">&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">&lt;span style=" font-size:14pt; font-weight:600;">${name}&lt;/span>&lt;/p>&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">${contact}&lt;/p>&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">Account: ${account}&lt;/p>&lt;/body>&lt;/html></string>
+        <string>property:_yate_itemtooltip=roomchat:&lt;html>&lt;head>&lt;meta name="qrichtext" content="1" />&lt;style type="text/css">\np, li { white-space: pre-wrap; }\n&lt;/style>&lt;/head>&lt;body style=" font-family:'Arial'; font-size:10pt; font-weight:400; font-style:normal;">&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">&lt;span style=" font-size:14pt; font-weight:600;">${contact}&lt;/span>&lt;/p>&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">Account: ${account}&lt;/p>&lt;/body>&lt;/html></string>
+        <string>property:_yate_itemtooltip=roomprivchat:&lt;html>&lt;head>&lt;meta name="qrichtext" content="1" />&lt;style type="text/css">\np, li { white-space: pre-wrap; }\n&lt;/style>&lt;/head>&lt;body style=" font-family:'Arial'; font-size:10pt; font-weight:400; font-style:normal;">&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">&lt;span style=" font-size:14pt; font-weight:600;">${name}&lt;/span>&lt;/p>&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">${contact}&lt;/p>&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">Account: ${account}&lt;/p>&lt;/body>&lt;/html></string>
+        <string>property:_yate_itemstatewidget=roomchat:state</string>
+        <string>property:_yate_itemexpandedimage=roomchat:minus.png</string>
+        <string>property:_yate_itemcollapsedimage=roomchat:plus.png</string>
+        <string>property:_yate_itemstatswidget=roomchat:count</string>
+        <string>property:_yate_itemstatstemplate=roomchat:(${count})</string>
        </stringlist>
       </property>
      </widget>
@@ -215,20 +221,16 @@
            <string>archive_session_list</string>
           </property>
           <property name="_yate_uiwidget_class" stdset="0" >
-           <string>ContactList</string>
+           <string>QtCustomTree</string>
           </property>
           <property name="_yate_uiwidget_params" stdset="0" >
            <stringlist>
-            <string>property:_yate_flatlist=true</string>
-            <string>property:_yate_showofflinecontacts=true</string>
-            <string>property:_yate_hideemptygroups=true</string>
             <string>property:itemsExpandable=true</string>
             <string>property:autoExpand=true</string>
             <string>property:styleSheet=QTreeWidget {border-image: none;font-size: 11px;background:white;border: 1px solid #97acbc;}</string>
-            <string>property:_yate_nogroup_caption=Not set</string>
-            <string>property:_yate_itemui=contact:arch_session_item.ui</string>
-            <string>property:_yate_itemstyle=contact:QWidget#${name}{background:white;}</string>
-            <string>property:_yate_itemselectedstyle=contact:QWidget#${name}{background:lightblue;}</string>
+            <string>property:_yate_itemui=default:arch_session_item.ui</string>
+            <string>property:_yate_itemstyle=default:QWidget#${name}{background:white;}</string>
+            <string>property:_yate_itemselectedstyle=default:QWidget#${name}{background:lightblue;}</string>
            </stringlist>
           </property>
          </widget>

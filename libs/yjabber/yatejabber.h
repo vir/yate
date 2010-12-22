@@ -1997,7 +1997,7 @@ private:
  */
 class YJABBER_API JBServerEngine : public JBEngine
 {
-    YCLASS(JBServerEngine,GenObject)
+    YCLASS(JBServerEngine,JBEngine)
 public:
     /**
      * Constructor
@@ -2114,7 +2114,7 @@ protected:
  */
 class YJABBER_API JBClientEngine : public JBEngine
 {
-    YCLASS(JBClientEngine,GenObject)
+    YCLASS(JBClientEngine,JBEngine)
 public:
     /**
      * Constructor

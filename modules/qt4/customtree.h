@@ -55,6 +55,8 @@ public:
     String m_stateExpandedImg;           // Image to show when expanded
     String m_stateCollapsedImg;          // Image to show when collapsed
     String m_toolTip;                    // Tooltip template
+    String m_statsWidget;                // Item widget showing statistics while collapsed
+    String m_statsTemplate;              // Statistics template (may include ${count} for children count)
 };
 
 
@@ -106,6 +108,8 @@ class QtCustomTree : public QtTree
     Q_PROPERTY(QString _yate_itemexpandedimage READ itemExpandedImage WRITE setExpandedImage(QString))
     Q_PROPERTY(QString _yate_itemcollapsedimage READ itemCollapsedImage WRITE setItemCollapsedImage(QString))
     Q_PROPERTY(QString _yate_itemtooltip READ itemTooltip WRITE setItemTooltip(QString))
+    Q_PROPERTY(QString _yate_itemstatswidget READ itemStatsWidget WRITE setItemStatsWidget(QString))
+    Q_PROPERTY(QString _yate_itemstatstemplate READ itemStatsTemplate WRITE setItemStatsTemplate(QString))
     Q_PROPERTY(QString _yate_col_widths READ colWidths WRITE setColWidths(QString))
     Q_PROPERTY(QString _yate_sorting READ sorting WRITE setSorting(QString))
 public:
@@ -436,6 +440,32 @@ public:
     void setItemTooltip(QString value);
 
     /**
+     * Read _yate_itemstatswidget property accessor: does nothing
+     * This method is here to stop MOC compiler complaining about missing READ accessor function
+     */
+    QString itemStatsWidget()
+	{ return QString(); }
+
+    /**
+     * Set an item's statistics widget name
+     * @param value Item props statistics widget name. Format [type:]widget_name
+     */
+    void setItemStatsWidget(QString value);
+
+    /**
+     * Read _yate_itemstatstemplate property accessor: does nothing
+     * This method is here to stop MOC compiler complaining about missing READ accessor function
+     */
+    QString itemStatsTemplate()
+	{ return QString(); }
+
+    /**
+     * Set an item's statistics template
+     * @param value Item props statistics template. Format [type:]template
+     */
+    void setItemStatsTemplate(QString value);
+
+    /**
      * Retrieve a comma separated list with column widths
      * @return Comma separated list containing column widths
      */
@@ -518,6 +548,13 @@ protected:
 	{ return m_itemPropsType[String(type)]; }
 
     /**
+     * Retrieve the item type integer value from associated string (name)
+     * @param name Item type name
+     * @return Associated item type integer value. QTreeWidgetItem::Type if not found
+     */
+    int itemType(const String& name) const;
+
+    /**
      * Build a tree context menu
      * @param menu Menu to replace on success
      * @param ns Pointer to received parameter
@@ -576,14 +613,37 @@ protected:
     /**
      * Item added notification
      * @param item Added item
+     * @param parent The parent of the added tree item. 0 if added to the root
      */
-    virtual void itemAdded(QtTreeItem& item);
+    virtual void itemAdded(QtTreeItem& item, QtTreeItem* parent);
+
+    /**
+     * Item removed notification.
+     * The item will be deleted after returning from this notification
+     * @param item Removed item
+     * @param parent The tree item from which the item was removed. 0 if removed from root
+     */
+    virtual void itemRemoved(QtTreeItem& item, QtTreeItem* parent);
 
     /**
      * Update a tree item's tooltip
      * @param item Item to update
      */
     virtual void applyItemTooltip(QtTreeItem& item);
+
+    /**
+     * Fill a list with item statistics.
+     * The default implementation fills a 'count' parameter with the number of item children
+     * @param item The tree item
+     * @param list The list to fill
+     */
+    virtual void fillItemStatistics(QtTreeItem& item, NamedList& list);
+
+    /**
+     * Update a tree item's statistics
+     * @param item Item to update
+     */
+    void applyItemStatistics(QtTreeItem& item);
 
     QMenu* m_menu;                       // Tree context menu
     bool m_autoExpand;                   // Items are expanded when added
@@ -777,8 +837,9 @@ protected:
     /**
      * Item added notification
      * @param item Added item
+     * @param parent The parent of the added tree item. 0 if added to the root
      */
-    virtual void itemAdded(QtTreeItem& item);
+    virtual void itemAdded(QtTreeItem& item, QtTreeItem* parent);
 
     /**
      * Retrieve a group item from root or create a new one

@@ -50,5 +50,5 @@
 ; Allowed values are boolean values or 'verbose' string
 ; If verbose is specified, XML elements' children, attributes or text will be
 ;  shown on separate lines
-; Defaults to no
-;printxml=no
+; Defaults to verbose
+;printxml=verbose

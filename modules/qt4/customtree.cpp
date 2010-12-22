@@ -343,7 +343,7 @@ bool QtCustomTree::getSelect(String& item)
 // Remove all items from tree
 bool QtCustomTree::clearTable()
 {
-    Debug(ClientDriver::self(),DebugAll,"QtCustomTree(%s)::clearTable()",name().c_str());
+    DDebug(ClientDriver::self(),DebugAll,"QtCustomTree(%s)::clearTable()",name().c_str());
     QTreeWidget::clear();
     return true;
 }

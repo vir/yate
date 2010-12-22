@@ -4390,8 +4390,9 @@ bool DefaultLogic::callStart(NamedList& params, Window* wnd, const String& cmd)
 		params.addParam("ojingle_version","0");
 		params.addParam("redirectcount","5");
 		params.addParam("checkcalled",String::boolText(false));
+		params.addParam("dtmfmethod","rfc2833");
 		String callParams = params["call_parameters"];
-		callParams.append("redirectcount,checkcalled,ojingle_version",",");
+		callParams.append("redirectcount,checkcalled,dtmfmethod,ojingle_version",",");
 		params.setParam("call_parameters",callParams);
 	    }
 	    else if (!valid) {

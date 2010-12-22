@@ -490,12 +490,11 @@ static inline const char* uiItemType(char type)
 // Find 2 NULL values in a buffer. Return buffer len if not found
 unsigned int find2Null(unsigned char* buf, unsigned int len)
 {
-    unsigned int n = 0;
-    for (; n < len; n++) {
+    for (unsigned int n = 0; n < len; n++) {
 	if (buf[n] == 0 && (n < len - 1) && (buf[n + 1] == 0))
 	    return n;
     }
-    return sizeof(len);
+    return len;
 }
 
 // Find a line in text buffer (until CR/LF, single CR or LF).

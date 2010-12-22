@@ -160,6 +160,8 @@ debian/tmp/usr/share/yate/skins/default/transfer_20.png
 debian/tmp/usr/share/yate/skins/default/tray_incomingcall.png
 debian/tmp/usr/share/yate/skins/default/tray_notification.png
 debian/tmp/usr/share/yate/skins/default/tray_incomingchat.png
+debian/tmp/etc/yate/jabberclient.conf
+debian/tmp/usr/lib/yate/client/jabberclient.yate
 debian/tmp/etc/yate/yate-qt4.conf
 debian/tmp/usr/lib/yate/qt4/updater.yate
 

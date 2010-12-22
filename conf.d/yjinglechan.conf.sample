@@ -105,6 +105,15 @@
 ; This parameter can be overridden from routing
 ;redirectcount=0
 
+; dtmfmethod: string: Default value for the method used to send DTMFs
+; Allowed values:
+;  jingle: Use the jingle protocol
+;  rfc2833: Send RFC 2833 DTMFs
+;  inband: Generate inband tones
+;  chat: Send tones as chat messages
+; This parameter can be overridden from routing
+;dtmfmethod=jingle
+
 
 [codecs]
 ; This section allows to individually enable or disable the codecs

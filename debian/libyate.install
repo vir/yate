@@ -38,8 +38,6 @@ debian/tmp/usr/lib/yate/yrtpchan.yate
 debian/tmp/usr/lib/yate/ystunchan.yate
 debian/tmp/usr/lib/yate/ysipchan.yate
 debian/tmp/usr/lib/yate/yiaxchan.yate
-#debian/tmp/usr/lib/yate/yjinglechan.yate
-#debian/tmp/usr/lib/yate/jingle/jinglefeatures.yate
 debian/tmp/usr/lib/yate/callgen.yate
 debian/tmp/usr/lib/yate/analyzer.yate
 debian/tmp/usr/lib/yate/rmanager.yate
@@ -62,7 +60,5 @@ debian/tmp/usr/lib/yate/yjinglechan.yate
 debian/tmp/etc/yate/zlibcompress.conf
 debian/tmp/usr/lib/yate/zlibcompress.yate
 
-debian/tmp/etc/yate/jabberclient.conf
-debian/tmp/usr/lib/yate/client/jabberclient.yate
 
 

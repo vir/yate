@@ -79,3 +79,5 @@ debian/tmp/usr/lib/yate/server/cpuload.yate
 debian/tmp/etc/yate/ccongestion.conf
 debian/tmp/usr/lib/yate/server/ccongestion.yate
 
+debian/tmp/usr/lib/yate/server/overlapdial.yate
+

@@ -1,3 +1,15 @@
+yate (3.0.1.svn4019) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4019: + Added new UI elements packaging.  +
+    Fixed unpackaged files listing script  + Fixed bug: lock the engine
+    while searching for a session to accept a received response.  + Set
+    the 'client' parameter from local/remote host when starting SOCKS
+    file transfer.  + Fixed bug: avoid sending entity caps request on
+    s2s incoming stream.  + Match socks wrapper on client/server flag
+    when finding one. Improved debug.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 24 Dec 2010 02:19:15 +0300
+
 yate (3.0.1.svn4015) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4015: + Moved jabberclient module into yate-

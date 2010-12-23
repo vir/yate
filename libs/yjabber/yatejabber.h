@@ -2594,9 +2594,9 @@ public:
      * @param stream The stream used to request capabilities
      * @param from The 'from' attribute of the request stanza
      * @param to The 'to' attribute of the request stanza
-     * @return XmlDocument pointer
+     * @return True if processed (already found, added or request sent)
      */
-    virtual void processCaps(String& capsId, XmlElement* xml, JBStream* stream,
+    virtual bool processCaps(String& capsId, XmlElement* xml, JBStream* stream,
 	const char* from, const char* to);
 
     /**

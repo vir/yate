@@ -2210,22 +2210,22 @@ void JBEntityCapsList::fromDocument(XmlDocument& doc, const char* rootName)
 
 // Process an element containing an entity capabily child.
 // Request capabilities if not found in the list
-void JBEntityCapsList::processCaps(String& capsId, XmlElement* xml, JBStream* stream,
+bool JBEntityCapsList::processCaps(String& capsId, XmlElement* xml, JBStream* stream,
     const char* from, const char* to)
 {
     if (!(m_enable && xml))
-	return;
+	return false;
     char version = 0;
     String* node = 0;
     String* ver = 0;
     String* ext = 0;
     if (!decodeCaps(*xml,version,node,ver,ext))
-	return;
+	return false;
     JBEntityCaps::buildId(capsId,version,*node,*ver,ext);
     Lock lock(this);
     JBEntityCaps* caps = findCaps(capsId);
     if (caps)
-	return;
+	return true;
     // Hack for google (doesn't support disco info, supports only disco info with node)
     if (version == JBEntityCaps::Ver1_3 &&
 	(*node == s_googleTalkNode || *node == s_googleMailNode)) {
@@ -2240,10 +2240,11 @@ void JBEntityCapsList::processCaps(String& capsId, XmlElement* xml, JBStream* st
 	}
 	append(caps);
 	capsAdded(caps);
-	return;
+	return true;
     }
     if (stream)
 	requestCaps(stream,from,to,capsId,version,*node,*ver);
+    return stream != 0;
 }
 
 // Add capabilities to a list.

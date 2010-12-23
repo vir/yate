@@ -1080,7 +1080,7 @@ public:
     virtual void cleanup();
     // Find a wrapper with a given DST ADDR/PORT
     // Return a referenced object if found
-    YSocksWrapper* findWrapper(const String& dstAddr, int dstPort);
+    YSocksWrapper* findWrapper(bool client, const String& dstAddr, int dstPort);
     // Find a wrapper with a given connection
     YSocksWrapper* findWrapper(SOCKSConn* conn);
     // Remove a wrapper from list
@@ -2893,12 +2893,12 @@ void YSocksEngine::cleanup()
 
 // Find a wrapper with a given DST ADDR/PORT
 // Return a referenced object if found
-YSocksWrapper* YSocksEngine::findWrapper(const String& dstAddr, int dstPort)
+YSocksWrapper* YSocksEngine::findWrapper(bool client, const String& dstAddr, int dstPort)
 {
     Lock lock(this);
     for (ObjList* o = m_wrappers.skipNull(); o; o = o->skipNext()) {
 	YSocksWrapper* w = static_cast<YSocksWrapper*>(o->get());
-	if (w->dstPort() == dstPort && w->dstAddr() == dstAddr)
+	if (w->client() == client && w->dstPort() == dstPort && w->dstAddr() == dstAddr)
 	    return w->ref() ? w : 0;
     }
     return 0;
@@ -2961,27 +2961,22 @@ SOCKSPacket::Error YSocksEngine::processSOCKSRequest(const SOCKSPacket& packet,
 	return SOCKSPacket::EUnsuppAddrType;
     }
 
-    // Find a wrapper for the connetion
-    YSocksWrapper* w = findWrapper(conn->reqAddr(),conn->reqPort());
+    // Find a wrapper for the connection
+    YSocksWrapper* w = findWrapper(false,conn->reqAddr(),conn->reqPort());
     if (w) {
-	// Set wrapper connection and remove from it from engine on success
+	// Set wrapper connection and remove it from engine on success
 	// Return error to deny the request and remove connection from engine
 	SOCKSPacket::Error result = SOCKSPacket::EOk;
-	if (!w->client()) {
-	    if (w->setConn(conn))
-		removeSocksConn(conn,"accepted");
-	    else
-		result = SOCKSPacket::EFailure;
-	}
-	else {
-	    Debug(this,DebugNote,"SOCKSConn(%s) %s for client connection [%p]",
-		conn->toString().c_str(),packet.msgName(),conn);
-	    result = SOCKSPacket::EHostGone;
-	}
+	if (w->setConn(conn))
+	    removeSocksConn(conn,"accepted");
+	else
+	    result = SOCKSPacket::EFailure;
 	TelEngine::destruct(w);
 	return result;
     }
 
+    Debug(this,DebugNote,"SOCKSConn(%s) %s for unknown connection [%p]",
+	conn->toString().c_str(),packet.msgName(),conn);
     return SOCKSPacket::EHostGone;
 }
 
@@ -3176,7 +3171,7 @@ bool YSocksWrapper::recvData()
 	return false;
     DataBlock block;
     block.assign(m_recvBuffer.data(),len,false);
-    DDebug(this,DebugAll,"Forwarding %u bytes [%p]",len,this);
+    XDebug(this,DebugAll,"Forwarding %u bytes [%p]",len,this);
     source->Forward(block);
     block.clear(false);
     source->busy(false);
@@ -3283,6 +3278,7 @@ void YSocksWrapper::notify(const char* status) const
 {
     if (m_notify.null())
 	return;
+    XDebug(this,DebugAll,"Notifying %s notifier=%s [%p]",status,m_notify.c_str(),this);
     Message* m = new Message("chan.notify");
     m->addParam("module",__plugin.name());
     m->addParam("id",m_id);
@@ -3502,12 +3498,16 @@ bool YSocksPlugin::handleChanSocks(Message& msg)
 	return false;
     }
 
-    YSocksWrapper* w = s_engine->findWrapper(*addr,msg.getIntValue("dst_port",0));
+    bool client = msg.getBoolValue("client",true);
+    int port = msg.getIntValue("dst_port",0);
+    YSocksWrapper* w = s_engine->findWrapper(client,*addr,port);
+    XDebug(this,DebugAll,"Processing %s client=%u auth=%s port=%d found %p",
+	msg.c_str(),client,addr->c_str(),port,w);
     if (!w) {
 	// Get and check required parameters
 	// Build client or server wrapper
 	SOCKSEndpointDef* epDef = 0;
-	if (msg.getBoolValue("client",true)) {
+	if (client) {
 	    epDef = new SOCKSEndpointDef("",true,msg.getValue("remoteip"),
 		msg.getIntValue("remoteport"),
 		msg.getValue("username"),msg.getValue("password"));

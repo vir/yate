@@ -170,6 +170,7 @@ bool JGEngine::acceptIq(XMPPUtils::IqType type, const JabberID& from, const Jabb
     if (!xml)
 	return false;
     if (type == XMPPUtils::IqResult || type == XMPPUtils::IqError) {
+	Lock lock(this);
 	for (ObjList* o = m_sessions.skipNull(); o; o = o->skipNext()) {
 	    JGSession* session = static_cast<JGSession*>(o->get());
 	    if (session->acceptIq(type,from,to,id,xml))

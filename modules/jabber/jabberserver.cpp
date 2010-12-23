@@ -172,6 +172,8 @@ public:
 class YJBEntityCapsList : public JBEntityCapsList
 {
 public:
+    virtual bool processCaps(String& capsId, XmlElement* xml, JBStream* stream,
+	const char* from, const char* to);
     // Load the entity caps file
     void load();
 protected:
@@ -883,6 +885,34 @@ void LocalDomain::updateFeatures()
 /*
  * YJBEntityCapsList
  */
+// Process entity caps. Handle s2s incoming streams
+bool YJBEntityCapsList::processCaps(String& capsId, XmlElement* xml, JBStream* stream,
+    const char* from, const char* to)
+{
+    if (!(m_enable && xml))
+	return false;
+    if (!stream || stream->clientStream())
+	return JBEntityCapsList::processCaps(capsId,xml,stream,from,to);
+    bool processed = JBEntityCapsList::processCaps(capsId,xml,0,from,to);
+    if (processed)
+	return true;
+    // Retrieve an outgoing s2s stream to send the caps request
+    JBStream* s = s_jabber->getServerStream(from,to);
+    if (!s)
+	return false;
+    char version = 0;
+    String* node = 0;
+    String* ver = 0;
+    String* ext = 0;
+    bool ok = decodeCaps(*xml,version,node,ver,ext);
+    if (ok) {
+	JBEntityCaps::buildId(capsId,version,*node,*ver,ext);
+	JBEntityCapsList::requestCaps(s,from,to,capsId,version,*node,*ver);       
+    }
+    TelEngine::destruct(s);
+    return ok;
+}
+                                                         
 // Load the entity caps file
 void YJBEntityCapsList::load()
 {

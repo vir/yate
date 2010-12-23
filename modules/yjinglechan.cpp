@@ -2734,6 +2734,7 @@ bool YJGConnection::setupSocksFileTransfer(bool start)
 	m.userData(this);
 	m.addParam("dst_addr_domain",m_dstAddrDomain);
 	m.addParam("format","data");
+	m.addParam("client",String::boolText(m_ftHostDirection != FTHostLocal));
 	bool ok = Engine::dispatch(m);
 	if (ok) {
 	    m_ftStatus = FTRunning;
@@ -2818,7 +2819,8 @@ bool YJGConnection::setupSocksFileTransfer(bool start)
     }
 
     if (!error) {
-	DDebug(this,DebugAll,"Waiting SOCKS file transfer [%p]",this);
+	DDebug(this,DebugAll,"Waiting SOCKS file transfer notifier=%s [%p]",
+	    m_ftNotifier.c_str(),this);
 	return true;
     }
 
@@ -2857,6 +2859,8 @@ bool YJGConnection::changeFTHostDir()
 // Handle SOCKS status changes for file transfer
 bool YJGConnection::processChanNotify(Message& msg)
 {
+    XDebug(this,DebugAll,"processChanNotify notifier=%s status=%s",
+	msg.getValue("id"),msg.getValue("status"));
     NamedString* notifier = msg.getParam("id");
     if (!notifier)
 	return false;

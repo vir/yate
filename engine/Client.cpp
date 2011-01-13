@@ -2481,16 +2481,16 @@ void Client::callTerminate(const String& id, const char* reason, const char* err
     Message* m = new Message("call.drop");
     m->addParam("id",id);
     if (hangup || cancel) {
-	if (!error && cancel)
-	    error = "cancelled";
-	if (!reason)
-	    reason = cancel ? s_cancelReason : s_hangupReason;
+	if (!reason && cancel)
+	    reason = "cancelled";
+	if (!error)
+	    error = cancel ? s_cancelReason : s_hangupReason;
     }
     else {
-	if (!error)
-	    error = "rejected";
 	if (!reason)
-	    reason = s_rejectReason;
+	    reason = "busy";
+	if (!error)
+	    error = s_rejectReason;
     }
     m->addParam("error",error,false);
     m->addParam("reason",reason,false);

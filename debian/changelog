@@ -1,3 +1,15 @@
+yate (3.0.1.svn4024) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4024: + Allow table horizontal header text
+    alignment to be specified from designer.  + Align left the text in
+    channels list header.  + Fixed call.drop parameters set when a call
+    is terminated. Set 'busy' reason for incoming, not answered calls.
+    + Account wizard: moved the cancel button to login page.  + Select a
+    single account in join chat room. Select the last one if there is
+    more then one.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 14 Jan 2011 02:19:18 +0300
+
 yate (3.0.1.svn4019) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4019: + Added new UI elements packaging.  +

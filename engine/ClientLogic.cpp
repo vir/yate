@@ -2217,6 +2217,32 @@ static void setOfflineMucs(ClientAccount* acc)
     }
 }
 
+// Select a single item in a list containing exactly 1 item not
+// matching s_notSelected
+// Select the last item otherwise if selLast is true
+static bool selectListItem(const String& name, Window* w, bool selLast = true,
+    bool selNotSelected = true)
+{
+    NamedList p("");
+    Client::self()->getOptions(name,&p,w);
+    NamedString* sel = 0;
+    unsigned int n = p.length();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* ns = p.getParam(i);
+	if (!ns || Client::s_notSelected.matches(ns->name()))
+	    continue;
+	if (!sel || selLast)
+	    sel = ns;
+	else {
+	    sel = 0;
+	    break;
+	}
+    }
+    if (sel)
+	return Client::self()->setSelect(name,sel->name(),w);
+    return selNotSelected && Client::self()->setSelect(name,s_notSelected,w);
+}
+
 
 /**
  * ClientWizard
@@ -2548,7 +2574,7 @@ JoinMucWizard::JoinMucWizard(ClientAccountList* accounts, NamedList* tempParams)
 
 void JoinMucWizard::reset(bool full)
 {
-    Client::self()->setSelect(s_mucAccounts,s_notSelected,window());
+    selectListItem(s_mucAccounts,window());
     m_account.clear();
     m_lastPage.clear();
     setQuerySrv(false);
@@ -2784,7 +2810,7 @@ bool JoinMucWizard::changePage(const String& page, const String& old)
 	    canPrev = false;
 	    if (!old) {
 		Client::self()->updateTableRow(s_mucAccounts,s_notSelected,0,true,w);
-		Client::self()->setSelect(s_mucAccounts,s_notSelected,w);
+		selectListItem(s_mucAccounts,window());
 	    }
 	    canNext = (0 != account(s_mucAccounts));
 	    break;

@@ -481,6 +481,14 @@ public:
      */
     static void applyWindowFlags(QWidget* w, const String& value);
 
+    /**
+     * Build a QT Alignment mask from a comma separated list of flags 
+     * @param flags The flags list
+     * @param initVal Initial value for the returned mask 
+     * @return QT Alignment mask
+     */
+    static int str2align(const String& flags, int initVal = 0);
+
 protected:
     virtual void loadWindows(const char* file = 0);
 private:

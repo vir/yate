@@ -447,6 +447,20 @@ static const TokenDict s_qVarType[] = {
     {0,0}
 };
 
+// Qt alignment flags translation
+static const TokenDict s_qAlign[] = {
+    {"left",      Qt::AlignLeft},
+    {"right",     Qt::AlignRight},
+    {"hcenter",   Qt::AlignHCenter},
+    {"justify",   Qt::AlignJustify},
+    {"top",       Qt::AlignTop},
+    {"bottom",    Qt::AlignBottom},
+    {"vcenter",   Qt::AlignVCenter},
+    {"center",    Qt::AlignCenter},
+    {"absolute",  Qt::AlignAbsolute},
+    {0,0}
+};
+
 // Handler for QT library messages
 static void qtMsgHandler(QtMsgType type, const char* text)
 {
@@ -2827,6 +2841,12 @@ void QtWindow::doInit()
 	// Stretch last column
 	bool b = QtClient::getBoolProperty(tables[i],"_yate_horizontalstretch",true);
 	hdr->setStretchLastSection(b);
+	String tmp;
+	QtClient::getProperty(tables[i],"_yate_horizontalheader_align",tmp);
+	if (tmp) {
+	    int def = hdr->defaultAlignment();
+	    hdr->setDefaultAlignment((Qt::Alignment)QtClient::str2align(tmp,def));
+	}
 	if (!QtClient::getBoolProperty(tables[i],"_yate_horizontalheader",true))
 	    hdr->hide();
 	// Vertical header
@@ -3902,6 +3922,22 @@ void QtClient::applyWindowFlags(QWidget* w, const String& value)
 	flags |= lookup(o->get()->toString(),s_windowFlags,0);
     TelEngine::destruct(f);
     w->setWindowFlags((Qt::WindowFlags)flags);
+}
+
+// Build a QT Alignment mask from a comma separated list of flags 
+int QtClient::str2align(const String& flags, int initVal)
+{
+    ObjList* list = flags.split(',',false);
+    for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
+	int val = ::lookup((static_cast<String*>(o->get()))->c_str(),s_qAlign);
+	if (0 != (val & Qt::AlignHorizontal_Mask))
+	    initVal &= ~Qt::AlignHorizontal_Mask;
+	if (0 != (val & Qt::AlignVertical_Mask))
+	    initVal &= ~Qt::AlignVertical_Mask;
+	initVal |= val;
+    }
+    TelEngine::destruct(list);
+    return initVal;
 }
 
 

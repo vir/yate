@@ -1345,6 +1345,9 @@ QToolButton:!enabled {image:url(digitpound.png);}
                 <property name="columnCount" >
                  <number>3</number>
                 </property>
+                <property name="_yate_horizontalheader_align" stdset="0" >
+                 <string>left</string>
+                </property>
                 <column>
                  <property name="text" >
                   <string>Party</string>

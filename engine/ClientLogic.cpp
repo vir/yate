@@ -2243,6 +2243,18 @@ static bool selectListItem(const String& name, Window* w, bool selLast = true,
     return selNotSelected && Client::self()->setSelect(name,s_notSelected,w);
 }
 
+// Update telephony account selector(s)
+static void updateTelAccList(bool ok, ClientAccount* acc)
+{
+    if (!acc)
+	return;
+    DDebug(ClientDriver::self(),DebugAll,"updateTelAccList(%d,%p)",ok,acc);
+    if (ok && (isTelProto(acc->protocol()) || isGmailAccount(acc)))
+	Client::self()->updateTableRow(s_account,acc->toString());
+    else
+	Client::self()->delTableRow(s_account,acc->toString());
+}
+
 
 /**
  * ClientWizard
@@ -3876,10 +3888,7 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
 		    acc->startup(ok);
 		    acc->save(true,acc->params().getBoolValue("savepassword"));
 		    // Update telephony account selector(s)
-		    if (ok && (isTelProto(acc->protocol()) || isGmailAccount(acc)))
-			Client::self()->updateTableRow(s_account,acc->toString());
-		    else
-			Client::self()->delTableRow(s_account,acc->toString());
+		    updateTelAccList(ok,acc);
 		    setAdvancedMode();
 		    if (Client::s_engineStarted) {
 			if (ok)
@@ -5197,6 +5206,7 @@ bool DefaultLogic::handleUserNotify(Message& msg, bool& stopLogic)
     // Notify wizards
     s_mucWizard->handleUserNotify(account,reg,reason);
     bool save = s_accWizard->handleUserNotify(account,reg,reason);
+    bool fromWiz = save;
     ClientAccount* acc = m_accounts->findAccount(account);
     if (!acc)
 	return false;
@@ -5313,6 +5323,11 @@ bool DefaultLogic::handleUserNotify(Message& msg, bool& stopLogic)
 	PendingRequest::clear(acc->toString());
     if (save)
 	acc->save(true,acc->params().getBoolValue("savepassword"));
+    // Update telephony account selector(s) if added from wizard
+    if (fromWiz) {
+	updateTelAccList(reg,acc);
+	setAdvancedMode();
+    }
     return false;
 }
 
@@ -6868,10 +6883,7 @@ bool DefaultLogic::updateAccount(const NamedList& account, bool save,
     // Make sure the account is selected in accounts list
     Client::self()->setSelect(s_accountList,acc->toString());
     // Update telephony account selector(s)
-    if (acc->startup() && (isTelProto(acc->protocol()) || isGmailAccount(acc)))
-	Client::self()->updateTableRow(s_account,acc->toString());
-    else
-	Client::self()->delTableRow(s_account,acc->toString());
+    updateTelAccList(acc->startup(),acc);
     // Reset selection if loaded: it will be set in setAdvancedMode() if appropriate
     if (loaded)
 	Client::self()->setSelect(s_account,s_notSelected);

@@ -1,3 +1,10 @@
+yate (3.0.1.svn4025) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4025: + Fixed bug: add telephony accounts
+    created using the wizard to the telephony account selector.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 15 Jan 2011 02:19:12 +0300
+
 yate (3.0.1.svn4024) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4024: + Allow table horizontal header text

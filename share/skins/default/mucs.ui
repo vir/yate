@@ -87,6 +87,7 @@
        <string>property:_yate_itemui=mucprivchat:mucprivchat.ui</string>
        <string>property:_yate_itemtextparam=name</string>
        <string>property:_yate_itemimageparam=status_image</string>
+       <string>property:widget:movable=true</string>
       </stringlist>
      </property>
     </widget>

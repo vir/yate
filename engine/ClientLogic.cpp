@@ -2388,7 +2388,7 @@ bool AccountWizard::handleUserNotify(const String& account, bool ok,
 	c_str(),account.c_str(),ok);
     String s;
     if (ok)
-	s << "Account '" << account << "' is now connected";
+	s << "Succesfully created account '" << account << "'";
     else {
 	s << "Failed to connect account '" << account << "'";
 	s.append(reason,"\r\n");
@@ -2545,6 +2545,8 @@ bool AccountWizard::changePage(const String& page, const String& old)
 	    setAccountContact(acc);
 	    Message* m = userLogin(acc,true);
 	    addAccPendingStatus(*m,acc);
+	    m->addParam("send_presence",String::boolText(false));
+	    m->addParam("request_roster",String::boolText(false));
 	    acc->resource().m_status = ClientResource::Connecting;
 	    TelEngine::destruct(acc);
 	    Engine::enqueue(m);
@@ -5323,10 +5325,26 @@ bool DefaultLogic::handleUserNotify(Message& msg, bool& stopLogic)
 	PendingRequest::clear(acc->toString());
     if (save)
 	acc->save(true,acc->params().getBoolValue("savepassword"));
-    // Update telephony account selector(s) if added from wizard
+    // Update telephony account selector(s)
+    updateTelAccList(acc->startup() && reg,acc);
+    setAdvancedMode();
+    // Added from wizard
+    // Update account status to server: notify presence and request roster or
+    //  disconnect it of global presence is 'offline'
     if (fromWiz) {
-	updateTelAccList(reg,acc);
-	setAdvancedMode();
+	if (AccountStatus::current() &&
+	    AccountStatus::current()->status() != ClientResource::Offline) {
+	    if (!isTelProto(acc->protocol())) {
+		Message* m = Client::buildNotify(true,acc->toString(),
+		    acc->resource(false));
+		Engine::enqueue(m);
+		m = Client::buildMessage("user.roster",acc->toString(),"query");
+		m->copyParams(acc->params(),"protocol");
+		Engine::enqueue(m);
+	    }
+	}
+	else
+	    setAccountStatus(m_accounts,acc);
     }
     return false;
 }

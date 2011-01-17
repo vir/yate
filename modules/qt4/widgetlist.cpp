@@ -156,8 +156,10 @@ WidgetList::WidgetList(const char* name, const NamedList& params, QWidget* paren
     updateDelItemProps(params,true);
     const String& type = params["type"];
     XDebug(ClientDriver::self(),DebugAll,"WidgetList(%s) type=%s",name,type.c_str());
+    QString wName = buildQChildName(params.getValue("widgetname","widget"));
     if (type == "tabs") {
 	m_tab = new WidgetListTabWidget(this,params);
+	m_tab->setObjectName(wName);
 	QtClient::setWidget(this,m_tab);
 	QtClient::connectObjects(m_tab,SIGNAL(currentChanged(int)),
 	    this,SLOT(currentChanged(int)));
@@ -170,6 +172,7 @@ WidgetList::WidgetList(const char* name, const NamedList& params, QWidget* paren
 	if (hdr)
 	    hdr->setObjectName(QtClient::setUtf8("pages_header"));
 	m_pages = new WidgetListStackedWidget(this,params);
+	m_pages->setObjectName(wName);
 	QVBoxLayout* newLayout = new QVBoxLayout;
 	newLayout->setSpacing(0);
 	newLayout->setContentsMargins(0,0,0,0);

@@ -1,3 +1,18 @@
+yate (3.0.1.svn4030) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4030: + Set enclosed widget's object name to
+    allow access to it.  + Conditionally compile debug message.  + Set
+    movable tabs property in controls showing chat pages to allow them
+    to be moved by the user (works in QT >= 4.5).  + Handle 'query'
+    operation in user.roster messages (request roster from server).
+    Enqueue an user.roster with operation=queryerror when an error is
+    received in response to a roster query request.  + Delay sending
+    presence and requesting the roster when creating an account using
+    the wizard.  + Always update the telephony account selector when
+    handling user.notify messages.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 18 Jan 2011 02:19:27 +0300
+
 yate (3.0.1.svn4025) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4025: + Fixed bug: add telephony accounts

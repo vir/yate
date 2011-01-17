@@ -644,7 +644,7 @@ void WidgetList::applyDelItemProps(QObject* obj)
 	NamedString* ns = m_delItemProps.getParam(i);
 	if (!ns)
 	    continue;
-	Debug(ClientDriver::self(),DebugAll,
+	DDebug(ClientDriver::self(),DebugAll,
 	    "WidgetList(%s)::applyDelItemProps() %s=%s",
 	    name().c_str(),ns->name().c_str(),ns->c_str());
 	QtClient::setProperty(obj,ns->name(),*ns);

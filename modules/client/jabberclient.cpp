@@ -474,6 +474,17 @@ static inline bool getWord(String& buf, String& word)
     return true;
 }
 
+// Decode an error element and set error/reason to a list of params
+static void getXmlError(NamedList& list, XmlElement* xml)
+{
+    if (!xml)
+	return;
+    String error, reason;
+    XMPPUtils::decodeError(xml,reason,error);
+    list.addParam("reason",reason,false);
+    list.addParam("error",error,false);
+}
+
 // Request the roster on a given stream
 // Set stream RosterRequested flag
 static bool requestRoster(JBStream* stream)
@@ -832,6 +843,14 @@ bool YJBEngine::handleUserRoster(Message& msg, const String& line)
 	return false;
     bool upd = (*oper == "update");
     if (!upd && *oper != "delete") {
+	if (*oper == "query") {
+	    JBClientStream* s = findAccount(line);
+	    if (!s)
+		return false;
+	    bool ok = requestRoster(s);
+	    TelEngine::destruct(s);
+	    return ok;
+	}
 	DDebug(this,DebugStub,"handleUserRoster() oper=%s not implemented!",oper->c_str());
 	return false;
     }
@@ -1470,10 +1489,7 @@ void YJBEngine::processPresenceStanza(JBEvent* ev)
 	m->addParam("contact",ev->from().bare());
 	if (ev->from().resource())
 	    m->addParam("instance",ev->from().resource());
-	String error, reason;
-	XMPPUtils::decodeError(ev->element(),reason,error);
-	m->addParam("reason",reason,false);
-	m->addParam("error",error,false);
+	getXmlError(*m,ev->element());
 	if (xMucUser)
 	    fillMucUser(*m,*xMucUser,pres);
 	else if (xMuc)
@@ -1828,8 +1844,17 @@ void YJBEngine::processRoster(JBEvent* ev, XmlElement* service, int tag, int iqT
 	Engine::enqueue(m);
 	return;
     }
-    if (iqType == XMPPUtils::IqError)
+    if (iqType == XMPPUtils::IqError) {
+	if (ev->id() == s_rosterQueryId) {
+	    Message* m = __plugin.message("user.roster",ev->clientStream());
+	    m->addParam("operation","queryerror");
+	    // Reset stream roster requested flag to allow subsequent requests
+	    ev->stream()->setRosterRequested(false);
+	    getXmlError(*m,ev->element());
+	    Engine::enqueue(m);
+	}
 	return;
+    }
     ev->sendStanzaError(XMPPError::ServiceUnavailable);
 }
 

@@ -269,7 +269,7 @@ static void getDigits(String& num, unsigned char oddNum, const unsigned char* bu
 {
     bool odd = (oddNum & 0x80) != 0;
     static const char digits1[] = "0123456789\0BC\0\0.";
-    static const char digits2[] = "0123456789?BC??.";
+    static const char digits2[] = "0123456789ABCD?.";
     const char* digits = ignoreUnk ? digits1 : digits2;
     for (unsigned int i = 0; i < len; i++) {
 	num += digits[buf[i] & 0x0f];

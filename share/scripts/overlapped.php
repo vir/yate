@@ -38,6 +38,8 @@ $executeParams = array();
 $final = false;
 // Don't answer the call, don't use prompts
 $routeOnly = true;
+// Tone language from call.execute
+$lang = "";
 
 function setState($newstate)
 {
@@ -45,6 +47,7 @@ function setState($newstate)
     global $state;
     global $collect;
     global $routeOnly;
+    global $lang;
 
     // are we exiting?
     if ($state == "")
@@ -58,6 +61,8 @@ function setState($newstate)
 	$m = new Yate("chan.attach");
 	$m->params["id"] = $ourcallid;
 	$m->params["source"] = "tone/dial";
+	if ($lang != "")
+	    $m->params["lang"] = $lang;
 	$m->params["consumer"] = "wave/record/-";
 	$m->params["maxlen"] = 320000;
 	$m->params["notify"] = $ourcallid;
@@ -78,6 +83,8 @@ function setState($newstate)
 	    $m = new Yate("chan.attach");
 	    $m->params["id"] = $ourcallid;
 	    $m->params["source"] = "tone/congestion";
+	    if ($lang != "")
+		$m->params["lang"] = $lang;
 	    $m->params["consumer"] = "wave/record/-";
 	    $m->params["maxlen"] = 32000;
 	    $m->params["notify"] = $ourcallid;
@@ -87,6 +94,8 @@ function setState($newstate)
 	    $m = new Yate("chan.attach");
 	    $m->params["id"] = $ourcallid;
 	    $m->params["source"] = "tone/noise";
+	    if ($lang != "")
+		$m->params["lang"] = $lang;
 	    $m->params["consumer"] = "wave/record/-";
 	    $m->params["maxlen"] = 320000;
 	    $m->params["notify"] = $ourcallid;
@@ -96,6 +105,8 @@ function setState($newstate)
 	    $m = new Yate("chan.attach");
 	    $m->params["id"] = $ourcallid;
 	    $m->params["source"] = "tone/outoforder";
+	    if ($lang != "")
+		$m->params["lang"] = $lang;
 	    $m->params["consumer"] = "wave/record/-";
 	    $m->params["maxlen"] = 32000;
 	    $m->params["notify"] = $ourcallid;
@@ -209,6 +220,9 @@ function endRoute($callto,$ok,$err,$params)
     global $collect;
     global $final;
     global $queue;
+    global $routeOnly;
+    global $state;
+
     if ($ok && ($callto != "-") && ($callto != "error")) {
 	Yate::Output("Overlapped got route: '$callto' for '$collect'");
 	$m = new Yate("chan.masquerade");
@@ -241,7 +255,11 @@ function endRoute($callto,$ok,$err,$params)
     }
     else {
 	Yate::Debug("Overlapped still incomplete: '$collect'");
-	setState("noroute");
+	if ($routeOnly)
+	    setState("noroute");
+	else
+	    // Don't use setState: we don't want to change the prompt
+	    $state = "prompt";
 	// Check if got some other digits
 	gotDTMF("");
     }
@@ -266,6 +284,7 @@ while ($state != "") {
 		    $routeOnly = !Yate::Str2bool($ev->getValue("accept_call"));
 		    $autoanswer = false;
 		    $callednum = "";
+		    $lang = $ev->getValue("lang");
 		    if ($routeOnly) {
 			$callednum = $ev->GetValue("called");
 			if ($callednum == "off-hook")

@@ -38,6 +38,10 @@
 ; retake: string: Exact sequence to exit DTMF pass-through mode
 ;retake=###
 
+; lang: string: Language for tones used by the pbx
+; This parameter can be overridden from routing by a 'pbxlang' parameter
+;lang=
+
 
 ; Every other section defines an operation to trigger
 ;[operation]

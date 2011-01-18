@@ -67,6 +67,11 @@
 ; Defaults to tone/outoforder
 ;outoforder-target=tone/outoforder
 
+; lang: string: Language for tones played by the analog module
+; This parameter is added to the call.preroute message dispatched by an FXS line
+; This parameter is applied on reload and can be overridden in group sections
+;lang=
+
 ; call-ended-playtime: integer: The time to play the call-ended-target prompt on an FXS line
 ; After that, the outoforder-target will be played until the user closes (set on hook) the line
 ; This parameter can be overridden in group sections

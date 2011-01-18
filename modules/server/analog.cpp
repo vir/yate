@@ -178,6 +178,7 @@ private:
     // FXS/FXO group data
     String m_callEndedTarget;            // callto when an FXS line was disconnected
     String m_oooTarget;                  // callto when out-of-order (hook is off for a long time after call ended)
+    String m_lang;                       // Language for played tones
     u_int64_t m_callEndedPlayTime;       // Time to play call ended prompt
     // Recorder group data
     ObjList m_endpoints;                 // Record data endpoints
@@ -292,6 +293,7 @@ private:
                                          // FXS: send call setup after first ring
     String m_callEndedTarget;            // callto when an FXS line was disconnected
     String m_oooTarget;                  // callto when out-of-order (hook is off for a long time after call ended)
+    String m_lang;                       // Language for played tones
     unsigned int m_polarityCount;        // The number of polarity changes received
     bool m_polarity;                     // The last value we've set for the line polarity
     bool m_privacy;                      // Send caller identity
@@ -1097,6 +1099,8 @@ void ModuleGroup::copyData(AnalogChannel* chan)
 	return;
     chan->m_callEndedTarget = m_callEndedTarget;
     chan->m_oooTarget = m_oooTarget;
+    if (!chan->m_lang)
+	chan->m_lang = m_lang;
     chan->m_callEndedTimer.interval(m_callEndedPlayTime);
 }
 
@@ -1233,6 +1237,7 @@ bool ModuleGroup::reload(const NamedList& params, const NamedList& defaults,
 	    defaults.getValue("outoforder-target"));
 	if (!m_oooTarget)
 	    m_oooTarget = "tone/outoforder";
+	m_lang = params.getValue("lang",defaults.getValue("lang"));
 	XDebug(this,DebugAll,"Targets: call-ended='%s' outoforder='%s' [%p]",
 	    m_callEndedTarget.c_str(),m_oooTarget.c_str(),this);
     }
@@ -1326,8 +1331,10 @@ AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg, RecordTrigger recor
 	m_line->moduleGroup()->setEndpoint(this,true);
 
     // Set caller/called from line
-    if (isOutgoing())
+    if (isOutgoing()) {
+	m_lang = msg->getValue("lang");
 	m_line->setCall(msg->getValue("caller"),msg->getValue("callername"),msg->getValue("called"));
+    }
     else
 	if ((m_line->type() == AnalogLine::FXS) || (recorder == FXO))
 	    m_line->setCall("","","off-hook");
@@ -1570,6 +1577,8 @@ bool AnalogChannel::callRouted(Message& msg)
     Channel::callRouted(msg);
     setStatus();
     Lock lock(m_mutex);
+    // Update tones language
+    m_lang = msg.getValue("lang",m_lang);
     // Check if the circuit supports tone detection
     if (!m_line->circuit())
 	return true;
@@ -1591,6 +1600,8 @@ bool AnalogChannel::callRouted(Message& msg)
 void AnalogChannel::callAccept(Message& msg)
 {
     Lock lock(m_mutex);
+    // Update tones language
+    m_lang = msg.getValue("lang",m_lang);
     if (isAnswered())
 	return;
     if (m_line) {
@@ -1607,6 +1618,10 @@ void AnalogChannel::callAccept(Message& msg)
 void AnalogChannel::callRejected(const char* error, const char* reason,
 	const Message* msg)
 {
+    if (msg) {
+	Lock lock(m_mutex);
+	m_lang = msg->getValue("lang",m_lang);
+    }
     setReason(error ? error : reason);
     Channel::callRejected(error,m_reason,msg);
     setStatus();
@@ -1933,6 +1948,7 @@ void AnalogChannel::startRouter(bool first)
 		break;
 	    case AnalogLine::FXS:
 		m->addParam("overlapped","true");
+		m->addParam("lang",m_lang,false);
 		break;
 	    default: ;
 	}
@@ -2000,6 +2016,7 @@ bool AnalogChannel::setAnnouncement(const char* status, const char* callto)
 	return false;
     Message* m = message("call.execute",false,true);
     m->addParam("callto",callto);
+    m->addParam("lang",m_lang,false);
     bool ok = Engine::dispatch(*m);
     TelEngine::destruct(m);
     if (ok) {

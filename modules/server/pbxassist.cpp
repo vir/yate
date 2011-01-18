@@ -133,6 +133,9 @@ static String s_onhold;
 // error beep override source name
 static String s_error;
 
+// Language parameter for tones played by the pbx
+static String s_lang;
+
 // on-hangup transfer list
 static ObjList s_transList;
 static Mutex s_transMutex(false,"PBXAssist::transfer");
@@ -229,6 +232,7 @@ void PBXList::initialize()
     s_retake = s_cfg.getValue("general","retake","###");
     s_onhold = s_cfg.getValue("general","onhold","moh/default");
     s_error = s_cfg.getValue("general","error","tone/outoforder");
+    s_lang = s_cfg.getValue("general","lang");
     unlock();
     if (s_cfg.getBoolValue("general","enabled",false))
 	ChanAssistList::initialize();
@@ -418,6 +422,7 @@ bool PBXAssist::msgDisconnect(Message& msg, const String& reason)
 	    return false;
 	Message *m = c->message("call.execute",false,true);
 	m->addParam("callto","tone/dial");
+	m->addParam("lang",m_keep.getValue("pbxlang",s_lang),false);
 	m->addParam("reason","hold");
 	m->addParam("pbxstate",state());
 	Engine::enqueue(m);
@@ -555,6 +560,7 @@ void PBXAssist::putPrompt(const char* source, const char* reason)
     m->addParam("id",id());
     m->addParam("pbxstate",state());
     m->addParam("override",source);
+    m->addParam("lang",m_keep.getValue("pbxlang",s_lang),false);
     m->addParam("single","yes");
     if (reason)
 	m->addParam("reason",reason);
@@ -825,6 +831,7 @@ bool PBXAssist::operOnHold(Message& msg)
 	m->addParam("id",id());
 	m->addParam("callto","tone/dial");
 	m->addParam("message","call.execute");
+	m->addParam("lang",m_keep.getValue("pbxlang",s_lang),false);
 	m->addParam("reason",reason,false);
 	copyParams(*m,msg);
 	setState("dial");
@@ -880,6 +887,7 @@ bool PBXAssist::operReturnTone(Message& msg, const char* reason)
     Message* m = new Message("chan.masquerade");
     m->addParam("id",id());
     m->addParam("callto","tone/dial");
+    m->addParam("lang",m_keep.getValue("pbxlang",s_lang),false);
     m->addParam("message","call.execute");
     m->addParam("pbxstate",state());
     if (reason)

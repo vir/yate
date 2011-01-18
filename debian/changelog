@@ -1,3 +1,20 @@
+yate (3.0.1.svn4037) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4037: + Always update the telephony account
+    selector when handling user.notify messages.  + Added suport to
+    build custom tones from config and specify a tone language. Imported
+    tone descriptions from Asterisk indications.conf.  + Added support
+    to configure the language for tones used by an analog line, group or
+    channel.  + Include A and D in the digits decoded when not following
+    strictly the ISUP standard.  + Set eol-style property to native.  +
+    Fixed SVN property, must be svn:eol-style not eol-style.  + Set the
+    'noroute' prompt on incomplete route if used only to route a call to
+    avoid terminating the script otherwise. Use a tone language if
+    specified in routing.  + Added tones language support to pbx
+    assistant.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 19 Jan 2011 02:19:17 +0300
+
 yate (3.0.1.svn4030) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4030: + Set enclosed widget's object name to

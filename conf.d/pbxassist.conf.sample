@@ -42,6 +42,12 @@
 ; This parameter can be overridden from routing by a 'pbxlang' parameter
 ;lang=
 
+; dropconfhangup: bool: Drop (terminate) the conference room on hangup if the call is in one
+; This parameter can be overridden from routing by a 'pbxdropconfhangup' parameter
+; This parameter is applied on reload
+; Defaults to yes
+;dropconfhangup=yes
+
 
 ; Every other section defines an operation to trigger
 ;[operation]

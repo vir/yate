@@ -246,10 +246,12 @@ function endRoute($callto,$ok,$err,$params)
     }
     if ($final) {
 	Yate::Output("Overlapped got final error '$err' for '$collect'");
+	Yate::SetLocal("reason",$err);
 	setState("");
     }
     else if ($err != "incomplete") {
 	Yate::Output("Overlapped got error '$err' for '$collect'");
+	Yate::SetLocal("reason",$err);
 	setState("");
 	$final = true;
     }
@@ -333,7 +335,7 @@ while ($state != "") {
 	    break;
 	case "answer":
 	    if ($ev->name == "call.route")
-		endRoute($ev->retval,$ev->handled,$ev->GetValue("error"),$ev->params);
+		endRoute($ev->retval,$ev->handled,$ev->GetValue("error","noroute"),$ev->params);
 	    break;
     }
 }

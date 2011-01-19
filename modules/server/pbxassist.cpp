@@ -136,6 +136,9 @@ static String s_error;
 // Language parameter for tones played by the pbx
 static String s_lang;
 
+// Drop conference on hangup
+static bool s_dropConfHangup = true;
+
 // on-hangup transfer list
 static ObjList s_transList;
 static Mutex s_transMutex(false,"PBXAssist::transfer");
@@ -233,6 +236,7 @@ void PBXList::initialize()
     s_onhold = s_cfg.getValue("general","onhold","moh/default");
     s_error = s_cfg.getValue("general","error","tone/outoforder");
     s_lang = s_cfg.getValue("general","lang");
+    s_dropConfHangup = s_cfg.getBoolValue("general","dropconfhangup",true);
     unlock();
     if (s_cfg.getBoolValue("general","enabled",false))
 	ChanAssistList::initialize();
@@ -1050,7 +1054,8 @@ void PBXAssist::msgHangup(Message& msg)
 	l = l->skipNext();
     }
     s_transMutex.unlock();
-    if (m_room && (state() == "conference")) {
+    if (m_room && (state() == "conference") &&
+	m_keep.getBoolValue("pbxdropconfhangup",s_dropConfHangup)) {
 	// hangup the conference if we didn't switch out of it
 	Message* m = new Message("call.drop");
 	m->addParam("id",m_room);

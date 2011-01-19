@@ -179,6 +179,10 @@ static const SignallingFlags s_flags_paramcompat[] = {
     { 0x04, 0x04, "cnf" },               // Parameter pass on set but not possible: Send CNF / RLC
     { 0x08, 0x08, "discard-msg" },       // Discard / pass on message
     { 0x18, 0x10, "discard-param" },     // Discard / pass on parameter (if not discarding message)
+    { 0x60, 0x00, "nopass-release" },    // No pass on: release call
+    { 0x60, 0x20, "nopass-msg" },        // No pass on: discard message
+    { 0x60, 0x40, "nopass-param" },      // No pass on: discard parameter
+    { 0x60, 0x60, "nopass-release" },    // Reserved, interpreted as 00
     { 0, 0, 0 }
 };
 

@@ -115,6 +115,10 @@ description=contactinfo.ui
 enabled=no
 description=messages_header.ui
 
+[messages_generic]
+enabled=no
+description=messages_generic.ui
+
 [messages_okrejignore]
 enabled=no
 description=messages_okrejignore.ui

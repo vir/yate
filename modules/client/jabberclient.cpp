@@ -1821,6 +1821,8 @@ void YJBEngine::processRoster(JBEvent* ev, XmlElement* service, int tag, int iqT
 	    return;
 	Message* m = __plugin.message("user.roster",ev->clientStream());
 	m->addParam("operation","update");
+	if (ev->id() == s_rosterQueryId)
+	    m->addParam("queryrsp",String::boolText(true));
 	NamedString* count = new NamedString("contact.count");
 	m->addParam(count);
 	int n = 0;

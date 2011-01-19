@@ -616,6 +616,69 @@ static inline void setImageParam(NamedList& p, const char* param,
     setImageParam(p,param,image);
 }
 
+// Build a parameter list used to update an item in notification area
+static inline void buildNotifAreaId(String& id, const char* itemType, const String& account,
+    const String& contact = String::empty())
+{
+    id = itemType;
+    ClientContact::buildContactId(id,account,contact);
+}
+
+// Build a parameter list used to update an item in notification area
+static NamedList* buildNotifArea(NamedList& list, const char* itemType, const String& account,
+    const String& contact, const char* title = 0, const char* extraParams = 0)
+{
+    String id;
+    buildNotifAreaId(id,itemType,account,contact);
+    NamedList* upd = new NamedList(id);
+    list.addParam(new NamedPointer(id,upd,String::boolText(true)));
+    upd->addParam("item_type",itemType);
+    upd->addParam("account",account);
+    upd->addParam("contact",contact,false);
+    upd->addParam("title",title,false);
+    String params("item_type,account,contact,title");
+    params.append(extraParams,",");
+    upd->addParam("_yate_itemparams",params);
+    return upd;
+}
+
+// Show/hide a button in generic notification. Set its title also
+static inline void setGenericNotif(NamedList& list, int index, const char* title)
+{
+    String name;
+    name << "messages_" << index;
+    list.addParam("show:" + name,String::boolText(!TelEngine::null(title)));
+    list.addParam(name,title);
+}
+
+// Customize buttons in generic notification
+static void setGenericNotif(NamedList& list, const char* title1 = 0,
+    const char* title2 = 0, const char* title3 = 0)
+{
+    setGenericNotif(list,1,title1);
+    setGenericNotif(list,2,title2);
+    setGenericNotif(list,3,title3);
+}
+
+// Remove a notification area account/contact item
+static inline void removeNotifArea(const char* itemType, const String& account,
+    const String& contact = String::empty(), Window* wnd = 0)
+{
+    String id;
+    buildNotifAreaId(id,itemType,account,contact);
+    Client::self()->delTableRow("messages",id,wnd);
+}
+
+// Remove all notifications belonging to an account
+static void removeAccNotifications(ClientAccount* acc)
+{
+    if (!acc)
+	return;
+    const String& account = acc->toString();
+    removeNotifArea("loginfail",account);
+    removeNotifArea("rosterreqfail",account);
+}
+
 // Request to the client to log a chat entry
 static bool logChat(ClientContact* c, unsigned int time, bool send, bool delayed,
     const String& body, bool roomChat = true, const String& nick = String::empty())
@@ -1317,9 +1380,6 @@ static void addAccPendingStatus(NamedList& p, ClientAccount* acc, AccountStatus*
     p.addParam("status",stat->text(),false);
 }
 
-// Forward declaration needed in setAccountStatus()
-void removeAccNotifications(ClientAccount* acc);
-
 // Set account status from global. Update UI. Notify remote party
 // Use current status if none specified
 static void setAccountStatus(ClientAccountList* accounts, ClientAccount* acc,
@@ -1697,69 +1757,6 @@ static void createRoomChat(MucRoom& room, MucRoomMember* member = 0, bool active
     room.updateChatWindow(room.resource().toString(),tmp);
     // Show it
     room.showChat(member->toString(),true,active);
-}
-
-// Build a parameter list used to update an item in notification area
-static inline void buildNotifAreaId(String& id, const char* itemType, const String& account,
-    const String& contact = String::empty())
-{
-    id = itemType;
-    ClientContact::buildContactId(id,account,contact);
-}
-
-// Build a parameter list used to update an item in notification area
-static NamedList* buildNotifArea(NamedList& list, const char* itemType, const String& account,
-    const String& contact, const char* title = 0, const char* extraParams = 0)
-{
-    String id;
-    buildNotifAreaId(id,itemType,account,contact);
-    NamedList* upd = new NamedList(id);
-    list.addParam(new NamedPointer(id,upd,String::boolText(true)));
-    upd->addParam("item_type",itemType);
-    upd->addParam("account",account);
-    upd->addParam("contact",contact,false);
-    upd->addParam("title",title,false);
-    String params("item_type,account,contact,title");
-    params.append(extraParams,",");
-    upd->addParam("_yate_itemparams",params);
-    return upd;
-}
-
-// Show/hide a button in generic notification. Set its title also
-static inline void setGenericNotif(NamedList& list, int index, const char* title)
-{
-    String name;
-    name << "messages_" << index;
-    list.addParam("show:" + name,String::boolText(!TelEngine::null(title)));
-    list.addParam(name,title);
-}
-
-// Customize buttons in generic notification
-static void setGenericNotif(NamedList& list, const char* title1 = 0,
-    const char* title2 = 0, const char* title3 = 0)
-{
-    setGenericNotif(list,1,title1);
-    setGenericNotif(list,2,title2);
-    setGenericNotif(list,3,title3);
-}
-
-// Remove a notification area account/contact item
-static inline void removeNotifArea(const char* itemType, const String& account,
-    const String& contact = String::empty(), Window* wnd = 0)
-{
-    String id;
-    buildNotifAreaId(id,itemType,account,contact);
-    Client::self()->delTableRow("messages",id,wnd);
-}
-
-// Remove all notifications belonging to an account
-static void removeAccNotifications(ClientAccount* acc)
-{
-    if (!acc)
-	return;
-    const String& account = acc->toString();
-    removeNotifArea("loginfail",account);
-    removeNotifArea("rosterreqfail",account);
 }
 
 // Show a contact's info window

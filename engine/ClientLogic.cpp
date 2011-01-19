@@ -411,6 +411,9 @@ enum PrivateNotifAction {
     PrivNotificationLogin,
     PrivNotificationAccEdit,
     PrivNotificationAccounts,
+    PrivNotification1,
+    PrivNotification2,
+    PrivNotification3,
 };
 static const TokenDict s_notifPrefix[] = {
     {"messages_ok:",          PrivNotificationOk},
@@ -418,6 +421,9 @@ static const TokenDict s_notifPrefix[] = {
     {"messages_login:",       PrivNotificationLogin},
     {"messages_acc_edit:",    PrivNotificationAccEdit},
     {"messages_accounts:",    PrivNotificationAccounts},
+    {"messages_1:",           PrivNotification1},
+    {"messages_2:",           PrivNotification2},
+    {"messages_3:",           PrivNotification3},
     {0,0,}
 };
 enum ChatLogEnum {
@@ -1311,6 +1317,9 @@ static void addAccPendingStatus(NamedList& p, ClientAccount* acc, AccountStatus*
     p.addParam("status",stat->text(),false);
 }
 
+// Forward declaration needed in setAccountStatus()
+void removeAccNotifications(ClientAccount* acc);
+
 // Set account status from global. Update UI. Notify remote party
 // Use current status if none specified
 static void setAccountStatus(ClientAccountList* accounts, ClientAccount* acc,
@@ -1381,6 +1390,8 @@ static void setAccountStatus(ClientAccountList* accounts, ClientAccount* acc,
 	    acc->resource().m_status = ClientResource::Offline;
 	    // Avoid notification when disconnected
 	    acc->m_params.setParam("internal.nologinfail",String::boolText(true));
+	    // Remove account notifications now
+	    removeAccNotifications(acc);
 	}
 	acc->resource().setStatusText();
     }
@@ -1714,6 +1725,24 @@ static NamedList* buildNotifArea(NamedList& list, const char* itemType, const St
     return upd;
 }
 
+// Show/hide a button in generic notification. Set its title also
+static inline void setGenericNotif(NamedList& list, int index, const char* title)
+{
+    String name;
+    name << "messages_" << index;
+    list.addParam("show:" + name,String::boolText(!TelEngine::null(title)));
+    list.addParam(name,title);
+}
+
+// Customize buttons in generic notification
+static void setGenericNotif(NamedList& list, const char* title1 = 0,
+    const char* title2 = 0, const char* title3 = 0)
+{
+    setGenericNotif(list,1,title1);
+    setGenericNotif(list,2,title2);
+    setGenericNotif(list,3,title3);
+}
+
 // Remove a notification area account/contact item
 static inline void removeNotifArea(const char* itemType, const String& account,
     const String& contact = String::empty(), Window* wnd = 0)
@@ -1721,6 +1750,16 @@ static inline void removeNotifArea(const char* itemType, const String& account,
     String id;
     buildNotifAreaId(id,itemType,account,contact);
     Client::self()->delTableRow("messages",id,wnd);
+}
+
+// Remove all notifications belonging to an account
+static void removeAccNotifications(ClientAccount* acc)
+{
+    if (!acc)
+	return;
+    const String& account = acc->toString();
+    removeNotifArea("loginfail",account);
+    removeNotifArea("rosterreqfail",account);
 }
 
 // Show a contact's info window
@@ -2253,6 +2292,16 @@ static void updateTelAccList(bool ok, ClientAccount* acc)
 	Client::self()->updateTableRow(s_account,acc->toString());
     else
 	Client::self()->delTableRow(s_account,acc->toString());
+}
+
+// Query roster on a given account
+static bool queryRoster(ClientAccount* acc)
+{
+    if (!acc)
+	return false;
+    Message* m = Client::buildMessage("user.roster",acc->toString(),"query");
+    m->copyParams(acc->params(),"protocol");
+    return Engine::enqueue(m);
 }
 
 
@@ -4607,7 +4656,7 @@ bool DefaultLogic::delAccount(const String& account, Window* wnd)
     // Disconnect
     Engine::enqueue(userLogin(acc,false));
     // Delete from memory and UI. Save the accounts file
-    removeNotifArea("loginfail",account);
+    removeAccNotifications(acc);
     Window* w = getAccPasswordWnd(account,false);
     if (w)
 	Client::self()->closeWindow(w->toString());
@@ -5212,6 +5261,8 @@ bool DefaultLogic::handleUserNotify(Message& msg, bool& stopLogic)
     ClientAccount* acc = m_accounts->findAccount(account);
     if (!acc)
 	return false;
+    // Always remove roster request notification when account status changed
+    removeNotifArea("rosterreqfail",account);
     // Notify status
     String txt = reg ? "Registered" : "Unregistered";
     txt << " account " << account;
@@ -5338,9 +5389,7 @@ bool DefaultLogic::handleUserNotify(Message& msg, bool& stopLogic)
 		Message* m = Client::buildNotify(true,acc->toString(),
 		    acc->resource(false));
 		Engine::enqueue(m);
-		m = Client::buildMessage("user.roster",acc->toString(),"query");
-		m->copyParams(acc->params(),"protocol");
-		Engine::enqueue(m);
+		queryRoster(acc);
 	    }
 	}
 	else
@@ -5357,21 +5406,48 @@ bool DefaultLogic::handleUserRoster(Message& msg, bool& stopLogic)
     const String& oper = msg["operation"];
     if (!oper)
 	return false;
+    bool fail = false;
     bool remove = (oper != "update");
-    if (remove && oper != "delete")
-	return false;
+    if (remove && oper != "delete") {
+	if (oper != "queryerror")
+	    return false;
+	fail = true;
+    }
     // Postpone message processing
     if (Client::self()->postpone(msg,Client::UserRoster)) {
 	stopLogic = true;
 	return false;
     }
     int n = msg.getIntValue("contact.count");
-    if (n < 1)
+    if (n < 1 && !fail)
 	return false;
     const String& account = msg["account"];
     ClientAccount* a = account ? m_accounts->findAccount(account) : 0;
     if (!a)
 	return false;
+    if (fail) {
+	String reason = msg["error"];
+	if (reason) {
+	    const String& res = msg["reason"];
+	    if (res)
+		reason << " (" << res << ")";
+	}
+	else
+	    reason = msg["reason"];
+	NamedList list("");
+	NamedList* upd = buildNotifArea(list,"rosterreqfail",account,
+	    String::empty(),"Friends list failure");
+	setGenericNotif(*upd,"Retry");
+	String text;
+	text << "Failed to retrieve the friends list";
+	text.append(reason,": ");
+	text.append(account,"\r\nAccount: ");
+	upd->addParam("text",text);
+	showNotificationArea(true,Client::self()->getWindow(s_wndMain),&list);
+	return false;
+    }
+    if (msg.getBoolValue("queryrsp"))
+	removeNotifArea("rosterreqfail",account);
     ObjList removed;
     NamedList chatlist("");
     for (int i = 1; i <= n; i++) {
@@ -7657,6 +7733,10 @@ bool DefaultLogic::handleNotificationAreaAction(const String& action, Window* wn
 		remove = true;
 	    }
 	}
+    }
+    if (type == "rosterreqfail") {
+	if (act->value == PrivNotification1)
+	    remove = queryRoster(m_accounts->findAccount(account));
     }
     else
 	return false;

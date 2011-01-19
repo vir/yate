@@ -1,3 +1,17 @@
+yate (3.0.1.svn4043) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4043: + Added the "No pass on possible"
+    flags decoding to parameter compatibility.  + Propagate the final
+    errors back to the cannel doing overlapped dialing.  + Add a
+    queryrsp=true parameter to dispatched user.roster message when
+    processing a roster query response.  + Optionally drop the
+    conference room when assisted channel is hungup (defaults to yes).
+    + Added generic notification ui. Notify the user when roster query
+    fails.  + Moved notifications related functions upper in the source
+    file to make them accessible to other functions.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 20 Jan 2011 02:19:16 +0300
+
 yate (3.0.1.svn4037) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4037: + Always update the telephony account

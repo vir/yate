@@ -1048,7 +1048,7 @@ bool XmlSaxParser::processElement(NamedList& list, bool empty)
  */
 XmlDomParser::XmlDomParser(const char* name, bool fragment)
     : XmlSaxParser(name),
-    m_current(0), m_data(0)
+    m_current(0), m_data(0), m_ownData(true)
 {
     if (fragment)
 	m_data = new XmlFragment();
@@ -1056,15 +1056,19 @@ XmlDomParser::XmlDomParser(const char* name, bool fragment)
 	m_data = new XmlDocument();
 }
 
-XmlDomParser::XmlDomParser(XmlParent* parent)
-    : m_current(0), m_data(0)
+XmlDomParser::XmlDomParser(XmlParent* fragment, bool takeOwnership)
+    : m_current(0), m_data(0), m_ownData(takeOwnership)
 {
-    m_data = parent;
+    m_data = fragment;
 }
 
 XmlDomParser::~XmlDomParser()
 {
-    reset();
+    if (m_ownData) {
+	reset();
+	if (m_data)
+	    delete m_data;
+    }
 }
 
 // Create a new xml comment and append it in the xml three
@@ -1520,22 +1524,22 @@ void XmlDocument::reset()
 // Load this document from data stream and parse it
 XmlSaxParser::Error XmlDocument::read(Stream& in, int* error)
 {
-    XmlDomParser* parser = new XmlDomParser(this);
+    XmlDomParser parser(static_cast<XmlParent*>(this),false);
     char buf[8096];
     while (true) {
 	int rd = in.readData(buf,sizeof(buf) - 1);
 	if (rd > 0) {
 	    buf[rd] = 0;
-	    if (parser->parse(buf) || parser->error() == XmlSaxParser::Incomplete)
+	    if (parser.parse(buf) || parser.error() == XmlSaxParser::Incomplete)
 		continue;
 	    break;
 	}
 	break;
     }
-    if (parser->error() != XmlSaxParser::NoError) {
+    if (parser.error() != XmlSaxParser::NoError) {
 	DDebug(DebugNote,"XmlDocument error loading stream. Parser error %d '%s' [%p]",
-	    parser->error(),parser->getError(),this);
-	return parser->error();
+	    parser.error(),parser.getError(),this);
+	return parser.error();
     }
     if (in.error()) {
 	if (error)

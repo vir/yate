@@ -585,10 +585,11 @@ static TokenDict s_dict_causeCCITT[] = {
 	{"net-out-of-order",               0x26}, // Network out of order
 	{"frame-mode-conn-down",           0x27}, // Permanent frame mode connection out of service
 	{"frame-mode-conn-up",             0x28}, // Permanent frame mode connection operational
+	{"noconn",                         0x29},
 	{"temporary-failure",              0x29}, // Temporary failure
 	{"congestion",                     0x2a}, // Switching equipment congestion
 	{"access-info-discarded",          0x2b}, // Access information discarded
-	{"noconn",                         0x2c}, // Requested channel not available
+	{"channel-unavailable",            0x2c}, // Requested channel not available
 	{"preemption-congestion",          0x2e}, // Precedence call blocked
 	{"noresource",                     0x2f}, // Resource unavailable, unspecified
 	{"service-unavailable",            0x30}, // Service or option not available

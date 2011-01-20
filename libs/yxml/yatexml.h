@@ -596,8 +596,9 @@ public:
     /**
      * XmlDomParser constructor
      * @param fragment The fragment who should keep the parsed data
+     * @param takeOwnership True to take ownership of the fragment
      */
-    XmlDomParser(XmlParent* fragment);
+    XmlDomParser(XmlParent* fragment, bool takeOwnership);
 
     /**
      * Destructor
@@ -692,6 +693,7 @@ protected:
 private:
     XmlElement* m_current;                   // The current xml element
     XmlParent* m_data;                       // Main xml fragment
+    bool m_ownData;                          // The DOM owns data
 };
 
 /**

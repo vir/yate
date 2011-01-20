@@ -1436,7 +1436,7 @@ XmlDocument::XmlDocument()
 // Destructor
 XmlDocument::~XmlDocument()
 {
-
+    reset();
 }
 
 // Append a new child to this document

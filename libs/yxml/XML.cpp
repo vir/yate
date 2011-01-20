@@ -579,6 +579,7 @@ bool XmlSaxParser::parseElement()
 	// Names starting with 'xml' (case insensitive) are reserved
 	if (name->startsWith("xml",false,true)) {
 	    Debug(this,DebugNote,"Element tag starts with 'xml' [%p]",this);
+	    TelEngine::destruct(name);
 	    return setError(ReadElementName);
 	}
 #endif

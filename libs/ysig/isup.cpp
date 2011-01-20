@@ -1820,10 +1820,19 @@ static void hexifyIsupParams(String& s, const String& list)
 	    if (val < 0) {
 		const IsupParam* p = getParamDesc(*str);
 		if (p)
-		    buf[len++] = (unsigned char)p->type;
+		    val = p->type;
 	    }
-	    else if (val < 256)
-		buf[len++] = (unsigned char)val;
+	    if (val >= 0 && val < 256) {
+		// avoid duplicates
+		for (unsigned int i = 0; i < len; i++) {
+		    if ((unsigned char)val == buf[i]) {
+			val = -1;
+			break;
+		    }
+		}
+		if (val >= 0)
+		    buf[len++] = (unsigned char)val;
+	    }
 	}
 	if (len)
 	    s.hexify(buf,len,' ');
@@ -4042,8 +4051,7 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
     }
     if (unsupported)
 	msg.addParam(prefix + "parameters-unsupported",unsupported);
-    String release;
-    String cnf;
+    String release,cnf,npRelease;
     String pCompat(prefix + "ParameterCompatInformation.");
     unsigned int n = msg.length();
     for (unsigned int i = 0; i < n; i++) {
@@ -4057,10 +4065,10 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 		release.append(ns->name().substr(pCompat.length()),",");
 		break;
 	    }
-	    if (*s == "cnf") {
+	    if (*s == "cnf")
 		cnf.append(ns->name().substr(pCompat.length()),",");
-		break;
-	    }
+	    if (*s == "nopass-release")
+		npRelease.append(ns->name().substr(pCompat.length()),",");
 	}
 	TelEngine::destruct(l);
     }
@@ -4068,6 +4076,8 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	msg.setParam(prefix + "parameters-unhandled-release",release);
     if (cnf)
 	msg.setParam(prefix + "parameters-unhandled-cnf",cnf);
+    if (npRelease)
+	msg.setParam(prefix + "parameters-nopass-release",npRelease);
     if (paramLen && mustWarn)
 	Debug(this,DebugWarn,"Got %u garbage octets after message type 0x%02x [%p]",
 	    paramLen,msgType,this);
@@ -4099,7 +4109,8 @@ bool SS7ISUP::processParamCompat(const NamedList& list, unsigned int cic, bool* 
 	return true;
     const String& prefix = list["message-prefix"];
     // Release call params
-    const String& relCall = list[prefix + "parameters-unhandled-release"];
+    String relCall = list[prefix + "parameters-unhandled-release"];
+    relCall.append(list[prefix + "parameters-nopass-release"],",");
     if (relCall) {
 	Lock lock(this);
 	SS7ISUPCall* call = findCall(cic);

@@ -808,7 +808,6 @@ NamedString* XmlSaxParser::getAttribute()
 	setError(ReadingAttributes);
 	return 0;
     }
-    NamedString* ns = new NamedString(name);
     int pos = ++len;
 
     while (len < m_buf.length()) {
@@ -823,7 +822,7 @@ NamedString* XmlSaxParser::getAttribute()
 	    setError(ReadingAttributes);
 	    return 0;
 	}
-	ns->assign(m_buf.substr(pos,len - pos));
+	NamedString* ns = new NamedString(name,m_buf.substr(pos,len - pos));
 	m_buf = m_buf.substr(len + 1);
 	// End of attribute value
 	unEscape(*ns);

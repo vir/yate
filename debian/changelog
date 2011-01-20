@@ -1,3 +1,20 @@
+yate (3.0.1.svn4049) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4049: + For signalling channels made
+    "noconn" an alias for temporary failure, provides better error
+    mapping.  + Make sure the CNF or REL diagnostic holds each parameter
+    code only once.  + Build a list of "No pass on possible"
+    compatibility parameters in "parameters-nopass-release", release the
+    call if the list is not cleared just like "parameters-unhandled-
+    release".  + Fixed memory leak: release the fragment owned by a DOM
+    parser. Release the temporary parser used when loading an xml
+    document from a file.  + Fixed memory leak: release data if failed
+    to parse attribute value.  + Fixed memory leak: release extracted
+    xml tag if invalid.  + Fixed memory leak: clear xml document data
+    when destroyed.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 21 Jan 2011 02:19:19 +0300
+
 yate (3.0.1.svn4043) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4043: + Added the "No pass on possible"

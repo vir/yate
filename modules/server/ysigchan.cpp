@@ -81,7 +81,7 @@ public:
     virtual void connected(const char *reason);
     virtual void disconnected(bool final, const char* reason);
     bool disconnect()
-	{ return Channel::disconnect(m_reason); }
+	{ return Channel::disconnect(m_reason,parameters()); }
     void handleEvent(SignallingEvent* event);
     void hangup(const char* reason = 0, SignallingEvent* event = 0, const NamedList* extra = 0);
     // Notifier message dispatched handler

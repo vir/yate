@@ -2476,6 +2476,7 @@ bool SubscriptionModule::handleUserRosterUpdate(const String& user, const String
     Array* contactData = notifyRosterUpdate(user,contact,true);
     if (!contactData) {
 	TelEngine::destruct(u);
+	TelEngine::destruct(m);
 	return true;
     }
 
@@ -2529,6 +2530,7 @@ bool SubscriptionModule::handleUserRosterUpdate(const String& user, const String
     }
     u->unlock();
     TelEngine::destruct(u);
+    TelEngine::destruct(m);
     return true;
 }
 

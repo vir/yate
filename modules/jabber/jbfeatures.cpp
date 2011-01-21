@@ -648,6 +648,7 @@ bool JBFeaturesModule::handleFeatureMsgOffline(JabberID& from, Message& msg)
 	    Debug(this,DebugNote,"Invalid database offline chat xml for user=%s",
 		from.bare().c_str());
 	}
+	TelEngine::destruct(m);
 	return true;
     }
     if (*oper == "delete") {

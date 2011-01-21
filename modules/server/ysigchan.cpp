@@ -55,6 +55,7 @@ public:
     // Outgoing
     SigChannel(const char* caller, const char* called);
     virtual ~SigChannel();
+    virtual void destroyed();
     bool startRouter();
     bool startCall(Message& msg, String& trunks);
     inline SignallingCall* call() const
@@ -867,6 +868,12 @@ SigChannel::~SigChannel()
     setState("destroyed",true,true);
 }
 
+void SigChannel::destroyed()
+{
+    setState("destroyed",false,true);
+    hangup();
+}
+
 bool SigChannel::startRouter()
 {
     Message* m = m_route;
@@ -1250,15 +1257,14 @@ void SigChannel::callRejected(const char* error, const char* reason, const Messa
 void SigChannel::connected(const char *reason)
 {
     releaseCallAccepted(true);
-    Channel::connected(m_reason);
+    m_reason.clear();
+    Channel::connected(reason);
 }
 
 void SigChannel::disconnected(bool final, const char* reason)
 {
     if (m_reason.null())
 	m_reason = reason;
-    setState("disconnected",false,true);
-    hangup();
     Channel::disconnected(final,m_reason);
 }
 

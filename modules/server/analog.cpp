@@ -1643,7 +1643,7 @@ bool AnalogChannel::disconnect(const char* reason)
 	setReason(reason);
 	setStatus("disconnecting");
     }
-    return Channel::disconnect(m_reason);
+    return Channel::disconnect(m_reason,parameters());
 }
 
 // Hangup call

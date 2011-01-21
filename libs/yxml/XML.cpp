@@ -1669,6 +1669,7 @@ XmlElement::XmlElement(const char* name, bool complete)
 XmlElement::~XmlElement()
 {
     setInheritedNs();
+    TelEngine::destruct(m_prefixed);
     XDebug(DebugAll,"XmlElement::~XmlElement() ( %s| %p )",
 	m_element.c_str(),this);
 }

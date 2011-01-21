@@ -453,7 +453,7 @@ public:
     virtual void disconnected(bool final, const char* reason);
 
     inline bool disconnect()
-	{ return Channel::disconnect(m_reason); }
+	{ return Channel::disconnect(m_reason,parameters()); }
 
     inline IAXTransaction* transaction() const
         { return m_transaction; }

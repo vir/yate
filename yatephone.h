@@ -1949,6 +1949,13 @@ public:
      */
     void filterDebug(const String& item);
 
+    /**
+     * Get the disconnect parameters list
+     * @return Constant reference to disconnect parameters
+     */
+    inline const NamedList& parameters() const
+	{ return m_parameters; }
+
 protected:
     /**
      * Constructor
@@ -2064,13 +2071,6 @@ protected:
      * @return Reference to disconnect parameters
      */
     inline NamedList& parameters()
-	{ return m_parameters; }
-
-    /**
-     * Get the disconnect parameters list
-     * @return Constant teference to disconnect parameters
-     */
-    inline const NamedList& parameters() const
 	{ return m_parameters; }
 
 private:

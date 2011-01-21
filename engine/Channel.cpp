@@ -514,9 +514,13 @@ void Channel::setMaxcall(const Message* msg)
 
 void Channel::complete(Message& msg, bool minimal) const
 {
+    static const String s_hangup("chan.hangup");
+
     msg.setParam("id",id());
     if (m_driver)
 	msg.setParam("module",m_driver->name());
+    if (s_hangup == msg)
+	msg.copyParams(parameters());
 
     if (minimal)
 	return;

@@ -2161,7 +2161,6 @@ void YateSIPConnection::hangup()
 	m_state,m_tr,error,m_reasonCode,m_reason.c_str(),this);
     setMedia(0);
     Message* m = message("chan.hangup");
-    m->copyParams(parameters());
     if (m_reason)
 	m->setParam("reason",m_reason);
     Engine::enqueue(m);

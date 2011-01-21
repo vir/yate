@@ -1368,7 +1368,8 @@ void YateH323Connection::OnCleared()
 	YateH323Chan* tmp = m_chan;
 	m_chan = 0;
 	lock.drop();
-	tmp->disconnect(error ? error : rtext);
+	tmp->parameters().setParam("cause_q931",String(GetQ931Cause()));
+	tmp->disconnect(error ? error : rtext,tmp->parameters());
 	tmp->finish();
 	tmp->deref();
     }

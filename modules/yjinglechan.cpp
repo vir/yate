@@ -158,7 +158,7 @@ public:
     virtual bool msgTransfer(Message& msg);
     inline bool disconnect(const char* reason) {
 	setReason(reason);
-	return Channel::disconnect(m_reason);
+	return Channel::disconnect(m_reason,parameters());
     }
     // Route an incoming call
     bool route();

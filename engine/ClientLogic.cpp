@@ -5611,6 +5611,11 @@ bool DefaultLogic::handleResourceNotify(Message& msg, bool& stopLogic)
 	}
 	// Update info window if displayed
 	updateContactInfo(c);
+	// Update chat actions in main contacts list (main window)
+	String sel;
+	Client::self()->getSelect(s_chatContactList,sel,Client::self()->getWindow(s_wndMain));
+	if (c->toString() == sel)
+	    enableChatActions(c);
     }
     return false;
 }

@@ -2208,8 +2208,10 @@ bool JBStream::processFeaturesOut(XmlElement* xml, const JabberID& from,
     }
     // Check compression
     XmlElement* x = checkCompress();
-    if (x)
+    if (x) {
+	TelEngine::destruct(xml);
 	return sendStreamXml(Compressing,x);
+    }
     JBClientStream* client = clientStream();
     if (client) {
 	TelEngine::destruct(xml);

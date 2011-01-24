@@ -629,6 +629,7 @@ bool XmlSaxParser::parseElement()
 	}
 	if (m_parsed.getParam(ns->name())) {
 	    Debug(this,DebugNote,"Duplicate attribute '%s' [%p]",ns->name().c_str(),this);
+	    TelEngine::destruct(ns);
 	    return setError(NotWellFormed);
 	}
 	XDebug(this,DebugAll,"Parser adding attribute %s='%s' to '%s' [%p]",

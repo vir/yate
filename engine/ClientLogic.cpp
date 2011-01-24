@@ -7731,7 +7731,7 @@ bool DefaultLogic::handleNotificationAreaAction(const String& action, Window* wn
 	    }
 	}
     }
-    if (type == "rosterreqfail") {
+    else if (type == "rosterreqfail") {
 	if (act->value == PrivNotification1)
 	    remove = queryRoster(m_accounts->findAccount(account));
     }

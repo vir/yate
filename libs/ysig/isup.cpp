@@ -1299,10 +1299,12 @@ static const IsupParam s_paramDefs[] = {
     MAKE_PARAM(UserTeleserviceInformation,     0,0,             0,             0),                    // 3.59
     MAKE_PARAM(UserToUserIndicators,           0,0,             0,             0),                    // 3.60
     MAKE_PARAM(UserToUserInformation,          0,0,             0,             0),                    // 3.61
+    MAKE_PARAM(CCSScallIndication,             1,0,             0,             0),                    // 3.63
     MAKE_PARAM(ForwardGVNS,                    0,0,             0,             0),                    // 3.66
     MAKE_PARAM(BackwardGVNS,                   0,0,             0,             0),                    // 3.62
     MAKE_PARAM(RedirectCapability,             0,0,             0,             0),                    // 3.96
     MAKE_PARAM(RedirectCounter,                0,0,             0,             0),                    // 3.97
+    MAKE_PARAM(CCNRpossibleIndicator,          0,0,             0,             0),                    // 3.83
     MAKE_PARAM(PivotRoutingIndicators,         0,0,             0,             0),                    // 3.85
     MAKE_PARAM(CalledDirectoryNumber,          0,0,             0,             0),                    // 3.86
     MAKE_PARAM(OriginalCalledINNumber,         0,0,             0,             0),                    // 3.87

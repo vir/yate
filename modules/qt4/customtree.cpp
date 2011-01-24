@@ -1163,7 +1163,7 @@ bool ContactList::updateContact(const String& id, const NamedList& params,
 	name().c_str(),id.c_str(),TelEngine::c_safe(groups));
     if (!groups || m_flatList) {
 	// No group changes or not shown by group. Update all contacts
-	for (int i = 0; !found && i < list.size(); i++)
+	for (int i = 0; i < list.size(); i++)
 	    if (list[i]->type() == TypeContact && list[i]->id() == id) {
 		ok = updateContact(*(static_cast<ContactItem*>(list[i])),params) || ok;
 		found = true;

@@ -2121,6 +2121,7 @@ bool JBStream::processFeaturesIn(XmlElement* xml, const JabberID& from, const Ja
 	    terminate(0,true,xml,XMPPError::Internal,"Stream already secured");
 	    return false;
 	}
+	TelEngine::destruct(xml);
 	return true;
     }
     // Stream SASL auth

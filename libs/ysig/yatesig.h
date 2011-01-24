@@ -7506,11 +7506,13 @@ public:
 	RedirectionNumberRestriction   = 0x40, // ITU only
 	FreephoneIndicators            = 0x41, // ITU only
 	GenericReference               = 0x42, // ITU only
+	CCSScallIndication             = 0x4b,
 	ForwardGVNS                    = 0x4c,
 	BackwardGVNS                   = 0x4d,
 	RedirectCapability             = 0x4e, // National use
 	RedirectCounter                = 0x77, // National use
 	ApplicationTransport           = 0x78,
+	CCNRpossibleIndicator          = 0x7a,
 	PivotRoutingIndicators         = 0x7c,
 	CalledDirectoryNumber          = 0x7d, // National use
 	OriginalCalledINNumber         = 0x7f,

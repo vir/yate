@@ -4865,7 +4865,8 @@ bool DefaultLogic::delContact(const String& contact, Window* wnd)
     String sectName;
     c->getContactSection(sectName);
     Client::s_contacts.clearSection(sectName);
-    m_accounts->localContacts()->removeContact(contact);
+    String id = c->toString();
+    m_accounts->localContacts()->removeContact(id);
     Client::save(Client::s_contacts);
     return true;
 }

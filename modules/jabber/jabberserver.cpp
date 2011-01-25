@@ -1726,8 +1726,10 @@ void YJBEngine::processPresenceStanza(JBEvent* ev)
 	    if (c2s) {
 		bool offlinechat = false;
 		if (!ev->to()) {
+		    Lock lock(c2s);
 		    if (!c2s->remote().resource())
 			break;
+		    lock.drop();
 		    // Presence broadcast
 		    int prio = XMPPUtils::priority(*ev->element());
 		    offlinechat = c2s->setAvailableResource(online,prio >= 0) &&
@@ -2121,39 +2123,47 @@ void YJBEngine::processStreamEvent(JBEvent* ev)
 	    bool changed = s->setAvailableResource(false);
 	    s->setRosterRequested(false);
 	    if (s->type() == JBStream::c2s) {
+		JabberID jid;
+		s->remote(jid);
 		// Notify 'offline' for client streams that forgot to send 'unavailable'
-		if (changed && s->remote().resource())
+		if (changed && jid.resource())
 		    notifyPresence(*(static_cast<JBClientStream*>(s)),false,0,String::empty());
 		// Unregister
-		m = userRegister(*s,false,s->remote().resource());
+		m = userRegister(*s,false,jid.resource());
 	    }
 	    else {
 		// TODO: notify offline for all users in remote domain
 		m = userRegister(*s,false);
 	    }
 	    // Remove component from serviced domain
-	    if (ev->stream()->type() == JBStream::comp)
-		setComponent(ev->stream()->remote(),false);
+	    if (ev->stream()->type() == JBStream::comp) {
+		JabberID jid;
+		s->remote(jid);
+		setComponent(jid,false);
+	    }
 	}
     }
     else {
+	JabberID local;
+	ev->stream()->local(local);
 	// Notify verify failure on dialback streams
 	if (!reg) {
 	    JBServerStream* s2s = ev->serverStream();
 	    NamedString* db = s2s ? s2s->takeDb() : 0;
 	    if (db) {
 		// See XEP 0220 2.4
-		notifyDbVerifyResult(s2s->local(),s2s->remote(),db->name(),
-		    XMPPError::RemoteTimeout);
+		JabberID remote;
+		s2s->remote(remote);
+		notifyDbVerifyResult(local,remote,db->name(),XMPPError::RemoteTimeout);
 		TelEngine::destruct(db);
 	    }
 	}
 	m = __plugin.message("user.notify");
 	m->addParam("account",s->name());
 	if (s->type() == JBStream::c2s)
-	    m->addParam("username",s->local().node());
-	m->addParam("server",s->local().domain());
-	m->addParam("jid",s->local());
+	    m->addParam("username",local.node());
+	m->addParam("server",local.domain());
+	m->addParam("jid",local);
 	m->addParam("registered",String::boolText(reg));
 	if (!reg && ev->text())
 	    m->addParam("error",ev->text());
@@ -2168,7 +2178,11 @@ void YJBEngine::processStreamEvent(JBEvent* ev)
 void YJBEngine::processDbResult(JBEvent* ev)
 {
     JBServerStream* stream = ev->serverStream();
-    const char* id = stream ? stream->id().c_str() : 0;
+    String id;
+    if (stream) {
+	Lock lock(stream);
+	id = stream->id();
+    }
     if (id && ev->text() && stream && ev->to() && hasDomain(ev->to()) && ev->from()) {
 	// Check if we already have a stream to the remote domain
 	// Build a dialback only outgoing stream if found
@@ -2183,7 +2197,7 @@ void YJBEngine::processDbResult(JBEvent* ev)
     }
     Debug(this,DebugNote,
 	"Failed to authenticate dialback request from=%s to=%s id=%s key=%s",
-	ev->from().c_str(),ev->to().c_str(),id,ev->text().c_str());
+	ev->from().c_str(),ev->to().c_str(),id.c_str(),ev->text().c_str());
     if (stream)
 	stream->sendDbResult(ev->to(),ev->from(),XMPPError::RemoteConn);
 }
@@ -2484,8 +2498,10 @@ void YJBEngine::notifyPresence(JBClientStream& cs, bool online, XmlElement* xml,
 {
     Message* m = __plugin.message("resource.notify");
     m->addParam("operation",online ? "online" : "offline");
+    cs.lock();
     m->addParam("contact",cs.remote().bare());
     m->addParam("instance",cs.remote().resource());
+    cs.unlock();
     if (online) {
 	if (xml)
 	    m->addParam("priority",String(XMPPUtils::priority(*xml)));
@@ -2552,11 +2568,13 @@ Message* YJBEngine::xmppIq(JBEvent* ev, const char* xmlns)
 Message* YJBEngine::userRegister(JBStream& stream, bool reg, const char* instance)
 {
     Message* m = __plugin.message(reg ? "user.register" : "user.unregister");
+    stream.lock();
     if (stream.type() == JBStream::c2s)
 	m->addParam("username",stream.remote().bare());
     else
 	m->addParam("server",String::boolText(true));
     JabberID data(stream.remote().node(),stream.remote().domain(),instance);
+    stream.unlock();
     m->addParam("data",data);
     if (reg) {
 	SocketAddr addr;
@@ -2746,7 +2764,7 @@ void YJBEngine::notifyDbVerifyResult(const JabberID& local, const JabberID& remo
 	return;
     // Notify the incoming stream
     JBServerStream* notify = findServerStream(local,remote,false,false);
-    if (notify && notify->id() == id)
+    if (notify && notify->isId(id))
 	notify->sendDbResult(local,remote,rsp);
     else
 	Debug(this,DebugNote,
@@ -2783,13 +2801,15 @@ JBPendingJob::JBPendingJob(JBEvent* ev)
     : m_event(ev),
     m_stream(ev->stream()->toString()),
     m_streamType((JBStream::Type)ev->stream()->type()),
-    m_local(ev->stream()->local().domain()),
     m_flags(ev->stream()->flags()),
     m_serverTarget(false),
     m_serverItemTarget(false)
 {
     m_serverItemTarget = ev->to() && s_jabber->isServerItemDomain(ev->to().domain());
+    Lock lock(ev->stream());
+    m_local = ev->stream()->local().domain();
     m_serverTarget = !m_serverItemTarget && (!ev->to() || ev->to() == ev->stream()->local());
+    lock.drop();
     m_event->releaseStream(true);
 }
 

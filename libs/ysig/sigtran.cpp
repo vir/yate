@@ -967,11 +967,17 @@ bool SS7M2PA::decodeSeq(const DataBlock& data,u_int8_t msgType)
     u_int32_t bsn = (data[1] << 16) | (data[2] << 8) | data[3];
     u_int32_t fsn = (data[5] << 16) | (data[6] << 8) | data[7];
     if (msgType == LinkStatus) {
+	// Do not check sequence numbers if either end is OutOfService
 	if (OutOfService == m_state)
 	    return true;
+	if (data.length() >= 12) {
+	    u_int32_t status = (data[8] << 24) | (data[9] << 16) | (data[10] << 8) | data[11];
+	    if (OutOfService == status)
+		return true;
+	}
 	if (fsn != m_needToAck) {
-	    DDebug(this,DebugNote,"Received LinkStatus message with wrong sequence number %d expected %d",
-		fsn,m_needToAck);
+	    Debug(this,DebugWarn,"Received LinkStatus with wrong sequence %d, expected %d in state %s",
+		fsn,m_needToAck,lookup(m_localStatus,s_state));
 	    abortAlignment("Wrong Sequence number");
 	    transmitLS();
 	    return false;

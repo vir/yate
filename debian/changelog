@@ -1,3 +1,24 @@
+yate (3.0.1.svn4070) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4070: + Fixed ring end on FXS analog MGCP
+    gateways.  + Added capability to force a ringback to a MGCP gateway
+    from ISDN and ISUP.  + Fixed bug: remove a deleted address book
+    contact from internal list.  + Added thread safe methods used to
+    retrieve a stream's local and remote party jid and check its id.  +
+    Make sure the stream is locked while accessing its local and remote
+    party jid or checking its id.  + More visibly warn about wrong
+    sequences once false positives are eliminated.  + Do not check the
+    sequence numbers of M2UA packets with LinkStatus == OutOfService,
+    let the state machine process them.  + Prevent misrouting or
+    inadvertently handling SS7 messages in silent transfer scenarios.  +
+    Add a short random time to the initial SLTM timer to prevent
+    synchronization between link ends.  + Fixed and simplified the way
+    M2PA is forcibly realigned, wasn't clearing sequence numbers and all
+    machine states.  + Ignore neighbours setting when receiving an UPU,
+    any node can send it.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 26 Jan 2011 02:19:14 +0300
+
 yate (3.0.1.svn4061) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4061: + Fixed memory leak: release received

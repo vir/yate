@@ -227,6 +227,7 @@ private:
     bool sendAsync(MGCPMessage* mm);
     RefPointer<MGCPMessage> sendSync(MGCPMessage* mm);
     bool sendRequest(const char* sigReq, const char* reqEvt = 0, const char* digitMap = 0);
+    bool sendPending(const char* sigReq = 0);
     bool enqueueEvent(SignallingCircuitEvent::Type type, const char* name, const char* dtmf = 0);
     void cleanupRtp();
     bool createRtp();
@@ -236,6 +237,7 @@ private:
     String m_notify;
     String m_specialMode;
     bool m_changing;
+    bool m_pending;
     // Gateway endpoint bearer information
     String m_gwFormat;
     bool m_gwFormatChanged;
@@ -1214,7 +1216,8 @@ bool MGCPSpan::processDelete(MGCPTransaction* tr, MGCPMessage* mm, const String&
 MGCPCircuit::MGCPCircuit(unsigned int code, MGCPSpan* span, const char* id)
     : SignallingCircuit(RTP,code,Missing,span->group(),span),
       SDPSession(&splugin.parser()),
-      m_epId(id), m_statusReq(Missing), m_changing(false), m_gwFormatChanged(false),
+      m_epId(id), m_statusReq(Missing),
+      m_changing(false), m_pending(false), m_gwFormatChanged(false),
       m_localRtpChanged(false), m_needClear(false), m_tr(0)
 {
     Debug(&splugin,DebugAll,"MGCPCircuit::MGCPCircuit(%u,%p,'%s') [%p]",
@@ -1360,6 +1363,7 @@ void MGCPCircuit::clearConn(bool force)
     m_remoteRawSdp.clear();
     m_localRtpChanged = false;
     sendAsync(mm);
+    sendPending();
 }
 
 // Wait for changing flag to be false
@@ -1438,11 +1442,32 @@ bool MGCPCircuit::sendRequest(const char* sigReq, const char* reqEvt, const char
     mm->params.addParam("X",m_notify);
     if (sigReq)
 	mm->params.addParam("S",sigReq);
+    else
+	m_pending = false;
     if (reqEvt)
 	mm->params.addParam("R",reqEvt);
     if (digitMap)
 	mm->params.addParam("D",digitMap);
     return sendAsync(mm);
+}
+
+// Send or clear pending (timeout) signal requests
+bool MGCPCircuit::sendPending(const char* sigReq)
+{
+    if (TelEngine::null(sigReq) && !m_pending)
+	return true;
+    Debug(&splugin,DebugInfo,"MGCPCircuit %s pending%s%s %u [%p]",
+	(sigReq ? "Signal" : "Clear all"),
+	(sigReq ? ": " : ""),c_safe(sigReq),
+	code(),this);
+    MGCPMessage* mm = message("RQNT");
+    mm->params.addParam("X",m_notify);
+    if (sigReq)
+	mm->params.addParam("S",sigReq);
+    if (!sendAsync(mm))
+	return false;
+    m_pending = !TelEngine::null(sigReq);
+    return true;
 }
 
 // Circuit status change request
@@ -1657,11 +1682,12 @@ bool MGCPCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params
 	case SignallingCircuitEvent::Connect:
 	    if (params)
 		setParams(*params);
+	    sendPending();
 	    return status(Connected,!params || params->getBoolValue("sync",true));
 	case SignallingCircuitEvent::RingBegin:
-	    return fxs() && sendRequest("L/rg");
-//	case SignallingCircuitEvent::RingEnd:
-//	    return fxs() && sendRequest("L/rg(-)");
+	    return fxs() && sendPending("L/rg");
+	case SignallingCircuitEvent::RingEnd:
+	    return fxs() && sendPending();
 	case SignallingCircuitEvent::Polarity:
 	    return fxs() && sendRequest("L/lsa");
 	case SignallingCircuitEvent::OffHook:
@@ -1677,6 +1703,19 @@ bool MGCPCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params
 		    tone = params;
 		if (!null(tone))
 		    return sendRequest("D/" + *tone);
+	    }
+	    break;
+	case SignallingCircuitEvent::GenericTone:
+	    if (params) {
+		const String* tone = params->getParam("tone");
+		if (!tone)
+		    tone = params;
+		if (null(tone))
+		    break;
+		if (*tone == "ringback" || *tone == "ring" || *tone == "rt")
+		    return sendPending("G/rt");
+		if (*tone == "congestion" || *tone == "cg")
+		    return sendPending("G/cg");
 	    }
 	    break;
 	default:

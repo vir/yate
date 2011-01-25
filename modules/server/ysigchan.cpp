@@ -136,6 +136,7 @@ private:
     bool m_hungup;                       // Hang up flag
     String m_reason;                     // Hangup reason
     bool m_inband;                       // True to try to send in-band tones
+    bool m_ringback;                     // Always provide ringback media
     bool m_rtpForward;                   // Forward RTP
     bool m_sdpForward;                   // Forward SDP (only of rtp forward is enabled)
     Message* m_route;                    // Prepared call.preroute message
@@ -329,6 +330,8 @@ public:
 	{ return m_controller; }
     inline bool inband() const
 	{ return m_inband; }
+    inline bool ringback() const
+	{ return m_ringback; }
     // Set exiting flag for call controller and timeout for the thread
     void setExiting(unsigned int msec);
     // Initialize (create or reload) the trunk. Process the debuglayer parameter.
@@ -376,6 +379,7 @@ protected:
     SignallingCallControl* m_controller; // Call controller, if any
     bool m_init;                         // True if already initialized
     bool m_inband;                       // True to send in-band tones through this trunk
+    bool m_ringback;                     // Always provide ringback media
 private:
     Type m_type;                         // Trunk type
     SigTrunkThread* m_thread;            // Event thread for call controller
@@ -792,6 +796,7 @@ SigChannel::SigChannel(SignallingEvent* event)
     m_trunk(0),
     m_hungup(true),
     m_inband(false),
+    m_ringback(false),
     m_rtpForward(false),
     m_sdpForward(false),
     m_route(0),
@@ -807,8 +812,10 @@ SigChannel::SigChannel(SignallingEvent* event)
     m_called = msg ? msg->params().getValue("called") : 0;
     m_call->userdata(this);
     m_trunk = plugin.findTrunk(m_call->controller());
-    if (m_trunk)
+    if (m_trunk) {
 	m_inband = m_trunk->inband();
+	m_ringback = m_trunk->ringback();
+    }
     // Startup
     m_hungup = false;
     setState(0);
@@ -853,6 +860,7 @@ SigChannel::SigChannel(const char* caller, const char* called)
     m_hungup(true),
     m_reason("noconn"),
     m_inband(false),
+    m_ringback(false),
     m_rtpForward(false),
     m_sdpForward(false),
     m_route(0),
@@ -953,6 +961,7 @@ bool SigChannel::startCall(Message& msg, SigTrunk* trunk)
 	return false;
     // Data
     m_inband = msg.getBoolValue("dtmfinband",trunk->inband());
+    m_ringback = msg.getBoolValue("ringback",trunk->ringback());
     // Make the call
     SignallingMessage* sigMsg = new SignallingMessage;
     sigMsg->params().addParam("caller",m_caller);
@@ -1040,6 +1049,8 @@ bool SigChannel::msgProgress(Message& msg)
     SignallingMessage* sm = new SignallingMessage;
     if (media && updateConsumer(format,false) && format)
 	sm->params().addParam("format",format);
+    if (media)
+	m_ringback = false;
     sm->params().addParam("earlymedia",String::boolText(media));
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Progress,sm,m_call);
     TelEngine::destruct(sm);
@@ -1063,6 +1074,17 @@ bool SigChannel::msgRinging(Message& msg)
     SignallingMessage* sm = new SignallingMessage;
     if (media && updateConsumer(format,false) && format)
 	sm->params().addParam("format",format);
+    if (m_ringback && !media) {
+	// Attempt to provide ringback using circuit features
+	SignallingCircuit* cic = getCircuit();
+	if (cic) {
+	    NamedList params("ringback");
+	    params.addParam("tone","ringback");
+	    media = cic->sendEvent(SignallingCircuitEvent::GenericTone,&params);
+	}
+    }
+    if (media)
+	m_ringback = false;
     sm->params().addParam("earlymedia",String::boolText(media));
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Ringing,sm,m_call);
     TelEngine::destruct(sm);
@@ -1081,6 +1103,7 @@ bool SigChannel::msgAnswered(Message& msg)
     setState("answered");
     if (!m_call)
 	return true;
+    m_ringback = false;
     updateSource(0,false);
     // Start echo training
     SignallingCircuit* cic = getCircuit();
@@ -1225,6 +1248,7 @@ void SigChannel::callAccept(Message& msg)
         }
 	TelEngine::destruct(sm);
     }
+    m_ringback = msg.getBoolValue("ringback",m_ringback);
     if (m_rtpForward) {
 	const String* tmp = msg.getParam("rtp_forward");
 	if (!(tmp && (*tmp == "accepted")))
@@ -2608,6 +2632,7 @@ SigTrunk::SigTrunk(const char* name, Type type)
       m_controller(0),
       m_init(false),
       m_inband(false),
+      m_ringback(false),
       m_type(type),
       m_thread(0)
 {
@@ -2639,6 +2664,7 @@ bool SigTrunk::initialize(NamedList& params)
 {
     // Reload common parameters
     m_inband = params.getBoolValue("dtmfinband",s_cfg.getBoolValue("general","dtmfinband",false));
+    m_ringback = params.getBoolValue("ringback",s_cfg.getBoolValue("general","ringback",false));
 
     // Check error:
     //  No need to initialize if no signalling engine or not in plugin's list

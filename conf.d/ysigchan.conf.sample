@@ -146,6 +146,10 @@
 ; alaw is used commonly in Europe while mulaw is used commonly in US and Japan.
 ;format=alaw
 
+; ringback: boolean: Offer a ringback tone even if not provided by peer channel
+; If it fails the correct indication (no inband available) is signaled
+;ringback=no
+
 ; print-messages: boolean: Print decoded protocol data units to output
 ; This option is applied on reload
 ; Defaults to no
@@ -376,6 +380,10 @@
 ; continuity: string: Type of continuity check to perform on the circuits
 ; If not set calls that request continuity check will be rejected
 ;continuity=
+
+; ringback: boolean: Offer a ringback tone even if not provided by peer channel
+; If it fails the correct indication (no inband available) is signaled
+;ringback=no
 
 ; location: string: Exchange location to be set when sending Q.850 causes
 ; Available values are: 

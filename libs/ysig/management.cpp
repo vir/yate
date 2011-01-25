@@ -348,7 +348,7 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 
     String addr;
     addr << label;
-    while (m_neighbours) {
+    while (m_neighbours && (msg->type() != SS7MsgSNM::UPU)) {
 	if (router) {
 	    if (!router->getRoutePriority(label.type(),label.opc()))
 		break;

@@ -1137,9 +1137,8 @@ bool SS7M2PA::control(Operation oper, NamedList* params)
 		return true;
 	case Align:
 	{
-	    bool em = getEmergency(params);
-	    m_state = em ? ProvingEmergency : ProvingNormal;
-	    startAlignment();
+	    m_state = getEmergency(params) ? ProvingEmergency : ProvingNormal;
+	    abortAlignment("Control request align.");
 	    return true;
 	}
 	case Status:
@@ -1192,21 +1191,16 @@ void SS7M2PA::abortAlignment(const String& info)
     setLocalStatus(OutOfService);
     setRemoteStatus(OutOfService);
     m_needToAck = m_lastAck = m_seqNr = 0xffffff;
-    if (m_confTimer.started())
-	m_confTimer.stop();
-    if (m_ackTimer.started())
-	m_ackTimer.stop();
-    if (m_t2.started())
-	m_t2.stop();
-    if (m_t3.started())
-	m_t3.stop();
-    if (m_t4.started())
-	m_t4.stop();
-    if (m_t1.started())
-	m_t1.stop();
+    m_confTimer.stop();
+    m_ackTimer.stop();
+    m_t2.stop();
+    m_t3.stop();
+    m_t4.stop();
+    m_t1.stop();
     if (m_state == ProvingNormal || m_state == ProvingEmergency)
 	startAlignment();
-    SS7Layer2::notify();
+    else
+	SS7Layer2::notify();
 }
 
 bool SS7M2PA::processLinkStatus(DataBlock& data,int streamId)

@@ -1525,8 +1525,12 @@ void YJBEngine::processIqStanza(JBEvent* ev)
 	    return;
     }
 
-    bool fromServer = (!ev->from() || ev->from() == ev->stream()->local().bare() ||
-	ev->from() == ev->stream()->local().domain());
+    bool fromServer = !ev->from();
+    if (!fromServer) {
+	Lock lock(ev->stream());
+	fromServer = ev->from() == ev->stream()->local().bare() ||
+	    ev->from() == ev->stream()->local().domain();
+    }
     if (fromServer) {
 	switch (n) {
 	    case XMPPNamespace::Roster:
@@ -1693,6 +1697,7 @@ void YJBEngine::processStreamEvent(JBEvent* ev, bool ok)
 	ev->stream()->unlock();
     }
     Message* m = __plugin.message("user.notify",ev->clientStream());
+    Lock lock(ev->stream());
     m->addParam("username",ev->stream()->local().node());
     m->addParam("server",ev->stream()->local().domain());
     m->addParam("jid",ev->stream()->local());
@@ -1704,6 +1709,7 @@ void YJBEngine::processStreamEvent(JBEvent* ev, bool ok)
     bool restart = (ev->stream()->state() != JBStream::Destroy &&
 	!ev->stream()->flag(JBStream::NoAutoRestart));
     m->addParam("autorestart",String::boolText(restart));
+    lock.drop();
     Engine::enqueue(m);
 }
 

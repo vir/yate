@@ -1466,6 +1466,7 @@ public:
     enum Type {
 	Unknown      = 0,
 	Dtmf         = 1,                // Transfer tones: param: tone
+	GenericTone  = 2,                // Play or detect tones: param: tone
 	// Analog line events
 	Timeout      = 10,               // 
 	Polarity     = 11,               // Line's polarity changed

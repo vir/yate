@@ -602,11 +602,32 @@ public:
 	{ return m_id; }
 
     /**
+     * Check if the stream id equals a given string.
+     * This method is thread safe
+     * @param str The string to check
+     * @return True if the given string equals this stream's id
+     */
+    inline bool isId(const String& str) {
+	    Lock lock(this);
+	    return str == m_id;
+	}
+
+    /**
      * Get the JID of the local side of this stream
      * @return The JID of the local side of this stream
      */
     inline const JabberID& local() const
 	{ return m_local; }
+
+    /**
+     * Get the JID of the local side of this stream.
+     * This method is thread safe
+     * @param jid The JID to be filled with the local side of this stream
+     */
+    inline void local(JabberID& jid) {
+	    Lock lock(this);
+	    jid = m_local;
+	}
 
     /**
      * Set the local party's JID
@@ -621,6 +642,16 @@ public:
      */
     inline const JabberID& remote() const
 	{ return m_remote; }
+
+    /**
+     * Get the JID of the remote side of this stream.
+     * This method is thread safe
+     * @param jid The JID to be filled with the remote side of this stream
+     */
+    inline void remote(JabberID& jid) {
+	    Lock lock(this);
+	    jid = m_remote;
+	}
 
     /**
      * Get the remote party's address

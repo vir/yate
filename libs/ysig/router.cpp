@@ -869,9 +869,12 @@ HandledMSU SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7L
 	default:
 	    break;
     }
+    // maintenance must stop here, others may be transferred out
+    if ((msu.getSIF() == SS7MSU::MTN) || (msu.getSIF() == SS7MSU::MTNS))
+	return HandledMSU::Rejected;
     unsigned int dpc = label.dpc().pack(label.type());
     bool local = getLocal(label.type()) == dpc;
-    if (network && !local && (ret != HandledMSU::NoCircuit))
+    if (network && !local && (ret != HandledMSU::NoCircuit) && !m_transferSilent)
 	local = network->getLocal(label.type()) == dpc;
     if (local)
 	return m_sendUnavail ? HandledMSU::Unequipped : HandledMSU::Failure;

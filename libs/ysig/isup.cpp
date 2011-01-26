@@ -3206,6 +3206,12 @@ bool SS7ISUP::initialize(const NamedList* config)
     return SS7Layer4::initialize(config);
 }
 
+void SS7ISUP::attach(SS7Layer3* network)
+{
+    SS7Layer4::attach(network);
+    m_l3LinkUp = network && network->operational();
+}
+
 // Append a point code to the list of point codes serviced by this controller
 // Set default point code
 bool SS7ISUP::setPointCode(SS7PointCode* pc, bool def)
@@ -3712,11 +3718,8 @@ void SS7ISUP::notify(SS7Layer3* link, int sls)
     if ((unsigned int)-1 == link->getRoutePriority(m_type,m_remotePoint->pack(m_type)))
 	return;
     bool linkTmp = m_l3LinkUp;
-    // Link is not operational
-    if (link->operational())
-	m_l3LinkUp = true;
-    else
-	m_l3LinkUp = false;
+    // Copy linkset operational state
+    m_l3LinkUp = link->operational();
     // Reset remote user part's availability state if supported
     // Force UPT re-send
     if (m_uptTimer.interval() && !m_l3LinkUp) {

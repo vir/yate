@@ -1,3 +1,18 @@
+yate (3.0.1.svn4075) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4075: + Such condition can happen in a
+    nonstandard STP with multiple local point codes.  + Never advertise
+    a point code from same linkset local address, it must be always
+    allowed by TRA to adjacent node.  + Properly initialize the MTP
+    operational status when attaching an ISUP dynamically at runtime.  +
+    Changed the order of local point code checks so a transparent STP
+    can transfer a message not handled by a local user part.  + Add a
+    raw hex variant of Parameter Compatibility Information for easier
+    forwarding.  + Added flags for Call Diversion Information encoding
+    and decoding.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 27 Jan 2011 02:19:21 +0300
+
 yate (3.0.1.svn4070) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4070: + Fixed ring end on FXS analog MGCP

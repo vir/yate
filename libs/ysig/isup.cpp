@@ -326,6 +326,7 @@ static bool decodeCompat(const SS7ISUP* isup, NamedList& list, const IsupParam* 
 		    return false;
 		i += count;
 	    }
+	    decodeRaw(isup,list,param,buf,len,prefix);
 	    return true;
 	default:
 	    Debug(isup,DebugStub,"decodeCompat not implemented for %s",param->name);

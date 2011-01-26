@@ -1029,6 +1029,9 @@ void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type,
 		    local = getLocal(type);
 		if (!local)
 		    break;
+		// never advertise a local point code from itself
+		if (r->packed() == local)
+		    break;
 		const char* cmd = SS7Route::stateName(state);
 		v = (*l3p)->getRoutes(type);
 		if (v)

@@ -326,6 +326,7 @@ static bool decodeCompat(const SS7ISUP* isup, NamedList& list, const IsupParam* 
 		    return false;
 		i += count;
 	    }
+	    decodeRaw(isup,list,param,buf,len,prefix);
 	    return true;
 	default:
 	    Debug(isup,DebugStub,"decodeCompat not implemented for %s",param->name);
@@ -1060,6 +1061,20 @@ static const SignallingFlags s_flags_bkcallind[] = {
     { 0, 0, 0 }
 };
 
+// Call Diversion Information (Q.763 3.6)
+static const SignallingFlags s_flags_calldivinfo[] = {
+    { 0x07, 0x01, "presentation-not-allowed" },
+    { 0x07, 0x02, "presentation-with-number" },
+    { 0x07, 0x03, "presentation-without-number" },
+    { 0x78, 0x08, "busy" },
+    { 0x78, 0x10, "noanswer" },
+    { 0x78, 0x18, "always" },
+    { 0x78, 0x20, "deflected-alerting" },
+    { 0x78, 0x28, "deflected-immediate" },
+    { 0x78, 0x30, "offline" },
+    { 0, 0, 0 }
+};
+
 // Optional Forward Call Indicators (Q.763 3.38)
 static const SignallingFlags s_flags_optfwcallind[] = {
     { 0x03, 0x00, "non-CUG" },
@@ -1245,7 +1260,7 @@ static const IsupParam s_paramDefs[] = {
     MAKE_PARAM(AccessTransport,                0,0,             0,             0),                    // 3.3
     MAKE_PARAM(AutomaticCongestionLevel,       1,decodeInt,     encodeInt,     0),                    // 3.4
     MAKE_PARAM(BackwardCallIndicators,         2,decodeFlags,   encodeFlags,   s_flags_bkcallind),    // 3.5
-    MAKE_PARAM(CallDiversionInformation,       0,0,             0,             0),                    // 3.6
+    MAKE_PARAM(CallDiversionInformation,       1,decodeFlags,   encodeFlags,   s_flags_calldivinfo),  // 3.6
     MAKE_PARAM(CallHistoryInformation,         2,decodeInt,     encodeInt,     0),                    // 3.7
     MAKE_PARAM(CallReference,                  0,0,             0,             0),                    // 3.8
     MAKE_PARAM(CalledPartyNumber,              0,decodeDigits,  encodeDigits,  0),                    // 3.9
@@ -3206,6 +3221,12 @@ bool SS7ISUP::initialize(const NamedList* config)
     return SS7Layer4::initialize(config);
 }
 
+void SS7ISUP::attach(SS7Layer3* network)
+{
+    SS7Layer4::attach(network);
+    m_l3LinkUp = network && network->operational();
+}
+
 // Append a point code to the list of point codes serviced by this controller
 // Set default point code
 bool SS7ISUP::setPointCode(SS7PointCode* pc, bool def)
@@ -3712,11 +3733,8 @@ void SS7ISUP::notify(SS7Layer3* link, int sls)
     if ((unsigned int)-1 == link->getRoutePriority(m_type,m_remotePoint->pack(m_type)))
 	return;
     bool linkTmp = m_l3LinkUp;
-    // Link is not operational
-    if (link->operational())
-	m_l3LinkUp = true;
-    else
-	m_l3LinkUp = false;
+    // Copy linkset operational state
+    m_l3LinkUp = link->operational();
     // Reset remote user part's availability state if supported
     // Force UPT re-send
     if (m_uptTimer.interval() && !m_l3LinkUp) {

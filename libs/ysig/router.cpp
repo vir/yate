@@ -251,8 +251,8 @@ int SS7Route::transmitInternal(const SS7Router* router, const SS7MSU& msu,
 	    !(l3->getRouteState(label.type(),label.dpc(),userPart) & states))
 	    continue;
 	unlock();
-	XDebug(router,DebugAll,"Attempting transmitMSU on L3=%p '%s' [%p]",
-	    (void*)l3,l3->toString().c_str(),router);
+	XDebug(router,DebugAll,"Attempting transmitMSU %s on L3=%p '%s' [%p]",
+	    msu.getServiceName(),(void*)l3,l3->toString().c_str(),router);
 	int res = l3->transmitMSU(msu,label,sls);
 	lock();
 	if (res != -1) {
@@ -836,8 +836,8 @@ HandledMSU SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7L
 	    RefPointer<SS7Layer4> l4 = static_cast<SS7Layer4*>(*p);
 	    if (!l4)
 		continue;
-	    XDebug(this,DebugAll,"Attempting receivedMSU to L4=%p '%s' [%p]",
-		(void*)l4,l4->toString().c_str(),this);
+	    XDebug(this,DebugAll,"Attempting receivedMSU %s to L4=%p '%s' [%p]",
+		msu.getServiceName(),(void*)l4,l4->toString().c_str(),this);
 	    int chg = m_changes;
 	    unlock();
 	    HandledMSU handled = l4->receivedMSU(msu,label,network,sls);
@@ -873,17 +873,18 @@ HandledMSU SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7L
     if ((msu.getSIF() == SS7MSU::MTN) || (msu.getSIF() == SS7MSU::MTNS))
 	return HandledMSU::Rejected;
     unsigned int dpc = label.dpc().pack(label.type());
-    bool local = getLocal(label.type()) == dpc;
-    if (network && !local && (ret != HandledMSU::NoCircuit) && !m_transferSilent)
-	local = network->getLocal(label.type()) == dpc;
-    if (local)
+    // if packet was for this node as set in router don't process any further
+    if (getLocal(label.type()) == dpc)
 	return m_sendUnavail ? HandledMSU::Unequipped : HandledMSU::Failure;
+    bool local = network && (network->getLocal(label.type()) == dpc);
     if (m_transfer || m_transferSilent) {
 	if (routeMSU(msu,label,network,label.sls(),SS7Route::NotProhibited) >= 0)
 	    return HandledMSU::Accepted;
-	return m_sendProhibited ? HandledMSU::NoAddress : HandledMSU::Failure;
+	// not routed and not local - send TFP or just drop it silently
+	if (!local)
+	    return m_sendProhibited ? HandledMSU::NoAddress : HandledMSU::Failure;
     }
-    return HandledMSU::Failure;
+    return (local && m_sendUnavail) ? HandledMSU::Unequipped : HandledMSU::Failure;
 }
 
 // Call the route changed notification for all known routes
@@ -1028,6 +1029,9 @@ void SS7Router::routeChanged(const SS7Route* route, SS7PointCode::Type type,
 		if (!local)
 		    local = getLocal(type);
 		if (!local)
+		    break;
+		// never advertise a local point code from itself
+		if (r->packed() == local)
 		    break;
 		const char* cmd = SS7Route::stateName(state);
 		v = (*l3p)->getRoutes(type);

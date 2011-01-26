@@ -8031,6 +8031,12 @@ public:
     virtual bool initialize(const NamedList* config);
 
     /**
+     * Attach a SS7 network or router to this service. Detach itself from the old one
+     * @param network Pointer to network or router to attach
+     */
+    virtual void attach(SS7Layer3* network);
+
+    /**
      * Get the length of the Circuit Identification Code for this user part
      * @return Length of the CIC field in octets
      */

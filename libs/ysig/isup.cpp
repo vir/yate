@@ -1061,6 +1061,20 @@ static const SignallingFlags s_flags_bkcallind[] = {
     { 0, 0, 0 }
 };
 
+// Call Diversion Information (Q.763 3.6)
+static const SignallingFlags s_flags_calldivinfo[] = {
+    { 0x07, 0x01, "presentation-not-allowed" },
+    { 0x07, 0x02, "presentation-with-number" },
+    { 0x07, 0x03, "presentation-without-number" },
+    { 0x78, 0x08, "busy" },
+    { 0x78, 0x10, "noanswer" },
+    { 0x78, 0x18, "always" },
+    { 0x78, 0x20, "deflected-alerting" },
+    { 0x78, 0x28, "deflected-immediate" },
+    { 0x78, 0x30, "offline" },
+    { 0, 0, 0 }
+};
+
 // Optional Forward Call Indicators (Q.763 3.38)
 static const SignallingFlags s_flags_optfwcallind[] = {
     { 0x03, 0x00, "non-CUG" },
@@ -1246,7 +1260,7 @@ static const IsupParam s_paramDefs[] = {
     MAKE_PARAM(AccessTransport,                0,0,             0,             0),                    // 3.3
     MAKE_PARAM(AutomaticCongestionLevel,       1,decodeInt,     encodeInt,     0),                    // 3.4
     MAKE_PARAM(BackwardCallIndicators,         2,decodeFlags,   encodeFlags,   s_flags_bkcallind),    // 3.5
-    MAKE_PARAM(CallDiversionInformation,       0,0,             0,             0),                    // 3.6
+    MAKE_PARAM(CallDiversionInformation,       1,decodeFlags,   encodeFlags,   s_flags_calldivinfo),  // 3.6
     MAKE_PARAM(CallHistoryInformation,         2,decodeInt,     encodeInt,     0),                    // 3.7
     MAKE_PARAM(CallReference,                  0,0,             0,             0),                    // 3.8
     MAKE_PARAM(CalledPartyNumber,              0,decodeDigits,  encodeDigits,  0),                    // 3.9

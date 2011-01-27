@@ -560,7 +560,7 @@ static bool decodeRedir(const SS7ISUP* isup, NamedList& list, const IsupParam* p
     SignallingUtils::addKeyword(list,preName,s_dict_redir_main,buf[0] & 0x07);
     unsigned int reason = buf[0] >> 4;
     if (reason)
-	SignallingUtils::addKeyword(list,preName+".reason-original",s_dict_redir_reason,reason);
+	SignallingUtils::addKeyword(list,preName+".reason_original",s_dict_redir_reason,reason);
     if (len > 1) {
 	int cnt = buf[1] & 0x07;
 	if (cnt)
@@ -991,7 +991,7 @@ static unsigned char encodeRedir(const SS7ISUP* isup, SS7MSU& msu,
     if (extra) {
 	String preName(prefix + param->name);
 	ri[1] = (extra->getIntValue(preName,s_dict_redir_main,0) & 0x07) |
-	    ((extra->getIntValue(preName+".reason-original",s_dict_redir_reason,0) & 0x0f) << 4);
+	    ((extra->getIntValue(preName+".reason_original",s_dict_redir_reason,0) & 0x0f) << 4);
 	ri[2] = (extra->getIntValue(preName+".counter") & 0x07) |
 	    ((extra->getIntValue(preName+".reason",s_dict_redir_reason,0) & 0x0f) << 4);
     }

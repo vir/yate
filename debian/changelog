@@ -1,3 +1,14 @@
+yate (3.0.1.svn4078) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4078: + Debian packaging: added new files  +
+    Handle SUS and RES messages - mandatory in ISUP v2.  + Only clear
+    active MGCP signals when entering Connected state, not if already in
+    that state.  + Make sure to turn off any ring signals when a call is
+    answered.  + Renamed RedirectionInformation field "reason-original"
+    to "reason_original" so it gets copied.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 28 Jan 2011 02:19:27 +0300
+
 yate (3.0.1.svn4075) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4075: + Such condition can happen in a

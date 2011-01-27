@@ -1204,6 +1204,7 @@ static const TokenDict s_dict_mediumReq[] = {
 static const TokenDict s_dict_notifications[] = {
     { "user-suspended",         0x00 },
     { "user-resumed",           0x01 },
+    { "bearer-service-change",  0x02 },
     { "call-completion-delay",  0x04 },
     { "conf-established",       0x42 },
     { "conf-disconnected",      0x43 },
@@ -2248,6 +2249,12 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 		case SS7MsgISUP::SGM:
 		    DDebug(isup(),DebugInfo,"Call(%u). Received late 'SGM' [%p]",id(),this);
 		    break;
+		case SS7MsgISUP::SUS:
+		    m_lastEvent = new SignallingEvent(SignallingEvent::Suspend,msg,this);
+		    break;
+		case SS7MsgISUP::RES:
+		    m_lastEvent = new SignallingEvent(SignallingEvent::Resume,msg,this);
+		    break;
 		case SS7MsgISUP::APM:
 		    m_lastEvent = new SignallingEvent(SignallingEvent::Generic,msg,this);
 		    break;
@@ -2677,6 +2684,11 @@ bool SS7ISUPCall::validMsgState(bool send, SS7MsgISUP::Type type)
 	    // fall through
 	case SS7MsgISUP::RLC:    // Release complete
 	    if (m_state == Null || m_state == Released)
+		break;
+	    return true;
+	case SS7MsgISUP::SUS:    // Suspend
+	case SS7MsgISUP::RES:    // Resume
+	    if (m_state != Answered)
 		break;
 	    return true;
 	case SS7MsgISUP::SGM:    // Segmentation
@@ -4267,6 +4279,8 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
 	case SS7MsgISUP::CCR:
 	case SS7MsgISUP::COT:
 	case SS7MsgISUP::APM:
+	case SS7MsgISUP::SUS:
+	case SS7MsgISUP::RES:
 	    processCallMsg(msg,label,sls);
 	    break;
 	case SS7MsgISUP::RLC:

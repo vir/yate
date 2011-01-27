@@ -18,6 +18,7 @@ debian/tmp/etc/yate/yrtpchan.conf
 debian/tmp/etc/yate/ysipchan.conf
 debian/tmp/etc/yate/ystunchan.conf
 debian/tmp/etc/yate/openssl.conf
+debian/tmp/etc/yate/tonegen.conf
 
 debian/tmp/usr/lib/yate/*codec.yate
 debian/tmp/usr/lib/yate/client/osschan.yate usr/lib/yate

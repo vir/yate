@@ -138,6 +138,7 @@ debian/tmp/usr/share/yate/skins/default/joinmucwizard.ui
 debian/tmp/usr/share/yate/skins/default/messages_header.ui
 debian/tmp/usr/share/yate/skins/default/messages_loginfail.ui
 debian/tmp/usr/share/yate/skins/default/messages_okrejignore.ui
+debian/tmp/usr/share/yate/skins/default/messages_generic.ui
 debian/tmp/usr/share/yate/skins/default/mucchat.ui
 debian/tmp/usr/share/yate/skins/default/mucinvite.ui
 debian/tmp/usr/share/yate/skins/default/muc.png

@@ -1486,10 +1486,11 @@ bool MGCPCircuit::status(Status newStat, bool sync)
 	}
 	allowRtpChange = SignallingCircuit::status() == Connected &&
 	    hasLocalRtp() && m_localRtpChanged;
-	if (SignallingCircuit::status() != Connected
-	    && mySpan()->rqntType() != MGCPSpan::RqntNone
-	    && !(fxs() || fxo()))
-	    sendRequest(0,mySpan()->rqntStr());
+	if (SignallingCircuit::status() != Connected) {
+	    if (mySpan()->rqntType() != MGCPSpan::RqntNone && !(fxs() || fxo()))
+		sendRequest(0,mySpan()->rqntStr());
+	    sendPending();
+	}
     }
     if (!allowRtpChange && (newStat == m_statusReq) &&
 	((SignallingCircuit::status() == newStat) || !sync)) {
@@ -1682,12 +1683,11 @@ bool MGCPCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params
 	case SignallingCircuitEvent::Connect:
 	    if (params)
 		setParams(*params);
-	    sendPending();
 	    return status(Connected,!params || params->getBoolValue("sync",true));
 	case SignallingCircuitEvent::RingBegin:
 	    return fxs() && sendPending("L/rg");
 	case SignallingCircuitEvent::RingEnd:
-	    return fxs() && sendPending();
+	    return sendPending();
 	case SignallingCircuitEvent::Polarity:
 	    return fxs() && sendRequest("L/lsa");
 	case SignallingCircuitEvent::OffHook:

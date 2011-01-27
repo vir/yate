@@ -1108,6 +1108,7 @@ bool SigChannel::msgAnswered(Message& msg)
     // Start echo training
     SignallingCircuit* cic = getCircuit();
     if (cic) {
+	cic->sendEvent(SignallingCircuitEvent::RingEnd);
 	String value;
 	cic->setParam("echotrain",value);
     }
@@ -1433,6 +1434,7 @@ void SigChannel::evAnswer(SignallingEvent* event)
     // Start echo training
     SignallingCircuit* cic = getCircuit();
     if (cic) {
+	cic->sendEvent(SignallingCircuitEvent::RingEnd);
 	String value;
 	cic->setParam("echotrain",value);
     }

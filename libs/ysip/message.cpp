@@ -526,21 +526,21 @@ int SIPMessage::countHeaders(const char* name) const
     return res;
 }
 
-const NamedString* SIPMessage::getParam(const char* name, const char* param) const
+const NamedString* SIPMessage::getParam(const char* name, const char* param, bool last) const
 {
-    const MimeHeaderLine* hl = getHeader(name);
+    const MimeHeaderLine* hl = last ? getLastHeader(name) : getHeader(name);
     return hl ? hl->getParam(param) : 0;
 }
 
-const String& SIPMessage::getHeaderValue(const char* name) const
+const String& SIPMessage::getHeaderValue(const char* name, bool last) const
 {
-    const MimeHeaderLine* hl = getHeader(name);
+    const MimeHeaderLine* hl = last ? getLastHeader(name) : getHeader(name);
     return hl ? *static_cast<const String*>(hl) : String::empty();
 }
 
-const String& SIPMessage::getParamValue(const char* name, const char* param) const
+const String& SIPMessage::getParamValue(const char* name, const char* param, bool last) const
 {
-    const NamedString* ns = getParam(name,param);
+    const NamedString* ns = getParam(name,param,last);
     return ns ? *static_cast<const String*>(ns) : String::empty();
 }
 

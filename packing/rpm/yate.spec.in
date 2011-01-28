@@ -173,6 +173,7 @@ for small to large scale projects.
 %config(noreplace) %{_sysconfdir}/yate/regexroute.conf
 %config(noreplace) %{_sysconfdir}/yate/regfile.conf
 %config(noreplace) %{_sysconfdir}/yate/register.conf
+%config(noreplace) %{_sysconfdir}/yate/tonegen.conf
 %config(noreplace) %{_sysconfdir}/yate/rmanager.conf
 %config(noreplace) %{_sysconfdir}/yate/yate.conf
 %config(noreplace) %{_sysconfdir}/yate/yiaxchan.conf

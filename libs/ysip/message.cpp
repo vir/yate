@@ -633,7 +633,7 @@ MimeAuthLine* SIPMessage::buildAuth(const String& username, const String& passwo
 	    {
 		nc = noncer.countNonce(nonce);
 		cnonce = noncer.cnonce();
-		SIPEngine::buildAuth(username,realm,password,nonce,meth,msguri,++nc,cnonce,qop,response);
+		SIPEngine::buildAuth(username,realm,password,nonce,meth,msguri,nc,cnonce,qop,response);
 	    }
 	    else
 		SIPEngine::buildAuth(username,realm,password,nonce,meth,msguri,response);
@@ -648,7 +648,7 @@ MimeAuthLine* SIPMessage::buildAuth(const String& username, const String& passwo
 	    {
 		char buf[10];
 		::snprintf(buf, sizeof(buf), "%08lx", nc);
-		auth->setParam("qop", MimeHeaderLine::quote(qop));
+		auth->setParam("qop", qop);
 		auth->setParam("cnonce", MimeHeaderLine::quote(cnonce));
 		auth->setParam("nc", buf);
 	    }

@@ -477,7 +477,7 @@ void SIPEngine::buildAuth(const String& username, const String& realm, const Str
     {
 	char buf[9];
 	sprintf(buf, "%08lx", nc);
-	tmp << ":" << buf << cnonce << ":" << qop;
+	tmp << ":" << buf << ":" << cnonce << ":" << qop;
     }
     tmp << ":" << m2.hexDigest();
     m1.clear();

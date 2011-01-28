@@ -39,7 +39,7 @@ SIPTransaction::SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outg
     if (m_firstMessage) {
 	m_firstMessage->ref();
 
-	const NamedString* ns = message->getParam("Via","branch");
+	const NamedString* ns = message->getParam("Via","branch",true);
 	if (ns)
 	    m_branch = *ns;
 	if (!m_branch.startsWith("z9hG4bK"))
@@ -87,7 +87,7 @@ SIPTransaction::SIPTransaction(SIPTransaction& original, SIPMessage* answer)
     m_firstMessage->setAutoAuth();
     msg->complete(m_engine);
     msg->addHeader(auth);
-    const NamedString* ns = msg->getParam("Via","branch");
+    const NamedString* ns = msg->getParam("Via","branch",true);
     if (ns)
 	original.m_branch = *ns;
     else
@@ -439,7 +439,7 @@ SIPTransaction::Processed SIPTransaction::processMessage(SIPMessage* message, co
 	    return NoMatch;
 	// allow braindamaged UAs that send answers with no Via line
 	if (m_firstMessage->getHeader("Via") && message->getHeader("Via") &&
-	    (m_firstMessage->getHeaderValue("Via") != message->getHeaderValue("Via")))
+	    (m_firstMessage->getHeaderValue("Via",true) != message->getHeaderValue("Via",true)))
 	    return NoMatch;
 	// extra checks are to be made for ACK only
 	if (message->isACK()) {

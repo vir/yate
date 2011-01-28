@@ -1,3 +1,17 @@
+yate (3.1.0.svn4084) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4084: + Added optional parameter to retrieve
+    the last header or its parameters from a SIP message.  + Fixes bug
+    #237.  + Consistently use the branch from the last Via header in
+    matching transactions.  + Added tonegen.conf to RPM specfile.  +
+    Added setting to disable dropping the call if the remote sends an
+    unknown or unsupported ISUP message in an early call state.  +
+    Translate between SIP Remote-Party-ID fields "party" and "id-type"
+    and Yate parameters "remote_party" and "remote_id_type".  + Bumped
+    version to 3.1.0 release.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 29 Jan 2011 02:19:12 +0300
+
 yate (3.0.1.svn4078) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4078: + Debian packaging: added new files  +

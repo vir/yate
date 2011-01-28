@@ -229,24 +229,27 @@ public:
      * Find a header parameter by name
      * @param name Name of the header to locate
      * @param param Name of the parameter to locate in the tag
+     * @param last Find the last header with that name instead of first
      * @return A pointer to the first matching header line or 0 if not found
      */
-    const NamedString* getParam(const char* name, const char* param) const;
+    const NamedString* getParam(const char* name, const char* param, bool last = false) const;
 
     /**
      * Get a string value (without parameters) from a header line
      * @param name Name of the header to locate
+     * @param last Find the last header with that name instead of first
      * @return The value hold in the header or an empty String
      */
-    const String& getHeaderValue(const char* name) const;
+    const String& getHeaderValue(const char* name, bool last = false) const;
 
     /**
      * Get a string value from a parameter in a header line
      * @param name Name of the header to locate
      * @param param Name of the parameter to locate in the tag
+     * @param last Find the last header with that name instead of first
      * @return The value hold in the parameter or an empty String
      */
-    const String& getParamValue(const char* name, const char* param) const;
+    const String& getParamValue(const char* name, const char* param, bool last = false) const;
 
     /**
      * Append a new header line constructed from name and content

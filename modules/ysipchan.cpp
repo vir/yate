@@ -675,6 +675,12 @@ static void copyPrivacy(Message& msg, const SIPMessage& sip)
 	tmp = uri.getHost();
 	if (tmp)
 	    msg.setParam("privacy_domain",tmp);
+	const String* str = hl->getParam("party");
+	if (!TelEngine::null(str))
+	    msg.setParam("remote_party",*str);
+	str = hl->getParam("id-type");
+	if (!TelEngine::null(str))
+	    msg.setParam("remote_id_type",*str);
     }
 }
 
@@ -722,6 +728,12 @@ static void copyPrivacy(SIPMessage& sip, const Message& msg)
 	    hl->setParam("privacy","uri");
 	else
 	    hl->setParam("privacy","none");
+	const char* str = msg.getValue("remote_party");
+	if (str)
+	    hl->setParam("party",str);
+	str = msg.getValue("remote_id_type");
+	if (str)
+	    hl->setParam("id-type",str);
 	sip.addHeader(hl);
     }
     if (rfc3323.null()) {

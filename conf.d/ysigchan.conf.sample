@@ -402,6 +402,10 @@
 ; Defaults to yes
 ;confirm_ccr=yes
 
+; drop_unknown: boolean: Drop call or attempt to change circuit if an unknown
+;  or unsupported message is received in an early state
+;drop_unknown=yes
+
 ; ignore-grs-single: boolean: Ignore (drop) circuit group reset messages with
 ;  range 0 (1 circuit affected)
 ; Defaults to no

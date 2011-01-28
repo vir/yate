@@ -8348,6 +8348,7 @@ private:
     String m_format;                     // Default format
     String m_continuity;                 // Continuity test type
     bool m_confirmCCR;                   // Send LPA in response to CCR
+    bool m_dropOnUnknown;                // Drop call in early state on unknown message
     bool m_ignoreGRSSingle;              // Ignore (drop) GRS with range 0 (1 circuit affected)
     bool m_ignoreCGBSingle;              // Ignore (drop) CGB with range 0 (1 circuit in map)
     bool m_ignoreCGUSingle;              // Ignore (drop) CGU with range 0 (1 circuit in map)

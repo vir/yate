@@ -3055,6 +3055,7 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
       m_defaultSls(SlsLatest),
       m_maxCalledDigits(16),
       m_confirmCCR(true),
+      m_dropOnUnknown(true),
       m_ignoreGRSSingle(false),
       m_ignoreCGBSingle(false),
       m_ignoreCGUSingle(false),
@@ -3156,6 +3157,7 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
 
     m_continuity = params.getValue("continuity");
     m_confirmCCR = params.getBoolValue("confirm_ccr",true);
+    m_dropOnUnknown = params.getBoolValue("drop_unknown",true);
     m_ignoreGRSSingle = params.getBoolValue("ignore-grs-single");
     m_ignoreCGBSingle = params.getBoolValue("ignore-cgb-single");
     m_ignoreCGUSingle = params.getBoolValue("ignore-cgu-single");
@@ -3221,6 +3223,7 @@ bool SS7ISUP::initialize(const NamedList* config)
 	m_earlyAcm = config->getBoolValue("earlyacm",m_earlyAcm);
 	m_continuity = config->getValue("continuity",m_continuity);
 	m_confirmCCR = config->getBoolValue("confirm_ccr",true);
+	m_dropOnUnknown = config->getBoolValue("drop_unknown",true);
 	m_ignoreGRSSingle = config->getBoolValue("ignore-grs-single");
 	m_ignoreCGBSingle = config->getBoolValue("ignore-cgb-single");
 	m_ignoreCGUSingle = config->getBoolValue("ignore-cgu-single");
@@ -4874,7 +4877,7 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    if (call)
 		call->ref();
 	    unlock();
-	    if (call && call->earlyState()) {
+	    if (m_dropOnUnknown && call && call->earlyState()) {
 		Debug(this,DebugNote,
 		    "Received unexpected message for call %u (%p) in initial state",
 		    msg->cic(),call);

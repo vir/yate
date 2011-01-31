@@ -686,10 +686,14 @@ static unsigned char setDigits(SS7MSU& msu, const char* val, unsigned char nai, 
 	    n = c - '0';
 	else if ('.' == c)
 	    n = 15;
+	else if ('A' == c)
+	    n = 10;
 	else if ('B' == c)
 	    n = 11;
 	else if ('C' == c)
 	    n = 12;
+	else if ('D' == c)
+	    n = 13;
 	else
 	    continue;
 	odd = !odd;

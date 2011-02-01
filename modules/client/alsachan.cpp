@@ -355,6 +355,8 @@ bool AlsaDevice::open()
     if ((err = snd_pcm_hw_params_set_format (m_handle_in, hw_params, SND_PCM_FORMAT_S16_LE)) < 0) Debug(DebugWarn, "cannot set sample format (%s)", snd_strerror (err));
     if ((err = snd_pcm_hw_params_set_rate_near (m_handle_in, hw_params, &rate_in, &direction)) < 0) Debug(DebugWarn, "cannot set sample rate %u (%s)", m_rate, snd_strerror (err));
     if ((err = snd_pcm_hw_params_set_channels (m_handle_in, hw_params, 1)) < 0) Debug(DebugWarn, "cannot set channel count (%s)", snd_strerror (err));
+    if ((err = snd_pcm_hw_params_set_period_size_near(m_handle_in, hw_params, &period_size_in, &direction)) < 0) Debug(DebugWarn, "cannot set period size (%s)", snd_strerror (err));
+    if ((err = snd_pcm_hw_params_set_buffer_size_near(m_handle_in, hw_params, &buffer_size_in)) < 0) Debug(DebugWarn, "cannot set buffer size (%s)", snd_strerror (err));
     if ((err = snd_pcm_hw_params (m_handle_in, hw_params)) < 0) Debug(DebugWarn, "cannot set parameters (%s)", snd_strerror (err));
     snd_pcm_hw_params_free (hw_params);
 

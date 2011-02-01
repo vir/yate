@@ -30,7 +30,7 @@ my $suff = sprintf("%04d%02d%02d%02d", 1900+$year, 1+$mon, $mday, 1);
 
 my $newver="$yatever.vir$suff";
 print "New version: $newver\n";
-#exec qw( debchange -b --preserve --distribution UNRELEASED --newversion ), "$newver";
+exec qw( debchange -b --preserve --distribution UNRELEASED --newversion ), "$newver";
 
 
 

@@ -1,5 +1,4 @@
 debian/tmp/usr/lib/libyate.so.*
-#debian/tmp/usr/lib/libyatejingle.so.*
 
 debian/tmp/etc/yate/cdrbuild.conf
 debian/tmp/etc/yate/cdrfile.conf

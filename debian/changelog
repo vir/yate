@@ -1,3 +1,14 @@
+yate (3.1.1.svn4090) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4090: + Added shared library symlink to dev.
+    package  + ISUP now emits SUS / RES messages on Suspend / Resume
+    events.  + A call.update with operation=accepted will transmit a
+    pending Accept event after merging provided parameters.  + Support
+    converting Accept, Suspend and Resume events to and from Yate
+    messages.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 03 Feb 2011 02:19:19 +0300
+
 yate (3.1.1.svn4088) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4088: + Set period and buffer size for the

@@ -1120,6 +1120,29 @@ void SS7M2PA::sendAck()
     transmitMSG(1,M2PA,UserData,data,1);
 }
 
+unsigned int SS7M2PA::status() const
+{
+    switch (m_localStatus) {
+	case ProvingNormal:
+	case ProvingEmergency:
+	    return SS7Layer2::OutOfAlignment;
+	case Ready:
+	    switch (m_remoteStatus) {
+		case Ready:
+		    return SS7Layer2::NormalAlignment;
+		case ProcessorOutage:
+		    return SS7Layer2::ProcessorOutage;
+		case Busy:
+		    return SS7Layer2::Busy;
+		case OutOfService:
+		    return SS7Layer2::OutOfService;
+		default:
+		    return SS7Layer2::OutOfAlignment;
+	    }
+    }
+    return SS7Layer2::OutOfService;
+}
+
 bool SS7M2PA::control(Operation oper, NamedList* params)
 {
     if (params) {
@@ -1563,6 +1586,19 @@ bool SS7M2UA::control(Operation oper, NamedList* params)
 	default:
 	    return false;
     }
+}
+
+unsigned int SS7M2UA::status() const
+{
+    switch (m_linkState) {
+	case LinkDown:
+	    return SS7Layer2::OutOfService;
+	case LinkUp:
+	    return m_rpo ? SS7Layer2::ProcessorOutage : SS7Layer2::NormalAlignment;
+	case LinkUpEmg:
+	    return m_rpo ? SS7Layer2::ProcessorOutage : SS7Layer2::EmergencyAlignment;
+    }
+    return SS7Layer2::OutOfAlignment;
 }
 
 bool SS7M2UA::transmitMSU(const SS7MSU& msu)

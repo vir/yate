@@ -733,6 +733,13 @@ protected:
     void setName(const char* name);
 
     /**
+     * Change the type of the component after it was constructed
+     * @param type Type of this component
+     */
+    inline void setCompType(const char* type)
+	{ m_compType = type; }
+
+    /**
      * Adjust (decrease only) the desired maximum time until next tick.
      * Can be called only from within timerTick()
      * @param usec Desired time until next engine's timerTick() call in usec
@@ -6458,6 +6465,12 @@ public:
     virtual bool control(Operation oper, NamedList* params = 0);
 
     /**
+     * Retrieve the current link status indications
+     * @return Link status indication bits
+     */
+    virtual unsigned int status() const;
+
+    /**
      * Push a Message Signal Unit down the protocol stack
      * @param msu MSU data to transmit
      * @return True if message was successfully queued
@@ -6670,6 +6683,12 @@ public:
      *  also indicates the data link is aligned and operational
      */
     virtual bool control(Operation oper, NamedList* params = 0);
+
+    /**
+     * Retrieve the current link status indications
+     * @return Link status indication bits
+     */
+    virtual unsigned int status() const;
 
     /**
      * Push a Message Signal Unit down the protocol stack

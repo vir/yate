@@ -2591,7 +2591,7 @@ void SigLinkSet::ifStatus(String& status)
 
 void SigLinkSet::linkStatus(String& status)
 {
-    SS7MTP3* mtp3 = static_cast<SS7MTP3*>(m_linkset);
+    SS7MTP3* mtp3 = YOBJECT(SS7MTP3,m_linkset);
     if (mtp3) {
 	const ObjList* list = mtp3->links();
 	for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {

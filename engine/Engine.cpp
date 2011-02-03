@@ -254,9 +254,10 @@ public:
     static SLib* load(const char* file, bool local, bool nounload);
     bool unload(bool doNow);
 private:
-    SLib(HMODULE handle, const char* file, bool nounload);
+    SLib(HMODULE handle, const char* file, bool nounload, unsigned int count);
     HMODULE m_handle;
     bool m_nounload;
+    unsigned int m_count;
 };
 
 class EngineSuperHandler : public MessageHandler
@@ -876,19 +877,21 @@ static int supervise(void)
 #endif /* _WINDOWS */
 
 
-SLib::SLib(HMODULE handle, const char* file, bool nounload)
-    : String(moduleBase(file)), m_handle(handle), m_nounload(nounload)
+SLib::SLib(HMODULE handle, const char* file, bool nounload, unsigned int count)
+    : String(moduleBase(file)),
+      m_handle(handle), m_nounload(nounload), m_count(count)
 {
-    DDebug(DebugAll,"SLib::SLib(%p,'%s',%s) [%p]",
-	handle,file,String::boolText(nounload),this);
+    DDebug(DebugAll,"SLib::SLib(%p,'%s',%s,%u) [%p]",
+	handle,file,String::boolText(nounload),count,this);
     checkPoint();
 }
 
 SLib::~SLib()
 {
 #ifdef DEBUG
-    Debugger debug("SLib::~SLib()"," '%s' [%p]",c_str(),this);
+    Debugger debug("SLib::~SLib()"," '%s' %u [%p]",c_str(),m_count,this);
 #endif
+    unsigned int count = plugins.count();
     if (s_nounload || m_nounload) {
 #ifdef _WINDOWS
 	typedef void (WINAPI *pFini)(HINSTANCE,DWORD,LPVOID);
@@ -904,22 +907,31 @@ SLib::~SLib()
 	    fini();
 #endif
 	if (fini || m_nounload) {
+	    count -= plugins.count();
+	    if (count != m_count)
+		Debug(DebugGoOn,"Finalizing '%s' removed %u out of %u plugins",
+		    c_str(),count,m_count);
 	    checkPoint();
 	    return;
 	}
-	Debug(DebugWarn,"Could not finalize, will dlclose(%p)",m_handle);
+	Debug(DebugWarn,"Could not finalize '%s', will dlclose(%p)",c_str(),m_handle);
     }
     int err = dlclose(m_handle);
     if (err)
-	Debug(DebugGoOn,"Error %d on dlclose(%p)",err,m_handle);
+	Debug(DebugGoOn,"Error %d on dlclose(%p) of '%s'",err,m_handle,c_str());
     else if (s_keepclosing) {
 	int tries;
 	for (tries=0; tries<10; tries++)
 	    if (dlclose(m_handle))
 		break;
 	if (tries)
-	    Debug(DebugGoOn,"Made %d attempts to dlclose(%p)",tries,m_handle);
+	    Debug(DebugGoOn,"Made %d attempts to dlclose(%p) '%s'",
+		tries,m_handle,c_str());
     }
+    count -= plugins.count();
+    if (count != m_count)
+	Debug(DebugGoOn,"Unloading '%s' removed %u out of %u plugins",
+	    c_str(),count,m_count);
     checkPoint();
 }
 
@@ -931,14 +943,15 @@ SLib* SLib::load(const char* file, bool local, bool nounload)
     if (!local)
 	flags |= RTLD_GLOBAL;
 #endif
+    unsigned int count = plugins.count();
     HMODULE handle = ::dlopen(file,flags);
     if (handle)
-	return new SLib(handle,file,nounload);
+	return new SLib(handle,file,nounload,plugins.count() - count);
 #ifdef _WINDOWS
     Debug(DebugWarn,"LoadLibrary error %u in '%s'",::GetLastError(),file);
 #else
     Debug(DebugWarn,"%s",dlerror());
-#endif    
+#endif
     return 0;
 }
 
@@ -961,12 +974,13 @@ Engine::Engine()
 Engine::~Engine()
 {
 #ifdef DEBUG
-    Debugger debug("Engine::~Engine()"," [%p]",this);
+    Debugger debug("Engine::~Engine()"," libs=%u plugins=%u [%p]",
+	m_libs.count(),plugins.count(),this);
 #endif
     assert(this == s_self);
     m_dispatcher.clear();
-    plugins.clear();
     m_libs.clear();
+    plugins.clear();
     s_mode = Stopped;
     s_self = 0;
 }

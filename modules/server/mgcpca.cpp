@@ -1353,9 +1353,9 @@ void MGCPCircuit::clearConn(bool force)
     }
     if (!force)
 	mm->params.addParam("C",m_callId);
-    else {
+    if (mySpan()->bearer() != m_gwFormat) {
 	m_gwFormat = mySpan()->bearer();
-	m_gwFormatChanged = false;
+	m_gwFormatChanged = true;
     }
     m_connId.clear();
     m_specialMode.clear();

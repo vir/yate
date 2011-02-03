@@ -1,3 +1,15 @@
+yate (3.1.1.svn4094) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4094: + Support converting Accept, Suspend
+    and Resume events to and from Yate messages.  + Always resend the
+    bearer change command after deleting a MGCP connection.  + Fixed
+    reporting of SS7 links status.  + Added information to debug
+    problems in dynamic modules unloading.  + This allows proper dynamic
+    construction and destruction of trunks.  + Correctly clean up calls
+    and circuits of ISUP and ISDN trunks.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 04 Feb 2011 02:19:17 +0300
+
 yate (3.1.1.svn4090) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4090: + Added shared library symlink to dev.

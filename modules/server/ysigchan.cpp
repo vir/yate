@@ -2891,8 +2891,15 @@ void SigSS7Isup::release()
     // m_controller is a SS7ISUP call controller
     if (m_controller) {
 	verifyController(0);
-	if (plugin.engine())
+	m_controller->cleanup();
+	if (plugin.engine()) {
 	    plugin.engine()->remove(isup());
+	    SignallingCircuitGroup* group = m_controller->attach((SignallingCircuitGroup*)0);
+	    if (group) {
+		plugin.engine()->remove(group);
+		TelEngine::destruct(group);
+	    }
+	}
 	isup()->destruct();
 	m_controller = 0;
     }
@@ -3057,8 +3064,15 @@ void SigIsdn::release()
 {
     // m_controller is an ISDNQ931 call controller
     if (m_controller) {
-	if (plugin.engine())
+	m_controller->cleanup();
+	if (plugin.engine()) {
 	    plugin.engine()->remove(q931());
+	    SignallingCircuitGroup* group = m_controller->attach((SignallingCircuitGroup*)0);
+	    if (group) {
+		plugin.engine()->remove(group);
+		TelEngine::destruct(group);
+	    }
+	}
 	q931()->destruct();
 	m_controller = 0;
     }
@@ -3305,8 +3319,20 @@ void SigIsdnMonitor::release()
 
     // m_controller is a ISDNQ931Monitor call controller
     if (m_controller) {
-	if (plugin.engine())
+	m_controller->cleanup();
+	if (plugin.engine()) {
 	    plugin.engine()->remove(q931());
+	    SignallingCircuitGroup* group = q931()->attach((SignallingCircuitGroup*)0,false);
+	    if (group) {
+		plugin.engine()->remove(group);
+		TelEngine::destruct(group);
+	    }
+	    group = q931()->attach((SignallingCircuitGroup*)0,true);
+	    if (group) {
+		plugin.engine()->remove(group);
+		TelEngine::destruct(group);
+	    }
+	}
 	q931()->destruct();
 	m_controller = 0;
     }

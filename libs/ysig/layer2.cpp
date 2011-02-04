@@ -253,7 +253,8 @@ SS7MTP2::SS7MTP2(const NamedList& params, unsigned int status)
       m_interval(0), m_resend(0), m_abort(0), m_fillTime(0), m_congestion(false),
       m_bsn(127), m_fsn(127), m_bib(true), m_fib(true),
       m_lastFsn(128), m_lastBsn(127), m_lastBib(true), m_errors(0),
-      m_resendMs(250), m_abortMs(5000), m_fillIntervalMs(20), m_fillLink(true)
+      m_resendMs(250), m_abortMs(5000), m_fillIntervalMs(20), m_fillLink(true),
+      m_autostart(false)
 {
 #ifdef DEBUG
     if (debugAt(DebugAll)) {
@@ -320,7 +321,7 @@ bool SS7MTP2::initialize(const NamedList* config)
 	    config->getIntValue("debuglevel",-1)));
 	m_autoEmergency = config->getBoolValue("autoemergency",true);
     }
-    bool noStart = true;
+    m_autostart = !config || config->getBoolValue("autostart",true);
     if (config && !iface()) {
 	NamedString* name = config->getParam("sig");
 	if (!name)
@@ -348,9 +349,8 @@ bool SS7MTP2::initialize(const NamedList* config)
 	    if (!(ifc->initialize(ifConfig) && control((Operation)SignallingInterface::Enable,ifConfig)))
 		TelEngine::destruct(SignallingReceiver::attach(0));
 	}
-	noStart = !config->getBoolValue("autostart",true);
     }
-    return iface() && (noStart || control(Resume,const_cast<NamedList*>(config)));
+    return iface() && control(Resume,const_cast<NamedList*>(config));
 }
 
 bool SS7MTP2::control(Operation oper, NamedList* params)
@@ -359,6 +359,7 @@ bool SS7MTP2::control(Operation oper, NamedList* params)
 	lock();
 	m_fillLink = params->getBoolValue("filllink",m_fillLink);
 	m_autoEmergency = params->getBoolValue("autoemergency",m_autoEmergency);
+	m_autostart = params->getBoolValue("autostart",m_autostart);
 	// The following are for test purposes
 	if (params->getBoolValue("toggle-bib"))
 	    m_bib = !m_bib;
@@ -376,12 +377,11 @@ bool SS7MTP2::control(Operation oper, NamedList* params)
     }
     switch (oper) {
 	case Pause:
-	    m_status = OutOfService;
-	    abortAlignment();
+	    abortAlignment(false);
 	    transmitLSSU();
 	    return true;
 	case Resume:
-	    if (aligned())
+	    if (aligned() || !m_autostart)
 		return true;
 	    // fall-through
 	case Align:
@@ -399,7 +399,7 @@ bool SS7MTP2::notify(SignallingInterface::Notification event)
     switch (event) {
 	case SignallingInterface::LinkDown:
 	    Debug(this,DebugWarn,"Interface is down - realigning [%p]",this);
-	    abortAlignment();
+	    abortAlignment(m_autostart);
 	    break;
 	case SignallingInterface::LinkUp:
 	    Debug(this,DebugInfo,"Interface is up [%p]",this);
@@ -409,7 +409,7 @@ bool SS7MTP2::notify(SignallingInterface::Notification event)
 		event,lookup(event,SignallingInterface::s_notifName),this);
 	    if (++m_errors >= 4) {
 		Debug(this,DebugWarn,"Got %d errors - realigning [%p]",m_errors,this);
-		abortAlignment();
+		abortAlignment(m_autostart);
 	    }
     }
     return true;
@@ -430,7 +430,7 @@ void SS7MTP2::timerTick(const Time& when)
     unlock();
     if (aborting) {
 	Debug(this,DebugWarn,"Timeout for MSU acknowledgement, realigning [%p]",this);
-	abortAlignment();
+	abortAlignment(m_autostart);
 	return;
     }
     if (operational()) {
@@ -764,7 +764,7 @@ void SS7MTP2::processLSSU(unsigned int status)
     setRemoteStatus(status);
     if (status == Busy) {
 	if (unaligned)
-	    abortAlignment();
+	    abortAlignment(m_autostart);
 	else
 	    m_congestion = true;
 	return;
@@ -779,7 +779,7 @@ void SS7MTP2::processLSSU(unsigned int status)
 	    break;
 	default:
 	    if (!m_interval)
-		abortAlignment();
+		abortAlignment(m_autostart);
 	    else if (m_lStatus != OutOfService && m_lStatus != OutOfAlignment)
 		m_interval = 0;
     }
@@ -848,10 +848,12 @@ void SS7MTP2::startAlignment(bool emergency)
     SS7Layer2::notify();
 }
 
-void SS7MTP2::abortAlignment()
+void SS7MTP2::abortAlignment(bool retry)
 {
     lock();
     DDebug(this,DebugNote,"Aborting alignment [%p]",this);
+    if (!retry)
+	m_status = OutOfService;
     setLocalStatus(OutOfService);
     m_interval = Time::now() + 1000000;
     m_abort = m_resend = 0;

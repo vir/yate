@@ -2440,6 +2440,26 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 		result = transmitMessage(m);
 	    }
 	    break;
+	case SignallingEvent::Suspend:
+	    if (event->message()) {
+		if (!validMsgState(true,SS7MsgISUP::SUS))
+		    break;
+		SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::SUS,id());
+		copyUpper(m->params(),event->message()->params());
+		mylock.drop();
+		result = transmitMessage(m);
+	    }
+	    break;
+	case SignallingEvent::Resume:
+	    if (event->message()) {
+		if (!validMsgState(true,SS7MsgISUP::RES))
+		    break;
+		SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::RES,id());
+		copyUpper(m->params(),event->message()->params());
+		mylock.drop();
+		result = transmitMessage(m);
+	    }
+	    break;
 	case SignallingEvent::Info:
 	    if (validMsgState(true,SS7MsgISUP::SAM)) {
 		mylock.drop();

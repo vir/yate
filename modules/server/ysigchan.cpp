@@ -100,7 +100,7 @@ private:
     void evAnswer(SignallingEvent* event);
     void evRinging(SignallingEvent* event);
     void evCircuit(SignallingEvent* event);
-    void evGeneric(SignallingEvent* event);
+    void evGeneric(SignallingEvent* event, const char* operation);
     // Handle RTP forward from a message.
     // Return a circuit event to be sent or 0 if not handled
     SignallingCircuitEvent* handleRtp(Message& msg);
@@ -1017,7 +1017,9 @@ void SigChannel::handleEvent(SignallingEvent* event)
 	case SignallingEvent::Release:   evRelease(event);  break;
 	case SignallingEvent::Ringing:   evRinging(event);  break;
 	case SignallingEvent::Circuit:   evCircuit(event);  break;
-	case SignallingEvent::Generic:   evGeneric(event);  break;
+	case SignallingEvent::Generic:   evGeneric(event,"transport"); break;
+	case SignallingEvent::Suspend:   evGeneric(event,"suspend");   break;
+	case SignallingEvent::Resume:    evGeneric(event,"resume");    break;
 	default:
 	    DDebug(this,DebugStub,"No handler for event '%s' [%p]",
 		event->name(),this);
@@ -1175,15 +1177,26 @@ bool SigChannel::msgText(Message& msg, const char* text)
 bool SigChannel::msgUpdate(Message& msg)
 {
     const String& oper = msg["operation"];
-    bool sendEvent = (oper == "transport");
-    if (!sendEvent)
+    SignallingEvent::Type evt = SignallingEvent::Unknown;
+    if (oper == "transport")
+	evt = SignallingEvent::Generic;
+    else if (oper == "suspend")
+	evt = SignallingEvent::Suspend;
+    else if (oper == "resume")
+	evt = SignallingEvent::Resume;
+    else if (m_callAccdEvent && (oper == "accepted")) {
+	plugin.copySigMsgParams(m_callAccdEvent,msg,"i");
+	releaseCallAccepted(true);
+	return true;
+    }
+    if (SignallingEvent::Unknown == evt)
 	return Channel::msgUpdate(msg);
     Lock lock(m_mutex);
     if (!m_call)
 	return false;
     SignallingMessage* sm = new SignallingMessage;
     sm->params().addParam("operation",oper);
-    SignallingEvent* event = new SignallingEvent(SignallingEvent::Generic,sm,m_call);
+    SignallingEvent* event = new SignallingEvent(evt,sm,m_call);
     lock.drop();
     TelEngine::destruct(sm);
     plugin.copySigMsgParams(event,msg);
@@ -1472,14 +1485,14 @@ void SigChannel::evCircuit(SignallingEvent* event)
     }
 }
 
-void SigChannel::evGeneric(SignallingEvent* event)
+void SigChannel::evGeneric(SignallingEvent* event, const char* operation)
 {
     SignallingMessage* sig = (event ? event->message() : 0);
     if (!sig || sig->params().count() < 1)
 	return;
     Message* msg = message("call.update",false,true);
     plugin.copySigMsgParams(*msg,event,&s_noPrefixParams);
-    msg->setParam("operation","transport");
+    msg->setParam("operation",operation);
     Engine::enqueue(msg);
 }
 
@@ -2575,7 +2588,7 @@ void SigLinkSet::ifStatus(String& status)
 
 void SigLinkSet::linkStatus(String& status)
 {
-    SS7MTP3* mtp3 = static_cast<SS7MTP3*>(m_linkset);
+    SS7MTP3* mtp3 = YOBJECT(SS7MTP3,m_linkset);
     if (mtp3) {
 	const ObjList* list = mtp3->links();
 	for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
@@ -2878,8 +2891,15 @@ void SigSS7Isup::release()
     // m_controller is a SS7ISUP call controller
     if (m_controller) {
 	verifyController(0);
-	if (plugin.engine())
+	m_controller->cleanup();
+	if (plugin.engine()) {
 	    plugin.engine()->remove(isup());
+	    SignallingCircuitGroup* group = m_controller->attach((SignallingCircuitGroup*)0);
+	    if (group) {
+		plugin.engine()->remove(group);
+		TelEngine::destruct(group);
+	    }
+	}
 	isup()->destruct();
 	m_controller = 0;
     }
@@ -3044,8 +3064,15 @@ void SigIsdn::release()
 {
     // m_controller is an ISDNQ931 call controller
     if (m_controller) {
-	if (plugin.engine())
+	m_controller->cleanup();
+	if (plugin.engine()) {
 	    plugin.engine()->remove(q931());
+	    SignallingCircuitGroup* group = m_controller->attach((SignallingCircuitGroup*)0);
+	    if (group) {
+		plugin.engine()->remove(group);
+		TelEngine::destruct(group);
+	    }
+	}
 	q931()->destruct();
 	m_controller = 0;
     }
@@ -3292,8 +3319,20 @@ void SigIsdnMonitor::release()
 
     // m_controller is a ISDNQ931Monitor call controller
     if (m_controller) {
-	if (plugin.engine())
+	m_controller->cleanup();
+	if (plugin.engine()) {
 	    plugin.engine()->remove(q931());
+	    SignallingCircuitGroup* group = q931()->attach((SignallingCircuitGroup*)0,false);
+	    if (group) {
+		plugin.engine()->remove(group);
+		TelEngine::destruct(group);
+	    }
+	    group = q931()->attach((SignallingCircuitGroup*)0,true);
+	    if (group) {
+		plugin.engine()->remove(group);
+		TelEngine::destruct(group);
+	    }
+	}
 	q931()->destruct();
 	m_controller = 0;
     }

@@ -6965,6 +6965,8 @@ private:
     bool m_fillLink;
     // automatically align on resume
     bool m_autostart;
+    // flush MSUs after aligning
+    bool m_flushMsus;
 };
 
 /**

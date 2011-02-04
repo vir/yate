@@ -1327,6 +1327,7 @@ bool SS7M2PA::processLinkStatus(DataBlock& data,int streamId)
 
 void SS7M2PA::recoverMSU(int sequence)
 {
+    Debug(this,DebugInfo,"Recovering MSUs from sequence %d",sequence);
     for (;;) {
 	m_mutex.lock();
 	DataBlock* pkt = static_cast<DataBlock*>(m_ackList.remove(false));

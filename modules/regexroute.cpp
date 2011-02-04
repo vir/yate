@@ -214,6 +214,32 @@ static void evalFunc(String& str)
 		    str << par.at(i);
 	    }
 	}
+	else if (str == "hex") {
+	    int len = 0;
+	    if (sep >= 0) {
+		len = par.substr(sep+1).toInteger();
+		par = par.substr(0,sep);
+	    }
+	    int val = par.toInteger();
+	    unsigned char buf[4];
+	    buf[0] = (unsigned char)val;
+	    buf[1] = (unsigned char)(val >> 8);
+	    buf[2] = (unsigned char)(val >> 16);
+	    buf[3] = (unsigned char)(val >> 24);
+	    if (len > 4)
+		len = 4;
+	    else if (len <= 0) {
+		if (buf[3])
+		    len = 4;
+		else if (buf[2])
+		    len = 3;
+		else if (buf[1])
+		    len = 2;
+		else
+		    len = 1;
+	    }
+	    str.hexify(&buf,len,' ');
+	}
 	else if ((sep > 0) && ((str == "index") || (str == "rotate"))) {
 	    bool rotate = (str == "rotate");
 	    String vname;

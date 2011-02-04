@@ -60,7 +60,8 @@
 ; channel: int: Number of the channel inside the session, must match remote config
 ;channel=0
 
-; autostart: bool: Automatically try to align the remote MTP2 at startup
+; autostart: bool: Automatically align the remote MTP2 at startup or on failure
+; This should be enabled (default) for normal operation
 ;autostart=yes
 
 ; autoemergency: boolean: Emergency align link if owner linkset is down

@@ -940,8 +940,7 @@ public:
      * @param xml Element to check
      * @return The found action, ActCount if not found or unknown
      */
-    inline Action getAction(XmlElement* xml)
-	{ return xml ? lookupAction(xml->attribute("type"),m_version) : ActCount; }
+    Action getAction(XmlElement* xml);
 
     /**
      * Ask this session to accept an incoming xml 'iq' element

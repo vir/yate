@@ -912,6 +912,17 @@ JGSession::~JGSession()
     XDebug(m_engine,DebugAll,"JGSession::~JGSession() [%p]",this);
 }
 
+// Get an action (jingle element type) from a jingle element
+JGSession::Action JGSession::getAction(XmlElement* xml)
+{
+    if (!xml)
+	return ActCount;
+    const char* act = xml->attribute("action");
+    if (!act)
+	act = xml->attribute("type");
+    return lookupAction(act,m_version);
+}
+
 // Ask this session to accept an incoming xml element
 bool JGSession::acceptIq(XMPPUtils::IqType type, const JabberID& from, const JabberID& to,
     const String& id, XmlElement* xml)
@@ -2132,8 +2143,11 @@ XmlElement* JGSession1::createJingle(Action action, XmlElement* element1,
     XmlElement* iq = XMPPUtils::createIq(XMPPUtils::IqSet,m_local,m_remote,0);
     XmlElement* jingle = XMPPUtils::createElement(XmlTag::Jingle,
 	XMPPNamespace::Jingle);
-    if (action < ActCount)
-	jingle->setAttribute("type",lookupAction(action,version()));
+    if (action < ActCount) {
+	const char* s = lookupAction(action,version());
+	jingle->setAttribute("action",s);
+	jingle->setAttribute("type",s);
+    }
     jingle->setAttribute("initiator",outgoing() ? m_local : m_remote);
     jingle->setAttribute("responder",outgoing() ? m_remote : m_local);
     jingle->setAttribute("sid",m_sid);

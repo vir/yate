@@ -6912,8 +6912,9 @@ protected:
 
     /**
      * Abort an alignment procedure if link errors occur
+     * @param retry Keep trying to align
      */
-    void abortAlignment();
+    void abortAlignment(bool retry = true);
 
     /**
      * Start the link proving period
@@ -6962,6 +6963,8 @@ private:
     unsigned int m_fillIntervalMs;
     // fill link with end-to-end FISU/LSSU
     bool m_fillLink;
+    // automatically align on resume
+    bool m_autostart;
 };
 
 /**

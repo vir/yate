@@ -434,6 +434,7 @@ protected:
     u_int16_t m_bearerId;                                  // Bearer ID NOTE it is set to 0
     SignallingTimer m_confReqTimer;                        // The configuration request timer
     bool m_printMsg;                                       // Flag used to see if we print this layer messages
+    bool m_autostart;                                      // Automatically align on resume
     static const TokenDict s_messages[];
     static const TokenDict s_connectM[];
     static const TokenDict s_errors[];
@@ -1572,7 +1573,7 @@ SLT::SLT(const String& name, const NamedList& param)
       SessionUser(1),
       m_status(Unconfigured), m_rStatus(OutOfService), m_reqStatus(OutOfService),
       m_messageId(1), m_channelId(0), m_bearerId(0),
-      m_confReqTimer(0), m_printMsg(false)
+      m_confReqTimer(0), m_printMsg(false), m_autostart(false)
 {
 #ifdef DEBUG
     String tmp;
@@ -1593,7 +1594,8 @@ SLT::SLT(const String& name, const NamedList& param)
     m_confReqTimer.interval(param,"configuration",250,5000,true);
     m_printMsg = param.getBoolValue("printslt",false);
     m_autoEmergency = param.getBoolValue("autoemergency",true);
-    if (param.getBoolValue("autostart",true))
+    m_autostart = param.getBoolValue("autostart",true);
+    if (m_autostart)
 	m_reqStatus = NormalAlignment;
 }
 
@@ -1664,6 +1666,7 @@ bool SLT::control(Operation oper, NamedList* params)
 {
     if (params) {
 	m_autoEmergency = params->getBoolValue("autoemergency",m_autoEmergency);
+	m_autostart = params->getBoolValue("autostart",m_autostart);
 	m_printMsg = params->getBoolValue("printslt",m_printMsg);
     }
     switch (oper) {
@@ -1672,8 +1675,9 @@ bool SLT::control(Operation oper, NamedList* params)
 	    sendManagement(Disconnect_R);
 	    return true;
 	case Resume:
-	    if (aligned())
+	    if (aligned() || !m_autostart)
 		return true;
+	    // fall through
 	case Align:
 	    {
 		bool emg = getEmergency(params);
@@ -1849,12 +1853,10 @@ void SLT::processSltMessage(u_int16_t msgType, DataBlock& data)
 	    }
 	    break;
 	case Disconnect_C:
-	    setRemoteStatus(OutOfService);
-	    if (m_reqStatus == EmergencyAlignment || m_reqStatus == NormalAlignment)
-		sendConnect(m_reqStatus == NormalAlignment ? Normal : Emergency);
-	    break;
 	case Disconnect_I:
 	    setRemoteStatus(OutOfService);
+	    if (!m_autostart)
+		break;
 	    if (m_reqStatus == EmergencyAlignment || m_reqStatus == NormalAlignment)
 		sendConnect(m_reqStatus == NormalAlignment ? Normal : Emergency);
 	    break;
@@ -1866,7 +1868,7 @@ void SLT::processSltMessage(u_int16_t msgType, DataBlock& data)
 	case Link_State_Controller_I:
 	    processCIndication(data);
 	    break;
-	default:	
+	default:
 	    const char* mes = messageType((Messages)msgType);
 	    if (mes)
 		DDebug(this,DebugWarn,"Received unhandled SLT message: %s",mes);
@@ -2037,6 +2039,8 @@ void SLT::configure(bool start)
     setStatus(Configured);
     SS7Layer2::notify();
     DDebug(this,DebugInfo,"requested status = %s",statusName(m_reqStatus,false));
+    if (!m_autostart)
+	return;
     if (m_reqStatus == NormalAlignment || m_reqStatus == EmergencyAlignment)
 	sendConnect(m_reqStatus == NormalAlignment ? Normal : Emergency);
 }

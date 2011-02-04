@@ -254,7 +254,7 @@ SS7MTP2::SS7MTP2(const NamedList& params, unsigned int status)
       m_bsn(127), m_fsn(127), m_bib(true), m_fib(true),
       m_lastFsn(128), m_lastBsn(127), m_lastBib(true), m_errors(0),
       m_resendMs(250), m_abortMs(5000), m_fillIntervalMs(20), m_fillLink(true),
-      m_autostart(false)
+      m_autostart(false), m_flushMsus(true)
 {
 #ifdef DEBUG
     if (debugAt(DebugAll)) {
@@ -322,6 +322,7 @@ bool SS7MTP2::initialize(const NamedList* config)
 	m_autoEmergency = config->getBoolValue("autoemergency",true);
     }
     m_autostart = !config || config->getBoolValue("autostart",true);
+    m_flushMsus = !config || config->getBoolValue("flushmsus",true);
     if (config && !iface()) {
 	NamedString* name = config->getParam("sig");
 	if (!name)
@@ -360,6 +361,7 @@ bool SS7MTP2::control(Operation oper, NamedList* params)
 	m_fillLink = params->getBoolValue("filllink",m_fillLink);
 	m_autoEmergency = params->getBoolValue("autoemergency",m_autoEmergency);
 	m_autostart = params->getBoolValue("autostart",m_autostart);
+	m_flushMsus = params->getBoolValue("flushmsus",m_flushMsus);
 	// The following are for test purposes
 	if (params->getBoolValue("toggle-bib"))
 	    m_bib = !m_bib;
@@ -378,7 +380,6 @@ bool SS7MTP2::control(Operation oper, NamedList* params)
     switch (oper) {
 	case Pause:
 	    abortAlignment(false);
-	    transmitLSSU();
 	    return true;
 	case Resume:
 	    if (aligned() || !m_autostart)
@@ -403,6 +404,7 @@ bool SS7MTP2::notify(SignallingInterface::Notification event)
 	    break;
 	case SignallingInterface::LinkUp:
 	    Debug(this,DebugInfo,"Interface is up [%p]",this);
+	    control(Resume);
 	    break;
 	default:
 	    XDebug(this,DebugMild,"Got error %u: %s [%p]",
@@ -439,12 +441,14 @@ void SS7MTP2::timerTick(const Time& when)
 	    lock();
 	    m_lastSeqRx = -1;
 	    unsigned int q = m_queue.count();
-	    if (q >= 64) {
+	    if (!q)
+		;
+	    else if (m_flushMsus || q >= 64) {
 		// there shouldn't have been that many queued MSUs
 		Debug(this,DebugWarn,"Cleaning %u queued MSUs from proved link! [%p]",q,this);
 		m_queue.clear();
 	    }
-	    else if (q) {
+	    else {
 		Debug(this,DebugNote,"Changing FSN of %u MSUs queued in proved link! [%p]",q,this);
 		// transmit a FISU just before the bunch of MSUs
 		transmitFISU();
@@ -495,18 +499,15 @@ void SS7MTP2::timerTick(const Time& when)
 	}
     }
     else if (tout) {
-	if (m_lStatus == OutOfService) {
-	    switch (m_status) {
-		case NormalAlignment:
-		case EmergencyAlignment:
+	switch (m_lStatus) {
+	    case OutOfService:
+		if (m_status != OutOfService)
 		    setLocalStatus(OutOfAlignment);
-		    break;
-		default:
-		    setLocalStatus(m_status);
-	    }
+		break;
+	    case OutOfAlignment:
+		Debug(this,DebugMild,"Initial alignment timed out, retrying");
+		break;
 	}
-	else if (m_lStatus == OutOfAlignment)
-	    Debug(this,DebugMild,"Initial alignment timed out, retrying");
     }
     if (when >= m_fillTime) {
 	if (operational())
@@ -570,6 +571,7 @@ bool SS7MTP2::transmitMSU(const SS7MSU& msu)
 // Remove the MSUs in the queue, the upper layer will move them to another link
 void SS7MTP2::recoverMSU(int sequence)
 {
+    Debug(this,DebugInfo,"Recovering MSUs from sequence %d",sequence);
     for (;;) {
 	lock();
 	DataBlock* pkt = static_cast<DataBlock*>(m_queue.remove(false));
@@ -659,6 +661,9 @@ bool SS7MTP2::receivedPacket(const DataBlock& packet)
 	    m_resend = Time::now();
 	}
 	unqueueAck(bsn);
+	// end proving now if received MSU with correct sequence
+	if (m_interval && (diff == 1))
+	    m_interval = Time::now();
     }
     else {
 	// keep sequence numbers in sync with the remote
@@ -774,12 +779,19 @@ void SS7MTP2::processLSSU(unsigned int status)
 	case OutOfAlignment:
 	case NormalAlignment:
 	case EmergencyAlignment:
+	    if (m_lStatus == OutOfService) {
+		if (m_status != OutOfService)
+		    setLocalStatus(OutOfAlignment);
+		break;
+	    }
 	    if (!(unaligned && startProving()))
 		setLocalStatus(m_status);
 	    break;
 	default:
-	    if (!m_interval)
-		abortAlignment(m_autostart);
+	    if (!m_interval) {
+		if (m_status != OutOfService)
+		    abortAlignment(m_autostart);
+	    }
 	    else if (m_lStatus != OutOfService && m_lStatus != OutOfAlignment)
 		m_interval = 0;
     }
@@ -837,12 +849,18 @@ void SS7MTP2::startAlignment(bool emergency)
     else
 	Debug(this,DebugInfo,"Starting %s alignment [%p]",
 	    (emergency ? "emergency" : "normal"),this);
+    m_bsn = m_fsn = 127;
+    m_bib = m_fib = true;
+    if (m_lStatus != OutOfService) {
+	setLocalStatus(OutOfService);
+	unlock();
+	transmitLSSU();
+	lock();
+    }
     m_status = emergency ? EmergencyAlignment : NormalAlignment;
     m_abort = m_resend = 0;
     setLocalStatus(OutOfAlignment);
     m_interval = Time::now() + 5000000;
-    m_fsn = 127;
-    m_fib = true;
     unlock();
     transmitLSSU();
     SS7Layer2::notify();
@@ -858,10 +876,11 @@ void SS7MTP2::abortAlignment(bool retry)
     m_interval = Time::now() + 1000000;
     m_abort = m_resend = 0;
     m_errors = 0;
-    m_fsn = 127;
-    m_fib = true;
+    m_bsn = m_fsn = 127;
+    m_bib = m_fib = true;
     m_fillTime = 0;
     unlock();
+    transmitLSSU();
     SS7Layer2::notify();
 }
 

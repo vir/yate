@@ -148,6 +148,7 @@
 ; Functions can be inserted using $(function,param,param)
 ;
 ; First word of a matched target has a special meaning:
+; if - make a new match using the rest of the line up to the = character
 ; return - returns immediately from the context without routing
 ; include - calls another context, returns at the next entry if the other
 ;   context did not return successfully
@@ -186,6 +187,8 @@
 ;^0\(.*\)$=h323/\1@long.distance.gateway
 ;   route short 3digit numbers to SIP using a DNS scheme 123 -> 3.2.1.domain
 ;^\(.\)\(.\)\(.\)$=sip/sip:\0@\3.\2.\1.domain
+;   route only calls from SIP starting with 123 to a H.323 gateway
+;${id}^sip/=if ^123.*$=h323/\0@provider.gw
 ;   is there anything else left? they go on E1 but only 15 channels can be used
 ;   we also make sure the number is at least 4 characters long
 ;   and we set a national caller dialplan

@@ -1,3 +1,11 @@
+yate (3.1.1.svn4099) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4099: + Added a special target "if" to
+    regexroute so a logic AND can be easily constructed on a single
+    line.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sun, 06 Feb 2011 02:19:18 +0300
+
 yate (3.1.1.svn4098) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4098: + Correctly clean up calls and

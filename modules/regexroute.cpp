@@ -373,6 +373,69 @@ static void setMessage(const String& match, Message& msg, String& line, Message*
     strs->destruct();
 }
 
+// helper function to process one match attempt
+static bool oneMatch(const NamedList& msg, Regexp& reg, String& match, const String& context, unsigned int rule)
+{
+    if (reg.startsWith("${")) {
+	// handle special matching by param ${paramname}regexp
+	int p = reg.find('}');
+	if (p < 3) {
+	    Debug("RegexRoute",DebugWarn,"Invalid parameter match '%s' in rule #%u in context '%s'",
+		reg.c_str(),rule,context.c_str());
+	    return false;
+	}
+	match = reg.substr(2,p-2);
+	reg = reg.substr(p+1);
+	match.trimBlanks();
+	reg.trimBlanks();
+	String def;
+	p = match.find('$');
+	if (p >= 0) {
+	    // param is in ${<name>$<default>} format
+	    def = match.substr(p+1);
+	    match = match.substr(0,p);
+	    match.trimBlanks();
+	}
+	if (match.null() || reg.null()) {
+	    Debug("RegexRoute",DebugWarn,"Missing parameter or rule in rule #%u in context '%s'",
+		rule,context.c_str());
+	    return false;
+	}
+	DDebug("RegexRoute",DebugAll,"Using message parameter '%s' default '%s'",
+	    match.c_str(),def.c_str());
+	match = msg.getValue(match,def);
+    }
+    else if (reg.startsWith("$(")) {
+	// handle special matching by param $(function)regexp
+	int p = reg.find(')');
+	if (p < 3) {
+	    Debug("RegexRoute",DebugWarn,"Invalid function match '%s' in rule #%u in context '%s'",
+		reg.c_str(),rule,context.c_str());
+	    return false;
+	}
+	match = reg.substr(0,p+1);
+	reg = reg.substr(p+1);
+	reg.trimBlanks();
+	if (reg.null()) {
+	    Debug("RegexRoute",DebugWarn,"Missing rule in rule #%u in context '%s'",
+		rule,context.c_str());
+	    return false;
+	}
+	DDebug("RegexRoute",DebugAll,"Using function '%s'",match.c_str());
+	msg.replaceParams(match);
+	replaceFuncs(match);
+    }
+    match.trimBlanks();
+
+    bool doMatch = true;
+    if (reg.endsWith("^")) {
+	// reverse match on final ^ (makes no sense in a regexp)
+	doMatch = false;
+	reg = reg.substr(0,reg.length()-1);
+    }
+    return (match.matches(reg) == doMatch);
+}
+
 // process one context, can call itself recursively
 static bool oneContext(Message &msg, String &str, const String &context, String &ret, int depth = 0)
 {
@@ -387,151 +450,117 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 	unsigned int len = l->length();
 	for (unsigned int i = 0; i < len; i++) {
 	    const NamedString* n = l->getParam(i);
-	    if (n) {
-		Regexp r(n->name(),s_extended,s_insensitive);
-		String match;
-		if (r.startsWith("${")) {
-		    // handle special matching by param ${paramname}regexp
-		    int p = r.find('}');
-		    if (p < 3) {
-			Debug("RegexRoute",DebugWarn,"Invalid parameter match '%s' in rule #%u in context '%s'",
-			    r.c_str(),i+1,context.c_str());
-			continue;
-		    }
-		    match = r.substr(2,p-2);
-		    r = r.substr(p+1);
-		    match.trimBlanks();
-		    r.trimBlanks();
-		    String def;
-		    p = match.find('$');
-		    if (p >= 0) {
-			// param is in ${<name>$<default>} format
-			def = match.substr(p+1);
-			match = match.substr(0,p);
-			match.trimBlanks();
-		    }
-		    if (match.null() || r.null()) {
-			Debug("RegexRoute",DebugWarn,"Missing parameter or rule in rule #%u in context '%s'",
-			    i+1,context.c_str());
-			continue;
-		    }
-		    DDebug("RegexRoute",DebugAll,"Using message parameter '%s' default '%s'",
-			match.c_str(),def.c_str());
-		    match = msg.getValue(match,def);
-		}
-		else if (r.startsWith("$(")) {
-		    // handle special matching by param $(function)regexp
-		    int p = r.find(')');
-		    if (p < 3) {
-			Debug("RegexRoute",DebugWarn,"Invalid function match '%s' in rule #%u in context '%s'",
-			    r.c_str(),i+1,context.c_str());
-			continue;
-		    }
-		    match = r.substr(0,p+1);
-		    r = r.substr(p+1);
-		    r.trimBlanks();
-		    if (r.null()) {
-			Debug("RegexRoute",DebugWarn,"Missing rule in rule #%u in context '%s'",
-			    i+1,context.c_str());
-			continue;
-		    }
-		    DDebug("RegexRoute",DebugAll,"Using function '%s'",
-			match.c_str());
-		    msg.replaceParams(match);
-		    replaceFuncs(match);
-		}
-		else
-		    match = str;
-		match.trimBlanks();
+	    if (!n)
+		continue;
+	    Regexp reg(n->name(),s_extended,s_insensitive);
+	    String val(*n);
+	    String match;
 
-		bool doMatch = true;
-		if (r.endsWith("^")) {
-		    // reverse match on final ^ (makes no sense in a regexp)
-		    doMatch = false;
-		    r = r.substr(0,r.length()-1);
-		}
-		if (match.matches(r) == doMatch) {
-		    String val = *n;
-		    if (val.startSkip("echo") || val.startSkip("output")) {
-			// special case: display the line but don't set params
-			val = match.replaceMatches(val);
-			msg.replaceParams(val);
-			replaceFuncs(val);
-			Output("%s",val.safe());
-			continue;
-		    }
-		    bool disp = val.startSkip("dispatch");
-		    if (disp || val.startSkip("enqueue")) {
-			// special case: enqueue or dispatch a new message
-			if (val && (val[0] != ';')) {
-			    Message* m = new Message("");
-			    // parameters are set in the new message
-			    setMessage(match,msg,val,m);
-			    val.trimBlanks();
-			    if (val) {
-				*m = val;
-				m->userData(msg.userData());
-				NDebug("RegexRoute",DebugAll,"%s new message '%s' by rule #%u '%s' in context '%s'",
-				    (disp ? "Dispatching" : "Enqueueing"),
-				    val.c_str(),i+1,n->name().c_str(),context.c_str());
-				if (disp) {
-				    s_dispatching++;
-				    Engine::dispatch(m);
-				    s_dispatching--;
-				}
-				else {
-				    Engine::enqueue(m);
-				    m = 0;
-				}
-			    }
-			    TelEngine::destruct(m);
+	    bool ok;
+	    do {
+		match = str;
+		ok = oneMatch(msg,reg,match,context,i+1);
+		if (ok) {
+		    if (!(val.startSkip("if") || val.startSkip("and")))
+			break;
+		    int p = val.find('=');
+		    if (p >= 1) {
+			reg = val.substr(0,p);
+			val = val.substr(p+1);
+			reg.trimBlanks();
+			val.trimBlanks();
+			if (!reg.null()) {
+			    NDebug("RegexRoute",DebugAll,"Secondary match rule '%s' by rule #%u in context '%s'",
+				reg.c_str(),i+1,context.c_str());
+			    continue;
 			}
-			continue;
 		    }
-		    setMessage(match,msg,val);
+		    Debug("RegexRoute",DebugWarn,"Missing if rule in rule #%u in context '%s'",
+			i+1,context.c_str());
+		    ok = false;
+		}
+	    } while (ok);
+	    if (!ok)
+		continue;
+
+	    if (val.startSkip("echo") || val.startSkip("output")) {
+		// special case: display the line but don't set params
+		val = match.replaceMatches(val);
+		msg.replaceParams(val);
+		replaceFuncs(val);
+		Output("%s",val.safe());
+		continue;
+	    }
+	    bool disp = val.startSkip("dispatch");
+	    if (disp || val.startSkip("enqueue")) {
+		// special case: enqueue or dispatch a new message
+		if (val && (val[0] != ';')) {
+		    Message* m = new Message("");
+		    // parameters are set in the new message
+		    setMessage(match,msg,val,m);
 		    val.trimBlanks();
-		    if (val.null()) {
-			// special case: do nothing on empty target
-			continue;
-		    }
-		    else if (val == "return") {
-			NDebug("RegexRoute",DebugAll,"Returning false from context '%s'", context.c_str());
-			return false;
-		    }
-		    else if (val.startSkip("goto") || val.startSkip("jump")) {
-			NDebug("RegexRoute",DebugAll,"Jumping to context '%s' by rule #%u '%s'",
-			    val.c_str(),i+1,n->name().c_str());
-			return oneContext(msg,str,val,ret,depth+1);
-		    }
-		    else if (val.startSkip("include") || val.startSkip("call")) {
-			NDebug("RegexRoute",DebugAll,"Including context '%s' by rule #%u '%s'",
-			    val.c_str(),i+1,n->name().c_str());
-			if (oneContext(msg,str,val,ret,depth+1)) {
-			    DDebug("RegexRoute",DebugAll,"Returning true from context '%s'", context.c_str());
-			    return true;
+		    if (val) {
+			*m = val;
+			m->userData(msg.userData());
+			NDebug("RegexRoute",DebugAll,"%s new message '%s' by rule #%u '%s' in context '%s'",
+			    (disp ? "Dispatching" : "Enqueueing"),
+			    val.c_str(),i+1,n->name().c_str(),context.c_str());
+			if (disp) {
+			    s_dispatching++;
+			    Engine::dispatch(m);
+			    s_dispatching--;
+			}
+			else {
+			    Engine::enqueue(m);
+			    m = 0;
 			}
 		    }
-		    else if (val.startSkip("match") || val.startSkip("newmatch")) {
-			if (!val.null()) {
-			    NDebug("RegexRoute",DebugAll,"Setting match string '%s' by rule #%u '%s' in context '%s'",
-				val.c_str(),i+1,n->name().c_str(),context.c_str());
-			    str = val;
-			}
-		    }
-		    else if (val.startSkip("rename")) {
-			if (!val.null()) {
-			    NDebug("RegexRoute",DebugAll,"Renaming message '%s' to '%s' by rule #%u '%s' in context '%s'",
-				msg.c_str(),val.c_str(),i+1,n->name().c_str(),context.c_str());
-			    msg = val;
-			}
-		    }
-		    else {
-			DDebug("RegexRoute",DebugAll,"Returning '%s' for '%s' in context '%s' by rule #%u '%s'",
-			    val.c_str(),str.c_str(),context.c_str(),i+1,n->name().c_str());
-			ret = val;
-			return true;
-		    }
+		    TelEngine::destruct(m);
 		}
+		continue;
+	    }
+	    setMessage(match,msg,val);
+	    val.trimBlanks();
+	    if (val.null()) {
+		// special case: do nothing on empty target
+		continue;
+	    }
+	    else if (val == "return") {
+		NDebug("RegexRoute",DebugAll,"Returning false from context '%s'", context.c_str());
+		return false;
+	    }
+	    else if (val.startSkip("goto") || val.startSkip("jump")) {
+		NDebug("RegexRoute",DebugAll,"Jumping to context '%s' by rule #%u '%s'",
+		    val.c_str(),i+1,n->name().c_str());
+		return oneContext(msg,str,val,ret,depth+1);
+	    }
+	    else if (val.startSkip("include") || val.startSkip("call")) {
+		NDebug("RegexRoute",DebugAll,"Including context '%s' by rule #%u '%s'",
+		    val.c_str(),i+1,n->name().c_str());
+		if (oneContext(msg,str,val,ret,depth+1)) {
+		    DDebug("RegexRoute",DebugAll,"Returning true from context '%s'", context.c_str());
+		    return true;
+		}
+	    }
+	    else if (val.startSkip("match") || val.startSkip("newmatch")) {
+		if (!val.null()) {
+		    NDebug("RegexRoute",DebugAll,"Setting match string '%s' by rule #%u '%s' in context '%s'",
+			val.c_str(),i+1,n->name().c_str(),context.c_str());
+		    str = val;
+		}
+	    }
+	    else if (val.startSkip("rename")) {
+		if (!val.null()) {
+		    NDebug("RegexRoute",DebugAll,"Renaming message '%s' to '%s' by rule #%u '%s' in context '%s'",
+			msg.c_str(),val.c_str(),i+1,n->name().c_str(),context.c_str());
+		    msg = val;
+		}
+	    }
+	    else {
+		DDebug("RegexRoute",DebugAll,"Returning '%s' for '%s' in context '%s' by rule #%u '%s'",
+		    val.c_str(),str.c_str(),context.c_str(),i+1,n->name().c_str());
+		ret = val;
+		return true;
 	    }
 	}
     }

@@ -156,6 +156,8 @@ QtCustomTree::QtCustomTree(const char* name, const NamedList& params, QWidget* p
 	this,SLOT(selectionChangedSlot(QTreeWidgetItem*,QTreeWidgetItem*)));
     QtClient::connectObjects(this,SIGNAL(itemDoubleClicked(QTreeWidgetItem*,int)),
 	this,SLOT(itemDoubleClickedSlot(QTreeWidgetItem*,int)));
+    QtClient::connectObjects(this,SIGNAL(itemActivated(QTreeWidgetItem*,int)),
+	this,SLOT(itemDoubleClickedSlot(QTreeWidgetItem*,int)));
     QtClient::connectObjects(this,SIGNAL(itemExpanded(QTreeWidgetItem*)),
 	this,SLOT(itemExpandedSlot(QTreeWidgetItem*)));
     QtClient::connectObjects(this,SIGNAL(itemCollapsed(QTreeWidgetItem*)),

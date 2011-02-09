@@ -1,3 +1,15 @@
+yate (3.1.1.svn4103) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4103: + Return the chan.disconnected from
+    getDisconnected() with the Channel already set as userData.  + Added
+    a flag for value 0 of Access Delivery Information so it gets
+    propagated.  + This allows propagating or altering release message
+    parameters.  + Copy release parameters from chan.disconnected if
+    message-oprefix is set.  + Copy ISUP or ISDN release parameters to
+    the chan.disconnected message.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 10 Feb 2011 02:19:18 +0300
+
 yate (3.1.1.svn4100) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4100: + Trigger tree name action when Enter

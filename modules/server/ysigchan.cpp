@@ -81,6 +81,7 @@ public:
 	const Message* msg = 0);
     virtual void connected(const char *reason);
     virtual void disconnected(bool final, const char* reason);
+    virtual Message* getDisconnect(const char* reason);
     bool disconnect()
 	{ return Channel::disconnect(m_reason,parameters()); }
     void handleEvent(SignallingEvent* event);
@@ -90,6 +91,7 @@ public:
 private:
     bool startCall(Message& msg, SigTrunk* trunk);
     virtual void statusParams(String& str);
+    void copyDisconnect(const NamedList& params);
     // Set call status. Print debug message
     void setState(const char* state, bool updateStatus = true, bool showReason = false);
     // Event handlers
@@ -1303,6 +1305,28 @@ void SigChannel::disconnected(bool final, const char* reason)
     Channel::disconnected(final,m_reason);
 }
 
+Message* SigChannel::getDisconnect(const char* reason)
+{
+    Message* msg = Channel::getDisconnect(reason);
+    msg->setNotify();
+    return msg;
+}
+
+void SigChannel::copyDisconnect(const NamedList& params)
+{
+    const char* prefix = params.getValue("message-oprefix");
+    if (TelEngine::null(prefix))
+	return;
+    parameters().clearParams();
+    parameters().setParam("message-oprefix",prefix);
+    unsigned int n = params.length();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* p = params.getParam(i);
+	if (p && p->name().startsWith(prefix))
+	    parameters().setParam(p->name(),*p);
+    }
+}
+
 void SigChannel::hangup(const char* reason, SignallingEvent* event, const NamedList* extra)
 {
     static String params = "reason";
@@ -1326,8 +1350,13 @@ void SigChannel::hangup(const char* reason, SignallingEvent* event, const NamedL
 	ev = new SignallingEvent(SignallingEvent::Release,msg,m_call);
 	TelEngine::destruct(msg);
 	TelEngine::destruct(m_call);
-	if (extra)
-	    plugin.copySigMsgParams(ev,*extra,"i");
+	if (!extra)
+	    extra = &parameters();
+	plugin.copySigMsgParams(ev,*extra,"i");
+    }
+    if (event) {
+	parameters().clearParams();
+	plugin.copySigMsgParams(parameters(),event,&params);
     }
     lock2.drop();
     lock.drop();
@@ -1335,7 +1364,6 @@ void SigChannel::hangup(const char* reason, SignallingEvent* event, const NamedL
 	ev->sendEvent();
     Message* m = message("chan.hangup",true);
     m->setParam("status",status());
-    plugin.copySigMsgParams(*m,event,&params);
     m->setParam("reason",m_reason);
     Engine::enqueue(m);
 }
@@ -1343,8 +1371,12 @@ void SigChannel::hangup(const char* reason, SignallingEvent* event, const NamedL
 // Notifier message dispatched handler
 void SigChannel::dispatched(const Message& msg, bool handled)
 {
+    static const String s_disc("chan.disconnected");
     DDebug(this,DebugAll,"dispatched(%s,%u) [%p]",msg.c_str(),handled,this);
-    processCompat(msg);
+    if (s_disc == msg)
+	copyDisconnect(msg);
+    else
+	processCompat(msg);
 }
 
 void SigChannel::statusParams(String& str)

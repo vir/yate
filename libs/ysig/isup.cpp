@@ -1127,7 +1127,8 @@ static const SignallingFlags s_flags_grptypeind[] = {
 
 // Access Delivery Information (Q.763 3.2)
 static const SignallingFlags s_flags_accdelinfo[] = {
-    { 0x01, 0x01, "no-setup" },          // No Setup message generated (if 0: A Setup message was generated)
+    { 0x01, 0x00, "setup-generated" },   // A Setup message was generated
+    { 0x01, 0x01, "no-setup" },          // No Setup message generated
     { 0, 0, 0 }
 };
 

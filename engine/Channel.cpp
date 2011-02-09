@@ -452,8 +452,6 @@ void Channel::disconnected(bool final, const char* reason)
     // last chance to get reconnected to something
     Message* m = getDisconnect(reason);
     m_targetid.clear();
-    // we will remain referenced until the message is destroyed
-    m->userData(this);
     Engine::enqueue(m);
 }
 
@@ -479,6 +477,8 @@ Message* Channel::getDisconnect(const char* reason)
     complete(*msg);
     if (reason)
 	msg->setParam("reason",reason);
+    // we will remain referenced until the message is destroyed
+    msg->userData(this);
     return msg;
 }
 

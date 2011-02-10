@@ -24,7 +24,7 @@
 
 #include "yatesig.h"
 
-#define MAX_UNACK 16
+#define MAX_UNACK 256
 
 using namespace TelEngine;
 

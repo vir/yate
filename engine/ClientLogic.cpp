@@ -5957,7 +5957,11 @@ bool DefaultLogic::defaultMsgHandler(Message& msg, int id, bool& stopLogic)
 		    p = buildChatParams(body,c->m_name,time,0 != delay,ds);
 		// Active state with no body or notification: remove last notification
 		//  if the contact has a chat
-		bool resetNotif = !p && !chatState && c->hasChat() && msg["chatstate"] == "active";
+		bool resetNotif = false;
+		if (c->hasChat())
+		    resetNotif = !p && !chatState && msg["chatstate"] == "active";
+		else
+		    chatState.clear();
 		if (p || chatState || resetNotif) {
 		    if (!c->hasChat()) {
 			c->createChatWindow();
@@ -6031,7 +6035,11 @@ bool DefaultLogic::defaultMsgHandler(Message& msg, int id, bool& stopLogic)
 	    p = buildChatParams(body,member ? member->m_name : nick,time,0,0);
 	const String& id = mucChat ? room->resource().toString() : member->toString();
 	// Active state with no body or notification: remove last notification
-	bool resetNotif = !p && !chatState && room->hasChat(id) && msg["chatstate"] == "active";
+	bool resetNotif = false;
+	if (room->hasChat(id))
+	    resetNotif = !p && !chatState && msg["chatstate"] == "active";
+	else
+	    chatState.clear();
 	if (p || chatState || resetNotif) {
 	    if (chat)
 		createRoomChat(*room,member,false);

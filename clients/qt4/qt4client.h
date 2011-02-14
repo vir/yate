@@ -489,6 +489,17 @@ public:
      */
     static int str2align(const String& flags, int initVal = 0);
 
+    /**
+     * Send an event to an object's child. The event must be already accepted
+     * The event's accepted flag is set to false before sending it and restored on failure
+     *  to avoid looping in event filters
+     * @param e The event to send
+     * @param parent The parent object
+     * @param name Child name
+     * @return True if the event was accepted by the target
+     */
+    static bool sendEvent(QEvent& e, QObject* parent, const QString& name);
+
 protected:
     virtual void loadWindows(const char* file = 0);
 private:
@@ -936,7 +947,8 @@ public:
      * @param parent Optional parent
      */
     inline QtUIWidget(const char* name)
-	: UIWidget(name)
+	: UIWidget(name),
+	m_wndEvHooked(false)
 	{}
 
     /**
@@ -1123,6 +1135,15 @@ public:
 	{ return name + "_" + item; }
 
     /**
+     * Build a container child name from parent property value
+     * @param dest Destination string
+     * @param parent Pointer to parent object
+     * @param prop Property name
+     * @return True on success
+     */
+    static bool buildQChildNameProp(QString& dest, QObject* parent, const char* prop);
+
+    /**
      * Build a container QString child name
      * @param name Container widget name
      * @param item Child name
@@ -1268,6 +1289,7 @@ protected:
      */
     bool filterKeyEvent(QObject* watched, QKeyEvent* event, bool& filter);
 
+    bool m_wndEvHooked;                  // Event filter already installed in parent window
     ObjList m_itemProps;
     QStringList m_saveProps;             // List of properties to be automatically
                                          //  saved/restored when window owning

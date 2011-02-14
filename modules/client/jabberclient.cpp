@@ -1528,7 +1528,7 @@ void YJBEngine::processIqStanza(JBEvent* ev)
     bool fromServer = !ev->from();
     if (!fromServer) {
 	Lock lock(ev->stream());
-	fromServer = ev->from() == ev->stream()->local().bare() ||
+	fromServer = ev->stream()->local().match(ev->from()) ||
 	    ev->from() == ev->stream()->local().domain();
     }
     if (fromServer) {

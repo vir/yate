@@ -1036,6 +1036,7 @@ bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
     switch (handled) {
 	case HandledMSU::Accepted:
 	case HandledMSU::Failure:
+	case HandledMSU::NoCircuit:
 	    return true;
 	default:
 	    break;

@@ -884,6 +884,8 @@ HandledMSU SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7L
 	if (!local)
 	    return m_sendProhibited ? HandledMSU::NoAddress : HandledMSU::Failure;
     }
+    if (HandledMSU::NoCircuit == ret)
+	return HandledMSU::NoCircuit;
     return (local && m_sendUnavail) ? HandledMSU::Unequipped : HandledMSU::Failure;
 }
 

@@ -544,6 +544,21 @@ bool WidgetList::eventFilter(QObject* watched, QEvent* event)
     if (!Client::valid())
 	return QWidget::eventFilter(watched,event);
     if (event->type() == QEvent::KeyPress) {
+	if (m_wndEvHooked) {
+	    QtWindow* wnd = qobject_cast<QtWindow*>(watched);
+	    if (wnd && wnd == getWindow()) {
+		QString child;
+		QWidget* sel = selectedItem();
+		if (sel && buildQChildNameProp(child,sel,"_yate_keypress_redirect") &&
+		    QtClient::sendEvent(*event,sel,child)) {
+		    QWidget* wid = qFindChild<QWidget*>(sel,child);
+		    if (wid)
+			wid->setFocus();
+		    return true;
+		}
+		return QWidget::eventFilter(watched,event);
+	    }
+	}
 	bool filter = false;
 	if (!filterKeyEvent(watched,static_cast<QKeyEvent*>(event),filter))
 	    return QWidget::eventFilter(watched,event);

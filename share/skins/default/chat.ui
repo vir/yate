@@ -16,7 +16,7 @@
    </sizepolicy>
   </property>
   <property name="focusPolicy" >
-   <enum>Qt::StrongFocus</enum>
+   <enum>Qt::NoFocus</enum>
   </property>
   <property name="windowTitle" >
    <string comment="VoIP Client" >Chat</string>
@@ -30,6 +30,9 @@
   </property>
   <property name="_yate_destroyonhide" stdset="0" >
    <bool>true</bool>
+  </property>
+  <property name="_yate_keypress_redirect" stdset="0" >
+   <string>message</string>
   </property>
   <layout class="QVBoxLayout" >
    <property name="spacing" >
@@ -452,5 +455,22 @@
   <tabstop>message</tabstop>
  </tabstops>
  <resources/>
- <connections/>
+ <connections>
+  <connection>
+   <sender>send_chat_button</sender>
+   <signal>clicked()</signal>
+   <receiver>message</receiver>
+   <slot>setFocus()</slot>
+   <hints>
+    <hint type="sourcelabel" >
+     <x>531</x>
+     <y>287</y>
+    </hint>
+    <hint type="destinationlabel" >
+     <x>249</x>
+     <y>287</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
 </ui>

@@ -3397,7 +3397,7 @@ SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
 	}
 	break;
     }
-    SignallingCall* call = 0;
+    SS7ISUPCall* call = 0;
     if (reason.null()) {
 	String* cicParams = msg->params().getParam("circuit_parameters");
 	if (cicParams) {
@@ -3427,8 +3427,8 @@ SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
 	// Drop lock and send the event
 	mylock.drop();
 	if (!event->sendEvent()) {
-	    m_calls.remove(call);
-	    call = 0;
+	    call->setTerminate(false,"failure");
+	    TelEngine::destruct(call);
 	    reason = "failure";
 	}
     }

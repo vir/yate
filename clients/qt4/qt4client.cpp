@@ -2472,11 +2472,21 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 // Handle key pressed events
 void QtWindow::keyPressEvent(QKeyEvent* event)
 {
-    if (!Client::self())
-	return QWidget::keyPressEvent(event);
+    if (!(Client::self() && event)) {
+	QWidget::keyPressEvent(event);
+	return;
+    }
+    QVariant var = wndWidget()->property("_yate_keypress_redirect");
+    QString child = var.toString();
+    if (child.size() > 0 && QtClient::sendEvent(*event,this,child)) {
+	QWidget* wid = qFindChild<QWidget*>(wndWidget(),child);
+	if (wid)
+	    wid->setFocus();
+	return;
+    }
     if (event->key() == Qt::Key_Backspace)
 	Client::self()->backspace(m_id,this);
-    return QWidget::keyPressEvent(event);
+    QWidget::keyPressEvent(event);
 }
 
 // Show hide window. Notify the client
@@ -3940,6 +3950,21 @@ int QtClient::str2align(const String& flags, int initVal)
     return initVal;
 }
 
+// Send an event to an object's child
+bool QtClient::sendEvent(QEvent& e, QObject* parent, const QString& name)
+{
+    if (!(parent && e.isAccepted()))
+	return false;
+    QObject* child = qFindChild<QObject*>(parent,name);
+    if (!child)
+	return false;
+    e.setAccepted(false);
+    bool ok = QCoreApplication::sendEvent(child,&e);
+    if (!ok)
+	e.setAccepted(true);
+    return ok;
+}
+
 
 /**
  * QtDriver
@@ -4425,6 +4450,18 @@ QMenu* QtUIWidget::buildWidgetItemMenu(QWidget* w, const NamedList* params,
     return menu;
 }
 
+// Build a container child name from parent property
+bool QtUIWidget::buildQChildNameProp(QString& dest, QObject* parent, const char* prop)
+{
+    if (!(parent && prop))
+	return false;
+    QVariant var = parent->property(prop);
+    if (!var.isValid() || var.toString().size() <= 0)
+	return false;
+    dest = buildQChildName(parent->objectName(),var.toString());
+    return true;
+}
+
 // Retrieve the top level QtUIWidget container parent of an object
 QtUIWidget* QtUIWidget::container(QObject* obj)
 {
@@ -4625,6 +4662,14 @@ QWidget* QtUIWidget::loadWidget(QWidget* parent, const String& name, const Strin
 	return 0;
     QObject* qObj = getQObject();
     QtWindow* wnd = getWindow();
+    // Install event filter in parent window
+    if (!m_wndEvHooked && wnd && qObj) {
+	QVariant var = w->property("_yate_keypress_redirect");
+	if (var.isValid()) {
+	    m_wndEvHooked = true;
+	    wnd->installEventFilter(qObj);
+	}
+    }
     String actionSlot;
     String toggleSlot;
     String selectSlot;

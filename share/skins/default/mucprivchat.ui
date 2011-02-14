@@ -18,6 +18,9 @@
   <property name="focusPolicy" >
    <enum>Qt::StrongFocus</enum>
   </property>
+  <property name="_yate_keypress_redirect" stdset="0" >
+   <string>message</string>
+  </property>
   <layout class="QVBoxLayout" >
    <property name="spacing" >
     <number>4</number>
@@ -401,5 +404,22 @@
   <tabstop>message</tabstop>
  </tabstops>
  <resources/>
- <connections/>
+ <connections>
+  <connection>
+   <sender>send_chat_button</sender>
+   <signal>clicked()</signal>
+   <receiver>message</receiver>
+   <slot>setFocus()</slot>
+   <hints>
+    <hint type="sourcelabel" >
+     <x>531</x>
+     <y>285</y>
+    </hint>
+    <hint type="destinationlabel" >
+     <x>249</x>
+     <y>289</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
 </ui>

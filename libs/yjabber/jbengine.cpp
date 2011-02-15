@@ -554,7 +554,7 @@ JBConnect::JBConnect(const JBStream& stream)
     m_engine(stream.engine()), m_stream(stream.toString()),
     m_streamType((JBStream::Type)stream.type())
 {
-    stream.connectAddr(m_address,m_port);
+    stream.connectAddr(m_address,m_port,m_localIp);
     if (m_engine)
 	m_engine->connectStatus(this,true);
 }
@@ -584,6 +584,34 @@ void JBConnect::connect()
 	return;
     Debug(m_engine,DebugAll,"JBConnect(%s) starting [%p]",m_stream.c_str(),this);
     Socket* sock = new Socket(PF_INET,SOCK_STREAM);
+    if (m_localIp) {
+	SocketAddr lip(PF_INET);
+	lip.host(m_localIp);
+	bool ok = false;
+	if (lip.host()) {
+	    ok = sock->bind(lip);
+	    if (!ok) {
+		String tmp;
+		Thread::errorString(tmp,sock->error());
+		Debug(m_engine,DebugNote,
+		    "JBConnect(%s) failed to bind to '%s' (%s). %d %s [%p]",
+		    m_stream.c_str(),lip.host().c_str(),m_localIp.c_str(),
+		    sock->error(),tmp.c_str(),this);
+	    }
+	}
+	else
+	    Debug(m_engine,DebugNote,"JBConnect(%s) invalid local ip '%s' [%p]",
+		m_stream.c_str(),m_localIp.c_str(),this);
+	if (!ok) {
+	    delete sock;
+	    terminated(0,false);
+	    return;
+	}
+	if (exiting(sock))
+	    return;
+	DDebug(m_engine,DebugAll,"JBConnect(%s) bound to '%s' (%s) [%p]",
+	    m_stream.c_str(),lip.host().c_str(),m_localIp.c_str(),this);
+    }
     // Try to use ip/port
     int port = m_port;
     if (!port)
@@ -1266,7 +1294,8 @@ JBServerStream* JBServerEngine::findServerStream(const String& local, const Stri
 
 // Create an outgoing s2s stream.
 JBServerStream* JBServerEngine::createServerStream(const String& local,
-    const String& remote, const char* dbId, const char* dbKey, bool dbOnly)
+    const String& remote, const char* dbId, const char* dbKey, bool dbOnly,
+    const NamedList* params)
 {
     if (exiting()) {
 	Debug(this,DebugAll,"Can't create s2s local=%s remote=%s: engine is exiting",
@@ -1277,7 +1306,7 @@ JBServerStream* JBServerEngine::createServerStream(const String& local,
     if (!dbOnly)
 	stream = findServerStream(local,remote,true);
     if (!stream) {
-	stream = new JBServerStream(this,local,remote,dbId,dbKey,dbOnly);
+	stream = new JBServerStream(this,local,remote,dbId,dbKey,dbOnly,params);
 	stream->ref();
 	addStream(stream);
     }

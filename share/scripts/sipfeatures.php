@@ -288,12 +288,12 @@ function onSubscribe($ev)
     global $chans;
     $event = $ev->GetValue("sip_event");
     $accept = $ev->GetValue("sip_accept");
-    if (($event == "message-summary") && ($accept == "application/simple-message-summary")) {
+    if (($event == "message-summary") && ($accept == "application/simple-message-summary" || $accept == "")) {
 	$s = new MailSub($ev);
 	$s->AddTo($users);
 	Yate::Debug("New mail subscription for " . $s->match);
     }
-    else if (($event == "dialog") && ($accept == "application/dialog-info+xml")) {
+    else if (($event == "dialog") && ($accept == "application/dialog-info+xml" || $accept == "")) {
 	$s = new DialogSub($ev);
 	$s->AddTo($chans);
 	Yate::Debug("New dialog subscription for " . $s->match);

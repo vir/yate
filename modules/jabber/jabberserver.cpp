@@ -305,7 +305,8 @@ public:
     bool sendStanza(XmlElement*& xml, ObjList*& streams);
     // Find a server stream used to send stanzas from local domain to remote
     // Build a new one if not found
-    JBStream* getServerStream(const JabberID& from, const JabberID& to);
+    JBStream* getServerStream(const JabberID& from, const JabberID& to,
+	const NamedList* params = 0);
     // Notify online/offline presence from client streams
     void notifyPresence(JBClientStream& cs, bool online, XmlElement* xml,
 	const String& capsId);
@@ -625,7 +626,7 @@ static YJBEngine* s_jabber = 0;
 
 // Commands help
 static const char* s_cmdStatus = "  status jabber [stream_name|{c2s|s2s} [remote_jid]]";
-static const char* s_cmdCreate = "  jabber create remote_domain [local_domain]";
+static const char* s_cmdCreate = "  jabber create remote_domain [local_domain] [parameter=value...]";
 static const char* s_cmdDropStreamName = "  jabber drop stream_name";
 static const char* s_cmdDropStream = "  jabber drop {c2s|s2s|*|all} [remote_jid]";
 static const char* s_cmdDropAll = "  jabber drop {stream_name|{c2s|s2s|*|all} [remote_jid]}";
@@ -2476,7 +2477,8 @@ bool YJBEngine::sendStanza(XmlElement*& xml, ObjList*& streams)
 
 // Find a server stream used to send stanzas from local domain to remote
 // Build a new one if not found
-JBStream* YJBEngine::getServerStream(const JabberID& from, const JabberID& to)
+JBStream* YJBEngine::getServerStream(const JabberID& from, const JabberID& to,
+    const NamedList* params)
 {
     JBServerStream* s = findServerStream(from.domain(),to.domain(),true);
     if (s)
@@ -2489,7 +2491,7 @@ JBStream* YJBEngine::getServerStream(const JabberID& from, const JabberID& to)
     if (comp)
 	return 0;
     DDebug(this,DebugAll,"getServerStream(%s,%s) creating s2s",from.c_str(),to.c_str());
-    return createServerStream(from.domain(),to.domain());
+    return createServerStream(from.domain(),to.domain(),0,0,false,params);
 }
 
 // Notify online/offline presence from client streams
@@ -3951,18 +3953,45 @@ bool JBModule::commandExecute(String& retVal, const String& line)
 	// Handle s2s stream start
 	String remote;
 	getWord(l,remote);
+	ObjList* list = l.split(' ');
+	ObjList* o = list->skipNull();
 	String local;
-	getWord(l,local);
 	bool hasLocal = true;
-	if (!local)
-	    s_jabber->firstDomain(local);
+	NamedList* params = 0;
+	if (o) {
+	    if (0 >= o->get()->toString().find('=')) {
+		local = o->get()->toString();
+		o = o->skipNext();
+	    }
+	    if (!local)
+		s_jabber->firstDomain(local);
+	    else
+		hasLocal = s_jabber->hasDomain(local);
+	    for (; o; o = o->skipNext()) {
+		const String& s = o->get()->toString();
+		if (!s)
+		    continue;
+		int pos = s.find('=');
+		if (pos < 1) {
+		    Debug(this,DebugNote,"'%s' command ignoring invalid parameter '%s'",
+			word.c_str(),s.c_str());
+		    continue;
+		}
+		if (!params)
+		    params = new NamedList("");
+		params->addParam(s.substr(0,pos),s.substr(pos + 1));
+	    }
+	}
 	else
-	    hasLocal = s_jabber->hasDomain(local);
+	    s_jabber->firstDomain(local);
 	bool hasRemote = s_jabber->hasDomain(remote);
-	Debug(this,DebugAll,"Executing '%s' command local=%s remote=%s",
-	     word.c_str(),local.c_str(),remote.c_str());
+	String tmp;
+	if (params)
+	    params->dump(tmp," ");
+	Debug(this,DebugAll,"Executing '%s' command local=%s remote=%s %s",
+	    word.c_str(),local.c_str(),remote.c_str(),tmp.safe());
 	if (remote && !hasRemote && local && hasLocal) {
-	    JBStream* s = s_jabber->getServerStream(local.c_str(),remote.c_str());
+	    JBStream* s = s_jabber->getServerStream(local.c_str(),remote.c_str(),params);
 	    retVal << (s ? "Success" : "Failure");
 	    TelEngine::destruct(s);
 	}
@@ -3970,6 +3999,8 @@ bool JBModule::commandExecute(String& retVal, const String& line)
 	    retVal << "Invalid remote domain";
 	else
 	    retVal << "Invalid local domain";
+	TelEngine::destruct(list);
+	TelEngine::destruct(params);
     }
     else if (word == "debug") {
 	Debug(this,DebugAll,"Executing '%s' command line=%s",word.c_str(),line.c_str());

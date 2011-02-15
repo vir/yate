@@ -1,3 +1,13 @@
+yate (3.1.1.svn4112) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4112: + Outgoing streams can now be forced
+    to use a specified local ip when connecting.  + Allow specifiying
+    stream parameters in stream create command.  + Accept subscription
+    requests that have no Accept: header, assume NOTIFY body will be
+    accepted anyway.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 16 Feb 2011 02:19:13 +0300
+
 yate (3.1.1.svn4109) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4109: + Do not send back an UPU when

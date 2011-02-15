@@ -196,6 +196,7 @@ JBStream::JBStream(JBEngine* engine, Type t, const JabberID& local, const Jabber
 	setFlags(flgs & StreamFlags);
 	m_connectAddr = params->getValue("server",params->getValue("address"));
 	m_connectPort = params->getIntValue("port");
+	m_localIp = params->getValue("localip");
     }
     else
 	updateFromRemoteDef();
@@ -2802,8 +2803,9 @@ JBServerStream::JBServerStream(JBEngine* engine, Socket* socket, bool component)
 
 // Build an outgoing stream
 JBServerStream::JBServerStream(JBEngine* engine, const JabberID& local,
-    const JabberID& remote, const char* dbId, const char* dbKey, bool dbOnly)
-    : JBStream(engine,s2s,local,remote),
+    const JabberID& remote, const char* dbId, const char* dbKey, bool dbOnly,
+    const NamedList* params)
+    : JBStream(engine,s2s,local,remote,0,params),
     m_remoteDomains(""), m_dbKey(0)
 {
     if (!(TelEngine::null(dbId) || TelEngine::null(dbKey)))

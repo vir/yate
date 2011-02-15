@@ -704,14 +704,16 @@ public:
 	}
 
     /**
-     * Retrieve remote ip/port used to connect to
+     * Retrieve connection address(es) and port
      * This method is not thread safe
-     * @param addr The ip
-     * @param port The port
+     * @param addr The remote ip
+     * @param port The remote port
+     * @param localip Local ip to bind
      */
-    inline void connectAddr(String& addr, int& port) const {
+    inline void connectAddr(String& addr, int& port, String& localip) const {
 	    addr = m_connectAddr;
 	    port = m_connectPort;
+	    localip = m_localIp;
 	}
 
     /**
@@ -1266,6 +1268,7 @@ private:
     Mutex m_socketMutex;                 // Protect the socket and parser
     String m_connectAddr;                // Remote ip to connect to
     int m_connectPort;                   // Remote port to connect to
+    String m_localIp;                    // Local ip to bind when connecting
     Compressor* m_compress;
 };
 
@@ -1452,9 +1455,11 @@ public:
      * @param dbId Optional dialback id (stream id)
      * @param dbKey Optional dialback key to verify
      * @param dbOnly True if this is a dialback only stream
+     * @param params Optional stream parameters
      */
     JBServerStream(JBEngine* engine, const JabberID& local, const JabberID& remote,
-	const char* dbId = 0, const char* dbKey = 0, bool dbOnly = false);
+	const char* dbId = 0, const char* dbKey = 0, bool dbOnly = false,
+	const NamedList* params = 0);
 
     /**
      * Check if this is an outgoing dialback stream
@@ -1704,6 +1709,7 @@ private:
     JBEngine* m_engine;                  // The engine owning this connector
     String m_stream;                     // Stream name
     JBStream::Type m_streamType;         // Stream type
+    String m_localIp;                    // Local ip to bind when connecting
 };
 
 
@@ -2077,10 +2083,12 @@ public:
      * @param dbId Optional dialback id (stream id)
      * @param dbKey Optional dialback key to verify
      * @param dbOnly True if this is a dialback only stream
+     * @param params Optional stream parameters
      * @return Referenced JBServerStream pointer or 0 if a stream already exists
      */
     JBServerStream* createServerStream(const String& local, const String& remote,
-	const char* dbId = 0, const char* dbKey = 0, bool dbOnly = false);
+	const char* dbId = 0, const char* dbKey = 0, bool dbOnly = false,
+	const NamedList* params = 0);
 
     /**
      * Terminate all incoming c2s streams matching a given JID

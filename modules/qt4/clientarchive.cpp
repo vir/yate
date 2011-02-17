@@ -826,24 +826,14 @@ bool ChatFile::loadSession(const String& id, ObjList& list, String* error,
 		break;
 	    n = find2Null((unsigned char*)buf.data(),buf.length());
 	}
-	if (!find && ok)
+	if (find && ok)
 	    break;
     }
     if (!exiting()) {
-	if (hdrFound && buf.length() && processed < s->m_length) {
-	    ChatItem* entry = 0;
-	    if (!(find && ok))
-		entry = decodeChat(find,s->m_offset + processed,buf.data(),buf.length());
-	    if (entry) {
-		if (!find)
-		    list.append(entry);
-		else {
-		    int pos = entry->m_search.indexOf(*search,0,cs);
-		    TelEngine::destruct(entry);
-		    ok = (pos >= 0);
-		}
-	    }
-	}
+	if (processed < s->m_length && !(find && ok))
+	    Debug(ClientDriver::self(),DebugNote,
+		"File '%s' unexpected end of session at offset " FMT64U,
+		m_full.c_str(),s->m_offset + processed);
     }
     else
 	list.clear();

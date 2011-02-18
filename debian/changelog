@@ -1,3 +1,15 @@
+yate (3.1.1.svn4118) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4118: + This allows proper dynamic addition
+    of links in existing sessions.  + Start a newly created Cisco SLT
+    link if its Session is already operational.  + Added conversion
+    methods between NamedList parameters and XmlElement objects.  +
+    Added cluster stream.  + Authentication username can now be
+    configured for sip accounts.  + Added possibility for pbxassist to
+    match pseudostate "first" - on first key(s) processed.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 19 Feb 2011 02:19:22 +0300
+
 yate (3.1.1.svn4113) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4113: + Fixed bug: exit read file loop when

@@ -33,7 +33,8 @@ class YPBX_API PBXAssist : public ChanAssist
 {
 public:
     inline PBXAssist(ChanAssistList* list, const String& id, bool pass, bool guest)
-	: ChanAssist(list,id), m_last(0), m_pass(pass), m_guest(guest),
+	: ChanAssist(list,id),
+	  m_last(0), m_pass(pass), m_guest(guest), m_first(true),
 	  m_state("new"), m_keep("")
 	{ Debug(list,DebugCall,"Created%s assistant for '%s'",guest ? " guest" : "",id.c_str()); }
     virtual void msgStartup(Message& msg);
@@ -57,6 +58,7 @@ protected:
     u_int64_t m_last;
     bool m_pass;
     bool m_guest;
+    bool m_first;
     String m_tones;
     String m_peer1;
     String m_room;
@@ -469,6 +471,8 @@ bool PBXAssist::msgTone(Message& msg)
 	return true;
 
     Lock lock(list());
+    bool first = m_first;
+    m_first = false;
     int n = s_cfg.sections();
     for (int i = 0; i < n; i++) {
 	NamedList* sect = s_cfg.getSection(i);
@@ -485,7 +489,7 @@ bool PBXAssist::msgTone(Message& msg)
 	tmp = sect->getValue("pbxstates");
 	if (tmp) {
 	    Regexp st(tmp);
-	    if (!st.matches(state()))
+	    if (!(st.matches(state()) || (first && st.matches("first"))))
 		continue;
 	}
 

@@ -236,6 +236,7 @@ const String XMPPNamespace::s_array[Count] = {
     "http://jabber.org/features/compress",                 // CompressFeature
     "jabber:x:data",                                       // XData
     "http://jabber.org/protocol/chatstates",               // ChatStates
+    "http://yate.null.ro/yate/cluster",                    // YateCluster
 };
 
 const String XMPPError::s_array[Count] = {
@@ -444,27 +445,6 @@ const TokenDict XMPPDirVal::s_names[] = {
     {"pending_out", PendingOut},
     {0,0},
 };
-
-
-// Compare 2 Strings. Return -1 if s1<s2, 1 if s1>s2 or 0
-static inline int cmpBytes(const String& s1, const String& s2)
-{
-    if (s1 && s2) {
-	if (s1.length() == s2.length())
-	    return ::memcmp(s1.c_str(),s2.c_str(),s1.length());
-	if (s1.length() < s2.length()) {
-	    int res = ::memcmp(s1.c_str(),s2.c_str(),s1.length());
-	    if (res)
-		return res;
-	    return -1;
-	}
-	int res = ::memcmp(s1.c_str(),s2.c_str(),s2.length());
-	return res ? res : 1;
-    }
-    if (s1 || s2)
-	return s1 ? 1 : -1;
-    return 0;
-}
 
 
 /*
@@ -826,7 +806,7 @@ void XMPPFeatureList::updateEntityCaps()
 	for (; oi; oi = oi->skipNext()) {
 	    JIDIdentity* crt = static_cast<JIDIdentity*>(oi->get());
 	    #define CMP_IDENT(a,b) { \
-		int res = cmpBytes(a,b); \
+		int res = XMPPUtils::cmpBytes(a,b); \
 		if (res == -1) \
 		    break; \
 		if (res == 1) \
@@ -853,7 +833,7 @@ void XMPPFeatureList::updateEntityCaps()
 	ObjList* of = f.skipNull();
 	for (; of; of = of->skipNext()) {
 	    String* crt = static_cast<String*>(of->get());
-	    if (cmpBytes(*feature,*crt) == -1)
+	    if (XMPPUtils::cmpBytes(*feature,*crt) == -1)
 		break;
 	}
 	if (of)
@@ -1736,6 +1716,26 @@ XmlElement* XMPPUtils::getChatXml(NamedList& list, const char* param,
     if (state && XmlSaxParser::validTag(state))
 	xml->addChild(createElement(state,XMPPNamespace::ChatStates));
     return xml;
+}
+
+// Compare 2 Strings. Return -1 if s1<s2, 1 if s1>s2 or 0
+int XMPPUtils::cmpBytes(const String& s1, const String& s2)
+{
+    if (s1 && s2) {
+	if (s1.length() == s2.length())
+	    return ::memcmp(s1.c_str(),s2.c_str(),s1.length());
+	if (s1.length() < s2.length()) {
+	    int res = ::memcmp(s1.c_str(),s2.c_str(),s1.length());
+	    if (res)
+		return res;
+	    return -1;
+	}
+	int res = ::memcmp(s1.c_str(),s2.c_str(),s2.length());
+	return res ? res : 1;
+    }
+    if (s1 || s2)
+	return s1 ? 1 : -1;
+    return 0;
 }
 
 // Parse a string to an XmlElement

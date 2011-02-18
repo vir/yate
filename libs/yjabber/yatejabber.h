@@ -36,6 +36,7 @@ class JBEvent;                           // A Jabber event
 class JBStream;                          // A Jabber stream
 class JBClientStream;                    // A client to server stream
 class JBServerStream;                    // A server to server stream
+class JBClusterStream;                   // A cluster stream
 class JBRemoteDomainDef;                 // Options and connect settings for a remote domain
 class JBConnect;                         // A socket connector
 class JBEngine;                          // A Jabber engine
@@ -362,6 +363,12 @@ public:
     JBServerStream* serverStream();
 
     /**
+     * Get a cluster stream from event's stream
+     * @return JBClusterStream pointer or 0
+     */
+    JBClusterStream* clusterStream();
+
+    /**
      * Get the underlying XmlElement
      * @return XmlElement pointer or 0
      */
@@ -473,6 +480,7 @@ public:
 	c2s = 0,                         // Client to server
 	s2s,                             // Server to server
 	comp,                            // External component
+	cluster,                         // Cluster stream
 	TypeCount                        // Unknown
     };
 
@@ -753,6 +761,13 @@ public:
      * @return JBServerStream pointer or 0
      */
     virtual JBServerStream* serverStream()
+	{ return 0; }
+
+    /**
+     * Get a cluster stream from this one
+     * @return JBClusterStream pointer
+     */
+    virtual JBClusterStream* clusterStream()
 	{ return 0; }
 
     /**
@@ -1618,6 +1633,68 @@ private:
 
 
 /**
+ * This class holds a cluster stream
+ * @short A cluster stream
+ */
+class YJABBER_API JBClusterStream : public JBStream
+{
+    YCLASS(JBClusterStream,JBStream)
+    friend class JBStream;
+public:
+    /**
+     * Constructor. Build an incoming stream from a socket
+     * @param engine Engine owning this stream
+     * @param socket The socket
+     */
+    JBClusterStream(JBEngine* engine, Socket* socket);
+
+    /**
+     * Constructor. Build an outgoing stream
+     * @param engine Engine owning this stream
+     * @param local Local party jabber id
+     * @param remote Remote party jabber id
+     * @param params Optional stream parameters
+     */
+    JBClusterStream(JBEngine* engine, const JabberID& local, const JabberID& remote,
+	const NamedList* params = 0);
+
+    /**
+     * Get a cluster stream from this one
+     * @return JBClusterStream pointer
+     */
+    virtual JBClusterStream* clusterStream()
+	{ return this; }
+
+protected:
+    /**
+     * Build a stream start XML element
+     * @return XmlElement pointer
+     */
+    virtual XmlElement* buildStreamStart();
+
+    /**
+     * Process stream start elements while waiting for them
+     * @param xml Received xml element
+     * @param from The 'from' attribute
+     * @param to The 'to' attribute
+     * @return False if stream termination was initiated
+     */
+    virtual bool processStart(const XmlElement* xml, const JabberID& from,
+	const JabberID& to);
+
+    /**
+     * Process elements in Running state
+     * @param xml Received element (will be consumed)
+     * @param from Already parsed source JID
+     * @param to Already parsed destination JID
+     * @return False if stream termination was initiated
+     */
+    virtual bool processRunning(XmlElement* xml, const JabberID& from,
+	const JabberID& to);
+};
+
+
+/**
  * This class holds data related to a remote domain.
  * The String holds the domain
  * @short Options and connect settings for a remote domain
@@ -1994,6 +2071,8 @@ protected:
 		getStreamList(list[JBStream::s2s],JBStream::s2s);
 	    if (type == JBStream::comp || type == JBStream::TypeCount)
 		getStreamList(list[JBStream::comp],JBStream::comp);
+	    if (type == JBStream::cluster || type == JBStream::TypeCount)
+		getStreamList(list[JBStream::cluster],JBStream::cluster);
 	}
 
     /**
@@ -2091,6 +2170,26 @@ public:
 	const NamedList* params = 0);
 
     /**
+     * Find a cluster stream by remote domain.
+     * This method is thread safe
+     * @param remote Remote jid
+     * @param skip Optional stream to skip
+     * @return Referenced JBClusterStream pointer or 0
+     */
+    JBClusterStream* findClusterStream(const String& remote, JBClusterStream* skip = 0);
+
+    /**
+     * Create an outgoing cluster stream.
+     * This method is thread safe
+     * @param local Local party domain
+     * @param remote Remote party domain
+     * @param params Optional stream parameters
+     * @return Referenced JBClusterStream pointer or 0 if a stream already exists
+     */
+    virtual JBClusterStream* createClusterStream(const String& local,
+	const String& remote, const NamedList* params = 0);
+
+    /**
      * Terminate all incoming c2s streams matching a given JID
      * This method is thread safe
      * @param jid Client JID
@@ -2130,6 +2229,15 @@ protected:
     virtual void getStreamList(RefPointer<JBStreamSetList>& list, int type);
 
     /**
+     * Retrieve the stream lists of a given type
+     * @param type Stream type
+     * @param recv Receive stream list to set
+     * @param process Process stream list to set
+     */
+    virtual void getStreamListsType(int type, RefPointer<JBStreamSetList>& recv,
+	RefPointer<JBStreamSetList>& process);
+
+    /**
      * Increment and return the stream index counter
      * @return Current stream index
      */
@@ -2145,6 +2253,8 @@ protected:
     JBStreamSetList* m_s2sProcess;       // s2s streams process list
     JBStreamSetList* m_compReceive;      // comp streams receive list
     JBStreamSetList* m_compProcess;      // comp streams process list
+    JBStreamSetList* m_clusterReceive;   // cluster streams receive list
+    JBStreamSetList* m_clusterProcess;   // cluster streams process list
 };
 
 /**

@@ -226,6 +226,7 @@ public:
 	CompressFeature,                 // http://jabber.org/features/compress
 	XData,                           // jabber:x:data
 	ChatStates,                      // http://jabber.org/protocol/chatstates
+	YateCluster,                     // http://yate.null.ro/yate/cluster
 	// This value MUST be the last one: it's used as array bound
 	Count,
     };
@@ -1930,6 +1931,14 @@ public:
      */
     static XmlElement* getChatXml(NamedList& list, const char* param = "xml",
 	const char* extra = "data", bool build = true);
+
+    /**
+     * Byte compare 2 strings.
+     * @param s1 The first string
+     * @param s2 The second string
+     * @return Return -1 if s1 < s2, 1 if s1 > s2 or 0 if the 2 strings are equal
+     */
+    static int cmpBytes(const String& s1, const String& s2);
 
     /**
      * Get the type of a 'presence' stanza as enumeration

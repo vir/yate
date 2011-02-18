@@ -753,7 +753,7 @@ p, li { white-space: pre-wrap; }
                <enum>QFrame::NoFrame</enum>
               </property>
               <property name="currentIndex" >
-               <number>1</number>
+               <number>2</number>
               </property>
               <widget class="QWidget" name="acc_proto_cfg_default" >
                <layout class="QVBoxLayout" >
@@ -807,6 +807,92 @@ p, li { white-space: pre-wrap; }
                   </item>
                   <item>
                    <widget class="QLineEdit" name="acc_proto_default_server" >
+                    <property name="minimumSize" >
+                     <size>
+                      <width>0</width>
+                      <height>23</height>
+                     </size>
+                    </property>
+                    <property name="maximumSize" >
+                     <size>
+                      <width>16777215</width>
+                      <height>23</height>
+                     </size>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </item>
+                <item>
+                 <spacer>
+                  <property name="orientation" >
+                   <enum>Qt::Vertical</enum>
+                  </property>
+                  <property name="sizeHint" >
+                   <size>
+                    <width>20</width>
+                    <height>40</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+               </layout>
+              </widget>
+              <widget class="QWidget" name="acc_proto_cfg_sip" >
+               <layout class="QVBoxLayout" >
+                <property name="spacing" >
+                 <number>6</number>
+                </property>
+                <property name="leftMargin" >
+                 <number>0</number>
+                </property>
+                <property name="topMargin" >
+                 <number>0</number>
+                </property>
+                <property name="rightMargin" >
+                 <number>0</number>
+                </property>
+                <property name="bottomMargin" >
+                 <number>0</number>
+                </property>
+                <item>
+                 <layout class="QHBoxLayout" >
+                  <property name="spacing" >
+                   <number>2</number>
+                  </property>
+                  <property name="topMargin" >
+                   <number>2</number>
+                  </property>
+                  <property name="rightMargin" >
+                   <number>2</number>
+                  </property>
+                  <item>
+                   <widget class="QLabel" name="label_19" >
+                    <property name="sizePolicy" >
+                     <sizepolicy vsizetype="Preferred" hsizetype="Fixed" >
+                      <horstretch>0</horstretch>
+                      <verstretch>0</verstretch>
+                     </sizepolicy>
+                    </property>
+                    <property name="minimumSize" >
+                     <size>
+                      <width>86</width>
+                      <height>0</height>
+                     </size>
+                    </property>
+                    <property name="maximumSize" >
+                     <size>
+                      <width>86</width>
+                      <height>16777215</height>
+                     </size>
+                    </property>
+                    <property name="text" >
+                     <string>Server:</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QLineEdit" name="acc_proto_sip_server" >
                     <property name="minimumSize" >
                      <size>
                       <width>0</width>
@@ -1005,7 +1091,7 @@ p, li { white-space: pre-wrap; }
             <enum>QFrame::Sunken</enum>
            </property>
            <property name="currentIndex" >
-            <number>2</number>
+            <number>0</number>
            </property>
            <widget class="QWidget" name="acc_proto_advanced_none" >
             <layout class="QVBoxLayout" >
@@ -1030,22 +1116,191 @@ p, li { white-space: pre-wrap; }
              </item>
             </layout>
            </widget>
+           <widget class="QWidget" name="acc_proto_advanced_sip" >
+            <layout class="QVBoxLayout" >
+             <property name="spacing" >
+              <number>2</number>
+             </property>
+             <property name="leftMargin" >
+              <number>6</number>
+             </property>
+             <property name="topMargin" >
+              <number>6</number>
+             </property>
+             <property name="rightMargin" >
+              <number>6</number>
+             </property>
+             <property name="bottomMargin" >
+              <number>4</number>
+             </property>
+             <item>
+              <widget class="QLabel" name="label_22" >
+               <property name="sizePolicy" >
+                <sizepolicy vsizetype="Preferred" hsizetype="Fixed" >
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <property name="minimumSize" >
+                <size>
+                 <width>66</width>
+                 <height>0</height>
+                </size>
+               </property>
+               <property name="maximumSize" >
+                <size>
+                 <width>66</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+               <property name="text" >
+                <string>Domain:</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLineEdit" name="acc_proto_sip_domain" >
+               <property name="sizePolicy" >
+                <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <property name="minimumSize" >
+                <size>
+                 <width>0</width>
+                 <height>23</height>
+                </size>
+               </property>
+               <property name="maximumSize" >
+                <size>
+                 <width>16777215</width>
+                 <height>23</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="label_23" >
+               <property name="text" >
+                <string>Outbound proxy:</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLineEdit" name="acc_proto_sip_outbound" >
+               <property name="sizePolicy" >
+                <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <property name="minimumSize" >
+                <size>
+                 <width>120</width>
+                 <height>23</height>
+                </size>
+               </property>
+               <property name="maximumSize" >
+                <size>
+                 <width>16777215</width>
+                 <height>23</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="label_20" >
+               <property name="text" >
+                <string>Registration Interval:</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLineEdit" name="acc_proto_sip_interval" >
+               <property name="sizePolicy" >
+                <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <property name="minimumSize" >
+                <size>
+                 <width>120</width>
+                 <height>23</height>
+                </size>
+               </property>
+               <property name="maximumSize" >
+                <size>
+                 <width>16777215</width>
+                 <height>23</height>
+                </size>
+               </property>
+               <property name="alignment" >
+                <set>Qt::AlignLeading</set>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="label_21" >
+               <property name="text" >
+                <string>Authentication username:</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLineEdit" name="acc_proto_sip_authname" >
+               <property name="sizePolicy" >
+                <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <property name="minimumSize" >
+                <size>
+                 <width>120</width>
+                 <height>23</height>
+                </size>
+               </property>
+               <property name="maximumSize" >
+                <size>
+                 <width>16777215</width>
+                 <height>23</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer>
+               <property name="orientation" >
+                <enum>Qt::Vertical</enum>
+               </property>
+               <property name="sizeHint" >
+                <size>
+                 <width>20</width>
+                 <height>40</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+            </layout>
+           </widget>
            <widget class="QWidget" name="acc_proto_advanced_jabber" >
             <layout class="QVBoxLayout" >
              <property name="spacing" >
-              <number>13</number>
+              <number>8</number>
              </property>
              <property name="leftMargin" >
-              <number>10</number>
+              <number>6</number>
              </property>
              <property name="topMargin" >
-              <number>10</number>
+              <number>6</number>
              </property>
              <property name="rightMargin" >
-              <number>10</number>
+              <number>6</number>
              </property>
              <property name="bottomMargin" >
-              <number>10</number>
+              <number>4</number>
              </property>
              <item>
               <widget class="QGroupBox" name="acc_proto_jabber_opt" >
@@ -1282,19 +1537,19 @@ p, li { white-space: pre-wrap; }
             </property>
             <layout class="QVBoxLayout" >
              <property name="spacing" >
-              <number>4</number>
+              <number>2</number>
              </property>
              <property name="leftMargin" >
-              <number>10</number>
+              <number>6</number>
              </property>
              <property name="topMargin" >
-              <number>10</number>
+              <number>6</number>
              </property>
              <property name="rightMargin" >
-              <number>10</number>
+              <number>6</number>
              </property>
              <property name="bottomMargin" >
-              <number>10</number>
+              <number>4</number>
              </property>
              <item>
               <widget class="QLabel" name="label_7" >

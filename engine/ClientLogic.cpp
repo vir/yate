@@ -389,7 +389,8 @@ static const String s_accBoolParams[] = {
 };
 // Account protocol dependent parameters
 static const String s_accProtoParams[] = {
-    "server", "domain", "outbound", "options", "resource", "port", "interval", ""
+    "server", "domain", "outbound", "options", "resource", "port", "interval",
+    "authname", ""
 };
 // Resource status images
 static const TokenDict s_statusImage[] = {
@@ -451,6 +452,7 @@ static bool s_changingDockedChat = false;
 static ObjList s_pendingChat;
 // Miscellaneous
 static const String s_jabber = "jabber";
+static const String s_sip = "sip";
 static const String s_gmailDomain = "gmail.com";
 static const String s_googleDomain = "google.com";
 static const String s_fileOpenSendPrefix = "send_fileopen:";
@@ -544,6 +546,8 @@ static const String& getProtoPage(const String& proto)
     static const String s_none = "none";
     if (proto == s_jabber)
 	return s_jabber;
+    if (proto == s_sip)
+	return s_sip;
     if (proto)
 	return s_default;
     return s_none;

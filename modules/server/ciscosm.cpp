@@ -246,6 +246,8 @@ public:
     void handleSmMessage(u_int32_t smMessageType);
     // Inform all users about session manager status change
     void informUser(bool up);
+    inline bool operational() const
+	{ return Operational == m_state; }
     static inline const char* stateName(State s)
 	{ return lookup((int)s,s_smStates); }
     void changeState(State newState);
@@ -1595,8 +1597,11 @@ SLT::SLT(const String& name, const NamedList& param)
     m_printMsg = param.getBoolValue("printslt",false);
     m_autoEmergency = param.getBoolValue("autoemergency",true);
     m_autostart = param.getBoolValue("autostart",true);
-    if (m_autostart)
+    if (m_autostart) {
 	m_reqStatus = NormalAlignment;
+	if (m_session && m_session->operational())
+	    configure(true);
+    }
 }
 
 SLT::~SLT()

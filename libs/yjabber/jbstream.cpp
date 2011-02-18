@@ -129,6 +129,7 @@ const TokenDict JBStream::s_typeName[] = {
     {"c2s",      c2s},
     {"s2s",      s2s},
     {"comp",     comp},
+    {"cluster",  cluster},
     {0,0}
 };
 
@@ -570,6 +571,8 @@ void JBStream::start(XMPPFeatureList* features, XmlElement* caps, bool useVer1)
 	    setFlags(StreamSecured);
 	    serverStream()->sendDialback();
 	}
+	else if (m_type == cluster)
+	    changeState(Features);
 	else
 	    DDebug(this,DebugStub,"JBStream::start() not handled for type=%s",typeName());
 	return;
@@ -611,6 +614,11 @@ void JBStream::start(XMPPFeatureList* features, XmlElement* caps, bool useVer1)
 	    newState = Running;
     }
     else if (m_type == s2s) {
+	// Change stream state to Running if authenticated and features list is empty
+	if (flag(StreamAuthenticated) && !m_features.skipNull())
+	    newState = Running;
+    }
+    else if (m_type == cluster) {
 	// Change stream state to Running if authenticated and features list is empty
 	if (flag(StreamAuthenticated) && !m_features.skipNull())
 	    newState = Running;
@@ -1217,7 +1225,7 @@ bool JBStream::processStreamStart(const XmlElement* xml)
     XMPPError::Type error = XMPPError::NoError;
     const char* reason = 0;
     while (true) {
-	if (m_type != c2s && m_type != s2s && m_type != comp) {
+	if (m_type != c2s && m_type != s2s && m_type != comp && m_type != cluster) {
 	    Debug(this,DebugStub,"processStreamStart() type %u not handled!",m_type);
 	    error = XMPPError::Internal;
 	    break;
@@ -1446,6 +1454,8 @@ bool JBStream::checkStanzaRecv(XmlElement* xml, JabberID& from, JabberID& to)
 		return false;
 	    }
 	    break;
+	case cluster:
+	    break;
 	default:
 	    Debug(this,DebugStub,"checkStanzaRecv() unhandled stream type=%s [%p]",
 		typeName(),this);
@@ -1480,7 +1490,7 @@ void JBStream::changeState(State newState, u_int64_t time)
     }
     switch (newState) {
 	case WaitStart:
-	    if (m_engine->m_setupTimeout)
+	    if (m_engine->m_setupTimeout && m_type != cluster)
 		m_setupTimeout = time + timerMultiplier(this) * m_engine->m_setupTimeout;
 	    else
 		m_setupTimeout = 0;
@@ -1818,7 +1828,8 @@ void JBStream::resetFlags(int mask)
 void JBStream::setIdleTimer(u_int64_t msecNow)
 {
     // Set only for non c2s in Running state
-    if (m_type == c2s || m_state != Running || !m_engine->m_idleTimeout)
+    if (m_type == c2s || m_type == cluster || m_state != Running ||
+	!m_engine->m_idleTimeout)
 	return;
     m_idleTimeout = msecNow + m_engine->m_idleTimeout;
     XDebug(this,DebugAll,"Idle timeout set to " FMT64 "ms [%p]",m_idleTimeout,this);
@@ -2219,7 +2230,8 @@ bool JBStream::processFeaturesOut(XmlElement* xml, const JabberID& from,
 	return client->bind();
     }
     JBServerStream* server = serverStream();
-    if (server) {
+    JBClusterStream* cluster = clusterStream();
+    if (server || cluster) {
 	TelEngine::destruct(xml);
 	changeState(Running);
 	return true;
@@ -2280,6 +2292,9 @@ void JBStream::setXmlns()
 	    break;
 	case comp:
 	    m_xmlns = XMPPNamespace::ComponentAccept;
+	    break;
+	case cluster:
+	    m_xmlns = XMPPNamespace::YateCluster;
 	    break;
     }
 }
@@ -2983,7 +2998,7 @@ bool JBServerStream::processStart(const XmlElement* xml, const JabberID& from,
     XDebug(this,DebugAll,"JBServerStream::processStart() [%p]",this);
 
     if (!processStreamStart(xml))
-	return true;
+	return false;
 
     if (type() == comp) {
 	if (incoming()) {
@@ -3107,6 +3122,98 @@ bool JBServerStream::processDbResult(XmlElement* xml, const JabberID& from,
     JBEvent* ev = new JBEvent(JBEvent::DbResult,this,xml,from,to);
     ev->m_text = key;
     m_events.append(ev);
+    return true;
+}
+
+
+/*
+ * JBClusterStream
+ */
+// Build an incoming stream from a socket
+JBClusterStream::JBClusterStream(JBEngine* engine, Socket* socket)
+    : JBStream(engine,socket,cluster)
+{
+}
+
+// Build an outgoing stream
+JBClusterStream::JBClusterStream(JBEngine* engine, const JabberID& local,
+    const JabberID& remote, const NamedList* params)
+    : JBStream(engine,cluster,local,remote,0,params)
+{
+}
+
+// Build a stream start XML element
+XmlElement* JBClusterStream::buildStreamStart()
+{
+    XmlElement* start = new XmlElement(XMPPUtils::s_tag[XmlTag::Stream],false);
+    if (incoming())
+	start->setAttribute("id",m_id);
+    XMPPUtils::setStreamXmlns(*start);
+    start->setAttribute(XmlElement::s_ns,XMPPUtils::s_ns[m_xmlns]);
+    start->setAttributeValid("from",m_local);
+    start->setAttributeValid("to",m_remote);
+    start->setAttribute("version","1.0");
+    start->setAttribute("xml:lang","en");
+    return start;
+}
+
+// Process received elements in WaitStart state
+// WaitStart: Incoming: waiting for stream start
+//            Outgoing: idem (our stream start was already sent)
+// Return false if stream termination was initiated
+bool JBClusterStream::processStart(const XmlElement* xml, const JabberID& from,
+    const JabberID& to)
+{
+    XDebug(this,DebugAll,"JBClusterStream::processStart() [%p]",this);
+    if (!processStreamStart(xml))
+	return false;
+    // Check from/to
+    bool ok = true;
+    if (outgoing())
+	ok = (m_local == to) && (m_remote == from);
+    else {
+	if (!m_remote) {
+	    m_local = to;
+	    m_remote = from;
+	    ok = from && to;
+	}
+	else
+	    ok = (m_local == to) && (m_remote == from);
+    }
+    if (!ok) {
+	Debug(this,DebugNote,"Got invalid from='%s' or to='%s' in stream start [%p]",
+	    from.c_str(),to.c_str(),this);
+	terminate(0,true,0,XMPPError::BadAddressing);
+	return false;
+    }
+    m_events.append(new JBEvent(JBEvent::Start,this,0,m_remote,m_local));
+    return true;
+}
+
+// Process elements in Running state
+bool JBClusterStream::processRunning(XmlElement* xml, const JabberID& from, const JabberID& to)
+{
+    if (!xml)
+	return true;
+    int t, ns;
+    if (!XMPPUtils::getTag(*xml,t,ns))
+	return dropXml(xml,"failed to retrieve element tag");
+    JBEvent::Type evType = JBEvent::Unknown;
+    XmlElement* child = 0;
+    switch (t) {
+	case XmlTag::Iq:
+	    evType = JBEvent::Iq;
+	    child = xml->findFirstChild();
+	    break;
+	case XmlTag::Message:
+	    evType = JBEvent::Message;
+	    break;
+	case XmlTag::Presence:
+	    evType = JBEvent::Presence;
+	    break;
+	default: ;
+    }
+    m_events.append(new JBEvent(evType,this,xml,m_remote,m_local,child));
     return true;
 }
 

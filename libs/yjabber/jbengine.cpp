@@ -614,8 +614,19 @@ void JBConnect::connect()
     }
     // Try to use ip/port
     int port = m_port;
-    if (!port)
-	port = (m_streamType == JBStream::c2s) ? XMPP_C2S_PORT : XMPP_S2S_PORT;
+    if (!port) {
+	if (m_streamType == JBStream::c2s)
+	    port = XMPP_C2S_PORT;
+	else if (m_streamType == JBStream::s2s)
+	    port = XMPP_S2S_PORT;
+	else {
+	    Debug(m_engine,DebugNote,"JBConnect(%s) no port for cluster stream [%p]",
+		m_stream.c_str(),this);
+	    delete sock;
+	    terminated(0,false);
+	    return;
+	}
+    }
     if (m_address && connect(sock,m_address,port)) {
 	terminated(sock,false);
 	return;
@@ -628,7 +639,7 @@ void JBConnect::connect()
 	terminated(0,false);
 	return;
     }
-    if (!m_port) {
+    if (!m_port && (m_streamType == JBStream::c2s || m_streamType == JBStream::s2s)) {
 	// Get SRV records from remote party
 	String query;
 	if (m_streamType == JBStream::c2s)
@@ -857,6 +868,8 @@ bool JBEngine::acceptConn(Socket* sock, SocketAddr& remote, JBStream::Type t, bo
 	s = new JBServerStream(this,sock,false);
     else if (t == JBStream::comp)
 	s = new JBServerStream(this,sock,true);
+    else if (t == JBStream::cluster)
+	s = new JBClusterStream(this,sock);
     if (s)
 	addStream(s);
     else
@@ -1194,7 +1207,7 @@ JBServerEngine::JBServerEngine(const char* name)
     : JBEngine(name),
     m_streamIndex(0),
     m_c2sReceive(0), m_c2sProcess(0), m_s2sReceive(0), m_s2sProcess(0),
-    m_compReceive(0), m_compProcess(0)
+    m_compReceive(0), m_compProcess(0), m_clusterReceive(0), m_clusterProcess(0)
 {
 }
 
@@ -1217,6 +1230,8 @@ void JBServerEngine::cleanup(bool final, bool waitTerminate)
     TelEngine::destruct(m_s2sProcess);
     TelEngine::destruct(m_compReceive);
     TelEngine::destruct(m_compProcess);
+    TelEngine::destruct(m_clusterReceive);
+    TelEngine::destruct(m_clusterProcess);
 }
 
 // Stop all stream sets
@@ -1225,13 +1240,15 @@ void JBServerEngine::stopStreamSets(bool waitTerminate)
     XDebug(this,DebugAll,"JBServerEngine::stopStreamSets() wait=%s",
 	String::boolText(waitTerminate));
     lock();
-    RefPointer<JBStreamSetList> sets[6] = {m_c2sReceive,m_c2sProcess,
-	m_s2sReceive,m_s2sProcess,m_compReceive,m_compProcess};
+    RefPointer<JBStreamSetList> sets[] = {m_c2sReceive,m_c2sProcess,
+	m_s2sReceive,m_s2sProcess,m_compReceive,m_compProcess,
+	m_clusterReceive,m_clusterProcess};
     unlock();
-    for (int i = 0; i < 6; i++)
+    int n = 2 * JBStream::TypeCount;
+    for (int i = 0; i < n; i++)
 	if (sets[i])
 	    sets[i]->stop(0,waitTerminate);
-    for (int j = 0; j < 6; j++)
+    for (int j = 0; j < n; j++)
 	sets[j] = 0;
 }
 
@@ -1245,6 +1262,30 @@ void JBServerEngine::getStreamList(RefPointer<JBStreamSetList>& list, int type)
 	list = m_s2sReceive;
     else if (type == JBStream::comp)
 	list = m_compReceive;
+    else if (type == JBStream::cluster)
+	list = m_clusterReceive;
+}
+
+// Retrieve the stream lists of a given type
+void JBServerEngine::getStreamListsType(int type, RefPointer<JBStreamSetList>& recv,
+    RefPointer<JBStreamSetList>& process)
+{
+    if (type == JBStream::c2s) {
+	recv = m_c2sReceive;
+	process = m_c2sProcess;
+    }
+    else if (type == JBStream::s2s) {
+	recv = m_s2sReceive;
+	process = m_s2sProcess;
+    }
+    else if (type == JBStream::comp) {
+	recv = m_compReceive;
+	process = m_compProcess;
+    }
+    else if (type == JBStream::cluster) {
+	recv = m_clusterReceive;
+	process = m_clusterProcess;
+    }
 }
 
 // Find a server to server or component stream by local/remote domain.
@@ -1315,6 +1356,55 @@ JBServerStream* JBServerEngine::createServerStream(const String& local,
     return stream;
 }
 
+// Find a cluster stream by remote domain
+JBClusterStream* JBServerEngine::findClusterStream(const String& remote,
+    JBClusterStream* skip)
+{
+    if (!remote)
+	return 0;
+    lock();
+    RefPointer<JBStreamSetList> list = m_clusterReceive;
+    unlock();
+    JBClusterStream* stream = 0;
+    list->lock();
+    for (ObjList* o = list->sets().skipNull(); o; o = o->skipNext()) {
+	JBStreamSet* set = static_cast<JBStreamSet*>(o->get());
+	for (ObjList* s = set->clients().skipNull(); s; s = s->skipNext()) {
+	    stream = static_cast<JBClusterStream*>(s->get());
+	    if (skip != stream) {
+		Lock lock(stream);
+		if (stream->state() != JBStream::Destroy &&
+		    remote == stream->remote()) {
+		    stream->ref();
+		    break;
+		}
+	    }
+	    stream = 0;
+	}
+    }
+    list->unlock();
+    list = 0;
+    return stream;
+}
+
+// Create an outgoing cluster stream
+JBClusterStream* JBServerEngine::createClusterStream(const String& local,
+    const String& remote, const NamedList* params)
+{
+    if (exiting()) {
+	Debug(this,DebugAll,"Can't create cluster local=%s remote=%s: engine is exiting",
+	    local.c_str(),remote.c_str());
+	return 0;
+    }
+    JBClusterStream* stream = findClusterStream(remote);
+    if (!stream) {
+	stream = new JBClusterStream(this,local,remote,params);
+	stream->ref();
+	addStream(stream);
+    }
+    return stream;
+}
+
 // Terminate all incoming c2s streams matching a given JID
 unsigned int JBServerEngine::terminateClientStreams(const JabberID& jid,
     XMPPError::Type error, const char* reason)
@@ -1342,18 +1432,7 @@ void JBServerEngine::addStream(JBStream* stream)
     lock();
     RefPointer<JBStreamSetList> recv;
     RefPointer<JBStreamSetList> process;
-    if (stream->type() == JBStream::c2s) {
-	recv = m_c2sReceive;
-	process = m_c2sProcess;
-    }
-    else if (stream->type() == JBStream::s2s) {
-	recv = m_s2sReceive;
-	process = m_s2sProcess;
-    }
-    else if (stream->type() == JBStream::comp) {
-	recv = m_compReceive;
-	process = m_compProcess;
-    }
+    getStreamListsType(stream->type(),recv,process);
     unlock();
     if (recv && process) {
 	recv->add(stream);
@@ -1378,18 +1457,7 @@ void JBServerEngine::removeStream(JBStream* stream, bool delObj)
 	stream,delObj,stream->toString().c_str());
     RefPointer<JBStreamSetList> recv;
     RefPointer<JBStreamSetList> process;
-    if (stream->type() == JBStream::c2s) {
-	recv = m_c2sReceive;
-	process = m_c2sProcess;
-    }
-    else if (stream->type() == JBStream::s2s) {
-	recv = m_s2sReceive;
-	process = m_s2sProcess;
-    }
-    else if (stream->type() == JBStream::comp) {
-	recv = m_compReceive;
-	process = m_compProcess;
-    }
+    getStreamListsType(stream->type(),recv,process);
     unlock();
     if (recv)
 	recv->remove(stream,delObj);
@@ -1575,6 +1643,11 @@ JBClientStream* JBEvent::clientStream()
 JBServerStream* JBEvent::serverStream()
 {
     return m_stream ? m_stream->serverStream() : 0;
+}
+
+JBClusterStream* JBEvent::clusterStream()
+{
+    return m_stream ? m_stream->clusterStream() : 0;
 }
 
 // Delete the underlying XmlElement(s). Release the ownership.

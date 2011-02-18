@@ -1410,6 +1410,50 @@ public:
 	{ return str == s_ns || str.startsWith(s_nsPrefix); }
 
     /**
+     * Build an XML element from a list parameter.
+     * Parameter name will be set in a 'name' attribute.
+     * Parameter value will be set in a 'value' attribute
+     * Handle NamedPointer parameters carrying DataBlock, NamedList and
+     *  XmlElement objects (a 'type' attribute is added to the created element).
+     *  DataBlock: Encode using BASE64 and add it as element text
+     *  NamedList: The name is added as element text. The function is called
+     *   again for each list parameter
+     *  XmlElement: Added as child to newly created element
+     * @param param The parameter to convert
+     * @param tag XmlElement tag
+     * @param copyXml True to copy XmlElement objects instead of just remove
+     *  them from the parameter
+     * @return XmlElement pointer or 0 on failure
+     */
+    static XmlElement* param2xml(NamedString* param, const String& tag,
+	bool copyXml = false);
+
+    /**
+     * Build a list parameter from xml element
+     * See @ref param2xml for more info
+     * @param xml The XML element to process 
+     * @param tag Child XmlElement tag to handle
+     * @param copyXml True to copy XmlElement objects instead of just remove
+     *  them from parent
+     * @return NamedString pointer or 0 on failure
+     */
+    static NamedString* xml2param(XmlElement* xml, const String* tag,
+	bool copyXml = false);
+
+    /**
+     * Build and add list parameters from XML element children.
+     * Each parameter will be taken from 'name' and 'value' attributes.
+     * See @ref param2xml for more info
+     * @param list Destination list
+     * @param parent The XML element to process 
+     * @param tag Child XmlElement tag to handle
+     * @param copyXml True to copy XmlElement objects instead of just remove
+     *  them from parent
+     */
+    static void xml2param(NamedList& list, XmlElement* parent, const String* tag,
+	bool copyXml = false);
+
+    /**
      * Default namespace attribute name
      */
     static const String s_ns;

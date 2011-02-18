@@ -1893,6 +1893,101 @@ bool XmlElement::setXmlns(const String& name, bool addAttr, const String& value)
     return true;
 }
 
+// Build an XML element from a list parameter
+XmlElement* XmlElement::param2xml(NamedString* param, const String& tag, bool copyXml)
+{
+    if (!(param && param->name() && tag))
+	return 0;
+    XmlElement* xml = new XmlElement(tag);
+    xml->setAttribute("name",param->name());
+    xml->setAttributeValid("value",*param);
+    NamedPointer* np = YOBJECT(NamedPointer,param);
+    if (!(np && np->userData()))
+	return xml;
+    DataBlock* db = YOBJECT(DataBlock,np->userData());
+    if (db) {
+	xml->setAttribute("type","DataBlock");
+	Base64 b(db->data(),db->length(),false);
+	String tmp;
+	b.encode(tmp);
+	b.clear(false);
+	xml->addText(tmp);
+	return xml;
+    }
+    XmlElement* element = YOBJECT(XmlElement,np->userData());
+    if (element) {
+	xml->setAttribute("type","XmlElement");
+	if (!copyXml) {
+	    np->takeData();
+	    xml->addChild(element);
+	}
+	else
+	    xml->addChild(new XmlElement(*element));
+	return xml;
+    }
+    NamedList* list = YOBJECT(NamedList,np->userData());
+    if (list) {
+	xml->setAttribute("type","NamedList");
+	xml->addText(list->c_str());
+	unsigned int n = list->length();
+	for (unsigned int i = 0; i < n; i++)
+	    xml->addChild(param2xml(list->getParam(i),tag,copyXml));
+	return xml;
+    }
+    return xml;
+}
+
+// Build a list parameter from xml element
+NamedString* XmlElement::xml2param(XmlElement* xml, const String* tag, bool copyXml)
+{
+    const char* name = xml ? xml->attribute("name") : 0;
+    if (TelEngine::null(name))
+	return 0;
+    GenObject* gen = 0;
+    String* type = xml->getAttribute("type");
+    if (type) {
+	if (*type == "DataBlock") {
+	    gen = new DataBlock;
+	    const String& text = xml->getText();
+	    Base64 b((void*)text.c_str(),text.length(),false);
+	    b.decode(*(static_cast<DataBlock*>(gen)));
+	    b.clear(false);
+	}
+	else if (*type == "XmlElement") {
+	    if (!copyXml)
+		gen = xml->pop();
+	    else {
+		XmlElement* tmp = xml->findFirstChild();
+		if (tmp)
+		    gen = new XmlElement(*tmp);
+	    }
+	}
+	else if (*type == "NamedList") {
+	    gen = new NamedList(xml->getText());
+	    xml2param(*(static_cast<NamedList*>(gen)),xml,tag,copyXml);
+	}
+	else
+	    Debug(DebugStub,"XmlElement::xml2param: unhandled type=%s",type->c_str());
+    }
+    if (!gen)
+	return new NamedString(name,xml->attribute("value"));
+    return new NamedPointer(name,gen,xml->attribute("value"));
+}
+
+// Build and add list parameters from XML element children
+void XmlElement::xml2param(NamedList& list, XmlElement* parent, const String* tag,
+    bool copyXml)
+{
+    if (!parent)
+	return;
+    XmlElement* ch = 0;
+    while (0 != (ch = parent->findNextChild(ch,tag))) {
+	NamedString* ns = xml2param(ch,tag,copyXml);
+	if (ns)
+	    list.addParam(ns);
+    }
+}
+
 
 /*
  * XmlComment

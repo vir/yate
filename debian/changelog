@@ -1,3 +1,9 @@
+yate (3.1.1.vir2011021901) UNRELEASED; urgency=low
+
+  * pulled in upstream changes
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Sat, 19 Feb 2011 13:55:49 +0300
+
 yate (3.1.1.vir2011020601) UNRELEASED; urgency=low
 
   * New Debian stable release out there, we have new versioning scheme for testing and stable ports

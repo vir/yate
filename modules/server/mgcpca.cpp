@@ -1530,7 +1530,12 @@ bool MGCPCircuit::status(Status newStat, bool sync)
 			break;
 		    clearConn();
 		}
-		cleanupRtp();
+		if (m_rtpForward) {
+		    m_source = 0;
+		    m_consumer = 0;
+		}
+		else
+		    cleanupRtp();
 	    }
 	    m_statusReq = SignallingCircuit::status();
 	    m_changing = false;

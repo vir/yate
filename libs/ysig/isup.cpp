@@ -2941,7 +2941,12 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 		m_sgmMsg = 0;
 		return 0;
 	    }
-	    connectCircuit();
+	    if (!connectCircuit() && isup() &&
+		(isup()->mediaRequired() >= SignallingCallControl::MediaAlways)) {
+		TelEngine::destruct(m_sgmMsg);
+		setReason("bearer-cap-not-available",0,0,isup()->location());
+		return release();
+	    }
 	    m_state = Setup;
 	    m_sgmMsg->params().setParam("overlapped",String::boolText(m_overlap));
 	    m_lastEvent = new SignallingEvent(SignallingEvent::NewCall,m_sgmMsg,this);
@@ -2976,7 +2981,12 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 		transmitMessage(new SS7MsgISUP(SS7MsgISUP::LPA,id()));
 	    break;
 	case SS7MsgISUP::ACM:
-	    connectCircuit();
+	    if (!connectCircuit() && isup() &&
+		(isup()->mediaRequired() >= SignallingCallControl::MediaAlways)) {
+		TelEngine::destruct(m_sgmMsg);
+		setReason("bearer-cap-not-available",0,0,isup()->location());
+		return release();
+	    }
 	    m_state = Accepted;
 	    {
 		m_lastEvent = 0;
@@ -3003,7 +3013,12 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 	    }
 	    break;
 	case SS7MsgISUP::CPR:
-	    connectCircuit();
+	    if (!connectCircuit() && isup() &&
+		(isup()->mediaRequired() >= SignallingCallControl::MediaRinging)) {
+		TelEngine::destruct(m_sgmMsg);
+		setReason("bearer-cap-not-available",0,0,isup()->location());
+		return release();
+	    }
 	    m_state = Ringing;
 	    {
 		bool ring = SignallingUtils::hasFlag(m_sgmMsg->params(),"EventInformation","ringing");
@@ -3016,7 +3031,12 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 	    break;
 	case SS7MsgISUP::ANM:
 	case SS7MsgISUP::CON:
-	    connectCircuit();
+	    if (!connectCircuit() && isup() &&
+		(isup()->mediaRequired() >= SignallingCallControl::MediaAnswered)) {
+		TelEngine::destruct(m_sgmMsg);
+		setReason("bearer-cap-not-available",0,0,isup()->location());
+		return release();
+	    }
 	    m_state = Answered;
 	    m_anmTimer.stop();
 	    m_lastEvent = new SignallingEvent(SignallingEvent::Answer,m_sgmMsg,this);
@@ -3211,6 +3231,7 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
 	s << " lockcircuits=" << params.getValue("lockcircuits");
 	s << " userpartavail=" << String::boolText(m_userPartAvail);
 	s << " lockgroup=" << String::boolText(m_lockGroup);
+	s << " mediareq=" << lookup(m_mediaRequired,s_mediaRequired);
 	const char* sls = lookup(m_defaultSls,s_dict_callSls);
 	s << " outboundsls=";
 	if (sls)
@@ -3254,6 +3275,8 @@ bool SS7ISUP::initialize(const NamedList* config)
 	m_ignoreCGUSingle = config->getBoolValue("ignore-cgu-single");
         m_ignoreUnkDigits = config->getBoolValue("ignore-unknown-digits",true);
 	m_defaultSls = config->getIntValue("sls",s_dict_callSls,m_defaultSls);
+	m_mediaRequired = (MediaRequired)config->getIntValue("needmedia",
+	    s_mediaRequired,m_mediaRequired);
         // Timers
 	m_t9Interval = SignallingTimer::getInterval(*config,"t9",ISUP_T9_MINVAL,0,ISUP_T9_MAXVAL,true);
     }

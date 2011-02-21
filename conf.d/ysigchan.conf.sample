@@ -406,6 +406,15 @@
 ;  or unsupported message is received in an early state
 ;drop_unknown=yes
 
+; needmedia: keyword: When is media absolutely required to continue the call
+; In case of circuit failure the call may continue and retry circuit setup later
+; Allowed values:
+;    no        Media not required, always continue the call (default)
+;    ringing   Media required after call is ringing
+;    answered  Media required after call is answered
+;    yes       Media required from the beginning
+;needmedia=no
+
 ; ignore-grs-single: boolean: Ignore (drop) circuit group reset messages with
 ;  range 0 (1 circuit affected)
 ; Defaults to no

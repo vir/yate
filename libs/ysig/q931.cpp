@@ -168,29 +168,29 @@ public:
     u_int8_t encode(ISDNQ931Message* msg, ObjList& dest);
 
     // Field names
-    static TokenDict s_dict_congestion[];
-    static TokenDict s_dict_bearerTransCap[];
-    static TokenDict s_dict_bearerTransMode[];
-    static TokenDict s_dict_bearerTransRate[];
-    static TokenDict s_dict_bearerProto1[];
-    static TokenDict s_dict_bearerProto2[];
-    static TokenDict s_dict_bearerProto3[];
-    static TokenDict s_dict_typeOfNumber[];
-    static TokenDict s_dict_numPlan[];
-    static TokenDict s_dict_presentation[];
-    static TokenDict s_dict_screening[];
-    static TokenDict s_dict_subaddrType[];
-    static TokenDict s_dict_channelIDSelect_BRI[];
-    static TokenDict s_dict_channelIDSelect_PRI[];
-    static TokenDict s_dict_channelIDUnits[];
-    static TokenDict s_dict_loLayerProto2[];
-    static TokenDict s_dict_loLayerProto3[];
-    static TokenDict s_dict_networkIdType[];
-    static TokenDict s_dict_networkIdPlan[];
-    static TokenDict s_dict_notification[];
-    static TokenDict s_dict_progressDescr[];
-    static TokenDict s_dict_restartClass[];
-    static TokenDict s_dict_signalValue[];
+    static const TokenDict s_dict_congestion[];
+    static const TokenDict s_dict_bearerTransCap[];
+    static const TokenDict s_dict_bearerTransMode[];
+    static const TokenDict s_dict_bearerTransRate[];
+    static const TokenDict s_dict_bearerProto1[];
+    static const TokenDict s_dict_bearerProto2[];
+    static const TokenDict s_dict_bearerProto3[];
+    static const TokenDict s_dict_typeOfNumber[];
+    static const TokenDict s_dict_numPlan[];
+    static const TokenDict s_dict_presentation[];
+    static const TokenDict s_dict_screening[];
+    static const TokenDict s_dict_subaddrType[];
+    static const TokenDict s_dict_channelIDSelect_BRI[];
+    static const TokenDict s_dict_channelIDSelect_PRI[];
+    static const TokenDict s_dict_channelIDUnits[];
+    static const TokenDict s_dict_loLayerProto2[];
+    static const TokenDict s_dict_loLayerProto3[];
+    static const TokenDict s_dict_networkIdType[];
+    static const TokenDict s_dict_networkIdPlan[];
+    static const TokenDict s_dict_notification[];
+    static const TokenDict s_dict_progressDescr[];
+    static const TokenDict s_dict_restartClass[];
+    static const TokenDict s_dict_signalValue[];
 
 private:
     // Encode a full message. Parameter ieEncoded is true if the IEs buffers are already filled
@@ -562,7 +562,7 @@ bool ISDNQ931IEData::processKeypad(ISDNQ931Message* msg, bool add,
 /**
  * ISDNQ931State
  */
-TokenDict ISDNQ931State::s_states[] = {
+const TokenDict ISDNQ931State::s_states[] = {
 	{"Null",                 Null},
 	{"CallInitiated",        CallInitiated},
 	{"OverlapSend",          OverlapSend},
@@ -2334,7 +2334,7 @@ ISDNQ931ParserData::ISDNQ931ParserData(const NamedList& params, DebugEnabler* db
 /**
  * ISDNQ931
  */
-TokenDict ISDNQ931::s_flags[] = {
+const TokenDict ISDNQ931::s_flags[] = {
 	{"sendnonisdnsource",    SendNonIsdnSource},
 	{"ignorenonisdndest",    IgnoreNonIsdnDest},
 	{"forcepresnetprov",     ForcePresNetProv},
@@ -2350,7 +2350,7 @@ TokenDict ISDNQ931::s_flags[] = {
 	{0,0},
 	};
 
-TokenDict ISDNQ931::s_swType[] = {
+const TokenDict ISDNQ931::s_swType[] = {
 	{"euro-isdn-e1",   EuroIsdnE1},
 	{"euro-isdn-t1",   EuroIsdnT1},
 	{"national-isdn",  NationalIsdn},
@@ -2442,7 +2442,7 @@ ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
 #ifdef DEBUG
 	s << " type=" << lookup(m_parserData.m_flags,s_swType,"Custom");
 	String t;
-	for (TokenDict* p = s_flags; p->token; p++)
+	for (const TokenDict* p = s_flags; p->token; p++)
 	    if (m_parserData.flag(p->value))
 		t.append(p->token,",");
 	if (!t.null())
@@ -3804,7 +3804,7 @@ void ISDNQ931Monitor::terminateMonitor(ISDNQ931CallMonitor* mon, const char* rea
 /**
  * ISDNQ931IE
  */
-TokenDict ISDNQ931IE::s_type[] = {
+const TokenDict ISDNQ931IE::s_type[] = {
 	{"Shift",                       Shift},
 	{"More data",                   MoreData},
 	{"Sending complete",            SendComplete},
@@ -3878,7 +3878,7 @@ void ISDNQ931IE::toString(String& dest, bool extendedDebug, const char* before)
 /**
  * ISDNQ931Message
  */
-TokenDict ISDNQ931Message::s_type[] = {
+const TokenDict ISDNQ931Message::s_type[] = {
 	{"ALERTING",           Alerting},
 	{"CALL PROCEEDING",    Proceeding},
 	{"CONNECT",            Connect},
@@ -4095,7 +4095,7 @@ static const char* s_errorUnsuppCoding = "unsupported coding standard";
 // *** Fixed (1 byte length) IEs
 
 // 4.5.14
-TokenDict Q931Parser::s_dict_congestion[] = {
+const TokenDict Q931Parser::s_dict_congestion[] = {
 	{"recv-ready",     0x00},      // Receiver ready
 	{"recv-not-ready", 0x0f},      // Receiver not ready
 	// aliases for level=...
@@ -4117,7 +4117,7 @@ static const IEParam s_ie_ieFixed[] = {
 // *** Q.931 4.5.5: Bearer capability
 
 // Q.931 4.5.5. Information transfer capability: Bits 0-4
-TokenDict Q931Parser::s_dict_bearerTransCap[] = {
+const TokenDict Q931Parser::s_dict_bearerTransCap[] = {
 	{"speech",       0x00},          // Speech
 	{"udi",          0x08},          // Unrestricted digital information
 	{"rdi",          0x09},          // Restricted digital information
@@ -4128,14 +4128,14 @@ TokenDict Q931Parser::s_dict_bearerTransCap[] = {
 	};
 
 // Q.931 4.5.5. Transfer mode: Bits 5,6
-TokenDict Q931Parser::s_dict_bearerTransMode[] = {
+const TokenDict Q931Parser::s_dict_bearerTransMode[] = {
 	{"circuit",      0x00},          // Circuit switch mode
 	{"packet",       0x40},          // Packet mode
 	{0,0}
 	};
 
 // Q.931 4.5.5. Transfer rate: Bits 0-4
-TokenDict Q931Parser::s_dict_bearerTransRate[] = {
+const TokenDict Q931Parser::s_dict_bearerTransRate[] = {
 	{"packet",        0x00},         // Packet mode use
 	{"64kbit",        0x10},         // 64 kbit/s
 	{"2x64kbit",      0x11},         // 2x64 kbit/s
@@ -4147,7 +4147,7 @@ TokenDict Q931Parser::s_dict_bearerTransRate[] = {
 	};
 
 // Q.931 4.5.5. User information Layer 1 protocol: Bits 0-4
-TokenDict Q931Parser::s_dict_bearerProto1[] = {
+const TokenDict Q931Parser::s_dict_bearerProto1[] = {
 	{"v110",          0x01},         // Recomendation V.110 and X.30
 	{"mulaw",         0x02},         // Recomendation G.711 mu-law
 	{"alaw",          0x03},         // Recomendation G.711 A-law 
@@ -4160,14 +4160,14 @@ TokenDict Q931Parser::s_dict_bearerProto1[] = {
 	};
 
 // Q.931 4.5.5. User information Layer 2 protocol: Bits 0-4
-TokenDict Q931Parser::s_dict_bearerProto2[] = {
+const TokenDict Q931Parser::s_dict_bearerProto2[] = {
 	{"q921",          0x02},         // Recommendation Q.921 or I441
 	{"x25",           0x06},         // Recommendation X.25 link layer
 	{0,0}
 	};
 
 // Q.931 4.5.5. User information Layer 3 protocol: Bits 0-4
-TokenDict Q931Parser::s_dict_bearerProto3[] = {
+const TokenDict Q931Parser::s_dict_bearerProto3[] = {
 	{"q931",          0x02},         // Recommendation Q.931 or I451
 	{"x25",           0x06},         // Recommendation X.25 packet layer
 	{0,0}
@@ -4208,7 +4208,7 @@ static const IEParam s_ie_ieCallState[] = {
 //     Q.931 4.5.10: Calling party number
 
 // Q.931 4.5.10 Type of number: Bits 4-6
-TokenDict Q931Parser::s_dict_typeOfNumber[] = {
+const TokenDict Q931Parser::s_dict_typeOfNumber[] = {
 	{"unknown",          0x00},      // Unknown
 	{"international",    0x10},      // International number
 	{"national",         0x20},      // National number
@@ -4220,7 +4220,7 @@ TokenDict Q931Parser::s_dict_typeOfNumber[] = {
 	};
 
 // Q.931 4.5.10 Numbering plan: Bits 0-3. Apply only for type 0,1,2,4
-TokenDict Q931Parser::s_dict_numPlan[] = {
+const TokenDict Q931Parser::s_dict_numPlan[] = {
 	{"unknown",          0x00},      // Unknown
 	{"isdn",             0x01},      // ISDN/telephoby numbering plan
 	{"data",             0x03},      // Data numbering plan
@@ -4232,7 +4232,7 @@ TokenDict Q931Parser::s_dict_numPlan[] = {
 	};
 
 // Q.931 4.5.10 Presentation indicator: Bits 5,6
-TokenDict Q931Parser::s_dict_presentation[] = {
+const TokenDict Q931Parser::s_dict_presentation[] = {
 	{"allowed",          0x00},      // Presentation allowed
 	{"restricted",       0x20},      // Presentation restricted
 	{"unavailable",      0x40},      // Number not available due to interworking
@@ -4246,7 +4246,7 @@ TokenDict Q931Parser::s_dict_presentation[] = {
 	};
 
 // Q.931 4.5.10 Presentation indicator: Bits 0,1
-TokenDict Q931Parser::s_dict_screening[] = {
+const TokenDict Q931Parser::s_dict_screening[] = {
 	{"user-provided",        0x00},  // User-provided, not screened
 	{"user-provided-passed", 0x01},  // User-provided, verified and passed
 	{"user-provided-failed", 0x02},  // User-provided, verified and failed
@@ -4273,7 +4273,7 @@ static const IEParam s_ie_ieNumber[] = {
 //     Q.931 4.5.11: Calling party subaddress
 
 // Q.931 4.5.9 Type of subaddress: Bits 5-6
-TokenDict Q931Parser::s_dict_subaddrType[] = {
+const TokenDict Q931Parser::s_dict_subaddrType[] = {
 	{"nsap",  0x00},                 // NSAP (CCITT Rec. X.213/ISO 8348 AD2)
 	{"user",  0x20},                 // User-specified
 	{0,0}
@@ -4290,7 +4290,7 @@ static const IEParam s_ie_ieSubAddress[] = {
 // *** Q.931 4.5.13: Channel identification
 
 // Q.931 4.5.13. Channel id selection for BRI interface: Bits 0,1
-TokenDict Q931Parser::s_dict_channelIDSelect_BRI[] = {
+const TokenDict Q931Parser::s_dict_channelIDSelect_BRI[] = {
 	{"none", 0x00},                  // No channel
 	{"b1",   0x01},                  // B1 channel
 	{"b2",   0x02},                  // B2 channel 
@@ -4299,7 +4299,7 @@ TokenDict Q931Parser::s_dict_channelIDSelect_BRI[] = {
 	};
 
 // Q.931 4.5.13. Channel id selection for PRI interface: Bits 0,1
-TokenDict Q931Parser::s_dict_channelIDSelect_PRI[] = {
+const TokenDict Q931Parser::s_dict_channelIDSelect_PRI[] = {
 	{"none",     0x00},              // No channel
 	{"present",  0x01},              // Defined by the following bytes
 	{"reserved", 0x02},              // Reserved value
@@ -4308,7 +4308,7 @@ TokenDict Q931Parser::s_dict_channelIDSelect_PRI[] = {
 	};
 
 // Q.931 4.5.13. Channel type: Bits 0-3
-TokenDict Q931Parser::s_dict_channelIDUnits[] = {
+const TokenDict Q931Parser::s_dict_channelIDUnits[] = {
 	{"B",   0x03},                   // B-channel
 	{"H0",  0x06},                   // H0-channel
 	{"H11", 0x08},                   // H11-channel
@@ -4377,7 +4377,7 @@ static const IEParam s_ie_ieKeypad[] = {
 // *** Q.931 4.5.19: Low layer compatibility
 
 // Q.931 4.5.19. User information Layer 2 protocol: Bits 0-4
-TokenDict Q931Parser::s_dict_loLayerProto2[] = {
+const TokenDict Q931Parser::s_dict_loLayerProto2[] = {
 	{"iso1745",       0x01},         // Basic mode ISO 1745
 	{"q921",          0x02},         // Recommendation Q.921 or I441
 	{"x25",           0x06},         // Recommendation X.25 link layer
@@ -4396,7 +4396,7 @@ TokenDict Q931Parser::s_dict_loLayerProto2[] = {
 	};
 
 // Q.931 4.5.19. User information Layer 3 protocol: Bits 0-4
-TokenDict Q931Parser::s_dict_loLayerProto3[] = {
+const TokenDict Q931Parser::s_dict_loLayerProto3[] = {
 	{"q931",          0x02},         // Recommendation Q.931 or I451
 	{"x25",           0x06},         // Recommendation X.25 packet layer
 	{"iso8208",       0x07},         // ISO/IEC 8208 (X.25 packet level protocol for data terminal equipment)
@@ -4433,7 +4433,7 @@ static const IEParam s_ie_ieLoLayerCompat[] = {
 //     Q.931 4.5.29: Transit network selection
 
 // Q.931 4.5.21. Type of network identification: Bits 4-6
-TokenDict Q931Parser::s_dict_networkIdType[] = {
+const TokenDict Q931Parser::s_dict_networkIdType[] = {
 	{"user",          0x00},         // User specified
 	{"national",      0x20},         // National network identification
 	{"international", 0x30},         // International network identification
@@ -4441,7 +4441,7 @@ TokenDict Q931Parser::s_dict_networkIdType[] = {
 	};
 
 // Q.931 4.5.21. Network identification plan: Bits 0-3
-TokenDict Q931Parser::s_dict_networkIdPlan[] = {
+const TokenDict Q931Parser::s_dict_networkIdPlan[] = {
 	{"unknown",       0x00},         // Unknown
 	{"carrier",       0x01},         // Carrier identification code
 	{"data",          0x03},         // Data network identification code (Recommendation X.121)
@@ -4467,7 +4467,7 @@ static const IEParam s_ie_ieNetTransit[] = {
 
 // *** Q.931 4.5.22: Notification
 
-TokenDict Q931Parser::s_dict_notification[] = {
+const TokenDict Q931Parser::s_dict_notification[] = {
 	{"suspended",             0x00},
 	{"resumed",               0x01},
 	{"bearer-service-change", 0x02},
@@ -4483,7 +4483,7 @@ static const IEParam s_ie_ieNotification[] = {
 // *** Q.931 4.5.23: Progress indication
 
 // Progress description: Bits 0-6
-TokenDict Q931Parser::s_dict_progressDescr[] = {
+const TokenDict Q931Parser::s_dict_progressDescr[] = {
 	{"non-isdn",              0x01}, // Call is not end-to-end ISDN, further call progress info may be present in-band
 	{"non-isdn-destination",  0x02}, // Destination address is non ISDN
 	{"non-isdn-source",       0x03}, // Source address is non ISDN
@@ -4503,7 +4503,7 @@ static const IEParam s_ie_ieProgress[] = {
 // *** Q.931 4.5.25: Restart indicator
 
 // Class: Bits 0-2
-TokenDict Q931Parser::s_dict_restartClass[] = {
+const TokenDict Q931Parser::s_dict_restartClass[] = {
 	{"channels",       0x00},        // Indicated channels
 	{"interface",      0x06},        // Single interface
 	{"all-interfaces", 0x07},        // All interfaces
@@ -4529,7 +4529,7 @@ static const IEParam s_ie_ieSegmented[] = {
 // *** Q.931 4.5.28: Signal
 
 // Q.931 4.5.28 Signal values: first byte
-TokenDict Q931Parser::s_dict_signalValue[] = {
+const TokenDict Q931Parser::s_dict_signalValue[] = {
 	{"dial",         0x00},  // Dial tone on
 	{"ring",         0x01},  // Ring back tone on
 	{"intercept",    0x02},  // Intercept tone on

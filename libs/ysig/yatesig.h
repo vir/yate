@@ -1485,7 +1485,7 @@ private:
     SignallingCall* m_call;
     SignallingCallControl* m_controller;
     SignallingCircuitEvent* m_cicEvent;
-    static TokenDict s_types[];
+    static const TokenDict s_types[];
 };
 
 /**
@@ -1876,7 +1876,7 @@ public:
     /**
      * Keep the lock flags names
      */
-    static TokenDict s_lockNames[];
+    static const TokenDict s_lockNames[];
 
 protected:
     /**
@@ -2278,7 +2278,7 @@ public:
     /**
      * Keep the strategy names
      */
-    static TokenDict s_strategy[];
+    static const TokenDict s_strategy[];
 
 protected:
     /**
@@ -2454,7 +2454,7 @@ public:
     /**
      * Keeps the names associated with the notifications
      */
-    static TokenDict s_notifName[];
+    static const TokenDict s_notifName[];
 
 protected:
     /**
@@ -2748,7 +2748,7 @@ public:
      * @return The OR'd value of found flags
      */
     static void encodeFlags(const SignallingComponent* comp, int& dest, const String& flags,
-	TokenDict* dict);
+	const TokenDict* dict);
 
     /**
      * Encode a comma separated list of signalling flags
@@ -2803,7 +2803,7 @@ public:
 	unsigned int& count, bool discardDup);
 
 private:
-    static TokenDict* s_dictCCITT[5];
+    static const TokenDict* s_dictCCITT[5];
 };
 
 /**
@@ -3615,7 +3615,7 @@ public:
 	{ return TelEngine::lookup((int)type,s_names); }
 
 private:
-    static TokenDict s_names[];          // Keep the strigns associated with point code type
+    static const TokenDict s_names[];    // Keep the strigns associated with point code type
     unsigned char m_network;
     unsigned char m_cluster;
     unsigned char m_member;
@@ -8790,7 +8790,7 @@ private:
     bool m_autoRestart;                  // True to restart when released
     u_int32_t m_maxUserData;             // Maximum length of user data transported trough this layer
     unsigned int m_teiRefNumber;         // The Reference Number (Ri) carried by a TEI management frame
-    static TokenDict m_states[];         // Keep the string associated with each state
+    static const TokenDict m_states[];   // Keep the string associated with each state
 };
 
 /**
@@ -9163,7 +9163,7 @@ public:
     /**
      * Keep the association between frame types and texts
      */
-    static TokenDict s_types[];
+    static const TokenDict s_types[];
 
 protected:
     /**
@@ -9952,7 +9952,7 @@ public:
     /**
      * Keep the string associated with IE types
      */
-    static TokenDict s_type[];
+    static const TokenDict s_type[];
 
     /**
      * Internally used buffer
@@ -10199,7 +10199,7 @@ public:
     /**
      * Keep the string associated with message types
      */
-    static TokenDict s_type[];
+    static const TokenDict s_type[];
 
     /**
      * Internally used buffer for debug purposes
@@ -10330,7 +10330,7 @@ public:
     /**
      * Keep the association between state values and their texts
      */
-    static TokenDict s_states[];
+    static const TokenDict s_states[];
 
 protected:
     /**
@@ -10956,12 +10956,12 @@ public:
     /**
      * The list of behaviour flag names
      */
-    static TokenDict s_flags[];
+    static const TokenDict s_flags[];
 
      /**
      * The list of switch type names
      */
-    static TokenDict s_swType[];
+    static const TokenDict s_swType[];
 
 protected:
     /**

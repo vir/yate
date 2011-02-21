@@ -1733,7 +1733,7 @@ bool ISDNQ921Passive::dropFrame(const ISDNFrame* frame, const char* reason)
 /**
  * ISDNLayer2
  */
-TokenDict ISDNLayer2::m_states[] = {
+const TokenDict ISDNLayer2::m_states[] = {
 	{"Released",      Released},
 	{"WaitEstablish", WaitEstablish},
 	{"Established",   Established},
@@ -1985,7 +1985,7 @@ static inline void setControl(u_int8_t* buf, u_int8_t cr_ns, u_int8_t nr, bool p
 	buf[3] |= 0x01;
 }
 
-TokenDict ISDNFrame::s_types[] = {
+const TokenDict ISDNFrame::s_types[] = {
 	{"DISC", DISC},
 	{"DM", DM},
 	{"FRMR", FRMR},

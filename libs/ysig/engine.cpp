@@ -525,7 +525,7 @@ unsigned int SignallingTimer::getInterval(const NamedList& params, const char* p
  */
 
 // Coding standard as defined in Q.931/Q.850
-static TokenDict s_dict_codingStandard[] = {
+static const TokenDict s_dict_codingStandard[] = {
 	{"CCITT",            0x00},
 	{"ISO/IEC",          0x20},
 	{"national",         0x40},
@@ -534,7 +534,7 @@ static TokenDict s_dict_codingStandard[] = {
 	};
 
 // Locations as defined in Q.850
-static TokenDict s_dict_location[] = {
+static const TokenDict s_dict_location[] = {
 	{"U",    0x00},                  // User
 	{"LPN",  0x01},                  // Private network serving the local user
 	{"LN",   0x02},                  // Public network serving the local user
@@ -549,7 +549,7 @@ static TokenDict s_dict_location[] = {
 // Q.850 2.2.5. Cause class: Bits 4-6
 // Q.850 Table 1. Cause value: Bits 0-6
 // Defined for CCITT coding standard
-static TokenDict s_dict_causeCCITT[] = {
+static const TokenDict s_dict_causeCCITT[] = {
 	// normal-event class
 	{"normal-event",                   0x00},
 	{"unallocated",                    0x01}, // Unallocated (unassigned) number
@@ -638,7 +638,7 @@ static TokenDict s_dict_causeCCITT[] = {
 
 // Q.931 4.5.5. Information transfer capability: Bits 0-4
 // Defined for CCITT coding standard
-static TokenDict s_dict_transferCapCCITT[] = {
+static const TokenDict s_dict_transferCapCCITT[] = {
 	{"speech",       0x00},          // Speech
 	{"udi",          0x08},          // Unrestricted digital information
 	{"rdi",          0x09},          // Restricted digital information
@@ -650,7 +650,7 @@ static TokenDict s_dict_transferCapCCITT[] = {
 
 // Q.931 4.5.5. Transfer mode: Bits 5,6
 // Defined for CCITT coding standard
-static TokenDict s_dict_transferModeCCITT[] = {
+static const TokenDict s_dict_transferModeCCITT[] = {
 	{"circuit",      0x00},          // Circuit switch mode
 	{"packet",       0x40},          // Packet mode
 	{0,0}
@@ -658,7 +658,7 @@ static TokenDict s_dict_transferModeCCITT[] = {
 
 // Q.931 4.5.5. Transfer rate: Bits 0-4
 // Defined for CCITT coding standard
-static TokenDict s_dict_transferRateCCITT[] = {
+static const TokenDict s_dict_transferRateCCITT[] = {
 	{"packet",        0x00},         // Packet mode only
 	{"64kbit",        0x10},         // 64 kbit/s
 	{"2x64kbit",      0x11},         // 2x64 kbit/s
@@ -671,7 +671,7 @@ static TokenDict s_dict_transferRateCCITT[] = {
 
 // Q.931 4.5.5. User information Layer 1 protocol: Bits 0-4
 // Defined for CCITT coding standard
-static TokenDict s_dict_formatCCITT[] = {
+static const TokenDict s_dict_formatCCITT[] = {
 	{"v110",          0x01},         // Recomendation V.110 and X.30
 	{"mulaw",         0x02},         // Recomendation G.711 mu-law
 	{"alaw",          0x03},         // Recomendation G.711 A-law 
@@ -683,7 +683,7 @@ static TokenDict s_dict_formatCCITT[] = {
 	{0,0}
 	};
 
-TokenDict* SignallingUtils::s_dictCCITT[5] = {
+const TokenDict* SignallingUtils::s_dictCCITT[5] = {
 	s_dict_causeCCITT,
 	s_dict_formatCCITT,
 	s_dict_transferCapCCITT,
@@ -901,7 +901,7 @@ bool SignallingUtils::decodeCaps(const SignallingComponent* comp, NamedList& lis
 // Encode a comma separated list of flags. Flags can be prefixed with the '-'
 //  character to be reset if previously set
 void SignallingUtils::encodeFlags(const SignallingComponent* comp,
-	int& dest, const String& flags, TokenDict* dict)
+	int& dest, const String& flags, const TokenDict* dict)
 {
     if (flags.null() || !dict)
 	return;
@@ -910,7 +910,7 @@ void SignallingUtils::encodeFlags(const SignallingComponent* comp,
     for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
 	String* s = static_cast<String*>(o->get());
 	bool set = !s->startSkip("-",false);
-	TokenDict* p = dict;
+	const TokenDict* p = dict;
 	for (; p->token && *s != p->token; p++) ;
 	if (!p->token) {
 	    DDebug(comp,DebugAll,"Utils::encodeFlags '%s' not found",s->c_str());

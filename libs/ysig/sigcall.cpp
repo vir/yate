@@ -30,7 +30,7 @@
 
 using namespace TelEngine;
 
-TokenDict SignallingCircuit::s_lockNames[] = {
+const TokenDict SignallingCircuit::s_lockNames[] = {
     {"localhw",            LockLocalHWFail},
     {"localmaint",         LockLocalMaint},
     {"lockinghw",          LockingHWFail},
@@ -321,7 +321,7 @@ SignallingMessage* SignallingCall::dequeue(bool remove)
 /**
  * SignallingEvent
  */
-TokenDict SignallingEvent::s_types[] = {
+const TokenDict SignallingEvent::s_types[] = {
 	{"Unknown",  Unknown},
 	{"Generic",  Generic},
 	{"NewCall",  NewCall},
@@ -430,7 +430,7 @@ bool SignallingCircuitEvent::sendEvent()
 /**
  * SignallingCircuit
  */
-static TokenDict s_cicTypeDict[] = {
+static const TokenDict s_cicTypeDict[] = {
     {"TDM",     SignallingCircuit::TDM},
     {"RTP",     SignallingCircuit::RTP},
     {"IAX",     SignallingCircuit::IAX},
@@ -439,7 +439,7 @@ static TokenDict s_cicTypeDict[] = {
     {0,0}
 };
 
-static TokenDict s_cicStatusDict[] = {
+static const TokenDict s_cicStatusDict[] = {
     {"Missing",   SignallingCircuit::Missing},
     {"Disabled",  SignallingCircuit::Disabled},
     {"Idle",      SignallingCircuit::Idle},
@@ -676,7 +676,7 @@ void SignallingCircuitRange::updateLast()
 /**
  * SignallingCircuitGroup
  */
-TokenDict SignallingCircuitGroup::s_strategy[] = {
+const TokenDict SignallingCircuitGroup::s_strategy[] = {
 	{"increment", Increment},
 	{"decrement", Decrement},
 	{"lowest",    Lowest},

@@ -28,7 +28,7 @@
 using namespace TelEngine;
 
 #define MAKE_NAME(x) { #x, x }
-TokenDict SS7PointCode::s_names[] = {
+const TokenDict SS7PointCode::s_names[] = {
 	MAKE_NAME(ITU),
 	MAKE_NAME(ANSI),
 	MAKE_NAME(ANSI8),

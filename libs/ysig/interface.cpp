@@ -28,7 +28,7 @@
 using namespace TelEngine;
 
 // SignallingInterface notification texts used to print debug
-TokenDict SignallingInterface::s_notifName[] = {
+const TokenDict SignallingInterface::s_notifName[] = {
 	{"LinkUp",     LinkUp},
 	{"LinkDown",   LinkDown},
 	{"HWError",    HardwareError},

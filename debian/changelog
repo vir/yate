@@ -1,3 +1,15 @@
+yate (3.1.1.svn4122) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4122: + The information is instead preserved
+    for possible later retries.  + When attempting RTP forwarding do not
+    reset the SDP information if MGCP connection fails.  + Drop the call
+    if a required circuit setup failed.  + Added a Media Required
+    setting to Call Controllers.  + Constified all TokenDicts in the
+    ysig library.  + Always restart cluster streams with InError flag
+    set.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 22 Feb 2011 02:19:22 +0300
+
 yate (3.1.1.svn4118) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4118: + This allows proper dynamic addition

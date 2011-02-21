@@ -823,7 +823,8 @@ bool JBStream::canProcess(u_int64_t time)
 	    // Re-connect
 	    // Don't connect non client if we are in error and have nothing to send
 	    if (m_restart) {
-		if (m_type != c2s && flag(InError) && !m_pending.skipNull())
+		if (m_type != c2s && m_type != cluster &&
+		    flag(InError) && !m_pending.skipNull())
 		    return false;
 		resetFlags(InError);
 		changeState(Connecting);

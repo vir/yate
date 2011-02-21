@@ -987,6 +987,17 @@ class YSIG_API SignallingCallControl : public Mutex
     friend class ISDNQ931Call;
     friend class ISDNQ931CallMonitor;
 public:
+
+    /**
+     * When is media absolutely required during the call
+     */
+    enum MediaRequired {
+	MediaNever,
+	MediaAnswered,
+	MediaRinging,
+	MediaAlways
+    };
+
     /**
      * Constructor
      * @param params Call controller's parameters
@@ -1032,6 +1043,13 @@ public:
 	m_verifyEvent = false;
 	return true;
     }
+
+    /**
+     * Get the Media Required flag
+     * @return Configured media requirement
+     */
+    inline MediaRequired mediaRequired() const
+	{ return m_mediaRequired; }
 
     /**
      * Get the prefix used by this call controller when decoding message parameters or
@@ -1184,6 +1202,11 @@ protected:
     String m_msgPrefix;
 
     /**
+     * Media required flag, call should drop if requirement not satisfied
+     */
+    MediaRequired m_mediaRequired;
+
+    /**
      * Draw attention to call controller's user that something changed by
      *  raising a Verify event
      */
@@ -1198,6 +1221,11 @@ protected:
      * Controller location used when encoding Q.850 cause
      */
     String m_location;
+
+    /**
+     * Media required keywords
+     */
+    static const TokenDict s_mediaRequired[];
 
 private:
     SignallingCircuitGroup* m_circuits;  // Circuit group

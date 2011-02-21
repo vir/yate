@@ -45,6 +45,21 @@ TokenDict SignallingCircuit::s_lockNames[] = {
     {0,0},
 };
 
+const TokenDict SignallingCallControl::s_mediaRequired[] = {
+    { "no", SignallingCallControl::MediaNever },
+    { "false", SignallingCallControl::MediaNever },
+    { "off", SignallingCallControl::MediaNever },
+    { "disable", SignallingCallControl::MediaNever },
+    { "answered", SignallingCallControl::MediaAnswered },
+    { "connected", SignallingCallControl::MediaAnswered },
+    { "ringing", SignallingCallControl::MediaRinging },
+    { "progress", SignallingCallControl::MediaRinging },
+    { "yes", SignallingCallControl::MediaAlways },
+    { "true", SignallingCallControl::MediaAlways },
+    { "on", SignallingCallControl::MediaAlways },
+    { "enable", SignallingCallControl::MediaAlways },
+    { 0, 0 }
+};
 
 /**
  * SignallingCallControl
@@ -52,6 +67,7 @@ TokenDict SignallingCircuit::s_lockNames[] = {
 SignallingCallControl::SignallingCallControl(const NamedList& params,
 	const char* msgPrefix)
     : Mutex(true,"SignallingCallControl"),
+      m_mediaRequired(MediaNever),
       m_verifyEvent(false),
       m_verifyTimer(0),
       m_circuits(0),
@@ -83,6 +99,10 @@ SignallingCallControl::SignallingCallControl(const NamedList& params,
     // Verify event timer
     m_verifyTimer.interval(params,"verifyeventinterval",10,120,true,true);
     m_verifyTimer.start();
+
+    // Media Required
+    m_mediaRequired = (MediaRequired)params.getIntValue("needmedia",
+	s_mediaRequired,m_mediaRequired);
 }
 
 SignallingCallControl::~SignallingCallControl()

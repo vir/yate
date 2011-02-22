@@ -4347,6 +4347,7 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
 		else
 		    processCallMsg(msg,label,sls);
 	    }
+	    break;
 	default:
 	    processControllerMsg(msg,label,sls);
     }
@@ -4639,8 +4640,6 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	case SS7MsgISUP::RLC: // Release Complete
 	    // Response to RSC: reset local lock flags. Release m_rscCic
 	    resetCircuit(msg->cic(),false,false);
-	    // Just to make sure everything is ok
-	    releaseCircuit(m_rscCic);
 	    break;
 	case SS7MsgISUP::RSC: // Reset Circuit
 	    if (resetCircuit(msg->cic(),true,true)) {

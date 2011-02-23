@@ -3283,12 +3283,15 @@ public:
 	{ return operator<<(String(value)); }
 };
 
+class NamedIterator;
+
 /**
  * This class holds a named list of named strings
  * @short A named string container class
  */
 class YATE_API NamedList : public String
 {
+    friend class NamedIterator;
 public:
     /**
      * Creates a new named list.
@@ -3536,6 +3539,68 @@ public:
 private:
     NamedList(); // no default constructor please
     ObjList m_params;
+};
+
+/**
+ * An iterator for NamedString parameters of a NamedList.
+ * Fast but unsafe, the list must not be modified during iteration.
+ * @short NamedList parameters iterator
+ */
+class YATE_API NamedIterator
+{
+public:
+    /**
+     * Constructor
+     * @param list NamedList whose parameters are iterated
+     */
+    inline NamedIterator(const NamedList& list)
+	: m_list(&list), m_item(list.m_params.skipNull())
+	{ }
+
+    /**
+     * Copy constructor, points to same list and position as the original
+     * @param original Iterator to copy from
+     */
+    inline NamedIterator(const NamedIterator& original)
+	: m_list(original.m_list), m_item(original.m_item)
+	{ }
+
+    /**
+     * Assignment from list operator
+     * @param list NamedList whose parameters are iterated
+     */
+    inline NamedIterator& operator=(const NamedList& list)
+	{ m_list = &list; m_item = list.m_params.skipNull(); return *this; }
+
+    /**
+     * Assignment operator, points to same list and position as the original
+     * @param original Iterator to copy from
+     */
+    inline NamedIterator& operator=(const NamedIterator& original)
+	{ m_list = original.m_list; m_item = original.m_item; return *this; }
+
+    /**
+     * Get the current parameter and advance in the list
+     * @return Pointer to list parameter or NULL if advanced past end (eof)
+     */
+    const NamedString* get();
+
+    /**
+     * Check if the iteration reached end of the parameters list
+     */
+    inline bool eof() const
+	{ return !m_item; }
+
+    /**
+     * Reset the iterator to the first position in the parameters list
+     */
+    inline void reset()
+	{ m_item = m_list->m_params.skipNull(); }
+
+private:
+    NamedIterator(); // no default constructor please
+    const NamedList* m_list;
+    const ObjList* m_item;
 };
 
 /**

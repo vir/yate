@@ -39,10 +39,9 @@ NamedList::NamedList(const char* name)
 NamedList::NamedList(const NamedList& original)
     : String(original)
 {
-    for (unsigned int i = 0; i < original.length(); i++) {
-	const NamedString* p = original.getParam(i);
-	if (p)
-	    m_params.append(new NamedString(p->name(),*p));
+    for (const ObjList* l = original.m_params.skipNull(); l; l = l->skipNext()) {
+	const NamedString* p = static_cast<const NamedString*>(l->get());
+	m_params.append(new NamedString(p->name(),*p));
     }
 }
 
@@ -69,8 +68,9 @@ void* NamedList::getObject(const String& name) const
 NamedList& NamedList::addParam(NamedString* param)
 {
     XDebug(DebugInfo,"NamedList::addParam(%p) [\"%s\",\"%s\"]",
-        param,param->name().c_str(),param->c_str());
-    m_params.append(param);
+        param,(param ? param->name().c_str() : ""),TelEngine::c_safe(param));
+    if (param)
+	m_params.append(param);
     return *this;
 }
 
@@ -85,7 +85,7 @@ NamedList& NamedList::addParam(const char* name, const char* value, bool emptyOK
 NamedList& NamedList::setParam(NamedString* param)
 {
     XDebug(DebugInfo,"NamedList::setParam(%p) [\"%s\",\"%s\"]",
-        param,param->name().c_str(),param->c_str());
+        param,(param ? param->name().c_str() : ""),TelEngine::c_safe(param));
     if (!param)
 	return *this;
     ObjList* p = m_params.find(param->name());
@@ -149,10 +149,9 @@ NamedList& NamedList::copyParam(const NamedList& original, const String& name, c
     clearParam(name,childSep);
     String tmp;
     tmp << name << childSep;
-    unsigned int n = original.length();
-    for (unsigned int i = 0; i < n; i++) {
-	const NamedString* s = original.getParam(i);
-        if (s && ((s->name() == name) || s->name().startsWith(tmp)))
+    for (const ObjList* l = original.m_params.skipNull(); l; l = l->skipNext()) {
+	const NamedString* s = static_cast<const NamedString*>(l->get());
+        if ((s->name() == name) || s->name().startsWith(tmp))
 	    addParam(s->name(),*s);
     }
     return *this;
@@ -161,10 +160,9 @@ NamedList& NamedList::copyParam(const NamedList& original, const String& name, c
 NamedList& NamedList::copyParams(const NamedList& original)
 {
     XDebug(DebugInfo,"NamedList::copyParams(%p) [%p]",&original,this);
-    for (unsigned int i = 0; i < original.length(); i++) {
-	const NamedString* p = original.getParam(i);
-	if (p)
-	    setParam(p->name(),*p);
+    for (const ObjList* l = original.m_params.skipNull(); l; l = l->skipNext()) {
+	const NamedString* p = static_cast<const NamedString*>(l->get());
+	setParam(p->name(),*p);
     }
     return *this;
 }
@@ -202,10 +200,9 @@ NamedList& NamedList::copySubParams(const NamedList& original, const String& pre
     XDebug(DebugInfo,"NamedList::copySubParams(%p,\"%s\")",&original,prefix.c_str());
     if (prefix) {
 	unsigned int offs = prefix.length();
-	unsigned int n = original.length();
-	for (unsigned int i = 0; i < n; i++) {
-	    const NamedString* s = original.getParam(i);
-	    if (s && s->name().startsWith(prefix)) {
+    for (const ObjList* l = original.m_params.skipNull(); l; l = l->skipNext()) {
+	const NamedString* s = static_cast<const NamedString*>(l->get());
+	    if (s->name().startsWith(prefix)) {
 		const char* name = s->name().c_str() + offs;
 		if (*name)
 		    addParam(name,*s);

@@ -4486,10 +4486,10 @@ bool ClientContact::setGroups(const NamedList& list, const String& param)
 {
     Lock lock(m_owner);
     ObjList* grps = 0;
-    unsigned int n = list.length();
-    for (unsigned int i = 0; i < n; i++) {
-	NamedString* ns = list.getParam(i);
-	if (TelEngine::null(ns) || ns->name() != param)
+    NamedIterator iter(list);
+    const NamedString* ns = 0;
+    while (0 != (ns = iter.get())) {
+	if (ns->name() != param)
 	    continue;
 	if (!grps)
 	    grps = new ObjList;

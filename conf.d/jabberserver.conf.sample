@@ -109,6 +109,12 @@
 ; Defaults to zlib if missing
 ;compression_formats=zlib
 
+; authcluster: boolean: True to authenticate incoming cluster stream requests
+; If enabled, an user.auth message will be enqueued to request authentication
+; If disabled, cluster streams will be automatically accepted
+; Defaults to disable
+;authcluster=disable
+
 ; printxml: boolean/string: Print sent/received XML data to output if debug
 ;  level is at least 9
 ; Allowed values are boolean values or 'verbose' string

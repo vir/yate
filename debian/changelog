@@ -1,3 +1,18 @@
+yate (3.1.1.svn4128) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4128: + Fixed a double release of a circuit
+    that could cause a race condition leading to multiple calls per
+    circuit.  + Added a fast unsafe iterator for parameters of
+    NamedList.  + Original patch by Allan Sandfeld.  + Prevent adding a
+    NULL parameter to a NamedList.  + Fix a number of inefficient
+    NamedList iterations using O(n^2) steps when they only need O(n)
+    steps.  + Display the proper OPC/DPC in the debug message when
+    sending a SLTA.  + Create yate cluster listener and connections.
+    Send/receive yate messages on cluster streams.  + Use a
+    NamedIterator (faster) to search for contact groups in input list.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 24 Feb 2011 02:19:33 +0300
+
 yate (3.1.1.svn4123) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4123: + Removed an unnecessary release of

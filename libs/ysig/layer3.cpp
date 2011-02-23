@@ -305,6 +305,10 @@ bool SS7Layer3::maintenance(const SS7MSU& msu, const SS7Label& label, int sls)
 		if (!d)
 		    return false;
 		linkChecked(sls,true);
+		addr.clear();
+		addr << SS7PointCode::lookup(lbl.type()) << "," << lbl;
+		if (debugAt(DebugAll))
+		    addr << " (" << lbl.opc().pack(lbl.type()) << ":" << lbl.dpc().pack(lbl.type()) << ":" << lbl.sls() << ")";
 		Debug(this,level,"Sending SLTA %s with %u bytes",addr.c_str(),len);
 		*d++ = SS7MsgMTN::SLTA;
 		*d++ = len << 4;

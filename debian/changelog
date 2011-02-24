@@ -1,3 +1,10 @@
+yate (3.1.1.svn4129) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4129: + Use a NamedIterator (faster) to
+    build a roster item from a list of parameters.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 25 Feb 2011 02:19:18 +0300
+
 yate (3.1.1.svn4128) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4128: + Fixed a double release of a circuit

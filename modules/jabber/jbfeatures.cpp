@@ -144,10 +144,10 @@ static XmlElement* buildRosterItem(NamedList& list, unsigned int index)
     item->setAttribute("jid",contact);
     prefix << ".";
     ObjList* groups = 0;
-    unsigned int n = list.length();
-    for (unsigned int i = 0; i < n; i++) {
-	NamedString* param = list.getParam(i);
-	if (!(param && param->name().startsWith(prefix)))
+    NamedIterator iter(list);
+    const NamedString* param = 0;
+    while (0 != (param = iter.get())) {
+	if (!param->name().startsWith(prefix))
 	    continue;
 	String name = param->name();
 	name.startSkip(prefix,false);

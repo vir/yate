@@ -28,16 +28,16 @@
 
 ; stream_setuptimeout: integer: Overall stream setup interval in milliseconds. The timer
 ;  will stop when the stream is authenticated
-; Defaults to 60000 if missing or invalid
-; Minimum allowed value is 5000, maximum allowed value is 120000
-;stream_setuptimeout=60000
+; Defaults to 120000 if missing or invalid
+; Minimum allowed value is 5000, maximum allowed value is 600000
+;stream_setuptimeout=120000
 
 ; stream_connecttimeout: integer: The interval, in milliseconds, allowed for an
 ;  outgoing stream to make a TCP connection to a remote host, including SRV request
 ;  and resolving domain(s)
-; Defaults to 5000 if missing or invalid
-; Minimum allowed value is 1000, maximum allowed value is 10000
-;stream_connecttimeout=5000
+; Defaults to 60000 if missing or invalid
+; Minimum allowed value is 1000, maximum allowed value is 120000
+;stream_connecttimeout=60000
 
 ; entitycaps: boolean: Enable entity capabilities cache.
 ; If enabled entity capabilities will be requested and cached each time a presence

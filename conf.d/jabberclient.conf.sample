@@ -29,7 +29,7 @@
 ; stream_setuptimeout: integer: Overall stream setup interval in milliseconds. The timer
 ;  will stop when the stream is authenticated
 ; Defaults to 120000 if missing or invalid
-; Minimum allowed value is 5000, maximum allowed value is 600000
+; Minimum allowed value is 60000, maximum allowed value is 600000
 ;stream_setuptimeout=120000
 
 ; stream_connecttimeout: integer: The interval, in milliseconds, allowed for an

@@ -1,3 +1,17 @@
+yate (3.1.1.svn4135) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4135: + Changed stream setup and connect
+    default and maximum timeout values.  + Changed stream start timeout
+    values.  + Refuse to configure in a separate build directory if the
+    source path has spaces or special characters in name.  + Fixed
+    building the modules/ilbccodec.yate if the source path contains
+    spaces or some special characters.  + Fixed building qt4 modules
+    outside the source directory.  + Documented changed stream setup
+    minimum allowed value.  + Fixed incomplete command bug in iLBC
+    detection introduced by Rev 4132.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 26 Feb 2011 02:19:13 +0300
+
 yate (3.1.1.svn4129) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4129: + Use a NamedIterator (faster) to

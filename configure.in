@@ -672,7 +672,7 @@ AC_MSG_CHECKING([for iLBC in libs])
 	incilbc="libs/ilbc"
         if [[ -f "$basedir/$incilbc/iLBC_encode.h" ]]; then
 		HAVE_ILBC=yes
-		basedir=`sed 's/\([[^\]]\)\([[[:space:]\$\"'\'']]\)/\1\\\2/g'`
+		basedir=`echo "$basedir" | sed 's/\([[^\]]\)\([[[:space:]\$\"'\'']]\)/\1\\\2/g'`
 		ILBC_INC="-I$basedir/$incilbc"
 	fi
 AC_MSG_RESULT([$HAVE_ILBC])

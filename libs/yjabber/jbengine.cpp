@@ -79,12 +79,12 @@ static const String s_googleMailNode = "http://mail.google.com/xmpp/client/caps"
 #define JB_RESTART_UPDATE_MAX     300000
 // Stream setup timer
 #define JB_SETUP_INTERVAL         180000
-#define JB_SETUP_INTERVAL_MIN       5000
+#define JB_SETUP_INTERVAL_MIN      60000
 #define JB_SETUP_INTERVAL_MAX     600000
 // Wait stream start timer
-#define JB_START_INTERVAL           5000
-#define JB_START_INTERVAL_MIN       1000
-#define JB_START_INTERVAL_MAX      10000
+#define JB_START_INTERVAL          20000
+#define JB_START_INTERVAL_MIN      10000
+#define JB_START_INTERVAL_MAX      60000
 // Stream connect timer
 #define JB_CONNECT_INTERVAL        60000
 #define JB_CONNECT_INTERVAL_MIN     1000

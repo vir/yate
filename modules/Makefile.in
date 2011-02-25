@@ -259,7 +259,7 @@ client/%.yate: @srcdir@/client/%.cpp $(MKDEPS) $(INCFILES)
 
 qt4/%.yate: @srcdir@/qt4/%.cpp ../libyateqt4.so $(MKDEPS) $(INCFILES)
 	$(MAKE) $(patsubst %.yate,%.moc,$@)
-	$(MODCOMP) -o $@ $(LOCALFLAGS) $(QT4_INC) -I@top_srcdir@/clients/qt4 $< $(LOCALLIBS) ../libyateqt4.so $(QT4_LIB) $(YATELIBS)
+	$(MODCOMP) -o $@ $(LOCALFLAGS) $(QT4_INC) -I@top_srcdir@/clients/qt4 -Iqt4 $< $(LOCALLIBS) ../libyateqt4.so $(QT4_LIB) $(YATELIBS)
 
 qt4/%.moc: @srcdir@/qt4/%.h $(MKDEPS) $(INCFILES)
 	mkdir -p qt4 && $(MOC) $(DEFS) $(INCLUDES) $(QT4_INC) -I@top_srcdir@/clients/qt4 -I@srcdir@/qt4 -o $@ $<

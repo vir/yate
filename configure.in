@@ -3,6 +3,10 @@ AC_INIT(Yate, 3.1.1)
 AC_CONFIG_SRCDIR([README])
 AC_PREREQ(2.52)
 
+if echo "$srcdir" | grep -q '[[[:space:]\$\"'\'']]'; then
+    AC_ERROR([Unsupported character(s) in source directory name])
+fi
+
 PACKAGE_RELEASE="1"
 PACKAGE_STATUS="alpha"
 PACKAGE_REVISION=`cat packing/revision.txt 2>/dev/null`
@@ -668,8 +672,8 @@ AC_MSG_CHECKING([for iLBC in libs])
 	incilbc="libs/ilbc"
         if [[ -f "$basedir/$incilbc/iLBC_encode.h" ]]; then
 		HAVE_ILBC=yes
+		basedir=`echo "$basedir" | sed 's/\([[^\]]\)\([[[:space:]\$\"'\'']]\)/\1\\\2/g'`
 		ILBC_INC="-I$basedir/$incilbc"
-		ILBC_DEP="../$incilbc/libilbc.a"
 	fi
 AC_MSG_RESULT([$HAVE_ILBC])
 fi

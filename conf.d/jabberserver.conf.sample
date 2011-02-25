@@ -59,9 +59,9 @@
 
 ; stream_starttimeout: integer: The interval, in milliseconds, allowed for a remote
 ;  party to send the stream start tag
-; Defaults to 5000 if missing or invalid
-; Minimum allowed value is 1000, maximum allowed value is 10000
-;stream_starttimeout=5000
+; Defaults to 20000 if missing or invalid
+; Minimum allowed value is 10000, maximum allowed value is 60000
+;stream_starttimeout=20000
 
 ; stream_setuptimeout: integer: Overall stream setup interval in milliseconds. The timer
 ;  will stop when the stream is authenticated

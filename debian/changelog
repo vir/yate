@@ -1,3 +1,15 @@
+yate (3.1.1.svn4139) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4139: + Delete "peerid" parameter from a
+    forked call.execute as it is incorrect for the new context - the
+    fork master did already replace that peer.  + Fixed building of
+    module.update messages for database modules.  + Enable sending
+    chan.startup/disconnected/hangup messages from the fork master, they
+    are required for proper PBX operation.  + Copy more parameters in
+    the chan.startup of the fork master.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 01 Mar 2011 02:19:18 +0300
+
 yate (3.1.1.svn4135) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4135: + Changed stream setup and connect

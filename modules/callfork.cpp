@@ -39,6 +39,7 @@ class ForkMaster : public CallEndpoint
 public:
     ForkMaster(ObjList* targets);
     virtual ~ForkMaster();
+    virtual void disconnected(bool final, const char* reason);
     bool startCalling(Message& msg);
     void checkTimer(const Time& tmr);
     void lostSlave(ForkSlave* slave, const char* reason);
@@ -64,6 +65,7 @@ protected:
     u_int64_t m_timer;
     bool m_timerDrop;
     bool m_execNext;
+    bool m_chanMsgs;
     String m_reason;
     String m_media;
 };
@@ -127,7 +129,8 @@ UNLOAD_PLUGIN(unloadNow)
 ForkMaster::ForkMaster(ObjList* targets)
     : m_index(0), m_answered(false), m_rtpForward(false), m_rtpStrict(false),
       m_fake(false), m_targets(targets), m_exec(0),
-      m_timer(0), m_timerDrop(false), m_execNext(false), m_reason("hangup")
+      m_timer(0), m_timerDrop(false), m_execNext(false), m_chanMsgs(false),
+      m_reason("hangup")
 {
     String tmp(MOD_PREFIX "/");
     tmp << ++s_current;
@@ -144,6 +147,25 @@ ForkMaster::~ForkMaster()
     s_calls.remove(this,false);
     CallEndpoint::commonMutex().unlock();
     clear(false);
+    if (m_chanMsgs) {
+	Message* msg = new Message("chan.hangup");
+	msg->addParam("id",id());
+	msg->addParam("cdrtrack",String::boolText(false));
+	Engine::enqueue(msg);
+    }
+}
+
+void ForkMaster::disconnected(bool final, const char* reason)
+{
+    CallEndpoint::disconnected(final,reason);
+    if (!final && m_chanMsgs) {
+	Message* msg = new Message("chan.disconnected");
+	msg->addParam("id",id());
+	if (m_exec)
+	    msg->copyParams(*m_exec,"error,reason");
+	msg->userData(this);
+	Engine::enqueue(msg);
+    }
 }
 
 String* ForkMaster::getNextDest()
@@ -236,6 +258,17 @@ bool ForkMaster::forkSlave(const char* dest)
 bool ForkMaster::startCalling(Message& msg)
 {
     m_exec = new Message(msg);
+    m_chanMsgs = msg.getBoolValue("fork.chanmsgs",(msg.getParam("pbxoper") != 0));
+    if (m_chanMsgs) {
+	Message* m = new Message("chan.startup");
+	m->addParam("id",id());
+	m->addParam("status","outgoing");
+	m->addParam("cdrtrack",String::boolText(false));
+	m->addParam("pbxguest",String::boolText(true));
+	m->addParam("fork.origid",getPeerId());
+	m->copyParam(msg,"billid");
+	Engine::enqueue(m);
+    }
     // stoperror is OBSOLETE
     m_failures = msg.getValue("fork.stop",msg.getValue("stoperror"));
     m_exec->clearParam("stoperror");

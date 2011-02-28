@@ -734,20 +734,14 @@ void MyModule::genUpdate(Message& msg)
 {
     Lock lock(this);
     unsigned int index = 0;
-    String db = "database.";
-    String total = "total.";
-    String failed = "failed.";
-    String error = "errorred.";
-    String conn = "hasconn.";
-    String time = "querytime.";
     for (ObjList* o = s_conns.skipNull(); o; o = o->next()) {
 	MyAcct* acc = static_cast<MyAcct*>(o->get());
-	msg.setParam(db << index,acc->toString());
-	msg.setParam(total << index,String(acc->total()));
-	msg.setParam(failed << index,String(acc->failed()));
-	msg.setParam(error << index,String(acc->errorred()));
-	msg.setParam(conn << index,String::boolText(acc->hasConn()));
-	msg.setParam(time << index,String(acc->queryTime()));
+	msg.setParam(String("database.") << index,acc->toString());
+	msg.setParam(String("total.") << index,String(acc->total()));
+	msg.setParam(String("failed.") << index,String(acc->failed()));
+	msg.setParam(String("errorred.") << index,String(acc->errorred()));
+	msg.setParam(String("hasconn.") << index,String::boolText(acc->hasConn()));
+	msg.setParam(String("querytime.") << index,String(acc->queryTime()));
 	index++;
     }
     msg.setParam("count",String(index));

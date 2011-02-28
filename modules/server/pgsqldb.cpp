@@ -482,20 +482,14 @@ void PgModule::initialize()
 void PgModule::genUpdate(Message& msg)
 {
     unsigned int index = 0;
-    String db = "database.";
-    String total = "total.";
-    String failed = "failed.";
-    String error = "errorred.";
-    String hasconn = "hasconn.";
-    String time = "querytime.";
     for (ObjList* o = s_conns.skipNull(); o; o = o->next()) {
 	PgConn* conn = static_cast<PgConn*>(o->get());
-	msg.setParam(db << index,conn->toString());
-	msg.setParam(total << index,String(conn->total()));
-	msg.setParam(failed << index,String(conn->failed()));
-	msg.setParam(error << index,String(conn->errorred()));
-	msg.setParam(hasconn << index,String::boolText(conn->hasConn()));
-	msg.setParam(time << index,String(conn->queryTime()));
+	msg.setParam(String("database.") << index,conn->toString());
+	msg.setParam(String("total.") << index,String(conn->total()));
+	msg.setParam(String("failed.") << index,String(conn->failed()));
+	msg.setParam(String("errorred.") << index,String(conn->errorred()));
+	msg.setParam(String("hasconn.") << index,String::boolText(conn->hasConn()));
+	msg.setParam(String("querytime.") << index,String(conn->queryTime()));
 	index++;
     }
     msg.setParam("count",String(index));

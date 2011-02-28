@@ -262,11 +262,12 @@ bool ForkMaster::startCalling(Message& msg)
     if (m_chanMsgs) {
 	Message* m = new Message("chan.startup");
 	m->addParam("id",id());
+	m->addParam("module",__plugin.name());
 	m->addParam("status","outgoing");
 	m->addParam("cdrtrack",String::boolText(false));
 	m->addParam("pbxguest",String::boolText(true));
 	m->addParam("fork.origid",getPeerId());
-	m->copyParam(msg,"billid");
+	m->copyParams(msg,"caller,callername,called,billid,username");
 	Engine::enqueue(m);
     }
     // stoperror is OBSOLETE

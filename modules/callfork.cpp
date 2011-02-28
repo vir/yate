@@ -240,6 +240,7 @@ bool ForkMaster::startCalling(Message& msg)
     m_failures = msg.getValue("fork.stop",msg.getValue("stoperror"));
     m_exec->clearParam("stoperror");
     m_exec->clearParam("fork.stop");
+    m_exec->clearParam("peerid");
     m_exec->setParam("fork.master",id());
     m_exec->setParam("fork.origid",getPeerId());
     m_rtpForward = msg.getBoolValue("rtp_forward");

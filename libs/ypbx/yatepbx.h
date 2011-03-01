@@ -297,6 +297,20 @@ protected:
      */
     void removeAssist(ChanAssist* assist);
 
+    /**
+     * Access to the assisted calls list
+     * @return The HashList holding the calls
+     */
+    inline HashList& calls()
+	{ return m_calls; }
+
+    /**
+     * Access to the assisted calls list
+     * @return The HashList holding the calls
+     */
+    inline const HashList& calls() const
+	{ return m_calls; }
+
 private:
     ChanAssistList(); // no default constructor please
     HashList m_calls;

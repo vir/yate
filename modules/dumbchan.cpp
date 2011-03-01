@@ -38,13 +38,13 @@ INIT_PLUGIN(DumbDriver);
 class DumbChannel :  public Channel
 {
 public:
-    DumbChannel(const char* addr = 0, const NamedList* exeMsg = 0) :
-      Channel(__plugin, 0, (exeMsg != 0))
+    DumbChannel(const char* addr, const NamedList& exeMsg, bool outgoing) :
+      Channel(__plugin, 0, outgoing)
     {
 	m_address = addr;
 	Message* s = message("chan.startup",exeMsg);
-	if (exeMsg)
-	    s->copyParams(*exeMsg,"caller,callername,called,billid,callto,username");
+	if (outgoing)
+	    s->copyParams(exeMsg,"caller,callername,called,billid,callto,username");
 	Engine::enqueue(s);
     };
     ~DumbChannel();
@@ -69,7 +69,7 @@ bool DumbDriver::msgExecute(Message& msg, String& dest)
 {
     CallEndpoint *dd = static_cast<CallEndpoint *>(msg.userData());
     if (dd) {
-	DumbChannel *c = new DumbChannel(dest,&msg);
+	DumbChannel *c = new DumbChannel(dest,msg,true);
 	c->initChan();
 	if (dd->connect(c)) {
 	    c->callConnect(msg);
@@ -94,7 +94,7 @@ bool DumbDriver::msgExecute(Message& msg, String& dest)
 	return false;
     }
 
-    DumbChannel* c = new DumbChannel(dest);
+    DumbChannel* c = new DumbChannel(dest,msg,false);
     c->initChan();
 
     String caller = msg.getValue("caller");
@@ -109,20 +109,7 @@ bool DumbDriver::msgExecute(Message& msg, String& dest)
     m.copyParam(msg,"callername");
     m.copyParam(msg,"maxcall");
     m.copyParam(msg,"timeout");
-
-    String params = msg.getValue("copyparams");
-    if (params) {
-	ObjList* lst = params.split(',',false);
-	for (ObjList* l = lst; l; l = l->next()) {
-	    String* s = static_cast<String*>(l->get());
-	    if (!s)
-		continue;
-	    s->trimBlanks();
-	    if (*s)
-		m.copyParam(msg,*s);
-	}
-	TelEngine::destruct(lst);
-    }
+    m.copyParams(msg,msg.getValue("copyparams"));
 
     if (Engine::dispatch(m)) {
 	m = "call.execute";

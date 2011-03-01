@@ -452,6 +452,7 @@ void Channel::disconnected(bool final, const char* reason)
     // last chance to get reconnected to something
     Message* m = getDisconnect(reason);
     m_targetid.clear();
+    m_parameters.clearParams();
     Engine::enqueue(m);
 }
 

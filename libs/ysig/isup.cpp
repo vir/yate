@@ -1037,6 +1037,8 @@ static const SignallingFlags s_flags_fwcallind[] = {
     { 0x0600, 0x0200, "sccp-less" },        //   connectionless method available
     { 0x0600, 0x0400, "sccp-conn" },        //   connection oriented method available
     { 0x0600, 0x0600, "sccp-less-conn" },   //   connectionless and connection oriented methods available
+    { 0x1000, 0x1000, "translated" },       // Number Translated (for portability)
+    { 0x2000, 0x2000, "qor-routing" },      // QoR routing attempt in progress
     { 0, 0, 0 }
 };
 

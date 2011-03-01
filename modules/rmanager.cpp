@@ -1250,7 +1250,11 @@ void Connection::writeStr(const Message &msg, bool received)
 	return;
     String s = msg.encode(received,"");
     s << "\r\n";
+    if (m_echoing && m_buffer)
+	clearLine();
     writeStr(s.c_str());
+    if (m_echoing && m_buffer)
+	writeStr(m_buffer);
 }
 
 // write debugging messages to the remote console

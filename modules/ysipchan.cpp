@@ -574,7 +574,7 @@ static bool matchAny(const String& name, const char** strs)
 }
 
 // Copy headers from SIP message to Yate message
-static void copySipHeaders(Message& msg, const SIPMessage& sip, bool filter = true)
+static void copySipHeaders(NamedList& msg, const SIPMessage& sip, bool filter = true)
 {
     const ObjList* l = sip.header.skipNull();
     for (; l; l = l->skipNext()) {
@@ -598,7 +598,7 @@ static void copySipHeaders(Message& msg, const SIPMessage& sip, bool filter = tr
 }
 
 // Copy headers from Yate message to SIP message
-static void copySipHeaders(SIPMessage& sip, const Message& msg, const char* prefix = "osip_")
+static void copySipHeaders(SIPMessage& sip, const NamedList& msg, const char* prefix = "osip_")
 {
     prefix = msg.getValue("osip-prefix",prefix);
     if (!prefix)
@@ -2413,7 +2413,14 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	m_byebye = false;
 	parameters().clearParams();
 	parameters().addParam("cause_sip",String(code));
+	parameters().addParam("reason_sip",msg->reason);
 	setReason(msg->reason,code);
+	if (msg->body) {
+	    Message tmp("isup.decode");
+	    if (decodeIsupBody(tmp,msg->body))
+		parameters().copyParams(tmp);
+	}
+	copySipHeaders(parameters(),*msg);
 	if (code < 400) {
 	    // this is a redirect, it should provide a Contact and possibly a Diversion
 	    const MimeHeaderLine* hl = msg->getHeader("Contact");
@@ -2819,8 +2826,14 @@ void YateSIPConnection::doBye(SIPTransaction* t)
     if (m_authBye && !checkUser(t))
 	return;
     DDebug(this,DebugAll,"YateSIPConnection::doBye(%p) [%p]",t,this);
-    // FIXME: decode isup
-    const MimeHeaderLine* hl = t->initialMessage()->getHeader("Reason");
+    const SIPMessage* msg = t->initialMessage();
+    if (msg->body) {
+	Message tmp("isup.decode");
+	if (decodeIsupBody(tmp,msg->body))
+	    parameters().copyParams(tmp);
+    }
+    copySipHeaders(parameters(),*msg);
+    const MimeHeaderLine* hl = msg->getHeader("Reason");
     if (hl) {
 	const NamedString* text = hl->getParam("text");
 	if (text)

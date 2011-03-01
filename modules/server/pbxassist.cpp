@@ -43,6 +43,8 @@ public:
     virtual bool msgDisconnect(Message& msg, const String& reason);
     virtual bool msgTone(Message& msg);
     virtual bool msgOperation(Message& msg, const String& operation);
+    inline void statusDetail(String& str) const
+	{ str.append(id() + "=" + m_state + "|" + m_tones,","); }
 protected:
     inline const String& state() const
 	{ return m_state; }
@@ -94,6 +96,10 @@ public:
     virtual void initialize();
     virtual void init(int priority);
     virtual bool received(Message& msg, int id, ChanAssist* assist);
+protected:
+    void statusModule(String& str);
+    void statusParams(String& str);
+    void statusDetail(String& str);
 };
 
 // assist all channels by default?
@@ -258,6 +264,34 @@ bool PBXList::received(Message& msg, int id, ChanAssist* assist)
 	default:
 	    return false;
     }
+}
+
+void PBXList::statusModule(String& str)
+{
+    Module::statusModule(str);
+    str.append("format=State|Keys",",");
+}
+
+void PBXList::statusParams(String& str)
+{
+    Module::statusParams(str);
+    lock();
+    str.append("assisted="+String(calls().count()),",");
+    unlock();
+    str << ",incoming=" << String::boolText(s_incoming);
+    str << ",dtmfpass=" << String::boolText(s_pass);
+    str << ",dialheld=" << String::boolText(s_dialHeld);
+    str << ",diversion=" << String::boolText(s_divProto);
+}
+
+void PBXList::statusDetail(String& str)
+{
+    Module::statusDetail(str);
+    lock();
+    ListIterator iter(calls());
+    while (const PBXAssist* assist = static_cast<const PBXAssist*>(iter.get()))
+	assist->statusDetail(str);
+    unlock();
 }
 
 

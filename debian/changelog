@@ -1,3 +1,19 @@
+yate (3.1.1.svn4145) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4145: + Added status detail to the pbxassist
+    module.  + Being set by the peer we don't want them in our
+    chan.hangup message.  + Clear disconnect parameters after retrieving
+    them once.  + Parameters are put in local chan.hangup and peer's
+    chan.disconnected messages.  + Copy SIP headers and decode ISUP
+    (SIP-T/SIP-I) body to disconnect parameters.  + Preserve the editor
+    buffer when rmanager is in "machine on" mode.  + Simplified code
+    that copies the same parameters to call.route message.  + Always
+    copy parameters listed in "copyparams" to chan.startup of dumbchan.
+    + Added the newer Number Translated and QoR Routing flags to ISUP
+    Forward Call Indicators.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 02 Mar 2011 02:19:13 +0300
+
 yate (3.1.1.svn4139) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4139: + Delete "peerid" parameter from a

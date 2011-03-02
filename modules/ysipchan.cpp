@@ -3294,7 +3294,10 @@ bool YateSIPConnection::callRouted(Message& msg)
 		tmp += " ";
 	    }
 	    s = tmp + "<" + s + ">";
-	    SIPMessage* m = new SIPMessage(m_tr->initialMessage(),302);
+	    int code = msg.getIntValue("reason",dict_errors,302);
+	    if ((code < 300) || (code > 399))
+		code = 302;
+	    SIPMessage* m = new SIPMessage(m_tr->initialMessage(),code);
 	    m->addHeader("Contact",s);
 	    tmp = msg.getValue("diversion");
 	    if (tmp.trimBlanks() && tmp.toBoolean(true)) {
@@ -3321,6 +3324,7 @@ bool YateSIPConnection::callRouted(Message& msg)
 		}
 		m->addHeader(hl);
 	    }
+	    copySipHeaders(*m,msg);
 	    m_tr->setResponse(m);
 	    m->deref();
 	    m_byebye = false;

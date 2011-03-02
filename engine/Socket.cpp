@@ -414,6 +414,11 @@ bool Stream::canRetry() const
     return false;
 }
 
+bool Stream::inProgress() const
+{
+    return false;
+}
+
 bool Stream::setBlocking(bool block)
 {
     return false;
@@ -1316,6 +1321,18 @@ bool Socket::canRetry() const
 #endif
 }
 
+// Check if the last error code indicates a non blocking operation in progress
+bool Socket::inProgress() const
+{
+    if (!valid())
+	return false;
+#ifdef _WINDOWS
+    return m_error == WSAEWOULDBLOCK;
+#else
+    return m_error == EINPROGRESS;
+#endif
+}
+
 bool Socket::canSelect() const
 {
     return canSelect(m_handle);
@@ -1359,6 +1376,18 @@ SOCKET Socket::acceptHandle(struct sockaddr* addr, socklen_t* addrlen)
     else
 	clearError();
     return res;
+}
+
+// Update socket error from socket options
+bool Socket::updateError()
+{
+    int error = 0;
+    socklen_t len = sizeof(error);
+    if (getOption(SOL_SOCKET,SO_ERROR,&error,&len)) {
+	m_error = error;
+	return true;
+    }
+    return false;
 }
 
 bool Socket::connect(struct sockaddr* addr, socklen_t addrlen)

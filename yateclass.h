@@ -5226,6 +5226,12 @@ public:
     virtual bool canRetry() const;
 
     /**
+     * Check if the last error code indicates a non blocking operation in progress
+     * @return True if a non blocking operation is in progress
+     */
+    virtual bool inProgress() const;
+
+    /**
      * Check if this stream is valid
      * @return True if the stream is valid, false if it's invalid or closed
      */
@@ -5748,6 +5754,12 @@ public:
     virtual bool canRetry() const;
 
     /**
+     * Check if the last error code indicates a non blocking operation in progress
+     * @return True if a non blocking operation is in progress
+     */
+    virtual bool inProgress() const;
+
+    /**
      * Check if this socket is valid
      * @return True if the handle is valid, false if it's invalid
      */
@@ -5861,6 +5873,15 @@ public:
      * @return Operating system handle to the new connection or @ref invalidHandle() on failure
      */
     SOCKET acceptHandle(struct sockaddr* addr = 0, socklen_t* addrlen = 0);
+
+    /**
+     * Update socket error from socket options.
+     * This method should be called when select() indicates a non blocking operation
+     *  completed.
+     * Note: if false is returned, the socket error is the reason of getOption() failure
+     * @return Return true on success
+     */
+    bool updateError();
 
     /**
      * Check if select() is efficient on this platform and worth using frequently

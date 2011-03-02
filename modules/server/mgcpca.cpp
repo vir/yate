@@ -1816,8 +1816,8 @@ void MGCPCircuit::processDelete(MGCPMessage* mm, const String& error)
 	    m_needClear = true;
 	    // fall-through
 	default:
-	    SignallingCircuit::status(
-		SignallingCircuit::status() >= Reserved ? Reserved : Idle);
+	    if (SignallingCircuit::status() > Reserved)
+		SignallingCircuit::status(Reserved);
     }
     // Signal a transient media failure condition
     enqueueEvent(SignallingCircuitEvent::Disconnected,error);

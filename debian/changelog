@@ -1,3 +1,15 @@
+yate (3.1.1.svn4149) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4149: + Do not Idle a Failed or Missing MGCP
+    circuit whose connection was deleted by the gateway.  + Added
+    failsafes to prevent reusing an ISUP circuit if a call still owns
+    it.  + Added method used to check if a non blocking operation is in
+    progress. Added method used to update the socket error when a non
+    blocking operation completed.  + Added capability to set response
+    code and additional parameters when redirecting a SIP call as UAS.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 03 Mar 2011 02:19:19 +0300
+
 yate (3.1.1.svn4145) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4145: + Added status detail to the pbxassist

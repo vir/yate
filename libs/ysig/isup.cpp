@@ -2142,6 +2142,8 @@ SS7ISUPCall::~SS7ISUPCall()
 	else
 	    isup()->startCircuitReset(m_circuit,m_relTimer.started() ? "T5" : "T16");
     }
+    else
+	TelEngine::destruct(m_circuit);
 }
 
 // Stop waiting for a SGM (Segmentation) message when another message is
@@ -3415,11 +3417,20 @@ SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
 	    }
 	    dest = *m_remotePoint;
 	}
-	if (!reserveCircuit(cic,range,SignallingCircuit::LockLockedBusy)) {
-	    Debug(this,DebugNote,"Can't reserve circuit");
-	    reason = "congestion";
-	    break;
+	for (int attempts = 3; attempts; attempts--) {
+	    if (!reserveCircuit(cic,range,SignallingCircuit::LockLockedBusy)) {
+		Debug(this,DebugNote,"Can't reserve circuit");
+		break;
+	    }
+	    SS7ISUPCall* call2 = findCall(cic->code());
+	    if (!call2)
+		break;
+	    Debug(this,DebugWarn,"Circuit %u is already used by call %p",
+		cic->code(),call2);
+	    TelEngine::destruct(cic);
 	}
+	if (!cic)
+	    reason = "congestion";
 	break;
     }
     SS7ISUPCall* call = 0;

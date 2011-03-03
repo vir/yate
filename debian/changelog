@@ -1,3 +1,18 @@
+yate (3.1.1.svn4153) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4153: + Use async connect if available. The
+    stream connect timeout value is no longer global: it's used for each
+    connect attempt (configured address, srv record, domain). Remember
+    connect status and re-connect starting from old status. Added srv
+    query timeout configurable option.  + Added subdirectory for SIP
+    related feature modules.  + Added module to perform CNAM and LNP
+    queries via SIP INVITE / 3xx.  + This allows using ${modulepath} and
+    ${modsuffix} so an absolute path is no longer required.  + Replace
+    engine parameters in the path of modules loaded from [preload] or
+    [postload] sections.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 04 Mar 2011 02:19:23 +0300
+
 yate (3.1.1.svn4149) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4149: + Do not Idle a Failed or Missing MGCP

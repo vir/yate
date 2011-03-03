@@ -85,6 +85,13 @@ public:
      */
     static void insert(ObjList& list, SrvRecord* rec);
 
+    /**
+     * Copy a SrvRecord list into another one
+     * @param dest Destination list
+     * @param src Source list
+     */
+    static void copy(ObjList& dest, const ObjList& src);
+
     int m_port;
     int m_priority;
     int m_weight;

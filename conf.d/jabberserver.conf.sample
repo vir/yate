@@ -70,11 +70,15 @@
 ;stream_setuptimeout=120000
 
 ; stream_connecttimeout: integer: The interval, in milliseconds, allowed for an
-;  outgoing stream to make a TCP connection to a remote host, including SRV request
-;  and resolving domain(s)
+;  outgoing stream to make a TCP connection to a remote host
 ; Defaults to 60000 if missing or invalid
 ; Minimum allowed value is 1000, maximum allowed value is 120000
 ;stream_connecttimeout=60000
+
+; stream_srvtimeout: integer: The timeout interval, in milliseconds, for SRV query
+; Defaults to 30000 if missing or invalid
+; Minimum allowed value is 10000, maximum allowed value is 120000
+;stream_srvtimeout=30000
 
 ; stream_idletimeout: integer: The interval, in milliseconds, allowed for a
 ;  server to server stream to be idle

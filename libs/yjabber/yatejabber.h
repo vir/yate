@@ -712,17 +712,16 @@ public:
 	}
 
     /**
-     * Retrieve connection address(es) and port
+     * Retrieve connection address(es), port and status
      * This method is not thread safe
      * @param addr The remote ip
      * @param port The remote port
      * @param localip Local ip to bind
+     * @param stat Current connect status
+     * @param srvs List to copy stream SRV records
      */
-    inline void connectAddr(String& addr, int& port, String& localip) const {
-	    addr = m_connectAddr;
-	    port = m_connectPort;
-	    localip = m_localIp;
-	}
+    void connectAddr(String& addr, int& port, String& localip, int& stat,
+	ObjList& srvs) const;
 
     /**
      * Set/reset RosterRequested flag
@@ -852,6 +851,16 @@ public:
      * @param sock The connected socket, will be consumed and zeroed
      */
     virtual void connectTerminated(Socket*& sock);
+
+    /**
+     * Connecting notification. Start connect timer for synchronous connect
+     * This method is thread safe
+     * @param sync True if the connection is synchronous
+     * @param stat Current status of the connect thread
+     * @param srvs Current list of SRV records in the connect thread
+     * @return True if accepted
+     */
+    virtual bool connecting(bool sync, int stat, ObjList& srvs);
 
     /**
      * Get an object from this stream
@@ -1232,6 +1241,8 @@ private:
     // Compress data to be sent (the pending stream xml buffer or pending stanza)
     // Return false on failure
     bool compress(XmlElementOut* xml = 0);
+    // Reset connect status data
+    void resetConnectStatus();
 
     enum {
 	SocketCanRead = 0x01,
@@ -1285,6 +1296,8 @@ private:
     int m_connectPort;                   // Remote port to connect to
     String m_localIp;                    // Local ip to bind when connecting
     Compressor* m_compress;
+    int m_connectStatus;                 // Current connect stream status
+    ObjList m_connectSrvs;               // Current connect stream SRV records
 };
 
 
@@ -1737,6 +1750,13 @@ class YJABBER_API JBConnect : public GenObject
 {
     YCLASS(JBConnect,GenObject)
 public:
+    enum Status {
+	Start = 0,
+	Address,                         // Use configured address
+	Srv,                             // Use SRV records
+	Domain                           // Use stream remote domain
+    };
+
     /**
      * Constructor. Add itself to the stream's engine
      * @param stream The stream to connect
@@ -1759,6 +1779,11 @@ public:
      */
     virtual const String& toString() const;
 
+    /**
+     * Status name dictionary
+     */
+    static const TokenDict s_statusName[];
+
 protected:
     /**
      * Connect the socket.
@@ -1775,11 +1800,19 @@ private:
 	{}
     // Check if exiting. Release socket if exiting
     bool exiting(Socket*& sock);
-    // Connect a socket
-    bool connect(Socket*& sock, const char* addr, int port);
+    // Create and try to connect a socket. Return it on success
+    // Set stop on fatal failure and return 0
+    Socket* connect(const char* addr, int port, bool& stop);
     // Notify termination, remove from engine
     void terminated(Socket* sock, bool final);
+    // Notify connecting to the stream. Return false if stream vanished
+    bool notifyConnecting(bool sync, bool useCurrentStat = false);
+    // Delete a socket and zero the pointer
+    void deleteSocket(Socket*& sock);
+    // Advance connect status
+    void advanceStatus();
 
+    int m_status;                        // Current status
     String m_domain;                     // Remote domain
     String m_address;                    // Remote ip address
     int m_port;                          // Port to connect to
@@ -1787,6 +1820,7 @@ private:
     String m_stream;                     // Stream name
     JBStream::Type m_streamType;         // Stream type
     String m_localIp;                    // Local ip to bind when connecting
+    ObjList m_srvs;                      // SRV records list
 };
 
 
@@ -2091,6 +2125,7 @@ protected:
     unsigned int m_setupTimeout;         // Overall stream setup timeout
     unsigned int m_startTimeout;         // Wait stream start period
     unsigned int m_connectTimeout;       // Outgoing: socket connect timeout
+    unsigned int m_srvTimeout;           // SRV query timeout
     unsigned int m_pingInterval;         // Stream idle interval (no data received)
     unsigned int m_pingTimeout;          // Sent ping timeout
     unsigned int m_idleTimeout;          // Stream idle timeout (nothing sent or received)
@@ -2103,6 +2138,8 @@ protected:
 private:
     // Add/remove a connect stream thread when started/stopped
     void connectStatus(JBConnect* conn, bool started);
+    // Stop a connect stream
+    void stopConnect(const String& name);
 
     ObjList m_connect;                   // Connecting streams
 };

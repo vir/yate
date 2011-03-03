@@ -155,7 +155,7 @@ JBStream::JBStream(JBEngine* engine, Socket* socket, Type t, bool ssl)
     m_engine(engine), m_type(t),
     m_incoming(true), m_terminateEvent(0),
     m_xmlDom(0), m_socket(0), m_socketFlags(0), m_socketMutex(true,"JBStream::Socket"),
-    m_connectPort(0), m_compress(0)
+    m_connectPort(0), m_compress(0), m_connectStatus(JBConnect::Start)
 {
     if (ssl)
 	setFlags(StreamSecured | StreamTls);
@@ -186,7 +186,7 @@ JBStream::JBStream(JBEngine* engine, Type t, const JabberID& local, const Jabber
     m_incoming(false), m_name(name),
     m_terminateEvent(0),
     m_xmlDom(0), m_socket(0), m_socketFlags(0), m_socketMutex(true,"JBStream::Socket"),
-    m_connectPort(0), m_compress(0)
+    m_connectPort(0), m_compress(0), m_connectStatus(JBConnect::Start)
 {
     if (!m_name)
 	m_engine->buildStreamName(m_name,this);
@@ -231,6 +231,7 @@ void JBStream::connectTerminated(Socket*& sock)
 	}
 	else {
 	    DDebug(this,DebugNote,"Connect failed [%p]",this);
+	    resetConnectStatus();
 	    terminate(0,false,0,XMPPError::NoRemote);
 	}
 	return;
@@ -241,6 +242,29 @@ void JBStream::connectTerminated(Socket*& sock)
 	delete sock;
 	sock = 0;
     }
+}
+
+// Connecting notification. Start connect timer for synchronous connect
+bool JBStream::connecting(bool sync, int stat, ObjList& srvs)
+{
+    if (incoming() || !m_engine || state() != Connecting)
+	return false;
+    Lock lock(this);
+    if (state() != Connecting)
+	return false;
+    m_connectStatus = stat;
+    SrvRecord::copy(m_connectSrvs,srvs);
+    if (sync) {
+	if (stat != JBConnect::Srv)
+	    m_connectTimeout = Time::msecNow() + m_engine->m_connectTimeout;
+	else
+	    m_connectTimeout = Time::msecNow() + m_engine->m_srvTimeout;
+    }
+    else
+	m_connectTimeout = 0;
+    DDebug(this,DebugAll,"Connecting sync=%u stat=%s [%p]",
+	sync,lookup(m_connectStatus,JBConnect::s_statusName),this);
+    return true;
 }
 
 // Get an object from this stream
@@ -259,6 +283,17 @@ void* JBStream::getObject(const String& name) const
 const String& JBStream::toString() const
 {
     return m_name;
+}
+
+// Retrieve connection address(es), port and status
+void JBStream::connectAddr(String& addr, int& port, String& localip, int& stat,
+    ObjList& srvs) const
+{
+    addr = m_connectAddr;
+    port = m_connectPort;
+    localip = m_localIp;
+    stat = m_connectStatus;
+    SrvRecord::copy(srvs,m_connectSrvs);
 }
 
 // Set/reset RosterRequested flag
@@ -821,14 +856,19 @@ bool JBStream::canProcess(u_int64_t time)
 	}
 	if (state() == Idle) {
 	    // Re-connect
-	    // Don't connect non client if we are in error and have nothing to send
-	    if (m_restart) {
+	    bool conn = (m_connectStatus > JBConnect::Start);
+	    if (!conn && m_restart) {
+		// Don't connect non client or cluster if we are in error and
+		//  have nothing to send
 		if (m_type != c2s && m_type != cluster &&
 		    flag(InError) && !m_pending.skipNull())
 		    return false;
+		conn = true;
+		m_restart--;
+	    }
+	    if (conn) {
 		resetFlags(InError);
 		changeState(Connecting);
-		m_restart--;
 		m_engine->connectStream(this);
 		return false;
 	    }
@@ -1048,7 +1088,15 @@ void JBStream::checkTimeouts(u_int64_t time)
     }
     // Stream connect timer
     if (m_connectTimeout && m_connectTimeout < time) {
-	terminate(0,m_incoming,0,XMPPError::ConnTimeout,"Stream connect timeout");
+	DDebug(this,DebugNote,"Connect timed out stat=%s [%p]",
+	    lookup(m_connectStatus,JBConnect::s_statusName),this);
+	// Don't terminate if there are more connect options
+	if (state() == Connecting && m_connectStatus > JBConnect::Start) {
+	    m_engine->stopConnect(toString());
+	    m_engine->connectStream(this);
+	}
+	else
+	    terminate(0,m_incoming,0,XMPPError::ConnTimeout,"Stream connect timeout");
 	return;
     }
 }
@@ -1474,6 +1522,9 @@ void JBStream::changeState(State newState, u_int64_t time)
     // Set/reset state depending data
     switch (m_state) {
 	case WaitStart:
+	    // Reset connect status if not timeout
+	    if (m_startTimeout && m_startTimeout > time)
+		resetConnectStatus();
 	    m_startTimeout = 0;
 	    break;
 	case Securing:
@@ -1482,6 +1533,7 @@ void JBStream::changeState(State newState, u_int64_t time)
 	    break;
 	case Connecting:
 	    m_connectTimeout = 0;
+	    m_engine->stopConnect(toString());
 	    break;
 	case Register:
 	    if (type() == c2s)
@@ -1518,19 +1570,13 @@ void JBStream::changeState(State newState, u_int64_t time)
 		clientStream()->m_registerReq = 0;
 	    break;
 	case Running:
+	    resetConnectStatus();
 	    setFlags(StreamSecured | StreamAuthenticated);
 	    resetFlags(InError);
 	    m_setupTimeout = 0;
 	    m_startTimeout = 0;
 	    if (m_state != Running)
 		m_events.append(new JBEvent(JBEvent::Running,this,0));
-	    break;
-	case Connecting:
-	    if (m_engine->m_connectTimeout)
-		m_connectTimeout = time + m_engine->m_connectTimeout;
-	    else
-		m_connectTimeout = 0;
-	    DDebug(this,DebugAll,"Set connect timeout " FMT64 " [%p]",m_connectTimeout,this);
 	    break;
 	case Securing:
 	    socketSetCanRead(false);
@@ -2333,6 +2379,14 @@ bool JBStream::compress(XmlElementOut* xml)
     else
 	Debug(this,DebugNote,"Failed to compress %s xml: %d [%p]",s,res,this);
     return false;
+}
+
+// Reset connect status data
+void JBStream::resetConnectStatus()
+{
+    DDebug(this,DebugAll,"resetConnectStatus() [%p]",this);
+    m_connectStatus = JBConnect::Start;
+    m_connectSrvs.clear();
 }
 
 

@@ -1,0 +1,64 @@
+[priorities]
+; These settings that are read only at first initialization!
+
+; Sets the priorities for installing relevant message handlers
+
+; call.preroute: int: Priority of the call.preroute handler
+; Should be set between 10 and 90
+;call.preroute=50
+
+; call.route: int: Priority of the call.route handler
+; Should be set between 10 and 90
+;call.route=50
+
+
+[cnam]
+; Controls how CNAM queries are performed, a SIP 3xx answer is expected
+; CNAM is taken from the description of P-Asserted-Identity URI
+; Query is performed on call.preroute when callername is missing and caller is E.164
+; Parameters modified: callername, querycnam
+
+; Actual call parameters ${...} are substituted in the strings
+
+; callto: string: Template for the resource of the CNAM request
+; This parameter is required for CNAM functionality
+; Example: callto=sip/sip:${caller}@10.0.0.1
+;callto=
+
+; caller: string: Template for the caller party number of the request
+; It should not be modified
+;caller=${caller}
+
+; called: string: Template for the called party number of the request
+; It can be used to force anonymous requests
+;called=${called}
+
+; timeout: int: overall timeout of the SIP request in milliseconds
+; It is limited to range 1000-30000 (1s to 30s)
+;timeout=5000
+
+
+[lnp]
+; Controls how LNP queries are performed, a SIP 3xx answer is expected
+; Routing Number and NPDI are taken from the Contact URI
+; Query is performed on call.route when npdi is not true
+; Parameters modified: routing, npdi, querylnp
+
+; Actual call parameters ${...} are substituted in the strings
+
+; callto: string: Template for the resource of the LNP request
+; This parameter is required for LNP functionality
+; Example: callto=sip/sip:${called}@10.0.0.2
+;callto=
+
+; caller: string: Template for the caller party number of the request
+; It can be used to force anonymous requests
+;caller=${caller}
+
+; called: string: Template for the called party number of the request
+; It should not be modified
+;called=${called}
+
+; timeout: int: overall timeout of the SIP request in milliseconds
+; It is limited to range 1000-30000 (1s to 30s)
+;timeout=5000

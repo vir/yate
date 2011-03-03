@@ -67,6 +67,17 @@ void SrvRecord::insert(ObjList& list, SrvRecord* rec)
     list.append(rec);
 }
 
+// Copy a SrvRecord list into another one
+void SrvRecord::copy(ObjList& dest, const ObjList& src)
+{
+    dest.clear();
+    for (ObjList* o = src.skipNull(); o; o = o->skipNext()) {
+	SrvRecord* rec = static_cast<SrvRecord*>(o->get());
+	dest.append(new SrvRecord(*rec,rec->m_port,rec->m_priority,rec->m_weight));
+    }
+}
+
+
 // Make a SRV query
 int Resolver::srvQuery(const char* query, ObjList& result, String* error)
 {

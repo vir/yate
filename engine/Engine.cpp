@@ -1352,8 +1352,11 @@ void Engine::loadPlugins()
         unsigned int len = l->length();
         for (unsigned int i=0; i<len; i++) {
             NamedString *n = l->getParam(i);
-            if (n && n->toBoolean())
-                loadPlugin(n->name());
+            if (n && n->toBoolean()) {
+        	String path(n->name());
+        	s_params.replaceParams(path);
+                loadPlugin(path);
+            }
 	    if (exiting())
 		break;
 	}
@@ -1370,8 +1373,11 @@ void Engine::loadPlugins()
 	    if (exiting())
 		return;
             NamedString *n = l->getParam(i);
-            if (n && n->toBoolean())
-                loadPlugin(n->name());
+            if (n && n->toBoolean()) {
+        	String path(n->name());
+        	s_params.replaceParams(path);
+                loadPlugin(path);
+	    }
 	}
     }
 }

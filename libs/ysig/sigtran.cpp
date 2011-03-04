@@ -1044,12 +1044,16 @@ void SS7M2PA::timerTick(const Time& when)
 	abortAlignment("T3 timeout");
 	return;
     }
-    if (m_t4.started() && m_t4.timeout(when.msec())) {
-	m_t4.stop();
-	setLocalStatus(Ready);
-	transmitLS();
-	m_t1.start();
-	return;
+    if (m_t4.started()) {
+	if (m_t4.timeout(when.msec())) {
+	    m_t4.stop();
+	    setLocalStatus(Ready);
+	    transmitLS();
+	    m_t1.start();
+	    return;
+	}
+	if ((when & 0x3f) == 0)
+	    transmitLS();
     }
     if (m_t1.started() && m_t1.timeout(when.msec())) {
 	m_t1.stop();

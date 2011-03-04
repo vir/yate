@@ -381,6 +381,12 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	case SS7MsgSNM::CHM:
 	case SS7MsgSNM::ECM:
 	case SS7MsgSNM::MIM:
+	    {
+		// for ANSI the SLC is not stored in SLS but in a separate field
+		int slc = msg->params().getIntValue("slc",-1);
+		if (slc >= 0 && slc <= 255)
+		    lbl.setSls((unsigned char)slc);
+	    }
 	    // check if the addressed link exists
 	    if (router && !router->inhibit(lbl,0,0)) {
 		Debug(this,DebugMild,"Received %s for inexistent %s on SLS %d [%p]",

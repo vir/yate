@@ -1,3 +1,21 @@
+yate (3.1.1.svn4159) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4159: + Replace engine parameters in the
+    path of modules loaded from [preload] or [postload] sections.  + Do
+    not emit chan.disconnected for the master of a fork already
+    answered.  + Prevents a race condition from clearing the timer too
+    early.  + Start the M2PA ACK timer before sending the SIGTRAN
+    packet.  + Fixed the way ISUP calls are released when media cannot
+    be started or checked.  + Added support for changeover and
+    changeback messages on networks like ANSI where the SLC is not
+    stored in the routing label's SLS.  + Send repeatedly Link Status
+    messages during M2PA proving, some implementations require them.  +
+    Code was crashing if an ISUP was started with an invalid
+    configuration.  + Check if the remote Point Code is set in ISUP
+    before using it.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 05 Mar 2011 02:19:20 +0300
+
 yate (3.1.1.svn4153) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4153: + Use async connect if available. The

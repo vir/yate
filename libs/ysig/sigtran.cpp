@@ -1360,9 +1360,9 @@ void SS7M2PA::retransData()
 	head[3] = m_needToAck & 0xff ;
 	if (m_confTimer.started())
 	    m_confTimer.stop();
-	transmitMSG(1,M2PA, 1, *msg,1);
 	if (!m_ackTimer.started())
 	    m_ackTimer.start();
+	transmitMSG(1,M2PA, 1, *msg,1);
     }
 }
 
@@ -1401,11 +1401,9 @@ bool SS7M2PA::transmitMSU(const SS7MSU& msu)
     m_ackList.append(new DataBlock(packet));
     if (m_dumpMsg)
 	dumpMsg(1,M2PA,1,packet,1,true);
-    bool ok = transmitMSG(1,M2PA,1,packet,1);
-    lock.drop();
     if (!m_ackTimer.started())
 	m_ackTimer.start();
-    return ok;
+    return transmitMSG(1,M2PA,1,packet,1);
 }
 
 void SS7M2PA::notifyLayer(SignallingInterface::Notification event)

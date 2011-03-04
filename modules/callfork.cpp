@@ -158,7 +158,7 @@ ForkMaster::~ForkMaster()
 void ForkMaster::disconnected(bool final, const char* reason)
 {
     CallEndpoint::disconnected(final,reason);
-    if (!final && m_chanMsgs) {
+    if (m_chanMsgs && !(final || m_answered)) {
 	Message* msg = new Message("chan.disconnected");
 	msg->addParam("id",id());
 	if (m_exec)

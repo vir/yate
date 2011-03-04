@@ -2928,14 +2928,12 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 		if (m_circuitTesting && !(isup() && isup()->m_continuity)) {
 		    Debug(isup(),DebugWarn,"Call(%u). Continuity check requested but not configured [%p]",
 			id(),this);
-		    TelEngine::destruct(m_sgmMsg);
-		    setReason("service-not-implemented",0,0,isup()->location());
-		    return release();
+		    setTerminate(true,"service-not-implemented",0,isup()->location());
+		    break;
 		}
 		if (m_circuitTesting && !connectCircuit(isup()->m_continuity)) {
-		    TelEngine::destruct(m_sgmMsg);
-		    setReason("bearer-cap-not-available",0,0,isup()->location());
-		    return release();
+		    setTerminate(true,"bearer-cap-not-available",0,isup()->location());
+		    break;
 		}
 		Debug(isup(),DebugNote,"Call(%u). Waiting for continuity check [%p]",
 		    id(),this);
@@ -2947,9 +2945,8 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 	    }
 	    if (!connectCircuit() && isup() &&
 		(isup()->mediaRequired() >= SignallingCallControl::MediaAlways)) {
-		TelEngine::destruct(m_sgmMsg);
-		setReason("bearer-cap-not-available",0,0,isup()->location());
-		return release();
+		setTerminate(true,"bearer-cap-not-available",0,isup()->location());
+		break;
 	    }
 	    m_state = Setup;
 	    m_sgmMsg->params().setParam("overlapped",String::boolText(m_overlap));
@@ -2960,24 +2957,21 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 		if (!(isup() && isup()->m_continuity)) {
 		    Debug(isup(),DebugWarn,"Call(%u). Continuity check requested but not configured [%p]",
 			id(),this);
-		    TelEngine::destruct(m_sgmMsg);
-		    setReason("service-not-implemented",0,0,isup()->location());
-		    return release();
+		    setTerminate(true,"service-not-implemented",0,isup()->location());
+		    break;
 		}
 		m_circuitTesting = true;
 		if (!connectCircuit(isup()->m_continuity)) {
-		    TelEngine::destruct(m_sgmMsg);
-		    setReason("bearer-cap-not-available",0,0,isup()->location());
-		    return release();
+		    setTerminate(true,"bearer-cap-not-available",0,isup()->location());
+		    break;
 		}
 		Debug(isup(),DebugNote,"Call(%u). Continuity test only [%p]",
 		    id(),this);
 		m_state = Testing;
 	    }
 	    else if (!m_circuitTesting) {
-		TelEngine::destruct(m_sgmMsg);
-		setReason("wrong-state-message",0,0,isup()->location());
-		return release();
+		setTerminate(true,"wrong-state-message",0,isup()->location());
+		break;
 	    }
 	    m_contTimer.stop();
 	    m_iamTimer.start();
@@ -2987,9 +2981,9 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 	case SS7MsgISUP::ACM:
 	    if (!connectCircuit() && isup() &&
 		(isup()->mediaRequired() >= SignallingCallControl::MediaAlways)) {
-		TelEngine::destruct(m_sgmMsg);
 		setReason("bearer-cap-not-available",0,0,isup()->location());
-		return release();
+		m_lastEvent = release();
+		break;
 	    }
 	    m_state = Accepted;
 	    {
@@ -3019,9 +3013,8 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 	case SS7MsgISUP::CPR:
 	    if (!connectCircuit() && isup() &&
 		(isup()->mediaRequired() >= SignallingCallControl::MediaRinging)) {
-		TelEngine::destruct(m_sgmMsg);
-		setReason("bearer-cap-not-available",0,0,isup()->location());
-		return release();
+		setTerminate(true,"bearer-cap-not-available",0,isup()->location());
+		break;
 	    }
 	    m_state = Ringing;
 	    {
@@ -3037,9 +3030,8 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 	case SS7MsgISUP::CON:
 	    if (!connectCircuit() && isup() &&
 		(isup()->mediaRequired() >= SignallingCallControl::MediaAnswered)) {
-		TelEngine::destruct(m_sgmMsg);
-		setReason("bearer-cap-not-available",0,0,isup()->location());
-		return release();
+		setTerminate(true,"bearer-cap-not-available",0,isup()->location());
+		break;
 	    }
 	    m_state = Answered;
 	    m_anmTimer.stop();
@@ -3567,7 +3559,7 @@ void SS7ISUP::timerTick(const Time& when)
 	return;
 
     // Test remote user part
-    if (!m_userPartAvail && m_uptTimer.interval()) {
+    if (m_remotePoint && !m_userPartAvail && m_uptTimer.interval()) {
 	if (m_uptTimer.started()) {
 	    if (!m_uptTimer.timeout(when.msec()))
 		return;
@@ -3725,6 +3717,8 @@ bool SS7ISUP::control(NamedList& params)
     if (!(cmp && toString() == cmp))
 	return false;
     Lock mylock(this);
+    if (!m_remotePoint)
+	return false;
     ObjList* o = circuits()->circuits().skipNull();
     SignallingCircuit* cic = o ? static_cast<SignallingCircuit*>(o->get()) : 0;
     unsigned int code1 = cic ? cic->code() : 1;
@@ -3806,6 +3800,8 @@ void SS7ISUP::notify(SS7Layer3* link, int sls)
 	return;
     Lock mylock(this);
     // Ignore links not routing our remote point code
+    if (!m_remotePoint)
+	return;
     if ((unsigned int)-1 == link->getRoutePriority(m_type,m_remotePoint->pack(m_type)))
 	return;
     bool linkTmp = m_l3LinkUp;
@@ -4217,7 +4213,7 @@ bool SS7ISUP::processParamCompat(const NamedList& list, unsigned int cic, bool* 
 	hexifyIsupParams(diagnostic,relCall);
 	if (call)
 	    call->setTerminate(true,"unknown-ie",diagnostic,m_location);
-	else {
+	else if (m_remotePoint) {
 	    // No call: make sure the circuit is released at remote party
 	    SS7Label label(m_type,*m_remotePoint,*m_defPoint,
 		(m_defaultSls == SlsCircuit) ? cic : m_sls);
@@ -4236,7 +4232,7 @@ bool SS7ISUP::processParamCompat(const NamedList& list, unsigned int cic, bool* 
 	cic,cnf.c_str(),this);
     String diagnostic;
     hexifyIsupParams(diagnostic,cnf);
-    if (diagnostic) {
+    if (diagnostic && m_remotePoint) {
 	SS7Label label(m_type,*m_remotePoint,*m_defPoint,
 	    (m_defaultSls == SlsCircuit) ? cic : m_sls);
 	transmitCNF(this,cic,label,false,"unknown-ie",diagnostic,m_location);

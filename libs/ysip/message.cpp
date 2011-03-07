@@ -233,7 +233,9 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
     }
     if (isAnswer()) {
 	hl->setParam("received",getParty()->getPartyAddr());
-	hl->setParam("rport",String(getParty()->getPartyPort()));
+	const String* rport = hl->getParam("rport");
+	if (rport && rport->null())
+	    const_cast<String&>(*rport) = getParty()->getPartyPort();
     }
 
     if (!isAnswer()) {

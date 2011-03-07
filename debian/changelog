@@ -1,3 +1,19 @@
+yate (3.1.1.svn4164) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4164: + Check if the remote Point Code is
+    set in ISUP before using it.  + Set the value of rport parameter
+    (RFC 3581) in the topmost Via header only if the parameter is
+    already set by the client or proxy and has no value.  + These flags
+    can be configured per engine and can be overridden in some messages
+    by setting an "xsip_flags" parameter.  + Added flags that control
+    how SIP message components are automatically completed.  + Add a
+    "sip/" in front of a callto resource that starts with a SIP URI.  +
+    Added setting for the extra SIP flags in requests.  + Report textual
+    status of call controllers (trunks).  + Added support for Extended
+    Changeover messages (XCO/XCA) used with 24-bit sequence SS7 links.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 08 Mar 2011 02:19:16 +0300
+
 yate (3.1.1.svn4159) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4159: + Replace engine parameters in the

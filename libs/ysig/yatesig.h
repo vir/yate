@@ -1074,6 +1074,12 @@ public:
 	{ return m_calls; }
 
     /**
+     * Get the controller's status as text
+     * @return Controller status name
+     */
+    virtual const char* statusName() const = 0;
+
+    /**
      * Attach/detach a circuit group to this call controller. Set group's allocation strategy.
      * Set locked flags for all circuits belonging to the attached circuit group.
      * Cleanup controller before detaching the group or attaching a new one
@@ -8083,6 +8089,12 @@ public:
     virtual bool initialize(const NamedList* config);
 
     /**
+     * Get the controller's status as text
+     * @return Controller status name
+     */
+    virtual const char* statusName() const;
+
+    /**
      * Attach a SS7 network or router to this service. Detach itself from the old one
      * @param network Pointer to network or router to attach
      */
@@ -10761,6 +10773,12 @@ public:
     virtual bool initialize(const NamedList* config);
 
     /**
+     * Get the controller's status as text
+     * @return Controller status name
+     */
+    virtual const char* statusName() const;
+
+    /**
      * Get the layer 2 attached to this object
      * @return Pointer to the layer 2 attached to this object or 0 if none
      */
@@ -11176,6 +11194,12 @@ public:
      * @return True if Q.931 monitor and both interfaces were initialized properly
      */
     virtual bool initialize(const NamedList* config);
+
+    /**
+     * Get the controller's status as text
+     * @return Controller status name
+     */
+    virtual const char* statusName() const;
 
     /**
      * Notification from layer 2 of data link set/release command or response

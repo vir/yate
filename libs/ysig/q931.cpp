@@ -2528,6 +2528,17 @@ bool ISDNQ931::initialize(const NamedList* config)
     return 0 != layer2();
 }
 
+const char* ISDNQ931::statusName() const
+{
+    if (exiting())
+	return "Exiting";
+    if (!m_q921)
+	return "Layer 2 missing";
+    if (!m_q921Up)
+	return "Layer 2 down";
+    return "Operational";
+}
+
 // Check if layer 2 may be up
 bool ISDNQ931::q921Up() const
 {
@@ -3530,6 +3541,15 @@ bool ISDNQ931Monitor::initialize(const NamedList* config)
 	}
     }
     return m_q921Net && m_q921Cpe;
+}
+
+const char* ISDNQ931Monitor::statusName() const
+{
+    if (exiting())
+	return "Exiting";
+    if (!(m_q921Net && m_q921Cpe))
+	return "Layer 2 missing";
+    return "Operational";
 }
 
 // Notification from layer 2 of data link set/release command or response

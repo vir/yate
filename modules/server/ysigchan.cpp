@@ -1913,6 +1913,7 @@ void SigDriver::status(SigTrunk* trunk, String& retVal, const String& target)
     retVal << ",trunk=" << trunk->name();
     retVal << ",type=" << lookup(trunk->type(),SigTrunk::s_type);
     retVal << ",circuits=" << circuits;
+    retVal << ",status=" << (trunk->controller() ? trunk->controller()->statusName() : "Unknown");
     retVal << ",calls=" << (trunk->controller() ? trunk->controller()->calls().count() : 0);
     if (!target.null()) {
 	retVal << ";count=" << count;

@@ -3280,6 +3280,21 @@ bool SS7ISUP::initialize(const NamedList* config)
     return SS7Layer4::initialize(config);
 }
 
+const char* SS7ISUP::statusName() const
+{
+    if (exiting())
+	return "Exiting";
+    if (!m_l3LinkUp)
+	return "Layer 3 down";
+    if (!m_userPartAvail)
+	return "Remote unavailable";
+    if (!m_defPoint)
+	return "No local PC set";
+    if (!m_remotePoint)
+	return "No remote PC set";
+    return "Operational";
+}
+
 void SS7ISUP::attach(SS7Layer3* network)
 {
     SS7Layer4::attach(network);

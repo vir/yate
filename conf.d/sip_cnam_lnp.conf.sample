@@ -33,9 +33,13 @@
 ; It can be used to force anonymous requests
 ;called=${called}
 
-; timeout: int: overall timeout of the SIP request in milliseconds
+; timeout: int: Overall timeout of the SIP request in milliseconds
 ; It is limited to range 1000-30000 (1s to 30s)
 ;timeout=5000
+
+; flags: int: Miscellaneous flags for the SIP messages
+; A value of -1 will use the SIP channel defaults
+;flags=-1
 
 
 [lnp]
@@ -59,6 +63,10 @@
 ; It should not be modified
 ;called=${called}
 
-; timeout: int: overall timeout of the SIP request in milliseconds
+; timeout: int: Overall timeout of the SIP request in milliseconds
 ; It is limited to range 1000-30000 (1s to 30s)
 ;timeout=5000
+
+; flags: int: Miscellaneous flags for the SIP messages
+; A value of -1 will use the SIP channel defaults
+;flags=-1

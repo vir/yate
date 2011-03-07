@@ -39,7 +39,7 @@ SIPMessage::SIPMessage(const SIPMessage& original)
       body(0), m_ep(0),
       m_valid(original.isValid()), m_answer(original.isAnswer()),
       m_outgoing(original.isOutgoing()), m_ack(original.isACK()),
-      m_cseq(-1)
+      m_cseq(-1), m_flags(original.getFlags())
 {
     DDebug(DebugAll,"SIPMessage::SIPMessage(&%p) [%p]",
 	&original,this);
@@ -68,7 +68,7 @@ SIPMessage::SIPMessage(const SIPMessage& original)
 SIPMessage::SIPMessage(const char* _method, const char* _uri, const char* _version)
     : version(_version), method(_method), uri(_uri), code(0),
       body(0), m_ep(0), m_valid(true),
-      m_answer(false), m_outgoing(true), m_ack(false), m_cseq(-1)
+      m_answer(false), m_outgoing(true), m_ack(false), m_cseq(-1), m_flags(-1)
 {
     DDebug(DebugAll,"SIPMessage::SIPMessage('%s','%s','%s') [%p]",
 	_method,_uri,_version,this);
@@ -76,7 +76,7 @@ SIPMessage::SIPMessage(const char* _method, const char* _uri, const char* _versi
 
 SIPMessage::SIPMessage(SIPParty* ep, const char* buf, int len)
     : code(0), body(0), m_ep(ep), m_valid(false),
-      m_answer(false), m_outgoing(false), m_ack(false), m_cseq(-1)
+      m_answer(false), m_outgoing(false), m_ack(false), m_cseq(-1), m_flags(-1)
 {
     DDebug(DebugInfo,"SIPMessage::SIPMessage(%p,%d) [%p]\n------\n%s------",
 	buf,len,this,buf);
@@ -94,7 +94,7 @@ SIPMessage::SIPMessage(SIPParty* ep, const char* buf, int len)
 SIPMessage::SIPMessage(const SIPMessage* message, int _code, const char* _reason)
     : code(_code), body(0),
       m_ep(0), m_valid(false),
-      m_answer(true), m_outgoing(true), m_ack(false), m_cseq(-1)
+      m_answer(true), m_outgoing(true), m_ack(false), m_cseq(-1), m_flags(-1)
 {
     DDebug(DebugAll,"SIPMessage::SIPMessage(%p,%d,'%s') [%p]",
 	message,_code,_reason,this);
@@ -103,6 +103,7 @@ SIPMessage::SIPMessage(const SIPMessage* message, int _code, const char* _reason
     reason = _reason;
     if (!(message && message->isValid()))
 	return;
+    m_flags = message->getFlags();
     m_ep = message->getParty();
     if (m_ep)
 	m_ep->ref();
@@ -121,11 +122,12 @@ SIPMessage::SIPMessage(const SIPMessage* message, int _code, const char* _reason
 SIPMessage::SIPMessage(const SIPMessage* original, const SIPMessage* answer)
     : method("ACK"), code(0),
       body(0), m_ep(0), m_valid(false),
-      m_answer(false), m_outgoing(true), m_ack(true), m_cseq(-1)
+      m_answer(false), m_outgoing(true), m_ack(true), m_cseq(-1), m_flags(-1)
 {
     DDebug(DebugAll,"SIPMessage::SIPMessage(%p,%p) [%p]",original,answer,this);
     if (!(original && original->isValid()))
 	return;
+    m_flags = original->getFlags();
     m_ep = original->getParty();
     if (m_ep)
 	m_ep->ref();
@@ -181,16 +183,21 @@ SIPMessage::~SIPMessage()
     setBody();
 }
 
-void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domain, const char* dlgTag)
+void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domain, const char* dlgTag, int flags)
 {
-    DDebug(engine,DebugAll,"SIPMessage::complete(%p,'%s','%s','%s')%s%s%s [%p]",
-	engine,user,domain,dlgTag,
+    DDebug(engine,DebugAll,"SIPMessage::complete(%p,'%s','%s','%s',%d)%s%s%s [%p]",
+	engine,user,domain,dlgTag,flags,
 	isACK() ? " ACK" : "",
 	isOutgoing() ? " OUT" : "",
 	isAnswer() ? " ANS" : "",
 	this);
     if (!engine)
 	return;
+    if (-1 == flags)
+	flags = m_flags;
+    if (-1 == flags)
+	flags = engine->flags();
+    m_flags = flags;
 
     // don't complete incoming messages
     if (!isOutgoing())
@@ -221,7 +228,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	tmp << version << "/" << getParty()->getProtoName();
 	tmp << " " << getParty()->getLocalAddr() << ":" << getParty()->getLocalPort();
 	hl = new MimeHeaderLine("Via",tmp);
-	if (!(isAnswer() || isACK()))
+	if (!((flags & (NotReqRport|RportAfterBranch)) || isAnswer() || isACK()))
 	    hl->setParam("rport");
 	header.append(hl);
     }
@@ -231,9 +238,14 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	hl->setParam("branch",tmp);
     }
     if (isAnswer()) {
-	hl->setParam("received",getParty()->getPartyAddr());
-	hl->setParam("rport",String(getParty()->getPartyPort()));
+	if (!(flags & NotSetReceived))
+	    hl->setParam("received",getParty()->getPartyAddr());
+	const String* rport = hl->getParam("rport");
+	if (rport && rport->null() && !(flags & NotSetRport))
+	    const_cast<String&>(*rport) = getParty()->getPartyPort();
     }
+    else if ((flags & RportAfterBranch) && !((flags & NotReqRport) || isACK() || hl->getParam("rport")))
+	hl->setParam("rport");
 
     if (!isAnswer()) {
 	hl = const_cast<MimeHeaderLine*>(getHeader("From"));
@@ -273,7 +285,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
     }
 
     const char* info = isAnswer() ? "Server" : "User-Agent";
-    if (!(getHeader(info) || engine->getUserAgent().null()))
+    if (!((flags & NotAddAgent) || getHeader(info) || engine->getUserAgent().null()))
 	addHeader(info,engine->getUserAgent());
 
     // keep 100 answers short - they are hop to hop anyway
@@ -302,7 +314,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	addHeader("Contact",tmp);
     }
 
-    if (!getHeader("Allow"))
+    if (!((flags & NotAddAllow) || getHeader("Allow")))
 	addHeader("Allow",engine->getAllowed());
 }
 

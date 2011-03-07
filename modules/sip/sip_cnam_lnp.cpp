@@ -169,6 +169,7 @@ bool QuerySipDriver::msgPreroute(Message& msg)
     String caller = s_cfg.getValue("cnam","caller","${caller}");
     String called = s_cfg.getValue("cnam","called","${called}");
     int timeout = s_cfg.getIntValue("cnam","timeout",5000);
+    int flags = s_cfg.getIntValue("cnam","flags",-1);
     mylock.drop();
     msg.replaceParams(callto);
     msg.replaceParams(caller);
@@ -177,6 +178,8 @@ bool QuerySipDriver::msgPreroute(Message& msg)
 	timeout = 1000;
     else if (timeout > 30000)
 	timeout = 30000;
+    if (callto.startsWith("sip:"))
+	callto = "sip/" + callto;
     QuerySipChannel* c = new QuerySipChannel(caller,QuerySipChannel::CNAM,&msg);
     c->initChan();
     Message* m = c->message("call.execute",false,true);
@@ -184,6 +187,8 @@ bool QuerySipDriver::msgPreroute(Message& msg)
     m->addParam("caller",caller);
     m->addParam("called",called);
     m->addParam("timeout",String(timeout));
+    if (-1 != flags)
+	m->addParam("xsip_flags",String(flags));
     m->addParam("media",String::boolText(false));
     m->addParam("pbxassist",String::boolText(false));
     m->addParam("cdrtrack",String::boolText(false));
@@ -212,6 +217,7 @@ bool QuerySipDriver::msgRoute(Message& msg)
     String caller = s_cfg.getValue("lnp","caller","${caller}");
     String called = s_cfg.getValue("lnp","called","${called}");
     int timeout = s_cfg.getIntValue("lnp","timeout",5000);
+    int flags = s_cfg.getIntValue("lnp","flags",-1);
     mylock.drop();
     msg.replaceParams(callto);
     msg.replaceParams(caller);
@@ -220,6 +226,8 @@ bool QuerySipDriver::msgRoute(Message& msg)
 	timeout = 1000;
     else if (timeout > 30000)
 	timeout = 30000;
+    if (callto.startsWith("sip:"))
+	callto = "sip/" + callto;
     QuerySipChannel* c = new QuerySipChannel(caller,QuerySipChannel::LNP,&msg);
     c->initChan();
     Message* m = c->message("call.execute",false,true);
@@ -227,6 +235,8 @@ bool QuerySipDriver::msgRoute(Message& msg)
     m->addParam("caller",caller);
     m->addParam("called",called);
     m->addParam("timeout",String(timeout));
+    if (-1 != flags)
+	m->addParam("xsip_flags",String(flags));
     m->addParam("media",String::boolText(false));
     m->addParam("pbxassist",String::boolText(false));
     m->addParam("cdrtrack",String::boolText(false));

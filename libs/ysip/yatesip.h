@@ -94,6 +94,19 @@ class YSIP_API SIPMessage : public RefObject
 {
 public:
     /**
+     * Various message flags
+     */
+    enum Flags {
+	Defaults          =      0,
+	NotReqRport       = 0x0001,
+	NotAddAllow       = 0x0002,
+	NotAddAgent       = 0x0004,
+	RportAfterBranch  = 0x0008,
+	NotSetRport       = 0x0010,
+	NotSetReceived    = 0x0020,
+    };
+
+    /**
      * Copy constructor
      */
     SIPMessage(const SIPMessage& original);
@@ -131,8 +144,13 @@ public:
 
     /**
      * Complete missing fields with defaults taken from a SIP engine
+     * @param engine Pointer to the SIP engine to use for extra parameters
+     * @param user Username to set in the From header instead of that in rURI
+     * @param domain Domain to use in From instead of the local IP address
+     * @param dlgTag Value of dialog tag parameter to set in To header
+     * @param flags Miscellaneous completion flags, -1 to take them from engine
      */
-    void complete(SIPEngine* engine, const char* user = 0, const char* domain = 0, const char* dlgTag = 0);
+    void complete(SIPEngine* engine, const char* user = 0, const char* domain = 0, const char* dlgTag = 0, int flags = -1);
 
     /**
      * Copy an entire header line (including all parameters) from another message
@@ -200,9 +218,17 @@ public:
 
     /**
      * Get the Command Sequence number from this message
+     * @return Number part of CSEQ in this message
      */
     inline int getCSeq() const
 	{ return m_cseq; }
+
+    /**
+     * Get the last flags used by this message
+     * @return Flags last used, ORed together
+     */
+    inline int getFlags() const
+	{ return m_flags; }
 
     /**
      * Find a header line by name
@@ -391,6 +417,7 @@ protected:
     bool m_outgoing;
     bool m_ack;
     int m_cseq;
+    int m_flags;
     mutable String m_string;
     mutable DataBlock m_data;
     String m_authUser;
@@ -1158,6 +1185,13 @@ public:
 	{ m_lazyTrying = lazy100; }
 
     /**
+     * Retrieve various flags for this engine
+     * @return Value of flags ORed together
+     */
+    inline int flags() const
+	{ return m_flags; }
+
+    /**
      * Get an authentication nonce
      * @param nonce String reference to fill with the current nonce
      */
@@ -1244,6 +1278,7 @@ protected:
     u_int64_t m_t4;
     unsigned int m_maxForwards;
     int m_cseq;
+    int m_flags;
     bool m_lazyTrying;
     String m_userAgent;
     String m_allowed;

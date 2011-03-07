@@ -191,19 +191,23 @@ SS7MsgSNM* SS7MsgSNM::parse(SS7Management* receiver, unsigned char type,
 		    msg->name(),len,receiver);
 	    break;
 	}
-	// COO,COA: changeover sequence, slc
-	else if (type == COO || type == COA) {
+	// COO,COA,XCO,XCA: changeover sequence, slc
+	else if (type == COO || type == COA || type == XCO || type == XCA) {
 	    int seq = -1;
 	    int slc = -1;
 	    switch (pcType) {
 		case SS7PointCode::ITU:
 		    if (len >= 1)
 			seq = buf[0];
+		    if ((type == XCO || type == XCA) && (len >= 3))
+			seq |= (((unsigned int)buf[1]) << 8) | (((unsigned int)buf[2]) << 16);
 		    break;
 		case SS7PointCode::ANSI:
 		    if (len >= 2) {
 			slc = buf[0] & 0x0f;
 			seq = (buf[0] >> 4) | (((unsigned int)buf[1]) << 4);
+			if ((type == XCO || type == XCA) && (len >= 4))
+			    seq |= (((unsigned int)buf[2]) << 12) | (((unsigned int)buf[3]) << 20);
 		    }
 		    break;
 		default:
@@ -455,16 +459,29 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	    seq = router ? router->getSequence(lbl) : -1;
 	    if (seq >= 0) {
 		int len = 2;
-		unsigned char data[3];
+		unsigned char data[5];
 		data[0] = SS7MsgSNM::COA;
+		if (seq & 0xff000000) {
+		    seq &= 0x00ffffff;
+		    data[0] = SS7MsgSNM::XCA;
+		    len += 2;
+		}
 		switch (label.type()) {
 		    case SS7PointCode::ITU:
 			data[1] = (unsigned char)seq;
+			if (len >= 4) {
+			    data[2] = (unsigned char)(seq >> 8);
+			    data[3] = (unsigned char)(seq >> 16);
+			}
 			break;
 		    case SS7PointCode::ANSI:
 			data[1] = (unsigned char)((msg->params().getIntValue("slc",sls) & 0x0f) | (seq << 4));
 			data[2] = (unsigned char)(seq >> 4);
-			len = 3;
+			len++;
+			if (len >= 5) {
+			    data[3] = (unsigned char)(seq >> 12);
+			    data[4] = (unsigned char)(seq >> 20);
+			}
 			break;
 		    default:
 			Debug(DebugStub,"Please implement COO for type %u",label.type());
@@ -787,6 +804,8 @@ bool SS7Management::control(NamedList& params)
 	    switch (cmd) {
 		case SS7MsgSNM::COO:
 		case SS7MsgSNM::COA:
+		case SS7MsgSNM::XCO:
+		case SS7MsgSNM::XCA:
 		case SS7MsgSNM::CBD:
 		case SS7MsgSNM::CBA:
 		case SS7MsgSNM::LIN:
@@ -855,23 +874,37 @@ bool SS7Management::control(NamedList& params)
 		// Changeover messages
 		case SS7MsgSNM::COO:
 		case SS7MsgSNM::COA:
+		case SS7MsgSNM::XCO:
+		case SS7MsgSNM::XCA:
 		    if (params.getBoolValue("emergency",false)) {
 			unsigned char data = (SS7MsgSNM::COO == cmd) ? SS7MsgSNM::ECO : SS7MsgSNM::ECA;
 			return transmitMSU(SS7MSU(txSio,lbl,&data,1),lbl,txSls) >= 0;
 		    }
 		    else {
-			int seq = params.getIntValue("sequence",0) & 0x7f;
+			int seq = params.getIntValue("sequence",0) & 0x00ffffff;
+			if (SS7MsgSNM::COO == cmd || SS7MsgSNM::COA == cmd)
+			    seq &= 0x7f;
 			int len = 2;
-			unsigned char data[3];
+			unsigned char data[5];
 			data[0] = cmd;
 			switch (t) {
 			    case SS7PointCode::ITU:
 				data[1] = (unsigned char)seq;
+				if (SS7MsgSNM::XCO == cmd || SS7MsgSNM::XCA == cmd) {
+				    data[2] = (unsigned char)(seq >> 8);
+				    data[3] = (unsigned char)(seq >> 16);
+				    len += 2;
+				}
 				break;
 			    case SS7PointCode::ANSI:
 				data[1] = (unsigned char)((params.getIntValue("slc",sls) & 0x0f) | (seq << 4));
 				data[2] = (unsigned char)(seq >> 4);
 				len = 3;
+				if (SS7MsgSNM::XCO == cmd || SS7MsgSNM::XCA == cmd) {
+				    data[3] = (unsigned char)(seq >> 12);
+				    data[4] = (unsigned char)(seq >> 20);
+				    len += 2;
+				}
 				break;
 			    default:
 				Debug(DebugStub,"Please implement COO for type %u",t);

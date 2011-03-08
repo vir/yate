@@ -831,7 +831,11 @@ SS7M2PA::SS7M2PA(const NamedList& params)
     // Acknowledge timer ~1s
     m_ackTimer.interval(params,"ack_timer",1000,1100,false);
     // Confirmation timer 1/2 t4
-    m_confTimer.interval(params,"conf_timer",500,600,false);
+    m_confTimer.interval(params,"conf_timer",100,400,false);
+    // Maximum unacknowledged messages, max_unack+1 will force an ACK
+    m_maxUnack = params.getIntValue("max_unack",4);
+    if (m_maxUnack > 10)
+	m_maxUnack = 10;
     DDebug(this,DebugAll,"Creating SS7M2PA [%p]",this);
 }
 
@@ -839,7 +843,6 @@ SS7M2PA::~SS7M2PA()
 {
     Lock lock(m_mutex);
     m_ackList.clear();
-    m_bufMsg.clear();
     DDebug(this,DebugAll,"Destroying SS7M2PA [%p]",this);
 }
 
@@ -922,15 +925,6 @@ bool SS7M2PA::processMSG(unsigned char msgVersion, unsigned char msgClass,
     if (m_dumpMsg)
 	dumpMsg(msgVersion,msgClass,msgType,msg,streamId,false);
     Lock lock(m_mutex);
-    if (!operational() && msgType == UserData) {
-	if (m_remoteStatus != ProcessorOutage || m_remoteStatus != Busy)
-	    return false;
-	// If we are not operational buffer the received messages and ack them when we are op
-	m_bufMsg.append(new DataBlock(msg));
-	DDebug(this,DebugAll,"Buffering data message while non operational, %d messages buffered",
-	    m_bufMsg.count());
-	return true;
-    }
     if (!operational() && msgType == UserData)
 	return false;
     if (!decodeSeq(msg,(u_int8_t)msgType))
@@ -991,22 +985,28 @@ bool SS7M2PA::decodeSeq(const DataBlock& data,u_int8_t msgType)
 	transmitLS();
 	return false;
     }
-    if (fsn != getNext(m_needToAck) && fsn != m_needToAck) {
+    // UserData
+    bool ok = false;
+    if (fsn == getNext(m_needToAck)) {
+	m_needToAck = fsn;
+	ok = true;
+	if (m_confTimer.started()) {
+	    if (++m_confCounter >= m_maxUnack) {
+		m_confTimer.stop();
+		sendAck();
+	    }
+	}
+	else if (m_maxUnack) {
+	    m_confCounter = 0;
+	    m_confTimer.start();
+	}
+	else
+	    sendAck();
+    }
+    else if (fsn != m_needToAck) {
 	abortAlignment("Received Out of sequence frame");
 	transmitLS();
 	return false;
-    }
-    else {
-	if (fsn == getNext(m_needToAck) && operational()) {
-	    if (m_confTimer.started()) {
-		sendAck();
-		m_confTimer.stop();
-	    }
-	    m_needToAck = fsn;
-	    m_confTimer.start();
-	}
-	else if (!operational())
-	    m_bufMsg.append(new DataBlock(data));
     }
     while (nextBsn(bsn))
 	removeFrame(getNext(m_lastAck));
@@ -1016,7 +1016,7 @@ bool SS7M2PA::decodeSeq(const DataBlock& data,u_int8_t msgType)
 	return false;
     }
     m_lastSeqRx = (m_needToAck & 0x00ffffff) | 0x01000000;
-    return true;
+    return ok;
 }
 
 void SS7M2PA::timerTick(const Time& when)
@@ -1290,8 +1290,6 @@ bool SS7M2PA::processLinkStatus(DataBlock& data,int streamId)
 		m_t4.stop();
 	    if (m_t1.started())
 		m_t1.stop();
-	    if (m_bufMsg.count())
-		dequeueMsg();
 	    break;
 	case ProcessorRecovered:
 	    transmitLS();
@@ -1367,19 +1365,6 @@ void SS7M2PA::retransData()
 	if (!m_ackTimer.started())
 	    m_ackTimer.start();
 	transmitMSG(1,M2PA, 1, *msg,1);
-    }
-}
-
-void SS7M2PA::dequeueMsg()
-{
-    for (ObjList* o = m_bufMsg.skipNull();o;o = o->skipNext()) {
-	DataBlock* msg = static_cast<DataBlock*>(o->get());
-	if (!decodeSeq(*msg,UserData))
-	    return;
-	msg->cut(-9); // Remove M2PA Header and priority octet
-	SS7MSU msu(*msg);
-	receivedMSU(msu);
-	sendAck();
     }
 }
 

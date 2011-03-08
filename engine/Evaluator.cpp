@@ -830,6 +830,7 @@ unsigned int TableEvaluator::evalLimit()
 	    if (lim < 0)
 		lim = 0;
 	    m_limitVal = lim;
+	    break;
 	}
     }
     return m_limitVal;

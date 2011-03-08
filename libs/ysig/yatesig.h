@@ -6637,10 +6637,6 @@ protected:
      */
      void retransData();
 
-    /**
-     * Transmit the buffered messages to mtp3 and acknowledge them
-     */
-     void dequeueMsg();
 private:
     void dumpMsg(u_int8_t version, u_int8_t mClass, u_int8_t type,
 	const DataBlock& data, int stream, bool send);
@@ -6649,13 +6645,14 @@ private:
     u_int32_t m_seqNr;
     u_int32_t m_needToAck;
     u_int32_t m_lastAck;
+    u_int32_t m_confCounter;
+    u_int32_t m_maxUnack;
     unsigned int m_localStatus;
     unsigned int m_state;
     unsigned int m_remoteStatus;
     unsigned int m_transportState;
     Mutex m_mutex;
     ObjList m_ackList;
-    ObjList m_bufMsg;
     SignallingTimer m_t1;
     SignallingTimer m_t2;
     SignallingTimer m_t3;

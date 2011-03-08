@@ -116,6 +116,7 @@ Source: "Release\server\cpuload.yate"; DestDir: "{app}\modules\server"; Flags: r
 Source: "Release\server\ccongestion.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor
 Source: "Release\server\monitoring.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor
 Source: "Release\server\ysnmpagent.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor
+Source: "Release\sip\sip_cnam_lnp.yate"; DestDir: "{app}\modules\sip"; Flags: replacesameversion; Components: server
 Source: "Release\qt4\clientarchive.yate"; DestDir: "{app}\modules\qt4"; Flags: replacesameversion; Components: client\qt
 Source: "Release\qt4\customtable.yate"; DestDir: "{app}\modules\qt4"; Flags: replacesameversion; Components: client\qt
 Source: "Release\qt4\customtree.yate"; DestDir: "{app}\modules\qt4"; Flags: replacesameversion; Components: client\qt
@@ -276,6 +277,22 @@ begin
                       MsgBox('Browser failed. Please go to:' #13 + url,mbError,MB_OK);
                 end;
             end;
+        end;
+    end;
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+var
+    crt : String;
+begin
+    if (CurPageID = wpReady) then begin
+        if CrtLocal then crt := 'Install locally'
+        else if CrtLoadable then crt := 'Already loadable (will not install)'
+        else crt := 'Install globally';
+        if crt <> '' then begin
+            Wizardform.ReadyMemo.Lines.Add('');
+            Wizardform.ReadyMemo.Lines.Add('C Runtimes:');
+            Wizardform.ReadyMemo.Lines.Add('      ' + crt);
         end;
     end;
 end;

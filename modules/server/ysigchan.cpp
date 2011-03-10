@@ -997,6 +997,8 @@ bool SigChannel::startCall(Message& msg, SigTrunk* trunk)
 	if (ns && ns->name().startsWith(prefix))
 	    sigMsg->params().addParam(ns->name().substr(prefix.length()),*ns);
     }
+    Debug(this,DebugAll,"Trying to call on trunk '%s' [%p]",
+	trunk->name().safe(),this);
     m_call = trunk->controller()->call(sigMsg,m_reason);
     if (m_call) {
 	m_call->userdata(this);
@@ -1004,7 +1006,7 @@ bool SigChannel::startCall(Message& msg, SigTrunk* trunk)
 	m_reason.clear();
 	return true;
     }
-    DDebug(this,DebugNote,"Failed to call on trunk '%s' reason: '%s' [%p]",
+    Debug(this,DebugAll,"Failed to call on trunk '%s' reason: '%s' [%p]",
 	trunk->name().safe(),m_reason.c_str(),this);
     return false;
 }

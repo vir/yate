@@ -674,9 +674,10 @@ public:
     *  just before processing further. This is a good opportunity to
     *  change the SSRC and continue
     * @param newSsrc SSRC received in packet
+    * @param newPayload Payload received in packet
     * @param marker True if marker bit is set in the RTP packet
     */
-    virtual void rtpNewSSRC(u_int32_t newSsrc, bool marker);
+    virtual void rtpNewSSRC(u_int32_t newSsrc, int newPayload, bool marker);
 
     /**
      * Retrieve the statistical data from this receiver in a NamedList. Reset all the data.
@@ -1033,9 +1034,10 @@ public:
     *  just before processing further. This is a good opportunity to
     *  change the SSRC and continue
     * @param newSsrc SSRC received in packet
+    * @param newPayload Payload received in packet
     * @param marker True if marker bit is set in the RTP packet
     */
-    virtual void rtpNewSSRC(u_int32_t newSsrc, bool marker);
+    virtual void rtpNewSSRC(u_int32_t newSsrc, int newPayload, bool marker);
 
     /**
      * Create a new RTP sender for this session.

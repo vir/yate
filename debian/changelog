@@ -1,3 +1,9 @@
+yate (3.2.1.vir2011031101) UNRELEASED; urgency=low
+
+  * pulled in upstramm changes
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Fri, 11 Mar 2011 11:29:59 +0300
+
 yate (3.1.1.vir2011021901) UNRELEASED; urgency=low
 
   * pulled in upstream changes

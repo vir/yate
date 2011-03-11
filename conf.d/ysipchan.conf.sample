@@ -96,6 +96,10 @@
 ; refresh_nosdp: bool: Accept session refresh reINVITEs that lack a SDP offer
 ;refresh_nosdp=enable
 
+; flags: int: Miscellaneous SIP engine flags for broken implementations
+; See SIPMessage::Flags and SIPMessage::complete() in the source for gory details
+;flags=0
+
 
 [registrar]
 ; Controls the behaviour when acting as registrar

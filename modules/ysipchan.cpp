@@ -166,6 +166,7 @@ private:
     u_int64_t m_keepalive;
     int m_interval;
     int m_alive;
+    int m_flags;
     SIPTransaction* m_tr;
     bool m_marked;
     bool m_valid;
@@ -899,6 +900,7 @@ YateSIPEngine::YateSIPEngine(YateSIPEndPoint* ep)
 	addAllowed("INFO");
     lazyTrying(s_cfg.getBoolValue("general","lazy100",false));
     m_fork = s_cfg.getBoolValue("general","fork",true);
+    m_flags = s_cfg.getIntValue("general","flags",m_flags);
     NamedList *l = s_cfg.getSection("methods");
     if (l) {
 	unsigned int len = l->length();
@@ -2010,7 +2012,9 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     String display = msg.getValue("callername",(line ? line->getFullName().c_str() : (const char*)0));
     m->complete(plugin.ep()->engine(),
 	callerId ? (callerId->null() ? "anonymous" : callerId->c_str()) : (const char*)0,
-	m_domain);
+	m_domain,
+	0,
+	msg.getIntValue("xsip_flags",-1));
     if (display) {
 	MimeHeaderLine* hl = const_cast<MimeHeaderLine*>(m->getHeader("From"));
 	if (hl) {
@@ -3625,7 +3629,7 @@ MimeBody* YateSIPConnection::buildSIPBody(Message& msg, MimeSdpBody* sdp)
 
 YateSIPLine::YateSIPLine(const String& name)
     : String(name), m_resend(0), m_keepalive(0), m_interval(0), m_alive(0),
-      m_tr(0), m_marked(false), m_valid(false),
+      m_flags(-1), m_tr(0), m_marked(false), m_valid(false),
       m_localPort(0), m_proxyPort(0), m_partyPort(0), m_localDetect(false)
 {
     DDebug(&plugin,DebugInfo,"YateSIPLine::YateSIPLine('%s') [%p]",c_str(),this);
@@ -3691,7 +3695,7 @@ SIPMessage* YateSIPLine::buildRegister(int expires) const
     m->addHeader("To",tmp);
     if (m_callid)
 	m->addHeader("Call-ID",m_callid);
-    m->complete(plugin.ep()->engine(),m_username,domain());
+    m->complete(plugin.ep()->engine(),m_username,domain(),0,m_flags);
     return m;
 }
 
@@ -3928,6 +3932,7 @@ bool YateSIPLine::update(const Message& msg)
     chg = change(m_authname,msg.getValue("authname")) || chg;
     chg = change(m_password,msg.getValue("password")) || chg;
     chg = change(m_domain,msg.getValue("domain")) || chg;
+    chg = change(m_flags,msg.getIntValue("xsip_flags",-1)) || chg;
     m_display = msg.getValue("description");
     m_interval = msg.getIntValue("interval",600);
     String tmp(msg.getValue("localaddress",s_auto_nat ? "auto" : ""));
@@ -4093,7 +4098,8 @@ bool SipHandler::received(Message &msg)
     const char* body = msg.getValue("xsip_body");
     if (type && body)
 	sip->setBody(new MimeStringBody(type,body,-1));
-    sip->complete(plugin.ep()->engine(),msg.getValue("user"),domain);
+    sip->complete(plugin.ep()->engine(),msg.getValue("user"),domain,0,
+	msg.getIntValue("xsip_flags",-1));
     if (!msg.getBoolValue("wait")) {
 	// no answer requested - start transaction and forget
 	plugin.ep()->engine()->addMessage(sip);

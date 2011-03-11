@@ -220,7 +220,7 @@ String SIPAuthNonce::cnonce() const
 SIPEngine::SIPEngine(const char* userAgent)
     : Mutex(true,"SIPEngine"),
       m_t1(500000), m_t4(5000000), m_maxForwards(70),
-      m_cseq(0), m_lazyTrying(false),
+      m_cseq(0), m_flags(0), m_lazyTrying(false),
       m_userAgent(userAgent)
 {
     debugName("sipengine");

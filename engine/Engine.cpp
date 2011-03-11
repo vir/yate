@@ -198,6 +198,7 @@ ObjList Engine::s_extramod;
 NamedList Engine::s_params("");
 
 Engine::RunMode Engine::s_mode = Engine::Stopped;
+Engine::CallAccept Engine::s_accept = Engine::Accept;
 Engine* Engine::s_self = 0;
 int Engine::s_haltcode = -1;
 int EnginePrivate::count = 0;
@@ -209,6 +210,14 @@ static bool s_dynplugin = false;
 static Engine::PluginMode s_loadMode = Engine::LoadFail;
 static int s_maxworkers = 10;
 static bool s_debug = true;
+
+const TokenDict Engine::s_callAccept[] = {
+    {"accept",      Engine::Accept},
+    {"partial",     Engine::Partial},
+    {"congestion",  Engine::Congestion},
+    {"reject",      Engine::Reject},
+    {0,0}
+};
 
 #ifdef RLIMIT_CORE
 static bool s_coredump = false;
@@ -324,6 +333,7 @@ bool EngineStatusHandler::received(Message &msg)
     msg.retValue() << ",locks=" << Mutex::locks();
     msg.retValue() << ",semaphores=" << Semaphore::count();
     msg.retValue() << ",waiting=" << Semaphore::locks();
+    msg.retValue() << ",acceptcalls=" << lookup(Engine::accept(),Engine::getCallAcceptStates());
     msg.retValue() << "\r\n";
     return false;
 }
@@ -1460,40 +1470,6 @@ unsigned int Engine::runId()
 {
     return s_runid;
 }
-#ifdef _WINDOWS
-static String getExeDirectory()
-{
-	char path[MAX_PATH];
-	HINSTANCE hinst = ::GetModuleHandle(NULL);
-	if(! ::GetModuleFileNameA(hinst, path, sizeof(path)))
-		return (const char *)NULL;
-	char* fnstart = strrchr(path, PATH_SEP[0]);
-	if(!fnstart)
-		return (const char *)NULL;
-	fnstart++;
-	*fnstart ='\0';
-	String dir(path);
-#if _DEBUG
-	if(dir.endsWith(PATH_SEP "Debug" PATH_SEP))
-		dir = dir.substr(0, dir.length() - (sizeof("Debug" PATH_SEP) - 1));
-#endif
-	return dir;
-}
-
-void Engine::fixWin32Paths()
-{
-	String dir = getExeDirectory();
-	if(dir.null())
-		return;
-	String* paths_to_fix[] = { &s_cfgpath, &s_shrpath, &s_modpath };
-	for(unsigned int i = 0; i < sizeof(paths_to_fix)/sizeof(paths_to_fix[0]); ++i) {
-		String& s = *(paths_to_fix[i]);
-		if(s.startSkip("." PATH_SEP,false)) {
-			s = dir + s;
-		}
-	}
-}
-#endif
 
 static void usage(bool client, FILE* f)
 {
@@ -1513,9 +1489,6 @@ static void usage(bool client, FILE* f)
 "   -m pathname    Path to modules directory (" MOD_PATH ")\n"
 "   -x relpath     Relative path to extra modules directory (can be repeated)\n"
 "   -w directory   Change working directory\n"
-#ifdef _WINDOWS
-"   -W             Prefix all relative paths with %s\n"
-#endif
 "   -N nodename    Set the name of this node in a cluster\n"
 #ifdef RLIMIT_CORE
 "   -C             Enable core dumps if possible\n"
@@ -1552,11 +1525,7 @@ static void usage(bool client, FILE* f)
 "   -r             Enable rotation of log file (needs -s and -l)\n"
 #endif
     ,s_cfgfile.safe()
-    ,s_usrpath.safe()
-#ifdef _WINDOWS
-	,getExeDirectory().c_str()
-#endif
-    );
+    ,s_usrpath.safe());
 }
 
 static void badopt(bool client, char chr, const char* opt)
@@ -1833,11 +1802,6 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 		    case 'V':
 			version();
 			return 0;
-#ifdef _WINDOWS
-		    case 'W':
-			fixWin32Paths();
-			break;
-#endif
 		    default:
 			initUsrPath(s_usrpath);
 			badopt(client,*pc,argv[i]);

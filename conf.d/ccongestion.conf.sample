@@ -1,0 +1,21 @@
+; This file is used by the ccongestion module
+
+[cpu]
+; This section keeps the settings for CPU load
+; Each parameter needs to match this type:
+; monitor=interval_name,threshold_value,hysteresis_value;.....
+; Where :
+; monitor - String: Represents the CPU monitor for the given interval. Can be one of the following :
+;	-systemLoad: The system CPU load
+;	-totalLoad: Overall Yate CPU load
+;	-userLoad: Yate user-space CPU load
+;	-kernelLoad: Yate kernel-space CPU load
+; interval_name : string: The name of the interval. Four values: accept, partial, congestion, reject.
+; threshold_value: int: The upper value of the interval.
+; hysteresis_value: int.
+
+; Examples:
+; systemLoad=accept,50,4;partial,65,2;congestion,80,2;reject
+; totalLoad=accept,40,4;partial,50,2;congestion,70,2;reject
+; kernelLoad=accept,25,4;partial,35,2;congestion,60,2;reject
+; userLoad=accept,25,4;partial,35,2;congestion,60,2;reject

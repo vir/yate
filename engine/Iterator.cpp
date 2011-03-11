@@ -124,4 +124,14 @@ GenObject* ListIterator::get()
     return 0;
 }
 
+
+const NamedString* NamedIterator::get()
+{
+    if (!m_item)
+	return 0;
+    const NamedString* item = static_cast<const NamedString*>(m_item->get());
+    m_item = m_item->skipNext();
+    return item;
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

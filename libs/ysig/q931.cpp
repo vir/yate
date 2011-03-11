@@ -796,14 +796,20 @@ bool ISDNQ931Call::sendEvent(SignallingEvent* event)
     bool retVal = false;
     switch (event->type()) {
 	case SignallingEvent::Progress:
+	    if(state() == OverlapSend) {
+		changeState(CallPresent);
+		retVal = sendCallProceeding(event->message());
+		break;
+	    }
 	    retVal = sendProgress(event->message());
 	    break;
 	case SignallingEvent::Ringing:
 	    retVal = sendAlerting(event->message());
 	    break;
 	case SignallingEvent::Accept:
-	    if (m_overlap) {
-		sendSetupAck();
+	    if (m_overlap && state() != OverlapSend) {
+		sendSetupAck(event->message());
+		changeState(OverlapSend);
 		m_overlap = false;
 		break;
 	    }
@@ -847,6 +853,7 @@ bool ISDNQ931Call::sendEvent(SignallingEvent* event)
 	    retVal = sendInfo(event->message());
 	    break;
 	case SignallingEvent::NewCall:
+	    m_overlap = event->message()->params().getBoolValue("overlapped", false);
 	    retVal = sendSetup(event->message());
 	    break;
 	default:
@@ -1284,7 +1291,7 @@ SignallingEvent* ISDNQ931Call::processMsgSetup(ISDNQ931Message* msg)
     else if (q931() && q931()->primaryRate())
 	return releaseComplete("congestion");
     // *** CalledNo /CallingNo
-    m_overlap = !m_data.processCalledNo(msg,false);
+    m_overlap = !m_data.processCalledNo(msg,false) && q931()->m_overlapEnabled;
     m_data.processCallingNo(msg,false);
     // *** Display
     m_data.processDisplay(msg,false);
@@ -1299,7 +1306,8 @@ SignallingEvent* ISDNQ931Call::processMsgSetup(ISDNQ931Message* msg)
     msg->params().setParam("callerscreening",m_data.m_callerScreening);
     msg->params().setParam("callednumtype",m_data.m_calledType);
     msg->params().setParam("callednumplan",m_data.m_calledPlan);
-    msg->params().setParam("overlapped",String::boolText(m_overlap));
+    if(q931()->m_overlapEnabled)
+	msg->params().setParam("overlapped",String::boolText(m_overlap));
     return new SignallingEvent(SignallingEvent::NewCall,msg,this);
 }
 
@@ -1311,10 +1319,13 @@ SignallingEvent* ISDNQ931Call::processMsgSetupAck(ISDNQ931Message* msg)
 	return 0;
     if (!m_data.processChannelID(msg,false))
 	return errorWrongIE(msg,ISDNQ931IE::ChannelID,true);
-    // We don't implement overlap sending. So, just complete the number sending
-    SignallingMessage* m = new SignallingMessage;
-    m->params().addParam("complete",String::boolText(true));
-    sendInfo(m);
+    if(m_overlap) {
+	changeState(OverlapSend);
+    } else { // We are not using overlap sending. So, just complete the number sending
+	SignallingMessage* m = new SignallingMessage;
+	m->params().addParam("complete",String::boolText(true));
+	sendInfo(m);
+    }
     return 0;
 }
 
@@ -1581,8 +1592,12 @@ bool ISDNQ931Call::sendInfo(SignallingMessage* sigMsg)
     m_data.processDisplay(msg,true,&q931()->parserData());
     // Check tones or ringing
     const char* tone = sigMsg->params().getValue("tone");
-    if (tone)
-	msg->appendIEValue(ISDNQ931IE::Keypad,"keypad",tone);
+    if (tone) {
+	if(state() == OverlapSend)
+	    msg->appendIEValue(ISDNQ931IE::CalledNo,"number",tone);
+	else
+	    msg->appendIEValue(ISDNQ931IE::Keypad,"keypad",tone);
+    }
     return q931()->sendMessage(msg,callTei());
 }
 
@@ -1599,7 +1614,8 @@ bool ISDNQ931Call::sendProgress(SignallingMessage* sigMsg)
 	    SignallingUtils::appendFlag(m_data.m_progress,"in-band-info");
     }
     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::Progress,this);
-    m_data.processProgress(msg,true);
+    if(!m_data.processProgress(msg,true))
+	return false;
     return q931()->sendMessage(msg,callTei());
 }
 
@@ -1654,8 +1670,7 @@ bool ISDNQ931Call::sendSetup(SignallingMessage* sigMsg)
     MSG_CHECK_SEND(ISDNQ931Message::Setup)
     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::Setup,this);
     while (true) {
-	// TODO: fix it (don't send?) if overlapp dialing is used
-	if (q931()->parserData().flag(ISDNQ931::ForceSendComplete))
+	if (q931()->parserData().flag(ISDNQ931::ForceSendComplete) && !m_overlap)
 	    msg->appendSafe(new ISDNQ931IE(ISDNQ931IE::SendComplete));
 	// BearerCaps
 	m_data.m_transferCapability = "speech";
@@ -1709,7 +1724,8 @@ bool ISDNQ931Call::sendSetup(SignallingMessage* sigMsg)
 	m_data.m_calledType = sigMsg->params().getValue("callednumtype");
 	m_data.m_calledPlan = sigMsg->params().getValue("callednumplan");
 	m_data.m_calledNo = sigMsg->params().getValue("called");
-	m_data.processCalledNo(msg,true);
+	if(!(m_overlap && !m_data.m_calledNo))
+	    m_data.processCalledNo(msg,true);
 	// Send
 	changeState(CallInitiated);
 	if (m_net && !q931()->primaryRate()) {
@@ -1737,21 +1753,28 @@ bool ISDNQ931Call::sendSuspendRej(const char* reason, SignallingMessage* sigMsg)
     return q931()->sendMessage(msg,callTei());
 }
 
-bool ISDNQ931Call::sendSetupAck()
+// Send SETUP ACKNOWLEDGE. See Q.931 1.1.15
+// IE: ChannelID, Progress, Display, Signal
+bool ISDNQ931Call::sendSetupAck(SignallingMessage* sigMsg)
 {
     MSG_CHECK_SEND(ISDNQ931Message::SetupAck)
     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::SetupAck,this);
     if (!m_channelIDSent) {
-	m_data.m_channelType = "B";
-	if (m_circuit)
-	    m_data.m_channelSelect = lookup(m_circuit->code(),Q931Parser::s_dict_channelIDSelect_BRI);
-	if (!m_data.m_channelSelect) {
-	    Debug(q931(),DebugNote,"Call(%u,%u). No voice channel available [%p]",
-		Q931_CALL_ID,this);
-	    return sendReleaseComplete("congestion");
+	if(! q931()->primaryRate()) {
+	    m_data.m_channelType = "B";
+	    if (m_circuit)
+		m_data.m_channelSelect = lookup(m_circuit->code(),Q931Parser::s_dict_channelIDSelect_BRI);
+	    if (!m_data.m_channelSelect) {
+		Debug(q931(),DebugNote,"Call(%u,%u). No voice channel available [%p]",
+		    Q931_CALL_ID,this);
+		return sendReleaseComplete("congestion");
+	    }
 	}
 	m_data.processChannelID(msg,true,&q931()->parserData());
 	m_channelIDSent = true;
+    }
+    if(sigMsg->params().getBoolValue("media",true)) {
+	msg->appendIEValue(ISDNQ931IE::Progress,"description","in-band-info");
     }
     return q931()->sendMessage(msg,callTei());
 }
@@ -2410,6 +2433,7 @@ ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
     m_format = params.getValue("format");
     if (0xffff == lookup(m_format,Q931Parser::s_dict_bearerProto1,0xffff))
 	m_format = "alaw";
+    m_overlapEnabled = params.getBoolValue("overlap", true);
     // Debug
     setDebug(params.getBoolValue("print-messages",false),
 	params.getBoolValue("extended-debug",false));

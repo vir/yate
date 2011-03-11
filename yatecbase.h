@@ -3120,6 +3120,16 @@ protected:
      */
     virtual bool handleFileTransferNotify(Message& msg, bool& stopLogic);
 
+    /**
+     * Show/hide no audio notification
+     * @param show Show or hide notification
+     * @param micOk False if microphone open failed
+     * @param speakerOk False if speaker open failed
+     * @param chan Optional failed channel
+     */
+    virtual void notifyNoAudio(bool show, bool micOk = false, bool speakerOk = false,
+	ClientChannel* chan = 0);
+
     String m_selectedChannel;            // The currently selected channel
     String m_transferInitiated;          // Tranfer initiated id
 

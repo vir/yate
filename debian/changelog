@@ -1,3 +1,14 @@
+yate (3.2.1.svn4176) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4176: + Added new module to yate package  +
+    Fixed the name of the cause_q931 variable in the sample file for
+    RADIUS accounting.  + Advanced mode view now defaults to off.  +
+    Correctly report RUDP socket errors - and only once.  + Show a
+    notification message when failed to set media on active channel.  +
+    Cry loud when a Cisco MGCP gateway reports a DSP failure.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 12 Mar 2011 02:19:29 +0300
+
 yate (3.2.1.svn4171) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4171: + Added and chaged debug to see when a

@@ -66,6 +66,7 @@ PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 	server/ysnmpagent.yate \
 	server/monitoring.yate \
 	server/sipfeatures.yate \
+	sip/sip_cnam_lnp.yate \
 	server/heartbeat.yate server/clustering.yate \
 	server/mgcpgw.yate server/mgcpca.yate \
 	server/mrcpspeech.yate \
@@ -77,7 +78,7 @@ PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 	callgen.yate analyzer.yate rmanager.yate msgsniff.yate
 
 LIBS :=
-DIRS := client server jabber qt4
+DIRS := client server jabber qt4 sip
 PROGS := $(PROGS) server/overlapdial.yate
 
 ifneq ($(HAVE_PGSQL),no)

@@ -153,6 +153,7 @@ for small to large scale projects.
 %{_libdir}/yate/client/jabberclient.yate
 %{_libdir}/yate/jabber/jabberserver.yate
 %{_libdir}/yate/jabber/jbfeatures.yate
+%{_libdir}/yate/sip/sip_cnam_lnp.yate
 %dir %{_sysconfdir}/yate
 %config(noreplace) %{_sysconfdir}/yate/accfile.conf
 %config(noreplace) %{_sysconfdir}/yate/cdrbuild.conf
@@ -202,6 +203,7 @@ for small to large scale projects.
 %config(noreplace) %{_sysconfdir}/yate/jabberclient.conf
 %config(noreplace) %{_sysconfdir}/yate/jabberserver.conf
 %config(noreplace) %{_sysconfdir}/yate/jbfeatures.conf
+%config(noreplace) %{_sysconfdir}/yate/sip_cnam_lnp.conf
 
 %config %{_sysconfdir}/logrotate.d/yate
 

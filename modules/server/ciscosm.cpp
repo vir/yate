@@ -172,6 +172,7 @@ private:
     RudpThread* m_thread;                                  // The socket thread
     Socket *m_socket;                                      // The socket
     ObjList m_msgList;                                     // The messages list
+    int m_lastError;                                       // Last error we have displayed
     // Sequence numbers
     unsigned int m_sequence;                               // The sequence number
     unsigned int m_ackNum;                                 // The sequence number of the last in sequence message received
@@ -530,7 +531,8 @@ const TokenDict RudpSocket::s_RudpStates[] = {
 
 RudpSocket::RudpSocket(SessionManager* sm)
     : Mutex(true,"RudpSocket"),
-      m_sm(sm), m_thread(0), m_socket(0), m_sequence(0), m_ackNum(0), m_lastAck(0), m_lastSend(0), m_retTStartSeq(0),
+      m_sm(sm), m_thread(0), m_socket(0), m_lastError(-1),
+      m_sequence(0), m_ackNum(0), m_lastAck(0), m_lastSend(0), m_retTStartSeq(0),
       m_syn(1000), m_cumAckTimer(0), m_nullTimer(0), m_retransTimer(0), m_synTimer(0),
       m_version(-1), m_haveChecksum(false), m_sendSyn(false),
       m_connId(0x208000),
@@ -873,17 +875,30 @@ bool RudpSocket::readData()
     bool readOk = false,error = false;
     if (!m_socket->select(&readOk,0,&error,1000))
 	return false;
-    if (error)
-	Debug(m_sm,DebugInfo,"Reading data error: %s (%d)",
-	    strerror(m_socket->error()),m_socket->error());
+    if (error) {
+	m_socket->updateError();
+	int err = m_socket->error();
+	if (err && (err != m_lastError)) {
+	    m_lastError = err;
+	    Debug(m_sm,DebugMild,"Selecting error: %s (%d)",strerror(err),err);
+	}
+    }
     if (!readOk || error)
 	return false;
     unsigned char buffer [MAX_BUF_SIZE];
     SocketAddr addr;
     int r = m_socket->recv(buffer,MAX_BUF_SIZE);
 
-    if (r <= 0)
+    if (r < 0) {
+	int err = m_socket->error();
+	if (err && (err != m_lastError)) {
+	    m_lastError = err;
+	    Debug(m_sm,DebugMild,"Reading data error: %s (%d)",strerror(err),err);
+	}
+    }
+    else if (r == 0)
 	return false;
+    m_lastError = -1;
     DataBlock packet(buffer,r);
 #ifdef XDEBUG
     String seen;

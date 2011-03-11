@@ -1985,7 +1985,7 @@ static void setAdvancedMode(bool* show = 0)
 {
     if (!Client::valid())
 	return;
-    bool ok = show ? *show : Client::s_settings.getBoolValue("client","advanced_mode",true);
+    bool ok = show ? *show : Client::s_settings.getBoolValue("client","advanced_mode");
     const char* val = String::boolText(ok);
     NamedList p("");
     p.addParam("check:advanced_mode",val);
@@ -5750,6 +5750,11 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 		if (silence)
 		    Client::self()->ringer(false,true);
 	    }
+	    if (chan) {
+		bool mic = chan->muted() || (0 != chan->getSource());
+		bool speaker = (0 != chan->getConsumer());
+		notifyNoAudio(!(mic && speaker),mic,speaker,chan);
+	    }
 	    break;
 	case ClientChannel::OnHold:
 	    enableActions = true;
@@ -6885,6 +6890,47 @@ bool DefaultLogic::handleFileTransferNotify(Message& msg, bool& stopLogic)
 	p.addParam("cancel","Close");
     updateFileTransferItem(false,id,p);
     return true;
+}
+
+// Show/hide no audio notification (chan==0: initial check)
+void DefaultLogic::notifyNoAudio(bool show, bool micOk, bool speakerOk,
+    ClientChannel* chan)
+{
+    if (!Client::valid())
+	return;
+    Window* w = Client::self()->getWindow(s_wndMain);
+    if (!show) {
+	String id;
+	buildNotifAreaId(id,"noaudio",String::empty());
+	Client::self()->delTableRow("messages",id,w);
+	return;
+    }
+    if (micOk && speakerOk)
+	return;
+    NamedList list("");
+    NamedList* upd = buildNotifArea(list,"noaudio",String::empty(),
+	String::empty(),"Audio failure");
+    String text;
+    if (chan) {
+	text << "Failed to open ";
+	if (!(micOk || speakerOk))
+	    text << "audio";
+	else if (micOk)
+	    text << "speaker";
+	else
+	    text << "microphone";
+	text << ".\r\nPlease check your sound card";
+    }
+    else
+	return;
+    upd->addParam("text",text);
+    setGenericNotif(*upd);
+    Client::self()->updateTableRows("messages",&list,false,w);
+    NamedList p("");
+    const char* ok = String::boolText(show);
+    p.addParam("check:messages_show",ok);
+    p.addParam("show:frame_messages",ok);
+    Client::self()->setParams(&p,w);
 }
 
 // Add/set an account

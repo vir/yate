@@ -1985,7 +1985,7 @@ static void setAdvancedMode(bool* show = 0)
 {
     if (!Client::valid())
 	return;
-    bool ok = show ? *show : Client::s_settings.getBoolValue("client","advanced_mode",true);
+    bool ok = show ? *show : Client::s_settings.getBoolValue("client","advanced_mode");
     const char* val = String::boolText(ok);
     NamedList p("");
     p.addParam("check:advanced_mode",val);

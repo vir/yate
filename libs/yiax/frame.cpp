@@ -321,6 +321,7 @@ bool IAXIEList::createFromFrame(const IAXFullFrame* frame, bool incoming)
 	    case IAXInfoElement::CALLINGTNS:
 	    case IAXInfoElement::FIRMWAREVER:
 	    case IAXInfoElement::RR_DELAY:
+	    case IAXInfoElement::ENCRYPTION:
 		if (data[i] != 2) {
 		    i = 0xFFFF;
 		    break;
@@ -334,7 +335,6 @@ bool IAXIEList::createFromFrame(const IAXFullFrame* frame, bool incoming)
 	    case IAXInfoElement::CALLINGPRES:
 	    case IAXInfoElement::CALLINGTON:
 	    case IAXInfoElement::CAUSECODE:
-	    case IAXInfoElement::ENCRYPTION:
 		if (data[i] != 1) {
 		    i = 0xFFFF;
 		    break;
@@ -586,13 +586,16 @@ TokenDict IAXFormat::audioData[] = {
     {"GSM",          GSM},
     {"G.711 mu-law", ULAW},
     {"G.711 a-law",  ALAW},
-    {"G.726",        MP3},
+    {"G.726",        G726},
     {"IMA ADPCM",    ADPCM},
     {"SLIN",         SLIN},
     {"LPC10",        LPC10},
     {"G729",         G729A},
     {"SPEEX",        SPEEX},
     {"ILBC",         ILBC},
+    {"G.726 AAL2",   G726AAL2},
+    {"G.722",        G722},
+    {"AMR",          AMR},
     {0,0}
 };
 
@@ -601,6 +604,8 @@ TokenDict IAXFormat::videoData[] = {
     {"PNG",  IAXFormat::PNG},
     {"H261", IAXFormat::H261},
     {"H263", IAXFormat::H263},
+    {"H263 plus", IAXFormat::H263P},
+    {"H264", IAXFormat::H264},
     {0,0}
 };
 

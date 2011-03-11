@@ -47,8 +47,18 @@ TokenDict dict_payloads[] = {
     {"g723",   IAXFormat::G723_1},
     {"g729",   IAXFormat::G729A},
     {"adpcm",  IAXFormat::ADPCM},
-    {"mp3",    IAXFormat::MP3},
+    {"g726",   IAXFormat::G726},
     {"slin",   IAXFormat::SLIN},
+    {"g726aal2", IAXFormat::G726AAL2},
+    {"g722",   IAXFormat::G722},
+    {"amr",    IAXFormat::AMR},
+    // video payloads
+    {"jpeg",   IAXFormat::JPEG},
+    {"png",    IAXFormat::PNG},
+    {"h261",   IAXFormat::H261},
+    {"h263",   IAXFormat::H263},
+    {"h263p",  IAXFormat::H263P},
+    {"h264",   IAXFormat::H264},
     {0, 0}
 };
 

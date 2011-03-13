@@ -1319,6 +1319,12 @@ bool MGCPCircuit::setupConn(const char* mode)
     mm = sendSync(mm);
     if (!mm)
 	return false;
+    if (mm->code() == 400 && mm->params.count() == 0 &&
+	mm->comment().startsWith("Setup failed",true)) {
+	// 400 nnnnn Setup failed 0:(11:135):0:63
+	Debug(&splugin,DebugWarn,"Cisco DSP failure detected! [%p]",this);
+	return false;
+    }
     m_gwFormatChanged = false;
     if (m_connId.null())
 	m_connId = mm->params.getParam("i");

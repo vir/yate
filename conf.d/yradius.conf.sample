@@ -109,7 +109,7 @@ add:Service-Type=8
 rad_auth=no
 rad_server=common
 ; Some RADIUS attributes you're likely to set
-add:h323-disconnect-cause=${q931_cause}
+add:h323-disconnect-cause=${cause_q931}
 add:Acct-Delay-Time=0
 
 

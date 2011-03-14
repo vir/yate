@@ -2203,7 +2203,7 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 	}
 	// Process received messages
 	msg = static_cast<SS7MsgISUP*>(dequeue());
-	if (msg && validMsgState(false,msg->type()))
+	if (msg && validMsgState(false,msg->type(),(msg->params().getParam("BackwardCallIndicators") != 0)))
 	    switch (msg->type()) {
 		case SS7MsgISUP::IAM:
 		case SS7MsgISUP::CCR:
@@ -2671,7 +2671,7 @@ void SS7ISUPCall::setReason(const char* reason, SignallingMessage* msg,
 }
 
 // Accept send/receive messages in current state based on call direction
-bool SS7ISUPCall::validMsgState(bool send, SS7MsgISUP::Type type)
+bool SS7ISUPCall::validMsgState(bool send, SS7MsgISUP::Type type, bool hasBkwCallInd)
 {
     bool handled = true;
     switch (type) {
@@ -2692,7 +2692,7 @@ bool SS7ISUPCall::validMsgState(bool send, SS7MsgISUP::Type type)
 		break;
 	    return true;
 	case SS7MsgISUP::CPR:    // Call progress
-	    if (m_state < Accepted || m_state >= Releasing)
+	    if (m_state < (hasBkwCallInd ? Setup : Accepted) || m_state >= Releasing)
 		break;
 	    return true;
 	case SS7MsgISUP::CON:    // Connect
@@ -2700,7 +2700,7 @@ bool SS7ISUPCall::validMsgState(bool send, SS7MsgISUP::Type type)
 	    if (m_state == Setup && send != outgoing())
 		return true;
 	case SS7MsgISUP::ANM:    // Answer
-	    if (m_state < Accepted || m_state >= Answered || send == outgoing())
+	    if (m_state < (hasBkwCallInd ? Setup : Accepted) || m_state >= Answered || send == outgoing())
 		break;
 	    return true;
 	case SS7MsgISUP::SAM:    // Subsequent address

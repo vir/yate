@@ -1726,6 +1726,7 @@ public:
 	Answered,
 	Transfer,
 	Conference,
+	AudioSet,
 	Unknown
     };
 

@@ -3137,10 +3137,8 @@ bool ClientChannel::setMedia(bool open, bool replace)
         Debug(this,DebugNote,"Failed to set data source [%p]",this);
     bool ok = ((m_muted || getSource()) && getConsumer());
     lock.drop();
-    if (!ok && Client::self()) {
-	String tmp = "Failed to open media channel(s)";
-	Client::self()->setStatusLocked(tmp);
-    }
+    if (!ok && Client::self())
+	Client::self()->addToLog("Failed to open media channel(s): " + id());
     return ok;
 }
 

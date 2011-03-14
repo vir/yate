@@ -5750,6 +5750,8 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 		if (silence)
 		    Client::self()->ringer(false,true);
 	    }
+	    break;
+	case ClientChannel::AudioSet:
 	    if (chan) {
 		bool mic = chan->muted() || (0 != chan->getSource());
 		bool speaker = (0 != chan->getConsumer());

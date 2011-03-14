@@ -250,6 +250,7 @@ TokenDict ClientChannel::s_notification[] = {
     {"answered",        ClientChannel::Answered},
     {"transfer",        ClientChannel::Transfer},
     {"conference",      ClientChannel::Conference},
+    {"audioset",        ClientChannel::AudioSet},
     {0,0}
 };
 
@@ -3136,6 +3137,7 @@ bool ClientChannel::setMedia(bool open, bool replace)
     if (!(getSource() || m_muted))
         Debug(this,DebugNote,"Failed to set data source [%p]",this);
     bool ok = ((m_muted || getSource()) && getConsumer());
+    update(AudioSet);
     lock.drop();
     if (!ok && Client::self())
 	Client::self()->addToLog("Failed to open media channel(s): " + id());

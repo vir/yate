@@ -6664,6 +6664,33 @@ bool DefaultLogic::handleTextChanged(NamedList* params, Window* wnd)
     String sender = (*params)["sender"];
     if (!sender)
 	return false;
+    // Username changes in contact add/edit
+    if (wnd->id().startsWith("contactedit_")) {
+	if (!Client::valid())
+	    return false;
+	if (!wnd->context()) {
+	    // Username changes in contact add: find '@', set domain if found
+	    if (sender == "username") {
+		const String& text = (*params)["text"];
+		int pos = text.find('@');
+		if (pos >= 0) {
+		    NamedList p("");
+		    p.addParam("username",text.substr(0,pos));
+		    String d = text.substr(pos + 1);
+		    if (d) {
+			String tmp;
+			if (Client::self()->getText("domain",tmp,false,wnd) && !tmp) {
+			    p.addParam("domain",d);
+			    p.addParam("focus:domain",String::boolText(false));
+			}
+		    }
+		    Client::self()->setParams(&p,wnd);
+		}
+		return true;
+	    }
+	}
+	return false;
+    }
     // Chat input changes
     if (Client::valid() && Client::self()->getBoolOpt(Client::OptNotifyChatState)) {
 	ClientContact* c = 0;

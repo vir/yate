@@ -541,50 +541,6 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 		    DDebug("RegexRoute",DebugAll,"Returning true from context '%s'", context.c_str());
 		    return true;
 		}
-		continue;
-	    }
-	    setMessage(match,msg,val);
-	    val.trimBlanks();
-	    if (val.null()) {
-		// special case: do nothing on empty target
-		continue;
-	    }
-	    else if (val == "return") {
-		NDebug("RegexRoute",DebugAll,"Returning false from context '%s'", context.c_str());
-		return false;
-	    }
-	    else if (val.startSkip("goto") || val.startSkip("jump")) {
-		NDebug("RegexRoute",DebugAll,"Jumping to context '%s' by rule #%u '%s'",
-		    val.c_str(),i+1,n->name().c_str());
-		return oneContext(msg,str,val,ret,depth+1);
-	    }
-	    else if (val.startSkip("include") || val.startSkip("call")) {
-		NDebug("RegexRoute",DebugAll,"Including context '%s' by rule #%u '%s'",
-		    val.c_str(),i+1,n->name().c_str());
-		if (oneContext(msg,str,val,ret,depth+1)) {
-		    DDebug("RegexRoute",DebugAll,"Returning true from context '%s'", context.c_str());
-		    return true;
-		}
-	    }
-	    else if (val.startSkip("match") || val.startSkip("newmatch")) {
-		if (!val.null()) {
-		    NDebug("RegexRoute",DebugAll,"Setting match string '%s' by rule #%u '%s' in context '%s'",
-			val.c_str(),i+1,n->name().c_str(),context.c_str());
-		    str = val;
-		}
-	    }
-	    else if (val.startSkip("rename")) {
-		if (!val.null()) {
-		    NDebug("RegexRoute",DebugAll,"Renaming message '%s' to '%s' by rule #%u '%s' in context '%s'",
-			msg.c_str(),val.c_str(),i+1,n->name().c_str(),context.c_str());
-		    msg = val;
-		}
-	    }
-	    else {
-		DDebug("RegexRoute",DebugAll,"Returning '%s' for '%s' in context '%s' by rule #%u '%s'",
-		    val.c_str(),str.c_str(),context.c_str(),i+1,n->name().c_str());
-		ret = val;
-		return true;
 	    }
 	    else if (val.startSkip("match") || val.startSkip("newmatch")) {
 		if (!val.null()) {

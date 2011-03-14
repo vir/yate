@@ -1231,13 +1231,6 @@ public:
 	{ return m_flags; }
 
     /**
-     * Get an authentication nonce
-     * @param nonce String reference to fill with the current nonce
-     */
-    inline int flags() const
-	{ return m_flags; }
-
-    /**
      * Build an authentication response (qop support)
      * @param username User account name
      * @param realm Authentication realm

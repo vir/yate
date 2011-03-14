@@ -1,3 +1,9 @@
+yate (3.2.1.vir2011031401) UNRELEASED; urgency=low
+
+  * Fix bug introduced by recent history rewrite
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Mon, 14 Mar 2011 06:57:58 +0300
+
 yate (3.2.1.vir2011031101) UNRELEASED; urgency=low
 
   * pulled in upstramm changes

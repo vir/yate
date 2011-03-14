@@ -7995,7 +7995,7 @@ private:
     void setReason(const char* reason, SignallingMessage* msg, const char* diagnostic = 0,
 	const char* location = 0);
     // Accept send/receive messages in current state based on call direction
-    bool validMsgState(bool send, SS7MsgISUP::Type type);
+    bool validMsgState(bool send, SS7MsgISUP::Type type, bool hasBkwCallInd = false);
     // Connect the reserved circuit. Return false if it fails. Return true if this call is a signalling only one
     bool connectCircuit(const char* special = 0);
     // Transmit the IAM message. Start IAM timer if not started

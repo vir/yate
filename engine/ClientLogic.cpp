@@ -295,6 +295,7 @@ static const String s_contactList = "contacts";
 static const String s_logList = "log";
 static const String s_calltoList = "callto";
 static const String s_account = "account";               // Account selector
+static const String s_chatAccount = "chataccount";       // List of chat accounts
 static const String s_chatContactList = "chat_contacts"; // List of chat contacts
 static const String s_mucAccounts = "mucaccount";        // List of accounts supporting MUC
 static const String s_mucSavedRooms = "mucsavedrooms";   // List of saved MUC rooms
@@ -440,8 +441,6 @@ const TokenDict s_chatLogDict[] = {
     {0,0}
 };
 static ChatLogEnum s_chatLog = ChatLogSaveAll;
-// Posponed contact update
-static Configuration s_postponedContacts;
 // Temporary wizards
 static ObjList s_tempWizards;
 // Chat state templates
@@ -618,6 +617,32 @@ static inline void setImageParam(NamedList& p, const char* param,
 {
     p.setParam(param,value);
     setImageParam(p,param,image);
+}
+
+// Select a single item in a list containing exactly 1 item not
+// matching s_notSelected
+// Select the last item otherwise if selLast is true
+static bool selectListItem(const String& name, Window* w, bool selLast = true,
+    bool selNotSelected = true)
+{
+    NamedList p("");
+    Client::self()->getOptions(name,&p,w);
+    NamedString* sel = 0;
+    unsigned int n = p.length();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* ns = p.getParam(i);
+	if (!ns || Client::s_notSelected.matches(ns->name()))
+	    continue;
+	if (!sel || selLast)
+	    sel = ns;
+	else {
+	    sel = 0;
+	    break;
+	}
+    }
+    if (sel)
+	return Client::self()->setSelect(name,sel->name(),w);
+    return selNotSelected && Client::self()->setSelect(name,s_notSelected,w);
 }
 
 // Build a parameter list used to update an item in notification area
@@ -1013,6 +1038,36 @@ static Window* getContactInfoEditWnd(bool edit, ClientContact* c, bool create = 
 	Client::self()->setParams(&p,w);
     }
     return w;
+}
+
+// Update account list in chat account add windows
+// Select single updated account
+static void updateChatAccountList(const String& account, bool upd)
+{
+    if (!(Client::valid() && account))
+	return;
+    ObjList* list = Client::listWindows();
+    for (ObjList* o = (list ? list->skipNull() : 0); o; o = o->skipNext()) {
+	String* id = static_cast<String*>(o->get());
+	if (!id->startsWith("contactedit_"))
+	    continue;
+	Window* w = Client::self()->getWindow(*id);
+	if (!w || w->context())
+	    continue;
+	if (upd) {
+	    Client::self()->updateTableRow(s_chatAccount,account,0,false,w);
+	    selectListItem(s_chatAccount,w,false,false);
+	}
+	else {
+	    // Avoid showing another selected account
+	    String tmp;
+	    Client::self()->getSelect(s_chatAccount,tmp,w);
+	    if (tmp && tmp == account)
+		Client::self()->setSelect(s_chatAccount,s_notSelected,w);
+	    Client::self()->delTableRow(s_chatAccount,account,w);
+	}
+    }
+    TelEngine::destruct(list);
 }
 
 // Retrieve an account's enter password window
@@ -1867,28 +1922,18 @@ static bool showContactEdit(ClientAccountList& accounts, ClientContact* c = 0)
 	p.addParam("domain","");
 	p.addParam("name","");
 	p.addParam("check:request_subscribe",String::boolText(true));
-	// Fill accounts
-	Client::self()->addOption("chataccount",s_notSelected,false,String::empty(),w);
+	// Fill accounts. Select single account
+	Client::self()->addOption(s_chatAccount,s_notSelected,false,String::empty(),w);
 	for (ObjList* o = accounts.accounts().skipNull(); o; o = o->skipNext()) {
 	    ClientAccount* a = static_cast<ClientAccount*>(o->get());
-	    if (a->hasChat())
-		Client::self()->addOption("chataccount",a->toString(),false,String::empty(),w);
+	    if (a->resource().online() && a->hasChat())
+		Client::self()->addOption(s_chatAccount,a->toString(),false,String::empty(),w);
 	}
+	selectListItem(s_chatAccount,w,false,false);
     }
     Client::self()->setParams(&p,w);
     Client::self()->setVisible(w->id(),true,true);
     return true;
-}
-
-// Remove sections from postponed contacts. Save the file
-static void removePostponedContacts(ObjList& list)
-{
-    ObjList* o = list.skipNull();
-    if (!o)
-	return;
-    for (; o; o = o->skipNext())
-	s_postponedContacts.clearSection(o->get()->toString());
-    s_postponedContacts.save();
 }
 
 // Find a temporary wizard
@@ -2255,32 +2300,6 @@ static void setOfflineMucs(ClientAccount* acc)
 	room->resource().m_role = MucRoomMember::RoleNone;
 	updateMucRoomMember(*room,room->resource());
     }
-}
-
-// Select a single item in a list containing exactly 1 item not
-// matching s_notSelected
-// Select the last item otherwise if selLast is true
-static bool selectListItem(const String& name, Window* w, bool selLast = true,
-    bool selNotSelected = true)
-{
-    NamedList p("");
-    Client::self()->getOptions(name,&p,w);
-    NamedString* sel = 0;
-    unsigned int n = p.length();
-    for (unsigned int i = 0; i < n; i++) {
-	NamedString* ns = p.getParam(i);
-	if (!ns || Client::s_notSelected.matches(ns->name()))
-	    continue;
-	if (!sel || selLast)
-	    sel = ns;
-	else {
-	    sel = 0;
-	    break;
-	}
-    }
-    if (sel)
-	return Client::self()->setSelect(name,sel->name(),w);
-    return selNotSelected && Client::self()->setSelect(name,s_notSelected,w);
 }
 
 // Update telephony account selector(s)
@@ -4360,6 +4379,10 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
 	return false;
     }
 
+    // Avoid sync with other contact add window
+    if (name == s_chatAccount)
+	return false;
+
     // keep the item in sync in all windows
     // if the same object is present in more windows, we will synchronise all of them
     if (Client::self())
@@ -5296,35 +5319,9 @@ bool DefaultLogic::handleUserNotify(Message& msg, bool& stopLogic)
 	if (tmp > stat)
 	    stat = tmp;
 	regStat = acc->params().getValue("internal.status.text");
-	// Handle postponed contacts
-	ObjList remove;
-	unsigned int n = s_postponedContacts.sections();
-	for (unsigned int i = 0; i < n; i++) {
-	    NamedList* sect = s_postponedContacts.getSection(i);
-	    if (!(sect && account == (*sect)["account"]))
-		continue;
-	    remove.append(sect)->setDelete(false);
-	    // Send contact update
-	    const String& contact = (*sect)["contact"];
-	    if (!contact)
-		continue;
-	    Message* m = Client::buildUserRoster(true,account,contact);
-	    bool reqSub = false;
-	    unsigned int nc = sect->length();
-	    for (unsigned int j = 0; j < nc; j++) {
-		NamedString* ns = sect->getParam(j);
-		if (!ns || ns->name() == "account" || ns->name() == "contact")
-		    continue;
-		if (ns->name() != "request_subscribe")
-		    m->addParam(ns->name(),*ns);
-		else
-		    reqSub = ns->toBoolean();
-	    }
-	    Engine::enqueue(m);
-	    if (reqSub)
-		Engine::enqueue(Client::buildSubscribe(true,true,account,contact));
-	}
-	removePostponedContacts(remove);
+	// Update chat accounts
+	if (acc->hasChat())
+	    updateChatAccountList(account,true);
     }
     else {
 	bool noFail = acc->params().getBoolValue("internal.nologinfail");
@@ -5365,6 +5362,9 @@ bool DefaultLogic::handleUserNotify(Message& msg, bool& stopLogic)
 	}
 	clearAccountContacts(*acc);
 	setOfflineMucs(acc);
+	// Remove from chat accounts
+	if (acc->hasChat())
+	    updateChatAccountList(account,false);
     }
     // Clear some internal params
     acc->m_params.clearParam("internal.nologinfail");
@@ -6147,10 +6147,6 @@ bool DefaultLogic::initializedClient()
 
     addTrayIcon("main");
 
-    // Load postponed contact update
-    s_postponedContacts = Engine::configFile("contactupd",true);
-    s_postponedContacts.load(false);
-
     // Load account status
     AccountStatus::load();
     AccountStatus::updateUi();
@@ -6374,15 +6370,6 @@ void DefaultLogic::updateSelectedChannel(const String* item)
 // Engine start notification. Connect startup accounts
 void DefaultLogic::engineStart(Message& msg)
 {
-    // Remove from postponed contacts missing accounts or invalid sections
-    ObjList remove;
-    unsigned int n = s_postponedContacts.sections();
-    for (unsigned int i = 0; i < n; i++) {
-	NamedList* sect = s_postponedContacts.getSection(i);
-	if (sect && sect->c_str() && !m_accounts->findAccount((*sect)["account"]))
-	    remove.append(sect)->setDelete(false);
-    }
-    removePostponedContacts(remove);
     // Set account status or start add wizard
     if (m_accounts->accounts().skipNull())
 	setAccountsStatus(m_accounts);
@@ -7333,7 +7320,7 @@ bool DefaultLogic::handleChatContactAction(const String& name, Window* wnd)
 	    }
 	}
 	else {
-	    a = selectedAccount(*m_accounts,wnd,"chataccount");
+	    a = selectedAccount(*m_accounts,wnd,s_chatAccount);
 	    if (!a) {
 		showError(wnd,"You must select an account");
 		return false;
@@ -7348,33 +7335,16 @@ bool DefaultLogic::handleChatContactAction(const String& name, Window* wnd)
 	    contact << user << "@" << domain;
 	    Client::self()->getCheck("request_subscribe",reqSub,wnd);
 	}
+	if (!a->resource().online()) {
+	    showError(wnd,"Selected account is not online");
+	    return false;
+	}
 	String name;
 	Client::self()->getText("name",name,false,wnd);
 	NamedList p("");
 	Client::self()->getOptions("groups",&p,wnd);
-	String cid;
-	ClientContact::buildContactId(cid,a->toString(),contact);
-	// Clear from postponed contacts
-	s_postponedContacts.clearSection(cid);
-	Message* m = 0;
-	NamedList* sect = 0;
-	if (a->resource().online()) {
-	    m = Client::buildUserRoster(true,a->toString(),contact);
-	    m->addParam("name",name,false);
-	}
-	else {
-	    // Postpone
-	    Debug(ClientDriver::self(),DebugAll,
-		"Postponing update account=%s contact=%s reqSub=%u",
-		a->toString().c_str(),contact.c_str(),reqSub);
-	    sect = s_postponedContacts.createSection(cid);
-	    if (sect) {
-		sect->addParam("account",a->toString());
-		sect->addParam("contact",contact);
-		sect->addParam("name",name);
-		sect->addParam("request_subscribe",String::boolText(reqSub));
-	    }
-	}
+	Message* m = Client::buildUserRoster(true,a->toString(),contact);
+	m->addParam("name",name,false);
 	unsigned int n = p.length();
 	for (unsigned int i = 0; i < n; i++) {
 	    NamedString* ns = p.getParam(i);
@@ -7382,20 +7352,13 @@ bool DefaultLogic::handleChatContactAction(const String& name, Window* wnd)
 		continue;
 	    NamedList pp("");
 	    Client::self()->getTableRow("groups",ns->name(),&pp,wnd);
-	    if (!pp.getBoolValue("check:group"))
-		continue;
-	    if (m)
+	    if (pp.getBoolValue("check:group"))
 		m->addParam("group",ns->name(),false);
-	    else if (sect)
-		sect->addParam("group",ns->name(),false);
 	}
-	if (m) {
-	    Engine::enqueue(m);
-	    if (reqSub)
-		Engine::enqueue(Client::buildSubscribe(true,true,a->toString(),contact));
-	}
+	Engine::enqueue(m);
+	if (reqSub)
+	    Engine::enqueue(Client::buildSubscribe(true,true,a->toString(),contact));
 	Client::self()->setVisible(wnd->id(),false);
-	s_postponedContacts.save();
 	return true;
     }
     // Add group in contact edit/add window

@@ -1,3 +1,18 @@
+yate (3.2.1.svn4182) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4182: + Prevents a race condition causing a
+    crash if a RFC2833 DTMF is sent while media stream is destroyed.  +
+    Reference on find() and keep the RTP wrapper referenced while we use
+    it.  + Avoid deadlock: don't try to lock the client proxy mutex from
+    client channel handlers.  + Added audio set notification to
+    ClientChannel. Handle it in default logic.  + Allow adding chat
+    contacts on connected accounts only.  + Accept ISUP CPR and ANM in
+    state Setup if they have Backward Call Indicators.  + Handle text
+    changed in username field in chat contact add window: split
+    'user@domain' and set user and domain in the appropriate field(s).
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 15 Mar 2011 02:19:14 +0300
+
 yate (3.2.1.svn4176) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4176: + Added new module to yate package  +

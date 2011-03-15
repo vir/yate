@@ -1903,6 +1903,7 @@ void SigDriver::status(SigTrunk* trunk, String& retVal, const String& target)
 	    detail << "|" << SignallingCircuit::lookupStatus(cic->status());
 	    detail << "|" << String::boolText(0 != cic->locked(SignallingCircuit::LockLocal));
 	    detail << "|" << String::boolText(0 != cic->locked(SignallingCircuit::LockRemote));
+	    detail << "|" << String::boolText(0 != cic->locked(SignallingCircuit::LockChanged|SignallingCircuit::Resetting));
 	}
 	break;
     }
@@ -1916,7 +1917,7 @@ void SigDriver::status(SigTrunk* trunk, String& retVal, const String& target)
     retVal << ",calls=" << (trunk->controller() ? trunk->controller()->calls().count() : 0);
     if (!target.null()) {
 	retVal << ";count=" << count;
-	retVal << ",format=Span|Status|LockedLocal|LockedRemote";
+	retVal << ",format=Span|Status|LockedLocal|LockedRemote|Changing";
 	retVal << ";" << detail;
     }
     retVal << "\r\n";

@@ -5284,6 +5284,7 @@ bool SS7ISUP::handleCicBlockCommand(const NamedList& p, bool block)
     if (!circuits())
 	return false;
     SS7MsgISUP* msg = 0;
+    SS7MsgISUP::Type remove = SS7MsgISUP::Unknown;
     bool force = p.getBoolValue("force");
     String* param = p.getParam("circuit");
     Lock mylock(this);
@@ -5292,6 +5293,8 @@ bool SS7ISUP::handleCicBlockCommand(const NamedList& p, bool block)
 	msg = buildCicBlock(cic,block,force);
 	if (!msg)
 	    return false;
+	if (force)
+	    remove = block ? SS7MsgISUP::UBL : SS7MsgISUP::BLK;
     }
     else {
 	// NOTE: we assume the circuits belongs to the same span
@@ -5377,6 +5380,21 @@ bool SS7ISUP::handleCicBlockCommand(const NamedList& p, bool block)
         t->message(msg);
 	m_pending.add(t);
 	msg->ref();
+	if (force)
+	    remove = block ? SS7MsgISUP::CGU : SS7MsgISUP::CGB;
+    }
+    if (SS7MsgISUP::Unknown != remove) {
+	bool removed = false;
+	for (;;) {
+	    SignallingMessageTimer* pending = findPendingMessage(remove,msg->cic(),true);
+	    if (!pending)
+		break;
+	    TelEngine::destruct(pending);
+	    removed = true;
+	}
+	if (removed)
+	    Debug(this,DebugNote,"Removed pending operation '%s' cic=%u",
+		SS7MsgISUP::lookup(remove),msg->cic());
     }
     SS7Label label;
     setLabel(label,msg->cic());

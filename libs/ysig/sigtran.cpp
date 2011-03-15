@@ -831,7 +831,7 @@ SS7M2PA::SS7M2PA(const NamedList& params)
     // Acknowledge timer ~1s
     m_ackTimer.interval(params,"ack_timer",1000,1100,false);
     // Confirmation timer 1/2 t4
-    m_confTimer.interval(params,"conf_timer",100,400,false);
+    m_confTimer.interval(params,"conf_timer",50,400,false);
     // Maximum unacknowledged messages, max_unack+1 will force an ACK
     m_maxUnack = params.getIntValue("max_unack",4);
     if (m_maxUnack > 10)
@@ -1152,6 +1152,9 @@ bool SS7M2PA::control(Operation oper, NamedList* params)
     if (params) {
 	m_autostart = params->getBoolValue("autostart",m_autostart);
 	m_autoEmergency = params->getBoolValue("autoemergency",m_autoEmergency);
+	m_maxUnack = params->getIntValue("max_unack",m_maxUnack);
+	if (m_maxUnack > 10)
+	    m_maxUnack = 10;
     }
     switch (oper) {
 	case Pause:

@@ -1,3 +1,11 @@
+yate (3.2.1.svn4187) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4187: + Fixed parsing of trunks status
+    messages, made it tolerable to changes in engine.status.  + Added
+    ISUP setting (default on ANSI) to set CGB messages duplicated.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 17 Mar 2011 02:19:19 +0300
+
 yate (3.2.1.svn4185) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4185: + Indicate in circuit status if it has

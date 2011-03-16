@@ -71,7 +71,7 @@ public:
 	const char* called = 0)
 	{ m_caller = caller; m_callerName = callername; m_called = called; }
     // Set the caller, callername and called parameters
-    void copyCall(Message& dest, bool privacy = false);
+    void copyCall(NamedList& dest, bool privacy = false);
     // Fill a string with line status parameters
     void statusParams(String& str);
     // Fill a string with line status detail parameters
@@ -680,7 +680,7 @@ void ModuleLine::processNotify(Message& msg)
 }
 
 // Set the caller, callername and called parameters
-void ModuleLine::copyCall(Message& dest, bool privacy)
+void ModuleLine::copyCall(NamedList& dest, bool privacy)
 {
     if (privacy)
 	dest.addParam("callerpres","restricted");
@@ -1409,7 +1409,15 @@ AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg, RecordTrigger recor
 		m_privacy = getPrivacy(*msg);
 		if (m_callsetup == AnalogLine::Before)
 		    m_line->sendCallSetup(m_privacy);
-		m_line->sendEvent(SignallingCircuitEvent::RingBegin,AnalogLine::Dialing);
+		{
+		    NamedList* params = 0;
+		    NamedList callerId("");
+		    if (m_callsetup != AnalogLine::NoCallSetup) {
+			params = &callerId;
+			m_line->copyCall(callerId,m_privacy);
+		    }
+		    m_line->sendEvent(SignallingCircuitEvent::RingBegin,AnalogLine::Dialing,params);
+		}
 		if (m_callsetup == AnalogLine::After)
 		    m_dialTimer.interval(500);
 		break;

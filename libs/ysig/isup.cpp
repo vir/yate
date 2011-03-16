@@ -3100,6 +3100,7 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
       m_ignoreGRSSingle(false),
       m_ignoreCGBSingle(false),
       m_ignoreCGUSingle(false),
+      m_duplicateCGB(false),
       m_ignoreUnkDigits(true),
       m_l3LinkUp(false),
       m_t1Interval(15000),               // Q.764 T1 15..60 seconds
@@ -3202,6 +3203,8 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
     m_ignoreGRSSingle = params.getBoolValue("ignore-grs-single");
     m_ignoreCGBSingle = params.getBoolValue("ignore-cgb-single");
     m_ignoreCGUSingle = params.getBoolValue("ignore-cgu-single");
+    m_duplicateCGB = params.getBoolValue("duplicate-cgb",
+	(SS7PointCode::ANSI == m_type || SS7PointCode::ANSI8 == m_type));
     m_ignoreUnkDigits = params.getBoolValue("ignore-unknown-digits",true);
     m_defaultSls = params.getIntValue("sls",s_dict_callSls,m_defaultSls);
     m_maxCalledDigits = params.getIntValue("maxcalleddigits",m_maxCalledDigits);
@@ -3269,6 +3272,8 @@ bool SS7ISUP::initialize(const NamedList* config)
 	m_ignoreGRSSingle = config->getBoolValue("ignore-grs-single");
 	m_ignoreCGBSingle = config->getBoolValue("ignore-cgb-single");
 	m_ignoreCGUSingle = config->getBoolValue("ignore-cgu-single");
+	m_duplicateCGB = config->getBoolValue("duplicate-cgb",
+	    (SS7PointCode::ANSI == m_type || SS7PointCode::ANSI8 == m_type));
         m_ignoreUnkDigits = config->getBoolValue("ignore-unknown-digits",true);
 	m_defaultSls = config->getIntValue("sls",s_dict_callSls,m_defaultSls);
 	m_mediaRequired = (MediaRequired)config->getIntValue("needmedia",
@@ -5257,6 +5262,11 @@ bool SS7ISUP::transmitMessages(ObjList& list)
 	SS7MsgISUP* msg = static_cast<SS7MsgISUP*>(o->get());
     	SS7Label label;
 	setLabel(label,msg->cic());
+	if (m_duplicateCGB && (msg->type() == SS7MsgISUP::CGB)) {
+	    // ANSI needs the CGB duplicated
+	    msg->ref();
+	    transmitMessage(msg,label,false);
+	}
 	transmitMessage(msg,label,false);
     }
     return true;
@@ -5399,6 +5409,11 @@ bool SS7ISUP::handleCicBlockCommand(const NamedList& p, bool block)
     SS7Label label;
     setLabel(label,msg->cic());
     mylock.drop();
+    if (m_duplicateCGB && (msg->type() == SS7MsgISUP::CGB)) {
+	// ANSI needs the CGB duplicated
+	msg->ref();
+	transmitMessage(msg,label,false);
+    }
     transmitMessage(msg,label,false);
     return true;
 }

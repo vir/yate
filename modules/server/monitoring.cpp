@@ -1236,6 +1236,7 @@ TokenDict TrunkInfo::s_trunkStatus[] = {
     {"type",	    TrunkInfo::TYPE},
     {"circuits",    TrunkInfo::CIRCUITS},
     {"calls",	    TrunkInfo::CALLS},
+    {"status",      TrunkInfo::STATUS},
     {0,0}
 };
 
@@ -1921,12 +1922,15 @@ NamedList* LinksetInfo::parseLinksetInfo(String& info,const String& link, NamedL
 	String nameParam = param->substr(0,pos);
 	String valParam = param->substr(pos + 1);
 	int type = lookup(nameParam,s_linksetStatus,0);
-	if (type == 0) {
-	    TelEngine::destruct(params);
-	    TelEngine::destruct(nl);
-	    return 0;
-	}
-	nl->setParam(lookup(type,s_linksetInfo,""),valParam);
+	if (type > 0)
+	    nl->setParam(lookup(type,s_linksetInfo,""),valParam);
+    }
+    String idQuery = lookup(ID,s_linksetInfo);
+    String linksetId = nl->getValue(idQuery,"");
+    if (linksetId.null()) {
+	TelEngine::destruct(params);
+	TelEngine::destruct(nl);
+	return 0;
     }
     TelEngine::destruct(params);
     if (!nl->getParam(lookup(ALARMS_COUNT,s_linksetInfo,"")))
@@ -2006,12 +2010,16 @@ NamedList* TrunkInfo::parseTrunkInfo(String& info, const String& trunk, NamedLis
 	String valParam = param->substr(pos + 1);
 
 	int type = lookup(nameParam,s_trunkStatus,0);
-	if (type == 0) {
-	    TelEngine::destruct(params);
-	    TelEngine::destruct(nl);
-	    return 0;
-	}
-	nl->setParam(lookup(type,s_trunkInfo,""),valParam);
+	if (type > 0)
+	    nl->setParam(lookup(type,s_trunkInfo,""),valParam);
+    }
+    // check that it's indeed a trunk
+    String idQuery = lookup(ID,s_trunkInfo);
+    String trunkId = nl->getValue(idQuery,"");
+    if (trunkId.null()) {
+	TelEngine::destruct(params);
+	TelEngine::destruct(nl);
+	return 0;
     }
     TelEngine::destruct(params);
     if (!nl->getParam(lookup(ALARMS_COUNT,s_trunkInfo,"")))

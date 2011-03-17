@@ -1,3 +1,21 @@
+yate (3.2.1.svn4193) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4193: + Added support for delivering Caller
+    ID over analog FXS MGCP gateways.  + Added option to try to provide
+    ringback from analog card or gateway if early media is not available
+    from the called party.  + Emit call.ringing automatically from
+    outbound calls on FXS interfaces.  + Modified notification in ISUP
+    to only consider its own Layer 3 and remote route status, not
+    individual linksets attached to the router.  + Added to
+    NamedList::copySubParams() the option of not skipping over the
+    matched prefix in parameter names.  + Added method to check easily
+    if a SIP transaction can send a response message.  + Added
+    capability of sending arbitrary SIP headers on call disconnect.  +
+    Moved the post-disconnect hooking code from ysigchan to the Channel
+    class.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 18 Mar 2011 02:19:23 +0300
+
 yate (3.2.1.svn4187) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4187: + Fixed parsing of trunks status

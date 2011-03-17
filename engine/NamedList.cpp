@@ -195,13 +195,14 @@ NamedList& NamedList::copyParams(const NamedList& original, const String& list, 
     return *this;
 }
 
-NamedList& NamedList::copySubParams(const NamedList& original, const String& prefix)
+NamedList& NamedList::copySubParams(const NamedList& original, const String& prefix, bool skipPrefix)
 {
-    XDebug(DebugInfo,"NamedList::copySubParams(%p,\"%s\")",&original,prefix.c_str());
+    XDebug(DebugInfo,"NamedList::copySubParams(%p,\"%s\",%s) [%p]",
+	&original,prefix.c_str(),String::boolText(skipPrefix),this);
     if (prefix) {
-	unsigned int offs = prefix.length();
-    for (const ObjList* l = original.m_params.skipNull(); l; l = l->skipNext()) {
-	const NamedString* s = static_cast<const NamedString*>(l->get());
+	unsigned int offs = skipPrefix ? prefix.length() : 0;
+	for (const ObjList* l = original.m_params.skipNull(); l; l = l->skipNext()) {
+	    const NamedString* s = static_cast<const NamedString*>(l->get());
 	    if (s->name().startsWith(prefix)) {
 		const char* name = s->name().c_str() + offs;
 		if (*name)

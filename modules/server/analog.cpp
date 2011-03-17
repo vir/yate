@@ -71,7 +71,7 @@ public:
 	const char* called = 0)
 	{ m_caller = caller; m_callerName = callername; m_called = called; }
     // Set the caller, callername and called parameters
-    void copyCall(Message& dest, bool privacy = false);
+    void copyCall(NamedList& dest, bool privacy = false);
     // Fill a string with line status parameters
     void statusParams(String& str);
     // Fill a string with line status detail parameters
@@ -104,7 +104,8 @@ class ModuleGroup : public AnalogLineGroup
 public:
     // Create an FXS/FXO group of analog lines
     inline ModuleGroup(AnalogLine::Type type, const char* name)
-	: AnalogLineGroup(type,name), m_init(false), m_thread(0), m_callEndedPlayTime(0)
+	: AnalogLineGroup(type,name),
+	  m_init(false), m_ringback(false), m_thread(0), m_callEndedPlayTime(0)
 	{ m_prefix << name << "/"; }
     // Create a group of analog lines used to record
     inline ModuleGroup(const char* name, ModuleGroup* fxo)
@@ -120,6 +121,8 @@ public:
 	{ return static_cast<ModuleGroup*>(fxo()); }
     inline const String& prefix()
 	{ return m_prefix; }
+    inline bool ringback() const
+	{ return m_ringback; }
     // Remove all channels associated with this group and stop worker thread
     virtual void destruct();
     // Process an event geberated by a line
@@ -173,6 +176,7 @@ private:
     static const char* lineParams[];
 
     bool m_init;                         // Init flag
+    bool m_ringback;                     // Lines need to provide ringback
     String m_prefix;                     // Line prefix used to complete commands
     AnalogWorkerThread* m_thread;        // The worker thread
     // FXS/FXO group data
@@ -283,6 +287,7 @@ protected:
 private:
     ModuleLine* m_line;                  // The analog line associated with this channel
     bool m_hungup;                       // Hang up flag
+    bool m_ringback;                     // Circuit ringback provider flag
     bool m_routeOnSecondRing;            // Delay router if waiting callerid
     RecordTrigger m_recording;           // Recording trigger source
     String m_reason;                     // Hangup reason
@@ -680,7 +685,7 @@ void ModuleLine::processNotify(Message& msg)
 }
 
 // Set the caller, callername and called parameters
-void ModuleLine::copyCall(Message& dest, bool privacy)
+void ModuleLine::copyCall(NamedList& dest, bool privacy)
 {
     if (privacy)
 	dest.addParam("callerpres","restricted");
@@ -979,6 +984,8 @@ bool ModuleGroup::initialize(const NamedList& params, const NamedList& defaults,
 	debugEnabled(0 != level);
 	debugLevel(level);
     }
+
+    m_ringback = params.getBoolValue("ringback");
 
     Lock2 lock(this,fxoRec());
     bool ok = true;
@@ -1315,6 +1322,7 @@ AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg, RecordTrigger recor
     : Channel(&plugin,0,(msg != 0)),
     m_line(line),
     m_hungup(false),
+    m_ringback(false),
     m_routeOnSecondRing(false),
     m_recording(recorder),
     m_callEndedTimer(0),
@@ -1327,8 +1335,10 @@ AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg, RecordTrigger recor
     m_callsetup(AnalogLine::NoCallSetup)
 {
     m_line->userdata(this);
-    if (m_line->moduleGroup())
+    if (m_line->moduleGroup()) {
 	m_line->moduleGroup()->setEndpoint(this,true);
+	m_ringback = m_line->moduleGroup()->ringback();
+    }
 
     // Set caller/called from line
     if (isOutgoing()) {
@@ -1409,7 +1419,15 @@ AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg, RecordTrigger recor
 		m_privacy = getPrivacy(*msg);
 		if (m_callsetup == AnalogLine::Before)
 		    m_line->sendCallSetup(m_privacy);
-		m_line->sendEvent(SignallingCircuitEvent::RingBegin,AnalogLine::Dialing);
+		{
+		    NamedList* params = 0;
+		    NamedList callerId("");
+		    if (m_callsetup != AnalogLine::NoCallSetup) {
+			params = &callerId;
+			m_line->copyCall(callerId,m_privacy);
+		    }
+		    m_line->sendEvent(SignallingCircuitEvent::RingBegin,AnalogLine::Dialing,params);
+		}
 		if (m_callsetup == AnalogLine::After)
 		    m_dialTimer.interval(500);
 		break;
@@ -1491,11 +1509,20 @@ bool AnalogChannel::msgRinging(Message& msg)
 	    m_line->acceptPulseDigit(false);
 	m_line->changeState(AnalogLine::Ringing);
     }
-    if (msg.getBoolValue("earlymedia",getPeer() && getPeer()->getSource())) {
+    bool media = msg.getBoolValue("earlymedia",getPeer() && getPeer()->getSource());
+    if (media) {
 	setAudio(false);
 	if (m_line)
 	    m_line->setCircuitParam("echotrain",msg.getValue("echotrain"));
     }
+    else if (m_ringback && m_line) {
+	// Provide ringback from circuit features if supported
+	NamedList params("ringback");
+	params.addParam("tone","ringback");
+	media = m_line->sendEvent(SignallingCircuitEvent::GenericTone,&params);
+    }
+    if (media)
+	m_ringback = false;
     return true;
 }
 
@@ -1506,10 +1533,9 @@ bool AnalogChannel::msgAnswered(Message& msg)
     if (m_line) {
 	m_line->noRingTimer().stop();
 	m_line->removeCallSetupDetector();
-	if (m_line->type() == AnalogLine::FXS) {
-	    m_line->sendEvent(SignallingCircuitEvent::RingEnd);
+	m_line->sendEvent(SignallingCircuitEvent::RingEnd);
+	if (m_line->type() == AnalogLine::FXS)
 	    polarityControl(true);
-	}
 	else {
 	    m_line->acceptPulseDigit(false);
 	    m_line->sendEvent(SignallingCircuitEvent::OffHook);
@@ -1609,6 +1635,7 @@ void AnalogChannel::callAccept(Message& msg)
 	    m_line->acceptPulseDigit(false);
 	m_line->changeState(AnalogLine::DialComplete);
     }
+    m_ringback = msg.getBoolValue("ringback",m_ringback);
     setAudio(false);
     setAudio(true);
     Channel::callAccept(msg);
@@ -2043,6 +2070,7 @@ void AnalogChannel::outCallAnswered(bool stopDial)
     if (stopDial)
 	m_dialTimer.stop();
     m_answered = true;
+    m_ringback = false;
     setStatus("answered");
     if (m_line) {
 	m_line->changeState(AnalogLine::Answered);
@@ -2748,6 +2776,8 @@ bool AnalogDriver::msgExecute(Message& msg, String& dest)
 	    analogCh->callConnect(msg);
 	    msg.setParam("peerid",analogCh->id());
 	    msg.setParam("targetid",analogCh->id());
+	    if (analogCh->line() && (analogCh->line()->type() == AnalogLine::FXS))
+		Engine::enqueue(analogCh->message("call.ringing",false,true));
         }
     }
     else

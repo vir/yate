@@ -354,6 +354,7 @@ protected:
     virtual Message* buildChanRtp(RefObject* context);
     MimeSdpBody* createProvisionalSDP(Message& msg);
     virtual void mediaChanged(const SDPMedia& media);
+    virtual void endDisconnect(const Message& msg, bool handled);
 
 private:
     virtual void statusParams(String& str);
@@ -2137,9 +2138,13 @@ void YateSIPConnection::clearTransaction()
     Lock lock(driver());
     if (m_tr) {
 	m_tr->setUserData(0);
-	if (m_tr->isIncoming()) {
-	    if (m_tr->setResponse(m_reasonCode,m_reason.null() ? "Request Terminated" : m_reason.c_str()))
-		m_byebye = false;
+	if (m_tr->setResponse()) {
+	    SIPMessage* m = new SIPMessage(m_tr->initialMessage(),m_reasonCode,
+		m_reason.safe("Request Terminated"));
+	    copySipHeaders(*m,parameters(),0);
+	    m_tr->setResponse(m);
+	    TelEngine::destruct(m);
+	    m_byebye = false;
 	}
 	m_tr->deref();
 	m_tr = 0;
@@ -2236,6 +2241,7 @@ void YateSIPConnection::hangup()
 	    const char* stats = parameters().getValue("rtp_stats");
 	    if (stats)
 		m->addHeader("P-RTP-Stat",stats);
+	    copySipHeaders(*m,parameters(),0);
 	    plugin.ep()->engine()->addMessage(m);
 	    m->deref();
 	}
@@ -3266,6 +3272,16 @@ bool YateSIPConnection::msgUpdate(Message& msg)
 	return true;
     }
     return false;
+}
+
+void YateSIPConnection::endDisconnect(const Message& msg, bool handled)
+{
+    const char* prefix = msg.getValue("osip-prefix");
+    if (TelEngine::null(prefix))
+        return;
+    parameters().clearParams();
+    parameters().setParam("osip-prefix",prefix);
+    parameters().copySubParams(msg,prefix,false);
 }
 
 void YateSIPConnection::statusParams(String& str)

@@ -31,6 +31,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 using namespace TelEngine;
 namespace { // anonymous
@@ -300,6 +301,7 @@ YSIGFACTORY2(MGCPSpan);
 static YMGCPEngine* s_engine = 0;
 static MGCPEndpoint* s_endpoint = 0;
 static String s_defaultEp;
+static int s_tzOffset = 0;
 
 static MGCPPlugin splugin;
 static ObjList s_wrappers;
@@ -1696,7 +1698,27 @@ bool MGCPCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params
 		setParams(*params);
 	    return status(Connected,!params || params->getBoolValue("sync",true));
 	case SignallingCircuitEvent::RingBegin:
-	    return fxs() && sendPending("L/rg");
+	    if (fxs()) {
+		String s("L/rg");
+		if (params) {
+		    String number = params->getValue("caller");
+		    String name = params->getValue("callername");
+		    if (number || name) {
+			MimeHeaderLine::addQuotes(number);
+			MimeHeaderLine::addQuotes(name);
+			int year;
+			unsigned int month,day,hour,minutes,seconds;
+			int tzo = params->getIntValue("tzoffset",s_tzOffset);
+			Time::toDateTime(Time::secNow()+tzo,year,month,day,hour,minutes,seconds);
+			char buf[16];
+			::snprintf(buf,sizeof(buf),"%02u/%02u/%02u/%02u",month,day,hour,minutes);
+			buf[sizeof(buf)-1] = '\0';
+			s << ",L/ci(" << buf << "," << number << "," << name << ")";
+		    }
+		}
+		return sendPending(s);
+	    }
+	    return false;
 	case SignallingCircuitEvent::RingEnd:
 	    return sendPending();
 	case SignallingCircuitEvent::Polarity:
@@ -1956,6 +1978,7 @@ void MGCPPlugin::initialize()
     Output("Initializing module MGCP Call Agent");
     Configuration cfg(Engine::configFile("mgcpca"));
     setup();
+    s_tzOffset = cfg.getIntValue("general","tzoffset",0);
     NamedList* engSect = cfg.getSection("engine");
     if (s_engine && engSect)
 	s_engine->initialize(*engSect);

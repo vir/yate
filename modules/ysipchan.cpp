@@ -1970,18 +1970,21 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     YateSIPLine* line = 0;
     if (m_line) {
 	line = plugin.findLine(m_line);
-	if (line && (uri.find('@') < 0)) {
-	    if (!uri.startsWith("sip:"))
-		tmp = "sip:";
-	    tmp << uri << "@" << line->domain();
-	}
-	if (line)
+	if (line) {
+	    if (uri.find('@') < 0 && !uri.startsWith("tel:")) {
+		if (!uri.startsWith("sip:"))
+		    tmp = "sip:";
+		tmp << uri << "@" << line->domain();
+	    }
 	    m_externalAddr = line->getLocalAddr();
+	}
     }
     if (tmp.null()) {
-	int sep = uri.find(':');
-	if ((sep < 0) || ((sep > 0) && (uri.substr(sep+1).toInteger(-1) > 0)))
-	    tmp = "sip:";
+	if (!(uri.startsWith("tel:") || uri.startsWith("sip:"))) {
+	    int sep = uri.find(':');
+	    if ((sep < 0) || ((sep > 0) && (uri.substr(sep+1).toInteger(-1) > 0)))
+		tmp = "sip:";
+	}
 	tmp << uri;
     }
     m_uri = tmp;

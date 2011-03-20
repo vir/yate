@@ -194,10 +194,13 @@ windows: check-topdir
 	@cmp -s yateversn.h $@/yateversn.h || cp -p yateversn.h $@/yateversn.h
 	@cmp -s yateiss.inc $@/yateiss.inc || cp -p yateiss.inc $@/yateiss.inc
 
-.PHONY: install install-root install-noapi install-api uninstall uninstall-root
+.PHONY: install install-root install-noconf install-noapi install-api uninstall uninstall-root
 install install-root: all $(APIDOCS) install-noapi install-api check-ldconfig
 
-install-noapi: all
+install-noapi: install-noconf
+	$(MAKE) -C ./conf.d install
+
+install-noconf: all
 	@mkdir -p "$(DESTDIR)$(libdir)/" && \
 	for i in $(SLIBS) ; do \
 	    if [ -h "$$i" ]; then \
@@ -212,7 +215,6 @@ install-noapi: all
 	$(MAKE) -C ./modules install
 	$(MAKE) -C ./clients install
 	$(MAKE) -C ./share install
-	$(MAKE) -C ./conf.d install
 	@$(LDCONFIG)
 	@mkdir -p "$(DESTDIR)$(mandir)/man8/" && \
 	for i in $(MAN8) ; do \

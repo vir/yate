@@ -1970,18 +1970,21 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     YateSIPLine* line = 0;
     if (m_line) {
 	line = plugin.findLine(m_line);
-	if (line && (uri.find('@') < 0)) {
-	    if (!uri.startsWith("sip:"))
-		tmp = "sip:";
-	    tmp << uri << "@" << line->domain();
-	}
-	if (line)
+	if (line) {
+	    if (uri.find('@') < 0 && !uri.startsWith("tel:")) {
+		if (!uri.startsWith("sip:"))
+		    tmp = "sip:";
+		tmp << uri << "@" << line->domain();
+	    }
 	    m_externalAddr = line->getLocalAddr();
+	}
     }
     if (tmp.null()) {
-	int sep = uri.find(':');
-	if ((sep < 0) || ((sep > 0) && (uri.substr(sep+1).toInteger(-1) > 0)))
-	    tmp = "sip:";
+	if (!(uri.startsWith("tel:") || uri.startsWith("sip:"))) {
+	    int sep = uri.find(':');
+	    if ((sep < 0) || ((sep > 0) && (uri.substr(sep+1).toInteger(-1) > 0)))
+		tmp = "sip:";
+	}
 	tmp << uri;
     }
     m_uri = tmp;
@@ -1994,7 +1997,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 	tmp = "Invalid address: ";
 	tmp << m_uri;
 	msg.setParam("reason",tmp);
-	setReason(tmp);
+	setReason(tmp,500);
 	return;
     }
     int maxf = msg.getIntValue("antiloop",s_maxForwards);
@@ -2233,7 +2236,7 @@ void YateSIPConnection::hangup()
 	    if (m_reason) {
 		// FIXME: add SIP and Q.850 cause codes, set the proper reason
 		MimeHeaderLine* hl = new MimeHeaderLine("Reason","SIP");
-		if ((m_reasonCode >= 300) && (m_reasonCode != 487))
+		if ((m_reasonCode >= 300) && (m_reasonCode <= 699) && (m_reasonCode != 487))
 		    hl->setParam("cause",String(m_reasonCode));
 		hl->setParam("text",MimeHeaderLine::quote(m_reason));
 		m->addHeader(hl);
@@ -2417,7 +2420,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
     m_dialog = *ev->getTransaction()->recentMessage();
     mylock.drop();
 
-    if (msg && !msg->isOutgoing() && msg->isAnswer() && (code >= 300)) {
+    if (msg && !msg->isOutgoing() && msg->isAnswer() && (code >= 300) && (code <= 699)) {
 	updateTags = false;
 	m_cancel = false;
 	m_byebye = false;
@@ -3032,7 +3035,7 @@ void YateSIPConnection::disconnected(bool final, const char *reason)
     Debug(this,DebugAll,"YateSIPConnection::disconnected() '%s' [%p]",reason,this);
     if (reason) {
 	int code = lookup(reason,dict_errors);
-	if (code)
+	if (code >= 300 && code <= 699)
 	    setReason(lookup(code,SIPResponses,reason),code);
 	else
 	    setReason(reason);
@@ -3196,7 +3199,7 @@ bool YateSIPConnection::msgDrop(Message& msg, const char* reason)
     if (!Channel::msgDrop(msg,reason))
 	return false;
     int code = lookup(reason,dict_errors);
-    if (code >= 300) {
+    if (code >= 300 && code <= 699) {
 	m_reasonCode = code;
 	m_reason = lookup(code,SIPResponses,reason);
     }
@@ -3276,6 +3279,14 @@ bool YateSIPConnection::msgUpdate(Message& msg)
 
 void YateSIPConnection::endDisconnect(const Message& msg, bool handled)
 {
+    const String* reason = msg.getParam("reason");
+    if (!TelEngine::null(reason)) {
+	int code = reason->toInteger(dict_errors);
+	if (code >= 300 && code <= 699)
+	    setReason(lookup(code,SIPResponses,*reason),code);
+	else
+	    setReason(*reason,m_reasonCode);
+    }
     const char* prefix = msg.getValue("osip-prefix");
     if (TelEngine::null(prefix))
         return;
@@ -3385,6 +3396,8 @@ void YateSIPConnection::callRejected(const char* error, const char* reason, cons
 {
     Channel::callRejected(error,reason,msg);
     int code = lookup(error,dict_errors,500);
+    if (code < 300 || code > 699)
+	code = 500;
     Lock lock(driver());
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	if (code == 401)

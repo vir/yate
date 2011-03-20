@@ -1,3 +1,15 @@
+yate (3.2.1.svn4196) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4196: + Moved the post-disconnect hooking
+    code from ysigchan to the Channel class.  + Also don't add sip: in
+    front of sip:number URIs (we turned to sip:sip:number).  + Leave the
+    tel: URIs untouched when sent on an outbound SIP call.  + Allow
+    altering the SIP code in the chan.disconnected message.  + Sanitize
+    the custom SIP cause codes, must be >= 300.  + Added make target
+    install-noconf that doesn't install config files or API docs.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Mon, 21 Mar 2011 02:19:20 +0300
+
 yate (3.2.1.svn4193) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4193: + Added support for delivering Caller

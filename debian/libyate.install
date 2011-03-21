@@ -60,5 +60,7 @@ debian/tmp/usr/lib/yate/yjinglechan.yate
 debian/tmp/etc/yate/zlibcompress.conf
 debian/tmp/usr/lib/yate/zlibcompress.yate
 
+debian/tmp/etc/yate/jabberclient.conf
+debian/tmp/usr/lib/yate/client/jabberclient.yate usr/lib/yate
 
 

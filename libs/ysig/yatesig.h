@@ -7995,7 +7995,7 @@ private:
     void setReason(const char* reason, SignallingMessage* msg, const char* diagnostic = 0,
 	const char* location = 0);
     // Accept send/receive messages in current state based on call direction
-    bool validMsgState(bool send, SS7MsgISUP::Type type);
+    bool validMsgState(bool send, SS7MsgISUP::Type type, bool hasBkwCallInd = false);
     // Connect the reserved circuit. Return false if it fails. Return true if this call is a signalling only one
     bool connectCircuit(const char* special = 0);
     // Transmit the IAM message. Start IAM timer if not started
@@ -8413,6 +8413,7 @@ private:
     bool m_ignoreGRSSingle;              // Ignore (drop) GRS with range 0 (1 circuit affected)
     bool m_ignoreCGBSingle;              // Ignore (drop) CGB with range 0 (1 circuit in map)
     bool m_ignoreCGUSingle;              // Ignore (drop) CGU with range 0 (1 circuit in map)
+    bool m_duplicateCGB;                 // Send duplicate CGB messages (ANSI)
     bool m_ignoreUnkDigits;              // Check if the message parser should ignore unknown digits encoding
     bool m_l3LinkUp;                     // Flag indicating the availability of a Layer3 data link
     u_int64_t m_t1Interval;              // Q.764 T1 timer interval

@@ -3430,10 +3430,11 @@ public:
     /**
      * Copy subparameters from another list
      * @param original Named list to copy parameters from
-     * @param prefix Prefix to match and remove from parameter names, must not be NULL
+     * @param prefix Prefix to match in parameter names, must not be NULL
+     * @param skipPrefix Skip over the prefix when building new parameter name
      * @return Reference to this NamedList
      */
-    NamedList& copySubParams(const NamedList& original, const String& prefix);
+    NamedList& copySubParams(const NamedList& original, const String& prefix, bool skipPrefix = true);
 
     /**
      * Get the index of a named string in the parameter list.

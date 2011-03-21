@@ -327,20 +327,29 @@ void SIPTransaction::setResponse(SIPMessage* message)
 	setTimeout(m_engine->getTimer('C'));
 }
 
+bool SIPTransaction::setResponse() const
+{
+    if (m_outgoing)
+	return false;
+    switch (m_state) {
+	case Initial:
+	case Trying:
+	case Process:
+	    return true;
+    }
+    return false;
+}
+
 bool SIPTransaction::setResponse(int code, const char* reason)
 {
     if (m_outgoing) {
 	Debug(getEngine(),DebugWarn,"SIPTransaction::setResponse(%d,'%s') in client mode [%p]",code,reason,this);
 	return false;
     }
-    switch (m_state) {
-	case Invalid:
-	case Retrans:
-	case Finish:
-	case Cleared:
-	    DDebug(getEngine(),DebugInfo,"SIPTransaction ignoring setResponse(%d) in state %s [%p]",
-		code,stateName(m_state),this);
-	    return false;
+    if (!setResponse()) {
+	DDebug(getEngine(),DebugInfo,"SIPTransaction ignoring setResponse(%d) in state %s [%p]",
+	    code,stateName(m_state),this);
+	return false;
     }
     if (!reason)
 	reason = lookup(code,SIPResponses,"Unknown Reason Code");

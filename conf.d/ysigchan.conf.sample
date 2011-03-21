@@ -430,6 +430,10 @@
 ; Defaults to no
 ;ignore-cgu-single=no
 
+; duplicate-cgb: boolean: Duplicate all sent circuit group blocking requests
+; Defaults to yes if pointcodetype is ANSI or ANSI8, no for other types
+;duplicate-cgb=
+
 ; print-messages: boolean: Print decoded protocol data units to output
 ; This option is applied on reload
 ; Defaults to no

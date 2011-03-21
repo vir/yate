@@ -184,6 +184,10 @@
 ; Defaults to after if missing or invalid
 ;callsetup=after
 
+; ringback: boolean: Offer a ringback tone even if not provided by peer channel
+; This requires ringback tone generation support from the analog circuit driver
+;ringback=no
+
 ; debuglevel: integer: The debug level of this group
 ; Applied on reload
 ; Defaults to the current debug level if missing or invalid

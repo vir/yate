@@ -844,6 +844,12 @@ public:
     virtual SIPEvent* getEvent(bool pendingOnly = false);
 
     /**
+     * Checks if a response message can be sent
+     * @return True if the transaction can send a response message
+     */
+    bool setResponse() const;
+
+    /**
      * Creates and transmits a final response message
      * @param code Response code to send
      * @param reason Human readable reason text (optional)

@@ -47,8 +47,9 @@ class IsupEncodeHandler;                 // Handler for "isup.encode" message
 class SigNotifier;                       // Class for handling received notifications
 
 // The signalling channel
-class SigChannel : public Channel, public MessageNotifier
+class SigChannel : public Channel
 {
+    YCLASS(SigChannel,Channel)
 public:
     // Incoming
     SigChannel(SignallingEvent* event);
@@ -65,7 +66,6 @@ public:
     inline bool hungup() const
 	{ return m_hungup; }
     // Overloaded methods
-    virtual void* getObject(const String& name) const;
     virtual bool msgProgress(Message& msg);
     virtual bool msgRinging(Message& msg);
     virtual bool msgAnswered(Message& msg);
@@ -81,17 +81,17 @@ public:
 	const Message* msg = 0);
     virtual void connected(const char *reason);
     virtual void disconnected(bool final, const char* reason);
-    virtual Message* getDisconnect(const char* reason);
     bool disconnect()
 	{ return Channel::disconnect(m_reason,parameters()); }
     void handleEvent(SignallingEvent* event);
     void hangup(const char* reason = 0, SignallingEvent* event = 0, const NamedList* extra = 0);
     // Notifier message dispatched handler
     virtual void dispatched(const Message& msg, bool handled);
+protected:
+    void endDisconnect(const Message& params, bool handled);
 private:
     bool startCall(Message& msg, SigTrunk* trunk);
     virtual void statusParams(String& str);
-    void copyDisconnect(const NamedList& params);
     // Set call status. Print debug message
     void setState(const char* state, bool updateStatus = true, bool showReason = false);
     // Event handlers
@@ -1035,15 +1035,6 @@ void SigChannel::handleEvent(SignallingEvent* event)
     }
 }
 
-void* SigChannel::getObject(const String& name) const
-{
-    if (name == "SigChannel")
-	return (void*)this;
-    if (name == "MessageNotifier")
-	return static_cast<MessageNotifier*>((SigChannel*)this);
-    return Channel::getObject(name);
-}
-
 bool SigChannel::msgProgress(Message& msg)
 {
     Lock lock(m_mutex);
@@ -1310,26 +1301,14 @@ void SigChannel::disconnected(bool final, const char* reason)
     Channel::disconnected(final,m_reason);
 }
 
-Message* SigChannel::getDisconnect(const char* reason)
-{
-    Message* msg = Channel::getDisconnect(reason);
-    msg->setNotify();
-    return msg;
-}
-
-void SigChannel::copyDisconnect(const NamedList& params)
+void SigChannel::endDisconnect(const Message& params, bool handled)
 {
     const char* prefix = params.getValue("message-oprefix");
     if (TelEngine::null(prefix))
 	return;
     parameters().clearParams();
     parameters().setParam("message-oprefix",prefix);
-    unsigned int n = params.length();
-    for (unsigned int i = 0; i < n; i++) {
-	NamedString* p = params.getParam(i);
-	if (p && p->name().startsWith(prefix))
-	    parameters().setParam(p->name(),*p);
-    }
+    parameters().copySubParams(params,prefix,false);
 }
 
 void SigChannel::hangup(const char* reason, SignallingEvent* event, const NamedList* extra)
@@ -1379,7 +1358,7 @@ void SigChannel::dispatched(const Message& msg, bool handled)
     static const String s_disc("chan.disconnected");
     DDebug(this,DebugAll,"dispatched(%s,%u) [%p]",msg.c_str(),handled,this);
     if (s_disc == msg)
-	copyDisconnect(msg);
+	Channel::dispatched(msg,handled);
     else
 	processCompat(msg);
 }
@@ -1906,6 +1885,7 @@ void SigDriver::status(SigTrunk* trunk, String& retVal, const String& target)
 	    detail << "|" << SignallingCircuit::lookupStatus(cic->status());
 	    detail << "|" << String::boolText(0 != cic->locked(SignallingCircuit::LockLocal));
 	    detail << "|" << String::boolText(0 != cic->locked(SignallingCircuit::LockRemote));
+	    detail << "|" << String::boolText(0 != cic->locked(SignallingCircuit::LockChanged|SignallingCircuit::Resetting));
 	}
 	break;
     }
@@ -1919,7 +1899,7 @@ void SigDriver::status(SigTrunk* trunk, String& retVal, const String& target)
     retVal << ",calls=" << (trunk->controller() ? trunk->controller()->calls().count() : 0);
     if (!target.null()) {
 	retVal << ";count=" << count;
-	retVal << ",format=Span|Status|LockedLocal|LockedRemote";
+	retVal << ",format=Span|Status|LockedLocal|LockedRemote|Changing";
 	retVal << ";" << detail;
     }
     retVal << "\r\n";

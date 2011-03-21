@@ -318,6 +318,8 @@ bool CallEndpoint::clearData(DataNode* node, const char* type)
 }
 
 
+static const String s_disconnected("chan.disconnected");
+
 Channel::Channel(Driver* driver, const char* id, bool outgoing)
     : CallEndpoint(id),
       m_parameters(""), m_driver(driver), m_outgoing(outgoing),
@@ -348,6 +350,8 @@ void* Channel::getObject(const String& name) const
 {
     if (name == "Channel")
 	return const_cast<Channel*>(this);
+    if (name == "MessageNotifier")
+	return static_cast<MessageNotifier*>(const_cast<Channel*>(this));
     return CallEndpoint::getObject(name);
 }
 
@@ -464,6 +468,16 @@ void Channel::setDisconnect(const NamedList* params)
 	m_parameters.copyParams(*params);
 }
 
+void Channel::endDisconnect(const Message& msg, bool handled)
+{
+}
+
+void Channel::dispatched(const Message& msg, bool handled)
+{
+    if (s_disconnected == msg)
+	endDisconnect(msg,handled);
+}
+
 void Channel::setId(const char* newId)
 {
     debugName(0);
@@ -473,13 +487,14 @@ void Channel::setId(const char* newId)
 
 Message* Channel::getDisconnect(const char* reason)
 {
-    Message* msg = new Message("chan.disconnected");
+    Message* msg = new Message(s_disconnected);
     msg->copyParams(m_parameters);
     complete(*msg);
     if (reason)
 	msg->setParam("reason",reason);
     // we will remain referenced until the message is destroyed
     msg->userData(this);
+    msg->setNotify();
     return msg;
 }
 
@@ -1603,12 +1618,13 @@ bool Router::route()
 	    else {
 		const char* error = m_msg->getValue("error","noconn");
 		const char* reason = m_msg->getValue("reason","Could not connect to target");
-		Message m("chan.disconnected");
+		Message m(s_disconnected);
 		chan->complete(m);
 		m.setParam("error",error);
 		m.setParam("reason",reason);
 		m.setParam("reroute",String::boolText(true));
 		m.userData(chan);
+		m.setNotify();
 		if (!Engine::dispatch(m))
 		    chan->callRejected(error,reason,m_msg);
 	    }

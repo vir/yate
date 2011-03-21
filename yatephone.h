@@ -1605,7 +1605,7 @@ private:
  * A class that holds common channel related features (a.k.a. call leg)
  * @short An abstract communication channel
  */
-class YATE_API Channel : public CallEndpoint, public DebugEnabler
+class YATE_API Channel : public CallEndpoint, public DebugEnabler, public MessageNotifier
 {
     friend class Driver;
     friend class Router;
@@ -1956,6 +1956,13 @@ public:
     inline const NamedList& parameters() const
 	{ return m_parameters; }
 
+    /**
+     * Notification for dispatched messages
+     * @param msg Message that was dispatched
+     * @param handled Result of handling the message
+     */
+    virtual void dispatched(const Message& msg, bool handled);
+
 protected:
     /**
      * Constructor
@@ -2002,6 +2009,13 @@ protected:
      * @param params Pointer to disconnect cause parameters, NULL to reset them
      */
     virtual void setDisconnect(const NamedList* params);
+
+    /**
+     * Notification after chan.disconnected handling
+     * @param msg The chan.disconnected message
+     * @param handled True if the message was handled
+     */
+    virtual void endDisconnect(const Message& msg, bool handled);
 
     /**
      * Set a new ID for this channel

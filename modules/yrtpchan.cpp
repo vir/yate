@@ -472,9 +472,9 @@ YRTPWrapper* YRTPWrapper::find(const CallEndpoint* conn, const String& media)
     Lock lock(s_mutex);
     ObjList* l = &s_calls;
     for (; l; l=l->next()) {
-	const YRTPWrapper *p = static_cast<const YRTPWrapper *>(l->get());
+	YRTPWrapper *p = static_cast<YRTPWrapper *>(l->get());
 	if (p && (p->conn() == conn) && (p->media() == media))
-	    return const_cast<YRTPWrapper *>(p);
+	    return p->ref() ? p : 0;
     }
     return 0;
 }
@@ -486,9 +486,9 @@ YRTPWrapper* YRTPWrapper::find(const String& id)
     Lock lock(s_mutex);
     ObjList* l = &s_calls;
     for (; l; l=l->next()) {
-	const YRTPWrapper *p = static_cast<const YRTPWrapper *>(l->get());
+	YRTPWrapper *p = static_cast<YRTPWrapper *>(l->get());
 	if (p && (p->id() == id))
-	    return const_cast<YRTPWrapper *>(p);
+	    return p->ref() ? p : 0;
     }
     return 0;
 }
@@ -1297,7 +1297,7 @@ bool AttachHandler::received(Message &msg)
 	return false;
     }
 
-    YRTPWrapper *w = YRTPWrapper::find(ch,media);
+    RefPointer<YRTPWrapper> w = YRTPWrapper::find(ch,media);
     if (!w)
 	w = YRTPWrapper::find(msg.getValue("rtpid"));
     if (!w) {
@@ -1318,10 +1318,11 @@ bool AttachHandler::received(Message &msg)
 	    ch->setConsumer(c,media);
 	    c->deref();
 	}
-
-	if (w->deref())
-	    return false;
     }
+
+    w->deref();
+    if (w->refcount() <= 1)
+	return false;
 
     w->setParams(rip,msg);
     msg.setParam("localip",w->host());
@@ -1366,15 +1367,17 @@ bool RtpHandler::received(Message &msg)
     DataEndpoint* de = YOBJECT(DataEndpoint,msg.userData());
     const char* media = udptl ? "image" : "audio";
     media = msg.getValue("media",(de ? de->name().c_str() : media));
-    YRTPWrapper* w = YRTPWrapper::find(ch,media);
+    RefPointer<YRTPWrapper> w = YRTPWrapper::find(ch,media);
     if (w)
-	Debug(&splugin,DebugAll,"Wrapper %p found by CallEndpoint %p",w,ch);
+	Debug(&splugin,DebugAll,"Wrapper %p found by CallEndpoint %p",(YRTPWrapper*)w,ch);
     else {
 	const char* rid = msg.getValue("rtpid");
 	w = YRTPWrapper::find(rid);
 	if (w)
-	    Debug(&splugin,DebugAll,"Wrapper %p found by ID '%s'",w,rid);
+	    Debug(&splugin,DebugAll,"Wrapper %p found by ID '%s'",(YRTPWrapper*)w,rid);
     }
+    if (w)
+	w->deref();
     if (terminate) {
 	if (w) {
 	    w->terminate(msg);
@@ -1403,11 +1406,11 @@ bool RtpHandler::received(Message &msg)
 
 	w = new YRTPWrapper(lip,ch,media,direction,msg,udptl);
 	w->setMaster(msg.getValue("id"));
+
+	w->deref();
     }
-    else if (w->valid()) {
-	w->ref();
+    else if (w->valid())
 	w->addDirection(direction);
-    }
     else
 	return false;
 
@@ -1437,7 +1440,7 @@ bool RtpHandler::received(Message &msg)
 	}
     }
 
-    if (w->deref())
+    if (w->refcount() <= 1)
 	return false;
 
     w->setParams(rip,msg);
@@ -1459,8 +1462,11 @@ bool DTMFHandler::received(Message &msg)
     String text(msg.getValue("text"));
     if (text.null())
 	return false;
-    YRTPWrapper* wrap = YRTPWrapper::find(targetid);
-    if (wrap && wrap->rtp()) {
+    RefPointer<YRTPWrapper> wrap = YRTPWrapper::find(targetid);
+    if (!wrap)
+	return false;
+    wrap->deref();
+    if (wrap->rtp()) {
 	Debug(&splugin,DebugInfo,"RTP DTMF '%s' targetid '%s'",text.c_str(),targetid.c_str());
 	int duration = msg.getIntValue("duration");
 	for (unsigned int i=0;i<text.length();i++)

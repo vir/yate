@@ -31,12 +31,12 @@
    <iconset>edit.png</iconset>
   </property>
   <property name="styleSheet" >
-   <string>QWidget {&#xd;
-  color: black;&#xd;
-}&#xd;
-QWidget#contactedit {&#xd;
-  background-color:#e0dfe3;&#xd;
-}&#xd;
+   <string>QWidget {
+  color: black;
+}
+QWidget#contactedit {
+  background-color:#e0dfe3;
+}
 </string>
   </property>
   <property name="_yate_destroyonhide" stdset="0" >
@@ -222,6 +222,9 @@ QWidget#contactedit {&#xd;
             <width>100</width>
             <height>22</height>
            </size>
+          </property>
+          <property name="_yate_textchangednotify" stdset="0" >
+           <bool>true</bool>
           </property>
          </widget>
         </item>

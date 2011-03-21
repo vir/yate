@@ -166,8 +166,6 @@ debian/tmp/usr/share/yate/skins/default/arch_roompriv_item.ui
 debian/tmp/usr/share/yate/skins/default/minus.png
 debian/tmp/usr/share/yate/skins/default/plus.png
 
-debian/tmp/etc/yate/jabberclient.conf
-debian/tmp/usr/lib/yate/client/jabberclient.yate
 debian/tmp/etc/yate/yate-qt4.conf
 debian/tmp/usr/lib/yate/qt4/updater.yate
 

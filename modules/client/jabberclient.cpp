@@ -150,9 +150,15 @@ protected:
 class StreamData : public NamedList
 {
 public:
+    enum ReqType {
+	UnknownReq = 0,
+	UserRosterUpdate,
+	UserRosterRemove,
+    };
     inline StreamData(JBClientStream& m_owner, bool requestRoster)
 	: NamedList(m_owner.local().bare()),
-	m_requestRoster(requestRoster), m_presence(0)
+	m_requestRoster(requestRoster), m_presence(0),
+	m_requests(""), m_reqIndex(Time::msecNow())
 	{}
     ~StreamData()
 	{ TelEngine::destruct(m_presence); }
@@ -201,8 +207,34 @@ public:
     void setPresence(const char* prio, const char* show, const char* status);
     // Retrieve a contact
     ObjList* find(const String& name);
+    // Add a pending request. Return its id
+    void addRequest(ReqType t, const NamedList& params, String& id);
+    // Remove a pending request
+    bool removeRequest(const String& id);
+    // Process a received response. Return true if handled
+    bool processResponse(JBEvent* ev, bool ok);
     // Build an online presence element
     static XmlElement* buildPresence(StreamData* d = 0, const char* to = 0);
+    // Add a pending request to a stream's data
+    static inline void addRequest(JBClientStream* s, ReqType t,
+	const NamedList& params, String& id) {
+	    Lock lock(s);
+	    StreamData* data = s ? static_cast<StreamData*>(s->userData()) : 0;
+	    if (data)
+		data->addRequest(t,params,id);
+	}
+    // Remove a pending request from stream's data
+    static inline bool removeRequest(JBClientStream* s, const String& id) {
+	    Lock lock(s);
+	    StreamData* data = s ? static_cast<StreamData*>(s->userData()) : 0;
+	    return data && data->removeRequest(id);
+	}
+    // Process a received response. Return true if handled
+    static inline bool processResponse(JBClientStream* s, JBEvent* ev, bool ok) {
+	    Lock lock(s);
+	    StreamData* data = s ? static_cast<StreamData*>(s->userData()) : 0;
+	    return data && data->processResponse(ev,ok);
+	}
 
     // Request roster when connected
     bool m_requestRoster;
@@ -210,6 +242,10 @@ public:
     NamedList* m_presence;
     // Contacts and their resources
     ObjList m_contacts;
+    // Pending requests. Each element is a NamedList object
+    NamedList m_requests;
+    // Request index
+    unsigned int m_reqIndex;
 };
 
 /*
@@ -390,6 +426,7 @@ static YJBEngine* s_jabber = 0;
 static String s_priority = "20";         // Default priority for generated presence
 static String s_rosterQueryId = "roster-query";
 static String s_capsNode = "http://yate.null.ro/yate/client/caps"; // Node for entity capabilities
+static const String s_reqTypeParam = "jabberclient_requesttype";
 
 // Commands help
 static const char* s_cmdStatus = "  status jabberclient stream_name";
@@ -869,7 +906,12 @@ bool YJBEngine::handleUserRoster(Message& msg, const String& line)
 	return false;
     }
 
-    XmlElement* query = XMPPUtils::createIq(XMPPUtils::IqSet,0,0);
+    String id;
+    if (upd)
+	StreamData::addRequest(s,StreamData::UserRosterUpdate,msg,id);
+    else
+	StreamData::addRequest(s,StreamData::UserRosterRemove,msg,id);
+    XmlElement* query = XMPPUtils::createIq(XMPPUtils::IqSet,0,0,id);
     XmlElement* x = XMPPUtils::createElement(XmlTag::Query,XMPPNamespace::Roster);
     query->addChild(x);
     XmlElement* item = new XmlElement("item");
@@ -907,6 +949,8 @@ bool YJBEngine::handleUserRoster(Message& msg, const String& line)
     else
 	item->setAttribute("subscription","remove");
     bool ok = s->sendStanza(query);
+    if (!ok && id)
+	StreamData::removeRequest(s,id);
     TelEngine::destruct(s);
     return ok;
 }
@@ -1511,6 +1555,7 @@ void YJBEngine::processIqStanza(JBEvent* ev)
 	ev->sendStanzaError(XMPPError::ServiceUnavailable);
 	return;
     }
+    bool ok = rsp && type == XMPPUtils::IqResult;
     int t = XmlTag::Count;
     int n = XMPPNamespace::Count;
     if (service)
@@ -1518,10 +1563,10 @@ void YJBEngine::processIqStanza(JBEvent* ev)
     if (rsp) {
 	// Server entity caps responses
 	if (n == XMPPNamespace::DiscoInfo &&
-	    s_entityCaps.processRsp(ev->element(),ev->id(),type == XMPPUtils::IqResult))
+	    s_entityCaps.processRsp(ev->element(),ev->id(),ok))
 	    return;
 	// Responses to disco info/items requests
-	if (rsp && processDiscoRsp(ev,service,t,n,type == XMPPUtils::IqResult))
+	if (rsp && processDiscoRsp(ev,service,t,n,ok))
 	    return;
     }
 
@@ -1627,6 +1672,9 @@ void YJBEngine::processIqStanza(JBEvent* ev)
 	Engine::enqueue(m);
 	return;
     }
+    // Check pending requests
+    if (rsp && StreamData::processResponse(ev->clientStream(),ev,ok))
+	return;
     // Route the iq
     Message m("jabber.iq");
     __plugin.complete(m,ev->clientStream());
@@ -1692,8 +1740,10 @@ void YJBEngine::processStreamEvent(JBEvent* ev, bool ok)
 	ev->stream()->lock();
 	ev->stream()->setRosterRequested(false);
 	StreamData* sdata = streamData(ev);
-	if (sdata)
+	if (sdata) {
 	    sdata->m_contacts.clear();
+	    sdata->m_requests.clearParams();
+	}
 	ev->stream()->unlock();
     }
     Message* m = __plugin.message("user.notify",ev->clientStream());
@@ -1814,21 +1864,22 @@ void YJBEngine::processRoster(JBEvent* ev, XmlElement* service, int tag, int iqT
 	}
 	ev->stream()->unlock();
 	m->addParam("operation",upd ? "update" : "delete");
+	m->addParam("id",ev->id(),false);
 	m->addParam("contact.count","1");
 	addRosterItem(*m,*x,*jid,1,!upd);
 	Engine::enqueue(m);
 	return;
     }
-    // Ignore responses for now (except for roster query)
-    // The client shouldn't expect the result (the server will push changes)
+    // Process responses
     if (iqType == XMPPUtils::IqResult) {
-	// Handle 'query' responses
-	if (!service || tag != XmlTag::Query || ev->id() != s_rosterQueryId)
+	if (!service || tag != XmlTag::Query || ev->id() != s_rosterQueryId) {
+	    StreamData::processResponse(ev->clientStream(),ev,false);
 	    return;
+	}
+	// Handle 'query' roster responses
 	Message* m = __plugin.message("user.roster",ev->clientStream());
 	m->addParam("operation","update");
-	if (ev->id() == s_rosterQueryId)
-	    m->addParam("queryrsp",String::boolText(true));
+	m->addParam("queryrsp",String::boolText(true));
 	NamedString* count = new NamedString("contact.count");
 	m->addParam(count);
 	int n = 0;
@@ -1861,6 +1912,8 @@ void YJBEngine::processRoster(JBEvent* ev, XmlElement* service, int tag, int iqT
 	    getXmlError(*m,ev->element());
 	    Engine::enqueue(m);
 	}
+	else
+	    StreamData::processResponse(ev->clientStream(),ev,false);
 	return;
     }
     ev->sendStanzaError(XMPPError::ServiceUnavailable);
@@ -2075,6 +2128,78 @@ ObjList* StreamData::find(const String& name)
 	    return o;
     }
     return 0;
+}
+
+// Add a pending request
+void StreamData::addRequest(ReqType t, const NamedList& params, String& id)
+{
+    String type(t);
+    NamedList* req = new NamedList(params);
+    id.clear();
+    id = type;
+    switch (t) {
+	case UserRosterUpdate:
+	case UserRosterRemove:
+	    id << "_" << params["contact"].hash();
+	    break;
+	default: ;
+    }
+    id << "_" << ++m_reqIndex;
+    req->addParam(s_reqTypeParam,type);
+    m_requests.addParam(new NamedPointer(id,req));
+    Debug(&__plugin,DebugAll,"StreamData(%s) added request %s type=%s",
+	c_str(),id.c_str(),type.c_str());
+}
+
+// Remove a pending request
+bool StreamData::removeRequest(const String& id)
+{
+    NamedString* ns = id ? m_requests.getParam(id) : 0;
+    if (!ns)
+	return false;
+    Debug(&__plugin,DebugAll,"StreamData(%s) removing request %s",
+	c_str(),id.c_str());
+    m_requests.clearParam(ns);
+    return true;
+}
+
+// Process a received response. Return true if handled
+bool StreamData::processResponse(JBEvent* ev, bool ok)
+{
+    NamedString* ns = ev->id() ? m_requests.getParam(ev->id()) : 0;
+    if (!ns)
+	return false;
+    const char* msg = 0;
+    NamedList* req = YOBJECT(NamedList,ns);
+    if (req) {
+	int t = req->getIntValue(s_reqTypeParam);
+	switch (t) {
+	    case UserRosterUpdate:
+	    case UserRosterRemove:
+		msg = "user.roster";
+		break;
+	    default:
+		Debug(&__plugin,DebugStub,
+		    "StreamData(%s) unhandled request type %s id=%s",
+		    c_str(),req->getValue(s_reqTypeParam),ns->name().c_str());
+	}
+    }
+    else
+	Debug(&__plugin,DebugStub,"StreamData(%s) no parameters in request %s",
+	    c_str(),ns->name().c_str());
+    if (msg) {
+	Message* m = new Message(msg);
+	m->copyParams(*req);
+	m->setParam("module",__plugin.name());
+	m->addParam("requested_operation",m->getValue("operation"),false);
+	m->setParam("operation",ok ? "result" : "error");
+	if (!ok)
+	    getXmlError(*m,ev->element());
+	m->clearParam(s_reqTypeParam);
+	Engine::enqueue(m);
+    }
+    removeRequest(ev->id());
+    return true;
 }
 
 // Build an online presence element

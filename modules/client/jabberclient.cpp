@@ -154,11 +154,13 @@ public:
 	UnknownReq = 0,
 	UserRosterUpdate,
 	UserRosterRemove,
+	UserDataGet,
+	UserDataSet,
     };
     inline StreamData(JBClientStream& m_owner, bool requestRoster)
 	: NamedList(m_owner.local().bare()),
 	m_requestRoster(requestRoster), m_presence(0),
-	m_requests(""), m_reqIndex(Time::msecNow())
+	m_requests(""), m_reqIndex((unsigned int)Time::msecNow())
 	{}
     ~StreamData()
 	{ TelEngine::destruct(m_presence); }
@@ -279,6 +281,8 @@ public:
     bool handleUserRoster(Message& msg, const String& line);
     // Process 'user.update' messages
     bool handleUserUpdate(Message& msg, const String& line);
+    // Process 'user.data' messages
+    bool handleUserData(Message& msg, const String& line);
     // Process 'contact.info' messages
     bool handleContactInfo(Message& msg, const String& line);
     // Process 'jabber.iq' messages
@@ -348,6 +352,7 @@ public:
 	JabberAccount  = -6,           // YJBEngine::handleJabberAccount()
 	ContactInfo    = -7,           // YJBEngine::handleContactInfo()
 	MucRoom        = -8,           // YJBEngine::handleMucRoom()
+	UserData       = -9,           // YJBEngine::handleUserData()
 	JabberIq       = 150,          // YJBEngine::handleJabberIq()
     };
     JBMessageHandler(int handler);
@@ -426,6 +431,7 @@ static YJBEngine* s_jabber = 0;
 static String s_priority = "20";         // Default priority for generated presence
 static String s_rosterQueryId = "roster-query";
 static String s_capsNode = "http://yate.null.ro/yate/client/caps"; // Node for entity capabilities
+static String s_yateClientNs = "http://yate.null.ro/yate/client";  // Client namespace
 static const String s_reqTypeParam = "jabberclient_requesttype";
 
 // Commands help
@@ -450,6 +456,7 @@ static const TokenDict s_msgHandler[] = {
     {"jabber.account",      JBMessageHandler::JabberAccount},
     {"contact.info",        JBMessageHandler::ContactInfo},
     {"muc.room",            JBMessageHandler::MucRoom},
+    {"user.data",           JBMessageHandler::UserData},
     {"jabber.iq",           JBMessageHandler::JabberIq},
     {0,0}
 };
@@ -973,6 +980,64 @@ bool YJBEngine::handleUserUpdate(Message& msg, const String& line)
     }
     else if (*oper == "query")
 	ok = requestRoster(s);
+    TelEngine::destruct(s);
+    return ok;
+}
+
+// Process 'user.data' messages
+bool YJBEngine::handleUserData(Message& msg, const String& line)
+{
+    const String& oper = msg["operation"];
+    if (!oper)
+	return false;
+    bool upd = (oper == "update");
+    if (!upd && oper != "query")
+	return false;
+    const String& data = msg["data"];
+    if (!data)
+	return false;
+    if (!XmlSaxParser::validTag(data)) {
+	Debug(this,DebugNote,"%s with invalid tag data=%s",msg.c_str(),data.c_str());
+	return false;
+    }
+    JBClientStream* s = findAccount(line);
+    if (!s)
+	return false;
+    XmlElement* xmlPriv = new XmlElement(data);
+    xmlPriv->setXmlns(String::empty(),true,s_yateClientNs);
+    if (upd) {
+	NamedIterator iter(msg);
+	const NamedString* ns = 0;
+	int n = msg.getIntValue("data.count");
+	for (int i = 1; i <= n; i++) {
+	    String prefix;
+	    prefix << "data." << i;
+	    XmlElement* r = XMPPUtils::createElement(XmlTag::Item);
+	    xmlPriv->addChild(r);
+	    r->setAttributeValid("id",msg[prefix]);
+	    prefix << ".";
+	    for (iter.reset(); 0 != (ns = iter.get());) {
+		if (!ns->name().startsWith(prefix))
+		    continue;
+		XmlElement* p = XMPPUtils::createElement(XmlTag::Parameter);
+		p->setAttribute("name",ns->name().substr(prefix.length()));
+		p->setAttribute("value",*ns);
+		r->addChild(p);
+	    }
+	}
+    }
+    String id;
+    if (upd)
+	StreamData::addRequest(s,StreamData::UserDataSet,msg,id);
+    else
+	StreamData::addRequest(s,StreamData::UserDataGet,msg,id);
+    XmlElement* xml = XMPPUtils::createIq(upd ? XMPPUtils::IqSet : XMPPUtils::IqGet,0,0,id);
+    XmlElement* ch = XMPPUtils::createElement(XmlTag::Query,XMPPNamespace::IqPrivate);
+    xml->addChild(ch);
+    ch->addChild(xmlPriv);
+    bool ok = s->sendStanza(xml);
+    if (!ok && id)
+	StreamData::removeRequest(s,id);
     TelEngine::destruct(s);
     return ok;
 }
@@ -2142,6 +2207,10 @@ void StreamData::addRequest(ReqType t, const NamedList& params, String& id)
 	case UserRosterRemove:
 	    id << "_" << params["contact"].hash();
 	    break;
+	case UserDataGet:
+	case UserDataSet:
+	    id << "_" << params["data"].hash();
+	    break;
 	default: ;
     }
     id << "_" << ++m_reqIndex;
@@ -2171,12 +2240,17 @@ bool StreamData::processResponse(JBEvent* ev, bool ok)
 	return false;
     const char* msg = 0;
     NamedList* req = YOBJECT(NamedList,ns);
+    int t = UnknownReq;
     if (req) {
-	int t = req->getIntValue(s_reqTypeParam);
+	t = req->getIntValue(s_reqTypeParam);
 	switch (t) {
 	    case UserRosterUpdate:
 	    case UserRosterRemove:
 		msg = "user.roster";
+		break;
+	    case UserDataGet:
+	    case UserDataSet:
+		msg = "user.data";
 		break;
 	    default:
 		Debug(&__plugin,DebugStub,
@@ -2196,6 +2270,34 @@ bool StreamData::processResponse(JBEvent* ev, bool ok)
 	if (!ok)
 	    getXmlError(*m,ev->element());
 	m->clearParam(s_reqTypeParam);
+	// Private data responses contains the data
+	if (ok && t == UserDataGet) {
+	    unsigned int n = 0;
+	    XmlElement* data = 0;
+	    if (ev->element()) {
+		XmlElement* query = XMPPUtils::findFirstChild(*ev->element(),
+		    XmlTag::Query,XMPPNamespace::IqPrivate);
+		data = query ? query->findFirstChild(0,&s_yateClientNs) : 0;
+	    }
+	    if (data) {
+		XmlElement* x = 0;
+		const String& tag = XMPPUtils::s_tag[XmlTag::Item];
+		const String& param = XMPPUtils::s_tag[XmlTag::Parameter];
+		while (0 != (x = data->findNextChild(x,&tag))) {
+		    String prefix;
+		    prefix << "data." << ++n;
+		    m->addParam(prefix,x->attribute("id"));
+		    prefix << ".";
+		    XmlElement* p = 0;
+		    while (0 != (p = x->findNextChild(p,&param))) {
+			const char* name = p->attribute("name");
+			if (!TelEngine::null(name))
+			    m->addParam(prefix + name,p->attribute("value"));
+		    }
+		}
+	    }
+	    m->setParam("data.count",String(n));
+	}
 	Engine::enqueue(m);
     }
     removeRequest(ev->id());
@@ -2267,6 +2369,8 @@ bool JBMessageHandler::received(Message& msg)
 	    return s_jabber->handleContactInfo(msg,*line);
 	case MucRoom:
 	    return s_jabber->handleMucRoom(msg,*line);
+	case UserData:
+	    return s_jabber->handleUserData(msg,*line);
 	default:
 	    Debug(&__plugin,DebugStub,"JBMessageHandler(%s) not handled!",msg.c_str());
     }

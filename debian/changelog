@@ -1,3 +1,16 @@
+yate (3.2.1.svn4200) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4200: + Moved jabberclient from yate-qt4
+    into libyate  + This helps catching netind2pctype MTP3
+    misconfiguration.  + Complain when mapping NI -> Type -> NI of
+    received SS7 SLTM is not identity.  + Implemented per stream
+    requests queue. Notify when confirmed. Use them for roster changes.
+    + Handle user.data messages and set/get private data from server.  +
+    Added national use NAI for network specific and routing numbers
+    (ANSI style).
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 23 Mar 2011 02:19:17 +0300
+
 yate (3.2.1.svn4196) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4196: + Moved the post-disconnect hooking

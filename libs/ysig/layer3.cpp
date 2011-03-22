@@ -283,7 +283,10 @@ bool SS7Layer3::maintenance(const SS7MSU& msu, const SS7Label& label, int sls)
     if (badLink) {
 	addr << " on " << sls;
 	level = DebugMild;
-	badLink = true;
+    }
+    if (getNI(type(msu.getNI())) != msu.getNI()) {
+	addr << " wrong " << msu.getIndicatorName() << " NI";
+	level = DebugMild;
     }
     unsigned char len = s[1] >> 4;
     // get a pointer to the test pattern

@@ -144,7 +144,8 @@ void HookHandler::dispatched(const Message& msg, bool handled)
 
 
 MsgSniff::MsgSniff()
-    : m_first(true)
+    : Plugin("msgsniff"),
+      m_first(true)
 {
     Output("Loaded module MsgSniffer");
 }

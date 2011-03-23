@@ -4060,7 +4060,6 @@ Message* YJGDriver::checkAccount(const String& line, bool query,
     if (!line)
 	return 0;
     Message* m = message("jabber.account");
-    m->addParam("module",name());
     m->addParam("line",line);
     if (query)
 	m->addParam("query",String::boolText(true));

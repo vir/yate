@@ -934,14 +934,12 @@ const char* Module::messageName(int id)
 
 Module::Module(const char* name, const char* type, bool earlyInit)
     : Plugin(name,earlyInit), Mutex(true,"Module"),
-      m_init(false), m_relays(0), m_name(name), m_type(type), m_changed(0)
+      m_init(false), m_relays(0), m_type(type), m_changed(0)
 {
-    debugName(m_name);
 }
 
 Module::~Module()
 {
-    debugName(0);
 }
 
 void* Module::getObject(const String& name) const
@@ -1052,7 +1050,7 @@ void Module::msgTimer(Message& msg)
 {
     if (m_changed && (msg.msgTime() > m_changed)) {
 	Message* m = new Message("module.update");
-	m->addParam("module",m_name);
+	m->addParam("module",name());
 	m_changed = 0;
 	genUpdate(*m);
 	Engine::enqueue(m);
@@ -1113,7 +1111,7 @@ void Module::msgStatus(Message& msg)
 
 void Module::statusModule(String& str)
 {
-    str.append("name=",",") << m_name;
+    str.append("name=",",") << name();
     if (m_type)
 	str << ",type=" << m_type;
 }
@@ -1132,7 +1130,7 @@ void Module::genUpdate(Message& msg)
 
 bool Module::received(Message &msg, int id)
 {
-    if (!m_name)
+    if (name().null())
 	return false;
 
     switch (id) {
@@ -1148,7 +1146,7 @@ bool Module::received(Message &msg, int id)
     String dest = msg.getValue("module");
 
     if (id == Status) {
-	if (dest == m_name) {
+	if (dest == name()) {
 	    msgStatus(msg);
 	    return true;
 	}
@@ -1166,7 +1164,7 @@ bool Module::received(Message &msg, int id)
 
 bool Module::setDebug(Message& msg, const String& target)
 {
-    if (target != m_name)
+    if (target != name())
 	return false;
 
     String str = msg.getValue("line");
@@ -1186,7 +1184,7 @@ bool Module::setDebug(Message& msg, const String& target)
 	str >> dbg;
 	debugEnabled(dbg);
     }
-    msg.retValue() << "Module " << m_name
+    msg.retValue() << "Module " << name()
 	<< " debug " << (debugEnabled() ? "on" : "off")
 	<< " level " << debugLevel();
     if (m_filter)

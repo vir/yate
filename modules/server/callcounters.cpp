@@ -75,7 +75,7 @@ public:
     virtual bool received(Message& msg);
 };
 
-class CallCountersPlugin : public Plugin, public String
+class CallCountersPlugin : public Plugin
 {
 public:
     CallCountersPlugin();
@@ -192,7 +192,7 @@ bool RouteHandler::received(Message& msg)
 bool StatusHandler::received(Message &msg)
 {
     const String* sel = msg.getParam("module");
-    if (!TelEngine::null(sel) && (*sel != __plugin))
+    if (!TelEngine::null(sel) && (*sel != __plugin.name()))
 	return false;
     String st("name=callcounters,type=misc,format=Context|Count");
     s_mutex.lock();
@@ -221,8 +221,8 @@ bool CommandHandler::received(Message &msg)
 	String* tmp = msg.getParam("partline");
 	if (tmp && (*tmp == "status")) {
 	    tmp = msg.getParam("partword");
-	    if (!tmp || tmp->null() || __plugin.startsWith(*tmp))
-		msg.retValue().append(__plugin,"\t");
+	    if (!tmp || tmp->null() || __plugin.name().startsWith(*tmp))
+		msg.retValue().append(__plugin.name(),"\t");
 	}
     }
     return false;
@@ -230,7 +230,7 @@ bool CommandHandler::received(Message &msg)
 
 
 CallCountersPlugin::CallCountersPlugin()
-    : String("callcounters")
+    : Plugin("callcounters")
 {
     Output("Loaded module CallCounters");
 }
@@ -242,7 +242,7 @@ CallCountersPlugin::~CallCountersPlugin()
 
 void CallCountersPlugin::initialize()
 {
-    Configuration cfg(Engine::configFile(c_str()));
+    Configuration cfg(Engine::configFile(name().c_str()));
     s_allCounters = cfg.getBoolValue("general","allcounters",false);
     // tracked parameter, direction and priorities cannot be reloaded
     if (s_paramName.null()) {

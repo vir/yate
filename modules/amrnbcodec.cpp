@@ -360,7 +360,7 @@ bool AmrDecoder::pushData(unsigned long& tStamp)
 
 // Plugin and translator factory
 AmrPlugin::AmrPlugin()
-    : TranslatorFactory("amr-nb")
+    : Plugin("amrnbcodec"), TranslatorFactory("amr-nb")
 {
     Output("Loaded module AMR-NB codec - based on 3GPP code");
     const FormatInfo* f = FormatRepository::addFormat("amr",0,20000);

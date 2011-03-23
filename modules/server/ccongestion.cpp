@@ -102,7 +102,7 @@ bool CpuNotify::received(Message& msg)
  */
 
 CongestionModule::CongestionModule()
-    : Module("CongestionModule","misc"), m_init(false), m_monitorsBlocker(false,s_mutexName)
+    : Module("ccongestion","misc"), m_init(false), m_monitorsBlocker(false,s_mutexName)
 {
     Output("Loaded module CCongestion");
 }

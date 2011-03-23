@@ -676,7 +676,7 @@ private:
  *</pre>
  * @short Plugin support
  */
-class YATE_API Plugin : public GenObject
+class YATE_API Plugin : public GenObject, public DebugEnabler
 {
 public:
     /**
@@ -687,17 +687,18 @@ public:
     explicit Plugin(const char* name, bool earlyInit = false);
 
     /**
-     * Creates a new Plugin container.
-     * Alternate constructor which is also the default.
-     */
-    Plugin();
-
-    /**
      * Destroys the plugin.
      * The destructor must never be called directly - the Loader will do it
      *  when the shared object's reference count reaches zero.
      */
     virtual ~Plugin();
+
+    /**
+     * Get a string representation of this object
+     * @return Name of the plugin
+     */
+    virtual const String& toString() const
+	{ return m_name; }
 
     /**
      * Get a pointer to a derived class given that class name
@@ -719,6 +720,13 @@ public:
 	{ return false; }
 
     /**
+     * Retrieve the name of the plugin
+     * @return The plugin's name as String
+     */
+    inline const String& name() const
+	{ return m_name; }
+
+    /**
      * Check if the module is to be initialized early
      * @return True if the module should be initialized before regular ones
      */
@@ -726,6 +734,8 @@ public:
 	{ return m_early; }
 
 private:
+    Plugin(); // no default constructor please
+    String m_name;
     bool m_early;
 };
 
@@ -807,7 +817,7 @@ public:
 	Client = 3,
 	ClientProxy = 4,
     };
-    
+
     enum CallAccept {
 	Accept = 0,
 	Partial = 1,
@@ -1000,6 +1010,13 @@ public:
      * Reinitialize the plugins
      */
     static void init();
+
+    /**
+     * Reinitialize one plugin
+     * @param name Name of the plugin to initialize, emplty, "*" or "all" to initialize all
+     * @return True if plugin(s) were reinitialized
+     */
+    static bool init(const String& name);
 
     /**
      * Stop the engine and the entire program

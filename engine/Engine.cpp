@@ -463,6 +463,12 @@ void EngineCommand::doCompletion(Message &msg, const String& partLine, const Str
 		completeOne(msg.retValue(),*s,partWord);
 	}
     }
+    else if (partLine == "reload") {
+	for (ObjList* l = plugins.skipNull(); l; l = l->skipNext()) {
+	    const Plugin* p = static_cast<const Plugin*>(l->get());
+	    completeOne(msg.retValue(),p->name(),partWord);
+	}
+    }
 }
 
 bool EngineCommand::received(Message &msg)
@@ -1449,6 +1455,28 @@ bool Engine::restart(unsigned int code, bool gracefull)
 void Engine::init()
 {
     s_init = true;
+}
+
+bool Engine::init(const String& name)
+{
+    if (exiting() || !s_self)
+	return false;
+    if (name.null() || name == "*" || name == "all") {
+	s_init = true;
+	return true;
+    }
+    Output("Initializing plugin '%s'",name.c_str());
+    Message msg("engine.init",0,true);
+    msg.addParam("plugin",name);
+    if (nodeName())
+	msg.addParam("nodename",nodeName());
+    bool ok = s_self->m_dispatcher.dispatch(msg);
+    Plugin* p = static_cast<Plugin*>(plugins[name]);
+    if (p) {
+	p->initialize();
+	ok = true;
+    }
+    return ok;
 }
 
 bool Engine::install(MessageHandler* handler)

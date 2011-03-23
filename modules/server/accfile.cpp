@@ -249,7 +249,8 @@ bool StartHandler::received(Message &msg)
 
 
 AccFilePlugin::AccFilePlugin()
-    : m_first(true)
+    : Plugin("accfile"),
+      m_first(true)
 {
     Output("Loaded module Accounts from file");
 }

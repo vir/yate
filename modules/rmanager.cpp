@@ -110,7 +110,7 @@ static const CommandInfo s_cmdInfo[] =
     { "drop", "{chan|*|all} [reason]", s_dall, "Drops one or all active calls" },
     { "call", "chan target", 0, "Execute an outgoing call" },
     { "control", "chan [operation] [param=val] [param=...]", 0, "Apply arbitrary control operations to a channel or entity" },
-    { "reload", 0, 0, "Reloads module configuration files" },
+    { "reload", "[plugin]", 0, "Reloads module configuration files" },
     { "restart", "[now]", s_rnow, "Restarts the engine if executing supervised" },
     { "stop", "[exitcode]", 0, "Stops the engine with optionally provided exit code" },
     { 0, 0, 0, 0 }
@@ -1206,8 +1206,9 @@ bool Connection::processLine(const char *line)
 #endif
     else if (str.startSkip("reload"))
     {
+	str.trimSpaces();
 	writeStr(m_machine ? "%%=reload\r\n" : "Reinitializing...\r\n");
-	Engine::init();
+	Engine::init(str);
     }
     else if (str.startSkip("restart"))
     {
@@ -1328,7 +1329,8 @@ void RHook::dispatched(const Message& msg, bool handled)
 
 
 RManager::RManager()
-    : m_first(true)
+    : Plugin("rmanager"),
+      m_first(true)
 {
     Output("Loaded module RManager");
     Debugger::setIntOut(dbg_remote_func);

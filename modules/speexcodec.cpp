@@ -256,7 +256,7 @@ unsigned long SpeexCodec::Consume(const DataBlock& data, unsigned long tStamp, u
 }
 
 SpeexPlugin::SpeexPlugin()
-    : TranslatorFactory("speex")
+    : Plugin("speexcodec"), TranslatorFactory("speex")
 {
     int major, minor, micro;
     speex_lib_ctl(SPEEX_LIB_GET_MAJOR_VERSION, &major);

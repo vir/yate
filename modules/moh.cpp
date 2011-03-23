@@ -410,7 +410,8 @@ bool StatusHandler::received(Message &msg)
 
 
 MOHPlugin::MOHPlugin()
-    : m_handler(0)
+    : Plugin("moh"),
+      m_handler(0)
 {
     Output("Loaded module MOH");
 }

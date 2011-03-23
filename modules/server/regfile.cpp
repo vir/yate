@@ -322,7 +322,8 @@ bool StatusHandler::received(Message &msg)
 }
 
 RegfilePlugin::RegfilePlugin()
-    : m_init(false)
+    : Plugin("regfile"),
+      m_init(false)
 {
     Output("Loaded module Registration from file");
 }

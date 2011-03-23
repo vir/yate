@@ -1980,7 +1980,7 @@ TdmConsumer::~TdmConsumer()
 String TdmModule::s_statusCmd[StatusCmdCount] = {"spans","channels","all"};
 
 TdmModule::TdmModule()
-    : Module("Tdm","misc",true),
+    : Module("tdmcard","misc",true),
     m_init(false),
     m_count(0),
     m_active(0)

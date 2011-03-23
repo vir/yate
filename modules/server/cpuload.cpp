@@ -716,7 +716,7 @@ bool QueryHandler::received(Message& msg)
  */
 
 CpuModule::CpuModule()
-    : Module("CpuModule","misc",true), m_init(false)
+    : Module("cpuload","misc",true), m_init(false)
 {
     Output("Loaded module Cpu");
     m_updater = new CpuUpdater();

@@ -1741,7 +1741,8 @@ ExtListener* ExtListener::build(const char* name, const NamedList& sect)
 
 
 ExtModulePlugin::ExtModulePlugin()
-    : m_handler(0)
+    : Plugin("extmodule"),
+      m_handler(0)
 {
     Output("Loaded module ExtModule");
 }

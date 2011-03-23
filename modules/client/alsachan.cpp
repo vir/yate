@@ -679,7 +679,8 @@ bool AttachHandler::received(Message &msg)
 
 
 AlsaPlugin::AlsaPlugin()
-    : m_handler(0)
+    : Plugin("alsachan"),
+      m_handler(0)
 {
     Output("Loaded module AlsaChan");
 }

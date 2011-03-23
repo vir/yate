@@ -666,7 +666,8 @@ bool AttachHandler::received(Message &msg)
 
 
 OssPlugin::OssPlugin()
-    : m_handler(0)
+    : Plugin("osschan"),
+      m_handler(0)
 {
     Output("Loaded module OssChan");
 }

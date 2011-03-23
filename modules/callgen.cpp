@@ -608,7 +608,8 @@ bool CmdHandler::received(Message &msg, int id)
 }
 
 CallGenPlugin::CallGenPlugin()
-    : m_first(true)
+    : Plugin("callgen"),
+      m_first(true)
 {
     Output("Loaded module Call Generator");
 }

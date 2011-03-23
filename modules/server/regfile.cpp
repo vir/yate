@@ -70,6 +70,14 @@ public:
     virtual bool received(Message &msg);
 };
 
+class CommandHandler : public MessageHandler
+{
+public:
+    CommandHandler(const char *name, unsigned prio = 100)
+	: MessageHandler(name,prio) { }
+    virtual bool received(Message &msg);
+};
+
 class ExpireHandler : public MessageHandler
 {
 public:
@@ -108,6 +116,9 @@ static Configuration s_accounts;
 static bool s_create = false;
 static const String s_general = "general";
 static ObjList s_expand;
+static int s_count = 0;
+
+INIT_PLUGIN(RegfilePlugin);
 
 bool expired(const NamedList& list, unsigned int time)
 {
@@ -257,8 +268,6 @@ bool RouteHandler::received(Message &msg)
     return false;
 }
 
-static int s_count = 0;
-
 bool ExpireHandler::received(Message &msg)
 {
     if ((s_count = (s_count+1) % 30)) // Check for timeouts once at 30 seconds
@@ -321,6 +330,18 @@ bool StatusHandler::received(Message &msg)
     return false;
 }
 
+bool CommandHandler::received(Message &msg)
+{
+    if (msg.getValue("line"))
+	return false;
+    if (msg["partline"] == "status") {
+	const String& partWord = msg["partword"];
+	if (partWord.null() || __plugin.name().startsWith(partWord))
+	    msg.retValue().append(__plugin.name(),"\t");
+    }
+    return false;
+}
+
 RegfilePlugin::RegfilePlugin()
     : Plugin("regfile"),
       m_init(false)
@@ -353,6 +374,7 @@ void RegfilePlugin::initialize()
 	Engine::install(new UnRegistHandler("user.unregister",s_cfg.getIntValue("general","register",100)));
 	Engine::install(new RouteHandler("call.route",s_cfg.getIntValue("general","route",100)));
 	Engine::install(new StatusHandler("engine.status"));
+	Engine::install(new CommandHandler("engine.command"));
 	Engine::install(new ExpireHandler());
     }
     populate();
@@ -399,8 +421,6 @@ void RegfilePlugin::populate()
 	i--;
     }
 }
-
-INIT_PLUGIN(RegfilePlugin);
 
 }; // anonymous namespace
 

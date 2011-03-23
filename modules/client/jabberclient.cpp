@@ -1151,7 +1151,7 @@ bool YJBEngine::handleJabberAccount(Message& msg, const String& line)
 	    break;
 	}
 	// Find an audio resource for the contact
-	unsigned int n = c->count();
+	unsigned int n = c->length();
 	for (unsigned int i = 0; i < n; i++) {
 	    NamedString* res = c->getParam(i);
 	    if (TelEngine::null(res))

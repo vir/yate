@@ -1,3 +1,15 @@
+yate (3.2.1.svn4204) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4204: + Avoid adding twice the module
+    parameter when dispatching jabber.account messages.  + Fixed bug:
+    parse all contact's instance list when searching for audio caps.  +
+    Added API and command to reload configuration of a single plugin.  +
+    Moved DebugEnabler and name from Module to Plugin, made name
+    mandatory.  + Added TAB completion for status command to the regfile
+    module.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 24 Mar 2011 02:19:18 +0300
+
 yate (3.2.1.svn4200) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4200: + Moved jabberclient from yate-qt4

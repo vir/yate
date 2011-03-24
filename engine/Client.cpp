@@ -3894,6 +3894,13 @@ MucRoom* ClientAccount::findRoomByUri(const String& uri, bool ref)
     return findRoom(id,ref);
 }
 
+// Find any contact (regular or MUC room) by its id
+ClientContact* ClientAccount::findAnyContact(const String& id, bool ref)
+{
+    ClientContact* c = findContact(id,ref);
+    return c ? c : findRoom(id,ref);
+}
+
 // Build a contact and append it to the list
 ClientContact* ClientAccount::appendContact(const String& id, const char* name,
     const char* uri)
@@ -3940,6 +3947,24 @@ ClientContact* ClientAccount::removeContact(const String& id, bool delObj)
     return c;
 }
 
+// Clear MUC rooms
+void ClientAccount::clearRooms(bool saved, bool temp)
+{
+    if (!(saved || temp))
+	return;
+    Lock lock(this);
+    ListIterator iter(m_mucs);
+    for (GenObject* gen = 0; 0 != (gen = iter.get());) {
+	MucRoom* r = static_cast<MucRoom*>(gen);
+	if (r->local() || r->remote()) {
+	    if (saved)
+		m_mucs.remove(r);
+	}
+	else if (temp)
+	    m_mucs.remove(r);
+    }
+}
+
 // Build a login/logout message from account's data
 Message* ClientAccount::userlogin(bool login, const char* msg)
 {
@@ -3953,6 +3978,44 @@ Message* ClientAccount::userlogin(bool login, const char* msg)
     return m;
 }
 
+// Build a message used to update or query account userdata
+Message* ClientAccount::userData(bool update, const String& data, const char* msg)
+{
+    Message* m = Client::buildMessage(msg,toString(),update ? "update" : "query");
+    m->addParam("data",data,false);
+    if (!update || data != "chatrooms")
+	return m;
+    m->setParam("data.count","0");
+    unsigned int n = 0;
+    Lock lock(this);
+    for (ObjList* o = m_mucs.skipNull(); o; o = o->skipNext()) {
+	MucRoom* r = static_cast<MucRoom*>(o->get());
+	if (!r->remote())
+	    continue;
+	String prefix;
+	prefix << "data." << ++n;
+	m->addParam(prefix,r->uri());
+	prefix << ".";
+	m->addParam(prefix + "name",r->m_name,false);
+	if (r->m_password) {
+	    Base64 b((void*)r->m_password.c_str(),r->m_password.length());
+	    String tmp;
+	    b.encode(tmp);
+	    m->addParam(prefix + "password",tmp);
+	}
+	for (ObjList* o = r->groups().skipNull(); o; o = o->skipNext())
+	    m->addParam(prefix + "group",o->get()->toString(),false);
+	NamedIterator iter(r->m_params);
+	for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	    // Skip local/remote params
+	    if (ns->name() != "local" && ns->name() != "remote")
+		m->addParam(prefix + ns->name(),*ns);
+	}
+    }
+    m->setParam("data.count",String(n));
+    return m;
+}
+
 // Fill a list used to update an account list item
 void ClientAccount::fillItemParams(NamedList& list)
 {
@@ -3962,6 +4025,225 @@ void ClientAccount::fillItemParams(NamedList& list)
     NamedString* status = new NamedString("status",sName);
     status->append(resource().m_text,": ");
     list.addParam(status);
+}
+
+// Utility used in ClientAccount::setupDataDir
+static bool showAccError(ClientAccount* a, String* errStr, const String& fail,
+    const char* what, int error = 0, const char* errorStr = 0)
+{
+    String tmp;
+    if (!errStr)
+	errStr = &tmp;
+    if (error) {
+	Thread::errorString(*errStr,error);
+	*errStr = String(error) + " " + *errStr;
+    }
+    else
+    	*errStr = errorStr;
+    *errStr = fail + " '" + what + "': " + *errStr;
+    Debug(ClientDriver::self(),DebugWarn,"Account(%s) %s [%p]",
+	a->toString().c_str(),errStr->c_str(),a);
+    return false;
+}
+
+// Set account data directory. Make sure it exists.
+// Move all files from the old one if changed
+bool ClientAccount::setupDataDir(String* errStr, bool saveAcc)
+{
+    String dir;
+    String user = m_params["username"];
+    user.toLower();
+    String domain = m_params.getValue("domain",m_params.getValue("server"));
+    domain.toLower();
+    dir << protocol().hash() << "_" << user.hash() << "_" << domain.hash();
+    if (dataDir() == dir) {
+	String s;
+	s << Engine::configPath(true) << Engine::pathSeparator() << dataDir();
+	ObjList d;
+	ObjList f;
+	File::listDirectory(s,&d,&f);
+	if (d.find(dataDir()))
+	    return true;
+	if (f.find(dataDir()))
+	    return showAccError(this,errStr,"Failed to create directory",s,0,
+		"A file with the same name already exists");
+	// Not found: clear old directory
+	m_params.clearParam("datadirectory");
+    }
+    String path = Engine::configPath(true);
+    // Check if already there
+    int error = 0;
+    ObjList dirs;
+    ObjList files;
+    File::listDirectory(path,&dirs,&files);
+    if (error)
+	return showAccError(this,errStr,"Failed to list directory",path,error);
+    String fullPath = path + Engine::pathSeparator() + dir;
+    if (files.find(dir))
+	return showAccError(this,errStr,"Failed to create directory",fullPath,0,
+	    "A file with the same name already exists");
+    const String& existing = dataDir();
+    ObjList* oldDir = existing ? dirs.find(existing) : 0;
+    if (dirs.find(dir)) {
+	if (oldDir) {
+	    // Move dirs and files from old directory
+	    String old = path + Engine::pathSeparator() + existing;
+	    ObjList all;
+	    File::listDirectory(old,&all,&all,&error);
+	    if (!error) {
+		bool ok = true;
+		for (ObjList* o = all.skipNull(); o; o = o->skipNext()) {
+		    String* item = static_cast<String*>(o->get());
+		    String oldItem = old + Engine::pathSeparator() + *item;
+		    String newItem = fullPath + Engine::pathSeparator() + *item;
+		    File::rename(oldItem,newItem,&error);
+		    if (!error)
+			continue;
+		    ok = false;
+		    String tmp;
+		    Thread::errorString(tmp,error);
+		    Debug(ClientDriver::self(),DebugWarn,
+			"Account(%s) failed to move '%s' to '%s': %d %s [%p]",
+			toString().c_str(),oldItem.c_str(),newItem.c_str(),
+			error,tmp.c_str(),this);
+		    error = 0;
+		}
+		// Delete it if all moved
+		if (ok) {
+		    File::rmDir(old,&error);
+		    if (error)
+			showAccError(this,errStr,"Failed to delete directory",old,error);
+		}
+	    }
+	    else
+		showAccError(this,errStr,"Failed to list directory",old,error);
+	}
+    }
+    else {
+	if (oldDir) {
+	    // Rename it
+	    String old = path + Engine::pathSeparator() + existing;
+	    File::rename(old,fullPath,&error);
+	    if (error)
+		return showAccError(this,errStr,"Failed to rename existing directory",
+		    old,error);
+	}
+	else {
+	    // Create a new one
+	    File::mkDir(fullPath,&error);
+	    if (error)
+		return showAccError(this,errStr,"Failed to create directory",
+		    fullPath,error);
+	}
+    }
+    m_params.setParam("datadirectory",dir);
+    if (saveAcc) {
+	NamedList* sect = Client::s_accounts.getSection(toString());
+	if (sect) {
+	    sect->setParam("datadirectory",dir);
+	    Client::s_accounts.save();
+	}
+    }
+    // Set account meta data
+    loadDataDirCfg();
+    NamedList* sect = m_cfg.createSection("general");
+    sect->setParam("account",toString());
+    sect->copyParams(m_params,"protocol,username,domain,server");
+    m_cfg.save();
+    return true;
+}
+
+// Load configuration file from data directory
+bool ClientAccount::loadDataDirCfg(Configuration* cfg, const char* file)
+{
+    if (TelEngine::null(file))
+	return false;
+    if (!cfg)
+	cfg = &m_cfg;
+    if (!dataDir())
+	setupDataDir(0,false);
+    const String& dir = dataDir();
+    if (!dir)
+	return false;
+    *cfg = "";
+    *cfg << Engine::configPath(true) + Engine::pathSeparator() + dir;
+    *cfg << Engine::pathSeparator() << file;
+    return cfg->load();
+}
+
+// Clear account data directory
+bool ClientAccount::clearDataDir(String* errStr)
+{
+    if (!dataDir())
+	setupDataDir(0,false);
+    const String& dir = dataDir();
+    if (!dir)
+	return false;
+    // Check base path
+    String tmp(Engine::configPath(true));
+    ObjList dirs;
+    File::listDirectory(tmp,&dirs,0);
+    if (!dirs.find(dir))
+	return true;
+    // Delete files
+    tmp << Engine::pathSeparator() << dir << Engine::pathSeparator();
+    int error = 0;
+    bool ok = false;
+    ObjList files;
+    if (File::listDirectory(tmp,0,&files,&error)) {
+	for (ObjList* o = files.skipNull(); o; o = o->skipNext()) {
+	    String file(tmp + o->get()->toString());
+	    int err = 0;
+	    if (!File::remove(file,&err)) {
+		if (!error)
+		    error = err;
+	    }
+	}
+	if (!error)
+	    ok = File::rmDir(tmp,&error);
+    }
+    return ok ? ok : showAccError(this,errStr,"Failed to clear data directory",tmp,error);
+}
+
+// Load contacts from configuration file
+void ClientAccount::loadContacts(Configuration* cfg)
+{
+    if (!cfg)
+	cfg = &m_cfg;
+    unsigned int n = cfg->sections();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedList* sect = cfg->getSection(i);
+	if (!(sect && sect->c_str()))
+	    continue;
+	const String& type = (*sect)["type"];
+	if (type == "groupchat") {
+	    String id;
+	    ClientContact::buildContactId(id,toString(),*sect);
+	    MucRoom* room = findRoom(id);
+	    if (!room)
+		room = new MucRoom(this,id,0,*sect);
+	    room->groups().clear();
+	    NamedIterator iter(*sect);
+	    for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+		if (ns->name() == "type")
+		    continue;
+		if (ns->name() == "name")
+		    room->m_name = *ns;
+		else if (ns->name() == "password")
+		    room->m_password = *ns;
+		else if (ns->name() == "group") {
+		    if (*ns)
+			room->appendGroup(*ns);
+		}
+		else
+		    room->m_params.setParam(ns->name(),*ns);
+	    }
+	    room->setLocal(true);
+	    Debug(ClientDriver::self(),DebugAll,
+		"Account(%s) loaded MUC room '%s' [%p]",
+		toString().c_str(),room->uri().c_str(),this);
+	}
+    }
 }
 
 // Remove from owner. Release data
@@ -4087,6 +4369,16 @@ MucRoom* ClientAccountList::findRoomByMember(const String& id, bool ref)
     return acc ? acc->findRoom(contact,ref) : 0;
 }
 
+// Find any contact (regular or MUC room) by its id
+ClientContact* ClientAccountList::findAnyContact(const String& id, bool ref)
+{
+    String account;
+    ClientContact::splitContactId(id,account);
+    Lock lock(this);
+    ClientAccount* acc = findAccount(account);
+    return acc ? acc->findAnyContact(id,ref) : 0;
+}
+
 // Check if there is a single registered account and return it
 ClientAccount* ClientAccountList::findSingleRegAccount(const String* skipProto, bool ref)
 {
@@ -4136,8 +4428,8 @@ void ClientAccountList::removeAccount(const String& id)
 // Constructor. Append itself to the owner's list
 ClientContact::ClientContact(ClientAccount* owner, const char* id, const char* name,
     const char* uri)
-    : m_name(name ? name : id), m_owner(owner), m_online(false), m_uri(uri),
-    m_dockedChat(false)
+    : m_name(name ? name : id), m_params(""), m_owner(owner), m_online(false),
+    m_uri(uri), m_dockedChat(false)
 {
     m_dockedChat = Client::valid() && Client::self()->getBoolOpt(Client::OptDockedChat);
     m_id = id ? id : uri;
@@ -4152,7 +4444,7 @@ ClientContact::ClientContact(ClientAccount* owner, const char* id, const char* n
 // Constructor. Build a contact from a list of parameters.
 ClientContact::ClientContact(ClientAccount* owner, const NamedList& params, const char* id,
     const char* uri)
-    : m_name(params.getValue("name",params)),
+    : m_name(params.getValue("name",params)), m_params(""),
     m_owner(owner), m_online(false), m_uri(uri), m_dockedChat(false)
 {
     m_dockedChat = Client::valid() && Client::self()->getBoolOpt(Client::OptDockedChat);
@@ -4167,7 +4459,7 @@ ClientContact::ClientContact(ClientAccount* owner, const NamedList& params, cons
 
 // Constructor. Append itself to the owner's list
 ClientContact::ClientContact(ClientAccount* owner, const char* id, bool mucRoom)
-    : m_owner(owner), m_online(false), m_id(id), m_dockedChat(false)
+    : m_params(""), m_owner(owner), m_online(false), m_id(id), m_dockedChat(false)
 {
     if (m_owner)
 	m_owner->appendContact(this,mucRoom);

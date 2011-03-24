@@ -1,3 +1,23 @@
+yate (3.2.1.svn4215) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4215: + Allow overriding dtmf method on
+    incoming jingle channels.  + Emit new message "chan.replaced" when a
+    fork is answered so other modules can synchronize their state.  +
+    Handle "chan.replaced" message, adjust ID for PBX peer on-hold and
+    pending transfer list.  + The custom contact list can now handle
+    chat room contacts.  + Chat rooms can now be added to contacts list.
+    Save them locally and to server as private data. Retrieve chat rooms
+    private data when connected.  + Optionally set entity node when
+    building a GTalk entity caps element.  + Allow
+    Engine::loadPluginDir(), Engine::extraPath() and yate -x to load a
+    single module file, not an entire directory.  + Adjusted debugging
+    in MGCP, prevent log spamming.  + Display only the mapping of first
+    circuit in a MGCP span.  + Added new namespace and use it to detect
+    jingle version and audio capability from advertised features.  +
+    Report the various paths in engine status detail.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 25 Mar 2011 02:19:21 +0300
+
 yate (3.2.1.svn4204) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4204: + Avoid adding twice the module

@@ -335,6 +335,16 @@ bool EngineStatusHandler::received(Message &msg)
     msg.retValue() << ",semaphores=" << Semaphore::count();
     msg.retValue() << ",waiting=" << Semaphore::locks();
     msg.retValue() << ",acceptcalls=" << lookup(Engine::accept(),Engine::getCallAcceptStates());
+    if (msg.getBoolValue("details",true)) {
+	NamedIterator iter(Engine::runParams());
+	char sep = ';';
+	while (const NamedString* p = iter.get()) {
+	    if (p->name().find("path") < 0)
+		continue;
+	    msg.retValue() << sep << p->name() << "=" << *p;
+	    sep = ',';
+	}
+    }
     msg.retValue() << "\r\n";
     return false;
 }

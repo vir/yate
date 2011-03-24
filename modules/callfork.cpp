@@ -440,9 +440,17 @@ bool ForkMaster::msgAnswered(Message& msg, const String& dest)
 	peer->id().c_str(),dest.c_str(),call->id().c_str());
     msg.setParam("peerid",peer->id());
     msg.setParam("targetid",peer->id());
+    Message* r = new Message("chan.replaced",0,true);
+    r->addParam("id",id());
+    r->addParam("newid",call->id());
+    r->addParam("peerid",peer->id());
+    r->addParam("id.1",dest);
+    r->addParam("newid.1",peer->id());
+    r->addParam("peerid.1",call->id());
     lock.drop();
     clearEndpoint();
     call->connect(peer);
+    Engine::enqueue(r);
     return true;
 }
 

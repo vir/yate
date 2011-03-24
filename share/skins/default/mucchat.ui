@@ -130,6 +130,34 @@
       </widget>
      </item>
      <item>
+      <widget class="QToolButton" name="room_save_btn" >
+       <property name="minimumSize" >
+        <size>
+         <width>30</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>30</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="autoRaise" >
+        <bool>true</bool>
+       </property>
+       <property name="_yate_identity" stdset="0" >
+        <string>room_save</string>
+       </property>
+       <property name="_yate_setaction" stdset="0" >
+        <string>room_save</string>
+       </property>
+       <property name="_yate_noautoconnect" stdset="0" >
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QToolButton" name="room_showlog_btn" >
        <property name="minimumSize" >
         <size>
@@ -682,6 +710,17 @@
    </property>
    <property name="_yate_identity" stdset="0" >
     <string>room_showlog</string>
+   </property>
+  </action>
+  <action name="room_save" >
+   <property name="icon" >
+    <iconset>save.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Save chat room contact</string>
+   </property>
+   <property name="_yate_identity" stdset="0" >
+    <string>room_save</string>
    </property>
   </action>
  </widget>

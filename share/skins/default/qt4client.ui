@@ -130,6 +130,7 @@
       <addaction name="menuSubscription" />
       <addaction name="separator" />
       <addaction name="chatcontact_new" />
+      <addaction name="chatroom_new" />
       <addaction name="separator" />
       <addaction name="chatcontact_showoffline" />
       <addaction name="chatcontact_flatlist" />
@@ -203,14 +204,18 @@
            <string>property:_yate_nogroup_caption=Not set</string>
            <string>property:_yate_itemui=contact:contactlist_contact.ui</string>
            <string>property:_yate_itemui=group:contactlist_group.ui</string>
+           <string>property:_yate_itemui=chatroom:contactlist_chatroom.ui</string>
            <string>property:_yate_itemstyle=contact:QWidget#${name}{background:white;}</string>
            <string>property:_yate_itemstyle=group:QWidget#${name}{background:lightgrey;}</string>
+           <string>property:_yate_itemstyle=chatroom:QWidget#${name}{background:white;}</string>
            <string>property:_yate_itemselectedstyle=contact:QWidget#${name}{background:lightblue;}</string>
            <string>property:_yate_itemselectedstyle=group:QWidget#${name}{background:lightgrey;}</string>
+           <string>property:_yate_itemselectedstyle=chatroom:QWidget#${name}{background:lightblue;}</string>
            <string>property:_yate_itemstatewidget=group:state</string>
            <string>property:_yate_itemexpandedimage=group:expanded.png</string>
            <string>property:_yate_itemcollapsedimage=group:collapsed.png</string>
            <string>property:_yate_itemtooltip=contact:&lt;html>&lt;head>&lt;meta name="qrichtext" content="1" />&lt;style type="text/css">\np, li { white-space: pre-wrap; }\n&lt;/style>&lt;/head>&lt;body style=" font-family:'Arial'; font-size:10pt; font-weight:400; font-style:normal;">&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">&lt;span style=" font-size:14pt; font-weight:600;">${name}&lt;/span>&lt;/p>&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">${status_text}&lt;/p>&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">${contact}&lt;/p>&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">Account: ${account}&lt;/p>&lt;/body>&lt;/html></string>
+           <string>property:_yate_itemtooltip=chatroom:&lt;html>&lt;head>&lt;meta name="qrichtext" content="1" />&lt;style type="text/css">\np, li { white-space: pre-wrap; }\n&lt;/style>&lt;/head>&lt;body style=" font-family:'Arial'; font-size:10pt; font-weight:400; font-style:normal;">&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">&lt;span style=" font-size:14pt; font-weight:600;">${name}&lt;/span>&lt;/p>&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">${status_text}&lt;/p>&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">${contact}&lt;/p>&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">Account: ${account}&lt;/p>&lt;/body>&lt;/html></string>
            <string>groupcount=count</string>
           </stringlist>
          </property>
@@ -1973,6 +1978,7 @@ QTextEdit {
        <string>delete_item_action=deleteitem</string>
        <string>property:_yate_hidewndwhenempty=false</string>
        <string>property:_yate_hidewidgetwhenempty=frame_messages</string>
+       <string>property:_yate_itemui=generic:messages_generic.ui</string>
        <string>property:_yate_itemui=subscription:messages_okrejignore.ui</string>
        <string>property:_yate_itemui=mucinvite:messages_okrejignore.ui</string>
        <string>property:_yate_itemui=loginfail:messages_loginfail.ui</string>
@@ -2372,6 +2378,14 @@ QTextEdit {
    </property>
    <property name="text" >
     <string>Show log</string>
+   </property>
+  </action>
+  <action name="chatroom_new" >
+   <property name="icon" >
+    <iconset>addchatroom.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Add chat room</string>
    </property>
   </action>
  </widget>

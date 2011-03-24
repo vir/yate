@@ -791,6 +791,7 @@ public:
 	MsgExecute,
 	EngineStart,
 	TransferNotify,
+	UserData,
 	// Starting value for custom relays
 	MsgIdCount
     };
@@ -2618,6 +2619,24 @@ public:
      */
     static void initStaticData();
 
+    /**
+     * Save a contact into a configuration file
+     * @param cfg The configuration file
+     * @param c The contact to save
+     * @param save True to save the file
+     * @return True on success
+     */
+    static bool saveContact(Configuration& cfg, ClientContact* c, bool save = true);
+
+    /**
+     * Delete a contact from a configuration file
+     * @param cfg The configuration file
+     * @param c The contact to delete
+     * @param save True to save the file
+     * @return True on success
+     */
+    static bool clearContact(Configuration& cfg, ClientContact* c, bool save = true);
+
     // Account options string list
     static ObjList s_accOptions;
     // Parameters that are applied from provider template
@@ -3122,6 +3141,26 @@ protected:
     virtual bool handleFileTransferNotify(Message& msg, bool& stopLogic);
 
     /**
+     * Handle user.data messages.
+     * @param msg The message
+     * @param stopLogic Stop notifying other logics if set to true on return
+     * @return True if handled
+     */
+    virtual bool handleUserData(Message& msg, bool& stopLogic);
+
+    /**
+     * Show a generic notification
+     * @param text Notification text
+     * @param account Optional concerned account
+     * @param contact Optional concerned contact
+     * @param title Notification title
+     */
+    virtual void notifyGenericError(const String& text,
+	const String& account = String::empty(),
+	const String& contact = String::empty(),
+	const char* title = "Error");
+
+    /**
      * Show/hide no audio notification
      * @param show Show or hide notification
      * @param micOk False if microphone open failed
@@ -3130,6 +3169,15 @@ protected:
      */
     virtual void notifyNoAudio(bool show, bool micOk = false, bool speakerOk = false,
 	ClientChannel* chan = 0);
+
+    /**
+     * (Un)Load account's saved chat rooms or a specific room in contact list
+     * @param load True to load, false to unload
+     * @param acc The account owning the chat rooms
+     * @param room The room to update, ignored if acc is not 0
+     */
+    virtual void updateChatRoomsContactList(bool load, ClientAccount* acc,
+	MucRoom* room = 0);
 
     String m_selectedChannel;            // The currently selected channel
     String m_transferInitiated;          // Tranfer initiated id
@@ -3351,6 +3399,14 @@ public:
     virtual MucRoom* findRoomByUri(const String& uri, bool ref = false);
 
     /**
+     * Find any contact (regular or MUC room) by its id
+     * @param id The id of the desired contact
+     * @param ref True to obtain a referenced pointer
+     * @return ClientContact pointer (may be account's own contact) or 0 if not found
+     */
+    virtual ClientContact* findAnyContact(const String& id, bool ref = false);
+
+    /**
      * Build a contact and append it to the list
      * @param id The contact's id
      * @param name The contact's name
@@ -3376,6 +3432,13 @@ public:
     virtual ClientContact* removeContact(const String& id, bool delObj = true);
 
     /**
+     * Clear MUC rooms. This method is thread safe
+     * @param saved True to clear saved rooms
+     * @param temp True to clear temporary rooms
+     */
+    virtual void clearRooms(bool saved, bool temp);
+
+    /**
      * Build a login/logout message from account's data
      * @param login True to login, false to logout
      * @param msg Optional message name. Default to 'user.login'
@@ -3384,12 +3447,64 @@ public:
     virtual Message* userlogin(bool login, const char* msg = "user.login");
 
     /**
+     * Build a message used to update or query account userdata.
+     * Add account MUC rooms if data is 'chatrooms' and update
+     * @param update True to update, false to query
+     * @param data Data to update or query
+     * @param msg Optional message name. Default to 'user.data'
+     * @return A valid Message pointer
+     */
+    virtual Message* userData(bool update, const String& data,
+	const char* msg = "user.data");
+
+    /**
      * Fill a list used to update a account's list item
      * @param list Parameter list to fill
      */
     virtual void fillItemParams(NamedList& list);
 
+    /**
+     * Retrieve account data directory
+     * @return Account data directory
+     */
+    inline const String& dataDir() const
+	{ return m_params["datadirectory"]; }
+
+    /**
+     * Set account directory in application data directory. Make sure it exists.
+     * Move all files from the old one if changed
+     * @param errStr Optional string to be filled with error string
+     * @param saveAcc Save data directory parameter in client accounts
+     * @return True on success
+     */
+    virtual bool setupDataDir(String* errStr = 0, bool saveAcc = true);
+
+    /**
+     * Load configuration file from data directory
+     * @param cfg Optional configuration file to load.
+     *  Load account's conf file if 0
+     * @param file File name. Defaults to 'account.conf'
+     * @return True on success
+     */
+    virtual bool loadDataDirCfg(Configuration* cfg = 0,
+	const char* file = "account.conf");
+
+    /**
+     * Load contacts from configuration file
+     * @param cfg Optional configuration file to load.
+     *  Load from account's conf file if 0
+     */
+    virtual void loadContacts(Configuration* cfg = 0);
+
+    /**
+     * Clear account data directory
+     * @param errStr Optional string to be filled with error string
+     * @return True if all files were succesfully removed
+     */
+    virtual bool clearDataDir(String* errStr = 0);
+
     NamedList m_params;                  // Account parameters
+    Configuration m_cfg;                 // Account conf file
 
 protected:
     // Remove from owner. Release data
@@ -3519,6 +3634,14 @@ public:
     virtual MucRoom* findRoomByMember(const String& id, bool ref = false);
 
     /**
+     * Find any contact (regular or MUC room) by its id
+     * @param id The id of the desired contact
+     * @param ref True to obtain a referenced pointer
+     * @return ClientContact pointer (may be account's own contact) or 0 if not found
+     */
+    virtual ClientContact* findAnyContact(const String& id, bool ref = false);
+
+    /**
      * Check if there is a single registered account and return it
      * @param skipProto Optional account protocol to skip
      * @param ref True to get a referenced pointer
@@ -3635,6 +3758,35 @@ public:
     inline ObjList& groups()
 	{ return m_groups; }
 
+    /**
+     * Check if the contact is locally saved
+     * @param defVal Default value to return if parameter is invalid
+     * @return True if the contact is locally saved
+     */
+    inline bool local(bool defVal = false) const
+	{ return m_params.getBoolValue("local",defVal); }
+
+    /**
+     * Set contact locally saved flag
+     * @param on The new value for locally saved flag
+     */
+    inline void setLocal(bool on)
+	{ m_params.setParam("local",String::boolText(on)); }
+
+    /**
+     * Check if the contact is saved on server
+     * @param defVal Default value to return if parameter is invalid
+     * @return True if the contact is saved on server
+     */
+    inline bool remote(bool defVal = false) const
+	{ return m_params.getBoolValue("remote",defVal); }
+
+    /**
+     * Set contact server saved flag
+     * @param on The new value for server saved flag
+     */
+    inline void setRemote(bool on)
+	{ m_params.setParam("remote",String::boolText(on)); }
 
     /**
      * Set/reset the docked chat flag for non MucRoom contact
@@ -3957,6 +4109,7 @@ public:
 
     String m_name;                       // Contact's display name
     String m_subscription;               // Presence subscription state
+    NamedList m_params;                  // Optional contact extra params
 
 protected:
     /**

@@ -670,6 +670,7 @@ public:
      */
     enum ItemType {
 	TypeContact = QtCustomTree::TypeCount,
+	TypeChatRoom = QtCustomTree::TypeCount + 1,
 	TypeGroup,
     };
 
@@ -800,6 +801,25 @@ public:
 		showEmptyChildren(!m_hideEmptyGroups);
 	}
 
+    /**
+     * Check if a given type is a contact or chat room
+     * @param type Type to check
+     * @return True if the type is contact or chat room
+     */
+    static inline bool isContactType(int type)
+	{ return type == TypeContact || type == TypeChatRoom; }
+
+    /**
+     * Get contact type from a string value
+     * @param val The string
+     * @return Contact type value
+     */
+    static inline int contactType(const String& val) {
+	    if (!val || val != "chatroom")
+		return TypeContact;
+	    return TypeChatRoom;
+	}
+
 protected:
     // Update contact count in a group
     void updateGroupCountContacts(QtTreeItem& item);
@@ -874,6 +894,7 @@ private:
     String m_noGroupText;                // Group text to show for contacts not belonging to any group
     QMap<QString,QString> m_statusOrder; // Status order (names are mapped to status icons)
     QMenu* m_menuContact;
+    QMenu* m_menuChatRoom;
 };
 
 /**
@@ -884,8 +905,9 @@ class ContactItem : public QtTreeItem
 {
     YCLASS(ContactItem,QtTreeItem)
 public:
-    inline ContactItem(const char* id, const NamedList& p = NamedList::empty())
-	: QtTreeItem(id,ContactList::TypeContact,p.getValue("name"))
+    inline ContactItem(const char* id, const NamedList& p = NamedList::empty(),
+	bool contact = true)
+	: QtTreeItem(id,ContactList::contactType(p["type"]),p.getValue("name"))
 	{}
     // Build and return a list of groups
     inline ObjList* groups() const

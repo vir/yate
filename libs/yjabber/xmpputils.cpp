@@ -232,6 +232,7 @@ const String XMPPNamespace::s_array[Count] = {
     "http://www.google.com/session",                       // JingleSession
     "http://www.google.com/session/phone",                 // JingleAudio
     "http://www.google.com/transport/p2p",                 // JingleTransport
+    "http://www.google.com/xmpp/protocol/voice/v1",        // JingleVoiceV1
     "urn:xmpp:jingle:apps:rtp:info",                       // JingleRtpInfoOld
     "http://jabber.org/protocol/jingle/info/dtmf",         // DtmfOld
     "jabber:x:oob",                                        // XOob
@@ -1515,10 +1516,13 @@ XmlElement* XMPPUtils::createEntityCaps(const String& hash, const char* node)
 }
 
 // Create a 'c' entity capability element as defined by GTalk
-XmlElement* XMPPUtils::createEntityCapsGTalkV1()
+XmlElement* XMPPUtils::createEntityCapsGTalkV1(const char* node)
 {
     XmlElement* c = createElement(XmlTag::EntityCapsTag,XMPPNamespace::EntityCaps);
-    c->setAttribute("node","http://www.google.com/xmpp/client/caps");
+    if (node)
+	c->setAttributeValid("node",node);
+    else
+	c->setAttribute("node","http://www.google.com/xmpp/client/caps");
     c->setAttribute("ver","1.0");
     c->setAttribute("ext","voice-v1");
     return c;

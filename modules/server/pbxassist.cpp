@@ -43,6 +43,7 @@ public:
     virtual bool msgDisconnect(Message& msg, const String& reason);
     virtual bool msgTone(Message& msg);
     virtual bool msgOperation(Message& msg, const String& operation);
+    void chanReplaced(const String& initial, const String& final);
     inline void statusDetail(String& str) const
 	{ str.append(id() + "=" + m_state + "|" + m_tones,","); }
 protected:
@@ -86,7 +87,8 @@ class YPBX_API PBXList : public ChanAssistList
 {
 public:
     enum {
-	Operation = AssistPrivate
+	Operation = AssistPrivate,
+	Replaced,
     };
     inline PBXList()
 	: ChanAssistList("pbxassist")
@@ -95,11 +97,15 @@ public:
     virtual ChanAssist* create(Message& msg, const String& id);
     virtual void initialize();
     virtual void init(int priority);
+    virtual bool received(Message& msg, int id);
     virtual bool received(Message& msg, int id, ChanAssist* assist);
 protected:
     void statusModule(String& str);
     void statusParams(String& str);
     void statusDetail(String& str);
+private:
+    void chanReplaced(const NamedList& params);
+    void chanReplaced(const String& initial, const String& final);
 };
 
 // assist all channels by default?
@@ -208,6 +214,7 @@ void PBXList::init(int priority)
     ChanAssistList::init(priority);
     installRelay(Tone,priority);
     Engine::install(new MessageRelay("chan.operation",this,Operation,priority));
+    Engine::install(new MessageRelay("chan.replaced",this,Replaced,priority));
 }
 
 void PBXList::initialize()
@@ -264,6 +271,65 @@ bool PBXList::received(Message& msg, int id, ChanAssist* assist)
 	default:
 	    return false;
     }
+}
+
+// Handler for all messages
+bool PBXList::received(Message& msg, int id)
+{
+    if (Replaced == id) {
+	chanReplaced(msg);
+	return false;
+    }
+    return ChanAssistList::received(msg,id);
+}
+
+// Handler for chan.replaced
+void PBXList::chanReplaced(const NamedList& params)
+{
+    for (unsigned int i = 0; ; i++) {
+	String id("id");
+	String newId("newid");
+	if (i) {
+	    id << "." << i;
+	    newId << "." << i;
+	}
+	const String* initial = params.getParam(id);
+	if (!initial)
+	    break;
+	const String* final = params.getParam(newId);
+	if (!final)
+	    break;
+	if (*initial && *final)
+	    chanReplaced(*initial,*final);
+    }
+}
+
+// Operate single channel ID replacement
+void PBXList::chanReplaced(const String& initial, const String& final)
+{
+    DDebug(this,DebugAll,"Replacing '%s' with '%s'",initial.c_str(),final.c_str());
+    // replace in transfer list, test both sides
+    s_transMutex.lock();
+    for (ObjList* l = s_transList.skipNull(); l; l = l->skipNext()) {
+	NamedString* n = static_cast<NamedString*>(l->get());
+	if (initial == n->name()) {
+	    Debug(this,DebugInfo,"In transfer '%s' replaced '%s' with '%s'",
+		n->c_str(),initial.c_str(),final.c_str());
+	    const_cast<String&>(n->name()) = final;
+	}
+	if (initial == *n) {
+	    Debug(this,DebugInfo,"In transfer '%s' replaced '%s' with '%s'",
+		n->name().c_str(),initial.c_str(),final.c_str());
+	    *n = final;
+	}
+    }
+    s_transMutex.unlock();
+    // replace in assists
+    lock();
+    ListIterator iter(calls());
+    while (PBXAssist* assist = static_cast<PBXAssist*>(iter.get()))
+	assist->chanReplaced(initial,final);
+    unlock();
 }
 
 void PBXList::statusModule(String& str)
@@ -1172,6 +1238,16 @@ void PBXAssist::msgExecute(Message& msg)
     copyParameter(msg,"caller");
     copyParameter(msg,"called");
     m_keep.copyParam(msg,"divert",'_');
+}
+
+// Adjust any channel ID that has been replaced
+void PBXAssist::chanReplaced(const String& initial, const String& final)
+{
+    if (initial == m_peer1) {
+	Debug(list(),DebugInfo,"For '%s' replacing peer '%s' with '%s'",
+	    id().c_str(),initial.c_str(),final.c_str());
+	m_peer1 = final;
+    }
 }
 
 INIT_PLUGIN(PBXList);

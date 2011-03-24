@@ -391,7 +391,7 @@ bool YMGCPEngine::processEvent(MGCPTransaction* trans, MGCPMessage* msg, void* d
     MGCPWrapper* wrap = YOBJECT(MGCPWrapper,static_cast<GenObject*>(data));
     MGCPSpan* span = YOBJECT(MGCPSpan,static_cast<GenObject*>(data));
     MGCPCircuit* circ = YOBJECT(MGCPCircuit,static_cast<GenObject*>(data));
-    Debug(this,DebugAll,"YMGCPEngine::processEvent(%p,%p,%p) wrap=%p span=%p circ=%p [%p]",
+    DDebug(this,DebugAll,"YMGCPEngine::processEvent(%p,%p,%p) wrap=%p span=%p circ=%p [%p]",
 	trans,msg,data,wrap,span,circ,this);
     if (!trans)
 	return false;
@@ -566,7 +566,7 @@ MGCPWrapper::~MGCPWrapper()
 // Process incoming events for this wrapper
 bool MGCPWrapper::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 {
-    Debug(&splugin,DebugAll,"MGCPWrapper::processEvent(%p,%p) [%p]",
+    DDebug(&splugin,DebugAll,"MGCPWrapper::processEvent(%p,%p) [%p]",
 	tr,mm,this);
     if (tr == m_tr) {
 	if (!mm || (tr->msgResponse())) {
@@ -713,11 +713,13 @@ RefPointer<MGCPMessage> MGCPWrapper::sendSync(MGCPMessage* mm, const SocketAddr&
 	Thread::idle();
     RefPointer<MGCPMessage> tmp = m_msg;
     m_msg = 0;
-    if (tmp)
-	Debug(&splugin,DebugNote,"MGCPWrapper::sendSync() returning %d '%s' [%p]",
-	    tmp->code(),tmp->comment().c_str(),this);
-    else
+    if (!tmp)
 	Debug(&splugin,DebugMild,"MGCPWrapper::sendSync() returning NULL [%p]",this);
+#ifdef DEBUG
+    else
+	Debug(&splugin,DebugInfo,"MGCPWrapper::sendSync() returning %d '%s' [%p]",
+	    tmp->code(),tmp->comment().c_str(),this);
+#endif
     return tmp;
 }
 
@@ -972,6 +974,7 @@ bool MGCPSpan::init(const NamedList& params)
     for (i = 0; i < m_count; i++)
 	m_circuits[i] = 0;
     bool ok = true;
+    String first;
     for (i = 0; i < m_count; i++) {
 	if (range.count() && !range.find(i+1))
 	    continue;
@@ -992,12 +995,16 @@ bool MGCPSpan::init(const NamedList& params)
 	    ok = false;
 	    break;
 	}
+	if (first.null())
+	    first << (cicStart + i) << " '" << name << "'";
 	circuit->ref();
 	if (clear)
 	    circuit->needClear();
     }
 
     if (ok) {
+	Debug(&splugin,DebugNote,"MGCPSpan '%s' first circuit=%s",
+	    id().safe(),first.c_str());
 	m_version = config->getValue("version");
 	const char* addr = config->getValue("address");
 	if (addr) {
@@ -1222,7 +1229,7 @@ MGCPCircuit::MGCPCircuit(unsigned int code, MGCPSpan* span, const char* id)
       m_changing(false), m_pending(false), m_gwFormatChanged(false),
       m_localRtpChanged(false), m_needClear(false), m_tr(0)
 {
-    Debug(&splugin,DebugAll,"MGCPCircuit::MGCPCircuit(%u,%p,'%s') [%p]",
+    DDebug(&splugin,DebugAll,"MGCPCircuit::MGCPCircuit(%u,%p,'%s') [%p]",
 	code,span,id,this);
     u_int32_t cic = code;
     m_notify.hexify(&cic,sizeof(cic));
@@ -1234,7 +1241,7 @@ MGCPCircuit::MGCPCircuit(unsigned int code, MGCPSpan* span, const char* id)
 
 MGCPCircuit::~MGCPCircuit()
 {
-    Debug(&splugin,DebugAll,"MGCPCircuit::~MGCPCircuit() %u [%p]",
+    DDebug(&splugin,DebugAll,"MGCPCircuit::~MGCPCircuit() %u [%p]",
 	code(),this);
     s_mutex.lock();
     if (m_tr) {
@@ -1428,11 +1435,13 @@ RefPointer<MGCPMessage> MGCPCircuit::sendSync(MGCPMessage* mm)
 	Thread::idle();
     RefPointer<MGCPMessage> tmp = m_msg;
     m_msg = 0;
-    if (tmp)
-	Debug(&splugin,DebugNote,"MGCPCircuit::sendSync() returning %d '%s' [%p]",
-	    tmp->code(),tmp->comment().c_str(),this);
-    else
+    if (!tmp)
 	Debug(&splugin,DebugMild,"MGCPCircuit::sendSync() returning NULL [%p]",this);
+#ifdef DEBUG
+    else
+	Debug(&splugin,DebugInfo,"MGCPCircuit::sendSync() returning %d '%s' [%p]",
+	    tmp->code(),tmp->comment().c_str(),this);
+#endif
     return tmp;
 }
 
@@ -1760,7 +1769,7 @@ bool MGCPCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params
 // Process incoming events for this circuit
 bool MGCPCircuit::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 {
-    Debug(&splugin,DebugAll,"MGCPCircuit::processEvent(%p,%p) [%p]",
+    DDebug(&splugin,DebugAll,"MGCPCircuit::processEvent(%p,%p) [%p]",
 	tr,mm,this);
     if (tr == m_tr) {
 	if (!mm || (tr->msgResponse())) {

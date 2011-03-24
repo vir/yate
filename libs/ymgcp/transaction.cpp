@@ -310,7 +310,7 @@ void MGCPTransaction::processMessage(MGCPMessage* msg)
 		retrans = true;
 		send(m_ack);
 	    }
-	    Debug(m_engine,(ok || retrans) ? DebugAll : DebugNote,
+	    DDebug(m_engine,(ok || retrans) ? DebugAll : DebugNote,
 		"%s. Received %sresponse %d [%p]",m_debug.c_str(),
 		ok?"":(retrans?"retransmission for ":"different "),msg->code(),this);
 	}
@@ -318,7 +318,7 @@ void MGCPTransaction::processMessage(MGCPMessage* msg)
 	    ok = (!m_response && !m_provisional);
 	    if (ok)
 		m_provisional = msg;
-	    Debug(m_engine,(ok || m_response)? DebugAll : DebugNote,
+	    DDebug(m_engine,(ok || m_response)? DebugAll : DebugNote,
 		"%s. Received %sprovisional response %d [%p]",m_debug.c_str(),
 		ok?"":(m_response?"late ":"different "),msg->code(),this);
 	}
@@ -474,8 +474,10 @@ MGCPEvent* MGCPTransaction::terminate()
 	m_engine->removeTrans(this,false);
     if (m_timeout)
 	Debug(m_engine,DebugNote,"%s. Timeout in state %u [%p]",m_debug.c_str(),state(),this);
+#ifdef DEBUG
     else
-	DDebug(m_engine,DebugAll,"%s. Terminated in state %u [%p]",m_debug.c_str(),state(),this);
+	Debug(m_engine,DebugAll,"%s. Terminated in state %u [%p]",m_debug.c_str(),state(),this);
+#endif
     MGCPEvent* event = new MGCPEvent(this);
     deref();
     return event;

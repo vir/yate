@@ -1012,6 +1012,7 @@ void YJGConnection::callAccept(Message& msg)
     Debug(this,DebugCall,"callAccept [%p]",this);
     m_secure = msg.getBoolValue("secure",m_secure);
     m_secureRequired = msg.getBoolValue("secure_required",m_secureRequired);
+    m_dtmfMeth = msg.getIntValue("dtmfmethod",s_dictDtmfMeth,m_dtmfMeth);
     Channel::callAccept(msg);
 }
 

@@ -218,6 +218,7 @@ public:
 	JingleSession,                   // http://www.google.com/session
 	JingleAudio,                     // http://www.google.com/session/phone
 	JingleTransport,                 // http://www.google.com/transport/p2p
+	JingleVoiceV1,                   // http://www.google.com/xmpp/protocol/voice/v1
 	JingleRtpInfoOld,                // urn:xmpp:jingle:apps:rtp:info
 	DtmfOld,                         // http://jabber.org/protocol/jingle/info/dtmf
 	XOob,                            // jabber:x:oob
@@ -1664,9 +1665,10 @@ public:
 
     /**
      * Create a 'c' entity capability element as defined by GTalk
+     * @param node Optional node attribute, defaults to GTalk's node
      * @return A valid XmlElement pointer
      */
-    static XmlElement* createEntityCapsGTalkV1();
+    static XmlElement* createEntityCapsGTalkV1(const char* node = 0);
 
     /**
      * Create an 'presence' element

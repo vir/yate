@@ -335,6 +335,16 @@ bool EngineStatusHandler::received(Message &msg)
     msg.retValue() << ",semaphores=" << Semaphore::count();
     msg.retValue() << ",waiting=" << Semaphore::locks();
     msg.retValue() << ",acceptcalls=" << lookup(Engine::accept(),Engine::getCallAcceptStates());
+    if (msg.getBoolValue("details",true)) {
+	NamedIterator iter(Engine::runParams());
+	char sep = ';';
+	while (const NamedString* p = iter.get()) {
+	    if (p->name().find("path") < 0)
+		continue;
+	    msg.retValue() << sep << p->name() << "=" << *p;
+	    sep = ',';
+	}
+    }
     msg.retValue() << "\r\n";
     return false;
 }
@@ -1309,6 +1319,17 @@ bool Engine::loadPluginDir(const String& relPath)
 	if (!path.endsWith(PATH_SEP))
 	    path += PATH_SEP;
 	path += relPath;
+    }
+    if (path.endsWith(s_modsuffix)) {
+	int sep = path.rfind(PATH_SEP[0]);
+	if (sep >= 0)
+	    sep++;
+	else
+	    sep = 0;
+	String name = path.substr(sep);
+	if (loadPlugin(path,s_cfg.getBoolValue("localsym",name,s_localsymbol),
+	    s_cfg.getBoolValue("nounload",name)))
+	    return true;
     }
     if (path.endsWith(PATH_SEP))
 	path = path.substr(0,path.length()-1);

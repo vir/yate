@@ -391,7 +391,7 @@ bool YMGCPEngine::processEvent(MGCPTransaction* trans, MGCPMessage* msg, void* d
     MGCPWrapper* wrap = YOBJECT(MGCPWrapper,static_cast<GenObject*>(data));
     MGCPSpan* span = YOBJECT(MGCPSpan,static_cast<GenObject*>(data));
     MGCPCircuit* circ = YOBJECT(MGCPCircuit,static_cast<GenObject*>(data));
-    Debug(this,DebugAll,"YMGCPEngine::processEvent(%p,%p,%p) wrap=%p span=%p circ=%p [%p]",
+    DDebug(this,DebugAll,"YMGCPEngine::processEvent(%p,%p,%p) wrap=%p span=%p circ=%p [%p]",
 	trans,msg,data,wrap,span,circ,this);
     if (!trans)
 	return false;
@@ -566,7 +566,7 @@ MGCPWrapper::~MGCPWrapper()
 // Process incoming events for this wrapper
 bool MGCPWrapper::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 {
-    Debug(&splugin,DebugAll,"MGCPWrapper::processEvent(%p,%p) [%p]",
+    DDebug(&splugin,DebugAll,"MGCPWrapper::processEvent(%p,%p) [%p]",
 	tr,mm,this);
     if (tr == m_tr) {
 	if (!mm || (tr->msgResponse())) {
@@ -713,11 +713,13 @@ RefPointer<MGCPMessage> MGCPWrapper::sendSync(MGCPMessage* mm, const SocketAddr&
 	Thread::idle();
     RefPointer<MGCPMessage> tmp = m_msg;
     m_msg = 0;
-    if (tmp)
-	Debug(&splugin,DebugNote,"MGCPWrapper::sendSync() returning %d '%s' [%p]",
-	    tmp->code(),tmp->comment().c_str(),this);
-    else
+    if (!tmp)
 	Debug(&splugin,DebugMild,"MGCPWrapper::sendSync() returning NULL [%p]",this);
+#ifdef DEBUG
+    else
+	Debug(&splugin,DebugInfo,"MGCPWrapper::sendSync() returning %d '%s' [%p]",
+	    tmp->code(),tmp->comment().c_str(),this);
+#endif
     return tmp;
 }
 
@@ -1428,11 +1430,13 @@ RefPointer<MGCPMessage> MGCPCircuit::sendSync(MGCPMessage* mm)
 	Thread::idle();
     RefPointer<MGCPMessage> tmp = m_msg;
     m_msg = 0;
-    if (tmp)
-	Debug(&splugin,DebugNote,"MGCPCircuit::sendSync() returning %d '%s' [%p]",
-	    tmp->code(),tmp->comment().c_str(),this);
-    else
+    if (!tmp)
 	Debug(&splugin,DebugMild,"MGCPCircuit::sendSync() returning NULL [%p]",this);
+#ifdef DEBUG
+    else
+	Debug(&splugin,DebugInfo,"MGCPCircuit::sendSync() returning %d '%s' [%p]",
+	    tmp->code(),tmp->comment().c_str(),this);
+#endif
     return tmp;
 }
 
@@ -1760,7 +1764,7 @@ bool MGCPCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params
 // Process incoming events for this circuit
 bool MGCPCircuit::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 {
-    Debug(&splugin,DebugAll,"MGCPCircuit::processEvent(%p,%p) [%p]",
+    DDebug(&splugin,DebugAll,"MGCPCircuit::processEvent(%p,%p) [%p]",
 	tr,mm,this);
     if (tr == m_tr) {
 	if (!mm || (tr->msgResponse())) {

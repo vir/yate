@@ -1122,9 +1122,9 @@ public:
 	{ return m_dispatcher.handlerCount(); }
 
     /**
-     * Loads the plugins from an extra plugins directory
+     * Loads the plugins from an extra plugins directory or just an extra plugin
      * @param relPath Path to the extra directory, relative to the main modules
-     * @return True if the directory could at least be opened
+     * @return True if the plugin was loaded or the directory could at least be opened
      */
     bool loadPluginDir(const String& relPath);
 

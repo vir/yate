@@ -1310,6 +1310,17 @@ bool Engine::loadPluginDir(const String& relPath)
 	    path += PATH_SEP;
 	path += relPath;
     }
+    if (path.endsWith(s_modsuffix)) {
+	int sep = path.rfind(PATH_SEP[0]);
+	if (sep >= 0)
+	    sep++;
+	else
+	    sep = 0;
+	String name = path.substr(sep);
+	if (loadPlugin(path,s_cfg.getBoolValue("localsym",name,s_localsymbol),
+	    s_cfg.getBoolValue("nounload",name)))
+	    return true;
+    }
     if (path.endsWith(PATH_SEP))
 	path = path.substr(0,path.length()-1);
 #ifdef _WINDOWS

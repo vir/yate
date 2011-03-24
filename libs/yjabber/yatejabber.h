@@ -2669,7 +2669,8 @@ public:
      */
     inline bool hasAudio() {
 	    return m_features.get(XMPPNamespace::JingleAppsRtpAudio) ||
-		m_features.get(XMPPNamespace::JingleAudio);
+		m_features.get(XMPPNamespace::JingleAudio) ||
+		m_features.get(XMPPNamespace::JingleVoiceV1);
 	}
 
     /**

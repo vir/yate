@@ -232,6 +232,7 @@ const String XMPPNamespace::s_array[Count] = {
     "http://www.google.com/session",                       // JingleSession
     "http://www.google.com/session/phone",                 // JingleAudio
     "http://www.google.com/transport/p2p",                 // JingleTransport
+    "http://www.google.com/xmpp/protocol/voice/v1",        // JingleVoiceV1
     "urn:xmpp:jingle:apps:rtp:info",                       // JingleRtpInfoOld
     "http://jabber.org/protocol/jingle/info/dtmf",         // DtmfOld
     "jabber:x:oob",                                        // XOob

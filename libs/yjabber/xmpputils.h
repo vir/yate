@@ -218,6 +218,7 @@ public:
 	JingleSession,                   // http://www.google.com/session
 	JingleAudio,                     // http://www.google.com/session/phone
 	JingleTransport,                 // http://www.google.com/transport/p2p
+	JingleVoiceV1,                   // http://www.google.com/xmpp/protocol/voice/v1
 	JingleRtpInfoOld,                // urn:xmpp:jingle:apps:rtp:info
 	DtmfOld,                         // http://jabber.org/protocol/jingle/info/dtmf
 	XOob,                            // jabber:x:oob

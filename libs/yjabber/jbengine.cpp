@@ -2508,7 +2508,8 @@ void JBEntityCapsList::addCaps(NamedList& list, JBEntityCaps& caps)
     int jingleVersion = -1;
     if (caps.m_features.get(XMPPNamespace::Jingle))
 	jingleVersion = 1;
-    else if (caps.m_features.get(XMPPNamespace::JingleSession))
+    else if (caps.m_features.get(XMPPNamespace::JingleSession) ||
+	caps.m_features.get(XMPPNamespace::JingleVoiceV1))
 	jingleVersion = 0;
     NamedString* params = new NamedString("caps.params");
     list.addParam("caps.id",caps.toString());
@@ -2516,14 +2517,16 @@ void JBEntityCapsList::addCaps(NamedList& list, JBEntityCaps& caps)
     if (jingleVersion != -1) {
 	params->append("caps.jingle_version");
 	list.addParam("caps.jingle_version",String(jingleVersion));
+	if (caps.hasAudio()) {
+	    params->append("caps.audio",",");
+	    list.addParam("caps.audio",String::boolText(true));
+	}
 	switch (jingleVersion) {
 	    case 1:
-		CHECK_NS(XMPPNamespace::JingleAppsRtpAudio,"caps.audio");
 		CHECK_NS(XMPPNamespace::JingleTransfer,"caps.calltransfer");
 		CHECK_NS(XMPPNamespace::JingleAppsFileTransfer,"caps.filetransfer");
 		break;
 	    case 0:
-		CHECK_NS(XMPPNamespace::JingleAudio,"caps.audio");
 		break;
 	}
     }

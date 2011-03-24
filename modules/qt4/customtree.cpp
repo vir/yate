@@ -874,11 +874,13 @@ ContactList::ContactList(const char* name, const NamedList& params, QWidget* par
     m_flatList(true),
     m_showOffline(true),
     m_hideEmptyGroups(true),
-    m_menuContact(0)
+    m_menuContact(0),
+    m_menuChatRoom(0)
 {
     XDebug(ClientDriver::self(),DebugAll,"ContactList(%s) [%p]",name,this);
     // Add item props translation
     m_itemPropsType.addParam(String((int)TypeContact),"contact");
+    m_itemPropsType.addParam(String((int)TypeChatRoom),"chatroom");
     m_itemPropsType.addParam(String((int)TypeGroup),"group");
     m_savedIndent = indentation();
     m_groupCountWidget = params["groupcount"];
@@ -895,6 +897,7 @@ bool ContactList::setParams(const NamedList& params)
 {
     bool ok = QtCustomTree::setParams(params);
     buildMenu(m_menuContact,params.getParam("contactmenu"));
+    buildMenu(m_menuChatRoom,params.getParam("chatroommenu"));
     return ok;
 }
 
@@ -909,7 +912,7 @@ bool ContactList::setTableRow(const String& item, const NamedList* data)
     if (!data)
 	return true;
     SafeTree tree(this);
-    bool ok = it->type() == TypeContact && updateContact(item,*data,false);
+    bool ok = isContactType(it->type()) && updateContact(item,*data,false);
     listChanged();
     return ok;
 }
@@ -980,10 +983,14 @@ bool ContactList::updateTableRows(const NamedList* data, bool atStart)
 void ContactList::countContacts(QtTreeItem* grp, int& total, int& online)
 {
     QList<QtTreeItem*> c = findItems(TypeContact,grp,true,false);
-    total = c.size();
+    QList<QtTreeItem*> r = findItems(TypeChatRoom,grp,true,false);
+    total = c.size() + r.size();
     online = 0;
-    for (int i = 0; i < total; i++)
+    for (int i = 0; i < c.size(); i++)
 	if (!(static_cast<ContactItem*>(c[i]))->offline())
+	    online++;
+    for (int j = 0; j < r.size(); j++)
+	if (!(static_cast<ContactItem*>(r[j]))->offline())
 	    online++;
 }
 
@@ -1166,7 +1173,7 @@ bool ContactList::updateContact(const String& id, const NamedList& params,
     if (!groups || m_flatList) {
 	// No group changes or not shown by group. Update all contacts
 	for (int i = 0; i < list.size(); i++)
-	    if (list[i]->type() == TypeContact && list[i]->id() == id) {
+	    if (isContactType(list[i]->type()) && list[i]->id() == id) {
 		ok = updateContact(*(static_cast<ContactItem*>(list[i])),params) || ok;
 		found = true;
 	    }
@@ -1175,7 +1182,7 @@ bool ContactList::updateContact(const String& id, const NamedList& params,
 	// Groups changed while shown by group
 	ContactItem* c = 0;
 	for (int i = 0; i < list.size(); i++)
-	    if (list[i]->type() == TypeContact && list[i]->id() == id) {
+	    if (isContactType(list[i]->type()) && list[i]->id() == id) {
 		c = static_cast<ContactItem*>(list[i]);
 		break;
 	    }
@@ -1220,7 +1227,7 @@ bool ContactList::updateContact(const String& id, const NamedList& params,
 	    TelEngine::destruct(newList);
 	    TelEngine::destruct(cgroups);
 	    for (int i = 0; i < list.size(); i++) {
-		if (list[i]->type() != TypeContact || list[i]->id() != id)
+		if (!isContactType(list[i]->type()) || list[i]->id() != id)
 		    continue;
 		ok = updateContact(*(static_cast<ContactItem*>(list[i])),params) || ok;
 		found = true;
@@ -1328,7 +1335,7 @@ bool ContactList::updateContact(ContactItem& c, const NamedList& params, bool al
 // Update a contact
 bool ContactList::updateItem(QtTreeItem& item, const NamedList& params)
 {
-    if (item.type() == TypeContact)
+    if (isContactType(item.type()))
 	return updateContact(*static_cast<ContactItem*>(&item),params);
     return QtCustomTree::updateItem(item,params);
 }
@@ -1351,6 +1358,10 @@ QMenu* ContactList::contextMenu(QtTreeItem* item)
 	if (m_menuContact)
 	    return m_menuContact;
     }
+    if (item->type() == TypeChatRoom) {
+	if (m_menuChatRoom)
+	    return m_menuChatRoom;
+    }
     else if (item->type() == TypeGroup)
 	return m_menu;
     return QtCustomTree::contextMenu(item);
@@ -1362,7 +1373,7 @@ void ContactList::itemAdded(QtTreeItem& item, QtTreeItem* parent)
     QtCustomTree::itemAdded(item,parent);
     DDebug(ClientDriver::self(),DebugAll,"ContactList(%s)::itemAdded(%p,%p) type=%d id=%s",
 	name().c_str(),&item,parent,item.type(),item.id().c_str(),parent);
-    if (item.type() == TypeContact) {
+    if (isContactType(item.type())) {
 	ContactItem* c = static_cast<ContactItem*>(&item);
 	updateContact(*c,*c);
 	return;
@@ -1473,7 +1484,7 @@ void ContactList::removeContactFromGroup(QList<ContactItem*> list, const String&
     if (!g)
 	return;
     QtTreeItem* it = find(id,g,false,false);
-    if (!(it && it->type() == TypeContact))
+    if (!(it && isContactType(it->type())))
 	return;
     g->removeChild(it);
     list.append(static_cast<ContactItem*>(it));

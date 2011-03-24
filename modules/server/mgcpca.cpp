@@ -974,6 +974,7 @@ bool MGCPSpan::init(const NamedList& params)
     for (i = 0; i < m_count; i++)
 	m_circuits[i] = 0;
     bool ok = true;
+    String first;
     for (i = 0; i < m_count; i++) {
 	if (range.count() && !range.find(i+1))
 	    continue;
@@ -994,12 +995,16 @@ bool MGCPSpan::init(const NamedList& params)
 	    ok = false;
 	    break;
 	}
+	if (first.null())
+	    first << (cicStart + i) << " '" << name << "'";
 	circuit->ref();
 	if (clear)
 	    circuit->needClear();
     }
 
     if (ok) {
+	Debug(&splugin,DebugNote,"MGCPSpan '%s' first circuit=%s",
+	    id().safe(),first.c_str());
 	m_version = config->getValue("version");
 	const char* addr = config->getValue("address");
 	if (addr) {
@@ -1224,7 +1229,7 @@ MGCPCircuit::MGCPCircuit(unsigned int code, MGCPSpan* span, const char* id)
       m_changing(false), m_pending(false), m_gwFormatChanged(false),
       m_localRtpChanged(false), m_needClear(false), m_tr(0)
 {
-    Debug(&splugin,DebugAll,"MGCPCircuit::MGCPCircuit(%u,%p,'%s') [%p]",
+    DDebug(&splugin,DebugAll,"MGCPCircuit::MGCPCircuit(%u,%p,'%s') [%p]",
 	code,span,id,this);
     u_int32_t cic = code;
     m_notify.hexify(&cic,sizeof(cic));
@@ -1236,7 +1241,7 @@ MGCPCircuit::MGCPCircuit(unsigned int code, MGCPSpan* span, const char* id)
 
 MGCPCircuit::~MGCPCircuit()
 {
-    Debug(&splugin,DebugAll,"MGCPCircuit::~MGCPCircuit() %u [%p]",
+    DDebug(&splugin,DebugAll,"MGCPCircuit::~MGCPCircuit() %u [%p]",
 	code(),this);
     s_mutex.lock();
     if (m_tr) {

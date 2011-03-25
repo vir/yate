@@ -1,3 +1,11 @@
+yate (3.2.1.svn4217) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4217: + Set dtmf method for incoming calls
+    from google voice.  + Set yate node in presence entity capability
+    child.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 26 Mar 2011 02:19:20 +0300
+
 yate (3.2.1.svn4215) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4215: + Allow overriding dtmf method on

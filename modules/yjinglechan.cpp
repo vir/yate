@@ -3785,7 +3785,7 @@ bool YJGDriver::handleResNotify(Message& msg)
 		if (!XMPPUtils::findFirstChild(*target,XmlTag::EntityCapsTag,
 		    XMPPNamespace::EntityCaps)) {
 		    target->addChild(new XmlElement(*m_entityCaps));
-		    target->addChild(XMPPUtils::createEntityCapsGTalkV1());
+		    target->addChild(XMPPUtils::createEntityCapsGTalkV1(s_capsNode));
 		    // Restore the data parameter
 		    if (dataXml) {
 			data->clear();
@@ -4043,7 +4043,7 @@ void YJGDriver::notifyPresence(const JabberID& from, const char* to, bool online
 	    if (online) {
 		XmlElement* xml = XMPPUtils::createPresence(0,0);
 		XMPPUtils::setPriority(*xml,String(s_priority));
-		xml->addChild(XMPPUtils::createEntityCapsGTalkV1());
+		xml->addChild(XMPPUtils::createEntityCapsGTalkV1(s_capsNode));
 		xml->addChild(new XmlElement(*m_entityCaps));
 		m->addParam(new NamedPointer("xml",xml));
 	    }

@@ -4695,8 +4695,15 @@ bool DefaultLogic::callIncoming(Message& msg, const String& dest)
     if (!Client::self())
 	return false;
     const String& fmt = msg["format"];
-    if (!fmt || fmt != "data")
+    if (!fmt || fmt != "data") {
+	// Set params for incoming google voice call
+	if (msg["module"] == "jingle") {
+	    URI uri(msg["callername"]);
+	    if (uri.getHost() == "voice.google.com")
+		msg.setParam("dtmfmethod","rfc2833");
+	}
 	return Client::self()->buildIncomingChannel(msg,dest);
+    }
     if (!(msg.userData() && ClientDriver::self() && Client::self()))
 	return false;
     CallEndpoint* peer = static_cast<CallEndpoint*>(msg.userData());

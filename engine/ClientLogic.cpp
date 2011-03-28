@@ -1987,6 +1987,7 @@ static bool showContactEdit(ClientAccountList& accounts, bool room = false,
 	    p.addParam("password",r->m_password);
 	    ObjList* grp = r->groups().skipNull();
 	    p.addParam("group",grp ? grp->get()->toString() : String::empty());
+	    p.addParam("check:autojoin",r->m_params.getValue("autojoin"));
 	    p.addParam("check:history",r->m_params.getValue("history"));
 	    int val = r->m_params.getIntValue("historylast");
 	    p.addParam("check:historylast",String::boolText(val > 0));
@@ -2016,6 +2017,7 @@ static bool showContactEdit(ClientAccountList& accounts, bool room = false,
 	    p.addParam("nick","");
 	    p.addParam("password","");
 	    p.addParam("group","Rooms");
+	    p.addParam("check:autojoin",String::boolText(false));
 	    p.addParam("check:history",String::boolText(true));
 	    p.addParam("check:historylast",String::boolText(false));
 	    p.addParam("historylast_value","30");
@@ -5514,6 +5516,12 @@ bool DefaultLogic::handleUserNotify(Message& msg, bool& stopLogic)
 	if (acc->hasChat()) {
 	    updateChatAccountList(account,true);
 	    Engine::enqueue(acc->userData(false,"chatrooms"));
+	    // Auto join rooms
+	    for (ObjList* o = acc->mucs().skipNull(); o; o = o->skipNext()) {
+		MucRoom* r = static_cast<MucRoom*>(o->get());
+		if (r->m_params.getBoolValue("autojoin"))
+		    joinRoom(r);
+	    }
 	}
     }
     else {
@@ -7185,6 +7193,8 @@ bool DefaultLogic::handleUserData(Message& msg, bool& stopLogic)
 		if (r) {
 		    changed = setChangedString(r->m_name,name) || changed;
 		    changed = setChangedString(r->m_password,pwd) || changed;
+		    changed = setChangedParam(r->m_params,"autojoin",msg[prefix + "autojoin"]) ||
+			changed;
 		}
 		else {
 		    changed = true;
@@ -7206,7 +7216,9 @@ bool DefaultLogic::handleUserData(Message& msg, bool& stopLogic)
 		Debug(ClientDriver::self(),DebugAll,
 		    "Account(%s) updated remote MUC room '%s' [%p]",
 		    account.c_str(),r->uri().c_str(),a);
-
+		// Auto join
+		if (changed && r->m_params.getBoolValue("autojoin"))
+		    joinRoom(r);
 	    }
 	    if (changed)
 		updateChatRoomsContactList(true,a);
@@ -7325,6 +7337,33 @@ void DefaultLogic::updateChatRoomsContactList(bool load, ClientAccount* acc,
     else
 	addChatRoomParam(upd,load,room);
     Client::self()->updateTableRows(s_chatContactList,&upd,false);
+}
+
+// Join a MUC room. Create/show chat. Update its status
+void DefaultLogic::joinRoom(MucRoom* room)
+{
+    if (!room)
+	return;
+    if (!room->resource().offline()) {
+	createRoomChat(*room);
+	return;
+    }
+    room->resource().m_name = room->m_params.getValue("nick");
+    if (!room->resource().m_name && room->account()) {
+	if (room->account()->contact())
+	    room->resource().m_name = room->account()->contact()->uri().getUser();
+	if (!room->resource().m_name)
+	    room->resource().m_name = room->account()->params().getValue("username");
+    }
+    bool hist = room->m_params.getBoolValue("history",true);
+    unsigned int lastMinutes = 0;
+    if (hist)
+	lastMinutes = room->m_params.getIntValue("historylast");
+    Message* m = room->buildJoin(true,hist,lastMinutes * 60);
+    room->resource().m_status = ClientResource::Connecting;
+    updateChatRoomsContactList(true,0,room);
+    createRoomChat(*room);
+    Engine::enqueue(m);
 }
 
 // Utility used in updateAccount
@@ -7669,26 +7708,8 @@ bool DefaultLogic::handleChatContactAction(const String& name, Window* wnd)
 	    }
 	    c->showChat(true,true);
 	}
-	else {
-	    if (r->resource().offline()) {
-		r->resource().m_name = r->m_params.getValue("nick");
-		if (!r->resource().m_name && r->account()) {
-		    if (r->account()->contact())
-			r->resource().m_name = r->account()->contact()->uri().getUser();
-		    if (!r->resource().m_name)
-			r->resource().m_name = r->account()->params().getValue("username");
-		}
-		bool hist = r->m_params.getBoolValue("history",true);
-		unsigned int lastMinutes = 0;
-		if (hist)
-		    lastMinutes = r->m_params.getIntValue("historylast");
-		Message* m = r->buildJoin(true,hist,lastMinutes * 60);
-		r->resource().m_status = ClientResource::Connecting;
-		updateChatRoomsContactList(true,0,r);
-		Engine::enqueue(m);
-	    }
-	    createRoomChat(*r);
-	}
+	else
+	    joinRoom(r);
 	return true;
     }
     // Call chat contact
@@ -7851,6 +7872,8 @@ bool DefaultLogic::handleChatContactAction(const String& name, Window* wnd)
 	    bool remote = true;
 	    Client::self()->getCheck("save_local",local,wnd);
 	    Client::self()->getCheck("save_remote",remote,wnd);
+	    bool join = false;
+	    Client::self()->getCheck("autojoin",join,wnd);
 	    bool reqHist = false;
 	    String histLastValue;
 	    Client::self()->getCheck("history",reqHist,wnd);
@@ -7877,6 +7900,7 @@ bool DefaultLogic::handleChatContactAction(const String& name, Window* wnd)
 	    room->m_params.setParam("nick",nick);
 	    room->m_params.setParam("history",String::boolText(reqHist));
 	    room->m_params.setParam("historylast",histLastValue);
+	    room->m_params.setParam("autojoin",String::boolText(join));
 	    if (localChanged || remoteChanged) {
 		// Fake local to enable updating
 		room->setLocal(true);
@@ -7898,6 +7922,8 @@ bool DefaultLogic::handleChatContactAction(const String& name, Window* wnd)
 		ClientLogic::clearContact(a->m_cfg,room);
 	    if (remoteChanged)
 		Engine::enqueue(a->userData(true,"chatrooms"));
+	    if (join)
+		joinRoom(room);
 	}
 	Client::self()->setVisible(wnd->id(),false);
 	return true;

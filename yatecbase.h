@@ -3179,6 +3179,12 @@ protected:
     virtual void updateChatRoomsContactList(bool load, ClientAccount* acc,
 	MucRoom* room = 0);
 
+    /**
+     * Join a MUC room. Create/show chat. Update its status
+     * @param room The room
+     */
+    virtual void joinRoom(MucRoom* room);
+
     String m_selectedChannel;            // The currently selected channel
     String m_transferInitiated;          // Tranfer initiated id
 

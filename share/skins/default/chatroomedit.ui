@@ -6,7 +6,7 @@
     <x>0</x>
     <y>0</y>
     <width>400</width>
-    <height>268</height>
+    <height>294</height>
    </rect>
   </property>
   <property name="sizePolicy" >
@@ -18,13 +18,13 @@
   <property name="minimumSize" >
    <size>
     <width>400</width>
-    <height>200</height>
+    <height>294</height>
    </size>
   </property>
   <property name="maximumSize" >
    <size>
     <width>400</width>
-    <height>268</height>
+    <height>294</height>
    </size>
   </property>
   <property name="windowIcon" >
@@ -514,6 +514,13 @@
       </widget>
      </item>
     </layout>
+   </item>
+   <item>
+    <widget class="QCheckBox" name="autojoin" >
+     <property name="text" >
+      <string>Automatically join when account is connected</string>
+     </property>
+    </widget>
    </item>
    <item>
     <widget class="QCheckBox" name="history" >

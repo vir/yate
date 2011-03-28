@@ -2791,12 +2791,10 @@ bool JoinMucWizard::action(Window* w, const String& name, NamedList* params)
 	if (!domain && acc->contact())
 	    domain = acc->contact()->uri().getHost();
 	m->addParam("contact",domain,false);
-	String* id = new String("items_" + String((unsigned int)Time::msecNow()));
-	m->addParam("id",*id);
 	Engine::enqueue(m);
 	setQuerySrv(true,domain);
 	m_requests.clear();
-	m_requests.append(id);
+	m_requests.append(new String(domain));
 	return true;
     }
     return false;
@@ -2837,18 +2835,22 @@ bool JoinMucWizard::handleContactInfo(Message& msg, const String& account,
 	return false;
     if (!m_account || m_account != account)
 	return false;
-    bool info = (oper == "notifyinfo");
-    if (!info && oper != "notifyitems")
+    bool ok = (oper == "result");
+    if (!ok && oper != "error")
+	return false;
+    const String& req = msg["requested_operation"];
+    bool info = (req == "queryinfo");
+    if (!info && req != "queryitems")
 	return false;
     const String& id = msg["id"];
-    ObjList* o = m_requests.find(id);
+    ObjList* o = m_requests.find(contact);
     if (!o)
 	return false;
     DDebug(ClientDriver::self(),DebugAll,
-	"JoinMucWizard(%s) handleContactInfo() contact=%s oper=%s",
-	c_str(),contact.c_str(),oper.c_str());
+	"JoinMucWizard(%s) handleContactInfo() contact=%s oper=%s req=%s",
+	c_str(),contact.c_str(),oper.c_str(),req.c_str());
     if (!info && m_queryRooms) {
-	Window* w = window();
+	Window* w = ok ? window() : 0;
 	if (w) {
 	    NamedList upd("");
 	    int n = msg.getIntValue("item.count");
@@ -2864,7 +2866,7 @@ bool JoinMucWizard::handleContactInfo(Message& msg, const String& account,
 	    }
 	    Client::self()->updateTableRows("muc_rooms",&upd,false,w);
 	}
-	if (!msg.getBoolValue("partial")) {
+	if (!(ok && msg.getBoolValue("partial"))) {
 	    o->remove();
 	    setQueryRooms(false);
 	}
@@ -2873,13 +2875,13 @@ bool JoinMucWizard::handleContactInfo(Message& msg, const String& account,
     if (!m_querySrv)
 	return false;
     if (info) {
-	if (contact && msg.getBoolValue("caps.muc")) {
+	if (ok && contact && msg.getBoolValue("caps.muc")) {
 	    Window* w = window();
 	    if (w)
 		Client::self()->updateTableRow("muc_server",contact,0,false,w);
 	}
     }
-    else {
+    else if (ok) {
 	NamedList upd("");
 	int n = msg.getIntValue("item.count");
 	for (int i = 1; i <= n; i++) {
@@ -2891,13 +2893,11 @@ bool JoinMucWizard::handleContactInfo(Message& msg, const String& account,
 		"JoinMucWizard(%s) requesting info from %s",c_str(),item.c_str());
 	    Message* m = Client::buildMessage("contact.info",m_account,"queryinfo");
 	    m->addParam("contact",item,false);
-	    String* id = new String("info_" + String((unsigned int)Time::msecNow()));
-	    m->addParam("id",*id);
 	    Engine::enqueue(m);
-	    m_requests.append(id);
+	    m_requests.append(new String(item));
 	}
     }
-    if (!msg.getBoolValue("partial"))
+    if (!(ok && msg.getBoolValue("partial")))
 	o->remove();
     if (!o->skipNull())
 	setQuerySrv(false);
@@ -3057,11 +3057,9 @@ bool JoinMucWizard::changePage(const String& page, const String& old)
 		Client::self()->clearTable("muc_rooms",w);
 		Message* m = Client::buildMessage("contact.info",acc->toString(),"queryitems");
 		m->addParam("contact",target);
-		String* id = new String("items_" + String((unsigned int)Time::msecNow()));
-		m->addParam("id",*id);
 		Engine::enqueue(m);
 		m_requests.clear();
-		m_requests.append(id);
+		m_requests.append(new String(target));
 	    }
 	    else {
 		showError(w,"You must choose a MUC server");

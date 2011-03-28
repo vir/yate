@@ -153,9 +153,11 @@ protected:
     // Retrieve the selected MUC server if not currently requesting one
     bool selectedMucServer(String* buf = 0);
     // Set/reset servers query
-    void setQuerySrv(bool on);
+    void setQuerySrv(bool on, const char* domain = 0);
     // Set/reset rooms query
-    void setQueryRooms(bool on);
+    void setQueryRooms(bool on, const char* domain = 0);
+    // Update UI progress params
+    void addProgress(NamedList& dest, bool on, const char* target);
 private:
     bool m_queryRooms;                   // Requesting rooms from server
     bool m_querySrv;                     // Requesting MUC server(s)
@@ -1987,6 +1989,7 @@ static bool showContactEdit(ClientAccountList& accounts, bool room = false,
 	    p.addParam("password",r->m_password);
 	    ObjList* grp = r->groups().skipNull();
 	    p.addParam("group",grp ? grp->get()->toString() : String::empty());
+	    p.addParam("check:autojoin",r->m_params.getValue("autojoin"));
 	    p.addParam("check:history",r->m_params.getValue("history"));
 	    int val = r->m_params.getIntValue("historylast");
 	    p.addParam("check:historylast",String::boolText(val > 0));
@@ -2016,6 +2019,7 @@ static bool showContactEdit(ClientAccountList& accounts, bool room = false,
 	    p.addParam("nick","");
 	    p.addParam("password","");
 	    p.addParam("group","Rooms");
+	    p.addParam("check:autojoin",String::boolText(false));
 	    p.addParam("check:history",String::boolText(true));
 	    p.addParam("check:historylast",String::boolText(false));
 	    p.addParam("historylast_value","30");
@@ -2784,16 +2788,13 @@ bool JoinMucWizard::action(Window* w, const String& name, NamedList* params)
 	String domain;
 	Client::self()->getText("muc_domain",domain,false,w);
 	Message* m = Client::buildMessage("contact.info",acc->toString(),"queryitems");
-	if (domain)
-	    m->addParam("contact",domain);
-	else if (acc->contact())
-	    m->addParam("contact",acc->contact()->uri().getHost(),false);
-	String* id = new String("items_" + String((unsigned int)Time::msecNow()));
-	m->addParam("id",*id);
+	if (!domain && acc->contact())
+	    domain = acc->contact()->uri().getHost();
+	m->addParam("contact",domain,false);
 	Engine::enqueue(m);
-	setQuerySrv(true);
+	setQuerySrv(true,domain);
 	m_requests.clear();
-	m_requests.append(id);
+	m_requests.append(new String(domain));
 	return true;
     }
     return false;
@@ -2834,18 +2835,21 @@ bool JoinMucWizard::handleContactInfo(Message& msg, const String& account,
 	return false;
     if (!m_account || m_account != account)
 	return false;
-    bool info = (oper == "notifyinfo");
-    if (!info && oper != "notifyitems")
+    bool ok = (oper == "result");
+    if (!ok && oper != "error")
 	return false;
-    const String& id = msg["id"];
-    ObjList* o = m_requests.find(id);
+    const String& req = msg["requested_operation"];
+    bool info = (req == "queryinfo");
+    if (!info && req != "queryitems")
+	return false;
+    ObjList* o = m_requests.find(contact);
     if (!o)
 	return false;
     DDebug(ClientDriver::self(),DebugAll,
-	"JoinMucWizard(%s) handleContactInfo() contact=%s oper=%s",
-	c_str(),contact.c_str(),oper.c_str());
+	"JoinMucWizard(%s) handleContactInfo() contact=%s oper=%s req=%s",
+	c_str(),contact.c_str(),oper.c_str(),req.c_str());
     if (!info && m_queryRooms) {
-	Window* w = window();
+	Window* w = ok ? window() : 0;
 	if (w) {
 	    NamedList upd("");
 	    int n = msg.getIntValue("item.count");
@@ -2861,7 +2865,7 @@ bool JoinMucWizard::handleContactInfo(Message& msg, const String& account,
 	    }
 	    Client::self()->updateTableRows("muc_rooms",&upd,false,w);
 	}
-	if (!msg.getBoolValue("partial")) {
+	if (!(ok && msg.getBoolValue("partial"))) {
 	    o->remove();
 	    setQueryRooms(false);
 	}
@@ -2870,13 +2874,13 @@ bool JoinMucWizard::handleContactInfo(Message& msg, const String& account,
     if (!m_querySrv)
 	return false;
     if (info) {
-	if (contact && msg.getBoolValue("caps.muc")) {
+	if (ok && contact && msg.getBoolValue("caps.muc")) {
 	    Window* w = window();
 	    if (w)
 		Client::self()->updateTableRow("muc_server",contact,0,false,w);
 	}
     }
-    else {
+    else if (ok) {
 	NamedList upd("");
 	int n = msg.getIntValue("item.count");
 	for (int i = 1; i <= n; i++) {
@@ -2888,13 +2892,11 @@ bool JoinMucWizard::handleContactInfo(Message& msg, const String& account,
 		"JoinMucWizard(%s) requesting info from %s",c_str(),item.c_str());
 	    Message* m = Client::buildMessage("contact.info",m_account,"queryinfo");
 	    m->addParam("contact",item,false);
-	    String* id = new String("info_" + String((unsigned int)Time::msecNow()));
-	    m->addParam("id",*id);
 	    Engine::enqueue(m);
-	    m_requests.append(id);
+	    m_requests.append(new String(item));
 	}
     }
-    if (!msg.getBoolValue("partial"))
+    if (!(ok && msg.getBoolValue("partial")))
 	o->remove();
     if (!o->skipNull())
 	setQuerySrv(false);
@@ -3054,11 +3056,9 @@ bool JoinMucWizard::changePage(const String& page, const String& old)
 		Client::self()->clearTable("muc_rooms",w);
 		Message* m = Client::buildMessage("contact.info",acc->toString(),"queryitems");
 		m->addParam("contact",target);
-		String* id = new String("items_" + String((unsigned int)Time::msecNow()));
-		m->addParam("id",*id);
 		Engine::enqueue(m);
 		m_requests.clear();
-		m_requests.append(id);
+		m_requests.append(new String(target));
 	    }
 	    else {
 		showError(w,"You must choose a MUC server");
@@ -3169,8 +3169,13 @@ bool JoinMucWizard::changePage(const String& page, const String& old)
     if (page != "pageRooms")
 	updateActions(p,canPrev,canNext,canCancel);
     Client::self()->setParams(&p,w);
-    if (page == "pageRooms")
-	setQueryRooms(old == "pageMucServer");
+    if (page == "pageRooms") {
+	String target;
+	bool on = (old == "pageMucServer");
+	if (on)
+	    selectedMucServer(&target);
+	setQueryRooms(on,target);
+    }
     // Safe to remember the last page here: it might be the received page
     m_lastPage = old;
     return true;
@@ -3278,7 +3283,7 @@ bool JoinMucWizard::selectedMucServer(String* buf)
 }
 
 // Set/reset servers query
-void JoinMucWizard::setQuerySrv(bool on)
+void JoinMucWizard::setQuerySrv(bool on, const char* domain)
 {
     if (!on)
 	m_requests.clear();
@@ -3295,14 +3300,14 @@ void JoinMucWizard::setQuerySrv(bool on)
     p.addParam("active:muc_query_servers",active);
     p.addParam("active:mucserver_joinroom",active);
     p.addParam("active:mucserver_queryrooms",active);
-    p.addParam("show:frame_progress",String::boolText(m_querySrv));
+    addProgress(p,m_querySrv,domain);
     if (isCurrentPage("pageMucServer"))
 	updateActions(p,!m_querySrv,selectedMucServer(),m_querySrv);
     Client::self()->setParams(&p,w);
 }
 
 // Set/reset rooms query
-void JoinMucWizard::setQueryRooms(bool on)
+void JoinMucWizard::setQueryRooms(bool on, const char* domain)
 {
     if (!isCurrentPage("pageRooms"))
 	return;
@@ -3314,7 +3319,7 @@ void JoinMucWizard::setQueryRooms(bool on)
 	c_str(),String::boolText(on));
     NamedList p("");
     p.addParam("active:muc_rooms",String::boolText(!m_queryRooms));
-    p.addParam("show:frame_progress",String::boolText(m_queryRooms));
+    addProgress(p,m_queryRooms,domain);
     String sel;
     if (!m_queryRooms)
 	Client::self()->getSelect("muc_rooms",sel,w);
@@ -3322,6 +3327,16 @@ void JoinMucWizard::setQueryRooms(bool on)
     Client::self()->setParams(&p,w);
 }
 
+// Update UI progress params
+void JoinMucWizard::addProgress(NamedList& dest, bool on, const char* target)
+{
+    dest.addParam("show:frame_progress",String::boolText(on));
+    if (on) {
+	String tmp("Waiting");
+	tmp.append(target," for ");
+	dest.addParam("progress_text",tmp + " ...");
+    }
+}
 
 /*
  * AccountStatus
@@ -5514,6 +5529,12 @@ bool DefaultLogic::handleUserNotify(Message& msg, bool& stopLogic)
 	if (acc->hasChat()) {
 	    updateChatAccountList(account,true);
 	    Engine::enqueue(acc->userData(false,"chatrooms"));
+	    // Auto join rooms
+	    for (ObjList* o = acc->mucs().skipNull(); o; o = o->skipNext()) {
+		MucRoom* r = static_cast<MucRoom*>(o->get());
+		if (r->m_params.getBoolValue("autojoin"))
+		    joinRoom(r);
+	    }
 	}
     }
     else {
@@ -7185,6 +7206,8 @@ bool DefaultLogic::handleUserData(Message& msg, bool& stopLogic)
 		if (r) {
 		    changed = setChangedString(r->m_name,name) || changed;
 		    changed = setChangedString(r->m_password,pwd) || changed;
+		    changed = setChangedParam(r->m_params,"autojoin",msg[prefix + "autojoin"]) ||
+			changed;
 		}
 		else {
 		    changed = true;
@@ -7206,7 +7229,9 @@ bool DefaultLogic::handleUserData(Message& msg, bool& stopLogic)
 		Debug(ClientDriver::self(),DebugAll,
 		    "Account(%s) updated remote MUC room '%s' [%p]",
 		    account.c_str(),r->uri().c_str(),a);
-
+		// Auto join
+		if (changed && r->m_params.getBoolValue("autojoin"))
+		    joinRoom(r);
 	    }
 	    if (changed)
 		updateChatRoomsContactList(true,a);
@@ -7325,6 +7350,33 @@ void DefaultLogic::updateChatRoomsContactList(bool load, ClientAccount* acc,
     else
 	addChatRoomParam(upd,load,room);
     Client::self()->updateTableRows(s_chatContactList,&upd,false);
+}
+
+// Join a MUC room. Create/show chat. Update its status
+void DefaultLogic::joinRoom(MucRoom* room)
+{
+    if (!room)
+	return;
+    if (!room->resource().offline()) {
+	createRoomChat(*room);
+	return;
+    }
+    room->resource().m_name = room->m_params.getValue("nick");
+    if (!room->resource().m_name && room->account()) {
+	if (room->account()->contact())
+	    room->resource().m_name = room->account()->contact()->uri().getUser();
+	if (!room->resource().m_name)
+	    room->resource().m_name = room->account()->params().getValue("username");
+    }
+    bool hist = room->m_params.getBoolValue("history",true);
+    unsigned int lastMinutes = 0;
+    if (hist)
+	lastMinutes = room->m_params.getIntValue("historylast");
+    Message* m = room->buildJoin(true,hist,lastMinutes * 60);
+    room->resource().m_status = ClientResource::Connecting;
+    updateChatRoomsContactList(true,0,room);
+    createRoomChat(*room);
+    Engine::enqueue(m);
 }
 
 // Utility used in updateAccount
@@ -7669,26 +7721,8 @@ bool DefaultLogic::handleChatContactAction(const String& name, Window* wnd)
 	    }
 	    c->showChat(true,true);
 	}
-	else {
-	    if (r->resource().offline()) {
-		r->resource().m_name = r->m_params.getValue("nick");
-		if (!r->resource().m_name && r->account()) {
-		    if (r->account()->contact())
-			r->resource().m_name = r->account()->contact()->uri().getUser();
-		    if (!r->resource().m_name)
-			r->resource().m_name = r->account()->params().getValue("username");
-		}
-		bool hist = r->m_params.getBoolValue("history",true);
-		unsigned int lastMinutes = 0;
-		if (hist)
-		    lastMinutes = r->m_params.getIntValue("historylast");
-		Message* m = r->buildJoin(true,hist,lastMinutes * 60);
-		r->resource().m_status = ClientResource::Connecting;
-		updateChatRoomsContactList(true,0,r);
-		Engine::enqueue(m);
-	    }
-	    createRoomChat(*r);
-	}
+	else
+	    joinRoom(r);
 	return true;
     }
     // Call chat contact
@@ -7851,6 +7885,8 @@ bool DefaultLogic::handleChatContactAction(const String& name, Window* wnd)
 	    bool remote = true;
 	    Client::self()->getCheck("save_local",local,wnd);
 	    Client::self()->getCheck("save_remote",remote,wnd);
+	    bool join = false;
+	    Client::self()->getCheck("autojoin",join,wnd);
 	    bool reqHist = false;
 	    String histLastValue;
 	    Client::self()->getCheck("history",reqHist,wnd);
@@ -7877,6 +7913,7 @@ bool DefaultLogic::handleChatContactAction(const String& name, Window* wnd)
 	    room->m_params.setParam("nick",nick);
 	    room->m_params.setParam("history",String::boolText(reqHist));
 	    room->m_params.setParam("historylast",histLastValue);
+	    room->m_params.setParam("autojoin",String::boolText(join));
 	    if (localChanged || remoteChanged) {
 		// Fake local to enable updating
 		room->setLocal(true);
@@ -7898,6 +7935,8 @@ bool DefaultLogic::handleChatContactAction(const String& name, Window* wnd)
 		ClientLogic::clearContact(a->m_cfg,room);
 	    if (remoteChanged)
 		Engine::enqueue(a->userData(true,"chatrooms"));
+	    if (join)
+		joinRoom(room);
 	}
 	Client::self()->setVisible(wnd->id(),false);
 	return true;

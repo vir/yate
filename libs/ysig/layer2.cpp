@@ -160,6 +160,19 @@ void SS7Layer2::attach(SS7L2User* l2user)
     l2user->attach(this);
 }
 
+void SS7Layer2::notify()
+{
+    if (!operational())
+	m_lastUp = 0;
+    else if (!m_lastUp)
+	m_lastUp = Time::secNow();
+    m_l2userMutex.lock();
+    RefPointer<SS7L2User> tmp = m_l2user;
+    m_l2userMutex.unlock();
+    if (tmp)
+	tmp->notify(this);
+}
+
 unsigned int SS7Layer2::status() const
 {
     return ProcessorOutage;

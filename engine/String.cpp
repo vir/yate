@@ -870,6 +870,52 @@ bool String::endsWith(const char* what, bool wordBreak, bool caseInsensitive) co
     return (::strncmp(m_string+m_length-l,what,l) == 0);
 }
 
+String& String::extractTo(const char* sep, String& str)
+{
+    int pos = find(sep);
+    if (pos >= 0) {
+	str = substr(0,pos);
+	assign(m_string+pos+::strlen(sep));
+    }
+    else {
+	str = *this;
+	clear();
+    }
+    return *this;
+}
+
+String& String::extractTo(const char* sep, bool& store)
+{
+    String str;
+    extractTo(sep,str);
+    store = str.toBoolean(store);
+    return *this;
+}
+
+String& String::extractTo(const char* sep, int& store, int base)
+{
+    String str;
+    extractTo(sep,str);
+    store = str.toInteger(store,base);
+    return *this;
+}
+
+String& String::extractTo(const char* sep, int& store, const TokenDict* tokens, int base)
+{
+    String str;
+    extractTo(sep,str);
+    store = str.toInteger(tokens,store,base);
+    return *this;
+}
+
+String& String::extractTo(const char* sep, double& store)
+{
+    String str;
+    extractTo(sep,str);
+    store = str.toDouble(store);
+    return *this;
+}
+
 bool String::matches(const Regexp& rexp)
 {
     if (m_matches)

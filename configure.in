@@ -104,6 +104,10 @@ AC_HEADER_TIME
 AC_TYPE_SIGNAL
 AC_CHECK_FUNCS([malloc gettimeofday inet_ntoa memmove strerror], , [AC_MSG_ERROR([This function is required.])])
 
+HAVE_GETCWD=""
+AC_CHECK_FUNCS([getcwd], [HAVE_GETCWD="-DHAVE_GETCWD"])
+AC_SUBST(HAVE_GETCWD)
+
 HAVE_PRCTL=""
 AC_MSG_CHECKING([for prctl])
 have_prctl="no"

@@ -60,7 +60,7 @@ moddir = @libdir@/yate
 all: ../$(YLIB)
 
 debug:
-	$(MAKE) all DEBUG=-g3                                                                              
+	$(MAKE) all DEBUG=-g3
 
 ddebug:
 	$(MAKE) all DEBUG='-g3 -DDEBUG'
@@ -77,7 +77,7 @@ strip: all
 	-strip --strip-debug --discard-locals ../$(YLIB)
 
 Engine.o: @srcdir@/Engine.cpp $(MKDEPS) $(EINC) ../yateversn.h ../yatepaths.h
-	$(COMPILE) @FDSIZE_HACK@ @HAVE_PRCTL@ -c $<
+	$(COMPILE) @FDSIZE_HACK@ @HAVE_PRCTL@ @HAVE_GETCWD@ -c $<
 
 Channel.o: @srcdir@/Channel.cpp $(MKDEPS) $(PINC)
 	$(COMPILE) -c $<

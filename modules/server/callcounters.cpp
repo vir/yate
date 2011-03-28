@@ -101,10 +101,10 @@ bool Context::remove(const String& id)
     if (!s)
 	return false;
     delete s;
-    DDebug(__plugin,DebugAll,"Removing call '%s' from context '%s'",
+    DDebug(&__plugin,DebugAll,"Removing call '%s' from context '%s'",
 	id.c_str(),c_str());
     if (--m_count <= 0) {
-	DDebug(__plugin,DebugInfo,"Removing empty context '%s'",c_str());
+	DDebug(&__plugin,DebugInfo,"Removing empty context '%s'",c_str());
 	s_contexts.remove(this);
     }
     return true;
@@ -131,7 +131,7 @@ bool CdrHandler::received(Message& msg)
 	    Context* c = static_cast<Context*>(s_contexts[*ctxt]);
 	    if (c && c->remove(*chan))
 		return false;
-	    DDebug(__plugin,DebugNote,"Call '%s' not removed from '%s'",chan->c_str(),ctxt->c_str());
+	    DDebug(&__plugin,DebugNote,"Call '%s' not removed from '%s'",chan->c_str(),ctxt->c_str());
 	}
 	// now we have to look in all contexts
 	for (ObjList* l = s_contexts.skipNull(); l; l=l->skipNext()) {
@@ -139,7 +139,7 @@ bool CdrHandler::received(Message& msg)
 	    if (c->remove(*chan))
 		return false;
 	}
-	DDebug(__plugin,DebugAll,"Call '%s' not found in any context",chan->c_str());
+	DDebug(&__plugin,DebugAll,"Call '%s' not found in any context",chan->c_str());
     } // finalize operation
     else {
 	if (TelEngine::null(ctxt))
@@ -155,11 +155,11 @@ bool CdrHandler::received(Message& msg)
 		break;
 	}
 	if (!c) {
-	    DDebug(__plugin,DebugInfo,"Creating context '%s'",ctxt->c_str());
+	    DDebug(&__plugin,DebugInfo,"Creating context '%s'",ctxt->c_str());
 	    c = new Context(*ctxt);
 	    s_contexts.append(c);
 	}
-	DDebug(__plugin,DebugAll,"Adding call '%s' to context '%s'",
+	DDebug(&__plugin,DebugAll,"Adding call '%s' to context '%s'",
 	    chan->c_str(),ctxt->c_str());
 	c->add(*chan);
     }

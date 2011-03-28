@@ -142,6 +142,10 @@ using namespace TelEngine;
 #define HOST_NAME_MAX 255
 #endif
 
+#ifndef PATH_MAX
+#define PATH_MAX 270
+#endif
+
 static u_int64_t s_nextinit = 0;
 static u_int64_t s_restarts = 0;
 static bool s_makeworker = true;
@@ -1077,6 +1081,20 @@ int Engine::run()
     s_params.addParam("supervised",String::boolText(s_super_handle >= 0));
     s_params.addParam("runattempt",String(s_run_attempt));
     s_params.addParam("maxworkers",String(s_maxworkers));
+#ifdef _WINDOWS
+    {
+	char buf[PATH_MAX];
+	DWORD ret = ::GetCurrentDirectoryA(PATH_MAX,buf);
+	if (ret && (ret < PATH_MAX))
+	    s_params.addParam("workpath",buf);
+    }
+#elif defined (HAVE_GETCWD)
+    {
+	char buf[PATH_MAX];
+	if (::getcwd(buf,PATH_MAX))
+	    s_params.addParam("workpath",buf);
+    }
+#endif
     DDebug(DebugAll,"Engine::run()");
     install(new EngineStatusHandler);
     install(new EngineCommand);

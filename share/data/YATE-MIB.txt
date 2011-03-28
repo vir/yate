@@ -21,6 +21,9 @@ yate MODULE-IDENTITY
 		  Email: office@null.ro"
 	DESCRIPTION
 		"The MIB module for Yate."
+	REVISION	"201103281730Z"
+	DESCRIPTION
+		"Most recent version of this MIB module."
 	REVISION	"201009281300Z"
 	DESCRIPTION
 		"Initial published revision."

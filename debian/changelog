@@ -1,3 +1,26 @@
+yate (3.2.1.svn4232) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4232: + Fixed enabling of internal
+    microphone on Mac OS X.  + Added autojoin option to chat room
+    contacts.  + Added "netindicator" setting for linksets so it's no
+    longer required to restrict types using netind2pctype.  + Fixed
+    checking if a engine.status module is indeed intended for that
+    module. Fixed bug: don't print for a second time the status message
+    for IAX module.  + Display the target when querying a domain for
+    conference server(s) and a conference server for available rooms.  +
+    Add the "workpath" to the Engine parameters so the current working
+    directory can be found at runtime.  + Fixed ui spacer.  + Remember
+    disco info/items requests if no 'id' parameter is specified. Notify
+    when responded.  + Handle conference server and rooms query errors.
+    Reset join wizard state if error is received.  + Fixed ddebug
+    building of call counters module.  + Removed unused variable.  +
+    Added methods to extract a fragment of a String up to a separator.
+    + Fixed link status parsing for SNMP, added support for link uptime.
+    + Added support for reporting uptime for SS7 links and Q.921
+    interfaces.  + Added proper MIB revision.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 29 Mar 2011 02:19:15 +0400
+
 yate (3.2.1.svn4217) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4217: + Set dtmf method for incoming calls

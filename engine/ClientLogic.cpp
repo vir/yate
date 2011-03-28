@@ -153,9 +153,11 @@ protected:
     // Retrieve the selected MUC server if not currently requesting one
     bool selectedMucServer(String* buf = 0);
     // Set/reset servers query
-    void setQuerySrv(bool on);
+    void setQuerySrv(bool on, const char* domain = 0);
     // Set/reset rooms query
-    void setQueryRooms(bool on);
+    void setQueryRooms(bool on, const char* domain = 0);
+    // Update UI progress params
+    void addProgress(NamedList& dest, bool on, const char* target);
 private:
     bool m_queryRooms;                   // Requesting rooms from server
     bool m_querySrv;                     // Requesting MUC server(s)
@@ -2786,14 +2788,13 @@ bool JoinMucWizard::action(Window* w, const String& name, NamedList* params)
 	String domain;
 	Client::self()->getText("muc_domain",domain,false,w);
 	Message* m = Client::buildMessage("contact.info",acc->toString(),"queryitems");
-	if (domain)
-	    m->addParam("contact",domain);
-	else if (acc->contact())
-	    m->addParam("contact",acc->contact()->uri().getHost(),false);
+	if (!domain && acc->contact())
+	    domain = acc->contact()->uri().getHost();
+	m->addParam("contact",domain,false);
 	String* id = new String("items_" + String((unsigned int)Time::msecNow()));
 	m->addParam("id",*id);
 	Engine::enqueue(m);
-	setQuerySrv(true);
+	setQuerySrv(true,domain);
 	m_requests.clear();
 	m_requests.append(id);
 	return true;
@@ -3171,8 +3172,13 @@ bool JoinMucWizard::changePage(const String& page, const String& old)
     if (page != "pageRooms")
 	updateActions(p,canPrev,canNext,canCancel);
     Client::self()->setParams(&p,w);
-    if (page == "pageRooms")
-	setQueryRooms(old == "pageMucServer");
+    if (page == "pageRooms") {
+	String target;
+	bool on = (old == "pageMucServer");
+	if (on)
+	    selectedMucServer(&target);
+	setQueryRooms(on,target);
+    }
     // Safe to remember the last page here: it might be the received page
     m_lastPage = old;
     return true;
@@ -3280,7 +3286,7 @@ bool JoinMucWizard::selectedMucServer(String* buf)
 }
 
 // Set/reset servers query
-void JoinMucWizard::setQuerySrv(bool on)
+void JoinMucWizard::setQuerySrv(bool on, const char* domain)
 {
     if (!on)
 	m_requests.clear();
@@ -3297,14 +3303,14 @@ void JoinMucWizard::setQuerySrv(bool on)
     p.addParam("active:muc_query_servers",active);
     p.addParam("active:mucserver_joinroom",active);
     p.addParam("active:mucserver_queryrooms",active);
-    p.addParam("show:frame_progress",String::boolText(m_querySrv));
+    addProgress(p,m_querySrv,domain);
     if (isCurrentPage("pageMucServer"))
 	updateActions(p,!m_querySrv,selectedMucServer(),m_querySrv);
     Client::self()->setParams(&p,w);
 }
 
 // Set/reset rooms query
-void JoinMucWizard::setQueryRooms(bool on)
+void JoinMucWizard::setQueryRooms(bool on, const char* domain)
 {
     if (!isCurrentPage("pageRooms"))
 	return;
@@ -3316,7 +3322,7 @@ void JoinMucWizard::setQueryRooms(bool on)
 	c_str(),String::boolText(on));
     NamedList p("");
     p.addParam("active:muc_rooms",String::boolText(!m_queryRooms));
-    p.addParam("show:frame_progress",String::boolText(m_queryRooms));
+    addProgress(p,m_queryRooms,domain);
     String sel;
     if (!m_queryRooms)
 	Client::self()->getSelect("muc_rooms",sel,w);
@@ -3324,6 +3330,16 @@ void JoinMucWizard::setQueryRooms(bool on)
     Client::self()->setParams(&p,w);
 }
 
+// Update UI progress params
+void JoinMucWizard::addProgress(NamedList& dest, bool on, const char* target)
+{
+    dest.addParam("show:frame_progress",String::boolText(on));
+    if (on) {
+	String tmp("Waiting");
+	tmp.append(target," for ");
+	dest.addParam("progress_text",tmp + " ...");
+    }
+}
 
 /*
  * AccountStatus

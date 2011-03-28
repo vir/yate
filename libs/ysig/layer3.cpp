@@ -59,7 +59,7 @@ SS7Layer3::SS7Layer3(SS7PointCode::Type type)
     : SignallingComponent("SS7Layer3"),
       m_routeMutex(true,"SS7Layer3::route"),
       m_l3userMutex(true,"SS7Layer3::l3user"),
-      m_l3user(0)
+      m_l3user(0), m_defNI(SS7MSU::National)
 {
     for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++)
 	m_local[i] = 0;
@@ -69,6 +69,8 @@ SS7Layer3::SS7Layer3(SS7PointCode::Type type)
 // Initialize the Layer 3 component
 bool SS7Layer3::initialize(const NamedList* config)
 {
+    if (config)
+	setNI(SS7MSU::getNetIndicator(config->getValue("netindicator"),SS7MSU::National));
     if (engine() && !user()) {
 	NamedList params("ss7router");
 	if (config)
@@ -143,6 +145,13 @@ unsigned char SS7Layer3::getNI(SS7PointCode::Type pcType, unsigned char defNI) c
     if (pcType == m_cpType[1])
 	return SS7MSU::SpareInternational;
     return defNI;
+}
+
+void SS7Layer3::setNI(unsigned char defNI)
+{
+    if ((defNI & 0xc0) == 0)
+	defNI <<= 6;
+    m_defNI = defNI & 0xc0;
 }
 
 bool SS7Layer3::hasType(SS7PointCode::Type pcType) const

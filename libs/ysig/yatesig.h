@@ -5727,7 +5727,28 @@ public:
      * @param defNI Default Network Indicator bits to use
      * @return Network Indicator bits matching the Point Code type
      */
-    virtual unsigned char getNI(SS7PointCode::Type pcType, unsigned char defNI = SS7MSU::National) const;
+    virtual unsigned char getNI(SS7PointCode::Type pcType, unsigned char defNI) const;
+
+    /**
+     * Get the Network Indicator bits that would match a Point Code type
+     * @param pcType Point Code type to search for
+     * @return Network Indicator bits matching the Point Code type
+     */
+    inline unsigned char getNI(SS7PointCode::Type pcType) const
+	{ return getNI(pcType,m_defNI); }
+
+    /**
+     * Get the default Network Indicator bits
+     * @return Default Network Indicator bits for this layer
+     */
+    inline unsigned char getNI() const
+	{ return m_defNI; }
+
+    /**
+     * Set the default Network Indicator bits
+     * @param defNI Network Indicator bits to set as defaults
+     */
+    void setNI(unsigned char defNI);
 
     /**
      * Build the list of outgoing routes serviced by this network. Clear the list before re-building it.
@@ -5946,6 +5967,7 @@ private:
     SS7PointCode::Type m_cpType[4];      // Map incoming MSUs net indicators to point code type
                                          // or the routing table of a message router
     unsigned int m_local[YSS7_PCTYPE_COUNT];
+    unsigned char m_defNI;               // Default Network Indicator
 };
 
 /**
@@ -6251,7 +6273,7 @@ public:
      * @param defNI Default Network Indicator bits to use
      * @return Network Indicator bits matching the Point Code type
      */
-    virtual unsigned char getNI(SS7PointCode::Type pcType, unsigned char defNI = SS7MSU::National) const;
+    virtual unsigned char getNI(SS7PointCode::Type pcType, unsigned char defNI) const;
 
     /**
      * Retrieve the default local Point Code for a specific Point Code type

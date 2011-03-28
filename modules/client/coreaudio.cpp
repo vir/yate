@@ -285,7 +285,7 @@ bool CoreAudioSource::init()
     if (err == noErr) {
 	// disable output on the AUHAL
 	param = 0;
-	err = AudioUnitSetProperty(fAudioUnit,kAudioOutputUnitProperty_EnableIO,kAudioUnitScope_Input,0,&param,sizeof(UInt32));
+	err = AudioUnitSetProperty(fAudioUnit,kAudioOutputUnitProperty_EnableIO,kAudioUnitScope_Output,0,&param,sizeof(UInt32));
     }
     else {
 	Debug(DebugInfo,"CoreAUdioSource::init() [%p] - failed to configure AudioUnit for input error==%4.4s, %ld",this,(char*)&err,err);

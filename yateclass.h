@@ -1885,6 +1885,49 @@ public:
     bool startSkip(const char* what, bool wordBreak = true, bool caseInsensitive = false);
 
     /**
+     * Extract a substring up to a separator
+     * @param sep Separator string to match after extracted fragment
+     * @param store Reference to String variable to store extracted fragment
+     * @return Reference to this string
+     */
+    String& extractTo(const char* sep, String& store);
+
+    /**
+     * Extract a boolean substring up to a separator
+     * @param sep Separator string to match after extracted fragment
+     * @param store Reference to boolean variable to store extracted fragment
+     * @return Reference to this string
+     */
+    String& extractTo(const char* sep, bool& store);
+
+    /**
+     * Extract an integer value substring up to a separator
+     * @param sep Separator string to match after extracted fragment
+     * @param store Reference to integer variable to store extracted fragment
+     * @param base Numeration base, 0 to autodetect
+     * @return Reference to this string
+     */
+    String& extractTo(const char* sep, int& store, int base = 0);
+
+    /**
+     * Extract an integer or token value substring up to a separator
+     * @param sep Separator string to match after extracted fragment
+     * @param store Reference to integer variable to store extracted fragment
+     * @param tokens Pointer to an array of tokens to lookup first
+     * @param base Numeration base, 0 to autodetect
+     * @return Reference to this string
+     */
+    String& extractTo(const char* sep, int& store, const TokenDict* tokens, int base = 0);
+
+    /**
+     * Extract a double value substring up to a separator
+     * @param sep Separator string to match after extracted fragment
+     * @param store Reference to double variable to store extracted fragment
+     * @return Reference to this string
+     */
+    String& extractTo(const char* sep, double& store);
+
+    /**
      * Checks if matches another string
      * @param value String to check for match
      * @return True if matches, false otherwise

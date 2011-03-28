@@ -1752,6 +1752,7 @@ ISDNLayer2::ISDNLayer2(const NamedList& params, const char* name, u_int8_t tei)
       m_sapi(0),
       m_tei(0),
       m_ri(0),
+      m_lastUp(0),
       m_checked(false),
       m_teiAssigned(false),
       m_autoRestart(true),
@@ -1902,6 +1903,10 @@ void ISDNLayer2::changeState(State newState, const char* reason)
     Lock lock(m_layerMutex);
     if (m_state == newState)
 	return;
+    if (Established != newState)
+	m_lastUp = 0;
+    else if (!m_lastUp)
+	m_lastUp = Time::secNow();
     if (!m_teiAssigned && (newState != Released))
 	return;
     DDebug(this,DebugInfo,"Changing state from '%s' to '%s'%s%s%s",

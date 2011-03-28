@@ -5155,6 +5155,13 @@ public:
     virtual bool operational() const = 0;
 
     /**
+     * Get the uptime of the link
+     * @return Time since link got up in seconds
+     */
+    unsigned int upTime() const
+	{ return m_lastUp ? (Time::secNow() - m_lastUp) : 0; }
+
+    /**
      * Attach a Layer 2 user component to the data link. Detach from the old one if valid
      * @param l2user Pointer to Layer 2 user component to attach
      */
@@ -5234,7 +5241,7 @@ protected:
     inline SS7Layer2()
 	: m_autoEmergency(true), m_lastSeqRx(-1), m_congestion(0),
 	  m_l2userMutex(true,"SS7Layer2::l2user"), m_l2user(0), m_sls(-1),
-	  m_checkTime(0), m_checkFail(0), m_inhibited(Unchecked)
+	  m_checkTime(0), m_checkFail(0), m_inhibited(Unchecked), m_lastUp(0)
 	{ }
 
     /**
@@ -5266,14 +5273,7 @@ protected:
     /**
      * Notify out user part about a status change
      */
-    inline void notify()
-    {
-	m_l2userMutex.lock();
-	RefPointer<SS7L2User> tmp = m_l2user;
-	m_l2userMutex.unlock();
-	if (tmp)
-	    tmp->notify(this);
-    }
+    void notify();
 
     /**
      * Set and clear inhibition flags, method used by MTP3
@@ -5313,6 +5313,7 @@ private:
     u_int64_t m_checkTime;
     int m_checkFail;
     int m_inhibited;
+    u_int32_t m_lastUp;
 };
 
 /**
@@ -8658,6 +8659,13 @@ public:
 	{ return m_autoRestart; }
 
     /**
+     * Get the uptime of the interface
+     * @return Time since interface got up in seconds
+     */
+    unsigned int upTime() const
+	{ return m_lastUp ? (Time::secNow() - m_lastUp) : 0; }
+
+    /**
      * Implements Q.921 DL-ESTABLISH and DL-RELEASE request primitives
      * Descendants must implement this method to fullfill the request
      * @param tei This layer TEI (Terminal Endpoint Identifier)
@@ -8817,6 +8825,7 @@ private:
     u_int8_t m_sapi;                     // SAPI value
     u_int8_t m_tei;                      // TEI value
     u_int16_t m_ri;                      // Reference number
+    u_int32_t m_lastUp;                  // Time when the interface got up
     bool m_checked;                      // Flag to indicate if the layer was checked
     bool m_teiAssigned;                  // The TEI status
     bool m_autoRestart;                  // True to restart when released

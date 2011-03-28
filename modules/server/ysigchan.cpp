@@ -1780,7 +1780,7 @@ bool SigDriver::received(Message& msg, int id)
 	return false;
     if (target.startSkip("links")) {
 	msg.retValue() << "module=" << name();
-	msg.retValue() << ",format=Type|Status;";
+	msg.retValue() << ",format=Type|Status|Uptime;";
 
 	String ret;
 	m_trunksMutex.lock();
@@ -2615,7 +2615,7 @@ void SigLinkSet::linkStatus(String& status)
 		status.append(link->toString(),",") << "=";
 		status << link->componentType() ;
 		status << "|" << link->statusName();
-
+		status << "|" << link->upTime();
 	    }
 	}
     }
@@ -3116,6 +3116,7 @@ void SigIsdn::linkStatus(String& status)
 	    status.append(l2->toString(),",") << "=";
 	    status << l2->componentType();
 	    status << "|" << l2->stateName(l2->state());
+	    status << "|" << l2->upTime();
 	}
     }
 }

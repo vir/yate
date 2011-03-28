@@ -305,6 +305,9 @@ protected:
 class LinkInfo : public SigInfo
 {
 public:
+    enum LinkExtraInfo {
+    	UPTIME		= 8,
+    };
     // Constructor
     inline LinkInfo()
 	: SigInfo("Monitor::linkInfo",s_linkInfo)
@@ -1062,6 +1065,7 @@ static TokenDict s_categories[] = {
     {"linkType",		Monitor::LINKS},
     {"linkStatus",		Monitor::LINKS},
     {"linkDownAlarms",		Monitor::LINKS},
+    {"linkUptime",		Monitor::LINKS},
     // interfaces
     {"interfacesCount",		Monitor::IFACES},
     {"interfaceIndex",		Monitor::IFACES},
@@ -1455,6 +1459,7 @@ TokenDict LinkInfo::s_linkInfo[] = {
     {"linkType",	LinkInfo::TYPE},
     {"linkStatus",      LinkInfo::STATUS},
     {"linkDownAlarms",  LinkInfo::ALARMS_COUNT},
+    {"linkUptime",      LinkInfo::UPTIME},
     {0,0}
 };
 
@@ -1836,28 +1841,30 @@ bool LinkInfo::load()
 	Lock l(this);
 	ObjList* list = status.split(',');
 	for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
-	    String* link = static_cast<String*>(o->get());
-	    pos1 = link->find("=");
-	    if (pos1 < 0)
+	    String link = static_cast<String*>(o->get());
+	    String name,type,status;
+	    int uptime = 0;
+	    link.extractTo("=",name).extractTo("|",type).
+		extractTo("|",status).extractTo("|",uptime);
+	    if (name.null() || type.null())
 		continue;
-	    int pos2 = link->find("|");
-	    if (pos2 < 0)
-		continue;
-	    String name = link->substr(0,pos1);
-	    String type = link->substr(pos1 + 1,pos2 - pos1 -1);
-	    String status = link->substr(pos2 + 1);
 	    NamedList* nl = static_cast<NamedList*>(m_table[name]);
 	    if (!nl) {
 		nl = new NamedList(name);
 		nl->setParam(lookup(ID,s_linkInfo,""),name);
 		nl->setParam(lookup(TYPE,s_linkInfo,""),type);
 		nl->setParam(lookup(STATUS,s_linkInfo,""),status);
+		nl->setParam(lookup(UPTIME,s_linkInfo,""),String(uptime));
 		m_table.append(nl);
 	    }
-	    else
+	    else {
 		nl->setParam(lookup(STATUS,s_linkInfo,""),status);
+		nl->setParam(lookup(UPTIME,s_linkInfo,""),String(uptime));
+	    }
 	    if (!nl->getParam(lookup(ALARMS_COUNT,s_linkInfo,"")))
 		nl->setParam(lookup(ALARMS_COUNT,s_linkInfo,""),"0");
+	    if (!nl->getParam(lookup(UPTIME,s_linkInfo,"")))
+		nl->setParam(lookup(UPTIME,s_linkInfo,""),"0");
 	}
 	TelEngine::destruct(list);
     }

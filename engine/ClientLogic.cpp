@@ -2842,7 +2842,6 @@ bool JoinMucWizard::handleContactInfo(Message& msg, const String& account,
     bool info = (req == "queryinfo");
     if (!info && req != "queryitems")
 	return false;
-    const String& id = msg["id"];
     ObjList* o = m_requests.find(contact);
     if (!o)
 	return false;

@@ -4236,9 +4236,9 @@ bool SIPDriver::received(Message& msg, int id)
     }
     else if (id == Status) {
 	String target = msg.getValue("module");
-	if (target && target.startsWith(name()) && !target.startsWith(prefix())) {
+	if (target && target.startsWith(name(),true) && !target.startsWith(prefix())) {
 	    msgStatus(msg);
-	    return true;
+	    return false;
 	}
     }
     return Driver::received(msg,id);

@@ -2441,7 +2441,7 @@ bool JBModule::received(Message& msg, int id)
 	if (!target || target == name())
 	    return Module::received(msg,id);
 	// Check additional commands
-	if (!target.startSkip(name(),false))
+	if (!target.startSkip(name(),true))
 	    return false;
 	target.trimBlanks();
 	if (!target)

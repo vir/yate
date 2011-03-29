@@ -82,9 +82,10 @@ public:
      * Copy constructor
      */
     inline JGRtpMedia(const JGRtpMedia& src)
-	: GenObject(),
-	  m_params(src.m_params)
-	{ set(src.m_id,src.m_name,src.m_clockrate,src.m_synonym,src.m_channels); }
+	: m_params("") {
+	    set(src.m_id,src.m_name,src.m_clockrate,src.m_synonym,src.m_channels);
+	    m_params = src.m_params;
+	}
 
     /**
      * Set the data
@@ -294,6 +295,14 @@ public:
      * Reset the list and data
      */
     void reset();
+
+    /**
+     * Set media type and payloads from another list
+     * @param src Media list to copy into this one
+     * @param only Optional list of synonyms to set if found in src.
+     *  Copy the whole list if this parameter is empty
+     */
+    void setMedia(const JGRtpMediaList& src, const String& only = String::empty());
 
     /**
      * Find a data payload by its id

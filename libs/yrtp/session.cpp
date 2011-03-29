@@ -391,6 +391,7 @@ void RTPReceiver::stats(NamedList& stat) const
     stat.setParam("seqslost",String(m_seqLost));
 }
 
+
 RTPSender::RTPSender(RTPSession* session, bool randomTs)
     : RTPBaseIO(session), m_evTime(0), m_padding(0)
 {
@@ -568,6 +569,7 @@ void RTPSender::stats(NamedList& stat) const
 {
 }
 
+
 UDPSession::UDPSession()
     : m_transport(0), m_timeoutTime(0), m_timeoutInterval(0)
 {
@@ -650,7 +652,8 @@ void UDPSession::setTimeout(int interval)
 
 
 RTPSession::RTPSession()
-    : m_direction(FullStop),
+    : Mutex(true,"RTPSession"),
+      m_direction(FullStop),
       m_send(0), m_recv(0), m_secure(0),
       m_reportTime(0), m_reportInterval(0)
 {
@@ -976,8 +979,10 @@ void RTPSession::incWrongSrc()
     m_wrongSrc++;
 }
 
+
 UDPTLSession::UDPTLSession(u_int16_t maxLen, u_int8_t maxSec)
-    : m_rxSeq(0xffff), m_txSeq(0xffff),
+    : Mutex(true,"UDPTLSession"),
+      m_rxSeq(0xffff), m_txSeq(0xffff),
       m_maxLen(maxLen), m_maxSec(maxSec),
       m_warn(true)
 {
@@ -1094,6 +1099,7 @@ bool UDPTLSession::udptlSend(const void* data, int len, u_int16_t seq)
 {
     if (!(UDPSession::transport() && data && len))
 	return false;
+    Lock lck(this);
     int pl = len + 5;
     if ((len > 255) || (pl > m_maxLen)) {
 	Debug(DebugWarn,"UDPTL could not send IFP with len=%d [%p]",len,this);

@@ -1,3 +1,17 @@
+yate (3.2.1.svn4237) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4237: + Lock the sessions when sending data
+    or events, prevent race conditions.  + Made RTP and UDPTL sessions
+    derive from Mutex.  + Added fax divert capability on RFC2833 CNG to
+    the RTP channel too.  + Changed variable and method names to be more
+    suggestive.  + Fixed adding caller and caller numbers when diverting
+    to fax from tonedetect.  + Copy the connect reason from call.execute
+    message.  + Added method used to set a media list from another one.
+    + Fixed bug: avoid clearing rtp media parameters in copy
+    constructor.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 30 Mar 2011 02:19:15 +0400
+
 yate (3.2.1.svn4232) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4232: + Fixed enabling of internal

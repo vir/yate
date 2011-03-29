@@ -966,7 +966,7 @@ bool ConferenceDriver::msgExecute(Message& msg, String& dest)
     if (ch) {
 	ConfChan *c = new ConfChan(dest,msg,counted,utility);
 	c->initChan();
-	if (ch->connect(c)) {
+	if (ch->connect(c,msg.getValue("reason"))) {
 	    c->callConnect(msg);
 	    msg.setParam("peerid",c->id());
 	    c->deref();

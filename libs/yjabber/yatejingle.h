@@ -82,9 +82,10 @@ public:
      * Copy constructor
      */
     inline JGRtpMedia(const JGRtpMedia& src)
-	: GenObject(),
-	  m_params(src.m_params)
-	{ set(src.m_id,src.m_name,src.m_clockrate,src.m_synonym,src.m_channels); }
+	: m_params("") {
+	    set(src.m_id,src.m_name,src.m_clockrate,src.m_synonym,src.m_channels);
+	    m_params = src.m_params;
+	}
 
     /**
      * Set the data

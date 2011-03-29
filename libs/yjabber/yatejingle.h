@@ -296,6 +296,14 @@ public:
     void reset();
 
     /**
+     * Set media type and payloads from another list
+     * @param src Media list to copy into this one
+     * @param only Optional list of synonyms to set if found in src.
+     *  Copy the whole list if this parameter is empty
+     */
+    void setMedia(const JGRtpMediaList& src, const String& only = String::empty());
+
+    /**
      * Find a data payload by its id
      * @param id Identifier of media to find
      * @return JGRtpMedia pointer or 0 if not found

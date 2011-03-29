@@ -401,6 +401,21 @@ void JGRtpMediaList::reset()
     TelEngine::destruct(m_bandwidth);
 }
 
+// Copy media type and payloads from another list
+void JGRtpMediaList::setMedia(const JGRtpMediaList& src, const String& only)
+{
+    clear();
+    m_media = src.m_media;
+    ObjList* f = only ? only.split(',',false) : 0;
+    for (ObjList* o = src.skipNull(); o; o = o->skipNext()) {
+	JGRtpMedia* media = static_cast<JGRtpMedia*>(o->get());
+	if (find(media->toString()) || (f && !f->find(media->m_synonym)))
+	    continue;
+	append(new JGRtpMedia(*media));
+    }
+    TelEngine::destruct(f);
+}
+
 // Find a data payload by its id
 JGRtpMedia* JGRtpMediaList::findMedia(const String& id)
 {

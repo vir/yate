@@ -124,6 +124,7 @@ public:
     virtual void* getObject(const String& name) const;
     bool setParams(const char* raddr, Message& msg);
     bool setRemote(const char* raddr, unsigned int rport, const Message& msg);
+    void setFaxDivert(const Message& msg);
     bool sendDTMF(char dtmf, int duration = 0);
     void gotDTMF(char tone);
     void gotFax();
@@ -183,6 +184,9 @@ private:
     String m_media;
     String m_format;
     String m_master;
+    String m_faxDivert;
+    String m_faxCaller;
+    String m_faxCalled;
     String m_host;
     unsigned int m_bufsize;
     unsigned int m_port;
@@ -824,8 +828,19 @@ void YRTPWrapper::gotFax()
 	return;
     Message* m = new Message("chan.masquerade");
     m->addParam("id",m_master);
-    m->addParam("message","call.fax");
-    m->addParam("detected","rfc2833");
+    if (m_faxDivert) {
+	Debug(&splugin,DebugCall,"Diverting call %s to: %s",
+	    m_master.c_str(),m_faxDivert.c_str());
+	m->addParam("message","call.execute");
+	m->addParam("callto",m_faxDivert);
+	m->addParam("reason","fax");
+    }
+    else {
+	m->addParam("message","call.fax");
+	m->addParam("detected","rfc2833");
+    }
+    m->addParam("caller",m_faxCaller,false);
+    m->addParam("called",m_faxCalled,false);
     Engine::enqueue(m);
 }
 
@@ -911,6 +926,21 @@ void YRTPWrapper::terminate(Message& msg)
     if (stats)
 	msg.setParam("stats",stats);
     m_valid = false;
+}
+
+void YRTPWrapper::setFaxDivert(const Message& msg)
+{
+    NamedString* divert = msg.getParam("fax_divert");
+    if (!divert)
+	return;
+    // if divert is empty or false disable diverting
+    if (divert->null() || !divert->toBoolean(true))
+	m_faxDivert.clear();
+    else {
+	m_faxDivert = *divert;
+	m_faxCaller = msg.getValue("fax_caller",msg.getValue("caller",m_faxCaller));
+	m_faxCalled = msg.getValue("fax_called",msg.getValue("called",m_faxCalled));
+    }
 }
 
 
@@ -1321,6 +1351,7 @@ bool AttachHandler::received(Message &msg)
 	return false;
 
     w->setParams(rip,msg);
+    w->setFaxDivert(msg);
     msg.setParam("localip",w->host());
     msg.setParam("localport",String(w->port()));
     msg.setParam("rtpid",w->id());
@@ -1440,6 +1471,7 @@ bool RtpHandler::received(Message &msg)
 	return false;
 
     w->setParams(rip,msg);
+    w->setFaxDivert(msg);
     msg.setParam("localip",w->host());
     msg.setParam("localport",String(w->port()));
     msg.setParam("rtpid",w->id());

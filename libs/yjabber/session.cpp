@@ -305,6 +305,7 @@ XmlElement* JGRtpMedia::toXml() const
     p->setAttributeValid("channels",m_channels);
     p->setAttributeValid("ptime",m_pTime);
     p->setAttributeValid("maxptime",m_maxPTime);
+    p->setAttributeValid("bitrate",m_bitRate);
     unsigned int n = m_params.length();
     for (unsigned int i = 0; i < n; i++) {
 	NamedString* s = m_params.getParam(i);
@@ -322,7 +323,8 @@ void JGRtpMedia::fromXml(XmlElement* xml)
     }
     set(xml->attribute("id"),xml->attribute("name"),
 	xml->attribute("clockrate"),"",xml->attribute("channels"),
-	xml->attribute("ptime"),xml->attribute("maxptime"));
+	xml->attribute("ptime"),xml->attribute("maxptime"),
+	xml->attribute("bitrate"));
     XmlElement* param = XMPPUtils::findFirstChild(*xml,XmlTag::Parameter);
     for (; param; param = XMPPUtils::findNextChild(*xml,param,XmlTag::Parameter))
 	m_params.addParam(param->attribute("name"),param->attribute("value"));

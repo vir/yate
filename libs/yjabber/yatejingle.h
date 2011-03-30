@@ -63,12 +63,13 @@ public:
      * @param channels Optional 'channels' attribute (the number of channels)
      * @param pTime Optional "ptime" attribute (packet time)
      * @param maxPTime Optional "maxptime" attribute (maximum packet time)
+     * @param bitRate Optional "bitrate" attribute
      */
     inline JGRtpMedia(const char* id, const char* name, const char* clockrate,
 	const char* synonym, const char* channels = 0,
-	const char* pTime = 0, const char* maxPTime = 0)
+	const char* pTime = 0, const char* maxPTime = 0, const char* bitRate = 0)
 	: m_params("")
-	{ set(id,name,clockrate,synonym,channels,pTime,maxPTime); }
+	{ set(id,name,clockrate,synonym,channels,pTime,maxPTime,bitRate); }
 
     /**
      * Constructor. Fill this object from an XML element
@@ -84,7 +85,7 @@ public:
     inline JGRtpMedia(const JGRtpMedia& src)
 	: m_params("") {
 	    set(src.m_id,src.m_name,src.m_clockrate,src.m_synonym,src.m_channels,
-		src.m_pTime,src.m_maxPTime);
+		src.m_pTime,src.m_maxPTime,src.m_bitRate);
 	    m_params = src.m_params;
 	}
 
@@ -97,10 +98,11 @@ public:
      * @param channels Optional 'channels' attribute (the number of channels)
      * @param pTime Optional "ptime" attribute (packet time)
      * @param maxPTime Optional "maxptime" attribute (maximum packet time)
+     * @param bitRate Optional "bitrate" attribute
      */
     inline void set(const char* id, const char* name, const char* clockrate,
 	const char* synonym = 0, const char* channels = 0,
-	const char* pTime = 0, const char* maxPTime = 0) {
+	const char* pTime = 0, const char* maxPTime = 0, const char* bitRate = 0) {
 	    m_id = id;
 	    m_name = name;
 	    m_clockrate = clockrate;
@@ -108,6 +110,7 @@ public:
 	    m_channels = channels;
 	    m_pTime = pTime;
 	    m_maxPTime = maxPTime;
+	    m_bitRate = bitRate;
 	    m_params.clearParams();
 	}
 
@@ -171,6 +174,11 @@ public:
      * Maximum packet time
      */
     String m_maxPTime;
+
+    /**
+     * Data bit rate
+     */
+    String m_bitRate;
 
     /**
      * List of optional parameters

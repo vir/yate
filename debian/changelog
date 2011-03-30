@@ -1,3 +1,17 @@
+yate (3.2.1.svn4241) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4241: + Fixed bug: set all data when
+    initializing media payload.  + Handle 'bitrate' attribute in
+    received payload.  + Fixed media checking for incoming contents.
+    Fixed ilbc codec negotiation. Added speex to codecs list.  + Thanks
+    to Michele Badaracchi for finding out the source of the problem.  +
+    Should fix many crashes like: assert.cxx(108) PWLib Assertion fail:
+    Invalid array index, file .../ptlib/contain.inl  + Protected H.323
+    endpoint against concurrent creation of connections, the library is
+    not thread safe when copying capabilities.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 31 Mar 2011 02:19:15 +0400
+
 yate (3.2.1.svn4237) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4237: + Lock the sessions when sending data

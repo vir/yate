@@ -68,7 +68,7 @@ public:
 	const char* synonym, const char* channels = 0,
 	const char* pTime = 0, const char* maxPTime = 0)
 	: m_params("")
-	{ set(id,name,clockrate,synonym,channels); }
+	{ set(id,name,clockrate,synonym,channels,pTime,maxPTime); }
 
     /**
      * Constructor. Fill this object from an XML element
@@ -83,7 +83,8 @@ public:
      */
     inline JGRtpMedia(const JGRtpMedia& src)
 	: m_params("") {
-	    set(src.m_id,src.m_name,src.m_clockrate,src.m_synonym,src.m_channels);
+	    set(src.m_id,src.m_name,src.m_clockrate,src.m_synonym,src.m_channels,
+		src.m_pTime,src.m_maxPTime);
 	    m_params = src.m_params;
 	}
 

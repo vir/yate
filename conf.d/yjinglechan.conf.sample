@@ -130,6 +130,9 @@ alaw=true
 ; gsm: bool: European GSM 06.10 (GSM/8000)
 gsm=default
 
+; ilbc: bool: Internet Low Bandwidth Codec (iLBC/8000)
+;ilbc=default
+
 ; lpc10: bool: Linear Prediction Codec (LPC/8000)
 lpc10=default
 
@@ -147,3 +150,16 @@ g728=default
 
 ; g729: bool: ITU G.729 all variations (G729/8000)
 g729=default
+
+
+[hacks]
+; This section holds the dirty stuff required to work with some broken
+;  or old implementations
+
+; ilbc_forced: string: Format to offer as iLBC, can be: ilbc20 or ilbc30
+; Defaults to ilbc30
+;ilbc_forced=ilbc30
+
+; ilbc_default: string: Format to use for iLBC when packetization is unknown
+; Defaults to ilbc30
+;ilbc_default=ilbc30

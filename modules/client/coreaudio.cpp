@@ -85,6 +85,8 @@ private:
     unsigned int m_total;
     // check if the AudioDevice supports setting the volume
     bool m_volSettable;
+    // number of channels for the device
+    unsigned int m_channels;
     // internal buffer
     DataBlock m_data;
     // output sample rate
@@ -115,6 +117,8 @@ private:
     unsigned int m_total;
     // check if the AudioDevice supports setting the volume
     bool m_volSettable;
+    // number of channels for the device
+    unsigned int m_channels;
     // AudioDevice ID
     AudioDeviceID fOutputDevID;
     // internal buffer
@@ -196,9 +200,21 @@ INIT_PLUGIN(CoreAudioPlugin);
 static bool checkVolumeSettable(AudioDeviceID devId, UInt32 inChannel,Boolean isInput)
 {
     Boolean isWritable = false;
-    OSStatus err = AudioDeviceGetPropertyInfo(devId,inChannel,isInput,kAudioDevicePropertyVolumeScalar,NULL,&isWritable);
+
+    AudioObjectPropertyScope volumeScope = isInput ? kAudioDevicePropertyScopeInput : kAudioDevicePropertyScopeOutput;
+    AudioObjectPropertyAddress volumeAddress = {kAudioDevicePropertyVolumeScalar,volumeScope,inChannel};
+
+    Boolean hasProperty = AudioObjectHasProperty(devId,&volumeAddress);
+    if (!hasProperty) {
+        DDebug(DebugAll, "CoreAudio - %s AudioUnit does not have 'kAudioDevicePropertyVolumeScalar' property on channel %u",
+               (isInput ? "Input" : "Output"),(unsigned int)inChannel);
+        return false;
+    }
+
+    OSStatus err = AudioObjectIsPropertySettable(devId,&volumeAddress,&isWritable);
     if (err != noErr) {
-	DDebug(DebugInfo, "CoreAudio - Failed to get volume property err=%4.4s, %ld",(char*)&err,err);
+	DDebug(DebugAll, "CoreAudio - %s AudioUnit Failed to get if volume property is settable on channel=%u, err=%4.4s, %ld",(isInput ? "Input" : "Output"),
+               (unsigned int)inChannel,(char*)&err,err);
 	return false;
     }
     return isWritable;
@@ -238,7 +254,7 @@ OSStatus convertCallback(AudioConverterRef inAudioConverter, UInt32* ioNumberDat
 
 CoreAudioSource::CoreAudioSource(unsigned int rate)
     : m_inAudioBuffer(0), m_audioConvert(NULL), fInputDevID(0),
-      m_total(0), m_rate(rate)
+      m_total(0), m_volSettable(false), m_channels(0), m_rate(rate)
 {
     Debug(DebugAll,"CoreAudioSource::CoreAudioSource() [%p]",this);
     if (m_rate != DEFAULT_SAMPLE_RATE)
@@ -263,20 +279,32 @@ bool CoreAudioSource::init()
     UInt32  param;
 
     // open the AudioOutputUnit, provide description
+#ifdef MAC_OS_X_VERSION_10_6
+    AudioComponent component;
+    AudioComponentDescription description;
+#else
     Component component;
     ComponentDescription description;
+#endif
+
     description.componentType = kAudioUnitType_Output;
     description.componentSubType = kAudioUnitSubType_HALOutput;
     description.componentManufacturer = kAudioUnitManufacturer_Apple;
     description.componentFlags = 0;
     description.componentFlagsMask = 0;
-    if((component = FindNextComponent(NULL,&description))) {
+
+#ifdef MAC_OS_X_VERSION_10_6
+    if((component = AudioComponentFindNext(NULL,&description)))
+	err = AudioComponentInstanceNew(component,&fAudioUnit);
+#else
+    if((component = FindNextComponent(NULL,&description)))
 	err = OpenAComponent(component,&fAudioUnit);
-	if(err != noErr) {
-	    fAudioUnit = NULL;
-	    Debug(DebugInfo,"CoreAUdioSource::init() [%p] - failed to open component error==%4.4s, %ld",this,(char*)&err,err);
-	    return false;
-	}
+#endif
+
+    if(err != noErr) {
+        fAudioUnit = NULL;
+        Debug(DebugInfo,"CoreAudioSource::init() [%p] - failed to open component error==%4.4s, %ld",this,(char*)&err,err);
+        return false;
     }
 
     // configure AudioOutputUnit for input, enable input on the AUHAL
@@ -288,13 +316,15 @@ bool CoreAudioSource::init()
 	err = AudioUnitSetProperty(fAudioUnit,kAudioOutputUnitProperty_EnableIO,kAudioUnitScope_Output,0,&param,sizeof(UInt32));
     }
     else {
-	Debug(DebugInfo,"CoreAUdioSource::init() [%p] - failed to configure AudioUnit for input error==%4.4s, %ld",this,(char*)&err,err);
+	Debug(DebugInfo,"CoreAudioSource::init() [%p] - failed to configure AudioUnit for input error==%4.4s, %ld",this,(char*)&err,err);
 	return false;
     }
 	
     // select the default input device
     param = sizeof(AudioDeviceID);
-    err = AudioHardwareGetProperty(kAudioHardwarePropertyDefaultInputDevice,&param,&fInputDevID);
+
+    AudioObjectPropertyAddress devAddress = {kAudioHardwarePropertyDefaultInputDevice,kAudioObjectPropertyScopeGlobal,kAudioObjectPropertyElementMaster};
+    err = AudioObjectGetPropertyData(kAudioObjectSystemObject,&devAddress,0,NULL,&param,&fInputDevID);
     if(err != noErr) {
 	Debug(DebugInfo,"CoreAudioSource::init() [%p] - failed to get input device error==%4.4s, %ld",this,(char*)&err,err);
 	return false;
@@ -340,12 +370,15 @@ bool CoreAudioSource::init()
 #if __BIG_ENDIAN__
     m_outDevFormat.mFormatFlags |= kAudioFormatFlagIsBigEndian;
 #endif
-    m_outDevFormat.mBitsPerChannel = sizeof(int16_t) * 8;
-    m_outDevFormat.mBytesPerFrame = m_outDevFormat.mBitsPerChannel / 8;
+    m_outDevFormat.mBytesPerFrame = sizeof(int16_t) * devFormat.mChannelsPerFrame;
+    m_outDevFormat.mBitsPerChannel = m_outDevFormat.mBytesPerFrame * 8;
     m_outDevFormat.mFramesPerPacket = 1;
     m_outDevFormat.mBytesPerPacket = m_outDevFormat.mBytesPerFrame;
 
-    // det the AudioUnit output data format
+    // remembering the number of channels for the device
+    m_channels = devFormat.mChannelsPerFrame;
+
+    // set the AudioUnit output data format
     err = AudioUnitSetProperty(fAudioUnit,kAudioUnitProperty_StreamFormat,kAudioUnitScope_Output,1,&m_outDevFormat,sizeof(AudioStreamBasicDescription));
     if(err != noErr) {
 	Debug(DebugInfo, "CoreAudioSource::init() [%p] - failed to set output data format error==%4.4s, %ld",this,(char*)&err,err);
@@ -398,7 +431,9 @@ bool CoreAudioSource::init()
 	Debug(DebugInfo,"CoreAudioSource::init() [%p] - AudioUnit started",this);
 
     // check if the device lets us set the volume
-    m_volSettable = checkVolumeSettable(fInputDevID,0,true);
+    m_volSettable = false;
+    for (unsigned int i = 0; i <= m_channels; i++)
+        m_volSettable = checkVolumeSettable(fInputDevID,i,true) || m_volSettable;
     Debug(DebugAll,"CoreAudioSource::init() [%p] - volume %s settable",this,(m_volSettable ? "is" : "isn't"));
     
     return start("CoreAudioSource");
@@ -421,7 +456,7 @@ OSStatus CoreAudioSource::buildConverter(AudioStreamBasicDescription inputFormat
     
     DDebug(DebugInfo,"CoreAudioSource::buildConverter() [%p] - AudioConverter output format is : channels/frame=%u, sampleRate=%f, bits/channel=%u, "
 	   "bytes/frame=%u, frames/packet=%u, bytes/packet=%u, formatFlags=0x%x",
-	   this,(unsigned int)m_convertToFormat.mChannelsPerFrame,m_convertToFormat.mSampleRate,(unsigned int)m_convertToFormat.mBitsPerChannel,
+           this,(unsigned int)m_convertToFormat.mChannelsPerFrame,m_convertToFormat.mSampleRate,(unsigned int)m_convertToFormat.mBitsPerChannel,
 	   (unsigned int)m_convertToFormat.mBytesPerFrame,(unsigned int)m_convertToFormat.mFramesPerPacket,(unsigned int)m_convertToFormat.mBytesPerPacket,
 	   (unsigned int)m_convertToFormat.mFormatFlags);
     
@@ -565,7 +600,7 @@ void CoreAudioSource::cleanup()
 	
 bool CoreAudioSource::control(NamedList& params)
 {
-    DDebug(DebugInfo,"CoreAudioSource::control() [%p]",this);
+    DDebug(DebugAll,"CoreAudioSource::control() [%p]",this);
     if (!m_volSettable)
 	return false;
     int vol = params.getIntValue("in_volume",-1);
@@ -574,18 +609,43 @@ bool CoreAudioSource::control(NamedList& params)
 	return false;
     }   
     Float32 volValue = vol / 100.0;
-    OSStatus err = AudioDeviceSetProperty(fInputDevID,NULL,0,true,kAudioDevicePropertyVolumeScalar,sizeof(Float32),&volValue);
-    if (err != noErr)
-	Debug(DebugInfo,"CoreAudioSource::control() [%p] - set volume failed with error=%4.4s, %ld",this,(char*)&err,err);
+
+    bool setVolStatus = false;
+    bool getVolStatus = false;
+    int setVolValue = 0;
+    for (unsigned int i = 0; i <= m_channels; i++) {
+        AudioObjectPropertyAddress volumeAddress = {kAudioDevicePropertyVolumeScalar,kAudioDevicePropertyScopeInput,i};
+        OSStatus err = AudioObjectSetPropertyData(fInputDevID,&volumeAddress,0,NULL,sizeof(Float32),&volValue);
+        if (err != noErr)
+            DDebug(DebugAll,"CoreAudioSource::control() [%p] - set volume failed with error=%4.4s, %ld on channel %u",this,(char*)&err,err,i);
+        setVolStatus = (err == noErr) || setVolStatus;
+
+        // get the actual set volume value
+        Float32 setVolumePerChannel = 0;
+        UInt32 size = sizeof(setVolumePerChannel);
+        err = AudioObjectGetPropertyData(fInputDevID,&volumeAddress,0,NULL,&size,&setVolumePerChannel);
+        if (err != noErr)
+            DDebug(DebugAll,"CoreAudioSource::control() [%p] - get volume failed with error=%4.4s, %ld on channel %u",this,(char*)&err,err,i);
+        else {
+            if (setVolValue / 100.0 < setVolumePerChannel)
+                setVolValue = setVolumePerChannel * 100;
+        }
+        getVolStatus = (err == noErr) || getVolStatus;
+    }
+    if (getVolStatus)
+        params.setParam("in_volume",String(setVolValue));
+    if (!setVolStatus)
+        Debug(DebugAll,"CoreAudioSource::control() [%p] - set volume failed on all channels",this);
+
     if(params.getParam("out_volume"))
 	return false;
-    return err == noErr;
+    return setVolStatus;
 }
 	
 	
 CoreAudioConsumer::CoreAudioConsumer(unsigned int rate)
     : Mutex(false,"CoreAudioConsumer"),
-      m_total(0), m_volSettable(false), fOutputDevID(0), m_rate(rate)
+      m_total(0), m_volSettable(false), m_channels(0), fOutputDevID(0), m_rate(rate)
 {
     Debug(DebugAll,"CoreAudioConsumer::CoreAudioConsumer() [%p]",this);
     if (m_rate != DEFAULT_SAMPLE_RATE)
@@ -608,20 +668,32 @@ bool CoreAudioConsumer::init()
     OSStatus err = noErr;
 
     // open the AudioOutputUnit, provide description
+#ifdef MAC_OS_X_VERSION_10_6
+    AudioComponent component;
+    AudioComponentDescription description;
+#else
     Component component;
     ComponentDescription description;
+#endif
+
     description.componentType = kAudioUnitType_Output;
     description.componentSubType = kAudioUnitSubType_DefaultOutput;
     description.componentManufacturer = kAudioUnitManufacturer_Apple;
     description.componentFlags = 0;
     description.componentFlagsMask = 0;
-    if((component = FindNextComponent(NULL,&description))) {
+
+#ifdef MAC_OS_X_VERSION_10_6
+    if((component = AudioComponentFindNext(NULL,&description)))
+	err = AudioComponentInstanceNew(component,&fAudioUnit);
+#else
+    if((component = FindNextComponent(NULL,&description)))
 	err = OpenAComponent(component,&fAudioUnit);
-	if(err != noErr) {
-	    Debug(DebugInfo,"CoreAudioConsumer::init() [%p] - failed to open component error==%4.4s, %ld",this,(char*)&err,err);
-	    fAudioUnit = NULL;
-	    return false;
-	}
+#endif
+
+    if(err != noErr) {
+        Debug(DebugInfo,"CoreAudioConsumer::init() [%p] - failed to open component error==%4.4s, %ld",this,(char*)&err,err);
+        fAudioUnit = NULL;
+        return false;
     }
 
     // set up the callback to generate output to the output unit
@@ -671,12 +743,35 @@ bool CoreAudioConsumer::init()
 
     // get the id of the default output device
     UInt32 param = sizeof(AudioDeviceID);
-    err = AudioHardwareGetProperty(kAudioHardwarePropertyDefaultOutputDevice,&param,&fOutputDevID);
+    param = sizeof(AudioDeviceID);
+    AudioObjectPropertyAddress devAddress = {kAudioHardwarePropertyDefaultOutputDevice,kAudioObjectPropertyScopeGlobal,kAudioObjectPropertyElementMaster};
+    err = AudioObjectGetPropertyData(kAudioObjectSystemObject,&devAddress,0,NULL,&param,&fOutputDevID);
     if(err != noErr)
 	Debug(DebugMild,"CoreAudioConsumer::init() [%p] - Failed to get the device id of the output device error==%4.4s, %ld",this,(char*)&err,err);
-	
-    m_volSettable = checkVolumeSettable(fOutputDevID,1,false);
-    Debug(DebugInfo,"CoreAudioConsumer::init() volume %s settable",(m_volSettable ? "is" : "isn't"));
+
+    // get hardware device format
+    param = sizeof(AudioStreamBasicDescription);
+    AudioStreamBasicDescription devFormat;
+    err = AudioUnitGetProperty(fAudioUnit,kAudioUnitProperty_StreamFormat,kAudioUnitScope_Output,0,&devFormat,&param);
+    if(err != noErr) {
+	Debug(DebugInfo,"CoreAudioConsumer::init() [%p] - failed to get input device AudioStreamBasicDescription error==%4.4s, %ld",this,(char*)&err,err);
+	// we didn't get the hardware format, but it's a safe bet that we have at least 1 channel
+        m_channels = 1;
+    }
+    else {
+        m_channels = devFormat.mChannelsPerFrame;
+
+        DDebug(DebugInfo,"CoreAudioConsumer::init() [%p] - hardware device input format is : channels/frame=%u, sampleRate=%f, bits/channel=%u, "
+               "bytes/frame=%u, frames/packet=%u, bytes/packet=%u, formatFlags=0x%x",
+               this,(unsigned int)devFormat.mChannelsPerFrame,devFormat.mSampleRate,(unsigned int)devFormat.mBitsPerChannel,
+               (unsigned int)devFormat.mBytesPerFrame,(unsigned int)devFormat.mFramesPerPacket,(unsigned int)devFormat.mBytesPerPacket,
+               (unsigned int)devFormat.mFormatFlags);
+    }
+
+    m_volSettable = false;
+    for (unsigned int i = 0; i <= m_channels; i++)
+        m_volSettable = checkVolumeSettable(fOutputDevID,i,false) || m_volSettable;
+    Debug(DebugAll,"CoreAudioConsumer::init() - volume %s settable",(m_volSettable ? "is" : "isn't"));
     return true;
 }
 
@@ -736,10 +831,36 @@ bool CoreAudioConsumer::control(NamedList& params)
     	return false;
     }
     Float32 volValue = vol / 100.0;
-    // set the volume for the output on every channel
-    OSStatus err1 = AudioDeviceSetProperty(fOutputDevID,NULL,1,false,kAudioDevicePropertyVolumeScalar,sizeof(Float32),&volValue);
-    OSStatus err2 = AudioDeviceSetProperty(fOutputDevID,NULL,2,false,kAudioDevicePropertyVolumeScalar,sizeof(Float32),&volValue);
-    return err1 == noErr && err2 == noErr;
+
+    bool setVolStatus = false;
+    bool getVolStatus = false;
+    int setVolValue = 0;
+    for (unsigned int i = 0; i <= m_channels; i++) {
+        // set the volume for the output on every channel
+        AudioObjectPropertyAddress volumeAddress = {kAudioDevicePropertyVolumeScalar,kAudioDevicePropertyScopeOutput,i};
+        OSStatus err = AudioObjectSetPropertyData(fOutputDevID,&volumeAddress,0,NULL,sizeof(Float32),&volValue);
+        if (err != noErr)
+            DDebug(DebugAll,"CoreAudioConsumer::control() [%p] - set volume failed with error=%4.4s, %ld on channel %u",this,(char*)&err,err,i);
+        setVolStatus = (err == noErr) || setVolStatus;
+
+        // get the actual set volume value
+        Float32 setVolumePerChannel = 0;
+        UInt32 size = sizeof(setVolumePerChannel);
+        err = AudioObjectGetPropertyData(fOutputDevID,&volumeAddress,0,NULL,&size,&setVolumePerChannel);
+        if (err != noErr)
+            DDebug(DebugAll,"CoreAudioComsumer::control() [%p] - get volume failed with error=%4.4s, %ld on channel %u",this,(char*)&err,err,i);
+        else {
+            if (setVolValue / 100.0 < setVolumePerChannel)
+                setVolValue = setVolumePerChannel * 100;
+        }
+        getVolStatus = (err == noErr) || getVolStatus;
+    }
+    if (getVolStatus)
+        params.setParam("out_volume",String(setVolValue));
+    if (!setVolStatus)
+        Debug(DebugAll,"CoreAudioConsumer::control() [%p] - set volume failed on all channels",this);
+
+    return setVolStatus;
 }
 	
 CoreAudioChan::CoreAudioChan(const String& dev, unsigned int rate)

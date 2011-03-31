@@ -633,6 +633,23 @@ AC_MSG_CHECKING([for Mac OS X audio headers])
 AC_TRY_COMPILE([
 #include <AudioUnit/AudioUnit.h>
 #include <AudioToolbox/AudioToolbox.h>
+
+AudioDeviceID getDefaultInputDevice()
+{
+    AudioDeviceID theAnswer = 0;
+    UInt32 theSize = sizeof(AudioDeviceID);
+    AudioObjectPropertyAddress theAddress = { kAudioHardwarePropertyDefaultInputDevice,
+                                              kAudioObjectPropertyScopeGlobal,
+                                              kAudioObjectPropertyElementMaster };
+
+    OSStatus theError = AudioObjectGetPropertyData(kAudioObjectSystemObject,
+                                                   &theAddress,
+                                                   0,
+                                                   NULL,
+                                                   &theSize,
+                                                   &theAnswer);
+    return theAnswer;
+}
 ],[],
 [HAVE_COREAUDIO="yes"],[]
 )
@@ -1319,3 +1336,9 @@ AC_CONFIG_FILES([run],[chmod +x run])
 CONFIGURE_FILES=`echo "$ac_config_files config.status config.log" | sed 's,packing/[[^ ]]* *,,g'`
 AC_SUBST(CONFIGURE_FILES)
 AC_OUTPUT
+
+if [[ "x$uname_os" = "xDarwin" ]]; then
+if [[ "x$HAVE_COREAUDIO" != "xyes" ]]; then
+AC_MSG_WARN([Please take note that the building of the audio module for Mac OS X has been disabled. The Yate client will not have audio support. If you need audio, you need at least Mac OS X SDK 10.5 or something newer.])
+fi
+fi

@@ -430,9 +430,9 @@ AC_ARG_WITH(mysql,AC_HELP_STRING([--with-mysql=DIR],[use MySQL client library fr
 if [[ "x$ac_cv_use_mysql" != "xno" ]]; then
 if [[ "x$ac_cv_use_mysql" = "xyes" ]]; then
 AC_MSG_CHECKING([for MySQL using mysql_config])
-MYSQL_INC=`mysql_config --include 2>/dev/null`
-MYSQL_LIB=`mysql_config --libs_r 2>/dev/null`
-MYSQL_VER=`mysql_config --version 2>/dev/null`
+MYSQL_INC=`(mysql_config --include) 2>/dev/null`
+MYSQL_LIB=`(mysql_config --libs_r) 2>/dev/null`
+MYSQL_VER=`(mysql_config --version) 2>/dev/null`
 if [[ x`echo "$MYSQL_INC $MYSQL_LIB $MYSQL_VER" | wc -l | sed 's/^ *//g'` != "x1" ]]; then
 MYSQL_INC=""
 fi
@@ -1016,13 +1016,13 @@ AC_ARG_WITH(openssl,AC_HELP_STRING([--with-openssl],[use OpenSSL for secure sock
 if [[ "x$ac_cv_use_openssl" = "xyes" ]]; then
     AC_MSG_CHECKING([for OpenSSL using pkg-config])
     pkg="openssl"
-    verssl=`pkg-config --modversion $pkg 2>/dev/null`
+    verssl=`(pkg-config --modversion $pkg) 2>/dev/null`
     if [[ "x$verssl" = "x" ]]; then
 	pkg="libssl"
-	verssl=`pkg-config --modversion $pkg 2>/dev/null`
+	verssl=`(pkg-config --modversion $pkg) 2>/dev/null`
     fi
-    incssl=`pkg-config --cflags $pkg 2>/dev/null`
-    libssl=`pkg-config --libs $pkg 2>/dev/null`
+    incssl=`(pkg-config --cflags $pkg) 2>/dev/null`
+    libssl=`(pkg-config --libs $pkg) 2>/dev/null`
     if [[ "x$incssl" != "x" -a "x$libssl" != "x" ]]; then
 	HAVE_OPENSSL=yes
 	OPENSSL_VER="$verssl"
@@ -1099,21 +1099,21 @@ QT4_STATIC_MODULES=`echo "$ac_cv_use_qtstatic" | sed 's/,/ /g'`
 if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
     AC_MSG_CHECKING([for Qt4 >= 4.3.0 using pkg-config])
     pkgd="/usr/lib/qt4/$ARCHLIB/pkgconfig"
-    verqt=`pkg-config --modversion QtCore 2>/dev/null`
+    verqt=`(pkg-config --modversion QtCore) 2>/dev/null`
     if [[ -z "$verqt" -a -d "$pkgd" ]]; then
 	export PKG_CONFIG_LIBDIR="$pkgd"
-	verqt=`pkg-config --modversion QtCore 2>/dev/null`
+	verqt=`(pkg-config --modversion QtCore) 2>/dev/null`
     fi
-    incqt=`pkg-config --cflags QtNetwork QtGui QtXml QtCore 2>/dev/null | sed 's/QtNetwork/QtUiTools/'`
-    libqt=`pkg-config --libs $qtstatic QtNetwork QtGui QtXml QtCore 2>/dev/null | sed 's/QtNetwork/QtUiTools/'`
+    incqt=`(pkg-config --cflags QtNetwork QtGui QtXml QtCore) 2>/dev/null | sed 's/QtNetwork/QtUiTools/'`
+    libqt=`(pkg-config --libs $qtstatic QtNetwork QtGui QtXml QtCore) 2>/dev/null | sed 's/QtNetwork/QtUiTools/'`
     if [[ "x$incqt" != "x" -a "x$libqt" != "x" ]]; then
 	HAVE_QT4=yes
 	QT4_INC="$incqt"
 	QT4_LIB="$libqt"
-	QT4_INC_NET=`pkg-config --cflags QtNetwork 2>/dev/null | grep -o '[[^ ]]*QtNetwork[[^ ]]*'`
-	QT4_LIB_NET=`pkg-config --libs QtNetwork 2>/dev/null | grep -o '[[^ ]]*QtNetwork[[^ ]]*'`
+	QT4_INC_NET=`(pkg-config --cflags QtNetwork) 2>/dev/null | grep -o '[[^ ]]*QtNetwork[[^ ]]*'`
+	QT4_LIB_NET=`(pkg-config --libs QtNetwork) 2>/dev/null | grep -o '[[^ ]]*QtNetwork[[^ ]]*'`
 	QT4_MOC=`echo "$incqt" | sed -n 's,^.*-I\([[^ ]]\+\)/include .*$,\1/bin/moc,p'`
-	test -z "$QT4_MOC" && QT4_MOC=`which moc-qt4 2>/dev/null`
+	test -z "$QT4_MOC" && QT4_MOC=`(which moc-qt4) 2>/dev/null`
 	test -z "$QT4_MOC" && QT4_MOC="moc"
 	QT4_VER=`echo "$verqt" | $csed "$vsed" | $csed "$vsed" | sed 's/\(..\)\.\(..\)\.\(..\)/\1\2\3/'`
 	ac_cv_use_libqt="no"
@@ -1129,8 +1129,8 @@ if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
 
     if [[ "x$HAVE_QT4" = "xno" ]]; then
 	AC_MSG_CHECKING([for Qt4 >= 4.3.0 using qmake])
-	incqt=`qmake -query QT_INSTALL_HEADERS 2>/dev/null`
-	libqt=`qmake -query QT_INSTALL_LIBS 2>/dev/null`
+	incqt=`(qmake -query QT_INSTALL_HEADERS) 2>/dev/null`
+	libqt=`(qmake -query QT_INSTALL_LIBS) 2>/dev/null`
 	if [[ "x$incqt" = "x**Unknown**" -o "x$libqt" = "x**Unknown**" ]]; then
 	    incqt=""
 	    libqt=""
@@ -1154,9 +1154,9 @@ if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
 	            QT4_LIB_NET="-framework QtNetwork"
 		    ;;
 	    esac
-	    QT4_MOC=`qmake -query QT_INSTALL_BINS 2>/dev/null`
+	    QT4_MOC=`(qmake -query QT_INSTALL_BINS) 2>/dev/null`
 	    QT4_MOC="$QT4_MOC/moc"
-	    verqt=`qmake -query QT_VERSION 2>/dev/null`
+	    verqt=`(qmake -query QT_VERSION) 2>/dev/null`
 	    QT4_VER=`echo "$verqt" | $csed "$vsed" | $csed "$vsed" | sed 's/\(..\)\.\(..\)\.\(..\)/\1\2\3/'`
 	    if [[ 1$QT4_VER -lt 1040300 ]]; then
 	    	HAVE_QT4=no
@@ -1269,11 +1269,11 @@ AC_SUBST(SONAME_OPT)
 DOXYGEN_BIN=""
 AC_ARG_WITH(doxygen,AC_HELP_STRING([--with-doxygen=EXE],[use doxygen to generate API docs (default: PATH)]),[ac_cv_use_doxygen=$withval],[ac_cv_use_doxygen=yes])
 if [[ "x$ac_cv_use_doxygen" != "xno" ]]; then
-test "x$ac_cv_use_doxygen" = "xyes" && ac_cv_use_doxygen=`which doxygen 2>/dev/null`
+test "x$ac_cv_use_doxygen" = "xyes" && ac_cv_use_doxygen=`(which doxygen) 2>/dev/null`
 AC_MSG_CHECKING([for doxygen version])
 if [[ "x$ac_cv_use_doxygen" != "x" -a -x "$ac_cv_use_doxygen" ]]; then
 DOXYGEN_BIN="$ac_cv_use_doxygen"
-ac_cv_use_doxygen=`$DOXYGEN_BIN --version 2>/dev/null`
+ac_cv_use_doxygen=`($DOXYGEN_BIN --version) 2>/dev/null`
 else
 ac_cv_use_doxygen="no"
 fi
@@ -1285,11 +1285,11 @@ AC_SUBST(DOXYGEN_BIN)
 KDOC_BIN=""
 AC_ARG_WITH(kdoc,AC_HELP_STRING([--with-kdoc=EXE],[use kdoc to generate API docs (default: PATH)]),[ac_cv_use_kdoc=$withval],[ac_cv_use_kdoc=yes])
 if [[ "x$ac_cv_use_kdoc" != "xno" ]]; then
-test "x$ac_cv_use_kdoc" = "xyes" && ac_cv_use_kdoc=`which kdoc 2>/dev/null`
+test "x$ac_cv_use_kdoc" = "xyes" && ac_cv_use_kdoc=`(which kdoc) 2>/dev/null`
 AC_MSG_CHECKING([for kdoc version])
 if [[ "x$ac_cv_use_kdoc" != "x" -a -x "$ac_cv_use_kdoc" ]]; then
 KDOC_BIN="$ac_cv_use_kdoc"
-ac_cv_use_kdoc=`$KDOC_BIN --version 2>&1 | awk '{ print $2 }'`
+ac_cv_use_kdoc=`($KDOC_BIN --version) 2>&1 | awk '{ print $2 }'`
 else
 ac_cv_use_kdoc="no"
 fi

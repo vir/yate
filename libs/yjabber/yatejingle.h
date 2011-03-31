@@ -134,13 +134,6 @@ public:
     void fromXml(XmlElement* xml);
 
     /**
-     * Build a telephone-event media
-     * @return JGRtpMedia pointer
-     */
-    static inline JGRtpMedia* telEvent()
-	{ return new JGRtpMedia("101","telephone-event","8000",""); }
-
-    /**
      * The numeric id of this payload
      */
     String m_id;
@@ -269,7 +262,8 @@ public:
      * @param cryptoRequired True to require media encryption
      */
     inline JGRtpMediaList(Media m = MediaMissing, bool cryptoRequired = false)
-	: m_media(m), m_bandwidth(0), m_cryptoRequired(cryptoRequired), m_ready(false)
+	: m_media(m), m_bandwidth(0), m_cryptoRequired(cryptoRequired), m_ready(false),
+	m_telEvent(101), m_telEventName("telephone-event")
 	{}
 
     /**
@@ -329,10 +323,9 @@ public:
 
     /**
      * Create a 'description' element and add payload children to it
-     * @param telEvent True to append a telephone event data payload
      * @return Valid XmlElement pointer
      */
-    XmlElement* toXml(bool telEvent = true) const;
+    XmlElement* toXml() const;
 
     /**
      * Fill this list from an XML element's children. Clear before attempting to fill
@@ -348,6 +341,14 @@ public:
      * @return False if the list is empty
      */
     bool createList(String& dest, bool synonym, const char* sep = ",");
+
+    /**
+     * Build and add telephone-event media child to a parent xml element.
+     * Add a second telephone event media child if set
+     * @param xml Parent element
+     * @param name Optional event name. Defaults to set event name
+     */
+    void addTelEvent(XmlElement* xml, const char* name = 0) const;
 
     /**
      * The list of media type names
@@ -381,6 +382,21 @@ public:
      * Flag indicating wether media was negotiated
      */
     bool m_ready;
+
+    /**
+     * Telephone event payload id
+     */
+    int m_telEvent;
+
+    /**
+     * Telephone event payload name
+     */
+    String m_telEventName;
+
+    /**
+     * Second telephone event payload name
+     */
+    String m_telEventName2;
 };
 
 

@@ -30,6 +30,7 @@
 using namespace TelEngine;
 
 static const TokenDict s_dict_control[] = {
+    { "show",    SS7MTP3::Status },
     { "pause",   SS7MTP3::Pause },
     { "resume",  SS7MTP3::Resume },
     { "restart", SS7MTP3::Restart },
@@ -289,13 +290,13 @@ bool SS7Layer3::maintenance(const SS7MSU& msu, const SS7Label& label, int sls)
 	    badLink = true;
     }
     int level = DebugAll;
-    if (badLink) {
-	addr << " on " << sls;
-	level = DebugMild;
-    }
     if (getNI(type(msu.getNI())) != msu.getNI()) {
 	addr << " wrong " << msu.getIndicatorName() << " NI";
 	level = DebugMild;
+    }
+    if (badLink) {
+	addr << " on " << sls;
+	level = DebugWarn;
     }
     unsigned char len = s[1] >> 4;
     // get a pointer to the test pattern
@@ -467,10 +468,10 @@ void SS7Layer3::printRoutes()
     }
     if (s) {
 	s = s.substr(0,s.length() - 2);
-	Debug(this,DebugInfo,"%s: [%p]\r\n%s",router?"Routing table":"Destinations",this,s.c_str());
+	Output("%s of '%s': [%p]\r\n%s",router?"Routing table":"Destinations",debugName(),this,s.c_str());
     }
     else 
-	Debug(this,DebugInfo,"No %s [%p]",router?"routes":"destinations",this);
+	Output("No %s in '%s' [%p]",router?"routes":"destinations",debugName(),this);
 }
 
 
@@ -829,6 +830,7 @@ bool SS7MTP3::control(Operation oper, NamedList* params)
 	    }
 	    return true;
 	case Status:
+	    printRoutes();
 	    return ok;
     }
     return false;

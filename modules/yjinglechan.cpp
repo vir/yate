@@ -593,6 +593,13 @@ static const TokenDict s_dictDtmfMeth[] = {
 };
 
 
+// Check if a payload name is telephone event one
+static inline bool isTelEvent(const String& name)
+{
+    return (name &= "telephone-event") || (name &= "tone") ||
+	(name &= "audio/telephone-event");
+};
+
 static inline void addValidParam(Message& m, const char* param, const char* value)
 {
     if (!null(value))
@@ -2228,6 +2235,7 @@ bool YJGConnection::startRtp()
 	m.addParam("payload",media->m_id);
  	m.addParam("format",media->m_synonym);
     }
+    m.addParam("evpayload",String(m_audioContent->m_rtpMedia.m_telEvent));
     m.addParam("localip",rtpLocal->m_address);
     m.addParam("localport",rtpLocal->m_port);
     m.addParam("remoteip",rtpRemote->m_address);
@@ -2480,6 +2488,10 @@ JGSessionContent* YJGConnection::buildAudioContent(JGRtpCandidates::Type type,
 	c->m_rtpMedia.m_cryptoRequired = true;
     if (useFormats)
 	c->m_rtpMedia.setMedia(m_audioFormats);
+    if (m_sessVersion == JGSession::Version0) {
+	// Hack: set second telephone event for implementations expecting it
+	c->m_rtpMedia.m_telEventName2 = "audio/telephone-event";
+    }
 
     c->m_rtpLocalCandidates.m_type = c->m_rtpRemoteCandidates.m_type = type;
 
@@ -2596,11 +2608,31 @@ bool YJGConnection::initLocalCandidates(JGSessionContent& content, bool sendTran
 // Return false if there is no common media
 bool YJGConnection::matchMedia(JGSessionContent& local, JGSessionContent& recv) const
 {
+    int telEvent = 0;
     ListIterator iter(local.m_rtpMedia);
     for (GenObject* gen = 0; 0 != (gen = iter.get()); ) {
 	JGRtpMedia* m = static_cast<JGRtpMedia*>(gen);
-	if (!recv.m_rtpMedia.find(m->toString()))
-	    local.m_rtpMedia.remove(m);
+	JGRtpMedia* found = 0;
+	for (ObjList* o = recv.m_rtpMedia.skipNull(); o; o = o->skipNext()) {
+	    JGRtpMedia* recvMedia = static_cast<JGRtpMedia*>(o->get());
+	    int id = recvMedia->m_id.toInteger();
+	    if (id > 95 && !telEvent && isTelEvent(recvMedia->m_name))
+		telEvent = id;
+	    if (!found && m->toString() == recvMedia->toString())
+		found = recvMedia;
+	    if (found && telEvent)
+		break;
+	}
+	if (found)
+	    continue;
+	Debug(this,DebugAll,"Content '%s' removing media %s/%s from offer [%p]",
+	    local.toString().c_str(),m->m_id.c_str(),m->m_synonym.c_str(),this);
+	local.m_rtpMedia.remove(m);
+    }
+    if (telEvent && local.m_rtpMedia.m_telEvent != telEvent) {
+	Debug(this,DebugAll,"Content '%s' changing tel event from %d to %d [%p]",
+	    local.toString().c_str(),local.m_rtpMedia.m_telEvent,telEvent,this);
+	local.m_rtpMedia.m_telEvent = telEvent;
     }
     return 0 != local.m_rtpMedia.skipNull();
 }
@@ -3083,11 +3115,11 @@ bool YJGConnection::checkMedia(const JGEvent& event, JGSessionContent& c)
 		found = codecs.findMedia(recv->m_id);
 	    else if (recv->m_name) {
 		// Remove tel event from offer
-		if ((recv->m_name &= "telephone-event") ||
-		    (recv->m_name &= "tone") ||
-		    (recv->m_name &= "audio/telephone-event")) {
-		    XDebug(this,DebugAll,"Removing tel event '%s' [%p]",
-			recv->m_name.c_str(),this);
+		if (isTelEvent(recv->m_name)) {
+		    XDebug(this,DebugAll,"Removing tel event payload=%d '%s' [%p]",
+			payloadId,recv->m_name.c_str(),this);
+		    c.m_rtpMedia.m_telEvent = payloadId;
+		    c.m_rtpMedia.m_telEventName = recv->m_name;
 		    c.m_rtpMedia.remove(recv);
 		    break;
 		}

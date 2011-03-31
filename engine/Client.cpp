@@ -4075,7 +4075,7 @@ bool ClientAccount::setupDataDir(String* errStr, bool saveAcc)
     int error = 0;
     ObjList dirs;
     ObjList files;
-    File::listDirectory(path,&dirs,&files);
+    File::listDirectory(path,&dirs,&files,&error);
     if (error)
 	return showAccError(this,errStr,"Failed to list directory",path,error);
     String fullPath = path + Engine::pathSeparator() + dir;
@@ -4186,13 +4186,13 @@ bool ClientAccount::clearDataDir(String* errStr)
     if (!dirs.find(dir))
 	return true;
     // Delete files
-    tmp << Engine::pathSeparator() << dir << Engine::pathSeparator();
+    tmp << Engine::pathSeparator() << dir;
     int error = 0;
     bool ok = false;
     ObjList files;
     if (File::listDirectory(tmp,0,&files,&error)) {
 	for (ObjList* o = files.skipNull(); o; o = o->skipNext()) {
-	    String file(tmp + o->get()->toString());
+	    String file(tmp + Engine::pathSeparator() + o->get()->toString());
 	    int err = 0;
 	    if (!File::remove(file,&err)) {
 		if (!error)

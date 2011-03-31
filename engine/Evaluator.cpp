@@ -596,6 +596,33 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper)
 		stack.append(new ExpOperation(val));
 	    }
 	    break;
+	case OpcLAnd:
+	case OpcLOr:
+	    {
+		ExpOperation* op2 = popOne(stack);
+		ExpOperation* op1 = popOne(stack);
+		if (!op1 || !op2) {
+		    TelEngine::destruct(op1);
+		    TelEngine::destruct(op2);
+		    return gotError("ExpEvaluator stack underflow");
+		}
+		bool val = false;
+		switch (oper.opcode()) {
+		    case OpcLAnd:
+			val = op1->number() && op2->number();
+			break;
+		    case OpcLOr:
+			val = op1->number() || op2->number();
+			break;
+		    default:
+			break;
+		}
+		TelEngine::destruct(op1);
+		TelEngine::destruct(op2);
+		DDebug(DebugAll,"Bool result: '%s'",String::boolText(val));
+		stack.append(new ExpOperation(val ? 1 : 0));
+	    }
+	    break;
 	case OpcCat:
 	    {
 		ExpOperation* op2 = popOne(stack);

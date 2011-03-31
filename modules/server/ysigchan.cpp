@@ -3955,7 +3955,7 @@ bool IsupEncodeHandler::received(Message& msg)
   */
 void SigNotifier::notify(NamedList& notifs)
 {
-    Debug(&plugin,DebugInfo,"SigNotifier [%p] received a notify ",this);
+    DDebug(&plugin,DebugInfo,"SigNotifier [%p] received a notify ",this);
     Message* msg = new Message("module.update");
     msg->addParam("module",plugin.name());
     msg->copyParams(notifs);

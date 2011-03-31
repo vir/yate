@@ -1,3 +1,32 @@
+yate (3.2.1.svn4252) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4252: + Should fix many crashes like:
+    assert.cxx(108) PWLib Assertion fail: Invalid array index, file
+    .../ptlib/contain.inl  + Protected H.323 endpoint against concurrent
+    creation of connections, the library is not thread safe when copying
+    capabilities.  + Complain louder if an incorrect SLTM is received on
+    a link.  + Added "show" control that print routes to linksets too.
+    + Print SS7 routes to the output, not as a debug.  + Changed some
+    monitoring and SNMP debug messages to DDEBUG (compile-time).  + Made
+    the SNMP debugging messages more useful.  + The media list is now
+    keeping the telephone event payload id along with its name and an
+    optional second telephone event payload name to send.  + Remember
+    telephone event payload id and name for received contents and
+    reflect them when responding. Update telephone event for sent
+    contents. Set event payload id when starting rtp.  + Reset errno
+    when starting to list directory content to make sure we don't
+    inherit a previous failure.  + Fixed compile errors on Mac OS X
+    10.6. Moved on from deprecated APIs. Added check during configure
+    for APIs used.  + Handle logical AND and OR operators when
+    evaluating an expression.  + Fixed account directory clear: don't
+    add path separator when listing the directory. Fixed account
+    directory setup: properly check the error when listing the parent
+    directory.  + Prevent the original Bourne shell from showing command
+    not found errors.  + Fixed parser for links status and interfaces
+    status when there are none configured.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 01 Apr 2011 02:19:20 +0400
+
 yate (3.2.1.svn4241) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4241: + Fixed bug: set all data when

@@ -398,7 +398,7 @@ public:
     // process a SNMP message
     int processMsg(SnmpMessage* msg);
     // process a SNMPv2 message
-    int processSnmpV2Msg(Snmp::Message& msg);
+    int processSnmpV2Msg(Snmp::Message& msg, const String& host);
     // decode a pdu and process it accordingly
     void decodePDU(int& reqType, Snmp::PDU* obj, const int& access);
     // process get/getnext/set requests
@@ -409,7 +409,7 @@ public:
     Snmp::PDU* decodeBulkPDU(int& reqType, Snmp::BulkPDU* pdu, const int& access);
 
     // handle a SNMPv3 message
-    int processSnmpV3Msg(Snmp::SNMPv3Message& msg);
+    int processSnmpV3Msg(Snmp::SNMPv3Message& msg, const String& host);
     // generate reports and responses for SNMPv3 messages
     int generateReport(Snmp::SNMPv3Message& msg, const int& usmRes, SnmpV3MsgContainer& msgContainer);
     int generateResponse(Snmp::SNMPv3Message& msg, SnmpV3MsgContainer& msgContainer);
@@ -452,6 +452,7 @@ public:
 private:
     bool m_init;
     SnmpMsgQueue* m_msgQueue;
+    String m_lastRecvHost;
     String m_roCommunity;
     String m_rwCommunity;
     String m_rcCommunity;
@@ -1563,6 +1564,7 @@ void SnmpAgent::initialize()
     m_salt += m_startTime;
 
     m_silentDrops = 0;
+    m_lastRecvHost.clear();
 
     AsnMib* yateMib = (m_mibTree ? m_mibTree->find("yate") : 0);
     if (yateMib)
@@ -1619,19 +1621,20 @@ bool SnmpAgent::received(Message& msg, int id)
 
 int SnmpAgent::processMsg(SnmpMessage* msg)
 {
-    Debug(&__plugin,DebugAll,"::processMsg([%p])",msg);
+    DDebug(&__plugin,DebugAll,"::processMsg([%p])",msg);
     if(!msg)
 	return MESSAGE_DROP;
     DataBlock data = msg->data();
+    const String& host = msg->peer().host();
 
     // determine the version of the SNMP message
     Snmp::Message msgSnmp;
     int l = msgSnmp.decode(data);
     if (l > 0) {
 	// SNMPv2 message
-	Debug(&__plugin,DebugAll,"::processMsg() - received %s message msg=%p",lookup(msgSnmp.m_version,s_proto,""),&msgSnmp);
+	DDebug(&__plugin,DebugAll,"::processMsg() - received %s message msg=%p",lookup(msgSnmp.m_version,s_proto,""),&msgSnmp);
 	// try to handle it
-	if (processSnmpV2Msg(msgSnmp) < 0) {
+	if (processSnmpV2Msg(msgSnmp,host) < 0) {
 	    m_silentDrops++;
 	    return MESSAGE_DROP;
 	}
@@ -1645,8 +1648,8 @@ int SnmpAgent::processMsg(SnmpMessage* msg)
 	l = m.decode(data);
 	if (l >= 0) {
 	    // SNMPv3 message
-	    Debug(&__plugin,DebugAll,"::processMsg() - received SNMPv3 message msg=%p",&m);
-	    if(processSnmpV3Msg(m) < 0) {
+	    DDebug(&__plugin,DebugAll,"::processMsg() - received SNMPv3 message msg=%p",&m);
+	    if(processSnmpV3Msg(m,host) < 0) {
 		m_silentDrops++;
 		return MESSAGE_DROP;
 	    }
@@ -1655,11 +1658,18 @@ int SnmpAgent::processMsg(SnmpMessage* msg)
 	    m.encode(data);
 	}
 	else {
-	    Debug(&__plugin,DebugNote,"::processMsg() - unknown SNMP protocol version");
+	    Debug(&__plugin,DebugNote,"Unknown SNMP protocol version from %s",host.c_str());
 	    return MESSAGE_DROP;
 	}
     }
-    Debug(&__plugin,DebugAll,"::processMsg([%p]) - successful",msg);
+    if (host != m_lastRecvHost) {
+	m_lastRecvHost = host;
+	Debug(&__plugin,DebugNote,"SNMP client connected from %s",host.c_str());
+    }
+#ifdef DEBUG
+    else
+	Debug(&__plugin,DebugAll,"::processMsg([%p]) - successful",msg);
+#endif
     // set the data for the message wrapper
     msg->setData(data);
     // send it and return with success
@@ -1670,7 +1680,7 @@ int SnmpAgent::processMsg(SnmpMessage* msg)
 }
 
 // process a SNMPv2 message
-int SnmpAgent::processSnmpV2Msg(Snmp::Message& msg)
+int SnmpAgent::processSnmpV2Msg(Snmp::Message& msg, const String& host)
 {
     DDebug(&__plugin,DebugAll,"::processSnmpV2Msg() [%p]",&msg);
     // verify community string
@@ -1683,7 +1693,8 @@ int SnmpAgent::processSnmpV2Msg(Snmp::Message& msg)
     else if (!m_roCommunity.null() && m_roCommunity == community)
 	access = AsnMib::readOnly;
     if (access == AsnMib::notAccessible) {
-    	Debug(&__plugin,DebugInfo,"::processSnmpV2Msg() [%p] - message arrived with wrong community string, message dropped",&msg);
+    	Debug(&__plugin,DebugInfo,"Dropping message from %s with wrong community '%s'",
+	    host.c_str(),community.safe());
 	return MESSAGE_DROP;
     }
     // obtain pdus and do decoding
@@ -2170,15 +2181,15 @@ void SnmpAgent::assignValue(Snmp::VarBind* varBind, AsnValue* val)
   *	    or
   *	    - encrypted Data - string to be decrypted according the encryption methos (DES-CBC / AES-CFB)
   */
-int SnmpAgent::processSnmpV3Msg(Snmp::SNMPv3Message& msg)
+int SnmpAgent::processSnmpV3Msg(Snmp::SNMPv3Message& msg, const String& host)
 {
-    Debug(&__plugin,DebugAll,"::processSnmpV3Msg() [%p]",&msg);
+    DDebug(&__plugin,DebugAll,"::processSnmpV3Msg() [%p]",&msg);
     // initialize a SNMPv3 container
     SnmpV3MsgContainer msgContainer;
     // message is valid?
     int secRes = msgContainer.validate(msg);
     if (secRes == MESSAGE_DROP) {
- 	Debug(&__plugin,DebugNote, "::processSnmpV3Msg() - message not validated, silent drop");
+ 	Debug(&__plugin,DebugNote, "SNMPv3 message from %s not validated, silent drop",host.c_str());
 	return MESSAGE_DROP;
     }
 
@@ -2190,7 +2201,7 @@ int SnmpAgent::processSnmpV3Msg(Snmp::SNMPv3Message& msg)
 	    return secRes;
 	}
 	else {
- 	    Debug(&__plugin,DebugNote,"::processSnmpV3Msg() - an error ocurred during SNMPv3 message processing, further processing aborted");
+ 	    Debug(&__plugin,DebugNote,"Error during SNMPv3 message from %s processing, further processing aborted",host.c_str());
 	    return MESSAGE_DROP;
 	}
     }
@@ -2203,7 +2214,7 @@ int SnmpAgent::processSnmpV3Msg(Snmp::SNMPv3Message& msg)
 // build a ReportPDU
 int SnmpAgent::generateReport(Snmp::SNMPv3Message& msg, const int& secRes, SnmpV3MsgContainer& cont)
 {
-    Debug(&__plugin,DebugInfo,"::generateReport() - %s",lookup(secRes,s_errors,"unknown cause"));
+    DDebug(&__plugin,DebugInfo,"::generateReport() - %s",lookup(secRes,s_errors,"unknown cause"));
     if (!m_mibTree)
 	return MESSAGE_DROP;	
     if (!msg.m_msgGlobalData)

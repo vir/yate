@@ -1790,19 +1790,24 @@ bool InterfaceInfo::load()
     String& status = m.retValue();
     if (!TelEngine::null(status)) {
 	cutNewLine(status);
-	int pos = status.rfind(';');
-	if (pos < 0)
+	ObjList* parts = status.split(';');
+	if (!(parts && parts->count() > 2)) {
+	    TelEngine::destruct(parts);
 	    return true;
-	String ifaces = status.substr(pos + 1);
+	}
+	String ifaces = static_cast<String*>(parts->at(2));
+	if (ifaces.null()) {
+	    TelEngine::destruct(parts);
+	    return true;
+	}
 	Lock l(this);
 	ObjList* list = ifaces.split(',');
 	for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
-	    String* iface = static_cast<String*>(o->get());
-	    pos = iface->find("=");
-	    if (pos < 0)
+	    String iface = static_cast<String*>(o->get());
+	    String name, status;
+	    iface.extractTo("=",name).extractTo("|",status);
+	    if (name.null())
 		continue;
-	    String name = iface->substr(0,pos);
-	    String status = iface->substr(pos+1);
 	    NamedList* nl = static_cast<NamedList*>(m_table[name]);
 	    if (!nl) {
 		nl = new NamedList(name);
@@ -1834,12 +1839,18 @@ bool LinkInfo::load()
     String& status = m.retValue();
     if (!TelEngine::null(status)) {
 	cutNewLine(status);
-	int pos1 = status.rfind(';');
-	if (pos1 < 0)
+	ObjList* parts = status.split(';');
+	if (!(parts && parts->count() > 2)) {
+	    TelEngine::destruct(parts);
 	    return true;
-	status = status.substr(pos1 + 1);
+	}
+	String links = static_cast<String*>(parts->at(2));
+	if (links.null()) {
+	    TelEngine::destruct(parts);
+	    return true;
+	}
 	Lock l(this);
-	ObjList* list = status.split(',');
+	ObjList* list = links.split(',');
 	for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
 	    String link = static_cast<String*>(o->get());
 	    String name,type,status;

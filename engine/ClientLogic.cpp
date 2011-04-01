@@ -2835,6 +2835,22 @@ bool JoinMucWizard::action(Window* w, const String& name, NamedList* params)
 	m_requests.append(new String(domain));
 	return true;
     }
+    if (name == "textchanged") {
+	const String& sender = params ? (*params)["sender"] : String::empty();
+	if (!sender)
+	    return true;
+	const String& text = (*params)["text"];
+	if (sender == "muc_server") {
+	    if (m_queryRooms || m_querySrv)
+		return true;
+	    String page;
+	    currentPage(page);
+	    // Enable 'next' button
+	    if (page == "pageMucServer")
+		Client::self()->setActive(s_actionNext,!text.null(),w);
+	}
+	return true;
+    }
     return false;
 }
 

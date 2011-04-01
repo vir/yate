@@ -1516,7 +1516,7 @@ XmlElement* XMPPUtils::createEntityCaps(const String& hash, const char* node)
 }
 
 // Create a 'c' entity capability element as defined by GTalk
-XmlElement* XMPPUtils::createEntityCapsGTalkV1(const char* node)
+XmlElement* XMPPUtils::createEntityCapsGTalkV1(const char* node, bool muc)
 {
     XmlElement* c = createElement(XmlTag::EntityCapsTag,XMPPNamespace::EntityCaps);
     if (node)
@@ -1524,7 +1524,10 @@ XmlElement* XMPPUtils::createEntityCapsGTalkV1(const char* node)
     else
 	c->setAttribute("node","http://www.google.com/xmpp/client/caps");
     c->setAttribute("ver","1.0");
-    c->setAttribute("ext","voice-v1");
+    String caps = "voice-v1";
+    if (muc)
+	caps.append("pmuc-v1"," ");
+    c->setAttribute("ext",caps);
     return c;
 }
 

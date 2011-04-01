@@ -24,6 +24,7 @@
 #include "yatecbase.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 
 using namespace TelEngine;
 
@@ -2895,6 +2896,23 @@ bool Client::updateTrayIcon(const String& wndName)
     return ok;
 }
 
+// Generate a GUID string in the format 8*HEX-4*HEX-4*HEX-4*HEX-12*HEX
+void Client::generateGuid(String& buf, const String& extra)
+{
+    int8_t data[16];
+    *(int32_t*)(data + 12) = (u_int32_t)::random();
+    *(u_int64_t*)(data + 3) = Time::now();
+    if (extra)
+	*(u_int16_t*)(data + 11) = extra.hash();
+    *(int32_t*)data = (u_int32_t)::random();
+    String tmp;
+    tmp.hexify(data,16);
+    buf.clear();
+    buf << tmp.substr(0,8) << "-" << tmp.substr(8,4) << "-";
+    buf << tmp.substr(12,4) << "-" << tmp.substr(16,4) << "-";
+    buf << tmp.substr(20);
+}
+
 // Build an 'ui.event' message
 Message* Client::eventMessage(const String& event, Window* wnd, const char* name,
 	NamedList* params)
@@ -4009,7 +4027,8 @@ Message* ClientAccount::userData(bool update, const String& data, const char* ms
 	NamedIterator iter(r->m_params);
 	for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
 	    // Skip local/remote params
-	    if (ns->name() != "local" && ns->name() != "remote")
+	    if (ns->name() != "local" && ns->name() != "remote" &&
+		!ns->name().startsWith("internal."))
 		m->addParam(prefix + ns->name(),*ns);
 	}
     }

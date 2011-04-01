@@ -1639,6 +1639,13 @@ public:
      */
     static bool updateTrayIcon(const String& wndName);
 
+    /**
+     * Generate a GUID string in the format 8*HEX-4*HEX-4*HEX-4*HEX-12*HEX
+     * @param buf Destination string
+     * @param extra Optional string whose hash will be inserted in the GUID
+     */
+    static void generateGuid(String& buf, const String& extra = String::empty());
+
     static Configuration s_settings;     // Client settings
     static Configuration s_actions;      // Logic preferrences
     static Configuration s_accounts;     // Accounts
@@ -3204,6 +3211,8 @@ private:
     bool handleChatContactAction(const String& name, Window* wnd);
     // Handle actions from MUCS window. Return true if handled
     bool handleMucsAction(const String& name, Window* wnd, NamedList* params);
+    // Handle ok button in muc invite window. Return true if handled
+    bool handleMucInviteOk(Window* wnd);
     // Handle select from MUCS window. Return true if handled
     bool handleMucsSelect(const String& name, const String& item, Window* wnd,
 	const String& text = String::empty());

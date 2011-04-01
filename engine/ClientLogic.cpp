@@ -453,6 +453,8 @@ static NamedList s_chatStates("");
 static bool s_changingDockedChat = false;
 // Pending chat items managed in the client's thread
 static ObjList s_pendingChat;
+// Google MUC domain
+static const String s_googleMucDomain = "groupchat.google.com";
 // Miscellaneous
 static const String s_jabber = "jabber";
 static const String s_sip = "sip";
@@ -565,7 +567,7 @@ static inline bool isGmailAccount(ClientAccount* acc)
 // Check if a given domain is a Google MUC server
 static inline bool isGoogleMucDomain(const String& domain)
 {
-    return (domain &= "groupchat.google.com");
+    return (domain &= s_googleMucDomain);
 }
 
 // Retrieve protocol specific page name in UI
@@ -2088,7 +2090,7 @@ static inline ClientWizard* findTempWizard(Window* wnd)
 }
 
 // Show the MUC invite window
-static bool showMucInvite(MucRoom& room, ClientAccountList* accounts)
+static bool showMucInvite(ClientContact& contact, ClientAccountList* accounts)
 {
     if (!Client::valid())
 	return false;
@@ -2096,8 +2098,19 @@ static bool showMucInvite(MucRoom& room, ClientAccountList* accounts)
     if (!w)
 	return false;
     NamedList p("");
-    p.addParam("invite_room",room.uri());
-    p.addParam("invite_account",room.accountName());
+    MucRoom* room = contact.mucRoom();
+    if (room) {
+	p.addParam("invite_room",room->uri());
+    }
+    else {
+	p.addParam("invite_room","");
+	p.addParam("invite_password","");
+    }
+    p.addParam("show:label_room",String::boolText(room != 0));
+    p.addParam("show:invite_room",String::boolText(room != 0));
+    p.addParam("show:label_password",String::boolText(room == 0));
+    p.addParam("show:invite_password",String::boolText(room == 0));
+    p.addParam("invite_account",contact.accountName());
     p.addParam("invite_text","");
     Client::self()->setParams(&p,w);
     Client::self()->clearTable(s_inviteContacts,w);
@@ -2109,11 +2122,15 @@ static bool showMucInvite(MucRoom& room, ClientAccountList* accounts)
 	        ClientContact* c = static_cast<ClientContact*>(oc->get());
 		NamedList* p = new NamedList(c->toString());
 		fillChatContact(*p,*c,true,true);
+		if (!room && c == &contact)
+		    p->addParam("check:enabled",String::boolText(true));
 		rows.addParam(new NamedPointer(c->toString(),p,String::boolText(true)));
 	    }
 	}
 	Client::self()->updateTableRows(s_inviteContacts,&rows,false,w);
     }
+    if (!room)
+	Client::self()->setSelect(s_inviteContacts,contact.toString(),w);
     Client::self()->setVisible(s_wndMucInvite,true,true);
     return true;
 }
@@ -2127,43 +2144,6 @@ static Message* buildMucRoom(const char* oper, const String& account, const Stri
     m->addParam("contact",contact,false);
     m->addParam("reason",reason,false);
     return m;
-}
-
-// Handle 'ok' in MUC invite window
-static bool mucInvite(Window* w, ClientAccountList* accounts)
-{
-    if (!(w && accounts && Client::valid() ))
-	return false;
-    String account;
-    Client::self()->getText("invite_account",account,false,w);
-    ClientAccount* acc = accounts->findAccount(account);
-    if (!acc) {
-	showError(w,"Account not found!");
-	return false;
-    }
-    String room;
-    Client::self()->getText("invite_room",room,false,w);
-    MucRoom* r = acc->findRoomByUri(room);
-    if (!r) {
-	showError(w,"MUC room not found!");
-	return false;
-    }
-    String text;
-    Client::self()->getText("invite_text",text,false,w);
-    NamedList p("");
-    Client::self()->getOptions(s_inviteContacts,&p,w);
-    unsigned int n = p.length();
-    for (unsigned int i = 0; i < n; i++) {
-	NamedString* ns = p.getParam(i);
-	if (!(ns && ns->name()))
-	    continue;
-	NamedList tmp("");
-	Client::self()->getTableRow(s_inviteContacts,ns->name(),&tmp,w);
-	if (tmp.getBoolValue("check:enabled"))
-	    Engine::enqueue(buildMucRoom("invite",account,room,text,tmp["contact"]));
-    }
-    Client::self()->setVisible(w->id(),false);
-    return true;
 }
 
 // Show advanced UI controls
@@ -3851,6 +3831,7 @@ bool ClientLogic::saveContact(Configuration& cfg, ClientContact* c, bool save)
     sect->clearParam("group");
     for (ObjList* o = c->groups().skipNull(); o; o = o->skipNext())
 	sect->addParam("group",o->get()->toString(),false);
+    sect->clearParam("internal",'.');
     return !save || cfg.save();
 }
 
@@ -4218,7 +4199,7 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
     // OK actions
     if (name == "ok") {
 	if (wnd && wnd->id() == s_wndMucInvite)
-	    return mucInvite(wnd,m_accounts);
+	    return handleMucInviteOk(wnd);
     }
     // Handle show window actions
     if (name.startsWith("action_show_"))
@@ -8031,6 +8012,16 @@ bool DefaultLogic::handleChatContactAction(const String& name, Window* wnd)
 	    Client::self()->setText("editgroup",String::empty(),false,wnd);
 	return true;
     }
+    // Invite chat contacts, create room
+    ok = getPrefixedContact(name,s_mucInvite,id,m_accounts,&c,0);
+    if (ok || name == s_mucInvite) {
+	if (!ok && wnd && wnd->context())
+	    c = m_accounts->findContact(wnd->context());
+	if (!c)
+	    return false;
+	showMucInvite(*c,m_accounts);
+	return true;
+    }
     return false;
 }
 
@@ -8115,6 +8106,74 @@ bool DefaultLogic::handleMucsAction(const String& name, Window* wnd, NamedList* 
     return false;
 }
 
+// Handle 'ok' in MUC invite window
+bool DefaultLogic::handleMucInviteOk(Window* w)
+{
+    if (!(w && Client::valid() ))
+	return false;
+    String account;
+    Client::self()->getText("invite_account",account,false,w);
+    ClientAccount* acc = m_accounts->findAccount(account);
+    if (!acc) {
+	showError(w,"Account not found!");
+	return false;
+    }
+    String room;
+    Client::self()->getText("invite_room",room,false,w);
+    MucRoom* r = 0;
+    if (room) {
+	r = acc->findRoomByUri(room);
+	if (!r) {
+	    showError(w,"MUC room not found!");
+	    return false;
+	}
+    }
+    else {
+	String guid;
+	Client::generateGuid(guid,account);
+	String uri = "private-chat-" + guid;
+	uri << "@" << (isGmailAccount(acc) ? s_googleMucDomain : "conference.jabber.org");
+	String id;
+	ClientContact::buildContactId(id,account,uri);
+	r = acc->findRoom(id);
+	if (!r)
+	    r = new MucRoom(acc,id,"",uri);
+    }
+    String text;
+    Client::self()->getText("invite_text",text,false,w);
+    NamedList p("");
+    Client::self()->getOptions(s_inviteContacts,&p,w);
+    bool inviteNow = (room || r->resource().online());
+    unsigned int count = 0;
+    r->m_params.clearParam("internal.invite",'.');
+    unsigned int n = p.length();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* ns = p.getParam(i);
+	if (!(ns && ns->name()))
+	    continue;
+	NamedList tmp("");
+	Client::self()->getTableRow(s_inviteContacts,ns->name(),&tmp,w);
+	if (!tmp.getBoolValue("check:enabled"))
+	    continue;
+	const String& uri = tmp["contact"];
+	if (inviteNow)
+	    Engine::enqueue(buildMucRoom("invite",account,room,text,uri));
+	else {
+	    count++;
+	    r->m_params.addParam("internal.invite.contact",uri);
+	}
+    }
+    if (!inviteNow) {
+	if (count) {
+    	    r->m_params.addParam("internal.invite.count",String(count));
+    	    r->m_params.addParam("internal.invite.text",text,false);
+	}
+	joinRoom(r);
+    }
+    Client::self()->setVisible(w->id(),false);
+    return true;
+}
+
 // Handle select from MUCS window. Return true if handled
 bool DefaultLogic::handleMucsSelect(const String& name, const String& item, Window* wnd,
     const String& text)
@@ -8163,13 +8222,14 @@ bool DefaultLogic::handleMucResNotify(Message& msg, ClientAccount* acc, const St
     if (operation == "error") {
 	if (instance && !room->ownMember(member))
 	    return false;
-	if (!instance && room->resource().m_status == ClientResource::Connecting) {
+	if (room->resource().m_status == ClientResource::Connecting) {
 	    // Connection refused
 	    String text("Failed to join room");
 	    text.append(msg.getValue("reason",msg.getValue("error")),": ");
 	    addChatNotify(*room,text,msg.msgTime().sec());
 	    room->resource().m_status = ClientResource::Offline;
 	    updateMucRoomMember(*room,room->resource());
+	    room->m_params.clearParam("internal.invite",'.');
 	}
 	return true;
     }
@@ -8275,6 +8335,20 @@ bool DefaultLogic::handleMucResNotify(Message& msg, ClientAccount* acc, const St
 	    addChatNotify(*room,text,msg.msgTime().sec());
 	}
 	changed = true;
+	if (member->m_status == ClientResource::Online && room->ownMember(member)) {
+	    // Send invitations
+	    unsigned int count = room->m_params.getIntValue("internal.invite.count");
+	    if (count) {
+		const String& text = room->m_params["internal.invite.text"];
+		NamedIterator iter(room->m_params);
+		for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+		    if (ns->name() == "internal.invite.contact")
+			Engine::enqueue(buildMucRoom("invite",acc->toString(),
+			    room->uri(),text,*ns));
+		}
+	    }
+	    room->m_params.clearParam("internal.invite",'.');
+	}
     }
     // Update contact/instance
     if (!room->ownMember(member)) {

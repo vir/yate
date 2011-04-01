@@ -192,6 +192,7 @@ Configuration Client::s_history;                 // Call log
 Configuration Client::s_calltoHistory;           // Dialed destinations history
 int Client::s_changing = 0;
 Regexp Client::s_notSelected("^-\\(.*\\)-$");    // Holds a not selected/set value match
+Regexp Client::s_guidRegexp("^\\([[:xdigit:]]\\{8\\}\\)-\\(\\([[:xdigit:]]\\{4\\}\\)-\\)\\{3\\}\\([[:xdigit:]]\\{12\\}\\)$");
 ObjList Client::s_logics;
 String Client::s_skinPath;                       // Skin path
 String Client::s_soundPath;                      // Sounds path
@@ -5023,6 +5024,21 @@ MucRoomMember* MucRoom::findMember(const String& nick)
     for (ObjList* o = m_resources.skipNull(); o; o = o->skipNext()) {
 	MucRoomMember* r = static_cast<MucRoomMember*>(o->get());
 	if (nick == r->m_name)
+	    return r;
+    }
+    return 0;
+}
+
+// Retrieve a room member (or own member) by its contact and instance
+MucRoomMember* MucRoom::findMember(const String& contact, const String& instance)
+{
+    if (!(contact && instance))
+	return 0;
+    if (m_resource->m_instance == instance && (m_resource->m_uri &= contact))
+	return m_resource;
+    for (ObjList* o = m_resources.skipNull(); o; o = o->skipNext()) {
+	MucRoomMember* r = static_cast<MucRoomMember*>(o->get());
+	if (r->m_instance == instance && (r->m_uri &= contact))
 	    return r;
     }
     return 0;

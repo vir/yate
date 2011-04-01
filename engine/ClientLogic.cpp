@@ -562,6 +562,12 @@ static inline bool isGmailAccount(ClientAccount* acc)
 	(acc->contact()->uri().getHost() &= s_googleDomain);
 }
 
+// Check if a given domain is a Google MUC server
+static inline bool isGoogleMucDomain(const String& domain)
+{
+    return (domain &= "groupchat.google.com");
+}
+
 // Retrieve protocol specific page name in UI
 static const String& getProtoPage(const String& proto)
 {
@@ -616,6 +622,34 @@ static void showError(Window* wnd, const char* text)
 static inline void showAccDupError(Window* wnd)
 {
     showError(wnd,"Another account with the same protocol, username and host already exists!");
+}
+
+// Check a room chat at groupchat.google.com
+// Show an error if invalid
+static bool checkGoogleRoom(const String& contact, Window* w = 0)
+{
+    String room;
+    String domain;
+    int pos = contact.find('@');
+    if (pos >= 0) {
+	room = contact.substr(0,pos);
+	domain = contact.substr(pos + 1);
+    }
+    else
+	domain = contact;
+    if (!isGoogleMucDomain(domain))
+	return true;
+    if (room.startSkip("private-chat-",false) && Client::s_guidRegexp.matches(room))
+	return true;
+    String text;
+    text << "Invalid room '" << contact << "' for this domain!";
+    text << "\r\nThe format must be private-chat-8*HEX-4*HEX-4*HEX-4*HEX-12*HEX";
+    text << "\r\nE.g. private-chat-1a34561f-2d34-1111-dF23-29adc0347418";
+    if (w)
+	showError(w,text);
+    else
+	Client::openMessage(text);
+    return false;
 }
 
 // Retrieve resource status image with path
@@ -1791,6 +1825,10 @@ static void updateMucRoomMember(MucRoom& room, MucRoomMember& item, Message* msg
 	pList->addParam("name",item.m_name);
 	pList->addParam("groups",lookup(item.m_role,MucRoomMember::s_roleName));
 	pList->addParam("status_text",ClientResource::statusDisplayText(item.m_status));
+	String uri = item.m_uri;
+	if (uri)
+	    uri.append(item.m_instance,"/");
+	pList->addParam("contact",uri,false);
 	pList->addParam("image:status_image",resStatusImage(item.m_status));
 	if (room.hasChat(item.toString())) {
 	    pChat = new NamedList(*pList);
@@ -3209,6 +3247,8 @@ void JoinMucWizard::joinRoom()
     }
     String id;
     String uri(room + "@" + server);
+    if (!checkGoogleRoom(uri,w))
+	return;
     ClientContact::buildContactId(id,acc->toString(),uri);
     MucRoom* r = acc->findRoom(id);
     if (r && !r->resource().offline()) {
@@ -5532,7 +5572,8 @@ bool DefaultLogic::handleUserNotify(Message& msg, bool& stopLogic)
 	    // Auto join rooms
 	    for (ObjList* o = acc->mucs().skipNull(); o; o = o->skipNext()) {
 		MucRoom* r = static_cast<MucRoom*>(o->get());
-		if (r->m_params.getBoolValue("autojoin"))
+		if (r->m_params.getBoolValue("autojoin") &&
+		    checkGoogleRoom(r->uri()))
 		    joinRoom(r);
 	    }
 	}
@@ -7230,7 +7271,8 @@ bool DefaultLogic::handleUserData(Message& msg, bool& stopLogic)
 		    "Account(%s) updated remote MUC room '%s' [%p]",
 		    account.c_str(),r->uri().c_str(),a);
 		// Auto join
-		if (changed && r->m_params.getBoolValue("autojoin"))
+		if (changed && r->m_params.getBoolValue("autojoin") &&
+		    checkGoogleRoom(r->uri()))
 		    joinRoom(r);
 	    }
 	    if (changed)
@@ -7368,6 +7410,8 @@ void DefaultLogic::joinRoom(MucRoom* room)
 	if (!room->resource().m_name)
 	    room->resource().m_name = room->account()->params().getValue("username");
     }
+    if (!checkGoogleRoom(room->uri()))
+	return;
     bool hist = room->m_params.getBoolValue("history",true);
     unsigned int lastMinutes = 0;
     if (hist)
@@ -7639,9 +7683,20 @@ bool DefaultLogic::handleDialogAction(const String& name, bool& retVal, Window* 
 	MucRoom* room = getInput(m_accounts,context,wnd,nick);
 	retVal = room && room->resource().online();
 	if (retVal && nick != room->resource().m_name) {
-	    Message* m = room->buildMucRoom("setnick");
-	    m->addParam("nick",nick);
-	    retVal = Engine::enqueue(m);
+	    if (!isGoogleMucDomain(room->uri().getHost())) {
+		Message* m = room->buildMucRoom("setnick");
+		m->addParam("nick",nick);
+		retVal = Engine::enqueue(m);
+	    }
+	    else {
+		// Google MUC: send unavailable first
+		Message* m = room->buildJoin(false);
+		if (Engine::enqueue(m)) {
+		    m = room->buildJoin(true);
+		    m->setParam("nick",nick);
+		    retVal = Engine::enqueue(m);
+		}
+	    }
 	}
     }
     else
@@ -7721,7 +7776,7 @@ bool DefaultLogic::handleChatContactAction(const String& name, Window* wnd)
 	    }
 	    c->showChat(true,true);
 	}
-	else
+	else if (checkGoogleRoom(r->uri(),wnd))
 	    joinRoom(r);
 	return true;
     }
@@ -7875,6 +7930,8 @@ bool DefaultLogic::handleChatContactAction(const String& name, Window* wnd)
 		Engine::enqueue(Client::buildSubscribe(true,true,a->toString(),contact));
 	}
 	else {
+	    if (!checkGoogleRoom(contact,wnd))
+		return false;
 	    String nick;
 	    String pwd;
 	    String grp;
@@ -8076,7 +8133,17 @@ bool DefaultLogic::handleMucResNotify(Message& msg, ClientAccount* acc, const St
 	"Logic(%s) handle MUC notify account=%s contact=%s instance=%s operation=%s",
 	name().c_str(),acc->toString().c_str(),contact.c_str(),instance.safe(),
 	operation.c_str());
-    MucRoomMember* member = instance ? room->findMember(instance) : 0;
+    MucRoomMember* member = 0;
+    const String& mucContact = msg["muc.contact"];
+    const String& mucInst = msg["muc.contactinstance"];
+    String nick;
+    if (mucContact && mucInst) {
+	member = room->findMember(mucContact,mucInst);
+	if (member && room->ownMember(member))
+	    nick = instance;
+    }
+    if (!member)
+	member = instance ? room->findMember(instance) : 0;
     if (operation == "error") {
 	if (instance && !room->ownMember(member))
 	    return false;
@@ -8101,7 +8168,6 @@ bool DefaultLogic::handleMucResNotify(Message& msg, ClientAccount* acc, const St
     bool ownUser = 0 != list->find("ownuser");
     bool userKicked = !online && list->find("userkicked");
     bool userBanned = !online && list->find("userbanned");
-    String nick;
     if (!ownUser && list->find("nickchanged"))
 	nick = msg.getParam("muc.nick");
     TelEngine::destruct(list);
@@ -8196,19 +8262,13 @@ bool DefaultLogic::handleMucResNotify(Message& msg, ClientAccount* acc, const St
     }
     // Update contact/instance
     if (!room->ownMember(member)) {
-	String* tmp = msg.getParam("muc.contact");
-	if (tmp && *tmp != member->m_uri) {
-	    member->m_uri = *tmp;
-	    changed = true;
-	}
-	tmp = msg.getParam("muc.contactinstance");
-	if (tmp && *tmp != member->m_instance) {
-	    member->m_instance = *tmp;
-	    changed = true;
-	}
+	if (mucContact)
+	    changed = setChangedString(member->m_uri,mucContact) || changed;
+	if (mucInst)
+	    changed = setChangedString(member->m_instance,mucInst) || changed;
     }
     // Handle nick changes
-    if (nick) {
+    if (nick && nick != member->m_name) {
 	String text;
 	if (room->ownMember(member))
 	    text << "You are";
@@ -8225,7 +8285,8 @@ bool DefaultLogic::handleMucResNotify(Message& msg, ClientAccount* acc, const St
     // Update
     if (changed) {
 	updateMucRoomMember(*room,*member,&msg);
-	if (acc->resource().online() && (room->local() || room->remote()))
+	if (acc->resource().online() && room->ownMember(member) &&
+	    (room->local() || room->remote()))
 	    updateChatRoomsContactList(true,0,room);
     }
     return true;

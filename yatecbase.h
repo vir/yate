@@ -1648,6 +1648,9 @@ public:
     static Configuration s_calltoHistory;  // Dialed destinations history
     // Holds a not selected/set value match
     static Regexp s_notSelected;
+    // Regexp used to check if a string is a GUID in the format
+    // 8*HEX-4*HEX-4*HEX-4*HEX-12*HEX
+    static Regexp s_guidRegexp;
     // Paths
     static String s_skinPath;
     static String s_soundPath;
@@ -4498,6 +4501,14 @@ public:
      * @return MucRoomMember pointer or 0 if not found
      */
     MucRoomMember* findMember(const String& nick);
+
+    /**
+     * Retrieve a room member (or own member) by its contact and instance
+     * @param contact Member's contact
+     * @param instance Member's instance
+     * @return MucRoomMember pointer or 0 if not found
+     */
+    MucRoomMember* findMember(const String& contact, const String& instance);
 
     /**
      * Retrieve a room member (or own member) by its id

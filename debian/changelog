@@ -1,3 +1,17 @@
+yate (3.3.1.svn4262) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4262: + Advertise 'pmuc-v1' MUC capability
+    in entity capability child of the presence stanza.  + Added support
+    for google groupchat.  + Fixed bug: enable 'next' button in join muc
+    wizard when the user enters text in muc server.  + Filled muc server
+    list in join muc wizard with known conference servers.  + Added
+    capability to create a new private chat room and invite contacts to
+    it.  + Changed application icons.  + Fixed data conversion warning.
+    + Bumped version to 3.3.0 release.  + Bumped version to 3.3.1 alpha1
+    development.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 02 Apr 2011 02:19:21 +0400
+
 yate (3.2.1.svn4252) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4252: + Should fix many crashes like:

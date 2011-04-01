@@ -64,7 +64,7 @@
       </sizepolicy>
      </property>
      <property name="currentIndex" >
-      <number>0</number>
+      <number>2</number>
      </property>
      <widget class="QWidget" name="pageAccount" >
       <layout class="QVBoxLayout" >
@@ -357,9 +357,22 @@
          <property name="editable" >
           <bool>true</bool>
          </property>
+         <property name="currentIndex" >
+          <number>-1</number>
+         </property>
          <property name="_yate_textchangednotify" stdset="0" >
           <bool>true</bool>
          </property>
+         <item>
+          <property name="text" >
+           <string>conference.jabber.org</string>
+          </property>
+         </item>
+         <item>
+          <property name="text" >
+           <string>groupchat.google.com</string>
+          </property>
+         </item>
         </widget>
        </item>
        <item>

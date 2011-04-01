@@ -1666,9 +1666,11 @@ public:
     /**
      * Create a 'c' entity capability element as defined by GTalk
      * @param node Optional node attribute, defaults to GTalk's node
+     * @param muc Advertise MUC capability
      * @return A valid XmlElement pointer
      */
-    static XmlElement* createEntityCapsGTalkV1(const char* node = 0);
+    static XmlElement* createEntityCapsGTalkV1(const char* node = 0,
+	bool muc = false);
 
     /**
      * Create an 'presence' element

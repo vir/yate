@@ -90,9 +90,6 @@
          <height>20</height>
         </size>
        </property>
-       <property name="toolTip" >
-        <string>Contact name</string>
-       </property>
        <property name="styleSheet" >
         <string>font-size:12px;</string>
        </property>

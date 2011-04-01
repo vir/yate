@@ -2406,7 +2406,7 @@ XmlElement* StreamData::buildPresence(StreamData* d, const char* to)
 	    XMPPUtils::setPriority(*xml,s_priority);
 	// TODO: Build module default caps
     }
-    xml->addChild(XMPPUtils::createEntityCapsGTalkV1(s_capsNode));
+    xml->addChild(XMPPUtils::createEntityCapsGTalkV1(s_capsNode,true));
     xml->addChild(XMPPUtils::createEntityCaps(s_jabber->features().m_entityCapsHash,
 	s_capsNode));
     return xml;

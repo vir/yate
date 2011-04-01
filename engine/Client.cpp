@@ -24,6 +24,7 @@
 #include "yatecbase.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 
 using namespace TelEngine;
 
@@ -192,6 +193,7 @@ Configuration Client::s_history;                 // Call log
 Configuration Client::s_calltoHistory;           // Dialed destinations history
 int Client::s_changing = 0;
 Regexp Client::s_notSelected("^-\\(.*\\)-$");    // Holds a not selected/set value match
+Regexp Client::s_guidRegexp("^\\([[:xdigit:]]\\{8\\}\\)-\\(\\([[:xdigit:]]\\{4\\}\\)-\\)\\{3\\}\\([[:xdigit:]]\\{12\\}\\)$");
 ObjList Client::s_logics;
 String Client::s_skinPath;                       // Skin path
 String Client::s_soundPath;                      // Sounds path
@@ -2894,6 +2896,24 @@ bool Client::updateTrayIcon(const String& wndName)
     return ok;
 }
 
+// Generate a GUID string in the format 8*HEX-4*HEX-4*HEX-4*HEX-12*HEX
+void Client::generateGuid(String& buf, const String& extra)
+{
+    int8_t data[16];
+    *(int32_t*)(data + 12) = (u_int32_t)::random();
+    *(u_int64_t*)(data + 3) = Time::now();
+    if (extra)
+	*(u_int16_t*)(data + 11) = extra.hash();
+    int32_t* d = (int32_t*)data;
+    *d = (int32_t)::random();
+    String tmp;
+    tmp.hexify(data,16);
+    buf.clear();
+    buf << tmp.substr(0,8) << "-" << tmp.substr(8,4) << "-";
+    buf << tmp.substr(12,4) << "-" << tmp.substr(16,4) << "-";
+    buf << tmp.substr(20);
+}
+
 // Build an 'ui.event' message
 Message* Client::eventMessage(const String& event, Window* wnd, const char* name,
 	NamedList* params)
@@ -4008,7 +4028,8 @@ Message* ClientAccount::userData(bool update, const String& data, const char* ms
 	NamedIterator iter(r->m_params);
 	for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
 	    // Skip local/remote params
-	    if (ns->name() != "local" && ns->name() != "remote")
+	    if (ns->name() != "local" && ns->name() != "remote" &&
+		!ns->name().startsWith("internal."))
 		m->addParam(prefix + ns->name(),*ns);
 	}
     }
@@ -5023,6 +5044,21 @@ MucRoomMember* MucRoom::findMember(const String& nick)
     for (ObjList* o = m_resources.skipNull(); o; o = o->skipNext()) {
 	MucRoomMember* r = static_cast<MucRoomMember*>(o->get());
 	if (nick == r->m_name)
+	    return r;
+    }
+    return 0;
+}
+
+// Retrieve a room member (or own member) by its contact and instance
+MucRoomMember* MucRoom::findMember(const String& contact, const String& instance)
+{
+    if (!(contact && instance))
+	return 0;
+    if (m_resource->m_instance == instance && (m_resource->m_uri &= contact))
+	return m_resource;
+    for (ObjList* o = m_resources.skipNull(); o; o = o->skipNext()) {
+	MucRoomMember* r = static_cast<MucRoomMember*>(o->get());
+	if (r->m_instance == instance && (r->m_uri &= contact))
 	    return r;
     }
     return 0;

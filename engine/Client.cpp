@@ -2904,7 +2904,8 @@ void Client::generateGuid(String& buf, const String& extra)
     *(u_int64_t*)(data + 3) = Time::now();
     if (extra)
 	*(u_int16_t*)(data + 11) = extra.hash();
-    *(int32_t*)data = (u_int32_t)::random();
+    int32_t* d = (int32_t*)data;
+    *d = (int32_t)::random();
     String tmp;
     tmp.hexify(data,16);
     buf.clear();

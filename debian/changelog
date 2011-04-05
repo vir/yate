@@ -1,3 +1,15 @@
+yate (3.3.1.svn4266) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4266: + Added packaging: new client UI files
+    + Fixed bug: add the separator when building the list of compression
+    methods from received stanza.  + Added support for forwarding media
+    change requests (reINVITE) from ysigchan to mgcpca or any other
+    bearer.  + Set server parameter for GTalk provider.  + Advertise
+    external components in the list of server items when requested.
+    Match server target for stanzas received on component streams.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 06 Apr 2011 02:19:22 +0400
+
 yate (3.3.1.svn4262) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4262: + Advertise 'pmuc-v1' MUC capability

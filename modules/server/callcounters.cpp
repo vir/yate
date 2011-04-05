@@ -75,7 +75,7 @@ public:
     virtual bool received(Message& msg);
 };
 
-class CallCountersPlugin : public Plugin, public String
+class CallCountersPlugin : public Plugin
 {
 public:
     CallCountersPlugin();
@@ -101,10 +101,10 @@ bool Context::remove(const String& id)
     if (!s)
 	return false;
     delete s;
-    DDebug(__plugin,DebugAll,"Removing call '%s' from context '%s'",
+    DDebug(&__plugin,DebugAll,"Removing call '%s' from context '%s'",
 	id.c_str(),c_str());
     if (--m_count <= 0) {
-	DDebug(__plugin,DebugInfo,"Removing empty context '%s'",c_str());
+	DDebug(&__plugin,DebugInfo,"Removing empty context '%s'",c_str());
 	s_contexts.remove(this);
     }
     return true;
@@ -131,7 +131,7 @@ bool CdrHandler::received(Message& msg)
 	    Context* c = static_cast<Context*>(s_contexts[*ctxt]);
 	    if (c && c->remove(*chan))
 		return false;
-	    DDebug(__plugin,DebugNote,"Call '%s' not removed from '%s'",chan->c_str(),ctxt->c_str());
+	    DDebug(&__plugin,DebugNote,"Call '%s' not removed from '%s'",chan->c_str(),ctxt->c_str());
 	}
 	// now we have to look in all contexts
 	for (ObjList* l = s_contexts.skipNull(); l; l=l->skipNext()) {
@@ -139,7 +139,7 @@ bool CdrHandler::received(Message& msg)
 	    if (c->remove(*chan))
 		return false;
 	}
-	DDebug(__plugin,DebugAll,"Call '%s' not found in any context",chan->c_str());
+	DDebug(&__plugin,DebugAll,"Call '%s' not found in any context",chan->c_str());
     } // finalize operation
     else {
 	if (TelEngine::null(ctxt))
@@ -155,11 +155,11 @@ bool CdrHandler::received(Message& msg)
 		break;
 	}
 	if (!c) {
-	    DDebug(__plugin,DebugInfo,"Creating context '%s'",ctxt->c_str());
+	    DDebug(&__plugin,DebugInfo,"Creating context '%s'",ctxt->c_str());
 	    c = new Context(*ctxt);
 	    s_contexts.append(c);
 	}
-	DDebug(__plugin,DebugAll,"Adding call '%s' to context '%s'",
+	DDebug(&__plugin,DebugAll,"Adding call '%s' to context '%s'",
 	    chan->c_str(),ctxt->c_str());
 	c->add(*chan);
     }
@@ -192,7 +192,7 @@ bool RouteHandler::received(Message& msg)
 bool StatusHandler::received(Message &msg)
 {
     const String* sel = msg.getParam("module");
-    if (!TelEngine::null(sel) && (*sel != __plugin))
+    if (!TelEngine::null(sel) && (*sel != __plugin.name()))
 	return false;
     String st("name=callcounters,type=misc,format=Context|Count");
     s_mutex.lock();
@@ -221,8 +221,8 @@ bool CommandHandler::received(Message &msg)
 	String* tmp = msg.getParam("partline");
 	if (tmp && (*tmp == "status")) {
 	    tmp = msg.getParam("partword");
-	    if (!tmp || tmp->null() || __plugin.startsWith(*tmp))
-		msg.retValue().append(__plugin,"\t");
+	    if (!tmp || tmp->null() || __plugin.name().startsWith(*tmp))
+		msg.retValue().append(__plugin.name(),"\t");
 	}
     }
     return false;
@@ -230,7 +230,7 @@ bool CommandHandler::received(Message &msg)
 
 
 CallCountersPlugin::CallCountersPlugin()
-    : String("callcounters")
+    : Plugin("callcounters")
 {
     Output("Loaded module CallCounters");
 }
@@ -242,7 +242,7 @@ CallCountersPlugin::~CallCountersPlugin()
 
 void CallCountersPlugin::initialize()
 {
-    Configuration cfg(Engine::configFile(c_str()));
+    Configuration cfg(Engine::configFile(name().c_str()));
     s_allCounters = cfg.getBoolValue("general","allcounters",false);
     // tracked parameter, direction and priorities cannot be reloaded
     if (s_paramName.null()) {

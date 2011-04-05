@@ -12,7 +12,7 @@ IMPORTS
 		FROM NULL-TEAM-MIB;
 
 yate MODULE-IDENTITY
-	LAST-UPDATED	"201009281300Z"
+	LAST-UPDATED	"201103281730Z"
 	ORGANIZATION	"S.C. Null Team Impex S.R.L."
 	CONTACT-INFO
 		"Diana Cionoiu
@@ -21,6 +21,9 @@ yate MODULE-IDENTITY
 		  Email: office@null.ro"
 	DESCRIPTION
 		"The MIB module for Yate."
+	REVISION	"201103281730Z"
+	DESCRIPTION
+		"Most recent version of this MIB module."
 	REVISION	"201009281300Z"
 	DESCRIPTION
 		"Initial published revision."
@@ -580,7 +583,8 @@ LinkEntry ::= SEQUENCE {
 	linkID		DisplayString,
 	linkType	DisplayString,
 	linkStatus	DisplayString,
-	linkDownAlarms	Counter32
+	linkDownAlarms	Counter32,
+	linkUptime	Counter32
 }
 
 linkIndex OBJECT-TYPE
@@ -622,6 +626,14 @@ linkDownAlarms OBJECT-TYPE
 	DESCRIPTION
 		"Number of times an alarm that signals that this link is down alarm has been sent."
 	::= { linkEntry 5 }
+
+linkUptime OBJECT-TYPE
+	SYNTAX 		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Time since the link is up in seconds."
+	::= { linkEntry 6 }
 
 -- links END
 -- interfaces BEGIN

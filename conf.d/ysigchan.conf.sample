@@ -468,6 +468,10 @@
 ;  netind2pctype=ANSI8,ITU,ANSI,ITU
 ;netind2pctype=
 
+; netindicator: keyword: Default value of Network Indicator bits
+; Allowed values: international, spareinternational, national, reservednational
+;netindicator=national
+
 ; route: string: Build a destination route for the SS7 network
 ; The format of this option is pointcodetype,label,priority
 ; This parameter can be repeated to build multiple destination routes
@@ -628,6 +632,14 @@
 ; If missing the local address of the attached router is used
 ; Example: local=ITU,2-2-4
 ;local=
+
+; priority: keyword: Value of the Priority bits in the Service Information Octet
+; Allowed values: regular, special, circuit, facility
+;priority=regular
+
+; netindicator: keyword: Default value of Network Indicator bits in the SIO
+; Allowed values: international, spareinternational, national, reservednational
+;netindicator=national
 
 ; changemsgs: boolean: Emit and process changeover and changeback messages
 ; Disabling these messages forces always using time controlled diversion

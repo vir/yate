@@ -67,10 +67,14 @@ struct MsgParams {
 
 // Nature of Address Indicator
 static const TokenDict s_dict_nai[] = {
-    { "subscriber",    1 },
-    { "unknown",       2 },
-    { "national",      3 },
-    { "international", 4 },
+    { "subscriber",        1 },
+    { "unknown",           2 },
+    { "national",          3 },
+    { "international",     4 },
+    { "network-specific",  5 },
+    { "national-routing",  6 },
+    { "specific-routing",  7 },
+    { "routing-with-cdn",  8 },
     { 0, 0 }
 };
 

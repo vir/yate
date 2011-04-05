@@ -53,6 +53,34 @@
    <item>
     <layout class="QHBoxLayout" >
      <item>
+      <widget class="QToolButton" name="room_invite_btn" >
+       <property name="minimumSize" >
+        <size>
+         <width>30</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>30</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="autoRaise" >
+        <bool>true</bool>
+       </property>
+       <property name="_yate_identity" stdset="0" >
+        <string>room_invite</string>
+       </property>
+       <property name="_yate_setaction" stdset="0" >
+        <string>room_invite_contacts</string>
+       </property>
+       <property name="_yate_noautoconnect" stdset="0" >
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QLabel" name="name" >
        <property name="sizePolicy" >
         <sizepolicy vsizetype="Fixed" hsizetype="Preferred" >
@@ -83,6 +111,9 @@
        </property>
        <property name="styleSheet" >
         <string>QLabel {font-family: Arial; font-size: 14px;}</string>
+       </property>
+       <property name="alignment" >
+        <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
        </property>
        <property name="indent" >
         <number>2</number>
@@ -448,6 +479,17 @@
    </property>
    <property name="_yate_identity" stdset="0" >
     <string>send_chat</string>
+   </property>
+  </action>
+  <action name="room_invite_contacts" >
+   <property name="icon" >
+    <iconset>muc.png</iconset>
+   </property>
+   <property name="text" >
+    <string>Create chat room</string>
+   </property>
+   <property name="_yate_identity" stdset="0" >
+    <string>room_invite_contacts</string>
    </property>
   </action>
  </widget>

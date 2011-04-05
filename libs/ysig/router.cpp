@@ -376,6 +376,7 @@ bool SS7Router::initialize(const NamedList* config)
 	    m_transferSilent = (*tr == "silent");
 	    m_transfer = !m_transferSilent && tr->toBoolean(m_transfer);
 	}
+	setNI(SS7MSU::getNetIndicator(config->getValue("netindicator"),SS7MSU::National));
 	m_autoAllowed = config->getBoolValue("autoallow",m_autoAllowed);
 	m_sendUnavail = config->getBoolValue("sendupu",m_sendUnavail);
 	m_sendProhibited = config->getBoolValue("sendtfp",m_sendProhibited);

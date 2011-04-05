@@ -103,7 +103,7 @@ public:
 	{ return m_name; }
     inline const String& id() const
 	{ return m_id; }
-    void setDivert(const Message& msg);
+    void setFaxDivert(const Message& msg);
     void init();
 private:
     void checkDtmf();
@@ -111,9 +111,9 @@ private:
     void checkCont();
     String m_id;
     String m_name;
-    String m_divert;
-    String m_caller;
-    String m_called;
+    String m_faxDivert;
+    String m_faxCaller;
+    String m_faxCalled;
     String m_target;
     String m_dnis;
     Mode m_mode;
@@ -401,17 +401,19 @@ void ToneConsumer::checkFax()
     m_detFax = false;
     Message* m = new Message("chan.masquerade");
     m->addParam("id",m_id);
-    if (m_divert) {
+    if (m_faxDivert) {
 	Debug(&plugin,DebugCall,"Diverting call %s to: %s",
-	    m_id.c_str(),m_divert.c_str());
+	    m_id.c_str(),m_faxDivert.c_str());
 	m->addParam("message","call.execute");
-	m->addParam("callto",m_divert);
+	m->addParam("callto",m_faxDivert);
 	m->addParam("reason","fax");
     }
     else {
 	m->addParam("message","call.fax");
 	m->addParam("detected","inband");
     }
+    m->addParam("caller",m_faxCaller,false);
+    m->addParam("called",m_faxCalled,false);
     Engine::enqueue(m);
 }
 
@@ -508,7 +510,7 @@ unsigned long ToneConsumer::Consume(const DataBlock& data, unsigned long tStamp,
 }
 
 // Copy parameters required for automatic fax call diversion
-void ToneConsumer::setDivert(const Message& msg)
+void ToneConsumer::setFaxDivert(const Message& msg)
 {
     m_target = msg.getParam("notify");
     if (m_id.null())
@@ -519,11 +521,11 @@ void ToneConsumer::setDivert(const Message& msg)
     m_detFax = true;
     // if divert is empty or false disable diverting
     if (divert->null() || !divert->toBoolean(true))
-	m_divert.clear();
+	m_faxDivert.clear();
     else {
-	m_divert = *divert;
-	m_caller = msg.getValue("caller",m_caller);
-	m_called = msg.getValue("called",m_called);
+	m_faxDivert = *divert;
+	m_faxCaller = msg.getValue("fax_caller",msg.getValue("caller",m_faxCaller));
+	m_faxCalled = msg.getValue("fax_called",msg.getValue("called",m_faxCalled));
     }
 }
 
@@ -545,7 +547,7 @@ bool AttachHandler::received(Message& msg)
     if (ch) {
 	if (cons) {
 	    ToneConsumer* c = new ToneConsumer(ch->id(),cons);
-	    c->setDivert(msg);
+	    c->setFaxDivert(msg);
 	    ch->setConsumer(c);
 	    c->deref();
 	}
@@ -555,11 +557,11 @@ bool AttachHandler::received(Message& msg)
 	    ToneConsumer* c = static_cast<ToneConsumer*>(de->getSniffer(snif));
 	    if (c) {
 		c->init();
-		c->setDivert(msg);
+		c->setFaxDivert(msg);
 	    }
 	    else {
 		c = new ToneConsumer(ch->id(),snif);
-		c->setDivert(msg);
+		c->setFaxDivert(msg);
 		de->addSniffer(c);
 		c->deref();
 	    }
@@ -568,7 +570,7 @@ bool AttachHandler::received(Message& msg)
     }
     else if (ds && cons) {
 	ToneConsumer* c = new ToneConsumer(msg.getValue("id"),cons);
-	c->setDivert(msg);
+	c->setFaxDivert(msg);
 	bool ok = DataTranslator::attachChain(ds,c);
 	if (ok)
 	    msg.userData(c);
@@ -579,7 +581,7 @@ bool AttachHandler::received(Message& msg)
     }
     else if (de && cons) {
 	ToneConsumer* c = new ToneConsumer(msg.getValue("id"),cons);
-	c->setDivert(msg);
+	c->setFaxDivert(msg);
 	de->setConsumer(c);
 	c->deref();
 	return msg.getBoolValue("single");
@@ -606,7 +608,7 @@ bool RecordHandler::received(Message& msg)
     }
     if (de) {
 	ToneConsumer* c = new ToneConsumer(id,src);
-	c->setDivert(msg);
+	c->setFaxDivert(msg);
 	de->setCallRecord(c);
 	c->deref();
 	return true;

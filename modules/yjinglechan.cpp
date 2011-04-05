@@ -287,6 +287,8 @@ private:
     void overrideJingleVersion(const NamedList& list, bool caps);
     // Copy chan/session parameters to a destination list
     void copySessionParams(NamedList& list, bool redirect = true);
+    // Check media for a received content
+    bool checkMedia(const JGEvent& event, JGSessionContent& c);
 
     Mutex m_mutex;                       // Lock transport and session
     State m_state;                       // Connection state
@@ -298,8 +300,8 @@ private:
     JabberID m_remote;                   // Remote user's JID
     ObjList m_audioContents;             // The list of negotiated audio contents
     JGSessionContent* m_audioContent;    // The current audio content
+    JGRtpMediaList m_audioFormats;       // Audio formats used by this channel
     String m_callerPrompt;               // Text to be sent to called before calling it
-    String m_formats;                    // Formats received in call.execute
     String m_subject;                    // Connection subject
     String m_line;                       // Connection line
     String m_localip;                    // Local address
@@ -526,6 +528,7 @@ static String s_capsNode = "http://yate.null.ro/yate/jingle/caps"; // node for e
 static bool s_serverMode = true;                  // Server/client mode
 static YJGEngine* s_jingle = 0;
 static YJGDriver plugin;                          // The driver
+static bool s_ilbcDefault30 = true;               // Default ilbc format when ptime is unknown (30 or 20)
 
 // Message handlers installed by the module
 static const TokenDict s_msgHandler[] = {
@@ -590,6 +593,13 @@ static const TokenDict s_dictDtmfMeth[] = {
 };
 
 
+// Check if a payload name is telephone event one
+static inline bool isTelEvent(const String& name)
+{
+    return (name &= "telephone-event") || (name &= "tone") ||
+	(name &= "audio/telephone-event");
+};
+
 static inline void addValidParam(Message& m, const char* param, const char* value)
 {
     if (!null(value))
@@ -606,20 +616,6 @@ static inline void jingleAddParam(NamedList& list, const char* param, const char
     list.addParam(param,value,emptyOk);
     if (copy)
 	copy->append(param,",");
-}
-
-// Add formats to a list of jingle payloads
-static void setMedia(JGRtpMediaList& dest, const String& formats,
-    const JGRtpMediaList& src)
-{
-    ObjList* f = formats.split(',');
-    for (ObjList* o = f->skipNull(); o; o = o->skipNext()) {
-	String* format = static_cast<String*>(o->get());
-	JGRtpMedia* a = src.findSynonym(*format);
-	if (a)
-	    dest.append(new JGRtpMedia(*a));
-    }
-    TelEngine::destruct(f);
 }
 
 
@@ -738,6 +734,7 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
     m_state(Pending), m_session(0), m_rtpStarted(false), m_acceptRelay(s_acceptRelay),
     m_sessVersion(s_sessVersion),
     m_local(caller), m_remote(called), m_audioContent(0),
+    m_audioFormats(JGRtpMediaList::Audio),
     m_callerPrompt(msg.getValue("callerprompt")),
     m_localip(localip),
     m_offerRawTransport(true), m_offerIceTransport(true),
@@ -771,9 +768,12 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
     }
     // Get formats. Check if this is a file transfer session
     if (null(file)) {
-	m_formats = msg.getValue("formats");
-	if (!m_formats)
-	    s_usedCodecs.createList(m_formats,true);
+	String audio = msg["formats"];
+	plugin.lock();
+	if (!(audio || s_usedCodecs.createList(audio,true)))
+	    audio = "alaw,mulaw";
+	m_audioFormats.setMedia(s_usedCodecs,audio);
+	plugin.unlock();
     }
     else {
 	m_ftStatus = FTIdle;
@@ -835,6 +835,7 @@ YJGConnection::YJGConnection(JGEvent* event)
     m_sessVersion(event->session()->version()),
     m_local(event->session()->local()), m_remote(event->session()->remote()),
     m_audioContent(0),
+    m_audioFormats(JGRtpMediaList::Audio),
     m_offerRawTransport(true), m_offerIceTransport(true),
     m_redirectCount(0), m_dtmfMeth(s_dtmfMeth),
     m_secure(s_useCrypto), m_secureRequired(s_cryptoMandatory),
@@ -843,6 +844,9 @@ YJGConnection::YJGConnection(JGEvent* event)
     m_connSocksServer(false)
 {
     m_line = m_session->line();
+    plugin.lock();
+    m_audioFormats.setMedia(s_usedCodecs);
+    plugin.unlock();
     // Update local ip in non server mode
     if (!s_serverMode && m_line) {
 	Message* m = plugin.checkAccount(m_line);
@@ -1001,6 +1005,11 @@ bool YJGConnection::route()
 		m->addParam("file_time",String(time));
 	}
     }
+    else {
+	String formats;
+	m_audioFormats.createList(formats,true);
+	m->addParam("formats",formats,false);
+    }
     m_mutex.unlock();
     return startRouter(m);
 }
@@ -1012,6 +1021,7 @@ void YJGConnection::callAccept(Message& msg)
     Debug(this,DebugCall,"callAccept [%p]",this);
     m_secure = msg.getBoolValue("secure",m_secure);
     m_secureRequired = msg.getBoolValue("secure_required",m_secureRequired);
+    m_dtmfMeth = msg.getIntValue("dtmfmethod",s_dictDtmfMeth,m_dtmfMeth);
     Channel::callAccept(msg);
 }
 
@@ -2077,15 +2087,6 @@ void YJGConnection::addContent(bool local, JGSessionContent* c)
 	else
 	    c->m_rtpLocalCandidates.generateOldIceAuth();
     }
-    // Fill synonym for received media
-    if (!local) {
-	for (ObjList* o = c->m_rtpMedia.skipNull(); o; o = o->skipNext()) {
-	    JGRtpMedia* m = static_cast<JGRtpMedia*>(o->get());
-	    JGRtpMedia* tmp = s_knownCodecs.findMedia(m->toString());
-	    if (tmp)
-		m->m_synonym = tmp->m_synonym;
-	}
-    }
     Debug(this,DebugAll,"Added content='%s' type=%s initiator=%s [%p]",
 	c->toString().c_str(),c->m_rtpLocalCandidates.typeName(),
 	String::boolText(c->creator() == JGSessionContent::CreatorInitiator),this);
@@ -2130,12 +2131,8 @@ void YJGConnection::removeCurrentAudioContent(bool removeReq)
 	    if (m_audioContent->isEarlyMedia())
 		c->setEarlyMedia();
 	    // Copy media
-	    c->m_rtpMedia.m_media = m_audioContent->m_rtpMedia.m_media;
 	    c->m_rtpMedia.m_cryptoRequired = m_audioContent->m_rtpMedia.m_cryptoRequired;
-	    for (ObjList* o = m_audioContent->m_rtpMedia.skipNull(); o; o = o->skipNext()) {
-		JGRtpMedia* m = static_cast<JGRtpMedia*>(o->get());
-		c->m_rtpMedia.append(new JGRtpMedia(*m));
-	    }
+	    c->m_rtpMedia.setMedia(m_audioContent->m_rtpMedia);
 	    // Append
 	    addContent(true,c);
 	    if (m_session)
@@ -2233,8 +2230,12 @@ bool YJGConnection::startRtp()
     m.addParam("media","audio");
     m.addParam("getsession","true");
     ObjList* obj = m_audioContent->m_rtpMedia.skipNull();
-    if (obj)
-	m.addParam("format",(static_cast<JGRtpMedia*>(obj->get()))->m_synonym);
+    if (obj) {
+	JGRtpMedia* media = static_cast<JGRtpMedia*>(obj->get());
+	m.addParam("payload",media->m_id);
+ 	m.addParam("format",media->m_synonym);
+    }
+    m.addParam("evpayload",String(m_audioContent->m_rtpMedia.m_telEvent));
     m.addParam("localip",rtpLocal->m_address);
     m.addParam("localport",rtpLocal->m_port);
     m.addParam("remoteip",rtpRemote->m_address);
@@ -2410,34 +2411,7 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
 	}
 
 	// Check media
-	// Fill a string with our capabilities for debug purposes
-	String remoteCaps;
-	if (debugAt(DebugInfo))
-	    c->m_rtpMedia.createList(remoteCaps,false);
-	// Check received media against the used codecs list
-	// Compare 'id' and 'name'
-	ListIterator iter(c->m_rtpMedia);
-	for (GenObject* go; (go = iter.get());) {
-	    JGRtpMedia* recv = static_cast<JGRtpMedia*>(go);
-	    ObjList* used = s_usedCodecs.skipNull();
-	    for (; used; used = used->skipNext()) {
-		JGRtpMedia* local = static_cast<JGRtpMedia*>(used->get());
-		if (local->m_id == recv->m_id && local->m_name == recv->m_name)
-		    break;
-	    }
-	    if (!used)
-		c->m_rtpMedia.remove(recv,true);
-	}
-	// Check if both parties have common media
-	if (!c->m_rtpMedia.skipNull()) {
-	    if (debugAt(DebugInfo)) {
-		String localCaps;
-		s_usedCodecs.createList(localCaps,false);
-		Debug(this,DebugNote,
-		    "Event(%s) no common media for content='%s' local='%s' remote='%s' [%p]",
-		    event.actionName(),c->toString().c_str(),localCaps.c_str(),
-		    remoteCaps.c_str(),this);
-	    }
+	if (!checkMedia(event,*c)) {
 	    remove.append(c)->setDelete(false);
 	    continue;
 	}
@@ -2513,7 +2487,11 @@ JGSessionContent* YJGConnection::buildAudioContent(JGRtpCandidates::Type type,
     if (m_secure && m_secureRequired)
 	c->m_rtpMedia.m_cryptoRequired = true;
     if (useFormats)
-	setMedia(c->m_rtpMedia,m_formats,s_usedCodecs);
+	c->m_rtpMedia.setMedia(m_audioFormats);
+    if (m_sessVersion == JGSession::Version0) {
+	// Hack: set second telephone event for implementations expecting it
+	c->m_rtpMedia.m_telEventName2 = "audio/telephone-event";
+    }
 
     c->m_rtpLocalCandidates.m_type = c->m_rtpRemoteCandidates.m_type = type;
 
@@ -2630,11 +2608,31 @@ bool YJGConnection::initLocalCandidates(JGSessionContent& content, bool sendTran
 // Return false if there is no common media
 bool YJGConnection::matchMedia(JGSessionContent& local, JGSessionContent& recv) const
 {
+    int telEvent = 0;
     ListIterator iter(local.m_rtpMedia);
     for (GenObject* gen = 0; 0 != (gen = iter.get()); ) {
 	JGRtpMedia* m = static_cast<JGRtpMedia*>(gen);
-	if (!recv.m_rtpMedia.find(m->toString()))
-	    local.m_rtpMedia.remove(m);
+	JGRtpMedia* found = 0;
+	for (ObjList* o = recv.m_rtpMedia.skipNull(); o; o = o->skipNext()) {
+	    JGRtpMedia* recvMedia = static_cast<JGRtpMedia*>(o->get());
+	    int id = recvMedia->m_id.toInteger();
+	    if (id > 95 && !telEvent && isTelEvent(recvMedia->m_name))
+		telEvent = id;
+	    if (!found && m->toString() == recvMedia->toString())
+		found = recvMedia;
+	    if (found && telEvent)
+		break;
+	}
+	if (found)
+	    continue;
+	Debug(this,DebugAll,"Content '%s' removing media %s/%s from offer [%p]",
+	    local.toString().c_str(),m->m_id.c_str(),m->m_synonym.c_str(),this);
+	local.m_rtpMedia.remove(m);
+    }
+    if (telEvent && local.m_rtpMedia.m_telEvent != telEvent) {
+	Debug(this,DebugAll,"Content '%s' changing tel event from %d to %d [%p]",
+	    local.toString().c_str(),local.m_rtpMedia.m_telEvent,telEvent,this);
+	local.m_rtpMedia.m_telEvent = telEvent;
     }
     return 0 != local.m_rtpMedia.skipNull();
 }
@@ -2684,7 +2682,9 @@ void YJGConnection::setEarlyMediaOut(Message& msg)
     if (!c) {
 	c = buildAudioContent(JGRtpCandidates::RtpRawUdp,
 	    JGSessionContent::SendResponder,false,false);
-	setMedia(c->m_rtpMedia,formats,s_usedCodecs);
+	plugin.lock();
+	c->m_rtpMedia.setMedia(s_usedCodecs,formats);
+	plugin.unlock();
 	c->setEarlyMedia();
 	addContent(true,c);
     }
@@ -3036,8 +3036,11 @@ void YJGConnection::copySessionParams(NamedList& list, bool redirect)
 	jingleAddParam(list,"redirectcount",String(m_redirectCount),copy);
 	list.addParam("diverter",m_remote,false);
     }
-    if (m_ftStatus == FTNone)
-	jingleAddParam(list,"formats",m_formats,copy,false);
+    if (m_ftStatus == FTNone) {
+	String formats;
+	m_audioFormats.createList(formats,true);
+	jingleAddParam(list,"formats",formats,copy,false);
+    }
     else
 	jingleAddParam(list,"format","data",copy);
     // Jingle session params
@@ -3072,6 +3075,125 @@ void YJGConnection::copySessionParams(NamedList& list, bool redirect)
     unsigned int t = XMPPUtils::decodeDateTimeSec(c->m_fileTransfer["date"]);
     if (t != (unsigned int)-1)
 	jingleAddParam(list,"file_time",String(t),copy);
+}
+
+// Check media in a received content 
+bool YJGConnection::checkMedia(const JGEvent& event, JGSessionContent& c)
+{
+    JGRtpMediaList& codecs = m_audioFormats;
+    // Fill a string with our capabilities for debug purposes
+    String remoteCaps;
+    if (debugAt(DebugInfo))
+	c.m_rtpMedia.createList(remoteCaps,false);
+    ListIterator iter(c.m_rtpMedia);
+    for (GenObject* go = 0; (go = iter.get());) {
+	JGRtpMedia* recv = static_cast<JGRtpMedia*>(go);
+	XDebug(this,DebugAll,"Checking received media %s/%s/%s/%s/%s/%s/%s [%p]",
+	    recv->m_id.c_str(),recv->m_name.c_str(),recv->m_clockrate.c_str(),
+	    recv->m_channels.c_str(),recv->m_pTime.c_str(),
+	    recv->m_maxPTime.c_str(),recv->m_bitRate.c_str(),this);
+	const char* reason = 0;
+	int level = DebugNote;
+	// Use a while() to break to the end
+	while (true) {
+	    // RTP payload id must be [0..127]
+	    int payloadId = recv->m_id.toInteger(-1);
+	    if (payloadId < 0 || payloadId > 127) {
+		reason = "Invalid id";
+		break;
+	    }
+	    // XEP 0167: Channels is an unsigned byte, defaults to 1
+	    // We support only 1 channel for now
+	    if (recv->m_channels.toInteger(1) != 1) {
+		reason = "Invalid number of channels";
+		break;
+	    }
+	    JGRtpMedia* found = 0;
+	    // 0..95: static payloads: match by id
+	    // > 95: dynamic payloads: match by name
+	    if (payloadId < 96)
+		found = codecs.findMedia(recv->m_id);
+	    else if (recv->m_name) {
+		// Remove tel event from offer
+		if (isTelEvent(recv->m_name)) {
+		    XDebug(this,DebugAll,"Removing tel event payload=%d '%s' [%p]",
+			payloadId,recv->m_name.c_str(),this);
+		    c.m_rtpMedia.m_telEvent = payloadId;
+		    c.m_rtpMedia.m_telEventName = recv->m_name;
+		    c.m_rtpMedia.remove(recv);
+		    break;
+		}
+		for (ObjList* o = codecs.skipNull(); o; o = o->skipNext(), found = 0) {
+		    found = static_cast<JGRtpMedia*>(o->get());
+		    if (found->m_name |= recv->m_name)
+			continue;
+		    if (recv->m_clockrate && recv->m_clockrate != found->m_clockrate)
+			continue;
+		    // Fix ilbc
+		    if (recv->m_name &= "ilbc") {
+			// RFC 3952 specifies
+			// 30ms ptime = 13.33 kbit/s: check 13000
+			// 20ms ptime = 15.2 kbit/s:  check 15000
+			if (!recv->m_pTime && recv->m_bitRate) {
+			    int val = recv->m_bitRate.toInteger() / 1000;
+			    if (val == 13)
+				recv->m_pTime = "30";
+			    else if (val == 15)
+				recv->m_pTime = "20";
+			}
+			if (!recv->m_pTime)
+			    recv->m_pTime = (s_ilbcDefault30 ? "30" : "20");
+			if (recv->m_pTime != found->m_pTime)
+				continue;
+		    }
+		    break;
+		}
+	    }
+	    else {
+		// XEP 0167: name is mandatory for dynamic payloads
+		reason = "Missing name for dynamic payload";
+		break;
+	    }
+	    if (found) {
+		XDebug(this,DebugAll,"Setting synonym=%s to received %s from %s/%s [%p]",
+		    found->m_synonym.c_str(),recv->m_name.c_str(),
+		    found->m_id.c_str(),found->m_name.c_str(),this);
+		recv->m_synonym = found->m_synonym;
+	    }
+	    else {
+		reason = "Codec disabled/unknown";
+		level = DebugAll;
+	    }
+	    break;
+	}
+	if (!reason)
+	    continue;
+	Debug(this,level,
+	    "Event(%s) removing payload id=%s %s/%s/%s/%s from content='%s': %s [%p]",
+	    event.actionName(),recv->m_id.c_str(),recv->m_name.c_str(),
+	    recv->m_clockrate.c_str(),recv->m_channels.c_str(),recv->m_pTime.c_str(),
+	    c.toString().c_str(),reason,this);
+	c.m_rtpMedia.remove(recv);
+    }
+    // Check if both parties have common media
+    if (c.m_rtpMedia.skipNull()) {
+#ifdef DEBUG
+	String formats;
+	c.m_rtpMedia.createList(formats,true);
+	Debug(this,DebugAll,"Set formats '%s' in content '%s' [%p]",
+	    formats.c_str(),c.toString().c_str(),this);
+#endif
+	return true;
+    }
+    if (debugAt(DebugInfo)) {
+	String localCaps;
+	codecs.createList(localCaps,false);
+	Debug(this,DebugNote,
+	    "Event(%s) no common media for content='%s' local='%s' remote='%s' [%p]",
+	    event.actionName(),c.toString().c_str(),localCaps.c_str(),
+	    remoteCaps.c_str(),this);
+    }
+    return false;
 }
 
 
@@ -3260,8 +3382,11 @@ void YJGDriver::initialize()
 	s_knownCodecs.add("32", "MPV",     "90000", "mpv");
 	s_knownCodecs.add("34", "H263",    "90000", "h263");
 	s_knownCodecs.add("98", "iLBC",    "8000",  "ilbc");
-	s_knownCodecs.add("98", "iLBC",    "8000",  "ilbc20");
-	s_knownCodecs.add("98", "iLBC",    "8000",  "ilbc30");
+	s_knownCodecs.add("98", "iLBC",    "8000",  "ilbc20", 0, "20");
+	s_knownCodecs.add("98", "iLBC",    "8000",  "ilbc30", 0, "30");
+	s_knownCodecs.add("102","speex",   "8000",  "speex");
+	s_knownCodecs.add("103","speex",   "16000", "speex/16000");
+	s_knownCodecs.add("104","speex",   "32000", "speex/32000");
 
 	s_jingle = new YJGEngine;
 	s_jingle->debugChain(this);
@@ -3368,9 +3493,23 @@ void YJGDriver::initialize()
     bool defcodecs = s_cfg.getBoolValue("codecs","default",true);
     for (ObjList* o = s_knownCodecs.skipNull(); o; o = o->skipNext()) {
 	JGRtpMedia* crt = static_cast<JGRtpMedia*>(o->get());
+	if (crt->m_name &= "ilbc")
+	    continue;
 	bool enable = defcodecs && DataTranslator::canConvert(crt->m_synonym);
 	if (s_cfg.getBoolValue("codecs",crt->m_synonym,enable))
 	    s_usedCodecs.append(new JGRtpMedia(*crt));
+    }
+    // Special care for ilbc
+    bool ilbc = s_cfg.getBoolValue("codecs","ilbc",defcodecs);
+    if (ilbc) {
+	String tmp = s_cfg.getValue("hacks","ilbc_forced","ilbc30");
+	if (tmp != "ilbc20" && tmp != "ilbc30")
+	    tmp = "ilbc30";
+	JGRtpMedia* s = s_knownCodecs.findSynonym(tmp);
+	if (s && DataTranslator::canConvert(s->m_synonym))
+	    s_usedCodecs.append(new JGRtpMedia(*s));
+	tmp = s_cfg.getValue("hacks","ilbc_default","ilbc30");
+	s_ilbcDefault30 = (tmp != "ilbc20");
     }
 
     TelEngine::destruct(m_ftProxy);
@@ -3387,14 +3526,14 @@ void YJGDriver::initialize()
     }
 
     int dbg = DebugInfo;
-    if (!m_localAddress)
+    if (!m_localAddress && s_serverMode)
 	dbg = DebugNote;
     if (!s_usedCodecs.count())
 	dbg = DebugWarn;
 
     if (debugAt(dbg)) {
 	String s;
-	s << " localip=" << m_localAddress ? m_localAddress.c_str() : "MISSING";
+	s << " localip=" << (m_localAddress ? m_localAddress.c_str() : "MISSING");
 	s << " jingle_version=" << JGSession::lookupVersion(s_sessVersion);
 	s << " singletone=" << String::boolText(s_singleTone);
 	s << " pending_timeout=" << s_pendingTimeout;
@@ -3784,7 +3923,7 @@ bool YJGDriver::handleResNotify(Message& msg)
 		if (!XMPPUtils::findFirstChild(*target,XmlTag::EntityCapsTag,
 		    XMPPNamespace::EntityCaps)) {
 		    target->addChild(new XmlElement(*m_entityCaps));
-		    target->addChild(XMPPUtils::createEntityCapsGTalkV1());
+		    target->addChild(XMPPUtils::createEntityCapsGTalkV1(s_capsNode));
 		    // Restore the data parameter
 		    if (dataXml) {
 			data->clear();
@@ -4042,7 +4181,7 @@ void YJGDriver::notifyPresence(const JabberID& from, const char* to, bool online
 	    if (online) {
 		XmlElement* xml = XMPPUtils::createPresence(0,0);
 		XMPPUtils::setPriority(*xml,String(s_priority));
-		xml->addChild(XMPPUtils::createEntityCapsGTalkV1());
+		xml->addChild(XMPPUtils::createEntityCapsGTalkV1(s_capsNode));
 		xml->addChild(new XmlElement(*m_entityCaps));
 		m->addParam(new NamedPointer("xml",xml));
 	    }
@@ -4060,7 +4199,6 @@ Message* YJGDriver::checkAccount(const String& line, bool query,
     if (!line)
 	return 0;
     Message* m = message("jabber.account");
-    m->addParam("module",name());
     m->addParam("line",line);
     if (query)
 	m->addParam("query",String::boolText(true));

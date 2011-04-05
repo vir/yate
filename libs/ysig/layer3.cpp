@@ -30,6 +30,7 @@
 using namespace TelEngine;
 
 static const TokenDict s_dict_control[] = {
+    { "show",    SS7MTP3::Status },
     { "pause",   SS7MTP3::Pause },
     { "resume",  SS7MTP3::Resume },
     { "restart", SS7MTP3::Restart },
@@ -59,7 +60,7 @@ SS7Layer3::SS7Layer3(SS7PointCode::Type type)
     : SignallingComponent("SS7Layer3"),
       m_routeMutex(true,"SS7Layer3::route"),
       m_l3userMutex(true,"SS7Layer3::l3user"),
-      m_l3user(0)
+      m_l3user(0), m_defNI(SS7MSU::National)
 {
     for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++)
 	m_local[i] = 0;
@@ -69,6 +70,8 @@ SS7Layer3::SS7Layer3(SS7PointCode::Type type)
 // Initialize the Layer 3 component
 bool SS7Layer3::initialize(const NamedList* config)
 {
+    if (config)
+	setNI(SS7MSU::getNetIndicator(config->getValue("netindicator"),SS7MSU::National));
     if (engine() && !user()) {
 	NamedList params("ss7router");
 	if (config)
@@ -143,6 +146,13 @@ unsigned char SS7Layer3::getNI(SS7PointCode::Type pcType, unsigned char defNI) c
     if (pcType == m_cpType[1])
 	return SS7MSU::SpareInternational;
     return defNI;
+}
+
+void SS7Layer3::setNI(unsigned char defNI)
+{
+    if ((defNI & 0xc0) == 0)
+	defNI <<= 6;
+    m_defNI = defNI & 0xc0;
 }
 
 bool SS7Layer3::hasType(SS7PointCode::Type pcType) const
@@ -280,10 +290,13 @@ bool SS7Layer3::maintenance(const SS7MSU& msu, const SS7Label& label, int sls)
 	    badLink = true;
     }
     int level = DebugAll;
+    if (getNI(type(msu.getNI())) != msu.getNI()) {
+	addr << " wrong " << msu.getIndicatorName() << " NI";
+	level = DebugMild;
+    }
     if (badLink) {
 	addr << " on " << sls;
-	level = DebugMild;
-	badLink = true;
+	level = DebugWarn;
     }
     unsigned char len = s[1] >> 4;
     // get a pointer to the test pattern
@@ -455,10 +468,10 @@ void SS7Layer3::printRoutes()
     }
     if (s) {
 	s = s.substr(0,s.length() - 2);
-	Debug(this,DebugInfo,"%s: [%p]\r\n%s",router?"Routing table":"Destinations",this,s.c_str());
+	Output("%s of '%s': [%p]\r\n%s",router?"Routing table":"Destinations",debugName(),this,s.c_str());
     }
     else 
-	Debug(this,DebugInfo,"No %s [%p]",router?"routes":"destinations",this);
+	Output("No %s in '%s' [%p]",router?"routes":"destinations",debugName(),this);
 }
 
 
@@ -817,6 +830,7 @@ bool SS7MTP3::control(Operation oper, NamedList* params)
 	    }
 	    return true;
 	case Status:
+	    printRoutes();
 	    return ok;
     }
     return false;

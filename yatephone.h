@@ -1315,13 +1315,12 @@ private:
  * Module is a descendent of Plugin specialized in implementing modules
  * @short A Plugin that implements a module
  */
-class YATE_API Module : public Plugin, public Mutex, public MessageReceiver, public DebugEnabler
+class YATE_API Module : public Plugin, public Mutex, public MessageReceiver
 {
     YNOCOPY(Module); // no automatic copies please
 private:
     bool m_init;
     int m_relays;
-    String m_name;
     String m_type;
     Regexp m_filter;
     u_int64_t m_changed;
@@ -1334,13 +1333,6 @@ public:
      * @return Pointer to the requested class or NULL if this object doesn't implement it
      */
     virtual void* getObject(const String& name) const;
-
-    /**
-     * Retrieve the name of the module
-     * @return The module's name as String
-     */
-    inline const String& name() const
-	{ return m_name; }
 
     /**
      * Retrieve the type of the module

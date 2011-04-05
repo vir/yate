@@ -63,12 +63,13 @@ public:
      * @param channels Optional 'channels' attribute (the number of channels)
      * @param pTime Optional "ptime" attribute (packet time)
      * @param maxPTime Optional "maxptime" attribute (maximum packet time)
+     * @param bitRate Optional "bitrate" attribute
      */
     inline JGRtpMedia(const char* id, const char* name, const char* clockrate,
 	const char* synonym, const char* channels = 0,
-	const char* pTime = 0, const char* maxPTime = 0)
+	const char* pTime = 0, const char* maxPTime = 0, const char* bitRate = 0)
 	: m_params("")
-	{ set(id,name,clockrate,synonym,channels); }
+	{ set(id,name,clockrate,synonym,channels,pTime,maxPTime,bitRate); }
 
     /**
      * Constructor. Fill this object from an XML element
@@ -82,9 +83,11 @@ public:
      * Copy constructor
      */
     inline JGRtpMedia(const JGRtpMedia& src)
-	: GenObject(),
-	  m_params(src.m_params)
-	{ set(src.m_id,src.m_name,src.m_clockrate,src.m_synonym,src.m_channels); }
+	: m_params("") {
+	    set(src.m_id,src.m_name,src.m_clockrate,src.m_synonym,src.m_channels,
+		src.m_pTime,src.m_maxPTime,src.m_bitRate);
+	    m_params = src.m_params;
+	}
 
     /**
      * Set the data
@@ -95,10 +98,11 @@ public:
      * @param channels Optional 'channels' attribute (the number of channels)
      * @param pTime Optional "ptime" attribute (packet time)
      * @param maxPTime Optional "maxptime" attribute (maximum packet time)
+     * @param bitRate Optional "bitrate" attribute
      */
     inline void set(const char* id, const char* name, const char* clockrate,
 	const char* synonym = 0, const char* channels = 0,
-	const char* pTime = 0, const char* maxPTime = 0) {
+	const char* pTime = 0, const char* maxPTime = 0, const char* bitRate = 0) {
 	    m_id = id;
 	    m_name = name;
 	    m_clockrate = clockrate;
@@ -106,6 +110,7 @@ public:
 	    m_channels = channels;
 	    m_pTime = pTime;
 	    m_maxPTime = maxPTime;
+	    m_bitRate = bitRate;
 	    m_params.clearParams();
 	}
 
@@ -127,13 +132,6 @@ public:
      * @param xml The element
      */
     void fromXml(XmlElement* xml);
-
-    /**
-     * Build a telephone-event media
-     * @return JGRtpMedia pointer
-     */
-    static inline JGRtpMedia* telEvent()
-	{ return new JGRtpMedia("101","telephone-event","8000",""); }
 
     /**
      * The numeric id of this payload
@@ -169,6 +167,11 @@ public:
      * Maximum packet time
      */
     String m_maxPTime;
+
+    /**
+     * Data bit rate
+     */
+    String m_bitRate;
 
     /**
      * List of optional parameters
@@ -259,7 +262,8 @@ public:
      * @param cryptoRequired True to require media encryption
      */
     inline JGRtpMediaList(Media m = MediaMissing, bool cryptoRequired = false)
-	: m_media(m), m_bandwidth(0), m_cryptoRequired(cryptoRequired), m_ready(false)
+	: m_media(m), m_bandwidth(0), m_cryptoRequired(cryptoRequired), m_ready(false),
+	m_telEvent(101), m_telEventName("telephone-event")
 	{}
 
     /**
@@ -296,6 +300,14 @@ public:
     void reset();
 
     /**
+     * Set media type and payloads from another list
+     * @param src Media list to copy into this one
+     * @param only Optional list of synonyms to set if found in src.
+     *  Copy the whole list if this parameter is empty
+     */
+    void setMedia(const JGRtpMediaList& src, const String& only = String::empty());
+
+    /**
      * Find a data payload by its id
      * @param id Identifier of media to find
      * @return JGRtpMedia pointer or 0 if not found
@@ -311,10 +323,9 @@ public:
 
     /**
      * Create a 'description' element and add payload children to it
-     * @param telEvent True to append a telephone event data payload
      * @return Valid XmlElement pointer
      */
-    XmlElement* toXml(bool telEvent = true) const;
+    XmlElement* toXml() const;
 
     /**
      * Fill this list from an XML element's children. Clear before attempting to fill
@@ -330,6 +341,14 @@ public:
      * @return False if the list is empty
      */
     bool createList(String& dest, bool synonym, const char* sep = ",");
+
+    /**
+     * Build and add telephone-event media child to a parent xml element.
+     * Add a second telephone event media child if set
+     * @param xml Parent element
+     * @param name Optional event name. Defaults to set event name
+     */
+    void addTelEvent(XmlElement* xml, const char* name = 0) const;
 
     /**
      * The list of media type names
@@ -363,6 +382,21 @@ public:
      * Flag indicating wether media was negotiated
      */
     bool m_ready;
+
+    /**
+     * Telephone event payload id
+     */
+    int m_telEvent;
+
+    /**
+     * Telephone event payload name
+     */
+    String m_telEventName;
+
+    /**
+     * Second telephone event payload name
+     */
+    String m_telEventName2;
 };
 
 

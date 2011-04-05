@@ -804,7 +804,7 @@ bool FaxDriver::msgExecute(Message& msg, String& dest)
 	fc = new FaxChan(true,dest,transmit,msg);
 	fc->initChan();
 	fc->deref();
-	if (fc->connect(ce)) {
+	if (fc->connect(ce,msg.getValue("reason"))) {
 	    msg.setParam("peerid",fc->id());
 	    msg.setParam("targetid",fc->id());
 	    fc->answer(msg,msg.getValue("id",ce->id()));

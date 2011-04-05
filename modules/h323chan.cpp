@@ -255,7 +255,6 @@ public:
 };
 
 class YateGkRegThread;
-class YateH323EndPoint;
 class YateGatekeeperServer;
 class YateH323EndPoint;
 class YateH323Chan;
@@ -358,7 +357,7 @@ private:
 
 class YateH323_ExternalRTPChannel;
 
-class YateH323EndPoint : public String, public H323EndPoint
+class YateH323EndPoint : public String, public Mutex, public H323EndPoint
 {
     PCLASSINFO(YateH323EndPoint, H323EndPoint)
 public:
@@ -720,8 +719,10 @@ BOOL YateGatekeeperServer::Init()
     return TRUE;
 }
 
+
 YateH323EndPoint::YateH323EndPoint(const NamedList* params, const char* name)
-    : String(name), m_gkServer(0), m_thread(0), m_registered(false)
+    : String(name), Mutex(false,"H323Endpoint"),
+      m_gkServer(0), m_thread(0), m_registered(false)
 {
     Debug(&hplugin,DebugAll,"YateH323EndPoint::YateH323EndPoint(%p,\"%s\") [%p]",
 	params,name,this);
@@ -770,6 +771,7 @@ H323Connection* YateH323EndPoint::CreateConnection(unsigned callReference,
 	Debug(DebugWarn,"Refusing new H.323 call, full or exiting");
 	return 0;
     }
+    Lock mylock(this);
     return new YateH323Connection(*this,transport,callReference,userData);
 }
 
@@ -2347,7 +2349,7 @@ bool H323Driver::received(Message &msg, int id)
 {
     if (id == Status) {
 	String target = msg.getValue("module");
-	if (target && target.startsWith(name()) && !target.startsWith(prefix()))
+	if (target && target.startsWith(name(),true) && !target.startsWith(prefix()))
 	    msgStatus(msg);
 	return false;
     }

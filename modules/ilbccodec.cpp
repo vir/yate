@@ -187,7 +187,8 @@ unsigned long iLBCCodec::Consume(const DataBlock& data, unsigned long tStamp, un
 }
 
 iLBCPlugin::iLBCPlugin()
-    : m_ilbc20(0), m_ilbc30(0)
+    : Plugin("ilbccodec"),
+      m_ilbc20(0), m_ilbc30(0)
 {
     Output("Loaded module iLBC - based on iLBC library");
     const FormatInfo* f = FormatRepository::addFormat("ilbc20",NO_OF_BYTES_20MS,20000);

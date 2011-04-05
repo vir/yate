@@ -954,7 +954,7 @@ protected:
  * An unidirectional or bidirectional RTP session
  * @short Full RTP session
  */
-class YRTP_API RTPSession : public UDPSession
+class YRTP_API RTPSession : public UDPSession, public Mutex
 {
 public:
     /**
@@ -1079,7 +1079,7 @@ public:
      */
     inline bool rtpSend(bool marker, int payload, unsigned int timestamp,
 	const void* data, int len)
-	{ return m_send && m_send->rtpSend(marker,payload,timestamp,data,len); }
+	{ Lock lck(this); return m_send && m_send->rtpSend(marker,payload,timestamp,data,len); }
 
     /**
      * Send one RTP data packet
@@ -1091,7 +1091,7 @@ public:
      */
     inline bool rtpSendData(bool marker, unsigned int timestamp,
 	const void* data, int len)
-	{ return m_send && m_send->rtpSendData(marker,timestamp,data,len); }
+	{ Lock lck(this); return m_send && m_send->rtpSendData(marker,timestamp,data,len); }
 
     /**
      * Send one RTP event
@@ -1102,7 +1102,7 @@ public:
      * @return True if data sending was attempted
      */
     inline bool rtpSendEvent(int event, int duration, int volume = 0, unsigned int timestamp = 0)
-	{ return m_send && m_send->rtpSendEvent(event,duration,volume,timestamp); }
+	{ Lock lck(this); return m_send && m_send->rtpSendEvent(event,duration,volume,timestamp); }
 
     /**
      * Send one RTP key event
@@ -1113,7 +1113,7 @@ public:
      * @return True if data sending was attempted
      */
     inline bool rtpSendKey(char key, int duration, int volume = 0, unsigned int timestamp = 0)
-	{ return m_send && m_send->rtpSendKey(key,duration,volume,timestamp); }
+	{ Lock lck(this); return m_send && m_send->rtpSendKey(key,duration,volume,timestamp); }
 
     /**
      * Get the payload padding size
@@ -1231,7 +1231,7 @@ public:
      * @return True if address set, false if a failure occured
      */
     inline bool localAddr(SocketAddr& addr, bool rtcp = true)
-	{ return m_transport && m_transport->localAddr(addr,rtcp); }
+	{ Lock lck(this); return m_transport && m_transport->localAddr(addr,rtcp); }
 
     /**
      * Get the stored security provider or of the sender
@@ -1294,7 +1294,7 @@ private:
  * A bidirectional UDPTL session usable for T.38
  * @short UDPTL session
  */
-class YRTP_API UDPTLSession : public UDPSession
+class YRTP_API UDPTLSession : public UDPSession, public Mutex
 {
 public:
     /**
@@ -1308,7 +1308,7 @@ public:
      * @return True if address set, false if a failure occured
      */
     inline bool localAddr(SocketAddr& addr)
-	{ return m_transport && m_transport->localAddr(addr,false); }
+	{ Lock lck(this); return m_transport && m_transport->localAddr(addr,false); }
 
     /**
      * Get the maximum UDPTL packet length

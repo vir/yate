@@ -225,10 +225,8 @@ static void addJingleContents0(String& name, XmlElement* xml, const ObjList& con
 		JGRtpMedia* a = static_cast<JGRtpMedia*>(o->get());
 		desc->addChild(a->toXml());
 	    }
-	   JGRtpMedia* te = JGRtpMedia::telEvent();
-	   desc->addChild(te->toXml());
-	   TelEngine::destruct(te);
-	   jingle->addChild(desc);
+	    c->m_rtpMedia.addTelEvent(desc);
+	    jingle->addChild(desc);
 	}
 	if (addTrans) {
 	    XmlElement* parent = 0;
@@ -305,6 +303,7 @@ XmlElement* JGRtpMedia::toXml() const
     p->setAttributeValid("channels",m_channels);
     p->setAttributeValid("ptime",m_pTime);
     p->setAttributeValid("maxptime",m_maxPTime);
+    p->setAttributeValid("bitrate",m_bitRate);
     unsigned int n = m_params.length();
     for (unsigned int i = 0; i < n; i++) {
 	NamedString* s = m_params.getParam(i);
@@ -322,7 +321,8 @@ void JGRtpMedia::fromXml(XmlElement* xml)
     }
     set(xml->attribute("id"),xml->attribute("name"),
 	xml->attribute("clockrate"),"",xml->attribute("channels"),
-	xml->attribute("ptime"),xml->attribute("maxptime"));
+	xml->attribute("ptime"),xml->attribute("maxptime"),
+	xml->attribute("bitrate"));
     XmlElement* param = XMPPUtils::findFirstChild(*xml,XmlTag::Parameter);
     for (; param; param = XMPPUtils::findNextChild(*xml,param,XmlTag::Parameter))
 	m_params.addParam(param->attribute("name"),param->attribute("value"));
@@ -401,6 +401,22 @@ void JGRtpMediaList::reset()
     TelEngine::destruct(m_bandwidth);
 }
 
+// Copy media type and payloads from another list
+void JGRtpMediaList::setMedia(const JGRtpMediaList& src, const String& only)
+{
+    clear();
+    m_media = src.m_media;
+    m_telEvent = src.m_telEvent;
+    ObjList* f = only ? only.split(',',false) : 0;
+    for (ObjList* o = src.skipNull(); o; o = o->skipNext()) {
+	JGRtpMedia* media = static_cast<JGRtpMedia*>(o->get());
+	if (find(media->toString()) || (f && !f->find(media->m_synonym)))
+	    continue;
+	append(new JGRtpMedia(*media));
+    }
+    TelEngine::destruct(f);
+}
+
 // Find a data payload by its id
 JGRtpMedia* JGRtpMediaList::findMedia(const String& id)
 {
@@ -420,7 +436,7 @@ JGRtpMedia* JGRtpMediaList::findSynonym(const String& value) const
 }
 
 // Create a 'description' element and add payload children to it
-XmlElement* JGRtpMediaList::toXml(bool telEvent) const
+XmlElement* JGRtpMediaList::toXml() const
 {
     if (m_media != Audio)
 	return 0;
@@ -432,11 +448,7 @@ XmlElement* JGRtpMediaList::toXml(bool telEvent) const
        JGRtpMedia* a = static_cast<JGRtpMedia*>(o->get());
        desc->addChild(a->toXml());
     }
-    if (telEvent) {
-       JGRtpMedia* te = JGRtpMedia::telEvent();
-       desc->addChild(te->toXml());
-       TelEngine::destruct(te);
-    }
+    addTelEvent(desc);
     // Bandwidth
     if (m_bandwidth && *m_bandwidth) {
 	XmlElement* b = XMPPUtils::createElement(s_bandwidth,*m_bandwidth);
@@ -490,6 +502,28 @@ bool JGRtpMediaList::createList(String& dest, bool synonym, const char* sep)
 	dest.append(synonym ? a->m_synonym : a->m_name,sep);
     }
     return (0 != dest.length());
+}
+
+// Build and add telephone-event media child to a parent xml element
+void JGRtpMediaList::addTelEvent(XmlElement* xml, const char* name) const
+{
+    if (!xml)
+	return;
+    if (TelEngine::null(name))
+	name = m_telEventName;
+    if (m_telEvent < 96 || m_telEvent > 127)
+	return;
+    String id(m_telEvent);
+    if (!TelEngine::null(name)) {
+	JGRtpMedia* m = new JGRtpMedia(id,name,"8000","");
+	xml->addChild(m->toXml());
+	TelEngine::destruct(m);
+    }
+    if (m_telEventName2 && m_telEventName2 != name) {
+	JGRtpMedia* m = new JGRtpMedia(id,m_telEventName2,"8000","");
+	xml->addChild(m->toXml());
+	TelEngine::destruct(m);
+    }
 }
 
 

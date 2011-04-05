@@ -69,14 +69,14 @@ MGCPPrivateThread::MGCPPrivateThread(MGCPEngine* engine, bool process,
     m_engine(engine),
     m_action(process?Process:Receive)
 {
-    XDebug(m_engine,DebugInfo,"MGCPPrivateThread::MGCPPrivateThread() [%p]",this);
+    DDebug(m_engine,DebugInfo,"MGCPPrivateThread::MGCPPrivateThread() [%p]",this);
     if (m_engine)
 	m_engine->appendThread(this);
 }
 
 MGCPPrivateThread::~MGCPPrivateThread()
 {
-    XDebug(m_engine,DebugInfo,"MGCPPrivateThread::~MGCPPrivateThread() [%p]",this);
+    DDebug(m_engine,DebugInfo,"MGCPPrivateThread::~MGCPPrivateThread() [%p]",this);
     if (m_engine)
 	m_engine->removeThread(this);
 }
@@ -431,7 +431,7 @@ bool MGCPEngine::receive(unsigned char* buffer, SocketAddr& addr)
 	    new MGCPTransaction(this,msg,false,addr);
 	    continue;
 	}
-	DDebug(this,DebugNote,"Received response %d for unknown transaction %u",
+	Debug(this,DebugNote,"Received response %d for unknown transaction %u",
 	    msg->code(),msg->transactionId());
 	TelEngine::destruct(msg);
     }
@@ -569,16 +569,16 @@ void MGCPEngine::cleanup(bool gracefully, const char* text)
 	return;
 
     // Terminate private threads
-    XDebug(this,DebugAll,"Terminating %u private threads",m_threads.count());
+    Debug(this,DebugAll,"Terminating %u private threads",m_threads.count());
     lock();
     ListIterator iter(m_threads);
     for (GenObject* o = 0; 0 != (o = iter.get());)
 	static_cast<MGCPPrivateThread*>(o)->cancel(!gracefully);
     unlock();
-    XDebug(this,DebugAll,"Waiting for private threads to terminate");
+    DDebug(this,DebugAll,"Waiting for private threads to terminate");
     while (m_threads.skipNull())
 	Thread::yield();
-    XDebug(this,DebugAll,"Private threads terminated");
+    DDebug(this,DebugAll,"Private threads terminated");
 }
 
 // Write data to socket

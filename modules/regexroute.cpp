@@ -674,7 +674,8 @@ private:
 };
 
 RegexRoutePlugin::RegexRoutePlugin()
-    : m_preroute(0), m_route(0), m_first(true)
+    : Plugin("regexroute"),
+      m_preroute(0), m_route(0), m_first(true)
 {
     Output("Loaded module RegexRoute");
 }

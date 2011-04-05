@@ -1135,6 +1135,7 @@ bool File::listDirectory(const char* path, ObjList* dirs, ObjList* files, int* e
 	*error = code;
     ::FindClose(hFind);
 #else
+    errno = 0;
     DIR* dir = ::opendir(path);
     if (!dir) {
 	if (!errno)

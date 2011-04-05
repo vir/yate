@@ -142,6 +142,10 @@ using namespace TelEngine;
 #define HOST_NAME_MAX 255
 #endif
 
+#ifndef PATH_MAX
+#define PATH_MAX 270
+#endif
+
 static u_int64_t s_nextinit = 0;
 static u_int64_t s_restarts = 0;
 static bool s_makeworker = true;
@@ -335,6 +339,16 @@ bool EngineStatusHandler::received(Message &msg)
     msg.retValue() << ",semaphores=" << Semaphore::count();
     msg.retValue() << ",waiting=" << Semaphore::locks();
     msg.retValue() << ",acceptcalls=" << lookup(Engine::accept(),Engine::getCallAcceptStates());
+    if (msg.getBoolValue("details",true)) {
+	NamedIterator iter(Engine::runParams());
+	char sep = ';';
+	while (const NamedString* p = iter.get()) {
+	    if (p->name().find("path") < 0)
+		continue;
+	    msg.retValue() << sep << p->name() << "=" << *p;
+	    sep = ',';
+	}
+    }
     msg.retValue() << "\r\n";
     return false;
 }
@@ -461,6 +475,12 @@ void EngineCommand::doCompletion(Message &msg, const String& partLine, const Str
 	    SLib* s = static_cast<SLib*>(l->get());
 	    if (s->unload(false))
 		completeOne(msg.retValue(),*s,partWord);
+	}
+    }
+    else if (partLine == "reload") {
+	for (ObjList* l = plugins.skipNull(); l; l = l->skipNext()) {
+	    const Plugin* p = static_cast<const Plugin*>(l->get());
+	    completeOne(msg.retValue(),p->name(),partWord);
 	}
     }
 }
@@ -1061,6 +1081,20 @@ int Engine::run()
     s_params.addParam("supervised",String::boolText(s_super_handle >= 0));
     s_params.addParam("runattempt",String(s_run_attempt));
     s_params.addParam("maxworkers",String(s_maxworkers));
+#ifdef _WINDOWS
+    {
+	char buf[PATH_MAX];
+	DWORD ret = ::GetCurrentDirectoryA(PATH_MAX,buf);
+	if (ret && (ret < PATH_MAX))
+	    s_params.addParam("workpath",buf);
+    }
+#elif defined (HAVE_GETCWD)
+    {
+	char buf[PATH_MAX];
+	if (::getcwd(buf,PATH_MAX))
+	    s_params.addParam("workpath",buf);
+    }
+#endif
     DDebug(DebugAll,"Engine::run()");
     install(new EngineStatusHandler);
     install(new EngineCommand);
@@ -1304,6 +1338,17 @@ bool Engine::loadPluginDir(const String& relPath)
 	    path += PATH_SEP;
 	path += relPath;
     }
+    if (path.endsWith(s_modsuffix)) {
+	int sep = path.rfind(PATH_SEP[0]);
+	if (sep >= 0)
+	    sep++;
+	else
+	    sep = 0;
+	String name = path.substr(sep);
+	if (loadPlugin(path,s_cfg.getBoolValue("localsym",name,s_localsymbol),
+	    s_cfg.getBoolValue("nounload",name)))
+	    return true;
+    }
     if (path.endsWith(PATH_SEP))
 	path = path.substr(0,path.length()-1);
 #ifdef _WINDOWS
@@ -1449,6 +1494,28 @@ bool Engine::restart(unsigned int code, bool gracefull)
 void Engine::init()
 {
     s_init = true;
+}
+
+bool Engine::init(const String& name)
+{
+    if (exiting() || !s_self)
+	return false;
+    if (name.null() || name == "*" || name == "all") {
+	s_init = true;
+	return true;
+    }
+    Output("Initializing plugin '%s'",name.c_str());
+    Message msg("engine.init",0,true);
+    msg.addParam("plugin",name);
+    if (nodeName())
+	msg.addParam("nodename",nodeName());
+    bool ok = s_self->m_dispatcher.dispatch(msg);
+    Plugin* p = static_cast<Plugin*>(plugins[name]);
+    if (p) {
+	p->initialize();
+	ok = true;
+    }
+    return ok;
 }
 
 bool Engine::install(MessageHandler* handler)

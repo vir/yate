@@ -657,7 +657,7 @@ XMPPFeature* XMPPFeature::fromStreamFeature(XmlElement& xml)
 	// Get methods
 	XmlElement* x = 0;
 	while (0 != (x = XMPPUtils::findNextChild(xml,x,XmlTag::Method)))
-	    meth.append(x->getText(),false);
+	    meth.append(x->getText(),",",false);
 	f = new XMPPFeatureCompress(meth,required);
     }
     else {

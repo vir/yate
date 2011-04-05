@@ -2609,12 +2609,14 @@ XmlElement* YJBEngine::discoItems(JBEvent* ev)
 	    XmlElement* query = XMPPUtils::createElement(XmlTag::Query,
 		XMPPNamespace::DiscoItems);
 	    lock();
-	    for (ObjList* o = m_items.skipNull(); o; o = o->skipNext()) {
-		String* s = static_cast<String*>(o->get());
-		XmlElement* item = new XmlElement("item");
-		item->setAttribute("jid",*s);
-		query->addChild(item);
-	    }
+	    ObjList* lists[] = {&m_items,&m_components,0};
+	    for (unsigned int i = 0; lists[i]; i++)
+		for (ObjList* o = lists[i]->skipNull(); o; o = o->skipNext()) {
+		    String* s = static_cast<String*>(o->get());
+		    XmlElement* item = new XmlElement("item");
+		    item->setAttribute("jid",*s);
+		    query->addChild(item);
+		}
 	    unlock();
 	    return ev->buildIqResult(false,query);
 	}
@@ -3042,6 +3044,8 @@ JBPendingJob::JBPendingJob(JBEvent* ev)
 	Lock lock(ev->stream());
 	m_local = ev->stream()->local().domain();
 	m_serverTarget = !m_serverItemTarget && (!ev->to() || ev->to() == ev->stream()->local());
+	if (!m_serverTarget && m_streamType == JBStream::comp)
+	    m_serverTarget = (ev->to() == ev->from());
     }
     m_event->releaseStream(true);
 }

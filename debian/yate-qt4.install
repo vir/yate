@@ -18,6 +18,7 @@ debian/tmp/usr/share/yate/help/4.yhlp
 debian/tmp/usr/share/yate/help/99.yhlp
 debian/tmp/usr/share/yate/skins/default/account.ui
 debian/tmp/usr/share/yate/skins/default/accountlist.ui
+debian/tmp/usr/share/yate/skins/default/addchatroom.png
 debian/tmp/usr/share/yate/skins/default/addrbook.ui
 debian/tmp/usr/share/yate/skins/default/book.png
 debian/tmp/usr/share/yate/skins/default/close.png
@@ -78,11 +79,13 @@ debian/tmp/usr/share/yate/skins/default/book_32.png
 debian/tmp/usr/share/yate/skins/default/cdr_32.png
 debian/tmp/usr/share/yate/skins/default/chat.png
 debian/tmp/usr/share/yate/skins/default/chat.ui
+debian/tmp/usr/share/yate/skins/default/chatroomedit.ui
 debian/tmp/usr/share/yate/skins/default/clear.png
 debian/tmp/usr/share/yate/skins/default/collapsed.png
 debian/tmp/usr/share/yate/skins/default/conference_20.png
 debian/tmp/usr/share/yate/skins/default/contactedit.ui
 debian/tmp/usr/share/yate/skins/default/contactinfo.ui
+debian/tmp/usr/share/yate/skins/default/contactlist_chatroom.ui
 debian/tmp/usr/share/yate/skins/default/contactlist_contact.ui
 debian/tmp/usr/share/yate/skins/default/contactlist_group.ui
 debian/tmp/usr/share/yate/skins/default/digit0_hover.png
@@ -142,6 +145,7 @@ debian/tmp/usr/share/yate/skins/default/messages_generic.ui
 debian/tmp/usr/share/yate/skins/default/mucchat.ui
 debian/tmp/usr/share/yate/skins/default/mucinvite.ui
 debian/tmp/usr/share/yate/skins/default/muc.png
+debian/tmp/usr/share/yate/skins/default/muc_16.png
 debian/tmp/usr/share/yate/skins/default/mucprivchat.ui
 debian/tmp/usr/share/yate/skins/default/mucs.ui
 debian/tmp/usr/share/yate/skins/default/phone_32.png
@@ -165,9 +169,9 @@ debian/tmp/usr/share/yate/skins/default/arch_room_item.ui
 debian/tmp/usr/share/yate/skins/default/arch_roompriv_item.ui
 debian/tmp/usr/share/yate/skins/default/minus.png
 debian/tmp/usr/share/yate/skins/default/plus.png
+debian/tmp/usr/share/yate/skins/default/save.png
 
 debian/tmp/etc/yate/yate-qt4.conf
 debian/tmp/usr/lib/yate/qt4/updater.yate
-
 
 

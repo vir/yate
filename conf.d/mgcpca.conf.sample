@@ -177,9 +177,16 @@
 ; Normally the default bearer is not set so a B: line is added when needed
 ;bearer=
 
-; req_dtmf: keyword: When to request DTMF notification from gateway
+; req_fax: bool: Request Fax Tone detection from gateway
+;req_fax=yes
+
+; req_evts: string: Requested Events in MGCP format, overrides default
+; Default depends on endpoint configuration and fax setting
+;req_evts=
+
+; req_dtmf: keyword: When to request DTMF and fax notification from gateway
 ; Allowed values:
-;  none - do not request to be notified about DTMF events
+;  none - do not request to be notified about DTMF and fax events
 ;  once - emit RQNT once when connecting the circuit (default)
 ;  more - emit RQNT on connection and after each notification received
 ;req_dtmf=once

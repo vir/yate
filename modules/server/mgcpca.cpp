@@ -162,7 +162,7 @@ private:
     bool m_fxo;
     bool m_fxs;
     RqntType m_rqntType;
-    const char* m_rqntStr;
+    String m_rqntStr;
     String m_notify;
     String m_address;
     String m_version;
@@ -884,7 +884,7 @@ MGCPSpan::MGCPSpan(const NamedList& params, const char* name, const MGCPEpInfo& 
 		break;
 	    case AnalogLine::FXS:
 		m_fxs = true;
-		m_rqntStr = "L/hu(N),D/[0-9#*](N)";
+		m_rqntStr = "L/hu(N)," + m_rqntStr;
 		break;
 	    default:
 		break;
@@ -968,6 +968,9 @@ bool MGCPSpan::init(const NamedList& params)
     m_sdpForward = config->getBoolValue("forward_sdp",false);
     m_bearer = lookup(config->getIntValue("bearer",s_dict_payloads,-1),s_dict_gwbearerinfo);
     m_rqntType = (RqntType)config->getIntValue("req_dtmf",s_dict_rqnt,RqntOnce);
+    if (config->getBoolValue("req_fax",true))
+	m_rqntStr.append("G/ft(N)",",");
+    m_rqntStr = config->getValue("req_evts",m_rqntStr);
     bool clear = config->getBoolValue("clearconn",false);
     m_circuits = new MGCPCircuit*[m_count];
     unsigned int i;
@@ -1820,6 +1823,13 @@ bool MGCPCircuit::processNotify(const String& package, const String& event, cons
 	// DTMF events
 	if (event.length() == 1)
 	    return enqueueEvent(SignallingCircuitEvent::Dtmf,fullName,event);
+    }
+    else if (package == "G") {
+	if (mySpan()->rqntType() == MGCPSpan::RqntMore)
+	    sendRequest(0,mySpan()->rqntStr());
+	// Generic events
+	if (event &= "ft")
+	    return enqueueEvent(SignallingCircuitEvent::GenericTone,"fax");
     }
     return false;
 }

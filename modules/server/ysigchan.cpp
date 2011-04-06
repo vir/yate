@@ -1450,6 +1450,7 @@ void SigChannel::evAccept(SignallingEvent* event)
     if (isupController())
 	msg->setNotify(true);
     plugin.copySigMsgParams(*msg,event,&s_noPrefixParams);
+    addRtp(*msg);
     msg->setParam("operation","accepted");
     Engine::enqueue(msg);
 }

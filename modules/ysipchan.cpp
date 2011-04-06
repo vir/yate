@@ -2342,10 +2342,12 @@ bool YateSIPConnection::emitPRACK(const SIPMessage* msg)
 // Creates a SDP for provisional (1xx) messages
 MimeSdpBody* YateSIPConnection::createProvisionalSDP(Message& msg)
 {
+    if (!msg.getBoolValue("earlymedia",true))
+	return 0;
     if (m_rtpForward)
 	return createPasstroughSDP(msg);
     // check if our peer can source at least audio data
-    if (!(getPeer() && getPeer()->getSource() && msg.getBoolValue("earlymedia",true)))
+    if (!(getPeer() && getPeer()->getSource()))
 	return 0;
     if (m_rtpAddr.null())
 	return 0;

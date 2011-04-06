@@ -1450,6 +1450,7 @@ void SigChannel::evAccept(SignallingEvent* event)
     if (isupController())
 	msg->setNotify(true);
     plugin.copySigMsgParams(*msg,event,&s_noPrefixParams);
+    addRtp(*msg);
     msg->setParam("operation","accepted");
     Engine::enqueue(msg);
 }
@@ -1496,6 +1497,16 @@ void SigChannel::evCircuit(SignallingEvent* event)
 	case SignallingCircuitEvent::Disconnected:
 	    hangup("nomedia");
 	    break;
+	case SignallingCircuitEvent::GenericTone:
+	    if (*ev == "fax") {
+		bool inband = ev->getBoolValue("inband");
+		Message* msg = message("call.fax",false,true);
+		msg->setParam("detected",(inband ? "inband" : "signal"));
+		plugin.copySigMsgParams(*msg,event,&s_noPrefixParams);
+		Engine::enqueue(msg);
+		break;
+	    }
+	    // fall through
 	default:
 	    Debug(this,DebugStub,"Unhandled circuit event '%s' type=%d [%p]",
 		ev->c_str(),ev->type(),this);

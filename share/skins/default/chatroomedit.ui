@@ -6,7 +6,7 @@
     <x>0</x>
     <y>0</y>
     <width>400</width>
-    <height>294</height>
+    <height>264</height>
    </rect>
   </property>
   <property name="sizePolicy" >
@@ -18,13 +18,13 @@
   <property name="minimumSize" >
    <size>
     <width>400</width>
-    <height>294</height>
+    <height>264</height>
    </size>
   </property>
   <property name="maximumSize" >
    <size>
     <width>400</width>
-    <height>294</height>
+    <height>264</height>
    </size>
   </property>
   <property name="windowIcon" >
@@ -116,25 +116,6 @@
        </property>
       </widget>
      </item>
-     <item>
-      <widget class="QLineEdit" name="chatcontact_account" >
-       <property name="minimumSize" >
-        <size>
-         <width>0</width>
-         <height>22</height>
-        </size>
-       </property>
-       <property name="maximumSize" >
-        <size>
-         <width>16777215</width>
-         <height>22</height>
-        </size>
-       </property>
-       <property name="readOnly" >
-        <bool>true</bool>
-       </property>
-      </widget>
-     </item>
     </layout>
    </item>
    <item>
@@ -207,7 +188,7 @@
          <number>0</number>
         </property>
         <item>
-         <widget class="QLineEdit" name="username" >
+         <widget class="QLineEdit" name="room_room" >
           <property name="sizePolicy" >
            <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
             <horstretch>0</horstretch>
@@ -216,13 +197,13 @@
           </property>
           <property name="minimumSize" >
            <size>
-            <width>100</width>
+            <width>150</width>
             <height>22</height>
            </size>
           </property>
           <property name="maximumSize" >
            <size>
-            <width>100</width>
+            <width>150</width>
             <height>22</height>
            </size>
           </property>
@@ -245,7 +226,7 @@
          </widget>
         </item>
         <item>
-         <widget class="QLineEdit" name="domain" >
+         <widget class="QLineEdit" name="room_server" >
           <property name="sizePolicy" >
            <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
             <horstretch>0</horstretch>
@@ -269,25 +250,6 @@
        </layout>
       </widget>
      </item>
-     <item>
-      <widget class="QLineEdit" name="chatcontact_uri" >
-       <property name="minimumSize" >
-        <size>
-         <width>0</width>
-         <height>22</height>
-        </size>
-       </property>
-       <property name="maximumSize" >
-        <size>
-         <width>16777215</width>
-         <height>22</height>
-        </size>
-       </property>
-       <property name="readOnly" >
-        <bool>true</bool>
-       </property>
-      </widget>
-     </item>
     </layout>
    </item>
    <item>
@@ -296,7 +258,7 @@
       <number>0</number>
      </property>
      <item>
-      <widget class="QLabel" name="label_nick_2" >
+      <widget class="QLabel" name="label_name" >
        <property name="enabled" >
         <bool>true</bool>
        </property>
@@ -330,7 +292,7 @@
       </widget>
      </item>
      <item>
-      <widget class="QLineEdit" name="name" >
+      <widget class="QLineEdit" name="room_name" >
        <property name="minimumSize" >
         <size>
          <width>0</width>
@@ -387,7 +349,7 @@
       </widget>
      </item>
      <item>
-      <widget class="QLineEdit" name="nick" >
+      <widget class="QLineEdit" name="room_nick" >
        <property name="minimumSize" >
         <size>
          <width>0</width>
@@ -438,7 +400,7 @@
       </widget>
      </item>
      <item>
-      <widget class="QLineEdit" name="password" >
+      <widget class="QLineEdit" name="room_password" >
        <property name="minimumSize" >
         <size>
          <width>0</width>
@@ -459,71 +421,14 @@
     </layout>
    </item>
    <item>
-    <layout class="QHBoxLayout" >
-     <property name="topMargin" >
-      <number>0</number>
-     </property>
-     <item>
-      <widget class="QLabel" name="label_group" >
-       <property name="enabled" >
-        <bool>true</bool>
-       </property>
-       <property name="sizePolicy" >
-        <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize" >
-        <size>
-         <width>70</width>
-         <height>22</height>
-        </size>
-       </property>
-       <property name="maximumSize" >
-        <size>
-         <width>70</width>
-         <height>22</height>
-        </size>
-       </property>
-       <property name="styleSheet" >
-        <string>QLabel:disabled {color: red;}</string>
-       </property>
-       <property name="text" >
-        <string>Group:</string>
-       </property>
-       <property name="indent" >
-        <number>0</number>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QLineEdit" name="group" >
-       <property name="minimumSize" >
-        <size>
-         <width>0</width>
-         <height>22</height>
-        </size>
-       </property>
-       <property name="maximumSize" >
-        <size>
-         <width>16777215</width>
-         <height>22</height>
-        </size>
-       </property>
-      </widget>
-     </item>
-    </layout>
-   </item>
-   <item>
-    <widget class="QCheckBox" name="autojoin" >
+    <widget class="QCheckBox" name="room_autojoin" >
      <property name="text" >
       <string>Automatically join when account is connected</string>
      </property>
     </widget>
    </item>
    <item>
-    <widget class="QCheckBox" name="history" >
+    <widget class="QCheckBox" name="room_history" >
      <property name="sizePolicy" >
       <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
        <horstretch>0</horstretch>
@@ -553,7 +458,7 @@
       <number>18</number>
      </property>
      <item>
-      <widget class="QCheckBox" name="historylast" >
+      <widget class="QCheckBox" name="room_historylast" >
        <property name="minimumSize" >
         <size>
          <width>0</width>
@@ -572,7 +477,7 @@
       </widget>
      </item>
      <item>
-      <widget class="QSpinBox" name="historylast_value" >
+      <widget class="QSpinBox" name="room_historylast_value" >
        <property name="minimumSize" >
         <size>
          <width>0</width>

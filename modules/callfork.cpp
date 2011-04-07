@@ -47,6 +47,7 @@ public:
     bool msgProgress(Message& msg, const String& dest);
     const ObjList& slaves() const
 	{ return m_slaves; }
+    bool msgToSlaves(const Message& msg, const String& match);
 protected:
     void clear(bool softly);
     String* getNextDest();
@@ -100,6 +101,7 @@ public:
     ForkModule();
     virtual ~ForkModule();
     bool unload();
+    bool msgToSlaves(const Message& msg, const String& match);
 protected:
     virtual void initialize();
     virtual bool received(Message& msg, int id);
@@ -107,6 +109,19 @@ protected:
     bool msgExecute(Message& msg);
     bool msgLocate(Message& msg, bool masquerade);
     bool msgToMaster(Message& msg, bool answer);
+    bool m_hasRelays;
+};
+
+class ForkRelay : public MessageHandler
+{
+public:
+    inline ForkRelay(const char* name, const char* match, int priority)
+	: MessageHandler(name,priority),
+	  m_match(match)
+	{ }
+    virtual bool received(Message& msg);
+private:
+    String m_match;
 };
 
 static TokenDict s_calltypes[] = {
@@ -520,6 +535,21 @@ bool ForkMaster::msgProgress(Message& msg, const String& dest)
     return true;
 }
 
+bool ForkMaster::msgToSlaves(const Message& msg, const String& match)
+{
+    bool ok = false;
+    for (ObjList* l = m_slaves.skipNull(); l; l = l->skipNext()) {
+	ForkSlave* slave = static_cast<ForkSlave*>(l->get());
+	if (slave->type() == ForkSlave::Auxiliar)
+	    continue;
+	Message* m = new Message(msg);
+	m->setParam(match,slave->getPeerId());
+	m->userData(msg.userData());
+	ok = Engine::enqueue(m) || ok;
+    }
+    return ok;
+}
+
 void ForkMaster::clear(bool softly)
 {
     RefPointer<ForkSlave> slave;
@@ -567,8 +597,15 @@ void ForkSlave::disconnected(bool final, const char* reason)
 }
 
 
+bool ForkRelay::received(Message& msg)
+{
+    return __plugin.msgToSlaves(msg,m_match);
+}
+
+
 ForkModule::ForkModule()
-    : Module("callfork","misc")
+    : Module("callfork","misc"),
+      m_hasRelays(false)
 {
     Output("Loaded module Call Forker");
 }
@@ -582,16 +619,50 @@ void ForkModule::initialize()
 {
     Output("Initializing module Call Forker");
     setup();
-    installRelay(Execute);
-    installRelay(Masquerade,10);
-    installRelay(Locate,40);
-    installRelay(Answered,20);
-    installRelay(Ringing,20);
-    installRelay(Progress,20);
+    if (!m_hasRelays) {
+	static const String s_prio("priorities");
+	Configuration cfg(Engine::configFile("callfork"));
+	installRelay(Execute,cfg.getIntValue(s_prio,messageName(Execute),100));
+	installRelay(Masquerade,cfg.getIntValue(s_prio,messageName(Masquerade),10));
+	installRelay(Locate,cfg.getIntValue(s_prio,messageName(Locate),40));
+	installRelay(Answered,cfg.getIntValue(s_prio,messageName(Answered),20));
+	installRelay(Ringing,cfg.getIntValue(s_prio,messageName(Ringing),20));
+	installRelay(Progress,cfg.getIntValue(s_prio,messageName(Progress),20));
+	int prio = cfg.getIntValue(s_prio,"generic",100);
+	const NamedList* generic = cfg.getSection("messages");
+	if (generic) {
+	    NamedIterator iter(*generic);
+	    while (!iter.eof()) {
+		const NamedString* item = iter.get();
+		if (TelEngine::null(item))
+		    continue;
+		switch (relayId(item->name())) {
+		    case 0:
+		    case Tone:
+		    case Text:
+		    case Update:
+		    case Control:
+		    case ImExecute:
+			break;
+		    default:
+			Debug(this,DebugWarn,"Refusing to fork message '%s'",item->name().c_str());
+			continue;
+		}
+		ForkRelay* r = new ForkRelay(item->name(),*item,
+		    cfg.getIntValue(s_prio,item->name(),prio));
+		Debug(this,DebugAll,"Will fork messages '%s' matching '%s'",
+		    item->name().c_str(),item->c_str());
+		Engine::install(r);
+		m_hasRelays = true;
+	    }
+	}
+    }
 }
 
 bool ForkModule::unload()
 {
+    if (m_hasRelays)
+	return false;
     Lock lock(CallEndpoint::commonMutex(),500000);
     if (!lock.locked())
 	return false;
@@ -673,6 +744,20 @@ bool ForkModule::msgToMaster(Message& msg, bool answer)
     if (m)
 	return answer ? m->msgAnswered(msg,dest) : m->msgProgress(msg,dest);
     return false;
+}
+
+bool ForkModule::msgToSlaves(const Message& msg, const String& match)
+{
+    if (match.null())
+	return false;
+    const String* param = msg.getParam(match);
+    if (TelEngine::null(param))
+	return false;
+    if (!param->startsWith(MOD_PREFIX "/"))
+	return false;
+    Lock lock(CallEndpoint::commonMutex());
+    ForkMaster* m = static_cast<ForkMaster*>(s_calls[*param]);
+    return m && m->msgToSlaves(msg,match);
 }
 
 bool ForkModule::received(Message& msg, int id)

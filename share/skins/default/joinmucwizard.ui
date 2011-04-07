@@ -64,7 +64,7 @@
       </sizepolicy>
      </property>
      <property name="currentIndex" >
-      <number>2</number>
+      <number>0</number>
      </property>
      <widget class="QWidget" name="pageAccount" >
       <layout class="QVBoxLayout" >
@@ -376,11 +376,43 @@
         </widget>
        </item>
        <item>
-        <widget class="QRadioButton" name="mucserver_joinroom" >
-         <property name="text" >
-          <string>Join a room to selected server</string>
-         </property>
-        </widget>
+        <layout class="QHBoxLayout" >
+         <item>
+          <widget class="QRadioButton" name="mucserver_joinroom" >
+           <property name="text" >
+            <string>Join a room to selected server</string>
+           </property>
+           <property name="checked" >
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLineEdit" name="room_room" >
+           <property name="sizePolicy" >
+            <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="minimumSize" >
+            <size>
+             <width>200</width>
+             <height>22</height>
+            </size>
+           </property>
+           <property name="maximumSize" >
+            <size>
+             <width>200</width>
+             <height>22</height>
+            </size>
+           </property>
+           <property name="_yate_textchangednotify" stdset="0" >
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+        </layout>
        </item>
        <item>
         <widget class="QRadioButton" name="mucserver_queryrooms" >
@@ -486,21 +518,24 @@
           </widget>
          </item>
          <item>
-          <widget class="QLineEdit" name="room_account" >
+          <widget class="QLabel" name="room_account" >
+           <property name="sizePolicy" >
+            <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
            <property name="minimumSize" >
             <size>
              <width>0</width>
-             <height>23</height>
+             <height>22</height>
             </size>
            </property>
            <property name="maximumSize" >
             <size>
              <width>16777215</width>
-             <height>23</height>
+             <height>22</height>
             </size>
-           </property>
-           <property name="readOnly" >
-            <bool>true</bool>
            </property>
           </widget>
          </item>
@@ -508,13 +543,13 @@
        </item>
        <item>
         <layout class="QHBoxLayout" >
-         <property name="topMargin" >
-          <number>0</number>
-         </property>
          <item>
           <widget class="QLabel" name="label_room" >
+           <property name="enabled" >
+            <bool>true</bool>
+           </property>
            <property name="sizePolicy" >
-            <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+            <sizepolicy vsizetype="Expanding" hsizetype="Fixed" >
              <horstretch>0</horstretch>
              <verstretch>0</verstretch>
             </sizepolicy>
@@ -540,68 +575,23 @@
           </widget>
          </item>
          <item>
-          <widget class="QLineEdit" name="room_room" >
-           <property name="minimumSize" >
-            <size>
-             <width>0</width>
-             <height>23</height>
-            </size>
-           </property>
-           <property name="maximumSize" >
-            <size>
-             <width>16777215</width>
-             <height>23</height>
-            </size>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </item>
-       <item>
-        <layout class="QHBoxLayout" >
-         <property name="topMargin" >
-          <number>0</number>
-         </property>
-         <item>
-          <widget class="QLabel" name="label_server" >
+          <widget class="QLabel" name="room_uri" >
            <property name="sizePolicy" >
-            <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+            <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
              <horstretch>0</horstretch>
              <verstretch>0</verstretch>
             </sizepolicy>
            </property>
            <property name="minimumSize" >
             <size>
-             <width>70</width>
-             <height>22</height>
-            </size>
-           </property>
-           <property name="maximumSize" >
-            <size>
-             <width>70</width>
-             <height>22</height>
-            </size>
-           </property>
-           <property name="text" >
-            <string>Server:</string>
-           </property>
-           <property name="indent" >
-            <number>0</number>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QLineEdit" name="room_server" >
-           <property name="minimumSize" >
-            <size>
              <width>0</width>
-             <height>23</height>
+             <height>22</height>
             </size>
            </property>
            <property name="maximumSize" >
             <size>
              <width>16777215</width>
-             <height>23</height>
+             <height>22</height>
             </size>
            </property>
           </widget>
@@ -718,6 +708,13 @@
           </widget>
          </item>
         </layout>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="room_autojoin" >
+         <property name="text" >
+          <string>Automatically join when account is connected</string>
+         </property>
+        </widget>
        </item>
        <item>
         <widget class="QCheckBox" name="room_history" >

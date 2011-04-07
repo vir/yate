@@ -1,3 +1,18 @@
+yate (3.3.1.svn4275) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4275: + Use join muc wizard to add new chat
+    room contacts. Allow changing chat room account, room and server
+    when editing one.  + Properly add lines of text bodies to generic
+    SIP messages.  + Allow generic processing of SIP INFO messages that
+    are not used for DTMFs.  + Decode MIME type message/sipfrag as lines
+    of text.  + Added methods to get the Module ID of a MessageRelay and
+    to check if the relay with a specific ID is installed.  + Priority
+    of all handlers in callfork is now configurable.  + Added
+    possibility to configure messages to be forked by the callfork
+    module.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 08 Apr 2011 02:19:21 +0400
+
 yate (3.3.1.svn4271) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4271: + Honor an earlymedia=false parameter

@@ -446,7 +446,7 @@ MimeBody* MimeBody::build(const char* buf, int len, const MimeHeaderLine& type)
     what.toLower();
     if (what == "application/sdp")
 	return new MimeSdpBody(type,buf,len);
-    if (what == "application/dtmf-relay")
+    if ((what == "application/dtmf-relay") || (what == "message/sipfrag"))
 	return new MimeLinesBody(type,buf,len);
     if (what.startsWith("text/") || (what == "application/dtmf"))
 	return new MimeStringBody(type,buf,len);

@@ -132,12 +132,17 @@ public:
     JoinMucWizard(ClientAccountList* accounts, NamedList* tempParams = 0);
     ~JoinMucWizard()
 	{ reset(true); }
+    // Start the wizard. Show the window
+    virtual void start(bool add = false);
     virtual void reset(bool full);
     // Handle actions from wizard window. Return true if handled
     virtual bool action(Window* w, const String& name, NamedList* params = 0);
     // Handle selection changes notifications. Return true if handled
     virtual bool select(Window* w, const String& name, const String& item,
 	const String& text = String::empty());
+    // Handle checkable widgets status changes in wizard window
+    // Return true if handled
+    virtual bool toggle(Window* w, const String& name, bool active);
     // Process contact.info message
     bool handleContactInfo(Message& msg, const String& account, const String& oper,
 	const String& contact);
@@ -158,7 +163,10 @@ protected:
     void setQueryRooms(bool on, const char* domain = 0);
     // Update UI progress params
     void addProgress(NamedList& dest, bool on, const char* target);
+    // Update 'next' button status on select server page
+    void updatePageMucServerNext();
 private:
+    bool m_add;
     bool m_queryRooms;                   // Requesting rooms from server
     bool m_querySrv;                     // Requesting MUC server(s)
     ObjList m_requests;                  // Info/items requests id
@@ -335,6 +343,7 @@ static const String s_chatFlatList = "chatcontact_flatlist";
 static const String s_chatSend = "send_chat";
 static const String s_fileSend = "send_file";
 static const String s_fileSendPrefix = "send_file:";
+static const String s_mucJoin = "room_join";
 static const String s_mucChgSubject = "room_changesubject";
 static const String s_mucChgNick = "room_changenick";
 static const String s_mucSave = "room_save";
@@ -344,6 +353,7 @@ static const String s_mucKick = "room_member_kick";
 static const String s_mucBan = "room_member_ban";
 static const String s_mucRoomShowLog = "room_showlog";
 static const String s_mucMemberShowLog = "room_member_showlog";
+static const String s_storeContact = "storecontact";
 // Not selected string(s)
 static String s_notSelected = "-none-";
 // Maximum number of call log entries
@@ -478,6 +488,18 @@ static inline void dumpList(const NamedList& p, const char* text, Window* w = 0)
 #endif
 }
 
+// Split user@domain
+static inline void splitContact(const String& contact, String& user, String& domain)
+{
+    int pos = contact.find('@');
+    if (pos >= 0) {
+	user = contact.substr(0,pos);
+	domain = contact.substr(pos + 1);
+    }
+    else
+	domain = contact;
+}
+
 // Utility: check if a string changed, set it, return true if changed
 static inline bool setChangedString(String& dest, const String& src)
 {
@@ -610,20 +632,60 @@ static bool showConfirm(Window* wnd, const char* text, const char* context)
 }
 
 // Show an error dialog box in a given window
-static void showError(Window* wnd, const char* text)
+// Return false to simplify code
+static bool showError(Window* wnd, const char* text)
 {
     static const String name = "error_dialog";
     if (!Client::valid())
-	return;
+	return false;
     NamedList p("");
     p.addParam("text",text);
     Client::self()->createDialog("message",wnd,String::empty(),"error_dialog",&p);
+    return false;
 }
 
 // Show an error dialog box in a given window
-static inline void showAccDupError(Window* wnd)
+static inline bool showAccDupError(Window* wnd)
 {
-    showError(wnd,"Another account with the same protocol, username and host already exists!");
+    return showError(wnd,"Another account with the same protocol, username and host already exists!");
+}
+
+// Show select account error dialog box in a given window
+static inline bool showAccSelect(Window* wnd)
+{
+    return showError(wnd,"You must choose an account");
+}
+
+// Show a duplicate room error dialog box in a given window
+static inline bool showRoomDupError(Window* wnd)
+{
+    return showError(wnd,"A chat room with the same username and server already exist!");
+}
+
+// Check text changes for user@domain
+// Username changes: find '@', set domain if found
+static bool checkUriTextChanged(Window* w, const String& sender, const String& text,
+    const String& usrName, const String& dName = String::empty())
+{
+    if (sender != usrName)
+	return false;
+    int pos = text.find('@');
+    if (pos >= 0) {
+	NamedList p("");
+	p.addParam(usrName,text.substr(0,pos));
+	if (dName) {
+	    String d = text.substr(pos + 1);
+	    if (d) {
+		String tmp;
+		if (Client::self()->getText(dName,tmp,false,w) && !tmp) {
+		    p.addParam(dName,d);
+		    p.addParam("focus:" + dName,String::boolText(false));
+		}
+	    }
+	}
+	Client::self()->setParams(&p,w);
+    }
+    return true;
 }
 
 // Check a room chat at groupchat.google.com
@@ -632,13 +694,7 @@ static bool checkGoogleRoom(const String& contact, Window* w = 0)
 {
     String room;
     String domain;
-    int pos = contact.find('@');
-    if (pos >= 0) {
-	room = contact.substr(0,pos);
-	domain = contact.substr(pos + 1);
-    }
-    else
-	domain = contact;
+    splitContact(contact,room,domain);
     if (!isGoogleMucDomain(domain))
 	return true;
     if (room.startSkip("private-chat-",false) && Client::s_guidRegexp.matches(room))
@@ -652,6 +708,34 @@ static bool checkGoogleRoom(const String& contact, Window* w = 0)
     else
 	Client::openMessage(text);
     return false;
+}
+
+// Check an URI read from UI
+// Show an error if invalid
+static bool checkUri(Window* w, const String& user, const String& domain, bool muc)
+{
+    String text;
+    if (user) {
+	if (user.find('@') < 0) {
+	    if (domain) {
+		if (domain.find('@') >= 0)
+		    text << "Invalid domain";
+	    }
+	    else
+		text << "Domain can't be empty";
+	}
+	else
+	    text << "Invalid " << (muc ? "room id" : "username");
+    }
+    else
+	text << (muc ? "Room id" : "Username") << " can't be empty";
+    if (text) {
+	showError(w,text);
+	return false;
+    }
+    if (!muc)
+	return true;
+    return checkGoogleRoom(user + "@" + domain,w);
 }
 
 // Retrieve resource status image with path
@@ -1120,7 +1204,7 @@ static void updateChatAccountList(const String& account, bool upd)
 	if (!(isContact || id->startsWith("chatroomedit_")))
 	    continue;
 	Window* w = Client::self()->getWindow(*id);
-	if (!w || w->context())
+	if (!w || (isContact && w->context()))
 	    continue;
 	if (upd) {
 	    Client::self()->updateTableRow(s_chatAccount,account,0,false,w);
@@ -1430,6 +1514,138 @@ static bool getAccount(Window* w, String* proto, String* user, String* host)
     return true;
 }
 
+// Read room data from a window
+// Check the room pointer on return: 0 means failure
+// Return true if connection data changed (username, server, password)
+static bool getRoom(Window* w, ClientAccount* acc, bool permanent,
+    bool denyExist, MucRoom*& r, bool& dataChanged, bool hasRoomSrv = true)
+{
+    r = 0;
+    if (!w)
+	return false;
+    if (!acc) {
+	showError(w,"No account selected");
+	return false;
+    }
+    if (!acc->resource().online()) {
+	showError(w,"The account is offline");
+	return false;
+    }
+    String contact;
+    String room;
+    String server;
+    if (hasRoomSrv) {
+	Client::self()->getText("room_room",room,false,w);
+	Client::self()->getText("room_server",server,false,w);
+	contact << room << "@" << server;
+    }
+    else {
+	Client::self()->getText("room_uri",contact,false,w);
+	splitContact(contact,room,server);
+    }
+    if (!checkUri(w,room,server,true))
+	return false;
+    String id;
+    ClientContact::buildContactId(id,acc->toString(),contact);
+    r = acc->findRoom(id);
+    bool changed = (r == 0);
+    dataChanged = changed;
+    if (!r) {
+	// Check if a contact with the same user@domain already exists
+	if (permanent && acc->findContact(id)) {
+	    showError(w,"A contact with the same username and domain already exist");
+	    return false;
+	}
+	r = new MucRoom(acc,id,0,contact,0);
+    }
+    else if (denyExist && (r->local() || r->remote())) {
+	r = 0;
+	return showRoomDupError(w);
+    }
+    String nick;
+    String pwd;
+    String name;
+    Client::self()->getText("room_nick",nick,false,w);
+    Client::self()->getText("room_password",pwd,false,w);
+    // Join room wizard don't have name set, avoid resetting it
+    if (hasRoomSrv)
+	Client::self()->getText("room_name",name,false,w);
+    else
+	name = r->m_name;
+    bool autoJoin = false;
+    Client::self()->getCheck("room_autojoin",autoJoin,w);
+    bool hist = true;
+    Client::self()->getCheck("room_history",hist,w);
+    String lastHist;
+    if (hist) {
+	bool t = false;
+	if (Client::self()->getCheck("room_historylast",t,w) && t)
+	    Client::self()->getText("room_historylast_value",lastHist,false,w);
+    }
+    if (lastHist.toInteger() < 1)
+	lastHist.clear();
+    // Update room data. Check if connection related data changed
+    if (setChangedString(r->m_password,pwd))
+	changed = dataChanged = true;
+    dataChanged = setChangedString(r->m_name,name ? name : contact) || dataChanged;
+    dataChanged = setChangedParam(r->m_params,"nick",nick) || dataChanged;
+    dataChanged = setChangedParam(r->m_params,"autojoin",String::boolText(autoJoin)) ||
+	dataChanged;
+    dataChanged = setChangedParam(r->m_params,"history",String::boolText(hist)) ||
+	dataChanged;
+    dataChanged = setChangedParam(r->m_params,"historylast",lastHist) || dataChanged;
+    // Permanent room
+    if (permanent) {
+	if (!(r->local() && r->remote()))
+	    dataChanged = true;
+	r->setLocal(true);
+	r->setRemote(true);
+    }
+    return changed;
+}
+
+// Fill a list used to update muc room edit/join window
+static void fillRoomParams(NamedList& p, MucRoom* r = 0, bool hasRoomSrv = true)
+{
+    bool autoJoin = false;
+    bool hist = true;
+    String last;
+    if (r) {
+	p.addParam("room_account",r->accountName());
+	if (hasRoomSrv) {
+	    p.addParam("room_room",r->uri().getUser());
+	    p.addParam("room_server",r->uri().getHost());
+	}
+	else
+	    p.addParam("room_uri",r->uri());
+	p.addParam("room_nick",r->m_params["nick"]);
+	p.addParam("room_password",r->m_password);
+	p.addParam("room_name",r->m_name);
+	autoJoin = r->m_params.getBoolValue("autojoin");
+	hist = r->m_params.getBoolValue("history");
+	if (hist)
+	    last = r->m_params["historylast"];
+    }
+    else {
+	p.addParam("room_account","");
+	if (hasRoomSrv) {
+	    p.addParam("room_room","");
+	    p.addParam("room_server","");
+	}
+	else
+	    p.addParam("room_uri","");
+	p.addParam("room_nick","");
+	p.addParam("room_password","");
+	p.addParam("room_name","");
+    }
+    p.addParam("check:room_autojoin",String::boolText(autoJoin));
+    p.addParam("check:room_history",String::boolText(hist));
+    p.addParam("check:room_historylast",String::boolText(hist && last));
+    if (last.toInteger() <= 0)
+	last = "30";
+    p.addParam("room_historylast_value",last);
+}
+
 // Retrieve account data from UI
 static bool getAccount(Window* w, NamedList& p, ClientAccountList& accounts)
 {
@@ -1672,9 +1888,13 @@ static void fillChatContact(NamedList& p, ClientContact& c, bool data, bool stat
     p.addParam("name",c.m_name);
     p.addParam("contact",c.uri());
     p.addParam("subscription",c.m_subscription);
-    NamedString* groups = new NamedString("groups");
-    Client::appendEscape(*groups,c.groups());
-    p.addParam(groups);
+    if (!c.mucRoom()) {
+	NamedString* groups = new NamedString("groups");
+	Client::appendEscape(*groups,c.groups());
+	p.addParam(groups);
+    }
+    else
+	p.addParam("groups","Chat Rooms");
 }
 
 // Enable/disable chat contacts actions
@@ -1973,11 +2193,11 @@ static bool showContactEdit(ClientAccountList& accounts, bool room = false,
     NamedList p("");
     const char* add = String::boolText(c == 0);
     const char* edit = String::boolText(c != 0);
-    p.addParam("show:chataccount",add);
-    p.addParam("show:frame_uri",add);
-    p.addParam("show:chatcontact_account",edit);
-    p.addParam("show:chatcontact_uri",edit);
     if (!room) {
+	p.addParam("show:chataccount",add);
+	p.addParam("show:frame_uri",add);
+	p.addParam("show:chatcontact_account",edit);
+	p.addParam("show:chatcontact_uri",edit);
 	Client::self()->clearTable("groups",w);
 	// Add groups used by all accounts
 	NamedList upd("");
@@ -2024,56 +2244,35 @@ static bool showContactEdit(ClientAccountList& accounts, bool room = false,
 	p.addParam("name",c->m_name);
 	p.addParam("chatcontact_uri",c->uri());
 	MucRoom* r = room ? c->mucRoom() : 0;
-	if (r) {
-	    p.addParam("nick",r->m_params.getValue("nick"));
-	    p.addParam("password",r->m_password);
-	    ObjList* grp = r->groups().skipNull();
-	    p.addParam("group",grp ? grp->get()->toString() : String::empty());
-	    p.addParam("check:autojoin",r->m_params.getValue("autojoin"));
-	    p.addParam("check:history",r->m_params.getValue("history"));
-	    int val = r->m_params.getIntValue("historylast");
-	    p.addParam("check:historylast",String::boolText(val > 0));
-	    p.addParam("historylast_value",val > 0 ? String(val).c_str() : "30");
-	    if (r->local() || r->remote()) {
-		p.addParam("check:save_local",String::boolText(r->local(true)));
-		p.addParam("check:save_remote",String::boolText(r->remote(true)));
-	    }
-	    else {
-		// Temporary room: connected from wizard
-		p.addParam("check:save_local",String::boolText(true));
-		p.addParam("check:save_remote",String::boolText(true));
-	    }
-	}
+	if (r)
+	    fillRoomParams(p,r);
     }
     else {
 	p.addParam("context","");
-	p.addParam("username","");
-	p.addParam("domain","");
-	p.addParam("name","");
 	if (!room) {
 	    p.addParam("title","Add friend");
+	    p.addParam("username","");
+	    p.addParam("domain","");
+	    p.addParam("name","");
 	    p.addParam("check:request_subscribe",String::boolText(true));
 	}
 	else {
 	    p.addParam("title","Add chat room");
-	    p.addParam("nick","");
-	    p.addParam("password","");
-	    p.addParam("group","Rooms");
-	    p.addParam("check:autojoin",String::boolText(false));
-	    p.addParam("check:history",String::boolText(true));
-	    p.addParam("check:historylast",String::boolText(false));
-	    p.addParam("historylast_value","30");
-	    p.addParam("check:save_local",String::boolText(true));
-	    p.addParam("check:save_remote",String::boolText(true));
+	    fillRoomParams(p);
 	}
-	// Fill accounts. Select single account
+    }
+    // Fill accounts. Select single account or room account
+    if (!c || c->mucRoom()) {
 	Client::self()->addOption(s_chatAccount,s_notSelected,false,String::empty(),w);
 	for (ObjList* o = accounts.accounts().skipNull(); o; o = o->skipNext()) {
 	    ClientAccount* a = static_cast<ClientAccount*>(o->get());
 	    if (a->resource().online() && a->hasChat())
 		Client::self()->addOption(s_chatAccount,a->toString(),false,String::empty(),w);
 	}
-	selectListItem(s_chatAccount,w,false,false);
+	if (!(c && c->mucRoom()))
+	    selectListItem(s_chatAccount,w,false,false);
+	else
+	    p.addParam("select:" + s_chatAccount,c->accountName());
     }
     Client::self()->setParams(&p,w);
     Client::self()->setVisible(w->id(),true,true);
@@ -2763,6 +2962,7 @@ bool AccountWizard::changePage(const String& page, const String& old)
  */
 JoinMucWizard::JoinMucWizard(ClientAccountList* accounts, NamedList* tempParams)
     : ClientWizard("joinmucwizard",accounts,tempParams != 0),
+    m_add(false),
     m_queryRooms(false),
     m_querySrv(false)
 {
@@ -2773,7 +2973,28 @@ JoinMucWizard::JoinMucWizard(ClientAccountList* accounts, NamedList* tempParams)
     if (!w)
 	return;
     Client::self()->setParams(tempParams,w);
+    Client::self()->setShow("room_autojoin",false,w);
     changePage("pageJoinRoom");
+    Client::self()->setVisible(toString(),true,true);
+}
+
+// Start the wizard. Show the window
+void JoinMucWizard::start(bool add)
+{
+    reset(true);
+    changePage(String::empty());
+    Window* w = window();
+    if (!w)
+	return;
+    m_add = add;
+    NamedList p("");
+    const char* addOk = String::boolText(add);
+    if (!add)
+	p.addParam("title","Join Chat Room Wizard");
+    else
+	p.addParam("title","Add Chat Room Wizard");
+    p.addParam("show:room_autojoin",addOk);
+    Client::self()->setParams(&p,w);
     Client::self()->setVisible(toString(),true,true);
 }
 
@@ -2820,16 +3041,17 @@ bool JoinMucWizard::action(Window* w, const String& name, NamedList* params)
 	if (!sender)
 	    return true;
 	const String& text = (*params)["text"];
-	if (sender == "muc_server") {
-	    if (m_queryRooms || m_querySrv)
-		return true;
+	if (sender == "muc_server" || sender == "room_room") {
 	    String page;
 	    currentPage(page);
-	    // Enable 'next' button
-	    if (page == "pageMucServer")
-		Client::self()->setActive(s_actionNext,!text.null(),w);
+	    if (page == "pageMucServer") {
+		if (!checkUriTextChanged(w,sender,text,sender))
+		    return false;
+		updatePageMucServerNext();
+	    }
+	    return true;
 	}
-	return true;
+	return false;
     }
     return false;
 }
@@ -2854,11 +3076,28 @@ bool JoinMucWizard::select(Window* w, const String& name, const String& item,
 	return true;
     }
     if (name == "muc_rooms") {
-	// Update actions
-	setQueryRooms(m_queryRooms);
+	updatePageMucServerNext();
 	return true;
     }
     return false;
+}
+
+// Handle checkable widgets status changes in wizard window
+// Return true if handled
+bool JoinMucWizard::toggle(Window* w, const String& name, bool active)
+{
+    if (!isWindow(w))
+	return false;
+    if (name == "mucserver_joinroom" || name == "mucserver_queryrooms") {
+	if (!active)
+	    return true;
+	String page;
+	currentPage(page);
+	if (page == "pageMucServer")
+	    updatePageMucServerNext();
+	return true;
+    }
+    return ClientWizard::toggle(w,name,active);
 }
 
 // Process contact.info message
@@ -2970,8 +3209,12 @@ void JoinMucWizard::onNext()
     currentPage(page);
     if (!page)
 	return;
-    if (page == "pageAccount")
-	changePage("pageChooseRoomServer",page);
+    if (page == "pageAccount") {
+	if (!m_add)
+	    changePage("pageChooseRoomServer",page);
+	else
+	    changePage("pageMucServer",page);
+    }
     else if (page == "pageChooseRoomServer") {
 	bool join = false;
 	Window* w = window();
@@ -2996,8 +3239,12 @@ void JoinMucWizard::onPrev()
     currentPage(page);
     if (page == "pageChooseRoomServer")
 	changePage("pageAccount",page);
-    else if (page == "pageMucServer")
-	changePage("pageChooseRoomServer",page);
+    else if (page == "pageMucServer") {
+	if (!m_add)
+	    changePage("pageChooseRoomServer",page);
+	else
+	    changePage("pageAccount",page);
+    }
     else if (page == "pageJoinRoom")
 	changePage(m_lastPage,page);
     else if (page == "pageRooms")
@@ -3036,10 +3283,8 @@ bool JoinMucWizard::changePage(const String& page, const String& old)
 	}
 	if (page == "pageChooseRoomServer") {
 	    ClientAccount* a = account(s_mucAccounts);
-	    if (old == "pageAccount" && !a) {
-		showError(window(),"You must select an account");
-		return false;
-	    }
+	    if (old == "pageAccount" && !a)
+		return showAccSelect(w);
 	    // Add rooms from account
 	    Client::self()->clearTable(s_mucSavedRooms,w);
 	    if (a) {
@@ -3073,8 +3318,10 @@ bool JoinMucWizard::changePage(const String& page, const String& old)
 	    setQueryRooms(false);
 	    canNext = selectedMucServer();
 	    // Reset the page if comming from previous
-	    if (old == "pageChooseRoomServer")
+	    if (old == "pageChooseRoomServer" || old == "pageAccount") {
 		p.addParam("check:mucserver_joinroom",String::boolText(true));
+		p.addParam("room_room","");
+	    }
 	    break;
 	}
 	if (page == "pageRooms") {
@@ -3113,85 +3360,55 @@ bool JoinMucWizard::changePage(const String& page, const String& old)
 	    String server;
 	    String nick;
 	    String pwd;
-	    bool history = true;
-	    unsigned int lastMinutes = 30;
+	    MucRoom* r = 0;
 	    if (old == "pageRooms") {
 		String sel;
 		Client::self()->getSelect("muc_rooms",sel,w);
-		int pos = sel ? sel.find('@') : -1;
-		if (pos > 0) {
-		    room = sel.substr(0,pos);
-		    server = sel.substr(pos + 1);
-		}
-		if (!(room && server)) {
-		    showError(w,"You must choose a MUC room");
-		    return false;
-		}
+		splitContact(sel,room,server);
 	    }
 	    else if (old == "pageMucServer") {
+		Client::self()->getText("room_room",room,false,w);
 		selectedMucServer(&server);
-		if (!server) {
-		    showError(w,"You must choose a MUC server");
-		    return false;
-		}
 	    }
 	    else if (old == "pageChooseRoomServer") {
 		String tmp;
 		Client::self()->getSelect(s_mucSavedRooms,tmp,w);
 		if (!tmp)
 		    return false;
-		MucRoom* r = acc->findRoomByUri(tmp);
+		r = acc->findRoomByUri(tmp);
 		if (r && !(r->local() || r->remote()))
 		    r = 0;
-		NamedList* sect = !r ? s_mucRooms.getSection(tmp) : 0;
 		if (r) {
 		    room = r->uri().getUser();
 		    server = r->uri().getHost();
 		}
-		else if (sect) {
-		    URI uri(*sect);
-		    room = uri.getUser();
-		    server = uri.getHost();
-		}
-		bool ok = room && server;
-		if (ok) {
-		    int lm = 0;
-		    if (r) {
-			nick = r->m_params["nick"];
-			pwd = r->m_password;
-			history = r->m_params.getBoolValue("history",true);
-			if (history)
-			    lm = r->m_params.getIntValue("historylast");
-		    }
-		    else {
+		else {
+		    NamedList* sect = s_mucRooms.getSection(tmp);
+		    if (sect) {
+			splitContact(*sect,room,server);
 			nick = (*sect)["nick"];
 			pwd = (*sect)["password"];
-			history = sect->getBoolValue("history",true);
-			if (history)
-			    lm = sect->getIntValue("history.newer");
 		    }
-		    if (lm > 0)
-			lastMinutes = (unsigned int)lm;
-		}
-		else if (!r) {
-		    Client::self()->delTableRow(s_mucSavedRooms,tmp,w);
-		    s_mucRooms.clearSection(tmp);
-		    s_mucRooms.save();
-		    showError(w,"Deleted unknown/invalid room");
-		    return false;
+		    if (!(room && server)) {
+			Client::self()->delTableRow(s_mucSavedRooms,tmp,w);
+			s_mucRooms.clearSection(tmp);
+			s_mucRooms.save();
+			showError(w,"Deleted unknown/invalid room");
+			return false;
+		    }
 		}
 	    }
-	    p.addParam("room_account",acc->toString());
-	    p.addParam("room_room",room);
-	    p.addParam("room_server",server);
-	    if (!nick && acc->contact())
-		nick = acc->contact()->uri().getUser();
-	    p.addParam("room_nick",nick);
-	    p.addParam("room_password",pwd);
-	    p.addParam("check:room_history",String::boolText(history));
-	    p.addParam("check:room_historylast",String::boolText(history && lastMinutes > 0));
-	    if (lastMinutes > 0)
-		p.addParam("room_historylast_value",String(lastMinutes));
+	    if (!checkUri(w,room,server,true))
+		return false;
+	    fillRoomParams(p,r,false);
+	    if (!r) {
+		p.setParam("room_account",acc->toString());
+		p.setParam("room_uri",room + "@" + server);
+		if (!nick && acc->contact())
+		    nick = acc->contact()->uri().getUser();
+		p.setParam("room_nick",nick);
+		p.setParam("room_password",pwd);
+	    }
 	    nextText = "Join";
 	    break;
 	}
@@ -3210,6 +3427,8 @@ bool JoinMucWizard::changePage(const String& page, const String& old)
 	    selectedMucServer(&target);
 	setQueryRooms(on,target);
     }
+    else if (page == "pageMucServer")
+	updatePageMucServerNext();
     // Safe to remember the last page here: it might be the received page
     m_lastPage = old;
     return true;
@@ -3229,78 +3448,28 @@ void JoinMucWizard::joinRoom()
 	Client::self()->getText("room_account",tmp,false,w);
 	acc = tmp ? m_accounts->findAccount(tmp) : 0;
     }
-    if (!acc) {
-	showError(w,"There is no selected account");
-	return;
-    }
-    String room;
-    String server;
-    Client::self()->getText("room_room",room,false,w);
-    Client::self()->getText("room_server",server,false,w);
-    if (!(room && server)) {
-	showError(w,"There is no room or server to join");
-	return;
-    }
-    String id;
-    String uri(room + "@" + server);
-    if (!checkGoogleRoom(uri,w))
-	return;
-    ClientContact::buildContactId(id,acc->toString(),uri);
-    MucRoom* r = acc->findRoom(id);
-    if (r && !r->resource().offline()) {
-	Client::self()->setVisible(toString(),false);
-	createRoomChat(*r);
-	return;
-    }
-    String nick;
-    Client::self()->getText("room_nick",nick,false,w);
-    if (!nick) {
-	if (r)
-	    nick = r->resource().m_name;
-	if (!nick && acc->contact())
-	    nick = acc->contact()->uri().getUser();
-    }
-    if (!nick) {
-	showError(w,"No available nick name");
-	return;
-    }
+    bool dataChanged = false;
+    MucRoom* r = 0;
+    bool changed = getRoom(w,acc,m_add,m_add,r,dataChanged,false);
     if (!r)
-	r = new MucRoom(acc,id,room,uri,nick);
-    else
-	r->resource().m_name = nick;
-    bool history = false;
-    String lastHist;
-    // Get password and history
-    Client::self()->getText("room_password",r->m_password,false,w);
-    Client::self()->getCheck("room_history",history,w);
-    if (history) {
-	bool t = false;
-	if (Client::self()->getCheck("room_historylast",t,w) && t)
-	    Client::self()->getText("room_historylast_value",lastHist,false,w);
+	return;
+    if (r->local() || r->remote()) {
+	if (dataChanged)
+	    Client::self()->action(w,s_storeContact + ":" + r->toString());
     }
-    unsigned int lastMinutes = lastHist.toInteger(0);
-    Message* m = r->buildJoin(true,history,lastMinutes * 60);
-    r->resource().m_status = ClientResource::Connecting;
-    // Ok. Show the window and request join
-    createRoomChat(*r);
-    Engine::enqueue(m);
-    // Save room
-    if (!(r->local() || r->remote())) {
-	r->m_params.setParam("nick",nick);
-	r->m_params.setParam("history",String::boolText(history));
-	if (lastMinutes)
-	    r->m_params.setParam("historylast",String(lastMinutes));
-	else
-	    r->m_params.clearParam("historylast");
-	s_mucRooms.clearSection(uri);
-	NamedList* sect = s_mucRooms.createSection(uri);
+    else {
+	s_mucRooms.clearSection(r->uri());
+	NamedList* sect = s_mucRooms.createSection(r->uri());
 	if (sect) {
-	    sect->addParam("nick",nick,false);
+	    sect->addParam("nick",r->m_params["nick"],false);
 	    sect->addParam("password",r->m_password,false);
 	    s_mucRooms.save();
 	}
     }
-    Client::self()->setVisible(toString(),false);
+    NamedList params("");
+    params.addParam("force",String::boolText(changed));
+    if (Client::self()->action(w,s_mucJoin + ":" + r->toString(),&params))
+	Client::self()->setVisible(toString(),false);
 }
 
 // Retrieve the selected MUC server if not currently requesting one
@@ -3335,6 +3504,7 @@ void JoinMucWizard::setQuerySrv(bool on, const char* domain)
     p.addParam("active:muc_domain",active);
     p.addParam("active:muc_query_servers",active);
     p.addParam("active:mucserver_joinroom",active);
+    p.addParam("active:room_room",active);
     p.addParam("active:mucserver_queryrooms",active);
     addProgress(p,m_querySrv,domain);
     if (isCurrentPage("pageMucServer"))
@@ -3373,6 +3543,35 @@ void JoinMucWizard::addProgress(NamedList& dest, bool on, const char* target)
 	dest.addParam("progress_text",tmp + " ...");
     }
 }
+
+// Update 'next' button status on select server page
+void JoinMucWizard::updatePageMucServerNext()
+{
+    Window* w = window();
+    if (!w)
+	return;
+    if (m_querySrv)
+	return;
+    bool on = false;
+    while (true) {
+	String tmp;
+	Client::self()->getText("muc_server",tmp,false,w);
+	if (!tmp)
+	    break;
+	bool join = false;
+	Client::self()->getCheck("mucserver_joinroom",join,w);
+	if (join) {
+	    tmp.clear();
+	    Client::self()->getText("room_room",tmp,false,w);
+	    if (!tmp)
+		break;
+	}
+	on = true;
+	break;
+    }
+    Client::self()->setActive(s_actionNext,on,w);
+}
+
 
 /*
  * AccountStatus
@@ -4068,6 +4267,8 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
     // *** Specific action handlers
     if (handleChatContactAction(name,wnd) ||
 	handleMucsAction(name,wnd,params) ||
+	handleChatContactEditOk(name,wnd) ||
+	handleChatRoomEditOk(name,wnd) ||
 	handleFileTransferAction(name,wnd,params))
 	return true;
 
@@ -4382,8 +4583,10 @@ bool DefaultLogic::toggle(Window* wnd, const String& name, bool active)
 	    fillContactEditActive(p,!active);
 	    fillLogContactActive(p,!active);
 	}
-	else if (s_mucWizard->isWindow(wnd))
+	else if (s_mucWizard->isWindow(wnd)) {
 	    p.addParam("active:joinmuc_wizard",nText);
+	    p.addParam("active:" + s_chatRoomNew,nText);
+	}
 	else if (wnd->id() == ClientContact::s_mucsWnd) {
 	    // Hidden: destroy/close all MUCS, close log sessions
 	    if (!active) {
@@ -6943,31 +7146,18 @@ bool DefaultLogic::handleTextChanged(NamedList* params, Window* wnd)
     if (!sender)
 	return false;
     // Username changes in contact add/edit
-    if (wnd->id().startsWith("contactedit_") ||
-	wnd->id().startsWith("chatroomedit_")) {
+    bool isContact = wnd->id().startsWith("contactedit_");
+    if (isContact || wnd->id().startsWith("chatroomedit_")) {
 	if (!Client::valid())
 	    return false;
-	if (!wnd->context()) {
-	    // Username changes in contact add: find '@', set domain if found
-	    if (sender == "username") {
-		const String& text = (*params)["text"];
-		int pos = text.find('@');
-		if (pos >= 0) {
-		    NamedList p("");
-		    p.addParam("username",text.substr(0,pos));
-		    String d = text.substr(pos + 1);
-		    if (d) {
-			String tmp;
-			if (Client::self()->getText("domain",tmp,false,wnd) && !tmp) {
-			    p.addParam("domain",d);
-			    p.addParam("focus:domain",String::boolText(false));
-			}
-		    }
-		    Client::self()->setParams(&p,wnd);
-		}
+	const String& text = (*params)["text"];
+	if (isContact) {
+	    if (!wnd->context() &&
+		checkUriTextChanged(wnd,sender,text,"username","domain"))
 		return true;
-	    }
 	}
+	else if (checkUriTextChanged(wnd,sender,text,"room_room","room_server"))
+	    return true;
 	return false;
     }
     // Chat input changes
@@ -7254,7 +7444,6 @@ bool DefaultLogic::handleUserData(Message& msg, bool& stopLogic)
 		    r->setLocal(false);
 		}
 		r->setRemote(true);
-		changed = r->setGroups(msg,prefix + "group") || changed;
 		// Copy other params
 		for (iter.reset(); 0 != (ns = iter.get());) {
 		    if (!ns->name().startsWith(prefix))
@@ -7367,7 +7556,7 @@ void DefaultLogic::notifyNoAudio(bool show, bool micOk, bool speakerOk,
 // Build (un)load a chat room parameter
 static void addChatRoomParam(NamedList& upd, bool load, MucRoom* room)
 {
-    if (!(room && (room->local() || room->remote())))
+    if (!(room && (!load || room->local() || room->remote())))
 	return;
     NamedList* p = new NamedList(room->toString());
     if (load)
@@ -7392,11 +7581,15 @@ void DefaultLogic::updateChatRoomsContactList(bool load, ClientAccount* acc,
 }
 
 // Join a MUC room. Create/show chat. Update its status
-void DefaultLogic::joinRoom(MucRoom* room)
+void DefaultLogic::joinRoom(MucRoom* room, bool force)
 {
     if (!room)
 	return;
     if (!room->resource().offline()) {
+	if (force) {
+	    room->m_params.setParam("internal.reconnect",String::boolText(true));
+	    Engine::enqueue(room->buildJoin(false));
+	}
 	createRoomChat(*room);
 	return;
     }
@@ -7817,8 +8010,10 @@ bool DefaultLogic::handleChatContactAction(const String& name, Window* wnd)
     // Add chat contact
     if (name == s_chatNew)
 	return showContactEdit(*m_accounts,false);
-    if (name == s_chatRoomNew)
-	return showContactEdit(*m_accounts,true);
+    if (name == s_chatRoomNew) {
+	s_mucWizard->start(true);
+	return true;
+    }
     // Remove chat contact
     if (name == s_chatDel)
 	return deleteSelectedItem(s_chatContactList + ":",wnd);
@@ -7838,161 +8033,6 @@ bool DefaultLogic::handleChatContactAction(const String& name, Window* wnd)
 	    Engine::enqueue(Client::buildSubscribe(true,sub,c->accountName(),c->uri()));
 	else
 	    Engine::enqueue(Client::buildSubscribe(false,false,c->accountName(),c->uri()));
-	return true;
-    }
-    // Save contact
-    bool cedit = (name == "contactedit_ok");
-    if (cedit || name == "chatroomedit_ok") {
-	if (!(Client::valid() && wnd))
-	    return false;
-	String contact;
-	ClientAccount* a = 0;
-	if (wnd->context()) {
-	    // Edit
-	    ClientContact* c = 0;
-	    if (cedit)
-		c = m_accounts->findContact(wnd->context());
-	    else
-		c = m_accounts->findRoom(wnd->context());
-	    if (c) {
-		a = c->account();
-		contact = c->uri();
-	    }
-	    if (!a) {
-		// Try to retrieve from data
-		String account;
-		Client::self()->getText("chatcontact_account",account,false,wnd);
-		a = m_accounts->findAccount(account);
-		if (!a) {
-		    showError(wnd,"Account does not exists");
-		    return false;
-		}
-		Client::self()->getText("chatcontact_uri",contact,false,wnd);
-	    }
-	}
-	else {
-	    a = selectedAccount(*m_accounts,wnd,s_chatAccount);
-	    if (!a) {
-		showError(wnd,"You must select an account");
-		return false;
-	    }
-	    String user, domain;
-	    Client::self()->getText("username",user,false,wnd);
-	    Client::self()->getText("domain",domain,false,wnd);
-	    if (!(user && domain)) {
-		showError(wnd,"You must enter an username and domain");
-		return false;
-	    }
-	    contact << user << "@" << domain;
-	    // Check unique
-	    ClientContact* e = 0;
-	    if (cedit)
-		e = a->findRoomByUri(contact);
-	    else
-		e = a->findContactByUri(contact);
-	    if (e) {
-		String error = "A ";
-		error << (cedit ? "chat room" : "contact");
-		error << " with the same username and domain already exist";
-		showError(wnd,error);
-		return false;
-	    }
-	}
-	if (!a->resource().online()) {
-	    showError(wnd,"Selected account is not online");
-	    return false;
-	}
-	String name;
-	Client::self()->getText("name",name,false,wnd);
-	if (cedit) {
-	    bool reqSub = false;
-	    if (!wnd->context())
-		Client::self()->getCheck("request_subscribe",reqSub,wnd);
-	    NamedList p("");
-	    Client::self()->getOptions("groups",&p,wnd);
-	    Message* m = Client::buildUserRoster(true,a->toString(),contact);
-	    m->addParam("name",name,false);
-	    unsigned int n = p.length();
-	    for (unsigned int i = 0; i < n; i++) {
-		NamedString* ns = p.getParam(i);
-		if (!(ns && ns->name()))
-		    continue;
-		NamedList pp("");
-		Client::self()->getTableRow("groups",ns->name(),&pp,wnd);
-		if (pp.getBoolValue("check:group"))
-		    m->addParam("group",ns->name(),false);
-	    }
-	    Engine::enqueue(m);
-	    if (reqSub)
-		Engine::enqueue(Client::buildSubscribe(true,true,a->toString(),contact));
-	}
-	else {
-	    if (!checkGoogleRoom(contact,wnd))
-		return false;
-	    String nick;
-	    String pwd;
-	    String grp;
-	    Client::self()->getText("nick",nick,false,wnd);
-	    Client::self()->getText("password",pwd,false,wnd);
-	    Client::self()->getText("group",grp,false,wnd);
-	    bool local = true;
-	    bool remote = true;
-	    Client::self()->getCheck("save_local",local,wnd);
-	    Client::self()->getCheck("save_remote",remote,wnd);
-	    bool join = false;
-	    Client::self()->getCheck("autojoin",join,wnd);
-	    bool reqHist = false;
-	    String histLastValue;
-	    Client::self()->getCheck("history",reqHist,wnd);
-	    if (reqHist) {
-		bool reqHistLast = false;
-		Client::self()->getCheck("historylast",reqHistLast,wnd);
-		if (reqHistLast)
-		    Client::self()->getText("historylast_value",histLastValue,false,wnd);
-	    }
-	    ClientContact::buildContactId(id,a->toString(),contact);
-	    bool remoteChanged = remote;
-	    bool localChanged = local;
-	    MucRoom* room = a->findRoom(id);
-	    if (!room)
-		room = new MucRoom(a,id,0,contact,0);
-	    else {
-		remoteChanged = remote || room->remote();
-		localChanged = local || room->local();
-	    }
-	    room->m_name = name ? name : contact;
-	    room->m_password = pwd;
-	    room->groups().clear();
-	    room->appendGroup(grp);
-	    room->m_params.setParam("nick",nick);
-	    room->m_params.setParam("history",String::boolText(reqHist));
-	    room->m_params.setParam("historylast",histLastValue);
-	    room->m_params.setParam("autojoin",String::boolText(join));
-	    if (localChanged || remoteChanged) {
-		// Fake local to enable updating
-		room->setLocal(true);
-		updateChatRoomsContactList(local || remote,0,room);
-	    }
-	    room->setLocal(local);
-	    room->setRemote(remote);
-	    // Save it
-	    if (local) {
-		String error;
-		if (!(a->setupDataDir(&error) && saveContact(a->m_cfg,room))) {
-		    String text;
-		    text << "Failed to save chat room " << contact;
-		    text.append(error,"\r\n");
-		    notifyGenericError(text,a->toString(),contact);
-		}
-	    }
-	    else
-		ClientLogic::clearContact(a->m_cfg,room);
-	    if (remoteChanged)
-		Engine::enqueue(a->userData(true,"chatrooms"));
-	    if (join)
-		joinRoom(room);
-	}
-	Client::self()->setVisible(wnd->id(),false);
 	return true;
     }
     // Add group in contact edit/add window
@@ -8022,7 +8062,143 @@ bool DefaultLogic::handleChatContactAction(const String& name, Window* wnd)
 	showMucInvite(*c,m_accounts);
 	return true;
     }
+    // Store contact
+    if (getPrefixedContact(name,s_storeContact,id,m_accounts,0,&room)) {
+	if (room)
+	    updateChatRoomsContactList(room->local() || room->remote(),0,room);
+	return storeContact(room);
+    }
     return false;
+}
+
+// Handle chat contact edit ok button press. Return true if handled
+bool DefaultLogic::handleChatContactEditOk(const String& name, Window* wnd)
+{
+    static const String s_cceokname = "contactedit_ok";
+    if (name != s_cceokname)
+	return false;
+    if (!(Client::valid() && wnd))
+	return true;
+    String contact;
+    ClientAccount* a = 0;
+    if (wnd->context()) {
+	// Edit
+	ClientContact* c = m_accounts->findContact(wnd->context());
+	if (c) {
+	    a = c->account();
+	    contact = c->uri();
+	}
+	if (!a) {
+	    // Try to retrieve from data
+	    String account;
+	    Client::self()->getText("chatcontact_account",account,false,wnd);
+	    a = m_accounts->findAccount(account);
+	    if (!a) {
+		showError(wnd,"Account does not exists");
+		return true;
+	    }
+	    Client::self()->getText("chatcontact_uri",contact,false,wnd);
+	}
+    }
+    else {
+	a = selectedAccount(*m_accounts,wnd,s_chatAccount);
+	if (!a) {
+	    showAccSelect(wnd);
+	    return true;
+	}
+	String user, domain;
+	Client::self()->getText("username",user,false,wnd);
+	Client::self()->getText("domain",domain,false,wnd);
+	if (!checkUri(wnd,user,domain,false))
+	    return true;
+	contact << user << "@" << domain;
+	// Check unique
+	if (a->findRoomByUri(contact)) {
+	    showRoomDupError(wnd);
+	    return true;
+	}
+    }
+    if (!a->resource().online()) {
+	showError(wnd,"Selected account is offline");
+	return true;
+    }
+    String cname;
+    Client::self()->getText("name",cname,false,wnd);
+    bool reqSub = false;
+    if (!wnd->context())
+	Client::self()->getCheck("request_subscribe",reqSub,wnd);
+    NamedList p("");
+    Client::self()->getOptions("groups",&p,wnd);
+    Message* m = Client::buildUserRoster(true,a->toString(),contact);
+    m->addParam("name",cname,false);
+    unsigned int n = p.length();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* ns = p.getParam(i);
+	if (!(ns && ns->name()))
+	    continue;
+	NamedList pp("");
+	Client::self()->getTableRow("groups",ns->name(),&pp,wnd);
+	if (pp.getBoolValue("check:group"))
+	    m->addParam("group",ns->name(),false);
+    }
+    Engine::enqueue(m);
+    if (reqSub)
+	Engine::enqueue(Client::buildSubscribe(true,true,a->toString(),contact));
+    Client::self()->setVisible(wnd->id(),false);
+    return true;
+}
+
+// Handle chat room contact edit ok button press. Return true if handled
+bool DefaultLogic::handleChatRoomEditOk(const String& name, Window* wnd)
+{
+    static const String s_creokname = "chatroomedit_ok";
+    if (name != s_creokname)
+	return false;
+    if (!(Client::valid() && wnd))
+	return false;
+    ClientAccount* a = selectedAccount(*m_accounts,wnd,s_chatAccount);
+    if (!a)
+	return showAccSelect(wnd);
+    // Retrieve user/domain
+    String user, domain;
+    Client::self()->getText("room_room",user,false,wnd);
+    Client::self()->getText("room_server",domain,false,wnd);
+    if (!checkUri(wnd,user,domain,true))
+	return false;
+    // Check if changed
+    String id;
+    String contact(user + "@" + domain);
+    ClientContact::buildContactId(id,a->toString(),contact);
+    MucRoom* room = a->findRoom(id);
+    if (wnd->context()) {
+	MucRoom* e = 0;
+	if (wnd->context() != id)
+	    e = m_accounts->findRoom(wnd->context());
+	if (e) {
+	    // Reset non temporary old one
+	    // Delete it if don't have chat displayed
+	    if (e->local() || e->remote()) {
+		e->setLocal(false);
+		e->setRemote(false);
+		updateChatRoomsContactList(false,0,e);
+		storeContact(e);
+	    }
+	    if (!e->hasChat(e->resource().toString()))
+		TelEngine::destruct(e);
+	}
+    }
+    room = 0;
+    bool dataChanged = false;
+    bool changed = getRoom(wnd,a,true,!wnd->context(),room,dataChanged);
+    if (!room)
+	return false;
+    updateChatRoomsContactList(true,0,room);
+    if (dataChanged)
+	storeContact(room);
+    if (room->m_params.getBoolValue("autojoin"))
+	joinRoom(room,changed);
+    Client::self()->setVisible(wnd->id(),false);
+    return true;
 }
 
 // Handle actions from MUCS window. Return true if handled
@@ -8103,6 +8279,11 @@ bool DefaultLogic::handleMucsAction(const String& name, Window* wnd, NamedList* 
     // Save/edit chat room contact
     if (getPrefixedContact(name,s_mucSave,id,m_accounts,0,&room))
 	return room && showContactEdit(*m_accounts,true,room);
+    // Join MUC room
+    if (getPrefixedContact(name,s_mucJoin,id,m_accounts,0,&room)) {
+	joinRoom(room,params && params->getBoolValue("force"));
+	return room != 0;
+    }
     return false;
 }
 
@@ -8230,6 +8411,7 @@ bool DefaultLogic::handleMucResNotify(Message& msg, ClientAccount* acc, const St
 	    room->resource().m_status = ClientResource::Offline;
 	    updateMucRoomMember(*room,room->resource());
 	    room->m_params.clearParam("internal.invite",'.');
+	    room->m_params.clearParam("internal.reconnect");
 	}
 	return true;
     }
@@ -8349,6 +8531,12 @@ bool DefaultLogic::handleMucResNotify(Message& msg, ClientAccount* acc, const St
 	    }
 	    room->m_params.clearParam("internal.invite",'.');
 	}
+	// Re-connect?
+	if (room->ownMember(member) && !online &&
+	    room->m_params.getBoolValue("internal.reconnect")) {
+	    room->m_params.clearParam("internal.reconnect");
+	    joinRoom(room);
+	}
     }
     // Update contact/instance
     if (!room->ownMember(member)) {
@@ -8460,10 +8648,15 @@ bool DefaultLogic::handleNotificationAreaAction(const String& action, Window* wn
 	    if (acc) {
 		NamedList params("");
 		params.addParam("room_account",acc->toString());
-		URI uri(room);
-		params.addParam("room_room",uri.getUser());
-		params.addParam("room_server",uri.getHost());
-		params.addParam("room_nick",acc->contact() ? acc->contact()->uri().getUser().c_str() : "");
+		params.addParam("room_uri",room);
+		// Check if we already have a room, use its nickname
+		const char* nick = 0;
+		MucRoom* r = acc->findRoomByUri(room);
+		if (r)
+		    nick = r->m_params.getValue("nick");
+		else if (acc->contact())
+		    nick = acc->contact()->uri().getUser();
+		params.addParam("room_nick",nick);
 		params.addParam("room_password",p["password"]);
 		params.addParam("check:room_history",String::boolText(true));
 		s_tempWizards.append(new JoinMucWizard(m_accounts,&params));
@@ -8511,6 +8704,30 @@ bool DefaultLogic::handleNotificationAreaAction(const String& action, Window* wn
 	Debug(ClientDriver::self(),DebugStub,"Unhandled notification area action='%s' type=%s",
 	    act->token,type.c_str());
     return handled;
+}
+
+// Save a contact
+bool DefaultLogic::storeContact(ClientContact* c)
+{
+    ClientAccount* a = c ? c->account() : 0;
+    if (!a)
+	return false;
+    MucRoom* room = c->mucRoom();
+    if (!room)
+	return false;
+    if (room->local()) {
+	String error;
+	if (!(a->setupDataDir(&error) && saveContact(a->m_cfg,room))) {
+	    String text;
+	    text << "Failed to save chat room " << room->uri();
+	    text.append(error,"\r\n");
+	    notifyGenericError(text,a->toString(),room->uri());
+	}
+    }
+    else
+	ClientLogic::clearContact(a->m_cfg,room);
+    Engine::enqueue(a->userData(true,"chatrooms"));
+    return true;
 }
 
 

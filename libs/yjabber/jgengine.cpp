@@ -59,6 +59,8 @@ void JGEngine::initialize(const NamedList& params)
     if (lvl != -1)
 	debugLevel(lvl);
 
+    m_sessionFlags = 0;
+    m_sessionFlags = decodeFlags(params["jingle_flags"],JGSession::s_flagName);
     int timeout = params.getIntValue("stanza_timeout",(int)m_stanzaTimeout);
     m_stanzaTimeout = timeout > 10000 ? timeout : 10000;
     int ping = params.getIntValue("ping_interval",(int)m_pingInterval);
@@ -72,19 +74,19 @@ void JGEngine::initialize(const NamedList& params)
     if (m_pingInterval && m_stanzaTimeout && m_pingInterval <= m_stanzaTimeout)
 	m_pingInterval = m_stanzaTimeout + 100;
 
-    if (debugAt(DebugInfo)) {
+    if (debugAt(DebugAll)) {
 	String s;
+	s << " jingle_flags=" << m_sessionFlags;
 	s << " stanza_timeout=" << (unsigned int)m_stanzaTimeout;
 	s << " ping_interval=" << (unsigned int)m_pingInterval;
-	Debug(this,DebugInfo,"Jabber Jingle service initialized:%s [%p]",
-	    s.c_str(),this);
+	Debug(this,DebugAll,"Jingle engine initialized:%s [%p]",s.c_str(),this);
     }
 }
 
 // Make an outgoing call
 JGSession* JGEngine::call(JGSession::Version ver, const JabberID& caller,
     const JabberID& called, const ObjList& contents, XmlElement* extra,
-    const char* msg, const char* subject, const char* line)
+    const char* msg, const char* subject, const char* line, int* flags)
 {
     DDebug(this,DebugAll,"call() from '%s' to '%s'",caller.c_str(),called.c_str());
     JGSession* session = 0;
@@ -101,6 +103,8 @@ JGSession* JGEngine::call(JGSession::Version ver, const JabberID& caller,
 	    return 0;
     }
     if (session) {
+	if (flags)
+	    session->setFlags(*flags);
 	session->line(line);
 	if (!TelEngine::null(msg))
 	    sendMessage(session,msg);
@@ -274,6 +278,30 @@ void JGEngine::processEvent(JGEvent* event)
 {
     Debug(this,DebugStub,"JGEngine::processEvent. Calling default processor");
     defProcessEvent(event);
+}
+
+// Decode a comma separated list of flags
+int JGEngine::decodeFlags(const String& list, const TokenDict* dict)
+{
+    if (!(list && dict))
+	return 0;
+    int ret = 0;
+    ObjList* l = list.split(',',false); 
+    for (; dict->token; dict++)
+	if (l->find(dict->token))
+	    ret += dict->value;
+    TelEngine::destruct(l);
+    return ret;
+}
+
+// Encode flags to a comma separated list
+void JGEngine::encodeFlags(String& buf, int flags, const TokenDict* dict)
+{
+    if (!(flags && dict))
+	return;
+    for (; dict->token; dict++)
+	if (0 != (flags & dict->value))
+	    buf.append(dict->token,",");
 }
 
 // Create a local session id

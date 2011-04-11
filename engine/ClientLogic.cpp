@@ -4954,8 +4954,10 @@ bool DefaultLogic::callIncoming(Message& msg, const String& dest)
 	// Set params for incoming google voice call
 	if (msg["module"] == "jingle") {
 	    URI uri(msg["callername"]);
-	    if (uri.getHost() == "voice.google.com")
+	    if (uri.getHost() == "voice.google.com") {
 		msg.setParam("dtmfmethod","rfc2833");
+		msg.setParam("jingle_flags","noping");
+	    }
 	}
 	return Client::self()->buildIncomingChannel(msg,dest);
     }
@@ -5022,11 +5024,12 @@ bool DefaultLogic::callStart(NamedList& params, Window* wnd, const String& cmd)
 	    if (target) {
 		target = target + "@voice.google.com";
 		params.addParam("ojingle_version","0");
+		params.addParam("ojingle_flags","noping");
 		params.addParam("redirectcount","5");
 		params.addParam("checkcalled",String::boolText(false));
 		params.addParam("dtmfmethod","rfc2833");
 		String callParams = params["call_parameters"];
-		callParams.append("redirectcount,checkcalled,dtmfmethod,ojingle_version",",");
+		callParams.append("redirectcount,checkcalled,dtmfmethod,ojingle_version,ojingle_flags",",");
 		params.setParam("call_parameters",callParams);
 	    }
 	    else if (!valid) {

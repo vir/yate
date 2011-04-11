@@ -118,9 +118,9 @@ bool SniffHandler::received(Message &msg)
     }
     if (!s_active)
 	return false;
+    Lock lock(s_mutex);
     if (s_filter && !s_filter.matches(msg))
 	return false;
-    Lock lock(s_mutex);
     lock.drop();
     String par;
     dumpParams(msg,par);

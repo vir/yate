@@ -153,6 +153,12 @@ const TokenDict JGSession::s_actions1[] = {
     {0,0}
 };
 
+// Session flag names
+const TokenDict JGSession::s_flagName[] = {
+    {"noping",                FlagNoPing},
+    {0,0}
+};
+
 // Output a debug message on unhandled actions
 // Confirm received element
 static void unhandledAction(JGSession* sess, XmlElement*& xml, int act,
@@ -896,6 +902,7 @@ JGSession::JGSession(Version ver, JGEngine* engine,
     : Mutex(true,"JGSession"),
     m_version(ver),
     m_state(Idle),
+    m_flags(engine->sessionFlags()),
     m_timeToPing(0),
     m_engine(engine),
     m_outgoing(true),
@@ -921,6 +928,7 @@ JGSession::JGSession(Version ver, JGEngine* engine, const JabberID& caller,
     : Mutex(true,"JGSession"),
     m_version(ver),
     m_state(Idle),
+    m_flags(engine->sessionFlags()),
     m_timeToPing(0),
     m_engine(engine),
     m_outgoing(false),
@@ -1226,7 +1234,8 @@ JGEvent* JGSession::getEvent(u_int64_t time)
     }
 
     // Ping the remote party
-    sendPing(time);
+    if (!flag(FlagNoPing))
+	sendPing(time);
 
     return 0;
 }

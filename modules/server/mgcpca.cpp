@@ -1356,7 +1356,7 @@ bool MGCPCircuit::setupConn(const char* mode)
 	    enqueueEvent(SignallingCircuitEvent::Disconnected,"Disconnected");
 	return true;
     }
-    return true;
+    return (mm->code() >= 200 && mm->code() <= 299);
 }
 
 // Delete remote connection if any

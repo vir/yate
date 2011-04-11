@@ -191,6 +191,7 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 			}
 			if (line.startsWith("TELEPHONE-EVENT/")) {
 			    rfc2833 = var;
+			    payload.clear();
 			    continue;
 			}
 			const char* pload = 0;

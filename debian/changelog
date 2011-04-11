@@ -1,3 +1,19 @@
+yate (3.3.1.svn4283) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4283: + Added possibility to configure
+    messages to be forked by the callfork module.  + Added an optional
+    Regexp filter to the message sniffer.  + Fixed a misplaced line from
+    Rev 4276.  + Return success from MGCP only if CRCX / MDCX returned a
+    code 2xx.  + Initialize jingle engine when module initializes.  +
+    Added jingle session 'no ping' flag to prevent sending session ping.
+    Fixed debug.  + Handle (o)jingle_flags parameter from routing and
+    replace session flags. Set the parameter when redirecting.  + Set
+    'noping' flag for calls with google voice to prevent call
+    termination.  + If we find a RFC2833 mapping in SDP it cannot be a
+    regular payload too.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 12 Apr 2011 02:19:15 +0400
+
 yate (3.3.1.svn4275) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4275: + Use join muc wizard to add new chat

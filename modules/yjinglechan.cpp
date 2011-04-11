@@ -3439,6 +3439,7 @@ void YJGDriver::initialize()
     }
     else
 	setDomains(sect->getValue("domains"));
+    s_jingle->initialize(*sect);
 
     if (s_serverMode) {
 	s_requestSubscribe = sect->getBoolValue("request_subscribe",true);

@@ -1,5 +1,6 @@
 debian/tmp/usr/lib/libyate.so.*
 
+debian/tmp/etc/yate/callfork.conf
 debian/tmp/etc/yate/cdrbuild.conf
 debian/tmp/etc/yate/cdrfile.conf
 #debian/tmp/etc/yate/dsoundchan.conf

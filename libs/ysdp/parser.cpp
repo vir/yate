@@ -325,11 +325,17 @@ void SDPParser::initialize(const NamedList* codecs, const NamedList* hacks, cons
     }
     DDebug(this,DebugNote,"Default audio codecs: %s",m_audioFormats.c_str());
     m_ignorePort = m_hacks.getBoolValue("ignore_sdp_port",false);
-    m_rfc2833 = true;
+    m_rfc2833 = 101;
     m_secure = false;
     m_sdpForward = false;
     if (general) {
-	m_rfc2833 = general->getBoolValue("rfc2833",m_rfc2833);
+	if (general->getBoolValue("rfc2833",true)) {
+	    m_rfc2833 = general->getIntValue("rfc2833",m_rfc2833);
+	    if (m_rfc2833 < 96 || m_rfc2833 > 127)
+		m_rfc2833 = 101;
+	}
+	else
+	    m_rfc2833 = -1;
 	m_secure = general->getBoolValue("secure",m_secure);
 	m_sdpForward = general->getBoolValue("forward_sdp",m_sdpForward);
     }

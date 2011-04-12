@@ -941,6 +941,9 @@ bool SigChannel::startCall(Message& msg, String& trunks)
 	    else
 		cic->setParam("echocancel",String::boolText(echo->toBoolean(true)));
 	}
+	const char* rfc2833 = msg.getValue("rfc2833");
+	if (rfc2833)
+	    cic->setParam("rtp_rfc2833",rfc2833);
 	m_rtpForward = cic->getBoolParam("rtp_forward") && msg.getBoolValue("rtp_forward");
 	if (m_rtpForward) {
 	    m_sdpForward = (0 != msg.getParam("sdp_raw"));

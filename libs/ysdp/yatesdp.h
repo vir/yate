@@ -388,6 +388,27 @@ public:
 	{ putMedia(msg,m_rtpMedia,putPort); }
 
     /**
+     * Retrieve a single media description
+     * @param name Name of the media to retrieve
+     * @return Pointer to media descriptor, NULL if no such media set
+     */
+    SDPMedia* getMedia(const String& name) const
+	{ return m_rtpMedia ? static_cast<SDPMedia*>((*m_rtpMedia)[name]) : 0; }
+
+    /**
+     * Update the RFC 2833 availability and payload
+     * @param value String to get payload or availability
+     */
+    void setRfc2833(const String& value);
+
+    /**
+     * Update the RFC 2833 availability and payload
+     * @param value Pointer to string to get payload or availability
+     */
+    inline void setRfc2833(const String* value)
+	{ if (value) setRfc2833(*value); }
+
+    /**
      * Build and dispatch a chan.rtp message for a given media. Update media on success
      * @param media The media to use
      * @param addr Remote RTP address
@@ -523,8 +544,9 @@ public:
 
     /**
      * Reset this object to default values
+     * @param all True to reset all parameters including configuration
      */
-    virtual void resetSdp();
+    virtual void resetSdp(bool all = true);
 
     /**
      * Build a chan.rtp message and populate with media information
@@ -566,6 +588,14 @@ public:
     static ObjList* updateRtpSDP(const NamedList& params, String& rtpAddr,
 	ObjList* oldList = 0);
 
+protected:
+    /**
+     * Media changed notification.
+     * This method is called when setting new media and an old one changed
+     * @param media Old media that changed
+     */
+    virtual void mediaChanged(const SDPMedia& media);
+
     SDPParser* m_parser;
     int m_mediaStatus;
     bool m_rtpForward;                   // Forward RTP flag
@@ -578,15 +608,7 @@ public:
     int m_sdpVersion;                    // SDP version number, incremented each time we generate a new SDP
     String m_host;
     bool m_secure;
-    bool m_rfc2833;                      // Offer RFC 2833 to remote party
-
-protected:
-    /**
-     * Media changed notification.
-     * This method is called when setting new media and an old one changed
-     * @param media Old media that changed
-     */
-    virtual void mediaChanged(const SDPMedia& media);
+    int m_rfc2833;                       // Payload of RFC 2833 for remote party
 };
 
 /**
@@ -605,8 +627,9 @@ public:
      * @param fmts Default media formats
      */
     inline SDPParser(const char* dbgName, const char* sessName, const char* fmts = "alaw,mulaw")
-	: Mutex(true,"SDPParser"), m_sdpForward(false),
-	  m_rfc2833(true), m_secure(false), m_ignorePort(false),
+	: Mutex(true,"SDPParser"),
+	  m_rfc2833(101),
+	  m_sdpForward(false), m_secure(false), m_ignorePort(false),
 	  m_sessionName(sessName), m_audioFormats(fmts),
 	  m_codecs(""), m_hacks("")
 	{ debugName(dbgName); }
@@ -620,10 +643,10 @@ public:
 	{ Lock lock(this); buf = m_audioFormats; }
 
     /**
-     * Get the RFC 2833 offer flag
-     * @return True if RFC 2883 telephony events will be offered
+     * Get the RFC 2833 offer payload
+     * @return Payload for RFC 2883 telephony events, negative if not offered
      */
-    inline bool rfc2833() const
+    inline int rfc2833() const
 	{ return m_rfc2833; }
 
     /**
@@ -695,8 +718,8 @@ public:
     static const TokenDict s_rtpmap[];
 
 private:
+    int m_rfc2833;                       // RFC 2833 payload offered to remote
     bool m_sdpForward;                   // Include raw SDP for forwarding
-    bool m_rfc2833;                      // Offer RFC 2833 to remote party
     bool m_secure;                       // Offer SRTP
     bool m_ignorePort;                   // Ignore port only changes in SDP
     String m_sessionName;

@@ -163,6 +163,7 @@ for small to large scale projects.
 %config(noreplace) %{_sysconfdir}/yate/dsoundchan.conf
 %config(noreplace) %{_sysconfdir}/yate/enumroute.conf
 %config(noreplace) %{_sysconfdir}/yate/sipfeatures.conf
+%config(noreplace) %{_sysconfdir}/yate/callfork.conf
 %config(noreplace) %{_sysconfdir}/yate/extmodule.conf
 %config(noreplace) %{_sysconfdir}/yate/filetransfer.conf
 %config(noreplace) %{_sysconfdir}/yate/moh.conf

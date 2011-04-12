@@ -315,7 +315,7 @@ public:
     bool checkUser(SIPTransaction* t, bool refuse = true);
     void doBye(SIPTransaction* t);
     void doCancel(SIPTransaction* t);
-    void doInfo(SIPTransaction* t);
+    bool doInfo(SIPTransaction* t);
     void doRefer(SIPTransaction* t);
     void reInvite(SIPTransaction* t);
     void hangup();
@@ -1348,15 +1348,22 @@ bool YateSIPEndPoint::incoming(SIPEvent* e, SIPTransaction* t)
 	    t->setResponse(481);
     }
     else if (t->getMethod() == "INFO") {
-	if (!t->initialMessage()->body)
-	    return generic(e,t);
 	YateSIPConnection* conn = plugin.findCall(t->getCallID(),true);
+	bool done = false;
 	if (conn) {
-	    conn->doInfo(t);
+	    done = conn->doInfo(t);
 	    conn->deref();
+	    if (!done)
+		done = generic(e,t);
+	}
+	else if (t->getDialogTag()) {
+	    done = true;
+	    t->setResponse(481);
 	}
 	else
-	    t->setResponse(481);
+	    done = generic(e,t);
+	if (!done)
+	    t->setResponse(415);
     }
     else if (t->getMethod() == "REGISTER")
 	regReq(e,t);
@@ -1606,6 +1613,14 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
     if (strBody) {
 	m.addParam("xsip_type",strBody->getType());
 	m.addParam("xsip_body",strBody->text());
+    }
+    else {
+	MimeLinesBody* txtBody = YOBJECT(MimeLinesBody,message->body);
+	if (txtBody) {
+	    String bodyText((const char*)txtBody->getBody().data(),txtBody->getBody().length());
+	    m.addParam("xsip_type",txtBody->getType());
+	    m.addParam("xsip_body",bodyText);
+	}
     }
 
     int code = 0;
@@ -2342,10 +2357,12 @@ bool YateSIPConnection::emitPRACK(const SIPMessage* msg)
 // Creates a SDP for provisional (1xx) messages
 MimeSdpBody* YateSIPConnection::createProvisionalSDP(Message& msg)
 {
+    if (!msg.getBoolValue("earlymedia",true))
+	return 0;
     if (m_rtpForward)
 	return createPasstroughSDP(msg);
     // check if our peer can source at least audio data
-    if (!(getPeer() && getPeer()->getSource() && msg.getBoolValue("earlymedia",true)))
+    if (!(getPeer() && getPeer()->getSource()))
 	return 0;
     if (m_rtpAddr.null())
 	return 0;
@@ -2884,10 +2901,10 @@ void YateSIPConnection::doCancel(SIPTransaction* t)
 	t->setResponse(481);
 }
 
-void YateSIPConnection::doInfo(SIPTransaction* t)
+bool YateSIPConnection::doInfo(SIPTransaction* t)
 {
     if (m_authBye && !checkUser(t))
-	return;
+	return true;
     DDebug(this,DebugAll,"YateSIPConnection::doInfo(%p) [%p]",t,this);
     int sig = -1;
     const MimeLinesBody* lb = YOBJECT(MimeLinesBody,getOneBody(t->initialMessage()->body,"application/dtmf-relay"));
@@ -2908,10 +2925,8 @@ void YateSIPConnection::doInfo(SIPTransaction* t)
 	tmp.trimSpaces();
 	sig = tmp.toInteger(info_signals,-1);
     }
-    else {
-	t->setResponse(415);
-	return;
-    }
+    else
+	return false;
     t->setResponse(200);
     if ((sig >= 0) && (sig <= 16)) {
 	char tmp[2];
@@ -2923,6 +2938,7 @@ void YateSIPConnection::doInfo(SIPTransaction* t)
 	msg->addParam("detected","sip-info");
 	dtmfEnqueue(msg);
     }
+    return true;
 }
 
 void YateSIPConnection::doRefer(SIPTransaction* t)

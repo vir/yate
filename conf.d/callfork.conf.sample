@@ -1,0 +1,27 @@
+[priorities]
+; Priorities of handlers for various messages
+
+; Standard messages used by callfork:
+;call.execute=100
+;chan.masquerade=10
+;chan.locate=40
+;call.answered=20
+;call.ringing=20
+;call.progress=20
+
+; Default for messages forked to slaves:
+;generic=100
+
+; For any custom forked message you can override the generic priority:
+;  messagename=priority
+
+
+[messages]
+; Custom messages that should be forked to each running slave
+
+; Each parameter is of the format:
+;  messagename=parameter
+; The parameter is matched against the fork master and replaced
+; Examples:
+;  chan.dtmf=peerid
+;  xsip.generate=id

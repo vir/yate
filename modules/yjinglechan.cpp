@@ -285,6 +285,8 @@ private:
     void handleAudioInfoEvent(JGEvent* event);
     // Check jingle version override from call.execute or resource caps
     void overrideJingleVersion(const NamedList& list, bool caps);
+    // Override session flags
+    void overrideJingleFlags(const NamedList& list, const char* param);
     // Copy chan/session parameters to a destination list
     void copySessionParams(NamedList& list, bool redirect = true);
     // Check media for a received content
@@ -296,6 +298,7 @@ private:
     bool m_rtpStarted;                   // RTP started flag used by version 0 of the jingle session
     bool m_acceptRelay;                  // Accept to replace with a relay candidate
     JGSession::Version m_sessVersion;    // Jingle session version
+    int m_sessFlags;                     // Session flags
     JabberID m_local;                    // Local user's JID
     JabberID m_remote;                   // Remote user's JID
     ObjList m_audioContents;             // The list of negotiated audio contents
@@ -732,7 +735,7 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
     : Channel(&plugin,0,true),
     m_mutex(true,"YJGConnection"),
     m_state(Pending), m_session(0), m_rtpStarted(false), m_acceptRelay(s_acceptRelay),
-    m_sessVersion(s_sessVersion),
+    m_sessVersion(s_sessVersion), m_sessFlags(s_jingle->sessionFlags()),
     m_local(caller), m_remote(called), m_audioContent(0),
     m_audioFormats(JGRtpMediaList::Audio),
     m_callerPrompt(msg.getValue("callerprompt")),
@@ -752,6 +755,7 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
     overrideJingleVersion(msg,false);
     if (available)
 	overrideJingleVersion(caps,true);
+    overrideJingleFlags(msg,"ojingle_flags");
     if (m_sessVersion != JGSession::Version0) {
 	m_offerRawTransport = msg.getBoolValue("offerrawudp",s_offerRawTransport);
 	m_offerIceTransport = msg.getBoolValue("offericeudp",s_offerIceTransport);
@@ -832,7 +836,7 @@ YJGConnection::YJGConnection(JGEvent* event)
     : Channel(&plugin,0,false),
     m_mutex(true,"YJGConnection"),
     m_state(Active), m_session(event->session()), m_rtpStarted(false), m_acceptRelay(s_acceptRelay),
-    m_sessVersion(event->session()->version()),
+    m_sessVersion(event->session()->version()), m_sessFlags(s_jingle->sessionFlags()),
     m_local(event->session()->local()), m_remote(event->session()->remote()),
     m_audioContent(0),
     m_audioFormats(JGRtpMediaList::Audio),
@@ -981,6 +985,9 @@ bool YJGConnection::route()
     if (m_subject)
 	m->addParam("subject",m_subject);
     m->addParam("jingle_version",JGSession::lookupVersion(m_sessVersion));
+    String flags;
+    JGEngine::encodeFlags(flags,m_sessFlags,JGSession::s_flagName);
+    m->addParam("jingle_flags",flags,false);
     m_mutex.lock();
     // TODO: add remote ip/port
     // Fill file transfer data
@@ -1022,7 +1029,11 @@ void YJGConnection::callAccept(Message& msg)
     m_secure = msg.getBoolValue("secure",m_secure);
     m_secureRequired = msg.getBoolValue("secure_required",m_secureRequired);
     m_dtmfMeth = msg.getIntValue("dtmfmethod",s_dictDtmfMeth,m_dtmfMeth);
+    overrideJingleFlags(msg,"jingle_flags");
     Channel::callAccept(msg);
+    Lock lock(m_mutex);
+    if (m_session)
+	m_session->setFlags(m_sessFlags);
 }
 
 void YJGConnection::callRejected(const char* error, const char* reason,
@@ -1818,7 +1829,7 @@ bool YJGConnection::presenceChanged(bool available, NamedList* params)
 	if (m_offerIceTransport)
 	    addContent(true,buildAudioContent(JGRtpCandidates::RtpIceUdp));
 	m_session = s_jingle->call(m_sessVersion,m_local,m_remote,m_audioContents,transfer,
-	    m_callerPrompt,m_subject,m_line);
+	    m_callerPrompt,m_subject,m_line,&m_sessFlags);
 	// Init now the transport for version 0
 	if (m_session && m_session->version() == JGSession::Version0)
 	    resetCurrentAudioContent(true,false);
@@ -3027,6 +3038,17 @@ void YJGConnection::overrideJingleVersion(const NamedList& list, bool caps)
     }
 }
 
+// Override session flags
+void YJGConnection::overrideJingleFlags(const NamedList& list, const char* param)
+{
+    String* str = list.getParam(param);
+    if (!str)
+	return;
+    m_sessFlags = JGEngine::decodeFlags(*str,JGSession::s_flagName);
+    Debug(this,DebugAll,"Session flags set to %d from %s=%s [%p]",
+	m_sessFlags,param,str->c_str(),this);
+}
+
 // Copy chan/session params to a destination list
 void YJGConnection::copySessionParams(NamedList& list, bool redirect)
 {
@@ -3047,6 +3069,9 @@ void YJGConnection::copySessionParams(NamedList& list, bool redirect)
     jingleAddParam(list,"line",m_line,copy,false);
     jingleAddParam(list,"ojingle_version",
 	JGSession::lookupVersion(m_sessVersion,""),copy,false);
+    String flags;
+    JGEngine::encodeFlags(flags,m_sessFlags,JGSession::s_flagName);
+    jingleAddParam(list,"ojingle_flags",flags,copy,false);
     jingleAddParam(list,"callerprompt",m_callerPrompt,copy,false);
     jingleAddParam(list,"subject",m_subject,copy,false);
     jingleAddParam(list,"secure",String::boolText(m_secure),copy);
@@ -3439,6 +3464,7 @@ void YJGDriver::initialize()
     }
     else
 	setDomains(sect->getValue("domains"));
+    s_jingle->initialize(*sect);
 
     if (s_serverMode) {
 	s_requestSubscribe = sect->getBoolValue("request_subscribe",true);

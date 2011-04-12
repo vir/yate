@@ -888,6 +888,13 @@ public:
     };
 
     /**
+     * Session flags
+     */
+    enum SessionFlag {
+	FlagNoPing = 0x0001,             // Don't send ping
+    };
+
+    /**
      * Destructor
      */
     virtual ~JGSession();
@@ -940,6 +947,21 @@ public:
      */
     inline State state() const
 	{ return m_state; }
+
+    /**
+     * Retrieve session flags
+     * @param mask Mask to retrieve
+     * @return Session flags
+     */
+    inline int flag(int mask) const
+	{ return m_flags & mask; }
+
+    /**
+     * Replace session flags
+     * @param value The new session flags
+     */
+    inline void setFlags(int value)
+	{ m_flags = value; }
 
     /**
      * Get the arbitrary user data of this session
@@ -1243,6 +1265,11 @@ public:
      */
     static const TokenDict s_actions1[];
 
+    /**
+     * Session flag names
+     */
+    static const TokenDict s_flagName[];
+
 protected:
     /**
      * Constructor. Create an outgoing session
@@ -1373,6 +1400,7 @@ protected:
 
     Version m_version;                   // Session version
     State m_state;                       // Session state
+    int m_flags;                         // Session flags
     u_int64_t m_timeToPing;              // Time to send ping (empty session-info)
     JGEngine* m_engine;                  // The engine that owns this session
     bool m_outgoing;                     // Session direction
@@ -1881,6 +1909,13 @@ public:
     virtual ~JGEngine();
 
     /**
+     * Retrieve the default session flags value
+     * @return The default session flags value
+     */
+    inline int sessionFlags() const
+	{ return m_sessionFlags; }
+
+    /**
      * Get the timeout interval of a sent stanza
      * @return The timeout interval of a sent stanza
      */
@@ -1936,11 +1971,12 @@ public:
      * @param msg Optional message to send before call
      * @param subject Optional session subject
      * @param line Optional session account
+     * @param flags Optional session flags to set
      * @return Valid JGSession pointer (referenced) on success
      */
     JGSession* call(JGSession::Version ver, const JabberID& caller, const JabberID& called,
 	const ObjList& contents, XmlElement* extra = 0, const char* msg = 0,
-	const char* subject = 0, const char* line = 0);
+	const char* subject = 0, const char* line = 0, int* flags = 0);
 
     /**
      * Ask this engine to accept an incoming xml 'iq' element
@@ -1972,6 +2008,22 @@ public:
      */
     virtual void processEvent(JGEvent* event);
 
+    /**
+     * Decode a comma separated list of flags
+     * @param list The list of flags
+     * @param dict Dictionary to use
+     * @return Found flags
+     */
+    static int decodeFlags(const String& list, const TokenDict* dict);
+
+    /**
+     * Encode (append) flags to a comma separated list
+     * @param buf Destination buffer
+     * @param flags Flags to encode
+     * @param dict Dictionary to use
+     */
+    static void encodeFlags(String& buf, int flags, const TokenDict* dict);
+
 private:
     // Create a local session id
     void createSessionId(String& id);
@@ -1980,6 +2032,7 @@ private:
     u_int32_t m_sessionId;               // Session id counter
     u_int64_t m_stanzaTimeout;           // The timeout of a sent stanza
     u_int64_t m_pingInterval;            // Interval to send ping (empty session-info)
+    int m_sessionFlags;                  // Default session flags
 };
 
 

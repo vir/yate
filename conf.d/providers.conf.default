@@ -43,6 +43,7 @@ enabled=yes
 description=Google Talk
 protocol=jabber
 domain=gmail.com
+server=talk.google.com
 options=allowplainauth
 
 [Facebook]

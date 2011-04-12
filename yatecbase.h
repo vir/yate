@@ -3192,8 +3192,9 @@ protected:
     /**
      * Join a MUC room. Create/show chat. Update its status
      * @param room The room
+     * @param force True to disconnect if connecting or online and re-connect
      */
-    virtual void joinRoom(MucRoom* room);
+    virtual void joinRoom(MucRoom* room, bool force = false);
 
     String m_selectedChannel;            // The currently selected channel
     String m_transferInitiated;          // Tranfer initiated id
@@ -3209,6 +3210,10 @@ private:
     bool handleDialogAction(const String& name, bool& retVal, Window* wnd);
     // Handle chat and contact related actions. Return true if handled
     bool handleChatContactAction(const String& name, Window* wnd);
+    // Handle chat contact edit ok button press. Return true if handled
+    bool handleChatContactEditOk(const String& name, Window* wnd);
+    // Handle chat room contact edit ok button press. Return true if handled
+    bool handleChatRoomEditOk(const String& name, Window* wnd);
     // Handle actions from MUCS window. Return true if handled
     bool handleMucsAction(const String& name, Window* wnd, NamedList* params);
     // Handle ok button in muc invite window. Return true if handled
@@ -3225,6 +3230,8 @@ private:
     bool showNotificationArea(bool show, Window* wnd, NamedList* upd = 0);
     // Handle actions from notification area. Return true if handled
     bool handleNotificationAreaAction(const String& action, Window* wnd);
+    // Save a contact to config. Save chat rooms if the contact is a chat room
+    bool storeContact(ClientContact* c);
 
     ClientAccountList* m_accounts;       // Accounts list (always valid)
 };

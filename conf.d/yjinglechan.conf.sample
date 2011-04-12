@@ -30,6 +30,13 @@
 ; This parameter can be overridden when routing by an 'ojingle_version' parameter
 ;jingle_version=
 
+; jingle_flags: string: Comma separated list of default jingle session flags
+; Available flags:
+;  - noping: Don't send ping (empty session info)
+; This parameter can be overridden when routing by an 'ojingle_flags' parameter for
+;  outgoing calls or "jingle_flags" for incoming calls
+;jingle_flags=
+
 ; accept_relay: bool: Accept a "relay" transport type even if we had another type before
 ; This works only with Jingle version 0 (Google Talk, libjingle)
 ;accept_relay=disable in server mode, enable in client mode

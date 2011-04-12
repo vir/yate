@@ -46,6 +46,12 @@
 ; msgsniff: bool: Activate message sniffer module (if loaded) at engine init time
 ;msgsniff=disable
 
+; filtersniff: regexp: Default filter to apply to message sniffer at initialization
+; If empty it will match all messages except engine.timer which is never displayed
+; Example for a filter matching all chan.Anything messages and engine.halt:
+;  filtersniff=^\(chan\.\|engine\.halt$\)
+;filtersniff=
+
 
 [modules]
 ; This section should hold one line for each module whose loading behaviour

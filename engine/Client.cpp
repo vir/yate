@@ -869,6 +869,8 @@ Client::Client(const char *name)
     m_toggles[OptAddAccountOnStartup] = true;
     m_toggles[OptNotifyChatState] = true;
     m_toggles[OptDockedChat] = true;
+    m_toggles[OptRingIn] = true;
+    m_toggles[OptRingOut] = true;
     s_incomingUrlParam = Engine::config().getValue("client","incomingcallurlparam",
 	"caller_info_uri");
 

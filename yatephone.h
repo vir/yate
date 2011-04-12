@@ -1428,6 +1428,14 @@ protected:
     static const char* messageName(int id);
 
     /**
+     * Find the ID or a specific Relay name
+     * @param name Name of the Relay to search for
+     * @return ID of the Relay, zero if not found
+     */
+    static inline int relayId(const char* name)
+	{ return lookup(name,s_messages); }
+
+    /**
      * Constructor
      * @param name Plugin name of this driver
      * @param type Type of the driver: "misc", "route", etc.
@@ -1449,6 +1457,14 @@ protected:
      * Install standard message relays
      */
     void setup();
+
+    /**
+     * Check if a specific relay ID is installed
+     * @param id RelayID to test for
+     * @return True if such a relay is installed
+     */
+    inline bool relayInstalled(int id) const
+	{ return (id & m_relays) != 0; }
 
     /**
      * Install a standard message relay

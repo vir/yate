@@ -72,7 +72,7 @@ class CdrBuilder : public NamedList
 public:
     CdrBuilder(const char *name);
     virtual ~CdrBuilder();
-    void update(int type, u_int64_t val);
+    void update(int type, u_int64_t val, const char* status = 0);
     bool update(const Message& msg, int type, u_int64_t val);
     void emit(const char *operation = 0);
     String getStatus() const;
@@ -304,7 +304,7 @@ String CdrBuilder::getStatus() const
     return s;
 }
 
-void CdrBuilder::update(int type, u_int64_t val)
+void CdrBuilder::update(int type, u_int64_t val, const char* status)
 {
     switch (type) {
 	case CdrStart:
@@ -326,6 +326,8 @@ void CdrBuilder::update(int type, u_int64_t val)
 	    m_hangup = val;
 	    break;
     }
+    if (!TelEngine::null(status))
+	m_status = status;
 }
 
 bool CdrBuilder::update(const Message& msg, int type, u_int64_t val)
@@ -478,7 +480,7 @@ bool CdrHandler::received(Message &msg)
 	if (id.null())
 	    id = msg.getValue("targetid");
 	if (id && (b = CdrBuilder::find(id))) {
-	    b->update(type,msg.msgTime().usec());
+	    b->update(type,msg.msgTime().usec(),msg.getValue("status"));
 	    b->emit();
 	}
     }

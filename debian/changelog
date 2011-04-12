@@ -1,3 +1,12 @@
+yate (3.3.3.svn4287) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4287: + new file: callfork.conf  + Bumped
+    version to 3.3.2 release.  + Bumped version to 3.3.3 alpha1
+    development.  + The default RFC 2833 payload can be configured and
+    overriden per call.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 13 Apr 2011 02:19:20 +0400
+
 yate (3.3.1.svn4283) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4283: + Added possibility to configure

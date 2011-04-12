@@ -230,7 +230,7 @@ private:
     bool sendRequest(const char* sigReq, const char* reqEvt = 0, const char* digitMap = 0);
     bool sendPending(const char* sigReq = 0);
     bool enqueueEvent(SignallingCircuitEvent::Type type, const char* name, const char* dtmf = 0);
-    void cleanupRtp();
+    void cleanupRtp(bool all = true);
     bool createRtp();
     bool setupConn(const char* mode = 0);
     String m_epId;
@@ -1271,9 +1271,9 @@ void* MGCPCircuit::getObject(const String& name) const
 }
 
 // Clean up any RTP we may still hold
-void MGCPCircuit::cleanupRtp()
+void MGCPCircuit::cleanupRtp(bool all)
 {
-    resetSdp();
+    resetSdp(all);
     m_localRawSdp.clear();
     m_localRtpChanged = false;
     m_remoteRawSdp.clear();
@@ -1286,8 +1286,7 @@ bool MGCPCircuit::createRtp()
 {
     if (hasRtp())
 	return true;
-    cleanupRtp();
-    resetSdp();
+    cleanupRtp(false);
     updateSDP(NamedList::empty());
     RefPointer<DataEndpoint> de = new DataEndpoint;
     bool ok = dispatchRtp(mySpan()->address(),false,de);
@@ -1299,7 +1298,7 @@ bool MGCPCircuit::createRtp()
     }
     else {
 	Debug(&splugin,DebugWarn,"MGCPCircuit::createRtp() failed [%p]",this);
-	cleanupRtp();
+	cleanupRtp(false);
     }
     TelEngine::destruct(de);
     return ok;
@@ -1377,7 +1376,7 @@ void MGCPCircuit::clearConn(bool force)
     }
     m_connId.clear();
     m_specialMode.clear();
-    resetSdp();
+    resetSdp(false);
     m_remoteRawSdp.clear();
     m_localRtpChanged = false;
     sendAsync(mm);
@@ -1555,12 +1554,14 @@ bool MGCPCircuit::status(Status newStat, bool sync)
 		    m_consumer = 0;
 		}
 		else
-		    cleanupRtp();
+		    cleanupRtp(false);
 	    }
 	    m_statusReq = SignallingCircuit::status();
 	    m_changing = false;
 	    return false;
 	case Reserved:
+	    if (SignallingCircuit::status() <= Idle)
+		cleanupRtp();
 	    break;
 	case Idle:
 	    if (m_needClear) {
@@ -1627,6 +1628,8 @@ bool MGCPCircuit::setParam(const String& param, const String& value)
 	rtpChanged = m_rtpForward != fwd;
 	m_rtpForward = fwd;
     }
+    else if (param == "rtp_rfc2833")
+	setRfc2833(value);
     else if (param == "special_mode")
 	m_specialMode = value;
     else
@@ -1844,7 +1847,7 @@ void MGCPCircuit::processDelete(MGCPMessage* mm, const String& error)
     m_connId.clear();
     m_gwFormat = mySpan()->bearer();
     m_gwFormatChanged = false;
-    cleanupRtp();
+    cleanupRtp(false);
     m_changing = false;
     unsigned int code = 0;
     String tmp(error);
@@ -2071,7 +2074,8 @@ void MGCPPlugin::initialize()
 	    Engine::install(new DTMFHandler);
 	}
     }
-    m_parser.initialize(cfg.getSection("codecs"),cfg.getSection("hacks"));
+    m_parser.initialize(cfg.getSection("codecs"),cfg.getSection("hacks"),
+	cfg.getSection("general"));
 }
 
 void MGCPPlugin::genUpdate(Message& msg)

@@ -73,6 +73,7 @@
 ;dtmfinfo=no
 
 ; rfc2833: bool: Offer RFC2833 telephone-event by default
+; A numeric payload >= 96 can be provided
 ;rfc2833=yes
 
 ; privacy: bool: Process and generate privacy related SIP headers

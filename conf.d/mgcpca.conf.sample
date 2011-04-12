@@ -4,6 +4,10 @@
 ; priority: int: Priority of the chan.rtp message handler
 ;priority=80
 
+; rfc2833: bool: Offer RFC2833 telephone-event by default
+; A numeric payload >= 96 can be provided
+;rfc2833=yes
+
 ; tzoffset: int: Timezone offset from GMT in seconds for sending Caller ID
 ; Positive to go East, negative to go West
 ; Examples: CET=3600, EST=-18000

@@ -1977,7 +1977,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     m_inband = msg.getBoolValue("dtmfinband",s_inband);
     m_info = msg.getBoolValue("dtmfinfo",s_info);
     m_secure = msg.getBoolValue("secure",plugin.parser().secure());
-    m_rfc2833 = msg.getBoolValue("rfc2833",plugin.parser().rfc2833());
+    setRfc2833(msg.getParam("rfc2833"));
     m_rtpForward = msg.getBoolValue("rtp_forward");
     m_user = msg.getValue("user");
     m_line = msg.getValue("line");
@@ -3328,7 +3328,7 @@ bool YateSIPConnection::callRouted(Message& msg)
     // try to disable RTP forwarding earliest possible
     if (m_rtpForward && !msg.getBoolValue("rtp_forward"))
 	m_rtpForward = false;
-    m_rfc2833 = msg.getBoolValue("rfc2833",m_rfc2833);
+    setRfc2833(msg.getParam("rfc2833"));
     Channel::callRouted(msg);
     Lock lock(driver());
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {

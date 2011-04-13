@@ -198,6 +198,8 @@
            <string>property:_yate_flatlist=false</string>
            <string>property:_yate_showofflinecontacts=true</string>
            <string>property:_yate_hideemptygroups=true</string>
+           <string>property:_yate_sorting=name,true</string>
+           <string>property:rowHeight=42</string>
            <string>property:itemsExpandable=true</string>
            <string>property:autoExpand=true</string>
            <string>property:styleSheet=QTreeWidget {border-image: none;font-size: 11px;background:white;border: 0px solid #97acbc;border-radius:2px;}</string>

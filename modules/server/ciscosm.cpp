@@ -221,6 +221,7 @@ public:
 	Q_RESUME_R = 7,                                    // Q_RESUME Response Message used with redundant MGC configuration
 	Q_RESET_I = 8,                                     // Q_RESET Invoke Message used with redundant MGC configuration
 	Q_RESET_R = 9,                                     // Q_RESET Response Message used with redundant MGC configuration
+	Q_RESTART = 12,
 	PDU = 0x8000,                                      // PDU - Non Session Manager message from application
     };
     SessionManager(const String& name,const NamedList& param);
@@ -263,6 +264,7 @@ private:
     State m_state;                                         // Session Manager state
     String m_name;                                         // The name of this session
     unsigned int m_upUsers;                                // The number of up users
+    SignallingTimer m_standbyTimer;                        // When should send next Standby
     static const TokenDict s_smStates[];
     static const TokenDict s_types[];
 };
@@ -1239,8 +1241,10 @@ SessionManager* SessionManager::get(const String& name, const NamedList* params)
     lock.drop();
     if (session && !session->ref())
 	session = 0;
-    if (params && !session)
+    if (params && !session) {
 	session = new SessionManager(name,*params);
+	session->debugChain(&plugin);
+    }
     return session;
 }
 
@@ -1263,13 +1267,15 @@ const TokenDict SessionManager::s_types[] = {
     { "Q_RESUME_R", Q_RESUME_R },
     { "Q_RESET_I", Q_RESET_I },
     { "Q_RESET_R", Q_RESET_R },
+    { "Q_RESTART", Q_RESTART },
     { "PDU", PDU },
     { 0, 0 }
 };
 
 SessionManager::SessionManager(const String& name, const NamedList& param)
     : Mutex(true,"SessionManager"),
-      m_socket(0), m_state(Nonoperational), m_name(name), m_upUsers(0)
+      m_socket(0), m_state(Nonoperational), m_name(name),
+      m_upUsers(0), m_standbyTimer(0)
 {
     debugName(0);
     debugName(m_name.c_str());
@@ -1296,6 +1302,7 @@ SessionManager::~SessionManager()
 
 bool SessionManager::initialize(const NamedList& params)
 {
+    m_standbyTimer.interval(params,"send_standby",100,2500,true);
     m_socket = new RudpSocket(this);
     return m_socket->initialize(params);
 }
@@ -1303,6 +1310,7 @@ bool SessionManager::initialize(const NamedList& params)
 void SessionManager::notify(bool down)
 {
     if (down) {
+	m_standbyTimer.stop();
 	changeState(Nonoperational);
 	informUser(false);
     } else {
@@ -1337,14 +1345,19 @@ void SessionManager::initSession()
     if (!m_socket)
 	return;
     u_int8_t buf[4];
-    // send standby message
     buf[0] = buf[1] = buf[2] = 0;
-    buf[3] = 3;
     DataBlock data((void*)buf,4,false);
-    DDebug(this,DebugInfo,"Session manager sending: Standby");
-    m_socket->sendMSG(data);
+    // Standby messages should not be sent too often
+    if (m_standbyTimer.interval() &&
+	(m_standbyTimer.timeout() || !m_standbyTimer.started())) {
+	m_standbyTimer.start();
+	// send standby message
+	buf[3] = Standby;
+	DDebug(this,DebugInfo,"Session manager sending: Standby");
+	m_socket->sendMSG(data);
+    }
     // send active message
-    buf[3] = 2;
+    buf[3] = Active;
     DDebug(this,DebugInfo,"Session manager sending: Active");
     m_socket->sendMSG(data);
     data.clear(false);
@@ -1455,7 +1468,10 @@ void SessionManager::handleSmMessage(u_int32_t smMessageType)
 	case Q_RESUME_R:
 	case Q_RESET_I:
 	case Q_RESET_R:
-	    Debug(DebugMild,"Received unexpected SM message %s",typeName((Type)smMessageType));
+	    Debug(this,DebugMild,"Received unexpected SM message %s",typeName((Type)smMessageType));
+	    break;
+	case Q_RESTART:
+	    Debug(this,DebugAll,"Received SM message %s",typeName((Type)smMessageType));
 	    break;
 	default:
 	    Debug(this,DebugNote,"Unknown message type = 0x%08X",smMessageType);
@@ -1904,9 +1920,10 @@ void SLT::buildHeader(DataBlock& data,bool management)
     for (int i = 0;i < 16;i ++)
 	head[i] = 0;
     head[2] = 0x80;
-    head[5] = 1;
+    head[4] = (u_int8_t)(protocol() >> 8);
+    head[5] = (u_int8_t)(protocol() & 0xff);
     if (!management)
-	head[7] = 1;
+	head[7] = 1; // Message ID
     head[10] = (u_int8_t)(m_channelId >> 8);
     head[11] = (u_int8_t)(m_channelId & 0xff);
     data.append((void*)head,16);
@@ -1919,7 +1936,7 @@ void SLT::sendConnect(unsigned int status)
     DataBlock data;
     buildHeader(data);
     u_int8_t* header = data.data(0,16);
-    header[9] = 0x6;
+    header[9] = Connect_R;
     header[15] = 4;
     u_int8_t det[4];
     det[0] = det[1] = det[2] = 0;
@@ -1938,7 +1955,7 @@ void SLT::sendControllerR(unsigned int linkState)
     DataBlock data;
     buildHeader(data);
     u_int8_t* header = data.data(0,16);
-    header[9] = 0x20;
+    header[9] = Link_State_Controller_R;
     header[15] = 4;
     u_int8_t det[4];
     for (int i = 0;i < 4;i ++)
@@ -1964,7 +1981,7 @@ void SLT::sendManagement(unsigned int message)
 	getStringMessage(tmp,data);
 	Debug(this,DebugInfo,"Sending %s",tmp.c_str());
     }
-    m_session->sendData(data);
+    m_session->sendData(data,(Configuration_R == message));
 }
 
 void SLT::sendDisconnect()
@@ -1972,7 +1989,7 @@ void SLT::sendDisconnect()
     DataBlock data;
     buildHeader(data);
     u_int8_t* header = data.data(0,16);
-    header[9] = 0x0a;
+    header[9] = Disconnect_R;
     if (m_printMsg) {
 	String tmp;
 	getStringMessage(tmp,data);
@@ -2031,7 +2048,7 @@ bool SLT::transmitMSU(const SS7MSU& msu)
     DataBlock data;
     buildHeader(data);
     u_int8_t* header = data.data(0,16);
-    header[9] = 0x10;
+    header[9] = Data_Req;
     header[15] = msu.length();
     data += msu;
     if (m_printMsg) {

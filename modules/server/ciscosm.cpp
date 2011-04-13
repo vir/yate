@@ -264,6 +264,7 @@ private:
     State m_state;                                         // Session Manager state
     String m_name;                                         // The name of this session
     unsigned int m_upUsers;                                // The number of up users
+    SignallingTimer m_standbyTimer;                        // When should send next Standby
     static const TokenDict s_smStates[];
     static const TokenDict s_types[];
 };
@@ -1273,7 +1274,8 @@ const TokenDict SessionManager::s_types[] = {
 
 SessionManager::SessionManager(const String& name, const NamedList& param)
     : Mutex(true,"SessionManager"),
-      m_socket(0), m_state(Nonoperational), m_name(name), m_upUsers(0)
+      m_socket(0), m_state(Nonoperational), m_name(name),
+      m_upUsers(0), m_standbyTimer(0)
 {
     debugName(0);
     debugName(m_name.c_str());
@@ -1300,6 +1302,7 @@ SessionManager::~SessionManager()
 
 bool SessionManager::initialize(const NamedList& params)
 {
+    m_standbyTimer.interval(params,"send_standby",100,2500,true);
     m_socket = new RudpSocket(this);
     return m_socket->initialize(params);
 }
@@ -1307,6 +1310,7 @@ bool SessionManager::initialize(const NamedList& params)
 void SessionManager::notify(bool down)
 {
     if (down) {
+	m_standbyTimer.stop();
 	changeState(Nonoperational);
 	informUser(false);
     } else {
@@ -1341,12 +1345,17 @@ void SessionManager::initSession()
     if (!m_socket)
 	return;
     u_int8_t buf[4];
-    // send standby message
     buf[0] = buf[1] = buf[2] = 0;
-    buf[3] = Standby;
     DataBlock data((void*)buf,4,false);
-    DDebug(this,DebugInfo,"Session manager sending: Standby");
-    m_socket->sendMSG(data);
+    // Standby messages should not be sent too often
+    if (m_standbyTimer.interval() &&
+	(m_standbyTimer.timeout() || !m_standbyTimer.started())) {
+	m_standbyTimer.start();
+	// send standby message
+	buf[3] = Standby;
+	DDebug(this,DebugInfo,"Session manager sending: Standby");
+	m_socket->sendMSG(data);
+    }
     // send active message
     buf[3] = Active;
     DDebug(this,DebugInfo,"Session manager sending: Active");

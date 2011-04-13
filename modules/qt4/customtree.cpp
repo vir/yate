@@ -108,35 +108,35 @@ static inline int compareStr(const QString& s1, const QString& s2,
 }
 
 // Utility: compare a single key item
-static bool caseInsensitiveLessThan(const QPair<QTreeWidgetItem*,QString>& left,
-    const QPair<QTreeWidgetItem*,QString>& right)
+static bool caseInsensitiveLessThan(const QtTreeItemKey& left,
+    const QtTreeItemKey& right)
 {
     return -1 == compareStr(left.second,right.second,Qt::CaseInsensitive);
 }
 
 // Utility: compare a single key item
-static bool caseInsensitiveGreaterThan(const QPair<QTreeWidgetItem*,QString>& left,
-    const QPair<QTreeWidgetItem*,QString>& right)
+static bool caseInsensitiveGreaterThan(const QtTreeItemKey& left,
+    const QtTreeItemKey& right)
 {
     return 1 == compareStr(left.second,right.second,Qt::CaseInsensitive);
 }
 
 // Utility: compare a single key item
-static inline bool caseSensitiveLessThan(const QPair<QTreeWidgetItem*,QString>& left,
-    const QPair<QTreeWidgetItem*,QString>& right)
+static bool caseSensitiveLessThan(const QtTreeItemKey& left,
+    const QtTreeItemKey& right)
 {
     return -1 == compareStr(left.second,right.second,Qt::CaseSensitive);
 }
 
 // Utility: compare a single key item
-static bool caseSensitiveGreaterThan(const QPair<QTreeWidgetItem*,QString>& left,
-    const QPair<QTreeWidgetItem*,QString>& right)
+static bool caseSensitiveGreaterThan(const QtTreeItemKey& left,
+    const QtTreeItemKey& right)
 {
     return 1 == compareStr(left.second,right.second,Qt::CaseSensitive);
 }
 
 // Utility: sort
-static inline void stableSort(QVector<QPair<QTreeWidgetItem*,QString>>& v,
+static inline void stableSort(QVector<QtTreeItemKey>& v,
     Qt::SortOrder order, Qt::CaseSensitivity cs)
 {
     if (order == Qt::AscendingOrder) {
@@ -1622,7 +1622,7 @@ void ContactList::sortContacts(QList<QTreeWidgetItem*>& list)
     if (!list.size())
 	return;
     if (m_sortKey == "name") {
-	QVector<QPair<QTreeWidgetItem*,QString>> v(list.size());
+	QVector<QtTreeItemKey> v(list.size());
 	for (int i = 0; i < list.size(); i++) {
 	    v[i].first = list[i];
 	    v[i].second = (static_cast<ContactItem*>(list[i]))->m_name;
@@ -1692,7 +1692,7 @@ int ContactItemList::getGroupIndex(const String& id, const String& text)
 	(static_cast<QtTreeItem*>(m_groups[pos - 1]))->id() == s_noGroupId)
 	pos--;
     m_groups.insert(pos,new QtTreeItem(id,ContactList::TypeGroup,text));
-    m_contacts.insert(pos,QList<QTreeWidgetItem*>());
+    m_contacts.insert(pos,QtTreeItemList());
     return pos;
 }
 

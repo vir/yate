@@ -36,6 +36,9 @@ class ContactList;                       // A contact list tree
 class ContactItem;                       // A contact list contact
 class ContactItemList;                   // Groups and contact items belonging to them
 
+typedef QList<QTreeWidgetItem*> QtTreeItemList;
+typedef QPair<QTreeWidgetItem*,QString> QtTreeItemKey;
+
 /**
  * This class holds data about a tree widget container item
  * @short Tree widget container item properties
@@ -1062,7 +1065,7 @@ public:
     int getGroupIndex(const String& id, const String& text);
 
     QList<QTreeWidgetItem*> m_groups;
-    QList<QList<QTreeWidgetItem*>> m_contacts;
+    QList<QtTreeItemList> m_contacts;
 };
 
 }; // anonymous namespace

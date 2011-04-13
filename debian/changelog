@@ -1,3 +1,18 @@
+yate (3.3.3.svn4293) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4293: + Replaced several hardcoded constants
+    with their enumerated values.  + Chain the session's DebugEnabler to
+    the plugin.  + Cycle the session active status when sending
+    Configuration requests.  + Recognize the Restart indication from
+    Cisco Session Manager.  + Do not send Cisco SM Standby messages too
+    often, especially if a session is shared by several links.  + The
+    ContactList is now displaying contacts in ascending order of their
+    name.  + Fixed usage of QT template with another template parameter.
+    + Added script to properly configure SCTP on Linux.  + Check for
+    modprobe.conf instead of modprobe.preload as it may be missing.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 14 Apr 2011 02:19:20 +0400
+
 yate (3.3.3.svn4287) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4287: + new file: callfork.conf  + Bumped

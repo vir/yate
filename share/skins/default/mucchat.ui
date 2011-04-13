@@ -306,6 +306,7 @@
          <string>property:_yate_save_props=_yate_flatlist,_yate_showofflinecontacts</string>
          <string>property:_yate_flatlist=false</string>
          <string>property:_yate_showofflinecontacts=true</string>
+         <string>property:_yate_sorting=name,true</string>
          <string>property:itemsExpandable=true</string>
          <string>property:autoExpand=true</string>
          <string>property:styleSheet=QTreeWidget{font-size: 11px;background:white;border: 1px solid #97acbc;border-radius:2px;}QTreeView::branch{image:none;}</string>

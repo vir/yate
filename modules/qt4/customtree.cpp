@@ -68,10 +68,88 @@ private:
     bool m_sorting;
 };
 
+// Utility class used to restore selection
+class TreeRestoreSel
+{
+public:
+    inline TreeRestoreSel(QtCustomTree* tree, const String& check = String::empty())
+	: m_tree(tree) {
+	    if (!tree)
+		return;
+	    tree->getSelect(m_sel);
+	    if (m_sel && check && m_sel != check)
+		m_sel.clear();
+	}
+    inline ~TreeRestoreSel() {
+	    if (m_tree && m_sel)
+		m_tree->setSelect(m_sel);
+	}
+private:
+    QtCustomTree* m_tree;
+    String m_sel;
+};
+
 
 static CustomTreeFactory s_factory;
 static const String s_noGroupId(String(Time::secNow()) + "_" + MD5("Yate").hexDigest());
 static const String s_offline("offline");
+
+// Utility: compare strings
+// return -1 if s1 < s2, 0 if s1 == s2, 1 if s1 > s2
+static inline int compareStr(const QString& s1, const QString& s2, 
+    Qt::CaseSensitivity cs)
+{
+    if (cs == Qt::CaseSensitive) {
+	if (s1 == s2)
+	    return 0;
+	return (s1 < s2) ? -1 : 1;
+    }
+    return s1.compare(s2,cs);
+}
+
+// Utility: compare a single key item
+static bool caseInsensitiveLessThan(const QPair<QTreeWidgetItem*,QString>& left,
+    const QPair<QTreeWidgetItem*,QString>& right)
+{
+    return -1 == compareStr(left.second,right.second,Qt::CaseInsensitive);
+}
+
+// Utility: compare a single key item
+static bool caseInsensitiveGreaterThan(const QPair<QTreeWidgetItem*,QString>& left,
+    const QPair<QTreeWidgetItem*,QString>& right)
+{
+    return 1 == compareStr(left.second,right.second,Qt::CaseInsensitive);
+}
+
+// Utility: compare a single key item
+static inline bool caseSensitiveLessThan(const QPair<QTreeWidgetItem*,QString>& left,
+    const QPair<QTreeWidgetItem*,QString>& right)
+{
+    return -1 == compareStr(left.second,right.second,Qt::CaseSensitive);
+}
+
+// Utility: compare a single key item
+static bool caseSensitiveGreaterThan(const QPair<QTreeWidgetItem*,QString>& left,
+    const QPair<QTreeWidgetItem*,QString>& right)
+{
+    return 1 == compareStr(left.second,right.second,Qt::CaseSensitive);
+}
+
+// Utility: sort
+static inline void stableSort(QVector<QPair<QTreeWidgetItem*,QString>>& v,
+    Qt::SortOrder order, Qt::CaseSensitivity cs)
+{
+    if (order == Qt::AscendingOrder) {
+	if (cs == Qt::CaseInsensitive)
+	    qStableSort(v.begin(),v.end(),caseInsensitiveLessThan);
+	else
+	    qStableSort(v.begin(),v.end(),caseSensitiveLessThan);
+    }
+    else if (cs == Qt::CaseInsensitive)
+	qStableSort(v.begin(),v.end(),caseInsensitiveGreaterThan);
+    else
+	qStableSort(v.begin(),v.end(),caseSensitiveGreaterThan);
+}
 
 
 /*
@@ -294,13 +372,12 @@ bool QtCustomTree::updateTableRows(const NamedList* data, bool atStart)
 	name().c_str());
     SafeTree tree(this);
     bool ok = false;
-    unsigned int n = data->length();
-    for (unsigned int i = 0; i < n; i++) {
-	NamedString* ns = data->getParam(i);
-	if (!(ns && ns->name()))
+    NamedIterator iter(*data);
+    for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	if (!ns->name())
 	    continue;
 	if (!ns->null()) {
-	    NamedList* params = static_cast<NamedList*>(ns->getObject("NamedList"));
+	    NamedList* params = YOBJECT(NamedList,ns);
 	    QtTreeItem* item = find(ns->name());
 	    if (!params) {
 		ok = (0 != item) || ok;
@@ -360,6 +437,32 @@ int QtCustomTree::itemType(const String& name) const
 	    return ns->name().toInteger(QTreeWidgetItem::Type);
     }
     return QTreeWidgetItem::Type;
+}
+
+// Retrieve tree sorting
+QString QtCustomTree::getSorting()
+{
+    String t;
+    QHeaderView* h = QTreeView::header();
+    if (h) {
+	int col = h->sortIndicatorSection();
+	int sort = h->sortIndicatorOrder();
+	if (col >= 0 && col < columnCount() &&
+	    (sort == Qt::AscendingOrder || sort == Qt::DescendingOrder))
+	    t << col << "," << sort;
+    }
+    return QtClient::setUtf8(t);
+}
+
+// Set tree sorting
+void QtCustomTree::updateSorting(const String& key, Qt::SortOrder sort)
+{
+    QHeaderView* h = QTreeView::header();
+    if (!h)
+	return;
+    int col = key.toInteger(-1);
+    if (col >= 0 && col < columnCount())
+	h->setSortIndicator(col,sort);
 }
 
 // Build a tree context menu
@@ -515,7 +618,8 @@ void QtCustomTree::findItems(NamedList& list, QtTreeItem* start, bool includeSta
 }
 
 // Add a child to a given item
-QtTreeItem* QtCustomTree::addChild(QtTreeItem* child, int pos, QtTreeItem* parent)
+QtTreeItem* QtCustomTree::addChild(QtTreeItem* child, int pos, QtTreeItem* parent,
+    bool applyRowH)
 {
     if (!child)
 	return 0;
@@ -525,33 +629,82 @@ QtTreeItem* QtCustomTree::addChild(QtTreeItem* child, int pos, QtTreeItem* paren
     DDebug(ClientDriver::self(),DebugAll,
 	"QtTree(%s) adding child '%s' type=%d parent=%p pos=%d",
 	name().c_str(),child->id().c_str(),child->type(),parent,pos);
+    if (applyRowH)
+	setItemRowHeight(child);
     if (pos < 0 || pos >= root->childCount())
 	root->addChild(child);
     else
 	root->insertChild(pos,child);
-    // Set widget
-    int h = m_rowHeight;
-    if (!itemWidget(child,0)) {
-	QWidget* w = loadWidgetType(this,child->id(),itemPropsName(child->type()));
-	if (w) {
-	    w->setAutoFillBackground(true);
-	    setItemWidget(child,0,w);
-	    XDebug(ClientDriver::self(),DebugAll,
-		"QtTree(%s) set widget (%p,%s) for child '%s'",
-		name().c_str(),w,YQT_OBJECT_NAME(w),child->id().c_str());
-	    applyStyleSheet(child,child->isSelected());
-	    h = w->height();
-	}
-    }
-    if (h > 0) {
-	QSize sz = child->sizeHint(0);
-	sz.setHeight(h);
-	child->setSizeHint(0,sz);
-    }
-    if (m_autoExpand)
-	child->setExpanded(true);
+    setupItem(child,applyRowH);
     itemAdded(*child,parent);
     return child;
+}
+
+// Add a list of children to a given item
+void QtCustomTree::addChildren(QList<QTreeWidgetItem*> list, int pos, QtTreeItem* parent,
+    bool applyRowH)
+{
+    QTreeWidgetItem* root = parent ? static_cast<QTreeWidgetItem*>(parent) : invisibleRootItem();
+    if (!root)
+	return;
+    if (applyRowH)
+	for (int i = 0; i < list.size(); i++)
+	    setItemRowHeight(list[i]);
+    if (pos < 0 || pos >= root->childCount())
+	root->addChildren(list);
+    else
+	root->insertChildren(pos,list);
+    for (int i = 0; i < list.size(); i++) {
+	QtTreeItem* item = static_cast<QtTreeItem*>(list[i]);
+	if (!item)
+	    continue;
+	setupItem(item,applyRowH);
+	itemAdded(*item,parent);	
+    }
+}
+
+// Setup an item. Load its widget if not found
+void QtCustomTree::setupItem(QtTreeItem* item, bool adjustWidget)
+{
+    if (!item)
+	return;
+    int h = m_rowHeight;
+    // Set widget
+    QWidget* w = itemWidget(item,0);
+    if (!w) {
+	w = loadWidgetType(this,item->id(),itemPropsName(item->type()));
+	if (w) {
+	    w->setAutoFillBackground(true);
+	    setItemWidget(item,0,w);
+	    XDebug(ClientDriver::self(),DebugAll,
+		"QtTree(%s) set widget (%p,%s) for child '%s'",
+		name().c_str(),w,YQT_OBJECT_NAME(w),item->id().c_str());
+	    applyStyleSheet(item,item->isSelected());
+	    if (adjustWidget && m_rowHeight > 0) {
+		if (m_rowHeight != w->height())
+		    w->resize(w->width(),m_rowHeight);
+	    }
+	    else
+		h = w->height();
+	}
+    }
+    if (!adjustWidget && h >= 0) {
+	QSize sz = item->sizeHint(0);
+	if (sz.height() != h) {
+	    sz.setHeight(h);
+	    item->setSizeHint(0,sz);
+	}
+    }
+}
+
+// Set and item's row height hint
+void QtCustomTree::setItemRowHeight(QTreeWidgetItem* item)
+{
+    if (!item || m_rowHeight < 0)
+	return;
+    QSize sz = item->sizeHint(0);
+    sz.setHeight(m_rowHeight);
+    item->setSizeHint(0,sz);
 }
 
 // Show or hide empty children.
@@ -694,35 +847,23 @@ void QtCustomTree::setColWidths(QString widths)
     }
 }
 
-// Retrieve tree sorting string (column and order)
-QString QtCustomTree::sorting()
-{
-    String t;
-    QHeaderView* h = QTreeView::header();
-    if (h) {
-	int col = h->sortIndicatorSection();
-	int sort = h->sortIndicatorOrder();
-	if (col >= 0 && col < columnCount() &&
-	    (sort == Qt::AscendingOrder || sort == Qt::DescendingOrder))
-	    t << col << "," << sort;
-    }
-    return QtClient::setUtf8(t);
-}
-
 // Set sorting (column and order)
 void QtCustomTree::setSorting(QString s)
 {
-    QHeaderView* h = QTreeView::header();
-    if (!h)
+    if (!s.length()) {
+	updateSorting(String::empty(),Qt::AscendingOrder);
 	return;
-    QStringList list = s.split(",");
-    if (list.size() >= 2) {
-	int col = list[0].toInt();
-	int sort = list[1].toInt();
-	if (col >= 0 && col < columnCount() &&
-	    (sort == Qt::AscendingOrder || sort == Qt::DescendingOrder))
-	    h->setSortIndicator(col,(Qt::SortOrder)sort);
     }
+    String key;
+    String order;
+    int pos = s.indexOf(QChar(','));
+    if (pos >= 0) {
+	QtClient::getUtf8(key,s.left(pos));
+	QtClient::getUtf8(order,s.right(s.length() - pos - 1));
+    }
+    else
+	QtClient::getUtf8(key,s);
+    updateSorting(key,order.toBoolean(true) ? Qt::AscendingOrder : Qt::DescendingOrder);
 }
 
 // Apply item widget style sheet
@@ -807,6 +948,8 @@ QMenu* QtCustomTree::contextMenu(QtTreeItem* item)
 // Item added notification
 void QtCustomTree::itemAdded(QtTreeItem& item, QtTreeItem* parent)
 {
+    if (m_autoExpand)
+	item.setExpanded(true);
     setStateImage(item);
     applyItemTooltip(item);
     applyItemStatistics(item);
@@ -875,7 +1018,9 @@ ContactList::ContactList(const char* name, const NamedList& params, QWidget* par
     m_showOffline(true),
     m_hideEmptyGroups(true),
     m_menuContact(0),
-    m_menuChatRoom(0)
+    m_menuChatRoom(0),
+    m_sortOrder(Qt::AscendingOrder),
+    m_compareNameCs(Qt::CaseSensitive)
 {
     XDebug(ClientDriver::self(),DebugAll,"ContactList(%s) [%p]",name,this);
     // Add item props translation
@@ -906,15 +1051,21 @@ bool ContactList::setTableRow(const String& item, const NamedList* data)
 {
     DDebug(ClientDriver::self(),DebugAll,"ContactList(%s)::setTableRow(%s,%p)",
 	name().c_str(),item.c_str(),data);
-    QtTreeItem* it = find(item);
-    if (!it)
+    ContactItem* c = findContact(item);
+    if (!c)
 	return false;
     if (!data)
 	return true;
     SafeTree tree(this);
-    bool ok = isContactType(it->type()) && updateContact(item,*data,false);
+    bool changed = c->updateName(*data,m_compareNameCs);
+    if (!changed && !m_flatList)
+	changed = c->groupsWouldChange(*data);
+    if (!changed)
+	updateContact(item,*data);
+    else
+	replaceContact(*c,*data);
     listChanged();
-    return ok;
+    return true;
 }
 
 // Add a new account or contact
@@ -927,9 +1078,9 @@ bool ContactList::addTableRow(const String& item, const NamedList* data, bool at
     if (find(item))
 	return false;
     SafeTree tree(this);
-    bool ok = updateContact(item,*data,atStart);
+    addContact(item,*data);
     listChanged();
-    return ok;
+    return true;
 }
 
 // Remove an item from tree
@@ -958,24 +1109,33 @@ bool ContactList::updateTableRows(const NamedList* data, bool atStart)
 	name().c_str());
     SafeTree tree(this);
     bool ok = false;
-    unsigned int n = data->length();
-    for (unsigned int i = 0; i < n; i++) {
-	NamedString* ns = data->getParam(i);
-	if (!(ns && ns->name()))
+    QList<QTreeWidgetItem*> list;
+    QTreeWidgetItem* root = invisibleRootItem();
+    bool empty = root && !root->childCount();
+    NamedIterator iter(*data);
+    for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	if (!ns->name())
 	    continue;
 	if (!ns->null()) {
-	    NamedList* params = static_cast<NamedList*>(ns->getObject("NamedList"));
-	    if (!params) {
-		ok = (0 != find(ns->name())) || ok;
-		continue;
+	    NamedList* params = YOBJECT(NamedList,ns);
+	    if (!empty) {
+		if (!params)
+		    ok = (0 != find(ns->name())) || ok;
+		else if (ns->toBoolean() || find(ns->name()))
+		    ok = updateContact(ns->name(),*params) || ok;
 	    }
-	    if (ns->toBoolean() || find(ns->name()))
-		ok = updateContact(ns->name(),*params,atStart) || ok;
+	    else if (params)
+		list.append(createContact(ns->name(),*params));
 	}
 	else
 	    ok = removeContact(ns->name()) || ok;
     }
-    listChanged();
+    if (!empty)
+	listChanged();
+    else {
+	setContacts(list);
+	ok = true;
+    }
     return ok;
 }
 
@@ -1011,6 +1171,21 @@ void ContactList::listChanged()
     }
 }
 
+// Find a contact
+ContactItem* ContactList::findContact(const String& id, QList<QtTreeItem*>* list)
+{
+    QList<QtTreeItem*> local;
+    if (!list)
+	list = &local;
+    *list = findItems(id);
+    for (int i = 0; i < list->size(); i++) {
+	QtTreeItem* it = static_cast<QtTreeItem*>((*list)[i]);
+	if (isContactType(it->type()) && it->id() == id)
+	    return static_cast<ContactItem*>(it);
+    }
+    return 0;
+}
+
 // Set '_yate_nogroup_caption' property
 void ContactList::setNoGroupCaption(QString value)
 {
@@ -1022,12 +1197,11 @@ void ContactList::setFlatList(bool flat)
 {
     if (flat == m_flatList)
 	return;
-
     QTreeWidgetItem* root = invisibleRootItem();
     if (!root)
 	return;
-    String sel;
-    getSelect(sel);
+    SafeTree tree(this);
+    TreeRestoreSel sel(this);
     setCurrentItem(0);
     // Retrieve (take) contacts
     QList<QTreeWidgetItem*> c = root->takeChildren();
@@ -1051,6 +1225,12 @@ void ContactList::setFlatList(bool flat)
 		}
 	    }
 	}
+	// Make sure the list contains valid pointers
+	for (int i = 0; i < c.size();)
+	    if (c[i])
+		i++;
+	    else
+		c.removeAt(i);
     }
     // Set new grouping
     m_flatList = flat;
@@ -1061,57 +1241,7 @@ void ContactList::setFlatList(bool flat)
 	m_savedIndent = indentation();
 	setIndentation(0);
     }
-    // Add contacts to tree
-    for (int i = 0; i < c.size(); i++) {
-	if (!c[i])
-	    continue;
-	ContactItem* cc = static_cast<ContactItem*>(c[i]);
-        if (!m_flatList) {
-	    ObjList* groups = cc->groups();
-	    ObjList* o = groups->skipNull();
-	    if (o) {
-		// Add a copy of the contact for each group
-		while (o) {
-		    QtTreeItem* g = getGroup(o->get()->toString());
-		    o = o->skipNext();
-		    if (!g)
-			continue;
-		    if (!o)
-		        cc = static_cast<ContactItem*>(addChild(cc,false,g));
-		    else {
-			ContactItem* ci = new ContactItem(cc->id(),*cc);
-		        if (addChild(ci,false,g))
-			    updateContact(*ci,*cc,true);
-			else
-			    TelEngine::destruct(ci);
-		    }
-		    if (!g->childCount())
-			TelEngine::destruct(g);
-		}
-	    }
-	    else {
-		QtTreeItem* g = getGroup();
-		if (g) {
-		    cc = static_cast<ContactItem*>(addChild(cc,false,g));
-		    if (!g->childCount())
-			TelEngine::destruct(g);
-		}
-	    }
-	    TelEngine::destruct(groups);
-	}
-	else
-	    cc = static_cast<ContactItem*>(addChild(cc,false));
-	if (!cc) {
-	    // Delete failed contact
-	    cc = static_cast<ContactItem*>(c[i]);
-	    Debug(ClientDriver::self(),DebugWarn,
-		"ContactList(%s)::setFlatList() deleting failed contact '%s'",
-		name().c_str(),cc->id().c_str());
-	    delete cc;
-	}
-    }
-    listChanged();
-    setSelect(sel);
+    setContacts(c);
 }
 
 // Show or hide offline contacts
@@ -1123,6 +1253,7 @@ void ContactList::setShowOffline(bool value)
     QTreeWidgetItem* root = invisibleRootItem();
     if (!root)
 	return;
+    SafeTree tree(this);
     String sel;
     getSelect(sel);
     setCurrentItem(0);
@@ -1139,6 +1270,55 @@ void ContactList::setShowOffline(bool value)
     QtTreeItem* it = sel ? find(sel) : 0;
     if (it && !it->isHidden())
 	setCurrentItem(it);
+}
+
+// Retrieve tree sorting
+QString ContactList::getSorting()
+{
+    String tmp = m_sortKey;
+    if (tmp)
+	tmp << "," << String::boolText(m_sortOrder == Qt::AscendingOrder);
+    return QtClient::setUtf8(tmp);
+}
+
+// Set tree sorting
+void ContactList::updateSorting(const String& key, Qt::SortOrder sort)
+{
+    m_sortKey = key;
+    m_sortOrder = sort;
+}
+
+// Optimized add. Set the whole tree
+void ContactList::setContacts(QList<QTreeWidgetItem*>& list)
+{
+    // Add contacts to tree
+    if (m_flatList) {
+	sortContacts(list);
+	addChildren(list,-1,0,true);
+    }
+    else {
+	ContactItemList cil;
+	for (int i = 0; i < list.size(); i++)
+	    createContactTree(static_cast<ContactItem*>(list[i]),cil);
+	if (cil.m_groups.size()) {
+	    addChildren(cil.m_groups);
+	    for (int i = 0; i < cil.m_groups.size(); i++) {
+		sortContacts(cil.m_contacts[i]);
+		QtTreeItem* grp = static_cast<QtTreeItem*>(cil.m_groups[i]);
+		addChildren(cil.m_contacts[i],-1,grp,true);
+	    }
+	}
+    }
+    listChanged();
+}
+
+// Create a contact
+ContactItem* ContactList::createContact(const String& id, const NamedList& params)
+{
+    ContactItem* c = new ContactItem(id,params);
+    c->copyParams(params);
+    c->updateName(params,m_compareNameCs);
+    return c;
 }
 
 // Retrieve the contact count to be shown in group
@@ -1159,106 +1339,29 @@ void ContactList::updateGroupCountContacts(QtTreeItem& item)
 }
 
 // Add or update a contact
-bool ContactList::updateContact(const String& id, const NamedList& params,
-    bool atStart)
+bool ContactList::updateContact(const String& id, const NamedList& params)
 {
     if (TelEngine::null(id))
 	return false;
-    bool ok = false;
-    bool found = false;
-    QList<QtTreeItem*> list = findItems(id);
-    String* groups = params.getParam("groups");
-    DDebug(ClientDriver::self(),DebugAll,"ContactList(%s)::updateContact(%s) groups=%s",
-	name().c_str(),id.c_str(),TelEngine::c_safe(groups));
-    if (!groups || m_flatList) {
-	// No group changes or not shown by group. Update all contacts
+    DDebug(ClientDriver::self(),DebugAll,"ContactList(%s)::updateContact(%s)",
+	name().c_str(),id.c_str());
+    QList<QtTreeItem*> list;
+    ContactItem* c = findContact(id,&list);
+    if (!c) {
+	addContact(id,params);
+	return true;
+    }
+    bool changed = c->updateName(params,m_compareNameCs);
+    if (!changed && !m_flatList)
+	changed = c->groupsWouldChange(params);
+    if (!changed) {
 	for (int i = 0; i < list.size(); i++)
-	    if (isContactType(list[i]->type()) && list[i]->id() == id) {
-		ok = updateContact(*(static_cast<ContactItem*>(list[i])),params) || ok;
-		found = true;
-	    }
+	    if (isContactType(list[i]->type()) && list[i]->id() == id)
+		updateContact(*(static_cast<ContactItem*>(list[i])),params);
     }
-    else {
-	// Groups changed while shown by group
-	ContactItem* c = 0;
-	for (int i = 0; i < list.size(); i++)
-	    if (isContactType(list[i]->type()) && list[i]->id() == id) {
-		c = static_cast<ContactItem*>(list[i]);
-		break;
-	    }
-	if (c) {
-	    // Check if groups changed
-	    ObjList removedGroups;
-	    ObjList newGroups;
-	    ObjList* cgroups = c->groups();
-	    ObjList* newList = Client::splitUnescape(*groups);
-	    ObjList* o;
-	    for (o = newList->skipNull(); o; o = o->skipNext())
-		if (!cgroups->find(o->get()->toString()))
-		    newGroups.append(new String(o->get()->toString()));
-	    for (o = cgroups->skipNull(); o; o = o->skipNext())
-		if (!newList->find(o->get()->toString()))
-		    removedGroups.append(new String(o->get()->toString()));
-	    // Update
-	    if (newGroups.skipNull() || removedGroups.skipNull()) {
-		// Re-use removed items
-		QList<ContactItem*> removed;
-		// Remove contacts from groups
-		for (o = removedGroups.skipNull(); o; o = o->skipNext())
-		    removeContactFromGroup(removed,id,o->get()->toString());
-		if (!cgroups->skipNull())
-		    removeContactFromGroup(removed,id);
-		// Add contacts to new groups
-		o = newGroups.skipNull();
-		if (o) {
-		    for (; o; o = o->skipNext())
-			addContactToGroup(id,params,atStart,o->get()->toString(),&removed,c);
-		}
-		else if (TelEngine::null(groups))
-		    addContactToGroup(id,params,atStart,String::empty(),
-			&removed,c);
-		// Delete not used items
-		for (int i = 0; i < removed.size(); i++)
-		    if (removed[i])
-			delete removed[i];
-		// Refresh list
-		list = findItems(id);
-	    }
-	    TelEngine::destruct(newList);
-	    TelEngine::destruct(cgroups);
-	    for (int i = 0; i < list.size(); i++) {
-		if (!isContactType(list[i]->type()) || list[i]->id() != id)
-		    continue;
-		ok = updateContact(*(static_cast<ContactItem*>(list[i])),params) || ok;
-		found = true;
-	    }
-	}
-    }
-
-    if (found)
-	return ok;
-
-    if (!m_flatList) {
-	// Add to all groups
-	ObjList* grps = groups ? Client::splitUnescape(*groups) : 0;
-	ObjList* o = grps ? grps->skipNull() : 0;
-	if (o) {
-	    for (; o; o = o->skipNext())
-		ok = addContactToGroup(id,params,atStart,o->get()->toString()) || ok;
-	}
-	else
-	    ok = addContactToGroup(id,params,atStart);
-	TelEngine::destruct(grps);
-    }
-    else {
-	ContactItem* c = new ContactItem(id,params);
-	ok = addChild(c,atStart);
-	if (ok)
-	    ok = updateContact(*c,params);
-	else
-	    TelEngine::destruct(c);
-    }
-    return ok;
+    else
+	replaceContact(*c,params);
+    return true;
 }
 
 // Remove a contact from tree
@@ -1327,7 +1430,7 @@ bool ContactList::updateContact(ContactItem& c, const NamedList& params, bool al
     }
     applyItemTooltip(c);
     // Show/hide
-    if (!m_showOffline)
+    if (c.type() == TypeContact && !m_showOffline)
 	c.setHidden(c.offline());
     return true;
 }
@@ -1429,79 +1532,168 @@ QtTreeItem* ContactList::getGroup(const String& name, bool create)
     return g;
 }
 
-// Add a contact to a group item
-bool ContactList::addContactToGroup(const String& id, const NamedList& params,
-    bool atStart, const String& grp, QList<ContactItem*>* bucket,
-    const NamedList* origParams)
+// Add a contact
+void ContactList::addContact(const String& id, const NamedList& params)
 {
-    DDebug(ClientDriver::self(),DebugAll,
-	"ContactList(%s)::addContactToGroup(%s,%p,%u,%s,%p,%p)",
-	name().c_str(),id.c_str(),&params,atStart,grp.c_str(),bucket,origParams);
-    QtTreeItem* g = getGroup(grp);
-    if (!g)
-	return false;
-    int i = 0;
-    ContactItem* c = 0;
-    if (bucket) {
-	for (i = 0; i < bucket->size(); i++)
-	    if ((*bucket)[i]) {
-		c = (*bucket)[i];
-		break;
-	    }
+    ContactItem* c = createContact(id,params);
+    if (m_flatList) {
+	addContact(c);
+	return;
     }
-    if (!c) {
-	if (origParams) {
-	    c = new ContactItem(id,*origParams);
-	    c->copyParams(*origParams);
+    ContactItemList cil;
+    createContactTree(c,cil);
+    for (int i = 0; i < cil.m_groups.size(); i++) {
+	QtTreeItem* cg = static_cast<QtTreeItem*>(cil.m_groups[i]);
+	if (cil.m_contacts[i].size()) {
+	    ContactItem* item = static_cast<ContactItem*>((cil.m_contacts[i])[0]);
+	    QtTreeItem* grp = getGroup(cg->id() != s_noGroupId ? cg->id() : String::empty());
+	    if (grp)
+		addContact(item,grp);
+	    else
+		TelEngine::destruct(item);
 	}
-	else
-	    c = new ContactItem(id,params);
+	TelEngine::destruct(cg);
     }
-    c->copyParams(params);
-    bool oldContact = (bucket && i < bucket->size());
-    if (addChild(c,atStart,g)) {
-	if (oldContact)
-	    (*bucket)[i] = 0;
-	return true;
-    }
-    if (!oldContact) {
-	TelEngine::destruct(c);
-	// Remove empty group
-	if (g->childCount() < 1)
-	    delete g;
-    }
-    return false;
 }
 
-// Remove a contact from a group item and add it to a list
-void ContactList::removeContactFromGroup(QList<ContactItem*> list, const String& id,
-    const String& grp)
+// Add a contact to a specified parent
+void ContactList::addContact(ContactItem* c, QtTreeItem* parent)
 {
-    DDebug(ClientDriver::self(),DebugAll,
-	"ContactList(%s)::removeContactFromGroup(%s,%s)",
-	name().c_str(),id.c_str(),grp.c_str());
-    QtTreeItem* g = getGroup(grp,false);
-    if (!g)
+    if (!c)
 	return;
-    QtTreeItem* it = find(id,g,false,false);
-    if (!(it && isContactType(it->type())))
+    int pos = -1;
+    if (m_sortKey == "name") {
+	bool asc = (m_sortOrder == Qt::AscendingOrder);
+	QTreeWidgetItem* p = parent ? (QTreeWidgetItem*)parent : invisibleRootItem();
+	int n = p ? p->childCount() : 0;
+	for (int i = 0; i < n; i++) {
+	    ContactItem* item = static_cast<ContactItem*>(p->child(i));
+	    int comp = compareStr(c->m_name,item->m_name,m_compareNameCs);
+	    if (comp && (asc == (comp < 0))) {
+		pos = i;
+		break;
+	    }
+	}
+    }
+    QtCustomTree::addChild(c,pos,parent,true);
+}
+
+// Replace an existing contact. Remove it and add it again
+void ContactList::replaceContact(ContactItem& c, const NamedList& params)
+{
+    if (!c)
 	return;
-    g->removeChild(it);
-    list.append(static_cast<ContactItem*>(it));
-    // Remove empty group
-    if (g->childCount() < 1)
-	delete g;
+    TreeRestoreSel sel(this,c.id());
+    String id = c.id();
+    NamedList p(c);
+    p.copyParams(params);
+    removeContact(id);
+    addContact(id,p);
+}
+
+// Create contact structure (groups and lists)
+void ContactList::createContactTree(ContactItem* c, ContactItemList& cil)
+{
+    if (!c)
+	return;
+    bool noGrp = true;
+    ObjList* grps = c->groups();
+    for (ObjList* o = grps->skipNull(); o; o = o->skipNext()) {
+	String* grp = static_cast<String*>(o->get());
+	if (grp->null())
+	    continue;
+	noGrp = false;
+	int index = cil.getGroupIndex(*grp,*grp);
+	if (o->skipNext())
+	    cil.m_contacts[index].append(createContact(c->id(),*c));
+	else
+	    cil.m_contacts[index].append(c);
+    }
+    TelEngine::destruct(grps);
+    if (noGrp) {
+	int index = cil.getGroupIndex(s_noGroupId,m_noGroupText);
+	cil.m_contacts[index].append(c);
+    }
+}
+
+// Sort contacts
+void ContactList::sortContacts(QList<QTreeWidgetItem*>& list)
+{
+    if (!list.size())
+	return;
+    if (m_sortKey == "name") {
+	QVector<QPair<QTreeWidgetItem*,QString>> v(list.size());
+	for (int i = 0; i < list.size(); i++) {
+	    v[i].first = list[i];
+	    v[i].second = (static_cast<ContactItem*>(list[i]))->m_name;
+	}
+	stableSort(v,m_sortOrder,m_compareNameCs);
+	for (int i = 0; i < list.size(); i++)
+	    list[i] = v[i].first;
+    }
 }
 
 
 /*
  * ContactItem
  */
+// Update name. Return true if changed
+bool ContactItem::updateName(const NamedList& params, Qt::CaseSensitivity cs)
+{
+    const String* name = params.getParam("name");
+    if (!name)
+	return false;
+    QString s = QtClient::setUtf8(*name);
+    if (!compareStr(m_name,s,cs))
+	return false;
+    m_name = s;
+    return true;
+}
+
+// Check if groups would change
+bool ContactItem::groupsWouldChange(const NamedList& params)
+{
+    String* grps = params.getParam("groups");
+    if (!grps)
+	return false;
+    bool changed = false;
+    ObjList* cgroups = groups();
+    ObjList* newList = Client::splitUnescape(*grps);
+    ObjList* o = 0;
+    for (o = newList->skipNull(); o && !changed; o = o->skipNext())
+	changed = !cgroups->find(o->get()->toString());
+    for (o = cgroups->skipNull(); o && !changed; o = o->skipNext())
+	changed = !newList->find(o->get()->toString());
+    TelEngine::destruct(newList);
+    TelEngine::destruct(cgroups);
+    return changed;
+}
+
 // Check if the contact status is 'offline'
 bool ContactItem::offline()
 {
     String* status = getParam("status");
     return status && *status == s_offline;
+}
+
+
+/*
+ * ContactItemList
+ */
+int ContactItemList::getGroupIndex(const String& id, const String& text)
+{
+    for (int i = 0; i < m_groups.size(); i++) {
+	QtTreeItem* item = static_cast<QtTreeItem*>(m_groups[i]);
+	if (item->id() == id)
+	    return i;
+    }
+    int pos = m_groups.size();
+    if (pos && id != s_noGroupId &&
+	(static_cast<QtTreeItem*>(m_groups[pos - 1]))->id() == s_noGroupId)
+	pos--;
+    m_groups.insert(pos,new QtTreeItem(id,ContactList::TypeGroup,text));
+    m_contacts.insert(pos,QList<QTreeWidgetItem*>());
+    return pos;
 }
 
 

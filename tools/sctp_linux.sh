@@ -2,7 +2,7 @@
 
 # This script configures Linux SCTP parameters for use with SIGTRAN
 
-if [ ! -f /etc/sysctl.conf -o ! -f /etc/modprobe.preload -o ! -d /proc/sys/net ]; then
+if [ ! -f /etc/sysctl.conf -o ! -f /etc/modprobe.conf -o ! -d /proc/sys/net ]; then
     echo "Your system does not look like Linux!" >&2
     exit 1
 fi

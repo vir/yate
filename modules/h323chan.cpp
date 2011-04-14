@@ -1254,7 +1254,8 @@ bool YateH323Connection::adjustCapabilities()
     // remote has a list of supported codecs - remove unsupported capabilities
     bool nocodecs = true;
     bool changed = false;
-    Lock();
+    if (!Lock())
+	return false;
     for (int i = 0; i < localCapabilities.GetSize(); i++) {
 	const char* format = 0;
 	String fname;

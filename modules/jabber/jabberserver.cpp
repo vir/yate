@@ -3278,7 +3278,8 @@ void JBPendingWorker::processChat(JBPendingJob& job)
     Message m("msg.route");
     while (true) {
 	__plugin.complete(m);
-	m.addParam("type",ev->stanzaType());
+	const char* tStr = ev->stanzaType();
+	m.addParam("type",tStr ? tStr : XMPPUtils::msgText(XMPPUtils::Normal));
 	addValidParam(m,"id",ev->id());
 	m.addParam("caller",ev->from().bare());
 	addValidParam(m,"called",ev->to().bare());

@@ -968,8 +968,13 @@ bool MGCPSpan::init(const NamedList& params)
     m_sdpForward = config->getBoolValue("forward_sdp",false);
     m_bearer = lookup(config->getIntValue("bearer",s_dict_payloads,-1),s_dict_gwbearerinfo);
     m_rqntType = (RqntType)config->getIntValue("req_dtmf",s_dict_rqnt,RqntOnce);
-    if (config->getBoolValue("req_fax",true))
+    if (config->getBoolValue("req_fax",true)) {
+	if (RqntNone == m_rqntType) {
+	    m_rqntType = RqntOnce;
+	    m_rqntStr.clear();
+	}
 	m_rqntStr.append("G/ft(N)",",");
+    }
     m_rqntStr = config->getValue("req_evts",m_rqntStr);
     bool clear = config->getBoolValue("clearconn",false);
     m_circuits = new MGCPCircuit*[m_count];

@@ -1,3 +1,14 @@
+yate (3.3.3.svn4297) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4297: + Test if locking of the H.323
+    connection succeeded (fails during cleanup).  + Always set the
+    correct message stanza type in dispatched msg.execute/route
+    messages.  + Fix notify request when only Fax detection is desired.
+    + Fixed bug: restart rtp and transport when used media format or
+    payload id changes in received session accept. Added debug.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 15 Apr 2011 02:19:14 +0400
+
 yate (3.3.3.svn4293) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4293: + Replaced several hardcoded constants

@@ -629,7 +629,7 @@ void ConfRoom::setExpire()
     DDebug(&__plugin,DebugAll,"ConfRoom(%s) %s lonely timeout users=%d [%p]",
 	m_name.c_str(),(m_expire ? "started" : "stopped"),m_users,this);
     if (changed)
-	__plugin.setConfToutCount(m_expire);
+	__plugin.setConfToutCount(m_expire != 0);
 }
 
 

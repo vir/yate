@@ -225,7 +225,7 @@ protected:
 private:
     void waitNotChanging();
     MGCPMessage* message(const char* cmd);
-    bool sendAsync(MGCPMessage* mm);
+    bool sendAsync(MGCPMessage* mm, bool notify = false);
     RefPointer<MGCPMessage> sendSync(MGCPMessage* mm);
     bool sendRequest(const char* sigReq, const char* reqEvt = 0, const char* digitMap = 0);
     bool sendPending(const char* sigReq = 0);
@@ -1384,7 +1384,7 @@ void MGCPCircuit::clearConn(bool force)
     resetSdp(false);
     m_remoteRawSdp.clear();
     m_localRtpChanged = false;
-    sendAsync(mm);
+    sendAsync(mm,true);
     sendPending();
 }
 
@@ -1409,13 +1409,19 @@ MGCPMessage* MGCPCircuit::message(const char* cmd)
 }
 
 // Send a MGCP message asynchronously
-bool MGCPCircuit::sendAsync(MGCPMessage* mm)
+bool MGCPCircuit::sendAsync(MGCPMessage* mm, bool notify)
 {
     if (!mm)
 	return false;
     MGCPEpInfo* ep = s_endpoint->find(mySpan()->epId().id());
-    if (ep && s_engine->sendCommand(mm,ep->address))
-	return true;
+    if (ep) {
+	MGCPTransaction* tr = s_engine->sendCommand(mm,ep->address);
+	if (tr) {
+	    if (notify)
+		tr->userData(static_cast<GenObject*>(this));
+	    return true;
+	}
+    }
     TelEngine::destruct(mm);
     return false;
 }
@@ -1780,6 +1786,8 @@ bool MGCPCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params
 // Process incoming events for this circuit
 bool MGCPCircuit::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 {
+    if (tr->state() < MGCPTransaction::Responded)
+	return false;
     DDebug(&splugin,DebugAll,"MGCPCircuit::processEvent(%p,%p) [%p]",
 	tr,mm,this);
     if (tr == m_tr) {
@@ -1787,6 +1795,35 @@ bool MGCPCircuit::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 	    tr->userData(0);
 	    m_msg = mm;
 	    m_tr = 0;
+	}
+    }
+    else if (tr->initial() && (tr->initial()->name() == "DLCX")) {
+	int err = 406;
+	if (tr->msgResponse()) {
+	    if (tr->state() > MGCPTransaction::Responded)
+		return false;
+	    err = tr->msgResponse()->code();
+	}
+	if (err < 300)
+	    return false;
+	tr->userData(0);
+	Debug(&splugin,DebugWarn,"Gateway error %d deleting connection on circuit %u [%p]",
+	    err,code(),this);
+	if (err >= 500) {
+	    String error;
+	    error << "Error " << err;
+	    if (tr->msgResponse())
+		error.append(tr->msgResponse()->comment(),": ");
+	    switch (err) {
+		case 515: // Incorrect connection-id
+		case 516: // Unknown or incorrect call-id
+		case 520: // Endpoint is restarting
+		    break;
+		default:
+		    // Disable the circuit and signal Alarm condition
+		    SignallingCircuit::status(Disabled);
+		    enqueueEvent(SignallingCircuitEvent::Alarm,error);
+	    }
 	}
     }
     return false;

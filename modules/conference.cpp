@@ -100,14 +100,22 @@ public:
 	{ return m_notify; }
     inline int maxLock() const
 	{ return m_maxLock; }
+    inline bool timeout(const Time& time) const
+	{ return m_expire && m_expire < time; }
     void mix(ConfConsumer* cons = 0);
     void addChannel(ConfChan* chan, bool player = false);
     void delChannel(ConfChan* chan);
     void dropAll(const char* reason = 0);
     void msgStatus(Message& msg);
     bool setRecording(const NamedList& params);
+    void update(const NamedList& params);
 private:
     ConfRoom(const String& name, const NamedList& params);
+    // Set the expire time from 'lonely' parameter value
+    // Set the lonely flag if called the first time (no users in conference)
+    void setLonelyTimeout(const String& value);
+    // Set the expire time
+    void setExpire();
     String m_name;
     ObjList m_chans;
     String m_notify;
@@ -118,6 +126,8 @@ private:
     int m_users;
     int m_maxusers;
     int m_maxLock;
+    u_int64_t m_expire;
+    unsigned int m_lonelyInterval;
 };
 
 // A conference channel is just a dumb holder of its data channels
@@ -214,6 +224,8 @@ public:
     virtual ~ConferenceDriver();
     bool checkRoom(String& room, bool existing, bool counted);
     bool unload();
+    // Change the number of rooms needing timeout check
+    void setConfToutCount(bool on);
 protected:
     virtual void initialize();
     virtual bool received(Message &msg, int id);
@@ -222,6 +234,7 @@ protected:
     virtual void statusParams(String& str);
 private:
     ConfHandler* m_handler;
+    unsigned int m_confTout;             // The number of rooms needing timeout check
 };
 
 INIT_PLUGIN(ConferenceDriver);
@@ -255,15 +268,20 @@ ConfRoom* ConfRoom::get(const String& name, const NamedList* params)
     ConfRoom* room = l ? static_cast<ConfRoom*>(l->get()) : 0;
     if (room && !room->ref())
 	room = 0;
-    if (params && !room)
-	room = new ConfRoom(name,*params);
+    if (params) {
+	if (room)
+	    room->update(*params);
+	else
+	    room = new ConfRoom(name,*params);
+    }
     return room;
 }
 
 // Private constructor, always called from ConfRoom::get() with mutex hold
 ConfRoom::ConfRoom(const String& name, const NamedList& params)
     : m_name(name), m_lonely(false), m_record(0),
-      m_rate(8000), m_users(0), m_maxusers(10), m_maxLock(200)
+      m_rate(8000), m_users(0), m_maxusers(10), m_maxLock(200),
+      m_expire(0), m_lonelyInterval(0)
 {
     DDebug(&__plugin,DebugAll,"ConfRoom::ConfRoom('%s',%p) [%p]",
 	name.c_str(),&params,this);
@@ -271,7 +289,7 @@ ConfRoom::ConfRoom(const String& name, const NamedList& params)
     m_maxusers = params.getIntValue("maxusers",m_maxusers);
     m_maxLock = params.getIntValue("waitlock",m_maxLock);
     m_notify = params.getValue("notify");
-    m_lonely = params.getBoolValue("lonely");
+    setLonelyTimeout(params["lonely"]);
     if (m_rate != 8000)
 	m_format << "/" << m_rate;
     s_rooms.append(this);
@@ -299,6 +317,8 @@ void ConfRoom::destroyed()
     // plugin must be locked as the destructor is called when room is dereferenced
     Lock lock(&__plugin);
     s_rooms.remove(this,false);
+    if (m_expire)
+	__plugin.setConfToutCount(false);
     m_chans.clear();
     if (m_notify) {
 	Message* m = new Message("chan.notify");
@@ -319,8 +339,10 @@ void ConfRoom::addChannel(ConfChan* chan, bool player)
     m_chans.append(chan);
     if (player)
 	m_playerId = chan->id();
-    if (chan->isCounted())
+    if (chan->isCounted()) {
 	m_users++;
+	setExpire();
+    }
     if (m_notify && !chan->isUtility()) {
 	String tmp(m_users);
 	Message* m = new Message("chan.notify");
@@ -349,8 +371,10 @@ void ConfRoom::delChannel(ConfChan* chan)
 	m_record = 0;
     if (m_playerId && (chan->id() == m_playerId))
 	m_playerId.clear();
-    if (m_chans.remove(chan,false) && chan->isCounted())
+    if (m_chans.remove(chan,false) && chan->isCounted()) {
 	m_users--;
+	setExpire();
+    }
     bool alone = (m_users == 1);
     mylock.drop();
     if (m_notify && !chan->isUtility()) {
@@ -400,6 +424,10 @@ void ConfRoom::msgStatus(Message& msg)
     msg.retValue() << ",room=" << m_name;
     msg.retValue() << ",maxusers=" << m_maxusers;
     msg.retValue() << ",lonely=" << m_lonely;
+    int exp = 0;
+    if (m_lonely && m_expire)
+	exp = (int)(((int64_t)m_expire - (int64_t)msg.msgTime().usec())/1000);
+    msg.retValue() << ",expire=" << (int)exp;
     msg.retValue() << ",rate=" << m_rate;
     msg.retValue() << ",users=" << m_users;
     msg.retValue() << ",chans=" << m_chans.count();
@@ -553,6 +581,55 @@ void ConfRoom::mix(ConfConsumer* cons)
     mixbuf.clear();
     mylock.drop();
     Forward(data);
+}
+
+// Update room data
+void ConfRoom::update(const NamedList& params)
+{
+    String* l = params.getParam("lonely");
+    if (l)
+	setLonelyTimeout(*l);
+}
+
+// Set the expire time from 'lonely' parameter value
+// Set the lonely flag if called the first time (no users in conference)
+void ConfRoom::setLonelyTimeout(const String& value)
+{
+    int interval = value.toInteger(-1);
+    if (!m_users) {
+	m_lonely = value.toBoolean(interval >= 0);
+	DDebug(&__plugin,DebugAll,"ConfRoom(%s) lonely=%u [%p]",m_name.c_str(),m_lonely,this);
+    }
+    if (!m_lonely || interval < 0)
+	return;
+    if (interval > 0 && interval < 1000)
+	interval = 1000;
+    if ((int)m_lonelyInterval == interval)
+	return;
+    m_lonelyInterval = interval;
+    DDebug(&__plugin,DebugAll,"ConfRoom(%s) set lonely interval to %ums [%p]",
+	m_name.c_str(),m_lonelyInterval,this);
+    setExpire();
+}
+
+// Set the expire time
+void ConfRoom::setExpire()
+{
+    if (!m_lonely)
+	return;
+    bool changed = true;
+    if (m_users == 1 && m_lonelyInterval) {
+	changed = !m_expire;
+	m_expire = Time::now() + m_lonelyInterval * 1000;
+    }
+    else if (m_expire)
+	m_expire = 0;
+    else
+	return;
+    DDebug(&__plugin,DebugAll,"ConfRoom(%s) %s lonely timeout users=%d [%p]",
+	m_name.c_str(),(m_expire ? "started" : "stopped"),m_users,this);
+    if (changed)
+	__plugin.setConfToutCount(m_expire);
 }
 
 
@@ -922,6 +999,32 @@ bool ConferenceDriver::received(Message &msg, int id)
 	}
 	return true;
     }
+    if (id == Timer) {
+	// Use a while to break
+	while (m_confTout) {
+	    lock();
+	    if (!m_confTout) {
+		unlock();
+		break;
+	    }
+	    ListIterator iter(s_rooms);
+	    Time t;
+	    for (;;) {
+		RefPointer<ConfRoom> room = static_cast<ConfRoom*>(iter.get());
+		unlock();
+		if (!room)
+		    break;
+		if (room->timeout(t)) {
+		    Debug(this,DebugAll,"Room (%p) '%s' timed out",
+			(ConfRoom*)room,room->toString().c_str());
+		    room->dropAll("timeout");
+		}
+		room = 0;
+		lock();
+	    }
+	    break;
+	}
+    }
     return Driver::received(msg,id);
 }
 
@@ -934,7 +1037,9 @@ bool ConferenceDriver::received(Message &msg, int id)
 	"maxusers" - maximum number of users allowed to connect to this
 	    conference, not counting utility channels
 	"lonely" - set to true to allow lonely users to remain in conference
-	    else they will be disconnected
+	    else they will be disconnected. A valid integer (>= 0) will
+	    be interpreted as lonely timeout interval (ms).
+	    In the initial state a value of 0 indicates lonely=true
 	"notify" - ID used for "chan.notify" room notifications, an empty
 	    string (default) will disable notifications
 	"record" - route that will make an outgoing record-only call
@@ -1016,8 +1121,18 @@ bool ConferenceDriver::unload()
     return true;
 }
 
+void ConferenceDriver::setConfToutCount(bool on)
+{
+    Lock lock(this);
+    if (on)
+	m_confTout++;
+    else if (m_confTout)
+	m_confTout--;
+    DDebug(this,DebugAll,"Rooms timeout counter set to %u",m_confTout);
+}
+
 ConferenceDriver::ConferenceDriver()
-    : Driver("conf","misc"), m_handler(0)
+    : Driver("conf","misc"), m_handler(0), m_confTout(0)
 {
     Output("Loaded module Conference");
 }

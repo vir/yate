@@ -134,6 +134,8 @@ public:
 	{ return m_fxo; }
     inline bool fxs() const
 	{ return m_fxs; }
+    inline bool rqntEmbed() const
+	{ return m_rqntEmbed; }
     inline RqntType rqntType() const
 	{ return m_rqntType; }
     inline const char* rqntStr() const
@@ -161,6 +163,7 @@ private:
     bool m_sdpForward;
     bool m_fxo;
     bool m_fxs;
+    bool m_rqntEmbed;
     RqntType m_rqntType;
     String m_rqntStr;
     String m_notify;
@@ -225,7 +228,7 @@ protected:
 private:
     void waitNotChanging();
     MGCPMessage* message(const char* cmd);
-    bool sendAsync(MGCPMessage* mm);
+    bool sendAsync(MGCPMessage* mm, bool notify = false);
     RefPointer<MGCPMessage> sendSync(MGCPMessage* mm);
     bool sendRequest(const char* sigReq, const char* reqEvt = 0, const char* digitMap = 0);
     bool sendPending(const char* sigReq = 0);
@@ -869,7 +872,8 @@ MGCPSpan::MGCPSpan(const NamedList& params, const char* name, const MGCPEpInfo& 
     : SignallingCircuitSpan(params.getValue("debugname",name),
        static_cast<SignallingCircuitGroup*>(params.getObject("SignallingCircuitGroup"))),
       m_circuits(0), m_count(0), m_epId(ep), m_operational(false),
-      m_rtpForward(false), m_sdpForward(false), m_fxo(false), m_fxs(false)
+      m_rtpForward(false), m_sdpForward(false), m_fxo(false), m_fxs(false),
+      m_rqntEmbed(true), m_rqntType(RqntOnce)
 {
     Debug(&splugin,DebugAll,"MGCPSpan::MGCPSpan(%p,'%s') [%p]",
 	&params,name,this);
@@ -967,13 +971,19 @@ bool MGCPSpan::init(const NamedList& params)
     m_rtpForward = config->getBoolValue("forward_rtp",!(m_fxo || m_fxs));
     m_sdpForward = config->getBoolValue("forward_sdp",false);
     m_bearer = lookup(config->getIntValue("bearer",s_dict_payloads,-1),s_dict_gwbearerinfo);
+    m_rqntEmbed = config->getBoolValue("req_embed",true);
     m_rqntType = (RqntType)config->getIntValue("req_dtmf",s_dict_rqnt,RqntOnce);
-    if (config->getBoolValue("req_fax",true)) {
+    bool fax = config->getBoolValue("req_fax",true);
+    bool t38 = config->getBoolValue("req_t38",fax);
+    if (fax || t38) {
 	if (RqntNone == m_rqntType) {
 	    m_rqntType = RqntOnce;
 	    m_rqntStr.clear();
 	}
-	m_rqntStr.append("G/ft(N)",",");
+	if (fax)
+	    m_rqntStr.append("G/ft(N)",",");
+	if (t38)
+	    m_rqntStr.append("fxr/t38",",");
     }
     m_rqntStr = config->getValue("req_evts",m_rqntStr);
     bool clear = config->getBoolValue("clearconn",false);
@@ -1316,6 +1326,11 @@ bool MGCPCircuit::setupConn(const char* mode)
     mm->params.addParam("C",m_callId);
     if (m_connId)
 	mm->params.addParam("I",m_connId);
+    else if (mySpan()->rqntEmbed() && mySpan()->rqntStr() &&
+	(mySpan()->rqntType() != MGCPSpan::RqntNone) && !(fxs() || fxo())) {
+	mm->params.addParam("X",m_notify);
+	mm->params.addParam("R",mySpan()->rqntStr());
+    }
     if (m_gwFormatChanged && m_gwFormat)
 	mm->params.addParam("B",m_gwFormat);
     if (mode)
@@ -1384,7 +1399,7 @@ void MGCPCircuit::clearConn(bool force)
     resetSdp(false);
     m_remoteRawSdp.clear();
     m_localRtpChanged = false;
-    sendAsync(mm);
+    sendAsync(mm,true);
     sendPending();
 }
 
@@ -1409,13 +1424,19 @@ MGCPMessage* MGCPCircuit::message(const char* cmd)
 }
 
 // Send a MGCP message asynchronously
-bool MGCPCircuit::sendAsync(MGCPMessage* mm)
+bool MGCPCircuit::sendAsync(MGCPMessage* mm, bool notify)
 {
     if (!mm)
 	return false;
     MGCPEpInfo* ep = s_endpoint->find(mySpan()->epId().id());
-    if (ep && s_engine->sendCommand(mm,ep->address))
-	return true;
+    if (ep) {
+	MGCPTransaction* tr = s_engine->sendCommand(mm,ep->address);
+	if (tr) {
+	    if (notify)
+		tr->userData(static_cast<GenObject*>(this));
+	    return true;
+	}
+    }
     TelEngine::destruct(mm);
     return false;
 }
@@ -1511,7 +1532,7 @@ bool MGCPCircuit::status(Status newStat, bool sync)
 	allowRtpChange = SignallingCircuit::status() == Connected &&
 	    hasLocalRtp() && m_localRtpChanged;
 	if (SignallingCircuit::status() != Connected) {
-	    if (mySpan()->rqntType() != MGCPSpan::RqntNone && !(fxs() || fxo()))
+	    if (mySpan()->rqntType() != MGCPSpan::RqntNone && !(fxs() || fxo() || mySpan()->rqntEmbed()))
 		sendRequest(0,mySpan()->rqntStr());
 	    sendPending();
 	}
@@ -1780,6 +1801,8 @@ bool MGCPCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params
 // Process incoming events for this circuit
 bool MGCPCircuit::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 {
+    if (tr->state() < MGCPTransaction::Responded)
+	return false;
     DDebug(&splugin,DebugAll,"MGCPCircuit::processEvent(%p,%p) [%p]",
 	tr,mm,this);
     if (tr == m_tr) {
@@ -1787,6 +1810,35 @@ bool MGCPCircuit::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 	    tr->userData(0);
 	    m_msg = mm;
 	    m_tr = 0;
+	}
+    }
+    else if (tr->initial() && (tr->initial()->name() == "DLCX")) {
+	int err = 406;
+	if (tr->msgResponse()) {
+	    if (tr->state() > MGCPTransaction::Responded)
+		return false;
+	    err = tr->msgResponse()->code();
+	}
+	if (err < 300)
+	    return false;
+	tr->userData(0);
+	Debug(&splugin,DebugWarn,"Gateway error %d deleting connection on circuit %u [%p]",
+	    err,code(),this);
+	if (err >= 500) {
+	    String error;
+	    error << "Error " << err;
+	    if (tr->msgResponse())
+		error.append(tr->msgResponse()->comment(),": ");
+	    switch (err) {
+		case 515: // Incorrect connection-id
+		case 516: // Unknown or incorrect call-id
+		case 520: // Endpoint is restarting
+		    break;
+		default:
+		    // Disable the circuit and signal Alarm condition
+		    SignallingCircuit::status(Disabled);
+		    enqueueEvent(SignallingCircuitEvent::Alarm,error);
+	    }
 	}
     }
     return false;
@@ -1837,6 +1889,13 @@ bool MGCPCircuit::processNotify(const String& package, const String& event, cons
 	    sendRequest(0,mySpan()->rqntStr());
 	// Generic events
 	if (event &= "ft")
+	    return enqueueEvent(SignallingCircuitEvent::GenericTone,"fax");
+    }
+    else if (package == "FXR") {
+	if (mySpan()->rqntType() == MGCPSpan::RqntMore)
+	    sendRequest(0,mySpan()->rqntStr());
+	// Fax Relay events
+	if (event &= "t38(start)")
 	    return enqueueEvent(SignallingCircuitEvent::GenericTone,"fax");
     }
     return false;

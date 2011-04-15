@@ -182,7 +182,13 @@
 ;bearer=
 
 ; req_fax: bool: Request Fax Tone detection from gateway
+; This requests notification for G/ft (Generic package, Fax Tone)
 ;req_fax=yes
+
+; req_t38: bool: Request Fax Relay detection from gateway
+; This requests notification for fxr/t38 (Fax Relay, T.38)
+; The default is taken from the req_fax setting
+;req_t38=
 
 ; req_evts: string: Requested Events in MGCP format, overrides default
 ; Default depends on endpoint configuration and fax setting
@@ -194,6 +200,10 @@
 ;  once - emit RQNT once when connecting the circuit (default)
 ;  more - emit RQNT on connection and after each notification received
 ;req_dtmf=once
+
+; req_embed: boolean: Embed Request Notify in the CRCX message
+; This setting applies only to digital gateways, not FXS or FXO
+;req_embed=yes
 
 ; forward_rtp: bool: Support to forward RTP directly to protocols that support it
 ; The actual direct RTP forwarding is still negotiated in routing

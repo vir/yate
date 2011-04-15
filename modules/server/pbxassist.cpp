@@ -153,6 +153,9 @@ static String s_lang;
 // Drop conference on hangup
 static bool s_dropConfHangup = true;
 
+// Conference lonely timeout
+static int s_lonely = 0;
+
 // on-hangup transfer list
 static ObjList s_transList;
 static Mutex s_transMutex(false,"PBXAssist::transfer");
@@ -252,6 +255,7 @@ void PBXList::initialize()
     s_error = s_cfg.getValue("general","error","tone/outoforder");
     s_lang = s_cfg.getValue("general","lang");
     s_dropConfHangup = s_cfg.getBoolValue("general","dropconfhangup",true);
+    s_lonely = s_cfg.getIntValue("general","lonelytimeout");
     unlock();
     if (s_cfg.getBoolValue("general","enabled",false))
 	ChanAssistList::initialize();
@@ -810,7 +814,7 @@ bool PBXAssist::operConference(Message& msg)
 	Message m("call.conference");
 	m.addParam("id",id());
 	m.userData(c);
-	m.addParam("lonely","yes");
+	m.addParam("lonely",m_keep.getValue("pbxlonelytimeout",String(s_lonely)));
 	if (room)
 	    m.addParam("room",room);
 	m.addParam("pbxstate",state());

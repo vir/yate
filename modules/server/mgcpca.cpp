@@ -225,12 +225,12 @@ protected:
 private:
     void waitNotChanging();
     MGCPMessage* message(const char* cmd);
-    bool sendAsync(MGCPMessage* mm);
+    bool sendAsync(MGCPMessage* mm, bool notify = false);
     RefPointer<MGCPMessage> sendSync(MGCPMessage* mm);
     bool sendRequest(const char* sigReq, const char* reqEvt = 0, const char* digitMap = 0);
     bool sendPending(const char* sigReq = 0);
     bool enqueueEvent(SignallingCircuitEvent::Type type, const char* name, const char* dtmf = 0);
-    void cleanupRtp();
+    void cleanupRtp(bool all = true);
     bool createRtp();
     bool setupConn(const char* mode = 0);
     String m_epId;
@@ -968,8 +968,13 @@ bool MGCPSpan::init(const NamedList& params)
     m_sdpForward = config->getBoolValue("forward_sdp",false);
     m_bearer = lookup(config->getIntValue("bearer",s_dict_payloads,-1),s_dict_gwbearerinfo);
     m_rqntType = (RqntType)config->getIntValue("req_dtmf",s_dict_rqnt,RqntOnce);
-    if (config->getBoolValue("req_fax",true))
+    if (config->getBoolValue("req_fax",true)) {
+	if (RqntNone == m_rqntType) {
+	    m_rqntType = RqntOnce;
+	    m_rqntStr.clear();
+	}
 	m_rqntStr.append("G/ft(N)",",");
+    }
     m_rqntStr = config->getValue("req_evts",m_rqntStr);
     bool clear = config->getBoolValue("clearconn",false);
     m_circuits = new MGCPCircuit*[m_count];
@@ -1271,9 +1276,9 @@ void* MGCPCircuit::getObject(const String& name) const
 }
 
 // Clean up any RTP we may still hold
-void MGCPCircuit::cleanupRtp()
+void MGCPCircuit::cleanupRtp(bool all)
 {
-    resetSdp();
+    resetSdp(all);
     m_localRawSdp.clear();
     m_localRtpChanged = false;
     m_remoteRawSdp.clear();
@@ -1286,8 +1291,7 @@ bool MGCPCircuit::createRtp()
 {
     if (hasRtp())
 	return true;
-    cleanupRtp();
-    resetSdp();
+    cleanupRtp(false);
     updateSDP(NamedList::empty());
     RefPointer<DataEndpoint> de = new DataEndpoint;
     bool ok = dispatchRtp(mySpan()->address(),false,de);
@@ -1299,7 +1303,7 @@ bool MGCPCircuit::createRtp()
     }
     else {
 	Debug(&splugin,DebugWarn,"MGCPCircuit::createRtp() failed [%p]",this);
-	cleanupRtp();
+	cleanupRtp(false);
     }
     TelEngine::destruct(de);
     return ok;
@@ -1377,10 +1381,10 @@ void MGCPCircuit::clearConn(bool force)
     }
     m_connId.clear();
     m_specialMode.clear();
-    resetSdp();
+    resetSdp(false);
     m_remoteRawSdp.clear();
     m_localRtpChanged = false;
-    sendAsync(mm);
+    sendAsync(mm,true);
     sendPending();
 }
 
@@ -1405,13 +1409,19 @@ MGCPMessage* MGCPCircuit::message(const char* cmd)
 }
 
 // Send a MGCP message asynchronously
-bool MGCPCircuit::sendAsync(MGCPMessage* mm)
+bool MGCPCircuit::sendAsync(MGCPMessage* mm, bool notify)
 {
     if (!mm)
 	return false;
     MGCPEpInfo* ep = s_endpoint->find(mySpan()->epId().id());
-    if (ep && s_engine->sendCommand(mm,ep->address))
-	return true;
+    if (ep) {
+	MGCPTransaction* tr = s_engine->sendCommand(mm,ep->address);
+	if (tr) {
+	    if (notify)
+		tr->userData(static_cast<GenObject*>(this));
+	    return true;
+	}
+    }
     TelEngine::destruct(mm);
     return false;
 }
@@ -1555,12 +1565,14 @@ bool MGCPCircuit::status(Status newStat, bool sync)
 		    m_consumer = 0;
 		}
 		else
-		    cleanupRtp();
+		    cleanupRtp(false);
 	    }
 	    m_statusReq = SignallingCircuit::status();
 	    m_changing = false;
 	    return false;
 	case Reserved:
+	    if (SignallingCircuit::status() <= Idle)
+		cleanupRtp();
 	    break;
 	case Idle:
 	    if (m_needClear) {
@@ -1627,6 +1639,8 @@ bool MGCPCircuit::setParam(const String& param, const String& value)
 	rtpChanged = m_rtpForward != fwd;
 	m_rtpForward = fwd;
     }
+    else if (param == "rtp_rfc2833")
+	setRfc2833(value);
     else if (param == "special_mode")
 	m_specialMode = value;
     else
@@ -1772,6 +1786,8 @@ bool MGCPCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params
 // Process incoming events for this circuit
 bool MGCPCircuit::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 {
+    if (tr->state() < MGCPTransaction::Responded)
+	return false;
     DDebug(&splugin,DebugAll,"MGCPCircuit::processEvent(%p,%p) [%p]",
 	tr,mm,this);
     if (tr == m_tr) {
@@ -1779,6 +1795,35 @@ bool MGCPCircuit::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 	    tr->userData(0);
 	    m_msg = mm;
 	    m_tr = 0;
+	}
+    }
+    else if (tr->initial() && (tr->initial()->name() == "DLCX")) {
+	int err = 406;
+	if (tr->msgResponse()) {
+	    if (tr->state() > MGCPTransaction::Responded)
+		return false;
+	    err = tr->msgResponse()->code();
+	}
+	if (err < 300)
+	    return false;
+	tr->userData(0);
+	Debug(&splugin,DebugWarn,"Gateway error %d deleting connection on circuit %u [%p]",
+	    err,code(),this);
+	if (err >= 500) {
+	    String error;
+	    error << "Error " << err;
+	    if (tr->msgResponse())
+		error.append(tr->msgResponse()->comment(),": ");
+	    switch (err) {
+		case 515: // Incorrect connection-id
+		case 516: // Unknown or incorrect call-id
+		case 520: // Endpoint is restarting
+		    break;
+		default:
+		    // Disable the circuit and signal Alarm condition
+		    SignallingCircuit::status(Disabled);
+		    enqueueEvent(SignallingCircuitEvent::Alarm,error);
+	    }
 	}
     }
     return false;
@@ -1844,7 +1889,7 @@ void MGCPCircuit::processDelete(MGCPMessage* mm, const String& error)
     m_connId.clear();
     m_gwFormat = mySpan()->bearer();
     m_gwFormatChanged = false;
-    cleanupRtp();
+    cleanupRtp(false);
     m_changing = false;
     unsigned int code = 0;
     String tmp(error);
@@ -2071,7 +2116,8 @@ void MGCPPlugin::initialize()
 	    Engine::install(new DTMFHandler);
 	}
     }
-    m_parser.initialize(cfg.getSection("codecs"),cfg.getSection("hacks"));
+    m_parser.initialize(cfg.getSection("codecs"),cfg.getSection("hacks"),
+	cfg.getSection("general"));
 }
 
 void MGCPPlugin::genUpdate(Message& msg)

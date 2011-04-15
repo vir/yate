@@ -49,6 +49,11 @@
 ; local_port: int: Local UDP port number for RUDP session
 ;local_port=same as remote_port
 
+; send_standby: int: Session standby disabling timer in ms, 100+
+; Standby request are never sent more often than that
+; A value of zero disables the Standby messages entirely
+;send_standby=2500
+
 
 ;[slt_name]
 ; SLT sections create on demand SS7 Layer 2 transports (remote MTP2 links)

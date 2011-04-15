@@ -780,7 +780,8 @@ void YJBEngine::processEvent(JBEvent* ev)
 		if (processMucMessage(ev))
 		    break;
 		Message* m = __plugin.message("msg.execute",ev->clientStream());
-		m->addParam("type",ev->stanzaType());
+		const char* tStr = ev->stanzaType();
+		m->addParam("type",tStr ? tStr : XMPPUtils::msgText(XMPPUtils::Normal));
 		m->addParam("id",ev->id(),false);
 		m->addParam("caller",ev->from().bare());
 		m->addParam("caller_instance",ev->from().resource(),false);

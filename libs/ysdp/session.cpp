@@ -44,7 +44,8 @@ SDPSession::SDPSession(SDPParser* parser, NamedList& params)
 {
     m_rtpForward = params.getBoolValue("rtp_forward");
     m_secure = params.getBoolValue("secure",parser->m_secure);
-    m_rfc2833 = params.getBoolValue("rfc2833",parser->m_rfc2833);
+    m_rfc2833 = parser->m_rfc2833;
+    setRfc2833(params.getParam("rfc2833"));
 }
 
 SDPSession::~SDPSession()
@@ -92,6 +93,18 @@ void SDPSession::putMedia(NamedList& msg, ObjList* mList, bool putPort)
     }
     if (other && !audio)
 	msg.setParam("media",String::boolText(false));
+}
+
+// Update the RFC 2833 availability and payload
+void SDPSession::setRfc2833(const String& value)
+{
+    if (value.toBoolean(true)) {
+	m_rfc2833 = value.toInteger(m_parser->m_rfc2833);
+	if (m_rfc2833 < 96 || m_rfc2833 > 127)
+	    m_rfc2833 = value.toBoolean(false) ? 101 : m_parser->m_rfc2833;
+    }
+    else
+	m_rfc2833 = -1;
 }
 
 // Build and dispatch a chan.rtp message for a given media. Update media on success
@@ -382,9 +395,9 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 	TelEngine::destruct(l);
 	TelEngine::destruct(map);
 
-	if (m_rfc2833 && frm && m->isAudio()) {
-	    int rfc2833 = m->rfc2833().toInteger(-1);
-	    if (rfc2833 < 0)
+	if ((m_rfc2833 >= 0) && frm && m->isAudio()) {
+	    int rfc2833 = m->rfc2833().toInteger(m_rfc2833);
+	    if (rfc2833 < 96 || rfc2833 > 127)
 		rfc2833 = 101;
 	    // claim to support telephone events
 	    frm << " " << rfc2833;
@@ -610,7 +623,7 @@ bool SDPSession::addRtpParams(NamedList& msg, const String& natAddr,
 }
 
 // Reset this object to default values
-void SDPSession::resetSdp()
+void SDPSession::resetSdp(bool all)
 {
     m_mediaStatus = MediaMissing;
     TelEngine::destruct(m_rtpMedia);
@@ -622,8 +635,10 @@ void SDPSession::resetSdp()
     m_sdpSession = 0;
     m_sdpVersion = 0;
     m_host.clear();
-    m_secure = m_parser->secure();
-    m_rfc2833 = m_parser->rfc2833();
+    if (all) {
+	m_secure = m_parser->secure();
+	m_rfc2833 = m_parser->rfc2833();
+    }
 }
 
 // Build a populated chan.rtp message

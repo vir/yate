@@ -34,6 +34,10 @@ class QtTreeItem;                        // A tree widget item
 class QtCustomTree;                      // A custom tree widget
 class ContactList;                       // A contact list tree
 class ContactItem;                       // A contact list contact
+class ContactItemList;                   // Groups and contact items belonging to them
+
+typedef QList<QTreeWidgetItem*> QtTreeItemList;
+typedef QPair<QTreeWidgetItem*,QString> QtTreeItemKey;
 
 /**
  * This class holds data about a tree widget container item
@@ -292,19 +296,47 @@ public:
      * @param child Child to add
      * @param pos Position to insert. Negative to add after the last child
      * @param parent The parent item. Set it to 0 to add to the root
+     * @param applyRowH True to apply row height hint on item before adding
      * @return QtTreeItem pointer on failure, 0 on success
      */
-    QtTreeItem* addChild(QtTreeItem* child, int pos = -1, QtTreeItem* parent = 0);
+    QtTreeItem* addChild(QtTreeItem* child, int pos = -1, QtTreeItem* parent = 0,
+	bool applyRowH = false);
 
     /**
      * Add a child to a given item
      * @param child Child to add
      * @param atStart True to insert at start, false to add aftr the last child
      * @param parent The parent item. Set it to 0 to add to the root
+     * @param applyRowH True to apply row height hint on item before adding
      * @return QtTreeItem pointer on failure, 0 on success
      */
-    inline QtTreeItem* addChild(QtTreeItem* child, bool atStart, QtTreeItem* parent = 0)
-	{ return addChild(child,atStart ? 0 : -1,parent); }
+    inline QtTreeItem* addChild(QtTreeItem* child, bool atStart, QtTreeItem* parent = 0,
+	bool applyRowH = false)
+	{ return addChild(child,atStart ? 0 : -1,parent,applyRowH); }
+
+    /**
+     * Add a list of children to a given item
+     * @param list Children to add
+     * @param pos Position to insert. Negative to add after the last child
+     * @param parent The parent item. Set it to 0 to add to the root
+     * @param applyRowH True to apply row height hint on items before adding
+     */
+    void addChildren(QList<QTreeWidgetItem*> list, int pos = -1, QtTreeItem* parent = 0,
+	bool applyRowH = false);
+
+    /**
+     * Setup an item. Load its widget if not found
+     * @param item Item to setup
+     * @param adjustWidget True to adjust widget to row height,
+     *  false to adjust the row to widget height
+     */
+    void setupItem(QtTreeItem* item, bool adjustWidget);
+
+    /**
+     * Set and item's row height hint
+     * @param item Item to set
+     */
+    void setItemRowHeight(QTreeWidgetItem* item);
 
     /**
      * Show or hide empty children.
@@ -481,7 +513,8 @@ public:
      * Retrieve tree sorting string (column and order)
      * @return Sorting string
      */
-    QString sorting();
+    QString sorting()
+	{ return getSorting(); }
 
     /**
      * Set sorting (column and order)
@@ -553,6 +586,19 @@ protected:
      * @return Associated item type integer value. QTreeWidgetItem::Type if not found
      */
     int itemType(const String& name) const;
+
+    /**
+     * Retrieve tree sorting
+     * @return Sorting string
+     */
+    virtual QString getSorting();
+
+    /**
+     * Set tree sorting
+     * @param key Sorting key
+     * @param sort Sort order
+     */
+    virtual void updateSorting(const String& key, Qt::SortOrder sort);
 
     /**
      * Build a tree context menu
@@ -664,6 +710,7 @@ class ContactList : public QtCustomTree
     Q_PROPERTY(bool _yate_flatlist READ flatList WRITE setFlatList(bool))
     Q_PROPERTY(bool _yate_showofflinecontacts READ showOffline WRITE setShowOffline(bool))
     Q_PROPERTY(bool _yate_hideemptygroups READ hideEmptyGroups WRITE setHideEmptyGroups(bool))
+    Q_PROPERTY(bool _yate_comparecase READ cmpNameCs WRITE setCmpNameCs(bool))
 public:
     /**
      * List item type enumeration
@@ -744,6 +791,14 @@ public:
     virtual void listChanged();
 
     /**
+     * Find a contact
+     * @param id Contact id
+     * @param list Optional list to be filled with items having the given id
+     * @return ContactItem pointer or 0 if not found
+     */
+    ContactItem* findContact(const String& id, QList<QtTreeItem*>* list = 0);
+
+    /**
      * Retrieve the value of '_yate_nogroup_caption' property
      * @return The value of '_yate_nogroup_caption' property
      */
@@ -802,6 +857,20 @@ public:
 	}
 
     /**
+     * Retrieve contact name comparison
+     * @return True if contact names are compared case sensitive
+     */
+    bool cmpNameCs()
+	{ return m_compareNameCs == Qt::CaseSensitive; }
+
+    /**
+     * Set contact name comparison
+     * @return True to compare contact names case sensitive
+     */
+    void setCmpNameCs(bool value)
+	{ m_compareNameCs = (value ? Qt::CaseSensitive : Qt::CaseInsensitive); }
+
+    /**
      * Check if a given type is a contact or chat room
      * @param type Type to check
      * @return True if the type is contact or chat room
@@ -821,11 +890,38 @@ public:
 	}
 
 protected:
+    /**
+     * Retrieve tree sorting
+     * @return Sorting string
+     */
+    virtual QString getSorting();
+
+    /**
+     * Set tree sorting
+     * @param key Sorting key
+     * @param sort Sort order
+     */
+    virtual void updateSorting(const String& key, Qt::SortOrder sort);
+
+    /**
+     * Optimized add. Set the whole tree
+     * @param list The list of contacts to set
+     */
+    void setContacts(QList<QTreeWidgetItem*>& list);
+
+    /**
+     * Create a contact
+     * @param id Contact id
+     * @param params Contact parameters
+     * @return ContactItem pointer
+     */
+    ContactItem* createContact(const String& id, const NamedList& params);
+
     // Update contact count in a group
     void updateGroupCountContacts(QtTreeItem& item);
 
     // Add or update a contact
-    bool updateContact(const String& id, const NamedList& params, bool atStart);
+    bool updateContact(const String& id, const NamedList& params);
 
     // Update a contact
     bool updateContact(ContactItem& c, const NamedList& params, bool all = true);
@@ -870,19 +966,46 @@ protected:
     QtTreeItem* getGroup(const String& name = String::empty(), bool create = true);
 
     /**
-     * Add a contact to a group item
-     *
+     * Add a contact to the list
+     * @param id Contact id
+     * @param params Contact parameters
      */
-    bool addContactToGroup(const String& id,
-	const NamedList& params, bool atStart, const String& grp = String::empty(),
-	QList<ContactItem*>* bucket = 0, const NamedList* origParams = 0);
+    void addContact(const String& id, const NamedList& params);
 
     /**
-     * Remove a contact from a group item and add it to a list
-     *
+     * Add a contact to a specified parent
+     * @param c The contact to add
+     * @param grp Optional parent
      */
-    void removeContactFromGroup(QList<ContactItem*> list, const String& id,
-	const String& grp = String::empty());
+    void addContact(ContactItem* c, QtTreeItem* parent = 0);
+
+    /**
+     * Replace an existing contact. Remove it and add it again
+     * @param c The contact item
+     * @param params Contact parameters
+     */
+    void replaceContact(ContactItem& c, const NamedList& params);
+
+    /**
+     * Create contact structure (groups and lists)
+     * @param c The contact to add
+     * @param cil Contact structure
+     */
+    void createContactTree(ContactItem* c, ContactItemList& cil);
+
+    /**
+     * Compare two contacts's name
+     * @param c1 First contact
+     * @param c2 Second contact
+     * @return -1 if c1 < c2, 0 if c1 == c2, 1 if c1 > c2
+     */
+    int compareContactName(ContactItem* c1, ContactItem* c2);
+
+    /**
+     * Sort contacts
+     * @param list The list of contacts to sort
+     */
+    void sortContacts(QList<QTreeWidgetItem*>& list);
 
 private:
     int m_savedIndent;
@@ -895,6 +1018,10 @@ private:
     QMap<QString,QString> m_statusOrder; // Status order (names are mapped to status icons)
     QMenu* m_menuContact;
     QMenu* m_menuChatRoom;
+    // Sorting
+    String m_sortKey;                    // Sorting key
+    Qt::SortOrder m_sortOrder;           // Sort order
+    Qt::CaseSensitivity m_compareNameCs; // Contact name case comparison
 };
 
 /**
@@ -912,8 +1039,33 @@ public:
     // Build and return a list of groups
     inline ObjList* groups() const
 	{ return Client::splitUnescape((*this)["groups"]); }
+    // Update name. Return true if changed
+    bool updateName(const NamedList& params, Qt::CaseSensitivity cs);
+    // Check if groups would change
+    bool groupsWouldChange(const NamedList& params);
     // Check if the contact status is 'offline'
     bool offline();
+
+    QString m_name;
+};
+
+/**
+ * Utility class used to hold contact groups along with contacts
+ * @short Groups and contact items belonging to them
+ */
+class ContactItemList
+{
+public:
+    /**
+     * Retrieve a group. Create it if not found. Create contact list entry when a group is created
+     * @param id Group id
+     * @param text Group text
+     * @return Valid groups index
+     */
+    int getGroupIndex(const String& id, const String& text);
+
+    QList<QTreeWidgetItem*> m_groups;
+    QList<QtTreeItemList> m_contacts;
 };
 
 }; // anonymous namespace

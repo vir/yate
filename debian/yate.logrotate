@@ -8,6 +8,6 @@
     compress
     create 640 yate yate
     postrotate
-	[ -f /var/run/yate.pid ] && kill -HUP `cat /var/run/yate.pid`
+	[ -f /var/run/yate/yate.pid ] && kill -HUP `cat /var/run/yate/yate.pid`
     endscript
 }

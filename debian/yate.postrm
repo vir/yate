@@ -21,16 +21,16 @@
 
 case "$1" in
     remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
-    ;;
+        ;;
     purge)
-    rm -rf /var/lib/yate
-    deluser --system --quiet yate
-    delgroup --system --quiet yate
-    ;;
+        rm -rf /var/lib/yate /var/run/yate
+        deluser --system --quiet yate
+        delgroup --system --quiet yate
+        ;;
     *)
         echo "postrm called with unknown argument \`$1'" >&2
         exit 1
-    ;;
+        ;;
 esac
 
 # dh_installdeb will replace this with shell code automatically
@@ -40,4 +40,6 @@ esac
 
 exit 0
 
+
+# vim: ts=4 sw=4 sts=4 et
 

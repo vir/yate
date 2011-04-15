@@ -1,3 +1,16 @@
+yate (3.3.3.svn4303) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4303: + Disable MGCP circuits for which DLCX
+    returned an error.  + Pidfile is now /var/run/yate/yate.pid (thx
+    sabi!)  + Added support for requesting notification for fxr/t38
+    events.  + Allow embedding the notification request in the CRCX
+    message.  + A lonely timeout can now be set for a conference room to
+    allow a single user to remain in the room for a specified interval.
+    + A lonely conference timeout interval can now be set for a channel
+    assistant.  + Fixed VC++ compiler warning.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 16 Apr 2011 02:19:22 +0400
+
 yate (3.3.3.svn4297) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4297: + Test if locking of the H.323

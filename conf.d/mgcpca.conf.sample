@@ -182,7 +182,13 @@
 ;bearer=
 
 ; req_fax: bool: Request Fax Tone detection from gateway
+; This requests notification for G/ft (Generic package, Fax Tone)
 ;req_fax=yes
+
+; req_t38: bool: Request Fax Relay detection from gateway
+; This requests notification for fxr/t38 (Fax Relay, T.38)
+; The default is taken from the req_fax setting
+;req_t38=
 
 ; req_evts: string: Requested Events in MGCP format, overrides default
 ; Default depends on endpoint configuration and fax setting

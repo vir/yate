@@ -968,12 +968,17 @@ bool MGCPSpan::init(const NamedList& params)
     m_sdpForward = config->getBoolValue("forward_sdp",false);
     m_bearer = lookup(config->getIntValue("bearer",s_dict_payloads,-1),s_dict_gwbearerinfo);
     m_rqntType = (RqntType)config->getIntValue("req_dtmf",s_dict_rqnt,RqntOnce);
-    if (config->getBoolValue("req_fax",true)) {
+    bool fax = config->getBoolValue("req_fax",true);
+    bool t38 = config->getBoolValue("req_t38",fax);
+    if (fax || t38) {
 	if (RqntNone == m_rqntType) {
 	    m_rqntType = RqntOnce;
 	    m_rqntStr.clear();
 	}
-	m_rqntStr.append("G/ft(N)",",");
+	if (fax)
+	    m_rqntStr.append("G/ft(N)",",");
+	if (t38)
+	    m_rqntStr.append("fxr/t38",",");
     }
     m_rqntStr = config->getValue("req_evts",m_rqntStr);
     bool clear = config->getBoolValue("clearconn",false);
@@ -1874,6 +1879,13 @@ bool MGCPCircuit::processNotify(const String& package, const String& event, cons
 	    sendRequest(0,mySpan()->rqntStr());
 	// Generic events
 	if (event &= "ft")
+	    return enqueueEvent(SignallingCircuitEvent::GenericTone,"fax");
+    }
+    else if (package == "FXR") {
+	if (mySpan()->rqntType() == MGCPSpan::RqntMore)
+	    sendRequest(0,mySpan()->rqntStr());
+	// Fax Relay events
+	if (event &= "t38(start)")
 	    return enqueueEvent(SignallingCircuitEvent::GenericTone,"fax");
     }
     return false;

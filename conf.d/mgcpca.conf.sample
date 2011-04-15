@@ -201,6 +201,10 @@
 ;  more - emit RQNT on connection and after each notification received
 ;req_dtmf=once
 
+; req_embed: boolean: Embed Request Notify in the CRCX message
+; This setting applies only to digital gateways, not FXS or FXO
+;req_embed=yes
+
 ; forward_rtp: bool: Support to forward RTP directly to protocols that support it
 ; The actual direct RTP forwarding is still negotiated in routing
 ;forward_rtp=yes for digital gateways, no for analogic

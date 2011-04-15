@@ -134,6 +134,8 @@ public:
 	{ return m_fxo; }
     inline bool fxs() const
 	{ return m_fxs; }
+    inline bool rqntEmbed() const
+	{ return m_rqntEmbed; }
     inline RqntType rqntType() const
 	{ return m_rqntType; }
     inline const char* rqntStr() const
@@ -161,6 +163,7 @@ private:
     bool m_sdpForward;
     bool m_fxo;
     bool m_fxs;
+    bool m_rqntEmbed;
     RqntType m_rqntType;
     String m_rqntStr;
     String m_notify;
@@ -869,7 +872,8 @@ MGCPSpan::MGCPSpan(const NamedList& params, const char* name, const MGCPEpInfo& 
     : SignallingCircuitSpan(params.getValue("debugname",name),
        static_cast<SignallingCircuitGroup*>(params.getObject("SignallingCircuitGroup"))),
       m_circuits(0), m_count(0), m_epId(ep), m_operational(false),
-      m_rtpForward(false), m_sdpForward(false), m_fxo(false), m_fxs(false)
+      m_rtpForward(false), m_sdpForward(false), m_fxo(false), m_fxs(false),
+      m_rqntEmbed(true), m_rqntType(RqntOnce)
 {
     Debug(&splugin,DebugAll,"MGCPSpan::MGCPSpan(%p,'%s') [%p]",
 	&params,name,this);
@@ -967,6 +971,7 @@ bool MGCPSpan::init(const NamedList& params)
     m_rtpForward = config->getBoolValue("forward_rtp",!(m_fxo || m_fxs));
     m_sdpForward = config->getBoolValue("forward_sdp",false);
     m_bearer = lookup(config->getIntValue("bearer",s_dict_payloads,-1),s_dict_gwbearerinfo);
+    m_rqntEmbed = config->getBoolValue("req_embed",true);
     m_rqntType = (RqntType)config->getIntValue("req_dtmf",s_dict_rqnt,RqntOnce);
     bool fax = config->getBoolValue("req_fax",true);
     bool t38 = config->getBoolValue("req_t38",fax);
@@ -1321,6 +1326,11 @@ bool MGCPCircuit::setupConn(const char* mode)
     mm->params.addParam("C",m_callId);
     if (m_connId)
 	mm->params.addParam("I",m_connId);
+    else if (mySpan()->rqntEmbed() && mySpan()->rqntStr() &&
+	(mySpan()->rqntType() != MGCPSpan::RqntNone) && !(fxs() || fxo())) {
+	mm->params.addParam("X",m_notify);
+	mm->params.addParam("R",mySpan()->rqntStr());
+    }
     if (m_gwFormatChanged && m_gwFormat)
 	mm->params.addParam("B",m_gwFormat);
     if (mode)
@@ -1522,7 +1532,7 @@ bool MGCPCircuit::status(Status newStat, bool sync)
 	allowRtpChange = SignallingCircuit::status() == Connected &&
 	    hasLocalRtp() && m_localRtpChanged;
 	if (SignallingCircuit::status() != Connected) {
-	    if (mySpan()->rqntType() != MGCPSpan::RqntNone && !(fxs() || fxo()))
+	    if (mySpan()->rqntType() != MGCPSpan::RqntNone && !(fxs() || fxo() || mySpan()->rqntEmbed()))
 		sendRequest(0,mySpan()->rqntStr());
 	    sendPending();
 	}

@@ -18,23 +18,31 @@ set -e
 # the debian-policy package
 
 H=/var/lib/yate
+P=/var/run/yate
 
 case "$1" in
     configure)
-    echo "Creating user 'yate' and group 'yate'..."
-    addgroup --system yate
-    adduser --system --ingroup yate --home $H --gecos "YATE daemon" --shell /bin/sh --disabled-password yate
-    mkdir -p $H
-    chown -R yate:yate $H
-    ;;
+        if ! getent passwd pyicqt >/dev/null; then
+            echo "Creating user 'yate' and group 'yate'..."
+            addgroup --system yate
+            adduser --system --ingroup yate --home $H --gecos "YATE daemon" --shell /bin/sh --disabled-password yate
+        fi
+        mkdir -p $H $P
+        if ! dpkg-statoverride --list $H >/dev/null; then
+            chown yate:yate $H
+        fi
+        if ! dpkg-statoverride --list $P >/dev/null; then
+            chown yate:yate $P
+        fi
+        ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)
-    ;;
+        ;;
 
     *)
         echo "postinst called with unknown argument \`$1'" >&2
         exit 1
-    ;;
+        ;;
 esac
 
 # dh_installdeb will replace this with shell code automatically
@@ -44,4 +52,5 @@ esac
 
 exit 0
 
+# vim: ts=4 sw=4 sts=4 et
 

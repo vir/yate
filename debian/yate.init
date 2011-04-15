@@ -6,7 +6,7 @@
 # description: Starts and stops YATE used as Telephony Server
 #
 # processname: yate
-# pidfile: /var/run/yate.pid
+# pidfile: /var/run/yate/yate.pid
 #
 
 ### BEGIN INIT INFO
@@ -22,7 +22,7 @@
 
 
 DAEMON=/usr/bin/yate
-PIDFILE=/var/lib/yate/yate.pid
+PIDFILE=/var/run/yate/yate.pid
 LOG=/var/log/yate
 
 # Extra Yate command line options

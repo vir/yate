@@ -1,3 +1,10 @@
+yate (3.3.3.vir2011041701) UNRELEASED; urgency=low
+
+  * New debian package. Fixed pidfile-related troubles.
+  * Merged a lot of upstream fixes.
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Sun, 17 Apr 2011 00:09:18 +0400
+
 yate (3.2.1.vir2011032102) UNRELEASED; urgency=low
 
   * Moved jabberclient.yate from yate-qt4 into libyate package

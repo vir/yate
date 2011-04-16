@@ -134,6 +134,10 @@ public:
 	{ return m_fxo; }
     inline bool fxs() const
 	{ return m_fxs; }
+    inline bool rtpForward() const
+	{ return m_rtpForward; }
+    inline bool sdpForward() const
+	{ return m_sdpForward; }
     inline bool rqntEmbed() const
 	{ return m_rqntEmbed; }
     inline RqntType rqntType() const
@@ -1333,6 +1337,7 @@ bool MGCPCircuit::setupConn(const char* mode)
     }
     if (m_gwFormatChanged && m_gwFormat)
 	mm->params.addParam("B",m_gwFormat);
+    bool rtpChange = false;
     if (mode)
 	mm->params.addParam("M",mode);
     else if (m_localRawSdp) {
@@ -1345,6 +1350,10 @@ bool MGCPCircuit::setupConn(const char* mode)
 	if (sdp) {
 	    mm->params.addParam("M","sendrecv");
 	    mm->sdp.append(sdp);
+	}
+	else {
+	    mm->params.addParam("M","inactive");
+	    rtpChange = true;
 	}
     }
     mm = sendSync(mm);
@@ -1363,7 +1372,7 @@ bool MGCPCircuit::setupConn(const char* mode)
 	m_needClear = true;
 	return false;
     }
-    m_localRtpChanged = false;
+    m_localRtpChanged = rtpChange;
     MimeSdpBody* sdp = static_cast<MimeSdpBody*>(mm->sdp[0]);
     if (sdp) {
 	String oldIp = m_rtpAddr;
@@ -1564,7 +1573,8 @@ bool MGCPCircuit::status(Status newStat, bool sync)
 	case Connected:
 	    // Create local rtp if we don't have one
 	    // Start it if we don't forward the rtp
-	    if (m_rtpForward || hasLocalRtp() || createRtp()) {
+	    if (m_rtpForward || hasLocalRtp() || createRtp() ||
+		(m_rtpForward = mySpan()->rtpForward())) {
 		if (setupConn()) {
 		    if (m_rtpForward) {
 			m_source = 0;

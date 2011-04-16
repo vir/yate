@@ -30,6 +30,14 @@
 ;  This setting is ignored if an userpass is set
 ;output=no
 
+; debug: bool: Enable local debug as soon as connecting
+;  This setting is ignored if any password is set
+;debug=no
+
+; color: bool: Enable colorization debug as soon as connecting
+;  This setting is ignored if telnet negotiation is disabled
+;color=no
+
 ; interactive: bool: Disable the TCP coalescing to improve interactivity
 ;  This is almost never required and needs Yate to run as superuser
 ;interactive=no

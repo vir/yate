@@ -1,3 +1,13 @@
+yate (3.3.3.svn4306) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4306: + Added rmanager settings to enable
+    debug and color on connect.  + Added a fallback code path if local
+    RTP cannot be created for MGCP.  + This prevents an initial RTP
+    timeout from being retriggered if RTCP interval is larger than
+    timeout.  + For timeout ignore RTCP packets if no RTP was received.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sun, 17 Apr 2011 02:19:14 +0400
+
 yate (3.3.3.svn4303) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4303: + Disable MGCP circuits for which DLCX

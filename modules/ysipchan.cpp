@@ -2651,6 +2651,7 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
 	return false;
 
     if (m_reInviting == ReinviteRequest) {
+	detachTransaction2();
 	// we emitted a client reINVITE, now we are forced to deal with it
 	if (code < 300) {
 	    MimeSdpBody* sdp = getSdpBody(msg->body);

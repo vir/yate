@@ -48,6 +48,13 @@
 ; Defaults to yes
 ;dropconfhangup=yes
 
+; lonelytimeout: integer: The interval (in milliseconds) a lonely user is allowed to
+;  remain in conference
+; This parameter can be overridden from routing by a 'pbxlonelytimeout' parameter
+; This parameter is applied on reload
+; Defaults to 0 (stay until hangup)
+;lonelytimeout=0
+
 
 ; Every other section defines an operation to trigger
 ;[operation]

@@ -437,10 +437,13 @@ void Connection::run()
     else {
 	m_auth = cfg().getValue("password") ? User : Admin;
 	m_output = cfg().getBoolValue("output",false);
+	if (Admin == m_auth)
+	    m_debug = cfg().getBoolValue("debug",false);
     }
     String hdr = cfg().getValue("header","YATE ${version}-${release} (http://YATE.null.ro) ready on ${nodename}.");
     Engine::runParams().replaceParams(hdr);
     if (cfg().getBoolValue("telnet",true)) {
+	m_colorize = cfg().getBoolValue("color",false);
 	// WILL SUPPRESS GO AHEAD, WILL ECHO - and enough BS and blanks to hide them
 	writeStr("\377\373\003\377\373\001\r      \b\b\b\b\b\b");
     }

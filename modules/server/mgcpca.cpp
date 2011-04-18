@@ -134,6 +134,12 @@ public:
 	{ return m_fxo; }
     inline bool fxs() const
 	{ return m_fxs; }
+    inline bool rtpForward() const
+	{ return m_rtpForward; }
+    inline bool sdpForward() const
+	{ return m_sdpForward; }
+    inline bool rqntEmbed() const
+	{ return m_rqntEmbed; }
     inline RqntType rqntType() const
 	{ return m_rqntType; }
     inline const char* rqntStr() const
@@ -161,6 +167,7 @@ private:
     bool m_sdpForward;
     bool m_fxo;
     bool m_fxs;
+    bool m_rqntEmbed;
     RqntType m_rqntType;
     String m_rqntStr;
     String m_notify;
@@ -869,7 +876,8 @@ MGCPSpan::MGCPSpan(const NamedList& params, const char* name, const MGCPEpInfo& 
     : SignallingCircuitSpan(params.getValue("debugname",name),
        static_cast<SignallingCircuitGroup*>(params.getObject("SignallingCircuitGroup"))),
       m_circuits(0), m_count(0), m_epId(ep), m_operational(false),
-      m_rtpForward(false), m_sdpForward(false), m_fxo(false), m_fxs(false)
+      m_rtpForward(false), m_sdpForward(false), m_fxo(false), m_fxs(false),
+      m_rqntEmbed(true), m_rqntType(RqntOnce)
 {
     Debug(&splugin,DebugAll,"MGCPSpan::MGCPSpan(%p,'%s') [%p]",
 	&params,name,this);
@@ -967,13 +975,19 @@ bool MGCPSpan::init(const NamedList& params)
     m_rtpForward = config->getBoolValue("forward_rtp",!(m_fxo || m_fxs));
     m_sdpForward = config->getBoolValue("forward_sdp",false);
     m_bearer = lookup(config->getIntValue("bearer",s_dict_payloads,-1),s_dict_gwbearerinfo);
+    m_rqntEmbed = config->getBoolValue("req_embed",true);
     m_rqntType = (RqntType)config->getIntValue("req_dtmf",s_dict_rqnt,RqntOnce);
-    if (config->getBoolValue("req_fax",true)) {
+    bool fax = config->getBoolValue("req_fax",true);
+    bool t38 = config->getBoolValue("req_t38",fax);
+    if (fax || t38) {
 	if (RqntNone == m_rqntType) {
 	    m_rqntType = RqntOnce;
 	    m_rqntStr.clear();
 	}
-	m_rqntStr.append("G/ft(N)",",");
+	if (fax)
+	    m_rqntStr.append("G/ft(N)",",");
+	if (t38)
+	    m_rqntStr.append("fxr/t38",",");
     }
     m_rqntStr = config->getValue("req_evts",m_rqntStr);
     bool clear = config->getBoolValue("clearconn",false);
@@ -1316,8 +1330,14 @@ bool MGCPCircuit::setupConn(const char* mode)
     mm->params.addParam("C",m_callId);
     if (m_connId)
 	mm->params.addParam("I",m_connId);
+    else if (mySpan()->rqntEmbed() && mySpan()->rqntStr() &&
+	(mySpan()->rqntType() != MGCPSpan::RqntNone) && !(fxs() || fxo())) {
+	mm->params.addParam("X",m_notify);
+	mm->params.addParam("R",mySpan()->rqntStr());
+    }
     if (m_gwFormatChanged && m_gwFormat)
 	mm->params.addParam("B",m_gwFormat);
+    bool rtpChange = false;
     if (mode)
 	mm->params.addParam("M",mode);
     else if (m_localRawSdp) {
@@ -1330,6 +1350,10 @@ bool MGCPCircuit::setupConn(const char* mode)
 	if (sdp) {
 	    mm->params.addParam("M","sendrecv");
 	    mm->sdp.append(sdp);
+	}
+	else {
+	    mm->params.addParam("M","inactive");
+	    rtpChange = true;
 	}
     }
     mm = sendSync(mm);
@@ -1348,7 +1372,7 @@ bool MGCPCircuit::setupConn(const char* mode)
 	m_needClear = true;
 	return false;
     }
-    m_localRtpChanged = false;
+    m_localRtpChanged = rtpChange;
     MimeSdpBody* sdp = static_cast<MimeSdpBody*>(mm->sdp[0]);
     if (sdp) {
 	String oldIp = m_rtpAddr;
@@ -1517,7 +1541,7 @@ bool MGCPCircuit::status(Status newStat, bool sync)
 	allowRtpChange = SignallingCircuit::status() == Connected &&
 	    hasLocalRtp() && m_localRtpChanged;
 	if (SignallingCircuit::status() != Connected) {
-	    if (mySpan()->rqntType() != MGCPSpan::RqntNone && !(fxs() || fxo()))
+	    if (mySpan()->rqntType() != MGCPSpan::RqntNone && !(fxs() || fxo() || mySpan()->rqntEmbed()))
 		sendRequest(0,mySpan()->rqntStr());
 	    sendPending();
 	}
@@ -1549,7 +1573,8 @@ bool MGCPCircuit::status(Status newStat, bool sync)
 	case Connected:
 	    // Create local rtp if we don't have one
 	    // Start it if we don't forward the rtp
-	    if (m_rtpForward || hasLocalRtp() || createRtp()) {
+	    if (m_rtpForward || hasLocalRtp() || createRtp() ||
+		(m_rtpForward = mySpan()->rtpForward())) {
 		if (setupConn()) {
 		    if (m_rtpForward) {
 			m_source = 0;
@@ -1874,6 +1899,13 @@ bool MGCPCircuit::processNotify(const String& package, const String& event, cons
 	    sendRequest(0,mySpan()->rqntStr());
 	// Generic events
 	if (event &= "ft")
+	    return enqueueEvent(SignallingCircuitEvent::GenericTone,"fax");
+    }
+    else if (package == "FXR") {
+	if (mySpan()->rqntType() == MGCPSpan::RqntMore)
+	    sendRequest(0,mySpan()->rqntStr());
+	// Fax Relay events
+	if (event &= "t38(start)")
 	    return enqueueEvent(SignallingCircuitEvent::GenericTone,"fax");
     }
     return false;

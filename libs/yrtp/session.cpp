@@ -711,7 +711,8 @@ void RTPSession::rtcpData(const void* data, int len)
     if ((m_direction & RecvOnly) == 0)
 	return;
     if (m_recv) {
-	m_timeoutTime = 0;
+	if ((m_timeoutTime != INF_TIMEOUT) || m_recv->ssrc())
+	    m_timeoutTime = 0;
 	m_recv->rtcpData(data,len);
     }
 }

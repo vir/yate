@@ -626,6 +626,7 @@ static inline void jingleAddParam(NamedList& list, const char* param, const char
 	copy->append(param,",");
 }
 
+#ifdef DEBUG
 // Utility function needed for debug: dump a candidate to a string
 static void dumpCandidate(String& buf, JGRtpCandidate* c, char sep = ' ')
 {
@@ -641,6 +642,7 @@ static void dumpCandidate(String& buf, JGRtpCandidate* c, char sep = ' ')
     buf << sep << "protocol=" << c->m_protocol;
     buf << sep << "type=" << c->m_type;
 }
+#endif
 
 
 /*

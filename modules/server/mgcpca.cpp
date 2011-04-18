@@ -1338,7 +1338,18 @@ bool MGCPCircuit::setupConn(const char* mode)
     if (m_gwFormatChanged && m_gwFormat)
 	mm->params.addParam("B",m_gwFormat);
     bool rtpChange = false;
-    if (mode)
+    const char* faxOpt = 0;
+    if (m_specialMode == "t38")
+	faxOpt = "a:image/t38";
+    else if (m_specialMode == "fax")
+	faxOpt = "a:PCMU;PCMA";
+    if (faxOpt) {
+	mm->params.addParam("M","sendrecv");
+	mm->params.addParam("L",faxOpt);
+	m_specialMode.clear();
+	rtpChange = true;
+    }
+    else if (mode)
 	mm->params.addParam("M",mode);
     else if (m_localRawSdp) {
 	mm->params.addParam("M","sendrecv");
@@ -1666,8 +1677,12 @@ bool MGCPCircuit::setParam(const String& param, const String& value)
     }
     else if (param == "rtp_rfc2833")
 	setRfc2833(value);
-    else if (param == "special_mode")
-	m_specialMode = value;
+    else if (param == "special_mode") {
+	if (value != m_specialMode) {
+	    rtpChanged = true;
+	    m_specialMode = value;
+	}
+    }
     else
 	return false;
     m_localRtpChanged = m_localRtpChanged || rtpChanged;

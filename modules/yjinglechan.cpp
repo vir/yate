@@ -608,12 +608,6 @@ static inline bool isTelEvent(const String& name)
 	(name &= "audio/telephone-event");
 };
 
-static inline void addValidParam(Message& m, const char* param, const char* value)
-{
-    if (!null(value))
-	m.addParam(param,value);
-}
-
 // Add a parameter to a list.
 // Optionally add it to a copy params string
 static inline void jingleAddParam(NamedList& list, const char* param, const char* value,

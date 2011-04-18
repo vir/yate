@@ -1191,8 +1191,14 @@ bool SigChannel::msgUpdate(Message& msg)
 	releaseCallAccepted(true);
 	return true;
     }
-    else if (oper == "request" || oper == "reject" || oper == "initiate")
+    else if (oper == "request" || oper == "reject")
 	return updateMedia(msg,oper);
+    else if (oper == "initiate") {
+	if (updateMedia(msg,oper))
+	    return true;
+	Debug(this,DebugMild,"No media update: %s",msg.getValue("reason"));
+	return false;
+    }
     else if (oper == "notify")
 	return notifyMedia(msg);
 

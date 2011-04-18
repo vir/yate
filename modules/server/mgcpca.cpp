@@ -1811,7 +1811,7 @@ bool MGCPCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params
 // Process incoming events for this circuit
 bool MGCPCircuit::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 {
-    if (tr->state() < MGCPTransaction::Responded)
+    if (tr->state() < MGCPTransaction::Responded && !tr->timeout())
 	return false;
     DDebug(&splugin,DebugAll,"MGCPCircuit::processEvent(%p,%p) [%p]",
 	tr,mm,this);
@@ -1820,6 +1820,8 @@ bool MGCPCircuit::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 	    tr->userData(0);
 	    m_msg = mm;
 	    m_tr = 0;
+	    if (tr->timeout())
+		enqueueEvent(SignallingCircuitEvent::Disconnected,"Timeout");
 	}
     }
     else if (tr->initial() && (tr->initial()->name() == "DLCX")) {

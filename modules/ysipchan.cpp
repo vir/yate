@@ -2638,11 +2638,18 @@ bool YateSIPConnection::process(SIPEvent* ev)
 bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg, int code)
 {
     if (ev->getState() == SIPTransaction::Cleared) {
+	bool fatal = (m_reInviting == ReinviteRequest);
 	detachTransaction2();
-	Message* m = message("call.update");
-	m->addParam("operation","reject");
-	m->addParam("error","timeout");
-	Engine::enqueue(m);
+	if (fatal) {
+	    setReason("Request Timeout",408);
+	    hangup();
+	}
+	else {
+	    Message* m = message("call.update");
+	    m->addParam("operation","reject");
+	    m->addParam("error","timeout");
+	    Engine::enqueue(m);
+	}
 	return false;
     }
     if (!msg || msg->isOutgoing() || !msg->isAnswer())

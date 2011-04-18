@@ -81,6 +81,7 @@ private:
     bool operTransfer(Message& msg);
     bool operDoTransfer(Message& msg);
     bool operForTransfer(Message& msg);
+    void postConference(Message& msg, int users, bool created);
 };
 
 class YPBX_API PBXList : public ChanAssistList
@@ -809,6 +810,8 @@ bool PBXAssist::operConference(Message& msg)
 	peer.clear();
     cancelTransfer(peer);
     const char* room = msg.getValue("room",m_room);
+    int users = 0;
+    bool created = false;
 
     if (peer) {
 	Message m("call.conference");
@@ -822,6 +825,8 @@ bool PBXAssist::operConference(Message& msg)
 
 	if (Engine::dispatch(m) && m.userData()) {
 	    m_room = m.getParam("room");
+	    users = m.getIntValue("users");
+	    created = m.getBoolValue("newroom");
 	    if (m_peer1 && (m_peer1 != peer)) {
 		// take the held party in the conference
 		Message* m2 = new Message("chan.masquerade");
@@ -840,6 +845,8 @@ bool PBXAssist::operConference(Message& msg)
 		Engine::enqueue(m2);
 		// no longer holding it
 		m_peer1.clear();
+		if (users > 0)
+		    users++;
 	    }
 	}
 	else
@@ -860,6 +867,8 @@ bool PBXAssist::operConference(Message& msg)
 	if (!Engine::dispatch(m))
 	    return errorBeep("conference failed");
 	m_room = room;
+	users = m.getIntValue("users");
+	created = m.getBoolValue("newroom");
     }
 
     setState("conference");
@@ -873,6 +882,7 @@ bool PBXAssist::operConference(Message& msg)
 	m->addParam("pbxstate",state());
 	Engine::enqueue(m);
     }
+    postConference(msg,users,created);
     return true;
 }
 
@@ -985,6 +995,7 @@ bool PBXAssist::operReturnConf(Message& msg)
     copyParams(m,msg);
     if (Engine::dispatch(m)) {
 	setState("conference");
+	postConference(msg,m.getIntValue("users"),m.getBoolValue("newroom"));
 	return true;
     }
     return errorBeep(m.getValue("reason",m.getValue("error","conference failed")));
@@ -1138,6 +1149,37 @@ bool PBXAssist::operForTransfer(Message& msg)
 	return true;
     }
     return errorBeep(m.getValue("reason",m.getValue("error","call failed")));
+}
+
+// Execute secondary operation after entering conference
+void PBXAssist::postConference(Message& msg, int users, bool created)
+{
+    if (created) {
+	String oper = msg.getValue("opercreate");
+	if (oper) {
+	    Message* m = new Message(msg);
+	    m->setParam("operation",oper);
+	    m->setParam("pbxstate",state());
+	    m->setParam("room",m_room);
+	    m->setParam("users",String(users));
+	    m->userData(msg.userData());
+	    Engine::enqueue(m);
+	}
+    }
+    if (users <= 0)
+	return;
+    String oper("operusers");
+    oper << users;
+    oper = msg.getValue(oper);
+    if (oper) {
+	Message* m = new Message(msg);
+	m->setParam("operation",oper);
+	m->setParam("pbxstate",state());
+	m->setParam("room",m_room);
+	m->setParam("users",String(users));
+	m->userData(msg.userData());
+	Engine::enqueue(m);
+    }
 }
 
 // Hangup handler, do any cleanups needed

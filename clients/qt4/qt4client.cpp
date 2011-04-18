@@ -3442,6 +3442,14 @@ bool QtClient::setProperty(QObject* obj, const char* name, const String& value)
 	case QVariant::KeySequence:
 	    ok = obj->setProperty(name,QVariant(QtClient::setUtf8(value)));
 	    break;
+	case QVariant::StringList:
+	    {
+		QStringList qList;
+		if (value)
+		    qList.append(setUtf8(value));
+		ok = obj->setProperty(name,QVariant(qList));
+	    }
+	    break;
 	case QVariant::Invalid:
 	    err = "no such property";
 	    break;

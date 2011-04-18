@@ -997,8 +997,12 @@ public:
      * Set the list of properties to save
      * @param list The new list of properties to save
      */
-    void setSaveProps(QStringList list)
-	{ m_saveProps = list; }
+    void setSaveProps(QStringList list) {
+	    if (list.size() != 1)
+		m_saveProps = list;
+	    else
+		m_saveProps = list[0].split(QChar(','),QString::SkipEmptyParts);
+	}
 
     /**
      * Retrieve a QObject descendent of this object

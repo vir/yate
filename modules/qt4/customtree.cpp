@@ -151,6 +151,14 @@ static inline void stableSort(QVector<QtTreeItemKey>& v,
 	qStableSort(v.begin(),v.end(),caseSensitiveGreaterThan);
 }
 
+// Retrieve a string from a list
+static inline const String& objListItem(ObjList* list, int index)
+{
+    GenObject* gen = list ? (*list)[index] : 0;
+    return gen ? gen->toString() : String::empty();
+}
+
+
 
 /*
  * QtTreeItem
@@ -170,11 +178,14 @@ QtTreeItem::~QtTreeItem()
 }
 
 
+
 /*
  * QtCustomTree
  */
-QtCustomTree::QtCustomTree(const char* name, const NamedList& params, QWidget* parent)
+QtCustomTree::QtCustomTree(const char* name, const NamedList& params, QWidget* parent,
+    bool applyParams)
     : QtTree(name,parent),
+    m_hasCheckableCols(false),
     m_menu(0),
     m_autoExpand(false),
     m_rowHeight(-1),
@@ -202,33 +213,44 @@ QtCustomTree::QtCustomTree(const char* name, const NamedList& params, QWidget* p
 	else {
 	    QHeaderView* header = QTreeView::header();
 	    ObjList* id = columns->split(',',false);
+	    ObjList* title = params["columns.title"].split(',',true);
+	    ObjList* width = params["columns.width"].split(',',true);
+	    ObjList* sizeMode = params["columns.resize"].split(',',true);
+	    ObjList* check = params["columns.check"].split(',',false);
 	    setColumnCount(id->count());
 	    int n = 0;
 	    for (ObjList* o = id->skipNull(); o; o = o->skipNext(), n++) {
 		String* name = static_cast<String*>(o->get());
-		String pref("column." + *name);
-		String* cap = params.getParam(pref + ".caption");
-		if (!cap)
-		    cap = name;
-		int ww = params.getIntValue(pref + ".width");
+		String caption = objListItem(title,n);
+		hdr->setText(n,QtClient::setUtf8(caption ? caption : *name));
+		hdr->setData(n,RoleId,QtClient::setUtf8(name->toLower()));
+		int ww = objListItem(width,n).toInteger(-1);
 		if (ww > 0)
 		    setColumnWidth(n,ww);
-		String* sizeMode = header ? params.getParam(pref + ".size") : 0;
-		if (!TelEngine::null(sizeMode)) {
-		    if (*sizeMode == "fixed")
-			header->setResizeMode(n,QHeaderView::Fixed);
-		    else if (*sizeMode == "fitcontent")
-			header->setResizeMode(n,QHeaderView::ResizeToContents);
-		    else if (*sizeMode == "stretch")
-			header->setResizeMode(n,QHeaderView::Stretch);
+		if (check->find(*name)) {
+		    hdr->setData(n,RoleCheckable,QVariant(true));
+		    m_hasCheckableCols = true;
 		}
-		hdr->setData(n,-1,QtClient::setUtf8(*name));
-		hdr->setText(n,QtClient::setUtf8(*cap));
+		// Header
+		if (!header)
+		    continue;
+		const String& szMode = header ? objListItem(sizeMode,n) : String::empty();
+		if (szMode == "fixed")
+		    header->setResizeMode(n,QHeaderView::Fixed);
+		else if (szMode == "stretch")
+		    header->setResizeMode(n,QHeaderView::Stretch);
+		else if (szMode == "contents")
+		    header->setResizeMode(n,QHeaderView::ResizeToContents);
+		else
+		    header->setResizeMode(n,QHeaderView::Interactive);
 	    }
 	    TelEngine::destruct(id);
+	    TelEngine::destruct(title);
+	    TelEngine::destruct(width);
+	    TelEngine::destruct(sizeMode);
+	    TelEngine::destruct(check);
 	}
     }
-    setParams(params);
     // Connect signals
     QtClient::connectObjects(this,SIGNAL(currentItemChanged(QTreeWidgetItem*,QTreeWidgetItem*)),
 	this,SLOT(selectionChangedSlot(QTreeWidgetItem*,QTreeWidgetItem*)));
@@ -240,6 +262,9 @@ QtCustomTree::QtCustomTree(const char* name, const NamedList& params, QWidget* p
 	this,SLOT(itemExpandedSlot(QTreeWidgetItem*)));
     QtClient::connectObjects(this,SIGNAL(itemCollapsed(QTreeWidgetItem*)),
 	this,SLOT(itemCollapsedSlot(QTreeWidgetItem*)));
+    // Set params
+    if (applyParams)
+	setParams(params);
 }
 
 // Destructor
@@ -285,8 +310,24 @@ bool QtCustomTree::getTableRow(const String& item, NamedList* data)
 	name().c_str(),item.c_str(),it);
     if (!it)
 	return false;
-    if (data)
+    if (data) {
 	data->copyParams(*it);
+	// Get checked items
+	if (m_hasCheckableCols) {
+	    QTreeWidgetItem* hdr = headerItem();
+	    int n = hdr ? columnCount() : 0;
+	    for (int i = 0; i < n; i++) {
+		if (!hdr->data(i,RoleCheckable).toBool())
+		    continue;
+		String id;
+		getItemData(id,*hdr,i);
+		if (!id)
+		    continue;
+		bool checked = it->checkState(i) != Qt::Unchecked;
+		data->setParam("check:" + id,String::boolText(checked));
+	    }
+	}
+    }
     return true;
 }
 
@@ -443,13 +484,17 @@ int QtCustomTree::itemType(const String& name) const
 QString QtCustomTree::getSorting()
 {
     String t;
-    QHeaderView* h = QTreeView::header();
+    QHeaderView* h = isSortingEnabled() ? QTreeView::header() : 0;
     if (h) {
 	int col = h->sortIndicatorSection();
 	int sort = h->sortIndicatorOrder();
-	if (col >= 0 && col < columnCount() &&
-	    (sort == Qt::AscendingOrder || sort == Qt::DescendingOrder))
-	    t << col << "," << sort;
+	if (col >= 0 && col < columnCount()) {
+	    String id;
+	    QTreeWidgetItem* hdr = headerItem();
+	    if (hdr)
+		getItemData(id,*hdr,col);
+	    t << (id ? id : String(col)) << "," << String::boolText(sort == Qt::AscendingOrder);
+	}
     }
     return QtClient::setUtf8(t);
 }
@@ -461,6 +506,8 @@ void QtCustomTree::updateSorting(const String& key, Qt::SortOrder sort)
     if (!h)
 	return;
     int col = key.toInteger(-1);
+    if (col < 0)
+	col = getColumn(key);
     if (col >= 0 && col < columnCount())
 	h->setSortIndicator(col,sort);
 }
@@ -695,6 +742,8 @@ void QtCustomTree::setupItem(QtTreeItem* item, bool adjustWidget)
 	    item->setSizeHint(0,sz);
 	}
     }
+    // Set checkable columns
+    uncheckItem(*item);
 }
 
 // Set and item's row height hint
@@ -707,6 +756,20 @@ void QtCustomTree::setItemRowHeight(QTreeWidgetItem* item)
     item->setSizeHint(0,sz);
 }
 
+// Retrieve a column by it's id
+int QtCustomTree::getColumn(const String& id)
+{
+    QTreeWidgetItem* hdr = headerItem();
+    int n = hdr ? columnCount() : 0;
+    for (int i = 0; i < n; i++) {
+	String tmp;
+	getItemData(tmp,*hdr,i);
+	if (tmp == id)
+	    return i;
+    }
+    return -1;
+}
+
 // Show or hide empty children.
 void QtCustomTree::showEmptyChildren(bool show, QtTreeItem* parent)
 {
@@ -716,11 +779,11 @@ void QtCustomTree::showEmptyChildren(bool show, QtTreeItem* parent)
     SafeTree tree(this);
     int n = root->childCount();
     for (int i = 0; i < n; i++) {
-	QTreeWidgetItem* item = root->child(i);
+	QtTreeItem* item = static_cast<QtTreeItem*>(root->child(i));
 	if (!item)
 	    continue;
 	if (show) {
-	    item->setHidden(false);
+	    showItem(*item,true);
 	    continue;
 	}
 	// Find a displayed child. Hide the item if not found
@@ -731,7 +794,7 @@ void QtCustomTree::showEmptyChildren(bool show, QtTreeItem* parent)
 	    if (child && !child->isHidden())
 		break;
 	}
-	item->setHidden(!child);
+	showItem(*item,child != 0);
     }
 }
 
@@ -829,6 +892,8 @@ void QtCustomTree::setItemStatsTemplate(QString value)
 // Retrieve a comma separated list with column widths
 QString QtCustomTree::colWidths()
 {
+    if (!columnCount())
+	return QString();
     String t;
     int cols = columnCount();
     for (int i = 0; i < cols; i++)
@@ -839,8 +904,12 @@ QString QtCustomTree::colWidths()
 // Set column widths
 void QtCustomTree::setColWidths(QString widths)
 {
+    if (!columnCount())
+	return;
     QStringList list = widths.split(",");
     for (int i = 0; i < list.size(); i++) {
+	if (!list[i].length())
+	    continue;
 	int width = list[i].toInt();
 	if (width >= 0)
 	    setColumnWidth(i,width);
@@ -932,9 +1001,29 @@ bool QtCustomTree::updateItem(QtTreeItem& item, const NamedList& params)
     bool all = (&params == &item);
     if (!all)
 	item.copyParams(params);
+    const NamedList& p = all ? (const NamedList&)item : params;
     QWidget* w = itemWidget(&item,0);
     if (w)
-	QtUIWidget::setParams(w,all ? (const NamedList&)item : params);
+	QtUIWidget::setParams(w,p);
+    else {
+	QTreeWidgetItem* hdr = headerItem();
+	int n = hdr ? columnCount() : 0;
+	for (int col = 0; col < n; col++) {
+	    String id;
+	    getItemData(id,*hdr,col);
+	    if (!id)
+		continue;
+	    String* tmp = p.getParam(id);
+	    if (tmp)
+		item.setText(col,QtClient::setUtf8(*tmp));
+	    tmp = p.getParam(id + "_image");
+	    if (tmp)
+		item.setIcon(col,QIcon(QtClient::setUtf8(*tmp)));
+	    tmp = p.getParam("check:" + id);
+	    if (tmp)
+		item.setCheckState(col,tmp->toBoolean() ? Qt::Checked : Qt::Unchecked);
+	}
+    }
     applyItemTooltip(item);
     return true;
 }
@@ -965,6 +1054,26 @@ void QtCustomTree::itemRemoved(QtTreeItem& item, QtTreeItem* parent)
 	applyItemStatistics(*parent);
 }
 
+// Handle item visiblity changes
+void QtCustomTree::itemVisibleChanged(QtTreeItem& item)
+{
+    // Uncheck columns for invisible item
+    if (item.isHidden())
+	uncheckItem(item);
+}
+
+// Uncheck all checkable columns in a given item
+void QtCustomTree::uncheckItem(QtTreeItem& item)
+{
+    if (!m_hasCheckableCols)
+	return;
+    QTreeWidgetItem* hdr = headerItem();
+    int n = hdr ? columnCount() : 0;
+    for (int i = 0; i < n; i++)
+	if (hdr->data(i,RoleCheckable).toBool())
+	    item.setCheckState(i,Qt::Unchecked);
+}
+
 // Update a tree item's tooltip
 void QtCustomTree::applyItemTooltip(QtTreeItem& item)
 {
@@ -976,11 +1085,8 @@ void QtCustomTree::applyItemTooltip(QtTreeItem& item)
     if (!tooltip)
 	return;
     item.replaceParams(tooltip);
-    QWidget* w = itemWidget(&item,0);
-    if (w)
-	w->setToolTip(QtClient::setUtf8(tooltip));
-    else
-	item.setToolTip(0,QtClient::setUtf8(tooltip));
+    for (int n = columnCount() - 1; n >= 0; n--) 
+	item.setToolTip(n,QtClient::setUtf8(tooltip));
 }
 
 // Fill a list with item statistics.
@@ -1013,7 +1119,7 @@ void QtCustomTree::applyItemStatistics(QtTreeItem& item)
  * ContactList
  */
 ContactList::ContactList(const char* name, const NamedList& params, QWidget* parent)
-    : QtCustomTree(name,params,parent),
+    : QtCustomTree(name,params,parent,false),
     m_flatList(true),
     m_showOffline(true),
     m_hideEmptyGroups(true),
@@ -1030,10 +1136,6 @@ ContactList::ContactList(const char* name, const NamedList& params, QWidget* par
     m_savedIndent = indentation();
     m_groupCountWidget = params["groupcount"];
     m_noGroupText = "None";
-    //FIXME
-    m_saveProps << "_yate_flatlist";
-    m_saveProps << "_yate_showofflinecontacts";
-    m_saveProps << "_yate_hideemptygroups";
     setParams(params);
 }
 
@@ -1263,7 +1365,7 @@ void ContactList::setShowOffline(bool value)
 	if (!c)
 	    continue;
 	if (c->offline())
-	    c->setHidden(!m_showOffline);
+	    showItem(*c,m_showOffline);
     }
     listChanged();
     // Avoid selecting a hidden item
@@ -1275,17 +1377,22 @@ void ContactList::setShowOffline(bool value)
 // Retrieve tree sorting
 QString ContactList::getSorting()
 {
+    if (!m_sortKey)
+	return QtCustomTree::getSorting();
     String tmp = m_sortKey;
-    if (tmp)
-	tmp << "," << String::boolText(m_sortOrder == Qt::AscendingOrder);
+    tmp << "," << String::boolText(m_sortOrder == Qt::AscendingOrder);
     return QtClient::setUtf8(tmp);
 }
 
 // Set tree sorting
 void ContactList::updateSorting(const String& key, Qt::SortOrder sort)
 {
-    m_sortKey = key;
-    m_sortOrder = sort;
+    if (!isSortingEnabled()) {
+	m_sortKey = key;
+	m_sortOrder = sort;
+    }
+    else
+	QtCustomTree::updateSorting(key,sort);
 }
 
 // Optimized add. Set the whole tree
@@ -1414,24 +1521,10 @@ bool ContactList::updateContact(ContactItem& c, const NamedList& params, bool al
     Debug(ClientDriver::self(),DebugAll,"ContactList(%s)::updateContact(%p,%s) all=%u %s",
 	name().c_str(),&c,c.id().c_str(),all,tmp.safe());
 #endif
-    if (&params != &c)
-	c.copyParams(params);
-    else
-	all = true;
-    const NamedList* p = all ? &c : &params;
-    QWidget* w = itemWidget(&c,0);
-    if (w)
-	QtUIWidget::setParams(w,*p);
-    else {
-	String* name = p->getParam("name");
-	if (name)
-	    c.setText(0,QtClient::setUtf8(*name));
-	// TODO: update status, image ...
-    }
-    applyItemTooltip(c);
+    QtCustomTree::updateItem(c,params);
     // Show/hide
     if (c.type() == TypeContact && !m_showOffline)
-	c.setHidden(c.offline());
+	showItem(c,!c.offline());
     return true;
 }
 

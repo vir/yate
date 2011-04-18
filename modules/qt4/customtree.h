@@ -125,12 +125,23 @@ public:
     };
 
     /**
+     * List item data role
+     */
+    enum ItemDataRole {
+	RoleId = Qt::UserRole,           // Item id (used in headers)
+	RoleCheckable,                   // Column checkable (used in headers)
+	RoleCount
+    };
+
+    /**
      * Constructor
      * @param name Object name
      * @param params Parameters
      * @param parent Optional parent
+     * @param applyParams Apply parameters (call setParams())
      */
-    QtCustomTree(const char* name, const NamedList& params, QWidget* parent = 0);
+    QtCustomTree(const char* name, const NamedList& params, QWidget* parent = 0,
+	bool applyParams = true);
 
     /**
      * Destructor
@@ -337,6 +348,36 @@ public:
      * @param item Item to set
      */
     void setItemRowHeight(QTreeWidgetItem* item);
+
+    /**
+     * Retrieve string data associated with a column
+     * @param buf Destination string
+     * @param item The tree item whose data to retreive
+     * @param column Column to retrieve
+     * @param role Data role to retrieve, defaults to id
+     */
+    inline void getItemData(String& buf, QTreeWidgetItem& item, int column,
+	int role = RoleId)
+	{ QtClient::getUtf8(buf,item.data(column,role).toString()); }
+
+    /**
+     * Retrieve a column by it's id
+     * @param id The column id to find
+     * @return Column number, -1 if not found
+     */
+    int getColumn(const String& id);
+
+    /**
+     * Show or hide an item
+     * @param item The item
+     * @param show True to show, false to hide
+     */
+    inline void showItem(QtTreeItem& item, bool show) {
+	    if (item.isHidden() != show)
+		return;
+	    item.setHidden(!show);
+	    itemVisibleChanged(item);
+	}
 
     /**
      * Show or hide empty children.
@@ -672,6 +713,18 @@ protected:
     virtual void itemRemoved(QtTreeItem& item, QtTreeItem* parent);
 
     /**
+     * Handle item visiblity changes
+     * @param item Changed item
+     */
+    virtual void itemVisibleChanged(QtTreeItem& item);
+
+    /**
+     * Uncheck all checkable columns in a given item
+     * @param item The item
+     */
+    virtual void uncheckItem(QtTreeItem& item);
+
+    /**
      * Update a tree item's tooltip
      * @param item Item to update
      */
@@ -691,6 +744,7 @@ protected:
      */
     void applyItemStatistics(QtTreeItem& item);
 
+    bool m_hasCheckableCols;             // True if we have checkable columns
     QMenu* m_menu;                       // Tree context menu
     bool m_autoExpand;                   // Items are expanded when added
     int m_rowHeight;                     // Tree row height
@@ -1034,7 +1088,7 @@ class ContactItem : public QtTreeItem
 public:
     inline ContactItem(const char* id, const NamedList& p = NamedList::empty(),
 	bool contact = true)
-	: QtTreeItem(id,ContactList::contactType(p["type"]),p.getValue("name"))
+	: QtTreeItem(id,ContactList::contactType(p["type"]))
 	{}
     // Build and return a list of groups
     inline ObjList* groups() const

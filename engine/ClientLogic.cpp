@@ -354,6 +354,7 @@ static const String s_mucBan = "room_member_ban";
 static const String s_mucRoomShowLog = "room_showlog";
 static const String s_mucMemberShowLog = "room_member_showlog";
 static const String s_storeContact = "storecontact";
+static const String s_mucInviteAdd = "invite_add";
 // Not selected string(s)
 static String s_notSelected = "-none-";
 // Maximum number of call log entries
@@ -745,6 +746,15 @@ static inline String resStatusImage(int stat)
     if (img)
 	return Client::s_skinPath + img;
     return String();
+}
+
+// Retrieve the status of a contact
+static inline int contactStatus(ClientContact& c)
+{
+    ClientResource* res = c.status();
+    if (res)
+	return res->m_status;
+    return c.online() ? ClientResource::Online : ClientResource::Offline;
 }
 
 // Set the image parameter of a list
@@ -2288,6 +2298,28 @@ static inline ClientWizard* findTempWizard(Window* wnd)
     return o ? static_cast<ClientWizard*>(o->get()) : 0;
 }
 
+// Retrieve selected contacts from UI
+static void getSelectedContacts(ObjList& list, const String& name, Window* w,
+    const String& itemToGet)
+{
+    if (!Client::valid())
+	return;
+    String param("check:" + itemToGet);
+    NamedList p("");
+    Client::self()->getOptions(name,&p,w);
+    NamedIterator iter(p);
+    for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	if (!ns->name())
+	    continue;
+	NamedList* tmp = new NamedList(ns->name());
+	Client::self()->getTableRow(name,*tmp,tmp,w);
+	if (tmp->getBoolValue(param))
+	    list.append(tmp);
+	else
+	    TelEngine::destruct(tmp);
+    }
+}
+
 // Show the MUC invite window
 static bool showMucInvite(ClientContact& contact, ClientAccountList* accounts)
 {
@@ -2311,25 +2343,50 @@ static bool showMucInvite(ClientContact& contact, ClientAccountList* accounts)
     p.addParam("show:invite_password",String::boolText(room == 0));
     p.addParam("invite_account",contact.accountName());
     p.addParam("invite_text","");
+    String showOffline;
+    Client::self()->getProperty(s_inviteContacts,"_yate_showofflinecontacts",showOffline,w);
+    p.addParam("check:muc_invite_showofflinecontacts",showOffline);
     Client::self()->setParams(&p,w);
     Client::self()->clearTable(s_inviteContacts,w);
     if (accounts) {
 	NamedList rows("");
+	String sel;
+	if (!room)
+	    sel = contact.uri();
 	for (ObjList* oa = accounts->accounts().skipNull(); oa; oa = oa->skipNext()) {
 	    ClientAccount* a = static_cast<ClientAccount*>(oa->get());
 	    for (ObjList* oc = a->contacts().skipNull(); oc; oc = oc->skipNext()) {
 	        ClientContact* c = static_cast<ClientContact*>(oc->get());
-		NamedList* p = new NamedList(c->toString());
+		int stat = contactStatus(*c);
+		String id = c->uri();
+		// Check if contact already added
+		NamedString* added = rows.getParam(id);
+		if (added) {
+		    NamedList* nl = YOBJECT(NamedList,added);
+		    int aStat = nl ? nl->getIntValue("contact_status_value") :
+			ClientResource::Unknown;
+		    // At least one of them offline: the greater status wins
+		    if ((aStat < ClientResource::Online ||
+			stat < ClientResource::Online) && stat < aStat)
+			continue;
+		    // Both online: the lesser status wins
+		    if (stat >= aStat)
+			continue;
+		    rows.clearParam(added);
+		}
+		// Add the contact
+		NamedList* p = new NamedList(id);
 		fillChatContact(*p,*c,true,true);
-		if (!room && c == &contact)
-		    p->addParam("check:enabled",String::boolText(true));
-		rows.addParam(new NamedPointer(c->toString(),p,String::boolText(true)));
+		p->addParam("contact_status_value",String(stat));
+		if (id == sel)
+		    p->addParam("check:name",String::boolText(true));
+		rows.addParam(new NamedPointer(id,p,String::boolText(true)));
 	    }
 	}
 	Client::self()->updateTableRows(s_inviteContacts,&rows,false,w);
+	if (sel)
+	    Client::self()->setSelect(s_inviteContacts,sel,w);
     }
-    if (!room)
-	Client::self()->setSelect(s_inviteContacts,contact.toString(),w);
     Client::self()->setVisible(s_wndMucInvite,true,true);
     return true;
 }
@@ -7892,6 +7949,23 @@ bool DefaultLogic::handleDialogAction(const String& name, bool& retVal, Window* 
 	    }
 	}
     }
+    else if (dlg == s_mucInviteAdd) {
+	// Add contact to muc invite
+	String contact;
+	Client::self()->getText("inputdialog_input",contact,false,wnd);
+	String user, domain;
+	splitContact(contact,user,domain);
+	retVal = user && domain;
+	if (retVal && Client::valid() &&
+	    !Client::self()->getTableRow(s_inviteContacts,contact,0,wnd)) {
+	    NamedList row("");
+	    row.addParam("name",contact);
+	    row.addParam("contact",contact);
+	    row.addParam("check:name",String::boolText(true));
+	    row.addParam("name_image",Client::s_skinPath + "addcontact.png");
+	    Client::self()->addTableRow(s_inviteContacts,contact,&row,false,wnd);
+	}
+    }
     else
 	retVal = context && Client::self()->action(wnd,context);
     return true;
@@ -8287,6 +8361,11 @@ bool DefaultLogic::handleMucsAction(const String& name, Window* wnd, NamedList* 
 	joinRoom(room,params && params->getBoolValue("force"));
 	return room != 0;
     }
+    // Add contact to muc invite list
+    if (name == s_mucInviteAdd) {
+	showInput(wnd,name,"Invite friend to conference",name,"Invite friend");
+	return true;
+    }
     return false;
 }
 
@@ -8325,21 +8404,14 @@ bool DefaultLogic::handleMucInviteOk(Window* w)
     }
     String text;
     Client::self()->getText("invite_text",text,false,w);
-    NamedList p("");
-    Client::self()->getOptions(s_inviteContacts,&p,w);
+    ObjList chosen;
+    getSelectedContacts(chosen,s_inviteContacts,w,"name");
     bool inviteNow = (room || r->resource().online());
     unsigned int count = 0;
     r->m_params.clearParam("internal.invite",'.');
-    unsigned int n = p.length();
-    for (unsigned int i = 0; i < n; i++) {
-	NamedString* ns = p.getParam(i);
-	if (!(ns && ns->name()))
-	    continue;
-	NamedList tmp("");
-	Client::self()->getTableRow(s_inviteContacts,ns->name(),&tmp,w);
-	if (!tmp.getBoolValue("check:enabled"))
-	    continue;
-	const String& uri = tmp["contact"];
+    for (ObjList* o = chosen.skipNull(); o; o = o->skipNext()) {
+	NamedList* nl = static_cast<NamedList*>(o->get());
+	const String& uri = (*nl)["contact"];
 	if (inviteNow)
 	    Engine::enqueue(buildMucRoom("invite",account,room,text,uri));
 	else {

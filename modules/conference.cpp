@@ -102,6 +102,8 @@ public:
 	{ return m_maxLock; }
     inline bool timeout(const Time& time) const
 	{ return m_expire && m_expire < time; }
+    inline bool created()
+	{ return m_created && !(m_created = false); }
     void mix(ConfConsumer* cons = 0);
     void addChannel(ConfChan* chan, bool player = false);
     void delChannel(ConfChan* chan);
@@ -121,6 +123,7 @@ private:
     String m_notify;
     String m_playerId;
     bool m_lonely;
+    bool m_created;
     ConfChan* m_record;
     int m_rate;
     int m_users;
@@ -146,6 +149,8 @@ public:
 	{ return m_utility; }
     inline bool isRecorder() const
 	{ return m_room && (m_room->recorder() == this); }
+    inline ConfRoom* room() const
+	{ return m_room; }
     void populateMsg(Message& msg) const;
 private:
     void alterMsg(Message& msg, const char* event);
@@ -279,7 +284,7 @@ ConfRoom* ConfRoom::get(const String& name, const NamedList* params)
 
 // Private constructor, always called from ConfRoom::get() with mutex hold
 ConfRoom::ConfRoom(const String& name, const NamedList& params)
-    : m_name(name), m_lonely(false), m_record(0),
+    : m_name(name), m_lonely(false), m_created(true), m_record(0),
       m_rate(8000), m_users(0), m_maxusers(10), m_maxLock(200),
       m_expire(0), m_lonelyInterval(0)
 {
@@ -953,7 +958,6 @@ bool ConfHandler::received(Message& msg)
     c->initChan();
     if (chan->connect(c,reason,false)) {
 	msg.setParam("peerid",c->id());
-	c->deref();
 	msg.setParam("room",__plugin.prefix()+room);
 	if (peer) {
 	    // create a conference leg for the old peer too
@@ -962,6 +966,11 @@ bool ConfHandler::received(Message& msg)
 	    peer->connect(p,reason,false);
 	    p->deref();
 	}
+	if (c->room()) {
+	    msg.setParam("newroom",String::boolText(c->room()->created()));
+	    msg.setParam("users",String(c->room()->users()));
+	}
+	c->deref();
 	return true;
     }
     c->destruct();
@@ -1074,8 +1083,12 @@ bool ConferenceDriver::msgExecute(Message& msg, String& dest)
 	if (ch->connect(c,msg.getValue("reason"))) {
 	    c->callConnect(msg);
 	    msg.setParam("peerid",c->id());
-	    c->deref();
 	    msg.setParam("room",prefix()+dest);
+	    if (c->room()) {
+		msg.setParam("newroom",String::boolText(c->room()->created()));
+		msg.setParam("users",String(c->room()->users()));
+	    }
+	    c->deref();
 	    return true;
 	}
 	else {

@@ -109,7 +109,9 @@ private:
     // Set RTP data from circuit to message
     bool addRtp(Message& msg, bool possible = false);
     // Update media type, may have switched to fax
-    bool updateMedia(Message& msg);
+    bool updateMedia(Message& msg, const String& operation);
+    // Notification from peer channel
+    bool notifyMedia(Message& msg);
     // Update circuit and format in source, optionally in consumer too
     void updateCircuitFormat(SignallingEvent* event, bool consumer);
     // Open or update format source/consumer
@@ -1189,8 +1191,11 @@ bool SigChannel::msgUpdate(Message& msg)
 	releaseCallAccepted(true);
 	return true;
     }
-    else if (oper == "request")
-	return updateMedia(msg);
+    else if (oper == "request" || oper == "reject" || oper == "initiate")
+	return updateMedia(msg,oper);
+    else if (oper == "notify")
+	return notifyMedia(msg);
+
     if (SignallingEvent::Unknown == evt)
 	return Channel::msgUpdate(msg);
     Lock lock(m_mutex);
@@ -1505,6 +1510,7 @@ void SigChannel::evCircuit(SignallingEvent* event)
 		bool inband = ev->getBoolValue("inband");
 		Message* msg = message("call.fax",false,true);
 		msg->setParam("detected",(inband ? "inband" : "signal"));
+		msg->setParam("rtp_forward",String::boolText(m_rtpForward));
 		plugin.copySigMsgParams(*msg,event,&s_noPrefixParams);
 		Engine::enqueue(msg);
 		break;
@@ -1565,7 +1571,7 @@ bool SigChannel::addRtp(Message& msg, bool possible)
     return ok;
 }
 
-bool SigChannel::updateMedia(Message& msg)
+bool SigChannel::updateMedia(Message& msg, const String& operation)
 {
     bool hadRtp = !m_rtpForward;
     bool rtpFwd = msg.getBoolValue("rtp_forward",m_rtpForward);
@@ -1580,22 +1586,71 @@ bool SigChannel::updateMedia(Message& msg)
 	msg.setParam("reason","Circuit missing or not connected");
 	return false;
     }
+    if (operation == "request") {
+	String tmp = msg;
+	msg = "rtp";
+	bool ok = cic->setParams(msg) && cic->status(SignallingCircuit::Connected,true);
+	msg = tmp;
+	if (!ok) {
+	    msg.setParam("error","failure");
+	    msg.setParam("reason","Circuit does not support media change");
+	    return false;
+	}
+	m_rtpForward = cic->getBoolParam("rtp_forward");
+	if (m_rtpForward && hadRtp)
+	    clearEndpoint();
+	Message* m = message("call.update",false,true);
+	m->addParam("operation","notify");
+	cic->getParams(*m,"rtp");
+	return Engine::enqueue(m);
+    }
+    else if (operation == "initiate") {
+	const char* mode = msg.getValue("mode");
+	if (!mode) {
+	    bool audio = msg.getBoolValue("media",true);
+	    if (msg.getBoolValue("media_image",!audio))
+		mode = "t38";
+	    else if (audio)
+		mode = "fax";
+	}
+	if (TelEngine::null(mode))
+	    return false;
+	if (!(cic->setParam("rtp_forward",String::boolText(rtpFwd)) &&
+	    cic->setParam("special_mode",mode) &&
+	    cic->status(SignallingCircuit::Connected,true))) {
+	    msg.setParam("error","failure");
+	    msg.setParam("reason","Circuit does not support media change");
+	    return false;
+	}
+	m_rtpForward = cic->getBoolParam("rtp_forward");
+	if (m_rtpForward && hadRtp)
+	    clearEndpoint();
+	Message m("call.update");
+	complete(m);
+	m.addParam("operation","request");
+	m.addParam("mandatory",String::boolText(true));
+	cic->getParams(m,"rtp");
+	if (Engine::dispatch(m))
+	    return true;
+	msgDrop(msg,"nomedia");
+    }
+    else if (operation == "reject")
+	msgDrop(msg,"nomedia");
+    return false;
+}
+
+bool SigChannel::notifyMedia(Message& msg)
+{
+    if (!(m_rtpForward && msg.getBoolValue("rtp_forward")))
+	return false;
+    RefPointer<SignallingCircuit> cic = getCircuit();
+    if (!(cic && cic->connected()))
+	return false;
     String tmp = msg;
     msg = "rtp";
     bool ok = cic->setParams(msg) && cic->status(SignallingCircuit::Connected,true);
     msg = tmp;
-    if (!ok) {
-	msg.setParam("error","failure");
-	msg.setParam("reason","Circuit does not support media change");
-	return false;
-    }
-    m_rtpForward = cic->getBoolParam("rtp_forward");
-    if (m_rtpForward && hadRtp)
-	clearEndpoint();
-    Message* m = message("call.update",false,true);
-    m->addParam("operation","notify");
-    cic->getParams(*m,"rtp");
-    return Engine::enqueue(m);
+    return ok;
 }
 
 void SigChannel::updateCircuitFormat(SignallingEvent* event, bool consumer)

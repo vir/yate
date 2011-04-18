@@ -1,3 +1,31 @@
+yate (3.3.3.svn4321) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4321: + For timeout ignore RTCP packets if
+    no RTP was received.  + Conditionally compile function used only for
+    debug purposes.  + Removed unused function.  + Bug report and patch
+    provided by Matthew.  + Clear the initiated reINVITE transaction on
+    completion, allow further reINVITEs.  + Bug report and patch
+    provided by Matthew.  + Terminate a SIP call for which we had a
+    timeout on a reINVITE as media state becomes uncertain.  + Drop a
+    call for which a CRCX or MDCX had timed out.  + Properly handle the
+    MGCP transaction timeouts in the circuits.  + Support switching MGCP
+    circuits to T.38 or G.711 fax.  + Support initiation and updating of
+    T.38 fax mode in sig channels.  + Print a mild warning when failed
+    to initiate a media update.  + Handle StringList type when setting
+    an object's property.  + Handle comma separated list of properties
+    to save for a custom widget.  + Custom tree widget's columns can now
+    be configured (including checkable columns) and updated.  + Added
+    option to hide/show offline contacts when inviting to conference.
+    Avoid adding contact duplicates in the list. The user can now add
+    arbitrary contacts to the list.  + Return the current number of
+    users in conference in the call.conference or call.execute messages.
+    + Return a flag if a new conference room has been created in the
+    call.conference or call.execute messages.  + Added possibility to
+    execute secondary operations after entering a conference depending
+    of the number of participants and its freshenss.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 19 Apr 2011 02:19:25 +0400
+
 yate (3.3.3.svn4306) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4306: + Added rmanager settings to enable

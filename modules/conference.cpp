@@ -146,6 +146,8 @@ public:
 	{ return m_utility; }
     inline bool isRecorder() const
 	{ return m_room && (m_room->recorder() == this); }
+    inline ConfRoom* room() const
+	{ return m_room; }
     void populateMsg(Message& msg) const;
 private:
     void alterMsg(Message& msg, const char* event);
@@ -953,7 +955,6 @@ bool ConfHandler::received(Message& msg)
     c->initChan();
     if (chan->connect(c,reason,false)) {
 	msg.setParam("peerid",c->id());
-	c->deref();
 	msg.setParam("room",__plugin.prefix()+room);
 	if (peer) {
 	    // create a conference leg for the old peer too
@@ -962,6 +963,9 @@ bool ConfHandler::received(Message& msg)
 	    peer->connect(p,reason,false);
 	    p->deref();
 	}
+	if (c->room())
+	    msg.setParam("users",String(c->room()->users()));
+	c->deref();
 	return true;
     }
     c->destruct();
@@ -1074,8 +1078,10 @@ bool ConferenceDriver::msgExecute(Message& msg, String& dest)
 	if (ch->connect(c,msg.getValue("reason"))) {
 	    c->callConnect(msg);
 	    msg.setParam("peerid",c->id());
-	    c->deref();
 	    msg.setParam("room",prefix()+dest);
+	    if (c->room())
+		msg.setParam("users",String(c->room()->users()));
+	    c->deref();
 	    return true;
 	}
 	else {

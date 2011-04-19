@@ -4542,6 +4542,7 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
     }
     if (name == s_actionShowCallsList) {
 	if (Client::valid()) {
+	    Client::self()->ringer(true,false);
 	    Client::self()->setVisible("mainwindow",true,true);
 	    activatePageCalls();
 	    removeTrayIcon("incomingcall");
@@ -4875,8 +4876,11 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
 	ClientContact* c = 0;
 	if (item == "tabChat")
 	    c = selectedChatContact(*m_accounts,wnd);
-	else if (isPageCallsActive(wnd,false))
+	else if (isPageCallsActive(wnd,false)) {
+	    if (Client::valid())
+		Client::self()->ringer(true,false);
 	    removeTrayIcon("incomingcall");
+	}
 	enableChatActions(c,false);
 	return true;
     }
@@ -4896,8 +4900,10 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
 
     // Page changed in telephony tab
     if (name == "framePages") {
-    	if (isPageCallsActive(wnd,true))
+    	if (isPageCallsActive(wnd,true)) {
+	    Client::self()->ringer(true,false);
 	    removeTrayIcon("incomingcall");
+	}
 	return false;
     }
 
@@ -4912,8 +4918,10 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
 
     // Enable specific actions when a channel is selected
     if (name == s_channelList) {
-    	if (isPageCallsActive(wnd,true))
+    	if (isPageCallsActive(wnd,true)) {
+	    Client::self()->ringer(true,false);
 	    removeTrayIcon("incomingcall");
+	}
 	updateSelectedChannel(&item);
 	return true;
     }
@@ -6208,6 +6216,9 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	stopLogic = true;
 	return false;
     }
+    // Ignore utility channels (playing sounds)
+    if (msg.getBoolValue("utility"))
+	return false;
     int notif = ClientChannel::lookup(msg.getValue("notify"));
     if (notif == ClientChannel::Destroyed) {
 	if (!Client::valid())
@@ -6726,8 +6737,8 @@ bool DefaultLogic::initializedClient()
     setClientParam("callerid",Client::s_settings.getValue("default","callerid"),false,true);
     setClientParam("domain",Client::s_settings.getValue("default","domain"),false,true);
     // Create default ring sound
-    String ring = cGen->getValue("ringinfile",Client::s_soundPath + "ring.wav");
-    Client::self()->createSound(Client::s_ringInName,ring);
+    String ring = cGen->getValue("ringinfile",Client::s_soundPath + "ring.au");
+    ClientSound::build(Client::s_ringInName,ring);
     ring = cGen->getValue("ringoutfile",Client::s_soundPath + "tone.wav");
     Client::self()->createSound(Client::s_ringOutName,ring);
 
@@ -6900,8 +6911,12 @@ void DefaultLogic::updateSelectedChannel(const String* item)
 	Client::self()->getSelect(s_channelList,m_selectedChannel);
     else
 	m_selectedChannel = "";
-    if (old != m_selectedChannel)
-	channelSelectionChanged(old);
+    if (old == m_selectedChannel)
+        return;
+    // Stop incoming ringer
+    if (Client::valid())
+	Client::self()->ringer(true,false);
+    channelSelectionChanged(old);
 }
 
 // Engine start notification. Connect startup accounts

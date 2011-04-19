@@ -1,3 +1,22 @@
+yate (3.3.3.svn4329) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4329: + Show a notification when a contact
+    add, change or remove succeeded or failed. Show a notification when
+    contact list retrieval fails.  + Fixed bug: clear account
+    'nologinfail' internal flag when connecting to make sure account
+    login failure notification is shown.  + Secondary PBX operations can
+    be stored in the pbxassist's parameter store.  + Added possibility
+    of second PBX operation on specific number of users in new
+    conference.  + Replaced default incoming ring sound file.  + Try to
+    build a QT sound to play ring wave file if available. Use the AU
+    file as fallback.  + Keep a list of optional conference owner
+    channels, do not drop a lonely conference if there is still an owner
+    other than the remaining participant.  + Allow setting channels as
+    conference owners from pbxassist.  + Don't drop on timeout a
+    conference room still owned.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 20 Apr 2011 02:19:22 +0400
+
 yate (3.3.3.svn4321) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4321: + For timeout ignore RTCP packets if

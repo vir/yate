@@ -81,7 +81,9 @@ private:
     bool operTransfer(Message& msg);
     bool operDoTransfer(Message& msg);
     bool operForTransfer(Message& msg);
+    // post conference operations
     void postConference(Message& msg, int users, bool created);
+    void postConference(Message& msg, const String& name, int users);
 };
 
 class YPBX_API PBXList : public ChanAssistList
@@ -153,6 +155,9 @@ static String s_lang;
 
 // Drop conference on hangup
 static bool s_dropConfHangup = true;
+
+// Make channels own the conference rooms
+static bool s_confOwner = false;
 
 // Conference lonely timeout
 static int s_lonely = 0;
@@ -256,6 +261,7 @@ void PBXList::initialize()
     s_error = s_cfg.getValue("general","error","tone/outoforder");
     s_lang = s_cfg.getValue("general","lang");
     s_dropConfHangup = s_cfg.getBoolValue("general","dropconfhangup",true);
+    s_confOwner = s_cfg.getBoolValue("general","confowner",false);
     s_lonely = s_cfg.getIntValue("general","lonelytimeout");
     unlock();
     if (s_cfg.getBoolValue("general","enabled",false))
@@ -776,9 +782,22 @@ bool PBXAssist::operSetState(Message& msg, const char* newState)
 	defState();
     else
 	setState(tmp);
-    m_room = msg.getValue("room",m_room);
     setGuest(msg);
     setParams(msg);
+    const String* room = msg.getParam("room");
+    if (room && (*room != m_room)) {
+	m_room = *room;
+	if (m_room && !m_guest && msg.getBoolValue("confowner",
+	    m_keep.getBoolValue("pbxconfowner",s_confOwner))) {
+	    Message m("call.conference");
+	    m.addParam("id",id());
+	    m.addParam("room",m_room);
+	    m.addParam("pbxstate",state());
+	    m.addParam("confowner",String::boolText(true));
+	    copyParams(m,msg);
+	    Engine::dispatch(m);
+	}
+    }
     return true;
 }
 
@@ -812,6 +831,7 @@ bool PBXAssist::operConference(Message& msg)
     const char* room = msg.getValue("room",m_room);
     int users = 0;
     bool created = false;
+    bool owner = msg.getBoolValue("confowner",m_keep.getBoolValue("pbxconfowner",s_confOwner));
 
     if (peer) {
 	Message m("call.conference");
@@ -821,6 +841,7 @@ bool PBXAssist::operConference(Message& msg)
 	if (room)
 	    m.addParam("room",room);
 	m.addParam("pbxstate",state());
+	m.addParam("confowner",String::boolText(owner));
 	copyParams(m,msg);
 
 	if (Engine::dispatch(m) && m.userData()) {
@@ -863,6 +884,7 @@ bool PBXAssist::operConference(Message& msg)
 	c->complete(m,false);
 	m.addParam("callto",room);
 	m.addParam("pbxstate",state());
+	m.addParam("confowner",String::boolText(owner));
 	copyParams(m,msg);
 	if (!Engine::dispatch(m))
 	    return errorBeep("conference failed");
@@ -987,11 +1009,13 @@ bool PBXAssist::operReturnConf(Message& msg)
     Channel* c = static_cast<Channel*>(msg.userObject("Channel"));
     if (!c)
 	return errorBeep("no channel");
+    bool owner = msg.getBoolValue("confowner",m_keep.getBoolValue("pbxconfowner",s_confOwner));
     Message m("call.execute");
     m.userData(c);
     c->complete(m,false);
     m.addParam("callto",m_room);
     m.addParam("pbxstate",state());
+    m.addParam("confowner",String::boolText(owner));
     copyParams(m,msg);
     if (Engine::dispatch(m)) {
 	setState("conference");
@@ -1155,31 +1179,27 @@ bool PBXAssist::operForTransfer(Message& msg)
 void PBXAssist::postConference(Message& msg, int users, bool created)
 {
     if (created) {
-	String oper = msg.getValue("opercreate");
-	if (oper) {
-	    Message* m = new Message(msg);
-	    m->setParam("operation",oper);
-	    m->setParam("pbxstate",state());
-	    m->setParam("room",m_room);
-	    m->setParam("users",String(users));
-	    m->userData(msg.userData());
-	    Engine::enqueue(m);
-	}
+	postConference(msg,"opercreate",users);
+	postConference(msg,"opercreate" + String(users),users);
     }
     if (users <= 0)
 	return;
-    String oper("operusers");
-    oper << users;
-    oper = msg.getValue(oper);
-    if (oper) {
-	Message* m = new Message(msg);
-	m->setParam("operation",oper);
-	m->setParam("pbxstate",state());
-	m->setParam("room",m_room);
-	m->setParam("users",String(users));
-	m->userData(msg.userData());
-	Engine::enqueue(m);
-    }
+    postConference(msg,"operusers" + String(users),users);
+}
+
+// Try to execute a single secondary operation
+void PBXAssist::postConference(Message& msg, const String& name, int users)
+{
+    const char* oper = msg.getValue(name,m_keep.getValue(name));
+    if (TelEngine::null(oper))
+	return;
+    Message* m = new Message(msg);
+    m->setParam("operation",oper);
+    m->setParam("pbxstate",state());
+    m->setParam("room",m_room);
+    m->setParam("users",String(users));
+    m->userData(msg.userData());
+    Engine::enqueue(m);
 }
 
 // Hangup handler, do any cleanups needed

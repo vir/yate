@@ -1988,6 +1988,8 @@ QTextEdit {
        <string>property:_yate_itemui=incomingfile:messages_okrejignore.ui</string>
        <string>property:_yate_itemui=rosterreqfail:messages_generic.ui</string>
        <string>property:_yate_itemui=noaudio:messages_generic.ui</string>
+       <string>property:_yate_itemui=contactupdatefail:messages_generic.ui</string>
+       <string>property:_yate_itemui=contactremovefail:messages_generic.ui</string>
       </stringlist>
      </property>
     </widget>

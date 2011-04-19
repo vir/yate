@@ -107,9 +107,13 @@ public:
     void mix(ConfConsumer* cons = 0);
     void addChannel(ConfChan* chan, bool player = false);
     void delChannel(ConfChan* chan);
+    void addOwner(const String& id);
+    void delOwner(const String& id);
+    bool isOwned() const;
     void dropAll(const char* reason = 0);
     void msgStatus(Message& msg);
     bool setRecording(const NamedList& params);
+    bool setParams(NamedList& params);
     void update(const NamedList& params);
 private:
     ConfRoom(const String& name, const NamedList& params);
@@ -120,6 +124,7 @@ private:
     void setExpire();
     String m_name;
     ObjList m_chans;
+    ObjList m_owners;
     String m_notify;
     String m_playerId;
     bool m_lonely;
@@ -221,6 +226,18 @@ public:
     virtual bool received(Message& msg);
 };
 
+// Handler for chan.hangup message
+class HangupHandler : public MessageHandler
+{
+public:
+    inline HangupHandler(unsigned int priority)
+	: MessageHandler("chan.hangup",priority)
+	{ }
+    virtual ~HangupHandler()
+	{ }
+    virtual bool received(Message& msg);
+};
+
 // The driver just holds all the channels (not conferences)
 class ConferenceDriver : public Driver
 {
@@ -238,7 +255,8 @@ protected:
     virtual bool commandComplete(Message& msg, const String& partLine, const String& partWord);
     virtual void statusParams(String& str);
 private:
-    ConfHandler* m_handler;
+    MessageHandler* m_handler;
+    MessageHandler* m_hangup;
     unsigned int m_confTout;             // The number of rooms needing timeout check
 };
 
@@ -381,6 +399,7 @@ void ConfRoom::delChannel(ConfChan* chan)
 	setExpire();
     }
     bool alone = (m_users == 1);
+    bool notOwned = !isOwned();
     mylock.drop();
     if (m_notify && !chan->isUtility()) {
 	String tmp(m_users);
@@ -401,9 +420,60 @@ void ConfRoom::delChannel(ConfChan* chan)
     }
 
     // cleanup if there are only 1 or 0 (if lonely==true) real users left
-    if (m_users <= (m_lonely ? 0 : 1))
+    if (notOwned)
 	// all channels left are utility or the lonely user - drop them
 	dropAll("hangup");
+}
+
+// Add one owner channel
+void ConfRoom::addOwner(const String& id)
+{
+    if (id.null() || m_owners.find(id))
+	return;
+    m_owners.append(new String(id));
+    DDebug(&__plugin,DebugInfo,"Added owner '%s' to room '%s'",
+	id.c_str(),m_name.c_str());
+}
+
+// Remove one owner channel from the room
+void ConfRoom::delOwner(const String& id)
+{
+    Lock mylock(this);
+    if (!m_owners.find(id))
+	return;
+    m_owners.remove(id);
+    DDebug(&__plugin,DebugInfo,"Removed owner '%s' from room '%s'",
+	id.c_str(),m_name.c_str());
+    if (isOwned())
+	return;
+    // only utilities and a lonely user remains - drop them
+    mylock.drop();
+    dropAll("hangup");
+}
+
+// Check if a room is owned by at least one other channel
+bool ConfRoom::isOwned() const
+{
+    if (!m_users)
+	return false;
+    if (m_lonely || (m_users > 1))
+	return true;
+    unsigned int c = m_owners.count();
+    if (c > 1)
+	return true;
+    else if (c == 0)
+	return false;
+    // one user, one owner - check if the same
+    const String& id = m_owners.skipNull()->get()->toString();
+    for (ObjList* l = m_chans.skipNull(); l; l = l->skipNext()) {
+	const ConfChan* chan = static_cast<const ConfChan*>(l->get());
+	if (chan->isCounted()) {
+	    String id2;
+	    return chan->getPeerId(id2) && (id != id2);
+	}
+    }
+    // should not reach here
+    return true;
 }
 
 // Drop all channels attached to the room, the lock must not be hold
@@ -436,6 +506,7 @@ void ConfRoom::msgStatus(Message& msg)
     msg.retValue() << ",rate=" << m_rate;
     msg.retValue() << ",users=" << m_users;
     msg.retValue() << ",chans=" << m_chans.count();
+    msg.retValue() << ",owners=" << m_owners.count();
     if (m_notify)
 	msg.retValue() << ",notify=" << m_notify;
     if (m_playerId)
@@ -508,6 +579,30 @@ bool ConfRoom::setRecording(const NamedList& params)
     }
 
     deref();
+    return true;
+}
+
+// Set miscellaneous parameters from and to conference message
+bool ConfRoom::setParams(NamedList& params)
+{
+    // return room parameters
+    params.setParam("newroom",String::boolText(created()));
+    params.setParam("users",String(users()));
+    // possibly set the caller or explicit ID as controller
+    const String* ctl = params.getParam("confowner");
+    if (TelEngine::null(ctl))
+	return false;
+    if (ctl->isBoolean()) {
+	const String* id = params.getParam("id");
+	if (!TelEngine::null(id)) {
+	    if (ctl->toBoolean())
+		addOwner(*id);
+	    else
+		delOwner(*id);
+	}
+    }
+    else
+	addOwner(*ctl);
     return true;
 }
 
@@ -921,6 +1016,7 @@ bool ConfHandler::received(Message& msg)
 	ConfRoom* cr = ConfRoom::get(room);
 	if (cr) {
 	    ok = cr->setRecording(msg);
+	    ok = cr->setParams(msg) || ok;
 	    cr->deref();
 	}
 	if (!ok)
@@ -966,14 +1062,28 @@ bool ConfHandler::received(Message& msg)
 	    peer->connect(p,reason,false);
 	    p->deref();
 	}
-	if (c->room()) {
-	    msg.setParam("newroom",String::boolText(c->room()->created()));
-	    msg.setParam("users",String(c->room()->users()));
-	}
+	if (c->room())
+	    c->room()->setParams(msg);
 	c->deref();
 	return true;
     }
     c->destruct();
+    return false;
+}
+
+
+bool HangupHandler::received(Message& msg)
+{
+    const String* id = msg.getParam("id");
+    if (TelEngine::null(id))
+	return false;
+    __plugin.lock();
+    ListIterator iter(s_rooms);
+    while (ConfRoom* room = static_cast<ConfRoom*>(iter.get())) {
+	if (room->alive())
+	    room->delOwner(*id);
+    }
+    __plugin.unlock();
     return false;
 }
 
@@ -1024,9 +1134,13 @@ bool ConferenceDriver::received(Message &msg, int id)
 		if (!room)
 		    break;
 		if (room->timeout(t)) {
-		    Debug(this,DebugAll,"Room (%p) '%s' timed out",
-			(ConfRoom*)room,room->toString().c_str());
-		    room->dropAll("timeout");
+		    Lock mylock(room,500000);
+		    if (mylock.locked() && !room->isOwned()) {
+			Debug(this,DebugAll,"Room (%p) '%s' timed out",
+			    (ConfRoom*)room,room->toString().c_str());
+			mylock.drop();
+			room->dropAll("timeout");
+		    }
 		}
 		room = 0;
 		lock();
@@ -1084,10 +1198,8 @@ bool ConferenceDriver::msgExecute(Message& msg, String& dest)
 	    c->callConnect(msg);
 	    msg.setParam("peerid",c->id());
 	    msg.setParam("room",prefix()+dest);
-	    if (c->room()) {
-		msg.setParam("newroom",String::boolText(c->room()->created()));
-		msg.setParam("users",String(c->room()->users()));
-	    }
+	    if (c->room())
+		c->room()->setParams(msg);
 	    c->deref();
 	    return true;
 	}
@@ -1131,6 +1243,8 @@ bool ConferenceDriver::unload()
     uninstallRelays();
     Engine::uninstall(m_handler);
     m_handler = 0;
+    Engine::uninstall(m_hangup);
+    m_hangup = 0;
     return true;
 }
 
@@ -1145,7 +1259,8 @@ void ConferenceDriver::setConfToutCount(bool on)
 }
 
 ConferenceDriver::ConferenceDriver()
-    : Driver("conf","misc"), m_handler(0), m_confTout(0)
+    : Driver("conf","misc"),
+      m_handler(0), m_hangup(0), m_confTout(0)
 {
     Output("Loaded module Conference");
 }
@@ -1192,6 +1307,8 @@ void ConferenceDriver::initialize()
 	return;
     m_handler = new ConfHandler(150);
     Engine::install(m_handler);
+    m_hangup = new HangupHandler(150);
+    Engine::install(m_hangup);
 }
 
 }; // anonymous namespace

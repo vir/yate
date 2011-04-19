@@ -170,6 +170,7 @@ Source: "..\conf.d\*.conf.sample"; DestDir: "{app}\conf.d"
 
 Source: "..\share\help\*.yhlp"; DestDir: "{app}\share\help"; Components: client
 Source: "..\share\sounds\*.wav"; DestDir: "{app}\share\sounds"; Components: client
+Source: "..\share\sounds\*.au"; DestDir: "{app}\share\sounds"; Components: client
 Source: "..\conf.d\providers.conf.default"; DestName: "providers.conf"; DestDir: "{app}\conf.d"; Components: client
 Source: "..\share\skins\default\qt4client.rc"; DestDir: "{app}\share\skins\default"; Components: client\qt
 Source: "..\share\skins\default\*.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt

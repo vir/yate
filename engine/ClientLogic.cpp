@@ -6737,8 +6737,14 @@ bool DefaultLogic::initializedClient()
     setClientParam("callerid",Client::s_settings.getValue("default","callerid"),false,true);
     setClientParam("domain",Client::s_settings.getValue("default","domain"),false,true);
     // Create default ring sound
-    String ring = cGen->getValue("ringinfile",Client::s_soundPath + "ring.au");
-    ClientSound::build(Client::s_ringInName,ring);
+    // Try to build native for wave file
+    String ring = cGen->getValue("ringinfile",Client::s_soundPath + "ring.wav");
+    bool wave = ring.endsWith(".wav");
+    if (!(wave && Client::self()->createSound(Client::s_ringInName,ring))) {
+	if (wave)
+	    ring = Client::s_soundPath + "ring.au";
+	ClientSound::build(Client::s_ringInName,ring);
+    }
     ring = cGen->getValue("ringoutfile",Client::s_soundPath + "tone.wav");
     Client::self()->createSound(Client::s_ringOutName,ring);
 

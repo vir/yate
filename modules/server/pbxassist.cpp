@@ -156,6 +156,9 @@ static String s_lang;
 // Drop conference on hangup
 static bool s_dropConfHangup = true;
 
+// Make channels own the conference rooms
+static bool s_confOwner = false;
+
 // Conference lonely timeout
 static int s_lonely = 0;
 
@@ -258,6 +261,7 @@ void PBXList::initialize()
     s_error = s_cfg.getValue("general","error","tone/outoforder");
     s_lang = s_cfg.getValue("general","lang");
     s_dropConfHangup = s_cfg.getBoolValue("general","dropconfhangup",true);
+    s_confOwner = s_cfg.getBoolValue("general","confowner",false);
     s_lonely = s_cfg.getIntValue("general","lonelytimeout");
     unlock();
     if (s_cfg.getBoolValue("general","enabled",false))
@@ -778,9 +782,22 @@ bool PBXAssist::operSetState(Message& msg, const char* newState)
 	defState();
     else
 	setState(tmp);
-    m_room = msg.getValue("room",m_room);
     setGuest(msg);
     setParams(msg);
+    const String* room = msg.getParam("room");
+    if (room && (*room != m_room)) {
+	m_room = *room;
+	if (m_room && !m_guest && msg.getBoolValue("confowner",
+	    m_keep.getBoolValue("pbxconfowner",s_confOwner))) {
+	    Message m("call.conference");
+	    m.addParam("id",id());
+	    m.addParam("room",m_room);
+	    m.addParam("pbxstate",state());
+	    m.addParam("confowner",String::boolText(true));
+	    copyParams(m,msg);
+	    Engine::dispatch(m);
+	}
+    }
     return true;
 }
 
@@ -814,6 +831,7 @@ bool PBXAssist::operConference(Message& msg)
     const char* room = msg.getValue("room",m_room);
     int users = 0;
     bool created = false;
+    bool owner = msg.getBoolValue("confowner",m_keep.getBoolValue("pbxconfowner",s_confOwner));
 
     if (peer) {
 	Message m("call.conference");
@@ -823,6 +841,7 @@ bool PBXAssist::operConference(Message& msg)
 	if (room)
 	    m.addParam("room",room);
 	m.addParam("pbxstate",state());
+	m.addParam("confowner",String::boolText(owner));
 	copyParams(m,msg);
 
 	if (Engine::dispatch(m) && m.userData()) {
@@ -865,6 +884,7 @@ bool PBXAssist::operConference(Message& msg)
 	c->complete(m,false);
 	m.addParam("callto",room);
 	m.addParam("pbxstate",state());
+	m.addParam("confowner",String::boolText(owner));
 	copyParams(m,msg);
 	if (!Engine::dispatch(m))
 	    return errorBeep("conference failed");
@@ -989,11 +1009,13 @@ bool PBXAssist::operReturnConf(Message& msg)
     Channel* c = static_cast<Channel*>(msg.userObject("Channel"));
     if (!c)
 	return errorBeep("no channel");
+    bool owner = msg.getBoolValue("confowner",m_keep.getBoolValue("pbxconfowner",s_confOwner));
     Message m("call.execute");
     m.userData(c);
     c->complete(m,false);
     m.addParam("callto",m_room);
     m.addParam("pbxstate",state());
+    m.addParam("confowner",String::boolText(owner));
     copyParams(m,msg);
     if (Engine::dispatch(m)) {
 	setState("conference");

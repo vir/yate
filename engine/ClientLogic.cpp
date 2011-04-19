@@ -1818,6 +1818,8 @@ static void setAccountStatus(ClientAccountList* accounts, ClientAccount* acc,
 	if (login) {
 	    acc->resource().m_status = ClientResource::Connecting;
 	    addAccPendingStatus(*m,acc,stat);
+	    // Make sure we see the login fail notification
+	    acc->m_params.clearParam("internal.nologinfail");
 	}
 	else {
 	    acc->resource().m_status = ClientResource::Offline;

@@ -81,7 +81,9 @@ private:
     bool operTransfer(Message& msg);
     bool operDoTransfer(Message& msg);
     bool operForTransfer(Message& msg);
+    // post conference operations
     void postConference(Message& msg, int users, bool created);
+    void postConference(Message& msg, const String& name, int users);
 };
 
 class YPBX_API PBXList : public ChanAssistList
@@ -1155,31 +1157,27 @@ bool PBXAssist::operForTransfer(Message& msg)
 void PBXAssist::postConference(Message& msg, int users, bool created)
 {
     if (created) {
-	String oper = msg.getValue("opercreate");
-	if (oper) {
-	    Message* m = new Message(msg);
-	    m->setParam("operation",oper);
-	    m->setParam("pbxstate",state());
-	    m->setParam("room",m_room);
-	    m->setParam("users",String(users));
-	    m->userData(msg.userData());
-	    Engine::enqueue(m);
-	}
+	postConference(msg,"opercreate",users);
+	postConference(msg,"opercreate" + String(users),users);
     }
     if (users <= 0)
 	return;
-    String oper("operusers");
-    oper << users;
-    oper = msg.getValue(oper);
-    if (oper) {
-	Message* m = new Message(msg);
-	m->setParam("operation",oper);
-	m->setParam("pbxstate",state());
-	m->setParam("room",m_room);
-	m->setParam("users",String(users));
-	m->userData(msg.userData());
-	Engine::enqueue(m);
-    }
+    postConference(msg,"operusers" + String(users),users);
+}
+
+// Try to execute a single secondary operation
+void PBXAssist::postConference(Message& msg, const String& name, int users)
+{
+    const char* oper = msg.getValue(name,m_keep.getValue(name));
+    if (TelEngine::null(oper))
+	return;
+    Message* m = new Message(msg);
+    m->setParam("operation",oper);
+    m->setParam("pbxstate",state());
+    m->setParam("room",m_room);
+    m->setParam("users",String(users));
+    m->userData(msg.userData());
+    Engine::enqueue(m);
 }
 
 // Hangup handler, do any cleanups needed

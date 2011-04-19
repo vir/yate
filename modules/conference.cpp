@@ -109,6 +109,7 @@ public:
     void delChannel(ConfChan* chan);
     void addOwner(const String& id);
     void delOwner(const String& id);
+    bool isOwned() const;
     void dropAll(const char* reason = 0);
     void msgStatus(Message& msg);
     bool setRecording(const NamedList& params);
@@ -121,8 +122,6 @@ private:
     void setLonelyTimeout(const String& value);
     // Set the expire time
     void setExpire();
-    // Check if owned
-    bool isOwned() const;
     String m_name;
     ObjList m_chans;
     ObjList m_owners;
@@ -1135,9 +1134,13 @@ bool ConferenceDriver::received(Message &msg, int id)
 		if (!room)
 		    break;
 		if (room->timeout(t)) {
-		    Debug(this,DebugAll,"Room (%p) '%s' timed out",
-			(ConfRoom*)room,room->toString().c_str());
-		    room->dropAll("timeout");
+		    Lock mylock(room,500000);
+		    if (mylock.locked() && !room->isOwned()) {
+			Debug(this,DebugAll,"Room (%p) '%s' timed out",
+			    (ConfRoom*)room,room->toString().c_str());
+			mylock.drop();
+			room->dropAll("timeout");
+		    }
 		}
 		room = 0;
 		lock();

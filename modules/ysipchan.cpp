@@ -293,6 +293,7 @@ public:
 	ReinviteNone,
 	ReinvitePending,
 	ReinviteRequest,
+	ReinviteReceived,
     };
     YateSIPConnection(SIPEvent* ev, SIPTransaction* tr);
     YateSIPConnection(Message& msg, const String& uri, const char* target = 0);
@@ -2184,7 +2185,7 @@ void YateSIPConnection::detachTransaction2()
 	m_tr2->setUserData(0);
 	m_tr2->deref();
 	m_tr2 = 0;
-	if (m_reInviting == ReinviteRequest)
+	if (m_reInviting != ReinvitePending)
 	    m_reInviting = ReinviteNone;
     }
     startPendingUpdate();
@@ -2428,11 +2429,13 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    msg->code,msg->body);
 #endif
 
-    if (ev->getTransaction() == m_tr2)
+    Lock mylock(driver());
+    if (ev->getTransaction() == m_tr2) {
+	mylock.drop();
 	return processTransaction2(ev,msg,code);
+    }
 
     bool updateTags = true;
-    Lock mylock(driver());
     SIPDialog oldDlg(m_dialog);
     m_dialog = *ev->getTransaction()->recentMessage();
     mylock.drop();
@@ -2745,11 +2748,20 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
     if (!checkUser(t))
 	return;
     DDebug(this,DebugAll,"YateSIPConnection::reInvite(%p) [%p]",t,this);
-    if (m_tr || m_tr2) {
+    Lock mylock(driver());
+    int invite = m_reInviting;
+    if (m_tr || m_tr2 || (invite == ReinviteRequest) || (invite == ReinviteReceived)) {
 	// another request pending - refuse this one
 	t->setResponse(491);
 	return;
     }
+    if (m_hungup) {
+	t->setResponse(481);
+	return;
+    }
+    m_reInviting = ReinviteReceived;
+    mylock.drop();
+
     // hack: use a while instead of if so we can return or break out of it
     MimeSdpBody* sdp = getSdpBody(t->initialMessage()->body);
     while (sdp) {
@@ -2779,15 +2791,27 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 		msg.addParam("rtp_nat_addr",natAddr);
 	    putMedia(msg,lst);
 	    addSdpParams(msg,sdp);
+	    bool ok = Engine::dispatch(msg);
+	    Lock mylock2(driver());
 	    // if peer doesn't support updates fail the reINVITE
-	    if (!Engine::dispatch(msg)) {
+	    if (!ok) {
 		t->setResponse(msg.getIntValue("error",dict_errors,488),msg.getValue("reason"));
-		return;
+		m_reInviting = invite;
 	    }
-	    // we remember the request and leave it pending
-	    t->ref();
-	    t->setUserData(this);
-	    m_tr2 = t;
+	    else if (m_tr2) {
+		// ouch! this shouldn't have happened!
+		t->setResponse(491);
+		// media is uncertain now so drop the call
+		setReason("Internal Server Error",500);
+		mylock2.drop();
+		hangup();
+	    }
+	    else {
+		// we remember the request and leave it pending
+		t->ref();
+		t->setUserData(this);
+		m_tr2 = t;
+	    }
 	    return;
 	}
 	// refuse request if we had no media at all before
@@ -2830,8 +2854,10 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	msg->addParam("mute",String::boolText(MediaStarted != m_mediaStatus));
 	putMedia(*msg);
 	Engine::enqueue(msg);
+	m_reInviting = invite;
 	return;
     }
+    m_reInviting = invite;
     if (s_refresh_nosdp && !sdp) {
 	// be permissive, accept session refresh with no SDP
 	SIPMessage* m = new SIPMessage(t->initialMessage(),200);
@@ -2914,6 +2940,10 @@ bool YateSIPConnection::doInfo(SIPTransaction* t)
     if (m_authBye && !checkUser(t))
 	return true;
     DDebug(this,DebugAll,"YateSIPConnection::doInfo(%p) [%p]",t,this);
+    if (m_hungup) {
+	t->setResponse(481);
+	return true;
+    }
     int sig = -1;
     const MimeLinesBody* lb = YOBJECT(MimeLinesBody,getOneBody(t->initialMessage()->body,"application/dtmf-relay"));
     const MimeStringBody* sb = YOBJECT(MimeStringBody,getOneBody(t->initialMessage()->body,"application/dtmf"));
@@ -2954,6 +2984,10 @@ void YateSIPConnection::doRefer(SIPTransaction* t)
     if (m_authBye && !checkUser(t))
 	return;
     DDebug(this,DebugAll,"doRefer(%p) [%p]",t,this);
+    if (m_hungup) {
+	t->setResponse(481);
+	return;
+    }
     if (m_referring) {
 	DDebug(this,DebugAll,"doRefer(%p). Already referring [%p]",t,this);
 	t->setResponse(491);           // Request Pending
@@ -3080,6 +3114,8 @@ bool YateSIPConnection::msgProgress(Message& msg)
 	    code = 182;
     }
     Lock lock(driver());
+    if (m_hungup)
+	return false;
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	SIPMessage* m = new SIPMessage(m_tr->initialMessage(), code);
 	copySipHeaders(*m,msg);
@@ -3095,6 +3131,8 @@ bool YateSIPConnection::msgRinging(Message& msg)
 {
     Channel::msgRinging(msg);
     Lock lock(driver());
+    if (m_hungup)
+	return false;
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	SIPMessage* m = new SIPMessage(m_tr->initialMessage(), 180);
 	copySipHeaders(*m,msg);
@@ -3109,6 +3147,8 @@ bool YateSIPConnection::msgRinging(Message& msg)
 bool YateSIPConnection::msgAnswered(Message& msg)
 {
     Lock lock(driver());
+    if (m_hungup)
+	return false;
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	updateFormats(msg,true);
 	SIPMessage* m = new SIPMessage(m_tr->initialMessage(), 200);
@@ -3149,6 +3189,8 @@ bool YateSIPConnection::msgAnswered(Message& msg)
 
 bool YateSIPConnection::msgTone(Message& msg, const char* tone)
 {
+    if (m_hungup)
+	return false;
     bool info = m_info;
     bool inband = m_inband;
     const String* method = msg.getParam("method");
@@ -3205,7 +3247,7 @@ bool YateSIPConnection::msgTone(Message& msg, const char* tone)
 
 bool YateSIPConnection::msgText(Message& msg, const char* text)
 {
-    if (null(text))
+    if (m_hungup || null(text))
 	return false;
     SIPMessage* m = createDlgMsg("MESSAGE");
     if (m) {
@@ -3236,6 +3278,8 @@ bool YateSIPConnection::msgUpdate(Message& msg)
     if (!oper || oper->null())
 	return false;
     Lock lock(driver());
+    if (m_hungup)
+	return false;
     if (*oper == "request") {
 	if (m_tr || m_tr2) {
 	    DDebug(this,DebugWarn,"Update request rejected, pending:%s%s [%p]",
@@ -3339,6 +3383,8 @@ bool YateSIPConnection::callRouted(Message& msg)
     setRfc2833(msg.getParam("rfc2833"));
     Channel::callRouted(msg);
     Lock lock(driver());
+    if (m_hungup)
+	return false;
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	String s(msg.retValue());
 	if (s.startSkip("sip/",false) && s && msg.getBoolValue("redirect")) {
@@ -3475,7 +3521,8 @@ bool YateSIPConnection::startClientReInvite(Message& msg)
 // Emit pending update if possible, method is called with driver mutex hold
 void YateSIPConnection::startPendingUpdate()
 {
-    if (m_tr || m_tr2 || (m_reInviting != ReinvitePending))
+    Lock mylock(driver());
+    if (m_hungup || m_tr || m_tr2 || (m_reInviting != ReinvitePending))
 	return;
     if (m_rtpAddr.null()) {
 	Debug(this,DebugWarn,"Cannot start update, remote RTP address unknown [%p]",this);
@@ -3487,6 +3534,8 @@ void YateSIPConnection::startPendingUpdate()
 	m_reInviting = ReinviteNone;
 	return;
     }
+    m_reInviting = ReinviteRequest;
+    mylock.drop();
 
     Message msg("call.update");
     complete(msg);
@@ -3494,7 +3543,6 @@ void YateSIPConnection::startPendingUpdate()
     msg.addParam("rtp_forward","yes");
     msg.addParam("rtp_addr",m_rtpAddr);
     putMedia(msg);
-    m_reInviting = ReinviteRequest;
     // if peer doesn't support updates fail the reINVITE
     if (!Engine::dispatch(msg)) {
 	Debug(this,DebugWarn,"Cannot start update by '%s', %s: %s [%p]",

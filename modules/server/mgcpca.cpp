@@ -1928,6 +1928,8 @@ bool MGCPCircuit::processNotify(const String& package, const String& event, cons
 	// Fax Relay events
 	if (event &= "t38(start)")
 	    return enqueueEvent(SignallingCircuitEvent::GenericTone,"fax");
+	else if (event &= "t38(stop)")
+	    return enqueueEvent(SignallingCircuitEvent::GenericTone,"audio");
     }
     return false;
 }

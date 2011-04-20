@@ -1198,7 +1198,8 @@ bool TdmSpan::init(TdmDevice::Type type,
 
     if (!digital)
 	m_increment = chans = count;
-    unsigned int start = params.getIntValue("start",0);
+    m_increment = config.getIntValue("increment",m_increment);
+    unsigned int start = config.getIntValue("start",params.getIntValue("start",0));
     // Create and insert circuits
     unsigned int added = 0;
     DDebug(m_group,DebugNote,

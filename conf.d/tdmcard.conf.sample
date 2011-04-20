@@ -3,10 +3,10 @@
 [general]
 ; This section configures common settings and defaults for all interfaces
 
-; buflen: int: Size of data buffer in bytes
+; buflen: integer: Size of data buffer in bytes
 ;buflen=160
 
-; idlevalue: int: Byte value to use as filler when no data is available
+; idlevalue: integer: Byte value to use as filler when no data is available
 ;idlevalue=255
 
 ; priority: keyword: Data thread priority: normal, high, highest
@@ -19,8 +19,17 @@
 ;  interfaces (like D channels) and voice circuit groups (B channels)
 ; The buflen, idlevalue and priority can be overriden in each section
 
-; span: int: TDM span number as configured in wanrouter configuration
+; span: integer: TDM span number as configured in wanrouter configuration
 ;span=1
 
 ; type: keyword: Type of the interface, one of: E1, T1, NET, CPE
 ;type=E1
+
+; start: integer: Absolute start of circuits numbers, ignore group's start
+; Default is group's start
+;start=
+
+; increment: integer: How much will increment this span the circuit number in
+;  the group it belongs to
+; Defaults to 32 for E1, 24 for T1, 3 for BRI
+;increment=

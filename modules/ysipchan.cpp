@@ -2165,6 +2165,8 @@ void YateSIPConnection::clearTransaction()
 	    TelEngine::destruct(m);
 	    m_byebye = false;
 	}
+	else if (m_hungup && m_tr->isIncoming() && m_dialog.localTag.null())
+	    m_dialog.localTag = m_tr->getDialogTag();
 	m_tr->deref();
 	m_tr = 0;
     }

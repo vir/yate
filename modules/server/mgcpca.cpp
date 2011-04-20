@@ -956,7 +956,10 @@ bool MGCPSpan::init(const NamedList& params)
     if (range.count())
 	m_count = range[range.count()-1];
     m_count = config->getIntValue("chans",m_count);
-    cicStart += config->getIntValue("offset");
+    cicStart += config->getIntValue(("offset_"+*sect),
+	config->getIntValue("offset"));
+    cicStart = config->getIntValue(("start_"+*sect),
+	config->getIntValue("start",cicStart));
 
     if (!m_count)
 	return false;
@@ -971,7 +974,8 @@ bool MGCPSpan::init(const NamedList& params)
 	    m_increment = 32;
 	    break;
     }
-    m_increment = config->getIntValue("increment",m_increment);
+    m_increment = config->getIntValue(("increment_"+*sect),
+	config->getIntValue("increment",m_increment));
     m_rtpForward = config->getBoolValue("forward_rtp",!(m_fxo || m_fxs));
     m_sdpForward = config->getBoolValue("forward_sdp",false);
     m_bearer = lookup(config->getIntValue("bearer",s_dict_payloads,-1),s_dict_gwbearerinfo);

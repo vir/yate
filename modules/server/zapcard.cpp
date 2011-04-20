@@ -2058,7 +2058,7 @@ bool ZapSpan::init(ZapDevice::Type type, unsigned int offset,
     if (!digital)
 	m_increment = chans = count;
     m_increment = config.getIntValue("increment",m_increment);
-    unsigned int start = params.getIntValue("start",0);
+    unsigned int start = config.getIntValue("start",params.getIntValue("start",0));
 
     // Create and insert circuits
     unsigned int added = 0;

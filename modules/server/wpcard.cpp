@@ -1444,7 +1444,9 @@ bool WpSpan::init(const NamedList& config, const NamedList& defaults, NamedList&
     // Type depending data: channel count, samples, circuit list
     String type = params.getValue("type",config.getValue("type"));
     String cics = params.getValue("voicechans",config.getValue("voicechans"));
-    unsigned int offs = params.getIntValue("offset",config.getIntValue("offset",0));
+    unsigned int start = params.getIntValue("offset",config.getIntValue("offset",0));
+    start += params.getIntValue("start");
+    start = config.getIntValue("start",start);
     m_samples = params.getIntValue("samples",config.getIntValue("samples"));
     int idleValue = 0xd5; // A-Law idle code
     if (type.null())
@@ -1497,7 +1499,7 @@ bool WpSpan::init(const NamedList& config, const NamedList& defaults, NamedList&
     if (!m_buflen)
 	m_buflen = 160;
     // Channels
-    if (!createCircuits(params.getIntValue("start") + offs,cics)) {
+    if (!createCircuits(start,cics)) {
 	Debug(m_group,DebugNote,
 	    "WpSpan('%s'). Failed to create voice chans (voicechans=%s) [%p]",
 	    id().safe(),cics.safe(),this);

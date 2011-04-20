@@ -84,6 +84,10 @@
 ;  if this value is invalid (not an integer or less then 0)
 ;offset=
 
+; start: integer: Absolute start of circuits numbers, ignore group's start
+; Default is group's current start
+;start=
+
 ; sigchan: integer: The circuit used for signalling (D-channel)
 ; Numbers greater then circuit count (circuit count defaults to 31 for E1 and
 ;  to 24 for T1) are not allowed

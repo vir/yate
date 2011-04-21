@@ -8456,6 +8456,7 @@ private:
     // Remote User Part test
     SignallingTimer m_uptTimer;          // Timer for UPT
     bool m_userPartAvail;                // Flag indicating the remote User Part availability
+    SS7MsgISUP::Type m_uptMessage;       // Message used, may not be always UPT
     unsigned int m_uptCicCode;           // The circuit code sent with UPT
     int m_cicWarnLevel;                  // Wrong CIC warn level
     // Circuit reset

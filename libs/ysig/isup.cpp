@@ -214,6 +214,7 @@ static const TokenDict s_dict_control[] = {
     { "block", SS7MsgISUP::BLK },
     { "unblock", SS7MsgISUP::UBL },
     { "release", SS7MsgISUP::RLC },
+    { "parttest", SS7MsgISUP::UPT },
     { "available", SS7MsgISUP::UPA },
     { 0, 0 }
 };
@@ -3122,6 +3123,7 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
       m_t21Interval(300000),             // Q.764 T21 (CGU global) 5..15 minutes
       m_uptTimer(0),
       m_userPartAvail(true),
+      m_uptMessage(SS7MsgISUP::UPT),
       m_uptCicCode(0),
       m_cicWarnLevel(DebugMild),
       m_rscTimer(0),
@@ -3209,6 +3211,17 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
     m_ignoreCGUSingle = params.getBoolValue("ignore-cgu-single");
     m_duplicateCGB = params.getBoolValue("duplicate-cgb",
 	(SS7PointCode::ANSI == m_type || SS7PointCode::ANSI8 == m_type));
+    int testMsg = params.getIntValue("parttestmsg",s_names,SS7MsgISUP::UPT);
+    switch (testMsg) {
+	case SS7MsgISUP::CVT:
+	    if (SS7PointCode::ANSI != m_type && SS7PointCode::ANSI8 != m_type)
+		break;
+	    // fall through
+	case SS7MsgISUP::RSC:
+	case SS7MsgISUP::UBL:
+	case SS7MsgISUP::UPT:
+	    m_uptMessage = (SS7MsgISUP::Type)testMsg;
+    }
     m_ignoreUnkDigits = params.getBoolValue("ignore-unknown-digits",true);
     m_defaultSls = params.getIntValue("sls",s_dict_callSls,m_defaultSls);
     m_maxCalledDigits = params.getIntValue("maxcalleddigits",m_maxCalledDigits);
@@ -3278,6 +3291,17 @@ bool SS7ISUP::initialize(const NamedList* config)
 	m_ignoreCGUSingle = config->getBoolValue("ignore-cgu-single");
 	m_duplicateCGB = config->getBoolValue("duplicate-cgb",
 	    (SS7PointCode::ANSI == m_type || SS7PointCode::ANSI8 == m_type));
+	int testMsg = config->getIntValue("parttestmsg",s_names,SS7MsgISUP::UPT);
+	switch (testMsg) {
+	    case SS7MsgISUP::CVT:
+		if (SS7PointCode::ANSI != m_type && SS7PointCode::ANSI8 != m_type)
+		    break;
+		// fall through
+	    case SS7MsgISUP::RSC:
+	    case SS7MsgISUP::UBL:
+	    case SS7MsgISUP::UPT:
+		m_uptMessage = (SS7MsgISUP::Type)testMsg;
+	}
         m_ignoreUnkDigits = config->getBoolValue("ignore-unknown-digits",true);
 	m_defaultSls = config->getIntValue("sls",s_dict_callSls,m_defaultSls);
 	m_mediaRequired = (MediaRequired)config->getIntValue("needmedia",
@@ -3587,12 +3611,12 @@ void SS7ISUP::timerTick(const Time& when)
 	if (m_uptTimer.started()) {
 	    if (!m_uptTimer.timeout(when.msec()))
 		return;
-	    DDebug(this,DebugNote,"UPT timed out. Retransmitting");
+	    DDebug(this,DebugNote,"%s timed out. Retransmitting",lookup(m_uptMessage,s_names));
 	}
 	ObjList* o = circuits()->circuits().skipNull();
 	SignallingCircuit* cic = o ? static_cast<SignallingCircuit*>(o->get()) : 0;
 	m_uptCicCode = cic ? cic->code() : 1;
-	SS7MsgISUP* msg = new SS7MsgISUP(SS7MsgISUP::UPT,m_uptCicCode);
+	SS7MsgISUP* msg = new SS7MsgISUP(m_uptMessage,m_uptCicCode);
 	SS7Label label(m_type,*m_remotePoint,*m_defPoint,
 	    (m_defaultSls == SlsCircuit) ? m_uptCicCode : m_sls);
 	m_uptTimer.start(when.msec());
@@ -3747,10 +3771,11 @@ bool SS7ISUP::control(NamedList& params)
     SignallingCircuit* cic = o ? static_cast<SignallingCircuit*>(o->get()) : 0;
     unsigned int code1 = cic ? cic->code() : 1;
     switch (cmd) {
+	case SS7MsgISUP::UPT:
 	case SS7MsgISUP::CVT:
 	    {
 		unsigned int code = params.getIntValue("circuit",code1);
-		SS7MsgISUP* msg = new SS7MsgISUP(SS7MsgISUP::CVT,code);
+		SS7MsgISUP* msg = new SS7MsgISUP((SS7MsgISUP::Type)cmd,code);
 		SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
 		mylock.drop();
 		transmitMessage(msg,label,false);
@@ -4344,6 +4369,7 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
 	Debug(this,DebugInfo,"Remote user part is available");
 	if (msg->cic() == m_uptCicCode &&
 	    (msg->type() == SS7MsgISUP::UPA ||
+	     msg->type() == SS7MsgISUP::CVR ||
 	     msg->type() == SS7MsgISUP::CNF ||
 	     msg->type() == SS7MsgISUP::UEC)) {
 	    m_uptCicCode = 0;

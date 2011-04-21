@@ -395,11 +395,13 @@ YMGCPEngine::~YMGCPEngine()
 // Process all events of this engine, forward them to wrappers if found
 bool YMGCPEngine::processEvent(MGCPTransaction* trans, MGCPMessage* msg, void* data)
 {
-    MGCPWrapper* wrap = YOBJECT(MGCPWrapper,static_cast<GenObject*>(data));
-    MGCPSpan* span = YOBJECT(MGCPSpan,static_cast<GenObject*>(data));
-    MGCPCircuit* circ = YOBJECT(MGCPCircuit,static_cast<GenObject*>(data));
+    s_mutex.lock();
+    RefPointer<MGCPWrapper> wrap = YOBJECT(MGCPWrapper,static_cast<GenObject*>(data));
+    RefPointer<MGCPSpan> span = YOBJECT(MGCPSpan,static_cast<GenObject*>(data));
+    RefPointer<MGCPCircuit> circ = YOBJECT(MGCPCircuit,static_cast<GenObject*>(data));
+    s_mutex.unlock();
     DDebug(this,DebugAll,"YMGCPEngine::processEvent(%p,%p,%p) wrap=%p span=%p circ=%p [%p]",
-	trans,msg,data,wrap,span,circ,this);
+	trans,msg,data,(void*)wrap,(void*)span,(void*)circ,this);
     if (!trans)
 	return false;
     if (wrap)

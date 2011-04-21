@@ -3213,7 +3213,7 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
     int testMsg = params.getIntValue("parttestmsg",s_names,SS7MsgISUP::UPT);
     switch (testMsg) {
 	case SS7MsgISUP::CVT:
-	    if (SS7PointCode::ANSI != m_type || SS7PointCode::ANSI8 != m_type)
+	    if (SS7PointCode::ANSI != m_type && SS7PointCode::ANSI8 != m_type)
 		break;
 	    // fall through
 	case SS7MsgISUP::RSC:
@@ -3293,7 +3293,7 @@ bool SS7ISUP::initialize(const NamedList* config)
 	int testMsg = config->getIntValue("parttestmsg",s_names,SS7MsgISUP::UPT);
 	switch (testMsg) {
 	    case SS7MsgISUP::CVT:
-		if (SS7PointCode::ANSI != m_type || SS7PointCode::ANSI8 != m_type)
+		if (SS7PointCode::ANSI != m_type && SS7PointCode::ANSI8 != m_type)
 		    break;
 		// fall through
 	    case SS7MsgISUP::RSC:

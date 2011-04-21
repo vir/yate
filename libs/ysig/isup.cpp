@@ -214,6 +214,7 @@ static const TokenDict s_dict_control[] = {
     { "block", SS7MsgISUP::BLK },
     { "unblock", SS7MsgISUP::UBL },
     { "release", SS7MsgISUP::RLC },
+    { "parttest", SS7MsgISUP::UPT },
     { "available", SS7MsgISUP::UPA },
     { 0, 0 }
 };
@@ -3770,10 +3771,11 @@ bool SS7ISUP::control(NamedList& params)
     SignallingCircuit* cic = o ? static_cast<SignallingCircuit*>(o->get()) : 0;
     unsigned int code1 = cic ? cic->code() : 1;
     switch (cmd) {
+	case SS7MsgISUP::UPT:
 	case SS7MsgISUP::CVT:
 	    {
 		unsigned int code = params.getIntValue("circuit",code1);
-		SS7MsgISUP* msg = new SS7MsgISUP(SS7MsgISUP::CVT,code);
+		SS7MsgISUP* msg = new SS7MsgISUP((SS7MsgISUP::Type)cmd,code);
 		SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
 		mylock.drop();
 		transmitMessage(msg,label,false);

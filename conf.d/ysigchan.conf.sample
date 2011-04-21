@@ -287,6 +287,11 @@
 ; Invalid values default to minimum (10s)
 ;userparttest=60
 
+; parttestmsg: keyword: ISUP message to use for user part test
+; For ANSI the CVT message may be used instead on UPT
+; Other possibilities are RSC and UBL but are not recommended
+;parttestmsg=UPT
+
 ; lockgroup: boolean: Allow sending circuit group block/unblock requests
 ; Normally the remote side must support circuit group operations
 ;lockgroup=yes

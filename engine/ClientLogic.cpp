@@ -6580,7 +6580,7 @@ bool DefaultLogic::defaultMsgHandler(Message& msg, int id, bool& stopLogic)
 	if (!delay && (!member || room->ownMember(member)))
 	    return true;
 	String chatState;
-	bool hasState = !delay && chat && buildChatState(chatState,msg,member->m_name);
+	bool hasState = !delay && buildChatState(chatState,msg,member->m_name);
 	NamedList* p = 0;
 	if (body || !hasState)
 	    p = buildChatParams(body,member ? member->m_name : nick,time,0,0);

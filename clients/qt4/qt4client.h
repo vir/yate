@@ -500,6 +500,15 @@ public:
      */
     static bool sendEvent(QEvent& e, QObject* parent, const QString& name);
 
+    /**
+     * Retrieve a pixmap from global application cache.
+     * Load and add it to the cache if not found
+     * @param pixmap Destination pixmap to set
+     * @param file File name to retrieve or load
+     * @return True on success, false if failed to load
+     */
+    static bool getPixmapFromCache(QPixmap& pixmap, const QString& file);
+
 protected:
     virtual void loadWindows(const char* file = 0);
 private:

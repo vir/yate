@@ -3973,6 +3973,28 @@ bool QtClient::sendEvent(QEvent& e, QObject* parent, const QString& name)
     return ok;
 }
 
+// Retrieve a pixmap from global application cache.
+// Load and add it to the cache if not found
+bool QtClient::getPixmapFromCache(QPixmap& pixmap, const QString& file)
+{
+    if (file.isEmpty())
+	return false;
+    QPixmap* cached = QPixmapCache::find(file);
+    if (cached) {
+	pixmap = *cached;
+	return true;
+    }
+    if (!pixmap.load(file))
+	return false;
+#ifdef XDEBUG
+    String f;
+    getUtf8(f,file);
+    Debug(ClientDriver::self(),DebugAll,"Loaded '%s' in pixmap cache",f.c_str());
+#endif
+    QPixmapCache::insert(file,pixmap);
+    return true;
+}
+
 
 /**
  * QtDriver

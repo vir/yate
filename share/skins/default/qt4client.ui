@@ -209,6 +209,7 @@
            <string>property:allColumnsShowFocus=false</string>
            <string>property:styleSheet=QTreeWidget{border-image: none;font-size: 11px;background:white;selection-background-color:lightblue;border: 0px solid #97acbc;border-radius:2px;}QTreeView::branch{background:transparent;}</string>
            <string>property:_yate_nogroup_caption=Not set</string>
+           <string>property:_yate_comparecase=false</string>
            <string>property:_yate_itemheight=contact:40</string>
            <string>property:_yate_itemheight=group:22</string>
            <string>property:_yate_itemheight=chatroom:40</string>

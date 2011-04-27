@@ -317,6 +317,7 @@
          <string>property:allColumnsShowFocus=false</string>
          <string>property:styleSheet=QTreeWidget{border-image: none;font-size: 11px;background:white;selection-background-color:lightblue;border: 0px solid #97acbc;border-radius:2px;}QTreeView::branch{background:transparent;}</string>
          <string>property:_yate_nogroup_caption=Not set</string>
+         <string>property:_yate_comparecase=false</string>
          <string>property:_yate_itemheight=contact:20</string>
          <string>property:_yate_itemheight=group:20</string>
          <string>property:_yate_itemstyle=contact:&lt;html>&lt;head>&lt;meta name="qrichtext" content="1" />&lt;style type="text/css">\np, li { white-space: pre-wrap; }\n&lt;/style>&lt;/head>&lt;body style=" font-size:10px; font-weight:400; font-style:normal;">&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">&lt;span style=" font-size:12px;">${name}&lt;/span>&lt;/p>&lt;/body>&lt;/html></string>

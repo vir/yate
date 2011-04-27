@@ -1907,6 +1907,8 @@ static void fillChatContact(NamedList& p, ClientContact& c, bool data, bool stat
 	    if (res)
 		text = res->m_text;
 	}
+	else
+	    p.addParam("name_image",Client::s_skinPath + "muc_16.png");
 	p.addParam("status_text",text ? text.c_str() : ClientResource::statusDisplayText(stat));
 	p.addParam("status",lookup(stat,ClientResource::s_statusName));
     }
@@ -2080,7 +2082,9 @@ static void updateMucRoomMember(MucRoom& room, MucRoomMember& item, Message* msg
 	if (uri)
 	    uri.append(item.m_instance,"/");
 	pList->addParam("contact",uri,false);
-	pList->addParam("image:status_image",resStatusImage(item.m_status));
+	String img = resStatusImage(item.m_status);
+	pList->addParam("image:status_image",img);
+	pList->addParam("name_image",img);
 	if (room.hasChat(item.toString())) {
 	    pChat = new NamedList(*pList);
 	    pChat->setParam("name",room.uri() + " - " + item.m_name);

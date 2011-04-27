@@ -89,10 +89,211 @@ private:
     String m_sel;
 };
 
+class QtItemDelegate : public QItemDelegate, public String
+{
+    YCLASS(QtItemDelegate,String)
+public:
+    QtItemDelegate(QObject* parent, const NamedList& params = NamedList::empty());
+    virtual void paint(QPainter* painter, const QStyleOptionViewItem& option,
+	const QModelIndex& index) const;
+protected:
+    // Retrieve display text for a given index
+    virtual QString getDisplayText(const QStyleOptionViewItem& opt,
+	const QModelIndex& index) const;
+    // Inherited methods
+    virtual void drawBackground(QPainter* painter, const QStyleOptionViewItem& opt,
+	const QModelIndex& index) const;
+    virtual void drawDecoration(QPainter* painter, const QStyleOptionViewItem& opt,
+	const QRect& rect, const QPixmap& pixmap) const;
+    virtual void drawFocus(QPainter* painter, const QStyleOptionViewItem& opt,
+	const QRect& rect) const;
+
+    bool m_drawFocus;                    // Draw focus
+    int m_roleDisplayText;               // Item display role to handle
+    int m_roleImage;                     // Item role containing image file name
+    int m_roleBackground;                // Item background role to handle
+};
+
+class QtHtmlItemDelegate : public QtItemDelegate
+{
+    YCLASS(QtHtmlItemDelegate,QtItemDelegate)
+public:
+    QtHtmlItemDelegate(QObject* parent, const NamedList& params = NamedList::empty())
+	: QtItemDelegate(parent,params)
+	{}
+protected:
+    virtual void drawDisplay(QPainter* painter, const QStyleOptionViewItem& opt,
+	const QRect& rect, const QString& text) const;
+};
+
+
+QtItemDelegate::QtItemDelegate(QObject* parent, const NamedList& params)
+    : QItemDelegate(parent),
+    String(params),
+    m_drawFocus(true),
+    m_roleDisplayText(Qt::DisplayRole),
+    m_roleImage(Qt::UserRole),
+    m_roleBackground(Qt::UserRole)
+{
+    m_drawFocus = params.getBoolValue("drawfocus",true);
+    // Handle parameters set from code (not configurable)
+    if (params) {
+	m_roleDisplayText = params.getIntValue(params + ".role_display",Qt::DisplayRole);
+	m_roleImage = params.getIntValue(params + ".role_image",Qt::UserRole);
+	m_roleBackground = params.getIntValue(params + ".role_background",Qt::UserRole);
+    }
+#ifdef XDEBUG
+    String dump;
+    params.dump(dump," ");
+    Debug(DebugAll,"QtItemDelegate(%s) created: %s [%p]",c_str(),dump.c_str(),this);
+#endif
+}
+
+void QtItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
+    const QModelIndex& index) const
+{
+    QStyleOptionViewItemV3 opt = setOptions(index,option);
+    const QStyleOptionViewItemV2* v2 = qstyleoption_cast<const QStyleOptionViewItemV2*>(&option);
+    opt.features = v2 ? v2->features : QStyleOptionViewItemV2::ViewItemFeatures(QStyleOptionViewItemV2::None);
+    const QStyleOptionViewItemV3* v3 = qstyleoption_cast<const QStyleOptionViewItemV3*>(&option);
+    opt.locale = v3 ? v3->locale : QLocale();
+    opt.widget = v3 ? v3->widget : 0;
+    // Prepare painter
+    painter->save();
+    // Retrieve check
+    QRect checkRect;
+    Qt::CheckState checkState = Qt::Unchecked;
+    QVariant checkVar = index.data(Qt::CheckStateRole);
+    if (checkVar.isValid()) {
+	checkState = static_cast<Qt::CheckState>(checkVar.toInt());
+	checkRect = check(opt,opt.rect,checkVar);
+    }
+    // Retrieve image (decoration)
+    QPixmap pixmap;
+    QRect decorationRect;
+    bool isStd = (m_roleImage <= Qt::UserRole);
+    QVariant pVar = index.data(isStd ? Qt::DecorationRole : m_roleImage);
+    if (pVar.isValid()) {
+	if (isStd)
+	    pixmap = decoration(opt,pVar);
+	else {
+	    QString file = pVar.toString();
+	    QtClient::getPixmapFromCache(pixmap,file);
+	    // Resize the pixmap
+	    if (!pixmap.isNull())
+		pixmap = pixmap.scaled(opt.decorationSize.width(),
+		    opt.decorationSize.height(),Qt::KeepAspectRatio);
+	}
+	decorationRect = QRect(QPoint(0,0),pixmap.size());
+    }
+    // Retrieve text to display
+    QString text = getDisplayText(opt,index);
+    QRect displayRect = opt.rect;
+    displayRect.setWidth(INT_MAX/256);
+    displayRect = textRectangle(painter,displayRect,opt.font,text);
+    // Calculate layout
+    doLayout(opt,&checkRect,&decorationRect,&displayRect,false);
+    // Draw the item
+    drawBackground(painter,opt,index);
+    drawCheck(painter,opt,checkRect,checkState);
+    drawDecoration(painter,opt,decorationRect,pixmap);
+    drawDisplay(painter,opt,displayRect,text);
+    drawFocus(painter,opt,displayRect);
+    // Restore painter
+    painter->restore();
+}
+
+// Retrieve display text for a given index
+QString QtItemDelegate::getDisplayText(const QStyleOptionViewItem& opt,
+    const QModelIndex& index) const
+{
+    QVariant var = index.data(m_roleDisplayText);
+    if (var.type() == QVariant::StringList) {
+	QStringList list = var.toStringList();
+	if (!list.size())
+	    return QString();
+	// 1 item or not selected: return the first string
+	if (list.size() == 1 || 0 == (opt.state & QStyle::State_Selected))
+	    return list[0];
+	return list[1];
+    }
+    if (var.canConvert(QVariant::String))
+	return var.toString();
+    return QString();
+}
+
+void QtItemDelegate::drawBackground(QPainter* painter, const QStyleOptionViewItem& opt,
+    const QModelIndex& index) const
+{
+    QVariant var;
+    if (m_roleBackground != Qt::UserRole)
+	var = index.data(m_roleBackground);
+    if (!var.isValid()) {
+	QItemDelegate::drawBackground(painter,opt,index);
+	return;
+    }
+    if (qVariantCanConvert<QBrush>(var)) {
+	QPointF oldBO = painter->brushOrigin();
+	painter->setBrushOrigin(opt.rect.topLeft());
+	painter->fillRect(opt.rect,qvariant_cast<QBrush>(var));
+	painter->setBrushOrigin(oldBO);
+    }
+    else
+	Debug(DebugNote,"QtItemDelegate(%s) unhandled background variant type=%s",
+	    c_str(),var.typeName());
+}
+
+void QtItemDelegate::drawDecoration(QPainter* painter, const QStyleOptionViewItem& opt,
+    const QRect& rect, const QPixmap& pixmap) const
+{
+    if (pixmap.isNull() || !rect.isValid())
+	return;
+    QPoint p = QStyle::alignedRect(opt.direction,opt.decorationAlignment,
+	pixmap.size(),rect).topLeft();
+    painter->drawPixmap(p,pixmap);
+}
+
+void QtItemDelegate::drawFocus(QPainter* painter, const QStyleOptionViewItem& opt,
+    const QRect& rect) const
+{
+    if (!m_drawFocus)
+	return;
+    QItemDelegate::drawFocus(painter,opt,rect);
+}
+
+
+void QtHtmlItemDelegate::drawDisplay(QPainter* painter, const QStyleOptionViewItem& opt,
+    const QRect& rect, const QString& text) const
+{
+    if (text.isEmpty())
+	return;
+    QTextDocument doc;
+    doc.setHtml(text);
+    QAbstractTextDocumentLayout* layout = doc.documentLayout();
+    if (!layout)
+	return;
+    QAbstractTextDocumentLayout::PaintContext context;
+    painter->save();
+    painter->setClipRect(rect);
+    QSize sz(layout->documentSize().toSize());
+    int y = rect.y();
+    if (sz.height()) {
+	// Align vcenter and bottom (top is the default for document)
+	if (0 != (opt.displayAlignment & Qt::AlignVCenter))
+	    y += (rect.height() - sz.height()) / 2;
+	else if (0 != (opt.displayAlignment & Qt::AlignBottom))
+	    y += rect.height() - sz.height();
+    }
+    painter->translate(rect.x(),y);
+    layout->draw(painter,context);
+    painter->restore();
+}
+
 
 static CustomTreeFactory s_factory;
 static const String s_noGroupId(String(Time::secNow()) + "_" + MD5("Yate").hexDigest());
 static const String s_offline("offline");
+
 
 // Utility: compare strings
 // return -1 if s1 < s2, 0 if s1 == s2, 1 if s1 > s2
@@ -111,28 +312,28 @@ static inline int compareStr(const QString& s1, const QString& s2,
 static bool caseInsensitiveLessThan(const QtTreeItemKey& left,
     const QtTreeItemKey& right)
 {
-    return -1 == compareStr(left.second,right.second,Qt::CaseInsensitive);
+    return compareStr(left.second,right.second,Qt::CaseInsensitive) < 0;
 }
 
 // Utility: compare a single key item
 static bool caseInsensitiveGreaterThan(const QtTreeItemKey& left,
     const QtTreeItemKey& right)
 {
-    return 1 == compareStr(left.second,right.second,Qt::CaseInsensitive);
+    return compareStr(left.second,right.second,Qt::CaseInsensitive) > 0;
 }
 
 // Utility: compare a single key item
 static bool caseSensitiveLessThan(const QtTreeItemKey& left,
     const QtTreeItemKey& right)
 {
-    return -1 == compareStr(left.second,right.second,Qt::CaseSensitive);
+    return compareStr(left.second,right.second,Qt::CaseSensitive) < 0;
 }
 
 // Utility: compare a single key item
 static bool caseSensitiveGreaterThan(const QtTreeItemKey& left,
     const QtTreeItemKey& right)
 {
-    return 1 == compareStr(left.second,right.second,Qt::CaseSensitive);
+    return compareStr(left.second,right.second,Qt::CaseSensitive) > 0;
 }
 
 // Utility: sort
@@ -158,6 +359,35 @@ static inline const String& objListItem(ObjList* list, int index)
     return gen ? gen->toString() : String::empty();
 }
 
+int replaceHtmlParams(String& str, const NamedList& list, bool spaceEol = false)
+{
+    int p1 = 0;
+    int cnt = 0;
+    while ((p1 = str.find("${",p1)) >= 0) {
+	int p2 = str.find('}',p1 + 2);
+	if (p2 <= 0)
+	    return -1;
+	String param = str.substr(p1 + 2,p2 - p1 - 2);
+	param.trimBlanks();
+	int defValPos = param.find('$');
+	if (defValPos < 0)
+	    param = list.getValue(param);
+	else {
+	    // param is in ${<name>$<default>} format
+	    String def = param.substr(defValPos + 1);
+	    param = list.getValue(param.substr(0,defValPos).trimBlanks());
+	    if (!param && def)
+		param = list.getValue(def.trimBlanks());
+	}
+	if (param)
+	    Client::plain2html(param,spaceEol);
+	str = str.substr(0,p1) + param + str.substr(p2 + 1);
+	// advance search offset past the string we just replaced
+	p1 += param.length();
+	cnt++;
+    }
+    return cnt;
+}
 
 
 /*
@@ -168,7 +398,7 @@ QtTreeItem::QtTreeItem(const char* id, int type, const char* text)
     NamedList(id)
 {
     if (!TelEngine::null(text))
-	setText(0,QtClient::setUtf8(text));
+	QTreeWidgetItem::setText(0,QtClient::setUtf8(text));
     XDebug(ClientDriver::self(),DebugAll,"QtTreeItem(%s) type=%d [%p]",id,type,this);
 }
 
@@ -177,6 +407,17 @@ QtTreeItem::~QtTreeItem()
     XDebug(ClientDriver::self(),DebugAll,"~QtTreeItem(%s) type=%d [%p]",c_str(),type(),this);
 }
 
+// Set a column's icon from a list of parameter cname_image
+void QtTreeItem::setImage(int col, const String& cname, const NamedList& list, int role)
+{
+    String* s = cname ? list.getParam(cname + "_image") : 0;
+    if (!s)
+	return;
+    if (role <= Qt::UserRole)
+	QTreeWidgetItem::setIcon(col,QIcon(QtClient::setUtf8(*s)));
+    else
+	setData(col,role,QtClient::setUtf8(*s));
+}
 
 
 /*
@@ -249,6 +490,33 @@ QtCustomTree::QtCustomTree(const char* name, const NamedList& params, QWidget* p
 	    TelEngine::destruct(width);
 	    TelEngine::destruct(sizeMode);
 	    TelEngine::destruct(check);
+	}
+	// Set item delegate(s)
+	String* htmlDlg = params.getParam("htmldelegate");
+	if (!TelEngine::null(htmlDlg)) {
+	    ObjList* l = htmlDlg->split(',',false);
+	    for (ObjList* o = l->skipNull(); o; o = o->skipNext()) {
+		String* s = static_cast<String*>(o->get());
+		int col = s->toInteger(-1);
+		if (col < 0)
+		    col = getColumn(*s);
+		if (col < 0 || col >= columnCount())
+		    continue;
+		hdr->setData(col,RoleHtmlDelegate,true);
+		String prefix;
+		prefix << name << ".htmldelegate." << col;
+		NamedList pp(prefix);
+		pp.copySubParams(params,String("delegateparam.") + *s + ".");
+		pp.setParam(prefix + ".role_display",String(RoleHtmlDelegate));
+		pp.setParam(prefix + ".role_image",String(RoleImage));
+		pp.setParam(prefix + ".role_background",String(RoleBackground));
+		QtHtmlItemDelegate* dlg = new QtHtmlItemDelegate(this,pp);
+		XDebug(ClientDriver::self(),DebugNote,
+		    "QtCustomTree(%s) setting html item delegate (%p,%s) for column %d [%p]",
+		    name,dlg,dlg->toString().c_str(),col,this);
+		setItemDelegateForColumn(col,dlg);
+	    }
+	    TelEngine::destruct(l);
 	}
     }
     // Connect signals
@@ -665,8 +933,7 @@ void QtCustomTree::findItems(NamedList& list, QtTreeItem* start, bool includeSta
 }
 
 // Add a child to a given item
-QtTreeItem* QtCustomTree::addChild(QtTreeItem* child, int pos, QtTreeItem* parent,
-    bool applyRowH)
+QtTreeItem* QtCustomTree::addChild(QtTreeItem* child, int pos, QtTreeItem* parent)
 {
     if (!child)
 	return 0;
@@ -676,27 +943,24 @@ QtTreeItem* QtCustomTree::addChild(QtTreeItem* child, int pos, QtTreeItem* paren
     DDebug(ClientDriver::self(),DebugAll,
 	"QtTree(%s) adding child '%s' type=%d parent=%p pos=%d",
 	name().c_str(),child->id().c_str(),child->type(),parent,pos);
-    if (applyRowH)
-	setItemRowHeight(child);
+    setItemRowHeight(child);
     if (pos < 0 || pos >= root->childCount())
 	root->addChild(child);
     else
 	root->insertChild(pos,child);
-    setupItem(child,applyRowH);
+    setupItem(child);
     itemAdded(*child,parent);
     return child;
 }
 
 // Add a list of children to a given item
-void QtCustomTree::addChildren(QList<QTreeWidgetItem*> list, int pos, QtTreeItem* parent,
-    bool applyRowH)
+void QtCustomTree::addChildren(QList<QTreeWidgetItem*> list, int pos, QtTreeItem* parent)
 {
     QTreeWidgetItem* root = parent ? static_cast<QTreeWidgetItem*>(parent) : invisibleRootItem();
     if (!root)
 	return;
-    if (applyRowH)
-	for (int i = 0; i < list.size(); i++)
-	    setItemRowHeight(list[i]);
+    for (int i = 0; i < list.size(); i++)
+	setItemRowHeight(list[i]);
     if (pos < 0 || pos >= root->childCount())
 	root->addChildren(list);
     else
@@ -705,17 +969,16 @@ void QtCustomTree::addChildren(QList<QTreeWidgetItem*> list, int pos, QtTreeItem
 	QtTreeItem* item = static_cast<QtTreeItem*>(list[i]);
 	if (!item)
 	    continue;
-	setupItem(item,applyRowH);
+	setupItem(item);
 	itemAdded(*item,parent);	
     }
 }
 
 // Setup an item. Load its widget if not found
-void QtCustomTree::setupItem(QtTreeItem* item, bool adjustWidget)
+void QtCustomTree::setupItem(QtTreeItem* item)
 {
     if (!item)
 	return;
-    int h = m_rowHeight;
     // Set widget
     QWidget* w = itemWidget(item,0);
     if (!w) {
@@ -727,19 +990,16 @@ void QtCustomTree::setupItem(QtTreeItem* item, bool adjustWidget)
 		"QtTree(%s) set widget (%p,%s) for child '%s'",
 		name().c_str(),w,YQT_OBJECT_NAME(w),item->id().c_str());
 	    applyStyleSheet(item,item->isSelected());
-	    if (adjustWidget && m_rowHeight > 0) {
-		if (m_rowHeight != w->height())
-		    w->resize(w->width(),m_rowHeight);
+	    // Adjust widget to row height if configured,
+	    // or row height to widget otherwise
+	    QSize sz = item->sizeHint(0);
+	    int h = getItemRowHeight(item->type());
+	    if (h > 0)
+		w->resize(w->width(),sz.height());
+	    else {
+		sz.setHeight(w->height());
+		item->setSizeHint(0,sz);
 	    }
-	    else
-		h = w->height();
-	}
-    }
-    if (!adjustWidget && h >= 0) {
-	QSize sz = item->sizeHint(0);
-	if (sz.height() != h) {
-	    sz.setHeight(h);
-	    item->setSizeHint(0,sz);
 	}
     }
     // Set checkable columns
@@ -749,10 +1009,13 @@ void QtCustomTree::setupItem(QtTreeItem* item, bool adjustWidget)
 // Set and item's row height hint
 void QtCustomTree::setItemRowHeight(QTreeWidgetItem* item)
 {
-    if (!item || m_rowHeight < 0)
+    if (!item)
+	return;
+    int h = getItemRowHeight(item->type());
+    if (h <= 0)
 	return;
     QSize sz = item->sizeHint(0);
-    sz.setHeight(m_rowHeight);
+    sz.setHeight(h);
     item->setSizeHint(0,sz);
 }
 
@@ -801,13 +1064,13 @@ void QtCustomTree::showEmptyChildren(bool show, QtTreeItem* parent)
 // Set the expanded/collapsed image of an item
 void QtCustomTree::setStateImage(QtTreeItem& item)
 {
-    QtUIWidgetItemProps* pUi = QtUIWidget::getItemProps(itemPropsName(item.type()));
-    QtTreeItemProps* p = YOBJECT(QtTreeItemProps,pUi);
+    QtTreeItemProps* p = treeItemProps(item.type());
     if (!(p && p->m_stateWidget))
 	return;
     NamedList tmp("");
-    tmp.addParam("image:" + p->m_stateWidget,
-	item.isExpanded() ? p->m_stateExpandedImg : p->m_stateCollapsedImg);
+    const String& img = item.isExpanded() ? p->m_stateExpandedImg : p->m_stateCollapsedImg;
+    tmp.addParam("image:" + p->m_stateWidget,img);
+    tmp.addParam(p->m_stateWidget + "_image",img);
     updateItem(item,tmp);
 }
 
@@ -887,6 +1150,28 @@ void QtCustomTree::setItemStatsTemplate(QString value)
     QtTreeItemProps* p = YOBJECT(QtTreeItemProps,getItemProps(value,tmp));
     if (p)
 	p->m_statsTemplate = tmp;
+}
+
+// Set an item props height
+void QtCustomTree::setItemHeight(QString value)
+{
+    String tmp;
+    QtTreeItemProps* p = YOBJECT(QtTreeItemProps,getItemProps(value,tmp));
+    if (p)
+	p->m_height = tmp.toInteger(-1);
+}
+
+// Set an item props background
+void QtCustomTree::setItemBg(QString value)
+{
+    String tmp;
+    QtTreeItemProps* p = YOBJECT(QtTreeItemProps,getItemProps(value,tmp));
+    if (!p)
+	return;
+    if (tmp.startSkip("color:",false))
+	p->m_bg = QBrush(QColor(tmp.c_str()));
+    else
+	p->m_bg = QBrush();
 }
 
 // Retrieve a comma separated list with column widths
@@ -1002,27 +1287,43 @@ bool QtCustomTree::updateItem(QtTreeItem& item, const NamedList& params)
     if (!all)
 	item.copyParams(params);
     const NamedList& p = all ? (const NamedList&)item : params;
-    QWidget* w = itemWidget(&item,0);
-    if (w)
-	QtUIWidget::setParams(w,p);
-    else {
-	QTreeWidgetItem* hdr = headerItem();
-	int n = hdr ? columnCount() : 0;
-	for (int col = 0; col < n; col++) {
-	    String id;
-	    getItemData(id,*hdr,col);
-	    if (!id)
-		continue;
-	    String* tmp = p.getParam(id);
-	    if (tmp)
-		item.setText(col,QtClient::setUtf8(*tmp));
-	    tmp = p.getParam(id + "_image");
-	    if (tmp)
-		item.setIcon(col,QIcon(QtClient::setUtf8(*tmp)));
-	    tmp = p.getParam("check:" + id);
-	    if (tmp)
-		item.setCheckState(col,tmp->toBoolean() ? Qt::Checked : Qt::Unchecked);
+    QTreeWidgetItem* hdr = headerItem();
+    QtTreeItemProps* props = treeItemProps(item.type());
+    int n = columnCount();
+    for (int col = 0; col < n; col++) {
+	QWidget* w = itemWidget(&item,col);
+	if (w) {
+	    QtUIWidget::setParams(w,p);
+	    continue;
 	}
+	if (!hdr)
+	    continue;
+	String id;
+	getItemData(id,*hdr,col);
+	item.setText(col,id,p);
+	item.setCheckState(col,id,p);
+	int imageRole = Qt::UserRole;
+	if (props) {
+	    // Set brush
+	    if (props->m_bg != QBrush())
+		item.setData(col,RoleBackground,props->m_bg);
+	    if (getBoolItemData(col,RoleHtmlDelegate,hdr)) {
+		imageRole = RoleImage;
+		// HTML delegate
+		QStringList qList;
+		String s = props->m_styleSheet;
+		if (s)
+		    replaceHtmlParams(s,item,true);
+		qList.append(QtClient::setUtf8(s));
+		s = props->m_selStyleSheet;
+		if (s) {
+		    replaceHtmlParams(s,item);
+		    qList.append(QtClient::setUtf8(s));
+		}
+		item.setData(col,RoleHtmlDelegate,qList);
+	    }
+	}
+	item.setImage(col,id,p,imageRole);
     }
     applyItemTooltip(item);
     return true;
@@ -1071,7 +1372,7 @@ void QtCustomTree::uncheckItem(QtTreeItem& item)
     int n = hdr ? columnCount() : 0;
     for (int i = 0; i < n; i++)
 	if (hdr->data(i,RoleCheckable).toBool())
-	    item.setCheckState(i,Qt::Unchecked);
+	    item.setCheckState(i,false);
 }
 
 // Update a tree item's tooltip
@@ -1098,9 +1399,8 @@ void QtCustomTree::fillItemStatistics(QtTreeItem& item, NamedList& list)
 // Update a tree item's statistics
 void QtCustomTree::applyItemStatistics(QtTreeItem& item)
 {
-    QtUIWidgetItemProps* pt = QtUIWidget::getItemProps(itemPropsName(item.type()));
-    QtTreeItemProps* p = YOBJECT(QtTreeItemProps,pt);
-    if (!(p && p->m_statsWidget))
+    QtTreeItemProps* p = treeItemProps(item.type());
+    if (!p)
 	return;
     String text;
     if (!item.isExpanded()) {
@@ -1110,7 +1410,10 @@ void QtCustomTree::applyItemStatistics(QtTreeItem& item)
 	list.replaceParams(text);
     }
     NamedList params("");
-    params.addParam(p->m_statsWidget,text);
+    if (p->m_statsWidget)
+	params.addParam(p->m_statsWidget,text);
+    else
+	params.addParam("statistics",text);
     updateItem(item,params);
 }
 
@@ -1134,7 +1437,6 @@ ContactList::ContactList(const char* name, const NamedList& params, QWidget* par
     m_itemPropsType.addParam(String((int)TypeChatRoom),"chatroom");
     m_itemPropsType.addParam(String((int)TypeGroup),"group");
     m_savedIndent = indentation();
-    m_groupCountWidget = params["groupcount"];
     m_noGroupText = "None";
     setParams(params);
 }
@@ -1263,12 +1565,12 @@ void ContactList::listChanged()
     if (!m_flatList)
 	showEmptyChildren(!m_hideEmptyGroups);
     // Update contact count in groups
-    if (!m_flatList && m_groupCountWidget) {
+    if (!m_flatList) {
 	QList<QtTreeItem*> grps = findItems(TypeGroup,0,true,false);
 	for (int i = 0; i < grps.size(); i++) {
 	    if (!grps[i])
 		continue;
-	    updateGroupCountContacts(*(grps[i]));
+	    applyItemStatistics(*(grps[i]));
 	}
     }
 }
@@ -1401,7 +1703,7 @@ void ContactList::setContacts(QList<QTreeWidgetItem*>& list)
     // Add contacts to tree
     if (m_flatList) {
 	sortContacts(list);
-	addChildren(list,-1,0,true);
+	addChildren(list,-1,0);
     }
     else {
 	ContactItemList cil;
@@ -1412,7 +1714,7 @@ void ContactList::setContacts(QList<QTreeWidgetItem*>& list)
 	    for (int i = 0; i < cil.m_groups.size(); i++) {
 		sortContacts(cil.m_contacts[i]);
 		QtTreeItem* grp = static_cast<QtTreeItem*>(cil.m_groups[i]);
-		addChildren(cil.m_contacts[i],-1,grp,true);
+		addChildren(cil.m_contacts[i],-1,grp);
 	    }
 	}
     }
@@ -1426,23 +1728,6 @@ ContactItem* ContactList::createContact(const String& id, const NamedList& param
     c->copyParams(params);
     c->updateName(params,m_compareNameCs);
     return c;
-}
-
-// Retrieve the contact count to be shown in group
-void ContactList::updateGroupCountContacts(QtTreeItem& item)
-{
-    if (item.type() != TypeGroup)
-	return;
-    String value;
-    if (!item.isExpanded()) {
-	int total = 0;
-	int online = 0;
-	countContacts(&item,total,online);
-	value << "(" << online << "/" << total << ")";
-    }
-    NamedList tmp("");
-    tmp.addParam(m_groupCountWidget,value);
-    updateItem(item,tmp);
 }
 
 // Add or update a contact
@@ -1536,15 +1821,6 @@ bool ContactList::updateItem(QtTreeItem& item, const NamedList& params)
     return QtCustomTree::updateItem(item,params);
 }
 
-// Item expanded/collapsed notification
-void ContactList::onItemExpandedChanged(QtTreeItem* item)
-{
-    QtCustomTree::onItemExpandedChanged(item);
-    // Update online/offline contacts
-    if (item && item->type() == TypeGroup && m_groupCountWidget)
-	updateGroupCountContacts(*item);
-}
-
 // Get the context menu associated with a given item
 QMenu* ContactList::contextMenu(QtTreeItem* item)
 {
@@ -1578,8 +1854,10 @@ void ContactList::itemAdded(QtTreeItem& item, QtTreeItem* parent)
 	return;
     // Set group name
     QWidget* w = itemWidget(&item,0);
-    if (!w)
+    if (!w) {
+	QtCustomTree::updateItem(item,item);
 	return;
+    }
     QtWindow* wnd = QtClient::parentWindow(this);
     if (!wnd)
 	return;
@@ -1589,6 +1867,18 @@ void ContactList::itemAdded(QtTreeItem& item, QtTreeItem* parent)
     QtClient::getUtf8(n,w->objectName());
     String buf;
     wnd->setText(buildChildName(buf,n,"group"),text,false);
+}
+
+// Fill a list with item statistics
+void ContactList::fillItemStatistics(QtTreeItem& item, NamedList& list)
+{
+    if (item.type() != TypeGroup)
+	return;
+    int total = 0;
+    int online = 0;
+    countContacts(&item,total,online);
+    list.addParam("total",String(total));
+    list.addParam("online",String(online));
 }
 
 // Retrieve a group item from root or create a new one
@@ -1619,7 +1909,7 @@ QtTreeItem* ContactList::getGroup(const String& name, bool create)
 	if (noGrp)
 	    pos = root->indexOfChild(noGrp);
     }
-    QtTreeItem* g = new QtTreeItem(grp,TypeGroup,gText);
+    QtTreeItem* g = createGroup(grp,gText);
     if (!addChild(g,pos))
 	TelEngine::destruct(g);
     return g;
@@ -1668,7 +1958,7 @@ void ContactList::addContact(ContactItem* c, QtTreeItem* parent)
 	    }
 	}
     }
-    QtCustomTree::addChild(c,pos,parent,true);
+    QtCustomTree::addChild(c,pos,parent);
 }
 
 // Replace an existing contact. Remove it and add it again
@@ -1784,7 +2074,7 @@ int ContactItemList::getGroupIndex(const String& id, const String& text)
     if (pos && id != s_noGroupId &&
 	(static_cast<QtTreeItem*>(m_groups[pos - 1]))->id() == s_noGroupId)
 	pos--;
-    m_groups.insert(pos,new QtTreeItem(id,ContactList::TypeGroup,text));
+    m_groups.insert(pos,ContactList::createGroup(id,text));
     m_contacts.insert(pos,QtTreeItemList());
     return pos;
 }

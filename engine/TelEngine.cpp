@@ -530,7 +530,7 @@ void Time::toTimeval(struct timeval* tv, u_int64_t usec)
 unsigned int Time::toEpoch(int year, unsigned int month, unsigned int day,
 	unsigned int hour, unsigned int minute, unsigned int sec, int offset)
 {
-    Debug(DebugAll,"Time::toEpoch(%d,%u,%u,%u,%u,%u,%d)",
+    DDebug(DebugAll,"Time::toEpoch(%d,%u,%u,%u,%u,%u,%d)",
 	year,month,day,hour,minute,sec,offset);
     if (year < 1970)
 	return (unsigned int)-1;
@@ -599,7 +599,7 @@ bool Time::toDateTime(unsigned int epochTimeSec, int& year, unsigned int& month,
     minute = t.tm_min;
     sec = t.tm_sec;
 #endif
-    Debug(DebugAll,"Time::toDateTime(%u,%d,%u,%u,%u,%u,%u)",
+    DDebug(DebugAll,"Time::toDateTime(%u,%d,%u,%u,%u,%u,%u)",
 	epochTimeSec,year,month,day,hour,minute,sec);
     return true;
 }

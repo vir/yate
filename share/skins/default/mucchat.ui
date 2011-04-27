@@ -303,24 +303,32 @@
         <stringlist>
          <string>buildprops=_yate_identity=string</string>
          <string>property:_yate_identity=muc_members</string>
+         <string>columns=name</string>
+         <string>htmldelegate=name</string>
+         <string>delegateparam.name.drawfocus=false</string>
          <string>property:_yate_save_props=_yate_flatlist,_yate_showofflinecontacts</string>
          <string>property:_yate_flatlist=false</string>
          <string>property:_yate_showofflinecontacts=true</string>
+         <string>property:_yate_horizontalheader=false</string>
          <string>property:_yate_sorting=name,true</string>
          <string>property:itemsExpandable=true</string>
          <string>property:autoExpand=true</string>
-         <string>property:styleSheet=QTreeWidget{font-size: 11px;background:white;border: 1px solid #97acbc;border-radius:2px;}QTreeView::branch{image:none;}</string>
+         <string>property:rootIsDecorated=false</string>
+         <string>property:allColumnsShowFocus=false</string>
+         <string>property:styleSheet=QTreeWidget{border-image: none;font-size: 11px;background:white;selection-background-color:lightblue;border: 0px solid #97acbc;border-radius:2px;}QTreeView::branch{background:transparent;}</string>
          <string>property:_yate_nogroup_caption=Not set</string>
-         <string>property:_yate_itemui=contact:room_member.ui</string>
-         <string>property:_yate_itemui=group:contactlist_group.ui</string>
-         <string>property:_yate_itemstyle=contact:QWidget#${name}{background:white;}</string>
-         <string>property:_yate_itemstyle=group:QWidget#${name}{background:lightgrey;}</string>
-         <string>property:_yate_itemselectedstyle=contact:QWidget#${name}{background:lightblue;}</string>
-         <string>property:_yate_itemselectedstyle=group:QWidget#${name}{background:lightgrey;}</string>
-         <string>property:_yate_itemstatewidget=group:state</string>
+         <string>property:_yate_comparecase=false</string>
+         <string>property:_yate_itemheight=contact:20</string>
+         <string>property:_yate_itemheight=group:20</string>
+         <string>property:_yate_itemstyle=contact:&lt;html>&lt;head>&lt;meta name="qrichtext" content="1" />&lt;style type="text/css">\np, li { white-space: pre-wrap; }\n&lt;/style>&lt;/head>&lt;body style=" font-size:10px; font-weight:400; font-style:normal;">&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">&lt;span style=" font-size:12px;">${name}&lt;/span>&lt;/p>&lt;/body>&lt;/html></string>
+         <string>property:_yate_itemstyle=group:&lt;html>&lt;head>&lt;meta name="qrichtext" content="1" />&lt;style type="text/css">\np, li { white-space: pre-wrap; }\n&lt;/style>&lt;/head>&lt;body style=" font-size:10px; font-weight:400; font-style:normal;">&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">&lt;span style=" font-size:11px;">${name}${statistics}&lt;/span>&lt;/p>&lt;/body>&lt;/html></string>
+         <string>property:_yate_itemselectedstyle=contact:&lt;html>&lt;head>&lt;meta name="qrichtext" content="1" />&lt;style type="text/css">\np, li { white-space: pre-wrap; }\n&lt;/style>&lt;/head>&lt;body style=" color:blue; font-size:10px; font-weight:400; font-style:normal;">&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">&lt;span style=" font-size:12px;">${name}&lt;/span>&lt;/p>&lt;/body>&lt;/html></string>
+         <string>property:_yate_itembackground=group:color:lightgrey</string>
+         <string>property:_yate_itemstatewidget=group:name</string>
          <string>property:_yate_itemexpandedimage=group:expanded.png</string>
          <string>property:_yate_itemcollapsedimage=group:collapsed.png</string>
          <string>property:_yate_itemtooltip=contact:&lt;html>&lt;head>&lt;meta name="qrichtext" content="1" />&lt;style type="text/css">\np, li { white-space: pre-wrap; }\n&lt;/style>&lt;/head>&lt;body style=" font-family:'Arial'; font-size:10pt; font-weight:400; font-style:normal;">&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">&lt;span style=" font-size:14pt; font-weight:600;">${name}&lt;/span>&lt;/p>&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">${status_text}&lt;/p>&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">${contact}&lt;/p>&lt;/body>&lt;/html></string>
+         <string>property:_yate_itemtooltip=group:&lt;html>&lt;head>&lt;meta name="qrichtext" content="1" />&lt;style type="text/css">\np, li { white-space: pre-wrap; }\n&lt;/style>&lt;/head>&lt;body style=" font-family:'Arial'; font-size:10pt; font-weight:400; font-style:normal;">&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">&lt;span style=" font-size:14pt; font-weight:600;">${name}&lt;/span>&lt;/p>&lt;/body>&lt;/html></string>
         </stringlist>
        </property>
       </widget>

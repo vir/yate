@@ -312,28 +312,28 @@ static inline int compareStr(const QString& s1, const QString& s2,
 static bool caseInsensitiveLessThan(const QtTreeItemKey& left,
     const QtTreeItemKey& right)
 {
-    return -1 == compareStr(left.second,right.second,Qt::CaseInsensitive);
+    return compareStr(left.second,right.second,Qt::CaseInsensitive) < 0;
 }
 
 // Utility: compare a single key item
 static bool caseInsensitiveGreaterThan(const QtTreeItemKey& left,
     const QtTreeItemKey& right)
 {
-    return 1 == compareStr(left.second,right.second,Qt::CaseInsensitive);
+    return compareStr(left.second,right.second,Qt::CaseInsensitive) > 0;
 }
 
 // Utility: compare a single key item
 static bool caseSensitiveLessThan(const QtTreeItemKey& left,
     const QtTreeItemKey& right)
 {
-    return -1 == compareStr(left.second,right.second,Qt::CaseSensitive);
+    return compareStr(left.second,right.second,Qt::CaseSensitive) < 0;
 }
 
 // Utility: compare a single key item
 static bool caseSensitiveGreaterThan(const QtTreeItemKey& left,
     const QtTreeItemKey& right)
 {
-    return 1 == compareStr(left.second,right.second,Qt::CaseSensitive);
+    return compareStr(left.second,right.second,Qt::CaseSensitive) > 0;
 }
 
 // Utility: sort

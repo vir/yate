@@ -1,3 +1,19 @@
+yate (3.3.3.svn4346) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4346: + Added method used to retrieve and
+    load image files from/into global application pixmap cache.  + Show
+    chat state notifications received from chat rooms.  + Added client
+    method used to replace plain text chars with html markups.  + The
+    custom tree (and ContactList) is now using a custom item delegate to
+    display html content in cells (faster then using widgets).  + Fixed
+    bug: check the correct value when comparing 2 strings.  + Use case
+    insentive comparison when sorting contacts.  + Moved some annoying
+    messages to DDebug.  + Do not URI-unescape the user part if protocol
+    is empty or Jabber/XMPP.  + Properly parse URIs whose protocol
+    contains digits like h323:something.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 28 Apr 2011 02:19:25 +0400
+
 yate (3.3.3.svn4338) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4338: + Take the global mutex while

@@ -1647,6 +1647,13 @@ public:
      */
     static void generateGuid(String& buf, const String& extra = String::empty());
 
+    /**
+     * Replace plain text chars with HTML escape or markup
+     * @param buf Destination string
+     * @param spaceEol True to replace end of line with space instead of html markup
+     */
+    static void plain2html(String& buf, bool spaceEol = false);
+
     static Configuration s_settings;     // Client settings
     static Configuration s_actions;      // Logic preferrences
     static Configuration s_accounts;     // Accounts

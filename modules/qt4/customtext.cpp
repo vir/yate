@@ -70,41 +70,6 @@ static inline bool isIgnoreUrlEnd(char c)
     return (c == '.' || c == ';' || c == ':' || c == '?' || c == '!');
 }
 
-// Replace plain text chars with HTML escape or markup
-static void plain2html(String& buf)
-{
-    static const String htmlBr = "<br>";
-    static const String htmlAmp = "&amp;";
-    static const String htmlLt = "&lt;";
-    static const String htmlGt = "&gt;";
-    static const String htmlQuot = "&quot;";
-
-    unsigned int i = 0;
-    while (i < buf.length()) {
-	const String* mark = 0;
-	if (buf[i] == '\r' || buf[i] == '\n')
-	    mark = &htmlBr;
-	else if (buf[i] == '&')
-	    mark = &htmlAmp;
-	else if (buf[i] == '<')
-	    mark = &htmlLt;
-	else if (buf[i] == '>')
-	    mark = &htmlGt;
-	else if (buf[i] == '\"')
-	    mark = &htmlQuot;
-	else {
-	    i++;
-	    continue;
-	}
-	// Handle "\r\n" as single <br>
-	if (buf[i] == '\r' && i != buf.length() - 1 && buf[i + 1] == '\n')
-	    buf = buf.substr(0,i) + *mark + buf.substr(i + 2);
-	else
-	    buf = buf.substr(0,i) + *mark + buf.substr(i + 1);
-	i += mark->length();
-    }
-}
-
 // Move a cursor at document start/end.
 // Adjust position by 'blocks' count
 // Select if required and blocks is not 0
@@ -194,7 +159,7 @@ void CustomTextFormat::buildText(String& text, const NamedList* params,
 	    for (unsigned int i = 0; i < n; i++) {
 		String* s = dummy.getParam(i);
 		if (!TelEngine::null(s)) {
-		    plain2html(*s);
+		    Client::plain2html(*s);
 		    if (owner)
 			owner->replace(*s);
 		}

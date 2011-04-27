@@ -2916,6 +2916,42 @@ void Client::generateGuid(String& buf, const String& extra)
     buf << tmp.substr(20);
 }
 
+// Replace plain text chars with HTML escape or markup
+void Client::plain2html(String& buf, bool spaceEol)
+{
+    static const String space = " ";
+    static const String htmlBr = "<br>";
+    static const String htmlAmp = "&amp;";
+    static const String htmlLt = "&lt;";
+    static const String htmlGt = "&gt;";
+    static const String htmlQuot = "&quot;";
+
+    unsigned int i = 0;
+    while (i < buf.length()) {
+	const String* mark = 0;
+	if (buf[i] == '\r' || buf[i] == '\n')
+	    mark = spaceEol ? &space : &htmlBr;
+	else if (buf[i] == '&')
+	    mark = &htmlAmp;
+	else if (buf[i] == '<')
+	    mark = &htmlLt;
+	else if (buf[i] == '>')
+	    mark = &htmlGt;
+	else if (buf[i] == '\"')
+	    mark = &htmlQuot;
+	else {
+	    i++;
+	    continue;
+	}
+	// Handle "\r\n" as single <br>
+	if (buf[i] == '\r' && i != buf.length() - 1 && buf[i + 1] == '\n')
+	    buf = buf.substr(0,i) + *mark + buf.substr(i + 2);
+	else
+	    buf = buf.substr(0,i) + *mark + buf.substr(i + 1);
+	i += mark->length();
+    }
+}
+
 // Build an 'ui.event' message
 Message* Client::eventMessage(const String& event, Window* wnd, const char* name,
 	NamedList* params)

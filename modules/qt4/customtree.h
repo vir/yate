@@ -52,15 +52,18 @@ public:
      * @param type Item type
      */
     explicit inline QtTreeItemProps(const String& type)
-	: QtUIWidgetItemProps(type)
+	: QtUIWidgetItemProps(type),
+	m_height(-1)
 	{}
 
-    String m_stateWidget;                // Item widget showing the state
+    int m_height;                        // Item height
+    String m_stateWidget;                // Item widget or column showing the state
     String m_stateExpandedImg;           // Image to show when expanded
     String m_stateCollapsedImg;          // Image to show when collapsed
     String m_toolTip;                    // Tooltip template
     String m_statsWidget;                // Item widget showing statistics while collapsed
     String m_statsTemplate;              // Statistics template (may include ${count} for children count)
+    QBrush m_bg;                         // Item background
 };
 
 
@@ -86,6 +89,48 @@ public:
     ~QtTreeItem();
 
     /**
+     * Set a column's text from a list of parameter cname
+     * @param col Column to set
+     * @param cname Column name
+     * @param list The list containing the parameter
+     */
+    inline void setText(int col, const String& cname, const NamedList& list) {
+	    String* s = cname ? list.getParam(cname) : 0;
+	    if (s)
+		QTreeWidgetItem::setText(col,QtClient::setUtf8(*s));
+	}
+
+    /**
+     * Set a column's icon from a list of parameter cname_image
+     * @param col Column to set
+     * @param cname Column name
+     * @param list The list containing the parameter
+     * @param role Set image file path in this role if greater then Qt::UserRole
+     */
+    void setImage(int col, const String& cname, const NamedList& list,
+	    int role = Qt::UserRole);
+
+    /**
+     * Set a column's check state from boolean value
+     * @param col Column to set
+     * @param check Check state
+     */
+    inline void setCheckState(int col, bool check)
+	{ QTreeWidgetItem::setCheckState(col,check ? Qt::Checked : Qt::Unchecked); }
+
+    /**
+     * Set a column's check state from a list of parameter check:cname
+     * @param col Column to set
+     * @param cname Column name
+     * @param list The list containing the parameter
+     */
+    inline void setCheckState(int col, const String& cname, const NamedList& list) {
+	    String* s = cname ? list.getParam("check:" + cname) : 0;
+	    if (s)
+		setCheckState(col,s->toBoolean());
+	}
+
+    /**
      * Retrieve the item id
      * @return Item id
      */
@@ -105,6 +150,7 @@ class QtCustomTree : public QtTree
     Q_PROPERTY(QStringList _yate_save_props READ saveProps WRITE setSaveProps(QStringList))
     Q_PROPERTY(bool autoExpand READ autoExpand WRITE setAutoExpand(bool))
     Q_PROPERTY(int rowHeight READ rowHeight WRITE setRowHeight(int))
+    Q_PROPERTY(bool _yate_horizontalheader READ getHHeader WRITE setHHeader(bool))
     Q_PROPERTY(QString _yate_itemui READ itemUi WRITE setItemUi(QString))
     Q_PROPERTY(QString _yate_itemstyle READ itemStyle WRITE setItemStyle(QString))
     Q_PROPERTY(QString _yate_itemselectedstyle READ itemSelectedStyle WRITE setItemSelectedStyle(QString))
@@ -114,6 +160,8 @@ class QtCustomTree : public QtTree
     Q_PROPERTY(QString _yate_itemtooltip READ itemTooltip WRITE setItemTooltip(QString))
     Q_PROPERTY(QString _yate_itemstatswidget READ itemStatsWidget WRITE setItemStatsWidget(QString))
     Q_PROPERTY(QString _yate_itemstatstemplate READ itemStatsTemplate WRITE setItemStatsTemplate(QString))
+    Q_PROPERTY(QString _yate_itemheight READ itemHeight WRITE setItemHeight(QString))
+    Q_PROPERTY(QString _yate_itembackground READ itemBg WRITE setItemBg(QString))
     Q_PROPERTY(QString _yate_col_widths READ colWidths WRITE setColWidths(QString))
     Q_PROPERTY(QString _yate_sorting READ sorting WRITE setSorting(QString))
 public:
@@ -125,12 +173,27 @@ public:
     };
 
     /**
+     * List item data role
+     */
+    enum ItemDataRole {
+	RoleId = Qt::UserRole + 1,       // Item id (used in headers)
+	RoleCheckable,                   // Column checkable (used in headers)
+	RoleHtmlDelegate,                // Headers: true if a column has a custom html item delegate
+	                                 // Rows: QStringList with data
+	RoleImage,                       // Role containing item image file name
+	RoleBackground,                  // Role containing item background color
+	RoleCount
+    };
+
+    /**
      * Constructor
      * @param name Object name
      * @param params Parameters
      * @param parent Optional parent
+     * @param applyParams Apply parameters (call setParams())
      */
-    QtCustomTree(const char* name, const NamedList& params, QWidget* parent = 0);
+    QtCustomTree(const char* name, const NamedList& params, QWidget* parent = 0,
+	bool applyParams = true);
 
     /**
      * Destructor
@@ -296,47 +359,102 @@ public:
      * @param child Child to add
      * @param pos Position to insert. Negative to add after the last child
      * @param parent The parent item. Set it to 0 to add to the root
-     * @param applyRowH True to apply row height hint on item before adding
      * @return QtTreeItem pointer on failure, 0 on success
      */
-    QtTreeItem* addChild(QtTreeItem* child, int pos = -1, QtTreeItem* parent = 0,
-	bool applyRowH = false);
+    QtTreeItem* addChild(QtTreeItem* child, int pos = -1, QtTreeItem* parent = 0);
 
     /**
      * Add a child to a given item
      * @param child Child to add
      * @param atStart True to insert at start, false to add aftr the last child
      * @param parent The parent item. Set it to 0 to add to the root
-     * @param applyRowH True to apply row height hint on item before adding
      * @return QtTreeItem pointer on failure, 0 on success
      */
-    inline QtTreeItem* addChild(QtTreeItem* child, bool atStart, QtTreeItem* parent = 0,
-	bool applyRowH = false)
-	{ return addChild(child,atStart ? 0 : -1,parent,applyRowH); }
+    inline QtTreeItem* addChild(QtTreeItem* child, bool atStart, QtTreeItem* parent = 0)
+	{ return addChild(child,atStart ? 0 : -1,parent); }
 
     /**
      * Add a list of children to a given item
      * @param list Children to add
      * @param pos Position to insert. Negative to add after the last child
      * @param parent The parent item. Set it to 0 to add to the root
-     * @param applyRowH True to apply row height hint on items before adding
      */
-    void addChildren(QList<QTreeWidgetItem*> list, int pos = -1, QtTreeItem* parent = 0,
-	bool applyRowH = false);
+    void addChildren(QList<QTreeWidgetItem*> list, int pos = -1, QtTreeItem* parent = 0);
 
     /**
      * Setup an item. Load its widget if not found
      * @param item Item to setup
-     * @param adjustWidget True to adjust widget to row height,
-     *  false to adjust the row to widget height
      */
-    void setupItem(QtTreeItem* item, bool adjustWidget);
+    void setupItem(QtTreeItem* item);
+
+    /**
+     * Retrieve and item's row height by type
+     * @param item Item to set
+     * @return Item row height
+     */
+    inline int getItemRowHeight(int type) {
+	    QtTreeItemProps* p = treeItemProps(type);
+	    return (p && p->m_height > 0) ? p->m_height : m_rowHeight;
+	}
 
     /**
      * Set and item's row height hint
      * @param item Item to set
      */
     void setItemRowHeight(QTreeWidgetItem* item);
+
+    /**
+     * Retrieve item properties associated with a given type
+     * @param type Item type
+     * @return QtTreeItemProps poinetr or 0 if not found
+     */
+    inline QtTreeItemProps* treeItemProps(int type) {
+	    QtUIWidgetItemProps* pt = QtUIWidget::getItemProps(itemPropsName(type));
+	    return YOBJECT(QtTreeItemProps,pt);
+	}
+
+    /**
+     * Retrieve string data associated with a column
+     * @param buf Destination string
+     * @param item The tree item whose data to retreive
+     * @param column Column to retrieve
+     * @param role Data role to retrieve, defaults to id
+     */
+    inline void getItemData(String& buf, QTreeWidgetItem& item, int column,
+	int role = RoleId)
+	{ QtClient::getUtf8(buf,item.data(column,role).toString()); }
+
+    /**
+     * Retrieve boolean data associated with a column
+     * @param column Column to retrieve
+     * @param role Data role to retrieve
+     * @param item Optional item, use tree header item if 0
+     * @return The boolean value for the given column and role
+     */
+    inline bool getBoolItemData(int column, int role, QTreeWidgetItem* item = 0) {
+	    if (!item)
+		item = headerItem();
+	    return item && item->data(column,role).toBool();
+	}
+
+    /**
+     * Retrieve a column by it's id
+     * @param id The column id to find
+     * @return Column number, -1 if not found
+     */
+    int getColumn(const String& id);
+
+    /**
+     * Show or hide an item
+     * @param item The item
+     * @param show True to show, false to hide
+     */
+    inline void showItem(QtTreeItem& item, bool show) {
+	    if (item.isHidden() != show)
+		return;
+	    item.setHidden(!show);
+	    itemVisibleChanged(item);
+	}
 
     /**
      * Show or hide empty children.
@@ -379,6 +497,25 @@ public:
      */
     void setRowHeight(int h)
 	{ m_rowHeight = h; }
+
+    /**
+     * Check if the horizontal header is visible
+     * @return True if the horizontal is visible
+     */
+    bool getHHeader() {
+	    QTreeWidgetItem* h = headerItem();
+	    return h && !h->isHidden();
+	}
+
+    /**
+     * Show/hide the horizontal header
+     * @param on True to show the horizontal header, false to hide it
+     */
+    void setHHeader(bool on) {
+	    QTreeWidgetItem* h = headerItem();
+	    if (h)
+		h->setHidden(!on);
+	}
 
     /**
      * Read _yate_itemui property accessor: does nothing
@@ -496,6 +633,32 @@ public:
      * @param value Item props statistics template. Format [type:]template
      */
     void setItemStatsTemplate(QString value);
+
+    /**
+     * Read _yate_itemheight property accessor: does nothing
+     * This method is here to stop MOC compiler complaining about missing READ accessor function
+     */
+    QString itemHeight()
+	{ return QString(); }
+
+    /**
+     * Set an item props height
+     * @param value Item props height. Format [type:]height
+     */
+    void setItemHeight(QString value);
+
+    /**
+     * Read _yate_itembackground property accessor: does nothing
+     * This method is here to stop MOC compiler complaining about missing READ accessor function
+     */
+    QString itemBg()
+	{ return QString(); }
+
+    /**
+     * Set an item props background
+     * @param value Item props background. Format [type:]background
+     */
+    void setItemBg(QString value);
 
     /**
      * Retrieve a comma separated list with column widths
@@ -672,6 +835,18 @@ protected:
     virtual void itemRemoved(QtTreeItem& item, QtTreeItem* parent);
 
     /**
+     * Handle item visiblity changes
+     * @param item Changed item
+     */
+    virtual void itemVisibleChanged(QtTreeItem& item);
+
+    /**
+     * Uncheck all checkable columns in a given item
+     * @param item The item
+     */
+    virtual void uncheckItem(QtTreeItem& item);
+
+    /**
      * Update a tree item's tooltip
      * @param item Item to update
      */
@@ -691,6 +866,7 @@ protected:
      */
     void applyItemStatistics(QtTreeItem& item);
 
+    bool m_hasCheckableCols;             // True if we have checkable columns
     QMenu* m_menu;                       // Tree context menu
     bool m_autoExpand;                   // Items are expanded when added
     int m_rowHeight;                     // Tree row height
@@ -889,6 +1065,18 @@ public:
 	    return TypeChatRoom;
 	}
 
+    /**
+     * Create a group item
+     * @param id Group id
+     * @param name Group name
+     * @return Valid QtTreeItem pointer
+     */
+    static QtTreeItem* createGroup(const String& id, const String& name) {
+	    QtTreeItem* g = new QtTreeItem(id,TypeGroup,name);
+	    g->addParam("name",name);
+	    return g;
+	}
+
 protected:
     /**
      * Retrieve tree sorting
@@ -938,12 +1126,6 @@ protected:
     virtual bool updateItem(QtTreeItem& item, const NamedList& params);
 
     /**
-     * Item expanded/collapsed notification
-     * @param item The item
-     */
-    virtual void onItemExpandedChanged(QtTreeItem* item);
-
-    /**
      * Get the context menu associated with a given item
      * @param item The item (can be 0)
      * @return QMenu pointer or 0
@@ -956,6 +1138,14 @@ protected:
      * @param parent The parent of the added tree item. 0 if added to the root
      */
     virtual void itemAdded(QtTreeItem& item, QtTreeItem* parent);
+
+    /**
+     * Fill a list with item statistics.
+     * The default implementation fills a 'count' parameter with the number of item children
+     * @param item The tree item
+     * @param list The list to fill
+     */
+    virtual void fillItemStatistics(QtTreeItem& item, NamedList& list);
 
     /**
      * Retrieve a group item from root or create a new one
@@ -1012,8 +1202,6 @@ private:
     bool m_flatList;                     // Flat list
     bool m_showOffline;                  // Show or hide offline contacts
     bool m_hideEmptyGroups;              // Show or hide empty groups
-    String m_groupCountWidget;           // The name of the widget used to display
-                                         //  online/count contacts
     String m_noGroupText;                // Group text to show for contacts not belonging to any group
     QMap<QString,QString> m_statusOrder; // Status order (names are mapped to status icons)
     QMenu* m_menuContact;
@@ -1034,7 +1222,7 @@ class ContactItem : public QtTreeItem
 public:
     inline ContactItem(const char* id, const NamedList& p = NamedList::empty(),
 	bool contact = true)
-	: QtTreeItem(id,ContactList::contactType(p["type"]),p.getValue("name"))
+	: QtTreeItem(id,ContactList::contactType(p["type"]))
 	{}
     // Build and return a list of groups
     inline ObjList* groups() const

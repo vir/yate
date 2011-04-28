@@ -236,6 +236,16 @@
     </layout>
    </item>
    <item>
+    <widget class="QCheckBox" name="muc_invite_showofflinecontacts" >
+     <property name="text" >
+      <string>Show offline contacts</string>
+     </property>
+     <property name="_yate_identity" stdset="0" >
+      <string>setparams:property:invite_contacts:_yate_showofflinecontacts</string>
+     </property>
+    </widget>
+   </item>
+   <item>
     <widget class="QFrame" name="frame_contacts" >
      <property name="sizePolicy" >
       <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
@@ -250,20 +260,22 @@
       <string>invite_contacts</string>
      </property>
      <property name="_yate_uiwidget_class" stdset="0" >
-      <string>CustomTable</string>
+      <string>ContactList</string>
      </property>
      <property name="_yate_uiwidget_params" stdset="0" >
       <stringlist>
+       <string>columns=Name,Contact,Status</string>
+       <string>columns.check=name</string>
+       <string>property:itemsExpandable=true</string>
        <string>property:sortingEnabled=true</string>
-       <string>property:_yate_horizontalheader=true</string>
-       <string>property:_yate_notifyonenterpressed=false</string>
-       <string>property:_yate_notifyitemchanged=false</string>
-       <string>property:_yate_itemheight=0</string>
-       <string>property:_yate_sorting=2,true</string>
-       <string>hheader_columns=Enabled,Name,Contact,Status</string>
-       <string>hheader_columns_check=enabled</string>
-       <string>hheader_columns_size=60</string>
-       <string>hheader_columns_resize=contents</string>
+       <string>property:autoExpand=true</string>
+       <string>property:styleSheet=QTreeWidget {border-image: none;font-size: 11px;background:white;selection-background-color:#0c7acb;selection-color:white;border: 0px solid #97acbc;border-radius:2px;}</string>
+       <string>property:_yate_save_props=_yate_showofflinecontacts,_yate_sorting,_yate_col_widths</string>
+       <string>property:_yate_flatlist=true</string>
+       <string>property:_yate_showofflinecontacts=false</string>
+       <string>property:_yate_hideemptygroups=true</string>
+       <string>property:_yate_sorting=name,true</string>
+       <string>property:_yate_itemtooltip=contact:&lt;html>&lt;head>&lt;meta name="qrichtext" content="1" />&lt;style type="text/css">\np, li { white-space: pre-wrap; }\n&lt;/style>&lt;/head>&lt;body style=" font-family:'Arial'; font-size:10pt; font-weight:400; font-style:normal;">&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">&lt;span style=" font-size:14pt; font-weight:600;">${name}&lt;/span>&lt;/p>&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">${status_text}&lt;/p>&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">${contact}&lt;/p>&lt;/body>&lt;/html></string>
       </stringlist>
      </property>
     </widget>
@@ -273,6 +285,22 @@
      <property name="topMargin" >
       <number>6</number>
      </property>
+     <item>
+      <widget class="QPushButton" name="invite_add" >
+       <property name="toolTip" >
+        <string>Add a contact to the list</string>
+       </property>
+       <property name="text" >
+        <string>Add</string>
+       </property>
+       <property name="icon" >
+        <iconset>addcontact.png</iconset>
+       </property>
+       <property name="shortcut" >
+        <string>Return</string>
+       </property>
+      </widget>
+     </item>
      <item>
       <spacer>
        <property name="orientation" >

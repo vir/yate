@@ -318,6 +318,7 @@ static const String s_inviteContacts = "invite_contacts";   // List of contacts 
 // Actions
 static const String s_actionShowCallsList = "showCallsList";
 static const String s_actionShowNotification = "showNotification";
+static const String s_actionShowInfo = "showNotificationInfo";
 static const String s_actionPendingChat = "showPendingChat";
 static const String s_actionCall = "call";
 static const String s_actionAnswer = "answer";
@@ -354,6 +355,7 @@ static const String s_mucBan = "room_member_ban";
 static const String s_mucRoomShowLog = "room_showlog";
 static const String s_mucMemberShowLog = "room_member_showlog";
 static const String s_storeContact = "storecontact";
+static const String s_mucInviteAdd = "invite_add";
 // Not selected string(s)
 static String s_notSelected = "-none-";
 // Maximum number of call log entries
@@ -518,6 +520,22 @@ static inline bool setChangedParam(NamedList& dest, const String& param,
 	return setChangedString(*exist,src);
     dest.addParam(param,src);
     return true;
+}
+
+// Append failure reason/error to a string
+static void addError(String& buf, NamedList& list)
+{
+    String* error = list.getParam("error");
+    String* reason = list.getParam("reason");
+    if (TelEngine::null(error)) {
+	if (TelEngine::null(reason))
+	    return;
+	error = reason;
+	reason = 0;
+    }
+    buf.append(*error,": ");
+    if (!TelEngine::null(reason))
+	buf << " (" << *reason << ")";
 }
 
 // Build contact name: name <uri>
@@ -745,6 +763,15 @@ static inline String resStatusImage(int stat)
     if (img)
 	return Client::s_skinPath + img;
     return String();
+}
+
+// Retrieve the status of a contact
+static inline int contactStatus(ClientContact& c)
+{
+    ClientResource* res = c.status();
+    if (res)
+	return res->m_status;
+    return c.online() ? ClientResource::Online : ClientResource::Offline;
 }
 
 // Set the image parameter of a list
@@ -1791,6 +1818,8 @@ static void setAccountStatus(ClientAccountList* accounts, ClientAccount* acc,
 	if (login) {
 	    acc->resource().m_status = ClientResource::Connecting;
 	    addAccPendingStatus(*m,acc,stat);
+	    // Make sure we see the login fail notification
+	    acc->m_params.clearParam("internal.nologinfail");
 	}
 	else {
 	    acc->resource().m_status = ClientResource::Offline;
@@ -1878,6 +1907,8 @@ static void fillChatContact(NamedList& p, ClientContact& c, bool data, bool stat
 	    if (res)
 		text = res->m_text;
 	}
+	else
+	    p.addParam("name_image",Client::s_skinPath + "muc_16.png");
 	p.addParam("status_text",text ? text.c_str() : ClientResource::statusDisplayText(stat));
 	p.addParam("status",lookup(stat,ClientResource::s_statusName));
     }
@@ -2051,7 +2082,9 @@ static void updateMucRoomMember(MucRoom& room, MucRoomMember& item, Message* msg
 	if (uri)
 	    uri.append(item.m_instance,"/");
 	pList->addParam("contact",uri,false);
-	pList->addParam("image:status_image",resStatusImage(item.m_status));
+	String img = resStatusImage(item.m_status);
+	pList->addParam("image:status_image",img);
+	pList->addParam("name_image",img);
 	if (room.hasChat(item.toString())) {
 	    pChat = new NamedList(*pList);
 	    pChat->setParam("name",room.uri() + " - " + item.m_name);
@@ -2288,6 +2321,28 @@ static inline ClientWizard* findTempWizard(Window* wnd)
     return o ? static_cast<ClientWizard*>(o->get()) : 0;
 }
 
+// Retrieve selected contacts from UI
+static void getSelectedContacts(ObjList& list, const String& name, Window* w,
+    const String& itemToGet)
+{
+    if (!Client::valid())
+	return;
+    String param("check:" + itemToGet);
+    NamedList p("");
+    Client::self()->getOptions(name,&p,w);
+    NamedIterator iter(p);
+    for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	if (!ns->name())
+	    continue;
+	NamedList* tmp = new NamedList(ns->name());
+	Client::self()->getTableRow(name,*tmp,tmp,w);
+	if (tmp->getBoolValue(param))
+	    list.append(tmp);
+	else
+	    TelEngine::destruct(tmp);
+    }
+}
+
 // Show the MUC invite window
 static bool showMucInvite(ClientContact& contact, ClientAccountList* accounts)
 {
@@ -2311,25 +2366,50 @@ static bool showMucInvite(ClientContact& contact, ClientAccountList* accounts)
     p.addParam("show:invite_password",String::boolText(room == 0));
     p.addParam("invite_account",contact.accountName());
     p.addParam("invite_text","");
+    String showOffline;
+    Client::self()->getProperty(s_inviteContacts,"_yate_showofflinecontacts",showOffline,w);
+    p.addParam("check:muc_invite_showofflinecontacts",showOffline);
     Client::self()->setParams(&p,w);
     Client::self()->clearTable(s_inviteContacts,w);
     if (accounts) {
 	NamedList rows("");
+	String sel;
+	if (!room)
+	    sel = contact.uri();
 	for (ObjList* oa = accounts->accounts().skipNull(); oa; oa = oa->skipNext()) {
 	    ClientAccount* a = static_cast<ClientAccount*>(oa->get());
 	    for (ObjList* oc = a->contacts().skipNull(); oc; oc = oc->skipNext()) {
 	        ClientContact* c = static_cast<ClientContact*>(oc->get());
-		NamedList* p = new NamedList(c->toString());
+		int stat = contactStatus(*c);
+		String id = c->uri();
+		// Check if contact already added
+		NamedString* added = rows.getParam(id);
+		if (added) {
+		    NamedList* nl = YOBJECT(NamedList,added);
+		    int aStat = nl ? nl->getIntValue("contact_status_value") :
+			ClientResource::Unknown;
+		    // At least one of them offline: the greater status wins
+		    if ((aStat < ClientResource::Online ||
+			stat < ClientResource::Online) && stat < aStat)
+			continue;
+		    // Both online: the lesser status wins
+		    if (stat >= aStat)
+			continue;
+		    rows.clearParam(added);
+		}
+		// Add the contact
+		NamedList* p = new NamedList(id);
 		fillChatContact(*p,*c,true,true);
-		if (!room && c == &contact)
-		    p->addParam("check:enabled",String::boolText(true));
-		rows.addParam(new NamedPointer(c->toString(),p,String::boolText(true)));
+		p->addParam("contact_status_value",String(stat));
+		if (id == sel)
+		    p->addParam("check:name",String::boolText(true));
+		rows.addParam(new NamedPointer(id,p,String::boolText(true)));
 	    }
 	}
 	Client::self()->updateTableRows(s_inviteContacts,&rows,false,w);
+	if (sel)
+	    Client::self()->setSelect(s_inviteContacts,sel,w);
     }
-    if (!room)
-	Client::self()->setSelect(s_inviteContacts,contact.toString(),w);
     Client::self()->setVisible(s_wndMucInvite,true,true);
     return true;
 }
@@ -2468,6 +2548,8 @@ static bool dropFileTransferItem(const String& id)
 // Add a tray icon to the mainwindow stack
 static bool addTrayIcon(const String& type)
 {
+    if (!type)
+	return false;
     int prio = 0;
     String triggerAction;
     NamedList* iconParams = 0;
@@ -2489,12 +2571,19 @@ static bool addTrayIcon(const String& type)
 	triggerAction = s_actionShowCallsList;
 	specific = "View calls";
     }
-    else if (type == "notification") {
-	prio = Client::TrayIconNotification;
+    else if (type == "notification" || type == "info") {
 	iconParams = new NamedList(name);
-	iconParams->addParam("icon",Client::s_skinPath + "tray_notification.png");
+	if (type == "notification") {
+	    prio = Client::TrayIconNotification;
+	    iconParams->addParam("icon",Client::s_skinPath + "tray_notification.png");
+	    triggerAction = s_actionShowNotification;
+	} 
+	else {
+	    prio = Client::TrayIconInfo;
+	    iconParams->addParam("icon",Client::s_skinPath + "tray_info.png");
+	    triggerAction = s_actionShowInfo;
+	}
 	info << "\r\nA notification is requiring your attention";
-	triggerAction = s_actionShowNotification;
 	specific = "View notifications";
     }
     else if (type == "incomingchat") {
@@ -2526,7 +2615,8 @@ static bool addTrayIcon(const String& type)
 // Remove a tray icon from mainwindow stack
 static inline bool removeTrayIcon(const String& type)
 {
-    return Client::removeTrayIcon("mainwindow","mainwindow_" + type + "_icon");
+    return type &&
+	Client::removeTrayIcon("mainwindow","mainwindow_" + type + "_icon");
 }
 
 // Notify incoming chat to the user
@@ -4412,16 +4502,17 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
     if (name == "button_hide" && wnd)
 	return Client::self() && Client::self()->setVisible(wnd->toString(),false);
     // Show/hide messages
-    bool showMsgs = (name == "messages_show" || name == s_actionShowNotification);
+    bool showMsgs = (name == "messages_show" || name == s_actionShowNotification ||
+	name == s_actionShowInfo);
     if (showMsgs || name == "messages_close") {
-	if (name == s_actionShowNotification) {
-	    removeTrayIcon("notification");
+	bool notif = (name == s_actionShowNotification); 
+	if (notif || name == s_actionShowInfo) {
+	    removeTrayIcon(notif ? "notification" : "info"); 
 	    if (wnd && Client::valid())
 		Client::self()->setVisible(wnd->id(),true,true);
 	}
 	return showNotificationArea(showMsgs,wnd);
     }
-  
     // Dialog actions
     // Return 'true' to close the dialog
     bool dlgRet = false;
@@ -4455,6 +4546,7 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
     }
     if (name == s_actionShowCallsList) {
 	if (Client::valid()) {
+	    Client::self()->ringer(true,false);
 	    Client::self()->setVisible("mainwindow",true,true);
 	    activatePageCalls();
 	    removeTrayIcon("incomingcall");
@@ -4788,8 +4880,11 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
 	ClientContact* c = 0;
 	if (item == "tabChat")
 	    c = selectedChatContact(*m_accounts,wnd);
-	else if (isPageCallsActive(wnd,false))
+	else if (isPageCallsActive(wnd,false)) {
+	    if (Client::valid())
+		Client::self()->ringer(true,false);
 	    removeTrayIcon("incomingcall");
+	}
 	enableChatActions(c,false);
 	return true;
     }
@@ -4809,8 +4904,10 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
 
     // Page changed in telephony tab
     if (name == "framePages") {
-    	if (isPageCallsActive(wnd,true))
+    	if (isPageCallsActive(wnd,true)) {
+	    Client::self()->ringer(true,false);
 	    removeTrayIcon("incomingcall");
+	}
 	return false;
     }
 
@@ -4825,8 +4922,10 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
 
     // Enable specific actions when a channel is selected
     if (name == s_channelList) {
-    	if (isPageCallsActive(wnd,true))
+    	if (isPageCallsActive(wnd,true)) {
+	    Client::self()->ringer(true,false);
 	    removeTrayIcon("incomingcall");
+	}
 	updateSelectedChannel(&item);
 	return true;
     }
@@ -4863,8 +4962,10 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
 
     // No more notifications: remove the tray icon
     if (name == "messages") {
-	if (!item)
+	if (!item) {
 	    removeTrayIcon("notification");
+	    removeTrayIcon("info");
+	}
 	return true;
     }
 
@@ -5638,6 +5739,15 @@ bool DefaultLogic::handleUiAction(Message& msg, bool& stopLogic)
 	Client::self()->unlockOther();
 	return ok;
     }
+    else if (*action == "notify_error") {
+	const String* text = msg.getParam("text");
+	if (TelEngine::null(text))
+	    return false;
+	Client::self()->lockOther();
+	notifyGenericError(*text,msg.getValue("account"),msg.getValue("contact"),msg.getValue("title"));
+	Client::self()->unlockOther();
+	return true;
+    }
     // get the name of the widget for which the action is meant
     String name(msg.getValue("name"));
     if (name.null())
@@ -5868,47 +5978,27 @@ bool DefaultLogic::handleUserRoster(Message& msg, bool& stopLogic)
     const String& oper = msg["operation"];
     if (!oper)
 	return false;
-    bool fail = false;
-    bool remove = (oper != "update");
-    if (remove && oper != "delete") {
-	if (oper != "queryerror")
-	    return false;
-	fail = true;
-    }
     // Postpone message processing
     if (Client::self()->postpone(msg,Client::UserRoster)) {
 	stopLogic = true;
 	return false;
     }
-    int n = msg.getIntValue("contact.count");
-    if (n < 1 && !fail)
-	return false;
     const String& account = msg["account"];
     ClientAccount* a = account ? m_accounts->findAccount(account) : 0;
     if (!a)
 	return false;
-    if (fail) {
-	String reason = msg["error"];
-	if (reason) {
-	    const String& res = msg["reason"];
-	    if (res)
-		reason << " (" << res << ")";
-	}
-	else
-	    reason = msg["reason"];
-	NamedList list("");
-	NamedList* upd = buildNotifArea(list,"rosterreqfail",account,
-	    String::empty(),"Friends list failure");
-	setGenericNotif(*upd,"Retry");
-	String text;
-	text << "Failed to retrieve the friends list";
-	text.append(reason,": ");
-	text.append(account,"\r\nAccount: ");
-	upd->addParam("text",text);
-	showNotificationArea(true,Client::self()->getWindow(s_wndMain),&list);
+    if (oper == "error" || oper == "queryerror" || oper == "result") {
+	showUserRosterNotification(a,oper,msg,msg["contact"]);
 	return false;
     }
-    if (msg.getBoolValue("queryrsp"))
+    bool remove = (oper != "update");
+    if (remove && oper != "delete")
+	return false;
+    int n = msg.getIntValue("contact.count");
+    if (n < 1)
+	return false;
+    bool queryRsp = msg.getBoolValue("queryrsp");
+    if (queryRsp)
 	removeNotifArea("rosterreqfail",account);
     ObjList removed;
     NamedList chatlist("");
@@ -5926,6 +6016,8 @@ bool DefaultLogic::handleUserRoster(Message& msg, bool& stopLogic)
 	if (remove) {
 	    if (!c)
 		continue;
+	    if (!queryRsp)
+		showUserRosterNotification(a,oper,msg,uri);
 	    removed.append(a->removeContact(id,false));
 	    continue;
 	}
@@ -5945,9 +6037,13 @@ bool DefaultLogic::handleUserRoster(Message& msg, bool& stopLogic)
 	changed = setChangedString(c->m_subscription,sub) || changed;
 	// Get groups
 	changed = c->setGroups(msg,pref + "group") || changed;
-	// Update info window if displayed
-	if (changed)
+	if (changed) {
+	    // Update info window if displayed
 	    updateContactInfo(c);
+	    // Show update notification
+	    if (!queryRsp)
+		showUserRosterNotification(a,oper,msg,uri,newContact);
+	}
 	if (!(changed && a->hasChat()))
 	    continue;
 	NamedList* p = new NamedList(c->toString());
@@ -6133,6 +6229,9 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	stopLogic = true;
 	return false;
     }
+    // Ignore utility channels (playing sounds)
+    if (msg.getBoolValue("utility"))
+	return false;
     int notif = ClientChannel::lookup(msg.getValue("notify"));
     if (notif == ClientChannel::Destroyed) {
 	if (!Client::valid())
@@ -6494,7 +6593,7 @@ bool DefaultLogic::defaultMsgHandler(Message& msg, int id, bool& stopLogic)
 	if (!delay && (!member || room->ownMember(member)))
 	    return true;
 	String chatState;
-	bool hasState = !delay && chat && buildChatState(chatState,msg,member->m_name);
+	bool hasState = !delay && buildChatState(chatState,msg,member->m_name);
 	NamedList* p = 0;
 	if (body || !hasState)
 	    p = buildChatParams(body,member ? member->m_name : nick,time,0,0);
@@ -6651,8 +6750,14 @@ bool DefaultLogic::initializedClient()
     setClientParam("callerid",Client::s_settings.getValue("default","callerid"),false,true);
     setClientParam("domain",Client::s_settings.getValue("default","domain"),false,true);
     // Create default ring sound
+    // Try to build native for wave file
     String ring = cGen->getValue("ringinfile",Client::s_soundPath + "ring.wav");
-    Client::self()->createSound(Client::s_ringInName,ring);
+    bool wave = ring.endsWith(".wav");
+    if (!(wave && Client::self()->createSound(Client::s_ringInName,ring))) {
+	if (wave)
+	    ring = Client::s_soundPath + "ring.au";
+	ClientSound::build(Client::s_ringInName,ring);
+    }
     ring = cGen->getValue("ringoutfile",Client::s_soundPath + "tone.wav");
     Client::self()->createSound(Client::s_ringOutName,ring);
 
@@ -6825,8 +6930,12 @@ void DefaultLogic::updateSelectedChannel(const String* item)
 	Client::self()->getSelect(s_channelList,m_selectedChannel);
     else
 	m_selectedChannel = "";
-    if (old != m_selectedChannel)
-	channelSelectionChanged(old);
+    if (old == m_selectedChannel)
+        return;
+    // Stop incoming ringer
+    if (Client::valid())
+	Client::self()->ringer(true,false);
+    channelSelectionChanged(old);
 }
 
 // Engine start notification. Connect startup accounts
@@ -7892,6 +8001,23 @@ bool DefaultLogic::handleDialogAction(const String& name, bool& retVal, Window* 
 	    }
 	}
     }
+    else if (dlg == s_mucInviteAdd) {
+	// Add contact to muc invite
+	String contact;
+	Client::self()->getText("inputdialog_input",contact,false,wnd);
+	String user, domain;
+	splitContact(contact,user,domain);
+	retVal = user && domain;
+	if (retVal && Client::valid() &&
+	    !Client::self()->getTableRow(s_inviteContacts,contact,0,wnd)) {
+	    NamedList row("");
+	    row.addParam("name",contact);
+	    row.addParam("contact",contact);
+	    row.addParam("check:name",String::boolText(true));
+	    row.addParam("name_image",Client::s_skinPath + "addcontact.png");
+	    Client::self()->addTableRow(s_inviteContacts,contact,&row,false,wnd);
+	}
+    }
     else
 	retVal = context && Client::self()->action(wnd,context);
     return true;
@@ -8287,6 +8413,11 @@ bool DefaultLogic::handleMucsAction(const String& name, Window* wnd, NamedList* 
 	joinRoom(room,params && params->getBoolValue("force"));
 	return room != 0;
     }
+    // Add contact to muc invite list
+    if (name == s_mucInviteAdd) {
+	showInput(wnd,name,"Invite friend to conference",name,"Invite friend");
+	return true;
+    }
     return false;
 }
 
@@ -8325,21 +8456,14 @@ bool DefaultLogic::handleMucInviteOk(Window* w)
     }
     String text;
     Client::self()->getText("invite_text",text,false,w);
-    NamedList p("");
-    Client::self()->getOptions(s_inviteContacts,&p,w);
+    ObjList chosen;
+    getSelectedContacts(chosen,s_inviteContacts,w,"name");
     bool inviteNow = (room || r->resource().online());
     unsigned int count = 0;
     r->m_params.clearParam("internal.invite",'.');
-    unsigned int n = p.length();
-    for (unsigned int i = 0; i < n; i++) {
-	NamedString* ns = p.getParam(i);
-	if (!(ns && ns->name()))
-	    continue;
-	NamedList tmp("");
-	Client::self()->getTableRow(s_inviteContacts,ns->name(),&tmp,w);
-	if (!tmp.getBoolValue("check:enabled"))
-	    continue;
-	const String& uri = tmp["contact"];
+    for (ObjList* o = chosen.skipNull(); o; o = o->skipNext()) {
+	NamedList* nl = static_cast<NamedList*>(o->get());
+	const String& uri = (*nl)["contact"];
 	if (inviteNow)
 	    Engine::enqueue(buildMucRoom("invite",account,room,text,uri));
 	else {
@@ -8574,16 +8698,17 @@ bool DefaultLogic::handleMucResNotify(Message& msg, ClientAccount* acc, const St
 }
 
 // Show/hide the notification area (messages)
-bool DefaultLogic::showNotificationArea(bool show, Window* wnd, NamedList* upd)
+bool DefaultLogic::showNotificationArea(bool show, Window* wnd, NamedList* upd,
+    const char* notif)
 {
     if (!Client::self())
 	return false;
     if (upd) {
 	Client::self()->updateTableRows("messages",upd,false,wnd);
-	addTrayIcon("notification");
+	addTrayIcon(notif);
     }
     else if (!show)
-	removeTrayIcon("notification");
+	removeTrayIcon(notif);
     NamedList p("");
     const char* ok = String::boolText(show);
     p.addParam("check:messages_show",ok);
@@ -8592,6 +8717,78 @@ bool DefaultLogic::showNotificationArea(bool show, Window* wnd, NamedList* upd)
     if (wnd)
 	Client::self()->setUrgent(wnd->id(),true,wnd);
     return true;
+}
+
+// Show a roster change or failure notification
+void DefaultLogic::showUserRosterNotification(ClientAccount* a, const String& oper,
+    Message& msg, const String& contactUri, bool newContact)
+{
+    if (!a)
+	return;
+    NamedList list("");
+    NamedList* upd = 0;
+    String text;
+    const char* firstButton = 0;
+    bool update = (oper == "update");
+    const char* notif = "notification";
+    ClientContact* c = contactUri ? a->findContactByUri(contactUri) : 0;
+    String cName;
+    if (c)
+	buildContactName(cName,*c);
+    else
+	cName = contactUri;
+    if (update || oper == "delete") {
+	if (!c)
+	    return;
+	notif = "info";
+	upd = buildNotifArea(list,"generic",a->toString(),contactUri,
+	    "Friends list changed");
+	text << (update ? (newContact ? "Added" : "Updated") : "Removed");
+	text << " friend " << cName;
+    }
+    else if (oper == "error") {
+	if (!contactUri)
+	    return;
+	ClientContact* c = a->findContactByUri(contactUri);
+	const String& req = msg["requested_operation"];
+	const char* what = 0;
+	if (req == "update") {
+	    upd = buildNotifArea(list,"contactupdatefail",a->toString(),
+		contactUri,"Friend update failure");
+	    what = (c ? "update" : "add");
+	}
+	else if (req == "delete") {
+	    if (!c)
+		return;
+	    upd = buildNotifArea(list,"contactremovefail",a->toString(),
+		contactUri,"Friend delete failure");
+	    what = "remove";
+	}
+	else
+	    return;
+	text << "Failed to " << what << " friend " << cName;
+	addError(text,msg);
+    }
+    else if (oper == "queryerror") {
+	upd = buildNotifArea(list,"rosterreqfail",a->toString(),String::empty(),
+	    "Friends list failure");
+	firstButton = "Retry";
+	text << "Failed to retrieve the friends list";
+	addError(text,msg);
+    }
+    else {
+	if (oper == "result")
+	    Debug(ClientDriver::self(),DebugAll,"Contact %s for '%s' account=%s confirmed",
+		msg.getValue("requested_operation"),msg.getValue("contact"),
+		a->toString().c_str());
+	return;
+    }
+    setGenericNotif(*upd,firstButton);
+    Debug(ClientDriver::self(),DebugAll,"Account '%s'. %s",
+	a->toString().c_str(),text.c_str());
+    text << "\r\nAccount: " << a->toString();
+    upd->addParam("text",text);
+    showNotificationArea(true,Client::self()->getWindow(s_wndMain),&list,notif);
 }
 
 // Handle actions from notification area. Return true if handled

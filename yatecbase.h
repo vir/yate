@@ -822,6 +822,7 @@ public:
      */
     enum TrayIconType {
 	TrayIconMain = 0,
+	TrayIconInfo = 1000,
 	TrayIconIncomingChat = 3000,
 	TrayIconNotification = 5000,
 	TrayIconIncomingCall = 10000,
@@ -1645,6 +1646,13 @@ public:
      * @param extra Optional string whose hash will be inserted in the GUID
      */
     static void generateGuid(String& buf, const String& extra = String::empty());
+
+    /**
+     * Replace plain text chars with HTML escape or markup
+     * @param buf Destination string
+     * @param spaceEol True to replace end of line with space instead of html markup
+     */
+    static void plain2html(String& buf, bool spaceEol = false);
 
     static Configuration s_settings;     // Client settings
     static Configuration s_actions;      // Logic preferrences
@@ -3226,8 +3234,13 @@ private:
     bool handleMucResNotify(Message& msg, ClientAccount* acc, const String& contact,
 	const String& instance, const String& operation);
     // Show/hide the notification area (messages).
-    // Update rows if requested
-    bool showNotificationArea(bool show, Window* wnd, NamedList* upd = 0);
+    // Update rows if requested. Add/remove tray notification/info icon
+    bool showNotificationArea(bool show, Window* wnd, NamedList* upd = 0,
+	const char* notif = "notification");
+    // Show a roster change or failure notification
+    void showUserRosterNotification(ClientAccount* a, const String& oper,
+	Message& msg, const String& contactUri = String::empty(),
+	bool newContact = true);
     // Handle actions from notification area. Return true if handled
     bool handleNotificationAreaAction(const String& action, Window* wnd);
     // Save a contact to config. Save chat rooms if the contact is a chat room

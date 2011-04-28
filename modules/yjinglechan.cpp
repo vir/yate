@@ -608,12 +608,6 @@ static inline bool isTelEvent(const String& name)
 	(name &= "audio/telephone-event");
 };
 
-static inline void addValidParam(Message& m, const char* param, const char* value)
-{
-    if (!null(value))
-	m.addParam(param,value);
-}
-
 // Add a parameter to a list.
 // Optionally add it to a copy params string
 static inline void jingleAddParam(NamedList& list, const char* param, const char* value,
@@ -626,6 +620,7 @@ static inline void jingleAddParam(NamedList& list, const char* param, const char
 	copy->append(param,",");
 }
 
+#ifdef DEBUG
 // Utility function needed for debug: dump a candidate to a string
 static void dumpCandidate(String& buf, JGRtpCandidate* c, char sep = ' ')
 {
@@ -641,6 +636,7 @@ static void dumpCandidate(String& buf, JGRtpCandidate* c, char sep = ' ')
     buf << sep << "protocol=" << c->m_protocol;
     buf << sep << "type=" << c->m_type;
 }
+#endif
 
 
 /*

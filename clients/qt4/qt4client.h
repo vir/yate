@@ -500,6 +500,15 @@ public:
      */
     static bool sendEvent(QEvent& e, QObject* parent, const QString& name);
 
+    /**
+     * Retrieve a pixmap from global application cache.
+     * Load and add it to the cache if not found
+     * @param pixmap Destination pixmap to set
+     * @param file File name to retrieve or load
+     * @return True on success, false if failed to load
+     */
+    static bool getPixmapFromCache(QPixmap& pixmap, const QString& file);
+
 protected:
     virtual void loadWindows(const char* file = 0);
 private:
@@ -997,8 +1006,12 @@ public:
      * Set the list of properties to save
      * @param list The new list of properties to save
      */
-    void setSaveProps(QStringList list)
-	{ m_saveProps = list; }
+    void setSaveProps(QStringList list) {
+	    if (list.size() != 1)
+		m_saveProps = list;
+	    else
+		m_saveProps = list[0].split(QChar(','),QString::SkipEmptyParts);
+	}
 
     /**
      * Retrieve a QObject descendent of this object

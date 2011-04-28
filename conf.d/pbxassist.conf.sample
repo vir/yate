@@ -48,6 +48,12 @@
 ; Defaults to yes
 ;dropconfhangup=yes
 
+; confowner: bool: Make non-guest assistants own the conference rooms they join
+; This parameter can be overridden from routing by a 'pbxconfowner' parameter
+; This parameter is applied on reload
+; Defaults to no
+;confowner=no
+
 ; lonelytimeout: integer: The interval (in milliseconds) a lonely user is allowed to
 ;  remain in conference
 ; This parameter can be overridden from routing by a 'pbxlonelytimeout' parameter

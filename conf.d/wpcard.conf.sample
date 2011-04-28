@@ -67,6 +67,10 @@
 ; Defaults to 0 if missing or invalid
 ;offset=
 
+; start: integer: Absolute start of circuits numbers, ignore group's start
+; Default is offset + group's current start
+;start=
+
 ; increment: integer: How much will increment this span the circuit number in
 ;  the group it belongs to
 ; Defaults to 32 for E1, 24 for T1

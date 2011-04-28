@@ -395,11 +395,13 @@ YMGCPEngine::~YMGCPEngine()
 // Process all events of this engine, forward them to wrappers if found
 bool YMGCPEngine::processEvent(MGCPTransaction* trans, MGCPMessage* msg, void* data)
 {
-    MGCPWrapper* wrap = YOBJECT(MGCPWrapper,static_cast<GenObject*>(data));
-    MGCPSpan* span = YOBJECT(MGCPSpan,static_cast<GenObject*>(data));
-    MGCPCircuit* circ = YOBJECT(MGCPCircuit,static_cast<GenObject*>(data));
+    s_mutex.lock();
+    RefPointer<MGCPWrapper> wrap = YOBJECT(MGCPWrapper,static_cast<GenObject*>(data));
+    RefPointer<MGCPSpan> span = YOBJECT(MGCPSpan,static_cast<GenObject*>(data));
+    RefPointer<MGCPCircuit> circ = YOBJECT(MGCPCircuit,static_cast<GenObject*>(data));
+    s_mutex.unlock();
     DDebug(this,DebugAll,"YMGCPEngine::processEvent(%p,%p,%p) wrap=%p span=%p circ=%p [%p]",
-	trans,msg,data,wrap,span,circ,this);
+	trans,msg,data,(void*)wrap,(void*)span,(void*)circ,this);
     if (!trans)
 	return false;
     if (wrap)
@@ -956,7 +958,10 @@ bool MGCPSpan::init(const NamedList& params)
     if (range.count())
 	m_count = range[range.count()-1];
     m_count = config->getIntValue("chans",m_count);
-    cicStart += config->getIntValue("offset");
+    cicStart += config->getIntValue(("offset_"+*sect),
+	config->getIntValue("offset"));
+    cicStart = config->getIntValue(("start_"+*sect),
+	config->getIntValue("start",cicStart));
 
     if (!m_count)
 	return false;
@@ -971,7 +976,8 @@ bool MGCPSpan::init(const NamedList& params)
 	    m_increment = 32;
 	    break;
     }
-    m_increment = config->getIntValue("increment",m_increment);
+    m_increment = config->getIntValue(("increment_"+*sect),
+	config->getIntValue("increment",m_increment));
     m_rtpForward = config->getBoolValue("forward_rtp",!(m_fxo || m_fxs));
     m_sdpForward = config->getBoolValue("forward_sdp",false);
     m_bearer = lookup(config->getIntValue("bearer",s_dict_payloads,-1),s_dict_gwbearerinfo);
@@ -1338,7 +1344,18 @@ bool MGCPCircuit::setupConn(const char* mode)
     if (m_gwFormatChanged && m_gwFormat)
 	mm->params.addParam("B",m_gwFormat);
     bool rtpChange = false;
-    if (mode)
+    const char* faxOpt = 0;
+    if (m_specialMode == "t38")
+	faxOpt = "a:image/t38";
+    else if (m_specialMode == "fax")
+	faxOpt = "a:PCMU;PCMA";
+    if (faxOpt) {
+	mm->params.addParam("M","sendrecv");
+	mm->params.addParam("L",faxOpt);
+	m_specialMode.clear();
+	rtpChange = true;
+    }
+    else if (mode)
 	mm->params.addParam("M",mode);
     else if (m_localRawSdp) {
 	mm->params.addParam("M","sendrecv");
@@ -1666,8 +1683,12 @@ bool MGCPCircuit::setParam(const String& param, const String& value)
     }
     else if (param == "rtp_rfc2833")
 	setRfc2833(value);
-    else if (param == "special_mode")
-	m_specialMode = value;
+    else if (param == "special_mode") {
+	if (value != m_specialMode) {
+	    rtpChanged = true;
+	    m_specialMode = value;
+	}
+    }
     else
 	return false;
     m_localRtpChanged = m_localRtpChanged || rtpChanged;
@@ -1811,7 +1832,7 @@ bool MGCPCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params
 // Process incoming events for this circuit
 bool MGCPCircuit::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 {
-    if (tr->state() < MGCPTransaction::Responded)
+    if (tr->state() < MGCPTransaction::Responded && !tr->timeout())
 	return false;
     DDebug(&splugin,DebugAll,"MGCPCircuit::processEvent(%p,%p) [%p]",
 	tr,mm,this);
@@ -1820,6 +1841,8 @@ bool MGCPCircuit::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 	    tr->userData(0);
 	    m_msg = mm;
 	    m_tr = 0;
+	    if (tr->timeout())
+		enqueueEvent(SignallingCircuitEvent::Disconnected,"Timeout");
 	}
     }
     else if (tr->initial() && (tr->initial()->name() == "DLCX")) {
@@ -1907,6 +1930,8 @@ bool MGCPCircuit::processNotify(const String& package, const String& event, cons
 	// Fax Relay events
 	if (event &= "t38(start)")
 	    return enqueueEvent(SignallingCircuitEvent::GenericTone,"fax");
+	else if (event &= "t38(stop)")
+	    return enqueueEvent(SignallingCircuitEvent::GenericTone,"audio");
     }
     return false;
 }

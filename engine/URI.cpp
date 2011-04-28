@@ -24,6 +24,9 @@
 
 using namespace TelEngine;
 
+static const String s_jabber("jabber");
+static const String s_xmpp("xmpp");
+
 URI::URI()
     : m_parsed(false)
 {
@@ -116,16 +119,19 @@ void URI::parse() const
     // We parse:
     // [proto:][//][user@]hostname[:port][/path][;params][?params][&params]
 
-    static const Regexp r4("^\\([[:alpha:]]\\+:\\)\\?/\\?/\\?\\([^[:space:][:cntrl:]@]\\+@\\)\\?\\([[:alnum:]._-]\\+\\|[[][[:xdigit:].:]\\+[]]\\)\\(:[0-9]\\+\\)\\?");
+    static const Regexp r4("^\\([[:alpha:]][[:alnum:]]\\+:\\)\\?/\\?/\\?\\([^[:space:][:cntrl:]@]\\+@\\)\\?\\([[:alnum:]._-]\\+\\|[[][[:xdigit:].:]\\+[]]\\)\\(:[0-9]\\+\\)\\?");
     // hack: use while only so we could break out of it
     while (tmp.matches(r4)) {
 	int errptr = -1;
 	m_proto = tmp.matchString(1).toLower();
 	m_proto = m_proto.substr(0,m_proto.length()-1);
 	m_user = tmp.matchString(2);
-	m_user = m_user.substr(0,m_user.length()-1).uriUnescape(&errptr);
-	if (errptr >= 0)
-	    break;
+	m_user = m_user.substr(0,m_user.length()-1);
+	if (m_proto && s_jabber != m_proto && s_xmpp != m_proto) {
+	    m_user = m_user.uriUnescape(&errptr);
+	    if (errptr >= 0)
+		break;
+	}
 	m_host = tmp.matchString(3).uriUnescape(&errptr).toLower();
 	if (errptr >= 0)
 	    break;

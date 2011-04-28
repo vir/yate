@@ -87,7 +87,7 @@ QuerySipChannel::~QuerySipChannel()
 
 void QuerySipChannel::disconnected(bool final, const char *reason)
 {
-    Debug(DebugAll,"QuerySipChannel::disconnected() '%s'",reason);
+    DDebug(this,DebugAll,"QuerySipChannel::disconnected() '%s'",reason);
     switch (m_type) {
 	case CNAM:
 	    endCnam(parameters());
@@ -157,7 +157,7 @@ void QuerySipChannel::endLnp(const NamedList& params)
 
 bool QuerySipDriver::msgPreroute(Message& msg)
 {
-    DDebug(DebugAll,"QuerySipChannel::msgPreroute()");
+    DDebug(this,DebugAll,"QuerySipDriver::msgPreroute()");
     if (!msg.getBoolValue("querycnam",(0 == msg.getParam("callername"))))
 	return false;
     if (!TelEngine::isE164(msg.getValue("caller")))
@@ -205,7 +205,7 @@ bool QuerySipDriver::msgPreroute(Message& msg)
 
 bool QuerySipDriver::msgRoute(Message& msg)
 {
-    DDebug(DebugAll,"QuerySipChannel::msgRoute()");
+    DDebug(this,DebugAll,"QuerySipDriver::msgRoute()");
     if (!msg.getBoolValue("querylnp",!msg.getBoolValue("npdi")))
 	return false;
     if (!TelEngine::isE164(msg.getValue("called")))

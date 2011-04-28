@@ -1,3 +1,9 @@
+yate (3.3.3.vir2011042801) UNRELEASED; urgency=low
+
+  * Merged upstream fixes
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Thu, 28 Apr 2011 22:30:19 +0400
+
 yate (3.3.3.vir2011041701) UNRELEASED; urgency=low
 
   * New debian package. Fixed pidfile-related troubles.

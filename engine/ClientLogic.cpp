@@ -5739,6 +5739,15 @@ bool DefaultLogic::handleUiAction(Message& msg, bool& stopLogic)
 	Client::self()->unlockOther();
 	return ok;
     }
+    else if (*action == "notify_error") {
+	const String* text = msg.getParam("text");
+	if (TelEngine::null(text))
+	    return false;
+	Client::self()->lockOther();
+	notifyGenericError(*text,msg.getValue("account"),msg.getValue("contact"),msg.getValue("title"));
+	Client::self()->unlockOther();
+	return true;
+    }
     // get the name of the widget for which the action is meant
     String name(msg.getValue("name"));
     if (name.null())

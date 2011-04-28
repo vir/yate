@@ -10,6 +10,7 @@ debian/tmp/usr/share/pixmaps/null_team-32.png
 debian/tmp/usr/share/pixmaps/null_team-48.png
 debian/tmp/usr/lib/menu/yate-qt4.menu
 debian/tmp/usr/share/applications/yate-qt4.desktop
+debian/tmp/usr/share/yate/sounds/ring.au
 debian/tmp/usr/share/yate/help/0.yhlp
 debian/tmp/usr/share/yate/help/1.yhlp
 debian/tmp/usr/share/yate/help/2.yhlp
@@ -61,6 +62,7 @@ debian/tmp/usr/share/yate/skins/default/prev.png
 debian/tmp/usr/share/yate/skins/default/speaker.png
 debian/tmp/usr/share/yate/skins/default/speaker_x.png
 debian/tmp/usr/share/yate/skins/default/transfer.png
+debian/tmp/usr/share/yate/skins/default/tray_info.png
 debian/tmp/usr/share/yate/skins/default/up_active.png
 debian/tmp/usr/share/yate/skins/default/update.png
 debian/tmp/usr/share/yate/skins/default/updater.ui
@@ -85,9 +87,6 @@ debian/tmp/usr/share/yate/skins/default/collapsed.png
 debian/tmp/usr/share/yate/skins/default/conference_20.png
 debian/tmp/usr/share/yate/skins/default/contactedit.ui
 debian/tmp/usr/share/yate/skins/default/contactinfo.ui
-debian/tmp/usr/share/yate/skins/default/contactlist_chatroom.ui
-debian/tmp/usr/share/yate/skins/default/contactlist_contact.ui
-debian/tmp/usr/share/yate/skins/default/contactlist_group.ui
 debian/tmp/usr/share/yate/skins/default/digit0_hover.png
 debian/tmp/usr/share/yate/skins/default/digit0.png
 debian/tmp/usr/share/yate/skins/default/digit0_pressed.png

@@ -787,6 +787,104 @@ inline bool addBodyParam(NamedList& nl, const char* param, MimeBody* body, const
     return true;
 }
 
+// Decode an application/isup body into 'msg' if configured to do so
+// The message's name and user data are restored before exiting, regardless the result
+// Return true if an ISUP message was succesfully decoded
+static bool decodeIsupBody(const DebugEnabler* debug, Message& msg, MimeBody* body)
+{
+    if (!s_sipt_isup)
+	return false;
+    // Get a valid application/isup body
+    MimeBinaryBody* isup = static_cast<MimeBinaryBody*>(getOneBody(body,"application/isup"));
+    if (!isup)
+	return false;
+    // Remember the message's name and user data and fill parameters
+    String name = msg;
+    RefObject* userdata = msg.userData();
+    if (userdata)
+	userdata->ref();
+    msg = "isup.decode";
+    msg.addParam("message-prefix","isup.");
+    addBodyParam(msg,"isup.protocol-type",isup,"version");
+    addBodyParam(msg,"isup.protocol-basetype",isup,"base");
+    msg.addParam(new NamedPointer("rawdata",new DataBlock(isup->body())));
+    bool ok = Engine::dispatch(msg);
+    // Clear added params and restore message
+    if (!ok) {
+	Debug(debug,DebugMild,"%s failed error='%s'",
+	    msg.c_str(),msg.getValue("error"));
+	msg.clearParam("error");
+    }
+    msg.clearParam("rawdata");
+    msg = name;
+    msg.userData(userdata);
+    TelEngine::destruct(userdata);
+    return ok;
+}
+
+// Build the body of a SIP message from an engine message
+// Encode an ISUP message from parameters received in msg if enabled to process them
+// Build a multipart/mixed body if more then one body is going to be sent
+static MimeBody* buildSIPBody(const DebugEnabler* debug, Message& msg, MimeSdpBody* sdp)
+{
+    MimeBinaryBody* isup = 0;
+
+    // Build isup
+    while (s_sipt_isup) {
+	String prefix = msg.getValue("message-prefix");
+	if (!msg.getParam(prefix + "message-type"))
+	    break;
+
+	// Remember the message's name and user data
+	String name = msg;
+	RefObject* userdata = msg.userData();
+	if (userdata)
+	    userdata->ref();
+
+	DataBlock* data = 0;
+	msg = "isup.encode";
+	if (Engine::dispatch(msg)) {
+	    NamedString* ns = msg.getParam("rawdata");
+	    if (ns) {
+		NamedPointer* np = static_cast<NamedPointer*>(ns->getObject("NamedPointer"));
+		if (np)
+		    data = static_cast<DataBlock*>(np->userObject("DataBlock"));
+	    }
+	}
+	if (data && data->length()) {
+	    isup = new MimeBinaryBody("application/isup",(const char*)data->data(),data->length());
+	    isup->setParam("version",msg.getValue(prefix + "protocol-type"));
+	    const char* s = msg.getValue(prefix + "protocol-basetype");
+	    if (s)
+		isup->setParam("base",s);
+	    MimeHeaderLine* line = new MimeHeaderLine("Content-Disposition","signal");
+	    line->setParam("handling","optional");
+	    isup->appendHdr(line);
+	}
+	else {
+	    Debug(debug,DebugMild,"%s failed error='%s'",
+		msg.c_str(),msg.getValue("error"));
+	    msg.clearParam("error");
+	}
+
+	// Restore message
+	msg = name;
+	msg.userData(userdata);
+	TelEngine::destruct(userdata);
+	break;
+    }
+
+    if (!isup)
+	return sdp;
+    if (!sdp)
+	return isup;
+    // Build multipart
+    MimeMultipartBody* body = new MimeMultipartBody;
+    body->appendBody(sdp);
+    body->appendBody(isup);
+    return body;
+}
+
 // Find an URI parameter separator. Accept '?' or '&'
 static inline int findURIParamSep(const String& str, int start)
 {
@@ -983,6 +1081,7 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
     if (message) {
 	m.addParam("ip_host",message->getParty()->getPartyAddr());
 	m.addParam("ip_port",String(message->getParty()->getPartyPort()));
+	m.addParam("transport",message->getParty()->getProtoName());
 	String addr = message->getParty()->getPartyAddr();
 	if (addr) {
 	    addr << ":" << message->getParty()->getPartyPort();
@@ -1491,6 +1590,7 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
     msg.setParam("data","sip/" + data);
     msg.setParam("ip_host",message->getParty()->getPartyAddr());
     msg.setParam("ip_port",String(message->getParty()->getPartyPort()));
+    msg.setParam("transport",message->getParty()->getProtoName());
 
     bool dereg = false;
     String tmp(message->getHeader("Expires"));
@@ -1570,8 +1670,21 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
     const String* auth = s_cfg.getKey("methods",meth);
     if (!auth)
 	return false;
+
     Message m("sip." + meth);
-    if (auth->toBoolean(true)) {
+    const SIPMessage* message = e->getMessage();
+    const String& host = message->getParty()->getPartyAddr();
+    int portNum = message->getParty()->getPartyPort();
+    URI uri(message->uri);
+    YateSIPLine* line = plugin.findLine(host,portNum,uri.getUser());
+    if (line) {
+	// message comes from line we have registered to
+	if (user.null())
+	    user = line->getUserName();
+	m.addParam("domain",line->domain());
+	m.addParam("in_line",*line);
+    }
+    else if (auth->toBoolean(true)) {
 	int age = t->authUser(user,false,&m);
 	DDebug(&plugin,DebugAll,"User '%s' age %d",user.c_str(),age);
 	if ((age < 0) || (age > 10)) {
@@ -1580,7 +1693,6 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
 	}
     }
 
-    const SIPMessage* message = e->getMessage();
     if (message->getParam("To","tag")) {
 	SIPDialog dlg(*message);
 	YateSIPConnection* conn = plugin.findDialog(dlg,true);
@@ -1590,8 +1702,12 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
 	    conn->deref();
 	}
     }
-    if (user)
-	m.addParam("username",user);
+    m.addParam("username",user,false);
+    m.addParam("called",uri.getUser(),false);
+    uri = message->getHeader("From");
+    uri.parse();
+    m.addParam("caller",uri.getUser(),false);
+    m.addParam("callername",uri.getDescription(),false);
 
     String tmp(message->getHeaderValue("Max-Forwards"));
     int maxf = tmp.toInteger(s_maxForwards);
@@ -1600,8 +1716,11 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
     tmp = maxf-1;
     m.addParam("antiloop",tmp);
 
-    m.addParam("ip_host",message->getParty()->getPartyAddr());
-    m.addParam("ip_port",String(message->getParty()->getPartyPort()));
+    String port(portNum);
+    m.addParam("address",host + ":" + port);
+    m.addParam("ip_host",host);
+    m.addParam("ip_port",port);
+    m.addParam("transport",message->getParty()->getProtoName());
     m.addParam("sip_uri",t->getURI());
     m.addParam("sip_callid",t->getCallID());
     // establish the dialog here so user code will have the dialog tag handy
@@ -1609,6 +1728,7 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
     m.addParam("xsip_dlgtag",t->getDialogTag());
     copySipHeaders(m,*message,false);
 
+    decodeIsupBody(&plugin,m,message->body);
     // add the body if it's a string one
     MimeStringBody* strBody = YOBJECT(MimeStringBody,message->body);
     if (strBody) {
@@ -1880,6 +2000,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     m->addParam("antiloop",tmp);
     m->addParam("ip_host",m_host);
     m->addParam("ip_port",String(m_port));
+    m->addParam("transport",m_tr->initialMessage()->getParty()->getProtoName());
     m->addParam("sip_uri",uri);
     m->addParam("sip_from",m_uri);
     m->addParam("sip_to",ev->getMessage()->getHeaderValue("To"));
@@ -3632,101 +3753,15 @@ bool YateSIPConnection::initTransfer(Message*& msg, SIPMessage*& sipNotify,
 }
 
 // Decode an application/isup body into 'msg' if configured to do so
-// The message's name and user data are restored before exiting, regardless the result
-// Return true if an ISUP message was succesfully decoded
 bool YateSIPConnection::decodeIsupBody(Message& msg, MimeBody* body)
 {
-    if (!s_sipt_isup)
-	return false;
-    // Get a valid application/isup body
-    MimeBinaryBody* isup = static_cast<MimeBinaryBody*>(getOneBody(body,"application/isup"));
-    if (!isup)
-	return false;
-    // Remember the message's name and user data and fill parameters
-    String name = msg;
-    RefObject* userdata = msg.userData();
-    if (userdata)
-	userdata->ref();
-    msg = "isup.decode";
-    msg.addParam("message-prefix","isup.");
-    addBodyParam(msg,"isup.protocol-type",isup,"version");
-    addBodyParam(msg,"isup.protocol-basetype",isup,"base");
-    msg.addParam(new NamedPointer("rawdata",new DataBlock(isup->body())));
-    bool ok = Engine::dispatch(msg);
-    // Clear added params and restore message
-    if (!ok) {
-	Debug(this,DebugMild,"%s failed error='%s' [%p]",
-	    msg.c_str(),msg.getValue("error"),this);
-	msg.clearParam("error");
-    }
-    msg.clearParam("rawdata");
-    msg = name;
-    msg.userData(userdata);
-    TelEngine::destruct(userdata);
-    return ok;
+    return ::decodeIsupBody(this,msg,body);
 }
 
 // Build the body of a SIP message from an engine message
-// Encode an ISUP message from parameters received in msg if enabled to process them
-// Build a multipart/mixed body if more then one body is going to be sent
 MimeBody* YateSIPConnection::buildSIPBody(Message& msg, MimeSdpBody* sdp)
 {
-    MimeBinaryBody* isup = 0;
-
-    // Build isup
-    while (s_sipt_isup) {
-	String prefix = msg.getValue("message-prefix");
-	if (!msg.getParam(prefix + "message-type"))
-	    break;
-
-	// Remember the message's name and user data
-	String name = msg;
-	RefObject* userdata = msg.userData();
-	if (userdata)
-	    userdata->ref();
-
-	DataBlock* data = 0;
-	msg = "isup.encode";
-	if (Engine::dispatch(msg)) {
-	    NamedString* ns = msg.getParam("rawdata");
-	    if (ns) {
-		NamedPointer* np = static_cast<NamedPointer*>(ns->getObject("NamedPointer"));
-		if (np)
-		    data = static_cast<DataBlock*>(np->userObject("DataBlock"));
-	    }
-	}
-	if (data && data->length()) {
-	    isup = new MimeBinaryBody("application/isup",(const char*)data->data(),data->length());
-	    isup->setParam("version",msg.getValue(prefix + "protocol-type"));
-	    const char* s = msg.getValue(prefix + "protocol-basetype");
-	    if (s)
-		isup->setParam("base",s);
-	    MimeHeaderLine* line = new MimeHeaderLine("Content-Disposition","signal");
-	    line->setParam("handling","optional");
-	    isup->appendHdr(line);
-	}
-	else {
-	    Debug(this,DebugMild,"%s failed error='%s' [%p]",
-		msg.c_str(),msg.getValue("error"),this);
-	    msg.clearParam("error");
-	}
-
-	// Restore message
-	msg = name;
-	msg.userData(userdata);
-	TelEngine::destruct(userdata);
-	break;
-    }
-
-    if (!isup)
-	return sdp;
-    if (!sdp)
-	return isup;
-    // Build multipart
-    MimeMultipartBody* body = new MimeMultipartBody;
-    body->appendBody(sdp);
-    body->appendBody(isup);
-    return body;
+    return ::buildSIPBody(this,msg,sdp);
 }
 
 

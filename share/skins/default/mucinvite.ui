@@ -269,7 +269,7 @@
        <string>property:itemsExpandable=true</string>
        <string>property:sortingEnabled=true</string>
        <string>property:autoExpand=true</string>
-       <string>property:styleSheet=QTreeWidget {border-image: none;font-size: 11px;background:white;selection-background-color:lightblue;selection-color:black;border: 0px solid #97acbc;border-radius:2px;}</string>
+       <string>property:styleSheet=QTreeWidget {border-image: none;font-size: 11px;background:white;selection-background-color:#0c7acb;selection-color:white;border: 0px solid #97acbc;border-radius:2px;}</string>
        <string>property:_yate_save_props=_yate_showofflinecontacts,_yate_sorting,_yate_col_widths</string>
        <string>property:_yate_flatlist=true</string>
        <string>property:_yate_showofflinecontacts=false</string>

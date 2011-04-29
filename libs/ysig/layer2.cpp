@@ -265,7 +265,7 @@ SS7MTP2::SS7MTP2(const NamedList& params, unsigned int status)
       m_status(status), m_lStatus(OutOfService), m_rStatus(OutOfAlignment),
       m_interval(0), m_resend(0), m_abort(0), m_fillTime(0), m_congestion(false),
       m_bsn(127), m_fsn(127), m_bib(true), m_fib(true),
-      m_lastFsn(128), m_lastBsn(127), m_lastBib(true), m_errors(0),
+      m_lastFsn(128), m_lastBsn(127), m_lastBib(true), m_errors(0), m_maxErrors(64),
       m_resendMs(250), m_abortMs(5000), m_fillIntervalMs(20), m_fillLink(true),
       m_autostart(false), m_flushMsus(true)
 {
@@ -278,6 +278,11 @@ SS7MTP2::SS7MTP2(const NamedList& params, unsigned int status)
     }
 #endif
     m_fillLink = params.getBoolValue("filllink",m_fillLink);
+    m_maxErrors = params.getIntValue("maxerrors",64);
+    if (m_maxErrors < 8)
+	m_maxErrors = 8;
+    else if (m_maxErrors > 256)
+	m_maxErrors = 256;
     setDumper(params.getValue("layer2dump"));
 }
 
@@ -333,6 +338,13 @@ bool SS7MTP2::initialize(const NamedList* config)
 	debugLevel(config->getIntValue("debuglevel_mtp2",
 	    config->getIntValue("debuglevel",-1)));
 	m_autoEmergency = config->getBoolValue("autoemergency",true);
+	unsigned int maxErrors = config->getIntValue("maxerrors",m_maxErrors);
+	if (maxErrors < 8)
+	    m_maxErrors = 8;
+	else if (maxErrors > 256)
+	    m_maxErrors = 256;
+	else
+	    m_maxErrors = maxErrors;
     }
     m_autostart = !config || config->getBoolValue("autostart",true);
     m_flushMsus = !config || config->getBoolValue("flushmsus",true);
@@ -375,6 +387,13 @@ bool SS7MTP2::control(Operation oper, NamedList* params)
 	m_autoEmergency = params->getBoolValue("autoemergency",m_autoEmergency);
 	m_autostart = params->getBoolValue("autostart",m_autostart);
 	m_flushMsus = params->getBoolValue("flushmsus",m_flushMsus);
+	unsigned int maxErrors = params->getIntValue("maxerrors",m_maxErrors);
+	if (maxErrors < 8)
+	    m_maxErrors = 8;
+	else if (maxErrors > 256)
+	    m_maxErrors = 256;
+	else
+	    m_maxErrors = maxErrors;
 	// The following are for test purposes
 	if (params->getBoolValue("toggle-bib"))
 	    m_bib = !m_bib;
@@ -389,6 +408,8 @@ bool SS7MTP2::control(Operation oper, NamedList* params)
 	    transmitLSSU(tmp);
 	if (params->getBoolValue("send-fisu"))
 	    transmitFISU();
+	if (params->getBoolValue("simulate-error"))
+	    notify(SignallingInterface::HardwareError);
     }
     switch (oper) {
 	case Pause:
@@ -422,9 +443,13 @@ bool SS7MTP2::notify(SignallingInterface::Notification event)
 	default:
 	    XDebug(this,DebugMild,"Got error %u: %s [%p]",
 		event,lookup(event,SignallingInterface::s_notifName),this);
-	    if (++m_errors >= 4) {
-		Debug(this,DebugWarn,"Got %d errors - realigning [%p]",m_errors,this);
-		abortAlignment(m_autostart);
+	    {
+		unsigned int err = (m_errors += 256) >> 8;
+		if (err >= (operational() ? m_maxErrors :
+		    ((m_rStatus == EmergencyAlignment) ? 1 : 4))) {
+		    Debug(this,DebugWarn,"Got %u errors - realigning [%p]",err,this);
+		    abortAlignment(m_autostart);
+		}
 	    }
     }
     return true;
@@ -626,6 +651,9 @@ bool SS7MTP2::receivedPacket(const DataBlock& packet)
 	return false;
     }
 
+    // adjust error counter
+    if (m_errors && operational())
+	m_errors--;
     // process LSSU and FISU to detect link status changes
     switch (len) {
 	case 2:

@@ -7008,7 +7008,9 @@ private:
     // last received backward indicator bit
     bool m_lastBib;
     // count of errors
-    int m_errors;
+    unsigned int m_errors;
+    // maximum accepted errors
+    unsigned int m_maxErrors;
     // packet resend interval
     unsigned int m_resendMs;
     // packet resend abort interval

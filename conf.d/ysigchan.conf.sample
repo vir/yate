@@ -560,6 +560,12 @@
 ;  sending FISU or LSSU packets
 ;filllink=yes
 
+; maxerrors: int: Number of consecutive errors that cause realignment
+; This parameter is constrained between 8 and 256
+; When in proving interval this setting is ignored and realignment occurs at
+;  4 errors in normal proving or 1 error in emergency proving
+;maxerrors=64
+
 ; rxunderrun: int: Maximum interval in ms between two packets before we report
 ;  an underrun condition, zero to disable or 25+
 ;rxunderrun=0

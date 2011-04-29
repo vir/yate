@@ -4,7 +4,7 @@
 # override DESTDIR at install time to prefix the install directory
 DESTDIR :=
 
-SOUNDS := ring.wav tone.wav
+SOUNDS := ring.au ring.wav tone.wav
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@

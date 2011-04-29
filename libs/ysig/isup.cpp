@@ -3553,7 +3553,7 @@ int SS7ISUP::transmitMessage(SS7MsgISUP* msg, const SS7Label& label, bool recvLb
     }
     else if (debugAt(DebugAll)) {
 	String tmp;
-	tmp << label;
+	tmp << *p;
 	Debug(this,DebugAll,"Sending message '%s' cic=%u label=%s",
 	    msg->name(),msg->cic(),tmp.c_str());
     }

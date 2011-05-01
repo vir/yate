@@ -281,6 +281,13 @@ const char* NamedList::getValue(const String& name, const char* defvalue) const
     return s ? s->c_str() : defvalue;
 }
 
+String NamedList::getStrValue(const String& name, const String& defvalue) const
+{
+    XDebug(DebugInfo,"NamedList::getValue(\"%s\",\"%s\")",name.c_str(),defvalue);
+    const NamedString *s = getParam(name);
+    return s ? static_cast<String>(s) : defvalue;
+}
+
 int NamedList::getIntValue(const String& name, int defvalue) const
 {
     const NamedString *s = getParam(name);

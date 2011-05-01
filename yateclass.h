@@ -3530,6 +3530,14 @@ public:
     const char* getValue(const String& name, const char* defvalue = 0) const;
 
     /**
+     * Retrieve the string value of a named parameter (can contain NUL chars).
+     * @param name Name of parameter to locate
+     * @param defvalue Default value to return if not found
+     * @return The string contained in the named parameter or the default
+     */
+    String getStrValue(const String& name, const String& defvalue = String(0)) const;
+
+    /**
      * Retrieve the numeric value of a parameter.
      * @param name Name of parameter to locate
      * @param defvalue Default value to return if not found

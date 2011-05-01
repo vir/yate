@@ -4233,9 +4233,9 @@ bool SipHandler::received(Message &msg)
     sip->addHeader("Max-Forwards",String(maxf));
     copySipHeaders(*sip,msg,"sip_");
     const char* type = msg.getValue("xsip_type");
-    const char* body = msg.getValue("xsip_body");
+    String body = msg.getStrValue("xsip_body");
     if (type && body)
-	sip->setBody(new MimeStringBody(type,body,-1));
+	sip->setBody(new MimeBinaryBody(type,body.c_str(),body.length()));
     sip->complete(plugin.ep()->engine(),msg.getValue("user"),domain,0,
 	msg.getIntValue("xsip_flags",-1));
     if (!msg.getBoolValue("wait")) {

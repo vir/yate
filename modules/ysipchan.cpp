@@ -4234,8 +4234,17 @@ bool SipHandler::received(Message &msg)
     copySipHeaders(*sip,msg,"sip_");
     const char* type = msg.getValue("xsip_type");
     const char* body = msg.getValue("xsip_body");
-    if (type && body)
-	sip->setBody(new MimeStringBody(type,body,-1));
+    const char* benc = msg.getValue("xsip_body_encoding");
+    if (type && body) {
+	if(benc && 0 == ::strcmp(benc, "base64")) {
+	    DataBlock newbody;
+	    Base64 b64(body, ::strlen(body), false);
+	    b64.decode(newbody);
+	    sip->setBody(new MimeBinaryBody(type,newbody,newbody.length()));
+	} else {
+	    sip->setBody(new MimeStringBody(type,body,-1));
+	}
+    }
     sip->complete(plugin.ep()->engine(),msg.getValue("user"),domain,0,
 	msg.getIntValue("xsip_flags",-1));
     if (!msg.getBoolValue("wait")) {

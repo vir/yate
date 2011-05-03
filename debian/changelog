@@ -1,3 +1,9 @@
+yate (3.3.3.vir2011050305) UNRELEASED; urgency=low
+
+  * Support "xsip_body_encoding" parameter in xsip.generate message
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Tue, 03 May 2011 22:34:03 +0400
+
 yate (3.3.3.vir2011050304) UNRELEASED; urgency=low
 
   * FAKE

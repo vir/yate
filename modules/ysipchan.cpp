@@ -4236,11 +4236,20 @@ bool SipHandler::received(Message &msg)
     const char* body = msg.getValue("xsip_body");
     const char* benc = msg.getValue("xsip_body_encoding");
     if (type && body) {
-	if(benc && 0 == ::strcmp(benc, "base64")) {
+	if(benc && *benc) {
 	    DataBlock newbody;
-	    Base64 b64(body, ::strlen(body), false);
-	    b64.decode(newbody);
-	    sip->setBody(new MimeBinaryBody(type,newbody,newbody.length()));
+	    if(0 == ::strcmp(benc, "base64")) {
+		Base64 b64;
+		b64 << body;
+		b64.decode(newbody);
+	    } else if(benc && 0 == ::strcmp(benc, "hex")) {
+		newbody.unHexify(body, ::strlen(body));
+	    } else if(benc && 0 == ::strcmp(benc, "hexs")) {
+		newbody.unHexify(body, ::strlen(body), ' ');
+	    } else {
+		Debug(&plugin,DebugWarn,"Invalid xsip_body_encoding '%s'", benc);
+	    }
+	    sip->setBody(new MimeBinaryBody(type,(const char *)newbody.data(),newbody.length()));
 	} else {
 	    sip->setBody(new MimeStringBody(type,body,-1));
 	}

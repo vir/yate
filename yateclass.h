@@ -1799,6 +1799,13 @@ public:
     String& operator>>(bool& store);
 
     /**
+     * Appending a char buffer
+     * @param value String to append
+     * @param len Number of bytes to append
+     */
+    String& append(const char* value, unsigned int len);
+
+    /**
      * Conditional appending with a separator
      * @param value String to append
      * @param separator Separator to insert before the value
@@ -1991,15 +1998,15 @@ public:
      * @param extraEsc Character to escape other than the default ones
      * @return The string with special characters escaped
      */
-    static String msgEscape(const char* str, char extraEsc = 0);
+    inline static String msgEscape(const char* str, char extraEsc = 0)
+        { return String(str).msgEscape(extraEsc); }
 
     /**
      * Create an escaped string suitable for use in messages
      * @param extraEsc Character to escape other than the default ones
      * @return The string with special characters escaped
      */
-    inline String msgEscape(char extraEsc = 0) const
-	{ return msgEscape(c_str(),extraEsc); }
+    String msgEscape(char extraEsc = 0) const;
 
     /**
      * Decode an escaped string back to its raw form

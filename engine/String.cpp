@@ -208,10 +208,12 @@ String::String(const String& value)
 {
     XDebug(DebugAll,"String::String(%p) [%p]",&value,this);
     if (!value.null()) {
-	m_string = ::strdup(value.c_str());
+	m_string = (char *) ::malloc(value.m_length+1);
 	if (!m_string)
 	    Debug("String",DebugFail,"strdup() returned NULL!");
-	changed();
+	memcpy(m_string, value.m_string, value.m_length);
+	m_length = value.m_length;
+	m_string[m_length] = 0;
     }
 }
 
@@ -557,27 +559,7 @@ String& String::operator+=(const char* value)
     if (value && !*value)
 	value = 0;
     if (value) {
-	if (m_string) {
-	    int olen = length();
-	    int len = ::strlen(value)+olen;
-	    char *tmp1 = m_string;
-	    char *tmp2 = (char *) ::malloc(len+1);
-	    if (tmp2) {
-		::strncpy(tmp2,m_string,olen);
-		tmp2[olen] = 0;
-		::strncat(tmp2,value,len-olen);
-		tmp2[len] = 0;
-		m_string = tmp2;
-		::free(tmp1);
-	    }
-	    else
-		Debug("String",DebugFail,"malloc(%d) returned NULL!",len+1);
-	}
-	else {
-	    m_string = ::strdup(value);
-	    if (!m_string)
-		Debug("String",DebugFail,"strdup() returned NULL!");
-	}
+	append(value, ::strlen(value));
 	changed();
     }
     return *this;
@@ -605,8 +587,7 @@ String& String::operator=(unsigned int value)
 
 String& String::operator+=(char value)
 {
-    char buf[2] = {value,0};
-    return operator+=(buf);
+    return append(&value, 1);
 }
 
 String& String::operator+=(int value)
@@ -698,6 +679,39 @@ String& String::operator>>(bool& store)
 		return *this;
 	    }
 	}
+    }
+    return *this;
+}
+
+String& String::append(const char* value, unsigned int len)
+{
+    if (value && len) {
+	if (m_string) {
+	    unsigned int olen = length();
+	    len += olen;
+	    char *tmp1 = m_string;
+	    char *tmp2 = (char *) ::malloc(len+1);
+	    if (tmp2) {
+		::memcpy(tmp2,m_string,olen);
+		::memcpy(tmp2+olen,value,len-olen);
+		tmp2[len] = 0;
+		m_string = tmp2;
+		::free(tmp1);
+	    }
+	    else
+		Debug("String",DebugFail,"malloc(%d) returned NULL!",len+1);
+	}
+	else {
+	    m_string = (char *) ::malloc(len+1);
+	    if (m_string) {
+		::memcpy(m_string, value, len);
+		m_string[len] = 0;
+	    }
+	    else
+		Debug("String",DebugFail,"strdup() returned NULL!");
+	}
+	changed();
+	m_length = len; // Store actual length
     }
     return *this;
 }
@@ -1001,13 +1015,16 @@ ObjList* String::split(char separator, bool emptyOK) const
     return list;
 }
 
-String String::msgEscape(const char* str, char extraEsc)
+String String::msgEscape(char extraEsc) const
 {
     String s;
-    if (TelEngine::null(str))
+    const char* p = c_str();
+    if (TelEngine::null(p))
 	return s;
     char c;
-    while ((c=*str++)) {
+    unsigned int l = length();
+    while (l--) {
+	c = *p++;
 	if ((unsigned char)c < ' ' || c == ':' || c == extraEsc) {
 	    c += '@';
 	    s += '%';
@@ -1036,7 +1053,7 @@ String String::msgUnescape(const char* str, int* errptr, char extraEsc)
 	}
 	else if (c == '%') {
 	    c=*pos++;
-	    if ((c > '@' && c <= '_') || c == 'z' || c == extraEsc)
+	    if ((c >= '@' && c <= '_') || c == 'z' || c == extraEsc)
 		c -= '@';
 	    else if (c != '%') {
 		if (errptr)

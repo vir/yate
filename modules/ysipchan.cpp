@@ -1742,6 +1742,16 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
 	    m.addParam("xsip_type",txtBody->getType());
 	    m.addParam("xsip_body",bodyText);
 	}
+	else if (message->body) {
+	    const DataBlock& binBody = message->body->getBody();
+	    String bodyText;
+	    Base64 b64(binBody.data(),binBody.length(),false);
+	    b64.encode(bodyText);
+	    b64.clear(false);
+	    m.addParam("xsip_type",message->body->getType());
+	    m.addParam("xsip_body_encoding","base64");
+	    m.addParam("xsip_body",bodyText);
+	}
     }
 
     int code = 0;
@@ -4232,10 +4242,31 @@ bool SipHandler::received(Message &msg)
     }
     sip->addHeader("Max-Forwards",String(maxf));
     copySipHeaders(*sip,msg,"sip_");
-    const char* type = msg.getValue("xsip_type");
-    const char* body = msg.getValue("xsip_body");
-    if (type && body)
-	sip->setBody(new MimeStringBody(type,body,-1));
+    const String& type = msg["xsip_type"];
+    const String& body = msg["xsip_body"];
+    if (type && body) {
+	const String& bodyEnc = msg["xsip_body_encoding"];
+	if (bodyEnc.null())
+	    sip->setBody(new MimeStringBody(type,body.c_str(),body.length()));
+	else {
+	    DataBlock binBody;
+	    bool ok = false;
+	    if (bodyEnc == "base64") {
+		Base64 b64;
+		b64 << body;
+		ok = b64.decode(binBody);
+	    }
+	    else if (bodyEnc == "hex")
+		ok = binBody.unHexify(body,body.length());
+	    else if (bodyEnc == "hexs")
+		ok = binBody.unHexify(body,body.length(),' ');
+
+	    if (ok)
+		sip->setBody(new MimeBinaryBody(type,(const char*)binBody.data(),binBody.length()));
+	    else
+		Debug(&plugin,DebugWarn,"Invalid xsip_body_encoding '%s'",bodyEnc.c_str());
+	}
+    }
     sip->complete(plugin.ep()->engine(),msg.getValue("user"),domain,0,
 	msg.getIntValue("xsip_flags",-1));
     if (!msg.getBoolValue("wait")) {

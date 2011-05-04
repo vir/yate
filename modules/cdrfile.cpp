@@ -30,6 +30,12 @@
 #include <errno.h>
 #include <string.h>
 
+#ifdef _WINDOWS
+#define EOLN "\r\n"
+#else
+#define EOLN "\n"
+#endif
+
 using namespace TelEngine;
 namespace { // anonymous
 
@@ -88,7 +94,7 @@ bool CdrFileHandler::received(Message &msg)
     Lock lock(this);
     if ((m_file >= 0) && m_format) {
 	String str = m_format;
-	str += "\n";
+	str += EOLN;
 	msg.replaceParams(str);
 	::write(m_file,str.c_str(),str.length());
     }

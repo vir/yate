@@ -1081,7 +1081,7 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
     if (message) {
 	m.addParam("ip_host",message->getParty()->getPartyAddr());
 	m.addParam("ip_port",String(message->getParty()->getPartyPort()));
-	m.addParam("transport",message->getParty()->getProtoName());
+	m.addParam("ip_transport",message->getParty()->getProtoName());
 	String addr = message->getParty()->getPartyAddr();
 	if (addr) {
 	    addr << ":" << message->getParty()->getPartyPort();
@@ -1590,7 +1590,7 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
     msg.setParam("data","sip/" + data);
     msg.setParam("ip_host",message->getParty()->getPartyAddr());
     msg.setParam("ip_port",String(message->getParty()->getPartyPort()));
-    msg.setParam("transport",message->getParty()->getProtoName());
+    msg.setParam("ip_transport",message->getParty()->getProtoName());
 
     bool dereg = false;
     String tmp(message->getHeader("Expires"));
@@ -1720,7 +1720,7 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
     m.addParam("address",host + ":" + port);
     m.addParam("ip_host",host);
     m.addParam("ip_port",port);
-    m.addParam("transport",message->getParty()->getProtoName());
+    m.addParam("ip_transport",message->getParty()->getProtoName());
     m.addParam("sip_uri",t->getURI());
     m.addParam("sip_callid",t->getCallID());
     // establish the dialog here so user code will have the dialog tag handy
@@ -2000,7 +2000,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     m->addParam("antiloop",tmp);
     m->addParam("ip_host",m_host);
     m->addParam("ip_port",String(m_port));
-    m->addParam("transport",m_tr->initialMessage()->getParty()->getProtoName());
+    m->addParam("ip_transport",m_tr->initialMessage()->getParty()->getProtoName());
     m->addParam("sip_uri",uri);
     m->addParam("sip_from",m_uri);
     m->addParam("sip_to",ev->getMessage()->getHeaderValue("To"));

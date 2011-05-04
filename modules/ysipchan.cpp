@@ -790,7 +790,7 @@ inline bool addBodyParam(NamedList& nl, const char* param, MimeBody* body, const
 // Decode an application/isup body into 'msg' if configured to do so
 // The message's name and user data are restored before exiting, regardless the result
 // Return true if an ISUP message was succesfully decoded
-static bool decodeIsupBody(const DebugEnabler* debug, Message& msg, MimeBody* body)
+static bool doDecodeIsupBody(const DebugEnabler* debug, Message& msg, MimeBody* body)
 {
     if (!s_sipt_isup)
 	return false;
@@ -825,7 +825,7 @@ static bool decodeIsupBody(const DebugEnabler* debug, Message& msg, MimeBody* bo
 // Build the body of a SIP message from an engine message
 // Encode an ISUP message from parameters received in msg if enabled to process them
 // Build a multipart/mixed body if more then one body is going to be sent
-static MimeBody* buildSIPBody(const DebugEnabler* debug, Message& msg, MimeSdpBody* sdp)
+static MimeBody* doBuildSIPBody(const DebugEnabler* debug, Message& msg, MimeSdpBody* sdp)
 {
     MimeBinaryBody* isup = 0;
 
@@ -1728,7 +1728,7 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
     m.addParam("xsip_dlgtag",t->getDialogTag());
     copySipHeaders(m,*message,false);
 
-    decodeIsupBody(&plugin,m,message->body);
+    doDecodeIsupBody(&plugin,m,message->body);
     // add the body if it's a string one
     MimeStringBody* strBody = YOBJECT(MimeStringBody,message->body);
     if (strBody) {
@@ -3755,13 +3755,13 @@ bool YateSIPConnection::initTransfer(Message*& msg, SIPMessage*& sipNotify,
 // Decode an application/isup body into 'msg' if configured to do so
 bool YateSIPConnection::decodeIsupBody(Message& msg, MimeBody* body)
 {
-    return ::decodeIsupBody(this,msg,body);
+    return doDecodeIsupBody(this,msg,body);
 }
 
 // Build the body of a SIP message from an engine message
 MimeBody* YateSIPConnection::buildSIPBody(Message& msg, MimeSdpBody* sdp)
 {
-    return ::buildSIPBody(this,msg,sdp);
+    return doBuildSIPBody(this,msg,sdp);
 }
 
 

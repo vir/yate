@@ -1,3 +1,21 @@
+yate (3.3.3.svn4359) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4359: + The error threshold of a proven link
+    can be configured.  + Make the MTP2 error rate monitor more closely
+    follow Q.703 10.2 and 10.3.  + Fixed lack of media bug introduced by
+    Rev 4349.  + Renamed SIP parameter "transport" to "ip_transport"
+    because of collision with audio media transport.  + Added capability
+    of handling SIP PUBLISH method in PHP features script.  + Changed
+    the name of the functions encoding and decoding isup bodies to fix
+    scope related compile errors in VC++.  + Base64 decode and encode
+    binary bodies in generic SIP messages.  + Made tabs format default
+    and removed override from sample config file.  + Use open() instead
+    of fopen() for CDR files so O_LARGEFILE can be specified.  + Added
+    the typical location of CDR file to logrotate control file.  + On
+    Windows write CDR files with CR LF end of lines.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 05 May 2011 02:19:21 +0400
+
 yate (3.3.3.svn4352) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4352: + Detect generic SIP messages coming

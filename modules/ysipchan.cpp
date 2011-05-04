@@ -790,7 +790,7 @@ inline bool addBodyParam(NamedList& nl, const char* param, MimeBody* body, const
 // Decode an application/isup body into 'msg' if configured to do so
 // The message's name and user data are restored before exiting, regardless the result
 // Return true if an ISUP message was succesfully decoded
-static bool decodeIsupBody(const DebugEnabler* debug, Message& msg, MimeBody* body)
+static bool doDecodeIsupBody(const DebugEnabler* debug, Message& msg, MimeBody* body)
 {
     if (!s_sipt_isup)
 	return false;
@@ -825,7 +825,7 @@ static bool decodeIsupBody(const DebugEnabler* debug, Message& msg, MimeBody* bo
 // Build the body of a SIP message from an engine message
 // Encode an ISUP message from parameters received in msg if enabled to process them
 // Build a multipart/mixed body if more then one body is going to be sent
-static MimeBody* buildSIPBody(const DebugEnabler* debug, Message& msg, MimeSdpBody* sdp)
+static MimeBody* doBuildSIPBody(const DebugEnabler* debug, Message& msg, MimeSdpBody* sdp)
 {
     MimeBinaryBody* isup = 0;
 
@@ -1081,7 +1081,7 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
     if (message) {
 	m.addParam("ip_host",message->getParty()->getPartyAddr());
 	m.addParam("ip_port",String(message->getParty()->getPartyPort()));
-	m.addParam("transport",message->getParty()->getProtoName());
+	m.addParam("ip_transport",message->getParty()->getProtoName());
 	String addr = message->getParty()->getPartyAddr();
 	if (addr) {
 	    addr << ":" << message->getParty()->getPartyPort();
@@ -1590,7 +1590,7 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
     msg.setParam("data","sip/" + data);
     msg.setParam("ip_host",message->getParty()->getPartyAddr());
     msg.setParam("ip_port",String(message->getParty()->getPartyPort()));
-    msg.setParam("transport",message->getParty()->getProtoName());
+    msg.setParam("ip_transport",message->getParty()->getProtoName());
 
     bool dereg = false;
     String tmp(message->getHeader("Expires"));
@@ -1720,7 +1720,7 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
     m.addParam("address",host + ":" + port);
     m.addParam("ip_host",host);
     m.addParam("ip_port",port);
-    m.addParam("transport",message->getParty()->getProtoName());
+    m.addParam("ip_transport",message->getParty()->getProtoName());
     m.addParam("sip_uri",t->getURI());
     m.addParam("sip_callid",t->getCallID());
     // establish the dialog here so user code will have the dialog tag handy
@@ -1728,7 +1728,7 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
     m.addParam("xsip_dlgtag",t->getDialogTag());
     copySipHeaders(m,*message,false);
 
-    decodeIsupBody(&plugin,m,message->body);
+    doDecodeIsupBody(&plugin,m,message->body);
     // add the body if it's a string one
     MimeStringBody* strBody = YOBJECT(MimeStringBody,message->body);
     if (strBody) {
@@ -1740,6 +1740,16 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
 	if (txtBody) {
 	    String bodyText((const char*)txtBody->getBody().data(),txtBody->getBody().length());
 	    m.addParam("xsip_type",txtBody->getType());
+	    m.addParam("xsip_body",bodyText);
+	}
+	else if (message->body) {
+	    const DataBlock& binBody = message->body->getBody();
+	    String bodyText;
+	    Base64 b64(binBody.data(),binBody.length(),false);
+	    b64.encode(bodyText);
+	    b64.clear(false);
+	    m.addParam("xsip_type",message->body->getType());
+	    m.addParam("xsip_body_encoding","base64");
 	    m.addParam("xsip_body",bodyText);
 	}
     }
@@ -2000,7 +2010,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     m->addParam("antiloop",tmp);
     m->addParam("ip_host",m_host);
     m->addParam("ip_port",String(m_port));
-    m->addParam("transport",m_tr->initialMessage()->getParty()->getProtoName());
+    m->addParam("ip_transport",m_tr->initialMessage()->getParty()->getProtoName());
     m->addParam("sip_uri",uri);
     m->addParam("sip_from",m_uri);
     m->addParam("sip_to",ev->getMessage()->getHeaderValue("To"));
@@ -3755,13 +3765,13 @@ bool YateSIPConnection::initTransfer(Message*& msg, SIPMessage*& sipNotify,
 // Decode an application/isup body into 'msg' if configured to do so
 bool YateSIPConnection::decodeIsupBody(Message& msg, MimeBody* body)
 {
-    return ::decodeIsupBody(this,msg,body);
+    return doDecodeIsupBody(this,msg,body);
 }
 
 // Build the body of a SIP message from an engine message
 MimeBody* YateSIPConnection::buildSIPBody(Message& msg, MimeSdpBody* sdp)
 {
-    return ::buildSIPBody(this,msg,sdp);
+    return doBuildSIPBody(this,msg,sdp);
 }
 
 
@@ -4232,26 +4242,29 @@ bool SipHandler::received(Message &msg)
     }
     sip->addHeader("Max-Forwards",String(maxf));
     copySipHeaders(*sip,msg,"sip_");
-    const char* type = msg.getValue("xsip_type");
-    const char* body = msg.getValue("xsip_body");
-    const char* benc = msg.getValue("xsip_body_encoding");
+    const String& type = msg["xsip_type"];
+    const String& body = msg["xsip_body"];
     if (type && body) {
-	if(benc && *benc) {
-	    DataBlock newbody;
-	    if(0 == ::strcmp(benc, "base64")) {
+	const String& bodyEnc = msg["xsip_body_encoding"];
+	if (bodyEnc.null())
+	    sip->setBody(new MimeStringBody(type,body.c_str(),body.length()));
+	else {
+	    DataBlock binBody;
+	    bool ok = false;
+	    if (bodyEnc == "base64") {
 		Base64 b64;
 		b64 << body;
-		b64.decode(newbody);
-	    } else if(benc && 0 == ::strcmp(benc, "hex")) {
-		newbody.unHexify(body, ::strlen(body));
-	    } else if(benc && 0 == ::strcmp(benc, "hexs")) {
-		newbody.unHexify(body, ::strlen(body), ' ');
-	    } else {
-		Debug(&plugin,DebugWarn,"Invalid xsip_body_encoding '%s'", benc);
+		ok = b64.decode(binBody);
 	    }
-	    sip->setBody(new MimeBinaryBody(type,(const char *)newbody.data(),newbody.length()));
-	} else {
-	    sip->setBody(new MimeStringBody(type,body,-1));
+	    else if (bodyEnc == "hex")
+		ok = binBody.unHexify(body,body.length());
+	    else if (bodyEnc == "hexs")
+		ok = binBody.unHexify(body,body.length(),' ');
+
+	    if (ok)
+		sip->setBody(new MimeBinaryBody(type,(const char*)binBody.data(),binBody.length()));
+	    else
+		Debug(&plugin,DebugWarn,"Invalid xsip_body_encoding '%s'",bodyEnc.c_str());
 	}
     }
     sip->complete(plugin.ep()->engine(),msg.getValue("user"),domain,0,

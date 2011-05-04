@@ -1,6 +1,6 @@
-# Have to rotate the log file before it reaches 2GB in size
+# Have to rotate the log and CDR files before each reaches 2GB in size
 
-/var/log/yate {
+/var/log/yate /var/log/yate-cdr.tsv {
     size=100M
     rotate 5
     missingok

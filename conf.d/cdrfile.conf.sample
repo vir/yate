@@ -1,11 +1,11 @@
 [general]
 ; file: string: Name of the file to write the CDR to
+; You should check that this file is log rotated - see /etc/logrotate.d/yate
+; Example: file=/var/log/yate-cdr.tsv
 ;file=
-file=/tmp/cdr.tsv
 
 ; tabs: bool: Use tab-separated instead of comma-separated if format is missing
-;tabs=false
-tabs=true
+;tabs=true
 
 ; format: string: Custom format to use, overrides default. Each ${parameter}
 ;  is replaced with the value of that parameter in the call.cdr message

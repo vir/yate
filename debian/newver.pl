@@ -32,7 +32,7 @@ my $newver="$yatever.vir$suff";
 print "New version: $newver\n";
 my $rc = system qw( debchange -b --preserve --distribution UNRELEASED --newversion ), "$newver";
 if($rc == 0) {
-	exec "git commit -m 'New debian package version' debian/changelog";
+	exec "git commit -m 'New debian package $newver' debian/changelog";
 }
 
 

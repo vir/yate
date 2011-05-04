@@ -24,7 +24,11 @@
 
 #include <yatengine.h>
 
-#include <stdio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <string.h>
 
 using namespace TelEngine;
 namespace { // anonymous
@@ -34,36 +38,43 @@ class CdrFileHandler : public MessageHandler, public Mutex
 public:
     CdrFileHandler(const char *name)
 	: MessageHandler(name), Mutex(false,"CdrFileHandler"),
-	  m_file(0)
+	  m_file(-1)
 	{ }
     virtual ~CdrFileHandler();
     virtual bool received(Message &msg);
     void init(const char *fname, bool tabsep, const char* format);
 private:
-    FILE *m_file;
+    int m_file;
     String m_format;
 };
 
 CdrFileHandler::~CdrFileHandler()
 {
     Lock lock(this);
-    if (m_file) {
-	::fclose(m_file);
-	m_file = 0;
+    if (m_file >= 0) {
+	::close(m_file);
+	m_file = -1;
     }
 }
 
 void CdrFileHandler::init(const char *fname, bool tabsep, const char* format)
 {
     Lock lock(this);
-    if (m_file)
-	::fclose(m_file);
+    if (m_file >= 0) {
+	::close(m_file);
+	m_file = -1;
+    }
     m_format = format;
     if (m_format.null())
 	m_format = tabsep
 	    ? "${time}\t${billid}\t${chan}\t${address}\t${caller}\t${called}\t${billtime}\t${ringtime}\t${duration}\t${direction}\t${status}\t${reason}"
 	    : "${time},\"${billid}\",\"${chan}\",\"${address}\",\"${caller}\",\"${called}\",${billtime},${ringtime},${duration},\"${direction}\",\"${status}\",\"${reason}\"";
-    m_file = fname ? ::fopen(fname,"a") : 0;
+    if (fname) {
+	m_file = ::open(fname,O_WRONLY|O_CREAT|O_APPEND|O_LARGEFILE,0640);
+	if (m_file < 0)
+	    Debug(DebugWarn,"Failed to open or create '%s': %s (%d)",
+		fname,::strerror(errno),errno);
+    }
 }
 
 bool CdrFileHandler::received(Message &msg)
@@ -75,16 +86,15 @@ bool CdrFileHandler::received(Message &msg)
         return false;
 
     Lock lock(this);
-    if (m_file && m_format) {
+    if ((m_file >= 0) && m_format) {
 	String str = m_format;
 	str += "\n";
 	msg.replaceParams(str);
-	::fputs(str.safe(),m_file);
-	::fflush(m_file);
+	::write(m_file,str.c_str(),str.length());
     }
     return false;
 };
-		    
+
 class CdrFilePlugin : public Plugin
 {
 public:
@@ -117,7 +127,7 @@ void CdrFilePlugin::initialize()
 	Engine::install(m_handler);
     }
     if (m_handler)
-	m_handler->init(file,cfg.getBoolValue("general","tabs"),cfg.getValue("general","format"));
+	m_handler->init(file,cfg.getBoolValue("general","tabs",true),cfg.getValue("general","format"));
 }
 
 INIT_PLUGIN(CdrFilePlugin);

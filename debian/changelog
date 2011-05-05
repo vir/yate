@@ -1,3 +1,10 @@
+yate (3.3.3.svn4360) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4360: + Added more mappings for SIP
+    responses to improve mapping to ISUP and ISDN.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 06 May 2011 02:19:21 +0400
+
 yate (3.3.3.svn4359) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4359: + The error threshold of a proven link

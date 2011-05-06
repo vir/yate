@@ -1114,11 +1114,25 @@ bool MGCPSpan::matchEndpoint(const MGCPEndpointId& ep)
     static const Regexp s_finalAll("^\\([^*]\\+/\\)[/*]\\+$");
     if (tmp.matches(s_finalAll) && m_epId.user().startsWith(tmp.matchString(1),false,true))
 	return true;
-    // check for prefix[min-max]
+    // check for prefix[min-max] or prefix*/[min-max]
     static const Regexp s_finalRange("^\\(.*\\)\\[\\([0-9]\\+\\)-\\([0-9]\\+\\)\\]$");
-    if (!(tmp.matches(s_finalRange) && m_epId.user().startsWith(tmp.matchString(1),false,true)))
+    if (!tmp.matches(s_finalRange))
 	return false;
-    int idx = m_epId.user().substr(tmp.matchLength(1)).toInteger(-1,10);
+    int idx = -1;
+    if (tmp.matchString(1).endsWith("*/")) {
+	if (!m_epId.user().startsWith(tmp.matchString(1).substr(0,tmp.matchLength(1)-2)))
+	    return false;
+	idx = m_epId.user().rfind('/');
+	if (idx < 0)
+	    return false;
+	idx++;
+    }
+    else {
+	if (!m_epId.user().startsWith(tmp.matchString(1),false,true))
+	    return false;
+	idx = tmp.matchLength(1);
+    }
+    idx = m_epId.user().substr(idx).toInteger(-1,10);
     if (idx < 0)
 	return false;
     return (tmp.matchString(2).toInteger(idx+1,10) <= idx) && (idx <= tmp.matchString(3).toInteger(-1,10));

@@ -6806,6 +6806,7 @@ protected:
     int32_t m_iid;
     int m_linkState;
     bool m_rpo;
+    bool m_longSeq;
 };
 
 /**

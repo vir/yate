@@ -463,8 +463,10 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 		data[0] = SS7MsgSNM::COA;
 		if (seq & 0xff000000) {
 		    seq &= 0x00ffffff;
-		    data[0] = SS7MsgSNM::XCA;
-		    len += 2;
+		    if (msg->type() != SS7MsgSNM::COO || (seq & 0x00ffff80)) {
+			data[0] = SS7MsgSNM::XCA;
+			len += 2;
+		    }
 		}
 		switch (label.type()) {
 		    case SS7PointCode::ITU:

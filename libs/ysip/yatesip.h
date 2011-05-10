@@ -1219,9 +1219,11 @@ public:
      * @param method Method of the SIP message that is being authenticated
      * @param uri URI of the SIP message that is being authenticated
      * @param response String to store the computed response
+     * @param qop Optional quality of protection type (set in list name) and parameters
      */
     static void buildAuth(const String& username, const String& realm, const String& passwd,
-	const String& nonce, const String& method, const String& uri, String& response);
+	const String& nonce, const String& method, const String& uri, String& response,
+	const NamedList& qop = NamedList::empty());
 
     /**
      * Build an authentication response from already hashed components

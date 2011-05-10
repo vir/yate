@@ -635,8 +635,21 @@ MimeAuthLine* SIPMessage::buildAuth(const String& username, const String& passwo
 	    MimeHeaderLine::delQuotes(realm);
 	    int par = uri.find(';');
 	    String msguri = uri.substr(0,par);
+	    NamedList qop(TelEngine::c_safe(t->getParam("qop")));
+	    if (qop) {
+		MimeHeaderLine::delQuotes(qop);
+		if (qop == "auth") {
+		    String nc("00000001");
+		    qop.addParam("nc",nc);
+		    MD5 md5;
+		    md5 << String(::rand()) << nc << String(Time::secNow());
+		    qop.addParam("cnonce",md5.hexDigest());
+		}
+		else
+		    continue;
+	    }
 	    String response;
-	    SIPEngine::buildAuth(username,realm,password,nonce,meth,msguri,response);
+	    SIPEngine::buildAuth(username,realm,password,nonce,meth,msguri,response,qop);
 	    MimeAuthLine* auth = new MimeAuthLine(proxy ? "Proxy-Authorization" : "Authorization","Digest");
 	    auth->setParam("username",MimeHeaderLine::quote(username));
 	    auth->setParam("realm",MimeHeaderLine::quote(realm));
@@ -648,6 +661,12 @@ MimeAuthLine* SIPMessage::buildAuth(const String& username, const String& passwo
 	    const NamedString* opaque = t->getParam("opaque");
 	    if (opaque)
 		auth->setParam(opaque->name(),*opaque);
+	    if (qop) {
+		auth->setParam("qop",MimeHeaderLine::quote(qop));
+		NamedIterator iter(qop);
+		for (const NamedString* ns = 0; 0 != (ns = iter.get());)
+		    auth->setParam(ns->name(),MimeHeaderLine::quote(*ns));
+	    }
 	    return auth;
 	}
     }

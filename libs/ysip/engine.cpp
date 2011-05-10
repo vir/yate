@@ -436,8 +436,10 @@ bool SIPEngine::checkAuth(bool noUser, const SIPMessage* message, GenObject* use
 }
 
 // response = md5(md5(username:realm:password):nonce:md5(method:uri))
+// qop=auth --> response = md5(md5(username:realm:password):nonce:nc:cnonce:qop:md5(method:uri))
 void SIPEngine::buildAuth(const String& username, const String& realm, const String& passwd,
-    const String& nonce, const String& method, const String& uri, String& response)
+    const String& nonce, const String& method, const String& uri, String& response,
+    const NamedList& qop)
 {
     XDebug(DebugAll,"SIP Building auth: '%s:%s:%s' '%s' '%s:%s'",
 	username.c_str(),realm.c_str(),passwd.c_str(),nonce.c_str(),method.c_str(),uri.c_str());
@@ -445,7 +447,15 @@ void SIPEngine::buildAuth(const String& username, const String& realm, const Str
     m1 << username << ":" << realm << ":" << passwd;
     m2 << method << ":" << uri;
     String tmp;
-    tmp << m1.hexDigest() << ":" << nonce << ":" << m2.hexDigest();
+    tmp << m1.hexDigest() << ":" << nonce << ":";
+    if (qop) {
+	if (qop == "auth")
+	    tmp << qop["nc"] << ":" << qop["cnonce"] << ":" << qop.c_str() << ":";
+	else
+	    Debug(DebugStub,"SIPEngine::buildAuth() not implemented for qop=%s",
+		qop.c_str());
+    }
+    tmp << m2.hexDigest();
     m1.clear();
     m1.update(tmp);
     response = m1.hexDigest();

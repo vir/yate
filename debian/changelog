@@ -1,3 +1,10 @@
+yate (3.3.3.svn4366) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4366: + Properly match ilbc when handling
+    formats set from routing.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 12 May 2011 02:19:20 +0400
+
 yate (3.3.3.svn4365) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4365: + Handle qop=auth authentication

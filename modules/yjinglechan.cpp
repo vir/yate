@@ -620,6 +620,33 @@ static inline void jingleAddParam(NamedList& list, const char* param, const char
 	copy->append(param,",");
 }
 
+// Replace 'ilbc' to used ilbc20/30
+static void adjustUsedIlbc(String& fmts)
+{
+    if (!fmts)
+	return;
+    ObjList* list = fmts.split(',',false);
+    ObjList* o = list->find("ilbc");
+    if (o) {
+	JGRtpMedia* m = 0;
+	plugin.lock();
+	for (ObjList* l = s_usedCodecs.skipNull(); l; l = l->skipNext()) {
+	    m = static_cast<JGRtpMedia*>(l->get());
+	    if (m->m_name == "iLBC")
+		break;
+	    m = 0;
+	}
+	if (m)
+	    *(static_cast<String*>(o->get())) = m->m_synonym;
+	else
+	    o->remove();
+	plugin.unlock();
+	fmts.clear();
+	fmts.append(list,",");
+    }
+    TelEngine::destruct(list);
+}
+
 #ifdef DEBUG
 // Utility function needed for debug: dump a candidate to a string
 static void dumpCandidate(String& buf, JGRtpCandidate* c, char sep = ' ')
@@ -791,7 +818,9 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
     if (null(file)) {
 	String audio = msg["formats"];
 	plugin.lock();
-	if (!(audio || s_usedCodecs.createList(audio,true)))
+	if (audio)
+	    adjustUsedIlbc(audio);
+	else if (!s_usedCodecs.createList(audio,true))
 	    audio = "alaw,mulaw";
 	m_audioFormats.setMedia(s_usedCodecs,audio);
 	plugin.unlock();

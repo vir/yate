@@ -113,7 +113,7 @@ public:
     inline bool info() const
 	{ return m_info; }
 private:
-    static bool copyAuthParams(NamedList* dest, const NamedList& src);
+    static bool copyAuthParams(NamedList* dest, const NamedList& src, bool ok = true);
     YateSIPEndPoint* m_ep;
     bool m_prack;
     bool m_info;
@@ -149,11 +149,13 @@ public:
 	{ return m_username; }
     inline const String& getAuthName() const
 	{ return m_authname ? m_authname : m_username; }
+    inline const String& regDomain() const
+	{ return m_registrar ? m_registrar : m_proxyAddr; }
     inline const String& domain() const
-	{ return m_domain ? m_domain : m_registrar; }
+	{ return m_domain ? m_domain : regDomain(); }
     inline const char* domain(const char* defDomain) const
 	{ return m_domain ? m_domain.c_str() :
-	    (TelEngine::null(defDomain) ? m_registrar.c_str() : defDomain); }
+	    (TelEngine::null(defDomain) ? regDomain().c_str() : defDomain); }
     inline bool valid() const
 	{ return m_valid; }
     inline bool marked() const
@@ -1044,7 +1046,7 @@ bool YateSIPEngine::buildParty(SIPMessage* message)
     return m_ep->buildParty(message);
 }
 
-bool YateSIPEngine::copyAuthParams(NamedList* dest, const NamedList& src)
+bool YateSIPEngine::copyAuthParams(NamedList* dest, const NamedList& src, bool ok)
 {
     // we added those and we want to exclude them from copy
     static TokenDict exclude[] = {
@@ -1060,17 +1062,20 @@ bool YateSIPEngine::copyAuthParams(NamedList* dest, const NamedList& src)
 	{  0,   0 },
     };
     if (!dest)
-	return true;
+	return ok;
     unsigned int n = src.length();
     for (unsigned int i = 0; i < n; i++) {
 	NamedString* s = src.getParam(i);
 	if (!s)
 	    continue;
-	if (s->name().toInteger(exclude,0))
+	String name = s->name();
+	if (name.startSkip("authfail_",false) == ok)
 	    continue;
-	dest->setParam(s->name(),*s);
+	if (name.toInteger(exclude,0))
+	    continue;
+	dest->setParam(name,*s);
     }
-    return true;
+    return ok;
 }
 
 bool YateSIPEngine::checkUser(const String& username, const String& realm, const String& nonce,
@@ -1117,7 +1122,7 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
     }
 
     if (!Engine::dispatch(m))
-	return false;
+	return copyAuthParams(params,m,false);
 
     // empty password returned means authentication succeeded
     if (m.retValue().null())
@@ -1132,11 +1137,11 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
 	    if (err)
 		params->setParam("reason",err);
 	}
-	return false;
+	return copyAuthParams(params,m,false);
     }
     // password works only with username
     if (!username)
-	return false;
+	return copyAuthParams(params,m,false);
 
     String res;
     buildAuth(username,realm,m.retValue(),nonce,method,uri,res);
@@ -1155,7 +1160,7 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
 	m_ep->incFailedAuths();
 	plugin.changed();
     }
-    return ok;
+    return ok || copyAuthParams(params,m,false);
 }
 
 YateSIPEndPoint::YateSIPEndPoint(Thread::Priority prio)
@@ -3616,6 +3621,12 @@ void YateSIPConnection::callRejected(const char* error, const char* reason, cons
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	if (code == 401)
 	    m_tr->requestAuth(s_realm,m_domain,false);
+	else if (msg && m_tr->setResponse()) {
+	    SIPMessage* m = new SIPMessage(m_tr->initialMessage(),code,reason);
+	    copySipHeaders(*m,*msg);
+	    m_tr->setResponse(m);
+	    TelEngine::destruct(m);
+	}
 	else
 	    m_tr->setResponse(code,reason);
     }

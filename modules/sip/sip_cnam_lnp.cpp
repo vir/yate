@@ -158,21 +158,19 @@ void QuerySipChannel::endLnp(const NamedList& params)
 bool QuerySipDriver::msgPreroute(Message& msg)
 {
     DDebug(this,DebugAll,"QuerySipDriver::msgPreroute()");
-    if (!msg.getBoolValue("querycnam",(0 == msg.getParam("callername"))))
-	return false;
-    if (!TelEngine::isE164(msg.getValue("caller")))
-	return false;
     Lock mylock(this);
     String callto = s_cfg.getValue("cnam","callto");
     if (callto.null())
 	return false;
     String caller = s_cfg.getValue("cnam","caller","${caller}");
+    msg.replaceParams(caller);
+    if (!msg.getBoolValue("querycnam",TelEngine::isE164(caller) && !msg.getParam("callername")))
+	return false;
     String called = s_cfg.getValue("cnam","called","${called}");
     int timeout = s_cfg.getIntValue("cnam","timeout",5000);
     int flags = s_cfg.getIntValue("cnam","flags",-1);
     mylock.drop();
     msg.replaceParams(callto);
-    msg.replaceParams(caller);
     msg.replaceParams(called);
     if (timeout < 1000)
 	timeout = 1000;
@@ -206,22 +204,20 @@ bool QuerySipDriver::msgPreroute(Message& msg)
 bool QuerySipDriver::msgRoute(Message& msg)
 {
     DDebug(this,DebugAll,"QuerySipDriver::msgRoute()");
-    if (!msg.getBoolValue("querylnp",!msg.getBoolValue("npdi")))
-	return false;
-    if (!TelEngine::isE164(msg.getValue("called")))
-	return false;
     Lock mylock(this);
     String callto = s_cfg.getValue("lnp","callto");
     if (callto.null())
 	return false;
-    String caller = s_cfg.getValue("lnp","caller","${caller}");
     String called = s_cfg.getValue("lnp","called","${called}");
+    msg.replaceParams(called);
+    if (!msg.getBoolValue("querylnp",TelEngine::isE164(called) && !msg.getBoolValue("npdi")))
+	return false;
+    String caller = s_cfg.getValue("lnp","caller","${caller}");
     int timeout = s_cfg.getIntValue("lnp","timeout",5000);
     int flags = s_cfg.getIntValue("lnp","flags",-1);
     mylock.drop();
     msg.replaceParams(callto);
     msg.replaceParams(caller);
-    msg.replaceParams(called);
     if (timeout < 1000)
 	timeout = 1000;
     else if (timeout > 30000)

@@ -351,7 +351,7 @@ public:
     bool addAttribute(const char* attrib, unsigned char subType, const char* val, bool emptyOk = false);
     void addAttributes(NamedList& params, NamedList* list);
     bool prepareAttributes(NamedList& params, bool forAcct = true, String* user = 0);
-    bool returnAttributes(NamedList& params, const ObjList* attributes);
+    bool returnAttributes(NamedList& params, const ObjList* attributes, bool ok = true);
     static bool fillRandom(DataBlock& data, int len);
 
 private:
@@ -1292,7 +1292,7 @@ bool RadiusClient::prepareAttributes(NamedList& params, bool forAcct, String* us
 }
 
 // Copy some attributes back from RADIUS answer to parameter list (message)
-bool RadiusClient::returnAttributes(NamedList& params, const ObjList* attributes)
+bool RadiusClient::returnAttributes(NamedList& params, const ObjList* attributes, bool ok)
 {
     Lock lock(s_cfgMutex);
     NamedList* sect = s_cfg.getSection(m_section);
@@ -1309,7 +1309,7 @@ bool RadiusClient::returnAttributes(NamedList& params, const ObjList* attributes
 	    attr->getString(val);
 	    attrDump << "\r\n  " << attr->name() << "='" << val << "'";
 	}
-	String tmp("ret:");
+	String tmp(ok ? "ret:" : "ret-fail:");
 	tmp += attr->name();
 	String* par = sect->getParam(tmp);
 	if (par && *par) {
@@ -1366,13 +1366,15 @@ bool AuthHandler::received(Message& msg)
     radclient.addAttribute("h323-remote-address",address);
 
     ObjList result;
-    if (radclient.doAuthenticate(&result) != AuthSuccess)
+    if (radclient.doAuthenticate(&result) != AuthSuccess) {
+	radclient.returnAttributes(msg,&result,false);
 	return false;
+    }
     // copy back the username we actually authenticated
     if (user)
 	msg.setParam("username",user);
     // and pick whatever other parameters we want to return
-    radclient.returnAttributes(msg,&result);
+    radclient.returnAttributes(msg,&result,true);
     if (s_pb_enabled)
 	portaBillingRoute(msg,&result);
     // signal we don't return a password

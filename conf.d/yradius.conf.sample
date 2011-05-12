@@ -71,6 +71,9 @@
 ; ret: will set authentication returned attributes back into message
 ;ret:attribute-name=paramname
 
+; ret-fail: will set returned attributes from auth rejection back into message
+;ret-fail:attribute-name=paramname
+
 ; Any other parameter will attempt to match the right hand Regexp
 ;paramname=REGEXP
 

@@ -3619,6 +3619,12 @@ void YateSIPConnection::callRejected(const char* error, const char* reason, cons
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	if (code == 401)
 	    m_tr->requestAuth(s_realm,m_domain,false);
+	else if (msg && m_tr->setResponse()) {
+	    SIPMessage* m = new SIPMessage(m_tr->initialMessage(),code,reason);
+	    copySipHeaders(*m,*msg);
+	    m_tr->setResponse(m);
+	    TelEngine::destruct(m);
+	}
 	else
 	    m_tr->setResponse(code,reason);
     }

@@ -68,6 +68,7 @@ static Socket s_localSock;
 static bool s_localTime = false;
 static bool s_shortnum = false;
 static bool s_unisocket = false;
+static bool s_printAttr = false;
 static bool s_pb_enabled = false;
 static bool s_pb_parallel = false;
 static bool s_pb_simplify = false;
@@ -1298,11 +1299,16 @@ bool RadiusClient::returnAttributes(NamedList& params, const ObjList* attributes
     if (!sect)
 	return false;
 
+    String attrDump;
     for (; attributes; attributes = attributes->next()) {
 	const RadAttrib* attr = static_cast<const RadAttrib*>(attributes->get());
 	if (!attr)
 	    continue;
-	XDebug(&__plugin,DebugInfo,"Returned attribute %d '%s'",attr->code(),attr->name());
+	if (s_printAttr && __plugin.debugAt(DebugAll)) {
+	    String val;
+	    attr->getString(val);
+	    attrDump << "\r\n  " << attr->name() << "='" << val << "'";
+	}
 	String tmp("ret:");
 	tmp += attr->name();
 	String* par = sect->getParam(tmp);
@@ -1312,6 +1318,8 @@ bool RadiusClient::returnAttributes(NamedList& params, const ObjList* attributes
 	    params.setParam(*par,tmp);
 	}
     }
+    if (attrDump)
+	Debug(&__plugin,DebugAll,"Returned attributes:%s",attrDump.c_str());
     return true;
 }
 
@@ -1514,6 +1522,7 @@ void RadiusModule::initialize()
     s_localTime = s_cfg.getBoolValue("general","local_time",false);
     s_shortnum = s_cfg.getBoolValue("general","short_number",false);
     s_unisocket = s_cfg.getBoolValue("general","single_socket",false);
+    s_printAttr = s_cfg.getBoolValue("general","print_attributes",false);
     s_pb_enabled = s_cfg.getBoolValue("portabill","enabled",false);
     s_pb_parallel = s_cfg.getBoolValue("portabill","parallel",false);
     s_pb_simplify = s_cfg.getBoolValue("portabill","simplify",false);

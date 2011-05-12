@@ -1,3 +1,17 @@
+yate (3.3.3.svn4372) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4372: + Check that caller / called party
+    number is E.164 after applying substitution.  + Allow querycnam /
+    querylnp to override the default E.164 checking of numbers.  + Added
+    possibility to print returned RADIUS attributes in debugging.  +
+    Allow returning attributes from rejected RADIUS authentication.  +
+    Allow copying parameters starting with authfail_ from failed
+    user.auth messages.  + Allow setting arbitrary SIP headers in
+    rejected calls.  + Use the proxy address if domain is not set for
+    outbound calls.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 13 May 2011 02:19:14 +0400
+
 yate (3.3.3.svn4366) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4366: + Properly match ilbc when handling

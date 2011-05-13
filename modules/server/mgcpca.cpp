@@ -45,7 +45,7 @@ public:
 	: MGCPEngine(false,0,params), m_timedOutTrans(0), m_timedOutDels(0)
 	{ }
     virtual ~YMGCPEngine();
-    virtual bool processEvent(MGCPTransaction* trans, MGCPMessage* msg, void* data);
+    virtual bool processEvent(MGCPTransaction* trans, MGCPMessage* msg);
     virtual void timeout(MGCPTransaction* trans);
     inline unsigned int trTimeouts()
     {
@@ -354,6 +354,10 @@ static const TokenDict s_dict_rqnt[] = {
     { "none", MGCPSpan::RqntNone },
     { "once", MGCPSpan::RqntOnce },
     { "more", MGCPSpan::RqntMore },
+    { "no",   MGCPSpan::RqntNone },
+    { "yes",  MGCPSpan::RqntOnce },
+    { "off",  MGCPSpan::RqntNone },
+    { "on",   MGCPSpan::RqntOnce },
     { 0,      0                  }
 };
 
@@ -393,15 +397,16 @@ YMGCPEngine::~YMGCPEngine()
 }
 
 // Process all events of this engine, forward them to wrappers if found
-bool YMGCPEngine::processEvent(MGCPTransaction* trans, MGCPMessage* msg, void* data)
+bool YMGCPEngine::processEvent(MGCPTransaction* trans, MGCPMessage* msg)
 {
     s_mutex.lock();
+    void* data = trans ? trans->userData() : 0;
     RefPointer<MGCPWrapper> wrap = YOBJECT(MGCPWrapper,static_cast<GenObject*>(data));
     RefPointer<MGCPSpan> span = YOBJECT(MGCPSpan,static_cast<GenObject*>(data));
     RefPointer<MGCPCircuit> circ = YOBJECT(MGCPCircuit,static_cast<GenObject*>(data));
     s_mutex.unlock();
-    DDebug(this,DebugAll,"YMGCPEngine::processEvent(%p,%p,%p) wrap=%p span=%p circ=%p [%p]",
-	trans,msg,data,(void*)wrap,(void*)span,(void*)circ,this);
+    DDebug(this,DebugAll,"YMGCPEngine::processEvent(%p,%p) wrap=%p span=%p circ=%p [%p]",
+	trans,msg,(void*)wrap,(void*)span,(void*)circ,this);
     if (!trans)
 	return false;
     if (wrap)
@@ -579,9 +584,11 @@ bool MGCPWrapper::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 	tr,mm,this);
     if (tr == m_tr) {
 	if (!mm || (tr->msgResponse())) {
+	    s_mutex.lock();
 	    tr->userData(0);
 	    m_msg = mm;
 	    m_tr = 0;
+	    s_mutex.unlock();
 	}
     }
     else if (mm) {
@@ -1477,7 +1484,8 @@ bool MGCPCircuit::sendAsync(MGCPMessage* mm, bool notify)
 	    return true;
 	}
     }
-    TelEngine::destruct(mm);
+    else
+	TelEngine::destruct(mm);
     return false;
 }
 
@@ -1852,9 +1860,11 @@ bool MGCPCircuit::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 	tr,mm,this);
     if (tr == m_tr) {
 	if (!mm || (tr->msgResponse())) {
+	    s_mutex.lock();
 	    tr->userData(0);
 	    m_msg = mm;
 	    m_tr = 0;
+	    s_mutex.unlock();
 	    if (tr->timeout())
 		enqueueEvent(SignallingCircuitEvent::Disconnected,"Timeout");
 	}
@@ -1868,7 +1878,9 @@ bool MGCPCircuit::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 	}
 	if (err < 300)
 	    return false;
+	s_mutex.lock();
 	tr->userData(0);
+	s_mutex.unlock();
 	Debug(&splugin,DebugWarn,"Gateway error %d deleting connection on circuit %u [%p]",
 	    err,code(),this);
 	if (err >= 500) {

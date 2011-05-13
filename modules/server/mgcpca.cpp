@@ -354,6 +354,10 @@ static const TokenDict s_dict_rqnt[] = {
     { "none", MGCPSpan::RqntNone },
     { "once", MGCPSpan::RqntOnce },
     { "more", MGCPSpan::RqntMore },
+    { "no",   MGCPSpan::RqntNone },
+    { "yes",  MGCPSpan::RqntOnce },
+    { "off",  MGCPSpan::RqntNone },
+    { "on",   MGCPSpan::RqntOnce },
     { 0,      0                  }
 };
 

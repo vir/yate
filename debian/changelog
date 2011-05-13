@@ -1,3 +1,17 @@
+yate (3.3.3.svn4377) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4377: + Avoid message double destruction if
+    trying to send an invalid command.  + Access explicitely the pointer
+    under a mutex lock to prevent race conditions.  + Do not provide the
+    raw user data from library when processing MGCP events.  + Protect
+    the channel status variable while changing it.  + Allow yes/no and
+    on/off aliases for DTMF request modes once/none.  + Moved processing
+    of Signal and RequestNotify parameters in their own function called
+    when they are embedded in CRCX or MDCX.  + No longer enable by
+    default cluster/fallback related operation of MGCP GW.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 14 May 2011 02:19:20 +0400
+
 yate (3.3.3.svn4372) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4372: + Check that caller / called party

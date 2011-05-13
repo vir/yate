@@ -1477,7 +1477,8 @@ bool MGCPCircuit::sendAsync(MGCPMessage* mm, bool notify)
 	    return true;
 	}
     }
-    TelEngine::destruct(mm);
+    else
+	TelEngine::destruct(mm);
     return false;
 }
 

@@ -38,7 +38,7 @@ public:
 	: MGCPEngine(true,0,params)
 	{ }
     virtual ~YMGCPEngine();
-    virtual bool processEvent(MGCPTransaction* trans, MGCPMessage* msg, void* data);
+    virtual bool processEvent(MGCPTransaction* trans, MGCPMessage* msg);
 private:
     bool createConn(MGCPTransaction* trans, MGCPMessage* msg);
 };
@@ -97,6 +97,8 @@ public:
 	{ }
 };
 
+static Mutex s_mutex(false,"MGCP-GW");
+
 static MGCPPlugin splugin;
 
 static YMGCPEngine* s_engine = 0;
@@ -126,18 +128,20 @@ YMGCPEngine::~YMGCPEngine()
 }
 
 // process all MGCP events, distribute them according to their type
-bool YMGCPEngine::processEvent(MGCPTransaction* trans, MGCPMessage* msg, void* data)
+bool YMGCPEngine::processEvent(MGCPTransaction* trans, MGCPMessage* msg)
 {
-    RefPointer<MGCPChan> chan = YOBJECT(MGCPChan,static_cast<GenObject*>(data));
-    Debug(this,DebugAll,"YMGCPEngine::processEvent(%p,%p,%p) [%p]",
-	trans,msg,data,this);
+    DDebug(this,DebugAll,"YMGCPEngine::processEvent(%p,%p) [%p]",
+	trans,msg,this);
     if (!trans)
 	return false;
+    s_mutex.lock();
+    RefPointer<MGCPChan> chan = YOBJECT(MGCPChan,static_cast<GenObject*>(trans->userData()));
+    s_mutex.unlock();
     if (chan)
 	return chan->processEvent(trans,msg);
     if (!msg)
 	return false;
-    if (!data && !trans->outgoing() && msg->isCommand()) {
+    if (!trans->userData() && !trans->outgoing() && msg->isCommand()) {
 	if (msg->name() == "CRCX") {
 	    // create connection
 	    if (!createConn(trans,msg))
@@ -263,12 +267,14 @@ void MGCPChan::activate(bool standby)
 
 void MGCPChan::endTransaction(int code, const NamedList* params)
 {
+    Lock mylock(s_mutex);
     MGCPTransaction* tr = m_tr;
     m_tr = 0;
     if (!tr)
 	return;
     Debug(this,DebugInfo,"Finishing transaction %p with code %d [%p]",tr,code,this);
     tr->userData(0);
+    mylock.drop();
     tr->setResponse(code,params);
 }
 
@@ -319,11 +325,13 @@ bool MGCPChan::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 {
     Debug(this,DebugInfo,"MGCPChan::processEvent(%p,%p) [%p]",tr,mm,this);
     if (!mm) {
+	s_mutex.lock();
 	if (m_tr == tr) {
 	    Debug(this,DebugInfo,"Clearing transaction %p [%p]",tr,this);
 	    m_tr = 0;
 	    tr->userData(0);
 	}
+	s_mutex.unlock();
 	return true;
     }
     if (!(m_tr || tr->userData())) {

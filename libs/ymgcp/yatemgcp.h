@@ -980,11 +980,10 @@ public:
      *  method if they want to process events
      * @param trans Pointer to the transaction that generated the event
      * @param msg MGCP message of the event, may be NULL
-     * @param data User data that is stored in transaction, may be NULL
      * @return True if the event was processed. If the event carry a received
      *  command and it's not processed the transaction will receive an 'unknown command' response
      */
-    virtual bool processEvent(MGCPTransaction* trans, MGCPMessage* msg, void* data);
+    virtual bool processEvent(MGCPTransaction* trans, MGCPMessage* msg);
 
     /**
      * Returns an unprocessed event to this engine to be deleted.

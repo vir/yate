@@ -4,6 +4,10 @@
 ; standby: bool: Enter standby mode initially
 ;standby=no
 
+; cluster: bool: Enable cluster mode
+; If standby is enabled cluster mode is forced
+;cluster=
+
 
 [engine]
 ; These parameters are used to initialize the MGCP Engine

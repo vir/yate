@@ -500,6 +500,7 @@ Message* Channel::getDisconnect(const char* reason)
 
 void Channel::status(const char* newstat)
 {
+    Lock lock(mutex());
     m_status = newstat;
     if (!m_answered && (m_status == "answered")) {
 	m_maxcall = 0;

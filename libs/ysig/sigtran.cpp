@@ -1470,10 +1470,12 @@ bool SS7M2UAClient::processMSG(unsigned char msgVersion, unsigned char msgClass,
 SS7M2UA::SS7M2UA(const NamedList& params)
     : SignallingComponent(params.safe("SS7M2UA"),&params),
       m_retrieve(50),
-      m_iid(params.getIntValue("iid",-1)), m_linkState(LinkDown), m_rpo(false)
+      m_iid(params.getIntValue("iid",-1)), m_linkState(LinkDown), m_rpo(false),
+      m_longSeq(false)
 {
     DDebug(DebugInfo,"Creating SS7M2UA [%p]",this);
     m_retrieve.interval(params,"retrieve",5,200,true);
+    m_longSeq = params.getBoolValue("longsequence");
     m_lastSeqRx = -2;
 }
 
@@ -1522,6 +1524,7 @@ bool SS7M2UA::control(Operation oper, NamedList* params)
     if (params) {
 	m_autostart = params->getBoolValue("autostart",m_autostart);
 	m_autoEmergency = params->getBoolValue("autoemergency",m_autoEmergency);
+	m_longSeq = params->getBoolValue("longsequence",m_longSeq);
     }
     switch (oper) {
 	case Pause:
@@ -1764,7 +1767,7 @@ bool SS7M2UA::processMAUP(unsigned char msgType, const DataBlock& msg, int strea
 			break;
 		    }
 		    Debug(this,DebugInfo,"Recovered sequence number %u",res);
-		    if (res & 0xffffff80)
+		    if (m_longSeq || res & 0xffffff80)
 			res = (res & 0x00ffffff) | 0x01000000;
 		    m_lastSeqRx = res;
 		    postRetrieve();

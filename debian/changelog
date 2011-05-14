@@ -1,3 +1,10 @@
+yate (3.3.3.vir2011051401) UNRELEASED; urgency=low
+
+  * Merge SIP QOP handling with upstream
+  * New Yate.pm
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Sat, 14 May 2011 10:49:42 +0400
+
 yate (3.3.3.vir2011050401) UNRELEASED; urgency=low
 
   * Merged upstream updates

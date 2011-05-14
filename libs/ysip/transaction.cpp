@@ -83,7 +83,7 @@ SIPTransaction::SIPTransaction(SIPTransaction& original, SIPMessage* answer)
 	&original,answer,this);
 
     SIPMessage* msg = new SIPMessage(*original.m_firstMessage);
-    MimeAuthLine* auth = answer->buildAuth(*original.m_firstMessage, m_engine->m_noncer);
+    MimeAuthLine* auth = answer->buildAuth(*original.m_firstMessage);
     m_firstMessage->setAutoAuth();
     msg->complete(m_engine);
     msg->addHeader(auth);
@@ -383,7 +383,7 @@ void SIPTransaction::requestAuth(const String& realm, const String& domain, bool
 	MimeHeaderLine* line = new MimeHeaderLine(hdr,tmp,',');
 	if (domain)
 	    line->setParam(" domain",MimeHeaderLine::quote(domain));
-	m_engine->m_noncer.nonceGet(tmp);
+	m_engine->nonceGet(tmp);
 	line->setParam(" nonce",MimeHeaderLine::quote(tmp));
 	line->setParam(" stale",stale ? "TRUE" : "FALSE");
 	line->setParam(" algorithm","MD5");

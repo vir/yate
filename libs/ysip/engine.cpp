@@ -146,88 +146,22 @@ SIPEvent::~SIPEvent()
     TelEngine::destruct(m_message);
 }
 
-SIPAuthNonce::SIPAuthNonce()
-    : m_nc(0), m_nonce_time(0),
-      m_nonce_mutex(false,"SIPEngine::nonce")
-{
-    char tmp[32];
-    ::snprintf(tmp,sizeof(tmp),"%08x",::rand() ^ (int)Time::now());
-    m_nonce_secret = tmp;
-}
-
-void SIPAuthNonce::nonceGet(String& nonce)
-{
-    m_nonce_mutex.lock();
-    unsigned int t = Time::secNow();
-    if (t != m_nonce_time) {
-	m_nonce_time = t;
-	String tmp(m_nonce_secret);
-	tmp << "." << t;
-	MD5 md5(tmp);
-	m_nonce = md5.hexDigest();
-	m_nonce << "." << t;
-	XDebug(this,DebugAll,"Generated new nonce '%s' [%p]",
-	    m_nonce.c_str(),this);
-    }
-    nonce = m_nonce;
-    m_nonce_mutex.unlock();
-}
-
-long SIPAuthNonce::nonceAge(const String& nonce)
-{
-    if (nonce.null())
-	return -1;
-    Lock lock(m_nonce_mutex);
-    if (nonce == m_nonce)
-	return Time::secNow() - m_nonce_time;
-    lock.drop();
-    int dot = nonce.find('.');
-    if (dot < 0)
-	return -1;
-    String tmp(nonce.substr(dot+1));
-    if (tmp.null())
-	return -1;
-    unsigned int t = 0;
-    tmp >> t;
-    if (!tmp.null())
-	return -1;
-    tmp << m_nonce_secret << "." << t;
-    MD5 md5(tmp);
-    if (nonce.substr(0,dot) != md5.hexDigest())
-	return -1;
-    return Time::secNow() - t;
-}
-
-unsigned long SIPAuthNonce::countNonce(const String& nonce)
-{
-    if(m_nonce != nonce)
-    {
-	m_nc = 0;
-	m_nonce = nonce;
-    }
-    return ++m_nc;
-}
-
-String SIPAuthNonce::cnonce() const
-{
-    char tmp[32];
-    ::snprintf(tmp,sizeof(tmp),"%08x",::rand() ^ (int)Time::now());
-    MD5 m;
-    m << tmp;
-    return m.hexDigest();
-}
 
 SIPEngine::SIPEngine(const char* userAgent)
     : Mutex(true,"SIPEngine"),
       m_t1(500000), m_t4(5000000), m_maxForwards(70),
       m_cseq(0), m_flags(0), m_lazyTrying(false),
-      m_userAgent(userAgent)
+      m_userAgent(userAgent), m_nonce_time(0),
+      m_nonce_mutex(false,"SIPEngine::nonce")
 {
     debugName("sipengine");
     DDebug(this,DebugInfo,"SIPEngine::SIPEngine() [%p]",this);
     if (m_userAgent.null())
 	m_userAgent << "YATE/" << YATE_VERSION;
     m_allowed = "ACK";
+    char tmp[32];
+    ::snprintf(tmp,sizeof(tmp),"%08x",::rand() ^ (int)Time::now());
+    m_nonce_secret = tmp;
 }
 
 SIPEngine::~SIPEngine()
@@ -446,6 +380,49 @@ u_int64_t SIPEngine::getTimer(char which, bool reliable) const
     return 0;
 }
 
+void SIPEngine::nonceGet(String& nonce)
+{
+    m_nonce_mutex.lock();
+    unsigned int t = Time::secNow();
+    if (t != m_nonce_time) {
+	m_nonce_time = t;
+	String tmp(m_nonce_secret);
+	tmp << "." << t;
+	MD5 md5(tmp);
+	m_nonce = md5.hexDigest();
+	m_nonce << "." << t;
+	XDebug(this,DebugAll,"Generated new nonce '%s' [%p]",
+	    m_nonce.c_str(),this);
+    }
+    nonce = m_nonce;
+    m_nonce_mutex.unlock();
+}
+
+long SIPEngine::nonceAge(const String& nonce)
+{
+    if (nonce.null())
+	return -1;
+    Lock lock(m_nonce_mutex);
+    if (nonce == m_nonce)
+	return Time::secNow() - m_nonce_time;
+    lock.drop();
+    int dot = nonce.find('.');
+    if (dot < 0)
+	return -1;
+    String tmp(nonce.substr(dot+1));
+    if (tmp.null())
+	return -1;
+    unsigned int t = 0;
+    tmp >> t;
+    if (!tmp.null())
+	return -1;
+    tmp << m_nonce_secret << "." << t;
+    MD5 md5(tmp);
+    if (nonce.substr(0,dot) != md5.hexDigest())
+	return -1;
+    return Time::secNow() - t;
+}
+
 bool SIPEngine::checkUser(const String& username, const String& realm, const String& nonce,
     const String& method, const String& uri, const String& response,
     const SIPMessage* message, GenObject* userData)
@@ -456,33 +433,6 @@ bool SIPEngine::checkUser(const String& username, const String& realm, const Str
 bool SIPEngine::checkAuth(bool noUser, const SIPMessage* message, GenObject* userData)
 {
     return message && noUser && checkUser("","","",message->method,message->uri,"",message,userData);
-}
-
-// response = md5(md5(username:realm:password):nonce:nc:cnonce:qop:md5(method:uri))
-void SIPEngine::buildAuth(const String& username, const String& realm, const String& passwd,
-    const String& nonce, const String& method, const String& uri,
-    unsigned long nc, const String& cnonce, const String& qop,
-    String& response)
-{
-    XDebug(DebugAll,"SIP Building auth: '%s:%s:%s' '%s:%u:%s:%s' '%s:%s'",
-	username.c_str(),realm.c_str(),passwd.c_str(),
-	nonce.c_str(), nc, cnonce.c_str(), qop.c_str(),
-	method.c_str(),uri.c_str());
-    MD5 m1,m2;
-    m1 << username << ":" << realm << ":" << passwd;
-    m2 << method << ":" << uri;
-    String tmp;
-    tmp << m1.hexDigest() << ":" << nonce;
-    if(qop.length())
-    {
-	char buf[9];
-	sprintf(buf, "%08lx", nc);
-	tmp << ":" << buf << ":" << cnonce << ":" << qop;
-    }
-    tmp << ":" << m2.hexDigest();
-    m1.clear();
-    m1.update(tmp);
-    response = m1.hexDigest();
 }
 
 // response = md5(md5(username:realm:password):nonce:md5(method:uri))
@@ -535,7 +485,7 @@ int SIPEngine::authUser(const SIPMessage* message, String& user, bool proxy, Gen
 	    if (nonce.null())
 		continue;
 	    // see if the nonce was generated by this engine
-	    long age = m_noncer.nonceAge(nonce);
+	    long age = nonceAge(nonce);
 	    if (age < 0)
 		continue;
 	    noUser = false;

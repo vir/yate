@@ -26,7 +26,6 @@
 
 #include <string.h>
 #include <stdlib.h>
-#include <stdio.h>
 
 
 using namespace TelEngine;
@@ -621,12 +620,10 @@ void SIPMessage::setParty(SIPParty* ep)
 }
 
 MimeAuthLine* SIPMessage::buildAuth(const String& username, const String& password,
-    const String& meth, const String& uri, SIPAuthNonce& noncer, bool proxy) const
+    const String& meth, const String& uri, bool proxy) const
 {
     const char* hdr = proxy ? "Proxy-Authenticate" : "WWW-Authenticate";
     const ObjList* l = &header;
-    unsigned long nc = 0;
-    String cnonce;
     for (; l; l = l->next()) {
 	const MimeAuthLine* t = YOBJECT(MimeAuthLine,l->get());
 	if (t && (t->name() &= hdr) && (*t &= "Digest")) {
@@ -636,19 +633,10 @@ MimeAuthLine* SIPMessage::buildAuth(const String& username, const String& passwo
 		continue;
 	    String realm(t->getParam("realm"));
 	    MimeHeaderLine::delQuotes(realm);
-	    String qop(t->getParam("qop"));
-	    MimeHeaderLine::delQuotes(qop);
 	    int par = uri.find(';');
 	    String msguri = uri.substr(0,par);
 	    String response;
-	    if(qop.length())
-	    {
-		nc = noncer.countNonce(nonce);
-		cnonce = noncer.cnonce();
-		SIPEngine::buildAuth(username,realm,password,nonce,meth,msguri,nc,cnonce,qop,response);
-	    }
-	    else
-		SIPEngine::buildAuth(username,realm,password,nonce,meth,msguri,response);
+	    SIPEngine::buildAuth(username,realm,password,nonce,meth,msguri,response);
 	    MimeAuthLine* auth = new MimeAuthLine(proxy ? "Proxy-Authorization" : "Authorization","Digest");
 	    auth->setParam("username",MimeHeaderLine::quote(username));
 	    auth->setParam("realm",MimeHeaderLine::quote(realm));
@@ -656,14 +644,6 @@ MimeAuthLine* SIPMessage::buildAuth(const String& username, const String& passwo
 	    auth->setParam("uri",MimeHeaderLine::quote(msguri));
 	    auth->setParam("response",MimeHeaderLine::quote(response));
 	    auth->setParam("algorithm","MD5");
-	    if(nc)
-	    {
-		char buf[10];
-		::snprintf(buf, sizeof(buf), "%08lx", nc);
-		auth->setParam("qop", qop);
-		auth->setParam("cnonce", MimeHeaderLine::quote(cnonce));
-		auth->setParam("nc", buf);
-	    }
 	    // copy opaque data as-is, only if present
 	    const NamedString* opaque = t->getParam("opaque");
 	    if (opaque)
@@ -674,12 +654,12 @@ MimeAuthLine* SIPMessage::buildAuth(const String& username, const String& passwo
     return 0;
 }
 
-MimeAuthLine* SIPMessage::buildAuth(const SIPMessage& original, SIPAuthNonce& noncer) const
+MimeAuthLine* SIPMessage::buildAuth(const SIPMessage& original) const
 {
     if (original.getAuthUsername().null())
 	return 0;
     return buildAuth(original.getAuthUsername(),original.getAuthPassword(),
-	original.method,original.uri,noncer,(code == 407));
+	original.method,original.uri,(code == 407));
 }
 
 ObjList* SIPMessage::getRoutes() const

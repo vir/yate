@@ -151,7 +151,7 @@ SIPEngine::SIPEngine(const char* userAgent)
     : Mutex(true,"SIPEngine"),
       m_t1(500000), m_t4(5000000), m_maxForwards(70),
       m_cseq(0), m_flags(0), m_lazyTrying(false),
-      m_userAgent(userAgent), m_nonce_time(0),
+      m_userAgent(userAgent), m_nonce_time(0), m_nc(0),
       m_nonce_mutex(false,"SIPEngine::nonce")
 {
     debugName("sipengine");
@@ -421,6 +421,16 @@ long SIPEngine::nonceAge(const String& nonce)
     if (nonce.substr(0,dot) != md5.hexDigest())
 	return -1;
     return Time::secNow() - t;
+}
+
+unsigned long SIPEngine::countNonce(const String& nonce)
+{
+    if(m_nonce != nonce)
+    {
+	m_nc = 0;
+	m_nonce = nonce;
+    }
+    return ++m_nc;
 }
 
 bool SIPEngine::checkUser(const String& username, const String& realm, const String& nonce,

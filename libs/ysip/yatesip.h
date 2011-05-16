@@ -311,17 +311,19 @@ public:
      * @param meth Method to include in the authorization digest
      * @param uri URI to include in the authorization digest
      * @param proxy Set to true to authenticate to a proxy, false to a server
+     * @param engine Optional engine processing this message
      * @return A new authorization line to be used in a new transaction
      */
     MimeAuthLine* buildAuth(const String& username, const String& password,
-	const String& meth, const String& uri, bool proxy = false) const;
+	const String& meth, const String& uri, bool proxy = false, SIPEngine* engine = 0) const;
 
     /**
      * Construct a new authorization line based on this answer and original message
      * @param original Origianl outgoing message
+     * @param engine Optional engine processing this message
      * @return A new authorization line to be used in a new transaction
      */
-    MimeAuthLine* buildAuth(const SIPMessage& original) const;
+    MimeAuthLine* buildAuth(const SIPMessage& original, SIPEngine* engine = 0) const;
 
     /**
      * Prepare the message for automatic client transaction authentication.
@@ -1211,6 +1213,12 @@ public:
     long nonceAge(const String& nonce);
 
     /**
+     * Get a nonce count
+     * @param nc String reference to fill with new nonce count
+     */
+    void ncGet(String& nc);
+
+    /**
      * Build an authentication response
      * @param username User account name
      * @param realm Authentication realm
@@ -1290,6 +1298,7 @@ protected:
     bool m_lazyTrying;
     String m_userAgent;
     String m_allowed;
+    u_int32_t m_nc;
     String m_nonce;
     String m_nonce_secret;
     u_int32_t m_nonce_time;

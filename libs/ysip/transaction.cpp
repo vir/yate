@@ -83,7 +83,7 @@ SIPTransaction::SIPTransaction(SIPTransaction& original, SIPMessage* answer)
 	&original,answer,this);
 
     SIPMessage* msg = new SIPMessage(*original.m_firstMessage);
-    MimeAuthLine* auth = answer->buildAuth(*original.m_firstMessage);
+    MimeAuthLine* auth = answer->buildAuth(*original.m_firstMessage,m_engine);
     m_firstMessage->setAutoAuth();
     msg->complete(m_engine);
     msg->addHeader(auth);

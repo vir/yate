@@ -42,6 +42,7 @@ public:
     virtual ~OverlapDialMaster();
     bool startWork(Message& msg);
     void msgDTMF(Message& msg);
+    void gotDigit(char digit);
     bool checkCollectedNumber(String & route);
     bool switchCall(const String & route);
     void sendProgress();
@@ -119,15 +120,21 @@ bool OverlapDialMaster::startWork(Message& msg)
 void OverlapDialMaster::msgDTMF(Message& msg)
 {
     String dtmf = msg.getValue("text");
+    for(unsigned int i = 0; i < dtmf.length(); ++i)
+	gotDigit(dtmf[i]);
 
+}
+
+void OverlapDialMaster::gotDigit(char digit)
+{
     Lock lock(s_mutex);
     RefPointer<CallEndpoint> peer = getPeer();
     if (!peer)
 	return;
 
-    m_collected << dtmf;
-    Debug(&__plugin,DebugCall,"Call '%s' got DTMF '%s', collected so far: '%s'",
-	    peer->id().c_str(),dtmf.c_str(),m_collected.c_str());
+    m_collected << digit;
+    Debug(&__plugin,DebugCall,"Call '%s' got DTMF '%c', collected so far: '%s'",
+	    peer->id().c_str(),digit,m_collected.c_str());
 
     String route;
     // TODO: implement timeout-based dialing

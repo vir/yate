@@ -1,3 +1,13 @@
+yate (3.3.3.svn4379) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4379: + No longer enable by default
+    cluster/fallback related operation of MGCP GW.  + Use a global (per
+    engine) nonce counter. Increase it each time we need it.  + Got rid
+    of some useless instruction blocks.  + Change call status before
+    checking the bearer so any call cleanup is executed correctly.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 17 May 2011 02:19:22 +0400
+
 yate (3.3.3.svn4377) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4377: + Avoid message double destruction if

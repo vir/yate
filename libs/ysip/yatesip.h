@@ -310,20 +310,18 @@ public:
      * @param password Clear text password for the account
      * @param meth Method to include in the authorization digest
      * @param uri URI to include in the authorization digest
-     * @param engine Refernece to the engine (for nonce counting)
      * @param proxy Set to true to authenticate to a proxy, false to a server
      * @return A new authorization line to be used in a new transaction
      */
     MimeAuthLine* buildAuth(const String& username, const String& password,
-	const String& meth, const String& uri, SIPEngine& engine, bool proxy = false) const;
+	const String& meth, const String& uri, bool proxy = false) const;
 
     /**
      * Construct a new authorization line based on this answer and original message
      * @param original Origianl outgoing message
-     * @param engine Refernece to the engine (for nonce counting)
      * @return A new authorization line to be used in a new transaction
      */
-    MimeAuthLine* buildAuth(const SIPMessage& original, SIPEngine& engine) const;
+    MimeAuthLine* buildAuth(const SIPMessage& original) const;
 
     /**
      * Prepare the message for automatic client transaction authentication.
@@ -1213,11 +1211,6 @@ public:
     long nonceAge(const String& nonce);
 
     /**
-     * Check nonce value aginst stored and return repetitions count
-     */
-    unsigned long countNonce(const String& nonce);
-
-    /**
      * Build an authentication response
      * @param username User account name
      * @param realm Authentication realm
@@ -1300,7 +1293,6 @@ protected:
     String m_nonce;
     String m_nonce_secret;
     u_int32_t m_nonce_time;
-    unsigned long m_nc;
     Mutex m_nonce_mutex;
 };
 

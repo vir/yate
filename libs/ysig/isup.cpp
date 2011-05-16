@@ -2930,6 +2930,7 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 	    // intentionally fall through
 	case SS7MsgISUP::IAM:
 	    if (needsTesting(m_sgmMsg)) {
+		m_state = Testing;
 		if (m_circuitTesting && !(isup() && isup()->m_continuity)) {
 		    Debug(isup(),DebugWarn,"Call(%u). Continuity check requested but not configured [%p]",
 			id(),this);
@@ -2942,23 +2943,23 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 		}
 		Debug(isup(),DebugNote,"Call(%u). Waiting for continuity check [%p]",
 		    id(),this);
-		m_state = Testing;
 		// Save message for later
 		m_iamMsg = m_sgmMsg;
 		m_sgmMsg = 0;
 		return 0;
 	    }
+	    m_state = Setup;
 	    if (!connectCircuit() && isup() &&
 		(isup()->mediaRequired() >= SignallingCallControl::MediaAlways)) {
 		setTerminate(true,"bearer-cap-not-available",0,isup()->location());
 		break;
 	    }
-	    m_state = Setup;
 	    m_sgmMsg->params().setParam("overlapped",String::boolText(m_overlap));
 	    m_lastEvent = new SignallingEvent(SignallingEvent::NewCall,m_sgmMsg,this);
 	    break;
 	case SS7MsgISUP::CCR:
 	    if (m_state < Testing) {
+		m_state = Testing;
 		if (!(isup() && isup()->m_continuity)) {
 		    Debug(isup(),DebugWarn,"Call(%u). Continuity check requested but not configured [%p]",
 			id(),this);
@@ -2972,7 +2973,6 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 		}
 		Debug(isup(),DebugNote,"Call(%u). Continuity test only [%p]",
 		    id(),this);
-		m_state = Testing;
 	    }
 	    else if (!m_circuitTesting) {
 		setTerminate(true,"wrong-state-message",0,isup()->location());
@@ -2984,62 +2984,60 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 		transmitMessage(new SS7MsgISUP(SS7MsgISUP::LPA,id()));
 	    break;
 	case SS7MsgISUP::ACM:
+	    m_state = Accepted;
 	    if (!connectCircuit() && isup() &&
 		(isup()->mediaRequired() >= SignallingCallControl::MediaAlways)) {
 		setReason("bearer-cap-not-available",0,0,isup()->location());
 		m_lastEvent = release();
 		break;
 	    }
-	    m_state = Accepted;
-	    {
-		m_lastEvent = 0;
-		m_inbandAvailable = m_inbandAvailable ||
-		    SignallingUtils::hasFlag(m_sgmMsg->params(),"OptionalBackwardCallIndicators","inband");
-		if (isup() && isup()->m_earlyAcm) {
-		    // If the called party is known free report ringing
-		    // If it may become free or there is inband audio report progress
-		    bool ring = SignallingUtils::hasFlag(m_sgmMsg->params(),"BackwardCallIndicators","called-free");
-		    if (m_inbandAvailable || ring || SignallingUtils::hasFlag(m_sgmMsg->params(),"BackwardCallIndicators","called-conn")) {
-			m_sgmMsg->params().setParam("earlymedia",String::boolText(m_inbandAvailable));
-			m_lastEvent = new SignallingEvent(ring ? SignallingEvent::Ringing : SignallingEvent::Progress,m_sgmMsg,this);
-		    }
-		}
-		if (!m_lastEvent) {
+	    m_lastEvent = 0;
+	    m_inbandAvailable = m_inbandAvailable ||
+		SignallingUtils::hasFlag(m_sgmMsg->params(),"OptionalBackwardCallIndicators","inband");
+	    if (isup() && isup()->m_earlyAcm) {
+		// If the called party is known free report ringing
+		// If it may become free or there is inband audio report progress
+		bool ring = SignallingUtils::hasFlag(m_sgmMsg->params(),"BackwardCallIndicators","called-free");
+		if (m_inbandAvailable || ring || SignallingUtils::hasFlag(m_sgmMsg->params(),"BackwardCallIndicators","called-conn")) {
 		    m_sgmMsg->params().setParam("earlymedia",String::boolText(m_inbandAvailable));
-		    m_lastEvent = new SignallingEvent(SignallingEvent::Accept,m_sgmMsg,this);
+		    m_lastEvent = new SignallingEvent(ring ? SignallingEvent::Ringing : SignallingEvent::Progress,m_sgmMsg,this);
 		}
-		// Start T9 timer
-		if (isup()->m_t9Interval) {
-		    m_anmTimer.interval(isup()->m_t9Interval);
-		    m_anmTimer.start();
-		}
+	    }
+	    if (!m_lastEvent) {
+		m_sgmMsg->params().setParam("earlymedia",String::boolText(m_inbandAvailable));
+		m_lastEvent = new SignallingEvent(SignallingEvent::Accept,m_sgmMsg,this);
+	    }
+	    // Start T9 timer
+	    if (isup()->m_t9Interval) {
+		m_anmTimer.interval(isup()->m_t9Interval);
+		m_anmTimer.start();
 	    }
 	    break;
 	case SS7MsgISUP::CPR:
+	    m_state = Ringing;
 	    if (!connectCircuit() && isup() &&
 		(isup()->mediaRequired() >= SignallingCallControl::MediaRinging)) {
 		setTerminate(true,"bearer-cap-not-available",0,isup()->location());
 		break;
 	    }
-	    m_state = Ringing;
-	    {
-		bool ring = SignallingUtils::hasFlag(m_sgmMsg->params(),"EventInformation","ringing");
-		m_inbandAvailable = m_inbandAvailable ||
-		    SignallingUtils::hasFlag(m_sgmMsg->params(),"OptionalBackwardCallIndicators","inband") ||
-		    SignallingUtils::hasFlag(m_sgmMsg->params(),"EventInformation","inband");
-		m_sgmMsg->params().setParam("earlymedia",String::boolText(m_inbandAvailable));
-		m_lastEvent = new SignallingEvent(ring ? SignallingEvent::Ringing : SignallingEvent::Progress,m_sgmMsg,this);
-	    }
+	    m_inbandAvailable = m_inbandAvailable ||
+		SignallingUtils::hasFlag(m_sgmMsg->params(),"OptionalBackwardCallIndicators","inband") ||
+		SignallingUtils::hasFlag(m_sgmMsg->params(),"EventInformation","inband");
+	    m_sgmMsg->params().setParam("earlymedia",String::boolText(m_inbandAvailable));
+	    m_lastEvent = new SignallingEvent(
+		SignallingUtils::hasFlag(m_sgmMsg->params(),"EventInformation","ringing")
+	        ? SignallingEvent::Ringing : SignallingEvent::Progress,
+	        m_sgmMsg,this);
 	    break;
 	case SS7MsgISUP::ANM:
 	case SS7MsgISUP::CON:
+	    m_state = Answered;
+	    m_anmTimer.stop();
 	    if (!connectCircuit() && isup() &&
 		(isup()->mediaRequired() >= SignallingCallControl::MediaAnswered)) {
 		setTerminate(true,"bearer-cap-not-available",0,isup()->location());
 		break;
 	    }
-	    m_state = Answered;
-	    m_anmTimer.stop();
 	    m_lastEvent = new SignallingEvent(SignallingEvent::Answer,m_sgmMsg,this);
 	    break;
 	default:

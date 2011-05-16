@@ -620,7 +620,7 @@ void SIPMessage::setParty(SIPParty* ep)
 }
 
 MimeAuthLine* SIPMessage::buildAuth(const String& username, const String& password,
-    const String& meth, const String& uri, bool proxy) const
+    const String& meth, const String& uri, bool proxy, SIPEngine* engine) const
 {
     const char* hdr = proxy ? "Proxy-Authenticate" : "WWW-Authenticate";
     const ObjList* l = &header;
@@ -640,6 +640,8 @@ MimeAuthLine* SIPMessage::buildAuth(const String& username, const String& passwo
 		MimeHeaderLine::delQuotes(qop);
 		if (qop == "auth") {
 		    String nc("00000001");
+		    if (engine)
+			engine->ncGet(nc);
 		    qop.addParam("nc",nc);
 		    MD5 md5;
 		    md5 << String(::rand()) << nc << String(Time::secNow());
@@ -673,12 +675,12 @@ MimeAuthLine* SIPMessage::buildAuth(const String& username, const String& passwo
     return 0;
 }
 
-MimeAuthLine* SIPMessage::buildAuth(const SIPMessage& original) const
+MimeAuthLine* SIPMessage::buildAuth(const SIPMessage& original, SIPEngine* engine) const
 {
     if (original.getAuthUsername().null())
 	return 0;
     return buildAuth(original.getAuthUsername(),original.getAuthPassword(),
-	original.method,original.uri,(code == 407));
+	original.method,original.uri,(code == 407),engine);
 }
 
 ObjList* SIPMessage::getRoutes() const

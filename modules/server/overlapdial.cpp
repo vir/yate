@@ -42,7 +42,7 @@ public:
     virtual ~OverlapDialMaster();
     bool startWork(Message& msg);
     void msgDTMF(Message& msg);
-    void gotDigit(char digit);
+    bool gotDigit(char digit);
     bool checkCollectedNumber(String & route);
     bool switchCall(const String & route);
     void sendProgress();
@@ -121,16 +121,17 @@ void OverlapDialMaster::msgDTMF(Message& msg)
 {
     String dtmf = msg.getValue("text");
     for(unsigned int i = 0; i < dtmf.length(); ++i)
-	gotDigit(dtmf[i]);
+	if(! gotDigit(dtmf[i]))
+	    break;
 
 }
 
-void OverlapDialMaster::gotDigit(char digit)
+bool OverlapDialMaster::gotDigit(char digit)
 {
     Lock lock(s_mutex);
     RefPointer<CallEndpoint> peer = getPeer();
     if (!peer)
-	return;
+	return false;
 
     m_collected << digit;
     Debug(&__plugin,DebugCall,"Call '%s' got DTMF '%c', collected so far: '%s'",
@@ -148,12 +149,15 @@ void OverlapDialMaster::gotDigit(char digit)
 	    // error switching
 	    disconnect("can't connect");
 	}
+	return false;
     } else {
 	if(m_collected.length() >= m_len_max) {
 	    // number is too long
 	    disconnect("wrong number");
+	    return false;
 	}
     }
+    return true; // want more digits
 }
 
 void OverlapDialMaster::grabLengths(Message & m)

@@ -30,8 +30,8 @@
 
 #define MAX_BUF_SIZE  48500
 
-#define CONN_RETRY_MIN  100000
-#define CONN_RETRY_MAX 6000000
+#define CONN_RETRY_MIN   250000
+#define CONN_RETRY_MAX 60000000
 
 using namespace TelEngine;
 namespace { // anonymous
@@ -962,8 +962,11 @@ bool StreamReader::sendBuffer(int streamId)
 	DDebug(m_transport,DebugAll,"Select error detected. %s",strerror(errno));
 	return false;
     }
-    if (error)
+    if (error) {
+	if (m_socket->updateError() && !m_socket->canRetry())
+	    connectionDown();
 	return false;
+    }
     if (!sendOk)
 	return true;
     int len = 0;
@@ -1043,8 +1046,7 @@ bool StreamReader::readData()
 	    len = m_socket->recv((void*)buf,m_headerLen);
 	}
 	if (len == 0) {
-	    if (!m_transport->supportEvents())
-		connectionDown();
+	    connectionDown();
 	    return false;
 	}
 	if (len < 0) {

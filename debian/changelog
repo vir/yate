@@ -1,3 +1,22 @@
+yate (3.3.3.svn4388) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4388: + Change call status before checking
+    the bearer so any call cleanup is executed correctly.  + In UAC mode
+    copy returned headers from REGISTER answer to user.notify message.
+    + Copy UAS SIP headers between user.register and REGISTER messages
+    and answers.  + Handle sctp socket shutdown event  + Added support
+    for altering the reason and error code of SIP Registrar answers.  +
+    Detect when remote peer has closed the socket. Notify upper layer
+    that transport layer, is down and try to reconnect the transport
+    layer.  + On transport failure set the SIGTRAN ASP state down.  +
+    Accomodate new SIGTRAN stream handling by issuing ASP commands on
+    link events.  + Reinitialize stream socket if an non retryable write
+    error occurred  + Return -1 when an event is detected.  + Handle
+    more SCTP events that can indicate a closed connection.  + Close and
+    reconnect the SIGTRAN stream socket whenever an error or EOF occurs.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 18 May 2011 02:19:21 +0400
+
 yate (3.3.3.svn4379) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4379: + No longer enable by default

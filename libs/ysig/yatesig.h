@@ -4700,6 +4700,12 @@ public:
 	AspActive
     };
 
+    /**
+     * Method called when the transport status has been changed
+     * @param status Status of the transport causing the notification
+     */
+    virtual void notifyLayer(SignallingInterface::Notification status);
+
 protected:
     /**
      * Constructs an uninitialized User Adaptation client component

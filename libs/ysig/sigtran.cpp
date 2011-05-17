@@ -546,6 +546,18 @@ void SIGAdaptClient::detach(SIGAdaptUser* user)
     }
 }
 
+// Status notification from transport layer
+void SIGAdaptClient::notifyLayer(SignallingInterface::Notification status)
+{
+    switch (status) {
+	case SignallingInterface::LinkDown:
+	case SignallingInterface::HardwareError:
+	    setState(AspDown);
+	    break;
+	default:
+	    return;
+    }
+}
 // Request activation of the ASP
 bool SIGAdaptClient::activate()
 {

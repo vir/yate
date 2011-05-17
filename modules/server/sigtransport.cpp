@@ -979,7 +979,10 @@ bool StreamReader::sendBuffer(int streamId)
     else
 	len = m_socket->send(m_sendBuffer.data(),m_sendBuffer.length());
     if (len <= 0) {
-	DDebug(m_transport,DebugAll,"Send error detected. %s",strerror(errno));
+	if (!m_socket->canRetry()) {
+	    Debug(m_transport,DebugMild,"Send error detected. %s",strerror(errno));
+	    connectionDown();
+	}
 	return false;
     }
     m_sendBuffer.cut(-len);
@@ -1127,6 +1130,7 @@ void StreamReader::connectionDown() {
     while (!m_sending.lock(Thread::idleUsec()))
 	Thread::yield();
     m_canSend = false;
+    m_sendBuffer.clear();
     m_socket->terminate();
     if (m_transport->listen())
 	stop();

@@ -168,7 +168,7 @@ private:
     bool change(String& dest, const String& src);
     bool change(int& dest, int src);
     void keepalive();
-    void setValid(bool valid, const char* reason = 0);
+    void setValid(bool valid, const char* reason = 0, const SIPMessage* msg = 0);
     String m_registrar;
     String m_username;
     String m_authname;
@@ -1636,17 +1636,17 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
     hl = message->getHeader("User-Agent");
     if (hl)
 	msg.setParam("device",*hl);
+    copySipHeaders(msg,*message,true);
+    SIPMessage* r = 0;
     // Always OK deregistration attempts
     if (Engine::dispatch(msg) || dereg) {
-	if (dereg) {
-	    t->setResponse(200);
+	r = new SIPMessage(t->initialMessage(),200,msg.getValue("reason"));
+	if (dereg)
 	    Debug(&plugin,DebugNote,"Unregistered user '%s'",user.c_str());
-	}
 	else {
 	    tmp = msg.getValue("expires",tmp);
 	    if (tmp.null())
 		tmp = expires;
-	    SIPMessage* r = new SIPMessage(t->initialMessage(),200);
 	    r->addHeader("Expires",tmp);
 	    MimeHeaderLine* contact = new MimeHeaderLine("Contact","<" + addr + ">");
 	    contact->setParam("expires",tmp);
@@ -1656,14 +1656,23 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
 		    r->addHeader("P-NAT-Refresh",String(s_nat_refresh));
 		r->addHeader("X-Real-Contact",data);
 	    }
-	    t->setResponse(r);
-	    r->deref();
 	    Debug(&plugin,DebugNote,"Registered user '%s' expires in %s s%s",
 		user.c_str(),tmp.c_str(),natChanged ? " (NAT)" : "");
 	}
     }
+    else {
+	int code = msg.getIntValue("error",dict_errors,404);
+	if (code < 300 || code > 699)
+	    code = 404;
+	r = new SIPMessage(t->initialMessage(),code,msg.getValue("reason"));
+    }
+    if (r && t->setResponse()) {
+	copySipHeaders(*r,msg);
+	t->setResponse(r);
+    }
     else
-	t->setResponse(404);
+	t->setResponse(500);
+    TelEngine::destruct(r);
 }
 
 void YateSIPEndPoint::options(SIPEvent* e, SIPTransaction* t)
@@ -3819,7 +3828,7 @@ void YateSIPLine::setupAuth(SIPMessage* msg) const
 	msg->setAutoAuth(getAuthName(),m_password);
 }
 
-void YateSIPLine::setValid(bool valid, const char* reason)
+void YateSIPLine::setValid(bool valid, const char* reason, const SIPMessage* msg)
 {
     if ((m_valid == valid) && !reason)
 	return;
@@ -3834,6 +3843,8 @@ void YateSIPLine::setValid(bool valid, const char* reason)
 	m->addParam("registered",String::boolText(valid));
 	if (reason)
 	    m->addParam("reason",reason);
+	if (msg)
+	    copySipHeaders(*m,*msg);
 	Engine::enqueue(m);
     }
 }
@@ -3986,14 +3997,14 @@ bool YateSIPLine::process(SIPEvent* ev)
 		m_partyAddr = msg->getParty()->getPartyAddr();
 		m_partyPort = msg->getParty()->getPartyPort();
 	    }
-	    setValid(true);
+	    setValid(true,0,msg);
 	    Debug(&plugin,DebugCall,"SIP line '%s' logon success to %s:%d",
 		c_str(),m_partyAddr.c_str(),m_partyPort);
 	    break;
 	default:
 	    // detect local address even from failed attempts - helps next time
 	    detectLocal(msg);
-	    setValid(false,msg->reason);
+	    setValid(false,msg->reason,msg);
 	    Debug(&plugin,DebugWarn,"SIP line '%s' logon failure %d: %s",
 		c_str(),msg->code,msg->reason.safe());
     }

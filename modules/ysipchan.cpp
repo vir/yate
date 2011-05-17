@@ -1640,7 +1640,7 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
     SIPMessage* r = 0;
     // Always OK deregistration attempts
     if (Engine::dispatch(msg) || dereg) {
-	r = new SIPMessage(t->initialMessage(),200);
+	r = new SIPMessage(t->initialMessage(),200,msg.getValue("reason"));
 	if (dereg)
 	    Debug(&plugin,DebugNote,"Unregistered user '%s'",user.c_str());
 	else {
@@ -1660,8 +1660,12 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
 		user.c_str(),tmp.c_str(),natChanged ? " (NAT)" : "");
 	}
     }
-    else
-	r = new SIPMessage(t->initialMessage(),404);
+    else {
+	int code = msg.getIntValue("error",dict_errors,404);
+	if (code < 300 || code > 699)
+	    code = 404;
+	r = new SIPMessage(t->initialMessage(),code,msg.getValue("reason"));
+    }
     if (r && t->setResponse()) {
 	copySipHeaders(*r,msg);
 	t->setResponse(r);

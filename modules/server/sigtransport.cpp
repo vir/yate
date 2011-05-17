@@ -31,7 +31,7 @@
 #define MAX_BUF_SIZE  48500
 
 #define CONN_RETRY_MIN  100000
-#define CONN_RETRY_MAX 5000000
+#define CONN_RETRY_MAX 6000000
 
 using namespace TelEngine;
 namespace { // anonymous
@@ -162,6 +162,8 @@ public:
 	{ return m_listener != 0; }
     inline bool streamDefault() const
 	{ return m_type == Tcp || m_type == Unix; }
+    inline bool supportEvents()
+	{ return m_type == Sctp && m_supportEvents; }
     void setStatus(int status);
     inline int status() const
 	{ return m_state; }
@@ -172,7 +174,7 @@ public:
 	{ return m_type == Sctp || m_type == Tcp; }
     virtual bool control(const NamedList &param);
     virtual bool connected(int id) const
-	{ return true;}
+	{ return m_state == Up;}
     virtual void attached(bool ual)
 	{ }
     bool connectSocket();
@@ -189,6 +191,7 @@ private:
     ListenerThread* m_listener;
     const NamedList m_config;
     bool m_endpoint;
+    bool m_supportEvents;
 };
 
 class StreamReader : public TReader
@@ -205,6 +208,7 @@ public:
     virtual void listen(int maxConn)
 	{ }
     virtual bool sendBuffer(int streamId = 0);
+    void connectionDown();
 private:
     Transport* m_transport;
     Socket* m_socket;
@@ -518,7 +522,7 @@ SignallingComponent* Transport::create(const String& type, const NamedList& name
 }
 
 Transport::Transport(const NamedList &param)
-    : m_reader(0), m_state(Down), m_listener(0), m_config(param), m_endpoint(true)
+    : m_reader(0), m_state(Down), m_listener(0), m_config(param), m_endpoint(true), m_supportEvents(true)
 {
     setName("Transport");
     Debug(this,DebugAll,"Transport created (%p)",this);
@@ -721,8 +725,10 @@ bool Transport::connectSocket()
 	    SctpSocket* socket = static_cast<SctpSocket*>(sock);
 	    if (!socket->setStreams(2,2))
 		Debug(this,DebugInfo,"Failed to set sctp streams number");
-	    if (!socket->subscribeEvents())
+	    if (!socket->subscribeEvents()) {
 		Debug(this,DebugWarn,"Unable to subscribe to Sctp events");
+		m_supportEvents = false;
+	    }
 	    int ppid = sigtran() ? sigtran()->payload() : 0;
 	    ppid = m_config.getIntValue("payload",ppid);
 	    if (ppid > 0)
@@ -805,6 +811,7 @@ bool Transport::connectSocket()
 	} else
 	     Debug(this,DebugNote,"Socket conected to %d addresses",o.count());
     }
+    sock->setBlocking(false);
     m_reader->setSocket(sock);
     setStatus(Up);
     return true;
@@ -864,8 +871,10 @@ bool Transport::addSocket(Socket* socket,SocketAddr& adress)
 	    SctpSocket* soc = static_cast<SctpSocket*>(sock);
 	    if (!soc->setStreams(2,2))
 		DDebug(this,DebugInfo,"Sctp set Streams failed");
-	    if (!soc->subscribeEvents())
+	    if (!soc->subscribeEvents()) {
 		DDebug(this,DebugInfo,"Sctp subscribe events failed");
+		m_supportEvents = false;
+	    }
 	    int ppid = sigtran() ? sigtran()->payload() : 0;
 	    ppid = m_config.getIntValue("payload",ppid);
 	    if (ppid > 0)
@@ -949,10 +958,12 @@ bool StreamReader::sendBuffer(int streamId)
     if (m_sendBuffer.null())
 	return true;
     bool sendOk = false, error = false;
-    if (!m_socket->select(0,&sendOk,&error,Thread::idleUsec()) || error) {
-	DDebug(m_transport,DebugAll,"Error detected. %s",strerror(errno));
+    if (!m_socket->select(0,&sendOk,&error,Thread::idleUsec())) {
+	DDebug(m_transport,DebugAll,"Select error detected. %s",strerror(errno));
 	return false;
     }
+    if (error)
+	return false;
     if (!sendOk)
 	return true;
     int len = 0;
@@ -1002,11 +1013,6 @@ bool StreamReader::readData()
     m_sending.lock();
     sendBuffer();
     m_sending.unlock();
-    bool readOk = false, error = false;
-    if (!m_socket->select(&readOk,0,&error,Thread::idleUsec()))
-	return false;
-    if (!readOk || error || !running())
-	return false;
     int stream = 0, len = 0;
     SocketAddr addr;
     unsigned char buf[MAX_BUF_SIZE];
@@ -1025,16 +1031,7 @@ bool StreamReader::readData()
 		    m_transport->setStatus(Transport::Up);
 		    return true;
 		}
-		DDebug(m_transport,DebugWarn,"Connection down [%p] %d",m_socket, flags);
-		m_transport->setStatus(Transport::Down);
-		while (!m_sending.lock(Thread::idleUsec()))
-		    Thread::yield();
-		m_canSend = false;
-		m_sending.unlock();
-		m_socket->terminate();
-		if (m_transport->listen())
-		    stop();
-		delete m_socket;
+		connectionDown();
 		return false;
 	    }
 	}
@@ -1042,8 +1039,16 @@ bool StreamReader::readData()
 	    SocketAddr addr;
 	    len = m_socket->recv((void*)buf,m_headerLen);
 	}
-	if (len <= 0)
+	if (len == 0) {
+	    if (!m_transport->supportEvents())
+		connectionDown();
 	    return false;
+	}
+	if (len < 0) {
+	    if (!m_socket->canRetry())
+		connectionDown();
+	    return false;
+	}
 	m_headerLen -= len;
 	m_headerBuffer.append(buf,len);
 	if (m_headerLen > 0)
@@ -1080,17 +1085,25 @@ bool StreamReader::readData()
 		return false;
 	    }
 	    len = s->recvMsg((void*)buf1,m_totalPacketLen,addr,stream,flags);
-	    if (flags) {
-		DDebug(m_transport,DebugWarn,"Receive error [%p]",m_socket);
-		m_transport->notifyLayer(SignallingInterface::HardwareError);
+	    if (flags && flags != 2) {
+		connectionDown();
+		return false;
 	    }
 	}
 	else {
 	    SocketAddr addr;
 	    len = m_socket->recv((void*)buf1,m_totalPacketLen);
 	}
-	if (len <= 0)
+	if (len == 0) {
+	    if (!m_transport->supportEvents())
+		connectionDown();
 	    return false;
+	}
+	if (len < 0) {
+	    if (!m_socket->canRetry())
+		connectionDown();
+	    return false;
+	}
 	m_transport->setStatus(Transport::Up);
 	m_totalPacketLen -= len;
 	m_readBuffer.append(buf1,len);
@@ -1107,6 +1120,21 @@ bool StreamReader::readData()
     }
     return false;
 }
+
+void StreamReader::connectionDown() {
+    DDebug(m_transport,DebugWarn,"Connection down [%p]",m_socket);
+    m_transport->setStatus(Transport::Down);
+    while (!m_sending.lock(Thread::idleUsec()))
+	Thread::yield();
+    m_canSend = false;
+    m_socket->terminate();
+    if (m_transport->listen())
+	stop();
+    delete m_socket;
+    m_socket = 0;
+    m_sending.unlock();
+}
+
 
 /**
  * class MessageReader

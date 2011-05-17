@@ -223,12 +223,17 @@ bool LKSocket::getStreams(int& in, int& out)
 bool LKSocket::sctpDown(void* buf)
 {
     union sctp_notification *sn = (union sctp_notification *)buf;
-    switch (sn->sn_assoc_change.sac_state) {
-	case SCTP_COMM_LOST:
-	case SCTP_SHUTDOWN_COMP:
-	case SCTP_CANT_STR_ASSOC:
-	case SCTP_RESTART:
+    switch (sn->sn_header.sn_type) {
+	case SCTP_SHUTDOWN_EVENT:
 	    return true;
+	case SCTP_ASSOC_CHANGE:
+	  switch (sn->sn_assoc_change.sac_state) {
+	      case SCTP_COMM_LOST:
+	      case SCTP_SHUTDOWN_COMP:
+	      case SCTP_CANT_STR_ASSOC:
+	      case SCTP_RESTART:
+		  return true;
+	  }
     }
     return false;
 }
@@ -236,6 +241,8 @@ bool LKSocket::sctpDown(void* buf)
 bool LKSocket::sctpUp(void* buf)
 {
     union sctp_notification *sn = (union sctp_notification *)buf;
+    if (sn->sn_header.sn_type != SCTP_ASSOC_CHANGE)
+	return false;
     switch (sn->sn_assoc_change.sac_state) {
 	case SCTP_COMM_UP:
 	    return true;

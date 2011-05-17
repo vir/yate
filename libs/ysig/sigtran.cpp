@@ -552,7 +552,22 @@ void SIGAdaptClient::notifyLayer(SignallingInterface::Notification status)
     switch (status) {
 	case SignallingInterface::LinkDown:
 	case SignallingInterface::HardwareError:
-	    setState(AspDown);
+	    switch (m_state) {
+		case AspDown:
+		case AspUpRq:
+		    break;
+		default:
+		    setState(AspUpRq);
+	    }
+	    break;
+	case SignallingInterface::LinkUp:
+	    if (m_state >= AspUpRq) {
+		setState(AspUpRq,false);
+		DataBlock data;
+		if (m_aspId != -1)
+		    addTag(data,0x0011,m_aspId);
+		transmitMSG(ASPSM,AspsmUP,data);
+	    }
 	    break;
 	default:
 	    return;
@@ -575,7 +590,8 @@ bool SIGAdaptClient::activate()
 		DataBlock data;
 		if (m_aspId != -1)
 		    addTag(data,0x0011,m_aspId);
-		return transmitMSG(ASPSM,AspsmUP,data);
+		transmitMSG(ASPSM,AspsmUP,data);
+		return true;
 	    }
 	case AspUp:
 	    setState(AspActRq,false);

@@ -183,7 +183,10 @@ public:
 
     // set the time which is used for increasing the expire time for the cache at each access
     inline void setRetainInfoTime(u_int64_t time)
-	{ m_retainInfoTime = time; }
+    {
+	m_retainInfoTime = time;
+	m_expireTime = 0; //expire data
+    }
 
     // get information from the cached data
     virtual String getInfo(const String& query, unsigned int& index, TokenDict* dict);
@@ -533,6 +536,12 @@ public:
     const String getInfo(unsigned int query);
     // reset internal data
     void reset();
+    inline bool isCurrent()
+	{ return m_isCurrent; }
+    inline void setIsCurrent(bool current = true)
+	{ m_isCurrent = current; }
+    // update configuration for this direction
+    void updateConfig(const NamedList* cfg);
 private:
     // account name
     String m_name;
@@ -552,6 +561,8 @@ private:
     unsigned int m_resetTime;
     // time to hold on on current data
     unsigned int m_resetInterval;
+    // flag if monitored account is current (i.e. false means this direction was removed from monitoring)
+    bool m_isCurrent;
 };
 
 /**
@@ -581,6 +592,15 @@ public:
     String getInfo(const String& query, unsigned int& index, TokenDict* dict);
     // try to reset internal data of the table entries
     void reset();
+
+    inline void setMonitorEnabled(bool enable = false)
+	{ m_monitor = enable; }
+    inline bool monitorEnable()
+	{ return m_monitor; }
+    // reconfigure
+    void setConfigure(const NamedList* sect);
+    // update database account after reinitialization
+    void updateDatabaseAccounts();
 private:
     static TokenDict s_databaseInfo[];
     bool load();
@@ -629,12 +649,18 @@ public:
     String getInfo(unsigned int query);
     // mapping dictionary for Monitor queries
     static TokenDict s_rtpInfo[];
+    inline bool isCurrent()
+	{ return m_isCurrent; }
+    inline void setIsCurrent(bool current = true)
+	{ m_isCurrent = current; }
 private:
     // the RTP direction
     String m_rtpDir;
     // counters
     unsigned int m_counters[WrongSSRC - Direction];
     unsigned int m_index;
+    // flag if monitored direction is current (i.e. false means this direction was removed from monitoring)
+    bool m_isCurrent;
 };
 
 /**
@@ -644,7 +670,7 @@ class RTPTable : public GenObject
 {
 public:
     // Constructor
-    inline RTPTable(String directions, u_int64_t resetTime, bool monitor = false);
+    inline RTPTable(const NamedList* cfg);
     // Destructor
     inline ~RTPTable()
 	{ m_rtpEntries.clear(); }
@@ -657,6 +683,7 @@ public:
     // check if the internal data should be reset
     inline bool shouldReset()
 	{ return Time::secNow() >= m_resetTime; }
+    void reconfigure(const NamedList* cfg);
 private:
     // list of RTPEntry
     ObjList m_rtpEntries;
@@ -755,6 +782,14 @@ public:
     // set the index of this object
     inline void setIndex(unsigned int index)
 	{ m_index = index; }
+    inline unsigned int index()
+	{ return m_index; }
+    inline bool isCurrent()
+	{ return m_isCurrent; }
+    inline void setIsCurrent(bool current = true)
+	{ m_isCurrent = current; }
+    // update configuration for this direction
+    void updateConfig(const NamedList* cfg);
 private:
     String m_routeName;
     // call hangup reasons counters
@@ -784,6 +819,8 @@ private:
     unsigned int m_minCalls;
     // index in the table
     unsigned int m_index;
+    // flag if monitored direction is current (i.e. false means this direction was removed from monitoring)
+    bool m_isCurrent;
 };
 
 /**
@@ -827,6 +864,11 @@ public:
     // add a route to be monitored
     void addRoute(NamedList* sect);
 
+    // reconfigure
+    void setConfigure(const NamedList* sect);
+    // update route after reinitialization
+    void updateRoutes();
+
 private:
     // interval at which notifications are sent
     unsigned int m_checkTime;
@@ -843,6 +885,8 @@ private:
     String m_routeParam;
     // Directions monitored?
     bool m_monitor;
+    // configure mutex
+    Mutex m_cfgMtx;
 };
 
 /**
@@ -2252,6 +2296,8 @@ bool ModuleInfo::load()
  */
 // configure a database account for monitoring and initialize internal data
 DatabaseAccount::DatabaseAccount(const NamedList* cfg)
+    : m_resetTime(0), m_resetInterval(3600),
+    m_isCurrent(true)
 {
     if (cfg) {
 	Debug(&__plugin,DebugAll,"DatabaseAccount('%s') created for monitoring [%p]",cfg->c_str(),this);
@@ -2262,12 +2308,11 @@ DatabaseAccount::DatabaseAccount(const NamedList* cfg)
 	    m_prevDbCounters[i] = 0;
 	}
 	for (int i = 0; i <= NoConnAlrmCount - TooManyAlrmCount; i++)
-		m_alarmCounters[i] = 0;
-	    for (int i = 0; i <= MaxExecTime - MaxQueries; i++)
-		m_thresholds[i] = cfg->getIntValue(lookup(MaxQueries + i,s_dbAccountInfo,""),0);
-	m_resetInterval = cfg->getIntValue("notiftime",3600);
+	    m_alarmCounters[i] = 0;
+	updateConfig(cfg);
 	m_resetTime = Time::secNow() + m_resetInterval;
     }
+    m_isCurrent = true;
 }
 
 // update internal data from a message received from the sql modules
@@ -2315,6 +2360,18 @@ void DatabaseAccount::update(const NamedList& info)
     }
     else
 	m_alarms &= ~EXEC_ALARM;
+}
+
+void DatabaseAccount::updateConfig(const NamedList* cfg)
+{
+    if (!cfg)
+	return;
+    for (int i = 0; i <= MaxExecTime - MaxQueries; i++)
+	m_thresholds[i] = cfg->getIntValue(lookup(MaxQueries + i,s_dbAccountInfo,""),0);
+    m_resetInterval = cfg->getIntValue("notiftime",3600);
+    if (m_resetTime > Time::secNow() + m_resetInterval)
+	m_resetTime = Time::secNow() + m_resetInterval;
+    m_isCurrent = true;
 }
 
 // obtain information from this entry
@@ -2485,10 +2542,41 @@ void DatabaseInfo::addDatabase(NamedList* cfg)
     if (!cfg || !m_monitor)
 	return;
     DDebug(&__plugin,DebugInfo,"DatabaseInfo::addDatabase('%s') [%p]",cfg->c_str(),this);
-    DatabaseAccount* acc = new DatabaseAccount(cfg);
     lock();
-    m_table.append(acc);
-    acc->setIndex(m_table.count());
+    DatabaseAccount* acc = static_cast<DatabaseAccount*>(m_table[*cfg]);
+    if (!acc) {
+	acc = new DatabaseAccount(cfg);;
+        m_table.append(acc);
+	acc->setIndex(m_table.count());
+    }
+    else
+	acc->updateConfig(cfg);
+    unlock();
+}
+
+void DatabaseInfo::updateDatabaseAccounts()
+{
+    lock();
+    bool deletedRoute = true;
+    while (deletedRoute) {
+	deletedRoute = false;
+	for (ObjList* o = m_table.skipNull(); o; o = o->skipNext()) {
+	    DatabaseAccount* acc = static_cast<DatabaseAccount*>(o->get());
+	    if (!acc->isCurrent()) {
+		DDebug(__plugin.name(),DebugAll,"DatabaseInfo::updateDatabaseAccounts() - removed database account '%s' from monitoring",
+			    acc->toString().c_str());
+		m_table.remove(acc);
+		deletedRoute = true;
+	    }
+	}
+    }
+    unsigned int index = 1;
+    for (ObjList* o = m_table.skipNull(); o; o = o->skipNext()) {
+	DatabaseAccount* acc = static_cast<DatabaseAccount*>(o->get());
+	acc->setIsCurrent(false);
+	acc->setIndex(index);
+	index++;
+    }
     unlock();
 }
 
@@ -2528,7 +2616,8 @@ void DatabaseInfo::update(const Message& msg)
  * RTPEntry
  */
 RTPEntry::RTPEntry(String rtpDirection)
-    : m_rtpDir(rtpDirection), m_index(0)
+    : m_rtpDir(rtpDirection), m_index(0),
+      m_isCurrent(true)
 {
     Debug(&__plugin,DebugAll,"RTPEntry '%s' created [%p]",rtpDirection.c_str(),this);
     reset();
@@ -2592,22 +2681,65 @@ String RTPEntry::getInfo(unsigned int query)
 /**
  *  RTPTable
  */
-RTPTable::RTPTable(String directions, u_int64_t resetTime, bool monitor)
-    : m_rtpMtx(false,"Monitor::rtpInfo"), m_resetInterval(resetTime), m_monitor(monitor)
+RTPTable::RTPTable(const NamedList* cfg)
+    : m_rtpMtx(false,"Monitor::rtpInfo"),
+      m_resetInterval(3600), m_monitor(false)
 {
-    Debug(&__plugin,DebugAll,"RTPTable created [%p] direction='%s',resetTime=" FMT64,this,directions.c_str(),m_resetInterval);
+    Debug(&__plugin,DebugAll,"RTPTable created [%p]",this);
     // build RTPEntry objects for monitoring RTP directions if monitoring is enabled
+    reconfigure(cfg);
+}
+
+void RTPTable::reconfigure(const NamedList* cfg)
+{
+    if (!cfg)
+	return;
+    m_monitor = cfg->getBoolValue("monitor",false);
+    m_resetInterval = cfg->getIntValue("reset_interval",3600);
+
+    m_rtpMtx.lock();
+    if (!m_monitor)
+	m_rtpEntries.clear();
+    String directions = cfg->getValue("rtp_directions","");
+    Debug(&__plugin,DebugAll,"RTPTable [%p] configured with directions='%s',resetTime=" FMT64,this,directions.c_str(),m_resetInterval);
     if (m_monitor) {
 	ObjList* l = directions.split(',');
 	for (ObjList* o = l->skipNull(); o; o = o->skipNext()) {
 	    String* str = static_cast<String*>(o->get());
-	    RTPEntry* entry = new RTPEntry(*str);
-	    m_rtpEntries.append(entry);
-	    entry->setIndex(m_rtpEntries.count());
+	    RTPEntry* entry = static_cast<RTPEntry*>(m_rtpEntries[*str]);
+	    if (!entry) {
+		entry = new RTPEntry(*str);
+		m_rtpEntries.append(entry);
+		entry->setIndex(m_rtpEntries.count());
+	    }
+	    else
+		entry->setIsCurrent(true);
 	}
 	TelEngine::destruct(l);
     }
-    m_resetTime = Time::secNow() + m_resetInterval;
+
+    bool deletedDir = true;
+    while (deletedDir) {
+	deletedDir = false;
+	for (ObjList* o = m_rtpEntries.skipNull(); o; o = o->skipNext()) {
+	    RTPEntry* entry = static_cast<RTPEntry*>(o->get());
+	    if (!entry->isCurrent()) {
+		DDebug(__plugin.name(),DebugAll,"RTPTable::reconfigure() - removed direction '%s' from monitoring",entry->toString().c_str());
+		m_rtpEntries.remove(entry);
+		deletedDir = true;
+	    }
+	}
+    }
+    unsigned int index = 1;
+    for (ObjList* o = m_rtpEntries.skipNull(); o; o = o->skipNext()) {
+	RTPEntry* entry = static_cast<RTPEntry*>(o->get());
+	entry->setIsCurrent(false);
+	entry->setIndex(index);
+	index++;
+    }
+
+    m_rtpMtx.unlock();
+    m_resetTime = Time::secNow() + m_resetInterval;  
 }
 
 // update an entry
@@ -2689,18 +2821,25 @@ CallRouteQoS::CallRouteQoS(const String direction, const NamedList* cfg)
     m_minCalls = 1;
     m_minASR = m_minNER = 0;
     m_maxASR = 101;
-    if (cfg) {
-	m_minCalls = cfg->getIntValue("mincalls",m_minCalls);
-	m_minASR = cfg->getIntValue("minASR",m_minASR);
-	m_maxASR = cfg->getIntValue("maxASR",m_maxASR);
-	m_minNER = cfg->getIntValue("minNER",m_minNER);
-    }
+    if (cfg) 
+	updateConfig(cfg);
     m_index = 0;
 }
 
 CallRouteQoS::~CallRouteQoS()
 {
     Debug(&__plugin,DebugAll,"CallRouteQoS [%p] destroyed",this);
+}
+
+void CallRouteQoS::updateConfig(const NamedList* cfg)
+{
+    if (!cfg)
+	return;
+    m_minCalls = cfg->getIntValue("mincalls",m_minCalls);
+    m_minASR = cfg->getIntValue("minASR",m_minASR);
+    m_maxASR = cfg->getIntValue("maxASR",m_maxASR);
+    m_minNER = cfg->getIntValue("minNER",m_minNER);
+    m_isCurrent = true;
 }
 
 // update the counters taking into account the type of the call and reason with which the call was ended
@@ -2973,13 +3112,13 @@ bool CallRouteQoS::get(int query, String& result)
   */
 CallMonitor::CallMonitor(const NamedList* sect, unsigned int priority)
       : MessageHandler("call.cdr",priority),
-	Thread("Call Monitor")
+	Thread("Call Monitor"),
+	m_checkTime(3600), m_routeParam("address"),
+	m_monitor(false)
 {
     setFilter("operation","finalize");
-    // configs, interval at which the monitored values should be sent as notifications - in seconds
-    m_checkTime = sect ? sect->getIntValue("time_interval",3600) : 3600;
-    m_routeParam = sect ? sect->getValue("route","address") : "address";
-    m_monitor = sect ? sect->getBoolValue("monitor",false) : false;
+    // configure
+    setConfigure(sect);
 
     m_notifTime = Time::secNow() + m_checkTime;
     m_inCalls = m_outCalls = 0;
@@ -3001,10 +3140,12 @@ void CallMonitor::run()
 	idle();
 	bool sendNotif = false;
 
+	m_cfgMtx.lock();
 	if (!m_first && Time::secNow() >= m_notifTime) {
 	    m_notifTime = Time::secNow() + m_checkTime;
 	    sendNotif = true;
 	}
+	m_cfgMtx.unlock();
 
 	m_routesMtx.lock();
 	unsigned int index = 0;
@@ -3026,15 +3167,63 @@ void CallMonitor::run()
     }
 }
 
+// set configuration
+void CallMonitor::setConfigure(const NamedList* sect)
+{
+    if (!sect)
+	return;
+    m_cfgMtx.lock();
+    m_checkTime = sect ? sect->getIntValue("time_interval",3600) : 3600;
+    m_routeParam = sect ? sect->getValue("route","address") : "address";
+    m_monitor = sect ? sect->getBoolValue("monitor",false) : false;
+    if (!m_monitor)
+	m_routes.clear();
+
+    // if the previous time for notification is later than the one with the new interval, reset it
+    if (m_notifTime > Time::secNow() + m_checkTime)
+	m_notifTime = Time::secNow() + m_checkTime;
+    m_cfgMtx.unlock();
+}
+
 // add a route to be monitored
 void CallMonitor::addRoute(NamedList* cfg)
 {
     if (!m_monitor || !cfg)
 	return;
-    CallRouteQoS* route = new CallRouteQoS(*cfg,cfg);
     m_routesMtx.lock();
-    m_routes.append(route);
-    route->setIndex(m_routes.count());
+    CallRouteQoS* route = static_cast<CallRouteQoS*>(m_routes[*cfg]);
+    if (!route) {
+	route = new CallRouteQoS(*cfg,cfg);
+        m_routes.append(route);
+	route->setIndex(m_routes.count());
+    }
+    else
+	route->updateConfig(cfg);
+    m_routesMtx.unlock();
+}
+
+void CallMonitor::updateRoutes()
+{
+    m_routesMtx.lock();
+    bool deletedRoute = true;
+    while (deletedRoute) {
+	deletedRoute = false;
+	for (ObjList* o = m_routes.skipNull(); o; o = o->skipNext()) {
+	    CallRouteQoS* route = static_cast<CallRouteQoS*>(o->get());
+	    if (!route->isCurrent()) {
+		DDebug(__plugin.name(),DebugAll,"CallMonitor::updateRoutes() - removed route '%s' from monitoring",route->toString().c_str());
+		m_routes.remove(route);
+		deletedRoute = true;
+	    }
+	}
+    }
+    unsigned int index = 1;
+    for (ObjList* o = m_routes.skipNull(); o; o = o->skipNext()) {
+	CallRouteQoS* route = static_cast<CallRouteQoS*>(o->get());
+	route->setIsCurrent(false);
+	route->setIndex(index);
+	index++;
+    }
     m_routesMtx.unlock();
 }
 
@@ -3181,13 +3370,7 @@ Monitor::Monitor()
 Monitor::~Monitor()
 {
     Output("Unloaded module Monitoring");
-}
 
-bool Monitor::unload()
-{
-    DDebug(this,DebugAll,"::unload()");
-    if (!lock(500000))
-	return false;
     TelEngine::destruct(m_moduleInfo);
     TelEngine::destruct(m_engineInfo);
     TelEngine::destruct(m_activeCallsCache);
@@ -3199,14 +3382,35 @@ bool Monitor::unload()
     TelEngine::destruct(m_ifaceInfo);
     TelEngine::destruct(m_accountsInfo);
     TelEngine::destruct(m_sipMonitoredGws);
+
+    TelEngine::destruct(m_msgUpdateHandler);
+    TelEngine::destruct(m_snmpMsgHandler);
+    TelEngine::destruct(m_startHandler);
+    TelEngine::destruct(m_authHandler);
+    TelEngine::destruct(m_registerHandler);
+    TelEngine::destruct(m_hangupHandler);
+}
+
+bool Monitor::unload()
+{
+    DDebug(this,DebugAll,"::unload()");
+    if (!lock(500000))
+	return false;
+
     Engine::uninstall(m_msgUpdateHandler);
-    Engine::uninstall(m_snmpMsgHandler);
+    Engine::uninstall(m_snmpMsgHandler);    
     Engine::uninstall(m_startHandler);
     Engine::uninstall(m_authHandler);
     Engine::uninstall(m_registerHandler);
     Engine::uninstall(m_hangupHandler);
-    if (m_callMonitor)
+
+    if (m_callMonitor) {
 	Engine::uninstall(m_callMonitor);
+	delete m_callMonitor;
+	m_callMonitor = 0;
+    }
+
+    uninstallRelays();
     unlock();
     return true;
 }
@@ -3225,78 +3429,83 @@ void Monitor::initialize()
 	installRelay(Timer);
 
 	s_nodeState = "active";
-
-	if (!m_msgUpdateHandler) {
-	    m_msgUpdateHandler = new MsgUpdateHandler();
-	    Engine::install(m_msgUpdateHandler);
-	}
-	if (!m_snmpMsgHandler) {
-	    m_snmpMsgHandler = new SnmpMsgHandler();
-	    Engine::install(m_snmpMsgHandler);
-	}
-	if (!m_hangupHandler) {
-	    m_hangupHandler = new HangupHandler();
-	    Engine::install(m_hangupHandler);
-	}
-	if (!m_startHandler) {
-	    m_startHandler = new EngineStartHandler();
-	    Engine::install(m_startHandler);
-	}
-	if (!m_authHandler) {
-	    m_authHandler = new AuthHandler();
-	    Engine::install(m_authHandler);
-	}
-	if (!m_registerHandler) {
-	    m_registerHandler = new RegisterHandler();
-	    Engine::install(m_registerHandler);
-	}
-	// build a call monitor
-	if (!m_callMonitor) {
-	    NamedList* asrCfg = cfg.getSection("call_qos");
-	    m_callMonitor = new CallMonitor(asrCfg);
-	    Engine::install(m_callMonitor);
-	}
-
-	int cacheFor = cfg.getIntValue("general","cache",1);
-	if (!m_activeCallsCache) {
-	    m_activeCallsCache = new ActiveCallsInfo();
-	    m_activeCallsCache->setRetainInfoTime(cacheFor);//seconds
-	}
-	if (!m_trunkInfo) {
-	    m_trunkInfo = new TrunkInfo();
-	    m_trunkInfo->setRetainInfoTime(cacheFor);//seconds
-	}
-	if (!m_linksetInfo) {
-	    m_linksetInfo = new LinksetInfo();
-	    m_linksetInfo->setRetainInfoTime(cacheFor);//seconds
-	}
-	if (!m_linkInfo) {
-	    m_linkInfo = new LinkInfo();
-	    m_linkInfo->setRetainInfoTime(cacheFor);//seconds
-	}
-	if (!m_ifaceInfo) {
-	    m_ifaceInfo = new InterfaceInfo();
-	    m_ifaceInfo->setRetainInfoTime(cacheFor);//seconds
-	}
-	if (!m_accountsInfo) {
-	    m_accountsInfo = new AccountsInfo();
-	    m_accountsInfo->setRetainInfoTime(cacheFor);//seconds
-	}
-	if (!m_engineInfo) {
-	    m_engineInfo = new EngineInfo();
-	    m_engineInfo->setRetainInfoTime(cacheFor);//seconds
-	}
-	if (!m_moduleInfo) {
-	    m_moduleInfo = new ModuleInfo();
-	    m_moduleInfo->setRetainInfoTime(cacheFor);//seconds
-	}
-	if (!m_dbInfo) {
-	    bool enable = cfg.getBoolValue("database","monitor",false);
-	    m_dbInfo = new DatabaseInfo(enable);
-	    m_dbInfo->setRetainInfoTime(cacheFor);
-	}
-        readConfig(cfg);
     }
+
+    if (!m_msgUpdateHandler) {
+	m_msgUpdateHandler = new MsgUpdateHandler();
+        Engine::install(m_msgUpdateHandler);
+    }
+    if (!m_snmpMsgHandler) {
+	m_snmpMsgHandler = new SnmpMsgHandler();
+	Engine::install(m_snmpMsgHandler);
+    }
+    if (!m_hangupHandler) {
+	m_hangupHandler = new HangupHandler();
+	Engine::install(m_hangupHandler);
+    }
+    if (!m_startHandler) {
+	m_startHandler = new EngineStartHandler();
+	Engine::install(m_startHandler);
+    }
+    if (!m_authHandler) {
+	m_authHandler = new AuthHandler();
+	Engine::install(m_authHandler);
+    }
+    if (!m_registerHandler) {
+	m_registerHandler = new RegisterHandler();
+	Engine::install(m_registerHandler);
+    }
+
+    // build a call monitor
+    NamedList* asrCfg = cfg.getSection("call_qos");
+    if (!m_callMonitor) {
+	m_callMonitor = new CallMonitor(asrCfg);
+	Engine::install(m_callMonitor);
+    }
+    else
+	m_callMonitor->setConfigure(asrCfg);
+
+    int cacheFor = cfg.getIntValue("general","cache",1);
+    if (!m_activeCallsCache)
+	m_activeCallsCache = new ActiveCallsInfo();
+    m_activeCallsCache->setRetainInfoTime(cacheFor);//seconds
+
+    if (!m_trunkInfo)
+        m_trunkInfo = new TrunkInfo();
+    m_trunkInfo->setRetainInfoTime(cacheFor);//seconds
+
+    if (!m_linksetInfo)
+	m_linksetInfo = new LinksetInfo();
+    m_linksetInfo->setRetainInfoTime(cacheFor);//seconds
+
+    if (!m_linkInfo)
+	m_linkInfo = new LinkInfo();
+    m_linkInfo->setRetainInfoTime(cacheFor);//seconds
+
+    if (!m_ifaceInfo)
+	m_ifaceInfo = new InterfaceInfo();
+    m_ifaceInfo->setRetainInfoTime(cacheFor);//seconds
+
+    if (!m_accountsInfo)
+	m_accountsInfo = new AccountsInfo();
+    m_accountsInfo->setRetainInfoTime(cacheFor);//seconds
+
+    if (!m_engineInfo)
+	m_engineInfo = new EngineInfo();
+    m_engineInfo->setRetainInfoTime(cacheFor);//seconds
+
+    if (!m_moduleInfo)
+	m_moduleInfo = new ModuleInfo();
+    m_moduleInfo->setRetainInfoTime(cacheFor);//seconds
+
+    bool enable = cfg.getBoolValue("database","monitor",false);
+    if (!m_dbInfo)
+	m_dbInfo = new DatabaseInfo(enable);
+    else
+	m_dbInfo->setMonitorEnabled(enable);
+    m_dbInfo->setRetainInfoTime(cacheFor);
+
+    readConfig(cfg);
 }
 
 void Monitor::readConfig(const Configuration& cfg)
@@ -3317,9 +3526,14 @@ void Monitor::readConfig(const Configuration& cfg)
 	if (type == "call_qos" && m_callMonitor)
 	    m_callMonitor->addRoute(sec);
     }
+    m_callMonitor->updateRoutes();
+    m_dbInfo->updateDatabaseAccounts();
+
     // read config for SIP monitoring
     String gw = cfg.getValue("sip","gateways","");
     if (!gw.null()) {
+	if (m_sipMonitoredGws)
+	    TelEngine::destruct(m_sipMonitoredGws);
         m_sipMonitoredGws = gw.split(';',false);
 	for (ObjList* o = m_sipMonitoredGws->skipNull(); o; o = o->skipNext()) {
 	    String* addr = static_cast<String*>(o->get());
@@ -3347,13 +3561,18 @@ void Monitor::readConfig(const Configuration& cfg)
     m_linksetMon = cfg.getBoolValue("sig","linkset",sigEnable);
     m_linkMon = cfg.getBoolValue("sig","link",sigEnable);
     m_isdnMon = cfg.getBoolValue("sig","isdn",sigEnable);
-    
+
     // read RTP monitoring
-    bool enable = cfg.getBoolValue("rtp","monitor",false);
-    int resetTime = cfg.getIntValue("rtp","reset_interval",3600);
-    String directions = cfg.getValue("rtp","rtp_directions","");
-    m_rtpInfo = new RTPTable(directions,resetTime,enable);
-    
+    NamedList* sect = cfg.getSection("rtp");
+    if (sect) {
+        if (!m_rtpInfo)
+	    m_rtpInfo = new RTPTable(sect);
+	else
+	    m_rtpInfo->reconfigure(sect);
+    }
+    else
+	TelEngine::destruct(m_rtpInfo);
+
     // read config for MGCP monitoring
     s_mgcpInfo.transactions.threshold = cfg.getIntValue("mgcp","max_transaction_timeouts",0);
     s_mgcpInfo.deletes.threshold = cfg.getIntValue("mgcp","max_deletes_timeouts",0);
@@ -3371,12 +3590,6 @@ bool Monitor::received(Message& msg, int id)
 	DDebug(this,DebugInfo,"::received() - Halt Message");
 	s_nodeState = "exiting";
 	unload();
-	TelEngine::destruct(m_msgUpdateHandler);
-	TelEngine::destruct(m_snmpMsgHandler);
-	TelEngine::destruct(m_hangupHandler);
-	TelEngine::destruct(m_startHandler);
-	TelEngine::destruct(m_authHandler);
-	TelEngine::destruct(m_registerHandler);
     }
     if (id == Timer) {
 	if (m_rtpInfo && m_rtpInfo->shouldReset())

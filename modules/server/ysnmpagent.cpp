@@ -1886,7 +1886,27 @@ int SnmpAgent::processGetNextReq(Snmp::VarBind* varBind, AsnValue* value,  int& 
     ASNObjId oid = objName->m_ObjectName;
     AsnMib *next = 0, *aux = 0;
 
-    next = m_mibTree->findNext(oid);
+    // obtain the value for the next oid
+    next = m_mibTree->find(oid);
+    if (next && !next->getName().null()) {
+	String name = next->getName();
+	unsigned int idx = next->index();
+	if (!idx) {
+	    *value = makeQuery(name,idx,next);
+	    int type = lookup(next->getType(),s_types,0);
+	    if (type != 0)
+		value->setType(type);
+	    if (!value || value->getValue().null())
+		next->setIndex(idx + 1);
+	    else
+		next = m_mibTree->findNext(oid);
+	}
+	else
+	    next->setIndex(idx + 1);
+    }
+    else
+	next = m_mibTree->findNext(oid);
+
     if (!next) {
         varBind->m_choiceType = Snmp::VarBind::ENDOFMIBVIEW;
 	return 1;

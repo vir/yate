@@ -21,11 +21,24 @@
 ; port: int: UDP port to bind, set to zero to use default MGCP GW port (2427)
 ;port=
 
+; Maximum received packet size, 1500 to 65528, default 1500
+;max_recv_packet=1500
+
+; buffer: int: Requested size of socket's receive buffer, 0 for system default
+; Minimum value is 4096
+;buffer=0
+
 ; request_ack: bool: Request an Acknowledge of the transactions
 ;request_ack=yes
 
 ; send_provisional: bool: Send 1xx provisional answers to the requests
 ;send_provisional=yes
+
+; retrans_interval: int: Message retransmission interval in msec
+;retrans_interval=250
+
+; retrans_count: int: Maximum number of retransmissions
+;retrans_count=3
 
 
 ;[ep PUT_NAME_HERE]

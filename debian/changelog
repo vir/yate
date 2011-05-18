@@ -1,3 +1,15 @@
+yate (3.3.3.svn4393) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4393: + Added missing documentation for some
+    MGCP engine parameters.  + Fixed unloading of the SNMP module.  +
+    Fixed unloading of the monitoring module. Allow reconfigure through
+    reload.  + Bug fix: Don't increment global call counters when
+    cdrwrite is false in the call.cdr messages.  + Bug fix: Return the
+    correct OID successor for GetNextRequest for table entries when an
+    extra 0 is added at the end of the OID in the request.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 19 May 2011 02:19:20 +0400
+
 yate (3.3.3.svn4388) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4388: + Change call status before checking

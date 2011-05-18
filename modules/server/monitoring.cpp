@@ -3256,10 +3256,12 @@ bool CallMonitor::received(Message& msg)
 	code = CallRouteQoS::DELIVERED;
 
     String direction = msg.getValue("direction","");
-    if (direction == "incoming")
-	m_inCalls++;
-    else if (direction == "outgoing")
-	m_outCalls++;
+    if (msg.getBoolValue("cdrwrite",true)) {
+	if (direction == "incoming")
+	    m_inCalls++;
+	else if (direction == "outgoing")
+	    m_outCalls++;
+    }
 
     String reason = msg.getValue("reason","");
     int type = lookup(reason,s_endReasons,0);

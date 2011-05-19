@@ -362,9 +362,11 @@ while ($state != "") {
 		    if ($ev->GetValue("targetid") == $ourcallid ) {
 			gotDTMF($ev->GetValue("text"));
 			$ev->handled = true;
-		    }   
+		    }
 		    break;
 		case "engine.timer":
+		    $ev->Acknowledge();
+		    $ev = false;
 		    timerTick();
 		    break;
 	    }

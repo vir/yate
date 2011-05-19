@@ -350,7 +350,6 @@ function onUserUpdate($ev)
 {
     global $users;
     updateAll($users,$ev->GetValue("user"),$ev);
-    return false;
 }
 
 // Channel status (dialog) handler, not currently used
@@ -358,7 +357,6 @@ function onChanUpdate($ev)
 {
     global $chans;
     updateAll($chans,$ev->GetValue("id"),$ev);
-    return false;
 }
 
 // CDR handler for channel status update
@@ -366,7 +364,6 @@ function onCdr($ev)
 {
     global $chans;
     updateAll($chans,$ev->GetValue("external"),$ev,$ev->GetValue("chan"));
-    return false;
 }
 
 // Timer message handler, expires and flushes subscriptions
@@ -439,7 +436,9 @@ for (;;) {
 	case "incoming":
 	    switch ($ev->name) {
 		case "engine.timer":
+		    $ev->Acknowledge();
 		    onTimer($ev->GetValue("time"));
+		    $ev = false;
 		    break;
 		case "engine.command":
 		    $ev->handled = onCommand($ev->GetValue("line"),$ev->retval);
@@ -451,16 +450,23 @@ for (;;) {
 		    $ev->handled = onPublish($ev);
 		    break;
 		case "user.update":
-		    $ev->handled = onUserUpdate($ev);
+		    $ev->Acknowledge();
+		    onUserUpdate($ev);
+		    $ev = false;
 		    break;
 		case "chan.update":
-		    $ev->handled = onChanUpdate($ev);
+		    $ev->Acknowledge();
+		    onChanUpdate($ev);
+		    $ev = false;
 		    break;
 		case "call.cdr":
-		    $ev->handled = onCdr($ev);
+		    $ev->Acknowledge();
+		    onCdr($ev);
+		    $ev = false;
 		    break;
 	    }
-	    $ev->Acknowledge();
+	    if ($ev)
+		$ev->Acknowledge();
 	    break;
 	case "answer":
 	    // Yate::Debug("PHP Answered: " . $ev->name . " id: " . $ev->id);

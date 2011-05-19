@@ -1059,6 +1059,7 @@ bool YateSIPEngine::copyAuthParams(NamedList* dest, const NamedList& src, bool o
 	{ "ip_host", 1 },
 	{ "ip_port", 1 },
 	{ "address", 1 },
+	{ "billid", 1 },
 	{  0,   0 },
     };
     if (!dest)
@@ -1113,12 +1114,9 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
     }
 
     if (params) {
-	const char* str = params->getValue("caller");
-	if (str)
-	    m.addParam("caller",str);
-	str = params->getValue("called");
-	if (str)
-	    m.addParam("called",str);
+	m.copyParam(*params,"caller");
+	m.copyParam(*params,"called");
+	m.copyParam(*params,"billid");
     }
 
     if (!Engine::dispatch(m))
@@ -3034,7 +3032,9 @@ bool YateSIPConnection::checkUser(SIPTransaction* t, bool refuse)
     // don't try to authenticate requests from server
     if (m_user.null() || m_line)
 	return true;
-    int age = t->authUser(m_user);
+    NamedList params("");
+    params.addParam("billid",billid(),false);
+    int age = t->authUser(m_user,false,&params);
     if ((age >= 0) && (age <= 10))
 	return true;
     DDebug(this,DebugAll,"YateSIPConnection::checkUser(%p) failed, age %d [%p]",t,age,this);

@@ -734,27 +734,29 @@ public:
 	HIGH_ASR_ALL_COUNT  = 17,
 	LOW_NER_COUNT       = 18,
 	LOW_NER_ALL_COUNT   = 19,
-	HANGUP		= 20,
-	REJECT		= 21,
-	BUSY		= 22,
-	CANCELLED	= 23,
-	NO_ANSWER	= 24,
-	NO_ROUTE	= 25,
-	NO_CONN		= 26,
-	NO_AUTH		= 27,
-	CONGESTION      = 28,
-	NO_CAUSE	= 29,
-	HANGUP_ALL	= 30,
-	REJECT_ALL	= 31,
-	BUSY_ALL	= 32,
-	CANCELLED_ALL	= 33,
-	NO_ANSWER_ALL	= 34,
-	NO_ROUTE_ALL	= 35,
-	NO_CONN_ALL	= 36,
-	NO_AUTH_ALL	= 37,
-	CONGESTION_ALL  = 38,
-	NAME		= 39,
-	INDEX		= 40,
+	HANGUP		= 40,
+	REJECT		= 41,
+	BUSY		= 42,
+	CANCELLED	= 43,
+	NO_ANSWER	= 44,
+	NO_ROUTE	= 45,
+	NO_CONN		= 46,
+	NO_AUTH		= 47,
+	CONGESTION      = 48,
+	NO_MEDIA	= 49,
+	NO_CAUSE	= 50,
+	HANGUP_ALL	= 60,
+	REJECT_ALL	= 61,
+	BUSY_ALL	= 62,
+	CANCELLED_ALL	= 63,
+	NO_ANSWER_ALL	= 64,
+	NO_ROUTE_ALL	= 65,
+	NO_CONN_ALL	= 66,
+	NO_AUTH_ALL	= 67,
+	CONGESTION_ALL  = 68,
+	NO_MEDIA_ALL	= 69,
+	NAME		= 80,
+	INDEX		= 81,
     };
     // Constructor
     CallRouteQoS(const String direction, const NamedList* cfg = 0);
@@ -1083,6 +1085,7 @@ static TokenDict s_categories[] = {
     {"currentNoConnectionEndCause",	Monitor::CALL_MONITOR},
     {"currentNoAuthEndCause",		Monitor::CALL_MONITOR},
     {"currentCongestionEndCause",       Monitor::CALL_MONITOR},
+    {"currentNoMediaEndCause",		Monitor::CALL_MONITOR},
 
     {"overallHangupEndCause",		Monitor::CALL_MONITOR},
     {"overallBusyEndCause",		Monitor::CALL_MONITOR},
@@ -1093,6 +1096,7 @@ static TokenDict s_categories[] = {
     {"overallNoConnectionEndCause",	Monitor::CALL_MONITOR},
     {"overallNoAuthEndCause",		Monitor::CALL_MONITOR},
     {"overallCongestionEndCause",       Monitor::CALL_MONITOR},
+    {"overallNoMediaEndCause",		Monitor::CALL_MONITOR},
 
     // connections info
     // linksets
@@ -1210,6 +1214,7 @@ static TokenDict s_callQualityQueries[] = {
     {"currentNoConnectionEndCause", CallRouteQoS::NO_CONN},
     {"currentNoAuthEndCause",       CallRouteQoS::NO_AUTH},
     {"currentCongestionEndCause",   CallRouteQoS::CONGESTION},
+    {"currentNoMediaEndCause",      CallRouteQoS::NO_MEDIA},
 
     {"overallHangupEndCause",       CallRouteQoS::HANGUP_ALL},
     {"overallBusyEndCause",	    CallRouteQoS::BUSY_ALL},
@@ -1220,6 +1225,7 @@ static TokenDict s_callQualityQueries[] = {
     {"overallNoConnectionEndCause", CallRouteQoS::NO_CONN_ALL},
     {"overallNoAuthEndCause",	    CallRouteQoS::NO_AUTH_ALL},
     {"overallCongestionEndCause",   CallRouteQoS::CONGESTION_ALL},
+    {"overallNoMediaEndCause",      CallRouteQoS::NO_MEDIA_ALL},
     // thresholds
     {"lowASRThreshold",		    CallRouteQoS::MIN_ASR},
     {"highASRThreshold",	    CallRouteQoS::MAX_ASR},
@@ -1235,15 +1241,25 @@ static TokenDict s_callQualityQueries[] = {
 };
 // call end reasons
 static TokenDict s_endReasons[] = {
-    {"User hangup",		    CallRouteQoS::HANGUP},
-    {"Rejected",		    CallRouteQoS::REJECT},
-    {"User busy", 		    CallRouteQoS::BUSY},
-    {"Request Terminated", 	    CallRouteQoS::NO_ANSWER},
-    {"No route to call target",     CallRouteQoS::NO_ROUTE},
-    {"Service Unavailable", 	    CallRouteQoS::NO_CONN},
-    {"Unauthorized", 		    CallRouteQoS::NO_AUTH},
-    {"Cancelled",		    CallRouteQoS::CANCELLED},
-    {"Congestion",		    CallRouteQoS::CONGESTION},
+    {"User hangup",               CallRouteQoS::HANGUP},
+    {"Rejected",                  CallRouteQoS::REJECT},
+    {"rejected",                  CallRouteQoS::REJECT},
+    {"User busy",                 CallRouteQoS::BUSY},
+    {"busy",                      CallRouteQoS::BUSY},
+    {"Request Terminated",        CallRouteQoS::NO_ANSWER},
+    {"noanswer",                  CallRouteQoS::NO_ANSWER},
+    {"No route to call target",   CallRouteQoS::NO_ROUTE},
+    {"noroute",                   CallRouteQoS::NO_ROUTE},
+    {"Service Unavailable",       CallRouteQoS::NO_CONN},
+    {"noconn",                    CallRouteQoS::NO_CONN},
+    {"service-unavailable",       CallRouteQoS::NO_CONN},
+    {"Unauthorized",              CallRouteQoS::NO_AUTH},
+    {"noauth",                    CallRouteQoS::NO_AUTH},
+    {"Cancelled",                 CallRouteQoS::CANCELLED},
+    {"Congestion",                CallRouteQoS::CONGESTION},
+    {"congestion",                CallRouteQoS::CONGESTION},
+    {"Unsupported Media Type",    CallRouteQoS::NO_MEDIA},
+    {"nomedia",                   CallRouteQoS::NO_MEDIA},
     {0,0}
 };
 
@@ -3081,6 +3097,7 @@ bool CallRouteQoS::get(int query, String& result)
 	    case NO_CONN:
 	    case NO_AUTH:
 	    case CONGESTION:
+	    case NO_MEDIA:
 		result << m_callCounters[query - HANGUP];
 		return true;
 	    case HANGUP_ALL:
@@ -3092,6 +3109,7 @@ bool CallRouteQoS::get(int query, String& result)
 	    case NO_CONN_ALL:
 	    case NO_AUTH_ALL:
 	    case CONGESTION_ALL:
+	    case NO_MEDIA_ALL:
 		result << m_callCountersAll[query - HANGUP_ALL];
 		return true;
 	    case NAME:
@@ -3264,8 +3282,10 @@ bool CallMonitor::received(Message& msg)
     }
 
     String reason = msg.getValue("reason","");
-    int type = lookup(reason,s_endReasons,0);
-    int reasonEnd = -1;
+    int type = lookup(reason,s_endReasons,CallRouteQoS::HANGUP);
+    int reasonEnd = CallRouteQoS::HANGUP;
+    if (type == CallRouteQoS::HANGUP && code == CallRouteQoS::DELIVERED && direction == "outgoing")
+	type = CallRouteQoS::CANCELLED;
     if (type <=  CallRouteQoS::NO_ANSWER) {
 	if (direction == "outgoing")
 	   reasonEnd = type;

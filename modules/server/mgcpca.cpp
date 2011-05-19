@@ -1400,7 +1400,7 @@ bool MGCPCircuit::setupConn(const char* mode)
     if (mm->code() == 400 && mm->params.count() == 0 &&
 	mm->comment().startsWith("Setup failed",true)) {
 	// 400 nnnnn Setup failed 0:(11:135):0:63
-	Debug(&splugin,DebugWarn,"Cisco DSP failure detected! [%p]",this);
+	Debug(&splugin,DebugWarn,"Cisco DSP failure detected on circuit %u [%p]",code(),this);
 	return false;
     }
     m_gwFormatChanged = false;

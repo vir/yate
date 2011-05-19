@@ -387,9 +387,10 @@ public:
     // @param response True if it is a response.
     // @param requestAuth True on exit: the caller should request authentication
     // @param invalidAuth True on exit: authentication response is incorrect
+    // @param billid The billing ID parameter if available
     // @return False if not authenticated
     bool userAuth(IAXTransaction* tr, bool response, bool& requestAuth,
-	bool& invalidAuth);
+	bool& invalidAuth, const char* billid = 0);
 
     bool commandComplete(Message& msg, const String& partLine, const String& partWord);
     void msgStatus(Message& msg);
@@ -1399,7 +1400,7 @@ void YIAXDriver::createFormatList(String& dest, u_int32_t codecs)
 }
 
 bool YIAXDriver::userAuth(IAXTransaction* tr, bool response, bool& requestAuth,
-	bool& invalidAuth)
+	bool& invalidAuth, const char* billid)
 {
     requestAuth = invalidAuth = false;
     // Create and dispatch user.auth
@@ -1415,6 +1416,7 @@ bool YIAXDriver::userAuth(IAXTransaction* tr, bool response, bool& requestAuth,
 	msg.addParam("nonce",tr->challenge());
 	msg.addParam("response",tr->authdata());
     }
+    msg.addParam("billid",billid,false);
     if (!Engine::dispatch(msg))
 	return false;
     String pwd = msg.retValue();
@@ -1870,7 +1872,7 @@ void YIAXConnection::evAuthRep(IAXEvent* event)
 {
     DDebug(this,DebugAll,"AUTHREP [%p]",this);
     bool requestAuth, invalidAuth;
-    if (iplugin.userAuth(event->getTransaction(),true,requestAuth,invalidAuth)) {
+    if (iplugin.userAuth(event->getTransaction(),true,requestAuth,invalidAuth,billid())) {
 	// Authenticated. Route the user.
 	route(true);
 	return;

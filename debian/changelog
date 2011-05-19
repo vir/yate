@@ -1,3 +1,17 @@
+yate (3.3.3.svn4400) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4400: + Create h323-conf-id for
+    authentication too if billid is present in message.  + Added support
+    for interdigit timer in overlapped dialer.  + Add the billid
+    parameter to SIP generated user.auth messages.  + Add the billid
+    parameter to IAX generated user.auth messages.  + As much as
+    possible process messages in external scripts after acknowledging
+    them.  + Added counter for calls ended due to nomedia reason. Fixed
+    access level for ASR/NER alarms.  + Print the number of the circuit
+    on which the Cisco DSP failed.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 20 May 2011 02:19:21 +0400
+
 yate (3.3.3.svn4393) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4393: + Added missing documentation for some

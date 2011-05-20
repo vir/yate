@@ -1,3 +1,11 @@
+yate (3.3.3.svn4401) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4401: + Added YATE MIB file containing the
+    noMediaEndCause counter OID and the fixed access levels for ASR/NER
+    alarms.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 21 May 2011 02:19:20 +0400
+
 yate (3.3.3.svn4400) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4400: + Create h323-conf-id for

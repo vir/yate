@@ -54,6 +54,14 @@
 ; Default value is 3600 (1 hour)
 ;time_interval=3600
 
+; hysteresis_factor=
+; The multiplying factor C for the hysteresis value H = 50 / N * C (where N is the number of calls, C is the configured value)
+; where H is a value specifying how much to add/substract to/from the ASR/NER value when deciding if the ASR/NER value should raise an alarm
+; About a number of C calls (succeeded or not from the ASR/NER standpoint) can trigger a change of the alarm state
+; Double. Allowed values between 1.0 - 10.0.
+; Defaults to 2.0
+; hysteresis_factor=2.0
+
 ;[192.168.168.185]
 ; this section is an example on how to configure a routing direction to be monitor for ASR/NER values and call statistics
 ; name of this section is the routing direction name. It should match the value of the route param from the call.cdr message
@@ -62,19 +70,19 @@
 ;type=call_qos
 
 ; minASR=
-; lower threshold at which the low ASR alarm is set for the current time interval. Value can be 0..100
-; Default is 0 ( to mean that no low ASR alarm will be sent)
-;minASR=0
+; lower threshold at which the low ASR alarm is set for the current time interval. Values can be -1..100
+; Default is -1 ( to mean that no low ASR alarm will be sent)
+;minASR=-1
 
 ; maxASR=
-; upper threshold at which the high ASR alarm is set for the current time interval.
-; Default is 101 ( to mean that no high ASR alarm will be sent)
-;maxASR=101
+; upper threshold at which the high ASR alarm is set for the current time interval. Values can be -1..100
+; Default is -1 ( to mean that no high ASR alarm will be sent)
+;maxASR=-1
 
 ; minNER=
-; threshold at which the low NER alarm should be set.
-; Defaults to 0
-;minNER=0
+; threshold at which the low NER alarm should be set. Values can be -1..100
+; Defaults to -1
+;minNER=-1
 
 ; minimum number of calls received before calculating ASR and NER
 ; Defaults to 1

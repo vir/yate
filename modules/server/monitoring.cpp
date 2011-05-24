@@ -769,7 +769,7 @@ public:
     // reset the internal data
     void reset();
     // check if the given value has surpassed the given threshold and set the appropriate alarm
-    void checkForAlarm(int& value, u_int8_t& alarm, const int min, const int max, u_int8_t minAlarm, u_int8_t maxAlarm = 0xff);
+    void checkForAlarm(int& value, float hysteresis, u_int8_t& alarm, const int min, const int max, u_int8_t minAlarm, u_int8_t maxAlarm = 0xff);
     // is this route in a state of alarm
     bool alarm();
     // get the alarm
@@ -1015,6 +1015,7 @@ private:
 static int s_yateRun = 0;
 static int s_yateRunAlarm = 0;
 static String s_nodeState = "";
+static double s_qosHysteresisFactor = 2.0;
 
 MGCPInfo s_mgcpInfo = { {0, 0, false}, {0, 0, false}, 0, 0, false};
 static SIPInfo s_sipInfo = { {0, 0, false}, {0, 0, false},  {0, 0, false}, 0, 0};
@@ -2835,8 +2836,7 @@ CallRouteQoS::CallRouteQoS(const String direction, const NamedList* cfg)
     m_overallAlarmsSent = 0;
 
     m_minCalls = 1;
-    m_minASR = m_minNER = 0;
-    m_maxASR = 101;
+    m_minASR = m_maxASR = m_minNER = -1;
     if (cfg) 
 	updateConfig(cfg);
     m_index = 0;
@@ -2853,8 +2853,23 @@ void CallRouteQoS::updateConfig(const NamedList* cfg)
 	return;
     m_minCalls = cfg->getIntValue("mincalls",m_minCalls);
     m_minASR = cfg->getIntValue("minASR",m_minASR);
+    if (m_minASR > 100 || m_minASR < -1) {
+	Debug(&__plugin,DebugNote,"CallRouteQoS::updateConfig() - route '%s': configured minASR is not in the -1..100 interval, "
+		"defaulting to -1",m_routeName.c_str());
+	m_minASR = -1;
+    }
     m_maxASR = cfg->getIntValue("maxASR",m_maxASR);
+    if (m_maxASR > 100 || m_maxASR < -1) {
+	Debug(&__plugin,DebugNote,"CallRouteQoS::updateConfig() - route '%s': configured maxASR is not in the -1..100 interval, "
+		"defaulting to -1",m_routeName.c_str());
+	m_maxASR = -1;
+    }
     m_minNER = cfg->getIntValue("minNER",m_minNER);
+    if (m_minNER > 100 || m_minNER < -1) {
+	Debug(&__plugin,DebugNote,"CallRouteQoS::updateConfig() - route '%s': configured minNER is not in the -1..100 interval, "
+		"defaulting to -1",m_routeName.c_str());
+	m_minNER = -1;
+    }
     m_isCurrent = true;
 }
 
@@ -2889,18 +2904,21 @@ void CallRouteQoS::updateQoS()
     int realASR, totalASR;
     if ((m_totalCalls[CURRENT_IDX] != m_totalCalls[PREVIOUS_IDX]) && (m_totalCalls[CURRENT_IDX] >= m_minCalls)) {
 
+	float currentHyst = 50.0 / m_totalCalls[CURRENT_IDX] * s_qosHysteresisFactor;
+	float totalHyst = 50.0 / m_totalCalls[TOTAL_IDX] * s_qosHysteresisFactor;
+
 	realASR = (int) (m_answeredCalls[CURRENT_IDX] * 100.0 / m_totalCalls[CURRENT_IDX]);
-	checkForAlarm(realASR,m_alarms,m_minASR,m_maxASR,LOW_ASR,HIGH_ASR);
+	checkForAlarm(realASR,currentHyst,m_alarms,m_minASR,m_maxASR,LOW_ASR,HIGH_ASR);
 	m_totalCalls[PREVIOUS_IDX] = m_totalCalls[CURRENT_IDX];
 
 	totalASR = (int) (m_answeredCalls[TOTAL_IDX] * 100.0 / m_totalCalls[TOTAL_IDX]);
-	checkForAlarm(totalASR,m_overallAlarms,m_minASR,m_maxASR,LOW_ASR,HIGH_ASR);
+	checkForAlarm(totalASR,totalHyst,m_overallAlarms,m_minASR,m_maxASR,LOW_ASR,HIGH_ASR);
 
 	int ner = (int) ((m_answeredCalls[CURRENT_IDX] + m_delivCalls[CURRENT_IDX]) * 100.0 / m_totalCalls[CURRENT_IDX]);
-	checkForAlarm(ner,m_alarms,m_minNER,-1,LOW_NER);
+	checkForAlarm(ner,currentHyst,m_alarms,m_minNER,-1,LOW_NER);
 
 	ner = (int) ((m_answeredCalls[TOTAL_IDX] + m_delivCalls[TOTAL_IDX]) * 100.0 / m_totalCalls[TOTAL_IDX]);
-	checkForAlarm(ner,m_overallAlarms,m_minNER,-1,LOW_NER);
+	checkForAlarm(ner,totalHyst,m_overallAlarms,m_minNER,-1,LOW_NER);
     }
 }
 
@@ -2912,20 +2930,26 @@ void CallRouteQoS::reset()
     m_answeredCalls[CURRENT_IDX] = m_answeredCalls[PREVIOUS_IDX] = 0;
     m_delivCalls[CURRENT_IDX] = m_delivCalls[PREVIOUS_IDX] = 0;
     m_alarms = 0;
-    m_alarmsSent = m_overallAlarmsSent = 0;
+    m_alarmsSent = 0;
+    m_alarmCounters[ASR_LOW] = m_alarmCounters[ASR_HIGH] = m_alarmCounters[NER_LOW] = 0;
     for (int i = 0; i < NO_CAUSE - HANGUP; i++)
 	m_callCounters[i] = 0;
 }
 
 // check a value against a threshold and if necessary set an alarm
-void CallRouteQoS::checkForAlarm(int& value, u_int8_t& alarm, const int min, const int max, u_int8_t minAlarm, u_int8_t maxAlarm)
-{
-    if ( value < 1.05 * min)
-	alarm |= minAlarm;
-    else
-	alarm &= ~minAlarm;
-    if (max > 0) {
-	if (value > 0.95 * max)
+void CallRouteQoS::checkForAlarm(int& value, float hysteresis, u_int8_t& alarm, const int min,
+			const int max, u_int8_t minAlarm, u_int8_t maxAlarm)
+ {
+    if (min >= 0) {
+	float hystValue = (alarm & minAlarm ? value - hysteresis : value + hysteresis);
+	if (hystValue <= min)
+	    alarm |= minAlarm;
+	else
+	    alarm &= ~minAlarm;
+    }
+    if (max >= 0) {
+	float hystValue  = (alarm & maxAlarm ? value + hysteresis : value - hysteresis);
+	if (hystValue >= max)
 	    alarm |= maxAlarm;
 	else
 	    alarm &= ~maxAlarm;
@@ -2937,6 +2961,7 @@ bool CallRouteQoS::alarm()
 {
     if (m_alarms || m_overallAlarms)
 	return true;
+    m_alarmsSent = m_overallAlarmsSent = 0;
     return false;
 }
 
@@ -3011,23 +3036,23 @@ void CallRouteQoS::sendNotifs(unsigned int index, bool rst)
 {
     DDebug(&__plugin,DebugInfo,"CallRouteQoS::sendNotifs() - route='%s' reset=%s [%p]",toString().c_str(),String::boolText(rst),this);
     // we dont want notifcations if we didn't have the minimum number of calls
-    if (m_totalCalls[CURRENT_IDX] < m_minCalls)
-	return;
-    NamedList nl("");
-    String value;
-    nl.addParam("index",String(index));
-    nl.addParam("count","4");
+    if (m_totalCalls[CURRENT_IDX] >= m_minCalls) {
+	NamedList nl("");
+	String value;
+	nl.addParam("index",String(index));
+	nl.addParam("count","4");
 
-    for (int i = 0; i < 4; i++) {
-        String param = "notify.";
-	param << i;
-	String paramValue = "value.";
-	paramValue << i;
-        nl.addParam(param,lookup(ASR + i,s_callQualityQueries,""));
-	get(ASR + i,value);
-	nl.addParam(paramValue,value);
+	for (int i = 0; i < 4; i++) {
+	    String param = "notify.";
+	    param << i;
+	    String paramValue = "value.";
+	    paramValue << i;
+	    nl.addParam(param,lookup(ASR + i,s_callQualityQueries,""));
+	    get(ASR + i,value);
+	    nl.addParam(paramValue,value);
+	}
+	__plugin.sendTraps(nl);
     }
-    __plugin.sendTraps(nl);
     if (rst)
 	reset();
 }
@@ -3045,7 +3070,7 @@ bool CallRouteQoS::get(int query, String& result)
 		    result = String( val);
 		}
 		else
-		    result = "0";
+		    result = "-1";
 		return true;
 	    case NER:
 	    	if (m_totalCalls[CURRENT_IDX]) {
@@ -3053,7 +3078,7 @@ bool CallRouteQoS::get(int query, String& result)
 		    result = String(val);
 		}
 		else
-		    result = "0";
+		    result = "-1";
 		return true;
 	    case ASR_ALL:
 		if (m_totalCalls[TOTAL_IDX]) {
@@ -3061,7 +3086,7 @@ bool CallRouteQoS::get(int query, String& result)
 		    result = String(val);
 		}
 		else
-		    result = "0";
+		    result = "-1";
 		return true;
 	    case NER_ALL:
 	    	if (m_totalCalls[TOTAL_IDX]) {
@@ -3069,7 +3094,7 @@ bool CallRouteQoS::get(int query, String& result)
 	    	    result = String(val);
 	    	}
 		else
-		    result = "0";
+		    result = "-1";
 		return true;
 	    case MIN_ASR:
 	        result << m_minASR;
@@ -3200,6 +3225,13 @@ void CallMonitor::setConfigure(const NamedList* sect)
     // if the previous time for notification is later than the one with the new interval, reset it
     if (m_notifTime > Time::secNow() + m_checkTime)
 	m_notifTime = Time::secNow() + m_checkTime;
+
+    s_qosHysteresisFactor = sect ? sect->getDoubleValue("hysteresis_factor",2.0) : 2.0;
+    if (s_qosHysteresisFactor > 10 || s_qosHysteresisFactor < 1.0) {
+	Debug(&__plugin,DebugNote,"CallMonitor::setConfigure() - configured hysteresis_factor is not in the 1.0 - 10.0 interval,"
+		" defaulting to 2.0");
+	s_qosHysteresisFactor = 2.0;
+    }
     m_cfgMtx.unlock();
 }
 

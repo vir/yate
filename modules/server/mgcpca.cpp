@@ -1437,6 +1437,14 @@ void MGCPCircuit::clearConn(bool force)
     }
     if (!force)
 	mm->params.addParam("C",m_callId);
+    if (mySpan()->rqntStr() && (mySpan()->rqntType() != MGCPSpan::RqntNone) && !(fxs() || fxo())) {
+	if (mySpan()->rqntEmbed()) {
+	    mm->params.addParam("X",m_notify);
+	    mm->params.addParam("R","");
+	}
+	else
+	    sendRequest(0,"");
+    }
     if (mySpan()->bearer() != m_gwFormat) {
 	m_gwFormat = mySpan()->bearer();
 	m_gwFormatChanged = true;

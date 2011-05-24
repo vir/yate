@@ -236,7 +236,8 @@ static bool decodeRaw(const SS7ISUP* isup, NamedList& list, const IsupParam* par
 static bool decodeRawParam(const SS7ISUP* isup, NamedList& list, unsigned char value,
     const unsigned char* buf, unsigned int len, const String& prefix)
 {
-    String name(value);
+    String name("Param_");
+    name << value;
     IsupParam p;
     p.type = (SS7MsgISUP::Parameters)value;
     p.size = len;
@@ -3998,9 +3999,20 @@ SS7MSU* SS7ISUP::buildMSU(SS7MsgISUP::Type type, unsigned char sio,
 	    String tmp(ns->name());
 	    tmp >> prefix.c_str();
 	    const IsupParam* param = getParamDesc(tmp);
-	    if (!param)
-		continue;
-	    unsigned char size = encodeParam(this,*msu,param,ns,params,prefix);
+	    unsigned char size = 0;
+	    if (param)
+		size = encodeParam(this,*msu,param,ns,params,prefix);
+	    else if (tmp.startSkip("Param_",false)) {
+		int val = tmp.toInteger(-1);
+		if (val >= 0 && val <= 255) {
+		    IsupParam p;
+		    p.name = tmp;
+		    p.type = (SS7MsgISUP::Parameters)val;
+		    p.size = 0;
+		    p.encoder = 0;
+		    size = encodeParam(this,*msu,&p,ns,params,prefix);
+		}
+	    }
 	    if (!size)
 		continue;
 	    if (len) {
@@ -4098,7 +4110,7 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	}
 	if (!decodeParam(this,msg,param,paramPtr,param->size,prefix)) {
 	    Debug(this,DebugWarn,"Could not decode fixed ISUP parameter %s [%p]",param->name,this);
-	    decodeRawParam(this,msg,param->type,paramPtr,param->size,prefix);
+	    decodeRaw(this,msg,param,paramPtr,param->size,prefix);
 	    unsupported.append(param->name,",");
 	}
 	paramPtr += param->size;
@@ -4131,7 +4143,7 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	if (!decodeParam(this,msg,param,paramPtr+offs+1,size,prefix)) {
 	    Debug(this,DebugWarn,"Could not decode variable ISUP parameter %s (size=%u) [%p]",
 		param->name,size,this);
-	    decodeRawParam(this,msg,param->type,paramPtr+offs+1,size,prefix);
+	    decodeRaw(this,msg,param,paramPtr+offs+1,size,prefix);
 	    unsupported.append(param->name,",");
 	}
 	paramPtr++;
@@ -4179,7 +4191,7 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 		}
 		else if (!decodeParam(this,msg,param,paramPtr,size,prefix)) {
 		    Debug(this,DebugWarn,"Could not decode optional ISUP parameter %s (size=%u) [%p]",param->name,size,this);
-		    decodeRawParam(this,msg,ptype,paramPtr,size,prefix);
+		    decodeRaw(this,msg,param,paramPtr,size,prefix);
 		    unsupported.append(param->name,",");
 		}
 		paramPtr += size;

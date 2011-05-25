@@ -199,7 +199,7 @@ public:
 private:
     bool startup(FaxWrapper* wrap, const char* type = "audio", const char* format = "slin");
     bool startup(Message& msg);
-    void updateInfo(t30_state_t* t30);
+    void updateInfo(t30_state_t* t30, const char* reason = 0);
     String m_localId;
     String m_remoteId;
     Type m_type;
@@ -428,7 +428,7 @@ void FaxWrapper::phaseE(int result)
     m_eof = true;
     FaxChan* chan = YOBJECT(FaxChan,m_chan);
     if (chan)
-	chan->updateInfo(t30());
+	chan->updateInfo(t30(),m_error);
 }
 
 
@@ -751,8 +751,10 @@ void FaxChan::setParams(Message& msg, Type type, int t38version)
     }
 }
 
-void FaxChan::updateInfo(t30_state_t* t30)
+void FaxChan::updateInfo(t30_state_t* t30, const char* reason)
 {
+    if (reason)
+	parameters().setParam("reason",reason);
     const char* ident = t30_get_rx_ident(t30);
     if (!null(ident))
 	m_remoteId = ident;

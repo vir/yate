@@ -1,3 +1,14 @@
+yate (3.3.3.svn4408) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4408: + Allow using span and range names in
+    circuits= parameter for (un)block commands.  + Allow using span and
+    range names in trunk circuit status.  + Add the reason parameter to
+    the fax chan.hangup message.  + Added separate reason variable,
+    simplified complete() code.  + Update the fax reason in phase B too,
+    we may never reach phase E.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 26 May 2011 02:19:15 +0400
+
 yate (3.3.3.svn4404) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4404: + Changed default values for ASR/NER

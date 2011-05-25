@@ -199,9 +199,10 @@ public:
 private:
     bool startup(FaxWrapper* wrap, const char* type = "audio", const char* format = "slin");
     bool startup(Message& msg);
-    void updateInfo(t30_state_t* t30);
+    void updateInfo(t30_state_t* t30, const char* reason = 0);
     String m_localId;
     String m_remoteId;
+    String m_reason;
     Type m_type;
     int m_t38version;
     bool m_sender;
@@ -408,14 +409,17 @@ void FaxWrapper::phaseB(int result)
 // Called after transferring a page
 void FaxWrapper::phaseD(int result)
 {
+    const char* err = t30_completion_code_to_str(result);
     Debug(this,DebugInfo,"Phase D code 0x%X: %s [%p]",
-	result,t30_completion_code_to_str(result),this);
+	result,err,this);
     lock();
+    if (T30_ERR_OK != result)
+	m_error = err;
     m_new = true;
     unlock();
     FaxChan* chan = YOBJECT(FaxChan,m_chan);
     if (chan)
-	chan->updateInfo(t30());
+	chan->updateInfo(t30(),m_error);
 }
 
 // Called to report end of transfer
@@ -428,7 +432,7 @@ void FaxWrapper::phaseE(int result)
     m_eof = true;
     FaxChan* chan = YOBJECT(FaxChan,m_chan);
     if (chan)
-	chan->updateInfo(t30());
+	chan->updateInfo(t30(),m_error);
 }
 
 
@@ -616,15 +620,12 @@ void FaxChan::complete(Message& msg, bool minimal) const
     Channel::complete(msg,minimal);
     if (minimal)
 	return;
-    if (m_localId)
-	msg.addParam("faxident_local",m_localId);
-    if (m_remoteId)
-	msg.addParam("faxident_remote",m_remoteId);
+    msg.addParam("reason",m_reason,false);
+    msg.addParam("faxident_local",m_localId,false);
+    msg.addParam("faxident_remote",m_remoteId,false);
     if (m_pages)
 	msg.addParam("faxpages",String(m_pages));
-    const char* type = lookup(m_type,s_types);
-    if (type)
-	msg.addParam("faxtype",type);
+    msg.addParam("faxtype",lookup(m_type,s_types),false);
     msg.addParam("faxecm",String::boolText(m_ecm));
     msg.addParam("faxcaller",String::boolText(m_caller));
 }
@@ -751,8 +752,10 @@ void FaxChan::setParams(Message& msg, Type type, int t38version)
     }
 }
 
-void FaxChan::updateInfo(t30_state_t* t30)
+void FaxChan::updateInfo(t30_state_t* t30, const char* reason)
 {
+    if (reason)
+	m_reason = reason;
     const char* ident = t30_get_rx_ident(t30);
     if (!null(ident))
 	m_remoteId = ident;

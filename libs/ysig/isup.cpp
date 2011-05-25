@@ -5359,9 +5359,15 @@ bool SS7ISUP::handleCicBlockCommand(const NamedList& p, bool block)
 	unsigned int count = 0;
 	unsigned int* cics = SignallingUtils::parseUIntArray(*param,1,0xffffffff,count,true);
 	if (!cics) {
-	    Debug(this,DebugNote,"Circuit group '%s': invalid circuits=%s",
-		p.getValue("operation"),param->c_str());
-	    return false;
+	    SignallingCircuitRange* range = circuits()->findRange(*param);
+	    if (!(range && (count = range->count()))) {
+		Debug(this,DebugNote,"Circuit group '%s': invalid circuits=%s",
+		    p.getValue("operation"),param->c_str());
+		return false;
+	    }
+	    cics = new unsigned int[count];
+	    for (unsigned int i = 0; i < count; i++)
+		cics[i] = (*range)[i];
 	}
 	if (count > 32) {
 	    Debug(this,DebugNote,"Circuit group '%s': too many circuits %u (max=32)",

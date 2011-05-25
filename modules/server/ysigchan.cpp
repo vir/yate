@@ -1981,10 +1981,13 @@ void SigDriver::status(SigTrunk* trunk, String& retVal, const String& target)
 	    break;
 
 	SignallingCircuitRange range(target,0);
+	SignallingCircuitRange* rptr = &range;
 	if (target == "*" || target == "all")
 	    range.add(ctrl->circuits()->base(),ctrl->circuits()->last());
-	for (unsigned int i = 0; i < range.count(); i++) {
-	    SignallingCircuit* cic = ctrl->circuits()->find(range[i]);
+	else if (range.count() == 0)
+	    rptr = ctrl->circuits()->findRange(target);
+	for (unsigned int i = 0; rptr && i < rptr->count(); i++) {
+	    SignallingCircuit* cic = ctrl->circuits()->find((*rptr)[i]);
 	    if (!cic)
 		continue;
 	    count++;

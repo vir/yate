@@ -1,0 +1,136 @@
+; This file configures the cache module
+
+
+[general]
+; This section sets global variables of the implementation
+
+; size: integer: The number of hash lists to use in each cache
+; Defaults to 17, can't be less then 3 or greater then 1024
+; This parameter can be overridden in cache sections
+;size=17
+
+; ttl: integer: Cache item time to live in seconds
+; Minimum allowed value is 10
+; This parameter is not applied on reload for already created cache objects
+;ttl=
+
+; limit: integer: Maximum number of stored cache items
+; This value must be at least the power of 2 of cache size, e.g. for
+;  cache size 5 limit must be at least 25
+; This parameter is applied on reload and can be overridden in cache sections
+;limit=
+
+; expire_check_interval: integer: The interval (in seconds) to check cache expire
+; Defaults to 10, minimum allowed value 1, maximum allowed value 300
+; This parameter is applied on reload
+;expire_check_interval=10
+
+; account: string: Database name
+; This parameter is applied on reload and can be overridden in cache sections
+;account=
+
+
+[lnp]
+; This section configures the LNP cache
+; Database query examples assume a 'lnp' table with the following fields:
+; - id TEXT The called number
+; - routing TEXT Routing number (may be empty)
+; - expires NUMERIC Expire time (EPOCH) in seconds
+
+; enable: boolean: Enable LNP cache
+; Defaults to no
+; This parameter is applied on reload
+;enable=no
+
+; store_failed_requests: boolean: Store failed LNP requests in cache
+; Defaults to no
+; This parameter is applied on reload
+;store_failed_requests=no
+
+; store_npdi_before: boolean: Store routing number from incoming calls with LNP
+; This parameter can be overidden by a 'cache_lnp_store' parameter when routing
+; Defaults to yes
+; This parameter is applied on reload
+;store_npdi_before=yes
+
+; copyparams: string: Parameters to handle (store in cache or copy to handled messages)
+; This parameter is applied on reload and can be overridden when routing by
+;  a 'cache_lnp_parameters' parameter
+;copyparams=routing
+
+; routebefore: integer: The priority of the call.route message handler used to
+;  intercept incoming calls and set the routing number if found in cache or
+;  update the cache if LNP was already done
+; Defaults to 25
+;routebefore=25
+
+; routeafter: integer: The priority of the call.route message handler used to
+;  intercept the message after LNP was done locally and update the cache
+; Defaults to 75
+;routeafter=75
+
+; query_loadcache: string: Database query used to load the LNP cache when created
+; This parameter is applied on reload
+;query_loadcache=SELECT * FROM lnp
+
+; query_loaditem: string: Database query used to load an item when created
+; This parameter is applied on reload
+;query_loaditem=SELECT * FROM lnp WHERE id='${id}'
+
+; query_save: string: Database query used to save an item
+; This parameter is applied on reload
+;query_save=INSERT INTO lnp(id,routing,expires) VALUES('${id}','${routing}',${expires})
+
+; query_expire: string: Database query used to expire items
+; This parameter is applied on reload
+;query_expire=DELETE FROM lnp WHERE expires <= ${time}
+
+
+[cnam]
+; This section configures the CNAM cache
+; Database query examples assume a 'cnam' table with the following fields:
+; - id TEXT The caller number
+; - callername TEXT Caller's name (may be empty)
+; - expires NUMERIC Expire time (EPOCH) in seconds
+
+; enable: boolean: Enable CNAM cache
+; Defaults to no
+; This parameter is applied on reload
+;enable=no
+
+; store_empty: boolean: Store empty caller name returned by local CNAM query in cache
+; Defaults to no
+; This parameter is applied on reload
+;store_empty=no
+
+; copyparams: string: Parameters to handle (store in cache or copy to handled messages)
+; This parameter is applied on reload and can be overridden when routing by
+;  a 'cache_cnam_parameters' parameter
+;copyparams=callername
+
+; routebefore: integer: The priority of the call.preroute message handler used to
+;  intercept incoming calls and set the callername if found in cache or
+;  update the cache from caller name
+; Defaults to 25
+;routebefore=25
+
+; routeafter: integer: The priority of the call.preroute message handler used to
+;  intercept the message after CNAM was done locally and update the cache
+; Defaults to 75
+;routeafter=75
+
+; query_loadcache: string: Database query used to load the CNAM cache when created
+; This parameter is applied on reload
+;query_loadcache=SELECT * FROM cnam
+
+; query_loaditem: string: Database query used to load an item when created
+; This parameter is applied on reload
+;query_loaditem=SELECT * FROM cnam WHERE id='${id}'
+
+; query_save: string: Database query used to save an item
+; This parameter is applied on reload
+;query_save=INSERT INTO cnam(id,callername,expires) VALUES('${id}','${callername}',${expires})
+
+; query_expire: string: Database query used to expire items
+; This parameter is applied on reload
+;query_expire=DELETE FROM cnam WHERE expires <= ${time}

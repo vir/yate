@@ -1,3 +1,9 @@
+yate (3.3.3.vir2011052601) UNRELEASED; urgency=low
+
+  * SDP fmtp lines forwarding
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Thu, 26 May 2011 18:52:34 +0400
+
 yate (3.3.3.vir2011051601) UNRELEASED; urgency=low
 
   * Merged marian's QOP implementation

@@ -380,7 +380,7 @@ public:
     void checkGkClient();
 protected:
     bool internalGkClient(int mode, const PString& name);
-    void internalGkNotify(bool registered);
+    void internalGkNotify(bool registered, const char* reason = 0);
     YateGatekeeperServer* m_gkServer;
     YateGkRegThread* m_thread;
     bool m_registered;
@@ -946,6 +946,7 @@ void YateH323EndPoint::asyncGkClient(int mode, const PString& name, int retry)
 
 bool YateH323EndPoint::internalGkClient(int mode, const PString& name)
 {
+    String error;
     switch (mode) {
 	case ByAddr:
 	    if (SetGatekeeper(name,new H323TransportUDP(*this))) {
@@ -954,8 +955,8 @@ bool YateH323EndPoint::internalGkClient(int mode, const PString& name)
 		internalGkNotify(true);
 		return true;
 	    }
-	    Debug(&hplugin,DebugWarn,"Failed to connect '%s' to GK addr '%s'",
-		safe(),(const char*)name);
+	    error << "Failed to connect '" << safe() <<
+		"' to GK addr '" << (const char*)name << "'";
 	    break;
 	case ByName:
 	    if (LocateGatekeeper(name)) {
@@ -964,8 +965,8 @@ bool YateH323EndPoint::internalGkClient(int mode, const PString& name)
 		internalGkNotify(true);
 		return true;
 	    }
-	    Debug(&hplugin,DebugWarn,"Failed to connect '%s' to GK name '%s'",
-		safe(),(const char*)name);
+	    error << "Failed to connect '" << safe() <<
+		"' to GK name '" << (const char*)name << "'";
 	    break;
 	case Discover:
 	    if (DiscoverGatekeeper(new H323TransportUDP(*this))) {
@@ -973,7 +974,7 @@ bool YateH323EndPoint::internalGkClient(int mode, const PString& name)
 		internalGkNotify(true);
 		return true;
 	    }
-	    Debug(&hplugin,DebugWarn,"Failed to discover a GK in '%s'",safe());
+	    error << "Failed to discover a GK in '" << safe() << "'";
 	    break;
 	case Unregister:
 	    RemoveGatekeeper();
@@ -981,19 +982,22 @@ bool YateH323EndPoint::internalGkClient(int mode, const PString& name)
 	    internalGkNotify(false);
 	    return true;
     }
-    internalGkNotify(false);
+    if (error)
+	Debug(&hplugin,DebugWarn,"%s",error.c_str());
+    internalGkNotify(false,error);
     return false;
 }
 
-void YateH323EndPoint::internalGkNotify(bool registered)
+void YateH323EndPoint::internalGkNotify(bool registered, const char* reason)
 {
-    if ((m_registered == registered) || null())
+    if (((m_registered == registered) && !reason) || null())
 	return;
     m_registered = registered;
     Message* m = new Message("user.notify");
     m->addParam("account",*this);
     m->addParam("protocol","h323");
     m->addParam("registered",String::boolText(registered));
+    m->addParam("reason",reason,false);
     Engine::enqueue(m);
 }
 

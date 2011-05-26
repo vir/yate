@@ -189,6 +189,11 @@ public:
 protected:
     virtual void initialize();
     virtual bool received(Message& msg, int id);
+    virtual void statusModule(String& buf);
+    virtual void statusParams(String& buf);
+    virtual void statusDetail(String& buf);
+    // Add a cache to detail
+    void addCacheDetail(String& buf, Cache* cache);
     // Handle messages for LNP
     void handleLnp(Message& msg, bool before);
     // Handle messages for CNAM
@@ -742,6 +747,10 @@ void CacheModule::initialize()
     }
     // Init module
     if (s_first) {
+	// Install now basic relays
+	installRelay(Status,110);
+	installRelay(Level,120);
+	installRelay(Command,120);
 	Engine::install(new EngineStartHandler);
 	s_first = false;
     }
@@ -771,6 +780,40 @@ bool CacheModule::received(Message& msg, int id)
 	return false;
     }
     return Module::received(msg,id);
+}
+
+void CacheModule::statusModule(String& buf)
+{
+    static const String s_params = "format=Count";
+    Module::statusModule(buf);
+    buf.append(s_params,",");
+}
+
+void CacheModule::statusParams(String& buf)
+{
+    unsigned int count = 0;
+    if (m_lnpCache)
+	count++;
+    if (m_cnamCache)
+	count++;
+    String tmp("caches=");
+    tmp << count;
+    buf.append(tmp,";");
+}
+
+void CacheModule::statusDetail(String& buf)
+{
+    addCacheDetail(buf,m_lnpCache);
+    addCacheDetail(buf,m_cnamCache);
+}
+
+// Add a cache to detail
+void CacheModule::addCacheDetail(String& buf, Cache* cache)
+{
+    if (!cache)
+	return;
+    Lock lock(cache);
+    buf.append(cache->toString() + "=" + String(cache->count()),";");
 }
 
 // Handle messages for LNP

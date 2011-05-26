@@ -388,6 +388,19 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 			    *temp << payload << " octet-align=1";
 			    rtpmap.append(temp);
 			}
+
+			if(s->length()) {
+			    String key("fmtp_");
+			    key << *s;
+			    for(unsigned int i = 0; i < m->length(); ++i) {
+				const NamedString *ns = m->getParam(i);
+				if(ns && ns->name() == key) {
+				    temp = new String("fmtp:");
+				    *temp << payload << *ns;
+				    rtpmap.append(temp);
+				}
+			    }
+			}
 		    }
 		}
 	    }

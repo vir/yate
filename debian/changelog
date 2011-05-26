@@ -1,3 +1,13 @@
+yate (3.3.3.svn4411) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4411: + Update the fax reason in phase B
+    too, we may never reach phase E.  + Added cache module handling LNP
+    and CNAM.  + Install basic relays when module is loaded. Handle
+    status  + Emit proper user.notify when failing to connect to H.323
+    Gatekeeper.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 27 May 2011 02:19:22 +0400
+
 yate (3.3.3.svn4408) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4408: + Allow using span and range names in

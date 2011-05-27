@@ -1,3 +1,9 @@
+yate (3.3.3.vir2011052701) UNRELEASED; urgency=low
+
+  * SDP fmtp lines forwarding fix
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Fri, 27 May 2011 12:13:46 +0400
+
 yate (3.3.3.vir2011052601) UNRELEASED; urgency=low
 
   * SDP fmtp lines forwarding

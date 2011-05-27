@@ -83,7 +83,7 @@ public:
     // Expire entries
     void expire(const Time& time);
     // Copy params from cache item. Return true if found
-    bool copyParams(const String& id, NamedList& list, const String& copy);
+    bool copyParams(const String& id, NamedList& list, const String* cpParams);
     // Add an item to the cache. Remove an existing one
     // Set dbSave=false when loading from database to avoid saving it again
     void add(const String& id, const NamedList& params, const String* cpParams,
@@ -277,7 +277,7 @@ Cache::Cache(const String& name, int size, const NamedList& params)
 }
 
 // Copy params from cache item. Return true if found
-bool Cache::copyParams(const String& id, NamedList& list, const String& copy)
+bool Cache::copyParams(const String& id, NamedList& list, const String* cpParams)
 {
     lock();
     CacheItem* item = find(id);
@@ -308,7 +308,7 @@ bool Cache::copyParams(const String& id, NamedList& list, const String& copy)
 		m_name.c_str(),id.c_str(),TelEngine::c_safe(error),this);
     }
     if (item) {
-	list.copyParams(*item,copy);
+	list.copyParams(*item,!cpParams ? m_copyParams : *cpParams);
 	dumpItem(*this,*item,"found in cache");
     }
     unlock();
@@ -421,8 +421,19 @@ CacheItem* Cache::addUnsafe(const String& id, const NamedList& params, const Str
     if (list)
 	list = list->skipNull();
     u_int64_t expires = 0;
-    if (!dbSave)
-	expires = (u_int64_t)safeValue(params.getIntValue("expires")) * 1000000;
+    if (!dbSave) {
+	String* exp = params.getParam("expires");
+	if (exp) {
+	    int tmp = (int)exp->toInteger();
+	    if (tmp > 0)
+		expires = Time::now() + tmp * 1000000;
+	    else {
+		XDebug(&__plugin,DebugAll,"Cache(%s) item '%s' already expired [%p]",
+		    m_name.c_str(),id.c_str(),this);
+		return 0;
+	    }
+	}
+    }
     if (!expires)
 	expires = Time::now() + m_cacheTtl;
     // Search for insert/add point and existing item
@@ -464,7 +475,7 @@ CacheItem* Cache::addUnsafe(const String& id, const NamedList& params, const Str
 	String query = m_querySave;
 	NamedList p(*item);
 	p.setParam("id",item->toString());
-	p.setParam("expires",String((unsigned int)(expires / 1000000)));
+	p.setParam("expires",String((unsigned int)(m_cacheTtl / 1000000)));
 	p.replaceParams(query);
 	Message* m = new Message("database");
 	m->addParam("account",m_account);

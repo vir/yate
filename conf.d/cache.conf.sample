@@ -35,7 +35,7 @@
 ; Database query examples assume a 'lnp' table with the following fields:
 ; - id TEXT The called number
 ; - routing TEXT Routing number (may be empty)
-; - expires NUMERIC Expire time (EPOCH) in seconds
+; - timeout TIMESTAMP Expire time
 
 ; enable: boolean: Enable LNP cache
 ; Defaults to no
@@ -71,19 +71,19 @@
 
 ; query_loadcache: string: Database query used to load the LNP cache when created
 ; This parameter is applied on reload
-;query_loadcache=SELECT * FROM lnp
+;query_loadcache=SELECT FLOOR(EXTRACT('EPOCH' FROM (timeout - CURRENT_TIMESTAMP))) AS expires,* FROM lnp
 
 ; query_loaditem: string: Database query used to load an item when created
 ; This parameter is applied on reload
-;query_loaditem=SELECT * FROM lnp WHERE id='${id}'
+;query_loaditem=SELECT FLOOR(EXTRACT('EPOCH' FROM (timeout - CURRENT_TIMESTAMP))) AS expires,* FROM lnp WHERE id='${id}'
 
 ; query_save: string: Database query used to save an item
 ; This parameter is applied on reload
-;query_save=INSERT INTO lnp(id,routing,expires) VALUES('${id}','${routing}',${expires})
+;query_save=INSERT INTO lnp(id,routing,timeout) VALUES('${id}','${routing}',CURRENT_TIMESTAMP + INTERVAL '${expires} s')
 
 ; query_expire: string: Database query used to expire items
 ; This parameter is applied on reload
-;query_expire=DELETE FROM lnp WHERE expires <= ${time}
+;query_expire=DELETE FROM lnp WHERE CURRENT_TIMESTAMP >= timeout
 
 
 [cnam]
@@ -91,7 +91,7 @@
 ; Database query examples assume a 'cnam' table with the following fields:
 ; - id TEXT The caller number
 ; - callername TEXT Caller's name (may be empty)
-; - expires NUMERIC Expire time (EPOCH) in seconds
+; - timeout TIMESTAMP Expire time
 
 ; enable: boolean: Enable CNAM cache
 ; Defaults to no
@@ -121,16 +121,16 @@
 
 ; query_loadcache: string: Database query used to load the CNAM cache when created
 ; This parameter is applied on reload
-;query_loadcache=SELECT * FROM cnam
+;query_loadcache=SELECT FLOOR(EXTRACT('EPOCH' FROM (timeout - CURRENT_TIMESTAMP))) AS expires,* FROM cnam
 
 ; query_loaditem: string: Database query used to load an item when created
 ; This parameter is applied on reload
-;query_loaditem=SELECT * FROM cnam WHERE id='${id}'
+;query_loaditem=SELECT FLOOR(EXTRACT('EPOCH' FROM (timeout - CURRENT_TIMESTAMP))) AS expires,* FROM cnam WHERE id='${id}'
 
 ; query_save: string: Database query used to save an item
 ; This parameter is applied on reload
-;query_save=INSERT INTO cnam(id,callername,expires) VALUES('${id}','${callername}',${expires})
+;query_save=INSERT INTO cnam(id,callername,timeout) VALUES('${id}','${callername}',CURRENT_TIMESTAMP + INTERVAL '${expires} s')
 
 ; query_expire: string: Database query used to expire items
 ; This parameter is applied on reload
-;query_expire=DELETE FROM cnam WHERE expires <= ${time}
+;query_expire=DELETE FROM cnam WHERE CURRENT_TIMESTAMP >= timeout

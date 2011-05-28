@@ -1353,7 +1353,8 @@ bool MGCPCircuit::createRtp()
 // Create or update remote connection
 bool MGCPCircuit::setupConn(const char* mode)
 {
-    RefPointer<MGCPMessage> mm = message(m_connId.null() ? "CRCX" : "MDCX");
+    bool create = m_connId.null();
+    RefPointer<MGCPMessage> mm = message(create ? "CRCX" : "MDCX");
     mm->params.addParam("C",m_callId);
     if (m_connId)
 	mm->params.addParam("I",m_connId);
@@ -1414,7 +1415,8 @@ bool MGCPCircuit::setupConn(const char* mode)
     MimeSdpBody* sdp = static_cast<MimeSdpBody*>(mm->sdp[0]);
     if (sdp) {
 	String oldIp = m_rtpAddr;
-	bool mediaChanged = setMedia(splugin.parser().parse(*sdp,m_rtpAddr,m_rtpMedia));
+	bool mediaChanged = setMedia(splugin.parser().parse(*sdp,m_rtpAddr,
+	    m_rtpMedia,String::empty(),m_rtpForward && !create));
 	const DataBlock& raw = sdp->getBody();
 	m_remoteRawSdp.assign((const char*)raw.data(),raw.length());
 	// Disconnect if media changed

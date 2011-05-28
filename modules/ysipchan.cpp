@@ -2823,7 +2823,7 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
 	    MimeSdpBody* sdp = getSdpBody(msg->body);
 	    while (sdp) {
 		String addr;
-		ObjList* lst = plugin.parser().parse(sdp,addr);
+		ObjList* lst = plugin.parser().parse(sdp,addr,0,String::empty(),m_rtpForward);
 		if (!lst)
 		    break;
 		if ((addr == m_rtpAddr) || isNatBetween(addr,m_host)) {
@@ -2870,7 +2870,7 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
 	MimeSdpBody* sdp = getSdpBody(msg->body);
 	if (sdp) {
 	    DDebug(this,DebugInfo,"YateSIPConnection got reINVITE SDP [%p]",this);
-	    setMedia(plugin.parser().parse(sdp,m_rtpAddr,m_rtpMedia));
+	    setMedia(plugin.parser().parse(sdp,m_rtpAddr,m_rtpMedia,String::empty(),m_rtpForward));
 	    // guess if the call comes from behind a NAT
 	    if (s_auto_nat && isNatBetween(m_rtpAddr,m_host)) {
 		Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
@@ -2925,7 +2925,7 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	if (m_rtpForward) {
 	    String addr;
 	    String natAddr;
-	    ObjList* lst = plugin.parser().parse(sdp,addr);
+	    ObjList* lst = plugin.parser().parse(sdp,addr,0,String::empty(),true);
 	    if (!lst)
 		break;
 	    // guess if the call comes from behind a NAT

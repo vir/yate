@@ -1,3 +1,14 @@
+yate (3.3.3.svn4418) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4418: + Allow forcing the SDP parser to
+    update the formats list.  + Made the _cache project Windows use
+    native EOL.  + Fixed name of SVN EOL property.  + Pick up any new
+    formats (even if not negotiated before) in RTP forward mode.  +
+    Support a comma separated list of modes when initiating a change in
+    ysigchan.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sun, 29 May 2011 02:19:24 +0400
+
 yate (3.3.3.svn4413) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4413: + Set and read expires as expire

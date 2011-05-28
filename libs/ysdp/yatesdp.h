@@ -243,9 +243,10 @@ public:
      * @param formats New media formats
      * @param rport Optional remote media port
      * @param lport Optional local media port
+     * @param force Force updating formats even if incompatible with old ones
      * @return True if media changed
      */
-    bool update(const char* formats, int rport = -1, int lport = -1);
+    bool update(const char* formats, int rport = -1, int lport = -1, bool force = false);
 
     /**
      * Update from a chan.rtp message (rtp id and local port)
@@ -679,10 +680,11 @@ public:
      *  will be moved to returned list)
      * @param media Optional expected media type. If not empty this will be the
      *  only media type returned (if found)
+     * @param force Force updating formats even if incompatible with old ones
      * @return List of SDPMedia objects, may be NULL
      */
     ObjList* parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedia = 0,
-	const String& media = String::empty());
+	const String& media = String::empty(), bool force = false);
 
     /**
      * Parse a received SDP body, returns NULL if SDP is not present
@@ -693,11 +695,12 @@ public:
      *  will be moved to returned list)
      * @param media Optional expected media type. If not empty this will be the
      *  only media type returned (if found)
+     * @param force Force updating formats even if incompatible with old ones
      * @return List of SDPMedia objects, may be NULL
      */
     inline ObjList* parse(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia = 0,
-	const String& media = String::empty())
-	{ return sdp ? parse(*sdp,addr,oldMedia,media) : 0; }
+	const String& media = String::empty(), bool force = false)
+	{ return sdp ? parse(*sdp,addr,oldMedia,media,force) : 0; }
 
     /**
      * Update configuration. This method should be called after a configuration file is loaded

@@ -110,6 +110,10 @@ private:
     bool addRtp(Message& msg, bool possible = false);
     // Update media type, may have switched to fax
     bool updateMedia(Message& msg, const String& operation);
+    // Initiate change with a list of possible modes
+    bool initiateMedia(Message& msg, SignallingCircuit* cic, String& modes);
+    // Initiate change for a single mode
+    bool initiateMedia(Message& msg, SignallingCircuit* cic, const String& mode, bool mandatory);
     // Notification from peer channel
     bool notifyMedia(Message& msg);
     // Update circuit and format in source, optionally in consumer too
@@ -145,6 +149,7 @@ private:
     bool m_ringback;                     // Always provide ringback media
     bool m_rtpForward;                   // Forward RTP
     bool m_sdpForward;                   // Forward SDP (only of rtp forward is enabled)
+    String m_nextModes;                  // Next modes to attempt to set
     Message* m_route;                    // Prepared call.preroute message
     ObjList m_chanDtmf;                  // Postponed (received while routing) chan.dtmf messages
     SignallingEvent* m_callAccdEvent;    // Postponed call accepted event to be sent to remote
@@ -1577,6 +1582,7 @@ bool SigChannel::addRtp(Message& msg, bool possible)
     return ok;
 }
 
+// Update media from call.update message
 bool SigChannel::updateMedia(Message& msg, const String& operation)
 {
     bool hadRtp = !m_rtpForward;
@@ -1611,38 +1617,84 @@ bool SigChannel::updateMedia(Message& msg, const String& operation)
 	return Engine::enqueue(m);
     }
     else if (operation == "initiate") {
-	const char* mode = msg.getValue("mode");
-	if (!mode) {
+	String modes = msg.getValue("mode");
+	if (modes.null()) {
 	    bool audio = msg.getBoolValue("media",true);
 	    if (msg.getBoolValue("media_image",!audio))
-		mode = "t38";
+		modes = audio ? "t38,fax" : "t38";
 	    else if (audio)
-		mode = "fax";
+		modes = "fax";
 	}
-	if (TelEngine::null(mode))
+	if (modes.null())
 	    return false;
-	if (!(cic->setParam("rtp_forward",String::boolText(rtpFwd)) &&
-	    cic->setParam("special_mode",mode) &&
-	    cic->status(SignallingCircuit::Connected,true))) {
+	if (!cic->setParam("rtp_forward",String::boolText(rtpFwd))) {
 	    msg.setParam("error","failure");
-	    msg.setParam("reason","Circuit does not support media change");
+	    msg.setParam("reason","Circuit does not support RTP forward");
 	    return false;
 	}
 	m_rtpForward = cic->getBoolParam("rtp_forward");
 	if (m_rtpForward && hadRtp)
 	    clearEndpoint();
-	Message m("call.update");
-	complete(m);
-	m.addParam("operation","request");
-	m.addParam("mandatory",String::boolText(true));
-	cic->getParams(m,"rtp");
-	if (Engine::dispatch(m))
+	m_nextModes.clear();
+	if (initiateMedia(msg,cic,modes))
 	    return true;
 	msgDrop(msg,"nomedia");
     }
-    else if (operation == "reject")
+    else if (operation == "reject") {
+	if (initiateMedia(msg,cic,m_nextModes))
+	    return true;
 	msgDrop(msg,"nomedia");
+    }
     return false;
+}
+
+// Attempt to initiate media change from a list of modes
+bool SigChannel::initiateMedia(Message& msg, SignallingCircuit* cic, String& modes)
+{
+    while (modes) {
+	String mode;
+	int pos = modes.find(',');
+	if (pos > 0) {
+	    mode = modes.substr(0,pos);
+	    modes = modes.substr(pos+1);
+	}
+	else if (pos < 0) {
+	    mode = modes;
+	    modes.clear();
+	}
+	else {
+	    modes = modes.substr(1);
+	    continue;
+	}
+	if (initiateMedia(msg,cic,mode,modes.null())) {
+	    m_nextModes = modes;
+	    return true;
+	}
+    }
+    return false;
+}
+
+// Attempt to initiate media change for a single mode
+bool SigChannel::initiateMedia(Message& msg, SignallingCircuit* cic,
+    const String& mode, bool mandatory)
+{
+    DDebug(this,DebugAll,"Attempting to initiate mode '%s'",mode.c_str());
+    if (!(cic->setParam("special_mode",mode) &&
+	cic->status(SignallingCircuit::Connected,true))) {
+	msg.setParam("error","failure");
+	msg.setParam("reason","Circuit does not support media change");
+	return false;
+    }
+    Message m("call.update");
+    complete(m);
+    m.addParam("operation","request");
+    m.addParam("mandatory",String::boolText(mandatory));
+    cic->getParams(m,"rtp");
+    if (!Engine::dispatch(m))
+	return false;
+    msg.clearParam("error");
+    msg.clearParam("reason");
+    return true;
 }
 
 bool SigChannel::notifyMedia(Message& msg)
@@ -1656,6 +1708,8 @@ bool SigChannel::notifyMedia(Message& msg)
     msg = "rtp";
     bool ok = cic->setParams(msg) && cic->status(SignallingCircuit::Connected,true);
     msg = tmp;
+    if (ok)
+	m_nextModes.clear();
     return ok;
 }
 

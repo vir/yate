@@ -365,6 +365,7 @@ void RegfilePlugin::initialize()
 	m_init = true;
 	s_create = s_cfg.getBoolValue("general","autocreate",false);
 	String conf = s_cfg.getValue("general","file");
+	Engine::self()->runParams().replaceParams(conf);
 	if (conf) {
 	    s_accounts = conf;
 	    s_accounts.load();

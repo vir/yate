@@ -222,7 +222,7 @@ void IAXEngine::readSocket(SocketAddr& addr)
 	    if (!m_socket.canRetry())
 		Debug(this,DebugWarn,"Socket read error: %s (%d)",
 		    ::strerror(m_socket.error()),m_socket.error());
-	    Thread::msleep(1,true);
+	    Thread::idle(true);
 	    continue;
 	}
 	addFrame(addr,buf,len);

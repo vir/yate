@@ -26,6 +26,11 @@
 ;  be sent through the signalling channel if any
 ;dtmfinband=no
 
+; datafile: string: File to save/restore trunks data (circuits lock status)
+; Defaults to ysigdata.conf located in current config directory
+; If set the file must contain the path (relative or absolute)
+; This parameter is applied on reload
+;datafile=
 
 ; Each section except [general] can have some common parameters
 

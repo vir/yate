@@ -201,6 +201,11 @@ public:
     bool initSection(NamedList* sect);
     // Copy outgoing message parameters
     void copySigMsgParams(SignallingEvent* event, const NamedList& params, const char* prePrefix = "o");
+    // Load a trunk's section from data file. Trunk name must be set in list name
+    // Return true if found
+    bool loadTrunkData(NamedList& list);
+    // Save a trunk's section to data file
+    bool saveTrunkData(const NamedList& list);
     static const TokenDict s_operations[];
 private:
     // Handle command complete requests
@@ -232,6 +237,7 @@ private:
     void status(SigTopmost* topmost, String& retVal);
 
     SignallingEngine* m_engine;          // The signalling engine
+    String m_dataFile;                   // Trunks data file (protected by m_trunksMutex)
     ObjList m_trunks;                    // Trunk list
     Mutex m_trunksMutex;                 // Lock trunk list operations
     ObjList m_topmost;                   // Topmost non-trunk list
@@ -666,7 +672,6 @@ static SigDriver plugin;
 static SigFactory factory;
 static SigNotifier s_notifier;
 static Configuration s_cfg;
-static Configuration s_cfgData;
 static const String s_noPrefixParams = "format,earlymedia";
 
 static const char s_miniHelp[] = "sigdump component [filename]";
@@ -2649,10 +2654,10 @@ void SigDriver::initialize()
     Lock2 lock(m_trunksMutex,m_topmostMutex);
     s_cfg = Engine::configFile("ysigchan");
     s_cfg.load();
+    m_dataFile = s_cfg.getValue("general","datafile",Engine::configFile("ysigdata"));
+    Engine::self()->runParams().replaceParams(m_dataFile);
     // Startup
     if (!m_engine) {
-	s_cfgData = Engine::configFile("ysigdata");
-	s_cfgData.load(false);
 	setup();
 	installRelay(Masquerade);
 	installRelay(Halt);
@@ -2702,6 +2707,34 @@ bool SigDriver::initSection(NamedList* sect)
     else if (type & SigFactory::SigTopMost)
 	ret = initTopmost(*sect,type);
     return ret;
+}
+
+// Load a trunk's section from data file. Return true if found
+bool SigDriver::loadTrunkData(NamedList& list)
+{
+    if (!list)
+	return false;
+    Lock lock(m_trunksMutex);
+    Configuration data(m_dataFile);
+    data.load(false);
+    NamedList* sect = data.getSection(list);
+    if (sect)
+	list.copyParams(*sect);
+    return sect != 0;
+}
+
+// Save a trunk's section to data file
+bool SigDriver::saveTrunkData(const NamedList& list)
+{
+    if (!list)
+	return false;
+    Lock lock(m_trunksMutex);
+    Configuration data(m_dataFile);
+    data.load(false);
+    data.clearSection(list);
+    NamedList* tmp = data.createSection(list);
+    tmp->copyParams(list);
+    return data.save();
 }
 
 
@@ -3009,14 +3042,14 @@ bool SigSS7Isup::create(NamedList& params, String& error)
 	return false;
 
     // Load circuits lock state from file
-    NamedList* sect = s_cfgData.getSection(name());
-    if (sect) {
+    NamedList sect(name());
+    if (plugin.loadTrunkData(sect)) {
 	DDebug(&plugin,DebugAll,
 	    "SigSS7Isup('%s'). Loading circuits lock state from config [%p]",
 	    name().c_str(),this);
-	unsigned int n = sect->count();
+	unsigned int n = sect.count();
 	for (unsigned int i = 0; i < n; i++) {
-	    NamedString* ns = sect->getParam(i);
+	    NamedString* ns = sect.getParam(i);
 	    if (!ns)
 		continue;
 	    unsigned int code = ns->name().toInteger(0);
@@ -3120,6 +3153,9 @@ bool SigSS7Isup::verifyController(const NamedList* params, bool save)
 	isup()->buildVerifyEvent(tmp);
 	params = &tmp;
     }
+    // Load config
+    NamedList sect(name());
+    plugin.loadTrunkData(sect);
 
     Lock lock(m_controller);
     SignallingCircuitGroup* group = m_controller->circuits();
@@ -3128,11 +3164,6 @@ bool SigSS7Isup::verifyController(const NamedList* params, bool save)
     DDebug(&plugin,DebugInfo,"SigSS7Isup('%s'). Verifying circuits state [%p]",
 	name().c_str(),this);
     Lock lockGroup(group);
-    NamedList* sect = s_cfgData.getSection(name());
-    if (!sect) {
-	s_cfgData.createSection(name());
-	sect = s_cfgData.getSection(name());
-    }
     bool changed = false;
     // Save local changed maintenance status
     // Save all remote lock flags (except for changed)
@@ -3144,7 +3175,7 @@ bool SigSS7Isup::verifyController(const NamedList* params, bool save)
 	// Param exists and remote state didn't changed: check local
 	//  maintenance flag against params's value (save if last state
         //  is not equal to the current one)
-	NamedString* cicParam = sect->getParam(code);
+	NamedString* cicParam = sect.getParam(code);
 	if (cicParam && !cic->locked(SignallingCircuit::LockRemoteChg)) {
 	    int cicFlags = 0;
 	    SignallingUtils::encodeFlags(0,cicFlags,*cicParam,SignallingCircuit::s_lockNames);
@@ -3178,7 +3209,7 @@ bool SigSS7Isup::verifyController(const NamedList* params, bool save)
 	    DDebug(&plugin,DebugInfo,
 		"SigSS7Isup('%s'). Saving cic %s flags 0x%x '%s' (all=0x%x) [%p]",
 		name().c_str(),code.c_str(),flags,tmp.c_str(),cic->locked(-1),this);
-	    sect->setParam(code,tmp);
+	    sect.setParam(code,tmp);
 	    changed = true;
 	}
 	cic->resetLock(SignallingCircuit::LockRemoteChg);
@@ -3187,7 +3218,7 @@ bool SigSS7Isup::verifyController(const NamedList* params, bool save)
     lock.drop();
 
     if (changed && save)
-	s_cfgData.save();
+	plugin.saveTrunkData(sect);
     return changed;
 }
 

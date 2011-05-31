@@ -127,7 +127,8 @@ void CdrFilePlugin::initialize()
 {
     Output("Initializing module CdrFile");
     Configuration cfg(Engine::configFile("cdrfile"));
-    const char *file = cfg.getValue("general","file");
+    String file = cfg.getValue("general","file");
+    Engine::self()->runParams().replaceParams(file);
     if (file && !m_handler) {
 	m_handler = new CdrFileHandler("call.cdr");
 	Engine::install(m_handler);

@@ -1,3 +1,12 @@
+yate (3.3.3.svn4421) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4421: + Made the CDR and registration
+    filenames parametrizable.  + Made trunks data file configurable.
+    Load it each time save/restore is needed.  + Use default thread
+    sleep value when failed to read data from socket.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 01 Jun 2011 02:19:24 +0400
+
 yate (3.3.3.svn4418) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4418: + Allow forcing the SDP parser to

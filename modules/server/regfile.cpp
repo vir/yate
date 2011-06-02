@@ -129,6 +129,8 @@ bool expired(const NamedList& list, unsigned int time)
 
 bool AuthHandler::received(Message &msg)
 {
+    if (!msg.getBoolValue("auth_regfile",true))
+	return false;
     String username(msg.getValue("username"));
     if (username.null() || username == s_general)
 	return false;

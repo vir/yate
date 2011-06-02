@@ -85,6 +85,8 @@ void CdrFileHandler::init(const char *fname, bool tabsep, const char* format)
 
 bool CdrFileHandler::received(Message &msg)
 {
+    if (!msg.getBoolValue("cdrwrite_cdrfile",true))
+	return false;
     String op(msg.getValue("operation"));
     if (op != "finalize")
 	return false;

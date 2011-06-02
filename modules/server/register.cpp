@@ -436,6 +436,8 @@ bool AAAHandler::received(Message& msg)
 	break;
 	case Auth:
 	{
+	    if (!msg.getBoolValue("auth_register",true))
+		return false;
 	    Message m("database");
 	    prepareQuery(m,account,query,true);
 	    if (Engine::dispatch(m))
@@ -550,6 +552,8 @@ bool CDRHandler::loadQuery()
 
 bool CDRHandler::received(Message& msg)
 {
+    if (!msg.getBoolValue("cdrwrite_register",true))
+	return false;
     if (m_account.null())
 	return false;
     // Don't update CDR if told so

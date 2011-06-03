@@ -444,7 +444,8 @@ MGCPEvent* MGCPTransaction::checkResponse(u_int64_t time)
 {
     if (!m_response)
 	return 0;
-    if (m_response->params.getParam("k") || m_response->params.getParam("K")) {
+    if (m_response->params.getParam(YSTRING("k")) ||
+	m_response->params.getParam(YSTRING("K"))) {
 	m_ack = new MGCPMessage(this,0);
 	send(m_ack);
     }

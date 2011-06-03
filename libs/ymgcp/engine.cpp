@@ -140,26 +140,26 @@ MGCPEngine::~MGCPEngine()
 // Initialize this engine
 void MGCPEngine::initialize(const NamedList& params)
 {
-    int level = params.getIntValue("debuglevel");
+    int level = params.getIntValue(YSTRING("debuglevel"));
     if (level)
 	debugLevel(level);
 
-    m_allowUnkCmd = params.getBoolValue("allow_unknown_cmd",false);
-    int val = params.getIntValue("retrans_interval",TR_RETRANS_INTERVAL);
+    m_allowUnkCmd = params.getBoolValue(YSTRING("allow_unknown_cmd"),false);
+    int val = params.getIntValue(YSTRING("retrans_interval"),TR_RETRANS_INTERVAL);
     m_retransInterval = 1000 * (val < TR_RETRANS_INTERVAL_MIN ? TR_RETRANS_INTERVAL_MIN : val);
-    val = params.getIntValue("retrans_count",TR_RETRANS_COUNT);
+    val = params.getIntValue(YSTRING("retrans_count"),TR_RETRANS_COUNT);
     m_retransCount = (val < TR_RETRANS_COUNT_MIN ? TR_RETRANS_COUNT_MIN : val);
-    val = params.getIntValue("extra_time_to_live",TR_EXTRA_TIME);
+    val = params.getIntValue(YSTRING("extra_time_to_live"),TR_EXTRA_TIME);
     m_extraTime = 1000 * (val < TR_EXTRA_TIME_MIN ? TR_EXTRA_TIME_MIN : val);
 
     if (!m_initialized) {
-	val = params.getIntValue("max_recv_packet",RECV_BUF_LEN);
+	val = params.getIntValue(YSTRING("max_recv_packet"),RECV_BUF_LEN);
 	m_maxRecvPacket = val < RECV_BUF_LEN ? RECV_BUF_LEN : val;
     }
 
-    m_parseParamToLower = params.getBoolValue("lower_case_params",true);
-    m_provisional = params.getBoolValue("send_provisional",true);
-    m_ackRequest = params.getBoolValue("request_ack",true);
+    m_parseParamToLower = params.getBoolValue(YSTRING("lower_case_params"),true);
+    m_provisional = params.getBoolValue(YSTRING("send_provisional"),true);
+    m_ackRequest = params.getBoolValue(YSTRING("request_ack"),true);
 
     // Bind socket if not valid
     if (!m_socket.valid()) {
@@ -385,9 +385,9 @@ bool MGCPEngine::receive(unsigned char* buffer, SocketAddr& addr)
 	// Command messages may contain ACK'd incoming transaction's responses
 	// See RFC 3435: 3.2.2.19 and 3.5.1
 	if (msg->isCommand()) {
-	    String s = msg->params.getValue("k");
+	    String s = msg->params.getValue(YSTRING("k"));
 	    if (!(s || m_parseParamToLower))
-		s = msg->params.getValue("K");
+		s = msg->params.getValue(YSTRING("K"));
 	    if (s) {
 		unsigned int len = 0;
 		unsigned int* trList = decodeAck(s,len);

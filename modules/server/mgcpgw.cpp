@@ -146,32 +146,32 @@ bool YMGCPEngine::processEvent(MGCPTransaction* trans, MGCPMessage* msg)
     if (!msg)
 	return false;
     if (!trans->userData() && !trans->outgoing() && msg->isCommand()) {
-	if (msg->name() == "CRCX") {
+	if (msg->name() == YSTRING("CRCX")) {
 	    // create connection
 	    if (!createConn(trans,msg))
 		trans->setResponse(500); // unknown endpoint
 	    return true;
 	}
-	if ((msg->name() == "DLCX") || // delete
-	    (msg->name() == "MDCX") || // modify
-	    (msg->name() == "AUCX")) { // audit
+	if ((msg->name() == YSTRING("DLCX")) || // delete
+	    (msg->name() == YSTRING("MDCX")) || // modify
+	    (msg->name() == YSTRING("AUCX"))) { // audit
 	    // connection must exist already
-	    chan = splugin.findConn(msg->params.getParam("i"),MGCPChan::ConnId);
+	    chan = splugin.findConn(msg->params.getParam(YSTRING("i")),MGCPChan::ConnId);
 	    if (chan)
 		return chan->processEvent(trans,msg);
 	    trans->setResponse(515); // no connection
 	    return true;
 	}
-	if (msg->name() == "RQNT") {
+	if (msg->name() == YSTRING("RQNT")) {
 	    // request notify
-	    chan = splugin.findConn(msg->params.getParam("x"),MGCPChan::NtfyId);
+	    chan = splugin.findConn(msg->params.getParam(YSTRING("x")),MGCPChan::NtfyId);
 	    if (chan)
 		return chan->processEvent(trans,msg);
 	}
-	if (msg->name() == "EPCF") {
+	if (msg->name() == YSTRING("EPCF")) {
 	    // endpoint configuration
 	    NamedList params("");
-	    bool standby = msg->params.getBoolValue("x-standby",s_standby);
+	    bool standby = msg->params.getBoolValue(YSTRING("x-standby"),s_standby);
 	    if (standby != s_standby) {
 		params << "Switching to " << (standby ? "standby" : "active") << " mode";
 		Debug(this,DebugNote,"%s",params.c_str());
@@ -182,7 +182,7 @@ bool YMGCPEngine::processEvent(MGCPTransaction* trans, MGCPMessage* msg)
 	    trans->setResponse(200,&params);
 	    return true;
 	}
-	if (msg->name() == "AUEP") {
+	if (msg->name() == YSTRING("AUEP")) {
 	    // audit endpoint
 	    NamedList params("");
 	    params.addParam("MD",String(s_engine->maxRecvPacket()));
@@ -203,7 +203,7 @@ bool YMGCPEngine::processEvent(MGCPTransaction* trans, MGCPMessage* msg)
 bool YMGCPEngine::createConn(MGCPTransaction* trans, MGCPMessage* msg)
 {
     String id = msg->endpointId();
-    const char* connId = msg->params.getValue("i");
+    const char* connId = msg->params.getValue(YSTRING("i"));
     DDebug(this,DebugInfo,"YMGCPEngine::createConn() id='%s' connId='%s'",id.c_str(),connId);
     if (connId && splugin.findConn(connId,MGCPChan::ConnId)) {
 	trans->setResponse(539,"Connection exists");
@@ -352,7 +352,7 @@ bool MGCPChan::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
     params.addParam("I",address());
     if (s_cluster || m_standby)
 	params.addParam("x-standby",String::boolText(m_standby));
-    if (mm->name() == "DLCX") {
+    if (mm->name() == YSTRING("DLCX")) {
 	disconnect();
 	status("deleted");
 	clearEndpoint();
@@ -360,8 +360,8 @@ bool MGCPChan::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 	tr->setResponse(250,&params);
 	return true;
     }
-    if (mm->name() == "MDCX") {
-	NamedString* param = mm->params.getParam("z2");
+    if (mm->name() == YSTRING("MDCX")) {
+	NamedString* param = mm->params.getParam(YSTRING("z2"));
 	if (param) {
 	    // native connect requested
 	    RefPointer<MGCPChan> chan2 = splugin.findConn(*param,MGCPChan::ConnId);
@@ -369,12 +369,12 @@ bool MGCPChan::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 		tr->setResponse(515); // no connection
 		return true;
 	    }
-	    if (!connect(chan2,mm->params.getValue("x-reason","bridged"))) {
+	    if (!connect(chan2,mm->params.getValue(YSTRING("x-reason"),"bridged"))) {
 		tr->setResponse(400); // unspecified error
 		return true;
 	    }
 	}
-	param = mm->params.getParam("x");
+	param = mm->params.getParam(YSTRING("x"));
 	if (param)
 	    m_ntfyId = *param;
 	rqntParams(mm);
@@ -388,17 +388,17 @@ bool MGCPChan::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 	    if (Engine::dispatch(m)) {
 		copyRename(params,"x-localip",m,"localip");
 		copyRename(params,"x-localport",m,"localport");
-		m_rtpId = m.getValue("rtpid",m_rtpId);
+		m_rtpId = m.getValue(YSTRING("rtpid"),m_rtpId);
 	    }
 	}
 	tr->setResponse(200,&params);
 	return true;
     }
-    if (mm->name() == "AUCX") {
+    if (mm->name() == YSTRING("AUCX")) {
 	tr->setResponse(200,&params);
 	return true;
     }
-    if (mm->name() == "RQNT") {
+    if (mm->name() == YSTRING("RQNT")) {
 	tr->setResponse(rqntParams(mm) ? 200 : 538,&params);
 	return true;
     }
@@ -411,7 +411,7 @@ bool MGCPChan::rqntParams(const MGCPMessage* mm)
 	return false;
     bool ok = true;
     // what we are requested to notify back
-    const NamedString* req = mm->params.getParam("r");
+    const NamedString* req = mm->params.getParam(YSTRING("r"));
     if (req) {
 	ObjList* lst = req->split(',');
 	for (ObjList* item = lst->skipNull(); item; item = item->skipNext())
@@ -419,7 +419,7 @@ bool MGCPChan::rqntParams(const MGCPMessage* mm)
 	delete lst;
     }
     // what we must signal now
-    req = mm->params.getParam("s");
+    req = mm->params.getParam(YSTRING("s"));
     if (req) {
 	ObjList* lst = req->split(',');
 	for (ObjList* item = lst->skipNull(); item; item = item->skipNext())
@@ -434,8 +434,8 @@ bool MGCPChan::initialEvent(MGCPTransaction* tr, MGCPMessage* mm, const MGCPEndp
     Debug(this,DebugInfo,"MGCPChan::initialEvent(%p,%p,'%s') [%p]",
 	tr,mm,id.id().c_str(),this);
     m_connEp = id.id();
-    m_callId = mm->params.getValue("c");
-    m_ntfyId = mm->params.getValue("x");
+    m_callId = mm->params.getValue(YSTRING("c"));
+    m_ntfyId = mm->params.getValue(YSTRING("x"));
     rqntParams(mm);
 
     if (id.user() == "gigi")
@@ -458,7 +458,7 @@ bool MGCPChan::initialEvent(MGCPTransaction* tr, MGCPMessage* mm, const MGCPEndp
 	    params.addParam("x-standby",String::boolText(m_standby));
 	copyRename(params,"x-localip",*m,"localip");
 	copyRename(params,"x-localport",*m,"localport");
-	m_rtpId = m->getValue("rtpid");
+	m_rtpId = m->getValue(YSTRING("rtpid"));
 	delete m;
 	tr->setResponse(200,&params);
 	DummyCall* dummy = new DummyCall;
@@ -547,11 +547,11 @@ void MGCPPlugin::initialize()
     Output("Initializing module MGCP Gateway");
     Configuration cfg(Engine::configFile("mgcpgw"));
     setup();
-    NamedList* sect = cfg.getSection("engine");
+    NamedList* sect = cfg.getSection(YSTRING("engine"));
     if (s_engine && sect)
 	s_engine->initialize(*sect);
     while (!s_engine) {
-	if (!(sect && sect->getBoolValue("enabled",true)))
+	if (!(sect && sect->getBoolValue(YSTRING("enabled"),true)))
 	    break;
 	s_started = Time::secNow();
 	s_standby = cfg.getBoolValue("general","standby",false);
@@ -567,13 +567,13 @@ void MGCPPlugin::initialize()
 	    if (name.startSkip("ep") && name) {
 		MGCPEndpoint* ep = new MGCPEndpoint(
 		    s_engine,
-		    sect->getValue("local_user",name),
-		    sect->getValue("local_host",s_engine->address().host()),
-		    sect->getIntValue("local_port")
+		    sect->getValue(YSTRING("local_user"),name),
+		    sect->getValue(YSTRING("local_host"),s_engine->address().host()),
+		    sect->getIntValue(YSTRING("local_port"))
 		);
 		MGCPEpInfo* ca = ep->append(0,
-		    sect->getValue("remote_host"),
-		    sect->getIntValue("remote_port",0)
+		    sect->getValue(YSTRING("remote_host")),
+		    sect->getIntValue(YSTRING("remote_port"),0)
 		);
 		if (ca) {
 		    if (sect->getBoolValue("announce",true)) {

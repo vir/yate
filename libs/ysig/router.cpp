@@ -337,20 +337,20 @@ SS7Router::SS7Router(const NamedList& params)
 	    &params,this,tmp.c_str());
     }
 #endif
-    const String* tr = params.getParam("transfer");
+    const String* tr = params.getParam(YSTRING("transfer"));
     if (!TelEngine::null(tr)) {
-	m_transferSilent = (*tr == "silent");
+	m_transferSilent = (*tr == YSTRING("silent"));
 	m_transfer = !m_transferSilent && tr->toBoolean();
     }
-    m_autoAllowed = params.getBoolValue("autoallow",m_autoAllowed);
-    m_sendUnavail = params.getBoolValue("sendupu",m_sendUnavail);
-    m_sendProhibited = params.getBoolValue("sendtfp",m_sendProhibited);
+    m_autoAllowed = params.getBoolValue(YSTRING("autoallow"),m_autoAllowed);
+    m_sendUnavail = params.getBoolValue(YSTRING("sendupu"),m_sendUnavail);
+    m_sendProhibited = params.getBoolValue(YSTRING("sendtfp"),m_sendProhibited);
     m_restart.interval(params,"starttime",5000,(m_transfer ? 60000 : 10000),false);
     m_isolate.interval(params,"isolation",500,1000,true);
     m_routeTest.interval(params,"testroutes",10000,50000,true),
     m_trafficOk.interval(m_restart.interval() + 4000);
     m_trafficSent.interval(m_restart.interval() + 8000);
-    m_testRestricted = params.getBoolValue("testrestricted",m_testRestricted);
+    m_testRestricted = params.getBoolValue(YSTRING("testrestricted"),m_testRestricted);
     loadLocalPC(params);
 }
 
@@ -369,18 +369,18 @@ bool SS7Router::initialize(const NamedList* config)
     Debug(this,DebugInfo,"SS7Router::initialize(%p) [%p]%s",config,this,tmp.c_str());
 #endif
     if (config) {
-	debugLevel(config->getIntValue("debuglevel_router",
-	    config->getIntValue("debuglevel",-1)));
-	const String* tr = config->getParam("transfer");
+	debugLevel(config->getIntValue(YSTRING("debuglevel_router"),
+	    config->getIntValue(YSTRING("debuglevel"),-1)));
+	const String* tr = config->getParam(YSTRING("transfer"));
 	if (!TelEngine::null(tr)) {
-	    m_transferSilent = (*tr == "silent");
+	    m_transferSilent = (*tr == YSTRING("silent"));
 	    m_transfer = !m_transferSilent && tr->toBoolean(m_transfer);
 	}
-	setNI(SS7MSU::getNetIndicator(config->getValue("netindicator"),SS7MSU::National));
-	m_autoAllowed = config->getBoolValue("autoallow",m_autoAllowed);
-	m_sendUnavail = config->getBoolValue("sendupu",m_sendUnavail);
-	m_sendProhibited = config->getBoolValue("sendtfp",m_sendProhibited);
-	const String* param = config->getParam("management");
+	setNI(SS7MSU::getNetIndicator(config->getValue(YSTRING("netindicator")),SS7MSU::National));
+	m_autoAllowed = config->getBoolValue(YSTRING("autoallow"),m_autoAllowed);
+	m_sendUnavail = config->getBoolValue(YSTRING("sendupu"),m_sendUnavail);
+	m_sendProhibited = config->getBoolValue(YSTRING("sendtfp"),m_sendProhibited);
+	const String* param = config->getParam(YSTRING("management"));
 	const char* name = "ss7snm";
 	if (param) {
 	    if (*param && !param->toBoolean(false))
@@ -402,7 +402,7 @@ bool SS7Router::initialize(const NamedList* config)
 	    attach(m_mngmt = YSIGCREATE(SS7Management,&params));
 	}
     }
-    return m_started || (config && !config->getBoolValue("autostart")) || restart();
+    return m_started || (config && !config->getBoolValue(YSTRING("autostart"))) || restart();
 }
 
 void SS7Router::loadLocalPC(const NamedList& params)
@@ -1765,9 +1765,9 @@ void SS7Router::notify(SS7Layer3* network, int sls)
 
 bool SS7Router::control(NamedList& params)
 {
-    String* ret = params.getParam("completion");
-    const String* oper = params.getParam("operation");
-    const char* cmp = params.getValue("component");
+    String* ret = params.getParam(YSTRING("completion"));
+    const String* oper = params.getParam(YSTRING("operation"));
+    const char* cmp = params.getValue(YSTRING("component"));
     int cmd = -1;
     if (!TelEngine::null(oper))
 	cmd = oper->toInteger(s_dict_control,cmd);
@@ -1775,7 +1775,7 @@ bool SS7Router::control(NamedList& params)
     if (ret) {
 	if (oper && (cmd < 0))
 	    return false;
-	String part = params.getValue("partword");
+	String part = params.getValue(YSTRING("partword"));
 	if (cmp) {
 	    if (toString() != cmp)
 		return false;
@@ -1789,9 +1789,9 @@ bool SS7Router::control(NamedList& params)
     if (!(cmp && toString() == cmp))
 	return false;
 
-    m_autoAllowed = params.getBoolValue("autoallow",m_autoAllowed);
-    m_sendUnavail = params.getBoolValue("sendupu",m_sendUnavail);
-    m_sendProhibited = params.getBoolValue("sendtfp",m_sendProhibited);
+    m_autoAllowed = params.getBoolValue(YSTRING("autoallow"),m_autoAllowed);
+    m_sendUnavail = params.getBoolValue(YSTRING("sendupu"),m_sendUnavail);
+    m_sendProhibited = params.getBoolValue(YSTRING("sendtfp"),m_sendProhibited);
     String err;
     switch (cmd) {
 	case SS7Router::Pause:
@@ -1826,12 +1826,12 @@ bool SS7Router::control(NamedList& params)
 	case SS7MsgSNM::TFR:
 	case SS7MsgSNM::TFA:
 	    {
-		SS7PointCode::Type type = SS7PointCode::lookup(params.getValue("pointcodetype"));
+		SS7PointCode::Type type = SS7PointCode::lookup(params.getValue(YSTRING("pointcodetype")));
 		if (SS7PointCode::length(type) == 0) {
 		    err << "missing 'pointcodetype'";
 		    break;
 		}
-		const String* dest = params.getParam("destination");
+		const String* dest = params.getParam(YSTRING("destination"));
 		if (TelEngine::null(dest)) {
 		    err << "missing 'destination'";
 		    break;
@@ -1842,9 +1842,9 @@ bool SS7Router::control(NamedList& params)
 		    break;
 		}
 		if (SS7MsgSNM::RST == cmd || SS7MsgSNM::RSR == cmd) {
-		    const String* addr = params.getParam("back-address");
+		    const String* addr = params.getParam(YSTRING("back-address"));
 		    if (TelEngine::null(addr))
-			addr = params.getParam("address");
+			addr = params.getParam(YSTRING("address"));
 		    if (TelEngine::null(addr)) {
 			err = "missing 'address'";
 			break;
@@ -1876,9 +1876,9 @@ bool SS7Router::control(NamedList& params)
 		    m_mngmt->controlExecute(ctl);
 		    return true;
 		}
-		String src = params.getParam("source");
+		String src = params.getParam(YSTRING("source"));
 		if (src.null()) {
-		    const String* addr = params.getParam("address");
+		    const String* addr = params.getParam(YSTRING("address"));
 		    if (addr) {
 			ObjList* l = addr->split(',');
 			if (l && l->at(1))
@@ -1889,18 +1889,18 @@ bool SS7Router::control(NamedList& params)
 		if (src) {
 		    SS7PointCode opc;
 		    if (!opc.assign(src,type)) {
-			if (!params.getBoolValue("automatic"))
+			if (!params.getBoolValue(YSTRING("automatic")))
 			    err << "invalid source: " << src ;
 			break;
 		    }
 		    if (!setRouteSpecificState(type,pc,opc,routeState(static_cast<SS7MsgSNM::Type>(cmd)))) {
-			if (!params.getBoolValue("automatic"))
+			if (!params.getBoolValue(YSTRING("automatic")))
 			    err << "no such route: " << *dest << " from: " << src;
 			break;
 		    }
 		}
 		else if (!setRouteState(type,pc,routeState(static_cast<SS7MsgSNM::Type>(cmd)))) {
-		    if (!params.getBoolValue("automatic"))
+		    if (!params.getBoolValue(YSTRING("automatic")))
 			err << "no such route: " << *dest;
 		    break;
 		}

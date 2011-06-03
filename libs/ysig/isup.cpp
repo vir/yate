@@ -2062,7 +2062,7 @@ static void getMsgCompat(SS7MsgISUP* msg, bool& release, bool& cnf)
 {
     if (!msg)
 	return;
-    String* msgCompat = msg->params().getParam("MessageCompatInformation");
+    String* msgCompat = msg->params().getParam(YSTRING("MessageCompatInformation"));
     if (msgCompat) {
 	ObjList* l = msgCompat->split(',',false);
 	// Use a while() to make sure the list is destroyed
@@ -2209,7 +2209,7 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 	}
 	// Process received messages
 	msg = static_cast<SS7MsgISUP*>(dequeue());
-	if (msg && validMsgState(false,msg->type(),(msg->params().getParam("BackwardCallIndicators") != 0)))
+	if (msg && validMsgState(false,msg->type(),(msg->params().getParam(YSTRING("BackwardCallIndicators")) != 0)))
 	    switch (msg->type()) {
 		case SS7MsgISUP::IAM:
 		case SS7MsgISUP::CCR:
@@ -2237,7 +2237,7 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 		    break;
 		case SS7MsgISUP::SAM:
 		    setOverlapped(isCalledIncomplete(msg->params(),"SubsequentNumber"));
-		    msg->params().addParam("tone",msg->params().getValue("SubsequentNumber"));
+		    msg->params().addParam("tone",msg->params().getValue(YSTRING("SubsequentNumber")));
 		    msg->params().addParam("dialing",String::boolText(true));
 		    m_lastEvent = new SignallingEvent(SignallingEvent::Info,msg,this);
 		    break;
@@ -2380,7 +2380,7 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 		setOverlapped(isCalledIncomplete(m_iamMsg->params()));
 		if (m_overlap) {
 		    // Check for maximum number of digits allowed
-		    String* called = m_iamMsg->params().getParam("CalledPartyNumber");
+		    String* called = m_iamMsg->params().getParam(YSTRING("CalledPartyNumber"));
 		    if (called && called->length() > isup()->m_maxCalledDigits) {
 			m_samDigits = called->substr(isup()->m_maxCalledDigits);
 			*called = called->substr(0,isup()->m_maxCalledDigits);
@@ -2398,7 +2398,7 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 		if (event->message()) {
 		    copyUpper(m->params(),event->message()->params());
 		    m_inbandAvailable = m_inbandAvailable ||
-			event->message()->params().getBoolValue("earlymedia");
+			event->message()->params().getBoolValue(YSTRING("earlymedia"));
 		}
 		if (m_inbandAvailable)
 		    SignallingUtils::appendFlag(m->params(),"OptionalBackwardCallIndicators","inband");
@@ -2413,7 +2413,7 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 		if (event->message()) {
 		    copyUpper(m->params(),event->message()->params());
 		    m_inbandAvailable = m_inbandAvailable ||
-			event->message()->params().getBoolValue("earlymedia");
+			event->message()->params().getBoolValue(YSTRING("earlymedia"));
 		}
 		if (m_inbandAvailable)
 		    SignallingUtils::appendFlag(m->params(),"OptionalBackwardCallIndicators","inband");
@@ -2440,7 +2440,7 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 	    break;
 	case SignallingEvent::Generic:
 	    if (event->message()) {
-		const String& oper = event->message()->params()["operation"];
+		const String& oper = event->message()->params()[YSTRING("operation")];
 		if (oper != "transport")
 		    break;
 		if (!validMsgState(true,SS7MsgISUP::APM))
@@ -2474,7 +2474,7 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 	case SignallingEvent::Info:
 	    if (validMsgState(true,SS7MsgISUP::SAM)) {
 		mylock.drop();
-		transmitSAM(event->message()->params().getValue("tone"));
+		transmitSAM(event->message()->params().getValue(YSTRING("tone")));
 		result = true;
 		break;
 	    }
@@ -2498,9 +2498,9 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 // Get reserved circuit or this object
 void* SS7ISUPCall::getObject(const String& name) const
 {
-    if (name == "SignallingCircuit")
+    if (name == YSTRING("SignallingCircuit"))
 	return m_circuit;
-    if (name == "SS7ISUPCall")
+    if (name == YSTRING("SS7ISUPCall"))
 	return (void*)this;
     return SignallingCall::getObject(name);
 }
@@ -2601,23 +2601,23 @@ bool SS7ISUPCall::copyParamIAM(SS7MsgISUP* msg, bool outgoing, SignallingMessage
 	param(dest,src,"CallingPartyNumber.restrict","callerpres",isup()->m_numPresentation);
 	param(dest,src,"CallingPartyNumber.screened","callerscreening",isup()->m_numScreening);
 	param(dest,src,"CallingPartyNumber.complete","complete","true");
-	m_format = src.getValue("format",isup()->format());
+	m_format = src.getValue(YSTRING("format"),isup()->format());
 	dest.addParam("UserServiceInformation",m_format);
 	return true;
     }
     // Incoming call
-    m_format = dest.getValue("UserServiceInformation",isup()->format());
+    m_format = dest.getValue(YSTRING("UserServiceInformation"),isup()->format());
     dest.setParam("format",m_format);
-    dest.setParam("caller",dest.getValue("CallingPartyNumber"));
+    dest.setParam("caller",dest.getValue(YSTRING("CallingPartyNumber")));
     //dest.setParam("callername",dest.getValue(""));
-    dest.setParam("callernumtype",dest.getValue("CallingPartyNumber.nature"));
-    dest.setParam("callernumplan",dest.getValue("CallingPartyNumber.plan"));
-    dest.setParam("callerpres",dest.getValue("CallingPartyNumber.restrict"));
-    dest.setParam("callerscreening",dest.getValue("CallingPartyNumber.screened"));
-    dest.setParam("called",dest.getValue("CalledPartyNumber"));
-    dest.setParam("callednumtype",dest.getValue("CalledPartyNumber.nature"));
-    dest.setParam("callednumplan",dest.getValue("CalledPartyNumber.plan"));
-    dest.setParam("inn",dest.getValue("CalledPartyNumber.inn"));
+    dest.setParam("callernumtype",dest.getValue(YSTRING("CallingPartyNumber.nature")));
+    dest.setParam("callernumplan",dest.getValue(YSTRING("CallingPartyNumber.plan")));
+    dest.setParam("callerpres",dest.getValue(YSTRING("CallingPartyNumber.restrict")));
+    dest.setParam("callerscreening",dest.getValue(YSTRING("CallingPartyNumber.screened")));
+    dest.setParam("called",dest.getValue(YSTRING("CalledPartyNumber")));
+    dest.setParam("callednumtype",dest.getValue(YSTRING("CalledPartyNumber.nature")));
+    dest.setParam("callednumplan",dest.getValue(YSTRING("CalledPartyNumber.plan")));
+    dest.setParam("inn",dest.getValue(YSTRING("CalledPartyNumber.inn")));
     if (m_label.sls() != 0xff)
 	dest.setParam("sls",String((unsigned int)m_label.sls()));
     return true;
@@ -2670,9 +2670,9 @@ void SS7ISUPCall::setReason(const char* reason, SignallingMessage* msg,
 	m_location = location;
     }
     else if (msg) {
-	m_reason = msg->params().getValue("CauseIndicators",msg->params().getValue("reason"));
-	m_diagnostic = msg->params().getValue("CauseIndicators.diagnostic",diagnostic);
-	m_location = msg->params().getValue("CauseIndicators.location",location);
+	m_reason = msg->params().getValue(YSTRING("CauseIndicators"),msg->params().getValue(YSTRING("reason")));
+	m_diagnostic = msg->params().getValue(YSTRING("CauseIndicators.diagnostic"),diagnostic);
+	m_location = msg->params().getValue(YSTRING("CauseIndicators.location"),location);
     }
 }
 
@@ -2865,7 +2865,7 @@ bool SS7ISUPCall::needsTesting(const SS7MsgISUP* msg)
 {
     if ((m_state >= Testing) || !msg)
 	return false;
-    const String* naci = msg->params().getParam("NatureOfConnectionIndicators");
+    const String* naci = msg->params().getParam(YSTRING("NatureOfConnectionIndicators"));
     if (!naci)
 	return false;
     ObjList* list = naci->split(',',false);
@@ -2887,12 +2887,12 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 	    #define COPY_PARAM(param) \
 		m_sgmMsg->params().copyParam(sgm->params(),param); \
 		m_sgmMsg->params().copyParam(sgm->params(),param,'.');
-	    COPY_PARAM("AccessTranport")
-	    COPY_PARAM("UserToUserInformation")
-	    COPY_PARAM("MessageCompatInformation")
-	    COPY_PARAM("GenericDigits")
-	    COPY_PARAM("GenericNotification")
-	    COPY_PARAM("GenericNumber")
+	    COPY_PARAM(YSTRING("AccessTranport"))
+	    COPY_PARAM(YSTRING("UserToUserInformation"))
+	    COPY_PARAM(YSTRING("MessageCompatInformation"))
+	    COPY_PARAM(YSTRING("GenericDigits"))
+	    COPY_PARAM(YSTRING("GenericNotification"))
+	    COPY_PARAM(YSTRING("GenericNumber"))
 	    #undef COPY_PARAM
 	}
 	else
@@ -2907,8 +2907,8 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
     switch (m_sgmMsg->type()) {
 	case SS7MsgISUP::COT:
 	    {
-		const String* cont = m_sgmMsg->params().getParam("ContinuityIndicators");
-		bool ok = cont && (*cont == "success");
+		const String* cont = m_sgmMsg->params().getParam(YSTRING("ContinuityIndicators"));
+		bool ok = cont && (*cont == YSTRING("success"));
 		if (ok) {
 		    Debug(isup(),DebugNote,"Call(%u). Continuity check succeeded [%p]",
 			id(),this);
@@ -3141,7 +3141,7 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
 	    &params,this,tmp.c_str());
     }
 #endif
-    const char* stype = params.getValue("pointcodetype");
+    const char* stype = params.getValue(YSTRING("pointcodetype"));
     m_type = SS7PointCode::lookup(stype);
     if (m_type == SS7PointCode::Other) {
 	Debug(this,DebugWarn,"Invalid point code type '%s'",c_safe(stype));
@@ -3150,7 +3150,7 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
     if (m_type == SS7PointCode::ITU)
 	m_defaultSls = SlsCircuit;
 
-    m_format = params.getValue("format");
+    m_format = params.getValue(YSTRING("format"));
     if (-1 == lookup(m_format,SignallingUtils::dict(1,0),-1))
 	switch (m_type) {
 	    case SS7PointCode::ANSI:
@@ -3163,29 +3163,29 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
 		m_format = "alaw";
 	}
 
-    const char* rpc = params.getValue("remotepointcode");
+    const char* rpc = params.getValue(YSTRING("remotepointcode"));
     m_remotePoint = new SS7PointCode(0,0,0);
     if (!(m_remotePoint->assign(rpc,m_type) && m_remotePoint->pack(m_type))) {
 	Debug(this,DebugMild,"Invalid remotepointcode='%s'",rpc);
 	TelEngine::destruct(m_remotePoint);
     }
 
-    m_lockGroup = params.getBoolValue("lockgroup",m_lockGroup);
-    m_earlyAcm = params.getBoolValue("earlyacm",m_earlyAcm);
-    m_inn = params.getBoolValue("inn",m_inn);
-    m_numPlan = params.getValue("numplan");
+    m_lockGroup = params.getBoolValue(YSTRING("lockgroup"),m_lockGroup);
+    m_earlyAcm = params.getBoolValue(YSTRING("earlyacm"),m_earlyAcm);
+    m_inn = params.getBoolValue(YSTRING("inn"),m_inn);
+    m_numPlan = params.getValue(YSTRING("numplan"));
     if (-1 == lookup(m_numPlan,s_dict_numPlan,-1))
 	m_numPlan = "unknown";
-    m_numType = params.getValue("numtype");
+    m_numType = params.getValue(YSTRING("numtype"));
     if (-1 == lookup(m_numType,s_dict_nai,-1))
 	m_numType = "unknown";
-    m_numPresentation = params.getValue("presentation");
+    m_numPresentation = params.getValue(YSTRING("presentation"));
     if (-1 == lookup(m_numPresentation,s_dict_presentation,-1))
 	m_numPresentation = "allowed";
-    m_numScreening = params.getValue("screening");
+    m_numScreening = params.getValue(YSTRING("screening"));
     if (-1 == lookup(m_numScreening,s_dict_screening,-1))
 	m_numScreening = "user-provided";
-    m_callerCat = params.getValue("callercategory");
+    m_callerCat = params.getValue(YSTRING("callercategory"));
     if (-1 == lookup(m_callerCat,s_dict_callerCat,-1))
 	m_callerCat = "ordinary";
 
@@ -3202,15 +3202,15 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
     // Timers
     m_t9Interval = SignallingTimer::getInterval(params,"t9",ISUP_T9_MINVAL,0,ISUP_T9_MAXVAL,true);
 
-    m_continuity = params.getValue("continuity");
-    m_confirmCCR = params.getBoolValue("confirm_ccr",true);
-    m_dropOnUnknown = params.getBoolValue("drop_unknown",true);
-    m_ignoreGRSSingle = params.getBoolValue("ignore-grs-single");
-    m_ignoreCGBSingle = params.getBoolValue("ignore-cgb-single");
-    m_ignoreCGUSingle = params.getBoolValue("ignore-cgu-single");
-    m_duplicateCGB = params.getBoolValue("duplicate-cgb",
+    m_continuity = params.getValue(YSTRING("continuity"));
+    m_confirmCCR = params.getBoolValue(YSTRING("confirm_ccr"),true);
+    m_dropOnUnknown = params.getBoolValue(YSTRING("drop_unknown"),true);
+    m_ignoreGRSSingle = params.getBoolValue(YSTRING("ignore-grs-single"));
+    m_ignoreCGBSingle = params.getBoolValue(YSTRING("ignore-cgb-single"));
+    m_ignoreCGUSingle = params.getBoolValue(YSTRING("ignore-cgu-single"));
+    m_duplicateCGB = params.getBoolValue(YSTRING("duplicate-cgb"),
 	(SS7PointCode::ANSI == m_type || SS7PointCode::ANSI8 == m_type));
-    int testMsg = params.getIntValue("parttestmsg",s_names,SS7MsgISUP::UPT);
+    int testMsg = params.getIntValue(YSTRING("parttestmsg"),s_names,SS7MsgISUP::UPT);
     switch (testMsg) {
 	case SS7MsgISUP::CVT:
 	    if (SS7PointCode::ANSI != m_type && SS7PointCode::ANSI8 != m_type)
@@ -3221,14 +3221,14 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
 	case SS7MsgISUP::UPT:
 	    m_uptMessage = (SS7MsgISUP::Type)testMsg;
     }
-    m_ignoreUnkDigits = params.getBoolValue("ignore-unknown-digits",true);
-    m_defaultSls = params.getIntValue("sls",s_dict_callSls,m_defaultSls);
-    m_maxCalledDigits = params.getIntValue("maxcalleddigits",m_maxCalledDigits);
+    m_ignoreUnkDigits = params.getBoolValue(YSTRING("ignore-unknown-digits"),true);
+    m_defaultSls = params.getIntValue(YSTRING("sls"),s_dict_callSls,m_defaultSls);
+    m_maxCalledDigits = params.getIntValue(YSTRING("maxcalleddigits"),m_maxCalledDigits);
     if (m_maxCalledDigits < 1)
 	m_maxCalledDigits = 16;
 
-    setDebug(params.getBoolValue("print-messages",false),
-	params.getBoolValue("extended-debug",false));
+    setDebug(params.getBoolValue(YSTRING("print-messages"),false),
+	params.getBoolValue(YSTRING("extended-debug"),false));
 
     if (debugAt(DebugInfo)) {
 	String s;
@@ -3243,7 +3243,7 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
 	else
 	    s << "missing";
 	s << " SIF/SSF=" << (unsigned int)sif() << "/" << (unsigned int)ssf();
-	s << " lockcircuits=" << params.getValue("lockcircuits");
+	s << " lockcircuits=" << params.getValue(YSTRING("lockcircuits"));
 	s << " userpartavail=" << String::boolText(m_userPartAvail);
 	s << " lockgroup=" << String::boolText(m_lockGroup);
 	s << " mediareq=" << lookup(m_mediaRequired,s_mediaRequired);
@@ -3276,21 +3276,21 @@ bool SS7ISUP::initialize(const NamedList* config)
     Debug(this,DebugInfo,"SS7ISUP::initialize(%p) [%p]%s",config,this,tmp.c_str());
 #endif
     if (config) {
-	debugLevel(config->getIntValue("debuglevel_isup",
-	    config->getIntValue("debuglevel",-1)));
-	setDebug(config->getBoolValue("print-messages",false),
-	    config->getBoolValue("extended-debug",false));
-	m_lockGroup = config->getBoolValue("lockgroup",m_lockGroup);
-	m_earlyAcm = config->getBoolValue("earlyacm",m_earlyAcm);
-	m_continuity = config->getValue("continuity",m_continuity);
-	m_confirmCCR = config->getBoolValue("confirm_ccr",true);
-	m_dropOnUnknown = config->getBoolValue("drop_unknown",true);
-	m_ignoreGRSSingle = config->getBoolValue("ignore-grs-single");
-	m_ignoreCGBSingle = config->getBoolValue("ignore-cgb-single");
-	m_ignoreCGUSingle = config->getBoolValue("ignore-cgu-single");
-	m_duplicateCGB = config->getBoolValue("duplicate-cgb",
+	debugLevel(config->getIntValue(YSTRING("debuglevel_isup"),
+	    config->getIntValue(YSTRING("debuglevel"),-1)));
+	setDebug(config->getBoolValue(YSTRING("print-messages"),false),
+	    config->getBoolValue(YSTRING("extended-debug"),false));
+	m_lockGroup = config->getBoolValue(YSTRING("lockgroup"),m_lockGroup);
+	m_earlyAcm = config->getBoolValue(YSTRING("earlyacm"),m_earlyAcm);
+	m_continuity = config->getValue(YSTRING("continuity"),m_continuity);
+	m_confirmCCR = config->getBoolValue(YSTRING("confirm_ccr"),true);
+	m_dropOnUnknown = config->getBoolValue(YSTRING("drop_unknown"),true);
+	m_ignoreGRSSingle = config->getBoolValue(YSTRING("ignore-grs-single"));
+	m_ignoreCGBSingle = config->getBoolValue(YSTRING("ignore-cgb-single"));
+	m_ignoreCGUSingle = config->getBoolValue(YSTRING("ignore-cgu-single"));
+	m_duplicateCGB = config->getBoolValue(YSTRING("duplicate-cgb"),
 	    (SS7PointCode::ANSI == m_type || SS7PointCode::ANSI8 == m_type));
-	int testMsg = config->getIntValue("parttestmsg",s_names,SS7MsgISUP::UPT);
+	int testMsg = config->getIntValue(YSTRING("parttestmsg"),s_names,SS7MsgISUP::UPT);
 	switch (testMsg) {
 	    case SS7MsgISUP::CVT:
 		if (SS7PointCode::ANSI != m_type && SS7PointCode::ANSI8 != m_type)
@@ -3301,9 +3301,9 @@ bool SS7ISUP::initialize(const NamedList* config)
 	    case SS7MsgISUP::UPT:
 		m_uptMessage = (SS7MsgISUP::Type)testMsg;
 	}
-        m_ignoreUnkDigits = config->getBoolValue("ignore-unknown-digits",true);
-	m_defaultSls = config->getIntValue("sls",s_dict_callSls,m_defaultSls);
-	m_mediaRequired = (MediaRequired)config->getIntValue("needmedia",
+        m_ignoreUnkDigits = config->getBoolValue(YSTRING("ignore-unknown-digits"),true);
+	m_defaultSls = config->getIntValue(YSTRING("sls"),s_dict_callSls,m_defaultSls);
+	m_mediaRequired = (MediaRequired)config->getIntValue(YSTRING("needmedia"),
 	    s_mediaRequired,m_mediaRequired);
         // Timers
 	m_t9Interval = SignallingTimer::getInterval(*config,"t9",ISUP_T9_MINVAL,0,ISUP_T9_MAXVAL,true);
@@ -3373,9 +3373,9 @@ unsigned int SS7ISUP::setPointCode(const NamedList& params)
 	if (!ns)
 	    continue;
 	bool defPc = false;
-	if (ns->name() == "defaultpointcode")
+	if (ns->name() == YSTRING("defaultpointcode"))
 	    defPc = true;
-	else if (ns->name() != "pointcode")
+	else if (ns->name() != YSTRING("pointcode"))
 	    continue;
 	SS7PointCode* pc = new SS7PointCode(0,0,0);
 	if (pc->assign(*ns,m_type) && setPointCode(pc,defPc && !hadDef)) {
@@ -3436,7 +3436,7 @@ SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
     }
     SS7PointCode dest;
     SignallingCircuit* cic = 0;
-    const char* range = msg->params().getValue("circuits");
+    const char* range = msg->params().getValue(YSTRING("circuits"));
     reason.clear();
     Lock mylock(this);
     // Check
@@ -3446,7 +3446,7 @@ SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
 	    reason = "noconn";
 	    break;
 	}
-	String pc = msg->params().getValue("calledpointcode");
+	String pc = msg->params().getValue(YSTRING("calledpointcode"));
 	if (!(dest.assign(pc,m_type) && dest.pack(m_type))) {
 	    if (!m_remotePoint) {
 		Debug(this,DebugNote,
@@ -3474,13 +3474,13 @@ SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
     }
     SS7ISUPCall* call = 0;
     if (reason.null()) {
-	String* cicParams = msg->params().getParam("circuit_parameters");
+	String* cicParams = msg->params().getParam(YSTRING("circuit_parameters"));
 	if (cicParams) {
 	    NamedList* p = YOBJECT(NamedList,cicParams);
 	    if (p)
 		cic->setParams(*p);
 	}
-	int sls = msg->params().getIntValue("sls",s_dict_callSls,m_defaultSls);
+	int sls = msg->params().getIntValue(YSTRING("sls"),s_dict_callSls,m_defaultSls);
 	switch (sls) {
 	    case SlsCircuit:
 		if (cic) {
@@ -3674,8 +3674,8 @@ void SS7ISUP::timerTick(const Time& when)
 		continue;
 	    }
 	}
-	bool alert = msg->params().getBoolValue("isup_alert_maint");
-	const char* reason = msg->params().getValue("isup_pending_reason","");
+	bool alert = msg->params().getBoolValue(YSTRING("isup_alert_maint"));
+	const char* reason = msg->params().getValue(YSTRING("isup_pending_reason"),"");
 	Debug(this,!alert ? DebugAll : DebugMild,
 	    "Pending operation '%s' cic=%u reason='%s' timed out",
 	    msg->name(),msg->cic(),reason);
@@ -3742,15 +3742,15 @@ void SS7ISUP::timerTick(const Time& when)
 // Process a component control request
 bool SS7ISUP::control(NamedList& params)
 {
-    String* ret = params.getParam("completion");
-    const String* oper = params.getParam("operation");
-    const char* cmp = params.getValue("component");
+    String* ret = params.getParam(YSTRING("completion"));
+    const String* oper = params.getParam(YSTRING("operation"));
+    const char* cmp = params.getValue(YSTRING("component"));
     int cmd = oper ? oper->toInteger(s_dict_control,-1) : -1;
 
     if (ret) {
 	if (oper && (cmd < 0))
 	    return false;
-	String part = params.getValue("partword");
+	String part = params.getValue(YSTRING("partword"));
 	if (cmp) {
 	    if (toString() != cmp)
 		return false;
@@ -3773,7 +3773,7 @@ bool SS7ISUP::control(NamedList& params)
 	case SS7MsgISUP::UPT:
 	case SS7MsgISUP::CVT:
 	    {
-		unsigned int code = params.getIntValue("circuit",code1);
+		unsigned int code = params.getIntValue(YSTRING("circuit"),code1);
 		SS7MsgISUP* msg = new SS7MsgISUP((SS7MsgISUP::Type)cmd,code);
 		SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
 		mylock.drop();
@@ -3782,8 +3782,8 @@ bool SS7ISUP::control(NamedList& params)
 	    return true;
 	case SS7MsgISUP::CQM:
 	    {
-		unsigned int code = params.getIntValue("circuit",code1);
-		unsigned int range = params.getIntValue("range",1);
+		unsigned int code = params.getIntValue(YSTRING("circuit"),code1);
+		unsigned int range = params.getIntValue(YSTRING("range"),1);
 		SS7MsgISUP* msg = new SS7MsgISUP(SS7MsgISUP::CQM,code);
 		msg->params().addParam("RangeAndStatus",String(range));
 		SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
@@ -3793,7 +3793,7 @@ bool SS7ISUP::control(NamedList& params)
 	    return true;
 	case SS7MsgISUP::CCR:
 	    {
-		unsigned int code = params.getIntValue("circuit",code1);
+		unsigned int code = params.getIntValue(YSTRING("circuit"),code1);
 		// TODO: create a test call, not just send CCR
 		SS7MsgISUP* msg = new SS7MsgISUP(SS7MsgISUP::CCR,code);
 		SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
@@ -3816,7 +3816,7 @@ bool SS7ISUP::control(NamedList& params)
 	    return handleCicBlockCommand(params,cmd == SS7MsgISUP::BLK);
 	case SS7MsgISUP::RLC:
 	    {
-		int code = params.getIntValue("circuit");
+		int code = params.getIntValue(YSTRING("circuit"));
 		SignallingMessageTimer* pending = 0;
 		if (code > 0)
 		    pending = findPendingMessage(SS7MsgISUP::RSC,code,true);
@@ -3942,7 +3942,7 @@ SS7MSU* SS7ISUP::buildMSU(SS7MsgISUP::Type type, unsigned char sio,
 #endif
     ObjList exclude;
     plist = msgParams->params;
-    String prefix = params->getValue("message-prefix");
+    String prefix = params->getValue(YSTRING("message-prefix"));
     // first populate with mandatory fixed parameters
     while ((ptype = *plist++) != SS7MsgISUP::EndOfParameters) {
 	const IsupParam* param = getParamDesc(ptype);
@@ -4066,7 +4066,7 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
     }
 
     // Get parameter prefix
-    String prefix = msg.getValue("message-prefix");
+    String prefix = msg.getValue(YSTRING("message-prefix"));
 
     // Add protocol and message type
     switch (pcType) {
@@ -4213,13 +4213,13 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	ObjList* l = ns->split(',',false);
 	for (ObjList* ol = l->skipNull(); ol; ol = ol->skipNext()) {
 	    String* s = static_cast<String*>(ol->get());
-	    if (*s == "release") {
+	    if (*s == YSTRING("release")) {
 		release.append(ns->name().substr(pCompat.length()),",");
 		break;
 	    }
-	    if (*s == "cnf")
+	    if (*s == YSTRING("cnf"))
 		cnf.append(ns->name().substr(pCompat.length()),",");
-	    if (*s == "nopass-release")
+	    if (*s == YSTRING("nopass-release"))
 		npRelease.append(ns->name().substr(pCompat.length()),",");
 	}
 	TelEngine::destruct(l);
@@ -4259,7 +4259,7 @@ bool SS7ISUP::processParamCompat(const NamedList& list, unsigned int cic, bool* 
 {
     if (!cic)
 	return true;
-    const String& prefix = list["message-prefix"];
+    const String& prefix = list[YSTRING("message-prefix")];
     // Release call params
     String relCall = list[prefix + "parameters-unhandled-release"];
     relCall.append(list[prefix + "parameters-nopass-release"],",");
@@ -4466,10 +4466,10 @@ SignallingEvent* SS7ISUP::processCircuitEvent(SignallingCircuitEvent*& event,
 	    }
 	    break;
 	case SignallingCircuitEvent::Dtmf:
-	    if (event->getValue("tone")) {
+	    if (event->getValue(YSTRING("tone"))) {
 		SignallingMessage* msg = new SignallingMessage(event->c_str());
-		msg->params().addParam("tone",event->getValue("tone"));
-		msg->params().addParam("inband",event->getValue("inband",String::boolText(true)));
+		msg->params().addParam("tone",event->getValue(YSTRING("tone")));
+		msg->params().addParam("inband",event->getValue(YSTRING("inband"),String::boolText(true)));
 		ev = new SignallingEvent(SignallingEvent::Info,msg,call);
 		TelEngine::destruct(msg);
 	    }
@@ -4598,7 +4598,7 @@ void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 	// Q.764 2.8.2 - accept test calls even if the remote side is blocked
 	// Q.764 2.8.2.3 (xiv) - unblock remote side of the circuit for non-test calls
 	if ((msg->type() == SS7MsgISUP::CCR) ||
-	    (String(msg->params().getValue("CallingPartyCategory")) == "test")) {
+	    (msg->params()[YSTRING("CallingPartyCategory")] == YSTRING("test"))) {
 	    Debug(this,DebugInfo,"Received test call on circuit %u",msg->cic());
 	    flags = 0;
 	}
@@ -4641,12 +4641,12 @@ void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 unsigned int getRangeAndStatus(NamedList& nl, unsigned int minRange, unsigned int maxRange,
     unsigned int maxMap = 0, String** map = 0, unsigned int nCicsMax = 0)
 {
-    unsigned int range = nl.getIntValue("RangeAndStatus");
+    unsigned int range = nl.getIntValue(YSTRING("RangeAndStatus"));
     if (range < minRange || range > maxRange)
 	return 0;
     if (!maxMap)
 	return range;
-    NamedString* ns = nl.getParam("RangeAndStatus.map");
+    NamedString* ns = nl.getParam(YSTRING("RangeAndStatus.map"));
     if (!ns || ns->length() > maxMap || ns->length() < range)
 	return 0;
     if (map) {
@@ -4671,9 +4671,9 @@ static bool getGrpTypeInd(SS7ISUP* isup, SS7MsgISUP* msg, bool& hwFail)
 {
     if (!msg)
 	return false;
-    const String& s = msg->params()["GroupSupervisionTypeIndicator"];
-    hwFail = (s == "hw-failure");
-    if (hwFail || (s == "maintenance"))
+    const String& s = msg->params()[YSTRING("GroupSupervisionTypeIndicator")];
+    hwFail = (s == YSTRING("hw-failure"));
+    if (hwFail || (s == YSTRING("maintenance")))
 	return true;
     Debug(isup,DebugNote,"%s with unknown GroupSupervisionTypeIndicator=%s [%p]",
 	msg->name(),s.c_str(),isup);
@@ -4703,8 +4703,8 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    // TODO: check if this message was received in response to RSC, UBL, UBK, CGB, CGU
 	    Debug(this,DebugNote,"%s with cic=%u cause='%s' diagnostic='%s'",
 		msg->name(),msg->cic(),
-		msg->params().getValue("CauseIndicators"),
-		msg->params().getValue("CauseIndicators.diagnostic"));
+		msg->params().getValue(YSTRING("CauseIndicators")),
+		msg->params().getValue(YSTRING("CauseIndicators.diagnostic")));
 	    stopSGM = true;
 	    break;
 	case SS7MsgISUP::RLC: // Release Complete
@@ -4736,7 +4736,7 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		unsigned int n = getRangeAndStatus(msg->params(),1,31);
 		if (!n) {
 		    Debug(this,DebugNote,"%s with invalid range %s",msg->name(),
-			msg->params().getValue("RangeAndStatus"));
+			msg->params().getValue(YSTRING("RangeAndStatus")));
 		    break;
 		}
 		else if (n == 1 && m_ignoreGRSSingle) {
@@ -4777,7 +4777,7 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		SignallingMessageTimer* t = findPendingMessage(type,msg->cic(),true);
 		if (t) {
 		    SS7MsgISUP* m = static_cast<SS7MsgISUP*>(t->message());
-		    bool hw = m && m->params().getBoolValue("isup_pending_block_hwfail");
+		    bool hw = m && m->params().getBoolValue(YSTRING("isup_pending_block_hwfail"));
 		    DDebug(this,m ? DebugAll : DebugNote,"%s confirmed for pending cic=%u",
 			  block ? "BLK" : "UBL",msg->cic());
 		    TelEngine::destruct(t);
@@ -4800,8 +4800,8 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		unsigned int nCics = getRangeAndStatus(msg->params(),1,256,256,&srcMap,32);
 		if (!nCics) {
 		    Debug(this,DebugNote,"%s with invalid range %s or map=%s",msg->name(),
-			msg->params().getValue("RangeAndStatus"),
-			msg->params().getValue("RangeAndStatus.map"));
+			msg->params().getValue(YSTRING("RangeAndStatus")),
+			msg->params().getValue(YSTRING("RangeAndStatus.map")));
 		    break;
 		}
 		bool block = (msg->type() == SS7MsgISUP::CGA);
@@ -4813,11 +4813,11 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		String map;
 		while (m) {
 		    // Check type indicator
-		    bool hw = (m->params()["GroupSupervisionTypeIndicator"] == "hw-failure");
+		    bool hw = (m->params()[YSTRING("GroupSupervisionTypeIndicator")] == YSTRING("hw-failure"));
 		    if (hw != hwFail)
 			break;
 		    // Check map
-		    map = m->params()["RangeAndStatus.map"];
+		    map = m->params()[YSTRING("RangeAndStatus.map")];
 		    if (!map)
 			break;
 		    if (map.length() != nCics) {
@@ -4838,8 +4838,8 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		unlock();
 		if (!map) {
 		    Debug(this,DebugNote,"%s with unnacceptable range %s or map=%s",msg->name(),
-			msg->params().getValue("RangeAndStatus"),
-			msg->params().getValue("RangeAndStatus.map"));
+			msg->params().getValue(YSTRING("RangeAndStatus")),
+			msg->params().getValue(YSTRING("RangeAndStatus.map")));
 		    break;
 		}
 		for (unsigned int i = 0; i < map.length(); i++)
@@ -4861,8 +4861,8 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		unsigned int nCics = getRangeAndStatus(msg->params(),1,256,256,&srcMap,32);
 		if (!nCics) {
 		    Debug(this,DebugNote,"%s with invalid range %s or map=%s",msg->name(),
-			msg->params().getValue("RangeAndStatus"),
-			msg->params().getValue("RangeAndStatus.map"));
+			msg->params().getValue(YSTRING("RangeAndStatus")),
+			msg->params().getValue(YSTRING("RangeAndStatus.map")));
 		    break;
 		}
 		else if (nCics == 1 && ((block && m_ignoreCGBSingle) || (!block && m_ignoreCGUSingle))) {
@@ -5336,8 +5336,8 @@ bool SS7ISUP::handleCicBlockCommand(const NamedList& p, bool block)
 	return false;
     SS7MsgISUP* msg = 0;
     SS7MsgISUP::Type remove = SS7MsgISUP::Unknown;
-    bool force = p.getBoolValue("force");
-    String* param = p.getParam("circuit");
+    bool force = p.getBoolValue(YSTRING("force"));
+    String* param = p.getParam(YSTRING("circuit"));
     Lock mylock(this);
     if (param) {
 	SignallingCircuit* cic = circuits()->find(param->toInteger());
@@ -5349,10 +5349,10 @@ bool SS7ISUP::handleCicBlockCommand(const NamedList& p, bool block)
     }
     else {
 	// NOTE: we assume the circuits belongs to the same span
-	param = p.getParam("circuits");
+	param = p.getParam(YSTRING("circuits"));
 	if (TelEngine::null(param)) {
 	    Debug(this,DebugNote,"Circuit '%s' missing circuit(s)",
-		p.getValue("operation"));
+		p.getValue(YSTRING("operation")));
 	    return false;
 	}
 	// Parse the range
@@ -5362,7 +5362,7 @@ bool SS7ISUP::handleCicBlockCommand(const NamedList& p, bool block)
 	    SignallingCircuitRange* range = circuits()->findRange(*param);
 	    if (!(range && (count = range->count()))) {
 		Debug(this,DebugNote,"Circuit group '%s': invalid circuits=%s",
-		    p.getValue("operation"),param->c_str());
+		    p.getValue(YSTRING("operation")),param->c_str());
 		return false;
 	    }
 	    cics = new unsigned int[count];
@@ -5371,19 +5371,19 @@ bool SS7ISUP::handleCicBlockCommand(const NamedList& p, bool block)
 	}
 	if (count > 32) {
 	    Debug(this,DebugNote,"Circuit group '%s': too many circuits %u (max=32)",
-		p.getValue("operation"),count);
+		p.getValue(YSTRING("operation")),count);
 	    delete[] cics;
 	    return false;
 	}
 	// Check if all circuits can be (un)blocked
 	ObjList list;
-	bool maint = !p.getBoolValue("hwfail");
+	bool maint = !p.getBoolValue(YSTRING("hwfail"));
 	for (unsigned int i = 0; i < count; i++) {
 	    SignallingCircuit* c = circuits()->find(cics[i]);
 	    const char* reason = checkBlockCic(c,block,maint,force);
 	    if (reason) {
 		Debug(this,DebugNote,"Circuit group '%s' range=%s failed for cic=%u: %s",
-		    p.getValue("operation"),param->c_str(),cics[i],reason);
+		    p.getValue(YSTRING("operation")),param->c_str(),cics[i],reason);
 		delete[] cics;
 		return false;
 	    }
@@ -5413,7 +5413,7 @@ bool SS7ISUP::handleCicBlockCommand(const NamedList& p, bool block)
 	delete[] cics;
 	if (nCics != count) {
 	    Debug(this,DebugNote,"Circuit group '%s': invalid circuit map=%s",
-		p.getValue("operation"),param->c_str());
+		p.getValue(YSTRING("operation")),param->c_str());
 	    return false;
 	}
 	// Ok: block circuits and send the request

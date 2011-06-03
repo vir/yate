@@ -129,7 +129,7 @@ bool SS7Testing::initialize(const NamedList* config)
     Lock mylock(this);
     setParams(*config);
     bool ok = SS7Layer4::initialize(config);
-    if (ok && config->getBoolValue("autostart",false)) {
+    if (ok && config->getBoolValue(YSTRING("autostart"),false)) {
 	if (m_timer.interval() && m_lbl.length())
 	    m_timer.start();
 	sendTraffic();
@@ -139,15 +139,15 @@ bool SS7Testing::initialize(const NamedList* config)
 
 bool SS7Testing::control(NamedList& params)
 {
-    String* ret = params.getParam("completion");
-    const String* oper = params.getParam("operation");
-    const char* cmp = params.getValue("component");
+    String* ret = params.getParam(YSTRING("completion"));
+    const String* oper = params.getParam(YSTRING("operation"));
+    const char* cmp = params.getValue(YSTRING("component"));
     int cmd = oper ? oper->toInteger(s_dict_control,-1) : -1;
 
     if (ret) {
 	if (oper && (cmd < 0))
 	    return false;
-	String part = params.getValue("partword");
+	String part = params.getValue(YSTRING("partword"));
 	if (cmp) {
 	    if (toString() != cmp)
 		return false;
@@ -188,15 +188,15 @@ bool SS7Testing::control(NamedList& params)
 
 void SS7Testing::setParams(const NamedList& params, bool setSeq)
 {
-    if (!m_timer.interval() || params.getParam("interval"))
+    if (!m_timer.interval() || params.getParam(YSTRING("interval")))
 	m_timer.interval(params,"interval",20,1000,true);
-    m_len = params.getIntValue("length",m_len);
-    m_sharing = params.getBoolValue("sharing",m_sharing);
+    m_len = params.getIntValue(YSTRING("length"),m_len);
+    m_sharing = params.getBoolValue(YSTRING("sharing"),m_sharing);
     if (m_len > 1024)
 	m_len = 1024;
     if (setSeq || !m_seq)
-	m_seq = params.getIntValue("sequence",m_seq);
-    const String* lbl = params.getParam("address");
+	m_seq = params.getIntValue(YSTRING("sequence"),m_seq);
+    const String* lbl = params.getParam(YSTRING("address"));
     if (!TelEngine::null(lbl)) {
 	// TYPE,opc,dpc,sls,spare
 	SS7PointCode::Type t = SS7PointCode::Other;

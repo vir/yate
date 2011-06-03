@@ -282,9 +282,9 @@ bool SIGAdaptation::initialize(const NamedList* config)
 {
     if (transport())
 	return true;
-    NamedString* name = config->getParam("sig");
+    NamedString* name = config->getParam(YSTRING("sig"));
     if (!name)
-	name = config->getParam("basename");
+	name = config->getParam(YSTRING("basename"));
     if (name) {
 	DDebug(this,DebugInfo,"Creating transport for SIGTRAN UA [%p]",this);
 	NamedPointer* ptr = YOBJECT(NamedPointer,name);
@@ -513,8 +513,8 @@ SIGAdaptClient::SIGAdaptClient(const char* name, const NamedList* params,
 	Debug(this,DebugInfo,"SIGAdaptClient(%u,%u) created [%p]%s",
 	    payload,port,this,tmp.c_str());
 #endif
-	m_aspId = params->getIntValue("aspid",m_aspId);
-	m_traffic = (TrafficMode)params->getIntValue("traffic",s_trafficModes,m_traffic);
+	m_aspId = params->getIntValue(YSTRING("aspid"),m_aspId);
+	m_traffic = (TrafficMode)params->getIntValue(YSTRING("traffic"),s_trafficModes,m_traffic);
     }
 }
 
@@ -861,7 +861,7 @@ SS7M2PA::SS7M2PA(const NamedList& params)
     // Confirmation timer 1/2 t4
     m_confTimer.interval(params,"conf_timer",50,400,false);
     // Maximum unacknowledged messages, max_unack+1 will force an ACK
-    m_maxUnack = params.getIntValue("max_unack",4);
+    m_maxUnack = params.getIntValue(YSTRING("max_unack"),4);
     if (m_maxUnack > 10)
 	m_maxUnack = 10;
     DDebug(this,DebugAll,"Creating SS7M2PA [%p]",this);
@@ -882,13 +882,13 @@ bool SS7M2PA::initialize(const NamedList* config)
 	config->dump(tmp,"\r\n  ",'\'',true);
     Debug(this,DebugInfo,"SS7M2PA::initialize(%p) [%p]%s",config,this,tmp.c_str());
 #endif
-    m_dumpMsg = config && config->getBoolValue("dumpMsg",false);
-    m_autostart = !config || config->getBoolValue("autostart",true);
-    m_autoEmergency = !config || config->getBoolValue("autoemergency",true);
+    m_dumpMsg = config && config->getBoolValue(YSTRING("dumpMsg"),false);
+    m_autostart = !config || config->getBoolValue(YSTRING("autostart"),true);
+    m_autoEmergency = !config || config->getBoolValue(YSTRING("autoemergency"),true);
     if (config && !transport()) {
-	NamedString* name = config->getParam("sig");
+	NamedString* name = config->getParam(YSTRING("sig"));
 	if (!name)
-	    name = config->getParam("basename");
+	    name = config->getParam(YSTRING("basename"));
 	if (name) {
 	    NamedPointer* ptr = YOBJECT(NamedPointer,name);
 	    NamedList* trConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
@@ -1178,9 +1178,9 @@ unsigned int SS7M2PA::status() const
 bool SS7M2PA::control(Operation oper, NamedList* params)
 {
     if (params) {
-	m_autostart = params->getBoolValue("autostart",m_autostart);
-	m_autoEmergency = params->getBoolValue("autoemergency",m_autoEmergency);
-	m_maxUnack = params->getIntValue("max_unack",m_maxUnack);
+	m_autostart = params->getBoolValue(YSTRING("autostart"),m_autostart);
+	m_autoEmergency = params->getBoolValue(YSTRING("autoemergency"),m_autoEmergency);
+	m_maxUnack = params->getIntValue(YSTRING("max_unack"),m_maxUnack);
 	if (m_maxUnack > 10)
 	    m_maxUnack = 10;
     }
@@ -1498,12 +1498,13 @@ bool SS7M2UAClient::processMSG(unsigned char msgVersion, unsigned char msgClass,
 SS7M2UA::SS7M2UA(const NamedList& params)
     : SignallingComponent(params.safe("SS7M2UA"),&params),
       m_retrieve(50),
-      m_iid(params.getIntValue("iid",-1)), m_linkState(LinkDown), m_rpo(false),
+      m_iid(params.getIntValue(YSTRING("iid"),-1)),
+      m_linkState(LinkDown), m_rpo(false),
       m_longSeq(false)
 {
     DDebug(DebugInfo,"Creating SS7M2UA [%p]",this);
     m_retrieve.interval(params,"retrieve",5,200,true);
-    m_longSeq = params.getBoolValue("longsequence");
+    m_longSeq = params.getBoolValue(YSTRING("longsequence"));
     m_lastSeqRx = -2;
 }
 
@@ -1515,13 +1516,13 @@ bool SS7M2UA::initialize(const NamedList* config)
 	config->dump(tmp,"\r\n  ",'\'',true);
     Debug(this,DebugInfo,"SS7M2UA::initialize(%p) [%p]%s",config,this,tmp.c_str());
 #endif
-    m_autostart = !config || config->getBoolValue("autostart",true);
-    m_autoEmergency = !config || config->getBoolValue("autoemergency",true);
+    m_autostart = !config || config->getBoolValue(YSTRING("autostart"),true);
+    m_autoEmergency = !config || config->getBoolValue(YSTRING("autoemergency"),true);
     if (config && !adaptation()) {
-	m_iid = config->getIntValue("iid",m_iid);
-	NamedString* name = config->getParam("client");
+	m_iid = config->getIntValue(YSTRING("iid"),m_iid);
+	NamedString* name = config->getParam(YSTRING("client"));
 	if (!name)
-	    name = config->getParam("basename");
+	    name = config->getParam(YSTRING("basename"));
 	if (name) {
 	    DDebug(this,DebugInfo,"Creating adaptation '%s' for SS7 M2UA [%p]",
 		name->c_str(),this);
@@ -1550,9 +1551,9 @@ bool SS7M2UA::initialize(const NamedList* config)
 bool SS7M2UA::control(Operation oper, NamedList* params)
 {
     if (params) {
-	m_autostart = params->getBoolValue("autostart",m_autostart);
-	m_autoEmergency = params->getBoolValue("autoemergency",m_autoEmergency);
-	m_longSeq = params->getBoolValue("longsequence",m_longSeq);
+	m_autostart = params->getBoolValue(YSTRING("autostart"),m_autostart);
+	m_autoEmergency = params->getBoolValue(YSTRING("autoemergency"),m_autoEmergency);
+	m_longSeq = params->getBoolValue(YSTRING("longsequence"),m_longSeq);
     }
     switch (oper) {
 	case Pause:
@@ -1922,7 +1923,7 @@ bool ISDNIUAClient::processMSG(unsigned char msgVersion, unsigned char msgClass,
 ISDNIUA::ISDNIUA(const NamedList& params, const char *name, u_int8_t tei)
     : SignallingComponent(params.safe(name ? name : "ISDNIUA"),&params),
       ISDNLayer2(params,name,tei),
-      m_iid(params.getIntValue("iid",-1))
+      m_iid(params.getIntValue(YSTRING("iid"),-1))
 {
     DDebug(DebugInfo,"Creating ISDNIUA [%p]",this);
 }
@@ -2122,12 +2123,12 @@ bool ISDNIUA::initialize(const NamedList* config)
 	config->dump(tmp,"\r\n  ",'\'',true);
     Debug(this,DebugInfo,"ISDNIUA::initialize(%p) [%p]%s",config,this,tmp.c_str());
 #endif
-    m_autostart = !config || config->getBoolValue("autostart",true);
+    m_autostart = !config || config->getBoolValue(YSTRING("autostart"),true);
     if (config && !adaptation()) {
-	m_iid = config->getIntValue("iid",m_iid);
-	NamedString* name = config->getParam("client");
+	m_iid = config->getIntValue(YSTRING("iid"),m_iid);
+	NamedString* name = config->getParam(YSTRING("client"));
 	if (!name)
-	    name = config->getParam("basename");
+	    name = config->getParam(YSTRING("basename"));
 	if (name) {
 	    DDebug(this,DebugInfo,"Creating adaptation '%s' for ISDN UA [%p]",
 		name->c_str(),this);

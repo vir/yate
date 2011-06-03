@@ -40,6 +40,7 @@ static int s_ringing = 0;
 static int s_answers = 0;
 
 static int s_numcalls = 0;
+static const String s_parameters("parameters");
 
 static const char s_mini[] = "callgen {start|stop|drop|pause|resume|single|info|reset|load|save|set paramname[=value]}";
 static const char s_help[] = "Commands to control the Call Generator";
@@ -188,10 +189,10 @@ bool GenConnection::oneCall(String* target)
 {
     Message m("call.route");
     m.addParam("module","callgen");
-    m.addParam("caller",s_cfg.getValue("parameters","caller","yate"));
-    String callto(s_cfg.getValue("parameters","callto"));
+    m.addParam("caller",s_cfg.getValue(s_parameters,YSTRING("caller"),"yate"));
+    String callto(s_cfg.getValue(s_parameters,YSTRING("callto")));
     if (callto.null()) {
-	String called(s_cfg.getValue("parameters","called"));
+	String called(s_cfg.getValue(s_parameters,YSTRING("called")));
 	if (called.null())
 	    return false;
 	if (target)
@@ -211,9 +212,9 @@ bool GenConnection::oneCall(String* target)
     }
     m = "call.execute";
     m.addParam("callto",callto);
-    unsigned int lifetime = s_cfg.getIntValue("parameters","maxlife");
+    unsigned int lifetime = s_cfg.getIntValue(s_parameters,YSTRING("maxlife"));
     if (lifetime) {
-	int minlife = s_cfg.getIntValue("parameters","minlife");
+	int minlife = s_cfg.getIntValue(s_parameters,YSTRING("minlife"));
 	if (minlife)
 	    lifetime -= (int)(((lifetime - minlife) * (int64_t)::random()) / RAND_MAX);
     }
@@ -373,11 +374,11 @@ void GenThread::run()
 	Thread::usleep(tonext);
 	tonext = 10000;
 	Lock lock(s_mutex);
-	int maxcalls = s_cfg.getIntValue("parameters","maxcalls",5);
+	int maxcalls = s_cfg.getIntValue(s_parameters,YSTRING("maxcalls"),5);
 	if (!s_runs || (s_current >= maxcalls) || (s_numcalls <= 0))
 	    continue;
 	--s_numcalls;
-	tonext = s_cfg.getIntValue("parameters","avgdelay",1000);
+	tonext = s_cfg.getIntValue(s_parameters,YSTRING("avgdelay"),1000);
 	lock.drop();
 	GenConnection::oneCall();
 	tonext = (int)(((int64_t)::random() * tonext * 2000) / RAND_MAX);
@@ -460,12 +461,12 @@ bool CmdHandler::doCommand(String& line, String& rval)
 	if (q >= 0) {
 	    String val = line.substr(q+1).trimBlanks();
 	    line = line.substr(0,q).trimBlanks().toLower();
-	    s_cfg.setValue("parameters",line,val.c_str());
+	    s_cfg.setValue(s_parameters,line,val.c_str());
 	    rval << "Set '" << line << "' to '" << val << "'";
 	}
 	else {
 	    line.toLower();
-	    rval << "Value of '" << line << "' is '" << s_cfg.getValue("parameters",line) << "'";
+	    rval << "Value of '" << line << "' is '" << s_cfg.getValue(s_parameters,line) << "'";
 	}
 	s_mutex.unlock();
     }
@@ -481,7 +482,7 @@ bool CmdHandler::doCommand(String& line, String& rval)
     }
     else if (line == "start") {
 	s_mutex.lock();
-	s_numcalls = s_cfg.getIntValue("parameters","numcalls",100);
+	s_numcalls = s_cfg.getIntValue(s_parameters,YSTRING("numcalls"),100);
 	rval << "Generating " << s_numcalls << " new calls";
 	s_runs = true;
 	s_mutex.unlock();
@@ -537,7 +538,7 @@ bool CmdHandler::doCommand(String& line, String& rval)
     }
     else if (line == "save") {
 	s_mutex.lock();
-	if (s_cfg.getBoolValue("general","cansave",true)) {
+	if (s_cfg.getBoolValue(YSTRING("general"),YSTRING("cansave"),true)) {
 	    s_cfg.save();
 	    rval << "Saved config to " << s_cfg;
 	}
@@ -558,15 +559,15 @@ bool CmdHandler::received(Message &msg, int id)
     String tmp;
     switch (id) {
 	case Status:
-	    tmp = msg.getValue("module");
-	    if (tmp.null() || (tmp == "callgen")) {
+	    tmp = msg.getValue(YSTRING("module"));
+	    if (tmp.null() || (tmp == YSTRING("callgen"))) {
 		s_mutex.lock();
 		msg.retValue() << "name=callgen,type=varchans,format=Status|Callto"
 		    << ";total=" << s_total
 		    << ",ring=" << s_ringing
 		    << ",answered=" << s_answers
 		    << ",chans=" << s_current;
-		if (msg.getBoolValue("details",true)) {
+		if (msg.getBoolValue(YSTRING("details"),true)) {
 		    msg.retValue() << ";";
 		    ObjList *l = &s_calls;
 		    bool first = true;
@@ -588,14 +589,14 @@ bool CmdHandler::received(Message &msg, int id)
 	    }
 	    break;
 	case Command:
-	    tmp = msg.getValue("line");
+	    tmp = msg.getValue(YSTRING("line"));
 	    if (tmp.startSkip("callgen"))
 		return doCommand(tmp,msg.retValue());
-	    return doComplete(msg.getValue("partline"),msg.getValue("partword"),msg.retValue());
+	    return doComplete(msg.getValue(YSTRING("partline")),msg.getValue(YSTRING("partword")),msg.retValue());
 	    break;
 	case Help:
-	    tmp = msg.getValue("line");
-	    if (tmp.null() || (tmp == "callgen")) {
+	    tmp = msg.getValue(YSTRING("line"));
+	    if (tmp.null() || (tmp == YSTRING("callgen"))) {
 		msg.retValue() << "  " << s_mini << "\r\n";
 		if (tmp) {
 		    msg.retValue() << s_help << "\r\n";

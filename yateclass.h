@@ -4484,7 +4484,7 @@ private:
  *  larger set of objects needing lock.
  * @short A Mutex pool
  */
-class MutexPool
+class YATE_API MutexPool
 {
 public:
     /**

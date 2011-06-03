@@ -65,7 +65,7 @@ SIPTransaction::SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outg
 	    }
 	}
     }
-    m_invite = (getMethod() == "INVITE");
+    m_invite = (getMethod() == YSTRING("INVITE"));
     m_state = Initial;
     m_engine->append(this);
 }

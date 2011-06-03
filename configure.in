@@ -90,6 +90,21 @@ AC_TRY_LINK([],[],[ld_unresolved_symbols=yes],[GCC_UNRESOLVED_SYMBOLS=""])
 CFLAGS="$SAVE_CFLAGS"
 AC_MSG_RESULT([$ld_unresolved_symbols])
 
+# Check if { instruction } blocks can return a value
+HAVE_BLOCK_RETURN=no
+AC_ARG_ENABLE(strings,AC_HELP_STRING([--enable-strings],[Create static Strings (default: yes)]),want_strings=$enableval,want_strings=yes)
+if [[ "x$want_strings" = "xyes" ]]; then
+AC_MSG_CHECKING([if instruction blocks return values])
+AC_TRY_COMPILE([],[return ({static int ret = 1; ret;});],HAVE_BLOCK_RETURN="yes")
+AC_MSG_RESULT([$HAVE_BLOCK_RETURN])
+fi
+if [[ "x$HAVE_BLOCK_RETURN" = "xyes" ]]; then
+HAVE_BLOCK_RETURN="-DHAVE_BLOCK_RETURN"
+else
+HAVE_BLOCK_RETURN=""
+fi
+AC_SUBST(HAVE_BLOCK_RETURN)
+
 # Checks for header files.
 AC_HEADER_DIRENT
 AC_HEADER_STDC
@@ -1239,7 +1254,7 @@ fi
 
 INSTALL_D="install -D"
 CFLAGS=`echo "$CFLAGS" | sed 's/\(^\| *\)-g[[0-9]]*//' | sed 's/[[[:space:]]]\{2,\}/ /g'`
-MODULE_CFLAGS="-fno-exceptions -fPIC $HAVE_GCC_FORMAT_CHECK"
+MODULE_CFLAGS="-fno-exceptions -fPIC $HAVE_GCC_FORMAT_CHECK $HAVE_BLOCK_RETURN"
 MODULE_CPPFLAGS="-fno-check-new $RTTI_OPT $MODULE_CFLAGS"
 MODULE_LDRELAX="-export-dynamic -shared"
 MODULE_SYMBOLS="-Wl,--retain-symbols-file,/dev/null"

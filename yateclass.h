@@ -202,6 +202,12 @@ namespace TelEngine {
 #define FORMAT_CHECK(f)
 #endif
 
+#ifdef HAVE_BLOCK_RETURN
+#define YSTRING(s) (*({static const String str(s);&str;}))
+#else
+#define YSTRING(s) (s)
+#endif
+
 /**
  * Abort execution (and coredump if allowed) if the abort flag is set.
  * This function may not return.
@@ -575,6 +581,13 @@ class Mutex;
 
 #if 0 /* for documentation generator */
 /**
+ * Macro to create a local static String if supported by compiler, use with caution
+ * @param string Literal constant string
+ * @return A const String& if supported, literal string if not supported
+ */
+constant YSTRING(const char* string);
+
+/**
  * Macro to create a GenObject class from a base class and implement @ref GenObject::getObject
  * @param type Class that is declared
  * @param base Base class that is inherited
@@ -639,17 +652,17 @@ void YNOCOPY(class type);
 
 #define YCLASS(type,base) \
 public: virtual void* getObject(const String& name) const \
-{ return (name == #type) ? const_cast<type*>(this) : base::getObject(name); }
+{ return (name == YSTRING(#type)) ? const_cast<type*>(this) : base::getObject(name); }
 
 #define YCLASS2(type,base1,base2) \
 public: virtual void* getObject(const String& name) const \
-{ if (name == #type) return const_cast<type*>(this); \
+{ if (name == YSTRING(#type)) return const_cast<type*>(this); \
   void* tmp = base1::getObject(name); \
   return tmp ? tmp : base2::getObject(name); }
 
 #define YCLASS3(type,base1,base2,base3) \
 public: virtual void* getObject(const String& name) const \
-{ if (name == #type) return const_cast<type*>(this); \
+{ if (name == YSTRING(#type)) return const_cast<type*>(this); \
   void* tmp = base1::getObject(name); \
   if (tmp) return tmp; \
   tmp = base2::getObject(name); \
@@ -657,23 +670,23 @@ public: virtual void* getObject(const String& name) const \
 
 #define YCLASSIMP(type,base) \
 void* type::getObject(const String& name) const \
-{ return (name == #type) ? const_cast<type*>(this) : base::getObject(name); }
+{ return (name == YSTRING(#type)) ? const_cast<type*>(this) : base::getObject(name); }
 
 #define YCLASSIMP2(type,base1,base2) \
 void* type::getObject(const String& name) const \
-{ if (name == #type) return const_cast<type*>(this); \
+{ if (name == YSTRING(#type)) return const_cast<type*>(this); \
   void* tmp = base1::getObject(name); \
   return tmp ? tmp : base2::getObject(name); }
 
 #define YCLASSIMP3(type,base1,base2,base3) \
 void* type::getObject(const String& name) const \
-{ if (name == #type) return const_cast<type*>(this); \
+{ if (name == YSTRING(#type)) return const_cast<type*>(this); \
   void* tmp = base1::getObject(name); \
   if (tmp) return tmp; \
   tmp = base2::getObject(name); \
   return tmp ? tmp : base3::getObject(name); }
 
-#define YOBJECT(type,pntr) (static_cast<type*>(GenObject::getObject(#type,pntr)))
+#define YOBJECT(type,pntr) (static_cast<type*>(GenObject::getObject(YSTRING(#type),pntr)))
 
 #define YNOCOPY(type) private: \
 type(const type&); \

@@ -28,6 +28,8 @@ using namespace TelEngine;
 
 const String XmlElement::s_ns = "xmlns";
 const String XmlElement::s_nsPrefix = "xmlns:";
+static const String s_type("type");
+static const String s_name("name");
 
 
 // Return a replacement char for the given string
@@ -481,7 +483,7 @@ bool XmlSaxParser::parseSpecial()
 	setUnparsed(Special);
 	return setError(Incomplete);
     }
-    if (m_buf.substr(0,2) == "--") {
+    if (m_buf.startsWith("--")) {
 	m_buf = m_buf.substr(2);
 	if (!parseComment())
 	    return false;
@@ -491,13 +493,13 @@ bool XmlSaxParser::parseSpecial()
 	setUnparsed(Special);
 	return setError(Incomplete);
     }
-    if (m_buf.substr(0,7) == "[CDATA[") {
+    if (m_buf.startsWith("[CDATA[")) {
 	m_buf = m_buf.substr(7);
 	if (!parseCData())
 	    return false;
 	return true;
     }
-    if (m_buf.substr(0,7) == "DOCTYPE") {
+    if (m_buf.startsWith("DOCTYPE")) {
 	m_buf = m_buf.substr(7);
 	if (!parseDoctype())
 	    return false;
@@ -1899,14 +1901,14 @@ XmlElement* XmlElement::param2xml(NamedString* param, const String& tag, bool co
     if (!(param && param->name() && tag))
 	return 0;
     XmlElement* xml = new XmlElement(tag);
-    xml->setAttribute("name",param->name());
-    xml->setAttributeValid("value",*param);
+    xml->setAttribute(s_name,param->name());
+    xml->setAttributeValid(YSTRING("value"),*param);
     NamedPointer* np = YOBJECT(NamedPointer,param);
     if (!(np && np->userData()))
 	return xml;
     DataBlock* db = YOBJECT(DataBlock,np->userData());
     if (db) {
-	xml->setAttribute("type","DataBlock");
+	xml->setAttribute(s_type,"DataBlock");
 	Base64 b(db->data(),db->length(),false);
 	String tmp;
 	b.encode(tmp);
@@ -1916,7 +1918,7 @@ XmlElement* XmlElement::param2xml(NamedString* param, const String& tag, bool co
     }
     XmlElement* element = YOBJECT(XmlElement,np->userData());
     if (element) {
-	xml->setAttribute("type","XmlElement");
+	xml->setAttribute(s_type,"XmlElement");
 	if (!copyXml) {
 	    np->takeData();
 	    xml->addChild(element);
@@ -1927,7 +1929,7 @@ XmlElement* XmlElement::param2xml(NamedString* param, const String& tag, bool co
     }
     NamedList* list = YOBJECT(NamedList,np->userData());
     if (list) {
-	xml->setAttribute("type","NamedList");
+	xml->setAttribute(s_type,"NamedList");
 	xml->addText(list->c_str());
 	unsigned int n = list->length();
 	for (unsigned int i = 0; i < n; i++)
@@ -1940,20 +1942,20 @@ XmlElement* XmlElement::param2xml(NamedString* param, const String& tag, bool co
 // Build a list parameter from xml element
 NamedString* XmlElement::xml2param(XmlElement* xml, const String* tag, bool copyXml)
 {
-    const char* name = xml ? xml->attribute("name") : 0;
+    const char* name = xml ? xml->attribute(s_name) : 0;
     if (TelEngine::null(name))
 	return 0;
     GenObject* gen = 0;
-    String* type = xml->getAttribute("type");
+    String* type = xml->getAttribute(s_type);
     if (type) {
-	if (*type == "DataBlock") {
+	if (*type == YSTRING("DataBlock")) {
 	    gen = new DataBlock;
 	    const String& text = xml->getText();
 	    Base64 b((void*)text.c_str(),text.length(),false);
 	    b.decode(*(static_cast<DataBlock*>(gen)));
 	    b.clear(false);
 	}
-	else if (*type == "XmlElement") {
+	else if (*type == YSTRING("XmlElement")) {
 	    if (!copyXml)
 		gen = xml->pop();
 	    else {
@@ -1962,7 +1964,7 @@ NamedString* XmlElement::xml2param(XmlElement* xml, const String* tag, bool copy
 		    gen = new XmlElement(*tmp);
 	    }
 	}
-	else if (*type == "NamedList") {
+	else if (*type == YSTRING("NamedList")) {
 	    gen = new NamedList(xml->getText());
 	    xml2param(*(static_cast<NamedList*>(gen)),xml,tag,copyXml);
 	}
@@ -1970,8 +1972,8 @@ NamedString* XmlElement::xml2param(XmlElement* xml, const String* tag, bool copy
 	    Debug(DebugStub,"XmlElement::xml2param: unhandled type=%s",type->c_str());
     }
     if (!gen)
-	return new NamedString(name,xml->attribute("value"));
-    return new NamedPointer(name,gen,xml->attribute("value"));
+	return new NamedString(name,xml->attribute(YSTRING("value")));
+    return new NamedPointer(name,gen,xml->attribute(YSTRING("value")));
 }
 
 // Build and add list parameters from XML element children

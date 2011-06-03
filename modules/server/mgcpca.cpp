@@ -717,11 +717,13 @@ void MGCPWrapper::addParams(MGCPMessage* mm)
 // Send a MGCP message, wait for an answer and return it
 RefPointer<MGCPMessage> MGCPWrapper::sendSync(MGCPMessage* mm, const SocketAddr& address)
 {
+    u_int64_t t1 = Time::msecNow();
     while (m_msg) {
 	if (Thread::check(false))
 	    return 0;
 	Thread::idle();
     }
+    u_int64_t t2 = Time::msecNow();
     MGCPTransaction* tr = s_engine->sendCommand(mm,address);
     tr->userData(static_cast<GenObject*>(this));
     m_tr = tr;
@@ -729,13 +731,22 @@ RefPointer<MGCPMessage> MGCPWrapper::sendSync(MGCPMessage* mm, const SocketAddr&
 	Thread::idle();
     RefPointer<MGCPMessage> tmp = m_msg;
     m_msg = 0;
+    u_int64_t t3 = Time::msecNow();
     if (!tmp)
-	Debug(&splugin,DebugMild,"MGCPWrapper::sendSync() returning NULL [%p]",this);
-#ifdef DEBUG
-    else
-	Debug(&splugin,DebugInfo,"MGCPWrapper::sendSync() returning %d '%s' [%p]",
-	    tmp->code(),tmp->comment().c_str(),this);
-#endif
+	Debug(&splugin,DebugMild,"MGCPWrapper::sendSync() returning NULL in %u+%u ms [%p]",
+	    (unsigned int)(t2-t1),(unsigned int)(t3-t2),this);
+    else {
+	int level = DebugAll;
+	if (t3-t1 > 500)
+	    level = DebugMild;
+	else if (t3-t1 > 350)
+	    level = DebugNote;
+	else if (t3-t1 > 200)
+	    level = DebugInfo;
+	Debug(&splugin,level,"MGCPWrapper::sendSync() returning %d '%s' in %u+%u ms [%p]",
+	    tmp->code(),tmp->comment().c_str(),
+	    (unsigned int)(t2-t1),(unsigned int)(t3-t2),this);
+    }
     return tmp;
 }
 
@@ -1509,11 +1520,13 @@ RefPointer<MGCPMessage> MGCPCircuit::sendSync(MGCPMessage* mm)
 	TelEngine::destruct(mm);
 	return 0;
     }
+    u_int64_t t1 = Time::msecNow();
     while (m_msg) {
 	if (Thread::check(false))
 	    return 0;
 	Thread::idle();
     }
+    u_int64_t t2 = Time::msecNow();
     MGCPTransaction* tr = s_engine->sendCommand(mm,ep->address);
     tr->userData(static_cast<GenObject*>(this));
     m_tr = tr;
@@ -1521,13 +1534,22 @@ RefPointer<MGCPMessage> MGCPCircuit::sendSync(MGCPMessage* mm)
 	Thread::idle();
     RefPointer<MGCPMessage> tmp = m_msg;
     m_msg = 0;
+    u_int64_t t3 = Time::msecNow();
     if (!tmp)
-	Debug(&splugin,DebugMild,"MGCPCircuit::sendSync() returning NULL [%p]",this);
-#ifdef DEBUG
-    else
-	Debug(&splugin,DebugInfo,"MGCPCircuit::sendSync() returning %d '%s' [%p]",
-	    tmp->code(),tmp->comment().c_str(),this);
-#endif
+	Debug(&splugin,DebugMild,"MGCPCircuit::sendSync() returning NULL in %u+%u ms [%p]",
+	    (unsigned int)(t2-t1),(unsigned int)(t3-t2),this);
+    else {
+	int level = DebugAll;
+	if (t3-t1 > 500)
+	    level = DebugMild;
+	else if (t3-t1 > 350)
+	    level = DebugNote;
+	else if (t3-t1 > 200)
+	    level = DebugInfo;
+	Debug(&splugin,level,"MGCPCircuit::sendSync() returning %d '%s' in %u+%u ms [%p]",
+	    tmp->code(),tmp->comment().c_str(),
+	    (unsigned int)(t2-t1),(unsigned int)(t3-t2),this);
+    }
     return tmp;
 }
 

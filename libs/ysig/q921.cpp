@@ -54,7 +54,7 @@ static inline const char* linkSide(bool net)
 static inline void fixParams(NamedList& params, const NamedList& config)
 {
     params.copyParams(config);
-    int rx = params.getIntValue("rxunderrun");
+    int rx = params.getIntValue(YSTRING("rxunderrun"));
     if ((rx > 0) && (rx < 2500))
 	params.setParam("rxunderrun","2500");
 }
@@ -143,11 +143,11 @@ ISDNQ921::ISDNQ921(const NamedList& params, const char* name, ISDNQ921Management
     m_idleTimer.interval(params,"t203",2000,10000,false);
     // Adjust idle timeout to data link side
     m_idleTimer.interval(m_idleTimer.interval() + (network() ? -500 : 500));
-    m_window.maxVal(params.getIntValue("maxpendingframes",7));
+    m_window.maxVal(params.getIntValue(YSTRING("maxpendingframes"),7));
     if (!m_window.maxVal())
 	m_window.maxVal(7);
-    setDebug(params.getBoolValue("print-frames",false),
-	params.getBoolValue("extended-debug",false));
+    setDebug(params.getBoolValue(YSTRING("print-frames"),false),
+	params.getBoolValue(YSTRING("extended-debug"),false));
     if (debugAt(DebugInfo)) {
 	String tmp;
 #ifdef DEBUG
@@ -168,7 +168,7 @@ ISDNQ921::ISDNQ921(const NamedList& params, const char* name, ISDNQ921Management
 	    linkSide(network()),tmp.safe(),this);
     }
     if (!mgmt)
-	setDumper(params.getValue("layer2dump"));
+	setDumper(params.getValue(YSTRING("layer2dump")));
 }
 
 // Destructor
@@ -195,15 +195,15 @@ bool ISDNQ921::initialize(const NamedList* config)
     Debug(this,DebugInfo,"ISDNQ921::initialize(%p) [%p]%s",config,this,tmp.c_str());
 #endif
     if (config) {
-	debugLevel(config->getIntValue("debuglevel_q921",
-	    config->getIntValue("debuglevel",-1)));
-	setDebug(config->getBoolValue("print-frames",false),
-	    config->getBoolValue("extended-debug",false));
+	debugLevel(config->getIntValue(YSTRING("debuglevel_q921"),
+	    config->getIntValue(YSTRING("debuglevel"),-1)));
+	setDebug(config->getBoolValue(YSTRING("print-frames"),false),
+	    config->getBoolValue(YSTRING("extended-debug"),false));
     }
     if (config && !m_management && !iface()) {
-	NamedString* name = config->getParam("sig");
+	NamedString* name = config->getParam(YSTRING("sig"));
 	if (!name)
-	    name = config->getParam("basename");
+	    name = config->getParam(YSTRING("basename"));
 	if (name) {
 	    NamedPointer* ptr = YOBJECT(NamedPointer,name);
 	    NamedList* ifConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
@@ -1043,7 +1043,7 @@ ISDNQ921Management::ISDNQ921Management(const NamedList& params, const char* name
     m_network = net;
     m_teiManTimer.interval(params,"t202",2500,2600,false);
     m_teiTimer.interval(params,"t201",1000,5000,false);
-    setDumper(params.getValue("layer2dump"));
+    setDumper(params.getValue(YSTRING("layer2dump")));
     bool set0 = true;
     if (baseName.endsWith("Management")) {
 	baseName = baseName.substr(0,baseName.length()-10);
@@ -1087,12 +1087,12 @@ bool ISDNQ921Management::initialize(const NamedList* config)
     Debug(this,DebugInfo,"ISDNQ921Management::initialize(%p) [%p]%s",config,this,tmp.c_str());
 #endif
     if (config)
-	debugLevel(config->getIntValue("debuglevel_q921mgmt",
-	    config->getIntValue("debuglevel",-1)));
+	debugLevel(config->getIntValue(YSTRING("debuglevel_q921mgmt"),
+	    config->getIntValue(YSTRING("debuglevel"),-1)));
     if (config && !iface()) {
-	NamedString* name = config->getParam("sig");
+	NamedString* name = config->getParam(YSTRING("sig"));
 	if (!name)
-	    name = config->getParam("basename");
+	    name = config->getParam(YSTRING("basename"));
 	if (name) {
 	    NamedPointer* ptr = YOBJECT(NamedPointer,name);
 	    NamedList* ifConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
@@ -1512,8 +1512,8 @@ ISDNQ921Passive::ISDNQ921Passive(const NamedList& params, const char* name)
 #endif
     m_idleTimer.interval(params,"idletimeout",4000,30000,false);
     m_checkLinkSide = detectType();
-    setDebug(params.getBoolValue("print-frames",false),
-	params.getBoolValue("extended-debug",false));
+    setDebug(params.getBoolValue(YSTRING("print-frames"),false),
+	params.getBoolValue(YSTRING("extended-debug"),false));
     DDebug(this,DebugInfo,
 	"ISDN Passive Data Link type=%s autodetect=%s idle-timeout=%u [%p]",
 	linkSide(network()),String::boolText(detectType()),
@@ -1521,7 +1521,7 @@ ISDNQ921Passive::ISDNQ921Passive(const NamedList& params, const char* name)
     m_idleTimer.start();
     // Try to dump from specific parameter, fall back to generic
     const char* dump = network() ? "layer2dump-net" : "layer2dump-cpe";
-    setDumper(params.getValue(dump,params.getValue("layer2dump")));
+    setDumper(params.getValue(dump,params.getValue(YSTRING("layer2dump"))));
 }
 
 // Destructor
@@ -1546,15 +1546,15 @@ bool ISDNQ921Passive::initialize(const NamedList* config)
     Debug(this,DebugInfo,"ISDNQ921Passive::initialize(%p) [%p]%s",config,this,tmp.c_str());
 #endif
     if (config) {
-	debugLevel(config->getIntValue("debuglevel_q921",
-	    config->getIntValue("debuglevel",-1)));
-	setDebug(config->getBoolValue("print-frames",false),
-	    config->getBoolValue("extended-debug",false));
+	debugLevel(config->getIntValue(YSTRING("debuglevel_q921"),
+	    config->getIntValue(YSTRING("debuglevel"),-1)));
+	setDebug(config->getBoolValue(YSTRING("print-frames"),false),
+	    config->getBoolValue(YSTRING("extended-debug"),false));
     }
     if (config && !iface()) {
-	NamedString* name = config->getParam("sig");
+	NamedString* name = config->getParam(YSTRING("sig"));
 	if (!name)
-	    name = config->getParam("basename");
+	    name = config->getParam(YSTRING("basename"));
 	if (name) {
 	    NamedPointer* ptr = YOBJECT(NamedPointer,name);
 	    NamedList* ifConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
@@ -1759,15 +1759,15 @@ ISDNLayer2::ISDNLayer2(const NamedList& params, const char* name, u_int8_t tei)
       m_maxUserData(260)
 {
     XDebug(this,DebugAll,"ISDNLayer2 '%s' comp=%p [%p]",name,static_cast<const SignallingComponent*>(this),this);
-    m_network = params.getBoolValue("network",false);
-    m_detectType = params.getBoolValue("detect",false);
-    int tmp = params.getIntValue("sapi",0);
+    m_network = params.getBoolValue(YSTRING("network"),false);
+    m_detectType = params.getBoolValue(YSTRING("detect"),false);
+    int tmp = params.getIntValue(YSTRING("sapi"),0);
     m_sapi = (tmp >= 0 && tmp <= Q921_SAPI_MANAGEMENT) ? tmp : 0;
-    tmp = params.getIntValue("tei",tei);
+    tmp = params.getIntValue(YSTRING("tei"),tei);
     m_tei = (tmp >= 0 && tmp < Q921_TEI_BROADCAST) ? tmp : 0;
     teiAssigned(true);
-    m_autoRestart = params.getBoolValue("auto-restart",true);
-    m_maxUserData = params.getIntValue("maxuserdata",260);
+    m_autoRestart = params.getBoolValue(YSTRING("auto-restart"),true);
+    m_maxUserData = params.getIntValue(YSTRING("maxuserdata"),260);
     if (!m_maxUserData)
 	m_maxUserData = 260;
 }

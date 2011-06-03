@@ -462,8 +462,8 @@ void SIPEngine::buildAuth(const String& username, const String& realm, const Str
     String tmp;
     tmp << m1.hexDigest() << ":" << nonce << ":";
     if (qop) {
-	if (qop == "auth")
-	    tmp << qop["nc"] << ":" << qop["cnonce"] << ":" << qop.c_str() << ":";
+	if (qop == YSTRING("auth"))
+	    tmp << qop[YSTRING("nc")] << ":" << qop[YSTRING("cnonce")] << ":" << qop.c_str() << ":";
 	else
 	    Debug(DebugStub,"SIPEngine::buildAuth() not implemented for qop=%s",
 		qop.c_str());

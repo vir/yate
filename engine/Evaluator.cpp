@@ -668,7 +668,7 @@ bool ExpEvaluator::runFunction(ObjList& stack, const ExpOperation& oper)
 {
     DDebug(DebugAll,"runFunction(%p,'%s' %ld) ext=%p",
 	&stack,oper.name().c_str(),oper.number(),(void*)m_extender);
-    if (oper.name() == "chr") {
+    if (oper.name() == YSTRING("chr")) {
 	String res;
 	for (long int i = oper.number(); i; i--) {
 	    ExpOperation* o = popOne(stack);
@@ -680,7 +680,7 @@ bool ExpEvaluator::runFunction(ObjList& stack, const ExpOperation& oper)
 	stack.append(new ExpOperation(res));
 	return true;
     }
-    if (oper.name() == "now") {
+    if (oper.name() == YSTRING("now")) {
 	if (oper.number())
 	    return gotError("Function expects no arguments");
 	stack.append(new ExpOperation(Time::secNow()));

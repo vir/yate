@@ -312,9 +312,9 @@ SS7Management::SS7Management(const NamedList& params, unsigned char sio)
       SS7Layer4(sio,&params),
       m_changeMsgs(true), m_changeSets(false), m_neighbours(true)
 {
-    m_changeMsgs = params.getBoolValue("changemsgs",m_changeMsgs);
-    m_changeSets = params.getBoolValue("changesets",m_changeSets);
-    m_neighbours = params.getBoolValue("neighbours",m_neighbours);
+    m_changeMsgs = params.getBoolValue(YSTRING("changemsgs"),m_changeMsgs);
+    m_changeSets = params.getBoolValue(YSTRING("changesets"),m_changeSets);
+    m_neighbours = params.getBoolValue(YSTRING("neighbours"),m_neighbours);
 }
 
 
@@ -387,7 +387,7 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	case SS7MsgSNM::MIM:
 	    {
 		// for ANSI the SLC is not stored in SLS but in a separate field
-		int slc = msg->params().getIntValue("slc",-1);
+		int slc = msg->params().getIntValue(YSTRING("slc"),-1);
 		if (slc >= 0 && slc <= 255)
 		    lbl.setSls((unsigned char)slc);
 	    }
@@ -405,7 +405,7 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	msg->type() == SS7MsgSNM::TFC ||
 	msg->type() == SS7MsgSNM::RST ||
 	msg->type() == SS7MsgSNM::RSR) {
-	String dest = msg->params().getValue("destination");
+	String dest = msg->params().getValue(YSTRING("destination"));
 	if (!dest.null()) {
 	    const char* oper = lookup(msg->type(),s_dict_control);
 	    Debug(this,DebugInfo,"%s (label=%s): Traffic %s to dest=%s [%p]",
@@ -451,9 +451,9 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	    return true;
 	if (inhibit(lbl,SS7Layer2::Inactive)) {
 	    String link;
-	    link << msg->params().getValue("pointcodetype") << "," << lbl;
+	    link << msg->params().getValue(YSTRING("pointcodetype")) << "," << lbl;
 	    Debug(this,DebugNote,"Changeover order on %s",link.c_str());
-	    int seq = msg->params().getIntValue("sequence",-1);
+	    int seq = msg->params().getIntValue(YSTRING("sequence"),-1);
 	    if (seq >= 0)
 		recover(lbl,seq);
 	    seq = router ? router->getSequence(lbl) : -1;
@@ -477,7 +477,7 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 			}
 			break;
 		    case SS7PointCode::ANSI:
-			data[1] = (unsigned char)((msg->params().getIntValue("slc",sls) & 0x0f) | (seq << 4));
+			data[1] = (unsigned char)((msg->params().getIntValue(YSTRING("slc"),sls) & 0x0f) | (seq << 4));
 			data[2] = (unsigned char)(seq >> 4);
 			len++;
 			if (len >= 5) {
@@ -529,10 +529,10 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	unlock();
 	if (pend) {
 	    String link;
-	    link << msg->params().getValue("pointcodetype") << "," << *pend;
+	    link << msg->params().getValue(YSTRING("pointcodetype")) << "," << *pend;
 	    Debug(this,DebugNote,"Changeover acknowledged on %s",link.c_str());
 	    inhibit(*pend,SS7Layer2::Inactive);
-	    int seq = msg->params().getIntValue("sequence",-1);
+	    int seq = msg->params().getIntValue(YSTRING("sequence"),-1);
 	    if (seq >= 0)
 		recover(*pend,seq);
 	}
@@ -551,7 +551,7 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	    return true;
 	if (inhibit(lbl,0,SS7Layer2::Inactive)) {
 	    String link;
-	    link << msg->params().getValue("pointcodetype") << "," << lbl;
+	    link << msg->params().getValue(YSTRING("pointcodetype")) << "," << lbl;
 	    Debug(this,DebugNote,"Changeback declaration on %s",link.c_str());
 	    SS7MSU answer(msu.getSIO(),lbl,0,len+1);
 	    unsigned char* d = answer.getData(lbl.length()+1,len+1);
@@ -588,7 +588,7 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	unlock();
 	if (pend) {
 	    String link;
-	    link << msg->params().getValue("pointcodetype") << "," << *pend;
+	    link << msg->params().getValue(YSTRING("pointcodetype")) << "," << *pend;
 	    Debug(this,DebugNote,"Changeback acknowledged on %s",link.c_str());
 	    inhibit(*pend,0,SS7Layer2::Inactive);
 	}
@@ -714,15 +714,15 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
     }
     else if (msg->type() == SS7MsgSNM::UPU) {
 	Debug(this,DebugNote,"Unavailable part %s at %s, cause %s",
-	    msg->params().getValue("part","?"),
-	    msg->params().getValue("destination","?"),
-	    msg->params().getValue("cause","?"));
+	    msg->params().getValue(YSTRING("part"),"?"),
+	    msg->params().getValue(YSTRING("destination"),"?"),
+	    msg->params().getValue(YSTRING("cause"),"?"));
 	if (router) {
-	    unsigned char part = msg->params().getIntValue("part",-1);
-	    unsigned char cause = msg->params().getIntValue("cause",-1);
+	    unsigned char part = msg->params().getIntValue(YSTRING("part"),-1);
+	    unsigned char cause = msg->params().getIntValue(YSTRING("cause"),-1);
 	    SS7PointCode pc;
 	    if (part > SS7MSU::MTNS && part <= 0x0f && cause <= 0x0f &&
-		pc.assign(msg->params().getValue("destination"),label.type()))
+		pc.assign(msg->params().getValue(YSTRING("destination")),label.type()))
 		router->receivedUPU(label.type(),pc,(SS7MSU::Services)part,
 		    cause,label,sls);
 	}
@@ -750,9 +750,9 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 
 bool SS7Management::control(NamedList& params)
 {
-    String* ret = params.getParam("completion");
-    const String* oper = params.getParam("operation");
-    const char* cmp = params.getValue("component");
+    String* ret = params.getParam(YSTRING("completion"));
+    const String* oper = params.getParam(YSTRING("operation"));
+    const char* cmp = params.getValue(YSTRING("component"));
     int cmd = -1;
     if (!TelEngine::null(oper)) {
 	cmd = oper->toInteger(s_dict_control,cmd);
@@ -763,7 +763,7 @@ bool SS7Management::control(NamedList& params)
     if (ret) {
 	if (oper && (cmd < 0))
 	    return false;
-	String part = params.getValue("partword");
+	String part = params.getValue(YSTRING("partword"));
 	if (cmp) {
 	    if (toString() != cmp)
 		return false;
@@ -777,10 +777,10 @@ bool SS7Management::control(NamedList& params)
     if (!(cmp && toString() == cmp))
 	return false;
 
-    m_changeMsgs = params.getBoolValue("changemsgs",m_changeMsgs);
-    m_changeSets = params.getBoolValue("changesets",m_changeSets);
-    m_neighbours = params.getBoolValue("neighbours",m_neighbours);
-    const String* addr = params.getParam("address");
+    m_changeMsgs = params.getBoolValue(YSTRING("changemsgs"),m_changeMsgs);
+    m_changeSets = params.getBoolValue(YSTRING("changesets"),m_changeSets);
+    m_neighbours = params.getBoolValue(YSTRING("neighbours"),m_neighbours);
+    const String* addr = params.getParam(YSTRING("address"));
     if (cmd < 0 || TelEngine::null(addr))
 	return SignallingComponent::control(params);
     // TYPE,opc,dpc,sls,spare
@@ -818,7 +818,7 @@ bool SS7Management::control(NamedList& params)
 		case SS7MsgSNM::LFU:
 		    txSls = (txSls + 1) & 0xff;
 	    }
-	    txSls = params.getIntValue("linksel",txSls) & 0xff;
+	    txSls = params.getIntValue(YSTRING("linksel"),txSls) & 0xff;
 	    String tmp;
 	    tmp << SS7PointCode::lookup(lbl.type()) << "," << lbl;
 	    Debug(this,DebugAll,"Sending %s to %s on %d [%p]",
@@ -832,7 +832,7 @@ bool SS7Management::control(NamedList& params)
 		case SS7MsgSNM::RST:
 		case SS7MsgSNM::RSR:
 		    {
-			addr = params.getParam("destination");
+			addr = params.getParam(YSTRING("destination"));
 			SS7PointCode dest(opc);
 			if (TelEngine::null(addr) || dest.assign(*addr,t)) {
 			    unsigned char data[5];
@@ -878,12 +878,12 @@ bool SS7Management::control(NamedList& params)
 		case SS7MsgSNM::COA:
 		case SS7MsgSNM::XCO:
 		case SS7MsgSNM::XCA:
-		    if (params.getBoolValue("emergency",false)) {
+		    if (params.getBoolValue(YSTRING("emergency"),false)) {
 			unsigned char data = (SS7MsgSNM::COO == cmd) ? SS7MsgSNM::ECO : SS7MsgSNM::ECA;
 			return transmitMSU(SS7MSU(txSio,lbl,&data,1),lbl,txSls) >= 0;
 		    }
 		    else {
-			int seq = params.getIntValue("sequence",0) & 0x00ffffff;
+			int seq = params.getIntValue(YSTRING("sequence"),0) & 0x00ffffff;
 			if (SS7MsgSNM::COO == cmd || SS7MsgSNM::COA == cmd)
 			    seq &= 0x7f;
 			int len = 2;
@@ -899,7 +899,7 @@ bool SS7Management::control(NamedList& params)
 				}
 				break;
 			    case SS7PointCode::ANSI:
-				data[1] = (unsigned char)((params.getIntValue("slc",sls) & 0x0f) | (seq << 4));
+				data[1] = (unsigned char)((params.getIntValue(YSTRING("slc"),sls) & 0x0f) | (seq << 4));
 				data[2] = (unsigned char)(seq >> 4);
 				len = 3;
 				if (SS7MsgSNM::XCO == cmd || SS7MsgSNM::XCA == cmd) {
@@ -920,7 +920,7 @@ bool SS7Management::control(NamedList& params)
 		case SS7MsgSNM::CBD:
 		case SS7MsgSNM::CBA:
 		    {
-			int code = params.getIntValue("code",0);
+			int code = params.getIntValue(YSTRING("code"),0);
 			int len = 2;
 			unsigned char data[3];
 			data[0] = cmd;
@@ -929,7 +929,7 @@ bool SS7Management::control(NamedList& params)
 				data[1] = (unsigned char)code;
 				break;
 			    case SS7PointCode::ANSI:
-				data[1] = (unsigned char)((params.getIntValue("slc",sls) & 0x0f) | (code << 4));
+				data[1] = (unsigned char)((params.getIntValue(YSTRING("slc"),sls) & 0x0f) | (code << 4));
 				data[2] = (unsigned char)(code >> 4);
 				len = 3;
 				break;

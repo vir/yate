@@ -341,10 +341,10 @@ bool ISDNQ931IEData::processBearerCaps(ISDNQ931Message* msg, bool add,
 	m_transferRate = "";
 	return false;
     }
-    m_transferCapability = ie->getValue("transfer-cap");
-    m_transferMode = ie->getValue("transfer-mode");
-    m_transferRate = ie->getValue("transfer-rate");
-    m_format = ie->getValue("layer1-protocol");
+    m_transferCapability = ie->getValue(YSTRING("transfer-cap"));
+    m_transferMode = ie->getValue(YSTRING("transfer-mode"));
+    m_transferRate = ie->getValue(YSTRING("transfer-rate"));
+    m_format = ie->getValue(YSTRING("layer1-protocol"));
     return true;
 }
 
@@ -370,11 +370,11 @@ bool ISDNQ931IEData::processChannelID(ISDNQ931Message* msg, bool add,
 	m_channelMandatory = m_channelByNumber = false;
 	return false;
     }
-    m_bri = ie->getBoolValue("interface-bri",m_bri);
-    m_channelMandatory = ie->getBoolValue("channel-exclusive");
-    m_channelByNumber = ie->getBoolValue("channel-by-number");
-    m_channelType = ie->getValue("type");
-    m_channelSelect = ie->getValue("channel-select");
+    m_bri = ie->getBoolValue(YSTRING("interface-bri"),m_bri);
+    m_channelMandatory = ie->getBoolValue(YSTRING("channel-exclusive"));
+    m_channelByNumber = ie->getBoolValue(YSTRING("channel-by-number"));
+    m_channelType = ie->getValue(YSTRING("type"));
+    m_channelSelect = ie->getValue(YSTRING("channel-select"));
     if (m_bri && m_channelSelect) {
 	m_channelByNumber = true;
 	if (m_channelSelect == "b1")
@@ -389,12 +389,12 @@ bool ISDNQ931IEData::processChannelID(ISDNQ931Message* msg, bool add,
 	unsigned int n = ie->length();
 	for (unsigned int i = 0; i < n; i++) {
 	    NamedString* ns = ie->getParam(i);
-	    if (ns && (ns->name() == "channels"))
+	    if (ns && (ns->name() == YSTRING("channels")))
 		m_channels.append(*ns,",");
 	}
     }
     else
-	m_channels = ie->getValue("slot-map");
+	m_channels = ie->getValue(YSTRING("slot-map"));
     return true;
 }
 
@@ -418,7 +418,7 @@ bool ISDNQ931IEData::processProgress(ISDNQ931Message* msg, bool add,
 	// Progress may repeat
 	ISDNQ931IE* ie = msg->getIE(ISDNQ931IE::Progress);
 	for (; ie; ie = msg->getIE(ISDNQ931IE::Progress,ie))
-	    m_progress.append(ie->getValue("description"),",");
+	    m_progress.append(ie->getValue(YSTRING("description")),",");
     }
     return !m_progress.null();
 }
@@ -474,9 +474,9 @@ bool ISDNQ931IEData::processCalledNo(ISDNQ931Message* msg, bool add,
 	m_calledNo = "";
 	return false;
     }
-    m_calledNo = ie->getValue("number");
-    m_calledType = ie->getValue("type");
-    m_calledPlan = ie->getValue("plan");
+    m_calledNo = ie->getValue(YSTRING("number"));
+    m_calledType = ie->getValue(YSTRING("type"));
+    m_calledPlan = ie->getValue(YSTRING("plan"));
     return true;
 }
 
@@ -510,11 +510,11 @@ bool ISDNQ931IEData::processCallingNo(ISDNQ931Message* msg, bool add,
 	m_callerNo = "";
 	return false;
     }
-    m_callerNo = ie->getValue("number");
-    m_callerType = ie->getValue("type");
-    m_callerPlan = ie->getValue("plan");
-    m_callerPres = ie->getValue("presentation");
-    m_callerScreening = ie->getValue("screening");
+    m_callerNo = ie->getValue(YSTRING("number"));
+    m_callerType = ie->getValue(YSTRING("type"));
+    m_callerPlan = ie->getValue(YSTRING("plan"));
+    m_callerPres = ie->getValue(YSTRING("presentation"));
+    m_callerScreening = ie->getValue(YSTRING("screening"));
     return true;
 }
 
@@ -839,7 +839,7 @@ bool ISDNQ931Call::sendEvent(SignallingEvent* event)
 		default:
 		    m_terminate = m_destroy = true;
 		    retVal = sendReleaseComplete(event->message() ?
-			event->message()->params().getValue("reason") : 0);
+			event->message()->params().getValue(YSTRING("reason")) : 0);
 		    break;
 	    }
 	    break;
@@ -948,9 +948,9 @@ SignallingEvent* ISDNQ931Call::getEvent(const Time& when)
 // Get reserved circuit or this object
 void* ISDNQ931Call::getObject(const String& name) const
 {
-    if (name == "SignallingCircuit")
+    if (name == YSTRING("SignallingCircuit"))
 	return m_circuit;
-    if (name == "ISDNQ931Call")
+    if (name == YSTRING("ISDNQ931Call"))
 	return (void*)this;
     return SignallingCall::getObject(name);
 }
@@ -1448,9 +1448,9 @@ bool ISDNQ931Call::sendAlerting(SignallingMessage* sigMsg)
     MSG_CHECK_SEND(ISDNQ931Message::Alerting)
     const char* format = 0;
     if (sigMsg) {
-	format = sigMsg->params().getValue("format");
+	format = sigMsg->params().getValue(YSTRING("format"));
 	m_inbandAvailable = m_inbandAvailable ||
-	    sigMsg->params().getBoolValue("earlymedia",false);
+	    sigMsg->params().getBoolValue(YSTRING("earlymedia"),false);
 	if (m_inbandAvailable)
 	    SignallingUtils::appendFlag(m_data.m_progress,"in-band-info");
     }
@@ -1526,7 +1526,7 @@ bool ISDNQ931Call::sendConnect(SignallingMessage* sigMsg)
     }
     // Progress indicator
     if (sigMsg) {
-	m_data.m_progress = sigMsg->params().getValue("call-progress");
+	m_data.m_progress = sigMsg->params().getValue(YSTRING("call-progress"));
 	m_data.processProgress(msg,true,&q931()->parserData());
     }
     m_conTimer.start();
@@ -1543,7 +1543,7 @@ bool ISDNQ931Call::sendConnectAck(SignallingMessage* sigMsg)
     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::ConnectAck,this);
     // Progress indicator
     if (sigMsg) {
-	m_data.m_progress = sigMsg->params().getValue("call-progress");
+	m_data.m_progress = sigMsg->params().getValue(YSTRING("call-progress"));
 	m_data.processProgress(msg,true,&q931()->parserData());
     }
     else
@@ -1558,7 +1558,7 @@ bool ISDNQ931Call::sendDisconnect(SignallingMessage* sigMsg)
     MSG_CHECK_SEND(ISDNQ931Message::Disconnect)
     m_data.m_reason = "";
     if (sigMsg)
-	m_data.m_reason = sigMsg->params().getValue("reason");
+	m_data.m_reason = sigMsg->params().getValue(YSTRING("reason"));
     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::Disconnect,this);
     m_data.processCause(msg,true);
     changeState(DisconnectReq);
@@ -1575,12 +1575,12 @@ bool ISDNQ931Call::sendInfo(SignallingMessage* sigMsg)
     MSG_CHECK_SEND(ISDNQ931Message::Info)
     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::Info,this);
     // Check send complete complete
-    if (sigMsg->params().getBoolValue("complete"))
+    if (sigMsg->params().getBoolValue(YSTRING("complete")))
 	msg->appendSafe(new ISDNQ931IE(ISDNQ931IE::SendComplete));
-    m_data.m_display = sigMsg->params().getValue("display");
+    m_data.m_display = sigMsg->params().getValue(YSTRING("display"));
     m_data.processDisplay(msg,true,&q931()->parserData());
     // Check tones or ringing
-    const char* tone = sigMsg->params().getValue("tone");
+    const char* tone = sigMsg->params().getValue(YSTRING("tone"));
     if (tone)
 	msg->appendIEValue(ISDNQ931IE::Keypad,"keypad",tone);
     return q931()->sendMessage(msg,callTei());
@@ -1592,9 +1592,9 @@ bool ISDNQ931Call::sendProgress(SignallingMessage* sigMsg)
 {
     MSG_CHECK_SEND(ISDNQ931Message::Progress)
     if (sigMsg) {
-	m_data.m_progress = sigMsg->params().getValue("progress");
+	m_data.m_progress = sigMsg->params().getValue(YSTRING("progress"));
 	m_inbandAvailable = m_inbandAvailable ||
-	    sigMsg->params().getBoolValue("earlymedia",false);
+	    sigMsg->params().getBoolValue(YSTRING("earlymedia"),false);
 	if (m_inbandAvailable)
 	    SignallingUtils::appendFlag(m_data.m_progress,"in-band-info");
     }
@@ -1611,7 +1611,7 @@ bool ISDNQ931Call::sendRelease(const char* reason, SignallingMessage* sigMsg)
 	return false;
     // Get reason
     if (!reason && sigMsg)
-	reason = sigMsg->params().getValue("reason",0);
+	reason = sigMsg->params().getValue(YSTRING("reason"),0);
     if (reason)
 	m_data.m_reason = reason;
     m_terminate = true;
@@ -1661,7 +1661,7 @@ bool ISDNQ931Call::sendSetup(SignallingMessage* sigMsg)
 	m_data.m_transferCapability = "speech";
 	m_data.m_transferMode = "circuit";
 	m_data.m_transferRate = "64kbit";
-	m_data.m_format = sigMsg->params().getValue("format",q931()->format());
+	m_data.m_format = sigMsg->params().getValue(YSTRING("format"),q931()->format());
 	if (0xffff == lookup(m_data.m_format,Q931Parser::s_dict_bearerProto1,0xffff))
 	    m_data.m_format = "alaw";
 	m_data.processBearerCaps(msg,true);
@@ -1693,22 +1693,22 @@ bool ISDNQ931Call::sendSetup(SignallingMessage* sigMsg)
 	    m_data.processChannelID(msg,true);
 	}
 	// Progress indicator
-	m_data.m_progress = sigMsg->params().getValue("call-progress");
+	m_data.m_progress = sigMsg->params().getValue(YSTRING("call-progress"));
 	m_data.processProgress(msg,true,&q931()->parserData());
 	// Display
-	m_data.m_display = sigMsg->params().getValue("callername");
+	m_data.m_display = sigMsg->params().getValue(YSTRING("callername"));
 	m_data.processDisplay(msg,true,&q931()->parserData());
 	// CallingNo
-	m_data.m_callerType = sigMsg->params().getValue("callernumtype",q931()->numType());
-	m_data.m_callerPlan = sigMsg->params().getValue("callernumplan",q931()->numPlan());
-	m_data.m_callerPres = sigMsg->params().getValue("callerpres",q931()->numPresentation());
-	m_data.m_callerScreening = sigMsg->params().getValue("callerscreening",q931()->numScreening());
-	m_data.m_callerNo = sigMsg->params().getValue("caller");
+	m_data.m_callerType = sigMsg->params().getValue(YSTRING("callernumtype"),q931()->numType());
+	m_data.m_callerPlan = sigMsg->params().getValue(YSTRING("callernumplan"),q931()->numPlan());
+	m_data.m_callerPres = sigMsg->params().getValue(YSTRING("callerpres"),q931()->numPresentation());
+	m_data.m_callerScreening = sigMsg->params().getValue(YSTRING("callerscreening"),q931()->numScreening());
+	m_data.m_callerNo = sigMsg->params().getValue(YSTRING("caller"));
 	m_data.processCallingNo(msg,true);
 	// CalledNo
-	m_data.m_calledType = sigMsg->params().getValue("callednumtype");
-	m_data.m_calledPlan = sigMsg->params().getValue("callednumplan");
-	m_data.m_calledNo = sigMsg->params().getValue("called");
+	m_data.m_calledType = sigMsg->params().getValue(YSTRING("callednumtype"));
+	m_data.m_calledPlan = sigMsg->params().getValue(YSTRING("callednumplan"));
+	m_data.m_calledNo = sigMsg->params().getValue(YSTRING("called"));
 	m_data.processCalledNo(msg,true);
 	// Send
 	changeState(CallInitiated);
@@ -1731,7 +1731,7 @@ bool ISDNQ931Call::sendSetup(SignallingMessage* sigMsg)
 bool ISDNQ931Call::sendSuspendRej(const char* reason, SignallingMessage* sigMsg)
 {
     if (!reason && sigMsg)
-	reason = sigMsg->params().getValue("reason");
+	reason = sigMsg->params().getValue(YSTRING("reason"));
     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::SuspendRej,this);
     msg->appendIEValue(ISDNQ931IE::Cause,0,reason);
     return q931()->sendMessage(msg,callTei());
@@ -1790,7 +1790,7 @@ SignallingEvent* ISDNQ931Call::getCircuitEvent(const Time& when)
     SignallingEvent* event = 0;
     switch (ev->type()) {
 	case SignallingCircuitEvent::Dtmf: {
-	    const char* tone = ev->getValue("tone");
+	    const char* tone = ev->getValue(YSTRING("tone"));
 	    if (!(tone && *tone))
 		break;
 	    ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::Info,this);
@@ -2021,11 +2021,11 @@ void ISDNQ931CallMonitor::setTerminate(const char* reason)
 // Get caller's and called's circuit or this object
 void* ISDNQ931CallMonitor::getObject(const String& name) const
 {
-    if (name == "SignallingCircuitCaller")
+    if (name == YSTRING("SignallingCircuitCaller"))
 	return m_callerCircuit;
-    if (name == "SignallingCircuitCalled")
+    if (name == YSTRING("SignallingCircuitCalled"))
 	return m_calledCircuit;
-    if (name == "ISDNQ931CallMonitor")
+    if (name == YSTRING("ISDNQ931CallMonitor"))
 	return (void*)this;
     return SignallingCall::getObject(name);
 }
@@ -2200,7 +2200,7 @@ SignallingEvent* ISDNQ931CallMonitor::getCircuitEvent(const Time& when)
     SignallingEvent* event = 0;
     switch (ev->type()) {
 	case SignallingCircuitEvent::Dtmf: {
-	    const char* tone = ev->getValue("tone");
+	    const char* tone = ev->getValue(YSTRING("tone"));
 	    if (!(tone && *tone))
 		break;
 	    ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::Info,
@@ -2295,14 +2295,14 @@ ISDNQ931ParserData::ISDNQ931ParserData(const NamedList& params, DebugEnabler* db
     m_flags(0),
     m_flagsOrig(0)
 {
-    m_allowSegment = params.getBoolValue("allowsegmentation",false);
-    m_maxSegments = params.getIntValue("maxsegments",8);
-    m_maxDisplay = params.getIntValue("max-display",34);
+    m_allowSegment = params.getBoolValue(YSTRING("allowsegmentation"),false);
+    m_maxSegments = params.getIntValue(YSTRING("maxsegments"),8);
+    m_maxDisplay = params.getIntValue(YSTRING("max-display"),34);
     if (m_maxDisplay != 34 && m_maxDisplay != 82)
 	m_maxDisplay = 34;
-    m_extendedDebug = params.getBoolValue("extended-debug",false);
+    m_extendedDebug = params.getBoolValue(YSTRING("extended-debug"),false);
     // Set flags
-    String flags = params.getValue("switchtype");
+    String flags = params.getValue(YSTRING("switchtype"));
     SignallingUtils::encodeFlags(0,m_flagsOrig,flags,ISDNQ931::s_swType);
     SignallingUtils::encodeFlags(0,m_flagsOrig,flags,ISDNQ931::s_flags);
     m_flags = m_flagsOrig;
@@ -2379,9 +2379,9 @@ ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
     }
 #endif
     m_parserData.m_dbg = this;
-    m_networkHint = params.getBoolValue("network",m_networkHint);
-    m_data.m_bri = !(m_primaryRate = params.getBoolValue("primary",m_primaryRate));
-    m_callRefLen = params.getIntValue("callreflen",m_primaryRate ? 2 : 1);
+    m_networkHint = params.getBoolValue(YSTRING("network"),m_networkHint);
+    m_data.m_bri = !(m_primaryRate = params.getBoolValue(YSTRING("primary"),m_primaryRate));
+    m_callRefLen = params.getIntValue(YSTRING("callreflen"),m_primaryRate ? 2 : 1);
     if (m_callRefLen < 1 || m_callRefLen > 4)
 	m_callRefLen = 2;
     // Set mask. Bit 7 of the first byte of the message header it's used for initiator flag
@@ -2394,25 +2394,25 @@ ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
     m_callDiscTimer.interval(params,"t305",0,5000,false);
     m_callRelTimer.interval(params,"t308",0,5000,false);
     m_callConTimer.interval(params,"t313",0,5000,false);
-    m_cpeNumber = params.getValue("number");
-    m_numPlan = params.getValue("numplan");
+    m_cpeNumber = params.getValue(YSTRING("number"));
+    m_numPlan = params.getValue(YSTRING("numplan"));
     if (0xffff == lookup(m_numPlan,Q931Parser::s_dict_numPlan,0xffff))
 	m_numPlan = "unknown";
-    m_numType = params.getValue("numtype");
+    m_numType = params.getValue(YSTRING("numtype"));
     if (0xffff == lookup(m_numType,Q931Parser::s_dict_typeOfNumber,0xffff))
 	m_numType = "unknown";
-    m_numPresentation = params.getValue("presentation");
+    m_numPresentation = params.getValue(YSTRING("presentation"));
     if (0xffff == lookup(m_numPresentation,Q931Parser::s_dict_presentation,0xffff))
 	m_numPresentation = "allowed";
-    m_numScreening = params.getValue("screening");
+    m_numScreening = params.getValue(YSTRING("screening"));
     if (0xffff == lookup(m_numScreening,Q931Parser::s_dict_screening,0xffff))
 	m_numScreening = "user-provided";
-    m_format = params.getValue("format");
+    m_format = params.getValue(YSTRING("format"));
     if (0xffff == lookup(m_format,Q931Parser::s_dict_bearerProto1,0xffff))
 	m_format = "alaw";
     // Debug
-    setDebug(params.getBoolValue("print-messages",false),
-	params.getBoolValue("extended-debug",false));
+    setDebug(params.getBoolValue(YSTRING("print-messages"),false),
+	params.getBoolValue(YSTRING("extended-debug"),false));
     if (debugAt(DebugInfo)) {
 	String s(network() ? "NET" : "CPE");
 #ifdef DEBUG
@@ -2437,14 +2437,14 @@ ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
 	s << " segmentation=" << String::boolText(m_parserData.m_allowSegment);
 	s << " max-segments=" << (unsigned int)m_parserData.m_maxSegments;
 #else
-	s << " type=" << params.getValue("switchtype");
+	s << " type=" << params.getValue(YSTRING("switchtype"));
 	s << " pri=" << String::boolText(m_primaryRate);
 	s << " format=" << m_format;
 	s << " channelsync=" << String::boolText(0 != m_syncGroupTimer.interval());
 #endif
 	Debug(this,DebugInfo,"ISDN Call Controller %s [%p]",s.c_str(),this);
     }
-    setDumper(params.getValue("layer3dump"));
+    setDumper(params.getValue(YSTRING("layer3dump")));
     m_syncGroupTimer.start();
 }
 
@@ -2469,13 +2469,13 @@ bool ISDNQ931::initialize(const NamedList* config)
     Debug(this,DebugInfo,"ISDNQ931::initialize(%p) [%p]%s",config,this,tmp.c_str());
 #endif
     if (config) {
-	debugLevel(config->getIntValue("debuglevel_q931",
-	    config->getIntValue("debuglevel",-1)));
-	setDebug(config->getBoolValue("print-messages",false),
-	    config->getBoolValue("extended-debug",false));
+	debugLevel(config->getIntValue(YSTRING("debuglevel_q931"),
+	    config->getIntValue(YSTRING("debuglevel"),-1)));
+	setDebug(config->getBoolValue(YSTRING("print-messages"),false),
+	    config->getBoolValue(YSTRING("extended-debug"),false));
     }
     if (config && !layer2()) {
-	const String* name = config->getParam("sig");
+	const String* name = config->getParam(YSTRING("sig"));
 	if (!name)
 	    name = config;
 	if (!TelEngine::null(name)) {
@@ -2728,7 +2728,7 @@ void ISDNQ931::receiveData(const DataBlock& data, u_int8_t tei, ISDNLayer2* laye
 		// We are a BRI CPE with a number - check the called party field
 		ISDNQ931IE* ie = msg->getIE(ISDNQ931IE::CalledNo);
 		if (ie) {
-		    const String* number = ie->getParam("number");
+		    const String* number = ie->getParam(YSTRING("number"));
 		    if (number && !number->startsWith(m_cpeNumber)) {
 			DDebug(this,DebugInfo,"Setup was for '%s', not us.",number->c_str());
 			break;
@@ -3043,12 +3043,12 @@ ISDNQ931Message* ISDNQ931::getMsg(const DataBlock& data)
 	ISDNQ931IE* ie = msg->getIE(ISDNQ931IE::Segmented);
 	if (!ie)
 	    break;
-	NamedString* ns = ie->getParam("first");
+	NamedString* ns = ie->getParam(YSTRING("first"));
 	if (!ns)
 	    break;
 	first = ns->toBoolean();
-	remaining = (u_int8_t)ie->getIntValue("remaining",0xff);
-	type = (u_int8_t)ie->getIntValue("message",0xff);
+	remaining = (u_int8_t)ie->getIntValue(YSTRING("remaining"),0xff);
+	type = (u_int8_t)ie->getIntValue(YSTRING("message"),0xff);
 	valid = true;
 	break;
     }
@@ -3196,7 +3196,7 @@ void ISDNQ931::processMsgRestart(ISDNQ931Message* msg, u_int8_t tei)
 	msg->name(),m_data.m_restart.c_str(),m_data.m_channels.c_str());
 
     while (true) {
-	if (m_data.m_restart == "channels") {
+	if (m_data.m_restart == YSTRING("channels")) {
 	    if (list->count() > 0)
 		terminateCalls(list,"resource-unavailable");
 	    else {
@@ -3206,8 +3206,8 @@ void ISDNQ931::processMsgRestart(ISDNQ931Message* msg, u_int8_t tei)
 	    break;
 	}
 
-	bool single = (m_data.m_restart == "interface");
-	bool all = !single && (m_data.m_restart == "all-interfaces");
+	bool single = (m_data.m_restart == YSTRING("interface"));
+	bool all = !single && (m_data.m_restart == YSTRING("all-interfaces"));
 	// If all interfaces is specified, ChannelID must not be present
 	// If ChannelID is present and allowed, it must contain a single channel code
 	if (!(single || all) || (all && list->count() > 0) ||
@@ -3460,8 +3460,8 @@ ISDNQ931Monitor::ISDNQ931Monitor(const NamedList& params, const char* name)
     m_parserData.m_maxMsgLen = 0xffffffff;
     m_parserData.m_dbg = this;
     // Debug
-    setDebug(params.getBoolValue("print-messages",true),
-	params.getBoolValue("extended-debug",false));
+    setDebug(params.getBoolValue(YSTRING("print-messages"),true),
+	params.getBoolValue(YSTRING("extended-debug"),false));
 }
 
 ISDNQ931Monitor::~ISDNQ931Monitor()
@@ -3485,10 +3485,10 @@ bool ISDNQ931Monitor::initialize(const NamedList* config)
     Debug(this,DebugInfo,"ISDNQ931Monitor::initialize(%p) [%p]%s",config,this,tmp.c_str());
 #endif
     if (config) {
-	debugLevel(config->getIntValue("debuglevel_q931",
-	    config->getIntValue("debuglevel",-1)));
-	setDebug(config->getBoolValue("print-messages",false),
-	    config->getBoolValue("extended-debug",false));
+	debugLevel(config->getIntValue(YSTRING("debuglevel_q931"),
+	    config->getIntValue(YSTRING("debuglevel"),-1)));
+	setDebug(config->getBoolValue(YSTRING("print-messages"),false),
+	    config->getBoolValue(YSTRING("extended-debug"),false));
 	for (int i = 0; i <= 1; i++) {
 	    bool net = (0 == i);
 	    if (net && m_q921Net)
@@ -4044,7 +4044,7 @@ void ISDNQ931Message::toString(String& dest, bool extendedDebug, const char* ind
 
 void* ISDNQ931Message::getObject(const String& name) const
 {
-    if (name == "ISDNQ931Message")
+    if (name == YSTRING("ISDNQ931Message"))
 	return (void*)this;
     return SignallingMessage::getObject(name);
 }
@@ -4594,7 +4594,7 @@ ISDNQ931Message* Q931Parser::decode(const DataBlock& buffer, DataBlock* segData)
 	    if (m_settings->flag(ISDNQ931::IgnoreNonLockedIE)) {
 		bool ignore = false;
 		if (ie->type() == ISDNQ931IE::Shift)
-		    ignore = m_skip = !ie->getBoolValue("lock",false);
+		    ignore = m_skip = !ie->getBoolValue(YSTRING("lock"),false);
 		else if (m_skip) {
 		    ignore = true;
 		    m_skip = false;
@@ -5074,8 +5074,8 @@ ISDNQ931IE* Q931Parser::getIE(const u_int8_t* data, u_int32_t len, u_int32_t& co
 // Check Shift IE. Change current codeset
 void Q931Parser::shiftCodeset(const ISDNQ931IE* ie)
 {
-    bool locking = ie->getBoolValue("lock",false);
-    int value = ie->getIntValue("codeset",0);
+    bool locking = ie->getBoolValue(YSTRING("lock"),false);
+    int value = ie->getIntValue(YSTRING("codeset"),0);
     XDebug(m_settings->m_dbg,DebugAll,
 	"Process %s shift with codeset %u [%p]",
 	locking?"locking":"non locking",value,m_msg);

@@ -1317,7 +1317,7 @@ int String::fixUtf8(const char* replace, unsigned int maxSeq, bool overlong)
 
 void* String::getObject(const String& name) const
 {
-    if (name == "String")
+    if (name == YSTRING("String"))
 	return const_cast<String*>(this);
     return GenObject::getObject(name);
 }
@@ -1441,7 +1441,7 @@ const String& NamedString::toString() const
 
 void* NamedString::getObject(const String& name) const
 {
-    if (name == "NamedString")
+    if (name == YSTRING("NamedString"))
 	return (void*)this;
     return String::getObject(name);
 }
@@ -1476,7 +1476,7 @@ GenObject* NamedPointer::takeData()
 
 void* NamedPointer::getObject(const String& name) const
 {
-    if (name == "NamedPointer")
+    if (name == YSTRING("NamedPointer"))
 	return (void*)this;
     void* p = NamedString::getObject(name);
     if (p)

@@ -92,21 +92,21 @@ SignallingComponent* SignallingFactory::build(const String& type, const NamedLis
     lock.drop();
     DDebug(DebugInfo,"Factory creating default '%s' named '%s'",type.c_str(),name->c_str());
     // now build some objects we know about
-    if (type == "SS7MTP2")
+    if (type == YSTRING("SS7MTP2"))
 	return new SS7MTP2(*name);
-    else if (type == "SS7M2PA")
+    else if (type == YSTRING("SS7M2PA"))
 	return new SS7M2PA(*name);
-    else if (type == "SS7MTP3")
+    else if (type == YSTRING("SS7MTP3"))
 	return new SS7MTP3(*name);
-    else if (type == "SS7Router")
+    else if (type == YSTRING("SS7Router"))
 	return new SS7Router(*name);
-    else if (type == "SS7Management")
+    else if (type == YSTRING("SS7Management"))
 	return new SS7Management(*name);
-    else if (type == "ISDNQ921")
+    else if (type == YSTRING("ISDNQ921"))
 	return new ISDNQ921(*name,*name);
-    else if (type == "ISDNQ931")
+    else if (type == YSTRING("ISDNQ931"))
 	return new ISDNQ931(*name,*name);
-    else if (type == "ISDNQ931Monitor")
+    else if (type == YSTRING("ISDNQ931Monitor"))
 	return new ISDNQ931Monitor(*name,*name);
     Debug(DebugMild,"Factory could not create '%s' named '%s'",type.c_str(),name->c_str());
     return 0;
@@ -132,9 +132,9 @@ SignallingComponent::SignallingComponent(const char* name, const NamedList* para
     : m_engine(0), m_compType("unknown")
 {
     if (params) {
-	name = params->getValue("debugname",name);
-	m_compType = params->getValue("type",m_compType);
-	debugLevel(params->getIntValue("debuglevel",-1));
+	name = params->getValue(YSTRING("debugname"),name);
+	m_compType = params->getValue(YSTRING("type"),m_compType);
+	debugLevel(params->getIntValue(YSTRING("debuglevel"),-1));
     }
     DDebug(engine(),DebugAll,"Component '%s' created [%p]",name,this);
     setName(name);

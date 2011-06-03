@@ -94,7 +94,7 @@ MimeHeaderLine::~MimeHeaderLine()
 
 void* MimeHeaderLine::getObject(const String& name) const
 {
-    if (name == "MimeHeaderLine")
+    if (name == YSTRING("MimeHeaderLine"))
 	return const_cast<MimeHeaderLine*>(this);
     return NamedString::getObject(name);
 }
@@ -316,7 +316,7 @@ MimeAuthLine::MimeAuthLine(const MimeAuthLine& original, const char* newName)
 
 void* MimeAuthLine::getObject(const String& name) const
 {
-    if (name == "MimeAuthLine")
+    if (name == YSTRING("MimeAuthLine"))
 	return const_cast<MimeAuthLine*>(this);
     return MimeHeaderLine::getObject(name);
 }
@@ -444,11 +444,11 @@ MimeBody* MimeBody::build(const char* buf, int len, const MimeHeaderLine& type)
 	return 0;
     String what = type;
     what.toLower();
-    if (what == "application/sdp")
+    if (what == YSTRING("application/sdp"))
 	return new MimeSdpBody(type,buf,len);
-    if ((what == "application/dtmf-relay") || (what == "message/sipfrag"))
+    if ((what == YSTRING("application/dtmf-relay")) || (what == YSTRING("message/sipfrag")))
 	return new MimeLinesBody(type,buf,len);
-    if (what.startsWith("text/") || (what == "application/dtmf"))
+    if (what.startsWith("text/") || (what == YSTRING("application/dtmf")))
 	return new MimeStringBody(type,buf,len);
     if (what.startsWith("multipart/"))
 	return new MimeMultipartBody(type,buf,len);
@@ -592,7 +592,7 @@ MimeMultipartBody::MimeMultipartBody(const MimeMultipartBody& original)
 // Find object by class name, descend into parts
 void* MimeMultipartBody::getObject(const String& name) const
 {
-    if (name == "MimeMultipartBody")
+    if (name == YSTRING("MimeMultipartBody"))
 	return const_cast<MimeMultipartBody*>(this);
     void* res = MimeBody::getObject(name);
     if (res)

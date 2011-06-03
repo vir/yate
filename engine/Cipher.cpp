@@ -38,7 +38,7 @@ Cipher::~Cipher()
 
 void* Cipher::getObject(const String& name) const
 {
-    if (name == "Cipher")
+    if (name == YSTRING("Cipher"))
 	return const_cast<Cipher*>(this);
     return GenObject::getObject(name);
 }

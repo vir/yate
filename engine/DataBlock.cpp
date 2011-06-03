@@ -64,7 +64,7 @@ DataBlock::~DataBlock()
 
 void* DataBlock::getObject(const String& name) const
 {
-    if (name == "DataBlock")
+    if (name == YSTRING("DataBlock"))
 	return const_cast<DataBlock*>(this);
     return GenObject::getObject(name);
 }
@@ -208,32 +208,32 @@ bool DataBlock::convert(const DataBlock& src, const String& sFormat,
     }
     unsigned sl = 0, dl = 0;
     void *ctable = 0;
-    if (sFormat == "slin") {
+    if (sFormat == YSTRING("slin")) {
 	sl = 2;
 	dl = 1;
-	if (dFormat == "alaw")
+	if (dFormat == YSTRING("alaw"))
 	    ctable = s2a;
-	else if (dFormat == "mulaw")
+	else if (dFormat == YSTRING("mulaw"))
 	    ctable = s2u;
     }
-    else if (sFormat == "alaw") {
+    else if (sFormat == YSTRING("alaw")) {
 	sl = 1;
-	if (dFormat == "mulaw") {
+	if (dFormat == YSTRING("mulaw")) {
 	    dl = 1;
 	    ctable = a2u;
 	}
-	else if (dFormat == "slin") {
+	else if (dFormat == YSTRING("slin")) {
 	    dl = 2;
 	    ctable = a2s;
 	}
     }
-    else if (sFormat == "mulaw") {
+    else if (sFormat == YSTRING("mulaw")) {
 	sl = 1;
-	if (dFormat == "alaw") {
+	if (dFormat == YSTRING("alaw")) {
 	    dl = 1;
 	    ctable = u2a;
 	}
-	else if (dFormat == "slin") {
+	else if (dFormat == YSTRING("slin")) {
 	    dl = 2;
 	    ctable = u2s;
 	}

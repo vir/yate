@@ -868,6 +868,7 @@ bool Connection::autoComplete()
 	if (*lvl)
 	    break;
 	completeWords(m.retValue(),s_level,partWord);
+	break;
     }
     if (m_auth >= Admin)
 	Engine::dispatch(m);

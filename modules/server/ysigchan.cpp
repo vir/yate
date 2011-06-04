@@ -382,7 +382,7 @@ protected:
     // Set trunk name and type. Append to plugin list
     SigTrunk(const char* name, Type type);
     // Start worker thread. Set error on failure
-    bool startThread(String& error, unsigned long sleepUsec);
+    bool startThread(String& error, unsigned long sleepUsec, int floodLimit);
     // Create/Reload/Release data
     virtual bool create(NamedList& params, String& error) { return false; }
     virtual bool reload(NamedList& params) { return false; }
@@ -620,9 +620,10 @@ class SigTrunkThread : public Thread
 {
     friend class SigTrunk;                // SigTrunk will set m_timeout when needded
 public:
-    inline SigTrunkThread(SigTrunk* trunk, unsigned long sleepUsec)
+    inline SigTrunkThread(SigTrunk* trunk, unsigned long sleepUsec, int floodLimit)
 	: Thread("YSIG Trunk"),
-	  m_trunk(trunk), m_timeout(0), m_sleepUsec(sleepUsec)
+	  m_trunk(trunk), m_timeout(0), m_sleepUsec(sleepUsec),
+	  m_floodEvents(floodLimit)
 	{ }
     virtual ~SigTrunkThread();
     virtual void run();
@@ -630,6 +631,7 @@ private:
     SigTrunk* m_trunk;
     u_int64_t m_timeout;
     unsigned long m_sleepUsec;
+    int m_floodEvents;
 };
 
 
@@ -673,6 +675,7 @@ static SigFactory factory;
 static SigNotifier s_notifier;
 static Configuration s_cfg;
 static const String s_noPrefixParams = "format,earlymedia";
+static int s_floodEvents = 20;
 
 static const char s_miniHelp[] = "sigdump component [filename]";
 static const char s_fullHelp[] = "Command to dump signalling data to a file";
@@ -2656,6 +2659,7 @@ void SigDriver::initialize()
     s_cfg.load();
     m_dataFile = s_cfg.getValue("general","datafile",Engine::configFile("ysigdata"));
     Engine::self()->runParams().replaceParams(m_dataFile);
+    s_floodEvents = s_cfg.getIntValue("general","floodevents",20);
     // Startup
     if (!m_engine) {
 	setup();
@@ -2935,11 +2939,11 @@ void SigTrunk::cleanup()
     release();
 }
 
-bool SigTrunk::startThread(String& error, unsigned long sleepUsec)
+bool SigTrunk::startThread(String& error, unsigned long sleepUsec, int floodLimit)
 {
     if (!m_thread) {
 	if (m_controller)
-	    m_thread = new SigTrunkThread(this,sleepUsec);
+	    m_thread = new SigTrunkThread(this,sleepUsec,floodLimit);
 	else {
 	    Debug(&plugin,DebugNote,
 		"Trunk('%s'). No worker thread for trunk without call controller [%p]",
@@ -3088,7 +3092,8 @@ bool SigSS7Isup::create(NamedList& params, String& error)
     }
 
     // Start thread
-    if (!startThread(error,plugin.engine()->tickDefault()))
+    if (!startThread(error,plugin.engine()->tickDefault(),
+	params.getIntValue("floodevents",s_floodEvents)))
 	return false;
 
     return true;
@@ -3262,7 +3267,8 @@ bool SigIsdn::create(NamedList& params, String& error)
     q931()->initialize(&params);
 
     // Start thread
-    if (!startThread(error,plugin.engine()->tickDefault()))
+    if (!startThread(error,plugin.engine()->tickDefault(),
+	params.getIntValue("floodevents",s_floodEvents)))
 	return false;
 
     return true;
@@ -3499,7 +3505,8 @@ bool SigIsdnMonitor::create(NamedList& params, String& error)
     q931()->attach(groupCpe,false);
 
     // Start thread
-    if (!startThread(error,plugin.engine()->tickDefault()))
+    if (!startThread(error,plugin.engine()->tickDefault(),
+	params.getIntValue("floodevents",s_floodEvents)))
 	return false;
 
     if (debugAt(DebugInfo)) {
@@ -4013,6 +4020,7 @@ void SigTrunkThread::run()
 	return;
     DDebug(&plugin,DebugAll,"%s is running for trunk '%s' [%p]",
 	name(),m_trunk->name().c_str(),this);
+    int evCount = 0;
     SignallingEvent* event = 0;
     while (true) {
 	if (!event)
@@ -4022,11 +4030,26 @@ void SigTrunkThread::run()
 	Time time;
 	event = m_trunk->controller()->getEvent(time);
 	if (event) {
-	    XDebug(&plugin,DebugAll,"Trunk('%s'). Got event (%p,'%s',%p,%u)",
-		m_trunk->name().c_str(),event,event->name(),event->call(),
+	    evCount++;
+	    XDebug(&plugin,DebugAll,"Trunk('%s'). Got event #%d (%p,'%s',%p,%u)",
+		m_trunk->name().c_str(),evCount,
+		event,event->name(),event->call(),
 		event->call()?event->call()->refcount():0);
 	    m_trunk->handleEvent(event);
 	    delete event;
+	    if (evCount == m_floodEvents)
+		Debug(&plugin,DebugMild,"Trunk('%s') flooded: %d handled events",
+		    m_trunk->name().c_str(),evCount);
+	    else if ((evCount % m_floodEvents) == 0)
+		Debug(&plugin,DebugWarn,"Trunk('%s') severe flood: %d events",
+		    m_trunk->name().c_str(),evCount);
+	}
+	else {
+#ifdef XDEBUG
+	    if (evCount)
+		Debug(&plugin,DebugAll,"Trunk('%s'). Got no event",m_trunk->name().c_str());
+#endif
+	    evCount = 0;
 	}
 	// Check timeout if waiting to terminate
 	if (m_timeout && time.msec() > m_timeout) {

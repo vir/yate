@@ -1849,13 +1849,27 @@ bool ISDNQ931Call::reserveCircuit()
 	q931()->reserveCircuit(m_circuit,0,-1,&m_data.m_channels,m_data.m_channelMandatory,true);
     if (m_circuit) {
 	m_data.m_channels = m_circuit->code();
+	u_int64_t t = Time::msecNow();
 	if (!m_circuit->connect(m_data.m_format) && !m_net && (state() != ISDNQ931State::CallPresent)) {
 	    Debug(q931(),DebugNote,
 		"Call(%u,%u). Failed to connect circuit [%p]",Q931_CALL_ID,this);
 	    return false;
 	}
-	DDebug(q931(),DebugInfo,"Call(%u,%u). Connected to circuit %u [%p]",
-	    Q931_CALL_ID,m_circuit->code(),this);
+	t = Time::msecNow() - t;
+	if (t > 100) {
+	    int level = DebugInfo;
+	    if (t > 300)
+		level = DebugMild;
+	    else if (t > 200)
+		level = DebugNote;
+	    Debug(q931(),level,"Call(%u,%u). Connected to circuit %u in %u ms [%p]",
+		Q931_CALL_ID,m_circuit->code(),(unsigned int)t,this);
+	}
+#ifdef DEBUG
+	else
+	    Debug(q931(),DebugAll,"Call(%u,%u). Connected to circuit %u in %u ms [%p]",
+		Q931_CALL_ID,m_circuit->code(),(unsigned int)t,this);
+#endif
 	return true;
     }
     DDebug(q931(),DebugNote,

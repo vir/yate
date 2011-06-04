@@ -1,3 +1,13 @@
+yate (3.3.3.svn4438) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4438: + Added support for detecting event
+    flood condition on ISUP and ISDN trunks.  + Compute how long took
+    for ISUP and ISDN circuits to connect, log a message if time is
+    excessive.  + Added a local debug level viewing threshold to
+    rmanager.  + Added missing instruction, fixed bug in Rev. 4437
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sun, 05 Jun 2011 02:19:22 +0400
+
 yate (3.3.3.svn4434) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4434: + On unsupported compilers the literal

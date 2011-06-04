@@ -69,6 +69,12 @@ static const char* s_level[] =
     0
 };
 
+static const char* s_debug[] =
+{
+    "threshold",
+    0
+};
+
 static const char* s_oview[] =
 {
     "overview",
@@ -220,6 +226,7 @@ private:
     bool m_output;
     bool m_colorize;
     bool m_machine;
+    int m_threshold;
     Socket* m_socket;
     unsigned char m_lastch;
     unsigned char m_escmode;
@@ -395,6 +402,7 @@ Connection* RManagerListener::checkCreate(Socket* sock, const char* addr)
 Connection::Connection(Socket* sock, const char* addr, RManagerListener* listener)
     : Thread("RManager Connection"),
       m_auth(None), m_debug(false), m_output(false), m_colorize(false), m_machine(false),
+      m_threshold(DebugAll),
       m_socket(sock), m_lastch(0), m_escmode(0), m_echoing(false), m_beeping(false),
       m_timeout(0), m_address(addr), m_listener(listener)
 {
@@ -841,9 +849,27 @@ bool Connection::autoComplete()
 	m.addParam("partword",partWord);
     if ((partLine == "status") || (partLine == "debug") || (partLine == "drop"))
 	m.setParam("complete","channels");
-    static const Regexp r("^debug [^ ]\\+$");
-    if (r.matches(partLine))
+    static const Regexp r("^debug \\([^ ]\\+\\)$");
+    if (partLine == "debug")
+	completeWords(m.retValue(),s_debug,partWord);
+    else while (partLine.matches(r)) {
+	String tmp = partLine.matchString(1);
+	const char** lvl = s_level;
+	for (; *lvl; lvl++) {
+	    if (tmp == *lvl)
+		break;
+	}
+	if (*lvl)
+	    break;
+	for (lvl = s_debug; *lvl; lvl++) {
+	    if (tmp == *lvl)
+		break;
+	}
+	if (*lvl)
+	    break;
 	completeWords(m.retValue(),s_level,partWord);
+	break;
+    }
     if (m_auth >= Admin)
 	Engine::dispatch(m);
     if (m.retValue().null())
@@ -1108,6 +1134,15 @@ bool Connection::processLine(const char *line)
 	    str >> dbg;
 	    dbg = debugLevel(dbg);
 	}
+	if (str.startSkip("threshold")) {
+	    int thr = m_threshold;
+	    str >> thr;
+	    if (thr < DebugConf)
+		thr = DebugConf;
+	    else if (thr > DebugAll)
+		thr = DebugAll;
+	    m_threshold = thr;
+	}
 	else if (str.isBoolean()) {
 	    str >> m_debug;
 	    if (m_debug)
@@ -1137,11 +1172,13 @@ bool Connection::processLine(const char *line)
 	}
 	if (m_machine) {
 	    str = "%%=debug:level=";
-	    str << debugLevel() << ":local=" << m_debug << "\r\n";
+	    str << debugLevel() << ":local=" << m_debug;
+	    str << ":threshold=" << m_threshold << "\r\n";
 	}
 	else {
 	    str = "Debug level: ";
-	    str << debugLevel() << " local: " << (m_debug ? "on\r\n" : "off\r\n");
+	    str << debugLevel() << " local: " << (m_debug ? "on" : "off");
+	    str << " threshold: " << m_threshold << "\r\n";
 	}
 	writeStr(str);
     }
@@ -1266,7 +1303,7 @@ void Connection::writeDebug(const char *str, int level)
 {
     if (null(str))
 	return;
-    if (m_debug || (m_output && (level < 0))) {
+    if ((m_debug && (m_threshold >= level)) || (m_output && (level < 0))) {
 	if (m_echoing && m_buffer)
 	    clearLine();
 	const char* col = m_colorize ? debugColor(level) : 0;

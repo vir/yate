@@ -2747,6 +2747,7 @@ bool SS7ISUPCall::connectCircuit(const char* special)
     if (TelEngine::null(special))
 	special = 0;
     if (m_circuit && !ok) {
+	u_int64_t t = Time::msecNow();
 	if (special) {
 	    m_circuit->updateFormat(m_format,0);
 	    ok = m_circuit->setParam("special_mode",special) &&
@@ -2754,6 +2755,21 @@ bool SS7ISUPCall::connectCircuit(const char* special)
 	}
 	else
 	    ok = m_circuit->connected() || m_circuit->connect(m_format);
+	t = Time::msecNow() - t;
+	if (t > 100) {
+	    int level = DebugInfo;
+	    if (t > 300)
+		level = DebugMild;
+	    else if (t > 200)
+		level = DebugNote;
+	    Debug(isup(),level,"Call(%u). Spent %u ms connecting circuit [%p]",
+		id(),(unsigned int)t,this);
+	}
+#ifdef DEBUG
+	else
+	    Debug(isup(),DebugAll,"Call(%u). Spent %u ms connecting circuit [%p]",
+		id(),(unsigned int)t,this);
+#endif
     }
     if (!ok)
 	Debug(isup(),DebugMild,"Call(%u). Circuit %s failed (format='%s')%s [%p]",

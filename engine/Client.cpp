@@ -445,9 +445,9 @@ bool Window::setParams(const NamedList& params)
 	const NamedString* s = params.getParam(i);
 	if (s) {
 	    String n(s->name());
-	    if (n == "title")
+	    if (n == YSTRING("title"))
 		title(*s);
-	    if (n == "context")
+	    if (n == YSTRING("context"))
 		context(*s);
 	    else if (n.startSkip("show:",false) || n.startSkip("display:",false))
 		ok = setShow(n,s->toBoolean()) && ok;
@@ -991,7 +991,7 @@ void Client::run()
 // Check if a message is sent by the client
 bool Client::isClientMsg(Message& msg)
 {
-    String* module = msg.getParam("module");
+    String* module = msg.getParam(YSTRING("module"));
     return module && ClientDriver::self() &&
 	ClientDriver::self()->name() == *module;
 }
@@ -2397,7 +2397,7 @@ bool Client::buildOutgoingChannel(NamedList& params)
 #endif
     Debug(ClientDriver::self(),DebugAll,"Client::buildOutgoingChannel(%s) [%p]",tmp.safe(),this);
     // get the target of the call
-    NamedString* target = params.getParam("target");
+    NamedString* target = params.getParam(YSTRING("target"));
     if (TelEngine::null(target))
 	return false;
     // Create the channel. Release driver's mutex as soon as possible
@@ -2975,7 +2975,7 @@ Message* Client::eventMessage(const String& event, Window* wnd, const char* name
 // Incoming (from engine) constructor
 ClientChannel::ClientChannel(const Message& msg, const String& peerid)
     : Channel(ClientDriver::self(),0,true),
-    m_party(msg.getValue("caller")), m_noticed(false),
+    m_party(msg.getValue(YSTRING("caller"))), m_noticed(false),
     m_line(0), m_active(false), m_silence(false), m_conference(false),
     m_muted(false), m_clientData(0), m_utility(false)
 {
@@ -2984,8 +2984,8 @@ ClientChannel::ClientChannel(const Message& msg, const String& peerid)
     m_targetid = peerid;
     m_peerId = peerid;
     Message* s = message("chan.startup");
-    s->copyParams(msg,"caller,callername,called,billid,callto,username");
-    String* cs = msg.getParam("chanstartup_parameters");
+    s->copyParams(msg,YSTRING("caller,callername,called,billid,callto,username"));
+    String* cs = msg.getParam(YSTRING("chanstartup_parameters"));
     if (!null(cs))
 	s->copyParams(msg,*cs);
     Engine::enqueue(s);
@@ -3029,6 +3029,7 @@ ClientChannel::~ClientChannel()
 // Init and start router for an outgoing (to engine), not utility, channel
 bool ClientChannel::start(const String& target, const NamedList& params)
 {
+    static const String s_cpParams("line,protocol,account,caller,callername,domain,cdrwrite");
     // Build the call.route and chan.startup messages
     Message* m = message("call.route");
     Message* s = message("chan.startup");
@@ -3045,12 +3046,12 @@ bool ClientChannel::start(const String& target, const NamedList& params)
     }
     m->setParam(param,to);
     s->setParam("called",to);
-    m->copyParams(params,"line,protocol,account,caller,callername,domain,cdrwrite");
-    s->copyParams(params,"line,protocol,account,caller,callername,domain,cdrwrite");
-    String* cs = params.getParam("chanstartup_parameters");
+    m->copyParams(params,s_cpParams);
+    s->copyParams(params,s_cpParams);
+    String* cs = params.getParam(YSTRING("chanstartup_parameters"));
     if (!null(cs))
 	s->copyParams(params,*cs);
-    String* c = params.getParam("call_parameters");
+    String* c = params.getParam(YSTRING("call_parameters"));
     if (!null(c))
 	m->copyParams(params,*c);
     Engine::enqueue(s);
@@ -3119,7 +3120,7 @@ void ClientChannel::connected(const char* reason)
     Message m("chan.attach");
     complete(m,true);
     m.userData(this);
-    m.clearParam("id");
+    m.clearParam(YSTRING("id"));
     m.setParam("consumer",dev);
     ClientSound::s_soundsMutex.lock();
     ClientSound* s = ClientSound::find(m_soundId);
@@ -3514,7 +3515,7 @@ void ClientDriver::msgTimer(Message& msg)
 bool ClientDriver::msgRoute(Message& msg)
 {
     // don't route here our own calls
-    if (name() == msg.getValue("module"))
+    if (name() == msg.getValue(YSTRING("module")))
 	return false;
     if (Client::self() && Client::self()->callRouting(msg)) {
 	msg.retValue() = name() + "/*";
@@ -3527,7 +3528,7 @@ bool ClientDriver::received(Message& msg, int id)
 {
     if (id == ImRoute) {
 	// don't route here our own messages
-	if (name() == msg.getValue("module"))
+	if (name() == msg.getValue(YSTRING("module")))
 	    return false;
 	if (!(Client::self() && Client::self()->imRouting(msg)))
 	    return false;
@@ -3785,7 +3786,7 @@ ClientAccount::ClientAccount(const char* proto, const char* user, const char* ho
     m_params.addParam("protocol",proto,false);
     m_params.addParam("username",user,false);
     m_params.addParam("domain",host,false);
-    setResource(new ClientResource(m_params.getValue("resource")));
+    setResource(new ClientResource(m_params.getValue(YSTRING("resource"))));
     setContact(contact);
     Debug(ClientDriver::self(),DebugAll,"Created client account='%s' [%p]",
 	toString().c_str(),this);
@@ -3796,7 +3797,7 @@ ClientAccount::ClientAccount(const NamedList& params, ClientContact* contact)
     : Mutex(true,"ClientAccount"),
     m_params(params), m_resource(0), m_contact(0)
 {
-    setResource(new ClientResource(m_params.getValue("resource")));
+    setResource(new ClientResource(m_params.getValue(YSTRING("resource"))));
     setContact(contact);
     Debug(ClientDriver::self(),DebugAll,"Created client account='%s' [%p]",
 	toString().c_str(),this);
@@ -3840,15 +3841,16 @@ void ClientAccount::setResource(ClientResource* res)
 // Save this account to client accounts file or remove it
 bool ClientAccount::save(bool ok, bool savePwd)
 {
+    static const String s_oldId("old_id");
     bool changed = false;
     // Handle id changes (new version generate an internal id)
-    String old = m_params["old_id"];
+    String old = m_params[s_oldId];
     NamedList* oldSect = old ? Client::s_accounts.getSection(old) : 0;
     if (oldSect) {
 	changed = true;
 	Client::s_accounts.clearSection(old);
     }
-    m_params.clearParam("old_id");
+    m_params.clearParam(s_oldId);
     NamedList* sect = Client::s_accounts.getSection(toString());
     if (ok) {
 	if (!sect)
@@ -3857,9 +3859,9 @@ bool ClientAccount::save(bool ok, bool savePwd)
 	    changed = true;
 	    *sect = m_params;
 	    if (!savePwd)
-		sect->clearParam("password");
+		sect->clearParam(YSTRING("password"));
 	    // Don't save internal (temporary parameters)
-	    sect->clearParam("internal",'.');
+	    sect->clearParam(YSTRING("internal"),'.');
 	    sect->assign(toString());
 	}
     }
@@ -4029,7 +4031,7 @@ Message* ClientAccount::userlogin(bool login, const char* msg)
     Message* m = Client::buildMessage(msg,toString(),login ? "login" : "logout");
     if (login) {
 	m->copyParams(m_params);
-	m->clearParam("internal",'.');
+	m->clearParam(YSTRING("internal"),'.');
     }
     else
 	m->addParam("protocol",protocol(),false);
@@ -4041,7 +4043,7 @@ Message* ClientAccount::userData(bool update, const String& data, const char* ms
 {
     Message* m = Client::buildMessage(msg,toString(),update ? "update" : "query");
     m->addParam("data",data,false);
-    if (!update || data != "chatrooms")
+    if (!update || data != YSTRING("chatrooms"))
 	return m;
     m->setParam("data.count","0");
     unsigned int n = 0;
@@ -4066,7 +4068,7 @@ Message* ClientAccount::userData(bool update, const String& data, const char* ms
 	NamedIterator iter(r->m_params);
 	for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
 	    // Skip local/remote params
-	    if (ns->name() != "local" && ns->name() != "remote" &&
+	    if (ns->name() != YSTRING("local") && ns->name() != YSTRING("remote") &&
 		!ns->name().startsWith("internal."))
 		m->addParam(prefix + ns->name(),*ns);
 	}
@@ -4079,7 +4081,7 @@ Message* ClientAccount::userData(bool update, const String& data, const char* ms
 void ClientAccount::fillItemParams(NamedList& list)
 {
     list.addParam("account",toString());
-    list.addParam("protocol",m_params.getValue("protocol"));
+    list.addParam("protocol",m_params.getValue(YSTRING("protocol")));
     const char* sName = resource().statusName();
     NamedString* status = new NamedString("status",sName);
     status->append(resource().m_text,": ");
@@ -4110,9 +4112,9 @@ static bool showAccError(ClientAccount* a, String* errStr, const String& fail,
 bool ClientAccount::setupDataDir(String* errStr, bool saveAcc)
 {
     String dir;
-    String user = m_params["username"];
+    String user = m_params[YSTRING("username")];
     user.toLower();
-    String domain = m_params.getValue("domain",m_params.getValue("server"));
+    String domain = m_params.getValue(YSTRING("domain"),m_params.getValue(YSTRING("server")));
     domain.toLower();
     dir << protocol().hash() << "_" << user.hash() << "_" << domain.hash();
     if (dataDir() == dir) {
@@ -4127,7 +4129,7 @@ bool ClientAccount::setupDataDir(String* errStr, bool saveAcc)
 	    return showAccError(this,errStr,"Failed to create directory",s,0,
 		"A file with the same name already exists");
 	// Not found: clear old directory
-	m_params.clearParam("datadirectory");
+	m_params.clearParam(YSTRING("datadirectory"));
     }
     String path = Engine::configPath(true);
     // Check if already there
@@ -4274,8 +4276,8 @@ void ClientAccount::loadContacts(Configuration* cfg)
 	NamedList* sect = cfg->getSection(i);
 	if (!(sect && sect->c_str()))
 	    continue;
-	const String& type = (*sect)["type"];
-	if (type == "groupchat") {
+	const String& type = (*sect)[YSTRING("type")];
+	if (type == YSTRING("groupchat")) {
 	    String id;
 	    ClientContact::buildContactId(id,toString(),*sect);
 	    MucRoom* room = findRoom(id);
@@ -4284,13 +4286,13 @@ void ClientAccount::loadContacts(Configuration* cfg)
 	    room->groups().clear();
 	    NamedIterator iter(*sect);
 	    for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
-		if (ns->name() == "type")
+		if (ns->name() == YSTRING("type"))
 		    continue;
-		if (ns->name() == "name")
+		if (ns->name() == YSTRING("name"))
 		    room->m_name = *ns;
-		else if (ns->name() == "password")
+		else if (ns->name() == YSTRING("password"))
 		    room->m_password = *ns;
-		else if (ns->name() == "group") {
+		else if (ns->name() == YSTRING("group")) {
 		    if (*ns)
 			room->appendGroup(*ns);
 		}
@@ -4503,7 +4505,7 @@ ClientContact::ClientContact(ClientAccount* owner, const char* id, const char* n
 // Constructor. Build a contact from a list of parameters.
 ClientContact::ClientContact(ClientAccount* owner, const NamedList& params, const char* id,
     const char* uri)
-    : m_name(params.getValue("name",params)), m_params(""),
+    : m_name(params.getValue(YSTRING("name"),params)), m_params(""),
     m_owner(owner), m_online(false), m_uri(uri), m_dockedChat(false)
 {
     m_dockedChat = Client::valid() && Client::self()->getBoolOpt(Client::OptDockedChat);
@@ -4562,7 +4564,7 @@ bool ClientContact::sendChat(const char* body, const String& res,
     m->addParam("body",body);
     if (mucRoom())
 	m->addParam("muc",String::boolText(true));
-    if (!TelEngine::null(state) && (!type || type == "chat" || type == "groupchat"))
+    if (!TelEngine::null(state) && (!type || type == YSTRING("chat") || type == YSTRING("groupchat")))
 	m->addParam("chatstate",state);
     return Engine::enqueue(m);
 }

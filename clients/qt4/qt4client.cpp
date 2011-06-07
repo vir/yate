@@ -4841,9 +4841,11 @@ bool QtSound::doStart()
     if (m_sound)
 	DDebug(ClientDriver::self(),DebugAll,"Sound(%s) started file=%s",
 	    c_str(),m_file.c_str());
-    else
+    else {
 	Debug(ClientDriver::self(),DebugNote,"Sound(%s) failed to start file=%s",
 	    c_str(),m_file.c_str());
+	return false;
+    }
     m_sound->setLoops(m_repeat ? m_repeat : -1);
     m_sound->play();
     return true;

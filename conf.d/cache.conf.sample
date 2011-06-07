@@ -20,6 +20,28 @@
 ; This parameter is applied on reload and can be overridden in cache sections
 ;limit=
 
+; loadchunk: integer: The number of items to load in a database request
+; Minimum allowed value is 500, maximum allowed value is 10000
+; Set it to 0 to load the whole cache using a single database request
+; This parameter is applied on reload and can be overridden in cache sections
+; NOTES for non 0 value:
+; - The 'query_loadcache' parameter in cache sections should contain an 'ORDER BY'
+;   clause to make sure the cache table is parsed in the same order
+; - The 'query_loadcache' query MUST be a parameterized query containing
+;   LIMIT ${chunk} OFFSET ${offset}. The module will replace chunk and offset for each
+;   sent database request
+;loadchunk=0
+
+; maxchunks: integer: Maximum number of chunks to load from cache
+; Minimum allowed value is 1, maximum allowed value is 10000
+; Defaults to 1000
+; This parameter is applied on reload
+; WARNING:
+; - Set a large value only if you are sure the cache load queries are correct
+; - Setting a large value for a query without LIMIT or OFFSET will lead to
+;    useless extra processing
+;maxchunks=1000
+
 ; expire_check_interval: integer: The interval (in seconds) to check cache expire
 ; Defaults to 10, minimum allowed value 1, maximum allowed value 300
 ; This parameter is applied on reload
@@ -28,6 +50,10 @@
 ; account: string: Database name
 ; This parameter is applied on reload and can be overridden in cache sections
 ;account=
+
+; account_loadcache: string: Optional database account used to load an entire cache
+; This parameter is applied on reload and can be overridden in cache sections
+;account_loadcache=
 
 
 [lnp]
@@ -49,9 +75,9 @@
 
 ; store_npdi_before: boolean: Store routing number from incoming calls with LNP
 ; This parameter can be overidden by a 'cache_lnp_store' parameter when routing
-; Defaults to yes
+; Defaults to no
 ; This parameter is applied on reload
-;store_npdi_before=yes
+;store_npdi_before=no
 
 ; copyparams: string: Parameters to handle (store in cache or copy to handled messages)
 ; This parameter is applied on reload and can be overridden when routing by
@@ -72,6 +98,8 @@
 ; query_loadcache: string: Database query used to load the LNP cache when created
 ; This parameter is applied on reload
 ;query_loadcache=SELECT FLOOR(EXTRACT('EPOCH' FROM (timeout - CURRENT_TIMESTAMP))) AS expires,* FROM lnp
+; For non 0 'loadchunk'
+;query_loadcache=SELECT FLOOR(EXTRACT('EPOCH' FROM (timeout - CURRENT_TIMESTAMP))) AS expires,* FROM lnp ORDER BY timeout LIMIT ${chunk} OFFSET ${offset}
 
 ; query_loaditem: string: Database query used to load an item when created
 ; This parameter is applied on reload
@@ -122,6 +150,8 @@
 ; query_loadcache: string: Database query used to load the CNAM cache when created
 ; This parameter is applied on reload
 ;query_loadcache=SELECT FLOOR(EXTRACT('EPOCH' FROM (timeout - CURRENT_TIMESTAMP))) AS expires,* FROM cnam
+; For non 0 'loadchunk'
+;query_loadcache=SELECT FLOOR(EXTRACT('EPOCH' FROM (timeout - CURRENT_TIMESTAMP))) AS expires,* FROM cnam ORDER BY timeout LIMIT ${chunk} OFFSET ${offset}
 
 ; query_loaditem: string: Database query used to load an item when created
 ; This parameter is applied on reload

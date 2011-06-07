@@ -1352,6 +1352,19 @@ public:
     inline int getColumns() const
 	{ return m_columns; }
 
+    /**
+     * Retrieve a column.
+     * Note: Use the returned list only to get or set data.
+     *  List items must not be removed or appended
+     * @param column Column to retrieve
+     * @return Pointer to column list, NULL for out of bound indexes
+     */
+    inline ObjList* getColumn(int column) const {
+	    if (column >= 0 || column < m_columns)
+		return static_cast<ObjList*>(m_obj[column]);
+	    return 0;
+	}
+
 private:
     int m_rows;
     int m_columns;

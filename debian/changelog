@@ -1,3 +1,16 @@
+yate (3.3.3.svn4444) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4444: + Allow loading a cache using multiple
+    database requests. Added optional extra account used to load a
+    cache.  + Optimized Array creation: avoid parsing the whole ObjList
+    to append a new item.  + Added method used to retrieve an Array's
+    column list.  + Fixed bug: avoid accessing a NULL pointer.  + When
+    the child was terminated by watchdog report SIGCHLD.  + The
+    supervisor keeps the last child termination signal, adds it to next
+    instance's engine status and parameters.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 08 Jun 2011 02:19:23 +0400
+
 yate (3.3.3.svn4439) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4439: + Optimized const String usage in

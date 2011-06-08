@@ -7,7 +7,7 @@
    postanm_dtmf.php=
 
    Parameters handled in call.answered:
-   postanm_dtmf: boolean: Handle the message. Defaults to true
+   postanm_dtmf: boolean: Handle the message. Defaults to false
    postanm_dtmf_text: string: Tones to send. The message will be ignored if text is empty
    postanm_dtmf_outbound: boolean: Send DTMFs to called (true) or caller (false). Defaults to false
    postanm_dtmf_delay: integer: Interval to delay the tones in seconds. Defaults to 0
@@ -140,7 +140,7 @@ for (;;) {
 	case "answer":
 	    if ($ev->name == "call.answered") {
 		$text = "";
-		if (getBoolValue($ev->getValue($param),true))
+		if (getBoolValue($ev->getValue($param),false))
 		    $text = $ev->getValue($param . "_text");
 		if (!empty($text))
 		    callAnswered($ev,$text);

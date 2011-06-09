@@ -1,3 +1,12 @@
+yate (3.3.3.svn4449) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4449: + Send a message for each tone. Handle
+    a pipe char as a 1 second delay. Watch chan.replaced messages also
+    to handle tones.  + Increase threshold for cpu unconfigured core
+    number report.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 10 Jun 2011 02:19:22 +0400
+
 yate (3.3.3.svn4447) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4447: + The supervisor keeps the last child

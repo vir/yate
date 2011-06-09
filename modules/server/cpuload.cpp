@@ -568,7 +568,7 @@ void CpuMonitor::initialize(const NamedList& params,int osTimer)
 
 void CpuMonitor::manageLoad(int load)
 {
-    if (load > 100 && !m_informed) {
+    if (load > 120 && !m_informed) {
 	Debug(&s_module,DebugConf,"Please configure cpu core number");
 	m_informed = true;
 	return;

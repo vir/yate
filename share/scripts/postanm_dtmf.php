@@ -9,6 +9,7 @@
    Parameters handled in call.answered:
    postanm_dtmf: boolean: Handle the message. Defaults to false
    postanm_dtmf_text: string: Tones to send. The message will be ignored if text is empty
+	Each pipe '|' character will be interpreted as 1 second delay
    postanm_dtmf_outbound: boolean: Send DTMFs to called (true) or caller (false). Defaults to false
    postanm_dtmf_delay: integer: Interval to delay the tones in seconds. Defaults to 0
 */
@@ -55,20 +56,29 @@ function sendTones($id,$text)
     global $param;
 
     Yate::Debug($param . ": sendTones(" . $id ."," . $text . ")");
-    $m = new Yate("chan.masquerade");
-    $m->params["id"] = $id;
-    $m->params["message"] = "chan.dtmf";
-    $m->params["text"] = $text;
-    $m->Dispatch();
+    while (strlen($text) > 0) {
+	$tone = substr($text,0,1);
+	$text = substr($text,1);
+	if ($tone == "|") {
+	    if (!empty($text))
+		setupCall($id,true,1,$text);
+	    break;
+	}
+	$m = new Yate("chan.masquerade");
+	$m->params["id"] = $id;
+	$m->params["message"] = "chan.dtmf";
+	$m->params["text"] = $tone;
+	$m->Dispatch();
+    }
 }
 
 // Handle call.answered
-function callAnswered($ev,$text)
+function callAnswered($ev,$text,$idParam)
 {
     global $param;
     global $defDelay;
 
-    $evId = $ev->GetValue("id");
+    $evId = $ev->GetValue($idParam);
     $evPeerId = $ev->GetValue("peerid");
     $outbound = getBoolValue($ev->getValue($param . "_outbound"),false);
     $tmp = $ev->getValue($param . "_delay");
@@ -101,12 +111,15 @@ function checkCalls()
 	$calls[$key]--;
 	if ($calls[$key] <= 0) {
 	    sendTones($key,$tones[$key]);
-	    setupCall($key,false);
+	    // sendTones() might change the counter
+	    if ($calls[$key] <= 0)
+		setupCall($key,false);
 	}
     }
 }
 
 Yate::Watch("call.answered");
+Yate::Watch("chan.replaced");
 Yate::Install("chan.hangup");
 Yate::Install("engine.timer");
 // Restart if terminated
@@ -138,12 +151,16 @@ for (;;) {
 	    $ev->Acknowledge();
 	    break;
 	case "answer":
-	    if ($ev->name == "call.answered") {
+	    if ($ev->name == "call.answered" || $ev->name == "chan.replaced") {
 		$text = "";
 		if (getBoolValue($ev->getValue($param),false))
 		    $text = $ev->getValue($param . "_text");
-		if (!empty($text))
-		    callAnswered($ev,$text);
+		if (!empty($text)) {
+		    $id = "id";
+		    if ($ev->name == "chan.replaced")
+			$id = "newid";
+		    callAnswered($ev,$text,$id);
+		}
 	    }
 	    break;
 	case "watched":

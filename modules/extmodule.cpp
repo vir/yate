@@ -1639,6 +1639,22 @@ bool ExtModCommand::complete(const String& partLine, const String& partWord, Str
 	    Module::itemComplete(rval,*list,partWord);
 	return true;
     }
+    else if (partLine == "external restart" || partLine == "external stop") {
+	ObjList mod;
+	s_mutex.lock();
+	ObjList *l = &s_modules;
+	for (; l; l=l->next()) {
+	    ExtModReceiver *r = static_cast<ExtModReceiver *>(l->get());
+	    if (!r)
+		continue;
+	    if (mod.find(r->scriptFile()))
+		continue;
+	    mod.append(new String(r->scriptFile()));
+	}
+	s_mutex.unlock();
+	for (l = mod.skipNull(); l; l = l->skipNext())
+	    Module::itemComplete(rval,l->get()->toString(),partWord);
+    }
     return false;
 }
 

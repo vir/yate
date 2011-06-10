@@ -1,3 +1,16 @@
+yate (3.3.3.svn4454) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4454: + Added PHP script to detect and block
+    brute force attackers.  + Use that message in the ban script.  +
+    Emit new message "user.authfail" for paswword mismatch for existing
+    users.  + Commented out debugging accidentally left on.  + Made the
+    debugging and ban limit modifiable at runtime.  + Changed algorithm
+    and default ban limit to accomodate devices that register and
+    subscribe to several resources.  + List running external modules in
+    "external stop" and "external restart" completion.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 11 Jun 2011 02:19:23 +0400
+
 yate (3.3.3.svn4449) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4449: + Send a message for each tone. Handle

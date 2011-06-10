@@ -8,7 +8,7 @@
  */
 
 // How many failures in a row cause a ban
-$ban_failures = 5;
+$ban_failures = 10;
 // In how many seconds to clear a gray host
 $clear_gray = 10;
 // In how many seconds to clear a blacklisted host
@@ -21,7 +21,7 @@ $cmd_unban = "iptables -D INPUT -s \$addr -j DROP";
 
 require_once("libyate.php");
 
-$banHelp = "  banbrutes [unban address]\r\n";
+$banHelp = "  banbrutes [list|unban address|debug on/off|failures NN]\r\n";
 
 $hosts = array();
 
@@ -39,8 +39,10 @@ class Host
 
     function success()
     {
-	if ($this->fail > 0)
+	if ($this->fail > 0) {
+	    $this->fail = 0;
 	    $this->when = time() + 2;
+	}
     }
 
     function failed()
@@ -48,11 +50,11 @@ class Host
 	global $ban_failures;
 	global $clear_gray;
 	global $clear_black;
-	if ($this->fail <= 0)
+	if ($this->fail < 0)
 	    return false;
 	$this->fail++;
 	if ($this->fail >= $ban_failures) {
-	    $this->fail = 0;
+	    $this->fail = -1;
 	    $this->when = time() + $clear_black;
 	    return true;
 	}
@@ -62,7 +64,7 @@ class Host
 
     function banned()
     {
-	return $this->fail <= 0;
+	return $this->fail < 0;
     }
 
     function timer($now)
@@ -116,8 +118,21 @@ function onTimer()
 function onCommand($l,&$retval)
 {
     global $hosts;
+    global $ban_failures;
     global $cmd_unban;
     if ($l == "banbrutes") {
+	$gray = 0;
+	$banned = 0;
+	foreach ($hosts as &$host) {
+	    if ($host->banned())
+		$banned++;
+	    else
+		$gray++;
+	}
+	$retval = "failures=${ban_failures},banned=${banned},gray=${gray}\r\n";
+	return true;
+    }
+    else if ($l == "banbrutes list") {
 	$retval = "";
 	$now = time();
 	foreach ($hosts as $addr => &$host) {
@@ -133,7 +148,7 @@ function onCommand($l,&$retval)
 	$retval .= "\r\n";
 	return true;
     }
-    if (strpos($l,"banbrutes unban ") === 0) {
+    else if (strpos($l,"banbrutes unban ") === 0) {
 	$addr = substr($l,16);
 	if (isset($hosts[$addr])) {
 	    if ($hosts[$addr]->banned()) {
@@ -151,6 +166,28 @@ function onCommand($l,&$retval)
 	else
 	    $retval = "Not banned: $addr\r\n";
 	return true;
+    }
+    else if (strpos($l,"banbrutes failures ") === 0) {
+	$fail = 1 * substr($l,19);
+	if ($fail > 1 && $fail <= 1000) {
+	    $ban_failures = $fail;
+	    return true;
+	}
+    }
+    else if (strpos($l,"banbrutes debug ") === 0) {
+	$dbg = substr($l,16);
+	switch ($dbg) {
+	    case "true":
+	    case "yes":
+	    case "on":
+		Yate::Debug(true);
+		return true;
+	    case "false":
+	    case "no":
+	    case "off":
+		Yate::Debug(false);
+		return true;
+	}
     }
     return false;
 }
@@ -171,13 +208,21 @@ function onComplete(&$ev,$l,$w)
 	oneCompletion($ev->retval,"banbrutes",$w);
     else if ($l == "help")
 	oneCompletion($ev->retval,"banbrutes",$w);
-    else if ($l == "banbrutes")
+    else if ($l == "banbrutes") {
+	oneCompletion($ev->retval,"list",$w);
 	oneCompletion($ev->retval,"unban",$w);
+	oneCompletion($ev->retval,"debug",$w);
+	oneCompletion($ev->retval,"failures",$w);
+    }
     else if ($l == "banbrutes unban") {
 	foreach ($hosts as $addr => &$host) {
 	    if ($host->banned())
 		oneCompletion($ev->retval,$addr,$w);
 	}
+    }
+    else if ($l == "banbrutes debug") {
+	oneCompletion($ev->retval,"on",$w);
+	oneCompletion($ev->retval,"off",$w);
     }
 }
 

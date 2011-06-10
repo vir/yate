@@ -199,7 +199,7 @@ Yate::Init();
 // Comment the next line to get output only in logs, not in rmanager
 Yate::Output(true);
 // Uncomment the next line to get debugging details
-Yate::Debug(true);
+//Yate::Debug(true);
 
 Yate::Watch("user.auth");
 Yate::Install("user.authfail",120);

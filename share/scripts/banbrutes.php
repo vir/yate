@@ -37,6 +37,12 @@ class Host
 	$this->when = time() + $clear_gray;
     }
 
+    function success()
+    {
+	if ($this->fail > 0)
+	    $this->when = time() + 2;
+    }
+
     function failed()
     {
 	global $ban_failures;
@@ -69,17 +75,16 @@ function updateAuth($addr,$ok)
 {
     global $hosts;
     global $cmd_ban;
+    global $cmd_unban;
     if ($ok) {
-	if (isset($hosts[$addr])) {
-	    Yate::Debug("Good host: $addr");
-	    unset($hosts[$addr]);
-	}
+	if (isset($hosts[$addr]))
+	    $hosts[$addr]->success();
 	return;
     }
     if (isset($hosts[$addr])) {
 	if ($hosts[$addr]->failed()) {
 	    $cmd = eval('return "'.$cmd_ban.'";');
-	    Yate::Output("Executing: $cmd");
+	    Yate::Output("banbrutes: $cmd");
 	    shell_exec($cmd);
 	}
     }
@@ -98,7 +103,7 @@ function onTimer()
 	if ($host->timer($now)) {
 	    if ($host->banned()) {
 		$cmd = eval('return "'.$cmd_unban.'";');
-		Yate::Output("Executing: $cmd");
+		Yate::Output("banbrutes: $cmd");
 		shell_exec($cmd);
 	    }
 	    else
@@ -120,7 +125,7 @@ function onCommand($l,&$retval)
 		$retval .= ",";
 	    if ($host->banned()) {
 		$t = $host->when - $now;
-		$retval .= "$addr=banned:$t";
+		$retval .= "$addr=banned:${t}s";
 	    }
 	    else
 		$retval .= "$addr=gray:".$host->fail;
@@ -133,7 +138,7 @@ function onCommand($l,&$retval)
 	if (isset($hosts[$addr])) {
 	    if ($hosts[$addr]->banned()) {
 		$cmd = eval('return "'.$cmd_unban.'";');
-		Yate::Output("Executing: $cmd");
+		Yate::Output("banbrutes: $cmd");
 		shell_exec($cmd);
 		unset($hosts[$addr]);
 		$retval = "Unbanned: $addr\r\n";
@@ -194,9 +199,10 @@ Yate::Init();
 // Comment the next line to get output only in logs, not in rmanager
 Yate::Output(true);
 // Uncomment the next line to get debugging details
-//Yate::Debug(true);
+Yate::Debug(true);
 
 Yate::Watch("user.auth");
+Yate::Install("user.authfail",120);
 Yate::Install("engine.timer",150);
 Yate::Install("engine.command",120);
 Yate::Install("engine.help",150);
@@ -210,6 +216,10 @@ for (;;) {
         continue;
     if ($ev->type == "incoming") {
 	switch ($ev->name) {
+	    case "user.authfail":
+		$addr = $ev->GetValue("ip_host");
+		if ($addr != "")
+		    updateAuth($addr,false);
 	    case "engine.timer":
 		onTimer();
 		break;

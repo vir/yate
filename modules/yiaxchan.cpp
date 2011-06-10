@@ -396,9 +396,11 @@ public:
     void msgStatus(Message& msg);
 
 protected:
+    virtual void genUpdate(Message& msg);
     YIAXEngine* m_iaxEngine;
     u_int32_t m_defaultCodec;
     u_int32_t m_codecs;
+    unsigned int m_failedAuths;
     int m_port;
 };
 
@@ -1181,7 +1183,7 @@ bool YIAXRegDataHandler::received(Message& msg)
 }
 
 YIAXDriver::YIAXDriver()
-    : Driver("iax","varchans"), m_iaxEngine(0), m_port(4569)
+    : Driver("iax","varchans"), m_failedAuths(0), m_port(4569)
 {
     Output("Loaded module YIAX");
 }
@@ -1265,6 +1267,14 @@ void YIAXDriver::initialize()
     if (trunkingThreadCount < 1)
 	trunkingThreadCount = 1;
     m_iaxEngine->start(readThreadCount,eventThreadCount,trunkingThreadCount);
+}
+
+// Add specific module update parameters
+void YIAXDriver::genUpdate(Message& msg)
+{
+    unsigned int tmp = m_failedAuths;
+    m_failedAuths = 0;
+    msg.setParam("failed_auths",String(tmp));
 }
 
 // Check if we have a line
@@ -1430,6 +1440,12 @@ bool YIAXDriver::userAuth(IAXTransaction* tr, bool response, bool& requestAuth,
 	// Check response
 	if (!IAXEngine::isMD5ChallengeCorrect(tr->authdata(),tr->challenge(),pwd)) {
 	    invalidAuth = true;
+	    m_failedAuths++;
+	    changed();
+	    Message* fail = new Message(msg);
+	    *fail = "user.authfail";
+	    fail->retValue().clear();
+	    Engine::enqueue(fail);
 	    return false;
 	}
     }

@@ -1157,6 +1157,10 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
 	DDebug(&plugin,DebugNote,"Failed authentication for username='%s'",username.c_str());
 	m_ep->incFailedAuths();
 	plugin.changed();
+	Message* fail = new Message(m);
+	*fail = "user.authfail";
+	fail->retValue().clear();
+	Engine::enqueue(fail);
     }
     return ok || copyAuthParams(params,m,false);
 }

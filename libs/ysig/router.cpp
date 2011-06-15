@@ -342,6 +342,7 @@ SS7Router::SS7Router(const NamedList& params)
 	m_transferSilent = (*tr == YSTRING("silent"));
 	m_transfer = !m_transferSilent && tr->toBoolean();
     }
+    setNI(SS7MSU::getNetIndicator(params.getValue(YSTRING("netindicator")),SS7MSU::National));
     m_autoAllowed = params.getBoolValue(YSTRING("autoallow"),m_autoAllowed);
     m_sendUnavail = params.getBoolValue(YSTRING("sendupu"),m_sendUnavail);
     m_sendProhibited = params.getBoolValue(YSTRING("sendtfp"),m_sendProhibited);
@@ -352,6 +353,27 @@ SS7Router::SS7Router(const NamedList& params)
     m_trafficSent.interval(m_restart.interval() + 8000);
     m_testRestricted = params.getBoolValue(YSTRING("testrestricted"),m_testRestricted);
     loadLocalPC(params);
+    const String* param = params.getParam(YSTRING("management"));
+    const char* name = "ss7snm";
+    if (param) {
+	if (*param && !param->toBoolean(false))
+	    name = param->c_str();
+    }
+    else
+	param = &params;
+    if (param->toBoolean(true)) {
+	NamedPointer* ptr = YOBJECT(NamedPointer,param);
+	NamedList* mConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
+	NamedList mParams(name);
+	mParams.addParam("basename",name);
+	if (mConfig)
+	    mParams.copyParams(*mConfig);
+	else {
+	    mParams.copySubParams(params,mParams + ".");
+	    mConfig = &mParams;
+	}
+	attach(m_mngmt = YSIGCREATE(SS7Management,&mParams));
+    }
 }
 
 SS7Router::~SS7Router()
@@ -376,32 +398,12 @@ bool SS7Router::initialize(const NamedList* config)
 	    m_transferSilent = (*tr == YSTRING("silent"));
 	    m_transfer = !m_transferSilent && tr->toBoolean(m_transfer);
 	}
-	setNI(SS7MSU::getNetIndicator(config->getValue(YSTRING("netindicator")),SS7MSU::National));
 	m_autoAllowed = config->getBoolValue(YSTRING("autoallow"),m_autoAllowed);
 	m_sendUnavail = config->getBoolValue(YSTRING("sendupu"),m_sendUnavail);
 	m_sendProhibited = config->getBoolValue(YSTRING("sendtfp"),m_sendProhibited);
-	const String* param = config->getParam(YSTRING("management"));
-	const char* name = "ss7snm";
-	if (param) {
-	    if (*param && !param->toBoolean(false))
-		name = param->c_str();
-	}
-	else
-	    param = config;
-	if (param->toBoolean(true) && !m_mngmt) {
-	    NamedPointer* ptr = YOBJECT(NamedPointer,param);
-	    NamedList* mConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
-	    NamedList params(name);
-	    params.addParam("basename",name);
-	    if (mConfig)
-		params.copyParams(*mConfig);
-	    else {
-		params.copySubParams(*config,params + ".");
-		mConfig = &params;
-	    }
-	    attach(m_mngmt = YSIGCREATE(SS7Management,&params));
-	}
     }
+    if (m_mngmt)
+	SignallingComponent::insert(m_mngmt);
     return m_started || (config && !config->getBoolValue(YSTRING("autostart"))) || restart();
 }
 

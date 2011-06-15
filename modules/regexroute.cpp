@@ -182,6 +182,13 @@ static void evalFunc(String& str)
 	    ret ^= (str == par);
 	    str = ret;
 	}
+	else if ((sep >= 0) && (str == "strpos")) {
+	    str = par.substr(sep+1);
+	    par = par.substr(0,sep);
+	    vars(str);
+	    vars(par);
+	    str = str.find(par);
+	}
 	else if ((sep >= 0) && ((str == "add") || (str == "+")))
 	    mathOper(str,par,sep,OPER_ADD);
 	else if ((sep >= 0) && ((str == "sub") || (str == "-")))

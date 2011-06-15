@@ -79,6 +79,10 @@
 ; prerouteall: bool: Preroute even calls having a context or with empty caller
 ;prerouteall=no
 
+; maxdepth: int: Maximum number of jumps or recursive includes
+; Values are clamped to interval 5-100
+;maxdepth=5
+
 
 [$once]
 ; First-time only global variables initialization.

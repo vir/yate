@@ -1,3 +1,10 @@
+yate (3.3.3.svn4460) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4460: + Set output and intermediate
+    directories in QT4Modules VC++ project.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 17 Jun 2011 02:19:21 +0400
+
 yate (3.3.3.svn4459) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4459: + This passes the proper name and

@@ -894,7 +894,7 @@ MGCPSpan* MGCPSpan::findNotify(const String& id)
 
 MGCPSpan::MGCPSpan(const NamedList& params, const char* name, const MGCPEpInfo& ep)
     : SignallingCircuitSpan(params.getValue("debugname",name),
-       static_cast<SignallingCircuitGroup*>(params.getObject("SignallingCircuitGroup"))),
+	static_cast<SignallingCircuitGroup*>(params.getObject("SignallingCircuitGroup"))),
       m_circuits(0), m_count(0), m_epId(ep), m_operational(false),
       m_rtpForward(false), m_sdpForward(false), m_fxo(false), m_fxs(false),
       m_rqntEmbed(true), m_rqntType(RqntOnce)

@@ -137,6 +137,9 @@
 ;host=
 
 ; port: int: Remote port to send packets to
+; Zero uses the protocol default 2427
+; A negative value suppresses :port at end of ID
+; A value of -1 uses default 2427 but doesn't add at end of ID
 ;port=2427
 
 ; address: ipaddress: IP address of the gateway, if present will override

@@ -30,9 +30,10 @@ using namespace TelEngine;
  */
 // Construct the id. Append itself to the engine's list
 MGCPEndpoint::MGCPEndpoint(MGCPEngine* engine, const char* user,
-	const char* host, int port)
-    : MGCPEndpointId(user,host,port), Mutex(false,"MGCPEndpoint"),
-    m_engine(engine)
+	const char* host, int port, bool addPort)
+    : MGCPEndpointId(user,host,port,addPort),
+      Mutex(false,"MGCPEndpoint"),
+      m_engine(engine)
 {
     if (!m_engine) {
 	Debug(DebugNote,"Can't construct endpoint without engine [%p]",this);
@@ -57,9 +58,12 @@ MGCPEpInfo* MGCPEndpoint::append(const char* endpoint, const char* host, int por
 
     if (!endpoint)
 	endpoint = user();
-    if (!port)
+    bool addPort = (port >= 0);
+    if (port < -1)
+	port = -port;
+    else if (port <= 0)
 	port = m_engine->defaultPort(!m_engine->gateway());
-    MGCPEpInfo* ep = new MGCPEpInfo(endpoint,host,port);
+    MGCPEpInfo* ep = new MGCPEpInfo(endpoint,host,port,addPort);
     if (!ep->valid() || find(ep->id()))
 	TelEngine::destruct(ep);
     else
@@ -98,7 +102,7 @@ MGCPEpInfo* MGCPEndpoint::peer()
  * MGCPEndpointId
  */
 // Set this endpoint id. Convert it to lower case
-void MGCPEndpointId::set(const char* endpoint, const char* host, int port)
+void MGCPEndpointId::set(const char* endpoint, const char* host, int port, bool addPort)
 {
     m_id = "";
     m_endpoint = endpoint;
@@ -107,7 +111,7 @@ void MGCPEndpointId::set(const char* endpoint, const char* host, int port)
     m_host.toLower();
     m_port = port;
     m_id << m_endpoint << "@" << m_host;
-    if (m_port)
+    if (m_port && addPort)
 	m_id << ":" << m_port;
 }
 

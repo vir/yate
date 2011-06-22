@@ -1277,6 +1277,7 @@ bool Driver::received(Message &msg, int id)
 		    if (!c)
 			break;
 		    c->checkTimers(msg,t);
+		    c = 0;
 		    lock();
 		}
 	    }

@@ -2558,6 +2558,7 @@ static bool addTrayIcon(const String& type)
 	return false;
     int prio = 0;
     String triggerAction;
+    bool doubleClickAction = true;
     NamedList* iconParams = 0;
     String name;
     name << "mainwindow_" << type << "_icon";
@@ -2567,7 +2568,8 @@ static bool addTrayIcon(const String& type)
 	prio = Client::TrayIconMain;
 	iconParams = new NamedList(name);
 	iconParams->addParam("icon",Client::s_skinPath + "null_team-32.png");
-	triggerAction = "action_show_mainwindow";
+	triggerAction = "action_toggleshow_mainwindow";
+	doubleClickAction = false;
     }
     else if (type == "incomingcall") {
 	prio = Client::TrayIconIncomingCall;
@@ -2604,7 +2606,8 @@ static bool addTrayIcon(const String& type)
 	return false;
     iconParams->addParam("tooltip",info);
     iconParams->addParam("dynamicActionTrigger:string",triggerAction,false);
-    iconParams->addParam("dynamicActionDoubleClick:string",triggerAction,false);
+    if (doubleClickAction)
+	iconParams->addParam("dynamicActionDoubleClick:string",triggerAction,false);
     // Add the menu
     NamedList* pMenu = new NamedList("menu_" + type);
     pMenu->addParam("item:quit","Quit");
@@ -4501,6 +4504,11 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
     // Handle show window actions
     if (name.startsWith("action_show_"))
 	Client::self()->setVisible(name.substr(12),true,true);
+    if (name.startsWith("action_toggleshow_")) {
+	String wnd = name.substr(18);
+	return wnd && Client::self() &&
+	    Client::self()->setVisible(wnd,!Client::self()->getVisible(wnd),true);
+    }
     // Help commands
     if (name.startsWith("help:"))
 	return help(name,wnd);

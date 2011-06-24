@@ -265,12 +265,7 @@ bool SS7Layer3::maintenance(const SS7MSU& msu, const SS7Label& label, int sls)
 {
     if (msu.getSIF() != SS7MSU::MTN && msu.getSIF() != SS7MSU::MTNS)
 	return false;
-    unsigned int local = getLocal(label.type());
-    if (local && label.dpc().pack(label.type()) != local)
-	return false;
 
-    XDebug(this,DebugStub,"Possibly incomplete SS7Layer3::maintenance(%p,%p,%d) [%p]",
-	&msu,&label,sls,this);
     // Q.707 says test pattern length should be 1-15 but we accept 0 as well
     const unsigned char* s = msu.getData(label.length()+1,2);
     if (!s)
@@ -279,6 +274,16 @@ bool SS7Layer3::maintenance(const SS7MSU& msu, const SS7Label& label, int sls)
     addr << SS7PointCode::lookup(label.type()) << "," << label;
     if (debugAt(DebugAll))
 	addr << " (" << label.opc().pack(label.type()) << ":" << label.dpc().pack(label.type()) << ":" << label.sls() << ")";
+
+    unsigned int local = getLocal(label.type());
+    if (local && label.dpc().pack(label.type()) != local) {
+	Debug(this,DebugMild,"Received MTN %s type %02X length %u %s [%p]",
+	    addr.c_str(),s[0],msu.length(),
+	    (label.opc().pack(label.type()) == local ? "looped back!" : "with invalid DPC"),
+	    this);
+	return false;
+    }
+
     bool badLink = label.sls() != sls;
     if (!badLink) {
 	unsigned int local = getLocal(label.type());

@@ -84,3 +84,6 @@ debian/tmp/usr/lib/yate/server/overlapdial.yate
 debian/tmp/etc/yate/sip_cnam_lnp.conf
 debian/tmp/usr/lib/yate/sip/sip_cnam_lnp.yate
 
+debian/tmp/etc/yate/cache.conf
+debian/tmp/usr/lib/yate/server/cache.yate
+

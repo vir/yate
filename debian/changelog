@@ -1,3 +1,10 @@
+yate (3.3.3.vir2011062601) UNRELEASED; urgency=low
+
+  * Fixed SDP fmtp lines forwarding.
+  * Merged latest upstream changes: fixes and new module 'cache'
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Sun, 26 Jun 2011 09:42:52 +0400
+
 yate (3.3.3.vir2011052702) UNRELEASED; urgency=low
 
   * Crash fix

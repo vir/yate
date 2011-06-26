@@ -211,20 +211,20 @@ bool SignallingDumpable::setDumper(const String& name, bool create, bool append)
 
 bool SignallingDumpable::control(NamedList& params, SignallingComponent* owner)
 {
-    String* tmp = params.getParam("operation");
-    if (!(tmp && (*tmp == "sigdump")))
+    String* tmp = params.getParam(YSTRING("operation"));
+    if (!(tmp && (*tmp == YSTRING("sigdump"))))
 	return false;
-    tmp = params.getParam("component");
+    tmp = params.getParam(YSTRING("component"));
     if (tmp && *tmp && owner && (owner->toString() != *tmp))
 	return false;
-    tmp = params.getParam("completion");
+    tmp = params.getParam(YSTRING("completion"));
     if (tmp) {
 	if (!owner)
 	    return false;
-	String part = params.getValue("partword");
+	String part = params.getValue(YSTRING("partword"));
 	return Module::itemComplete(*tmp,owner->toString(),part);
     }
-    tmp = params.getParam("file");
+    tmp = params.getParam(YSTRING("file"));
     if (tmp)
 	return setDumper(*tmp);
     return false;

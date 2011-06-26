@@ -168,7 +168,7 @@ private:
     bool change(String& dest, const String& src);
     bool change(int& dest, int src);
     void keepalive();
-    void setValid(bool valid, const char* reason = 0);
+    void setValid(bool valid, const char* reason = 0, const SIPMessage* msg = 0);
     String m_registrar;
     String m_username;
     String m_authname;
@@ -472,7 +472,7 @@ public:
 	: m_data(data)
 	{}
     virtual void* getObject(const String& name) const {
-	    if (name == "DataBlock")
+	    if (name == YSTRING("DataBlock"))
 		return m_data;
 	    return RefObject::getObject(name);
 	}
@@ -616,7 +616,7 @@ static void copySipHeaders(NamedList& msg, const SIPMessage& sip, bool filter = 
 // Copy headers from Yate message to SIP message
 static void copySipHeaders(SIPMessage& sip, const NamedList& msg, const char* prefix = "osip_")
 {
-    prefix = msg.getValue("osip-prefix",prefix);
+    prefix = msg.getValue(YSTRING("osip-prefix"),prefix);
     if (!prefix)
 	return;
     unsigned int n = msg.length();
@@ -703,8 +703,8 @@ static void copyPrivacy(Message& msg, const SIPMessage& sip)
 // Copy privacy related information from Yate message to SIP message
 static void copyPrivacy(SIPMessage& sip, const Message& msg)
 {
-    String screened(msg.getValue("screened"));
-    String privacy(msg.getValue("privacy"));
+    String screened(msg.getValue(YSTRING("screened")));
+    String privacy(msg.getValue(YSTRING("privacy")));
     if (screened.null() && privacy.null())
 	return;
     bool screen = screened.toBoolean();
@@ -721,13 +721,13 @@ static void copyPrivacy(SIPMessage& sip, const Message& msg)
     if (anonip)
 	sip.setHeader("Anonymity","ipaddr");
     if (screen || privname || privuri) {
-	const char* caller = msg.getValue("privacy_caller",msg.getValue("caller"));
+	const char* caller = msg.getValue(YSTRING("privacy_caller"),msg.getValue(YSTRING("caller")));
 	if (!caller)
 	    caller = "anonymous";
-	const char* domain = msg.getValue("privacy_domain",msg.getValue("domain"));
+	const char* domain = msg.getValue(YSTRING("privacy_domain"),msg.getValue(YSTRING("domain")));
 	if (!domain)
 	    domain = "domain";
-	String tmp = msg.getValue("privacy_callername",msg.getValue("callername",caller));
+	String tmp = msg.getValue(YSTRING("privacy_callername"),msg.getValue(YSTRING("callername"),caller));
 	if (tmp) {
 	    MimeHeaderLine::addQuotes(tmp);
 	    tmp += " ";
@@ -744,10 +744,10 @@ static void copyPrivacy(SIPMessage& sip, const Message& msg)
 	    hl->setParam("privacy","uri");
 	else
 	    hl->setParam("privacy","none");
-	const char* str = msg.getValue("remote_party");
+	const char* str = msg.getValue(YSTRING("remote_party"));
 	if (str)
 	    hl->setParam("party",str);
-	str = msg.getValue("remote_id_type");
+	str = msg.getValue(YSTRING("remote_id_type"));
 	if (str)
 	    hl->setParam("id-type",str);
 	sip.addHeader(hl);
@@ -825,10 +825,10 @@ static bool doDecodeIsupBody(const DebugEnabler* debug, Message& msg, MimeBody* 
     // Clear added params and restore message
     if (!ok) {
 	Debug(debug,DebugMild,"%s failed error='%s'",
-	    msg.c_str(),msg.getValue("error"));
-	msg.clearParam("error");
+	    msg.c_str(),msg.getValue(YSTRING("error")));
+	msg.clearParam(YSTRING("error"));
     }
-    msg.clearParam("rawdata");
+    msg.clearParam(YSTRING("rawdata"));
     msg = name;
     msg.userData(userdata);
     TelEngine::destruct(userdata);
@@ -844,7 +844,7 @@ static MimeBody* doBuildSIPBody(const DebugEnabler* debug, Message& msg, MimeSdp
 
     // Build isup
     while (s_sipt_isup) {
-	String prefix = msg.getValue("message-prefix");
+	String prefix = msg.getValue(YSTRING("message-prefix"));
 	if (!msg.getParam(prefix + "message-type"))
 	    break;
 
@@ -857,11 +857,11 @@ static MimeBody* doBuildSIPBody(const DebugEnabler* debug, Message& msg, MimeSdp
 	DataBlock* data = 0;
 	msg = "isup.encode";
 	if (Engine::dispatch(msg)) {
-	    NamedString* ns = msg.getParam("rawdata");
+	    NamedString* ns = msg.getParam(YSTRING("rawdata"));
 	    if (ns) {
-		NamedPointer* np = static_cast<NamedPointer*>(ns->getObject("NamedPointer"));
+		NamedPointer* np = static_cast<NamedPointer*>(ns->getObject(YSTRING("NamedPointer")));
 		if (np)
-		    data = static_cast<DataBlock*>(np->userObject("DataBlock"));
+		    data = static_cast<DataBlock*>(np->userObject(YSTRING("DataBlock")));
 	    }
 	}
 	if (data && data->length()) {
@@ -876,8 +876,8 @@ static MimeBody* doBuildSIPBody(const DebugEnabler* debug, Message& msg, MimeSdp
 	}
 	else {
 	    Debug(debug,DebugMild,"%s failed error='%s'",
-		msg.c_str(),msg.getValue("error"));
-	    msg.clearParam("error");
+		msg.c_str(),msg.getValue(YSTRING("error")));
+	    msg.clearParam(YSTRING("error"));
 	}
 
 	// Restore message
@@ -1059,6 +1059,7 @@ bool YateSIPEngine::copyAuthParams(NamedList* dest, const NamedList& src, bool o
 	{ "ip_host", 1 },
 	{ "ip_port", 1 },
 	{ "address", 1 },
+	{ "billid", 1 },
 	{  0,   0 },
     };
     if (!dest)
@@ -1104,7 +1105,7 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
 	    m.addParam("address",addr);
 	}
 	// a dialogless INVITE could create a new call
-	m.addParam("newcall",String::boolText((message->method == "INVITE") && !message->getParam("To","tag")));
+	m.addParam("newcall",String::boolText((message->method == YSTRING("INVITE")) && !message->getParam("To","tag")));
 	const MimeHeaderLine* hl = message->getHeader("From");
 	if (hl) {
 	    URI from(*hl);
@@ -1113,12 +1114,9 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
     }
 
     if (params) {
-	const char* str = params->getValue("caller");
-	if (str)
-	    m.addParam("caller",str);
-	str = params->getValue("called");
-	if (str)
-	    m.addParam("called",str);
+	m.copyParam(*params,"caller");
+	m.copyParam(*params,"called");
+	m.copyParam(*params,"billid");
     }
 
     if (!Engine::dispatch(m))
@@ -1130,10 +1128,10 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
     // check for refusals
     if (m.retValue() == "-") {
 	if (params) {
-	    const char* err = m.getValue("error");
+	    const char* err = m.getValue(YSTRING("error"));
 	    if (err)
 		params->setParam("error",err);
-	    err = m.getValue("reason");
+	    err = m.getValue(YSTRING("reason"));
 	    if (err)
 		params->setParam("reason",err);
 	}
@@ -1159,6 +1157,10 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
 	DDebug(&plugin,DebugNote,"Failed authentication for username='%s'",username.c_str());
 	m_ep->incFailedAuths();
 	plugin.changed();
+	Message* fail = new Message(m);
+	*fail = "user.authfail";
+	fail->retValue().clear();
+	Engine::enqueue(fail);
     }
     return ok || copyAuthParams(params,m,false);
 }
@@ -1295,7 +1297,7 @@ bool YateSIPEndPoint::Init()
     m_buffer.assign(0,maxpkt);
     Debug(&plugin,DebugCall,"Started on %s:%d, max %d bytes",
 	addr.host().safe(),addr.port(),maxpkt);
-    if (addr.host() != "0.0.0.0")
+    if (addr.host() != YSTRING("0.0.0.0"))
 	m_local = addr.host();
     m_port = addr.port();
     m_engine = new YateSIPEngine(this);
@@ -1391,7 +1393,7 @@ void YateSIPEndPoint::run()
 	    plugin.lock();
 
 	    if (t->isOutgoing() && t->getResponseCode() == 408) {
-	    	if (t->getMethod() == "BYE") {
+	    	if (t->getMethod() == YSTRING("BYE")) {
 		    DDebug(&plugin,DebugInfo,"BYE for transaction %p has timed out",t);
 		    m_timedOutByes++;
 		    plugin.changed();
@@ -1445,7 +1447,7 @@ bool YateSIPEndPoint::incoming(SIPEvent* e, SIPTransaction* t)
 {
     if (t->isInvite())
 	invite(e,t);
-    else if (t->getMethod() == "BYE") {
+    else if (t->getMethod() == YSTRING("BYE")) {
 	YateSIPConnection* conn = plugin.findCall(t->getCallID(),true);
 	if (conn) {
 	    conn->doBye(t);
@@ -1454,7 +1456,7 @@ bool YateSIPEndPoint::incoming(SIPEvent* e, SIPTransaction* t)
 	else
 	    t->setResponse(481);
     }
-    else if (t->getMethod() == "CANCEL") {
+    else if (t->getMethod() == YSTRING("CANCEL")) {
 	YateSIPConnection* conn = plugin.findCall(t->getCallID(),true);
 	if (conn) {
 	    conn->doCancel(t);
@@ -1463,7 +1465,7 @@ bool YateSIPEndPoint::incoming(SIPEvent* e, SIPTransaction* t)
 	else
 	    t->setResponse(481);
     }
-    else if (t->getMethod() == "INFO") {
+    else if (t->getMethod() == YSTRING("INFO")) {
 	YateSIPConnection* conn = plugin.findCall(t->getCallID(),true);
 	bool done = false;
 	if (conn) {
@@ -1481,11 +1483,11 @@ bool YateSIPEndPoint::incoming(SIPEvent* e, SIPTransaction* t)
 	if (!done)
 	    t->setResponse(415);
     }
-    else if (t->getMethod() == "REGISTER")
+    else if (t->getMethod() == YSTRING("REGISTER"))
 	regReq(e,t);
-    else if (t->getMethod() == "OPTIONS")
+    else if (t->getMethod() == YSTRING("OPTIONS"))
 	options(e,t);
-    else if (t->getMethod() == "REFER") {
+    else if (t->getMethod() == YSTRING("REFER")) {
 	YateSIPConnection* conn = plugin.findCall(t->getCallID(),true);
 	if (conn) {
 	    conn->doRefer(t);
@@ -1581,10 +1583,10 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
 	int port = addr.getPort();
 	if (!port)
 	    port = 5060;
-	nat = (message->getParty()->getPartyPort() != port) && msg.getBoolValue("nat_port_support",true);
+	nat = (message->getParty()->getPartyPort() != port) && msg.getBoolValue(YSTRING("nat_port_support"),true);
     }
     bool natChanged = false;
-    if (msg.getBoolValue("nat_support",s_auto_nat && nat)) {
+    if (msg.getBoolValue(YSTRING("nat_support"),s_auto_nat && nat)) {
 	Debug(&plugin,DebugInfo,"Registration NAT detected: private '%s:%d' public '%s:%d'",
 		    addr.getHost().c_str(),addr.getPort(),
 		    message->getParty()->getPartyAddr().c_str(),
@@ -1636,17 +1638,17 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
     hl = message->getHeader("User-Agent");
     if (hl)
 	msg.setParam("device",*hl);
+    copySipHeaders(msg,*message,true);
+    SIPMessage* r = 0;
     // Always OK deregistration attempts
     if (Engine::dispatch(msg) || dereg) {
-	if (dereg) {
-	    t->setResponse(200);
+	r = new SIPMessage(t->initialMessage(),200,msg.getValue(YSTRING("reason")));
+	if (dereg)
 	    Debug(&plugin,DebugNote,"Unregistered user '%s'",user.c_str());
-	}
 	else {
-	    tmp = msg.getValue("expires",tmp);
+	    tmp = msg.getValue(YSTRING("expires"),tmp);
 	    if (tmp.null())
 		tmp = expires;
-	    SIPMessage* r = new SIPMessage(t->initialMessage(),200);
 	    r->addHeader("Expires",tmp);
 	    MimeHeaderLine* contact = new MimeHeaderLine("Contact","<" + addr + ">");
 	    contact->setParam("expires",tmp);
@@ -1656,21 +1658,30 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
 		    r->addHeader("P-NAT-Refresh",String(s_nat_refresh));
 		r->addHeader("X-Real-Contact",data);
 	    }
-	    t->setResponse(r);
-	    r->deref();
 	    Debug(&plugin,DebugNote,"Registered user '%s' expires in %s s%s",
 		user.c_str(),tmp.c_str(),natChanged ? " (NAT)" : "");
 	}
     }
+    else {
+	int code = msg.getIntValue(YSTRING("error"),dict_errors,404);
+	if (code < 300 || code > 699)
+	    code = 404;
+	r = new SIPMessage(t->initialMessage(),code,msg.getValue(YSTRING("reason")));
+    }
+    if (r && t->setResponse()) {
+	copySipHeaders(*r,msg);
+	t->setResponse(r);
+    }
     else
-	t->setResponse(404);
+	t->setResponse(500);
+    TelEngine::destruct(r);
 }
 
 void YateSIPEndPoint::options(SIPEvent* e, SIPTransaction* t)
 {
     const MimeHeaderLine* acpt = e->getMessage()->getHeader("Accept");
     if (acpt) {
-	if (*acpt != "application/sdp") {
+	if (*acpt != YSTRING("application/sdp")) {
 	    t->setResponse(415);
 	    return;
 	}
@@ -1772,13 +1783,13 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
 
     int code = 0;
     if (Engine::dispatch(m)) {
-	const String* ret = m.getParam("code");
+	const String* ret = m.getParam(YSTRING("code"));
 	if (!ret)
 	    ret = &m.retValue();
-	code = ret->toInteger(m.getIntValue("reason",dict_errors,200));
+	code = ret->toInteger(m.getIntValue(YSTRING("reason"),dict_errors,200));
     }
     else {
-	code = m.getIntValue("code",m.getIntValue("reason",dict_errors,0));
+	code = m.getIntValue(YSTRING("code"),m.getIntValue(YSTRING("reason"),dict_errors,0));
 	if (code < 300)
 	    code = 0;
     }
@@ -1813,12 +1824,13 @@ YateSIPRefer::YateSIPRefer(const String& transferorID, const String& transferred
 
 void YateSIPRefer::run()
 {
-    String* attended = m_msg->getParam("transfer_callid");
+    String* attended = m_msg->getParam(YSTRING("transfer_callid"));
 #ifdef DEBUG
     if (attended)
 	Debug(&plugin,DebugAll,"%s(%s) running callid=%s fromtag=%s totag=%s [%p]",
 	    name(),m_transferorID.c_str(),attended->c_str(),
-	    m_msg->getValue("transfer_fromtag"),m_msg->getValue("transfer_totag"),this);
+	    m_msg->getValue(YSTRING("transfer_fromtag")),
+	    m_msg->getValue(YSTRING("transfer_totag")),this);
     else
 	Debug(&plugin,DebugAll,"%s(%s) running [%p]",name(),m_transferorID.c_str(),this);
 #endif
@@ -1829,8 +1841,8 @@ void YateSIPRefer::run()
 	// NOTE: Remove the whole 'if' when a routing module will be able to route
 	//  attended transfer requests
 	if (attended) {
-	    String* from = m_msg->getParam("transfer_fromtag");
-	    String* to = m_msg->getParam("transfer_totag");
+	    String* from = m_msg->getParam(YSTRING("transfer_fromtag"));
+	    String* to = m_msg->getParam(YSTRING("transfer_totag"));
 	    if (null(from) || null(to)) {
 		m_rspCode = m_notifyCode = 487;     // Request Terminated
 		break;
@@ -1841,7 +1853,7 @@ void YateSIPRefer::run()
 		RefPointer<Channel> chan = m_transferredDrv->find(m_transferredID);
 		m_transferredDrv->unlock();
 		if (chan && conn->getPeer() && 
-		    chan->connect(conn->getPeer(),m_msg->getValue("reason"))) {
+		    chan->connect(conn->getPeer(),m_msg->getValue(YSTRING("reason")))) {
 		    m_rspCode = 202;
 		    m_notifyCode = 200;
 		}
@@ -1873,16 +1885,16 @@ void YateSIPRefer::run()
 	    break;
 	}
 	m_msg->userData(chan);
-	if ((m_msg->retValue() == "-") || (m_msg->retValue() == "error"))
+	if ((m_msg->retValue() == "-") || (m_msg->retValue() == YSTRING("error")))
 	    m_rspCode = m_notifyCode = 603; // Decline
-	else if (m_msg->getIntValue("antiloop",1) <= 0)
+	else if (m_msg->getIntValue(YSTRING("antiloop"),1) <= 0)
 	    m_rspCode = m_notifyCode = 482; // Loop Detected
 	else {
 	    DDebug(&plugin,DebugAll,"%s(%s). Call succesfully routed [%p]",
 		name(),m_transferorID.c_str(),this);
 	    *m_msg = "call.execute";
 	    m_msg->setParam("callto",m_msg->retValue());
-	    m_msg->clearParam("error");
+	    m_msg->clearParam(YSTRING("error"));
 	    m_msg->retValue().clear();
 	    if (Engine::dispatch(m_msg)) {
 		DDebug(&plugin,DebugAll,"%s(%s). 'call.execute' succeeded [%p]",
@@ -1982,11 +1994,11 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     const MimeHeaderLine* hl = m_tr->initialMessage()->getHeader("Call-Info");
     if (hl) {
 	const NamedString* type = hl->getParam("purpose");
-	if (!type || *type == "info")
+	if (!type || *type == YSTRING("info"))
 	    m->addParam("caller_info_uri",*hl);
-	else if (*type == "icon")
+	else if (*type == YSTRING("icon"))
 	    m->addParam("caller_icon_uri",*hl);
-	else if (*type == "card")
+	else if (*type == YSTRING("card"))
 	    m->addParam("caller_card_uri",*hl);
     }
 
@@ -2013,7 +2025,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 		m->addParam("expired_user",user);
 	    m->addParam("xsip_nonce_age",String(age));
 	}
-	m_domain = m->getValue("domain");
+	m_domain = m->getValue(YSTRING("domain"));
     }
     if (s_privacy)
 	copyPrivacy(*m,*ev->getMessage());
@@ -2079,7 +2091,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 	    m_rtpForward = true;
 	    // guess if the call comes from behind a NAT
 	    bool nat = isNatBetween(m_rtpAddr,m_host);
-	    if (m->getBoolValue("nat_support",s_auto_nat && nat)) {
+	    if (m->getBoolValue(YSTRING("nat_support"),s_auto_nat && nat)) {
 		Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
 		    m_rtpAddr.c_str(),m_host.c_str());
 		m->addParam("rtp_nat_addr",m_rtpAddr);
@@ -2122,13 +2134,13 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 	&msg,uri.c_str(),this);
     m_targetid = target;
     setReason();
-    m_inband = msg.getBoolValue("dtmfinband",s_inband);
-    m_info = msg.getBoolValue("dtmfinfo",s_info);
-    m_secure = msg.getBoolValue("secure",plugin.parser().secure());
-    setRfc2833(msg.getParam("rfc2833"));
-    m_rtpForward = msg.getBoolValue("rtp_forward");
-    m_user = msg.getValue("user");
-    m_line = msg.getValue("line");
+    m_inband = msg.getBoolValue(YSTRING("dtmfinband"),s_inband);
+    m_info = msg.getBoolValue(YSTRING("dtmfinfo"),s_info);
+    m_secure = msg.getBoolValue(YSTRING("secure"),plugin.parser().secure());
+    setRfc2833(msg.getParam(YSTRING("rfc2833")));
+    m_rtpForward = msg.getBoolValue(YSTRING("rtp_forward"));
+    m_user = msg.getValue(YSTRING("user"));
+    m_line = msg.getValue(YSTRING("line"));
     String tmp;
     YateSIPLine* line = 0;
     if (m_line) {
@@ -2163,11 +2175,11 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 	setReason(tmp,500);
 	return;
     }
-    int maxf = msg.getIntValue("antiloop",s_maxForwards);
+    int maxf = msg.getIntValue(YSTRING("antiloop"),s_maxForwards);
     m->addHeader("Max-Forwards",String(maxf));
     copySipHeaders(*m,msg);
-    m_domain = msg.getValue("domain");
-    const String* callerId = msg.getParam("caller");
+    m_domain = msg.getValue(YSTRING("domain"));
+    const String* callerId = msg.getParam(YSTRING("caller"));
     String caller;
     if (callerId)
 	caller = *callerId;
@@ -2176,12 +2188,12 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 	callerId = &caller;
 	m_domain = line->domain(m_domain);
     }
-    String display = msg.getValue("callername",(line ? line->getFullName().c_str() : (const char*)0));
+    String display = msg.getValue(YSTRING("callername"),(line ? line->getFullName().c_str() : (const char*)0));
     m->complete(plugin.ep()->engine(),
 	callerId ? (callerId->null() ? "anonymous" : callerId->c_str()) : (const char*)0,
 	m_domain,
 	0,
-	msg.getIntValue("xsip_flags",-1));
+	msg.getIntValue(YSTRING("xsip_flags"),-1));
     if (display) {
 	MimeHeaderLine* hl = const_cast<MimeHeaderLine*>(m->getHeader("From"));
 	if (hl) {
@@ -2189,8 +2201,8 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 	    *hl = display + " " + *hl;
 	}
     }
-    if (msg.getParam("calledname")) {
-	display = msg.getValue("calledname");
+    if (msg.getParam(YSTRING("calledname"))) {
+	display = msg.getValue(YSTRING("calledname"));
 	MimeHeaderLine* hl = const_cast<MimeHeaderLine*>(m->getHeader("To"));
 	if (hl) {
 	    MimeHeaderLine::addQuotes(display);
@@ -2208,18 +2220,18 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 	copyPrivacy(*m,msg);
 
     // Check if this is a transferred call
-    String* diverter = msg.getParam("diverter");
+    String* diverter = msg.getParam(YSTRING("diverter"));
     if (!null(diverter)) {
 	const MimeHeaderLine* from = m->getHeader("From");
 	if (from) {
 	    URI fr(*from);
 	    URI d(fr.getProtocol(),*diverter,fr.getHost(),fr.getPort(),
-		msg.getValue("divertername",""));
-	    String* reason = msg.getParam("divert_reason");
-	    String* privacy = msg.getParam("divert_privacy");
-	    String* screen = msg.getParam("divert_screen");
+		msg.getValue(YSTRING("divertername"),""));
+	    String* reason = msg.getParam(YSTRING("divert_reason"));
+	    String* privacy = msg.getParam(YSTRING("divert_privacy"));
+	    String* screen = msg.getParam(YSTRING("divert_screen"));
 	    bool divert = !(TelEngine::null(reason) && TelEngine::null(privacy) && TelEngine::null(screen));
-	    divert = msg.getBoolValue("diversion",divert);
+	    divert = msg.getBoolValue(YSTRING("diversion"),divert);
 	    MimeHeaderLine* hl = new MimeHeaderLine(divert ? "Diversion" : "Referred-By",d);
 	    if (divert) {
 		if (!TelEngine::null(reason))
@@ -2234,26 +2246,26 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     }
 
     // add some Call-Info headers
-    const char* info = msg.getValue("caller_info_uri");
+    const char* info = msg.getValue(YSTRING("caller_info_uri"));
     if (info) {
 	MimeHeaderLine* hl = new MimeHeaderLine("Call-Info",info);
 	hl->setParam("purpose","info");
 	m->addHeader(hl);
     }
-    info = msg.getValue("caller_icon_uri");
+    info = msg.getValue(YSTRING("caller_icon_uri"));
     if (info) {
 	MimeHeaderLine* hl = new MimeHeaderLine("Call-Info",info);
 	hl->setParam("purpose","icon");
 	m->addHeader(hl);
     }
-    info = msg.getValue("caller_card_uri");
+    info = msg.getValue(YSTRING("caller_card_uri"));
     if (info) {
 	MimeHeaderLine* hl = new MimeHeaderLine("Call-Info",info);
 	hl->setParam("purpose","card");
 	m->addHeader(hl);
     }
 
-    m_rtpLocalAddr = msg.getValue("rtp_localip",s_rtpip);
+    m_rtpLocalAddr = msg.getValue(YSTRING("rtp_localip"),s_rtpip);
     MimeSdpBody* sdp = createPasstroughSDP(msg);
     if (!sdp)
 	sdp = createRtpSDP(m_host,msg);
@@ -2380,7 +2392,7 @@ void YateSIPConnection::hangup()
 		    String tmp;
 		    tmp << i->getCSeq() << " CANCEL";
 		    m->addHeader("CSeq",tmp);
-		    if (m_reason == "pickup") {
+		    if (m_reason == YSTRING("pickup")) {
 			MimeHeaderLine* hl = new MimeHeaderLine("Reason","SIP");
 			hl->setParam("cause","200");
 			hl->setParam("text","\"Call completed elsewhere\"");
@@ -2406,7 +2418,7 @@ void YateSIPConnection::hangup()
 		hl->setParam("text",MimeHeaderLine::quote(m_reason));
 		m->addHeader(hl);
 	    }
-	    const char* stats = parameters().getValue("rtp_stats");
+	    const char* stats = parameters().getValue(YSTRING("rtp_stats"));
 	    if (stats)
 		m->addHeader("P-RTP-Stat",stats);
 	    copySipHeaders(*m,parameters(),0);
@@ -2507,7 +2519,7 @@ bool YateSIPConnection::emitPRACK(const SIPMessage* msg)
 // Creates a SDP for provisional (1xx) messages
 MimeSdpBody* YateSIPConnection::createProvisionalSDP(Message& msg)
 {
-    if (!msg.getBoolValue("earlymedia",true))
+    if (!msg.getBoolValue(YSTRING("earlymedia"),true))
 	return 0;
     if (m_rtpForward)
 	return createPasstroughSDP(msg);
@@ -2553,7 +2565,7 @@ void YateSIPConnection::mediaChanged(const SDPMedia& media)
 	m.addParam("call_status",status());
 	m.addParam("call_billid",billid());
 	Engine::dispatch(m);
-	const char* stats = m.getValue("stats");
+	const char* stats = m.getValue(YSTRING("stats"));
 	if (stats)
 	    parameters().setParam("rtp_stats"+media.suffix(),stats);
     }
@@ -2816,7 +2828,7 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
 	    MimeSdpBody* sdp = getSdpBody(msg->body);
 	    while (sdp) {
 		String addr;
-		ObjList* lst = plugin.parser().parse(sdp,addr);
+		ObjList* lst = plugin.parser().parse(sdp,addr,0,String::empty(),m_rtpForward);
 		if (!lst)
 		    break;
 		if ((addr == m_rtpAddr) || isNatBetween(addr,m_host)) {
@@ -2863,7 +2875,7 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
 	MimeSdpBody* sdp = getSdpBody(msg->body);
 	if (sdp) {
 	    DDebug(this,DebugInfo,"YateSIPConnection got reINVITE SDP [%p]",this);
-	    setMedia(plugin.parser().parse(sdp,m_rtpAddr,m_rtpMedia));
+	    setMedia(plugin.parser().parse(sdp,m_rtpAddr,m_rtpMedia,String::empty(),m_rtpForward));
 	    // guess if the call comes from behind a NAT
 	    if (s_auto_nat && isNatBetween(m_rtpAddr,m_host)) {
 		Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
@@ -2918,7 +2930,7 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	if (m_rtpForward) {
 	    String addr;
 	    String natAddr;
-	    ObjList* lst = plugin.parser().parse(sdp,addr);
+	    ObjList* lst = plugin.parser().parse(sdp,addr,0,String::empty(),true);
 	    if (!lst)
 		break;
 	    // guess if the call comes from behind a NAT
@@ -2944,7 +2956,7 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	    Lock mylock2(driver());
 	    // if peer doesn't support updates fail the reINVITE
 	    if (!ok) {
-		t->setResponse(msg.getIntValue("error",dict_errors,488),msg.getValue("reason"));
+		t->setResponse(msg.getIntValue(YSTRING("error"),dict_errors,488),msg.getValue(YSTRING("reason")));
 		m_reInviting = invite;
 	    }
 	    else if (m_tr2) {
@@ -3025,7 +3037,9 @@ bool YateSIPConnection::checkUser(SIPTransaction* t, bool refuse)
     // don't try to authenticate requests from server
     if (m_user.null() || m_line)
 	return true;
-    int age = t->authUser(m_user);
+    NamedList params("");
+    params.addParam("billid",billid(),false);
+    int age = t->authUser(m_user,false,&params);
     if ((age >= 0) && (age <= 10))
 	return true;
     DDebug(this,DebugAll,"YateSIPConnection::checkUser(%p) failed, age %d [%p]",t,age,this);
@@ -3055,7 +3069,7 @@ void YateSIPConnection::doBye(SIPTransaction* t)
     }
     setMedia(0);
     SIPMessage* m = new SIPMessage(t->initialMessage(),200);
-    const char* stats = parameters().getValue("rtp_stats");
+    const char* stats = parameters().getValue(YSTRING("rtp_stats"));
     if (stats)
 	m->addHeader("P-RTP-Stat",stats);
     t->setResponse(m);
@@ -3254,12 +3268,12 @@ bool YateSIPConnection::msgProgress(Message& msg)
 {
     Channel::msgProgress(msg);
     int code = 183;
-    const NamedString* reason = msg.getParam("reason");
+    const NamedString* reason = msg.getParam(YSTRING("reason"));
     if (reason) {
 	// handle the special progress types that have provisional codes
-	if (*reason == "forwarded")
+	if (*reason == YSTRING("forwarded"))
 	    code = 181;
-	else if (*reason == "queued")
+	else if (*reason == YSTRING("queued"))
 	    code = 182;
     }
     Lock lock(driver());
@@ -3305,13 +3319,13 @@ bool YateSIPConnection::msgAnswered(Message& msg)
 	MimeSdpBody* sdp = createPasstroughSDP(msg);
 	if (!sdp) {
 	    m_rtpForward = false;
-	    bool startNow = msg.getBoolValue("rtp_start",s_start_rtp);
+	    bool startNow = msg.getBoolValue(YSTRING("rtp_start"),s_start_rtp);
 	    if (startNow && !m_rtpMedia) {
 		// early RTP start but media list yet unknown - build best guess
 		String fmts;
 		plugin.parser().getAudioFormats(fmts);
 		ObjList* lst = new ObjList;
-		lst->append(new SDPMedia("audio","RTP/AVP",msg.getValue("formats",fmts)));
+		lst->append(new SDPMedia("audio","RTP/AVP",msg.getValue(YSTRING("formats"),fmts)));
 		setMedia(lst);
 		m_rtpAddr = m_host;
 	    }
@@ -3342,17 +3356,17 @@ bool YateSIPConnection::msgTone(Message& msg, const char* tone)
 	return false;
     bool info = m_info;
     bool inband = m_inband;
-    const String* method = msg.getParam("method");
+    const String* method = msg.getParam(YSTRING("method"));
     if (method) {
-	if ((*method == "info") || (*method == "sip-info")) {
+	if ((*method == YSTRING("info")) || (*method == YSTRING("sip-info"))) {
 	    info = true;
 	    inband = false;
 	}
-	else if (*method == "rfc2833") {
+	else if (*method == YSTRING("rfc2833")) {
 	    info = false;
 	    inband = false;
 	}
-	else if (*method == "inband") {
+	else if (*method == YSTRING("inband")) {
 	    info = false;
 	    inband = true;
 	}
@@ -3423,13 +3437,13 @@ bool YateSIPConnection::msgDrop(Message& msg, const char* reason)
 
 bool YateSIPConnection::msgUpdate(Message& msg)
 {
-    String* oper = msg.getParam("operation");
+    String* oper = msg.getParam(YSTRING("operation"));
     if (!oper || oper->null())
 	return false;
     Lock lock(driver());
     if (m_hungup)
 	return false;
-    if (*oper == "request") {
+    if (*oper == YSTRING("request")) {
 	if (m_tr || m_tr2) {
 	    DDebug(this,DebugWarn,"Update request rejected, pending:%s%s [%p]",
 		m_tr ? " invite" : "",m_tr2 ? " reinvite" : "",this);
@@ -3439,7 +3453,7 @@ bool YateSIPConnection::msgUpdate(Message& msg)
 	}
 	return startClientReInvite(msg);
     }
-    if (*oper == "initiate") {
+    if (*oper == YSTRING("initiate")) {
 	if (m_reInviting != ReinviteNone) {
 	    msg.setParam("error","pending");
 	    msg.setParam("reason","Another INVITE Pending");
@@ -3450,12 +3464,12 @@ bool YateSIPConnection::msgUpdate(Message& msg)
 	return true;
     }
     if (!m_tr2) {
-	if ((m_reInviting == ReinviteRequest) && (*oper == "notify")) {
+	if ((m_reInviting == ReinviteRequest) && (*oper == YSTRING("notify"))) {
 	    if (startClientReInvite(msg))
 		return true;
 	    Debug(this,DebugMild,"Failed to start reINVITE, %s: %s [%p]",
-		msg.getValue("error","unknown"),
-		msg.getValue("reason","No reason"),this);
+		msg.getValue(YSTRING("error"),"unknown"),
+		msg.getValue(YSTRING("reason"),"No reason"),this);
 	    return false;
 	}
 	msg.setParam("error","nocall");
@@ -3466,9 +3480,9 @@ bool YateSIPConnection::msgUpdate(Message& msg)
 	msg.setParam("reason","Incompatible Transaction State");
 	return false;
     }
-    if (*oper == "notify") {
+    if (*oper == YSTRING("notify")) {
 	bool rtpSave = m_rtpForward;
-	m_rtpForward = msg.getBoolValue("rtp_forward",m_rtpForward);
+	m_rtpForward = msg.getBoolValue(YSTRING("rtp_forward"),m_rtpForward);
 	MimeSdpBody* sdp = createPasstroughSDP(msg);
 	if (!sdp) {
 	    m_rtpForward = rtpSave;
@@ -3486,8 +3500,8 @@ bool YateSIPConnection::msgUpdate(Message& msg)
 	m->deref();
 	return true;
     }
-    else if (*oper == "reject") {
-	m_tr2->setResponse(msg.getIntValue("error",dict_errors,488),msg.getValue("reason"));
+    else if (*oper == YSTRING("reject")) {
+	m_tr2->setResponse(msg.getIntValue(YSTRING("error"),dict_errors,488),msg.getValue(YSTRING("reason")));
 	detachTransaction2();
 	return true;
     }
@@ -3496,7 +3510,7 @@ bool YateSIPConnection::msgUpdate(Message& msg)
 
 void YateSIPConnection::endDisconnect(const Message& msg, bool handled)
 {
-    const String* reason = msg.getParam("reason");
+    const String* reason = msg.getParam(YSTRING("reason"));
     if (!TelEngine::null(reason)) {
 	int code = reason->toInteger(dict_errors);
 	if (code >= 300 && code <= 699)
@@ -3504,7 +3518,7 @@ void YateSIPConnection::endDisconnect(const Message& msg, bool handled)
 	else
 	    setReason(*reason,m_reasonCode);
     }
-    const char* prefix = msg.getValue("osip-prefix");
+    const char* prefix = msg.getValue(YSTRING("osip-prefix"));
     if (TelEngine::null(prefix))
         return;
     parameters().clearParams();
@@ -3527,29 +3541,29 @@ void YateSIPConnection::statusParams(String& str)
 bool YateSIPConnection::callRouted(Message& msg)
 {
     // try to disable RTP forwarding earliest possible
-    if (m_rtpForward && !msg.getBoolValue("rtp_forward"))
+    if (m_rtpForward && !msg.getBoolValue(YSTRING("rtp_forward")))
 	m_rtpForward = false;
-    setRfc2833(msg.getParam("rfc2833"));
+    setRfc2833(msg.getParam(YSTRING("rfc2833")));
     Channel::callRouted(msg);
     Lock lock(driver());
     if (m_hungup)
 	return false;
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	String s(msg.retValue());
-	if (s.startSkip("sip/",false) && s && msg.getBoolValue("redirect")) {
+	if (s.startSkip("sip/",false) && s && msg.getBoolValue(YSTRING("redirect"))) {
 	    Debug(this,DebugAll,"YateSIPConnection redirecting to '%s' [%p]",s.c_str(),this);
-	    String tmp(msg.getValue("calledname"));
+	    String tmp(msg.getValue(YSTRING("calledname")));
 	    if (tmp) {
 		MimeHeaderLine::addQuotes(tmp);
 		tmp += " ";
 	    }
 	    s = tmp + "<" + s + ">";
-	    int code = msg.getIntValue("reason",dict_errors,302);
+	    int code = msg.getIntValue(YSTRING("reason"),dict_errors,302);
 	    if ((code < 300) || (code > 399))
 		code = 302;
 	    SIPMessage* m = new SIPMessage(m_tr->initialMessage(),code);
 	    m->addHeader("Contact",s);
-	    tmp = msg.getValue("diversion");
+	    tmp = msg.getValue(YSTRING("diversion"));
 	    if (tmp.trimBlanks() && tmp.toBoolean(true)) {
 		// if diversion is a boolean true use the dialog local URI
 		if (tmp.toBoolean(false))
@@ -3557,17 +3571,17 @@ bool YateSIPConnection::callRouted(Message& msg)
 		if (!(tmp.startsWith("<") && tmp.endsWith(">")))
 		    tmp = "<" + tmp + ">";
 		MimeHeaderLine* hl = new MimeHeaderLine("Diversion",tmp);
-		tmp = msg.getValue("divert_reason");
+		tmp = msg.getValue(YSTRING("divert_reason"));
 		if (tmp) {
 		    MimeHeaderLine::addQuotes(tmp);
 		    hl->setParam("reason",tmp);
 		}
-		tmp = msg.getValue("divert_privacy");
+		tmp = msg.getValue(YSTRING("divert_privacy"));
 		if (tmp) {
 		    MimeHeaderLine::addQuotes(tmp);
 		    hl->setParam("privacy",tmp);
 		}
-		tmp = msg.getValue("divert_screen");
+		tmp = msg.getValue(YSTRING("divert_screen"));
 		if (tmp) {
 		    MimeHeaderLine::addQuotes(tmp);
 		    hl->setParam("screen",tmp);
@@ -3584,7 +3598,7 @@ bool YateSIPConnection::callRouted(Message& msg)
 	}
 
 	updateFormats(msg);
-	if (msg.getBoolValue("progress",s_progress))
+	if (msg.getBoolValue(YSTRING("progress"),s_progress))
 	    m_tr->setResponse(183);
     }
     return true;
@@ -3592,19 +3606,19 @@ bool YateSIPConnection::callRouted(Message& msg)
 
 void YateSIPConnection::callAccept(Message& msg)
 {
-    m_user = msg.getValue("username");
+    m_user = msg.getValue(YSTRING("username"));
     if (m_authBye)
-	m_authBye = msg.getBoolValue("xsip_auth_bye",true);
+	m_authBye = msg.getBoolValue(YSTRING("xsip_auth_bye"),true);
     if (m_rtpForward) {
-	String tmp(msg.getValue("rtp_forward"));
-	if (tmp != "accepted")
+	String tmp(msg.getValue(YSTRING("rtp_forward")));
+	if (tmp != YSTRING("accepted"))
 	    m_rtpForward = false;
     }
-    m_secure = m_secure && msg.getBoolValue("secure",true);
+    m_secure = m_secure && msg.getBoolValue(YSTRING("secure"),true);
     Channel::callAccept(msg);
 
     if ((m_reInviting == ReinviteNone) && !m_rtpForward && !isAnswered() && 
-	msg.getBoolValue("autoreinvite",false)) {
+	msg.getBoolValue(YSTRING("autoreinvite"),false)) {
 	// remember we want to switch to RTP forwarding when party answers
 	m_reInviting = ReinvitePending;
 	startPendingUpdate();
@@ -3637,7 +3651,7 @@ void YateSIPConnection::callRejected(const char* error, const char* reason, cons
 bool YateSIPConnection::startClientReInvite(Message& msg)
 {
     bool hadRtp = !m_rtpForward;
-    bool rtpFwd = msg.getBoolValue("rtp_forward",m_rtpForward);
+    bool rtpFwd = msg.getBoolValue(YSTRING("rtp_forward"),m_rtpForward);
     if (!rtpFwd) {
 	msg.setParam("error","failure");
 	msg.setParam("reason","RTP forwarding is not enabled");
@@ -3702,8 +3716,8 @@ void YateSIPConnection::startPendingUpdate()
     if (!Engine::dispatch(msg)) {
 	Debug(this,DebugWarn,"Cannot start update by '%s', %s: %s [%p]",
 	    getPeerId().c_str(),
-	    msg.getValue("error","not supported"),
-	    msg.getValue("reason","No reason provided"),this);
+	    msg.getValue(YSTRING("error"),"not supported"),
+	    msg.getValue(YSTRING("reason"),"No reason provided"),this);
 	m_reInviting = ReinviteNone;
     }
 }
@@ -3819,7 +3833,7 @@ void YateSIPLine::setupAuth(SIPMessage* msg) const
 	msg->setAutoAuth(getAuthName(),m_password);
 }
 
-void YateSIPLine::setValid(bool valid, const char* reason)
+void YateSIPLine::setValid(bool valid, const char* reason, const SIPMessage* msg)
 {
     if ((m_valid == valid) && !reason)
 	return;
@@ -3834,6 +3848,8 @@ void YateSIPLine::setValid(bool valid, const char* reason)
 	m->addParam("registered",String::boolText(valid));
 	if (reason)
 	    m->addParam("reason",reason);
+	if (msg)
+	    copySipHeaders(*m,*msg);
 	Engine::enqueue(m);
     }
 }
@@ -3986,14 +4002,14 @@ bool YateSIPLine::process(SIPEvent* ev)
 		m_partyAddr = msg->getParty()->getPartyAddr();
 		m_partyPort = msg->getParty()->getPartyPort();
 	    }
-	    setValid(true);
+	    setValid(true,0,msg);
 	    Debug(&plugin,DebugCall,"SIP line '%s' logon success to %s:%d",
 		c_str(),m_partyAddr.c_str(),m_partyPort);
 	    break;
 	default:
 	    // detect local address even from failed attempts - helps next time
 	    detectLocal(msg);
-	    setValid(false,msg->reason);
+	    setValid(false,msg->reason,msg);
 	    Debug(&plugin,DebugWarn,"SIP line '%s' logon failure %d: %s",
 		c_str(),msg->code,msg->reason.safe());
     }
@@ -4091,23 +4107,23 @@ bool YateSIPLine::change(int& dest, int src)
 bool YateSIPLine::update(const Message& msg)
 {
     DDebug(&plugin,DebugInfo,"YateSIPLine::update() '%s' [%p]",c_str(),this);
-    String oper(msg.getValue("operation"));
-    if (oper == "logout") {
+    String oper(msg.getValue(YSTRING("operation")));
+    if (oper == YSTRING("logout")) {
 	logout();
 	return true;
     }
     bool chg = false;
-    chg = change(m_registrar,msg.getValue("registrar",msg.getValue("server"))) || chg;
-    chg = change(m_username,msg.getValue("username")) || chg;
-    chg = change(m_authname,msg.getValue("authname")) || chg;
-    chg = change(m_password,msg.getValue("password")) || chg;
-    chg = change(m_domain,msg.getValue("domain")) || chg;
-    chg = change(m_flags,msg.getIntValue("xsip_flags",-1)) || chg;
-    m_display = msg.getValue("description");
-    m_interval = msg.getIntValue("interval",600);
-    String tmp(msg.getValue("localaddress",s_auto_nat ? "auto" : ""));
+    chg = change(m_registrar,msg.getValue(YSTRING("registrar"),msg.getValue(YSTRING("server")))) || chg;
+    chg = change(m_username,msg.getValue(YSTRING("username"))) || chg;
+    chg = change(m_authname,msg.getValue(YSTRING("authname"))) || chg;
+    chg = change(m_password,msg.getValue(YSTRING("password"))) || chg;
+    chg = change(m_domain,msg.getValue(YSTRING("domain"))) || chg;
+    chg = change(m_flags,msg.getIntValue(YSTRING("xsip_flags"),-1)) || chg;
+    m_display = msg.getValue(YSTRING("description"));
+    m_interval = msg.getIntValue(YSTRING("interval"),600);
+    String tmp(msg.getValue(YSTRING("localaddress"),s_auto_nat ? "auto" : ""));
     // "auto", "yes", "enable" or "true" to autodetect local address
-    m_localDetect = (tmp == "auto") || tmp.toBoolean(false);
+    m_localDetect = (tmp == YSTRING("auto")) || tmp.toBoolean(false);
     if (!m_localDetect) {
 	// "no", "disable" or "false" to just disable detection
 	if (!tmp.toBoolean(true))
@@ -4125,7 +4141,7 @@ bool YateSIPLine::update(const Message& msg)
 	chg = change(m_localAddr,tmp) || chg;
 	chg = change(m_localPort,port) || chg;
     }
-    tmp = msg.getValue("outbound");
+    tmp = msg.getValue(YSTRING("outbound"));
     int port = 0;
     if (tmp) {
 	int sep = tmp.find(':');
@@ -4136,10 +4152,10 @@ bool YateSIPLine::update(const Message& msg)
     }
     chg = change(m_proxyAddr,tmp) || chg;
     chg = change(m_proxyPort,port) || chg;
-    m_alive = msg.getIntValue("keepalive",(m_localDetect ? 25 : 0));
-    tmp = msg.getValue("operation");
+    m_alive = msg.getIntValue(YSTRING("keepalive"),(m_localDetect ? 25 : 0));
+    tmp = msg.getValue(YSTRING("operation"));
     // if something changed we logged out so try to climb back
-    if (chg || (oper == "login"))
+    if (chg || (oper == YSTRING("login")))
 	login();
     return chg;
 }
@@ -4197,10 +4213,10 @@ void YateSIPGenerate::clearTransaction()
 
 bool UserHandler::received(Message &msg)
 {
-    String tmp(msg.getValue("protocol"));
-    if (tmp != "sip")
+    String tmp(msg.getValue(YSTRING("protocol")));
+    if (tmp != YSTRING("sip"))
 	return false;
-    tmp = msg.getValue("account");
+    tmp = msg.getValue(YSTRING("account"));
     if (tmp.null())
 	return false;
     YateSIPLine* line = plugin.findLine(tmp);
@@ -4216,7 +4232,7 @@ bool SipHandler::received(Message &msg)
     Debug(&plugin,DebugInfo,"SipHandler::received() [%p]",this);
     RefPointer<YateSIPConnection> conn;
     String uri;
-    const char* id = msg.getValue("id");
+    const char* id = msg.getValue(YSTRING("id"));
     if (id) {
 	plugin.lock();
 	conn = static_cast<YateSIPConnection*>(plugin.find(id));
@@ -4227,15 +4243,15 @@ bool SipHandler::received(Message &msg)
 	}
 	uri = conn->m_uri;
     }
-    const char* method = msg.getValue("method");
-    uri = msg.getValue("uri",uri);
+    const char* method = msg.getValue(YSTRING("method"));
+    uri = msg.getValue(YSTRING("uri"),uri);
     static const Regexp r("<\\([^>]\\+\\)>");
     if (uri.matches(r))
 	uri = uri.matchString(1);
     if (!(method && uri))
 	return false;
 
-    int maxf = msg.getIntValue("antiloop",s_maxForwards);
+    int maxf = msg.getIntValue(YSTRING("antiloop"),s_maxForwards);
     if (maxf <= 0) {
 	Debug(&plugin,DebugMild,"Blocking looping request '%s %s' [%p]",
 	    method,uri.c_str(),this);
@@ -4245,14 +4261,14 @@ bool SipHandler::received(Message &msg)
 
     SIPMessage* sip = 0;
     YateSIPLine* line = 0;
-    const char* domain = msg.getValue("domain");
+    const char* domain = msg.getValue(YSTRING("domain"));
     if (conn) {
 	line = plugin.findLine(conn->getLine());
 	sip = conn->createDlgMsg(method,uri);
 	conn = 0;
     }
     else {
-	line = plugin.findLine(msg.getValue("line"));
+	line = plugin.findLine(msg.getValue(YSTRING("line")));
 	if (line && !line->valid()) {
 	    msg.setParam("error","offline");
 	    return false;
@@ -4264,23 +4280,23 @@ bool SipHandler::received(Message &msg)
     }
     sip->addHeader("Max-Forwards",String(maxf));
     copySipHeaders(*sip,msg,"sip_");
-    const String& type = msg["xsip_type"];
-    const String& body = msg["xsip_body"];
+    const String& type = msg[YSTRING("xsip_type")];
+    const String& body = msg[YSTRING("xsip_body")];
     if (type && body) {
-	const String& bodyEnc = msg["xsip_body_encoding"];
+	const String& bodyEnc = msg[YSTRING("xsip_body_encoding")];
 	if (bodyEnc.null())
 	    sip->setBody(new MimeStringBody(type,body.c_str(),body.length()));
 	else {
 	    DataBlock binBody;
 	    bool ok = false;
-	    if (bodyEnc == "base64") {
+	    if (bodyEnc == YSTRING("base64")) {
 		Base64 b64;
 		b64 << body;
 		ok = b64.decode(binBody);
 	    }
-	    else if (bodyEnc == "hex")
+	    else if (bodyEnc == YSTRING("hex"))
 		ok = binBody.unHexify(body,body.length());
-	    else if (bodyEnc == "hexs")
+	    else if (bodyEnc == YSTRING("hexs"))
 		ok = binBody.unHexify(body,body.length(),' ');
 
 	    if (ok)
@@ -4289,9 +4305,9 @@ bool SipHandler::received(Message &msg)
 		Debug(&plugin,DebugWarn,"Invalid xsip_body_encoding '%s'",bodyEnc.c_str());
 	}
     }
-    sip->complete(plugin.ep()->engine(),msg.getValue("user"),domain,0,
-	msg.getIntValue("xsip_flags",-1));
-    if (!msg.getBoolValue("wait")) {
+    sip->complete(plugin.ep()->engine(),msg.getValue(YSTRING("user")),domain,0,
+	msg.getIntValue(YSTRING("xsip_flags"),-1));
+    if (!msg.getBoolValue(YSTRING("wait"))) {
 	// no answer requested - start transaction and forget
 	plugin.ep()->engine()->addMessage(sip);
 	sip->deref();
@@ -4397,7 +4413,7 @@ bool SIPDriver::received(Message& msg, int id)
 	s_lines.clear();
     }
     else if (id == Status) {
-	String target = msg.getValue("module");
+	String target = msg.getValue(YSTRING("module"));
 	if (target && target.startsWith(name(),true) && !target.startsWith(prefix())) {
 	    msgStatus(msg);
 	    return false;
@@ -4417,16 +4433,16 @@ bool SIPDriver::msgExecute(Message& msg, String& dest)
 	Debug(this,DebugWarn,"SIP call found but no data channel!");
 	return false;
     }
-    if (!validLine(msg.getValue("line"))) {
+    if (!validLine(msg.getValue(YSTRING("line")))) {
 	// asked to use a line but it's not registered
 	msg.setParam("error","offline");
 	return false;
     }
-    YateSIPConnection* conn = new YateSIPConnection(msg,dest,msg.getValue("id"));
+    YateSIPConnection* conn = new YateSIPConnection(msg,dest,msg.getValue(YSTRING("id")));
     conn->initChan();
     if (conn->getTransaction()) {
 	CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
-	if (ch && conn->connect(ch,msg.getValue("reason"))) {
+	if (ch && conn->connect(ch,msg.getValue(YSTRING("reason")))) {
 	    conn->callConnect(msg);
 	    msg.setParam("peerid",conn->id());
 	    msg.setParam("targetid",conn->id());
@@ -4523,7 +4539,7 @@ bool SIPDriver::commandComplete(Message& msg, const String& partLine, const Stri
 
 void SIPDriver::msgStatus(Message& msg)
 {
-    String str = msg.getValue("module");
+    String str = msg.getValue(YSTRING("module"));
     while (str.startSkip(name())) {
 	str.trimBlanks();
 	if (str.null())

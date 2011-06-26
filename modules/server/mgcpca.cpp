@@ -418,9 +418,9 @@ bool YMGCPEngine::processEvent(MGCPTransaction* trans, MGCPMessage* msg)
     if (!msg)
 	return false;
     if (!data && !trans->outgoing() && msg->isCommand()) {
-	while (msg->name() == "NTFY") {
-	    const String* rqId = msg->params.getParam("x");
-	    const String* event = msg->params.getParam("o");
+	while (msg->name() == YSTRING("NTFY")) {
+	    const String* rqId = msg->params.getParam(YSTRING("x"));
+	    const String* event = msg->params.getParam(YSTRING("o"));
 	    if (null(rqId))
 		trans->setResponse(538,"Missing request-id");
 	    else if (null(event))
@@ -471,8 +471,8 @@ bool YMGCPEngine::processEvent(MGCPTransaction* trans, MGCPMessage* msg)
 	    }
 	    return true;
 	}
-	if (msg->name() == "RSIP") {
-	    const String* method = msg->params.getParam("rm");
+	if (msg->name() == YSTRING("RSIP")) {
+	    const String* method = msg->params.getParam(YSTRING("rm"));
 	    Debug(this,DebugInfo,"RSIP '%s' from '%s'",
 		c_str(method),msg->endpointId().c_str());
 	    MGCPEndpointId id(msg->endpointId());
@@ -496,8 +496,8 @@ bool YMGCPEngine::processEvent(MGCPTransaction* trans, MGCPMessage* msg)
 		return true;
 	    }
 	}
-	else if (msg->name() == "DLCX") {
-	    const String* error = msg->params.getParam("e");
+	else if (msg->name() == YSTRING("DLCX")) {
+	    const String* error = msg->params.getParam(YSTRING("e"));
 	    Debug(this,DebugInfo,"DLCX '%s' from '%s'",
 		c_str(error),msg->endpointId().c_str());
 	    MGCPEndpointId id(msg->endpointId());
@@ -534,7 +534,7 @@ void YMGCPEngine::timeout(MGCPTransaction* tr)
 	const MGCPMessage* cmd = tr->initial();
 	if (!cmd || !cmd->isCommand())
 	    return;
-	if (cmd->name() != "DLCX")
+	if (cmd->name() != YSTRING("DLCX"))
 	    m_timedOutTrans++;
 	else
 	    m_timedOutDels++;
@@ -554,8 +554,8 @@ MGCPWrapper::MGCPWrapper(CallEndpoint* conn, const char* media, Message& msg, co
     m_id << (unsigned int)::random();
     if (conn)
 	m_master = conn->id();
-    m_master = msg.getValue("id",(conn ? conn->id().c_str() : (const char*)0));
-    m_audio = (name() == "audio");
+    m_master = msg.getValue(YSTRING("id"),(conn ? conn->id().c_str() : (const char*)0));
+    m_audio = (name() == YSTRING("audio"));
     s_mutex.lock();
     s_wrappers.append(this);
 //    setupRTP(localip,rtcp);
@@ -592,8 +592,8 @@ bool MGCPWrapper::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 	}
     }
     else if (mm) {
-	if (mm->name() == "NTFY") {
-	    String* event = mm->params.getParam("o");
+	if (mm->name() == YSTRING("NTFY")) {
+	    String* event = mm->params.getParam(YSTRING("o"));
 	    if (event && processNotify(tr,mm,*event)) {
 		tr->setResponse(200);
 		return true;
@@ -632,7 +632,7 @@ bool MGCPWrapper::rtpMessage(Message& msg)
 	return false;
     const char* cmd = "MDCX";
     bool extend = false;
-    bool fini = msg.getBoolValue("terminate");
+    bool fini = msg.getBoolValue(YSTRING("terminate"));
     if (fini) {
 	if (m_connId.null())
 	    return true;
@@ -645,12 +645,12 @@ bool MGCPWrapper::rtpMessage(Message& msg)
 	return false;
     RefPointer<MGCPMessage> mm = new MGCPMessage(s_engine,cmd,ep->toString());
     addParams(mm);
-    String dir = msg.getValue("direction",m_connId.null() ? "bidir" : "");
-    if (dir == "bidir")
+    String dir = msg.getValue(YSTRING("direction"),m_connId.null() ? "bidir" : "");
+    if (dir == YSTRING("bidir"))
 	dir = "sendrecv";
-    else if (dir == "send")
+    else if (dir == YSTRING("send"))
 	dir = "sendonly";
-    else if (dir == "receive")
+    else if (dir == YSTRING("receive"))
 	dir = "recvonly";
     else
 	dir.clear();
@@ -678,7 +678,7 @@ bool MGCPWrapper::rtpMessage(Message& msg)
     if (!mm)
 	return false;
     if (m_connId.null())
-	m_connId = mm->params.getParam("i");
+	m_connId = mm->params.getParam(YSTRING("i"));
     if (m_connId.null())
 	return false;
     copyRename(msg,"localip",mm->params,"x-localip");
@@ -717,11 +717,13 @@ void MGCPWrapper::addParams(MGCPMessage* mm)
 // Send a MGCP message, wait for an answer and return it
 RefPointer<MGCPMessage> MGCPWrapper::sendSync(MGCPMessage* mm, const SocketAddr& address)
 {
+    u_int64_t t1 = Time::msecNow();
     while (m_msg) {
 	if (Thread::check(false))
 	    return 0;
 	Thread::idle();
     }
+    u_int64_t t2 = Time::msecNow();
     MGCPTransaction* tr = s_engine->sendCommand(mm,address);
     tr->userData(static_cast<GenObject*>(this));
     m_tr = tr;
@@ -729,13 +731,22 @@ RefPointer<MGCPMessage> MGCPWrapper::sendSync(MGCPMessage* mm, const SocketAddr&
 	Thread::idle();
     RefPointer<MGCPMessage> tmp = m_msg;
     m_msg = 0;
+    u_int64_t t3 = Time::msecNow();
     if (!tmp)
-	Debug(&splugin,DebugMild,"MGCPWrapper::sendSync() returning NULL [%p]",this);
-#ifdef DEBUG
-    else
-	Debug(&splugin,DebugInfo,"MGCPWrapper::sendSync() returning %d '%s' [%p]",
-	    tmp->code(),tmp->comment().c_str(),this);
-#endif
+	Debug(&splugin,DebugMild,"MGCPWrapper::sendSync() returning NULL in %u+%u ms [%p]",
+	    (unsigned int)(t2-t1),(unsigned int)(t3-t2),this);
+    else {
+	int level = DebugAll;
+	if (t3-t1 > 500)
+	    level = DebugMild;
+	else if (t3-t1 > 350)
+	    level = DebugNote;
+	else if (t3-t1 > 200)
+	    level = DebugInfo;
+	Debug(&splugin,level,"MGCPWrapper::sendSync() returning %d '%s' in %u+%u ms [%p]",
+	    tmp->code(),tmp->comment().c_str(),
+	    (unsigned int)(t2-t1),(unsigned int)(t3-t2),this);
+    }
     return tmp;
 }
 
@@ -849,7 +860,7 @@ SignallingComponent* MGCPSpan::create(const String& type, const NamedList& name)
 {
     if (type != "SignallingCircuitSpan")
 	return 0;
-    const String* spanName = name.getParam("voice");
+    const String* spanName = name.getParam(YSTRING("voice"));
     if (!spanName)
 	spanName = &name;
     if (null(spanName) || !s_endpoint)
@@ -883,7 +894,7 @@ MGCPSpan* MGCPSpan::findNotify(const String& id)
 
 MGCPSpan::MGCPSpan(const NamedList& params, const char* name, const MGCPEpInfo& ep)
     : SignallingCircuitSpan(params.getValue("debugname",name),
-       static_cast<SignallingCircuitGroup*>(params.getObject("SignallingCircuitGroup"))),
+	static_cast<SignallingCircuitGroup*>(params.getObject("SignallingCircuitGroup"))),
       m_circuits(0), m_count(0), m_epId(ep), m_operational(false),
       m_rtpForward(false), m_sdpForward(false), m_fxo(false), m_fxs(false),
       m_rqntEmbed(true), m_rqntType(RqntOnce)
@@ -938,12 +949,12 @@ void MGCPSpan::clearCircuits()
 bool MGCPSpan::init(const NamedList& params)
 {
     clearCircuits();
-    const String* sect = params.getParam("voice");
+    const String* sect = params.getParam(YSTRING("voice"));
     if (!sect)
-	sect = params.getParam("basename");
+	sect = params.getParam(YSTRING("basename"));
     if (!sect)
 	sect = &params;
-    int cicStart = params.getIntValue("start");
+    int cicStart = params.getIntValue(YSTRING("start"));
     if ((cicStart < 0) || !sect)
 	return false;
     Configuration cfg(Engine::configFile("mgcpca"));
@@ -960,15 +971,15 @@ bool MGCPSpan::init(const NamedList& params)
 	    id().safe(),this);
 	return false;
     }
-    SignallingCircuitRange range(config->getValue("voicechans"));
+    SignallingCircuitRange range(config->getValue(YSTRING("voicechans")));
     m_count = 1;
     if (range.count())
 	m_count = range[range.count()-1];
-    m_count = config->getIntValue("chans",m_count);
+    m_count = config->getIntValue(YSTRING("chans"),m_count);
     cicStart += config->getIntValue(("offset_"+*sect),
-	config->getIntValue("offset"));
+	config->getIntValue(YSTRING("offset")));
     cicStart = config->getIntValue(("start_"+*sect),
-	config->getIntValue("start",cicStart));
+	config->getIntValue(YSTRING("start"),cicStart));
 
     if (!m_count)
 	return false;
@@ -984,14 +995,14 @@ bool MGCPSpan::init(const NamedList& params)
 	    break;
     }
     m_increment = config->getIntValue(("increment_"+*sect),
-	config->getIntValue("increment",m_increment));
-    m_rtpForward = config->getBoolValue("forward_rtp",!(m_fxo || m_fxs));
-    m_sdpForward = config->getBoolValue("forward_sdp",false);
-    m_bearer = lookup(config->getIntValue("bearer",s_dict_payloads,-1),s_dict_gwbearerinfo);
-    m_rqntEmbed = config->getBoolValue("req_embed",true);
-    m_rqntType = (RqntType)config->getIntValue("req_dtmf",s_dict_rqnt,RqntOnce);
-    bool fax = config->getBoolValue("req_fax",true);
-    bool t38 = config->getBoolValue("req_t38",fax);
+	config->getIntValue(YSTRING("increment"),m_increment));
+    m_rtpForward = config->getBoolValue(YSTRING("forward_rtp"),!(m_fxo || m_fxs));
+    m_sdpForward = config->getBoolValue(YSTRING("forward_sdp"),false);
+    m_bearer = lookup(config->getIntValue(YSTRING("bearer"),s_dict_payloads,-1),s_dict_gwbearerinfo);
+    m_rqntEmbed = config->getBoolValue(YSTRING("req_embed"),true);
+    m_rqntType = (RqntType)config->getIntValue(YSTRING("req_dtmf"),s_dict_rqnt,RqntOnce);
+    bool fax = config->getBoolValue(YSTRING("req_fax"),true);
+    bool t38 = config->getBoolValue(YSTRING("req_t38"),fax);
     if (fax || t38) {
 	if (RqntNone == m_rqntType) {
 	    m_rqntType = RqntOnce;
@@ -1002,8 +1013,8 @@ bool MGCPSpan::init(const NamedList& params)
 	if (t38)
 	    m_rqntStr.append("fxr/t38",",");
     }
-    m_rqntStr = config->getValue("req_evts",m_rqntStr);
-    bool clear = config->getBoolValue("clearconn",false);
+    m_rqntStr = config->getValue(YSTRING("req_evts"),m_rqntStr);
+    bool clear = config->getBoolValue(YSTRING("clearconn"),false);
     m_circuits = new MGCPCircuit*[m_count];
     unsigned int i;
     for (i = 0; i < m_count; i++)
@@ -1040,8 +1051,8 @@ bool MGCPSpan::init(const NamedList& params)
     if (ok) {
 	Debug(&splugin,DebugNote,"MGCPSpan '%s' first circuit=%s",
 	    id().safe(),first.c_str());
-	m_version = config->getValue("version");
-	const char* addr = config->getValue("address");
+	m_version = config->getValue(YSTRING("version"));
+	const char* addr = config->getValue(YSTRING("address"));
 	if (addr) {
 	    MGCPEpInfo* ep = s_endpoint->find(epId().id());
 	    if (ep) {
@@ -1090,11 +1101,11 @@ void MGCPSpan::operational(const SocketAddr& address)
 // Get a configuration or operational boolean parameter by name
 bool MGCPSpan::getBoolParam(const String& param, bool defValue) const
 {
-    if (param == "operational")
+    if (param == YSTRING("operational"))
 	return operational();
-    if (param == "rtp_forward")
+    if (param == YSTRING("rtp_forward"))
 	return m_rtpForward;
-    if (param == "sdp_forward")
+    if (param == YSTRING("sdp_forward"))
 	return m_sdpForward;
     return defValue;
 }
@@ -1192,11 +1203,11 @@ bool MGCPSpan::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
     DDebug(&splugin,DebugInfo,"MGCPSpan::processEvent(%p,%p) '%s' [%p]",
 	tr,mm,mm->name().c_str(),this);
 
-    if (mm->name() == "NTFY") {
-	const String* rqId = mm->params.getParam("x");
+    if (mm->name() == YSTRING("NTFY")) {
+	const String* rqId = mm->params.getParam(YSTRING("x"));
 	if (null(rqId))
 	    return false;
-	const String* event = mm->params.getParam("o");
+	const String* event = mm->params.getParam(YSTRING("o"));
 	if (c_str(event) && processNotify(tr,mm,*event,*rqId)) {
 	    tr->setResponse(200);
 	    return true;
@@ -1306,12 +1317,12 @@ MGCPCircuit::~MGCPCircuit()
 void* MGCPCircuit::getObject(const String& name) const
 {
     if (connected()) {
-	if (name == "DataSource")
+	if (name == YSTRING("DataSource"))
 	    return m_source;
-	if (name == "DataConsumer")
+	if (name == YSTRING("DataConsumer"))
 	    return m_consumer;
     }
-    if (name == "MGCPCircuit")
+    if (name == YSTRING("MGCPCircuit"))
 	return (void*)this;
     return SignallingCircuit::getObject(name);
 }
@@ -1353,7 +1364,8 @@ bool MGCPCircuit::createRtp()
 // Create or update remote connection
 bool MGCPCircuit::setupConn(const char* mode)
 {
-    RefPointer<MGCPMessage> mm = message(m_connId.null() ? "CRCX" : "MDCX");
+    bool create = m_connId.null();
+    RefPointer<MGCPMessage> mm = message(create ? "CRCX" : "MDCX");
     mm->params.addParam("C",m_callId);
     if (m_connId)
 	mm->params.addParam("I",m_connId);
@@ -1400,12 +1412,12 @@ bool MGCPCircuit::setupConn(const char* mode)
     if (mm->code() == 400 && mm->params.count() == 0 &&
 	mm->comment().startsWith("Setup failed",true)) {
 	// 400 nnnnn Setup failed 0:(11:135):0:63
-	Debug(&splugin,DebugWarn,"Cisco DSP failure detected! [%p]",this);
+	Debug(&splugin,DebugWarn,"Cisco DSP failure detected on circuit %u [%p]",code(),this);
 	return false;
     }
     m_gwFormatChanged = false;
     if (m_connId.null())
-	m_connId = mm->params.getParam("i");
+	m_connId = mm->params.getParam(YSTRING("i"));
     if (m_connId.null()) {
 	m_needClear = true;
 	return false;
@@ -1414,7 +1426,8 @@ bool MGCPCircuit::setupConn(const char* mode)
     MimeSdpBody* sdp = static_cast<MimeSdpBody*>(mm->sdp[0]);
     if (sdp) {
 	String oldIp = m_rtpAddr;
-	bool mediaChanged = setMedia(splugin.parser().parse(*sdp,m_rtpAddr,m_rtpMedia));
+	bool mediaChanged = setMedia(splugin.parser().parse(*sdp,m_rtpAddr,
+	    m_rtpMedia,String::empty(),m_rtpForward && !create));
 	const DataBlock& raw = sdp->getBody();
 	m_remoteRawSdp.assign((const char*)raw.data(),raw.length());
 	// Disconnect if media changed
@@ -1437,6 +1450,14 @@ void MGCPCircuit::clearConn(bool force)
     }
     if (!force)
 	mm->params.addParam("C",m_callId);
+    if (mySpan()->rqntStr() && (mySpan()->rqntType() != MGCPSpan::RqntNone) && !(fxs() || fxo())) {
+	if (mySpan()->rqntEmbed()) {
+	    mm->params.addParam("X",m_notify);
+	    mm->params.addParam("R","");
+	}
+	else
+	    sendRequest(0,"");
+    }
     if (mySpan()->bearer() != m_gwFormat) {
 	m_gwFormat = mySpan()->bearer();
 	m_gwFormatChanged = true;
@@ -1499,11 +1520,13 @@ RefPointer<MGCPMessage> MGCPCircuit::sendSync(MGCPMessage* mm)
 	TelEngine::destruct(mm);
 	return 0;
     }
+    u_int64_t t1 = Time::msecNow();
     while (m_msg) {
 	if (Thread::check(false))
 	    return 0;
 	Thread::idle();
     }
+    u_int64_t t2 = Time::msecNow();
     MGCPTransaction* tr = s_engine->sendCommand(mm,ep->address);
     tr->userData(static_cast<GenObject*>(this));
     m_tr = tr;
@@ -1511,13 +1534,22 @@ RefPointer<MGCPMessage> MGCPCircuit::sendSync(MGCPMessage* mm)
 	Thread::idle();
     RefPointer<MGCPMessage> tmp = m_msg;
     m_msg = 0;
+    u_int64_t t3 = Time::msecNow();
     if (!tmp)
-	Debug(&splugin,DebugMild,"MGCPCircuit::sendSync() returning NULL [%p]",this);
-#ifdef DEBUG
-    else
-	Debug(&splugin,DebugInfo,"MGCPCircuit::sendSync() returning %d '%s' [%p]",
-	    tmp->code(),tmp->comment().c_str(),this);
-#endif
+	Debug(&splugin,DebugMild,"MGCPCircuit::sendSync() returning NULL in %u+%u ms [%p]",
+	    (unsigned int)(t2-t1),(unsigned int)(t3-t2),this);
+    else {
+	int level = DebugAll;
+	if (t3-t1 > 500)
+	    level = DebugMild;
+	else if (t3-t1 > 350)
+	    level = DebugNote;
+	else if (t3-t1 > 200)
+	    level = DebugInfo;
+	Debug(&splugin,level,"MGCPCircuit::sendSync() returning %d '%s' in %u+%u ms [%p]",
+	    tmp->code(),tmp->comment().c_str(),
+	    (unsigned int)(t2-t1),(unsigned int)(t3-t2),this);
+    }
     return tmp;
 }
 
@@ -1602,7 +1634,8 @@ bool MGCPCircuit::status(Status newStat, bool sync)
 	case Special:
 	    if (m_specialMode.null())
 		return false;
-	    if ((m_specialMode == "loopback" || m_specialMode == "conttest") &&
+	    if ((m_specialMode == YSTRING("loopback") ||
+		m_specialMode == YSTRING("conttest")) &&
 		setupConn(m_specialMode))
 		break;
 	    if (m_rtpForward)
@@ -1694,18 +1727,18 @@ bool MGCPCircuit::setParam(const String& param, const String& value)
     if (m_changing)
 	return false;
     bool rtpChanged = false;
-    if (param == "sdp_raw") {
+    if (param == YSTRING("sdp_raw")) {
 	rtpChanged = m_localRawSdp != value;
 	m_localRawSdp = value;
     }
-    else if (param == "rtp_forward") {
+    else if (param == YSTRING("rtp_forward")) {
 	bool fwd = value.toBoolean();
 	rtpChanged = m_rtpForward != fwd;
 	m_rtpForward = fwd;
     }
-    else if (param == "rtp_rfc2833")
+    else if (param == YSTRING("rtp_rfc2833"))
 	setRfc2833(value);
-    else if (param == "special_mode") {
+    else if (param == YSTRING("special_mode")) {
 	if (value != m_specialMode) {
 	    rtpChanged = true;
 	    m_specialMode = value;
@@ -1727,15 +1760,15 @@ bool MGCPCircuit::getParam(const String& param, String& value) const
     Lock lock(s_mutex);
     if (m_changing)
 	return false;
-    if (param == "rtp_addr") {
+    if (param == YSTRING("rtp_addr")) {
 	value = m_rtpAddr;
 	return true;
     }
-    else if (param == "sdp_raw") {
+    else if (param == YSTRING("sdp_raw")) {
 	value = m_remoteRawSdp;
 	return true;
     }
-    else if (param == "special_mode") {
+    else if (param == YSTRING("special_mode")) {
 	value = m_specialMode;
 	return true;
     }
@@ -1753,7 +1786,7 @@ bool MGCPCircuit::setParams(const NamedList& params)
     if (params == "rtp") {
 	waitNotChanging();
 	DDebug(&splugin,DebugAll,"MGCPCircuit::setParams(rtp) %u [%p]",code(),this);
-	String* raw = params.getParam("sdp_raw");
+	String* raw = params.getParam(YSTRING("sdp_raw"));
 	if (raw && m_localRawSdp != *raw) {
 	    m_localRawSdp = *raw;
 	    m_localRtpChanged = true;
@@ -1790,19 +1823,19 @@ bool MGCPCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params
 	case SignallingCircuitEvent::Connect:
 	    if (params)
 		setParams(*params);
-	    return status(Connected,!params || params->getBoolValue("sync",true));
+	    return status(Connected,!params || params->getBoolValue(YSTRING("sync"),true));
 	case SignallingCircuitEvent::RingBegin:
 	    if (fxs()) {
 		String s("L/rg");
 		if (params) {
-		    String number = params->getValue("caller");
-		    String name = params->getValue("callername");
+		    String number = params->getValue(YSTRING("caller"));
+		    String name = params->getValue(YSTRING("callername"));
 		    if (number || name) {
 			MimeHeaderLine::addQuotes(number);
 			MimeHeaderLine::addQuotes(name);
 			int year;
 			unsigned int month,day,hour,minutes,seconds;
-			int tzo = params->getIntValue("tzoffset",s_tzOffset);
+			int tzo = params->getIntValue(YSTRING("tzoffset"),s_tzOffset);
 			Time::toDateTime(Time::secNow()+tzo,year,month,day,hour,minutes,seconds);
 			char buf[16];
 			::snprintf(buf,sizeof(buf),"%02u/%02u/%02u/%02u",month,day,hour,minutes);
@@ -1825,7 +1858,7 @@ bool MGCPCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params
 	    return fxo() && sendRequest("L/hf");
 	case SignallingCircuitEvent::Dtmf:
 	    if (params) {
-		const String* tone = params->getParam("tone");
+		const String* tone = params->getParam(YSTRING("tone"));
 		if (!tone)
 		    tone = params;
 		if (!null(tone))
@@ -1834,14 +1867,14 @@ bool MGCPCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params
 	    break;
 	case SignallingCircuitEvent::GenericTone:
 	    if (params) {
-		const String* tone = params->getParam("tone");
+		const String* tone = params->getParam(YSTRING("tone"));
 		if (!tone)
 		    tone = params;
 		if (null(tone))
 		    break;
-		if (*tone == "ringback" || *tone == "ring" || *tone == "rt")
+		if (*tone == YSTRING("ringback") || *tone == YSTRING("ring") || *tone == YSTRING("rt"))
 		    return sendPending("G/rt");
-		if (*tone == "congestion" || *tone == "cg")
+		if (*tone == YSTRING("congestion") || *tone == YSTRING("cg"))
 		    return sendPending("G/cg");
 	    }
 	    break;
@@ -1869,7 +1902,7 @@ bool MGCPCircuit::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 		enqueueEvent(SignallingCircuitEvent::Disconnected,"Timeout");
 	}
     }
-    else if (tr->initial() && (tr->initial()->name() == "DLCX")) {
+    else if (tr->initial() && (tr->initial()->name() == YSTRING("DLCX"))) {
 	int err = 406;
 	if (tr->msgResponse()) {
 	    if (tr->state() > MGCPTransaction::Responded)
@@ -2016,24 +2049,24 @@ bool MGCPCircuit::enqueueEvent(SignallingCircuitEvent::Type type, const char* na
 bool RtpHandler::received(Message& msg)
 {
     // refuse calls from a MGCP-GW
-    if (!msg.getBoolValue("mgcp_allowed",true))
+    if (!msg.getBoolValue(YSTRING("mgcp_allowed"),true))
 	return false;
-    String trans = msg.getValue("transport");
+    String trans = msg.getValue(YSTRING("transport"));
     if (trans && !trans.startsWith("RTP/"))
 	return false;
     Debug(&splugin,DebugAll,"RTP message received");
 
     CallEndpoint* ch = YOBJECT(CallEndpoint,msg.userData());
-    const char* media = msg.getValue("media","audio");
+    const char* media = msg.getValue(YSTRING("media"),"audio");
     MGCPWrapper* w = MGCPWrapper::find(ch,media);
     if (w)
 	Debug(&splugin,DebugAll,"Wrapper %p found by CallEndpoint",w);
     else {
-	w = MGCPWrapper::find(msg.getValue("rtpid"));
+	w = MGCPWrapper::find(msg.getValue(YSTRING("rtpid")));
 	if (w)
 	    Debug(&splugin,DebugAll,"Wrapper %p found by ID",w);
     }
-    const char* epId = msg.getValue("mgcp_endpoint",s_defaultEp);
+    const char* epId = msg.getValue(YSTRING("mgcp_endpoint"),s_defaultEp);
     if (!(ch || w)) {
 	if (epId)
 	    Debug(&splugin,DebugWarn,"Neither call channel nor MGCP wrapper found!");
@@ -2062,7 +2095,7 @@ bool RtpHandler::received(Message& msg)
 bool SdpHandler::received(Message& msg)
 {
     // refuse calls from a MGCP-GW
-    if (!msg.getBoolValue("mgcp_allowed",true))
+    if (!msg.getBoolValue(YSTRING("mgcp_allowed"),true))
 	return false;
     Debug(&splugin,DebugAll,"SDP message received");
 
@@ -2073,10 +2106,10 @@ bool SdpHandler::received(Message& msg)
 // Handler for chan.dtmf messages, forwards them to the remote endpoint
 bool DTMFHandler::received(Message& msg)
 {
-    String targetid(msg.getValue("targetid"));
+    String targetid(msg.getValue(YSTRING("targetid")));
     if (targetid.null())
 	return false;
-    String text(msg.getValue("text"));
+    String text(msg.getValue(YSTRING("text")));
     if (text.null())
 	return false;
     MGCPWrapper* wrap = MGCPWrapper::find(targetid);
@@ -2125,12 +2158,12 @@ void MGCPPlugin::initialize()
     Output("Initializing module MGCP Call Agent");
     Configuration cfg(Engine::configFile("mgcpca"));
     setup();
-    s_tzOffset = cfg.getIntValue("general","tzoffset",0);
-    NamedList* engSect = cfg.getSection("engine");
+    s_tzOffset = cfg.getIntValue(YSTRING("general"),YSTRING("tzoffset"),0);
+    NamedList* engSect = cfg.getSection(YSTRING("engine"));
     if (s_engine && engSect)
 	s_engine->initialize(*engSect);
     while (!s_engine) {
-	if (!(engSect && engSect->getBoolValue("enabled",true)))
+	if (!(engSect && engSect->getBoolValue(YSTRING("enabled"),true)))
 	    break;
 	int n = cfg.sections();
 	for (int i = 0; i < n; i++) {
@@ -2139,7 +2172,7 @@ void MGCPPlugin::initialize()
 		continue;
 	    String name(*sect);
 	    if (name.startSkip("gw") && name) {
-		const char* host = sect->getValue("host");
+		const char* host = sect->getValue(YSTRING("host"));
 		if (!host)
 		    continue;
 		if (!s_engine) {
@@ -2147,15 +2180,15 @@ void MGCPPlugin::initialize()
 		    s_engine->debugChain(this);
 		    s_endpoint = new MGCPEndpoint(
 			s_engine,
-			cfg.getValue("endpoint","user","yate"),
-			cfg.getValue("endpoint","host",s_engine->address().host()),
-			cfg.getIntValue("endpoint","port")
+			cfg.getValue(YSTRING("endpoint"),YSTRING("user"),"yate"),
+			cfg.getValue(YSTRING("endpoint"),YSTRING("host"),s_engine->address().host()),
+			cfg.getIntValue(YSTRING("endpoint"),YSTRING("port"))
 		    );
 		}
-		int port = sect->getIntValue("port",0);
-		String user = sect->getValue("user",name);
-		name = sect->getValue("name",name);
-		SignallingCircuitRange range(sect->getValue("range"));
+		int port = sect->getIntValue(YSTRING("port"),0);
+		String user = sect->getValue(YSTRING("user"),name);
+		name = sect->getValue(YSTRING("name"),name);
+		SignallingCircuitRange range(sect->getValue(YSTRING("range")));
 		if (range.count() && user.find('*') >= 0) {
 		    // This section is a template
 		    for (unsigned int idx = 0; idx < range.count(); idx++) {
@@ -2178,7 +2211,7 @@ void MGCPPlugin::initialize()
 		MGCPEpInfo* ep = s_endpoint->append(user,host,port);
 		if (ep) {
 		    ep->alias = name;
-		    if (sect->getBoolValue("cluster",false))
+		    if (sect->getBoolValue(YSTRING("cluster"),false))
 			s_defaultEp = ep->toString();
 		}
 		else
@@ -2192,7 +2225,7 @@ void MGCPPlugin::initialize()
 	}
 	if (s_defaultEp)
 	    Debug(this,DebugCall,"Default remote endpoint: '%s'",s_defaultEp.c_str());
-	int prio = cfg.getIntValue("general","priority",80);
+	int prio = cfg.getIntValue(YSTRING("general"),YSTRING("priority"),80);
 	if (prio > 0) {
 	    Engine::install(new RtpHandler(prio));
 	    Engine::install(new SdpHandler(prio));

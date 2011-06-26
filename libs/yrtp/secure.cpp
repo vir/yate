@@ -43,13 +43,13 @@ RTPSecure::RTPSecure(const String& suite)
       m_rtpAuthLen(4), m_rtpEncrypted(true)
 {
     DDebug(DebugAll,"RTPSecure::RTPSecure('%s') [%p]",suite.c_str(),this);
-    if (suite == "NULL") {
+    if (suite == YSTRING("NULL")) {
 	m_rtpAuthLen = 0;
 	m_rtpEncrypted = false;
     }
-    else if (suite == "AES_CM_128_HMAC_SHA1_32")
+    else if (suite == YSTRING("AES_CM_128_HMAC_SHA1_32"))
 	m_rtpAuthLen = 4;
-    else if (suite == "AES_CM_128_HMAC_SHA1_80")
+    else if (suite == YSTRING("AES_CM_128_HMAC_SHA1_80"))
 	m_rtpAuthLen = 10;
 }
 
@@ -124,13 +124,13 @@ bool RTPSecure::setup(const String& cryptoSuite, const String& keyParams, const 
     Debug(DebugInfo,"RTPSecure::setup('%s','%s',%p) [%p]",
 	cryptoSuite.c_str(),keyParams.c_str(),paramList,this);
     m_rtpEncrypted = !paramList || (0 == paramList->find("UNENCRYPTED_SRTP"));
-    if (cryptoSuite.null() || cryptoSuite == "NULL") {
+    if (cryptoSuite.null() || cryptoSuite == YSTRING("NULL")) {
 	m_rtpAuthLen = 0;
 	m_rtpEncrypted = false;
     }
-    else if (cryptoSuite == "AES_CM_128_HMAC_SHA1_32")
+    else if (cryptoSuite == YSTRING("AES_CM_128_HMAC_SHA1_32"))
 	m_rtpAuthLen = 4;
-    else if (cryptoSuite == "AES_CM_128_HMAC_SHA1_80")
+    else if (cryptoSuite == YSTRING("AES_CM_128_HMAC_SHA1_80"))
 	m_rtpAuthLen = 10;
     else {
 	Debug(DebugMild,"Unknown SRTP crypto suite '%s'",cryptoSuite.c_str());

@@ -58,7 +58,7 @@ Message::~Message()
 
 void* Message::getObject(const String& name) const
 {
-    if (name == "Message")
+    if (name == YSTRING("Message"))
 	return const_cast<Message*>(this);
     return NamedList::getObject(name);
 }

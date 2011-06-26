@@ -29,16 +29,17 @@ Array::Array(int columns, int rows)
     : m_rows(rows), m_columns(columns)
 {
     if (rows && columns) {
+	ObjList* column = &m_obj;
 	for (int i=0; i<columns; i++) {
 	    ObjList *a = new ObjList();
 	    // for the first column set the row directly
 	    if (i == 0)
-		m_obj.set(a);
+		column->set(a);
 	    else
-		m_obj.append(a,false);
+		column = column->append(a,false);
 	    // and add some empty holders for each item
 	    for (int k=1; k<rows; k++)
-		a->append(0,false);	
+		a = a->append(0,false);	
 	}
     }
 }
@@ -52,7 +53,7 @@ Array::~Array()
 
 void* Array::getObject(const String& name) const
 {
-    if (name == "Array")
+    if (name == YSTRING("Array"))
 	return const_cast<Array*>(this);
     return RefObject::getObject(name);
 }

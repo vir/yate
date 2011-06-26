@@ -26,6 +26,15 @@
 ;  be sent through the signalling channel if any
 ;dtmfinband=no
 
+; floodevents: int: How many events retrieved in a row trigger a flood warning
+; Can be overridden in each ss7-isup, isdn-pri-... or isdn-bri-... section
+;floodevents=20
+
+; datafile: string: File to save/restore trunks data (circuits lock status)
+; Defaults to ysigdata.conf located in current config directory
+; If set the file must contain the path (relative or absolute)
+; This parameter is applied on reload
+;datafile=
 
 ; Each section except [general] can have some common parameters
 
@@ -150,6 +159,10 @@
 ; If it fails the correct indication (no inband available) is signaled
 ;ringback=no
 
+; floodevents: int: How many events retrieved in a row trigger a flood warning
+; Default value is taken from the [general] section
+;floodevents=20
+
 ; print-messages: boolean: Print decoded protocol data units to output
 ; This option is applied on reload
 ; Defaults to no
@@ -219,6 +232,10 @@
 ; Interval: 0..255. Defaults to 255 if missing or invalid
 ; Ignored if type is not isdn-pri-mon
 ;idlevalue=255
+
+; floodevents: int: How many events retrieved in a row trigger a flood warning
+; Default value is taken from the [general] section
+;floodevents=20
 
 ; layer2dump-net: string: Filename to dump NET Q.921 packets to
 ;layer2dump-net=
@@ -438,6 +455,10 @@
 ; duplicate-cgb: boolean: Duplicate all sent circuit group blocking requests
 ; Defaults to yes if pointcodetype is ANSI or ANSI8, no for other types
 ;duplicate-cgb=
+
+; floodevents: int: How many events retrieved in a row trigger a flood warning
+; Default value is taken from the [general] section
+;floodevents=20
 
 ; print-messages: boolean: Print decoded protocol data units to output
 ; This option is applied on reload

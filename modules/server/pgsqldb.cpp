@@ -309,9 +309,20 @@ int PgConn::queryDbInternal(const char* query, Message* dest)
 			if (dest->getBoolValue("results",true) && !PQbinaryTuples(res)) {
 			    Array *a = new Array(columns,rows+1);
 			    for (int k = 0; k < columns; k++) {
-				String *f= new String(PQfname(res,k));
-				a->set(f,k,0);
+				ObjList* column = a->getColumn(k);
+				if (column)
+				    column->set(new String(PQfname(res,k)));
+				else {
+				    Debug(&module,DebugGoOn,"No array column for %d",k);
+				    continue;
+				}
 				for (int j = 0; j < rows; j++) {
+				    column = column->next();
+				    if (!column) {
+					// Stop now: we won't get the next row
+					Debug(&module,DebugGoOn,"No array row %d in column %d",j + 1,k);
+					break;
+				    }
 				    // skip over NULL values
 				    if (PQgetisnull(res,j,k))
 					continue;
@@ -320,7 +331,7 @@ int PgConn::queryDbInternal(const char* query, Message* dest)
 					v = new DataBlock(PQgetvalue(res,j,k),PQgetlength(res,j,k));
 				    else
 					v = new String(PQgetvalue(res,j,k));
-				    a->set(v,k,j+1);
+				    column->set(v);
 				}
 			    }
 			    dest->userData(a);

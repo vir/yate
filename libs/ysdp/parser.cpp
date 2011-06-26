@@ -92,16 +92,17 @@ const TokenDict SDPParser::s_rtpmap[] = {
 
 // Parse a received SDP body
 ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedia,
-    const String& media)
+    const String& media, bool force)
 {
-    DDebug(DebugAll,"SDPParser::parse(%p,%s,%p,'%s')",&sdp,addr.c_str(),oldMedia,media.safe());
+    DDebug(DebugAll,"SDPParser::parse(%p,%s,%p,'%s',%s)",
+	&sdp,addr.c_str(),oldMedia,media.safe(),String::boolText(force));
     const NamedString* c = sdp.getLine("c");
     if (c) {
 	String tmp(*c);
 	if (tmp.startSkip("IN IP4")) {
 	    tmp.trimBlanks();
 	    // Handle the case media is muted
-	    if (tmp == "0.0.0.0")
+	    if (tmp == YSTRING("0.0.0.0"))
 		tmp.clear();
 	    addr = tmp;
 	}
@@ -134,7 +135,7 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 	    trans.toLower();
 	    rtp = false;
 	}
-	else {
+	else if (!force) {
 	    Debug(this,DebugWarn,"Unknown SDP transport '%s' for media '%s'",
 		trans.c_str(),type.c_str());
 	    continue;
@@ -251,7 +252,7 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 		else if ((mode == 30) || (ptime == 30))
 		    payload = "ilbc30";
 		else
-		    payload = m_hacks.getValue("ilbc_default","ilbc30");
+		    payload = m_hacks.getValue(YSTRING("ilbc_default"),"ilbc30");
 	    }
 
 	    if (amrOctet && payload == "amr")
@@ -267,7 +268,7 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 			mappings << ",";
 		    mappings << payload << "=" << var;
 		}
-		if ((payload == "g729") && m_hacks.getBoolValue("g729_annexb",annexB))
+		if ((payload == "g729") && m_hacks.getBoolValue(YSTRING("g729_annexb"),annexB))
 		    aux << ",g729b";
 	    }
 	}
@@ -282,7 +283,7 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 	}
 	bool append = false;
 	if (net)
-	    net->update(fmt,port);
+	    net->update(fmt,port,-1,force);
 	else {
 	    net = new SDPMedia(type,trans,fmt,port);
 	    append = true;

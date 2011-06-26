@@ -1326,6 +1326,8 @@ bool RadiusClient::returnAttributes(NamedList& params, const ObjList* attributes
 
 bool AuthHandler::received(Message& msg)
 {
+    if (!msg.getBoolValue("auth_radius",true))
+	return false;
     String proto = msg.getValue("protocol",msg.getValue("module"));
     if (proto.null())
 	return false;
@@ -1364,6 +1366,18 @@ bool AuthHandler::received(Message& msg)
     if (sep >= 0)
 	address = address.substr(0,sep);
     radclient.addAttribute("h323-remote-address",address);
+    String billid = msg.getValue("billid");
+    if (billid) {
+	// create a Cisco-compatible conference ID
+	MD5 cid(billid);
+	String confid;
+	confid << cid.hexDigest().substr(0,8) << " ";
+	confid << cid.hexDigest().substr(8,8) << " ";
+	confid << cid.hexDigest().substr(16,8) << " ";
+	confid << cid.hexDigest().substr(24,8);
+	confid.toUpper();
+	radclient.addAttribute("h323-conf-id",confid);
+    }
 
     ObjList result;
     if (radclient.doAuthenticate(&result) != AuthSuccess) {
@@ -1412,6 +1426,8 @@ static bool ciscoTime(double t, String& ret)
 
 bool AcctHandler::received(Message& msg)
 {
+    if (!msg.getBoolValue("cdrwrite_radius",true))
+	return false;
     String op = msg.getValue("operation");
     int acctStat = 0;
     if (op == "initialize")

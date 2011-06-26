@@ -68,21 +68,22 @@ const char* SDPMedia::fmtList() const
 }
 
 // Update members with data taken from a SDP, return true if something changed
-bool SDPMedia::update(const char* formats, int rport, int lport)
+bool SDPMedia::update(const char* formats, int rport, int lport, bool force)
 {
-    DDebug(DebugAll,"SDPMedia::update('%s',%d,%d) [%p]",formats,rport,lport,this);
+    DDebug(DebugAll,"SDPMedia::update('%s',%d,%d,%s) [%p]",
+	formats,rport,lport,String::boolText(force),this);
     bool chg = false;
     String tmp(formats);
     if (tmp && (m_formats != tmp)) {
 	if (tmp.find(',') < 0) {
 	    // single format received, check if acceptable
-	    if (m_formats && m_formats.find(tmp) < 0) {
+	    if (m_formats && !force && m_formats.find(tmp) < 0) {
 		Debug(DebugNote,"Not changing to '%s' from '%s' [%p]",
 		    formats,m_formats.c_str(),this);
 		tmp.clear();
 	    }
 	}
-	else if (m_formats) {
+	else if (m_formats && !force) {
 	    // from received list keep only already offered formats
 	    ObjList* l1 = tmp.split(',',false);
 	    ObjList* l2 = m_formats.split(',',false);

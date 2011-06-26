@@ -144,7 +144,7 @@ acceptStatus OBJECT-TYPE
 cpuLoad		OBJECT IDENTIFIER ::= { engine 9 }
 
 kernelLoad OBJECT-TYPE
-	SYNTAX		INTEGER (1..100)
+	SYNTAX		INTEGER (0..100)
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -152,7 +152,7 @@ kernelLoad OBJECT-TYPE
 	::= { cpuLoad 1 }
 
 userLoad OBJECT-TYPE
-	SYNTAX		INTEGER (1..100)
+	SYNTAX		INTEGER (0..100)
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -160,7 +160,7 @@ userLoad OBJECT-TYPE
 	::= { cpuLoad 2 }
 
 totalLoad OBJECT-TYPE
-	SYNTAX		INTEGER (1..100)
+	SYNTAX		INTEGER (0..100)
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -168,7 +168,7 @@ totalLoad OBJECT-TYPE
 	::= { cpuLoad 3 }
 
 systemLoad OBJECT-TYPE
-	SYNTAX		INTEGER (1..100)
+	SYNTAX		INTEGER (0..100)
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
@@ -874,10 +874,10 @@ asrData OBJECT-TYPE
 	::= { qosEntry 3 }
 
 ASRData ::= SEQUENCE {
-	lowASRThreshold		INTEGER (1..100),
-	highASRThreshold	INTEGER	(1..100),
-	currentASR		INTEGER (1..100),
-	overallASR		INTEGER (1..100),
+	lowASRThreshold		INTEGER (-1..100),
+	highASRThreshold	INTEGER	(-1..100),
+	currentASR		INTEGER (-1..100),
+	overallASR		INTEGER (-1..100),
 	currentLowASRAlarmCount		Counter32,
 	currentHighASRAlarmCount	Counter32,
 	overallLowASRAlarmCount		Counter32,
@@ -885,35 +885,37 @@ ASRData ::= SEQUENCE {
 }
 
 lowASRThreshold OBJECT-TYPE
-	SYNTAX		INTEGER (1..100)
+	SYNTAX		INTEGER (-1..100)
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
-		"The lower threshold for triggering an ASR alarm."
+		"The lower threshold for triggering an ASR alarm. A value of -1 means that the threshold has not been set."
 	::= { asrData 1 }
 
 highASRThreshold OBJECT-TYPE
-	SYNTAX		INTEGER (1..100)
+	SYNTAX		INTEGER (-1..100)
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
-		"The upper threshold for triggering an ASR alarm."
+		"The upper threshold for triggering an ASR alarm. A value of -1 means that the threshold has not been set."
 	::= { asrData 2 }
 
 currentASR OBJECT-TYPE
-	SYNTAX		INTEGER (1..100)
+	SYNTAX		INTEGER (-1..100)
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
-		"The ASR value for the configured time interval."
+		"The ASR value for the configured time interval. A value of -1 means that there haven't been 
+		    calls in order to compute the ASR value."
 	::= { asrData 3 }
 
 overallASR OBJECT-TYPE
-	SYNTAX		INTEGER (1..100)
+	SYNTAX		INTEGER (-1..100)
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
-		"The ASR value since YATE started."
+		"The ASR value since YATE started. A value of -1 means that there haven't been 
+		    calls in order to compute the ASR value."
 	::= { asrData 4 }
 
 currentLowASRAlarmCount OBJECT-TYPE
@@ -957,35 +959,37 @@ nerData OBJECT-TYPE
 	::= { qosEntry 4 }
 
 NERData ::= SEQUENCE {
-	lowNERThreshold		INTEGER (1..100),
-	currentNER		INTEGER (1..100),
-	overallNER		INTEGER (1..100),
+	lowNERThreshold		INTEGER (-1..100),
+	currentNER		INTEGER (-1..100),
+	overallNER		INTEGER (-1..100),
 	currentLowNERAlarmCount	Counter32,
 	overallLowNERAlarmCount	Counter32
 }
 
 lowNERThreshold OBJECT-TYPE
-	SYNTAX		INTEGER (1..100)
+	SYNTAX		INTEGER (-1..100)
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
-		"The lower threshold for triggering a NER alarm."
+		"The lower threshold for triggering a NER alarm. A value of -1 means that the threshold has not been set."
 	::= { nerData 1 }
 
 currentNER OBJECT-TYPE
-	SYNTAX		INTEGER (1..100)
+	SYNTAX		INTEGER (-1..100)
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
-		"The NER value for the configured time interval."
+		"The NER value for the configured time interval. A value of -1 means that there haven't been 
+		    calls in order to compute the NER value."
 	::= { nerData 2 }
 
 overallNER OBJECT-TYPE
-	SYNTAX		INTEGER (1..100)
+	SYNTAX		INTEGER (-1..100)
 	MAX-ACCESS	read-only
 	STATUS		current
 	DESCRIPTION
-		"The NER value since YATE started."
+		"The NER value since YATE started. A value of -1 means that there haven't been 
+		    calls in order to compute the NER value."
 	::= { nerData 3 }
 
 currentLowNERAlarmCount OBJECT-TYPE
@@ -1030,7 +1034,9 @@ EndCauseCounters ::= SEQUENCE {
 	currentNoAuthEndCause		Counter32,
 	overallNoAuthEndCause		Counter32,
 	currentCongestionEndCause	Counter32,
-	overallCongestionEndCause	Counter32
+	overallCongestionEndCause	Counter32,
+	currentNoMediaEndCause		Counter32,
+	overallNoMediaEndCause		Counter32
 }
 
 currentHangupEndCause OBJECT-TYPE
@@ -1176,6 +1182,22 @@ overallCongestionEndCause OBJECT-TYPE
 	DESCRIPTION
 		"Number of calls ended due with congestion since YATE started."
 	::= { callEndCauseCounters 18 }
+
+currentNoMediaEndCause OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of calls ended with a no media reason in the configured time interval."
+	::= { callEndCauseCounters 19 }
+
+overallNoMediaEndCause OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of calls ended with a no media reason since YATE started."
+	::= { callEndCauseCounters 20 }
 
 -- serviceQuality END
 -- calls END
@@ -1579,7 +1601,7 @@ currentLowASR OBJECT-TYPE
 
 overallLowASR OBJECT-TYPE
 	SYNTAX		DisplayString
-	MAX-ACCESS	read-only
+	MAX-ACCESS	accessible-for-notify
 	STATUS		current
 	DESCRIPTION
 		"Alarm that signals that the ASR value since Yate started is bellow a set threshold."
@@ -1589,7 +1611,7 @@ highASRAlarms			OBJECT IDENTIFIER ::= { asrAlarms 2 }
 
 currentHighASR OBJECT-TYPE
 	SYNTAX		DisplayString
-	MAX-ACCESS	read-only
+	MAX-ACCESS	accessible-for-notify
 	STATUS		current
 	DESCRIPTION
 		"Alarm that signals that the ASR value for a configured time interval has surpassed a set threshold."
@@ -1597,7 +1619,7 @@ currentHighASR OBJECT-TYPE
 
 overallHighASR OBJECT-TYPE
 	SYNTAX		DisplayString
-	MAX-ACCESS	read-only
+	MAX-ACCESS	accessible-for-notify
 	STATUS		current
 	DESCRIPTION
 		"Alarm that signals that the overall ASR value has surpassed a set threshold."
@@ -1607,7 +1629,7 @@ lowNERAlarms			OBJECT IDENTIFIER ::= { serviceQualityAlarms 2 }
 
 currentLowNER OBJECT-TYPE
 	SYNTAX		DisplayString
-	MAX-ACCESS	read-only
+	MAX-ACCESS	accessible-for-notify
 	STATUS		current
 	DESCRIPTION
 		"Alarm that signals that the NER value for a configured time interval is bellow a set threshold."
@@ -1615,7 +1637,7 @@ currentLowNER OBJECT-TYPE
 
 overallLowNER OBJECT-TYPE
 	SYNTAX		DisplayString
-	MAX-ACCESS	read-only
+	MAX-ACCESS	accessible-for-notify
 	STATUS		current
 	DESCRIPTION
 		"Alarm that signals that the overall NER value is bellow a set threshold."

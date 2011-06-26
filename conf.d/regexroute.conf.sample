@@ -43,6 +43,7 @@
 ;  $(ge,VAL1,VAL2) = "true" if VAL1 >= VAL2, "false" otherwise
 ;  $(streq,VAL1,VAL2) = "true" if VAL1 = VAL2 (string), "false" otherwise
 ;  $(strne,VAL1,VAL2) = "true" if VAL1 != VAL2 (string), "false" otherwise
+;  $(strpos,VAL1,VAL2) = 0-based position of VAL1 in VAL2, -1 if not found
 ;  $(random,STRING) = STRING with each ? character replaced with a random digit
 ;  $(index,N,ITEM1,ITEM2,...) = N-th (modulo length of list) item in list
 ;  $(rotate,N,ITEM1,ITEM2,...) = list rotated N (modulo length of list) times
@@ -77,6 +78,10 @@
 
 ; prerouteall: bool: Preroute even calls having a context or with empty caller
 ;prerouteall=no
+
+; maxdepth: int: Maximum number of jumps or recursive includes
+; Values are clamped to interval 5-100
+;maxdepth=5
 
 
 [$once]

@@ -75,13 +75,13 @@ SignallingCallControl::SignallingCallControl(const NamedList& params,
       m_exiting(false)
 {
     // Controller location
-    m_location = params.getValue("location");
+    m_location = params.getValue(YSTRING("location"));
     // Strategy
-    const char* strategy = params.getValue("strategy","increment");
+    const char* strategy = params.getValue(YSTRING("strategy"),"increment");
     m_strategy = SignallingCircuitGroup::str2strategy(strategy);
     String restrict;
     if (m_strategy != SignallingCircuitGroup::Random)
-	restrict = params.getValue("strategy-restrict");
+	restrict = params.getValue(YSTRING("strategy-restrict"));
     if (!restrict.null()) {
 	if (restrict == "odd")
 	    m_strategy |= SignallingCircuitGroup::OnlyOdd;
@@ -94,14 +94,14 @@ SignallingCallControl::SignallingCallControl(const NamedList& params,
     }
 
     // Message prefix
-    m_msgPrefix = params.getValue("message-prefix",msgPrefix);
+    m_msgPrefix = params.getValue(YSTRING("message-prefix"),msgPrefix);
 
     // Verify event timer
     m_verifyTimer.interval(params,"verifyeventinterval",10,120,true,true);
     m_verifyTimer.start();
 
     // Media Required
-    m_mediaRequired = (MediaRequired)params.getIntValue("needmedia",
+    m_mediaRequired = (MediaRequired)params.getIntValue(YSTRING("needmedia"),
 	s_mediaRequired,m_mediaRequired);
 }
 
@@ -789,7 +789,7 @@ SignallingCircuitSpan* SignallingCircuitGroup::buildSpan(const String& name, uns
 	    : NamedList(name), m_group(group)
 	    { }
 	virtual void* getObject(const String& name) const
-	    { return (name == "SignallingCircuitGroup") ? m_group : NamedList::getObject(name); }
+	    { return (name == YSTRING("SignallingCircuitGroup")) ? m_group : NamedList::getObject(name); }
 	SignallingCircuitGroup* m_group;
     };
 
@@ -1174,15 +1174,15 @@ AnalogLine::AnalogLine(AnalogLineGroup* grp, unsigned int cic, const NamedList& 
     if (m_type == Recorder)
 	m_type = FXO;
     m_address << m_group->toString() << "/" << m_circuit->code();
-    m_inband = params.getBoolValue("dtmfinband",false);
-    String tmp = params.getValue("echocancel");
+    m_inband = params.getBoolValue(YSTRING("dtmfinband"),false);
+    String tmp = params.getValue(YSTRING("echocancel"));
     if (tmp.isBoolean())
 	m_echocancel = tmp.toBoolean() ? 1 : -1;
-    m_answerOnPolarity = params.getBoolValue("answer-on-polarity",false);
-    m_hangupOnPolarity = params.getBoolValue("hangup-on-polarity",false);
-    m_polarityControl = params.getBoolValue("polaritycontrol",false);
+    m_answerOnPolarity = params.getBoolValue(YSTRING("answer-on-polarity"),false);
+    m_hangupOnPolarity = params.getBoolValue(YSTRING("hangup-on-polarity"),false);
+    m_polarityControl = params.getBoolValue(YSTRING("polaritycontrol"),false);
 
-    m_callSetup = (CallSetupInfo)lookup(params.getValue("callsetup"),csNames(),After);
+    m_callSetup = (CallSetupInfo)lookup(params.getValue(YSTRING("callsetup")),csNames(),After);
 
     m_callSetupTimeout = getValidInt(params,"callsetup-timeout",2000);
     m_noRingTimeout = getValidInt(params,"ring-timeout",10000);
@@ -1192,9 +1192,9 @@ AnalogLine::AnalogLine(AnalogLineGroup* grp, unsigned int cic, const NamedList& 
     DDebug(m_group,DebugAll,"AnalogLine() addr=%s type=%s [%p]",
 	address(),lookup(m_type,typeNames()),this);
 
-    if (!params.getBoolValue("out-of-service",false)) {
+    if (!params.getBoolValue(YSTRING("out-of-service"),false)) {
 	resetCircuit();
-	if (params.getBoolValue("connect",true))
+	if (params.getBoolValue(YSTRING("connect"),true))
 	    connect(false);
     }
     else

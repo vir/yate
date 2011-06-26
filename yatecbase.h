@@ -1968,7 +1968,7 @@ protected:
     inline bool peerHasSource(Message& msg) {
     	    CallEndpoint* ch = getPeer();
 	    if (!ch)
-		ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
+		ch = static_cast<CallEndpoint*>(msg.userObject(YSTRING("CallEndpoint")));
 	    return ch && ch->getSource();
 	}
     // Check if our consumer's source sent any data
@@ -2615,7 +2615,7 @@ public:
      * @return The remote party (may be empty)
      */
     static const String& cdrRemoteParty(const NamedList& params, bool outgoing)
-	{ return outgoing ? params["called"] : params["caller"]; }
+	{ return outgoing ? params[YSTRING("called")] : params[YSTRING("caller")]; }
 
     /**
      * Retrieve the remote party from CDR parameters
@@ -2623,10 +2623,10 @@ public:
      * @return The remote party (may be empty)
      */
     static const String& cdrRemoteParty(const NamedList& params) {
-	    const String& dir = params["direction"];
-	    if (dir == "incoming")
+	    const String& dir = params[YSTRING("direction")];
+	    if (dir == YSTRING("incoming"))
 		return cdrRemoteParty(params,true);
-	    if (dir == "outgoing")
+	    if (dir == YSTRING("outgoing"))
 		return cdrRemoteParty(params,false);
 	    return String::empty();
 	}
@@ -3318,28 +3318,28 @@ public:
      * @return The account's protocol
      */
     inline const String& protocol() const
-	{ return m_params["protocol"]; }
+	{ return m_params[YSTRING("protocol")]; }
 
     /**
      * Check if the account's protocol has chat support
      * @return True if this account has chat support
      */
     inline bool hasChat() const
-	{ return protocol() == "jabber"; }
+	{ return protocol() == YSTRING("jabber"); }
 
     /**
      * Check if the account's protocol has presence support
      * @return True if this account has presence support
      */
     inline bool hasPresence() const
-	{ return protocol() == "jabber"; }
+	{ return protocol() == YSTRING("jabber"); }
 
     /**
      * Check if the account should be logged in at startup
      * @return True if the account should be logged in at startup
      */
     inline bool startup() const
-	{ return m_params.getBoolValue("enabled",true); }
+	{ return m_params.getBoolValue(YSTRING("enabled"),true); }
 
     /**
      * Set the account's startup login flag
@@ -3506,7 +3506,7 @@ public:
      * @return Account data directory
      */
     inline const String& dataDir() const
-	{ return m_params["datadirectory"]; }
+	{ return m_params[YSTRING("datadirectory")]; }
 
     /**
      * Set account directory in application data directory. Make sure it exists.
@@ -3802,7 +3802,7 @@ public:
      * @return True if the contact is locally saved
      */
     inline bool local(bool defVal = false) const
-	{ return m_params.getBoolValue("local",defVal); }
+	{ return m_params.getBoolValue(YSTRING("local"),defVal); }
 
     /**
      * Set contact locally saved flag
@@ -3817,7 +3817,7 @@ public:
      * @return True if the contact is saved on server
      */
     inline bool remote(bool defVal = false) const
-	{ return m_params.getBoolValue("remote",defVal); }
+	{ return m_params.getBoolValue(YSTRING("remote"),defVal); }
 
     /**
      * Set contact server saved flag

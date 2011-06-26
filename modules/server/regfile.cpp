@@ -129,6 +129,8 @@ bool expired(const NamedList& list, unsigned int time)
 
 bool AuthHandler::received(Message &msg)
 {
+    if (!msg.getBoolValue("auth_regfile",true))
+	return false;
     String username(msg.getValue("username"));
     if (username.null() || username == s_general)
 	return false;
@@ -365,6 +367,7 @@ void RegfilePlugin::initialize()
 	m_init = true;
 	s_create = s_cfg.getBoolValue("general","autocreate",false);
 	String conf = s_cfg.getValue("general","file");
+	Engine::self()->runParams().replaceParams(conf);
 	if (conf) {
 	    s_accounts = conf;
 	    s_accounts.load();

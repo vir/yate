@@ -297,7 +297,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	addHeader("Max-Forwards",tmp);
     }
 
-    if ((method == "INVITE") && !getHeader("Contact")) {
+    if ((method == YSTRING("INVITE")) && !getHeader("Contact")) {
 	// automatically add a contact field to (re)INVITE and its answers
 	String tmp(user);
 	if (!tmp) {
@@ -369,7 +369,7 @@ bool SIPMessage::parseFirst(String& line)
 	    version = line.matchString(3).toUpper();
 	    DDebug(DebugAll,"got request method='%s' uri='%s' version='%s'",
 		method.c_str(),uri.c_str(),version.c_str());
-	    if (method == "ACK")
+	    if (method == YSTRING("ACK"))
 		m_ack = true;
 	}
 	else {
@@ -638,7 +638,7 @@ MimeAuthLine* SIPMessage::buildAuth(const String& username, const String& passwo
 	    NamedList qop(TelEngine::c_safe(t->getParam("qop")));
 	    if (qop) {
 		MimeHeaderLine::delQuotes(qop);
-		if (qop == "auth") {
+		if (qop == YSTRING("auth")) {
 		    String nc("00000001");
 		    if (engine)
 			engine->ncGet(nc);
@@ -660,7 +660,7 @@ MimeAuthLine* SIPMessage::buildAuth(const String& username, const String& passwo
 	    auth->setParam("response",MimeHeaderLine::quote(response));
 	    auth->setParam("algorithm","MD5");
 	    // copy opaque data as-is, only if present
-	    const NamedString* opaque = t->getParam("opaque");
+	    const NamedString* opaque = t->getParam(YSTRING("opaque"));
 	    if (opaque)
 		auth->setParam(opaque->name(),*opaque);
 	    if (qop) {

@@ -265,7 +265,7 @@ public:
 	{ return m_wrap && m_wrap->valid(); }
     virtual unsigned long Consume(const DataBlock &data, unsigned long tStamp, unsigned long flags);
     inline void setSplitable()
-	{ m_splitable = (m_format == "alaw") || (m_format == "mulaw"); }
+	{ m_splitable = (m_format == YSTRING("alaw")) || (m_format == YSTRING("mulaw")); }
 private:
     YRTPWrapper* m_wrap;
     bool m_splitable;
@@ -336,7 +336,7 @@ public:
     virtual ~CipherHolder()
 	{ TelEngine::destruct(m_cipher); }
     virtual void* getObject(const String& name) const
-	{ return (name == "Cipher*") ? (void*)&m_cipher : RefObject::getObject(name); }
+	{ return (name == YSTRING("Cipher*")) ? (void*)&m_cipher : RefObject::getObject(name); }
     inline Cipher* cipher()
 	{ Cipher* tmp = m_cipher; m_cipher = 0; return tmp; }
 private:
@@ -408,17 +408,17 @@ YRTPWrapper::YRTPWrapper(const char* localip, CallEndpoint* conn, const char* me
     m_id << (unsigned int)::random();
     if (conn)
 	m_master = conn->id();
-    m_audio = !udptl && (m_media == "audio");
+    m_audio = !udptl && (m_media == YSTRING("audio"));
     s_mutex.lock();
     s_calls.append(this);
     if (udptl) {
-	int md = 0xffff & msg.getIntValue("sdp_T38FaxMaxDatagram");
-	md = msg.getIntValue("t38maxdatagram",md);
+	int md = 0xffff & msg.getIntValue(YSTRING("sdp_T38FaxMaxDatagram"));
+	md = msg.getIntValue(YSTRING("t38maxdatagram"),md);
 	if (md < 96)
 	    md = 250;
-	const String* ec = msg.getParam("sdp_T38FaxUdpEC");
-	int ms = (ec && (*ec == "t38UDPRedundancy")) ? 2 : 0;
-	ms = msg.getIntValue("t38redundancy",ms);
+	const String* ec = msg.getParam(YSTRING("sdp_T38FaxUdpEC"));
+	int ms = (ec && (*ec == YSTRING("t38UDPRedundancy"))) ? 2 : 0;
+	ms = msg.getIntValue(YSTRING("t38redundancy"),ms);
 	if (ms < 0)
 	    ms = 0;
 	else if (ms > 16)
@@ -427,7 +427,7 @@ YRTPWrapper::YRTPWrapper(const char* localip, CallEndpoint* conn, const char* me
 	setupUDPTL(localip,md,ms);
     }
     else
-	setupRTP(localip,msg.getBoolValue("rtcp",s_rtcp));
+	setupRTP(localip,msg.getBoolValue(YSTRING("rtcp"),s_rtcp));
     s_mutex.unlock();
 }
 
@@ -458,13 +458,13 @@ YRTPWrapper::~YRTPWrapper()
 
 void* YRTPWrapper::getObject(const String& name) const
 {
-    if (name == "Socket")
+    if (name == YSTRING("Socket"))
 	return m_rtp ? m_rtp->rtpSock() : 0;
-    if (name == "DataSource")
+    if (name == YSTRING("DataSource"))
 	return m_source;
-    if (name == "DataConsumer")
+    if (name == YSTRING("DataConsumer"))
 	return m_consumer;
-    if (name == "RTPSession")
+    if (name == YSTRING("RTPSession"))
 	return m_rtp;
     return RefObject::getObject(name);
 }
@@ -569,11 +569,11 @@ bool YRTPWrapper::bindLocal(const char* localip, bool rtcp)
 bool YRTPWrapper::setParams(const char* rip, Message& msg)
 {
     // start or just setup either RTP or UDPTL
-    int rport = msg.getIntValue("remoteport");
+    int rport = msg.getIntValue(YSTRING("remoteport"));
     if (rip && (rport > 0))
 	return m_udptl ? startUDPTL(rip,rport,msg) : startRTP(rip,rport,msg);
     else
-	return m_udptl ? setupUDPTL(msg) : setupSRTP(msg,msg.getBoolValue("secure"));
+	return m_udptl ? setupUDPTL(msg) : setupSRTP(msg,msg.getBoolValue(YSTRING("secure")));
 }
 
 bool YRTPWrapper::setRemote(const char* raddr, unsigned int rport, const Message& msg)
@@ -581,7 +581,7 @@ bool YRTPWrapper::setRemote(const char* raddr, unsigned int rport, const Message
     if (!session())
 	return false;
     SocketAddr addr(AF_INET);
-    if (!(addr.host(raddr) && addr.port(rport) && session()->remoteAddr(addr,msg.getBoolValue("autoaddr",s_autoaddr)))) {
+    if (!(addr.host(raddr) && addr.port(rport) && session()->remoteAddr(addr,msg.getBoolValue(YSTRING("autoaddr"),s_autoaddr)))) {
 	Debug(&splugin,DebugWarn,"RTP failed to set remote address %s:%d [%p]",raddr,rport,this);
 	return false;
     }
@@ -590,7 +590,7 @@ bool YRTPWrapper::setRemote(const char* raddr, unsigned int rport, const Message
 
 void YRTPWrapper::setTimeout(const Message& msg, int timeOut)
 {
-    const String* param = msg.getParam("timeout");
+    const String* param = msg.getParam(YSTRING("timeout"));
     if (param) {
 	// accept true/false to apply default or disable
 	if (param->isBoolean())
@@ -618,14 +618,14 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, Message& msg)
 	return true;
     }
 
-    String p(msg.getValue("payload"));
+    String p(msg.getValue(YSTRING("payload")));
     if (p.null())
-	p = msg.getValue("format");
+	p = msg.getValue(YSTRING("format"));
     int payload = p.toInteger(dict_payloads,-1);
-    int evpayload = msg.getIntValue("evpayload",101);
-    const char* format = msg.getValue("format");
-    int tos = msg.getIntValue("tos",dict_tos,s_tos);
-    int msec = msg.getIntValue("msleep",s_sleep);
+    int evpayload = msg.getIntValue(YSTRING("evpayload"),101);
+    const char* format = msg.getValue(YSTRING("format"));
+    int tos = msg.getIntValue(YSTRING("tos"),dict_tos,s_tos);
+    int msec = msg.getIntValue(YSTRING("msleep"),s_sleep);
 
     if (!format)
 	format = lookup(payload, dict_payloads);
@@ -650,12 +650,12 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, Message& msg)
     }
 
     Debug(&splugin,DebugInfo,"RTP starting format '%s' payload %d [%p]",format,payload,this);
-    int minJitter = msg.getIntValue("minjitter",s_minjitter);
-    int maxJitter = msg.getIntValue("maxjitter",s_maxjitter);
+    int minJitter = msg.getIntValue(YSTRING("minjitter"),s_minjitter);
+    int maxJitter = msg.getIntValue(YSTRING("maxjitter"),s_maxjitter);
 
     if (!setRemote(raddr,rport,msg))
 	return false;
-    m_rtp->anySSRC(msg.getBoolValue("anyssrc",s_anyssrc));
+    m_rtp->anySSRC(msg.getBoolValue(YSTRING("anyssrc"),s_anyssrc));
     m_format = format;
     // Change format of source and/or consumer,
     //  reinstall them to rebuild codec chains
@@ -682,15 +682,15 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, Message& msg)
 	    m_consumer->deref();
 	}
     }
-    if (!(m_rtp->initGroup(msec,Thread::priority(msg.getValue("thread"),s_priority)) &&
+    if (!(m_rtp->initGroup(msec,Thread::priority(msg.getValue(YSTRING("thread")),s_priority)) &&
 	 m_rtp->direction(m_dir)))
 	return false;
 
     bool secure = false;
-    const String* sec = msg.getParam("crypto_suite");
+    const String* sec = msg.getParam(YSTRING("crypto_suite"));
     if (sec && *sec) {
 	// separate crypto parameters
-	const String* key = msg.getParam("crypto_key");
+	const String* key = msg.getParam(YSTRING("crypto_key"));
 	if (key && *key) {
 	    if (startSRTP(*sec,*key,0))
 		secure = true;
@@ -708,15 +708,15 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, Message& msg)
     m_rtp->dataPayload(payload);
     m_rtp->eventPayload(evpayload);
     m_rtp->setTOS(tos);
-    m_rtp->padding(msg.getIntValue("padding",s_padding));
-    if (msg.getBoolValue("drillhole",s_drill)) {
+    m_rtp->padding(msg.getIntValue(YSTRING("padding"),s_padding));
+    if (msg.getBoolValue(YSTRING("drillhole"),s_drill)) {
 	bool ok = m_rtp->drillHole();
 	Debug(&splugin,(ok ? DebugInfo : DebugWarn),
 	    "Wrapper %s a hole in firewall/NAT [%p]",
 	    (ok ? "opened" : "failed to open"),this);
     }
     setTimeout(msg,s_timeout);
-    m_rtp->setReports(msg.getIntValue("rtcp_interval",s_interval));
+    m_rtp->setReports(msg.getIntValue(YSTRING("rtcp_interval"),s_interval));
 //    if (maxJitter > 0)
 //	m_rtp->setDejitter(minJitter*1000,maxJitter*1000);
     m_bufsize = s_bufsize;
@@ -731,15 +731,15 @@ bool YRTPWrapper::startUDPTL(const char* raddr, unsigned int rport, Message& msg
 	return false;
     }
 
-    int tos = msg.getIntValue("tos",dict_tos,s_tos);
-    int msec = msg.getIntValue("msleep",s_sleep);
+    int tos = msg.getIntValue(YSTRING("tos"),dict_tos,s_tos);
+    int msec = msg.getIntValue(YSTRING("msleep"),s_sleep);
     if (!setRemote(raddr,rport,msg))
 	return false;
-    if (!m_udptl->initGroup(msec,Thread::priority(msg.getValue("thread"),s_priority)))
+    if (!m_udptl->initGroup(msec,Thread::priority(msg.getValue(YSTRING("thread")),s_priority)))
 	return false;
 
     m_udptl->setTOS(tos);
-    if (msg.getBoolValue("drillhole",s_drill)) {
+    if (msg.getBoolValue(YSTRING("drillhole"),s_drill)) {
 	bool ok = m_udptl->drillHole();
 	Debug(&splugin,(ok ? DebugInfo : DebugWarn),
 	    "Wrapper %s a hole in firewall/NAT [%p]",
@@ -765,7 +765,7 @@ bool YRTPWrapper::setupSRTP(Message& msg, bool buildMaster)
 	if (srtp)
 	    srtp = new RTPSecure(*srtp);
 	else
-	    srtp = new RTPSecure(msg.getValue("crypto_suite"));
+	    srtp = new RTPSecure(msg.getValue(YSTRING("crypto_suite")));
     }
     else
 	buildMaster = false;
@@ -930,7 +930,7 @@ void YRTPWrapper::terminate(Message& msg)
 
 void YRTPWrapper::setFaxDivert(const Message& msg)
 {
-    NamedString* divert = msg.getParam("fax_divert");
+    NamedString* divert = msg.getParam(YSTRING("fax_divert"));
     if (!divert)
 	return;
     // if divert is empty or false disable diverting
@@ -938,8 +938,8 @@ void YRTPWrapper::setFaxDivert(const Message& msg)
 	m_faxDivert.clear();
     else {
 	m_faxDivert = *divert;
-	m_faxCaller = msg.getValue("fax_caller",msg.getValue("caller",m_faxCaller));
-	m_faxCalled = msg.getValue("fax_called",msg.getValue("called",m_faxCalled));
+	m_faxCaller = msg.getValue(YSTRING("fax_caller"),msg.getValue(YSTRING("caller"),m_faxCaller));
+	m_faxCalled = msg.getValue(YSTRING("fax_called"),msg.getValue(YSTRING("called"),m_faxCalled));
     }
 }
 
@@ -1294,7 +1294,7 @@ YRTPReflector::~YRTPReflector()
 bool AttachHandler::received(Message &msg)
 {
     int more = 2;
-    String src(msg.getValue("source"));
+    String src(msg.getValue(YSTRING("source")));
     if (src.null())
 	more--;
     else {
@@ -1304,7 +1304,7 @@ bool AttachHandler::received(Message &msg)
 	    src = "";
     }
 
-    String cons(msg.getValue("consumer"));
+    String cons(msg.getValue(YSTRING("consumer")));
     if (cons.null())
 	more--;
     else {
@@ -1316,8 +1316,8 @@ bool AttachHandler::received(Message &msg)
     if (src.null() && cons.null())
 	return false;
 
-    const char* media = msg.getValue("media","audio");
-    String rip(msg.getValue("remoteip"));
+    const char* media = msg.getValue(YSTRING("media"),"audio");
+    String rip(msg.getValue(YSTRING("remoteip")));
     CallEndpoint* ch = YOBJECT(CallEndpoint,msg.userData());
     if (!ch) {
 	if (!src.null())
@@ -1329,13 +1329,13 @@ bool AttachHandler::received(Message &msg)
 
     RefPointer<YRTPWrapper> w = YRTPWrapper::find(ch,media);
     if (!w)
-	w = YRTPWrapper::find(msg.getValue("rtpid"));
+	w = YRTPWrapper::find(msg.getValue(YSTRING("rtpid")));
     if (!w) {
-	String lip(msg.getValue("localip"));
+	String lip(msg.getValue(YSTRING("localip")));
 	if (lip.null())
 	    YRTPWrapper::guessLocal(rip,lip);
 	w = new YRTPWrapper(lip,ch,media,RTPSession::SendRecv,msg);
-	w->setMaster(msg.getValue("id"));
+	w->setMaster(msg.getValue(YSTRING("id")));
 
 	if (!src.null()) {
 	    DataSource* s = w->getSource();
@@ -1368,7 +1368,7 @@ bool AttachHandler::received(Message &msg)
 bool RtpHandler::received(Message &msg)
 {
     bool udptl = false;
-    String trans = msg.getValue("transport");
+    String trans = msg.getValue(YSTRING("transport"));
     if (trans && !trans.startsWith("RTP/")) {
 	if (trans &= "udptl")
 	    udptl = true;
@@ -1376,20 +1376,20 @@ bool RtpHandler::received(Message &msg)
 	    return false;
     }
     Debug(&splugin,DebugAll,"%s message received",(trans ? trans.c_str() : "No-transport"));
-    bool terminate = msg.getBoolValue("terminate",false);
-    String dir(msg.getValue("direction"));
+    bool terminate = msg.getBoolValue(YSTRING("terminate"),false);
+    String dir(msg.getValue(YSTRING("direction")));
     RTPSession::Direction direction = terminate ? RTPSession::FullStop : RTPSession::SendRecv;
     bool d_recv = false;
     bool d_send = false;
-    if (dir == "bidir") {
+    if (dir == YSTRING("bidir")) {
 	d_recv = true;
 	d_send = true;
     }
-    else if (dir == "receive") {
+    else if (dir == YSTRING("receive")) {
 	d_recv = true;
 	direction = RTPSession::RecvOnly;
     }
-    else if (dir == "send") {
+    else if (dir == YSTRING("send")) {
 	d_send = true;
 	direction = RTPSession::SendOnly;
     }
@@ -1397,12 +1397,12 @@ bool RtpHandler::received(Message &msg)
     CallEndpoint* ch = YOBJECT(CallEndpoint,msg.userData());
     DataEndpoint* de = YOBJECT(DataEndpoint,msg.userData());
     const char* media = udptl ? "image" : "audio";
-    media = msg.getValue("media",(de ? de->name().c_str() : media));
+    media = msg.getValue(YSTRING("media"),(de ? de->name().c_str() : media));
     RefPointer<YRTPWrapper> w = YRTPWrapper::find(ch,media);
     if (w)
 	Debug(&splugin,DebugAll,"Wrapper %p found by CallEndpoint %p",(YRTPWrapper*)w,ch);
     else {
-	const char* rid = msg.getValue("rtpid");
+	const char* rid = msg.getValue(YSTRING("rtpid"));
 	w = YRTPWrapper::find(rid);
 	if (w)
 	    Debug(&splugin,DebugAll,"Wrapper %p found by ID '%s'",(YRTPWrapper*)w,rid);
@@ -1421,13 +1421,13 @@ bool RtpHandler::received(Message &msg)
 	return false;
     }
 
-    String rip(msg.getValue("remoteip"));
+    String rip(msg.getValue(YSTRING("remoteip")));
 
     if (!w) {
 	// it would be pointless to create an unreferenced wrapper
 	if (!(d_recv || d_send))
 	    return false;
-	String lip(msg.getValue("localip"));
+	String lip(msg.getValue(YSTRING("localip")));
 	if (lip.null())
 	    YRTPWrapper::guessLocal(rip,lip);
 	if (lip.null()) {
@@ -1436,7 +1436,7 @@ bool RtpHandler::received(Message &msg)
 	}
 
 	w = new YRTPWrapper(lip,ch,media,direction,msg,udptl);
-	w->setMaster(msg.getValue("id"));
+	w->setMaster(msg.getValue(YSTRING("id")));
 
 	w->deref();
     }
@@ -1480,7 +1480,7 @@ bool RtpHandler::received(Message &msg)
     msg.setParam("localport",String(w->port()));
     msg.setParam("rtpid",w->id());
 
-    if (msg.getBoolValue("getsession",!msg.userData()))
+    if (msg.getBoolValue(YSTRING("getsession"),!msg.userData()))
 	msg.userData(w);
     return true;
 }
@@ -1488,10 +1488,10 @@ bool RtpHandler::received(Message &msg)
 
 bool DTMFHandler::received(Message &msg)
 {
-    String targetid(msg.getValue("targetid"));
+    String targetid(msg.getValue(YSTRING("targetid")));
     if (targetid.null())
 	return false;
-    String text(msg.getValue("text"));
+    String text(msg.getValue(YSTRING("text")));
     if (text.null())
 	return false;
     RefPointer<YRTPWrapper> wrap = YRTPWrapper::find(targetid);
@@ -1500,7 +1500,7 @@ bool DTMFHandler::received(Message &msg)
     wrap->deref();
     if (wrap->rtp()) {
 	Debug(&splugin,DebugInfo,"RTP DTMF '%s' targetid '%s'",text.c_str(),targetid.c_str());
-	int duration = msg.getIntValue("duration");
+	int duration = msg.getIntValue(YSTRING("duration"));
 	for (unsigned int i=0;i<text.length();i++)
 	    wrap->sendDTMF(text.at(i),duration);
 	return true;
@@ -1581,7 +1581,7 @@ static Regexp s_reflectMatch(
 bool YRTPPlugin::reflectSetup(Message& msg, const char* id, RTPTransport& rtp,
     const char* rHost, const char* leg)
 {
-    String lip(msg.getValue("rtp_localip"));
+    String lip(msg.getValue(YSTRING("rtp_localip")));
     if (lip.null())
 	YRTPWrapper::guessLocal(rHost,lip);
     SocketAddr addr(AF_INET);
@@ -1591,8 +1591,8 @@ bool YRTPPlugin::reflectSetup(Message& msg, const char* id, RTPTransport& rtp,
 	return false;
     }
 
-    int minport = msg.getIntValue("rtp_minport",s_minport);
-    int maxport = msg.getIntValue("rtp_maxport",s_maxport);
+    int minport = msg.getIntValue(YSTRING("rtp_minport"),s_minport);
+    int maxport = msg.getIntValue(YSTRING("rtp_maxport"),s_maxport);
     int attempt = 10;
     if (minport > maxport) {
 	int tmp = maxport;
@@ -1603,7 +1603,7 @@ bool YRTPPlugin::reflectSetup(Message& msg, const char* id, RTPTransport& rtp,
 	maxport++;
 	attempt = 1;
     }
-    bool rtcp = msg.getBoolValue("rtp_rtcp",s_rtcp);
+    bool rtcp = msg.getBoolValue(YSTRING("rtp_rtcp"),s_rtcp);
     for (;;) {
 	int lport = (minport + (::random() % (maxport - minport))) & 0xfffe;
 	addr.port(lport);
@@ -1624,11 +1624,11 @@ bool YRTPPlugin::reflectSetup(Message& msg, const char* id, RTPTransport& rtp,
 bool YRTPPlugin::reflectStart(Message& msg, const char* id, RTPTransport& rtp,
     SocketAddr& rAddr)
 {
-    if (!rtp.remoteAddr(rAddr,msg.getBoolValue("rtp_autoaddr",s_autoaddr))) {
+    if (!rtp.remoteAddr(rAddr,msg.getBoolValue(YSTRING("rtp_autoaddr"),s_autoaddr))) {
 	Debug(this,DebugWarn,"Could not set remote RTP address for '%s'",id);
 	return false;
     }
-    if (msg.getBoolValue("rtp_drillhole",s_drill)) {
+    if (msg.getBoolValue(YSTRING("rtp_drillhole"),s_drill)) {
 	bool ok = rtp.drillHole();
 	Debug(this,(ok ? DebugInfo : DebugWarn),
 	    "Reflector for '%s' %s a hole in firewall/NAT",
@@ -1650,13 +1650,13 @@ void YRTPPlugin::reflectDrop(YRTPReflector*& refl, Lock& mylock)
 
 void YRTPPlugin::reflectExecute(Message& msg)
 {
-    const String* id = msg.getParam("id");
+    const String* id = msg.getParam(YSTRING("id"));
     if (null(id))
 	return;
-    String* sdp = msg.getParam("sdp_raw");
+    String* sdp = msg.getParam(YSTRING("sdp_raw"));
     if (null(sdp))
 	return;
-    if (!(msg.getBoolValue("rtp_forward",false) && msg.getBoolValue("rtp_reflect",false)))
+    if (!(msg.getBoolValue(YSTRING("rtp_forward"),false) && msg.getBoolValue(YSTRING("rtp_reflect"),false)))
 	return;
     DDebug(this,DebugAll,"YRTPPlugin::reflectExecute() A='%s'",id->c_str());
     // we have a candidate
@@ -1669,8 +1669,8 @@ void YRTPPlugin::reflectExecute(Message& msg)
 	Debug(this,DebugWarn,"Invalid RTP transport address for '%s'",id->c_str());
 	return;
     }
-    const char* aHost = msg.getValue("rtp_addr",ra.host().c_str());
-    const char* bHost = msg.getValue("rtp_remoteip",aHost);
+    const char* aHost = msg.getValue(YSTRING("rtp_addr"),ra.host().c_str());
+    const char* bHost = msg.getValue(YSTRING("rtp_remoteip"),aHost);
     YRTPReflector* r = new YRTPReflector(*id,
 	(sdp->find("a=recvonly") >= 0),(sdp->find("a=sendonly") >= 0));
     if (!(reflectSetup(msg,id->c_str(),r->rtpA(),aHost,"A") &&
@@ -1691,7 +1691,7 @@ void YRTPPlugin::reflectExecute(Message& msg)
 
 void YRTPPlugin::reflectAnswer(Message& msg, bool ignore)
 {
-    const String* peerid = msg.getParam("peerid");
+    const String* peerid = msg.getParam(YSTRING("peerid"));
     if (null(peerid))
 	return;
     YRTPReflector* r = 0;
@@ -1706,7 +1706,7 @@ void YRTPPlugin::reflectAnswer(Message& msg, bool ignore)
     if (!r)
 	return;
     DDebug(this,DebugAll,"YRTPPlugin::reflectAnswer() A='%s'",peerid->c_str());
-    const String* id = msg.getParam("id");
+    const String* id = msg.getParam(YSTRING("id"));
     if (null(id)) {
 	if (ignore)
 	    return;
@@ -1720,8 +1720,8 @@ void YRTPPlugin::reflectAnswer(Message& msg, bool ignore)
 	reflectDrop(r,mylock);
 	return;
     }
-    String* sdp = msg.getParam("sdp_raw");
-    if (null(sdp) || !msg.getBoolValue("rtp_forward",false)) {
+    String* sdp = msg.getParam(YSTRING("sdp_raw"));
+    if (null(sdp) || !msg.getBoolValue(YSTRING("rtp_forward"),false)) {
 	if (ignore)
 	    return;
 	Debug(this,DebugWarn,"Unable to complete RTP reflection for '%s'",peerid->c_str());
@@ -1758,7 +1758,7 @@ void YRTPPlugin::reflectAnswer(Message& msg, bool ignore)
 
 void YRTPPlugin::reflectHangup(Message& msg)
 {
-    const String* id = msg.getParam("id");
+    const String* id = msg.getParam(YSTRING("id"));
     if (null(id))
 	return;
     Lock mylock(s_refMutex);

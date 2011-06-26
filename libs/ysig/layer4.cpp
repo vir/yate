@@ -43,11 +43,11 @@ unsigned char SS7Layer4::getSIO(const NamedList& params, unsigned char sif, unsi
 	prio <<= 4;
     if ((ni & 0xc0) == 0)
 	ni <<= 6;
-    sif = params.getIntValue("service",sif & 0x0f);
-    prio = SS7MSU::getPriority(params.getValue("priority"),prio & 0x30);
+    sif = params.getIntValue(YSTRING("service"),sif & 0x0f);
+    prio = SS7MSU::getPriority(params.getValue(YSTRING("priority")),prio & 0x30);
     if ((prio & 0x30) == 0)
 	prio <<= 4;
-    ni = SS7MSU::getNetIndicator(params.getValue("netindicator"),ni & 0xc0);
+    ni = SS7MSU::getNetIndicator(params.getValue(YSTRING("netindicator")),ni & 0xc0);
     if ((ni & 0xc0) == 0)
 	ni <<= 6;
     return (sif & 0x0f) | (prio & 0x30) | (ni & 0xc0);
@@ -58,14 +58,14 @@ bool SS7Layer4::initialize(const NamedList* config)
     if (engine() && !network()) {
 	NamedList params("ss7router");
 	if (config) {
-	    String name = config->getValue("router",params);
+	    String name = config->getValue(YSTRING("router"),params);
 	    if (name && !name.toBoolean(false))
 		static_cast<String&>(params) = name;
 	}
 	if (params.toBoolean(true))
 	    attach(YOBJECT(SS7Router,engine()->build("SS7Router",params,true)));
 	else if (config) {
-	    String name = config->getValue("network");
+	    String name = config->getValue(YSTRING("network"));
 	    if (name && name.toBoolean(true)) {
 		static_cast<String&>(params) = name;
 		attach(YOBJECT(SS7Layer3,engine()->build("SS7Layer3",params,true)));
@@ -87,7 +87,7 @@ void SS7Layer4::attach(SS7Layer3* network)
 	const char* name = 0;
 	if (!engine() || engine()->find(tmp)) {
 	    name = tmp->toString().safe();
-	    if (tmp->getObject("SS7Router"))
+	    if (tmp->getObject(YSTRING("SS7Router")))
 		(static_cast<SS7Router*>(tmp))->detach(this);
 	    else
 		tmp->attach(0);

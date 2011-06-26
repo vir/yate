@@ -654,7 +654,7 @@ Qt4ClientFactory::Qt4ClientFactory(const char* name)
 // Build QSound
 void* Qt4ClientFactory::create(const String& type, const char* name, NamedList* params)
 {
-    if (type == "QSound")
+    if (type == YSTRING("QSound"))
 	return new QSound(QtClient::setUtf8(name));
     return 0;
 }
@@ -729,8 +729,8 @@ void TableWidget::updateRow(int row, const NamedList& data)
 	    setImage(row,i,*tmp);
     }
     // Init vertical header
-    String* rowText = data.getParam("row_text");
-    String* rowImg = data.getParam("row_image");
+    String* rowText = data.getParam(YSTRING("row_text"));
+    String* rowImg = data.getParam(YSTRING("row_image"));
     if (rowText || rowImg) {
 	QTableWidgetItem* item = m_table->verticalHeaderItem(row);
 	if (!item) {
@@ -955,7 +955,7 @@ bool QtWindow::setParams(const NamedList& params)
 
     setUpdatesEnabled(false);
     // Check for custom widget params
-    if (params == "customwidget") {
+    if (params == YSTRING("customwidget")) {
 	// Each parameter is a list of parameters for a custom widget
 	// Parameter name is the widget's name
 	unsigned int n = params.length();
@@ -980,7 +980,7 @@ bool QtWindow::setParams(const NamedList& params)
 	return ok;
     }
     // Check for system tray icon params
-    if (params == "systemtrayicon") {
+    if (params == YSTRING("systemtrayicon")) {
 	// Each parameter is a list of parameters for a system tray icon
 	// Parameter name is the widget's name
 	// Parameter value indicates delete/create/set an existing one
@@ -1005,7 +1005,7 @@ bool QtWindow::setParams(const NamedList& params)
 		}
 		continue;
 	    }
-	    NamedList* nl = static_cast<NamedList*>(ns ? ns->getObject("NamedList") : 0);
+	    NamedList* nl = YOBJECT(NamedList,ns);
 	    if (!nl)
 		continue;
 	    // Create a new one if needed
@@ -1024,23 +1024,23 @@ bool QtWindow::setParams(const NamedList& params)
 	    // TODO: track the properties, clear the old ones if needed
 	    addDynamicProps(trayIcon,*nl);
 	    // Set icon and tooltip
-	    NamedString* tmp = nl->getParam("icon");
+	    NamedString* tmp = nl->getParam(YSTRING("icon"));
 	    if (tmp && *tmp)
 		trayIcon->setIcon(QIcon(QtClient::setUtf8(*tmp)));
-	    tmp = nl->getParam("tooltip");
+	    tmp = nl->getParam(YSTRING("tooltip"));
 	    if (tmp && *tmp)
 		trayIcon->setToolTip(QtClient::setUtf8(*tmp));
 	    // Check context menu
-	    NamedString* menu = nl->getParam("menu");
+	    NamedString* menu = nl->getParam(YSTRING("menu"));
 	    if (menu) {
 		QMenu* oldMenu = trayIcon->contextMenu();
 		if (oldMenu)
 		    delete oldMenu;
-		NamedList* nlMenu = static_cast<NamedList*>(menu->getObject("NamedList"));
+		NamedList* nlMenu = YOBJECT(NamedList,menu);
 		trayIcon->setContextMenu(nlMenu ? QtClient::buildMenu(*nlMenu,*menu,this,
 		    SLOT(action()),SLOT(toggled(bool)),this) : 0);
 	    }
-	    if (nl->getBoolValue("show",true))
+	    if (nl->getBoolValue(YSTRING("show"),true))
 		trayIcon->setVisible(true);
 	}
 	setUpdatesEnabled(true);
@@ -1057,9 +1057,9 @@ bool QtWindow::setParams(const NamedList& params)
 	    return ok;
 	}
 	if (w.type() == QtWidget::Calendar) {
-	    int year = params.getIntValue("year");
-	    int month = params.getIntValue("month");
-	    int day = params.getIntValue("day");
+	    int year = params.getIntValue(YSTRING("year"));
+	    int month = params.getIntValue(YSTRING("month"));
+	    int day = params.getIntValue(YSTRING("day"));
 	    w.calendar()->setCurrentPage(year, month);
 	    w.calendar()->setSelectedDate(QDate(year, month, day));
 	    setUpdatesEnabled(true);
@@ -1068,13 +1068,13 @@ bool QtWindow::setParams(const NamedList& params)
     }
 
     // Window or other parameters
-    if (params.getBoolValue("modal")) {
+    if (params.getBoolValue(YSTRING("modal"))) {
 	if (parentWindow())
 	    setWindowModality(Qt::WindowModal);
 	else
 	    setWindowModality(Qt::ApplicationModal);
     }
-    if (params.getBoolValue("minimized"))
+    if (params.getBoolValue(YSTRING("minimized")))
 	QWidget::setWindowState(Qt::WindowMinimized);
     bool ok = Window::setParams(params);
     setUpdatesEnabled(true);
@@ -1943,7 +1943,7 @@ bool QtWindow::buildMenu(const NamedList& params)
 {
     QWidget* parent = wndWidget();
     // Retrieve the owner
-    const String& owner = params["owner"];
+    const String& owner = params[YSTRING("owner")];
     if (owner && owner != m_id) {
 	parent = qFindChild<QWidget*>(wndWidget(),QtClient::setUtf8(owner));
 	if (!parent) {
@@ -1954,7 +1954,7 @@ bool QtWindow::buildMenu(const NamedList& params)
 	}
     }
     QWidget* target = parent;
-    const String& t = params["target"];
+    const String& t = params[YSTRING("target")];
     if (t) {
 	target = qFindChild<QWidget*>(wndWidget(),QtClient::setUtf8(t));
 	if (!target) {
@@ -1966,7 +1966,7 @@ bool QtWindow::buildMenu(const NamedList& params)
     }
     // Remove existing menu
     removeMenu(params);
-    QMenu* menu = QtClient::buildMenu(params,params.getValue("title",params),this,
+    QMenu* menu = QtClient::buildMenu(params,params.getValue(YSTRING("title"),params),this,
 	SLOT(action()),SLOT(toggled(bool)),parent);
     if (!menu) {
 	DDebug(QtDriver::self(),DebugNote,
@@ -1980,7 +1980,7 @@ bool QtWindow::buildMenu(const NamedList& params)
     QMenu* mOwner = !mbOwner ? qobject_cast<QMenu*>(target) : 0;
     if (mbOwner || mOwner) {
 	QAction* before = 0;
-	const String& bef = params["before"];
+	const String& bef = params[YSTRING("before")];
 	// Retrieve the action to insert before
 	if (bef) {
 	    QString cmp = QtClient::setUtf8(bef);
@@ -1992,7 +1992,7 @@ bool QtWindow::buildMenu(const NamedList& params)
 		else if (list[i]->menu() && list[i]->menu()->objectName() == cmp)
 		    before = list[i]->menu()->menuAction();
 		if (before && i && list[i - 1]->isSeparator() &&
-		    params.getBoolValue("before_separator",true))
+		    params.getBoolValue(YSTRING("before_separator"),true))
 		    before = list[i - 1];
 	    }
 	}
@@ -2022,7 +2022,7 @@ bool QtWindow::removeMenu(const NamedList& params)
 {
     QWidget* parent = wndWidget();
     // Retrieve the owner
-    const String& owner = params["owner"];
+    const String& owner = params[YSTRING("owner")];
     if (owner && owner != m_id) {
 	parent = qFindChild<QWidget*>(wndWidget(),QtClient::setUtf8(owner));
 	if (!parent)
@@ -2090,22 +2090,23 @@ void QtWindow::resizeEvent(QResizeEvent* event)
 
 bool QtWindow::event(QEvent* ev)
 {
+    static const String s_activeChg("window_active_changed");
     if (ev->type() == QEvent::WindowDeactivate) {
 	String hideProp;
 	QtClient::getProperty(wndWidget(),s_propHideInactive,hideProp);
 	if (hideProp && hideProp.toBoolean())
 	    setVisible(false);
 	m_active = false;
-	Client::self()->toggle(this,"window_active_changed",false);
+	Client::self()->toggle(this,s_activeChg,false);
     }
     else if (ev->type() == QEvent::WindowActivate) {
 	m_active = true;
-	Client::self()->toggle(this,"window_active_changed",true);
+	Client::self()->toggle(this,s_activeChg,true);
     }
     else if (ev->type() == QEvent::ApplicationDeactivate) {
 	if (m_active) {
 	    m_active = false;
-	    Client::self()->toggle(this,"window_active_changed",true);
+	    Client::self()->toggle(this,s_activeChg,true);
 	}
     }
     return QWidget::event(ev);
@@ -2326,7 +2327,7 @@ void QtWindow::notifyTextChanged(QObject* obj, const QString& text)
     p.addParam("sender",name);
     if (text.size())
 	QtClient::getUtf8(p,"text",text);
-    Client::self()->action(this,"textchanged",&p);
+    Client::self()->action(this,YSTRING("textchanged"),&p);
 }
 
 // Load a widget from file
@@ -2521,7 +2522,7 @@ void QtWindow::setVisible(bool visible)
 	if (wndWidget())
 	    var = wndWidget()->property("dynamicUiActionVisibleChanged");
 	if (!var.toBool())
-	    Client::self()->toggle(this,"window_visible_changed",m_visible);
+	    Client::self()->toggle(this,YSTRING("window_visible_changed"),m_visible);
 	else {
 	    Message* m = new Message("ui.action");
 	    m->addParam("action","window_visible_changed");
@@ -3109,7 +3110,7 @@ bool QtDialog::show(const String& name, const String& title, const String& alias
     if (params) {
 	if (!flags)
 	    flags = params->getParam(s_propWindowFlags);
-	m_closable = params->getBoolValue("closable","true");
+	m_closable = params->getBoolValue(YSTRING("closable"),"true");
 	w->setParams(*params);
     }
     if (flags)
@@ -3263,7 +3264,7 @@ void QtClient::loadWindows(const char* file)
     unsigned int n = s_cfg.sections();
     for (unsigned int i = 0; i < n; i++) {
 	NamedList* l = s_cfg.getSection(i);
-	if (l && l->getBoolValue("enabled",true))
+	if (l && l->getBoolValue(YSTRING("enabled"),true))
 	    createWindow(*l);
     }
 }
@@ -3276,14 +3277,14 @@ bool QtClient::chooseFile(Window* parent, NamedList& params)
     QtWindow* wnd = static_cast<QtWindow*>(parent);
     // Don't set the dialog's parent: window's style sheet will be propagated to
     //  child dialog and we might have incomplete (not full) custom styled controls
-    QFileDialog* dlg = new QFileDialog(0,setUtf8(params.getValue("caption")),
-	setUtf8(params.getValue("dir")));
+    QFileDialog* dlg = new QFileDialog(0,setUtf8(params.getValue(YSTRING("caption"))),
+	setUtf8(params.getValue(YSTRING("dir"))));
 
     if (wnd)
 	dlg->setWindowIcon(wnd->windowIcon());
 
     // Connect signals
-    String* action = params.getParam("action");
+    String* action = params.getParam(YSTRING("action"));
     if (wnd && !null(action)) {
 	dlg->setObjectName(setUtf8(*action));
 	QtClient::connectObjects(dlg,SIGNAL(accepted()),wnd,SLOT(chooseFileAccepted()));
@@ -3296,11 +3297,11 @@ bool QtClient::chooseFile(Window* parent, NamedList& params)
     dlg->setWindowFlags(dlg->windowFlags() | Qt::WindowStaysOnTopHint);
 
     // Window modality doesn't work without a parent so make it application modal
-    if (params.getBoolValue("modal",true))
+    if (params.getBoolValue(YSTRING("modal"),true))
 	dlg->setWindowModality(Qt::ApplicationModal);
 
     // Filters
-    NamedString* f = params.getParam("filters");
+    NamedString* f = params.getParam(YSTRING("filters"));
     if (f) {
 	QStringList filters;
 	ObjList* obj = f->split('|',false);
@@ -3309,20 +3310,20 @@ bool QtClient::chooseFile(Window* parent, NamedList& params)
 	TelEngine::destruct(obj);
 	dlg->setFilters(filters);
     }
-    QString flt = QtClient::setUtf8(params.getValue("selectedfilter"));
+    QString flt = QtClient::setUtf8(params.getValue(YSTRING("selectedfilter")));
     if (flt.length())
 	dlg->selectFilter(flt);
 
-    if (params.getBoolValue("save"))
+    if (params.getBoolValue(YSTRING("save")))
 	dlg->setAcceptMode(QFileDialog::AcceptSave);
     else
 	dlg->setAcceptMode(QFileDialog::AcceptOpen);
 
     // Choose options
-    if (params.getBoolValue("choosefile",true)) {
-	if (params.getBoolValue("chooseanyfile"))
+    if (params.getBoolValue(YSTRING("choosefile"),true)) {
+	if (params.getBoolValue(YSTRING("chooseanyfile")))
 	    dlg->setFileMode(QFileDialog::AnyFile);
-	else if (params.getBoolValue("multiplefiles"))
+	else if (params.getBoolValue(YSTRING("multiplefiles")))
 	    dlg->setFileMode(QFileDialog::ExistingFiles);
 	else
 	    dlg->setFileMode(QFileDialog::ExistingFile);
@@ -3330,7 +3331,7 @@ bool QtClient::chooseFile(Window* parent, NamedList& params)
     else
 	dlg->setFileMode(QFileDialog::DirectoryOnly);
  
-    dlg->selectFile(QtClient::setUtf8(params.getValue("selectedfile")));
+    dlg->selectFile(QtClient::setUtf8(params.getValue(YSTRING("selectedfile"))));
 
     dlg->setVisible(true);
     return true;
@@ -3623,9 +3624,9 @@ QMenu* QtClient::buildMenu(const NamedList& params, const char* text, QObject* r
 	if (!menu)
 	    menu = new QMenu(setUtf8(text),parent);
 
-	NamedList* p = static_cast<NamedList*>(param->getObject("NamedList"));
+	NamedList* p = YOBJECT(NamedList,param);
 	if (p)  {
-	    QMenu* subMenu = buildMenu(*p,*param ? param->c_str() : p->getValue("title",*p),
+	    QMenu* subMenu = buildMenu(*p,*param ? param->c_str() : p->getValue(YSTRING("title"),*p),
 		receiver,triggerSlot,toggleSlot,menu);
 	    if (subMenu)
 		menu->addMenu(subMenu);
@@ -4094,7 +4095,7 @@ QtUIWidgetItemProps* QtUIWidget::getItemProps(QString& in, String& value)
 bool QtUIWidget::setParams(const NamedList& params)
 {
     bool ok = false;
-    NamedString* ns = params.getParam("applyall");
+    NamedString* ns = params.getParam(YSTRING("applyall"));
     if (ns) {
 	NamedList* list = YOBJECT(NamedList,ns);
 	if (list) {
@@ -4251,7 +4252,7 @@ bool QtUIWidget::setParams(QObject* parent, const NamedList& params)
 	    ok = wnd->setText(buildChildName(buf,pName,ns->name()),*ns,false) && ok;
     }
     // Set item parameters
-    NamedString* yparams = params.getParam("_yate_itemparams");
+    NamedString* yparams = params.getParam(YSTRING("_yate_itemparams"));
     if (!TelEngine::null(yparams)) {
 	QVariant var = parent->property(yparams->name().c_str());
 	if (var.type() == QVariant::Invalid || var.type() == QVariant::StringList) {
@@ -4343,7 +4344,7 @@ QMenu* QtUIWidget::buildWidgetItemMenu(QWidget* w, const NamedList* params,
 	"QtUIWidget(%s)::buildMenu() widget=%s item=%s [%p]",
 	this->name().c_str(),YQT_OBJECT_NAME(w),item.c_str(),this);
     String pName(YQT_OBJECT_NAME(w));
-    const String& owner = (*params)["owner"];
+    const String& owner = (*params)[YSTRING("owner")];
     if (owner && owner != item) {
 	QString tmp = buildQChildName(pName,owner);
 	parent = qFindChild<QWidget*>(w,tmp);
@@ -4355,7 +4356,7 @@ QMenu* QtUIWidget::buildWidgetItemMenu(QWidget* w, const NamedList* params,
 	}
     }
     QWidget* target = parent;
-    String t = child ? child : (*params)["target"];
+    String t = child ? child : (*params)[YSTRING("target")];
     if (t) {
 	QString tmp = buildQChildName(pName,t);
 	target = qFindChild<QWidget*>(w,tmp);
@@ -4390,11 +4391,11 @@ QMenu* QtUIWidget::buildWidgetItemMenu(QWidget* w, const NamedList* params,
 	if (!(param && param->name().startsWith("item:")))
 	    continue;
 	if (!menu)
-	    menu = new QMenu(QtClient::setUtf8(params->getValue("title")),parent);
+	    menu = new QMenu(QtClient::setUtf8(params->getValue(YSTRING("title"))),parent);
 	NamedList* p = YOBJECT(NamedList,param);
 	if (p)  {
 	    QMenu* subMenu = QtClient::buildMenu(*p,
-		*param ? param->c_str() : p->getValue("title",*p),
+		*param ? param->c_str() : p->getValue(YSTRING("title"),*p),
 		thisObj,actionSlot,toggleSlot,menu);
 	    if (subMenu) {
 		menu->addMenu(subMenu);
@@ -4540,16 +4541,16 @@ void QtUIWidget::initNavigation(const NamedList& params)
     getSlots(actionSlot,toggleSlot,selectSlot);
     QObject* qObj = getQObject();
     if (qObj && actionSlot) {
-	m_prev = params.getValue("navigate_prev");
+	m_prev = params.getValue(YSTRING("navigate_prev"));
 	if (!initNavAction(qObj,m_prev,actionSlot))
 	    m_prev = "";
-	m_next = params.getValue("navigate_next");
+	m_next = params.getValue(YSTRING("navigate_next"));
 	if (!initNavAction(qObj,m_next,actionSlot))
 	    m_next = "";
     }
-    m_info = params.getValue("navigate_info");
-    m_infoFormat = params.getValue("navigate_info_format");
-    m_title = params.getValue("navigate_title");
+    m_info = params.getValue(YSTRING("navigate_info"));
+    m_infoFormat = params.getValue(YSTRING("navigate_info_format"));
+    m_title = params.getValue(YSTRING("navigate_title"));
     updateNavigation();
 }
 
@@ -4590,7 +4591,7 @@ void QtUIWidget::updateNavigation()
 	NamedList pp("");
 	if (crt)
 	    getTableRow(crt,&pp);
-	p.addParam(m_title,pp["title"]);
+	p.addParam(m_title,pp[YSTRING("title")]);
     }
     wnd->setParams(p);
 }
@@ -4840,9 +4841,11 @@ bool QtSound::doStart()
     if (m_sound)
 	DDebug(ClientDriver::self(),DebugAll,"Sound(%s) started file=%s",
 	    c_str(),m_file.c_str());
-    else
+    else {
 	Debug(ClientDriver::self(),DebugNote,"Sound(%s) failed to start file=%s",
 	    c_str(),m_file.c_str());
+	return false;
+    }
     m_sound->setLoops(m_repeat ? m_repeat : -1);
     m_sound->play();
     return true;

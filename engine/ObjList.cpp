@@ -47,7 +47,7 @@ ObjList::~ObjList()
 
 void* ObjList::getObject(const String& name) const
 {
-    if (name == "ObjList")
+    if (name == YSTRING("ObjList"))
 	return const_cast<ObjList*>(this);
     return GenObject::getObject(name);
 }

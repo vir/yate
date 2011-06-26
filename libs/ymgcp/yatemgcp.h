@@ -506,18 +506,20 @@ public:
      * @param value Original Endpoint ID to copy
      */
     inline MGCPEndpointId(const MGCPEndpointId& value)
-	: m_port(0)
-	{ set(value.user(),value.host(),value.port()); }
+	: m_id(value.id()), m_endpoint(value.user()),
+	  m_host(value.host()), m_port(value.port())
+	{ }
 
     /**
      * Constructor. Construct this endpoint id
      * @param endpoint The user part of the endpoint's URI
      * @param host The IP address of the endpoint's URI
      * @param port The port used by the endpoint to receive data
+     * @param addPort Add :port at end of id only if port is not zero
      */
-    inline MGCPEndpointId(const char* endpoint, const char* host, int port)
+    inline MGCPEndpointId(const char* endpoint, const char* host, int port, bool addPort = true)
 	: m_port(0)
-	{ set(endpoint,host,port); }
+	{ set(endpoint,host,port,addPort); }
 
     /**
      * Get the full id of the endpoint
@@ -550,17 +552,19 @@ public:
     /**
      * Set the port used by this endpoint
      * @param newPort The new port used by this endpoint
+     * @param addPort Add :port at end of id only if port is not zero
      */
-    inline void port(int newPort)
-	{ set(m_endpoint,m_host,newPort); }
+    inline void port(int newPort, bool addPort = true)
+	{ set(m_endpoint,m_host,newPort,addPort); }
 
     /**
      * Set this endpoint id. Convert it to lower case
      * @param endpoint The user part of the endpoint's URI
      * @param host The IP address of the endpoint's URI
      * @param port The port used by the endpoint to receive data
+     * @param addPort Add :port at end of id only if port is not zero
      */
-    void set(const char* endpoint, const char* host, int port);
+    void set(const char* endpoint, const char* host, int port, bool addPort = true);
 
     /**
      * Set this endpoint id. Convert it to lower case
@@ -601,9 +605,10 @@ public:
      * @param endpoint The endpoint part of the endpoint's id
      * @param host The IP address of this endpoint
      * @param port The port used to send data to this endpoint
+     * @param addPort Add :port at end of id only if port is not zero
      */
-    inline MGCPEpInfo(const char* endpoint, const char* host, int port)
-	: MGCPEndpointId(endpoint,host,port), address(AF_INET) {
+    inline MGCPEpInfo(const char* endpoint, const char* host, int port, bool addPort = true)
+	: MGCPEndpointId(endpoint,host,port,addPort), address(AF_INET) {
 	    address.host(host);
 	    address.port(port);
 	}
@@ -642,8 +647,9 @@ public:
      * @param user The user part of the endpoint's id
      * @param host The host part of the endpoint's id
      * @param port The port part of the endpoint's id
+     * @param addPort Add :port at end of id only if port is not zero
      */
-    MGCPEndpoint(MGCPEngine* engine, const char* user, const char* host, int port);
+    MGCPEndpoint(MGCPEngine* engine, const char* user, const char* host, int port, bool addPort = true);
 
     /**
      * Destructor. Remove itself from engine's list
@@ -672,6 +678,8 @@ public:
      * @param port The port used to send data to this endpoint.
      *  Set to 0 to set it to the default port defined by the protocol and the
      *  opposite of the engine's mode
+     *  A value of -1 uses the default but doesn't add :port at end of ID
+     *  Other negative values use specified port but don't add :port at end
      * @return Valid MGCPEpInfo pointer or 0 if the data wasn't added
      */
     MGCPEpInfo* append(const char* endpoint, const char* host, int port = 0);

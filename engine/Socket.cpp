@@ -390,7 +390,7 @@ SocketFilter::~SocketFilter()
 
 void* SocketFilter::getObject(const String& name) const
 {
-    if (name == "SocketFilter")
+    if (name == YSTRING("SocketFilter"))
 	return const_cast<SocketFilter*>(this);
     return GenObject::getObject(name);
 }

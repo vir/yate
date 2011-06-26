@@ -397,17 +397,20 @@ public:
     // @param response True if it is a response.
     // @param requestAuth True on exit: the caller should request authentication
     // @param invalidAuth True on exit: authentication response is incorrect
+    // @param billid The billing ID parameter if available
     // @return False if not authenticated
     bool userAuth(IAXTransaction* tr, bool response, bool& requestAuth,
-	bool& invalidAuth);
+	bool& invalidAuth, const char* billid = 0);
 
     bool commandComplete(Message& msg, const String& partLine, const String& partWord);
     void msgStatus(Message& msg);
 
 protected:
+    virtual void genUpdate(Message& msg);
     YIAXEngine* m_iaxEngine;
     u_int32_t m_defaultCodec;
     u_int32_t m_codecs;
+    unsigned int m_failedAuths;
     int m_port;
 };
 
@@ -1190,7 +1193,7 @@ bool YIAXRegDataHandler::received(Message& msg)
 }
 
 YIAXDriver::YIAXDriver()
-    : Driver("iax","varchans"), m_iaxEngine(0), m_port(4569)
+    : Driver("iax","varchans"), m_failedAuths(0), m_port(4569)
 {
     Output("Loaded module YIAX");
 }
@@ -1274,6 +1277,14 @@ void YIAXDriver::initialize()
     if (trunkingThreadCount < 1)
 	trunkingThreadCount = 1;
     m_iaxEngine->start(readThreadCount,eventThreadCount,trunkingThreadCount);
+}
+
+// Add specific module update parameters
+void YIAXDriver::genUpdate(Message& msg)
+{
+    unsigned int tmp = m_failedAuths;
+    m_failedAuths = 0;
+    msg.setParam("failed_auths",String(tmp));
 }
 
 // Check if we have a line
@@ -1409,7 +1420,7 @@ void YIAXDriver::createFormatList(String& dest, u_int32_t codecs)
 }
 
 bool YIAXDriver::userAuth(IAXTransaction* tr, bool response, bool& requestAuth,
-	bool& invalidAuth)
+	bool& invalidAuth, const char* billid)
 {
     requestAuth = invalidAuth = false;
     // Create and dispatch user.auth
@@ -1425,6 +1436,7 @@ bool YIAXDriver::userAuth(IAXTransaction* tr, bool response, bool& requestAuth,
 	msg.addParam("nonce",tr->challenge());
 	msg.addParam("response",tr->authdata());
     }
+    msg.addParam("billid",billid,false);
     if (!Engine::dispatch(msg))
 	return false;
     String pwd = msg.retValue();
@@ -1438,6 +1450,12 @@ bool YIAXDriver::userAuth(IAXTransaction* tr, bool response, bool& requestAuth,
 	// Check response
 	if (!IAXEngine::isMD5ChallengeCorrect(tr->authdata(),tr->challenge(),pwd)) {
 	    invalidAuth = true;
+	    m_failedAuths++;
+	    changed();
+	    Message* fail = new Message(msg);
+	    *fail = "user.authfail";
+	    fail->retValue().clear();
+	    Engine::enqueue(fail);
 	    return false;
 	}
     }
@@ -1880,7 +1898,7 @@ void YIAXConnection::evAuthRep(IAXEvent* event)
 {
     DDebug(this,DebugAll,"AUTHREP [%p]",this);
     bool requestAuth, invalidAuth;
-    if (iplugin.userAuth(event->getTransaction(),true,requestAuth,invalidAuth)) {
+    if (iplugin.userAuth(event->getTransaction(),true,requestAuth,invalidAuth,billid())) {
 	// Authenticated. Route the user.
 	route(true);
 	return;

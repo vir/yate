@@ -34,6 +34,7 @@ static Configuration s_cfg;
 static bool s_extended;
 static bool s_insensitive;
 static bool s_prerouteall;
+static int s_maxDepth = 5;
 static Mutex s_mutex(true,"RegexRoute");
 static ObjList s_extra;
 static NamedList s_vars("");
@@ -181,6 +182,13 @@ static void evalFunc(String& str)
 	    vars(par);
 	    ret ^= (str == par);
 	    str = ret;
+	}
+	else if ((sep >= 0) && (str == "strpos")) {
+	    str = par.substr(sep+1);
+	    par = par.substr(0,sep);
+	    vars(str);
+	    vars(par);
+	    str = str.find(par);
 	}
 	else if ((sep >= 0) && ((str == "add") || (str == "+")))
 	    mathOper(str,par,sep,OPER_ADD);
@@ -441,7 +449,7 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 {
     if (context.null())
 	return false;
-    if (depth > 5) {
+    if (depth > s_maxDepth) {
 	Debug("RegexRoute",DebugWarn,"Possible loop detected, current context '%s'",context.c_str());
 	return false;
     }
@@ -719,6 +727,12 @@ void RegexRoutePlugin::initialize()
 	m_route = new RouteHandler(priority);
 	Engine::install(m_route);
     }
+    int depth = s_cfg.getIntValue("priorities","maxdepth",5);
+    if (depth < 5)
+	depth = 5;
+    else if (depth > 100)
+	depth = 100;
+    s_maxDepth = depth;
     NamedList* l = s_cfg.getSection("extra");
     if (l) {
 	unsigned int len = l->length();

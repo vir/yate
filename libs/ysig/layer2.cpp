@@ -205,14 +205,14 @@ bool SS7Layer2::control(Operation oper, NamedList* params)
 
 bool SS7Layer2::control(NamedList& params)
 {
-    String* ret = params.getParam("completion");
-    const String* oper = params.getParam("operation");
-    const char* cmp = params.getValue("component");
+    String* ret = params.getParam(YSTRING("completion"));
+    const String* oper = params.getParam(YSTRING("operation"));
+    const char* cmp = params.getValue(YSTRING("component"));
     int cmd = oper ? oper->toInteger(s_dict_control,-1) : -1;
     if (ret) {
 	if (oper && (cmd < 0))
 	    return false;
-	String part = params.getValue("partword");
+	String part = params.getValue(YSTRING("partword"));
 	if (cmp) {
 	    if (toString() != cmp)
 		return false;
@@ -235,7 +235,7 @@ bool SS7Layer2::getEmergency(NamedList* params, bool emg) const
 	    emg = true;
     }
     if (params)
-	emg = params->getBoolValue("emergency",emg);
+	emg = params->getBoolValue(YSTRING("emergency"),emg);
     return emg;
 }
 
@@ -277,13 +277,13 @@ SS7MTP2::SS7MTP2(const NamedList& params, unsigned int status)
 	    &params,statusName(true),this,tmp.c_str());
     }
 #endif
-    m_fillLink = params.getBoolValue("filllink",m_fillLink);
-    m_maxErrors = params.getIntValue("maxerrors",64);
+    m_fillLink = params.getBoolValue(YSTRING("filllink"),m_fillLink);
+    m_maxErrors = params.getIntValue(YSTRING("maxerrors"),64);
     if (m_maxErrors < 8)
 	m_maxErrors = 8;
     else if (m_maxErrors > 256)
 	m_maxErrors = 256;
-    setDumper(params.getValue("layer2dump"));
+    setDumper(params.getValue(YSTRING("layer2dump")));
 }
 
 SS7MTP2::~SS7MTP2()
@@ -335,10 +335,10 @@ bool SS7MTP2::initialize(const NamedList* config)
     Debug(this,DebugInfo,"SS7MTP2::initialize(%p) [%p]%s",config,this,tmp.c_str());
 #endif
     if (config) {
-	debugLevel(config->getIntValue("debuglevel_mtp2",
-	    config->getIntValue("debuglevel",-1)));
-	m_autoEmergency = config->getBoolValue("autoemergency",true);
-	unsigned int maxErrors = config->getIntValue("maxerrors",m_maxErrors);
+	debugLevel(config->getIntValue(YSTRING("debuglevel_mtp2"),
+	    config->getIntValue(YSTRING("debuglevel"),-1)));
+	m_autoEmergency = config->getBoolValue(YSTRING("autoemergency"),true);
+	unsigned int maxErrors = config->getIntValue(YSTRING("maxerrors"),m_maxErrors);
 	if (maxErrors < 8)
 	    m_maxErrors = 8;
 	else if (maxErrors > 256)
@@ -346,12 +346,12 @@ bool SS7MTP2::initialize(const NamedList* config)
 	else
 	    m_maxErrors = maxErrors;
     }
-    m_autostart = !config || config->getBoolValue("autostart",true);
-    m_flushMsus = !config || config->getBoolValue("flushmsus",true);
+    m_autostart = !config || config->getBoolValue(YSTRING("autostart"),true);
+    m_flushMsus = !config || config->getBoolValue(YSTRING("flushmsus"),true);
     if (config && !iface()) {
-	NamedString* name = config->getParam("sig");
+	NamedString* name = config->getParam(YSTRING("sig"));
 	if (!name)
-	    name = config->getParam("basename");
+	    name = config->getParam(YSTRING("basename"));
 	if (name) {
 	    NamedPointer* ptr = YOBJECT(NamedPointer,name);
 	    NamedList* ifConfig = ptr ? YOBJECT(NamedList,ptr->userData()) : 0;
@@ -360,7 +360,7 @@ bool SS7MTP2::initialize(const NamedList* config)
 	    params.addParam("protocol","ss7");
 	    if (ifConfig) {
 		params.copyParams(*ifConfig);
-		int rx = params.getIntValue("rxunderrun");
+		int rx = params.getIntValue(YSTRING("rxunderrun"));
 		if ((rx > 0) && (rx < 25))
 		    params.setParam("rxunderrun","25");
 	    }
@@ -383,11 +383,11 @@ bool SS7MTP2::control(Operation oper, NamedList* params)
 {
     if (params) {
 	lock();
-	m_fillLink = params->getBoolValue("filllink",m_fillLink);
-	m_autoEmergency = params->getBoolValue("autoemergency",m_autoEmergency);
-	m_autostart = params->getBoolValue("autostart",m_autostart);
-	m_flushMsus = params->getBoolValue("flushmsus",m_flushMsus);
-	unsigned int maxErrors = params->getIntValue("maxerrors",m_maxErrors);
+	m_fillLink = params->getBoolValue(YSTRING("filllink"),m_fillLink);
+	m_autoEmergency = params->getBoolValue(YSTRING("autoemergency"),m_autoEmergency);
+	m_autostart = params->getBoolValue(YSTRING("autostart"),m_autostart);
+	m_flushMsus = params->getBoolValue(YSTRING("flushmsus"),m_flushMsus);
+	unsigned int maxErrors = params->getIntValue(YSTRING("maxerrors"),m_maxErrors);
 	if (maxErrors < 8)
 	    m_maxErrors = 8;
 	else if (maxErrors > 256)
@@ -395,20 +395,20 @@ bool SS7MTP2::control(Operation oper, NamedList* params)
 	else
 	    m_maxErrors = maxErrors;
 	// The following are for test purposes
-	if (params->getBoolValue("toggle-bib"))
+	if (params->getBoolValue(YSTRING("toggle-bib")))
 	    m_bib = !m_bib;
-	if (params->getBoolValue("toggle-fib"))
+	if (params->getBoolValue(YSTRING("toggle-fib")))
 	    m_fib = !m_fib;
-	int tmp = params->getIntValue("change-fsn");
+	int tmp = params->getIntValue(YSTRING("change-fsn"));
 	if (tmp)
 	    m_fsn = (m_fsn + tmp) & 0x7f;
 	unlock();
-	tmp = params->getIntValue("send-lssu",-1);
+	tmp = params->getIntValue(YSTRING("send-lssu"),-1);
 	if (tmp >= 0)
 	    transmitLSSU(tmp);
-	if (params->getBoolValue("send-fisu"))
+	if (params->getBoolValue(YSTRING("send-fisu")))
 	    transmitFISU();
-	if (params->getBoolValue("simulate-error"))
+	if (params->getBoolValue(YSTRING("simulate-error")))
 	    notify(SignallingInterface::HardwareError);
     }
     switch (oper) {

@@ -390,7 +390,7 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 			}
 
 			if(s->length()) {
-			    String key("fmtp_");
+			    String key("fmtp-");
 			    key << *s;
 			    for(unsigned int i = 0; i < m->length(); ++i) {
 				const NamedString *ns = m->getParam(i);

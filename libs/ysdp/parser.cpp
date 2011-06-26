@@ -216,7 +216,7 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 			else if (line.startSkip("octet-align=",false))
 			    amrOctet = (0 != line.toInteger(0));
 			else if(payload.length()) {
-			    String key("fmtp_");
+			    String key("fmtp-");
 			    key << payload;
 			    params.append(new NamedString(key,line));
 			}

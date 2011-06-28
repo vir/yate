@@ -154,8 +154,24 @@ bool SignallingCallControl::reserveCircuit(SignallingCircuit*& cic, const char* 
 	}
 	cic = m_circuits->reserve(*list,mandatory,checkLock,s,m_circuits->findRange(range));
     }
-    else
+    else if (range) {
+	int num = String(range).toInteger();
+	if (num > 0) {
+	    // Specific circuit required
+	    SignallingCircuit* circuit = m_circuits->find(num);
+	    if (circuit && !circuit->locked(checkLock) && circuit->reserve()) {
+		if (circuit->ref())
+		    cic = circuit;
+		else
+		    m_circuits->release(circuit);
+	    }
+	    if (cic || mandatory)
+		return (cic != 0);
+	}
 	cic = m_circuits->reserve(checkLock,-1,m_circuits->findRange(range));
+    }
+    else
+	cic = m_circuits->reserve(checkLock,-1);
     return (cic != 0);
 }
 

@@ -1991,6 +1991,7 @@ void YJBEngine::processStartIn(JBEvent* ev)
     XMPPFeature* reg = 0;
     XMPPFeature* auth = 0;
     XMPPFeature* bind = 0;
+    XMPPFeature* sess = 0;
     XmlElement* caps = 0;
     bool setComp = false;
     bool c2s = ev->stream()->type() == JBStream::c2s;
@@ -2024,8 +2025,10 @@ void YJBEngine::processStartIn(JBEvent* ev)
 		auth = new XMPPFeatureSasl(mech,true);
 	    }
 	    // TLS and/or SASL are missing or not required: add bind
-	    if (!(auth && auth->required()))
+	    if (!(auth && auth->required())) {
 		bind = new XMPPFeature(XmlTag::Bind,XMPPNamespace::Bind,true);
+		sess = new XMPPFeature(XmlTag::Session,XMPPNamespace::Session,false);
+	    }
 	}
 	else if (addReg)
 	    // Stream not secured, TLS not required: add register
@@ -2041,6 +2044,7 @@ void YJBEngine::processStartIn(JBEvent* ev)
     if (setComp)
 	addCompressFeature(ev->stream(),features);
     features.add(bind);
+    features.add(sess);
     ev->releaseStream();
     ev->stream()->start(&features,caps);
 }

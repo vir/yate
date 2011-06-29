@@ -362,7 +362,7 @@ public:
 private:
     // Notify an incoming s2s stream about a dialback verify response
     void notifyDbVerifyResult(const JabberID& local, const JabberID& remote,
-	const String& id, XMPPError::Type rsp);
+	const String& id, XMPPError::Type rsp, bool authFail);
     // Find a configured or dynamic domain
     inline ObjList* findDomain(const String& domain, bool cfg)
 	{ return cfg ? m_domains.find(domain) : m_dynamicDomains.find(domain); }
@@ -487,6 +487,8 @@ public:
 protected:
     // Check accepted and returned value. Calls stream's authenticated() method
     virtual void dispatched(bool accepted);
+    // Enqueue a fail message
+    void authFailed();
 
     String m_stream;
     JBStream::Type m_streamType;
@@ -2296,7 +2298,7 @@ void YJBEngine::processStreamEvent(JBEvent* ev)
 		// See XEP 0220 2.4
 		JabberID remote;
 		s2s->remote(remote);
-		notifyDbVerifyResult(local,remote,db->name(),XMPPError::RemoteTimeout);
+		notifyDbVerifyResult(local,remote,db->name(),XMPPError::RemoteTimeout,false);
 		TelEngine::destruct(db);
 	    }
 	}
@@ -2408,7 +2410,7 @@ void YJBEngine::processDbVerify(JBEvent* ev)
 	// Adjust the response. See XEP 0220 2.4
 	if (r == XMPPError::ItemNotFound || r == XMPPError::HostUnknown)
 	    r = XMPPError::NoRemote;
-	notifyDbVerifyResult(ev->to(),ev->from(),id,(XMPPError::Type)r);
+	notifyDbVerifyResult(ev->to(),ev->from(),id,(XMPPError::Type)r,true);
     }
     TelEngine::destruct(db);
     // Terminate dialback only streams
@@ -2992,14 +2994,28 @@ bool YJBEngine::sendCluster(XmlElement* xml, const String& node)
 
 // Notify an incoming s2s stream about a dialback verify response
 void YJBEngine::notifyDbVerifyResult(const JabberID& local, const JabberID& remote,
-    const String& id, XMPPError::Type rsp)
+    const String& id, XMPPError::Type rsp, bool authFail)
 {
     if (!id)
 	return;
     // Notify the incoming stream
     JBServerStream* notify = findServerStream(local,remote,false,false);
-    if (notify && notify->isId(id))
+    if (notify && notify->isId(id)) {
+	if (authFail && rsp != XMPPError::NoError) {
+	    Message* m = new Message("user.authfail");
+	    __plugin.complete(*m);
+	    SocketAddr addr;
+	    if (notify->remoteAddr(addr)) {
+		m->addParam("ip_host",addr.host());
+		m->addParam("ip_port",String(addr.port()));
+	    }
+	    m->addParam("streamtype",notify->typeName());
+	    m->addParam("local_domain",local);
+	    m->addParam("remote_domain",remote);
+	    Engine::enqueue(m);
+	}
 	notify->sendDbResult(local,remote,rsp);
+    }
     else
 	Debug(this,DebugNote,
 	    "No incoming s2s stream local=%s remote=%s id='%s' to notify dialback verify result",
@@ -3643,8 +3659,10 @@ void UserAuthMessage::dispatched(bool accepted)
 		addCompressFeature(stream,features);
 		stream->start(&features);
 	    }
-	    else
+	    else {
 		stream->terminate(-1,true,0,XMPPError::NotAuthorized);
+		authFailed();
+	    }
 	    TelEngine::destruct(stream);
 	    return;
 	}
@@ -3701,6 +3719,17 @@ void UserAuthMessage::dispatched(bool accepted)
 	stream->authenticated(ok,rspValue,XMPPError::NotAuthorized,username.node(),
 	    getValue("requestid"),getValue("instance"));
     TelEngine::destruct(stream);
+    if (!ok)
+	authFailed();
+}
+
+// Enqueue a fail message
+void UserAuthMessage::authFailed()
+{
+    Message* fail = new Message(*this);
+    *fail = "user.authfail";
+    fail->retValue().clear();
+    Engine::enqueue(fail);
 }
 
 

@@ -309,7 +309,7 @@ void JGEngine::createSessionId(String& id)
 {
     Lock lock(this);
     id = "JG";
-    id << (unsigned int)m_sessionId << "_" << (int)random();
+    id << (unsigned int)m_sessionId << "_" << (int)Random::random();
     m_sessionId++;
 }
 

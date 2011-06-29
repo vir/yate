@@ -160,7 +160,7 @@ SIPEngine::SIPEngine(const char* userAgent)
 	m_userAgent << "YATE/" << YATE_VERSION;
     m_allowed = "ACK";
     char tmp[32];
-    ::snprintf(tmp,sizeof(tmp),"%08x",::rand() ^ (int)Time::now());
+    ::snprintf(tmp,sizeof(tmp),"%08x",(int)(Random::random() ^ Time::now()));
     m_nonce_secret = tmp;
 }
 

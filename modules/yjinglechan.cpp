@@ -273,7 +273,7 @@ protected:
 	}
     // Build a RTP candidate
     inline JGRtpCandidate* buildCandidate(bool rtp = true) {
-	    return new JGRtpCandidate(id() + "_candidate_" + String((int)::random()),
+	    return new JGRtpCandidate(id() + "_candidate_" + String((int)Random::random()),
 		rtp ? "1" : "2");
 	}
     // Get the first file transfer content
@@ -2548,7 +2548,7 @@ JGSessionContent* YJGConnection::buildAudioContent(JGRtpCandidates::Type type,
     JGSessionContent::Senders senders, bool rtcp, bool useFormats)
 {
     String id;
-    id << this->id() << "_content_" << (int)::random();
+    id << this->id() << "_content_" << (int)Random::random();
     JGSessionContent::Type t = JGSessionContent::Unknown;
     if (type == JGRtpCandidates::RtpRawUdp)
 	t = JGSessionContent::RtpRawUdp;
@@ -2582,7 +2582,7 @@ JGSessionContent* YJGConnection::buildFileTransferContent(bool send, const char*
 {
     // Build the content
     String id;
-    id << this->id() << "_content_" << (int)::random();
+    id << this->id() << "_content_" << (int)Random::random();
     JGSessionContent::Type t = JGSessionContent::Unknown;
     JGSessionContent::Senders s = JGSessionContent::SendUnknown;
     if (send) {

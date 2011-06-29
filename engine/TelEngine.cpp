@@ -30,17 +30,6 @@
 
 
 #ifdef _WINDOWS
-extern "C" {
-
-static u_int32_t s_randSeed = (u_int32_t)(TelEngine::Time::now() & 0xffffffff);
-
-long int random()
-{ return (s_randSeed = (s_randSeed + 1) * 0x8088405) % RAND_MAX; }
-
-void srandom(unsigned int seed)
-{ s_randSeed = seed % RAND_MAX; }
-
-}
 
 #ifndef HAVE_GMTIME_S
 #include <errno.h>
@@ -68,7 +57,7 @@ int _gmtime_s(struct tm* _tm, const time_t* time)
 
 #endif
 
-#else
+#else // !_WINDOWS
 #include <sys/resource.h>
 #endif
 
@@ -474,7 +463,6 @@ void Debugger::setFormatting(Formatting format)
 }
 
 
-
 u_int64_t Time::now()
 {
 #ifdef _WINDOWS
@@ -602,6 +590,29 @@ bool Time::toDateTime(unsigned int epochTimeSec, int& year, unsigned int& month,
     DDebug(DebugAll,"Time::toDateTime(%u,%d,%u,%u,%u,%u,%u)",
 	epochTimeSec,year,month,day,hour,minute,sec);
     return true;
+}
+
+static Random s_random;
+static Mutex s_randomMutex(false,"Random");
+
+u_int32_t Random::next()
+{
+    return (m_random = (m_random + 1) * 0x8088405);
+}
+
+long int Random::random()
+{
+    s_randomMutex.lock();
+    long int ret = s_random.next() % RAND_MAX;
+    s_randomMutex.unlock();
+    return ret;
+}
+
+void Random::srandom(unsigned int seed)
+{
+    s_randomMutex.lock();
+    s_random.set(seed % RAND_MAX);
+    s_randomMutex.unlock();
 }
 
 

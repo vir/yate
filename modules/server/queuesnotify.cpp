@@ -25,8 +25,6 @@
 
 #include <yatephone.h>
 
-#include <stdlib.h>                     // random()
-
 using namespace TelEngine;
 namespace { // anonymous
 
@@ -258,8 +256,8 @@ void QueuedCall::setDestroy(u_int64_t now)
 // Add prio to a list
 void QueuedCall::addPriority(NamedList& params)
 {
-    m_queuePrio = ::random() % 10;
-    m_callerPrio = ::random() % 10;
+    m_queuePrio = Random::random() % 10;
+    m_callerPrio = Random::random() % 10;
     int prio = s_coefQueuePriority  * m_queuePrio + s_coefCallPriority * m_callerPrio;
     params.addParam("priority",String(prio));
 }

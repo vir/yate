@@ -570,7 +570,7 @@ void RudpSocket::changeState(RudpState newState)
 // Initialize Parameters ,initialize socket and start thread
 bool RudpSocket::initialize(const NamedList& params)
 {
-    m_sequence = params.getIntValue("rudp_sequence",0xff & ::random());
+    m_sequence = params.getIntValue("rudp_sequence",0xff & Random::random());
     if (!Modulo256::between(m_sequence,0,255)) {
 	Debug(m_sm,DebugNote,"Rudp Sequence value out of bounds set to 0");
 	m_sequence = 0;

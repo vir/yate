@@ -1097,7 +1097,7 @@ void YJBEngine::initialize(const NamedList* params, bool first)
 	    MD5 md5;
 	    md5 << String((unsigned int)Time::msecNow());
 	    md5 << String(Engine::runId());
-	    md5 << String((int)::random());
+	    md5 << String((int)Random::random());
 	    m_dialbackSecret = md5.hexDigest();
 	}
     }

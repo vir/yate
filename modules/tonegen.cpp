@@ -580,7 +580,7 @@ const short* ToneData::data()
 	    int ofs = 65535 >> (-m_f1);
 	    int max = 2 * ofs + 1;
 	    for (int x = 0; x < len; x++)
-		*tmp++ = (short)((::random() % max) - ofs);
+		*tmp++ = (short)((Random::random() % max) - ofs);
 	}
 	else {
 	    double samp = 2*M_PI/8000;

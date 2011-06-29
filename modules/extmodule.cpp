@@ -552,7 +552,7 @@ MsgHolder::MsgHolder(Message &msg)
 {
     // the address of this object should be unique
     char buf[64];
-    ::sprintf(buf,"%p.%ld",this,random());
+    ::sprintf(buf,"%p.%ld",this,Random::random());
     m_id = buf;
 }
 

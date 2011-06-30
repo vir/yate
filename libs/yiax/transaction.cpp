@@ -572,7 +572,7 @@ bool IAXTransaction::sendAuth()
 	return false;
     switch (m_authmethod) {
 	case IAXAuthMethod::MD5:
-	    m_challenge = (int)random();
+	    m_challenge = (int)Random::random();
 	    break;
 	case IAXAuthMethod::RSA:
 	case IAXAuthMethod::Text:

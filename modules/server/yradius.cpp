@@ -882,7 +882,7 @@ bool RadiusClient::fillRandom(DataBlock& data, int len)
     unsigned int r = 0;
     while (len--) {
 	while (!r)
-	    r = ::random() % RAND_MAX;
+	    r = Random::random();
 	*dd++ = r & 0xff;
 	r = r >> 8;
     }

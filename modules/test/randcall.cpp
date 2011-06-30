@@ -60,7 +60,7 @@ public:
 void RandThread::run()
 {
     for (int i = 0; i < 10; i++) {
-	Thread::usleep(::random() % 10000);
+	Thread::usleep(Random::random() % 10000);
 	RouteThread *thread = new RouteThread;
 	if (thread->error()) {
 	    Debug(DebugFail,"New thread error!");
@@ -73,41 +73,41 @@ void RandThread::run()
 
 void RouteThread::run()
 {
-    Thread::usleep(::random() % 1000000);
+    Thread::usleep(Random::random() % 1000000);
     Message *m = new Message("call");
     m->addParam("callto","wave/play//dev/zero");
-    m->addParam("target",String((int)(::random() % 1000000)));
+    m->addParam("target",String((int)(Random::random() % 1000000)));
     if (!Engine::dispatch(m))
 	Debug(DebugMild,"Noone processed call from '%s' to '%s'",
 	    m->getValue("callto"),m->getValue("target"));
     delete m;
 #if 0
-    String id("random/"+String((int)::random() %1000));
+    String id("random/"+String((int)Random::random() %1000));
     Message *m = new Message("preroute");
 	m->addParam("id",id);
-	m->addParam("caller",String((int)(::random() % 1000000)));
-	m->addParam("called",String((int)(::random() % 1000000)));
+	m->addParam("caller",String((int)(Random::random() % 1000000)));
+	m->addParam("called",String((int)(Random::random() % 1000000)));
 	Engine::dispatch(m);
 	*m = "route";
 	bool routed = Engine::dispatch(m);
 	Debug(DebugMild,"Routed %ssuccessfully in " FMT64 " usec",(routed ? "" : "un"),
 	    Time::now()-m->msgTime().usec());
 	if (routed) {
-	    Thread::usleep(::random() % 1000000);
+	    Thread::usleep(Random::random() % 1000000);
 	    m->addParam("callto",m->retValue());
 	    m->retValue() = "";
 	    *m = "call";
 	    m->msgTime() = Time::now();
 	    if (Engine::dispatch(m)) {
-		Thread::usleep(::random() % 5000000);
-		if ((::random() % 100) < 33) {
+		Thread::usleep(Random::random() % 5000000);
+		if ((Random::random() % 100) < 33) {
 		    *m = "answered";
 		    m->msgTime() = Time::now();
 		    m->addParam("status","answered");
 		    Engine::dispatch(m);
-		    Thread::usleep(::random() % 10000000);
+		    Thread::usleep(Random::random() % 10000000);
 		}
-		else if ((::random() % 100) < 50)
+		else if ((Random::random() % 100) < 50)
 		    *m = "busy";
 		else
 		    *m = "no answer";

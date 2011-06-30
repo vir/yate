@@ -391,7 +391,7 @@ bool SASL::buildAuthRsp(String& buf, const char* digestUri)
     SASL_ADD_QDIR("username")
     SASL_ADD_QDIR("realm")
     SASL_ADD_QDIR("nonce")
-    MD5 md5(String((unsigned int)::random()));
+    MD5 md5(String((unsigned int)Random::random()));
     m_cnonce = md5.hexDigest();
     m_params->setParam("cnonce",m_cnonce);
     SASL_ADD_QDIR("cnonce")
@@ -429,7 +429,7 @@ bool SASL::buildMD5Challenge(String& buf)
     }
     // Re-build nonce. Increase nonce count
     m_nonce.clear();
-    m_nonce << (int)Time::msecNow() << (int)::random();
+    m_nonce << (int)Time::msecNow() << (int)Random::random();
     MD5 md5(m_nonce);
     m_nonce = md5.hexDigest();
     m_nonceCount++;

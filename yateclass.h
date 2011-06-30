@@ -2818,6 +2818,57 @@ private:
 };
 
 /**
+ * Implementation of a system independent pseudo random number generator
+ * @short Pseudo random number generator
+ */
+class YATE_API Random
+{
+public:
+    /**
+     * Constructor
+     * @param seed Number to use as initial sequence seed
+     */
+    inline Random(u_int32_t seed = Time::now() & 0xffffffff)
+	: m_random(seed)
+	{ }
+
+    /**
+     * Get the latest random number generated
+     * @return Last random number generated
+     */
+    inline u_int32_t get() const
+	{ return m_random; }
+
+    /**
+     * Set the pseudo random generator to a known state
+     * @param seed Number to set as current state
+     */
+    inline void set(u_int32_t seed)
+	{ m_random = seed; }
+
+    /**
+     * Advance the pseudo random sequence and return new value
+     * @return Next random number in sequence
+     */
+    u_int32_t next();
+
+    /**
+     * Thread safe (and shared) replacement for library ::random()
+     * @return Next random number in the global sequence
+     */
+    static long int random();
+
+    /**
+     * Thread safe (and shared) replacement for library ::srandom()
+     * @param seed Number to set as seed in the global sequence
+     */
+    static void srandom(unsigned int seed);
+
+private:
+    u_int32_t m_random;
+};
+
+/**
  * The DataBlock holds a data buffer with no specific formatting.
  * @short A class that holds just a block of raw data
  */

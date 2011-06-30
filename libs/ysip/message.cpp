@@ -144,7 +144,7 @@ SIPMessage::SIPMessage(const SIPMessage* original, const SIPMessage* answer)
     }
     if (answer && (answer->code == 200) && (original->method &= "INVITE")) {
 	String tmp("z9hG4bK");
-	tmp << (int)::random();
+	tmp << (int)Random::random();
 	hl->setParam("branch",tmp);
 	const MimeHeaderLine* co = answer->getHeader("Contact");
 	if (co) {
@@ -234,7 +234,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
     }
     if (!(isAnswer() || hl->getParam("branch"))) {
 	String tmp("z9hG4bK");
-	tmp << (int)::random();
+	tmp << (unsigned int)Random::random();
 	hl->setParam("branch",tmp);
     }
     if (isAnswer()) {
@@ -258,7 +258,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	    header.append(hl);
 	}
 	if (!hl->getParam("tag"))
-	    hl->setParam("tag",String((int)::random()));
+	    hl->setParam("tag",String((unsigned int)Random::random()));
     }
 
     hl = const_cast<MimeHeaderLine*>(getHeader("To"));
@@ -273,7 +273,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 
     if (!(isAnswer() || getHeader("Call-ID"))) {
 	String tmp;
-	tmp << (int)::random() << "@" << domain;
+	tmp << (unsigned int)Random::random() << "@" << domain;
 	addHeader("Call-ID",tmp);
     }
 
@@ -644,7 +644,7 @@ MimeAuthLine* SIPMessage::buildAuth(const String& username, const String& passwo
 			engine->ncGet(nc);
 		    qop.addParam("nc",nc);
 		    MD5 md5;
-		    md5 << String(::rand()) << nc << String(Time::secNow());
+		    md5 << String((unsigned int)Random::random()) << nc << String(Time::secNow());
 		    qop.addParam("cnonce",md5.hexDigest());
 		}
 		else

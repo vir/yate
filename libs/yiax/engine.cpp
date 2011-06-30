@@ -71,7 +71,7 @@ IAXEngine::IAXEngine(const char* iface, int port, u_int16_t transListCount, u_in
     m_socket.setBlocking(false);
     if (!m_socket.bind(addr))
 	Debug(this,DebugWarn,"Failed to bind socket to %s:%d",c_safe(iface),port);
-    m_startLocalCallNo = 1 + (u_int16_t)(random() % IAX2_MAX_CALLNO);
+    m_startLocalCallNo = 1 + (u_int16_t)(Random::random() % IAX2_MAX_CALLNO);
 }
 
 IAXEngine::~IAXEngine()

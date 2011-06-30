@@ -229,7 +229,7 @@ MGCPChan::MGCPChan(const char* connId)
     else {
 	if (m_standby)
 	    Debug(this,DebugMild,"Allocating connection ID in standby mode! [%p]",this);
-	long int r = ::random();
+	long int r = Random::random();
 	m_address.hexify(&r,sizeof(r),0,true);
     }
 }

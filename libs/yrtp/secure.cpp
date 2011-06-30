@@ -197,7 +197,7 @@ bool RTPSecure::create(String& suite, String& keyParams, bool buildMaster)
 #else
 	unsigned char sk[30];
 	for (unsigned int i = 0; i < sizeof(sk);) {
-	    u_int16_t r = (u_int16_t)::random();
+	    u_int16_t r = (u_int16_t)Random::random();
 	    sk[i++] = r & 0xff;
 	    sk[i++] = (r >> 8) & 0xff;
 	}

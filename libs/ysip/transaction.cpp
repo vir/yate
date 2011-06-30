@@ -193,7 +193,7 @@ void SIPTransaction::setDialogTag(const char* tag)
 {
     if (null(tag)) {
 	if (m_tag.null())
-	    m_tag = (int)::random();
+	    m_tag = (int)Random::random();
     }
     else
 	m_tag = tag;

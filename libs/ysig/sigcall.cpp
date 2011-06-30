@@ -975,7 +975,7 @@ SignallingCircuit* SignallingCircuitGroup::reserve(int checkLock, int strategy,
 	    break;
 	default:
 	    while ((range->m_last > 1) && (n == range->m_used))
-		n = ::random() % range->m_last;
+		n = Random::random() % range->m_last;
     }
     // then go to the proper even/odd start circuit
     adjustParity(n,strategy,up);

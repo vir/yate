@@ -2,6 +2,11 @@
 
 # Run this to generate a new configure script
 
+if [ -z `which which 2>/dev/null` ]; then
+    echo "Please install the required 'which' utility." >&2
+    exit 1
+fi
+
 if [ -s engine/tables/a2s.h ]; then
     test "x$1" = "x--silent" || echo "Good! Tables are generated so we don't need sox."
 else

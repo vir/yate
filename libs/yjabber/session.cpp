@@ -655,7 +655,7 @@ void JGRtpCandidates::generateIceToken(String& dest, bool pwd, unsigned int max)
 	max = 256;
     dest = "";
     while (dest.length() < max)
- 	dest << (int)random();
+ 	dest << (int)Random::random();
     dest = dest.substr(0,max);
 }
 
@@ -664,7 +664,7 @@ void JGRtpCandidates::generateOldIceToken(String& dest)
 {
     dest = "";
     while (dest.length() < 16)
- 	dest << (int)random();
+ 	dest << (int)Random::random();
     dest = dest.substr(0,16);
 }
 

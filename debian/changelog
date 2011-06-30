@@ -1,3 +1,9 @@
+yate (3.3.3.vir2011063001) UNRELEASED; urgency=low
+
+  * SDP FMTP lines forwarding should now work as expected
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Thu, 30 Jun 2011 15:18:17 +0400
+
 yate (3.3.3.vir2011062601) UNRELEASED; urgency=low
 
   * Fixed SDP fmtp lines forwarding.

@@ -396,7 +396,7 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 				const NamedString *ns = m->getParam(i);
 				if(ns && ns->name() == key) {
 				    temp = new String("fmtp:");
-				    *temp << payload << *ns;
+				    *temp << payload << " " << *ns;
 				    rtpmap.append(temp);
 				}
 			    }
@@ -449,6 +449,8 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 		const NamedString* param = m->getParam(i);
 		if (param) {
 		    String tmp = param->name();
+		    if (tmp.startsWith("fmtp-"))
+			continue;
 		    if (*param)
 			tmp << ":" << *param;
 		    sdp->addLine("a",tmp);

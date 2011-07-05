@@ -155,7 +155,18 @@ bool SignallingCallControl::reserveCircuit(SignallingCircuit*& cic, const char* 
 	cic = m_circuits->reserve(*list,mandatory,checkLock,s,m_circuits->findRange(range));
     }
     else if (range) {
-	int num = String(range).toInteger();
+	const char* nRange = range;
+	switch (nRange[0]) {
+	    case '!':
+		mandatory = true;
+		nRange++;
+		break;
+	    case '?':
+		mandatory = false;
+		nRange++;
+		break;
+	}
+	int num = String(nRange).toInteger();
 	if (num > 0) {
 	    // Specific circuit required
 	    SignallingCircuit* circuit = m_circuits->find(num);
@@ -167,6 +178,7 @@ bool SignallingCallControl::reserveCircuit(SignallingCircuit*& cic, const char* 
 	    }
 	    if (cic || mandatory)
 		return (cic != 0);
+	    DDebug(DebugInfo,"SignallingCallControl. Fallback, circuit %u not available [%p]",num,this);
 	}
 	cic = m_circuits->reserve(checkLock,-1,m_circuits->findRange(range));
     }

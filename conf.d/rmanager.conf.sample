@@ -54,3 +54,9 @@
 ;  For acceptable values see the documentation of the openssl module
 ;  By default no client certificate is required
 ;verify=
+
+; Initial aliases can be created for each connection
+; Each declaration line starts with alias: and may include \0 as placeholder
+;  for the line entered in rmanager and \1 ... \9 for individual components
+; Example:
+;  alias:cgu=control \1/ISUP unblock force=yes circuits=\2

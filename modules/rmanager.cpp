@@ -206,7 +206,7 @@ public:
     virtual void run();
     bool processTelnetChar(unsigned char c);
     bool processChar(unsigned char c);
-    bool processLine(const char *line);
+    bool processLine(const char *line, bool saveLine = true);
     bool autoComplete();
     void errorBeep();
     void clearLine();
@@ -626,11 +626,11 @@ bool Connection::processChar(unsigned char c)
 		errorBeep();
 		return false;
 	    }
-	    return processLine("quit");
+	    return processLine("quit",false);
 	case 0x1C: // ^backslash
 	    if (m_buffer)
 		break;
-	    return processLine("reload");
+	    return processLine("reload",false);
 	case 0x05: // ^E
 	    m_escmode = 0;
 	    m_echoing = !m_echoing;
@@ -707,7 +707,7 @@ bool Connection::processChar(unsigned char c)
 	case 0x09: // ^I, TAB
 	    m_escmode = 0;
 	    if (m_buffer.null())
-		return processLine("help");
+		return processLine("help",false);
 	    if (!autoComplete())
 		errorBeep();
 	    return false;
@@ -908,7 +908,7 @@ bool Connection::autoComplete()
 }
 
 // execute received input line
-bool Connection::processLine(const char *line)
+bool Connection::processLine(const char *line, bool saveLine)
 {
     DDebug("RManager",DebugInfo,"processLine = '%s'",line);
     String str(line);
@@ -916,7 +916,8 @@ bool Connection::processLine(const char *line)
     if (str.null())
 	return false;
 
-    m_lastcmd = str;
+    if (saveLine)
+	m_lastcmd = str;
     line = 0;
     m_buffer.clear();
 

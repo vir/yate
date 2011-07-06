@@ -263,7 +263,8 @@ public:
      */
     YIAXEngine(const char* iface, int port, u_int16_t transListCount, u_int16_t retransCount, u_int16_t retransInterval,
 	u_int16_t authTimeout, u_int16_t transTimeout,
-	u_int16_t maxFullFrameDataLen, u_int32_t trunkSendInterval, bool authRequired);
+	u_int16_t maxFullFrameDataLen, u_int32_t trunkSendInterval, bool authRequired,
+	NamedList* params);
 
     virtual ~YIAXEngine()
 	{}
@@ -944,10 +945,10 @@ void YIAXTrunking::run()
 YIAXEngine::YIAXEngine(const char* iface, int port, u_int16_t transListCount,
 	u_int16_t retransCount, u_int16_t retransInterval, u_int16_t authTimeout,
 	u_int16_t transTimeout, u_int16_t maxFullFrameDataLen,
-	u_int32_t trunkSendInterval, bool authRequired)
+	u_int32_t trunkSendInterval, bool authRequired, NamedList* params)
     : IAXEngine(iface,port,transListCount,retransCount,retransInterval,authTimeout,
 	transTimeout,maxFullFrameDataLen,iplugin.defaultCodec(),iplugin.codecs(),
-	trunkSendInterval,authRequired),
+	trunkSendInterval,authRequired,params),
       m_threadsCreated(false)
 {
 }
@@ -1250,7 +1251,7 @@ void YIAXDriver::initialize()
     String iface = s_cfg.getValue("general","addr");
     bool authReq = s_cfg.getBoolValue("registrar","auth_required",true);
     m_iaxEngine = new YIAXEngine(iface,m_port,transListCount,retransCount,retransInterval,authTimeout,
-	transTimeout,maxFullFrameDataLen,trunkSendInterval,authReq);
+	transTimeout,maxFullFrameDataLen,trunkSendInterval,authReq,s_cfg.getSection("general"));
     m_iaxEngine->debugChain(this);
     int tos = s_cfg.getIntValue("general","tos",dict_tos,0);
     if (tos && !m_iaxEngine->socket().setTOS(tos))

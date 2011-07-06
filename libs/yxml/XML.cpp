@@ -1394,7 +1394,8 @@ void XmlFragment::toString(String& dump, bool escape, const String& indent,
 }
 
 // Find a completed xml element in a list
-XmlElement* XmlFragment::findElement(ObjList* list, const String* name, const String* ns)
+XmlElement* XmlFragment::findElement(ObjList* list, const String* name, const String* ns,
+    bool noPrefix)
 {
     XmlElement* e = 0;
     for (; list; list = list->skipNext()) {
@@ -1403,7 +1404,11 @@ XmlElement* XmlFragment::findElement(ObjList* list, const String* name, const St
 	    continue;
 	if (name || ns) {
 	    if (!ns) {
-		if (*name == e->toString())
+		if (noPrefix) {
+		    if (*name == e->unprefixedTag())
+			break;
+		}
+		else if (*name == e->toString())
 		    break;
 	    }
 	    else if (name) {

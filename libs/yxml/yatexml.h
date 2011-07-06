@@ -911,9 +911,13 @@ public:
      * @param list The list to search for the element
      * @param name Optional element tag to match
      * @param ns Optional element namespace to match
+     * @param noPrefix True to compare the tag without namespace prefix, false to
+     *  include namespace prefix when comparing the given tag.
+     *  This parameter is ignored if name is 0 or ns is not 0
      * @return XmlElement pointer or 0 if not found
      */
-    static XmlElement* findElement(ObjList* list, const String* name, const String* ns);
+    static XmlElement* findElement(ObjList* list, const String* name, const String* ns,
+	bool noPrefix = true);
 
 private:
     ObjList m_list;                    // The children list
@@ -1263,24 +1267,31 @@ public:
      * Find the first child of this XmlElement
      * @param name Optional name of the child
      * @param ns Optional child namespace
+     * @param noPrefix True to compare the tag without namespace prefix, false to
+     *  include namespace prefix when comparing the given tag.
+     *  This parameter is ignored if name is 0 or ns is not 0
      * @return The first child element meeting the requested conditions
      */
-    inline XmlElement* findFirstChild(const String* name = 0, const String* ns = 0) const
-	{ return XmlFragment::findElement(getChildren().skipNull(),name,ns); }
+    inline XmlElement* findFirstChild(const String* name = 0, const String* ns = 0,
+	bool noPrefix = true) const
+	{ return XmlFragment::findElement(getChildren().skipNull(),name,ns,noPrefix); }
 
     /**
      * Finds next child of this XmlElement
      * @param prev Previous child
      * @param name Optional name of the child
      * @param ns Optional child namespace
+     * @param noPrefix True to compare the tag without namespace prefix, false to
+     *  include namespace prefix when comparing the given tag.
+     *  This parameter is ignored if name is 0 or ns is not 0
      * @return The next found child if prev exists else the first
      */
     inline XmlElement* findNextChild(XmlElement* prev = 0, const String* name = 0,
-	const String* ns = 0) const {
+	const String* ns = 0, bool noPrefix = true) const {
 	    if (!prev)
-		return findFirstChild(name,ns);
+		return findFirstChild(name,ns,noPrefix);
 	    ObjList* start = getChildren().find(prev);
-	    return start ? XmlFragment::findElement(start->skipNext(),name,ns) : 0;
+	    return start ? XmlFragment::findElement(start->skipNext(),name,ns,noPrefix) : 0;
 	}
 
     /**

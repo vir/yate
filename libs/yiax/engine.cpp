@@ -32,7 +32,8 @@ using namespace TelEngine;
 
 IAXEngine::IAXEngine(const char* iface, int port, u_int16_t transListCount, u_int16_t retransCount, u_int16_t retransInterval,
 	u_int16_t authTimeout, u_int16_t transTimeout, u_int16_t maxFullFrameDataLen,
-	u_int32_t format, u_int32_t capab, u_int32_t trunkSendInterval, bool authRequired)
+	u_int32_t format, u_int32_t capab, u_int32_t trunkSendInterval, bool authRequired,
+	NamedList* params)
     : Mutex(true,"IAXEngine"),
     m_lastGetEvIndex(0),
     m_authRequired(authRequired),
@@ -69,8 +70,28 @@ IAXEngine::IAXEngine(const char* iface, int port, u_int16_t transListCount, u_in
     addr.host(iface);
     addr.port(port);
     m_socket.setBlocking(false);
-    if (!m_socket.bind(addr))
-	Debug(this,DebugWarn,"Failed to bind socket to %s:%d",c_safe(iface),port);
+    bool ok = m_socket.bind(addr);
+    if (!ok) {
+	bool force = !params || params->getBoolValue("force_bind",true);
+	String tmp;
+	Thread::errorString(tmp,m_socket.error());
+	Debug(this,DebugWarn,"Failed to bind socket on '%s:%d'%s. %d: '%s'",
+	    c_safe(iface),port,force ? " - trying a random port" : "",
+	    m_socket.error(),tmp.c_str());
+	if (force) {
+	    addr.port(0);
+	    ok = m_socket.bind(addr);
+	    if (!ok)
+		Debug(this,DebugWarn,"Failed to bind on any port");
+	    else {
+		ok = m_socket.getSockName(addr);
+		if (!ok)
+		    Debug(this,DebugWarn,"Failed to retrieve bound address");
+	    }
+	}
+    }
+    if (ok)
+	Debug(this,DebugInfo,"Bound on '%s:%d'",addr.host().c_str(),addr.port());
     m_startLocalCallNo = 1 + (u_int16_t)(Random::random() % IAX2_MAX_CALLNO);
 }
 
@@ -219,9 +240,12 @@ void IAXEngine::readSocket(SocketAddr& addr)
     while (1) {
 	int len = m_socket.recvFrom(buf,sizeof(buf),addr);
 	if (len == Socket::socketError()) {
-	    if (!m_socket.canRetry())
+	    if (!m_socket.canRetry()) {
+		String tmp;
+		Thread::errorString(tmp,m_socket.error());
 		Debug(this,DebugWarn,"Socket read error: %s (%d)",
-		    ::strerror(m_socket.error()),m_socket.error());
+		    tmp.c_str(),m_socket.error());
+	    }
 	    Thread::idle(true);
 	    continue;
 	}
@@ -240,9 +264,12 @@ bool IAXEngine::writeSocket(const void* buf, int len, const SocketAddr& addr, IA
     }
     len = m_socket.sendTo(buf,len,addr);
     if (len == Socket::socketError()) {
-	if (!m_socket.canRetry())
+	if (!m_socket.canRetry()) {
+	    String tmp;
+	    Thread::errorString(tmp,m_socket.error());
 	    Debug(this,DebugWarn,"Socket write error: %s (%d)",
-		::strerror(m_socket.error()),m_socket.error());
+		tmp.c_str(),m_socket.error());
+	}
 #ifdef DEBUG
 	else
 	    Debug(this,DebugMild,"Socket temporary unavailable: %s (%d)",

@@ -119,6 +119,7 @@ static const CommandInfo s_cmdInfo[] =
     { "reload", "[plugin]", 0, "Reloads module configuration files" },
     { "restart", "[now]", s_rnow, "Restarts the engine if executing supervised" },
     { "stop", "[exitcode]", 0, "Stops the engine with optionally provided exit code" },
+    { "alias", "[name [command...]]", 0, "Create an alias for a longer command" },
     { 0, 0, 0, 0 }
 };
 
@@ -206,7 +207,7 @@ public:
     virtual void run();
     bool processTelnetChar(unsigned char c);
     bool processChar(unsigned char c);
-    bool processLine(const char *line);
+    bool processLine(const char *line, bool saveLine = true);
     bool autoComplete();
     void errorBeep();
     void clearLine();
@@ -221,6 +222,7 @@ public:
 	{ return m_listener->cfg(); }
     void checkTimer(u_int64_t time);
 private:
+    NamedList m_aliases;
     Level m_auth;
     bool m_debug;
     bool m_output;
@@ -401,6 +403,7 @@ Connection* RManagerListener::checkCreate(Socket* sock, const char* addr)
 
 Connection::Connection(Socket* sock, const char* addr, RManagerListener* listener)
     : Thread("RManager Connection"),
+      m_aliases(""),
       m_auth(None), m_debug(false), m_output(false), m_colorize(false), m_machine(false),
       m_threshold(DebugAll),
       m_socket(sock), m_lastch(0), m_escmode(0), m_echoing(false), m_beeping(false),
@@ -458,6 +461,14 @@ void Connection::run()
     if (hdr) {
 	writeStr("\r" + hdr + "\r\n");
 	hdr.clear();
+    }
+    NamedIterator iter(cfg());
+    while (const NamedString* s = iter.get()) {
+	if (s->null() || !s->name().startsWith("alias:"))
+	    continue;
+	String name = s->name().substr(6).trimSpaces();
+	if (name)
+	    m_aliases.setParam(name,*s);
     }
     unsigned char buffer[128];
     while (m_socket && m_socket->valid()) {
@@ -626,11 +637,11 @@ bool Connection::processChar(unsigned char c)
 		errorBeep();
 		return false;
 	    }
-	    return processLine("quit");
+	    return processLine("quit",false);
 	case 0x1C: // ^backslash
 	    if (m_buffer)
 		break;
-	    return processLine("reload");
+	    return processLine("reload",false);
 	case 0x05: // ^E
 	    m_escmode = 0;
 	    m_echoing = !m_echoing;
@@ -707,7 +718,7 @@ bool Connection::processChar(unsigned char c)
 	case 0x09: // ^I, TAB
 	    m_escmode = 0;
 	    if (m_buffer.null())
-		return processLine("help");
+		return processLine("help",false);
 	    if (!autoComplete())
 		errorBeep();
 	    return false;
@@ -821,6 +832,11 @@ bool Connection::autoComplete()
 		if (cmd.startsWith(partWord))
 		    m.retValue().append(cmd,"\t");
 	    }
+	    NamedIterator iter(m_aliases);
+	    while (const NamedString* s = iter.get()) {
+		if (s->name().startsWith(partWord))
+		    m.retValue().append(s->name(),"\t");
+	    }
 	}
 	else {
 	    const CommandInfo* info = s_cmdInfo;
@@ -908,7 +924,7 @@ bool Connection::autoComplete()
 }
 
 // execute received input line
-bool Connection::processLine(const char *line)
+bool Connection::processLine(const char *line, bool saveLine)
 {
     DDebug("RManager",DebugInfo,"processLine = '%s'",line);
     String str(line);
@@ -916,7 +932,8 @@ bool Connection::processLine(const char *line)
     if (str.null())
 	return false;
 
-    m_lastcmd = str;
+    if (saveLine)
+	m_lastcmd = str;
     line = 0;
     m_buffer.clear();
 
@@ -1272,8 +1289,47 @@ bool Connection::processLine(const char *line)
 	writeStr(m_machine ? "%%=shutdown\r\n" : "Engine shutting down - bye!\r\n");
 	Engine::halt(code);
     }
+    else if (str.startSkip("alias"))
+    {
+	str.trimSpaces();
+	if (str.null()) {
+	    NamedIterator iter(m_aliases);
+	    while (const NamedString* s = iter.get())
+		str << s->name() << "=" << *s << "\r\n";
+	    writeStr(str);
+	    return false;
+	}
+	int sep = str.find(' ');
+	if (sep > 0) {
+	    String val = str.substr(sep+1);
+	    str = str.substr(0,sep);
+	    m_aliases.setParam(str,val);
+	    writeStr("Alias " + str + " set to: " + val + "\r\n");
+	}
+	else {
+	    m_aliases.clearParam(str);
+	    writeStr("Alias " + str + " removed\r\n");
+	}
+    }
     else
     {
+	str.trimSpaces();
+	int sep = str.find(' ');
+	const String* cmd = m_aliases.getParam(str.substr(0,sep));
+	if (cmd) {
+	    if (!saveLine) {
+		writeStr("Error: possible alias loop in '" + str + "'\r\n");
+		return false;
+	    }
+	    if (sep > 0)
+		str = str.substr(sep+1);
+	    else
+		str.clear();
+	    static const Regexp s_paramSep("^\\([^ ]*\\)\\? *\\([^ ]*\\)\\? *\\([^ ]*\\)\\? *\\([^ ]*\\)\\? *\\([^ ]*\\)\\? *\\([^ ]*\\)\\? *\\([^ ]*\\)\\? *\\([^ ]*\\)\\? *\\([^ ]*\\)\\? *\\([^ ]*\\)\\? *");
+	    str.matches(s_paramSep);
+	    str = str.replaceMatches(*cmd);
+	    return processLine(str,false);
+	}
 	Message m("engine.command");
 	m.addParam("line",str);
 	if (Engine::dispatch(m))

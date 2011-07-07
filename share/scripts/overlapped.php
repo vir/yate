@@ -125,6 +125,7 @@ function setState($newstate)
 
 function routeTo($num)
 {
+    global $final;
     global $ourcallid;
     global $executeParams;
     setState("routing");
@@ -132,7 +133,7 @@ function routeTo($num)
     $m->params = $executeParams;
     $m->params["id"] = $ourcallid;
     $m->params["called"] = $num;
-    $m->params["overlapped"] = "yes";
+    $m->params["overlapped"] = $final ? "no" : "yes";
     $m->Dispatch();
 }
 

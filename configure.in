@@ -357,7 +357,10 @@ AC_SUBST(SCTP_FLAGS)
 # Checks for optional libraries.
 
 HAVE_RESOLV=no
+RESOLV_INC="-DNO_RESOLV"
 RESOLV_LIB=""
+AC_ARG_ENABLE(resolver,AC_HELP_STRING([--enable-resolver],[Use resolver if available (default: yes)]),want_resolver=$enableval,want_resolver=yes)
+if [[ "x$want_resolver" = "xyes" ]]; then
 AC_MSG_CHECKING([for resolver library])
 AC_LANG_SAVE
 AC_LANG_C
@@ -383,7 +386,28 @@ fi
 CFLAGS="$SAVE_CFLAGS"
 AC_LANG_RESTORE
 AC_MSG_RESULT([$HAVE_RESOLV $RESOLV_LIB])
+if [[ "x$HAVE_RESOLV" = "xyes" ]]; then
+RESOLV_INC="-DNO_DN_SKIPNAME"
+HAVE_DN_SKIPNAME="no"
+AC_MSG_CHECKING([for dn_skipname])
+AC_LANG_SAVE
+AC_LANG_C
+SAVE_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS -Wall -Werror $GCC_UNRESOLVED_SYMBOLS"
+SAVE_LIBS="$LIBS"
+LIBS="$LIBS $RESOLV_LIB"
+AC_TRY_LINK([#include <netinet/in.h>
+#include <arpa/nameser.h>
+#include <resolv.h>],[unsigned char*p=0; dn_skipname(p,p);],
+[HAVE_DN_SKIPNAME=yes RESOLV_INC=""])
+LIBS="$SAVE_LIBS"
+CFLAGS="$SAVE_CFLAGS"
+AC_LANG_RESTORE
+AC_MSG_RESULT([$HAVE_DN_SKIPNAME])
+fi
+fi
 AC_SUBST(HAVE_RESOLV)
+AC_SUBST(RESOLV_INC)
 AC_SUBST(RESOLV_LIB)
 
 INTERNAL_REGEX=yes

@@ -404,7 +404,7 @@ public:
  * This class holds a RTP transport candidate
  * @short A RTP transport candidate
  */
-class JGRtpCandidate : public String
+class YJABBER_API JGRtpCandidate : public String
 {
 public:
     /**
@@ -430,7 +430,7 @@ public:
      * @param container The transport container
      * @return Valid XmlElement pointer if type is a known one
      */
-    XmlElement* toXml(const JGRtpCandidates& container) const;
+    virtual XmlElement* toXml(const JGRtpCandidates& container) const;
 
     /**
      * Fill this object from a candidate element using remote address/port
@@ -451,6 +451,49 @@ public:
 
 
 /**
+ * This class holds a RTP transport candidate
+ * @short A RTP transport candidate
+ */
+class YJABBER_API JGRtpCandidateP2P : public JGRtpCandidate
+{
+    YCLASS(JGRtpCandidateP2P,JGRtpCandidate)
+public:
+    /**
+     * Constructor
+     */
+    inline JGRtpCandidateP2P()
+	: JGRtpCandidate("")
+	{}
+
+    /**
+     * Constructor. Build a candidate from received data
+     * @param xml Received xml element
+     * @param container The transport container
+     */
+    inline JGRtpCandidateP2P(XmlElement* xml, const JGRtpCandidates& container)
+	: JGRtpCandidate("")
+	{ fromXml(xml,container); }
+
+    /**
+     * Create a 'candidate' element from this object using local address/port
+     * @param container The transport container
+     * @return Valid XmlElement pointer if type is a known one
+     */
+    virtual XmlElement* toXml(const JGRtpCandidates& container) const;
+
+    /**
+     * Fill this object from a candidate element using remote address/port
+     * @param xml Received xml element
+     * @param container The transport container
+     */
+    void fromXml(XmlElement* xml, const JGRtpCandidates& container);
+
+    String m_username;
+    String m_password;
+};
+
+
+/**
  * This class holds a list of jingle RTP transport candidates
  * @short A list of RTP transport candidates
  */
@@ -463,7 +506,8 @@ public:
     enum Type {
 	Unknown   = -1,
 	RtpIceUdp = 1,
-	RtpRawUdp = 2,
+	RtpRawUdp,
+	RtpP2P,
     };
 
     /**
@@ -552,6 +596,7 @@ public:
     String m_ufrag;
 };
 
+
 /**
  * This class holds a Jingle content negotiated during a session
  * It can be built from a received xml element and
@@ -568,9 +613,10 @@ public:
 	Unknown             = -1,        // Unknown
 	UnknownFileTransfer = -2,        // Unknown (unsupported) file transfer content
 	RtpIceUdp           = 1,         // Audio: RTP ICE-UDP transport
-	RtpRawUdp           = 2,         // Audio: RTP RAW-UDP transport
-	FileBSBOffer        = 3,         // File offer: byte stream (SOCKS) transport
-	FileBSBRequest      = 4,         // File request: byte stream (SOCKS) transport
+	RtpRawUdp,                       // Audio: RTP RAW-UDP transport
+	RtpP2P,                          // 
+	FileBSBOffer,                    // File offer: byte stream (SOCKS) transport
+	FileBSBRequest,                  // File request: byte stream (SOCKS) transport
     };
 
     /**

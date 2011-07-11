@@ -540,6 +540,7 @@ private:
 static Configuration s_cfg; 		// Configuration file
 static YIAXLineContainer s_lines;	// Lines
 static Thread::Priority s_priority = Thread::Normal;  // Threads priority
+static bool s_callTokenOut = true;      // Send an empty call token on outgoing calls
 static YIAXDriver iplugin;		// Init the driver
 
 static String s_statusCmd = "status";
@@ -1031,6 +1032,8 @@ IAXTransaction* YIAXEngine::call(SocketAddr& addr, NamedList& params)
     }
     ieList.appendNumeric(IAXInfoElement::FORMAT,format,4);
     ieList.appendNumeric(IAXInfoElement::CAPABILITY,codecs,4);
+    if (params.getBoolValue("calltoken_out",s_callTokenOut))
+	ieList.appendBinary(IAXInfoElement::CALLTOKEN,0,0);
     return startLocalTransaction(IAXTransaction::New,addr,ieList);
 }
 
@@ -1206,6 +1209,11 @@ void YIAXDriver::initialize()
     // Load configuration
     s_cfg = Engine::configFile("yiaxchan");
     s_cfg.load();
+    NamedList* gen = s_cfg.getSection("general");
+    NamedList dummy("general");
+    if (!gen)
+	gen = &dummy;
+    s_callTokenOut = gen->getBoolValue("calltoken_out",true);
     // Codec capabilities
     m_defaultCodec = 0;
     m_codecs = 0;
@@ -1231,8 +1239,10 @@ void YIAXDriver::initialize()
 	m_defaultCodec = fallback;
     unlock();
     // Setup driver if this is the first call
-    if (m_iaxEngine)
+    if (m_iaxEngine) {
+	m_iaxEngine->initialize(*gen);
 	return;
+    }
     setup();
     installRelay(Halt);
     installRelay(Route);
@@ -1251,7 +1261,7 @@ void YIAXDriver::initialize()
     String iface = s_cfg.getValue("general","addr");
     bool authReq = s_cfg.getBoolValue("registrar","auth_required",true);
     m_iaxEngine = new YIAXEngine(iface,m_port,transListCount,retransCount,retransInterval,authTimeout,
-	transTimeout,maxFullFrameDataLen,trunkSendInterval,authReq,s_cfg.getSection("general"));
+	transTimeout,maxFullFrameDataLen,trunkSendInterval,authReq,gen);
     m_iaxEngine->debugChain(this);
     int tos = s_cfg.getIntValue("general","tos",dict_tos,0);
     if (tos && !m_iaxEngine->socket().setTOS(tos))

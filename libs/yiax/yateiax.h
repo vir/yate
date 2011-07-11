@@ -123,6 +123,7 @@ public:
         RR_DELAY = 0x31,         // W
         RR_DROPPED = 0x32,       // DW
         RR_OOO = 0x33,           // DW
+        CALLTOKEN = 0X36,        // BIN
     };
 
     /**
@@ -308,6 +309,14 @@ public:
         { return m_data; }
 
     /**
+     * Set the data
+     * @param buf Source buffer to construct this IE
+     * @param len Buffer length
+     */
+    inline void setData(void* buf, unsigned len)
+        { m_data.assign(buf,len); }
+
+    /**
      * Constructs a buffer containing this Information Element
      * @param buf Destination buffer
      */
@@ -348,22 +357,19 @@ public:
     /**
      * Constructor
      */
-    inline IAXIEList() : m_invalidIEList(false)
-	{}
+    IAXIEList();
 
     /**
      * Constructor. Construct the list from an IAXFullFrame object
      * @param frame Source object
      * @param incoming True if it is an incoming frame
      */
-    inline IAXIEList(const IAXFullFrame* frame, bool incoming = true) : m_invalidIEList(false)
-	{ createFromFrame(frame,incoming); }
+    IAXIEList(const IAXFullFrame* frame, bool incoming = true);
 
     /**
      * Destructor
      */
-    inline ~IAXIEList()
-	{}
+    ~IAXIEList();
 
     /**
      * Get the invalid IE list flag
@@ -377,6 +383,13 @@ public:
      */
     inline void clear()
 	{ m_list.clear(); }
+
+    /**
+     * Check if the list is empty
+     * @return True if the list is empty
+     */
+    inline bool empty()
+	{ return 0 == m_list.skipNull(); }
 
     /**
      * Insert a VERSION Information Element in the list if not already done
@@ -644,6 +657,7 @@ public:
         Provision = 0x23,
         FwDownl   = 0x24,
         FwData    = 0x25,
+        CallToken = 0x28,
     };
 
     /**
@@ -737,7 +751,7 @@ public:
      * Get a pointer to this frame if it is a full frame
      * @return A pointer to this frame if it is a full frame or 0
      */
-    virtual const IAXFullFrame* fullFrame() const;
+    virtual IAXFullFrame* fullFrame();
 
     /**
      * Parse a received buffer and returns a IAXFrame pointer if valid
@@ -853,6 +867,22 @@ public:
 		 const unsigned char* buf = 0, unsigned int len = 0);
 
     /**
+     * Constructor. Constructs an outgoing full frame
+     * @param type Frame type
+     * @param subclass Frame subclass
+     * @param sCallNo Source (remote) call number
+     * @param dCallNo Destination (local) call number
+     * @param oSeqNo Outgoing sequence number
+     * @param iSeqNo Incoming (expected) sequence number
+     * @param tStamp Frame timestamp
+     * @param ieList List of frame IEs
+     * @param maxlen Max frame data length
+     */
+    IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_int16_t dCallNo,
+		 unsigned char oSeqNo, unsigned char iSeqNo,
+		 u_int32_t tStamp, IAXIEList* ieList, u_int16_t maxlen);
+
+    /**
      * Destructor
      */
     virtual ~IAXFullFrame();
@@ -889,7 +919,34 @@ public:
      * Get a pointer to this frame if it is a full frame
      * @return A pointer to this frame
      */
-    virtual const IAXFullFrame* fullFrame() const;
+    virtual IAXFullFrame* fullFrame();
+
+    /**
+     * Rebuild frame buffer from the list of IEs
+     * @param maxlen Max frame data length
+     */
+    void updateBuffer(u_int16_t maxlen);
+
+    /**
+     * Retrieve the IE list
+     * @return IAXIEList pointer or NULL
+     */
+    inline IAXIEList* ieList()
+	{ return m_ieList; }
+
+    /**
+     * Update IE list from buffer if not already done
+     * @param incoming True if this is an incoming frame
+     * @return True if the list is valid
+     */
+    bool updateIEList(bool incoming);
+
+    /**
+     * Remove the IE list
+     * @param delObj True to delete it
+     * @return IAXIEList pointer or NULL if requested to delete it or already NULL
+     */
+    IAXIEList* removeIEList(bool delObj = true);
 
     /**
      * Fill a string with this frame
@@ -899,7 +956,7 @@ public:
      * @param incoming True if it is an incoming frame
      */
     void toString(String& dest, const SocketAddr& local, const SocketAddr& remote,
-	bool incoming) const;
+	bool incoming);
 
     /**
      * Get the string associated with the given IAX control type
@@ -909,12 +966,21 @@ public:
     static inline const char* controlTypeText(int type)
 	{ return lookup(type,s_controlTypes,0); }
 
+protected:
+    /**
+     * Destroyed notification. Clear data
+     */
+    virtual void destroyed();
+
 private:
+    // Build frame buffer header
+    void setDataHeader();
     static TokenDict s_controlTypes[]; // Keep the association between control types and their names
     u_int16_t m_dCallNo;	// Destination call number
     unsigned char m_oSeqNo;	// Out sequence number
     unsigned char m_iSeqNo;	// In sequence number
     u_int32_t m_subclass;	// Subclass
+    IAXIEList* m_ieList;        // List of IEs
 };
 
 /**
@@ -943,6 +1009,30 @@ public:
                        unsigned char oSeqNo, unsigned char iSeqNo, u_int32_t tStamp, const unsigned char* buf, unsigned int len,
                        u_int16_t retransCount, u_int32_t retransInterval, bool ackOnly)
         : IAXFullFrame(type,subclass,sCallNo,dCallNo,oSeqNo,iSeqNo,tStamp,buf,len),
+          m_ack(false), m_ackOnly(ackOnly), m_retransCount(retransCount), m_retransTimeInterval(retransInterval),
+	  m_nextTransTime(Time::msecNow() + m_retransTimeInterval)
+	{}
+
+    /**
+     * Constructor. Constructs an outgoing full frame
+     * @param type Frame type
+     * @param subclass Frame subclass
+     * @param sCallNo Source (remote) call number
+     * @param dCallNo Destination (local) call number
+     * @param oSeqNo Outgoing sequence number
+     * @param iSeqNo Incoming (expected) sequence number
+     * @param tStamp Frame timestamp
+     * @param ieList List of frame IEs
+     * @param maxlen Max frame data length
+     * @param retransCount Retransmission counter
+     * @param retransInterval Time interval to the next retransmission
+     * @param ackOnly Acknoledge only flag. If true, the frame only expects an ACK
+     */
+    inline IAXFrameOut(Type type, u_int32_t subclass, u_int16_t sCallNo, u_int16_t dCallNo,
+                       unsigned char oSeqNo, unsigned char iSeqNo, u_int32_t tStamp,
+		       IAXIEList* ieList, u_int16_t maxlen,
+                       u_int16_t retransCount, u_int32_t retransInterval, bool ackOnly)
+        : IAXFullFrame(type,subclass,sCallNo,dCallNo,oSeqNo,iSeqNo,tStamp,ieList,maxlen),
           m_ack(false), m_ackOnly(ackOnly), m_retransCount(retransCount), m_retransTimeInterval(retransInterval),
 	  m_nextTransTime(Time::msecNow() + m_retransTimeInterval)
 	{}
@@ -1449,6 +1539,13 @@ public:
     bool enableTrunking(IAXMetaTrunkFrame* trunkFrame);
 
     /**
+     * Process a received call token
+     * This method is thread safe
+     * @param callToken Received call token
+     */
+    void processCallToken(const DataBlock& callToken);
+
+    /**
      * Print transaction data on stdin
      */
     void print();
@@ -1534,7 +1631,7 @@ protected:
      * @param createIEList If true create IE list in the generated event
      * @return Pointer to a valid IAXEvent
      */
-    IAXEvent* terminate(u_int8_t evType, bool local, const IAXFullFrame* frame = 0, bool createIEList = true);
+    IAXEvent* terminate(u_int8_t evType, bool local, IAXFullFrame* frame = 0, bool createIEList = true);
 
     /**
      * Wait for ACK to terminate the transaction. No more events will be generated
@@ -1543,7 +1640,7 @@ protected:
      * @param frame Frame to build event from
      * @return Pointer to a valid IAXEvent
      */
-    IAXEvent* waitForTerminate(u_int8_t evType, bool local, const IAXFullFrame* frame);
+    IAXEvent* waitForTerminate(u_int8_t evType, bool local, IAXFullFrame* frame);
 
     /**
      * Constructs an IAXFrameOut frame, send it to remote peer and put it in the transmission list
@@ -1556,6 +1653,18 @@ protected:
      * @param ackOnly Frame's acknoledge only flag
      */
     void postFrame(IAXFrame::Type type, u_int32_t subclass, void* data = 0, u_int16_t len = 0, u_int32_t tStamp = 0,
+		bool ackOnly = false);
+
+    /**
+     * Constructs an IAXFrameOut frame, send it to remote peer and put it in the transmission list
+     * This method is thread safe
+     * @param type Frame type
+     * @param subclass Frame subclass
+     * @param ies Frame IE list
+     * @param tStamp Frame timestamp. If 0 the transaction timestamp will be used
+     * @param ackOnly Frame's acknoledge only flag
+     */
+    void postFrameIes(IAXFrame::Type type, u_int32_t subclass, IAXIEList* ies, u_int32_t tStamp = 0,
 		bool ackOnly = false);
 
     /**
@@ -1574,7 +1683,7 @@ protected:
      * @param newState The transaction new state
      * @return Pointer to an IAXEvent or 0 (invalid IE list)
      */
-    IAXEvent* createEvent(u_int8_t evType, bool local, const IAXFullFrame* frame, State newState);
+    IAXEvent* createEvent(u_int8_t evType, bool local, IAXFullFrame* frame, State newState);
 
     /**
      * Create an event from a received frame that is a response to a sent frame and
@@ -1748,7 +1857,7 @@ protected:
      * @param delFrame Delete frame flag. If true on exit, a request was found
      * @return A valid IAXEvent or 0
      */
-    IAXEvent* processMidCallControl(const IAXFullFrame* frame, bool& delFrame);
+    IAXEvent* processMidCallControl(IAXFullFrame* frame, bool& delFrame);
 
     /**
      * Process mid call IAX control frames
@@ -1756,7 +1865,7 @@ protected:
      * @param delFrame Delete frame flag. If true on exit, a request was found
      * @return A valid IAXEvent or 0
      */
-    IAXEvent* processMidCallIAXControl(const IAXFullFrame* frame, bool& delFrame);
+    IAXEvent* processMidCallIAXControl(IAXFullFrame* frame, bool& delFrame);
 
     /**
      * Test if frame is a Reject/RegRej frame
@@ -1764,7 +1873,7 @@ protected:
      * @param delFrame Delete frame flag. If true on exit, a request was found
      * @return A valid IAXEvent or 0.
      */
-    IAXEvent* remoteRejectCall(const IAXFullFrame* frame, bool& delFrame);
+    IAXEvent* remoteRejectCall(IAXFullFrame* frame, bool& delFrame);
 
     /**
      * Terminate the transaction if state is Terminating on a remote request
@@ -1818,6 +1927,9 @@ protected:
     }
 
 private:
+    void adjustTStamp(u_int32_t& tStamp);
+    void postFrame(IAXFrameOut* frame);
+
     // Params
     bool m_localInitTrans;			// True: local initiated transaction
     bool m_localReqEnd;				// Local client requested terminate
@@ -1867,6 +1979,7 @@ private:
     u_int32_t m_formatIn;			// Incoming media format
     u_int32_t m_formatOut;			// Outgoing media format
     u_int32_t m_capability;			// Media capability of this transaction
+    bool m_callToken;                           // Call token supported/expected
     // Meta trunking
     IAXMetaTrunkFrame* m_trunkFrame;		// Reference to a trunk frame if trunking is enabled for this transaction
 };
@@ -1979,7 +2092,7 @@ public:
      * @return IE list reference
      */
     inline IAXIEList& getList()
-	{ return m_ieList; }
+	{ return *m_ieList; }
 
 protected:
     /**
@@ -2001,7 +2114,7 @@ protected:
      * @param transaction IAX transaction that generated the event
      * @param frame The frame that generated the event
      */
-    IAXEvent(Type type, bool local, bool final, IAXTransaction* transaction, const IAXFullFrame* frame = 0);
+    IAXEvent(Type type, bool local, bool final, IAXTransaction* transaction, IAXFullFrame* frame = 0);
 
 private:
     inline IAXEvent() {}		// Default constructor
@@ -2012,7 +2125,7 @@ private:
     bool m_local;			// If true the event is generated locally, the receiver MUST not respond
     bool m_final;			// Final event flag
     IAXTransaction* m_transaction;	// Transaction that generated this event
-    IAXIEList m_ieList;			// IAXInfoElement list
+    IAXIEList* m_ieList;		// IAXInfoElement list
 };
 
 /**
@@ -2139,6 +2252,12 @@ public:
         { return m_capability; }
 
     /**
+     * (Re)Initialize the engine
+     * @param params Parameter list
+     */
+    void initialize(const NamedList& params);
+
+    /**
      * Read data from socket
      * @param addr Socket to read from
      */
@@ -2149,10 +2268,19 @@ public:
      * @param buf Data to write
      * @param len Data length
      * @param addr Socket to write to
-     * @param frame Optional frame to be printed if debug is DebugAll
+     * @param frame Optional frame to be printed
      * @return True on success
      */
     bool writeSocket(const void* buf, int len, const SocketAddr& addr, IAXFullFrame* frame = 0);
+
+    /**
+     * Write a full frame to socket
+     * @param addr Socket to write to
+     * @param frame Frame to write
+     * @return True on success
+     */
+    inline bool writeSocket(const SocketAddr& addr, IAXFullFrame* frame)
+	{ return !frame || writeSocket(frame->data().data(),frame->data().length(),addr,frame); }
 
     /**
      * Read events
@@ -2187,6 +2315,15 @@ public:
      */
     virtual bool voiceFormatChanged(IAXTransaction* trans, u_int32_t format)
 	{ return false; }
+
+    /**
+     * Check call token on incoming call requests.
+     * This method is called by the engine when processing an incoming call request
+     * @param addr The address from where the call request was received
+     * @param frame Received frame
+     * @return True if accepted, false to ignore the call
+     */
+    virtual bool checkCallToken(const SocketAddr& addr, IAXFullFrame& frame);
 
     /**
      * Process the initial received format and capability. If accepted on exit will set the transaction format and capability
@@ -2240,6 +2377,25 @@ public:
      * @param password Password source
      */
     static bool isMD5ChallengeCorrect(const String& md5data, const String& challenge, const String& password);
+
+    /**
+     * Build a time signed secret used to authenticate an IP address
+     * @param buf Destination buffer
+     * @param secret Extra secret to add to MD5 sum
+     * @param addr Socket address
+     */
+    static void buildAddrSecret(String& buf, const String& secret,
+	const SocketAddr& addr);
+
+    /**
+     * Decode a secret built using buildAddrSecret()
+     * @param buf Input buffer
+     * @param secret Extra secret to check
+     * @param addr Socket address
+     * @return Secret age, negative if invalid
+     */
+    static int addrSecretAge(const String& buf, const String& secret,
+	const SocketAddr& addr);
 
 protected:
     /**
@@ -2303,6 +2459,12 @@ private:
     u_int16_t m_authTimeout;			// Timeout (in seconds) of acknoledged auth frames sent
     u_int32_t m_transTimeout;			// Timeout (in seconds) on remote request of transactions
     						//  belonging to this engine
+    bool m_callToken;                           // Call token required on incoming calls
+    String m_callTokenSecret;                   // Secret used to generate call tokens
+    int m_callTokenAge;                         // Max allowed call token age
+    bool m_showCallTokenFailures;               // Print incoming call token failures to output
+    bool m_rejectMissingCallToken;              // Reject/ignore incoming calls without call token if mandatory
+    bool m_printMsg;                            // Print frame to output
     // Media
     u_int32_t m_format;				// The default media format
     u_int32_t m_capability;			// The media capability

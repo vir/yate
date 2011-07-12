@@ -1049,6 +1049,7 @@ bool SS7M2PA::decodeSeq(const DataBlock& data,u_int8_t msgType)
 
 void SS7M2PA::timerTick(const Time& when)
 {
+    SS7Layer2::timerTick(when);
     Lock lock(m_mutex);
     if (m_confTimer.started() && m_confTimer.timeout(when.msec())) {
 	sendAck(); // Acknowledge last received message before endpoint drops down the link
@@ -1681,6 +1682,7 @@ int SS7M2UA::getSequence()
 
 void SS7M2UA::timerTick(const Time& when)
 {
+    SS7Layer2::timerTick(when);
     if (m_retrieve.timeout(when.msec())) {
 	m_retrieve.stop();
 	if (m_lastSeqRx == -2) {

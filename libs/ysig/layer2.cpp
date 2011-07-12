@@ -160,6 +160,19 @@ void SS7Layer2::attach(SS7L2User* l2user)
     l2user->attach(this);
 }
 
+void SS7Layer2::timerTick(const Time& when)
+{
+    SignallingComponent::timerTick(when);
+    m_l2userMutex.lock();
+    RefPointer<SS7L2User> tmp = m_notify ? m_l2user : 0;
+    m_notify = false;
+    m_l2userMutex.unlock();
+    if (tmp) {
+	XDebug(this,DebugAll,"SS7Layer2 notifying user [%p]",this);
+	tmp->notify(this);
+    }
+}
+
 void SS7Layer2::notify()
 {
     if (!operational())
@@ -167,10 +180,8 @@ void SS7Layer2::notify()
     else if (!m_lastUp)
 	m_lastUp = Time::secNow();
     m_l2userMutex.lock();
-    RefPointer<SS7L2User> tmp = m_l2user;
+    m_notify = true;
     m_l2userMutex.unlock();
-    if (tmp)
-	tmp->notify(this);
 }
 
 unsigned int SS7Layer2::status() const
@@ -457,6 +468,7 @@ bool SS7MTP2::notify(SignallingInterface::Notification event)
 
 void SS7MTP2::timerTick(const Time& when)
 {
+    SS7Layer2::timerTick(when);
     lock();
     bool tout = m_interval && (when >= m_interval);
     if (tout)

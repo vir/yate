@@ -5247,8 +5247,15 @@ protected:
     inline SS7Layer2()
 	: m_autoEmergency(true), m_lastSeqRx(-1), m_congestion(0),
 	  m_l2userMutex(true,"SS7Layer2::l2user"), m_l2user(0), m_sls(-1),
-	  m_checkTime(0), m_checkFail(0), m_inhibited(Unchecked), m_lastUp(0)
+	  m_checkTime(0), m_checkFail(0), m_inhibited(Unchecked), m_lastUp(0),
+	  m_notify(false)
 	{ }
+
+    /**
+     * Method called periodically by the engine to keep everything alive
+     * @param when Time to use as computing base for events and timeouts
+     */
+    virtual void timerTick(const Time& when);
 
     /**
      * Push a received Message Signal Unit up the protocol stack
@@ -5277,7 +5284,8 @@ protected:
     }
 
     /**
-     * Notify out user part about a status change
+     * Set the notify flag.
+     * The user part will be notified on timer tick about status change
      */
     void notify();
 
@@ -5320,6 +5328,7 @@ private:
     int m_checkFail;
     int m_inhibited;
     u_int32_t m_lastUp;
+    bool m_notify;                       // Notify on timer tick
 };
 
 /**

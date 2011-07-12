@@ -1148,6 +1148,8 @@ void SS7M2PA::setLocalStatus(unsigned int status)
 	return;
     DDebug(this,DebugInfo,"Local status change %s -> %s [%p]",
 	lookup(m_localStatus,s_state),lookup(status,s_state),this);
+    if (status == Ready)
+	m_ackList.clear();
     m_localStatus = status;
 }
 

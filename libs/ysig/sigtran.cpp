@@ -23,6 +23,7 @@
  */
 
 #include "yatesig.h"
+#include <yatephone.h>
 
 #define MAX_UNACK 256
 
@@ -195,6 +196,16 @@ bool SIGTRAN::transmitMSG(unsigned char msgVersion, unsigned char msgClass,
     return trans && trans->transmitMSG(msgVersion,msgClass,msgType,msg,streamId);
 }
 
+bool SIGTRAN::restart(bool force)
+{
+    m_transMutex.lock();
+    RefPointer<SIGTransport> trans = m_trans;
+    m_transMutex.unlock();
+    if (!trans)
+	return false;
+    trans->reconnect(force);
+    return true;
+}
 
 // Attach or detach an user adaptation layer
 void SIGTransport::attach(SIGTRAN* sigtran)
@@ -838,6 +849,14 @@ static TokenDict s_state[] = {
     {0,0}
 };
 
+static const TokenDict s_m2pa_dict_control[] = {
+    { "pause",              SS7M2PA::Pause },
+    { "resume",             SS7M2PA::Resume },
+    { "align",              SS7M2PA::Align },
+    { "transport_restart",  SS7M2PA::TransRestart },
+    { 0, 0 }
+};
+
 SS7M2PA::SS7M2PA(const NamedList& params)
     : SignallingComponent(params.safe("SS7M2PA"),&params),
       SIGTRAN(5,3565),
@@ -1194,7 +1213,31 @@ unsigned int SS7M2PA::status() const
     return SS7Layer2::OutOfService;
 }
 
-bool SS7M2PA::control(Operation oper, NamedList* params)
+bool SS7M2PA::control(NamedList& params)
+{
+    String* ret = params.getParam(YSTRING("completion"));
+    const String* oper = params.getParam(YSTRING("operation"));
+    const char* cmp = params.getValue(YSTRING("component"));
+    int cmd = oper ? oper->toInteger(s_m2pa_dict_control,-1) : -1;
+    if (ret) {
+	if (oper && (cmd < 0))
+	    return false;
+	String part = params.getValue(YSTRING("partword"));
+	if (cmp) {
+	    if (toString() != cmp)
+		return false;
+	    for (const TokenDict* d = s_m2pa_dict_control; d->token; d++)
+		Module::itemComplete(*ret,d->token,part);
+	    return true;
+	}
+	return Module::itemComplete(*ret,toString(),part);
+    }
+    if (!(cmp && toString() == cmp))
+	return false;
+    return (cmd >= 0) && control((M2PAOperations)cmd,&params);
+}
+
+bool SS7M2PA::control(M2PAOperations oper, NamedList* params)
 {
     if (params) {
 	m_autostart = params->getBoolValue(YSTRING("autostart"),m_autostart);
@@ -1220,6 +1263,8 @@ bool SS7M2PA::control(Operation oper, NamedList* params)
 	}
 	case Status:
 	    return operational();
+	case TransRestart:
+	    return restart(true);
 	default:
 	    return false;
     }

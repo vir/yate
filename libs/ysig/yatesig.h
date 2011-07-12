@@ -4517,6 +4517,13 @@ public:
 	const DataBlock& msg, int streamId = 0) const
 	{ return transmitMSG(1,msgClass,msgType,msg,streamId); }
 
+    /**
+     * Restart the underlaying transport
+     * @param force True to hard restart, false to force restart if transport is down
+     * @return True if the transport was notified that it needs to restart
+     */
+    bool restart(bool force);
+
 protected:
     /**
      * Process a complete message
@@ -6516,6 +6523,18 @@ public:
 	Established
     };
 
+    enum M2PAOperations {
+	Pause        = SS7Layer2::Pause,
+	// start link operation, align if it needs to
+	Resume       = SS7Layer2::Resume,
+	// start link, force realignment
+	Align        = SS7Layer2::Align,
+	// get operational status
+	Status       = SS7Layer2::Status,
+	// restart transport layer
+	TransRestart = 0x500
+    };
+
     /**
      * Constructor
      */
@@ -6533,15 +6552,21 @@ public:
      */
     virtual bool initialize(const NamedList* config);
 
+     /**
+     * Query or modify layer's settings or operational parameters
+     * @param params The list of parameters to query or change
+     * @return True if the control operation was executed
+     */
+    virtual bool control(NamedList& params);
+
     /**
      * Execute a control operation. Operations can change the link status or
      *  can query the aligned status.
-     * @param oper Operation to execute
      * @param params Optional parameters for the operation
      * @return True if the command completed successfully, for query operations
      *  also indicates the data link is aligned and operational
      */
-    virtual bool control(Operation oper, NamedList* params = 0);
+    virtual bool control(M2PAOperations oper, NamedList* params = 0);
 
     /**
      * Retrieve the current link status indications

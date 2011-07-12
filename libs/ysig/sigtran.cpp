@@ -841,7 +841,7 @@ static TokenDict s_state[] = {
 SS7M2PA::SS7M2PA(const NamedList& params)
     : SignallingComponent(params.safe("SS7M2PA"),&params),
       SIGTRAN(5,3565),
-      m_seqNr(0xffffff), m_needToAck(0xffffff), m_lastAck(0xffffff),
+      m_seqNr(0xffffff), m_needToAck(0xffffff), m_lastAck(0xffffff), m_maxQueueSize(MAX_UNACK),
       m_localStatus(OutOfService), m_state(OutOfService),
       m_remoteStatus(OutOfService), m_transportState(Idle), m_mutex(true,"SS7M2PA"), m_t1(0),
       m_t2(0), m_t3(0), m_t4(0), m_ackTimer(0), m_confTimer(0), m_oosTimer(0),
@@ -866,6 +866,11 @@ SS7M2PA::SS7M2PA(const NamedList& params)
     m_maxUnack = params.getIntValue(YSTRING("max_unack"),4);
     if (m_maxUnack > 10)
 	m_maxUnack = 10;
+    m_maxQueueSize = params.getIntValue(YSTRING("max_queue_size"),MAX_UNACK);
+    if (m_maxQueueSize < 16)
+	m_maxQueueSize = 16;
+    if (m_maxQueueSize > 65356)
+	m_maxQueueSize = 65356;
     DDebug(this,DebugAll,"Creating SS7M2PA [%p]",this);
 }
 
@@ -978,10 +983,12 @@ bool SS7M2PA::processMSG(unsigned char msgVersion, unsigned char msgClass,
 bool SS7M2PA::nextBsn(u_int32_t bsn) const
 {
     u_int32_t n = (0x1000000 + m_seqNr - bsn) & 0xffffff;
-    if (n > MAX_UNACK)
+    if (n > m_maxQueueSize) {
+	Debug(this,DebugWarn,"Maximum number of unacknowledged messages reached!!!");
 	return false;
+    }
     n = (0x1000000 + bsn - m_lastAck) & 0xffffff;
-    return (n != 0) && (n <= MAX_UNACK);
+    return (n != 0) && (n <= m_maxQueueSize);
 }
 
 bool SS7M2PA::decodeSeq(const DataBlock& data,u_int8_t msgType)

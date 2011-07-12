@@ -6692,6 +6692,7 @@ private:
     u_int32_t m_lastAck;
     u_int32_t m_confCounter;
     u_int32_t m_maxUnack;
+    u_int32_t m_maxQueueSize;
     unsigned int m_localStatus;
     unsigned int m_state;
     unsigned int m_remoteStatus;

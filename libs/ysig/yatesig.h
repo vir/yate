@@ -6704,6 +6704,7 @@ private:
     SignallingTimer m_t4;
     SignallingTimer m_ackTimer;
     SignallingTimer m_confTimer;
+    SignallingTimer m_oosTimer;
     bool m_autostart;
     bool m_dumpMsg;
 };

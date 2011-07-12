@@ -844,7 +844,7 @@ SS7M2PA::SS7M2PA(const NamedList& params)
       m_seqNr(0xffffff), m_needToAck(0xffffff), m_lastAck(0xffffff),
       m_localStatus(OutOfService), m_state(OutOfService),
       m_remoteStatus(OutOfService), m_transportState(Idle), m_mutex(true,"SS7M2PA"), m_t1(0),
-      m_t2(0), m_t3(0), m_t4(0), m_ackTimer(0), m_confTimer(0),
+      m_t2(0), m_t3(0), m_t4(0), m_ackTimer(0), m_confTimer(0), m_oosTimer(0),
       m_autostart(false), m_dumpMsg(false)
 
 {
@@ -860,6 +860,8 @@ SS7M2PA::SS7M2PA(const NamedList& params)
     m_ackTimer.interval(params,"ack_timer",1000,1100,false);
     // Confirmation timer 1/2 t4
     m_confTimer.interval(params,"conf_timer",50,400,false);
+    // Out of service timer
+    m_oosTimer.interval(params,"oos_timer",3000,5000,false);
     // Maximum unacknowledged messages, max_unack+1 will force an ACK
     m_maxUnack = params.getIntValue(YSTRING("max_unack"),4);
     if (m_maxUnack > 10)
@@ -1063,6 +1065,14 @@ void SS7M2PA::timerTick(const Time& when)
 	} else
 	    retransData();
     }
+    if (m_oosTimer.started() && m_oosTimer.timeout(when.msec())) {
+	m_oosTimer.stop();
+	//if (m_transportState == Established)
+	    abortAlignment("Out of service timeout");
+	//else
+	  //  m_oosTimer.start();
+	return;
+    }
     if (m_t2.started() && m_t2.timeout(when.msec())) {
 	m_t2.stop();
 	abortAlignment("T2 timeout");
@@ -1081,6 +1091,7 @@ void SS7M2PA::timerTick(const Time& when)
 	    m_t1.start();
 	    return;
 	}
+	// Retransmit proving state
 	if ((when & 0x3f) == 0)
 	    transmitLS();
     }
@@ -1212,6 +1223,7 @@ void SS7M2PA::startAlignment(bool emergency)
     setLocalStatus(OutOfService);
     transmitLS();
     setLocalStatus(Alignment);
+    m_oosTimer.start();
     SS7Layer2::notify();
 }
 
@@ -1252,6 +1264,7 @@ void SS7M2PA::abortAlignment(const String& info)
     m_needToAck = m_lastAck = m_seqNr = 0xffffff;
     m_confTimer.stop();
     m_ackTimer.stop();
+    m_oosTimer.stop();
     m_t2.stop();
     m_t3.stop();
     m_t4.stop();
@@ -1274,6 +1287,7 @@ bool SS7M2PA::processLinkStatus(DataBlock& data,int streamId)
 	lookup(status,s_state),lookup(m_localStatus,s_state),lookup(m_state,s_state));
     switch (status) {
 	case Alignment:
+	    m_oosTimer.stop();
 	    if (m_t2.started()) {
 		m_t2.stop();
 		setLocalStatus(m_state);
@@ -1316,12 +1330,10 @@ bool SS7M2PA::processLinkStatus(DataBlock& data,int streamId)
 	    setRemoteStatus(status);
 	    m_lastSeqRx = -1;
 	    SS7Layer2::notify();
-	    if (m_t3.started())
-		m_t3.stop();
-	    if (m_t4.started())
-		m_t4.stop();
-	    if (m_t1.started())
-		m_t1.stop();
+	    m_oosTimer.stop();
+	    m_t3.stop();
+	    m_t4.stop();
+	    m_t1.stop();
 	    break;
 	case ProcessorRecovered:
 	    transmitLS();
@@ -1337,6 +1349,7 @@ bool SS7M2PA::processLinkStatus(DataBlock& data,int streamId)
 	    SS7Layer2::notify();
 	    break;
 	case OutOfService:
+	    m_oosTimer.stop();
 	    if (m_localStatus == Ready) {
 		abortAlignment("Received : LinkStatus Out of service, local status Ready");
 		SS7Layer2::notify();

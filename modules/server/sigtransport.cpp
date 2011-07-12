@@ -227,13 +227,14 @@ public:
     ~MessageReader();
     virtual bool readData();
     virtual bool connectSocket()
-	{ return m_transport->connectSocket(); }
+	{ return bindSocket(); }
     virtual bool needConnect()
 	{ return m_transport && m_transport->status() == Transport::Down && !m_transport->listen(); }
     virtual bool sendMSG(const DataBlock& header, const DataBlock& msg, int streamId = 0);
     virtual void setSocket(Socket* s);
     virtual void listen(int maxConn)
 	{ m_socket->listen(maxConn); }
+    bool bindSocket();
 private:
     Socket* m_socket;
     Transport* m_transport;
@@ -586,16 +587,6 @@ bool Transport::initialize(const NamedList* params)
 	addr.port(port);
 	m_reader = new MessageReader(this,0,addr);
 	bindSocket();
-	if (m_type == Sctp) {
-	    // Send a dummy MGMT NTFY message to create the connection
-	    static const unsigned char dummy[8] =
-		{ 1, 0, 0, 1, 0, 0, 0, 8 };
-	    DataBlock hdr((void*)dummy,8,false);
-	    if (m_reader->sendMSG(hdr,DataBlock::empty(),1))
-		m_reader->listen(1);
-	    hdr.clear(false);
-	    setStatus(Up);
-	}
     }
     m_reader->start();
     return true;
@@ -646,12 +637,16 @@ bool Transport::bindSocket()
     if (!socket)
 	return false;
     if (!socket->valid()) {
-	Debug(this,DebugWarn,"Unable to create listener socket: %s",
+	Debug(this,DebugWarn,"Unable to create message socket: %s",
 	    strerror(socket->error()));
+	socket->terminate();
+	delete socket;
 	return false;
     }
     if (!socket->setBlocking(false)) {
-	Debug(this,DebugWarn,"Unable to set listener to nonblocking mode");
+	Debug(this,DebugWarn,"Unable to set message socket to nonblocking mode");
+	socket->terminate();
+	delete socket;
 	return false;
     }
     SocketAddr addr(AF_INET);
@@ -661,16 +656,32 @@ bool Transport::bindSocket()
     addr.host(address);
     addr.port(port);
     if (!socket->bind(addr)) {
-	Debug(DebugNote,"Unable to bind to %s:%u: %d: %s",
+	Debug(DebugMild,"Unable to bind to %s:%u: %d: %s",
 	    addr.host().c_str(),addr.port(),errno,strerror(errno));
+	socket->terminate();
+	delete socket;
 	return false;
     } else
-	Debug(this,DebugAll,"Socket bound to %s:%u",addr.host().c_str(),addr.port());
-    if (multi && !addAddress(m_config,socket))
+	DDebug(this,DebugAll,"Socket bound to %s:%u",addr.host().c_str(),addr.port());
+    if (multi && !addAddress(m_config,socket)) {
+	socket->terminate();
+	delete socket;
 	return false;
+    }
     m_reader->setSocket(socket);
-    if (m_type == Transport::Udp)
-	setStatus(Up);
+    int linger = m_config.getIntValue("linger",0);
+    socket->setLinger(linger);
+    setStatus(Up);
+    if (m_type == Sctp) {
+	// Send a dummy MGMT NTFY message to create the connection
+	static const unsigned char dummy[8] =
+		{ 1, 0, 0, 1, 0, 0, 0, 8 };
+	DataBlock hdr((void*)dummy,8,false);
+	setStatus(Initiating);
+	if (m_reader->sendMSG(hdr,DataBlock::empty(),1))
+	    m_reader->listen(1);
+	hdr.clear(false);
+    }
     return true;
 }
 
@@ -1186,6 +1197,27 @@ void MessageReader::setSocket(Socket* s)
     m_socket = s;
 }
 
+bool MessageReader::bindSocket()
+{
+    Time t;
+    if (t < m_tryAgain) {
+	Thread::yield(true);
+	return false;
+    }
+    m_tryAgain = t + m_interval;
+    Lock mylock(m_sending);
+    if (m_transport->bindSocket()) {
+	m_interval = CONN_RETRY_MIN;
+	return true;
+    }
+    m_tryAgain = Time::now() + m_interval;
+    // exponential backoff
+    m_interval *= 2;
+    if (m_interval > CONN_RETRY_MAX)
+	m_interval = CONN_RETRY_MAX;
+    return false;
+}
+
 bool MessageReader::sendMSG(const DataBlock& header, const DataBlock& msg, int streamId)
 {
     if (!m_canSend) {
@@ -1239,6 +1271,8 @@ bool MessageReader::sendMSG(const DataBlock& header, const DataBlock& msg, int s
 
 bool MessageReader::readData()
 {
+    if (!m_socket && !bindSocket())
+	return false;
     bool readOk = false,error = false;
     if (!(running() && m_socket && m_socket->select(&readOk,0,&error,Thread::idleUsec())))
 	return false;
@@ -1273,12 +1307,14 @@ bool MessageReader::readData()
 		return true;
 	    }
 	    DDebug(m_transport,DebugNote,"Message error [%p] %d",m_socket,flags);
+	    if (m_transport->status() != Transport::Up)
+		return false;
+	    Lock lock(m_sending);
 	    m_transport->setStatus(Transport::Initiating);
-	    m_tryAgain = Time::now() + m_interval;
-	    // exponential backoff
-	    m_interval *= 2;
-	    if (m_interval > CONN_RETRY_MAX)
-		m_interval = CONN_RETRY_MAX;
+	    Debug(m_transport,DebugInfo,"Terminating socket [%p] Reason: connection down!",m_socket);
+	    m_socket->terminate();
+	    delete m_socket;
+	    m_socket = 0;
 	    return false;
 	}
     }

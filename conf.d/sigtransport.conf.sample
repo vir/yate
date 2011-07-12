@@ -39,6 +39,9 @@
 ;  false to listen for remote connections
 ;endpoint=false
 
+; linger: int; How much to block waiting for socket to close.
+;linger = 0
+
 
 ; SCTP parameters
 ; NOTE these parameters will be set only for SCTP sockets
@@ -66,3 +69,4 @@
 ; Enable / disable SCTP heartbeat. Default is enabled
 ; Ex: hb_enabled = true
 ;hb_enabled=
+

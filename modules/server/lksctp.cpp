@@ -50,6 +50,7 @@ public:
     virtual bool setPayload(u_int32_t payload)
 	{ m_payload = payload; return true; }
     virtual int sendTo(void* buf, int buflen, int stream, SocketAddr& addr, int flags);
+    virtual bool setParams(const NamedList& params);
     virtual bool valid() const;
     bool sctpDown(void* buf);
     bool sctpUp(void* buf);
@@ -203,6 +204,42 @@ bool LKSocket::subscribeEvents()
     events.sctp_shutdown_event = 1;
     events.sctp_association_event = 1;
     return setOption(IPPROTO_SCTP,SCTP_EVENTS, &events, sizeof(events));
+}
+
+bool LKSocket::setParams(const NamedList& params)
+{
+    bool ret = false;
+    bool aux = false;
+    if (params.getParam(YSTRING("rto_initial")) || params.getParam(YSTRING("rto_max")) ||
+	    params.getParam(YSTRING("rto_min"))) {
+	struct sctp_rtoinfo rto;
+	bzero(&rto, sizeof(rto));
+	rto.srto_initial = params.getIntValue("rto_initial",0);
+	rto.srto_max = params.getIntValue("rto_max",0);
+	rto.srto_min = params.getIntValue("rto_min",0);
+	aux = setOption(IPPROTO_SCTP,SCTP_RTOINFO, &rto, sizeof(rto));
+	if (!aux)
+	    Debug(&plugin,DebugNote,"Failed to set SCTP RTO params! Reason: %s",strerror(errno));
+	ret |= aux;
+    }
+    struct sctp_paddrparams paddr_params;
+    bzero(&paddr_params, sizeof(paddr_params));
+    if (params.getParam(YSTRING("hb_interval")))
+	paddr_params.spp_hbinterval = params.getIntValue(YSTRING("hb_interval"),0);
+    if (params.getParam(YSTRING("max_retrans")))
+	paddr_params.spp_pathmaxrxt = params.getIntValue(YSTRING("max_retrans"),0);
+    bool hbEnabled = params.getBoolValue(YSTRING("hb_enabled"),true);
+    paddr_params.spp_flags |= hbEnabled ? SPP_HB_ENABLE : SPP_HB_DISABLE;
+    if (params.getParam(YSTRING("hb_0")))
+	paddr_params.spp_flags |= SPP_HB_TIME_IS_ZERO;
+    if (params.getParam(YSTRING("hb_demand")))
+	paddr_params.spp_flags |= SPP_HB_DEMAND;
+    aux = setOption(IPPROTO_SCTP,SCTP_PEER_ADDR_PARAMS, &paddr_params, sizeof(paddr_params));
+    ret |= aux;
+    if (!aux)
+	Debug(&plugin,DebugNote,"Failed to set SCTP paddr params! Reason: %s",strerror(errno));
+    aux = Socket::setParams(params);
+    return ret || aux;
 }
 
 bool LKSocket::valid() const

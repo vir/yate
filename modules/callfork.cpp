@@ -51,7 +51,7 @@ public:
 protected:
     void clear(bool softly);
     String* getNextDest();
-    bool forkSlave(const char* dest);
+    bool forkSlave(String* dest);
     bool callContinue();
     ObjList m_slaves;
     String m_ringing;
@@ -191,7 +191,7 @@ String* ForkMaster::getNextDest()
     return ret;
 }
 
-bool ForkMaster::forkSlave(const char* dest)
+bool ForkMaster::forkSlave(String* dest)
 {
     if (null(dest))
 	return false;
@@ -199,9 +199,12 @@ bool ForkMaster::forkSlave(const char* dest)
     m_exec->clearParam("error");
     m_exec->clearParam("reason");
     Message msgCopy(*m_exec);
-    msgCopy.setParam("callto",dest);
+    msgCopy.setParam("callto",*dest);
     msgCopy.setParam("rtp_forward",String::boolText(m_rtpForward));
     msgCopy.setParam("cdrtrack",String::boolText(false));
+    NamedList* params = YOBJECT(NamedList,dest);
+    if (params)
+	msgCopy.copyParams(*params);
     if (m_execNext) {
 	RefPointer<CallEndpoint> peer = getPeer();
 	if (!peer) {
@@ -209,7 +212,7 @@ bool ForkMaster::forkSlave(const char* dest)
 	    return false;
 	}
 	Debug(&__plugin,DebugCall,"Call '%s' directly to target '%s'",
-	    peer->id().c_str(),dest);
+	    peer->id().c_str(),dest->c_str());
 	msgCopy.userData(peer);
 	msgCopy.setParam("id",peer->id());
 	msgCopy.clearParam("cdrtrack");
@@ -242,7 +245,7 @@ bool ForkMaster::forkSlave(const char* dest)
 		    level = DebugCall;
 		}
 		Debug(&__plugin,level,"Call '%s' did not get RTP forward from '%s' target '%s'",
-		    getPeerId().c_str(),slave->getPeerId().c_str(),dest);
+		    getPeerId().c_str(),slave->getPeerId().c_str(),dest->c_str());
 	    }
 	}
 	m_exec->copyParams(msgCopy,"error,reason,rtp_forward");
@@ -253,7 +256,7 @@ bool ForkMaster::forkSlave(const char* dest)
     if (ok) {
 	ForkSlave::Type type = static_cast<ForkSlave::Type>(msgCopy.getIntValue("fork.calltype",s_calltypes,ForkSlave::Regular));
 	Debug(&__plugin,DebugCall,"Call '%s' calling on %s '%s' target '%s'",
-	    getPeerId().c_str(),lookup(type,s_calltypes),tmp.c_str(),dest);
+	    getPeerId().c_str(),lookup(type,s_calltypes),tmp.c_str(),dest->c_str());
 	slave->setType(type);
 	m_slaves.append(slave);
 	if (autoring) {
@@ -356,7 +359,7 @@ bool ForkMaster::callContinue()
 		break;
 	    continue;
 	}
-	if (forkSlave(*dest))
+	if (forkSlave(dest))
 	    ++forks;
 	dest->destruct();
     }
@@ -687,9 +690,41 @@ bool ForkModule::msgExecute(Message& msg)
     String dest(msg.getParam("callto"));
     if (!dest.startSkip(MOD_PREFIX))
 	return false;
-    ObjList* targets = dest.split(' ',false);
-    if (!targets)
+    ObjList* targets = 0;
+    if (dest)
+	targets = dest.split(' ',false);
+    else {
+	for (int n = 1; true; n++) {
+	    String prefix;
+	    prefix << "callto." << n;
+	    NamedString* ns = msg.getParam(prefix);
+	    if (!ns)
+		break;
+	    if (TelEngine::null(ns))
+		continue;
+	    // Set target parameters from enclosed list
+	    // Override/add new params from message sub-params
+	    NamedPointer* np = YOBJECT(NamedPointer,ns);
+	    NamedList* target = YOBJECT(NamedList,np);
+	    if (target) {
+		np->takeData();
+		target->assign(*ns);
+	    }
+	    else
+		target = new NamedList(*ns);
+	    target->copySubParams(msg,prefix + ".");
+	    if (!targets)
+		targets = new ObjList;
+	    targets->append(target);
+	    // Clear from initial message
+	    msg.clearParam(prefix,'.');
+	}
+    }
+    if (!(targets && targets->skipNull())) {
+	msg.setParam("error","failure");
+	TelEngine::destruct(targets);
 	return false;
+    }
     CallEndpoint::commonMutex().lock();
     ForkMaster* master = new ForkMaster(targets);
     bool ok = master->connect(ch,msg.getValue("reason")) && master->startCalling(msg);

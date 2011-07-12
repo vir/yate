@@ -117,16 +117,19 @@ class TReader : public TransportWorker, public Mutex
 public:
     inline TReader()
 	: Mutex(true,"TReader"),
-	  m_sending(true,"TReader::sending"), m_canSend(true),
+	  m_sending(true,"TReader::sending"), m_canSend(true), m_reconnect(false),
           m_tryAgain(0), m_interval(CONN_RETRY_MIN)
 	{ }
     virtual ~TReader();
     virtual void listen(int maxConn) = 0;
     virtual bool sendMSG(const DataBlock& header, const DataBlock& msg, int streamId = 0) = 0;
     virtual void setSocket(Socket* s) = 0;
+    void reconnect()
+	{ m_reconnect = true; }
     Mutex m_sending;
     bool m_canSend;
 protected:
+    bool m_reconnect;
     u_int64_t m_tryAgain;
     u_int32_t m_interval;
 };
@@ -177,6 +180,7 @@ public:
 	{ return m_state == Up;}
     virtual void attached(bool ual)
 	{ }
+    virtual void reconnect(bool force);
     bool connectSocket();
     u_int32_t getMsgLen(unsigned char* buf);
     bool addAddress(const NamedList &param, Socket* socket);
@@ -541,17 +545,32 @@ Transport::~Transport()
 
 bool Transport::control(const NamedList &param)
 {
-    String oper = param.getValue("operation","init");
-    if (oper == "init")
+    String oper = param.getValue(YSTRING("operation"),YSTRING("init"));
+    if (oper == YSTRING("init"))
 	return initialize(&param);
-    else if (oper == "add_addr") {
+    else if (oper == YSTRING("add_addr")) {
 	if (!m_listener) {
 	    Debug(this,DebugWarn,"Unable to listen on another address, listener is missing");
 	    return false;
 	}
 	return m_listener->addAddress(param);
+    } else if (oper == YSTRING("reconnect")) {
+	reconnect(true);
+	return true;
     }
     return false;
+}
+
+void Transport::reconnect(bool force)
+{
+    if (!m_reader) {
+	Debug(this,DebugWarn,"Request to reconnect but the transport is not initialized!!");
+	return;
+    }
+    if (m_state == Up && !force)
+	return;
+    Debug(this,DebugInfo,"Transport reconnect requested");
+    m_reader->reconnect();
 }
 
 bool Transport::initialize(const NamedList* params)
@@ -940,6 +959,7 @@ void StreamReader::setSocket(Socket* s)
 {
     if (!s || s == m_socket)
 	return;
+    m_reconnect = false;
     Socket* temp = m_socket;
     m_socket = s;
     if (temp) {
@@ -1037,6 +1057,11 @@ bool StreamReader::readData()
     if (!m_socket)
 	return false;
     m_sending.lock();
+    if (m_reconnect) {
+	connectionDown();
+	m_sending.unlock();
+	return false;
+    }
     sendBuffer();
     m_sending.unlock();
     int stream = 0, len = 0;
@@ -1190,6 +1215,7 @@ void MessageReader::setSocket(Socket* s)
 {
     if (!s || s == m_socket)
 	return;
+    m_reconnect = false;
     if (m_socket) {
 	m_socket->terminate();
 	delete m_socket;
@@ -1271,6 +1297,18 @@ bool MessageReader::sendMSG(const DataBlock& header, const DataBlock& msg, int s
 
 bool MessageReader::readData()
 {
+    Lock reconLock(m_sending);
+    // If m_socket is null We are already reconnecting
+    if (m_socket && m_reconnect) {
+	if (m_transport->status() != Transport::Up)
+	    return false; // We are already in reconnecting state
+	m_transport->setStatus(Transport::Initiating);
+	m_socket->terminate();
+	delete m_socket;
+	m_socket = 0;
+	return false;
+    }
+    reconLock.drop();
     if (!m_socket && !bindSocket())
 	return false;
     bool readOk = false,error = false;

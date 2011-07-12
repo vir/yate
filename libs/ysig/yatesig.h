@@ -4281,6 +4281,13 @@ public:
     bool processMSG(unsigned char msgVersion, unsigned char msgClass,
 	unsigned char msgType, const DataBlock& msg, int streamId) const;
 
+    /**
+     * Force the underlaying transport to reconnect
+     * @param force True to force transport socket reconnection
+     */
+    virtual void reconnect(bool force = false)
+	{ }
+
 protected:
     /**
      * Constructor

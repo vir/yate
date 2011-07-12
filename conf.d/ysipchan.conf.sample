@@ -238,7 +238,7 @@
 ;ignore_sdp_port=no
 
 
-[listener general]
+;[listener general]
 ; This section has the following purposes:
 ; - Maintain compatibility with old configuration
 ; - Setup an UDP listener named 'general'

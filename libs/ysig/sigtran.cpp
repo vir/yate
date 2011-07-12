@@ -1093,10 +1093,10 @@ void SS7M2PA::timerTick(const Time& when)
     }
     if (m_oosTimer.started() && m_oosTimer.timeout(when.msec())) {
 	m_oosTimer.stop();
-	//if (m_transportState == Established)
+	if (m_transportState == Established)
 	    abortAlignment("Out of service timeout");
-	//else
-	  //  m_oosTimer.start();
+	else
+	    m_oosTimer.start();
 	return;
     }
     if (m_t2.started() && m_t2.timeout(when.msec())) {

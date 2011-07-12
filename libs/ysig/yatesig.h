@@ -6562,6 +6562,7 @@ public:
     /**
      * Execute a control operation. Operations can change the link status or
      *  can query the aligned status.
+     * @param oper Operation to execute
      * @param params Optional parameters for the operation
      * @return True if the command completed successfully, for query operations
      *  also indicates the data link is aligned and operational

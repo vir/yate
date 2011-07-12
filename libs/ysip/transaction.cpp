@@ -577,8 +577,13 @@ SIPEvent* SIPTransaction::getClientEvent(int state, int timeout)
     switch (state) {
 	case Initial:
 	    e = new SIPEvent(m_firstMessage,this);
-	    if (changeState(Trying))
-		setTimeout(m_engine->getTimer(isInvite() ? 'A' : 'E'),5);
+	    if (changeState(Trying)) {
+		bool reliable = e->getParty() && e->getParty()->isReliable();
+		if (!reliable)
+		    setTimeout(m_engine->getTimer(isInvite() ? 'A' : 'E'),5);
+		else
+		    setTimeout(m_engine->getTimer(isInvite() ? 'B' : 'F',true),1);
+	    }
 	    break;
 	case Trying:
 	    if (timeout < 0)

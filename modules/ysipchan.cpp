@@ -151,7 +151,7 @@ public:
 	: ProtocolHolder(Udp),
 	m_party(0), m_partyMutex(mutex), m_transLocalPort(0), m_transRemotePort(0)
 	{}
-    inline ~YateSIPPartyHolder()
+    virtual ~YateSIPPartyHolder()
 	{ setParty(); }
     // Retrieve a referrenced pointer to the held party
     inline SIPParty* party() {

@@ -38,3 +38,31 @@
 ; endpoint: bool: Set to true if this is an endpoint that actively tries to connect,
 ;  false to listen for remote connections
 ;endpoint=false
+
+
+; SCTP parameters
+; NOTE these parameters will be set only for SCTP sockets
+
+; Set initial retransmission interval in milliseconds
+; Ex: rto_initial = 400
+;rto_initial=
+
+; Set maximum retransmission interval in milliseconds
+; Ex: rto_max = 800
+;rto_max=
+
+; Set minimum retransmission interval in milliseconds
+; Ex: rto_min = 200
+;rto_min=
+
+; Set heartbeat interval in milliseconds
+; Ex: hb_interval = 5000
+;hb_interval=
+
+; Set maximum number of retransmissions before the SCTP connection is considered down
+; Ex: max_retrans = 5
+;max_retrans=
+
+; Enable / disable SCTP heartbeat. Default is enabled
+; Ex: hb_enabled = true
+;hb_enabled=

@@ -729,6 +729,8 @@ bool Transport::connectSocket()
 		Debug(this,DebugWarn,"Unable to subscribe to Sctp events");
 		m_supportEvents = false;
 	    }
+	    if (!socket->setParams(m_config))
+		Debug(this,DebugWarn,"Failed to set SCTP params!");
 	    int ppid = sigtran() ? sigtran()->payload() : 0;
 	    ppid = m_config.getIntValue("payload",ppid);
 	    if (ppid > 0)
@@ -875,6 +877,8 @@ bool Transport::addSocket(Socket* socket,SocketAddr& adress)
 		DDebug(this,DebugInfo,"Sctp subscribe events failed");
 		m_supportEvents = false;
 	    }
+	    if (!soc->setParams(m_config))
+		Debug(this,DebugWarn,"Failed to set SCTP params!");
 	    int ppid = sigtran() ? sigtran()->payload() : 0;
 	    ppid = m_config.getIntValue("payload",ppid);
 	    if (ppid > 0)

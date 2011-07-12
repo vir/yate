@@ -1746,6 +1746,7 @@ bool SLT::aligned() const
 // if we don't receive it we resend the configuration request
 void SLT::timerTick(const Time& when)
 {
+    SS7Layer2::timerTick(when);
     if (m_confReqTimer.timeout()) {
 	sendManagement(Configuration_R);
 	m_confReqTimer.stop();

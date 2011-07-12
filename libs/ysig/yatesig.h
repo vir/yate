@@ -4281,6 +4281,13 @@ public:
     bool processMSG(unsigned char msgVersion, unsigned char msgClass,
 	unsigned char msgType, const DataBlock& msg, int streamId) const;
 
+    /**
+     * Force the underlaying transport to reconnect
+     * @param force True to force transport socket reconnection
+     */
+    virtual void reconnect(bool force = false)
+	{ }
+
 protected:
     /**
      * Constructor
@@ -4509,6 +4516,13 @@ public:
     inline bool transmitMSG(unsigned char msgClass, unsigned char msgType,
 	const DataBlock& msg, int streamId = 0) const
 	{ return transmitMSG(1,msgClass,msgType,msg,streamId); }
+
+    /**
+     * Restart the underlaying transport
+     * @param force True to hard restart, false to force restart if transport is down
+     * @return True if the transport was notified that it needs to restart
+     */
+    bool restart(bool force);
 
 protected:
     /**
@@ -5247,8 +5261,15 @@ protected:
     inline SS7Layer2()
 	: m_autoEmergency(true), m_lastSeqRx(-1), m_congestion(0),
 	  m_l2userMutex(true,"SS7Layer2::l2user"), m_l2user(0), m_sls(-1),
-	  m_checkTime(0), m_checkFail(0), m_inhibited(Unchecked), m_lastUp(0)
+	  m_checkTime(0), m_checkFail(0), m_inhibited(Unchecked), m_lastUp(0),
+	  m_notify(false)
 	{ }
+
+    /**
+     * Method called periodically by the engine to keep everything alive
+     * @param when Time to use as computing base for events and timeouts
+     */
+    virtual void timerTick(const Time& when);
 
     /**
      * Push a received Message Signal Unit up the protocol stack
@@ -5277,7 +5298,8 @@ protected:
     }
 
     /**
-     * Notify out user part about a status change
+     * Set the notify flag.
+     * The user part will be notified on timer tick about status change
      */
     void notify();
 
@@ -5320,6 +5342,7 @@ private:
     int m_checkFail;
     int m_inhibited;
     u_int32_t m_lastUp;
+    bool m_notify;                       // Notify on timer tick
 };
 
 /**
@@ -6500,6 +6523,18 @@ public:
 	Established
     };
 
+    enum M2PAOperations {
+	Pause        = SS7Layer2::Pause,
+	// start link operation, align if it needs to
+	Resume       = SS7Layer2::Resume,
+	// start link, force realignment
+	Align        = SS7Layer2::Align,
+	// get operational status
+	Status       = SS7Layer2::Status,
+	// restart transport layer
+	TransRestart = 0x500
+    };
+
     /**
      * Constructor
      */
@@ -6517,6 +6552,13 @@ public:
      */
     virtual bool initialize(const NamedList* config);
 
+     /**
+     * Query or modify layer's settings or operational parameters
+     * @param params The list of parameters to query or change
+     * @return True if the control operation was executed
+     */
+    virtual bool control(NamedList& params);
+
     /**
      * Execute a control operation. Operations can change the link status or
      *  can query the aligned status.
@@ -6525,7 +6567,7 @@ public:
      * @return True if the command completed successfully, for query operations
      *  also indicates the data link is aligned and operational
      */
-    virtual bool control(Operation oper, NamedList* params = 0);
+    virtual bool control(M2PAOperations oper, NamedList* params = 0);
 
     /**
      * Retrieve the current link status indications
@@ -6676,6 +6718,7 @@ private:
     u_int32_t m_lastAck;
     u_int32_t m_confCounter;
     u_int32_t m_maxUnack;
+    u_int32_t m_maxQueueSize;
     unsigned int m_localStatus;
     unsigned int m_state;
     unsigned int m_remoteStatus;
@@ -6688,6 +6731,7 @@ private:
     SignallingTimer m_t4;
     SignallingTimer m_ackTimer;
     SignallingTimer m_confTimer;
+    SignallingTimer m_oosTimer;
     bool m_autostart;
     bool m_dumpMsg;
 };

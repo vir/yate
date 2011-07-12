@@ -70,10 +70,12 @@ static TokenDict sip_responses[] = {
     { "Interval Too Brief", 423 },
     { "Use Identity Header", 428 },
     { "Provide Referrer Identity", 429 },
+    { "Flow Failed", 430 },                                // RFC5626
     { "Anonymity Disallowed", 433 },
     { "Bad Identity-Info", 436 },
     { "Unsupported Certificate", 437 },
     { "Invalid Identity Header", 438 },
+    { "First Hop Lacks Outbound Support", 439 },           // RFC5626
     { "Consent Needed", 470 },
     { "Temporarily Unavailable", 480 },
     { "Call/Transaction Does Not Exist", 481 },
@@ -108,14 +110,14 @@ static TokenDict sip_responses[] = {
 
 TokenDict* TelEngine::SIPResponses = sip_responses;
 
-SIPParty::SIPParty()
-    : m_reliable(false)
+SIPParty::SIPParty(Mutex* mutex)
+    : m_mutex(mutex), m_reliable(false), m_localPort(0), m_partyPort(0)
 {
     DDebug(DebugAll,"SIPParty::SIPParty() [%p]",this);
 }
 
-SIPParty::SIPParty(bool reliable)
-    : m_reliable(reliable)
+SIPParty::SIPParty(bool reliable, Mutex* mutex)
+    : m_mutex(mutex), m_reliable(reliable), m_localPort(0), m_partyPort(0)
 {
     DDebug(DebugAll,"SIPParty::SIPParty(%d) [%p]",reliable,this);
 }
@@ -123,6 +125,24 @@ SIPParty::SIPParty(bool reliable)
 SIPParty::~SIPParty()
 {
     DDebug(DebugAll,"SIPParty::~SIPParty() [%p]",this);
+}
+
+void SIPParty::setAddr(const String& addr, int port, bool local)
+{
+    Lock lock(m_mutex);
+    String& a = local ? m_local : m_party;
+    int& p = local ? m_localPort : m_partyPort;
+    a = addr;
+    p = port;
+    DDebug(DebugAll,"SIPParty updated %s address '%s:%d' [%p]",
+	local ? "local" : "remote",a.c_str(),p,this);
+}
+
+void SIPParty::getAddr(String& addr, int& port, bool local)
+{
+    Lock lock(m_mutex);
+    addr = local ? m_local : m_party;
+    port = local ? m_localPort : m_partyPort;
 }
 
 
@@ -290,7 +310,6 @@ void SIPEngine::processEvent(SIPEvent *event)
 {
     if (!event)
 	return;
-    Lock lock(this);
     const char* type = "unknown";
     if (event->isOutgoing())
 	type = "outgoing";

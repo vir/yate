@@ -5919,6 +5919,13 @@ public:
     virtual bool getOption(int level, int name, void* buffer, socklen_t* length);
 
     /**
+     * Set specific socket parameters.
+     * @param params List of parameters
+     */
+    virtual bool setParams(const NamedList& params)
+	{ return false; }
+
+    /**
      * Set the Type of Service on the IP level of this socket
      * @param tos New TOS bits to set
      * @return True if operation was successfull, false if an error occured

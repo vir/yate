@@ -50,12 +50,15 @@ public:
     virtual bool setPayload(u_int32_t payload)
 	{ m_payload = payload; return true; }
     virtual int sendTo(void* buf, int buflen, int stream, SocketAddr& addr, int flags);
+    virtual bool valid() const;
     bool sctpDown(void* buf);
     bool sctpUp(void* buf);
+    bool alive() const;
 private:
     int m_inbound;
     int m_outbound;
     u_int32_t m_payload;
+    sctp_assoc_t m_assocId;
 };
 
 class LKHandler : public MessageHandler
@@ -183,7 +186,7 @@ bool LKSocket::setStreams(int inbound, int outbound)
     memset(&initMsg,0,sizeof(initMsg));
     initMsg.sinit_max_instreams = inbound;
     initMsg.sinit_num_ostreams = outbound;
-    if (setsockopt(handle(),IPPROTO_SCTP,SCTP_INITMSG,&initMsg,sizeof(initMsg)) < 0) {
+    if (!setOption(IPPROTO_SCTP,SCTP_INITMSG,&initMsg,sizeof(initMsg))) {
 	DDebug(&plugin,DebugNote,"Unable to set streams number. Error: %s",strerror(errno));
 	return false;
     }
@@ -199,16 +202,69 @@ bool LKSocket::subscribeEvents()
     events.sctp_peer_error_event = 1;
     events.sctp_shutdown_event = 1;
     events.sctp_association_event = 1;
-    int ret = setsockopt(handle(),IPPROTO_SCTP,SCTP_EVENTS, &events, sizeof(events));
-    return (ret != -1);
+    return setOption(IPPROTO_SCTP,SCTP_EVENTS, &events, sizeof(events));
+}
+
+bool LKSocket::valid() const
+{
+    if (!Socket::valid())
+	return false;
+    return alive();
+}
+
+bool LKSocket::alive() const
+{
+    struct sctp_status status;
+    int statusLen = sizeof(status);
+    bzero(&status, statusLen);
+    socklen_t len = statusLen;
+    int ret = sctp_opt_info(handle(),m_assocId,SCTP_STATUS, &status, &len);
+    if (ret < 0)
+	return true;
+    bool localUp = true;
+    switch (status.sstat_state) {
+	case SCTP_CLOSED:
+	case SCTP_SHUTDOWN_PENDING:
+	case SCTP_SHUTDOWN_SENT:
+	case SCTP_SHUTDOWN_RECEIVED:
+	case SCTP_SHUTDOWN_ACK_SENT:
+	    localUp = false;
+    }
+    localUp = localUp && status.sstat_primary.spinfo_state == SCTP_ACTIVE;
+    if (localUp)
+	return true;
+#ifdef DEBUG
+#define MAKE_CASE(x,y) case SCTP_##x: \
+	    Debug(&plugin,DebugNote,"%s sctp status : SCTP_%s",#y,#x); \
+	    break;
+    switch (status.sstat_primary.spinfo_state) {
+	MAKE_CASE(ACTIVE,Remote);
+	MAKE_CASE(INACTIVE,Remote);
+    }
+    switch (status.sstat_state) {
+	MAKE_CASE(EMPTY,Local);
+	MAKE_CASE(CLOSED,Local);
+	MAKE_CASE(COOKIE_WAIT,Local);
+	MAKE_CASE(COOKIE_ECHOED,Local);
+	MAKE_CASE(ESTABLISHED,Local);
+	MAKE_CASE(SHUTDOWN_PENDING,Local);
+	MAKE_CASE(SHUTDOWN_SENT,Local);
+	MAKE_CASE(SHUTDOWN_RECEIVED,Local);
+	MAKE_CASE(SHUTDOWN_ACK_SENT,Local);
+	default:
+	    Debug(&plugin,DebugNote,"Unknown SCTP local State : 0x0%x",status.sstat_state);
+    }
+#undef MAKE_CASE
+#endif
+    return false;
 }
 
 bool LKSocket::getStreams(int& in, int& out)
 {
     sctp_status status;
     memset(&status,0,sizeof(status));
-    socklen_t len;
-    if (getsockopt(handle(),IPPROTO_SCTP,SCTP_STATUS, &status,&len) < 0) {
+    socklen_t len = sizeof(status);
+    if (!getOption(IPPROTO_SCTP,SCTP_STATUS, &status,&len)) {
 	DDebug(&plugin,DebugNote,"Unable to find the number of negotiated streams: %s",
 	    strerror(errno));
 	return false;
@@ -248,6 +304,7 @@ bool LKSocket::sctpUp(void* buf)
 	return false;
     switch (sn->sn_assoc_change.sac_state) {
 	case SCTP_COMM_UP:
+	    m_assocId = sn->sn_assoc_change.sac_assoc_id;
 	    return true;
     }
     return false;

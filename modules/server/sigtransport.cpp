@@ -976,6 +976,11 @@ bool StreamReader::sendBuffer(int streamId)
 	    Debug(m_transport,DebugGoOn,"Sctp conversion failed");
 	    return false;
 	}
+	if (m_transport->status() == Transport::Up)
+	    if (!s->valid()) {
+		connectionDown();
+		return false;
+	    }
 	int flags = 0;
 	len = s->sendMsg(m_sendBuffer.data(),m_sendBuffer.length(),streamId,flags);
     }
@@ -1127,12 +1132,16 @@ bool StreamReader::readData()
 }
 
 void StreamReader::connectionDown() {
-    DDebug(m_transport,DebugWarn,"Connection down [%p]",m_socket);
+    Debug(m_transport,DebugMild,"Connection down [%p]",m_socket);
     m_transport->setStatus(Transport::Down);
     while (!m_sending.lock(Thread::idleUsec()))
 	Thread::yield();
     m_canSend = false;
     m_sendBuffer.clear();
+    if (!m_socket) {
+	m_sending.unlock();
+	return;
+    }
     m_socket->terminate();
     if (m_transport->listen())
 	stop();

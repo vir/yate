@@ -708,7 +708,7 @@ int IAXEngine::addrSecretAge(const String& buf, const String& secret, const Sock
     int t = buf.substr(pos + 1).toInteger();
     String tmp;
     buildSecretDigest(tmp,secret,t,addr);
-    return (tmp == buf.substr(0,pos)) ? (Time::secNow() - t) : -1;
+    return (tmp == buf.substr(0,pos)) ? ((int)Time::secNow() - t) : -1;
 }
 
 /*

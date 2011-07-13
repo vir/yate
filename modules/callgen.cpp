@@ -216,7 +216,7 @@ bool GenConnection::oneCall(String* target)
     if (lifetime) {
 	int minlife = s_cfg.getIntValue(s_parameters,YSTRING("minlife"));
 	if (minlife)
-	    lifetime -= (int)(((lifetime - minlife) * (int64_t)::random()) / RAND_MAX);
+	    lifetime -= (int)(((lifetime - minlife) * (int64_t)Random::random()) / RAND_MAX);
     }
     GenConnection* conn = new GenConnection(lifetime,callto);
     m.addParam("id",conn->id());
@@ -381,7 +381,7 @@ void GenThread::run()
 	tonext = s_cfg.getIntValue(s_parameters,YSTRING("avgdelay"),1000);
 	lock.drop();
 	GenConnection::oneCall();
-	tonext = (int)(((int64_t)::random() * tonext * 2000) / RAND_MAX);
+	tonext = (int)(((int64_t)Random::random() * tonext * 2000) / RAND_MAX);
     }
 }
 

@@ -154,8 +154,36 @@ bool SignallingCallControl::reserveCircuit(SignallingCircuit*& cic, const char* 
 	}
 	cic = m_circuits->reserve(*list,mandatory,checkLock,s,m_circuits->findRange(range));
     }
-    else
+    else if (range) {
+	const char* nRange = range;
+	switch (nRange[0]) {
+	    case '!':
+		mandatory = true;
+		nRange++;
+		break;
+	    case '?':
+		mandatory = false;
+		nRange++;
+		break;
+	}
+	int num = String(nRange).toInteger();
+	if (num > 0) {
+	    // Specific circuit required
+	    SignallingCircuit* circuit = m_circuits->find(num);
+	    if (circuit && !circuit->locked(checkLock) && circuit->reserve()) {
+		if (circuit->ref())
+		    cic = circuit;
+		else
+		    m_circuits->release(circuit);
+	    }
+	    if (cic || mandatory)
+		return (cic != 0);
+	    DDebug(DebugInfo,"SignallingCallControl. Fallback, circuit %u not available [%p]",num,this);
+	}
 	cic = m_circuits->reserve(checkLock,-1,m_circuits->findRange(range));
+    }
+    else
+	cic = m_circuits->reserve(checkLock,-1);
     return (cic != 0);
 }
 
@@ -959,7 +987,7 @@ SignallingCircuit* SignallingCircuitGroup::reserve(int checkLock, int strategy,
 	    break;
 	default:
 	    while ((range->m_last > 1) && (n == range->m_used))
-		n = ::random() % range->m_last;
+		n = Random::random() % range->m_last;
     }
     // then go to the proper even/odd start circuit
     adjustParity(n,strategy,up);

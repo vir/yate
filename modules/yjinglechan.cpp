@@ -272,10 +272,7 @@ protected:
 	    return "bidir";
 	}
     // Build a RTP candidate
-    inline JGRtpCandidate* buildCandidate(bool rtp = true) {
-	    return new JGRtpCandidate(id() + "_candidate_" + String((int)::random()),
-		rtp ? "1" : "2");
-	}
+    JGRtpCandidate* buildCandidate(bool nonP2P = true, bool rtp = true);
     // Get the first file transfer content
     inline JGSessionContent* firstFTContent() {
 	    ObjList* o = m_ftContents.skipNull();
@@ -662,6 +659,11 @@ static void dumpCandidate(String& buf, JGRtpCandidate* c, char sep = ' ')
     buf << sep << "priority=" << c->m_priority;
     buf << sep << "protocol=" << c->m_protocol;
     buf << sep << "type=" << c->m_type;
+    JGRtpCandidateP2P* p2p = YOBJECT(JGRtpCandidateP2P,c);
+    if (p2p) {
+	buf << sep << "username=" << p2p->m_username;
+	buf << sep << "password=" << p2p->m_password;
+    }
 }
 #endif
 
@@ -932,6 +934,7 @@ YJGConnection::YJGConnection(JGEvent* event)
 	    switch (c->type()) {
 		case JGSessionContent::RtpIceUdp:
 		case JGSessionContent::RtpRawUdp:
+		case JGSessionContent::RtpP2P:
 		    haveAudioSession = haveAudioSession || c->isSession();
 		    addContent(false,c);
 		    break;
@@ -949,7 +952,6 @@ YJGConnection::YJGConnection(JGEvent* event)
 		    // Append this content to 'remove' list
 		    // Let the list own it since we'll remove it from event's list
 		    remove.append(c);
-		    continue;
 	    }
 	    event->m_contents.remove(c,false);
 	}
@@ -2104,8 +2106,9 @@ bool YJGConnection::updateCandidate(unsigned int component, JGSessionContent& lo
     Debug(this,DebugAll,"updateCandidate() recv: %s found: %s [%p]",
 	s1.c_str(),s2.c_str(),this);
 #endif
-    // Version0: check acceptable transport
-    if (m_sessVersion == JGSession::Version0) {
+    // Version0 or p2p transport: check acceptable transport
+    if (m_sessVersion == JGSession::Version0 ||
+	local.type() == JGSessionContent::RtpP2P) {
 	// We only handle UDP based transports for now
 	if (rtpRecv->m_protocol != "udp")
 	    return false;
@@ -2330,28 +2333,50 @@ bool YJGConnection::startRtp()
     m_rtpId = m.getValue("rtpid");
     rtpLocal->m_port = m.getValue("localport");
 
+    String buf;
+#ifdef DEBUG
+    buf << ". Candidates local: ";
+    dumpCandidate(buf,rtpLocal);
+    buf << " remote: ";
+    dumpCandidate(buf,rtpRemote);
+#endif
     Debug(this,DebugAll,
-	"RTP started for content='%s' local='%s:%s' remote='%s:%s' [%p]",
+	"RTP started for content='%s' local='%s:%s' remote='%s:%s'%s [%p]",
     	m_audioContent->toString().c_str(),
 	rtpLocal->m_address.c_str(),rtpLocal->m_port.c_str(),
-	rtpRemote->m_address.c_str(),rtpRemote->m_port.c_str(),this);
+	rtpRemote->m_address.c_str(),rtpRemote->m_port.c_str(),buf.safe(),this);
 
     if (oldPort != rtpLocal->m_port && m_session) {
 	rtpLocal->m_generation = rtpLocal->m_generation.toInteger(0) + 1;
 	m_session->sendContent(JGSession::ActTransportInfo,m_audioContent);
     }
 
-    if (m_audioContent->m_rtpLocalCandidates.m_type == JGRtpCandidates::RtpIceUdp &&
-	rtpRemote->m_address) {
+    if (rtpRemote->m_address &&
+	(m_audioContent->m_rtpLocalCandidates.m_type == JGRtpCandidates::RtpIceUdp ||
+	m_audioContent->m_rtpLocalCandidates.m_type == JGRtpCandidates::RtpP2P)) {
 	m_rtpStarted = true;
 	// Start STUN
 	Message* msg = plugin.message("socket.stun");
 	msg->userData(m.userData());
-	// FIXME: check if these parameters are correct
-	msg->addParam("localusername",m_audioContent->m_rtpRemoteCandidates.m_ufrag +
-	    m_audioContent->m_rtpLocalCandidates.m_ufrag);
-	msg->addParam("remoteusername",m_audioContent->m_rtpLocalCandidates.m_ufrag +
-	    m_audioContent->m_rtpRemoteCandidates.m_ufrag);
+	String user;
+	String pwd;
+	if (m_audioContent->m_rtpLocalCandidates.m_type == JGRtpCandidates::RtpIceUdp) {
+	    // FIXME: check if these parameters are correct
+	    user = m_audioContent->m_rtpRemoteCandidates.m_ufrag +
+		m_audioContent->m_rtpLocalCandidates.m_ufrag;
+	    pwd = m_audioContent->m_rtpLocalCandidates.m_ufrag +
+		m_audioContent->m_rtpRemoteCandidates.m_ufrag;
+	}
+	else {
+	    JGRtpCandidateP2P* local = YOBJECT(JGRtpCandidateP2P,rtpLocal);
+	    JGRtpCandidateP2P* remote = YOBJECT(JGRtpCandidateP2P,rtpRemote);
+	    if (local && remote) {
+		user = remote->m_username + local->m_username;
+		pwd = local->m_username + remote->m_username;
+	    }
+	}
+	msg->addParam("localusername",user);
+	msg->addParam("remoteusername",pwd);
 	msg->addParam("remoteip",rtpRemote->m_address.c_str());
 	msg->addParam("remoteport",rtpRemote->m_port);
 	msg->addParam("userid",m_rtpId);
@@ -2402,6 +2427,7 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
 	switch (c->type()) {
 	    case JGSessionContent::RtpIceUdp:
 	    case JGSessionContent::RtpRawUdp:
+	    case JGSessionContent::RtpP2P:
 		break;
 	    case JGSessionContent::FileBSBOffer:
 	    case JGSessionContent::FileBSBRequest:
@@ -2548,12 +2574,14 @@ JGSessionContent* YJGConnection::buildAudioContent(JGRtpCandidates::Type type,
     JGSessionContent::Senders senders, bool rtcp, bool useFormats)
 {
     String id;
-    id << this->id() << "_content_" << (int)::random();
+    id << this->id() << "_content_" << (int)Random::random();
     JGSessionContent::Type t = JGSessionContent::Unknown;
     if (type == JGRtpCandidates::RtpRawUdp)
 	t = JGSessionContent::RtpRawUdp;
     else if (type == JGRtpCandidates::RtpIceUdp)
 	t = JGSessionContent::RtpIceUdp;
+    else if (type == JGRtpCandidates::RtpP2P)
+	t = JGSessionContent::RtpP2P;
     JGSessionContent* c = new JGSessionContent(t,id,senders,
 	isOutgoing() ? JGSessionContent::CreatorInitiator : JGSessionContent::CreatorResponder);
 
@@ -2563,7 +2591,7 @@ JGSessionContent* YJGConnection::buildAudioContent(JGRtpCandidates::Type type,
 	c->m_rtpMedia.m_cryptoRequired = true;
     if (useFormats)
 	c->m_rtpMedia.setMedia(m_audioFormats);
-    if (m_sessVersion == JGSession::Version0) {
+    if (m_sessVersion == JGSession::Version0 || type == JGRtpCandidates::RtpP2P) {
 	// Hack: set second telephone event for implementations expecting it
 	c->m_rtpMedia.m_telEventName2 = "audio/telephone-event";
     }
@@ -2582,7 +2610,7 @@ JGSessionContent* YJGConnection::buildFileTransferContent(bool send, const char*
 {
     // Build the content
     String id;
-    id << this->id() << "_content_" << (int)::random();
+    id << this->id() << "_content_" << (int)Random::random();
     JGSessionContent::Type t = JGSessionContent::Unknown;
     JGSessionContent::Senders s = JGSessionContent::SendUnknown;
     if (send) {
@@ -2619,7 +2647,7 @@ bool YJGConnection::initLocalCandidates(JGSessionContent& content, bool sendTran
     JGRtpCandidate* rtp = content.m_rtpLocalCandidates.findByComponent(1);
     bool incGeneration = (0 != rtp);
     if (!rtp) {
-	rtp = buildCandidate();
+	rtp = buildCandidate(content.type() != JGSessionContent::RtpP2P);
 	content.m_rtpLocalCandidates.append(rtp);
     }
 
@@ -2939,6 +2967,18 @@ bool YJGConnection::changeFTHostDir()
 	Debug(this,DebugNote,"No more hosts available [%p]",this); 
     m_ftHostDirection = FTHostNone;
     return false;
+}
+
+// Build a RTP candidate
+JGRtpCandidate* YJGConnection::buildCandidate(bool nonP2P, bool rtp)
+{
+    if (nonP2P)
+	return new JGRtpCandidate(id() + "_candidate_" + String((int)Random::random()),
+	    rtp ? "1" : "2");
+    JGRtpCandidateP2P* p2p = new JGRtpCandidateP2P;
+    JGRtpCandidates::generateOldIceToken(p2p->m_username);
+    JGRtpCandidates::generateOldIceToken(p2p->m_password);
+    return p2p;
 }
 
 // Process chan.notify messages

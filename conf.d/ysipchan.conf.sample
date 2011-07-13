@@ -1,17 +1,36 @@
+; This file configures the SIP channel
+;
+; NOTES on UDP listeners
+; - Address/port can be changed and reloaded
+; - If address/port is changed for an enabled listener this will be destroyed and recreated
+; - When an UDP listener is destroyed all channels using it will be dropped and
+;   all lines using it will be unregistered
+; - If the only configured listener is 'general' this one will be the default one
+; - After initializing the module will find for a default transport:
+;   1: First search for a default listener whose name is not 'general'
+;   2: Use 'general' if no other listener is set to be the default
+
+
 [general]
 ; This section sets global variables of the implementation
 
-; port: int: SIP UDP port
-;port=5060
-
-; addr: ipaddress: IP address to bind to
-;addr=0.0.0.0
-
-; maxpkt: int: Maximum received packet size, 524 to 65528, default 1500
+; maxpkt: int: Maximum received UDP packet size, 524 to 65528, default 1500
+; This parameter is applied on reload and can be overridden in UDP listener sections
 ;maxpkt=1500
 
-; buffer: int: Requested size of socket's receive buffer, 0 to use default
+; buffer: int: Requested size of UDP socket's receive buffer, 0 to use default
+; This can be overridden in UDP listener sections
 ;buffer=0
+
+; tcp_maxpkt: int: Maximum received TCP packet size, 524 to 65528, default 4096
+; This parameter is applied on reload and can be overridden in TCP/TLS listener sections
+; The parameter is not applied on reload for already created listeners or connections
+;tcp_maxpkt=4096
+
+; tcp_out_rtp_localip: ipaddress: IP address to bind local RTP to for outgoing
+;  TCP connections, empty to guess best
+; This parameter is applied on reload for new connections only
+;tcp_out_rtp_localip=
 
 ; thread: keyword: Default priority of the SIP handling threads
 ; Can be one of: lowest, low, normal, high, highest
@@ -85,9 +104,6 @@
 ; forward_sdp: bool: Include the raw SDP body to be used as-is for forwarding RTP
 ;forward_sdp=disable
 
-; rtp_localip: ipaddress: IP address to bind local RTP to, empty to guess best
-;rtp_localip=
-
 ; rtp_start: bool: Start RTP when sending 200 on incoming instead of receiving ACK
 ;rtp_start=disable
 
@@ -100,6 +116,11 @@
 ; flags: int: Miscellaneous SIP engine flags for broken implementations
 ; See SIPMessage::Flags and SIPMessage::complete() in the source for gory details
 ;flags=0
+
+; printmsg: boolean: Print SIP messages to output
+; This parameter is applied on reload
+; Defaults to yes
+;printmsg=yes
 
 
 [registrar]
@@ -215,3 +236,100 @@
 ; ignore_sdp_port: bool: Ignore SDP changes if only the port is different
 ; This allows preserving the local RTP session and port
 ;ignore_sdp_port=no
+
+
+;[listener general]
+; This section has the following purposes:
+; - Maintain compatibility with old configuration
+; - Setup an UDP listener named 'general'
+; This section will be processed before any other listener sections
+; The following parameters can be overridden from 'general' section: maxpkt, buffer
+
+; enable: boolean: Enable or disable the UDP listener
+; This parameter is applied on reload and defaults to yes
+;enable=yes
+
+; default: boolean: Specifiy if this is the default transport to use when none specified
+; Defaults to yes (unlike the other listeners)
+;default=yes
+
+; udp_force_bind: boolean: Try to use a random port if failed to bind on configured one
+; Defaults to yes
+;udp_force_bind=yes
+
+; addr: ipaddress: IP address to bind to
+; Leave it empty to listen on all available interfaces
+;addr=
+
+; port: integer: Port to bind to
+; Defaults to 5060
+;port=5060
+
+; rtp_localip: ipaddress: IP address to bind local RTP to, empty to guess best
+; This parameter is applied on reload
+; RTP local IP address will default to bound IP address if not binding on all interfaces
+; Explicitly set it to empty string to avoid using bound IP address
+;rtp_localip=
+
+; thread: keyword: Listener thread priority
+; Can be one of: lowest, low, normal, high, highest
+; High priorities need superuser privileges on POSIX operating systems
+; Low priorities are not recommended except for debugging
+;thread=normal
+
+
+;[listener name]
+; This section configures a listener named 'name' ('general' is reserved and will be ignored)
+; The following parameters can be overridden from 'general' section:
+;   UDP: maxpkt, buffer
+;   TCP/TLS: tcp_maxpkt
+
+; type: keyword: Listener type
+; Allowed values:
+; udp: Build an UDP listener. Ignored if multihomed is disabled
+; tcp: Build a TCP listener
+; tls: Build a TLS listener (encrypted TCP)
+;type=
+
+; enable: boolean: Enable or disable this listener
+; This parameter is applied on reload and defaults to yes
+;enable=yes
+
+; default: boolean: UDP only: specifiy if this is the default transport to use when none specified
+; Defaults to no
+;default=no
+
+; udp_force_bind: boolean: UDP only: try to use a random port if failed to bind on configured one
+; Defaults to yes
+;udp_force_bind=yes
+
+; addr: ipaddress: IP address to bind to
+; Leave it empty to listen on all available interfaces
+;addr=
+
+; port: integer: Port to bind to
+; Defaults to 5060 for UDP and TCP, 5061 for TLS listeners
+;port=
+
+; rtp_localip: ipaddress: IP address to bind local RTP to
+; This parameter is applied on reload
+; TCP/TLS: this parameter is applied on reload for new connections only
+; RTP local IP address will default to bound IP address if not binding on all interfaces
+; Explicitly set it to empty string to avoid using bound IP address
+;rtp_localip=
+
+; backlog: integer: Maximum length of the queue of pending connections
+; This parameter is ignored for UDP listeners
+; Set it to 0 for system maximum
+; Defaults to 5 if missing or invalid
+;backlog=5
+
+; context: string: SSL context if this is an encrypted connection
+; Ignored for non TLS listeners, required for TLS listeners
+;context=
+
+; thread: keyword: Listener thread priority
+; Can be one of: lowest, low, normal, high, highest
+; High priorities need superuser privileges on POSIX operating systems
+; Low priorities are not recommended except for debugging
+;thread=normal

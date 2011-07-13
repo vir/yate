@@ -69,7 +69,7 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, IAXFullFrame* frame, u_int16_t
     m_format(0),
     m_formatIn(0),
     m_formatOut(0),
-    m_capability(0),
+    m_capability(0), m_callToken(false),
     m_trunkFrame(0)
 {
     XDebug(m_engine,DebugAll,"IAXTransaction::IAXTransaction(%u,%u) incoming [%p]",
@@ -137,7 +137,7 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
     m_format(0),
     m_formatIn(0),
     m_formatOut(0),
-    m_capability(0),
+    m_capability(0), m_callToken(false),
     m_trunkFrame(0)
 {
     XDebug(m_engine,DebugAll,"IAXTransaction::IAXTransaction(%u,%u) outgoing. [%p]",
@@ -153,25 +153,27 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
     m_retransInterval = engine->retransInterval();
     m_timeToNextPing = m_timeStamp + m_pingInterval;
     init(ieList);
-    ieList.clear();
     IAXControl::Type frametype;
+    IAXIEList* ies = new IAXIEList;
     // Create IE list to send
     switch (type) {
 	case New:
-	    ieList.insertVersion();
-	    ieList.appendString(IAXInfoElement::USERNAME,m_username);
-	    ieList.appendString(IAXInfoElement::CALLING_NUMBER,m_callingNo);
-	    ieList.appendString(IAXInfoElement::CALLING_NAME,m_callingName);
-	    ieList.appendString(IAXInfoElement::CALLED_NUMBER,m_calledNo);
-	    ieList.appendString(IAXInfoElement::CALLED_CONTEXT,m_calledContext);
-	    ieList.appendNumeric(IAXInfoElement::FORMAT,m_format,4);
-	    ieList.appendNumeric(IAXInfoElement::CAPABILITY,m_capability,4);
+	    ies->insertVersion();
+	    ies->appendString(IAXInfoElement::USERNAME,m_username);
+	    ies->appendString(IAXInfoElement::CALLING_NUMBER,m_callingNo);
+	    ies->appendString(IAXInfoElement::CALLING_NAME,m_callingName);
+	    ies->appendString(IAXInfoElement::CALLED_NUMBER,m_calledNo);
+	    ies->appendString(IAXInfoElement::CALLED_CONTEXT,m_calledContext);
+	    ies->appendNumeric(IAXInfoElement::FORMAT,m_format,4);
+	    ies->appendNumeric(IAXInfoElement::CAPABILITY,m_capability,4);
+	    if (m_callToken)
+		ies->appendBinary(IAXInfoElement::CALLTOKEN,0,0);
 	    frametype = IAXControl::New;
 	    break;
 	case RegReq:
 	case RegRel:
-	    ieList.appendString(IAXInfoElement::USERNAME,m_username);
-	    ieList.appendNumeric(IAXInfoElement::REFRESH,m_expire,2);
+	    ies->appendString(IAXInfoElement::USERNAME,m_username);
+	    ies->appendNumeric(IAXInfoElement::REFRESH,m_expire,2);
 	    frametype = (type == RegReq ? IAXControl::RegReq : IAXControl::RegRel);
 	    break;
 	case Poke:
@@ -180,17 +182,11 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
 	default:
 	    XDebug(m_engine,DebugAll,"IAXTransaction::IAXTransaction(%u,%u) outgoing. Unsupported type: %u. [%p]",
 		localCallNo(),remoteCallNo(),m_type,this);
+	    delete ies;
 	    m_type = Incorrect;
 	    return;
     }
-    DataBlock d;
-    ieList.toBuffer(d);
-    if (d.length() > (unsigned int)m_engine->maxFullFrameDataLen()) {
-	XDebug(m_engine,DebugAll,"IAXTransaction::IAXTransaction(%u,%u). Buffer too long (%u > %u). [%p]",
-		localCallNo(),remoteCallNo(),d.length(),(unsigned int)m_engine->maxFullFrameDataLen(),this);
-	d.clear();
-    }
-    postFrame(IAXFrame::IAX,frametype,(void*)(d.data()),d.length());
+    postFrameIes(IAXFrame::IAX,frametype,ies);
     changeState(NewLocalInvite);
 }
 
@@ -475,19 +471,18 @@ bool IAXTransaction::sendAccept()
 	((type() == RegReq || type() == RegRel) && state() == NewRemoteInvite_RepRecv)))
 	return false;
     if (type() == New) {
-	unsigned char d[12] = {IAXInfoElement::FORMAT,4,m_format >> 24,m_format >> 16,m_format >> 8,m_format,
-		IAXInfoElement::CAPABILITY,4,m_capability >> 24,m_capability >> 16,m_capability >> 8,m_capability};
-	postFrame(IAXFrame::IAX,IAXControl::Accept,d,sizeof(d),0,true);
+	IAXIEList* ies = new IAXIEList;
+	ies->appendNumeric(IAXInfoElement::FORMAT,m_format,4);
+	ies->appendNumeric(IAXInfoElement::CAPABILITY,m_capability,4);
+	postFrameIes(IAXFrame::IAX,IAXControl::Accept,ies,0,true);
 	changeState(Connected);
     }
     else {
-	IAXIEList ieList;
-	ieList.appendString(IAXInfoElement::USERNAME,m_username);
-	ieList.appendNumeric(IAXInfoElement::REFRESH,m_expire,2);
-	ieList.appendIE(IAXInfoElementBinary::packIP(remoteAddr()));
-	DataBlock data;
-	ieList.toBuffer(data);
-	postFrame(IAXFrame::IAX,IAXControl::RegAck,data.data(),data.length(),0,true);
+	IAXIEList* ies = new IAXIEList;
+	ies->appendString(IAXInfoElement::USERNAME,m_username);
+	ies->appendNumeric(IAXInfoElement::REFRESH,m_expire,2);
+	ies->appendIE(IAXInfoElementBinary::packIP(remoteAddr()));
+	postFrameIes(IAXFrame::IAX,IAXControl::RegAck,ies,0,true);
 	changeState(Terminating);
 	m_localReqEnd = true;
     }
@@ -496,27 +491,15 @@ bool IAXTransaction::sendAccept()
 
 bool IAXTransaction::sendHangup(const char* cause, u_int8_t code)
 {
-    String s(cause);
-    unsigned char d[3];
-    DataBlock data,aux;
-
     Lock lock(this);
     if (type() != New || state() == Terminated || state() == Terminating)
 	return false;
-    if (cause) {
-	d[0] = IAXInfoElement::CAUSE;
-	d[1] = s.length();
-	data.assign(d,2);
-	data.append(s);
-    }
-    if (code) {
-	d[0] = IAXInfoElement::CAUSECODE;
-	d[1] = 1;
-	d[2] = code;
-	aux.assign(d,3);
-	data += aux;
-    }
-    postFrame(IAXFrame::IAX,IAXControl::Hangup,data.data(),data.length(),0,true);
+    IAXIEList* ies = new IAXIEList;
+    if (!TelEngine::null(cause))
+	ies->appendString(IAXInfoElement::CAUSE,cause);
+    if (code)
+	ies->appendNumeric(IAXInfoElement::CAUSECODE,code,1);
+    postFrameIes(IAXFrame::IAX,IAXControl::Hangup,ies,0,true);
     changeState(Terminating);
     m_localReqEnd = true;
     Debug(m_engine,DebugAll,"Transaction(%u,%u). Hangup call. Cause: '%s'",localCallNo(),remoteCallNo(),cause);
@@ -525,10 +508,6 @@ bool IAXTransaction::sendHangup(const char* cause, u_int8_t code)
 
 bool IAXTransaction::sendReject(const char* cause, u_int8_t code)
 {
-    String s(cause);
-    unsigned char d[3];
-    DataBlock data,aux;
-
     Lock lock(this);
     if (state() == Terminated || state() == Terminating)
 	return false;
@@ -545,20 +524,12 @@ bool IAXTransaction::sendReject(const char* cause, u_int8_t code)
 	default:
 	    return false;
     }
-    if (cause) {
-	d[0] = IAXInfoElement::CAUSE;
-	d[1] = s.length();
-	data.assign(d,2);
-	data.append(s);
-    }
-    if (code) {
-	d[0] = IAXInfoElement::CAUSECODE;
-	d[1] = 1;
-	d[2] = code;
-	aux.assign(d,3);
-	data += aux;
-    }
-    postFrame(IAXFrame::IAX,frametype,data.data(),data.length(),0,true);
+    IAXIEList* ies = new IAXIEList;
+    if (!TelEngine::null(cause))
+	ies->appendString(IAXInfoElement::CAUSE,cause);
+    if (code)
+	ies->appendNumeric(IAXInfoElement::CAUSECODE,code,1);
+    postFrameIes(IAXFrame::IAX,frametype,ies,0,true);
     Debug(m_engine,DebugAll,"Transaction(%u,%u). Reject. Cause: '%s'",localCallNo(),remoteCallNo(),cause);
     changeState(Terminating);
     m_localReqEnd = true;
@@ -572,28 +543,30 @@ bool IAXTransaction::sendAuth()
 	return false;
     switch (m_authmethod) {
 	case IAXAuthMethod::MD5:
-	    m_challenge = (int)random();
+	    m_challenge = (int)Random::random();
 	    break;
 	case IAXAuthMethod::RSA:
 	case IAXAuthMethod::Text:
 	default:
 	    return false;
     }
-    IAXIEList ieList;
-    ieList.appendString(IAXInfoElement::USERNAME,m_username);
-    ieList.appendNumeric(IAXInfoElement::AUTHMETHODS,m_authmethod,2);
-    ieList.appendString(IAXInfoElement::CHALLENGE,m_challenge);
-    DataBlock data;
-    ieList.toBuffer(data);
+    IAXControl::Type t = IAXControl::Unsupport;
     switch (type()) {
 	case New:
-	    postFrame(IAXFrame::IAX,IAXControl::AuthReq,data.data(),data.length(),0,false);
+	    t = IAXControl::AuthReq;
 	    break;
 	case RegReq:
 	case RegRel:
-	    postFrame(IAXFrame::IAX,IAXControl::RegAuth,data.data(),data.length(),0,false);
+	    t = IAXControl::RegAuth;
 	    break;
 	default: ;
+    }
+    if (t != IAXControl::Unsupport) {
+	IAXIEList* ies = new IAXIEList;
+	ies->appendString(IAXInfoElement::USERNAME,m_username);
+	ies->appendNumeric(IAXInfoElement::AUTHMETHODS,m_authmethod,2);
+	ies->appendString(IAXInfoElement::CHALLENGE,m_challenge);
+	postFrameIes(IAXFrame::IAX,t,ies);
     }
     changeState(NewRemoteInvite_AuthSent);
     return true;
@@ -605,7 +578,7 @@ bool IAXTransaction::sendAuthReply(const String& response)
     if (state() != NewLocalInvite_AuthRecv)
 	return false;
     m_authdata = response;
-    IAXIEList ieList;
+    IAXIEList* ies = new IAXIEList;
     IAXControl::Type subclass;
     switch (type()) {
 	case New:
@@ -613,21 +586,22 @@ bool IAXTransaction::sendAuthReply(const String& response)
 	    break;
 	case RegReq:
 	    subclass = IAXControl::RegReq;
-	    ieList.appendString(IAXInfoElement::USERNAME,m_username);
+	    ies->appendString(IAXInfoElement::USERNAME,m_username);
 	    break;
 	case RegRel:
 	    subclass = IAXControl::RegRel;
-	    ieList.appendString(IAXInfoElement::USERNAME,m_username);
+	    ies->appendString(IAXInfoElement::USERNAME,m_username);
 	    break;
 	default:
+	    delete ies;
 	    return false;
     }
-    if (m_authmethod != IAXAuthMethod::MD5)
+    if (m_authmethod != IAXAuthMethod::MD5) {
+	delete ies;
 	return false;
-    ieList.appendString(IAXInfoElement::MD5_RESULT,response);
-    DataBlock data;
-    ieList.toBuffer(data);
-    postFrame(IAXFrame::IAX,subclass,data.data(),data.length(),0,false);
+    }
+    ies->appendString(IAXInfoElement::MD5_RESULT,response);
+    postFrameIes(IAXFrame::IAX,subclass,ies);
     changeState(NewLocalInvite_RepSent);
     return true;
 }
@@ -681,6 +655,41 @@ bool IAXTransaction::enableTrunking(IAXMetaTrunkFrame* trunkFrame)
     return true;
 }
 
+// Process a received call token
+void IAXTransaction::processCallToken(const DataBlock& callToken)
+{
+    Lock lock(this);
+    IAXFrameOut* frame = 0;
+    if (state() == NewLocalInvite && m_callToken) {
+	ObjList* o = m_outFrames.skipNull();
+	frame = o ? static_cast<IAXFrameOut*>(o->get()) : 0;
+	if (frame && frame->type() != IAXFrame::IAX && frame->subclass() != IAXControl::New)
+	    frame = 0;
+    }
+    m_callToken = false;
+    if (!frame) {
+	Debug(m_engine,DebugNote,
+	    "Transaction(%u,%u). Received call token in invalid state [%p]",
+	    localCallNo(),remoteCallNo(),this);
+	return;
+    }
+    frame->updateIEList(false);
+    IAXIEList* ies = frame->ieList();
+    if (!ies) {
+	Debug(m_engine,DebugNote,
+	    "Transaction(%u,%u). No IE list in first frame [%p]",
+	    localCallNo(),remoteCallNo(),this);
+	return;
+    }
+    IAXInfoElementBinary* ct = static_cast<IAXInfoElementBinary*>(ies->getIE(IAXInfoElement::CALLTOKEN));
+    if (ct)
+	ct->setData(callToken.data(),callToken.length());
+    else
+	ies->appendBinary(IAXInfoElement::CALLTOKEN,(unsigned char*)callToken.data(),callToken.length());
+    frame->updateBuffer(m_engine->maxFullFrameDataLen());
+    sendFrame(frame);
+}
+
 void IAXTransaction::print()
 {
     static SocketAddr addr;
@@ -712,8 +721,10 @@ void IAXTransaction::init(IAXIEList& ieList)
 	    ieList.getString(IAXInfoElement::CALLED_CONTEXT,m_calledContext);
 	    ieList.getNumeric(IAXInfoElement::FORMAT,m_format);
 	    ieList.getNumeric(IAXInfoElement::CAPABILITY,m_capability);
-	    if (outgoing())
+	    if (outgoing()) {
 		m_formatOut = m_format;
+		m_callToken = (0 != ieList.getIE(IAXInfoElement::CALLTOKEN));
+	    }
 	    else
 		m_formatIn = m_format;
 	    break;
@@ -788,7 +799,7 @@ bool IAXTransaction::changeState(State newState)
     return true;
 }
 
-IAXEvent* IAXTransaction::terminate(u_int8_t evType, bool local, const IAXFullFrame* frame, bool createIEList)
+IAXEvent* IAXTransaction::terminate(u_int8_t evType, bool local, IAXFullFrame* frame, bool createIEList)
 {
     IAXEvent* ev;
     if (createIEList)
@@ -805,7 +816,7 @@ IAXEvent* IAXTransaction::terminate(u_int8_t evType, bool local, const IAXFullFr
     return ev;
 }
 
-IAXEvent* IAXTransaction::waitForTerminate(u_int8_t evType, bool local, const IAXFullFrame* frame)
+IAXEvent* IAXTransaction::waitForTerminate(u_int8_t evType, bool local, IAXFullFrame* frame)
 {
     IAXEvent* ev = new IAXEvent((IAXEvent::Type)evType,local,true,this,frame);
     Debug(m_engine,DebugAll,"Transaction(%u,%u). Terminating. Event: %u, Frame(%u,%u)",
@@ -820,23 +831,24 @@ void IAXTransaction::postFrame(IAXFrame::Type type, u_int32_t subclass, void* da
     Lock lock(this);
     if (state() == Terminated)
 	return;
-    if (!tStamp) {
-	tStamp = (u_int32_t)timeStamp();
-	if (m_lastFullFrameOut) {
-	    // adjust timestamp to be different from the last sent
-	    int32_t delta = tStamp - m_lastFullFrameOut;
-	    if (delta <= 0)
-		tStamp = m_lastFullFrameOut + 1;
-	}
-	m_lastFullFrameOut = tStamp;
-    }
+    adjustTStamp(tStamp);
     IAXFrameOut* frame = new IAXFrameOut(type,subclass,m_lCallNo,m_rCallNo,m_oSeqNo,m_iSeqNo,tStamp,
 			 (unsigned char*)data,len,m_retransCount,m_retransInterval,ackOnly);
-    DDebug(m_engine,DebugAll,"Transaction(%u,%u) posting Frame(%u,%u) oseq=%u iseq=%u stamp=%u [%p]",
-	localCallNo(),remoteCallNo(),type,subclass,m_oSeqNo,m_iSeqNo,tStamp,this);
-    incrementSeqNo(frame,false);
-    m_outFrames.append(frame);
-    sendFrame(frame);
+    postFrame(frame);
+}
+
+// Constructs an IAXFrameOut frame, send it to remote peer and put it in the transmission list
+void IAXTransaction::postFrameIes(IAXFrame::Type type, u_int32_t subclass, IAXIEList* ies,
+    u_int32_t tStamp, bool ackOnly)
+{
+    Lock lock(this);
+    if (state() == Terminated)
+	return;
+    adjustTStamp(tStamp);
+    IAXFrameOut* frame = new IAXFrameOut(type,subclass,m_lCallNo,m_rCallNo,m_oSeqNo,
+	m_iSeqNo,tStamp,ies,m_engine->maxFullFrameDataLen(),m_retransCount,
+	m_retransInterval,ackOnly);
+    postFrame(frame);
 }
 
 bool IAXTransaction::sendFrame(IAXFrameOut* frame, bool vnak)
@@ -854,7 +866,7 @@ bool IAXTransaction::sendFrame(IAXFrameOut* frame, bool vnak)
     return b;
 }
 
-IAXEvent* IAXTransaction::createEvent(u_int8_t evType, bool local, const IAXFullFrame* frame, State newState)
+IAXEvent* IAXTransaction::createEvent(u_int8_t evType, bool local, IAXFullFrame* frame, State newState)
 {
     IAXEvent* ev;
     changeState(newState);
@@ -1257,7 +1269,7 @@ bool IAXTransaction::sendConnected(IAXFullFrame::ControlType subclass, IAXFrame:
 {
     if (state() != Connected)
 	return false;
-    postFrame(frametype,subclass,0,0,0,true);
+    postFrameIes(frametype,subclass,0,0,true);
     return true;
 }
 
@@ -1291,8 +1303,10 @@ void IAXTransaction::sendVNAK()
 
 void IAXTransaction::sendUnsupport(u_int32_t subclass)
 {
-    unsigned char d[3] = {IAXInfoElement::IAX_UNKNOWN,1,IAXFrame::packSubclass(subclass)};
-    postFrame(IAXFrame::IAX,IAXControl::Unsupport,d,sizeof(d),0,true);
+    IAXIEList* ies = new IAXIEList;
+    u_int8_t val = IAXFrame::packSubclass(subclass);
+    ies->appendNumeric(IAXInfoElement::IAX_UNKNOWN,val,1);
+    postFrameIes(IAXFrame::IAX,IAXControl::Unsupport,ies,0,true);
 }
 
 IAXEvent* IAXTransaction::processInternalOutgoingRequest(IAXFrameOut* frame, bool& delFrame)
@@ -1328,7 +1342,7 @@ IAXEvent* IAXTransaction::processInternalIncomingRequest(const IAXFullFrame* fra
     return 0;
 }
 
-IAXEvent* IAXTransaction::processMidCallControl(const IAXFullFrame* frame, bool& delFrame)
+IAXEvent* IAXTransaction::processMidCallControl(IAXFullFrame* frame, bool& delFrame)
 {
     delFrame = true;
     switch (frame->subclass()) {
@@ -1358,7 +1372,7 @@ IAXEvent* IAXTransaction::processMidCallControl(const IAXFullFrame* frame, bool&
     return 0;
 }
 
-IAXEvent* IAXTransaction::processMidCallIAXControl(const IAXFullFrame* frame, bool& delFrame)
+IAXEvent* IAXTransaction::processMidCallIAXControl(IAXFullFrame* frame, bool& delFrame)
 {
     delFrame = true;
     switch (frame->subclass()) {
@@ -1408,7 +1422,7 @@ IAXEvent* IAXTransaction::processMidCallIAXControl(const IAXFullFrame* frame, bo
     return 0;
 }
 
-IAXEvent* IAXTransaction::remoteRejectCall(const IAXFullFrame* frame, bool& delFrame)
+IAXEvent* IAXTransaction::remoteRejectCall(IAXFullFrame* frame, bool& delFrame)
 {
     delFrame = true;
     switch (type()) {
@@ -1449,8 +1463,8 @@ IAXTransaction* IAXTransaction::processVoiceFrame(const IAXFullFrame* frame)
     if (m_formatIn) {
 	if (frame->subclass() && frame->subclass() != m_formatIn) {
 	    // Format changed.
-	    if (m_engine->voiceFormatChanged(this,frame->fullFrame()->subclass()))
-		m_formatIn = frame->fullFrame()->subclass();
+	    if (m_engine->voiceFormatChanged(this,frame->subclass()))
+		m_formatIn = frame->subclass();
 	    else {
 		DDebug(m_engine,DebugAll,"IAXTransaction(%u,%u). Process Voice Frame. Media format (%u) change rejected!",
 		    localCallNo(),remoteCallNo(),m_format);
@@ -1509,6 +1523,33 @@ void IAXTransaction::eventTerminated(IAXEvent* event)
 	    localCallNo(),remoteCallNo(),event,this);
 	m_currentEvent = 0;
     }
+}
+
+void IAXTransaction::adjustTStamp(u_int32_t& tStamp)
+{
+    if (tStamp)
+	return;
+    tStamp = (u_int32_t)timeStamp();
+    if (m_lastFullFrameOut) {
+	// adjust timestamp to be different from the last sent
+	int32_t delta = tStamp - m_lastFullFrameOut;
+	if (delta <= 0)
+	    tStamp = m_lastFullFrameOut + 1;
+    }
+    m_lastFullFrameOut = tStamp;
+}
+
+void IAXTransaction::postFrame(IAXFrameOut* frame)
+{
+    if (!frame)
+	return;
+    DDebug(m_engine,DebugAll,
+	"Transaction(%u,%u) posting Frame(%u,%u) oseq=%u iseq=%u stamp=%u [%p]",
+	localCallNo(),remoteCallNo(),frame->type(),frame->subclass(),
+	m_oSeqNo,m_iSeqNo,frame->timeStamp(),this);
+    incrementSeqNo(frame,false);
+    m_outFrames.append(frame);
+    sendFrame(frame);
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

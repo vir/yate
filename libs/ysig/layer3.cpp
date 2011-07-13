@@ -1138,7 +1138,7 @@ void SS7MTP3::notify(SS7Layer2* link)
 	if (link->operational()) {
 	    if (link->inhibited(SS7Layer2::Unchecked)) {
 		// initiate a slightly delayed SLTM check
-		u_int64_t t = Time::now() + 100000 + (::random() % 200000);
+		u_int64_t t = Time::now() + 100000 + (Random::random() % 200000);
 		if ((link->m_checkTime > t) || (t - 2000000 > link->m_checkTime))
 		    link->m_checkTime = t;
 	    }

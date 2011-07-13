@@ -59,12 +59,17 @@ class SIPEvent;
 class YSIP_API SIPParty : public RefObject
 {
 public:
-    SIPParty();
-    SIPParty(bool reliable);
+    SIPParty(Mutex* mutex = 0);
+    SIPParty(bool reliable, Mutex* mutex = 0);
     virtual ~SIPParty();
     virtual void transmit(SIPEvent* event) = 0;
     virtual const char* getProtoName() const = 0;
     virtual bool setParty(const URI& uri) = 0;
+    virtual void* getTransport() = 0;
+    void setAddr(const String& addr, int port, bool local);
+    void getAddr(String& addr, int& port, bool local);
+    inline Mutex* mutex()
+	{ return m_mutex; }
     inline const String& getLocalAddr() const
 	{ return m_local; }
     inline const String& getPartyAddr() const
@@ -76,8 +81,8 @@ public:
     inline bool isReliable() const
 	{ return m_reliable; }
 protected:
+    Mutex* m_mutex;
     bool m_reliable;
-    bool m_init;
     String m_local;
     String m_party;
     int m_localPort;
@@ -104,6 +109,7 @@ public:
 	RportAfterBranch  = 0x0008,
 	NotSetRport       = 0x0010,
 	NotSetReceived    = 0x0020,
+	NoConnReuse       = 0x0040,      // Don't add 'alias' parameter to Via header (reliable only)
     };
 
     /**
@@ -118,8 +124,14 @@ public:
 
     /**
      * Creates a new SIPMessage from parsing a text buffer.
+     * @param ep Party to set in message
+     * @param buf Buffer to parse
+     * @param len Optional buffer length
+     * @param bodyLen Pointer to body length to be set if the message was received
+     *  on a stream transport. If not 0 the buffer must contain the message
+     *  without its body
      */
-    SIPMessage(SIPParty* ep, const char* buf, int len = -1);
+    SIPMessage(SIPParty* ep, const char* buf, int len = -1, unsigned int* bodyLen = 0);
 
     /**
      * Creates a new SIPMessage as answer to another message.
@@ -138,9 +150,24 @@ public:
 
     /**
      * Construct a new SIP message by parsing a text buffer
+     * @param ep Party to set in message
+     * @param buf Buffer to parse
+     * @param len Optional buffer length
+     * @param bodyLen Pointer to body length to be set if the message was received
+     *  on a stream transport. If not 0 the buffer must contain the message
+     *  without its body
      * @return A pointer to a valid new message or NULL
      */
-    static SIPMessage* fromParsing(SIPParty* ep, const char* buf, int len = -1);
+    static SIPMessage* fromParsing(SIPParty* ep, const char* buf, int len = -1,
+	unsigned int* bodyLen = 0);
+
+    /**
+     * Build message's body. Reset it before.
+     * This method should be called after parsing a partial message (headers only)
+     * @param buf Buffer to parse
+     * @param len Optional buffer length
+     */
+    void buildBody(const char* buf, int len = -1);
 
     /**
      * Complete missing fields with defaults taken from a SIP engine
@@ -411,7 +438,7 @@ public:
     MimeBody* body;
 
 protected:
-    bool parse(const char* buf, int len);
+    bool parse(const char* buf, int len, unsigned int* bodyLen);
     bool parseFirst(String& line);
     SIPParty* m_ep;
     bool m_valid;
@@ -759,6 +786,12 @@ public:
     inline void setTransmit()
 	{ m_transmit = true; }
 
+    /**
+     * Change transaction status to Cleared
+     * This method is not thread safe
+     */
+    inline void setCleared()
+	{ changeState(Cleared); }
 
     /**
      * Send back an authentication required response

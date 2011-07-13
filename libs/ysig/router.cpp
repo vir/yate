@@ -284,6 +284,7 @@ void SS7Route::rerouteCheck(u_int64_t when)
 	while (HeldMSU* msu = static_cast<HeldMSU*>(m_reroute.remove(false))) {
 	    transmitInternal(msu->m_router,*msu,msu->m_label,msu->m_sls,
 		msu->m_states,msu->m_source);
+	    TelEngine::destruct(msu);
 	    c++;
 	}
 	if (c)

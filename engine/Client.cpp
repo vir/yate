@@ -2902,12 +2902,12 @@ bool Client::updateTrayIcon(const String& wndName)
 void Client::generateGuid(String& buf, const String& extra)
 {
     int8_t data[16];
-    *(int32_t*)(data + 12) = (u_int32_t)::random();
+    *(int32_t*)(data + 12) = (u_int32_t)Random::random();
     *(u_int64_t*)(data + 3) = Time::now();
     if (extra)
 	*(u_int16_t*)(data + 11) = extra.hash();
     int32_t* d = (int32_t*)data;
-    *d = (int32_t)::random();
+    *d = (int32_t)Random::random();
     String tmp;
     tmp.hexify(data,16);
     buf.clear();

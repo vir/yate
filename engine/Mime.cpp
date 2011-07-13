@@ -555,7 +555,7 @@ MimeMultipartBody::MimeMultipartBody(const char* subtype, const char* boundary)
     String b = boundary;
     b.trimBlanks();
     if (b.null())
-	b << (int)::random() << "_" << (unsigned int)Time::now();
+	b << (int)Random::random() << "_" << (unsigned int)Time::now();
     if (b.length() > 70)
 	b = b.substr(0,70);
     setParam("boundary",b);

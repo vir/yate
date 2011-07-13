@@ -405,7 +405,7 @@ YRTPWrapper::YRTPWrapper(const char* localip, CallEndpoint* conn, const char* me
 	localip,conn,media,lookup(direction,dict_yrtp_dir),
 	&msg,String::boolText(udptl),this);
     m_id = udptl ? "udptl/" : "yrtp/";
-    m_id << (unsigned int)::random();
+    m_id << (unsigned int)Random::random();
     if (conn)
 	m_master = conn->id();
     m_audio = !udptl && (m_media == YSTRING("audio"));
@@ -551,7 +551,7 @@ bool YRTPWrapper::bindLocal(const char* localip, bool rtcp)
 	return false;
     }
     for (; attempt; attempt--) {
-	int lport = (minport + (::random() % (maxport - minport))) & 0xfffe;
+	int lport = (minport + (Random::random() % (maxport - minport))) & 0xfffe;
 	addr.port(lport);
 	if (m_rtp ? m_rtp->localAddr(addr,rtcp) : m_udptl->localAddr(addr)) {
 	    m_host = addr.host();
@@ -1605,7 +1605,7 @@ bool YRTPPlugin::reflectSetup(Message& msg, const char* id, RTPTransport& rtp,
     }
     bool rtcp = msg.getBoolValue(YSTRING("rtp_rtcp"),s_rtcp);
     for (;;) {
-	int lport = (minport + (::random() % (maxport - minport))) & 0xfffe;
+	int lport = (minport + (Random::random() % (maxport - minport))) & 0xfffe;
 	addr.port(lport);
 	if (rtp.localAddr(addr,rtcp)) {
 	    Debug(this,DebugInfo,"Reflector %s for '%s' bound to %s:%u%s",

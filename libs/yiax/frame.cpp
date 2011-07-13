@@ -101,6 +101,7 @@ TokenDict IAXInfoElement::s_ieData[] = {
     {"RR_DELAY",          RR_DELAY},
     {"RR_DROPPED",        RR_DROPPED},
     {"RR_OOO",            RR_OOO},
+    {"CALLTOKEN",         CALLTOKEN},
     {0,0}
 };
 
@@ -186,7 +187,11 @@ void IAXInfoElementBinary::toBuffer(DataBlock& buf)
 
 void IAXInfoElementBinary::toString(String& buf)
 {
-    buf << "Binary data";
+    if (!m_data.length())
+	return;
+    String tmp;
+    tmp.hexify(m_data.data(),m_data.length(),' ');
+    buf << tmp;
 }
 
 IAXInfoElementBinary* IAXInfoElementBinary::packIP(const SocketAddr& addr)
@@ -206,6 +211,25 @@ bool IAXInfoElementBinary::unpackIP(SocketAddr& addr, IAXInfoElementBinary* ie)
 /*
  * IAXIEList
  */
+IAXIEList::IAXIEList()
+    : m_invalidIEList(false)
+{
+    XDebug(DebugInfo,"IAXIEList::IAXIEList() [%p]",this);
+}
+
+IAXIEList::IAXIEList(const IAXFullFrame* frame, bool incoming)
+    : m_invalidIEList(false)
+{
+    XDebug(DebugInfo,"IAXIEList::IAXIEList(%p,%u) [%p]",frame,incoming,this);
+    if (frame)
+	createFromFrame(frame,incoming);
+}
+
+IAXIEList::~IAXIEList()
+{
+    XDebug(DebugInfo,"IAXIEList::~IAXIEList() [%p]",this);
+}
+
 void IAXIEList::insertVersion()
 {
     if (!getIE(IAXInfoElement::VERSION))
@@ -282,6 +306,7 @@ bool IAXIEList::createFromFrame(const IAXFullFrame* frame, bool incoming)
 	    case IAXInfoElement::SERVICEIDENT:       // Length must be 6
 	    case IAXInfoElement::FWBLOCKDATA:        // Length can be 0
 	    case IAXInfoElement::ENKEY:
+	    case IAXInfoElement::CALLTOKEN:
 		if (data[i-1] == IAXInfoElement::SERVICEIDENT && data[i] != 6) {
 		    i = 0xFFFF;
 		    break;
@@ -353,9 +378,10 @@ bool IAXIEList::createFromFrame(const IAXFullFrame* frame, bool incoming)
 		i += 1;
 		break;
 	    default:
-		Debug(DebugWarn,"IAXIEList::createFromFrame. Frame(%u,%u) with unknown IE identifier %u [%p]",
+		Debug(DebugInfo,"IAX Frame(%u,%u) with unknown IE identifier %u [%p]",
 		    frame->type(),frame->subclass(),data[i-1],frame);
-		i = 0xFFFF;
+		appendBinary((IAXInfoElement::Type)data[i-1],data+i+1,data[i]);
+		i += data[i] + 1;
 	}
 	if (i == 0xFFFF)
 	    break;
@@ -393,7 +419,15 @@ void IAXIEList::toString(String& dest, const char* indent)
 	    ie->toString(dest);
 	    continue;
 	}
-	dest << IAXInfoElement::ieText(ie->type());
+	const char* name = IAXInfoElement::ieText(ie->type());
+	if (name)
+	    dest << name;
+	else {
+	    u_int8_t t = ie->type();
+	    String tmp;
+	    tmp.hexify(&t,1);
+	    dest << "0x" << tmp;
+	}
 	if (ie->type() != IAXInfoElement::AUTOANSWER)
 	    dest << ": ";
 	switch (ie->type()) {
@@ -436,6 +470,7 @@ void IAXIEList::toString(String& dest, const char* indent)
 	    case IAXInfoElement::SERVICEIDENT:
 	    case IAXInfoElement::FWBLOCKDATA:
 	    case IAXInfoElement::ENKEY:
+    	    case IAXInfoElement::CALLTOKEN:
 		ie->toString(dest);
 		break;
 	    // 4 bytes
@@ -510,6 +545,7 @@ void IAXIEList::toString(String& dest, const char* indent)
 	    case IAXInfoElement::AUTOANSWER:
 		break;
 	    default: ;
+		ie->toString(dest);
 	}
     }
 }
@@ -665,6 +701,7 @@ TokenDict IAXControl::s_types[] = {
         {"PROVISION",  Provision},
         {"FWDOWNL",    FwDownl},
         {"FWDATA",     FwData},
+        {"CALLTOKEN",  CallToken},
         {0,0}
 	};
 
@@ -823,7 +860,7 @@ u_int32_t IAXFrame::unpackSubclass(u_int8_t value)
     return value;
 }
 
-const IAXFullFrame* IAXFrame::fullFrame() const
+IAXFullFrame* IAXFrame::fullFrame()
 {
     return 0;
 }
@@ -855,7 +892,8 @@ IAXFullFrame::IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_i
 	u_int32_t tStamp, bool retrans,
 	const unsigned char* buf, unsigned int len)
     : IAXFrame(type,sCallNo,tStamp,retrans,buf,len),
-      m_dCallNo(dCallNo), m_oSeqNo(oSeqNo), m_iSeqNo(iSeqNo), m_subclass(subclass)
+      m_dCallNo(dCallNo), m_oSeqNo(oSeqNo), m_iSeqNo(iSeqNo), m_subclass(subclass),
+      m_ieList(0)
 {
 //    XDebug(DebugAll,"IAXFullFrame::IAXFullFrame(%u,%u) [%p]",
 //	type,subclass,this);
@@ -866,42 +904,31 @@ IAXFullFrame::IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_i
 	u_int32_t tStamp,
 	const unsigned char* buf, unsigned int len)
     : IAXFrame(type,sCallNo,tStamp,false,0,0),
-      m_dCallNo(dCallNo), m_oSeqNo(oSeqNo), m_iSeqNo(iSeqNo), m_subclass(subclass)
+      m_dCallNo(dCallNo), m_oSeqNo(oSeqNo), m_iSeqNo(iSeqNo), m_subclass(subclass),
+      m_ieList(0)
 {
 //    XDebug(DebugAll,"IAXFullFrame::IAXFullFrame(%u,%u) [%p]",
 //	type,subclass,this);
+    setDataHeader();
+    if (buf)
+	m_data.append((void*)buf,(unsigned int)len);
+}
 
-    unsigned char header[12];
-    DataBlock ie;
-
-    // Full frame flag + Source call number
-    header[0] = 0x80 | (unsigned char)(sourceCallNo() >> 8);
-    header[1] = (unsigned char)(sourceCallNo());
-    // Retrans + Destination call number
-    header[2] = (unsigned char)(destCallNo() >> 8);  // retrans is false: bit 7 is 0
-    header[3] = (unsigned char)destCallNo();
-    // Timestamp
-    header[4] = (unsigned char)(timeStamp() >> 24);
-    header[5] = (unsigned char)(timeStamp() >> 16);
-    header[6] = (unsigned char)(timeStamp() >> 8);
-    header[7] = (unsigned char)timeStamp();
-    // oSeqNo + iSeqNo
-    header[8] = m_oSeqNo;
-    header[9] = m_iSeqNo;
-    // Type
-    header[10] = type;
-    // Subclass
-    header[11] = packSubclass(m_subclass);
-    // Set data
-    m_data.assign(header,sizeof(header));
-    if (buf) {
-	ie.assign((void*)buf,(unsigned int)len);
-	m_data += ie;
-    }
+// Constructor. Constructs an outgoing full frame
+IAXFullFrame::IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_int16_t dCallNo,
+		 unsigned char oSeqNo, unsigned char iSeqNo,
+		 u_int32_t tStamp, IAXIEList* ieList, u_int16_t maxlen)
+    : IAXFrame(type,sCallNo,tStamp,false,0,0),
+      m_dCallNo(dCallNo), m_oSeqNo(oSeqNo), m_iSeqNo(iSeqNo), m_subclass(subclass),
+      m_ieList(ieList)
+{
+//    XDebug(DebugAll,"IAXFullFrame::IAXFullFrame(%u,%u) [%p]",
+//	type,subclass,this);
+    updateBuffer(maxlen);
 }
 
 void IAXFullFrame::toString(String& dest, const SocketAddr& local,
-	const SocketAddr& remote, bool incoming) const
+	const SocketAddr& remote, bool incoming)
 {
 #define STARTLINE(indent) "\r\n" << indent
 #define TMP_TEXT (tmp ? tmp : unk)
@@ -946,7 +973,6 @@ void IAXFullFrame::toString(String& dest, const SocketAddr& local,
 	    break;
 	default:
 	    subc = unk;
-
     }
     setStringFromInteger(stmp,subclass(),4);
     dest << " - " << subc << " (" << stmp << ")";
@@ -974,16 +1000,15 @@ void IAXFullFrame::toString(String& dest, const SocketAddr& local,
     dest << ". Retrans: " << String::boolText(retrans());
     dest << ". Sequence numbers: Out: " << oSeqNo() << " In: " << iSeqNo();
     // IEs
-    IAXIEList ieList;
-    bool hasIE = ieList.createFromFrame(this,incoming);
-    if (hasIE) {
+    updateIEList(incoming);
+    if (!m_ieList->empty()) {
 	String aux;
 	aux << STARTLINE("  ");
-	ieList.toString(dest,aux);
+	m_ieList->toString(dest,aux);
     }
-    if (!hasIE) {
+    if (m_ieList->empty()) {
 	dest << STARTLINE("  ");
-	if (ieList.invalidIEList())
+	if (m_ieList->invalidIEList())
 	    dest << "Error parsing Information Element(s)";
 	else
 	    dest << "No Information Element(s)";
@@ -993,15 +1018,85 @@ void IAXFullFrame::toString(String& dest, const SocketAddr& local,
 #undef STARTLINE
 }
 
+// Rebuild frame buffer from the list of IEs
+void IAXFullFrame::updateBuffer(u_int16_t maxlen)
+{
+    setDataHeader();
+    if (!m_ieList)
+	return;
+    DataBlock tmp;
+    m_ieList->toBuffer(tmp);
+    if (tmp.length() <= maxlen)
+	m_data += tmp;
+    else
+	Debug(DebugNote,"Frame(%u,%u) buffer too long (%u > %u) [%p]",
+	    type(),subclass(),tmp.length(),maxlen,this);
+}
+
+// Update IE list from buffer if not already done
+bool IAXFullFrame::updateIEList(bool incoming)
+{
+    if (!m_ieList)
+	m_ieList = new IAXIEList(this,incoming);
+    return !m_ieList->invalidIEList();
+}
+
+// Remove the IE list
+IAXIEList* IAXFullFrame::removeIEList(bool delObj)
+{
+    if (!m_ieList)
+	return 0;
+    IAXIEList* old = m_ieList;
+    m_ieList = 0;
+    if (delObj) {
+	delete old;
+	old = 0;
+    }
+    return old;
+}
+
 IAXFullFrame::~IAXFullFrame()
 {
 //    XDebug(DebugAll,"IAXFullFrame::~IAXFullFrame(%u,%u) [%p]",
 //	type(),m_subclass,this);
 }
 
-const IAXFullFrame* IAXFullFrame::fullFrame() const
+IAXFullFrame* IAXFullFrame::fullFrame()
 {
     return this;
+}
+
+// Destroyed notification. Clear data
+void IAXFullFrame::destroyed()
+{
+    removeIEList();
+    IAXFrame::destroyed();
+}
+
+// Build frame buffer header
+void IAXFullFrame::setDataHeader()
+{
+    unsigned char header[12];
+    // Full frame flag + Source call number
+    header[0] = 0x80 | (unsigned char)(sourceCallNo() >> 8);
+    header[1] = (unsigned char)(sourceCallNo());
+    // Retrans + Destination call number
+    header[2] = (unsigned char)(destCallNo() >> 8);  // retrans is false: bit 7 is 0
+    header[3] = (unsigned char)destCallNo();
+    // Timestamp
+    header[4] = (unsigned char)(timeStamp() >> 24);
+    header[5] = (unsigned char)(timeStamp() >> 16);
+    header[6] = (unsigned char)(timeStamp() >> 8);
+    header[7] = (unsigned char)timeStamp();
+    // oSeqNo + iSeqNo
+    header[8] = m_oSeqNo;
+    header[9] = m_iSeqNo;
+    // Type
+    header[10] = type();
+    // Subclass
+    header[11] = packSubclass(m_subclass);
+    // Set data
+    m_data.assign(header,sizeof(header));
 }
 
 /*

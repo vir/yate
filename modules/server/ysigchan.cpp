@@ -1010,12 +1010,13 @@ bool SigChannel::startCall(Message& msg, SigTrunk* trunk)
     }
     // Copy routing params
     unsigned int n = msg.length();
-    String prefix;
-    prefix << plugin.debugName() << ".";
+    String prefix = msg.getValue("osig-prefix");
+    if (prefix.null())
+	prefix << plugin.debugName() << ".";
     for (unsigned int i = 0; i < n; i++) {
 	NamedString* ns = msg.getParam(i);
 	if (ns && ns->name().startsWith(prefix))
-	    sigMsg->params().addParam(ns->name().substr(prefix.length()),*ns);
+	    sigMsg->params().setParam(ns->name().substr(prefix.length()),*ns);
     }
     Debug(this,DebugAll,"Trying to call on trunk '%s' [%p]",
 	trunk->name().safe(),this);

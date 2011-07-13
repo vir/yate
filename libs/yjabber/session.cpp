@@ -36,6 +36,7 @@ const TokenDict JGRtpMediaList::s_media[] = {
 const TokenDict JGRtpCandidates::s_type[] = {
     {"ice-udp", RtpIceUdp},
     {"raw-udp", RtpRawUdp},
+    {"p2p",     RtpP2P},
     {0,0},
 };
 
@@ -582,6 +583,45 @@ void JGRtpCandidate::fromXml(XmlElement* xml, const JGRtpCandidates& container)
 
 
 /*
+ * JGRtpCandidateP2P
+ */
+// Create a 'candidate' element from this object
+XmlElement* JGRtpCandidateP2P::toXml(const JGRtpCandidates& container) const
+{
+    if (container.m_type != JGRtpCandidates::RtpP2P)
+	return 0;
+    XmlElement* xml = XMPPUtils::createElement(XmlTag::Candidate);
+    xml->setAttribute("name","rtp");
+    xml->setAttributeValid("generation",m_generation);
+    xml->setAttributeValid("address",m_address);
+    xml->setAttributeValid("port",m_port);
+    xml->setAttributeValid("network","0");
+    xml->setAttributeValid("protocol",m_protocol);
+    xml->setAttribute("username",m_username);
+    xml->setAttribute("password",m_password);
+    xml->setAttributeValid("type","local");
+    xml->setAttributeValid("preference","1");
+    return xml;
+}
+
+// Fill this object from a candidate element
+void JGRtpCandidateP2P::fromXml(XmlElement* xml, const JGRtpCandidates& container)
+{
+    if (!xml || container.m_type != JGRtpCandidates::RtpP2P)
+	return;
+    m_component = "1";
+    m_generation = xml->attribute("generation");
+    m_address = xml->attribute("address");
+    m_port = xml->attribute("port");
+    m_protocol = xml->attribute("protocol");;
+    m_generation = xml->attribute("generation");
+    m_type = xml->attribute("type");
+    m_username = xml->attribute("username");
+    m_password = xml->attribute("password");
+}
+
+
+/*
  * JGRtpCandidates
  */
 // Create a 'transport' element from this object. Add 
@@ -592,6 +632,8 @@ XmlElement* JGRtpCandidates::toXml(bool addCandidates, bool addAuth) const
 	ns = XMPPNamespace::JingleTransportIceUdp;
     else if (m_type == RtpRawUdp)
 	ns = XMPPNamespace::JingleTransportRawUdp;
+    else if (m_type == RtpP2P)
+	ns = XMPPNamespace::JingleTransport;
     else
 	return 0;
     XmlElement* trans = XMPPUtils::createElement(XmlTag::Transport,ns);
@@ -620,14 +662,21 @@ void JGRtpCandidates::fromXml(XmlElement* element)
 	m_type = RtpIceUdp;
     else if (ns == XMPPNamespace::JingleTransportRawUdp)
 	m_type = RtpRawUdp;
+    else if (ns == XMPPNamespace::JingleTransport)
+	m_type = RtpP2P;
     else
 	return;
-    m_password = element->getAttribute("pwd");
-    m_ufrag = element->getAttribute("ufrag");
+    if (m_type != RtpP2P) {
+	m_password = element->getAttribute("pwd");
+	m_ufrag = element->getAttribute("ufrag");
+    }
     // Get candidates
     XmlElement* c = XMPPUtils::findFirstChild(*element,XmlTag::Candidate,ns);
     for (; c; c = XMPPUtils::findNextChild(*element,c,XmlTag::Candidate,ns))
-	append(new JGRtpCandidate(c,*this));
+	if (m_type != RtpP2P)
+	    append(new JGRtpCandidate(c,*this));
+	else
+	    append(new JGRtpCandidateP2P(c,*this));
 }
 
 // Find a candidate by its component value
@@ -655,7 +704,7 @@ void JGRtpCandidates::generateIceToken(String& dest, bool pwd, unsigned int max)
 	max = 256;
     dest = "";
     while (dest.length() < max)
- 	dest << (int)random();
+ 	dest << (int)Random::random();
     dest = dest.substr(0,max);
 }
 
@@ -664,7 +713,7 @@ void JGRtpCandidates::generateOldIceToken(String& dest)
 {
     dest = "";
     while (dest.length() < 16)
- 	dest << (int)random();
+ 	dest << (int)Random::random();
     dest = dest.substr(0,16);
 }
 
@@ -695,7 +744,7 @@ XmlElement* JGSessionContent::toXml(bool minimum, bool addDesc,
     // Add description and transport
     XmlElement* desc = 0;
     XmlElement* trans = 0;
-    if (m_type == RtpIceUdp || m_type == RtpRawUdp) {
+    if (m_type == RtpIceUdp || m_type == RtpRawUdp || m_type == RtpP2P) {
 	// Audio content
 	if (addDesc)
 	    desc = m_rtpMedia.toXml();
@@ -816,6 +865,8 @@ JGSessionContent* JGSessionContent::fromXml(XmlElement* xml, XMPPError::Type& er
 		    content->m_type = RtpIceUdp;
 		else if (content->m_rtpRemoteCandidates.m_type == JGRtpCandidates::RtpRawUdp)
 		    content->m_type = RtpRawUdp;
+		else if (content->m_rtpRemoteCandidates.m_type == JGRtpCandidates::RtpP2P)
+		    content->m_type = RtpP2P;
 	    }
 	    else {
 		if (offer >= 0) {

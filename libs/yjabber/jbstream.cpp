@@ -1326,7 +1326,7 @@ bool JBStream::processStreamStart(const XmlElement* xml)
 	    MD5 md5(String((int)(int64_t)this));
 	    md5 << m_name << String((int)Time::msecNow());
 	    m_id = md5.hexDigest();
-	    m_id << "_" << String((int)::random());
+	    m_id << "_" << String((int)Random::random());
 	}
 	else {
 	    m_id = xml->getAttribute("id");

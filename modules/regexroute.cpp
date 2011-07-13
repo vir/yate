@@ -217,7 +217,7 @@ static void evalFunc(String& str)
 	    vars(par);
 	    for (unsigned int i = 0; i < par.length(); i++) {
 		if (par.at(i) == '?')
-		    str << (int)(::random() % 10);
+		    str << (int)(Random::random() % 10);
 		else
 		    str << par.at(i);
 	    }

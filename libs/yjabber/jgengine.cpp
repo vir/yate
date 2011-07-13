@@ -232,7 +232,9 @@ bool JGEngine::acceptIq(XMPPUtils::IqType type, const JabberID& from, const Jabb
     // Check if this an incoming session request
     JGSession* session = 0;
     if (ver != JGSession::VersionUnknown) {
-	JGSession::Action action = JGSession::lookupAction(child->attribute("type"),ver);
+	JGSession::Action action = JGSession::lookupAction(child->attribute("action"),ver);
+	if (action == JGSession::ActCount)
+	    action = JGSession::lookupAction(child->attribute("type"),ver);
 	if (action == JGSession::ActInitiate) {
 	    switch (ver) {
 		case JGSession::Version1:
@@ -309,7 +311,7 @@ void JGEngine::createSessionId(String& id)
 {
     Lock lock(this);
     id = "JG";
-    id << (unsigned int)m_sessionId << "_" << (int)random();
+    id << (unsigned int)m_sessionId << "_" << (int)Random::random();
     m_sessionId++;
 }
 

@@ -3036,7 +3036,7 @@ YSocksWrapper::YSocksWrapper(const char* id, YSocksEngine* engine, CallEndpoint*
 	    int attempts = lip ? 10 : 0;
 	    // Try to build our own listener
 	    for (int i = 0; i < attempts; i++) {
-		int port = (s_minPort + (::random() % (s_maxPort - s_minPort))) & 0xfffe;
+		int port = (s_minPort + (Random::random() % (s_maxPort - s_minPort))) & 0xfffe;
 		srv = new SOCKSEndpointDef(m_id,false,lip,port,0,
 		    params.getValue("username"),params.getValue("password"));
 		YSocksListenerThread* th = new YSocksListenerThread(m_engine,srv,1);

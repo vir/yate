@@ -7,6 +7,29 @@
 ; addr: ipaddress: IP address to bind to
 ;addr=0.0.0.0
 
+; force_bind: boolean: Try to use a random port if failed to bind on configured one
+; Defaults to yes
+;force_bind=yes
+
+; calltoken_in: boolean: Use call token ip address authentication on incoming calls
+; Note: If the caller don't support the call token IAX extension the call request
+;  will be ignored anyway
+; This parameter is applied on reload
+; Defaults to no
+;calltoken_in=no
+
+; calltoken_out: boolean: Offer call token ip address authentication on outgoing calls
+; This parameter is applied on reload and can be overridden from routing
+; Defaults to yes
+;calltoken_out=yes
+
+; calltoken_rejectmissing: boolean: Reject incoming calls without call token support
+;  when calltoken_in is enabled
+; If disabled the requests will be ignored (dropped)
+; This parameter is applied on reload
+; Defaults to yes
+;calltoken_rejectmissing=yes
+
 ; tos: keyword: Type Of Service to set in outgoing UDP packets
 ; numeric TOS value or: lowdelay, throughput, reliability, mincost
 ;tos=0
@@ -25,6 +48,11 @@
 ; It is a bad idea to set a low priority for anything but testing
 ;thread=normal
 
+; printmsg: boolean: Print sent/received frames to output if the module's debug
+;  level is at least 9
+; This parameter is applied on reload
+; Defaults to yes
+;printmsg=yes
 
 [formats]
 ; This section allows to individually enable or disable the codecs

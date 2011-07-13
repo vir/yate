@@ -551,7 +551,7 @@ MGCPWrapper::MGCPWrapper(CallEndpoint* conn, const char* media, Message& msg, co
     Debug(&splugin,DebugAll,"MGCPWrapper::MGCPWrapper(%p,'%s','%s') [%p]",
 	conn,media,epId,this);
     m_id = "mgcp/";
-    m_id << (unsigned int)::random();
+    m_id << (unsigned int)Random::random();
     if (conn)
 	m_master = conn->id();
     m_master = msg.getValue(YSTRING("id"),(conn ? conn->id().c_str() : (const char*)0));
@@ -901,7 +901,7 @@ MGCPSpan::MGCPSpan(const NamedList& params, const char* name, const MGCPEpInfo& 
 {
     Debug(&splugin,DebugAll,"MGCPSpan::MGCPSpan(%p,'%s') [%p]",
 	&params,name,this);
-    u_int32_t ntfy = (u_int32_t)::random();
+    u_int32_t ntfy = (u_int32_t)Random::random();
     m_notify.hexify(&ntfy,sizeof(ntfy));
     m_rqntStr = "D/[0-9#*](N)";
     const AnalogLineGroup* analog = YOBJECT(AnalogLineGroup,group());

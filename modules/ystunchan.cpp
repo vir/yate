@@ -819,7 +819,7 @@ void YStunUtils::createId(String& id)
     id << m_id++ << "_";
     s_idMutex.unlock();
     for (; id.length() < STUN_MSG_IDLENGTH;)
- 	id << (int)random();
+ 	id << (int)Random::random();
     id = id.substr(0,STUN_MSG_IDLENGTH);
 }
 
@@ -944,7 +944,7 @@ YStunSocketFilter::YStunSocketFilter()
 {
     DDebug(&iplugin,DebugAll,"YStunSocketFilter. [%p]",this);
     for (; m_security.length() < FILTER_SECURITYLENGTH; )
-	m_security << (int)random();
+	m_security << (int)Random::random();
     m_security = m_security.substr(0,FILTER_SECURITYLENGTH);
 }
 

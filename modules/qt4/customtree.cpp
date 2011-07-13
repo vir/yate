@@ -1844,7 +1844,7 @@ void ContactList::itemAdded(QtTreeItem& item, QtTreeItem* parent)
 {
     QtCustomTree::itemAdded(item,parent);
     DDebug(ClientDriver::self(),DebugAll,"ContactList(%s)::itemAdded(%p,%p) type=%d id=%s",
-	name().c_str(),&item,parent,item.type(),item.id().c_str(),parent);
+	name().c_str(),&item,parent,item.type(),item.id().c_str());
     if (isContactType(item.type())) {
 	ContactItem* c = static_cast<ContactItem*>(&item);
 	updateContact(*c,*c);

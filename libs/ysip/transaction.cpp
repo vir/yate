@@ -193,7 +193,7 @@ void SIPTransaction::setDialogTag(const char* tag)
 {
     if (null(tag)) {
 	if (m_tag.null())
-	    m_tag = (int)::random();
+	    m_tag = (int)Random::random();
     }
     else
 	m_tag = tag;
@@ -577,8 +577,13 @@ SIPEvent* SIPTransaction::getClientEvent(int state, int timeout)
     switch (state) {
 	case Initial:
 	    e = new SIPEvent(m_firstMessage,this);
-	    if (changeState(Trying))
-		setTimeout(m_engine->getTimer(isInvite() ? 'A' : 'E'),5);
+	    if (changeState(Trying)) {
+		bool reliable = e->getParty() && e->getParty()->isReliable();
+		if (!reliable)
+		    setTimeout(m_engine->getTimer(isInvite() ? 'A' : 'E'),5);
+		else
+		    setTimeout(m_engine->getTimer(isInvite() ? 'B' : 'F',true),1);
+	    }
 	    break;
 	case Trying:
 	    if (timeout < 0)

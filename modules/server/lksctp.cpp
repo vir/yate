@@ -75,11 +75,15 @@ public:
     LKModule();
     ~LKModule();
     virtual void initialize();
+    virtual void statusParams(String& str);
 private:
     bool m_init;
 };
 
 static LKModule plugin;
+unsigned int s_count = 0;
+const char* s_mutexName = "LKSctpCounter";
+Mutex s_countMutex(true,s_mutexName);
 
 /**
  * class LKSocket
@@ -89,6 +93,8 @@ LKSocket::LKSocket()
     : m_payload(0)
 {
     XDebug(&plugin,DebugAll,"Creating LKSocket [%p]",this);
+    Lock lock(s_countMutex);
+    s_count++;
 }
 
 LKSocket::LKSocket(SOCKET fd)
@@ -96,11 +102,15 @@ LKSocket::LKSocket(SOCKET fd)
       m_payload(0)
 {
     XDebug(&plugin,DebugAll,"Creating LKSocket [%p]",this);
+    Lock lock(s_countMutex);
+    s_count++;
 }
 
 LKSocket::~LKSocket()
 {
     XDebug(&plugin,DebugAll,"Destroying LKSocket [%p]",this);
+    Lock lock(s_countMutex);
+    s_count--;
 }
 
 bool LKSocket::bindx(ObjList& addresses)
@@ -231,9 +241,17 @@ bool LKSocket::setParams(const NamedList& params)
     bool hbEnabled = params.getBoolValue(YSTRING("hb_enabled"),true);
     paddr_params.spp_flags |= hbEnabled ? SPP_HB_ENABLE : SPP_HB_DISABLE;
     if (params.getParam(YSTRING("hb_0")))
+#ifdef SPP_HB_TIME_IS_ZERO
 	paddr_params.spp_flags |= SPP_HB_TIME_IS_ZERO;
+#else
+	Debug(&plugin,DebugNote,"HeartBeat 0 is not available");
+#endif
     if (params.getParam(YSTRING("hb_demand")))
+#ifdef SPP_HB_DEMAND
 	paddr_params.spp_flags |= SPP_HB_DEMAND;
+#else
+	Debug(&plugin,DebugNote,"HeartBeat demand is not available");
+#endif
     aux = setOption(IPPROTO_SCTP,SCTP_PEER_ADDR_PARAMS, &paddr_params, sizeof(paddr_params));
     ret |= aux;
     if (!aux)
@@ -382,6 +400,12 @@ void LKModule::initialize()
 	m_init = true;
 	Engine::install(new LKHandler());
     }
+    setup();
+}
+
+void LKModule::statusParams(String& str)
+{
+    str << "count=" << s_count;
 }
 
 }; // anonymous namespace

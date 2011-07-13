@@ -56,6 +56,16 @@
 ;account_loadcache=
 
 
+; The following parameters can be set in cache sections
+
+; reload_interval: integer: Interval (in seconds) to reload the cache
+; This parameter is applied on reload
+; This parameter will be ignored if the cache don't have a load account and query
+; Minimum allowed value is 10. Set it to 0 to disable cache reload
+; Defaults to 0 (no reload)
+;reload_interval=0
+
+
 [lnp]
 ; This section configures the LNP cache
 ; Database query examples assume a 'lnp' table with the following fields:

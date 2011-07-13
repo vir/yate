@@ -2574,10 +2574,12 @@ SignallingEvent* SS7ISUPCall::releaseComplete(bool final, SS7MsgISUP* msg, const
 }
 
 // Helper function to copy parameters
-inline void param(NamedList& dest, NamedList& src, const char* param,
-	const char* srcParam, const char* defVal)
+inline void param(NamedList& dest, NamedList& src, const String& destParam,
+	const String& srcParam, const char* defVal)
 {
-    dest.addParam(param,src.getValue(srcParam,src.getValue(param,defVal)));
+    const char* val = src.getValue(srcParam,src.getValue(destParam,defVal));
+    if ((val != defVal) || !dest.getParam(destParam))
+	dest.setParam(destParam,val);
 }
 
 // Initialize/set IAM message parameters
@@ -2602,7 +2604,7 @@ bool SS7ISUPCall::copyParamIAM(SS7MsgISUP* msg, bool outgoing, SignallingMessage
 	param(dest,src,"CallingPartyNumber.screened","callerscreening",isup()->m_numScreening);
 	param(dest,src,"CallingPartyNumber.complete","complete","true");
 	m_format = src.getValue(YSTRING("format"),isup()->format());
-	dest.addParam("UserServiceInformation",m_format);
+	dest.setParam("UserServiceInformation",m_format);
 	return true;
     }
     // Incoming call

@@ -231,9 +231,17 @@ bool LKSocket::setParams(const NamedList& params)
     bool hbEnabled = params.getBoolValue(YSTRING("hb_enabled"),true);
     paddr_params.spp_flags |= hbEnabled ? SPP_HB_ENABLE : SPP_HB_DISABLE;
     if (params.getParam(YSTRING("hb_0")))
+#ifdef SPP_HB_TIME_IS_ZERO
 	paddr_params.spp_flags |= SPP_HB_TIME_IS_ZERO;
+#else
+	Debug(&plugin,DebugNote,"HeartBeat 0 is not available");
+#endif
     if (params.getParam(YSTRING("hb_demand")))
+#ifdef SPP_HB_DEMAND
 	paddr_params.spp_flags |= SPP_HB_DEMAND;
+#else
+	Debug(&plugin,DebugNote,"HeartBeat demand is not available");
+#endif
     aux = setOption(IPPROTO_SCTP,SCTP_PEER_ADDR_PARAMS, &paddr_params, sizeof(paddr_params));
     ret |= aux;
     if (!aux)

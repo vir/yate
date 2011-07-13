@@ -75,7 +75,7 @@ public:
     LKModule();
     ~LKModule();
     virtual void initialize();
-    virtual void msgStatus(Message& msg);
+    virtual void statusParams(String& str);
 private:
     bool m_init;
 };
@@ -403,9 +403,9 @@ void LKModule::initialize()
     setup();
 }
 
-void LKModule::msgStatus(Message& msg)
+void LKModule::statusParams(String& str)
 {
-    msg.retValue() << "count: " << s_count << "\r\n";
+    str << "count=" << s_count;
 }
 
 }; // anonymous namespace

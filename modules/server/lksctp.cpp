@@ -75,11 +75,15 @@ public:
     LKModule();
     ~LKModule();
     virtual void initialize();
+    virtual void msgStatus(Message& msg);
 private:
     bool m_init;
 };
 
 static LKModule plugin;
+unsigned int s_count = 0;
+const char* s_mutexName = "LKSctpCounter";
+Mutex s_countMutex(true,s_mutexName);
 
 /**
  * class LKSocket
@@ -89,6 +93,8 @@ LKSocket::LKSocket()
     : m_payload(0)
 {
     XDebug(&plugin,DebugAll,"Creating LKSocket [%p]",this);
+    Lock lock(s_countMutex);
+    s_count++;
 }
 
 LKSocket::LKSocket(SOCKET fd)
@@ -96,11 +102,15 @@ LKSocket::LKSocket(SOCKET fd)
       m_payload(0)
 {
     XDebug(&plugin,DebugAll,"Creating LKSocket [%p]",this);
+    Lock lock(s_countMutex);
+    s_count++;
 }
 
 LKSocket::~LKSocket()
 {
     XDebug(&plugin,DebugAll,"Destroying LKSocket [%p]",this);
+    Lock lock(s_countMutex);
+    s_count--;
 }
 
 bool LKSocket::bindx(ObjList& addresses)
@@ -390,6 +400,12 @@ void LKModule::initialize()
 	m_init = true;
 	Engine::install(new LKHandler());
     }
+    setup();
+}
+
+void LKModule::msgStatus(Message& msg)
+{
+    msg.retValue() << "count: " << s_count << "\r\n";
 }
 
 }; // anonymous namespace

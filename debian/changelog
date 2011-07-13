@@ -1,3 +1,9 @@
+yate (3.3.3.vir2011071301) UNRELEASED; urgency=low
+
+  * Merged a lot of upstream changes, most notably, SIP over TCP/TLS
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Wed, 13 Jul 2011 21:32:27 +0400
+
 yate (3.3.3.vir2011063001) UNRELEASED; urgency=low
 
   * SDP FMTP lines forwarding should now work as expected

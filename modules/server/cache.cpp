@@ -80,12 +80,8 @@ public:
     inline unsigned int index(const String& str) const
 	{ return str.hash() % m_list.length(); }
     // Safely retrieve DB load info
-    inline void getDbLoad(String& account, String& query, unsigned int& loadChunk) {
-	    Lock lock(this);
-	    account = (m_accountLoadCache ? m_accountLoadCache : m_account);
-	    query = m_queryLoadCache;
-	    loadChunk = m_loadChunk;
-	}
+    void getDbLoad(String& account, String& query, unsigned int& loadChunk,
+	Thread::Priority& loadPrio);
     // Reinit
     inline void update(const NamedList& params)
 	{ doUpdate(params,false); }
@@ -145,6 +141,7 @@ protected:
     unsigned int m_limit;                // Limit the number of cache items
     unsigned int m_limitOverflow;        // Allowed limit overflow
     unsigned int m_loadChunk;            // The number of items to load in each DB load query
+    Thread::Priority m_loadPrio;         // Load thread priority
     bool m_loading;                      // Cache is loading from database
     unsigned int m_loadInterval;         // Cache re-load interval (in seconds)
     u_int64_t m_nextLoad;                // Next time to load the cache
@@ -169,8 +166,8 @@ public:
 class CacheLoadThread : public Thread
 {
 public:
-    inline CacheLoadThread(const String name)
-	: Thread("CacheLoadThread"), m_cache(name)
+    inline CacheLoadThread(const String name, Thread::Priority prio)
+	: Thread("CacheLoadThread",prio), m_cache(name)
 	{}
     virtual void run();
 private:
@@ -247,6 +244,7 @@ static unsigned int s_size = 0;          // The number of listst in each cache
 static unsigned int s_limit = 0;         // Default cache limit
 static unsigned int s_loadChunk = 0;     // The number of cache items to load in each DB load query
 static unsigned int s_maxChunks = 1000;  // Maximum number of chunks to load in a cache
+static Thread::Priority s_loadPrio = Thread::Normal; // Cache load thread priority
 static unsigned int s_cacheTtlSec = 0;   // Default cache item time to live (in seconds)
 static u_int64_t s_checkToutInterval = 0;// Interval to check cache timeout
 
@@ -317,7 +315,7 @@ static inline void dumpItem(Cache& c, CacheItem& item, const char* oper)
 Cache::Cache(const String& name, int size, const NamedList& params)
     : Mutex(false,"Cache"),
     m_name(name), m_list(size), m_cacheTtl(0), m_count(0), m_limit(0),
-    m_limitOverflow(0), m_loadChunk(0),
+    m_limitOverflow(0), m_loadChunk(0), m_loadPrio(Thread::Normal),
     m_loading(false), m_loadInterval(0), m_nextLoad(0)
 {
     Debug(&__plugin,DebugInfo,"Cache(%s) size=%u [%p]",
@@ -402,6 +400,17 @@ bool Cache::copyParams(const String& id, NamedList& list, const String* cpParams
     }
     unlock();
     return item != 0;
+}
+
+// Safely retrieve DB load info
+void Cache::getDbLoad(String& account, String& query, unsigned int& loadChunk,
+    Thread::Priority& loadPrio)
+{
+    Lock lock(this);
+    account = (m_accountLoadCache ? m_accountLoadCache : m_account);
+    query = m_queryLoadCache;
+    loadChunk = m_loadChunk;
+    loadPrio = m_loadPrio;
 }
 
 // Expire entries
@@ -578,6 +587,7 @@ void Cache::doUpdate(const NamedList& params, bool first)
     else
 	m_limitOverflow = 0;
     m_loadChunk = adjustedCacheLoadChunk(params.getIntValue("loadchunk",s_loadChunk));
+    m_loadPrio = Thread::priority(params.getValue("loadcache_priority"),s_loadPrio);
     m_copyParams = params.getValue("copyparams");
     m_account = params.getValue("account",account);
     m_accountLoadCache = params.getValue("account_loadcache",accountLoadCache);
@@ -891,14 +901,15 @@ void CacheModule::loadCache(const String& name, bool async)
     String account;
     String query;
     unsigned int chunk = 0;
-    cache->getDbLoad(account,query,chunk);
+    Thread::Priority prio = Thread::Normal;
+    cache->getDbLoad(account,query,chunk,prio);
     if (!(account && query)) {
 	cache = 0;
 	return;
     }
     if (async) {
 	cache = 0;
-	(new CacheLoadThread(name))->startup();
+	(new CacheLoadThread(name,prio))->startup();
 	return;
     }
     bool load = cache->startLoad();
@@ -981,6 +992,7 @@ void CacheModule::initialize()
 	s_maxChunks = 1;
     else if (s_maxChunks > 10000)
 	s_maxChunks = 10000;
+    s_loadPrio = Thread::priority(cfg.getValue("general","loadcache_priority"));
     s_cacheTtlSec = adjustedCacheTtl(cfg.getIntValue("general","ttl"));
     unsigned int tmp = safeValue(cfg.getIntValue("general","expire_check_interval",10));
     if (tmp > s_cacheTtlSec)

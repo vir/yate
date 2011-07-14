@@ -42,6 +42,13 @@
 ;    useless extra processing
 ;maxchunks=1000
 
+; loadcache_priority: keyword: The priority of the cache load thread
+; This parameter is applied on reload and can be overridden in cache sections
+; Can be one of: lowest, low, normal, high, highest
+; High priorities need superuser privileges on POSIX operating systems
+; Defaults to normal
+;loadcache_priority=normal
+
 ; expire_check_interval: integer: The interval (in seconds) to check cache expire
 ; Defaults to 10, minimum allowed value 1, maximum allowed value 300
 ; This parameter is applied on reload

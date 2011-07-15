@@ -291,9 +291,9 @@ static inline unsigned int adjustedCacheLoadChunk(int val)
 {
     if (val <= 0)
 	return 0;
-    if (val >= 500 && val <= 10000)
+    if (val >= 500 && val <= 50000)
 	return val;
-    return val < 500 ? 500 : 10000;
+    return val < 500 ? 500 : 50000;
 }
 
 // Show cache item changes to output

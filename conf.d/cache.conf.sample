@@ -15,13 +15,13 @@
 ;ttl=
 
 ; limit: integer: Maximum number of stored cache items
-; This value must be at least the power of 2 of cache size, e.g. for
+; This value must be at least the power of 2 of cache hash list size, e.g. for
 ;  cache size 5 limit must be at least 25
 ; This parameter is applied on reload and can be overridden in cache sections
 ;limit=
 
 ; loadchunk: integer: The number of items to load in a database request
-; Minimum allowed value is 500, maximum allowed value is 10000
+; Minimum allowed value is 500, maximum allowed value is 50000
 ; Set it to 0 to load the whole cache using a single database request
 ; This parameter is applied on reload and can be overridden in cache sections
 ; NOTES for non 0 value:

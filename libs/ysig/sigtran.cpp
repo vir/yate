@@ -1478,6 +1478,8 @@ bool SS7M2PA::transmitMSU(const SS7MSU& msu)
     if (!transport())
 	return false;
     Lock lock(m_mutex);
+    if (!operational())
+	return false;
     DataBlock packet;
     increment(m_seqNr);
     setHeader(packet);

@@ -30,9 +30,10 @@ namespace { // anonymous
 
 class CacheItem;                         // A cache item
 class Cache;                             // A cache hash list
+class CacheThread;                       // Base class for cache threads
 class CacheExpireThread;                 // Cache expire thread
 class CacheLoadThread;                   // Cache load thread
-class EngineStartHandler;                // engine.start handler
+class EngineHandler;                     // engine.start/stop handler
 class CacheModule;
 
 // Max value for cache expire check interval
@@ -167,33 +168,46 @@ protected:
     String m_queryExpire;                // Database expire query
 };
 
-class CacheExpireThread : public Thread
+class CacheThread : public Thread, public GenObject
+{
+public:
+    CacheThread(const char* name, Priority prio = Normal);
+    ~CacheThread();
+    // List of running threads (objects are not owned by the list)
+    // The list is protected by the plugin mutex
+    static ObjList s_threads;
+};
+
+class CacheExpireThread : public CacheThread
 {
 public:
     inline CacheExpireThread()
-	: Thread("CacheExpireThread")
+	: CacheThread("CacheExpireThread")
 	{}
     virtual void run();
 };
 
-class CacheLoadThread : public Thread
+class CacheLoadThread : public CacheThread
 {
 public:
     inline CacheLoadThread(const String name, Thread::Priority prio)
-	: Thread("CacheLoadThread",prio), m_cache(name)
+	: CacheThread("CacheLoadThread",prio), m_cache(name)
 	{}
     virtual void run();
 private:
     String m_cache;
 };
 
-class EngineStartHandler : public MessageHandler
+class EngineHandler : public MessageHandler
 {
 public:
-    inline EngineStartHandler()
-	: MessageHandler("engine.start")
+    inline EngineHandler(bool start)
+	: MessageHandler(start ? "engine.start" : "engine.stop"),
+	m_start(start)
 	{}
     virtual bool received(Message& msg);
+protected:
+    bool m_start;
 };
 
 class CacheModule : public Module
@@ -249,6 +263,7 @@ protected:
 
 
 INIT_PLUGIN(CacheModule);                // The module
+ObjList CacheThread::s_threads;          // List of running threads
 static bool s_engineStarted = false;     // Engine started flag
 static bool s_lnpStoreFailed = false;    // Store failed LNP requests
 static bool s_lnpStoreNpdiBefore = true; // Store LNP when already done
@@ -790,6 +805,23 @@ void Cache::adjustToLimit(CacheItem* skipAdded)
 
 
 /*
+ * CacheThread
+ */
+CacheThread::CacheThread(const char* name, Priority prio)
+    : Thread(name,prio)
+{
+    Lock lck(__plugin);
+    s_threads.append(this)->setDelete(false);
+}
+
+CacheThread::~CacheThread()
+{
+    Lock lck(__plugin);
+    s_threads.remove(this,false);
+}
+
+
+/*
  * CacheExpireThread
  */
 void CacheExpireThread::run()
@@ -831,10 +863,14 @@ void CacheLoadThread::run()
 
 
 /*
- * EngineStartHandler
+ * EngineHandler
  */
-bool EngineStartHandler::received(Message& msg)
+bool EngineHandler::received(Message& msg)
 {
+    if (!m_start) {
+	Lock lck(__plugin);
+	return 0 != CacheThread::s_threads.skipNull();
+    }
     s_engineStarted = true;
     __plugin.loadCache("lnp");
     __plugin.loadCache("cnam");
@@ -1050,7 +1086,8 @@ void CacheModule::initialize()
 	installRelay(Status,110);
 	installRelay(Level,120);
 	installRelay(Command,120);
-	Engine::install(new EngineStartHandler);
+	Engine::install(new EngineHandler(true));
+	Engine::install(new EngineHandler(false));
 	s_first = false;
     }
     if (s_init) {

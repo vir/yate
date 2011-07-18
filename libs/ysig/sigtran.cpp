@@ -1032,8 +1032,6 @@ bool SS7M2PA::decodeSeq(const DataBlock& data,u_int8_t msgType)
 	    transmitLS();
 	    return false;
 	}
-	while (nextBsn(bsn))
-	    removeFrame(getNext(m_lastAck));
 	if (bsn == m_lastAck)
 	    return true;
 	// If we are here means that something went wrong
@@ -1064,8 +1062,8 @@ bool SS7M2PA::decodeSeq(const DataBlock& data,u_int8_t msgType)
 	transmitLS();
 	return false;
     }
-    while (nextBsn(bsn))
-	removeFrame(getNext(m_lastAck));
+    while (nextBsn(bsn) && removeFrame(getNext(m_lastAck)))
+	;
     if (bsn != m_lastAck) {
 	abortAlignment(String("Received unexpected bsn: ") << bsn);
 	transmitLS();
@@ -1127,7 +1125,7 @@ void SS7M2PA::timerTick(const Time& when)
     }
 }
 
-void SS7M2PA::removeFrame(u_int32_t bsn)
+bool SS7M2PA::removeFrame(u_int32_t bsn)
 {
     Lock lock(m_mutex);
     for (ObjList* o = m_ackList.skipNull();o;o = o->skipNext()) {
@@ -1138,8 +1136,10 @@ void SS7M2PA::removeFrame(u_int32_t bsn)
 	m_lastAck = bsn;
 	m_ackList.remove(d);
 	m_ackTimer.stop();
-	break;
+	return true;
     }
+    Debug(this,DebugWarn,"Failed to remove frame %d! Frame is missing!",bsn);
+    return false;
 }
 
 void SS7M2PA::setLocalStatus(unsigned int status)
@@ -1428,6 +1428,10 @@ bool SS7M2PA::processLinkStatus(DataBlock& data,int streamId)
 
 void SS7M2PA::recoverMSU(int sequence)
 {
+    if (operational()) {
+	Debug(this,DebugMild,"Recover MSU from sequence %d while link is operational",sequence);
+	return;
+    }
     Debug(this,DebugInfo,"Recovering MSUs from sequence %d",sequence);
     for (;;) {
 	m_mutex.lock();

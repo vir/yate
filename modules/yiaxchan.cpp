@@ -1589,6 +1589,12 @@ void YIAXConnection::callAccept(Message& msg)
     DDebug(this,DebugCall,"callAccept [%p]",this);
     m_mutexTrans.lock();
     if (m_transaction) {
+	const char* fmts = msg.getValue("formats");
+	if (fmts) {
+	    u_int32_t codecs = iplugin.codecs();
+	    iplugin.updateCodecsFromRoute(codecs,fmts);
+	    iplugin.getEngine()->acceptFormatAndCapability(m_transaction,&codecs);
+	}
 	m_transaction->sendAccept();
 	// Enable trunking if trunkin parameter is enabled
 	if (msg.getBoolValue("trunkin"))

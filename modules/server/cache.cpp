@@ -79,6 +79,18 @@ public:
     // Retrieve the mutex protecting a given list
     inline unsigned int index(const String& str) const
 	{ return str.hash() % m_list.length(); }
+    // Safely retrieve the id matching parameter
+    inline void getIdParam(String& param) {
+	    Lock lck(this);
+	    param = m_idParam;
+	}
+    // Replace id matching parameter from a list
+    // Return true if the id is not empty
+    inline bool replaceIdParam(String& param, const NamedList& list) {
+	    getIdParam(param);
+	    list.replaceParams(param);
+	    return !param.null();
+	}
     // Safely retrieve DB load info
     void getDbLoad(String& account, String& query, unsigned int& loadChunk,
 	Thread::Priority& loadPrio);
@@ -145,6 +157,7 @@ protected:
     bool m_loading;                      // Cache is loading from database
     unsigned int m_loadInterval;         // Cache re-load interval (in seconds)
     u_int64_t m_nextLoad;                // Next time to load the cache
+    String m_idParam;                    // Cache id match parameter
     String m_copyParams;                 // Item parameters to store/copy
     String m_account;                    // Database account
     String m_accountLoadCache;           // Load cache account
@@ -588,6 +601,7 @@ void Cache::doUpdate(const NamedList& params, bool first)
 	m_limitOverflow = 0;
     m_loadChunk = adjustedCacheLoadChunk(params.getIntValue("loadchunk",s_loadChunk));
     m_loadPrio = Thread::priority(params.getValue("loadcache_priority"),s_loadPrio);
+    m_idParam = params.getValue("id_param");
     m_copyParams = params.getValue("copyparams");
     m_account = params.getValue("account",account);
     m_accountLoadCache = params.getValue("account_loadcache",accountLoadCache);
@@ -616,6 +630,7 @@ void Cache::doUpdate(const NamedList& params, bool first)
     String all;
 #ifdef DEBUG
     if (m_account) {
+	all << " id_param=" << m_idParam;
 	all << " loadchunk=" << m_loadChunk;
 	all << " account=" << m_account;
 	all << " account_loadcache=" << m_accountLoadCache;
@@ -1010,18 +1025,22 @@ void CacheModule::initialize()
     // Update cache objects
     NamedList* lnp = cfg.getSection("lnp");
     if (lnp) {
-	// Set default copyparams
+	// Set default params
 	if (!lnp->getValue("copyparams"))
 	    lnp->setParam("copyparams","routing");
+	if (!lnp->getValue("id_param"))
+	    lnp->setParam("id_param","${called}");
 	setupCache(*lnp,*lnp);
 	s_lnpStoreFailed = lnp->getBoolValue("store_failed_requests");
 	s_lnpStoreNpdiBefore = lnp->getBoolValue("store_npdi_before");
     }
     NamedList* cnam = cfg.getSection("cnam");
     if (cnam) {
-	// Set default copyparams
+	// Set default params
 	if (!cnam->getValue("copyparams"))
 	    cnam->setParam("copyparams","callername");
+	if (!cnam->getValue("id_param"))
+	    cnam->setParam("id_param","${caller}");
 	setupCache(*cnam,*cnam);
 	s_cnamStoreEmpty = cnam->getBoolValue("store_empty");
     }
@@ -1135,21 +1154,23 @@ void CacheModule::handleLnp(Message& msg, bool before)
 {
     if (!(before || msg.getBoolValue("cache_lnp_posthook")))
 	return;
-    const String& called = msg["called"];
-    if (!called)
-	return;
     RefPointer<Cache> lnp;
     getCache(lnp,"lnp");
     if (!lnp)
 	return;
-    Debug(this,DebugAll,"handleLnp(%s) called=%s routing=%s querylnp=%s npdi=%s",
-	(before ? "before" : "after"),msg.getValue("called"),
+    String id;
+    if (!lnp->replaceIdParam(id,msg)) {
+	lnp = 0;
+	return;
+    }
+    Debug(this,DebugAll,"handleLnp(%s) id=%s routing=%s querylnp=%s npdi=%s",
+	(before ? "before" : "after"),id.c_str(),
 	msg.getValue("routing"),msg.getValue("querylnp"),msg.getValue("npdi"));
     bool querylnp = msg.getBoolValue("querylnp");
     if (before) {
 	if (querylnp) {
 	    // LNP requested: check the cache
-	    if (lnp->copyParams(called,msg,msg.getParam("cache_lnp_parameters")))
+	    if (lnp->copyParams(id,msg,msg.getParam("cache_lnp_parameters")))
 		msg.setParam("querylnp",String::boolText(false));
 	    else
 		msg.setParam("cache_lnp_posthook",String::boolText(true));
@@ -1157,13 +1178,13 @@ void CacheModule::handleLnp(Message& msg, bool before)
 	else if (msg.getBoolValue("npdi") &&
 	    msg.getBoolValue("cache_lnp_store",s_lnpStoreNpdiBefore)) {
 	    // LNP already done: update cache
-	    lnp->add(called,msg,msg.getParam("cache_lnp_parameters"));
+	    lnp->add(id,msg,msg.getParam("cache_lnp_parameters"));
 	}
     }
     else if (!querylnp || s_lnpStoreFailed || msg.getBoolValue("npdi")) {
 	// querylnp=true: request failed
 	// LNP query made locally: update cache
-	lnp->add(called,msg,msg.getParam("cache_lnp_parameters"));
+	lnp->add(id,msg,msg.getParam("cache_lnp_parameters"));
     }
     lnp = 0;
 }
@@ -1173,21 +1194,23 @@ void CacheModule::handleCnam(Message& msg, bool before)
 {
     if (!(before || msg.getBoolValue("cache_cnam_posthook")))
 	return;
-    const String& caller = msg["caller"];
-    if (!caller)
-	return;
     RefPointer<Cache> cnam;
     getCache(cnam,"cnam");
     if (!cnam)
 	return;
-    Debug(this,DebugAll,"handleCnam(%s) caller=%s callername=%s querycnam=%s",
-	(before ? "before" : "after"),msg.getValue("caller"),
+    String id;
+    if (!cnam->replaceIdParam(id,msg)) {
+	cnam = 0;
+	return;
+    }
+    Debug(this,DebugAll,"handleCnam(%s) id=%s callername=%s querycnam=%s",
+	(before ? "before" : "after"),id.c_str(),
 	msg.getValue("callername"),msg.getValue("querycnam"));
     bool querycnam = msg.getBoolValue("querycnam");
     if (before) {
 	if (querycnam) {
 	    // CNAM requested: check the cache
-	    if (cnam->copyParams(caller,msg,msg.getParam("cache_cnam_parameters")))
+	    if (cnam->copyParams(id,msg,msg.getParam("cache_cnam_parameters")))
 		msg.setParam("querycnam",String::boolText(false));
 	    else
 		msg.setParam("cache_cnam_posthook",String::boolText(true));
@@ -1196,7 +1219,7 @@ void CacheModule::handleCnam(Message& msg, bool before)
     else if (!querycnam && (s_cnamStoreEmpty || msg.getValue("callername"))) {
 	// querycnam=true: request failed
 	// CNAM query made locally: update cache
-	cnam->add(caller,msg,msg.getParam("cache_cnam_parameters"));
+	cnam->add(id,msg,msg.getParam("cache_cnam_parameters"));
     }
     cnam = 0;
 }

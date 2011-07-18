@@ -6638,8 +6638,9 @@ public:
     /**
      * Remove a frame from acknowledgement list
      * @param bsn The sequence number of the frame to be removed
+     * @return True if the frame was found and removed.
      */
-    void removeFrame(u_int32_t bsn);
+    bool removeFrame(u_int32_t bsn);
 
     /**
      * Check if a sequence number may be a valid next BSN

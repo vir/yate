@@ -96,6 +96,12 @@
 ; This parameter is applied on reload
 ;store_npdi_before=no
 
+; id_param: string: Template used to build a cache entry id value when handling messages
+; This parameter is applied on reload
+; Defaults to called party number parameter (the id is retrieved from the 'called'
+;  parameter value of handled messages)
+;id_param=${called}
+
 ; copyparams: string: Parameters to handle (store in cache or copy to handled messages)
 ; This parameter is applied on reload and can be overridden when routing by
 ;  a 'cache_lnp_parameters' parameter
@@ -147,6 +153,12 @@
 ; Defaults to no
 ; This parameter is applied on reload
 ;store_empty=no
+
+; id_param: string: Template used to build a cache entry id value when handling messages
+; This parameter is applied on reload
+; Defaults to caller party number parameter (the id is retrieved from the 'caller'
+;  parameter value of handled messages)
+;id_param=${caller}
 
 ; copyparams: string: Parameters to handle (store in cache or copy to handled messages)
 ; This parameter is applied on reload and can be overridden when routing by

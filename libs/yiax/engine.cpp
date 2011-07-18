@@ -573,10 +573,12 @@ bool IAXEngine::checkCallToken(const SocketAddr& addr, IAXFullFrame& frame)
     return false;
 }
 
-bool IAXEngine::acceptFormatAndCapability(IAXTransaction* trans)
+bool IAXEngine::acceptFormatAndCapability(IAXTransaction* trans, unsigned int* caps)
 {
     if (!trans)
 	return false;
+    if (caps)
+	trans->m_capability &= (u_int32_t)*caps;
     u_int32_t format = trans->format();
     u_int32_t capability = m_capability & trans->capability();
 #ifdef XDEBUG
@@ -592,10 +594,14 @@ bool IAXEngine::acceptFormatAndCapability(IAXTransaction* trans)
 #endif
     // Valid capability ?
     if (!capability) {
-#ifdef DEBUG
-	if (!trans->outgoing())
-	    Debug(this,DebugNote,"acceptFormatAndCapability. No capabilities received.");
-#endif
+	trans->m_capability = 0;
+	trans->m_format = 0;
+	if (trans->outgoing())
+	    trans->m_formatIn = 0;
+	else
+	    trans->m_formatOut = 0;
+	Debug(this,DebugNote,"Transaction(%u,%u) without common media [%p]",
+	    trans->localCallNo(),trans->remoteCallNo(),trans);
 	return false;
     }
     for (;;) {
@@ -616,7 +622,8 @@ bool IAXEngine::acceptFormatAndCapability(IAXTransaction* trans)
 	    format = IAXFormat::audioData[i].value;
 	    break;
 	}
-	DDebug(this,DebugNote,"acceptFormatAndCapability. Unable to choose a format.");
+	Debug(this,DebugNote,"Unable to choose a common format for transaction(%u,%u) [%p]",
+	    trans->localCallNo(),trans->remoteCallNo(),trans);
 	return false;
     }
     DDebug(this,DebugAll,"acceptFormatAndCapability. Format %u: '%s'.",
@@ -624,8 +631,7 @@ bool IAXEngine::acceptFormatAndCapability(IAXTransaction* trans)
     trans->m_format = format;
     trans->m_capability = capability;
     trans->m_formatIn = format;
-    if (!trans->outgoing())
-	trans->m_formatOut = format;
+    trans->m_formatOut = format;
     return true;
 }
 

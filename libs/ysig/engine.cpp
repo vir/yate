@@ -582,12 +582,14 @@ static const TokenDict s_dict_causeCCITT[] = {
 	// resource-unavailable class
 	{"resource-unavailable",           0x20}, // Resource unavailable
 	{"congestion",                     0x22}, // No circuit/channel available
+	{"channel-congestion",             0x22},
 	{"net-out-of-order",               0x26}, // Network out of order
 	{"frame-mode-conn-down",           0x27}, // Permanent frame mode connection out of service
 	{"frame-mode-conn-up",             0x28}, // Permanent frame mode connection operational
 	{"noconn",                         0x29},
 	{"temporary-failure",              0x29}, // Temporary failure
 	{"congestion",                     0x2a}, // Switching equipment congestion
+	{"switch-congestion",              0x2a},
 	{"access-info-discarded",          0x2b}, // Access information discarded
 	{"channel-unavailable",            0x2c}, // Requested channel not available
 	{"preemption-congestion",          0x2e}, // Precedence call blocked

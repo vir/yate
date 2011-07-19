@@ -1131,7 +1131,7 @@ bool SS7MTP3::recoveredMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
 
 void SS7MTP3::notify(SS7Layer2* link)
 {
-    Lock lock(this);
+    Lock mylock(this);
     unsigned int chk = m_checked;
     unsigned int act = m_active;
     if (link) {
@@ -1197,8 +1197,8 @@ void SS7MTP3::notify(SS7Layer2* link)
 	}
 	if (cnt)
 	    Debug(this,DebugNote,"Attempted to uninhibit/resume %u links [%p]",cnt,this);
-	SS7Layer3::notify(link ? link->sls() : -1);
 
+	int sls = link ? link->sls() : -1;
 	NamedList notif("");
 	notif.addParam("from", toString());
 	notif.addParam("type","ss7-mtp3");
@@ -1207,6 +1207,9 @@ void SS7MTP3::notify(SS7Layer2* link)
 	notif.addParam("total",String(m_total));
 	notif.addParam("link", link ? link->toString() : "");
 	notif.addParam("linkup", link ? String::boolText(link->operational()) : "");
+
+	mylock.drop();
+	SS7Layer3::notify(sls);
 	engine()->notify(this,notif);
     }
 }

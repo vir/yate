@@ -124,9 +124,16 @@
 ; For non 0 'loadchunk'
 ;query_loadcache=SELECT FLOOR(EXTRACT('EPOCH' FROM (timeout - CURRENT_TIMESTAMP))) AS expires,* FROM lnp ORDER BY timeout LIMIT ${chunk} OFFSET ${offset}
 
-; query_loaditem: string: Database query used to load an item when created
+; query_loaditem: string: Database query used to load an item when requested and not found
+;  in cache
 ; This parameter is applied on reload
 ;query_loaditem=SELECT FLOOR(EXTRACT('EPOCH' FROM (timeout - CURRENT_TIMESTAMP))) AS expires,* FROM lnp WHERE id='${id}'
+
+; query_loaditem_command: string: Database query used to load an item when handling
+;  a 'cacheload' command indicating specific items(s)
+; This parameter is applied on reload
+; Defaults to the value of query_loaditem
+;query_loaditem_command=SELECT FLOOR(EXTRACT('EPOCH' FROM (timeout - CURRENT_TIMESTAMP))) AS expires,* FROM lnp WHERE id='${id}'
 
 ; query_save: string: Database query used to save an item
 ; This parameter is applied on reload
@@ -182,9 +189,16 @@
 ; For non 0 'loadchunk'
 ;query_loadcache=SELECT FLOOR(EXTRACT('EPOCH' FROM (timeout - CURRENT_TIMESTAMP))) AS expires,* FROM cnam ORDER BY timeout LIMIT ${chunk} OFFSET ${offset}
 
-; query_loaditem: string: Database query used to load an item when created
+; query_loaditem: string: Database query used to load an item when requested and not found
+;  in cache
 ; This parameter is applied on reload
 ;query_loaditem=SELECT FLOOR(EXTRACT('EPOCH' FROM (timeout - CURRENT_TIMESTAMP))) AS expires,* FROM cnam WHERE id='${id}'
+
+; query_loaditem_command: string: Database query used to load an item when handling
+;  a 'cacheload' command indicating specific items(s)
+; This parameter is applied on reload
+; Defaults to the value of query_loaditem
+;query_loaditem_command=SELECT FLOOR(EXTRACT('EPOCH' FROM (timeout - CURRENT_TIMESTAMP))) AS expires,* FROM cnam WHERE id='${id}'
 
 ; query_save: string: Database query used to save an item
 ; This parameter is applied on reload

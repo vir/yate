@@ -314,6 +314,9 @@ int MyConn::queryDbInternal(DbQuery* query)
 	return -1;
     }
 
+#ifdef DEBUG
+    u_int64_t inter = Time::now();
+#endif
     int total = 0;
     unsigned int warns = 0;
     unsigned int affected = 0;
@@ -332,9 +335,15 @@ int MyConn::queryDbInternal(DbQuery* query)
 		query->m_msg->setParam("rows",String(rows));
 		Array *a = new Array(cols,rows+1);
 		unsigned int c;
-		// add field names
-		for (c = 0; c < cols; c++)
-		    a->set(new String(fields[c].name),c,0);
+		ObjList** columns = new ObjList*[cols];
+		// get top of columns and add field names
+		for (c = 0; c < cols; c++) {
+		    columns[c] = a->getColumn(c);
+		    if (columns[c])
+			columns[c]->set(new String(fields[c].name));
+		    else
+			Debug(&module,DebugGoOn,"No array for column %u",c);
+		}
 		// and now data row by row
 		for (unsigned int r = 1; r <= rows; r++) {
 		    MYSQL_ROW row = mysql_fetch_row(res);
@@ -342,7 +351,10 @@ int MyConn::queryDbInternal(DbQuery* query)
 			break;
 		    unsigned long* len = mysql_fetch_lengths(res);
 		    for (c = 0; c < cols; c++) {
-			if (!row[c])
+			// advance pointer in each column
+			if (columns[c])
+			    columns[c] = columns[c]->next();
+			if (!(columns[c] && row[c]))
 			    continue;
 			bool binary = false;
 			switch (fields[c].type) {
@@ -357,12 +369,13 @@ int MyConn::queryDbInternal(DbQuery* query)
 			if (binary) {
 			    if (!len)
 				continue;
-			    a->set(new DataBlock(row[c],len[c]),c,r);
+			    columns[c]->set(new DataBlock(row[c],len[c]));
 			}
 			else
-			    a->set(new String(row[c]),c,r);
+			    columns[c]->set(new String(row[c]));
 		    }
 		}
+		delete[] columns;
 		query->m_msg->userData(a);
 		a->deref();
 	    }
@@ -372,6 +385,11 @@ int MyConn::queryDbInternal(DbQuery* query)
 
     u_int64_t finish = Time::now();
     m_owner->incQueryTime(finish - start);
+#ifdef DEBUG
+    Debug(&module,DebugAll,"Query time for '%s' is %u+%u ms",c_str(),
+	(unsigned int)((inter-start+500)/1000),
+	(unsigned int)((finish-inter+500)/1000));
+#endif
 
     if (query->m_msg) {
 	query->m_msg->setParam("affected",String(affected));

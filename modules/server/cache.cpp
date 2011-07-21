@@ -663,8 +663,8 @@ unsigned int Cache::addRows(Array& array)
     TelEngine::destruct(params);
     if (colId < 0) {
 	// Don't release columns and titles content: they are owned by the array
-	delete columns;
-	delete titles;
+	delete[] columns;
+	delete[] titles;
 	return 0;
     }
     unsigned int added = 0;
@@ -699,8 +699,8 @@ unsigned int Cache::addRows(Array& array)
     // Add remaining items
     added += add(pending);
     // Don't release columns and titles content: they are owned by the array
-    delete columns;
-    delete titles;
+    delete[] columns;
+    delete[] titles;
     return added;
 }
 

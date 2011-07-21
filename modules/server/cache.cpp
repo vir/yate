@@ -474,7 +474,7 @@ void Cache::endLoad(bool triggerReload)
     DDebug(&__plugin,DebugInfo,"Cache(%s) endLoad() [%p]",m_name.c_str(),this);
     m_loading = false;
     if (triggerReload)
-	m_nextLoad = m_loadInterval ? (Time::now() + m_loadInterval * 1000000) : 0;
+	m_nextLoad = m_loadInterval ? (Time::now() + (u_int64_t)m_loadInterval * 1000000) : 0;
 }
 
 // Copy params from cache item. Return true if found
@@ -663,8 +663,8 @@ unsigned int Cache::addRows(Array& array)
     TelEngine::destruct(params);
     if (colId < 0) {
 	// Don't release columns and titles content: they are owned by the array
-	delete columns;
-	delete titles;
+	delete[] columns;
+	delete[] titles;
 	return 0;
     }
     unsigned int added = 0;
@@ -699,8 +699,8 @@ unsigned int Cache::addRows(Array& array)
     // Add remaining items
     added += add(pending);
     // Don't release columns and titles content: they are owned by the array
-    delete columns;
-    delete titles;
+    delete[] columns;
+    delete[] titles;
     return added;
 }
 
@@ -837,7 +837,7 @@ CacheItem* Cache::addUnsafe(const String& id, const NamedList& params, const Str
 	if (exp) {
 	    int tmp = (int)exp->toInteger();
 	    if (tmp > 0)
-		expires = Time::now() + tmp * 1000000;
+		expires = Time::now() + (u_int64_t)tmp * 1000000;
 	    else {
 		XDebug(&__plugin,DebugAll,"Cache(%s) item '%s' already expired [%p]",
 		    m_name.c_str(),id.c_str(),this);

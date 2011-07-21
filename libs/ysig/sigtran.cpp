@@ -1098,8 +1098,10 @@ void SS7M2PA::timerTick(const Time& when)
 	return;
     }
     if (m_t2.started() && m_t2.timeout(when.msec())) {
-	m_t2.stop();
 	abortAlignment("T2 timeout");
+	setLocalStatus(Alignment);
+	transmitLS();
+	m_t2.start();
 	return;
     }
     if (m_t3.started() && m_t3.timeout(when.msec())) {
@@ -1285,6 +1287,8 @@ void SS7M2PA::transmitLS(int streamId)
 {
     if (m_transportState != Established)
 	return;
+    if (m_state == OutOfService)
+	m_localStatus = OutOfService;
     DataBlock data;
     setHeader(data);
     u_int8_t ms[4];
@@ -1411,11 +1415,12 @@ bool SS7M2PA::processLinkStatus(DataBlock& data,int streamId)
 	    if ((m_state == ProvingNormal || m_state == ProvingEmergency)) {
 		if (m_localStatus == Alignment) {
 		    transmitLS();
-		    m_t2.start();
+		    if (!m_t2.started())
+			m_t2.start();
 		} else if (m_localStatus == OutOfService)
 		    startAlignment();
 		else
-		    return false;
+		    abortAlignment("Recv remote OOS");
 	    }
 	    setRemoteStatus(status);
 	    break;

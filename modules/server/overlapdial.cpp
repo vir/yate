@@ -34,24 +34,156 @@ static ObjList s_calls;
 static int s_current = 0;
 static int s_minlen = 0;
 static int s_maxlen = 16;
+static unsigned int s_timeout = 2500;
 
-class OverlapDialMaster : public CallEndpoint
+class TimerThread : public Thread
 {
 public:
-    OverlapDialMaster(const String & dest);
+    class EventReceiver
+    {
+    public:
+	virtual ~EventReceiver() { }
+	virtual void TimerEvent() = 0;
+    };
+    struct QueuedEvent
+    {
+	EventReceiver * m_receiver;
+	uint64_t m_when;
+	QueuedEvent * m_next;
+	QueuedEvent(EventReceiver * r, uint64_t when): m_receiver(r), m_when(when), m_next(NULL) { }
+	void fire() {
+	    m_receiver->TimerEvent();
+	}
+    };
+public:
+    TimerThread()
+	: m_mutex(true, "Overlapdial timer")
+	, m_signal(1, "Timer Thread")
+	, m_events(NULL)
+	, m_exit(false)
+    {
+    }
+    ~TimerThread()
+    {
+	QueuedEvent * e = m_events;
+	while(e) {
+	    m_events = e->m_next;
+	    delete e;
+	    e = m_events;
+	}
+    }
+    void add(EventReceiver * receiver, unsigned int when)
+    {
+	Lock lock(m_mutex);
+	uint64_t event_time = Time::now() + when;
+	QueuedEvent ** t = &m_events;
+	while(*t) {
+	    if((*t)->m_when > event_time)
+		break;
+	    t = &(*t)->m_next;
+	}
+	QueuedEvent * e = new QueuedEvent(receiver, event_time);
+	e->m_next = *t;
+	*t = e;
+	if(t == &m_events)
+	    update_timer();
+    }
+    void del(EventReceiver * receiver)
+    {
+	Lock lock(m_mutex);
+	QueuedEvent ** t = &m_events;
+	while(*t) {
+	    if((*t)->m_receiver == receiver) {
+		QueuedEvent * e = *t;
+		*t = e->m_next;
+		delete e;
+		if(t == &m_events)
+		    update_timer();
+	    } else
+		t = &(*t)->m_next;
+	}
+    }
+    void shutdown()
+    {
+	m_mutex.lock();
+	m_exit = true;
+	m_signal.unlock();
+	m_mutex.unlock();
+	m_running.lock(); // wait for worker thread shutdown
+	m_running.unlock();
+    }
+private:
+    inline void update_timer()
+    {
+	m_signal.unlock();
+    }
+    inline long get_next_event_delay() const
+    {
+	if(! m_events)
+	    return 5000000;
+	long r = m_events->m_when - Time::now();
+	if(r >= 0)
+	    return r;
+	return 0;
+    }
+    virtual void run()
+    {
+	m_signal.lock(0);
+	Lock running_lock(m_running);
+	long wait;
+	wait = get_next_event_delay();
+	for(;;) {
+	    Debug(DebugCall,"TimerThread::run(): waiting for %ld uS", wait);
+	    bool b = m_signal.lock(wait); // wait for event or timeout
+	    Debug(DebugCall,"TimerThread::run(): got %s! (exit flag: %s, events: %p)", b ? "event" : "timeout", m_exit ? "true" : "false", m_events);
+	    m_mutex.lock();
+	    if(m_exit)
+		break;
+	    while(m_events && m_events->m_when <= Time::now()) {
+		QueuedEvent * e = m_events;
+		m_events = e->m_next;
+		m_mutex.unlock();
+		e->fire();
+		delete e;
+		m_mutex.lock();
+	    }
+	    wait = get_next_event_delay();
+	    m_mutex.unlock();
+	}
+	m_mutex.unlock(); // locked just before 'break' a fiew lines above
+	m_signal.unlock();
+	Debug(DebugCall,"TimerThread::run(): worker thread exiting, bye-bye!");
+    }
+    Mutex m_mutex, m_running;
+    Semaphore m_signal;
+    QueuedEvent * m_events;
+    bool m_exit;
+};
+
+class OverlapDialModule;
+class OverlapDialMaster : public CallEndpoint, public TimerThread::EventReceiver
+{
+    enum CheckNumResult { NeedMore, Complete, Error };
+public:
+    OverlapDialMaster(OverlapDialModule& module, const String & dest);
     virtual ~OverlapDialMaster();
     bool startWork(Message& msg);
     void msgDTMF(Message& msg);
     bool gotDigit(char digit);
-    bool checkCollectedNumber(String & route);
-    bool switchCall(const String & route);
+    CheckNumResult checkCollectedNumber(bool timeout = false);
+    bool checkCollectedNumberOuter(bool timeout);
+    bool switchCall();
     void sendProgress();
 protected:
-    void grabLengths(Message & m);
+    virtual void TimerEvent();
+    void updateParams(Message & m);
+    void startStopTimer(bool start);
+    OverlapDialModule& m_module; // reference to the module object
     Message* m_msg; // copy of original call.exeute message
     String m_dest; // callto tail
     String m_collected; // collected dialed number
-    unsigned int m_len_min, m_len_max, m_len_fixed;
+    unsigned int m_len_min, m_len_max, m_len_fix, m_timeout;
+    String m_route;
 };
 
 class OverlapDialModule : public Module
@@ -60,12 +192,15 @@ public:
     OverlapDialModule();
     virtual ~OverlapDialModule();
     bool unload();
+    TimerThread& timer() { return m_timer; }
 protected:
     virtual void initialize();
     virtual bool received(Message& msg, int id);
     virtual void statusParams(String& str);
     bool msgExecute(Message& msg);
     bool msgToMaster(Message& msg);
+private:
+    TimerThread m_timer;
 };
 
 INIT_PLUGIN(OverlapDialModule);
@@ -78,8 +213,9 @@ UNLOAD_PLUGIN(unloadNow)
 }
 
 
-OverlapDialMaster::OverlapDialMaster(const String & dest)
-    : m_msg(0), m_dest(dest), m_len_min(0), m_len_max(0), m_len_fixed(0)
+OverlapDialMaster::OverlapDialMaster(OverlapDialModule& module, const String & dest)
+    : m_module(module), m_msg(0), m_dest(dest)
+    , m_len_min(0), m_len_max(0), m_len_fix(0), m_timeout(0)
 {
     String tmp(MOD_PREFIX "/");
     s_mutex.lock();
@@ -93,6 +229,7 @@ OverlapDialMaster::OverlapDialMaster(const String & dest)
 OverlapDialMaster::~OverlapDialMaster()
 {
     DDebug(&__plugin,DebugCall,"OverlapDialMaster::~OverlapDialMaster() '%s'",id().c_str());
+    m_module.timer().del(this);
     s_mutex.lock();
     s_calls.remove(this,false);
     TelEngine::destruct(m_msg);
@@ -105,8 +242,9 @@ bool OverlapDialMaster::startWork(Message& msg)
     s_mutex.lock();
     m_len_min = s_minlen;
     m_len_max = s_maxlen;
+    m_timeout = s_timeout;
     s_mutex.unlock();
-    grabLengths(*m_msg);
+    updateParams(*m_msg);
     if(false) {
 	msg.setParam("error",m_msg->getValue("error"));
 	msg.setParam("reason",m_msg->getValue("reason"));
@@ -123,60 +261,69 @@ void OverlapDialMaster::msgDTMF(Message& msg)
     for(unsigned int i = 0; i < dtmf.length(); ++i)
 	if(! gotDigit(dtmf[i]))
 	    break;
+}
 
+void OverlapDialMaster::TimerEvent()
+{
+    RefPointer<CallEndpoint> peer = getPeer();
+    if (!peer)
+	return;
+    Debug(&__plugin,DebugCall,"Call '%s' overlap dial timeout, collected: '%s'",
+	    peer->id().c_str(),m_collected.c_str());
+    OverlapDialMaster::checkCollectedNumberOuter(true);
 }
 
 bool OverlapDialMaster::gotDigit(char digit)
 {
-    Lock lock(s_mutex);
+    //Lock lock(s_mutex);
     RefPointer<CallEndpoint> peer = getPeer();
     if (!peer)
 	return false;
 
     m_collected << digit;
-    Debug(&__plugin,DebugCall,"Call '%s' got DTMF '%c', collected so far: '%s'",
+    Debug(&__plugin,DebugCall,"Call '%s' got '%c', collected: '%s'",
 	    peer->id().c_str(),digit,m_collected.c_str());
-
-    String route;
-    // TODO: implement timeout-based dialing
-    if(checkCollectedNumber(route)) {
-	Debug(&__plugin,DebugCall,"Call '%s': collected number check passed", peer->id().c_str());
-	if(! m_msg->getBoolValue("overlapped", true))
-	    sendProgress(); // seize dialing immediately if requested
-	if(switchCall(route)) {
-	    // successfully switched
-	} else {
-	    // error switching
-	    disconnect("can't connect");
-	}
-	return false;
-    } else {
-	if(m_collected.length() >= m_len_max) {
-	    // number is too long
-	    disconnect("wrong number");
-	    return false;
-	}
-    }
-    return true; // want more digits
+    return OverlapDialMaster::checkCollectedNumberOuter(false);
 }
 
-void OverlapDialMaster::grabLengths(Message & m)
+void OverlapDialMaster::startStopTimer(bool start)
 {
-    m_len_min   = m.getIntValue("minnumlen", m_len_min);
-    m_len_max   = m.getIntValue("maxnumlen", m_len_max);
-    m_len_fixed = m.getIntValue("numlength", m_len_fixed);
+    m_module.timer().del(this);
+    if(start) {
+	Debug(&__plugin,DebugCall,"Call '%s' overlap dial timer started, %u milliseconds", getPeer()->id().c_str(), m_timeout);
+	m_module.timer().add(this, m_timeout * 1000); // microseconds
+    }
+}
+
+void OverlapDialMaster::updateParams(Message & m)
+{
+    m_len_min = m.getIntValue("minnumlen", m_len_min);
+    m_len_max = m.getIntValue("maxnumlen", m_len_max);
+    m_len_fix = m.getIntValue("fixnumlen", m.getIntValue("numlength", 0));
+    m_timeout = m.getIntValue("numtimeout", m_timeout);
     m.clearParam("minnumlen");
     m.clearParam("maxnumlen");
+    m.clearParam("fixnumlen");
     m.clearParam("numlength");
+    m.clearParam("numtimeout");
+    if(m_timeout <= 300)
+	m_timeout *= 1000; // convert to milliseconds
 }
 
-bool OverlapDialMaster::checkCollectedNumber(String & route)
+OverlapDialMaster::CheckNumResult OverlapDialMaster::checkCollectedNumber(bool timeout)
 {
-    // Check number length
-    if(m_len_fixed && m_collected.length() != m_len_fixed)
-	return false;
+    if(m_len_fix && m_collected.length() > m_len_fix)
+	return Error;
+    if(m_len_max && m_collected.length() > m_len_max)
+	return Error;
+    if(m_len_fix && m_collected.length() < m_len_fix)
+	return NeedMore;
     if(m_len_min && m_collected.length() < m_len_min)
-	return false;
+	return NeedMore;
+    if(!m_len_fix && !timeout) // collect digits till timeout
+	return NeedMore;
+
+    // Sanity checks passed, let's ask someone else what to do now
     m_msg->clearParam("callto");
     m_msg->setParam("called",m_collected);
     m_msg->retValue().clear();
@@ -184,55 +331,59 @@ bool OverlapDialMaster::checkCollectedNumber(String & route)
     bool ok = Engine::dispatch(*m_msg);
     if(ok) {
 	if(m_msg->retValue().startsWith(MOD_PREFIX, true)) {
-	    grabLengths(*m_msg);
-	    return false;
+	    updateParams(*m_msg);
+	    return NeedMore;
 	} else
-	    route = m_msg->retValue();
+	    m_route = m_msg->retValue();
     }
     m_msg->retValue().clear();
-    return ok;
+    return ok ? Complete : NeedMore;
 }
 
-bool OverlapDialMaster::switchCall(const String & route)
+bool OverlapDialMaster::checkCollectedNumberOuter(bool timeout)
+{
+    switch(checkCollectedNumber(timeout)) {
+    case Complete:
+	if(! m_msg->getBoolValue("overlapped", true))
+	    sendProgress(); // seize dialing immediately if requested
+	if(switchCall()) {
+	    // successfully switched
+	} else {
+	    // error switching
+	    disconnect("can't connect");
+	}
+	return false;
+    case Error:
+	disconnect("wrong number");
+	return false;
+    case NeedMore:
+	startStopTimer(! m_len_fix);
+	return true; // want more digits
+    }
+    return true; // should never happen
+}
+
+bool OverlapDialMaster::switchCall()
 {
     RefPointer<CallEndpoint> peer = getPeer();
-    Debug(&__plugin,DebugCall,"Switching call '%s' to %s", peer->id().c_str(), route.c_str());
-#if 0
-    *m_msg = "chan.masquerade";
-    m_msg->setParam("id",peer->id());
-    m_msg->setParam("message","call.execute");
-    m_msg->setParam("callto",route);
-    m_msg->retValue().clear();
-    if (Engine::dispatch(*m_msg)) {
-	return true;
-    }
-    return false;
-#else
+    Debug(&__plugin,DebugCall,"Switching call '%s' to %s", peer->id().c_str(), m_route.c_str());
     Message * m = new Message(*m_msg);
     *m = "chan.masquerade";
     m->setParam("id",peer->id());
     m->setParam("message","call.execute");
-    m->setParam("callto",route);
+    m->setParam("callto",m_route);
     m->retValue().clear();
     Engine::enqueue(m);
     return true;
-#endif
 }
 
 void OverlapDialMaster::sendProgress()
 {
     RefPointer<CallEndpoint> peer = getPeer();
-#if 0
-    Message* m = new Message("call.progress");
-    m->addParam("id",id());
-    m->addParam("targetid",getPeerId());
-    Engine::enqueue(m);
-#else
     Message m("call.progress");
     m.addParam("id",id());
     m.addParam("targetid",getPeerId());
     Engine::dispatch(m);
-#endif
 }
 
 
@@ -254,6 +405,7 @@ void OverlapDialModule::initialize()
 {
     Output("Initializing module OverlapDialer");
     setup();
+    m_timer.startup();
     installRelay(Execute);
     installRelay(Tone);
 }
@@ -266,6 +418,7 @@ bool OverlapDialModule::unload()
     if (s_calls.count())
 	return false;
     uninstallRelays();
+    m_timer.shutdown();
     return true;
 }
 
@@ -284,7 +437,7 @@ bool OverlapDialModule::msgExecute(Message& msg)
     String dest(msg.getParam("callto"));
     if (!dest.startSkip(MOD_PREFIX))
 	return false;
-    OverlapDialMaster* master = new OverlapDialMaster(dest);
+    OverlapDialMaster* master = new OverlapDialMaster(*this, dest);
     bool ok = false;
     if (master->connect(ch,msg.getValue("reason")))
 	ok = master->startWork(msg);

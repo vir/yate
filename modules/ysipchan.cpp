@@ -854,6 +854,8 @@ private:
     // Encode an ISUP message from parameters received in msg if enabled to process them
     // Build a multipart/mixed body if more then one body is going to be sent
     MimeBody* buildSIPBody(Message& msg, MimeSdpBody* sdp = 0);
+    // Build the body of a hangup SIP message
+    MimeBody* buildSIPBody();
 
     SIPTransaction* m_tr;
     SIPTransaction* m_tr2;
@@ -4936,6 +4938,7 @@ void YateSIPConnection::clearTransaction()
 	    SIPMessage* m = new SIPMessage(m_tr->initialMessage(),m_reasonCode,
 		m_reason.safe("Request Terminated"));
 	    copySipHeaders(*m,parameters(),0);
+	    m->setBody(buildSIPBody());
 	    m_tr->setResponse(m);
 	    TelEngine::destruct(m);
 	    m_byebye = false;
@@ -5014,6 +5017,7 @@ void YateSIPConnection::hangup()
 			hl->setParam("text","\"Call completed elsewhere\"");
 			m->addHeader(hl);
 		    }
+		    m->setBody(buildSIPBody());
 		    plugin.ep()->engine()->addMessage(m);
 		}
 		m->deref();
@@ -5038,6 +5042,7 @@ void YateSIPConnection::hangup()
 	    if (stats)
 		m->addHeader("P-RTP-Stat",stats);
 	    copySipHeaders(*m,parameters(),0);
+	    m->setBody(buildSIPBody());
 	    plugin.ep()->engine()->addMessage(m);
 	    m->deref();
 	}
@@ -6136,12 +6141,19 @@ void YateSIPConnection::endDisconnect(const Message& msg, bool handled)
 	else
 	    setReason(*reason,m_reasonCode);
     }
-    const char* prefix = msg.getValue(YSTRING("osip-prefix"));
-    if (TelEngine::null(prefix))
+    const char* sPrefix = msg.getValue(YSTRING("osip-prefix"));
+    const char* mPrefix = msg.getValue(YSTRING("message-prefix"));
+    if (!(sPrefix || mPrefix))
         return;
     parameters().clearParams();
-    parameters().setParam("osip-prefix",prefix);
-    parameters().copySubParams(msg,prefix,false);
+    if (sPrefix) {
+	parameters().setParam("osip-prefix",sPrefix);
+	parameters().copySubParams(msg,sPrefix,false);
+    }
+    if (mPrefix) {
+	parameters().setParam("message-prefix",mPrefix);
+	parameters().copySubParams(msg,mPrefix,false);
+    }
 }
 
 void YateSIPConnection::statusParams(String& str)
@@ -6429,6 +6441,16 @@ bool YateSIPConnection::decodeIsupBody(Message& msg, MimeBody* body)
 MimeBody* YateSIPConnection::buildSIPBody(Message& msg, MimeSdpBody* sdp)
 {
     return doBuildSIPBody(this,msg,sdp);
+}
+
+// Build the body of a hangup SIP message from disconnect parameters
+MimeBody* YateSIPConnection::buildSIPBody()
+{
+    if (!s_sipt_isup)
+	return 0;
+    Message msg("");
+    msg.copyParams(parameters());
+    return doBuildSIPBody(this,msg,0);
 }
 
 

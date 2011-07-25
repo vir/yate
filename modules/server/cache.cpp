@@ -30,9 +30,10 @@ namespace { // anonymous
 
 class CacheItem;                         // A cache item
 class Cache;                             // A cache hash list
+class CacheThread;                       // Base class for cache threads
 class CacheExpireThread;                 // Cache expire thread
 class CacheLoadThread;                   // Cache load thread
-class EngineStartHandler;                // engine.start handler
+class EngineHandler;                     // engine.start/stop handler
 class CacheModule;
 
 // Max value for cache expire check interval
@@ -75,17 +76,28 @@ public:
 	{ return m_cacheTtl; }
     // Check if the cache has reload set
     inline bool canReload()
-	{ return m_loadInterval != 0; }
+	{ return m_loadInterval != 0 || m_reload != 0; }
     // Retrieve the mutex protecting a given list
     inline unsigned int index(const String& str) const
 	{ return str.hash() % m_list.length(); }
-    // Safely retrieve DB load info
-    inline void getDbLoad(String& account, String& query, unsigned int& loadChunk) {
-	    Lock lock(this);
-	    account = (m_accountLoadCache ? m_accountLoadCache : m_account);
-	    query = m_queryLoadCache;
-	    loadChunk = m_loadChunk;
+    // Safely retrieve the id matching parameter
+    inline void getIdParam(String& param) {
+	    Lock lck(this);
+	    param = m_idParam;
 	}
+    // Replace id matching parameter from a list
+    // Return true if the id is not empty
+    inline bool replaceIdParam(String& param, const NamedList& list) {
+	    getIdParam(param);
+	    list.replaceParams(param);
+	    return !param.null();
+	}
+    // Safely retrieve DB load info
+    void getDbLoad(String& account, String& query, unsigned int& loadChunk,
+	Thread::Priority& loadPrio);
+    void getDbLoadItemCmd(String& account, String& query, Thread::Priority& loadPrio);
+    // Schedule a cache re-load
+    bool scheduleLoad(const NamedList& params);
     // Reinit
     inline void update(const NamedList& params)
 	{ doUpdate(params,false); }
@@ -98,7 +110,7 @@ public:
     // endLoad() must be called when done
     bool startLoad();
     // Reset the loading flag. Set the next re-load time if we have an interval
-    void endLoad();
+    void endLoad(bool triggerReload);
     // Copy params from cache item. Return true if found
     bool copyParams(const String& id, NamedList& list, const String* cpParams);
     // Add an item to the cache. Remove an existing one
@@ -118,7 +130,9 @@ public:
     // Add items from Array rows. Return the number of added rows
     unsigned int addRows(Array& array);
     // Clear the cache
-    void clear();
+    unsigned int clear();
+    // Remove an item, decrease the item counter
+    bool remove(const String& id);
     // Retrieve cache name
     virtual const String& toString() const;
     // Set chunk limit and offset to a query
@@ -145,45 +159,67 @@ protected:
     unsigned int m_limit;                // Limit the number of cache items
     unsigned int m_limitOverflow;        // Allowed limit overflow
     unsigned int m_loadChunk;            // The number of items to load in each DB load query
+    Thread::Priority m_loadPrio;         // Load thread priority
     bool m_loading;                      // Cache is loading from database
     unsigned int m_loadInterval;         // Cache re-load interval (in seconds)
     u_int64_t m_nextLoad;                // Next time to load the cache
+    int m_reload;                        // Scheduled reload 0: none, 1: full, -1: items
+    ObjList* m_reloadItems;              // Scheduled items to reload
+    String m_idParam;                    // Cache id match parameter
     String m_copyParams;                 // Item parameters to store/copy
     String m_account;                    // Database account
     String m_accountLoadCache;           // Load cache account
     String m_queryLoadCache;             // Database load all cache query
     String m_queryLoadItem;              // Database load a cache item query
+    String m_queryLoadItemCmd;           // Database load item on command query
     String m_querySave;                  // Database save query
     String m_queryExpire;                // Database expire query
 };
 
-class CacheExpireThread : public Thread
+class CacheThread : public Thread, public GenObject
+{
+public:
+    CacheThread(const char* name, Priority prio = Normal);
+    ~CacheThread();
+    // List of running threads (objects are not owned by the list)
+    // The list is protected by the plugin mutex
+    static ObjList s_threads;
+};
+
+class CacheExpireThread : public CacheThread
 {
 public:
     inline CacheExpireThread()
-	: Thread("CacheExpireThread")
+	: CacheThread("CacheExpireThread")
 	{}
     virtual void run();
 };
 
-class CacheLoadThread : public Thread
+class CacheLoadThread : public CacheThread
 {
 public:
-    inline CacheLoadThread(const String name)
-	: Thread("CacheLoadThread"), m_cache(name)
+    inline CacheLoadThread(const String name, Thread::Priority prio, ObjList* items)
+	: CacheThread("CacheLoadThread",prio),
+	m_cache(name), m_items(items)
 	{}
+    ~CacheLoadThread()
+	{ TelEngine::destruct(m_items); }
     virtual void run();
 private:
     String m_cache;
+    ObjList* m_items;
 };
 
-class EngineStartHandler : public MessageHandler
+class EngineHandler : public MessageHandler
 {
 public:
-    inline EngineStartHandler()
-	: MessageHandler("engine.start")
+    inline EngineHandler(bool start)
+	: MessageHandler(start ? "engine.start" : "engine.stop"),
+	m_start(start)
 	{}
     virtual bool received(Message& msg);
+protected:
+    bool m_start;
 };
 
 class CacheModule : public Module
@@ -205,22 +241,24 @@ public:
     // Safely retrieve a reference to a cache
     inline void getCache(RefPointer<Cache>& c, const String& name) {
 	    Lock lock(this);
-	    if (name == "lnp")
-		c = m_lnpCache;
-	    else if (name == "cnam")
-		c = m_cnamCache;
+	    c = findCache(name);
 	}
     // Build/update a cache
     void setupCache(const String& name, const NamedList& params);
     // Load a cache from database
+    // Optionally load specific items only (the list will be consumed)
     // Set async=false from loading thread
-    void loadCache(const String& name, bool async = true);
+    void loadCache(const String& name, bool async = true, ObjList* items = 0);
 protected:
     virtual void initialize();
     virtual bool received(Message& msg, int id);
     virtual void statusModule(String& buf);
     virtual void statusParams(String& buf);
     virtual void statusDetail(String& buf);
+    virtual bool commandExecute(String& retVal, const String& line);
+    virtual bool commandComplete(Message& msg, const String& partLine, const String& partWord);
+    // Find a cache. This method is not thread safe
+    Cache* findCache(const String& name);
     // Update cache reload flag
     void updateCacheReload();
     // Add a cache to detail
@@ -229,6 +267,12 @@ protected:
     void handleLnp(Message& msg, bool before);
     // Handle messages for CNAM
     void handleCnam(Message& msg, bool before);
+    // Cache load handler
+    void commandLoad(Cache* cache, NamedList& params, String& retVal);
+    // Cache flush handler
+    void commandFlush(Cache* cache, NamedList& params, String& retVal);
+    // Help message handler
+    bool commandHelp(String& retVal, const String& line);
 
     bool m_haveCacheReload;              // True if we have caches to reload
     String m_account;                    // Database account
@@ -239,6 +283,7 @@ protected:
 
 
 INIT_PLUGIN(CacheModule);                // The module
+ObjList CacheThread::s_threads;          // List of running threads
 static bool s_engineStarted = false;     // Engine started flag
 static bool s_lnpStoreFailed = false;    // Store failed LNP requests
 static bool s_lnpStoreNpdiBefore = true; // Store LNP when already done
@@ -247,11 +292,29 @@ static unsigned int s_size = 0;          // The number of listst in each cache
 static unsigned int s_limit = 0;         // Default cache limit
 static unsigned int s_loadChunk = 0;     // The number of cache items to load in each DB load query
 static unsigned int s_maxChunks = 1000;  // Maximum number of chunks to load in a cache
+static Thread::Priority s_loadPrio = Thread::Normal; // Cache load thread priority
 static unsigned int s_cacheTtlSec = 0;   // Default cache item time to live (in seconds)
 static u_int64_t s_checkToutInterval = 0;// Interval to check cache timeout
 
+// Used strings: avoid allocation
+static const String s_id = "id";
 // List of known caches
 static const String s_caches[] = {"lnp", "cnam", ""};
+// Commands
+enum CacheCommands {
+    CmdLoad = 0,
+    CmdFlush,
+    CmdCount
+};
+static const String s_cmd[CmdCount] = {"cacheload","cacheflush"};
+static const String s_cmdFormat[CmdCount] = {
+    "cacheload cache_name [[param=value]...]",
+    "cacheflush cache_name [[param=value]...]"
+};
+static const String s_cmdHelp[CmdCount] = {
+    "Load a cache from database. Use 'id' (can be repeated) parameter to load specific item(s) only",
+    "Flush (clear) a cache's memory. Use 'id' (can be repeated) parameter to delete specific item(s) only"
+};
 
 // Check if application or current thread are terminating
 static inline bool exiting()
@@ -293,9 +356,9 @@ static inline unsigned int adjustedCacheLoadChunk(int val)
 {
     if (val <= 0)
 	return 0;
-    if (val >= 500 && val <= 10000)
+    if (val >= 500 && val <= 50000)
 	return val;
-    return val < 500 ? 500 : 10000;
+    return val < 500 ? 500 : 50000;
 }
 
 // Show cache item changes to output
@@ -310,6 +373,22 @@ static inline void dumpItem(Cache& c, CacheItem& item, const char* oper)
 #endif
 }
 
+// Fill a list of parameters from a string
+static void fillList(NamedList& list, String& buf)
+{
+    static const Regexp r("^\\(.* \\)\\?\\([^= ]\\+\\)=\\([^=]*\\)$");
+    ObjList items;
+    while (buf) {
+	if (!buf.matches(r))
+	    break;
+	items.insert(new NamedString(buf.matchString(2),buf.matchString(3).trimBlanks()));
+	buf = buf.matchString(1).trimBlanks();
+    }
+    GenObject* gen = 0;
+    while (0 != (gen = items.remove(false)))
+	list.addParam(static_cast<NamedString*>(gen));
+}
+
 
 /*
  * Cache
@@ -317,8 +396,10 @@ static inline void dumpItem(Cache& c, CacheItem& item, const char* oper)
 Cache::Cache(const String& name, int size, const NamedList& params)
     : Mutex(false,"Cache"),
     m_name(name), m_list(size), m_cacheTtl(0), m_count(0), m_limit(0),
-    m_limitOverflow(0), m_loadChunk(0),
-    m_loading(false), m_loadInterval(0), m_nextLoad(0)
+    m_limitOverflow(0), m_loadChunk(0), m_loadPrio(Thread::Normal),
+    m_loading(false), m_loadInterval(0), m_nextLoad(0),
+    m_reload(0), m_reloadItems(0)
+
 {
     Debug(&__plugin,DebugInfo,"Cache(%s) size=%u [%p]",
 	m_name.c_str(),m_list.length(),this);
@@ -329,17 +410,47 @@ Cache::Cache(const String& name, int size, const NamedList& params)
 // Set force to true to ignore the time to reload value
 bool Cache::reload(const Time& time, bool force)
 {
-    if (!m_loadInterval || m_loading)
+    XDebug(&__plugin,DebugAll,
+	"Cache(%s)::reload() loadinterval=%u loading=%u reload=%d [%p]",
+	m_name.c_str(),m_loadInterval,m_loading,m_reload,this);
+    if (m_loading || (!m_reload && !m_loadInterval))
 	return false;
     lock();
     String tmp;
-    if (m_loadInterval && !m_loading && (force || !m_nextLoad || m_nextLoad <= time))
-	tmp = toString();
+    ObjList* items = 0;
+    if (!m_reload) {
+	if (m_loadInterval && !m_loading && (force || !m_nextLoad || m_nextLoad <= time))
+	    tmp = toString();
+    }
+    else if (!m_loading) {
+	if (m_reload > 0) {
+	    m_reload--;
+	    if (!m_reload) {
+		tmp = toString();
+		TelEngine::destruct(m_reloadItems);
+	    }
+	}
+	else if (m_reloadItems && m_reloadItems->skipNull()) {
+	    m_reload++;
+	    if (!m_reload) {
+		tmp = toString();
+		items = m_reloadItems;
+		m_reloadItems = 0;
+	    }
+	}
+	else {
+	    TelEngine::destruct(m_reloadItems);
+	    m_reload = 0;
+	}
+    }
+    // Loading: release pending items if any
+    if (tmp)
+	TelEngine::destruct(m_reloadItems);
     unlock();
     if (!tmp)
 	return false;
     DDebug(&__plugin,DebugInfo,"Cache(%s) re-loading [%p]",m_name.c_str(),this);
-    __plugin.loadCache(tmp,true);
+    __plugin.loadCache(tmp,true,items);
     return true;
 }
 
@@ -357,12 +468,13 @@ bool Cache::startLoad()
 }
 
 // Reset the loading flag. Set the next re-load time if we have an interval
-void Cache::endLoad()
+void Cache::endLoad(bool triggerReload)
 {
     Lock lock(this);
     DDebug(&__plugin,DebugInfo,"Cache(%s) endLoad() [%p]",m_name.c_str(),this);
     m_loading = false;
-    m_nextLoad = m_loadInterval ? (Time::now() + m_loadInterval * 1000000) : 0;
+    if (triggerReload)
+	m_nextLoad = m_loadInterval ? (Time::now() + (u_int64_t)m_loadInterval * 1000000) : 0;
 }
 
 // Copy params from cache item. Return true if found
@@ -402,6 +514,69 @@ bool Cache::copyParams(const String& id, NamedList& list, const String* cpParams
     }
     unlock();
     return item != 0;
+}
+
+// Safely retrieve DB load info
+void Cache::getDbLoad(String& account, String& query, unsigned int& loadChunk,
+    Thread::Priority& loadPrio)
+{
+    Lock lock(this);
+    account = (m_accountLoadCache ? m_accountLoadCache : m_account);
+    query = m_queryLoadCache;
+    loadChunk = m_loadChunk;
+    loadPrio = m_loadPrio;
+}
+
+void Cache::getDbLoadItemCmd(String& account, String& query, Thread::Priority& loadPrio)
+{
+    Lock lock(this);
+    account = m_account;
+    query = m_queryLoadItemCmd;
+    loadPrio = m_loadPrio;
+}
+
+// Schedule a cache re-load
+bool Cache::scheduleLoad(const NamedList& params)
+{
+    Lock lck(this);
+    XDebug(&__plugin,DebugAll,"Cache(%s)::scheduleLoad() [%p]",m_name.c_str(),this);
+    int delay = params.getIntValue("delay",1);
+    if (delay < 1)
+	delay = 1;
+    if (!params.getParam(s_id)) {
+	if (!((m_account || m_accountLoadCache) && m_queryLoadCache))
+	    return false;
+	// Schedule full cache reload
+	m_reload = delay;
+	Debug(&__plugin,DebugAll,"Cache(%s) scheduled full reload delay=%d [%p]",
+	    m_name.c_str(),delay,this);
+	return true;
+    }
+    // Schedule items re-load if we have DB data and we don't have a pending full reload
+    if (!(m_account && m_queryLoadItemCmd) || m_reload > 0)
+	return false;
+    if (!m_reloadItems)
+	m_reloadItems = new ObjList;
+    NamedIterator iter(params);
+    for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	if (ns->name() == s_id && *ns && !m_reloadItems->find(*ns))
+	    m_reloadItems->append(new String(*ns));
+    }
+    if (m_reloadItems->skipNull()) {
+	m_reload = -delay;
+	String buf;
+#ifdef DEBUG
+	buf << " for";
+	buf.append(m_reloadItems," ");
+#endif
+	Debug(&__plugin,DebugAll,"Cache(%s) scheduled item(s) reload delay=%d%s [%p]",
+	    m_name.c_str(),delay,buf.safe(),this);
+    }
+    else {
+	TelEngine::destruct(m_reloadItems);
+	m_reload = 0;
+    }
+    return true;
 }
 
 // Expire entries
@@ -478,7 +653,7 @@ unsigned int Cache::addRows(Array& array)
 	String* title = columns[i] ? YOBJECT(String,columns[i]->get()) : 0;
 	if (TelEngine::null(title))
 	    continue;
-	if (*title == YSTRING("id")) {
+	if (*title == s_id) {
 	    colId = i;
 	    titles[i] = title;
 	}
@@ -488,8 +663,8 @@ unsigned int Cache::addRows(Array& array)
     TelEngine::destruct(params);
     if (colId < 0) {
 	// Don't release columns and titles content: they are owned by the array
-	delete columns;
-	delete titles;
+	delete[] columns;
+	delete[] titles;
 	return 0;
     }
     unsigned int added = 0;
@@ -524,17 +699,36 @@ unsigned int Cache::addRows(Array& array)
     // Add remaining items
     added += add(pending);
     // Don't release columns and titles content: they are owned by the array
-    delete columns;
-    delete titles;
+    delete[] columns;
+    delete[] titles;
     return added;
 }
 
 // Clear the cache
-void Cache::clear()
+unsigned int Cache::clear()
 {
     Lock lck(this);
     m_list.clear();
+    unsigned int n = m_count;
     m_count = 0;
+    return n;
+}
+
+// Remove an item
+bool Cache::remove(const String& id)
+{
+    if (!id)
+	return false;
+    Lock lck(this);
+    ObjList* list = m_list.getHashList(id);
+    GenObject* gen = list ? list->remove(id,false) : 0;
+    if (!gen)
+	return false;
+    CacheItem* item = static_cast<CacheItem*>(gen);
+    dumpItem(*this,*item,"removed");
+    m_count--;
+    TelEngine::destruct(item);
+    return true;
 }
 
 // Retrieve cache name
@@ -557,6 +751,7 @@ void Cache::destroyed()
 {
     Debug(&__plugin,DebugInfo,"Cache(%s) destroyed [%p]",m_name.c_str(),this);
     clear();
+    TelEngine::destruct(m_reloadItems);
     RefObject::destroyed();
 }
 
@@ -578,11 +773,14 @@ void Cache::doUpdate(const NamedList& params, bool first)
     else
 	m_limitOverflow = 0;
     m_loadChunk = adjustedCacheLoadChunk(params.getIntValue("loadchunk",s_loadChunk));
+    m_loadPrio = Thread::priority(params.getValue("loadcache_priority"),s_loadPrio);
+    m_idParam = params.getValue("id_param");
     m_copyParams = params.getValue("copyparams");
     m_account = params.getValue("account",account);
     m_accountLoadCache = params.getValue("account_loadcache",accountLoadCache);
     m_queryLoadCache = params.getValue("query_loadcache");
     m_queryLoadItem = params.getValue("query_loaditem");
+    m_queryLoadItemCmd = params.getValue("query_loaditem_command",m_queryLoadItem);
     m_querySave = params.getValue("query_save");
     m_queryExpire = params.getValue("query_expire");
     // Minimum sanity check for cache load
@@ -606,11 +804,13 @@ void Cache::doUpdate(const NamedList& params, bool first)
     String all;
 #ifdef DEBUG
     if (m_account) {
+	all << " id_param=" << m_idParam;
 	all << " loadchunk=" << m_loadChunk;
 	all << " account=" << m_account;
 	all << " account_loadcache=" << m_accountLoadCache;
 	all << " query_loadcache=" << m_queryLoadCache;
 	all << " query_loaditem=" << m_queryLoadItem;
+	all << " query_loaditem_command=" << m_queryLoadItemCmd;
 	all << " query_save=" << m_querySave;
 	all << " query_expire=" << m_queryExpire;
     }
@@ -637,7 +837,7 @@ CacheItem* Cache::addUnsafe(const String& id, const NamedList& params, const Str
 	if (exp) {
 	    int tmp = (int)exp->toInteger();
 	    if (tmp > 0)
-		expires = Time::now() + tmp * 1000000;
+		expires = Time::now() + (u_int64_t)tmp * 1000000;
 	    else {
 		XDebug(&__plugin,DebugAll,"Cache(%s) item '%s' already expired [%p]",
 		    m_name.c_str(),id.c_str(),this);
@@ -715,7 +915,7 @@ CacheItem* Cache::addUnsafe(Array& array, int row, int cols)
 	String* colVal = YOBJECT(String,array.get(col,row));
 	if (!colVal)
 	    continue;
-	if (*colName == "id")
+	if (*colName == s_id)
 	    p.assign(*colVal);
 	else
 	    p.addParam(*colName,*colVal);
@@ -765,6 +965,23 @@ void Cache::adjustToLimit(CacheItem* skipAdded)
 
 
 /*
+ * CacheThread
+ */
+CacheThread::CacheThread(const char* name, Priority prio)
+    : Thread(name,prio)
+{
+    Lock lck(__plugin);
+    s_threads.append(this)->setDelete(false);
+}
+
+CacheThread::~CacheThread()
+{
+    Lock lck(__plugin);
+    s_threads.remove(this,false);
+}
+
+
+/*
  * CacheExpireThread
  */
 void CacheExpireThread::run()
@@ -799,17 +1016,23 @@ void CacheLoadThread::run()
 {
     Debug(&__plugin,DebugAll,"%s start running cache=%s [%p]",
 	currentName(),m_cache.c_str(),this);
-    __plugin.loadCache(m_cache,false);
+    ObjList* items = m_items;
+    m_items = 0;
+    __plugin.loadCache(m_cache,false,items);
     Debug(&__plugin,DebugAll,"%s stopped cache=%s [%p]",
 	currentName(),m_cache.c_str(),this);
 }
 
 
 /*
- * EngineStartHandler
+ * EngineHandler
  */
-bool EngineStartHandler::received(Message& msg)
+bool EngineHandler::received(Message& msg)
 {
+    if (!m_start) {
+	Lock lck(__plugin);
+	return 0 != CacheThread::s_threads.skipNull();
+    }
     s_engineStarted = true;
     __plugin.loadCache("lnp");
     __plugin.loadCache("cnam");
@@ -881,46 +1104,80 @@ void CacheModule::setupCache(const String& name, const NamedList& params)
 }
 
 // Start cache load thread
-void CacheModule::loadCache(const String& name, bool async)
+// Optionally load specific items only (the list will be consumed)
+void CacheModule::loadCache(const String& name, bool async, ObjList* items)
 {
     XDebug(this,DebugAll,"loadCache(%s,%u)",name.c_str(),async);
     RefPointer<Cache> cache;
     getCache(cache,name);
-    if (!cache)
+    if (!cache) {
+	TelEngine::destruct(items);
 	return;
+    }
     String account;
     String query;
     unsigned int chunk = 0;
-    cache->getDbLoad(account,query,chunk);
+    Thread::Priority prio = Thread::Normal;
+    if (!items)
+	cache->getDbLoad(account,query,chunk,prio);
+    else
+	cache->getDbLoadItemCmd(account,query,prio);
     if (!(account && query)) {
+	TelEngine::destruct(items);
 	cache = 0;
 	return;
     }
     if (async) {
 	cache = 0;
-	(new CacheLoadThread(name))->startup();
+	(new CacheLoadThread(name,prio,items))->startup();
 	return;
     }
     bool load = cache->startLoad();
     cache = 0;
-    if (!load)
+    if (!load) {
+	TelEngine::destruct(items);
 	return;
-    Debug(this,DebugInfo,"Loading cache '%s' chunk=%u",name.c_str(),chunk);
+    }
     unsigned int loaded = 0;
     unsigned int failed = 0;
     unsigned int offset = 0;
-    unsigned int max = chunk ? s_maxChunks : 1;
+    unsigned int max = 0;
+    ObjList* crtItem = 0;
+    if (!items)
+	max = chunk ? s_maxChunks : 1;
+    else {
+	max = items->count();
+	crtItem = items->skipNull();
+    }
+    Debug(this,DebugInfo,"Loading cache '%s' %s=%u",
+	name.c_str(),(!items ? "chunks" : "items"),max);
     // NOTE: Don't return from the loop: we must notify the cache
     for (unsigned int i = 0; i < max; i++) {
+	String* id = 0;
 	Message m("database");
 	m.addParam("account",account);
-	if (chunk) {
+	if (!items) {
+	    if (chunk) {
+		String tmp = query;
+		Cache::setLimits(tmp,chunk,offset);
+		m.addParam("query",tmp);
+	    }
+	    else
+		m.addParam("query",query);
+	}
+	else if (crtItem) {
+	    id = static_cast<String*>(crtItem->get());
+	    crtItem = crtItem->skipNext();
+	    if (TelEngine::null(id))
+		continue;
+	    NamedList p("");
+	    p.addParam("id",*id);
 	    String tmp = query;
-	    Cache::setLimits(tmp,chunk,offset);
+	    p.replaceParams(tmp);
 	    m.addParam("query",tmp);
 	}
 	else
-	    m.addParam("query",query);
+	    break;
 	bool ok = Engine::dispatch(m);
 	if (exiting())
 	    break;
@@ -938,11 +1195,20 @@ void CacheModule::loadCache(const String& name, bool async)
 	Array* a = static_cast<Array*>(m.userObject("Array"));
 	int rows = a ? a->getRows() : 0;
 	unsigned int loadedRows = (rows > 0) ? rows - 1 : 0;
-	Debug(this,DebugAll,"Loaded %u rows current chunk=%u for cache '%s'",
-	    loadedRows,i + 1,name.c_str());
+	if (!items)
+	    Debug(this,DebugAll,"Loaded %u rows current chunk=%u for cache '%s'",
+		loadedRows,i + 1,name.c_str());
+	else
+	    Debug(this,DebugAll,"Loaded %u rows id='%s' for cache '%s'",
+		loadedRows,id->c_str(),name.c_str());
 	if (!loadedRows) {
 	    cache = 0;
-	    break;
+	    if (!items)
+		break;
+	    else {
+		failed++;
+		continue;
+	    }
 	}
 	offset += loadedRows;
 	loaded += loadedRows;
@@ -956,13 +1222,16 @@ void CacheModule::loadCache(const String& name, bool async)
 	if (chunk && loadedRows < chunk)
 	    break;
     }
+    bool triggerReload = (items == 0);
+    TelEngine::destruct(items);
     getCache(cache,name);
     if (!cache)
 	return;
-    cache->endLoad();
+    cache->endLoad(triggerReload);
     cache = 0;
     Debug(this,DebugInfo,"Loaded %u items (failed=%u) in cache '%s'",
 	loaded,failed,name.c_str());
+    updateCacheReload();
 }
 
 void CacheModule::initialize()
@@ -981,6 +1250,7 @@ void CacheModule::initialize()
 	s_maxChunks = 1;
     else if (s_maxChunks > 10000)
 	s_maxChunks = 10000;
+    s_loadPrio = Thread::priority(cfg.getValue("general","loadcache_priority"));
     s_cacheTtlSec = adjustedCacheTtl(cfg.getIntValue("general","ttl"));
     unsigned int tmp = safeValue(cfg.getIntValue("general","expire_check_interval",10));
     if (tmp > s_cacheTtlSec)
@@ -998,18 +1268,22 @@ void CacheModule::initialize()
     // Update cache objects
     NamedList* lnp = cfg.getSection("lnp");
     if (lnp) {
-	// Set default copyparams
+	// Set default params
 	if (!lnp->getValue("copyparams"))
 	    lnp->setParam("copyparams","routing");
+	if (!lnp->getValue("id_param"))
+	    lnp->setParam("id_param","${called}");
 	setupCache(*lnp,*lnp);
 	s_lnpStoreFailed = lnp->getBoolValue("store_failed_requests");
 	s_lnpStoreNpdiBefore = lnp->getBoolValue("store_npdi_before");
     }
     NamedList* cnam = cfg.getSection("cnam");
     if (cnam) {
-	// Set default copyparams
+	// Set default params
 	if (!cnam->getValue("copyparams"))
 	    cnam->setParam("copyparams","callername");
+	if (!cnam->getValue("id_param"))
+	    cnam->setParam("id_param","${caller}");
 	setupCache(*cnam,*cnam);
 	s_cnamStoreEmpty = cnam->getBoolValue("store_empty");
     }
@@ -1019,7 +1293,9 @@ void CacheModule::initialize()
 	installRelay(Status,110);
 	installRelay(Level,120);
 	installRelay(Command,120);
-	Engine::install(new EngineStartHandler);
+	installRelay(Help,120);
+	Engine::install(new EngineHandler(true));
+	Engine::install(new EngineHandler(false));
 	s_first = false;
     }
     if (s_init) {
@@ -1057,6 +1333,8 @@ bool CacheModule::received(Message& msg, int id)
 	handleCnam(msg,id == CnamBefore);
 	return false;
     }
+    if (id == Help)
+	return commandHelp(msg.retValue(),msg[YSTRING("line")]);
     if (id == Timer) {
 	if (m_haveCacheReload) {
 	    for (int i = 0; s_caches[i]; i++) {
@@ -1096,6 +1374,81 @@ void CacheModule::statusDetail(String& buf)
     addCacheDetail(buf,m_cnamCache);
 }
 
+bool CacheModule::commandExecute(String& retVal, const String& line)
+{
+    String name = line;
+    int cmd = 0;
+    for (; cmd < CmdCount; cmd++)
+	if (name.startSkip(s_cmd[cmd]))
+	    break;
+    if (cmd >= CmdCount)
+	return Module::commandExecute(retVal,line);
+    name.trimBlanks();
+    if (!name) {
+	retVal << "Usage: " << s_cmdFormat[cmd] << "\r\n" << s_cmdHelp[cmd] << "\r\n";
+	return true;
+    }
+    NamedList params("");
+    fillList(params,name);
+    RefPointer<Cache> cache;
+    getCache(cache,name);
+    if (cache) {
+	String buf;
+	params.dump(buf," ");
+	Debug(this,DebugAll,"Executing command '%s' for cache '%s' params '%s'",
+	    s_cmd[cmd].c_str(),cache->toString().c_str(),buf.safe());
+	switch (cmd) {
+	    case CmdLoad:
+		commandLoad(cache,params,retVal);
+		break;
+	    case CmdFlush:
+		commandFlush(cache,params,retVal);
+		break;
+	    default:
+		retVal << "Command not implemented!!!";
+	}
+	cache = 0;
+    }
+    else
+	retVal << "Cache not found";
+    retVal << "\r\n";
+    return true;
+}
+
+bool CacheModule::commandComplete(Message& msg, const String& partLine, const String& partWord)
+{
+    if (!partLine || partLine == YSTRING("help")) {
+	for (int cmd = 0; cmd < CmdCount; cmd++)
+	    Module::itemComplete(msg.retValue(),s_cmd[cmd],partWord);
+	return Module::commandComplete(msg,partLine,partWord);
+    }
+    String tmp = partLine;
+    for (int cmd = 0; cmd < CmdCount; cmd++) {
+	if (!tmp.startSkip(s_cmd[cmd]))
+	    continue;
+	tmp.trimBlanks();
+	if (tmp)
+	    return false;
+	Lock lck(this);
+	for (int i = 0; s_caches[i]; i++) {
+	    if (findCache(s_caches[i]))
+		Module::itemComplete(msg.retValue(),s_caches[i],partWord);
+	}
+	return false;
+    }
+    return Module::commandComplete(msg,partLine,partWord);
+}
+
+// Find a cache. This method is not thread safe
+Cache* CacheModule::findCache(const String& name)
+{
+    if (name == YSTRING("lnp"))
+	return m_lnpCache;
+    if (name == YSTRING("cnam"))
+	return m_cnamCache;
+    return 0;
+}
+
 // Update cache reload flag
 void CacheModule::updateCacheReload()
 {
@@ -1106,7 +1459,11 @@ void CacheModule::updateCacheReload()
 	ok = cache && cache->canReload();
 	cache = 0;
     }
+    Lock lck(this);
+    if (m_haveCacheReload == ok)
+	return;
     m_haveCacheReload = ok;
+    DDebug(this,DebugAll,"Cache reload handler is %u",m_haveCacheReload);
 }
 
 // Add a cache to detail
@@ -1123,21 +1480,23 @@ void CacheModule::handleLnp(Message& msg, bool before)
 {
     if (!(before || msg.getBoolValue("cache_lnp_posthook")))
 	return;
-    const String& called = msg["called"];
-    if (!called)
-	return;
     RefPointer<Cache> lnp;
     getCache(lnp,"lnp");
     if (!lnp)
 	return;
-    Debug(this,DebugAll,"handleLnp(%s) called=%s routing=%s querylnp=%s npdi=%s",
-	(before ? "before" : "after"),msg.getValue("called"),
+    String id;
+    if (!lnp->replaceIdParam(id,msg)) {
+	lnp = 0;
+	return;
+    }
+    Debug(this,DebugAll,"handleLnp(%s) id=%s routing=%s querylnp=%s npdi=%s",
+	(before ? "before" : "after"),id.c_str(),
 	msg.getValue("routing"),msg.getValue("querylnp"),msg.getValue("npdi"));
     bool querylnp = msg.getBoolValue("querylnp");
     if (before) {
 	if (querylnp) {
 	    // LNP requested: check the cache
-	    if (lnp->copyParams(called,msg,msg.getParam("cache_lnp_parameters")))
+	    if (lnp->copyParams(id,msg,msg.getParam("cache_lnp_parameters")))
 		msg.setParam("querylnp",String::boolText(false));
 	    else
 		msg.setParam("cache_lnp_posthook",String::boolText(true));
@@ -1145,13 +1504,13 @@ void CacheModule::handleLnp(Message& msg, bool before)
 	else if (msg.getBoolValue("npdi") &&
 	    msg.getBoolValue("cache_lnp_store",s_lnpStoreNpdiBefore)) {
 	    // LNP already done: update cache
-	    lnp->add(called,msg,msg.getParam("cache_lnp_parameters"));
+	    lnp->add(id,msg,msg.getParam("cache_lnp_parameters"));
 	}
     }
     else if (!querylnp || s_lnpStoreFailed || msg.getBoolValue("npdi")) {
 	// querylnp=true: request failed
 	// LNP query made locally: update cache
-	lnp->add(called,msg,msg.getParam("cache_lnp_parameters"));
+	lnp->add(id,msg,msg.getParam("cache_lnp_parameters"));
     }
     lnp = 0;
 }
@@ -1161,21 +1520,23 @@ void CacheModule::handleCnam(Message& msg, bool before)
 {
     if (!(before || msg.getBoolValue("cache_cnam_posthook")))
 	return;
-    const String& caller = msg["caller"];
-    if (!caller)
-	return;
     RefPointer<Cache> cnam;
     getCache(cnam,"cnam");
     if (!cnam)
 	return;
-    Debug(this,DebugAll,"handleCnam(%s) caller=%s callername=%s querycnam=%s",
-	(before ? "before" : "after"),msg.getValue("caller"),
+    String id;
+    if (!cnam->replaceIdParam(id,msg)) {
+	cnam = 0;
+	return;
+    }
+    Debug(this,DebugAll,"handleCnam(%s) id=%s callername=%s querycnam=%s",
+	(before ? "before" : "after"),id.c_str(),
 	msg.getValue("callername"),msg.getValue("querycnam"));
     bool querycnam = msg.getBoolValue("querycnam");
     if (before) {
 	if (querycnam) {
 	    // CNAM requested: check the cache
-	    if (cnam->copyParams(caller,msg,msg.getParam("cache_cnam_parameters")))
+	    if (cnam->copyParams(id,msg,msg.getParam("cache_cnam_parameters")))
 		msg.setParam("querycnam",String::boolText(false));
 	    else
 		msg.setParam("cache_cnam_posthook",String::boolText(true));
@@ -1184,9 +1545,59 @@ void CacheModule::handleCnam(Message& msg, bool before)
     else if (!querycnam && (s_cnamStoreEmpty || msg.getValue("callername"))) {
 	// querycnam=true: request failed
 	// CNAM query made locally: update cache
-	cnam->add(caller,msg,msg.getParam("cache_cnam_parameters"));
+	cnam->add(id,msg,msg.getParam("cache_cnam_parameters"));
     }
     cnam = 0;
+}
+
+// Cache load handler
+void CacheModule::commandLoad(Cache* cache, NamedList& params, String& retVal)
+{
+    if (!cache)
+	return;
+    if (s_engineStarted && cache->scheduleLoad(params)) {
+	updateCacheReload();
+	retVal << "Cache load scheduled";
+    }
+    else
+	retVal << "Failed to schedule cache load";
+}
+
+// Cache flush handler
+void CacheModule::commandFlush(Cache* cache, NamedList& params, String& retVal)
+{
+    if (!cache)
+	return;
+    unsigned int n = 0;
+    if (!params.getParam(s_id))
+	n = cache->clear();
+    else {
+	NamedIterator iter(params);
+	for (const NamedString* ns = 0; 0 != (ns = iter.get());)
+	    if (ns->name() == s_id && *ns && cache->remove(*ns))
+		n++;
+    }
+    retVal << "Flushed " << n << " item(s)";
+}
+
+// Help message handler
+bool CacheModule::commandHelp(String& retVal, const String& line)
+{
+    if (line) {
+	for (int cmd = 0; cmd < CmdCount; cmd++) {
+	    if (line == s_cmd[cmd]) {
+		retVal << "  " << s_cmdFormat[cmd] << "\r\n";
+		retVal << s_cmdHelp[cmd] << "\r\n";
+		return true;
+	    }
+	}
+    }
+    else {
+	for (int cmd = 0; cmd < CmdCount; cmd++)
+	    retVal << "  " << s_cmdFormat[cmd] << "\r\n";
+	return true;
+    }
+    return false;
 }
 
 }; // anonymous namespace

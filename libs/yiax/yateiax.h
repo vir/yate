@@ -2335,9 +2335,10 @@ public:
     /**
      * Process the initial received format and capability. If accepted on exit will set the transaction format and capability
      * @param trans Transaction that received the new format
+     * @param caps Optional codecs to set in transaction before processing
      * @return True if accepted
      */
-    bool acceptFormatAndCapability(IAXTransaction* trans);
+    bool acceptFormatAndCapability(IAXTransaction* trans, unsigned int* caps = 0);
 
     /**
      * Default event handler. event MUST NOT be deleted

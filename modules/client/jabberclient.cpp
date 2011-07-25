@@ -168,7 +168,7 @@ public:
 	{ TelEngine::destruct(m_presence); }
     // Retrieve a contact
     inline NamedList* contact(const String& name) {
-	    if (name == *this)
+	    if (name &= *this)
 		return this;
 	    ObjList* o = find(name);
 	    return o ? static_cast<NamedList*>(o->get()) : 0;
@@ -2235,7 +2235,7 @@ ObjList* StreamData::find(const String& name)
 {
     for (ObjList* o = m_contacts.skipNull(); o; o = o->skipNext()) {
 	NamedList* c = static_cast<NamedList*>(o->get());
-	if (*c == name)
+	if (*c &= name)
 	    return o;
     }
     return 0;

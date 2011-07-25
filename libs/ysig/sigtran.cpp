@@ -1032,8 +1032,6 @@ bool SS7M2PA::decodeSeq(const DataBlock& data,u_int8_t msgType)
 	    transmitLS();
 	    return false;
 	}
-	while (nextBsn(bsn))
-	    removeFrame(getNext(m_lastAck));
 	if (bsn == m_lastAck)
 	    return true;
 	// If we are here means that something went wrong
@@ -1064,8 +1062,8 @@ bool SS7M2PA::decodeSeq(const DataBlock& data,u_int8_t msgType)
 	transmitLS();
 	return false;
     }
-    while (nextBsn(bsn))
-	removeFrame(getNext(m_lastAck));
+    while (nextBsn(bsn) && removeFrame(getNext(m_lastAck)))
+	;
     if (bsn != m_lastAck) {
 	abortAlignment(String("Received unexpected bsn: ") << bsn);
 	transmitLS();
@@ -1100,8 +1098,10 @@ void SS7M2PA::timerTick(const Time& when)
 	return;
     }
     if (m_t2.started() && m_t2.timeout(when.msec())) {
-	m_t2.stop();
 	abortAlignment("T2 timeout");
+	setLocalStatus(Alignment);
+	transmitLS();
+	m_t2.start();
 	return;
     }
     if (m_t3.started() && m_t3.timeout(when.msec())) {
@@ -1127,7 +1127,7 @@ void SS7M2PA::timerTick(const Time& when)
     }
 }
 
-void SS7M2PA::removeFrame(u_int32_t bsn)
+bool SS7M2PA::removeFrame(u_int32_t bsn)
 {
     Lock lock(m_mutex);
     for (ObjList* o = m_ackList.skipNull();o;o = o->skipNext()) {
@@ -1138,8 +1138,10 @@ void SS7M2PA::removeFrame(u_int32_t bsn)
 	m_lastAck = bsn;
 	m_ackList.remove(d);
 	m_ackTimer.stop();
-	break;
+	return true;
     }
+    Debug(this,DebugWarn,"Failed to remove frame %d! Frame is missing!",bsn);
+    return false;
 }
 
 void SS7M2PA::setLocalStatus(unsigned int status)
@@ -1285,6 +1287,8 @@ void SS7M2PA::transmitLS(int streamId)
 {
     if (m_transportState != Established)
 	return;
+    if (m_state == OutOfService)
+	m_localStatus = OutOfService;
     DataBlock data;
     setHeader(data);
     u_int8_t ms[4];
@@ -1411,11 +1415,12 @@ bool SS7M2PA::processLinkStatus(DataBlock& data,int streamId)
 	    if ((m_state == ProvingNormal || m_state == ProvingEmergency)) {
 		if (m_localStatus == Alignment) {
 		    transmitLS();
-		    m_t2.start();
+		    if (!m_t2.started())
+			m_t2.start();
 		} else if (m_localStatus == OutOfService)
 		    startAlignment();
 		else
-		    return false;
+		    abortAlignment("Recv remote OOS");
 	    }
 	    setRemoteStatus(status);
 	    break;
@@ -1428,6 +1433,10 @@ bool SS7M2PA::processLinkStatus(DataBlock& data,int streamId)
 
 void SS7M2PA::recoverMSU(int sequence)
 {
+    if (operational()) {
+	Debug(this,DebugMild,"Recover MSU from sequence %d while link is operational",sequence);
+	return;
+    }
     Debug(this,DebugInfo,"Recovering MSUs from sequence %d",sequence);
     for (;;) {
 	m_mutex.lock();
@@ -1478,6 +1487,8 @@ bool SS7M2PA::transmitMSU(const SS7MSU& msu)
     if (!transport())
 	return false;
     Lock lock(m_mutex);
+    if (!operational())
+	return false;
     DataBlock packet;
     increment(m_seqNr);
     setHeader(packet);

@@ -15,13 +15,13 @@
 ;ttl=
 
 ; limit: integer: Maximum number of stored cache items
-; This value must be at least the power of 2 of cache size, e.g. for
+; This value must be at least the power of 2 of cache hash list size, e.g. for
 ;  cache size 5 limit must be at least 25
 ; This parameter is applied on reload and can be overridden in cache sections
 ;limit=
 
 ; loadchunk: integer: The number of items to load in a database request
-; Minimum allowed value is 500, maximum allowed value is 10000
+; Minimum allowed value is 500, maximum allowed value is 50000
 ; Set it to 0 to load the whole cache using a single database request
 ; This parameter is applied on reload and can be overridden in cache sections
 ; NOTES for non 0 value:
@@ -41,6 +41,13 @@
 ; - Setting a large value for a query without LIMIT or OFFSET will lead to
 ;    useless extra processing
 ;maxchunks=1000
+
+; loadcache_priority: keyword: The priority of the cache load thread
+; This parameter is applied on reload and can be overridden in cache sections
+; Can be one of: lowest, low, normal, high, highest
+; High priorities need superuser privileges on POSIX operating systems
+; Defaults to normal
+;loadcache_priority=normal
 
 ; expire_check_interval: integer: The interval (in seconds) to check cache expire
 ; Defaults to 10, minimum allowed value 1, maximum allowed value 300
@@ -89,6 +96,12 @@
 ; This parameter is applied on reload
 ;store_npdi_before=no
 
+; id_param: string: Template used to build a cache entry id value when handling messages
+; This parameter is applied on reload
+; Defaults to called party number parameter (the id is retrieved from the 'called'
+;  parameter value of handled messages)
+;id_param=${called}
+
 ; copyparams: string: Parameters to handle (store in cache or copy to handled messages)
 ; This parameter is applied on reload and can be overridden when routing by
 ;  a 'cache_lnp_parameters' parameter
@@ -111,9 +124,16 @@
 ; For non 0 'loadchunk'
 ;query_loadcache=SELECT FLOOR(EXTRACT('EPOCH' FROM (timeout - CURRENT_TIMESTAMP))) AS expires,* FROM lnp ORDER BY timeout LIMIT ${chunk} OFFSET ${offset}
 
-; query_loaditem: string: Database query used to load an item when created
+; query_loaditem: string: Database query used to load an item when requested and not found
+;  in cache
 ; This parameter is applied on reload
 ;query_loaditem=SELECT FLOOR(EXTRACT('EPOCH' FROM (timeout - CURRENT_TIMESTAMP))) AS expires,* FROM lnp WHERE id='${id}'
+
+; query_loaditem_command: string: Database query used to load an item when handling
+;  a 'cacheload' command indicating specific items(s)
+; This parameter is applied on reload
+; Defaults to the value of query_loaditem
+;query_loaditem_command=SELECT FLOOR(EXTRACT('EPOCH' FROM (timeout - CURRENT_TIMESTAMP))) AS expires,* FROM lnp WHERE id='${id}'
 
 ; query_save: string: Database query used to save an item
 ; This parameter is applied on reload
@@ -141,6 +161,12 @@
 ; This parameter is applied on reload
 ;store_empty=no
 
+; id_param: string: Template used to build a cache entry id value when handling messages
+; This parameter is applied on reload
+; Defaults to caller party number parameter (the id is retrieved from the 'caller'
+;  parameter value of handled messages)
+;id_param=${caller}
+
 ; copyparams: string: Parameters to handle (store in cache or copy to handled messages)
 ; This parameter is applied on reload and can be overridden when routing by
 ;  a 'cache_cnam_parameters' parameter
@@ -163,9 +189,16 @@
 ; For non 0 'loadchunk'
 ;query_loadcache=SELECT FLOOR(EXTRACT('EPOCH' FROM (timeout - CURRENT_TIMESTAMP))) AS expires,* FROM cnam ORDER BY timeout LIMIT ${chunk} OFFSET ${offset}
 
-; query_loaditem: string: Database query used to load an item when created
+; query_loaditem: string: Database query used to load an item when requested and not found
+;  in cache
 ; This parameter is applied on reload
 ;query_loaditem=SELECT FLOOR(EXTRACT('EPOCH' FROM (timeout - CURRENT_TIMESTAMP))) AS expires,* FROM cnam WHERE id='${id}'
+
+; query_loaditem_command: string: Database query used to load an item when handling
+;  a 'cacheload' command indicating specific items(s)
+; This parameter is applied on reload
+; Defaults to the value of query_loaditem
+;query_loaditem_command=SELECT FLOOR(EXTRACT('EPOCH' FROM (timeout - CURRENT_TIMESTAMP))) AS expires,* FROM cnam WHERE id='${id}'
 
 ; query_save: string: Database query used to save an item
 ; This parameter is applied on reload

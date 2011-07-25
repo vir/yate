@@ -333,7 +333,7 @@ bool ListenerThread::init(const NamedList& param)
 	    m.userData(s);
 	    TelEngine::destruct(s);
 	    if (!(Engine::dispatch(m) && soc)) {
-		DDebug("ListenerThread",DebugWarn,"Could not obtain SctpSocket");
+		Debug("ListenerThread",DebugConf,"Could not obtain SctpSocket");
 		return false;
 	    }
 	    m_socket = soc;
@@ -629,7 +629,7 @@ bool Transport::bindSocket()
 	    m.userData(s);
 	    TelEngine::destruct(s);
 	    if (!(Engine::dispatch(m) && soc)) {
-		DDebug("ListenerThread",DebugWarn,"Could not obtain SctpSocket");
+		Debug(this,DebugConf,"Could not obtain SctpSocket");
 		return false;
 	    }
 	    socket = soc;
@@ -748,7 +748,7 @@ bool Transport::connectSocket()
 	    m.userData(s);
 	    TelEngine::destruct(s);
 	    if (!(Engine::dispatch(m) && sock)) {
-		DDebug(this,DebugNote,"Could not obtain SctpSocket");
+		Debug(this,DebugConf,"Could not obtain SctpSocket");
 		return false;
 	    }
 	    sock->create(AF_INET,m_streamer ? SOCK_STREAM : SOCK_SEQPACKET,IPPROTO_SCTP);

@@ -561,11 +561,11 @@ public:
     inline const String& getLocalAddr() const
 	{ return m_localAddr; }
     inline const String& getPartyAddr() const
-	{ return m_transRemoteAddr ? m_transRemoteAddr : m_partyAddr; }
+	{ return m_partyAddr ? m_partyAddr : m_transRemoteAddr; }
     inline int getLocalPort() const
 	{ return m_localPort; }
     inline int getPartyPort() const
-	{ return m_transRemotePort ? m_transRemotePort : m_partyPort; }
+	{ return m_partyPort ? m_partyPort : m_transRemotePort; }
     inline bool localDetect() const
 	{ return m_localDetect; }
     inline const String& getFullName() const

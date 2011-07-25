@@ -1,3 +1,10 @@
+yate (3.3.3.vir2011072501) UNRELEASED; urgency=low
+
+  * Fix timeout-based overlap dialing lost in prev. versions.
+  * Merged upstream changes and fixes.
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Mon, 25 Jul 2011 16:07:30 +0400
+
 yate (3.3.3.vir2011071301) UNRELEASED; urgency=low
 
   * Merged a lot of upstream changes, most notably, SIP over TCP/TLS

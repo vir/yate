@@ -1,3 +1,57 @@
+yate (3.3.3.svn4523) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4523: + Verify if the SCTP message socket is
+    valid before sending data.  + The call fork module can now handle
+    separate parameters for each fork target.  + Set SCTP socket
+    specific parameters from the configuration section.  + Try to
+    periodically rebind the stream socket if previews bind failed.  +
+    Added the possibility to set socket linger value.  + Added the
+    option to force transport socket to reconnect.  + Added OutOfService
+    timer. Try periodically to realign the link.  + Make the value of
+    maximum unacknowledged messages configurable.  + Added the
+    possibility to restart transport from rmanager.  + Memory leak
+    fixed. Clear unacknowledged messages queue when the link status is
+    operational.  + Added support for tcp/tls sip transport. The sip
+    module can now use (bind on) more then one address for udp.  + Fixed
+    compiler warning.  + Try to realign the m2pa link only when the
+    transport is up.  + Fixed parameters documentation.  + Made virtual
+    base class destructor.  + Commented section to avoid conflicts with
+    older configuration.  + Check if the sctp flags are defined on the
+    platform.  + Implemented module status.  + Implement statusParams
+    instead of msgStatus.  + Added optional cache periodic reload
+    parameter. Allow a cache to have a 0 ttl (no expire).  + Avoid
+    creating duplicate parameters.  + Do not override already set ISUP
+    parameters with defaults.  + Avoid creating duplicate parameters.  +
+    Allow using "osig-prefix" to override the default "sig." prefix on
+    outbound calls.  + Scream louder when failed to obtain a sctp
+    socket. Changed debug level.  + Cache load thread priority is now
+    configurable.  + Bail out quickly if database query or account are
+    empty after substitition.  + Clarified the relation between hash
+    list size and cache limit.  + Increased maximum load chunk size to
+    50000 to allow efficient loading of large caches.  + Check if the
+    m2pa link is operational before sending an MSU  + Avoid looping when
+    failed to remove an acknowledged frame.  + Avoid recovering MSU
+    while m2pa link is operational.  + A template can now be used to
+    build a cache entry id from handled messages.  + Remember running
+    cache threads. Delay engine stop while there are running threads.  +
+    Fixed bug: use the same format for both directions if changed by
+    called party. Allow formats to be changed when routing an incoming
+    call.  + Notify status change to router or User Part only after
+    unlocking the MTP3.  + Added more specific channel-congestion and
+    switch-congestion cause aliases.  + Don't return true when
+    completing a command, let other modules handle the message.  + Added
+    cache load and flush commands.  + Send OutOfService and Align when
+    aborting alignment on t2 timeout  + Do not restart t2 timer when
+    retransmit Alignment state.  + Avoid repeating array column parsing
+    for each item to set to improve performance for large result sets.
+    + Use the proper delete operator to free arrays.  + Fixed bug: avoid
+    integer overflow.  + Added missing ISUP content to disconnection SIP
+    messages (BYE, CANCEL, 4xx/5xx).  + Use case insensitive comparison
+    when searching for user's contacts.  + Return line's resolved party
+    address/port to match it for incoming requests.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 26 Jul 2011 02:19:31 +0400
+
 yate (3.3.3.svn4465) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4465: + Added new module 'cache'

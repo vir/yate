@@ -1,3 +1,10 @@
+yate (3.3.3.svn4525) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4525: + Fixed ssl context parameter name for
+    tls listeners.  + Updated accfile account parameters.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 27 Jul 2011 02:19:24 +0400
+
 yate (3.3.3.svn4523) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4523: + Verify if the SCTP message socket is

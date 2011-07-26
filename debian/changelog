@@ -1,3 +1,9 @@
+yate (3.3.3.vir2011072601) UNRELEASED; urgency=low
+
+  * Fixed crash on overlapdial module unload
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Tue, 26 Jul 2011 18:41:41 +0400
+
 yate (3.3.3.vir2011072501) UNRELEASED; urgency=low
 
   * Fix timeout-based overlap dialing lost in prev. versions.

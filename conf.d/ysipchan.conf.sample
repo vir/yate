@@ -324,9 +324,9 @@
 ; Defaults to 5 if missing or invalid
 ;backlog=5
 
-; context: string: SSL context if this is an encrypted connection
+; sslcontext: string: SSL context if this is an encrypted connection
 ; Ignored for non TLS listeners, required for TLS listeners
-;context=
+;sslcontext=
 
 ; thread: keyword: Listener thread priority
 ; Can be one of: lowest, low, normal, high, highest

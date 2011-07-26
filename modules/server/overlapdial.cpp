@@ -60,7 +60,6 @@ public:
 	: m_mutex(true, "Overlapdial timer")
 	, m_signal(1, "Timer Thread")
 	, m_events(NULL)
-	, m_exit(false)
     {
     }
     ~TimerThread()
@@ -106,7 +105,7 @@ public:
     void shutdown()
     {
 	m_mutex.lock();
-	m_exit = true;
+	cancel(false); // set exit flag
 	m_signal.unlock();
 	m_mutex.unlock();
 	m_running.lock(); // wait for worker thread shutdown
@@ -135,9 +134,9 @@ private:
 	for(;;) {
 	    Debug(DebugCall,"TimerThread::run(): waiting for %ld uS", wait);
 	    bool b = m_signal.lock(wait); // wait for event or timeout
-	    Debug(DebugCall,"TimerThread::run(): got %s! (exit flag: %s, events: %p)", b ? "event" : "timeout", m_exit ? "true" : "false", m_events);
+	    Debug(DebugCall,"TimerThread::run(): got %s! (events: %p)", b ? "event" : "timeout", m_events);
 	    m_mutex.lock();
-	    if(m_exit)
+	    if(Engine::exiting() || check(false)) // check exit flag
 		break;
 	    while(m_events && m_events->m_when <= Time::now()) {
 		QueuedEvent * e = m_events;
@@ -157,7 +156,6 @@ private:
     Mutex m_mutex, m_running;
     Semaphore m_signal;
     QueuedEvent * m_events;
-    bool m_exit;
 };
 
 class OverlapDialModule;
@@ -192,7 +190,7 @@ public:
     OverlapDialModule();
     virtual ~OverlapDialModule();
     bool unload();
-    TimerThread& timer() { return m_timer; }
+    TimerThread* timer() { return m_timer; }
 protected:
     virtual void initialize();
     virtual bool received(Message& msg, int id);
@@ -200,7 +198,7 @@ protected:
     bool msgExecute(Message& msg);
     bool msgToMaster(Message& msg);
 private:
-    TimerThread m_timer;
+    TimerThread * m_timer;
 };
 
 INIT_PLUGIN(OverlapDialModule);
@@ -229,7 +227,8 @@ OverlapDialMaster::OverlapDialMaster(OverlapDialModule& module, const String & d
 OverlapDialMaster::~OverlapDialMaster()
 {
     DDebug(&__plugin,DebugCall,"OverlapDialMaster::~OverlapDialMaster() '%s'",id().c_str());
-    m_module.timer().del(this);
+    if(m_module.timer())
+	m_module.timer()->del(this);
     s_mutex.lock();
     s_calls.remove(this,false);
     TelEngine::destruct(m_msg);
@@ -288,10 +287,12 @@ bool OverlapDialMaster::gotDigit(char digit)
 
 void OverlapDialMaster::startStopTimer(bool start)
 {
-    m_module.timer().del(this);
+    if(! m_module.timer())
+	return;
+    m_module.timer()->del(this);
     if(start) {
 	Debug(&__plugin,DebugCall,"Call '%s' overlap dial timer started, %u milliseconds", getPeer()->id().c_str(), m_timeout);
-	m_module.timer().add(this, m_timeout * 1000); // microseconds
+	m_module.timer()->add(this, m_timeout * 1000); // microseconds
     }
 }
 
@@ -405,7 +406,12 @@ void OverlapDialModule::initialize()
 {
     Output("Initializing module OverlapDialer");
     setup();
-    m_timer.startup();
+    m_timer = new TimerThread;
+    if(! m_timer->startup()) {
+	delete m_timer;
+	m_timer = NULL;
+	Debug(&__plugin, DebugGoOn, "Error starting timer thread");
+    }
     installRelay(Execute);
     installRelay(Tone);
 }
@@ -418,7 +424,8 @@ bool OverlapDialModule::unload()
     if (s_calls.count())
 	return false;
     uninstallRelays();
-    m_timer.shutdown();
+    if(m_timer)
+	m_timer->shutdown();
     return true;
 }
 

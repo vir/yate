@@ -460,6 +460,8 @@ public:
 private:
     // Close the socket. Remove from endpoint list
     void cleanup(bool final);
+    // Reset socket
+    void stopListening(const char* reason = 0, int level = DebugNote);
 
     Mutex m_mutex;                       // Mutex protecting transport parameters and bind ip/port
     String m_reason;                     // Last error (state change) string
@@ -3024,6 +3026,9 @@ void YateSIPTCPListener::init(const NamedList& params, bool first)
 	sslContext = params.getValue("sslcontext");
 	m_sslContextChanged = first || m_sslContextChanged || (sslContext != m_sslContext);
 	m_sslContext = sslContext;
+	if (!m_sslContext)
+	    Debug(&plugin,DebugConf,"Listener(%s,'%s') ssl context is empty [%p]",
+		protoName(),c_str(),this);
     }
     int backlog = params.getIntValue("backlog",5);
     m_backlog = (backlog >= 0 ? backlog : 0);
@@ -3049,12 +3054,27 @@ void YateSIPTCPListener::run()
     while (true) {
 	if (Thread::check(false))
 	    break;
+	if (m_sslContextChanged || m_transParamsChanged) {
+	    Lock lock(m_mutex);
+	    if (m_sslContextChanged) {
+		sslContext = m_sslContext;
+		if (tls() && !sslContext)
+		    m_reason = "Empty ssl context";
+	    }
+	    if (m_transParamsChanged)
+		transParams = m_transParams;
+	    m_sslContextChanged = false;
+	    m_transParamsChanged = false;
+	}
+	if (tls() && !sslContext) {
+	    stopListening();
+	    Thread::msleep(3 * Thread::idleMsec());
+	    continue;
+	}
 	bool force = bindNow(&m_mutex);
 	if (force || !m_socket) {
-	    if (m_socket) {
-		Lock lck(m_mutex);
-		YateSIPTransport::resetSocket(m_socket,0);
-	    }
+	    if (m_socket)
+		stopListening("Address changed",DebugInfo);
 	    if (!force && m_nextBind > Time::now()) {
 		Thread::idle();
 		continue;
@@ -3087,15 +3107,6 @@ void YateSIPTCPListener::run()
 	    Thread::idle();
 	    continue;
 	}
-	if (m_sslContextChanged || m_transParamsChanged) {
-	    Lock lock(m_mutex);
-	    if (m_sslContextChanged)
-		sslContext = m_sslContext;
-	    if (m_transParamsChanged)
-		transParams = m_transParams;
-	    m_sslContextChanged = false;
-	    m_transParamsChanged = false;
-	}
 	if (!tls() || plugin.socketSsl(&sock,true,sslContext)) {
 	    YateSIPTCPTransport* trans = new YateSIPTCPTransport(sock,tls());
 	    if (!trans->init(transParams,true))
@@ -3122,6 +3133,21 @@ void YateSIPTCPListener::cleanup(bool final)
 	else
 	    Debug(&plugin,DebugWarn,"Listener(%s,'%s') abnormally terminated [%p]",protoName(),c_str(),this);
     }
+    stopListening("Terminated",DebugInfo);
+}
+
+// Reset socket
+void YateSIPTCPListener::stopListening(const char* reason, int level)
+{
+    if (!m_socket)
+	return;
+    Lock lck(m_mutex);
+    if (!m_socket)
+	return;
+    if (!reason)
+	reason = m_reason;
+    Debug(&plugin,level,"Listener(%s,'%s') stop listening reason='%s' [%p]",
+	protoName(),c_str(),reason,this);
     YateSIPTransport::resetSocket(m_socket,0);
 }
 
@@ -3858,11 +3884,6 @@ bool YateSIPEndPoint::setupListener(int proto, const String& name, bool enabled,
     }
     if (!enabled)
 	return true;
-    if (proto == ProtocolHolder::Tls && !params.getValue(YSTRING("sslcontext"))) {
-	Debug(&plugin,DebugNote,
-	    "Empty ssl context for TLS listener in section '%s'",params.c_str());
-	return false;
-    }
     // Build it
     YateSIPTCPListener* listener = new YateSIPTCPListener(proto,name,params);
     if (listener->startup()) {

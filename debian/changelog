@@ -1,3 +1,14 @@
+yate (3.3.3.svn4530) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4530: + Added possibility to reverse the
+    fork.stop match rule.  + Optimized user roster load from database
+    and query response.  + Signal and handle hierarchical (NamedPointer
+    usage) support in user.roster query message for faster processing.
+    + Allow logging in an account without username if it's explicitely
+    enabled.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 29 Jul 2011 02:19:27 +0400
+
 yate (3.3.3.svn4526) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4526: + Build the tls listener even if

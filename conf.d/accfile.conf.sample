@@ -3,7 +3,9 @@
 ;
 ; Warning: all strings are case sensitive
 ;
-; sections with an empty username or with enabled=no are ignored
+; Sections with enabled=no are always ignored.
+; If the enabled parameter is missing sections without username are ignored.
+; If enabled=yes the accounts are logged in even without an username.
 ;
 ; Parameter description:
 ;   protocol: The protocol to register on (sip, iax, h323, jabber ...)

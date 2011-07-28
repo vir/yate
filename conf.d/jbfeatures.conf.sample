@@ -18,6 +18,17 @@
 ; Default to yes
 ;ignore_invalid_groups=yes
 
+; roster_query_hierarchical: boolean: Signal hierarchical result support in
+;  user.roster query messages
+; A module handling the user.roster query message may set contact's parameters list
+;  in each contact parameter instead of adding them to the message
+; If enabled the performance will grow but parameter altering in external modules
+;  will be impossible
+; This parameter is applied on reload
+; Defaults to yes
+;roster_query_hierarchical=yes
+
+
 [register]
 ; This section configures in stream user management (add, change, delete)
 

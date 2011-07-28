@@ -103,7 +103,7 @@ static bool emitAccounts(const char* operation, const String& account = String::
     Lock lock(s_mutex);
     for (unsigned int i=0;i<s_cfg.sections();i++) {
 	NamedList* acc = s_cfg.getSection(i);
-	if (!(acc && acc->getValue("username") && acc->getBoolValue("enabled",true)))
+	if (!(acc && acc->getBoolValue("enabled",(acc->getValue("username") != 0))))
 	    continue;
 	if (account && (account != *acc))
 	    continue;

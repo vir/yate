@@ -67,6 +67,7 @@ protected:
     bool m_timerDrop;
     bool m_execNext;
     bool m_chanMsgs;
+    bool m_failuresRev;
     String m_reason;
     String m_media;
 };
@@ -145,7 +146,7 @@ ForkMaster::ForkMaster(ObjList* targets)
     : m_index(0), m_answered(false), m_rtpForward(false), m_rtpStrict(false),
       m_fake(false), m_targets(targets), m_exec(0),
       m_timer(0), m_timerDrop(false), m_execNext(false), m_chanMsgs(false),
-      m_reason("hangup")
+      m_failuresRev(false), m_reason("hangup")
 {
     String tmp(MOD_PREFIX "/");
     tmp << ++s_current;
@@ -290,6 +291,10 @@ bool ForkMaster::startCalling(Message& msg)
     }
     // stoperror is OBSOLETE
     m_failures = msg.getValue("fork.stop",msg.getValue("stoperror"));
+    if (m_failures.endsWith("^")) {
+	m_failuresRev = true;
+	m_failures = m_failures.substr(0,m_failures.length()-1);
+    }
     m_exec->clearParam("stoperror");
     m_exec->clearParam("fork.stop");
     m_exec->clearParam("peerid");
@@ -395,7 +400,7 @@ void ForkMaster::lostSlave(ForkSlave* slave, const char* reason)
     m_slaves.remove(slave,false);
     if (m_answered)
 	return;
-    if (reason && m_failures && m_failures.matches(reason)) {
+    if (reason && m_failures && (m_failures.matches(reason) != m_failuresRev)) {
 	Debug(&__plugin,DebugCall,"Call '%s' terminating early on reason '%s'",
 	    getPeerId().c_str(),reason);
     }

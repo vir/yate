@@ -103,7 +103,7 @@ public:
     RegfilePlugin();
     ~RegfilePlugin();
     virtual void initialize();
-    void populate();
+    void populate(bool first);
 private:
     bool m_init;
 };
@@ -120,12 +120,36 @@ static int s_count = 0;
 
 INIT_PLUGIN(RegfilePlugin);
 
+static void clearListParams(NamedList& list, const char* name)
+{
+    if (TelEngine::null(name))
+	return;
+    NamedString* param = list.getParam(name);
+    if (!param)
+	return;
+    ObjList* l = param->split(',',false);
+    for (ObjList* o = l->skipNull(); o; o = o->skipNext())
+	list.clearParam(o->get()->toString());
+    list.clearParam(param);
+    TelEngine::destruct(l);
+}
+
 bool expired(const NamedList& list, unsigned int time)
 {
     // If eTime is 0 the registration will never expire
     unsigned int eTime = list.getIntValue("expires",0);
     return eTime && eTime < time;
 }
+
+// Copy list parameters
+static inline void regfileCopyParams(NamedList& dest, NamedList& src, const String& params,
+    const String& extra)
+{
+    String s = params;
+    s.append(extra,",");
+    dest.copyParams(src,s);
+}
+
 
 bool AuthHandler::received(Message &msg)
 {
@@ -142,7 +166,7 @@ bool AuthHandler::received(Message &msg)
     if (!pass)
 	return false;
     msg.retValue() = *pass;
-    Debug("RegFile",DebugAll,"Authenticating user %s with password length %u",
+    Debug(&__plugin,DebugAll,"Authenticating user %s with password length %u",
 	username.c_str(),pass->length());
     return true;
 }
@@ -161,7 +185,7 @@ bool RegistHandler::received(Message &msg)
     NamedList* sect = s_cfg.getSection(username);
     if (s_create && !sect) {
 	sect = new NamedList(username);
-	Debug("RegFile",DebugInfo,"Auto creating new user %s",username.c_str());
+	Debug(&__plugin,DebugInfo,"Auto creating new user %s",username.c_str());
     }
     if (!sect)
 	return false;
@@ -170,24 +194,58 @@ bool RegistHandler::received(Message &msg)
     if (driver)
 	s->setParam("driver",driver);
     s->setParam("data",data);
+    // Clear existing route parameters
+    clearListParams(*s,"route_params");
+    const String& route = msg["route_params"];
+    if (route) {
+	s->copyParams(msg,route);
+	s->setParam("route_params",route);
+    }
+    s->clearParam("connection",'_');
+    s->copyParams(msg,"connection",'_');
     if (expire)
 	s->setParam("expires",String(msg.msgTime().sec() + expire));
-    Debug("RegFile",DebugAll,"Registered user %s via %s",username.c_str(),data);
+#ifdef DEBUG
+    String tmp;
+    s->dump(tmp," ");
+    Debug(&__plugin,DebugAll,"Registered user %s",tmp.c_str());
+#else
+    Debug(&__plugin,DebugAll,"Registered user %s via %s",username.c_str(),data);
+#endif
     return true;
 }
 
 bool UnRegistHandler::received(Message &msg)
 {
-    String username(msg.getValue("username"));
-    if (username.null() || username == s_general)
+    const String& username = msg["username"];
+    if (username) {
+	if (username == s_general)
+	    return false;
+	Lock lock(s_mutex);
+	NamedList* nl = s_accounts.getSection(username);
+	if (!nl)
+	    return false;
+	Debug(&__plugin,DebugAll,"Removing user %s, reason unregistered",username.c_str());
+	s_accounts.clearSection(username);
+	return true;
+    }
+    const String& conn = msg["connection_id"];
+    if (!conn)
 	return false;
     Lock lock(s_mutex);
-    NamedList* nl = s_accounts.getSection(username);
-    if (!nl)
-	return false;
-    Debug("RegFile",DebugAll,"Removing user %s, reason unregistered",username.c_str());
-    s_accounts.clearSection(username);
-    return true;
+    ObjList remove;
+    unsigned int n = s_accounts.sections();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedList* nl = s_accounts.getSection(i);
+	if (nl && (*nl)["connection_id"] == conn)
+	    remove.append(new String(*nl));
+    }
+    for (ObjList* o = remove.skipNull(); o; o = o->skipNext()) {
+	String* s = static_cast<String*>(o->get());
+	Debug(&__plugin,DebugAll,"Removing user %s, reason connection down",s->c_str());
+	s_accounts.clearSection(*s);
+    }
+    return false;
 }
 
 RouteHandler::RouteHandler(const char *name, unsigned prio)
@@ -227,6 +285,7 @@ bool RouteHandler::received(Message &msg)
     NamedList* ac = s_accounts.getSection(username);
     while (true) {
 	String data;
+	String extra;
 	if (!ac) {
 	    if (s_cfg.getSection(username)) {
 		msg.setParam("error","offline");
@@ -238,7 +297,7 @@ bool RouteHandler::received(Message &msg)
 	    ExpandedUser* eu = static_cast<ExpandedUser*>(o->get());
 	    if (!eu)
 		break;
-	    String d;
+	    ObjList targets;
 	    int count = 0;
 	    for (ObjList* ob = eu->skipNull(); ob;ob = ob->skipNext()) {
 		String* s = static_cast<String*>(ob->get());
@@ -247,24 +306,39 @@ bool RouteHandler::received(Message &msg)
 		NamedList* n = s_accounts.getSection(*s);
 		if (!n)
 		    continue;
-		if (count > 0)
-		    d << " ";
-		d  << n->getValue("data");
+		targets.append(n)->setDelete(false);
 		count ++;
 	    }
-	    if (count > 1)
-		data = "fork ";
 	    if (count == 0) {
 		msg.setParam("error","offline");
 		break;
 	    }
-	    data << d;
+	    if (count == 1) {
+		NamedList* n = static_cast<NamedList*>(targets.skipNull()->get());
+		data = (*n)["data"];
+		regfileCopyParams(msg,*n,(*n)["route_params"],"driver");
+	    }
+	    else {
+		int callto = 1;
+		data = "fork";
+		for (ObjList* o = targets.skipNull(); o; o = o->skipNext()) {
+		    NamedList* n = static_cast<NamedList*>(o->get());
+		    String prefix;
+		    prefix << "callto." << callto++;
+		    const String& d = (*n)["data"];
+		    NamedList* target = new NamedList(d);
+		    msg.addParam(new NamedPointer(prefix,target,d));
+		    extra << " " << d;
+		    regfileCopyParams(*target,*n,(*n)["route_params"],"driver");
+		}
+	    }
 	} else {
 	    data = ac->getValue("data");
-	    msg.copyParams(*ac,"driver");
+	    regfileCopyParams(msg,*ac,(*ac)["route_params"],"driver");
 	}
 	msg.retValue() = data;
-	Debug("RegFile",DebugInfo,"Routed '%s' via '%s'",username.c_str(),data.c_str());
+	Debug(&__plugin,DebugInfo,"Routed '%s' via '%s%s'",username.c_str(),
+	    data.c_str(),extra.c_str());
 	return true;
     }
     return false;
@@ -280,7 +354,7 @@ bool ExpireHandler::received(Message &msg)
     for (int i = 0;i < count;) {
 	NamedList* sec = s_accounts.getSection(i);
 	if (sec && *sec != s_general && expired(*sec,time)) {
-	    Debug("RegFile",DebugAll,"Removing user %s, Reson: Registration expired",sec->c_str());
+	    Debug(&__plugin,DebugAll,"Removing user %s, Reason: Registration expired",sec->c_str());
 	    s_accounts.clearSection(*sec);
 	    count--;
 	} else
@@ -363,6 +437,7 @@ void RegfilePlugin::initialize()
     Output("Initializing module Register from file");
     Lock lock(s_mutex);
     s_cfg.load();
+    bool first = !m_init;
     if (!m_init) {
 	m_init = true;
 	s_create = s_cfg.getBoolValue("general","autocreate",false);
@@ -380,10 +455,10 @@ void RegfilePlugin::initialize()
 	Engine::install(new CommandHandler("engine.command"));
 	Engine::install(new ExpireHandler());
     }
-    populate();
+    populate(first);
 }
 
-void RegfilePlugin::populate()
+void RegfilePlugin::populate(bool first)
 {
     s_expand.clear();
     int count = s_cfg.sections();
@@ -391,6 +466,7 @@ void RegfilePlugin::populate()
 	NamedList* nl = s_cfg.getSection(i);
 	if (!nl || *nl == s_general)
 	    continue;
+	DDebug(this,DebugAll,"Loaded account '%s'",nl->c_str());
 	String* ids = nl->getParam("alternatives");
 	if (!ids)
 	    continue;
@@ -407,6 +483,7 @@ void RegfilePlugin::populate()
 	    } else
 		eu = static_cast<ExpandedUser*>(ret->get());
 	    eu->append(new String(*nl));
+	    DDebug(this,DebugAll,"Added alternative '%s' for account '%s'",sec->c_str(),nl->c_str());
 	}
 	TelEngine::destruct(ob);
     }
@@ -417,8 +494,14 @@ void RegfilePlugin::populate()
 	NamedList* nl = s_accounts.getSection(i);
 	if (!nl)
 	    continue;
-	if (s_cfg.getSection(*nl))
+	// Delete saved accounts logged in on reliable connections on first load
+	bool exist = s_cfg.getSection(*nl);
+	if (exist && !(first && nl->getBoolValue("connection_reliable"))) {
+	    DDebug(this,DebugAll,"Loaded saved account '%s'",nl->c_str());
 	    continue;
+	}
+	DDebug(this,DebugAll,"Not loading saved account '%s': %s",
+	    nl->c_str(),exist ? "logged in on reliable connection" : "account deleted");
 	s_accounts.clearSection(*nl);
 	count--;
 	i--;

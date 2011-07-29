@@ -286,9 +286,10 @@
 
 ; type: keyword: Listener type
 ; Allowed values:
-; udp: Build an UDP listener. Ignored if multihomed is disabled
+; udp: Build an UDP listener
 ; tcp: Build a TCP listener
 ; tls: Build a TLS listener (encrypted TCP)
+; Defaults to udp if missing or invalid
 ;type=
 
 ; enable: boolean: Enable or disable this listener

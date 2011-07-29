@@ -1,3 +1,15 @@
+yate (3.3.3.svn4535) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4535: + Listener type now defaults to udp if
+    invalid. Handle listener type change in config.  + Added missing
+    projects (dbwave, presence, subscription, users) to Windows build.
+    + Set eol-style svn property to native.  + Handle route params in
+    user.register and copy them when routing. Unregister users when
+    their connection is down.  + Remember connection when handling a
+    subscription. Put it in notification messages.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 30 Jul 2011 02:19:28 +0400
+
 yate (3.3.3.svn4530) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4530: + Added possibility to reverse the

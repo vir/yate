@@ -1,3 +1,11 @@
+yate (3.3.3.svn4536) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4536: + Return the conference call leg
+    status when querying the channels.  + Handle chan.control for
+    conference legs to change the mute and silence detection at runtime.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 02 Aug 2011 02:19:22 +0400
+
 yate (3.3.3.svn4535) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4535: + Listener type now defaults to udp if

@@ -439,6 +439,7 @@ private:
     bool m_externalRtp;
     bool m_nativeRtp;
     bool m_passtrough;
+    bool m_lockFormats;
     String m_formats;
     String m_rtpid;
     String m_rtpAddr;
@@ -1042,7 +1043,8 @@ void YateCallThread::Main()
 YateH323Connection::YateH323Connection(YateH323EndPoint& endpoint,
     H323Transport* transport, unsigned callReference, void* userdata)
     : H323Connection(endpoint,callReference), m_chan(0), m_mutex(0),
-      m_externalRtp(s_externalRtp), m_nativeRtp(false), m_passtrough(false),
+      m_externalRtp(s_externalRtp), m_nativeRtp(false),
+      m_passtrough(false), m_lockFormats(false),
       m_rtpPort(0), m_remotePort(0), m_needMedia(true)
 {
     Debug(&hplugin,DebugAll,"YateH323Connection::YateH323Connection(%p,%u,%p) [%p]",
@@ -1238,8 +1240,9 @@ void YateH323Connection::rtpForward(Message& msg, bool init)
 void YateH323Connection::updateFormats(const Message& msg)
 {
     // when doing RTP forwarding formats are altered in rtpForward()
-    if (m_passtrough)
+    if (m_passtrough || m_lockFormats)
 	return;
+    m_lockFormats = msg.getBoolValue("lock_formats");
     // only audio is currently supported
     const char* formats = msg.getValue("formats");
     if (!formats)

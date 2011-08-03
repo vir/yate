@@ -1,3 +1,13 @@
+yate (3.3.3.svn4538) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4538: + Handle chan.control for conference
+    legs to change the mute and silence detection at runtime.  + Allow
+    the "cause_931" parameter of chan.disconnected to alter the Q.931
+    release cause of H.323 calls.  + Allow freezing H.323 formats for
+    proxied RTP by setting "lock_formats" to true.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 04 Aug 2011 02:19:19 +0400
+
 yate (3.3.3.svn4536) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4536: + Return the conference call leg

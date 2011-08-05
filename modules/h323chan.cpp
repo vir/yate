@@ -2181,12 +2181,14 @@ void YateH323Chan::endDisconnect(const Message& msg, bool handled)
     const String* p = msg.getParam(YSTRING("reason"));
     if (!TelEngine::null(p))
 	m_reason = (H323Connection::CallEndReason)p->toInteger(dict_errors,m_reason);
+#if (OPENH323_NUMVERSION >= 11704)
     p = msg.getParam(YSTRING("cause_q931"));
     if (m_conn && !TelEngine::null(p)) {
 	int i = p->toInteger(q931_errors);
 	if (i > 0)
 	    m_conn->SetQ931Cause(i);
     }
+#endif
 }
 
 // Set the signalling address

@@ -286,9 +286,10 @@
 
 ; type: keyword: Listener type
 ; Allowed values:
-; udp: Build an UDP listener. Ignored if multihomed is disabled
+; udp: Build an UDP listener
 ; tcp: Build a TCP listener
 ; tls: Build a TLS listener (encrypted TCP)
+; Defaults to udp if missing or invalid
 ;type=
 
 ; enable: boolean: Enable or disable this listener
@@ -324,9 +325,9 @@
 ; Defaults to 5 if missing or invalid
 ;backlog=5
 
-; context: string: SSL context if this is an encrypted connection
+; sslcontext: string: SSL context if this is an encrypted connection
 ; Ignored for non TLS listeners, required for TLS listeners
-;context=
+;sslcontext=
 
 ; thread: keyword: Listener thread priority
 ; Can be one of: lowest, low, normal, high, highest

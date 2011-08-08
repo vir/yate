@@ -33,6 +33,7 @@ class Subscription {
     var $to;
     var $callid;
     var $contact;
+    var $connid;
     var $state;
     var $body = "";
     var $expire = 0;
@@ -57,6 +58,7 @@ class Subscription {
 	    $this->to .= ';tag=' . $ev->GetValue("xsip_dlgtag");
 	$this->callid = $ev->params["sip_callid"];
 	$this->contact = $ev->params["sip_contact"];
+	$this->connid = $ev->params["connection_id"];
 	$exp = $ev->params["sip_expires"];
 	if ($exp == "0") {
 	    // this is an unsubscribe
@@ -97,6 +99,8 @@ class Subscription {
 	$m->params["uri"] = $this->contact;
 	$m->params["host"] = $this->host;
 	$m->params["port"] = $this->port;
+	if (strlen($this->connid) > 0)
+	    $m->params["connection_id"] = $this->connid;
 	$m->params["sip_Call-ID"] = $this->callid;
 	$m->params["sip_From"] = $this->to;
 	$m->params["sip_To"] = $this->from;

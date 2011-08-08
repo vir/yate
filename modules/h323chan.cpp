@@ -439,6 +439,7 @@ private:
     bool m_externalRtp;
     bool m_nativeRtp;
     bool m_passtrough;
+    bool m_lockFormats;
     String m_formats;
     String m_rtpid;
     String m_rtpAddr;
@@ -486,6 +487,7 @@ public:
     void finish();
 
     virtual void zeroRefs();
+    virtual void destroyed();
     virtual void disconnected(bool final, const char *reason);
     virtual bool msgProgress(Message& msg);
     virtual bool msgRinging(Message& msg);
@@ -499,6 +501,8 @@ public:
     void setAddress(const char* addr);
     inline void setTarget(const char* targetid)
 	{ m_targetid = targetid; }
+protected:
+    virtual void endDisconnect(const Message& msg, bool handled);
 private:
     YateH323Connection* m_conn;
     H323Connection::CallEndReason m_reason;
@@ -1039,7 +1043,8 @@ void YateCallThread::Main()
 YateH323Connection::YateH323Connection(YateH323EndPoint& endpoint,
     H323Transport* transport, unsigned callReference, void* userdata)
     : H323Connection(endpoint,callReference), m_chan(0), m_mutex(0),
-      m_externalRtp(s_externalRtp), m_nativeRtp(false), m_passtrough(false),
+      m_externalRtp(s_externalRtp), m_nativeRtp(false),
+      m_passtrough(false), m_lockFormats(false),
       m_rtpPort(0), m_remotePort(0), m_needMedia(true)
 {
     Debug(&hplugin,DebugAll,"YateH323Connection::YateH323Connection(%p,%u,%p) [%p]",
@@ -1235,8 +1240,9 @@ void YateH323Connection::rtpForward(Message& msg, bool init)
 void YateH323Connection::updateFormats(const Message& msg)
 {
     // when doing RTP forwarding formats are altered in rtpForward()
-    if (m_passtrough)
+    if (m_passtrough || m_lockFormats)
 	return;
+    m_lockFormats = msg.getBoolValue("lock_formats");
     // only audio is currently supported
     const char* formats = msg.getValue("formats");
     if (!formats)
@@ -2087,11 +2093,6 @@ YateH323Chan::~YateH323Chan()
     s_mutex.lock();
     s_chanCount--;
     s_mutex.unlock();
-    dropChan();
-    stopDataLinks();
-    if (m_conn)
-	m_conn->cleanups();
-    hangup();
     if (m_conn)
 	Debug(this,DebugFail,"Still having a connection %p [%p]",m_conn,this);
 }
@@ -2109,6 +2110,17 @@ void YateH323Chan::zeroRefs()
 	return;
     }
     Channel::zeroRefs();
+}
+
+void YateH323Chan::destroyed()
+{
+    DDebug(this,DebugAll,"YateH323Chan::destroyed() [%p]",this);
+    dropChan();
+    stopDataLinks();
+    if (m_conn)
+	m_conn->cleanups();
+    hangup();
+    Channel::destroyed();
 }
 
 void YateH323Chan::finish()
@@ -2155,13 +2167,28 @@ void YateH323Chan::hangup(bool dropChan, bool clearCall)
 void YateH323Chan::disconnected(bool final, const char *reason)
 {
     Debugger debug("YateH323Chan::disconnected()"," '%s' [%p]",reason,this);
-    Channel::disconnected(final,reason);
     m_reason = (H323Connection::CallEndReason)lookup(reason,dict_errors,H323Connection::EndedByLocalUser);
+    Channel::disconnected(final,reason);
     if (!final)
 	return;
     stopDataLinks();
     if (m_conn)
 	m_conn->ClearCall(m_reason);
+}
+
+void YateH323Chan::endDisconnect(const Message& msg, bool handled)
+{
+    const String* p = msg.getParam(YSTRING("reason"));
+    if (!TelEngine::null(p))
+	m_reason = (H323Connection::CallEndReason)p->toInteger(dict_errors,m_reason);
+#if (OPENH323_NUMVERSION >= 11704)
+    p = msg.getParam(YSTRING("cause_q931"));
+    if (m_conn && !TelEngine::null(p)) {
+	int i = p->toInteger(q931_errors);
+	if (i > 0)
+	    m_conn->SetQ931Cause(i);
+    }
+#endif
 }
 
 // Set the signalling address

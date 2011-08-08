@@ -456,10 +456,18 @@ public:
 	{ return protocol() == Tls; }
     inline bool listening() const
 	{ return m_socket != 0; }
+    inline void setReason(const char* reason) {
+	    if (!reason)
+		return;
+	    Lock lck(m_mutex);
+	    m_reason = reason;
+	}
     virtual void run();
 private:
     // Close the socket. Remove from endpoint list
     void cleanup(bool final);
+    // Reset socket
+    void stopListening(const char* reason = 0, int level = DebugNote);
 
     Mutex m_mutex;                       // Mutex protecting transport parameters and bind ip/port
     String m_reason;                     // Last error (state change) string
@@ -561,11 +569,11 @@ public:
     inline const String& getLocalAddr() const
 	{ return m_localAddr; }
     inline const String& getPartyAddr() const
-	{ return m_transRemoteAddr ? m_transRemoteAddr : m_partyAddr; }
+	{ return m_partyAddr ? m_partyAddr : m_transRemoteAddr; }
     inline int getLocalPort() const
 	{ return m_localPort; }
     inline int getPartyPort() const
-	{ return m_transRemotePort ? m_transRemotePort : m_partyPort; }
+	{ return m_partyPort ? m_partyPort : m_transRemotePort; }
     inline bool localDetect() const
 	{ return m_localDetect; }
     inline const String& getFullName() const
@@ -654,7 +662,7 @@ public:
     YateSIPUDPTransport* findUdpTransport(const String& addr, int port);
     // Build or delete an UDP transport (re-init existing). Start the thread
     bool setupUdpTransport(const String& name, bool enabled, const NamedList& params,
-	const NamedList& defs = NamedList::empty());
+	const NamedList& defs = NamedList::empty(), const char* reason = 0);
     // Delete an UDP transport
     bool removeUdpTransport(const String& name, const char* reason);
     // Remove a transport from list without deleting it. Notify termination.
@@ -669,7 +677,7 @@ public:
     // Remove a listener from list without deleting it. Return true if found
     bool removeListener(YateSIPTCPListener* listener);
     // Remove a listener from list. Remove all if name is empty. Wait for termination
-    void cancelListener(const String& name = String::empty());
+    void cancelListener(const String& name = String::empty(), const char* reason = 0);
     // This method is called by the driver when start/end initializing
     void initializing(bool start);
     inline YateSIPEngine* engine() const
@@ -3024,6 +3032,9 @@ void YateSIPTCPListener::init(const NamedList& params, bool first)
 	sslContext = params.getValue("sslcontext");
 	m_sslContextChanged = first || m_sslContextChanged || (sslContext != m_sslContext);
 	m_sslContext = sslContext;
+	if (!m_sslContext)
+	    Debug(&plugin,DebugConf,"Listener(%s,'%s') ssl context is empty [%p]",
+		protoName(),c_str(),this);
     }
     int backlog = params.getIntValue("backlog",5);
     m_backlog = (backlog >= 0 ? backlog : 0);
@@ -3049,12 +3060,27 @@ void YateSIPTCPListener::run()
     while (true) {
 	if (Thread::check(false))
 	    break;
+	if (m_sslContextChanged || m_transParamsChanged) {
+	    Lock lock(m_mutex);
+	    if (m_sslContextChanged) {
+		sslContext = m_sslContext;
+		if (tls() && !sslContext)
+		    m_reason = "Empty ssl context";
+	    }
+	    if (m_transParamsChanged)
+		transParams = m_transParams;
+	    m_sslContextChanged = false;
+	    m_transParamsChanged = false;
+	}
+	if (tls() && !sslContext) {
+	    stopListening();
+	    Thread::msleep(3 * Thread::idleMsec());
+	    continue;
+	}
 	bool force = bindNow(&m_mutex);
 	if (force || !m_socket) {
-	    if (m_socket) {
-		Lock lck(m_mutex);
-		YateSIPTransport::resetSocket(m_socket,0);
-	    }
+	    if (m_socket)
+		stopListening("Address changed",DebugInfo);
 	    if (!force && m_nextBind > Time::now()) {
 		Thread::idle();
 		continue;
@@ -3087,15 +3113,6 @@ void YateSIPTCPListener::run()
 	    Thread::idle();
 	    continue;
 	}
-	if (m_sslContextChanged || m_transParamsChanged) {
-	    Lock lock(m_mutex);
-	    if (m_sslContextChanged)
-		sslContext = m_sslContext;
-	    if (m_transParamsChanged)
-		transParams = m_transParams;
-	    m_sslContextChanged = false;
-	    m_transParamsChanged = false;
-	}
 	if (!tls() || plugin.socketSsl(&sock,true,sslContext)) {
 	    YateSIPTCPTransport* trans = new YateSIPTCPTransport(sock,tls());
 	    if (!trans->init(transParams,true))
@@ -3122,6 +3139,26 @@ void YateSIPTCPListener::cleanup(bool final)
 	else
 	    Debug(&plugin,DebugWarn,"Listener(%s,'%s') abnormally terminated [%p]",protoName(),c_str(),this);
     }
+    m_mutex.lock();
+    const char* reason = 0;
+    if (!m_reason)
+	reason = "Terminated";
+    m_mutex.unlock();
+    stopListening(reason,DebugInfo);
+}
+
+// Reset socket
+void YateSIPTCPListener::stopListening(const char* reason, int level)
+{
+    if (!m_socket)
+	return;
+    Lock lck(m_mutex);
+    if (!m_socket)
+	return;
+    if (!reason)
+	reason = m_reason;
+    Debug(&plugin,level,"Listener(%s,'%s') stop listening reason='%s' [%p]",
+	protoName(),c_str(),reason,this);
     YateSIPTransport::resetSocket(m_socket,0);
 }
 
@@ -3696,7 +3733,7 @@ YateSIPUDPTransport* YateSIPEndPoint::findUdpTransport(const String& addr, int p
 
 // Build an UDP transport (re-init existing). Start the thread
 bool YateSIPEndPoint::setupUdpTransport(const String& name, bool enabled,
-    const NamedList& params, const NamedList& defs)
+    const NamedList& params, const NamedList& defs, const char* reason)
 {
     if (!name)
 	return false;
@@ -3708,7 +3745,7 @@ bool YateSIPEndPoint::setupUdpTransport(const String& name, bool enabled,
 	if (stop)
 	    rd->init(params,defs,false);
 	else {
-	    removeUdpTransport(name,enabled ? "Address changed" : "Disabled");
+	    removeUdpTransport(name,enabled ? "Address changed" : (reason ? reason : "Disabled"));
 	    rd->deref();
 	}
 	TelEngine::destruct(rd);
@@ -3754,7 +3791,7 @@ bool YateSIPEndPoint::removeUdpTransport(const String& name, const char* reason)
 	    Thread::idle();
 	    intervals--;
 	}
-	if (intervals)
+	if (!intervals)
 	    Debug(&plugin,DebugNote,
 		"Removing udp transport '%s' with active transactions using it",
 		name.c_str());
@@ -3848,21 +3885,23 @@ bool YateSIPEndPoint::setupListener(int proto, const String& name, bool enabled,
     ObjList* o = m_listeners.find(name);
     if (o) {
 	YateSIPTCPListener* l = static_cast<YateSIPTCPListener*>(o->get());
-	if (enabled)
-	    l->init(params,false);
+	if (enabled) {
+	    if (l->protocol() == proto)
+		l->init(params,false);
+	    else {
+		lock.drop();
+		cancelListener(name,"Type changed");
+		return setupListener(proto,name,enabled,params);
+	    }
+	}
 	else {
 	    lock.drop();
-	    cancelListener(name);
+	    cancelListener(name,"Disabled");
 	}
 	return true;
     }
     if (!enabled)
 	return true;
-    if (proto == ProtocolHolder::Tls && !params.getValue(YSTRING("sslcontext"))) {
-	Debug(&plugin,DebugNote,
-	    "Empty ssl context for TLS listener in section '%s'",params.c_str());
-	return false;
-    }
     // Build it
     YateSIPTCPListener* listener = new YateSIPTCPListener(proto,name,params);
     if (listener->startup()) {
@@ -3888,7 +3927,7 @@ bool YateSIPEndPoint::removeListener(YateSIPTCPListener* listener)
 }
 
 // Remove a listener from list. Remove all if name is empty. Wait for termination
-void YateSIPEndPoint::cancelListener(const String& name)
+void YateSIPEndPoint::cancelListener(const String& name, const char* reason)
 {
     m_mutex.lock();
     bool wait = false;
@@ -3897,7 +3936,9 @@ void YateSIPEndPoint::cancelListener(const String& name)
 	if (name && name != l->toString())
 	    continue;
 	wait = true;
-	Debug(&plugin,DebugAll,"Stopping listener (%p,'%s')",l,l->toString().c_str());
+	Debug(&plugin,DebugAll,"Stopping listener (%p,'%s') reason=%s",
+	    l,l->toString().c_str(),reason);
+	l->setReason(reason);
 	l->cancel();
 	if (name)
 	    break;
@@ -3946,7 +3987,7 @@ void YateSIPEndPoint::initializing(bool start)
     for (ObjList* o = rmListener.skipNull(); o; o = o->skipNext()) {
 	String* name = static_cast<String*>(o->get());
 	Debug(&plugin,DebugNote,"Stopping deleted listener '%s'",name->c_str());
-	cancelListener(*name);
+	cancelListener(*name,"Deleted");
     }
     for (ObjList* o = rmUdpTrans.skipNull(); o; o = o->skipNext())
 	removeUdpTransport(o->get()->toString(),"Deleted");
@@ -7357,14 +7398,22 @@ void SIPDriver::initialize()
 	if (!name || name == YSTRING("general"))
 	    continue;
 	const String& type = (*nl)[YSTRING("type")];
-	int proto = ProtocolHolder::lookupProtoAny(type,false);
+	int proto = ProtocolHolder::lookupProtoAny(type);
+	if (proto == ProtocolHolder::Unknown) {
+	    proto = ProtocolHolder::Udp;
+	    Debug(this,DebugNote,"Invalid listener type '%s' in section '%s': defaults to %s",
+		type.c_str(),nl->c_str(),ProtocolHolder::lookupProtoName(proto,false));
+	}
 	bool enabled = nl->getBoolValue(YSTRING("enable"),true);
 	switch (proto) {
 	    case ProtocolHolder::Udp:
+		m_endpoint->cancelListener(name,"Type changed");
 		m_endpoint->setupUdpTransport(name,enabled,*nl,*def);
 		break;
 	    case ProtocolHolder::Tcp:
 	    case ProtocolHolder::Tls:
+		m_endpoint->setupUdpTransport(name,false,NamedList::empty(),
+		    NamedList::empty(),"Type changed");
 		m_endpoint->setupListener(proto,name,enabled,*nl);
 		break;
 	    default:

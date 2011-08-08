@@ -190,8 +190,10 @@ public:
     Message* buildUpdateDb(const String& user, bool add = false);
     // Set the contact from an array row
     void set(Array& a, int row);
+    void set(String**& titles, ObjList**& data, int len);
     // Build a contact from an array row
     static Contact* build(Array& a, int row);
+    static Contact* build(String**& titles, ObjList**& data, int len, int idCol);
 
     InstanceList m_instances;
     SubscriptionState m_subscription;
@@ -573,6 +575,11 @@ static const char* s_cmds[] = {
     0
 };
 
+static inline unsigned int ellapsedMs(u_int64_t start, u_int64_t now = Time::now())
+{
+    return (unsigned int)((now - start + 500) / 1000);
+}
+
 // Decode a list of comma separated flags
 static int decodeFlags(const String& str, const TokenDict* flags)
 {
@@ -606,6 +613,60 @@ static NamedString* getParam(NamedList& list, const String& name, const String& 
     return 0;
 }
 
+// Retrieve array rows and columns number
+// Optionally allocate and fill columns and titles from array
+// NOTE: The content of allocated buffers is owned by the array: don't release it
+static bool arrayData(Array* a, int& rows, int& cols, ObjList**& columns, String**& titles)
+{
+    if (!a)
+	return false;
+    rows = a->getRows();
+    cols = a->getColumns();
+    if (cols < 1 || rows < 1)
+	return false;
+    columns = new ObjList*[cols];
+    titles = new String*[cols];
+    for (int i = 0; i < cols; i++) {
+	columns[i] = a->getColumn(i);
+	titles[i] = columns[i] ? YOBJECT(String,columns[i]->get()) : 0;
+    }
+    return true;
+}
+
+// Clear array data allocated using arrayData()
+static void clearArrayData(ObjList**& columns, String**& titles)
+{
+    if (columns) {
+	delete[] columns;
+	columns = 0;
+    }
+    if (titles) {
+	delete[] titles;
+	titles = 0;
+    }
+}
+
+// Retrieve the index of a given string in an array of ObjList pointers
+static int strIndex(String**& titles, int len, const String& value)
+{
+    if (!titles)
+	return -1;
+    for (int i = 0; i < len; i++)
+	if (titles[i] && *(titles[i]) == value)
+	    return i;
+    return -1;
+}
+
+// Advance an array of ObjList
+static bool advanceObjLists(ObjList**& lists, int len)
+{
+    if (!lists)
+	return false;
+    for (int i = 0; i < len; i++)
+	if (lists[i])
+	    lists[i] = lists[i]->next();
+    return true;
+}
 
 /*
  * SubscriptionState
@@ -836,6 +897,23 @@ void Contact::set(Array& a, int row)
     }
 }
 
+// Set the contact from an array row
+void Contact::set(String**& titles, ObjList**& data, int len)
+{
+    if (!(titles && data))
+	return;
+    for (int i = 1; i < len; i++) {
+	String* title = titles[i];
+	if (TelEngine::null(title))
+	    continue;
+	if (*title == YSTRING("subscription")) {
+	    String* sub = YOBJECT(String,data[i] ? data[i]->get() : 0);
+	    if (sub)
+		m_subscription.replace(*sub);
+	}
+    }
+}
+
 // Build a contact from an array row
 Contact* Contact::build(Array& a, int row)
 {
@@ -856,6 +934,17 @@ Contact* Contact::build(Array& a, int row)
 	c->set(a,row);
     return c;
 }
+
+// Build a contact from an array row
+Contact* Contact::build(String**& titles, ObjList**& data, int len, int idCol)
+{
+    if (!titles || TelEngine::null(titles[idCol]))
+	return 0;
+    Contact* c = new Contact(*(titles[idCol]),String::empty());
+    c->set(titles,data,len);
+    return c;
+}
+
 
 /*
  * EventContact
@@ -1278,18 +1367,31 @@ PresenceUser* UserList::askDatabase(const String& name)
     m = __plugin.queryDb(m);
     if (!m)
 	return 0;
+#ifdef DEBUG
+    u_int64_t start = Time::now();
+#endif
     PresenceUser* u = new PresenceUser(name);
-    Array* a = 0;
-    if (m->getIntValue("rows") >= 1)
-	a = static_cast<Array*>(m->userObject("Array"));
-    if (a) {
-	int rows = a->getRows();
+    Array* a = static_cast<Array*>(m->userObject("Array"));
+    int rows = 0;
+    int cols = 0;
+    ObjList** columns = 0;
+    String** titles = 0;
+    if (arrayData(a,rows,cols,columns,titles)) {
+	int cntCol = strIndex(titles,cols,YSTRING("contact"));
+	if (cntCol < 0)
+	    rows = 0;
 	for (int i = 1; i < rows; i++) {
-	    Contact* c = Contact::build(*a,i);
+	    advanceObjLists(columns,cols);
+	    Contact* c = Contact::build(titles,columns,cols,cntCol);
 	    if (c)
 		u->appendContact(c);
 	}
     }
+    clearArrayData(columns,titles);
+#ifdef DEBUG
+    Debug(&__plugin,DebugAll,"Loaded user '%s' contacts=%u in %u ms",
+	name.c_str(),u->m_list.count(),ellapsedMs(start));
+#endif
     TelEngine::destruct(m);
     return u;
 }
@@ -1522,13 +1624,23 @@ bool SubMessageHandler::received(Message& msg)
 	    Message* m = __plugin.buildDb(__plugin.m_account,loadAll,p);
 	    m = __plugin.queryDb(m);
 	    if (m) {
+		u_int64_t start = Time::now();
 		unsigned int n = 0;
+		unsigned int nc = 0;
 		Array* a = static_cast<Array*>(m->userObject("Array"));
-		if (a) {
+		ObjList** columns = 0;
+		String** titles = 0;
+		int rows = 0;
+		int cols = 0;
+		if (arrayData(a,rows,cols,columns,titles)) {
+		    int usrCol = strIndex(titles,cols,YSTRING("username"));
+		    int cntCol = strIndex(titles,cols,YSTRING("contact"));
 		    __plugin.m_users.lock();
-		    int rows = a->getRows();
 		    for (int i = 1; i < rows; i++) {
-			String* s = YOBJECT(String,a->get(0,i));
+			advanceObjLists(columns,cols);
+			String* s = 0;
+			if (usrCol >= 0 && columns[usrCol])
+			    s = YOBJECT(String,columns[usrCol]->get());
 			if (!s)
 			    continue;
 			PresenceUser* u =  __plugin.m_users.getUser(*s,false);
@@ -1538,15 +1650,20 @@ bool SubMessageHandler::received(Message& msg)
 			    __plugin.m_users.users().append(u);
 			    u->ref();
 			}
-			Contact* c = Contact::build(*a,i);
-			if (c)
-			    u->appendContact(c);
+			if (cntCol >= 0) {
+			    Contact* c = Contact::build(titles,columns,cols,cntCol);
+			    if (c)
+				u->appendContact(c);
+			}
 			TelEngine::destruct(u);
+			nc++;
 		    }
 		    __plugin.m_users.unlock();
 		}
+		clearArrayData(columns,titles);
 		TelEngine::destruct(m);
-		Debug(&__plugin,DebugAll,"Loaded %u users",n);
+		Debug(&__plugin,DebugAll,"Loaded %u users and %u contacts in %u ms",
+		    n,nc,ellapsedMs(start));
 	    }
 	    else
 		Debug(&__plugin,DebugMild,"Failed to load users");
@@ -2412,34 +2529,59 @@ bool SubscriptionModule::handleUserRosterQuery(const String& user, const String*
     m = queryDb(m);
     if (!m)
 	return false;
-    Array* a = 0;
-    if (m->getIntValue("rows") >= 1)
-	a = static_cast<Array*>(m->userObject("Array"));
+    bool hierarchical = msg.getBoolValue("hierarchical");
+    Array* a = static_cast<Array*>(m->userObject("Array"));
+    int rows = 0;
+    int cols = 0;
     unsigned int n = 0;
-    if (a) {
-	int rows = a->getRows();
-	int cols = a->getColumns();
+#ifdef DEBUG
+    u_int64_t start = Time::now();
+#endif
+    ObjList** columns = 0;
+    String** titles = 0;
+    if (arrayData(a,rows,cols,columns,titles)) {
+	int cntCol = strIndex(titles,cols,YSTRING("contact"));
+	int usrCol = strIndex(titles,cols,YSTRING("username"));
 	for (int row = 1; row < rows; row++) {
 	    String cPrefix("contact.");
-	    cPrefix << String(++n);
-	    String prefix(cPrefix);
-	    prefix << ".";
+	    cPrefix << ++n;
+	    NamedList* p = 0;
+	    String prefix;
+	    if (hierarchical)
+		p = new NamedList("");
+	    else
+		prefix << cPrefix << ".";
 	    for (int col = 1; col < cols; col++) {
-		String* name = YOBJECT(String,a->get(col,0));
-		if (!name || *name == "username")
+		if (columns[col])
+		    columns[col] = columns[col]->next();
+		// Skip username column, missing object or empty title
+		if (col == usrCol || !columns[col] || TelEngine::null(titles[col]))
 		    continue;
-		String* value = YOBJECT(String,a->get(col,row));
+		String* value = YOBJECT(String,columns[col]->get());
 		if (!value)
 		    continue;
-		if (*name == "contact")
-		    msg.addParam(cPrefix,*value);
+		if (col != cntCol) {
+		    if (p)
+			p->addParam(*(titles[col]),*value);
+		    else
+			msg.addParam(prefix + *(titles[col]),*value);
+		}
+		else if (p)
+		    p->assign(*value);
 		else
-		    msg.addParam(prefix + *name,*value);
+		    msg.addParam(cPrefix,*value);
 	    }
+	    if (p)
+		msg.addParam(new NamedPointer(cPrefix,p,*p));
 	}
+	if (n)
+	    msg.addParam("contact.count",String(n));
     }
-    if (n)
-	msg.addParam("contact.count",String(n));
+    clearArrayData(columns,titles);
+#ifdef DEBUG
+    Debug(this,DebugAll,"Filled %u contacts in %u ms for user '%s' hierarchical=%u",
+	n,ellapsedMs(start),user.c_str(),hierarchical);
+#endif
     TelEngine::destruct(m);
     return true;
 }

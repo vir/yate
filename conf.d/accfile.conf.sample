@@ -3,7 +3,65 @@
 ;
 ; Warning: all strings are case sensitive
 ;
-; sections with an empty username or with enabled=no are ignored
+; Sections with enabled=no are always ignored.
+; If the enabled parameter is missing sections without username are ignored.
+; If enabled=yes the accounts are logged in even without an username.
+;
+; Parameter description:
+;   protocol: The protocol to register on (sip, iax, h323, jabber ...)
+;   username: Account username
+;   password: Account password
+;   interval: Registration interval (in seconds) to request from server (ignored for jabber)
+;
+; SIP:
+;   description: Caller name to set on outgoing calls on this account if none specified when routing
+;   registrar: Registrar address. A port can be specified here (e.g. 1.2.3.4:7999)
+;   authname: Authentication name to use instead of username when authenticating
+;   domain: Authentication domain if any
+;   outbound: Optional outbound proxy server if different from registrar.
+;     A port can be specified here (e.g. 1.2.3.4:7999)
+;   ip_transport: Optional SIP transport to use (udp, tcp, tls).
+;     Defaults to udp
+;   ip_transport_remoteip: IP address to connect to register the account.
+;     Defaults to outbound or registrar address
+;   ip_transport_remoteport: IP port to connect to register the account
+;   ip_transport_localip: UDP: This parameter is used in conjuction ip_transport_localport
+;       to identify the transport to use
+;     TCP/TLS: Optional local ip to use when connecting
+;   ip_transport_localport: Local port.
+;     UDP only: This parameter is used to identify the transport to use
+;   localaddress: Local address to set in sent messages
+;     Set it to 'yes' to detect NAT and re-register with public ip when NAT is detected
+;     Set it to 'no' or ipaddress (e.g. 1.2.3.4 or 1.2.3.4:5060) to disable NAT detection
+;   keepalive: Optional interval for NAT keep alive.
+;     Defaults to 0 if NAT detection is disabled
+;
+;   NOTE: Default port is 5060 for udp/tcp and 5061 for tls
+;
+; Jabber:
+;   domain: Authentication domain
+;   port: Server port. Defaults to 5222
+;   server: Optional jabber server ip address to connect to.
+;     If set the jabber stream will try first to connect to this address
+;   localip: Optional local ip address to use when connecting.
+;     Connect will fail if the address is invalid
+;   resource: Optional resource to request from server
+;   priority: Optional resource priority to set in initial presence
+;   options: Comma separated list of stream flags
+;     - allowplainauth: Allow plain password authentication
+;     - tlsrequired: Stream encryption is required
+;     - noautorestart: Don't restart the stream when disconnected (NOT RECOMMENDED)
+;   nocompression: Boolean. Set it to 'yes' to disable stream compression
+;
+; IAX:
+;   server: Registrar address or domain. A port can be specified here (e.g. 1.2.3.4:7999)
+;   port: Registrar port if not specified in 'server' parameter
+;   If not set the port defaults to 4569
+;
+; H323:
+;   server: Registrar IP address
+;   addr: Local address for H323 listener (leave it empty to listen on all interfaces)
+;   port: Local port for H323 listener
 
 [test_sip]
 enabled=no
@@ -11,10 +69,8 @@ protocol=sip
 ;username=me
 description=Test SIP account
 ;interval=600
-;formats=alaw,mulaw,gsm
 ;authname=metoo
 ;password=1234
-;number=1234
 ;domain=somewhere.org
 ;registrar=10.0.0.1:5060
 ;outbound=10.0.0.1:5061
@@ -26,20 +82,21 @@ protocol=h323
 ;username=me
 description=Test H.323 account
 ;interval=600
-;formats=alaw,mulaw,gsm
 ;password=1234
-;number=1235
-;gatekeeper=10.0.0.1:1721
-;gateway=10.0.0.1:1720
 
 [test_iax]
-; IAX has no user.login support yet!
 enabled=no
 protocol=iax
 ;username=me
 description=Test IAX2 account
 ;interval=600
-;formats=alaw,mulaw,gsm
 ;password=1234
-;number=1235
-;server=10.0.0.2:1721
+;server=10.0.0.2
+
+[test_jabber]
+enabled=no
+protocol=jabber
+;username=me
+;domain=example.com
+;password=1234
+;options=allowplainauth

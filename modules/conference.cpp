@@ -157,6 +157,8 @@ public:
     inline ConfRoom* room() const
 	{ return m_room; }
     void populateMsg(Message& msg) const;
+protected:
+    void statusParams(String& str);
 private:
     void alterMsg(Message& msg, const char* event);
     RefPointer<ConfRoom> m_room;
@@ -173,6 +175,7 @@ class ConfConsumer : public DataConsumer
     friend class ConfRoom;
     friend class ConfChan;
     friend class ConfSource;
+    YCLASS(ConfConsumer,DataConsumer);
 public:
     ConfConsumer(ConfRoom* room, bool smart = false)
 	: m_room(room), m_src(0), m_muted(false), m_smart(smart),
@@ -181,6 +184,7 @@ public:
     ~ConfConsumer()
 	{ DDebug(DebugAll,"ConfConsumer::~ConfConsumer() [%p]",this); }
     virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags);
+    virtual bool control(NamedList& msg);
     unsigned int energy() const;
     unsigned int noise() const;
     inline unsigned int energy2() const
@@ -189,8 +193,12 @@ public:
 	{ return m_noise2; }
     inline bool muted() const
 	{ return m_muted; }
+    inline bool smart() const
+	{ return m_smart; }
     inline bool hasSignal() const
-	{ return (!m_muted) && (m_buffer.length() > 1) && (m_energy2 >= m_noise2); }
+	{ return (!m_muted) && (m_energy2 >= m_noise2); }
+    inline bool shouldMix() const
+	{ return hasSignal() && (m_buffer.length() > 1); }
 private:
     void consumed(const int* mixed, unsigned int samples);
     void dataForward(const int* mixed, unsigned int samples);
@@ -645,7 +653,7 @@ void ConfRoom::mix(ConfConsumer* cons)
 	ConfConsumer* co = static_cast<ConfConsumer*>(ch->getConsumer());
 	if (co) {
 	    // avoid mixing in noise
-	    if (co->hasSignal()) {
+	    if (co->shouldMix()) {
 		unsigned int n = co->m_buffer.length() / 2;
 #ifdef XDEBUG
 		int noise = co->noise();
@@ -835,7 +843,7 @@ void ConfConsumer::dataForward(const int* mixed, unsigned int samples)
     for (unsigned int i=0; i < samples; i++) {
 	int val = *mixed++;
 	// substract our own data if we contributed - only as much as we have
-	if ((i < n) && hasSignal())
+	if ((i < n) && shouldMix())
 	    val -= d[i];
 	// saturate symmetrically the result of additions and substraction
 	*p++ = (val < -32767) ? -32767 : ((val > 32767) ? 32767 : val);
@@ -851,6 +859,22 @@ unsigned int ConfConsumer::energy() const
 unsigned int ConfConsumer::noise() const
 {
     return binLog(m_noise2);
+}
+
+bool ConfConsumer::control(NamedList& msg)
+{
+    bool ok = false;
+    const String* param = msg.getParam(YSTRING("mute"));
+    if (param && param->isBoolean()) {
+	m_muted = param->toBoolean();
+	ok = true;
+    }
+    param = msg.getParam(YSTRING("smart"));
+    if (param && param->isBoolean()) {
+	m_smart = param->toBoolean();
+	ok = true;
+    }
+    return DataConsumer::control(msg) || ok;
 }
 
 
@@ -999,6 +1023,24 @@ void ConfChan::alterMsg(Message& msg, const char* event)
 	msg.setParam("full",String::boolText(m_room->full()));
 	msg.setParam("targetid",m_room->notify());
 	msg.setParam("lastpeerid",lastPeerId());
+    }
+}
+
+void ConfChan::statusParams(String& str)
+{
+    Channel::statusParams(str);
+    __plugin.lock();
+    RefPointer<ConfConsumer> cons = YOBJECT(ConfConsumer,getConsumer());
+    __plugin.unlock();
+    if (cons) {
+	bool sig = cons->hasSignal();
+	str << ",mute=" << cons->muted();
+	str << ",signal=" << sig;
+	if (cons->smart() && !cons->muted()) {
+	    str << ",noise=" << cons->noise();
+	    if (sig)
+		str << ",energy=" << cons->energy();
+	}
     }
 }
 

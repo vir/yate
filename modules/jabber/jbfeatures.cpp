@@ -109,6 +109,7 @@ private:
 INIT_PLUGIN(JBFeaturesModule);           // The module
 static String s_groupSeparator = ",";    // Roster item list grup separator
 static bool s_ignoreGrp = true;          // Ignore invalid groups or refuse roster update
+static bool s_rosterQueryHierarchical = true; // Request hierarchical result in user.roster query
 
 // Return a safe pointer to config section
 static inline const NamedList* getSection(Configuration& cfg, const char* name)
@@ -135,22 +136,26 @@ static XmlElement* buildRosterItem(NamedList& list, unsigned int index)
 {
     String prefix("contact.");
     prefix << index;
-    const char* contact = list.getValue(prefix);
+    NamedString* contact = list.getParam(prefix);
     XDebug(&__plugin,DebugAll,"buildRosterItem(%s,%u) contact=%s",
-	list.c_str(),index,contact);
+	list.c_str(),index,TelEngine::c_safe(contact));
     if (TelEngine::null(contact))
 	return 0;
     XmlElement* item = new XmlElement("item");
-    item->setAttribute("jid",contact);
-    prefix << ".";
+    item->setAttribute("jid",*contact);
+    NamedList* params = YOBJECT(NamedList,contact);
+    if (!params)
+	prefix << ".";
     ObjList* groups = 0;
-    NamedIterator iter(list);
-    const NamedString* param = 0;
-    while (0 != (param = iter.get())) {
-	if (!param->name().startsWith(prefix))
-	    continue;
-	String name = param->name();
-	name.startSkip(prefix,false);
+    NamedIterator iter(params ? *params : list);
+    String dummy;
+    for (const NamedString* param = 0; 0 != (param = iter.get());) {
+	const String& name = params ? param->name() : dummy;
+	if (!params) {
+	    dummy = param->name();
+	    if (!dummy.startSkip(prefix,false))
+		continue;
+	}
 	if (name == "name")
 	    item->setAttributeValid("name",*param);
 	else if (name == "subscription")
@@ -265,6 +270,7 @@ void JBFeaturesModule::initialize()
 	m_nextCheck = 0;
     const NamedList* general = getSection(cfg,"general");
     s_ignoreGrp = general->getBoolValue("ignore_invalid_groups",true);
+    s_rosterQueryHierarchical = general->getBoolValue("roster_query_hierarchical",true);
 
     if (m_init)
 	return;
@@ -346,7 +352,9 @@ bool JBFeaturesModule::handleFeatureRoster(JabberID& from, Message& msg)
     m.addParam("module",name());
     m.addParam("operation",set ? "update" : (get ? "query": "delete"));
     m.addParam("username",from.bare());
-    if (!get) {
+    if (get)
+	m.addParam("hierarchical",String::boolText(s_rosterQueryHierarchical));
+    else {
 	m.addParam("contact",contact.bare());
 	if (set) {
 	    // We already found the item
@@ -380,8 +388,9 @@ bool JBFeaturesModule::handleFeatureRoster(JabberID& from, Message& msg)
 	}
     }
     if (Engine::dispatch(m)) {
-	DDebug(this,DebugAll,"Roster '%s' accepted user='%s'",
-	    m.getValue("operation"),m.getValue("username"));
+#ifdef DEBUG
+	u_int64_t start = Time::now();
+#endif
 	XmlElement* child = 0;
 	if (get) {
 	    unsigned int n = m.getIntValue("contact.count");
@@ -390,6 +399,11 @@ bool JBFeaturesModule::handleFeatureRoster(JabberID& from, Message& msg)
 		child->addChild(buildRosterItem(m,i));
 	}
 	msg.setParam("groups_separator",s_groupSeparator);
+#ifdef DEBUG
+	Debug(this,DebugAll,"Roster '%s' user='%s' filled in %u ms",
+	    m.getValue("operation"),m.getValue("username"),
+	    (unsigned int)((Time::now() - start + 500) / 1000));
+#endif
 	return buildResult(msg,xml,child);
     }
     if (m.getParam("error"))

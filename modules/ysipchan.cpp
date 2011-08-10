@@ -1764,7 +1764,7 @@ bool YateSIPPartyHolder::updateRemoteAddr(const NamedList& params, const String&
     const char* addr = params.getValue(prefix + "ip_transport_remoteip",defRemoteAddr);
     int port = params.getIntValue(prefix + "ip_transport_remoteport",defRemotePort);
     if (port <= 0)
-	defRemotePort = sipPort(protocol() != Tls);
+	port = sipPort(protocol() != Tls);
     bool chg = change(m_transRemoteAddr,addr);
     chg = change(m_transRemotePort,port) || chg;
     if (chg)
@@ -7038,8 +7038,10 @@ bool SipHandler::received(Message &msg)
 	}
 	sip = new SIPMessage(method,uri);
 	YateSIPPartyHolder holder;
-	holder.setParty(msg,false);
-	holder.setSipParty(sip,line,true,msg.getValue("host"),msg.getIntValue("port"));
+	const char* host = msg.getValue("host");
+	int port = msg.getIntValue("port");
+	holder.setParty(msg,false,String::empty(),host,port);
+	holder.setSipParty(sip,line,true,host,port);
 	if (line)
 	    domain = line->domain(domain);
     }

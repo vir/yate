@@ -6815,8 +6815,7 @@ bool YateSIPLine::update(const Message& msg)
     const String& oper = msg[YSTRING("operation")];
     if (oper == YSTRING("logout")) {
 	logout();
-	if (!m_keepTcpOffline)
-	    setParty();
+	setParty();
 	return true;
     }
     bool chg = updateProto(msg);

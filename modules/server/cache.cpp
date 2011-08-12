@@ -672,7 +672,8 @@ unsigned int Cache::addRows(Array& array)
     for (int row = 1; row < rows; row++) {
 	NamedList* p = new NamedList("");
 	for (int i = 0; i < cols; i++) {
-	    columns[i] = columns[i]->next();
+	    if (columns[i])
+		columns[i] = columns[i]->next();
 	    if (!columns[i] || TelEngine::null(titles[i]))
 		continue;
 	    String* colVal = YOBJECT(String,columns[i]->get());

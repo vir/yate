@@ -1497,8 +1497,10 @@ void CacheModule::handleLnp(Message& msg, bool before)
     if (before) {
 	if (querylnp) {
 	    // LNP requested: check the cache
-	    if (lnp->copyParams(id,msg,msg.getParam("cache_lnp_parameters")))
+	    if (lnp->copyParams(id,msg,msg.getParam("cache_lnp_parameters"))) {
 		msg.setParam("querylnp",String::boolText(false));
+		msg.setParam("npdi",String::boolText(true));
+	    }
 	    else
 		msg.setParam("cache_lnp_posthook",String::boolText(true));
 	}

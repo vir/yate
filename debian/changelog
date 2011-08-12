@@ -1,3 +1,11 @@
+yate (3.3.3.svn4543) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4543: + Fixed bug: check pointer before
+    using it.  + Set 'npdi' in handled message when called number is
+    found in lnp cache.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 13 Aug 2011 02:19:15 +0400
+
 yate (3.3.3.svn4541) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4541: + Always reset a line's party when

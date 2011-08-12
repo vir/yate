@@ -672,7 +672,8 @@ unsigned int Cache::addRows(Array& array)
     for (int row = 1; row < rows; row++) {
 	NamedList* p = new NamedList("");
 	for (int i = 0; i < cols; i++) {
-	    columns[i] = columns[i]->next();
+	    if (columns[i])
+		columns[i] = columns[i]->next();
 	    if (!columns[i] || TelEngine::null(titles[i]))
 		continue;
 	    String* colVal = YOBJECT(String,columns[i]->get());
@@ -1496,8 +1497,10 @@ void CacheModule::handleLnp(Message& msg, bool before)
     if (before) {
 	if (querylnp) {
 	    // LNP requested: check the cache
-	    if (lnp->copyParams(id,msg,msg.getParam("cache_lnp_parameters")))
+	    if (lnp->copyParams(id,msg,msg.getParam("cache_lnp_parameters"))) {
 		msg.setParam("querylnp",String::boolText(false));
+		msg.setParam("npdi",String::boolText(true));
+	    }
 	    else
 		msg.setParam("cache_lnp_posthook",String::boolText(true));
 	}

@@ -86,6 +86,8 @@ public:
     // Initialize certificate, key and domains. Check the key
     // Return false on failure
     bool init(const NamedList& params);
+    // Load a certificate and key. Check the key
+    bool loadCertificate(const String& cert, const String& key);
     // Check if this context can be used for server sockets in a given domain
     bool hasDomain(const String& domain);
     // Add a comma separated list of domains to a buffer
@@ -222,12 +224,18 @@ static void addRand(u_int64_t usec)
     ::RAND_add(&usec,sizeof(usec),2);
 }
 
+// Retrieve SslSocket from SSL structure
+static inline SslSocket* sslSocket(const SSL* ssl)
+{
+    if (ssl && s_index >= 0)
+	return static_cast<SslSocket*>(::SSL_get_ex_data(const_cast<SSL*>(ssl),s_index));
+    return 0;
+}
+
 // Callback function called from OpenSSL for state changes and alerts
 void infoCallback(const SSL* ssl, int where, int retVal)
 {
-    SslSocket* sock = 0;
-    if (s_index >= 0)
-	sock = static_cast<SslSocket*>(::SSL_get_ex_data(const_cast<SSL*>(ssl),s_index));
+    SslSocket* sock = sslSocket(ssl);
     if (sock) {
 	if (sock->ssl() == ssl)
 	    sock->onInfo(where,retVal);
@@ -240,9 +248,16 @@ void infoCallback(const SSL* ssl, int where, int retVal)
 void msgCallback(int write, int version, int content_type, const void* buf,
     size_t len, SSL* ssl, void* arg)
 {
-    Debug(&__plugin,DebugAll,
-	"%s SSL message: version=%d content_type=%d buf=%p len=%u ssl=%p",
-	write ? "Sent" : "Received",version,content_type,buf,(unsigned int)len,ssl);
+    SslSocket* sock = sslSocket(ssl);
+    if (!sock)
+	return;
+    if (sock->ssl() == ssl)
+	Debug(&__plugin,DebugAll,
+	    "%s SSL message: version=%d content_type=%d buf=%p len=%u [%p]",
+	    write ? "Sent" : "Received",version,content_type,buf,(unsigned int)len,
+	    sock);
+    else
+	Debug(&__plugin,DebugFail,"msgCallback: Mismatched session %p [%p]",ssl,sock);
 }
 
 
@@ -250,7 +265,7 @@ SslContext::SslContext(const char* name)
     : String(name),
     m_context(0)
 {
-    m_context = ::SSL_CTX_new(::SSLv23_server_method());
+    m_context = ::SSL_CTX_new(::SSLv23_method());
     SSL_CTX_set_info_callback(m_context,infoCallback);
 #ifdef DEBUG
     SSL_CTX_set_msg_callback(m_context,msgCallback);
@@ -261,46 +276,9 @@ SslContext::SslContext(const char* name)
 // Return false on failure
 bool SslContext::init(const NamedList& params)
 {
-    String cert;
-    const char* c = params.getValue("certificate");
-    if (c) {
-	cert << Engine::configPath();
-	if (cert && !cert.endsWith(Engine::pathSeparator()))
-	    cert << Engine::pathSeparator();
-	cert << c;
-    }
-    String key;
-    const char* k = params.getValue("key");
-    if (k) {
-	key << Engine::configPath();
-	if (key && !key.endsWith(Engine::pathSeparator()))
-	    key << Engine::pathSeparator();
-	key << k;
-    }
-    else
-	key = cert;
     // Load certificate and key. Check them
-    if (!::SSL_CTX_use_certificate_chain_file(m_context,cert)) {
-	unsigned long err = ::ERR_get_error();
-	Debug(&__plugin,DebugWarn,
-	    "Context '%s' failed to load certificate from '%s' '%s'",
-	    c_str(),c ? cert.c_str() : "",::ERR_error_string(err,0));
+    if (!loadCertificate(params["certificate"],params["key"]))
 	return false;
-    }
-    if (!::SSL_CTX_use_PrivateKey_file(m_context,key,SSL_FILETYPE_PEM)) {
-	unsigned long err = ::ERR_get_error();
-	Debug(&__plugin,DebugWarn,
-	    "Context '%s' failed to load key from '%s' '%s'",
-	    c_str(),k ? key.c_str() : "",::ERR_error_string(err,0));
-	return false;
-    }
-    if (!::SSL_CTX_check_private_key(m_context)) {
-	unsigned long err = ::ERR_get_error();
-	Debug(&__plugin,DebugWarn,
-	    "Context '%s' certificate='%s' or key='%s' are invalid '%s'",
-	    c_str(),cert.c_str(),key.c_str(),::ERR_error_string(err,0));
-	return false;
-    }
     // Load domains
     m_domains.clear();
     String* d = params.getParam("domains");
@@ -319,9 +297,54 @@ bool SslContext::init(const NamedList& params)
 	    m_domains.append(new String(s->toLower()));
 	}
 	TelEngine::destruct(list);
+	DDebug(&__plugin,DebugAll,"Context '%s' loaded domains=%s",
+	    c_str(),d->safe());
     }
-    DDebug(&__plugin,DebugAll,"Context '%s' loaded certificate='%s' key='%s' domains=%s",
-	c_str(),cert.c_str(),key.c_str(),TelEngine::c_safe(d));
+    return true;
+}
+
+// Load a certificate and key. Check the key
+bool SslContext::loadCertificate(const String& c, const String& k)
+{
+    String cert;
+    if (c) {
+	cert << Engine::configPath();
+	if (cert && !cert.endsWith(Engine::pathSeparator()))
+	    cert << Engine::pathSeparator();
+	cert << c;
+    }
+    String key;
+    if (k) {
+	key << Engine::configPath();
+	if (key && !key.endsWith(Engine::pathSeparator()))
+	    key << Engine::pathSeparator();
+	key << k;
+    }
+    else
+	key = cert;
+    if (!::SSL_CTX_use_certificate_chain_file(m_context,cert)) {
+	unsigned long err = ::ERR_get_error();
+	Debug(&__plugin,DebugWarn,
+	    "Context '%s' failed to load certificate from '%s' '%s'",
+	    c_str(),cert.c_str(),::ERR_error_string(err,0));
+	return false;
+    }
+    if (!::SSL_CTX_use_PrivateKey_file(m_context,key,SSL_FILETYPE_PEM)) {
+	unsigned long err = ::ERR_get_error();
+	Debug(&__plugin,DebugWarn,
+	    "Context '%s' failed to load key from '%s' '%s'",
+	    c_str(),key.c_str(),::ERR_error_string(err,0));
+	return false;
+    }
+    if (!::SSL_CTX_check_private_key(m_context)) {
+	unsigned long err = ::ERR_get_error();
+	Debug(&__plugin,DebugWarn,
+	    "Context '%s' certificate='%s' or key='%s' are invalid '%s'",
+	    c_str(),cert.c_str(),key.c_str(),::ERR_error_string(err,0));
+	return false;
+    }
+    DDebug(&__plugin,DebugAll,"Context '%s' loaded certificate='%s' key='%s'",
+	c_str(),cert.c_str(),key.c_str());
     return true;
 }
 
@@ -463,6 +486,11 @@ int SslSocket::sslError(int retcode)
 		retcode = socketError();
 		break;
 	}
+#ifdef DEBUG
+	if (!canRetry())
+	    Debug(&__plugin,DebugNote,"SslSocket error='%s' state='%s' [%p]",
+		ERR_error_string(ERR_get_error(),0),SSL_state_string_long(m_ssl),this);
+#endif
     }
     else
 	clearError();
@@ -527,14 +555,21 @@ bool SslHandler::received(Message& msg)
 	sSock = new SslSocket(pSock->handle(),true,
 	    msg.getIntValue("verify",s_verifyMode,SSL_VERIFY_NONE),c);
     }
-    else
-	sSock = new SslSocket(pSock->handle(),false,
-	    msg.getIntValue("verify",s_verifyMode,SSL_VERIFY_NONE));
-    if (!sSock->valid()) {
-	Debug(&__plugin,DebugWarn,"SslHandler: Invalid SSL Socket");
-	// detach and destroy new socket, preserve old one
-	sSock->detach();
-	delete sSock;
+    else {
+	const String& cert = msg["certificate"];
+	SslContext* c = cert ? new SslContext(msg) : 0;
+	if (!c || c->loadCertificate(cert,msg["key"]))
+	    sSock = new SslSocket(pSock->handle(),false,
+		msg.getIntValue("verify",s_verifyMode,SSL_VERIFY_NONE),c);
+	TelEngine::destruct(c);
+    }
+    if (!(sSock && sSock->valid())) {
+	if (sSock) {
+	    Debug(&__plugin,DebugWarn,"SslHandler: Invalid SSL Socket");
+	    // detach and destroy new socket, preserve old one
+	    sSock->detach();
+	    delete sSock;
+	}
 	return false;
     }
     // replace socket, detach and destroy old one

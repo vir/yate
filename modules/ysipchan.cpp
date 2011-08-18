@@ -582,11 +582,13 @@ public:
 	{ return m_username; }
     inline const String& getAuthName() const
 	{ return m_authname ? m_authname : m_username; }
+    inline const String& regDomain() const
+	{ return m_registrar ? m_registrar : m_transRemoteAddr; }
     inline const String& domain() const
-	{ return m_domain ? m_domain : m_registrar; }
+	{ return m_domain ? m_domain : regDomain(); }
     inline const char* domain(const char* defDomain) const
 	{ return m_domain ? m_domain.c_str() :
-	    (TelEngine::null(defDomain) ? m_registrar.c_str() : defDomain); }
+	    (TelEngine::null(defDomain) ? regDomain().c_str() : defDomain); }
     inline bool valid() const
 	{ return m_valid; }
     inline bool marked() const

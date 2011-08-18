@@ -582,11 +582,13 @@ public:
 	{ return m_username; }
     inline const String& getAuthName() const
 	{ return m_authname ? m_authname : m_username; }
+    inline const String& regDomain() const
+	{ return m_registrar ? m_registrar : m_transRemoteAddr; }
     inline const String& domain() const
-	{ return m_domain ? m_domain : m_registrar; }
+	{ return m_domain ? m_domain : regDomain(); }
     inline const char* domain(const char* defDomain) const
 	{ return m_domain ? m_domain.c_str() :
-	    (TelEngine::null(defDomain) ? m_registrar.c_str() : defDomain); }
+	    (TelEngine::null(defDomain) ? regDomain().c_str() : defDomain); }
     inline bool valid() const
 	{ return m_valid; }
     inline bool marked() const
@@ -1036,6 +1038,8 @@ static unsigned int s_tcpIdle = TCP_IDLE_DEF; // TCP transport idle interval
 static unsigned int s_tcpMaxpkt = 1500;  // Maximum packet to accept on TCP connections
 static String s_tcpOutRtpip;             // RTP ip for outgoing tcp/tls transports (protected by plugin mutex)
 static bool s_lineKeepTcpOffline = true; // Lines: keep TCP transports when offline
+static String s_sslCertFile;             // File containing the SSL client certificate to present if requested by the server
+static String s_sslKeyFile;              // File containing the key of the SSL client certificate
 
 static int s_expires_min = EXPIRES_MIN;
 static int s_expires_def = EXPIRES_DEF;
@@ -7368,6 +7372,8 @@ void SIPDriver::initialize()
     s_globalMutex.lock();
     s_realm = s_cfg.getValue("general","realm","Yate");
     s_tcpOutRtpip = s_cfg.getValue("general","tcp_out_rtp_localip");
+    s_sslCertFile = s_cfg.getValue("general","ssl_certificate_file");
+    s_sslKeyFile = s_cfg.getValue("general","ssl_key_file");
     s_globalMutex.unlock();
     // Adjust here the TCP idle interval: it uses the SIP engine
     s_tcpIdle = tcpIdleInterval(s_cfg.getIntValue("general","tcp_idle",TCP_IDLE_DEF));
@@ -7510,6 +7516,11 @@ bool SIPDriver::socketSsl(Socket** sock, bool server, const String& context)
     m.addParam("module",name());
     m.addParam("server",String::boolText(server));
     m.addParam("context",context,false);
+    if (!server) {
+	Lock lock(s_globalMutex);
+	m.addParam("certificate",s_sslCertFile,false);
+	m.addParam("key",s_sslKeyFile,false);
+    }
     if (sock && *sock) {
 	RefObjectProxy* p = new RefObjectProxy(sock);
 	m.userData(p);

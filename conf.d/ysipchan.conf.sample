@@ -117,6 +117,20 @@
 ; See SIPMessage::Flags and SIPMessage::complete() in the source for gory details
 ;flags=0
 
+; ssl_certificate_file: string: File containing client SSL certificate to present
+; This parameter is used for outgoing encrypted connections if a certificate
+;  is requested by the server during SSL negotiation
+; The file path is relative to configuration path
+; This parameter is applied on reload
+;ssl_certificate_file=
+
+; ssl_key_file: string: Optional file containing the key of the certificate
+;  set in ssl_certificate_file
+; The file path is relative to configuration path
+; The certificate file must contain the key if this parameter is empty
+; This parameter is applied on reload
+;ssl_key_file=
+
 ; printmsg: boolean: Print SIP messages to output
 ; This parameter is applied on reload
 ; Defaults to yes

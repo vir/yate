@@ -6630,6 +6630,14 @@ public:
     bool processLinkStatus(DataBlock& data, int streamId);
 
     /**
+     * Decode and process link status message in more strict manner
+     * @param data The message
+     * @param streamId The stream id witch received the message
+     * @return True if the message was procesed
+     */
+    bool processSLinkStatus(DataBlock& data, int streamId);
+
+    /**
      * Helper method used to acknowledge the last received message
      * when no data are to transmit
      */
@@ -6733,7 +6741,9 @@ private:
     SignallingTimer m_ackTimer;
     SignallingTimer m_confTimer;
     SignallingTimer m_oosTimer;
+    SignallingTimer m_waitOosTimer;
     bool m_autostart;
+    bool m_sequenced;
     bool m_dumpMsg;
 };
 

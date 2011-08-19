@@ -97,6 +97,7 @@ Source: "Release\dumbchan.yate"; DestDir: "{app}\modules"; Flags: replacesamever
 Source: "Release\extmodule.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server
 Source: "Release\msgsniff.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: debug
 Source: "Release\regexroute.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: client server debug
+Source: "Release\enumroute.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: client server debug
 Source: "Release\server\regfile.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
 Source: "Release\rmanager.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server debug
 Source: "Release\tonegen.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\base

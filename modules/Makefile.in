@@ -290,8 +290,6 @@ server/pgsqldb.yate: LOCALLIBS = $(PGSQL_LIB)
 server/mysqldb.yate: LOCALFLAGS = $(MYSQL_INC)
 server/mysqldb.yate: LOCALLIBS = $(MYSQL_LIB)
 
-enumroute.yate: LOCALLIBS = @RESOLV_LIB@
-
 client/alsachan.yate: LOCALLIBS = -lasound
 
 client/coreaudio.yate: LOCALLIBS = -framework CoreServices  -framework CoreAudio -framework AudioUnit -framework AudioToolBox

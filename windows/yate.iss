@@ -115,9 +115,9 @@ Source: "Release\server\queuesnotify.yate"; DestDir: "{app}\modules\server"; Fla
 Source: "Release\server\lateroute.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
 Source: "Release\server\sipfeatures.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
 Source: "Release\server\cache.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
-Source: "Release\server\subscription.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor
-Source: "Release\server\presence.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor
-Source: "Release\server\users.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor
+Source: "Release\server\subscription.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
+Source: "Release\server\presence.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
+Source: "Release\server\users.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
 Source: "Release\server\cpuload.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor
 Source: "Release\server\ccongestion.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor
 Source: "Release\server\monitoring.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor

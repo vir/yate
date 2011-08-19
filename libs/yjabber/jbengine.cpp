@@ -635,7 +635,9 @@ void JBConnect::connect()
 	    // Start connecting timeout
 	    if (!notifyConnecting(true,true))
 		return;
-	    int code = Resolver::srvQuery(query,m_srvs,&error);
+	    int code = 0;
+	    if (Resolver::init())
+		code = Resolver::srvQuery(query,m_srvs,&error);
 	    // Stop the timeout if not exiting
 	    if (exiting(sock) || !notifyConnecting(false,true)) {
 		terminated(0,false);
@@ -654,7 +656,7 @@ void JBConnect::connect()
 	ObjList* o = 0;
 	while (0 != (o = m_srvs.skipNull())) {
 	    SrvRecord* rec = static_cast<SrvRecord*>(o->get());
-	    sock = connect(*rec,rec->m_port,stop);
+	    sock = connect(rec->address(),rec->port(),stop);
 	    o->remove();
 	    if (sock || stop || exiting(sock)) {
 		terminated(sock,false);

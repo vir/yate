@@ -75,7 +75,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="Debug/libregex.lib ws2_32.lib advapi32.lib shell32.lib"
+				AdditionalDependencies="Debug/libregex.lib ws2_32.lib advapi32.lib shell32.lib dnsapi.lib"
 				OutputFile=".\Debug/Libyate.dll"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -172,7 +172,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="Release/libregex.lib ws2_32.lib advapi32.lib shell32.lib"
+				AdditionalDependencies="Release/libregex.lib ws2_32.lib advapi32.lib shell32.lib dnsapi.lib"
 				OutputFile=".\Release/Libyate.dll"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -564,6 +564,10 @@
 						PreprocessorDefinitions=""
 					/>
 				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="..\engine\Resolver.cpp"
+				>
 			</File>
 			<File
 				RelativePath="..\engine\Socket.cpp"

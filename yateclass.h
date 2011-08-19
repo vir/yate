@@ -6360,6 +6360,256 @@ public:
 };
 
 /**
+ * This class holds a DNS (resolver) record
+ * @short A DNS record
+ */
+class YATE_API DnsRecord : public GenObject
+{
+    YCLASS(DnsRecord,GenObject)
+    YNOCOPY(DnsRecord);
+public:
+    /**
+     * Build a DNS record
+     * @param order Record order (priority)
+     * @param pref Record preference
+     */
+    inline DnsRecord(int order, int pref)
+	: m_order(order), m_pref(pref)
+	{}
+
+    /**
+     * Default constructor
+     */
+    inline DnsRecord()
+	: m_order(0), m_pref(0)
+	{}
+
+    /**
+     * Retrieve the record order
+     * @return Record order
+     */
+    inline int order() const
+	{ return m_order; }
+
+    /**
+     * Retrieve the record preference
+     * @return Record preference
+     */
+    inline int pref() const
+	{ return m_pref; }
+
+    /**
+     * Dump a record for debug purposes
+     * @param buf Destination buffer
+     * @param sep Fields separator
+     */
+    virtual void dump(String& buf, const char* sep = " ");
+
+    /**
+     * Insert a DnsRecord into a list in the proper location given by order and preference
+     * @param list Destination list
+     * @param rec The item to insert
+     * @param ascPref Order preference ascending
+     * @return True on success, false on failure (already in the list)
+     */
+    static bool insert(ObjList& list, DnsRecord* rec, bool ascPref);
+
+protected:
+    int m_order;
+    int m_pref;
+};
+
+/**
+ * This class holds a SRV (Service Location) record
+ * @short A SRV record
+ */
+class YATE_API SrvRecord : public DnsRecord
+{
+    YCLASS(SrvRecord,DnsRecord)
+    YNOCOPY(SrvRecord);
+public:
+    /**
+     * Build a SRV record
+     * @param prio Record priority (order)
+     * @param weight Record weight (preference)
+     * @param addr Record address
+     * @param port Record port
+     */
+    inline SrvRecord(int prio, int weight, const char* addr, int port)
+	: DnsRecord(prio,weight), m_address(addr), m_port(port)
+	{}
+
+    /**
+     * Retrieve the record address
+     * @return Record address
+     */
+    inline const String& address() const
+	{ return m_address; }
+
+    /**
+     * Retrieve the record port
+     * @return Record port
+     */
+    inline int port() const
+	{ return m_port; }
+
+    /**
+     * Dump this record for debug purposes
+     * @param buf Destination buffer
+     * @param sep Fields separator
+     */
+    virtual void dump(String& buf, const char* sep = " ");
+
+    /**
+     * Copy a SrvRecord list into another one
+     * @param dest Destination list
+     * @param src Source list
+     */
+    static void copy(ObjList& dest, const ObjList& src);
+
+protected:
+    String m_address;
+    int m_port;
+
+private:
+    SrvRecord() {}                       // No default contructor
+};
+
+/**
+ * This class holds a NAPTR (Naming Authority Pointer) record
+ * @short A NAPTR record
+ */
+class YATE_API NaptrRecord : public DnsRecord
+{
+    YCLASS(NaptrRecord,DnsRecord)
+    YNOCOPY(NaptrRecord);
+public:
+    /**
+     * Build a NAPTR record
+     * @param ord Record order
+     * @param pref Record preference
+     * @param flags Interpretation flags
+     * @param serv Available services
+     * @param regexp Substitution expression
+     * @param next Next name to query
+     */
+    NaptrRecord(int ord, int pref, const char* flags, const char* serv,
+	const char* regexp, const char* next);
+
+    /**
+     * Replace the enclosed template in a given string if matching
+     *  the substitution expression
+     * @param str String to replace
+     * @return True on success
+     */
+    bool replace(String& str);
+
+    /**
+     * Dump this record for debug purposes
+     * @param buf Destination buffer
+     * @param sep Fields separator
+     */
+    virtual void dump(String& buf, const char* sep = " ");
+
+    /**
+     * Retrieve record interpretation flags
+     * @return Record interpretation flags
+     */
+    inline const String& flags() const
+	{ return m_flags; }
+
+    /**
+     * Retrieve available services
+     * @return Available services
+     */
+    inline const String& serv() const
+	{ return m_service; }
+
+    /**
+     * Retrieve the next domain name to query
+     * @return The next domain to query
+     */
+    inline const String& nextName() const
+	{ return m_next; }
+
+protected:
+    String m_flags;
+    String m_service;
+    Regexp m_regmatch;
+    String m_template;
+    String m_next;
+
+private:
+    NaptrRecord() {}                     // No default contructor
+};
+
+/**
+ * This class offers DNS query services
+ * @short DNS services
+ */
+class YATE_API Resolver
+{
+public:
+    /**
+     * Resolver handled types
+     */
+    enum Type {
+	Unknown,
+	Srv,                             // SRV (Service Location)
+	Naptr,                           // NAPTR (Naming Authority Pointer)
+    };
+
+    /**
+     * Runtime check for resolver availability
+     * @param type Optional type to check. Set it to Unknown (default) to check
+     *  general resolver availability
+     * @return True if the resolver is available on current platform
+     */
+    static bool available(Type type = Unknown);
+
+    /**
+     * Initialize the resolver in the current thread
+     * @param timeout Query timeout. Negative to use default
+     * @param retries The number of query retries. Negative to use default
+     * @return True on success
+     */
+    static bool init(int timeout = -1, int retries = -1);
+
+    /**
+     * Make a query
+     * @param type Query type as enumeration
+     * @param dname Domain to query
+     * @param result List of resulting record items
+     * @param error Optional string to be filled with error string
+     * @return 0 on success, error code otherwise (h_errno value on Linux)
+     */
+    static int query(Type type, const char* dname, ObjList& result, String* error = 0);
+
+    /**
+     * Make a SRV (Service Location) query
+     * @param dname Domain to query
+     * @param result List of resulting SrvRecord items
+     * @param error Optional string to be filled with error string
+     * @return 0 on success, error code otherwise (h_errno value on Linux)
+     */
+    static int srvQuery(const char* dname, ObjList& result, String* error = 0);
+
+    /**
+     * Make a NAPTR (Naming Authority Pointer) query
+     * @param dname Domain to query
+     * @param result List of resulting NaptrRecord items
+     * @param error Optional string to be filled with error string
+     * @return 0 on success, error code otherwise (h_errno value on Linux)
+     */
+    static int naptrQuery(const char* dname, ObjList& result, String* error = 0);
+
+    /**
+     * Resolver type names
+     */
+    static const TokenDict s_types[];
+};
+
+/**
  * The Cipher class provides an abstraction for data encryption classes
  * @short An abstract cipher
  */

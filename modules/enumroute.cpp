@@ -24,11 +24,6 @@
 
 #include <yatephone.h>
 
-#include <netinet/in.h>
-#include <arpa/nameser.h>
-#include <resolv.h>
-
-
 using namespace TelEngine;
 namespace { // anonymous
 
@@ -36,30 +31,6 @@ namespace { // anonymous
 #define ENUM_DEF_RETRIES 2
 #define ENUM_DEF_MINLEN  8
 #define ENUM_DEF_MAXCALL 30000
-
-class NAPTR : public GenObject
-{
-public:
-    NAPTR(int ord, int pref, const char* flags, const char* serv, const char* regexp, const char* replace);
-    bool replace(String& str);
-    inline int order() const
-	{ return m_order; }
-    inline int pref() const
-	{ return m_pref; }
-    inline const String& flags() const
-	{ return m_flags; }
-    inline const String& serv() const
-	{ return m_service; }
-
-private:
-    int m_order;
-    int m_pref;
-    String m_flags;
-    String m_service;
-    Regexp m_regmatch;
-    String m_template;
-    String m_replace;
-};
 
 class EnumHandler : public MessageHandler
 {
@@ -85,27 +56,6 @@ public:
 private:
     bool m_init;
 };
-
-// weird but NS_MAXSTRING and dn_string() are NOT part of the resolver API...
-#ifndef NS_MAXSTRING
-#define NS_MAXSTRING 255
-#endif
-
-// copy one string (not domain) from response
-static int dn_string(const unsigned char* end, const unsigned char* src, char *dest, int maxlen)
-{
-    int n = src[0];
-    maxlen--;
-    if (maxlen > n)
-	maxlen = n;
-    if (dest && (maxlen > 0)) {
-	while ((maxlen-- > 0) && (src < end))
-	    *dest++ = *++src;
-	*dest = 0;
-    }
-    return n+1;
-}
-
 
 static String s_prefix;
 static String s_forkStop;
@@ -133,139 +83,6 @@ static int s_reroute = 0;
 
 static EnumModule emodule;
 
-// Initializes the resolver library in the current thread
-static bool resolvInit()
-{
-    if ((_res.options & RES_INIT) == 0) {
-	// need to initialize in this thread
-	if (res_init())
-	    return false;
-    }
-    // always set the timeout variables
-    _res.retrans = s_timeout;
-    _res.retry = s_retries;
-    return true;
-}
-
-// Perform DNS query, return list of only NAPTR records
-static ObjList* naptrQuery(const char* dname)
-{
-    unsigned char buf[2048];
-    int r,q,a;
-    unsigned char *p, *e;
-    DDebug(&emodule,DebugInfo,"Querying %s",dname);
-    r = res_query(dname,ns_c_in,ns_t_naptr,
-	buf,sizeof(buf));
-    XDebug(&emodule,DebugAll,"res_query %d",r);
-    if ((r < 0) || (r > (int)sizeof(buf)))
-	return 0;
-    p = buf+NS_QFIXEDSZ;
-    NS_GET16(q,p);
-    NS_GET16(a,p);
-    XDebug(&emodule,DebugAll,"questions: %d, answers: %d",q,a);
-    p = buf + NS_HFIXEDSZ;
-    e = buf + r;
-    for (; q > 0; q--) {
-	int n = dn_skipname(p,e);
-	if (n < 0)
-	    return 0;
-	p += (n + NS_QFIXEDSZ);
-    }
-    XDebug(&emodule,DebugAll,"skipped questions");
-    ObjList* lst = 0;
-    for (; a > 0; a--) {
-	int ty,cl,sz;
-	long int tt;
-	char name[NS_MAXLABEL+1];
-	unsigned char* l;
-	int n = dn_expand(buf,e,p,name,sizeof(name));
-	if ((n <= 0) || (n > NS_MAXLABEL))
-	    return lst;
-	buf[n] = 0;
-	p += n;
-	NS_GET16(ty,p);
-	NS_GET16(cl,p);
-	NS_GET32(tt,p);
-	NS_GET16(sz,p);
-	XDebug(&emodule,DebugAll,"found '%s' type %d size %d",name,ty,sz);
-	l = p;
-	p += sz;
-	if (ty == ns_t_naptr) {
-	    int ord,pr;
-	    char fla[NS_MAXSTRING+1];
-	    char ser[NS_MAXSTRING+1];
-	    char reg[NS_MAXSTRING+1];
-	    char rep[NS_MAXLABEL+1];
-	    NS_GET16(ord,l);
-	    NS_GET16(pr,l);
-	    n = dn_string(e,l,fla,sizeof(fla));
-	    l += n;
-	    n = dn_string(e,l,ser,sizeof(ser));
-	    l += n;
-	    n = dn_string(e,l,reg,sizeof(reg));
-	    l += n;
-	    n = dn_expand(buf,e,l,rep,sizeof(rep));
-	    l += n;
-	    DDebug(&emodule,DebugAll,"order=%d pref=%d flags='%s' serv='%s' regexp='%s' replace='%s'",
-		ord,pr,fla,ser,reg,rep);
-	    if (!lst)
-		lst = new ObjList;
-	    NAPTR* ptr;
-	    ObjList* cur = lst;
-	    // cycle existing records, insert at the right place
-	    for (; cur; cur = cur->next()) {
-		ptr = static_cast<NAPTR*>(cur->get());
-		if (!ptr)
-		    continue;
-		if (ptr->order() > ord)
-		    break;
-		if (ptr->order() < ord)
-		    continue;
-		// sort first by order and then by preference
-		if (ptr->pref() > pr)
-		    break;
-	    }
-	    ptr = new NAPTR(ord,pr,fla,ser,reg,rep);
-	    if (cur)
-		cur->insert(ptr);
-	    else
-		lst->append(ptr);
-	}
-    }
-    return lst;
-}
-
-
-NAPTR::NAPTR(int ord, int pref, const char* flags, const char* serv, const char* regexp, const char* replace)
-    : m_order(ord), m_pref(pref), m_flags(flags), m_service(serv), m_replace(replace)
-{
-    // use case-sensitive extended regular expressions
-    m_regmatch.setFlags(true,false);
-    if (!null(regexp)) {
-	// look for <sep>regexp<sep>template<sep>
-	char sep[2] = { regexp[0], 0 };
-	String tmp(regexp+1);
-	if (tmp.endsWith(sep)) {
-	    int pos = tmp.find(sep);
-	    if (pos > 0) {
-		m_regmatch = tmp.substr(0,pos);
-		m_template = tmp.substr(pos+1,tmp.length()-pos-2);
-		XDebug(&emodule,DebugAll,"NAPTR match '%s' template '%s'",m_regmatch.c_str(),m_template.c_str());
-	    }
-	}
-    }
-}
-
-// Perform the Regexp replacement, return true if succeeded
-bool NAPTR::replace(String& str)
-{
-    if (m_regmatch && str.matches(m_regmatch)) {
-	str = str.replaceMatches(m_template);
-	return true;
-    }
-    return false;
-}
-
 
 // Routing message handler, performs checks and calls resolve method
 bool EnumHandler::received(Message& msg)
@@ -273,7 +90,7 @@ bool EnumHandler::received(Message& msg)
     if (s_domains.null() || !msg.getBoolValue("enumroute",true))
 	return false;
     // perform per-thread initialization of resolver and timeout settings
-    if (!resolvInit())
+    if (!Resolver::init(s_timeout,s_retries))
 	return false;
     return resolve(msg,s_telUsed);
 }
@@ -305,31 +122,26 @@ bool EnumHandler::resolve(Message& msg,bool canRedirect)
     for (int i = called.length()-1; i > 0; i--)
 	tmp << called.at(i) << ".";
     u_int64_t dt = Time::now();
-    ObjList* res = 0;
+    ObjList res;
     for (ObjList* l = domains; l; l = l->next()) {
 	const String* s = static_cast<const String*>(l->get());
 	if (!s || s->null())
 	    continue;
-	res = naptrQuery(tmp + *s);
-	if (res)
+	int result = Resolver::naptrQuery(tmp + *s,res);
+	if ((result == 0) && res.skipNull())
 	    break;
     }
     dt = Time::now() - dt;
     Debug(&emodule,DebugInfo,"Returned %d NAPTR records in %u.%06u s",
-	res ? res->count() : 0,
-	(unsigned int)(dt / 1000000),
-	(unsigned int)(dt % 1000000));
-    domains->destruct();
+	res.count(),(unsigned int)(dt / 1000000),(unsigned int)(dt % 1000000));
+    TelEngine::destruct(domains);
     bool reroute = false;
     bool unassigned = false;
-    if (res) {
+    if (res.skipNull()) {
 	msg.retValue().clear();
 	bool autoFork = msg.getBoolValue("autofork",s_autoFork);
-	ObjList* cur = res;
-	for (; cur; cur = cur->next()) {
-	    NAPTR* ptr = static_cast<NAPTR*>(cur->get());
-	    if (!ptr)
-		continue;
+	for (ObjList* cur = res.skipNull(); cur; cur = cur->skipNext()) {
+	    NaptrRecord* ptr = static_cast<NaptrRecord*>(cur->get());
 	    DDebug(&emodule,DebugAll,"order=%d pref=%d '%s'",
 		ptr->order(),ptr->pref(),ptr->serv().c_str());
 	    String serv = ptr->serv();
@@ -401,7 +213,6 @@ bool EnumHandler::resolve(Message& msg,bool canRedirect)
 		unassigned = true;
 	    }
 	}
-	res->destruct();
     }
     s_mutex.lock();
     if (rval) {
@@ -514,11 +325,10 @@ void EnumModule::initialize()
     if (m_init || (prio <= 0))
 	return;
     m_init = true;
-    int res = res_init();
-    if (res)
-	Debug(&emodule,DebugGoOn,"res_init returned error %d",res);
-    else
+    if (Resolver::available(Resolver::Naptr))
 	Engine::install(new EnumHandler(cfg.getIntValue("general","priority",prio)));
+    else
+	Debug(&emodule,DebugGoOn,"NAPTR resolver is not available on this platform");
 }
 
 }; // anonymous namespace

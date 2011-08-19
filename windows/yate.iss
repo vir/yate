@@ -97,6 +97,7 @@ Source: "Release\dumbchan.yate"; DestDir: "{app}\modules"; Flags: replacesamever
 Source: "Release\extmodule.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server
 Source: "Release\msgsniff.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: debug
 Source: "Release\regexroute.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: client server debug
+Source: "Release\enumroute.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: client server debug
 Source: "Release\server\regfile.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
 Source: "Release\rmanager.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server debug
 Source: "Release\tonegen.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\base
@@ -114,9 +115,9 @@ Source: "Release\server\queuesnotify.yate"; DestDir: "{app}\modules\server"; Fla
 Source: "Release\server\lateroute.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
 Source: "Release\server\sipfeatures.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
 Source: "Release\server\cache.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
-Source: "Release\server\subscription.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor
-Source: "Release\server\presence.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor
-Source: "Release\server\users.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor
+Source: "Release\server\subscription.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
+Source: "Release\server\presence.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
+Source: "Release\server\users.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
 Source: "Release\server\cpuload.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor
 Source: "Release\server\ccongestion.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor
 Source: "Release\server\monitoring.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\monitor

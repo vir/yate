@@ -1,3 +1,16 @@
+yate (3.3.3.svn4559) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4559: + Don't retransmit non 2xx final
+    responses to INVITE on reliable transports.  + Made configurable the
+    number of times to transmit a request or a final response when
+    retransmission is required.  + Added support to choose the transport
+    for sip accounts.  + Error ELAST (500) indicates a Zaptel/DAHDI
+    event during write() too.  + Double the timeout period before using
+    it. Decreased retransmission counters default values to keep the
+    same overall timeout.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 23 Aug 2011 02:19:18 +0400
+
 yate (3.3.3.svn4554) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4554: + Added wait out of service timer to

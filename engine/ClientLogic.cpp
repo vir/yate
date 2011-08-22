@@ -410,6 +410,8 @@ static const String s_accProtoParams[] = {
     "server", "domain", "outbound", "options", "resource", "port", "interval",
     "authname", ""
 };
+// Account protocol dependent parameters set in lists (param=default_value)
+static NamedList s_accProtoParamsSel("");
 // Resource status images
 static const TokenDict s_statusImage[] = {
     {"status_offline.png",   ClientResource::Offline},
@@ -556,6 +558,17 @@ static bool sameParams(const NamedList& l1, const NamedList& l2, const String* p
     while (*params && l1[*params] == l2[*params])
 	params++;
     return params->null();
+}
+
+// Compare list parameters given in NamedList
+// Return true if equal
+static bool sameParams(const NamedList& l1, const NamedList& l2, const NamedList& params)
+{
+    NamedIterator iter(params);
+    for (const NamedString* ns = 0; 0 != (ns = iter.get());)
+	if (l1[ns->name()] != l2[ns->name()])
+	    return false;
+    return true;
 }
 
 // Build an user.login message
@@ -1013,6 +1026,9 @@ static void updateProtocolSpec(NamedList& p, const String& proto, bool edit,
     prefix << "proto_" << getProtoPage(proto) << "_";
     for (const String* par = s_accProtoParams; !par->null(); par++)
 	p.setParam(prefix + *par,params.getValue(*par));
+    NamedIterator iter(s_accProtoParamsSel);
+    for (const NamedString* ns = 0; 0 != (ns = iter.get());)
+	p.setParam(prefix + ns->name(),params.getValue(ns->name(),*ns));
     // Set default resource for new accounts if not already set
     if (!edit && proto == s_jabber) {
 	String rname = prefix + "resource";
@@ -1697,6 +1713,9 @@ static bool getAccount(Window* w, NamedList& p, ClientAccountList& accounts)
     prefix << "proto_" << getProtoPage(proto) << "_";
     for (const String* par = s_accProtoParams; !par->null(); par++)
 	saveParam(p,prefix,*par,w);
+    NamedIterator iter(s_accProtoParamsSel);
+    for (const NamedString* ns = 0; 0 != (ns = iter.get());)
+	saveParam(p,prefix,ns->name(),w);
     // Options
     prefix << "opt_";
     String options;
@@ -4243,6 +4262,8 @@ DefaultLogic::DefaultLogic(const char* name, int prio)
     s_chatStates.addParam("gone","${sender} ended chat session");
     s_chatStates.addParam("inactive","${sender} is idle");
     s_chatStates.addParam("active","");
+    // Account select params default value
+    s_accProtoParamsSel.addParam("ip_transport","UDP");
 }
 
 // Destructor
@@ -7794,7 +7815,8 @@ bool DefaultLogic::updateAccount(const NamedList& account, bool save,
 	    // Compare account parameters
 	    changed = !(sameParams(acc->params(),account,s_accParams) &&
 		sameParams(acc->params(),account,s_accBoolParams) &&
-		sameParams(acc->params(),account,s_accProtoParams));
+		sameParams(acc->params(),account,s_accProtoParams) &&
+		sameParams(acc->params(),account,s_accProtoParamsSel));
 	    if (changed)
 		acc->m_params.copyParams(account);
 	}

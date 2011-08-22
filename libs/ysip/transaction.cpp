@@ -313,8 +313,12 @@ void SIPTransaction::setResponse(SIPMessage* message)
     if (message && (message->code >= 200)) {
 	if (isInvite()) {
 	    // we need to actively retransmit this message
-	    if (changeState(Retrans))
-		setTimeout(m_engine->getTimer('G'),6);
+	    // RFC3261 17.2.1: non 2xx are not retransmitted on reliable transports
+	    if (changeState(Retrans)) {
+		bool reliable = message->getParty() && message->getParty()->isReliable();
+		bool retrans = !reliable || message->code < 300;
+		setTimeout(m_engine->getTimer(retrans ? 'G' : 'H',reliable),retrans ? 6 : 1);
+	    }
 	}
 	else {
 	    // just wait and reply to retransmits

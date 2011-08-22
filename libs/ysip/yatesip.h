@@ -1193,6 +1193,22 @@ public:
     u_int64_t getTimer(char which, bool reliable = false) const;
 
     /**
+     * Get the number of times to send a SIP request.
+     * This value applies only when retransmission is required
+     * @return The number of times to send a SIP request
+     */
+    inline unsigned int getReqTransCount() const
+	{ return m_reqTransCount; }
+
+    /**
+     * Get the number of times to send a response to a SIP request.
+     * This value applies only when retransmission is required
+     * @return The number of times to send a response to a SIP request
+     */
+    inline unsigned int getRspTransCount() const
+	{ return m_rspTransCount; }
+
+    /**
      * Get the default value of the Max-Forwards header for this engine
      * @return The maximum number of hops the request is allowed to pass
      */
@@ -1325,6 +1341,8 @@ protected:
 
     u_int64_t m_t1;
     u_int64_t m_t4;
+    int m_reqTransCount;
+    int m_rspTransCount;
     unsigned int m_maxForwards;
     int m_cseq;
     int m_flags;

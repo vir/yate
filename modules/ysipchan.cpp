@@ -523,6 +523,8 @@ class YateSIPEngine : public SIPEngine
 {
 public:
     YateSIPEngine(YateSIPEndPoint* ep);
+    // Initialize the engine
+    void initialize(NamedList* params);
     virtual bool buildParty(SIPMessage* message);
     virtual bool checkUser(const String& username, const String& realm, const String& nonce,
 	const String& method, const String& uri, const String& response,
@@ -1121,6 +1123,16 @@ static unsigned int getMaxpkt(int val, int defVal)
     if (val > 65528)
 	return 65528;
     return 524;
+}
+
+// Retrieve an integer value from a list
+// Check bounds. Return default value if out of bounds
+static inline int checkIntValue(NamedList& params, const String& param, int def, int min, int max)
+{
+    int tmp = params.getIntValue(param,def);
+    if (tmp >= min && tmp <= max)
+	return tmp;
+    return def;
 }
 
 // Skip tabs, spaces, CR and LF from buffer start
@@ -3416,6 +3428,19 @@ YateSIPEngine::YateSIPEngine(YateSIPEndPoint* ep)
 	    addAllowed(meth);
 	}
     }
+    initialize(s_cfg.getSection("general"));
+}
+
+// Initialize the engine
+void YateSIPEngine::initialize(NamedList* params)
+{
+    NamedList dummy("");
+    if (!params)
+	params = &dummy;
+    m_reqTransCount = checkIntValue(*params,"sip_req_trans_count",5,2,10);
+    m_rspTransCount = checkIntValue(*params,"sip_rsp_trans_count",6,2,10);
+    DDebug(this,DebugAll,"Initialized sip_req_trans_count=%d sip_rsp_trans_count=%d",
+	m_reqTransCount,m_rspTransCount);
 }
 
 SIPTransaction* YateSIPEngine::forkInvite(SIPMessage* answer, SIPTransaction* trans)
@@ -7368,6 +7393,8 @@ void SIPDriver::initialize()
 	if (s_cfg.getBoolValue("general","generate"))
 	    Engine::install(new SipHandler);
     }
+    else
+	m_endpoint->engine()->initialize(s_cfg.getSection("general"));
     // Unsafe globals
     s_globalMutex.lock();
     s_realm = s_cfg.getValue("general","realm","Yate");

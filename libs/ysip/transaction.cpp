@@ -317,7 +317,8 @@ void SIPTransaction::setResponse(SIPMessage* message)
 	    if (changeState(Retrans)) {
 		bool reliable = message->getParty() && message->getParty()->isReliable();
 		bool retrans = !reliable || message->code < 300;
-		setTimeout(m_engine->getTimer(retrans ? 'G' : 'H',reliable),retrans ? 6 : 1);
+		setTimeout(m_engine->getTimer(retrans ? 'G' : 'H',reliable),
+		    retrans ? m_engine->getRspTransCount() : 1);
 	    }
 	}
 	else {
@@ -584,7 +585,7 @@ SIPEvent* SIPTransaction::getClientEvent(int state, int timeout)
 	    if (changeState(Trying)) {
 		bool reliable = e->getParty() && e->getParty()->isReliable();
 		if (!reliable)
-		    setTimeout(m_engine->getTimer(isInvite() ? 'A' : 'E'),5);
+		    setTimeout(m_engine->getTimer(isInvite() ? 'A' : 'E'),m_engine->getReqTransCount());
 		else
 		    setTimeout(m_engine->getTimer(isInvite() ? 'B' : 'F',true),1);
 	    }

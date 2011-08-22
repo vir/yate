@@ -266,8 +266,8 @@ SIPEvent* SIPTransaction::getEvent(bool pendingOnly)
     int timeout = -1;
     if (m_timeout && (Time::now() >= m_timeout)) {
 	timeout = --m_timeouts;
-	m_timeout = (m_timeouts) ? Time::now() + m_delay : 0;
 	m_delay *= 2; // exponential back-off
+	m_timeout = (m_timeouts) ? Time::now() + m_delay : 0;
 	DDebug(getEngine(),DebugAll,"SIPTransaction fired timer #%d [%p]",timeout,this);
     }
 

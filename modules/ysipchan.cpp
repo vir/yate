@@ -3437,8 +3437,8 @@ void YateSIPEngine::initialize(NamedList* params)
     NamedList dummy("");
     if (!params)
 	params = &dummy;
-    m_reqTransCount = checkIntValue(*params,"sip_req_trans_count",5,2,10);
-    m_rspTransCount = checkIntValue(*params,"sip_rsp_trans_count",6,2,10);
+    m_reqTransCount = checkIntValue(*params,"sip_req_trans_count",4,2,10);
+    m_rspTransCount = checkIntValue(*params,"sip_rsp_trans_count",5,2,10);
     DDebug(this,DebugAll,"Initialized sip_req_trans_count=%d sip_rsp_trans_count=%d",
 	m_reqTransCount,m_rspTransCount);
 }

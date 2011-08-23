@@ -29,6 +29,7 @@
 #error C++ is required
 #endif
 
+#include <limits.h>
 #include <sys/types.h>
 #include <stddef.h>
 #include <unistd.h>
@@ -185,10 +186,6 @@ typedef int HANDLE;
 #ifdef _WINDOWS
 #undef RAND_MAX
 #define RAND_MAX 2147483647
-extern "C" {
-YATE_API long int random();
-YATE_API void srandom(unsigned int seed);
-}
 #endif
 
 /**
@@ -1577,9 +1574,14 @@ public:
      * Convert the string to an integer value.
      * @param defvalue Default to return if the string is not a number
      * @param base Numeration base, 0 to autodetect
+     * @param minvalue Minimum value allowed
+     * @param maxvalue Maximum value allowed
+     * @param clamp Control the out of bound values: true to adjust to the nearest
+     *  bound, false to return the default value
      * @return The integer interpretation or defvalue.
      */
-    int toInteger(int defvalue = 0, int base = 0) const;
+    int toInteger(int defvalue = 0, int base = 0, int minvalue = INT_MIN,
+	int maxvalue = INT_MAX, bool clamp = true) const;
 
     /**
      * Convert the string to an integer value looking up first a token table.
@@ -3603,9 +3605,14 @@ public:
      * Retrieve the numeric value of a parameter.
      * @param name Name of parameter to locate
      * @param defvalue Default value to return if not found
+     * @param minvalue Minimum value allowed for the parameter
+     * @param maxvalue Maximum value allowed for the parameter
+     * @param clamp Control the out of bound values: true to adjust to the nearest
+     *  bound, false to return the default value
      * @return The number contained in the named parameter or the default
      */
-    int getIntValue(const String& name, int defvalue = 0) const;
+    int getIntValue(const String& name, int defvalue = 0, int minvalue = INT_MIN,
+	int maxvalue = INT_MAX, bool clamp = true) const;
 
     /**
      * Retrieve the numeric value of a parameter trying first a table lookup.

@@ -629,8 +629,9 @@ void GenObject::destruct()
 static MutexPool s_refMutex(REFOBJECT_MUTEX_COUNT,false,"RefObject");
 
 RefObject::RefObject()
-    : m_refcount(1), m_mutex(s_refMutex.mutex(this))
+    : m_refcount(1), m_mutex(0)
 {
+    m_mutex = s_refMutex.mutex(this);
 }
 
 RefObject::~RefObject()

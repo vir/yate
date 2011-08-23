@@ -22,7 +22,6 @@
 
 #include "yateclass.h"
 
-#include <limits.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
@@ -417,7 +416,8 @@ String String::substr(int offs, int len) const
     return String(c_str()+offs,len);
 }
 
-int String::toInteger(int defvalue, int base) const
+int String::toInteger(int defvalue, int base, int minvalue, int maxvalue,
+    bool clamp) const
 {
     if (!m_string)
 	return defvalue;
@@ -425,7 +425,11 @@ int String::toInteger(int defvalue, int base) const
     int val = strtoi(m_string,&eptr,base);
     if (!eptr || *eptr)
 	return defvalue;
-    return val;
+    if (val >= minvalue && val <= maxvalue)
+	return val;
+    if (clamp)
+	return (val < minvalue) ? minvalue : maxvalue;
+    return defvalue;
 }
 
 int String::toInteger(const TokenDict* tokens, int defvalue, int base) const

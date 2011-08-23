@@ -185,10 +185,6 @@ typedef int HANDLE;
 #ifdef _WINDOWS
 #undef RAND_MAX
 #define RAND_MAX 2147483647
-extern "C" {
-YATE_API long int random();
-YATE_API void srandom(unsigned int seed);
-}
 #endif
 
 /**

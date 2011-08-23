@@ -1125,16 +1125,6 @@ static unsigned int getMaxpkt(int val, int defVal)
     return 524;
 }
 
-// Retrieve an integer value from a list
-// Check bounds. Return default value if out of bounds
-static inline int checkIntValue(NamedList& params, const String& param, int def, int min, int max)
-{
-    int tmp = params.getIntValue(param,def);
-    if (tmp >= min && tmp <= max)
-	return tmp;
-    return def;
-}
-
 // Skip tabs, spaces, CR and LF from buffer start
 // Return true if the buffer changed
 static bool skipSpaces(String& buf, bool crlf = true)
@@ -3052,8 +3042,7 @@ void YateSIPTCPListener::init(const NamedList& params, bool first)
 	    Debug(&plugin,DebugConf,"Listener(%s,'%s') ssl context is empty [%p]",
 		protoName(),c_str(),this);
     }
-    int backlog = params.getIntValue("backlog",5);
-    m_backlog = (backlog >= 0 ? backlog : 0);
+    m_backlog = params.getIntValue("backlog",5,0);
     m_bind = setAddr(addr,port) || first;
     m_transParamsChanged = m_transParamsChanged || first;
     if (rtpLip != m_transParams["rtp_localip"]) {
@@ -3437,8 +3426,8 @@ void YateSIPEngine::initialize(NamedList* params)
     NamedList dummy("");
     if (!params)
 	params = &dummy;
-    m_reqTransCount = checkIntValue(*params,"sip_req_trans_count",4,2,10);
-    m_rspTransCount = checkIntValue(*params,"sip_rsp_trans_count",5,2,10);
+    m_reqTransCount = params->getIntValue("sip_req_trans_count",4,2,10,false);
+    m_rspTransCount = params->getIntValue("sip_rsp_trans_count",5,2,10,false);
     DDebug(this,DebugAll,"Initialized sip_req_trans_count=%d sip_rsp_trans_count=%d",
 	m_reqTransCount,m_rspTransCount);
 }
@@ -7370,11 +7359,7 @@ void SIPDriver::initialize()
     m_parser.initialize(s_cfg.getSection("codecs"),s_cfg.getSection("hacks"),s_cfg.getSection("general"));
     if (!m_endpoint) {
 	Thread::Priority prio = Thread::priority(s_cfg.getValue("general","thread"));
-	unsigned int partyMutexCount = s_cfg.getIntValue("general","party_mutexcount",47);
-	if (partyMutexCount < 13)
-	    partyMutexCount = 13;
-	else if (partyMutexCount > 101)
-	    partyMutexCount = 101;
+	unsigned int partyMutexCount = s_cfg.getIntValue("general","party_mutexcount",47,13,101);
 	m_endpoint = new YateSIPEndPoint(prio,partyMutexCount);
 	if (!(m_endpoint->Init())) {
 	    delete m_endpoint;

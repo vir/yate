@@ -78,10 +78,10 @@ const char* Configuration::getValue(const String& sect, const String& key, const
 }
 
 int Configuration::getIntValue(const String& sect, const String& key, int defvalue,
-    int minvalue, int maxvalue, bool clump) const
+    int minvalue, int maxvalue, bool clamp) const
 {
     const NamedString *s = getKey(sect,key);
-    return s ? s->toInteger(defvalue,0,minvalue,maxvalue,clump) : defvalue;
+    return s ? s->toInteger(defvalue,0,minvalue,maxvalue,clamp) : defvalue;
 }
 
 int Configuration::getIntValue(const String& sect, const String& key, const TokenDict* tokens, int defvalue) const

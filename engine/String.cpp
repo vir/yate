@@ -22,7 +22,6 @@
 
 #include "yateclass.h"
 
-#include <limits.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
@@ -418,7 +417,7 @@ String String::substr(int offs, int len) const
 }
 
 int String::toInteger(int defvalue, int base, int minvalue, int maxvalue,
-    bool clump) const
+    bool clamp) const
 {
     if (!m_string)
 	return defvalue;
@@ -428,7 +427,7 @@ int String::toInteger(int defvalue, int base, int minvalue, int maxvalue,
 	return defvalue;
     if (val >= minvalue && val <= maxvalue)
 	return val;
-    if (clump)
+    if (clamp)
 	return (val < minvalue) ? minvalue : maxvalue;
     return defvalue;
 }

@@ -282,10 +282,10 @@ const char* NamedList::getValue(const String& name, const char* defvalue) const
 }
 
 int NamedList::getIntValue(const String& name, int defvalue, int minvalue, int maxvalue,
-    bool clump) const
+    bool clamp) const
 {
     const NamedString *s = getParam(name);
-    return s ? s->toInteger(defvalue,0,minvalue,maxvalue,clump) : defvalue;
+    return s ? s->toInteger(defvalue,0,minvalue,maxvalue,clamp) : defvalue;
 }
 
 int NamedList::getIntValue(const String& name, const TokenDict* tokens, int defvalue) const

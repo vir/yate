@@ -1,3 +1,13 @@
+yate (3.3.3.svn4563) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4563: + Removed unused function
+    declarations.  + Initialize class member in constructor body to
+    avoid VC++ warning.  + String to integer conversion can now check
+    the result against allowed min/max values. Use it in sip module.  +
+    Fixed meaning of parameter: clump -> clamp.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 24 Aug 2011 02:19:15 +0400
+
 yate (3.3.3.svn4559) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4559: + Don't retransmit non 2xx final

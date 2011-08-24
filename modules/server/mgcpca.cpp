@@ -144,9 +144,9 @@ public:
 	{ return m_rqntType; }
     inline const char* rqntStr() const
 	{ return m_rqntStr; }
-    bool ownsId(const String& rqId) const;
+    bool ownsId(const String& rqId, const String& epId) const;
     static SignallingComponent* create(const String& type, const NamedList& name);
-    static MGCPSpan* findNotify(const String& id);
+    static MGCPSpan* findNotify(const String& id, const String& epId);
     bool getBoolParam(const String& param, bool defValue) const;
     bool matchEndpoint(const MGCPEndpointId& ep);
     bool processEvent(MGCPTransaction* tr, MGCPMessage* mm);
@@ -167,6 +167,7 @@ private:
     bool m_sdpForward;
     bool m_fxo;
     bool m_fxs;
+    bool m_ntfyMatch;
     bool m_rqntEmbed;
     RqntType m_rqntType;
     String m_rqntStr;
@@ -456,7 +457,7 @@ bool YMGCPEngine::processEvent(MGCPTransaction* trans, MGCPMessage* msg)
 		if (wrap)
 		    ok = wrap->processNotify(trans,msg,*event);
 		else {
-		    span = MGCPSpan::findNotify(*rqId);
+		    span = MGCPSpan::findNotify(*rqId,msg->endpointId());
 		    if (span)
 			ok = span->processNotify(trans,msg,*event,*rqId);
 		    else {
@@ -878,7 +879,7 @@ SignallingComponent* MGCPSpan::create(const String& type, const NamedList& name)
 }
 
 // Find a span by its Notify-ID
-MGCPSpan* MGCPSpan::findNotify(const String& id)
+MGCPSpan* MGCPSpan::findNotify(const String& id, const String& epId)
 {
     if (id.null())
 	return 0;
@@ -886,7 +887,7 @@ MGCPSpan* MGCPSpan::findNotify(const String& id)
     ObjList* l = &s_spans;
     for (; l; l=l->next()) {
 	MGCPSpan* s = static_cast<MGCPSpan*>(l->get());
-	if (s && s->ownsId(id))
+	if (s && s->ownsId(id,epId))
 	    return s;
     }
     return 0;
@@ -897,7 +898,7 @@ MGCPSpan::MGCPSpan(const NamedList& params, const char* name, const MGCPEpInfo& 
 	static_cast<SignallingCircuitGroup*>(params.getObject("SignallingCircuitGroup"))),
       m_circuits(0), m_count(0), m_epId(ep), m_operational(false),
       m_rtpForward(false), m_sdpForward(false), m_fxo(false), m_fxs(false),
-      m_rqntEmbed(true), m_rqntType(RqntOnce)
+      m_ntfyMatch(true), m_rqntEmbed(true), m_rqntType(RqntOnce)
 {
     Debug(&splugin,DebugAll,"MGCPSpan::MGCPSpan(%p,'%s') [%p]",
 	&params,name,this);
@@ -906,6 +907,7 @@ MGCPSpan::MGCPSpan(const NamedList& params, const char* name, const MGCPEpInfo& 
     m_rqntStr = "D/[0-9#*](N)";
     const AnalogLineGroup* analog = YOBJECT(AnalogLineGroup,group());
     if (analog) {
+	m_ntfyMatch = false;
 	switch (analog->type()) {
 	    case AnalogLine::FXO:
 		m_fxo = true;
@@ -999,6 +1001,7 @@ bool MGCPSpan::init(const NamedList& params)
     m_rtpForward = config->getBoolValue(YSTRING("forward_rtp"),!(m_fxo || m_fxs));
     m_sdpForward = config->getBoolValue(YSTRING("forward_sdp"),false);
     m_bearer = lookup(config->getIntValue(YSTRING("bearer"),s_dict_payloads,-1),s_dict_gwbearerinfo);
+    m_ntfyMatch = config->getBoolValue(YSTRING("match_ntfy"),m_ntfyMatch);
     m_rqntEmbed = config->getBoolValue(YSTRING("req_embed"),true);
     m_rqntType = (RqntType)config->getIntValue(YSTRING("req_dtmf"),s_dict_rqnt,RqntOnce);
     bool fax = config->getBoolValue(YSTRING("req_fax"),true);
@@ -1110,13 +1113,26 @@ bool MGCPSpan::getBoolParam(const String& param, bool defValue) const
     return defValue;
 }
 
+#ifdef XDEBUG
+static bool mismatch(const char* s)
+{
+    Debug(DebugAll,"MGCP No match: %s",s);
+    return false;
+}
+#else
+#define mismatch(s) false
+#endif
+
 // Check if this span matches an endpoint ID
 bool MGCPSpan::matchEndpoint(const MGCPEndpointId& ep)
 {
+    XDebug(DebugAll,"MGCP Match: %s@%s:%d vs %s@%s:%d",
+	ep.user().c_str(),ep.host().c_str(),ep.port(),
+	m_epId.user().c_str(),m_epId.host().c_str(),m_epId.port());
     if (ep.port() && (ep.port() != m_epId.port()))
-	return false;
+	return mismatch("Port differs");
     if (ep.host() |= m_epId.host())
-	return false;
+	return mismatch("Host differs");
     if (ep.user() &= m_epId.user())
 	return true;
     if (ep.user() == "*")
@@ -1135,36 +1151,48 @@ bool MGCPSpan::matchEndpoint(const MGCPEndpointId& ep)
     // check for prefix[min-max] or prefix*/[min-max]
     static const Regexp s_finalRange("^\\(.*\\)\\[\\([0-9]\\+\\)-\\([0-9]\\+\\)\\]$");
     if (!tmp.matches(s_finalRange))
-	return false;
+	return mismatch("No range");
     int idx = -1;
     if (tmp.matchString(1).endsWith("*/")) {
 	if (!m_epId.user().startsWith(tmp.matchString(1).substr(0,tmp.matchLength(1)-2)))
-	    return false;
+	    return mismatch("Different wildcard range prefix");
 	idx = m_epId.user().rfind('/');
 	if (idx < 0)
-	    return false;
+	    return mismatch("No wildcard range separator");
 	idx++;
     }
     else {
 	if (!m_epId.user().startsWith(tmp.matchString(1),false,true))
-	    return false;
+	    return mismatch("Different range prefix");
 	idx = tmp.matchLength(1);
     }
     idx = m_epId.user().substr(idx).toInteger(-1,10);
     if (idx < 0)
-	return false;
-    return (tmp.matchString(2).toInteger(idx+1,10) <= idx) && (idx <= tmp.matchString(3).toInteger(-1,10));
+	return mismatch("User suffix not numeric");
+    int rMin = tmp.matchString(2).toInteger(idx+1,10);
+    int rMax = tmp.matchString(3).toInteger(-1,10);
+    if (((idx + (int)m_count - 1) < rMin) || (idx > rMax))
+	return mismatch("Suffix not in range");
+    return true;
 }
 
 // Check if a request Id is for this span or one of its circuits
-bool MGCPSpan::ownsId(const String& rqId) const
+bool MGCPSpan::ownsId(const String& rqId, const String& epId) const
 {
     if (ntfyId() == rqId)
 	return true;
     for (unsigned int i = 0; i < m_count; i++) {
 	MGCPCircuit* circuit = m_circuits[i];
-	if (circuit && (circuit->ntfyId() == rqId))
-	    return true;
+	if (!circuit)
+	    continue;
+	if (m_ntfyMatch) {
+	    if (circuit->ntfyId() == rqId)
+		return true;
+	}
+	else {
+	    if (circuit->epId() == epId)
+		return true;
+	}
     }
     return false;
 }
@@ -1178,13 +1206,13 @@ MGCPCircuit* MGCPSpan::findCircuit(const String& epId, const String& rqId) const
 	return 0;
     bool localId = (rqId != "0") && !rqId.null();
     String id = epId;
-    if (id.rfind(':') < 0)
+    if ((id.rfind(':') < 0) && (m_epId.id().find(':') >= 0))
 	id << ":" << m_epId.port();
     for (unsigned int i = 0; i < m_count; i++) {
 	MGCPCircuit* circuit = m_circuits[i];
 	if (!circuit)
 	    continue;
-	if (localId) {
+	if (localId && m_ntfyMatch) {
 	    if (circuit->ntfyId() != rqId)
 		continue;
 	}
@@ -2149,6 +2177,10 @@ void MGCPPlugin::statusDetail(String& str)
     for (; l; l=l->skipNext()) {
 	MGCPWrapper* w = static_cast<MGCPWrapper*>(l->get());
         str.append(w->id(),",") << "=" << w->callId();
+    }
+    for (l = s_spans.skipNull(); l; l = l->skipNext()) {
+	MGCPSpan* s = static_cast<MGCPSpan*>(l->get());
+        str.append(s->id(),",") << "=" << s->epId().id();
     }
     s_mutex.unlock();
 }

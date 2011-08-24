@@ -1110,13 +1110,26 @@ bool MGCPSpan::getBoolParam(const String& param, bool defValue) const
     return defValue;
 }
 
+#ifdef XDEBUG
+static bool mismatch(const char* s)
+{
+    Debug(DebugAll,"MGCP No match: %s",s);
+    return false;
+}
+#else
+#define mismatch(s) false
+#endif
+
 // Check if this span matches an endpoint ID
 bool MGCPSpan::matchEndpoint(const MGCPEndpointId& ep)
 {
+    XDebug(DebugAll,"MGCP Match: %s@%s:%d vs %s@%s:%d",
+	ep.user().c_str(),ep.host().c_str(),ep.port(),
+	m_epId.user().c_str(),m_epId.host().c_str(),m_epId.port());
     if (ep.port() && (ep.port() != m_epId.port()))
-	return false;
+	return mismatch("Port differs");
     if (ep.host() |= m_epId.host())
-	return false;
+	return mismatch("Host differs");
     if (ep.user() &= m_epId.user())
 	return true;
     if (ep.user() == "*")
@@ -1135,25 +1148,29 @@ bool MGCPSpan::matchEndpoint(const MGCPEndpointId& ep)
     // check for prefix[min-max] or prefix*/[min-max]
     static const Regexp s_finalRange("^\\(.*\\)\\[\\([0-9]\\+\\)-\\([0-9]\\+\\)\\]$");
     if (!tmp.matches(s_finalRange))
-	return false;
+	return mismatch("No range");
     int idx = -1;
     if (tmp.matchString(1).endsWith("*/")) {
 	if (!m_epId.user().startsWith(tmp.matchString(1).substr(0,tmp.matchLength(1)-2)))
-	    return false;
+	    return mismatch("Different wildcard range prefix");
 	idx = m_epId.user().rfind('/');
 	if (idx < 0)
-	    return false;
+	    return mismatch("No wildcard range separator");
 	idx++;
     }
     else {
 	if (!m_epId.user().startsWith(tmp.matchString(1),false,true))
-	    return false;
+	    return mismatch("Different range prefix");
 	idx = tmp.matchLength(1);
     }
     idx = m_epId.user().substr(idx).toInteger(-1,10);
     if (idx < 0)
-	return false;
-    return (tmp.matchString(2).toInteger(idx+1,10) <= idx) && (idx <= tmp.matchString(3).toInteger(-1,10));
+	return mismatch("User suffix not numeric");
+    int rMin = tmp.matchString(2).toInteger(idx+1,10);
+    int rMax = tmp.matchString(3).toInteger(-1,10);
+    if (((idx + (int)m_count - 1) < rMin) || (idx > rMax))
+	return mismatch("Suffix not in range");
+    return true;
 }
 
 // Check if a request Id is for this span or one of its circuits
@@ -1178,7 +1195,7 @@ MGCPCircuit* MGCPSpan::findCircuit(const String& epId, const String& rqId) const
 	return 0;
     bool localId = (rqId != "0") && !rqId.null();
     String id = epId;
-    if (id.rfind(':') < 0)
+    if ((id.rfind(':') < 0) && (m_epId.id().find(':') >= 0))
 	id << ":" << m_epId.port();
     for (unsigned int i = 0; i < m_count; i++) {
 	MGCPCircuit* circuit = m_circuits[i];

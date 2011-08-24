@@ -1,3 +1,15 @@
+yate (3.3.3.svn4566) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4566: + Added debugging of MGCP matching
+    when compiled with XDEBUG.  + Fixed MGCP range matching against a
+    trunk.  + Fixed MGCP endpoint matching when port is not present.  +
+    Report base endpoint of each span in status.  + Added ability to
+    match NTFY by endpoint, use it as default for FXO/FXS.  + Added
+    extra check to avoid building a sip party with invalid remote
+    address.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 25 Aug 2011 02:19:14 +0400
+
 yate (3.3.3.svn4563) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4563: + Removed unused function

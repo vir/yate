@@ -1659,6 +1659,7 @@ bool YateSIPPartyHolder::buildParty(bool force)
     YateSIPTCPTransport* tcpTrans = 0;
     YateSIPUDPTransport* udpTrans = 0;
     bool initTcp = false;
+    bool addrValid = true;
     if (m_transId) {
 	YateSIPTransport* trans = 0;
 	if (plugin.ep())
@@ -1687,9 +1688,12 @@ bool YateSIPPartyHolder::buildParty(bool force)
 	else {
 	    initTcp = true;
 	    bool tls = (protocol() == Tls);
-	    if (tls || protocol() == Tcp)
-		tcpTrans = new YateSIPTCPTransport(tls,m_transLocalAddr,
-		    m_transRemoteAddr,m_transRemotePort);
+	    if (tls || protocol() == Tcp) {
+		addrValid = m_transRemoteAddr && m_transRemotePort > 0;
+		if (addrValid)
+		    tcpTrans = new YateSIPTCPTransport(tls,m_transLocalAddr,
+			m_transRemoteAddr,m_transRemotePort);
+	    }
 	    else
 		Debug(DebugStub,"YateSIPPartyHolder::buildParty() transport %s not implemented",
 		    protoName());
@@ -1700,7 +1704,9 @@ bool YateSIPPartyHolder::buildParty(bool force)
 	SocketAddr addr(AF_INET);
 	addr.host(m_transRemoteAddr);
 	addr.port(m_transRemotePort);
-	p = new YateUDPParty(udpTrans,addr);
+	addrValid = addr.host() && addr.port() > 0;
+	if (addrValid)
+	    p = new YateUDPParty(udpTrans,addr);
     }
     else if (tcpTrans) {
 	p = tcpTrans->getParty();
@@ -1709,6 +1715,10 @@ bool YateSIPPartyHolder::buildParty(bool force)
     }
     setParty(p);
     TelEngine::destruct(p);
+    if (!addrValid)
+	DDebug(&plugin,DebugNote,
+	    "Failed to build %s transport with invalid remote addr=%s:%d",
+	    protoName(),m_transRemoteAddr.c_str(),m_transRemotePort);
     if (tcpTrans && initTcp) {
 	// TODO: handle other params: maxpkt, thread prio
 	tcpTrans->init(NamedList::empty(),true);

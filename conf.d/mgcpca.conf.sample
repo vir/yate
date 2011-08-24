@@ -204,6 +204,10 @@
 ; Normally the default bearer is not set so a B: line is added when needed
 ;bearer=
 
+; match_ntfy: bool: Strict match the X: id in NTFY against the local value
+; This can cause trouble with FXS/FXO persistent notifications
+;match_ntfy=yes for digital gateways, no for analogic
+
 ; req_fax: bool: Request Fax Tone detection from gateway
 ; This requests notification for G/ft (Generic package, Fax Tone)
 ;req_fax=yes

@@ -8460,7 +8460,14 @@ private:
     bool blockCircuit(unsigned int cic, bool block, bool remote, bool hwFail,
 	bool changed, bool changedState, bool resetLocking = false);
     // Find a call by its circuit identification code
+    // This method is not thread safe
     SS7ISUPCall* findCall(unsigned int cic);
+    // Find a call by its circuit identification code
+    // This method is thread safe
+    inline void findCall(unsigned int cic, RefPointer<SS7ISUPCall>& call) {
+	    Lock mylock(this);
+	    call = findCall(cic);
+	}
     // Send blocking/unblocking messages.
     // Restart the re-check timer if there is any (un)lockable, not sent cic
     // Return false if no request was sent

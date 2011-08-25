@@ -323,7 +323,7 @@ SS7Router::SS7Router(const NamedList& params)
     : SignallingComponent(params.safe("SS7Router"),&params),
       Mutex(true,"SS7Router"),
       m_changes(0), m_transfer(false), m_phase2(false), m_started(false),
-      m_restart(0), m_isolate(0),
+      m_restart(0), m_isolate(0), m_statsMutex(false,"SS7RouterStats"),
       m_trafficOk(0), m_trafficSent(0), m_routeTest(0), m_testRestricted(false),
       m_transferSilent(false), m_checkRoutes(false), m_autoAllowed(false),
       m_sendUnavail(true), m_sendProhibited(true),
@@ -777,13 +777,13 @@ int SS7Router::routeMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* net
 		break;
 	    }
 	}
-	lock();
+	m_statsMutex.lock();
 	m_txMsu++;
 	if (network)
 	    m_fwdMsu++;
 	if (cong)
 	    m_congestions++;
-	unlock();
+	m_statsMutex.unlock();
     }
     return slsTx;
 }

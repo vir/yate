@@ -6474,6 +6474,7 @@ private:
     int routeMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls, SS7Route::State states);
     void buildView(SS7PointCode::Type type, ObjList& view, SS7Layer3* network);
     void buildViews();
+    Mutex m_statsMutex;
     SignallingTimer m_trafficOk;
     SignallingTimer m_trafficSent;
     SignallingTimer m_routeTest;

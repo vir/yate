@@ -703,7 +703,7 @@ protected:
      * This method is called to clean up and destroy the object after the
      *  reference counter becomes zero
      */
-    void destroyed();
+    virtual void destroyed();
 
     /**
      * Insert another component in the same engine as this one.
@@ -821,9 +821,10 @@ public:
      * @param type Class or base class of the component to find or create
      * @param params Name of component to find or create and creation parameters
      * @param init Set to true to initialize a newly created component
+     * @param ref True to add a reference when returning existing component
      * @return Pointer to component found or created, NULL on failure
      */
-    SignallingComponent* build(const String& type, const NamedList& params, bool init = false);
+    SignallingComponent* build(const String& type, const NamedList& params, bool init = false, bool ref = true);
 
     /**
      * Apply a control operation to all components in the engine
@@ -6008,6 +6009,12 @@ class YSIG_API SS7Layer4 : public SS7L3User
 {
 public:
     /**
+     * This method is called to clean up and destroy the object after the
+     *  reference counter becomes zero
+     */
+    virtual void destroyed();
+
+    /**
      * Initialize the application layer, connect it to the SS7 router
      * @param config Optional configuration parameters override
      * @return True if the application was initialized properly
@@ -6474,6 +6481,7 @@ private:
     int routeMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls, SS7Route::State states);
     void buildView(SS7PointCode::Type type, ObjList& view, SS7Layer3* network);
     void buildViews();
+    Mutex m_statsMutex;
     SignallingTimer m_trafficOk;
     SignallingTimer m_trafficSent;
     SignallingTimer m_routeTest;
@@ -8452,7 +8460,14 @@ private:
     bool blockCircuit(unsigned int cic, bool block, bool remote, bool hwFail,
 	bool changed, bool changedState, bool resetLocking = false);
     // Find a call by its circuit identification code
+    // This method is not thread safe
     SS7ISUPCall* findCall(unsigned int cic);
+    // Find a call by its circuit identification code
+    // This method is thread safe
+    inline void findCall(unsigned int cic, RefPointer<SS7ISUPCall>& call) {
+	    Lock mylock(this);
+	    call = findCall(cic);
+	}
     // Send blocking/unblocking messages.
     // Restart the re-check timer if there is any (un)lockable, not sent cic
     // Return false if no request was sent

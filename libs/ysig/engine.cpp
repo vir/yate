@@ -318,13 +318,13 @@ bool SignallingEngine::find(const SignallingComponent* component)
     return m_components.find(component) != 0;
 }
 
-SignallingComponent* SignallingEngine::build(const String& type, const NamedList& params, bool init)
+SignallingComponent* SignallingEngine::build(const String& type, const NamedList& params, bool init, bool ref)
 {
     XDebug(this,DebugAll,"Engine building '%s' of type %s [%p]",
 	params.c_str(),type.c_str(),this);
     Lock mylock(this);
     SignallingComponent* c = find(params,type);
-    if (c && c->ref()) {
+    if (c && (ref ? c->ref() : c->alive())) {
 	DDebug(this,DebugAll,"Engine returning existing component '%s' @%p (%d) [%p]",
 	    c->toString().c_str(),c,c->refcount(),this);
 	return c;

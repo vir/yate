@@ -3613,7 +3613,6 @@ void SS7ISUP::destroyed()
     clearCalls();
     unlock();
     SignallingCallControl::attach(0);
-    SS7Layer4::attach(0);
     SS7Layer4::destroyed();
 }
 
@@ -4560,7 +4559,8 @@ bool SS7ISUP::startCircuitReset(SignallingCircuit*& cic, const String& timer)
 void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 {
     // Find a call for this message, create a new one or drop the message
-    SS7ISUPCall* call = findCall(msg->cic());
+    RefPointer<SS7ISUPCall> call;
+    findCall(msg->cic(),call);
     const char* reason = 0;
     while (true) {
 	#define DROP_MSG(res) { reason = res; break; }
@@ -4611,6 +4611,7 @@ void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 	    reserveCircuit(circuit,call->cicRange(),SignallingCircuit::LockLockedBusy);
 	    call->replaceCircuit(circuit);
 	    circuit = 0;
+	    call = 0;
 	}
 	int flags = SignallingCircuit::LockLockedBusy;
 	// Q.764 2.8.2 - accept test calls even if the remote side is blocked
@@ -5046,9 +5047,11 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    TelEngine::destruct(call);
     }
     if (stopSGM) {
-	SS7ISUPCall* call = findCall(msg->cic());
+	RefPointer<SS7ISUPCall> call;
+	findCall(msg->cic(),call);
 	if (call)
 	    call->stopWaitSegment(false);
+	call = 0;
     }
     if (reason || !impl) {
 	Debug(this,impl?DebugNote:DebugStub,"'%s' with cic=%u: %s",
@@ -5069,7 +5072,8 @@ bool SS7ISUP::resetCircuit(unsigned int cic, bool remote, bool checkCall)
 	return false;
     DDebug(this,DebugAll,"Reseting circuit %u",cic);
     if (checkCall) {
-	SS7ISUPCall* call = findCall(cic);
+	RefPointer<SS7ISUPCall> call;
+	findCall(cic,call);
 	if (call) {
 	    if (call->outgoing() && call->state() == SS7ISUPCall::Setup) {
 	        SignallingCircuit* newCircuit = 0;
@@ -5134,7 +5138,6 @@ bool SS7ISUP::blockCircuit(unsigned int cic, bool block, bool remote, bool hwFai
 
 SS7ISUPCall* SS7ISUP::findCall(unsigned int cic)
 {
-    Lock mylock(this);
     for (ObjList* o = m_calls.skipNull(); o; o = o->skipNext()) {
 	SS7ISUPCall* call = static_cast<SS7ISUPCall*>(o->get());
 	if (call->id() == cic)

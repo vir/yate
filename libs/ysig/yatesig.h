@@ -821,9 +821,10 @@ public:
      * @param type Class or base class of the component to find or create
      * @param params Name of component to find or create and creation parameters
      * @param init Set to true to initialize a newly created component
+     * @param ref True to add a reference when returning existing component
      * @return Pointer to component found or created, NULL on failure
      */
-    SignallingComponent* build(const String& type, const NamedList& params, bool init = false);
+    SignallingComponent* build(const String& type, const NamedList& params, bool init = false, bool ref = true);
 
     /**
      * Apply a control operation to all components in the engine

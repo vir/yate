@@ -63,7 +63,7 @@ bool SS7Layer4::initialize(const NamedList* config)
 		static_cast<String&>(params) = name;
 	}
 	if (params.toBoolean(true))
-	    attach(YOBJECT(SS7Router,engine()->build("SS7Router",params,true)));
+	    attach(YOBJECT(SS7Router,engine()->build("SS7Router",params,true,false)));
 	else if (config) {
 	    String name = config->getValue(YSTRING("network"));
 	    if (name && name.toBoolean(true)) {

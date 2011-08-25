@@ -3613,7 +3613,6 @@ void SS7ISUP::destroyed()
     clearCalls();
     unlock();
     SignallingCallControl::attach(0);
-    SS7Layer4::attach(0);
     SS7Layer4::destroyed();
 }
 

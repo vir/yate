@@ -37,6 +37,12 @@ SS7Layer4::SS7Layer4(unsigned char sio, const NamedList* params)
     m_sio = getSIO(*params,sio);
 }
 
+void SS7Layer4::destroyed()
+{
+    attach(0);
+    SignallingComponent::destroyed();
+}
+
 unsigned char SS7Layer4::getSIO(const NamedList& params, unsigned char sif, unsigned char prio, unsigned char ni)
 {
     if ((prio & 0x30) == 0)

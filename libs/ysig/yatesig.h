@@ -703,7 +703,7 @@ protected:
      * This method is called to clean up and destroy the object after the
      *  reference counter becomes zero
      */
-    void destroyed();
+    virtual void destroyed();
 
     /**
      * Insert another component in the same engine as this one.
@@ -6008,6 +6008,12 @@ private:
 class YSIG_API SS7Layer4 : public SS7L3User
 {
 public:
+    /**
+     * This method is called to clean up and destroy the object after the
+     *  reference counter becomes zero
+     */
+    virtual void destroyed();
+
     /**
      * Initialize the application layer, connect it to the SS7 router
      * @param config Optional configuration parameters override

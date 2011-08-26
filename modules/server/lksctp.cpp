@@ -256,6 +256,21 @@ bool LKSocket::setParams(const NamedList& params)
     ret |= aux;
     if (!aux)
 	Debug(&plugin,DebugNote,"Failed to set SCTP paddr params! Reason: %s",strerror(errno));
+#ifdef SCTP_DELAYED_ACK_TIME
+    struct sctp_sack_info sack_info;
+    bzero(&paddr_params, sizeof(paddr_params));
+    if (params.getParam(YSTRING("sack_delay"))) {
+	sack_info.sack_delay = params.getIntValue(YSTRING("sack_delay"));
+	if (sack_info.sack_delay > 500)
+	    sack_info.sack_delay = 500;
+    }
+    if (params.getParam(YSTRING("sack_freq")))
+	sack_info.sack_freq = params.getIntValue(YSTRING("sack_freq"));
+    aux = setOption(IPPROTO_SCTP,SCTP_DELAYED_ACK_TIME, &sack_info, sizeof(sack_info));
+    ret |= aux;
+    if (!aux)
+	Debug(&plugin,DebugNote,"Failed to set SCTP sack params! Reason: %s",strerror(errno));
+#endif
     aux = Socket::setParams(params);
     return ret || aux;
 }

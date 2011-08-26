@@ -197,7 +197,7 @@
            <string>columns=name</string>
            <string>htmldelegate=name</string>
            <string>delegateparam.name.drawfocus=false</string>
-           <string>property:_yate_save_props=_yate_flatlist,_yate_showofflinecontacts,_yate_hideemptygroups</string>
+           <string>property:_yate_save_props=_yate_flatlist,_yate_showofflinecontacts,_yate_hideemptygroups,_yate_itemsexpstatus</string>
            <string>property:_yate_flatlist=false</string>
            <string>property:_yate_showofflinecontacts=true</string>
            <string>property:_yate_hideemptygroups=true</string>

@@ -639,6 +639,8 @@ bool Transport::bindSocket()
 		Debug(this,DebugInfo,"Failed to set sctp streams number");
 	    if (!sctp->subscribeEvents())
 		Debug(this,DebugWarn,"Unable to subscribe to Sctp events");
+	    if (!sctp->setParams(m_config))
+		Debug(this,DebugWarn,"Failed to set SCTP params!");
 	    int ppid = sigtran() ? sigtran()->payload() : 0;
 	    ppid = m_config.getIntValue("payload",ppid);
 	    if (ppid > 0)

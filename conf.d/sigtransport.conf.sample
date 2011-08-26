@@ -45,6 +45,7 @@
 
 ; SCTP parameters
 ; NOTE these parameters will be set only for SCTP sockets
+; Note! On some platforms this parameters may not be supported
 
 ; Set initial retransmission interval in milliseconds
 ; Ex: rto_initial = 400
@@ -70,3 +71,15 @@
 ; Ex: hb_enabled = true
 ;hb_enabled=
 
+; Set sctp delayed ack parameters
+; Note! Both sack_delay and sack_freq must be present and have values different than 0 to be successfully applied
+
+; Set ack time interval for sccp to cumulative acknowledge the received packets
+; Max value 500 in milliseconds
+; Ex: sack_delay = 50
+;sack_delay=
+
+; Set the maximum number of unacknowledged packets
+; Ex: sack_freq = 2
+; Note! If you set this to 1 you will disable the sctp acknowledge algorithm
+;sack_freq=

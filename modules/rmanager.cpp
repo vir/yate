@@ -213,6 +213,7 @@ public:
     void clearLine();
     void writeStr(const char *str, int len = -1);
     void writeDebug(const char *str, int level);
+    void writeEvent(const char *str, int level);
     void writeStr(const Message &msg, bool received);
     inline void writeStr(const String &s)
 	{ writeStr(s.safe(),s.length()); }
@@ -1357,28 +1358,33 @@ void Connection::writeStr(const Message &msg, bool received)
 // write debugging messages to the remote console
 void Connection::writeDebug(const char *str, int level)
 {
+    if ((m_debug && (m_threshold >= level)) || (m_output && (level < 0)))
+	writeEvent(str,level);
+}
+
+// unconditionally write an event to the remote console
+void Connection::writeEvent(const char *str, int level)
+{
     if (null(str))
 	return;
-    if ((m_debug && (m_threshold >= level)) || (m_output && (level < 0))) {
-	if (m_echoing && m_buffer)
-	    clearLine();
-	const char* col = m_colorize ? debugColor(level) : 0;
-	if (col)
-	    writeStr(col,::strlen(col));
-	int len = ::strlen(str);
-	for (; len > 0; len--) {
-	    if ((unsigned char)str[len-1] >= ' ')
-		break;
-	}
-	writeStr(str,len);
-	writeStr("\r\n",2);
-	if (col)
-	    col = debugColor(-2);
-	if (col)
-	    writeStr(col,::strlen(col));
-	if (m_echoing && m_buffer)
-	    writeStr(m_buffer);
+    if (m_echoing && m_buffer)
+	clearLine();
+    const char* col = m_colorize ? debugColor(level) : 0;
+    if (col)
+	writeStr(col,::strlen(col));
+    int len = ::strlen(str);
+    for (; len > 0; len--) {
+	if ((unsigned char)str[len-1] >= ' ')
+	    break;
     }
+    writeStr(str,len);
+    writeStr("\r\n",2);
+    if (col)
+	col = debugColor(-2);
+    if (col)
+	writeStr(col,::strlen(col));
+    if (m_echoing && m_buffer)
+	writeStr(m_buffer);
 }
 
 // write arbitrary string to the remote console

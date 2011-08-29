@@ -1,3 +1,15 @@
+yate (3.3.3.svn4577) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4577: + This allows proper processing of an
+    early CANCEL while routing is in progress.  + At end of routing
+    check if the INVITE transaction still exists.  + Increment the
+    pointer with the right amount after encoding one speex frame.  +
+    Separate the event writing code from the debug variable check.  +
+    Notify L3Users when a route state has changed.  + The entity
+    capabilities cache file is now configurable.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 30 Aug 2011 02:19:20 +0400
+
 yate (3.3.3.svn4572) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4572: + Set sctp message socket parameters.

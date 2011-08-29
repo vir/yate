@@ -6245,9 +6245,9 @@ bool YateSIPConnection::callRouted(Message& msg)
     setRfc2833(msg.getParam(YSTRING("rfc2833")));
     Channel::callRouted(msg);
     Lock lock(driver());
-    if (m_hungup)
+    if (m_hungup || !m_tr)
 	return false;
-    if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
+    if (m_tr->getState() == SIPTransaction::Process) {
 	String s(msg.retValue());
 	if (s.startSkip("sip/",false) && s && msg.getBoolValue(YSTRING("redirect"))) {
 	    Debug(this,DebugAll,"YateSIPConnection redirecting to '%s' [%p]",s.c_str(),this);

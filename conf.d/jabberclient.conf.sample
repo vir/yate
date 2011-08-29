@@ -49,6 +49,14 @@
 ; Defaults to enable
 ;entitycaps=enable
 
+; entitycaps_file: string: Entity capabilities cache file
+; This parameter is applied on reload
+; If the file changes on reload entity capabilities will be saved in the new
+;  location, the old file will not be deleted
+; Client: defaults to 'jabberentitycaps.xml' located in current user's files directory
+; Server: defaults to 'jabberentitycaps.xml' located in current configuration directory
+;entitycaps_file=
+
 ; printxml: boolean/string: Print sent/received XML data to output if debug
 ;  level is at least 9
 ; Allowed values are boolean values or 'verbose' string

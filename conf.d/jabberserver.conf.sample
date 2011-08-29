@@ -92,6 +92,13 @@
 ; Defaults to enable
 ;entitycaps=enable
 
+; entitycaps_file: string: Entity capabilities cache file
+; This parameter is applied on reload
+; If the file changes on reload entity capabilities will be saved in the new
+;  location, the old file will not be deleted
+; Defaults to 'jabberentitycaps.xml' located in current configuration directory
+;entitycaps_file=
+
 ; workers: integer: The number of worker threads processing stanzas received by streams
 ; Minimum allowed value is 1, maximum allowed value is 10
 ; Defaults to 1

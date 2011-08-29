@@ -1185,7 +1185,7 @@ bool SS7Router::setRouteSpecificState(SS7PointCode::Type type, unsigned int pack
 {
     if (type == SS7PointCode::Other || (unsigned int)type > YSS7_PCTYPE_COUNT || !packedPC)
 	return false;
-    Lock lock(m_routeMutex);
+    Lock myLock(m_routeMutex);
     SS7Route* route = findRoute(type,packedPC);
     if (!route) {
 	Debug(this,DebugNote,"Route to %u advertised by %u not found",packedPC,srcPC);
@@ -1240,6 +1240,24 @@ bool SS7Router::setRouteSpecificState(SS7PointCode::Type type, unsigned int pack
 	DDebug(this,DebugInfo,"Adjacent node %u seen started by %u, sending TFPs",packedPC,srcPC);
 	notifyRoutes(SS7Route::Prohibited,packedPC);
     }
+    myLock.drop();
+    SS7PointCode pc(type);
+    if (!pc.unpack(type,packedPC))
+	return true;
+    lock();
+    ListIterator iter(m_layer4);
+    while (L4Pointer* p = static_cast<L4Pointer*>(iter.get())) {
+	if (p && *p) {
+	    RefPointer<SS7Layer4> l4 = static_cast<SS7Layer4*>(*p);
+	    if (!l4)
+		continue;
+	    unlock();
+	    l4->routeStatusChanged(type,pc,state);
+	    l4 = 0;
+	    lock();
+	}
+    }
+    unlock();
     return true;
 }
 

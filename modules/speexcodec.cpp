@@ -197,11 +197,11 @@ unsigned long SpeexCodec::Consume(const DataBlock& data, unsigned long tStamp, u
 	if (frames) {
 	    outdata.assign(0, frames * m_frameSize);
 	    char* d = (char*)outdata.data();
-	    short* s = (short*)m_data.data();
+	    char* s = (char*)m_data.data();
 
 	    for (unsigned int i = 0; i < frames; i++) {
 		speex_bits_reset(m_bits);
-		speex_encode_int(m_state, s, m_bits);
+		speex_encode_int(m_state, (short*)s, m_bits);
 		d += speex_bits_write(m_bits, d, m_frameSize);
 		s += m_bsize;
 	    }

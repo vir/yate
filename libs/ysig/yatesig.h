@@ -5589,6 +5589,15 @@ protected:
     virtual void notify(SS7Layer3* link, int sls);
 
     /**
+     * Process route status changed notifications
+     * @param type Type of Point Code
+     * @param node Destination node witch state has changed
+     * @param state The new route state
+     */
+    virtual void routeStatusChanged(SS7PointCode::Type type, const SS7PointCode& node, SS7Route::State state)
+	{ }
+
+    /**
      * Retrieve the route table of a network for a specific Point Code type
      * @param network Network layer to retrieve routes from
      * @param type Point Code type of the desired table

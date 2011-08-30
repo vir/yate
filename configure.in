@@ -550,7 +550,8 @@ if [[ "x$want_zaptel" = "xyes" ]]; then
 AC_MSG_CHECKING([for Zaptel generic headers])
 AC_TRY_COMPILE([
 #include <zaptel/zaptel.h>
-],[],
+#include <sys/ioctl.h>
+],[ioctl(0,ZT_GETVERSION,(void*)0)],
 HAVE_ZAP="yes"
 ZAP_FLAGS="-DNEW_ZAPTEL_LOCATION -DHAVE_ZAP"
 )
@@ -559,7 +560,8 @@ if [[ "x$HAVE_ZAP" = "xno" ]]; then
 AC_MSG_CHECKING([for Zaptel linux headers])
 AC_TRY_COMPILE([
 #include <linux/zaptel.h>
-],[],
+#include <sys/ioctl.h>
+],[ioctl(0,ZT_GETVERSION,(void*)0)],
 HAVE_ZAP="yes"
 ZAP_FLAGS="-DHAVE_ZAP"
 )

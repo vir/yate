@@ -343,6 +343,27 @@ AC_MSG_RESULT([$sctp_connectx_new])
 if [[ "x$sctp_connectx_new" = "xyes" ]]; then
 SCTP_FLAGS="$SCTP_FLAGS -DHAVE_SCTP_CONNECTX_4"
 fi
+sctp_sack_info=no
+AC_MSG_CHECKING([whether sctp_sack_info struct is present])
+AC_TRY_COMPILE([#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/sctp.h>],[struct sctp_sack_info assoc_value;],[sctp_sack_info=yes])
+AC_MSG_RESULT([$sctp_sack_info])
+if [[ "x$sctp_sack_info" = "xyes" ]]; then
+SCTP_FLAGS="$SCTP_FLAGS -DHAVE_SACK_INFO_STRUCT"
+else
+sctp_assoc_value=no
+AC_MSG_CHECKING([whether sctp_assoc_value struct is present])
+AC_TRY_COMPILE([#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/sctp.h>],[struct sctp_assoc_value assoc_value;],[sctp_assoc_value=yes])
+AC_MSG_RESULT([$sctp_assoc_value])
+if [[ "x$sctp_assoc_value" = "xyes" ]]; then
+SCTP_FLAGS="$SCTP_FLAGS -DHAVE_ASSOC_VALUE_STRUCT"
+fi
+fi
 else
 if [[ "x$HAVE_SCTP" != "xno" ]]; then
 SCTP_FLAGS="-DHAVE_SCTP"
@@ -531,7 +552,8 @@ if [[ "x$want_zaptel" = "xyes" ]]; then
 AC_MSG_CHECKING([for Zaptel generic headers])
 AC_TRY_COMPILE([
 #include <zaptel/zaptel.h>
-],[],
+#include <sys/ioctl.h>
+],[ioctl(0,ZT_GETVERSION,(void*)0)],
 HAVE_ZAP="yes"
 ZAP_FLAGS="-DNEW_ZAPTEL_LOCATION -DHAVE_ZAP"
 )
@@ -540,7 +562,8 @@ if [[ "x$HAVE_ZAP" = "xno" ]]; then
 AC_MSG_CHECKING([for Zaptel linux headers])
 AC_TRY_COMPILE([
 #include <linux/zaptel.h>
-],[],
+#include <sys/ioctl.h>
+],[ioctl(0,ZT_GETVERSION,(void*)0)],
 HAVE_ZAP="yes"
 ZAP_FLAGS="-DHAVE_ZAP"
 )

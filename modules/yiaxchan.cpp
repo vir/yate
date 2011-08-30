@@ -1423,6 +1423,8 @@ void YIAXDriver::createFormatList(String& dest, u_int32_t codecs)
 bool YIAXDriver::userAuth(IAXTransaction* tr, bool response, bool& requestAuth,
 	bool& invalidAuth, const char* billid)
 {
+    bool newCall = (tr->type() == IAXTransaction::New);
+    DDebug(this,DebugAll,"YIAXDriver::userAuth(%p,%u) newcall=%u",tr,response,newCall);
     requestAuth = invalidAuth = false;
     // Create and dispatch user.auth
     Message msg("user.auth");
@@ -1438,6 +1440,7 @@ bool YIAXDriver::userAuth(IAXTransaction* tr, bool response, bool& requestAuth,
 	msg.addParam("response",tr->authdata());
     }
     msg.addParam("billid",billid,false);
+    msg.addParam("newcall",String::boolText(newCall));
     if (!Engine::dispatch(msg))
 	return false;
     String pwd = msg.retValue();

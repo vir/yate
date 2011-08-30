@@ -343,6 +343,7 @@ AC_MSG_RESULT([$sctp_connectx_new])
 if [[ "x$sctp_connectx_new" = "xyes" ]]; then
 SCTP_FLAGS="$SCTP_FLAGS -DHAVE_SCTP_CONNECTX_4"
 fi
+sctp_sack_info=no
 AC_MSG_CHECKING([whether sctp_sack_info struct is present])
 AC_TRY_COMPILE([#include <sys/types.h>
 #include <sys/socket.h>
@@ -352,6 +353,7 @@ AC_MSG_RESULT([$sctp_sack_info])
 if [[ "x$sctp_sack_info" = "xyes" ]]; then
 SCTP_FLAGS="$SCTP_FLAGS -DHAVE_SACK_INFO_STRUCT"
 else
+sctp_assoc_value=no
 AC_MSG_CHECKING([whether sctp_assoc_value struct is present])
 AC_TRY_COMPILE([#include <sys/types.h>
 #include <sys/socket.h>

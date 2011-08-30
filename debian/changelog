@@ -1,3 +1,15 @@
+yate (3.3.3.svn4583) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4583: + Check if set delayed acknowledge
+    timer struct exists.  + Reject really old Zaptel that does not
+    support ZT_GETVERSION.  + Avoid compile warnings on really old
+    wanpipe  + Add 'newcall' parameter in 'user.auth', true for new call
+    authentication, false otherwise.  + Initialize SCTP test variables
+    so the result report doesn't end with ...  + Add connection_id to
+    notification data when handling sip subscribe methods.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 31 Aug 2011 02:19:18 +0400
+
 yate (3.3.3.svn4577) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4577: + This allows proper processing of an

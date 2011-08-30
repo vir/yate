@@ -1726,12 +1726,10 @@ int WpSpan::readData()
 
 bool WpSpan::decodeEvent()
 {
+#ifdef WAN_EC_TONE_PRESENT
     api_rx_hdr_t* ev = (api_rx_hdr_t*)m_buffer;
-
     SignallingCircuitEvent* e = 0;
     WpCircuit* circuit = 0;
-
-#ifdef WAN_EC_TONE_PRESENT
     switch (ev->event_type) {
 	case WP_API_EVENT_NONE:
 	    return false;

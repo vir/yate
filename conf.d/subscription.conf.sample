@@ -15,6 +15,9 @@
 ;user_roster_load_all=SELECT users.username, roster.* FROM users LEFT OUTER JOIN roster ON users.username=roster.username
 
 ; user_roster_load: string: Database query used to load an user's roster
+; NOTE: The query must return an 'username' column and at least one data row
+;  containing the username whose roster we want to load in that column to signal
+;  user's existence
 ;user_roster_load=SELECT users.username, roster.* FROM users LEFT OUTER JOIN roster ON users.username=roster.username \
 ;WHERE users.username='${username}'
 

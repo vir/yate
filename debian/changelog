@@ -1,3 +1,12 @@
+yate (3.3.3.svn4584) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4584: + oad user roster database query.  +
+    Fixed bugs. Properly build a contact from array row content, not
+    from column name. Make sure the user exists when processing the
+    result of l
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 01 Sep 2011 02:19:26 +0400
+
 yate (3.3.3.svn4583) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4583: + Check if set delayed acknowledge

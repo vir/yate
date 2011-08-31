@@ -630,6 +630,13 @@ static bool arrayData(Array* a, int& rows, int& cols, ObjList**& columns, String
 	columns[i] = a->getColumn(i);
 	titles[i] = columns[i] ? YOBJECT(String,columns[i]->get()) : 0;
     }
+#ifdef XDEBUG
+    String s;
+    for (int i = 0; i < cols; i++)
+	s.append(TelEngine::c_safe(titles[i]),"|",true);
+    Debug(&__plugin,DebugAll,"arrayData(%p) cols=%d rows=%d titles=%s",
+	a,cols,rows,s.c_str());
+#endif
     return true;
 }
 
@@ -938,9 +945,12 @@ Contact* Contact::build(Array& a, int row)
 // Build a contact from an array row
 Contact* Contact::build(String**& titles, ObjList**& data, int len, int idCol)
 {
-    if (!titles || TelEngine::null(titles[idCol]))
+    if (!(titles && data))
 	return 0;
-    Contact* c = new Contact(*(titles[idCol]),String::empty());
+    String* id = YOBJECT(String,data[idCol] ? data[idCol]->get() : 0);
+    if (TelEngine::null(id))
+	return 0;
+    Contact* c = new Contact(*id,String::empty());
     c->set(titles,data,len);
     return c;
 }
@@ -1361,6 +1371,8 @@ void UserList::removeUser(const String& user)
 // Load an user from database. Build an PresenceUser and returns it if found
 PresenceUser* UserList::askDatabase(const String& name)
 {
+    if (!name)
+	return 0;
     NamedList p("");
     p.addParam("username",name);
     Message* m = __plugin.buildDb(__plugin.m_account,__plugin.m_userLoadQuery,p);
@@ -1370,13 +1382,24 @@ PresenceUser* UserList::askDatabase(const String& name)
 #ifdef DEBUG
     u_int64_t start = Time::now();
 #endif
-    PresenceUser* u = new PresenceUser(name);
+    PresenceUser* u = 0;
     Array* a = static_cast<Array*>(m->userObject("Array"));
     int rows = 0;
     int cols = 0;
     ObjList** columns = 0;
     String** titles = 0;
-    if (arrayData(a,rows,cols,columns,titles)) {
+    if (arrayData(a,rows,cols,columns,titles) && rows > 1) {
+	int cntCol = strIndex(titles,cols,YSTRING("username"));
+	String* usr = (cntCol >= 0) ? YOBJECT(String,a->get(cntCol,1)) : 0;
+	if (!TelEngine::null(usr) && *usr == name)
+	    u = new PresenceUser(name);
+	else if (TelEngine::null(usr))
+	    XDebug(&__plugin,DebugAll,"User '%s' not found in database",name.c_str());
+	else
+	    Debug(&__plugin,DebugNote,"Database query returned user='%s' for '%s'",
+		usr->c_str(),name.c_str());
+    }
+    if (u) {
 	int cntCol = strIndex(titles,cols,YSTRING("contact"));
 	if (cntCol < 0)
 	    rows = 0;
@@ -1389,8 +1412,9 @@ PresenceUser* UserList::askDatabase(const String& name)
     }
     clearArrayData(columns,titles);
 #ifdef DEBUG
-    Debug(&__plugin,DebugAll,"Loaded user '%s' contacts=%u in %u ms",
-	name.c_str(),u->m_list.count(),ellapsedMs(start));
+    if (u)
+	Debug(&__plugin,DebugAll,"Loaded user '%s' contacts=%u in %u ms",
+	    name.c_str(),u->m_list.count(),ellapsedMs(start));
 #endif
     TelEngine::destruct(m);
     return u;
@@ -2271,6 +2295,10 @@ bool SubscriptionModule::handleResNotify(bool online, Message& msg)
 	    if (!(c->m_subscription.from() || fromContact || pendingOut))
 		continue;
 	    PresenceUser* dest = m_users.getUser(*c);
+	    DDebug(this,DebugAll,
+		"handleResNotify(%s) user=%s instance=%s processing %s contact=%s sub=0x%x",
+		String::boolText(online),u->user().c_str(),TelEngine::c_safe(inst),
+		dest ? "local" : "remote",c->c_str(),(int)c->m_subscription);
 	    if (!dest) {
 		// User not found, it may belong to other domain
 		// Send presence and probe it if our user is online

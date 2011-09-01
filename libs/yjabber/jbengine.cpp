@@ -902,7 +902,7 @@ JBEngine::JBEngine(const char* name)
     m_setupTimeout(JB_SETUP_INTERVAL), m_startTimeout(JB_START_INTERVAL),
     m_connectTimeout(JB_CONNECT_INTERVAL), m_srvTimeout(JB_SRV_INTERVAL),
     m_pingInterval(JB_PING_INTERVAL), m_pingTimeout(JB_PING_TIMEOUT),
-    m_idleTimeout(0),
+    m_idleTimeout(0), m_pptTimeoutC2s(0), m_pptTimeout(0),
     m_streamReadBuffer(JB_STREAMBUF), m_maxIncompleteXml(XMPP_MAX_INCOMPLETEXML),
     m_hasClientTls(true), m_printXml(0), m_initialized(false)
 {
@@ -956,6 +956,8 @@ void JBEngine::initialize(const NamedList& params)
 	JB_PING_TIMEOUT,JB_PING_TIMEOUT_MIN,JB_PING_TIMEOUT_MAX);
     m_idleTimeout = fixValue(params,"stream_idletimeout",
 	JB_IDLE_INTERVAL,JB_IDLE_INTERVAL_MIN,JB_IDLE_INTERVAL_MAX);
+    m_pptTimeoutC2s = params.getIntValue("stream_ppttimeout_c2s",10000,0,120000);
+    m_pptTimeout = params.getIntValue("stream_ppttimeout",60000,0,180000);
     m_initialized = true;
 }
 

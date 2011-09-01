@@ -306,10 +306,11 @@ enum CacheCommands {
     CmdFlush,
     CmdCount
 };
-static const String s_cmd[CmdCount] = {"cacheload","cacheflush"};
+static const String s_cmd[CmdCount] = {"load","flush"};
+static const String s_cmdCacheFormat = "cache {load|flush} cache_name [[param=value]...]";
 static const String s_cmdFormat[CmdCount] = {
-    "cacheload cache_name [[param=value]...]",
-    "cacheflush cache_name [[param=value]...]"
+    "cache load cache_name [[param=value]...]",
+    "cache flush cache_name [[param=value]...]"
 };
 static const String s_cmdHelp[CmdCount] = {
     "Load a cache from database. Use 'id' (can be repeated) parameter to load specific item(s) only",
@@ -1378,6 +1379,9 @@ void CacheModule::statusDetail(String& buf)
 bool CacheModule::commandExecute(String& retVal, const String& line)
 {
     String name = line;
+    if (!name.startSkip(this->name()))
+	return Module::commandExecute(retVal,line);
+    name.trimBlanks();
     int cmd = 0;
     for (; cmd < CmdCount; cmd++)
 	if (name.startSkip(s_cmd[cmd]))
@@ -1419,25 +1423,31 @@ bool CacheModule::commandExecute(String& retVal, const String& line)
 bool CacheModule::commandComplete(Message& msg, const String& partLine, const String& partWord)
 {
     if (!partLine || partLine == YSTRING("help")) {
+	Module::itemComplete(msg.retValue(),name(),partWord);
+	return Module::commandComplete(msg,partLine,partWord);
+    }
+    // Line is module name: complete module commands
+    if (partLine == name()) {
 	for (int cmd = 0; cmd < CmdCount; cmd++)
 	    Module::itemComplete(msg.retValue(),s_cmd[cmd],partWord);
 	return Module::commandComplete(msg,partLine,partWord);
     }
-    String tmp = partLine;
+    if (!partLine.startsWith(name(),true))
+	return Module::commandComplete(msg,partLine,partWord);
     for (int cmd = 0; cmd < CmdCount; cmd++) {
-	if (!tmp.startSkip(s_cmd[cmd]))
+	String tmp = name() + " " + s_cmd[cmd];
+	if (!partLine.startsWith(tmp))
 	    continue;
-	tmp.trimBlanks();
-	if (tmp)
+	String rest = partLine.substr(tmp.length()).trimBlanks();
+	if (rest)
 	    return false;
 	Lock lck(this);
-	for (int i = 0; s_caches[i]; i++) {
+	for (int i = 0; s_caches[i]; i++)
 	    if (findCache(s_caches[i]))
 		Module::itemComplete(msg.retValue(),s_caches[i],partWord);
-	}
 	return false;
     }
-    return Module::commandComplete(msg,partLine,partWord);
+    return false;
 }
 
 // Find a cache. This method is not thread safe
@@ -1587,20 +1597,16 @@ void CacheModule::commandFlush(Cache* cache, NamedList& params, String& retVal)
 bool CacheModule::commandHelp(String& retVal, const String& line)
 {
     if (line) {
+	if (line != name())
+	    return false;
 	for (int cmd = 0; cmd < CmdCount; cmd++) {
-	    if (line == s_cmd[cmd]) {
-		retVal << "  " << s_cmdFormat[cmd] << "\r\n";
-		retVal << s_cmdHelp[cmd] << "\r\n";
-		return true;
-	    }
-	}
-    }
-    else {
-	for (int cmd = 0; cmd < CmdCount; cmd++)
 	    retVal << "  " << s_cmdFormat[cmd] << "\r\n";
+	    retVal << s_cmdHelp[cmd] << "\r\n";
+	}
 	return true;
     }
-    return false;
+    retVal << "  " << s_cmdCacheFormat << "\r\n";
+    return true;
 }
 
 }; // anonymous namespace

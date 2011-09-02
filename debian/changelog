@@ -1,3 +1,11 @@
+yate (3.3.3.svn4587) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4587: + Warn if at shutdown there are
+    mutexes locked or plugins loaded.  + Check the number of plugins
+    still loaded at shutdown, newer glibc sucks badly!
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 03 Sep 2011 02:19:19 +0400
+
 yate (3.3.3.svn4586) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4586: + Fixed bugs. Properly build a contact

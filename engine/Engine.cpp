@@ -1008,7 +1008,6 @@ Engine::~Engine()
     assert(this == s_self);
     m_dispatcher.clear();
     m_libs.clear();
-    plugins.clear();
     s_mode = Stopped;
     s_self = 0;
 }
@@ -1241,7 +1240,11 @@ int Engine::run()
     ::signal(SIGQUIT,SIG_DFL);
 #endif
     delete this;
-    Debug(DebugAll,"Exiting with %d locked mutexes",Mutex::locks());
+    int mux = Mutex::locks();
+    unsigned int cnt = plugins.count();
+    plugins.clear();
+    if (mux || cnt)
+	Debug(DebugGoOn,"Exiting with %d locked mutexes and %u plugins loaded!",mux,cnt);
 #ifdef _WINDOWS
     ::WSACleanup();
 #endif

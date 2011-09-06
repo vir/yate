@@ -57,8 +57,9 @@ public:
     };
 public:
     TimerThread()
-	: m_mutex(true, "Overlapdial timer")
-	, m_signal(1, "Timer Thread")
+	: Thread("Overlapdial timer thread")
+	, m_mutex(true, "Overlapdial timer mutex")
+	, m_signal(1, "Overlapdial timer signal")
 	, m_events(NULL)
     {
     }
@@ -393,6 +394,7 @@ void OverlapDialMaster::sendProgress()
 
 OverlapDialModule::OverlapDialModule()
     : Module(MOD_PREFIX,"misc")
+    , m_timer(NULL)
 {
     Output("Loaded module OverlapDialer");
 }
@@ -406,11 +408,13 @@ void OverlapDialModule::initialize()
 {
     Output("Initializing module OverlapDialer");
     setup();
-    m_timer = new TimerThread;
-    if(! m_timer->startup()) {
-	delete m_timer;
-	m_timer = NULL;
-	Debug(&__plugin, DebugGoOn, "Error starting timer thread");
+    if(! m_timer) {
+	m_timer = new TimerThread;
+	if(! m_timer->startup()) {
+	    delete m_timer;
+	    m_timer = NULL;
+	    Debug(&__plugin, DebugGoOn, "Error starting timer thread");
+	}
     }
     installRelay(Execute);
     installRelay(Tone);

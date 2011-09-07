@@ -27,7 +27,7 @@
 #include <yatephone.h>
 
 extern "C"  {
-#include <speex.h>
+#include <speex/speex.h>
 #ifdef _WINDOWS
 /* For some reason the DLL does not export the mode variables */
 #define speex_nb_mode (*speex_lib_get_mode(SPEEX_MODEID_NB))

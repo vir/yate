@@ -773,18 +773,18 @@ if [[ "x$ac_cv_use_libspeex" = "xstatic" ]]; then
     SPEEX_LIB="-Wl,-Bstatic $SPEEX_LIB -Wl,-Bdynamic"
 fi
 if [[ "x$ac_cv_use_libspeex" = "xyes" ]]; then
-for i in /usr/include /usr/include/speex /usr/local/include /usr/local/include/speex; do
+for i in /usr/include /usr/local/include; do
     ac_cv_use_libspeex="$i"
-    test -f "$ac_cv_use_libspeex/speex.h" && break
+    test -f "$ac_cv_use_libspeex/speex/speex.h" && break
 done
 fi
 if [[ "x$ac_cv_use_libspeex" != "xno" ]]; then
-AC_MSG_CHECKING([for speex.h in $ac_cv_use_libspeex])
-if [[ -f "$ac_cv_use_libspeex/speex.h" ]]; then
+AC_MSG_CHECKING([for speex.h in $ac_cv_use_libspeex/speex])
+if [[ -f "$ac_cv_use_libspeex/speex/speex.h" ]]; then
 SAVE_CFLAGS="$CFLAGS"
 CFLAGS="$CFLAGS -Wall -Werror -I$ac_cv_use_libspeex"
 AC_TRY_COMPILE([
-#include <speex.h>
+#include <speex/speex.h>
 ],[
 int i = SPEEX_MODEID_UWB;
 speex_lib_ctl(SPEEX_LIB_GET_MAJOR_VERSION, &i);

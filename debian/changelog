@@ -1,3 +1,14 @@
+yate (3.3.3.svn4588) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4588: + Check the number of plugins still
+    loaded at shutdown, newer glibc sucks badly!  + Patch by James Le
+    Cuirot.  + Because of differences in UWB support libspeex 1.0.5 is
+    minimum.  + This breaks libspeex 1.0.3 and older which are no longer
+    supported anyway.  + Find and include speex.h from the speex/
+    subdirectory.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 08 Sep 2011 02:19:20 +0400
+
 yate (3.3.3.svn4587) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4587: + Warn if at shutdown there are

@@ -1317,7 +1317,7 @@ bool YJBEngine::handleMsgExecute(Message& msg, const String& line)
 	    TelEngine::destruct(xml);
     }
     TelEngine::destruct(s);
-    return true;
+    return ok;
 }
 
 // Process 'user.login' messages

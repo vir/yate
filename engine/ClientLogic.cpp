@@ -4630,7 +4630,7 @@ bool DefaultLogic::toggle(Window* wnd, const String& name, bool active)
 		value = !active;
 	    }
 	    if (*param)
-		p.addParam(param,String::boolText(active));
+		p.addParam(param,String::boolText(value));
 	}
 	TelEngine::destruct(obj);
 	return Client::self()->setParams(&p);
@@ -5377,7 +5377,7 @@ bool DefaultLogic::updateContact(const NamedList& params, bool save, bool update
     }
     // Notify server if this is a client account (stored on server)
     // TODO: implement
-    return true;
+    return ok;
 }
 
 // Called when the user wants to save contact data

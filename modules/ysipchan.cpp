@@ -7339,7 +7339,6 @@ SIPDriver::~SIPDriver()
 
 void SIPDriver::initialize()
 {
-    static bool first = true;
     Output("Initializing module SIP Channel");
     s_cfg = Engine::configFile("ysipchan");
     s_cfg.load();
@@ -7455,7 +7454,6 @@ void SIPDriver::initialize()
     m_endpoint->initializing(false);
     // Everything set: update default udp transport
     m_endpoint->updateDefUdpTransport();
-    first = false;
 }
 
 void SIPDriver::genUpdate(Message& msg)

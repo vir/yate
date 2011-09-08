@@ -1323,7 +1323,6 @@ bool JGSession::sendStanza(XmlElement* stanza, String* stanzaId, bool confirmati
     }
     DDebug(m_engine,DebugAll,"Call(%s). Sending stanza (%p,'%s') id=%s [%p]",
 	m_sid.c_str(),stanza,stanza->tag(),String::boolText(stanzaId != 0),this);
-    const char* senderId = m_localSid;
     // Check if the stanza should be added to the list of stanzas requiring confirmation
     if (confirmation && XMPPUtils::isUnprefTag(*stanza,XmlTag::Iq)) {
 	String id = m_localSid;
@@ -1331,7 +1330,6 @@ bool JGSession::sendStanza(XmlElement* stanza, String* stanzaId, bool confirmati
 	JGSentStanza* sent = new JGSentStanza(id,
 	    m_engine->stanzaTimeout() + Time::msecNow(),stanzaId != 0,ping);
 	stanza->setAttribute("id",*sent);
-	senderId = *sent;
 	if (stanzaId)
 	    *stanzaId = *sent;
 	m_sentStanza.append(sent);

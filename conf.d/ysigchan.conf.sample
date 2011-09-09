@@ -710,15 +710,15 @@
 ; This allows direct connection without MTP management (unlikely)
 ;network=
 
-; management : string: Name of the SS7 management to use
+; management: string: Name of the SS7 management to use
 ;management=sccp-mgm
 
-; hopcounter : integer: Default value for hop-counter
+; hopcounter: integer: Default value for hop-counter
 ; This value indicates the maximum number of gt translations that can be
 ;  made before the message reach it's destination
 ;hopcounter=15
 
-; ludt-support : boolean: True to allow sccp to send Long UnitData messages
+; ludt-support: boolean: True to allow sccp to send Long UnitData messages
 ;ludt-support=false
 
 ; segmentation-timeout: integer: Time in milliseconds before a segmented
@@ -726,7 +726,7 @@
 ; Values: 5000-20000 ms
 ;segmentation-timeout=5000
 
-; extended-monitoring : boolean: Compute an extended monitoring of sccp messages
+; extended-monitoring: boolean: Compute an extended monitoring of sccp messages
 ;extended-monitoring=no
 
 ; print-messages: boolean: Print decoded protocol data units to output
@@ -740,7 +740,7 @@
 ; Defaults to no
 ;extended-debug=no
 
-; endpoint: boolean : Force message processing if we are an endpoint
+; endpoint: boolean: Force message processing if we are an endpoint
 ; This option will allow sccp to process failed gt translations messages
 ;  if a ssn is pressent
 ;endpoint=true;
@@ -754,17 +754,17 @@
 ; Must correspond with the pointcode type of the sccp
 ;type=
 
-; test-timer : integer: Initial time in milliseconds for Subsystem Status
+; test-timer: integer: Initial time in milliseconds for Subsystem Status
 ;  Test to be generated
 ; Values : 5000-10000
 ; Note! This timer will increase exponentially until reaches 20000 if no
 ;  corresponding message is received from the test initiator
 ;test-timer=5000
 
-; print-messages : boolean: True to print sccp management messages
+; print-messages: boolean: True to print sccp management messages
 ;print-messages=false
 
-; remote : struct: Remote SCCP witch present interest for GTT
+; remote: struct: Remote SCCP witch present interest for GTT
 ;  (Global Title Translator)
 ; This parameter allow us to monitor remote sccp's state
 ; This option can be repeated to monitor multiple remote sccp's
@@ -774,7 +774,7 @@
 ; Note! Ssn list may be empty if the remote sccp is a stp with GTT
 ;remote=2057:1,2,3,4
 
-; concerned : struct: List of remote sccp's witch are concerned about local state
+; concerned: struct: List of remote sccp's witch are concerned about local state
 ; This parameter allow us to inform remote sccp's when local status has changed
 ; This option can be repeated to inform multiple remote sccp's
 ; Format: remote=pc(integer):ssn1,ssn2,....
@@ -785,7 +785,7 @@
 ;  sccp is available or not
 ;concerned=2057:1,2,3,4
 
-; local-subsystems : string: Coma separated list of local subsystems
+; local-subsystems: string: Coma separated list of local subsystems
 ; The subsystems present in this list will be monitored by this sccp management
 ;local-subsystems=1,2,3,4,5,..
 
@@ -803,11 +803,11 @@
 ; Example of GTT (Global Title Translator)
 ;[gtt]
 
-; type : keyword: Identifies this component as a GTT
+; type: keyword: Identifies this component as a GTT
 ; NOTE! This type of gtt is based on yate messages system.
 ;type=ss7-gtt
 
-; sccp : string: The name of the sccp to attach to this GTT
+; sccp: string: The name of the sccp to attach to this GTT
 ;sccp=sccp
 
 
@@ -815,13 +815,13 @@
 ;[sccp-userd]
 ; Sccp user dummy sends a message over sccp protocol.
 
-; type : keyword: Identifies this component as a Sccp User Dummy
+; type: keyword: Identifies this component as a Sccp User Dummy
 ;type=ss7-sccpu-dummy
 
-; sccp : string: The name of the sccp to attach to this Sccp User
+; sccp: string: The name of the sccp to attach to this Sccp User
 ;sccp=sccp
 
-; ssn : integer: Optional ssn asociated with this user
+; ssn: integer: Optional ssn asociated with this user
 ; If this parameter is present this user will accept only the messages who
 ;  have the same ssn
 ;ssn=0

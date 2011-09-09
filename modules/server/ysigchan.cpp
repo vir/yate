@@ -33,6 +33,7 @@ namespace { // anonymous
 class SigChannel;                        // Signalling channel
 class SigDriver;                         // Signalling driver
 class SigTopmost;                        // Keep a topmost non-trunk component
+class OnDemand;                          // On demand component
 class SigCircuitGroup;                   // Used to create a signalling circuit group descendant to set the debug name
 class SigTrunk;                          // Keep a signalling trunk
 class SigSS7Isup;                        // SS7 ISDN User Part call controller
@@ -159,6 +160,7 @@ class SigDriver : public Driver
 {
     friend class SigTopmost;
     friend class SigTrunk;               // Needded for appendTrunk() / removeTrunk()
+    friend class OnDemand;               // Needed for Append OnDemand
     friend class SigTrunkThread;         // Needded for clearTrunk()
 public:
     enum Operations {
@@ -207,6 +209,8 @@ public:
     // Save a trunk's section to data file
     bool saveTrunkData(const NamedList& list);
     static const TokenDict s_operations[];
+    // Append an onDemand component
+    bool appendOnDemand(SignallingComponent* cmp, int type);
 private:
     // Handle command complete requests
     virtual bool commandComplete(Message& msg, const String& partLine,
@@ -235,6 +239,12 @@ private:
     bool initTopmost(NamedList& sect, int type);
     // Get the status of a topmost component
     void status(SigTopmost* topmost, String& retVal);
+    // Initialize an on demand component
+    bool initOnDemand(NamedList& sect, int type);
+    // Get the status on an on demand component
+    void status(OnDemand* cmp, String& retVal);
+    // Destroy OnDemand object that have no reference
+    void checkOnDemand();
 
     SignallingEngine* m_engine;          // The signalling engine
     String m_dataFile;                   // Trunks data file (protected by m_trunksMutex)
@@ -242,6 +252,8 @@ private:
     Mutex m_trunksMutex;                 // Lock trunk list operations
     ObjList m_topmost;                   // Topmost non-trunk list
     Mutex m_topmostMutex;                // Lock topmost non-trunk list operations
+    ObjList m_onDemand;                  // List of objects created on demand
+    Mutex m_onDemandMutex;               // Lock the list o objects created on demand
     String m_statusCmd;                  // Prefix for status commands
 };
 
@@ -260,6 +272,20 @@ protected:
 	{ }
 private:
     String m_name;                       // Element name
+};
+
+class OnDemand : public TopMost
+{
+public:
+    inline OnDemand(const char* name)
+	: TopMost(name) { }
+    virtual void status(String& retVal)
+	{ }
+    virtual bool initialize(NamedList& params)
+	{ return true; }
+    virtual bool reInitialize(const NamedList& params) = 0;
+    virtual bool isAlive() = 0;
+    virtual SignallingComponent* get() = 0;
 };
 
 class SigTopmost : public TopMost
@@ -299,6 +325,32 @@ private:
     SS7Layer3* m_linkset;
 };
 
+class SigSCCPUser : public SigTopmost
+{
+    YCLASS(SigSCCPUser,SigTopmost)
+public:
+    inline SigSCCPUser(const char* name)
+	: SigTopmost(name), m_user(0)
+	{ }
+    virtual ~SigSCCPUser();
+    virtual bool initialize(NamedList& params);
+private:
+    SCCPUser* m_user;
+};
+
+class SigSccpGtt : public SigTopmost
+{
+    YCLASS(SigSccpGtt,SigTopmost)
+public:
+    inline SigSccpGtt(const char* name)
+	: SigTopmost(name), m_gtt(0)
+	{ }
+    virtual ~SigSccpGtt();
+    virtual bool initialize(NamedList& params);
+private:
+    GTT* m_gtt;
+};
+
 // MTP Traffic Testing
 class SigTesting : public SigTopmost
 {
@@ -313,6 +365,24 @@ protected:
     virtual void destroyed();
 private:
     SS7Testing* m_testing;
+};
+
+class SigSS7Sccp : public OnDemand
+{
+public:
+    inline SigSS7Sccp(SS7SCCP* sccp)
+	: OnDemand(sccp? sccp->toString() : ""), m_sccp(sccp) { m_sccp->ref(); }
+    virtual ~SigSS7Sccp();
+    virtual bool initialize(NamedList& params)
+	{ return true; }
+    virtual void status(String& retVal);
+    virtual bool isAlive();
+    virtual SignallingComponent* get()
+	{ return m_sccp; }
+    virtual bool reInitialize(const NamedList& params)
+	{ return m_sccp ? m_sccp->initialize(&params) : false; }
+private:
+    SS7SCCP* m_sccp;
 };
 
 // Signalling trunk (Call Controller)
@@ -503,6 +573,13 @@ public:
 	SigSS7M2UAGateway = 0x34 | SigTopMost,
 	SigSS7M3UAClient  = 0x35 | SigDefaults,
 	SigSS7M3UAGateway = 0x36 | SigTopMost,
+	SigSS7SCCP        = 0x37 | SigOnDemand,
+	SigSCCP           = 0x38 | SigOnDemand,
+	SigSCCPUserDummy  = 0x39 | SigTopMost,
+	SigSccpGtt        = 0x3a | SigTopMost,
+	SigSCCPManagement = 0x3b | SigDefaults,
+	SigSS7ItuSccpManagement  = 0x3c | SigDefaults,
+	SigSS7AnsiSccpManagement = 0x3d | SigDefaults,
 	SigSS7Isup  = SigTrunk::SS7Isup    | SigIsTrunk | SigTopMost,
 	SigSS7Bicc  = SigTrunk::SS7Bicc    | SigIsTrunk | SigTopMost,
 	SigISDNPN   = SigTrunk::IsdnPriNet | SigIsTrunk | SigTopMost,
@@ -670,6 +747,41 @@ public:
     virtual void cleanup();
 };
 
+// Implementation for a SCCP Global Title Translator
+class GTTranslator : public GTT
+{
+    YCLASS(GTTranslator,GTT)
+public:
+    GTTranslator(const NamedList& params);
+    virtual ~GTTranslator();
+    virtual NamedList* routeGT(const NamedList& gt, const String& prefix);
+    virtual bool initialize(const NamedList* config);
+    virtual void updateTables(const NamedList& params);
+};
+
+class SCCPUserDummy : public SCCPUser
+{
+    YCLASS(SCCPUserDummy,SCCPUser)
+public:
+    SCCPUserDummy(const NamedList& params);
+
+    virtual ~SCCPUserDummy();
+    virtual HandledMSU receivedData(DataBlock& data, NamedList& params);
+    virtual HandledMSU notifyData(DataBlock& data, NamedList& params);
+    virtual bool managementNotify(SCCP::Type type, NamedList &params);
+protected:
+    int m_ssn;
+};
+
+class SCCPHandler : public MessageHandler
+{
+public:
+    inline SCCPHandler()
+	: MessageHandler("sccp.generate",100) {}
+    virtual bool received(Message& msg);
+};
+
+
 static SigDriver plugin;
 static SigFactory factory;
 static SigNotifier s_notifier;
@@ -700,6 +812,11 @@ const TokenDict SigFactory::s_compNames[] = {
     { "ss7-m3ua-gateway", SigSS7M3UAGateway },
     { "ss7-isup",         SigSS7Isup },
     { "ss7-bicc",         SigSS7Bicc },
+    { "ss7-sccp",         SigSS7SCCP },
+    { "ss7-sccpu-dummy",  SigSCCPUserDummy },
+    { "ss7-sccp-itu-mgm", SigSS7ItuSccpManagement },
+    { "ss7-sccp-ansi-mgm",SigSS7AnsiSccpManagement },
+    { "ss7-gtt",          SigSccpGtt },
     { "isdn-pri-net",     SigISDNPN },
     { "isdn-bri-net",     SigISDNBN },
     { "isdn-pri-cpe",     SigISDNPC },
@@ -732,6 +849,12 @@ const TokenDict SigFactory::s_compClass[] = {
     MAKE_CLASS(SS7M3UAClient),
     MAKE_CLASS(SS7Isup),
     MAKE_CLASS(SS7Bicc),
+    MAKE_CLASS(SS7SCCP),
+    MAKE_CLASS(SCCP),
+    MAKE_CLASS(SCCPManagement),
+    MAKE_CLASS(SS7ItuSccpManagement),
+    MAKE_CLASS(SS7AnsiSccpManagement),
+    MAKE_CLASS(SCCPUserDummy),
     MAKE_CLASS(ISDNPN),
     MAKE_CLASS(ISDNBN),
     MAKE_CLASS(ISDNPC),
@@ -801,6 +924,28 @@ SignallingComponent* SigFactory::create(const String& type, const NamedList& nam
 	    return new SS7Management(*config);
 	case SigSS7Testing:
 	    return new SS7Testing(*config);
+	case SigSCCP:
+	    if (ty && *ty != YSTRING("ss7-sccp"))
+		return 0;
+	case SigSS7SCCP:
+	{
+	    SS7SCCP* sccp = new SS7SCCP(*config);
+	    plugin.appendOnDemand(sccp, SigSS7SCCP);
+	    return sccp;
+	}
+	case SigSCCPManagement:
+	    if (!ty)
+		return 0;
+	    if (*ty == "ss7-sccp-itu-mgm")
+		return new SS7ItuSccpManagement(*config);
+	    else if (*ty == "ss7-sccp-ansi-mgm")
+		return new SS7AnsiSccpManagement(*config);
+	    else
+		return 0;
+	case SigSS7ItuSccpManagement:
+	    return new SS7ItuSccpManagement(*config);
+	case SigSS7AnsiSccpManagement:
+	    return new SS7AnsiSccpManagement(*config);
     }
     return 0;
 }
@@ -1845,7 +1990,7 @@ SigDriver::SigDriver()
     : Driver("sig","fixchans"),
     m_engine(0),
     m_trunksMutex(true,"SigDriver::trunks"),
-    m_topmostMutex(true,"SigDriver::topmost")
+    m_topmostMutex(true,"SigDriver::topmost"), m_onDemandMutex(true,"SigDriver::ondemand")
 {
     Output("Loaded module Signalling Channel");
     m_statusCmd << "status " << name();
@@ -1859,6 +2004,10 @@ SigDriver::~SigDriver()
     m_topmostMutex.lock();
     m_topmost.clear();
     m_topmostMutex.unlock();
+    // Clear OnDemand components
+    m_onDemandMutex.lock();
+    m_onDemand.clear();
+    m_onDemandMutex.unlock();
     if (m_engine)
 	delete m_engine;
 }
@@ -2024,6 +2173,16 @@ bool SigDriver::received(Message& msg, int id)
 	status(topmost,msg.retValue());
 	return true;
     }
+    m_onDemandMutex.lock();
+    ObjList* o = m_onDemand.find(trunkName);
+    RefPointer<OnDemand> cmp = 0;
+    if (o)
+	cmp = static_cast<OnDemand*>(o->get());
+    m_onDemandMutex.unlock();
+    if (cmp) {
+	status(cmp,msg.retValue());
+	return true;
+    }
     return false;
 }
 
@@ -2091,6 +2250,35 @@ void SigDriver::status(SigTopmost* topmost, String& retVal)
     if (!details.null())
 	retVal << "," << details;
     retVal << "\r\n";
+}
+
+void SigDriver::status(OnDemand* cmp, String& retVal)
+{
+    retVal.clear();
+    retVal << "module=" << name();
+    retVal << ",component=" << cmp->name();
+    String details = "";
+    cmp->status(details);
+    if (!details.null())
+	retVal << "," << details;
+    retVal << "\r\n";
+}
+
+void SigDriver::checkOnDemand()
+{
+    Lock lock(m_onDemandMutex);
+    ObjList remove;
+    ListIterator iter(m_onDemand);
+    GenObject* obj = 0;
+    while ((obj = iter.get())) {
+	OnDemand* cmp = static_cast<OnDemand*>(obj);
+	if (!cmp)
+	    continue;
+	Lock lock1(m_engine);
+	if (cmp->isAlive())
+	    continue;
+	m_onDemand.remove(cmp);
+    }
 }
 
 void SigDriver::handleEvent(SignallingEvent* event)
@@ -2329,6 +2517,10 @@ bool SigDriver::commandComplete(Message& msg, const String& partLine,
 	for (o = m_topmost.skipNull(); o; o = o->skipNext())
 	    itemComplete(msg.retValue(),static_cast<SigTopmost*>(o->get())->name(),partWord);
 	m_topmostMutex.unlock();
+	m_onDemandMutex.lock();
+	for (o = m_onDemand.skipNull(); o; o = o->skipNext())
+	    itemComplete(msg.retValue(),static_cast<OnDemand*>(o->get())->name(),partWord);
+	m_onDemandMutex.unlock();
 	return true;
     }
 
@@ -2400,6 +2592,42 @@ bool SigDriver::commandHelp(String& retVal, const String& line)
     }
     return false;
 }
+
+bool SigDriver::appendOnDemand(SignallingComponent* cmp, int type)
+{
+    if (!cmp)
+	return false;
+    if (type != SigFactory::SigSS7SCCP)
+	return false;
+    SS7SCCP* sccp = YOBJECT(SS7SCCP,cmp);
+    if (!sccp)
+	return false;
+    Lock lock(m_onDemandMutex);
+    if (m_onDemand.find(sccp->toString())) {
+	Debug(this,DebugGoOn,"Request to append duplicat of on demand component (%p): '%s'.",
+	    cmp,cmp->toString().c_str());
+	return false;
+    }
+    SigSS7Sccp* dsccp = new SigSS7Sccp(sccp);
+    m_onDemand.append(dsccp);
+    DDebug(this,DebugAll,"On Demand (%p): '%s' added",cmp,cmp->toString().c_str());
+    return true;
+}
+
+bool SigDriver::initOnDemand(NamedList& sect, int type)
+{
+    Lock lock(m_onDemandMutex);
+    ObjList* ret = m_onDemand.find(sect);
+    if (!ret) {
+	DDebug(this,DebugAll,"Can not find on demand component %s. Must not be needed.",sect.c_str());
+	return true;
+    }
+    OnDemand* cmp = static_cast<OnDemand*>(ret->get());
+    if (!cmp)
+	return false;
+    return cmp->reInitialize(sect);
+}
+
 
 // Append a topmost component to the list. Duplicate names are not allowed
 bool SigDriver::appendTopmost(SigTopmost* topmost)
@@ -2553,6 +2781,12 @@ bool SigDriver::initTopmost(NamedList& sect, int type)
 	    case SigFactory::SigSS7Testing:
 		topmost = new SigTesting(sect);
 		break;
+	    case SigFactory::SigSCCPUserDummy:
+		topmost =  new SigSCCPUser(sect);
+		break;
+	    case SigFactory::SigSccpGtt:
+		topmost = new SigSccpGtt(sect);
+		break;
 	    default:
 		return false;
 	}
@@ -2596,6 +2830,7 @@ bool SigDriver::reInitialize(NamedList& params)
     SignallingComponent* router = 0;
     while ((router = engine()->find("","SS7Router",router)))
 	YOBJECT(SS7Router,router)->printRoutes();
+    checkOnDemand();
     return ret;
 }
 
@@ -2672,6 +2907,7 @@ void SigDriver::initialize()
 	installRelay(Route);
 	Engine::install(new IsupDecodeHandler);
 	Engine::install(new IsupEncodeHandler);
+	Engine::install(new SCCPHandler);
 	m_engine = SignallingEngine::self(true);
 	m_engine->debugChain(this);
 	m_engine->start();
@@ -2693,6 +2929,7 @@ void SigDriver::initialize()
     SignallingComponent* router = 0;
     while ((router = engine()->find("","SS7Router",router)))
 	YOBJECT(SS7Router,router)->printRoutes();
+    checkOnDemand();
 }
 
 bool SigDriver::initSection(NamedList* sect)
@@ -2711,6 +2948,8 @@ bool SigDriver::initSection(NamedList* sect)
 	ret = initTrunk(*sect,type & SigFactory::SigPrivate);
     else if (type & SigFactory::SigTopMost)
 	ret = initTopmost(*sect,type);
+    else if (type & SigFactory::SigOnDemand)
+	ret = initOnDemand(*sect,type);
     return ret;
 }
 
@@ -2826,6 +3065,86 @@ void SigLinkSet::linkStatus(String& status)
 	    }
 	}
     }
+}
+
+/**
+ * SigSS7ccp
+ */ 
+
+SigSS7Sccp::~SigSS7Sccp()
+{
+    if (m_sccp) {
+	if (m_sccp->refcount() > 1)
+	    Debug(&plugin,DebugWarn,"Removing alive OnDemand component '%s' [%p]",
+		  name().c_str(),this);
+	TelEngine::destruct(m_sccp);
+	m_sccp = 0;
+    }
+}
+
+void SigSS7Sccp::status(String& retVal)
+{
+    if (!m_sccp)
+	return;
+    retVal << "type=" << m_sccp->componentType();
+    retVal << ",sent=" << m_sccp->messagesSend();
+    retVal << ",received=" <<  m_sccp->messagesReceived();
+    retVal << ",translations=" <<  m_sccp->translations();
+    retVal << ",errors=" <<  m_sccp->errors();
+}
+
+bool SigSS7Sccp::isAlive()
+{
+    return m_sccp && m_sccp->refcount() > 1;
+}
+
+/**
+ * SigSCCPUser
+ */
+
+SigSCCPUser::~SigSCCPUser()
+{
+    if (m_user) {
+	plugin.engine()->remove(m_user);
+	TelEngine::destruct(m_user);
+    }
+}
+
+bool SigSCCPUser::initialize(NamedList& params)
+{
+#ifdef DEBUG
+    String tmp;
+    params.dump(tmp,"\r\n  ",'\'',true);
+    Debug(DebugAll,"SigSCCPUser::initialize %s",tmp.c_str());
+#endif
+    if (!m_user) {
+	m_user = new SCCPUserDummy(params);
+	plugin.engine()->insert(m_user);
+    }
+    return m_user && m_user->initialize(&params);
+
+}
+
+/**
+ * class SigSccpGtt
+ */
+
+SigSccpGtt::~SigSccpGtt()
+{
+    DDebug(&plugin,DebugAll,"Destroing SigSccpGtt [%p]",this);
+    if (m_gtt) {
+	plugin.engine()->remove(m_gtt);
+	TelEngine::destruct(m_gtt);
+    }
+}
+
+bool SigSccpGtt::initialize(NamedList& params)
+{
+    if (!m_gtt) {
+	m_gtt = new GTTranslator(params);
+	plugin.engine()->insert(m_gtt);
+    }
+    return m_gtt && m_gtt->initialize(&params);
 }
 
 /**
@@ -4172,6 +4491,166 @@ bool IsupEncodeHandler::received(Message& msg)
     TelEngine::destruct(data);
     msg.setParam("error","Encoder failure");
     return false;
+}
+
+/**
+ * SCCPHandler
+ */
+
+bool SCCPHandler::received(Message& msg)
+{
+    if (!plugin.engine())
+	return false;
+#ifdef XDEBUG
+    String tmp;
+    msg.dump(tmp,"\r\n  ",'\'',true);
+    Debug(DebugAll,"SCCPHandler::received%s",tmp.c_str());
+#endif
+    const char* compName = msg.getValue("component-name");
+    if (!compName) {
+	DDebug(&plugin,DebugInfo,"Received message %s widthout component name",msg.c_str());
+	return false;
+    }
+    SignallingComponent* cmp = plugin.engine()->find(compName);
+    if (!cmp) {
+	DDebug(&plugin,DebugInfo,"Failed to find signalling component %s",compName);
+	return false;
+    }
+    SCCPUserDummy* sccpUser = YOBJECT(SCCPUserDummy,cmp);
+    if (!sccpUser) {
+	DDebug(&plugin,DebugInfo,"The component %s is not an instance of SCCPUserDummy!",compName);
+	return false;
+    }
+    DataBlock data;
+    NamedString* dataNamedPointer = msg.getParam("data");
+    if (dataNamedPointer) {
+	NamedPointer* dataPointer = YOBJECT(NamedPointer,dataNamedPointer);
+	if (dataPointer) {
+	    DataBlock* recvData = YOBJECT(DataBlock,dataPointer->userData());
+	    if (recvData)
+		data.assign(recvData->data(),recvData->length());
+	} else {
+	    String* hexData = YOBJECT(String,dataNamedPointer);
+	    if (hexData) {
+		data.unHexify(hexData->c_str(),hexData->length(),' ');
+	    }
+	} 
+    }
+    if (data.length() == 0) {
+	DDebug(&plugin,DebugNote,"Received message %s with no data",msg.c_str());
+	return false;
+    }
+    if (msg.getParam("mgm")) {
+	return sccpUser->sccpNotify((SCCP::Type)msg.getIntValue("type"),msg);
+    }
+    return sccpUser->sendData(data,msg);
+}
+
+/**
+ * class SCCPUserDummy
+ */
+
+SCCPUserDummy::SCCPUserDummy(const NamedList& params)
+    :SignallingComponent(params,&params), SCCPUser(params), m_ssn(0)
+{
+    Debug(&plugin,DebugAll,"Creating SCCPUserDummy [%p]",this);
+    m_ssn = params.getIntValue("ssn",0);
+}
+
+SCCPUserDummy::~SCCPUserDummy()
+{
+    Debug(&plugin,DebugAll,"Destroing SCCPUserDummy [%p]",this);
+}
+
+HandledMSU SCCPUserDummy::receivedData(DataBlock& data, NamedList& params)
+{
+    int ssn = params.getIntValue("ssn");
+    if (m_ssn && ssn != m_ssn)
+	return HandledMSU::Rejected;
+    Message* msg = new Message(params);
+    *msg = "sccp.message";
+    String hexData;
+    hexData.hexify(data.data(),data.length(),' ');
+    DataBlock* msgData = new DataBlock(data);
+    msg->setParam(new NamedPointer("data",msgData));
+    msg->setParam("hexData",hexData);
+    msg->setParam("msgType","indication");
+    Engine::enqueue(msg);
+    return HandledMSU::Accepted;
+}
+
+HandledMSU SCCPUserDummy::notifyData(DataBlock& data, NamedList& params)
+{
+    Message* msg = new Message("sccp.message");
+    msg->copyParams(params);
+    String hexData;
+    hexData.hexify(data.data(),data.length(),' ');
+    DataBlock* msgData = new DataBlock(data);
+    msg->setParam(new NamedPointer("data",msgData));
+    msg->setParam("hexData",hexData);
+    msg->setParam("msgType","notification");
+    Engine::enqueue(msg);
+    return HandledMSU::Accepted;
+}
+
+bool SCCPUserDummy::managementNotify(SCCP::Type type, NamedList &params)
+{
+    int ssn = params.getIntValue("ssn");
+    if (ssn != m_ssn)
+	return false;
+    switch (type) {
+	case SCCP::CoordinateConfirm:
+	    DDebug(&plugin,DebugMild,"Subsystem %d can Go Out Of Service",m_ssn);
+	    break;
+	case SCCP::CoordinateIndication:
+	    DDebug(&plugin,DebugMild,"SSN %d received SCCP::CoordinateIndication",m_ssn);
+	    sccpNotify(SCCP::CoordinateResponse,params);
+	    break;
+	default:
+	    return false;
+    }
+    return true;
+}
+
+/**
+ * class GTTranslator
+ */
+
+GTTranslator::GTTranslator(const NamedList& params)
+    : GTT(params)
+{
+    DDebug(this,DebugAll,"Crated Global Title Translator [%p]",this);
+}
+
+GTTranslator::~GTTranslator()
+{
+    DDebug(this,DebugAll,"Destroing Global Title Translator [%p]",this);
+}
+
+NamedList* GTTranslator::routeGT(const NamedList& gt, const String& prefix)
+{
+    // TODO keep a cache!!
+    // Verify iff the requested gt exists in cache
+    // if exists return the cached translation of th GT
+    // if not exists send it for translation
+    Message* msg = new Message("sccp.route");
+    msg->copySubParams(gt,prefix + ".");
+    if (Engine::dispatch(msg)) // Append the translated GT to cache
+	return msg;
+    TelEngine::destruct(msg);
+    return 0;
+}
+
+void GTTranslator::updateTables(const NamedList& params)
+{
+    Message* msg = new Message("sccp.update");
+    msg->copyParams(params);
+    Engine::enqueue(msg);
+}
+
+bool GTTranslator::initialize(const NamedList* config)
+{
+    return GTT::initialize(config);
 }
 
 /**

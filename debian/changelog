@@ -1,3 +1,12 @@
+yate (3.3.3.svn4593) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4593: + Fixed a few errors exposed by -
+    Wunused-but-set-variable.  + Added SCCP support.  + Fixed text
+    indentation.  + Removed spaces after parameter name.  + Added sample
+    custom log and CDR rotator script.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 10 Sep 2011 02:19:21 +0400
+
 yate (3.3.3.svn4589) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4589: + Because of differences in UWB

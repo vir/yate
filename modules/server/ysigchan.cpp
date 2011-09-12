@@ -1211,8 +1211,10 @@ bool SigChannel::startCall(Message& msg, SigTrunk* trunk)
     else
 	sigMsg->params().copyParam(msg,"callerpres");
     sigMsg->params().copyParam(msg,"callerscreening");
+    sigMsg->params().copyParam(msg,"complete");
     sigMsg->params().copyParam(msg,"callednumtype");
     sigMsg->params().copyParam(msg,"callednumplan");
+    sigMsg->params().copyParam(msg,"inn");
     sigMsg->params().copyParam(msg,"calledpointcode");
     // Copy RTP parameters
     if (msg.getBoolValue("rtp_forward")) {

@@ -763,7 +763,7 @@ void SS7TCAP::buildSCCPData(NamedList& params, SS7TCAPTransaction* tr)
 	  || type == TC_Response) {
 	if (!tr->basicEnd()) {
 	    sendOk = false; // prearranged end, don't send to remote Transaction End message
-	    Debug(this,DebugAll,"SS7TCAPITU::buildSCCPData(tr=%p) [%p] - transaction with id=%s has set prearranged end, won't be"
+	    Debug(this,DebugAll,"SS7TCAP::buildSCCPData(tr=%p) [%p] - transaction with id=%s has set prearranged end, won't be"
 		" sending anything to SCCP",tr,this,tr->toString().c_str());
 	}
     }
@@ -777,7 +777,7 @@ void SS7TCAP::buildSCCPData(NamedList& params, SS7TCAPTransaction* tr)
 	if (!sendData(data,params)) {
 	    params.setParam("ReturnCause","Network failure");
 	    enqueue(new SS7TCAPMessage(params,data,true));
-	    Debug(this,DebugInfo,"SS7TCAPITU::buildSCCPData(tr=%p) [%p] - message for transaction with id=%s failed to be sent",
+	    Debug(this,DebugInfo,"SS7TCAP::buildSCCPData(tr=%p) [%p] - message for transaction with id=%s failed to be sent",
 		tr,this,tr->toString().c_str());
 	    return;
 	};
@@ -787,7 +787,7 @@ void SS7TCAP::buildSCCPData(NamedList& params, SS7TCAPTransaction* tr)
 
 HandledMSU SS7TCAP::handleError(SS7TCAPError& error, NamedList& params, DataBlock& data, SS7TCAPTransaction* tr)
 {
-   Debug(this,DebugInfo,"SS7TCAPITU::handleError(error=%s) for transaction with id=%s(%p) [%p]",error.errorName().c_str(),
+    Debug(this,DebugInfo,"SS7TCAP::handleError(error=%s) for transaction with id=%s(%p) [%p]",error.errorName().c_str(),
 	(tr ? tr->toString().c_str() : "unknown"),tr,this);
     HandledMSU result = HandledMSU::Accepted;
 
@@ -1344,7 +1344,7 @@ void SS7TCAPTransaction::checkComponents()
     if (m_components.count() == 0) {// we don't have any more components
 	if (!m_timeout.started()) {
 	    m_timeout.start();
-	    XDebug(tcap(),DebugInfo,"SS7TCAPTransactionITU::checkComponents() - timer for transaction with localID=%s has been started [%p]",
+	    XDebug(tcap(),DebugInfo,"SS7TCAPTransaction::checkComponents() - timer for transaction with localID=%s has been started [%p]",
 		toString().c_str(),this);
 	}
     }
@@ -1400,7 +1400,7 @@ void SS7TCAPTransaction::addSCCPAddressing(NamedList& fillParams, bool local)
 
 SS7TCAPError SS7TCAPTransaction::handleData(NamedList& params, DataBlock& data)
 {
-    DDebug(tcap(),DebugAll,"SS7TCAPTransactionITU::handleData() transactionID=%s data length=%u [%p]",m_localID.c_str(),
+    DDebug(tcap(),DebugAll,"SS7TCAPTransaction::handleData() transactionID=%s data length=%u [%p]",m_localID.c_str(),
 	   data.length(),this);
     Lock lock(this);
     // in case of Abort message, check Cause Information
@@ -1564,7 +1564,7 @@ void SS7TCAPComponent::fill(unsigned int index, NamedList& fillIn)
 
 void SS7TCAPComponent::resetTimer(NamedList& params, unsigned int index)
 {
-    DDebug(m_transact->tcap(),DebugInfo,"SS7TCAPComponentITU::resetTimer() [%p]",this);
+    DDebug(m_transact->tcap(),DebugInfo,"SS7TCAPComponent::resetTimer() [%p]",this);
     String paramRoot;
     compPrefix(paramRoot,index,false);
     if (state() == OperationSent)
@@ -2594,7 +2594,7 @@ SS7TCAPError SS7TCAPTransactionANSI::decodeComponents(NamedList& params, DataBlo
 
 void SS7TCAPTransactionANSI::encodeComponents(NamedList& params, DataBlock& data)
 {
-    XDebug(tcap(),DebugAll,"SS7TCAPTransactionANS::encodeComponents() for transaction with localID=%s [%p]",m_localID.c_str(),this);
+    XDebug(tcap(),DebugAll,"SS7TCAPTransactionANSI::encodeComponents() for transaction with localID=%s [%p]",m_localID.c_str(),this);
 
     int componentCount = params.getIntValue(s_tcapCompCount,0);
     DataBlock compData;

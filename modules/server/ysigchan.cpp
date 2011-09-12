@@ -46,6 +46,9 @@ class SigTrunkThread;                    // Get events and check timeout for tru
 class IsupDecodeHandler;                 // Handler for "isup.decode" message
 class IsupEncodeHandler;                 // Handler for "isup.encode" message
 class SigNotifier;                       // Class for handling received notifications
+class SigSS7Tcap;                        // SS7 TCAP - Transaction Capabilities Application Part
+class SigTCAPUser;                       // Default TCAP user
+class TCAPMsgHandler;                    // TCAP Message handler
 
 // The signalling channel
 class SigChannel : public Channel
@@ -538,6 +541,56 @@ private:
     unsigned char m_idleValue;           // Idle value for source multiplexer to fill when no data
 };
 
+class SigSS7Tcap : public SigTopmost
+{
+public:
+    inline SigSS7Tcap(const char* name)
+    : SigTopmost(name), m_tcap(0)
+    { }
+    // Initialize (create or reload) the TCAP component
+    // Return false on failure
+    virtual bool initialize(NamedList& params);
+    // Return the status of this component
+    virtual void status(String& retVal);
+protected:
+    virtual void destroyed();
+private:
+    SS7TCAP* m_tcap;
+};
+
+class SigTCAPUser : public SigTopmost, public TCAPUser
+{
+    YCLASS(SigTCAPUser,TCAPUser)
+public:
+    inline SigTCAPUser(const char* name)
+	: SigTopmost(name),
+	TCAPUser(name), m_handler(0)
+    { }
+    virtual ~SigTCAPUser();
+   // { }
+    // Initialize the TCAP user
+    // Return false on failure
+    virtual bool initialize(NamedList& params);
+    virtual bool tcapRequest(NamedList& params);
+    virtual bool tcapIndication(NamedList& params);
+    // Return the status of this component
+    virtual void status(String& retVal);
+protected:
+    TCAPMsgHandler* m_handler;
+    String m_tcapName;
+    virtual void destroyed();
+};
+
+class TCAPMsgHandler : public MessageHandler
+{
+public:
+    TCAPMsgHandler(SigTCAPUser* user);
+    virtual bool received(Message& msg);
+    virtual void destruct();
+private:
+    SigTCAPUser* m_user;
+};
+
 // Factory for locally configured components
 class SigFactory : public SignallingFactory
 {
@@ -567,6 +620,10 @@ public:
 	SigSS7M2PA        = 0x21 | SigOnDemand,
 	SigSS7M2UA        = 0x22 | SigOnDemand,
 	SigSS7M3UA        = 0x23 | SigTopMost,
+	SigSS7TCAP        = 0x24 | SigTopMost,
+	SigSS7TCAPANSI    = 0x25 | SigTopMost,
+	SigSS7TCAPITU     = 0x26 | SigTopMost,
+	SigTCAPUser       = 0x27 | SigTopMost,
 	SigISDNIUAClient  = 0x31 | SigDefaults,
 	SigISDNIUAGateway = 0x32 | SigTopMost,
 	SigSS7M2UAClient  = 0x33 | SigDefaults,
@@ -817,6 +874,9 @@ const TokenDict SigFactory::s_compNames[] = {
     { "ss7-sccp-itu-mgm", SigSS7ItuSccpManagement },
     { "ss7-sccp-ansi-mgm",SigSS7AnsiSccpManagement },
     { "ss7-gtt",          SigSccpGtt },
+    { "ss7-tcap-ansi",    SigSS7TCAPANSI },
+    { "ss7-tcap-itu",     SigSS7TCAPITU },
+    { "ss7-tcap-user",    SigTCAPUser },
     { "isdn-pri-net",     SigISDNPN },
     { "isdn-bri-net",     SigISDNBN },
     { "isdn-pri-cpe",     SigISDNPC },
@@ -855,6 +915,10 @@ const TokenDict SigFactory::s_compClass[] = {
     MAKE_CLASS(SS7ItuSccpManagement),
     MAKE_CLASS(SS7AnsiSccpManagement),
     MAKE_CLASS(SCCPUserDummy),
+    MAKE_CLASS(SS7TCAP),
+    MAKE_CLASS(SS7TCAPANSI),
+    MAKE_CLASS(SS7TCAPITU),
+    MAKE_CLASS(TCAPUser),
     MAKE_CLASS(ISDNPN),
     MAKE_CLASS(ISDNBN),
     MAKE_CLASS(ISDNPC),
@@ -946,6 +1010,12 @@ SignallingComponent* SigFactory::create(const String& type, const NamedList& nam
 	    return new SS7ItuSccpManagement(*config);
 	case SigSS7AnsiSccpManagement:
 	    return new SS7AnsiSccpManagement(*config);
+	case SigSS7TCAP:
+	    if (ty) {
+		if (*ty == "ss7-tcap-ansi")
+		    return new SS7TCAPANSI(*config);
+	    }
+	    return 0;
     }
     return 0;
 }
@@ -1141,8 +1211,10 @@ bool SigChannel::startCall(Message& msg, SigTrunk* trunk)
     else
 	sigMsg->params().copyParam(msg,"callerpres");
     sigMsg->params().copyParam(msg,"callerscreening");
+    sigMsg->params().copyParam(msg,"complete");
     sigMsg->params().copyParam(msg,"callednumtype");
     sigMsg->params().copyParam(msg,"callednumplan");
+    sigMsg->params().copyParam(msg,"inn");
     sigMsg->params().copyParam(msg,"calledpointcode");
     // Copy RTP parameters
     if (msg.getBoolValue("rtp_forward")) {
@@ -2787,6 +2859,13 @@ bool SigDriver::initTopmost(NamedList& sect, int type)
 	    case SigFactory::SigSccpGtt:
 		topmost = new SigSccpGtt(sect);
 		break;
+	    case SigFactory::SigSS7TCAPANSI:
+	    case SigFactory::SigSS7TCAPITU:
+		topmost = new SigSS7Tcap(sect);
+		break;
+	    case SigFactory::SigTCAPUser:
+		topmost = new SigTCAPUser(sect);
+		break;
 	    default:
 		return false;
 	}
@@ -3880,6 +3959,118 @@ void SigIsdnMonitor::release()
 	m_controller = 0;
     }
     XDebug(&plugin,DebugAll,"SigIsdnMonitor('%s'). Released [%p]",name().c_str(),this);
+}
+
+/**
+ * SigSS7Tcap
+ */
+void SigSS7Tcap::destroyed()
+{
+    DDebug(&plugin,DebugAll,"SigSS7TCAP::destroyed() [%p]",this);
+    TelEngine::destruct(m_tcap);
+    SigTopmost::destroyed();
+}
+
+bool SigSS7Tcap::initialize(NamedList& params)
+{
+    if (!m_tcap) {
+	String type = params.getValue("type","");
+	m_tcap = YSIGCREATE(SS7TCAP,&params);
+	if (m_tcap)
+	    plugin.engine()->insert(m_tcap);
+    }
+    return m_tcap && m_tcap->initialize(&params);
+}
+
+void SigSS7Tcap::status(String& retVal)
+{
+    retVal << "type=" << (m_tcap ? m_tcap->componentType() : "");
+    NamedList p("");
+    m_tcap->status(p);
+    retVal << ",totalIncoming=" << p.getValue("totalIncoming","0");
+    retVal << ",totalOutgoing=" << p.getValue("totalOutgoing","0");
+    retVal << ",totalDiscarded=" << p.getValue("totalDiscarded","0");
+    retVal << ",totalNormal=" << p.getValue("totalNormal","0");
+    retVal << ",totalAbnormal=" << p.getValue("totalAbnormal","0");
+}
+
+/**
+ * SigTCAPUser
+ */
+SigTCAPUser::~SigTCAPUser()
+{
+    DDebug(&plugin,DebugAll,"SigTCAPUser::~SigTCAPUser() [%p]",this);
+    if (!TelEngine::null(m_handler))
+	TelEngine::destruct(m_handler);
+}
+
+bool SigTCAPUser::initialize(NamedList& params)
+{
+    DDebug(&plugin,DebugAll,"SigTCAPUser::initialize() [%p]",this);
+    m_tcapName = params.getValue("tcap","");
+    if (!m_handler) {
+	m_handler = new TCAPMsgHandler(this);
+	Engine::install(m_handler);
+    }
+    return true;
+}
+
+bool SigTCAPUser::tcapRequest(NamedList& params)
+{
+    if (!tcap()) {
+	SignallingComponent* tcap = 0;
+	if (!(tcap = plugin.engine()->find(m_tcapName,"SS7TCAP",tcap))) {
+	//TODO createTCAP ?
+	}
+	else
+	    attach(YOBJECT(SS7TCAP,tcap));
+    }
+    if (tcap()) {
+	SS7TCAPError err = tcap()->userRequest(params);
+	return err.error() != SS7TCAPError::NoError;
+    }
+    return false;
+}
+
+bool SigTCAPUser::tcapIndication(NamedList& params)
+{
+    Message msg("tcap.indication");
+    msg.copyParams(params);
+    return Engine::dispatch(&msg);
+}
+
+void SigTCAPUser::status(String& retVal)
+{
+}
+
+void SigTCAPUser::destroyed()
+{
+    DDebug(&plugin,DebugAll,"SigTCAPUser::destroyed() [%p]",this);
+    Engine::uninstall(m_handler);
+    attach(0);
+    SigTopmost::destroyed();
+}
+
+/**
+ * TCAPMsgHandler
+ */
+TCAPMsgHandler::TCAPMsgHandler(SigTCAPUser* user)
+    : MessageHandler("tcap.request"),
+      m_user(user)
+{
+    DDebug(&plugin,DebugAll,"TCAPMsgHandler created [%p]",this);
+}
+
+bool TCAPMsgHandler::received(Message& msg)
+{
+    return (m_user && m_user->tcapRequest(msg));
+}
+
+void TCAPMsgHandler::destruct()
+{
+    DDebug(&plugin,DebugAll,"TCAPMsgHandler::destroyed() [%p]",this);
+    m_user = 0;
+    MessageHandler::destruct();
 }
 
 /**

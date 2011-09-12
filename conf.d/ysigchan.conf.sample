@@ -826,3 +826,48 @@
 ;  have the same ssn
 ;ssn=0
 
+
+; Example of a SS7 Transaction Capabilities Application Part
+; This component is created when encountering a section of this kind
+;[ss7tcap]
+; type: keyword: identifies the component as a SS7 Transfer Capabilities Application Part
+; type = ss7-tcap-ansi for ANSI TCAP
+; type = ss7-tcap-itu for ITU TCAP - not implemented yet
+;type=
+
+; local_SSN: local SubSystem Number. Mandatory
+;local_SSN=
+
+; default_remote_SSN: remote SubSystem Number to provide to SCCP if the application does not provide one
+;default_remote_SSN=
+
+; default_remote_pointcode: remote Point Code to provide to SCCP if the application does not provide one
+;default_remote_pointcode=
+
+; pointcodetype: remote Point Code type. See above documentation for available types
+;pointcodetype=
+
+; sccp: Name of the SCCP component to create and be used by this TCAP
+; A section with the name given here must exist in order to configure the SCCP level
+;sccp=
+
+; transact_timeout: Time in seconds to timeout a TCAP transaction after no more activity was registered on it
+; Defaults to 300 seconds
+;transact_timeout=300
+
+;print-messages: Boolean to enable/disable printing of decoding/encoding of TCAP messages
+; This option applies on reload
+;print-messages=false
+
+;extended-debug: Boolean to enable/disable printing of the step-by-step decoding/encoding of TCAP messages
+; This option applies on reload. print-messages must be true.
+;extended-debug=false
+
+
+[tcapuser_test]
+; mimicks  a TCAP User, which emits and receives TCAP messages in Message form
+; type is ss7-tcap-user to identify it as the specific user
+;type=ss7-tcap-user
+
+; tcap: The TCAP to which this user is to attach itself to it
+;tcap=

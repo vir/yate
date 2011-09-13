@@ -1,3 +1,10 @@
+yate (3.3.3.svn4598) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4598: + Fixed building the names for address
+    parameters.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 14 Sep 2011 02:19:19 +0400
+
 yate (3.3.3.svn4597) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4597: + Added TCAP ANSI support.  + Fixed

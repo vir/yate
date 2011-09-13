@@ -1386,14 +1386,14 @@ void SS7TCAPTransaction::addSCCPAddressing(NamedList& fillParams, bool local)
 	NamedString* ns = m_localSCCPAddr.getParam(i);
 	if (ns && *ns && !(*ns).null()) {
 	    String name = ns->name();
-	    fillParams.setParam(localParam + name,*ns);
+	    fillParams.setParam(localParam + "." + name,*ns);
 	}
     }
     for (unsigned int i = 0; i < m_remoteSCCPAddr.count(); i++) {
 	NamedString* ns = m_remoteSCCPAddr.getParam(i);
 	if (ns && *ns && !(*ns).null()) {
 	    String name = ns->name();
-	    fillParams.setParam(remoteParam + name,*ns);
+	    fillParams.setParam(remoteParam + "." +  name,*ns);
 	}
     }
 }

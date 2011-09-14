@@ -1,3 +1,17 @@
+yate (3.3.3.svn4606) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4606: + Allow a $() in an alias to start a
+    new command.  + Removed compiler warnings.  + Fixed sample query to
+    log out disabled accounts.  + Fixed sample account registration
+    query: account name was missing.  + Keep transaction IDs as hex
+    strings (removes uses of htonl).  + Fixed signaling library
+    dependencies and include path(s) in Windows build.  + Added missing
+    Windows DLL export declarations to TCAP classes.  + Copy back the
+    peerid if the outbound call starts.  + Allow copying arbitrary
+    params when initiating calls from wave or tonegen.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 15 Sep 2011 02:19:20 +0400
+
 yate (3.3.3.svn4598) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4598: + Fixed building the names for address

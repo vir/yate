@@ -10512,8 +10512,14 @@ public:
     virtual SS7TCAPMessage* dequeue();
     /**
      * Get a new transaction ID
+     * @return A transaction ID
      */
-    virtual u_int32_t allocTransactionID();
+    virtual const String allocTransactionID();
+    /**
+     * Get a new transaction ID
+     * @param str String into which to put the id
+     */
+    void allocTransactionID(String& str);
     /**
      * Dictionary for TCAP versions
      */
@@ -10538,7 +10544,7 @@ public:
      * @param initLocal True if built by user, false if by remote end
      * @return A transaction
      */
-    virtual SS7TCAPTransaction* buildTransaction(SS7TCAP::TCAPUserTransActions type, u_int32_t transactID, NamedList& params,
+    virtual SS7TCAPTransaction* buildTransaction(SS7TCAP::TCAPUserTransActions type, const String& transactID, NamedList& params,
 	bool initLocal = true) = 0;
     /**
      * Find the transaction with the given id
@@ -10824,7 +10830,7 @@ public:
      * @param timeout Transaction timeout
      * @param initLocal True if the transaction was initiated locally, false if not
      */
-    SS7TCAPTransaction(SS7TCAP* tcap, SS7TCAP::TCAPUserTransActions type, u_int32_t transactID, NamedList& params,
+    SS7TCAPTransaction(SS7TCAP* tcap, SS7TCAP::TCAPUserTransActions type, const String& transactID, NamedList& params,
 	u_int64_t timeout, bool initLocal = true);
     /**
      * Destructor
@@ -11217,7 +11223,7 @@ public:
      * @param initLocal True if built by user, false if by remote end
      * @return A transaction
      */
-    virtual SS7TCAPTransaction* buildTransaction(SS7TCAP::TCAPUserTransActions type, u_int32_t transactID, NamedList& params,
+    virtual SS7TCAPTransaction* buildTransaction(SS7TCAP::TCAPUserTransActions type, const String& transactID, NamedList& params,
 	bool initLocal = true);
 private:
     SS7TCAPError decodeTransactionPart(NamedList& params, DataBlock& data);
@@ -11260,7 +11266,7 @@ public:
      * @param timeout Transaction timeout
      * @param initLocal True if the transaction was initiated locally, false if not
      */
-    SS7TCAPTransactionANSI(SS7TCAP* tcap, SS7TCAP::TCAPUserTransActions type, u_int32_t transactID, NamedList& params,
+    SS7TCAPTransactionANSI(SS7TCAP* tcap, SS7TCAP::TCAPUserTransActions type, const String& transactID, NamedList& params,
 	u_int64_t timeout, bool initLocal = true);
     /**
      * Destructor

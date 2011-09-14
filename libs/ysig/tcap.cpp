@@ -428,12 +428,25 @@ SS7TCAPMessage* SS7TCAP::dequeue()
     return msg;
 }
 
-u_int32_t SS7TCAP::allocTransactionID()
+void SS7TCAP::allocTransactionID(String& str)
 {
     u_int32_t tmp = m_idsPool;
     m_idsPool++;
-    XDebug(this,DebugAll,"SS7TCAP::allocTransactionID() - allocated new transaction ID=%u [%p]",tmp,this);
-    return tmp;
+    unsigned char buff[sizeof(tmp)];
+    int len = sizeof(tmp);
+    for (int index = len - 1; index >= 0; index--) {
+	buff[index] = tmp & 0xff;
+	tmp >>= 8;
+    }
+    str.hexify(buff,len,' ');
+    XDebug(this,DebugAll,"SS7TCAP::allocTransactionID() - allocated new transaction ID=%s [%p]",str.c_str(),this);
+}
+
+const String SS7TCAP::allocTransactionID()
+{
+    String str;
+    allocTransactionID(str);
+    return str;
 }
 
 bool SS7TCAP::sendToUser(NamedList& params)
@@ -586,10 +599,11 @@ HandledMSU SS7TCAP::processSCCPData(SS7TCAPMessage* msg)
 	case SS7TCAP::TC_QueryWithoutPerm:
 	    // if there isn't a destination ID, allocate a new one and build a transaction
 	    if (TelEngine::null(trID)) {
-		u_int32_t newID = allocTransactionID();
-		tr = buildTransaction(type,newID,msgParams,false);//new SS7TCAPTransaction(this,type,newID,msgParams,m_trTimeout,false);
+		String newID;
+		allocTransactionID(newID);
+		tr = buildTransaction(type,newID,msgParams,false);
 		m_transactions.append(tr);
-		msgParams.setParam(s_tcapLocalTID,String(newID));
+		msgParams.setParam(s_tcapLocalTID,newID);
 	    }
 	    break;
 	case SS7TCAP::TC_Continue:
@@ -677,7 +691,7 @@ SS7TCAPError SS7TCAP::userRequest(NamedList& params)
 	    case SS7TCAP::TC_QueryWithoutPerm:
 		// if otid not set, alloc one and set it
 		if (TelEngine::null(otid)) {
-		    params.setParam(s_tcapLocalTID,String(allocTransactionID()));
+		    params.setParam(s_tcapLocalTID,allocTransactionID());
 		    otid = params.getParam(s_tcapLocalTID);
 		}
 		// if set, check if we already have it
@@ -689,7 +703,7 @@ SS7TCAPError SS7TCAP::userRequest(NamedList& params)
 		    return error;
 		}
 		// create transaction
-		tr = buildTransaction((SS7TCAP::TCAPUserTransActions)type,otid->toInteger(),params,true);
+		tr = buildTransaction((SS7TCAP::TCAPUserTransActions)type,otid,params,true);
 		if (!TelEngine::null(user))
 		    tr->setUserName(user);
 		m_transactions.append(tr);
@@ -1054,13 +1068,13 @@ u_int16_t SS7TCAPError::errorCode()
  * SS7TCAPTransaction
  */
 SS7TCAPTransaction::SS7TCAPTransaction(SS7TCAP* tcap, SS7TCAP::TCAPUserTransActions type,
-	u_int32_t transactID, NamedList& params, u_int64_t timeout, bool initLocal)
+	const String& transactID, NamedList& params, u_int64_t timeout, bool initLocal)
     : m_tcap(tcap), m_tcapType(SS7TCAP::UnknownTCAP), m_userName(""), m_localID(transactID), m_type(type),
       m_localSCCPAddr(""), m_remoteSCCPAddr(""), m_basicEnd(true), m_endNow(false), m_timeout(timeout)
 {
 
-    DDebug(m_tcap,DebugAll,"SS7TCAPTransaction(tcap = '%s' [%p], transactID = %u) created [%p]",
-	    m_tcap->toString().c_str(),tcap,transactID,this);
+    DDebug(m_tcap,DebugAll,"SS7TCAPTransaction(tcap = '%s' [%p], transactID = %s) created [%p]",
+	    m_tcap->toString().c_str(),tcap,transactID.c_str(),this);
 
     m_remoteID = params.getValue(s_tcapRemoteTID);
     populateSCCPAddress(m_localSCCPAddr,m_remoteSCCPAddr,params,initLocal,false);
@@ -1666,7 +1680,7 @@ SS7TCAPANSI::~SS7TCAPANSI()
 		this,m_transactions.count(),refcount());
 }
 
-SS7TCAPTransaction* SS7TCAPANSI::buildTransaction(SS7TCAP::TCAPUserTransActions type, u_int32_t transactID, NamedList& params,
+SS7TCAPTransaction* SS7TCAPANSI::buildTransaction(SS7TCAP::TCAPUserTransActions type, const String& transactID, NamedList& params,
 	bool initLocal)
 {
     return new SS7TCAPTransactionANSI(this,type,transactID,params,m_trTimeout,initLocal);
@@ -1703,13 +1717,20 @@ SS7TCAPError SS7TCAPANSI::decodeTransactionPart(NamedList& params, DataBlock& da
     // if we'll detect an error, it should be a BadlyStructuredTransaction error
     error.setError(SS7TCAPError::Transact_BadlyStructuredTransaction);
 
-    // decode transaction IDs
-    u_int64_t transactionIDs;
-    len = ASNLib::decodeUINT64(data,&transactionIDs,false);
-    if (len < 0)
+    len = ASNLib::decodeLength(data);
+    if (len > data.length() || data.length() < len || (len != 0 && len != 4 && len != 8))
 	return error;
 
     // transaction IDs shall be decoded according to message type
+    String tid1, tid2;
+    if (len  > 0 ) {
+	tid1.hexify(data.data(),4,' ');
+	data.cut(-4);
+	if (len == 8) {
+	    tid2.hexify(data.data(),4,' ');
+	    data.cut(-4);
+	}
+    }
     switch (msgType) {
 	case SS7TCAPTransactionANSI::Unidirectional:
 	    if (len != 0)
@@ -1719,20 +1740,20 @@ SS7TCAPError SS7TCAPANSI::decodeTransactionPart(NamedList& params, DataBlock& da
 	case SS7TCAPTransactionANSI::QueryWithoutPermission:
 	    if (len != 4)
 		return error;
-	    params.setParam(s_tcapRemoteTID,String((int)transactionIDs));
+	    params.setParam(s_tcapRemoteTID,tid1);
 	    break;
 	case SS7TCAPTransactionANSI::Response:
 	case SS7TCAPTransactionANSI::Abort:
 	    if (len != 4)
 		return error;
-	    params.setParam(s_tcapLocalTID,String((int)transactionIDs));
+	    params.setParam(s_tcapLocalTID,tid1);
 	    break;
 	case SS7TCAPTransactionANSI::ConversationWithPermission:
 	case SS7TCAPTransactionANSI::ConversationWithoutPermission:
 	    if (len != 8)
 		return error;
-	    params.setParam(s_tcapRemoteTID,String((int)(transactionIDs >> 4 * 8)));
-	    params.setParam(s_tcapLocalTID,String((int)transactionIDs));
+	    params.setParam(s_tcapRemoteTID,tid1);
+	    params.setParam(s_tcapLocalTID,tid2);
 	    break;
 	default:
 	    error.setError(SS7TCAPError::Transact_UnrecognizedPackageType);
@@ -1757,33 +1778,31 @@ void SS7TCAPANSI::encodeTransactionPart(NamedList& params, DataBlock& data)
 
     int msgType = primitiveToTransactANSI(params.getValue(s_tcapRequest));
 
-    const String otid = params[s_tcapLocalTID];
-    const String dtid = params[s_tcapRemoteTID];
+    const String& otid = params[s_tcapLocalTID];
+    const String& dtid = params[s_tcapRemoteTID];
 
-    DataBlock db;
-    u_int32_t origNet = htonl(otid.toInteger());
-    u_int32_t destNet = htonl(dtid.toInteger());
-
+    String ids;
     switch (msgType) {
 	case SS7TCAPTransactionANSI::Unidirectional:
 	    break;
 	case SS7TCAPTransactionANSI::QueryWithPermission:
 	case SS7TCAPTransactionANSI::QueryWithoutPermission:
-	    db.append(&origNet,sizeof(u_int32_t));
+	    ids = otid;
 	    break;
 	case SS7TCAPTransactionANSI::Response:
 	case SS7TCAPTransactionANSI::Abort:
-	    db.append(&destNet,sizeof(u_int32_t));
+	    ids = dtid;
 	    break;
 	case SS7TCAPTransactionANSI::ConversationWithPermission:
 	case SS7TCAPTransactionANSI::ConversationWithoutPermission:
-	    db.append(&origNet,sizeof(u_int32_t));
-	    db.append(&destNet,sizeof(u_int32_t));
+	    ids << otid << " " << dtid;
 	    break;
 	default:
 	    break;
     };
 
+    DataBlock db;
+    db.unHexify(ids.c_str(),ids.length(),' ');
     db.insert(ASNLib::buildLength(db));
     int tag = TransactionIDTag;
     db.insert(DataBlock(&tag,1));
@@ -1808,7 +1827,7 @@ const TokenDict SS7TCAPTransactionANSI::s_ansiTransactTypes[] = {
 };
 
 SS7TCAPTransactionANSI::SS7TCAPTransactionANSI(SS7TCAP* tcap, SS7TCAP::TCAPUserTransActions type,
-	u_int32_t transactID, NamedList& params, u_int64_t timeout, bool initLocal)
+	const String& transactID, NamedList& params, u_int64_t timeout, bool initLocal)
     : SS7TCAPTransaction(tcap,type,transactID,params,timeout,initLocal),
       m_prevType(type)
 {

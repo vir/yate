@@ -1329,7 +1329,14 @@ bool Connection::processLine(const char *line, bool saveLine)
 	    static const Regexp s_paramSep("^\\([^ ]*\\)\\? *\\([^ ]*\\)\\? *\\([^ ]*\\)\\? *\\([^ ]*\\)\\? *\\([^ ]*\\)\\? *\\([^ ]*\\)\\? *\\([^ ]*\\)\\? *\\([^ ]*\\)\\? *\\([^ ]*\\)\\? *\\([^ ]*\\)\\? *");
 	    str.matches(s_paramSep);
 	    str = str.replaceMatches(*cmd);
-	    return processLine(str,false);
+	    for (;;) {
+		sep = str.find("$()");
+		if (sep < 0)
+		    return processLine(str,false);
+		if (processLine(str.substr(0,sep),false))
+		    return true;
+		str = str.substr(sep+3);
+	    }
 	}
 	Message m("engine.command");
 	m.addParam("line",str);

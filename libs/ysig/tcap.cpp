@@ -375,7 +375,7 @@ bool SS7TCAP::managementNotify(SCCP::Type type, NamedList& params)
 	    break;
 	if (user->managementNotify(type,params))
 	    ok = true;
-	if (user->managementState() == (int) SCCPManagement::SCCPManagement::UserInService)
+	if (user->managementState() == (int) SCCPManagement::UserInService)
 	    inService = true;
     }
     if (type == SCCP::SubsystemStatus)
@@ -1958,8 +1958,8 @@ SS7TCAPError SS7TCAPTransactionANSI::decodeDialogPortion(NamedList& params, Data
     data.cut(-1);
 
     // dialog portion is present, decode dialog length
-    unsigned int len = ASNLib::decodeLength(data);
-    if (len < 0 || len > data.length()) {
+    int len = ASNLib::decodeLength(data);
+    if (len < 0 || len > (int)data.length()) {
 	error.setError(SS7TCAPError::Dialog_BadlyStructuredDialoguePortion);
 	return error;
     }
@@ -2020,7 +2020,7 @@ SS7TCAPError SS7TCAPTransactionANSI::decodeDialogPortion(NamedList& params, Data
 	data.cut(-1);
 
 	len = ASNLib::decodeLength(data);
-	if (len < 0 || len > data.length()) {
+	if (len < 0 || len > (int)data.length()) {
 	    error.setError(SS7TCAPError::Dialog_BadlyStructuredDialoguePortion);
 	    return error;
 	}
@@ -2440,8 +2440,8 @@ SS7TCAPError SS7TCAPTransactionANSI::decodeComponents(NamedList& params, DataBlo
     data.cut(-1);
 
     // decode length of component portion
-    unsigned int len = ASNLib::decodeLength(data);
-    if (len < 0 || len != data.length()) { // the length of the remaining data should be the same as the decoded length()
+    int len = ASNLib::decodeLength(data);
+    if (len < 0 || len != (int)data.length()) { // the length of the remaining data should be the same as the decoded length()
 	error.setError(SS7TCAPError::General_BadlyStructuredCompPortion);
 	return error;
     }
@@ -2455,7 +2455,7 @@ SS7TCAPError SS7TCAPTransactionANSI::decodeComponents(NamedList& params, DataBlo
 
 	// verify component length
 	len = ASNLib::decodeLength(data);
-	if (len < 0 || len > data.length()) {
+	if (len < 0 || len > (int)data.length()) {
 	    error.setError(SS7TCAPError::General_BadlyStructuredCompPortion);
 	    break;
 	}
@@ -2571,7 +2571,7 @@ SS7TCAPError SS7TCAPTransactionANSI::decodeComponents(NamedList& params, DataBlo
 	if (tag == SS7TCAPANSI::ParameterSetTag || tag == SS7TCAPANSI::ParameterSeqTag) { // 0xf2 0x30
 		data.cut(-1);
 		len = ASNLib::decodeLength(data);
-		if (len < 0 || len > data.length()) {
+		if (len < 0 || len > (int)data.length()) {
 		    error.setError(SS7TCAPError::General_BadlyStructuredCompPortion);
 		    break;
 		}

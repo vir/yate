@@ -10512,8 +10512,14 @@ public:
     virtual SS7TCAPMessage* dequeue();
     /**
      * Get a new transaction ID
+     * @return A transaction ID
      */
-    virtual u_int32_t allocTransactionID();
+    virtual const String allocTransactionID();
+    /**
+     * Get a new transaction ID
+     * @param str String into which to put the id
+     */
+    void allocTransactionID(String& str);
     /**
      * Dictionary for TCAP versions
      */
@@ -10538,7 +10544,7 @@ public:
      * @param initLocal True if built by user, false if by remote end
      * @return A transaction
      */
-    virtual SS7TCAPTransaction* buildTransaction(SS7TCAP::TCAPUserTransActions type, u_int32_t transactID, NamedList& params,
+    virtual SS7TCAPTransaction* buildTransaction(SS7TCAP::TCAPUserTransActions type, const String& transactID, NamedList& params,
 	bool initLocal = true) = 0;
     /**
      * Find the transaction with the given id
@@ -10699,7 +10705,7 @@ protected:
     unsigned int m_abnormalMsgs;
 };
 
-class SS7TCAPError
+class YSIG_API SS7TCAPError
 {
 public:
     enum ErrorType {
@@ -10801,7 +10807,7 @@ private:
  * Implementation of SS7 Transactional Capabilities Application Part Transaction 
  * @short SS7 TCAP transaction implementation
  */
-class SS7TCAPTransaction : public GenObject, public Mutex
+class YSIG_API SS7TCAPTransaction : public GenObject, public Mutex
 {
 public:
     enum TransactionState {
@@ -10824,7 +10830,7 @@ public:
      * @param timeout Transaction timeout
      * @param initLocal True if the transaction was initiated locally, false if not
      */
-    SS7TCAPTransaction(SS7TCAP* tcap, SS7TCAP::TCAPUserTransActions type, u_int32_t transactID, NamedList& params,
+    SS7TCAPTransaction(SS7TCAP* tcap, SS7TCAP::TCAPUserTransActions type, const String& transactID, NamedList& params,
 	u_int64_t timeout, bool initLocal = true);
     /**
      * Destructor
@@ -11024,7 +11030,11 @@ protected:
     SignallingTimer m_timeout;
 };
 
-class SS7TCAPComponent : public GenObject
+/**
+ * Implementation of SS7 Transactional Capabilities Application Part Component 
+ * @short SS7 TCAP component implementation
+ */
+class YSIG_API SS7TCAPComponent : public GenObject
 {
 public:
     /**
@@ -11156,7 +11166,7 @@ private:
  * Implementation of SS7 Transactional Capabilities Application Part - specification ANSI
  * @short ANSI SS7 TCAP implementation
  */
-class SS7TCAPANSI : virtual public SS7TCAP
+class YSIG_API SS7TCAPANSI : virtual public SS7TCAP
 {
     YCLASS(SS7TCAPANSI,SS7TCAP)
 public:
@@ -11217,7 +11227,7 @@ public:
      * @param initLocal True if built by user, false if by remote end
      * @return A transaction
      */
-    virtual SS7TCAPTransaction* buildTransaction(SS7TCAP::TCAPUserTransActions type, u_int32_t transactID, NamedList& params,
+    virtual SS7TCAPTransaction* buildTransaction(SS7TCAP::TCAPUserTransActions type, const String& transactID, NamedList& params,
 	bool initLocal = true);
 private:
     SS7TCAPError decodeTransactionPart(NamedList& params, DataBlock& data);
@@ -11228,7 +11238,7 @@ private:
  * Implementation of SS7 Transactional Capabilities Application Part Transaction - specification ANSI
  * @short ANSI SS7 TCAP transaction implementation
  */
-class SS7TCAPTransactionANSI : public SS7TCAPTransaction
+class YSIG_API SS7TCAPTransactionANSI : public SS7TCAPTransaction
 {
 public:
     enum TCAPANSIComponentType {
@@ -11260,7 +11270,7 @@ public:
      * @param timeout Transaction timeout
      * @param initLocal True if the transaction was initiated locally, false if not
      */
-    SS7TCAPTransactionANSI(SS7TCAP* tcap, SS7TCAP::TCAPUserTransActions type, u_int32_t transactID, NamedList& params,
+    SS7TCAPTransactionANSI(SS7TCAP* tcap, SS7TCAP::TCAPUserTransActions type, const String& transactID, NamedList& params,
 	u_int64_t timeout, bool initLocal = true);
     /**
      * Destructor

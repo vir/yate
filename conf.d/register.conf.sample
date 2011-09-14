@@ -147,10 +147,14 @@
 ; Queries for registering as client to other servers
 
 ; query executed only once to create client registrations at startup
-;initquery=SELECT enabled,protocol,username,password,server FROM accounts WHERE enabled IS TRUE
+;initquery=SELECT account,protocol,username,password,server FROM accounts WHERE enabled IS TRUE
 
 ; poll on timer to update registrations if database was changed externally
-;timerquery=BEGIN; SELECT enabled,protocol,username,password,server FROM accounts WHERE modified IS TRUE; UPDATE accounts SET modified=FALSE; COMMIT
+;timerquery=BEGIN; \
+; SELECT (CASE WHEN enabled IS FALSE THEN 'logout' ELSE 'login' END) AS operation,\
+; account,protocol,username,password,server FROM accounts WHERE modified IS TRUE; \
+; UPDATE accounts SET modified=FALSE; \
+; COMMIT
 
 ; update account status after receiving an user.notify
 ;statusquery=UPDATE accounts SET status='${status}' WHERE account='${internalaccount}'

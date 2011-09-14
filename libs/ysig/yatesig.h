@@ -10705,7 +10705,7 @@ protected:
     unsigned int m_abnormalMsgs;
 };
 
-class SS7TCAPError
+class YSIG_API SS7TCAPError
 {
 public:
     enum ErrorType {
@@ -10807,7 +10807,7 @@ private:
  * Implementation of SS7 Transactional Capabilities Application Part Transaction 
  * @short SS7 TCAP transaction implementation
  */
-class SS7TCAPTransaction : public GenObject, public Mutex
+class YSIG_API SS7TCAPTransaction : public GenObject, public Mutex
 {
 public:
     enum TransactionState {
@@ -11030,7 +11030,11 @@ protected:
     SignallingTimer m_timeout;
 };
 
-class SS7TCAPComponent : public GenObject
+/**
+ * Implementation of SS7 Transactional Capabilities Application Part Component 
+ * @short SS7 TCAP component implementation
+ */
+class YSIG_API SS7TCAPComponent : public GenObject
 {
 public:
     /**
@@ -11162,7 +11166,7 @@ private:
  * Implementation of SS7 Transactional Capabilities Application Part - specification ANSI
  * @short ANSI SS7 TCAP implementation
  */
-class SS7TCAPANSI : virtual public SS7TCAP
+class YSIG_API SS7TCAPANSI : virtual public SS7TCAP
 {
     YCLASS(SS7TCAPANSI,SS7TCAP)
 public:
@@ -11234,7 +11238,7 @@ private:
  * Implementation of SS7 Transactional Capabilities Application Part Transaction - specification ANSI
  * @short ANSI SS7 TCAP transaction implementation
  */
-class SS7TCAPTransactionANSI : public SS7TCAPTransaction
+class YSIG_API SS7TCAPTransactionANSI : public SS7TCAPTransaction
 {
 public:
     enum TCAPANSIComponentType {

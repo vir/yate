@@ -1,3 +1,9 @@
+; IMPORTANT!
+; This feature module is not loaded automatically, it needs a line in yate.conf:
+; [postload]
+; ${modulepath}/sip/sip_cnam_lnp${modsuffix}=yes
+
+
 [priorities]
 ; These settings that are read only at first initialization!
 

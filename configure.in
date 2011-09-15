@@ -69,6 +69,8 @@ if [[ -n "`echo a | sed 's/a\|b//'`" ]]; then
 fi
 AC_MSG_RESULT([$csed])
 
+AC_C_BIGENDIAN([CFLAGS="$CFLAGS -DBIGENDIAN"])
+
 # Check if gcc style printf argument check is supported
 HAVE_GCC_FORMAT_CHECK=""
 AC_MSG_CHECKING([for gcc printf format typechecks])

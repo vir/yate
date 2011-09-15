@@ -732,6 +732,14 @@ public:
 	ObjList& srvs) const;
 
     /**
+     * Retrieve server host when connecting.
+     * This method is not thread safe
+     * @return Server host if set, remote jid's domain otherwise
+     */
+    inline const String& serverHost() const
+	{ return m_serverHost ? m_serverHost : m_remote.domain(); }
+
+    /**
      * Set/reset RosterRequested flag
      * This method is thread safe
      * @param ok True to set, false to reset it
@@ -954,9 +962,10 @@ protected:
      * @param remote Remote party jabber id
      * @param name Optional stream name
      * @param params Optional stream parameters
+     * @param serverHost Optional server host to use instead of jid domain
      */
     JBStream(JBEngine* engine, Type t, const JabberID& local, const JabberID& remote,
-	const char* name = 0, const NamedList* params = 0);
+	const char* name = 0, const NamedList* params = 0, const char* serverHost = 0);
 
     /**
      * Close the stream. Release memory
@@ -1194,6 +1203,7 @@ protected:
     String m_id;                         // Stream id
     JabberID m_local;                    // Local peer's jid
     JabberID m_remote;                   // Remote peer's jid
+    String m_serverHost;                 // Outgoing: optional server host (replaces remote domain when connecting)
     int m_flags;                         // Stream flags
     XMPPNamespace::Type m_xmlns;         // Stream namespace
     XMPPFeatureList m_features;          // Advertised features
@@ -1361,9 +1371,10 @@ public:
      * @param account Account (stream) name
      * @param params Stream parameters
      * @param name Optional stream name
+     * @param serverHost Optional server host to use instead of jid domain
      */
     JBClientStream(JBEngine* engine, const JabberID& jid, const String& account,
-	const NamedList& params, const char* name = 0);
+	const NamedList& params, const char* name = 0, const char* serverHost = 0);
 
     /**
      * Retrieve stream's account

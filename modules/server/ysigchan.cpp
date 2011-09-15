@@ -26,6 +26,7 @@
 #include <yatesig.h>
 
 #include <string.h>
+#include <stdio.h>
 
 using namespace TelEngine;
 namespace { // anonymous
@@ -233,7 +234,7 @@ private:
     // Create or initialize a trunk
     bool initTrunk(NamedList& sect, int type);
     // Get the status of a trunk
-    void status(SigTrunk* trunk, String& retVal, const String& target);
+    void status(SigTrunk* trunk, String& retVal, const String& target, bool details);
     // Append a topmost non-trunk component
     bool appendTopmost(SigTopmost* topmost);
     // Remove a topmost component without deleting it
@@ -2235,7 +2236,7 @@ bool SigDriver::received(Message& msg, int id)
     RefPointer<SigTrunk> trunk = findTrunk(trunkName,false);
     m_trunksMutex.unlock();
     if (trunk) {
-	status(trunk,msg.retValue(),target);
+	status(trunk,msg.retValue(),target,msg.getBoolValue(YSTRING("details"),true));
 	return true;
     }
     m_topmostMutex.lock();
@@ -2258,40 +2259,93 @@ bool SigDriver::received(Message& msg, int id)
     return false;
 }
 
-void SigDriver::status(SigTrunk* trunk, String& retVal, const String& target)
+// Utility used in status
+static void countCic(SignallingCircuit* cic, unsigned int& avail, unsigned int& resetting,
+    unsigned int& locked)
 {
+    if (!cic->locked(SignallingCircuit::LockLockedBusy))
+	avail++;
+    else {
+	if (cic->locked(SignallingCircuit::Resetting))
+	    resetting++;
+	if (cic->locked(SignallingCircuit::LockLocked))
+	    locked++;
+    }
+}
+
+void SigDriver::status(SigTrunk* trunk, String& retVal, const String& target, bool details)
+{
+    bool all = target.null();
     String detail;
+    String ctrlStatus = "Unknown";
     unsigned int circuits = 0;
+    unsigned int calls = 0;
     unsigned int count = 0;
+    int singleCic = false;
+    unsigned int availableCics = 0;
+    unsigned int resettingCics = 0;
+    unsigned int lockedCics = 0;
     while (true) {
 	SignallingCallControl* ctrl = trunk ? trunk->controller() : 0;
 	if (!ctrl)
 	    break;
 	Lock lckCtrl(ctrl);
-
-	if (ctrl->circuits())
-	    circuits = ctrl->circuits()->count();
-	else
+	ctrlStatus = ctrl->statusName();
+	if (!ctrl->circuits()) {
+	    // Count now the number of calls. It should be 0 !!!
+	    calls = ctrl->calls().count();
 	    break;
-
+	}
 	SignallingCircuitRange range(target,0);
 	SignallingCircuitRange* rptr = &range;
-	if (target == "*" || target == "all")
+	if (target == "*" || target == "all") {
 	    range.add(ctrl->circuits()->base(),ctrl->circuits()->last());
+	    all = true;
+	}
 	else if (range.count() == 0)
 	    rptr = ctrl->circuits()->findRange(target);
+	else
+	    singleCic = (range.count() == 1) && (-1 != target.toInteger(-1));
+	// Count calls, circuits and circuit status if complete status was requested
+	if (all) {
+	    calls = ctrl->calls().count();
+	    ObjList* o = ctrl->circuits()->circuits().skipNull();
+	    for (; o; o = o->skipNext()) {
+		circuits++;
+		SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
+		countCic(cic,availableCics,resettingCics,lockedCics);
+	    }
+	}
 	for (unsigned int i = 0; rptr && i < rptr->count(); i++) {
 	    SignallingCircuit* cic = ctrl->circuits()->find((*rptr)[i]);
 	    if (!cic)
 		continue;
 	    count++;
-	    detail.append(String(cic->code()) + "=",",");
-	    if (cic->span())
-		detail << cic->span()->id();
-	    detail << "|" << SignallingCircuit::lookupStatus(cic->status());
-	    detail << "|" << String::boolText(0 != cic->locked(SignallingCircuit::LockLocal));
-	    detail << "|" << String::boolText(0 != cic->locked(SignallingCircuit::LockRemote));
-	    detail << "|" << String::boolText(0 != cic->locked(SignallingCircuit::LockChanged|SignallingCircuit::Resetting));
+	    if (!singleCic) {
+		if (!all)
+		    countCic(cic,availableCics,resettingCics,lockedCics);
+		if (!details)
+		    continue;
+		detail.append(String(cic->code()) + "=",",");
+		if (cic->span())
+		    detail << cic->span()->id();
+		detail << "|" << SignallingCircuit::lookupStatus(cic->status());
+		detail << "|" << String::boolText(0 != cic->locked(SignallingCircuit::LockLocal));
+		detail << "|" << String::boolText(0 != cic->locked(SignallingCircuit::LockRemote));
+		detail << "|" << String::boolText(0 != cic->locked(SignallingCircuit::LockChanged|SignallingCircuit::Resetting));
+	    }
+	    else {
+		detail.append("circuit=",",");
+		detail << cic->code();
+		detail << ",span=" << (cic->span() ? cic->span()->id() : String::empty());
+		detail << ",status=" << SignallingCircuit::lookupStatus(cic->status());
+		detail << ",lockedlocal=" << String::boolText(0 != cic->locked(SignallingCircuit::LockLocal));
+		detail << ",lockedremote=" << String::boolText(0 != cic->locked(SignallingCircuit::LockRemote));
+		detail << ",changing=" << String::boolText(0 != cic->locked(SignallingCircuit::LockChanged|SignallingCircuit::Resetting));
+		char tmp[9];
+		::sprintf(tmp,"%x",cic->locked(-1));
+		detail << ",flags=0x" << tmp;
+	    }
 	}
 	break;
     }
@@ -2300,14 +2354,23 @@ void SigDriver::status(SigTrunk* trunk, String& retVal, const String& target)
     retVal << "module=" << name();
     retVal << ",trunk=" << trunk->name();
     retVal << ",type=" << lookup(trunk->type(),SigTrunk::s_type);
-    retVal << ",circuits=" << circuits;
-    retVal << ",status=" << (trunk->controller() ? trunk->controller()->statusName() : "Unknown");
-    retVal << ",calls=" << (trunk->controller() ? trunk->controller()->calls().count() : 0);
-    if (!target.null()) {
-	retVal << ";count=" << count;
-	retVal << ",format=Span|Status|LockedLocal|LockedRemote|Changing";
-	retVal << ";" << detail;
+    if (!singleCic) {
+	if (target)
+	    retVal << ",format=Span|Status|LockedLocal|LockedRemote|Changing";
+	if (all) {
+	    retVal << ";circuits=" << circuits;
+	    retVal << ",status=" << ctrlStatus;
+	    retVal << ",calls=" << calls;
+	}
+	else
+	    retVal << ";status=" << ctrlStatus;
+	retVal << ",available=" << availableCics;
+	retVal << ",resetting=" << resettingCics;
+	retVal << ",locked=" << lockedCics;
+	if (target)
+	    retVal << ",count=" << count;
     }
+    retVal.append(detail,";");
     retVal << "\r\n";
 }
 
@@ -3100,7 +3163,7 @@ bool SigLinkSet::initialize(NamedList& params)
 void SigLinkSet::status(String& retVal)
 {
     retVal << "type=" << (m_linkset ? m_linkset->componentType() : "");
-    retVal << ",status=" << (m_linkset && m_linkset->operational() ? "" : "non-") << "operational";
+    retVal << ";status=" << (m_linkset && m_linkset->operational() ? "" : "non-") << "operational";
 }
 
 void SigLinkSet::ifStatus(String& status)
@@ -3166,7 +3229,7 @@ void SigSS7Sccp::status(String& retVal)
     if (!m_sccp)
 	return;
     retVal << "type=" << m_sccp->componentType();
-    retVal << ",sent=" << m_sccp->messagesSend();
+    retVal << ";sent=" << m_sccp->messagesSend();
     retVal << ",received=" <<  m_sccp->messagesReceived();
     retVal << ",translations=" <<  m_sccp->translations();
     retVal << ",errors=" <<  m_sccp->errors();
@@ -3987,7 +4050,7 @@ void SigSS7Tcap::status(String& retVal)
     retVal << "type=" << (m_tcap ? m_tcap->componentType() : "");
     NamedList p("");
     m_tcap->status(p);
-    retVal << ",totalIncoming=" << p.getValue("totalIncoming","0");
+    retVal << ";totalIncoming=" << p.getValue("totalIncoming","0");
     retVal << ",totalOutgoing=" << p.getValue("totalOutgoing","0");
     retVal << ",totalDiscarded=" << p.getValue("totalDiscarded","0");
     retVal << ",totalNormal=" << p.getValue("totalNormal","0");

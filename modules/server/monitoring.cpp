@@ -1882,6 +1882,7 @@ bool InterfaceInfo::load()
 		nl->setParam(lookup(ALARMS_COUNT,s_ifacesInfo,""),"0");
 	}
 	TelEngine::destruct(list);
+	TelEngine::destruct(parts);
     }
     updateExpire();
     return true;
@@ -1939,6 +1940,7 @@ bool LinkInfo::load()
 		nl->setParam(lookup(UPTIME,s_linkInfo,""),"0");
 	}
 	TelEngine::destruct(list);
+	TelEngine::destruct(parts);
     }
     updateExpire();
     return true;
@@ -1992,26 +1994,41 @@ NamedList* LinksetInfo::parseLinksetInfo(String& info,const String& link, NamedL
     cutNewLine(info);
     DDebug(&__plugin,DebugAll,"LinksetInfo::parseLinkInfo(info='%s',link='%s', infoFill='%p') [%p]",info.c_str(),link.c_str(),infoFill,this);
     NamedList* nl = (infoFill ? infoFill : new NamedList(link));
-    ObjList* params = info.split(',',false);
-    for (ObjList* o = params->skipNull(); o; o = o->skipNext()) {
-	String* param = static_cast<String*>(o->get());
-	int pos = param->find("=");
-	if (pos < 0)
+
+    ObjList* parts = info.split(';',false);
+    for (ObjList* obj = parts->skipNull(); obj; obj = obj->skipNext()) {
+	String* infoPart = static_cast<String*>(obj->get());
+	if (TelEngine::null(infoPart))
 	    continue;
-	String nameParam = param->substr(0,pos);
-	String valParam = param->substr(pos + 1);
-	int type = lookup(nameParam,s_linksetStatus,0);
-	if (type > 0)
-	    nl->setParam(lookup(type,s_linksetInfo,""),valParam);
-    }
-    String idQuery = lookup(ID,s_linksetInfo);
-    String linksetId = nl->getValue(idQuery,"");
-    if (linksetId.null()) {
+	ObjList* params = infoPart->split(',',false);
+	for (ObjList* o = params->skipNull(); o; o = o->skipNext()) {
+	    String* param = static_cast<String*>(o->get());
+	    int pos = param->find("=");
+	    if (pos < 0)
+		continue;
+	    String nameParam = param->substr(0,pos);
+	    String valParam = param->substr(pos + 1);
+	    int type = lookup(nameParam,s_linksetStatus,0);
+	    if (type > 0) {
+		if (type == TYPE && (valParam.null() || valParam != "ss7-mtp3")) {
+		    TelEngine::destruct(params);
+		    TelEngine::destruct(nl);
+		    TelEngine::destruct(parts);
+		    return 0;
+		}
+		nl->setParam(lookup(type,s_linksetInfo,""),valParam);
+	    }
+	}
 	TelEngine::destruct(params);
+    }
+    NamedString* linksetId = nl->getParam(lookup(ID,s_linksetInfo));
+    NamedString* typeStr = nl->getParam(lookup(TYPE,s_linksetInfo));
+    if (TelEngine::null(linksetId) || TelEngine::null(typeStr)) {
+	TelEngine::destruct(parts);
 	TelEngine::destruct(nl);
 	return 0;
     }
-    TelEngine::destruct(params);
+    TelEngine::destruct(parts);
     if (!nl->getParam(lookup(ALARMS_COUNT,s_linksetInfo,"")))
 	nl->setParam(lookup(ALARMS_COUNT,s_linksetInfo,""),"0");
     return nl;
@@ -2079,28 +2096,37 @@ NamedList* TrunkInfo::parseTrunkInfo(String& info, const String& trunk, NamedLis
     cutNewLine(info);
     DDebug(&__plugin,DebugAll,"TrunkInfo::parseTrunkInfo(info='%s',trunk='%s', infoFill='%p') [%p]",info.c_str(),trunk.c_str(),infoFill,this);
     NamedList* nl = (infoFill ? infoFill : new NamedList(trunk));
-    ObjList* params = info.split(',',false);
-    for (ObjList* o = params->skipNull(); o; o = o->skipNext()) {
-	String* param = static_cast<String*>(o->get());
-	int pos = param->find("=");
-	if (pos < 0)
-	    continue;
-	String nameParam = param->substr(0,pos);
-	String valParam = param->substr(pos + 1);
 
-	int type = lookup(nameParam,s_trunkStatus,0);
-	if (type > 0)
-	    nl->setParam(lookup(type,s_trunkInfo,""),valParam);
+    ObjList* parts = info.split(';',false);
+    for (ObjList* obj = parts->skipNull(); obj; obj = obj->skipNext()) {
+	String* infoPart = static_cast<String*>(obj->get());
+	if (TelEngine::null(infoPart))
+	    continue;
+	ObjList* params = infoPart->split(',',false);
+	for (ObjList* o = params->skipNull(); o; o = o->skipNext()) {
+	    String* param = static_cast<String*>(o->get());
+	    int pos = param->find("=");
+	    if (pos < 0) {
+		TelEngine::destruct(params);
+		continue;
+	    }
+	    String nameParam = param->substr(0,pos);
+	    String valParam = param->substr(pos + 1);
+
+	    int type = lookup(nameParam,s_trunkStatus,0);
+	    if (type > 0)
+		nl->setParam(lookup(type,s_trunkInfo,""),valParam);
+	}
+	TelEngine::destruct(params);
     }
     // check that it's indeed a trunk
-    String idQuery = lookup(ID,s_trunkInfo);
-    String trunkId = nl->getValue(idQuery,"");
-    if (trunkId.null()) {
-	TelEngine::destruct(params);
+    NamedString* trunkId = nl->getParam(lookup(ID,s_trunkInfo));
+    if (TelEngine::null(trunkId)) {
+	TelEngine::destruct(parts);
 	TelEngine::destruct(nl);
 	return 0;
     }
-    TelEngine::destruct(params);
+    TelEngine::destruct(parts);
     if (!nl->getParam(lookup(ALARMS_COUNT,s_trunkInfo,"")))
 	nl->setParam(lookup(ALARMS_COUNT,s_trunkInfo,""),"0");
     return nl;

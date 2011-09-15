@@ -562,7 +562,7 @@ void SASL::buildMD5Digest(String& dest, const NamedList& params,
  */
 // Constructor. Add itself to the stream's engine
 JBConnect::JBConnect(const JBStream& stream)
-    : m_status(Start), m_domain(stream.remote().domain()), m_port(0),
+    : m_status(Start), m_domain(stream.serverHost()), m_port(0),
     m_engine(stream.engine()), m_stream(stream.toString()),
     m_streamType((JBStream::Type)stream.type())
 {
@@ -1679,10 +1679,18 @@ JBClientStream* JBClientEngine::create(const String& account, const NamedList& p
 {
     if (!account)
 	return 0;
-    const char* domain = params.getValue("domain");
-    if (TelEngine::null(domain))
+    String serverHost;
+    String username = params.getValue("username");
+    String domain = params.getValue("domain");
+    int pos = username.find("@");
+    if (pos > 0) {
+	serverHost = domain;
+	domain = username.substr(pos + 1);
+	username = username.substr(0,pos);
+    }
+    if (!domain)
 	domain = params.getValue("server",params.getValue("address"));
-    JabberID jid(params.getValue("username"),domain,params.getValue("resource"));
+    JabberID jid(username,domain,params.getValue("resource"));
     if (!jid.bare()) {
 	Debug(this,DebugNote,"Can't create client stream: invalid jid=%s",jid.bare().c_str());
 	return 0;
@@ -1690,7 +1698,7 @@ JBClientStream* JBClientEngine::create(const String& account, const NamedList& p
     Lock lock(this);
     JBClientStream* stream = static_cast<JBClientStream*>(findAccount(account));
     if (!stream) {
-	stream = new JBClientStream(this,jid,account,params,name);
+	stream = new JBClientStream(this,jid,account,params,name,serverHost);
 	stream->ref();
 	addStream(stream);
     }

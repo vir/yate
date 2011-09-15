@@ -173,10 +173,10 @@ JBStream::JBStream(JBEngine* engine, Socket* socket, Type t, bool ssl)
 
 // Outgoing
 JBStream::JBStream(JBEngine* engine, Type t, const JabberID& local, const JabberID& remote,
-    const char* name, const NamedList* params)
+    const char* name, const NamedList* params, const char* serverHost)
     : Mutex(true,"JBStream"),
     m_sasl(0),
-    m_state(Idle), m_local(local), m_remote(remote),
+    m_state(Idle), m_local(local), m_remote(remote), m_serverHost(serverHost),
     m_flags(0), m_xmlns(XMPPNamespace::Count), m_lastEvent(0),
     m_setupTimeout(0), m_startTimeout(0),
     m_pingTimeout(0), m_nextPing(0),
@@ -204,8 +204,8 @@ JBStream::JBStream(JBEngine* engine, Type t, const JabberID& local, const Jabber
     // Compress always defaults to true if not explicitly disabled
     if (!flag(Compress) && !(params && params->getBoolValue("nocompression")))
 	setFlags(Compress);
-    Debug(this,DebugAll,"JBStream::JBStream(%p,%s,%s,%s) outgoing [%p]",
-	engine,typeName(),local.c_str(),remote.c_str(),this);
+    Debug(this,DebugAll,"JBStream::JBStream(%p,%s,%s,%s,%s) outgoing [%p]",
+	engine,typeName(),local.c_str(),remote.c_str(),m_serverHost.safe(),this);
     setXmlns();
     changeState(Idle);
 }
@@ -2488,8 +2488,9 @@ JBClientStream::JBClientStream(JBEngine* engine, Socket* socket, bool ssl)
 }
 
 JBClientStream::JBClientStream(JBEngine* engine, const JabberID& jid, const String& account,
-    const NamedList& params, const char* name)
-    : JBStream(engine,c2s,jid,jid.domain(),TelEngine::null(name) ? account.c_str() : name,&params),
+    const NamedList& params, const char* name, const char* serverHost)
+    : JBStream(engine,c2s,jid,jid.domain(),TelEngine::null(name) ? account.c_str() : name,
+	&params,serverHost),
     m_account(account), m_userData(0), m_registerReq(0)
 {
     m_password = params.getValue("password");

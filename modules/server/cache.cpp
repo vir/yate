@@ -1489,7 +1489,13 @@ void CacheModule::addCacheDetail(String& buf, Cache* cache)
 // Handle messages for LNP
 void CacheModule::handleLnp(Message& msg, bool before)
 {
-    if (!(before || msg.getBoolValue("cache_lnp_posthook")))
+    bool handle = false;
+    if (before)
+	handle = msg.getBoolValue("querylnp_cache",true);
+    else
+	handle = msg.getBoolValue("cache_lnp_posthook");
+    XDebug(this,DebugAll,"handleLnp(%u) handle=%u",before,handle);
+    if (!handle)
 	return;
     RefPointer<Cache> lnp;
     getCache(lnp,"lnp");
@@ -1531,7 +1537,13 @@ void CacheModule::handleLnp(Message& msg, bool before)
 // Handle messages for CNAM
 void CacheModule::handleCnam(Message& msg, bool before)
 {
-    if (!(before || msg.getBoolValue("cache_cnam_posthook")))
+    bool handle = false;
+    if (before)
+	handle = msg.getBoolValue("querycnam_cache",true);
+    else
+	handle = msg.getBoolValue("cache_cnam_posthook");
+    XDebug(this,DebugAll,"handleCnam(%u) handle=%u",before,handle);
+    if (!handle)
 	return;
     RefPointer<Cache> cnam;
     getCache(cnam,"cnam");

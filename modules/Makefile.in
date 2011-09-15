@@ -44,7 +44,7 @@ INCFILES := @top_srcdir@/yateclass.h @top_srcdir@/yatengine.h @top_srcdir@/yatep
 
 JUSTSIG := server/ysigchan.yate server/analog.yate \
 	server/ciscosm.yate server/sigtransport.yate \
-	server/isupmangler.yate
+	server/isupmangler.yate ysig/ss7_lnp_ansi.yate
 
 SUBDIRS :=
 MKDEPS  := ../config.status
@@ -276,6 +276,9 @@ $(JUSTSIG): LOCALFLAGS = -I@top_srcdir@/libs/ysig
 server/wpcard.yate server/tdmcard.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig @WANPIPE_FLAGS@
 server/zapcard.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig @ZAP_FLAGS@
 $(JUSTSIG) server/wpcard.yate server/tdmcard.yate server/zapcard.yate: LOCALLIBS = -lyatesig
+
+ysig/ss7_lnp_ansi.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig -I@top_srcdir@/libs/yasn
+ysig/ss7_lnp_ansi.yate: LOCALLIBS = -lyatesig -L../libs/yasn -lyasn
 
 server/analogdetect.yate: ../libs/ymodem/libyatemodem.a
 server/analogdetect.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymodem

@@ -44,7 +44,7 @@ INCFILES := @top_srcdir@/yateclass.h @top_srcdir@/yatengine.h @top_srcdir@/yatep
 
 JUSTSIG := server/ysigchan.yate server/analog.yate \
 	server/ciscosm.yate server/sigtransport.yate \
-	server/isupmangler.yate sig/ss7_lnp_ansi.yate
+	sig/isupmangler.yate sig/ss7_lnp_ansi.yate
 
 SUBDIRS :=
 MKDEPS  := ../config.status

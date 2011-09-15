@@ -1,3 +1,21 @@
+yate (3.3.3.svn4616) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4616: + Allow copying arbitrary params when
+    initiating calls from wave or tonegen.  + Added module to perform
+    LNP queries via SS7.  + Fixed SVN EOL style for new file.  + Attempt
+    to detect big endian machines, add -DBIGENDIAN to CFLAGS if so.  +
+    Renamed modules/ysig to avoid Windows build conflict.  + Added notes
+    for feature modules that do not load automatically.  + Added SS7 lnp
+    module to Windows build. Moved isupmangler module to sig
+    subdirectory.  + Allow disabling lnp/cnam query from routing for
+    sip_cnam_lnp and cache modules.  + Package the modules from
+    modules/sig directory.  + Added extra info in sig circuit status.
+    Fixed status separators. Handle changes in monitoring module.  +
+    Outgoing client stream: handle the situation when user's domain is
+    hosted by another domain.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 16 Sep 2011 02:19:23 +0400
+
 yate (3.3.3.svn4606) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4606: + Allow a $() in an alias to start a

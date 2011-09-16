@@ -1,3 +1,12 @@
+yate (3.3.3.svn4618) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4618: + Added notifications for speaker list
+    change.  + Added activity (speech, we would hope) detector for
+    conferenced users.  + The "transfer silent" mode or the SS7 router
+    can be controlled at any time.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 17 Sep 2011 02:19:17 +0400
+
 yate (3.3.3.svn4616) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4616: + Allow copying arbitrary params when

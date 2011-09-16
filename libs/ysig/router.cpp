@@ -1813,6 +1813,8 @@ bool SS7Router::control(NamedList& params)
     m_autoAllowed = params.getBoolValue(YSTRING("autoallow"),m_autoAllowed);
     m_sendUnavail = params.getBoolValue(YSTRING("sendupu"),m_sendUnavail);
     m_sendProhibited = params.getBoolValue(YSTRING("sendtfp"),m_sendProhibited);
+    if (!m_transfer)
+	m_transferSilent = params.getBoolValue(YSTRING("transfersilent"),m_transferSilent);
     String err;
     switch (cmd) {
 	case SS7Router::Pause:

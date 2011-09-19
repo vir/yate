@@ -3098,6 +3098,8 @@ int SS7SCCP::sendMessage(DataBlock& data, const NamedList& params)
 	if (hopCounter < 1 || hopCounter > 15) // HopCounter is an mandatory fixed length parameter in XUDT
 	    sccpMsg->params().setParam(YSTRING("HopCounter"),String(m_hopCounter));
     }
+    if (params.getBoolValue(YSTRING("CallingPartyAddress.pointcode"),false) && m_localPointCode)
+	sccpMsg->params().setParam("CallingPartyAddress.pointcode",String(getPackedPointCode()));
     // Avoid sending optional parameters that aren't specified by protocol
     if (sccpMsg->type() == SS7MsgSCCP::XUDT || sccpMsg->type() == SS7MsgSCCP::LUDT)
 	checkSCLCOptParams(sccpMsg);

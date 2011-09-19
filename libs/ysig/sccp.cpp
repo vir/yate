@@ -170,8 +170,8 @@ static const TokenDict s_nai[] = {
 
 static const TokenDict s_encodingScheme[] = {
     { "unknown",     0x00 },
-    { "bcd-odd",     0x01 },
-    { "bcd-even",    0x02 },
+    { "bcd",         0x01 },
+    { "bcd",         0x02 },
     { 0, 0 }
 };
 
@@ -713,13 +713,11 @@ static unsigned char encodeItuAddress(const SS7SCCP* sccp, SS7MSU& msu,
 	data[++length] = tt & 0xff;
 	int np = plan->toInteger(s_numberingPlan);
 	int es = encoding->toInteger(s_encodingScheme);
-	data[++length] = ((np & 0x0f) << 4) | (es & 0x0f);
 	switch (es) {
 	    case 1:
 	    case 2:
-		odd = (es == 1);
-		if ((gtNr->length() % 2 == 1) != odd)
-		    Debug(sccp,DebugNote,"Inconsistence between digits number and encoding scheme!!!");
+		odd = (gtNr->length() % 2 == 1);
+		es = odd ? 1 : 2;
 		break;
 	    default:
 		digits = new DataBlock();
@@ -728,21 +726,18 @@ static unsigned char encodeItuAddress(const SS7SCCP* sccp, SS7MSU& msu,
 		    TelEngine::destruct(digits);
 		}
 	}
+	data[++length] = ((np & 0x0f) << 4) | (es & 0x0f);
     } else if (translation && plan && encoding && nature) { // GT = 0x04
 	addressIndicator |= 0x10;
 	int tt = translation->toInteger();
 	data[++length] = tt & 0xff;
 	int np = plan->toInteger(s_numberingPlan);
 	int es = encoding->toInteger(s_encodingScheme);
-	data[++length] = ((np & 0x0f) << 4) | (es & 0x0f);
-	int nai = nature->toInteger(s_nai);
-	data[++length] = nai & 0x7f;
 	switch (es) {
 	    case 1:
 	    case 2:
-		odd = (es == 1);
-		if ((gtNr->length() % 2 == 1) != odd)
-		    Debug(sccp,DebugNote,"Inconsistence between digits number and encoding scheme!!!");
+		odd = (gtNr->length() % 2 == 1);
+		es = odd ? 1 : 2;
 		break;
 	    default:
 		digits = new DataBlock();
@@ -751,6 +746,9 @@ static unsigned char encodeItuAddress(const SS7SCCP* sccp, SS7MSU& msu,
 		    TelEngine::destruct(digits);
 		}
 	}
+	data[++length] = ((np & 0x0f) << 4) | (es & 0x0f);
+	int nai = nature->toInteger(s_nai);
+	data[++length] = nai & 0x7f;
     } else {
 	Debug(sccp,DebugWarn,"Can not encode ITU GTI. Unknown GTI value for : nai= %s, NpEs = %s, tt = %s",
 	      nature? "present" : "missing",(plan && encoding)? "present" : "missing",translation ? "present" : "missing");
@@ -831,13 +829,11 @@ static unsigned char encodeAnsiAddress(const SS7SCCP* sccp, SS7MSU& msu,
 	data[++length] = tt & 0xff;
 	int np = plan->toInteger(s_numberingPlan);
 	int es = encoding->toInteger(s_encodingScheme);
-	data[++length] = ((np & 0x0f) << 4) | (es & 0x0f);
 	switch (es) {
 	    case 1:
 	    case 2:
-		odd = (es == 1);
-		if ((gtNr->length() % 2 == 1) != odd)
-		    Debug(sccp,DebugNote,"Inconsistence between digits number and encoding scheme!!!");
+		odd = (gtNr->length() % 2 == 1);
+		es = odd ? 1 : 2;
 		break;
 	    default:
 		digits = new DataBlock();
@@ -846,6 +842,7 @@ static unsigned char encodeAnsiAddress(const SS7SCCP* sccp, SS7MSU& msu,
 		    TelEngine::destruct(digits);
 		}
 	}
+	data[++length] = ((np & 0x0f) << 4) | (es & 0x0f);
     } else {
 	Debug(sccp,DebugWarn,"Can not encode ANSI GTI. Unknown GTI value for : NpEs = %s, tt = %s",
 	      (plan && encoding)? "present" : "missing",translation ? "present" : "missing");

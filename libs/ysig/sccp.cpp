@@ -170,8 +170,8 @@ static const TokenDict s_nai[] = {
 
 static const TokenDict s_encodingScheme[] = {
     { "unknown",     0x00 },
-    { "bcd-odd",     0x01 },
-    { "bcd-even",    0x02 },
+    { "bcd",         0x01 },
+    { "bcd",         0x02 },
     { 0, 0 }
 };
 
@@ -713,13 +713,11 @@ static unsigned char encodeItuAddress(const SS7SCCP* sccp, SS7MSU& msu,
 	data[++length] = tt & 0xff;
 	int np = plan->toInteger(s_numberingPlan);
 	int es = encoding->toInteger(s_encodingScheme);
-	data[++length] = ((np & 0x0f) << 4) | (es & 0x0f);
 	switch (es) {
 	    case 1:
 	    case 2:
-		odd = (es == 1);
-		if ((gtNr->length() % 2 == 1) != odd)
-		    Debug(sccp,DebugNote,"Inconsistence between digits number and encoding scheme!!!");
+		odd = (gtNr->length() % 2 == 1);
+		es = odd ? 1 : 2;
 		break;
 	    default:
 		digits = new DataBlock();
@@ -728,21 +726,18 @@ static unsigned char encodeItuAddress(const SS7SCCP* sccp, SS7MSU& msu,
 		    TelEngine::destruct(digits);
 		}
 	}
+	data[++length] = ((np & 0x0f) << 4) | (es & 0x0f);
     } else if (translation && plan && encoding && nature) { // GT = 0x04
 	addressIndicator |= 0x10;
 	int tt = translation->toInteger();
 	data[++length] = tt & 0xff;
 	int np = plan->toInteger(s_numberingPlan);
 	int es = encoding->toInteger(s_encodingScheme);
-	data[++length] = ((np & 0x0f) << 4) | (es & 0x0f);
-	int nai = nature->toInteger(s_nai);
-	data[++length] = nai & 0x7f;
 	switch (es) {
 	    case 1:
 	    case 2:
-		odd = (es == 1);
-		if ((gtNr->length() % 2 == 1) != odd)
-		    Debug(sccp,DebugNote,"Inconsistence between digits number and encoding scheme!!!");
+		odd = (gtNr->length() % 2 == 1);
+		es = odd ? 1 : 2;
 		break;
 	    default:
 		digits = new DataBlock();
@@ -751,6 +746,9 @@ static unsigned char encodeItuAddress(const SS7SCCP* sccp, SS7MSU& msu,
 		    TelEngine::destruct(digits);
 		}
 	}
+	data[++length] = ((np & 0x0f) << 4) | (es & 0x0f);
+	int nai = nature->toInteger(s_nai);
+	data[++length] = nai & 0x7f;
     } else {
 	Debug(sccp,DebugWarn,"Can not encode ITU GTI. Unknown GTI value for : nai= %s, NpEs = %s, tt = %s",
 	      nature? "present" : "missing",(plan && encoding)? "present" : "missing",translation ? "present" : "missing");
@@ -831,13 +829,11 @@ static unsigned char encodeAnsiAddress(const SS7SCCP* sccp, SS7MSU& msu,
 	data[++length] = tt & 0xff;
 	int np = plan->toInteger(s_numberingPlan);
 	int es = encoding->toInteger(s_encodingScheme);
-	data[++length] = ((np & 0x0f) << 4) | (es & 0x0f);
 	switch (es) {
 	    case 1:
 	    case 2:
-		odd = (es == 1);
-		if ((gtNr->length() % 2 == 1) != odd)
-		    Debug(sccp,DebugNote,"Inconsistence between digits number and encoding scheme!!!");
+		odd = (gtNr->length() % 2 == 1);
+		es = odd ? 1 : 2;
 		break;
 	    default:
 		digits = new DataBlock();
@@ -846,6 +842,7 @@ static unsigned char encodeAnsiAddress(const SS7SCCP* sccp, SS7MSU& msu,
 		    TelEngine::destruct(digits);
 		}
 	}
+	data[++length] = ((np & 0x0f) << 4) | (es & 0x0f);
     } else {
 	Debug(sccp,DebugWarn,"Can not encode ANSI GTI. Unknown GTI value for : NpEs = %s, tt = %s",
 	      (plan && encoding)? "present" : "missing",translation ? "present" : "missing");
@@ -2723,7 +2720,7 @@ void SubsystemStatusTest::restartTimer()
  * class SS7SCCP
  */
 SS7SCCP::SS7SCCP(const NamedList& params)
-    : SignallingComponent(params,&params), SS7Layer4(0x03,&params), Mutex(true,params),
+    : SignallingComponent(params,&params), SS7Layer4(SS7MSU::SCCP|SS7MSU::National,&params), Mutex(true,params),
     m_type(SS7PointCode::Other), m_localPointCode(0), m_management(0), m_hopCounter(15),
     m_msgReturnStatus(""), m_segTimeout(0), m_ignoreUnkDigits(false), m_layer3Up(false),
     m_supportLongData(false), m_totalSent(0), m_totalReceived(0), m_errors(0),
@@ -3101,6 +3098,8 @@ int SS7SCCP::sendMessage(DataBlock& data, const NamedList& params)
 	if (hopCounter < 1 || hopCounter > 15) // HopCounter is an mandatory fixed length parameter in XUDT
 	    sccpMsg->params().setParam(YSTRING("HopCounter"),String(m_hopCounter));
     }
+    if (params.getBoolValue(YSTRING("CallingPartyAddress.pointcode"),false) && m_localPointCode)
+	sccpMsg->params().setParam("CallingPartyAddress.pointcode",String(getPackedPointCode()));
     // Avoid sending optional parameters that aren't specified by protocol
     if (sccpMsg->type() == SS7MsgSCCP::XUDT || sccpMsg->type() == SS7MsgSCCP::LUDT)
 	checkSCLCOptParams(sccpMsg);

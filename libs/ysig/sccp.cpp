@@ -2723,7 +2723,7 @@ void SubsystemStatusTest::restartTimer()
  * class SS7SCCP
  */
 SS7SCCP::SS7SCCP(const NamedList& params)
-    : SignallingComponent(params,&params), SS7Layer4(0x03,&params), Mutex(true,params),
+    : SignallingComponent(params,&params), SS7Layer4(SS7MSU::SCCP|SS7MSU::National,&params), Mutex(true,params),
     m_type(SS7PointCode::Other), m_localPointCode(0), m_management(0), m_hopCounter(15),
     m_msgReturnStatus(""), m_segTimeout(0), m_ignoreUnkDigits(false), m_layer3Up(false),
     m_supportLongData(false), m_totalSent(0), m_totalReceived(0), m_errors(0),

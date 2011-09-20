@@ -561,8 +561,13 @@ bool LNPClient::findTCAP()
 {
     SignallingComponent* tcap = 0;
     SignallingEngine* engine = SignallingEngine::self(true);
-    if (engine)
-	tcap = engine->find(s_cfg.getValue(s_lnpCfg,"tcap",""),"SS7TCAPANSI",tcap);
+    if (engine) {
+	__plugin.lock();
+	NamedString* name = s_cfg.getKey(s_lnpCfg,"tcap");
+	__plugin.unlock();
+	if (!TelEngine::null(name))
+	    tcap = engine->find(*name,"SS7TCAPANSI",tcap);
+    }
     if (tcap) {
 	Debug(this,DebugInfo,"LNP client attaching to TCAP");
 	attach(YOBJECT(SS7TCAPANSI,tcap));
@@ -790,7 +795,9 @@ bool LNPClient::makeQuery(const String& called, Message& msg)
 		msg.setParam(s_lnpPrefix + s_acgGap,String(acg->gap()));
 	    }
 	    if (s_playAnnounce) {
+		__plugin.lock();
 		msg.retValue() << s_cfg.getValue("announcements",announcement,"tone/busy");
+		__plugin.unlock();
 		msg.setParam("autoprogress",String::boolText(true));
 		return true;
 	    }
@@ -857,6 +864,7 @@ bool LNPClient::tcapRequest(SS7TCAP::TCAPUserTransActions primitive, LNPQuery* c
 	case SS7TCAP::TC_QueryWithPerm:
 	    if (code->primitive() != SS7TCAP::TC_Invoke)
 		return false;
+	    __plugin.lock();
 	    copyLNPParams(&params,code->parameters(),"");
 	    encodeParameters(ProvideInstructionsStart,params,hexPayload);
 	    params.setParam(s_tcapLocalCID,code->toString());
@@ -876,6 +884,7 @@ bool LNPClient::tcapRequest(SS7TCAP::TCAPUserTransActions primitive, LNPQuery* c
 		params.setParam(s_remPC,String(s_remotePC.pack(s_remotePCType)));
 		params.setParam(s_cpdSSN,String(s_remoteSSN));
 	    }
+	    __plugin.unlock();
 	    break;
 	case SS7TCAP::TC_Unknown:
 	    params.setParam(s_tcapLocalCID,code->toString());
@@ -1375,6 +1384,7 @@ LNPQuery::LNPQuery(LNPClient* lnp, u_int8_t id, const String& called, Message* m
       m_dbSSN(0), m_dbPC(0), m_dialogID(""), m_called(called), m_lnp(lnp)
 {
     Debug(&__plugin,DebugAll,"LNPQuery::LNPQuery() created with id=%u, for called=%s [%p]",id,called.c_str(),this);
+    Lock l(__plugin);
     m_timeout = Time::msecNow() + s_cfg.getIntValue(s_lnpCfg,"timeout",3000,1000,30000); // milliseconds
 }
 
@@ -1395,7 +1405,9 @@ void LNPQuery::endQuery(SS7TCAP::TCAPUserCompActions primitive, int opCode, cons
     switch (primitive) {
 	case SS7TCAP::TC_Invoke:
 	    if (opCode == LNPClient::CallerInteractionPlay) {
+		__plugin.lock();
 		retValue = s_cfg.getValue("announcements",params.getValue(s_lnpPrefix + s_announcement,"busy"),"tone/busy");
+		__plugin.unlock();
 		m_status = Announcement;
 		__plugin.incCounter(SS7LNPDriver::Announcement);
 	    }

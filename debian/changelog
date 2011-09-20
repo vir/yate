@@ -1,3 +1,18 @@
+yate (3.3.3.svn4627) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4627: + Don't attach to any TCAP if not
+    configured. Fixed read access to configuration file.  + Don't treat
+    so strictly which type of invoke must be received for a certain
+    operation.  + Changed the way LNP queries are timed out.  + Changed
+    the way addressing parameters are configured and given to SCCP and
+    TCAP. Added possibility to add addressing parameters from
+    call.route.  + Greatly simplifies checking for booleans or non-empty
+    strings.  + Added a default regexp to apply where it is missing in a
+    rule.  + Allow cache item ttl to be overridden from routing. Added
+    debug.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 21 Sep 2011 02:19:15 +0400
+
 yate (3.3.3.svn4621) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4621: + Fixed SS7Layer4 initialization.  +

@@ -227,7 +227,6 @@ public:
     virtual bool tcapRequest(SS7TCAP::TCAPUserTransActions primitive, LNPQuery* query);
     virtual int  waitForQuery(LNPQuery* query);
     bool mandatoryParams(Operation opCode, NamedList& params);
-    void checkTimeouts();
     bool findTCAP();
     void checkBlocked();
     BlockedCode* findACG(const char* code);
@@ -464,8 +463,10 @@ static const String s_opCodeType = "tcap.component.1.operationCodeType";
 static const String s_tcapOpCode = "tcap.component.1.operationCode";
 static const String s_tcapProblem = "tcap.component.1.problemCode";
 static const String s_tcapLocalCID = "tcap.component.1.localCID";
+static const String s_compTimeout = "tcap.component.1.timeout";
 static const String s_tcapReq = "tcap.request.type";
 static const String s_tcapUser = "tcap.user";
+static const String s_tcapBasicTerm = "tcap.transaction.terminationBasic";
 
 
 static void copyLNPParams(NamedList* dest, NamedList* src, String paramsToCopy)
@@ -749,24 +750,6 @@ bool LNPClient::mandatoryParams(Operation opCode, NamedList& params)
     return ok;
 }
 
-void LNPClient::checkTimeouts()
-{
-    ListIterator iter(m_queries);
-    for (;;) {
-	LNPQuery* query = static_cast<LNPQuery*>(iter.get());
-	if (!query)
-	    break;
-	if (query->timedOut()) {
-	    m_queriesMtx.lock();
-	    if (query->status() != LNPQuery::TimedOut) {
-		DDebug(this,DebugInfo,"Query for called=%s timed out [%p]",query->calledNumber().c_str(),this);
-		query->endQuery(SS7TCAP::TC_U_Cancel,(int)None,NamedList::empty());
-	    }
-	    m_queriesMtx.unlock();
-	}
-    }
-}
-
 bool LNPClient::managementNotify(SCCP::Type type, NamedList& params)
 {
     return true;
@@ -870,6 +853,7 @@ bool LNPClient::tcapRequest(SS7TCAP::TCAPUserTransActions primitive, LNPQuery* c
 	    params.setParam(s_tcapLocalCID,code->toString());
 	    params.setParam(s_opCodeType,"national");
 	    params.setParam(s_tcapOpCode,String(ProvideInstructionsStart));
+	    params.setParam(s_compTimeout,String(s_cfg.getIntValue(s_lnpCfg,"timeout",3000) / 1000 + 1));
 	    // complete sccp data, read from configure
 	    if (s_cfg.getBoolValue("sccp_addr","route_on_gt",true)) {
 		const String& called = code->calledNumber();
@@ -886,17 +870,18 @@ bool LNPClient::tcapRequest(SS7TCAP::TCAPUserTransActions primitive, LNPQuery* c
 	    }
 	    __plugin.unlock();
 	    break;
+	case SS7TCAP::TC_Response:
 	case SS7TCAP::TC_Unknown:
 	    params.setParam(s_tcapLocalCID,code->toString());
 	    params.setParam(s_checkAddr,String::boolText(false));
 	    params.setParam(s_tcapTID,code->dialogID());
+	    params.setParam(s_tcapBasicTerm,String::boolText(false));
 	    break;
 	case SS7TCAP::TC_QueryWithoutPerm:
 	case SS7TCAP::TC_Continue:
 	case SS7TCAP::TC_ConversationWithPerm:
 	case SS7TCAP::TC_ConversationWithoutPerm:
 	case SS7TCAP::TC_End:
-	case SS7TCAP::TC_Response:
 	case SS7TCAP::TC_U_Abort:
 	case SS7TCAP::TC_P_Abort:
 	case SS7TCAP::TC_Notice:
@@ -931,6 +916,10 @@ int LNPClient::waitForQuery(LNPQuery* query)
 	Lock mylock(m_queriesMtx);
 	if (!query || (query && query->status() != LNPQuery::Pending))
 	    return (int)(Time::msecNow() - t);
+	if (query->timedOut() && query->status() != LNPQuery::TimedOut) {
+	    Debug(this,DebugAll,"Query for called=%s timed out [%p]",query->calledNumber().c_str(),this);
+	    query->endQuery(SS7TCAP::TC_U_Cancel,(int)None,NamedList::empty());
+	}
 	mylock.drop();
 	Thread::idle();
     }
@@ -1329,16 +1318,14 @@ unsigned int LNPClient::decodeBCD(unsigned int length, String& digits, unsigned 
 
 void LNPClient::checkBlocked()
 {
+    Lock l(m_blockedMtx);
     ListIterator iter(m_blocked);
     for (;;) {
 	BlockedCode* code = static_cast<BlockedCode*>(iter.get());
 	if (!code)
 	    break;
-	if (code->durationExpired()) {
-	    m_blockedMtx.lock();
+	if (code->durationExpired())
 	    m_blocked.remove(code);
-	    m_blockedMtx.unlock();
-	}
     }
 }
 
@@ -1432,7 +1419,7 @@ void LNPQuery::endQuery(SS7TCAP::TCAPUserCompActions primitive, int opCode, cons
 	case SS7TCAP::TC_U_Cancel:
 	    setPrimitive(SS7TCAP::TC_U_Cancel);
 	    if (m_lnp)
-		m_lnp->tcapRequest(SS7TCAP::TC_Unknown,this);
+		m_lnp->tcapRequest(SS7TCAP::TC_Response,this);
 	    m_status = TimedOut;
 	    __plugin.incCounter(SS7LNPDriver::TimedOutQueries);
 	    break;
@@ -1573,7 +1560,6 @@ void SS7LNPDriver::msgTimer(Message& msg)
 	if (!m_lnp->tcap())
 	    m_lnp->findTCAP();
 	m_lnp->checkBlocked();
-	m_lnp->checkTimeouts();
     }
 }
 bool SS7LNPDriver::received(Message& msg, int id)

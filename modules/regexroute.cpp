@@ -30,11 +30,14 @@
 using namespace TelEngine;
 namespace { // anonymous
 
+#define DEFAULT_RULE "^\\(false\\|no\\|off\\|disable\\|f\\|0*\\)$^"
+
 static Configuration s_cfg;
 static bool s_extended;
 static bool s_insensitive;
 static bool s_prerouteall;
 static int s_maxDepth = 5;
+static String s_defRule;
 static Mutex s_mutex(true,"RegexRoute");
 static ObjList s_extra;
 static NamedList s_vars("");
@@ -381,6 +384,22 @@ static void setMessage(const String& match, Message& msg, String& line, Message*
     strs->destruct();
 }
 
+// helper function to set the default regexp
+static void setDefault(Regexp& reg)
+{
+    if (s_defRule.null())
+	return;
+    if (reg.null())
+	reg = s_defRule;
+    else if (reg == "^") {
+	// deal with double '^' at end
+	if (s_defRule.endsWith("^"))
+	    reg.assign(s_defRule,s_defRule.length()-1);
+	else
+	    reg = s_defRule + reg;
+    }
+}
+
 // helper function to process one match attempt
 static bool oneMatch(const NamedList& msg, Regexp& reg, String& match, const String& context, unsigned int rule)
 {
@@ -404,6 +423,7 @@ static bool oneMatch(const NamedList& msg, Regexp& reg, String& match, const Str
 	    match = match.substr(0,p);
 	    match.trimBlanks();
 	}
+	setDefault(reg);
 	if (match.null() || reg.null()) {
 	    Debug("RegexRoute",DebugWarn,"Missing parameter or rule in rule #%u in context '%s'",
 		rule,context.c_str());
@@ -424,6 +444,7 @@ static bool oneMatch(const NamedList& msg, Regexp& reg, String& match, const Str
 	match = reg.substr(0,p+1);
 	reg = reg.substr(p+1);
 	reg.trimBlanks();
+	setDefault(reg);
 	if (reg.null()) {
 	    Debug("RegexRoute",DebugWarn,"Missing rule in rule #%u in context '%s'",
 		rule,context.c_str());
@@ -726,6 +747,7 @@ void RegexRoutePlugin::initialize()
     else if (depth > 100)
 	depth = 100;
     s_maxDepth = depth;
+    s_defRule = s_cfg.getValue("priorities","defaultrule",DEFAULT_RULE);
     NamedList* l = s_cfg.getSection("extra");
     if (l) {
 	unsigned int len = l->length();

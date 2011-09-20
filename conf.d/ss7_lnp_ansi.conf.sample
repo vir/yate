@@ -91,33 +91,12 @@ tcap=
 
 
 [sccp_addr]
+; this section configures the list of parameters to be given to SCCP and MTP3 as an address
+; all parameters prefixed by "sccp." will be copied and given to SCCP to build the address
+; NOTE! All needed parameters must be configured as nothing (except the ones mentioned below) are assumed as default
 
-; route_on_gt: boolean: Enable building of SCCP CalledPartyAddress based on Global Title. Defaults to true.
-;route_on_gt=true
-
-; gt.translation_type: integer: Translation type for Global Title
-; defaults to 11, which, according to ATIS 1000112.2005 is Number Portability Translation Type
-;gt.translation_type=11
-
-; gt.numplan: string: Numbering plan for Global Title
-; Permitted values:
-;    {"notused",        LNPClient::NPNotUsed},
-;    {"isdn",           LNPClient::NPISDN},
-;    {"telephony",      LNPClient::NPTelephony},
-;    {"data",           LNPClient::NPData},
-;    {"telex",          LNPClient::NPTelex},
-;    {"maritimemobile", LNPClient::NPMaritimeMobile},
-;    {"landmobile",     LNPClient::NPLandMobile},
-;    {"private",        LNPClient::NPPrivate},
-;gt.numplan=isdn
-
-; remote_ssn : integer: Remote SSN of the LNP application.
-; NOTE: This parameter is used only when route_on_gt is false)
-;remote_SSN=
-
-; remote_pointcode: string: Remote pointcode of the LNP application to be interrogated
-; The format is network-cluster-member or number
-; NOTE: This parameter is used only if route_on_gt is false
+; remote_pointcode: string: Remote pointcode of the LNP application to be interrogated.
+; The format is network-cluster-member or number.
 ;remote_pointcode=
 
 ;Type of pointcode: string
@@ -129,6 +108,62 @@ tcap=
 ;  Japan  T-Q704, NTT-Q704
 ;  Japan5 5-bit SLS
 ;pointcodetype=
+
+; check_addr: bool: indication for TCAP level if to alter the SCCP address with local information
+; Defaults to false
+;check_addr=false
+
+; sccp.CalledPartyAddress.route: string: Routing Indicator for SCCP Called Party Address
+; Values allowed : 
+; gt - for Global Title Translation
+; ssn - routing by SubSystem Number (SSN)
+;sccp.CalledPartyAddress.route=
+
+; sccp.CalledPartyAddress.ssn: integer: Subsystem Number of the called party
+;sccp.CalledPartyAddress.ssn=
+
+; sccp.CalledPartyAddress.pointcode: integer: Pointcode of the called party
+; NOTE! This must be given in integer form
+;sccp.CalledPartyAddress.pointcode=
+
+; sccp.CalledPartyAddress.gt.np: string: Numbering plan for Global Title in Called Party Address
+; Permitted values:
+;    {"notused",        LNPClient::NPNotUsed},
+;    {"isdn",           LNPClient::NPISDN},
+;    {"telephony",      LNPClient::NPTelephony},
+;    {"data",           LNPClient::NPData},
+;    {"telex",          LNPClient::NPTelex},
+;    {"maritimemobile", LNPClient::NPMaritimeMobile},
+;    {"landmobile",     LNPClient::NPLandMobile},
+;    {"private",        LNPClient::NPPrivate},
+; NOTE! According to GR-533-Core, this mustn't be set 
+;sccp.CalledPartyAddress.gt.np=
+
+; sccp.CalledPartyAddress.gt.enconding: string: Encoding type for Called Party Address GT
+; NOTE! According to GR-533-Core, this mustn't be set 
+; Allowed values: bcd
+;sccp.CalledPartyAddress.gt.encoding : integer GT encoding scheme
+
+; sccp.CalledPartyAddress.gt.tt: integer: Global Title translation type for Called Party Address
+; NOTE! If sccp.CalledPartyAddress.route is set to 'gt', and this is not set, will default to 11,
+; which, according to ATIS 1000112.2005 is Number Portability Translation Type
+;sccp.CalledPartyAddress.gt.tt=11
+
+; sccp.CallingPartyAddress.route: string: Routing Indicator for SCCP Calling Party Address
+; Values allowed : 
+; ssn - routing by SubSystem Number (SSN)
+;sccp.CallingPartyAddress.route=
+
+; sccp.CallingPartyAddress.ssn: bool/integer: Subsystem Number of the calling party
+; If set to boolean value,TCAP will complete the value if set to true
+;sccp.CallingPartyAddress.ssn=
+
+; sccp.CallingPartyAddress.pointcode: bool/integer: Pointcode of the calling party
+; If set to boolean value, SCCP will complete the value if set to true
+;sccp.CalledPartyAddress.pointcode=
+
+; sccp.MessageReturn: boolean / integer: True to return message on error
+;sccp.MessageReturn=
 
 
 [announcements]

@@ -76,6 +76,11 @@
 ; insensitive: bool: Make the regular expressions case insensitive
 ;insensitive=no
 
+; defaultrule: regexp: Default expression to use in matches if not specified
+; Works only for ${param} or $(expression) matches
+; Default matches any string that is not empty or explicitely false or zero
+;defaultrule=^\(false\|no\|off\|disable\|f\|0*\)$^
+
 ; prerouteall: bool: Preroute even calls having a context or with empty caller
 ;prerouteall=no
 

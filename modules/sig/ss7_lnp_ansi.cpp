@@ -617,6 +617,7 @@ bool LNPClient::tcapIndication(NamedList& params)
 	    }
 	    switch (primitive) {
 		case SS7TCAP::TC_Invoke:
+		case SS7TCAP::TC_InvokeNotLast:
 		    if (opCode == NetworkManagementACG) {
 			// build blocked code
 			DDebug(this,DebugAll,"Executing NetworkManagement:ACG operation [%p]",this);
@@ -642,17 +643,16 @@ bool LNPClient::tcapIndication(NamedList& params)
 			if (query)
 			    query->endQuery((SS7TCAP::TCAPUserCompActions)primitive,opCode,params);
 		    }
+		    else if (opCode == ConnectionControlConnect) {
+			if (query) {
+			    DDebug(this,DebugAll,"Executing ConnectionControl:Connect operation [%p]",this);
+    			    query->endQuery((SS7TCAP::TCAPUserCompActions)primitive,opCode,params);
+			}
+			else
+			    return false;
+		    }
 		    else
 			return false;
-		    break;
-		case SS7TCAP::TC_InvokeNotLast:
-		    if (opCode != ConnectionControlConnect)
-			return false;
-		    if (query) {
-			DDebug(this,DebugAll,"Executing ConnectionControl:Connect operation [%p]",this);
-			query->endQuery((SS7TCAP::TCAPUserCompActions)primitive,opCode,params);
-		    }
-
 		    break;
 		case SS7TCAP::TC_U_Error:
 		case SS7TCAP::TC_R_Reject:
@@ -1404,6 +1404,7 @@ void LNPQuery::endQuery(SS7TCAP::TCAPUserCompActions primitive, int opCode, cons
     bool copy = true;
     switch (primitive) {
 	case SS7TCAP::TC_Invoke:
+	case SS7TCAP::TC_InvokeNotLast:
 	    if (opCode == LNPClient::CallerInteractionPlay) {
 		__plugin.lock();
 		retValue = s_cfg.getValue("announcements",params.getValue(s_lnpPrefix + s_announcement,"busy"),"tone/busy");
@@ -1411,9 +1412,7 @@ void LNPQuery::endQuery(SS7TCAP::TCAPUserCompActions primitive, int opCode, cons
 		m_status = Announcement;
 		__plugin.incCounter(SS7LNPDriver::Announcement);
 	    }
-	    break;
-	case SS7TCAP::TC_InvokeNotLast:
-	    if (opCode == LNPClient::ConnectionControlConnect && m_msg) {
+	    else if (opCode == LNPClient::ConnectionControlConnect && m_msg) {
 		m_msg->setParam("querylnp",String::boolText(false));
 		m_msg->setParam("npdi",String::boolText(true));
 		String routing = params.getValue(s_lnpPrefix + s_routingNumber);

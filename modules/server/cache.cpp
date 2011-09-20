@@ -135,6 +135,8 @@ public:
     bool remove(const String& id);
     // Retrieve cache name
     virtual const String& toString() const;
+    // Dump the cache to output if XDEBUG is defined
+    void dump(const char* oper);
     // Set chunk limit and offset to a query
     // Return the number of replaced params
     static int setLimits(String& query, unsigned int chunk, unsigned int offset);
@@ -163,6 +165,7 @@ protected:
     bool m_loading;                      // Cache is loading from database
     unsigned int m_loadInterval;         // Cache re-load interval (in seconds)
     u_int64_t m_nextLoad;                // Next time to load the cache
+    String m_expireParam;                // Item expire parameter in add() parameters list
     int m_reload;                        // Scheduled reload 0: none, 1: full, -1: items
     ObjList* m_reloadItems;              // Scheduled items to reload
     String m_idParam;                    // Cache id match parameter
@@ -404,6 +407,7 @@ Cache::Cache(const String& name, int size, const NamedList& params)
 {
     Debug(&__plugin,DebugInfo,"Cache(%s) size=%u [%p]",
 	m_name.c_str(),m_list.length(),this);
+    m_expireParam << "cache_" << m_name << "_expires";
     doUpdate(params,true);
 }
 
@@ -600,6 +604,7 @@ void Cache::expire(const Time& time)
 	m->addParam("results",String::boolText(false));
 	Engine::enqueue(m);
     }
+    unsigned int oldCount = m_count;
     for (unsigned int i = 0; i < m_list.length(); i++) {
 	if (exiting())
 	    break;
@@ -617,6 +622,8 @@ void Cache::expire(const Time& time)
 	    m_count--;
 	}
     }
+    if (oldCount != m_count)
+	dump("Cache::expire()");
 }
 
 // Add items from NamedList list
@@ -739,6 +746,41 @@ const String& Cache::toString() const
     return m_name;
 }
 
+// Dump the cache to output if XDEBUG is defined
+void Cache::dump(const char* oper)
+{
+#ifdef XDEBUG
+    if (!__plugin.debugAt(DebugAll))
+	return;
+    Lock lck(locked() ? 0 : this);
+    String data("\r\n-----");
+    unsigned int n = 0;
+    int64_t now = (int64_t)Time::now();
+    for (unsigned int i = 0; i < m_list.length(); i++) {
+	ObjList* list = m_list.getHashList(i);
+	if (list)
+	    list = list->skipNull();
+	String rowData;
+	unsigned int rn = 0;
+	for (; list; list = list->skipNext()) {
+	    rn++;
+	    CacheItem* item = static_cast<CacheItem*>(list->get());
+	    String tmp;
+	    item->dump(tmp," ");
+	    int ttl = (int)(((int64_t)item->expires() - now) / 1000);
+	    rowData << "\r\n  " << ttl / 1000 << "." << ttl % 1000 << " " << tmp;
+	}
+	if (!rn)
+	    continue;
+	n += rn;
+	data << "\r\n" << i + 1 << " (" << rn << ")" << rowData;
+    }
+    data << "\r\n-----";
+    Debug(&__plugin,DebugAll,"Cache '%s' items=%u location='%s' [%p]%s",
+	toString().c_str(),n,oper,this,data.c_str());
+#endif
+}
+
 // Set chunk limit and offset to a query
 // Return the number of replaced params
 int Cache::setLimits(String& query, unsigned int chunk, unsigned int offset)
@@ -833,13 +875,18 @@ CacheItem* Cache::addUnsafe(const String& id, const NamedList& params, const Str
     ObjList* list = m_list.getHashList(idx);
     if (list)
 	list = list->skipNull();
-    u_int64_t expires = 0;
-    if (!dbSave) {
+    u_int64_t expires = m_cacheTtl;
+    if (dbSave) {
+	int tmp = params.getIntValue(m_expireParam);
+	if (tmp > 0)
+	    expires = (u_int64_t)tmp * 1000000;
+    }
+    else {
 	String* exp = params.getParam("expires");
 	if (exp) {
 	    int tmp = (int)exp->toInteger();
 	    if (tmp > 0)
-		expires = Time::now() + (u_int64_t)tmp * 1000000;
+		expires = (u_int64_t)tmp * 1000000;
 	    else {
 		XDebug(&__plugin,DebugAll,"Cache(%s) item '%s' already expired [%p]",
 		    m_name.c_str(),id.c_str(),this);
@@ -847,8 +894,8 @@ CacheItem* Cache::addUnsafe(const String& id, const NamedList& params, const Str
 	    }
 	}
     }
-    if (!expires && m_cacheTtl)
-	expires = Time::now() + m_cacheTtl;
+    if (expires)
+	expires += Time::now();
     // Search for insert/add point and existing item
     ObjList* insert = 0;
     bool found = false;
@@ -1230,6 +1277,7 @@ void CacheModule::loadCache(const String& name, bool async, ObjList* items)
     if (!cache)
 	return;
     cache->endLoad(triggerReload);
+    cache->dump("CacheModule::loadCache()");
     cache = 0;
     Debug(this,DebugInfo,"Loaded %u items (failed=%u) in cache '%s'",
 	loaded,failed,name.c_str());
@@ -1524,12 +1572,14 @@ void CacheModule::handleLnp(Message& msg, bool before)
 	    msg.getBoolValue("cache_lnp_store",s_lnpStoreNpdiBefore)) {
 	    // LNP already done: update cache
 	    lnp->add(id,msg,msg.getParam("cache_lnp_parameters"));
+	    lnp->dump("CacheModule::handleLnp('before')");
 	}
     }
     else if (!querylnp || s_lnpStoreFailed || msg.getBoolValue("npdi")) {
 	// querylnp=true: request failed
 	// LNP query made locally: update cache
 	lnp->add(id,msg,msg.getParam("cache_lnp_parameters"));
+	lnp->dump("CacheModule::handleLnp('after')");
     }
     lnp = 0;
 }
@@ -1571,6 +1621,7 @@ void CacheModule::handleCnam(Message& msg, bool before)
 	// querycnam=true: request failed
 	// CNAM query made locally: update cache
 	cnam->add(id,msg,msg.getParam("cache_cnam_parameters"));
+	cnam->dump("CacheModule::handleCnam('after')");
     }
     cnam = 0;
 }
@@ -1602,6 +1653,7 @@ void CacheModule::commandFlush(Cache* cache, NamedList& params, String& retVal)
 	    if (ns->name() == s_id && *ns && cache->remove(*ns))
 		n++;
     }
+    cache->dump("CacheModule::commandFlush()");
     retVal << "Flushed " << n << " item(s)";
 }
 

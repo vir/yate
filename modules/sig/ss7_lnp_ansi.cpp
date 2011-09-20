@@ -285,7 +285,6 @@ static Configuration s_cfg;
 
 static SS7PointCode s_remotePC;
 static SS7PointCode::Type s_remotePCType;
-static unsigned int s_remoteSSN;
 
 static bool s_copyBack = true;
 static String s_lnpPrefix = "lnp";
@@ -427,11 +426,13 @@ static const String s_remPC = "RemotePC";
 static const String s_cpdSSN = "CalledPartyAddress.ssn";
 static const String s_cpdGT = "CalledPartyAddress.gt";
 static const String s_cpdTT = "CalledPartyAddress.gt.tt";
-static const String s_cpdNP = "CalledPartyAddress.gt.np";
-static const String s_cpdEnc = "CalledPartyAddress.gt.encoding";
+static const String s_cpdRoute = "CalledPartyAddress.route";
 static const String s_checkAddr = "tcap.checkAddress";
 
 static const String s_lnpCfg = "lnp";
+static const String s_sccpCfg = "sccp_addr";
+static const String s_sccpPrefix = "sccp.";
+static const String s_tcapPrefix = "tcap";
 static const String s_opCode = ".operationCode";
 static const String s_localID = ".localCID";
 static const String s_remoteID = ".remoteCID";
@@ -495,6 +496,12 @@ static void copyLNPParams(NamedList* dest, NamedList* src, String paramsToCopy)
     dest->setParam(s_lnpPrefix + s_lata,lata);
     dest->setParam(s_lnpPrefix + s_cicExp,(cicExpansion ? "1" : "0"));
     dest->setParam(s_lnpPrefix + s_stationType,origStation);
+
+    if (src->getBoolValue("copyparams",false)) {
+	dest->copySubParams(*src,s_sccpPrefix);
+	dest->copyParam(*src,s_tcapPrefix,'.');
+	dest->copyParam(*src,s_lnpPrefix,'.');
+    }
 }
 
 // Get a space separated word from a buffer. msgUnescape() it if requested
@@ -611,7 +618,7 @@ bool LNPClient::tcapIndication(NamedList& params)
 	    SS7TCAPError error = decodeParameters(params,payload);
 	    if (error.error() != SS7TCAPError::NoError && query) {
 		// build error
-		DDebug(this,DebugAll,"Detected error=%s while decoding parameters [%p]",error.errorName().c_str(),this);
+		Debug(this,DebugAll,"Detected error=%s while decoding parameters [%p]",error.errorName().c_str(),this);
 		query->setPrimitive(SS7TCAP::TC_Invoke);
 		query->setProblemData(payload);
 		tcapRequest(SS7TCAP::TC_Unidirectional,query);
@@ -823,6 +830,7 @@ bool LNPClient::tcapRequest(SS7TCAP::TCAPUserTransActions primitive, LNPQuery* c
 
     // encode parameters
     String hexPayload;
+    NamedList* sect = 0;
     switch (primitive) {
 	case SS7TCAP::TC_Unidirectional:
 	    if (code->primitive() == SS7TCAP::TC_Invoke) {
@@ -842,32 +850,35 @@ bool LNPClient::tcapRequest(SS7TCAP::TCAPUserTransActions primitive, LNPQuery* c
 	    params.setParam(s_remPC,String(code->dbPointCode()));
 	    params.setParam(s_cpdSSN,String(code->dbSSN()));
 	    params.setParam(s_checkAddr,String::boolText(false));
+	    params.setParam(s_cpdRoute,"ssn");
 	    break;
 	case SS7TCAP::TC_Begin:
 	case SS7TCAP::TC_QueryWithPerm:
 	    if (code->primitive() != SS7TCAP::TC_Invoke)
 		return false;
 	    __plugin.lock();
-	    copyLNPParams(&params,code->parameters(),"");
-	    encodeParameters(ProvideInstructionsStart,params,hexPayload);
 	    params.setParam(s_tcapLocalCID,code->toString());
 	    params.setParam(s_opCodeType,"national");
 	    params.setParam(s_tcapOpCode,String(ProvideInstructionsStart));
 	    params.setParam(s_compTimeout,String(s_cfg.getIntValue(s_lnpCfg,"timeout",3000) / 1000 + 1));
 	    // complete sccp data, read from configure
-	    if (s_cfg.getBoolValue("sccp_addr","route_on_gt",true)) {
-		const String& called = code->calledNumber();
-		//params.setParam("CalledPartyAddress.route","gt");
-		params.setParam(s_cpdGT,called);
-		params.setParam(s_cpdTT,s_cfg.getValue("sccp_addr","gt.translation_type","11")); // defaults to 11, which,
-		    // according to ATIS 1000112.2005 is Number Portability Translation Type
-		params.setParam(s_cpdNP,s_cfg.getValue("sccp_addr","gt.numplan","isdn"));
-		params.setParam(s_cpdEnc,(called.length() % 2 ? "bcd-odd" : "bcd-even"));
+	    sect = s_cfg.getSection(s_sccpCfg);
+	    if (!sect) {
+		Debug(this,DebugInfo,"Section [sccp_addr] is missing, query abort");
+		return false;
 	    }
-	    else {
-		params.setParam(s_remPC,String(s_remotePC.pack(s_remotePCType)));
-		params.setParam(s_cpdSSN,String(s_remoteSSN));
+	    params.copySubParams(*sect,s_sccpPrefix);
+	    if (String("gt") == params.getValue(s_cpdRoute,"gt")) {
+		params.setParam(s_cpdGT,code->calledNumber());
+		// Translation Type defaults to 11, which,
+		// according to ATIS 1000112.2005 is Number Portability Translation Type
+		if (TelEngine::null(params.getParam(s_cpdTT)))
+		    params.setParam(s_cpdTT,String(11));
 	    }
+	    params.setParam(s_remPC,String(s_remotePC.pack(s_remotePCType)));
+	    params.setParam(s_checkAddr,String::boolText(sect->getBoolValue("check_addr",false)));
+	    copyLNPParams(&params,code->parameters(),"");
+	    encodeParameters(ProvideInstructionsStart,params,hexPayload);
 	    __plugin.unlock();
 	    break;
 	case SS7TCAP::TC_Response:
@@ -1520,13 +1531,11 @@ void SS7LNPDriver::initialize()
     s_lnpPrefix = s_cfg.getValue("general","prefix","lnp");
     s_playAnnounce = s_cfg.getBoolValue("general","play_announcements",false);
 
-    s_remoteSSN = s_cfg.getIntValue("sccp_addr",YSTRING("remote_SSN"),0);
-
-    const char* code = s_cfg.getValue("sccp_addr",YSTRING("remote_pointcode"));
-    s_remotePCType = SS7PointCode::lookup(s_cfg.getValue("sccp_addr",YSTRING("pointcodetype"),""));
+    const char* code = s_cfg.getValue(s_sccpCfg,YSTRING("remote_pointcode"));
+    s_remotePCType = SS7PointCode::lookup(s_cfg.getValue(s_sccpCfg,YSTRING("pointcodetype"),""));
     if (!(s_remotePC.assign(code,s_remotePCType) && s_remotePC.pack(s_remotePCType))) {
-	int codeInt = s_cfg.getIntValue("sccp_addr",YSTRING("remote_pointcode"));
-	if (!s_cfg.getBoolValue("sccp_addr","route_on_gt",true) && !s_remotePC.unpack(s_remotePCType,codeInt))
+	int codeInt = s_cfg.getIntValue(s_sccpCfg,YSTRING("remote_pointcode"));
+	if (!s_remotePC.unpack(s_remotePCType,codeInt))
 	    Debug(this,DebugMild,"SS7LNPDriver::initialize() [%p] - Invalid remote_pointcode=%s value configured",
 		this,code);
     }

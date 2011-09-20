@@ -103,8 +103,10 @@ struct PrimitiveMapping {
 
 static bool s_extendedDbg = false;
 static bool s_printMsgs = false;
+static const String s_checkAddr = "tcap.checkAddress";
 static const char* s_callingPA = "CallingPartyAddress";
 static const char* s_callingSSN = "CallingPartyAddress.ssn";
+static const char* s_callingRoute = "CallingPartyAddress.route";
 static const char* s_calledPA = "CalledPartyAddress";
 static const char* s_calledPC = "CalledPartyAddress.pointcode";
 static const char* s_calledSSN = "CalledPartyAddress.ssn";
@@ -307,18 +309,19 @@ bool SS7TCAP::initialize(const NamedList* config)
 
 bool SS7TCAP::sendData(DataBlock& data, NamedList& params)
 {
-    String dpc = params.getValue(s_calledPC,"");
-    if (dpc.null())
-	params.addParam(s_calledPC,String(m_defaultRemotePC.pack(m_remoteTypePC)));
-    int ssn = params.getIntValue(s_calledSSN,-1);
-    if (ssn < 0)
-	params.setParam(s_calledSSN,String(m_defaultRemoteSSN));
-
-    if (params.getBoolValue("tcap.checkAddress",true)) {
+    if (params.getBoolValue(s_callingSSN))
+	params.setParam(s_callingSSN,String(m_SSN));
+    if (params.getBoolValue(s_checkAddr,true)) {
+	String dpc = params.getValue(s_calledPC,"");
+	if (dpc.null())
+	    params.addParam(s_calledPC,String(m_defaultRemotePC.pack(m_remoteTypePC)));
+	int ssn = params.getIntValue(s_calledSSN,-1);
+	if (ssn < 0)
+	    params.setParam(s_calledSSN,String(m_defaultRemoteSSN));
 	ssn = params.getIntValue(s_callingSSN,-1);
 	if (ssn < 0) {
 	    params.setParam(s_callingSSN,String(m_SSN));
-	    params.setParam("CallingPartyAddress.route","ssn");
+	    params.setParam(s_callingRoute,"ssn");
 	}
     }
 #ifdef DEBUG

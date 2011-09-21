@@ -132,7 +132,7 @@ public:
     // Clear the cache
     unsigned int clear();
     // Remove an item, decrease the item counter
-    bool remove(const String& id);
+    unsigned int remove(const String& id, bool regexp = false);
     // Retrieve cache name
     virtual const String& toString() const;
     // Dump the cache to output if XDEBUG is defined
@@ -301,6 +301,7 @@ static u_int64_t s_checkToutInterval = 0;// Interval to check cache timeout
 
 // Used strings: avoid allocation
 static const String s_id = "id";
+static const String s_regexp = "regexp";
 // List of known caches
 static const String s_caches[] = {"lnp", "cnam", ""};
 // Commands
@@ -724,20 +725,47 @@ unsigned int Cache::clear()
 }
 
 // Remove an item
-bool Cache::remove(const String& id)
+unsigned int Cache::remove(const String& id, bool regexp)
 {
     if (!id)
-	return false;
-    Lock lck(this);
-    ObjList* list = m_list.getHashList(id);
-    GenObject* gen = list ? list->remove(id,false) : 0;
-    if (!gen)
-	return false;
-    CacheItem* item = static_cast<CacheItem*>(gen);
-    dumpItem(*this,*item,"removed");
-    m_count--;
-    TelEngine::destruct(item);
-    return true;
+	return 0;
+    if (!regexp) {
+	Lock lck(this);
+	ObjList* list = m_list.getHashList(id);
+	GenObject* gen = list ? list->remove(id,false) : 0;
+	if (!gen)
+	    return 0;
+	CacheItem* item = static_cast<CacheItem*>(gen);
+	dumpItem(*this,*item,"removed");
+	m_count--;
+	TelEngine::destruct(item);
+	return 1;
+    }
+    unsigned int removed = 0;
+    for (unsigned int i = 0; i < m_list.length(); i++) {
+	Lock lck(this);
+	ObjList* list = m_list.getHashList(i);
+	if (list)
+	    list = list->skipNull();
+	while (list) {
+	    CacheItem* item = static_cast<CacheItem*>(list->get());
+	    if (!id.matches(*item)) {
+		list = list->skipNext();
+		continue;
+	    }
+	    dumpItem(*this,*item,"removed");
+	    list->remove();
+	    list = list->skipNull();
+	    removed++;
+	    m_count--;
+	}
+	lck.drop();
+	if (exiting())
+	    break;
+	// Someone may need access to the cache
+	Thread::idle();
+    }
+    return removed;
 }
 
 // Retrieve cache name
@@ -1645,13 +1673,23 @@ void CacheModule::commandFlush(Cache* cache, NamedList& params, String& retVal)
     if (!cache)
 	return;
     unsigned int n = 0;
-    if (!params.getParam(s_id))
+    if (!(params.getParam(s_id) || params.getParam(s_regexp)))
 	n = cache->clear();
     else {
 	NamedIterator iter(params);
-	for (const NamedString* ns = 0; 0 != (ns = iter.get());)
-	    if (ns->name() == s_id && *ns && cache->remove(*ns))
-		n++;
+	for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	    if (!*ns)
+		continue;
+	    if (ns->name() == s_id)
+		n += cache->remove(*ns);
+	    else if (ns->name() == s_regexp) {
+		Regexp r(*ns);
+		if (r.compile())
+		    n += cache->remove(r,true);
+		else
+		    Debug(this,DebugNote,"Invalid regexp=%s in flush command",ns->c_str());
+	    }
+	}
     }
     cache->dump("CacheModule::commandFlush()");
     retVal << "Flushed " << n << " item(s)";

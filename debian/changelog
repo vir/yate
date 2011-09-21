@@ -1,3 +1,11 @@
+yate (3.3.3.svn4629) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4629: + Added utility script to add
+    copyright notice to new files.  + Allow removing cache items
+    matching a regexp in flush command.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 22 Sep 2011 02:19:16 +0400
+
 yate (3.3.3.svn4627) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4627: + Don't attach to any TCAP if not

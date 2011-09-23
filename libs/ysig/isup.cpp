@@ -216,6 +216,7 @@ static const TokenDict s_dict_control[] = {
     { "release", SS7MsgISUP::RLC },
     { "parttest", SS7MsgISUP::UPT },
     { "available", SS7MsgISUP::UPA },
+    { "save", SS7MsgISUP::CtrlSave },
     { 0, 0 }
 };
 
@@ -3852,6 +3853,9 @@ bool SS7ISUP::control(NamedList& params)
 		m_userPartAvail = true;
 		m_lockTimer.start();
 	    }
+	    return true;
+	case SS7MsgISUP::CtrlSave:
+	    setVerify(true,true);
 	    return true;
     }
     mylock.drop();

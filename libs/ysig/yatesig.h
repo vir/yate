@@ -1212,6 +1212,13 @@ protected:
     void removeCall(SignallingCall* call, bool del = false);
 
     /**
+     * Set the verify event flag. Restart/fire verify timer
+     * @param restartTimer True to restart/fire the timer
+     * @param fireNow True to fire the verify timer. Ignored if restartTimer is false
+     */
+    void setVerify(bool restartTimer = false, bool fireNow = false);
+
+    /**
      * List of active calls
      */
     ObjList m_calls;
@@ -7956,6 +7963,8 @@ public:
 	CVR  = 0xeb, // Circuit Validation Response (ANSI only)
 	CVT  = 0xec, // Circuit Validation Test (ANSI only)
 	EXM  = 0xed, // Exit Message (ANSI only)
+	// Dummy, used for various purposes
+	CtrlSave = 256  // control, save circuits
     };
 
     /**

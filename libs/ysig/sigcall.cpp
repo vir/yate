@@ -284,6 +284,19 @@ void SignallingCallControl::removeCall(SignallingCall* call, bool del)
     unlock();
 }
 
+// Set the verify event flag. Restart/fire verify timer
+void SignallingCallControl::setVerify(bool restartTimer, bool fireNow)
+{
+    m_verifyEvent = true;
+    if (!restartTimer)
+	return;
+    m_verifyTimer.stop();
+    if (!fireNow)
+	m_verifyTimer.start();
+    else
+	m_verifyTimer.fire();
+}
+
 
 /**
  * SignallingCall

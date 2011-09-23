@@ -1215,8 +1215,9 @@ protected:
      * Set the verify event flag. Restart/fire verify timer
      * @param restartTimer True to restart/fire the timer
      * @param fireNow True to fire the verify timer. Ignored if restartTimer is false
+     * @param time Optional time to use for timer restart
      */
-    void setVerify(bool restartTimer = false, bool fireNow = false);
+    void setVerify(bool restartTimer = false, bool fireNow = false, const Time* time = 0);
 
     /**
      * List of active calls

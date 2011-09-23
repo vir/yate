@@ -1983,6 +1983,14 @@ public:
 	{ return (const unsigned int*)m_range.data(); }
 
     /**
+     * Allocate and return an array containing range circuits
+     * @param count Address of variable to be filled with circuit count
+     * @return Pointer to allocated buffer, 0 if there is no circuit.
+     *  The caller will own the returned buffer
+     */
+    unsigned int* copyRange(unsigned int& count) const;
+
+    /**
      * Get the pointer to the circuit codes array
      * @return Pointer to the circuit codes array or 0
      */
@@ -8846,6 +8854,9 @@ private:
     bool transmitMessages(ObjList& list);
     // Handle circuit(s) (un)block command
     bool handleCicBlockCommand(const NamedList& p, bool block);
+    // Handle remote circuit(s) (un)block command
+    bool handleCicBlockRemoteCommand(const NamedList& p, unsigned int* cics,
+	unsigned int count, bool block);
     // Try to start single circuit (un)blocking. Set a pending operation on success 
     // @param force True to ignore resetting/(un)blocking flags of the circuit
     // Return built message to be sent on success

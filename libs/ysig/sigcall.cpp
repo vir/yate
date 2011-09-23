@@ -632,6 +632,17 @@ SignallingCircuitRange::SignallingCircuitRange(const String& rangeStr,
     add(rangeStr);
 }
 
+// Allocate and return an array containing range circuits
+unsigned int* SignallingCircuitRange::copyRange(unsigned int& count) const
+{
+    if (!m_count)
+	return 0;
+    count = m_count;
+    unsigned int* tmp = new unsigned int[count];
+    ::memcpy(tmp,range(),m_range.length());
+    return tmp;
+}
+
 // Add codes to this range from a string
 bool SignallingCircuitRange::add(const String& rangeStr)
 {

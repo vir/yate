@@ -1,3 +1,13 @@
+yate (3.3.3.svn4634) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4634: + Circuit (un)block command can now be
+    used to change remote side of the circuit.  + Don't save circuits
+    with empty flags.  + Added isup circuits save command.  + Check for
+    controller verify event before call or circuit events.  + Display
+    RTPSession::incWrongSrc() only when compiled with XDEBUG.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 24 Sep 2011 02:19:18 +0400
+
 yate (3.3.3.svn4629) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4629: + Added utility script to add

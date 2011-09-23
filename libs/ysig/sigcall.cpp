@@ -213,6 +213,16 @@ bool SignallingCallControl::releaseCircuit(unsigned int code, bool sync)
 SignallingEvent* SignallingCallControl::getEvent(const Time& when)
 {
     lock();
+    // Verify ?
+    if (m_verifyEvent && m_verifyTimer.timeout(when.msec())) {
+	SignallingMessage* msg = new SignallingMessage;
+	SignallingEvent* event = new SignallingEvent(SignallingEvent::Verify,msg,this);
+	buildVerifyEvent(msg->params());
+	TelEngine::destruct(msg);
+	setVerify(true,false,&when);
+	unlock();
+	return event;
+    }
     ListIterator iter(m_calls);
     for (;;) {
 	SignallingCall* call = static_cast<SignallingCall*>(iter.get());
@@ -248,14 +258,6 @@ SignallingEvent* SignallingCallControl::getEvent(const Time& when)
 		return event;
 	}
     }
-    // Verify ?
-    if (m_verifyTimer.timeout(when.msecNow()) && m_verifyEvent) {
-	SignallingMessage* msg = new SignallingMessage;
-	SignallingEvent* event = new SignallingEvent(SignallingEvent::Verify,msg,this);
-	buildVerifyEvent(msg->params());
-	m_verifyTimer.start(when.msecNow());
-	return event;
-    }
     // Terminate if exiting and no more calls
     //TODO: Make sure we raise this event one time only
     if (exiting() && !m_calls.skipNull())
@@ -282,6 +284,19 @@ void SignallingCallControl::removeCall(SignallingCall* call, bool del)
 	    "SignallingCallControl. Call (%p) removed%s from queue [%p]",
 	    call,(del ? " and deleted" : ""),this);
     unlock();
+}
+
+// Set the verify event flag. Restart/fire verify timer
+void SignallingCallControl::setVerify(bool restartTimer, bool fireNow, const Time* time)
+{
+    m_verifyEvent = true;
+    if (!restartTimer)
+	return;
+    m_verifyTimer.stop();
+    if (!fireNow)
+	m_verifyTimer.start(time ? time->msec() : Time::msecNow());
+    else
+	m_verifyTimer.fire();
 }
 
 
@@ -630,6 +645,17 @@ SignallingCircuitRange::SignallingCircuitRange(const String& rangeStr,
       m_used(0)
 {
     add(rangeStr);
+}
+
+// Allocate and return an array containing range circuits
+unsigned int* SignallingCircuitRange::copyRange(unsigned int& count) const
+{
+    if (!m_count)
+	return 0;
+    count = m_count;
+    unsigned int* tmp = new unsigned int[count];
+    ::memcpy(tmp,range(),m_range.length());
+    return tmp;
 }
 
 // Add codes to this range from a string

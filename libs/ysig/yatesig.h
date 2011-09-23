@@ -1212,6 +1212,14 @@ protected:
     void removeCall(SignallingCall* call, bool del = false);
 
     /**
+     * Set the verify event flag. Restart/fire verify timer
+     * @param restartTimer True to restart/fire the timer
+     * @param fireNow True to fire the verify timer. Ignored if restartTimer is false
+     * @param time Optional time to use for timer restart
+     */
+    void setVerify(bool restartTimer = false, bool fireNow = false, const Time* time = 0);
+
+    /**
      * List of active calls
      */
     ObjList m_calls;
@@ -1981,6 +1989,14 @@ public:
      */
     inline const unsigned int* range() const
 	{ return (const unsigned int*)m_range.data(); }
+
+    /**
+     * Allocate and return an array containing range circuits
+     * @param count Address of variable to be filled with circuit count
+     * @return Pointer to allocated buffer, 0 if there is no circuit.
+     *  The caller will own the returned buffer
+     */
+    unsigned int* copyRange(unsigned int& count) const;
 
     /**
      * Get the pointer to the circuit codes array
@@ -7948,6 +7964,8 @@ public:
 	CVR  = 0xeb, // Circuit Validation Response (ANSI only)
 	CVT  = 0xec, // Circuit Validation Test (ANSI only)
 	EXM  = 0xed, // Exit Message (ANSI only)
+	// Dummy, used for various purposes
+	CtrlSave = 256  // control, save circuits
     };
 
     /**
@@ -8846,6 +8864,9 @@ private:
     bool transmitMessages(ObjList& list);
     // Handle circuit(s) (un)block command
     bool handleCicBlockCommand(const NamedList& p, bool block);
+    // Handle remote circuit(s) (un)block command
+    bool handleCicBlockRemoteCommand(const NamedList& p, unsigned int* cics,
+	unsigned int count, bool block);
     // Try to start single circuit (un)blocking. Set a pending operation on success 
     // @param force True to ignore resetting/(un)blocking flags of the circuit
     // Return built message to be sent on success

@@ -3118,9 +3118,16 @@ bool SigDriver::saveTrunkData(const NamedList& list)
     Configuration data(m_dataFile);
     data.load(false);
     data.clearSection(list);
-    NamedList* tmp = data.createSection(list);
-    tmp->copyParams(list);
-    return data.save();
+    unsigned int n = list.count();
+    if (n) {
+	NamedList* tmp = data.createSection(list);
+	tmp->copyParams(list);
+    }
+    if (data.save()) {
+	Debug(this,DebugAll,"Saved trunk '%s' data (%u items)",list.c_str(),n);
+	return true;
+    }
+    return false;
 }
 
 
@@ -3632,6 +3639,7 @@ bool SigSS7Isup::verifyController(const NamedList* params, bool save)
 	name().c_str(),this);
     Lock lockGroup(group);
     bool changed = false;
+    NamedList list(sect.c_str());
     // Save local changed maintenance status
     // Save all remote lock flags (except for changed)
     for (ObjList* o = group->circuits().skipNull(); o; o = o->skipNext()) {
@@ -3652,8 +3660,14 @@ bool SigSS7Isup::verifyController(const NamedList* params, bool save)
 	else
 	    saveCic = (0 != cic->locked(SignallingCircuit::LockRemoteChg));
 
-	if (!saveCic)
+	if (!saveCic) {
+	    if (cicParam) {
+	        if (*cicParam)
+		    list.addParam(code,*cicParam);
+		changed = true;
+	    }
 	    continue;
+	}
 
 	int flags = 0;
 	if (cic->locked(SignallingCircuit::LockLocalMaintChg))
@@ -3676,16 +3690,19 @@ bool SigSS7Isup::verifyController(const NamedList* params, bool save)
 	    DDebug(&plugin,DebugInfo,
 		"SigSS7Isup('%s'). Saving cic %s flags 0x%x '%s' (all=0x%x) [%p]",
 		name().c_str(),code.c_str(),flags,tmp.c_str(),cic->locked(-1),this);
-	    sect.setParam(code,tmp);
+	    if (tmp)
+		list.addParam(code,tmp);
 	    changed = true;
 	}
+	else if (cicParam)
+	    changed = true;
 	cic->resetLock(SignallingCircuit::LockRemoteChg);
     }
     lockGroup.drop();
     lock.drop();
 
     if (changed && save)
-	plugin.saveTrunkData(sect);
+	plugin.saveTrunkData(list);
     return changed;
 }
 

@@ -216,6 +216,7 @@ static const TokenDict s_dict_control[] = {
     { "release", SS7MsgISUP::RLC },
     { "parttest", SS7MsgISUP::UPT },
     { "available", SS7MsgISUP::UPA },
+    { "save", SS7MsgISUP::CtrlSave },
     { 0, 0 }
 };
 
@@ -3853,6 +3854,9 @@ bool SS7ISUP::control(NamedList& params)
 		m_lockTimer.start();
 	    }
 	    return true;
+	case SS7MsgISUP::CtrlSave:
+	    setVerify(true,true);
+	    return true;
     }
     mylock.drop();
     return SignallingComponent::control(params);
@@ -5359,8 +5363,13 @@ bool SS7ISUP::handleCicBlockCommand(const NamedList& p, bool block)
     SS7MsgISUP::Type remove = SS7MsgISUP::Unknown;
     bool force = p.getBoolValue(YSTRING("force"));
     String* param = p.getParam(YSTRING("circuit"));
+    bool remote = p.getBoolValue(YSTRING("remote"));
     Lock mylock(this);
     if (param) {
+	if (remote) {
+	    unsigned int code = param->toInteger();
+	    return handleCicBlockRemoteCommand(p,&code,1,block);
+	}
 	SignallingCircuit* cic = circuits()->find(param->toInteger());
 	msg = buildCicBlock(cic,block,force);
 	if (!msg)
@@ -5369,7 +5378,7 @@ bool SS7ISUP::handleCicBlockCommand(const NamedList& p, bool block)
 	    remove = block ? SS7MsgISUP::UBL : SS7MsgISUP::BLK;
     }
     else {
-	// NOTE: we assume the circuits belongs to the same span
+	// NOTE: we assume the circuits belongs to the same span for local (un)block
 	param = p.getParam(YSTRING("circuits"));
 	if (TelEngine::null(param)) {
 	    Debug(this,DebugNote,"Circuit '%s' missing circuit(s)",
@@ -5380,15 +5389,29 @@ bool SS7ISUP::handleCicBlockCommand(const NamedList& p, bool block)
 	unsigned int count = 0;
 	unsigned int* cics = SignallingUtils::parseUIntArray(*param,1,0xffffffff,count,true);
 	if (!cics) {
-	    SignallingCircuitRange* range = circuits()->findRange(*param);
-	    if (!(range && (count = range->count()))) {
+	    // Allow '*' (all circuits) for remote
+	    if (!(remote && *param == YSTRING("*"))) {
+		SignallingCircuitRange* range = circuits()->findRange(*param);
+		if (range)
+		    cics = range->copyRange(count);
+	    }
+	    else {
+		String tmp;
+		circuits()->getCicList(tmp);
+		SignallingCircuitRange* range = new SignallingCircuitRange(tmp);
+		cics = range->copyRange(count);
+		TelEngine::destruct(range);
+	    }
+	    if (!cics) {
 		Debug(this,DebugNote,"Circuit group '%s': invalid circuits=%s",
 		    p.getValue(YSTRING("operation")),param->c_str());
 		return false;
 	    }
-	    cics = new unsigned int[count];
-	    for (unsigned int i = 0; i < count; i++)
-		cics[i] = (*range)[i];
+	}
+	if (remote) {
+	    bool ok = handleCicBlockRemoteCommand(p,cics,count,block);
+	    delete[] cics;
+	    return ok;
 	}
 	if (count > 32) {
 	    Debug(this,DebugNote,"Circuit group '%s': too many circuits %u (max=32)",
@@ -5484,6 +5507,33 @@ bool SS7ISUP::handleCicBlockCommand(const NamedList& p, bool block)
     }
     transmitMessage(msg,label,false);
     return true;
+}
+
+// Handle remote circuit(s) (un)block command
+bool SS7ISUP::handleCicBlockRemoteCommand(const NamedList& p, unsigned int* cics,
+    unsigned int count, bool block)
+{
+    if (!(cics && count))
+	return false;
+    bool hwFail = p.getBoolValue(YSTRING("hwfail"));
+    if (debugAt(DebugNote)) {
+	String s;
+	for (unsigned int i = 0; i < count; i++)
+	    s.append(String(cics[i]),",");
+	Debug(this,DebugNote,"Circuit remote '%s' command: hwfail=%s circuits=%s [%p]",
+	    p.getValue(YSTRING("operation")),String::boolText(hwFail),s.c_str(),this);
+    }
+    bool found = false;
+    for (unsigned int i = 0; i < count; i++) {
+	if (blockCircuit(cics[i],block,true,hwFail,true,true))
+	    found = true;
+	else
+	    Debug(this,DebugNote,"Circuit remote '%s' command: cic %u not found [%p]",
+		p.getValue(YSTRING("operation")),cics[i],this);
+    }
+    if (found)
+	m_verifyEvent = true;
+    return found;
 }
 
 // Try to start single circuit (un)blocking. Set a pending operation on success 

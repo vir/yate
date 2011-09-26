@@ -1,3 +1,10 @@
+yate (3.3.3.svn4636) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4636: + Detach the management when the
+    router is destroyed.  + Allow global calls limits to be reloaded.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 27 Sep 2011 02:19:16 +0400
+
 yate (3.3.3.svn4634) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4634: + Circuit (un)block command can now be

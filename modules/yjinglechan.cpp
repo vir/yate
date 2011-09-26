@@ -3590,8 +3590,10 @@ void YJGDriver::initialize()
 
 	(new YJGEngineWorker)->startup();
     }
-    else
+    else {
 	setDomains(sect->getValue("domains"));
+	loadLimits();
+    }
     s_jingle->initialize(*sect);
 
     if (s_serverMode) {

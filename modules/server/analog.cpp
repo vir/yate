@@ -2608,9 +2608,9 @@ void AnalogDriver::initialize()
 	general = &dummy;
 
     // Startup
+    setup();
     if (!m_init) {
 	m_init = true;
-	setup();
 	installRelay(Masquerade);
 	installRelay(Halt);
 	installRelay(Progress);

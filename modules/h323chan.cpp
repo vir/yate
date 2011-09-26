@@ -771,7 +771,7 @@ H323Connection* YateH323EndPoint::CreateConnection(unsigned callReference,
 	    return 0;
 	}
     }
-    if (!hplugin.canAccept(false)) {
+    if (!hplugin.canAccept(userData == 0)) {
 	Debug(DebugWarn,"Refusing new H.323 call, full or exiting");
 	return 0;
     }

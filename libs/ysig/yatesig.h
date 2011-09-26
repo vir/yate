@@ -6822,6 +6822,11 @@ protected:
      */
     virtual bool control(NamedList& params);
 
+    /**
+     * Detach management
+     */
+    virtual void destroyed();
+
     /** List of L3 (networks) attached to this router */
     ObjList m_layer3;
     /** List of L4 (services) attached to this router */

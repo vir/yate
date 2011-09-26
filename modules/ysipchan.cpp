@@ -7387,8 +7387,10 @@ void SIPDriver::initialize()
 	if (s_cfg.getBoolValue("general","generate"))
 	    Engine::install(new SipHandler);
     }
-    else
+    else {
 	m_endpoint->engine()->initialize(s_cfg.getSection("general"));
+	loadLimits();
+    }
     // Unsafe globals
     s_globalMutex.lock();
     s_realm = s_cfg.getValue("general","realm","Yate");

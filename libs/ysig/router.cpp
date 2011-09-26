@@ -1952,4 +1952,12 @@ bool SS7Router::control(NamedList& params)
     return false;
 }
 
+// Detach management. Call SignallingComponent::detach()
+void SS7Router::destroyed()
+{
+    if (m_mngmt)
+	detach(m_mngmt);
+    SS7Layer3::destroyed();
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

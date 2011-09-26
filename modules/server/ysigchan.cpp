@@ -3039,8 +3039,8 @@ void SigDriver::initialize()
     Engine::self()->runParams().replaceParams(m_dataFile);
     s_floodEvents = s_cfg.getIntValue("general","floodevents",20);
     // Startup
+    setup();
     if (!m_engine) {
-	setup();
 	installRelay(Masquerade);
 	installRelay(Halt);
 	installRelay(Help);

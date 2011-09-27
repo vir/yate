@@ -10333,16 +10333,6 @@ class YSIG_API SS7SUA : public SIGAdaptUser, public SCCP
 };
 
 /**
- * Implementation of SS7 Application Service Part
- * @short SS7 ASP implementation
- */
-class YSIG_API SS7ASP : public SCCPUser//, virtual public SignallingComponent
-{
-protected:
-    ObjList m_sccps;
-};
-
-/**
  * A TCAP message wrapper, encapsulates the data received from SCCP
  * @short TCAP message wrapper
  */

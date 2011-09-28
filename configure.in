@@ -972,6 +972,7 @@ if [[ "x$verpw" = "x" ]]; then
     verpw=`cat "$ac_cv_use_pwlib/include/ptbuildopts.h" 2>/dev/null | sed -n 's/^.*PWLIB_VERSION "\([[^"]]*\)".*$/\1/p'`
 fi
 vpw=`echo "$verpw" | $csed "$vsed" | $csed "$vsed"`
+flgpw=""
 PWLIB_INC="-I$ac_cv_use_pwlib/include" # Base dir, ok for ptlib
 if [[ "$vpw" '<' "02.00.00" ]]; then
     # Pwlib-1.xm no ptlib (2.x) install into ptlib
@@ -979,11 +980,17 @@ if [[ "$vpw" '<' "02.00.00" ]]; then
     if [[ "$vpw" '<' "01.06.00" ]]; then
         # Very old pwlib needs more includes.
         PWLIB_INC="$PWLIB_INC/unix/ptlib $PWLIB_INC/unix $PWLIB_INC"
+        flgpw="-DPHAS_TEMPLATES -D_REENTRANT -DP_HAS_SEMAPHORES"
     fi
-else
-    #Grab cflags for PTLIB 2.x
-    PWLIB_INC="$PWLIB_INC `$ptconfig --ccflags 2>/dev/null`"
 fi
+if [[ "x$flgpw" = "x" ]]; then
+    flgpw="`$ptconfig --ccflags 2>/dev/null`"
+    if [[ "x$flgpw" = "x" ]]; then
+	# Last resort, minimal guess
+	flgpw="-D_REENTRANT"
+    fi
+fi
+PWLIB_INC="$PWLIB_INC $flgpw"
 
 if [[ -f "$incpw" -a -f "$libpw" ]]; then
     HAVE_PWLIB=installed
@@ -1003,7 +1010,9 @@ else
     if [[ -f "$incpw" -a -f "$libpw" ]]; then
 	prtti=`"$ptconfig" --ccflags 2>/dev/null | sed -n 's/^.*\(-f[[^ ]]*rtti\).*$/\1/p'`
         HAVE_PWLIB=sources
-	PWLIB_INC="-I$ac_cv_use_pwlib/include $PWLIB_INC"
+	if [[ "$vpw" '<' "02.00.00" ]]; then
+	    PWLIB_INC="-I$ac_cv_use_pwlib/include $PWLIB_INC"
+	fi
         PWLIB_LIB=`echo "$libpw"|sed 's,^\(.*\)/lib,-L\1 -l,; s,\.so$,,'`
         PWLIB_RUN=":"`echo "$libpw"|sed 's,/[[^/]]*$,,'`
 	case "x$prtti" in

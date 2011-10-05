@@ -1025,6 +1025,7 @@ static bool s_info = false;
 static bool s_start_rtp = false;
 static bool s_ack_required = true;
 static bool s_1xx_formats = true;
+static bool s_rtp_preserve = false;
 static bool s_auth_register = true;
 static bool s_reg_async = true;
 static bool s_multi_ringing = false;
@@ -5686,7 +5687,8 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	    m_rtpAddr = addr;
 	    Debug(this,DebugAll,"New RTP addr '%s'",m_rtpAddr.c_str());
 	    // clear all data endpoints - createRtpSDP will build new ones
-	    clearEndpoint();
+	    if (!s_rtp_preserve)
+		clearEndpoint();
 	}
 	setMedia(lst);
 
@@ -7365,6 +7367,7 @@ void SIPDriver::initialize()
     s_reg_async = s_cfg.getBoolValue("registrar","async_process",true);
     s_ack_required = !s_cfg.getBoolValue("hacks","ignore_missing_ack",false);
     s_1xx_formats = s_cfg.getBoolValue("hacks","1xx_change_formats",true);
+    s_rtp_preserve = s_cfg.getBoolValue("hacks","ignore_sdp_addr",false);
     m_parser.initialize(s_cfg.getSection("codecs"),s_cfg.getSection("hacks"),s_cfg.getSection("general"));
     if (!m_endpoint) {
 	Thread::Priority prio = Thread::priority(s_cfg.getValue("general","thread"));

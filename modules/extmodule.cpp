@@ -1405,6 +1405,24 @@ bool ExtModReceiver::processLine(const char* line)
 		ok = val.null() && param;
 		val = param;
 	    }
+	    else if (id.startsWith("config.")) {
+		ok = val.null();
+		// keep the index in substr in sync with length of "config."
+		val = id.substr(7);
+		int sep = val.find('.');
+		if (sep > 0) {
+		    const NamedString* key = Engine::config().getKey(val.substr(0,sep).trimBlanks(),
+			val.substr(sep+1).trimBlanks());
+		    if (key)
+			val = *key;
+		    else {
+			val.clear();
+			ok = false;
+		    }
+		}
+		else
+		    ok = false;
+	    }
 	    else if (id == "runid") {
 		ok = val.null();
 		val = Engine::runId();

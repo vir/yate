@@ -287,6 +287,11 @@ static void evalFunc(String& str)
 	    }
 	    lst->destruct();
 	}
+	else if ((sep >= 0) && (str == "config")) {
+	    str = par.substr(0,sep).trimBlanks();
+	    par = par.substr(sep+1).trimBlanks();
+	    str = Engine::config().getValue(str,par);
+	}
 	else if (str == "engine")
 	    str = Engine::runParams().getValue(vars(par));
 	else if (str == "runid") {

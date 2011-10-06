@@ -1,3 +1,12 @@
+yate (3.3.3.svn4641) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4641: + Added hack to preserve the RTP
+    session when just the address has changed.  + Addded capability to
+    read parameters from main engine config file.  + Addded capability
+    to read parameters from main engine config file.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 07 Oct 2011 02:19:22 +0400
+
 yate (3.3.3.svn4639) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4639: + Define by default PHAS_TEMPLATES

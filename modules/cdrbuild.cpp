@@ -277,10 +277,10 @@ void CdrBuilder::emit(const char *operation)
     m->addParam("status",m_status);
     if (!getValue("external")) {
 	const char* ext = 0;
-	if (m_dir == "incoming")
-	    ext = getValue("caller");
-	else if (m_dir == "outgoing")
-	    ext = getValue("called");
+	if (m_dir == YSTRING("incoming"))
+	    ext = getValue(YSTRING("caller"));
+	else if (m_dir == YSTRING("outgoing"))
+	    ext = getValue(YSTRING("called"));
 	if (ext)
 	    m->setParam("external",ext);
     }
@@ -298,7 +298,8 @@ void CdrBuilder::emit(const char *operation)
 String CdrBuilder::getStatus() const
 {
     String s(m_status);
-    s << "|" << getValue("caller") << "|" << getValue("called") << "|" << getValue("billid");
+    s << "|" << getValue(YSTRING("caller")) << "|" << getValue(YSTRING("called")) <<
+	"|" << getValue(YSTRING("billid"));
     unsigned int sec = 0;
     if (m_start)
 	sec = (Time::now() - m_start + 500000) / 1000000;
@@ -343,8 +344,8 @@ bool CdrBuilder::update(const Message& msg, int type, u_int64_t val)
 	    clear();
 	else {
 	    // set a reason if none was set or one is explicitely provided
-	    const char* reason = msg.getValue("reason");
-	    if (!(reason || getValue("reason")))
+	    const char* reason = msg.getValue(YSTRING("reason"));
+	    if (!(reason || getValue(YSTRING("reason"))))
 		reason = "CDR dropped";
 	    if (reason)
 		setParam("reason",reason);
@@ -354,7 +355,7 @@ bool CdrBuilder::update(const Message& msg, int type, u_int64_t val)
     }
     // cdrwrite must be consistent over all emitted messages so we read it once
     if (m_first)
-	m_write = msg.getBoolValue("cdrwrite",true);
+	m_write = msg.getBoolValue(YSTRING("cdrwrite"),true);
     unsigned int n = msg.length();
     for (unsigned int i = 0; i < n; i++) {
 	const NamedString* s = msg.getParam(i);
@@ -362,12 +363,12 @@ bool CdrBuilder::update(const Message& msg, int type, u_int64_t val)
 	    continue;
 	if (s->null())
 	    continue;
-	if (s->name() == "status") {
+	if (s->name() == YSTRING("status")) {
 	    m_status = *s;
-	    if ((m_status == "incoming") || (m_status == "outgoing"))
+	    if ((m_status == YSTRING("incoming")) || (m_status == YSTRING("outgoing")))
 		m_dir = m_status;
 	}
-	else if (s->name() == "direction")
+	else if (s->name() == YSTRING("direction"))
 	    m_dir = *s;
 	else {
 	    // search the parameter
@@ -413,30 +414,23 @@ bool CdrHandler::received(Message &msg)
 	s_cdrs.clear();
 	return false;
     }
-    if ((m_type == CdrProgress) && !msg.getBoolValue("earlymedia",false))
+    if ((m_type == CdrProgress) && !msg.getBoolValue(YSTRING("earlymedia"),false))
 	return false;
     bool track = true;
     if (m_type == CdrUpdate) {
-	const String* oper = msg.getParam("operation");
-	if (oper && (*oper != "cdrbuild"))
+	const String* oper = msg.getParam(YSTRING("operation"));
+	if (oper && (*oper != YSTRING("cdrbuild")))
 	    track = false;
     }
-    if (!msg.getBoolValue("cdrtrack",track))
+    if (!msg.getBoolValue(YSTRING("cdrtrack"),track))
 	return false;
-    String id(msg.getValue("id"));
+    String id(msg.getValue(YSTRING("id")));
     if (m_type == CdrDrop) {
 	if (!id.startSkip("cdrbuild/",false))
 	    return false;
     }
-    if (id.null()) {
-	id = msg.getValue("module");
-	id += "/";
-	id += msg.getValue("span");
-	id += "/";
-	id += msg.getValue("channel");
-	if (id == "//")
-	    return false;
-    }
+    if (id.null())
+	return false;
     bool rval = false;
     int type = m_type;
     int level = DebugInfo;
@@ -460,7 +454,7 @@ bool CdrHandler::received(Message &msg)
 			}
 		    }
 		}
-		if ((type != CdrHangup) && !msg.getBoolValue("cdrcreate",true))
+		if ((type != CdrHangup) && !msg.getBoolValue(YSTRING("cdrcreate"),true))
 		    break;
 		b = new CdrBuilder(id);
 		s_cdrs.append(b);
@@ -481,9 +475,9 @@ bool CdrHandler::received(Message &msg)
 	Debug("cdrbuild",level,"Got message '%s' for untracked id '%s'",
 	    msg.c_str(),id.c_str());
     if ((type == CdrRinging) || (type == CdrProgress) || (type == CdrAnswer)) {
-	id = msg.getValue("peerid");
+	id = msg.getValue(YSTRING("peerid"));
 	if (id.null())
-	    id = msg.getValue("targetid");
+	    id = msg.getValue(YSTRING("targetid"));
 	if (id && (b = CdrBuilder::find(id))) {
 	    b->update(type,msg.msgTime().usec(),msg.getValue("status"));
 	    b->emit();
@@ -495,14 +489,14 @@ bool CdrHandler::received(Message &msg)
 
 bool StatusHandler::received(Message &msg)
 {
-    const char *sel = msg.getValue("module");
-    if (sel && ::strcmp(sel,"cdrbuild"))
+    const String* sel = msg.getParam(YSTRING("module"));
+    if (!(TelEngine::null(sel) || (*sel == YSTRING("cdrbuild"))))
 	return false;
     String st("name=cdrbuild,type=cdr,format=Status|Caller|Called|BillId|Duration");
     s_mutex.lock();
     expireHungup();
     st << ";cdrs=" << s_cdrs.count() << ",hungup=" << s_hungup.count();
-    if (msg.getBoolValue("details",true)) {
+    if (msg.getBoolValue(YSTRING("details"),true)) {
 	st << ";";
 	ObjList *l = &s_cdrs;
 	bool first = true;
@@ -526,10 +520,10 @@ bool StatusHandler::received(Message &msg)
 bool CommandHandler::received(Message &msg)
 {
     static const String name("cdrbuild");
-    const String* partial = msg.getParam("partline");
-    if (!partial || *partial != "status")
+    const String* partial = msg.getParam(YSTRING("partline"));
+    if (!partial || *partial != YSTRING("status"))
 	return false;
-    partial = msg.getParam("partword");
+    partial = msg.getParam(YSTRING("partword"));
     if (TelEngine::null(partial) || name.startsWith(*partial))
 	msg.retValue().append(name,"\t");
     return false;

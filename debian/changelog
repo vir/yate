@@ -1,3 +1,13 @@
+yate (3.3.3.svn4643) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4643: + A Progress with Early Media is
+    considered Ringing for CDR purposes.  + When building the CDR no
+    longer set ringtime from start of call if no Ringing was received.
+    + Use YSTRING in cdr builder to benefit from speedup on supported
+    systems.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 11 Oct 2011 02:19:20 +0400
+
 yate (3.3.3.svn4641) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4641: + Added hack to preserve the RTP

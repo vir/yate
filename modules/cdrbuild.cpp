@@ -34,6 +34,7 @@ enum {
     CdrStart,
     CdrCall,
     CdrRoute,
+    CdrProgress,
     CdrRinging,
     CdrAnswer,
     CdrUpdate,
@@ -245,14 +246,15 @@ void CdrBuilder::emit(const char *operation)
 	t_call = m_start;
     if (!t_call)
 	t_call = m_start = t_hangup;
-    if (!t_ringing)
-	t_ringing = t_call;
+
     if (!t_answer)
 	t_answer = t_hangup;
-
-    if (t_answer > t_hangup)
+    else if (t_answer > t_hangup)
 	t_answer = t_hangup;
-    if (t_ringing > t_answer)
+
+    if (!t_ringing)
+	t_ringing = t_answer;
+    else if (t_ringing > t_answer)
 	t_ringing = t_answer;
 
     if (!operation)
@@ -314,6 +316,7 @@ void CdrBuilder::update(int type, u_int64_t val, const char* status)
 	case CdrCall:
 	    m_call = val;
 	    break;
+	case CdrProgress:
 	case CdrRinging:
 	    if (!m_ringing)
 		m_ringing = val;
@@ -410,6 +413,8 @@ bool CdrHandler::received(Message &msg)
 	s_cdrs.clear();
 	return false;
     }
+    if ((m_type == CdrProgress) && !msg.getBoolValue("earlymedia",false))
+	return false;
     bool track = true;
     if (m_type == CdrUpdate) {
 	const String* oper = msg.getParam("operation");
@@ -475,7 +480,7 @@ bool CdrHandler::received(Message &msg)
     else
 	Debug("cdrbuild",level,"Got message '%s' for untracked id '%s'",
 	    msg.c_str(),id.c_str());
-    if ((type == CdrRinging) || (type == CdrAnswer)) {
+    if ((type == CdrRinging) || (type == CdrProgress) || (type == CdrAnswer)) {
 	id = msg.getValue("peerid");
 	if (id.null())
 	    id = msg.getValue("targetid");
@@ -598,6 +603,7 @@ void CdrBuildPlugin::initialize()
 	Engine::install(new CdrHandler("chan.startup",CdrStart));
 	Engine::install(new CdrHandler("call.route",CdrRoute));
 	Engine::install(new CdrHandler("call.execute",CdrCall));
+	Engine::install(new CdrHandler("call.progress",CdrProgress));
 	Engine::install(new CdrHandler("call.ringing",CdrRinging));
 	Engine::install(new CdrHandler("call.answered",CdrAnswer));
 	Engine::install(new CdrHandler("call.update",CdrUpdate));

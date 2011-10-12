@@ -1,3 +1,11 @@
+yate (3.3.3.svn4645) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4645: + Added video support to iax channel.
+    Added/changed debug.  + Allow registration expire time to be changed
+    by the user.register message when acting as registrar.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 13 Oct 2011 02:19:25 +0400
+
 yate (3.3.3.svn4643) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4643: + A Progress with Early Media is

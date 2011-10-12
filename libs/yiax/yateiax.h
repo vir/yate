@@ -51,6 +51,7 @@ class IAXInfoElement;
 class IAXInfoElementString;
 class IAXInfoElementNumeric;
 class IAXInfoElementBinary;
+class IAXFrame;
 class IAXFullFrame;
 class IAXFrameOut;
 class IAXEvent;
@@ -548,65 +549,193 @@ class YIAX_API IAXFormat
 {
 public:
     /**
-     * Audio format enumeration types
+     * Format enumeration types
      */
-    enum Audio {
+    enum Formats {
         G723_1 = (1 <<  0),
         GSM    = (1 <<  1),
         ULAW   = (1 <<  2),
         ALAW   = (1 <<  3),
-        MP3    = (1 <<  4),
+        G726   = (1 <<  4),
         ADPCM  = (1 <<  5),
         SLIN   = (1 <<  6),
         LPC10  = (1 <<  7),
-        G729A  = (1 <<  8),
+        G729   = (1 <<  8),
         SPEEX  = (1 <<  9),
         ILBC   = (1 << 10),
+        G726AAL2 = (1 << 11),
+        G722   = (1 << 12),
+        AMR    = (1 << 13),
+        AudioMask = G723_1 | GSM | ULAW | ALAW | G726 | ADPCM | SLIN | LPC10 | G729 | SPEEX |
+            ILBC | G726AAL2 | G722 | AMR,
+        JPEG   = (1 << 16),
+        PNG    = (1 << 17),
+        ImageMask = JPEG | PNG,
+        H261   = (1 << 18),
+        H263   = (1 << 19),
+        H263p  = (1 << 20),
+        H264   = (1 << 21),
+        VideoMask = H261 | H263 | H263p | H264,
     };
 
     /**
-     * Video format enumeration types
+     * Media type enumeration
      */
-    enum Video {
-        JPEG   = (1 << 16),
-        PNG    = (1 << 17),
-        H261   = (1 << 18),
-        H263   = (1 << 19),
+    enum Media {
+        Audio = 0,
+        Video,
+        Image,
+        TypeCount
     };
+
+    /**
+     * Constructor. Build an audio format
+     * @param type Media type
+    */
+    inline IAXFormat(int type = Audio)
+	: m_type(type), m_format(0), m_formatIn(0), m_formatOut(0)
+	{}
+
+    /**
+     * Get the media type
+     * @return Media type
+    */
+    inline int type() const
+	{ return m_type; }
+
+    /**
+     * Get the format
+     * @return The format
+    */
+    inline u_int32_t format() const
+	{ return m_format; }
+
+    /**
+     * Get the incoming format
+     * @return The incoming format
+    */
+    inline u_int32_t in() const
+	{ return m_formatIn; }
+
+    /**
+     * Get the outgoing format
+     * @return The outgoing format
+    */
+    inline u_int32_t out() const
+	{ return m_formatOut; }
+
+    /**
+     * Get the text associated with the format
+     * @return Format name
+    */
+    inline const char* formatName() const
+	{ return formatName(m_format); }
+
+    /**
+     * Get the text associated with the media type
+     * @return Media name
+    */
+    inline const char* typeName() const
+	{ return typeName(m_type); }
+
+    /**
+     * Set format
+     * @param fmt Optional pointer to format to set
+     * @param fmtIn Optional pointer to incoming format to set
+     * @param fmtOut Optional pointer to outgoing format to set
+    */
+    void set(u_int32_t* fmt, u_int32_t* fmtIn, u_int32_t* fmtOut);
 
     /**
      * Create a string list from formats
      * @param dest The destination
      * @param formats The formats
+     * @param dict Optional dictionary to use, 0 to use s_formats
      * @param sep The separator to use
     */
-    static void formatList(String& dest, u_int32_t formats, char sep = ',');
+    static void formatList(String& dest, u_int32_t formats, const TokenDict* dict = 0,
+	const char* sep = ",");
 
     /**
-     * Get the text associated with an audio format
-     * @param audio The desired format
+     * Pick a format from a list of capabilities
+     * @param formats Capabilities list
+     * @param format Optional format to pick
+     * @return IAX format, 0 if not found
+    */
+    static u_int32_t pickFormat(u_int32_t formats, u_int32_t format = 0);
+
+    /**
+     * Encode a formats list
+     * @param formats Formats list
+     * @param dict Dictionary to use
+     * @param sep Formats list separator
+     * @return Encoded formats
+    */
+    static u_int32_t encode(const String& formats, const TokenDict* dict, char sep = ',');
+
+    /**
+     * Mask formats by type
+     * @param value Input format(s)
+     * @param type Media type to retrieve
+     * @return Media format(s) from input
+    */
+    static inline u_int32_t mask(u_int32_t value, int type) {
+	    if (type == Audio)
+		return value & AudioMask;
+	    if (type == Video)
+		return value & VideoMask;
+	    if (type == Image)
+		return value & ImageMask;
+	    return 0;
+	}
+
+    /**
+     * Clear formats by type
+     * @param value Input format(s)
+     * @param type Media type to clear
+     * @return Cleared format(s) from input
+    */
+    static inline u_int32_t clear(u_int32_t value, int type) {
+	    if (type == Audio)
+		return value & ~AudioMask;
+	    if (type == Video)
+		return value & ~VideoMask;
+	    if (type == Image)
+		return value & ~ImageMask;
+	    return value;
+	}
+
+    /**
+     * Get the text associated with a format
+     * @param fmt The desired format
      * @return A pointer to the text associated with the format or 0 if the format doesn't exist
     */
-    static inline const char* audioText(u_int32_t audio)
-	{ return lookup(audio,audioData); }
+    static inline const char* formatName(u_int32_t fmt)
+	{ return lookup(fmt,s_formats); }
 
     /**
-     * Get the text associated with a video format
-     * @param video The desired format
-     * @return A pointer to the text associated with the format or 0 if the format doesn't exist
+     * Get the text associated with a media type
+     * @param type The media type
+     * @return A pointer to the text associated with the media type
     */
-    static inline const char* videoText(u_int32_t video)
-	{ return lookup(video,videoData); }
+    static inline const char* typeName(int type)
+	{ return lookup(type,s_types); }
 
     /**
-     * Keep the texts associated with the audio formats
+     * Keep the texts associated with the formats
     */
-    static TokenDict audioData[];
+    static const TokenDict s_formats[];
 
     /**
-     * Keep the texts associated with the video formats
-    */
-    static TokenDict videoData[];
+     * Keep the texts associated with type
+     */
+    static const TokenDict s_types[];
+
+protected:
+    int m_type;
+    u_int32_t m_format;
+    u_int32_t m_formatIn;
+    u_int32_t m_formatOut;
 };
 
 /**
@@ -703,9 +832,10 @@ public:
      * @param retrans Retransmission flag
      * @param buf IE buffer
      * @param len IE buffer length
+     * @param mark Mark flag
      */
     IAXFrame(Type type, u_int16_t sCallNo, u_int32_t tStamp, bool retrans,
-	     const unsigned char* buf, unsigned int len);
+	     const unsigned char* buf, unsigned int len, bool mark = false);
 
     /**
      * Destructor
@@ -748,6 +878,13 @@ public:
 	{ return m_tStamp; }
 
     /**
+     * Get the mark flag
+     * @return The mark flag
+     */
+    inline bool mark() const
+	{ return m_mark; }
+
+    /**
      * Get a pointer to this frame if it is a full frame
      * @return A pointer to this frame if it is a full frame or 0
      */
@@ -762,6 +899,29 @@ public:
      * @return A frame pointer on success or 0
      */
     static IAXFrame* parse(const unsigned char* buf, unsigned int len, IAXEngine* engine = 0, const SocketAddr* addr = 0);
+
+    /**
+     * Build a miniframe buffer
+     * @param dest Destination buffer
+     * @param sCallNo Source call number
+     * @param tStamp Frame timestamp
+     * @param data Data
+     * @param len Data length
+     */
+    static void buildMiniFrame(DataBlock& dest, u_int16_t sCallNo, u_int32_t tStamp,
+	void* data, unsigned int len);
+
+    /**
+     * Build a video meta frame buffer
+     * @param dest Destination buffer
+     * @param sCallNo Source call number
+     * @param tStamp Frame timestamp
+     * @param mark Frame mark
+     * @param data Data
+     * @param len Data length
+     */
+    static void buildVideoMetaFrame(DataBlock& dest, u_int16_t sCallNo, u_int32_t tStamp,
+	bool mark, void* data, unsigned int len);
 
     /**
      * Pack a subclass value according to IAX protocol
@@ -801,6 +961,7 @@ private:
     Type m_type;		// Frame type
     u_int16_t m_sCallNo;	// Source call number
     u_int32_t m_tStamp;		// Frame timestamp
+    bool m_mark;		// Mark flag
 };
 
 /**
@@ -843,11 +1004,12 @@ public:
      * @param retrans Retransmission flag
      * @param buf IE buffer
      * @param len IE buffer length
+     * @param mark Mark flag
      */
     IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_int16_t dCallNo,
 		 unsigned char oSeqNo, unsigned char iSeqNo,
 		 u_int32_t tStamp, bool retrans,
-		 const unsigned char* buf, unsigned int len);
+		 const unsigned char* buf, unsigned int len, bool mark = false);
 
     /**
      * Constructor. Constructs an outgoing full frame
@@ -860,11 +1022,12 @@ public:
      * @param tStamp Frame timestamp
      * @param buf IE buffer
      * @param len IE buffer length
+     * @param mark Mark flag
      */
     IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_int16_t dCallNo,
 		 unsigned char oSeqNo, unsigned char iSeqNo,
 		 u_int32_t tStamp,
-		 const unsigned char* buf = 0, unsigned int len = 0);
+		 const unsigned char* buf = 0, unsigned int len = 0, bool mark = false);
 
     /**
      * Constructor. Constructs an outgoing full frame
@@ -877,10 +1040,11 @@ public:
      * @param tStamp Frame timestamp
      * @param ieList List of frame IEs
      * @param maxlen Max frame data length
+     * @param mark Mark flag
      */
     IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_int16_t dCallNo,
 		 unsigned char oSeqNo, unsigned char iSeqNo,
-		 u_int32_t tStamp, IAXIEList* ieList, u_int16_t maxlen);
+		 u_int32_t tStamp, IAXIEList* ieList, u_int16_t maxlen, bool mark = false);
 
     /**
      * Destructor
@@ -1004,11 +1168,12 @@ public:
      * @param retransCount Retransmission counter
      * @param retransInterval Time interval to the next retransmission
      * @param ackOnly Acknoledge only flag. If true, the frame only expects an ACK
+     * @param mark Mark flag
      */
     inline IAXFrameOut(Type type, u_int32_t subclass, u_int16_t sCallNo, u_int16_t dCallNo,
                        unsigned char oSeqNo, unsigned char iSeqNo, u_int32_t tStamp, const unsigned char* buf, unsigned int len,
-                       u_int16_t retransCount, u_int32_t retransInterval, bool ackOnly)
-        : IAXFullFrame(type,subclass,sCallNo,dCallNo,oSeqNo,iSeqNo,tStamp,buf,len),
+                       u_int16_t retransCount, u_int32_t retransInterval, bool ackOnly, bool mark = false)
+        : IAXFullFrame(type,subclass,sCallNo,dCallNo,oSeqNo,iSeqNo,tStamp,buf,len,mark),
           m_ack(false), m_ackOnly(ackOnly), m_retransCount(retransCount), m_retransTimeInterval(retransInterval),
 	  m_nextTransTime(Time::msecNow() + m_retransTimeInterval)
 	{}
@@ -1027,12 +1192,13 @@ public:
      * @param retransCount Retransmission counter
      * @param retransInterval Time interval to the next retransmission
      * @param ackOnly Acknoledge only flag. If true, the frame only expects an ACK
+     * @param mark Mark flag
      */
     inline IAXFrameOut(Type type, u_int32_t subclass, u_int16_t sCallNo, u_int16_t dCallNo,
                        unsigned char oSeqNo, unsigned char iSeqNo, u_int32_t tStamp,
 		       IAXIEList* ieList, u_int16_t maxlen,
-                       u_int16_t retransCount, u_int32_t retransInterval, bool ackOnly)
-        : IAXFullFrame(type,subclass,sCallNo,dCallNo,oSeqNo,iSeqNo,tStamp,ieList,maxlen),
+                       u_int16_t retransCount, u_int32_t retransInterval, bool ackOnly, bool mark = false)
+        : IAXFullFrame(type,subclass,sCallNo,dCallNo,oSeqNo,iSeqNo,tStamp,ieList,maxlen,mark),
           m_ack(false), m_ackOnly(ackOnly), m_retransCount(retransCount), m_retransTimeInterval(retransInterval),
 	  m_nextTransTime(Time::msecNow() + m_retransTimeInterval)
 	{}
@@ -1155,7 +1321,7 @@ public:
      * @param tStamp Frame timestamp
      * @return The result of the write operation
      */
-    bool send(u_int32_t tStamp);
+    bool send(u_int32_t tStamp = Time::msecNow());
 
 private:
     u_int8_t* m_data;		// Data buffer
@@ -1163,6 +1329,43 @@ private:
     u_int32_t m_timestamp;	// Frame timestamp
     IAXEngine* m_engine;	// The engine that owns this frame
     SocketAddr m_addr;		// Remote peer address
+};
+
+/**
+ * This class holds data used by transaction to sync media.
+ * The mutex is not reentrant
+ * @short IAX2 transaction media data
+ */
+class YIAX_API IAXMediaData : public Mutex
+{
+    friend class IAXTransaction;
+public:
+    /**
+     * Constructor
+     */
+    inline IAXMediaData()
+	: Mutex(true,"IAXTransaction::InMedia"),
+	m_lastOut(0), m_lastIn(0), m_sent(0), m_sentBytes(0),
+	m_recv(0), m_recvBytes(0), m_ooPackets(0), m_ooBytes(0),
+	m_showInNoFmt(true)
+	{}
+
+    /**
+     * Print statistics
+     * @param buf Destination buffer
+     */
+    void print(String& buf);
+
+protected:
+    u_int32_t m_lastOut;                 // Last transmitted mini timestamp
+    u_int32_t m_lastIn;                  // Last received timestamp
+    unsigned int m_sent;                 // Packets sent
+    unsigned int m_sentBytes;            // Bytes sent
+    unsigned int m_recv;                 // Packets received
+    unsigned int m_recvBytes;            // Bytes received
+    unsigned int m_ooPackets;            // Dropped received out of order packets
+    unsigned int m_ooBytes;              // Dropped received out of order bytes
+    bool m_showInNoFmt;                  // Show incoming media arrival without format debug
 };
 
 /**
@@ -1345,25 +1548,48 @@ public:
 	{ return m_challenge; }
 
     /**
-     * Retrieve the media format used during initialization
-     * @return The initial media format
+     * Retrieve the media of a given type
+     * @param type Media type to retrieve
+     * @return IAXFormat pointer or 0 for invalid type
      */
-    inline u_int32_t format()
-	{ return m_format; }
+    IAXFormat* getFormat(int type);
+
+    /**
+     * Retrieve the media data for a given type
+     * @param type Media type to retrieve
+     * @return IAXMediaData pointer or 0 for invalid type
+     */
+    IAXMediaData* getData(int type);
+
+    /**
+     * Retrieve the media format used during initialization
+     * @param type Media type to retrieve
+     * @return The initial media format for the given type
+     */
+    inline u_int32_t format(int type) {
+	    IAXFormat* fmt = getFormat(type);
+	    return fmt ? fmt->format() : 0;
+	}
 
     /**
      * Retrieve the incoming media format
-     * @return The incoming media format
+     * @param type Media type to retrieve
+     * @return The incoming media format for the given type
      */
-    inline u_int32_t formatIn()
-	{ return m_formatIn; }
+    inline u_int32_t formatIn(int type) {
+	    IAXFormat* fmt = getFormat(type);
+	    return fmt ? fmt->in() : 0;
+	}
 
     /**
      * Retrieve the outgoing media format
-     * @return The outgoing media format
+     * @param type Media type to retrieve
+     * @return The outgoing media format for the given type
      */
-    inline u_int32_t formatOut() const 
-	{ return m_formatOut; }
+    inline u_int32_t formatOut(int type) {
+	    IAXFormat* fmt = getFormat(type);
+	    return fmt ? fmt->out() : 0;
+	}
 
     /**
      * Retrieve the media capability of this transaction
@@ -1395,21 +1621,27 @@ public:
     IAXTransaction* processFrame(IAXFrame* frame);
 
     /**
-     * Process received mini frame data
+     * Process received media data
      * @param data Received data
      * @param tStamp Mini frame timestamp
-     * @param voice True if received mini frame inside a Voice full frame
+     * @param type Media type
+     * @param full True if received in a full frame
+     * @param mark Mark flag
      * @return 0
      */
-    IAXTransaction* processMedia(DataBlock& data, u_int32_t tStamp, bool voice = false);
+    IAXTransaction* processMedia(DataBlock& data, u_int32_t tStamp,
+	int type = IAXFormat::Audio, bool full = false, bool mark = false);
 
     /**
      * Send media data to remote peer. Update the outgoing media format if changed
      * @param data Data to send
      * @param format Data format
-     * @return 'this' if successful or 0
+     * @param type Media type
+     * @param mark Mark flag
+     * @return The number of bytes sent
      */
-    IAXTransaction* sendMedia(const DataBlock& data, u_int32_t format);
+    unsigned int sendMedia(const DataBlock& data, u_int32_t format,
+	int type = IAXFormat::Audio, bool mark = false);
 
     /**
      * Get an IAX event from the queue
@@ -1547,8 +1779,11 @@ public:
 
     /**
      * Print transaction data on stdin
+     * @param printStats True to print media statistics
+     * @param printFrames True to print in/out pending frames
+     * @param location Additional location info to be shown in debug
      */
-    void print();
+    void print(bool printStats = false, bool printFrames = false, const char* location = "status");
 
     /**
      * Standard message sent if unsupported/unknown/none authentication methosd was received
@@ -1594,6 +1829,11 @@ protected:
      */
     IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, const SocketAddr& addr, IAXIEList& ieList,
 	void* data = 0);
+
+    /**
+     * Cleanup
+     */
+    virtual void destroyed();
 
     /**
      * Init data members from an IE list
@@ -1651,9 +1891,10 @@ protected:
      * @param len Frame IE list length
      * @param tStamp Frame timestamp. If 0 the transaction timestamp will be used
      * @param ackOnly Frame's acknoledge only flag
+     * @param mark Frame mark flag
      */
     void postFrame(IAXFrame::Type type, u_int32_t subclass, void* data = 0, u_int16_t len = 0, u_int32_t tStamp = 0,
-		bool ackOnly = false);
+	bool ackOnly = false, bool mark = false);
 
     /**
      * Constructs an IAXFrameOut frame, send it to remote peer and put it in the transmission list
@@ -1883,11 +2124,12 @@ protected:
     IAXEvent* getEventTerminating(u_int64_t time);
 
     /**
-     * Process received Voice frames
-     * @param frame Received voice frame
+     * Process received media full frames
+     * @param frame Received frame
+     * @param type Media type
      * @return 0
      */
-    IAXTransaction* processVoiceFrame(const IAXFullFrame* frame);
+    IAXTransaction* processMediaFrame(const IAXFullFrame* frame, int type);
 
     /**
      * Send all frames from outgoing queue with outbound sequence number starting with seqNo.
@@ -1945,10 +2187,9 @@ private:
     IAXEngine* m_engine;			// Engine that owns this transaction
     void* m_userdata;				// Arbitrary user data
     u_int32_t m_lastFullFrameOut;		// Last transmitted full frame timestamp
-    u_int16_t m_lastMiniFrameOut;		// Last transmitted mini frame timestamp
-    u_int32_t m_lastMiniFrameIn;		// Last received mini frame timestamp
+    IAXMediaData m_dataAudio;
+    IAXMediaData m_dataVideo;
     u_int16_t m_lastAck;			// Last ack'd received frame's oseqno
-    Mutex m_mutexInMedia;			// Keep received media thread safe
     IAXEvent* m_pendingEvent;			// Pointer to a pending event or 0
     IAXEvent* m_currentEvent;			// Pointer to last generated event or 0
     // Outgoing frames management
@@ -1975,9 +2216,8 @@ private:
     String m_challenge;				// Challenge
     String m_authdata;				// Auth data received with auth reply
     u_int32_t m_expire;				// Registration expiring time
-    u_int32_t m_format;				// Media format used for initial negotiation
-    u_int32_t m_formatIn;			// Incoming media format
-    u_int32_t m_formatOut;			// Outgoing media format
+    IAXFormat m_format;				// Audio format
+    IAXFormat m_formatVideo;			// Video format
     u_int32_t m_capability;			// Media capability of this transaction
     bool m_callToken;                           // Call token supported/expected
     // Meta trunking
@@ -2184,8 +2424,11 @@ public:
      * @param transaction IAXTransaction that owns the call leg
      * @param data Media data
      * @param tStamp Media timestamp
+     * @param type Media type
+     * @param mark Mark flag
      */
-    virtual void processMedia(IAXTransaction* transaction, DataBlock& data, u_int32_t tStamp)
+    virtual void processMedia(IAXTransaction* transaction, DataBlock& data, u_int32_t tStamp,
+	int type, bool mark)
 	{}
 
     /**
@@ -2239,10 +2482,11 @@ public:
 
     /**
      * Get the default media format
+     * @param audio True to retrieve default audio format, false for video format
      * @return The default media format
      */
-    inline u_int32_t format() const
-        { return m_format; }
+    inline u_int32_t format(bool audio = true) const
+        { return audio ? m_format : m_formatVideo; }
 
     /**
      * Get the media capability of this engine
@@ -2269,9 +2513,11 @@ public:
      * @param len Data length
      * @param addr Socket to write to
      * @param frame Optional frame to be printed
+     * @param sent Pointer to variable to be filled with the number of bytes sent
      * @return True on success
      */
-    bool writeSocket(const void* buf, int len, const SocketAddr& addr, IAXFullFrame* frame = 0);
+    bool writeSocket(const void* buf, int len, const SocketAddr& addr, IAXFullFrame* frame = 0,
+	unsigned int* sent = 0);
 
     /**
      * Write a full frame to socket
@@ -2308,12 +2554,13 @@ public:
     void keepAlive(SocketAddr& addr);
 
     /**
-     * Process a new format received with a Voice frame
+     * Process a new format received with a full frame
      * @param trans Transaction that received the new format
+     * @param type Media type
      * @param format The received format
      * @return True if accepted
      */
-    virtual bool voiceFormatChanged(IAXTransaction* trans, u_int32_t format)
+    virtual bool mediaFormatChanged(IAXTransaction* trans, int type, u_int32_t format)
 	{ return false; }
 
     /**
@@ -2326,12 +2573,15 @@ public:
     virtual bool checkCallToken(const SocketAddr& addr, IAXFullFrame& frame);
 
     /**
-     * Process the initial received format and capability. If accepted on exit will set the transaction format and capability
+     * Process the initial received format and capability.
+     * If accepted on exit will set the transaction format and capability
      * @param trans Transaction that received the new format
      * @param caps Optional codecs to set in transaction before processing
+     * @param type Media type
      * @return True if accepted
      */
-    bool acceptFormatAndCapability(IAXTransaction* trans, unsigned int* caps = 0);
+    bool acceptFormatAndCapability(IAXTransaction* trans, unsigned int* caps = 0,
+	int type = IAXFormat::Audio);
 
     /**
      * Default event handler. event MUST NOT be deleted
@@ -2352,6 +2602,17 @@ public:
     void removeTrunkFrame(IAXMetaTrunkFrame* metaFrame);
 
     /**
+     * Send a trunk frame
+     * @param metaFrame The trunk meta frame to sent
+     */
+    inline void sendTrunkFrame(IAXMetaTrunkFrame* metaFrame) {
+	    if (!metaFrame)
+		return;
+	    Lock lck(m_mutexTrunk);
+	    metaFrame->send();
+	}
+
+    /**
      * Keep calling processTrunkFrames to send trunked media data
      */
     void runProcessTrunkFrames();
@@ -2362,6 +2623,18 @@ public:
      */
     inline Socket& socket()
 	{ return m_socket; }
+
+    /**
+     * Send engine formats
+     * @param caps Capabilities
+     * @param fmtAudio Default audio format
+     * @param fmtVideo Default video format
+     */
+    inline void setFormats(u_int32_t caps, u_int32_t fmtAudio, u_int32_t fmtVideo) {
+	    m_format = fmtAudio;
+	    m_formatVideo = fmtVideo;
+	    m_capability = caps;
+	}
 
     /**
      * Get the MD5 data from a challenge and a password
@@ -2468,6 +2741,7 @@ private:
     bool m_printMsg;                            // Print frame to output
     // Media
     u_int32_t m_format;				// The default media format
+    u_int32_t m_formatVideo;                    // Default video format
     u_int32_t m_capability;			// The media capability
     // Trunking
     Mutex m_mutexTrunk;				// Mutex for trunk operations

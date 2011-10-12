@@ -1691,11 +1691,12 @@ public:
     /**
      * Send an ACCEPT/REGACK frame to remote peer
      * This method is thread safe
+     * @param expires Optional pointer to expiring time for register transactions
      * @return False if the transaction type is not New and state is NewRemoteInvite or NewRemoteInvite_AuthRep or
      *  if the transaction type is not RegReq and state is NewRemoteInvite or
      *  type is not RegReq/RegRel and state is NewRemoteInvite_AuthRep
      */
-    bool sendAccept();
+    bool sendAccept(unsigned int* expires = 0);
 
     /**
      * Send a HANGUP frame to remote peer

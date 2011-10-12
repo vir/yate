@@ -565,6 +565,10 @@ static Thread::Priority s_priority = Thread::Normal;  // Threads priority
 static bool s_callTokenOut = true;      // Send an empty call token on outgoing calls
 static YIAXDriver iplugin;		// Init the driver
 
+static unsigned int s_expires_min = 60;
+static unsigned int s_expires_def = 60;
+static unsigned int s_expires_max = 3600;
+
 static String s_statusCmd = "status";
 
 // Retrieve data endpoint name from IAXFormat type
@@ -1225,14 +1229,18 @@ void YIAXEngine::processRemoteReg(IAXEvent* event, bool first)
 	bool regrel = (event->subclass() == IAXControl::RegRel);
 	Message* msg = userreg(tr,regrel);
 	if (msg) {
+	    unsigned int exp = 0;
 	    if (!regrel) {
 		int expires = msg->getIntValue("expires");
-		Debug(&iplugin,DebugNote,"Registered user '%s' expires in %d s",
-		    user,expires);
+		if (expires < 1)
+		    expires = s_expires_def;
+		exp = expires;
+		Debug(&iplugin,DebugNote,"Registered user '%s' expires in %u s",
+		    user,exp);
 	    }
 	    else
 		Debug(&iplugin,DebugNote,"Unregistered user '%s'",user);
-	    tr->sendAccept();
+	    tr->sendAccept(&exp);
 	    TelEngine::destruct(msg);
 	}
 	else {
@@ -1279,7 +1287,14 @@ Message* YIAXEngine::userreg(IAXTransaction* tr, bool regrel)
 		data << "@" << context;
 	}
 	msg->addParam("data",data);
-	msg->addParam("expires",String((unsigned int)tr->expire()));
+	unsigned int exp = tr->expire();
+	if (!exp)
+	    exp = s_expires_def;
+	else if (exp < s_expires_min)
+	    exp = s_expires_min;
+	else if (exp > s_expires_max)
+	    exp = s_expires_max;
+	msg->addParam("expires",String(exp));
     }
     msg->addParam("ip_host",tr->remoteAddr().host());
     msg->addParam("ip_port",String(tr->remoteAddr().port()));
@@ -1327,6 +1342,15 @@ void YIAXDriver::initialize()
     if (!gen)
 	gen = &dummy;
     s_callTokenOut = gen->getBoolValue("calltoken_out",true);
+    NamedList* registrar = cfg.getSection("registrar");
+    if (!registrar)
+	registrar = &dummy;
+    s_expires_min = registrar->getIntValue("expires_min",60,1);
+    s_expires_max = registrar->getIntValue("expires_max",3600,s_expires_min);
+    s_expires_def = registrar->getIntValue("expires_def",60,s_expires_min,s_expires_max);
+    DDebug(this,DebugAll,
+	"Initialized calltoken_out=%s expires_min=%u expires_max=%u expires_def=%u",
+	String::boolText(s_callTokenOut),s_expires_min,s_expires_max,s_expires_def);
     // Setup driver if this is the first call
     if (m_iaxEngine) {
 	m_iaxEngine->initialize(*gen);

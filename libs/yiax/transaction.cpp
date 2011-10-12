@@ -605,7 +605,7 @@ IAXEvent* IAXTransaction::getEvent(u_int64_t time)
     return 0;
 }
 
-bool IAXTransaction::sendAccept()
+bool IAXTransaction::sendAccept(unsigned int* expires)
 {
     Lock lock(this);
     if (!((type() == New && (state() == NewRemoteInvite || state() == NewRemoteInvite_RepRecv)) ||
@@ -622,7 +622,11 @@ bool IAXTransaction::sendAccept()
     else {
 	IAXIEList* ies = new IAXIEList;
 	ies->appendString(IAXInfoElement::USERNAME,m_username);
-	ies->appendNumeric(IAXInfoElement::REFRESH,m_expire,2);
+	if (type() == RegReq) {
+	    if (expires)
+		m_expire = *expires;
+	    ies->appendNumeric(IAXInfoElement::REFRESH,m_expire,2);
+	}
 	ies->appendIE(IAXInfoElementBinary::packIP(remoteAddr()));
 	postFrameIes(IAXFrame::IAX,IAXControl::RegAck,ies,0,true);
 	changeState(Terminating);
@@ -729,6 +733,7 @@ bool IAXTransaction::sendAuthReply(const String& response)
 	case RegReq:
 	    subclass = IAXControl::RegReq;
 	    ies->appendString(IAXInfoElement::USERNAME,m_username);
+	    ies->appendNumeric(IAXInfoElement::REFRESH,m_expire,2);
 	    break;
 	case RegRel:
 	    subclass = IAXControl::RegRel;

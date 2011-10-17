@@ -1,3 +1,13 @@
+yate (3.3.3.svn4647) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4647: + Added some comments in the h323chan
+    configuration sample.  + Changed defaults of Fast Start and H.245
+    Tunneling to true.  + Delete an endpoint that failed to initialize
+    as it's no longer put in the list.  + Insert a H.323 endpoint in the
+    driver's list only after being initialized.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 18 Oct 2011 02:19:17 +0400
+
 yate (3.3.3.svn4645) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4645: + Added video support to iax channel.

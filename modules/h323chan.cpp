@@ -379,6 +379,7 @@ public:
     void asyncGkClient(int mode, const PString& name, int retry);
     void checkGkClient();
 protected:
+    bool initInternal(const NamedList* params);
     bool internalGkClient(int mode, const PString& name);
     void internalGkNotify(bool registered, const char* reason = 0);
     YateGatekeeperServer* m_gkServer;
@@ -732,7 +733,6 @@ YateH323EndPoint::YateH323EndPoint(const NamedList* params, const char* name)
 	params,name,this);
     if (params && params->getBoolValue("gw",false))
 	terminalType = e_GatewayOnly;
-    hplugin.m_endpoints.append(this);
 }
 
 YateH323EndPoint::~YateH323EndPoint()
@@ -780,6 +780,18 @@ H323Connection* YateH323EndPoint::CreateConnection(unsigned callReference,
 }
 
 bool YateH323EndPoint::Init(const NamedList* params)
+{
+    if (initInternal(params)) {
+	hplugin.m_endpoints.append(this);
+	return true;
+    }
+    else {
+	delete this;
+	return false;
+    }
+}
+
+bool YateH323EndPoint::initInternal(const NamedList* params)
 {
 #ifndef DISABLE_CAPS_DUMP
     if (null()) {
@@ -854,6 +866,7 @@ bool YateH323EndPoint::Init(const NamedList* params)
 	    Debug(DebugGoOn,"Unable to start H323 Listener at port %d",port);
 	    if (listener)
 		delete listener;
+	    internalGkNotify(false,"Cannot listen on port " + String(port));
 	    return false;
 	}
 	const char *ali = "yate";

@@ -129,14 +129,16 @@ alias = yate
 ; ident: string: Sets the hostname part of the outgoing e.164 (numeric) aliases
 ident = yate
 
-; maxconns: int: Maximum number of simultaneous connections (0 = no limit). 
+; maxconns: int: Maximum number of simultaneous connections (0 = no limit).
 ;maxconns = 0
 
 ; faststart: bool: Enable Fast Start mode (offer media channels early)
-;faststart=false
+; This setting is required when doing direct RTP forwarding between endpoints
+;faststart=true
 
 ; h245tunneling: bool: Enable H.245 tunneling mode
-;h245tunneling=false
+; This setting is almost always required to pass through a NAT
+;h245tunneling=true
 
 ; h245insetup: bool: Enable H.245 establishment early in call setup message
 ; Note that this setting may conflict with faststart so don't enable both
@@ -146,6 +148,7 @@ ident = yate
 ;dtmfinband = false
 
 ; silencedetect: keyword: Silence detection algorithm: none, fixed, adaptive
+; This applies only to OpenH323 internal RTP
 ;silencedetect = none
 
 ; gkclient: bool: If h323 module endpoint should register to a gatekeeper

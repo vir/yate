@@ -835,8 +835,8 @@ bool YateH323EndPoint::Init(const NamedList* params)
 
     AddAllUserInputCapabilities(0,1);
     DisableDetectInBandDTMF(!(params && params->getBoolValue("dtmfinband",s_inband)));
-    DisableFastStart(!(params && params->getBoolValue("faststart")));
-    DisableH245Tunneling(!(params && params->getBoolValue("h245tunneling")));
+    DisableFastStart(params && !params->getBoolValue("faststart",true));
+    DisableH245Tunneling(params && !params->getBoolValue("h245tunneling",true));
     DisableH245inSetup(!(params && params->getBoolValue("h245insetup")));
     SetSilenceDetectionMode(static_cast<H323AudioCodec::SilenceDetectionMode>
 	(params ? params->getIntValue("silencedetect",dict_silence,H323AudioCodec::NoSilenceDetection)

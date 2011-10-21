@@ -437,6 +437,15 @@
 ;    yes       Media required from the beginning
 ;needmedia=no
 
+; maxcalleddigits: int: Maximum number of digits sent in Called Party Number in IAM
+; Any digits exceeding this limit will be sent separately in a SAM
+;maxcalleddigits=16
+
+; ignore-unknown-digits: boolean: Ignore signal digits that are not ITU standard (A, D and E)
+; The standard set includes only 0-9, B, C and the stop pulsing "."
+; ISUP does not support sending the * and # signals
+;ignore-unknown-digits=yes
+
 ; ignore-grs-single: boolean: Ignore (drop) circuit group reset messages with
 ;  range 0 (1 circuit affected)
 ; Defaults to no

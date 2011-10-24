@@ -893,7 +893,7 @@ unsigned long ConfConsumer::Consume(const DataBlock& data, unsigned long tStamp,
 	else
 	    m_envelope2 = (unsigned int)(((u_int64_t)m_envelope2 * 15 + m_energy2) >> 4);
 	// detect speech or noises, apply hysteresis
-	m_speak = m_envelope2 > (m_noise2 + (m_speak ? SPEAK_HIST_MIN : SPEAK_HIST_MAX));
+	m_speak = (m_envelope2 >> 1) > (m_noise2 + (m_speak ? SPEAK_HIST_MIN : SPEAK_HIST_MAX));
     }
     bool autoMute = true;
     int maxLock = 1000 * m_room->maxLock();

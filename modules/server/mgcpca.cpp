@@ -230,6 +230,7 @@ protected:
 		m->addParam("mgcp_allowed",String::boolText(false));
 	    return m;
 	}
+    void mediaChanged(const SDPMedia& media);
 private:
     void waitNotChanging();
     MGCPMessage* message(const char* cmd);
@@ -1355,9 +1356,25 @@ void* MGCPCircuit::getObject(const String& name) const
     return SignallingCircuit::getObject(name);
 }
 
+// Media changed notification, reimplemented from SDPSession
+void MGCPCircuit::mediaChanged(const SDPMedia& media)
+{
+    SDPSession::mediaChanged(media);
+    if (media.id() && media.transport()) {
+	Message m("chan.rtp");
+	m.addParam("rtpid",media.id());
+	m.addParam("media",media);
+	m.addParam("transport",media.transport());
+	m.addParam("terminate",String::boolText(true));
+	m.addParam("mgcp_allowed",String::boolText(false));
+	Engine::dispatch(m);
+    }
+}
+
 // Clean up any RTP we may still hold
 void MGCPCircuit::cleanupRtp(bool all)
 {
+    setMedia(0);
     resetSdp(all);
     m_localRawSdp.clear();
     m_localRtpChanged = false;

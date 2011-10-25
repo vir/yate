@@ -20,10 +20,14 @@ $m->params["param1"]="val1";
 $m->retval="ret_value";
 $m->Dispatch();
 
-Yate::SetLocal("engine.version","");
-Yate::SetLocal("engine.nodename","");
-Yate::SetLocal("engine.nosuch","");
+Yate::GetLocal("engine.version");
+Yate::GetLocal("engine.nodename");
+Yate::GetLocal("engine.nosuch");
 Yate::SetLocal("engine.nodename","error because is readonly");
+Yate::GetLocal("config.nosuch");
+Yate::GetLocal("config.localsym");
+Yate::GetLocal("config.localsym.h323chan.yate");
+Yate::SetLocal("config.localsym.h323chan.yate","r/o error too");
 
 /* The main loop. We pick events and handle them */
 for (;;) {

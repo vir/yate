@@ -1420,8 +1420,10 @@ bool ExtModReceiver::processLine(const char* line)
 			ok = false;
 		    }
 		}
-		else
-		    ok = false;
+		else {
+		    ok = (Engine::config().getSection(val) != 0);
+		    val.clear();
+		}
 	    }
 	    else if (id == "runid") {
 		ok = val.null();

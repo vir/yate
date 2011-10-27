@@ -62,7 +62,8 @@ public:
     bool initialEvent(MGCPTransaction* tr, MGCPMessage* mm, const MGCPEndpointId& id);
     void activate(bool standby);
 protected:
-    void disconnected(bool final, const char* reason);
+    virtual void destroyed();
+    virtual void disconnected(bool final, const char* reason);
     virtual Message* buildChanRtp(RefObject* context)
 	{
 	    Message* m = new Message("chan.rtp");
@@ -76,7 +77,7 @@ protected:
 		m->addParam("mgcp_allowed",String::boolText(false));
 	    return m;
 	}
-    void mediaChanged(const SDPMedia& media);
+    virtual void mediaChanged(const SDPMedia& media);
 private:
     void endTransaction(int code = 407, const NamedList* params = 0, MimeSdpBody* sdp = 0);
     bool reqNotify(String& evt);
@@ -84,6 +85,7 @@ private:
     bool rqntParams(const MGCPMessage* mm);
     static void copyRtpParams(NamedList& dest, const NamedList& src);
     MGCPTransaction* m_tr;
+    SocketAddr m_addr;
     String m_connEp;
     String m_callId;
     String m_ntfyId;
@@ -264,6 +266,22 @@ MGCPChan::~MGCPChan()
     endTransaction();
 }
 
+
+void MGCPChan::destroyed()
+{
+    if (m_rtpMedia) {
+	setMedia(0);
+	clearEndpoint();
+	if (m_callId && m_addr.valid()) {
+	    MGCPMessage* mm = new MGCPMessage(s_engine,"DLCX",m_connEp);
+	    mm->params.addParam("I",address());
+	    mm->params.addParam("C",m_callId);
+	    mm->params.addParam("P",m_stats,false);
+	    s_engine->sendCommand(mm,m_addr);
+	}
+    }
+}
+
 void MGCPChan::disconnected(bool final, const char* reason)
 {
     if (final || Engine::exiting())
@@ -363,21 +381,18 @@ bool MGCPChan::msgTone(Message& msg, const char* tone)
 {
     if (null(tone))
 	return false;
-    MGCPEndpoint* ep = s_engine->findEp(m_connEp);
-    if (!ep)
+    if (!(m_connEp && m_addr.valid()))
 	return false;
-    MGCPEpInfo* epi = ep->peer();
-    if (!epi)
-	return false;
-    MGCPMessage* mm = new MGCPMessage(s_engine,"NTFY",epi->toString());
+    MGCPMessage* mm = new MGCPMessage(s_engine,"NTFY",m_connEp);
     String tmp;
     while (char c = *tone++) {
 	if (tmp)
 	    tmp << ",";
 	tmp << "D/" << c;
     }
+    mm->params.addParam("X",m_ntfyId,false);
     mm->params.setParam("O",tmp);
-    return s_engine->sendCommand(mm,epi->address) != 0;
+    return s_engine->sendCommand(mm,m_addr) != 0;
 }
 
 bool MGCPChan::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
@@ -408,6 +423,7 @@ bool MGCPChan::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 	setMedia(0);
 	clearEndpoint();
 	m_address.clear();
+	m_callId.clear();
 	params.addParam("P",m_stats,false);
 	m_stats.clear();
 	tr->setResponse(250,&params);
@@ -506,6 +522,7 @@ bool MGCPChan::initialEvent(MGCPTransaction* tr, MGCPMessage* mm, const MGCPEndp
 {
     Debug(this,DebugInfo,"MGCPChan::initialEvent(%p,%p,'%s') [%p]",
 	tr,mm,id.id().c_str(),this);
+    m_addr = tr->addr();
     m_connEp = id.id();
     m_callId = mm->params.getValue(YSTRING("c"));
     m_ntfyId = mm->params.getValue(YSTRING("x"));
@@ -581,6 +598,7 @@ void MGCPChan::copyRtpParams(NamedList& dest, const NamedList& src)
     copyRename(dest,"autoaddr",src,"x-autoaddr");
     copyRename(dest,"anyssrc",src,"x-anyssrc");
 }
+
 
 MGCPPlugin::MGCPPlugin()
     : Driver("mgcpgw","misc"),

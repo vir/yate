@@ -1,3 +1,13 @@
+yate (3.3.3.svn4658) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4658: + Added SDP and RTP support in the
+    MGCP GW.  + Set the address of the MGCP circuit in yrtp, helps in
+    troubleshooting.  + Added support for MDCX to change RTP parameters
+    in mgcpgw.  + Fixed the sending of digit NTFY.  + Emit DLCX when a
+    mgcpgw channel is dropped unexpectedly.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 28 Oct 2011 02:19:24 +0400
+
 yate (3.3.3.svn4654) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4654: + Added handlers to the pbx module so

@@ -313,9 +313,9 @@ server/mgcpca.yate: ../libyatemgcp.so ../libyatesig.so ../libs/ysdp/libyatesdp.a
 server/mgcpca.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymgcp -I@top_srcdir@/libs/ysig -I@top_srcdir@/libs/ysdp
 server/mgcpca.yate: LOCALLIBS = -lyatemgcp -lyatesig -L../libs/ysdp -lyatesdp
 
-server/mgcpgw.yate: ../libyatemgcp.so
-server/mgcpgw.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymgcp
-server/mgcpgw.yate: LOCALLIBS = -lyatemgcp
+server/mgcpgw.yate: ../libyatemgcp.so ../libs/ysdp/libyatesdp.a
+server/mgcpgw.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymgcp -I@top_srcdir@/libs/ysdp
+server/mgcpgw.yate: LOCALLIBS = -lyatemgcp -L../libs/ysdp -lyatesdp
 
 server/lksctp.yate: LOCALFLAGS = @SCTP_FLAGS@
 server/lksctp.yate: LOCALLIBS = -lsctp

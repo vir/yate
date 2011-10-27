@@ -220,6 +220,7 @@ protected:
     virtual Message* buildChanRtp(RefObject* context)
 	{
 	    Message* m = new Message("chan.rtp");
+	    m->addParam("id",m_owner,false);
 	    m->userData(context ? context : this);
 	    return m;
 	}
@@ -246,6 +247,7 @@ private:
     Status m_statusReq;
     String m_notify;
     String m_specialMode;
+    String m_owner;
     bool m_changing;
     bool m_pending;
     // Gateway endpoint bearer information
@@ -1326,6 +1328,7 @@ MGCPCircuit::MGCPCircuit(unsigned int code, MGCPSpan* span, const char* id)
     m_callId += m_notify;
     m_notify = span->ntfyId() + m_notify;
     m_gwFormat = span->bearer();
+    m_owner << span->id() << "/" << code;
 }
 
 MGCPCircuit::~MGCPCircuit()
@@ -1732,6 +1735,7 @@ bool MGCPCircuit::status(Status newStat, bool sync)
     if (ok && special) {
 	Message m("circuit.special");
 	m.userData(this);
+	m.addParam("id",m_owner,false);
 	if (group())
 	    m.addParam("group",group()->toString());
 	if (span())

@@ -124,6 +124,9 @@ static MGCPPlugin splugin;
 
 static YMGCPEngine* s_engine = 0;
 
+// preserve RTP session (local addr+port) even if remote address changed
+static bool s_rtp_preserve = false;
+
 // cluster and standby support
 static bool s_cluster = false;
 
@@ -428,6 +431,7 @@ bool MGCPChan::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 	if (param)
 	    m_ntfyId = *param;
 	rqntParams(mm);
+	MimeSdpBody* sdp = 0;
 	if (m_isRtp) {
 	    Message m("chan.rtp");
 	    m.addParam("mgcp_allowed",String::boolText(false));
@@ -441,7 +445,26 @@ bool MGCPChan::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 		m_rtpId = m.getValue(YSTRING("rtpid"),m_rtpId);
 	    }
 	}
-	tr->setResponse(200,&params);
+	else {
+	    sdp = static_cast<MimeSdpBody*>(mm->sdp[0]);
+	    if (sdp) {
+		String addr;
+		ObjList* lst = splugin.parser().parse(sdp,addr);
+		sdp = 0;
+		if (lst) {
+		    if (m_rtpAddr != addr) {
+			m_rtpAddr = addr;
+			Debug(this,DebugAll,"New RTP addr '%s'",m_rtpAddr.c_str());
+			// clear all data endpoints - createRtpSDP will build new ones
+			if (!s_rtp_preserve)
+			    clearEndpoint();
+		    }
+		    setMedia(lst);
+		    sdp = createRtpSDP(true);
+		}
+	    }
+	}
+	tr->setResponse(200,&params,sdp);
 	return true;
     }
     if (mm->name() == YSTRING("AUCX")) {
@@ -660,6 +683,7 @@ void MGCPPlugin::initialize()
     }
     m_parser.initialize(cfg.getSection("codecs"),cfg.getSection("hacks"),
 	cfg.getSection("general"));
+    s_rtp_preserve = cfg.getBoolValue("hacks","ignore_sdp_addr",false);
 }
 
 }; // anonymous namespace

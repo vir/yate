@@ -106,6 +106,10 @@
 ; This allows preserving the local RTP session and port
 ;ignore_sdp_port=no
 
+; ignore_sdp_addr: bool: Ignore SDP changes if only the address is different
+; This allows preserving the local RTP session and port
+;ignore_sdp_addr=no
+
 
 ;[ep PUT_NAME_HERE]
 ; One ep ... section is required for each of our endpoints

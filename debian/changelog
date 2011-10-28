@@ -1,3 +1,15 @@
+yate (3.3.3.svn4663) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4663: + Emit DLCX when a mgcpgw channel is
+    dropped unexpectedly.  + Fixed encoding of transfer mode and
+    parameter coding values.  + Fixed bug: encode cause code if one is
+    given for all coding standards.  + Fixed SIP status command broken
+    by SVN commit 3776.  + Added new static mutex to protect channel
+    disconnect parameters during access.  + Fixed paramMutex in H.323
+    channel.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 29 Oct 2011 02:19:23 +0400
+
 yate (3.3.3.svn4658) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4658: + Added SDP and RTP support in the

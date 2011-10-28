@@ -5007,7 +5007,9 @@ void YateSIPConnection::clearTransaction()
 	if (m_tr->setResponse()) {
 	    SIPMessage* m = new SIPMessage(m_tr->initialMessage(),m_reasonCode,
 		m_reason.safe("Request Terminated"));
+	    paramMutex().lock();
 	    copySipHeaders(*m,parameters(),0);
+	    paramMutex().unlock();
 	    m->setBody(buildSIPBody());
 	    m_tr->setResponse(m);
 	    TelEngine::destruct(m);
@@ -5108,10 +5110,12 @@ void YateSIPConnection::hangup()
 		hl->setParam("text",MimeHeaderLine::quote(m_reason));
 		m->addHeader(hl);
 	    }
+	    paramMutex().lock();
 	    const char* stats = parameters().getValue(YSTRING("rtp_stats"));
 	    if (stats)
 		m->addHeader("P-RTP-Stat",stats);
 	    copySipHeaders(*m,parameters(),0);
+	    paramMutex().unlock();
 	    m->setBody(buildSIPBody());
 	    plugin.ep()->engine()->addMessage(m);
 	    m->deref();
@@ -5257,8 +5261,11 @@ void YateSIPConnection::mediaChanged(const SDPMedia& media)
 	m.addParam("call_billid",billid());
 	Engine::dispatch(m);
 	const char* stats = m.getValue(YSTRING("stats"));
-	if (stats)
+	if (stats) {
+	    paramMutex().lock();
 	    parameters().setParam("rtp_stats"+media.suffix(),stats);
+	    paramMutex().unlock();
+	}
     }
     // Clear the data endpoint, will be rebuilt later if required
     clearEndpoint(media);
@@ -5296,13 +5303,17 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	updateTags = false;
 	m_cancel = false;
 	m_byebye = false;
+	paramMutex().lock();
 	parameters().clearParams();
 	parameters().addParam("cause_sip",String(code));
 	parameters().addParam("reason_sip",msg->reason);
 	setReason(msg->reason,code);
 	if (msg->body) {
+	    paramMutex().unlock();
 	    Message tmp("isup.decode");
-	    if (decodeIsupBody(tmp,msg->body))
+	    bool ok = decodeIsupBody(tmp,msg->body);
+	    paramMutex().lock();
+	    if (ok)
 		parameters().copyParams(tmp);
 	}
 	copySipHeaders(parameters(),*msg);
@@ -5340,6 +5351,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    else
 		Debug(this,DebugMild,"Received %d redirect without Contact [%p]",code,this);
 	}
+	paramMutex().unlock();
 	hangup();
     }
     else if (code == 408) {
@@ -5347,7 +5359,9 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	updateTags = false;
 	if (m_dialog.remoteTag.null())
 	    m_byebye = false;
+	paramMutex().lock();
 	parameters().setParam("cause_sip","408");
+	paramMutex().unlock();
 	setReason("Request Timeout",code);
 	hangup();
     }
@@ -5750,10 +5764,19 @@ void YateSIPConnection::doBye(SIPTransaction* t)
     const SIPMessage* msg = t->initialMessage();
     if (msg->body) {
 	Message tmp("isup.decode");
-	if (decodeIsupBody(tmp,msg->body))
+	if (decodeIsupBody(tmp,msg->body)) {
+	    paramMutex().lock();
 	    parameters().copyParams(tmp);
+	    paramMutex().unlock();
+	}
     }
+    SIPMessage* m = new SIPMessage(t->initialMessage(),200);
+    paramMutex().lock();
     copySipHeaders(parameters(),*msg);
+    const char* stats = parameters().getValue(YSTRING("rtp_stats"));
+    if (stats)
+	m->addHeader("P-RTP-Stat",stats);
+    paramMutex().unlock();
     const MimeHeaderLine* hl = msg->getHeader("Reason");
     if (hl) {
 	const NamedString* text = hl->getParam("text");
@@ -5762,10 +5785,6 @@ void YateSIPConnection::doBye(SIPTransaction* t)
 	// FIXME: add SIP and Q.850 cause codes
     }
     setMedia(0);
-    SIPMessage* m = new SIPMessage(t->initialMessage(),200);
-    const char* stats = parameters().getValue(YSTRING("rtp_stats"));
-    if (stats)
-	m->addHeader("P-RTP-Stat",stats);
     t->setResponse(m);
     m->deref();
     m_byebye = false;
@@ -6216,6 +6235,7 @@ void YateSIPConnection::endDisconnect(const Message& msg, bool handled)
     const char* mPrefix = msg.getValue(YSTRING("message-prefix"));
     if (!(sPrefix || mPrefix))
         return;
+    paramMutex().lock();
     parameters().clearParams();
     if (sPrefix) {
 	parameters().setParam("osip-prefix",sPrefix);
@@ -6225,6 +6245,7 @@ void YateSIPConnection::endDisconnect(const Message& msg, bool handled)
 	parameters().setParam("message-prefix",mPrefix);
 	parameters().copySubParams(msg,mPrefix,false);
     }
+    paramMutex().unlock();
 }
 
 void YateSIPConnection::statusParams(String& str)
@@ -6520,7 +6541,9 @@ MimeBody* YateSIPConnection::buildSIPBody()
     if (!s_sipt_isup)
 	return 0;
     Message msg("");
+    paramMutex().lock();
     msg.copyParams(parameters());
+    paramMutex().unlock();
     return doBuildSIPBody(this,msg,0);
 }
 

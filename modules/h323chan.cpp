@@ -1394,7 +1394,9 @@ void YateH323Connection::OnCleared()
 	YateH323Chan* tmp = m_chan;
 	m_chan = 0;
 	lock.drop();
+	paramMutex().lock();
 	tmp->parameters().setParam("cause_q931",String(GetQ931Cause()));
+	paramMutex().unlock();
 	tmp->disconnect(error ? error : rtext,tmp->parameters());
 	tmp->finish();
 	tmp->deref();

@@ -1651,6 +1651,12 @@ public:
     virtual void* getObject(const String& name) const;
 
     /**
+     * Get the big mutex that serializes access to all disconnect parameter lists
+     * @return A reference to the mutex
+     */
+    static Mutex& paramMutex();
+
+    /**
      * Put channel variables into a message
      * @param msg Message to fill in
      * @param minimal True to fill in only a minimum of parameters

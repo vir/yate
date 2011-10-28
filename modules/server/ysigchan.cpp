@@ -1553,9 +1553,11 @@ void SigChannel::endDisconnect(const Message& params, bool handled)
     const char* prefix = params.getValue("message-oprefix");
     if (TelEngine::null(prefix))
 	return;
+    paramMutex().lock();
     parameters().clearParams();
     parameters().setParam("message-oprefix",prefix);
     parameters().copySubParams(params,prefix,false);
+    paramMutex().unlock();
 }
 
 void SigChannel::hangup(const char* reason, SignallingEvent* event, const NamedList* extra)
@@ -1581,13 +1583,19 @@ void SigChannel::hangup(const char* reason, SignallingEvent* event, const NamedL
 	ev = new SignallingEvent(SignallingEvent::Release,msg,m_call);
 	TelEngine::destruct(msg);
 	TelEngine::destruct(m_call);
-	if (!extra)
-	    extra = &parameters();
-	plugin.copySigMsgParams(ev,*extra,"i");
+	if (extra)
+	    plugin.copySigMsgParams(ev,*extra,"i");
+	else {
+	    paramMutex().lock();
+	    plugin.copySigMsgParams(ev,parameters(),"i");
+	    paramMutex().unlock();
+	}
     }
     if (event) {
+	paramMutex().lock();
 	parameters().clearParams();
 	plugin.copySigMsgParams(parameters(),event,&params);
+	paramMutex().unlock();
     }
     lock2.drop();
     lock.drop();

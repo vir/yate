@@ -88,6 +88,7 @@ QuerySipChannel::~QuerySipChannel()
 void QuerySipChannel::disconnected(bool final, const char *reason)
 {
     DDebug(this,DebugAll,"QuerySipChannel::disconnected() '%s'",reason);
+    paramMutex().lock();
     switch (m_type) {
 	case CNAM:
 	    endCnam(parameters());
@@ -96,6 +97,7 @@ void QuerySipChannel::disconnected(bool final, const char *reason)
 	    endLnp(parameters());
 	    break;
     }
+    paramMutex().unlock();
 }
 
 void QuerySipChannel::endCnam(const NamedList& params)

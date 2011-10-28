@@ -7504,14 +7504,12 @@ bool SIPDriver::commandComplete(Message& msg, const String& partLine, const Stri
 void SIPDriver::msgStatus(Message& msg)
 {
     String str = msg.getValue(YSTRING("module"));
-    while (str.startSkip(name())) {
+    if (str.null() || str.startSkip(name())) {
 	str.trimBlanks();
 	if (str.null())
 	    Module::msgStatus(msg);
-	else if (str.startSkip("accounts")) {
+	else if (str.startSkip("accounts"))
 	    msgStatusAccounts(msg);
-	    return;
-	}
 	else if (str.startSkip("transports")) {
 	    String tmp = str;
 	    tmp.trimBlanks().toLower();
@@ -7525,12 +7523,9 @@ void SIPDriver::msgStatus(Message& msg)
 		msgStatusTransports(msg,true,true,true);
 	    else if (msg.getBoolValue("details",true))
 		msgStatusTransport(msg,str);
-	    return;
 	}
-	else if (str.startSkip("listeners")) {
+	else if (str.startSkip("listeners"))
 	    msgStatusListener(msg);
-	    return;
-	}
     }
 }
 

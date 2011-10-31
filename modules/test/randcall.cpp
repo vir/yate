@@ -125,7 +125,8 @@ void RouteThread::run()
 }
 
 RandPlugin::RandPlugin()
-    : m_thread(0)
+    : Plugin("randplugin","misc"),
+      m_thread(0)
 {
     Output("Loaded random call generator");
 }

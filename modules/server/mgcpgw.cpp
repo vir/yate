@@ -93,6 +93,7 @@ private:
     String m_stats;
     bool m_standby;
     bool m_isRtp;
+    bool m_started;
 };
 
 class MGCPPlugin : public Driver
@@ -243,7 +244,7 @@ bool YMGCPEngine::createConn(MGCPTransaction* trans, MGCPMessage* msg)
 MGCPChan::MGCPChan(const char* connId)
     : Channel(splugin),
       SDPSession(&splugin.parser()),
-      m_tr(0), m_standby(s_standby), m_isRtp(false)
+      m_tr(0), m_standby(s_standby), m_isRtp(false), m_started(false)
 {
     DDebug(this,DebugAll,"MGCPChan::MGCPChan('%s') [%p]",connId,this);
     status("created");
@@ -334,7 +335,7 @@ void MGCPChan::mediaChanged(const SDPMedia& media)
 {
     SDPSession::mediaChanged(media);
     m_stats.clear();
-    if (media.id() && media.transport()) {
+    if (m_started && media.id() && media.transport()) {
 	Message m("chan.rtp");
 	m.addParam("rtpid",media.id());
 	m.addParam("media",media);
@@ -369,10 +370,17 @@ void MGCPChan::callAccept(Message& msg)
     MimeSdpBody* sdp = 0;
     if (!m_isRtp) {
 	sdp = createRtpSDP(true);
-	if (sdp)
+	if (sdp) {
+	    m_started = true;
 	    params.addParam("M","sendrecv");
-	else
+	}
+	else {
+	    // this address is usd just as a hint
+	    const String& addr = msg["rtp_remoteip"];
+	    if (addr)
+		sdp = createRtpSDP(addr,msg);
 	    params.addParam("M","inactive");
+	}
     }
     endTransaction(200,&params,sdp);
 }
@@ -477,6 +485,7 @@ bool MGCPChan::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 		    }
 		    setMedia(lst);
 		    sdp = createRtpSDP(true);
+		    m_started = true;
 		}
 	    }
 	}
@@ -571,6 +580,7 @@ bool MGCPChan::initialEvent(MGCPTransaction* tr, MGCPMessage* mm, const MGCPEndp
 	    m->addParam("sdp_raw",tmp);
 	}
     }
+    // TODO: Handle the L: parameters if SDP is not set
     m_tr = tr;
     tr->userData(static_cast<GenObject*>(this));
     m->addParam("called",id.id());

@@ -1,3 +1,14 @@
+yate (3.3.3.svn4666) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4666: + Fixed building of test modules.  +
+    Added test module to delay arbitrary messages.  + Explicitely
+    disable RTP forwarding on circuits for outbound calls where inbound
+    does not offer it.  + This avoids always creating an initial local
+    RTP session on inbound calls.  + Allow MGCP-CA to request a SDP from
+    gateway by specifying Local Connection Options.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 01 Nov 2011 02:19:22 +0400
+
 yate (3.3.3.svn4663) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4663: + Emit DLCX when a mgcpgw channel is

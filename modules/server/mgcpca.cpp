@@ -128,6 +128,8 @@ public:
 	{ return m_address; }
     inline const String& bearer() const
 	{ return m_bearer; }
+    inline const String& options() const
+	{ return m_options; }
     inline const char* version() const
 	{ return m_version.null() ? "MGCP 1.0" : m_version.c_str(); }
     inline bool fxo() const
@@ -138,6 +140,8 @@ public:
 	{ return m_rtpForward; }
     inline bool sdpForward() const
 	{ return m_sdpForward; }
+    inline bool rtpForcedFwd() const
+	{ return m_rtpForcedFwd; }
     inline bool rqntEmbed() const
 	{ return m_rqntEmbed; }
     inline RqntType rqntType() const
@@ -165,6 +169,7 @@ private:
     bool m_operational;
     bool m_rtpForward;
     bool m_sdpForward;
+    bool m_rtpForcedFwd;
     bool m_fxo;
     bool m_fxs;
     bool m_ntfyMatch;
@@ -175,6 +180,7 @@ private:
     String m_address;
     String m_version;
     String m_bearer;
+    String m_options;
 };
 
 class MGCPCircuit : public SignallingCircuit, public SDPSession
@@ -319,35 +325,7 @@ static ObjList s_wrappers;
 static ObjList s_spans;
 static Mutex s_mutex(false,"MGCP-CA");
 
-// Yate Payloads for the AV profile
-static const TokenDict s_dict_payloads[] = {
-    { "mulaw",         0 },
-    { "alaw",          8 },
-    { "gsm",           3 },
-    { "lpc10",         7 },
-    { "slin",         11 },
-    { "g726",          2 },
-    { "g722",          9 },
-    { "g723",          4 },
-    { "g728",         15 },
-    { "g729",         18 },
-    { "ilbc",         98 },
-    { "ilbc20",       98 },
-    { "ilbc30",       98 },
-    { "amr",          96 },
-    { "amr-o",        96 },
-    { "amr/16000",    99 },
-    { "amr-o/16000",  99 },
-    { "speex",       102 },
-    { "speex/16000", 103 },
-    { "speex/32000", 104 },
-    { "h261",         31 },
-    { "h263",         34 },
-    { "mpv",          32 },
-    {      0,          0 }
-};
-
-// Media gateway bearer information (mapped from s_dict_payloads)
+// Media gateway bearer information (mapped from SDPParser::s_payloads)
 static const TokenDict s_dict_gwbearerinfo[] = {
     { "e:mu",          0 },
     { "e:A",           8 },
@@ -900,7 +878,7 @@ MGCPSpan::MGCPSpan(const NamedList& params, const char* name, const MGCPEpInfo& 
     : SignallingCircuitSpan(params.getValue("debugname",name),
 	static_cast<SignallingCircuitGroup*>(params.getObject("SignallingCircuitGroup"))),
       m_circuits(0), m_count(0), m_epId(ep), m_operational(false),
-      m_rtpForward(false), m_sdpForward(false), m_fxo(false), m_fxs(false),
+      m_rtpForward(false), m_sdpForward(false), m_rtpForcedFwd(false), m_fxo(false), m_fxs(false),
       m_ntfyMatch(true), m_rqntEmbed(true), m_rqntType(RqntOnce)
 {
     Debug(&splugin,DebugAll,"MGCPSpan::MGCPSpan(%p,'%s') [%p]",
@@ -1001,14 +979,17 @@ bool MGCPSpan::init(const NamedList& params)
     }
     m_increment = config->getIntValue(("increment_"+*sect),
 	config->getIntValue(YSTRING("increment"),m_increment));
-    m_rtpForward = config->getBoolValue(YSTRING("forward_rtp"),!(m_fxo || m_fxs));
+    bool digital = !(m_fxo || m_fxs);
+    m_rtpForcedFwd = digital && ((*config)[YSTRING("forward_rtp")] == YSTRING("always"));
+    m_rtpForward = m_rtpForcedFwd || config->getBoolValue(YSTRING("forward_rtp"),digital);
     m_sdpForward = config->getBoolValue(YSTRING("forward_sdp"),false);
-    m_bearer = lookup(config->getIntValue(YSTRING("bearer"),s_dict_payloads,-1),s_dict_gwbearerinfo);
+    m_bearer = lookup(config->getIntValue(YSTRING("bearer"),SDPParser::s_payloads,-1),s_dict_gwbearerinfo);
     m_ntfyMatch = config->getBoolValue(YSTRING("match_ntfy"),m_ntfyMatch);
     m_rqntEmbed = config->getBoolValue(YSTRING("req_embed"),true);
     m_rqntType = (RqntType)config->getIntValue(YSTRING("req_dtmf"),s_dict_rqnt,RqntOnce);
     bool fax = config->getBoolValue(YSTRING("req_fax"),true);
     bool t38 = config->getBoolValue(YSTRING("req_t38"),fax);
+    // build Fax notification request
     if (fax || t38) {
 	if (RqntNone == m_rqntType) {
 	    m_rqntType = RqntOnce;
@@ -1020,6 +1001,28 @@ bool MGCPSpan::init(const NamedList& params)
 	    m_rqntStr.append("fxr/t38",",");
     }
     m_rqntStr = config->getValue(YSTRING("req_evts"),m_rqntStr);
+    // build Local Connection Options
+    String fmts;
+    splugin.parser().getAudioFormats(fmts);
+    ObjList* l = fmts.split(',',false);
+    fmts.clear();
+    for (ObjList* o = l; o; o = o->next()) {
+	const String* s = static_cast<const String*>(o->get());
+	if (!s)
+	    continue;
+	String fmt = lookup(lookup(*s,SDPParser::s_payloads),SDPParser::s_rtpmap);
+	int slash = fmt.find('/');
+	if (slash >= 0)
+	    fmt = fmt.substr(0,slash);
+	if (fmt.null() || (fmts.find(fmt) >= 0))
+	    continue;
+	if (fmts)
+	    fmts << ";" << fmt;
+	else
+	    fmts << "a:" << fmt;
+    }
+    TelEngine::destruct(l);
+    m_options = fmts;
     bool clear = config->getBoolValue(YSTRING("clearconn"),false);
     m_circuits = new MGCPCircuit*[m_count];
     unsigned int i;
@@ -1379,6 +1382,7 @@ void MGCPCircuit::cleanupRtp(bool all)
 {
     setMedia(0);
     resetSdp(all);
+    m_rtpForward = mySpan()->rtpForcedFwd();
     m_localRawSdp.clear();
     m_localRtpChanged = false;
     m_remoteRawSdp.clear();
@@ -1438,7 +1442,7 @@ bool MGCPCircuit::setupConn(const char* mode)
     }
     else if (mode)
 	mm->params.addParam("M",mode);
-    else if (m_localRawSdp) {
+    else if (m_localRawSdp.trimBlanks()) {
 	mm->params.addParam("M","sendrecv");
 	mm->sdp.append(new MimeSdpBody("application/sdp",
 	    m_localRawSdp.safe(),m_localRawSdp.length()));
@@ -1451,6 +1455,8 @@ bool MGCPCircuit::setupConn(const char* mode)
 	}
 	else {
 	    mm->params.addParam("M","inactive");
+	    if (create)
+		mm->params.addParam("L",mySpan()->options(),false);
 	    rtpChange = true;
 	}
     }
@@ -1470,7 +1476,7 @@ bool MGCPCircuit::setupConn(const char* mode)
 	m_needClear = true;
 	return false;
     }
-    m_localRtpChanged = rtpChange;
+    m_localRtpChanged = rtpChange && hasLocalRtp();;
     MimeSdpBody* sdp = static_cast<MimeSdpBody*>(mm->sdp[0]);
     if (sdp) {
 	String oldIp = m_rtpAddr;
@@ -1513,6 +1519,7 @@ void MGCPCircuit::clearConn(bool force)
     m_connId.clear();
     m_specialMode.clear();
     resetSdp(false);
+    m_rtpForward = mySpan()->rtpForcedFwd();
     m_remoteRawSdp.clear();
     m_localRtpChanged = false;
     sendAsync(mm,true);
@@ -1657,8 +1664,7 @@ bool MGCPCircuit::status(Status newStat, bool sync)
 	    m_changing = false;
 	    return false;
 	}
-	allowRtpChange = SignallingCircuit::status() == Connected &&
-	    hasLocalRtp() && m_localRtpChanged;
+	allowRtpChange = SignallingCircuit::status() == Connected && m_localRtpChanged;
 	if (SignallingCircuit::status() != Connected) {
 	    if (mySpan()->rqntType() != MGCPSpan::RqntNone && !(fxs() || fxo() || mySpan()->rqntEmbed()))
 		sendRequest(0,mySpan()->rqntStr());
@@ -1755,7 +1761,7 @@ bool MGCPCircuit::updateFormat(const char* format, int direction)
 	return false;
     Debug(&splugin,DebugInfo,"MGCPCircuit::updateFormat('%s',%d) %u [%p]",
 	format,direction,code(),this);
-    int fmt = lookup(format,s_dict_payloads,-1);
+    int fmt = lookup(format,SDPParser::s_payloads,-1);
     const char* gwFmt = lookup(fmt,s_dict_gwbearerinfo);
     if (!gwFmt)
 	return false;
@@ -1776,6 +1782,7 @@ bool MGCPCircuit::setParam(const String& param, const String& value)
     if (m_changing)
 	return false;
     bool rtpChanged = false;
+    bool reConnect = false;
     if (param == YSTRING("sdp_raw")) {
 	rtpChanged = m_localRawSdp != value;
 	m_localRawSdp = value;
@@ -1784,6 +1791,7 @@ bool MGCPCircuit::setParam(const String& param, const String& value)
 	bool fwd = value.toBoolean();
 	rtpChanged = m_rtpForward != fwd;
 	m_rtpForward = fwd;
+	reConnect = rtpChanged && !fwd && (SignallingCircuit::status() == Connected);
     }
     else if (param == YSTRING("rtp_rfc2833"))
 	setRfc2833(value);
@@ -1795,10 +1803,16 @@ bool MGCPCircuit::setParam(const String& param, const String& value)
     }
     else
 	return false;
-    m_localRtpChanged = m_localRtpChanged || rtpChanged;
+    if (rtpChanged && hasLocalRtp())
+	m_localRtpChanged = true;
     lock.drop();
     DDebug(&splugin,DebugAll,"MGCPCircuit::setParam(%s,%s) %u [%p]",
 	param.c_str(),value.c_str(),code(),this);
+    if (reConnect) {
+	m_localRawSdp.clear();
+	m_localRtpChanged = true;
+	return status(Connected,true);
+    }
     return true;
 }
 

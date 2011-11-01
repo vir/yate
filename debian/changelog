@@ -1,3 +1,12 @@
+yate (3.3.3.svn4668) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4668: + Allow MGCP-CA to request a SDP from
+    gateway by specifying Local Connection Options.  + Allow creating an
+    inactive RTP session in MGCP-GW by providing a remote address hint
+    in routing.  + Added class for encoding and decoding ASN.1 tags.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 02 Nov 2011 02:19:22 +0400
+
 yate (3.3.3.svn4666) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4666: + Fixed building of test modules.  +

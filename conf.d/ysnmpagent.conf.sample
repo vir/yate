@@ -1,6 +1,9 @@
 [general]
 ; general SNMP configuration
 
+; local address to bind the listener to, default is 0.0.0.0 (all interfaces)
+;addr=0.0.0.0
+
 ; port on which the module listens for SNMP messages. Defaults to 161.
 ;port=161
 

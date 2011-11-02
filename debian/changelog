@@ -1,3 +1,10 @@
+yate (3.3.3.svn4669) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4669: + Made the SNMP local listen address
+    configurable.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 03 Nov 2011 02:19:21 +0400
+
 yate (3.3.3.svn4668) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4668: + Allow MGCP-CA to request a SDP from

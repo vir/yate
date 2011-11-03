@@ -1111,6 +1111,7 @@ int Engine::run()
     install(new EngineHelp);
     loadPlugins();
     Debug(DebugAll,"Loaded %d plugins",plugins.count());
+    internalStatisticsStart();
     if (s_super_handle >= 0) {
 	install(new EngineSuperHandler);
 	if (s_restarts)
@@ -1250,6 +1251,12 @@ int Engine::run()
 #endif
     setStatus(SERVICE_STOPPED);
     return s_haltcode;
+}
+
+void Engine::internalStatisticsStart()
+{
+    // This is here so runtime analyzers can start or reset statistics
+    //  after the cruft of module load + global objects initialization
 }
 
 Engine* Engine::self()

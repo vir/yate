@@ -37,6 +37,12 @@ if [ "$1" = "--valgrind" ]; then
     yate="valgrind $1 $yate"
     shift
 fi
+if [ "$1" = "--callgrind" ]; then
+    shift
+    export LD_BIND_NOW=yes
+    yate="valgrind --tool=callgrind --dump-instr=yes --simulate-cache=yes --zero-before=*TelEngine*Engine*internalStatisticsStart* $1 $yate -Du"
+    shift
+fi
 
 for opt in $@; do
     case "$opt" in
@@ -51,5 +57,5 @@ for opt in $@; do
 	    ;;
     esac
 done
-						
+
 LD_LIBRARY_PATH=.@H323_RUN@:$LD_LIBRARY_PATH exec $yate $set_conf $set_mods $set_share "$@"

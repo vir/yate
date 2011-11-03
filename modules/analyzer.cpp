@@ -111,7 +111,7 @@ public:
     AnalyzerCons(const String& type, const char* window = 0);
     virtual ~AnalyzerCons();
     virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags);
-    virtual void statusParams(String& str);
+    virtual void statusParams(String& str, Message* msg = 0);
     virtual void run();
 protected:
     DataBlock m_data;
@@ -141,7 +141,7 @@ public:
     void addConsumer();
 protected:
     void setDuration(NamedList& params);
-    void localParams(String& str);
+    void localParams(String& str, Message* msg = 0);
     u_int64_t m_stopTime;
     u_int64_t m_timeStart;
     unsigned long m_timeRoute;
@@ -522,7 +522,7 @@ void AnalyzerCons::run()
 	m_valid++;
 }
 
-void AnalyzerCons::statusParams(String& str)
+void AnalyzerCons::statusParams(String& str, Message* msg)
 {
     unsigned long samples = timeStamp() - m_tsStart;
     str.append("gaps=",",") << m_tsGapCount;
@@ -532,13 +532,25 @@ void AnalyzerCons::statusParams(String& str)
 	u_int64_t utime = Time::now() - m_timeStart;
 	utime = utime ? ((1000000 * (u_int64_t)samples) + (utime / 2)) / utime : 0;
 	str << ",rate=" << (unsigned int)utime;
+	if (msg)
+	    msg->setParam("rate",String((unsigned int)utime));
     }
     if (m_total > 0) {
 	double q = m_valid * 100.0 / m_total;
 	char buf[64];
 	snprintf(buf,sizeof(buf)-1,"quality=%0.2f",q);
 	str.append(buf,",");
+	if (msg) {
+	    char quality[32];
+	    snprintf(quality,sizeof(quality)-1,"%0.2f",q);
+	    msg->setParam("quality",quality);
+	}
     }
+    if (!msg)
+	return;
+    msg->setParam("gaps",String(m_tsGapCount));
+    msg->setParam("gaplen",String((unsigned int)m_tsGapLength));
+    msg->setParam("samples",String(((unsigned int)samples)));
 }
 
 
@@ -564,12 +576,15 @@ void AnalyzerChan::destroyed()
     char buf[32];
     printTime(buf,(unsigned int)(Time::now() - m_timeStart));
     String str(status());
-    localParams(str);
+    Message* msg = message("call.analyzer");
+    localParams(str,msg);
     str.append("totaltime=",",") << buf;
+    msg->setParam("totaltime",buf);
     if (cons)
-	cons->statusParams(str);
+	cons->statusParams(str,msg);
     Output("Finished '%s' status: %s",id().c_str(),str.c_str());
     Channel::destroyed();
+    Engine::enqueue(msg);
 }
 
 void AnalyzerChan::statusParams(String& str)
@@ -581,20 +596,26 @@ void AnalyzerChan::statusParams(String& str)
 	cons->statusParams(str);
 }
 
-void AnalyzerChan::localParams(String& str)
+void AnalyzerChan::localParams(String& str, Message* msg)
 {
     char buf[32];
     if (m_timeRoute) {
 	printTime(buf,m_timeRoute);
 	str.append("routetime=",",") << buf;
+	if (msg)
+	    msg->setParam("routetime",buf);
     }
     if (m_timeRing) {
 	printTime(buf,m_timeRing);
 	str.append("ringtime=",",") << buf;
+	if (msg)
+	    msg->setParam("ringtime",buf);
     }
     if (m_timeAnswer) {
 	printTime(buf,m_timeAnswer);
 	str.append("answertime=",",") << buf;
+	if (msg)
+	    msg->setParam("answertime",buf);
     }
 }
 

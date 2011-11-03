@@ -1,3 +1,15 @@
+yate (3.3.3.svn4673) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4673: + Added a shortcut for running yate
+    through valgrind with the callgrind tool.  + Added marker in Engine
+    for runtime analyzers like callgrind to start collecting data.  +
+    Fixed client login to gatekeeper. Implemented logout. Added mutexes
+    to protect the configuration and endpoints list.  + Emit
+    "call.analizer" message when AnalyzerChan is destroyed. The message
+    contains  Analyzer report.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 04 Nov 2011 02:19:26 +0400
+
 yate (3.3.3.svn4669) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4669: + Made the SNMP local listen address

@@ -1167,6 +1167,7 @@ protected:
 
 private:
     Engine();
+    void internalStatisticsStart();
     ObjList m_libs;
     MessageDispatcher m_dispatcher;
     static Engine* s_self;

@@ -40,7 +40,7 @@ fi
 if [ "$1" = "--callgrind" ]; then
     shift
     export LD_BIND_NOW=yes
-    yate="valgrind --tool=callgrind --dump-instr=yes --simulate-cache=yes $1 $yate -Du"
+    yate="valgrind --tool=callgrind --dump-instr=yes --simulate-cache=yes --zero-before=*TelEngine*Engine*internalStatisticsStart* $1 $yate -Du"
     shift
 fi
 

@@ -3058,6 +3058,20 @@ public:
      */
     virtual void engineStart(Message& msg);
 
+    /**
+     * Build an account id from protocol, username, host
+     * @param id Destination string
+     * @param proto Account protocol
+     * @param user Account username
+     * @param host Account host
+     * @return Destination string address
+     */
+    static inline String& buildAccountId(String& id, const String& proto,
+	const String& user, const String& host) {
+	    id = proto + ":" + user + "@" + host;
+	    return id;
+	}
+
 protected:
     /**
      * Method called by the client when idle.
@@ -3247,6 +3261,8 @@ private:
     bool handleNotificationAreaAction(const String& action, Window* wnd);
     // Save a contact to config. Save chat rooms if the contact is a chat room
     bool storeContact(ClientContact* c);
+    // Handle ok from account password/credentials input window
+    bool handleAccCredInput(Window* wnd, const String& name, bool inputPwd);
 
     ClientAccountList* m_accounts;       // Accounts list (always valid)
 };

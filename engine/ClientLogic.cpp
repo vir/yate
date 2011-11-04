@@ -493,6 +493,16 @@ static inline void dumpList(const NamedList& p, const char* text, Window* w = 0)
 #endif
 }
 
+// Check reason and error for auth failure texts
+static bool isNoAuth(const String& reason, const String& error)
+{
+    static const String s_noAuth[] = {"noauth", "not-authorized", "invalid-authzid", ""};
+    for (int i = 0; s_noAuth[i]; i++)
+	if (reason == s_noAuth[i] || error == s_noAuth[i])
+	    return true;
+    return false;
+}
+
 // Split user@domain
 static inline void splitContact(const String& contact, String& user, String& domain)
 {
@@ -1289,11 +1299,59 @@ static Window* getAccPasswordWnd(const String& account, bool create)
     text << "Enter password for account '" << account << "'";
     p.addParam("inputpwd_text",text);
     p.addParam("inputpwd_password","");
-    p.addParam("check::inputpwd_savepassword",String::boolText(false));
+    p.addParam("check:inputpwd_savepassword",String::boolText(false));
     p.addParam("context","loginpassword:" + account);
     Client::self()->setParams(&p,w);
     Client::self()->setVisible(wname,true,true);
     return w;
+}
+
+// Close an account's password window
+static void closeAccPasswordWnd(const String& account)
+{
+    Window* w = getAccPasswordWnd(account,false);
+    if (w)
+	Client::self()->closeWindow(w->toString());
+}
+
+// Retrieve an account's enter credentials window
+// Create it if requested and not found.
+static Window* getAccCredentialsWnd(const NamedList& account, bool create,
+    const String& text = String::empty())
+{
+    if (!(Client::valid() && account))
+	return 0;
+    String wname(account + "EnterCredentials");
+    Window* w = Client::self()->getWindow(wname);
+    if (!create)
+	return w;
+    if (!w) {
+	Client::self()->createWindowSafe(YSTRING("inputacccred"),wname);
+	w = Client::self()->getWindow(wname);
+	if (!w) {
+	    Debug(ClientDriver::self(),DebugNote,"Failed to build account credentials window!");
+	    return 0;
+	}
+    }
+    NamedList p("");
+    p.addParam("inputacccred_text",text);
+    p.addParam("inputacccred_username",account.getValue(YSTRING("username")));
+    p.addParam("inputacccred_password",account.getValue(YSTRING("password")));
+    p.addParam("check:inputacccred_savepassword",
+	String(account.getBoolValue(YSTRING("savepassword"))));
+    p.addParam("context","logincredentials:" + account);
+    Client::self()->setParams(&p,w);
+    Client::self()->setVisible(wname,true,true);
+    return w;
+}
+
+// Close an account's enter credentials window
+static void closeAccCredentialsWnd(const String& account)
+{
+    NamedList tmp(account);
+    Window* w = getAccCredentialsWnd(tmp,false);
+    if (w)
+	Client::self()->closeWindow(w->toString());
 }
 
 // Build a chat history item parameter list
@@ -1700,7 +1758,8 @@ static bool getAccount(Window* w, NamedList& p, ClientAccountList& accounts)
     String host;
     if (!getAccount(w,&proto,&user,&host))
 	return false;
-    p.assign(proto + ":" + user + "@" + host);
+    String id;
+    p.assign(DefaultLogic::buildAccountId(id,proto,user,host));
     p.addParam("enabled",String::boolText(true));
     // Account flags
     p.addParam("protocol",proto);
@@ -4565,20 +4624,10 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
 	return true;
     if (name == YSTRING("textchanged"))
 	return handleTextChanged(params,wnd);
-    if (name.startsWith("loginpassword:")) {
-	String account = name.substr(14);
-	ClientAccount* acc = account ? m_accounts->findAccount(account) : 0;
-	if (!acc)
-	    return false;
-	saveParam(acc->m_params,YSTRING("inputpwd_"),YSTRING("password"),wnd);
-	saveCheckParam(acc->m_params,YSTRING("inputpwd_"),YSTRING("savepassword"),wnd);
-	acc->save(true,acc->params().getBoolValue(YSTRING("savepassword")));
-	if (acc->startup()) {
-	    setAccountStatus(m_accounts,acc,0,0,false);
-	    return true;
-	}
-	return ::loginAccount(this,acc->params(),true,false);
-    }
+    // Input password/credentials
+    bool inputPwd = name.startsWith("loginpassword:");
+    if (inputPwd || name.startsWith("logincredentials:"))
+	return handleAccCredInput(wnd,name.substr(inputPwd ? 14 : 17),inputPwd);
     if (name == s_actionShowCallsList) {
 	if (Client::valid()) {
 	    Client::self()->ringer(true,false);
@@ -5263,9 +5312,8 @@ bool DefaultLogic::delAccount(const String& account, Window* wnd)
     Engine::enqueue(userLogin(acc,false));
     // Delete from memory and UI. Save the accounts file
     removeAccNotifications(acc);
-    Window* w = getAccPasswordWnd(account,false);
-    if (w)
-	Client::self()->closeWindow(w->toString());
+    closeAccPasswordWnd(account);
+    closeAccCredentialsWnd(account);
     clearAccountContacts(*acc);
     updateChatRoomsContactList(false,acc);
     Client::self()->delTableRow(s_account,account);
@@ -5877,7 +5925,8 @@ bool DefaultLogic::handleUserNotify(Message& msg, bool& stopLogic)
     if (!account)
 	return false;
     bool reg = msg.getBoolValue(YSTRING("registered"));
-    const char* reason = msg.getValue(YSTRING("reason"));
+    const String& reasonStr = msg[YSTRING("reason")];
+    const char* reason = reasonStr;
     // Notify wizards
     s_mucWizard->handleUserNotify(account,reg,reason);
     bool save = s_accWizard->handleUserNotify(account,reg,reason);
@@ -5897,6 +5946,8 @@ bool DefaultLogic::handleUserNotify(Message& msg, bool& stopLogic)
     if (reg) {
 	// Remove account failure notification if still there
 	removeNotifArea(YSTRING("loginfail"),account);
+	closeAccPasswordWnd(account);
+	closeAccCredentialsWnd(account);
 	// Clear account register option
 	NamedString* opt = acc->m_params.getParam(YSTRING("options"));
 	if (opt) {
@@ -5936,16 +5987,29 @@ bool DefaultLogic::handleUserNotify(Message& msg, bool& stopLogic)
 	bool reConn = acc->params().getBoolValue(YSTRING("internal.reconnect"));
 	// Show login failure message if not requested by the user
 	if (!(noFail || reConn)) {
-	    NamedList rows("");
-	    NamedList* upd = buildNotifArea(rows,"loginfail",account,String::empty(),"Login failure");
-	    String text;
-	    text << "Failed to connect account '" << account << "'";
-	    text.append(reason,"\r\nReason: ");
-	    upd->addParam("text",text);
-	    // Enable/disable account edit
-	    const char* ok = String::boolText(!Client::self()->getVisible(s_wndAccount));
-	    upd->addParam("active:messages_acc_edit",ok);
-	    showNotificationArea(true,Client::self()->getWindow(s_wndMain),&rows);
+	    const String& error = msg[YSTRING("error")];
+	    bool noAuth = isNoAuth(reasonStr,error);
+	    String text(noAuth ? "Login failed for account '" : "Failed to connect account '");
+	    text << account << "'";
+	    if (reasonStr || error) {
+		text << "\r\nReason: ";
+		if (reasonStr) {
+		    text << reasonStr;
+		    if (error && reasonStr != error)
+			text << " (" << error << ")";
+		}
+		else
+		    text << error;
+	    }
+	    if (!(noAuth && getAccCredentialsWnd(acc->params(),true,text))) {
+		NamedList rows("");
+		NamedList* upd = buildNotifArea(rows,"loginfail",account,String::empty(),"Login failure");
+		upd->addParam("text",text);
+		// Enable/disable account edit
+		const char* ok = String::boolText(!Client::self()->getVisible(s_wndAccount));
+		upd->addParam("active:messages_acc_edit",ok);
+		showNotificationArea(true,Client::self()->getWindow(s_wndMain),&rows);
+	    }
 	}
 	if (msg.getBoolValue(YSTRING("autorestart")))
 	    stat = ClientResource::Connecting;
@@ -7833,7 +7897,7 @@ bool DefaultLogic::updateAccount(const NamedList& account, bool save,
 		const String& user = account[YSTRING("username")];
 		const char* host = account.getValue(YSTRING("domain"),account.getValue(YSTRING("server")));
 		if (proto && user && host)
-		    id.assign(proto + ":" + user + "@" + host);
+		    buildAccountId(id,proto,user,host);
 		else {
 		    updAccDelOld(old,this);
 		    Debug(ClientDriver::self(),DebugNote,
@@ -8975,6 +9039,47 @@ bool DefaultLogic::storeContact(ClientContact* c)
 	ClientLogic::clearContact(a->m_cfg,room);
     Engine::enqueue(a->userData(true,"chatrooms"));
     return true;
+}
+
+// Handle ok from account password/credentials input window
+bool DefaultLogic::handleAccCredInput(Window* wnd, const String& name, bool inputPwd)
+{
+    ClientAccount* acc = name ? m_accounts->findAccount(name) : 0;
+    if (!acc)
+	return false;
+    String prefix = inputPwd ? "inputpwd_" : "inputacccred_";
+    String pwd;
+    Client::self()->getText(prefix + "password",pwd,false,wnd);
+    if (!pwd)
+	return showError(wnd,"Account password is mandatory");
+    // Check username changes
+    if (!inputPwd) {
+	String user;
+	Client::self()->getText(prefix + "username",user,false,wnd);
+	if (!user)
+	    return showError(wnd,"Account username is mandatory");
+	if (user != acc->params()[YSTRING("username")]) {
+	    String newId;
+	    buildAccountId(newId,acc->protocol(),user,
+		acc->params().getValue("domain",acc->params().getValue("server")));
+	    if (m_accounts->findAccount(newId))
+		return showAccDupError(wnd);
+	    NamedList account(acc->params());
+	    account.assign(newId);
+	    account.setParam("username",user);
+	    account.setParam("password",pwd);
+	    saveCheckParam(account,prefix,YSTRING("savepassword"),wnd);
+	    return updateAccount(account,true,name);
+	}
+    }
+    acc->m_params.setParam("password",pwd);
+    saveCheckParam(acc->m_params,prefix,YSTRING("savepassword"),wnd);
+    acc->save(true,acc->params().getBoolValue(YSTRING("savepassword")));
+    if (acc->startup()) {
+	setAccountStatus(m_accounts,acc,0,0,false);
+	return true;
+    }
+    return ::loginAccount(this,acc->params(),true,false);
 }
 
 

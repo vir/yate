@@ -107,7 +107,7 @@ public:
     inline int remotePort() const
 	{ return m_remotePort; }
 private:
-    void setRegistered(bool registered, const char* reason = 0);
+    void setRegistered(bool registered, const char* reason = 0, const char* error = 0);
     String m_name;
     String m_username;                  // Username
     String m_password;                  // Password
@@ -610,7 +610,7 @@ YIAXLine::~YIAXLine()
 }
 
 // Set the registered status, emits user.notify messages if necessary
-void YIAXLine::setRegistered(bool registered, const char* reason)
+void YIAXLine::setRegistered(bool registered, const char* reason, const char* error)
 {
     if ((m_registered == registered) && !reason)
 	return;
@@ -621,8 +621,8 @@ void YIAXLine::setRegistered(bool registered, const char* reason)
 	m->addParam("protocol","iax");
 	m->addParam("username",m_username);
 	m->addParam("registered",String::boolText(registered));
-	if (reason)
-	    m->addParam("reason",reason);
+	m->addParam("reason",reason,false);
+	m->addParam("error",error,false);
 	Engine::enqueue(m);
     }
 }
@@ -792,7 +792,7 @@ void YIAXLineContainer::regTerminate(IAXEvent* event)
 		line->toString().c_str(),what,tf,line->m_remoteAddr.c_str(),
 		line->m_remotePort,reason.safe());
 	clearTransaction(line);
-	line->setRegistered(ok,reason);
+	line->setRegistered(ok,reason,event->type() == IAXEvent::Reject ? "noauth" : 0);
 	remove = !line->m_register;
     }
     line->unlock();

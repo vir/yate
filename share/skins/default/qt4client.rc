@@ -54,6 +54,11 @@ enabled=false
 save=false
 description=inputpwd.ui
 
+[inputacccred]
+enabled=false
+save=false
+description=inputacccred.ui
+
 [account]
 enabled=true
 description=account.ui

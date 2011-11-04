@@ -206,7 +206,8 @@ String Client::s_toggles[OptCount] = {
     "multilines", "autoanswer", "ringincoming", "ringoutgoing",
     "activatelastoutcall", "activatelastincall", "activatecallonselect",
     "display_keypad", "openincomingurl", "addaccountonstartup",
-    "dockedchat", "destroychat", "notifychatstate"
+    "dockedchat", "destroychat", "notifychatstate", "showemptychat",
+    "sendemptychat"
 };
 bool Client::s_engineStarted = false;            // Engine started flag
 bool Client::s_idleLogicsTick = false;           // Call logics' timerTick()

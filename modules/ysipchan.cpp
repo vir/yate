@@ -601,7 +601,7 @@ private:
     void clearTransaction();
     void detectLocal(const SIPMessage* msg);
     void keepalive();
-    void setValid(bool valid, const char* reason = 0);
+    void setValid(bool valid, const char* reason = 0, const char* error = 0);
     virtual void changing();
 
     String m_registrar;
@@ -6573,7 +6573,7 @@ void YateSIPLine::setupAuth(SIPMessage* msg) const
 	msg->setAutoAuth(getAuthName(),m_password);
 }
 
-void YateSIPLine::setValid(bool valid, const char* reason)
+void YateSIPLine::setValid(bool valid, const char* reason, const char* error)
 {
     DDebug(&plugin,DebugInfo,"YateSIPLine(%s) setValid(%u,%s) current=%u [%p]",
 	c_str(),valid,reason,m_valid,this);
@@ -6588,8 +6588,8 @@ void YateSIPLine::setValid(bool valid, const char* reason)
 	if (m_domain)
 	    m->addParam("domain",m_domain);
 	m->addParam("registered",String::boolText(valid));
-	if (reason)
-	    m->addParam("reason",reason);
+	m->addParam("reason",reason,false);
+	m->addParam("error",error,false);
 	Engine::enqueue(m);
     }
 }
@@ -6774,7 +6774,7 @@ bool YateSIPLine::process(SIPEvent* ev)
 	default:
 	    // detect local address even from failed attempts - helps next time
 	    detectLocal(msg);
-	    setValid(false,msg->reason);
+	    setValid(false,msg->reason,lookup(msg->code,dict_errors,String(msg->code)));
 	    if (!m_keepTcpOffline)
 		setParty();
 	    Debug(&plugin,DebugWarn,"SIP line '%s' logon failure %d: %s",

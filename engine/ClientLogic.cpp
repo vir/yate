@@ -6558,7 +6558,8 @@ bool DefaultLogic::defaultMsgHandler(Message& msg, int id, bool& stopLogic)
 		bool hasState = !delay && buildChatState(chatState,msg,c->m_name);
 		const String& body = msg[YSTRING("body")];
 		NamedList* p = 0;
-		if (body || !hasState)
+		if (body || (!hasState &&
+		    Client::self()->getBoolOpt(Client::OptShowEmptyChat)))
 		    p = buildChatParams(body,c->m_name,time,0 != delay,ds);
 		// Active state with no body or notification: remove last notification
 		//  if the contact has a chat
@@ -6636,7 +6637,8 @@ bool DefaultLogic::defaultMsgHandler(Message& msg, int id, bool& stopLogic)
 	String chatState;
 	bool hasState = !delay && buildChatState(chatState,msg,member->m_name);
 	NamedList* p = 0;
-	if (body || !hasState)
+	if (body || (!hasState &&
+	    Client::self()->getBoolOpt(Client::OptShowEmptyChat)))
 	    p = buildChatParams(body,member ? member->m_name : nick,time,0,0);
 	const String& id = mucChat ? room->resource().toString() : member->toString();
 	// Active state with no body or notification: remove last notification
@@ -8082,14 +8084,16 @@ bool DefaultLogic::handleChatContactAction(const String& name, Window* wnd)
 		"DefaultLogic sending chat for contact=%s",c->toString().c_str());
 	    String text;
 	    c->getChatInput(text);
-	    if (text && c->sendChat(text)) {
+	    if ((text || Client::self()->getBoolOpt(Client::OptSendEmptyChat)) &&
+		c->sendChat(text)) {
 		unsigned int time = Time::secNow();
 		NamedList* tmp = buildChatParams(text,"me",time);
 		c->setChatProperty("history","_yate_tempitemreplace",String(false));
 		c->addChatHistory("chat_out",tmp);
 		c->setChatProperty("history","_yate_tempitemreplace",String(true));
 		c->setChatInput();
-		logChat(c,time,true,false,text);
+		if (text)
+		    logChat(c,time,true,false,text);
 	    }
 	}
 	else if (room) {
@@ -8101,11 +8105,11 @@ bool DefaultLogic::handleChatContactAction(const String& name, Window* wnd)
 		room->uri().c_str(),m->m_name.c_str());
 	    String text;
 	    room->getChatInput(id,text);
-	    bool ok = false;
+	    bool ok = text || Client::self()->getBoolOpt(Client::OptSendEmptyChat);
 	    if (room->ownMember(m))
-		ok = text && room->sendChat(text,String::empty(),"groupchat");
+		ok = ok && room->sendChat(text,String::empty(),"groupchat");
 	    else
-		ok = text && room->sendChat(text,m->m_name);
+		ok = ok && room->sendChat(text,m->m_name);
 	    if (ok) {
 		unsigned int time = Time::secNow();
 		NamedList* tmp = buildChatParams(text,"me",time);
@@ -8113,7 +8117,8 @@ bool DefaultLogic::handleChatContactAction(const String& name, Window* wnd)
 		room->addChatHistory(id,"chat_out",tmp);
 		room->setChatProperty(id,"history","_yate_tempitemreplace",String(true));
 		room->setChatInput(id);
-		logChat(room,time,true,false,text,room->ownMember(m),m->m_name);
+		if (text)
+		    logChat(room,time,true,false,text,room->ownMember(m),m->m_name);
 	    }
 	}
 	else

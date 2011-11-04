@@ -814,6 +814,8 @@ public:
 	OptDockedChat,                   // Show all contacts chat in the same window
 	OptDestroyChat,                  // Destroy contact chat when contact is removed/destroyed
 	OptNotifyChatState,              // Notify chat states
+	OptShowEmptyChat,                // Display received empty chat in chat history
+	OptSendEmptyChat,                // Send empty chat
 	OptCount
     };
 

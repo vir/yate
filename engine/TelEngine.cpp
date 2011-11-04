@@ -626,6 +626,7 @@ void GenObject::destruct()
     delete this;
 }
 
+
 static MutexPool s_refMutex(REFOBJECT_MUTEX_COUNT,false,"RefObject");
 
 RefObject::RefObject()
@@ -650,8 +651,9 @@ void RefObject::destruct()
     deref();
 }
 
-bool RefObject::refInternal()
+bool RefObject::ref()
 {
+    Lock lock(m_mutex);
     if (m_refcount > 0) {
 	++m_refcount;
 	return true;
@@ -659,23 +661,14 @@ bool RefObject::refInternal()
     return false;
 }
 
-bool RefObject::ref()
-{
-    Lock lock(m_mutex);
-    return refInternal();
-}
-
 bool RefObject::deref()
 {
-    bool zeroCall = false;
     m_mutex->lock();
     int i = m_refcount;
     if (i > 0)
 	--m_refcount;
-    if (i == 1)
-	zeroCall = zeroRefsTest();
     m_mutex->unlock();
-    if (zeroCall)
+    if (i == 1)
 	zeroRefs();
     else if (i <= 0)
 	Debug(DebugFail,"RefObject::deref() called with count=%d [%p]",i,this);
@@ -686,11 +679,6 @@ void RefObject::zeroRefs()
 {
     destroyed();
     delete this;
-}
-
-bool RefObject::zeroRefsTest()
-{
-    return true;
 }
 
 bool RefObject::resurrect()
@@ -706,6 +694,7 @@ bool RefObject::resurrect()
 void RefObject::destroyed()
 {
 }
+
 
 void RefPointerBase::assign(RefObject* oldptr, RefObject* newptr, void* pointer)
 {

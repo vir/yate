@@ -812,13 +812,6 @@ public:
      */
     virtual void destruct();
 
-    /**
-     * Retrieve the mutex that protects ref() and deref() for this object
-     * @return Reference to the mutex used for counter operations
-     */
-    inline Mutex& refMutex()
-	{ return *m_mutex; }
-
 protected:
     /**
      * This method is called when the reference count reaches zero after
@@ -826,23 +819,6 @@ protected:
      * The default behaviour is to delete the object.
      */
     virtual void zeroRefs();
-
-    /**
-     * This method is called when the reference count reaches zero just before
-     *  calling zeroRefs() with the non-recursive mutex still locked.
-     * Extra care must be taken to prevent deadlocks, normally the code should
-     *  only change some variables and return.
-     * The default implementation just returns true.
-     * @return True to call zeroRefs() after releasing the mutex
-     */
-    virtual bool zeroRefsTest();
-
-    /**
-     * Increments the reference counter if not already zero without locking
-     *  the mutex. The caller must make sure to hold the refMutex() locked.
-     * @return True if the object was successfully referenced
-     */
-    bool refInternal();
 
     /**
      * Bring the object back alive by setting the reference counter to one.

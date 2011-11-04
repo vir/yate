@@ -2466,7 +2466,7 @@ bool JBStream::postponedTerminate()
     if (!m_ppTerminate)
 	return false;
     int location = m_ppTerminate->getIntValue("location");
-    int destroy = m_ppTerminate->getIntValue("destroy");
+    bool destroy = m_ppTerminate->getBoolValue("destroy");
     int error = m_ppTerminate->getIntValue("error");
     String reason = m_ppTerminate->getValue("reason");
     resetPostponedTerminate();

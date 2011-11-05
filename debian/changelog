@@ -1,3 +1,12 @@
+yate (3.3.3.svn4680) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4680: + To debugging of relay messages set
+    level INFO and added display of priority.  + Commented out the
+    [messages] section in the sample file.  + Assume chan.dtmf=peerid in
+    the [messages] relay list of callfork.conf
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sun, 06 Nov 2011 02:19:16 +0400
+
 yate (3.3.3.svn4679) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4679: + Fixed parameter retrieval from

@@ -656,13 +656,19 @@ void ForkModule::initialize()
 			Debug(this,DebugWarn,"Refusing to fork message '%s'",item->name().c_str());
 			continue;
 		}
-		ForkRelay* r = new ForkRelay(item->name(),*item,
-		    cfg.getIntValue(s_prio,item->name(),prio));
-		Debug(this,DebugAll,"Will fork messages '%s' matching '%s'",
-		    item->name().c_str(),item->c_str());
+		int p = cfg.getIntValue(s_prio,item->name(),prio);
+		ForkRelay* r = new ForkRelay(item->name(),*item,p);
+		Debug(this,DebugInfo,"Will fork messages '%s' matching '%s' priority %d",
+		    item->name().c_str(),item->c_str(),p);
 		Engine::install(r);
 		m_hasRelays = true;
 	    }
+	}
+	else {
+	    int p = cfg.getIntValue(s_prio,"chan.dtmf",prio);
+	    Debug(this,DebugInfo,"Default fork for 'chan.dtmf' matching 'peerid' priority %d",p);
+	    Engine::install(new ForkRelay("chan.dtmf","peerid",p));
+	    m_hasRelays = true;
 	}
     }
 }

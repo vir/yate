@@ -6010,6 +6010,10 @@ bool DefaultLogic::handleUserNotify(Message& msg, bool& stopLogic)
 		upd->addParam("active:messages_acc_edit",ok);
 		showNotificationArea(true,Client::self()->getWindow(s_wndMain),&rows);
 	    }
+	    else {
+	    	// Remove account failure notification if still there
+		removeNotifArea(YSTRING("loginfail"),account);
+	    }
 	}
 	if (msg.getBoolValue(YSTRING("autorestart")))
 	    stat = ClientResource::Connecting;

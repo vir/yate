@@ -100,6 +100,9 @@ Mutex.o: @srcdir@/Mutex.cpp $(MKDEPS) $(CINC)
 Thread.o: @srcdir@/Thread.cpp $(MKDEPS) $(CINC)
 	$(COMPILE) @THREAD_KILL@ @HAVE_PRCTL@ -c $<
 
+TelEngine.o: @srcdir@/TelEngine.cpp $(MKDEPS) $(CINC)
+	$(COMPILE) @ATOMIC_OPS@ -c $<
+
 Client.o: @srcdir@/Client.cpp $(MKDEPS) $(CLINC)
 	$(COMPILE) -c $<
 

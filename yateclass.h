@@ -812,6 +812,13 @@ public:
      */
     virtual void destruct();
 
+    /**
+     * Check if reference counter manipulations are efficient on this platform.
+     * If platform does not support atomic operations a mutex pool is used.
+     * @return True if refcount uses atomic integer operations
+     */
+    static bool efficientIncDec();
+
 protected:
     /**
      * This method is called when the reference count reaches zero after

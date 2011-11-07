@@ -627,12 +627,16 @@ void GenObject::destruct()
 }
 
 
+#ifndef ATOMIC_OPS
 static MutexPool s_refMutex(REFOBJECT_MUTEX_COUNT,false,"RefObject");
+#endif
 
 RefObject::RefObject()
     : m_refcount(1), m_mutex(0)
 {
+#ifndef ATOMIC_OPS
     m_mutex = s_refMutex.mutex(this);
+#endif
 }
 
 RefObject::~RefObject()
@@ -653,21 +657,45 @@ void RefObject::destruct()
 
 bool RefObject::ref()
 {
+#ifdef ATOMIC_OPS
+#ifdef _WINDOWS
+    if (InterlockedIncrement((LONG*)&m_refcount) > 1)
+	return true;
+    InterlockedDecrement((LONG*)&m_refcount);
+#else
+    if (__sync_add_and_fetch(&m_refcount,1) > 1)
+	return true;
+    __sync_sub_and_fetch(&m_refcount,1);
+#endif
+#else
     Lock lock(m_mutex);
     if (m_refcount > 0) {
 	++m_refcount;
 	return true;
     }
+#endif
     return false;
 }
 
 bool RefObject::deref()
 {
+#ifdef ATOMIC_OPS
+#ifdef _WINDOWS
+    int i = InterlockedDecrement((LONG*)&m_refcount) + 1;
+    if (i <= 0)
+	InterlockedIncrement((LONG*)&m_refcount);
+#else
+    int i = __sync_fetch_and_sub(&m_refcount,1);
+    if (i <= 0)
+	__sync_fetch_and_add(&m_refcount,1);
+#endif
+#else
     m_mutex->lock();
     int i = m_refcount;
     if (i > 0)
 	--m_refcount;
     m_mutex->unlock();
+#endif
     if (i == 1)
 	zeroRefs();
     else if (i <= 0)
@@ -683,18 +711,40 @@ void RefObject::zeroRefs()
 
 bool RefObject::resurrect()
 {
+#ifdef ATOMIC_OPS
+#ifdef _WINDOWS
+    if (InterlockedIncrement((LONG*)&m_refcount) == 1)
+	return true;
+    InterlockedDecrement((LONG*)&m_refcount);
+    return false;
+#else
+    if (__sync_add_and_fetch(&m_refcount,1) == 1)
+	return true;
+    __sync_sub_and_fetch(&m_refcount,1);
+    return false;
+#endif
+#else
     m_mutex->lock();
     bool ret = (0 == m_refcount);
     if (ret)
 	m_refcount = 1;
     m_mutex->unlock();
     return ret;
+#endif
 }
 
 void RefObject::destroyed()
 {
 }
 
+bool RefObject::efficientIncDec()
+{
+#ifdef ATOMIC_OPS
+    return true;
+#else
+    return false;
+#endif
+}
 
 void RefPointerBase::assign(RefObject* oldptr, RefObject* newptr, void* pointer)
 {

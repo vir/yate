@@ -1,3 +1,15 @@
+yate (3.3.3.svn4682) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4682: + Commented out the [messages] section
+    in the sample file.  + Assume chan.dtmf=peerid in the [messages]
+    relay list of callfork.conf  + Remove account login failure
+    notification when presenting the credentials dialog.  + Note that
+    GCC supports them on specific architectures, on some platforms -
+    march=... must be set in CFLAGS.  + Detect and use atomic integer
+    operations for RefObject reference counter.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 08 Nov 2011 02:19:20 +0400
+
 yate (3.3.3.svn4680) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4680: + To debugging of relay messages set

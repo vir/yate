@@ -1,3 +1,15 @@
+yate (3.3.3.svn4685) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4685: + Detect and use atomic integer
+    operations for RefObject reference counter.  + See
+    http://comments.gmane.org/gmane.comp.telephony.yate/6558 for
+    details.  + Fix isupmangler module path  + Moved the debug
+    timestamping to a separate method.  + Added packageing of more new
+    files  + Support timestamping logs in local timezone format.  +
+    Added new -Dz option to the man page.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 10 Nov 2011 02:19:33 +0400
+
 yate (3.3.3.svn4682) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4682: + Commented out the [messages] section

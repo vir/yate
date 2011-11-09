@@ -506,6 +506,7 @@ public:
 	Relative,  // from program start
 	Absolute,  // from EPOCH (1-1-1970)
 	Textual,   // absolute GMT in YYYYMMDDhhmmss.uuuuuu format
+	TextLocal, // local time in YYYYMMDDhhmmss.uuuuuu format
     };
 
     /**

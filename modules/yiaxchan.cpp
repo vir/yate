@@ -59,7 +59,7 @@ static const TokenDict dict_payloads[] = {
     {"png",    IAXFormat::PNG},
     {"h261",   IAXFormat::H261},
     {"h263",   IAXFormat::H263},
-    {"h263p",  IAXFormat::H263P},
+    {"h263p",  IAXFormat::H263p},
     {"h264",   IAXFormat::H264},
     {0, 0}
 };

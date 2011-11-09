@@ -1,3 +1,10 @@
+yate (3.3.3.vir2011110901) UNRELEASED; urgency=low
+
+  * Merged lates upstream changes
+  * Fix building (failed due to isupmangler module path change)
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Wed, 09 Nov 2011 12:05:56 +0400
+
 yate (3.3.3.vir2011090601) UNRELEASED; urgency=low
 
   * Fixed overlapdial timer threads leak on reload

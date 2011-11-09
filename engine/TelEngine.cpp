@@ -34,7 +34,7 @@
 #ifndef HAVE_GMTIME_S
 #include <errno.h>
 
-int _gmtime_s(struct tm* _tm, const time_t* time)
+static int _gmtime_s(struct tm* _tm, const time_t* time)
 {
     static TelEngine::Mutex m(false,"_gmtime_s");
     struct tm* tmp;
@@ -46,6 +46,27 @@ int _gmtime_s(struct tm* _tm, const time_t* time)
 	return EINVAL;
     m.lock();
     tmp = gmtime(time);
+    if (!tmp) {
+	m.unlock();
+	return EINVAL;
+    }
+    *_tm = *tmp;
+    m.unlock();
+    return 0;
+}
+
+static int _localtime_s(struct tm* _tm, const time_t* time)
+{
+    static TelEngine::Mutex m(false,"_localtime_s");
+    struct tm* tmp;
+    if (!_tm)
+	return EINVAL;
+    _tm->tm_isdst = _tm->tm_yday = _tm->tm_wday = _tm->tm_year = _tm->tm_mon = _tm->tm_mday =
+	_tm->tm_hour = _tm->tm_min = _tm->tm_sec = -1;
+    if (!time)
+	return EINVAL;
+    m.lock();
+    tmp = localtime(time);
     if (!tmp) {
 	m.unlock();
 	return EINVAL;
@@ -176,29 +197,7 @@ static void dbg_output(int level,const char* prefix, const char* format, va_list
     if (!(s_output || s_intout))
 	return;
     char buf[OUT_BUFFER_SIZE];
-    unsigned int n = 0;
-    if (s_fmtstamp != Debugger::None) {
-	u_int64_t t = Time::now();
-	if (s_fmtstamp == Debugger::Relative)
-	    t -= s_timestamp;
-	unsigned int s = (unsigned int)(t / 1000000);
-	unsigned int u = (unsigned int)(t % 1000000);
-	if (s_fmtstamp == Debugger::Textual) {
-	    time_t sec = (time_t)s;
-	    struct tm tmp;
-#ifdef _WINDOWS
-	    _gmtime_s(&tmp,&sec);
-#else
-	    gmtime_r(&sec,&tmp);
-#endif
-	    ::sprintf(buf,"%04d%02d%02d%02d%02d%02d.%06u ",
-		tmp.tm_year+1900,tmp.tm_mon+1,tmp.tm_mday,
-		tmp.tm_hour,tmp.tm_min,tmp.tm_sec,u);
-	}
-	else
-	    ::sprintf(buf,"%07u.%06u ",s,u);
-	n = ::strlen(buf);
-    }
+    unsigned int n = Debugger::formatTime(buf,s_fmtstamp);
     unsigned int l = s_indent*2;
     if (l >= sizeof(buf)-n)
 	l = sizeof(buf)-n-1;
@@ -319,7 +318,7 @@ bool abortOnBug(bool doAbort)
     bool tmp = s_abort;
     s_abort = doAbort;
     return tmp;
-}  
+}
 
 int debugLevel()
 {
@@ -455,11 +454,53 @@ void Debugger::enableOutput(bool enable, bool colorize)
 	setOutput(dbg_colorize_func);
 }
 
+Debugger::Formatting Debugger::getFormatting()
+{
+    return s_fmtstamp;
+}
+
 void Debugger::setFormatting(Formatting format)
 {
     // start stamp will be rounded to full second
     s_timestamp = (Time::now() / 1000000) * 1000000;
     s_fmtstamp = format;
+}
+
+unsigned int Debugger::formatTime(char* buf, Formatting format)
+{
+    if (!buf)
+	return 0;
+    if (None != format) {
+	u_int64_t t = Time::now();
+	if (Relative == format)
+	    t -= s_timestamp;
+	unsigned int s = (unsigned int)(t / 1000000);
+	unsigned int u = (unsigned int)(t % 1000000);
+	if (Textual == format || TextLocal == format) {
+	    time_t sec = (time_t)s;
+	    struct tm tmp;
+	    if (TextLocal == format)
+#ifdef _WINDOWS
+		_localtime_s(&tmp,&sec);
+#else
+		localtime_r(&sec,&tmp);
+#endif
+	    else
+#ifdef _WINDOWS
+		_gmtime_s(&tmp,&sec);
+#else
+		gmtime_r(&sec,&tmp);
+#endif
+	    ::sprintf(buf,"%04d%02d%02d%02d%02d%02d.%06u ",
+		tmp.tm_year+1900,tmp.tm_mon+1,tmp.tm_mday,
+		tmp.tm_hour,tmp.tm_min,tmp.tm_sec,u);
+	}
+	else
+	    ::sprintf(buf,"%07u.%06u ",s,u);
+	return ::strlen(buf);
+    }
+    buf[0] = '\0';
+    return 0;
 }
 
 

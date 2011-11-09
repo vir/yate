@@ -1622,6 +1622,7 @@ static void usage(bool client, FILE* f)
 "     t            Timestamp debugging messages relative to program start\n"
 "     e            Timestamp debugging messages based on EPOCH (1-1-1970 GMT)\n"
 "     f            Timestamp debugging in GMT format YYYYMMDDhhmmss.uuuuuu\n"
+"     z            Timestamp debugging in local timezone YYYYMMDDhhmmss.uuuuuu\n"
     ,client ? "" :
 #ifdef _WINDOWS
 "   --service      Run as Windows service\n"
@@ -1898,6 +1899,9 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 				    break;
 				case 'f':
 				    tstamp = Debugger::Textual;
+				    break;
+				case 'z':
+				    tstamp = Debugger::TextLocal;
 				    break;
 				default:
 				    initUsrPath(s_usrpath);

@@ -15,7 +15,6 @@ debian/tmp/etc/yate/mgcpca.conf
 debian/tmp/usr/lib/yate/server/mgcpca.yate
 debian/tmp/etc/yate/sigtransport.conf
 debian/tmp/usr/lib/yate/server/sigtransport.yate
-
 debian/tmp/etc/yate/isupmangler.conf
-debian/tmp/usr/lib/yate/server/isupmangler.yate
+debian/tmp/usr/lib/yate/sig/isupmangler.yate
 

@@ -38,6 +38,13 @@ namespace { // anonymous
 // maximum size we allow the buffer to grow
 #define MAX_BUFFER 960
 
+// maximum and default number of speakers we track
+#define MAX_SPEAKERS 8
+#define DEF_SPEAKERS 3
+
+// Speaking detector energy square hysteresis
+#define SPEAK_HIST_MIN 16384
+#define SPEAK_HIST_MAX 32768
 
 // Absolute maximum possible energy (square +-32767 wave) - do not change
 #define ENERGY_MAX 1073676289
@@ -136,6 +143,9 @@ private:
     int m_maxLock;
     u_int64_t m_expire;
     unsigned int m_lonelyInterval;
+    ConfChan* m_speakers[MAX_SPEAKERS];
+    int m_trackSpeakers;
+    u_int64_t m_nextSpeakers;
 };
 
 // A conference channel is just a dumb holder of its data channels
@@ -178,8 +188,8 @@ class ConfConsumer : public DataConsumer
     YCLASS(ConfConsumer,DataConsumer);
 public:
     ConfConsumer(ConfRoom* room, bool smart = false)
-	: m_room(room), m_src(0), m_muted(false), m_smart(smart),
-	  m_energy2(ENERGY_MIN), m_noise2(ENERGY_MIN)
+	: m_room(room), m_src(0), m_muted(false), m_smart(smart), m_speak(false),
+	  m_energy2(ENERGY_MIN), m_noise2(ENERGY_MIN), m_envelope2(ENERGY_MIN)
 	{ DDebug(DebugAll,"ConfConsumer::ConfConsumer(%p,%s) [%p]",room,String::boolText(smart),this); m_format = room->getFormat(); }
     ~ConfConsumer()
 	{ DDebug(DebugAll,"ConfConsumer::~ConfConsumer() [%p]",this); }
@@ -187,14 +197,19 @@ public:
     virtual bool control(NamedList& msg);
     unsigned int energy() const;
     unsigned int noise() const;
+    unsigned int envelope() const;
     inline unsigned int energy2() const
 	{ return m_energy2; }
     inline unsigned int noise2() const
 	{ return m_noise2; }
+    inline unsigned int envelope2() const
+	{ return m_envelope2; }
     inline bool muted() const
 	{ return m_muted; }
     inline bool smart() const
 	{ return m_smart; }
+    inline bool speaking() const
+	{ return m_smart && m_speak && !m_muted; }
     inline bool hasSignal() const
 	{ return (!m_muted) && (m_energy2 >= m_noise2); }
     inline bool shouldMix() const
@@ -206,8 +221,10 @@ private:
     ConfSource* m_src;
     bool m_muted;
     bool m_smart;
+    bool m_speak;
     unsigned int m_energy2;
     unsigned int m_noise2;
+    unsigned int m_envelope2;
     DataBlock m_buffer;
 };
 
@@ -312,7 +329,7 @@ ConfRoom* ConfRoom::get(const String& name, const NamedList* params)
 ConfRoom::ConfRoom(const String& name, const NamedList& params)
     : m_name(name), m_lonely(false), m_created(true), m_record(0),
       m_rate(8000), m_users(0), m_maxusers(10), m_maxLock(200),
-      m_expire(0), m_lonelyInterval(0)
+      m_expire(0), m_lonelyInterval(0), m_nextSpeakers(0)
 {
     DDebug(&__plugin,DebugAll,"ConfRoom::ConfRoom('%s',%p) [%p]",
 	name.c_str(),&params,this);
@@ -320,9 +337,18 @@ ConfRoom::ConfRoom(const String& name, const NamedList& params)
     m_maxusers = params.getIntValue("maxusers",m_maxusers);
     m_maxLock = params.getIntValue("waitlock",m_maxLock);
     m_notify = params.getValue("notify");
+    m_trackSpeakers = params.getIntValue("speakers",0);
+    if (m_trackSpeakers < 0)
+	m_trackSpeakers = 0;
+    else if (m_trackSpeakers > MAX_SPEAKERS)
+	m_trackSpeakers = MAX_SPEAKERS;
+    else if ((m_trackSpeakers == 0) && params.getBoolValue("speakers"))
+	m_trackSpeakers = DEF_SPEAKERS;
     setLonelyTimeout(params["lonely"]);
     if (m_rate != 8000)
 	m_format << "/" << m_rate;
+    for (int i = 0; i < MAX_SPEAKERS; i++)
+	m_speakers[i] = 0;
     s_rooms.append(this);
     // possibly create outgoing call to room record utility channel
     setRecording(params);
@@ -645,6 +671,13 @@ void ConfRoom::mix(ConfConsumer* cons)
     unsigned int chunks = len / DATA_CHUNK;
     if (!chunks)
 	return;
+    int speakVol[MAX_SPEAKERS];
+    ConfChan* speakChan[MAX_SPEAKERS];
+    int spk;
+    for (spk = 0; spk < MAX_SPEAKERS; spk++) {
+	speakVol[spk] = 0;
+	speakChan[spk] = 0;
+    }
     len = chunks * DATA_CHUNK / sizeof(int16_t);
     DataBlock mixbuf(0,len*sizeof(int));
     int* buf = (int*)mixbuf.data();
@@ -656,19 +689,37 @@ void ConfRoom::mix(ConfConsumer* cons)
 	    if (co->shouldMix()) {
 		unsigned int n = co->m_buffer.length() / 2;
 #ifdef XDEBUG
-		int noise = co->noise();
-		int energy = co->energy() - noise;
-		if (energy < 0)
-		    energy = 0;
-		Debug(ch,DebugAll,"Cons %p samp=%u |%s%s>",
-		    co,n,String('#',noise).safe(),
-		    String('=',energy).safe());
+		if (ch->debugAt(DebugAll)) {
+		    int noise = co->noise();
+		    int energy = co->energy() - noise;
+		    if (energy < 0)
+			energy = 0;
+		    int tip = co->envelope() - energy - noise;
+		    if (tip < 0)
+			tip = 0;
+		    Debug(ch,DebugAll,"Cons %p samp=%u |%s%s%s>",
+			co,n,String('#',noise).safe(),
+			String('=',energy).safe(),String('-',tip).safe());
+		}
 #endif
 		if (n > len)
 		    n = len;
 		const int16_t* p = (const int16_t*)co->m_buffer.data();
 		for (unsigned int i=0; i < n; i++)
 		    buf[i] += *p++;
+	    }
+	    if (m_trackSpeakers && m_notify && !ch->isUtility() && co->speaking()) {
+		int vol = co->envelope();
+		for (spk = m_trackSpeakers-1; spk >= 0; spk--) {
+		    if (vol <= speakVol[spk])
+			break;
+		    if (spk < MAX_SPEAKERS-1) {
+			speakVol[spk+1] = speakVol[spk];
+			speakChan[spk+1] = speakChan[spk];
+		    }
+		    speakVol[spk] = vol;
+		    speakChan[spk] = ch;
+		}
 	    }
 	}
     }
@@ -687,8 +738,74 @@ void ConfRoom::mix(ConfConsumer* cons)
 	*p++ = (val < -32767) ? -32767 : ((val > 32767) ? 32767 : val);
     }
     mixbuf.clear();
+    Message* m = 0;
+    if (m_trackSpeakers && m_notify) {
+	u_int64_t now = Time::now();
+	bool notify = false;
+	bool changed = false;
+	// check if the list of speakers changed or not, exclude order change
+	for (spk = 0; spk < m_trackSpeakers; spk++) {
+	    changed = true;
+	    for (int i = 0; i < m_trackSpeakers; i++) {
+		if (m_speakers[spk] == speakChan[i]) {
+		    changed = false;
+		    break;
+		}
+	    }
+	    if (changed)
+		break;
+	}
+	if (!changed) {
+	    for (spk = 0; spk < m_trackSpeakers; spk++) {
+		changed = true;
+		for (int i = 0; i < m_trackSpeakers; i++) {
+		    if (m_speakers[i] == speakChan[spk]) {
+			changed = false;
+			break;
+		    }
+		}
+		if (changed)
+		    break;
+	    }
+	}
+	// check if anything changed
+	for (spk = 0; spk < m_trackSpeakers; spk++) {
+	    if (m_speakers[spk] != speakChan[spk]) {
+		m_speakers[spk] = speakChan[spk];
+		notify = true;
+	    }
+	}
+	// if we have speaker(s) notify periodically
+	if (!notify)
+	    notify = m_speakers[0] && (now >= m_nextSpeakers);
+	if (notify) {
+	    m = new Message("chan.notify");
+	    m->userData(this);
+	    m->addParam("targetid",m_notify);
+	    m->addParam("event","speaking");
+	    m->addParam("room",m_name);
+	    m->addParam("maxusers",String(m_maxusers));
+	    for (spk = 0; spk < m_trackSpeakers; spk++) {
+		if (!speakChan[spk])
+		    break;
+		String param("speaker.");
+		param << (spk+1);
+		m->addParam(param,speakChan[spk]->id());
+		String peer;
+		if (speakChan[spk]->getPeerId(peer))
+		    m->addParam(param + ".peer",peer);
+		m->addParam(param + ".energy",String(speakVol[spk]));
+	    }
+	    m->addParam("speakers",String(spk));
+	    m->addParam("changed",String::boolText(changed));
+	    // repeat notification at least once every 5s if someone speaks
+	    m_nextSpeakers = now + 5000000;
+	}
+    }
     mylock.drop();
     Forward(data);
+    if (m)
+	Engine::enqueue(m);
 }
 
 // Update room data
@@ -770,6 +887,13 @@ unsigned long ConfConsumer::Consume(const DataBlock& data, unsigned long tStamp,
 	// but never below our arbitrary absolute minimum
 	if (m_noise2 < ENERGY_MIN)
 	    m_noise2 = ENERGY_MIN;
+	// compute envelope, faster attack than decay
+	if (m_energy2 > m_envelope2)
+	    m_envelope2 = (unsigned int)(((u_int64_t)m_envelope2 * 7 + m_energy2) >> 3);
+	else
+	    m_envelope2 = (unsigned int)(((u_int64_t)m_envelope2 * 15 + m_energy2) >> 4);
+	// detect speech or noises, apply hysteresis
+	m_speak = (m_envelope2 >> 1) > (m_noise2 + (m_speak ? SPEAK_HIST_MIN : SPEAK_HIST_MAX));
     }
     bool autoMute = true;
     int maxLock = 1000 * m_room->maxLock();
@@ -859,6 +983,11 @@ unsigned int ConfConsumer::energy() const
 unsigned int ConfConsumer::noise() const
 {
     return binLog(m_noise2);
+}
+
+unsigned int ConfConsumer::envelope() const
+{
+    return binLog(m_envelope2);
 }
 
 bool ConfConsumer::control(NamedList& msg)

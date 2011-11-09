@@ -25,6 +25,7 @@
 
 #include <yatephone.h>
 #include <yatemgcp.h>
+#include <yatesdp.h>
 
 #include <stdlib.h>
 
@@ -43,7 +44,7 @@ private:
     bool createConn(MGCPTransaction* trans, MGCPMessage* msg);
 };
 
-class MGCPChan : public Channel
+class MGCPChan : public Channel, public SDPSession
 {
     YCLASS(MGCPChan,Channel);
 public:
@@ -61,20 +62,38 @@ public:
     bool initialEvent(MGCPTransaction* tr, MGCPMessage* mm, const MGCPEndpointId& id);
     void activate(bool standby);
 protected:
-    void disconnected(bool final, const char* reason);
+    virtual void destroyed();
+    virtual void disconnected(bool final, const char* reason);
+    virtual Message* buildChanRtp(RefObject* context)
+	{
+	    Message* m = new Message("chan.rtp");
+	    m->userData(context ? context : this);
+	    return m;
+	}
+    virtual Message* buildChanRtp(SDPMedia* media, const char* addr, bool start, RefObject* context)
+	{
+	    Message* m = SDPSession::buildChanRtp(media,addr,start,context);
+	    if (m)
+		m->addParam("mgcp_allowed",String::boolText(false));
+	    return m;
+	}
+    virtual void mediaChanged(const SDPMedia& media);
 private:
-    void endTransaction(int code = 407, const NamedList* params = 0);
+    void endTransaction(int code = 407, const NamedList* params = 0, MimeSdpBody* sdp = 0);
     bool reqNotify(String& evt);
     bool setSignal(String& req);
     bool rqntParams(const MGCPMessage* mm);
     static void copyRtpParams(NamedList& dest, const NamedList& src);
     MGCPTransaction* m_tr;
+    SocketAddr m_addr;
     String m_connEp;
     String m_callId;
     String m_ntfyId;
     String m_rtpId;
+    String m_stats;
     bool m_standby;
     bool m_isRtp;
+    bool m_started;
 };
 
 class MGCPPlugin : public Driver
@@ -87,7 +106,11 @@ public:
     RefPointer<MGCPChan> findConn(const String* id, MGCPChan::IdType type);
     inline RefPointer<MGCPChan> findConn(const String& id, MGCPChan::IdType type)
 	{ return findConn(&id,type); }
+    inline SDPParser& parser()
+	{ return m_parser; }
     void activate(bool standby);
+private:
+    SDPParser m_parser;
 };
 
 class DummyCall : public CallEndpoint
@@ -103,6 +126,9 @@ static Mutex s_mutex(false,"MGCP-GW");
 static MGCPPlugin splugin;
 
 static YMGCPEngine* s_engine = 0;
+
+// preserve RTP session (local addr+port) even if remote address changed
+static bool s_rtp_preserve = false;
 
 // cluster and standby support
 static bool s_cluster = false;
@@ -217,7 +243,8 @@ bool YMGCPEngine::createConn(MGCPTransaction* trans, MGCPMessage* msg)
 
 MGCPChan::MGCPChan(const char* connId)
     : Channel(splugin),
-      m_tr(0), m_standby(s_standby), m_isRtp(false)
+      SDPSession(&splugin.parser()),
+      m_tr(0), m_standby(s_standby), m_isRtp(false), m_started(false)
 {
     DDebug(this,DebugAll,"MGCPChan::MGCPChan('%s') [%p]",connId,this);
     status("created");
@@ -238,6 +265,22 @@ MGCPChan::~MGCPChan()
 {
     DDebug(this,DebugAll,"MGCPChan::~MGCPChan() [%p]",this);
     endTransaction();
+}
+
+
+void MGCPChan::destroyed()
+{
+    if (m_rtpMedia) {
+	setMedia(0);
+	clearEndpoint();
+	if (m_callId && m_addr.valid()) {
+	    MGCPMessage* mm = new MGCPMessage(s_engine,"DLCX",m_connEp);
+	    mm->params.addParam("I",address());
+	    mm->params.addParam("C",m_callId);
+	    mm->params.addParam("P",m_stats,false);
+	    s_engine->sendCommand(mm,m_addr);
+	}
+    }
 }
 
 void MGCPChan::disconnected(bool final, const char* reason)
@@ -271,18 +314,36 @@ void MGCPChan::activate(bool standby)
     m_standby = standby;
 }
 
-void MGCPChan::endTransaction(int code, const NamedList* params)
+void MGCPChan::endTransaction(int code, const NamedList* params, MimeSdpBody* sdp)
 {
     Lock mylock(s_mutex);
     MGCPTransaction* tr = m_tr;
     m_tr = 0;
-    if (!tr)
-	return;
-    tr->userData(0);
-    mylock.drop();
-    if (!tr->msgResponse()) {
-	Debug(this,DebugInfo,"Finishing transaction %p with code %d [%p]",tr,code,this);
-	tr->setResponse(code,params);
+    if (tr) {
+	tr->userData(0);
+	mylock.drop();
+	if (!tr->msgResponse()) {
+	    Debug(this,DebugInfo,"Finishing transaction %p with code %d [%p]",tr,code,this);
+	    tr->setResponse(code,params,sdp);
+	    sdp = 0;
+	}
+    }
+    TelEngine::destruct(sdp);
+}
+
+void MGCPChan::mediaChanged(const SDPMedia& media)
+{
+    SDPSession::mediaChanged(media);
+    m_stats.clear();
+    if (m_started && media.id() && media.transport()) {
+	Message m("chan.rtp");
+	m.addParam("rtpid",media.id());
+	m.addParam("media",media);
+	m.addParam("transport",media.transport());
+	m.addParam("terminate",String::boolText(true));
+	m.addParam("mgcp_allowed",String::boolText(false));
+	Engine::dispatch(m);
+	m_stats = m.getValue(YSTRING("stats"));
     }
 }
 
@@ -306,28 +367,40 @@ void MGCPChan::callAccept(Message& msg)
     params.addParam("I",address());
     if (s_cluster || m_standby)
 	params.addParam("x-standby",String::boolText(m_standby));
-    endTransaction(200,&params);
+    MimeSdpBody* sdp = 0;
+    if (!m_isRtp) {
+	sdp = createRtpSDP(true);
+	if (sdp) {
+	    m_started = true;
+	    params.addParam("M","sendrecv");
+	}
+	else {
+	    // this address is usd just as a hint
+	    const String& addr = msg["rtp_remoteip"];
+	    if (addr)
+		sdp = createRtpSDP(addr,msg);
+	    params.addParam("M","inactive");
+	}
+    }
+    endTransaction(200,&params,sdp);
 }
 
 bool MGCPChan::msgTone(Message& msg, const char* tone)
 {
     if (null(tone))
 	return false;
-    MGCPEndpoint* ep = s_engine->findEp(m_connEp);
-    if (!ep)
+    if (!(m_connEp && m_addr.valid()))
 	return false;
-    MGCPEpInfo* epi = ep->peer();
-    if (!epi)
-	return false;
-    MGCPMessage* mm = new MGCPMessage(s_engine,"NTFY",epi->toString());
+    MGCPMessage* mm = new MGCPMessage(s_engine,"NTFY",m_connEp);
     String tmp;
     while (char c = *tone++) {
 	if (tmp)
 	    tmp << ",";
 	tmp << "D/" << c;
     }
+    mm->params.addParam("X",m_ntfyId,false);
     mm->params.setParam("O",tmp);
-    return s_engine->sendCommand(mm,epi->address) != 0;
+    return s_engine->sendCommand(mm,m_addr) != 0;
 }
 
 bool MGCPChan::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
@@ -355,8 +428,12 @@ bool MGCPChan::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
     if (mm->name() == YSTRING("DLCX")) {
 	disconnect();
 	status("deleted");
+	setMedia(0);
 	clearEndpoint();
 	m_address.clear();
+	m_callId.clear();
+	params.addParam("P",m_stats,false);
+	m_stats.clear();
 	tr->setResponse(250,&params);
 	return true;
     }
@@ -378,6 +455,7 @@ bool MGCPChan::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 	if (param)
 	    m_ntfyId = *param;
 	rqntParams(mm);
+	MimeSdpBody* sdp = 0;
 	if (m_isRtp) {
 	    Message m("chan.rtp");
 	    m.addParam("mgcp_allowed",String::boolText(false));
@@ -391,7 +469,27 @@ bool MGCPChan::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
 		m_rtpId = m.getValue(YSTRING("rtpid"),m_rtpId);
 	    }
 	}
-	tr->setResponse(200,&params);
+	else {
+	    sdp = static_cast<MimeSdpBody*>(mm->sdp[0]);
+	    if (sdp) {
+		String addr;
+		ObjList* lst = splugin.parser().parse(sdp,addr);
+		sdp = 0;
+		if (lst) {
+		    if (m_rtpAddr != addr) {
+			m_rtpAddr = addr;
+			Debug(this,DebugAll,"New RTP addr '%s'",m_rtpAddr.c_str());
+			// clear all data endpoints - createRtpSDP will build new ones
+			if (!s_rtp_preserve)
+			    clearEndpoint();
+		    }
+		    setMedia(lst);
+		    sdp = createRtpSDP(true);
+		    m_started = true;
+		}
+	    }
+	}
+	tr->setResponse(200,&params,sdp);
 	return true;
     }
     if (mm->name() == YSTRING("AUCX")) {
@@ -433,13 +531,14 @@ bool MGCPChan::initialEvent(MGCPTransaction* tr, MGCPMessage* mm, const MGCPEndp
 {
     Debug(this,DebugInfo,"MGCPChan::initialEvent(%p,%p,'%s') [%p]",
 	tr,mm,id.id().c_str(),this);
+    m_addr = tr->addr();
     m_connEp = id.id();
     m_callId = mm->params.getValue(YSTRING("c"));
     m_ntfyId = mm->params.getValue(YSTRING("x"));
     rqntParams(mm);
 
-    if (id.user() == "gigi")
-	m_isRtp = true;
+    MimeSdpBody* sdp = static_cast<MimeSdpBody*>(mm->sdp[0]);
+    m_isRtp = mm->params.getParam(YSTRING("x-mediatype")) || mm->params.getParam(YSTRING("x-remoteip"));
 
     Message* m = message(m_isRtp ? "chan.rtp" : "call.route");
     m->addParam("mgcp_allowed",String::boolText(false));
@@ -467,6 +566,21 @@ bool MGCPChan::initialEvent(MGCPTransaction* tr, MGCPMessage* mm, const MGCPEndp
 	deref();
 	return true;
     }
+    if (sdp) {
+	setMedia(splugin.parser().parse(sdp,m_rtpAddr,m_rtpMedia));
+	if (m_rtpMedia) {
+	    m_rtpForward = true;
+	    m->addParam("rtp_addr",m_rtpAddr);
+	    putMedia(*m);
+	}
+	if (splugin.parser().sdpForward()) {
+	    m_rtpForward = true;
+	    const DataBlock& raw = sdp->getBody();
+	    String tmp((const char*)raw.data(),raw.length());
+	    m->addParam("sdp_raw",tmp);
+	}
+    }
+    // TODO: Handle the L: parameters if SDP is not set
     m_tr = tr;
     tr->userData(static_cast<GenObject*>(this));
     m->addParam("called",id.id());
@@ -495,10 +609,13 @@ void MGCPChan::copyRtpParams(NamedList& dest, const NamedList& src)
     copyRename(dest,"anyssrc",src,"x-anyssrc");
 }
 
+
 MGCPPlugin::MGCPPlugin()
-    : Driver("mgcpgw","misc")
+    : Driver("mgcpgw","misc"),
+      m_parser("mgcpgw","Gateway")
 {
     Output("Loaded module MGCP-GW");
+    m_parser.debugChain(this);
 }
 
 MGCPPlugin::~MGCPPlugin()
@@ -592,6 +709,9 @@ void MGCPPlugin::initialize()
 	    }
 	}
     }
+    m_parser.initialize(cfg.getSection("codecs"),cfg.getSection("hacks"),
+	cfg.getSection("general"));
+    s_rtp_preserve = cfg.getBoolValue("hacks","ignore_sdp_addr",false);
 }
 
 }; // anonymous namespace

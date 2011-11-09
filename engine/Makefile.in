@@ -24,7 +24,7 @@ EINC := $(CINC) @top_srcdir@/yatengine.h
 PINC := $(EINC) @top_srcdir@/yatephone.h
 CLINC:= $(PINC) @top_srcdir@/yatecbase.h
 LIBS :=
-CLSOBJS := TelEngine.o ObjList.o HashList.o Mutex.o Thread.o Socket.o \
+CLSOBJS := TelEngine.o ObjList.o HashList.o Mutex.o Thread.o Socket.o Resolver.o \
 	String.o DataBlock.o NamedList.o Evaluator.o \
 	URI.o Mime.o Array.o Iterator.o \
 	YMD5.o YSHA1.o Base64.o Cipher.o Compressor.o
@@ -91,11 +91,17 @@ DataFormat.o: @srcdir@/DataFormat.cpp $(MKDEPS) $(PINC)
 Socket.o: @srcdir@/Socket.cpp $(MKDEPS) $(CINC)
 	$(COMPILE) @FDSIZE_HACK@ @NETDB_FLAGS@ -c $<
 
+Resolver.o: @srcdir@/Resolver.cpp $(MKDEPS) $(CINC)
+	$(COMPILE) @RESOLV_INC@ -c $<
+
 Mutex.o: @srcdir@/Mutex.cpp $(MKDEPS) $(CINC)
 	$(COMPILE) @MUTEX_HACK@ -c $<
 
 Thread.o: @srcdir@/Thread.cpp $(MKDEPS) $(CINC)
 	$(COMPILE) @THREAD_KILL@ @HAVE_PRCTL@ -c $<
+
+TelEngine.o: @srcdir@/TelEngine.cpp $(MKDEPS) $(CINC)
+	$(COMPILE) @ATOMIC_OPS@ -c $<
 
 Client.o: @srcdir@/Client.cpp $(MKDEPS) $(CLINC)
 	$(COMPILE) -c $<
@@ -116,4 +122,4 @@ Makefile: @srcdir@/Makefile.in $(MKDEPS)
 	cd .. && ./config.status
 
 ../$(YLIB): $(LIBOBJS) $(LIBS)
-	$(LINK) -o $@ $(SONAME_OPT)$(YLIB) $^ $(LIBTHR) $(LIBAUX)
+	$(LINK) -o $@ $(SONAME_OPT)$(YLIB) $^ $(LIBTHR) $(LIBAUX) @RESOLV_LIB@

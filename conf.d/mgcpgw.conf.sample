@@ -41,6 +41,76 @@
 ;retrans_count=3
 
 
+[codecs]
+; This section allows to individually enable or disable the codecs
+
+; default: bool: Enable all unlisted codecs by default if a transcoder exists
+;default=enable
+
+; mulaw: bool: Companded-only G711 mu-law (PCMU/8000)
+;mulaw=default
+
+; alaw: bool: Companded-only G711 a-law (PCMU/8000)
+;alaw=default
+
+; gsm: bool: European GSM 06.10 (GSM/8000)
+;gsm=default
+
+; lpc10: bool: Linear Prediction Codec (LPC/8000)
+;lpc10=default
+
+; ilbc: bool: Internet Low Bandwidth Codec (iLBC/8000)
+;ilbc=default
+
+; amr: bool: Adaptive Multi-Rate 3GPP (AMR/8000)
+;amr=default
+
+; slin: bool: Signed Linear 16-bit uncompressed (L16/8000)
+;slin=default
+
+; g723: bool: ITU G.723 all variations (G723/8000)
+;g723=default
+
+; g726: bool: ITU G.726 32-bit (G726-32/8000)
+;g726=default
+
+; g728: bool: ITU G.728 all variations (G728/8000)
+;g728=default
+
+; g729: bool: ITU G.729 all variations (G729/8000)
+;g729=default
+
+; g729_annexb: bool: G.729 Annex B (VAD) support default (if not in SDP)
+; NOTE: RFC 3555 specifies the default should be yes
+;g729_annexb=no
+
+; amr_octet: bool: Octet aligned AMR RTP payload default (if not in SDP)
+; NOTE: RFC 4867 (and older 3267) specifies the default is bandwidth efficient
+;amr_octet=no
+
+
+[hacks]
+; This section holds the dirty stuff required to work with some broken
+;  implementations
+;
+; ilbc_forced: string: Format to force as iLBC, can be: ilbc20 or ilbc30
+;ilbc_forced=
+;
+; ilbc_default: string: Format to use for iLBC when packetization is unknown
+;ilbc_default=ilbc30
+
+; g729_annexb: bool: Force G.729 Annex B support when parsing the SDP
+;g729_annexb=
+
+; ignore_sdp_port: bool: Ignore SDP changes if only the port is different
+; This allows preserving the local RTP session and port
+;ignore_sdp_port=no
+
+; ignore_sdp_addr: bool: Ignore SDP changes if only the address is different
+; This allows preserving the local RTP session and port
+;ignore_sdp_addr=no
+
+
 ;[ep PUT_NAME_HERE]
 ; One ep ... section is required for each of our endpoints
 ; Each endpoint can be associated with at most one Call Agent

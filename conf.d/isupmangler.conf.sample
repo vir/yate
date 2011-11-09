@@ -1,3 +1,9 @@
+; IMPORTANT!
+; This feature module is not loaded automatically, it needs a line in yate.conf:
+; [postload]
+; ${modulepath}/sig/isupmangler${modsuffix}=yes
+
+
 ; Each section in this file describe an ISUP interceptor/mangler
 ; You can add, remove or disable sections and reload to apply the changes
 

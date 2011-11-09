@@ -1186,6 +1186,71 @@ int ASNLib::encodeSet(DataBlock& data, bool tagCheck)
     return len.length();
 }
 
+/**
+  * AsnTag
+  */
+void AsnTag::decode(AsnTag& tag, DataBlock& data)
+{
+    XDebug(s_libName.c_str(),DebugAll,"AsnTag::decode()");
+    tag.classType((Class)(data[0] & 0xc0));
+    tag.type((Type)(data[0] & 0x20));
+
+    unsigned int code = 0;
+    code |= data[0] & 0x1f;
+    unsigned int len = 1;
+    if (IS_EXTENSION_ID(code) && data.length() >= 2) { // extended tag
+	code = 0;
+	while (len < data.length() && (data[len] & ASN_BIT8) == ASN_BIT8) {
+	    code = code << 8;
+	    code |= (data[len] & 0x7f);
+	    len++;
+	}
+	code |= data[len] & 0x7f;
+    }
+    tag.code(code);
+    tag.encode();
+}
+
+void AsnTag::encode(Class clas, Type type, unsigned int code, DataBlock& data)
+{
+    XDebug(s_libName.c_str(),DebugAll,"AsnTag::encode(clas=0x%x, type=0x%x, code=%u)",clas,type,code);
+    if (code < 31) {
+	u_int8_t tag = clas | type | code;
+	data.insert(DataBlock(&tag,sizeof(tag)));
+    }
+    else {
+	u_int8_t last = clas | type | 31;
+	data.append(&last,sizeof(last));
+	int size = sizeof(unsigned int);
+	bool start = false;
+	while (size > 1) {
+	    u_int8_t msb = (code >> ((size - 1) * 8));
+	    if (start) {
+		msb |= 0x80;
+		data.append(&msb,sizeof(msb));
+	    }
+	    else {
+		if (msb == 0) {
+		    size--;
+		    continue;
+		}
+		else {
+		    start = true;
+		    msb |= 0x80;
+		    data.append(&msb,sizeof(msb));
+		}
+	    }
+	    size--;
+	}
+	last = code;
+	data.append(&last,sizeof(last));
+    }
+#ifdef XDEBUG
+    String str;
+    str.hexify(data.data(),data.length(),' ');
+    XDebug(s_libName.c_str(),DebugAll,"AsnTag::encode(clas=0x%x, type=0x%x, code=%u) tag=%s",clas,type,code,str.c_str());
+#endif
+}
 
 /**
   * ASNObjId

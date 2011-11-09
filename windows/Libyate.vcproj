@@ -49,7 +49,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories=".,..,..\engine\regex,..\engine\tables"
-				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;_USRDLL;LIBYATE_EXPORTS;__STDC__;_CRT_SECURE_NO_DEPRECATE"
+				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;_USRDLL;LIBYATE_EXPORTS;__STDC__;_CRT_SECURE_NO_DEPRECATE;ATOMIC_OPS;HAVE_DNS_NAPTR_DATA"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
@@ -75,7 +75,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="Debug/libregex.lib ws2_32.lib advapi32.lib shell32.lib"
+				AdditionalDependencies="Debug/libregex.lib ws2_32.lib advapi32.lib shell32.lib dnsapi.lib"
 				OutputFile=".\Debug/Libyate.dll"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -147,7 +147,7 @@
 				Optimization="2"
 				InlineFunctionExpansion="1"
 				AdditionalIncludeDirectories=".,..,..\engine\regex,..\engine\tables"
-				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_USRDLL;LIBYATE_EXPORTS;__STDC__;_CRT_SECURE_NO_DEPRECATE"
+				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_USRDLL;LIBYATE_EXPORTS;__STDC__;_CRT_SECURE_NO_DEPRECATE;ATOMIC_OPS;HAVE_DNS_NAPTR_DATA"
 				StringPooling="true"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
@@ -172,7 +172,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="Release/libregex.lib ws2_32.lib advapi32.lib shell32.lib"
+				AdditionalDependencies="Release/libregex.lib ws2_32.lib advapi32.lib shell32.lib dnsapi.lib"
 				OutputFile=".\Release/Libyate.dll"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -564,6 +564,10 @@
 						PreprocessorDefinitions=""
 					/>
 				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="..\engine\Resolver.cpp"
+				>
 			</File>
 			<File
 				RelativePath="..\engine\Socket.cpp"

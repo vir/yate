@@ -54,6 +54,18 @@ using namespace TelEngine;
 static ObjList s_factories;
 static Mutex s_mutex(true,"SignallingFactory");
 
+// Retrieve a value from a list
+// Shift it if upper bits are set and mask is not set
+// Mask it with a given mask
+static inline unsigned char fixValue(const NamedList& list, const String& param,
+    const TokenDict* dict, unsigned char mask, unsigned char upperMask, unsigned char shift)
+{
+    unsigned char val = (unsigned char)list.getIntValue(param,dict,0);
+    if (0 != (val & upperMask) && 0 == (val & mask))
+	val >>= shift;
+    return val & mask;
+}
+
 SignallingFactory::SignallingFactory(bool fallback)
 {
     s_mutex.lock();
@@ -318,13 +330,13 @@ bool SignallingEngine::find(const SignallingComponent* component)
     return m_components.find(component) != 0;
 }
 
-SignallingComponent* SignallingEngine::build(const String& type, const NamedList& params, bool init)
+SignallingComponent* SignallingEngine::build(const String& type, const NamedList& params, bool init, bool ref)
 {
     XDebug(this,DebugAll,"Engine building '%s' of type %s [%p]",
 	params.c_str(),type.c_str(),this);
     Lock mylock(this);
     SignallingComponent* c = find(params,type);
-    if (c && c->ref()) {
+    if (c && (ref ? c->ref() : c->alive())) {
 	DDebug(this,DebugAll,"Engine returning existing component '%s' @%p (%d) [%p]",
 	    c->toString().c_str(),c,c->refcount(),this);
 	return c;
@@ -527,9 +539,9 @@ unsigned int SignallingTimer::getInterval(const NamedList& params, const char* p
 // Coding standard as defined in Q.931/Q.850
 static const TokenDict s_dict_codingStandard[] = {
 	{"CCITT",            0x00},
-	{"ISO/IEC",          0x20},
-	{"national",         0x40},
-	{"network specific", 0x50},
+	{"ISO/IEC",          0x01},
+	{"national",         0x02},
+	{"network specific", 0x03},
 	{0,0}
 	};
 
@@ -654,7 +666,7 @@ static const TokenDict s_dict_transferCapCCITT[] = {
 // Defined for CCITT coding standard
 static const TokenDict s_dict_transferModeCCITT[] = {
 	{"circuit",      0x00},          // Circuit switch mode
-	{"packet",       0x40},          // Packet mode
+	{"packet",       0x02},          // Packet mode
 	{0,0}
 	};
 
@@ -826,7 +838,7 @@ bool SignallingUtils::decodeCause(const SignallingComponent* comp, NamedList& li
     }
     String causeName = prefix;
     // Byte 0: Coding standard (bit 5,6), location (bit 0-3)
-    unsigned char coding = buf[0] & 0x60;
+    unsigned char coding = (buf[0] & 0x60) >> 5;
     addKeyword(list,causeName + ".coding",codings(),coding);
     addKeyword(list,causeName + ".location",locations(),buf[0] & 0x0f);
     unsigned int crt = 1;
@@ -870,10 +882,10 @@ bool SignallingUtils::decodeCaps(const SignallingComponent* comp, NamedList& lis
     String capsName = prefix;
     // Byte 0: Coding standard (bit 5,6), Information transfer capability (bit 0-4)
     // Byte 1: Transfer mode (bit 5,6), Transfer rate (bit 0-4)
-    unsigned char coding = buf[0] & 0x60;
+    unsigned char coding = (buf[0] & 0x60) >> 5;
     addKeyword(list,capsName + ".coding",codings(),coding);
     addKeyword(list,capsName + ".transfercap",dict(2,coding),buf[0] & 0x1f);
-    addKeyword(list,capsName + ".transfermode",dict(3,coding),buf[1] & 0x60);
+    addKeyword(list,capsName + ".transfermode",dict(3,coding),(buf[1] & 0x60) >> 5);
     u_int8_t rate = buf[1] & 0x1f;
     addKeyword(list,capsName + ".transferrate",dict(4,coding),rate);
     // Figure 4.11 Note 1: Next byte is the rate multiplier if the transfer rate is 'multirate' (0x18)
@@ -960,9 +972,9 @@ bool SignallingUtils::encodeCause(const SignallingComponent* comp, DataBlock& bu
     u_int8_t data[4] = {2,0x80,0x80,0x80};
     String causeName = prefix;
     // Coding standard (0: CCITT) + location. If no location, set it to 0x0a: "BI"
-    unsigned char coding = (unsigned char)params.getIntValue(causeName + ".coding",codings(),0);
+    unsigned char coding = fixValue(params,causeName + ".coding",codings(),0x03,0x60,5);
     unsigned char loc = (unsigned char)params.getIntValue(causeName + ".location",locations(),0x0a);
-    data[1] |= ((coding & 0x03) << 5) | (loc & 0x0f);
+    data[1] |= (coding << 5) | (loc & 0x0f);
     // Recommendation (only for Q.931)
     if (!isup) {
 	unsigned char rec = (unsigned char)params.getIntValue(causeName + ".rec",0,0);
@@ -973,9 +985,7 @@ bool SignallingUtils::encodeCause(const SignallingComponent* comp, DataBlock& bu
     }
     // Value. Set to normal-clearing if missing for CCITT encoding or
     //  to 0 for other encoding standards
-    unsigned char val = 0;
-    if (!coding)
-	val = (unsigned char)params.getIntValue(causeName,dict(0,0),0x10);
+    unsigned char val = (unsigned char)params.getIntValue(causeName,dict(0,coding),!coding ? 0x10 : 0);
     data[data[0]] |= (val & 0x7f);
     // Diagnostic
     DataBlock diagnostic;
@@ -1005,12 +1015,12 @@ bool SignallingUtils::encodeCaps(const SignallingComponent* comp, DataBlock& buf
     String capsName = prefix;
     // Byte 1: Coding standard (bit 5,6), Information transfer capability (bit 0-4)
     // Byte 2: Transfer mode (bit 5,6), Transfer rate (bit 0-4)
-    unsigned char coding = (unsigned char)params.getIntValue(capsName + ".coding",codings(),0);
+    unsigned char coding = fixValue(params,capsName + ".coding",codings(),0x03,0x60,5);
     unsigned char cap = (unsigned char)params.getIntValue(capsName + ".transfercap",dict(2,coding),0);
-    unsigned char mode = (unsigned char)params.getIntValue(capsName + ".transfermode",dict(3,coding),0);
+    unsigned char mode = fixValue(params,capsName + ".transfermode",dict(3,coding),0x03,0x60,5);
     unsigned char rate = (unsigned char)params.getIntValue(capsName + ".transferrate",dict(4,coding),0x10);
-    data[1] |= ((coding << 5) & 0x60) | (cap & 0x1f);
-    data[2] |= ((mode << 5) & 0x60) | (rate & 0x1f);
+    data[1] |= (coding << 5) | (cap & 0x1f);
+    data[2] |= (mode << 5) | (rate & 0x1f);
     if (rate == 0x18) {
 	data[0] = 3;
 	rate = (unsigned char)params.getIntValue(capsName + ".multiplier",0,0);

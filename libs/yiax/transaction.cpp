@@ -34,6 +34,17 @@ String IAXTransaction::s_iax_modNoUsername("Username is missing");
 
 unsigned char IAXTransaction::m_maxInFrames = 100;
 
+
+// Print statistics
+void IAXMediaData::print(String& buf)
+{
+    Lock lck(this);
+    buf << "PS=" << m_sent << ",OS=" << m_sentBytes;
+    buf << ",PR=" << m_recv << ",OR=" << m_recvBytes;
+    buf << ",PL=" << m_ooPackets << ",OL=" << m_ooBytes;
+}
+
+
 IAXTransaction::IAXTransaction(IAXEngine* engine, IAXFullFrame* frame, u_int16_t lcallno, 
 	const SocketAddr& addr, void* data)
     : Mutex(true,"IAXTransaction"),
@@ -51,10 +62,7 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, IAXFullFrame* frame, u_int16_t
     m_engine(engine),
     m_userdata(data),
     m_lastFullFrameOut(0),
-    m_lastMiniFrameOut(0xFFFF),
-    m_lastMiniFrameIn(0),
     m_lastAck(0xFFFF),
-    m_mutexInMedia(true,"IAXTransaction::InMedia"),
     m_pendingEvent(0),
     m_currentEvent(0),
     m_retransCount(5),
@@ -66,14 +74,12 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, IAXFullFrame* frame, u_int16_t
     m_inDroppedFrames(0),
     m_authmethod(IAXAuthMethod::MD5),
     m_expire(60),
-    m_format(0),
-    m_formatIn(0),
-    m_formatOut(0),
+    m_format(IAXFormat::Audio), m_formatVideo(IAXFormat::Video),
     m_capability(0), m_callToken(false),
     m_trunkFrame(0)
 {
-    XDebug(m_engine,DebugAll,"IAXTransaction::IAXTransaction(%u,%u) incoming [%p]",
-	localCallNo(),remoteCallNo(),this);
+    Debug(m_engine,DebugAll,"Transaction(%u,%u) incoming type=%u remote=%s:%d [%p]",
+	localCallNo(),remoteCallNo(),m_type,m_addr.host().c_str(),m_addr.port(),this);
     // Setup transaction
     m_retransCount = engine->retransCount();
     m_retransInterval = engine->retransInterval();
@@ -92,8 +98,8 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, IAXFullFrame* frame, u_int16_t
 	    m_type = Poke;
 	    break;
 	default:
-	    XDebug(m_engine,DebugAll,"IAXTransaction::IAXTransaction(%u,%u) incoming [%p]. Unsupported type: %u",
-		localCallNo(),remoteCallNo(),this,frame->subclass());
+	    Debug(m_engine,DebugNote,"Transaction(%u,%u) incoming with unsupported type %u [%p]",
+		localCallNo(),remoteCallNo(),frame->subclass(),this);
 	    return;
     }
     // Append frame to incoming list
@@ -119,10 +125,7 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
     m_engine(engine),
     m_userdata(data),
     m_lastFullFrameOut(0),
-    m_lastMiniFrameOut(0xFFFF),
-    m_lastMiniFrameIn(0),
     m_lastAck(0xFFFF),
-    m_mutexInMedia(true,"IAXTransaction::InMedia"),
     m_pendingEvent(0),
     m_currentEvent(0),
     m_retransCount(5),
@@ -134,14 +137,12 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
     m_inDroppedFrames(0),
     m_authmethod(IAXAuthMethod::MD5),
     m_expire(60),
-    m_format(0),
-    m_formatIn(0),
-    m_formatOut(0),
+    m_format(IAXFormat::Audio), m_formatVideo(IAXFormat::Video),
     m_capability(0), m_callToken(false),
     m_trunkFrame(0)
 {
-    XDebug(m_engine,DebugAll,"IAXTransaction::IAXTransaction(%u,%u) outgoing. [%p]",
-	localCallNo(),remoteCallNo(),this);
+    Debug(m_engine,DebugAll,"Transaction(%u,%u) outgoing type=%u remote=%s:%d [%p]",
+	localCallNo(),remoteCallNo(),m_type,m_addr.host().c_str(),m_addr.port(),this);
     // Init data members
     if (!m_addr.port()) {
 	XDebug(m_engine,DebugAll,
@@ -164,7 +165,7 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
 	    ies->appendString(IAXInfoElement::CALLING_NAME,m_callingName);
 	    ies->appendString(IAXInfoElement::CALLED_NUMBER,m_calledNo);
 	    ies->appendString(IAXInfoElement::CALLED_CONTEXT,m_calledContext);
-	    ies->appendNumeric(IAXInfoElement::FORMAT,m_format,4);
+	    ies->appendNumeric(IAXInfoElement::FORMAT,m_format.format() | m_formatVideo.format(),4);
 	    ies->appendNumeric(IAXInfoElement::CAPABILITY,m_capability,4);
 	    if (m_callToken)
 		ies->appendBinary(IAXInfoElement::CALLTOKEN,0,0);
@@ -180,7 +181,7 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
 	    frametype = IAXControl::Poke;
 	    break;
 	default:
-	    XDebug(m_engine,DebugAll,"IAXTransaction::IAXTransaction(%u,%u) outgoing. Unsupported type: %u. [%p]",
+	    Debug(m_engine,DebugStub,"Transaction(%u,%u) outgoing with unsupported type %u [%p]",
 		localCallNo(),remoteCallNo(),m_type,this);
 	    delete ies;
 	    m_type = Incorrect;
@@ -192,13 +193,6 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
 
 IAXTransaction::~IAXTransaction()
 {
-#ifdef XDEBUG
-    print();
-#endif
-    if (m_trunkFrame)
-	m_trunkFrame->deref();
-    if (state() != Terminating && state() != Terminated)
-	sendReject("Server shutdown");
     XDebug(m_engine,DebugAll,"IAXTransaction::~IAXTransaction(%u,%u). [%p]",
 	localCallNo(),remoteCallNo(),this);
 }
@@ -223,6 +217,26 @@ IAXTransaction* IAXTransaction::factoryOut(IAXEngine* engine, Type type, u_int16
     return 0;
 }
 
+// Retrieve the media of a given type
+IAXFormat* IAXTransaction::getFormat(int type)
+{
+    if (type == IAXFormat::Audio)
+	return &m_format;
+    if (type == IAXFormat::Video)
+	return &m_formatVideo;
+    return 0;
+}
+
+// Retrieve the media data for a given type
+IAXMediaData* IAXTransaction::getData(int type)
+{
+    if (type == IAXFormat::Audio)
+	return &m_dataAudio;
+    if (type == IAXFormat::Video)
+	return &m_dataVideo;
+    return 0;
+}
+
 IAXTransaction* IAXTransaction::processFrame(IAXFrame* frame)
 {
     if (!frame)
@@ -241,8 +255,16 @@ IAXTransaction* IAXTransaction::processFrame(IAXFrame* frame)
 	    return 0;
     }
     // Mini frame
-    if (!frame->fullFrame())
-	return processMedia(frame->data(),frame->timeStamp());
+    if (!frame->fullFrame()) {
+	int t = 0;
+	if (frame->type() == IAXFrame::Voice)
+	    t = IAXFormat::Audio;
+	else if (frame->type() == IAXFrame::Video)
+	    t = IAXFormat::Video;
+	else
+	    return 0;
+	return processMedia(frame->data(),frame->timeStamp(),t,false,frame->mark());
+    }
     Lock lock(this);
     m_inTotalFramesCount++;
     // Frame is VNAK ?
@@ -250,7 +272,8 @@ IAXTransaction* IAXTransaction::processFrame(IAXFrame* frame)
 	return retransmitOnVNAK(frame->fullFrame()->iSeqNo());
     // Do we have enough space to keep this frame ?
     if (m_inFrames.count() == m_maxInFrames) {
-	Debug(DebugWarn,"Transaction(%u,%u). processFrame. Buffer overrun! (MAX=%u)",localCallNo(),remoteCallNo(),m_maxInFrames);
+	Debug(m_engine,DebugWarn,"Transaction(%u,%u). processFrame. Buffer overrun! (MAX=%u)",
+	    localCallNo(),remoteCallNo(),m_maxInFrames);
 	m_inDroppedFrames++;
 	return 0;
     }
@@ -258,13 +281,17 @@ IAXTransaction* IAXTransaction::processFrame(IAXFrame* frame)
     if (!fAck && !isFrameAcceptable(frame->fullFrame()))
 	return 0;
     incrementSeqNo(frame->fullFrame(),true);
-    // Voice full frame: process voice data & format
-    if (frame->type() == IAXFrame::Voice && type() == New) {
-	if (!processVoiceFrame(frame->fullFrame()))
+    // Video/Voice full frame: process data & format
+    if (type() == New && (frame->type() == IAXFrame::Voice ||
+	frame->type() == IAXFrame::Video)) {
+	int t = IAXFormat::Audio;
+	if (frame->type() == IAXFrame::Video)
+	    t = IAXFormat::Video;
+	if (!processMediaFrame(frame->fullFrame(),t))
 	    return 0;
 	// Frame accepted: process voice data
 	lock.drop();
-	return processMedia(frame->data(),frame->timeStamp(),true);
+	return processMedia(frame->data(),frame->timeStamp(),t,true,frame->mark());
     }
     // Process incoming Ping
     if (frame->type() == IAXFrame::IAX && frame->fullFrame()->subclass() == IAXControl::Ping) {
@@ -282,67 +309,182 @@ IAXTransaction* IAXTransaction::processFrame(IAXFrame* frame)
     return this;
 }
 
-IAXTransaction* IAXTransaction::processMedia(DataBlock& data, u_int32_t tStamp, bool voice)
+IAXTransaction* IAXTransaction::processMedia(DataBlock& data, u_int32_t tStamp, int type,
+    bool full, bool mark)
 {
-    Lock lock(&m_mutexInMedia);
-    if (!(voice || (tStamp & 0xffff0000))) {
-	// Miniframe timestamp
-	int16_t delta = (int16_t)(tStamp - m_lastMiniFrameIn);
-	if (delta < 0)
+    if (state() == Terminated || state() == Terminating)
+	return 0;
+    IAXMediaData* d = getData(type);
+    IAXFormat* fmt = getFormat(type);
+    if (!(d && fmt)) {
+	Debug(m_engine,DebugStub,
+	    "IAXTransaction::processMedia() no media data for type '%s'",
+	    IAXFormat::typeName(type));
+	return 0;
+    }
+    Lock lck(d);
+    if (!fmt->in()) {
+	if (d->m_showInNoFmt) {
+	    Debug(m_engine,DebugInfo,
+		"Transaction(%u,%u) received %s data without format [%p]",
+		localCallNo(),remoteCallNo(),fmt->typeName(),this);
+	    d->m_showInNoFmt = false;
+	}
+	return 0;
+    }
+    d->m_showInNoFmt = true;
+    d->m_recv++;
+    d->m_recvBytes += data.length();
+    if (!full) {
+	// Miniframe or video meta frame timestamp
+	// Voice: timestamp is lowest 16 bits
+	// Video: timestamp is lowest 15 bits
+	u_int32_t mask = 0xffff;
+	if (type == IAXFormat::Video)
+	    mask = 0x7fff;
+	tStamp &= mask;
+	// Interval between received timestamp and last one:
+	// Negative: wraparound if less then half mask
+	int delta = (int)tStamp - (int)(d->m_lastIn & mask);
+	if (delta < 0 && ((u_int32_t)-delta) < (mask / 2)) {
+	    d->m_ooPackets++;
+	    d->m_ooBytes += data.length();
+	    DDebug(m_engine,DebugNote,
+		"Transaction(%u,%u) dropping %u %s mini data mark=%u ts=%u last=%u [%p]",
+		localCallNo(),remoteCallNo(),data.length(),fmt->typeName(),
+		mark,tStamp,d->m_lastIn & mask,this);
 	    return 0;
-	// add upper bits from last frame
-	tStamp |= m_lastMiniFrameIn & 0xffff0000;
-	// check if timestamp wrapped around by a miniframe, adjust if so
-	if ((tStamp & 0xffff) < (m_lastMiniFrameIn & 0xffff)) {
-	    DDebug(m_engine,DebugAll,"Timestamp wraparound, ts=%u last=%u [%p]",tStamp & 0xffff,m_lastMiniFrameIn,this);
-	    tStamp += 0x10000;
+	}
+	// Add upper bits from last frame, adjust timestamp if wrapped around
+	tStamp |= d->m_lastIn & ~mask;
+	if (delta < 0) {
+	    DDebug(m_engine,DebugInfo,
+		"Transaction(%u,%u) timestamp wraparound media=%s ts=%u last=%u [%p]",
+		localCallNo(),remoteCallNo(),fmt->typeName(),
+		tStamp & mask,d->m_lastIn & mask,this);
+	    tStamp += mask + 1;
 	}
     }
-    int32_t interval = (int32_t)tStamp - m_lastMiniFrameIn;
-    if (interval <= 0)
+    bool forward = false;
+    if (type != IAXFormat::Video)
+	forward = (tStamp > d->m_lastIn);
+    else
+	forward = (tStamp >= d->m_lastIn);
+    if (forward) {
+	d->m_lastIn = tStamp; // New frame is newer then the last one
+	XDebug(m_engine,DebugAll,
+	    "Transaction(%u,%u) forwarding %u %s data mark=%u ts=%u [%p]",
+	    localCallNo(),remoteCallNo(),data.length(),fmt->typeName(),
+	    mark,tStamp,this);
+	m_engine->processMedia(this,data,tStamp,type,mark);
 	return 0;
-    if (voice || interval < 32767) {
-	m_lastMiniFrameIn = tStamp; // New frame is newer then the last one
-	m_engine->processMedia(this,data,tStamp);
     }
+    d->m_ooPackets++;
+    d->m_ooBytes += data.length();
+    DDebug(m_engine,DebugNote,
+	"Transaction(%u,%u) dropping %u %s data full=%u mark=%u ts=%u last=%u [%p]",
+	localCallNo(),remoteCallNo(),data.length(),fmt->typeName(),
+	full,mark,tStamp,d->m_lastIn,this);
     return 0;
 }
 
-IAXTransaction* IAXTransaction::sendMedia(const DataBlock& data, u_int32_t format)
+unsigned int IAXTransaction::sendMedia(const DataBlock& data, u_int32_t format,
+    int type, bool mark)
 {
     if (!data.length())
 	return 0;
+    if (state() == Terminated || state() == Terminating)
+	return 0;
+    IAXFormat* fmt = getFormat(type);
+    IAXMediaData* d = getData(type);
+    if (!(fmt && d)) {
+	Debug(m_engine,DebugStub,
+	    "IAXTransaction::sendMedia() no media desc for type '%s'",
+	    IAXFormat::typeName(type));
+	return 0;
+    }
+    d->m_sent++;
+    d->m_sentBytes += data.length();
     u_int32_t ts = (u_int32_t)timeStamp();
-    // Avoid to send the same timestamp twice
-    if ((u_int16_t)ts == m_lastMiniFrameOut)
+    // Avoid sending the same timestamp twice for non video
+    if (type != IAXFormat::Video && d->m_lastOut && ts == d->m_lastOut)
 	ts++;
-    // Format changed or timestamp wrapped around? Send Voice full frame
-    if ((u_int16_t)ts < m_lastMiniFrameOut || m_formatOut != format ) {
-	if (m_formatOut != format) {
-	    DDebug(m_engine,DebugNote,"Outgoing format changed (New: %u, Old: %u). Send VOICE. [%p]",
-		format,m_formatOut,this);
-	    m_formatOut = format;
+    // Format changed or timestamp wrapped around
+    // Send a full frame
+    bool fullFrame = (fmt->out() != format) || !d->m_lastOut;
+    if (!fullFrame) {
+	// Voice: timestamp is lowest 16 bits
+	// Video: timestamp is lowest 15 bits
+	u_int32_t mask = 0xffff;
+	if (type == IAXFormat::Video)
+	    mask = 0x7fff;
+	// Timestamp wraparound if mini timestamp is less then last one or
+	// we had a media gap greater then mask
+	fullFrame = ((ts & mask) < (d->m_lastOut & mask)) || ((ts - d->m_lastOut) > mask);
+    }
+    if (fullFrame) {
+	if (fmt->out() != format) {
+	    Debug(m_engine,DebugNote,
+		"Transaction(%u,%u). Outgoing %s format changed %u --> %u [%p]",
+		localCallNo(),remoteCallNo(),fmt->typeName(),fmt->out(),format,this);
+	    fmt->set(0,0,&format);
 	}
 #ifdef DEBUG
 	else
-	    Debug(m_engine,DebugNote,"Transaction(%u,%u) Time to send VOICE: ts=%u last=%u [%p]",
-		localCallNo(),remoteCallNo(),ts,m_lastMiniFrameOut,this);
+	    Debug(m_engine,DebugInfo,
+		"Transaction(%u,%u). Sending full frame for media '%s': ts=%u last=%u [%p]",
+		localCallNo(),remoteCallNo(),fmt->typeName(),ts,d->m_lastOut,this);
 #endif
-	m_lastMiniFrameOut = (u_int16_t)ts;
-	postFrame(IAXFrame::Voice,m_formatOut,data.data(),data.length(),ts,true);
-	return this;
     }
-    // Send mini frame
-    m_lastMiniFrameOut = (u_int16_t)ts;
-    if (m_trunkFrame)
-	m_trunkFrame->add(localCallNo(),data,m_lastMiniFrameOut);
-    else {
-	unsigned char b[4] = {localCallNo() >> 8,localCallNo() & 0xff,m_lastMiniFrameOut >> 8,m_lastMiniFrameOut & 0xff};
-	DataBlock buf(b,4);
-	buf += data;
-	m_engine->writeSocket(buf.data(),buf.length(),remoteAddr());
+    d->m_lastOut = ts;
+    unsigned int sent = 0;
+    if (type == IAXFormat::Audio) {
+	if (fullFrame) {
+	    // Send trunked frame before full frame to keep the media order
+	    if (m_trunkFrame)
+		m_engine->sendTrunkFrame(m_trunkFrame);
+	    postFrame(IAXFrame::Voice,fmt->out(),data.data(),data.length(),ts,true);
+	    sent = data.length();
+	}
+	else if (m_trunkFrame) {
+	    m_trunkFrame->add(localCallNo(),data,ts);
+	    sent = data.length();
+	}
+	else {
+	    DataBlock buf;
+	    IAXFrame::buildMiniFrame(buf,localCallNo(),ts,data.data(),data.length());
+	    m_engine->writeSocket(buf.data(),buf.length(),remoteAddr(),0,&sent);
+	    // Decrease with mini frame header
+	    if (sent > 4)
+		sent -= 4;
+	    else
+		sent = 0;
+	}
     }
-    return this;
+    else if (type == IAXFormat::Video) {
+	if (fullFrame) {
+	    postFrame(IAXFrame::Video,fmt->out(),data.data(),data.length(),ts,true,mark);
+	    sent = data.length();
+	}
+	else {
+	    DataBlock buf;
+	    IAXFrame::buildVideoMetaFrame(buf,localCallNo(),ts,mark,data.data(),data.length());
+	    m_engine->writeSocket(buf.data(),buf.length(),remoteAddr(),0,&sent);
+	    // Decrease with mini frame header
+	    if (sent > 6)
+		sent -= 6;
+	    else
+		sent = 0;
+	}
+    }
+    else
+	Debug(m_engine,DebugStub,
+	    "IAXTransaction::sendMedia() not implemented for type '%s'",fmt->typeName());
+    DDebug(m_engine,sent == data.length() ? DebugAll : DebugNote,
+	"Transaction(%u,%u) sent %u/%u media=%s mark=%u ts=%u [%p]",
+	localCallNo(),remoteCallNo(),sent,data.length(),
+	fmt->typeName(),mark,ts,this);
+    return sent;
 }
 
 IAXEvent* IAXTransaction::getEvent(u_int64_t time)
@@ -463,7 +605,7 @@ IAXEvent* IAXTransaction::getEvent(u_int64_t time)
     return 0;
 }
 
-bool IAXTransaction::sendAccept()
+bool IAXTransaction::sendAccept(unsigned int* expires)
 {
     Lock lock(this);
     if (!((type() == New && (state() == NewRemoteInvite || state() == NewRemoteInvite_RepRecv)) ||
@@ -472,7 +614,7 @@ bool IAXTransaction::sendAccept()
 	return false;
     if (type() == New) {
 	IAXIEList* ies = new IAXIEList;
-	ies->appendNumeric(IAXInfoElement::FORMAT,m_format,4);
+	ies->appendNumeric(IAXInfoElement::FORMAT,m_format.format() | m_formatVideo.format(),4);
 	ies->appendNumeric(IAXInfoElement::CAPABILITY,m_capability,4);
 	postFrameIes(IAXFrame::IAX,IAXControl::Accept,ies,0,true);
 	changeState(Connected);
@@ -480,7 +622,11 @@ bool IAXTransaction::sendAccept()
     else {
 	IAXIEList* ies = new IAXIEList;
 	ies->appendString(IAXInfoElement::USERNAME,m_username);
-	ies->appendNumeric(IAXInfoElement::REFRESH,m_expire,2);
+	if (type() == RegReq) {
+	    if (expires)
+		m_expire = *expires;
+	    ies->appendNumeric(IAXInfoElement::REFRESH,m_expire,2);
+	}
 	ies->appendIE(IAXInfoElementBinary::packIP(remoteAddr()));
 	postFrameIes(IAXFrame::IAX,IAXControl::RegAck,ies,0,true);
 	changeState(Terminating);
@@ -587,6 +733,7 @@ bool IAXTransaction::sendAuthReply(const String& response)
 	case RegReq:
 	    subclass = IAXControl::RegReq;
 	    ies->appendString(IAXInfoElement::USERNAME,m_username);
+	    ies->appendNumeric(IAXInfoElement::REFRESH,m_expire,2);
 	    break;
 	case RegRel:
 	    subclass = IAXControl::RegRel;
@@ -690,28 +837,56 @@ void IAXTransaction::processCallToken(const DataBlock& callToken)
     sendFrame(frame);
 }
 
-void IAXTransaction::print()
+void IAXTransaction::print(bool printStats, bool printFrames, const char* location)
 {
-    static SocketAddr addr;
-    ObjList* l;
-    String frames;
-    frames << "\r\nOutgoing frames: " << m_outFrames.count();
-    for(l = m_outFrames.skipNull(); l; l = l->skipNext()) {
-	IAXFrameOut* frame = static_cast<IAXFrameOut*>(l->get());
-	frame->toString(frames,addr,remoteAddr(),false);
+    if (m_engine && !m_engine->debugAt(DebugAll))
+	return;
+    String stats;
+    if (printStats && m_type == New) {
+	stats << " audio: ";
+	m_dataAudio.print(stats);
+	stats << " video: ";
+	m_dataVideo.print(stats);
     }
-    frames << "\r\nIncoming frames: " << m_inFrames.count();
-    for(l = m_inFrames.skipNull(); l; l = l->skipNext()) {
-	IAXFrameOut* frame = static_cast<IAXFrameOut*>(l->get());
-	frame->toString(frames,addr,remoteAddr(),true);
+    String buf;
+    if (printFrames) {
+	SocketAddr addr;
+	ObjList* l;
+	buf << "\r\nOutgoing frames: " << m_outFrames.count();
+	for(l = m_outFrames.skipNull(); l; l = l->skipNext()) {
+	    IAXFrameOut* frame = static_cast<IAXFrameOut*>(l->get());
+	    frame->toString(buf,addr,remoteAddr(),false);
+	}
+	buf << "\r\nIncoming frames: " << m_inFrames.count();
+	for(l = m_inFrames.skipNull(); l; l = l->skipNext()) {
+	    IAXFullFrame* frame = static_cast<IAXFullFrame*>(l->get());
+	    frame->toString(buf,addr,remoteAddr(),true);
+	}
     }
-    Debug(m_engine,DebugInfo,"Transaction(%u,%u). Remote address: %s:%u. Type: %u. State: %u. Timestamp: " FMT64U " [%p]%s",
-	localCallNo(),remoteCallNo(),remoteAddr().host().c_str(),remoteAddr().port(),
-	type(),state(),(u_int64_t)timeStamp(),this,frames.c_str());
+    Debug(m_engine,DebugAll,
+	"Transaction(%u,%u) %s remote=%s:%u type=%u state=%u timestamp=" FMT64U "%s [%p]%s%s%s",
+	localCallNo(),remoteCallNo(),location,remoteAddr().host().c_str(),remoteAddr().port(),
+	type(),state(),(u_int64_t)timeStamp(),stats.safe(),this,
+	buf ? "\r\n-----" : "",buf.safe(),buf ? "\r\n-----" : "");
+}
+
+// Cleanup
+void IAXTransaction::destroyed()
+{
+#ifndef DEBUG
+    print(false,false,"destroyed");
+#else
+    print(true,true,"destroyed");
+#endif
+    TelEngine::destruct(m_trunkFrame);
+    if (state() != Terminating && state() != Terminated)
+	sendReject("Server shutdown");
+    RefObject::destroyed();
 }
 
 void IAXTransaction::init(IAXIEList& ieList)
 {
+    u_int32_t fmt = 0;
     switch (type()) {
 	case New:
 	    ieList.getString(IAXInfoElement::USERNAME,m_username);
@@ -719,14 +894,14 @@ void IAXTransaction::init(IAXIEList& ieList)
 	    ieList.getString(IAXInfoElement::CALLING_NAME,m_callingName);
 	    ieList.getString(IAXInfoElement::CALLED_NUMBER,m_calledNo);
 	    ieList.getString(IAXInfoElement::CALLED_CONTEXT,m_calledContext);
-	    ieList.getNumeric(IAXInfoElement::FORMAT,m_format);
+	    ieList.getNumeric(IAXInfoElement::FORMAT,fmt);
 	    ieList.getNumeric(IAXInfoElement::CAPABILITY,m_capability);
-	    if (outgoing()) {
-		m_formatOut = m_format;
+	    m_capability &= m_engine->capability();
+	    fmt &= m_capability;
+	    m_format.set(&fmt,&fmt,&fmt);
+	    m_formatVideo.set(&fmt,&fmt,&fmt);
+	    if (outgoing())
 		m_callToken = (0 != ieList.getIE(IAXInfoElement::CALLTOKEN));
-	    }
-	    else
-		m_formatIn = m_format;
 	    break;
 	case RegReq:
 	    ieList.getString(IAXInfoElement::CALLED_NUMBER,m_calledNo);
@@ -826,14 +1001,15 @@ IAXEvent* IAXTransaction::waitForTerminate(u_int8_t evType, bool local, IAXFullF
     return ev;
 }
 
-void IAXTransaction::postFrame(IAXFrame::Type type, u_int32_t subclass, void* data, u_int16_t len, u_int32_t tStamp, bool ackOnly)
+void IAXTransaction::postFrame(IAXFrame::Type type, u_int32_t subclass, void* data,
+    u_int16_t len, u_int32_t tStamp, bool ackOnly, bool mark)
 {
     Lock lock(this);
     if (state() == Terminated)
 	return;
     adjustTStamp(tStamp);
     IAXFrameOut* frame = new IAXFrameOut(type,subclass,m_lCallNo,m_rCallNo,m_oSeqNo,m_iSeqNo,tStamp,
-			 (unsigned char*)data,len,m_retransCount,m_retransInterval,ackOnly);
+			 (unsigned char*)data,len,m_retransCount,m_retransInterval,ackOnly,mark);
     postFrame(frame);
 }
 
@@ -1007,12 +1183,13 @@ IAXEvent* IAXTransaction::processAccept(IAXEvent* event)
     if (event->type() != IAXEvent::Accept)
 	return event;
     Debug(m_engine,DebugAll,"Transaction(%u,%u). Accept received",localCallNo(),remoteCallNo());
-    // We might have a format received with a Voice frame
-    if (m_formatIn)
-	return event;
-    m_format = 0;
-    event->getList().getNumeric(IAXInfoElement::FORMAT,m_format);
-    if (m_engine->acceptFormatAndCapability(this))
+    u_int32_t fmt = 0;
+    event->getList().getNumeric(IAXInfoElement::FORMAT,fmt);
+    m_format.set(&fmt,0,0);
+    m_formatVideo.set(&fmt,0,0);
+    m_engine->acceptFormatAndCapability(this,0,IAXFormat::Audio);
+    m_engine->acceptFormatAndCapability(this,0,IAXFormat::Video);
+    if (m_format.format() || m_formatVideo.format())
 	return event;
     delete event;
     return internalReject(s_iax_modNoMediaFormat);
@@ -1452,33 +1629,60 @@ IAXEvent* IAXTransaction::getEventTerminating(u_int64_t time)
     return 0;
 }
 
-IAXTransaction* IAXTransaction::processVoiceFrame(const IAXFullFrame* frame)
+IAXTransaction* IAXTransaction::processMediaFrame(const IAXFullFrame* frame, int type)
 {
-    // Process format 
-    DDebug(m_engine,DebugAll,"Transaction(%u,%u). Received Voice Frame(%u,%u) iseq=%u oseq=%u stamp=%u [%p]",
-	localCallNo(),remoteCallNo(),frame->type(),frame->subclass(),
+    DDebug(m_engine,DebugAll,
+	"Transaction(%u,%u). Received %s (%u,%u) iseq=%u oseq=%u stamp=%u [%p]",
+	localCallNo(),remoteCallNo(),IAXFrame::typeText(frame->type()),
+	frame->type(),frame->subclass(),
 	frame->iSeqNo(),frame->oSeqNo(),frame->timeStamp(),this);
     sendAck(frame);
+    IAXFormat* fmt = getFormat(type);
+    if (!fmt)
+	return this;
+    if (!frame->subclass())
+	return this;
+    // Check the format
+    u_int32_t recvFmt = IAXFormat::mask(frame->subclass(),type);
+    if (recvFmt == fmt->in())
+        return this;
+    if (!recvFmt) {
+	String tmp;
+	IAXFormat::formatList(tmp,frame->subclass());
+	Debug(m_engine,DebugInfo,
+	    "IAXTransaction(%u,%u). Received %s frame with invalid format=%s (0x%x) [%p]",
+	    localCallNo(),remoteCallNo(),IAXFrame::typeText(frame->type()),
+	    tmp.c_str(),frame->subclass(),this);
+	return this;
+    }
+    if (!IAXFormat::formatName(recvFmt)) {
+	Debug(m_engine,DebugNote,
+	    "IAXTransaction(%u,%u). Received %s frame with unknown format=0x%x [%p]",
+	    localCallNo(),remoteCallNo(),IAXFrame::typeText(frame->type()),recvFmt,this);
+	m_pendingEvent = internalReject(s_iax_modNoMediaFormat);
+	return 0;
+    }
     // We might have an incoming media format received with an Accept frame
-    if (m_formatIn) {
-	if (frame->subclass() && frame->subclass() != m_formatIn) {
-	    // Format changed.
-	    if (m_engine->voiceFormatChanged(this,frame->subclass()))
-		m_formatIn = frame->subclass();
-	    else {
-		DDebug(m_engine,DebugAll,"IAXTransaction(%u,%u). Process Voice Frame. Media format (%u) change rejected!",
-		    localCallNo(),remoteCallNo(),m_format);
-		m_pendingEvent = internalReject(s_iax_modNoMediaFormat);
-		return 0;
-	    }
+    if (fmt->in()) {
+	// Format changed.
+	if (m_engine->mediaFormatChanged(this,type,recvFmt)) {
+	    Debug(m_engine,DebugNote,
+		"Transaction(%u,%u). Incoming %s format changed %u --> %u [%p]",
+		localCallNo(),remoteCallNo(),fmt->typeName(),fmt->in(),recvFmt,this);
+	    fmt->set(0,&recvFmt,0);
+	}
+	else {
+	    DDebug(m_engine,DebugAll,
+		"IAXTransaction(%u,%u). Format change rejected media=%s current=%u [%p]",
+		localCallNo(),remoteCallNo(),fmt->typeName(),fmt->format(),this);
+	    m_pendingEvent = internalReject(s_iax_modNoMediaFormat);
+	    return 0;
         }
     }
     else {
-	m_format = frame->subclass();
-	if (!m_engine->acceptFormatAndCapability(this)) {
-	    m_pendingEvent = internalReject(s_iax_modNoMediaFormat);
+	fmt->set(&recvFmt,0,0);
+	if (!m_engine->acceptFormatAndCapability(this,0,type))
 	    return 0;
-	}
     }
     return this;
 }

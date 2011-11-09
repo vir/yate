@@ -1120,25 +1120,26 @@ bool ToneGenDriver::msgExecute(Message& msg, String& dest)
     }
     else {
 	Message m("call.route");
-	m.addParam("module",name());
-	m.addParam("cdrtrack",String::boolText(false));
-	m.copyParam(msg,"called");
-	m.copyParam(msg,"caller");
-	m.copyParam(msg,"callername");
-	String callto(msg.getValue("direct"));
+	m.copyParams(msg,msg[YSTRING("copyparams")]);
+	m.clearParam(YSTRING("callto"));
+	m.clearParam(YSTRING("id"));
+	m.setParam("module",name());
+	m.setParam("cdrtrack",String::boolText(false));
+	m.copyParam(msg,YSTRING("called"));
+	m.copyParam(msg,YSTRING("caller"));
+	m.copyParam(msg,YSTRING("callername"));
+	String callto(msg.getValue(YSTRING("direct")));
 	if (callto.null()) {
-	    const char *targ = msg.getValue("target");
+	    const char *targ = msg.getValue(YSTRING("target"));
 	    if (!targ)
-		targ = msg.getValue("called");
+		targ = msg.getValue(YSTRING("called"));
 	    if (!targ) {
 		Debug(DebugWarn,"Tone outgoing call with no target!");
 		return false;
 	    }
-	    callto = msg.getValue("caller");
-	    if (callto.null())
-		callto << prefix() << dest;
 	    m.setParam("called",targ);
-	    m.setParam("caller",callto);
+	    if (!m.getValue(YSTRING("caller")))
+		m.setParam("caller",prefix() + dest);
 	    if ((!Engine::dispatch(m)) || m.retValue().null() || (m.retValue() == "-")) {
 		Debug(DebugWarn,"Tone outgoing call but no route!");
 		return false;
@@ -1155,6 +1156,7 @@ bool ToneGenDriver::msgExecute(Message& msg, String& dest)
 	m.userData(tc);
 	if (Engine::dispatch(m)) {
 	    msg.setParam("id",tc->id());
+	    msg.copyParam(m,YSTRING("peerid"));
 	    tc->deref();
 	    return true;
 	}

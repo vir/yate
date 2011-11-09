@@ -523,6 +523,8 @@ class YateSIPEngine : public SIPEngine
 {
 public:
     YateSIPEngine(YateSIPEndPoint* ep);
+    // Initialize the engine
+    void initialize(NamedList* params);
     virtual bool buildParty(SIPMessage* message);
     virtual bool checkUser(const String& username, const String& realm, const String& nonce,
 	const String& method, const String& uri, const String& response,
@@ -582,11 +584,13 @@ public:
 	{ return m_username; }
     inline const String& getAuthName() const
 	{ return m_authname ? m_authname : m_username; }
+    inline const String& regDomain() const
+	{ return m_registrar ? m_registrar : m_transRemoteAddr; }
     inline const String& domain() const
-	{ return m_domain ? m_domain : m_registrar; }
+	{ return m_domain ? m_domain : regDomain(); }
     inline const char* domain(const char* defDomain) const
 	{ return m_domain ? m_domain.c_str() :
-	    (TelEngine::null(defDomain) ? m_registrar.c_str() : defDomain); }
+	    (TelEngine::null(defDomain) ? regDomain().c_str() : defDomain); }
     inline bool valid() const
 	{ return m_valid; }
     inline bool marked() const
@@ -597,7 +601,7 @@ private:
     void clearTransaction();
     void detectLocal(const SIPMessage* msg);
     void keepalive();
-    void setValid(bool valid, const char* reason = 0);
+    void setValid(bool valid, const char* reason = 0, const char* error = 0);
     virtual void changing();
 
     String m_registrar;
@@ -1021,6 +1025,7 @@ static bool s_info = false;
 static bool s_start_rtp = false;
 static bool s_ack_required = true;
 static bool s_1xx_formats = true;
+static bool s_rtp_preserve = false;
 static bool s_auth_register = true;
 static bool s_reg_async = true;
 static bool s_multi_ringing = false;
@@ -1036,6 +1041,8 @@ static unsigned int s_tcpIdle = TCP_IDLE_DEF; // TCP transport idle interval
 static unsigned int s_tcpMaxpkt = 1500;  // Maximum packet to accept on TCP connections
 static String s_tcpOutRtpip;             // RTP ip for outgoing tcp/tls transports (protected by plugin mutex)
 static bool s_lineKeepTcpOffline = true; // Lines: keep TCP transports when offline
+static String s_sslCertFile;             // File containing the SSL client certificate to present if requested by the server
+static String s_sslKeyFile;              // File containing the key of the SSL client certificate
 
 static int s_expires_min = EXPIRES_MIN;
 static int s_expires_def = EXPIRES_DEF;
@@ -1653,6 +1660,7 @@ bool YateSIPPartyHolder::buildParty(bool force)
     YateSIPTCPTransport* tcpTrans = 0;
     YateSIPUDPTransport* udpTrans = 0;
     bool initTcp = false;
+    bool addrValid = true;
     if (m_transId) {
 	YateSIPTransport* trans = 0;
 	if (plugin.ep())
@@ -1681,9 +1689,12 @@ bool YateSIPPartyHolder::buildParty(bool force)
 	else {
 	    initTcp = true;
 	    bool tls = (protocol() == Tls);
-	    if (tls || protocol() == Tcp)
-		tcpTrans = new YateSIPTCPTransport(tls,m_transLocalAddr,
-		    m_transRemoteAddr,m_transRemotePort);
+	    if (tls || protocol() == Tcp) {
+		addrValid = m_transRemoteAddr && m_transRemotePort > 0;
+		if (addrValid)
+		    tcpTrans = new YateSIPTCPTransport(tls,m_transLocalAddr,
+			m_transRemoteAddr,m_transRemotePort);
+	    }
 	    else
 		Debug(DebugStub,"YateSIPPartyHolder::buildParty() transport %s not implemented",
 		    protoName());
@@ -1694,7 +1705,9 @@ bool YateSIPPartyHolder::buildParty(bool force)
 	SocketAddr addr(AF_INET);
 	addr.host(m_transRemoteAddr);
 	addr.port(m_transRemotePort);
-	p = new YateUDPParty(udpTrans,addr);
+	addrValid = addr.host() && addr.port() > 0;
+	if (addrValid)
+	    p = new YateUDPParty(udpTrans,addr);
     }
     else if (tcpTrans) {
 	p = tcpTrans->getParty();
@@ -1703,6 +1716,10 @@ bool YateSIPPartyHolder::buildParty(bool force)
     }
     setParty(p);
     TelEngine::destruct(p);
+    if (!addrValid)
+	DDebug(&plugin,DebugNote,
+	    "Failed to build %s transport with invalid remote addr=%s:%d",
+	    protoName(),m_transRemoteAddr.c_str(),m_transRemotePort);
     if (tcpTrans && initTcp) {
 	// TODO: handle other params: maxpkt, thread prio
 	tcpTrans->init(NamedList::empty(),true);
@@ -1764,7 +1781,7 @@ bool YateSIPPartyHolder::updateRemoteAddr(const NamedList& params, const String&
     const char* addr = params.getValue(prefix + "ip_transport_remoteip",defRemoteAddr);
     int port = params.getIntValue(prefix + "ip_transport_remoteport",defRemotePort);
     if (port <= 0)
-	defRemotePort = sipPort(protocol() != Tls);
+	port = sipPort(protocol() != Tls);
     bool chg = change(m_transRemoteAddr,addr);
     chg = change(m_transRemotePort,port) || chg;
     if (chg)
@@ -3036,8 +3053,7 @@ void YateSIPTCPListener::init(const NamedList& params, bool first)
 	    Debug(&plugin,DebugConf,"Listener(%s,'%s') ssl context is empty [%p]",
 		protoName(),c_str(),this);
     }
-    int backlog = params.getIntValue("backlog",5);
-    m_backlog = (backlog >= 0 ? backlog : 0);
+    m_backlog = params.getIntValue("backlog",5,0);
     m_bind = setAddr(addr,port) || first;
     m_transParamsChanged = m_transParamsChanged || first;
     if (rtpLip != m_transParams["rtp_localip"]) {
@@ -3412,6 +3428,19 @@ YateSIPEngine::YateSIPEngine(YateSIPEndPoint* ep)
 	    addAllowed(meth);
 	}
     }
+    initialize(s_cfg.getSection("general"));
+}
+
+// Initialize the engine
+void YateSIPEngine::initialize(NamedList* params)
+{
+    NamedList dummy("");
+    if (!params)
+	params = &dummy;
+    m_reqTransCount = params->getIntValue("sip_req_trans_count",4,2,10,false);
+    m_rspTransCount = params->getIntValue("sip_rsp_trans_count",5,2,10,false);
+    DDebug(this,DebugAll,"Initialized sip_req_trans_count=%d sip_rsp_trans_count=%d",
+	m_reqTransCount,m_rspTransCount);
 }
 
 SIPTransaction* YateSIPEngine::forkInvite(SIPMessage* answer, SIPTransaction* trans)
@@ -4978,7 +5007,9 @@ void YateSIPConnection::clearTransaction()
 	if (m_tr->setResponse()) {
 	    SIPMessage* m = new SIPMessage(m_tr->initialMessage(),m_reasonCode,
 		m_reason.safe("Request Terminated"));
+	    paramMutex().lock();
 	    copySipHeaders(*m,parameters(),0);
+	    paramMutex().unlock();
 	    m->setBody(buildSIPBody());
 	    m_tr->setResponse(m);
 	    TelEngine::destruct(m);
@@ -5079,10 +5110,12 @@ void YateSIPConnection::hangup()
 		hl->setParam("text",MimeHeaderLine::quote(m_reason));
 		m->addHeader(hl);
 	    }
+	    paramMutex().lock();
 	    const char* stats = parameters().getValue(YSTRING("rtp_stats"));
 	    if (stats)
 		m->addHeader("P-RTP-Stat",stats);
 	    copySipHeaders(*m,parameters(),0);
+	    paramMutex().unlock();
 	    m->setBody(buildSIPBody());
 	    plugin.ep()->engine()->addMessage(m);
 	    m->deref();
@@ -5228,8 +5261,11 @@ void YateSIPConnection::mediaChanged(const SDPMedia& media)
 	m.addParam("call_billid",billid());
 	Engine::dispatch(m);
 	const char* stats = m.getValue(YSTRING("stats"));
-	if (stats)
+	if (stats) {
+	    paramMutex().lock();
 	    parameters().setParam("rtp_stats"+media.suffix(),stats);
+	    paramMutex().unlock();
+	}
     }
     // Clear the data endpoint, will be rebuilt later if required
     clearEndpoint(media);
@@ -5267,13 +5303,17 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	updateTags = false;
 	m_cancel = false;
 	m_byebye = false;
+	paramMutex().lock();
 	parameters().clearParams();
 	parameters().addParam("cause_sip",String(code));
 	parameters().addParam("reason_sip",msg->reason);
 	setReason(msg->reason,code);
 	if (msg->body) {
+	    paramMutex().unlock();
 	    Message tmp("isup.decode");
-	    if (decodeIsupBody(tmp,msg->body))
+	    bool ok = decodeIsupBody(tmp,msg->body);
+	    paramMutex().lock();
+	    if (ok)
 		parameters().copyParams(tmp);
 	}
 	copySipHeaders(parameters(),*msg);
@@ -5311,6 +5351,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    else
 		Debug(this,DebugMild,"Received %d redirect without Contact [%p]",code,this);
 	}
+	paramMutex().unlock();
 	hangup();
     }
     else if (code == 408) {
@@ -5318,7 +5359,9 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	updateTags = false;
 	if (m_dialog.remoteTag.null())
 	    m_byebye = false;
+	paramMutex().lock();
 	parameters().setParam("cause_sip","408");
+	paramMutex().unlock();
 	setReason("Request Timeout",code);
 	hangup();
     }
@@ -5658,7 +5701,8 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	    m_rtpAddr = addr;
 	    Debug(this,DebugAll,"New RTP addr '%s'",m_rtpAddr.c_str());
 	    // clear all data endpoints - createRtpSDP will build new ones
-	    clearEndpoint();
+	    if (!s_rtp_preserve)
+		clearEndpoint();
 	}
 	setMedia(lst);
 
@@ -5720,10 +5764,19 @@ void YateSIPConnection::doBye(SIPTransaction* t)
     const SIPMessage* msg = t->initialMessage();
     if (msg->body) {
 	Message tmp("isup.decode");
-	if (decodeIsupBody(tmp,msg->body))
+	if (decodeIsupBody(tmp,msg->body)) {
+	    paramMutex().lock();
 	    parameters().copyParams(tmp);
+	    paramMutex().unlock();
+	}
     }
+    SIPMessage* m = new SIPMessage(t->initialMessage(),200);
+    paramMutex().lock();
     copySipHeaders(parameters(),*msg);
+    const char* stats = parameters().getValue(YSTRING("rtp_stats"));
+    if (stats)
+	m->addHeader("P-RTP-Stat",stats);
+    paramMutex().unlock();
     const MimeHeaderLine* hl = msg->getHeader("Reason");
     if (hl) {
 	const NamedString* text = hl->getParam("text");
@@ -5732,10 +5785,6 @@ void YateSIPConnection::doBye(SIPTransaction* t)
 	// FIXME: add SIP and Q.850 cause codes
     }
     setMedia(0);
-    SIPMessage* m = new SIPMessage(t->initialMessage(),200);
-    const char* stats = parameters().getValue(YSTRING("rtp_stats"));
-    if (stats)
-	m->addHeader("P-RTP-Stat",stats);
     t->setResponse(m);
     m->deref();
     m_byebye = false;
@@ -6186,6 +6235,7 @@ void YateSIPConnection::endDisconnect(const Message& msg, bool handled)
     const char* mPrefix = msg.getValue(YSTRING("message-prefix"));
     if (!(sPrefix || mPrefix))
         return;
+    paramMutex().lock();
     parameters().clearParams();
     if (sPrefix) {
 	parameters().setParam("osip-prefix",sPrefix);
@@ -6195,6 +6245,7 @@ void YateSIPConnection::endDisconnect(const Message& msg, bool handled)
 	parameters().setParam("message-prefix",mPrefix);
 	parameters().copySubParams(msg,mPrefix,false);
     }
+    paramMutex().unlock();
 }
 
 void YateSIPConnection::statusParams(String& str)
@@ -6217,9 +6268,9 @@ bool YateSIPConnection::callRouted(Message& msg)
     setRfc2833(msg.getParam(YSTRING("rfc2833")));
     Channel::callRouted(msg);
     Lock lock(driver());
-    if (m_hungup)
+    if (m_hungup || !m_tr)
 	return false;
-    if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
+    if (m_tr->getState() == SIPTransaction::Process) {
 	String s(msg.retValue());
 	if (s.startSkip("sip/",false) && s && msg.getBoolValue(YSTRING("redirect"))) {
 	    Debug(this,DebugAll,"YateSIPConnection redirecting to '%s' [%p]",s.c_str(),this);
@@ -6490,7 +6541,9 @@ MimeBody* YateSIPConnection::buildSIPBody()
     if (!s_sipt_isup)
 	return 0;
     Message msg("");
+    paramMutex().lock();
     msg.copyParams(parameters());
+    paramMutex().unlock();
     return doBuildSIPBody(this,msg,0);
 }
 
@@ -6520,7 +6573,7 @@ void YateSIPLine::setupAuth(SIPMessage* msg) const
 	msg->setAutoAuth(getAuthName(),m_password);
 }
 
-void YateSIPLine::setValid(bool valid, const char* reason)
+void YateSIPLine::setValid(bool valid, const char* reason, const char* error)
 {
     DDebug(&plugin,DebugInfo,"YateSIPLine(%s) setValid(%u,%s) current=%u [%p]",
 	c_str(),valid,reason,m_valid,this);
@@ -6535,8 +6588,8 @@ void YateSIPLine::setValid(bool valid, const char* reason)
 	if (m_domain)
 	    m->addParam("domain",m_domain);
 	m->addParam("registered",String::boolText(valid));
-	if (reason)
-	    m->addParam("reason",reason);
+	m->addParam("reason",reason,false);
+	m->addParam("error",error,false);
 	Engine::enqueue(m);
     }
 }
@@ -6721,7 +6774,7 @@ bool YateSIPLine::process(SIPEvent* ev)
 	default:
 	    // detect local address even from failed attempts - helps next time
 	    detectLocal(msg);
-	    setValid(false,msg->reason);
+	    setValid(false,msg->reason,lookup(msg->code,dict_errors,String(msg->code)));
 	    if (!m_keepTcpOffline)
 		setParty();
 	    Debug(&plugin,DebugWarn,"SIP line '%s' logon failure %d: %s",
@@ -6815,8 +6868,7 @@ bool YateSIPLine::update(const Message& msg)
     const String& oper = msg[YSTRING("operation")];
     if (oper == YSTRING("logout")) {
 	logout();
-	if (!m_keepTcpOffline)
-	    setParty();
+	setParty();
 	return true;
     }
     bool chg = updateProto(msg);
@@ -7038,8 +7090,10 @@ bool SipHandler::received(Message &msg)
 	}
 	sip = new SIPMessage(method,uri);
 	YateSIPPartyHolder holder;
-	holder.setParty(msg,false);
-	holder.setSipParty(sip,line,true,msg.getValue("host"),msg.getIntValue("port"));
+	const char* host = msg.getValue("host");
+	int port = msg.getIntValue("port");
+	holder.setParty(msg,false,String::empty(),host,port);
+	holder.setSipParty(sip,line,true,host,port);
 	if (line)
 	    domain = line->domain(domain);
     }
@@ -7310,7 +7364,6 @@ SIPDriver::~SIPDriver()
 
 void SIPDriver::initialize()
 {
-    static bool first = true;
     Output("Initializing module SIP Channel");
     s_cfg = Engine::configFile("ysipchan");
     s_cfg.load();
@@ -7337,14 +7390,11 @@ void SIPDriver::initialize()
     s_reg_async = s_cfg.getBoolValue("registrar","async_process",true);
     s_ack_required = !s_cfg.getBoolValue("hacks","ignore_missing_ack",false);
     s_1xx_formats = s_cfg.getBoolValue("hacks","1xx_change_formats",true);
+    s_rtp_preserve = s_cfg.getBoolValue("hacks","ignore_sdp_addr",false);
     m_parser.initialize(s_cfg.getSection("codecs"),s_cfg.getSection("hacks"),s_cfg.getSection("general"));
     if (!m_endpoint) {
 	Thread::Priority prio = Thread::priority(s_cfg.getValue("general","thread"));
-	unsigned int partyMutexCount = s_cfg.getIntValue("general","party_mutexcount",47);
-	if (partyMutexCount < 13)
-	    partyMutexCount = 13;
-	else if (partyMutexCount > 101)
-	    partyMutexCount = 101;
+	unsigned int partyMutexCount = s_cfg.getIntValue("general","party_mutexcount",47,13,101);
 	m_endpoint = new YateSIPEndPoint(prio,partyMutexCount);
 	if (!(m_endpoint->Init())) {
 	    delete m_endpoint;
@@ -7363,10 +7413,16 @@ void SIPDriver::initialize()
 	if (s_cfg.getBoolValue("general","generate"))
 	    Engine::install(new SipHandler);
     }
+    else {
+	m_endpoint->engine()->initialize(s_cfg.getSection("general"));
+	loadLimits();
+    }
     // Unsafe globals
     s_globalMutex.lock();
     s_realm = s_cfg.getValue("general","realm","Yate");
     s_tcpOutRtpip = s_cfg.getValue("general","tcp_out_rtp_localip");
+    s_sslCertFile = s_cfg.getValue("general","ssl_certificate_file");
+    s_sslKeyFile = s_cfg.getValue("general","ssl_key_file");
     s_globalMutex.unlock();
     // Adjust here the TCP idle interval: it uses the SIP engine
     s_tcpIdle = tcpIdleInterval(s_cfg.getIntValue("general","tcp_idle",TCP_IDLE_DEF));
@@ -7426,7 +7482,6 @@ void SIPDriver::initialize()
     m_endpoint->initializing(false);
     // Everything set: update default udp transport
     m_endpoint->updateDefUdpTransport();
-    first = false;
 }
 
 void SIPDriver::genUpdate(Message& msg)
@@ -7472,14 +7527,12 @@ bool SIPDriver::commandComplete(Message& msg, const String& partLine, const Stri
 void SIPDriver::msgStatus(Message& msg)
 {
     String str = msg.getValue(YSTRING("module"));
-    while (str.startSkip(name())) {
+    if (str.null() || str.startSkip(name())) {
 	str.trimBlanks();
 	if (str.null())
 	    Module::msgStatus(msg);
-	else if (str.startSkip("accounts")) {
+	else if (str.startSkip("accounts"))
 	    msgStatusAccounts(msg);
-	    return;
-	}
 	else if (str.startSkip("transports")) {
 	    String tmp = str;
 	    tmp.trimBlanks().toLower();
@@ -7493,12 +7546,9 @@ void SIPDriver::msgStatus(Message& msg)
 		msgStatusTransports(msg,true,true,true);
 	    else if (msg.getBoolValue("details",true))
 		msgStatusTransport(msg,str);
-	    return;
 	}
-	else if (str.startSkip("listeners")) {
+	else if (str.startSkip("listeners"))
 	    msgStatusListener(msg);
-	    return;
-	}
     }
 }
 
@@ -7509,6 +7559,11 @@ bool SIPDriver::socketSsl(Socket** sock, bool server, const String& context)
     m.addParam("module",name());
     m.addParam("server",String::boolText(server));
     m.addParam("context",context,false);
+    if (!server) {
+	Lock lock(s_globalMutex);
+	m.addParam("certificate",s_sslCertFile,false);
+	m.addParam("key",s_sslKeyFile,false);
+    }
     if (sock && *sock) {
 	RefObjectProxy* p = new RefObjectProxy(sock);
 	m.userData(p);

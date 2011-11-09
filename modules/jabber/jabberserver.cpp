@@ -176,15 +176,18 @@ public:
 	const char* from, const char* to);
     // Load the entity caps file
     void load();
+    // Set caps file. Save it if changed
+    void setFile(const char* file);
 protected:
     inline void getEntityCapsFile(String& file) {
-	    file = Engine::configPath();
-	    if (!file.endsWith(Engine::pathSeparator()))
-		file << Engine::pathSeparator();
-	    file << "jabberentitycaps.xml";
+	    Lock mylock(this);
+	    file = m_file;
 	}
     // Notify changes and save the entity caps file
     virtual void capsAdded(JBEntityCaps* caps);
+    // Save the file
+    void save();
+    String m_file;
 };
 
 /*
@@ -979,6 +982,25 @@ void YJBEntityCapsList::load()
     loadXmlDoc(file,s_jabber);
 }
 
+// Set caps file
+void YJBEntityCapsList::setFile(const char* file)
+{
+    Lock mylock(this);
+    String old = m_file;
+    m_file = file;
+    if (!m_file) {
+	m_file = Engine::configPath();
+	if (!m_file.endsWith(Engine::pathSeparator()))
+	    m_file << Engine::pathSeparator();
+	m_file << "jabberentitycaps.xml";
+    }
+    Engine::self()->runParams().replaceParams(m_file);
+    bool changed = m_enable && old && m_file && old != m_file;
+    mylock.drop();
+    if (changed)
+	save();
+}
+
 // Notify changes and save the entity caps file
 void YJBEntityCapsList::capsAdded(JBEntityCaps* caps)
 {
@@ -993,6 +1015,12 @@ void YJBEntityCapsList::capsAdded(JBEntityCaps* caps)
     addCaps(*m,*caps);
     Engine::enqueue(m);
     // Save the file
+    save();
+}
+
+// Save the file
+void YJBEntityCapsList::save()
+{
     String file;
     getEntityCapsFile(file);
     saveXmlDoc(file,s_jabber);
@@ -3910,6 +3938,7 @@ void JBModule::initialize()
     Output("Initializing module Jabber Server");
     Configuration cfg(Engine::configFile("jabberserver"));
 
+    s_entityCaps.setFile(cfg.getValue("general","entitycaps_file"));
     if (!m_init) {
 	// Init some globals
 	s_clusterControlSkip.append(new String("targetid"));

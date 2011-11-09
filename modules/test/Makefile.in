@@ -1,6 +1,9 @@
 # Makefile
 # This file holds the make rules for the Telephony Engine test cases
 
+# override DEBUG at compile time to enable full debug or remove it all
+DEBUG :=
+
 CXX := @CXX@ -Wall
 SED := sed
 DEFS :=
@@ -12,13 +15,13 @@ MODFLAGS:= @MODULE_LDFLAGS@
 MODSTRIP:= @MODULE_SYMBOLS@
 
 MKDEPS  := ../../config.status
-PROGS = randcall.yate
+PROGS = randcall.yate msgdelay.yate
 LIBS =
 OBJS =
 
 LOCALFLAGS =
 LOCALLIBS =
-COMPILE = $(CXX) $(DEFS) $(INCLUDES) $(CFLAGS)
+COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
 LINK = $(CXX) $(LDFLAGS)
 MODLINK = $(CXX) $(MODFLAGS) $(MODSTRIP) $(LDFLAGS)
 MODCOMP = $(COMPILE) $(MODFLAGS) $(MODSTRIP) $(LDFLAGS)
@@ -29,8 +32,17 @@ exec_prefix = @exec_prefix@
 # include optional local make rules
 -include YateLocal.mak
 
-.PHONY: all
+.PHONY: all debug ddebug xdebug
 all: $(LIBS) $(PROGS)
+
+debug:
+	$(MAKE) all DEBUG=-g3 MODSTRIP=
+
+ddebug:
+	$(MAKE) all DEBUG='-g3 -DDEBUG' MODSTRIP=
+
+xdebug:
+	$(MAKE) all DEBUG='-g3 -DXDEBUG' MODSTRIP=
 
 .PHONY: strip
 strip: all

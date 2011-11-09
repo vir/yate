@@ -204,6 +204,9 @@ bool YSipSubscribeHandler::received(Message &msg)
     appendEsc(data,"host",msg.getValue("ip_host"));
     appendEsc(data,"port",msg.getValue("ip_port"));
     appendEsc(data,"uri",notifyTo);
+    const String& conn = msg["connection_id"];
+    if (conn)
+	appendEsc(data,"connection_id",conn);
     String from = msg.getValue("sip_to");
     if (-1 == from.find("tag="))
 	from << ";tag=" << msg.getValue("xsip_dlgtag");

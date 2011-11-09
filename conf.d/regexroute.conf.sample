@@ -47,6 +47,7 @@
 ;  $(random,STRING) = STRING with each ? character replaced with a random digit
 ;  $(index,N,ITEM1,ITEM2,...) = N-th (modulo length of list) item in list
 ;  $(rotate,N,ITEM1,ITEM2,...) = list rotated N (modulo length of list) times
+;  $(config,SECTION,KEY) = value of KEY= in [SECTION] of main config file (yate.conf, yate-qt4.conf)
 ;  $(engine,NAME) = value of Engine's runtime parameter NAME
 ;  $(runid) = the current Engine run identifier
 ;  $(nodename) = the node name the Engine runs as, may be empty
@@ -75,6 +76,11 @@
 
 ; insensitive: bool: Make the regular expressions case insensitive
 ;insensitive=no
+
+; defaultrule: regexp: Default expression to use in matches if not specified
+; Works only for ${param} or $(expression) matches
+; Default matches any string that is not empty or explicitely false or zero
+;defaultrule=^\(false\|no\|off\|disable\|f\|0*\)$^
 
 ; prerouteall: bool: Preroute even calls having a context or with empty caller
 ;prerouteall=no

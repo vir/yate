@@ -68,7 +68,6 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="dnsapi.lib"
 				LinkIncremental="1"
 			/>
 			<Tool
@@ -153,7 +152,6 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="dnsapi.lib"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
 			/>

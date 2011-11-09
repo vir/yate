@@ -181,6 +181,26 @@
         </widget>
        </item>
        <item>
+        <widget class="QCheckBox" name="showemptychat" >
+         <property name="toolTip" >
+          <string>Show received chat with empty body</string>
+         </property>
+         <property name="text" >
+          <string>Show empty received chat</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="sendemptychat" >
+         <property name="toolTip" >
+          <string>Send empty chat</string>
+         </property>
+         <property name="text" >
+          <string>Send empty chat</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <spacer>
          <property name="orientation" >
           <enum>Qt::Vertical</enum>

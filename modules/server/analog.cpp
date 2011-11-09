@@ -2196,13 +2196,11 @@ AnalogCallRec::AnalogCallRec(ModuleLine* line, bool fxsCaller, const char* id)
 	m_address = m_line->address();
 
     // Set caller/called
-    ModuleLine* info = m_line;
     if (fxsCaller) {
 	if (m_startOnSecondRing && fxo->callSetup() == AnalogLine::Before)
 	    fxo->setCall(fxo->caller(),"",m_line->called());
 	else
 	    fxo->setCall(s_unk,"",m_line->called());
-	info = fxo;
     }
     else
 	m_line->setCall(s_unk,"",fxo->called());
@@ -2610,9 +2608,9 @@ void AnalogDriver::initialize()
 	general = &dummy;
 
     // Startup
+    setup();
     if (!m_init) {
 	m_init = true;
-	setup();
 	installRelay(Masquerade);
 	installRelay(Halt);
 	installRelay(Progress);

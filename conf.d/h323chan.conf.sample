@@ -118,10 +118,31 @@ ep = true
 gw = false
 
 ; addr: string: IP address to bind the endpoint to, defaults to all interfaces
+; This parameter is applied on reload
 ;addr=
 
 ; port: int: TCP port on which the endpoint will listen
+; This parameter is applied on reload
 ;port=1720
+
+; bind_retry_count: integer: The number of bind retries for endpoint's listener
+; This parameter is used when failed to bind on configured port
+; The endpoint will try to bind on a random port chosen in the range given
+;  by 'bind_minport' and 'bind_maxport'
+; Set it to 0 to disable bind retry if failed on configured port
+; Minimum allowed value is 0, maximum allowed value is 10
+; Defaults to 5
+;bind_retry_count=5
+
+; bind_minport: integer: Minimum port for bind retry range
+; Minimum allowed value is 1, maximum allowed value is 65535
+; Defaults to 1000
+;bind_minport=1000
+
+; bind_maxport: integer: Maximum port for bind retry range
+; Minimum allowed value is 1, maximum allowed value is 65535
+; Defaults to 65535
+;bind_maxport=65535
 
 ; alias: string: The alias used by h323 module to connect to gatekeeper
 alias = yate
@@ -129,14 +150,16 @@ alias = yate
 ; ident: string: Sets the hostname part of the outgoing e.164 (numeric) aliases
 ident = yate
 
-; maxconns: int: Maximum number of simultaneous connections (0 = no limit). 
+; maxconns: int: Maximum number of simultaneous connections (0 = no limit).
 ;maxconns = 0
 
 ; faststart: bool: Enable Fast Start mode (offer media channels early)
-;faststart=false
+; This setting is required when doing direct RTP forwarding between endpoints
+;faststart=true
 
 ; h245tunneling: bool: Enable H.245 tunneling mode
-;h245tunneling=false
+; This setting is almost always required to pass through a NAT
+;h245tunneling=true
 
 ; h245insetup: bool: Enable H.245 establishment early in call setup message
 ; Note that this setting may conflict with faststart so don't enable both
@@ -146,6 +169,7 @@ ident = yate
 ;dtmfinband = false
 
 ; silencedetect: keyword: Silence detection algorithm: none, fixed, adaptive
+; This applies only to OpenH323 internal RTP
 ;silencedetect = none
 
 ; gkclient: bool: If h323 module endpoint should register to a gatekeeper
@@ -166,6 +190,20 @@ gkclient = false
 ; gkretry: int: Gatekeeper discovery retry interval in seconds, 0 disables
 ;gkretry = 60
 
+; authmethods: string: Comma separated list of authentication methods to use
+; It can be use to change the order of offered authentication methods
+; Possible values: H.235.1, MD5, CAT
+; This parameter is applied on reload for both client and server
+; Note: this parameter is used only when requested by the H323 library, changing it
+;  won't trigger a re-register
+; Setting a '*' to the end of list will indicate to use all methods created by the
+;  H323 library
+; Examples:
+;  authmethods=MD5,CAT
+;  authmethods=MD5,*
+;  authmethods=MD5,*,CAT - same as authmethods=MD5,CAT
+;  authmethods=* - same as leaving the parameter empty
+;authmethods=
 
 ; How the gatekeeper is located
 ; If gkclient is true the endpoint will try first to find the gatekeeper by

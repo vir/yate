@@ -128,6 +128,8 @@ public:
 	{ return m_address; }
     inline const String& bearer() const
 	{ return m_bearer; }
+    inline const String& options() const
+	{ return m_options; }
     inline const char* version() const
 	{ return m_version.null() ? "MGCP 1.0" : m_version.c_str(); }
     inline bool fxo() const
@@ -138,15 +140,17 @@ public:
 	{ return m_rtpForward; }
     inline bool sdpForward() const
 	{ return m_sdpForward; }
+    inline bool rtpForcedFwd() const
+	{ return m_rtpForcedFwd; }
     inline bool rqntEmbed() const
 	{ return m_rqntEmbed; }
     inline RqntType rqntType() const
 	{ return m_rqntType; }
     inline const char* rqntStr() const
 	{ return m_rqntStr; }
-    bool ownsId(const String& rqId) const;
+    bool ownsId(const String& rqId, const String& epId) const;
     static SignallingComponent* create(const String& type, const NamedList& name);
-    static MGCPSpan* findNotify(const String& id);
+    static MGCPSpan* findNotify(const String& id, const String& epId);
     bool getBoolParam(const String& param, bool defValue) const;
     bool matchEndpoint(const MGCPEndpointId& ep);
     bool processEvent(MGCPTransaction* tr, MGCPMessage* mm);
@@ -165,8 +169,10 @@ private:
     bool m_operational;
     bool m_rtpForward;
     bool m_sdpForward;
+    bool m_rtpForcedFwd;
     bool m_fxo;
     bool m_fxs;
+    bool m_ntfyMatch;
     bool m_rqntEmbed;
     RqntType m_rqntType;
     String m_rqntStr;
@@ -174,6 +180,7 @@ private:
     String m_address;
     String m_version;
     String m_bearer;
+    String m_options;
 };
 
 class MGCPCircuit : public SignallingCircuit, public SDPSession
@@ -219,6 +226,7 @@ protected:
     virtual Message* buildChanRtp(RefObject* context)
 	{
 	    Message* m = new Message("chan.rtp");
+	    m->addParam("id",m_owner,false);
 	    m->userData(context ? context : this);
 	    return m;
 	}
@@ -229,6 +237,7 @@ protected:
 		m->addParam("mgcp_allowed",String::boolText(false));
 	    return m;
 	}
+    void mediaChanged(const SDPMedia& media);
 private:
     void waitNotChanging();
     MGCPMessage* message(const char* cmd);
@@ -244,6 +253,7 @@ private:
     Status m_statusReq;
     String m_notify;
     String m_specialMode;
+    String m_owner;
     bool m_changing;
     bool m_pending;
     // Gateway endpoint bearer information
@@ -315,35 +325,7 @@ static ObjList s_wrappers;
 static ObjList s_spans;
 static Mutex s_mutex(false,"MGCP-CA");
 
-// Yate Payloads for the AV profile
-static const TokenDict s_dict_payloads[] = {
-    { "mulaw",         0 },
-    { "alaw",          8 },
-    { "gsm",           3 },
-    { "lpc10",         7 },
-    { "slin",         11 },
-    { "g726",          2 },
-    { "g722",          9 },
-    { "g723",          4 },
-    { "g728",         15 },
-    { "g729",         18 },
-    { "ilbc",         98 },
-    { "ilbc20",       98 },
-    { "ilbc30",       98 },
-    { "amr",          96 },
-    { "amr-o",        96 },
-    { "amr/16000",    99 },
-    { "amr-o/16000",  99 },
-    { "speex",       102 },
-    { "speex/16000", 103 },
-    { "speex/32000", 104 },
-    { "h261",         31 },
-    { "h263",         34 },
-    { "mpv",          32 },
-    {      0,          0 }
-};
-
-// Media gateway bearer information (mapped from s_dict_payloads)
+// Media gateway bearer information (mapped from SDPParser::s_payloads)
 static const TokenDict s_dict_gwbearerinfo[] = {
     { "e:mu",          0 },
     { "e:A",           8 },
@@ -456,7 +438,7 @@ bool YMGCPEngine::processEvent(MGCPTransaction* trans, MGCPMessage* msg)
 		if (wrap)
 		    ok = wrap->processNotify(trans,msg,*event);
 		else {
-		    span = MGCPSpan::findNotify(*rqId);
+		    span = MGCPSpan::findNotify(*rqId,msg->endpointId());
 		    if (span)
 			ok = span->processNotify(trans,msg,*event,*rqId);
 		    else {
@@ -878,7 +860,7 @@ SignallingComponent* MGCPSpan::create(const String& type, const NamedList& name)
 }
 
 // Find a span by its Notify-ID
-MGCPSpan* MGCPSpan::findNotify(const String& id)
+MGCPSpan* MGCPSpan::findNotify(const String& id, const String& epId)
 {
     if (id.null())
 	return 0;
@@ -886,7 +868,7 @@ MGCPSpan* MGCPSpan::findNotify(const String& id)
     ObjList* l = &s_spans;
     for (; l; l=l->next()) {
 	MGCPSpan* s = static_cast<MGCPSpan*>(l->get());
-	if (s && s->ownsId(id))
+	if (s && s->ownsId(id,epId))
 	    return s;
     }
     return 0;
@@ -896,8 +878,8 @@ MGCPSpan::MGCPSpan(const NamedList& params, const char* name, const MGCPEpInfo& 
     : SignallingCircuitSpan(params.getValue("debugname",name),
 	static_cast<SignallingCircuitGroup*>(params.getObject("SignallingCircuitGroup"))),
       m_circuits(0), m_count(0), m_epId(ep), m_operational(false),
-      m_rtpForward(false), m_sdpForward(false), m_fxo(false), m_fxs(false),
-      m_rqntEmbed(true), m_rqntType(RqntOnce)
+      m_rtpForward(false), m_sdpForward(false), m_rtpForcedFwd(false), m_fxo(false), m_fxs(false),
+      m_ntfyMatch(true), m_rqntEmbed(true), m_rqntType(RqntOnce)
 {
     Debug(&splugin,DebugAll,"MGCPSpan::MGCPSpan(%p,'%s') [%p]",
 	&params,name,this);
@@ -906,6 +888,7 @@ MGCPSpan::MGCPSpan(const NamedList& params, const char* name, const MGCPEpInfo& 
     m_rqntStr = "D/[0-9#*](N)";
     const AnalogLineGroup* analog = YOBJECT(AnalogLineGroup,group());
     if (analog) {
+	m_ntfyMatch = false;
 	switch (analog->type()) {
 	    case AnalogLine::FXO:
 		m_fxo = true;
@@ -996,13 +979,17 @@ bool MGCPSpan::init(const NamedList& params)
     }
     m_increment = config->getIntValue(("increment_"+*sect),
 	config->getIntValue(YSTRING("increment"),m_increment));
-    m_rtpForward = config->getBoolValue(YSTRING("forward_rtp"),!(m_fxo || m_fxs));
+    bool digital = !(m_fxo || m_fxs);
+    m_rtpForcedFwd = digital && ((*config)[YSTRING("forward_rtp")] == YSTRING("always"));
+    m_rtpForward = m_rtpForcedFwd || config->getBoolValue(YSTRING("forward_rtp"),digital);
     m_sdpForward = config->getBoolValue(YSTRING("forward_sdp"),false);
-    m_bearer = lookup(config->getIntValue(YSTRING("bearer"),s_dict_payloads,-1),s_dict_gwbearerinfo);
+    m_bearer = lookup(config->getIntValue(YSTRING("bearer"),SDPParser::s_payloads,-1),s_dict_gwbearerinfo);
+    m_ntfyMatch = config->getBoolValue(YSTRING("match_ntfy"),m_ntfyMatch);
     m_rqntEmbed = config->getBoolValue(YSTRING("req_embed"),true);
     m_rqntType = (RqntType)config->getIntValue(YSTRING("req_dtmf"),s_dict_rqnt,RqntOnce);
     bool fax = config->getBoolValue(YSTRING("req_fax"),true);
     bool t38 = config->getBoolValue(YSTRING("req_t38"),fax);
+    // build Fax notification request
     if (fax || t38) {
 	if (RqntNone == m_rqntType) {
 	    m_rqntType = RqntOnce;
@@ -1014,6 +1001,28 @@ bool MGCPSpan::init(const NamedList& params)
 	    m_rqntStr.append("fxr/t38",",");
     }
     m_rqntStr = config->getValue(YSTRING("req_evts"),m_rqntStr);
+    // build Local Connection Options
+    String fmts;
+    splugin.parser().getAudioFormats(fmts);
+    ObjList* l = fmts.split(',',false);
+    fmts.clear();
+    for (ObjList* o = l; o; o = o->next()) {
+	const String* s = static_cast<const String*>(o->get());
+	if (!s)
+	    continue;
+	String fmt = lookup(lookup(*s,SDPParser::s_payloads),SDPParser::s_rtpmap);
+	int slash = fmt.find('/');
+	if (slash >= 0)
+	    fmt = fmt.substr(0,slash);
+	if (fmt.null() || (fmts.find(fmt) >= 0))
+	    continue;
+	if (fmts)
+	    fmts << ";" << fmt;
+	else
+	    fmts << "a:" << fmt;
+    }
+    TelEngine::destruct(l);
+    m_options = fmts;
     bool clear = config->getBoolValue(YSTRING("clearconn"),false);
     m_circuits = new MGCPCircuit*[m_count];
     unsigned int i;
@@ -1110,13 +1119,26 @@ bool MGCPSpan::getBoolParam(const String& param, bool defValue) const
     return defValue;
 }
 
+#ifdef XDEBUG
+static bool mismatch(const char* s)
+{
+    Debug(DebugAll,"MGCP No match: %s",s);
+    return false;
+}
+#else
+#define mismatch(s) false
+#endif
+
 // Check if this span matches an endpoint ID
 bool MGCPSpan::matchEndpoint(const MGCPEndpointId& ep)
 {
+    XDebug(DebugAll,"MGCP Match: %s@%s:%d vs %s@%s:%d",
+	ep.user().c_str(),ep.host().c_str(),ep.port(),
+	m_epId.user().c_str(),m_epId.host().c_str(),m_epId.port());
     if (ep.port() && (ep.port() != m_epId.port()))
-	return false;
+	return mismatch("Port differs");
     if (ep.host() |= m_epId.host())
-	return false;
+	return mismatch("Host differs");
     if (ep.user() &= m_epId.user())
 	return true;
     if (ep.user() == "*")
@@ -1135,36 +1157,48 @@ bool MGCPSpan::matchEndpoint(const MGCPEndpointId& ep)
     // check for prefix[min-max] or prefix*/[min-max]
     static const Regexp s_finalRange("^\\(.*\\)\\[\\([0-9]\\+\\)-\\([0-9]\\+\\)\\]$");
     if (!tmp.matches(s_finalRange))
-	return false;
+	return mismatch("No range");
     int idx = -1;
     if (tmp.matchString(1).endsWith("*/")) {
 	if (!m_epId.user().startsWith(tmp.matchString(1).substr(0,tmp.matchLength(1)-2)))
-	    return false;
+	    return mismatch("Different wildcard range prefix");
 	idx = m_epId.user().rfind('/');
 	if (idx < 0)
-	    return false;
+	    return mismatch("No wildcard range separator");
 	idx++;
     }
     else {
 	if (!m_epId.user().startsWith(tmp.matchString(1),false,true))
-	    return false;
+	    return mismatch("Different range prefix");
 	idx = tmp.matchLength(1);
     }
     idx = m_epId.user().substr(idx).toInteger(-1,10);
     if (idx < 0)
-	return false;
-    return (tmp.matchString(2).toInteger(idx+1,10) <= idx) && (idx <= tmp.matchString(3).toInteger(-1,10));
+	return mismatch("User suffix not numeric");
+    int rMin = tmp.matchString(2).toInteger(idx+1,10);
+    int rMax = tmp.matchString(3).toInteger(-1,10);
+    if (((idx + (int)m_count - 1) < rMin) || (idx > rMax))
+	return mismatch("Suffix not in range");
+    return true;
 }
 
 // Check if a request Id is for this span or one of its circuits
-bool MGCPSpan::ownsId(const String& rqId) const
+bool MGCPSpan::ownsId(const String& rqId, const String& epId) const
 {
     if (ntfyId() == rqId)
 	return true;
     for (unsigned int i = 0; i < m_count; i++) {
 	MGCPCircuit* circuit = m_circuits[i];
-	if (circuit && (circuit->ntfyId() == rqId))
-	    return true;
+	if (!circuit)
+	    continue;
+	if (m_ntfyMatch) {
+	    if (circuit->ntfyId() == rqId)
+		return true;
+	}
+	else {
+	    if (circuit->epId() == epId)
+		return true;
+	}
     }
     return false;
 }
@@ -1178,13 +1212,13 @@ MGCPCircuit* MGCPSpan::findCircuit(const String& epId, const String& rqId) const
 	return 0;
     bool localId = (rqId != "0") && !rqId.null();
     String id = epId;
-    if (id.rfind(':') < 0)
+    if ((id.rfind(':') < 0) && (m_epId.id().find(':') >= 0))
 	id << ":" << m_epId.port();
     for (unsigned int i = 0; i < m_count; i++) {
 	MGCPCircuit* circuit = m_circuits[i];
 	if (!circuit)
 	    continue;
-	if (localId) {
+	if (localId && m_ntfyMatch) {
 	    if (circuit->ntfyId() != rqId)
 		continue;
 	}
@@ -1297,6 +1331,7 @@ MGCPCircuit::MGCPCircuit(unsigned int code, MGCPSpan* span, const char* id)
     m_callId += m_notify;
     m_notify = span->ntfyId() + m_notify;
     m_gwFormat = span->bearer();
+    m_owner << span->id() << "/" << code;
 }
 
 MGCPCircuit::~MGCPCircuit()
@@ -1327,10 +1362,27 @@ void* MGCPCircuit::getObject(const String& name) const
     return SignallingCircuit::getObject(name);
 }
 
+// Media changed notification, reimplemented from SDPSession
+void MGCPCircuit::mediaChanged(const SDPMedia& media)
+{
+    SDPSession::mediaChanged(media);
+    if (media.id() && media.transport()) {
+	Message m("chan.rtp");
+	m.addParam("rtpid",media.id());
+	m.addParam("media",media);
+	m.addParam("transport",media.transport());
+	m.addParam("terminate",String::boolText(true));
+	m.addParam("mgcp_allowed",String::boolText(false));
+	Engine::dispatch(m);
+    }
+}
+
 // Clean up any RTP we may still hold
 void MGCPCircuit::cleanupRtp(bool all)
 {
+    setMedia(0);
     resetSdp(all);
+    m_rtpForward = mySpan()->rtpForcedFwd();
     m_localRawSdp.clear();
     m_localRtpChanged = false;
     m_remoteRawSdp.clear();
@@ -1390,7 +1442,7 @@ bool MGCPCircuit::setupConn(const char* mode)
     }
     else if (mode)
 	mm->params.addParam("M",mode);
-    else if (m_localRawSdp) {
+    else if (m_localRawSdp.trimBlanks()) {
 	mm->params.addParam("M","sendrecv");
 	mm->sdp.append(new MimeSdpBody("application/sdp",
 	    m_localRawSdp.safe(),m_localRawSdp.length()));
@@ -1403,6 +1455,8 @@ bool MGCPCircuit::setupConn(const char* mode)
 	}
 	else {
 	    mm->params.addParam("M","inactive");
+	    if (create)
+		mm->params.addParam("L",mySpan()->options(),false);
 	    rtpChange = true;
 	}
     }
@@ -1422,7 +1476,7 @@ bool MGCPCircuit::setupConn(const char* mode)
 	m_needClear = true;
 	return false;
     }
-    m_localRtpChanged = rtpChange;
+    m_localRtpChanged = rtpChange && hasLocalRtp();;
     MimeSdpBody* sdp = static_cast<MimeSdpBody*>(mm->sdp[0]);
     if (sdp) {
 	String oldIp = m_rtpAddr;
@@ -1465,6 +1519,7 @@ void MGCPCircuit::clearConn(bool force)
     m_connId.clear();
     m_specialMode.clear();
     resetSdp(false);
+    m_rtpForward = mySpan()->rtpForcedFwd();
     m_remoteRawSdp.clear();
     m_localRtpChanged = false;
     sendAsync(mm,true);
@@ -1609,8 +1664,7 @@ bool MGCPCircuit::status(Status newStat, bool sync)
 	    m_changing = false;
 	    return false;
 	}
-	allowRtpChange = SignallingCircuit::status() == Connected &&
-	    hasLocalRtp() && m_localRtpChanged;
+	allowRtpChange = SignallingCircuit::status() == Connected && m_localRtpChanged;
 	if (SignallingCircuit::status() != Connected) {
 	    if (mySpan()->rqntType() != MGCPSpan::RqntNone && !(fxs() || fxo() || mySpan()->rqntEmbed()))
 		sendRequest(0,mySpan()->rqntStr());
@@ -1687,6 +1741,7 @@ bool MGCPCircuit::status(Status newStat, bool sync)
     if (ok && special) {
 	Message m("circuit.special");
 	m.userData(this);
+	m.addParam("id",m_owner,false);
 	if (group())
 	    m.addParam("group",group()->toString());
 	if (span())
@@ -1706,7 +1761,7 @@ bool MGCPCircuit::updateFormat(const char* format, int direction)
 	return false;
     Debug(&splugin,DebugInfo,"MGCPCircuit::updateFormat('%s',%d) %u [%p]",
 	format,direction,code(),this);
-    int fmt = lookup(format,s_dict_payloads,-1);
+    int fmt = lookup(format,SDPParser::s_payloads,-1);
     const char* gwFmt = lookup(fmt,s_dict_gwbearerinfo);
     if (!gwFmt)
 	return false;
@@ -1727,6 +1782,7 @@ bool MGCPCircuit::setParam(const String& param, const String& value)
     if (m_changing)
 	return false;
     bool rtpChanged = false;
+    bool reConnect = false;
     if (param == YSTRING("sdp_raw")) {
 	rtpChanged = m_localRawSdp != value;
 	m_localRawSdp = value;
@@ -1735,6 +1791,7 @@ bool MGCPCircuit::setParam(const String& param, const String& value)
 	bool fwd = value.toBoolean();
 	rtpChanged = m_rtpForward != fwd;
 	m_rtpForward = fwd;
+	reConnect = rtpChanged && !fwd && (SignallingCircuit::status() == Connected);
     }
     else if (param == YSTRING("rtp_rfc2833"))
 	setRfc2833(value);
@@ -1746,10 +1803,16 @@ bool MGCPCircuit::setParam(const String& param, const String& value)
     }
     else
 	return false;
-    m_localRtpChanged = m_localRtpChanged || rtpChanged;
+    if (rtpChanged && hasLocalRtp())
+	m_localRtpChanged = true;
     lock.drop();
     DDebug(&splugin,DebugAll,"MGCPCircuit::setParam(%s,%s) %u [%p]",
 	param.c_str(),value.c_str(),code(),this);
+    if (reConnect) {
+	m_localRawSdp.clear();
+	m_localRtpChanged = true;
+	return status(Connected,true);
+    }
     return true;
 }
 
@@ -2149,6 +2212,10 @@ void MGCPPlugin::statusDetail(String& str)
     for (; l; l=l->skipNext()) {
 	MGCPWrapper* w = static_cast<MGCPWrapper*>(l->get());
         str.append(w->id(),",") << "=" << w->callId();
+    }
+    for (l = s_spans.skipNull(); l; l = l->skipNext()) {
+	MGCPSpan* s = static_cast<MGCPSpan*>(l->get());
+        str.append(s->id(),",") << "=" << s->epId().id();
     }
     s_mutex.unlock();
 }

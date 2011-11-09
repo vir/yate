@@ -16,8 +16,9 @@
 ;  messagename=priority
 
 
-[messages]
+;[messages]
 ; Custom messages that should be forked to each running slave
+; If this section is missing a default chan.dtmf=peerid is assumed
 
 ; Each parameter is of the format:
 ;  messagename=parameter
@@ -25,3 +26,4 @@
 ; Examples:
 ;  chan.dtmf=peerid
 ;  xsip.generate=id
+

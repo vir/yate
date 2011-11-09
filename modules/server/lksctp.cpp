@@ -256,6 +256,41 @@ bool LKSocket::setParams(const NamedList& params)
     ret |= aux;
     if (!aux)
 	Debug(&plugin,DebugNote,"Failed to set SCTP paddr params! Reason: %s",strerror(errno));
+#ifdef SCTP_DELAYED_ACK_TIME
+#ifdef HAVE_SACK_INFO_STRUCT
+    struct sctp_sack_info sack_info;
+    bzero(&sack_info, sizeof(sack_info));
+    if (params.getParam(YSTRING("sack_delay"))) {
+	sack_info.sack_delay = params.getIntValue(YSTRING("sack_delay"));
+	if (sack_info.sack_delay > 500)
+	    sack_info.sack_delay = 500;
+    }
+    if (params.getParam(YSTRING("sack_freq")))
+	sack_info.sack_freq = params.getIntValue(YSTRING("sack_freq"));
+    aux = setOption(IPPROTO_SCTP,SCTP_DELAYED_ACK_TIME, &sack_info, sizeof(sack_info));
+    ret |= aux;
+    if (!aux)
+	Debug(&plugin,DebugNote,"Failed to set SCTP sack params! Reason: %s",strerror(errno));
+#elif HAVE_ASSOC_VALUE_STRUCT
+    struct sctp_assoc_value sassoc_value;
+    bzero(&sassoc_value, sizeof(sassoc_value));
+    if (params.getParam(YSTRING("sack_delay"))) {
+	sassoc_value.assoc_value = params.getIntValue(YSTRING("sack_delay"));
+	if (sassoc_value.assoc_value > 500)
+	    sassoc_value.assoc_value = 500;
+    }
+    if (params.getParam(YSTRING("sack_freq")))
+	Debug(&plugin,DebugConf,"Unable to set sack_freq param! sack_info struct is missing!");
+    aux = setOption(IPPROTO_SCTP,SCTP_DELAYED_ACK_TIME, &sassoc_value, sizeof(sassoc_value));
+    ret |= aux;
+    if (!aux)
+	Debug(&plugin,DebugNote,"Failed to set SCTP sack params! Reason: %s",strerror(errno));
+#else // HAVE_SACK_INFO_STRUCT
+    Debug(&plugin,DebugConf,"SCTP delayed ack time is unavailable no struct present!!");
+#endif
+#else // SCTP_DELAYED_ACK_TIME
+    Debug(&plugin,DebugConf,"SCTP delayed ack time is unavailable");
+#endif
     aux = Socket::setParams(params);
     return ret || aux;
 }

@@ -77,10 +77,11 @@ const char* Configuration::getValue(const String& sect, const String& key, const
     return s ? s->c_str() : defvalue;
 }
 
-int Configuration::getIntValue(const String& sect, const String& key, int defvalue) const
+int Configuration::getIntValue(const String& sect, const String& key, int defvalue,
+    int minvalue, int maxvalue, bool clamp) const
 {
     const NamedString *s = getKey(sect,key);
-    return s ? s->toInteger(defvalue) : defvalue;
+    return s ? s->toInteger(defvalue,0,minvalue,maxvalue,clamp) : defvalue;
 }
 
 int Configuration::getIntValue(const String& sect, const String& key, const TokenDict* tokens, int defvalue) const

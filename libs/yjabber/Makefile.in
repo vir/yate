@@ -59,7 +59,7 @@ Makefile: @srcdir@/Makefile.in ../../config.status
 	cd ../.. && ./config.status
 
 ../../$(LIBD_VER): $(OBJS) $(YXML)
-	$(LINK) -o $@ $(SONAME_OPT)$(LIBD_VER) $^ $(YATELIBS) @RESOLV_LIB@
+	$(LINK) -o $@ $(SONAME_OPT)$(LIBD_VER) $^ $(YATELIBS)
 
 ../../$(LIBD_DEV): ../../$(LIBD_VER)
 	cd ../.. && ln -sf $(LIBD_VER) $(LIBD_DEV)

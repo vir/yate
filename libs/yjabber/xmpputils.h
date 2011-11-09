@@ -67,51 +67,6 @@ class XMPPDirVal;                        // Direction flags
 class XmlElementOut;                     // An outgoing xml element
 
 /**
- * This class holds a SRV record returned by a query
- * The String holds the domain/ip
- * @short A SRV record
- */
-class YJABBER_API SrvRecord : public String
-{
-public:
-    inline SrvRecord(const char* name, int port, int prio, int weight)
-	: String(name), m_port(port), m_priority(prio), m_weight(weight)
-	{}
-
-    /**
-     * Insert a SrvRecord into a list in the proper location
-     * @param list Destination list
-     * @param rec The item to insert
-     */
-    static void insert(ObjList& list, SrvRecord* rec);
-
-    /**
-     * Copy a SrvRecord list into another one
-     * @param dest Destination list
-     * @param src Source list
-     */
-    static void copy(ObjList& dest, const ObjList& src);
-
-    int m_port;
-    int m_priority;
-    int m_weight;
-};
-
-class YJABBER_API Resolver
-{
-public:
-    /**
-     * Make a SRV query
-     * @param query The query content
-     * @param result List of resulting SrvRecord items
-     * @param error Optional string to be filled with error string
-     * @return 0 on success, error code otherwise (h_errno value on Linux)
-     */
-    static int srvQuery(const char* query, ObjList& result, String* error = 0);
-};
-
-
-/**
  * Implements a String array set from an already allocated
  * @short A String array
  */

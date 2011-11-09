@@ -1242,33 +1242,75 @@ p, li { white-space: pre-wrap; }
               </widget>
              </item>
              <item>
-              <widget class="QLabel" name="label_21" >
-               <property name="text" >
-                <string>Authentication username:</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QLineEdit" name="acc_proto_sip_authname" >
-               <property name="sizePolicy" >
-                <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
-                 <horstretch>0</horstretch>
-                 <verstretch>0</verstretch>
-                </sizepolicy>
-               </property>
-               <property name="minimumSize" >
-                <size>
-                 <width>120</width>
-                 <height>23</height>
-                </size>
-               </property>
-               <property name="maximumSize" >
-                <size>
-                 <width>16777215</width>
-                 <height>23</height>
-                </size>
-               </property>
-              </widget>
+              <layout class="QGridLayout" >
+               <item row="0" column="0" >
+                <widget class="QLabel" name="label_21" >
+                 <property name="text" >
+                  <string>Authentication username:</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="0" column="1" >
+                <widget class="QLabel" name="label_24" >
+                 <property name="text" >
+                  <string>Transport:</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="1" column="0" >
+                <widget class="QLineEdit" name="acc_proto_sip_authname" >
+                 <property name="sizePolicy" >
+                  <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="minimumSize" >
+                  <size>
+                   <width>120</width>
+                   <height>23</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize" >
+                  <size>
+                   <width>16777215</width>
+                   <height>23</height>
+                  </size>
+                 </property>
+                </widget>
+               </item>
+               <item row="1" column="1" >
+                <widget class="QComboBox" name="acc_proto_sip_ip_transport" >
+                 <property name="minimumSize" >
+                  <size>
+                   <width>0</width>
+                   <height>23</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize" >
+                  <size>
+                   <width>16777215</width>
+                   <height>23</height>
+                  </size>
+                 </property>
+                 <item>
+                  <property name="text" >
+                   <string>UDP</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text" >
+                   <string>TCP</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text" >
+                   <string>TLS</string>
+                  </property>
+                 </item>
+                </widget>
+               </item>
+              </layout>
              </item>
              <item>
               <spacer>

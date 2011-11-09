@@ -96,8 +96,9 @@ public:
 class SnmpSocketListener : public Thread
 {
 public:
-    inline SnmpSocketListener(int port, SnmpMsgQueue* queue)
+    inline SnmpSocketListener(const char* addr, int port, SnmpMsgQueue* queue)
 	: Thread("SNMP Socket"),
+	  m_addr(TelEngine::null(addr) ? "0.0.0.0" : addr),
 	  m_port(port), m_msgQueue(queue)
 	{}
     inline ~SnmpSocketListener()
@@ -109,6 +110,7 @@ public:
 
 protected:
     Socket m_socket;
+    String m_addr;
     int m_port;
     SnmpMsgQueue* m_msgQueue;
 };
@@ -119,7 +121,8 @@ protected:
 class SnmpMsgQueue : public Thread
 {
 public:
-    SnmpMsgQueue(SnmpAgent* agent, Thread::Priority prio = Thread::Normal, unsigned int port = 161, int type = TransportType::UDP);
+    SnmpMsgQueue(SnmpAgent* agent, Thread::Priority prio = Thread::Normal,
+	const char* addr = "0.0.0.0", unsigned int port = 161, int type = TransportType::UDP);
     ~SnmpMsgQueue();
     virtual bool init();
     virtual void run();
@@ -489,7 +492,7 @@ private:
 class SnmpUdpListener : public SnmpSocketListener
 {
 public:
-    SnmpUdpListener(int port, SnmpMsgQueue* queue);
+    SnmpUdpListener(const char* addr, int port, SnmpMsgQueue* queue);
     ~SnmpUdpListener();
     virtual bool init();
     virtual void run();
@@ -642,22 +645,22 @@ static DataBlock toNetworkOrder(u_int64_t val, unsigned int size)
 /**
   * SnmpUdpListener
   */
-SnmpUdpListener::SnmpUdpListener(int port, SnmpMsgQueue* queue)
-    : SnmpSocketListener(port,queue)
+SnmpUdpListener::SnmpUdpListener(const char* addr, int port, SnmpMsgQueue* queue)
+    : SnmpSocketListener(addr,port,queue)
 {
-    DDebug(&__plugin,DebugAll,"SnmpUdpListener created with assigned port : %d",m_port);
+    DDebug(&__plugin,DebugAll,"SnmpUdpListener created for %s:%d",m_addr.safe(),m_port);
 }
 
 SnmpUdpListener::~SnmpUdpListener()
 {
-    DDebug(&__plugin,DebugAll,"SnmpUdpListener with port %d destroyed",m_port);
+    DDebug(&__plugin,DebugAll,"SnmpUdpListener for %s:%d destroyed",m_addr.safe(),m_port);
 }
 
 bool SnmpUdpListener::init()
 {
     SocketAddr addr;
 
-    if (!addr.assign(AF_INET) || !addr.host("0.0.0.0") || !addr.port(m_port)) {
+    if (!addr.assign(AF_INET) || !addr.host(m_addr) || !addr.port(m_port)) {
 	Debug(&__plugin,DebugWarn,"Could not assign values to socket address for SNMP UDP Listener");
 	return false;
     }
@@ -766,15 +769,15 @@ void SnmpUdpListener::cleanup()
 /**
   * SnmpMsgQueue
   */
-SnmpMsgQueue::SnmpMsgQueue(SnmpAgent* agent, Thread::Priority prio, unsigned int port, int type)
+SnmpMsgQueue::SnmpMsgQueue(SnmpAgent* agent, Thread::Priority prio, const char* addr, unsigned int port, int type)
     : Thread("SNMP Queue",prio),
       m_socket(0),
       m_queueMutex(false,"SnmpAgent::queue"),
       m_snmpAgent(agent)
 {
-    Debug(&__plugin,DebugAll,"SnmpMsgQueue created for port %d with priority '%s'",port,priority(prio));
+    Debug(&__plugin,DebugAll,"SnmpMsgQueue created for %s:%d with priority '%s'",addr,port,priority(prio));
     if (type == TransportType::UDP) {
-	m_socket = new SnmpUdpListener(port,this);
+	m_socket = new SnmpUdpListener(addr,port,this);
 	if (!m_socket->init()) {
 	    delete m_socket;
 	    m_socket = 0;
@@ -1621,6 +1624,9 @@ void SnmpAgent::initialize()
 
     // port on which to listen for SNMP requests
     int snmpPort = s_cfg.getIntValue("general","port",161);
+    const char* snmpAddr = s_cfg.getValue("general","addr");
+    if (!snmpAddr)
+	snmpAddr = "0.0.0.0";
     // thread priority
     Thread::Priority threadPrio = Thread::priority(s_cfg.getValue("general","thread"));
 
@@ -1629,7 +1635,7 @@ void SnmpAgent::initialize()
 	m_init = true;
 	setup();
 	installRelay(Halt);
-	m_msgQueue = new SnmpMsgQueue(this,threadPrio,snmpPort);
+	m_msgQueue = new SnmpMsgQueue(this,threadPrio,snmpAddr,snmpPort);
 	if (!m_msgQueue->init()) {
 	    delete m_msgQueue;
 	    m_msgQueue = 0;

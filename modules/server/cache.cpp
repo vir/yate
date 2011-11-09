@@ -132,9 +132,11 @@ public:
     // Clear the cache
     unsigned int clear();
     // Remove an item, decrease the item counter
-    bool remove(const String& id);
+    unsigned int remove(const String& id, bool regexp = false);
     // Retrieve cache name
     virtual const String& toString() const;
+    // Dump the cache to output if XDEBUG is defined
+    void dump(const char* oper);
     // Set chunk limit and offset to a query
     // Return the number of replaced params
     static int setLimits(String& query, unsigned int chunk, unsigned int offset);
@@ -163,6 +165,7 @@ protected:
     bool m_loading;                      // Cache is loading from database
     unsigned int m_loadInterval;         // Cache re-load interval (in seconds)
     u_int64_t m_nextLoad;                // Next time to load the cache
+    String m_expireParam;                // Item expire parameter in add() parameters list
     int m_reload;                        // Scheduled reload 0: none, 1: full, -1: items
     ObjList* m_reloadItems;              // Scheduled items to reload
     String m_idParam;                    // Cache id match parameter
@@ -298,6 +301,7 @@ static u_int64_t s_checkToutInterval = 0;// Interval to check cache timeout
 
 // Used strings: avoid allocation
 static const String s_id = "id";
+static const String s_regexp = "regexp";
 // List of known caches
 static const String s_caches[] = {"lnp", "cnam", ""};
 // Commands
@@ -306,10 +310,11 @@ enum CacheCommands {
     CmdFlush,
     CmdCount
 };
-static const String s_cmd[CmdCount] = {"cacheload","cacheflush"};
+static const String s_cmd[CmdCount] = {"load","flush"};
+static const String s_cmdCacheFormat = "cache {load|flush} cache_name [[param=value]...]";
 static const String s_cmdFormat[CmdCount] = {
-    "cacheload cache_name [[param=value]...]",
-    "cacheflush cache_name [[param=value]...]"
+    "cache load cache_name [[param=value]...]",
+    "cache flush cache_name [[param=value]...]"
 };
 static const String s_cmdHelp[CmdCount] = {
     "Load a cache from database. Use 'id' (can be repeated) parameter to load specific item(s) only",
@@ -403,6 +408,7 @@ Cache::Cache(const String& name, int size, const NamedList& params)
 {
     Debug(&__plugin,DebugInfo,"Cache(%s) size=%u [%p]",
 	m_name.c_str(),m_list.length(),this);
+    m_expireParam << "cache_" << m_name << "_expires";
     doUpdate(params,true);
 }
 
@@ -599,6 +605,7 @@ void Cache::expire(const Time& time)
 	m->addParam("results",String::boolText(false));
 	Engine::enqueue(m);
     }
+    unsigned int oldCount = m_count;
     for (unsigned int i = 0; i < m_list.length(); i++) {
 	if (exiting())
 	    break;
@@ -616,6 +623,8 @@ void Cache::expire(const Time& time)
 	    m_count--;
 	}
     }
+    if (oldCount != m_count)
+	dump("Cache::expire()");
 }
 
 // Add items from NamedList list
@@ -672,7 +681,8 @@ unsigned int Cache::addRows(Array& array)
     for (int row = 1; row < rows; row++) {
 	NamedList* p = new NamedList("");
 	for (int i = 0; i < cols; i++) {
-	    columns[i] = columns[i]->next();
+	    if (columns[i])
+		columns[i] = columns[i]->next();
 	    if (!columns[i] || TelEngine::null(titles[i]))
 		continue;
 	    String* colVal = YOBJECT(String,columns[i]->get());
@@ -715,26 +725,88 @@ unsigned int Cache::clear()
 }
 
 // Remove an item
-bool Cache::remove(const String& id)
+unsigned int Cache::remove(const String& id, bool regexp)
 {
     if (!id)
-	return false;
-    Lock lck(this);
-    ObjList* list = m_list.getHashList(id);
-    GenObject* gen = list ? list->remove(id,false) : 0;
-    if (!gen)
-	return false;
-    CacheItem* item = static_cast<CacheItem*>(gen);
-    dumpItem(*this,*item,"removed");
-    m_count--;
-    TelEngine::destruct(item);
-    return true;
+	return 0;
+    if (!regexp) {
+	Lock lck(this);
+	ObjList* list = m_list.getHashList(id);
+	GenObject* gen = list ? list->remove(id,false) : 0;
+	if (!gen)
+	    return 0;
+	CacheItem* item = static_cast<CacheItem*>(gen);
+	dumpItem(*this,*item,"removed");
+	m_count--;
+	TelEngine::destruct(item);
+	return 1;
+    }
+    unsigned int removed = 0;
+    for (unsigned int i = 0; i < m_list.length(); i++) {
+	Lock lck(this);
+	ObjList* list = m_list.getHashList(i);
+	if (list)
+	    list = list->skipNull();
+	while (list) {
+	    CacheItem* item = static_cast<CacheItem*>(list->get());
+	    if (!id.matches(*item)) {
+		list = list->skipNext();
+		continue;
+	    }
+	    dumpItem(*this,*item,"removed");
+	    list->remove();
+	    list = list->skipNull();
+	    removed++;
+	    m_count--;
+	}
+	lck.drop();
+	if (exiting())
+	    break;
+	// Someone may need access to the cache
+	Thread::idle();
+    }
+    return removed;
 }
 
 // Retrieve cache name
 const String& Cache::toString() const
 {
     return m_name;
+}
+
+// Dump the cache to output if XDEBUG is defined
+void Cache::dump(const char* oper)
+{
+#ifdef XDEBUG
+    if (!__plugin.debugAt(DebugAll))
+	return;
+    Lock lck(locked() ? 0 : this);
+    String data("\r\n-----");
+    unsigned int n = 0;
+    int64_t now = (int64_t)Time::now();
+    for (unsigned int i = 0; i < m_list.length(); i++) {
+	ObjList* list = m_list.getHashList(i);
+	if (list)
+	    list = list->skipNull();
+	String rowData;
+	unsigned int rn = 0;
+	for (; list; list = list->skipNext()) {
+	    rn++;
+	    CacheItem* item = static_cast<CacheItem*>(list->get());
+	    String tmp;
+	    item->dump(tmp," ");
+	    int ttl = (int)(((int64_t)item->expires() - now) / 1000);
+	    rowData << "\r\n  " << ttl / 1000 << "." << ttl % 1000 << " " << tmp;
+	}
+	if (!rn)
+	    continue;
+	n += rn;
+	data << "\r\n" << i + 1 << " (" << rn << ")" << rowData;
+    }
+    data << "\r\n-----";
+    Debug(&__plugin,DebugAll,"Cache '%s' items=%u location='%s' [%p]%s",
+	toString().c_str(),n,oper,this,data.c_str());
+#endif
 }
 
 // Set chunk limit and offset to a query
@@ -831,13 +903,18 @@ CacheItem* Cache::addUnsafe(const String& id, const NamedList& params, const Str
     ObjList* list = m_list.getHashList(idx);
     if (list)
 	list = list->skipNull();
-    u_int64_t expires = 0;
-    if (!dbSave) {
+    u_int64_t expires = m_cacheTtl;
+    if (dbSave) {
+	int tmp = params.getIntValue(m_expireParam);
+	if (tmp > 0)
+	    expires = (u_int64_t)tmp * 1000000;
+    }
+    else {
 	String* exp = params.getParam("expires");
 	if (exp) {
 	    int tmp = (int)exp->toInteger();
 	    if (tmp > 0)
-		expires = Time::now() + (u_int64_t)tmp * 1000000;
+		expires = (u_int64_t)tmp * 1000000;
 	    else {
 		XDebug(&__plugin,DebugAll,"Cache(%s) item '%s' already expired [%p]",
 		    m_name.c_str(),id.c_str(),this);
@@ -845,8 +922,8 @@ CacheItem* Cache::addUnsafe(const String& id, const NamedList& params, const Str
 	    }
 	}
     }
-    if (!expires && m_cacheTtl)
-	expires = Time::now() + m_cacheTtl;
+    if (expires)
+	expires += Time::now();
     // Search for insert/add point and existing item
     ObjList* insert = 0;
     bool found = false;
@@ -1228,6 +1305,7 @@ void CacheModule::loadCache(const String& name, bool async, ObjList* items)
     if (!cache)
 	return;
     cache->endLoad(triggerReload);
+    cache->dump("CacheModule::loadCache()");
     cache = 0;
     Debug(this,DebugInfo,"Loaded %u items (failed=%u) in cache '%s'",
 	loaded,failed,name.c_str());
@@ -1377,6 +1455,9 @@ void CacheModule::statusDetail(String& buf)
 bool CacheModule::commandExecute(String& retVal, const String& line)
 {
     String name = line;
+    if (!name.startSkip(this->name()))
+	return Module::commandExecute(retVal,line);
+    name.trimBlanks();
     int cmd = 0;
     for (; cmd < CmdCount; cmd++)
 	if (name.startSkip(s_cmd[cmd]))
@@ -1418,25 +1499,31 @@ bool CacheModule::commandExecute(String& retVal, const String& line)
 bool CacheModule::commandComplete(Message& msg, const String& partLine, const String& partWord)
 {
     if (!partLine || partLine == YSTRING("help")) {
+	Module::itemComplete(msg.retValue(),name(),partWord);
+	return Module::commandComplete(msg,partLine,partWord);
+    }
+    // Line is module name: complete module commands
+    if (partLine == name()) {
 	for (int cmd = 0; cmd < CmdCount; cmd++)
 	    Module::itemComplete(msg.retValue(),s_cmd[cmd],partWord);
 	return Module::commandComplete(msg,partLine,partWord);
     }
-    String tmp = partLine;
+    if (!partLine.startsWith(name(),true))
+	return Module::commandComplete(msg,partLine,partWord);
     for (int cmd = 0; cmd < CmdCount; cmd++) {
-	if (!tmp.startSkip(s_cmd[cmd]))
+	String tmp = name() + " " + s_cmd[cmd];
+	if (!partLine.startsWith(tmp))
 	    continue;
-	tmp.trimBlanks();
-	if (tmp)
+	String rest = partLine.substr(tmp.length()).trimBlanks();
+	if (rest)
 	    return false;
 	Lock lck(this);
-	for (int i = 0; s_caches[i]; i++) {
+	for (int i = 0; s_caches[i]; i++)
 	    if (findCache(s_caches[i]))
 		Module::itemComplete(msg.retValue(),s_caches[i],partWord);
-	}
 	return false;
     }
-    return Module::commandComplete(msg,partLine,partWord);
+    return false;
 }
 
 // Find a cache. This method is not thread safe
@@ -1478,7 +1565,13 @@ void CacheModule::addCacheDetail(String& buf, Cache* cache)
 // Handle messages for LNP
 void CacheModule::handleLnp(Message& msg, bool before)
 {
-    if (!(before || msg.getBoolValue("cache_lnp_posthook")))
+    bool handle = false;
+    if (before)
+	handle = msg.getBoolValue("querylnp_cache",true);
+    else
+	handle = msg.getBoolValue("cache_lnp_posthook");
+    XDebug(this,DebugAll,"handleLnp(%u) handle=%u",before,handle);
+    if (!handle)
 	return;
     RefPointer<Cache> lnp;
     getCache(lnp,"lnp");
@@ -1496,8 +1589,10 @@ void CacheModule::handleLnp(Message& msg, bool before)
     if (before) {
 	if (querylnp) {
 	    // LNP requested: check the cache
-	    if (lnp->copyParams(id,msg,msg.getParam("cache_lnp_parameters")))
+	    if (lnp->copyParams(id,msg,msg.getParam("cache_lnp_parameters"))) {
 		msg.setParam("querylnp",String::boolText(false));
+		msg.setParam("npdi",String::boolText(true));
+	    }
 	    else
 		msg.setParam("cache_lnp_posthook",String::boolText(true));
 	}
@@ -1505,12 +1600,14 @@ void CacheModule::handleLnp(Message& msg, bool before)
 	    msg.getBoolValue("cache_lnp_store",s_lnpStoreNpdiBefore)) {
 	    // LNP already done: update cache
 	    lnp->add(id,msg,msg.getParam("cache_lnp_parameters"));
+	    lnp->dump("CacheModule::handleLnp('before')");
 	}
     }
     else if (!querylnp || s_lnpStoreFailed || msg.getBoolValue("npdi")) {
 	// querylnp=true: request failed
 	// LNP query made locally: update cache
 	lnp->add(id,msg,msg.getParam("cache_lnp_parameters"));
+	lnp->dump("CacheModule::handleLnp('after')");
     }
     lnp = 0;
 }
@@ -1518,7 +1615,13 @@ void CacheModule::handleLnp(Message& msg, bool before)
 // Handle messages for CNAM
 void CacheModule::handleCnam(Message& msg, bool before)
 {
-    if (!(before || msg.getBoolValue("cache_cnam_posthook")))
+    bool handle = false;
+    if (before)
+	handle = msg.getBoolValue("querycnam_cache",true);
+    else
+	handle = msg.getBoolValue("cache_cnam_posthook");
+    XDebug(this,DebugAll,"handleCnam(%u) handle=%u",before,handle);
+    if (!handle)
 	return;
     RefPointer<Cache> cnam;
     getCache(cnam,"cnam");
@@ -1546,6 +1649,7 @@ void CacheModule::handleCnam(Message& msg, bool before)
 	// querycnam=true: request failed
 	// CNAM query made locally: update cache
 	cnam->add(id,msg,msg.getParam("cache_cnam_parameters"));
+	cnam->dump("CacheModule::handleCnam('after')");
     }
     cnam = 0;
 }
@@ -1569,14 +1673,25 @@ void CacheModule::commandFlush(Cache* cache, NamedList& params, String& retVal)
     if (!cache)
 	return;
     unsigned int n = 0;
-    if (!params.getParam(s_id))
+    if (!(params.getParam(s_id) || params.getParam(s_regexp)))
 	n = cache->clear();
     else {
 	NamedIterator iter(params);
-	for (const NamedString* ns = 0; 0 != (ns = iter.get());)
-	    if (ns->name() == s_id && *ns && cache->remove(*ns))
-		n++;
+	for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	    if (!*ns)
+		continue;
+	    if (ns->name() == s_id)
+		n += cache->remove(*ns);
+	    else if (ns->name() == s_regexp) {
+		Regexp r(*ns);
+		if (r.compile())
+		    n += cache->remove(r,true);
+		else
+		    Debug(this,DebugNote,"Invalid regexp=%s in flush command",ns->c_str());
+	    }
+	}
     }
+    cache->dump("CacheModule::commandFlush()");
     retVal << "Flushed " << n << " item(s)";
 }
 
@@ -1584,20 +1699,16 @@ void CacheModule::commandFlush(Cache* cache, NamedList& params, String& retVal)
 bool CacheModule::commandHelp(String& retVal, const String& line)
 {
     if (line) {
+	if (line != name())
+	    return false;
 	for (int cmd = 0; cmd < CmdCount; cmd++) {
-	    if (line == s_cmd[cmd]) {
-		retVal << "  " << s_cmdFormat[cmd] << "\r\n";
-		retVal << s_cmdHelp[cmd] << "\r\n";
-		return true;
-	    }
-	}
-    }
-    else {
-	for (int cmd = 0; cmd < CmdCount; cmd++)
 	    retVal << "  " << s_cmdFormat[cmd] << "\r\n";
+	    retVal << s_cmdHelp[cmd] << "\r\n";
+	}
 	return true;
     }
-    return false;
+    retVal << "  " << s_cmdCacheFormat << "\r\n";
+    return true;
 }
 
 }; // anonymous namespace

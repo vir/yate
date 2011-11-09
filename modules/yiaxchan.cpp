@@ -37,7 +37,7 @@
 using namespace TelEngine;
 namespace { // anonymous
 
-TokenDict dict_payloads[] = {
+static const TokenDict dict_payloads[] = {
     {"gsm",    IAXFormat::GSM},
     {"ilbc30", IAXFormat::ILBC},
     {"speex",  IAXFormat::SPEEX},
@@ -45,10 +45,12 @@ TokenDict dict_payloads[] = {
     {"mulaw",  IAXFormat::ULAW},
     {"alaw",   IAXFormat::ALAW},
     {"g723",   IAXFormat::G723_1},
-    {"g729",   IAXFormat::G729A},
+    {"g729",   IAXFormat::G729},
     {"adpcm",  IAXFormat::ADPCM},
     {"g726",   IAXFormat::G726},
     {"slin",   IAXFormat::SLIN},
+    {"g722",   IAXFormat::G722},
+    {"amr",    IAXFormat::AMR},
     {"g726aal2", IAXFormat::G726AAL2},
     {"g722",   IAXFormat::G722},
     {"amr",    IAXFormat::AMR},
@@ -62,7 +64,15 @@ TokenDict dict_payloads[] = {
     {0, 0}
 };
 
-static TokenDict dict_tos[] = {
+static const TokenDict dict_payloads_video[] = {
+    {"h261",  IAXFormat::H261},
+    {"h263",  IAXFormat::H263},
+    {"h263p", IAXFormat::H263p},
+    {"h264",  IAXFormat::H264},
+    {0, 0}
+};
+
+static const TokenDict dict_tos[] = {
     { "lowdelay", Socket::LowDelay },
     { "throughput", Socket::MaxThroughput },
     { "reliability", Socket::MaxReliability },
@@ -107,7 +117,7 @@ public:
     inline int remotePort() const
 	{ return m_remotePort; }
 private:
-    void setRegistered(bool registered, const char* reason = 0);
+    void setRegistered(bool registered, const char* reason = 0, const char* error = 0);
     String m_name;
     String m_username;                  // Username
     String m_password;                  // Password
@@ -284,8 +294,10 @@ public:
      * @param transaction IAXTransaction that owns the call leg
      * @param data Media data. 
      * @param tStamp Media timestamp. 
+     * @param type Media type
      */
-    virtual void processMedia(IAXTransaction* transaction, DataBlock& data, u_int32_t tStamp);
+    virtual void processMedia(IAXTransaction* transaction, DataBlock& data,
+	u_int32_t tStamp, int type, bool mark);
 
     /*
      * Initiate an outgoing registration (release) request.
@@ -318,12 +330,24 @@ public:
      */
     void start(u_int16_t listenThreadCount, u_int16_t eventThreadCount,u_int16_t trunkingThreadCount);
 
+    // Initialize formats from config
+    void initFormats(NamedList* params);
+
 protected:
 
     /*
      * Event handler for transaction with a connection.
      */
     virtual void processEvent(IAXEvent* event);
+
+    /*
+     * Process a new format received with a full frame
+     * @param trans Transaction that received the new format
+     * @param type Media type
+     * @param format The received format
+     * @return True if accepted
+     */
+    virtual bool mediaFormatChanged(IAXTransaction* trans, int type, u_int32_t format);
 
     /*
      * Event handler for incoming registration transactions.
@@ -335,8 +359,9 @@ protected:
 
     /*
      * Send Register/Unregister messages to Engine
+     * Return the message on success
      */
-    bool userreg(IAXTransaction* tr, bool regrel = true);
+    Message* userreg(IAXTransaction* tr, bool regrel = true);
 
 private:
     bool m_threadsCreated;      // True if reading and get events threads were created
@@ -368,30 +393,13 @@ public:
     virtual bool msgRoute(Message& msg);
     virtual bool received(Message& msg, int id);
 
-    // Default codec map - should have only one bit set
-    inline u_int32_t defaultCodec() const
-	{ return m_defaultCodec; }
-
-    // Supported codec map
-    inline u_int32_t codecs() const
-	{ return m_codecs; }
-
-    // UDP port we are using, also used as default
-    inline int port() const
-	{ return m_port; }
-
     // Retrieve the IAX engine
     inline YIAXEngine* getEngine() const
 	{ return m_iaxEngine; }
 
-    // Update codecs from 'formats' parameter of a message
-    // @param codecs Codec list to update
-    // @param formats The 'formats' parameter of a message
-    // @return False if formtas is not 0 and the result is 0 (no intersection)
-    bool updateCodecsFromRoute(u_int32_t& codecs, const char* formats);
-
-    // Create a format list from codecs
-    void createFormatList(String& dest, u_int32_t codecs);
+    // Update codecs a list of parameters
+    // @return False if the result is 0 (no intersection)
+    bool updateCodecsFromRoute(u_int32_t& codecs, const NamedList& params, int type);
 
     // Dispatch user.auth
     // @tr The IAX transaction
@@ -409,8 +417,6 @@ public:
 protected:
     virtual void genUpdate(Message& msg);
     YIAXEngine* m_iaxEngine;
-    u_int32_t m_defaultCodec;
-    u_int32_t m_codecs;
     unsigned int m_failedAuths;
     int m_port;
 };
@@ -418,33 +424,45 @@ protected:
 class YIAXConnection;
 
 /*
- * Connection's data consumer
+ * Base class for data consumer/source
  */
-class YIAXConsumer : public DataConsumer
+class YIAXData
 {
 public:
-    YIAXConsumer(YIAXConnection* conn, u_int32_t format, const char* formatText);
-    ~YIAXConsumer();
-    virtual unsigned long Consume(const DataBlock &data, unsigned long tStamp, unsigned long flags);
-private:
+    inline YIAXData(YIAXConnection* conn, u_int32_t format, int type)
+	: m_connection(conn), m_total(0), m_format(format), m_type(type)
+	{}
+    inline u_int32_t format()
+	{ return m_format; }
+protected:
     YIAXConnection* m_connection;
     unsigned m_total;
     u_int32_t m_format; // in IAX coding
+    int m_type;
+};
+
+/*
+ * Connection's data consumer
+ */
+class YIAXConsumer : public DataConsumer, public YIAXData
+{
+    YCLASS(YIAXConsumer,DataConsumer)
+public:
+    YIAXConsumer(YIAXConnection* conn, u_int32_t format, const char* formatText, int type);
+    ~YIAXConsumer();
+    virtual unsigned long Consume(const DataBlock &data, unsigned long tStamp, unsigned long flags);
 };
 
 /*
  * Connection's data source
  */
-class YIAXSource : public DataSource
+class YIAXSource : public DataSource, public YIAXData
 {
+    YCLASS(YIAXSource,DataSource)
 public:
-    YIAXSource(YIAXConnection* conn, u_int32_t format, const char* formatText);
+    YIAXSource(YIAXConnection* conn, u_int32_t format, const char* formatText, int type);
     ~YIAXSource();
-    void Forward(const DataBlock &data, unsigned long tStamp = 0);
-private:
-    YIAXConnection* m_connection;
-    unsigned m_total;
-    u_int32_t m_format; // in IAX coding
+    void Forward(const DataBlock &data, unsigned long tStamp = 0, unsigned long flags = 0);
 };
 
 /*
@@ -453,7 +471,8 @@ private:
 class YIAXConnection : public Channel
 {
 public:
-    YIAXConnection(YIAXEngine* iaxEngine, IAXTransaction* transaction, Message* msg = 0);
+    YIAXConnection(YIAXEngine* iaxEngine, IAXTransaction* transaction, Message* msg = 0,
+	NamedList* params = 0);
     virtual ~YIAXConnection();
     virtual void callAccept(Message& msg);
     virtual void callRejected(const char* error, const char* reason = 0, const Message* msg = 0);
@@ -482,14 +501,16 @@ public:
 
     bool route(bool authenticated = false);
 
+    // Retrieve the data consumer from IAXFormat media type
+    YIAXConsumer* getConsumer(int type);
+    // Retrieve the data source from IAXFormat media type
+    YIAXSource* getSource(int type);
+
 protected:
-    void hangup(const char* reason = 0, bool reject = false);
-    inline void hangup(IAXEvent* event, const char* reason = 0, bool reject = false) {
-	    event->setFinal();
-	    hangup(reason,reject);
-	}
-    void startAudioIn();
-    void startAudioOut();
+    // location: 0: from peer, else: from protocol
+    void hangup(int location, const char* reason = 0, bool reject = false);
+    void startMedia(bool in, int type = IAXFormat::Audio);
+    void clearMedia(bool in, int type = IAXFormat::Audio);
     void evAuthRep(IAXEvent* event);
     void evAuthReq(IAXEvent* event);
     // Safe deref the connection if the reference counter was increased during registration
@@ -501,8 +522,10 @@ private:
     String m_password;                  // Password for client authentication
     bool m_mutedIn;                     // No remote media accepted
     bool m_mutedOut;                    // No local media accepted
+    bool m_audio;                       // Audio endpoint was used
+    bool m_video;                       // Video endpoint was used
     String m_reason;                    // Call end reason text
-    bool m_hangup;			// Need to send chan.hangup message
+    bool m_hangup;                      // Need to send chan.hangup message
     Mutex m_mutexTrans;                 // Safe m_transaction operations
     Mutex m_mutexRefIncreased;          // Safe ref/deref connection
     bool m_refIncreased;                // If true, the reference counter was increased
@@ -547,13 +570,33 @@ private:
 /*
  * Local data
  */
-static Configuration s_cfg; 		// Configuration file
 static YIAXLineContainer s_lines;	// Lines
 static Thread::Priority s_priority = Thread::Normal;  // Threads priority
 static bool s_callTokenOut = true;      // Send an empty call token on outgoing calls
 static YIAXDriver iplugin;		// Init the driver
 
+static unsigned int s_expires_min = 60;
+static unsigned int s_expires_def = 60;
+static unsigned int s_expires_max = 3600;
+
 static String s_statusCmd = "status";
+
+// Retrieve data endpoint name from IAXFormat type
+static inline const char* dataEpName(int type)
+{
+    return IAXFormat::typeName(type);
+}
+
+// Retrieve format name from IAXFormat type
+static const char* lookupFormat(u_int32_t format, int type)
+{
+    if (type == IAXFormat::Audio)
+	return lookup(format,dict_payloads);
+    if (type == IAXFormat::Video)
+	return lookup(format,dict_payloads_video);
+    return 0;
+}
+
 
 /*
  * Class definitions
@@ -563,7 +606,7 @@ static String s_statusCmd = "status";
 YIAXLine::YIAXLine(const String& name)
     : Mutex(true,"IAX:Line"), m_name(name),
       m_expire(60), m_localPort(4569), m_remotePort(4569),
-      m_nextReg(Time::secNow() + 40),
+      m_nextReg(Time::secNow() + 40), m_nextKeepAlive(0),
       m_registered(false),
       m_register(true),
       m_transaction(0)
@@ -577,25 +620,19 @@ YIAXLine::~YIAXLine()
 }
 
 // Set the registered status, emits user.notify messages if necessary
-void YIAXLine::setRegistered(bool registered, const char* reason)
+void YIAXLine::setRegistered(bool registered, const char* reason, const char* error)
 {
     if ((m_registered == registered) && !reason)
 	return;
     m_registered = registered;
-    if (registered)
-	Debug(&iplugin,DebugInfo,"Line(%s) registered to %s:%d [%p]",
-	    m_name.c_str(),m_remoteAddr.c_str(),m_remotePort,this);
-    else
-	Debug(&iplugin,DebugNote,"Line(%s) unregistered from %s:%d reason='%s' [%p]",
-	    m_name.c_str(),m_remoteAddr.c_str(),m_remotePort,reason,this);
     if (m_username) {
 	Message* m = new Message("user.notify");
 	m->addParam("account",toString());
 	m->addParam("protocol","iax");
 	m->addParam("username",m_username);
 	m->addParam("registered",String::boolText(registered));
-	if (reason)
-	    m->addParam("reason",reason);
+	m->addParam("reason",reason,false);
+	m->addParam("error",error,false);
 	Engine::enqueue(m);
     }
 }
@@ -643,7 +680,7 @@ bool YIAXLineContainer::updateLine(Message& msg)
     const String& op = msg["operation"];
     bool login = (op != "logout" && op != "delete");
     const String& name = msg["account"];
-    Debug(&iplugin,DebugAll,"updateLine %s",name.c_str());
+    DDebug(&iplugin,DebugAll,"Updating line '%s'",name.c_str());
     Lock lck(this);
     YIAXLine* line = findLine(name);
     if (!line) {
@@ -715,9 +752,8 @@ void YIAXLineContainer::regTerminate(IAXEvent* event)
 	trans->setUserData(0);
 	return;
     }
-    const char* rsp = "accepted";
     String reason;
-    bool ok = true;
+    bool ok = false;
     switch (event->type()) {
 	case IAXEvent::Accept:
 	    if (line->m_register) {
@@ -726,7 +762,8 @@ void YIAXLineContainer::regTerminate(IAXEvent* event)
 		if (event->getList().getNumeric(IAXInfoElement::REFRESH,interval) && !interval)
 		    interval = 60;
 		if (line->m_expire != (int)interval) {
-		    Debug(&iplugin,DebugNote,"Line(%s) changed expire interval from %d to %u [%p]",
+		    DDebug(&iplugin,DebugNote,
+			"Line(%s) changed expire interval from %d to %u [%p]",
 			line->toString().c_str(),line->m_expire,interval,line);
 		    line->m_expire = interval;
 		}
@@ -740,27 +777,32 @@ void YIAXLineContainer::regTerminate(IAXEvent* event)
 	case IAXEvent::Reject:
 	    // retry at 25% of the expire time
 	    line->m_nextReg = Time::secNow() + (line->expire() / 4);
-	    ok = false;
-	    rsp = "rejected";
 	    event->getList().getString(IAXInfoElement::CAUSE,reason);
 	    break;
 	case IAXEvent::Timeout:
 	    // retry at 50% of the expire time
 	    line->m_nextReg = Time::secNow() + (line->expire() / 2);
-	    ok = false;
-	    rsp = "Timeout";
 	    reason = "timeout";
 	    break;
 	default:
-	    rsp = 0;
+	    ;
     }
     bool remove = false;
-    if (rsp) {
-	DDebug(&iplugin,event->type() == IAXEvent::Accept ? DebugAll : DebugNote,
-	    "Line(%s) regTerminate register=%s result=%s reason=%s [%p]",
-	    line->toString().c_str(),String::boolText(line->m_register),rsp,reason.safe(),line);
+    if (event->type() == IAXEvent::Accept ||
+	event->type() == IAXEvent::Reject ||
+	event->type() == IAXEvent::Timeout) {
+	const char* what = line->m_register ? "logon" : "logoff";
+	const char* tf = line->m_register ? "to" : "from";
+	if (event->type() == IAXEvent::Accept)
+	    Debug(&iplugin,DebugCall,"IAX line '%s' %s success %s %s:%d",
+		line->toString().c_str(),what,tf,line->m_remoteAddr.c_str(),
+		line->m_remotePort);
+	else
+	    Debug(&iplugin,DebugWarn,"IAX line '%s' %s failure %s %s:%d reason=%s",
+		line->toString().c_str(),what,tf,line->m_remoteAddr.c_str(),
+		line->m_remotePort,reason.safe());
 	clearTransaction(line);
-	line->setRegistered(ok,reason);
+	line->setRegistered(ok,reason,event->type() == IAXEvent::Reject ? "noauth" : 0);
 	remove = !line->m_register;
     }
     line->unlock();
@@ -958,27 +1000,34 @@ YIAXEngine::YIAXEngine(const char* iface, int port, u_int16_t transListCount,
 	u_int16_t transTimeout, u_int16_t maxFullFrameDataLen,
 	u_int32_t trunkSendInterval, bool authRequired, NamedList* params)
     : IAXEngine(iface,port,transListCount,retransCount,retransInterval,authTimeout,
-	transTimeout,maxFullFrameDataLen,iplugin.defaultCodec(),iplugin.codecs(),
+	transTimeout,maxFullFrameDataLen,0,0,
 	trunkSendInterval,authRequired,params),
       m_threadsCreated(false)
 {
 }
 
 // Handle received voice data, forward it to connection's source
-void YIAXEngine::processMedia(IAXTransaction* transaction, DataBlock& data, u_int32_t tStamp)
+void YIAXEngine::processMedia(IAXTransaction* transaction, DataBlock& data,
+    u_int32_t tStamp, int type, bool mark)
 {
-    if (transaction)
-	if (transaction->getUserData())
-	    if ((static_cast<YIAXConnection*>(transaction->getUserData()))->getSource())
-		// Multiply tStamp with 8 to keep the consumer satisfied
-		(static_cast<YIAXSource*>((static_cast<YIAXConnection*>(transaction->getUserData()))->getSource()))->Forward(data,tStamp * 8);
-	    else {
-		XDebug(this,DebugAll,"processMedia. No media source");
+    if (transaction) {
+	YIAXConnection* conn = static_cast<YIAXConnection*>(transaction->getUserData());
+	if (conn) {
+	    YIAXSource* src = conn->getSource(type);
+	    if (src) {
+		unsigned long flags = 0;
+		if (mark)
+		    flags = DataNode::DataMark;
+		src->Forward(data,tStamp,flags);
 	    }
+	    else
+		DDebug(this,DebugAll,"processMedia. No media source");
+	}
 	else
-	    Debug(this,DebugAll,"processMedia. Transaction doesn't have a connection");
+	    DDebug(this,DebugAll,"processMedia. Transaction doesn't have a connection");
+    }
     else
-	Debug(this,DebugAll,"processMedia. No transaction");
+	DDebug(this,DebugAll,"processMedia. No transaction");
 }
 
 // Create a new registration transaction for a line
@@ -989,9 +1038,9 @@ IAXTransaction* YIAXEngine::reg(YIAXLine* line, bool regreq)
     SocketAddr addr(AF_INET);
     addr.host(line->remoteAddr());
     addr.port(line->remotePort());
-    Debug(this,DebugAll,
-	"Outgoing Registration[%s]:\r\nUsername: %s\r\nHost: %s\r\nPort: %d\r\nTime(sec): %u",
-	line->toString().c_str(),line->username().c_str(),addr.host().c_str(),addr.port(),Time::secNow());
+    Debug(this,DebugAll,"%s line=%s username=%s server=%s:%d",
+	regreq ? "Registering" : "Unregistering",line->toString().c_str(),
+	line->username().c_str(),addr.host().c_str(),addr.port());
     // Create IE list
     IAXIEList ieList;
     ieList.appendString(IAXInfoElement::USERNAME,line->username());
@@ -1011,9 +1060,26 @@ IAXTransaction* YIAXEngine::reg(YIAXLine* line, bool regreq)
 IAXTransaction* YIAXEngine::call(SocketAddr& addr, NamedList& params)
 {
     Debug(this,DebugAll,
-	"Outgoing Call:\r\nUsername: %s\r\nHost: %s\r\nPort: %d\r\nCalled number: %s\r\nCalled context: %s",
+	"Outgoing Call: username=%s host=%s:%d called=%s called context=%s",
 	params.getValue("username"),addr.host().c_str(),addr.port(),
 	params.getValue("called"),params.getValue("calledname"));
+    // Set format and capabilities
+    u_int32_t audioCaps = capability();
+    u_int32_t videoCaps = 0;
+    iplugin.updateCodecsFromRoute(audioCaps,params,IAXFormat::Audio);
+    if (params.getBoolValue("media_video")) {
+	videoCaps = capability();
+	iplugin.updateCodecsFromRoute(videoCaps,params,IAXFormat::Video);
+    }
+    u_int32_t fmtAudio = IAXFormat::pickFormat(audioCaps,format(true));
+    u_int32_t fmtVideo = IAXFormat::pickFormat(videoCaps,format(false));
+    u_int32_t codecs = audioCaps | videoCaps;
+    u_int32_t fmt = fmtAudio | fmtVideo;
+    if (!fmt) {
+	DDebug(this,DebugNote,"Outgoing call failed: No preffered format");
+	params.setParam("error","nomedia");
+	return 0;
+    }
     // Create IE list
     IAXIEList ieList;
     ieList.appendString(IAXInfoElement::USERNAME,params.getValue("username"));
@@ -1022,25 +1088,7 @@ IAXTransaction* YIAXEngine::call(SocketAddr& addr, NamedList& params)
     ieList.appendString(IAXInfoElement::CALLING_NAME,params.getValue("callername"));
     ieList.appendString(IAXInfoElement::CALLED_NUMBER,params.getValue("called"));
     ieList.appendString(IAXInfoElement::CALLED_CONTEXT,params.getValue("iaxcontext"));
-    // Set format and capabilities
-    u_int32_t codecs = iplugin.codecs();
-    if (!iplugin.updateCodecsFromRoute(codecs,params.getValue("formats"))) {
-	DDebug(this,DebugAll,"Outgoing call failed: No codecs");
-	params.setParam("error","nomedia");
-	return 0;
-    }
-    u_int32_t format = iplugin.defaultCodec();
-    if (!(format & codecs)) {
-	for (format = 1; format < 0x10000; format = format << 1)
-	    if (format & codecs)
-		break;
-	if (format >= 0x10000) {
-	    DDebug(this,DebugAll,"Outgoing call failed: No preffered format");
-	    params.setParam("error","nomedia");
-	    return 0;
-	}
-    }
-    ieList.appendNumeric(IAXInfoElement::FORMAT,format,4);
+    ieList.appendNumeric(IAXInfoElement::FORMAT,fmt,4);
     ieList.appendNumeric(IAXInfoElement::CAPABILITY,codecs,4);
     if (params.getBoolValue("calltoken_out",s_callTokenOut))
 	ieList.appendBinary(IAXInfoElement::CALLTOKEN,0,0);
@@ -1074,6 +1122,52 @@ void YIAXEngine::start(u_int16_t listenThreadCount, u_int16_t eventThreadCount, 
     m_threadsCreated = true;
 }
 
+// Initialize formats from config
+void YIAXEngine::initFormats(NamedList* params)
+{
+    NamedList dummy("");
+    if (!params)
+	params = &dummy;
+    u_int32_t codecsAudio = 0;
+    u_int32_t codecsVideo = 0;
+    u_int32_t defAudio = 0;
+    u_int32_t defVideo = 0;
+    bool def = params->getBoolValue("default",true);
+    const TokenDict* dicts[2] = {dict_payloads,dict_payloads_video};
+    for (int i = 0; i < 2; i++) {
+	u_int32_t fallback = 0;
+	bool audio = (i == 0);
+	const char* media = audio ? "audio" : "video";
+	const String& preferred = (*params)[audio ? "preferred" : "preferred_video"];
+	u_int32_t& codecs = audio ? codecsAudio : codecsVideo;
+	u_int32_t& defaultCodec = audio ? defAudio : defVideo;
+	for (const TokenDict* d = dicts[i]; d->token; d++) {
+	    bool defVal = def && DataTranslator::canConvert(d->token);
+	    if (!params->getBoolValue(d->token,defVal))
+		continue;
+	    XDebug(this,DebugAll,"Adding supported %s codec %u: '%s'.",
+		media,d->value,d->token);
+	    codecs |= d->value;
+	    fallback = d->value;
+	    // Set default (desired) codec
+	    if (!defaultCodec && preferred == d->token)
+		defaultCodec = d->value;
+	}
+	// If desired codec is disabled fall back to last in list
+	if (!defaultCodec)
+	    defaultCodec = fallback;
+	if (codecs) {
+	    String tmp;
+	    IAXFormat::formatList(tmp,codecs,dicts[i]);
+	    Debug(&iplugin,DebugAll,"Enabled %s format(s) '%s' default=%s",
+		media,tmp.c_str(),lookup(defaultCodec,dicts[i],""));
+	}
+	else
+	    Debug(&iplugin,audio ? DebugWarn : DebugAll,"No %s format(s) available",media);
+    }
+    setFormats(codecsAudio | codecsVideo,defAudio,defVideo);
+}
+
 // Process all IAX events
 void YIAXEngine::processEvent(IAXEvent* event)
 {
@@ -1086,7 +1180,7 @@ void YIAXEngine::processEvent(IAXEvent* event)
 		connection->handleEvent(event);
 		if (event->final()) {
 		    // Final event: disconnect
-		    Debug(this,DebugAll,"processEvent. Disconnecting (%p): '%s'",
+		    DDebug(this,DebugAll,"processEvent. Disconnecting (%p): '%s'",
 			connection,connection->id().c_str());
 		    connection->disconnect();
 		}
@@ -1115,15 +1209,25 @@ void YIAXEngine::processEvent(IAXEvent* event)
     delete event;
 }
 
+// Process a new format received with a full frame
+bool YIAXEngine::mediaFormatChanged(IAXTransaction* trans, int type, u_int32_t format)
+{
+    if (!trans)
+	return false;
+    Debug(this,DebugNote,"Refusing media change for transaction (%p)",trans);
+    // TODO: implement
+    return false;
+}
+
 // Process events for remote users registering to us
 void YIAXEngine::processRemoteReg(IAXEvent* event, bool first)
 {
     IAXTransaction* tr = event->getTransaction();
-    Debug(this,DebugAll,"processRemoteReg: %s username: '%s'",
+    DDebug(this,DebugAll,"processRemoteReg: %s username: '%s'",
 	tr->type() == IAXTransaction::RegReq?"Register":"Unregister",tr->username().c_str());
     // Check for automatomatically authentication request if it's the first request
     if (first && iplugin.getEngine()->authRequired()) {
-	Debug(this,DebugAll,"processRemoteReg. Request authentication");
+	DDebug(this,DebugAll,"processRemoteReg. Requesting authentication");
 	tr->sendAuth();
 	return;
     }
@@ -1131,39 +1235,56 @@ void YIAXEngine::processRemoteReg(IAXEvent* event, bool first)
     bool requestAuth = false, invalidAuth = false;
     if (iplugin.userAuth(tr,!first,requestAuth,invalidAuth)) {
 	// Authenticated. Try to (un)register
-	if (userreg(tr,event->subclass() == IAXControl::RegRel)) {
-	    Debug(this,DebugAll,"processRemoteReg. Authenticated and (un)registered. Ack");
-	    tr->sendAccept();
+	const char* user = tr->username();
+	bool regrel = (event->subclass() == IAXControl::RegRel);
+	Message* msg = userreg(tr,regrel);
+	if (msg) {
+	    unsigned int exp = 0;
+	    if (!regrel) {
+		int expires = msg->getIntValue("expires");
+		if (expires < 1)
+		    expires = s_expires_def;
+		exp = expires;
+		Debug(&iplugin,DebugNote,"Registered user '%s' expires in %u s",
+		    user,exp);
+	    }
+	    else
+		Debug(&iplugin,DebugNote,"Unregistered user '%s'",user);
+	    tr->sendAccept(&exp);
+	    TelEngine::destruct(msg);
 	}
 	else {
-	    Debug(this,DebugAll,"processRemoteReg. Authenticated but not (un)registered. Reject");
+	    Debug(&iplugin,DebugNote,"%s failed for authenticated user '%s'",
+		regrel ? "Unregister" : "Register",user);
 	    tr->sendReject("not registered");
 	}
 	return;
     }
     // First request: check if we should request auth
-    const char* reason = 0;
     if (first && requestAuth) {
-	Debug(this,DebugAll,"processRemoteReg. Request authentication");
+	DDebug(this,DebugAll,"processRemoteReg. Requesting authentication");
 	tr->sendAuth();
 	return;
     }
-    else if (invalidAuth)
-	 reason = IAXTransaction::s_iax_modInvalidAuth;
+    const char* reason = 0;
+    if (invalidAuth)
+	reason = IAXTransaction::s_iax_modInvalidAuth;
     if (!reason)
 	reason = "not authenticated";
-    Debug(this,DebugAll,"processRemoteReg. Not authenticated ('%s'). Reject",reason);
+    Debug(&iplugin,DebugNote,"User '%s' addr=%s:%d not authenticated reason=%s'",
+	tr->username().c_str(),tr->remoteAddr().host().c_str(),
+	tr->remoteAddr().port(),reason);
     tr->sendReject(reason);
 }
 
 // Build and dispatch the user.(un)register message
-bool YIAXEngine::userreg(IAXTransaction* tr, bool regrel)
+Message* YIAXEngine::userreg(IAXTransaction* tr, bool regrel)
 {
-    Debug(this,DebugAll,"YIAXEngine - userreg. %s username: '%s'",
+    DDebug(this,DebugAll,"YIAXEngine - userreg. %s username: '%s'",
 	regrel ? "Unregistering":"Registering",tr->username().c_str());
-    Message msg(regrel ? "user.unregister" : "user.register");
-    msg.addParam("username",tr->username());
-    msg.addParam("driver","iax");
+    Message* msg = new Message(regrel ? "user.unregister" : "user.register");
+    msg->addParam("username",tr->username());
+    msg->addParam("driver","iax");
     if (!regrel) {
 	String data = "iax/iax2:";
 	data << tr->username() << "@";
@@ -1175,12 +1296,21 @@ bool YIAXEngine::userreg(IAXTransaction* tr, bool regrel)
 	    if (context)
 		data << "@" << context;
 	}
-	msg.addParam("data",data);
-	msg.addParam("expires",String((unsigned int)tr->expire()));
+	msg->addParam("data",data);
+	unsigned int exp = tr->expire();
+	if (!exp)
+	    exp = s_expires_def;
+	else if (exp < s_expires_min)
+	    exp = s_expires_min;
+	else if (exp > s_expires_max)
+	    exp = s_expires_max;
+	msg->addParam("expires",String(exp));
     }
-    msg.addParam("ip_host",tr->remoteAddr().host());
-    msg.addParam("ip_port",String(tr->remoteAddr().port()));
-    return Engine::dispatch(msg);
+    msg->addParam("ip_host",tr->remoteAddr().host());
+    msg->addParam("ip_port",String(tr->remoteAddr().port()));
+    if (!Engine::dispatch(*msg))
+	TelEngine::destruct(msg);
+    return msg;
 }
 
 // Handler for outgoing registration messages
@@ -1215,42 +1345,26 @@ YIAXDriver::~YIAXDriver()
 void YIAXDriver::initialize()
 {
     Output("Initializing module YIAX");
-    lock();
     // Load configuration
-    s_cfg = Engine::configFile("yiaxchan");
-    s_cfg.load();
-    NamedList* gen = s_cfg.getSection("general");
+    Configuration cfg(Engine::configFile("yiaxchan"));
+    NamedList* gen = cfg.getSection("general");
     NamedList dummy("general");
     if (!gen)
 	gen = &dummy;
     s_callTokenOut = gen->getBoolValue("calltoken_out",true);
-    // Codec capabilities
-    m_defaultCodec = 0;
-    m_codecs = 0;
-    u_int32_t fallback = 0;
-    String preferred = s_cfg.getValue("formats","preferred");
-    bool def = s_cfg.getBoolValue("formats","default",true);
-    for (int i = 0; dict_payloads[i].token; i++) {
-	if (s_cfg.getBoolValue("formats",dict_payloads[i].token,
-	    def && DataTranslator::canConvert(dict_payloads[i].token))) {
-	    XDebug(this,DebugAll,"Adding supported codec %u: '%s'.",
-		dict_payloads[i].value,dict_payloads[i].token);
-	    m_codecs |= dict_payloads[i].value;
-	    fallback = dict_payloads[i].value;
-	    // Set default (desired) codec
-	    if (preferred == dict_payloads[i].token)
-		m_defaultCodec = fallback;
-	}
-    }
-    if (!m_codecs)
-	Debug(this,DebugWarn,"No audio format(s) available.");
-    // If desired codec is disabled fall back to last in list
-    if (!m_defaultCodec)
-	m_defaultCodec = fallback;
-    unlock();
+    NamedList* registrar = cfg.getSection("registrar");
+    if (!registrar)
+	registrar = &dummy;
+    s_expires_min = registrar->getIntValue("expires_min",60,1);
+    s_expires_max = registrar->getIntValue("expires_max",3600,s_expires_min);
+    s_expires_def = registrar->getIntValue("expires_def",60,s_expires_min,s_expires_max);
+    DDebug(this,DebugAll,
+	"Initialized calltoken_out=%s expires_min=%u expires_max=%u expires_def=%u",
+	String::boolText(s_callTokenOut),s_expires_min,s_expires_max,s_expires_def);
     // Setup driver if this is the first call
     if (m_iaxEngine) {
 	m_iaxEngine->initialize(*gen);
+	m_iaxEngine->initFormats(cfg.getSection("formats"));
 	return;
     }
     setup();
@@ -1267,24 +1381,25 @@ void YIAXDriver::initialize()
     u_int16_t transTimeout = 10;
     u_int16_t maxFullFrameDataLen = 1400;
     u_int32_t trunkSendInterval = 10;
-    m_port = s_cfg.getIntValue("general","port",4569);
-    String iface = s_cfg.getValue("general","addr");
-    bool authReq = s_cfg.getBoolValue("registrar","auth_required",true);
+    m_port = gen->getIntValue("port",4569);
+    String iface = gen->getValue("general","addr");
+    bool authReq = cfg.getBoolValue("registrar","auth_required",true);
     m_iaxEngine = new YIAXEngine(iface,m_port,transListCount,retransCount,retransInterval,authTimeout,
 	transTimeout,maxFullFrameDataLen,trunkSendInterval,authReq,gen);
     m_iaxEngine->debugChain(this);
-    int tos = s_cfg.getIntValue("general","tos",dict_tos,0);
+    m_iaxEngine->initFormats(cfg.getSection("formats"));
+    int tos = gen->getIntValue("tos",dict_tos,0);
     if (tos && !m_iaxEngine->socket().setTOS(tos))
 	Debug(this,DebugWarn,"Could not set IP TOS to 0x%02x",tos);
-    s_priority = Thread::priority(s_cfg.getValue("general","thread"),s_priority);
+    s_priority = Thread::priority(gen->getValue("thread"),s_priority);
     DDebug(this,DebugInfo,"Default thread priority set to '%s'",Thread::priority(s_priority));
-    int readThreadCount = s_cfg.getIntValue("general","read_threads",Engine::clientMode() ? 1 : 3);
+    int readThreadCount = gen->getIntValue("read_threads",Engine::clientMode() ? 1 : 3);
     if (readThreadCount < 1)
 	readThreadCount = 1;
-    int eventThreadCount = s_cfg.getIntValue("general","event_threads",Engine::clientMode() ? 1 : 3);
+    int eventThreadCount = gen->getIntValue("event_threads",Engine::clientMode() ? 1 : 3);
     if (eventThreadCount < 1)
 	eventThreadCount = 1;
-    int trunkingThreadCount = s_cfg.getIntValue("general","trunk_threads",1);
+    int trunkingThreadCount = gen->getIntValue("trunk_threads",1);
     if (trunkingThreadCount < 1)
 	trunkingThreadCount = 1;
     m_iaxEngine->start(readThreadCount,eventThreadCount,trunkingThreadCount);
@@ -1318,37 +1433,38 @@ bool YIAXDriver::msgExecute(Message& msg, String& dest)
 	Debug(this,DebugAll,"No data channel for this IAX call!");
 	return false;
     }
+    NamedList params(msg);
     SocketAddr addr(AF_INET);
     if (isE164(dest)) {
-	// dest is called number. Find line
-	String name(msg.getValue("line"));
-	bool lineReg;
-	if(!s_lines.fillList(name,msg,addr,lineReg)) {
-	    Debug(this,DebugNote,"No line ['%s'] for this IAX call!",name.c_str());
-	    return false;
-	}
-	if(!lineReg) {
-	    Debug(this,DebugNote,"Line ['%s'] is not registered!",name.c_str());
+	String* line = params.getParam("line");
+	bool lineReg = (line == 0);
+	if (line && !s_lines.fillList(*line,params,addr,lineReg)) {
+	    Debug(this,DebugNote,"IAX call failed: no line '%s'",line->c_str());
 	    msg.setParam("error","offline");
 	    return false;
 	}
-	msg.setParam("called",dest);
+	if (!lineReg) {
+	    Debug(this,DebugNote,"IAX call failed: line '%s' is not registered!",line->c_str());
+	    msg.setParam("error","offline");
+	    return false;
+	}
+	params.setParam("called",dest);
     }
     else {
 	// dest should be an URI
 	IAXURI uri(dest);
 	uri.parse();
-	uri.fillList(msg);
+	uri.fillList(params);
 	uri.setAddr(addr);
     }
     if (!addr.host().length()) {
 	Debug(this,DebugAll,"Missing host name in this IAX call");
 	return false;
     }
-    IAXTransaction* tr = m_iaxEngine->call(addr,msg);
+    IAXTransaction* tr = m_iaxEngine->call(addr,params);
     if (!tr)
 	return false;
-    YIAXConnection* conn = new YIAXConnection(m_iaxEngine,tr,&msg);
+    YIAXConnection* conn = new YIAXConnection(m_iaxEngine,tr,&msg,&params);
     conn->initChan();
     tr->setUserData(conn);
     Channel* ch = static_cast<Channel*>(msg.userData());
@@ -1387,52 +1503,44 @@ bool YIAXDriver::received(Message& msg, int id)
     return Driver::received(msg,id);
 }
 
-bool YIAXDriver::updateCodecsFromRoute(u_int32_t& codecs, const char* formats)
-{
 // Extract individual codecs from 'formats'
 // Check if IAXFormat contains it
 // Before exiting: update 'codecs'
-    if (!formats)
-	return true;
-    u_int32_t codec_formats = 0;
-    for (u_int32_t i = 0; formats[i];) {
-	// Skip separator(s)
-	for (; formats[i] && formats[i] == ','; i++) ;
-	// Find first separator
-	u_int32_t start = i;
-	for (; formats[i] && formats[i] != ','; i++) ;
-	// Get format
-	if (start != i) {
-	    // Get string
-	    String tmp(formats + start,i - start);
-	    // Get format from IAXFormat::audioData
-	    u_int32_t format = 0;
-	    for (u_int32_t j = 0; dict_payloads[j].value; j++)
-		if (tmp == dict_payloads[j].token) {
-		    format = dict_payloads[j].value;
-		    break;
-		}
-	    if (format)
-		codec_formats |= format;
-	}
-    }
-    // Set intersection
-    codecs &= codec_formats;
-    return codecs != 0;
-}
-
-void YIAXDriver::createFormatList(String& dest, u_int32_t codecs)
+bool YIAXDriver::updateCodecsFromRoute(u_int32_t& codecs, const NamedList& params, int type)
 {
-    for (u_int32_t i = 0; dict_payloads[i].token; i++) {
-	if (!(codecs & dict_payloads[i].value))
-	    continue;
-	dest.append(dict_payloads[i].token,",");
+    String* formats = 0;
+    if (type == IAXFormat::Audio)
+	formats = params.getParam("formats");
+    if (TelEngine::null(formats)) {
+	String tmp("formats_");
+	tmp << dataEpName(type);
+	formats = params.getParam(tmp);
     }
+    XDebug(this,DebugAll,"updateCodecsFromRoute(%u,%d) formats=%s",
+	codecs,type,TelEngine::c_safe(formats));
+    if (formats) {
+	// Set intersection
+	if (type == IAXFormat::Audio)
+	    codecs &= IAXFormat::encode(*formats,dict_payloads);
+	else if (type == IAXFormat::Video)
+	    codecs &= IAXFormat::encode(*formats,dict_payloads_video);
+	else
+	    codecs = 0;
+    }
+    else {
+	// Reset formats for non audio
+	// They must be explicitely set
+	if (type != IAXFormat::Audio)
+	    codecs = 0;
+    }
+    return codecs != 0;
 }
 
 bool YIAXDriver::userAuth(IAXTransaction* tr, bool response, bool& requestAuth,
 	bool& invalidAuth, const char* billid)
 {
+    bool newCall = (tr->type() == IAXTransaction::New);
+    DDebug(this,DebugAll,"YIAXDriver::userAuth(%p,%u) newcall=%u",tr,response,newCall);
     requestAuth = invalidAuth = false;
     // Create and dispatch user.auth
     Message msg("user.auth");
@@ -1448,6 +1556,7 @@ bool YIAXDriver::userAuth(IAXTransaction* tr, bool response, bool& requestAuth,
 	msg.addParam("response",tr->authdata());
     }
     msg.addParam("billid",billid,false);
+    msg.addParam("newcall",String::boolText(newCall));
     if (!Engine::dispatch(msg))
 	return false;
     String pwd = msg.retValue();
@@ -1515,56 +1624,71 @@ void YIAXDriver::msgStatus(Message& msg)
     Driver::msgStatus(msg);
 }
 
+
 /**
  * IAXConsumer
  */
-YIAXConsumer::YIAXConsumer(YIAXConnection* conn, u_int32_t format, const char* formatText)
-    : DataConsumer(formatText), m_connection(conn), m_total(0), m_format(format)
+YIAXConsumer::YIAXConsumer(YIAXConnection* conn, u_int32_t format,
+    const char* formatText, int type)
+    : DataConsumer(formatText),
+    YIAXData(conn,format,type)
 {
+    Debug(m_connection,DebugAll,"YIAXConsumer '%s' format=%s [%p]",
+	IAXFormat::typeName(m_type),formatText,this);
 }
 
 YIAXConsumer::~YIAXConsumer()
 {
+    Debug(m_connection,DebugAll,"YIAXConsumer '%s' destroyed total=%u [%p]",
+	IAXFormat::typeName(m_type),m_total,this);
 }
 
 unsigned long YIAXConsumer::Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 {
+    unsigned long sent = 0;
     if (m_connection && !m_connection->mutedOut()) {
 	m_total += data.length();
 	if (m_connection->transaction()) {
-	    m_connection->transaction()->sendMedia(data,m_format);
-	    return invalidStamp();
+	    bool mark = (flags & DataMark) != 0;
+	    sent = m_connection->transaction()->sendMedia(data,format(),m_type,mark);
 	}
     }
-    return 0;
+    return sent;
 }
 
 /**
  * YIAXSource
  */
-YIAXSource::YIAXSource(YIAXConnection* conn, u_int32_t format, const char* formatText) 
-    : DataSource(formatText), m_connection(conn), m_total(0), m_format(format)
-{ 
+YIAXSource::YIAXSource(YIAXConnection* conn, u_int32_t format, const char* formatText, int type) 
+    : DataSource(formatText),
+    YIAXData(conn,format,type)
+{
+    Debug(m_connection,DebugAll,"YIAXSource '%s' format=%s [%p]",
+	IAXFormat::typeName(m_type),formatText,this);
 }
 
 YIAXSource::~YIAXSource()
 {
+    Debug(m_connection,DebugAll,"YIAXSource '%s' destroyed total=%u [%p]",
+	IAXFormat::typeName(m_type),m_total,this);
 }
 
-void YIAXSource::Forward(const DataBlock& data, unsigned long tStamp)
+void YIAXSource::Forward(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 {
     if (m_connection && m_connection->mutedIn())
 	return;
     m_total += data.length();
-    DataSource::Forward(data,tStamp);
+    DataSource::Forward(data,tStamp,flags);
 }
 
 /**
  * YIAXConnection
  */
-YIAXConnection::YIAXConnection(YIAXEngine* iaxEngine, IAXTransaction* transaction, Message* msg)
+YIAXConnection::YIAXConnection(YIAXEngine* iaxEngine, IAXTransaction* transaction, Message* msg,
+    NamedList* params)
     : Channel(&iplugin,0,transaction->outgoing()),
       m_iaxEngine(iaxEngine), m_transaction(transaction), m_mutedIn(false), m_mutedOut(false),
+      m_audio(false), m_video(false),
       m_hangup(true),
       m_mutexTrans(true,"YIAXConnection::trans"),
       m_mutexRefIncreased(true,"YIAXConnection::refIncreased"),
@@ -1576,10 +1700,11 @@ YIAXConnection::YIAXConnection(YIAXEngine* iaxEngine, IAXTransaction* transactio
     m->setParam("direction",status());
     if (transaction)
 	m_address << transaction->remoteAddr().host() << ":" << transaction->remoteAddr().port();
-    if (msg) {
+    if (msg)
 	m_targetid = msg->getValue("id");
-	m_password = msg->getValue("password");
-	m->copyParams(*msg,"caller,callername,called,billid,callto,username");
+    if (params) {
+	m_password = params->getValue("password");
+	m->copyParams(*params,"caller,callername,called,billid,callto,username");
     }
     Engine::enqueue(m);
 }
@@ -1589,7 +1714,7 @@ YIAXConnection::~YIAXConnection()
     status("destroyed");
     setConsumer();
     setSource();
-    hangup();
+    hangup(0);
     Debug(this,DebugAll,"Destroyed with reason '%s' [%p]",m_reason.safe(),this);
 }
 
@@ -1599,12 +1724,18 @@ void YIAXConnection::callAccept(Message& msg)
     DDebug(this,DebugCall,"callAccept [%p]",this);
     m_mutexTrans.lock();
     if (m_transaction) {
-	const char* fmts = msg.getValue("formats");
-	if (fmts) {
-	    u_int32_t codecs = iplugin.codecs();
-	    iplugin.updateCodecsFromRoute(codecs,fmts);
-	    iplugin.getEngine()->acceptFormatAndCapability(m_transaction,&codecs);
+	u_int32_t codecs = iplugin.getEngine()->capability();
+	if (msg.getValue("formats")) {
+	    u_int32_t ca = IAXFormat::mask(codecs,IAXFormat::Audio);
+	    iplugin.updateCodecsFromRoute(ca,msg,IAXFormat::Audio);
+	    iplugin.getEngine()->acceptFormatAndCapability(m_transaction,&ca);
 	}
+	u_int32_t cv = IAXFormat::mask(codecs,IAXFormat::Video);
+	iplugin.updateCodecsFromRoute(cv,msg,IAXFormat::Video);
+	iplugin.getEngine()->acceptFormatAndCapability(m_transaction,&cv,IAXFormat::Video);
+	u_int32_t ci = IAXFormat::mask(codecs,IAXFormat::Image);
+	iplugin.updateCodecsFromRoute(ci,msg,IAXFormat::Image);
+	iplugin.getEngine()->acceptFormatAndCapability(m_transaction,&ci,IAXFormat::Image);
 	m_transaction->sendAccept();
 	// Enable trunking if trunkin parameter is enabled
 	if (msg.getBoolValue("trunkin"))
@@ -1633,7 +1764,7 @@ void YIAXConnection::callRejected(const char* error, const char* reason, const M
     }
     lock.drop();
     Debug(this,DebugCall,"callRejected. Reason: '%s' [%p]",error,this);
-    hangup(reason,true);
+    hangup(0,reason,true);
 }
 
 bool YIAXConnection::callRouted(Message& msg)
@@ -1653,7 +1784,7 @@ bool YIAXConnection::msgProgress(Message& msg)
     if (m_transaction) {
 	m_transaction->sendProgress();
 	// only start audio output for early media
-	startAudioOut();
+	startMedia(false);
 	return Channel::msgProgress(msg);
     }
     return false;
@@ -1665,7 +1796,7 @@ bool YIAXConnection::msgRinging(Message& msg)
     if (m_transaction) {
 	m_transaction->sendRinging();
 	// only start audio output for early media
-	startAudioOut();
+	startMedia(false);
 	return Channel::msgRinging(msg);
     }
     return false;
@@ -1676,9 +1807,11 @@ bool YIAXConnection::msgAnswered(Message& msg)
     Lock lock(&m_mutexTrans);
     if (m_transaction) {
 	m_transaction->sendAnswer();
-	// fully start audio
-	startAudioIn();
-	startAudioOut();
+	// fully start media
+	startMedia(true);
+	startMedia(false);
+	startMedia(true,IAXFormat::Video);
+	startMedia(false,IAXFormat::Video);
 	return Channel::msgAnswered(msg);
     }
     return false;
@@ -1709,7 +1842,7 @@ void YIAXConnection::disconnected(bool final, const char* reason)
 {
     DDebug(this,DebugAll,"Disconnected. Final: %s . Reason: '%s' [%p]",
 	String::boolText(final),reason,this);
-    hangup(reason);
+    hangup(0,reason);
     Channel::disconnected(final,reason);
     safeDeref();
 }
@@ -1756,15 +1889,17 @@ void YIAXConnection::handleEvent(IAXEvent* event)
 	    break;
 	case IAXEvent::Accept:
 	    DDebug(this,DebugCall,"ACCEPT [%p]",this);
-	    startAudioIn();
+	    startMedia(true);
 	    break;
 	case IAXEvent::Answer:
 	    if (isAnswered())
 		break;
 	    DDebug(this,DebugCall,"ANSWER [%p]",this);
 	    status("answered");
-	    startAudioIn();
-	    startAudioOut();
+	    startMedia(true);
+	    startMedia(false);
+	    startMedia(true,IAXFormat::Video);
+	    startMedia(false,IAXFormat::Video);
 	    Engine::enqueue(message("call.answered",false,true));
 	    break; 
 	case IAXEvent::Quelch:
@@ -1777,19 +1912,17 @@ void YIAXConnection::handleEvent(IAXEvent* event)
 	    break;
 	case IAXEvent::Ringing:
 	    DDebug(this,DebugInfo,"RINGING [%p]",this);
-	    startAudioIn();
+	    startMedia(true);
 	    Engine::enqueue(message("call.ringing",false,true));
 	    break; 
 	case IAXEvent::Hangup:
 	case IAXEvent::Reject:
-	    if (m_reason.null()) {
-		event->getList().getString(IAXInfoElement::CAUSE,m_reason);
-		DDebug(this,DebugCall,"REJECT/HANGUP: '%s' [%p]",m_reason.c_str(),this);
+	    {
+		String reason;
+		event->getList().getString(IAXInfoElement::CAUSE,reason);
+		DDebug(this,DebugCall,"REJECT/HANGUP: '%s' [%p]",reason.c_str(),this);
+		hangup(event->local() ? 1 : -1,reason);
 	    }
-#ifdef DEBUG
-	    else
-		Debug(this,DebugCall,"REJECT/HANGUP [%p]",this);
-#endif
 	    break;
 	case IAXEvent::Timeout:
 	    DDebug(this,DebugNote,"TIMEOUT. Transaction: %u,%u, Frame: %u,%u [%p]",
@@ -1820,7 +1953,7 @@ void YIAXConnection::handleEvent(IAXEvent* event)
     }
 }
 
-void YIAXConnection::hangup(const char* reason, bool reject)
+void YIAXConnection::hangup(int location, const char* reason, bool reject)
 {
     if (!m_hangup)
 	return;
@@ -1829,21 +1962,38 @@ void YIAXConnection::hangup(const char* reason, bool reject)
 	m_reason = reason;
     if (m_reason.null())
 	m_reason = Engine::exiting() ? "shutdown" : "unknown";
+    const char* loc = location ? (location > 0 ? "internal" : "remote") : "peer";
+    clearMedia(true);
+    clearMedia(false);
+    clearMedia(true,IAXFormat::Video);
+    clearMedia(false,IAXFormat::Video);
+    Message* m = message("chan.hangup",true);
+    m->setParam("status","hangup");
+    m->setParam("reason",m_reason);
     m_mutexTrans.lock();
     if (m_transaction) {
-	m_transaction->setUserData(0);
+	IAXMediaData* d = m_audio ? m_transaction->getData(IAXFormat::Audio) : 0;
+	if (d) {
+	    String tmp;
+	    d->print(tmp);
+	    m->addParam("iax_stats",tmp);
+	}
+	d = m_video ? m_transaction->getData(IAXFormat::Video) : 0;
+	if (d) {
+	    String tmp;
+	    d->print(tmp);
+	    m->addParam("iax_stats_video",tmp);
+	}
 	if (reject)
 	    m_transaction->sendReject(m_reason);
 	else
 	    m_transaction->sendHangup(m_reason);
+	m_transaction->setUserData(0);
         m_transaction = 0;
     }
     m_mutexTrans.unlock();
-    Message* m = message("chan.hangup",true);
-    m->setParam("status","hangup");
-    m->setParam("reason",m_reason);
     Engine::enqueue(m);
-    Debug(this,DebugCall,"Hangup. Reason: %s [%p]",m_reason.safe(),this);
+    Debug(this,DebugCall,"Hangup location=%s reason=%s [%p]",loc,m_reason.safe(),this);
 }
 
 bool YIAXConnection::route(bool authenticated)
@@ -1860,55 +2010,114 @@ bool YIAXConnection::route(bool authenticated)
     else {
 	DDebug(this,DebugAll,"Route pass 1: No username [%p]",this);
 	if (!iplugin.getEngine()->acceptFormatAndCapability(m_transaction)) {
-	    hangup(IAXTransaction::s_iax_modNoMediaFormat,true);
+	    hangup(0,IAXTransaction::s_iax_modNoMediaFormat,true);
 	    return false;
 	}
 	// Advertise the not yet authenticated username
 	if (m_transaction->username())
 	    m->addParam("authname",m_transaction->username());
-	// Set 'formats' parameter
-	String formats;
-	iplugin.createFormatList(formats,m_transaction->capability());
-	m->addParam("formats",formats);
     }
     m->addParam("called",m_transaction->calledNo());
     m->addParam("caller",m_transaction->callingNo());
     m->addParam("callername",m_transaction->callingName());
     m->addParam("ip_host",m_transaction->remoteAddr().host());
     m->addParam("ip_port",String(m_transaction->remoteAddr().port()));
+    String fmtsAudio;
+    IAXFormat::formatList(fmtsAudio,m_transaction->capability(),dict_payloads);
+    m->addParam("formats",fmtsAudio);
+    String fmtsVideo;
+    IAXFormat::formatList(fmtsVideo,m_transaction->capability(),dict_payloads_video);
+    if (fmtsVideo) {
+	if (fmtsAudio) {
+	    m->addParam("media_audio",String::boolText(true));
+	    m->addParam("formats_audio",fmtsAudio);
+	}
+	m->addParam("media_video",String::boolText(true));
+	m->addParam("formats_video",fmtsVideo);
+    }
     return startRouter(m);
 }
 
-// Create audio source with the proper format
-void YIAXConnection::startAudioIn()
+// Retrieve the data consumer from IAXFormat media type
+YIAXConsumer* YIAXConnection::getConsumer(int type)
 {
-    if (getSource())
-	return;
-    u_int32_t format = 0;
-    m_mutexTrans.lock();
-    if (m_transaction)
-	format = m_transaction->formatIn();
-    m_mutexTrans.unlock();
-    const char* formatText = lookup(format,dict_payloads);
-    setSource(new YIAXSource(this,format,formatText));
-    getSource()->deref();
-    DDebug(this,DebugAll,"startAudioIn. Format %u: '%s' [%p]",format,formatText,this);
+    const char* name = dataEpName(type);
+    return name ? YOBJECT(YIAXConsumer,Channel::getConsumer(name)) : 0;
 }
 
-// Create audio consumer with the proper format
-void YIAXConnection::startAudioOut()
+// Retrieve the data source from IAXFormat media type
+YIAXSource* YIAXConnection::getSource(int type)
 {
-    if (getConsumer())
-	return;
+    const char* name = dataEpName(type);
+    return name ? YOBJECT(YIAXSource,Channel::getSource(name)) : 0;
+}
+
+// Create audio source with the proper format
+void YIAXConnection::startMedia(bool in, int type)
+{
     u_int32_t format = 0;
     m_mutexTrans.lock();
-    if (m_transaction)
-	format = m_transaction->formatOut();
+    if (m_transaction) {
+	format = in ? m_transaction->formatIn(type) : m_transaction->formatOut(type);
+	if (format) {
+	    if (type == IAXFormat::Audio)
+		m_audio = true;
+	    else if (type == IAXFormat::Video)
+		m_video = true;
+	}
+    }
     m_mutexTrans.unlock();
-    const char* formatText = lookup(format,dict_payloads);
-    setConsumer(new YIAXConsumer(this,format,formatText));
-    getConsumer()->deref();
-    DDebug(this,DebugAll,"startAudioOut. Format %u: '%s' [%p]",format,formatText,this);
+    bool exists = false;
+    if (in) {
+	YIAXSource* src = getSource(type);
+	if (src && src->format() == format)
+	    return;
+	exists = (src != 0);
+    }
+    else {
+	YIAXConsumer* cons = getConsumer(type);
+	if (cons && cons->format() == format)
+	    return;
+	exists = (cons != 0);
+    }
+    clearMedia(in,type);
+    const char* epName = dataEpName(type);
+    const char* formatText = format ? lookupFormat(format,type) : 0;
+    const char* dir = in ? "incoming" : "outgoing";
+    if (exists || format)
+	Debug(this,DebugAll,"Starting %s media '%s' format '%s' (%u) [%p]",
+	    dir,epName,formatText,format,this);
+    bool ok = true;
+    if (in) {
+	YIAXSource* src = 0;
+	if (formatText)
+	    src = new YIAXSource(this,format,formatText,type);
+	setSource(src,epName);
+	TelEngine::destruct(src);
+	ok = !format || getSource(type);
+    }
+    else {
+	YIAXConsumer* cons = 0;
+	if (formatText)
+	    cons = new YIAXConsumer(this,format,formatText,type);
+	setConsumer(cons,epName);
+	TelEngine::destruct(cons);
+	ok = !format || getConsumer(type);
+    }
+    if (!ok)
+	Debug(this,DebugNote,"Failed to start %s media '%s' format '%s' (%u) [%p]",
+	    dir,epName,formatText,format,this);
+}
+
+void YIAXConnection::clearMedia(bool in, int type)
+{
+    const char* epName = dataEpName(type);
+    DDebug(this,DebugAll,"Clearing %s %s media [%p]",
+	in ? "incoming" : "outgoing",epName,this);
+    if (in)
+	setSource(0,epName);
+    else
+	setConsumer(0,epName);
 }
 
 void YIAXConnection::evAuthRep(IAXEvent* event)
@@ -1920,9 +2129,9 @@ void YIAXConnection::evAuthRep(IAXEvent* event)
 	route(true);
 	return;
     }
-    const char* reason = IAXTransaction::s_iax_modInvalidAuth.c_str();
     DDebug(this,DebugCall,"Not authenticated. Rejecting [%p]",this);
-    hangup(event,reason,true);
+    event->setFinal();
+    hangup(1,"noauth",true);
 }
 
 void YIAXConnection::evAuthReq(IAXEvent* event)

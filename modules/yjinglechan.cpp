@@ -1494,13 +1494,15 @@ bool YJGConnection::handleEvent(JGEvent* event)
 		}
 	    }
 	    else {
-		parameters().clearParams();
 		URI uri(event->text());
+		paramMutex().lock();
+		parameters().clearParams();
 		parameters().addParam("called",uri.getUser());
 		parameters().addParam("calledname",uri.getDescription(),false);
 		parameters().addParam("calleduri",event->text());
 		parameters().addParam("copyparams","");
 		copySessionParams(parameters());
+		paramMutex().unlock();
 	    }
 	}
 	const char* reason = event->reason();
@@ -3590,8 +3592,10 @@ void YJGDriver::initialize()
 
 	(new YJGEngineWorker)->startup();
     }
-    else
+    else {
 	setDomains(sect->getValue("domains"));
+	loadLimits();
+    }
     s_jingle->initialize(*sect);
 
     if (s_serverMode) {

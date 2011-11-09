@@ -540,6 +540,161 @@ private:
 };
 
 /**
+ * Class AsnTag
+ * @short Class for ASN.1 tags
+ */
+class AsnTag {
+public:
+    /**
+     * ASN.1 Tag class types enum
+     */
+    enum Class {
+	Universal   = 0x00,
+	Application = 0x40,
+	Context     = 0x80,
+	Private     = 0xc0,
+    };
+
+    /**
+     * ASN.1  Type of tag enum
+     */
+    enum Type {
+	Primitive   = 0x00,
+	Constructor = 0x20,
+    };
+
+    /**
+     * Constructor
+     */
+    inline AsnTag()
+        : m_class(Universal), m_type(Primitive), m_code(0)
+    { }
+
+    /**
+     * Constructor
+     * @param clas Class of the ASN.1 Tag
+     * @param type Type of the ASN.1 Tag
+     * @param code Code ot the ASN.1 Tag
+     */
+    inline AsnTag(Class clas, Type type, unsigned int code)
+        : m_class(clas), m_type(type), m_code(code)
+    {
+	encode();
+    }
+
+    /**
+     * Destructor
+     */
+    inline ~AsnTag()
+    {}
+
+    /**
+     * Decode an ASN.1 tag from the given data
+     * @param tag Tag to fill
+     * @param data Data from which the tag should be filled
+     */
+    static void decode(AsnTag& tag, DataBlock& data);
+
+    /**
+     * Encode an ASN.1 tag and put the encoded form into the given data
+     * @param clas Class of the tag
+     * @param type Type of the tag
+     * @param code Tag code
+     * @param data DataBlock into which to insert the encoded tag
+     */
+    static void encode(Class clas, Type type, unsigned int code, DataBlock& data);
+
+    /**
+     * Encode self
+     */
+    inline void encode()
+	{ AsnTag::encode(m_class,m_type,m_code,m_coding); }
+
+    /**
+     * Equality operator
+     */
+    inline bool operator==(const AsnTag& tag) const
+    {
+	return (m_class == tag.classType() && m_type == tag.type() && m_code == tag.code());
+    }
+
+    /**
+     * Inequality operator
+     */
+    inline bool operator!=(const AsnTag& tag) const
+    {
+	return !(m_class == tag.classType() && m_type == tag.type() && m_code == tag.code());
+    }
+
+    /**
+     * Assignment operator
+     */
+    inline AsnTag& operator=(const AsnTag& value)
+    {
+	m_class = value.classType();
+	m_type = value.type();
+	m_code = value.code();
+	encode();
+	return *this;
+    }
+
+    /**
+     * Get the tag class
+     * @return The class of the tag
+     */
+    inline const Class classType() const
+	{ return m_class; }
+
+    /**
+     * Set the tag class
+     * @param clas The clas to set for the  tag
+     */
+    inline void classType(Class clas)
+	{ m_class = clas; }
+
+    /**
+     * Get the tag type
+     * @return The type of the tag
+     */
+    inline const Type type() const
+	{ return m_type; }
+
+    /**
+     * Set the tag type
+     * @param type The type to set for the  tag
+     */
+    inline void type(Type type)
+	{ m_type = type; }
+
+    /**
+     * Get the tag code
+     * @return The code of the tag
+     */
+    inline const unsigned int code() const
+	{ return m_code; }
+
+    /**
+     * Set the tag code
+     * @param code The code to set for the  tag
+     */
+    inline void code(unsigned int code)
+	{ m_code = code; }
+
+    /**
+     * Get the tag encoding
+     * @return The DataBlock containing the encoding for the tag
+     */
+    inline const DataBlock& coding() const
+	{ return m_coding; }
+
+private:
+    Class m_class;
+    Type m_type;
+    unsigned int m_code;
+    DataBlock m_coding;
+};
+
+/**
  * Class ASNLib
  * @short Class containing functions for decoding/encoding ASN.1 basic data types
  */

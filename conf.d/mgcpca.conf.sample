@@ -204,6 +204,10 @@
 ; Normally the default bearer is not set so a B: line is added when needed
 ;bearer=
 
+; match_ntfy: bool: Strict match the X: id in NTFY against the local value
+; This can cause trouble with FXS/FXO persistent notifications
+;match_ntfy=yes for digital gateways, no for analogic
+
 ; req_fax: bool: Request Fax Tone detection from gateway
 ; This requests notification for G/ft (Generic package, Fax Tone)
 ;req_fax=yes
@@ -230,6 +234,7 @@
 
 ; forward_rtp: bool: Support to forward RTP directly to protocols that support it
 ; The actual direct RTP forwarding is still negotiated in routing
+; The special value "always" (only for digital gateways) inhibits initial local RTP
 ;forward_rtp=yes for digital gateways, no for analogic
 
 ; forward_sdp: bool: Also include the raw SDP in the RTP forward offer

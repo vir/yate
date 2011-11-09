@@ -224,6 +224,15 @@ class Yate
     }
 
     /**
+     * Asynchronously retrieve a local module parameter
+     * @param $name Name of the parameter to read
+     */
+    static function GetLocal($name)
+    {
+	Yate::SetLocal($name, "");
+    }
+
+    /**
      * Constructor. Creates a new outgoing message
      * @param $name Name of the new message
      * @param $retval (optional) Default return

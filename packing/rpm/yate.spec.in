@@ -139,7 +139,6 @@ for small to large scale projects.
 %{_libdir}/yate/server/ysigchan.yate
 %{_libdir}/yate/server/ciscosm.yate
 %{_libdir}/yate/server/sigtransport.yate
-%{_libdir}/yate/server/isupmangler.yate
 %{_libdir}/yate/server/analog.yate
 %{_libdir}/yate/server/analogdetect.yate
 %{_libdir}/yate/server/users.yate
@@ -153,6 +152,8 @@ for small to large scale projects.
 %{_libdir}/yate/client/jabberclient.yate
 %{_libdir}/yate/jabber/jabberserver.yate
 %{_libdir}/yate/jabber/jbfeatures.yate
+%{_libdir}/yate/sig/isupmangler.yate
+%{_libdir}/yate/sig/ss7_lnp_ansi.yate
 %{_libdir}/yate/sip/sip_cnam_lnp.yate
 %dir %{_sysconfdir}/yate
 %config(noreplace) %{_sysconfdir}/yate/accfile.conf
@@ -193,7 +194,6 @@ for small to large scale projects.
 %config(noreplace) %{_sysconfdir}/yate/ysigchan.conf
 %config(noreplace) %{_sysconfdir}/yate/ciscosm.conf
 %config(noreplace) %{_sysconfdir}/yate/sigtransport.conf
-%config(noreplace) %{_sysconfdir}/yate/isupmangler.conf
 %config(noreplace) %{_sysconfdir}/yate/cpuload.conf
 %config(noreplace) %{_sysconfdir}/yate/ccongestion.conf
 %config(noreplace) %{_sysconfdir}/yate/monitoring.conf
@@ -204,6 +204,8 @@ for small to large scale projects.
 %config(noreplace) %{_sysconfdir}/yate/jabberclient.conf
 %config(noreplace) %{_sysconfdir}/yate/jabberserver.conf
 %config(noreplace) %{_sysconfdir}/yate/jbfeatures.conf
+%config(noreplace) %{_sysconfdir}/yate/isupmangler.conf
+%config(noreplace) %{_sysconfdir}/yate/ss7_lnp_ansi.conf
 %config(noreplace) %{_sysconfdir}/yate/sip_cnam_lnp.conf
 
 %config %{_sysconfdir}/logrotate.d/yate
@@ -573,6 +575,9 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Thu Sep 15 2011 Paul Chitescu <paulc@voip.null.ro>
+- Added new modules/sig directory for feature modules
+
 * Fri Dec 10 2010 Paul Chitescu <paulc@voip.null.ro>
 - Properly pack the new dynamic Qt client library and modules
 - Added missing CPU load and congestion control modules

@@ -437,6 +437,15 @@
 ;    yes       Media required from the beginning
 ;needmedia=no
 
+; maxcalleddigits: int: Maximum number of digits sent in Called Party Number in IAM
+; Any digits exceeding this limit will be sent separately in a SAM
+;maxcalleddigits=16
+
+; ignore-unknown-digits: boolean: Ignore signal digits that are not ITU standard (A, D and E)
+; The standard set includes only 0-9, B, C and the stop pulsing "."
+; ISUP does not support sending the * and # signals
+;ignore-unknown-digits=yes
+
 ; ignore-grs-single: boolean: Ignore (drop) circuit group reset messages with
 ;  range 0 (1 circuit affected)
 ; Defaults to no
@@ -684,3 +693,190 @@
 
 ; neighbours: boolean: Only accept management messages from adjacent nodes
 ;neighbours=yes
+
+
+; Example of a SS7 SCCP
+;[sccp]
+
+; type: keyword: identifies the component as a SS7 SCCP
+;type=ss7-sccp
+
+; pointcodetype: string: SS7 point code type (required)
+; Allowed values:
+;  ITU    ITU-T Q.704
+;  ANSI   ANSI T1.111.4
+;pointcodetype=
+
+; localpointcode: string: Local point code to accept as destination (required)
+; The format is network-cluster-member or number
+;localpointcode=
+
+; router: string: Name of the SS7 Router to attach to
+; A boolean false value disables attaching a router (unlikely)
+;router=ss7router
+
+; network: string: Name of linkset to attach to if router is disabled
+; This allows direct connection without MTP management (unlikely)
+;network=
+
+; management: string: Name of the SS7 management to use
+;management=sccp-mgm
+
+; hopcounter: integer: Default value for hop-counter
+; This value indicates the maximum number of gt translations that can be
+;  made before the message reach it's destination
+;hopcounter=15
+
+; ludt-support: boolean: True to allow sccp to send Long UnitData messages
+;ludt-support=false
+
+; segmentation-timeout: integer: Time in milliseconds before a segmented
+;  message is expired
+; Values: 5000-20000 ms
+;segmentation-timeout=5000
+
+; extended-monitoring: boolean: Compute an extended monitoring of sccp messages
+;extended-monitoring=no
+
+; print-messages: boolean: Print decoded protocol data units to output
+; This option is applied on reload
+; Defaults to no
+;print-messages=no
+
+; extended-debug: boolean: Print extended debug data (such as raw hex data)
+;  to output
+; This option is applied on reload
+; Defaults to no
+;extended-debug=no
+
+; endpoint: boolean: Force message processing if we are an endpoint
+; This option will allow sccp to process failed gt translations messages
+;  if a ssn is pressent
+;endpoint=true;
+
+
+; Example of SS7 Sccp Management
+;[sccp-mgm]
+
+; type: keyword: identifies the component as a SS7 SCCP Management
+; Values : ss7-sccp-itu-mgm 
+; Must correspond with the pointcode type of the sccp
+;type=
+
+; test-timer: integer: Initial time in milliseconds for Subsystem Status
+;  Test to be generated
+; Values : 5000-10000
+; Note! This timer will increase exponentially until reaches 20000 if no
+;  corresponding message is received from the test initiator
+;test-timer=5000
+
+; print-messages: boolean: True to print sccp management messages
+;print-messages=false
+
+; remote: struct: Remote SCCP witch present interest for GTT
+;  (Global Title Translator)
+; This parameter allow us to monitor remote sccp's state
+; This option can be repeated to monitor multiple remote sccp's
+; Format: remote=pc(integer):ssn1,ssn2,....
+; pc : integer: Remote sccp pointcode
+; ssn1 - ssnn: integer; Remote sccp subsystems witch we are monitoring
+; Note! Ssn list may be empty if the remote sccp is a stp with GTT
+;remote=2057:1,2,3,4
+
+; concerned: struct: List of remote sccp's witch are concerned about local state
+; This parameter allow us to inform remote sccp's when local status has changed
+; This option can be repeated to inform multiple remote sccp's
+; Format: remote=pc(integer):ssn1,ssn2,....
+; pc : integer: Remote sccp pointcode
+; ssn1 - ssnn: integer; List of local subsystems witch are of interest for the
+;  remote sccp
+; Note! Ssn list may be empty if the remote sccp is concerned only if local 
+;  sccp is available or not
+;concerned=2057:1,2,3,4
+
+; local-subsystems: string: Coma separated list of local subsystems
+; The subsystems present in this list will be monitored by this sccp management
+;local-subsystems=1,2,3,4,5,..
+
+; auto-monitor: boolean: True to auto monitor remote sccp's.
+; This flag enables remote sccp auto monitoring. When a message failed to be 
+;  send to a remote sccp, the sccp management will automaticaly append the 
+;  destination to the monitored remote sccp destinations
+;  to prevent sccp routing failure.
+; NOTE! Do not use this option if your GTT (Global Title Translator)
+;  can route to a large number of remote addresses
+;  because a lot of memory and cpu power will be used!
+;auto-monitor=false
+
+
+; Example of GTT (Global Title Translator)
+;[gtt]
+
+; type: keyword: Identifies this component as a GTT
+; NOTE! This type of gtt is based on yate messages system.
+;type=ss7-gtt
+
+; sccp: string: The name of the sccp to attach to this GTT
+;sccp=sccp
+
+
+; Example of dummy sccp user
+;[sccp-userd]
+; Sccp user dummy sends a message over sccp protocol.
+
+; type: keyword: Identifies this component as a Sccp User Dummy
+;type=ss7-sccpu-dummy
+
+; sccp: string: The name of the sccp to attach to this Sccp User
+;sccp=sccp
+
+; ssn: integer: Optional ssn asociated with this user
+; If this parameter is present this user will accept only the messages who
+;  have the same ssn
+;ssn=0
+
+
+; Example of a SS7 Transaction Capabilities Application Part
+; This component is created when encountering a section of this kind
+;[ss7tcap]
+; type: keyword: identifies the component as a SS7 Transfer Capabilities Application Part
+; type = ss7-tcap-ansi for ANSI TCAP
+; type = ss7-tcap-itu for ITU TCAP - not implemented yet
+;type=
+
+; local_SSN: local SubSystem Number. Mandatory
+;local_SSN=
+
+; default_remote_SSN: remote SubSystem Number to provide to SCCP if the application does not provide one
+;default_remote_SSN=
+
+; default_remote_pointcode: remote Point Code to provide to SCCP if the application does not provide one
+;default_remote_pointcode=
+
+; pointcodetype: remote Point Code type. See above documentation for available types
+;pointcodetype=
+
+; sccp: Name of the SCCP component to create and be used by this TCAP
+; A section with the name given here must exist in order to configure the SCCP level
+;sccp=
+
+; transact_timeout: Time in seconds to timeout a TCAP transaction after no more activity was registered on it
+; Defaults to 300 seconds
+;transact_timeout=300
+
+;print-messages: Boolean to enable/disable printing of decoding/encoding of TCAP messages
+; This option applies on reload
+;print-messages=false
+
+;extended-debug: Boolean to enable/disable printing of the step-by-step decoding/encoding of TCAP messages
+; This option applies on reload. print-messages must be true.
+;extended-debug=false
+
+
+[tcapuser_test]
+; mimicks  a TCAP User, which emits and receives TCAP messages in Message form
+; type is ss7-tcap-user to identify it as the specific user
+;type=ss7-tcap-user
+
+; tcap: The TCAP to which this user is to attach itself to it
+;tcap=

@@ -1,0 +1,192 @@
+; IMPORTANT!
+; This feature module is not loaded automatically, it needs a line in yate.conf:
+; [postload]
+; ${modulepath}/sig/ss7_lnp_ansi${modsuffix}=yes
+
+
+[general]
+
+; priority for call.route message handler
+;call.route=50
+
+; set prefix with which all encoded and decoded LNP parameter names are to be built
+; the format is prefix.LNPParam
+;prefix=lnp
+
+; interval at which statistic counters are to be reset. Set in seconds
+; default is 5 minutes according to the Telcordia GR-533-CORE standard
+;count_time=300
+
+; set to play an announcement if the response to the LNP query responds with CallerInteraction:Play Announcement or if the
+; number is under Automatic Code Gapping control.
+; NOTE: When this is set to true, call.route will always return true, except when a Routing number is returned (porting is done)
+;play_announcements=false
+
+
+[lnp]
+
+; TCAP component to which LNP should attach itself. Must be configured in ysigchan.conf
+tcap=
+
+;Determines if all parameters received on TCAP LNP query response are to be copied into the call.route message
+;copy_back_all=true
+
+; Timeout interval after which a LNP query is canceled. Set in miliseconds, must be in interval 1000 - 30 000
+;timeout=3000
+
+; called: string: Template for the called party number of the request
+; It should not be modified
+;called=${called}
+
+; caller: string: Template for the caller party number of the request
+; It can be used to force anonymous requests
+;caller=${caller}
+
+; LATA: integer: Assignment of LNP LATA parameter
+; It can be defined as ${lata$defvalue}
+;LATA=${lata}
+
+; station_type: integer/string: Assign LNP Originating Station Type parameter
+; It can be defined as ${oli$defvalue}
+; Also these string values are admitted:
+;    { "normal",            0 },
+;    { "multiparty",        1 },
+;    { "ani-failure",       2 },
+;    { "hotel-room-id",     6 },
+;    { "coinless",          7 },
+;    { "restricted",        8 },
+;    { "test-call-1",      10 },
+;    { "aiod-listed-dn",   20 },
+;    { "identified-line",  23 },
+;    { "800-call",         24 },
+;    { "coin-line",        27 },
+;    { "restricted-hotel", 68 },
+;    { "test-call-2",      95 },
+;station_type=${oli$normal}
+
+; cic_expansion: boolean: Assignment of LNP CIC expansion parameter
+;cic_expansion=${cicexpansion$true}
+
+; number_nature: string: The nature of the number
+; Values are:
+;    {"national",         LNPClient::NatureNational},
+;    {"international",    LNPClient::NatureInternational},
+; Default to national, according to GR-533-Core
+;number_nature=national
+
+; presentatation_restrict: boolean: Presentation Restriction for numbers
+; Default to false, according to GR-533-Core
+;presentation_restrict=false
+
+; numplan: string: Numbering plan for numbers
+; Permitted values:
+;    {"isdn",           LNPClient::NPISDN},
+;    {"telephony",      LNPClient::NPTelephony},
+; Defaults to ISDN
+;numplan=isdn
+
+; number_encoding: string: Numbering encoding for numbers
+; The only supported values is bcd, do not change!
+;number_encoding=bcd
+
+
+[sccp_addr]
+; this section configures the list of parameters to be given to SCCP and MTP3 as an address
+; all parameters prefixed by "sccp." will be copied and given to SCCP to build the address
+; NOTE! All needed parameters must be configured as nothing (except the ones mentioned below) are assumed as default
+
+; remote_pointcode: string: Remote pointcode of the LNP application to be interrogated.
+; The format is network-cluster-member or number.
+;remote_pointcode=
+
+;Type of pointcode: string
+; Allowed values:
+;  ITU    ITU-T Q.704
+;  ANSI   ANSI T1.111.4
+;  ANSI8  8-bit SLS
+;  China  GF 001-9001
+;  Japan  T-Q704, NTT-Q704
+;  Japan5 5-bit SLS
+;pointcodetype=
+
+; check_addr: bool: indication for TCAP level if to alter the SCCP address with local information
+; Defaults to false
+;check_addr=false
+
+; sccp.CalledPartyAddress.route: string: Routing Indicator for SCCP Called Party Address
+; Values allowed : 
+; gt - for Global Title Translation
+; ssn - routing by SubSystem Number (SSN)
+;sccp.CalledPartyAddress.route=
+
+; sccp.CalledPartyAddress.ssn: integer: Subsystem Number of the called party
+;sccp.CalledPartyAddress.ssn=
+
+; sccp.CalledPartyAddress.pointcode: integer: Pointcode of the called party
+; NOTE! This must be given in integer form
+;sccp.CalledPartyAddress.pointcode=
+
+; sccp.CalledPartyAddress.gt.np: string: Numbering plan for Global Title in Called Party Address
+; Permitted values:
+;    {"notused",        LNPClient::NPNotUsed},
+;    {"isdn",           LNPClient::NPISDN},
+;    {"telephony",      LNPClient::NPTelephony},
+;    {"data",           LNPClient::NPData},
+;    {"telex",          LNPClient::NPTelex},
+;    {"maritimemobile", LNPClient::NPMaritimeMobile},
+;    {"landmobile",     LNPClient::NPLandMobile},
+;    {"private",        LNPClient::NPPrivate},
+; NOTE! According to GR-533-Core, this mustn't be set 
+;sccp.CalledPartyAddress.gt.np=
+
+; sccp.CalledPartyAddress.gt.enconding: string: Encoding type for Called Party Address GT
+; NOTE! According to GR-533-Core, this mustn't be set 
+; Allowed values: bcd
+;sccp.CalledPartyAddress.gt.encoding : integer GT encoding scheme
+
+; sccp.CalledPartyAddress.gt.tt: integer: Global Title translation type for Called Party Address
+; NOTE! If sccp.CalledPartyAddress.route is set to 'gt', and this is not set, will default to 11,
+; which, according to ATIS 1000112.2005 is Number Portability Translation Type
+;sccp.CalledPartyAddress.gt.tt=11
+
+; sccp.CallingPartyAddress.route: string: Routing Indicator for SCCP Calling Party Address
+; Values allowed : 
+; ssn - routing by SubSystem Number (SSN)
+;sccp.CallingPartyAddress.route=
+
+; sccp.CallingPartyAddress.ssn: bool/integer: Subsystem Number of the calling party
+; If set to boolean value,TCAP will complete the value if set to true
+;sccp.CallingPartyAddress.ssn=
+
+; sccp.CallingPartyAddress.pointcode: bool/integer: Pointcode of the calling party
+; If set to boolean value, SCCP will complete the value if set to true
+;sccp.CalledPartyAddress.pointcode=
+
+; sccp.MessageReturn: boolean / integer: True to return message on error
+;sccp.MessageReturn=
+
+
+[announcements]
+; This section allows configuration of messages to be played when the a network management request was received from the LNP database
+; application or the response to the query was an announcement
+
+; Out of Band announcement
+;outofband=tone/busy
+
+; Vacand Code announcement
+;vacantcode=tone/busy
+
+; Number Disconnected announcement
+;disconnected=tone/busy
+
+; ReorderBusy Announcement
+;reorderbusy=tone/busy
+
+; Busy Announcement
+;busy=tone/busy
+
+; No Circuit Announcement
+;nocircuit=tone/busy
+
+; Reorder Announcement
+;reorder=tone/busy

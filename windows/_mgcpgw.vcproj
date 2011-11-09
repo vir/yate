@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="Windows-1252"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="8.00"
+	Version="8,00"
 	Name="_mgcpgw"
 	ProjectGUID="{715210DA-373F-89D2-577E-8DE41AA610BC}"
 	RootNamespace="_mgcpgw"
@@ -49,8 +49,8 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				InlineFunctionExpansion="1"
-				AdditionalIncludeDirectories=".,..,..\libs\ymgcp"
-				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;_USRDLL"
+				AdditionalIncludeDirectories=".,..,..\libs\ymgcp,..\libs\ysdp"
+				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;_USRDLL;LIBYSDP_STATIC"
 				StringPooling="true"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
@@ -144,8 +144,8 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories=".,..,..\libs\ymgcp"
-				PreprocessorDefinitions="_DEBUG;WIN32;_WINDOWS;_USRDLL"
+				AdditionalIncludeDirectories=".,..,..\libs\ymgcp,..\libs\ysdp"
+				PreprocessorDefinitions="_DEBUG;WIN32;_WINDOWS;_USRDLL;LIBYSDP_STATIC"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"

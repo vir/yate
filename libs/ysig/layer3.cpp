@@ -77,7 +77,7 @@ bool SS7Layer3::initialize(const NamedList* config)
 	if (config)
 	    static_cast<String&>(params) = config->getValue(YSTRING("router"),params);
 	if (params.toBoolean(true))
-	    SS7Layer3::attach(YOBJECT(SS7Router,engine()->build("SS7Router",params,true)));
+	    SS7Layer3::attach(YOBJECT(SS7Router,engine()->build("SS7Router",params,true,false)));
     }
     return true;
 }

@@ -320,6 +320,9 @@ bool CallEndpoint::clearData(DataNode* node, const char* type)
 
 static const String s_disconnected("chan.disconnected");
 
+// Mutex used to lock disconnect parameters during access
+static Mutex s_paramMutex(true,"ChannelParams");
+
 Channel::Channel(Driver* driver, const char* id, bool outgoing)
     : CallEndpoint(id),
       m_parameters(""), m_driver(driver), m_outgoing(outgoing),
@@ -353,6 +356,11 @@ void* Channel::getObject(const String& name) const
     if (name == YSTRING("MessageNotifier"))
 	return static_cast<MessageNotifier*>(const_cast<Channel*>(this));
     return CallEndpoint::getObject(name);
+}
+
+Mutex& Channel::paramMutex()
+{
+    return s_paramMutex;
 }
 
 void Channel::init()
@@ -455,17 +463,21 @@ void Channel::disconnected(bool final, const char* reason)
 	return;
     // last chance to get reconnected to something
     Message* m = getDisconnect(reason);
+    s_paramMutex.lock();
     m_targetid.clear();
     m_parameters.clearParams();
+    s_paramMutex.unlock();
     Engine::enqueue(m);
 }
 
 void Channel::setDisconnect(const NamedList* params)
 {
     DDebug(this,DebugInfo,"setDisconnect(%p) [%p]",params,this);
+    s_paramMutex.lock();
     m_parameters.clearParams();
     if (params)
 	m_parameters.copyParams(*params);
+    s_paramMutex.unlock();
 }
 
 void Channel::endDisconnect(const Message& msg, bool handled)
@@ -488,7 +500,9 @@ void Channel::setId(const char* newId)
 Message* Channel::getDisconnect(const char* reason)
 {
     Message* msg = new Message(s_disconnected);
+    s_paramMutex.lock();
     msg->copyParams(m_parameters);
+    s_paramMutex.unlock();
     complete(*msg);
     if (reason)
 	msg->setParam("reason",reason);
@@ -536,8 +550,11 @@ void Channel::complete(Message& msg, bool minimal) const
     msg.setParam("id",id());
     if (m_driver)
 	msg.setParam("module",m_driver->name());
-    if (s_hangup == msg)
+    if (s_hangup == msg) {
+	s_paramMutex.lock();
 	msg.copyParams(parameters());
+	s_paramMutex.unlock();
+    }
 
     if (minimal)
 	return;

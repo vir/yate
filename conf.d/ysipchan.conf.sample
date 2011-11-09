@@ -117,6 +117,36 @@
 ; See SIPMessage::Flags and SIPMessage::complete() in the source for gory details
 ;flags=0
 
+; ssl_certificate_file: string: File containing client SSL certificate to present
+; This parameter is used for outgoing encrypted connections if a certificate
+;  is requested by the server during SSL negotiation
+; The file path is relative to configuration path
+; This parameter is applied on reload
+;ssl_certificate_file=
+
+; ssl_key_file: string: Optional file containing the key of the certificate
+;  set in ssl_certificate_file
+; The file path is relative to configuration path
+; The certificate file must contain the key if this parameter is empty
+; This parameter is applied on reload
+;ssl_key_file=
+
+; sip_req_trans_count: integer: The number of times to transmit a sip request
+;  when retransmission is required (e.g. on non reliable transports)
+; This parameter is applied on reload
+; Minimum allowed value is 2, maximum allowed value is 10
+; Defaults to 4 if missing, invalid or out of bounds
+;sip_req_trans_count=4
+
+; sip_rsp_trans_count: integer: The number of times to transmit a final response
+;  to a sip request when retransmission is required
+; Retransmission is required for all responses to INVITE requests on non reliable
+;  transports or 2xx responses over reliable transports
+; This parameter is applied on reload
+; Minimum allowed value is 2, maximum allowed value is 10
+; Defaults to 5 if missing, invalid or out of bounds
+;sip_rsp_trans_count=5
+
 ; printmsg: boolean: Print SIP messages to output
 ; This parameter is applied on reload
 ; Defaults to yes
@@ -236,6 +266,10 @@
 ; ignore_sdp_port: bool: Ignore SDP changes if only the port is different
 ; This allows preserving the local RTP session and port
 ;ignore_sdp_port=no
+
+; ignore_sdp_addr: bool: Ignore SDP changes if only the address is different
+; This allows preserving the local RTP session and port
+;ignore_sdp_addr=no
 
 
 ;[listener general]

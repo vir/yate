@@ -38,6 +38,7 @@ class ContactItemList;                   // Groups and contact items belonging t
 
 typedef QList<QTreeWidgetItem*> QtTreeItemList;
 typedef QPair<QTreeWidgetItem*,QString> QtTreeItemKey;
+typedef QPair<String,int> QtTokenDict; 
 
 /**
  * This class holds data about a tree widget container item
@@ -80,8 +81,9 @@ public:
      * @param id Item id
      * @param type Item type
      * @param text Optional text for item column 0
+     * @param storeExp Set it to true to (re)store item expanded state
      */
-    QtTreeItem(const char* id, int type = Type,	const char* text = 0);
+    QtTreeItem(const char* id, int type = Type,	const char* text = 0, bool storeExp = false);
 
     /**
      * Destructor
@@ -136,6 +138,11 @@ public:
      */
     inline const String& id() const
 	{ return toString(); }
+
+    /**
+     * Save/restore item expanded status
+     */
+    bool m_storeExp;
 };
 
 /**
@@ -164,6 +171,7 @@ class QtCustomTree : public QtTree
     Q_PROPERTY(QString _yate_itembackground READ itemBg WRITE setItemBg(QString))
     Q_PROPERTY(QString _yate_col_widths READ colWidths WRITE setColWidths(QString))
     Q_PROPERTY(QString _yate_sorting READ sorting WRITE setSorting(QString))
+    Q_PROPERTY(QString _yate_itemsexpstatus READ itemsExpStatus WRITE setItemsExpStatus(QString))
 public:
     /**
      * List item type enumeration
@@ -685,6 +693,18 @@ public:
      */
     void setSorting(QString s);
 
+    /**
+     * Retrieve items expanded status value
+     * @return Items expanded status value
+     */
+    QString itemsExpStatus();
+
+    /**
+     * Set items expanded status value
+     * param s Items expanded status value
+     */
+    void setItemsExpStatus(QString s);
+
 protected slots:
     /**
      * Handle item children actions
@@ -866,11 +886,27 @@ protected:
      */
     void applyItemStatistics(QtTreeItem& item);
 
+    /**
+     * Store (update) to or remove from item expanded status storage an item
+     * @param id Item id
+     * @param on Expanded status
+     * @param store True to store, false to remove
+     */
+    void setStoreExpStatus(const String& id, bool on, bool store = true);
+
+    /**
+     * Retrieve the expanded status of an item from storage
+     * @param id Item id
+     * @return 1 if expanded, 0 if collapsed, -1 if not found
+     */
+    int getStoreExpStatus(const String& id);
+
     bool m_hasCheckableCols;             // True if we have checkable columns
     QMenu* m_menu;                       // Tree context menu
     bool m_autoExpand;                   // Items are expanded when added
     int m_rowHeight;                     // Tree row height
     NamedList m_itemPropsType;           // Tree item type to item props translation
+    QList<QtTokenDict> m_expStatus;      // List of stored item IDs and expanded status
 };
 
 /**
@@ -1069,10 +1105,11 @@ public:
      * Create a group item
      * @param id Group id
      * @param name Group name
+     * @param expStat Expanded state (re)store indicator
      * @return Valid QtTreeItem pointer
      */
-    static QtTreeItem* createGroup(const String& id, const String& name) {
-	    QtTreeItem* g = new QtTreeItem(id,TypeGroup,name);
+    static inline QtTreeItem* createGroup(const String& id, const String& name, bool expStat) {
+	    QtTreeItem* g = new QtTreeItem(id,TypeGroup,name,expStat);
 	    g->addParam("name",name);
 	    return g;
 	}
@@ -1202,6 +1239,7 @@ private:
     bool m_flatList;                     // Flat list
     bool m_showOffline;                  // Show or hide offline contacts
     bool m_hideEmptyGroups;              // Show or hide empty groups
+    bool m_expStatusGrp;                 // Save/restore groups expanded status
     String m_noGroupText;                // Group text to show for contacts not belonging to any group
     QMap<QString,QString> m_statusOrder; // Status order (names are mapped to status icons)
     QMenu* m_menuContact;
@@ -1248,9 +1286,10 @@ public:
      * Retrieve a group. Create it if not found. Create contact list entry when a group is created
      * @param id Group id
      * @param text Group text
+     * @param expStat Expanded state (re)store indicator for created item
      * @return Valid groups index
      */
-    int getGroupIndex(const String& id, const String& text);
+    int getGroupIndex(const String& id, const String& text, bool expStat);
 
     QList<QTreeWidgetItem*> m_groups;
     QList<QtTreeItemList> m_contacts;

@@ -1008,7 +1008,6 @@ Engine::~Engine()
     assert(this == s_self);
     m_dispatcher.clear();
     m_libs.clear();
-    plugins.clear();
     s_mode = Stopped;
     s_self = 0;
 }
@@ -1112,6 +1111,7 @@ int Engine::run()
     install(new EngineHelp);
     loadPlugins();
     Debug(DebugAll,"Loaded %d plugins",plugins.count());
+    internalStatisticsStart();
     if (s_super_handle >= 0) {
 	install(new EngineSuperHandler);
 	if (s_restarts)
@@ -1241,12 +1241,22 @@ int Engine::run()
     ::signal(SIGQUIT,SIG_DFL);
 #endif
     delete this;
-    Debug(DebugAll,"Exiting with %d locked mutexes",Mutex::locks());
+    int mux = Mutex::locks();
+    unsigned int cnt = plugins.count();
+    plugins.clear();
+    if (mux || cnt)
+	Debug(DebugGoOn,"Exiting with %d locked mutexes and %u plugins loaded!",mux,cnt);
 #ifdef _WINDOWS
     ::WSACleanup();
 #endif
     setStatus(SERVICE_STOPPED);
     return s_haltcode;
+}
+
+void Engine::internalStatisticsStart()
+{
+    // This is here so runtime analyzers can start or reset statistics
+    //  after the cruft of module load + global objects initialization
 }
 
 Engine* Engine::self()

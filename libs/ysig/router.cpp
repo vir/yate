@@ -323,7 +323,7 @@ SS7Router::SS7Router(const NamedList& params)
     : SignallingComponent(params.safe("SS7Router"),&params),
       Mutex(true,"SS7Router"),
       m_changes(0), m_transfer(false), m_phase2(false), m_started(false),
-      m_restart(0), m_isolate(0),
+      m_restart(0), m_isolate(0), m_statsMutex(false,"SS7RouterStats"),
       m_trafficOk(0), m_trafficSent(0), m_routeTest(0), m_testRestricted(false),
       m_transferSilent(false), m_checkRoutes(false), m_autoAllowed(false),
       m_sendUnavail(true), m_sendProhibited(true),
@@ -777,13 +777,13 @@ int SS7Router::routeMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* net
 		break;
 	    }
 	}
-	lock();
+	m_statsMutex.lock();
 	m_txMsu++;
 	if (network)
 	    m_fwdMsu++;
 	if (cong)
 	    m_congestions++;
-	unlock();
+	m_statsMutex.unlock();
     }
     return slsTx;
 }
@@ -1185,7 +1185,7 @@ bool SS7Router::setRouteSpecificState(SS7PointCode::Type type, unsigned int pack
 {
     if (type == SS7PointCode::Other || (unsigned int)type > YSS7_PCTYPE_COUNT || !packedPC)
 	return false;
-    Lock lock(m_routeMutex);
+    Lock myLock(m_routeMutex);
     SS7Route* route = findRoute(type,packedPC);
     if (!route) {
 	Debug(this,DebugNote,"Route to %u advertised by %u not found",packedPC,srcPC);
@@ -1240,6 +1240,24 @@ bool SS7Router::setRouteSpecificState(SS7PointCode::Type type, unsigned int pack
 	DDebug(this,DebugInfo,"Adjacent node %u seen started by %u, sending TFPs",packedPC,srcPC);
 	notifyRoutes(SS7Route::Prohibited,packedPC);
     }
+    myLock.drop();
+    SS7PointCode pc(type);
+    if (!pc.unpack(type,packedPC))
+	return true;
+    lock();
+    ListIterator iter(m_layer4);
+    while (L4Pointer* p = static_cast<L4Pointer*>(iter.get())) {
+	if (p && *p) {
+	    RefPointer<SS7Layer4> l4 = static_cast<SS7Layer4*>(*p);
+	    if (!l4)
+		continue;
+	    unlock();
+	    l4->routeStatusChanged(type,pc,state);
+	    l4 = 0;
+	    lock();
+	}
+    }
+    unlock();
     return true;
 }
 
@@ -1795,6 +1813,8 @@ bool SS7Router::control(NamedList& params)
     m_autoAllowed = params.getBoolValue(YSTRING("autoallow"),m_autoAllowed);
     m_sendUnavail = params.getBoolValue(YSTRING("sendupu"),m_sendUnavail);
     m_sendProhibited = params.getBoolValue(YSTRING("sendtfp"),m_sendProhibited);
+    if (!m_transfer)
+	m_transferSilent = params.getBoolValue(YSTRING("transfersilent"),m_transferSilent);
     String err;
     switch (cmd) {
 	case SS7Router::Pause:
@@ -1930,6 +1950,14 @@ bool SS7Router::control(NamedList& params)
     if (err)
 	Debug(this,DebugWarn,"Control error: %s [%p]",err.c_str(),this);
     return false;
+}
+
+// Detach management. Call SignallingComponent::detach()
+void SS7Router::destroyed()
+{
+    if (m_mngmt)
+	detach(m_mngmt);
+    SS7Layer3::destroyed();
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

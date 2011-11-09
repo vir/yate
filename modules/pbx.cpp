@@ -47,6 +47,26 @@ public:
     virtual bool received(Message &msg);
 };
 
+// chan.attach handler used for detaching data nodes by message
+class AttachHandler : public MessageHandler
+{
+public:
+    AttachHandler(int prio = 100)
+	: MessageHandler("chan.attach",prio)
+	{ }
+    virtual bool received(Message &msg);
+};
+
+// chan.record handler used for detaching data nodes by message
+class RecordHandler : public MessageHandler
+{
+public:
+    RecordHandler(int prio = 100)
+	: MessageHandler("chan.record",prio)
+	{ }
+    virtual bool received(Message &msg);
+};
+
 class PbxModule : public Module
 {
 public:
@@ -159,6 +179,99 @@ bool ChanPickup::received(Message& msg)
 }
 
 
+// chan.attach handler for detaching data nodes by message
+bool AttachHandler::received(Message &msg)
+{
+    bool src = msg[YSTRING("source")] == "-";
+    bool cons = msg[YSTRING("consumer")] == "-";
+    bool ovr = msg[YSTRING("override")] == "-";
+    bool repl = msg[YSTRING("replace")] == "-";
+    if (!(src || cons || ovr || repl))
+	return false;
+
+    RefPointer<DataEndpoint> de = static_cast<DataEndpoint*>(msg.userObject(YSTRING("DataEndpoint")));
+    if (!de) {
+	CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userObject(YSTRING("CallEndpoint")));
+	if (ch) {
+	    DataEndpoint::commonMutex().lock();
+	    de = ch->getEndpoint(msg.getValue(YSTRING("media"),"audio"));
+	    DataEndpoint::commonMutex().unlock();
+	}
+	if (!de)
+	    return false;
+    }
+
+    if (src)
+	de->setSource();
+
+    if (cons)
+	de->setConsumer();
+
+    if (ovr || repl) {
+	RefPointer<DataSource> sPeer = 0;
+	DataEndpoint::commonMutex().lock();
+	RefPointer<DataConsumer> c = de->getConsumer();
+	if (repl && de->getPeer())
+	    sPeer = de->getPeer()->getSource();
+	RefPointer<DataEndpoint> de2 = repl ? de->getPeer() : 0;
+	DataEndpoint::commonMutex().unlock();
+	if (c) {
+	    if (repl) {
+		RefPointer<DataSource> s = c->getConnSource();
+		if (s)
+		    s->detach(c);
+		// we need to reattach the peer's source, if any
+		if (sPeer)
+		    DataTranslator::attachChain(sPeer,c);
+	    }
+	    if (ovr) {
+		RefPointer<DataSource> s = c->getOverSource();
+		if (s)
+		    s->detach(c);
+	    }
+	}
+    }
+
+    de = 0;
+
+    // Stop dispatching if we handled all requested
+    return msg.getBoolValue(YSTRING("single"));
+}
+
+
+// chan.record handler for detaching data nodes by message
+bool RecordHandler::received(Message &msg)
+{
+    bool call = msg[YSTRING("call")] == "-";
+    bool peer = msg[YSTRING("peer")] == "-";
+    if (!(call || peer))
+	return false;
+
+    RefPointer<DataEndpoint> de = static_cast<DataEndpoint*>(msg.userObject(YSTRING("DataEndpoint")));
+    if (!de) {
+	CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userObject(YSTRING("CallEndpoint")));
+	if (ch) {
+	    DataEndpoint::commonMutex().lock();
+	    de = ch->getEndpoint(msg.getValue(YSTRING("media"),"audio"));
+	    DataEndpoint::commonMutex().unlock();
+	}
+	if (!de)
+	    return false;
+    }
+
+    if (call)
+	de->setCallRecord();
+
+    if (peer)
+	de->setPeerRecord();
+
+    de = 0;
+
+    // Stop dispatching if we handled all requested
+    return msg.getBoolValue(YSTRING("single"),call && peer);
+}
+
+
 PbxModule::PbxModule()
     : Module("pbx","misc"), m_first(true)
 {
@@ -178,6 +291,8 @@ void PbxModule::initialize()
 	m_first = false;
 	Engine::install(new ConnHandler);
 	Engine::install(new ChanPickup);
+	Engine::install(new AttachHandler);
+	Engine::install(new RecordHandler);
     }
 }
 

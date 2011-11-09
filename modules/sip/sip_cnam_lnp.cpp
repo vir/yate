@@ -88,6 +88,7 @@ QuerySipChannel::~QuerySipChannel()
 void QuerySipChannel::disconnected(bool final, const char *reason)
 {
     DDebug(this,DebugAll,"QuerySipChannel::disconnected() '%s'",reason);
+    paramMutex().lock();
     switch (m_type) {
 	case CNAM:
 	    endCnam(parameters());
@@ -96,6 +97,7 @@ void QuerySipChannel::disconnected(bool final, const char *reason)
 	    endLnp(parameters());
 	    break;
     }
+    paramMutex().unlock();
 }
 
 void QuerySipChannel::endCnam(const NamedList& params)
@@ -157,7 +159,10 @@ void QuerySipChannel::endLnp(const NamedList& params)
 
 bool QuerySipDriver::msgPreroute(Message& msg)
 {
-    DDebug(this,DebugAll,"QuerySipDriver::msgPreroute()");
+    bool handle = msg.getBoolValue("querycnam_sip",true);
+    DDebug(this,DebugAll,"QuerySipDriver::msgPreroute(%s)",String::boolText(handle));
+    if (!handle)
+	return false;
     Lock mylock(this);
     String callto = s_cfg.getValue("cnam","callto");
     if (callto.null())
@@ -203,7 +208,10 @@ bool QuerySipDriver::msgPreroute(Message& msg)
 
 bool QuerySipDriver::msgRoute(Message& msg)
 {
-    DDebug(this,DebugAll,"QuerySipDriver::msgRoute()");
+    bool handle = msg.getBoolValue("querylnp_sip",true);
+    DDebug(this,DebugAll,"QuerySipDriver::msgRoute(%s)",String::boolText(handle));
+    if (!handle)
+	return false;
     Lock mylock(this);
     String callto = s_cfg.getValue("lnp","callto");
     if (callto.null())

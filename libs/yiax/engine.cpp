@@ -68,6 +68,7 @@ IAXEngine::IAXEngine(const char* iface, int port, u_int16_t transListCount, u_in
     m_showCallTokenFailures(false),
     m_printMsg(true),
     m_format(format),
+    m_formatVideo(0),
     m_capability(capab),
     m_mutexTrunk(true,"IAXEngine::Trunk"),
     m_trunkSendInterval(trunkSendInterval)
@@ -320,7 +321,8 @@ void IAXEngine::readSocket(SocketAddr& addr)
     }
 }
 
-bool IAXEngine::writeSocket(const void* buf, int len, const SocketAddr& addr, IAXFullFrame* frame)
+bool IAXEngine::writeSocket(const void* buf, int len, const SocketAddr& addr,
+    IAXFullFrame* frame, unsigned int* sent)
 {
     if (m_printMsg && frame && debugAt(DebugInfo)) {
 	String s;
@@ -338,12 +340,17 @@ bool IAXEngine::writeSocket(const void* buf, int len, const SocketAddr& addr, IA
 		tmp.c_str(),m_socket.error());
 	}
 #ifdef DEBUG
-	else
+	else {
+	    String tmp;
+	    Thread::errorString(tmp,m_socket.error());
 	    Debug(this,DebugMild,"Socket temporary unavailable: %s (%d)",
-		::strerror(m_socket.error()),m_socket.error());
+		tmp.c_str(),m_socket.error());
+	}
 #endif
 	return false;
     }
+    if (sent)
+	*sent = (unsigned int)len;
     return true;
 }
 
@@ -573,66 +580,58 @@ bool IAXEngine::checkCallToken(const SocketAddr& addr, IAXFullFrame& frame)
     return false;
 }
 
-bool IAXEngine::acceptFormatAndCapability(IAXTransaction* trans, unsigned int* caps)
+bool IAXEngine::acceptFormatAndCapability(IAXTransaction* trans, unsigned int* caps, int type)
 {
     if (!trans)
 	return false;
-    if (caps)
-	trans->m_capability &= (u_int32_t)*caps;
-    u_int32_t format = trans->format();
-    u_int32_t capability = m_capability & trans->capability();
-#ifdef XDEBUG
-    if (!trans->outgoing()) {
-	String rec;
-	IAXFormat::formatList(rec,m_capability);
-	Debug(this,DebugAll,"acceptFormatAndCapability. Local: Format: %u(%s). Capabilities: '%s'.",
-	    m_format,IAXFormat::audioText(m_format),rec.c_str());
-	IAXFormat::formatList(rec,trans->capability());
-	Debug(this,DebugAll,"acceptFormatAndCapability. Received: Format: %u(%s). Capabilities: '%s'.",
-	    format,IAXFormat::audioText(format),rec.c_str());
+    u_int32_t transCapsNonType = IAXFormat::clear(trans->m_capability,type);
+    IAXFormat* fmt = trans->getFormat(type);
+    if (!fmt) {
+	DDebug(this,DebugStub,"acceptFormatAndCapability() No media %s in transaction",
+	    IAXFormat::typeName(type));
+	trans->m_capability = transCapsNonType;
+	return false;
     }
-#endif
+    u_int32_t transCapsType = IAXFormat::mask(trans->m_capability,type);
+    u_int32_t capability = transCapsType & m_capability;
+    if (caps)
+	capability &= IAXFormat::mask(*caps,type);
+    trans->m_capability = transCapsNonType | capability;
+    XDebug(this,DebugAll,
+	"acceptFormatAndCapability trans(%u,%u) type=%s caps(trans/our/param/result)=%u/%u/%u/%u",
+	trans->localCallNo(),trans->remoteCallNo(),
+	fmt->typeName(),transCapsType,IAXFormat::mask(m_capability,type),
+	caps ? IAXFormat::mask(*caps,type) : 0,capability);
     // Valid capability ?
     if (!capability) {
-	trans->m_capability = 0;
-	trans->m_format = 0;
+	// Warn if we should have media
+	if (type == IAXFormat::Audio || 0 != (trans->outgoing() ? fmt->in() : fmt->out()))
+	    Debug(this,DebugNote,"Transaction(%u,%u) no common format(s) for media '%s' [%p]",
+		trans->localCallNo(),trans->remoteCallNo(),fmt->typeName(),trans);
+	// capability is 0, use it to set format
 	if (trans->outgoing())
-	    trans->m_formatIn = 0;
+	    fmt->set(&capability,&capability,0);
 	else
-	    trans->m_formatOut = 0;
-	Debug(this,DebugNote,"Transaction(%u,%u) without common media [%p]",
-	    trans->localCallNo(),trans->remoteCallNo(),trans);
+	    fmt->set(&capability,0,&capability);
 	return false;
     }
-    for (;;) {
-	// Received format is valid ?
-	if (0 != (format & capability) && IAXFormat::audioText(format))
-	    break;
-	// Local format is valid ?
-	format = m_format;
-	if (0 != (m_format & capability) && IAXFormat::audioText(format))
-	    break;
-	// No valid format: choose one from capability
-	format = 0;
-	u_int32_t i = 0;
-	for (; IAXFormat::audioData[i].value; i++)
-	    if (0 != (capability & IAXFormat::audioData[i].value))
-		break;
-	if (IAXFormat::audioData[i].value) {
-	    format = IAXFormat::audioData[i].value;
-	    break;
-	}
-	Debug(this,DebugNote,"Unable to choose a common format for transaction(%u,%u) [%p]",
-	    trans->localCallNo(),trans->remoteCallNo(),trans);
-	return false;
+    u_int32_t format = fmt->format();
+    // Received format is valid ?
+    if (0 == (format & capability)) {
+	format = (type == IAXFormat::Audio) ? m_format : 0;
+	format = IAXFormat::pickFormat(capability,format);
     }
-    DDebug(this,DebugAll,"acceptFormatAndCapability. Format %u: '%s'.",
-	format,IAXFormat::audioText(format));
-    trans->m_format = format;
-    trans->m_capability = capability;
-    trans->m_formatIn = format;
-    trans->m_formatOut = format;
-    return true;
+    if (format) {
+	fmt->set(&format,&format,&format);
+	Debug(this,DebugAll,"Transaction(%u,%u) set format %u (%s) for media '%s' [%p]",
+	    trans->localCallNo(),trans->remoteCallNo(),format,fmt->formatName(),
+	    fmt->typeName(),trans);
+    }
+    else
+	Debug(this,DebugNote,
+	    "Transaction(%u,%u) failed to choose a common format for media '%s' [%p]",
+	    trans->localCallNo(),trans->remoteCallNo(),fmt->typeName(),trans);
+    return format != 0;
 }
 
 void IAXEngine::defaultEventHandler(IAXEvent* event)

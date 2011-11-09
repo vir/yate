@@ -712,6 +712,14 @@ public:
 	}
 
     /**
+     * Check if the stream has valid pending data (received xml elements in queue or
+     *  pending events or pending xml elements that can still be sent).
+     * This method is thread safe
+     * @return True if the stream have pending data, false otherwise
+     */
+    bool haveData();
+
+    /**
      * Retrieve connection address(es), port and status
      * This method is not thread safe
      * @param addr The remote ip
@@ -722,6 +730,14 @@ public:
      */
     void connectAddr(String& addr, int& port, String& localip, int& stat,
 	ObjList& srvs) const;
+
+    /**
+     * Retrieve server host when connecting.
+     * This method is not thread safe
+     * @return Server host if set, remote jid's domain otherwise
+     */
+    inline const String& serverHost() const
+	{ return m_serverHost ? m_serverHost : m_remote.domain(); }
 
     /**
      * Set/reset RosterRequested flag
@@ -946,9 +962,10 @@ protected:
      * @param remote Remote party jabber id
      * @param name Optional stream name
      * @param params Optional stream parameters
+     * @param serverHost Optional server host to use instead of jid domain
      */
     JBStream(JBEngine* engine, Type t, const JabberID& local, const JabberID& remote,
-	const char* name = 0, const NamedList* params = 0);
+	const char* name = 0, const NamedList* params = 0, const char* serverHost = 0);
 
     /**
      * Close the stream. Release memory
@@ -1120,7 +1137,7 @@ protected:
      * Write data to socket. Terminate the stream on socket error
      * @param data Buffer to sent
      * @param len The number of bytes to send. Filled with actually sent bytes on exit
-     * @return True on success, false if stream termination was initiated
+     * @return True on success, false on failure
      */
     bool writeSocket(const void* data, unsigned int& len);
 
@@ -1186,6 +1203,7 @@ protected:
     String m_id;                         // Stream id
     JabberID m_local;                    // Local peer's jid
     JabberID m_remote;                   // Remote peer's jid
+    String m_serverHost;                 // Outgoing: optional server host (replaces remote domain when connecting)
     int m_flags;                         // Stream flags
     XMPPNamespace::Type m_xmlns;         // Stream namespace
     XMPPFeatureList m_features;          // Advertised features
@@ -1243,11 +1261,24 @@ private:
     bool compress(XmlElementOut* xml = 0);
     // Reset connect status data
     void resetConnectStatus();
+    // Postpone stream terminate until all parsed elements are processed
+    // Terminate now if allowed
+    // This method is thread safe
+    void postponeTerminate(int location, bool destroy, int error, const char* reason);
+    // Handle postponed termination. Return true if found
+    // This method is not thread safe
+    bool postponedTerminate();
+    // Reset postponed terminate data
+    inline void resetPostponedTerminate() {
+	    m_ppTerminateTimeout = 0;
+	    TelEngine::destruct(m_ppTerminate);
+	}
 
     enum {
 	SocketCanRead = 0x01,
 	SocketReading = 0x02,
-	SocketWriting = 0x10,
+	SocketCanWrite = 0x10,
+	SocketWriting = 0x20,
 	SocketWaitReset = 0x80,
     };
     inline void socketSetCanRead(bool ok) {
@@ -1263,6 +1294,13 @@ private:
 	    else
 		m_socketFlags &= ~SocketReading;
 	}
+    inline void socketSetCanWrite(bool ok) {
+	    Lock lock(m_socketMutex);
+	    if (ok)
+		m_socketFlags |= SocketCanWrite;
+	    else
+		m_socketFlags &= ~SocketCanWrite;
+	}
     inline void socketSetWriting(bool ok) {
 	    if (ok)
 		m_socketFlags |= SocketWriting;
@@ -1271,18 +1309,26 @@ private:
 	}
     inline bool socketCanRead() const {
 	    return m_socket && (m_socketFlags & SocketCanRead) &&
-		0 == (m_socketFlags & SocketWaitReset);
+		!socketWaitReset();
+	}
+    inline bool socketCanWrite() const {
+	    return m_socket && (m_socketFlags & SocketCanWrite) &&
+		!socketWaitReset();
 	}
     inline bool socketReading() const
 	{ return (m_socketFlags & SocketReading) != 0; }
     inline bool socketWriting() const
 	{ return (m_socketFlags & SocketWriting) != 0; }
+    inline bool socketWaitReset() const
+	{ return 0 != (m_socketFlags & SocketWaitReset); }
 
     JBEngine* m_engine;                  // The owner of this stream
     int m_type;                          // Stream type
     bool m_incoming;                     // Stream direction
     String m_name;                       // Local (internal) name
     JBEvent* m_terminateEvent;           // Pending terminate event
+    NamedList* m_ppTerminate;            // Postponed terminate parameters
+    u_int64_t m_ppTerminateTimeout;      // Postponed terminate timeout
     // Pending outgoing XML
     String m_outStreamXml;
     DataBlock m_outStreamXmlCompress;
@@ -1325,9 +1371,10 @@ public:
      * @param account Account (stream) name
      * @param params Stream parameters
      * @param name Optional stream name
+     * @param serverHost Optional server host to use instead of jid domain
      */
     JBClientStream(JBEngine* engine, const JabberID& jid, const String& account,
-	const NamedList& params, const char* name = 0);
+	const NamedList& params, const char* name = 0, const char* serverHost = 0);
 
     /**
      * Retrieve stream's account
@@ -2129,6 +2176,8 @@ protected:
     unsigned int m_pingInterval;         // Stream idle interval (no data received)
     unsigned int m_pingTimeout;          // Sent ping timeout
     unsigned int m_idleTimeout;          // Stream idle timeout (nothing sent or received)
+    unsigned int m_pptTimeoutC2s;        // Client streams postpone termination intervals
+    unsigned int m_pptTimeout;           // Non client streams postpone stream termination intervals
     unsigned int m_streamReadBuffer;     // Stream read buffer length
     unsigned int m_maxIncompleteXml;     // Maximum length of an incomplete xml
     bool m_hasClientTls;                 // True if TLS is available for outgoing streams

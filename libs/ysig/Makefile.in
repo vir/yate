@@ -7,11 +7,12 @@ CXX  := @CXX@ -Wall
 AR  := ar
 DEFS :=
 LIBTHR := @THREAD_LIB@
-INCLUDES := -I@top_srcdir@ -I../.. -I@srcdir@
+INCLUDES := -I@top_srcdir@ -I../.. -I@srcdir@ -I@top_srcdir@/libs/yasn
 CFLAGS := @CFLAGS@ @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= @LDFLAGS@
 SONAME_OPT := @SONAME_OPT@
 YATELIBS := -L../.. -lyate @LIBS@
+YASNLIB := -L../yasn -lyasn
 INCFILES := @top_srcdir@/yateclass.h @srcdir@/yatesig.h
 
 PROGS= yate-ss7test
@@ -24,6 +25,7 @@ OBJS = engine.o address.o sigcall.o sigtran.o \
 LIBD_VER:= libyatesig.so.@PACKAGE_VERSION@
 LIBD_DEV:= libyatesig.so
 LIBD:= ../../$(LIBD_VER) ../../$(LIBD_DEV)
+YASN:= ../yasn/libyasn.a
 DOCS = classes.png
 
 LOCALFLAGS =
@@ -65,8 +67,8 @@ clean:
 Makefile: @srcdir@/Makefile.in ../../config.status
 	cd ../.. && ./config.status
 
-../../$(LIBD_VER): $(OBJS)
-	$(LINK) -o $@ $(SONAME_OPT)$(LIBD_VER) $^ $(YATELIBS)
+../../$(LIBD_VER): $(OBJS) $(YASN)
+	$(LINK) -o $@ $(SONAME_OPT)$(LIBD_VER) $^ $(YASNLIB) $(YATELIBS)
 
 ../../$(LIBD_DEV): ../../$(LIBD_VER)
 	cd ../.. && ln -sf $(LIBD_VER) $(LIBD_DEV)
@@ -76,6 +78,9 @@ yate-%: @srcdir@/main-%.cpp $(MKDEPS) $(LIBS) ../../libyate.so $(INCFILES)
 
 $(LIBS): $(OBJS)
 	$(AR) rcs $@ $^
+
+$(YASN):
+	$(MAKE) -C ../yasn
 
 yate-ss7test: LOCALLIBS += -L. -lyatesig
 

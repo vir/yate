@@ -242,7 +242,7 @@ bool IAXIEList::createFromFrame(const IAXFullFrame* frame, bool incoming)
     m_list.clear();
     if (!frame)
 	return true;
-    if (frame->type() == IAXFrame::Voice)
+    if (frame->type() == IAXFrame::Voice || frame->type() == IAXFrame::Video)
 	return true;
     unsigned char* data = (unsigned char*)(((IAXFullFrame*)frame)->data().data());
     unsigned int len = ((IAXFullFrame*)frame)->data().length();
@@ -484,7 +484,7 @@ void IAXIEList::toString(String& dest, const char* indent)
 		if (ie->type() == IAXInfoElement::AUTHMETHODS)
 		    IAXAuthMethod::authList(tmp,val,',');
 		else
-		    IAXFormat::formatList(tmp,val,',');
+		    IAXFormat::formatList(tmp,val);
 		dest << " (" << tmp << ')';
 		}
 		break;
@@ -617,7 +617,7 @@ void IAXAuthMethod::authList(String& dest, u_int16_t auth, char sep)
 /*
  * IAXFormat
  */
-TokenDict IAXFormat::audioData[] = {
+const TokenDict IAXFormat::s_formats[] = {
     {"G.723.1",      G723_1},
     {"GSM",          GSM},
     {"G.711 mu-law", ULAW},
@@ -626,40 +626,79 @@ TokenDict IAXFormat::audioData[] = {
     {"IMA ADPCM",    ADPCM},
     {"SLIN",         SLIN},
     {"LPC10",        LPC10},
-    {"G729",         G729A},
+    {"G.729",        G729},
     {"SPEEX",        SPEEX},
     {"ILBC",         ILBC},
     {"G.726 AAL2",   G726AAL2},
     {"G.722",        G722},
     {"AMR",          AMR},
+    {"JPEG",         JPEG},
+    {"PNG",          PNG},
+    {"H261",         H261},
+    {"H263",         H263},
+    {"H263p",        H263p},
+    {"H264",         H264},
     {0,0}
 };
 
-TokenDict IAXFormat::videoData[] = {
-    {"JPEG", IAXFormat::JPEG},
-    {"PNG",  IAXFormat::PNG},
-    {"H261", IAXFormat::H261},
-    {"H263", IAXFormat::H263},
-    {"H263 plus", IAXFormat::H263P},
-    {"H264", IAXFormat::H264},
+const TokenDict IAXFormat::s_types[] = {
+    {"audio",   Audio},
+    {"video",   Video},
+    {"image",   Image},
     {0,0}
 };
 
-void IAXFormat::formatList(String& dest, u_int32_t formats, char sep)
+// Set format
+void IAXFormat::set(u_int32_t* fmt, u_int32_t* fmtIn, u_int32_t* fmtOut)
 {
-    String s(sep);
-    u_int32_t i;
-    for (i = 0; audioData[i].value; i++) {
-	if (0 == (audioData[i].value & formats))
-	    continue;
-	dest.append(audioData[i].token,s);
-    }
-    for (i = 0; videoData[i].value; i++) {
-	if (0 == (videoData[i].value & formats))
-	    continue;
-	dest.append(videoData[i].token,s);
-    }
+    if (fmt)
+	m_format = mask(*fmt,m_type);
+    if (fmtIn)
+	m_formatIn = mask(*fmtIn,m_type);
+    if (fmtOut)
+	m_formatOut = mask(*fmtOut,m_type);
 }
+
+void IAXFormat::formatList(String& dest, u_int32_t formats, const TokenDict* dict,
+    const char* sep)
+{
+    if (!dict)
+	dict = s_formats;
+    for (; dict->value; dict++)
+	if (0 != (dict->value & formats))
+	    dest.append(dict->token,sep);
+}
+
+// Pick a format from a list of capabilities
+u_int32_t IAXFormat::pickFormat(u_int32_t formats, u_int32_t format)
+{
+    if (0 != (format & formats))
+        return format;
+    if (!formats)
+	return 0;
+    format = 1;
+    for (unsigned int i = 0; i < (8 * sizeof(u_int32_t)); i++, format = format << 1)
+	if (0 != (format & formats))
+	    return format;
+    return 0;
+}
+
+// Encode a formats list
+u_int32_t IAXFormat::encode(const String& formats, const TokenDict* dict, char sep)
+{
+    if (!dict)
+	return 0;
+    u_int32_t mask = 0;
+    ObjList* list = formats.split(',',false);
+    for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
+	int fmt = lookup(o->get()->toString(),dict);
+	if (fmt > 0)
+	    mask |= fmt;
+    }
+    TelEngine::destruct(list);
+    return mask;
+}
+
 
 /*
 * IAXControl
@@ -723,9 +762,9 @@ TokenDict IAXFrame::s_types[] = {
 	};
 
 IAXFrame::IAXFrame(Type type, u_int16_t sCallNo, u_int32_t tStamp, bool retrans,
-		   const unsigned char* buf, unsigned int len)
+		   const unsigned char* buf, unsigned int len, bool mark)
     : m_data((char*)buf,len,true), m_retrans(retrans), m_type(type),
-      m_sCallNo(sCallNo), m_tStamp(tStamp)
+      m_sCallNo(sCallNo), m_tStamp(tStamp), m_mark(mark)
 {
 //    XDebug(DebugAll,"IAXFrame::IAXFrame(%u) [%p]",type,this);
 }
@@ -751,9 +790,17 @@ IAXFrame* IAXFrame::parse(const unsigned char* buf, unsigned int len, IAXEngine*
 	    retrans = true;
 	    dcn &= 0x7fff;
 	}
-	u_int32_t sc = IAXFrame::unpackSubclass(buf[11]);
+	u_int32_t sc = 0;
+	bool mark = false;
+	if (buf[10] != IAXFrame::Video)
+	    sc = IAXFrame::unpackSubclass(buf[11]);
+	else {
+	    mark = 0 != (buf[11] & 0x40);
+	    // Clear the mark flag
+	    sc = IAXFrame::unpackSubclass(buf[11] & 0xbf);
+	}
 	u_int32_t ts = (buf[4] << 24) | (buf[5] << 16) | (buf[6] << 8) | buf[7];
-	return new IAXFullFrame((IAXFrame::Type)buf[10],sc,scn,dcn,buf[8],buf[9],ts,retrans,buf+12,len-12);
+	return new IAXFullFrame((IAXFrame::Type)buf[10],sc,scn,dcn,buf[8],buf[9],ts,retrans,buf+12,len-12,mark);
     }
     // Meta frame ?
     if (scn == 0) {
@@ -761,13 +808,10 @@ IAXFrame* IAXFrame::parse(const unsigned char* buf, unsigned int len, IAXEngine*
 	    // Meta video
 	    if (len < 6)
 		return 0;
-	    scn = (buf[4] << 8) | buf[5];
-	    bool retrans = false;
-	    if (scn & 0x8000) {
-		retrans = true;
-		scn &= 0x7fff;
-	    }
-	    return new IAXFrame(IAXFrame::Video,dcn & 0x7fff,scn,retrans,buf+6,len-6);
+	    // Timestamp: lowest 15 bits of transmiter timestamp
+	    scn = ((buf[4] & 0x7f) << 8) | buf[5];
+	    bool mark = (0 != (buf[4] & 0x80));
+	    return new IAXFrame(IAXFrame::Video,dcn & 0x7fff,scn & 0x7fff,false,buf+6,len-6,mark);
 	}
 	// Meta trunk frame - we need to push chunks into the engine
 	if (!(engine && addr))
@@ -828,6 +872,30 @@ IAXFrame* IAXFrame::parse(const unsigned char* buf, unsigned int len, IAXEngine*
     return new IAXFrame(IAXFrame::Voice,scn,dcn,false,buf+4,len-4);
 }
 
+// Build a miniframe buffer
+void IAXFrame::buildMiniFrame(DataBlock& dest, u_int16_t sCallNo, u_int32_t tStamp,
+    void* data, unsigned int len)
+{
+    unsigned char header[4] = {sCallNo >> 8,sCallNo & 0xff,tStamp >> 8,tStamp & 0xff};
+    dest.assign(header,4);
+    dest.append(data,len);
+}
+
+// Build a video meta frame buffer
+void IAXFrame::buildVideoMetaFrame(DataBlock& dest, u_int16_t sCallNo, u_int32_t tStamp,
+    bool mark, void* data, unsigned int len)
+{
+    unsigned char header[6] = {0,0};
+    header[2] = 0x80 | ((sCallNo >> 8) & 0x7f);
+    header[3] = (unsigned char)sCallNo;
+    header[4] = (tStamp >> 8) & 0x7f;
+    if (mark)
+	header[4] |= 0x80;
+    header[5] = tStamp;
+    dest.assign(header,6);
+    dest.append(data,len);
+}
+
 u_int8_t IAXFrame::packSubclass(u_int32_t value)
 {
     if (value < 0x80)
@@ -835,8 +903,8 @@ u_int8_t IAXFrame::packSubclass(u_int32_t value)
     if (value == 0x80)
 	return 0x87;
     if ((value > 0x9f) && (value <= 0xff)) {
-	DDebug(DebugMild,"IAXFrame nonstandard pack %u",value);
-	return (u_int8_t)value;
+	Debug(DebugMild,"IAXFrame nonstandard pack %u",value);
+	return 0;
     }
     // No need to start from zero, we already know it's >= 2^8
     u_int32_t v = 0x100;
@@ -845,7 +913,7 @@ u_int8_t IAXFrame::packSubclass(u_int32_t value)
 	    return i | 0x80;
 	v <<= 1;
     }
-    Debug(DebugGoOn,"IAXFrame could not pack subclass %u (0x%08x)",value,value);
+    Debug(DebugGoOn,"IAXFrame could not pack subclass %u (0x%x)",value,value);
     return 0;
 }
 
@@ -853,10 +921,10 @@ u_int32_t IAXFrame::unpackSubclass(u_int8_t value)
 {
     if (value > 0x9f) {
 	DDebug(DebugMild,"IAXFrame nonstandard unpack %u",value);
-	return value;
+	return 0;
     }
     if (value & 0x80)
-	return 1 << value & 0x7f;
+	return 1 << (value & 0x7f);
     return value;
 }
 
@@ -890,25 +958,27 @@ TokenDict IAXFullFrame::s_controlTypes[] = {
 IAXFullFrame::IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_int16_t dCallNo,
 	unsigned char oSeqNo, unsigned char iSeqNo,
 	u_int32_t tStamp, bool retrans,
-	const unsigned char* buf, unsigned int len)
-    : IAXFrame(type,sCallNo,tStamp,retrans,buf,len),
+	const unsigned char* buf, unsigned int len, bool mark)
+    : IAXFrame(type,sCallNo,tStamp,retrans,buf,len,mark),
       m_dCallNo(dCallNo), m_oSeqNo(oSeqNo), m_iSeqNo(iSeqNo), m_subclass(subclass),
       m_ieList(0)
 {
-//    XDebug(DebugAll,"IAXFullFrame::IAXFullFrame(%u,%u) [%p]",
-//	type,subclass,this);
+    XDebug(DebugAll,
+	"IAXFullFrame() incoming type=%u subclass=%u callno=(%u,%u) seq=(%u,%u) ts=%u retrans=%u [%p]",
+	type,subclass,sCallNo,dCallNo,oSeqNo,iSeqNo,tStamp,retrans,this);
 }
 
 IAXFullFrame::IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_int16_t dCallNo,
 	unsigned char oSeqNo, unsigned char iSeqNo,
 	u_int32_t tStamp,
-	const unsigned char* buf, unsigned int len)
-    : IAXFrame(type,sCallNo,tStamp,false,0,0),
+	const unsigned char* buf, unsigned int len, bool mark)
+    : IAXFrame(type,sCallNo,tStamp,false,0,0,mark),
       m_dCallNo(dCallNo), m_oSeqNo(oSeqNo), m_iSeqNo(iSeqNo), m_subclass(subclass),
       m_ieList(0)
 {
-//    XDebug(DebugAll,"IAXFullFrame::IAXFullFrame(%u,%u) [%p]",
-//	type,subclass,this);
+    XDebug(DebugAll,
+	"IAXFullFrame() outgoing type=%u subclass=%u callno=(%u,%u) seq=(%u,%u) ts=%u [%p]",
+	type,subclass,sCallNo,dCallNo,oSeqNo,iSeqNo,tStamp,this);
     setDataHeader();
     if (buf)
 	m_data.append((void*)buf,(unsigned int)len);
@@ -917,13 +987,14 @@ IAXFullFrame::IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_i
 // Constructor. Constructs an outgoing full frame
 IAXFullFrame::IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_int16_t dCallNo,
 		 unsigned char oSeqNo, unsigned char iSeqNo,
-		 u_int32_t tStamp, IAXIEList* ieList, u_int16_t maxlen)
-    : IAXFrame(type,sCallNo,tStamp,false,0,0),
+		 u_int32_t tStamp, IAXIEList* ieList, u_int16_t maxlen, bool mark)
+    : IAXFrame(type,sCallNo,tStamp,false,0,0,mark),
       m_dCallNo(dCallNo), m_oSeqNo(oSeqNo), m_iSeqNo(iSeqNo), m_subclass(subclass),
       m_ieList(ieList)
 {
-//    XDebug(DebugAll,"IAXFullFrame::IAXFullFrame(%u,%u) [%p]",
-//	type,subclass,this);
+    XDebug(DebugAll,
+	"IAXFullFrame() outgoing type=%u subclass=%u callno=(%u,%u) seq=(%u,%u) ts=%u [%p]",
+	type,subclass,sCallNo,dCallNo,oSeqNo,iSeqNo,tStamp,this);
     updateBuffer(maxlen);
 }
 
@@ -931,33 +1002,29 @@ void IAXFullFrame::toString(String& dest, const SocketAddr& local,
 	const SocketAddr& remote, bool incoming)
 {
 #define STARTLINE(indent) "\r\n" << indent
-#define TMP_TEXT (tmp ? tmp : unk)
     const char* enclose = "\r\n-----";
-    const char* unk = "???";
-    const char* tmp = 0;
     dest << enclose;
     String stmp;
     setStringFromInteger(stmp,type(),1);
-    tmp = typeText(type());
-    dest << STARTLINE("") << TMP_TEXT << " (" << stmp << ")";
+    dest << STARTLINE("") << typeText(type()) << " (" << stmp << ")";
+    String extra;
     // Subclass
     String subc;
     switch (type()) {
 	case IAXFrame::IAX:
 	case IAXFrame::Control:
-	    tmp = (type() == IAXFrame::IAX ? IAXControl::typeText(subclass()) :
+	    subc = (type() == IAXFrame::IAX ? IAXControl::typeText(subclass()) :
 		controlTypeText(subclass()));
-	    subc = TMP_TEXT;
 	    break;
 	case IAXFrame::DTMF:
 	    subc << (char)subclass();
 	    break;
-	case IAXFrame::Voice:
 	case IAXFrame::Video:
+	    extra << "Mark: " << String::boolText(mark());
+	    // fallthrough
+	case IAXFrame::Voice:
 	case IAXFrame::Image:
-	    tmp = (type() == IAXFrame::Voice ? IAXFormat::audioText(subclass()) :
-		IAXFormat::videoText(subclass()));
-	    subc = TMP_TEXT;
+	    IAXFormat::formatList(subc,subclass());
 	    break;
 	case IAXFrame::Null:
 	    subc = "Subclass: ";
@@ -972,10 +1039,10 @@ void IAXFullFrame::toString(String& dest, const SocketAddr& local,
 	    subc << (unsigned int)(subclass()) << " -dBov";
 	    break;
 	default:
-	    subc = unk;
+	    ;
     }
     setStringFromInteger(stmp,subclass(),4);
-    dest << " - " << subc << " (" << stmp << ")";
+    dest << " - " << (subc ? subc.c_str() : "???") << " (" << stmp << ")";
     // Addresses
     if (incoming)
 	dest << STARTLINE("  ") << "Incoming from ";
@@ -999,6 +1066,8 @@ void IAXFullFrame::toString(String& dest, const SocketAddr& local,
     dest << ". Timestamp: " << (unsigned int)(timeStamp());
     dest << ". Retrans: " << String::boolText(retrans());
     dest << ". Sequence numbers: Out: " << oSeqNo() << " In: " << iSeqNo();
+    if (extra)
+	dest << STARTLINE("  ") << extra;
     // IEs
     updateIEList(incoming);
     if (!m_ieList->empty()) {
@@ -1014,7 +1083,6 @@ void IAXFullFrame::toString(String& dest, const SocketAddr& local,
 	    dest << "No Information Element(s)";
     }
     dest << enclose;
-#undef TMP_TEXT
 #undef STARTLINE
 }
 
@@ -1057,8 +1125,7 @@ IAXIEList* IAXFullFrame::removeIEList(bool delObj)
 
 IAXFullFrame::~IAXFullFrame()
 {
-//    XDebug(DebugAll,"IAXFullFrame::~IAXFullFrame(%u,%u) [%p]",
-//	type(),m_subclass,this);
+    XDebug(DebugAll,"IAXFullFrame::~IAXFullFrame(%u,%u) [%p]",type(),m_subclass,this);
 }
 
 IAXFullFrame* IAXFullFrame::fullFrame()
@@ -1095,6 +1162,8 @@ void IAXFullFrame::setDataHeader()
     header[10] = type();
     // Subclass
     header[11] = packSubclass(m_subclass);
+    if (mark())
+	header[11] |= 0x40;
     // Set data
     m_data.assign(header,sizeof(header));
 }

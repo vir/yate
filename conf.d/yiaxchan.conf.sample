@@ -54,6 +54,29 @@
 ; Defaults to yes
 ;printmsg=yes
 
+
+[registrar]
+; Controls the behaviour when acting as registrar
+
+; expires_min: int: Minimum allowed expiration time in seconds
+; This parameter is applied on reload
+; Minimum allowed value is 1
+; Defaults to 60 if missing
+;expires_min=60
+
+; expires_max: int: Value used to limit the expiration time to something sane
+; This parameter is applied on reload
+; Minimum allowed value is the value set in expires_min
+; Defaults to 3600 if missing
+;expires_max=3600
+
+; expires_def: int: Default expiration time if not present in register requests
+; This parameter is applied on reload
+; The value is checked to be between expires_min and expires_max
+; Defaults to 60 if missing
+;expires_def=60
+
+
 [formats]
 ; This section allows to individually enable or disable the codecs
 

@@ -1082,20 +1082,26 @@ bool WaveFileDriver::msgExecute(Message& msg, String& dest)
 	}
     }
     Message m("call.route");
-    m.addParam("module",name());
-    m.addParam("cdrtrack",String::boolText(false));
-    String callto(msg.getValue("direct"));
+    m.copyParams(msg,msg[YSTRING("copyparams")]);
+    m.clearParam(YSTRING("callto"));
+    m.clearParam(YSTRING("id"));
+    m.setParam("module",name());
+    m.setParam("cdrtrack",String::boolText(false));
+    m.copyParam(msg,YSTRING("called"));
+    m.copyParam(msg,YSTRING("caller"));
+    m.copyParam(msg,YSTRING("callername"));
+    String callto(msg.getValue(YSTRING("direct")));
     if (callto.null()) {
-	const char *targ = msg.getValue("target");
+	const char *targ = msg.getValue(YSTRING("target"));
+	if (!targ)
+	    targ = msg.getValue(YSTRING("called"));
 	if (!targ) {
 	    Debug(DebugWarn,"Wave outgoing call with no target!");
 	    return false;
 	}
-	callto = msg.getValue("caller");
-	if (callto.null())
-	    callto << prefix() << dest;
-	m.addParam("called",targ);
-	m.addParam("caller",callto);
+	m.setParam("called",targ);
+	if (!m.getValue(YSTRING("caller")))
+	    m.setParam("caller",prefix() + dest);
 	if (!Engine::dispatch(m)) {
 	    Debug(DebugWarn,"Wave outgoing call but no route!");
 	    return false;
@@ -1104,7 +1110,7 @@ bool WaveFileDriver::msgExecute(Message& msg, String& dest)
 	m.retValue().clear();
     }
     m = "call.execute";
-    m.addParam("callto",callto);
+    m.setParam("callto",callto);
     WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen,msg.getBoolValue("autorepeat"),msg.getValue("format"));
     c->initChan();
     if (meth)
@@ -1115,6 +1121,7 @@ bool WaveFileDriver::msgExecute(Message& msg, String& dest)
     m.userData(c);
     if (Engine::dispatch(m)) {
 	msg.setParam("id",c->id());
+	msg.copyParam(m,YSTRING("peerid"));
 	c->deref();
 	return true;
     }

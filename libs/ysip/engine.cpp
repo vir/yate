@@ -169,7 +169,8 @@ SIPEvent::~SIPEvent()
 
 SIPEngine::SIPEngine(const char* userAgent)
     : Mutex(true,"SIPEngine"),
-      m_t1(500000), m_t4(5000000), m_maxForwards(70),
+      m_t1(500000), m_t4(5000000), m_reqTransCount(5), m_rspTransCount(6),
+      m_maxForwards(70),
       m_cseq(0), m_flags(0), m_lazyTrying(false),
       m_userAgent(userAgent), m_nc(0), m_nonce_time(0),
       m_nonce_mutex(false,"SIPEngine::nonce")

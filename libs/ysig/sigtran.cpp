@@ -863,8 +863,8 @@ SS7M2PA::SS7M2PA(const NamedList& params)
       m_seqNr(0xffffff), m_needToAck(0xffffff), m_lastAck(0xffffff), m_maxQueueSize(MAX_UNACK),
       m_localStatus(OutOfService), m_state(OutOfService),
       m_remoteStatus(OutOfService), m_transportState(Idle), m_mutex(true,"SS7M2PA"), m_t1(0),
-      m_t2(0), m_t3(0), m_t4(0), m_ackTimer(0), m_confTimer(0), m_oosTimer(0),
-      m_autostart(false), m_dumpMsg(false)
+      m_t2(0), m_t3(0), m_t4(0), m_ackTimer(0), m_confTimer(0), m_oosTimer(0),m_waitOosTimer(0),
+      m_autostart(false), m_sequenced(false), m_dumpMsg(false)
 
 {
     // Alignment ready timer ~45s
@@ -881,6 +881,8 @@ SS7M2PA::SS7M2PA(const NamedList& params)
     m_confTimer.interval(params,"conf_timer",50,400,false);
     // Out of service timer
     m_oosTimer.interval(params,"oos_timer",3000,5000,false);
+    m_waitOosTimer.interval(params,"ack_timer",500,1000,false);
+    m_sequenced = params.getBoolValue(YSTRING("sequenced"),false);
     // Maximum unacknowledged messages, max_unack+1 will force an ACK
     m_maxUnack = params.getIntValue(YSTRING("max_unack"),4);
     if (m_maxUnack > 10)
@@ -933,6 +935,8 @@ bool SS7M2PA::initialize(const NamedList* config)
 	    SIGTRAN::attach(tr);
 	    if (!tr->initialize(trConfig))
 		SIGTRAN::attach(0);
+	    m_sequenced = config->getBoolValue(YSTRING("sequenced"),transport() ? 
+		transport()->reliable() : false);
 	}
     }
     return transport() && control(Resume,const_cast<NamedList*>(config));
@@ -988,7 +992,7 @@ bool SS7M2PA::processMSG(unsigned char msgVersion, unsigned char msgClass,
     if (!data.length())
 	return true;
     if (msgType == LinkStatus)
-	return processLinkStatus(data,streamId);
+	return m_sequenced ? processSLinkStatus(data,streamId) : processLinkStatus(data,streamId);
 #ifdef DEBUG
     if (streamId != 1)
 	Debug(this,DebugNote,"Received data message on Link status stream");
@@ -1077,11 +1081,11 @@ void SS7M2PA::timerTick(const Time& when)
 {
     SS7Layer2::timerTick(when);
     Lock lock(m_mutex);
-    if (m_confTimer.started() && m_confTimer.timeout(when.msec())) {
+    if (m_confTimer.timeout(when.msec())) {
 	sendAck(); // Acknowledge last received message before endpoint drops down the link
 	m_confTimer.stop();
     }
-    if (m_ackTimer.started() && m_ackTimer.timeout(when.msec())) {
+    if (m_ackTimer.timeout(when.msec())) {
 	m_ackTimer.stop();
 	if (!transport() || transport()->reliable()) {
 	    lock.drop();
@@ -1089,7 +1093,12 @@ void SS7M2PA::timerTick(const Time& when)
 	} else
 	    retransData();
     }
-    if (m_oosTimer.started() && m_oosTimer.timeout(when.msec())) {
+    if (m_waitOosTimer.timeout(when.msec())) {
+	m_waitOosTimer.stop();
+	setLocalStatus(OutOfService);
+	transmitLS();
+    }
+    if (m_oosTimer.timeout(when.msec())) {
 	m_oosTimer.stop();
 	if (m_transportState == Established)
 	    abortAlignment("Out of service timeout");
@@ -1097,14 +1106,14 @@ void SS7M2PA::timerTick(const Time& when)
 	    m_oosTimer.start();
 	return;
     }
-    if (m_t2.started() && m_t2.timeout(when.msec())) {
+    if (m_t2.timeout(when.msec())) {
 	abortAlignment("T2 timeout");
 	setLocalStatus(Alignment);
 	transmitLS();
 	m_t2.start();
 	return;
     }
-    if (m_t3.started() && m_t3.timeout(when.msec())) {
+    if (m_t3.timeout(when.msec())) {
 	m_t3.stop();
 	abortAlignment("T3 timeout");
 	return;
@@ -1121,7 +1130,7 @@ void SS7M2PA::timerTick(const Time& when)
 	if ((when & 0x3f) == 0)
 	    transmitLS();
     }
-    if (m_t1.started() && m_t1.timeout(when.msec())) {
+    if (m_t1.timeout(when.msec())) {
 	m_t1.stop();
 	abortAlignment("T1 timeout");
     }
@@ -1278,7 +1287,8 @@ void SS7M2PA::startAlignment(bool emergency)
 {
     setLocalStatus(OutOfService);
     transmitLS();
-    setLocalStatus(Alignment);
+    if (!m_sequenced)
+	setLocalStatus(Alignment);
     m_oosTimer.start();
     SS7Layer2::notify();
 }
@@ -1327,9 +1337,11 @@ void SS7M2PA::abortAlignment(const String& info)
     m_t3.stop();
     m_t4.stop();
     m_t1.stop();
-    if (m_state == ProvingNormal || m_state == ProvingEmergency)
+    if (m_state == ProvingNormal || m_state == ProvingEmergency) {
 	startAlignment();
-    else
+	if (m_sequenced)
+	    m_waitOosTimer.start();
+    } else
 	SS7Layer2::notify();
 }
 
@@ -1421,6 +1433,111 @@ bool SS7M2PA::processLinkStatus(DataBlock& data,int streamId)
 		    startAlignment();
 		else
 		    abortAlignment("Recv remote OOS");
+	    }
+	    setRemoteStatus(status);
+	    break;
+	default:
+	    Debug(this,DebugNote,"Received unknown link status message %d",status);
+	    return false;
+    }
+    return true;
+}
+
+bool SS7M2PA::processSLinkStatus(DataBlock& data,int streamId)
+{
+    if (data.length() < 4)
+	return false;
+    u_int32_t status = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+    if (m_remoteStatus == status && status != OutOfService)
+	return true;
+    if (m_waitOosTimer.started())
+	return true;
+    Debug(this,DebugAll,"Received link status: %s, local status : %s, requested status %s",
+	lookup(status,s_state),lookup(m_localStatus,s_state),lookup(m_state,s_state));
+    switch (status) {
+	case Alignment:
+	    m_oosTimer.stop();
+	    if (m_localStatus == Alignment && m_t2.started()) {
+		m_t2.stop();
+		if (m_state == ProvingNormal || m_state == ProvingEmergency) {
+		    setLocalStatus(m_state);
+		    transmitLS();
+		    m_t3.start();
+		}
+	    } else if (m_localStatus == OutOfService) {
+		setLocalStatus(Alignment);
+		transmitLS();
+		m_t3.start();
+	    } else
+		abortAlignment("Out of order alignment message");
+	    setRemoteStatus(status);
+	    break;
+	case ProvingNormal:
+	case ProvingEmergency:
+	    if (m_localStatus == Alignment && m_t3.started()) {
+		m_t3.stop();
+		setLocalStatus(status);
+		transmitLS();
+		if (status == ProvingEmergency || m_state == ProvingEmergency)
+		    m_t4.fire(Time::msecNow() + (m_t4.interval() / 16));
+		else
+		    m_t4.start();
+	    } else if (m_localStatus == ProvingNormal || m_localStatus == ProvingEmergency) {
+		m_t3.stop();
+		if (status == ProvingEmergency || m_state == ProvingEmergency)
+		    m_t4.fire(Time::msecNow() + (m_t4.interval() / 16));
+		else
+		    m_t4.start();
+	    } else
+		abortAlignment("Out of order proving message");
+	    setRemoteStatus(status);
+	    break;
+	case Ready:
+	    if (m_localStatus == ProvingNormal || m_localStatus == ProvingEmergency) {
+		setLocalStatus(Ready);
+		transmitLS();
+	    } else if (m_localStatus != Ready) {
+		abortAlignment("Out of order Ready message");
+		return true;
+	    }
+	    setRemoteStatus(status);
+	    m_lastSeqRx = -1;
+	    SS7Layer2::notify();
+	    m_oosTimer.stop();
+	    m_t3.stop();
+	    m_t4.stop();
+	    m_t1.stop();
+	    break;
+	case ProcessorRecovered:
+	    transmitLS();
+	    setRemoteStatus(status);
+	    break;
+	case BusyEnded:
+	    setRemoteStatus(Ready);
+	    SS7Layer2::notify();
+	    break;
+	case ProcessorOutage:
+	case Busy:
+	    setRemoteStatus(status);
+	    SS7Layer2::notify();
+	    break;
+	case OutOfService:
+	    if (!(m_state == ProvingNormal || m_state == ProvingEmergency)) {
+		abortAlignment("Requested Pause");
+		setRemoteStatus(status);
+		return true;
+	    }
+	    if (m_localStatus == OutOfService) {
+		m_oosTimer.stop();
+		setLocalStatus(Alignment);
+		transmitLS();
+		if (!m_t2.started())
+		    m_t2.start();
+	    } else if (m_localStatus == Alignment)
+		transmitLS();
+	    else {
+		abortAlignment("Remote OOS");
+		m_waitOosTimer.fire(Time::msecNow() + (m_waitOosTimer.interval() / 2));
 	    }
 	    setRemoteStatus(status);
 	    break;

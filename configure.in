@@ -69,6 +69,8 @@ if [[ -n "`echo a | sed 's/a\|b//'`" ]]; then
 fi
 AC_MSG_RESULT([$csed])
 
+AC_C_BIGENDIAN([CFLAGS="$CFLAGS -DBIGENDIAN"])
+
 # Check if gcc style printf argument check is supported
 HAVE_GCC_FORMAT_CHECK=""
 AC_MSG_CHECKING([for gcc printf format typechecks])
@@ -289,6 +291,29 @@ esac
 AC_MSG_RESULT([$want_inline])
 AC_SUBST(INLINE_FLAGS)
 
+# Check for atomic integer operations
+ATOMIC_OPS=""
+AC_ARG_ENABLE(atomics,AC_HELP_STRING([--enable-atomics],[Enable atomic integer operations (default: yes)]),want_atomics=$enableval,want_atomics=yes)
+if [[ "x$want_atomics" != "xno" ]]; then
+AC_MSG_CHECKING([whether to use atomic integer operations])
+AC_LANG_SAVE
+AC_LANG_C
+SAVE_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS -Wall -Werror"
+AC_TRY_LINK([],[
+int i = 0;
+int j = __sync_add_and_fetch(&i,1);
+return __sync_fetch_and_sub(&j,1);
+],
+ATOMIC_OPS="-DATOMIC_OPS",
+want_atomics="no (missing -march ?)"
+)
+CFLAGS="$SAVE_CFLAGS"
+AC_LANG_RESTORE
+AC_MSG_RESULT([$want_atomics])
+fi
+AC_SUBST(ATOMIC_OPS)
+
 FDSIZE_HACK=""
 AC_ARG_WITH(fdsize,AC_HELP_STRING([--with-fdsize=NNNN],[set FD_SIZE to NNNN (default 8192)]),[ac_cv_use_fdsize=$withval],[ac_cv_use_fdsize=8192])
 if [[ "x$ac_cv_use_fdsize" != "xno" ]]; then
@@ -342,6 +367,27 @@ AC_TRY_COMPILE([#include <sys/types.h>
 AC_MSG_RESULT([$sctp_connectx_new])
 if [[ "x$sctp_connectx_new" = "xyes" ]]; then
 SCTP_FLAGS="$SCTP_FLAGS -DHAVE_SCTP_CONNECTX_4"
+fi
+sctp_sack_info=no
+AC_MSG_CHECKING([whether sctp_sack_info struct is present])
+AC_TRY_COMPILE([#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/sctp.h>],[struct sctp_sack_info assoc_value;],[sctp_sack_info=yes])
+AC_MSG_RESULT([$sctp_sack_info])
+if [[ "x$sctp_sack_info" = "xyes" ]]; then
+SCTP_FLAGS="$SCTP_FLAGS -DHAVE_SACK_INFO_STRUCT"
+else
+sctp_assoc_value=no
+AC_MSG_CHECKING([whether sctp_assoc_value struct is present])
+AC_TRY_COMPILE([#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/sctp.h>],[struct sctp_assoc_value assoc_value;],[sctp_assoc_value=yes])
+AC_MSG_RESULT([$sctp_assoc_value])
+if [[ "x$sctp_assoc_value" = "xyes" ]]; then
+SCTP_FLAGS="$SCTP_FLAGS -DHAVE_ASSOC_VALUE_STRUCT"
+fi
 fi
 else
 if [[ "x$HAVE_SCTP" != "xno" ]]; then
@@ -531,7 +577,8 @@ if [[ "x$want_zaptel" = "xyes" ]]; then
 AC_MSG_CHECKING([for Zaptel generic headers])
 AC_TRY_COMPILE([
 #include <zaptel/zaptel.h>
-],[],
+#include <sys/ioctl.h>
+],[ioctl(0,ZT_GETVERSION,(void*)0)],
 HAVE_ZAP="yes"
 ZAP_FLAGS="-DNEW_ZAPTEL_LOCATION -DHAVE_ZAP"
 )
@@ -540,7 +587,8 @@ if [[ "x$HAVE_ZAP" = "xno" ]]; then
 AC_MSG_CHECKING([for Zaptel linux headers])
 AC_TRY_COMPILE([
 #include <linux/zaptel.h>
-],[],
+#include <sys/ioctl.h>
+],[ioctl(0,ZT_GETVERSION,(void*)0)],
 HAVE_ZAP="yes"
 ZAP_FLAGS="-DHAVE_ZAP"
 )
@@ -750,18 +798,18 @@ if [[ "x$ac_cv_use_libspeex" = "xstatic" ]]; then
     SPEEX_LIB="-Wl,-Bstatic $SPEEX_LIB -Wl,-Bdynamic"
 fi
 if [[ "x$ac_cv_use_libspeex" = "xyes" ]]; then
-for i in /usr/include /usr/include/speex /usr/local/include /usr/local/include/speex; do
+for i in /usr/include /usr/local/include; do
     ac_cv_use_libspeex="$i"
-    test -f "$ac_cv_use_libspeex/speex.h" && break
+    test -f "$ac_cv_use_libspeex/speex/speex.h" && break
 done
 fi
 if [[ "x$ac_cv_use_libspeex" != "xno" ]]; then
-AC_MSG_CHECKING([for speex.h in $ac_cv_use_libspeex])
-if [[ -f "$ac_cv_use_libspeex/speex.h" ]]; then
+AC_MSG_CHECKING([for speex.h in $ac_cv_use_libspeex/speex])
+if [[ -f "$ac_cv_use_libspeex/speex/speex.h" ]]; then
 SAVE_CFLAGS="$CFLAGS"
 CFLAGS="$CFLAGS -Wall -Werror -I$ac_cv_use_libspeex"
 AC_TRY_COMPILE([
-#include <speex.h>
+#include <speex/speex.h>
 ],[
 int i = SPEEX_MODEID_UWB;
 speex_lib_ctl(SPEEX_LIB_GET_MAJOR_VERSION, &i);
@@ -947,6 +995,7 @@ if [[ "x$verpw" = "x" ]]; then
     verpw=`cat "$ac_cv_use_pwlib/include/ptbuildopts.h" 2>/dev/null | sed -n 's/^.*PWLIB_VERSION "\([[^"]]*\)".*$/\1/p'`
 fi
 vpw=`echo "$verpw" | $csed "$vsed" | $csed "$vsed"`
+flgpw=""
 PWLIB_INC="-I$ac_cv_use_pwlib/include" # Base dir, ok for ptlib
 if [[ "$vpw" '<' "02.00.00" ]]; then
     # Pwlib-1.xm no ptlib (2.x) install into ptlib
@@ -954,11 +1003,17 @@ if [[ "$vpw" '<' "02.00.00" ]]; then
     if [[ "$vpw" '<' "01.06.00" ]]; then
         # Very old pwlib needs more includes.
         PWLIB_INC="$PWLIB_INC/unix/ptlib $PWLIB_INC/unix $PWLIB_INC"
+        flgpw="-DPHAS_TEMPLATES -D_REENTRANT -DP_HAS_SEMAPHORES"
     fi
-else
-    #Grab cflags for PTLIB 2.x
-    PWLIB_INC="$PWLIB_INC `$ptconfig --ccflags 2>/dev/null`"
 fi
+if [[ "x$flgpw" = "x" ]]; then
+    flgpw="`$ptconfig --ccflags 2>/dev/null`"
+    if [[ "x$flgpw" = "x" ]]; then
+	# Last resort, minimal guess
+	flgpw="-D_REENTRANT"
+    fi
+fi
+PWLIB_INC="$PWLIB_INC $flgpw"
 
 if [[ -f "$incpw" -a -f "$libpw" ]]; then
     HAVE_PWLIB=installed
@@ -978,7 +1033,9 @@ else
     if [[ -f "$incpw" -a -f "$libpw" ]]; then
 	prtti=`"$ptconfig" --ccflags 2>/dev/null | sed -n 's/^.*\(-f[[^ ]]*rtti\).*$/\1/p'`
         HAVE_PWLIB=sources
-	PWLIB_INC="-I$ac_cv_use_pwlib/include $PWLIB_INC"
+	if [[ "$vpw" '<' "02.00.00" ]]; then
+	    PWLIB_INC="-I$ac_cv_use_pwlib/include $PWLIB_INC"
+	fi
         PWLIB_LIB=`echo "$libpw"|sed 's,^\(.*\)/lib,-L\1 -l,; s,\.so$,,'`
         PWLIB_RUN=":"`echo "$libpw"|sed 's,/[[^/]]*$,,'`
 	case "x$prtti" in

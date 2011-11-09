@@ -291,7 +291,7 @@ void QtHtmlItemDelegate::drawDisplay(QPainter* painter, const QStyleOptionViewIt
 
 
 static CustomTreeFactory s_factory;
-static const String s_noGroupId(String(Time::secNow()) + "_" + MD5("Yate").hexDigest());
+static const String s_noGroupId(MD5("Yate").hexDigest() + "_NOGROUP");
 static const String s_offline("offline");
 
 
@@ -393,9 +393,10 @@ int replaceHtmlParams(String& str, const NamedList& list, bool spaceEol = false)
 /*
  * QtTreeItem
  */
-QtTreeItem::QtTreeItem(const char* id, int type, const char* text)
+QtTreeItem::QtTreeItem(const char* id, int type, const char* text, bool storeExp)
     : QTreeWidgetItem(type),
-    NamedList(id)
+    NamedList(id),
+    m_storeExp(storeExp)
 {
     if (!TelEngine::null(text))
 	QTreeWidgetItem::setText(0,QtClient::setUtf8(text));
@@ -1220,6 +1221,43 @@ void QtCustomTree::setSorting(QString s)
     updateSorting(key,order.toBoolean(true) ? Qt::AscendingOrder : Qt::DescendingOrder);
 }
 
+// Retrieve items expanded status value
+QString QtCustomTree::itemsExpStatus()
+{
+    String tmp;
+    for (int i = 0; i < m_expStatus.size(); i++) {
+	String val;
+	val << m_expStatus[i].first.uriEscape(',') << "=" <<
+	    String::boolText(m_expStatus[i].second > 0);
+	tmp.append(val,",");
+    }
+    return QtClient::setUtf8(tmp);
+}
+
+// Set items expanded status value
+void QtCustomTree::setItemsExpStatus(QString s)
+{
+    m_expStatus.clear();
+    QStringList list = s.split(",",QString::SkipEmptyParts);
+    for (int i = 0; i < list.size(); i++) {
+	String id;
+	String value;
+	int pos = list[i].lastIndexOf('=');
+	if (pos > 0) {
+	    QtClient::getUtf8(id,list[i].left(pos));
+	    int n = list[i].size() - pos - 1;
+	    if (n)
+		QtClient::getUtf8(value,list[i].right(n));
+	}
+	else
+	    QtClient::getUtf8(id,list[i]);
+	if (id) {
+	    id = id.uriUnescape();
+	    m_expStatus.append(QtTokenDict(id,value.toBoolean(m_autoExpand) ? 1 : 0));
+	}
+    }
+}
+
 // Apply item widget style sheet
 void QtCustomTree::applyStyleSheet(QtTreeItem* item, bool selected)
 {
@@ -1262,6 +1300,8 @@ void QtCustomTree::onItemExpandedChanged(QtTreeItem* item)
 {
     if (!item)
 	return;
+    if (item->m_storeExp)
+	setStoreExpStatus(item->id(),item->isExpanded());
     setStateImage(*item);
     applyItemStatistics(*item);
 }
@@ -1338,8 +1378,15 @@ QMenu* QtCustomTree::contextMenu(QtTreeItem* item)
 // Item added notification
 void QtCustomTree::itemAdded(QtTreeItem& item, QtTreeItem* parent)
 {
-    if (m_autoExpand)
-	item.setExpanded(true);
+    bool on = m_autoExpand;
+    if (item.m_storeExp) {
+	int n = getStoreExpStatus(item.id());
+	if (n >= 0)
+	    on = (n > 0);
+	else
+	    setStoreExpStatus(item.id(),on);
+    }
+    item.setExpanded(on);
     setStateImage(item);
     applyItemTooltip(item);
     applyItemStatistics(item);
@@ -1417,6 +1464,30 @@ void QtCustomTree::applyItemStatistics(QtTreeItem& item)
     updateItem(item,params);
 }
 
+// Store (update) to or remove from item expanded status storage an item
+void QtCustomTree::setStoreExpStatus(const String& id, bool on, bool store)
+{
+    if (!id)
+	return;
+    for (int i = 0; i < m_expStatus.size(); i++)
+	if (m_expStatus[i].first == id) {
+	    m_expStatus[i].second = on ? 1 : 0;
+	    return;
+	}
+    m_expStatus.append(QtTokenDict(id,on ? 1 : 0));
+}
+
+// Retrieve the expanded status of an item from storage
+int QtCustomTree::getStoreExpStatus(const String& id)
+{
+    if (!id)
+	return -1;
+    for (int i = 0; i < m_expStatus.size(); i++)
+	if (m_expStatus[i].first == id)
+	    return m_expStatus[i].second;
+    return -1;
+}
+
 
 /*
  * ContactList
@@ -1426,6 +1497,7 @@ ContactList::ContactList(const char* name, const NamedList& params, QWidget* par
     m_flatList(true),
     m_showOffline(true),
     m_hideEmptyGroups(true),
+    m_expStatusGrp(true),
     m_menuContact(0),
     m_menuChatRoom(0),
     m_sortOrder(Qt::AscendingOrder),
@@ -1909,7 +1981,7 @@ QtTreeItem* ContactList::getGroup(const String& name, bool create)
 	if (noGrp)
 	    pos = root->indexOfChild(noGrp);
     }
-    QtTreeItem* g = createGroup(grp,gText);
+    QtTreeItem* g = createGroup(grp,gText,m_expStatusGrp);
     if (!addChild(g,pos))
 	TelEngine::destruct(g);
     return g;
@@ -1986,7 +2058,7 @@ void ContactList::createContactTree(ContactItem* c, ContactItemList& cil)
 	if (grp->null())
 	    continue;
 	noGrp = false;
-	int index = cil.getGroupIndex(*grp,*grp);
+	int index = cil.getGroupIndex(*grp,*grp,m_expStatusGrp);
 	if (o->skipNext())
 	    cil.m_contacts[index].append(createContact(c->id(),*c));
 	else
@@ -1994,7 +2066,7 @@ void ContactList::createContactTree(ContactItem* c, ContactItemList& cil)
     }
     TelEngine::destruct(grps);
     if (noGrp) {
-	int index = cil.getGroupIndex(s_noGroupId,m_noGroupText);
+	int index = cil.getGroupIndex(s_noGroupId,m_noGroupText,m_expStatusGrp);
 	cil.m_contacts[index].append(c);
     }
 }
@@ -2063,7 +2135,7 @@ bool ContactItem::offline()
 /*
  * ContactItemList
  */
-int ContactItemList::getGroupIndex(const String& id, const String& text)
+int ContactItemList::getGroupIndex(const String& id, const String& text, bool expStat)
 {
     for (int i = 0; i < m_groups.size(); i++) {
 	QtTreeItem* item = static_cast<QtTreeItem*>(m_groups[i]);
@@ -2074,7 +2146,7 @@ int ContactItemList::getGroupIndex(const String& id, const String& text)
     if (pos && id != s_noGroupId &&
 	(static_cast<QtTreeItem*>(m_groups[pos - 1]))->id() == s_noGroupId)
 	pos--;
-    m_groups.insert(pos,ContactList::createGroup(id,text));
+    m_groups.insert(pos,ContactList::createGroup(id,text,expStat));
     m_contacts.insert(pos,QtTreeItemList());
     return pos;
 }

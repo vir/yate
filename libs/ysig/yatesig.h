@@ -89,6 +89,8 @@ class SIGAdaptServer;                    // Server side of adaptation (SG)
 class SIGAdaptUser;                      // Abstract Adaptation User SIGTRAN
 class ASPUser;                           // Abstract SS7 ASP user interface
 class SCCP;                              // Abstract SS7 SCCP interface
+class GTT;                               // Abstract SCCP Global Title Translation interface
+class SCCPManagement;                    // Abstract SCCP Management interface
 class SCCPUser;                          // Abstract SS7 SCCP user interface
 class TCAPUser;                          // Abstract SS7 TCAP user interface
 class SS7L2User;                         // Abstract user of SS7 layer 2 (data link) message transfer part
@@ -106,15 +108,27 @@ class SS7MTP3;                           // SS7 Layer 3 implementation on top of
 class SS7MsgSNM;                         // SNM signalling message
 class SS7MsgMTN;                         // MTN signalling message
 class SS7MsgISUP;                        // ISUP signalling message
+class SS7MsgSCCP;                        // SCCP signalling message
 class SS7Management;                     // SS7 SNM implementation
 class SS7ISUPCall;                       // A SS7 ISUP call
 class SS7ISUP;                           // SS7 ISUP implementation
 class SS7BICC;                           // SS7 BICC implementation
 class SS7TUP;                            // SS7 TUP implementation
 class SS7SCCP;                           // SS7 SCCP implementation
+class SccpSubsystem;                     // Helper class to keep a SCCP subsystem
+class SccpLocalSubsystem;                // Helper class to keep s sccp local subsystem informations
+class SccpRemote;                        // Helper class to keep a remote sccp
+class SS7AnsiSccpManagement;             // SS7 SCCP management implementation for ANSI
+class SS7ItuSccpManagement;              // SS7 SCCP management implementation for ITU
 class SS7SUA;                            // SIGTRAN SCCP User Adaptation Layer
 class SS7ASP;                            // SS7 ASP implementation
+class SS7TCAPMessage;                    // SS7 TCAP message wrapper
+class SS7TCAPError;                      // SS7 TCAP errors
 class SS7TCAP;                           // SS7 TCAP implementation
+class SS7TCAPTransaction;                // SS7 TCAP transaction base class
+class SS7TCAPComponent;                  // SS7 TCAP component
+class SS7TCAPANSI;                       // SS7 ANSI TCAP implementation
+class SS7TCAPTransactionANSI;            // SS7 TCAP ANSI Transaction
 // ISDN
 class ISDNLayer2;                        // Abstract ISDN layer 2 (Q.921) message transport
 class ISDNLayer3;                        // Abstract ISDN layer 3 (Q.931) message transport
@@ -703,7 +717,7 @@ protected:
      * This method is called to clean up and destroy the object after the
      *  reference counter becomes zero
      */
-    void destroyed();
+    virtual void destroyed();
 
     /**
      * Insert another component in the same engine as this one.
@@ -821,9 +835,10 @@ public:
      * @param type Class or base class of the component to find or create
      * @param params Name of component to find or create and creation parameters
      * @param init Set to true to initialize a newly created component
+     * @param ref True to add a reference when returning existing component
      * @return Pointer to component found or created, NULL on failure
      */
-    SignallingComponent* build(const String& type, const NamedList& params, bool init = false);
+    SignallingComponent* build(const String& type, const NamedList& params, bool init = false, bool ref = true);
 
     /**
      * Apply a control operation to all components in the engine
@@ -1195,6 +1210,14 @@ protected:
      * @param del True to delete it. False to remove without destruct
      */
     void removeCall(SignallingCall* call, bool del = false);
+
+    /**
+     * Set the verify event flag. Restart/fire verify timer
+     * @param restartTimer True to restart/fire the timer
+     * @param fireNow True to fire the verify timer. Ignored if restartTimer is false
+     * @param time Optional time to use for timer restart
+     */
+    void setVerify(bool restartTimer = false, bool fireNow = false, const Time* time = 0);
 
     /**
      * List of active calls
@@ -1704,7 +1727,7 @@ public:
     /**
      * Set circuit data from a list of parameters
      * @param params Parameter list to set in the circuit
-     * @return True if all parameters were succesfully set
+     * @return True if all parameters were successfully set
      */
     virtual bool setParams(const NamedList& params);
 
@@ -1966,6 +1989,14 @@ public:
      */
     inline const unsigned int* range() const
 	{ return (const unsigned int*)m_range.data(); }
+
+    /**
+     * Allocate and return an array containing range circuits
+     * @param count Address of variable to be filled with circuit count
+     * @return Pointer to allocated buffer, 0 if there is no circuit.
+     *  The caller will own the returned buffer
+     */
+    unsigned int* copyRange(unsigned int& count) const;
 
     /**
      * Get the pointer to the circuit codes array
@@ -4949,16 +4980,118 @@ class YSIG_API ASPUser
 };
 
 /**
+ * An interface to a SS7 SCCP Global Title Translation
+ * @short Abstract SS7 SCCP GTT interface
+ */
+class YSIG_API GTT : virtual public SignallingComponent
+{
+public:
+    /**
+     * Constructor
+     */
+    GTT(const NamedList& config);
+
+    /**
+     * Destructor
+     */
+    virtual ~GTT();
+
+    /**
+     * Route a SCCP message based on Global Title
+     * @param gt The original global title used for message routing
+     * @param prefix Optional prefix for gt params
+     * @return A new SCCP called party address or null if no route was found.
+     */
+    virtual NamedList* routeGT(const NamedList& gt, const String& prefix);
+
+    /**
+     * Initialize this GTT
+     */
+    virtual bool initialize(const NamedList* config);
+
+    /**
+     * Attach a SCCP to us
+     *  @param sccp Pointer to the SCCP to use
+     */
+    virtual void attach(SCCP* sccp);
+    
+    /**
+     * Request to update Translations tables.
+     * Called when a remote pointcode or ssn has become reachable / unreachable
+     * @param params List of parameters that fired this request
+     */
+    virtual void updateTables(const NamedList& params)
+	{ }
+
+protected:
+    virtual void destroyed();
+
+private:
+    SCCP* m_sccp;
+
+};
+
+/**
  * An interface to a SS7 Signalling Connection Control Part
  * @short Abstract SS7 SCCP interface
  */
-class YSIG_API SCCP
+class YSIG_API SCCP : virtual public SignallingComponent
 {
+    YCLASS(SCCP,SignallingComponent)
+    friend class SCCPManagement;
 public:
+
+    enum Type {                     // used in management status method                                 Flow
+         CoordinateRequest         = 0, // Request that a subsystem to go oos (out of service)              (User->SCCP)
+         CoordinateConfirm         = 1, // Confirmation that a subsystem can go oos                         (SCCP->User)
+         CoordinateIndication      = 2, // Indication that a subsystem requires to go oos                   (SCCP->User)
+         CoordinateResponse        = 3, // Response to a subsystem requires to go oos                       (User->SCCP)
+         StatusIndication          = 4, // Indication form SCCP that a subsystem status has been changed    (SCCP->User)
+         StatusRequest             = 5, // Indication from a user that a subsystem status has been changed  (User->SCCP)
+         PointCodeStatusIndication = 6, // Indication to User that a point code is available / unavailable  (SCCP->User)
+         TraficIndication          = 7, // ANSI only! Indication that a traffic mix has been detected       (SCCP->User).
+         SubsystemStatus           = 8, // Request from sccp t users to find the status of a local subsystem
+     };
+
+    /**
+     * Constructor
+     */
+    SCCP();
+
     /**
      * Destructor
      */
     virtual ~SCCP();
+
+    /**
+     * Send a message
+     * @param data Data to be transported trough SCCP protocol
+     * @param params SCCP parameters
+     * SCCP parameters :
+     * MessageReturn : boolean / integer True or 0x08 to return message on error. NOTE int values should me below 0x0f
+     * sequenceControl : boolean. True to send messages in sequence
+     * LocalPC : integer. Local pointcode
+     * RemotePC : integer. Remote pointcode
+     * Address Parameter:
+     * 	Address parameter starts with : CallingPartyAddress or CalledPartyAddress followed by:
+     *	    .ssn         : integer (0-255) Subsequence number
+     *	    .pointcode   : integer Packed pointcode
+     *	    .gt          : string The digits of the global title
+     *	    .gt.np       : integer GT numbering plan
+     *	    .gt.encoding : integer GT encoding scheme
+     *	    .gt.tt       : integer GT Translation type
+     *	    .gt.nature   : integer Gt nature of address indicator (ITU only)
+     * Importance : integer (0-7) Importance of the message! (ITU only)
+     */
+    virtual int sendMessage(DataBlock& data, const NamedList& params);
+
+    /**
+      * Receive management information from attached users.
+      * @param type The type of management message
+      * @param params List of parameters (Affected subsystem [M])
+      * @return True if the notification was processed
+      */
+     virtual bool managementStatus(Type type, NamedList& params);
 
     /**
      * Attach an user to this SS7 SCCP
@@ -4966,25 +5099,222 @@ public:
      */
     virtual void attach(SCCPUser* user);
 
+    /**
+     * Detach an user from this SS7 SCCP
+     * @param user Pointer to the SCCP user
+     */
+    virtual void detach(SCCPUser* user);
+
+    /**
+     * Attach an Global Title Translator to this SS7 SCCP
+     * @param gtt Pointer to the Global Title Translator
+     */
+    virtual void attachGTT(GTT* gtt);
+
+    /**
+     * Obtain the dictionary for notifications types
+     * @return Pointer to the notification types dictionary
+     */
+    static const TokenDict* notifTypes();
+
+    virtual void updateTables(const NamedList& params)
+	{
+	    Lock lock(m_translatorLocker);
+	    if (m_translator)
+		m_translator->updateTables(params);
+	}
 protected:
+    /**
+     * Translate a Global Title
+     * @param params The Global Title content
+     * @param prefix The prefix of the global title content parameters
+     * @return a new SCCP route or 0 is no route was found
+     */
+    NamedList* translateGT(const NamedList& params, const String& prefix);
+
+    /**
+     * Send a SCCP message to users list for processing
+     * @param data The message data
+     * @param params The list of parameters
+     * @param ssn The ssn of the SCCP user
+     * @return HandledMSU enum value
+     */
+    HandledMSU pushMessage(DataBlock& data, NamedList& params, int ssn);
+
+    /**
+     * Notify the users that a message failed to be delivered to destination
+     * @param data The message data
+     * @param params The list of parameters
+     * @param ssn The ssn of the SCCP user
+     * @return HandledMSU enum value
+     */
+    HandledMSU notifyMessage(DataBlock& data, NamedList& params, int ssn);
+
+    /**
+     * Broadcast a management message to all attached users
+     * @param type The type of notification
+     * @param params The list of parameters
+     * @return True if at least one user processed the message
+     */
+    bool managementMessage(Type type, NamedList& params);
+
+    /**
+     * Check if this sccp is an endpoint
+     * @return False
+     */
+    virtual bool isEndpoint()
+	{ return false; }
+private:
     ObjList m_users;
+    Mutex m_translatorLocker;
+    Mutex m_usersLocker;
+    GTT* m_translator;
+};
+
+class YSIG_API SubsystemStatusTest : public RefObject
+{
+    YCLASS(SubsystemStatusTest,RefObject)
+public:
+    /**
+     * Constructor
+     * @param interval The time interval in milliseconds representing the test duration
+     */
+    inline SubsystemStatusTest(u_int32_t interval)
+	: m_interval(interval), m_statusInfo(interval), m_remoteSccp(0), m_remoteSubsystem(0),
+	m_markAllowed(false)
+	{ }
+
+    /**
+     * Destructor
+     */
+    virtual ~SubsystemStatusTest();
+
+    /**
+     * Start this subsystem status test
+     * @param remoteSccp The remote sccp where the subsystem is located
+     * @param rSubsystem The remote subsystem for witch the test is performed
+     * @return True if the test has successfully started
+     */
+    bool startTest(SccpRemote* remoteSccp, SccpSubsystem* rSubsystem);
+
+    /**
+     * Obtain the remote SCCP of this status test
+     * @return Remote Sccp
+     */
+    inline SccpRemote* getRemote()
+	{ return m_remoteSccp; };
+
+    /**
+     * Helper method to check for timeouts
+     * @return True if timed out
+     */
+    inline bool timeout()
+	{ return m_statusInfo.started() && m_statusInfo.timeout(); }
+    /**
+     * Get the subsystem who caused this test
+     * @return The subsystem for who this test was initiated
+     */
+    inline SccpSubsystem* getSubsystem()
+	{ return m_remoteSubsystem; }
+
+    /**
+     * Restart subsystem status test with exponential backoff
+     */
+    void restartTimer();
+
+    /**
+     * Helper method used to find if we should mark the remote subsystem as allowed at the end of the test
+     */
+    inline bool markAllowed()
+	{ return m_markAllowed; }
+
+    /**
+     * Mark the tested subsystem as allowed at the end of the test
+     * @param allowed True to set the subsystem allowed at the end of the test
+     */
+    inline void setAllowed(bool allowed)
+	{ m_markAllowed = allowed; }
+private:
+    u_int32_t m_interval;
+    SignallingTimer m_statusInfo;
+    SccpRemote* m_remoteSccp;
+    SccpSubsystem* m_remoteSubsystem;
+    bool m_markAllowed;
 };
 
 /**
  * An interface to a SS7 Signalling Connection Control Part user
  * @short Abstract SS7 SCCP user interface
  */
-class YSIG_API SCCPUser
+class YSIG_API SCCPUser : virtual public SignallingComponent
 {
+    YCLASS(SCCPUser,SignallingComponent)
 public:
+    /**
+     * Constructor
+     */
+    SCCPUser(const NamedList& params);
+
     /**
      * Destructor, detaches from the SCCP implementation
      */
     virtual ~SCCPUser();
 
     /**
+     * Configure and initialize the component and any subcomponents it may have
+     * @param config Optional configuration parameters override
+     * @return True if the component was initialized properly
+     */
+    virtual bool initialize(const NamedList* config);
+
+    /**
+     * Send a message to SCCP for transport
+     * @param data User data
+     * @param params SCCP parameters
+     * Note! If the request is made with return option set there is no warranty that a notification 
+     * will be received in case that the message failed to be delivered
+     */
+    virtual bool sendData(DataBlock& data, NamedList& params);
+
+    /**
+     * Send a request/ notification to sccp regarding a subsystem status
+     * @param type The type of request / notification
+     * @param params List of parameters
+     * @return True if sccp management has processed the request / notification.
+     */
+    virtual bool sccpNotify(SCCP::Type type, NamedList& params);
+
+    /**
+     * Notification from SCCP that a message has arrived
+     * @param data Received user data
+     * @param params SCCP parameters
+     * @return True if this user has processed the message, false otherwise
+     */
+     virtual HandledMSU receivedData(DataBlock& data, NamedList& params);
+
+    /**
+     * Notification from SCCP that a message failed to arrive to it's destination
+     * @param data User data send.
+     * @param params SCCP parameters
+     * Note! The data may not contain the full message block previously sent (in case of SCCP segmentation), 
+     * but it must always must contain the first segment
+     */
+     virtual HandledMSU notifyData(DataBlock& data, NamedList& params);
+
+     /**
+      * Notification from SCCP management about pointcodes status, OOS responses/indications, subsystems status
+      * @param type The type of notification
+      * @param params List of parameters
+      * @return False on error
+      */
+     virtual bool managementNotify(SCCP::Type type, NamedList& params);
+
+    /**
      * Attach as user to a SCCP
      * @param sccp Pointer to the SCCP to use
+     * NOTE: This method will deref the pointer is is the same with the one that we already have!!
+     * When this method is called the sccp pointer reference counter must be incremented for this
+     * SCCPUser.
      */
     virtual void attach(SCCP* sccp);
 
@@ -4995,17 +5325,28 @@ public:
     inline SCCP* sccp() const
 	{ return m_sccp; }
 
+protected:
+    virtual void destroyed();
+
 private:
     SCCP* m_sccp;
+    Mutex m_sccpMutex;
+    int m_sls;
 };
 
 /**
  * An interface to a SS7 Transactional Capabilities Application Part user
  * @short Abstract SS7 TCAP user interface
  */
-class YSIG_API TCAPUser
+class YSIG_API TCAPUser : public GenObject, public DebugEnabler
 {
+    friend class SS7TCAP;
 public:
+    TCAPUser(const char* name)
+      : m_name(name), m_tcap(0)
+	{
+	    debugName(m_name);
+	}
     /**
      * Destructor, detaches from the TCAP implementation
      */
@@ -5016,17 +5357,47 @@ public:
      * @param tcap Pointer to the TCAP to use
      */
     virtual void attach(SS7TCAP* tcap);
-
+    /**
+     * Receive a TCAP message from TCAP layer
+     * @param params The message in NamedList form
+     * @return True or false if the message was processed by this user
+     */
+    virtual bool tcapIndication(NamedList& params);
     /**
      * Retrieve the TCAP to which this user is attached
      * @return Pointer to a SS7 TCAP interface or NULL
      */
     inline SS7TCAP* tcap() const
 	{ return m_tcap; }
+    /**
+     * Received a management notification from SCCP layer
+     * @param type SCCP management notification type
+     * @param params Management notification params
+     * @return True or false if the notification was handled bu this user
+     */
+    virtual bool managementNotify(SCCP::Type type, NamedList& params);
+    /**
+     * Get TCAP user management state
+     * @return The state of the user
+     */
+    virtual int managementState();
+
+    virtual const String& toString() const
+	{ return m_name; }
+
+protected:
+    inline void setTCAP(SS7TCAP* tcap)
+    {
+	Lock l(m_tcapMtx);
+	m_tcap = tcap;
+    }
 
 private:
+    String m_name;
     SS7TCAP* m_tcap;
+    Mutex m_tcapMtx;
 };
+
 
 /**
  * An user of a Layer 2 (data link) SS7 message transfer part
@@ -5588,6 +5959,15 @@ protected:
     virtual void notify(SS7Layer3* link, int sls);
 
     /**
+     * Process route status changed notifications
+     * @param type Type of Point Code
+     * @param node Destination node witch state has changed
+     * @param state The new route state
+     */
+    virtual void routeStatusChanged(SS7PointCode::Type type, const SS7PointCode& node, SS7Route::State state)
+	{ }
+
+    /**
      * Retrieve the route table of a network for a specific Point Code type
      * @param network Network layer to retrieve routes from
      * @param type Point Code type of the desired table
@@ -6007,6 +6387,12 @@ private:
 class YSIG_API SS7Layer4 : public SS7L3User
 {
 public:
+    /**
+     * This method is called to clean up and destroy the object after the
+     *  reference counter becomes zero
+     */
+    virtual void destroyed();
+
     /**
      * Initialize the application layer, connect it to the SS7 router
      * @param config Optional configuration parameters override
@@ -6436,6 +6822,11 @@ protected:
      */
     virtual bool control(NamedList& params);
 
+    /**
+     * Detach management
+     */
+    virtual void destroyed();
+
     /** List of L3 (networks) attached to this router */
     ObjList m_layer3;
     /** List of L4 (services) attached to this router */
@@ -6474,6 +6865,7 @@ private:
     int routeMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls, SS7Route::State states);
     void buildView(SS7PointCode::Type type, ObjList& view, SS7Layer3* network);
     void buildViews();
+    Mutex m_statsMutex;
     SignallingTimer m_trafficOk;
     SignallingTimer m_trafficSent;
     SignallingTimer m_routeTest;
@@ -6630,6 +7022,14 @@ public:
     bool processLinkStatus(DataBlock& data, int streamId);
 
     /**
+     * Decode and process link status message in more strict manner
+     * @param data The message
+     * @param streamId The stream id witch received the message
+     * @return True if the message was procesed
+     */
+    bool processSLinkStatus(DataBlock& data, int streamId);
+
+    /**
      * Helper method used to acknowledge the last received message
      * when no data are to transmit
      */
@@ -6733,7 +7133,9 @@ private:
     SignallingTimer m_ackTimer;
     SignallingTimer m_confTimer;
     SignallingTimer m_oosTimer;
+    SignallingTimer m_waitOosTimer;
     bool m_autostart;
+    bool m_sequenced;
     bool m_dumpMsg;
 };
 
@@ -7567,6 +7969,8 @@ public:
 	CVR  = 0xeb, // Circuit Validation Response (ANSI only)
 	CVT  = 0xec, // Circuit Validation Test (ANSI only)
 	EXM  = 0xed, // Exit Message (ANSI only)
+	// Dummy, used for various purposes
+	CtrlSave = 256  // control, save circuits
     };
 
     /**
@@ -8301,7 +8705,7 @@ public:
      * @param pcType The point code type (message version)
      * @param paramPtr Pointer to the Parameter area (just after the message type)
      * @param paramLen Length of the Parameter area
-     * @return True if the mesage was succesfully parsed
+     * @return True if the mesage was successfully parsed
      */
     bool decodeMessage(NamedList& msg, SS7MsgISUP::Type msgType, SS7PointCode::Type pcType,
 	const unsigned char* paramPtr, unsigned int paramLen);
@@ -8314,7 +8718,7 @@ public:
      * @param pcType The point code type (message version)
      * @param params Message list of parameters
      * @param cic Optional cic to be added before mesage
-     * @return True if the mesage was succesfully encoded
+     * @return True if the mesage was successfully encoded
      */
     bool encodeMessage(DataBlock& buf, SS7MsgISUP::Type msgType, SS7PointCode::Type pcType,
 	const NamedList& params, unsigned int* cic = 0);
@@ -8442,7 +8846,14 @@ private:
     bool blockCircuit(unsigned int cic, bool block, bool remote, bool hwFail,
 	bool changed, bool changedState, bool resetLocking = false);
     // Find a call by its circuit identification code
+    // This method is not thread safe
     SS7ISUPCall* findCall(unsigned int cic);
+    // Find a call by its circuit identification code
+    // This method is thread safe
+    inline void findCall(unsigned int cic, RefPointer<SS7ISUPCall>& call) {
+	    Lock mylock(this);
+	    call = findCall(cic);
+	}
     // Send blocking/unblocking messages.
     // Restart the re-check timer if there is any (un)lockable, not sent cic
     // Return false if no request was sent
@@ -8458,6 +8869,9 @@ private:
     bool transmitMessages(ObjList& list);
     // Handle circuit(s) (un)block command
     bool handleCicBlockCommand(const NamedList& p, bool block);
+    // Handle remote circuit(s) (un)block command
+    bool handleCicBlockRemoteCommand(const NamedList& p, unsigned int* cics,
+	unsigned int count, bool block);
     // Try to start single circuit (un)blocking. Set a pending operation on success 
     // @param force True to ignore resetting/(un)blocking flags of the circuit
     // Return built message to be sent on success
@@ -8581,11 +8995,1331 @@ public:
 };
 
 /**
+ * An interface to a SS7 SCCP Management
+ * @short Abstract SS7 SCCP Management
+ */
+
+class YSIG_API SCCPManagement : public SignallingComponent , public Mutex
+{
+    friend class SS7SCCP;
+    friend class SccpLocalSubsystem; // Local Broadcast
+    YCLASS(SCCPManagement,SignallingComponent)
+public:
+    enum MsgType {
+	SSA = 0x01,  // Subsystem-allowed
+	SSP = 0x02,  // Subsystem-prohibited
+	SST = 0x03,  // Subsystem-status-test
+	SOR = 0x04,  // Subsystem-out-of-service-request
+	SOG = 0x05,  // Subsystem-out-of-service-grant
+	SSC = 0x06,  // SCCP/Subsystem-congested      (ITU  only)
+	SBR = 0xfd,  // Subsystem-backup-routing      (ANSI only)
+	SNR = 0xfe,  // Subsystem-normal-routing      (ANSI only)
+	SRT = 0xff   // Subsystem-routing-status-test (ANSI only)
+    };
+
+    enum LocalBroadcast {
+	UserOutOfService,
+	UserInService,
+	PCInaccessible,         // Signalling Point Inaccessible
+	PCAccessible,           // Signalling Point Accessible
+	SccpRemoteInaccessible,
+	SccpRemoteAccessible,
+	PCCongested,           // Signalling Point Congested
+	SubsystemStatus        // Request send by sccp management to find if a ssn is available
+    };
+
+    enum SccpStates {
+	Allowed = SS7Route::Allowed,
+	Prohibited = SS7Route::Prohibited,
+	WaitForGrant,
+	IgnoreTests
+    };
+
+    /**
+     * Constructor
+     */
+    SCCPManagement(const NamedList& params, SS7PointCode::Type type);
+
+    /**
+     * Destructor
+     */
+    virtual ~SCCPManagement();
+
+    /**
+     * Initialize this sccp management
+     */
+    virtual bool initialize(const NamedList* config);
+
+    /**
+     * Process a management message received from sccp
+     * @param message The message to process
+     * @return True if the message was processed successfully
+     */
+    virtual bool processMessage(SS7MsgSCCP* message);
+
+    /**
+     * Attach a ss7 sccp to this management
+     * @param sccp The ss7 sccp to attach
+     */
+    void attach(SS7SCCP* sccp);
+
+    /**
+     * Process a notification from MTP about a pointcode status
+     * @param link The affected link
+     * @param operational True if the layer3 is operational
+     */
+    virtual void pointcodeStatus(SS7Layer3* link, bool operational);
+
+    /**
+     * Process a notification from router about a route state change
+     * @param type The Point Code type
+     * @param node The remote pointcode
+     * @param state The route state
+     */
+    virtual void routeStatus(SS7PointCode::Type type, const SS7PointCode& node, SS7Route::State state);
+
+    /**
+     * Notification from sccp about local subsystems status
+     * @param type The type of notification
+     * @param params The notification parameters
+     */
+    virtual void notify(SCCP::Type type, NamedList& params);
+
+    /**
+     * Method called by SCCP to inform management that no route was found for the message
+     * @param msg The SCCP message that failed to be routed
+     */
+    virtual void routeFailure(SS7MsgSCCP* msg);
+
+    /**
+     * Method called by sccp when a sccp message hasn't been processed by any user
+     * @param msg The message
+     * @param label The mtp routing label
+     */
+    virtual void subsystemFailure(SS7MsgSCCP* msg, const SS7Label& label);
+
+    /**
+     * Notification from layer3 about a remote sccp unavailability
+     * @param pointcode The poincode of the unavailable sccp
+     * @param cause Unavailability cause
+     */
+    virtual void sccpUnavailable(const SS7PointCode& pointcode, unsigned char cause);
+
+    /**
+     * Helper method used to obtain a string statistic about the messages received for unknown subsystems
+     * @param dest The string where the statistics will be stored
+     * @param extended True to print an extended statistic ( the number of messages received for unknown subsystem)
+     */
+    void subsystemsStatus(String& dest,bool extended = true);
+
+    /**
+     * Helper method used to obtain information about the messages that failed to be routed
+     * @param dest The destination string
+     * @param extended True to print the GTT failures
+     */
+    void routeStatus(String& dest,bool extended = false);
+
+    /**
+     * Helper method used to notify the concerned signalling points about a subsystem status
+     * @param msg The message type to broadcast
+     * @param ssn Local affected ssn
+     * @param smi Local subsystem multiplicity indicator
+     */
+    virtual void notifyConcerned(MsgType msg, unsigned char ssn, int smi);
+
+    /**
+     * Obtain broadcast type dict table
+     * @return Pointer to broadcast type dict table
+     */
+    static const TokenDict* broadcastType();
+
+    /**
+     * Helper method used to inform Global Title Translator to update translation tables
+     * @param rsccp The remote SCCP witch status has been changed
+     * @param ssn The remote SCCP subsystem witch status has been changed
+     */
+    virtual void updateTables(SccpRemote* rsccp, SccpSubsystem* ssn = 0);
+
+    /**
+     * Print a sccp management message
+     * @param dest The destination string
+     * @param type The sccp management message type
+     * @param params List of sccp management message parameters
+     */
+    virtual void printMessage(String& dest, MsgType type, const NamedList& params);
+
+    /**
+     * Obtain a sccp management state name
+     * @param state The sccp management enum state
+     * @return The state name if found or 0
+     */
+    static const char* stateName(SCCPManagement::SccpStates state)
+	{ return lookup(state,s_states); }
+protected:
+
+    /**
+     * Method called periodically by engine to check for timeouts
+     * @param when Time to use as computing base for events and timeouts
+     * Reimplemented from SignallingComponent
+     */
+    virtual void timerTick(const Time& when);
+
+    inline SS7SCCP* sccp()
+	{ return m_sccp; }
+
+    ObjList m_remoteSccp;
+    ObjList m_statusTest;
+    ObjList m_localSubsystems;
+    ObjList m_concerned;
+    SS7PointCode::Type m_pcType;
+
+    /**
+     * Obtain the subsystem status test time interval
+     * @return Subsystem status test duration
+     */
+    inline u_int32_t getTestTimeout()
+	{ return m_testTimeout; }
+
+    /**
+     * Broadcast a management message to local attached sccp users
+     * @param type The broadcast type
+     * @param params List of parameters
+     * @return True if at least one user has processed the message
+     */
+    bool managementMessage(SCCP::Type type, NamedList& params);
+
+    /**
+     * Obtain a local subsystem
+     * @param ssn The local subsystem ssn
+     * @return Pointer to local subsystem if found, 0 otherwise
+     */
+    SccpLocalSubsystem* getLocalSubsystem(unsigned char ssn);
+
+    /**
+     * Obtain a remote SCCP
+     * @param pointcode The remote sccp pointcode
+     * @return The remote SCCP with the matching pointcode or 0 if not found
+     */
+    SccpRemote* getRemoteSccp(int pointcode);
+
+    /**
+     * Encode a sccp management message and send it to remote address
+     * @param msgType The SCCP management message type
+     * @param params List of message parameters
+     * @return True if the message was successfully send
+     */
+    virtual bool sendMessage(SCCPManagement::MsgType msgType, const NamedList& params) = 0;
+
+    /**
+     * Stop subsystem status tests for a remote location
+     * @param remoteSccp The remote sccp
+     * @param rSubsystem The remote subsystem. Can be 0 to stop all tests for the remote sccp
+     * @param less Stop all sst except this
+     */
+    virtual void stopSst(SccpRemote* remoteSccp, SccpSubsystem* rSubsystem = 0, SccpSubsystem* less = 0);
+
+    /**
+     * Start a new subsystem status test
+     * @param remoteSccp The remote sccp
+     * @param rSubsystem The remote subsystem
+     */
+    virtual void startSst(SccpRemote* remoteSccp, SccpSubsystem* rSubsystem);
+
+    /**
+     * Notification from sccp that mtp has finished restarting
+     */
+    void mtpEndRestart();
+
+    /**
+     * Send a local sccp broadcast
+     * @param type The broadcast message type
+     * @param pointcode The affected pointcode. -1 if it should not be included
+     * @param sps The signalling point status.  -1 if it should not be included
+     * @param rss The remote sccp status. -1 if it should not be included
+     * @param rl The restriction level. -1 if it should not be included
+     * @param ssn The affected ssn. -1 if it should not be included
+     * @param ss The subsystem status. -1 if it should not be included
+     */
+    void localBroadcast(SCCP::Type type, int pointcode, int sps, int rss = -1,
+	    int rl = -1, int ssn = -1, int ss = -1);
+
+    /**
+     * Helper method. Send subsystem status test
+     * Note: Management mutex must not be locked. Thread safe
+     * @param remote The remote sccp
+     * @param sub The remote subsystem
+     */
+    bool sendSST(SccpRemote* remote, SccpSubsystem* sub);
+
+    /**
+     * Process a sccp management message
+     * @param msgType The sccp management message type
+     * @param ssn The affected subsystem
+     * @param smi The subsystem multiplicity indicator
+     * @param params The message params
+     * @return True if the message was handled
+     */
+    bool handleMessage(int msgType, unsigned char ssn, unsigned char smi, NamedList& params);
+
+    /**
+     * Process remote sccp state
+     * @param rsccp The remote sccp witch state has changed
+     * @param newState The new state of the remote sccp
+     */
+    virtual void manageSccpRemoteStatus(SccpRemote* rsccp, SS7Route::State newState)
+	{ }
+
+    /**
+     * Helper method used to check if we should print sccp management messages
+     * @return True if we should print messages
+     */
+    inline bool printMessagess()
+	{ return m_printMessages; }
+
+    /**
+     * Helper method that handles coordinate request
+     * @param ssn Local subsystem that wish to go out of service
+     * @param smi Subsystem multiplicity indicator
+     * @param params List of parameters
+     */
+    void handleCoordinateChanged(unsigned char ssn, int smi, const NamedList& params);
+
+    /**
+     * Handle a subsystem out of service grant message
+     * @param ssn Remote subsystem ssn
+     * @param pointcode Remote subsystem pointcode
+     * Note! Lock management mutex before calling this method
+     */
+    void handleSog(unsigned char ssn, int pointcode);
+
+    /**
+     * Process the status of subsystems
+     * @param subsystem The subsystem who's status has changed
+     * @param allowed True if the subsystem status is Allowed false for Prohibited
+     * @param remote The remote sccp pointcode where the subsystem is located
+     * @param smi Subsystem Multiplicity Indicator
+     */
+    virtual void handleSubsystemStatus(SccpSubsystem* subsystem, bool allowed, SccpRemote* remote, int smi)
+	{ }
+
+    /**
+     * Ontain the coordinate changed time interval
+     * @return The coordinate time interval in ms
+     */
+    inline u_int32_t getCoordTimeout()
+	{ return m_coordTimeout; }
+
+    /**
+     * Obtain ignore status tests time interval
+     * @return ignore status tests time interval in ms
+     */
+    inline u_int32_t getIgnoreTestsInterval()
+	{ return m_ignoreStatusTestsInterval; }
+private:
+    // Helper method to fill broadcast param list
+    void putValue(NamedList& params,int val,const char* name, bool dict = false);
+
+    SS7SCCP* m_sccp;
+    NamedList m_unknownSubsystems;
+    unsigned int m_subsystemFailure;    // Counter used in status to inform about the total number of packets received for a unknown ssn
+    unsigned int m_routeFailure;
+    u_int32_t m_testTimeout;
+    u_int32_t m_coordTimeout;
+    u_int32_t m_ignoreStatusTestsInterval;
+    bool m_autoAppend;
+    bool m_printMessages;
+    static const TokenDict s_broadcastType[];
+    static const TokenDict s_states[];
+};
+
+class YSIG_API SS7MsgSCCP : public SignallingMessage
+{
+    YCLASS(SS7MsgSCCP,SignallingMessage)
+public:
+    /**
+     * SCCP Message type
+     */
+    enum Type {
+	Unknown = 0,
+	CR     = 0x01, // Connection request
+	CC     = 0x02, // Connection confirm
+	CREF   = 0x03, // Connection refused
+	RLSD   = 0x04, // Released
+	RLC    = 0x05, // Release complete
+	DT1    = 0x06, // Data form 1
+	DT2    = 0x07, // Data form 2
+	AK     = 0x08, // Data acknowledgement
+	UDT    = 0x09, // Unitdata
+	UDTS   = 0x0a, // Unitdata service
+	ED     = 0x0b, // Expedited data
+	EA     = 0x0c, // Expedited data acknowledgement
+	RSR    = 0x0d, // Reset request
+	RSC    = 0x0e, // Reset confirmation
+	ERR    = 0x0f, // Protocol data unit error
+	IT     = 0x10, // Inactivity test
+	XUDT   = 0x11, // Extended unitdata
+	XUDTS  = 0x12, // Extended unitdata service
+	LUDT   = 0x13, // Long unitdata
+	LUDTS  = 0x14, // Long unitdata service
+    };
+
+    enum Parameters {
+	EndOfParameters                = 0,
+	DestinationLocalReference      = 0x01,
+	SourceLocalReference           = 0x02,
+	CalledPartyAddress             = 0x03,
+	CallingPartyAddress            = 0x04,
+	ProtocolClass                  = 0x05,
+	Segmenting                     = 0x06,
+	ReceiveSequenceNumber          = 0x07,
+	Sequencing                     = 0x08,
+	Credit                         = 0x09,
+	ReleaseCause                   = 0x0a,
+	ReturnCause                    = 0x0b,
+	ResetCause                     = 0x0c,
+	ErrorCause                     = 0x0d,
+	RefusalCause                   = 0x0e,
+	Data                           = 0x0f,
+	Segmentation                   = 0x10,
+	HopCounter                     = 0x11,
+	Importance                     = 0x12, // ITU only
+	LongData                       = 0x13,
+	MessageTypeInterworking        = 0xf8, // ANSI only
+	INS                            = 0xf9, // ANSI only
+	ISNI                           = 0xfa, // ANSI only
+    };
+
+    /**
+     * Constructor
+     * @param type Type of SCCP message as enumeration
+     */
+    inline SS7MsgSCCP(Type type)
+	: SignallingMessage(lookup(type,"Unknown")), m_type(type), m_data(0)
+	{ }
+
+    /**
+     * Destructor
+     * NOTE: The SCCP message does not own the data pointer
+     * In destructor the data pointer should be valid if data was set from decode message
+     * In any other cases the pointer should be 0
+     * NOTE: The data is not destroyed!! Only removed from data object and after the data object is destroyed
+     */
+    virtual ~SS7MsgSCCP();
+
+    /**
+     * Get the type of this message
+     * @return The type of this message as enumeration
+     */
+    inline Type type() const
+	{ return m_type; }
+
+    /**
+     * Fill a string with this message's parameters for debug purposes
+     * @param dest The destination string
+     * @param label The routing label
+     * @param params True to add parameters
+     * @param raw Optional raw message data to be added to destination
+     * @param rawLen Raw data length
+     */
+    void toString(String& dest, const SS7Label& label, bool params,
+	const void* raw = 0, unsigned int rawLen = 0) const;
+
+    /**
+     * Get the dictionary with the message names
+     * @return Pointer to the dictionary with the message names
+     */
+    static const TokenDict* names();
+
+    /**
+     * Convert an SCCP message type to a C string
+     * @param type Type of SCCP message to look up
+     * @param defvalue Default string to return
+     * @return Name of the SCCP message type
+     */
+    static inline const char* lookup(Type type, const char* defvalue = 0)
+	{ return TelEngine::lookup(type,names(),defvalue); }
+
+    /**
+     * Look up an SCCP message name
+     * @param name String name of the SCCP message
+     * @param defvalue Default type to return
+     * @return Encoded type of the SCCP message
+     */
+    static inline Type lookup(const char* name, Type defvalue = Unknown)
+	{ return static_cast<Type>(TelEngine::lookup(name,names(),defvalue)); }
+
+    /**
+     * Set data for this message
+     * @param data the data
+     */
+    inline void setData(DataBlock* data)
+	{ m_data = data; }
+
+    /**
+     * Remove the data from this message
+     */
+    inline void removeData()
+	{ m_data = 0; }
+	
+    /**
+     * Obtain the data associated with this message
+     * @return The data
+     */
+    inline DataBlock* getData()
+	{ return m_data; }
+
+    /**
+     * Extract the data associated with this message
+     * @return The data
+     */
+    inline DataBlock* extractData()
+	{ 
+	    DataBlock* data = m_data;
+	    m_data = 0;
+	    return data;
+	}
+
+private:
+    Type m_type;                         // Message type
+    DataBlock* m_data;                   // Message data NOTE: The message never owns the data
+};
+
+class YSIG_API SS7MsgSccpReassemble : public SS7MsgSCCP
+{
+    YCLASS(SS7MsgSccpReassemble,SignallingMessage)
+public:
+    enum Return {
+	Rejected,
+	Accepted,
+	Error,
+	Finished,
+    };
+    /**
+     * Constructor
+     * @param msg The first message segment
+     * @param label The MTP routing label
+     * @param timeToLive The time internal in milliseconds that we wait to reassemble the message
+     */
+    SS7MsgSccpReassemble(SS7MsgSCCP* msg, const SS7Label& label, unsigned int timeToLive);
+
+    /**
+     * Destructor
+     */
+    virtual ~SS7MsgSccpReassemble();
+
+    /**
+     * Helper method used to check if the given message is part of this reassembling process
+     * @param msg The message to verify
+     * @param label The SS7 routing label
+     * @return True if msg is a part of this reassembling process
+     */
+    bool canProcess(const SS7MsgSCCP* msg, const SS7Label& label);
+
+    /**
+     * Append a sccp message segment to the main message
+     * @param msg The message segment
+     * @param label The SS7 routing label
+     * @return One of the Return enum options
+     */
+    Return appendSegment(SS7MsgSCCP* msg, const SS7Label& label);
+
+    /**
+     * Check if this reassemble process has expired
+     * @return True if this reassemble process has expired
+     */
+    inline bool timeout()
+	{ return m_timeout > 0 ? Time::msecNow() > m_timeout : false; }
+
+    /**
+     * Helper method to verify if all segments have arrived
+     * @return True if all segments arrived
+     */
+    inline bool haveAllSegments()
+	{ return m_remainingSegments == 0; }
+private:
+    SS7Label m_label;
+    NamedList m_callingPartyAddress;
+    u_int32_t m_segmentationLocalReference;
+    u_int64_t m_timeout;
+    unsigned char m_remainingSegments;
+    unsigned int m_firstSgmDataLen;
+};
+
+class YSIG_API SccpSubsystem : public RefObject
+{
+    YCLASS(SccpSubsystem,RefObject);
+public:
+    /**
+     * Constructor
+     * @param ssn The subsystem number alocated to this subsystem
+     * @param state The subsystem initial state
+     */
+    inline SccpSubsystem(int ssn, SCCPManagement::SccpStates state = SCCPManagement::Allowed, unsigned char smi = 0)
+	: m_ssn(ssn), m_smi(smi), m_state(state)
+	{ }
+
+    virtual ~SccpSubsystem()
+	{ }
+
+    /**
+     * Obtain subsystem number
+     * @return The subsystem number
+     */
+    inline unsigned char getSSN()
+	{ return m_ssn; }
+
+    /**
+     * Obtain the state of this subsystem
+     * @return This subsystem state
+     */
+    inline SCCPManagement::SccpStates getState()
+	{ return m_state; }
+
+    /**
+     * Set the state of this subsystem
+     * @param state The new state
+     */
+    inline void setState(SCCPManagement::SccpStates state)
+	{ m_state = state; }
+
+    /**
+     * Obtain the subsystem multiplicity indicator of this sccp subsystem
+     * @return The subsystem multiplicity indicator
+     */
+    inline unsigned char getSmi()
+	{ return m_smi; }
+
+    /**
+     * Dump this sccp subsystem status
+     * @param dest Destination string
+     */
+    void dump(String& dest)
+	{
+	    dest << "Subsystem: " << m_ssn << " , smi: " << m_smi;
+	    dest << ", state: " << SCCPManagement::stateName(m_state) << " ";
+	}
+private:
+    unsigned char m_ssn;
+    unsigned char m_smi;
+    SCCPManagement::SccpStates m_state;
+};
+
+class YSIG_API RemoteBackupSubsystem : public GenObject
+{
+    YCLASS(RemoteBackupSubsystem,GenObject);
+public:
+
+    /**
+     * Constructor
+     * @param ssn Remote subsystem number
+     * @param pointcode Remote pointcode
+     * @param wfg True if we are expecting SOG from this remote subsystem
+     */
+    RemoteBackupSubsystem(unsigned char ssn, int pointcode, bool wfg = false)
+	: m_ssn(ssn), m_pointcode(pointcode), m_waitForGrant(wfg)
+	{ }
+
+    virtual ~RemoteBackupSubsystem()
+	{ }
+
+    /**
+     * Helper method used to verify if a remore subsystem match this one
+     * @param ssn Remote subsystem number
+     * @param pointcode Remote pointcode
+     * @return True if pointcode and ssn match
+     */
+    inline bool equals(unsigned char ssn, int pointcode)
+	{ return m_pointcode == pointcode && m_ssn == ssn; }
+
+    /**
+     * Helper method to reset wait for grant flag
+     */
+    inline void permisionGranted()
+	{ m_waitForGrant = false; }
+
+    /**
+     * Check if we are steel waiting to receive SOG
+     * @return True if SOG message has arrived from the remote subsystem
+     */
+    inline bool waitingForGrant()
+	{ return m_waitForGrant; }
+
+private:
+    unsigned char m_ssn;
+    int m_pointcode;
+    bool m_waitForGrant;
+};
+
+class YSIG_API SccpLocalSubsystem : public RefObject, public Mutex
+{
+    YCLASS(SccpLocalSubsystem,RefObject);
+public:
+    /**
+     * Constructor
+     * @param ssn The subsystem number
+     * @param coordInterval The time interval for coordinate changed timer
+     * @param istInterval The time interval for ignore status test timer
+     * @param smi Subsystem multiplicity indicator
+     */
+    SccpLocalSubsystem(unsigned char ssn, u_int64_t coordInterval, u_int64_t istInterval, unsigned char smi = 0);
+
+    /**
+     * Destructor
+     */
+    virtual ~SccpLocalSubsystem();
+
+    /**
+     * Obtain the subsystem number number of this sccp subsystem
+     * @return The ssn associated with this subsystem
+     */
+    inline unsigned char getSSN()
+	{ return m_ssn; }
+
+    /**
+     * Set a new state of this SCCP subsystem
+     * @param newState Thew new state to set
+     */
+    inline void setState(SCCPManagement::SccpStates newState)
+	{ m_state = newState; }
+
+    /**
+     * Obtain the state associated with this sccp subsystem
+     * @return The state of this SCCP subsystem
+     */
+    inline SCCPManagement::SccpStates getState()
+	{ return m_state; }
+
+    /**
+     * Start coordinate change timer
+     */
+    inline void startCoord()
+	{ m_coordTimer.start(); }
+
+    /**
+     * Check if this subsystem should ignore SST (Subsystem status test)
+     */
+    inline bool ignoreTests()
+	{ return m_ignoreTestsTimer.started(); }
+
+    /**
+     * Inform this subsystem if should ignore subsystem status tests
+     * @param ignore True to ignore subsystem status tests
+     */
+    void setIgnoreTests(bool ignore);
+
+    /**
+     * Check if coordinate change timer has timed out
+     * @return True if coordinate change timer has timed out
+     */
+    bool timeout();
+
+    /**
+     * Handle coord timer timeout
+     * @param mgm Pointer to sccp management who owns this sccp local subsystem
+     */
+    void manageTimeout(SCCPManagement* mgm);
+
+    /**
+     * Stop coordinate change timer
+     */
+    inline void stopCoordTimer()
+	{ m_coordTimer.stop(); }
+	
+    /**
+     * Obtain the subsystem multiplicity indicator of this subsystem
+     * @return The Subsystem multiplicity indicator
+     */
+    inline unsigned char getSmi()
+	{ return m_smi; }
+
+    /**
+     * Dump this sccp subsystem status
+     * @param dest Destination string
+     */
+    void dump(String& dest);
+
+    /**
+     * Process a subsystem out of service grant message
+     * @param ssn The remote ssn
+     * @param pointcode The remote pointcode
+     * @return True if the message was procesed
+     */
+    bool receivedSOG(unsigned char ssn, int pointcode);
+
+    /**
+     * Helper method used to reset timers
+     */
+    inline void resetTimers()
+	{ m_coordTimer.stop(); m_ignoreTestsTimer.stop(); }
+    /**
+     * Clear remote backup subsystems
+     */
+    inline void clearBackups()
+	{ m_backups.clear(); }
+
+    /**
+     * Append new backup subsystem
+     * @param backup The backup subsystem to append
+     */
+    inline void appendBackup(RemoteBackupSubsystem* backup)
+	{ m_backups.append(backup); }
+private:
+    unsigned char m_ssn;
+    unsigned char m_smi;
+    SCCPManagement::SccpStates m_state;
+    SignallingTimer m_coordTimer;
+    SignallingTimer m_ignoreTestsTimer;
+    ObjList m_backups;
+    bool m_receivedAll;
+};
+
+/**
+ * Helper class to keep a remote sccp
+ */
+class YSIG_API SccpRemote : public RefObject, public Mutex
+{
+    YCLASS(SccpRemote,RefObject);
+public:
+    /**
+     * Constructor
+     * @param pcType The pointcode type
+     */
+    SccpRemote(SS7PointCode::Type pcType);
+
+    /**
+     * Constructor.
+     * Construncot an Remote sccp from given pointcode and pointcode type
+     * @param pointcode Integer value assigned to remote pointcode.
+     * @param pcType Remote pointcode type
+     */
+    SccpRemote(unsigned int pointcode, SS7PointCode::Type pcType);
+
+    /**
+     * Destructor
+     */
+    virtual ~SccpRemote();
+
+    /**
+     * Initialize the pointcode and subsystems list from a string
+     * @param params String containing the pointcode and the subsystems list
+     * @return False if the pointcode from the string is not valid
+     * Usage
+     */
+    bool initialize(const String& params);
+
+    /**
+     * Obtain the state of this remote SCCP
+     * @return Remote SCCP state
+     */
+    inline SCCPManagement::SccpStates getState()
+	{ return m_state; }
+
+    /**
+     * Find a subsystem stored in remote subsystems list
+     * @param ssn The subsystem number of the remote subsystem
+     * @return Pointer to the Subsystem or 0 if it was not found
+     */
+    SccpSubsystem* getSubsystem(int ssn);
+
+    /**
+     * Set remote SCCP state
+     * @param state The new state of the remote SCCP
+     */
+    void setState(SCCPManagement::SccpStates state);
+
+    /**
+     * Obtain the PointCode of the remote SCCP
+     * @return The pointcode of the remote SCCP
+     */
+    inline const SS7PointCode& getPointCode()
+	{ return m_pointcode; }
+
+    /**
+     * Obtain the pointcode as an integer
+     * @return The packed pointcode representation
+     */
+    inline int getPackedPointcode()
+	{ return m_pointcode.pack(m_pointcodeType); }
+
+    /**
+     * Obtain a string representation of the remote pointcode type
+     * @return String representation of remote pointcode type
+     */
+    inline const char* getPointCodeType()
+	{ return SS7PointCode::lookup(m_pointcodeType); }
+
+    /**
+     * Dump this sccp status an all it's subsystems
+     * @param dest Destination string
+     * @param extended True to append the subsystems status
+     */
+    void dump(String& dest, bool extended = false);
+
+    /**
+     * Helper method to change a subsystem state
+     * @param ssn The subsystem ssn
+     * @param newState The subsystem new state
+     * @return False if the subsystem state is the same
+     */
+    bool changeSubsystemState(int ssn,SCCPManagement::SccpStates newState);
+
+    /**
+     * Helper method to obtain remote sccp's subsystems list
+     * @return The subsystems list
+     */
+    inline ObjList& getSubsystems()
+	{ return m_subsystems; }
+
+    /**
+     * Helper method to set congestion level
+     * @param cl The new congestion level
+     */
+    inline void setCongestion(unsigned int cl)
+	{ m_congestionLevel = cl; }
+
+    /**
+     * Helper method to reset congestion level
+     */
+    inline void resetCongestion()
+	{ m_congestionLevel = 0; }
+
+    /**
+     * Helper method to obtain the congestion level
+     * @return The congestion level
+     */
+    inline unsigned int getCongestion()
+	{ return m_congestionLevel; }
+private:
+    SS7PointCode m_pointcode;
+    SS7PointCode::Type m_pointcodeType;
+    ObjList m_subsystems;
+    SCCPManagement::SccpStates m_state;
+    unsigned int m_congestionLevel;
+};
+
+class YSIG_API SS7AnsiSccpManagement : public SCCPManagement
+{
+    YCLASS(SS7AnsiSccpManagement,SCCPManagement)
+public:
+
+    /**
+     * Constructor
+     */
+    inline SS7AnsiSccpManagement(const NamedList& params)
+	: SCCPManagement(params,SS7PointCode::ANSI)
+	{ }
+
+    virtual ~SS7AnsiSccpManagement();
+
+    /**
+     * Process a management message received from sccp
+     * @param message The message to process
+     * @return True if the message was processed successfully
+     */
+    virtual bool processMessage(SS7MsgSCCP* message);
+
+    /**
+     * Encode a sccp management message and send it to remote address
+     * @param msgType The SCCP management message type
+     * @param params List of message parameters
+     * @return True if the message was successfully send
+     */
+    virtual bool sendMessage(SCCPManagement::MsgType msgType, const NamedList& params);
+
+    /**
+     * Handle notifications received from remote concerned sccp's
+     * @param rsccp Remote SCCP pointcode
+     * @param newState The new state of the remote SCCP
+     */
+    virtual void manageSccpRemoteStatus(SccpRemote* rsccp, SS7Route::State newState);
+
+    /**
+     * Process the status of subsystems
+     * @param subsystem The subsystem who's status has changed
+     * @param allowed True if the subsystem status is Allowed false for Prohibited
+     * @param remote The remote sccp pointcode where the subsystem is located
+     * @param smi Subsystem Multiplicity Indicator
+     */
+    virtual void handleSubsystemStatus(SccpSubsystem* subsystem, bool allowed, SccpRemote* remote, int smi);
+
+    /**
+     * Handle a SCCP Management message
+     * @param msgType The message type
+     * @param params List of message parameters
+     * @return True if the message was handled
+     */
+    bool handleMessage(int msgType, NamedList& params);
+};
+
+class YSIG_API SS7ItuSccpManagement : public SCCPManagement
+{
+    YCLASS(SS7ItuSccpManagement,SCCPManagement)
+public:
+
+    /**
+     * Constructor
+     */
+    SS7ItuSccpManagement(const NamedList& params);
+
+    /**
+     * Destructor
+     */
+    virtual ~SS7ItuSccpManagement()
+	{ }
+
+    /**
+     * Process a management message received from sccp
+     * @param message The message to process
+     * @return True if the message was processed successfully
+     */
+    virtual bool processMessage(SS7MsgSCCP* message);
+
+    /**
+     * Encode and send a SCCP ITU management message
+     * @param msgType The type of sccp management message
+     * @param params List of parameters
+     * @return True if the message was successfully sent
+     */
+    virtual bool sendMessage(MsgType msgType, const NamedList& params);
+
+    /**
+     * Handle notifications received from remote concerned sccp's
+     * @param rsccp Remote SCCP pointcode
+     * @param newState The new state of the remote SCCP
+     */
+    virtual void manageSccpRemoteStatus(SccpRemote* rsccp, SS7Route::State newState);
+
+    /**
+     * Handle a SCCP Management message
+     * @param msgType The message type
+     * @param params List of message parameters
+     * @return True if the message was handled
+     */
+    bool handleMessage(int msgType, NamedList& params);
+
+    /**
+     * Process the status of subsystems
+     * @param subsystem The subsystem who's status has changed
+     * @param allowed True if the subsystem status is Allowed false for Prohibited
+     * @param remote The remote sccp pointcode where the subsystem is located
+     * @param smi Subsystem Multiplicity Indicator
+     */
+    virtual void handleSubsystemStatus(SccpSubsystem* subsystem, bool allowed, SccpRemote* remote, int smi);
+
+};
+
+/**
  * Implementation of SS7 Signalling Connection Control Part
  * @short SS7 SCCP implementation
  */
-class YSIG_API SS7SCCP : public SS7Layer4, public SCCP
+class YSIG_API SS7SCCP : public SS7Layer4, public SCCP, public Mutex
 {
+    YCLASS(SS7SCCP,SCCP)
+    friend class SCCPManagement;
+public:
+    enum ReturnCauses {
+	NoTranslationAddressNature         = 0x00,
+	NoTranslationSpecificAddress       = 0x01,
+	SubsystemCongestion                = 0x02,
+	SubsystemFailure                   = 0x03,
+	UnequippedUser                     = 0x04,
+	MtpFailure                         = 0x05,
+	NetworkCongestion                  = 0x06,
+	Unqualified                        = 0x07,
+	ErrorInMessageTransport            = 0x08,
+	ErrorInLocalProcessing             = 0x09,
+	DestinationCanNotPerformReassembly = 0x0a,
+	SccpFailure                        = 0x0b,
+	HopCounterViolation                = 0x0c,
+	SegmentationNotSupported           = 0x0d,
+	SegmentationFailure                = 0x0e,
+	// ANSI only
+	MessageChangeFailure               = 0xf7,
+	InvalidINSRoutingRequest           = 0xf8,
+	InvalidISNIRoutingRequest          = 0xf9,
+	UnauthorizedMessage                = 0xfa,
+	MessageIncompatibility             = 0xfb,
+	NotSupportedISNIRouting            = 0xfc,
+	RedundantISNIConstrainedRouting    = 0xfd,
+	ISNIIdentificationFailed           = 0xfe,
+    };
+
+    enum Control {
+	Status                    = 0x01,
+	FullStatus                = 0x02,
+	EnableExtendedMonitoring  = 0x03,
+	DisableExtendedMonitoring = 0x04,
+	EnablePrintMsg            = 0x05,
+	DisablePrintMsg           = 0x06,
+    };
+    /**
+     * Constructor
+     */
+     SS7SCCP(const NamedList& config);
+
+    /**
+      * Destructor
+      */
+     ~SS7SCCP();
+
+    /**
+     * Configure and initialize the Signalling connection control part
+     * @param config Optional configuration parameters override
+     * @return True if SCCP was initialized properly
+     */
+    virtual bool initialize(const NamedList* config);
+
+    /**
+     * Attach a SS7 network or router to this service. Detach itself from the old one
+     * @param network Pointer to network or router to attach
+     */
+    virtual void attach(SS7Layer3* network);
+
+    /**
+     * Converts an SCCP message to a Message Signal Unit and push it down the protocol stack.
+     * The given message is consumed
+     * @param msg The message to send
+     * @param local True if the message is local initiated
+     * @return Link the message was successfully queued to, negative for error
+     */
+    int transmitMessage(SS7MsgSCCP* msg, bool local = false);
+
+    /**
+      * Receive management information from attached users.
+      * @param type The type of management message
+      * @param params List of parameters (Affected subsystem [M])
+      * @return True if the notification was processed
+      */
+     virtual bool managementStatus(Type type, NamedList& params);
+
+    /**
+     * Send a message
+     * Reimplemented from SCCP
+     * @param data Data to be transported trough SCCP protocol
+     * @param params SCCP parameters
+     */
+    virtual int sendMessage(DataBlock& data, const NamedList& params);
+
+    /**
+     * Process a MSU received from the Layer 3 component
+     * @param msu Message data, starting with Service Indicator Octet
+     * @param label Routing label of the received MSU
+     * @param network Network layer that delivered the MSU
+     * @param sls Signalling Link the MSU was received from
+     * @return Result of MSU processing
+     */
+    virtual HandledMSU receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls);
+
+    /**
+     * Notification for receiving User Part Unavailable
+     * @param type Type of Point Code
+     * @param node Node on which the User Part is unavailable
+     * @param part User Part (service) reported unavailable
+     * @param cause Unavailability cause - Q.704 15.17.5
+     * @param label Routing label of the UPU message
+     * @param sls Signaling link the UPU was received on
+     */
+    virtual void receivedUPU(SS7PointCode::Type type, const SS7PointCode node,
+	SS7MSU::Services part, unsigned char cause, const SS7Label& label, int sls);
+
+    virtual bool control(NamedList& params);
+
+    /**
+     * Message changeover procedure for segmentation purpose
+     * @param data The message data
+     * @param origMsg The original message
+     * @param type The destination message type
+     * @param local True if the origMsg is local initiated
+     * @return Negative value if the message failed to be sent
+     */
+    int segmentMessage(DataBlock& data, SS7MsgSCCP* origMsg, SS7MsgSCCP::Type type, bool local = false);
+
+    /**
+     * Check if we can send LUDT messages
+     * @param label The SS7 routing label
+     * @return True if we can send LUDT messages
+     */
+    bool canSendLUDT(const SS7Label& label);
+
+    /**
+     * Helper method to know if we use ITU or ANSI
+     */
+     inline const bool ITU() const
+	{ return m_type == SS7PointCode::ITU; }
+
+    /**
+     * Check if GT digit parser of should ignore unknown digits encoding
+     * @return True if unknown digits are ignored
+     */
+    inline bool ignoreUnknownAddrSignals() const
+	{ return m_ignoreUnkDigits; }
+
+    /**
+     * Process a notification generated by the attached network layer
+     * @param link Network or linkset that generated the notification
+     * @param sls Signalling Link that generated the notification, negative if none
+     */
+    virtual void notify(SS7Layer3* link, int sls);
+
+    /**
+     * Process route status changed notifications
+     * @param type Type of Point Code
+     * @param node Destination node witch communication status has changed
+     * @param state The new route state
+     */
+    virtual void routeStatusChanged(SS7PointCode::Type type, const SS7PointCode& node, SS7Route::State state);
+    /**
+     * Obtain the number of messages send by this SCCP instance
+     * @return The number of messages send
+     */
+    inline unsigned int messagesSend()
+	{ return m_totalSent; }
+
+    /**
+     * Obtain the number of messages received by this SCCP instance
+     * @return The number of messsages received
+     */
+    inline unsigned int messagesReceived()
+	{ return m_totalReceived; }
+
+    /**
+     * Obtain the number of errors found by this SCCP instance
+     * @return The number of errors found
+     */
+    inline unsigned int errors()
+	{ return m_errors; }
+
+    /**
+     * Obtain the number of GT translations made by this SCCP instance
+     * @return The number of translations made
+     */
+    inline unsigned int translations()
+	{ return m_totalGTTranslations; }
+	
+    /**
+     * Obtain the local SCCP point code
+     * @return Pointer to local point code or 0 if no pointcode was configured
+     */
+    inline const SS7PointCode* getLocalPointCode() const
+	{ return m_localPointCode; }
+
+    /**
+     * Obtain local pointcode type
+     * @return Local pointcode type
+     */
+     inline SS7PointCode::Type getLocalPointCodeType()
+	{ return m_type; }
+
+    /**
+     * Helper method to obtain the packed pointcode
+     * @return Packed pointcode or 0 if local pointcode is not set
+     */
+    inline int getPackedPointCode()
+	{ return m_localPointCode ? m_localPointCode->pack(m_type) : 0; }
+
+    /**
+     * Helper method to check if attached layer 3 is up
+     * @return True if attached layer3 is up
+     */
+    inline bool isLayer3Up()
+	{ return m_layer3Up; }
+protected:
+
+    /**
+     * This method is called to clean up and destroy the object after the
+     *  reference counter becomes zero
+     */
+    virtual void  destroyed();
+
+    /**
+     * Helper method to check if this sccp needs extended monitoring
+     * @return True if extended monitoring is needed
+     */
+    inline bool extendedMonitoring()
+	{ return m_extendedMonitoring; }
+
+    /**
+     * Method called periodically to check for timeouts
+     * Reimplemented from SignallingComponent
+     */
+    virtual void timerTick(const Time& when);
+
+    /**
+     * Reassemble a message segment
+     * @param segment The message segment
+     * @param label The MTP routing label
+     * @param msg Pointer to fill with the SS7MsgSccpReassemble who processed the message
+     * @return SS7MsgSccpReassemble::Return enum value
+     */
+    SS7MsgSccpReassemble::Return reassembleSegment(SS7MsgSCCP* segment, const SS7Label& label, SS7MsgSCCP*& msg);
+
+    /**
+     * Check if this sccp is an endpoint
+     * @return True if this sccp is an endpoint
+     */
+    virtual bool isEndpoint()
+	{ return m_endpoint; }
+private:
+    // Helper method used to extract the pointcode from Calling/Called party address.
+    // Also will call GT translate if there is no pointcode in called party address
+    bool fillPointCode(SS7PointCode& pointcode, SS7MsgSCCP* msg, const String& prefix, const char* pCode, bool translate);
+    // Helper method used to verify if the message is a connectionless data message
+    inline bool isSCLCMessage(int msgType)
+	{ return msgType == SS7MsgSCCP::UDT || msgType == SS7MsgSCCP::XUDT || msgType == SS7MsgSCCP::LUDT; }
+    // Helper method used to verify if the message is a connectionless service message
+    inline bool isSCLCSMessage(int msgType)
+	{ return msgType == SS7MsgSCCP::UDTS || msgType == SS7MsgSCCP::XUDTS || msgType == SS7MsgSCCP::LUDTS; }
+    bool isSCOCMsg(int msgType);
+
+    bool fillLabelAndReason(String& dest, const SS7Label& label,const SS7MsgSCCP* msg);
+    inline bool unknownPointCodeType()
+	{ return m_type != SS7PointCode::ITU && m_type != SS7PointCode::ANSI && m_type != SS7PointCode::ANSI8; }
+    // Helper method used to verify if th importance level is in standard range
+    int checkImportanceLevel(int msgType,int initialImportance);
+    // Helper method used to verify if the optional parameters present in message are declared in standards
+    void checkSCLCOptParams(SS7MsgSCCP* msg);
+    // Helper method used to monitor service messages
+    void archiveMessage(SS7MsgSCCP* msg);
+    // Helper method used to dump service messages and error codes status
+    void dumpArchive(String& msg, bool extended);
+
+    bool processMSU(SS7MsgSCCP::Type type, const unsigned char* paramPtr, 
+	    unsigned int paramLen, const SS7Label& label, SS7Layer3* network, int sls);
+
+    bool decodeMessage(SS7MsgSCCP* msg, SS7PointCode::Type pcType,
+	    const unsigned char* paramPtr, unsigned int paramLen);
+
+    void returnMessage(SS7MsgSCCP* message, int error);
+
+    static void switchAddresses(const NamedList& source, NamedList& dest);
+    // Helper method to dump sccp status
+    void printStatus(bool extended);
+    void setNetworkUp(bool operational);
+
+    SS7MSU* buildMSU(SS7MsgSCCP* msg, const SS7Label& label) const;
+    bool routeSCLCMessage(SS7MsgSCCP*& msg, const SS7Label& label);
+    // Member data
+    SS7PointCode::Type m_type;           // Point code type of this SCCP
+    SS7PointCode* m_localPointCode;      // Local point code
+    SCCPManagement* m_management;        // SCCP management
+    ObjList m_reassembleList;            // List of sccp messages that are waiting to be reassembled
+    u_int8_t m_hopCounter;               // Hop counter value
+    NamedList m_msgReturnStatus;         // List with message return statistics
+    u_int32_t m_segTimeout;              // Time in milliseconds for segmentation timeout
+    bool m_ignoreUnkDigits;              // Check if GT digit parser of should ignore unknown digits encoding
+    bool m_layer3Up;                     // Flag used to verify if the network is operational
+    bool m_supportLongData;              // Flag used to check if this sccp can send LUDT messages
+    u_int32_t m_totalSent;               // Counter of the total number of SCCP messages sent
+    u_int32_t m_totalReceived;           // The number of incoming sccp messages
+    u_int32_t m_errors;                  // Counter of the number of messages that failed to be delivered
+    u_int32_t m_totalGTTranslations;     // The number of GT translations made
+    u_int32_t m_gttFailed;               // Number of global title that failed to be translated
+    bool m_extendedMonitoring;           // Flag used to check if the monitoring is normal or extended
+    const char* m_mgmName;               // The name of the sccp management section from ysigchan.conf
+    // Debug flags
+    bool m_printMsg;                     // Print messages to output
+    bool m_extendedDebug;                // Extended debug flag
+    bool m_endpoint;                     // Flag used to force message processing if the message have a ssn
 };
 
 /**
@@ -8599,29 +10333,1028 @@ class YSIG_API SS7SUA : public SIGAdaptUser, public SCCP
 };
 
 /**
- * Implementation of SS7 Application Service Part
- * @short SS7 ASP implementation
+ * A TCAP message wrapper, encapsulates the data received from SCCP
+ * @short TCAP message wrapper
  */
-class YSIG_API SS7ASP : public SCCPUser, virtual public SignallingComponent
+class YSIG_API SS7TCAPMessage : public GenObject
 {
-protected:
-    ObjList m_sccps;
+public:
+    /**
+     * Constructor
+     * @param params NamedList reference containing information from the SCCP level
+     * @param data DataBlock representing the TCAP payload
+     * @param notice Flag if this is a notification, true if it is, false if it's a message 
+     */
+    inline SS7TCAPMessage(NamedList& params, DataBlock& data, bool notice = false)
+	: m_msgParams(params), m_msgData(data), m_notice(notice)
+	{}
+    /**
+     * Get the SCCP parameters
+     * @return NamedList reference containing information from the SCCP level
+     */
+    inline NamedList& msgParams()
+	{ return m_msgParams; }
+    /**
+     * Get the TCAP message data
+     * @return DataBlock representing the encoded TCAP message
+     */
+    inline DataBlock& msgData()
+	{ return m_msgData; }
+    /**
+     * Is this message a notice or a normal message?
+     * @return True if message is a notice, false otherwise
+     */
+    inline bool& isNotice()
+	{ return m_notice; }
+private:
+    NamedList m_msgParams;
+    DataBlock m_msgData;
+    bool m_notice;
 };
 
 /**
  * Implementation of SS7 Transactional Capabilities Application Part
  * @short SS7 TCAP implementation
  */
-class YSIG_API SS7TCAP : public ASPUser, virtual public SignallingComponent
+class YSIG_API SS7TCAP : public SCCPUser
 {
+    YCLASS(SS7TCAP,SCCPUser)
+public:
+    /**
+     * TCAP implementation variant
+     */
+    enum TCAPType {
+	UnknownTCAP,
+	ITUTCAP,
+	ANSITCAP,
+    };
+    /**
+     * Component handling primitives between TCAP and TCAP user (TC-user)
+     */
+    enum TCAPUserCompActions {
+	TC_Invoke         = 1,        // ITU-T Invoke primitive, ANSI InvokeLast - Request/Indication
+	TC_ResultLast     = 2,        // ITU-T & ANSI ResultLast primitive - Request/Indication
+	TC_U_Error        = 3,        // ITU-T & ANSI ReturnError primitive - Request/Indication
+	TC_U_Reject       = 4,        // ITU-T & ANSI Reject primitive - Request/Indication, TC-user rejected the component
+	TC_R_Reject       = 5,        // ITU-T & ANSI Reject primitive - Indication, Remote TC-user rejected the component
+	TC_L_Reject       = 6,        // ITU-T & ANSI Reject primitive - Indication, local Component Sublayer rejected the component
+	TC_InvokeNotLast  = 7,        // ANSI InvokeNotLast primitive - Request/Indication
+	TC_ResultNotLast  = 8,        // ITU-T & ANSI ResultNotLast primitive - Request/Indication
+	TC_L_Cancel       = 9,        // Local Cancel primitive - Indication, inform TC-user that an operation has timed out
+	TC_U_Cancel       = 10,       // User Cancel primitive - Request, TC-user request cancellation of an operation
+	TC_TimerReset     = 11,       // Timer Reset - Indication, allow TC-user to refresh an operation timer
+    };
+    /**
+     * TCAP message primitives
+     */
+    enum TCAPUserTransActions {
+	TC_Unknown         = 0,
+	TC_Unidirectional  = 1,          // ITU-T & ANSI - Request/Indication, request Unidirectional message
+	TC_Begin,                   // ITU-T - Request/Indication, begin a dialogue
+	TC_QueryWithPerm,           // ANSI - Request/Indication, begin a dialogue with permission to end it
+	TC_QueryWithoutPerm,        // ANSI - Request/Indication, begin a dialogue without permission to end it
+	TC_Continue,                // ITU-T - Request/Indication, continue a dialogue
+	TC_ConversationWithPerm,    // ANSI - Request/Indication, continue a dialogue with permission
+	TC_ConversationWithoutPerm, // ANSI - Request/Indication, continue a dialogue without permission
+	TC_End,                     // ITU-T -Request/Indication, end a dialogue
+	TC_Response,                // ANSI - Request/Indication, end a dialogue
+	TC_U_Abort,                 // ITU-T & ANSI - Request/Indication, abort a dialogue per user's request
+	TC_P_Abort,                 // ITU-T & ANSI - Indication, notify the abort of a dialogue because of a protocol error
+	TC_Notice,                  // ITU-T & ANSI - Indication, notify the TC-user that the network was unable to provide the requested service
+    };
+    /**
+     * Component Operation Classes
+     */
+    enum TCAPComponentOperationClass {
+	SuccessOrFailureReport    = 1,
+	FailureOnlyReport         = 2,
+	SuccessOnlyReport         = 3,
+	NoReport                  = 4,
+    };
+    /**
+     * Type of message counters
+     */
+    enum TCAPCounter {
+	IncomingMsgs,
+	OutgoingMsgs,
+	DiscardedMsgs,
+	NormalMsgs,
+	AbnormalMsgs,
+    };
+    /**
+     * Constructor
+     * @param params Parameters for building this TCAP
+     */
+    SS7TCAP(const NamedList& params);
+    /**
+     * Destructor
+     */
+    virtual ~SS7TCAP();
+    /**
+     * Configure and initialize the component and any subcomponents it may have
+     * @param config Optional configuration parameters override
+     * @return True if the component was initialized properly
+     */
+    virtual bool initialize(const NamedList* config);
+    /**
+     * Send a message to SCCP for transport, inherited from SCCPUser
+     * @param data User data
+     * @param params SCCP parameters
+     */
+    virtual bool sendData(DataBlock& data, NamedList& params);
+    /**
+     * Notification from SCCP that a message has arrived, inherited from SCCPUser
+     * @param data Received user data
+     * @param params SCCP parameters
+     * @return True if this user has processed the message, false otherwise
+     */
+    virtual HandledMSU receivedData(DataBlock& data, NamedList& params);
+    /**
+     * Notification from SCCP that a message failed to arrive to its destination, inherited from SCCPUser
+     * @param data User data sent.
+     * @param params SCCP parameters
+     * Note! The data may not contain the full message block previously sent (in case of SCCP segmentation),
+     * but it must always must contain the first segment
+     */
+    virtual HandledMSU notifyData(DataBlock& data, NamedList& params);
+    /**
+     * Notification from SCCP layer about management status
+     * @param type Type of management notification
+     * @param params Notification params
+     */
+    bool managementNotify(SCCP::Type type, NamedList& params);
     /**
      * Attach a SS7 TCAP user
      * @param user Pointer to the TCAP user to attach
      */
     void attach(TCAPUser* user);
+    /**
+     * Detach a SS7 TCAP user
+     * @param user TCAP user to detach
+     */
+    void detach(TCAPUser* user);
+    /**
+     * A TCAP user made a request
+     * @param requestParams NamedList containing all the necessary data for the TCAP request
+     * @return A SS7TCAPError reporting the status of the request
+     */
+    virtual SS7TCAPError userRequest(NamedList& requestParams);
+    /**
+     * Process received SCCP data
+     * @param sccpData A TCAP message received from SCCP to process
+     * @return A code specifying if this message was handled
+     */
+    virtual HandledMSU processSCCPData(SS7TCAPMessage* sccpData);
+    /**
+     * Report which TCAP implementation is in use
+     */
+    inline TCAPType tcapType()
+	{ return m_tcapType; }
+    /**
+     * Set TCAP version
+     * @param type TCAP version
+     */
+    inline void setTCAPType(TCAPType type)
+	{ m_tcapType = type; }
+    /**
+     * Enqueue data received from SCCP as a TCAP message, kept in a processing queue
+     * @param msg A SS7TCAPMessage pointer containing all data received from SSCP
+     */
+    virtual void enqueue(SS7TCAPMessage* msg);
+    /**
+     * Dequeue a TCAP message when ready to process it
+     * @return A SS7TCAPMessage pointer dequeued from the queue
+     */
+    virtual SS7TCAPMessage* dequeue();
+    /**
+     * Get a new transaction ID
+     * @return A transaction ID
+     */
+    virtual const String allocTransactionID();
+    /**
+     * Get a new transaction ID
+     * @param str String into which to put the id
+     */
+    void allocTransactionID(String& str);
+    /**
+     * Dictionary for TCAP versions
+     */
+    static const TokenDict s_tcapVersion[];
+    /**
+     * Dictionary for component primitives
+     */
+    static const TokenDict s_compPrimitives[];
+    /**
+     * Dictionary for transaction primitives
+     */
+    static const TokenDict s_transPrimitives[];
+    /**
+     * Dictionary for component opearation classes
+     */
+    static const TokenDict s_compOperClasses[];
+    /**
+     * Build a transaction
+     * @param type Type with which to build the transactions
+     * @param transactID ID for the transaction
+     * @param params Parameters for building the transaction
+     * @param initLocal True if built by user, false if by remote end
+     * @return A transaction
+     */
+    virtual SS7TCAPTransaction* buildTransaction(SS7TCAP::TCAPUserTransActions type, const String& transactID, NamedList& params,
+	bool initLocal = true) = 0;
+    /**
+     * Find the transaction with the given id
+     * @param tid Searched local id
+     * @return A pointer to the transaction or null if not found
+     */
+    SS7TCAPTransaction* getTransaction(const String& tid);
+    /**
+     * Remove transaction
+     * @param tr The transaction to remove
+     */
+    void removeTransaction(SS7TCAPTransaction* tr);
+    /**
+     * Method called periodically to do processing and timeout checks
+     * @param when Time to use as computing base for events and timeouts
+     */
+    virtual void timerTick(const Time& when);
+    /**
+     * Send to TCAP users a decode message
+     * @param params Message in NamedList form
+     * @return True if the message was handled by a user, false otherwise
+     */
+    virtual bool sendToUser(NamedList& params);
+    /**
+     * Build SCCP data
+     * @param params NamedList containing the parameters to be given to SCCP
+     * @param tr Transaction for which to build SCCP data
+     */
+    virtual void buildSCCPData(NamedList& params, SS7TCAPTransaction* tr);
+    /**
+     * Status of TCAP
+     * @param status NamedList to fill with status information
+     */
+    virtual void status(NamedList& status);
+    /**
+     * Status of TCAP users
+     * @param status NamedList to fill with user status information
+     */
+    virtual void userStatus(NamedList& status);
+    /**
+     * Handle an decoding error
+     * @param error The encoutered error
+     * @param params TCAP message parameters which where successfully decoded until the error was encoutered
+     * @param data Data block containing the rest of the message
+     * @param tr Transaction to which this message belongs to
+     * @return Status if the error was handled or not
+     */
+    virtual HandledMSU handleError(SS7TCAPError& error, NamedList& params, DataBlock& data, SS7TCAPTransaction* tr = 0);
+    /**
+     * Increment one of the status counters
+     * @param counterType The type of the counter to increment
+     */
+    inline void incCounter(TCAPCounter counterType)
+    {
+	switch (counterType) {
+	    case IncomingMsgs:
+		m_recvMsgs++;
+		break;
+	    case OutgoingMsgs:
+		m_sentMsgs++;
+		break;
+	    case DiscardedMsgs:
+		m_discardMsgs++;
+		break;
+	    case NormalMsgs:
+		m_normalMsgs++;
+		break;
+	    case AbnormalMsgs:
+		m_abnormalMsgs++;
+		break;
+	    default:
+		break;
+	}
+    }
+    /**
+     * Retrieve one of the status counters
+     * @param counterType The type of the counter to increment
+     * @return The value of the counter
+     */
+    inline unsigned int count(TCAPCounter counterType)
+    {
+	switch (counterType) {
+	    case IncomingMsgs:
+		return m_recvMsgs;
+	    case OutgoingMsgs:
+		return m_sentMsgs;
+	    case DiscardedMsgs:
+		return m_discardMsgs;
+	    case NormalMsgs:
+		return m_normalMsgs;
+	    case AbnormalMsgs:
+		return m_abnormalMsgs;
+	    default:
+		break;
+	}
+	return 0;
+    }
+    /**
+     * Get the type of transaction in string form
+     * @param tr Type of transaction
+     * @return A string containing the string form of that type of transaction
+     */
+    static inline const char* lookupTransaction(int tr)
+	{ return lookup(tr,s_transPrimitives,"Unknown"); }
+    /**
+     * Get the type of transaction from string form
+     * @param tr Type of transaction in string form
+     * @return The type of transaction
+     */
+    static inline int lookupTransaction(const char* tr)
+	{ return lookup(tr,s_transPrimitives,TC_Unknown); }
+    /**
+     * Get the type of component in string form
+     * @param comp Type of component
+     * @return A string containing the string form of that type of component
+     */
+    static inline const char* lookupComponent(int comp)
+	{ return lookup(comp,s_compPrimitives,"Unknown"); }
+    /**
+     * Get the type of component from string form
+     * @param comp Type of component
+     * @return The type of component
+     */
+    static inline int lookupComponent(const char* comp)
+	{ return lookup(comp,s_compPrimitives,TC_Unknown); }
 
 protected:
+    virtual SS7TCAPError decodeTransactionPart(NamedList& params, DataBlock& data) = 0;
+    virtual void encodeTransactionPart(NamedList& params, DataBlock& data) = 0;
+    // list of TCAP users attached to this TCAP instance
     ObjList m_users;
+    Mutex m_usersMtx;
+
+    // list of messages received from sublayer, waiting to be processed
+    ObjList m_inQueue;
+    Mutex m_inQueueMtx;
+
+    unsigned int m_SSN;
+    unsigned int m_defaultRemoteSSN;
+    SS7PointCode m_defaultRemotePC;
+    SS7PointCode::Type m_remoteTypePC;
+    u_int64_t m_trTimeout;
+
+    // list of current TCAP transactions
+    Mutex m_transactionsMtx;
+    ObjList m_transactions;
+    // type of TCAP
+    TCAPType m_tcapType;
+
+    // counter for allocating transaction IDs
+    u_int32_t m_idsPool;
+
+    // counters
+    unsigned int m_recvMsgs;
+    unsigned int m_sentMsgs;
+    unsigned int m_discardMsgs;
+    unsigned int m_normalMsgs;
+    unsigned int m_abnormalMsgs;
+};
+
+class YSIG_API SS7TCAPError
+{
+public:
+    enum ErrorType {
+	// P-AbortCause TransactionProblems
+	Transact_UnrecognizedPackageType,     // named after the ANSI specification, equivalent to ITU-T UnrecongnizedMessageType P-AbortCause
+	Transact_IncorrectTransactionPortion, // <==> ITU-T incorrectTrasactionPortion P-AbortCause
+	Transact_BadlyStructuredTransaction,  // <==> ITU-T badlyFormattedTransactionPortion P-AbortCause
+	Transact_UnassignedTransactionID,
+	Transact_PermissionToReleaseProblem,  // HANDLING NOT DEFINED
+	Transact_ResourceUnavailable,         // <==> ITU-T resourceLimitation P-AbortCause
+
+	// P-AbortCause DialogProblem
+	Dialog_UnrecognizedDialoguePortionID, // ANSI only
+	Dialog_BadlyStructuredDialoguePortion,// ANSI only
+	Dialog_MissingDialoguePortion,        // ANSI only
+	Dialog_InconsistentDialoguePortion,   // ANSI only
+	Dialog_Abnormal,                      // ITU only, indication only
+
+	// GeneralProblem
+	General_UnrecognizedComponentType,   // named after the ANSI specification, equivalent to ITU-T UnrecognizedComponent General Problem
+	General_IncorrectComponentPortion,   // ANSI specification, equivalent to ITU-T MistypedComponent General Problem
+	General_BadlyStructuredCompPortion,  // ANSI specification, equivalent to ITU-T BadlyStructuredComponent General Problem
+	General_IncorrectComponentCoding,    // ANSI specification, no ITU-T equivalent
+
+	// InvokeProblem
+	Invoke_DuplicateInvokeID,           // ANSI & ITU-T specification
+	Invoke_UnrecognizedOperationCode,   // ANSI specification, equivalent to ITU-T UnrecognizedOperation Invoke Problem
+	Invoke_IncorrectParameter,          // ANSI specification, equivalent to ITU-T MistypedParameter Invoke Problem
+	Invoke_UnrecognizedCorrelationID,   // ANSI specification, equivalent to ITU-T UnrecognizedLinkedID Invoke Problem
+	Invoke_ResourceLimitation,          // ITU-T only
+	Invoke_InitiatingRelease,           // ITU-T only
+	Invoke_LinkedResponseUnexpected,    // ITU-T only
+	Invoke_UnexpectedLinkedOperation,   // ITU-T only
+
+	// ReturnResult
+	Result_UnrecognizedInvokeID,        // ITU-T only
+	Result_UnrecognisedCorrelationID,   // ANSI only
+	Result_UnexpectedReturnResult,      // ANSI specification, equivalent to ITU-T ReturnResultUnexpected Result Problem
+	Result_IncorrectParameter,          // ANSI specification, equivalent to ITU-T MistypedParameter Result Problem
+
+	// ReturnError
+	Error_UnrecognizedInvokeID,        // ITU-T only
+	Error_UnrecognisedCorrelationID,   // ANSI only
+	Error_UnexpectedReturnError,       // ANSI only
+	Error_UnrecognisedError,           // ANSI & ITU-T
+	Error_UnexpectedError,             // ANSI & ITU-T
+	Error_IncorrectParameter,          // ANSI specification, equivalent to ITU-T MistypedParameter Return Error Problem
+
+	Discard,
+	NoError,
+    };
+    /**
+     * Constructor
+     * @param tcapType TCAP specification user for this error
+     */
+    SS7TCAPError(SS7TCAP::TCAPType tcapType);
+    /**
+     * Constructor
+     * @param tcapType TCAP specification used for this error
+     * @param error The error
+     */
+    SS7TCAPError(SS7TCAP::TCAPType tcapType, ErrorType error);
+    /**
+     * Destructor
+     */
+    ~SS7TCAPError();
+    /**
+     * Get the error
+     * @return The TCAP error
+     */
+    inline ErrorType error()
+	{ return m_error; }
+    /**
+     * Set the error
+     * @param error Error to set
+     */
+    inline void setError(ErrorType error)
+	{ m_error = error; }
+    /**
+     * Error name
+     * @return The error name
+     */
+    const String errorName();
+    /**
+     * The full value of the error
+     * @return 2 byte integer containing the full code of the error
+     */
+    u_int16_t errorCode();
+    /**
+     * Dictionary for error types
+     */
+    static const TokenDict s_errorTypes[];
+private:
+    SS7TCAP::TCAPType m_tcapType;
+    ErrorType m_error;
+};
+
+/**
+ * Implementation of SS7 Transactional Capabilities Application Part Transaction 
+ * @short SS7 TCAP transaction implementation
+ */
+class YSIG_API SS7TCAPTransaction : public GenObject, public Mutex
+{
+public:
+    enum TransactionState {
+	Idle                      = 0,
+	PackageSent               = 1,
+	PackageReceived           = 2,
+	Active                    = 3,
+    };
+    enum TransactionTransmit {
+	NoTransmit       = 0,
+	PendingTransmit  = 256,
+	Transmitted      = 521,
+    };
+    /**
+     * Constructor
+     * @param tcap TCAP holding this transaction
+     * @param type Initiating type for transaction
+     * @param transactID Transaction ID
+     * @param params Decoded TCAP parameters for building the transaction
+     * @param timeout Transaction timeout
+     * @param initLocal True if the transaction was initiated locally, false if not
+     */
+    SS7TCAPTransaction(SS7TCAP* tcap, SS7TCAP::TCAPUserTransActions type, const String& transactID, NamedList& params,
+	u_int64_t timeout, bool initLocal = true);
+    /**
+     * Destructor
+     */
+    ~SS7TCAPTransaction();
+    /**
+     * Process transaction data and fill the NamedList with the decoded data
+     * @param params NamedList to fill with decoded data
+     * @param data Data to decode
+     * @return A TCAP error encountered whilst decoding
+     */
+    virtual SS7TCAPError handleData(NamedList& params, DataBlock& data) = 0;
+    /**
+     * An update request for this transaction
+     * @param type The type of transaction to which this transaction should be updated
+     * @param params Update parameter
+     * @param updateByUser True if the update is made by the local user, false if it's made by the remote end
+     * @return A TCAP Error
+     */
+    virtual SS7TCAPError update(SS7TCAP::TCAPUserTransActions type, NamedList& params, bool updateByUser = true) = 0;
+    /**
+     * Handle TCAP relevant dialog data
+     * @param params NamedList containing (if present) dialog information
+     * @param byUser True if the dialog information is provided by the local user, false otherwise
+     * @return A report error
+     */
+    virtual SS7TCAPError handleDialogPortion(NamedList& params,bool byUser = true) = 0;
+    /**
+     * Build a Reject component in answer to an encoutered error during decoding of the component portion
+     * @param error The encountered error
+     * @param params Decoded TCAP message parameters
+     * @param data DataBlock containing the rest of the coded TCAP message
+     * @return A report error
+     */
+    virtual SS7TCAPError buildComponentError(SS7TCAPError& error, NamedList& params, DataBlock& data);
+    /**
+     * Update components
+     * @param params NamedList reference containing the update information
+     * @param updateByUser Flag if the update was issued by local user or by remote
+     * @return A report error
+     */
+    virtual SS7TCAPError handleComponents(NamedList& params, bool updateByUser = true);
+    /**
+     * Request encoding for the components of this transaction
+     * @param params Components parameters to encode
+     * @param data DataBlock reference in which to insert the encoded components
+     */
+    virtual void requestComponents(NamedList& params, DataBlock& data);
+    /**
+     * Fill the NamedList with transaction portion parameters
+     * @param params NamedList reference to fill with transaction portion parameters
+     */
+    virtual void transactionData(NamedList& params);
+    /**
+     * Request content for this transaction
+     * @param params List of parameters of this tranaction
+     * @param data Data block to fill with encoded content
+     */
+    virtual void requestContent(NamedList& params, DataBlock& data) = 0;
+    /**
+     * Check components for timeouts
+     */
+    virtual void checkComponents();
+    /**
+     * Set the current type of transaction primitive
+     * @param type The transaction primitive to be set
+     */
+    inline void setTransactionType(SS7TCAP::TCAPUserTransActions type)
+	{ m_type = type; }
+    /**
+     * Retrieve the current type of primitive that is set for this transaction
+     * @return The transaction primitive type
+     */
+    inline SS7TCAP::TCAPUserTransActions transactionType()
+	{ return m_type; }
+    /**
+     * Set the state of this transaction, trigger a transmission pending state
+     * @param state The state to set for the transaction
+     */
+    inline void setState(TransactionState state)
+    {
+	m_state = state;
+	// changing state automatically triggers a change in transmission state (except for Idle)
+	if (state != Idle)
+	    m_transmit = PendingTransmit;
+    }
+    /**
+     * Retrieve the state of this transaction
+     * @return The state of this transaction
+     */
+    inline TransactionState transactionState()
+	{ return m_state; }
+    /**
+     * Set the transmission state for this transaction
+     * @param state The transmission state to be set
+     */
+    void setTransmitState(TransactionTransmit state);
+    /**
+     * The transmission state for this transaction
+     * @return The current transmission state
+     */
+    inline TransactionTransmit transmitState()
+	{ return m_transmit; }
+    /**
+     * The TCAP to which this transaction belongs
+     * @return A pointer to the TCAP component
+     */
+    inline SS7TCAP* tcap()
+	{ return m_tcap; }
+    /**
+     * Get the ID of the transaction so it can be used for list searches
+     * @return A reference to the ID
+     */
+    const String& toString() const
+	{ return m_localID; }
+    /**
+     * Set the TCAP username to which this transaction belongs
+     * @param name The name of the user to set
+     */
+    inline void setUserName(const String& name)
+	{ m_userName = name; }
+    /**
+     * Return the name of the TCAP user to which this transaction belongs
+     * @return The name of the user
+     */
+    const String& userName()
+	{ return m_userName; }
+    /**
+     * Check if a basic end was set for this transaction
+     * @return True if basic end was specified by the user, false if prearranged end was specified
+     */
+    inline bool basicEnd()
+	{ return m_basicEnd; }
+    /**
+     * Add SCCP Addressing information
+     * @param fillParams NamedList to fill with addressing information
+     * @param local True if the information is for the user, otherwise
+     */
+    void addSCCPAddressing(NamedList& fillParams, bool local);
+    /**
+     * Check if the flag to end this transaction immediately was set
+     * @return True if the end flag was set, false otherwise
+     */
+    inline bool endNow()
+	{ return m_endNow; }
+    /**
+     * Set the flag to end this transaction immediately
+     * @param endNow Boolean value to set to the end flag
+     */
+    inline void endNow(bool endNow)
+	{ m_endNow = endNow; }
+    /**
+     * Check if the transaction has timed out
+     * @return True if the transaction timed out, false otherwise
+     */
+    inline bool timedOut()
+	{ return m_timeout.timeout(); }
+    /**
+     * Find a component with given id
+     * @param id Id of component to find
+     * @return The component with given id or null
+     */
+    SS7TCAPComponent* findComponent(const String& id);
+    /**
+     * Update the state of this transaction to end the transaction
+     */
+    virtual void updateToEnd();
+    /**
+     * Update transaction state
+     * @param byUser True if update is requested by user, false if by remote
+     */
+    inline void updateState(bool byUser = true)
+	{ }
+
+    virtual SS7TCAPError decodeDialogPortion(NamedList& params, DataBlock& data) = 0;
+    virtual void encodeDialogPortion(NamedList& params, DataBlock& data) = 0;
+    virtual SS7TCAPError decodeComponents(NamedList& params, DataBlock& data) = 0;
+    virtual void encodeComponents(NamedList& params, DataBlock& data) = 0;
+
+protected:
+    SS7TCAP* m_tcap;
+    SS7TCAP::TCAPType m_tcapType;
+    String m_userName;
+    String m_localID;
+    String m_remoteID;
+    SS7TCAP::TCAPUserTransActions m_type;
+    TransactionState m_state;
+    TransactionTransmit m_transmit;
+
+    ObjList m_components;
+
+    NamedList m_localSCCPAddr;
+    NamedList m_remoteSCCPAddr;
+
+    bool m_basicEnd; // basic or prearranged end (specified by user when sending a Response)
+    bool m_endNow; // delete immediately after sending
+    SignallingTimer m_timeout;
+};
+
+/**
+ * Implementation of SS7 Transactional Capabilities Application Part Component 
+ * @short SS7 TCAP component implementation
+ */
+class YSIG_API SS7TCAPComponent : public GenObject
+{
+public:
+    /**
+     * Component state
+     */
+    enum TCAPComponentState {
+	Idle,
+	OperationPending,
+	OperationSent,
+	WaitForReject,
+    };
+    /**
+     * Constructor
+     * @param type TCAP type for which to build this component
+     * @param trans TCAP transaction to which this component belongs to
+     * @param params Parameters for building component
+     * @param index Index in the list of parameters
+     */
+    SS7TCAPComponent(SS7TCAP::TCAPType type, SS7TCAPTransaction* trans, NamedList& params, unsigned int index);
+    /**
+     * Destructor
+     */
+    virtual ~SS7TCAPComponent();
+    /**
+     * Update this component's data
+     * @param params Update parameters
+     * @param index Index of parameters in the list for the update of this component
+     */
+    virtual void update(NamedList& params, unsigned int index);
+    /**
+     * Put the information of the component in a NamedList
+     * @param index Index for build parameter names
+     * @param fillIn NamedList to fill with this component's information
+     */
+    virtual void fill(unsigned int index, NamedList& fillIn);
+    /**
+     * Build a TCAP Component from a NamedList
+     * @param type TCAP type of component
+     * @param tr The transaction to which this component should belong
+     * @param params Parameters for building the component
+     * @param index Index in the list of parameters
+     * @return A pointer to the built SS7TCAPComponent or nil if not all required parameters are present
+     */
+    static SS7TCAPComponent* componentFromNamedList(SS7TCAP::TCAPType type, SS7TCAPTransaction* tr, NamedList& params, unsigned int index);
+    /**
+     * Set the transaction to which this component belongs to
+     * @param transact TCAP transaction
+     */
+    void setTransaction(SS7TCAPTransaction* transact);
+    /**
+     * Returns the transaction to which this component belongs to.
+     */
+    SS7TCAPTransaction* transaction();
+    /**
+     * Set the type for this component
+     * @param type The type of the component
+     */
+    inline void setType(SS7TCAP::TCAPUserCompActions type)
+	{ m_type = type; }
+    /**
+     * Get the type of the component
+     */
+    inline SS7TCAP::TCAPUserCompActions type()
+	{ return m_type; }
+    /**
+     * Set the Invoke ID for this component
+     * @param invokeID The invoke ID to assign
+     */
+    virtual void setInvokeID(String invokeID)
+	{ m_id = invokeID; }
+    /**
+     * String representation of this component's Invoke ID
+     * @return String representation of Invoke ID
+     */
+    virtual const String&  toString () const
+	{ return m_id; }
+    /**
+     * String representation of this component's Correlation ID
+     * @return String representation of Correlation ID
+     */
+    virtual const String&  correlationID() const
+	{ return m_corrID; }
+    /**
+     * Check if the component has timed out
+     * @return True if the component timed out, false otherwise
+     */
+    inline bool timedOut()
+	{ return m_opTimer.timeout(); }
+    /**
+     * Set component state
+     * @param state The state to be set
+     */
+    void setState(TCAPComponentState state);
+    /**
+     * Obtain the component state
+     * @return The component state
+     */
+    inline TCAPComponentState state()
+	{ return m_state; }
+    /**
+     * Reset invocation timer on user request
+     * @param params List of parameters
+     * @param index Index of this component's parameters in the list
+     */
+    void resetTimer(NamedList& params, unsigned int index);
+    /**
+     * Retrieve operation class for this component
+     * @return The class of the operation
+     */
+    SS7TCAP::TCAPComponentOperationClass operationClass()
+	{ return m_opClass; }
+    /**
+     * Dictionary for component states
+     */
+    static const TokenDict s_compStates[];
+
+private:
+    SS7TCAPTransaction* m_transact;
+    SS7TCAP::TCAPUserCompActions m_type;
+    TCAPComponentState m_state;
+    String m_id;
+    String m_corrID;
+    SS7TCAP::TCAPComponentOperationClass m_opClass;
+    SignallingTimer m_opTimer;
+    SS7TCAPError m_error;
+};
+
+/**
+ * Implementation of SS7 Transactional Capabilities Application Part - specification ANSI
+ * @short ANSI SS7 TCAP implementation
+ */
+class YSIG_API SS7TCAPANSI : virtual public SS7TCAP
+{
+    YCLASS(SS7TCAPANSI,SS7TCAP)
+public:
+    enum TCAPTags {
+	TransactionIDTag    = 0xc7,
+	PCauseTag           = 0xd7,
+	UserAbortPTag       = 0xd8 , // Primitive
+	UserAbortCTag       = 0xf8,  // Constructor
+    };
+    enum TCAPDialogTags {
+	DialogPortionTag         = 0xf9,
+	ProtocolVersionTag       = 0xda,
+	IntApplicationContextTag = 0xdb,
+	OIDApplicationContextTag = 0xdc,
+	UserInformationTag       = 0xfd,
+	IntSecurityContextTag    = 0x80,
+	OIDSecurityContextTag    = 0x81,
+	ConfidentialityTag       = 0xa2,
+    };
+    enum UserInfoTags {
+	DirectReferenceTag       = 0x06,
+	DataDescriptorTag        = 0x07,
+	ExternalTag              = 0x28,
+	SingleASNTypePEncTag     = 0x80, // Primitive Single-ASN1-Type-Encoding
+	SingleASNTypeCEncTag     = 0xa0, // Constructor Single-ASN1-Type-Encoding
+	OctetAlignEncTag         = 0x81,
+	ArbitraryEncTag          = 0x82,
+    };
+    enum ConfidentialityTags {
+	IntConfidentialContextTag    = 0x80,
+	OIDConfidentialContextTag    = 0x81,
+    };
+    enum TCAPComponentTags {
+	ComponentPortionTag  = 0xe8,
+	ComponentsIDsTag     = 0xcf,
+	OperationNationalTag = 0xd0,
+	OperationPrivateTag  = 0xd1,
+	ErrorNationalTag     = 0xd3,
+	ErrorPrivateTag      = 0xd4,
+	ProblemCodeTag       = 0xd5,
+	ParameterSetTag      = 0xf2,
+	ParameterSeqTag      = 0x30,
+    };
+    /**
+     * Constructor
+     * @param params NamedList containing parameters for building TCAP
+     */
+    SS7TCAPANSI(const NamedList& params);
+    /**
+     * Destructor
+     */
+    ~SS7TCAPANSI();
+    /**
+     * Build a transaction
+     * @param type Type with which to build the transactions
+     * @param transactID ID for the transaction
+     * @param params Parameters for building the transaction
+     * @param initLocal True if built by user, false if by remote end
+     * @return A transaction
+     */
+    virtual SS7TCAPTransaction* buildTransaction(SS7TCAP::TCAPUserTransActions type, const String& transactID, NamedList& params,
+	bool initLocal = true);
+private:
+    SS7TCAPError decodeTransactionPart(NamedList& params, DataBlock& data);
+    void encodeTransactionPart(NamedList& params, DataBlock& data);
+};
+
+/**
+ * Implementation of SS7 Transactional Capabilities Application Part Transaction - specification ANSI
+ * @short ANSI SS7 TCAP transaction implementation
+ */
+class YSIG_API SS7TCAPTransactionANSI : public SS7TCAPTransaction
+{
+public:
+    enum TCAPANSIComponentType {
+	CompUnknown         = 0x0,
+	Local               = 0x1,
+	InvokeLast          = 0xe9,
+	ReturnResultLast    = 0xea,
+	ReturnError         = 0xeb,
+	Reject              = 0xec,
+	InvokeNotLast       = 0xed,
+	ReturnResultNotLast = 0xee,
+    };
+    enum ANSITransactionType {
+	Unknown                         = 0x0,
+	Unidirectional                  = 0xe1,
+	QueryWithPermission             = 0xe2,
+	QueryWithoutPermission          = 0xe3,
+	Response                        = 0xe4,
+	ConversationWithPermission      = 0xe5,
+	ConversationWithoutPermission   = 0xe6,
+	Abort                           = 0xf6,
+    };
+    /**
+     * Constructor
+     * @param tcap TCAP holding this transaction
+     * @param type Initiating type for transaction
+     * @param transactID Transaction ID
+     * @param params Decoded TCAP parameters for building the transaction
+     * @param timeout Transaction timeout
+     * @param initLocal True if the transaction was initiated locally, false if not
+     */
+    SS7TCAPTransactionANSI(SS7TCAP* tcap, SS7TCAP::TCAPUserTransActions type, const String& transactID, NamedList& params,
+	u_int64_t timeout, bool initLocal = true);
+    /**
+     * Destructor
+     */
+    ~SS7TCAPTransactionANSI();
+    /**
+     * Process transaction data and fill the NamedList with the decoded data
+     * @param params NamedList to fill with decoded data
+     * @param data Data to decode
+     * @return A TCAP error encountered whilst decoding
+     */
+    virtual SS7TCAPError handleData(NamedList& params, DataBlock& data);
+    /**
+     * An update request for this transaction
+     * @param type The type of transaction to which this transaction should be updated
+     * @param params Update parameter
+     * @param updateByUser True if the update is made by the local user, false if it's made by the remote end
+     * @return A TCAP Error
+     */
+    virtual SS7TCAPError update(SS7TCAP::TCAPUserTransActions type, NamedList& params, bool updateByUser = true);
+    /**
+     * Handle TCAP relevant dialog data
+     * @param params NamedList containing (if present) dialog information
+     * @param byUser True if the dialog information is provided by the local user, false otherwise
+     * @return A report error
+     */
+    virtual SS7TCAPError handleDialogPortion(NamedList& params, bool byUser = true);
+    /**
+     * Encode P-Abort information
+     * @param tr The transaction on which the abort was signalled
+     * @param params NamedList reference from which to get the P-Abort information
+     * @param data DataBlock reference in which to insert the encoded P-Abort information
+     */
+    static void encodePAbort(SS7TCAPTransaction* tr, NamedList& params, DataBlock& data);
+    /**
+     * Decode P-Abort TCAP message portion
+     * @param tr The transaction on which the abort was signalled
+     * @param params NamedList reference to fill with the decoded P-Abort information
+     * @param data DataBlock reference from which to decode P-Abort information
+     */
+    static SS7TCAPError decodePAbort(SS7TCAPTransaction* tr, NamedList& params, DataBlock& data);
+    /**
+     * Update the state of this transaction to end the transaction
+     */
+    virtual void updateToEnd();
+    /**
+     * Update transaction state
+     * @param byUser True if update is requested by user, false if by remote
+     */
+    virtual void updateState(bool byUser);
+    /**
+     * Request content for this transaction
+     * @param params List of parameters of this tranaction
+     * @param data Data block to fill with encoded content
+     */
+    virtual void requestContent(NamedList& params, DataBlock& data);
+    /**
+     * Dictionary keeping string versions of transaction types
+     */
+    static const TokenDict s_ansiTransactTypes[];
+
+private:
+    SS7TCAPError decodeDialogPortion(NamedList& params, DataBlock& data);
+    void encodeDialogPortion(NamedList& params, DataBlock& data);
+    SS7TCAPError decodeComponents(NamedList& params, DataBlock& data);
+    void encodeComponents(NamedList& params, DataBlock& data);
+
+    SS7TCAP::TCAPUserTransActions m_prevType;
 };
 
 // The following classes are ISDN, not SS7, but they use the same signalling
@@ -9521,7 +12254,7 @@ private:
     // Statistics
     u_int32_t m_txFrames;                // The number of frames accepted by layer 1 to be transmitted
     u_int32_t m_txFailFrames;            // The number of frames not accepted by layer 1 to be transmitted
-    u_int32_t m_rxFrames;                // The number of succesfully parsed frames
+    u_int32_t m_rxFrames;                // The number of successfully parsed frames
     u_int32_t m_rxRejectedFrames;        // The number of rejected frames. Doesn't include dropped frames
     u_int32_t m_rxDroppedFrames;         // The number of dropped frames. Doesn't include rejected frames
     u_int32_t m_hwErrors;                // The number of hardware notifications
@@ -9849,7 +12582,7 @@ private:
     bool m_checkLinkSide;                // Check if this is the correct side of the data link
     SignallingTimer m_idleTimer;         // Channel idle interval
     u_int8_t m_lastFrame;                // Transmitter send number of the last received frame
-    u_int32_t m_rxFrames;                // The number of succesfully parsed frames
+    u_int32_t m_rxFrames;                // The number of successfully parsed frames
     u_int32_t m_rxRejectedFrames;        // The number of rejected frames. Doesn't include dropped frames
     u_int32_t m_rxDroppedFrames;         // The number of dropped frames. Doesn't include rejected frames
     u_int32_t m_hwErrors;                // The number of hardware notifications
@@ -10988,7 +13721,7 @@ public:
     /**
      * Restart one or more the circuits
      * @param circuits Comma separated list of circuits to be restarted
-     * @return True if the procedure was succesfully started or enqueued
+     * @return True if the procedure was successfully started or enqueued
      */
     bool restart(const char* circuits);
 
@@ -10999,7 +13732,7 @@ public:
      * @param cause Value for Cause IE
      * @param display Optional value for Display IE 
      * @param diagnostic Optional value for cause diagnostic value
-     * @return The result of the operation (true if succesfully sent)
+     * @return The result of the operation (true if successfully sent)
      */
     inline bool sendStatus(ISDNQ931Call* call, const char* cause, u_int8_t tei = 0,
 	const char* display = 0, const char* diagnostic = 0)
@@ -11017,7 +13750,7 @@ public:
      * @param diag Optional hexified string for cause dignostic
      * @param display Optional value for Display IE 
      * @param signal Optional value for Signal IE 
-     * @return The result of the operation (true if succesfully sent)
+     * @return The result of the operation (true if successfully sent)
      */
     inline bool sendRelease(ISDNQ931Call* call, bool release, const char* cause, u_int8_t tei = 0,
 	const char* diag = 0, const char* display = 0, const char* signal = 0)
@@ -11179,7 +13912,7 @@ protected:
      * @param state The state for CallState IE
      * @param display Optional value for Display IE 
      * @param diagnostic Optional value for cause diagnostic value
-     * @return The result of the operation (true if succesfully sent)
+     * @return The result of the operation (true if successfully sent)
      */
     bool sendStatus(const char* cause, u_int8_t callRefLen, u_int32_t callRef = 0,
 	u_int8_t tei = 0, bool initiator = false, ISDNQ931Call::State state = ISDNQ931Call::Null,
@@ -11196,7 +13929,7 @@ protected:
      * @param diag Optional hexified string for cause dignostic
      * @param display Optional value for Display IE 
      * @param signal Optional value for Signal IE 
-     * @return The result of the operation (true if succesfully sent)
+     * @return The result of the operation (true if successfully sent)
      */
     bool sendRelease(bool release, u_int8_t callRefLen, u_int32_t callRef, u_int8_t tei,
 	bool initiator, const char* cause = 0, const char* diag = 0,

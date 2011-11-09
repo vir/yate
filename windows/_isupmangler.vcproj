@@ -16,7 +16,7 @@
 	<Configurations>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory=".\Release\server"
+			OutputDirectory=".\Release\sig"
 			IntermediateDirectory=".\Release\modules"
 			ConfigurationType="2"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
@@ -76,7 +76,7 @@
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
 				AdditionalDependencies="Release/libysig.lib"
-				OutputFile="Release/server/isupmangler.yate"
+				OutputFile="Release/sig/isupmangler.yate"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				ProgramDatabaseFile=".\Release/isupmangler.pdb"
@@ -112,7 +112,7 @@
 		</Configuration>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory=".\Debug\server"
+			OutputDirectory=".\Debug\sig"
 			IntermediateDirectory=".\Debug\modules"
 			ConfigurationType="2"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
@@ -172,7 +172,7 @@
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
 				AdditionalDependencies="Debug/libysig.lib"
-				OutputFile="Debug/server/isupmangler.yate"
+				OutputFile="Debug/sig/isupmangler.yate"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				GenerateDebugInformation="true"
@@ -216,7 +216,7 @@
 			Filter="cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 			>
 			<File
-				RelativePath="..\modules\server\isupmangler.cpp"
+				RelativePath="..\modules\sig\isupmangler.cpp"
 				>
 				<FileConfiguration
 					Name="Release|Win32"

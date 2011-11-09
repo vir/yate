@@ -29,6 +29,7 @@
 #error C++ is required
 #endif
 
+#include <limits.h>
 #include <sys/types.h>
 #include <stddef.h>
 #include <unistd.h>
@@ -185,10 +186,6 @@ typedef int HANDLE;
 #ifdef _WINDOWS
 #undef RAND_MAX
 #define RAND_MAX 2147483647
-extern "C" {
-YATE_API long int random();
-YATE_API void srandom(unsigned int seed);
-}
 #endif
 
 /**
@@ -816,11 +813,11 @@ public:
     virtual void destruct();
 
     /**
-     * Retrieve the mutex that protects ref() and deref() for this object
-     * @return Reference to the mutex used for counter operations
+     * Check if reference counter manipulations are efficient on this platform.
+     * If platform does not support atomic operations a mutex pool is used.
+     * @return True if refcount uses atomic integer operations
      */
-    inline Mutex& refMutex()
-	{ return *m_mutex; }
+    static bool efficientIncDec();
 
 protected:
     /**
@@ -829,23 +826,6 @@ protected:
      * The default behaviour is to delete the object.
      */
     virtual void zeroRefs();
-
-    /**
-     * This method is called when the reference count reaches zero just before
-     *  calling zeroRefs() with the non-recursive mutex still locked.
-     * Extra care must be taken to prevent deadlocks, normally the code should
-     *  only change some variables and return.
-     * The default implementation just returns true.
-     * @return True to call zeroRefs() after releasing the mutex
-     */
-    virtual bool zeroRefsTest();
-
-    /**
-     * Increments the reference counter if not already zero without locking
-     *  the mutex. The caller must make sure to hold the refMutex() locked.
-     * @return True if the object was successfully referenced
-     */
-    bool refInternal();
 
     /**
      * Bring the object back alive by setting the reference counter to one.
@@ -1577,9 +1557,14 @@ public:
      * Convert the string to an integer value.
      * @param defvalue Default to return if the string is not a number
      * @param base Numeration base, 0 to autodetect
+     * @param minvalue Minimum value allowed
+     * @param maxvalue Maximum value allowed
+     * @param clamp Control the out of bound values: true to adjust to the nearest
+     *  bound, false to return the default value
      * @return The integer interpretation or defvalue.
      */
-    int toInteger(int defvalue = 0, int base = 0) const;
+    int toInteger(int defvalue = 0, int base = 0, int minvalue = INT_MIN,
+	int maxvalue = INT_MAX, bool clamp = true) const;
 
     /**
      * Convert the string to an integer value looking up first a token table.
@@ -3603,9 +3588,14 @@ public:
      * Retrieve the numeric value of a parameter.
      * @param name Name of parameter to locate
      * @param defvalue Default value to return if not found
+     * @param minvalue Minimum value allowed for the parameter
+     * @param maxvalue Maximum value allowed for the parameter
+     * @param clamp Control the out of bound values: true to adjust to the nearest
+     *  bound, false to return the default value
      * @return The number contained in the named parameter or the default
      */
-    int getIntValue(const String& name, int defvalue = 0) const;
+    int getIntValue(const String& name, int defvalue = 0, int minvalue = INT_MIN,
+	int maxvalue = INT_MAX, bool clamp = true) const;
 
     /**
      * Retrieve the numeric value of a parameter trying first a table lookup.
@@ -6357,6 +6347,256 @@ public:
      * @return True if set successfully
      */
     virtual bool setPayload(u_int32_t payload) = 0;
+};
+
+/**
+ * This class holds a DNS (resolver) record
+ * @short A DNS record
+ */
+class YATE_API DnsRecord : public GenObject
+{
+    YCLASS(DnsRecord,GenObject)
+    YNOCOPY(DnsRecord);
+public:
+    /**
+     * Build a DNS record
+     * @param order Record order (priority)
+     * @param pref Record preference
+     */
+    inline DnsRecord(int order, int pref)
+	: m_order(order), m_pref(pref)
+	{}
+
+    /**
+     * Default constructor
+     */
+    inline DnsRecord()
+	: m_order(0), m_pref(0)
+	{}
+
+    /**
+     * Retrieve the record order
+     * @return Record order
+     */
+    inline int order() const
+	{ return m_order; }
+
+    /**
+     * Retrieve the record preference
+     * @return Record preference
+     */
+    inline int pref() const
+	{ return m_pref; }
+
+    /**
+     * Dump a record for debug purposes
+     * @param buf Destination buffer
+     * @param sep Fields separator
+     */
+    virtual void dump(String& buf, const char* sep = " ");
+
+    /**
+     * Insert a DnsRecord into a list in the proper location given by order and preference
+     * @param list Destination list
+     * @param rec The item to insert
+     * @param ascPref Order preference ascending
+     * @return True on success, false on failure (already in the list)
+     */
+    static bool insert(ObjList& list, DnsRecord* rec, bool ascPref);
+
+protected:
+    int m_order;
+    int m_pref;
+};
+
+/**
+ * This class holds a SRV (Service Location) record
+ * @short A SRV record
+ */
+class YATE_API SrvRecord : public DnsRecord
+{
+    YCLASS(SrvRecord,DnsRecord)
+    YNOCOPY(SrvRecord);
+public:
+    /**
+     * Build a SRV record
+     * @param prio Record priority (order)
+     * @param weight Record weight (preference)
+     * @param addr Record address
+     * @param port Record port
+     */
+    inline SrvRecord(int prio, int weight, const char* addr, int port)
+	: DnsRecord(prio,weight), m_address(addr), m_port(port)
+	{}
+
+    /**
+     * Retrieve the record address
+     * @return Record address
+     */
+    inline const String& address() const
+	{ return m_address; }
+
+    /**
+     * Retrieve the record port
+     * @return Record port
+     */
+    inline int port() const
+	{ return m_port; }
+
+    /**
+     * Dump this record for debug purposes
+     * @param buf Destination buffer
+     * @param sep Fields separator
+     */
+    virtual void dump(String& buf, const char* sep = " ");
+
+    /**
+     * Copy a SrvRecord list into another one
+     * @param dest Destination list
+     * @param src Source list
+     */
+    static void copy(ObjList& dest, const ObjList& src);
+
+protected:
+    String m_address;
+    int m_port;
+
+private:
+    SrvRecord() {}                       // No default contructor
+};
+
+/**
+ * This class holds a NAPTR (Naming Authority Pointer) record
+ * @short A NAPTR record
+ */
+class YATE_API NaptrRecord : public DnsRecord
+{
+    YCLASS(NaptrRecord,DnsRecord)
+    YNOCOPY(NaptrRecord);
+public:
+    /**
+     * Build a NAPTR record
+     * @param ord Record order
+     * @param pref Record preference
+     * @param flags Interpretation flags
+     * @param serv Available services
+     * @param regexp Substitution expression
+     * @param next Next name to query
+     */
+    NaptrRecord(int ord, int pref, const char* flags, const char* serv,
+	const char* regexp, const char* next);
+
+    /**
+     * Replace the enclosed template in a given string if matching
+     *  the substitution expression
+     * @param str String to replace
+     * @return True on success
+     */
+    bool replace(String& str);
+
+    /**
+     * Dump this record for debug purposes
+     * @param buf Destination buffer
+     * @param sep Fields separator
+     */
+    virtual void dump(String& buf, const char* sep = " ");
+
+    /**
+     * Retrieve record interpretation flags
+     * @return Record interpretation flags
+     */
+    inline const String& flags() const
+	{ return m_flags; }
+
+    /**
+     * Retrieve available services
+     * @return Available services
+     */
+    inline const String& serv() const
+	{ return m_service; }
+
+    /**
+     * Retrieve the next domain name to query
+     * @return The next domain to query
+     */
+    inline const String& nextName() const
+	{ return m_next; }
+
+protected:
+    String m_flags;
+    String m_service;
+    Regexp m_regmatch;
+    String m_template;
+    String m_next;
+
+private:
+    NaptrRecord() {}                     // No default contructor
+};
+
+/**
+ * This class offers DNS query services
+ * @short DNS services
+ */
+class YATE_API Resolver
+{
+public:
+    /**
+     * Resolver handled types
+     */
+    enum Type {
+	Unknown,
+	Srv,                             // SRV (Service Location)
+	Naptr,                           // NAPTR (Naming Authority Pointer)
+    };
+
+    /**
+     * Runtime check for resolver availability
+     * @param type Optional type to check. Set it to Unknown (default) to check
+     *  general resolver availability
+     * @return True if the resolver is available on current platform
+     */
+    static bool available(Type type = Unknown);
+
+    /**
+     * Initialize the resolver in the current thread
+     * @param timeout Query timeout. Negative to use default
+     * @param retries The number of query retries. Negative to use default
+     * @return True on success
+     */
+    static bool init(int timeout = -1, int retries = -1);
+
+    /**
+     * Make a query
+     * @param type Query type as enumeration
+     * @param dname Domain to query
+     * @param result List of resulting record items
+     * @param error Optional string to be filled with error string
+     * @return 0 on success, error code otherwise (h_errno value on Linux)
+     */
+    static int query(Type type, const char* dname, ObjList& result, String* error = 0);
+
+    /**
+     * Make a SRV (Service Location) query
+     * @param dname Domain to query
+     * @param result List of resulting SrvRecord items
+     * @param error Optional string to be filled with error string
+     * @return 0 on success, error code otherwise (h_errno value on Linux)
+     */
+    static int srvQuery(const char* dname, ObjList& result, String* error = 0);
+
+    /**
+     * Make a NAPTR (Naming Authority Pointer) query
+     * @param dname Domain to query
+     * @param result List of resulting NaptrRecord items
+     * @param error Optional string to be filled with error string
+     * @return 0 on success, error code otherwise (h_errno value on Linux)
+     */
+    static int naptrQuery(const char* dname, ObjList& result, String* error = 0);
+
+    /**
+     * Resolver type names
+     */
+    static const TokenDict s_types[];
 };
 
 /**

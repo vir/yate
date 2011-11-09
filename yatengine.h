@@ -105,9 +105,14 @@ public:
      * @param sect Name of the section
      * @param key Name of the key in section
      * @param defvalue Default value to return if not found
+     * @param minvalue Minimum value allowed for the parameter
+     * @param maxvalue Maximum value allowed for the parameter
+     * @param clamp Control the out of bound values: true to adjust to the nearest
+     *  bound, false to return the default value
      * @return The number contained in the key or the default
      */
-    int getIntValue(const String& sect, const String& key, int defvalue = 0) const;
+    int getIntValue(const String& sect, const String& key, int defvalue = 0,
+	int minvalue = INT_MIN, int maxvalue = INT_MAX, bool clamp = true) const;
 
     /**
      * Retrieve the numeric value of a key in a section trying first a table lookup.
@@ -1162,6 +1167,7 @@ protected:
 
 private:
     Engine();
+    void internalStatisticsStart();
     ObjList m_libs;
     MessageDispatcher m_dispatcher;
     static Engine* s_self;

@@ -899,8 +899,23 @@ void DataEndpoint::setConsumer(DataConsumer* consumer)
     m_consumer = consumer;
     if (source && temp)
 	DataTranslator::detachChain(source,temp);
-    if (temp)
+    if (temp) {
+	s_consSrcMutex.lock();
+	RefPointer<DataSource> src = temp->getConnSource();
+	s_consSrcMutex.unlock();
+	if (src) {
+	    src->detach(temp);
+	    src = 0;
+	}
+	s_consSrcMutex.lock();
+	src = temp->getOverSource();
+	s_consSrcMutex.unlock();
+	if (src) {
+	    src->detach(temp);
+	    src = 0;
+	}
 	temp->attached(false);
+    }
     if (consumer)
 	consumer->attached(true);
     lock.drop();

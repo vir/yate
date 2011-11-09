@@ -44,7 +44,7 @@ INCFILES := @top_srcdir@/yateclass.h @top_srcdir@/yatengine.h @top_srcdir@/yatep
 
 JUSTSIG := server/ysigchan.yate server/analog.yate \
 	server/ciscosm.yate server/sigtransport.yate \
-	server/isupmangler.yate
+	sig/isupmangler.yate sig/ss7_lnp_ansi.yate
 
 SUBDIRS :=
 MKDEPS  := ../config.status
@@ -278,11 +278,14 @@ server/wpcard.yate server/tdmcard.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig @W
 server/zapcard.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig @ZAP_FLAGS@
 $(JUSTSIG) server/wpcard.yate server/tdmcard.yate server/zapcard.yate: LOCALLIBS = -lyatesig
 
+sig/ss7_lnp_ansi.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig -I@top_srcdir@/libs/yasn
+sig/ss7_lnp_ansi.yate: LOCALLIBS = -lyatesig -L../libs/yasn -lyasn
+
 server/analogdetect.yate: ../libs/ymodem/libyatemodem.a
 server/analogdetect.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymodem
 server/analogdetect.yate: LOCALLIBS = -L../libs/ymodem -lyatemodem
 
-h323chan.yate: LOCALFLAGS = -DPHAS_TEMPLATES -D_REENTRANT -DP_HAS_SEMAPHORES @H323_INC@
+h323chan.yate: LOCALFLAGS = @H323_INC@
 h323chan.yate: LOCALLIBS = @H323_LIB@
 
 server/pgsqldb.yate: LOCALFLAGS = $(PGSQL_INC)
@@ -290,8 +293,6 @@ server/pgsqldb.yate: LOCALLIBS = $(PGSQL_LIB)
 
 server/mysqldb.yate: LOCALFLAGS = $(MYSQL_INC)
 server/mysqldb.yate: LOCALLIBS = $(MYSQL_LIB)
-
-enumroute.yate: LOCALLIBS = @RESOLV_LIB@
 
 client/alsachan.yate: LOCALLIBS = -lasound
 
@@ -313,9 +314,9 @@ server/mgcpca.yate: ../libyatemgcp.so ../libyatesig.so ../libs/ysdp/libyatesdp.a
 server/mgcpca.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymgcp -I@top_srcdir@/libs/ysig -I@top_srcdir@/libs/ysdp
 server/mgcpca.yate: LOCALLIBS = -lyatemgcp -lyatesig -L../libs/ysdp -lyatesdp
 
-server/mgcpgw.yate: ../libyatemgcp.so
-server/mgcpgw.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymgcp
-server/mgcpgw.yate: LOCALLIBS = -lyatemgcp
+server/mgcpgw.yate: ../libyatemgcp.so ../libs/ysdp/libyatesdp.a
+server/mgcpgw.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymgcp -I@top_srcdir@/libs/ysdp
+server/mgcpgw.yate: LOCALLIBS = -lyatemgcp -L../libs/ysdp -lyatesdp
 
 server/lksctp.yate: LOCALFLAGS = @SCTP_FLAGS@
 server/lksctp.yate: LOCALLIBS = -lsctp

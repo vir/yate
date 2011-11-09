@@ -26,7 +26,7 @@ close CF;
 my($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
 my $suff = sprintf("%04d%02d%02d%02d", 1900+$year, 1+$mon, $mday, 1);
 
-++$suff while $suff eq $lastrev;
+++$suff while $suff le $lastrev;
 
 my $newver="$yatever.vir$suff";
 print "New version: $newver\n";

@@ -1,3 +1,9 @@
+yate (3.3.3.vir2011110902) UNRELEASED; urgency=low
+
+  * added Build-Depends: build-essential
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Wed, 09 Nov 2011 13:43:13 +0400
+
 yate (3.3.3.vir2011110901) UNRELEASED; urgency=low
 
   * Merged lates upstream changes

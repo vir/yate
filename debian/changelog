@@ -1,3 +1,15 @@
+yate (3.3.3.vir2011110903) UNRELEASED; urgency=low
+
+  * new package version finally
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Wed, 09 Nov 2011 16:23:23 +0400
+
+yate (3.3.3.vir2011110902) UNRELEASED; urgency=low
+
+  * Fix wrong package version
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Wed, 09 Nov 2011 16:22:34 +0400
+
 yate (3.3.3.vir2011110901) UNRELEASED; urgency=low
 
   * Added more new files

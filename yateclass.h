@@ -548,10 +548,24 @@ public:
     static void enableOutput(bool enable = true, bool colorize = false);
 
     /**
+     * Retrieve the format of timestamps
+     * @return The current formatting type for timestamps
+     */
+    static Formatting getFormatting();
+
+    /**
      * Set the format of timestamps on output messages and set the time start reference
      * @param format Desired timestamp formatting
      */
     static void setFormatting(Formatting format);
+
+    /**
+     * Fill a buffer with a current timestamp prefix
+     * @param buf Buffer to fill, must be at least 24 characters long
+     * @param format Desired timestamp formatting
+     * @return Length of the prefix written in buffer excluding final NUL
+     */
+    static unsigned int formatTime(char* buf, Formatting format = getFormatting());
 
 private:
     const char* m_name;

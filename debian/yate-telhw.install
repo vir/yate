@@ -17,4 +17,6 @@ debian/tmp/etc/yate/sigtransport.conf
 debian/tmp/usr/lib/yate/server/sigtransport.yate
 debian/tmp/etc/yate/isupmangler.conf
 debian/tmp/usr/lib/yate/sig/isupmangler.yate
+debian/tmp/etc/yate/ss7_lnp_ansi.conf
+debian/tmp/usr/lib/yate/sig/ss7_lnp_ansi.yate
 

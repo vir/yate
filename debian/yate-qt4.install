@@ -134,6 +134,7 @@ debian/tmp/usr/share/yate/skins/default/hangup_20.png
 debian/tmp/usr/share/yate/skins/default/hold_20.png
 debian/tmp/usr/share/yate/skins/default/info_32.png
 debian/tmp/usr/share/yate/skins/default/info.png
+debian/tmp/usr/share/yate/skins/default/inputacccred.ui
 debian/tmp/usr/share/yate/skins/default/inputpwd.ui
 debian/tmp/usr/share/yate/skins/default/input.ui
 debian/tmp/usr/share/yate/skins/default/joinmucwizard.ui

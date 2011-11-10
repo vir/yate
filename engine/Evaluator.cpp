@@ -78,12 +78,12 @@ const TokenDict s_operators_sql[] =
 
 
 
-bool ExpExtender::runFunction(ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper)
+bool ExpExtender::runFunction(const ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper)
 {
     return false;
 }
 
-bool ExpExtender::runField(ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper)
+bool ExpExtender::runField(const ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper)
 {
     return false;
 }
@@ -142,7 +142,7 @@ char ExpEvaluator::skipWhites(const char*& expr) const
     return *expr;
 }
 
-bool ExpEvaluator::gotError(const char* error, const char* text)
+bool ExpEvaluator::gotError(const char* error, const char* text) const
 {
     if (!error)
 	error = "unknown error";
@@ -488,7 +488,7 @@ void ExpEvaluator::addOpcode(long int value)
     m_opcodes.append(new ExpOperation(value));
 }
 
-ExpOperation* ExpEvaluator::popOne(ObjList& stack)
+ExpOperation* ExpEvaluator::popOne(ObjList& stack) const
 {
     GenObject* o = 0;
     for (ObjList* l = stack.skipNull(); l; l=l->skipNext())
@@ -498,7 +498,7 @@ ExpOperation* ExpEvaluator::popOne(ObjList& stack)
     return static_cast<ExpOperation*>(o);
 }
 
-bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper)
+bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper) const
 {
     DDebug(DebugAll,"runOperation(%p,%u) %s",&stack,oper.opcode(),getOperator(oper.opcode()));
     switch (oper.opcode()) {
@@ -664,7 +664,7 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper)
     return true;
 }
 
-bool ExpEvaluator::runFunction(ObjList& stack, const ExpOperation& oper)
+bool ExpEvaluator::runFunction(ObjList& stack, const ExpOperation& oper) const
 {
     DDebug(DebugAll,"runFunction(%p,'%s' %ld) ext=%p",
 	&stack,oper.name().c_str(),oper.number(),(void*)m_extender);
@@ -689,14 +689,14 @@ bool ExpEvaluator::runFunction(ObjList& stack, const ExpOperation& oper)
     return m_extender && m_extender->runFunction(this,stack,oper);
 }
 
-bool ExpEvaluator::runField(ObjList& stack, const ExpOperation& oper)
+bool ExpEvaluator::runField(ObjList& stack, const ExpOperation& oper) const
 {
     DDebug(DebugAll,"runField(%p,'%s') ext=%p",
 	&stack,oper.name().c_str(),(void*)m_extender);
     return m_extender && m_extender->runField(this,stack,oper);
 }
 
-bool ExpEvaluator::runEvaluate(ObjList& stack)
+bool ExpEvaluator::runEvaluate(ObjList& stack) const
 {
     DDebug(DebugInfo,"runEvaluate(%p)",&stack);
     for (ObjList* l = m_opcodes.skipNull(); l; l = l->skipNext()) {
@@ -720,7 +720,7 @@ int ExpEvaluator::compile(const char* expr)
     return skipWhites(expr) ? 0 : res;
 }
 
-bool ExpEvaluator::evaluate(ObjList* results)
+bool ExpEvaluator::evaluate(ObjList* results) const
 {
     ObjList res;
     if (results)
@@ -730,7 +730,7 @@ bool ExpEvaluator::evaluate(ObjList* results)
     return runEvaluate(*results);
 }
 
-int ExpEvaluator::evaluate(NamedList& results, unsigned int index, const char* prefix)
+int ExpEvaluator::evaluate(NamedList& results, unsigned int index, const char* prefix) const
 {
     ObjList stack;
     if (!evaluate(stack))
@@ -750,7 +750,7 @@ int ExpEvaluator::evaluate(NamedList& results, unsigned int index, const char* p
     return column;
 }
 
-int ExpEvaluator::evaluate(Array& results, unsigned int index)
+int ExpEvaluator::evaluate(Array& results, unsigned int index) const
 {
     Debug(DebugStub,"Please implement ExpEvaluator::evaluate(Array)");
     return -1;

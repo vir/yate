@@ -841,7 +841,7 @@
 ;[ss7tcap]
 ; type: keyword: identifies the component as a SS7 Transfer Capabilities Application Part
 ; type = ss7-tcap-ansi for ANSI TCAP
-; type = ss7-tcap-itu for ITU TCAP - not implemented yet
+; type = ss7-tcap-itu for ITU TCAP
 ;type=
 
 ; local_SSN: local SubSystem Number. Mandatory

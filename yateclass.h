@@ -3863,6 +3863,7 @@ class ExpOperation;
  */
 class YATE_API ExpExtender : public RefObject
 {
+    YCLASS(ExpExtender,RefObject)
 public:
     /**
      * Try to evaluate a single function
@@ -3872,7 +3873,7 @@ public:
      * @param oper Function to evaluate
      * @return True if evaluation succeeded
      */
-    virtual bool runFunction(ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper);
+    virtual bool runFunction(const ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper);
 
     /**
      * Try to evaluate a single field
@@ -3881,7 +3882,7 @@ public:
      * @param oper Field to evaluate
      * @return True if evaluation succeeded
      */
-    virtual bool runField(ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper);
+    virtual bool runField(const ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper);
 };
 
 /**
@@ -3994,14 +3995,14 @@ public:
      * @param results List to fill with results row
      * @return True if expression evaluation succeeded, false on failure
      */
-    bool evaluate(ObjList* results);
+    bool evaluate(ObjList* results) const;
 
     /**
      * Evaluate the expression, return computed results
      * @param results List to fill with results row
      * @return True if expression evaluation succeeded, false on failure
      */
-    inline bool evaluate(ObjList& results)
+    inline bool evaluate(ObjList& results) const
 	{ return evaluate(&results); }
 
     /**
@@ -4011,7 +4012,7 @@ public:
      * @param prefix Prefix to prepend to parameter names
      * @return Number of result columns, -1 on failure
      */
-    int evaluate(NamedList& results, unsigned int index = 0, const char* prefix = 0);
+    int evaluate(NamedList& results, unsigned int index = 0, const char* prefix = 0) const;
 
     /**
      * Evaluate the expression, return computed results
@@ -4019,7 +4020,7 @@ public:
      * @param index Index of result row, zero to just set column headers
      * @return Number of result columns, -1 on failure
      */
-    int evaluate(Array& results, unsigned int index);
+    int evaluate(Array& results, unsigned int index) const;
 
     /**
      * Simplify the expression, performs constant folding
@@ -4045,7 +4046,7 @@ public:
      * Retrieve the internally used operator dictionary
      * @return Pointer to operators dictionary in use
      */
-    inline const TokenDict* operators()
+    inline const TokenDict* operators() const
 	{ return m_operators; }
 
     /**
@@ -4082,7 +4083,7 @@ protected:
      * @param text Optional text that caused the error
      * @return Always returns false
      */
-    bool gotError(const char* error = 0, const char* text = 0);
+    bool gotError(const char* error = 0, const char* text = 0) const;
 
     /**
      * Runs the parser and compiler for one (sub)expression
@@ -4186,7 +4187,7 @@ protected:
      * @param stack Evaluation stack to remove the operand from
      * @return Operator removed from stack, NULL if stack underflow
      */
-    ExpOperation* popOne(ObjList& stack);
+    ExpOperation* popOne(ObjList& stack) const;
 
     /**
      * Try to apply simplification to the expression
@@ -4199,7 +4200,7 @@ protected:
      * @param stack Evaluation stack in use, results are left on stack
      * @return True if evaluation succeeded
      */
-    virtual bool runEvaluate(ObjList& stack);
+    virtual bool runEvaluate(ObjList& stack) const;
 
     /**
      * Try to evaluate a single operation
@@ -4208,7 +4209,7 @@ protected:
      * @param oper Operation to execute
      * @return True if evaluation succeeded
      */
-    virtual bool runOperation(ObjList& stack, const ExpOperation& oper);
+    virtual bool runOperation(ObjList& stack, const ExpOperation& oper) const;
 
     /**
      * Try to evaluate a single function
@@ -4217,7 +4218,7 @@ protected:
      * @param oper Function to evaluate
      * @return True if evaluation succeeded
      */
-    virtual bool runFunction(ObjList& stack, const ExpOperation& oper);
+    virtual bool runFunction(ObjList& stack, const ExpOperation& oper) const;
 
     /**
      * Try to evaluate a single field
@@ -4225,7 +4226,7 @@ protected:
      * @param oper Field to evaluate
      * @return True if evaluation succeeded
      */
-    virtual bool runField(ObjList& stack, const ExpOperation& oper);
+    virtual bool runField(ObjList& stack, const ExpOperation& oper) const;
 
     /**
      * Internally used operator dictionary
@@ -4248,6 +4249,7 @@ private:
 class YATE_API ExpOperation : public NamedString
 {
     friend class ExpEvaluator;
+    YCLASS(ExpOperation,NamedString)
 public:
     /**
      * Copy constructor

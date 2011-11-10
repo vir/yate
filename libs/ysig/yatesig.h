@@ -10811,6 +10811,20 @@ public:
      */
     u_int16_t errorCode();
     /**
+     * Obtain abstract TCAP error from TCAP protocol defined error value
+     * @param tcapType Type of TCAP for which the error is searched
+     * @param code TCAP protocol error value
+     * @return The type of the error
+     */
+    static int errorFromCode(SS7TCAP::TCAPType tcapType, u_int16_t code);
+    /**
+     * Obtain TCAP specific error value from abstract TCAP error
+     * @param tcapType Type of TCAP for which the error is searched
+     * @param err Abstrat TCAP error
+     * @return The error value as defined by the TCAP protocol
+     */
+    static u_int16_t codeFromError(SS7TCAP::TCAPType tcapType, int err);
+    /**
      * Dictionary for error types
      */
     static const TokenDict s_errorTypes[];

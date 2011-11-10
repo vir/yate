@@ -566,7 +566,7 @@ void SS7TCAP::timerTick(const Time& when)
 
 HandledMSU SS7TCAP::processSCCPData(SS7TCAPMessage* msg)
 {
-   HandledMSU result;
+    HandledMSU result;
     if (!msg)
 	return result;
     XDebug(this,DebugAll,"SS7TCAP::processSCCPData(msg=[%p]) [%p]",msg,this);
@@ -868,7 +868,7 @@ HandledMSU SS7TCAP::handleError(SS7TCAPError& error, NamedList& params, DataBloc
     if (buildLocAbort && !TelEngine::null(ltid)) { // notify user of the abort
 	params.setParam(s_tcapRequest,lookup(SS7TCAP::TC_P_Abort,SS7TCAP:: s_transPrimitives));
 	params.setParam(s_tcapAbortCause,"pAbort");
-	params.setParam(s_tcapAbortInfo,String(error.errorCode()));
+	params.setParam(s_tcapAbortInfo,String(error.error()));
 	if (tr) {
 	    tr->update(SS7TCAP::TC_P_Abort,params,false);
 	    tr->updateState();
@@ -887,7 +887,7 @@ HandledMSU SS7TCAP::handleError(SS7TCAPError& error, NamedList& params, DataBloc
 	    if (error.error() != SS7TCAPError::Dialog_Abnormal) {
 		params.setParam(s_tcapRequest,lookup(SS7TCAP::TC_P_Abort,SS7TCAP::s_transPrimitives));
 		params.setParam(s_tcapAbortCause,"pAbort");
-		params.setParam(s_tcapAbortInfo,String(error.errorCode()));
+		params.setParam(s_tcapAbortInfo,String(error.error()));
 	    }
 	    if (tcapType() == ANSITCAP)
 		SS7TCAPTransactionANSI::encodePAbort(tr,params,data);
@@ -1060,8 +1060,28 @@ const String SS7TCAPError::errorName()
 u_int16_t SS7TCAPError::errorCode()
 {
     const TCAPError* errDef = (m_tcapType == SS7TCAP::ANSITCAP ? s_ansiErrorDefs : s_ituErrorDefs);
-    for (;errDef && errDef->errorCode != SS7TCAPError::NoError; errDef++) {
+    for (;errDef && errDef->errorType != SS7TCAPError::NoError; errDef++) {
 	if (errDef->errorType == m_error)
+	    break;
+    }
+    return errDef->errorCode;
+}
+
+int SS7TCAPError::errorFromCode(SS7TCAP::TCAPType tcapType, u_int16_t code)
+{
+    const TCAPError* errDef = (tcapType == SS7TCAP::ANSITCAP ? s_ansiErrorDefs : s_ituErrorDefs);
+    for (;errDef && errDef->errorType != SS7TCAPError::NoError; errDef++) {
+	if (errDef->errorCode == code)
+	    break;
+    }
+    return errDef->errorType;
+}
+
+u_int16_t SS7TCAPError::codeFromError(SS7TCAP::TCAPType tcapType, int err)
+{
+    const TCAPError* errDef = (tcapType == SS7TCAP::ANSITCAP ? s_ansiErrorDefs : s_ituErrorDefs);
+    for (;errDef && errDef->errorType != SS7TCAPError::NoError; errDef++) {
+	if (errDef->errorType == err)
 	    break;
     }
     return errDef->errorCode;
@@ -1571,9 +1591,9 @@ void SS7TCAPComponent::fill(unsigned int index, NamedList& fillIn)
 
     if (m_error.error() != SS7TCAPError::NoError) {
 	if (m_type == SS7TCAP::TC_U_Error)
-	    fillIn.setParam(paramRoot + s_tcapErrCode,String(m_error.errorCode()));
+	    fillIn.setParam(paramRoot + s_tcapErrCode,String(m_error.error()));
 	else if (m_type == SS7TCAP::TC_L_Reject || m_type == SS7TCAP::TC_U_Reject || m_type == SS7TCAP::TC_R_Reject)
-	    fillIn.setParam(paramRoot + s_tcapProblemCode,String(m_error.errorCode()));
+	    fillIn.setParam(paramRoot + s_tcapProblemCode,String(m_error.error()));
     }
     if (m_type == SS7TCAP::TC_U_Reject || m_type == SS7TCAP::TC_R_Reject || m_type == SS7TCAP::TC_L_Reject)
 	setState(Idle);
@@ -2360,7 +2380,7 @@ SS7TCAPError SS7TCAPTransactionANSI::decodePAbort(SS7TCAPTransaction* tr, NamedL
 		return error;
 	    }
 	    params.setParam(s_tcapAbortCause,"pAbort");
-	    params.setParam(s_tcapAbortInfo,String(pCode));
+	    params.setParam(s_tcapAbortInfo,String(SS7TCAPError::errorFromCode(SS7TCAP::ANSITCAP,pCode)));
 	}
 	else {
 	    int len = ASNLib::decodeLength(data);
@@ -2392,7 +2412,7 @@ void SS7TCAPTransactionANSI::encodePAbort(SS7TCAPTransaction* tr, NamedList& par
 	int tag = 0;
 	if (*pAbortCause == "pAbort") {
 	    tag = SS7TCAPANSI::PCauseTag;
-	    u_int16_t pCode = params.getIntValue(s_tcapAbortInfo);
+	    u_int16_t pCode = SS7TCAPError::codeFromError(SS7TCAP::ANSITCAP,params.getIntValue(s_tcapAbortInfo));
 	    if (pCode) {
 		db.append(ASNLib::encodeInteger(pCode,false));
 		db.insert(ASNLib::buildLength(db));
@@ -2585,7 +2605,7 @@ SS7TCAPError SS7TCAPTransactionANSI::decodeComponents(NamedList& params, DataBlo
 		error.setError(SS7TCAPError::General_BadlyStructuredCompPortion);
 		break;
 	    }
-	    params.setParam(compParam + "." + s_tcapProblemCode,String(problemCode));
+	    params.setParam(compParam + "." + s_tcapProblemCode,String(SS7TCAPError::errorFromCode(tcap()->tcapType(),problemCode)));
 	}
 	// decode Parameters (Set or Sequence) as payload
 	tag = data[0];
@@ -2650,7 +2670,7 @@ void SS7TCAPTransactionANSI::encodeComponents(NamedList& params, DataBlock& data
 	    if (compType == Reject) {
 		value = params.getParam(compParam + "." + s_tcapProblemCode);
 		if (!TelEngine::null(value)) {
-		    u_int16_t code = value->toInteger();
+		    u_int16_t code = SS7TCAPError::codeFromError(tcap()->tcapType(),value->toInteger());
 		    DataBlock db = ASNLib::encodeInteger(code,false);
 		    // should check that encoded length is 2
 		    if (db.length() < 2) {

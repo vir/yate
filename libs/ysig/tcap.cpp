@@ -1303,8 +1303,8 @@ void SS7TCAPTransaction::requestComponents(NamedList& params, DataBlock& data)
     for (ObjList* o = m_components.skipNull(); o; o = o->skipNext()) {
 	SS7TCAPComponent* comp = static_cast<SS7TCAPComponent*>(o->get());
 	if (comp && comp->state() == SS7TCAPComponent::OperationPending) {
-	    comp->fill(index,params);
 	    index++;
+	    comp->fill(index,params);
 	}
     }
 #ifdef DEBUG
@@ -1348,10 +1348,10 @@ void SS7TCAPTransaction::checkComponents()
 		case SS7TCAP::TC_Invoke:
 		case SS7TCAP::TC_InvokeNotLast:
 			if (comp->operationClass() != SS7TCAP::NoReport) {
+			    index++;
 			    comp->fill(index,params);
 			    compPrefix(paramRoot,index,false);
 			    params.setParam(paramRoot + ".componentType",lookup(SS7TCAP::TC_L_Cancel,SS7TCAP::s_compPrimitives,"L_Cancel"));
-			    index++;
 			}
 			comp->setState(SS7TCAPComponent::Idle);
 		    break;
@@ -1374,6 +1374,7 @@ void SS7TCAPTransaction::checkComponents()
 	    m_components.remove(comp);
     }
     if (params.count()) {
+	params.setParam(s_tcapCompCount,String(index));
 	transactionData(params);
 	params.clearParam(s_tcapRequest);
 	tcap()->sendToUser(params);

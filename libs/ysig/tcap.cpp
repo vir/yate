@@ -893,8 +893,13 @@ HandledMSU SS7TCAP::handleError(SS7TCAPError& error, NamedList& params, DataBloc
 		params.setParam(s_tcapAbortCause,"pAbort");
 		params.setParam(s_tcapAbortInfo,String(error.error()));
 	    }
+	    else if (tr)
+		tr->abnormalDialogInfo(params);
+
 	    if (tcapType() == ANSITCAP)
 		SS7TCAPTransactionANSI::encodePAbort(tr,params,data);
+	    else if (tcapType() == ITUTCAP)
+		SS7TCAPTransactionITU::encodePAbort(tr,params,data);
 
 	    encodeTransactionPart(params,data);
 	    sendData(data,params);
@@ -1459,6 +1464,10 @@ void SS7TCAPTransaction::updateToEnd()
 {
 }
 
+void SS7TCAPTransaction::abnormalDialogInfo(NamedList& params)
+{
+    Debug(tcap(),DebugAll,"SS7TCAPTransaction::abnormalDialogInfo() [%p]",this);
+}
 
 /**
  * SS7TCAPComponent
@@ -2866,6 +2875,1537 @@ void SS7TCAPTransactionANSI::updateState(bool byUser)
 	default:
 	    break;
     }
+}
+
+/**
+ * ITU-T SS7 TCAP implementation
+ */
+
+static const int s_ituTCAPProto = 1;
+static const String s_tcapDialogueID = "tcap.dialogPDU.dialog-as-id";
+static const String s_tcapDialogueAppCtxt = "tcap.dialogPDU.application-context-name";
+static const String s_tcapDialoguePduType = "tcap.dialogPDU.dialog-pdu-type";
+static const String s_tcapDialogueAbrtSrc = "tcap.dialogPDU.abort-source";
+static const String s_tcapDialogueResult = "tcap.dialogPDU.result";
+static const String s_tcapDialogueDiag = "tcap.dialogPDU.result-source-diagnostic";
+static const String s_unstructDialogueOID = "0.0.17.773.1.2.1";
+static const String s_structDialogueOID = "0.0.17.773.1.1.1";
+
+static const PrimitiveMapping s_componentsITUMap[] = {
+    {SS7TCAP::TC_Invoke,              SS7TCAPTransactionITU::Invoke},
+    {SS7TCAP::TC_ResultLast,          SS7TCAPTransactionITU::ReturnResultLast},
+    {SS7TCAP::TC_U_Error,             SS7TCAPTransactionITU::ReturnError},
+    {SS7TCAP::TC_U_Reject,            SS7TCAPTransactionITU::Reject},
+    {SS7TCAP::TC_R_Reject,            SS7TCAPTransactionITU::Reject},
+    {SS7TCAP::TC_L_Reject,            SS7TCAPTransactionITU::Reject},
+    {SS7TCAP::TC_InvokeNotLast,       SS7TCAPTransactionITU::Invoke},
+    {SS7TCAP::TC_ResultNotLast,       SS7TCAPTransactionITU::ReturnResultNotLast},
+    {SS7TCAP::TC_L_Cancel,            SS7TCAPTransactionITU::Local},
+    {SS7TCAP::TC_U_Cancel,            SS7TCAPTransactionITU::Local},
+    {SS7TCAP::TC_TimerReset,          SS7TCAPTransactionITU::Local},
+    {SS7TCAP::TC_Unknown,             SS7TCAPTransactionITU::Unknown},
+};
+
+static const PrimitiveMapping s_transITUMap[] = {
+    {SS7TCAP::TC_Unidirectional,              SS7TCAPTransactionITU::Unidirectional},
+    {SS7TCAP::TC_Begin,                       SS7TCAPTransactionITU::Begin},
+    {SS7TCAP::TC_QueryWithPerm,               SS7TCAPTransactionITU::Begin},
+    {SS7TCAP::TC_QueryWithoutPerm,            SS7TCAPTransactionITU::Begin},
+    {SS7TCAP::TC_Continue,                    SS7TCAPTransactionITU::Continue},
+    {SS7TCAP::TC_ConversationWithPerm,        SS7TCAPTransactionITU::Continue},
+    {SS7TCAP::TC_ConversationWithoutPerm,     SS7TCAPTransactionITU::Continue},
+    {SS7TCAP::TC_End,                         SS7TCAPTransactionITU::End},
+    {SS7TCAP::TC_Response,                    SS7TCAPTransactionITU::End},
+    {SS7TCAP::TC_U_Abort,                     SS7TCAPTransactionITU::Abort},
+    {SS7TCAP::TC_P_Abort,                     SS7TCAPTransactionITU::Abort},
+    {SS7TCAP::TC_Notice,                      SS7TCAPTransactionITU::Unknown},
+    {SS7TCAP::TC_Unknown,                     SS7TCAPTransactionITU::Unknown},
+};
+
+static const PrimitiveMapping* mapCompPrimitivesITU(int primitive, int comp = -1)
+{
+    const PrimitiveMapping* map = s_componentsITUMap;
+    for (; map->primitive != SS7TCAP::TC_Unknown; map++) {
+	if (primitive != -1) {
+	    if (map->primitive == primitive )
+		break;
+	}
+	else if (comp != -1)
+	    if (map->mappedTo == comp)
+		break;
+    }
+    return map;
+}
+
+static const PrimitiveMapping* mapTransPrimitivesITU(int primitive, int trans = -1)
+{
+    const PrimitiveMapping* map = s_transITUMap;
+    for (; map->primitive != SS7TCAP::TC_Unknown; map++) {
+	if (primitive != -1) {
+	    if (map->primitive == primitive )
+		break;
+	}
+	else if (trans != -1)
+	    if (map->mappedTo == trans)
+		break;
+    }
+    return map;
+}
+
+SS7TCAPITU::SS7TCAPITU(const NamedList& params)
+    : SignallingComponent(params.safe("SS7TCAPITU"),&params),
+      SS7TCAP(params)
+{
+    String tmp;
+    params.dump(tmp,"\r\n  ",'\'',true);
+    DDebug(this,DebugAll,"SS7TCAPITU::SS7TCAPITU(%s)",tmp.c_str());
+    setTCAPType(SS7TCAP::ITUTCAP);
+}
+
+SS7TCAPITU::~SS7TCAPITU()
+{
+    DDebug(this,DebugAll,"SS7TCAPITU::~SS7TCAPITU() [%p] destroyed with %d transactions, refCount=%d",
+	this,m_transactions.count(),refcount());
+}
+
+SS7TCAPTransaction* SS7TCAPITU::buildTransaction(SS7TCAP::TCAPUserTransActions type, const String& transactID, NamedList& params,
+	bool initLocal)
+{
+    return new SS7TCAPTransactionITU(this,type,transactID,params,m_trTimeout,initLocal);
+}
+
+SS7TCAPError SS7TCAPITU::decodeTransactionPart(NamedList& params, DataBlock& data)
+{
+    SS7TCAPError error(SS7TCAP::ITUTCAP);
+    if (data.length() < 2)
+	return error;
+
+    // decode message type
+    u_int8_t msgType = data[0];
+    data.cut(-1);
+
+    const PrimitiveMapping* map = mapTransPrimitivesITU(-1,msgType);
+    if (map) {
+	String type = lookup(map->primitive,SS7TCAP::s_transPrimitives,"Unknown");
+	params.setParam(s_tcapRequest,type);
+    }
+
+    // decode message length
+    int len = ASNLib::decodeLength(data);
+    if (len != (int)data.length()) {
+	error.setError(SS7TCAPError::Transact_BadlyStructuredTransaction);
+	return error;
+    }
+
+    // decode transaction ids
+    bool decodeOTID = false;
+    bool decodeDTID = false;
+    switch (map->mappedTo) {
+	case SS7TCAPTransactionITU::Unidirectional:
+	    return error;
+	case SS7TCAPTransactionITU::Begin:
+	    decodeOTID = true;
+	    break;
+	case SS7TCAPTransactionITU::End:
+	case SS7TCAPTransactionITU::Abort:
+	    decodeDTID = true;
+	    break;
+	case SS7TCAPTransactionITU::Continue:
+	    decodeOTID = true;
+	    decodeDTID = true;
+	    break;
+	default:
+	    error.setError(SS7TCAPError::Transact_UnrecognizedPackageType);
+	    return error;
+    }
+
+    u_int8_t tag = data[0];
+    String str;
+    if (decodeOTID) {
+	// check for originating ID
+	if (tag != OriginatingIDTag) {// 0x48
+	    error.setError(SS7TCAPError::Transact_IncorrectTransactionPortion);
+	    return error;
+	}
+	data.cut(-1);
+
+	len = ASNLib::decodeLength(data);
+	if (len < 1 || len > 4 || len > (int)data.length()) {
+	    error.setError(SS7TCAPError::Transact_BadlyStructuredTransaction);
+	    return error;
+	}
+	str.hexify(data.data(),len,' ');
+	data.cut(-len);
+	params.setParam(s_tcapRemoteTID,str);
+    }
+
+    tag = data[0];
+    if (decodeDTID) {
+	// check for originating ID
+	if (tag != DestinationIDTag) {// 0x49
+	    error.setError(SS7TCAPError::Transact_IncorrectTransactionPortion);
+	    return error;
+	}
+	data.cut(-1);
+
+	len = ASNLib::decodeLength(data);
+	if (len < 1 || len > 4 || len > (int)data.length()) {
+	    error.setError(SS7TCAPError::Transact_BadlyStructuredTransaction);
+	    return error;
+	}
+	str.hexify(data.data(),len,' ');
+	data.cut(-len);
+	params.setParam(s_tcapLocalTID,str);
+    }
+
+#ifdef DEBUG
+    if (s_printMsgs && s_extendedDbg && debugAt(DebugAll))
+	dumpData(DebugAll,this,"SS7TCAPITU::decodeTransactionPart() finished",this,params,data);
+#endif
+
+    error.setError(SS7TCAPError::NoError);
+    return error;
+}
+
+void SS7TCAPITU::encodeTransactionPart(NamedList& params, DataBlock& data)
+{
+    String msg = params.getValue(s_tcapRequest);
+    const PrimitiveMapping* map = mapTransPrimitivesITU(msg.toInteger(SS7TCAP::s_transPrimitives),-1);
+    if (!map)
+	return;
+
+    u_int8_t msgType = map->mappedTo;
+    NamedString* val = 0;
+    u_int8_t tag;
+    bool encDTID = false;
+    bool encOTID = false;
+
+    switch (msgType) {
+	case SS7TCAPTransactionITU::Unidirectional:
+	    break;
+	case SS7TCAPTransactionITU::Begin:
+	    encOTID = true;
+	    break;
+	case SS7TCAPTransactionITU::End:
+	case SS7TCAPTransactionITU::Abort:
+	    encDTID = true;
+	    break;
+	case SS7TCAPTransactionITU::Continue:
+	    encOTID = true;
+	    encDTID = true;
+	    break;
+	default:
+	    break;
+    }
+
+    if (encDTID) {
+	val = params.getParam(s_tcapRemoteTID);
+	if (!TelEngine::null(val)) {
+	    // destination TID
+	    DataBlock db;
+	    db.unHexify(val->c_str(),val->length(),' ');
+	    db.insert(ASNLib::buildLength(db));
+	    tag = DestinationIDTag;
+	    db.insert(DataBlock(&tag,1));
+	    data.insert(db);
+	}
+    }
+    if (encOTID) {
+	val = params.getParam(s_tcapLocalTID);
+	if (!TelEngine::null(val)) {
+	    // origination id
+	    DataBlock db;
+	    db.unHexify(val->c_str(),val->length(),' ');
+	    db.insert(ASNLib::buildLength(db));
+	    tag = OriginatingIDTag;
+	    db.insert(DataBlock(&tag,1));
+	    data.insert(db);
+	}
+    }
+
+    data.insert(ASNLib::buildLength(data));
+    data.insert(DataBlock(&msgType,1));
+}
+
+/**
+ * ITU-T SS7 TCAP transaction implementation
+ */
+const TokenDict SS7TCAPTransactionITU::s_dialogPDUs[] = {
+    {"AARQ",    SS7TCAPTransactionITU::AARQDialogTag},
+    {"AARE",    SS7TCAPTransactionITU::AAREDialogTag},
+    {"ABRT",    SS7TCAPTransactionITU::ABRTDialogTag},
+    {0,0},
+};
+
+const TokenDict SS7TCAPTransactionITU::s_resultPDUValues[] = {
+    {"accepted",                                       SS7TCAPTransactionITU::ResultAccepted},
+    {"reject-permanent",                               SS7TCAPTransactionITU::ResultRejected},
+    {"user-null",                                      SS7TCAPTransactionITU::DiagnosticUserNull},
+    {"user-no-reason-given",                           SS7TCAPTransactionITU::DiagnosticUserNoReason},
+    {"user-application-context-name-not-supported",    SS7TCAPTransactionITU::DiagnosticUserAppCtxtNotSupported},
+    {"provider-null",                                  SS7TCAPTransactionITU::DiagnosticProviderNull},
+    {"provider-no-reason-given",                       SS7TCAPTransactionITU::DiagnosticProviderNoReason},
+    {"provider-no-common-dialogue-portion",            SS7TCAPTransactionITU::DiagnosticProviderNoCommonDialog},
+    {"dialogue-service-user",                          SS7TCAPTransactionITU::AbortSourceUser},
+    {"dialogue-service-provider",                      SS7TCAPTransactionITU::AbortSourceProvider},
+    {0,-1},
+};
+
+SS7TCAPTransactionITU::SS7TCAPTransactionITU(SS7TCAP* tcap, SS7TCAP::TCAPUserTransActions type,
+	const String& transactID, NamedList& params, u_int64_t timeout, bool initLocal)
+    : SS7TCAPTransaction(tcap,type,transactID,params,timeout,initLocal)
+{
+    DDebug(m_tcap,DebugAll,"SS7TCAPTransactionITU(tcap = '%s' [%p], transactID = %s, timeout="FMT64" ) created [%p]",
+	    m_tcap->toString().c_str(),tcap,transactID.c_str(),timeout,this);
+}
+
+
+SS7TCAPTransactionITU::~SS7TCAPTransactionITU()
+{
+    DDebug(tcap(),DebugAll,"Transaction with ID=%s of user=%s destroyed [%p]",
+	   m_localID.c_str(),m_userName.c_str(),this);
+}
+
+SS7TCAPError SS7TCAPTransactionITU::handleData(NamedList& params, DataBlock& data)
+{
+    DDebug(tcap(),DebugAll,"SS7TCAPTransactionITU::handleData() transactionID=%s data length=%u [%p]",m_localID.c_str(),
+	   data.length(),this);
+    Lock lock(this);
+    // in case of Abort message, check Cause Information
+    SS7TCAPError error(SS7TCAP::ITUTCAP);
+
+    if (m_type == SS7TCAP::TC_P_Abort) {
+	error = decodePAbort(this,params,data);
+	if (error.error() != SS7TCAPError::NoError)
+	    return error;
+    }
+    else if (testForDialog(data)) {
+	// decode DialogPortion
+	error = decodeDialogPortion(params,data);
+	if (error.error() != SS7TCAPError::NoError)
+	    return error;
+    }
+    error = handleDialogPortion(params,false);
+    if (error.error() != SS7TCAPError::NoError)
+	return error;
+
+    // decodeComponents
+    error = decodeComponents(params,data);
+     if (error.error() != SS7TCAPError::NoError)
+	buildComponentError(error,params,data);
+
+    error = handleComponents(params,false);
+    return error;
+}
+
+bool SS7TCAPTransactionITU::testForDialog(DataBlock& data)
+{
+    return (data.length() && data[0] == SS7TCAPITU::DialogPortionTag);
+}
+
+void SS7TCAPTransactionITU::updateState(bool byUser)
+{
+    switch (m_type) {
+	case SS7TCAP::TC_Begin:
+	case SS7TCAP::TC_QueryWithPerm:
+	case SS7TCAP::TC_QueryWithoutPerm:
+	    break;
+	case SS7TCAP::TC_Continue:
+	case SS7TCAP::TC_ConversationWithPerm:
+	case SS7TCAP::TC_ConversationWithoutPerm:
+	    setState(Active);
+	    break;
+	case SS7TCAP::TC_End:
+	case SS7TCAP::TC_U_Abort:
+	case SS7TCAP::TC_P_Abort:
+	case SS7TCAP::TC_Response:
+	case SS7TCAP::TC_Unidirectional:
+	    setState(Idle);
+	    break;
+	case SS7TCAP::TC_Notice:
+	case SS7TCAP::TC_Unknown:
+	default:
+	    break;
+    }
+}
+
+SS7TCAPError SS7TCAPTransactionITU::update(SS7TCAP::TCAPUserTransActions type, NamedList& params, bool updateByUser)
+{
+   DDebug(tcap(),DebugAll,"SS7TCAPTransactionITU::update() [%p], localID=%s - update to type=%s by %s",this,m_localID.c_str(),
+	lookup(type,SS7TCAP::s_transPrimitives,"Unknown"), (updateByUser ? "user" : "remote"));
+#ifdef DEBUG
+    if (s_printMsgs && s_extendedDbg && debugAt(DebugAll))
+	dumpData(DebugAll,tcap(),"SS7TCAPTransactionITU::update() with",this,params);
+#endif
+
+    Lock l(this);
+    SS7TCAPError error(SS7TCAP::ITUTCAP);
+    switch (type) {
+	case SS7TCAP::TC_Begin:
+	case SS7TCAP::TC_QueryWithPerm:
+	case SS7TCAP::TC_QueryWithoutPerm:
+	case SS7TCAP::TC_Unidirectional:
+	    Debug(tcap(),DebugInfo,"SS7TCAPTransactionITU::update() [%p], localID=%s - invalid update: trying to update from type=%s to type=%s",
+		    this,m_localID.c_str(),lookup(m_type,SS7TCAP::s_transPrimitives,"Unknown"),
+		    lookup(type,SS7TCAP::s_transPrimitives,"Unknown"));
+	    params.setParam(s_tcapRequestError,"invalid_update");
+	    params.setParam("tcap.request.error.currentState",lookup(m_type,SS7TCAP::s_transPrimitives,"Unknown"));
+	    error.setError(SS7TCAPError::Transact_IncorrectTransactionPortion);
+	    return error;
+
+	case SS7TCAP::TC_End:
+	case SS7TCAP::TC_Response:
+	    m_type = type;
+	    if (m_state == PackageReceived) {
+		m_basicEnd = params.getBoolValue(s_tcapBasicTerm,m_basicEnd);
+		if (!m_basicEnd)
+		    // prearranged end, no need to transmit to remote end
+		    m_transmit = NoTransmit;
+		else
+		    m_transmit = PendingTransmit;
+	    }
+	    else if (m_state == PackageSent) {
+		if(!updateByUser)
+		    m_transmit = PendingTransmit;
+		else
+		    m_transmit = NoTransmit;
+	    }
+	    else if (m_state == Active) {
+		if(!updateByUser)
+		    m_transmit = PendingTransmit;
+		else {
+		    m_basicEnd = params.getBoolValue(s_tcapBasicTerm,m_basicEnd);
+		    if (!m_basicEnd)
+			// prearranged end, no need to transmit to remote end
+			m_transmit = NoTransmit;
+		    else
+			m_transmit = PendingTransmit;
+		}
+	    }
+	    break;
+	case SS7TCAP::TC_Continue:
+	case SS7TCAP::TC_ConversationWithPerm:
+	case SS7TCAP::TC_ConversationWithoutPerm:
+	    if (m_state == PackageSent)
+		m_remoteID = params.getValue(s_tcapRemoteTID);
+	    populateSCCPAddress(m_localSCCPAddr,m_remoteSCCPAddr,params,updateByUser);
+	    m_type = type;
+	    m_transmit = PendingTransmit;
+	    break;
+	case SS7TCAP::TC_Notice:
+	    m_type = type;
+	    if (updateByUser) {
+		Debug(tcap(),DebugInfo,"SS7TCAPTransactionITU::update() [%p], localID=%s - invalid update: trying to update from type=%s to type=%s",
+		    this,m_localID.c_str(),lookup(m_type,SS7TCAP::s_transPrimitives,"Unknown"),
+		    lookup(type,SS7TCAP::s_transPrimitives,"Unknown"));
+		params.setParam(s_tcapRequestError,"invalid_update");
+		params.setParam("tcap.request.error.currentState",lookup(m_type,SS7TCAP::s_transPrimitives,"Unknown"));
+		error.setError(SS7TCAPError::Transact_IncorrectTransactionPortion);
+		return error;
+	    }
+	    break;
+	case SS7TCAP::TC_P_Abort:
+	case SS7TCAP::TC_U_Abort:
+	    m_type = type;
+	    if (m_state == PackageReceived)
+		m_transmit = PendingTransmit;
+	    else if (m_state == PackageSent) {
+		if (!updateByUser) {
+		    if (String("pAbort") == params.getValue(s_tcapAbortCause))
+			m_type = SS7TCAP::TC_P_Abort;
+		    else
+			m_type = SS7TCAP::TC_P_Abort;
+		    m_transmit = PendingTransmit;
+		}
+		else
+		    m_transmit = NoTransmit;
+	    }
+	    else if (m_state == Active) {
+		if (!updateByUser) {
+		    if (String("pAbort") == params.getValue(s_tcapAbortCause))
+			m_type = SS7TCAP::TC_P_Abort;
+		    else
+			m_type = SS7TCAP::TC_P_Abort;
+		}
+		m_transmit = PendingTransmit;
+	    }
+	    break;
+	default:
+	    break;
+    }
+
+    m_basicEnd = params.getBoolValue(s_tcapBasicTerm,true);
+
+    if (m_timeout.started()) {
+	m_timeout.stop();
+	XDebug(tcap(),DebugInfo,"SS7TCAPTransactionITU::update() [%p], localID=%s - timeout timer has been stopped",this,m_localID.c_str());
+    }
+    return error;
+}
+
+SS7TCAPError SS7TCAPTransactionITU::handleDialogPortion(NamedList& params, bool byUser)
+{
+    DDebug(tcap(),DebugAll,"SS7TCAPTransactionITU::handleDialogPortion() [%p]",this);
+
+    SS7TCAPError error(SS7TCAP::ITUTCAP);
+
+    NamedString* diagPDU = params.getParam(s_tcapDialoguePduType);
+    NamedString* protoVers = params.getParam(s_tcapProtoVers);
+    NamedString* appCtxt = params.getParam(s_tcapDialogueAppCtxt);
+
+    Lock l(this);
+    switch (m_type) {
+	case SS7TCAP::TC_Unidirectional:
+	    if (byUser) {
+		// check for context name, if not present no AUDT
+		if (TelEngine::null(appCtxt))
+		    return error;
+		m_appCtxt = *appCtxt;
+		// build AUDT.
+		params.setParam(s_tcapDialogueID,s_unstructDialogueOID.toString());
+		params.setParam(s_tcapProtoVers,String(s_ituTCAPProto));
+		params.setParam(s_tcapDialoguePduType,lookup(AARQDialogTag,s_dialogPDUs));
+	    }
+	    else {
+		// check to be AUDT
+		if (TelEngine::null(diagPDU) || TelEngine::null(protoVers))
+		    return error;
+		if (diagPDU->toInteger(s_dialogPDUs) != AARQDialogTag || s_ituTCAPProto != protoVers->toInteger())
+		    error.setError(SS7TCAPError::Dialog_Abnormal);
+	    }
+	    break;
+	case SS7TCAP::TC_Begin:
+	case SS7TCAP::TC_QueryWithPerm:
+	case SS7TCAP::TC_QueryWithoutPerm:
+	    if (byUser) {
+		if (TelEngine::null(appCtxt))
+		    break;
+		m_appCtxt = *appCtxt;
+		// build AARQ
+		params.setParam(s_tcapDialogueID,s_structDialogueOID);
+		params.setParam(s_tcapProtoVers,String(s_ituTCAPProto));
+		params.setParam(s_tcapDialoguePduType,lookup(AARQDialogTag,s_dialogPDUs));
+	    }
+	    else {
+		if (TelEngine::null(diagPDU) || TelEngine::null(protoVers))
+		    break;
+		// check to be AARQ and that it has context
+		if (diagPDU->toInteger(s_dialogPDUs) != AARQDialogTag || TelEngine::null(appCtxt)) {
+		    error.setError(SS7TCAPError::Dialog_Abnormal);
+		    break;
+		}
+		// check proto version, if not 1, build AARE - no common dialogue version, return err to build abort
+		if (s_ituTCAPProto != protoVers->toInteger()) {
+		    params.clearParam(s_tcapDialogPrefix,'.');
+		    params.setParam(s_tcapDialogueID,s_structDialogueOID);
+		    params.setParam(s_tcapDialoguePduType,lookup(AAREDialogTag,s_dialogPDUs));
+		    params.setParam(s_tcapDialogueResult,lookup(ResultRejected,s_resultPDUValues));
+		    params.setParam(s_tcapDialogueDiag,lookup(DiagnosticProviderNoCommonDialog,s_resultPDUValues));
+		    error.setError(SS7TCAPError::Dialog_Abnormal);
+		    break;
+		}
+		m_appCtxt = *appCtxt;
+	    }
+	    break;
+	case SS7TCAP::TC_End:
+	case SS7TCAP::TC_Response:
+	    if (byUser) {
+		if (!basicEnd() || transactionState() != PackageReceived || m_appCtxt.null()) {
+		    params.clearParam(s_tcapDialogPrefix,'.');
+		    break;
+		}
+		if (TelEngine::null(appCtxt))
+		    params.setParam(s_tcapDialogueAppCtxt,m_appCtxt);
+		// build AARE with result=accepted, result-source-diagnostic=null / dialog-service-user(null)
+		params.setParam(s_tcapDialogueID,s_structDialogueOID);
+		params.setParam(s_tcapProtoVers,String(s_ituTCAPProto));
+		params.setParam(s_tcapDialoguePduType,lookup(AAREDialogTag,s_dialogPDUs));
+		params.setParam(s_tcapDialogueResult,lookup(ResultAccepted,s_resultPDUValues));
+		params.setParam(s_tcapDialogueDiag,lookup(DiagnosticProviderNoReason,s_resultPDUValues));
+	    }
+	    else {
+		// page 51 q.774
+		// dialog info ?
+		// => yes => AC MODE ? = no, discard components. TC-p-abort to TCU , terminate transaction
+		//			= yes, check correct AARE, incorrect => TC-P-Abort to user, send TC_END to user otherwise
+		// => no =? AC MODE ? = no, send TC_END to user (continue processing)
+		// 			= yes, TC-p-abort to TCU , terminate transaction
+		if (transactionState() != PackageSent && !TelEngine::null(diagPDU)) {
+		    error.setError(SS7TCAPError::Dialog_Abnormal);
+		    break;
+		}
+		if (!TelEngine::null(appCtxt)) {
+		    if (m_appCtxt.null())
+			error.setError(SS7TCAPError::Dialog_Abnormal);
+		    else {
+			if (TelEngine::null(diagPDU) || diagPDU->toInteger(s_dialogPDUs) != AAREDialogTag)
+			    error.setError(SS7TCAPError::Dialog_Abnormal);
+		    }
+		}
+		else {
+		    if (!m_appCtxt.null() && transactionState() != Active)
+			error.setError(SS7TCAPError::Dialog_Abnormal);
+		}
+	    }
+	    break;
+	case SS7TCAP::TC_Continue:
+	case SS7TCAP::TC_ConversationWithPerm:
+	case SS7TCAP::TC_ConversationWithoutPerm:
+	    if (byUser) {
+		if (transactionState() != PackageReceived || TelEngine::null(appCtxt)) {
+		    params.clearParam(s_tcapDialogPrefix,'.');
+		    break;
+		}
+		// build AARE
+		m_appCtxt = *appCtxt;
+		params.setParam(s_tcapDialogueID,s_structDialogueOID);
+		params.setParam(s_tcapProtoVers,String(s_ituTCAPProto));
+		params.setParam(s_tcapDialoguePduType,lookup(AAREDialogTag,s_dialogPDUs));
+		params.setParam(s_tcapDialogueResult,lookup(ResultAccepted,s_resultPDUValues));
+		params.setParam(s_tcapDialogueDiag,lookup(DiagnosticProviderNoReason,s_resultPDUValues));
+	    }
+	    else {
+		// dialog info?
+		// yes => AC MODE? => yes, Check AARE
+		//		   = > no, discard, build P Abort with ABRT apdu
+		// no => AC MODE? => no, send to user / continue processing
+		//		  => yes, build U_Abort with ABRT apdu
+		if (transactionState() == PackageReceived)
+		    break;
+		if (!TelEngine::null(appCtxt)) {
+		    if (m_appCtxt.null())
+			error.setError(SS7TCAPError::Dialog_Abnormal);
+		    else {
+			if (TelEngine::null(diagPDU) || diagPDU->toInteger(s_dialogPDUs) != AAREDialogTag)
+			    error.setError(SS7TCAPError::Dialog_Abnormal);
+		    }
+		}
+		else {
+		    if (!m_appCtxt.null() && transactionState() == PackageSent)
+			error.setError(SS7TCAPError::Dialog_Abnormal);
+		}
+	    }
+	    break;
+	case SS7TCAP::TC_Notice:
+	case SS7TCAP::TC_P_Abort:
+	    break;
+	case SS7TCAP::TC_U_Abort:
+	    if (byUser) {
+		if (m_appCtxt.null())
+		    break;
+		params.setParam(s_tcapDialogueID,s_structDialogueOID);
+		params.setParam(s_tcapProtoVers,String(s_ituTCAPProto));
+		if (transactionState() == PackageReceived ) {
+		    NamedString* abrtReason = params.getParam(s_tcapDialogueDiag);
+		    if (!TelEngine::null(abrtReason) && (abrtReason->toInteger(s_resultPDUValues) == DiagnosticUserAppCtxtNotSupported ||
+			abrtReason->toInteger(s_resultPDUValues) == DiagnosticProviderNoCommonDialog)) {
+			// build AARE
+			if (TelEngine::null(appCtxt))
+			    params.setParam(s_tcapDialogueAppCtxt,m_appCtxt);
+			params.setParam(s_tcapDialoguePduType,lookup(AAREDialogTag,s_dialogPDUs));
+			params.setParam(s_tcapDialogueResult,lookup(ResultRejected,s_resultPDUValues));
+		    }
+		    else {
+			// build ABRT
+			params.setParam(s_tcapDialoguePduType,lookup(ABRTDialogTag,s_dialogPDUs));
+			params.setParam(s_tcapDialogueAbrtSrc,lookup(AbortSourceUser,s_resultPDUValues));
+		    }
+		}
+		else if (transactionState() == Active) {
+		    if (TelEngine::null(params.getParam(s_tcapDialogueAbrtSrc)))
+			params.setParam(s_tcapDialogueAbrtSrc,lookup(AbortSourceUser,s_resultPDUValues));
+		    params.setParam(s_tcapDialoguePduType,lookup(ABRTDialogTag,s_dialogPDUs));
+		}
+	    }
+	    else {
+		// state initsent/active
+		if (!TelEngine::null(m_appCtxt)) {
+		    NamedString* diagID = params.getParam(s_tcapDialogueID);
+		    NamedString* pdu = params.getParam(s_tcapDialoguePduType);
+		    if (!TelEngine::null(diagID) && !TelEngine::null(pdu)) {
+			if (s_structDialogueOID == *diagID && (pdu->toInteger(s_dialogPDUs) == AAREDialogTag
+			    || pdu->toInteger(s_dialogPDUs) == ABRTDialogTag)) {
+
+			    if (pdu->toInteger() == AAREDialogTag) {
+				NamedString* diag = params.getParam(s_tcapDialogueDiag);
+				if (transactionState() == PackageSent && !TelEngine::null(diag) &&
+				    diag->toInteger(s_resultPDUValues) != DiagnosticProviderNoCommonDialog) {
+				    params.setParam(s_tcapRequest,lookup(SS7TCAP::TC_P_Abort,SS7TCAP::s_transPrimitives));
+				    params.setParam(s_tcapAbortCause,"pAbort");
+				    m_transmit = PendingTransmit;
+				}
+				else
+				    error.setError(SS7TCAPError::Dialog_Abnormal);
+			    }
+			    else {
+				NamedString* src = params.getParam(s_tcapDialogueAbrtSrc);
+				if (!TelEngine::null(src) && src->toInteger(s_resultPDUValues) != AbortSourceUser)
+				    error.setError(SS7TCAPError::Dialog_Abnormal);
+			    }
+			}
+			else
+			    error.setError(SS7TCAPError::Dialog_Abnormal);
+		    }
+		    else
+			error.setError(SS7TCAPError::Dialog_Abnormal);
+		}
+		else {
+		    if (!TelEngine::null(appCtxt))
+			error.setError(SS7TCAPError::Dialog_Abnormal);
+		}
+	    }
+	    break;
+	default:
+	    break;
+    }
+
+#ifdef DEBUG
+    if (tcap() && s_printMsgs && s_extendedDbg && debugAt(DebugAll))
+	dumpData(DebugAll,tcap(),"SS7TCAPTransactionITU::handleDialogPortion()",this,params,DataBlock::empty());
+#endif
+    return error;
+}
+
+void SS7TCAPTransactionITU::abnormalDialogInfo(NamedList& params)
+{
+    params.setParam(s_tcapRequest,lookup(SS7TCAP::TC_U_Abort,SS7TCAP::s_transPrimitives));
+    params.setParam(s_tcapAbortCause,"uAbort");
+    params.setParam(s_tcapDialogueID,s_structDialogueOID);
+    params.setParam(s_tcapDialoguePduType,
+	lookup(SS7TCAPTransactionITU::ABRTDialogTag,SS7TCAPTransactionITU::s_dialogPDUs));
+    params.setParam(s_tcapDialogueAbrtSrc,
+	lookup(SS7TCAPTransactionITU::AbortSourceProvider,SS7TCAPTransactionITU::s_resultPDUValues));
+}
+
+void SS7TCAPTransactionITU::encodePAbort(SS7TCAPTransaction* tr, NamedList& params, DataBlock& data)
+{
+    NamedString* pAbortCause = params.getParam(s_tcapAbortCause);
+    DataBlock db;
+    if (!TelEngine::null(pAbortCause)) {
+	int tag = 0;
+	if (*pAbortCause == "pAbort") {
+	    tag = SS7TCAPITU::PCauseTag;
+	    u_int8_t pCode = SS7TCAPError::codeFromError(SS7TCAP::ITUTCAP,params.getIntValue(s_tcapAbortInfo));
+	    if (pCode) {
+		db.append(ASNLib::encodeInteger(pCode,false));
+		db.insert(ASNLib::buildLength(db));
+		db.insert(DataBlock(&tag,1));
+	    }
+	}
+	else if (*pAbortCause == "uAbort") {
+	    if (tr)
+		tr->encodeDialogPortion(params,data);
+	}
+    }
+    if (db.length())
+	data.insert(db);
+
+#ifdef DEBUG
+     if (tr && tr->tcap() && s_printMsgs && s_extendedDbg && debugAt(DebugAll))
+	 dumpData(DebugAll,tr->tcap(),"SS7TCAPTransactionITU::encodePAbort() - encoded Abort info",tr,params,data);
+#endif
+}
+
+SS7TCAPError SS7TCAPTransactionITU::decodePAbort(SS7TCAPTransaction* tr, NamedList& params, DataBlock& data)
+{
+    u_int8_t tag = data[0];
+    SS7TCAPError error(SS7TCAP::ITUTCAP);
+    if (!tr)
+	return error;
+    SS7TCAPTransactionITU* tri = static_cast<SS7TCAPTransactionITU*>(tr);
+    if (!tri)
+	return error;
+    if (tag == SS7TCAPITU::PCauseTag) {
+	data.cut(-1);
+	u_int8_t pCode = 0;
+	int len = ASNLib::decodeUINT8(data,&pCode,false);
+	if (len != 1) {
+	    error.setError(SS7TCAPError::Transact_BadlyStructuredTransaction);
+	    return error;
+	}
+	params.setParam(s_tcapAbortCause,"pAbort");
+	params.setParam(s_tcapAbortInfo,String(SS7TCAPError::errorFromCode(SS7TCAP::ITUTCAP,pCode)));
+    }
+    else if (tri->testForDialog(data))  {
+	error = tri->decodeDialogPortion(params,data);
+	if (error.error() != SS7TCAPError::NoError)
+	    return error;
+	params.setParam(s_tcapAbortCause,"uAbort");
+    }
+#ifdef DEBUG
+     if (tr && tr->tcap() && s_printMsgs && s_extendedDbg && debugAt(DebugAll))
+	 dumpData(DebugAll,tr->tcap(),"SS7TCAPTransactionITU::decodePAbort() - decoded Abort info",tr,params,data);
+#endif
+    return error;
+}
+
+void SS7TCAPTransactionITU::updateToEnd()
+{
+    setTransactionType(SS7TCAP::TC_End);
+    if (transactionState() == PackageSent)
+	m_basicEnd = false;
+}
+
+SS7TCAPError SS7TCAPTransactionITU::decodeDialogPortion(NamedList& params, DataBlock& data)
+{
+    DDebug(tcap(),DebugAll,"SS7TCAPTransactionITU::decodeDialogPortion() for transaction with localID=%s [%p]",
+    m_localID.c_str(),this);
+
+    SS7TCAPError error(SS7TCAP::ITUTCAP);
+
+    u_int8_t tag = data[0];
+    // dialog is not present
+    if (tag != SS7TCAPITU::DialogPortionTag) // 0x6b
+	return error;
+    data.cut(-1);
+
+    // dialog portion is present, decode dialog length
+    int len = ASNLib::decodeLength(data);
+    if (len < 0 || len > (int)data.length()) {
+	error.setError(SS7TCAPError::Dialog_BadlyStructuredDialoguePortion);
+	return error;
+    }
+
+    tag = data[0];
+    if (tag != SS7TCAPITU::ExternalTag) {// 0x28
+	error.setError(SS7TCAPError::Dialog_BadlyStructuredDialoguePortion);
+	return error;
+    }
+    data.cut(-1);
+
+    len = ASNLib::decodeLength(data);
+    if (len < 0 || len > (int)data.length()) {
+	error.setError(SS7TCAPError::Dialog_BadlyStructuredDialoguePortion);
+	return error;
+    }
+
+    // decode dialog-as-id
+    ASNObjId oid;
+    len = ASNLib::decodeOID(data,&oid,true);
+    if (len < 0) {
+	error.setError(SS7TCAPError::Dialog_BadlyStructuredDialoguePortion);
+	return error;
+    }
+    params.setParam(s_tcapDialogueID,oid.toString());
+
+    // remove Encoding Tag
+    tag = data[0];
+    if (tag != SS7TCAPITU::SingleASNTypeCEncTag) {// 0xa0
+	error.setError(SS7TCAPError::Dialog_BadlyStructuredDialoguePortion);
+	return error;
+    }
+    data.cut(-1);
+
+    len = ASNLib::decodeLength(data);
+    if (len < 0 || len > (int)data.length()) {
+	error.setError(SS7TCAPError::Dialog_BadlyStructuredDialoguePortion);
+	return error;
+    }
+
+    int dialogPDU = data[0]; // should be DialoguePDU type tag
+    if (dialogPDU != AARQDialogTag && dialogPDU != AAREDialogTag && dialogPDU != ABRTDialogTag)  {// 0x60 0x61 0x64
+	error.setError(SS7TCAPError::Dialog_BadlyStructuredDialoguePortion);
+	return error;
+    }
+    data.cut(-1);
+    params.setParam(s_tcapDialoguePduType,lookup(dialogPDU,s_dialogPDUs));
+
+    len = ASNLib::decodeLength(data);
+    if (len < 0 || len > (int)data.length()) {
+	error.setError(SS7TCAPError::Dialog_BadlyStructuredDialoguePortion);
+	return error;
+    }
+
+    // check for protocol version or abort-source
+    if (data[0] == SS7TCAPITU::ProtocolVersionTag) { //0x80 bitstring
+	data.cut(-1);
+	if (dialogPDU != ABRTDialogTag) {
+	    // decode protocol version
+	    String proto;
+	    len = ASNLib::decodeBitString(data,&proto,false);
+	    if (len != 1) {
+		error.setError(SS7TCAPError::Dialog_BadlyStructuredDialoguePortion);
+		return error;
+	    }
+	    params.setParam(s_tcapProtoVers,proto);
+	}
+	else {
+	    u_int8_t abrtSrc = 0xff;
+	    len = ASNLib::decodeUINT8(data,&abrtSrc,false);
+	    int code = 0x30 | abrtSrc;
+	    params.setParam(s_tcapDialogueAbrtSrc,lookup(code,s_resultPDUValues));
+	}
+    }
+
+    // check for Application Context Tag  length OID tag length
+    if (data[0] == SS7TCAPITU::ApplicationContextTag) { // 0xa1
+	data.cut(-1);
+	len = ASNLib::decodeLength(data);
+	if (len < 0 || len > (int)data.length()) {
+	    error.setError(SS7TCAPError::Dialog_BadlyStructuredDialoguePortion);
+	    return error;
+	}
+	ASNObjId oid;
+	len = ASNLib::decodeOID(data,&oid,true);
+	if (len < 0) {
+	    error.setError(SS7TCAPError::Dialog_BadlyStructuredDialoguePortion);
+	    return error;
+	}
+	params.setParam(s_tcapDialogueAppCtxt,oid.toString());
+    }
+
+    if (data[0] == ResultTag) {
+	data.cut(-1);
+	len = ASNLib::decodeLength(data);
+	if (len < 0 || len > (int)data.length()) {
+	    error.setError(SS7TCAPError::Dialog_BadlyStructuredDialoguePortion);
+	    return error;
+	}
+	u_int8_t res = 0xff;
+	len = ASNLib::decodeUINT8(data,&res,true);
+	params.setParam(s_tcapDialogueResult,lookup(res,s_resultPDUValues));
+    }
+
+    if (data[0] == ResultDiagnosticTag) {
+	data.cut(-1);
+	len = ASNLib::decodeLength(data);
+	if (data[0] == ResultDiagnosticUserTag || data[0]== ResultDiagnosticProviderTag) {
+	    tag = data[0];
+	    data.cut(-1);
+	    len = ASNLib::decodeLength(data);
+	    if (len < 0 || len > (int)data.length()) {
+		error.setError(SS7TCAPError::Dialog_BadlyStructuredDialoguePortion);
+		return error;
+	    }
+	    u_int8_t res = 0xff;
+	    len = ASNLib::decodeUINT8(data,&res,true);
+	    if (tag == ResultDiagnosticUserTag) {
+		int code = 0x10 | res;
+		params.setParam(s_tcapDialogueDiag,lookup(code,s_resultPDUValues));
+	    }
+	    else {
+		int code = 0x20 | res;
+		params.setParam(s_tcapDialogueDiag,lookup(code,s_resultPDUValues));
+	    }
+	}
+    }
+    // check for user information
+    if (data[0] == SS7TCAPITU::UserInformationTag) {// 0xfd
+	data.cut(-1);
+	len = ASNLib::decodeLength(data);
+	if (len < 0) {
+	    error.setError(SS7TCAPError::Dialog_BadlyStructuredDialoguePortion);
+	    return error;
+	}
+
+	tag = data[0];
+	if (tag != SS7TCAPITU::ExternalTag) {
+	    error.setError(SS7TCAPError::Dialog_BadlyStructuredDialoguePortion);
+	    return error;
+	}
+	data.cut(-1);
+
+	len = ASNLib::decodeLength(data);
+	if (len < 0 || len > (int)data.length()) {
+	    error.setError(SS7TCAPError::Dialog_BadlyStructuredDialoguePortion);
+	    return error;
+	}
+
+	// direct Reference
+	tag = data[0];
+	if (tag == SS7TCAPITU::DirectReferenceTag) { // 0x06
+	    data.cut(-1);
+	    ASNObjId oid;
+	    len = ASNLib::decodeOID(data,&oid,false);
+	    if (len < 0) {
+		error.setError(SS7TCAPError::Dialog_BadlyStructuredDialoguePortion);
+		return error;
+	    }
+	    params.setParam(s_tcapReference,oid.toString());
+	}
+
+	// data Descriptor
+	tag = data[0];
+	if (tag == SS7TCAPITU::DataDescriptorTag) { // 0x07
+	    data.cut(-1);
+	    String str;
+	    int type;
+	    len = ASNLib::decodeString(data,&str,&type,false);
+	    if (len < 0) {
+		error.setError(SS7TCAPError::Dialog_BadlyStructuredDialoguePortion);
+		return error;
+	    }
+	    params.setParam(s_tcapDataDesc,str);
+	}
+
+	// encoding
+	tag = data[0];
+	if (tag == SS7TCAPITU::SingleASNTypePEncTag || tag == SS7TCAPITU::SingleASNTypeCEncTag ||
+	    tag == SS7TCAPITU::OctetAlignEncTag || tag == SS7TCAPITU::ArbitraryEncTag) {
+	    data.cut(-1);
+	    len = ASNLib::decodeLength(data);
+	    if (len < 0) {
+		error.setError(SS7TCAPError::Dialog_BadlyStructuredDialoguePortion);
+		return error;
+	    }
+	    DataBlock d((void*)data.data(0,len),len);
+	    data.cut(-len);
+
+	    // put encoding context in hexified form
+	    String dataHexified;
+	    dataHexified.hexify(d.data(),d.length(),' ');
+	    params.setParam(s_tcapEncodingContent,dataHexified);
+	    // put encoding identifier
+	    switch (tag) {
+		case SS7TCAPITU::SingleASNTypePEncTag: // 0x80
+		    params.setParam(s_tcapEncodingType,"single-ASN1-type-primitive");
+		    break;
+		case SS7TCAPITU::SingleASNTypeCEncTag: // 0xa0
+		    params.setParam(s_tcapEncodingType,"single-ASN1-type-contructor");
+		    break;
+		case SS7TCAPITU::OctetAlignEncTag:     // 0x81
+		    params.setParam(s_tcapEncodingType,"octet-aligned");
+		    break;
+		case SS7TCAPITU::ArbitraryEncTag:      // 0x82
+		    params.setParam(s_tcapEncodingType,"arbitrary");
+		    break;
+		default:
+		    break;
+	    }
+	}
+    }
+#ifdef DEBUG
+     if (s_printMsgs && s_extendedDbg && debugAt(DebugAll))
+	 dumpData(DebugAll,tcap(),"SS7TCAPTransactionITU::decodeDialogPortion() - decoded dialog portion",this,params,data);
+#endif
+    return error;
+}
+
+void SS7TCAPTransactionITU::encodeDialogPortion(NamedList& params, DataBlock& data)
+{
+    DDebug(tcap(),DebugAll,"SS7TCAPTransactionITU::encodeDialogPortion() for transaction with localID=%s [%p]",
+		m_localID.c_str(),this);
+
+    DataBlock dialogData;
+    int tag;
+
+    NamedString* typeStr = params.getParam(s_tcapDialoguePduType);
+    if (TelEngine::null(typeStr))
+	return;
+    u_int8_t pduType = typeStr->toInteger(s_dialogPDUs);
+
+    // encode user information
+    DataBlock userInfo;
+    NamedString* val = params.getParam(s_tcapEncodingType);
+    if (!TelEngine::null(val)) {
+	if (*val == "single-ASN1-type-primitive")
+	    tag = SS7TCAPITU::SingleASNTypePEncTag;
+	else if (*val == "single-ASN1-type-contructor")
+	    tag = SS7TCAPITU::SingleASNTypeCEncTag;
+	else if (*val == "octet-aligned")
+	    tag = SS7TCAPITU::OctetAlignEncTag;
+	else if (*val == "arbitrary")
+	    tag = SS7TCAPITU::ArbitraryEncTag;
+
+	val = params.getParam(s_tcapEncodingContent);
+	if (val) {
+	    DataBlock db;
+	    db.unHexify(val->c_str(),val->length(),' ');
+	    db.insert(ASNLib::buildLength(db));
+	    db.insert(DataBlock(&tag,1));
+	    userInfo.insert(db);
+	}
+    }
+    val = params.getParam(s_tcapDataDesc);
+    if (!TelEngine::null(val)) {
+	DataBlock db = ASNLib::encodeString(*val,ASNLib::PRINTABLE_STR,false);
+	db.insert(ASNLib::buildLength(db));
+	tag = SS7TCAPITU::DataDescriptorTag;
+	db.insert(DataBlock(&tag,1));
+	userInfo.insert(db);
+    }
+    val = params.getParam(s_tcapReference);
+    if (!TelEngine::null(val)) {
+	ASNObjId oid = *val;
+	DataBlock db = ASNLib::encodeOID(oid,false);
+	db.insert(ASNLib::buildLength(db));
+	tag = SS7TCAPITU::DirectReferenceTag;
+	db.insert(DataBlock(&tag,1));
+	userInfo.insert(db);
+    }
+
+    if (userInfo.length()) {
+	userInfo.insert(ASNLib::buildLength(userInfo));
+	tag = SS7TCAPITU::ExternalTag;
+	userInfo.insert(DataBlock(&tag,1));
+	userInfo.insert(ASNLib::buildLength(userInfo));
+	tag = SS7TCAPITU::UserInformationTag;
+	userInfo.insert(DataBlock(&tag,1));
+	dialogData.insert(userInfo);
+    }
+
+    switch (pduType) {
+	case AAREDialogTag:
+	    val = params.getParam(s_tcapDialogueDiag);
+	    if (!TelEngine::null(val)) {
+		u_int16_t code = val->toInteger(s_resultPDUValues);
+		DataBlock db = ASNLib::encodeInteger(code % 0x10,true);
+		db.insert(ASNLib::buildLength(db));
+		if ((code & 0x10) == 0x10)
+		    tag = ResultDiagnosticUserTag;
+		else
+		    tag = ResultDiagnosticProviderTag;
+		db.insert(DataBlock(&tag,1));
+		db.insert(ASNLib::buildLength(db));
+		tag = ResultDiagnosticTag;
+		db.insert(DataBlock(&tag,1));
+		dialogData.insert(db);
+	    }
+
+	    val = params.getParam(s_tcapDialogueResult);
+	    if (!TelEngine::null(val)) {
+		u_int8_t res = val->toInteger(s_resultPDUValues);
+		DataBlock db = ASNLib::encodeInteger(res,true);
+		db.insert(ASNLib::buildLength(db));
+		tag = ResultTag;
+		db.insert(DataBlock(&tag,1));
+		dialogData.insert(db);
+	    }
+	case AARQDialogTag:
+	    // Application context
+	    val = params.getParam(s_tcapDialogueAppCtxt);
+	    if (!TelEngine::null(val)) {
+		ASNObjId oid = *val;
+		DataBlock db = ASNLib::encodeOID(oid,true);
+		db.insert(ASNLib::buildLength(db));
+		tag = SS7TCAPITU::ApplicationContextTag;
+		db.insert(DataBlock(&tag,1));
+		dialogData.insert(db);
+	    }
+	    val = params.getParam(s_tcapProtoVers);
+	    if (!TelEngine::null(val)) {
+		DataBlock db = ASNLib::encodeBitString(*val,false);
+		db.insert(ASNLib::buildLength(db));
+		tag = SS7TCAPITU::ProtocolVersionTag;
+		db.insert(DataBlock(&tag,1));
+		dialogData.insert(db);
+	    }
+	    break;
+	case ABRTDialogTag:
+	    val = params.getParam(s_tcapDialogueAbrtSrc);
+	    if (!TelEngine::null(val)) {
+		u_int8_t code = val->toInteger(s_resultPDUValues) % 0x30;
+		DataBlock db = ASNLib::encodeInteger(code,false);
+		db.insert(ASNLib::buildLength(db));
+		tag = SS7TCAPITU::ProtocolVersionTag;
+		db.insert(DataBlock(&tag,1));
+		dialogData.insert(db);
+	    }
+	    break;
+	default:
+	    return;
+    }
+
+    dialogData.insert(ASNLib::buildLength(dialogData));
+    dialogData.insert(DataBlock(&pduType,1));
+    dialogData.insert(ASNLib::buildLength(dialogData));
+    tag = SS7TCAPITU::SingleASNTypeCEncTag;
+    dialogData.insert(DataBlock(&tag,1));
+
+    val = params.getParam(s_tcapDialogueID);
+    if (TelEngine::null(val))
+	return;
+
+    ASNObjId oid = *val;
+    dialogData.insert(ASNLib::encodeOID(oid,true));
+    dialogData.insert(ASNLib::buildLength(dialogData));
+    tag = SS7TCAPITU::ExternalTag;
+    dialogData.insert(DataBlock(&tag,1));
+    dialogData.insert(ASNLib::buildLength(dialogData));
+    tag = SS7TCAPITU::DialogPortionTag;
+    dialogData.insert(DataBlock(&tag,1));
+
+    data.insert(dialogData);
+    params.clearParam(s_tcapDialogPrefix,'.');
+#ifdef DEBUG
+     if (s_printMsgs && s_extendedDbg && debugAt(DebugAll))
+	 dumpData(DebugAll,tcap(),"SS7TCAPTransactionITU::encodeDialogPortion() - encoded dialog portion",this,params,data);
+#endif
+}
+
+SS7TCAPError SS7TCAPTransactionITU::decodeComponents(NamedList& params, DataBlock& data)
+{
+    XDebug(tcap(),DebugAll,"SS7TCAPTransactionITU::decodeComponents() [%p] - data length=%u",this,data.length());
+
+    SS7TCAPError error(SS7TCAP::ITUTCAP);
+    if (!data.length()) {
+	params.setParam(s_tcapCompCount,"0");
+	return error;
+    }
+
+    u_int8_t tag = data[0];
+    if (tag != SS7TCAPITU::ComponentPortionTag) { // 0x6c
+	error.setError(SS7TCAPError::General_IncorrectComponentPortion);
+	return error;
+    }
+    data.cut(-1);
+
+    // decode length of component portion
+    int len = ASNLib::decodeLength(data);
+    if (len < 0 || len != (int)data.length()) { // the length of the remaining data should be the same as the decoded length
+	error.setError(SS7TCAPError::General_BadlyStructuredCompPortion);
+	return error;
+    }
+
+    unsigned int compCount = 0;
+    while (data.length()) {
+	compCount++;
+	// decode component type
+	u_int8_t compType = data[0];
+	data.cut(-1);
+
+	// verify component length
+	len = ASNLib::decodeLength(data);
+	if (len < 0 || len > (int)data.length()) {
+	    error.setError(SS7TCAPError::General_BadlyStructuredCompPortion);
+	    break;
+	}
+	unsigned int initLength = data.length();
+	unsigned int compLength = len;
+
+	// decode invoke id
+	u_int16_t compID;
+	tag = data[0];
+	bool notDeriv = false;
+	if (tag != SS7TCAPITU::LocalTag) {// 0x02
+	    if (compType == Reject) {
+		ASNLib::decodeNull(data,true);
+		notDeriv = true;
+	    }
+	    else {
+		error.setError(SS7TCAPError::General_BadlyStructuredCompPortion);
+		break;
+	    }
+	} else {
+	    data.cut(-1);
+
+	    // obtain component ID(s)
+	    len = ASNLib::decodeUINT16(data,&compID,false);
+	    if (len < 0) {
+		error.setError(SS7TCAPError::General_BadlyStructuredCompPortion);
+		break;
+	    }
+	}
+	String compParam;
+	compPrefix(compParam,compCount,false);
+	// comp IDs shall be decoded according to component type
+	switch (compType) {
+	    case Invoke:
+		params.setParam(compParam + "." + s_tcapRemoteCID,String(compID));
+		if (data[0] == SS7TCAPITU::LinkedIDTag) {
+		    data.cut(-1);
+		    u_int16_t linkID;
+		    len = ASNLib::decodeUINT16(data,&linkID,false);
+		    if (len < 0) {
+			error.setError(SS7TCAPError::General_BadlyStructuredCompPortion);
+			break;
+		    }
+		    params.setParam(compParam + "." + s_tcapLocalCID,String(compID));
+		}
+		break;
+	    case ReturnResultLast:
+	    case ReturnError:
+	    case Reject:
+	    case ReturnResultNotLast:
+		if (notDeriv)
+		    params.setParam(compParam + "." + s_tcapLocalCID,"");
+		else
+		    params.setParam(compParam + "." + s_tcapLocalCID,String(compID));
+		break;
+	    default:
+		error.setError(SS7TCAPError::General_UnrecognizedComponentType);
+		break;
+	}
+
+	const PrimitiveMapping* map = mapCompPrimitivesITU(-1,compType);
+	if (!map) {
+	    error.setError(SS7TCAPError::General_BadlyStructuredCompPortion);
+	    break;
+	}
+	params.setParam(compParam + "." +  s_tcapCompType,lookup(map->primitive,SS7TCAP::s_compPrimitives,"Unknown"));
+
+	if (error.error() != SS7TCAPError::NoError) {
+	    break;
+	}
+
+	// decode Operation Code
+	if (compType == Invoke ||
+	    compType == ReturnResultLast ||
+	    compType == ReturnResultNotLast) {
+	    tag = data[0];
+	    if (tag == SS7TCAPITU::ParameterSeqTag) {
+		data.cut(-1);
+		len = ASNLib::decodeLength(data);
+	    }
+	    tag = data[0];
+	    if (tag == SS7TCAPITU::LocalTag) {
+		data.cut(-1);
+		int opCode = 0;
+		len = ASNLib::decodeINT32(data,&opCode,false);
+		params.setParam(compParam +"." + s_tcapOpCodeType,"local");
+		params.setParam(compParam + "." + s_tcapOpCode,String(opCode));
+	    }
+	    else if (tag == SS7TCAPITU::GlobalTag) {
+		data.cut(-1);
+		ASNObjId obj;
+		len = ASNLib::decodeOID(data,&obj,false);
+		params.setParam(compParam + "." + s_tcapOpCodeType,"global");
+		params.setParam(compParam + "." + s_tcapOpCode,obj.toString());
+	    }
+	    else {
+		error.setError(SS7TCAPError::General_BadlyStructuredCompPortion);
+		break;
+	    }
+	}
+
+	// decode  Error Code
+	if (compType == ReturnError) {
+	    tag = data[0];
+	    if (tag == SS7TCAPITU::LocalTag) {
+		data.cut(-1);
+		int opCode = 0;
+		len = ASNLib::decodeINT32(data,&opCode,false);
+		params.setParam(compParam + "." + s_tcapErrCodeType,"local");
+		params.setParam(compParam + "." + s_tcapErrCode,String(SS7TCAPError::errorFromCode(tcap()->tcapType(),opCode)));
+	    }
+	    else if (tag == SS7TCAPITU::GlobalTag) {
+		data.cut(-1);
+		ASNObjId obj;
+		len = ASNLib::decodeOID(data,&obj,false);
+		params.setParam(compParam + "." + s_tcapErrCodeType,"global");
+		params.setParam(compParam + "." + s_tcapErrCode,obj.toString());
+	    }
+	    else {
+		error.setError(SS7TCAPError::General_BadlyStructuredCompPortion);
+		break;
+	    }
+	}
+
+	// decode Problem
+	if (compType == Reject) {
+	    tag = data[0];
+	    data.cut(-1);
+	    u_int16_t problemCode = 0x0 | (tag << 8);
+	    u_int8_t code = 0;
+	    len = ASNLib::decodeUINT8(data,&code,false);
+	    problemCode |= code;
+	    params.setParam(compParam + "." + s_tcapProblemCode,String(SS7TCAPError::errorFromCode(tcap()->tcapType(),problemCode)));
+	}
+	else {
+	// decode Parameters (Set or Sequence) as payload
+	    int payloadLen = data.length() - (initLength - compLength);
+	    DataBlock d((void*)data.data(0,payloadLen),payloadLen);
+	    data.cut(-payloadLen);
+	    String dataHexified = "";
+	    dataHexified.hexify(d.data(),d.length(),' ');
+	    params.setParam(compParam,dataHexified);
+	}
+	if (initLength - data.length() != compLength) { // check we consumed the announced component length
+	    error.setError(SS7TCAPError::General_BadlyStructuredCompPortion);
+	    break;
+	}
+    }
+
+    params.setParam(s_tcapCompCount,String(compCount));
+#ifdef DEBUG
+    if (tcap() && s_printMsgs && s_extendedDbg && debugAt(DebugAll))
+	dumpData(DebugAll,tcap(),"Finished decoding message",this,params,data);
+#endif
+    return error;
+}
+
+void SS7TCAPTransactionITU::encodeComponents(NamedList& params, DataBlock& data)
+{
+    XDebug(tcap(),DebugAll,"SS7TCAPTransactionITU::encodeComponents() for transaction with localID=%s [%p]",m_localID.c_str(),this);
+
+    int componentCount = params.getIntValue(s_tcapCompCount,0);
+    DataBlock compData;
+    if (componentCount) {
+	int index = 0;
+
+	while (index < componentCount) {
+	    index++;
+	    DataBlock codedComp;
+	    // encode parameters
+	    String compParam;
+	    compPrefix(compParam,index,false);
+	    // Component Type
+	    int compPrimitive = lookup(params.getValue(compParam + "." + s_tcapCompType,"Unknown"),SS7TCAP::s_compPrimitives);
+	    const PrimitiveMapping* map = mapCompPrimitivesITU(compPrimitive,-1);
+	    if (!map)
+		continue;
+	    int compType = map->mappedTo;
+
+	    NamedString* value = 0;
+	    if (compType == Reject) {
+		value = params.getParam(compParam + "." + s_tcapProblemCode);
+		if (!TelEngine::null(value)) {
+		    u_int16_t codeErr = SS7TCAPError::codeFromError(tcap()->tcapType(),(SS7TCAPError::ErrorType)value->toInteger());
+		    u_int8_t problemTag = (codeErr & 0xff00) >> 8;
+		    u_int8_t code = codeErr & 0x000f;
+		    DataBlock db(DataBlock(&code,1));
+		    db.insert(ASNLib::buildLength(db));
+		    db.insert(DataBlock(&problemTag,1));
+		    codedComp.insert(db);
+		}
+	    }
+	    else {
+		NamedString* payloadHex = params.getParam(compParam);
+		if (!TelEngine::null(payloadHex)) {
+		    DataBlock payload;
+		    payload.unHexify(payloadHex->c_str(),payloadHex->length(),' ');
+		    codedComp.insert(payload);
+		}
+	    }
+	    // encode  Error Code only if ReturnError
+	    if (compType == ReturnError) {
+		value = params.getParam(compParam + "." + s_tcapErrCodeType);
+		if (!TelEngine::null(value)) {
+		    int tag = 0;
+		    DataBlock db;
+		    if (*value == "local") {
+			tag = SS7TCAPITU::LocalTag;
+			int errCode = params.getIntValue(compParam + "." + s_tcapErrCode,0);
+			SS7TCAPError err(tcap()->tcapType(),(SS7TCAPError::ErrorType)errCode);
+			db = ASNLib::encodeInteger(err.errorCode(),false);
+			db.insert(ASNLib::buildLength(db));
+		    }
+		    else if (*value == "global") {
+			tag = SS7TCAPITU::GlobalTag;
+			ASNObjId oid = String(params.getValue(compParam + "." + s_tcapErrCode));
+			db = ASNLib::encodeOID(oid,false);
+			db.insert(ASNLib::buildLength(db));
+		    }
+		    db.insert(DataBlock(&tag,1));
+		    codedComp.insert(db);
+		}
+	    }
+
+	    // encode Operation Code only if Invoke
+	    if (compType == Invoke ||
+		compType == ReturnResultNotLast ||
+		compType == ReturnResultLast) {
+		value = params.getParam(compParam + "." + s_tcapOpCodeType);
+		if (!TelEngine::null(value)) {
+		    int tag = 0;
+		    DataBlock db;
+		    if (*value == "local") {
+			int opCode = params.getIntValue(compParam + "." + s_tcapOpCode,0);
+			db = ASNLib::encodeInteger(opCode,true);
+		    }
+		    else if (*value == "global") {
+			ASNObjId oid(params.getValue(compParam + "." + s_tcapOpCode));
+			db = ASNLib::encodeOID(oid,true);
+			//db.insert(ASNLib::buildLength(db));
+		    }
+		    codedComp.insert(db);
+		    if (compType != Invoke) {
+			tag = SS7TCAPITU::ParameterSeqTag;
+			codedComp.insert(ASNLib::buildLength(codedComp));
+			codedComp.insert(DataBlock(&tag,1));
+		    }
+		}
+	    }
+
+	    NamedString* invID = params.getParam(compParam + "." + s_tcapLocalCID);
+	    NamedString* linkID = params.getParam(compParam + "." + s_tcapRemoteCID);
+	    DataBlock db;
+	    u_int8_t val = 0;
+	    switch (compType) {
+		case Invoke:
+		    if (!TelEngine::null(linkID)) {
+			val = linkID->toInteger();
+			DataBlock db1;
+			db1.append(&val,sizeof(u_int8_t));
+			db1.insert(ASNLib::buildLength(db1));
+			val = SS7TCAPITU::LinkedIDTag;
+			db1.insert(DataBlock(&val,1));
+			codedComp.insert(db1);
+		    }
+		    if (!TelEngine::null(invID)) {
+			val = invID->toInteger();
+			db.append(&val,sizeof(u_int8_t));
+			db.insert(ASNLib::buildLength(db));
+			val = SS7TCAPITU::LocalTag;
+			db.insert(DataBlock(&val,1));
+		    }
+		    break;
+		case ReturnResultLast:
+		case ReturnError:
+		case ReturnResultNotLast:
+		    if (!TelEngine::null(linkID)) {
+			val = linkID->toInteger();
+			db.append(&val,sizeof(u_int8_t));
+			db.insert(ASNLib::buildLength(db));
+			val = SS7TCAPITU::LocalTag;
+			db.insert(DataBlock(&val,1));
+		    }
+		    break;
+		case Reject:
+		    if (TelEngine::null(linkID))
+			linkID = invID;
+		    if (!TelEngine::null(linkID)) {
+			val = linkID->toInteger();
+			db.append(&val,sizeof(u_int8_t));
+			db.insert(ASNLib::buildLength(db));
+			val = SS7TCAPITU::LocalTag;
+			db.insert(DataBlock(&val,1));
+		    }
+		    else
+			db.insert(ASNLib::encodeNull(true));
+		    break;
+		default:
+		    break;
+	    }
+	    codedComp.insert(db);
+
+	    if(codedComp.length()) {
+		codedComp.insert(ASNLib::buildLength(codedComp));
+		codedComp.insert(DataBlock(&compType,1));
+	    }
+
+	    params.clearParam(compParam,'.'); // clear all params for this component
+	    compData.insert(codedComp);
+	}
+
+	if (compData.length()) {
+	    compData.insert(ASNLib::buildLength(compData));
+	    int tag = SS7TCAPITU::ComponentPortionTag;
+	    compData.insert(DataBlock(&tag,1));
+
+	    data.insert(compData);
+	}
+    }
+
+    params.clearParam(s_tcapCompPrefix,'.');
+}
+
+void SS7TCAPTransactionITU::requestContent(NamedList& params, DataBlock &data)
+{
+#ifdef DEBUG
+    DDebug(tcap(),DebugAll,"SS7TCAPTransactionITU::requestContent() - for id=%s [%p]",m_localID.c_str(),this);
+#endif
+    if (m_type == SS7TCAP::TC_P_Abort || m_type == SS7TCAP::TC_U_Abort)
+	encodePAbort(this,params,data);
+    else {
+	requestComponents(params,data);
+	if (dialogPresent()) {
+	    if (TelEngine::null(params.getParam(s_tcapDialoguePduType)))
+		handleDialogPortion(params,true);
+	    encodeDialogPortion(params,data);
+	}
+    }
+    transactionData(params);
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

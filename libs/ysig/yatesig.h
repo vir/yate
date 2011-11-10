@@ -129,6 +129,8 @@ class SS7TCAPTransaction;                // SS7 TCAP transaction base class
 class SS7TCAPComponent;                  // SS7 TCAP component
 class SS7TCAPANSI;                       // SS7 ANSI TCAP implementation
 class SS7TCAPTransactionANSI;            // SS7 TCAP ANSI Transaction
+class SS7TCAPITU;                        // SS7 ITU TCAP implementation
+class SS7TCAPTransactionITU;             // SS7 TCAP ITU Transaction
 // ISDN
 class ISDNLayer2;                        // Abstract ISDN layer 2 (Q.921) message transport
 class ISDNLayer3;                        // Abstract ISDN layer 3 (Q.931) message transport
@@ -11118,8 +11120,13 @@ public:
      * Update transaction state
      * @param byUser True if update is requested by user, false if by remote
      */
-    inline void updateState(bool byUser = true)
-	{ }
+    virtual void updateState(bool byUser = true) = 0;
+
+    /**
+     * Set information in case of abnormal dialog detection
+     * @param params List of parameters where to set the abnormal dialog information
+     */
+    virtual void abnormalDialogInfo(NamedList& params);
 
     /**
      * @param params NamedList reference to fill with the decoded dialog information
@@ -11514,6 +11521,251 @@ private:
     void encodeComponents(NamedList& params, DataBlock& data);
 
     SS7TCAP::TCAPUserTransActions m_prevType;
+};
+
+/**
+ * Implementation of SS7 Transactional Capabilities Application Part - specification ITU-T
+ * @short ITU-T SS7 TCAP implementation
+ */
+class YSIG_API SS7TCAPITU : virtual public SS7TCAP
+{
+    YCLASS(SS7TCAPITU,SS7TCAP)
+public:
+    enum TCAPTags {
+	OriginatingIDTag    = 0x48,
+	DestinationIDTag    = 0x49,
+	PCauseTag           = 0x4a,
+    };
+
+    enum TCAPDialogTags {
+	DialogPortionTag         = 0x6b,
+	ProtocolVersionTag       = 0x80,
+	ApplicationContextTag    = 0xa1,
+	UserInformationTag       = 0xbe,
+    };
+
+    enum UserInfoTags {
+	DirectReferenceTag       = 0x06,
+	DataDescriptorTag        = 0x07,
+	ExternalTag              = 0x28,
+	SingleASNTypePEncTag     = 0x80, // Primitive Single-ASN1-Type-Encoding
+	SingleASNTypeCEncTag     = 0xa0, // Constructor Single-ASN1-Type-Encoding
+	OctetAlignEncTag         = 0x81,
+	ArbitraryEncTag          = 0x82,
+    };
+
+    enum TCAPComponentTags {
+	ComponentPortionTag  = 0x6c,
+	LocalTag             = 0x02,
+	LinkedIDTag          = 0x80,
+	GlobalTag            = 0x06,
+	ParameterSeqTag      = 0x30,
+	ParameterSetTag      = 0x31,
+    };
+
+    /**
+     * Constructor
+     * @param params Parameters to build ITU TCAP
+     */
+    SS7TCAPITU(const NamedList& params);
+
+    /**
+     * Destructor
+     */
+    ~SS7TCAPITU();
+
+    /**
+     * Build a transaction
+     * @param type Type with which to build the transactions
+     * @param transactID ID for the transaction
+     * @param params Parameters for building the transaction
+     * @param initLocal True if built by user, false if by remote end
+     * @return A transaction
+     */
+    virtual SS7TCAPTransaction* buildTransaction(SS7TCAP::TCAPUserTransActions type, const String& transactID, NamedList& params,
+	bool initLocal = true);
+
+private:
+    SS7TCAPError decodeTransactionPart(NamedList& params, DataBlock& data);
+    void encodeTransactionPart(NamedList& params, DataBlock& data);
+};
+
+/**
+ * Implementation of SS7 Transactional Capabilities Application Part Transaction - specification ITU-T
+ * @short ITU-T SS7 TCAP transaction implementation
+ */
+class YSIG_API SS7TCAPTransactionITU : public SS7TCAPTransaction
+{
+public:
+    enum ITUComponentType {
+	CompUnknown         = 0x0,
+	Local               = 0x1,
+	Invoke              = 0xa1,
+	ReturnResultLast    = 0xa2,
+	ReturnError         = 0xa3,
+	Reject              = 0xa4,
+	ReturnResultNotLast = 0xa7,
+    };
+
+    enum ITUTransactionType {
+	Unknown                         = 0x0,
+	Unidirectional                  = 0x61,
+	Begin                           = 0x62,
+	End                             = 0x64,
+	Continue                        = 0x65,
+	Abort                           = 0x67,
+    };
+
+    enum ITUDialogTags {
+	AARQDialogTag               = 0x60,
+	AAREDialogTag               = 0x61,
+	ABRTDialogTag               = 0x64,
+	ResultDiagnosticUserTag     = 0xa1,
+	ResultDiagnosticProviderTag = 0xa2,
+	ResultTag                   = 0xa2,
+	ResultDiagnosticTag         = 0xa3,
+    };
+
+    enum ITUDialogValues {
+	ResultAccepted                     = 0,
+	ResultRejected                     = 1,
+	DiagnosticUserNull                 = 0x10,
+	DiagnosticUserNoReason             = 0x11,
+	DiagnosticUserAppCtxtNotSupported  = 0x12,
+	DiagnosticProviderNull             = 0x20,
+	DiagnosticProviderNoReason         = 0x21,
+	DiagnosticProviderNoCommonDialog   = 0x22,
+	AbortSourceUser                    = 0x30,
+	AbortSourceProvider                = 0x31,
+    };
+
+    /**
+     * Constructor
+     * @param tcap TCAP holding this transaction
+     * @param type Initiating type for transaction
+     * @param transactID Transaction ID
+     * @param params Parameters to build this transaction
+     * @param timeout Transaction time out interval
+     * @param initLocal True if the transaction was initiated locally, false if not
+     */
+    SS7TCAPTransactionITU(SS7TCAP* tcap, SS7TCAP::TCAPUserTransActions type, const String& transactID, NamedList& params,
+	u_int64_t timeout, bool initLocal = true);
+
+    /**
+     * Destructor
+     */
+    ~SS7TCAPTransactionITU();
+
+    /**
+     * Process transaction data and fill the NamedList with the decoded data
+     * @param params NamedList to fill with decoded data
+     * @param data Data to decode
+     * @return A TCAP error encountered whilst decoding
+     */
+    virtual SS7TCAPError handleData(NamedList& params, DataBlock& data);
+
+    /**
+     * An update request for this transaction
+     * @param type The type of transaction to which this transaction should be updated
+     * @param params Update parameter
+     * @param updateByUser True if the update is made by the local user, false if it's made by the remote end
+     * @return A TCAP Error
+     */
+    virtual SS7TCAPError update(SS7TCAP::TCAPUserTransActions type, NamedList& params, bool updateByUser = true);
+
+    /**
+     * Handle TCAP relevant dialog data
+     * @param params NamedList containing (if present) dialog information
+     * @param byUser True if the dialog information is provided by the local user, false otherwise
+     * @return A report error
+     */
+    virtual SS7TCAPError handleDialogPortion(NamedList& params, bool byUser = true);
+
+    /**
+     * Encode P-Abort information
+     * @param tr The transaction on which the abort was signalled
+     * @param params NamedList reference from which to get the P-Abort information
+     * @param data DataBlock reference in which to insert the encoded P-Abort information
+     */
+    static void encodePAbort(SS7TCAPTransaction* tr, NamedList& params, DataBlock& data);
+
+    /**
+     * Decode P-Abort TCAP message portion
+     * @param tr The transaction on which the abort was signalled
+     * @param params NamedList reference to fill with the decoded P-Abort information
+     * @param data DataBlock reference from which to decode P-Abort information
+     * @return A report error
+     */
+    static SS7TCAPError decodePAbort(SS7TCAPTransaction* tr, NamedList& params, DataBlock& data);
+
+    /**
+     * Update the state of this transaction to end the transaction
+     */
+    virtual void updateToEnd();
+
+    /**
+     * Check if the transaction present dialog information
+     * @return True if dialog information is present, false otherwise
+     */
+    inline bool dialogPresent()
+	{ return !(m_appCtxt.null()); }
+
+    /**
+     * Test for dialog when decoding
+     * @param data Data from which the transaction is decoded
+     * @return True if dialog portion is present, false otherwise
+     */
+    bool testForDialog(DataBlock& data);
+
+    /**
+     * Encode dialog portion of transaction
+     * @param params List of parameters to encode
+     * @param data Data block into which to insert the encoded data
+     */
+    void encodeDialogPortion(NamedList& params, DataBlock& data);
+
+    /**
+     * Decode dialog portion
+     * @param params List into which to put the decoded dialog parameters
+     * @param data Data to decodeCaps
+     * @return A report error
+     */
+    SS7TCAPError decodeDialogPortion(NamedList& params, DataBlock& data);
+
+    /**
+     * Update transaction state
+     * @param byUser True if update is requested by user, false if by remote
+     */
+    void updateState(bool byUser = false);
+
+    /**
+     * Request content for this transaction
+     * @param params List of parameters of this tranaction
+     * @param data Data block to fill with encoded content
+     */
+    virtual void requestContent(NamedList& params, DataBlock& data);
+
+    /**
+     * Set information in case of abnormal dialog detection
+     * @param params List of parameters where to set the abnormal dialog information
+     */
+    virtual void abnormalDialogInfo(NamedList& params);
+
+    /**
+     * Dictionary for Dialogue PDUs
+     */
+    static const TokenDict s_dialogPDUs[];
+
+    /**
+     * Dictionary for dialogue result values
+     */
+    static const TokenDict s_resultPDUValues[];
+
+private:
+    SS7TCAPError decodeComponents(NamedList& params, DataBlock& data);
+    void encodeComponents(NamedList& params, DataBlock& data);
+
+    String m_appCtxt;
 };
 
 // The following classes are ISDN, not SS7, but they use the same signalling

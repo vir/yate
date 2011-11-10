@@ -548,13 +548,16 @@ void SS7TCAP::timerTick(const Time& when)
 	    break;
 	NamedList params("");
 	DataBlock data;
-	tr->checkComponents();
+	if (tr->transactionState() != SS7TCAPTransaction::Idle)
+	    tr->checkComponents();
 	if (tr->endNow())
 	    tr->setState(SS7TCAPTransaction::Idle);
 	if (tr->timedOut()) {
 	    DDebug(this,DebugInfo,"SS7TCAP::timerTick() - transaction with id=%s(%p) timed out [%p]",tr->toString().c_str(),tr,this);
 	    tr->updateToEnd();
 	    buildSCCPData(params,tr);
+	    if (!tr->basicEnd())
+		tr->transactionData(params);
 	    sendToUser(params);
 	    tr->setState(SS7TCAPTransaction::Idle);
 	}

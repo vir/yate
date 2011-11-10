@@ -774,6 +774,7 @@ void SS7TCAP::buildSCCPData(NamedList& params, SS7TCAPTransaction* tr)
 	return;
     DDebug(this,DebugAll,"SS7TCAP::buildSCCPData(tr=%p) for local transaction ID=%s [%p]",tr,tr->toString().c_str(),this);
 
+    Lock l(tr);
     bool sendOk = true;
     int type = tr->transactionType();
     if (type == SS7TCAP::TC_End
@@ -1092,7 +1093,8 @@ u_int16_t SS7TCAPError::codeFromError(SS7TCAP::TCAPType tcapType, int err)
  */
 SS7TCAPTransaction::SS7TCAPTransaction(SS7TCAP* tcap, SS7TCAP::TCAPUserTransActions type,
 	const String& transactID, NamedList& params, u_int64_t timeout, bool initLocal)
-    : m_tcap(tcap), m_tcapType(SS7TCAP::UnknownTCAP), m_userName(""), m_localID(transactID), m_type(type),
+    : Mutex(true,transactID),
+      m_tcap(tcap), m_tcapType(SS7TCAP::UnknownTCAP), m_userName(""), m_localID(transactID), m_type(type),
       m_localSCCPAddr(""), m_remoteSCCPAddr(""), m_basicEnd(true), m_endNow(false), m_timeout(timeout)
 {
 
@@ -1189,6 +1191,7 @@ SS7TCAPError SS7TCAPTransaction::handleComponents(NamedList& params, bool update
     if (!count)
 	return error;
     int index = 0;
+    Lock l(this);
     while (index < count) {
 	index++;
 	String paramRoot;
@@ -1321,6 +1324,7 @@ void SS7TCAPTransaction::requestComponents(NamedList& params, DataBlock& data)
 
 void SS7TCAPTransaction::transactionData(NamedList& params)
 {
+    Lock l(this);
     params.setParam(s_tcapRequest,lookup(m_type,SS7TCAP::s_transPrimitives));
     params.setParam(s_tcapLocalTID,m_localID);
     params.setParam(s_tcapRemoteTID,m_remoteID);
@@ -1334,6 +1338,7 @@ void SS7TCAPTransaction::checkComponents()
 {
     NamedList params("");
     int index = 0;
+    Lock l(this);
     ListIterator iter(m_components);
     for (;;) {
 	SS7TCAPComponent* comp = static_cast<SS7TCAPComponent*>(iter.get());
@@ -1420,6 +1425,7 @@ void SS7TCAPTransaction::addSCCPAddressing(NamedList& fillParams, bool local)
     String remoteParam(local ? s_callingPA : s_calledPA);
     fillParams.clearParam(s_calledPA,'.');
     fillParams.clearParam(s_callingPA,'.');
+    Lock l(this);
     for (unsigned int i = 0; i < m_localSCCPAddr.count(); i++) {
 	NamedString* ns = m_localSCCPAddr.getParam(i);
 	if (ns && *ns && !(*ns).null()) {
@@ -2785,6 +2791,7 @@ SS7TCAPError SS7TCAPTransactionANSI::handleDialogPortion(NamedList& params, bool
     SS7TCAPError err(SS7TCAP::ANSITCAP);
 
     NamedList dialog("");
+    Lock l(this);
     switch (m_type) {
 	case SS7TCAP::TC_Begin:
 	case SS7TCAP::TC_QueryWithPerm:

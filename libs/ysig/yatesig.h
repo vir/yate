@@ -10929,7 +10929,7 @@ public:
      * @param type The transaction primitive to be set
      */
     inline void setTransactionType(SS7TCAP::TCAPUserTransActions type)
-	{ m_type = type; }
+	{ Lock l(this); m_type = type; }
     /**
      * Retrieve the current type of primitive that is set for this transaction
      * @return The transaction primitive type
@@ -10942,6 +10942,7 @@ public:
      */
     inline void setState(TransactionState state)
     {
+	Lock l(this);
 	m_state = state;
 	// changing state automatically triggers a change in transmission state (except for Idle)
 	if (state != Idle)

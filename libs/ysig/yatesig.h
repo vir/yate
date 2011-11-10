@@ -10348,24 +10348,28 @@ public:
     inline SS7TCAPMessage(NamedList& params, DataBlock& data, bool notice = false)
 	: m_msgParams(params), m_msgData(data), m_notice(notice)
 	{}
+
     /**
      * Get the SCCP parameters
      * @return NamedList reference containing information from the SCCP level
      */
     inline NamedList& msgParams()
 	{ return m_msgParams; }
+
     /**
      * Get the TCAP message data
      * @return DataBlock representing the encoded TCAP message
      */
     inline DataBlock& msgData()
 	{ return m_msgData; }
+
     /**
      * Is this message a notice or a normal message?
      * @return True if message is a notice, false otherwise
      */
     inline bool& isNotice()
 	{ return m_notice; }
+
 private:
     NamedList m_msgParams;
     DataBlock m_msgData;
@@ -10388,6 +10392,7 @@ public:
 	ITUTCAP,
 	ANSITCAP,
     };
+
     /**
      * Component handling primitives between TCAP and TCAP user (TC-user)
      */
@@ -10404,6 +10409,7 @@ public:
 	TC_U_Cancel       = 10,       // User Cancel primitive - Request, TC-user request cancellation of an operation
 	TC_TimerReset     = 11,       // Timer Reset - Indication, allow TC-user to refresh an operation timer
     };
+
     /**
      * TCAP message primitives
      */
@@ -10422,6 +10428,7 @@ public:
 	TC_P_Abort,                 // ITU-T & ANSI - Indication, notify the abort of a dialogue because of a protocol error
 	TC_Notice,                  // ITU-T & ANSI - Indication, notify the TC-user that the network was unable to provide the requested service
     };
+
     /**
      * Component Operation Classes
      */
@@ -10431,6 +10438,7 @@ public:
 	SuccessOnlyReport         = 3,
 	NoReport                  = 4,
     };
+
     /**
      * Type of message counters
      */
@@ -10441,27 +10449,32 @@ public:
 	NormalMsgs,
 	AbnormalMsgs,
     };
+
     /**
      * Constructor
      * @param params Parameters for building this TCAP
      */
     SS7TCAP(const NamedList& params);
+
     /**
      * Destructor
      */
     virtual ~SS7TCAP();
+
     /**
      * Configure and initialize the component and any subcomponents it may have
      * @param config Optional configuration parameters override
      * @return True if the component was initialized properly
      */
     virtual bool initialize(const NamedList* config);
+
     /**
      * Send a message to SCCP for transport, inherited from SCCPUser
      * @param data User data
      * @param params SCCP parameters
      */
     virtual bool sendData(DataBlock& data, NamedList& params);
+
     /**
      * Notification from SCCP that a message has arrived, inherited from SCCPUser
      * @param data Received user data
@@ -10469,6 +10482,7 @@ public:
      * @return True if this user has processed the message, false otherwise
      */
     virtual HandledMSU receivedData(DataBlock& data, NamedList& params);
+
     /**
      * Notification from SCCP that a message failed to arrive to its destination, inherited from SCCPUser
      * @param data User data sent.
@@ -10477,81 +10491,97 @@ public:
      * but it must always must contain the first segment
      */
     virtual HandledMSU notifyData(DataBlock& data, NamedList& params);
+
     /**
      * Notification from SCCP layer about management status
      * @param type Type of management notification
      * @param params Notification params
      */
     bool managementNotify(SCCP::Type type, NamedList& params);
+
     /**
      * Attach a SS7 TCAP user
      * @param user Pointer to the TCAP user to attach
      */
     void attach(TCAPUser* user);
+
     /**
      * Detach a SS7 TCAP user
      * @param user TCAP user to detach
      */
     void detach(TCAPUser* user);
+
     /**
      * A TCAP user made a request
      * @param requestParams NamedList containing all the necessary data for the TCAP request
      * @return A SS7TCAPError reporting the status of the request
      */
     virtual SS7TCAPError userRequest(NamedList& requestParams);
+
     /**
      * Process received SCCP data
      * @param sccpData A TCAP message received from SCCP to process
      * @return A code specifying if this message was handled
      */
     virtual HandledMSU processSCCPData(SS7TCAPMessage* sccpData);
+
     /**
      * Report which TCAP implementation is in use
      */
     inline TCAPType tcapType()
 	{ return m_tcapType; }
+
     /**
      * Set TCAP version
      * @param type TCAP version
      */
     inline void setTCAPType(TCAPType type)
 	{ m_tcapType = type; }
+
     /**
      * Enqueue data received from SCCP as a TCAP message, kept in a processing queue
      * @param msg A SS7TCAPMessage pointer containing all data received from SSCP
      */
     virtual void enqueue(SS7TCAPMessage* msg);
+
     /**
      * Dequeue a TCAP message when ready to process it
      * @return A SS7TCAPMessage pointer dequeued from the queue
      */
     virtual SS7TCAPMessage* dequeue();
+
     /**
      * Get a new transaction ID
      * @return A transaction ID
      */
     virtual const String allocTransactionID();
+
     /**
      * Get a new transaction ID
      * @param str String into which to put the id
      */
     void allocTransactionID(String& str);
+
     /**
      * Dictionary for TCAP versions
      */
     static const TokenDict s_tcapVersion[];
+
     /**
      * Dictionary for component primitives
      */
     static const TokenDict s_compPrimitives[];
+
     /**
      * Dictionary for transaction primitives
      */
     static const TokenDict s_transPrimitives[];
+
     /**
      * Dictionary for component opearation classes
      */
     static const TokenDict s_compOperClasses[];
+
     /**
      * Build a transaction
      * @param type Type with which to build the transactions
@@ -10562,44 +10592,52 @@ public:
      */
     virtual SS7TCAPTransaction* buildTransaction(SS7TCAP::TCAPUserTransActions type, const String& transactID, NamedList& params,
 	bool initLocal = true) = 0;
+
     /**
      * Find the transaction with the given id
      * @param tid Searched local id
      * @return A pointer to the transaction or null if not found
      */
     SS7TCAPTransaction* getTransaction(const String& tid);
+
     /**
      * Remove transaction
      * @param tr The transaction to remove
      */
     void removeTransaction(SS7TCAPTransaction* tr);
+
     /**
      * Method called periodically to do processing and timeout checks
      * @param when Time to use as computing base for events and timeouts
      */
     virtual void timerTick(const Time& when);
+
     /**
      * Send to TCAP users a decode message
      * @param params Message in NamedList form
      * @return True if the message was handled by a user, false otherwise
      */
     virtual bool sendToUser(NamedList& params);
+
     /**
      * Build SCCP data
      * @param params NamedList containing the parameters to be given to SCCP
      * @param tr Transaction for which to build SCCP data
      */
     virtual void buildSCCPData(NamedList& params, SS7TCAPTransaction* tr);
+
     /**
      * Status of TCAP
      * @param status NamedList to fill with status information
      */
     virtual void status(NamedList& status);
+
     /**
      * Status of TCAP users
      * @param status NamedList to fill with user status information
      */
     virtual void userStatus(NamedList& status);
+
     /**
      * Handle an decoding error
      * @param error The encoutered error
@@ -10609,6 +10647,7 @@ public:
      * @return Status if the error was handled or not
      */
     virtual HandledMSU handleError(SS7TCAPError& error, NamedList& params, DataBlock& data, SS7TCAPTransaction* tr = 0);
+
     /**
      * Increment one of the status counters
      * @param counterType The type of the counter to increment
@@ -10635,6 +10674,7 @@ public:
 		break;
 	}
     }
+
     /**
      * Retrieve one of the status counters
      * @param counterType The type of the counter to increment
@@ -10658,6 +10698,7 @@ public:
 	}
 	return 0;
     }
+
     /**
      * Get the type of transaction in string form
      * @param tr Type of transaction
@@ -10665,6 +10706,7 @@ public:
      */
     static inline const char* lookupTransaction(int tr)
 	{ return lookup(tr,s_transPrimitives,"Unknown"); }
+
     /**
      * Get the type of transaction from string form
      * @param tr Type of transaction in string form
@@ -10672,6 +10714,7 @@ public:
      */
     static inline int lookupTransaction(const char* tr)
 	{ return lookup(tr,s_transPrimitives,TC_Unknown); }
+
     /**
      * Get the type of component in string form
      * @param comp Type of component
@@ -10679,6 +10722,7 @@ public:
      */
     static inline const char* lookupComponent(int comp)
 	{ return lookup(comp,s_compPrimitives,"Unknown"); }
+
     /**
      * Get the type of component from string form
      * @param comp Type of component
@@ -10773,43 +10817,51 @@ public:
 	Discard,
 	NoError,
     };
+
     /**
      * Constructor
      * @param tcapType TCAP specification user for this error
      */
     SS7TCAPError(SS7TCAP::TCAPType tcapType);
+
     /**
      * Constructor
      * @param tcapType TCAP specification used for this error
      * @param error The error
      */
     SS7TCAPError(SS7TCAP::TCAPType tcapType, ErrorType error);
+
     /**
      * Destructor
      */
     ~SS7TCAPError();
+
     /**
      * Get the error
      * @return The TCAP error
      */
     inline ErrorType error()
 	{ return m_error; }
+
     /**
      * Set the error
      * @param error Error to set
      */
     inline void setError(ErrorType error)
 	{ m_error = error; }
+
     /**
      * Error name
      * @return The error name
      */
     const String errorName();
+
     /**
      * The full value of the error
      * @return 2 byte integer containing the full code of the error
      */
     u_int16_t errorCode();
+
     /**
      * Obtain abstract TCAP error from TCAP protocol defined error value
      * @param tcapType Type of TCAP for which the error is searched
@@ -10817,6 +10869,7 @@ public:
      * @return The type of the error
      */
     static int errorFromCode(SS7TCAP::TCAPType tcapType, u_int16_t code);
+
     /**
      * Obtain TCAP specific error value from abstract TCAP error
      * @param tcapType Type of TCAP for which the error is searched
@@ -10824,10 +10877,12 @@ public:
      * @return The error value as defined by the TCAP protocol
      */
     static u_int16_t codeFromError(SS7TCAP::TCAPType tcapType, int err);
+
     /**
      * Dictionary for error types
      */
     static const TokenDict s_errorTypes[];
+
 private:
     SS7TCAP::TCAPType m_tcapType;
     ErrorType m_error;
@@ -10846,11 +10901,13 @@ public:
 	PackageReceived           = 2,
 	Active                    = 3,
     };
+
     enum TransactionTransmit {
 	NoTransmit       = 0,
 	PendingTransmit  = 256,
 	Transmitted      = 521,
     };
+
     /**
      * Constructor
      * @param tcap TCAP holding this transaction
@@ -10862,10 +10919,12 @@ public:
      */
     SS7TCAPTransaction(SS7TCAP* tcap, SS7TCAP::TCAPUserTransActions type, const String& transactID, NamedList& params,
 	u_int64_t timeout, bool initLocal = true);
+
     /**
      * Destructor
      */
     ~SS7TCAPTransaction();
+
     /**
      * Process transaction data and fill the NamedList with the decoded data
      * @param params NamedList to fill with decoded data
@@ -10873,6 +10932,7 @@ public:
      * @return A TCAP error encountered whilst decoding
      */
     virtual SS7TCAPError handleData(NamedList& params, DataBlock& data) = 0;
+
     /**
      * An update request for this transaction
      * @param type The type of transaction to which this transaction should be updated
@@ -10881,6 +10941,7 @@ public:
      * @return A TCAP Error
      */
     virtual SS7TCAPError update(SS7TCAP::TCAPUserTransActions type, NamedList& params, bool updateByUser = true) = 0;
+
     /**
      * Handle TCAP relevant dialog data
      * @param params NamedList containing (if present) dialog information
@@ -10888,6 +10949,7 @@ public:
      * @return A report error
      */
     virtual SS7TCAPError handleDialogPortion(NamedList& params,bool byUser = true) = 0;
+
     /**
      * Build a Reject component in answer to an encoutered error during decoding of the component portion
      * @param error The encountered error
@@ -10896,6 +10958,7 @@ public:
      * @return A report error
      */
     virtual SS7TCAPError buildComponentError(SS7TCAPError& error, NamedList& params, DataBlock& data);
+
     /**
      * Update components
      * @param params NamedList reference containing the update information
@@ -10903,39 +10966,46 @@ public:
      * @return A report error
      */
     virtual SS7TCAPError handleComponents(NamedList& params, bool updateByUser = true);
+
     /**
      * Request encoding for the components of this transaction
      * @param params Components parameters to encode
      * @param data DataBlock reference in which to insert the encoded components
      */
     virtual void requestComponents(NamedList& params, DataBlock& data);
+
     /**
      * Fill the NamedList with transaction portion parameters
      * @param params NamedList reference to fill with transaction portion parameters
      */
     virtual void transactionData(NamedList& params);
+
     /**
      * Request content for this transaction
      * @param params List of parameters of this tranaction
      * @param data Data block to fill with encoded content
      */
     virtual void requestContent(NamedList& params, DataBlock& data) = 0;
+
     /**
      * Check components for timeouts
      */
     virtual void checkComponents();
+
     /**
      * Set the current type of transaction primitive
      * @param type The transaction primitive to be set
      */
     inline void setTransactionType(SS7TCAP::TCAPUserTransActions type)
 	{ Lock l(this); m_type = type; }
+
     /**
      * Retrieve the current type of primitive that is set for this transaction
      * @return The transaction primitive type
      */
     inline SS7TCAP::TCAPUserTransActions transactionType()
 	{ return m_type; }
+
     /**
      * Set the state of this transaction, trigger a transmission pending state
      * @param state The state to set for the transaction
@@ -10948,87 +11018,102 @@ public:
 	if (state != Idle)
 	    m_transmit = PendingTransmit;
     }
+
     /**
      * Retrieve the state of this transaction
      * @return The state of this transaction
      */
     inline TransactionState transactionState()
 	{ return m_state; }
+
     /**
      * Set the transmission state for this transaction
      * @param state The transmission state to be set
      */
     void setTransmitState(TransactionTransmit state);
+
     /**
      * The transmission state for this transaction
      * @return The current transmission state
      */
     inline TransactionTransmit transmitState()
 	{ return m_transmit; }
+
     /**
      * The TCAP to which this transaction belongs
      * @return A pointer to the TCAP component
      */
     inline SS7TCAP* tcap()
 	{ return m_tcap; }
+
     /**
      * Get the ID of the transaction so it can be used for list searches
      * @return A reference to the ID
      */
     const String& toString() const
 	{ return m_localID; }
+
     /**
      * Set the TCAP username to which this transaction belongs
      * @param name The name of the user to set
      */
     inline void setUserName(const String& name)
 	{ m_userName = name; }
+
     /**
      * Return the name of the TCAP user to which this transaction belongs
      * @return The name of the user
      */
     const String& userName()
 	{ return m_userName; }
+
     /**
      * Check if a basic end was set for this transaction
      * @return True if basic end was specified by the user, false if prearranged end was specified
      */
     inline bool basicEnd()
 	{ return m_basicEnd; }
+
     /**
      * Add SCCP Addressing information
      * @param fillParams NamedList to fill with addressing information
      * @param local True if the information is for the user, otherwise
      */
     void addSCCPAddressing(NamedList& fillParams, bool local);
+
     /**
      * Check if the flag to end this transaction immediately was set
      * @return True if the end flag was set, false otherwise
      */
     inline bool endNow()
 	{ return m_endNow; }
+
     /**
      * Set the flag to end this transaction immediately
      * @param endNow Boolean value to set to the end flag
      */
     inline void endNow(bool endNow)
 	{ m_endNow = endNow; }
+
     /**
      * Check if the transaction has timed out
      * @return True if the transaction timed out, false otherwise
      */
     inline bool timedOut()
 	{ return m_timeout.timeout(); }
+
     /**
      * Find a component with given id
      * @param id Id of component to find
      * @return The component with given id or null
      */
     SS7TCAPComponent* findComponent(const String& id);
+
     /**
      * Update the state of this transaction to end the transaction
      */
     virtual void updateToEnd();
+
     /**
      * Update transaction state
      * @param byUser True if update is requested by user, false if by remote
@@ -11036,9 +11121,30 @@ public:
     inline void updateState(bool byUser = true)
 	{ }
 
+    /**
+     * @param params NamedList reference to fill with the decoded dialog information
+     * @param data DataBlock reference from which to decode the dialog information
+     * @return A TCAP error encountered whilst decoding
+     */
     virtual SS7TCAPError decodeDialogPortion(NamedList& params, DataBlock& data) = 0;
+
+    /**
+     * @param params NamedList reference from which to take the dialog information to encode
+     * @param data DataBlock reference into which to put the encoded dialog information
+     */
     virtual void encodeDialogPortion(NamedList& params, DataBlock& data) = 0;
+
+    /**
+     * @param params NamedList reference to fill with the decoded component information
+     * @param data DataBlock reference from which to decode the component information
+     * @return A TCAP error encountered whilst decoding
+     */
     virtual SS7TCAPError decodeComponents(NamedList& params, DataBlock& data) = 0;
+
+    /**
+     * @param params NamedList reference from which to take the component information to encode
+     * @param data DataBlock reference into which to put the encoded component information
+     */
     virtual void encodeComponents(NamedList& params, DataBlock& data) = 0;
 
 protected:
@@ -11077,6 +11183,7 @@ public:
 	OperationSent,
 	WaitForReject,
     };
+
     /**
      * Constructor
      * @param type TCAP type for which to build this component
@@ -11085,22 +11192,26 @@ public:
      * @param index Index in the list of parameters
      */
     SS7TCAPComponent(SS7TCAP::TCAPType type, SS7TCAPTransaction* trans, NamedList& params, unsigned int index);
+
     /**
      * Destructor
      */
     virtual ~SS7TCAPComponent();
+
     /**
      * Update this component's data
      * @param params Update parameters
      * @param index Index of parameters in the list for the update of this component
      */
     virtual void update(NamedList& params, unsigned int index);
+
     /**
      * Put the information of the component in a NamedList
      * @param index Index for build parameter names
      * @param fillIn NamedList to fill with this component's information
      */
     virtual void fill(unsigned int index, NamedList& fillIn);
+
     /**
      * Build a TCAP Component from a NamedList
      * @param type TCAP type of component
@@ -11110,73 +11221,86 @@ public:
      * @return A pointer to the built SS7TCAPComponent or nil if not all required parameters are present
      */
     static SS7TCAPComponent* componentFromNamedList(SS7TCAP::TCAPType type, SS7TCAPTransaction* tr, NamedList& params, unsigned int index);
+
     /**
      * Set the transaction to which this component belongs to
      * @param transact TCAP transaction
      */
     void setTransaction(SS7TCAPTransaction* transact);
+
     /**
      * Returns the transaction to which this component belongs to.
      */
     SS7TCAPTransaction* transaction();
+
     /**
      * Set the type for this component
      * @param type The type of the component
      */
     inline void setType(SS7TCAP::TCAPUserCompActions type)
 	{ m_type = type; }
+
     /**
      * Get the type of the component
      */
     inline SS7TCAP::TCAPUserCompActions type()
 	{ return m_type; }
+
     /**
      * Set the Invoke ID for this component
      * @param invokeID The invoke ID to assign
      */
     virtual void setInvokeID(String invokeID)
 	{ m_id = invokeID; }
+
     /**
      * String representation of this component's Invoke ID
      * @return String representation of Invoke ID
      */
     virtual const String&  toString () const
 	{ return m_id; }
+
     /**
      * String representation of this component's Correlation ID
      * @return String representation of Correlation ID
      */
     virtual const String&  correlationID() const
 	{ return m_corrID; }
+
     /**
      * Check if the component has timed out
      * @return True if the component timed out, false otherwise
      */
     inline bool timedOut()
 	{ return m_opTimer.timeout(); }
+
     /**
      * Set component state
      * @param state The state to be set
      */
     void setState(TCAPComponentState state);
+
     /**
      * Obtain the component state
      * @return The component state
      */
     inline TCAPComponentState state()
 	{ return m_state; }
+
     /**
      * Reset invocation timer on user request
      * @param params List of parameters
      * @param index Index of this component's parameters in the list
      */
     void resetTimer(NamedList& params, unsigned int index);
+
     /**
      * Retrieve operation class for this component
      * @return The class of the operation
      */
     SS7TCAP::TCAPComponentOperationClass operationClass()
 	{ return m_opClass; }
+
     /**
      * Dictionary for component states
      */
@@ -11207,6 +11331,7 @@ public:
 	UserAbortPTag       = 0xd8 , // Primitive
 	UserAbortCTag       = 0xf8,  // Constructor
     };
+
     enum TCAPDialogTags {
 	DialogPortionTag         = 0xf9,
 	ProtocolVersionTag       = 0xda,
@@ -11217,6 +11342,7 @@ public:
 	OIDSecurityContextTag    = 0x81,
 	ConfidentialityTag       = 0xa2,
     };
+
     enum UserInfoTags {
 	DirectReferenceTag       = 0x06,
 	DataDescriptorTag        = 0x07,
@@ -11226,10 +11352,12 @@ public:
 	OctetAlignEncTag         = 0x81,
 	ArbitraryEncTag          = 0x82,
     };
+
     enum ConfidentialityTags {
 	IntConfidentialContextTag    = 0x80,
 	OIDConfidentialContextTag    = 0x81,
     };
+
     enum TCAPComponentTags {
 	ComponentPortionTag  = 0xe8,
 	ComponentsIDsTag     = 0xcf,
@@ -11241,15 +11369,18 @@ public:
 	ParameterSetTag      = 0xf2,
 	ParameterSeqTag      = 0x30,
     };
+
     /**
      * Constructor
      * @param params NamedList containing parameters for building TCAP
      */
     SS7TCAPANSI(const NamedList& params);
+
     /**
      * Destructor
      */
     ~SS7TCAPANSI();
+
     /**
      * Build a transaction
      * @param type Type with which to build the transactions
@@ -11260,6 +11391,7 @@ public:
      */
     virtual SS7TCAPTransaction* buildTransaction(SS7TCAP::TCAPUserTransActions type, const String& transactID, NamedList& params,
 	bool initLocal = true);
+
 private:
     SS7TCAPError decodeTransactionPart(NamedList& params, DataBlock& data);
     void encodeTransactionPart(NamedList& params, DataBlock& data);
@@ -11282,6 +11414,7 @@ public:
 	InvokeNotLast       = 0xed,
 	ReturnResultNotLast = 0xee,
     };
+
     enum ANSITransactionType {
 	Unknown                         = 0x0,
 	Unidirectional                  = 0xe1,
@@ -11292,6 +11425,7 @@ public:
 	ConversationWithoutPermission   = 0xe6,
 	Abort                           = 0xf6,
     };
+
     /**
      * Constructor
      * @param tcap TCAP holding this transaction
@@ -11303,10 +11437,12 @@ public:
      */
     SS7TCAPTransactionANSI(SS7TCAP* tcap, SS7TCAP::TCAPUserTransActions type, const String& transactID, NamedList& params,
 	u_int64_t timeout, bool initLocal = true);
+
     /**
      * Destructor
      */
     ~SS7TCAPTransactionANSI();
+
     /**
      * Process transaction data and fill the NamedList with the decoded data
      * @param params NamedList to fill with decoded data
@@ -11314,6 +11450,7 @@ public:
      * @return A TCAP error encountered whilst decoding
      */
     virtual SS7TCAPError handleData(NamedList& params, DataBlock& data);
+
     /**
      * An update request for this transaction
      * @param type The type of transaction to which this transaction should be updated
@@ -11322,6 +11459,7 @@ public:
      * @return A TCAP Error
      */
     virtual SS7TCAPError update(SS7TCAP::TCAPUserTransActions type, NamedList& params, bool updateByUser = true);
+
     /**
      * Handle TCAP relevant dialog data
      * @param params NamedList containing (if present) dialog information
@@ -11329,6 +11467,7 @@ public:
      * @return A report error
      */
     virtual SS7TCAPError handleDialogPortion(NamedList& params, bool byUser = true);
+
     /**
      * Encode P-Abort information
      * @param tr The transaction on which the abort was signalled
@@ -11336,6 +11475,7 @@ public:
      * @param data DataBlock reference in which to insert the encoded P-Abort information
      */
     static void encodePAbort(SS7TCAPTransaction* tr, NamedList& params, DataBlock& data);
+
     /**
      * Decode P-Abort TCAP message portion
      * @param tr The transaction on which the abort was signalled
@@ -11343,21 +11483,25 @@ public:
      * @param data DataBlock reference from which to decode P-Abort information
      */
     static SS7TCAPError decodePAbort(SS7TCAPTransaction* tr, NamedList& params, DataBlock& data);
+
     /**
      * Update the state of this transaction to end the transaction
      */
     virtual void updateToEnd();
+
     /**
      * Update transaction state
      * @param byUser True if update is requested by user, false if by remote
      */
     virtual void updateState(bool byUser);
+
     /**
      * Request content for this transaction
      * @param params List of parameters of this tranaction
      * @param data Data block to fill with encoded content
      */
     virtual void requestContent(NamedList& params, DataBlock& data);
+
     /**
      * Dictionary keeping string versions of transaction types
      */

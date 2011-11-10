@@ -1,3 +1,21 @@
+yate (3.3.3.svn4692) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4692: + Always use internal abstract TCAP
+    errors in decoded TCAP messages. Added functions to obtain the
+    protocol error value from TCAP abstract error and vice versa.  +
+    Constified ExpEvaluator methods used during evaluation stage.  + Bug
+    fix: start component indexing from 1 when requesting the data for
+    rejected/timed out components. Set the count for timed out
+    components.  + Properly initialize transaction mutex. Ensure that
+    transaction data is always protected when accessed.  + Don't check
+    for timed out components when the transaction is in idle state. Add
+    transaction data for transactions with pre-arranged end that have
+    timed out when notifying the user.  + Prettify TCAP classes : add
+    empty line between method definitions in TCAP classes.  + Added ITU
+    TCAP support.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 11 Nov 2011 02:19:19 +0400
+
 yate (3.3.3.svn4685) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4685: + Detect and use atomic integer

@@ -1223,12 +1223,13 @@ static bool encodeEnumerated(const Parameter* param, MapCamelType* type, DataBlo
 	if (!dict)
 	    return false;
 	const String& text = elem->getText();
-	u_int8_t val = lookup(text,dict,0);
-	if (val < 0) {
+	int val = lookup(text,dict,-1);
+	if (val < 0 || val > 255) {
 	    err = TcapXApplication::UnexpectedDataValue;
 	    return false;
 	}
-	data.append(&val,sizeof(val));
+	u_int8_t enumVal = val & 0xff;
+	data.append(&enumVal,sizeof(enumVal));
     }
     if (param->tag != s_noTag) {
 	data.insert(ASNLib::buildLength(data));

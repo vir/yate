@@ -1,3 +1,13 @@
+yate (3.3.3.svn4696) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4696: + Fixed instruction and declaration
+    parse. Added/changed debug.  + Added module which translate
+    MAP/CAMEL protocol data to XML format and vice versa.  + Fixed a
+    range check in enumerated parameter encoding.  + Added missing Mutex
+    unlock at unload() time.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 12 Nov 2011 02:19:19 +0400
+
 yate (3.3.3.svn4692) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4692: + Always use internal abstract TCAP

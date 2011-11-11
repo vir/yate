@@ -6821,8 +6821,8 @@ bool TcapXModule::unload()
 {
     if (!lock(500000))
 	return false;
-
     uninstallRelays();
+    unlock();
     return true;
 }
 

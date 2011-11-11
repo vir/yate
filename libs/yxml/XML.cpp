@@ -124,6 +124,14 @@ bool XmlSaxParser::parse(const char* text)
 {
     if (TelEngine::null(text))
 	return m_error == NoError;
+#ifdef XDEBUG
+    String tmp;
+    m_parsed.dump(tmp," ");
+    if (tmp)
+	tmp = " parsed=" + tmp;
+    XDebug(this,DebugAll,"XmlSaxParser::parse(%s) unparsed=%u%s buf=%s [%p]",
+	text,unparsed(),tmp.safe(),m_buf.safe(),this);
+#endif
     char car;
     setError(NoError);
     String auxData;
@@ -136,7 +144,7 @@ bool XmlSaxParser::parse(const char* text)
     if (unparsed()) {
 	if (unparsed() != Text) {
 	    if (!auxParse())
-		return setError(Incomplete);
+		return false;
 	}
 	else
 	    auxData = m_parsed;
@@ -198,7 +206,7 @@ bool XmlSaxParser::parse(const char* text)
 	if (!parseElement())
 	    return false;
     }
-    if (len > 0 && !completed()) {
+    if (!completed()) {
 	// We have an element that is not complete
 	auxData << m_buf;
 	m_parsed.assign(auxData);
@@ -281,62 +289,80 @@ bool XmlSaxParser::parseEndTag()
 // Parse an instruction form the main buffer
 bool XmlSaxParser::parseInstruction()
 {
-    if (!m_buf.c_str()) {
-	setUnparsed(Instruction);
-	return false;
-    }
-    skipBlanks();
+    XDebug(this,DebugAll,"XmlSaxParser::parseInstruction() buf len=%u [%p]",m_buf.length(),this);
+    setUnparsed(Instruction);
+    if (!m_buf.c_str())
+	return setError(Incomplete);
     // extract the name
     String name;
     char c;
     int len = 0;
-    while (m_buf.at(len) && !m_parsed.c_str()) {
-	c = m_buf.at(len);
-	if (!blank(c) && c != '?') {
-	    if (checkNameCharacter(c)) {
-		len++;
-		continue;
-	    }
-	    else {
-		setError(InvalidElementName);
+    if (!m_parsed) {
+	bool nameComplete = false;
+	bool endDecl = false;
+	while (0 != (c = m_buf.at(len))) {
+	    nameComplete = blank(c);
+	    if (!nameComplete) {
+		// Check for instruction end: '?>'
+		if (c == '?') {
+		    char next = m_buf.at(len + 1);
+		    if (!next)
+			return setError(Incomplete);
+		    if (next == '>') {
+			nameComplete = endDecl = true;
+			break;
+		    }
+		}
+		if (checkNameCharacter(c)) {
+		    len++;
+		    continue;
+		}
 		Debug(this,DebugNote,"Instruction name contains bad character '%c' [%p]",c,this);
-		return false;
+		return setError(InvalidElementName);
 	    }
-	}
-	if (len == 0) {
-	    setError(InvalidElementName);
+	    // Blank found
+	    if (len)
+	        break;
 	    Debug(this,DebugNote,"Instruction with empty name [%p]",this);
-	    return false;
+	    return setError(InvalidElementName);
 	}
+	if (!len) {
+	    if (!endDecl)
+		return setError(Incomplete);
+	    // Remove instruction end from buffer
+	    m_buf = m_buf.substr(2);
+	    Debug(this,DebugNote,"Instruction with empty name [%p]",this);
+	    return setError(InvalidElementName);
+	}
+	if (!nameComplete)
+	    return setError(Incomplete);
 	name = m_buf.substr(0,len);
-	m_buf = m_buf.substr(len);
-	break;
+	m_buf = m_buf.substr(!endDecl ? len : len + 2);
+	if (name == YSTRING("xml")) {
+	    if (!endDecl)
+		return parseDeclaration();
+	    resetParsed();
+	    resetError();
+	    setUnparsed(None);
+	    gotDeclaration(NamedList::empty());
+	    return error() == NoError;
+	}
+	// Instruction name can't be xml case insensitive
+	if (name.length() == 3 && name.startsWith("xml",false,true)) {
+	    Debug(this,DebugNote,"Instruction name '%s' reserved [%p]",name.c_str(),this);
+	    return setError(InvalidElementName);
+	}
     }
-    if (m_parsed.c_str()) {
+    else {
 	name = m_parsed;
 	resetParsed();
     }
-    if (!name.c_str()) {
-	if (error() && error() == Incomplete)
-	    setUnparsed(Instruction);
-	return false;
-    }
-    if (name.startsWith("xml")) {
-	return parseDeclaration();
-    }
-    if (name.startsWith("xml",false,true)) {
-	setError(InvalidElementName);
-	Debug(this,DebugNote,"Instruction name begin with bad character set %s [%p]",
-	    name.c_str(),this);
-	return false;
-    }
-    NamedString inst(name);
+    // Retrieve instruction content
     skipBlanks();
     len = 0;
-    while (m_buf.at(len)) {
-	c = m_buf.at(len);
+    while (0 != (c = m_buf.at(len))) {
 	if (c != '?') {
-	    if (c == '>' || c == 0x0c) {
+	    if (c == 0x0c) {
 		setError(Unknown);
 		Debug(this,DebugNote,"Xml instruction with unaccepted character '%c' [%p]",
 		    c,this);
@@ -345,38 +371,33 @@ bool XmlSaxParser::parseInstruction()
 	    len++;
 	    continue;
 	}
-	if (!m_buf.at(len + 1))
-	    break;
 	char ch = m_buf.at(len + 1);
+	if (!ch)
+	    break;
 	if (ch == '>') { // end of instruction
-	    inst << m_buf.substr(0,len);
-	    resetError();
-	    if (!inst.c_str()) {
-		setError(Unknown);
-		Debug(this,DebugNote,"Empty instruction [%p]",this);
-		return false;
-	    }
-            gotProcessing(inst);// TODO call an callback for process instruction
-            resetParsed();
-	    if (error())
-		return false;
+	    NamedString inst(name,m_buf.substr(0,len));
+	    // Parsed instruction: remove instruction end from buffer and reset parsed
 	    m_buf = m_buf.substr(len + 2);
-	    return true;
+	    resetParsed();
+	    resetError();
+	    setUnparsed(None);
+	    gotProcessing(inst);
+	    return error() == NoError;
 	}
 	len ++;
     }
     // If we are here mens that text has reach his bounds is an error or we need to receive more data
-    setError(Incomplete);
-    return false;
+    m_parsed.assign(name);
+    return setError(Incomplete);
 }
 
 // Parse a declaration form the main buffer
 bool XmlSaxParser::parseDeclaration()
 {
-    if (!m_buf.c_str()) {
-	setUnparsed(Declaration);
+    XDebug(this,DebugAll,"XmlSaxParser::parseDeclaration() buf len=%u [%p]",m_buf.length(),this);
+    setUnparsed(Declaration);
+    if (!m_buf.c_str())
 	return setError(Incomplete);
-    }
     NamedList dc("xml");
     if (m_parsed.count()) {
 	dc.copyParams(m_parsed);
@@ -391,19 +412,18 @@ bool XmlSaxParser::parseDeclaration()
 	    skipBlanks();
 	    NamedString* s = getAttribute();
 	    if (!s) {
-		if (error() && error() == Incomplete) {
-		    setUnparsed(Declaration);
-		    m_parsed.copyParams(dc);
-		}
+		if (error() == Incomplete)
+		    m_parsed = dc;
 		return false;
 	    }
 	    len = 0;
 	    if (dc.getParam(s->name())) {
 		Debug(this,DebugNote,"Duplicate attribute '%s' in declaration [%p]",
 		    s->name().c_str(),this);
+		TelEngine::destruct(s);
 		return setError(DeclarationParse);
 	    }
-	    dc.setParam(s);
+	    dc.addParam(s);
 	    char ch = m_buf.at(len);
 	    if (ch && !blank(ch) && ch != '?') {
 		Debug(this,DebugNote,"No blanks between attributes in declaration [%p]",this);
@@ -416,18 +436,17 @@ bool XmlSaxParser::parseDeclaration()
 	    break;
 	char ch = m_buf.at(len);
 	if (ch == '>') { // end of declaration
+	    // Parsed declaration: remove declaration end from buffer and reset parsed
 	    resetError();
-	    gotDeclaration(dc);
 	    resetParsed();
-	    if (error())
-		return false;
+	    setUnparsed(None);
 	    m_buf = m_buf.substr(len + 1);
-	    return true;
+	    gotDeclaration(dc);
+	    return error() == NoError;
 	}
 	Debug(this,DebugNote,"Invalid declaration ending char '%c' [%p]",ch,this);
 	return setError(DeclarationParse);
     }
-    setUnparsed(Declaration);;
     m_parsed.copyParams(dc);
     setError(Incomplete);
     return false;
@@ -1094,7 +1113,8 @@ void XmlDomParser::gotDoctype(const String& doc)
 // TODO implement it see what to do
 void XmlDomParser::gotProcessing(const NamedString& instr)
 {
-    DDebug(this,DebugStub,"gotProcessing('---> %s <---') not implemented",instr.c_str());
+    DDebug(this,DebugStub,"gotProcessing(%s=%s) not implemented [%p]",
+	instr.name().c_str(),instr.safe(),this);
 }
 
 // Create a new xml declaration, verifies the version and encoding

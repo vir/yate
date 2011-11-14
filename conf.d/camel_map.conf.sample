@@ -1,3 +1,9 @@
+; IMPORTANT!
+; This feature module is not loaded automatically, it needs a line in yate.conf:
+; [postload]
+; ${modulepath}/sig/camel_map${modsuffix}=yes
+
+
 ; This file keeps the configuration for the module which translates MAP/CAMEL protocol data to XML and vice versa.
 ; Each section configures a separate translator
 

@@ -1,3 +1,12 @@
+yate (3.3.3.svn4699) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4699: + If version and/or encoding
+    attributes are missing from XML declaration, assume the default
+    values.  + Added note about the camel_map module not being loaded by
+    default.  + Put a proper EOL when dumping raw XML text.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 15 Nov 2011 02:19:23 +0400
+
 yate (3.3.3.svn4696) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4696: + Fixed instruction and declaration

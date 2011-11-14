@@ -5728,7 +5728,7 @@ bool XmlToTcap::validDeclaration()
     const NamedList& decl = m_decl->getDec();
     NamedString* vers = decl.getParam(YSTRING("version"));
     NamedString* enc = decl.getParam(YSTRING("encoding"));
-    if (TelEngine::null(vers) || (*vers != "1.0") || TelEngine::null(enc) || (*enc != "UTF-8"))
+    if ((!TelEngine::null(vers) && (*vers != "1.0")) || (!TelEngine::null(enc) && (*enc |= "UTF-8")))
 	return false;
     return true;
 }

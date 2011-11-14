@@ -5728,7 +5728,7 @@ bool XmlToTcap::validDeclaration()
     const NamedList& decl = m_decl->getDec();
     NamedString* vers = decl.getParam(YSTRING("version"));
     NamedString* enc = decl.getParam(YSTRING("encoding"));
-    if (TelEngine::null(vers) || (*vers != "1.0") || TelEngine::null(enc) || (*enc != "UTF-8"))
+    if ((!TelEngine::null(vers) && (*vers != "1.0")) || (!TelEngine::null(enc) && (*enc |= "UTF-8")))
 	return false;
     return true;
 }
@@ -6123,7 +6123,7 @@ bool TcapXApplication::sendTcapMsg(NamedList& params)
     if (m_user->printMessages()) {
 	String tmp;
 	msg->toString(tmp,false,"\r\n","  ",false);
-	Debug(&__plugin,DebugInfo,"App=%s[%p] is sending XML \n%s",m_name.c_str(),this,tmp.c_str());
+	Debug(&__plugin,DebugInfo,"App=%s[%p] is sending XML\r\n%s",m_name.c_str(),this,tmp.c_str());
     }
     if (ok && m_io) {
 	m_io->writeData(msg);
@@ -6384,7 +6384,7 @@ void TcapXApplication::receivedXML(XmlFragment* frag)
     if (m_user->printMessages()) {
 	String tmp;
 	frag->toString(tmp,false,"\r\n","  ",false);
-	Debug(&__plugin,DebugInfo,"App=%s[%p] received XML \n%s",m_name.c_str(),this,tmp.c_str());
+	Debug(&__plugin,DebugInfo,"App=%s[%p] received XML\r\n%s",m_name.c_str(),this,tmp.c_str());
     }
 
     m_xml2Tcap.setXmlFragment(frag);
@@ -6444,7 +6444,7 @@ void TcapXApplication::sendStateResponse(const char* error)
     if (m_user->printMessages()) {
 	String tmp;
 	msg->toString(tmp,false,"\r\n","  ",false);
-	Debug(&__plugin,DebugInfo,"App=%s[%p] is sending XML \n%s",m_name.c_str(),this,tmp.c_str());
+	Debug(&__plugin,DebugInfo,"App=%s[%p] is sending XML\r\n%s",m_name.c_str(),this,tmp.c_str());
     }
     if (ok && m_io) {
 	m_io->writeData(msg);

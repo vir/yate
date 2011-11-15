@@ -1150,8 +1150,8 @@ bool MGCPSpan::matchEndpoint(const MGCPEndpointId& ep)
     if (s_termsAll.matches(ep.user()))
 	return true;
     String tmp = ep.user();
-    // check for prefix/*/*
-    static const Regexp s_finalAll("^\\([^*]\\+/\\)[/*]\\+$");
+    // check for prefix*/*
+    static const Regexp s_finalAll("^\\([^*]\\+\\)[/*]\\+$");
     if (tmp.matches(s_finalAll) && m_epId.user().startsWith(tmp.matchString(1),false,true))
 	return true;
     // check for prefix[min-max] or prefix*/[min-max]

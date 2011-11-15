@@ -183,14 +183,12 @@ bool RegistHandler::received(Message &msg)
     Lock lock(s_mutex);
     int expire = msg.getIntValue("expires",0);
     NamedList* sect = s_cfg.getSection(username);
-    if (s_create && !sect) {
-	sect = new NamedList(username);
+    if (!sect) {
+	if (!s_create)
+	    return false;
 	Debug(&__plugin,DebugInfo,"Auto creating new user %s",username.c_str());
     }
-    if (!sect)
-	return false;
-    s_accounts.createSection(*sect);
-    NamedList* s = s_accounts.getSection(*sect);
+    NamedList* s = s_accounts.createSection(username);
     if (driver)
 	s->setParam("driver",driver);
     s->setParam("data",data);

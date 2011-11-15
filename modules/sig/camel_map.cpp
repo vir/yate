@@ -6504,6 +6504,15 @@ TcapXUser::~TcapXUser()
 
     while (m_listener)
 	Thread::idle();
+
+    while (true) {
+	Thread::idle();
+	m_appsMtx.lock();
+	ObjList* o = m_apps.skipNull();
+	m_appsMtx.unlock();
+	if (!o)
+	    break;
+    }
 }
 
 bool TcapXUser::initialize(NamedList& sect)
@@ -6813,6 +6822,7 @@ void TcapXModule::initialize()
     Module::initialize();
 
     Configuration cfg(Engine::configFile(name()));
+    installRelay(Halt);
     cfg.load();
     initUsers(cfg);
 }
@@ -6822,6 +6832,7 @@ bool TcapXModule::unload()
     if (!lock(500000))
 	return false;
     uninstallRelays();
+    m_users.clear();
     unlock();
     return true;
 }
@@ -6857,6 +6868,8 @@ void TcapXModule::initUsers(Configuration& cfg)
 
 bool TcapXModule::received(Message& msg, int id)
 {
+    if (id == Halt)
+	unload();
     return Module::received(msg,id);
 }
 

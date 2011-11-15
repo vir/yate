@@ -1,3 +1,9 @@
+yate (3.3.3.vir2011111501) UNRELEASED; urgency=low
+
+  * Merge upstream
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Tue, 15 Nov 2011 09:03:57 +0400
+
 yate (3.3.3.vir2011110903) UNRELEASED; urgency=low
 
   * new package version finally

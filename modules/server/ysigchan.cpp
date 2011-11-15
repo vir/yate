@@ -1015,6 +1015,8 @@ SignallingComponent* SigFactory::create(const String& type, const NamedList& nam
 	    if (ty) {
 		if (*ty == "ss7-tcap-ansi")
 		    return new SS7TCAPANSI(*config);
+		if (*ty == "ss7-tcap-itu")
+		    return new SS7TCAPITU(*config);
 	    }
 	    return 0;
     }

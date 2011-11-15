@@ -1,0 +1,30 @@
+; IMPORTANT!
+; This feature module is not loaded automatically, it needs a line in yate.conf:
+; [postload]
+; ${modulepath}/sig/camel_map${modsuffix}=yes
+
+
+; This file keeps the configuration for the module which translates MAP/CAMEL protocol data to XML and vice versa.
+; Each section configures a separate translator
+
+;[tcap map]
+; This section configures a TCAP User MAP/CAMEL protocol translator
+
+; type: string: Type of TCAP User 
+; Allowed values are MAP or CAMEL
+;type=MAP
+
+; host: IP address: Address on which the TCP listener should bind on for XML communication
+;host=127.0.0.1
+
+; port: integer: Port on which the TCP listener should bind on for XML communication
+;port=5555
+
+; tcap: string: Name of TCAP to which this TCAP user should attach itself to for the SS7 communication
+;tcap=
+
+; add-encoding: bool: Always add encoding attribute to XML elements for decoded parameters
+;add-encoding=false
+
+; print-messages: bool: Debug option to print TCAP and XML messages. This option is applicable on reload.
+;print-messages=false

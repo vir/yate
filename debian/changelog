@@ -1,3 +1,13 @@
+yate (3.3.3.svn4703) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4703: + Match partial MGCP endpoint
+    wildcards like prefix*/*  + Fixed memory leak.  + Unload module
+    properly.  + This should fix incorrect interactions with PBX
+    functions.  + When exiting a fork by |exec suppress
+    chan.disconnected and emit instead chan.replaced.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 16 Nov 2011 02:19:20 +0400
+
 yate (3.3.3.svn4699) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4699: + If version and/or encoding

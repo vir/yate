@@ -695,7 +695,7 @@ static unsigned char encodeItuAddress(const SS7SCCP* sccp, SS7MSU& msu,
 	addressIndicator |= 0x04;
 	int nai = nature->toInteger(s_nai);
 	odd = (gtNr->length() % 2) ? false : true;
-	if (odd)
+	if (!odd)
 	    nai |= 0x80;
 	data[++length] = nai & 0xff;
     } else if (translation && !(plan && encoding) && !nature) { // GT = 0x02
@@ -2147,6 +2147,10 @@ void SCCPManagement::routeFailure(SS7MsgSCCP* msg)
 	return;
     }
     int pointcode = msg->params().getIntValue(YSTRING("RemotePC"));
+    if (pointcode < 1) {
+	Debug(this,DebugWarn,"Remote pointcode %d is invalid!",pointcode);
+	return;
+    }
     if (pointcode == m_sccp->getPackedPointCode())
 	return;
     SccpRemote* rsccp = getRemoteSccp(pointcode);
@@ -2975,10 +2979,16 @@ bool SS7SCCP::fillPointCode(SS7PointCode& pointcode, SS7MsgSCCP* msg, const Stri
 {
     if (!msg)
 	return false;
-    bool havePointCode = msg->params().getParam(pCode) != 0;
-    if (!havePointCode && msg->params().getParam(prefix + ".pointcode")) {
-	msg->params().setParam(pCode,msg->params().getValue(prefix + ".pointcode"));
+    bool havePointCode = false;
+    NamedString* pcNs = msg->params().getParam(pCode);
+    if (pcNs && pcNs->toInteger(0) > 0)
 	havePointCode = true;
+    if (!havePointCode) {
+	pcNs = msg->params().getParam(prefix + ".pointcode");
+	if (pcNs && pcNs->toInteger(0) > 0) {
+	    msg->params().setParam(new NamedString(pCode,*pcNs));
+	    havePointCode = true;
+	}
     }
     if (!havePointCode && translate) { // CalledParyAddress with no pointcode. Check for Global Title
 	NamedList* route = translateGT(msg->params(),prefix);
@@ -4186,7 +4196,7 @@ bool SS7ItuSccpManagement::processMessage(SS7MsgSCCP* message)
 	Debug(sccp(),DebugNote,"Received short management message!");
 	return false;
     }
-    const char* paramsPtr = (const char*)data->data();
+    const unsigned char* paramsPtr = (const unsigned char*)data->data();
     unsigned char msg = *paramsPtr++;
     const char* msgType = lookup(msg,s_managementMessages);
     if (!msgType) {
@@ -4412,7 +4422,7 @@ bool SS7AnsiSccpManagement::processMessage(SS7MsgSCCP* message)
 	DDebug(sccp(),DebugNote,"Received short Ansi management message! %d",data->length());
 	return false;
     }
-    const char* paramsPtr = (const char*)data->data();
+    const unsigned char* paramsPtr = (const unsigned char*)data->data();
     unsigned char msg = *paramsPtr++;
     const char* msgType = lookup(msg,s_managementMessages);
     if (!msgType) {

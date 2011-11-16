@@ -4186,7 +4186,7 @@ bool SS7ItuSccpManagement::processMessage(SS7MsgSCCP* message)
 	Debug(sccp(),DebugNote,"Received short management message!");
 	return false;
     }
-    const char* paramsPtr = (const char*)data->data();
+    const unsigned char* paramsPtr = (const unsigned char*)data->data();
     unsigned char msg = *paramsPtr++;
     const char* msgType = lookup(msg,s_managementMessages);
     if (!msgType) {
@@ -4412,7 +4412,7 @@ bool SS7AnsiSccpManagement::processMessage(SS7MsgSCCP* message)
 	DDebug(sccp(),DebugNote,"Received short Ansi management message! %d",data->length());
 	return false;
     }
-    const char* paramsPtr = (const char*)data->data();
+    const unsigned char* paramsPtr = (const unsigned char*)data->data();
     unsigned char msg = *paramsPtr++;
     const char* msgType = lookup(msg,s_managementMessages);
     if (!msgType) {

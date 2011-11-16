@@ -1,3 +1,22 @@
+yate (3.3.3.svn4711) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4711: + When exiting a fork by |exec
+    suppress chan.disconnected and emit instead chan.replaced.  + Cast
+    message data pointer to unsigned char* to avoid integer wrong value
+    assigning.  + Bug fixed!  + Store MTP parameters for addressing. Add
+    them when building a message for SCCP. The default_remote_pointcode
+    configuration now sets RemotePC for MTP3, not the pointcode for
+    CalledPartyAddress.  + Replaced invalid name for nature of global
+    title parameter.  + Replaced invalid name for nature of global title
+    parameter in Called Party Address also.  + Don't set RemotePC,
+    CalledPartyAddress.ssn or CallingPartyAddress.ssn if not set in
+    configuration.  + Check if we have a valid pointcode before routing
+    a sccp message.  + Set odd/even flag properly in nature of address
+    octet.  + Bug Fixed!  + Attach TCAP user at initialization if
+    possible, warn if not possible.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 17 Nov 2011 02:19:22 +0400
+
 yate (3.3.3.svn4703) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4703: + Match partial MGCP endpoint

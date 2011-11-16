@@ -2147,6 +2147,10 @@ void SCCPManagement::routeFailure(SS7MsgSCCP* msg)
 	return;
     }
     int pointcode = msg->params().getIntValue(YSTRING("RemotePC"));
+    if (pointcode < 1) {
+	Debug(this,DebugWarn,"Remote pointcode %d is invalid!",pointcode);
+	return;
+    }
     if (pointcode == m_sccp->getPackedPointCode())
 	return;
     SccpRemote* rsccp = getRemoteSccp(pointcode);
@@ -2975,10 +2979,16 @@ bool SS7SCCP::fillPointCode(SS7PointCode& pointcode, SS7MsgSCCP* msg, const Stri
 {
     if (!msg)
 	return false;
-    bool havePointCode = msg->params().getParam(pCode) != 0;
-    if (!havePointCode && msg->params().getParam(prefix + ".pointcode")) {
-	msg->params().setParam(pCode,msg->params().getValue(prefix + ".pointcode"));
+    bool havePointCode = false;
+    NamedString* pcNs = msg->params().getParam(pCode);
+    if (pcNs && pcNs->toInteger(0) > 0)
 	havePointCode = true;
+    if (!havePointCode) {
+	pcNs = msg->params().getParam(prefix + ".pointcode");
+	if (pcNs && pcNs->toInteger(0) > 0) {
+	    msg->params().setParam(new NamedString(pCode,*pcNs));
+	    havePointCode = true;
+	}
     }
     if (!havePointCode && translate) { // CalledParyAddress with no pointcode. Check for Global Title
 	NamedList* route = translateGT(msg->params(),prefix);

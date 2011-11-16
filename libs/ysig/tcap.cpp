@@ -296,8 +296,8 @@ bool SS7TCAP::initialize(const NamedList* config)
 #endif
     if (config) {
 	// read local point code and default remote point code
-	m_SSN = config->getIntValue(YSTRING("local_SSN"),0);
-	m_defaultRemoteSSN = config->getIntValue(YSTRING("default_remote_SSN"),0);
+	m_SSN = config->getIntValue(YSTRING("local_SSN"),-1);
+	m_defaultRemoteSSN = config->getIntValue(YSTRING("default_remote_SSN"),-1);
 
 	const char* code = config->getValue(YSTRING("default_remote_pointcode"));
 	m_remoteTypePC = SS7PointCode::lookup(config->getValue(YSTRING("pointcodetype"),""));
@@ -321,13 +321,14 @@ bool SS7TCAP::sendData(DataBlock& data, NamedList& params)
 	params.setParam(s_callingSSN,String(m_SSN));
     if (params.getBoolValue(s_checkAddr,true)) {
 	String dpc = params.getValue(s_remotePC,"");
-	if (dpc.null())
-	    params.addParam(s_remotePC,String(m_defaultRemotePC.pack(m_remoteTypePC)));
+	unsigned int pc = m_defaultRemotePC.pack(m_remoteTypePC);
+	if (dpc.null() && pc)
+	    params.addParam(s_remotePC,String(pc));
 	int ssn = params.getIntValue(s_calledSSN,-1);
-	if (ssn < 0)
+	if (ssn < 0 && m_defaultRemoteSSN <= 255)
 	    params.setParam(s_calledSSN,String(m_defaultRemoteSSN));
 	ssn = params.getIntValue(s_callingSSN,-1);
-	if (ssn < 0) {
+	if (ssn < 0 && m_SSN <= 255) {
 	    params.setParam(s_callingSSN,String(m_SSN));
 	    params.setParam(s_callingRoute,"ssn");
 	}

@@ -695,7 +695,7 @@ static unsigned char encodeItuAddress(const SS7SCCP* sccp, SS7MSU& msu,
 	addressIndicator |= 0x04;
 	int nai = nature->toInteger(s_nai);
 	odd = (gtNr->length() % 2) ? false : true;
-	if (odd)
+	if (!odd)
 	    nai |= 0x80;
 	data[++length] = nai & 0xff;
     } else if (translation && !(plan && encoding) && !nature) { // GT = 0x02

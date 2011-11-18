@@ -854,7 +854,7 @@ private:
     SIPMessage* createDlgMsg(const char* method, const char* uri = 0);
     void emitUpdate();
     bool emitPRACK(const SIPMessage* msg);
-    bool startClientReInvite(Message& msg);
+    bool startClientReInvite(Message& msg, bool rtpForward);
     // Build the 'call.route' and NOTIFY messages needed by the transfer thread
     bool initTransfer(Message*& msg, SIPMessage*& sipNotify, const SIPMessage* sipRefer,
 	const MimeHeaderLine* refHdr, const URI& uri, const MimeHeaderLine* replaces);
@@ -5704,7 +5704,9 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	    if (!s_rtp_preserve)
 		clearEndpoint();
 	}
+	bool audioChg = (getMedia(YSTRING("audio")) != 0);
 	setMedia(lst);
+	audioChg ^= (getMedia(YSTRING("audio")) != 0);
 
 	m_mediaStatus = MediaMissing;
 	// let RTP guess again the local interface or use the enforced address
@@ -5718,6 +5720,7 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	Message* msg = message("call.update");
 	msg->addParam("operation","notify");
 	msg->addParam("mandatory","false");
+	msg->addParam("audio_changed",String::boolText(audioChg));
 	msg->addParam("mute",String::boolText(MediaStarted != m_mediaStatus));
 	putMedia(*msg);
 	Engine::enqueue(msg);
@@ -6164,7 +6167,7 @@ bool YateSIPConnection::msgUpdate(Message& msg)
 	    msg.setParam("reason","Another INVITE Pending");
 	    return false;
 	}
-	return startClientReInvite(msg);
+	return startClientReInvite(msg,true);
     }
     if (*oper == YSTRING("initiate")) {
 	if (m_reInviting != ReinviteNone) {
@@ -6177,13 +6180,26 @@ bool YateSIPConnection::msgUpdate(Message& msg)
 	return true;
     }
     if (!m_tr2) {
-	if ((m_reInviting == ReinviteRequest) && (*oper == YSTRING("notify"))) {
-	    if (startClientReInvite(msg))
-		return true;
-	    Debug(this,DebugMild,"Failed to start reINVITE, %s: %s [%p]",
-		msg.getValue(YSTRING("error"),"unknown"),
-		msg.getValue(YSTRING("reason"),"No reason"),this);
-	    return false;
+	if (*oper == YSTRING("notify")) {
+	    switch (m_reInviting) {
+		case ReinviteNone:
+		    if (!msg.getBoolValue(YSTRING("audio_changed")))
+			break;
+		    // if any side is forwarding RTP we shouldn't reach here
+		    if (m_rtpForward || msg.getBoolValue(YSTRING("rtp_forward")))
+			break;
+		    if (msg.getBoolValue(YSTRING("media"),true) ||
+			msg.getBoolValue(YSTRING("mute"),false))
+			    break;
+		    // fall through
+		case ReinviteRequest:
+		    if (startClientReInvite(msg,(ReinviteRequest == m_reInviting)))
+			return true;
+		    Debug(this,DebugMild,"Failed to start reINVITE, %s: %s [%p]",
+			msg.getValue(YSTRING("error"),"unknown"),
+			msg.getValue(YSTRING("reason"),"No reason"),this);
+		    return false;
+	    }
 	}
 	msg.setParam("error","nocall");
 	return false;
@@ -6366,20 +6382,25 @@ void YateSIPConnection::callRejected(const char* error, const char* reason, cons
 }
 
 // Start a client reINVITE transaction
-bool YateSIPConnection::startClientReInvite(Message& msg)
+bool YateSIPConnection::startClientReInvite(Message& msg, bool rtpForward)
 {
     bool hadRtp = !m_rtpForward;
-    bool rtpFwd = msg.getBoolValue(YSTRING("rtp_forward"),m_rtpForward);
-    if (!rtpFwd) {
+    if (msg.getBoolValue(YSTRING("rtp_forward"),m_rtpForward) != rtpForward) {
 	msg.setParam("error","failure");
-	msg.setParam("reason","RTP forwarding is not enabled");
+	msg.setParam("reason","Mismatched RTP forwarding");
 	return false;
     }
-    m_rtpForward = true;
+    m_rtpForward = rtpForward;
     // this is the point of no return
     if (hadRtp)
 	clearEndpoint();
-    MimeSdpBody* sdp = createPasstroughSDP(msg,false);
+    MimeSdpBody* sdp = 0;
+    if (rtpForward)
+	sdp = createPasstroughSDP(msg,false);
+    else {
+	updateSDP(msg);
+	sdp = createRtpSDP(true);
+    }
     if (!sdp) {
 	msg.setParam("error","failure");
 	msg.setParam("reason","Could not build the SDP");

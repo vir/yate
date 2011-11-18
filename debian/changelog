@@ -1,3 +1,12 @@
+yate (3.3.3.svn4713) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4713: + This allows switching to T.38 when
+    RTP is proxied.  + Change SIP media format if the peer changed.  +
+    Forward the SIP audio change information to the peer channel.  +
+    Added separate setting for UDPTL timeout with a default of 25s.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 19 Nov 2011 02:19:16 +0400
+
 yate (3.3.3.svn4711) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4711: + When exiting a fork by |exec

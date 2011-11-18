@@ -102,6 +102,7 @@ static int s_tos     = 0;
 static int s_sleep   = 5;
 static int s_interval= 0;
 static int s_timeout = 0;
+static int s_udptlTimeout = 0;
 
 static int s_minjitter = 0;
 static int s_maxjitter = 0;
@@ -593,8 +594,12 @@ void YRTPWrapper::setTimeout(const Message& msg, int timeOut)
     const String* param = msg.getParam(YSTRING("timeout"));
     if (param) {
 	// accept true/false to apply default or disable
-	if (param->isBoolean())
-	    timeOut = param->toBoolean() ? s_timeout : 0;
+	if (param->isBoolean()) {
+	    if (param->toBoolean())
+		timeOut = rtp() ? s_timeout : s_udptlTimeout;
+	    else
+		timeOut = 0;
+	}
 	else
 	    timeOut = param->toInteger(timeOut);
     }
@@ -745,7 +750,7 @@ bool YRTPWrapper::startUDPTL(const char* raddr, unsigned int rport, Message& msg
 	    "Wrapper %s a hole in firewall/NAT [%p]",
 	    (ok ? "opened" : "failed to open"),this);
     }
-    setTimeout(msg,s_timeout);
+    setTimeout(msg,s_udptlTimeout);
     return setupUDPTL(msg);
 }
 
@@ -1828,6 +1833,7 @@ void YRTPPlugin::initialize()
     RTPGroup::setMinSleep(cfg.getIntValue("general","minsleep"));
     s_priority = Thread::priority(cfg.getValue("general","thread"));
     s_timeout = cfg.getIntValue("timeouts","timeout",3000);
+    s_udptlTimeout = cfg.getIntValue("timeouts","udptl_timeout",25000);
     s_notifyMsg = cfg.getValue("timeouts","notifymsg");
     s_warnFirst = cfg.getBoolValue("timeouts","warnfirst",true);
     s_warnLater = cfg.getBoolValue("timeouts","warnlater",false);

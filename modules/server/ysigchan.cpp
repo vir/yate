@@ -1074,7 +1074,7 @@ SigChannel::SigChannel(SignallingEvent* event)
     // call.preroute message
     m_route = message("call.preroute",false,true);
     // Parameters to be copied to call.preroute
-    static String params = "caller,called,callername,format,formats,callernumtype,callernumplan,callerpres,callerscreening,callednumtype,callednumplan,inn,overlapped";
+    static String params = "caller,called,callername,format,formats,callernumtype,callernumplan,callerpres,callerscreening,callednumtype,callednumplan,inn,overlapped,uuprotocol,uuinformation";
     plugin.copySigMsgParams(*m_route,event,&params);
 #if 0
     if (m_route->getBoolValue("overlapped") && !m_route->getValue("called"))

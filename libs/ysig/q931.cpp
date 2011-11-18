@@ -559,6 +559,21 @@ bool ISDNQ931IEData::processKeypad(ISDNQ931Message* msg, bool add,
     return !m_keypad.null();
 }
 
+bool ISDNQ931IEData::processUserUser(ISDNQ931Message* msg, bool add,
+	ISDNQ931ParserData* data)
+{
+    if (!msg)
+	return false;
+    if (add) {
+	msg->appendIEValue(ISDNQ931IE::UserUser,"protocol",m_uuprotocol);
+	msg->appendIEValue(ISDNQ931IE::UserUser,"information",m_uuinformation);
+	return true;
+    }
+    m_uuprotocol = msg->getIEValue(ISDNQ931IE::UserUser,"protocol");
+    m_uuinformation = msg->getIEValue(ISDNQ931IE::UserUser,"information");
+    return !m_uuinformation.null();
+}
+
 /**
  * ISDNQ931State
  */
@@ -1295,6 +1310,8 @@ SignallingEvent* ISDNQ931Call::processMsgSetup(ISDNQ931Message* msg)
     m_data.processCallingNo(msg,false);
     // *** Display
     m_data.processDisplay(msg,false);
+    // *** UUS
+    m_data.processUserUser(msg,false);
     // Set message parameters
     msg->params().setParam("caller",m_data.m_callerNo);
     msg->params().setParam("called",m_data.m_calledNo);
@@ -1306,6 +1323,10 @@ SignallingEvent* ISDNQ931Call::processMsgSetup(ISDNQ931Message* msg)
     msg->params().setParam("callerscreening",m_data.m_callerScreening);
     msg->params().setParam("callednumtype",m_data.m_calledType);
     msg->params().setParam("callednumplan",m_data.m_calledPlan);
+    if(m_data.m_uuinformation) {
+	msg->params().setParam("uuprotocol",m_data.m_uuprotocol);
+	msg->params().setParam("uuinformation",m_data.m_uuinformation);
+    }
     if(q931()->m_overlapEnabled)
 	msg->params().setParam("overlapped",String::boolText(m_overlap));
     return new SignallingEvent(SignallingEvent::NewCall,msg,this);
@@ -1726,6 +1747,12 @@ bool ISDNQ931Call::sendSetup(SignallingMessage* sigMsg)
 	m_data.m_calledNo = sigMsg->params().getValue(YSTRING("called"));
 	if(!(m_overlap && !m_data.m_calledNo))
 	    m_data.processCalledNo(msg,true);
+	// User to User
+	if(sigMsg->params().getValue(YSTRING("uuinformation"))) {
+	    m_data.m_uuprotocol = sigMsg->params().getValue(YSTRING("uuprotocol"));
+	    m_data.m_uuinformation = sigMsg->params().getValue(YSTRING("uuinformation"));
+	    m_data.processUserUser(msg,true);
+	}
 	// Send
 	changeState(CallInitiated);
 	if (m_net && !q931()->primaryRate()) {

@@ -1,3 +1,11 @@
+yate (3.3.3.svn4715) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4715: + Fixed decoding for universal types
+    while decoding unknown parameters.  + Bug fix: decode properly the
+    parameters for sendAuthenticationInfo-v3 operation.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 22 Nov 2011 02:19:24 +0400
+
 yate (3.3.3.svn4713) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4713: + This allows switching to T.38 when

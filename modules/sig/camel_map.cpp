@@ -3576,9 +3576,9 @@ static const TokenDict s_requestingNodeType[] = {
     {0, 0},
 };
 
-static const Parameter s_sendAuthenticationInfoArgs[] = {
-    {"imsi",                                 s_hexTag,          false, TcapXApplication::TBCD,       0},
-    {"numberOfRequestedVectors",             s_intTag,          true,  TcapXApplication::Integer,    0},
+static const Parameter s_sendAuthInfoSeq[] = {
+    {"imsi",                                 s_ctxtPrim_0_Tag,  false, TcapXApplication::TBCD,       0},
+    {"numberOfRequestedVectors",             s_intTag,          false, TcapXApplication::Integer,    0},
     {"segmentationProhibited",               s_nullTag,         true,  TcapXApplication::Null,       0},
     {"immediateResponsePreferred",           s_ctxtPrim_1_Tag,  true,  TcapXApplication::Null,       0},
     {"re-synchronisationInfo",               s_sequenceTag,     true,  TcapXApplication::Sequence,   s_resynchronisationInfo},
@@ -3587,6 +3587,12 @@ static const Parameter s_sendAuthenticationInfoArgs[] = {
     {"requestingPLMN-Id",                    s_ctxtPrim_4_Tag,  true,  TcapXApplication::TBCD,       0},
     {"numberOfRequestedAdditional-Vectors",  s_ctxtPrim_5_Tag,  true,  TcapXApplication::Integer,    0},
     {"additionalVectorsAreForEPS",           s_ctxtPrim_6_Tag,  true,  TcapXApplication::Null,       0},
+    {"",                                     s_noTag,           false, TcapXApplication::None,       0},
+};
+
+static const Parameter s_sendAuthenticationInfoArgs[] = {
+    {"imsi",                                 s_hexTag,          false, TcapXApplication::TBCD,       0},
+    {"sendAuthenticationInfoArgs",           s_sequenceTag,     false, TcapXApplication::Sequence,   s_sendAuthInfoSeq},
     {"",                                     s_noTag,           false, TcapXApplication::None,       0},
 };
 

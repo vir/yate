@@ -600,7 +600,7 @@ static bool decodeRaw(XmlElement* elem, DataBlock& data, bool singleParam = fals
 	    switch (fullTag) {
 		case ASNLib::BOOLEAN: {
 			bool val;
-			if (ASNLib::decodeBoolean(data,&val,true) < 0)
+			if (ASNLib::decodeBoolean(data,&val,false) < 0)
 			    return false;
 			value = String::boolText(val);
 			enc = "bool";
@@ -608,7 +608,7 @@ static bool decodeRaw(XmlElement* elem, DataBlock& data, bool singleParam = fals
 		    break;
 		case ASNLib::INTEGER: {
 			u_int64_t val;
-			if (ASNLib::decodeInteger(data,val,sizeof(val),true) < 0)
+			if (ASNLib::decodeInteger(data,val,sizeof(val),false) < 0)
 			    return false;
 			    // to do fix conversion from u_int64_t
 			value = String((int)val);
@@ -617,21 +617,21 @@ static bool decodeRaw(XmlElement* elem, DataBlock& data, bool singleParam = fals
 		    break;
 		case ASNLib::OBJECT_ID: {
 			ASNObjId val;
-			if (ASNLib::decodeOID(data,&val,true) < 0)
+			if (ASNLib::decodeOID(data,&val,false) < 0)
 			    return false;
 			value = val.toString();
 			enc = "oid";
 		    }
 		    break;
 		case ASNLib::UTF8_STR: {
-			if (ASNLib::decodeUtf8(data,&enc,true) < 0)
+			if (ASNLib::decodeUtf8(data,&enc,false) < 0)
 			    return false;
 			value = enc;
 			enc = "str";
 		    }
 		    break;
 		case ASNLib::NULL_ID:
-		    if (ASNLib::decodeNull(data,true) < 0)
+		    if (ASNLib::decodeNull(data,false) < 0)
 			return false;
 		    enc = "null";
 		    break;
@@ -640,7 +640,7 @@ static bool decodeRaw(XmlElement* elem, DataBlock& data, bool singleParam = fals
 		case ASNLib::IA5_STR:
 		case ASNLib::VISIBLE_STR: {
 			int type;
-			if (ASNLib::decodeString(data,&enc,&type,true) < 0)
+			if (ASNLib::decodeString(data,&enc,&type,false) < 0)
 			    return false;
 			value = enc;
 			enc = "str";

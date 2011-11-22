@@ -4189,7 +4189,7 @@ SS7TCAPError SS7TCAPTransactionITU::decodeComponents(NamedList& params, DataBloc
 		int opCode = 0;
 		len = ASNLib::decodeINT32(data,&opCode,false);
 		params.setParam(compParam + "." + s_tcapErrCodeType,"local");
-		params.setParam(compParam + "." + s_tcapErrCode,String(SS7TCAPError::errorFromCode(tcap()->tcapType(),opCode)));
+		params.setParam(compParam + "." + s_tcapErrCode,String(opCode));
 	    }
 	    else if (tag == SS7TCAPITU::GlobalTag) {
 		data.cut(-1);
@@ -4289,8 +4289,7 @@ void SS7TCAPTransactionITU::encodeComponents(NamedList& params, DataBlock& data)
 		    if (*value == "local") {
 			tag = SS7TCAPITU::LocalTag;
 			int errCode = params.getIntValue(compParam + "." + s_tcapErrCode,0);
-			SS7TCAPError err(tcap()->tcapType(),(SS7TCAPError::ErrorType)errCode);
-			db = ASNLib::encodeInteger(err.errorCode(),false);
+			db = ASNLib::encodeInteger(errCode,false);
 			db.insert(ASNLib::buildLength(db));
 		    }
 		    else if (*value == "global") {

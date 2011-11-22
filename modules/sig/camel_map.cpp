@@ -4958,7 +4958,7 @@ static const Operation* findError(TcapXUser::UserType type, int opCode, bool opL
 static const Operation* findError(TcapXUser::UserType type, const String& op)
 {
     DDebug(&__plugin,DebugAll,"findError(opCode=%s)",op.c_str());
-    const Operation* ops = (type == TcapXUser::MAP ? s_mapOps : s_camelOps);
+    const Operation* ops = (type == TcapXUser::MAP ? s_mapErrors : s_camelErrors);
     while (!TelEngine::null(ops->name)) {
 	if (op == ops->name)
 	    return ops;

@@ -1,3 +1,13 @@
+yate (3.3.3.svn4719) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4719: + Bug fix: remove transaction IDs
+    properly from application lists.  + Don't transform component error
+    codes into internal error values.  + Search errors in error tables,
+    not in operation tables.  + Properly clean up list of transaction
+    ids-application mappings.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 23 Nov 2011 02:19:16 +0400
+
 yate (3.3.3.svn4715) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4715: + Fixed decoding for universal types

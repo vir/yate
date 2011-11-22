@@ -203,7 +203,7 @@ public:
     void setListener(XMLConnListener* list);
     void removeApp(TcapXApplication* app);
     SS7TCAPError applicationRequest(TcapXApplication* app, NamedList& params, int reqType);
-    bool sendToApp(NamedList& params, TcapXApplication* app = 0);
+    bool sendToApp(NamedList& params, TcapXApplication* app = 0, bool saveID = true);
     TcapXApplication* findApplication(NamedList& params);
     void reorderApps(TcapXApplication* app);
     inline UserType type()
@@ -6569,6 +6569,8 @@ bool TcapXUser::tcapIndication(NamedList& params)
 	case SS7TCAP::TC_Continue:
 	case SS7TCAP::TC_ConversationWithPerm:
 	case SS7TCAP::TC_ConversationWithoutPerm:
+	case SS7TCAP::TC_Notice:
+	case SS7TCAP::TC_Unknown:
 	    if (TelEngine::null(ltid) || TelEngine::null(tcapID))
 		return false;
 	    searchApp = true;
@@ -6577,8 +6579,6 @@ bool TcapXUser::tcapIndication(NamedList& params)
 	case SS7TCAP::TC_Response:
 	case SS7TCAP::TC_U_Abort:
 	case SS7TCAP::TC_P_Abort:
-	case SS7TCAP::TC_Notice:
-	case SS7TCAP::TC_Unknown:
 	    if (TelEngine::null(ltid) || TelEngine::null(tcapID))
 		return false;
 	    searchApp = true;
@@ -6602,10 +6602,10 @@ bool TcapXUser::tcapIndication(NamedList& params)
 	m_trIDs.remove(tcapID);
     }
     la.drop();
-    return sendToApp(params,app);
+    return sendToApp(params,app,false);
 }
 
-bool TcapXUser::sendToApp(NamedList& params, TcapXApplication* app)
+bool TcapXUser::sendToApp(NamedList& params, TcapXApplication* app, bool saveID)
 {
     DDebug(this,DebugAll,"TcapXUser::sendToApp(params=%p,app=%s[%p]) [%p]",&params,(app ? app->toString().c_str() : ""),app,this);
 
@@ -6614,7 +6614,8 @@ bool TcapXUser::sendToApp(NamedList& params, TcapXApplication* app)
 	app = findApplication(params);
     if (!app)
 	return false;
-    m_trIDs.append(new NamedString(params.getValue(s_tcapLocalTID),app->toString()));
+    if (saveID)
+	m_trIDs.append(new NamedString(params.getValue(s_tcapLocalTID),app->toString()));
     return (app && app->handleIndication(params));
 }
 

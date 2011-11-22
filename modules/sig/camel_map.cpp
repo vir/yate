@@ -114,7 +114,6 @@ public:
     void appendID(const char* tcapID, const char* appID);
     const String& findTcapID(const char* appID);
     const String& findAppID(const char* tcapID);
-    void removeAppID(const char* appID);
 };
 
 class XmlToTcap : public GenObject, public Mutex
@@ -5078,12 +5077,6 @@ const String& IDMap::findAppID(const char* tcapID)
     return String::empty();
 }
 
-void IDMap::removeAppID(const char* appID)
-{
-    DDebug(&__plugin,DebugAll,"IDMap::removeAppID(appID=%s)",appID);
-    remove(appID);
-}
-
 /**
  * XMLConnection
  */
@@ -6218,7 +6211,7 @@ bool TcapXApplication::handleIndication(NamedList& tcap)
 			reportError("Unknown request ID");
 			return false;
 		    }
-		    m_pending.remove(appID);
+		    m_pending.remove(*rtid);
 	    }
 	    unlock();
 	    break;
@@ -6231,7 +6224,7 @@ bool TcapXApplication::handleIndication(NamedList& tcap)
 	    lock();
 	    appID = m_ids.findAppID(ltid);
 	    if (TelEngine::null(appID)) {
-		    appID = m_pending.findTcapID(ltid);
+		    appID = m_pending.findAppID(ltid);
 		    if (TelEngine::null(appID)) {
 			unlock();
 			reportError("Unknown request ID");
@@ -6253,7 +6246,7 @@ bool TcapXApplication::handleIndication(NamedList& tcap)
     if (saveID)
 	m_pending.appendID(ltid,*rtid);
     if (removeID) {
-	m_ids.removeAppID(appID);
+	m_ids.remove(appID);
 	if (m_state == ShutDown && !trCount())
 	    reportState(Inactive);
     }
@@ -6308,7 +6301,7 @@ bool TcapXApplication::handleTcap(NamedList& tcap)
 			return false;
 		    }
 		    lock();
-		    m_pending.removeAppID(tcapID);
+		    m_pending.remove(rtid);
 		    unlock();
 		    saveID = true;
 		}
@@ -6335,7 +6328,7 @@ bool TcapXApplication::handleTcap(NamedList& tcap)
 			return false;
 		    }
 		    lock();
-		    m_pending.removeAppID(tcapID);
+		    m_pending.remove(rtid);
 		    unlock();
 		}
 		else {
@@ -6370,7 +6363,7 @@ bool TcapXApplication::handleTcap(NamedList& tcap)
 
     Lock l(this);
     if (removeID) {
-	m_ids.removeAppID(ltid);
+	m_ids.remove(ltid);
     	if (m_state == ShutDown && !trCount())
 	    reportState(Inactive);
     }

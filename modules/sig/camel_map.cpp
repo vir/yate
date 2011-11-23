@@ -842,7 +842,7 @@ static bool decodeHex(const Parameter* param, MapCamelType* type, AsnTag& tag, D
     XmlElement* child = new XmlElement(param->name);
     parent->addChild(child);
     if (addEnc)
-	child->setAttribute(s_encAttr,"oid");
+	child->setAttribute(s_encAttr,"hex");
 
     int len = ASNLib::decodeLength(data);
     String octets;

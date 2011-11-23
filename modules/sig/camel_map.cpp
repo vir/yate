@@ -3596,8 +3596,8 @@ static const Parameter s_sendAuthenticationInfoArgs[] = {
 };
 
 static const Parameter s_sendAuthenticationInfoRes[] = {
-    {"sendAuthenticationInfoRes-v2", s_sequenceTag,     true,  TcapXApplication::SequenceOf, s_authenticationSet},
-    {"sendAuthenticationInfoRes-v3", s_ctxtCstr_3_Tag,  true,  TcapXApplication::Sequence,   s_authenticationRes},
+    {"sendAuthenticationInfoRes-v2", s_sequenceTag,     false, TcapXApplication::SequenceOf, s_authenticationSet},
+    {"sendAuthenticationInfoRes-v3", s_ctxtCstr_3_Tag,  false, TcapXApplication::Sequence,   s_authenticationRes},
     {"",                             s_noTag,           false, TcapXApplication::None,       0},
 };
 
@@ -4283,7 +4283,7 @@ static const Parameter s_AOCBeforeAnswerSeq[] = {
 
 static const Parameter s_sCIBillingChargingCharacteristics[] = {
     {"aOCBeforeAnswer", s_ctxtCstr_0_Tag, false, TcapXApplication::Sequence, s_AOCBeforeAnswerSeq},
-    {"aOCAfterAnswer",  s_ctxtCstr_1_Tag, true,  TcapXApplication::Sequence, s_AOCSubsequentSeq},
+    {"aOCAfterAnswer",  s_ctxtCstr_1_Tag, false, TcapXApplication::Sequence, s_AOCSubsequentSeq},
     {"",                s_noTag,          false, TcapXApplication::None,     0},
 };
 
@@ -4579,7 +4579,7 @@ const TokenDict s_callBarringCause[] = {
 const Parameter s_extensibleCallBarredParam[] = {
     {"callBarringCause",               s_enumTag,       true,    TcapXApplication::Enumerated,    s_callBarringCause},
     {"extensionContainer",             s_sequenceTag,   true,    TcapXApplication::HexString,     0},
-    {"unauthorisedMessageOriginator",  s_nullTag,       true,    TcapXApplication::Null,          0},
+    {"unauthorisedMessageOriginator",  s_ctxtPrim_1_Tag,true,    TcapXApplication::Null,          0},
     {"",                               s_noTag,         false,   TcapXApplication::None,          0},
 };
 
@@ -4603,8 +4603,8 @@ static const Parameter s_roamingNotAllowedErr[] = {
 };
 
 static const Parameter s_callBarredErr[] = {
-    {"callBarringCause",               s_enumTag,       true,    TcapXApplication::Enumerated,    s_callBarringCause},
-    {"extensibleCallBarredParam",      s_sequenceTag,   true,    TcapXApplication::Sequence,      s_extensibleCallBarredParam},
+    {"callBarringCause",               s_enumTag,       false,   TcapXApplication::Enumerated,    s_callBarringCause},
+    {"extensibleCallBarredParam",      s_sequenceTag,   false,   TcapXApplication::Sequence,      s_extensibleCallBarredParam},
     {"",                               s_noTag,         false,   TcapXApplication::None,          0},
 };
 

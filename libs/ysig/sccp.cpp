@@ -3582,15 +3582,14 @@ bool SS7SCCP::routeSCLCMessage(SS7MsgSCCP*& msg, const SS7Label& label)
 	    break;
 	}
 	msg->params().clearParam(YSTRING("CalledPartyAddress"),'.');
-	msg->params().clearParam(YSTRING("RemotePC"));
 	for (unsigned int i = 0;i < gtRoute->length();i++) {
 	    NamedString* val = gtRoute->getParam(i);
-	    msg->params().setParam("CalledPartyAddress." + val->name(),*val);
+	    if (val->name() != YSTRING("RemotePC"))
+		msg->params().setParam("CalledPartyAddress." + val->name(),*val);
 	}
 	if (haveRemotePC)
-	    msg->params().setParam("RemotePC",gtRoute->getValue(YSTRING("RemotePC")));
-	else
-	    msg->params().setParam("RemotePC",gtRoute->getValue(YSTRING("pointcode")));
+	    msg->params().setParam("CalledPartyAddress.pointcode",
+		    gtRoute->getValue(YSTRING("RemotePC")));
 	TelEngine::destruct(gtRoute);
 	if (msg->params().getIntValue(YSTRING("CalledPartyAddress.ssn"),-1) == 1) {
 	    Debug(this,DebugNote,"GT Routing Warn!! Message %s global title translated for management!",
@@ -3598,7 +3597,8 @@ bool SS7SCCP::routeSCLCMessage(SS7MsgSCCP*& msg, const SS7Label& label)
 	    m_errors++;
 	    return false; // Management message with global title translation
 	}
-	unsigned int pointcode = msg->params().getIntValue(YSTRING("RemotePC"),-1);
+	unsigned int pointcode = msg->params().getIntValue(
+		YSTRING("CalledPartyAddress.pointcode"),-1);
 	if (!m_localPointCode)
 	    Debug(this,DebugConf,
 		  "No local PointCode configured!! GT translations with no local PointCode may lead to undesired behavior");
@@ -3613,6 +3613,7 @@ bool SS7SCCP::routeSCLCMessage(SS7MsgSCCP*& msg, const SS7Label& label)
 	}
 	// If from the translated gt resulted a pointcode other then ours forward the message
 	if (pointcode > 0 && m_localPointCode && pointcode != m_localPointCode->pack(m_type)) {
+	    msg->params().setParam("RemotePC",String(pointcode));
 	    lock.drop();
 	    if (transmitMessage(msg) >= 0)
 		return true;

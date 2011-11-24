@@ -463,6 +463,7 @@ static AsnTag s_hexTag(AsnTag::Universal, AsnTag::Primitive, 4);
 static AsnTag s_numStrTag(AsnTag::Universal, AsnTag::Primitive, 18);
 static AsnTag s_noTag(AsnTag::Universal, AsnTag::Primitive, 0);
 static AsnTag s_enumTag(AsnTag::Universal, AsnTag::Primitive, 10);
+static AsnTag s_boolTag(AsnTag::Universal, AsnTag::Primitive, 1);
 
 static const Parameter* findParam(const Parameter* param, const String& tag)
 {
@@ -2048,7 +2049,7 @@ static bool encodeUSI(const Parameter* param,  MapCamelType* type, DataBlock& da
 
 static const Capability s_mapCapab[] = {
     {"LocationManagement",       {"updateLocation", "cancelLocation", "purgeMS", "updateGprsLocation", "anyTimeInterrogation", ""}},
-    {"Authentication",           {"sendAuthenticationInfo", ""}},
+    {"Authentication",           {"sendAuthenticationInfo", "authenticationFailureReport", ""}},
     {"SubscriberData",           {"insertSubscriberData", "deleteSubscriberData", "restoreData", ""}},
     {"Routing",                  {"sendRoutingInfoForGprs", "statusReport", ""}},
     {"VLR-Routing",              {"provideRoamingNumber",  ""}},
@@ -2064,9 +2065,9 @@ static const Capability s_mapCapab[] = {
 
 static const AppCtxt s_mapAppCtxt[]= {
     // Network Loc Up context
-    {"networkLocUpContext-v3", "0.4.0.0.1.0.1.3", "updateLocation,forwardCheckSs,restoreData,insertSubscriberData,activateTraceMode"},
-    {"networkLocUpContext-v2", "0.4.0.0.1.0.1.2", "updateLocation,forwardCheckSs,restoreData,insertSubscriberData,activateTraceMode"},
-    {"networkLocUpContext-v1", "0.4.0.0.1.0.1.1", "updateLocation,forwardCheckSs,sendParameters,insertSubscriberData,activateTraceMode"},
+    {"networkLocUpContext-v3", "0.4.0.0.1.0.1.3", "updateLocation,forwardCheckSS-Indication,restoreData,insertSubscriberData,activateTraceMode"},
+    {"networkLocUpContext-v2", "0.4.0.0.1.0.1.2", "updateLocation,forwardCheckSS-Indication,restoreData,insertSubscriberData,activateTraceMode"},
+    {"networkLocUpContext-v1", "0.4.0.0.1.0.1.1", "updateLocation,forwardCheckSS-Indication,sendParameters,insertSubscriberData,activateTraceMode"},
 
     // Location Cancellation context
     {"locationCancelationContext-v3", "0.4.0.0.1.0.2.3", "cancelLocation"},
@@ -2086,8 +2087,12 @@ static const AppCtxt s_mapAppCtxt[]= {
     // Reporting Context
     {"reportingContext-v3", "0.4.0.0.1.0.7.3", "setReportingState,statusReport,remoteUserFree"},
 
+    // Reset context
+    {"resetContext-v2", "0.4.0.0.1.0.10.2", "reset"},
+    {"resetContext-v1", "0.4.0.0.1.0.10.1", "reset"},
+
     // Info retrieval context
-    {"infoRetrievalPackage-v3", "0.4.0.0.1.0.14.3", "sendAuthenticationInfo"},
+    {"infoRetrievalContext-v3", "0.4.0.0.1.0.14.3", "sendAuthenticationInfo"},
     {"infoRetrievalContext-v2", "0.4.0.0.1.0.14.2", "sendAuthenticationInfo"}, 
     {"infoRetrievalContext-v1", "0.4.0.0.1.0.14.1", "sendParameters"},
 
@@ -2099,7 +2104,7 @@ static const AppCtxt s_mapAppCtxt[]= {
     // Tracing context
     {"tracingContext-v3 ", "0.4.0.0.1.0.17.3", "activateTraceMode,deactivateTraceMode"},
     {"tracingContext-v2 ", "0.4.0.0.1.0.17.2", "activateTraceMode,deactivateTraceMode"},
-    {"tracingContext-v1 ", "0.4.0.0.1.0.17.1", "activateTraceMode,deactivateTraceMode"},
+    {"tracingContext-v1",  "0.4.0.0.1.0.17.1", "activateTraceMode,deactivateTraceMode"},
 
     // Network functional SS context
     {"networkFunctionalSsContext-v2", "0.4.0.0.1.0.18.2", "registerSS,eraseSS,activateSS,deactivateSS,"
@@ -2117,6 +2122,14 @@ static const AppCtxt s_mapAppCtxt[]= {
     {"shortMsgAlertContext-v2", "0.4.0.0.1.0.23.2", "alertServiceCentre"},
     {"shortMsgAlertContext-v1", "0.4.0.0.1.0.23.1", "alertServiceCentre"},
 
+    // readyForSM context
+    {"mwdMngtContext-v3", "0.4.0.0.1.0.24.3", "readyForSM"},
+    {"mwdMngtContext-v2", "0.4.0.0.1.0.24.2", "readyForSM"},
+    {"mwdMngtContext-v1", "0.4.0.0.1.0.24.1", "readyForSM"},
+
+    // sendIMSI Context
+    {"imsiRetrievalContext-v2", "0.4.0.0.1.0.26.2", "sendIMSI"},
+
     // MS Purging Context
     {"msPurgingContext-v3", "0.4.0.0.1.0.27.3", "purgeMS"},
     {"msPurgingContext-v2", "0.4.0.0.1.0.27.2", "purgeMS"},
@@ -2129,6 +2142,12 @@ static const AppCtxt s_mapAppCtxt[]= {
 
     // GPRS Location Info Retrieval Context
     {"gprsLocationInfoRetrievalContext-v3" , "0.4.0.0.1.0.33.3", "sendRoutingInfoForGprs"},
+
+    // Failure Report Context 
+    {"failureReportContext-v3" , "0.4.0.0.1.0.34.3", "failureReport"},
+
+    // Authentication Failure Report Context
+    {"authenticationFailureReportContext-v3" , "0.4.0.0.1.0.39.3", "authenticationFailureReport"},
 
     {"", "", ""},
 };
@@ -3111,6 +3130,29 @@ static const Parameter s_InterrogateSSRes[] = {
     {"",                       s_noTag,            false,    TcapXApplication::None,          0},
 };
 
+static const TokenDict s_failureCauseEnum[] = {
+// TS 129 002 v9.3.0 page 353
+    {"wrongUserResponse",     0x00},
+    {"wrongNetworkSignature", 0x01},
+    {0,                       0x00},
+};
+
+static const TokenDict s_accessTypeEnum[] = {
+// TS 129 002 v9.3.0 page 353
+    {"call",                  0x00},
+    {"emergencyCall",         0x01},
+    {"locationUpdating",      0x02},
+    {"supplementaryService",  0x03},
+    {"shortMessage",          0x04},
+    {"gprsAttach",            0x05},
+    {"routingAreaUpdating",   0x06},
+    {"serviceRequest",        0x07},
+    {"pdpContextActivation",  0x08},
+    {"pdpContextDeactivation",0x09},
+    {"gprsDetach",            0x0a},
+    {0,                       0x00},
+};
+
 static const TokenDict s_guidanceInfo[] = {
     {"enterPW",           0 },
     {"enterNewPW",        1 },
@@ -3448,6 +3490,23 @@ static const Parameter s_interrogateSSRes[] = {
     {"",                         s_noTag,    false,   TcapXApplication::None,      0},
 };
 
+static const Parameter s_authFailureArgs[] = {
+    {"imsi",               s_hexTag,          false,   TcapXApplication::TBCD,            0},
+    {"failureCause",       s_enumTag,         false,   TcapXApplication::Enumerated,      s_failureCauseEnum},
+    {"extensionContainer", s_sequenceTag,     true,    TcapXApplication::HexString,       0},
+    {"re-attempt",         s_boolTag,         true,    TcapXApplication::Bool,            0},
+    {"accessType",         s_enumTag,         true,    TcapXApplication::Enumerated,      s_accessTypeEnum},
+    {"rand",               s_hexTag,          true,    TcapXApplication::HexString,       0},
+    {"vlr-Number",         s_ctxtPrim_0_Tag,  true,    TcapXApplication::AddressString,   0},
+    {"sgsn-Number",        s_ctxtPrim_1_Tag,  true,    TcapXApplication::AddressString,   0},
+    {"",                   s_noTag,           false,   TcapXApplication::None,            0},
+};
+
+static const Parameter s_authFailureRes[] = {
+   {"extensionContainer", s_sequenceTag,     true,    TcapXApplication::HexString,       0},
+   {"",                         s_noTag,     false,   TcapXApplication::None,            0},
+};
+
 static const Parameter s_registerPasswordArgs[] = {
     {"ss-Code",                  s_hexTag, false, TcapXApplication::Enumerated,  s_SSCode},
     {"",                         s_noTag,  false, TcapXApplication::None,        0},
@@ -3750,6 +3809,10 @@ static const Operation s_mapOps[] = {
     {"interrogateSS",                 true,  14,
 	s_sequenceTag, s_ssCodeArgs,
 	s_noTag,       s_InterrogateSSRes
+    },
+    {"authenticationFailureReport",   true,  15,
+	s_sequenceTag, s_authFailureArgs,
+	s_sequenceTag, s_authFailureRes,
     },
     {"registerPassword",              true,  17,
 	s_noTag, s_registerPasswordArgs,

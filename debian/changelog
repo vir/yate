@@ -1,3 +1,12 @@
+yate (3.3.3.svn4723) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4723: + Added support for
+    authenticationFailureReport MAP operation. Added some missing
+    operation contexts.  + Do not modify RemotePC if a GT was translated
+    for a local SCCP user.  + Logic bug fixed!
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 25 Nov 2011 02:19:22 +0400
+
 yate (3.3.3.svn4721) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4721: + Bug fix: choice parameters are not

@@ -1102,22 +1102,30 @@ static bool encodeSeqOf(const Parameter* param, MapCamelType* type, DataBlock& d
     if (param->content) {
 	const Parameter* params = static_cast<const Parameter*>(param->content);
 	XmlElement* child = elem->pop();
+	bool atLeastOne = false;
 	while (params && !TelEngine::null(params->name) && child) {
 	    if (!(child->getTag() == params->name)) {
-		if (!param->isOptional) {
-		    TelEngine::destruct(child);
-		    printMissing(params->name.c_str(),param->name.c_str());
-		    err = TcapXApplication::DataMissing;
-		    return false;
-		} 
-		else
-		    continue;
+		Debug(&__plugin,DebugAll,"Skipping over unknown parameter '%s' for parent ''%s'",child->tag(),elem->tag());
+		TelEngine::destruct(child);
+		child = elem->pop();
+		continue;
 	    }
 	    DataBlock db;
 	    if (!encodeParam(params,db,child,err)) {
 		TelEngine::destruct(child);
-		return false;
+		if (err != TcapXApplication::DataMissing) {
+		    printMissing(params->name.c_str(),param->name.c_str());
+		    err = TcapXApplication::DataMissing;
+		}
+		if (!param->isOptional && !(elem->findFirstChild()) && !atLeastOne)
+		    return false;
+		else {
+		    child = elem->pop();
+		    continue;
+		}
 	    }
+	    else
+		atLeastOne = true;
 	    data.append(db);
 	    TelEngine::destruct(child);
 	    child = elem->pop();
@@ -5729,6 +5737,7 @@ bool TcapToXml::decodeOperation(Operation* op, XmlElement* elem, DataBlock& data
 {
     if (!(op && elem && m_app))
 	return false;
+
     const Parameter* param = (searchArgs ? op->args : op->res);
     AsnTag opTag = (searchArgs ? op->argTag : op->retTag);
     int err = TcapXApplication::NoError;

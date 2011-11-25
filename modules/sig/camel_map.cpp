@@ -337,6 +337,8 @@ public:
     virtual void initialize();
     // uninstall relays and message handlers
     bool unload();
+    inline bool showMissing()
+	{ return m_showMissing; }
 protected:
     // inherited methods
     virtual bool received(Message& msg, int id);
@@ -349,6 +351,7 @@ private:
     bool m_init;
     Mutex m_usersMtx;
     ObjList m_users;
+    bool m_showMissing;
 };
 
 INIT_PLUGIN(TcapXModule);
@@ -358,6 +361,16 @@ UNLOAD_PLUGIN(unloadNow)
     if (unloadNow && !__plugin.unload())
 	return false;
     return true;
+}
+
+void printMissing(const char* missing, const char* parent, bool atEncoding = true)
+{
+    if (__plugin.showMissing())
+	Debug(&__plugin,DebugMild,
+	    (atEncoding ?
+		"Missing mandatory child '%s' in XML parent '%s'" :
+		"Missing mandatory parameter '%s' in payload for '%s'"),
+	    missing,parent);
 }
 
 const String s_namespace = "http://yate.null.ro/xml/tcap/v1";
@@ -559,10 +572,8 @@ static bool encodeParam(const Parameter* param, DataBlock& data, XmlElement* ele
     else {
 	XmlElement* child = (elem->getTag() == s_component ? elem->findFirstChild(&param->name) : elem);
 	if (!child) {
-	    if (!param->isOptional) {
-		err = TcapXApplication::DataMissing;
+	    if (!param->isOptional)
 		return false;
-	    }
 	    return true;
 	}
 	ok = type->encode(param,type,data,child,err);
@@ -988,6 +999,8 @@ static bool decodeSeq(const Parameter* param, MapCamelType* type, AsnTag& tag, D
 	    AsnTag::decode(childTag,data);
 	    if (!decodeParam(params,childTag,data,child,addEnc,err)) {
 		if (!params->isOptional) {
+		    if (err != TcapXApplication::DataMissing)
+			printMissing(params->name.c_str(),param->name.c_str(),false);
 		    err = TcapXApplication::DataMissing;
 		    return false;
 		} 
@@ -1015,6 +1028,7 @@ static bool encodeSeq(const Parameter* param, MapCamelType* type, DataBlock& dat
 	    XmlElement* child = elem->findFirstChild(&name);
 	    if (!child) {
 		if (!params->isOptional) {
+		    printMissing(params->name.c_str(),param->name.c_str());
 		    err = TcapXApplication::DataMissing;
 		    return false;
 		} 
@@ -1065,6 +1079,8 @@ static bool decodeSeqOf(const Parameter* param, MapCamelType* type, AsnTag& tag,
 	    AsnTag::decode(childTag,data);
 	    if (!decodeParam(params,childTag,data,child,addEnc,err)) {
 		if (!param->isOptional) {
+		    if (err != TcapXApplication::DataMissing)
+			printMissing(params->name.c_str(),param->name.c_str(),false);
 		    err = TcapXApplication::DataMissing;
 		    return false;
 		} 
@@ -1086,21 +1102,30 @@ static bool encodeSeqOf(const Parameter* param, MapCamelType* type, DataBlock& d
     if (param->content) {
 	const Parameter* params = static_cast<const Parameter*>(param->content);
 	XmlElement* child = elem->pop();
+	bool atLeastOne = false;
 	while (params && !TelEngine::null(params->name) && child) {
 	    if (!(child->getTag() == params->name)) {
-		if (!param->isOptional) {
-		    TelEngine::destruct(child);
-		    err = TcapXApplication::DataMissing;
-		    return false;
-		} 
-		else
-		    continue;
+		Debug(&__plugin,DebugAll,"Skipping over unknown parameter '%s' for parent ''%s'",child->tag(),elem->tag());
+		TelEngine::destruct(child);
+		child = elem->pop();
+		continue;
 	    }
 	    DataBlock db;
 	    if (!encodeParam(params,db,child,err)) {
 		TelEngine::destruct(child);
-		return false;
+		if (err != TcapXApplication::DataMissing) {
+		    printMissing(params->name.c_str(),param->name.c_str());
+		    err = TcapXApplication::DataMissing;
+		}
+		if (!param->isOptional && !(elem->findFirstChild()) && !atLeastOne)
+		    return false;
+		else {
+		    child = elem->pop();
+		    continue;
+		}
 	    }
+	    else
+		atLeastOne = true;
 	    data.append(db);
 	    TelEngine::destruct(child);
 	    child = elem->pop();
@@ -1140,10 +1165,15 @@ static bool decodeChoice(const Parameter* param, MapCamelType* type, AsnTag& tag
 		params++;
 		continue;
 	    }
-	    break;
+	    return true;
+	}
+	if (err != TcapXApplication::DataMissing) {
+	    if (__plugin.showMissing())
+		Debug(&__plugin,DebugNote,"No valid choice in payload for '%s'",child->tag());
+	    err = TcapXApplication::DataMissing;
 	}
     }
-    return true;
+    return false;
 }
 
 static bool encodeChoice(const Parameter* param, MapCamelType* type, DataBlock& data, XmlElement* elem, int& err)
@@ -1173,6 +1203,11 @@ static bool encodeChoice(const Parameter* param, MapCamelType* type, DataBlock& 
 	    params++;
 	}
 	TelEngine::destruct(child);
+    }
+    if (err != TcapXApplication::DataMissing) {
+	if (__plugin.showMissing())
+	    Debug(&__plugin,DebugNote,"No valid choice was given for parent '%s'",elem->tag());
+	err = TcapXApplication::DataMissing;
     }
     return false;
 }
@@ -5702,6 +5737,7 @@ bool TcapToXml::decodeOperation(Operation* op, XmlElement* elem, DataBlock& data
 {
     if (!(op && elem && m_app))
 	return false;
+
     const Parameter* param = (searchArgs ? op->args : op->res);
     AsnTag opTag = (searchArgs ? op->argTag : op->retTag);
     int err = TcapXApplication::NoError;
@@ -5709,8 +5745,15 @@ bool TcapToXml::decodeOperation(Operation* op, XmlElement* elem, DataBlock& data
 	AsnTag tag;
 	AsnTag::decode(tag,data);
 	if (!decodeParam(param,tag,data,elem,m_app->addEncoding(),err)) {
-	    if (!param->isOptional)
-		err = TcapXApplication::DataMissing;
+	    if (!param->isOptional && (err != TcapXApplication::DataMissing)) {
+		if (opTag == s_noTag) {
+		    const Parameter* tmp = param;
+		    if ((++tmp) && TelEngine::null(tmp->name))
+			printMissing(param->name.c_str(),elem->tag(),false);
+		}
+		else
+		    printMissing(param->name.c_str(),elem->tag(),false);
+	    }
 	}
 	else if (opTag == s_noTag) // should be only one child
 		break;
@@ -5859,9 +5902,17 @@ void XmlToTcap::encodeOperation(Operation* op, XmlElement* elem, DataBlock& payl
     AsnTag opTag = (searchArgs ? op->argTag : op->retTag);
     while (param && !TelEngine::null(param->name)) {
 	DataBlock db;
+	err = TcapXApplication::NoError;
 	if (!encodeParam(param,db,elem,err)) {
-	    if (!param->isOptional)
-		err = TcapXApplication::DataMissing;
+	    if (!param->isOptional && (err != TcapXApplication::DataMissing)) {
+		if (opTag == s_noTag) {
+		    const Parameter* tmp = param;
+		    if ((++tmp) && TelEngine::null(tmp->name))
+			printMissing(param->name.c_str(),elem->tag());
+		}
+		else
+		    printMissing(param->name.c_str(),elem->tag());
+	    }
 	}
 	else {
 	    payload.append(db);
@@ -6887,6 +6938,7 @@ void TcapXModule::initialize()
     Configuration cfg(Engine::configFile(name()));
     installRelay(Halt);
     cfg.load();
+    m_showMissing = cfg.getBoolValue(YSTRING("general"),YSTRING("show-missing"),true);
     initUsers(cfg);
 }
 

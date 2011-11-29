@@ -293,6 +293,8 @@ private:
     bool checkMedia(const JGEvent& event, JGSessionContent& c);
     // Clear and reset data related to a given type: audio ...
     void resetEp(const String& what, bool releaseContent = true);
+    // Hangup and drop the call if failed to setup encryption
+    void dropNoCrypto();
 
     Mutex m_mutex;                       // Lock transport and session
     State m_state;                       // Connection state
@@ -617,6 +619,17 @@ static inline void jingleAddParam(NamedList& list, const char* param, const char
 	copy->append(param,",");
 }
 
+// Add secure parameters from crypto
+static void addSecure(NamedList& list, JGCrypto* crypto)
+{
+    if (!crypto)
+	return;
+    list.addParam("secure",String::boolText(true));
+    list.addParam("crypto_suite",crypto->m_suite);
+    list.addParam("crypto_key",crypto->m_keyParams);
+    // TODO: add session params
+}
+
 // Replace 'ilbc' to used ilbc20/30
 static void adjustUsedIlbc(String& fmts)
 {
@@ -828,6 +841,7 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
 	plugin.unlock();
     }
     else {
+	m_secure = false;
 	m_ftStatus = FTIdle;
 	m_ftHostDirection = FTHostLocal;
 	NamedString* oper = msg.getParam("operation");
@@ -964,6 +978,7 @@ YJGConnection::YJGConnection(JGEvent* event)
 	    error = "No content with session disposition";
     }
     else if (m_ftContents.skipNull()) {
+	m_secure = false;
 	m_ftStatus = FTIdle;
 	m_ftHostDirection = FTHostRemote;
 	m_session->buildSocksDstAddr(m_dstAddrDomain);
@@ -1426,7 +1441,7 @@ void YJGConnection::hangup(const char* reason, const char* text)
 	switch (res) {
 	    case JGSession::CryptoRequired:
 	    case JGSession::InvalidCrypto:
-		xml = m_session->createReason(JGSession::ReasonOk,text,
+		xml = m_session->createReason(JGSession::ReasonSecurity,text,
 		    m_session->createRtpSessionReason(res));
 		break;
 	    case JGSession::Transferred:
@@ -2285,6 +2300,8 @@ bool YJGConnection::resetCurrentAudioContent(bool session, bool earlyMedia,
 // For raw udp transports, sends a 'trying' session info
 bool YJGConnection::startRtp()
 {
+    if (m_hangup)
+	return false;
     if (!m_audioContent) {
 	DDebug(this,DebugInfo,"Failed to start RTP: no audio content [%p]",this);
 	return false;
@@ -2323,6 +2340,17 @@ bool YJGConnection::startRtp()
     //m.addParam("autoaddr","false");
     bool rtcp = (0 != m_audioContent->m_rtpLocalCandidates.findByComponent(2));
     m.addParam("rtcp",String::boolText(rtcp));
+    // Crypto
+    if (m_secure) {
+	ObjList* cr = m_audioContent->m_rtpMedia.m_cryptoRemote.skipNull();
+	if (cr && m_audioContent->m_rtpMedia.m_cryptoLocal.skipNull())
+	    addSecure(m,static_cast<JGCrypto*>(cr->get()));
+	else if (m_secureRequired) {
+	    Debug(this,DebugNote,"No required crypto in current content [%p]",this);
+	    dropNoCrypto();
+	    return false;
+	}
+    }
 
     String oldPort = rtpLocal->m_port;
 
@@ -2646,6 +2674,8 @@ JGSessionContent* YJGConnection::buildFileTransferContent(bool send, const char*
 // Reserve local port for a RTP session content
 bool YJGConnection::initLocalCandidates(JGSessionContent& content, bool sendTransInfo)
 {
+    if (m_hangup)
+	return false;
     JGRtpCandidate* rtp = content.m_rtpLocalCandidates.findByComponent(1);
     bool incGeneration = (0 != rtp);
     if (!rtp) {
@@ -2669,15 +2699,17 @@ bool YJGConnection::initLocalCandidates(JGSessionContent& content, bool sendTran
 	if (remote && remote->m_address)
 	    m.addParam("remoteip",remote->m_address);
     }
-    ObjList* cr = content.m_rtpMedia.m_cryptoRemote.skipNull();
-    if (cr) {
-	JGCrypto* crypto = static_cast<JGCrypto*>(cr->get());
-	m.addParam("secure",String::boolText(true));
-	m.addParam("crypto_suite",crypto->m_suite);
-	m.addParam("crypto_key",crypto->m_keyParams);
+    if (m_secure) {
+	ObjList* cr = content.m_rtpMedia.m_cryptoRemote.skipNull();
+	if (cr)
+	    addSecure(m,static_cast<JGCrypto*>(cr->get()));
+	else if (m_secureRequired) {
+	    // TODO: Terminate the call or try to use another content
+	    Debug(this,DebugNote,"No required crypto in current content [%p]",this);
+	    dropNoCrypto();
+	    return false;
+	}
     }
-    else if (m_secure)
-	m.addParam("secure",String::boolText(true));
 
     if (!Engine::dispatch(m)) {
 	Debug(this,DebugNote,"Failed to init RTP for content='%s' [%p]",
@@ -2685,14 +2717,19 @@ bool YJGConnection::initLocalCandidates(JGSessionContent& content, bool sendTran
 	return false;
     }
 
-    NamedString* cSuite = m.getParam("ocrypto_suite");
-    if (cSuite) {
-	JGCrypto* crypto = new JGCrypto("1",*cSuite,m.getValue("ocrypto_key"));
-	content.m_rtpMedia.m_cryptoLocal.append(crypto);
-    }
-    else if (m_secure && m_secureRequired) {
-	// TODO: Terminate the call or try to use another content
-
+    if (m_secure) {
+	NamedString* cSuite = m.getParam("ocrypto_suite");
+	if (cSuite) {
+	    JGCrypto* crypto = new JGCrypto("1",*cSuite,m.getValue("ocrypto_key"));
+	    content.m_rtpMedia.m_cryptoLocal.append(crypto);
+	}
+	else if (m_secureRequired) {
+	    // Failed to setup encryption
+	    // TODO: Terminate the call or try to use another content
+	    Debug(this,DebugNote,"Failed to setup required crypto [%p]",this);
+	    dropNoCrypto();
+	    return false;
+	}
     }
 
     plugin.setLocalIp(rtp->m_address,m);
@@ -3351,6 +3388,18 @@ void YJGConnection::resetEp(const String& what, bool releaseContent)
 	    TelEngine::destruct(m_audioContent);
     }
 }
+
+// Hangup and drop the call if failed to setup encryption
+void YJGConnection::dropNoCrypto()
+{
+    const char* reason = "crypto-required";
+    hangup(reason,"Failed to setup encryption");
+    Message* m = new Message("call.drop");
+    m->addParam("id",id());
+    m->addParam("reason",reason);
+    Engine::enqueue(m);
+}
+
 
 /*
  * Transfer thread (route and execute)

@@ -1,3 +1,10 @@
+yate (3.3.3.svn4727) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4727: + Fixed jingle SRTP negotiation and
+    setup.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 30 Nov 2011 02:19:22 +0400
+
 yate (3.3.3.svn4726) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4726: + Logic bug fixed!  + Added setting

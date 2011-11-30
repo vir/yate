@@ -89,6 +89,7 @@ const TokenDict JGSession::s_reasons[] = {
     {"unsupported-transports",   ReasonTransport},
     {"unsupported-applications", ReasonApp},
     {"general-error",            ReasonUnknown},
+    {"general-error",            ReasonGeneral},
     {"alternative-session",      ReasonAltSess},
     {"timeout",                  ReasonTimeout},
     {"security-error",           ReasonSecurity},

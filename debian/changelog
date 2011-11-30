@@ -1,3 +1,15 @@
+yate (3.3.3.svn4732) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4732: + Added missing reason to session
+    dictionary.  + Use XUDT message to transmit segmented data if we do
+    not support LUDT.  + Don't generate payload for components that have
+    no operation code.  + Bug fix: don't consider operation code as
+    mandatory parameter while decoding ReturnResult components.  + Fixed
+    a forever loop that sometimes blocked SS7 management on reception of
+    LUN.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 01 Dec 2011 02:19:19 +0400
+
 yate (3.3.3.svn4727) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4727: + Fixed jingle SRTP negotiation and

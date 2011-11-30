@@ -5944,7 +5944,7 @@ bool XmlToTcap::encodeComponent(DataBlock& payload, XmlElement* elem, bool searc
 	encodeRaw(0,payload,elem,err);
 
     if (elem->getTag() == s_component) {
-	AsnTag tag = ( op ? (searchArgs ? op->argTag : op->retTag) : s_sequenceTag);
+	AsnTag tag = ( op ? (searchArgs ? op->argTag : op->retTag) : s_noTag);
 	if (tag != s_noTag) {
 	    payload.insert(ASNLib::buildLength(payload));
 	    payload.insert(tag.coding());

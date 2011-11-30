@@ -4175,7 +4175,7 @@ SS7TCAPError SS7TCAPTransactionITU::decodeComponents(NamedList& params, DataBloc
 		params.setParam(compParam + "." + s_tcapOpCodeType,"global");
 		params.setParam(compParam + "." + s_tcapOpCode,obj.toString());
 	    }
-	    else {
+	    else if (compType == Invoke) {
 		error.setError(SS7TCAPError::General_BadlyStructuredCompPortion);
 		break;
 	    }

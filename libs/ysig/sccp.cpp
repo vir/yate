@@ -3071,7 +3071,7 @@ int SS7SCCP::sendMessage(DataBlock& data, const NamedList& params)
     if (data.length() > MAX_DATA_LEN) {
 	// TODO verify if we can send LUDT Have a sigtran under?
 	// If not segment the message. send multiple XUDT messages
-	sccpMsg = new SS7MsgSCCP(SS7MsgSCCP::LUDT);
+	sccpMsg = new SS7MsgSCCP(m_supportLongData ? SS7MsgSCCP::LUDT : SS7MsgSCCP::XUDT);
 	checkHopCounter = true;
 	if(params.getParam(YSTRING("Importance")) && m_type == SS7PointCode::ITU)
 	    checkImportance = true;

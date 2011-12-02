@@ -1,3 +1,11 @@
+yate (3.3.3.svn4733) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4733: + To unconditionally create a new
+    element added type NewElement.  + For regular XML elements update
+    their value in existing element rather than always create new one.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 03 Dec 2011 02:19:19 +0400
+
 yate (3.3.3.svn4732) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4732: + Added missing reason to session

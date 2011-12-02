@@ -163,6 +163,7 @@ public:
     enum XmlType {
 	None,
 	Element,
+	NewElement,
 	Attribute,
 	Value,
 	End,
@@ -5471,7 +5472,7 @@ const XMLMap TcapToXml::s_xmlMap[] = {
     {Regexp("^tcap\\.component\\..\\+\\.errorCode$"),          "component",                             "",                          TcapToXml::Attribute},
     {Regexp("^tcap\\.component\\..\\+\\.errorCodeType$"),      "",                                      "",                          TcapToXml::None},
     {Regexp("^tcap\\.component\\..\\+\\.problemCode$"),        "component",                             "",                          TcapToXml::Attribute},
-    {Regexp("^tcap\\.component\\..\\+\\..\\+"),                "component",                             "",                          TcapToXml::Element},
+    {Regexp("^tcap\\.component\\..\\+\\..\\+"),                "component",                             "",                          TcapToXml::NewElement},
     {Regexp(""),                                               "",                                      "",                          TcapToXml::End},
 };
 
@@ -5586,6 +5587,13 @@ void TcapToXml::addToXml(XmlElement* root, const XMLMap* map, NamedString* val)
 	    tag = map->tag;
 	switch (map->type) {
 	    case Element:
+		child = parent->findFirstChild(&tag);
+		if (child) {
+		    child->addText(*val);
+		    break;
+		}
+		// fall through and create new child if not found
+	    case NewElement:
 		child = new XmlElement(tag);
 		child->addText(*val);
 		parent->addChild(child);

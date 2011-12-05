@@ -327,7 +327,8 @@ bool SS7TCAP::sendData(DataBlock& data, NamedList& params)
 	ssn = params.getIntValue(s_callingSSN,-1);
 	if (ssn < 0 && m_SSN <= 255) {
 	    params.setParam(s_callingSSN,String(m_SSN));
-	    params.setParam(s_callingRoute,"ssn");
+	    if (!params.getParam(s_callingRoute))
+		params.addParam(s_callingRoute,"ssn");
 	}
     }
 #ifdef DEBUG

@@ -1639,25 +1639,22 @@ bool SCCPUser::sendData(DataBlock& data, NamedList& params)
 	Debug(this,DebugMild,"Can not send data! No Sccp attached!");
 	return false;
     }
-    // Adjust the sls if sequence control is requested
     bool sequenceControl = params.getBoolValue("sequenceControl",false);
-    int sls = m_sls;
-    // Set the protocol class
-    if (sequenceControl)
-	params.addParam("ProtocolClass","1");
+    params.addParam("ProtocolClass",(sequenceControl ? "1" : "0"));
+    int sls = params.getIntValue("sls",-1);
+    if (sls < 0) {
+	// Preserve the sls only if sequence control is requested
+	if (sequenceControl)
+	    sls = m_sls;
+	if (sls < 0)
+	    sls = Random::random() & 0xff;
+    }
     else
-	params.addParam("ProtocolClass","0");
-    if (sequenceControl && m_sls < 0) {
-	m_sls = Random::random() & 0xff;
-	sls = m_sls;
-    } else if (!sequenceControl)
-	sls = -1;
+	sls &= 0xff;
     params.setParam("sls", String(sls));
-    int ret = sccp()->sendMessage(data,params);
-    if (ret < 0)
+    if (sccp()->sendMessage(data,params) < 0)
 	return false;
-    if (sls > 0 && sls != ret)
-	m_sls = ret; // Adjust the sls
+    m_sls = sls; // Keep the last SLS sent
     return true;
 }
 
@@ -2931,7 +2928,6 @@ int SS7SCCP::transmitMessage(SS7MsgSCCP* sccpMsg, bool local)
 	      SS7MsgSCCP::lookup(sccpMsg->type()));
 	return -1;
     }
-    sls = -1;
     if (m_printMsg && debugAt(DebugInfo)) {
 	String tmp;
 	void* data = 0;
@@ -3168,7 +3164,7 @@ int SS7SCCP::segmentMessage(DataBlock& data, SS7MsgSCCP* origMsg, SS7MsgSCCP::Ty
     bool msgReturn = msgData.getBoolValue(YSTRING("MessageReturn"),false);
     int dataLength = data.length();
     int totalSent = 0;
-    int sls = -1;
+    int sls = msgData.getIntValue(YSTRING("sls"),-1);
     // Transmit first segment
     SS7MsgSCCP* msg = new SS7MsgSCCP(type);
     msg->params().copyParams(msgData);
@@ -3202,7 +3198,6 @@ int SS7SCCP::segmentMessage(DataBlock& data, SS7MsgSCCP* origMsg, SS7MsgSCCP::Ty
     msgData.setParam("Segmentation.FirstSegment","false");
     // Set message return option only for the first segment
     msgData.setParam("MessageReturn","false");
-    msgData.setParam("sls",String(sls));
     while (dataLength > 0) {
 	msg = new SS7MsgSCCP(type);
 	msg->params().copyParams(msgData);
@@ -3478,7 +3473,7 @@ bool SS7SCCP::processMSU(SS7MsgSCCP::Type type, const unsigned char* paramPtr,
     msg->params().setParam("LocalPC",String(label.dpc().pack(m_type)));
     msg->params().setParam("RemotePC",String(label.opc().pack(m_type)));
     // Set the sls in case of STP routing for sequence control
-    msg->params().setParam("sls",String(sls));
+    msg->params().setParam("sls",String(label.sls()));
     if (m_printMsg && debugAt(DebugInfo)) {
 	String tmp;
 	msg->toString(tmp,label,debugAt(DebugAll),

@@ -106,7 +106,6 @@ static bool s_printMsgs = false;
 static const String s_checkAddr = "tcap.checkAddress";
 static const char* s_localPC = "LocalPC";
 static const char* s_remotePC = "RemotePC";
-static const char* s_sls = "sls";
 static const char* s_callingPA = "CallingPartyAddress";
 static const char* s_callingSSN = "CallingPartyAddress.ssn";
 static const char* s_callingRoute = "CallingPartyAddress.route";
@@ -172,8 +171,6 @@ static void populateSCCPAddress(NamedList& localAddr, NamedList& remoteAddr, Nam
 	localAddr.copyParams(aux);
     if (!TelEngine::null(initParams.getParam(s_localPC)))
 	localAddr.copyParam(initParams,s_localPC);
-    if (!TelEngine::null(initParams.getParam(s_sls)))
-	localAddr.copyParam(initParams,s_sls);
 
     aux.clearParams();
     aux.copySubParams(initParams,remoteParam + ".");
@@ -330,7 +327,8 @@ bool SS7TCAP::sendData(DataBlock& data, NamedList& params)
 	ssn = params.getIntValue(s_callingSSN,-1);
 	if (ssn < 0 && m_SSN <= 255) {
 	    params.setParam(s_callingSSN,String(m_SSN));
-	    params.setParam(s_callingRoute,"ssn");
+	    if (!params.getParam(s_callingRoute))
+		params.addParam(s_callingRoute,"ssn");
 	}
     }
 #ifdef DEBUG
@@ -1444,12 +1442,11 @@ void SS7TCAPTransaction::addSCCPAddressing(NamedList& fillParams, bool local)
     fillParams.clearParam(s_callingPA,'.');
     Lock l(this);
     fillParams.copyParam(m_localSCCPAddr,s_localPC);
-    fillParams.copyParam(m_localSCCPAddr,s_sls);
     for (unsigned int i = 0; i < m_localSCCPAddr.count(); i++) {
 	NamedString* ns = m_localSCCPAddr.getParam(i);
 	if (ns && *ns && !(*ns).null()) {
 	    const String& name = ns->name();
-	    if (name != s_localPC && name != s_sls)
+	    if (name != s_localPC)
 		fillParams.setParam(localParam + "." + name,*ns);
 	}
     }

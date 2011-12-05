@@ -1,3 +1,15 @@
+yate (3.3.3.svn4736) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4736: + For regular XML elements update
+    their value in existing element rather than always create new one.
+    + Create a random SLS for class 0 messages and when missing for
+    class 1 (sequenced).  + Always use the SLS from the routing label in
+    the SCCP User part.  + Do not store the SLS of the TCAP dialog, let
+    SCCP add one if TCAP user did not set it.  + Add a default route=ssn
+    in CallingPartyAddress only if it wasn't explicitely set.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 06 Dec 2011 02:19:24 +0400
+
 yate (3.3.3.svn4733) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4733: + To unconditionally create a new

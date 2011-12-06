@@ -798,6 +798,20 @@ bool SS7MTP3::control(Operation oper, NamedList* params)
     if (params) {
 	m_checklinks = params->getBoolValue(YSTRING("checklinks"),m_checklinks);
 	m_forcealign = params->getBoolValue(YSTRING("forcealign"),m_forcealign);
+	const String& inh = (*params)[YSTRING("inhibit")];
+	if (inh) {
+	    // inhibit=slc,[inh_flags][,uninh_flags]
+	    ObjList* l = inh.split(',',true);
+	    if (l && (l->length() == 2 || l->length() == 3)) {
+		int slc = l->at(0)->toString().toInteger(-1);
+		if (slc >= 0) {
+		    int inh = l->at(1)->toString().toInteger(0);
+		    int unh = l->at(2) ? l->at(2)->toString().toInteger(0) : 0;
+		    inhibit(slc,inh,unh);
+		}
+	    }
+	    TelEngine::destruct(l);
+	}
     }
     switch (oper) {
 	case Pause:
@@ -1041,16 +1055,21 @@ bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
     }
 #endif
     bool maint = (msu.getSIF() == SS7MSU::MTN) || (msu.getSIF() == SS7MSU::MTNS);
-    if (link) {
-	if (link->inhibited(SS7Layer2::Unchecked)) {
-	    if (!maint)
-		return false;
-	}
-	if (!maint && (msu.getSIF() != SS7MSU::SNM) &&
-	    link->inhibited(SS7Layer2::Unchecked|SS7Layer2::Inactive|SS7Layer2::Local)) {
-	    Debug(this,DebugMild,"Received MSU on inhibited 0x%02X link %d '%s'",
-		link->inhibited(),sls,link->toString().c_str());
+    if (link && !maint) {
+	int inhibited = link->inhibited() & (SS7Layer2::Unchecked|SS7Layer2::Inactive|SS7Layer2::Local);
+	if (inhibited & SS7Layer2::Unchecked)
 	    return false;
+	if (inhibited && msu.getSIF() != SS7MSU::SNM) {
+	    if (inhibited == SS7Layer2::Inactive) {
+		Debug(this,DebugNote,"Activating inactive link %d '%s' on %s MSU receive",
+		    sls,link->toString().c_str(),msu.getServiceName());
+		link->inhibit(0,SS7Layer2::Inactive);
+	    }
+	    else {
+		Debug(this,DebugMild,"Received MSU on inhibited 0x%02X link %d '%s'",
+		    link->inhibited(),sls,link->toString().c_str());
+		return false;
+	    }
 	}
     }
     // first try to call the user part

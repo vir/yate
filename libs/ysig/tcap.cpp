@@ -37,7 +37,8 @@ static void dumpData(int debugLevel, SS7TCAP* tcap, String message, void* obj, N
 	params.dump(tmp,"\r\n  ",'\'',true);
 	String str;
 	str.hexify(data.data(),data.length(),' ');
-	Debug(tcap,debugLevel,message + " [%p] - \r\nparams='%s',\r\ndata='%s'",obj,tmp.c_str(),str.c_str());
+	Debug(tcap,debugLevel,"%s [%p] - \r\nparams='%s',\r\ndata='%s'",
+	    message.safe(),obj,tmp.c_str(),str.c_str());
     }
 }
 #endif

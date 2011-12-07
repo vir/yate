@@ -6119,11 +6119,15 @@ bool Q931Parser::encodeHighLayerCap(ISDNQ931IE* ie, DataBlock& buffer)
 
 bool Q931Parser::encodeUserUser(ISDNQ931IE* ie, DataBlock& buffer)
 {
-    // TODO: implement it!
-    u_int8_t tmp[10];
-    tmp[0]=0x7e;tmp[1]=0x08;tmp[2]=0x04;tmp[3]=0x30;tmp[4]=0x39;
-    tmp[5]=0x32;tmp[6]=0x21;tmp[7]=0x30;tmp[8]=0x39;tmp[9]=0x32;
-    buffer.assign(tmp,sizeof(tmp));
+    DataBlock data;
+    String hex = ie->getValue(s_ie_ieUserUser[1].name);
+    data.unHexify(hex.c_str(), hex.length(), ' ');
+
+    u_int8_t head[2] = {(u_int8_t)ie->type()};
+    head[1] = (u_int8_t)data.length();
+
+    buffer.assign(head, sizeof(head));
+    buffer.append(data);
     return true;
 }
 

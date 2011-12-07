@@ -119,6 +119,10 @@ public:
 	    if (!addParam(dest,data))
 		dest->addParam(name,String((unsigned int)(data & mask)));
 	}
+    inline void addNumericParam(NamedList* dest, u_int8_t data) const {
+	    String s((unsigned int)data);
+	    dumpDataBit7(dest, (const uint8_t*)s.c_str(), s.length(), false);
+	}
 
     inline void dumpData(NamedList* dest, const u_int8_t* data, u_int32_t len) const
 	{ SignallingUtils::dumpData(0,*dest,name,data,len); }
@@ -5707,7 +5711,7 @@ ISDNQ931IE* Q931Parser::decodeUserUser(ISDNQ931IE* ie, const u_int8_t* data,
     if (!len)
 	return errorParseIE(ie,s_errorNoData,0,0);
     // data[0]: Protocol discriminator
-    s_ie_ieUserUser[0].addIntParam(ie,data[0]);
+    s_ie_ieUserUser[0].addNumericParam(ie, data[0]);
     if (len == 1)
 	return errorParseIE(ie,s_errorWrongData,0,0);
     // Remaining data: user information
@@ -6123,8 +6127,9 @@ bool Q931Parser::encodeUserUser(ISDNQ931IE* ie, DataBlock& buffer)
     String hex = ie->getValue(s_ie_ieUserUser[1].name);
     data.unHexify(hex.c_str(), hex.length(), ' ');
 
-    u_int8_t head[2] = {(u_int8_t)ie->type()};
-    head[1] = (u_int8_t)data.length();
+    u_int8_t head[3] = {(u_int8_t)ie->type()};
+    head[1] = (u_int8_t)data.length() + 1; // protocol discriminator byte plus data
+    head[2] = (u_int8_t)ie->getIntValue(s_ie_ieUserUser[0].name);
 
     buffer.assign(head, sizeof(head));
     buffer.append(data);

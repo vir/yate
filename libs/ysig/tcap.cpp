@@ -46,6 +46,11 @@ static void dumpData(int debugLevel, SS7TCAP* tcap, String message, void* obj, N
 TCAPUser::~TCAPUser()
 {
     Debug(this,DebugAll,"TCAPUser::~TCAPUser() [%p] - tcap user destroyed",this);
+}
+
+void TCAPUser::destroyed()
+{
+    Debug(this,DebugAll,"TCAPUser::destroyed() [%p]",this);
     Lock lock(m_tcapMtx);
     if (m_tcap) {
 	m_tcap->detach(this);
@@ -53,6 +58,8 @@ TCAPUser::~TCAPUser()
 	m_tcap->deref();
 	m_tcap = 0;
     }
+    lock.drop();
+    SignallingComponent::destroyed();
 }
 
 void TCAPUser::attach(SS7TCAP* tcap)
@@ -64,7 +71,7 @@ void TCAPUser::attach(SS7TCAP* tcap)
     SS7TCAP* tmp = m_tcap;
     m_tcap = tcap;
     lock.drop();
-    DDebug(this,DebugAll,"TCAPUser::atach(tcap=%s [%p], replacing tcap=%s [%p] [%p]",(m_tcap ? m_tcap->toString().safe() : ""),m_tcap,
+    DDebug(this,DebugAll,"TCAPUser::attach(tcap=%s [%p], replacing tcap=%s [%p] [%p]",(m_tcap ? m_tcap->toString().safe() : ""),m_tcap,
 	    (tmp ? tmp->toString().c_str() : ""),tmp,this);
     if (tmp) {
 	tmp->detach(this);

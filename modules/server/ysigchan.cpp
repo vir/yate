@@ -49,7 +49,6 @@ class IsupEncodeHandler;                 // Handler for "isup.encode" message
 class SigNotifier;                       // Class for handling received notifications
 class SigSS7Tcap;                        // SS7 TCAP - Transaction Capabilities Application Part
 class SigTCAPUser;                       // Default TCAP user
-class TCAPMsgHandler;                    // TCAP Message handler
 
 // The signalling channel
 class SigChannel : public Channel
@@ -173,6 +172,9 @@ public:
 	Unknown     = 0x03,
     };
 
+    enum PrivateRelays {
+	TcapRequest = Private,
+    };
     SigDriver();
     ~SigDriver();
     virtual void initialize();
@@ -215,6 +217,9 @@ public:
     static const TokenDict s_operations[];
     // Append an onDemand component
     bool appendOnDemand(SignallingComponent* cmp, int type);
+    // Install a relay
+    inline bool requestRelay(int id, const char* name, unsigned priority = 100)
+	{ return installRelay(id,name,priority); }
 private:
     // Handle command complete requests
     virtual bool commandComplete(Message& msg, const String& partLine,
@@ -559,38 +564,40 @@ private:
     SS7TCAP* m_tcap;
 };
 
-class SigTCAPUser : public SigTopmost, public TCAPUser
+class MsgTCAPUser : public TCAPUser
 {
-    YCLASS(SigTCAPUser,TCAPUser)
 public:
-    inline SigTCAPUser(const char* name)
-	: SigTopmost(name),
-	TCAPUser(name), m_handler(0)
-    { }
-    virtual ~SigTCAPUser();
-   // { }
+    inline MsgTCAPUser(const char* name)
+	: TCAPUser(name)
+        { }
+    virtual ~MsgTCAPUser();
     // Initialize the TCAP user
     // Return false on failure
     virtual bool initialize(NamedList& params);
     virtual bool tcapRequest(NamedList& params);
     virtual bool tcapIndication(NamedList& params);
+protected:
+    SS7TCAP* tcapAttach();
+    String m_tcapName;
+};
+
+
+class SigTCAPUser : public SigTopmost
+{
+public:
+    inline SigTCAPUser(const char* name)
+	: SigTopmost(name), m_user(0)
+    { }
+    virtual ~SigTCAPUser();
+    // Initialize the TCAP user
+    // Return false on failure
+    virtual bool initialize(NamedList& params);
+    virtual bool tcapRequest(NamedList& params);
     // Return the status of this component
     virtual void status(String& retVal);
 protected:
-    SS7TCAP* tcapAttach();
-    TCAPMsgHandler* m_handler;
-    String m_tcapName;
+    MsgTCAPUser* m_user;
     virtual void destroyed();
-};
-
-class TCAPMsgHandler : public MessageHandler
-{
-public:
-    TCAPMsgHandler(SigTCAPUser* user);
-    virtual bool received(Message& msg);
-    virtual void destruct();
-private:
-    SigTCAPUser* m_user;
 };
 
 // Factory for locally configured components
@@ -2183,6 +2190,14 @@ bool SigDriver::received(Message& msg, int id)
 	    if (m_engine && m_engine->control(msg))
 		return true;
 	    return Driver::received(msg,id);
+	case TcapRequest:
+	    {
+		target = msg.getValue(YSTRING("tcap.user"));
+		m_topmostMutex.lock();
+		RefPointer<SigTCAPUser> user = static_cast<SigTCAPUser*>(m_topmost[target]);
+		m_topmostMutex.unlock();
+		return (user && user->tcapRequest(msg));
+	    }
 	case Halt:
 	    clearTrunk();
 	    if (m_engine)
@@ -4096,30 +4111,25 @@ void SigSS7Tcap::status(String& retVal)
 }
 
 /**
- * SigTCAPUser
+ * MsgTcapUser
  */
-SigTCAPUser::~SigTCAPUser()
+MsgTCAPUser::~MsgTCAPUser()
 {
-    DDebug(&plugin,DebugAll,"SigTCAPUser::~SigTCAPUser() [%p]",this);
-    if (!TelEngine::null(m_handler))
-	TelEngine::destruct(m_handler);
+    DDebug(&plugin,DebugAll,"MsgTCAPUser::~MsgTCAPUser() [%p]",this);
 }
 
-bool SigTCAPUser::initialize(NamedList& params)
+bool MsgTCAPUser::initialize(NamedList& params)
 {
-    DDebug(&plugin,DebugAll,"SigTCAPUser::initialize() [%p]",this);
+    DDebug(&plugin,DebugAll,"MsgTCAPUser::initialize() [%p]",this);
     m_tcapName = params.getValue("tcap");
-    if (!m_handler) {
-	m_handler = new TCAPMsgHandler(this);
-	Engine::install(m_handler);
-    }
+    plugin.requestRelay(SigDriver::TcapRequest,"tcap.request");
     if (!tcapAttach())
 	Debug(DebugMild,"Please move configuration of [%s] after [%s], cannot attach now",
 	    TCAPUser::toString().c_str(),m_tcapName.c_str());
     return true;
 }
 
-SS7TCAP* SigTCAPUser::tcapAttach()
+SS7TCAP* MsgTCAPUser::tcapAttach()
 {
     if (!tcap()) {
 	SignallingComponent* tc = plugin.engine()->find(m_tcapName,"SS7TCAP");
@@ -4129,28 +4139,48 @@ SS7TCAP* SigTCAPUser::tcapAttach()
     return tcap();
 }
 
-bool SigTCAPUser::tcapRequest(NamedList& params)
+bool MsgTCAPUser::tcapRequest(NamedList& params)
 {
     const String* name = params.getParam(YSTRING("tcap"));
     if (m_tcapName && !TelEngine::null(name) && (*name != m_tcapName))
 	return false;
-    name = params.getParam(YSTRING("tcap_user"));
-    if (!TelEngine::null(name) && (*name != TCAPUser::toString()))
-	return false;
     if (tcapAttach()) {
 	SS7TCAPError err = tcap()->userRequest(params);
-	return err.error() != SS7TCAPError::NoError;
+	return err.error() == SS7TCAPError::NoError;
     }
     return false;
 }
 
-bool SigTCAPUser::tcapIndication(NamedList& params)
+bool MsgTCAPUser::tcapIndication(NamedList& params)
 {
     Message msg("tcap.indication");
     msg.addParam("tcap",m_tcapName,false);
-    msg.addParam("tcap_user",TCAPUser::toString(),false);
+    msg.addParam("tcap.user",TCAPUser::toString(),false);
     msg.copyParams(params);
     return Engine::dispatch(&msg);
+}
+
+/**
+ * SigTCAPUser
+ */
+SigTCAPUser::~SigTCAPUser()
+{
+    DDebug(&plugin,DebugAll,"SigTCAPUser::~SigTCAPUser() [%p]",this);
+}
+
+bool SigTCAPUser::initialize(NamedList& params)
+{
+    DDebug(&plugin,DebugAll,"SigTCAPUser::initialize() [%p]",this);
+    if (!m_user)
+	m_user = new MsgTCAPUser(toString().c_str());
+    if (m_user)
+	m_user->initialize(params);
+    return true;
+}
+
+bool SigTCAPUser::tcapRequest(NamedList& params)
+{
+    return (m_user && m_user->tcapRequest(params));
 }
 
 void SigTCAPUser::status(String& retVal)
@@ -4160,31 +4190,8 @@ void SigTCAPUser::status(String& retVal)
 void SigTCAPUser::destroyed()
 {
     DDebug(&plugin,DebugAll,"SigTCAPUser::destroyed() [%p]",this);
-    Engine::uninstall(m_handler);
-    attach(0);
+    TelEngine::destruct(m_user);
     SigTopmost::destroyed();
-}
-
-/**
- * TCAPMsgHandler
- */
-TCAPMsgHandler::TCAPMsgHandler(SigTCAPUser* user)
-    : MessageHandler("tcap.request"),
-      m_user(user)
-{
-    DDebug(&plugin,DebugAll,"TCAPMsgHandler created [%p]",this);
-}
-
-bool TCAPMsgHandler::received(Message& msg)
-{
-    return (m_user && m_user->tcapRequest(msg));
-}
-
-void TCAPMsgHandler::destruct()
-{
-    DDebug(&plugin,DebugAll,"TCAPMsgHandler::destroyed() [%p]",this);
-    m_user = 0;
-    MessageHandler::destruct();
 }
 
 /**

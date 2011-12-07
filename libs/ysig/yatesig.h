@@ -5340,15 +5340,15 @@ private:
  * An interface to a SS7 Transactional Capabilities Application Part user
  * @short Abstract SS7 TCAP user interface
  */
-class YSIG_API TCAPUser : public GenObject, public DebugEnabler
+class YSIG_API TCAPUser : public SignallingComponent
 {
+    YCLASS(TCAPUser,SignallingComponent)
     friend class SS7TCAP;
 public:
-    TCAPUser(const char* name)
-      : m_name(name), m_tcap(0)
-	{
-	    debugName(m_name);
-	}
+    TCAPUser(const char* name, const NamedList* params = 0)
+      : SignallingComponent(name,params),
+	m_tcap(0)
+	{}
     /**
      * Destructor, detaches from the TCAP implementation
      */
@@ -5359,18 +5359,21 @@ public:
      * @param tcap Pointer to the TCAP to use
      */
     virtual void attach(SS7TCAP* tcap);
+
     /**
      * Receive a TCAP message from TCAP layer
      * @param params The message in NamedList form
      * @return True or false if the message was processed by this user
      */
     virtual bool tcapIndication(NamedList& params);
+
     /**
      * Retrieve the TCAP to which this user is attached
      * @return Pointer to a SS7 TCAP interface or NULL
      */
     inline SS7TCAP* tcap() const
 	{ return m_tcap; }
+
     /**
      * Received a management notification from SCCP layer
      * @param type SCCP management notification type
@@ -5378,14 +5381,18 @@ public:
      * @return True or false if the notification was handled bu this user
      */
     virtual bool managementNotify(SCCP::Type type, NamedList& params);
+
     /**
      * Get TCAP user management state
      * @return The state of the user
      */
     virtual int managementState();
 
-    virtual const String& toString() const
-	{ return m_name; }
+    /**
+     * This method is called to clean up and destroy the object after the
+     *  reference counter becomes zero
+     */
+    virtual void  destroyed();
 
 protected:
     inline void setTCAP(SS7TCAP* tcap)
@@ -5395,7 +5402,6 @@ protected:
     }
 
 private:
-    String m_name;
     SS7TCAP* m_tcap;
     Mutex m_tcapMtx;
 };

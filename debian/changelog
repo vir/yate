@@ -1,3 +1,9 @@
+yate (3.3.3.vir2011120704) UNRELEASED; urgency=low
+
+  * Fixed UU IE duplication
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Wed, 07 Dec 2011 16:50:23 +0400
+
 yate (3.3.3.vir2011120703) UNRELEASED; urgency=low
 
   * Fixed UUS IE encoding (missing protocol discrimrnator added)

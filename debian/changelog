@@ -1,3 +1,10 @@
+yate (3.3.3.vir2011120701) UNRELEASED; urgency=low
+
+  * Merged upstream changes.
+  * Fix outgoing UUS
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Wed, 07 Dec 2011 11:35:17 +0400
+
 yate (3.3.3.vir2011111801) UNRELEASED; urgency=low
 
   * Experimantal ISDN UUS support

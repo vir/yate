@@ -10752,6 +10752,7 @@ protected:
 
     unsigned int m_SSN;
     unsigned int m_defaultRemoteSSN;
+    unsigned int m_defaultHopCounter;
     SS7PointCode m_defaultRemotePC;
     SS7PointCode::Type m_remoteTypePC;
     u_int64_t m_trTimeout;

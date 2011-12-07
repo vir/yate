@@ -1,3 +1,9 @@
+yate (3.3.3.vir2011120703) UNRELEASED; urgency=low
+
+  * Fixed UUS IE encoding (missing protocol discrimrnator added)
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Wed, 07 Dec 2011 15:17:12 +0400
+
 yate (3.3.3.vir2011120702) UNRELEASED; urgency=low
 
   * Added UUS encoding mplementation

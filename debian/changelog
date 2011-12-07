@@ -1,3 +1,18 @@
+yate (3.3.3.svn4743) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4743: + Changed the MTP3 logic to auto-
+    activate a link that is accidentally inactive on MSU reception.  +
+    Fixed a printf-style format in DEBUG compile.  + Fixed reassembly of
+    fragmented SCCP messages.  + Derived TCAPUser from
+    SignallingComponent. Removed tcap.request message handler from
+    ysigchan, use relay instead. Removed multiple inheritance of
+    SigTcapUser class.  + Accelerated TCAP by storing preconstructed
+    Strings for comparations.  + Added possibility to set a default
+    HopCounter in TCAP.  + Added possibility to retrieve or set SCCP
+    HopCounter from XML.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 08 Dec 2011 02:19:18 +0400
+
 yate (3.3.3.svn4738) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4738: + Made ExpEvaluator::popOne() static

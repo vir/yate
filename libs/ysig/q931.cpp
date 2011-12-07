@@ -569,8 +569,10 @@ bool ISDNQ931IEData::processUserUser(ISDNQ931Message* msg, bool add,
     if (!msg)
 	return false;
     if (add) {
-	msg->appendIEValue(ISDNQ931IE::UserUser,"protocol",m_uuprotocol);
-	msg->appendIEValue(ISDNQ931IE::UserUser,"information",m_uuinformation);
+	ISDNQ931IE* ie = new ISDNQ931IE(ISDNQ931IE::UserUser);
+	ie->addParam("protocol", m_uuprotocol);
+	ie->addParam("information",m_uuinformation);
+	msg->appendSafe(ie);
 	return true;
     }
     m_uuprotocol = msg->getIEValue(ISDNQ931IE::UserUser,"protocol");

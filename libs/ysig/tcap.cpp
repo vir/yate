@@ -37,7 +37,8 @@ static void dumpData(int debugLevel, SS7TCAP* tcap, String message, void* obj, N
 	params.dump(tmp,"\r\n  ",'\'',true);
 	String str;
 	str.hexify(data.data(),data.length(),' ');
-	Debug(tcap,debugLevel,message + " [%p] - \r\nparams='%s',\r\ndata='%s'",obj,tmp.c_str(),str.c_str());
+	Debug(tcap,debugLevel,"%s [%p] - \r\nparams='%s',\r\ndata='%s'",
+	    message.safe(),obj,tmp.c_str(),str.c_str());
     }
 }
 #endif
@@ -45,6 +46,11 @@ static void dumpData(int debugLevel, SS7TCAP* tcap, String message, void* obj, N
 TCAPUser::~TCAPUser()
 {
     Debug(this,DebugAll,"TCAPUser::~TCAPUser() [%p] - tcap user destroyed",this);
+}
+
+void TCAPUser::destroyed()
+{
+    Debug(this,DebugAll,"TCAPUser::destroyed() [%p]",this);
     Lock lock(m_tcapMtx);
     if (m_tcap) {
 	m_tcap->detach(this);
@@ -52,6 +58,8 @@ TCAPUser::~TCAPUser()
 	m_tcap->deref();
 	m_tcap = 0;
     }
+    lock.drop();
+    SignallingComponent::destroyed();
 }
 
 void TCAPUser::attach(SS7TCAP* tcap)
@@ -63,7 +71,7 @@ void TCAPUser::attach(SS7TCAP* tcap)
     SS7TCAP* tmp = m_tcap;
     m_tcap = tcap;
     lock.drop();
-    DDebug(this,DebugAll,"TCAPUser::atach(tcap=%s [%p], replacing tcap=%s [%p] [%p]",(m_tcap ? m_tcap->toString().safe() : ""),m_tcap,
+    DDebug(this,DebugAll,"TCAPUser::attach(tcap=%s [%p], replacing tcap=%s [%p] [%p]",(m_tcap ? m_tcap->toString().safe() : ""),m_tcap,
 	    (tmp ? tmp->toString().c_str() : ""),tmp,this);
     if (tmp) {
 	tmp->detach(this);
@@ -104,13 +112,14 @@ struct PrimitiveMapping {
 static bool s_extendedDbg = false;
 static bool s_printMsgs = false;
 static const String s_checkAddr = "tcap.checkAddress";
-static const char* s_localPC = "LocalPC";
-static const char* s_remotePC = "RemotePC";
-static const char* s_callingPA = "CallingPartyAddress";
-static const char* s_callingSSN = "CallingPartyAddress.ssn";
-static const char* s_callingRoute = "CallingPartyAddress.route";
-static const char* s_calledPA = "CalledPartyAddress";
-static const char* s_calledSSN = "CalledPartyAddress.ssn";
+static const String s_localPC = "LocalPC";
+static const String s_remotePC = "RemotePC";
+static const String s_callingPA = "CallingPartyAddress";
+static const String s_callingSSN = "CallingPartyAddress.ssn";
+static const String s_callingRoute = "CallingPartyAddress.route";
+static const String s_calledPA = "CalledPartyAddress";
+static const String s_calledSSN = "CalledPartyAddress.ssn";
+static const String s_HopCounter = "HopCounter";
 
 // TCAP message parameters
 static const String s_tcapUser = "tcap.user";
@@ -250,6 +259,7 @@ SS7TCAP::SS7TCAP(const NamedList& params)
       m_inQueueMtx(true,"TCAPPendingMsg"),
       m_SSN(0),
       m_defaultRemoteSSN(0),
+      m_defaultHopCounter(0),
       m_defaultRemotePC(0),
       m_remoteTypePC(SS7PointCode::Other),
       m_trTimeout(300),
@@ -295,6 +305,9 @@ bool SS7TCAP::initialize(const NamedList* config)
 	// read local point code and default remote point code
 	m_SSN = config->getIntValue(YSTRING("local_SSN"),-1);
 	m_defaultRemoteSSN = config->getIntValue(YSTRING("default_remote_SSN"),-1);
+	m_defaultHopCounter = config->getIntValue(YSTRING("default_hopcounter"),0);
+	if (m_defaultHopCounter > 15 || config->getBoolValue(YSTRING("default_hopcounter")))
+	    m_defaultHopCounter = 15;
 
 	const char* code = config->getValue(YSTRING("default_remote_pointcode"));
 	m_remoteTypePC = SS7PointCode::lookup(config->getValue(YSTRING("pointcodetype"),""));
@@ -330,6 +343,8 @@ bool SS7TCAP::sendData(DataBlock& data, NamedList& params)
 	    if (!params.getParam(s_callingRoute))
 		params.addParam(s_callingRoute,"ssn");
 	}
+	if (m_defaultHopCounter && !params.getParam(s_HopCounter))
+	    params.addParam(s_HopCounter,String(m_defaultHopCounter));
     }
 #ifdef DEBUG
     if (s_printMsgs && debugAt(DebugInfo))

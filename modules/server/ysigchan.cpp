@@ -1228,6 +1228,8 @@ bool SigChannel::startCall(Message& msg, SigTrunk* trunk)
     sigMsg->params().copyParam(msg,"inn");
     sigMsg->params().copyParam(msg,"calledpointcode");
     sigMsg->params().copyParam(msg,"overlapped");
+    sigMsg->params().copyParam(msg,"uuprotocol");
+    sigMsg->params().copyParam(msg,"uuinformation");
     // Copy RTP parameters
     if (msg.getBoolValue("rtp_forward")) {
 	NamedList* tmp = new NamedList("rtp");

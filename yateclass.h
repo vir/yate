@@ -4062,6 +4062,13 @@ public:
      */
     void extender(ExpExtender* ext);
 
+    /**
+     * Pops an operand off an evaluation stack
+     * @param stack Evaluation stack to remove the operand from
+     * @return Operator removed from stack, NULL if stack underflow
+     */
+    static ExpOperation* popOne(ObjList& stack);
+
 protected:
     /**
      * Helper method to skip over whitespaces
@@ -4181,13 +4188,6 @@ protected:
      * @param value Numerical value used as parameter count to functions
      */
     void addOpcode(Opcode oper, const String& name, long int value = 0);
-
-    /**
-     * Pops an operand off the evaluation stack
-     * @param stack Evaluation stack to remove the operand from
-     * @return Operator removed from stack, NULL if stack underflow
-     */
-    ExpOperation* popOne(ObjList& stack) const;
 
     /**
      * Try to apply simplification to the expression

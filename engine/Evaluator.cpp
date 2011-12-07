@@ -488,7 +488,7 @@ void ExpEvaluator::addOpcode(long int value)
     m_opcodes.append(new ExpOperation(value));
 }
 
-ExpOperation* ExpEvaluator::popOne(ObjList& stack) const
+ExpOperation* ExpEvaluator::popOne(ObjList& stack)
 {
     GenObject* o = 0;
     for (ObjList* l = stack.skipNull(); l; l=l->skipNext())

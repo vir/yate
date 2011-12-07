@@ -695,7 +695,7 @@ static unsigned char encodeItuAddress(const SS7SCCP* sccp, SS7MSU& msu,
 	addressIndicator |= 0x04;
 	int nai = nature->toInteger(s_nai);
 	odd = (gtNr->length() % 2) ? false : true;
-	if (odd)
+	if (!odd)
 	    nai |= 0x80;
 	data[++length] = nai & 0xff;
     } else if (translation && !(plan && encoding) && !nature) { // GT = 0x02
@@ -1639,25 +1639,22 @@ bool SCCPUser::sendData(DataBlock& data, NamedList& params)
 	Debug(this,DebugMild,"Can not send data! No Sccp attached!");
 	return false;
     }
-    // Adjust the sls if sequence control is requested
     bool sequenceControl = params.getBoolValue("sequenceControl",false);
-    int sls = m_sls;
-    // Set the protocol class
-    if (sequenceControl)
-	params.addParam("ProtocolClass","1");
+    params.addParam("ProtocolClass",(sequenceControl ? "1" : "0"));
+    int sls = params.getIntValue("sls",-1);
+    if (sls < 0) {
+	// Preserve the sls only if sequence control is requested
+	if (sequenceControl)
+	    sls = m_sls;
+	if (sls < 0)
+	    sls = Random::random() & 0xff;
+    }
     else
-	params.addParam("ProtocolClass","0");
-    if (sequenceControl && m_sls < 0) {
-	m_sls = Random::random() & 0xff;
-	sls = m_sls;
-    } else if (!sequenceControl)
-	sls = -1;
+	sls &= 0xff;
     params.setParam("sls", String(sls));
-    int ret = sccp()->sendMessage(data,params);
-    if (ret < 0)
+    if (sccp()->sendMessage(data,params) < 0)
 	return false;
-    if (sls > 0 && sls != ret)
-	m_sls = ret; // Adjust the sls
+    m_sls = sls; // Keep the last SLS sent
     return true;
 }
 
@@ -2147,6 +2144,10 @@ void SCCPManagement::routeFailure(SS7MsgSCCP* msg)
 	return;
     }
     int pointcode = msg->params().getIntValue(YSTRING("RemotePC"));
+    if (pointcode < 1) {
+	Debug(this,DebugWarn,"Remote pointcode %d is invalid!",pointcode);
+	return;
+    }
     if (pointcode == m_sccp->getPackedPointCode())
 	return;
     SccpRemote* rsccp = getRemoteSccp(pointcode);
@@ -2927,7 +2928,6 @@ int SS7SCCP::transmitMessage(SS7MsgSCCP* sccpMsg, bool local)
 	      SS7MsgSCCP::lookup(sccpMsg->type()));
 	return -1;
     }
-    sls = -1;
     if (m_printMsg && debugAt(DebugInfo)) {
 	String tmp;
 	void* data = 0;
@@ -2975,10 +2975,16 @@ bool SS7SCCP::fillPointCode(SS7PointCode& pointcode, SS7MsgSCCP* msg, const Stri
 {
     if (!msg)
 	return false;
-    bool havePointCode = msg->params().getParam(pCode) != 0;
-    if (!havePointCode && msg->params().getParam(prefix + ".pointcode")) {
-	msg->params().setParam(pCode,msg->params().getValue(prefix + ".pointcode"));
+    bool havePointCode = false;
+    NamedString* pcNs = msg->params().getParam(pCode);
+    if (pcNs && pcNs->toInteger(0) > 0)
 	havePointCode = true;
+    if (!havePointCode) {
+	pcNs = msg->params().getParam(prefix + ".pointcode");
+	if (pcNs && pcNs->toInteger(0) > 0) {
+	    msg->params().setParam(new NamedString(pCode,*pcNs));
+	    havePointCode = true;
+	}
     }
     if (!havePointCode && translate) { // CalledParyAddress with no pointcode. Check for Global Title
 	NamedList* route = translateGT(msg->params(),prefix);
@@ -3061,7 +3067,7 @@ int SS7SCCP::sendMessage(DataBlock& data, const NamedList& params)
     if (data.length() > MAX_DATA_LEN) {
 	// TODO verify if we can send LUDT Have a sigtran under?
 	// If not segment the message. send multiple XUDT messages
-	sccpMsg = new SS7MsgSCCP(SS7MsgSCCP::LUDT);
+	sccpMsg = new SS7MsgSCCP(m_supportLongData ? SS7MsgSCCP::LUDT : SS7MsgSCCP::XUDT);
 	checkHopCounter = true;
 	if(params.getParam(YSTRING("Importance")) && m_type == SS7PointCode::ITU)
 	    checkImportance = true;
@@ -3158,7 +3164,7 @@ int SS7SCCP::segmentMessage(DataBlock& data, SS7MsgSCCP* origMsg, SS7MsgSCCP::Ty
     bool msgReturn = msgData.getBoolValue(YSTRING("MessageReturn"),false);
     int dataLength = data.length();
     int totalSent = 0;
-    int sls = -1;
+    int sls = msgData.getIntValue(YSTRING("sls"),-1);
     // Transmit first segment
     SS7MsgSCCP* msg = new SS7MsgSCCP(type);
     msg->params().copyParams(msgData);
@@ -3192,7 +3198,6 @@ int SS7SCCP::segmentMessage(DataBlock& data, SS7MsgSCCP* origMsg, SS7MsgSCCP::Ty
     msgData.setParam("Segmentation.FirstSegment","false");
     // Set message return option only for the first segment
     msgData.setParam("MessageReturn","false");
-    msgData.setParam("sls",String(sls));
     while (dataLength > 0) {
 	msg = new SS7MsgSCCP(type);
 	msg->params().copyParams(msgData);
@@ -3468,7 +3473,7 @@ bool SS7SCCP::processMSU(SS7MsgSCCP::Type type, const unsigned char* paramPtr,
     msg->params().setParam("LocalPC",String(label.dpc().pack(m_type)));
     msg->params().setParam("RemotePC",String(label.opc().pack(m_type)));
     // Set the sls in case of STP routing for sequence control
-    msg->params().setParam("sls",String(sls));
+    msg->params().setParam("sls",String(label.sls()));
     if (m_printMsg && debugAt(DebugInfo)) {
 	String tmp;
 	msg->toString(tmp,label,debugAt(DebugAll),
@@ -3572,15 +3577,14 @@ bool SS7SCCP::routeSCLCMessage(SS7MsgSCCP*& msg, const SS7Label& label)
 	    break;
 	}
 	msg->params().clearParam(YSTRING("CalledPartyAddress"),'.');
-	msg->params().clearParam(YSTRING("RemotePC"));
 	for (unsigned int i = 0;i < gtRoute->length();i++) {
 	    NamedString* val = gtRoute->getParam(i);
-	    msg->params().setParam("CalledPartyAddress." + val->name(),*val);
+	    if (val->name() != YSTRING("RemotePC"))
+		msg->params().setParam("CalledPartyAddress." + val->name(),*val);
 	}
 	if (haveRemotePC)
-	    msg->params().setParam("RemotePC",gtRoute->getValue(YSTRING("RemotePC")));
-	else
-	    msg->params().setParam("RemotePC",gtRoute->getValue(YSTRING("pointcode")));
+	    msg->params().setParam("CalledPartyAddress.pointcode",
+		    gtRoute->getValue(YSTRING("RemotePC")));
 	TelEngine::destruct(gtRoute);
 	if (msg->params().getIntValue(YSTRING("CalledPartyAddress.ssn"),-1) == 1) {
 	    Debug(this,DebugNote,"GT Routing Warn!! Message %s global title translated for management!",
@@ -3588,7 +3592,8 @@ bool SS7SCCP::routeSCLCMessage(SS7MsgSCCP*& msg, const SS7Label& label)
 	    m_errors++;
 	    return false; // Management message with global title translation
 	}
-	unsigned int pointcode = msg->params().getIntValue(YSTRING("RemotePC"),-1);
+	unsigned int pointcode = msg->params().getIntValue(
+		YSTRING("CalledPartyAddress.pointcode"),-1);
 	if (!m_localPointCode)
 	    Debug(this,DebugConf,
 		  "No local PointCode configured!! GT translations with no local PointCode may lead to undesired behavior");
@@ -3603,6 +3608,7 @@ bool SS7SCCP::routeSCLCMessage(SS7MsgSCCP*& msg, const SS7Label& label)
 	}
 	// If from the translated gt resulted a pointcode other then ours forward the message
 	if (pointcode > 0 && m_localPointCode && pointcode != m_localPointCode->pack(m_type)) {
+	    msg->params().setParam("RemotePC",String(pointcode));
 	    lock.drop();
 	    if (transmitMessage(msg) >= 0)
 		return true;
@@ -4186,7 +4192,7 @@ bool SS7ItuSccpManagement::processMessage(SS7MsgSCCP* message)
 	Debug(sccp(),DebugNote,"Received short management message!");
 	return false;
     }
-    const char* paramsPtr = (const char*)data->data();
+    const unsigned char* paramsPtr = (const unsigned char*)data->data();
     unsigned char msg = *paramsPtr++;
     const char* msgType = lookup(msg,s_managementMessages);
     if (!msgType) {
@@ -4412,7 +4418,7 @@ bool SS7AnsiSccpManagement::processMessage(SS7MsgSCCP* message)
 	DDebug(sccp(),DebugNote,"Received short Ansi management message! %d",data->length());
 	return false;
     }
-    const char* paramsPtr = (const char*)data->data();
+    const unsigned char* paramsPtr = (const unsigned char*)data->data();
     unsigned char msg = *paramsPtr++;
     const char* msgType = lookup(msg,s_managementMessages);
     if (!msgType) {

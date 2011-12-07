@@ -1756,7 +1756,8 @@ DataTranslator* ChainedFactory::create(const DataFormat& sFormat, const DataForm
 	trans1->deref();
     }
     else
-	trans->destruct();
+	// trans may be a chain itself so clear from first translator
+	trans->getFirstTranslator()->destruct();
     return trans2;
 }
 

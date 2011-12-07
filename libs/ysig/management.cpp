@@ -661,7 +661,7 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 		    l = m_pending.skipNull();
 		}
 		else
-		    l = m_pending.skipNext();
+		    l = l->skipNext();
 	    }
 	    unlock();
 	    static unsigned char lua = SS7MsgSNM::LUA;

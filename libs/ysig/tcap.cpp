@@ -104,11 +104,12 @@ struct PrimitiveMapping {
 static bool s_extendedDbg = false;
 static bool s_printMsgs = false;
 static const String s_checkAddr = "tcap.checkAddress";
+static const char* s_localPC = "LocalPC";
+static const char* s_remotePC = "RemotePC";
 static const char* s_callingPA = "CallingPartyAddress";
 static const char* s_callingSSN = "CallingPartyAddress.ssn";
 static const char* s_callingRoute = "CallingPartyAddress.route";
 static const char* s_calledPA = "CalledPartyAddress";
-static const char* s_calledPC = "CalledPartyAddress.pointcode";
 static const char* s_calledSSN = "CalledPartyAddress.ssn";
 
 // TCAP message parameters
@@ -168,6 +169,8 @@ static void populateSCCPAddress(NamedList& localAddr, NamedList& remoteAddr, Nam
     }
     else
 	localAddr.copyParams(aux);
+    if (!TelEngine::null(initParams.getParam(s_localPC)))
+	localAddr.copyParam(initParams,s_localPC);
 
     aux.clearParams();
     aux.copySubParams(initParams,remoteParam + ".");
@@ -181,6 +184,8 @@ static void populateSCCPAddress(NamedList& localAddr, NamedList& remoteAddr, Nam
     }
     else
 	remoteAddr.copyParams(aux);
+    if (!TelEngine::null(initParams.getParam(s_remotePC)))
+	remoteAddr.copyParam(initParams,s_remotePC);
 }
 
 static void compPrefix(String& prefix, unsigned int index, bool endSep = false)
@@ -288,8 +293,8 @@ bool SS7TCAP::initialize(const NamedList* config)
 #endif
     if (config) {
 	// read local point code and default remote point code
-	m_SSN = config->getIntValue(YSTRING("local_SSN"),0);
-	m_defaultRemoteSSN = config->getIntValue(YSTRING("default_remote_SSN"),0);
+	m_SSN = config->getIntValue(YSTRING("local_SSN"),-1);
+	m_defaultRemoteSSN = config->getIntValue(YSTRING("default_remote_SSN"),-1);
 
 	const char* code = config->getValue(YSTRING("default_remote_pointcode"));
 	m_remoteTypePC = SS7PointCode::lookup(config->getValue(YSTRING("pointcodetype"),""));
@@ -312,16 +317,18 @@ bool SS7TCAP::sendData(DataBlock& data, NamedList& params)
     if (params.getBoolValue(s_callingSSN))
 	params.setParam(s_callingSSN,String(m_SSN));
     if (params.getBoolValue(s_checkAddr,true)) {
-	String dpc = params.getValue(s_calledPC,"");
-	if (dpc.null())
-	    params.addParam(s_calledPC,String(m_defaultRemotePC.pack(m_remoteTypePC)));
+	String dpc = params.getValue(s_remotePC,"");
+	unsigned int pc = m_defaultRemotePC.pack(m_remoteTypePC);
+	if (dpc.null() && pc)
+	    params.addParam(s_remotePC,String(pc));
 	int ssn = params.getIntValue(s_calledSSN,-1);
-	if (ssn < 0)
+	if (ssn < 0 && m_defaultRemoteSSN <= 255)
 	    params.setParam(s_calledSSN,String(m_defaultRemoteSSN));
 	ssn = params.getIntValue(s_callingSSN,-1);
-	if (ssn < 0) {
+	if (ssn < 0 && m_SSN <= 255) {
 	    params.setParam(s_callingSSN,String(m_SSN));
-	    params.setParam(s_callingRoute,"ssn");
+	    if (!params.getParam(s_callingRoute))
+		params.addParam(s_callingRoute,"ssn");
 	}
     }
 #ifdef DEBUG
@@ -1434,18 +1441,22 @@ void SS7TCAPTransaction::addSCCPAddressing(NamedList& fillParams, bool local)
     fillParams.clearParam(s_calledPA,'.');
     fillParams.clearParam(s_callingPA,'.');
     Lock l(this);
+    fillParams.copyParam(m_localSCCPAddr,s_localPC);
     for (unsigned int i = 0; i < m_localSCCPAddr.count(); i++) {
 	NamedString* ns = m_localSCCPAddr.getParam(i);
 	if (ns && *ns && !(*ns).null()) {
-	    String name = ns->name();
-	    fillParams.setParam(localParam + "." + name,*ns);
+	    const String& name = ns->name();
+	    if (name != s_localPC)
+		fillParams.setParam(localParam + "." + name,*ns);
 	}
     }
+    fillParams.copyParam(m_remoteSCCPAddr,s_remotePC);
     for (unsigned int i = 0; i < m_remoteSCCPAddr.count(); i++) {
 	NamedString* ns = m_remoteSCCPAddr.getParam(i);
 	if (ns && *ns && !(*ns).null()) {
-	    String name = ns->name();
-	    fillParams.setParam(remoteParam + "." +  name,*ns);
+	    const String& name = ns->name();
+	    if (name != s_remotePC)
+		fillParams.setParam(remoteParam + "." +  name,*ns);
 	}
     }
 }
@@ -1963,8 +1974,6 @@ SS7TCAPError SS7TCAPTransactionANSI::update(SS7TCAP::TCAPUserTransActions type, 
 	    }
 	    else {
 		m_remoteID = params.getValue(s_tcapRemoteTID);
-		if (!updateByUser)
-		    populateSCCPAddress(m_localSCCPAddr,m_remoteSCCPAddr,params,updateByUser);
 		m_type = type;
 		m_transmit = PendingTransmit;
 	    }
@@ -1991,6 +2000,7 @@ SS7TCAPError SS7TCAPTransactionANSI::update(SS7TCAP::TCAPUserTransActions type, 
 	    break;
     }
 
+    populateSCCPAddress(m_localSCCPAddr,m_remoteSCCPAddr,params,updateByUser);
     if (updateByUser) {
 	setState(PackageSent);
 	m_basicEnd = params.getBoolValue(s_tcapBasicTerm,true);
@@ -3288,7 +3298,6 @@ SS7TCAPError SS7TCAPTransactionITU::update(SS7TCAP::TCAPUserTransActions type, N
 	case SS7TCAP::TC_ConversationWithoutPerm:
 	    if (m_state == PackageSent)
 		m_remoteID = params.getValue(s_tcapRemoteTID);
-	    populateSCCPAddress(m_localSCCPAddr,m_remoteSCCPAddr,params,updateByUser);
 	    m_type = type;
 	    m_transmit = PendingTransmit;
 	    break;
@@ -3334,6 +3343,7 @@ SS7TCAPError SS7TCAPTransactionITU::update(SS7TCAP::TCAPUserTransActions type, N
 	    break;
     }
 
+    populateSCCPAddress(m_localSCCPAddr,m_remoteSCCPAddr,params,updateByUser);
     m_basicEnd = params.getBoolValue(s_tcapBasicTerm,true);
 
     if (m_timeout.started()) {
@@ -4162,7 +4172,7 @@ SS7TCAPError SS7TCAPTransactionITU::decodeComponents(NamedList& params, DataBloc
 		params.setParam(compParam + "." + s_tcapOpCodeType,"global");
 		params.setParam(compParam + "." + s_tcapOpCode,obj.toString());
 	    }
-	    else {
+	    else if (compType == Invoke) {
 		error.setError(SS7TCAPError::General_BadlyStructuredCompPortion);
 		break;
 	    }
@@ -4176,7 +4186,7 @@ SS7TCAPError SS7TCAPTransactionITU::decodeComponents(NamedList& params, DataBloc
 		int opCode = 0;
 		len = ASNLib::decodeINT32(data,&opCode,false);
 		params.setParam(compParam + "." + s_tcapErrCodeType,"local");
-		params.setParam(compParam + "." + s_tcapErrCode,String(SS7TCAPError::errorFromCode(tcap()->tcapType(),opCode)));
+		params.setParam(compParam + "." + s_tcapErrCode,String(opCode));
 	    }
 	    else if (tag == SS7TCAPITU::GlobalTag) {
 		data.cut(-1);
@@ -4276,8 +4286,7 @@ void SS7TCAPTransactionITU::encodeComponents(NamedList& params, DataBlock& data)
 		    if (*value == "local") {
 			tag = SS7TCAPITU::LocalTag;
 			int errCode = params.getIntValue(compParam + "." + s_tcapErrCode,0);
-			SS7TCAPError err(tcap()->tcapType(),(SS7TCAPError::ErrorType)errCode);
-			db = ASNLib::encodeInteger(err.errorCode(),false);
+			db = ASNLib::encodeInteger(errCode,false);
 			db.insert(ASNLib::buildLength(db));
 		    }
 		    else if (*value == "global") {

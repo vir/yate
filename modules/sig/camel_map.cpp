@@ -114,7 +114,6 @@ public:
     void appendID(const char* tcapID, const char* appID);
     const String& findTcapID(const char* appID);
     const String& findAppID(const char* tcapID);
-    void removeAppID(const char* appID);
 };
 
 class XmlToTcap : public GenObject, public Mutex
@@ -164,6 +163,7 @@ public:
     enum XmlType {
 	None,
 	Element,
+	NewElement,
 	Attribute,
 	Value,
 	End,
@@ -204,7 +204,7 @@ public:
     void setListener(XMLConnListener* list);
     void removeApp(TcapXApplication* app);
     SS7TCAPError applicationRequest(TcapXApplication* app, NamedList& params, int reqType);
-    bool sendToApp(NamedList& params, TcapXApplication* app = 0);
+    bool sendToApp(NamedList& params, TcapXApplication* app = 0, bool saveID = true);
     TcapXApplication* findApplication(NamedList& params);
     void reorderApps(TcapXApplication* app);
     inline UserType type()
@@ -338,6 +338,8 @@ public:
     virtual void initialize();
     // uninstall relays and message handlers
     bool unload();
+    inline bool showMissing()
+	{ return m_showMissing; }
 protected:
     // inherited methods
     virtual bool received(Message& msg, int id);
@@ -350,6 +352,7 @@ private:
     bool m_init;
     Mutex m_usersMtx;
     ObjList m_users;
+    bool m_showMissing;
 };
 
 INIT_PLUGIN(TcapXModule);
@@ -359,6 +362,16 @@ UNLOAD_PLUGIN(unloadNow)
     if (unloadNow && !__plugin.unload())
 	return false;
     return true;
+}
+
+void printMissing(const char* missing, const char* parent, bool atEncoding = true)
+{
+    if (__plugin.showMissing())
+	Debug(&__plugin,DebugMild,
+	    (atEncoding ?
+		"Missing mandatory child '%s' in XML parent '%s'" :
+		"Missing mandatory parameter '%s' in payload for '%s'"),
+	    missing,parent);
 }
 
 const String s_namespace = "http://yate.null.ro/xml/tcap/v1";
@@ -464,6 +477,7 @@ static AsnTag s_hexTag(AsnTag::Universal, AsnTag::Primitive, 4);
 static AsnTag s_numStrTag(AsnTag::Universal, AsnTag::Primitive, 18);
 static AsnTag s_noTag(AsnTag::Universal, AsnTag::Primitive, 0);
 static AsnTag s_enumTag(AsnTag::Universal, AsnTag::Primitive, 10);
+static AsnTag s_boolTag(AsnTag::Universal, AsnTag::Primitive, 1);
 
 static const Parameter* findParam(const Parameter* param, const String& tag)
 {
@@ -559,10 +573,8 @@ static bool encodeParam(const Parameter* param, DataBlock& data, XmlElement* ele
     else {
 	XmlElement* child = (elem->getTag() == s_component ? elem->findFirstChild(&param->name) : elem);
 	if (!child) {
-	    if (!param->isOptional) {
-		err = TcapXApplication::DataMissing;
+	    if (!param->isOptional)
 		return false;
-	    }
 	    return true;
 	}
 	ok = type->encode(param,type,data,child,err);
@@ -600,7 +612,7 @@ static bool decodeRaw(XmlElement* elem, DataBlock& data, bool singleParam = fals
 	    switch (fullTag) {
 		case ASNLib::BOOLEAN: {
 			bool val;
-			if (ASNLib::decodeBoolean(data,&val,true) < 0)
+			if (ASNLib::decodeBoolean(data,&val,false) < 0)
 			    return false;
 			value = String::boolText(val);
 			enc = "bool";
@@ -608,7 +620,7 @@ static bool decodeRaw(XmlElement* elem, DataBlock& data, bool singleParam = fals
 		    break;
 		case ASNLib::INTEGER: {
 			u_int64_t val;
-			if (ASNLib::decodeInteger(data,val,sizeof(val),true) < 0)
+			if (ASNLib::decodeInteger(data,val,sizeof(val),false) < 0)
 			    return false;
 			    // to do fix conversion from u_int64_t
 			value = String((int)val);
@@ -617,21 +629,21 @@ static bool decodeRaw(XmlElement* elem, DataBlock& data, bool singleParam = fals
 		    break;
 		case ASNLib::OBJECT_ID: {
 			ASNObjId val;
-			if (ASNLib::decodeOID(data,&val,true) < 0)
+			if (ASNLib::decodeOID(data,&val,false) < 0)
 			    return false;
 			value = val.toString();
 			enc = "oid";
 		    }
 		    break;
 		case ASNLib::UTF8_STR: {
-			if (ASNLib::decodeUtf8(data,&enc,true) < 0)
+			if (ASNLib::decodeUtf8(data,&enc,false) < 0)
 			    return false;
 			value = enc;
 			enc = "str";
 		    }
 		    break;
 		case ASNLib::NULL_ID:
-		    if (ASNLib::decodeNull(data,true) < 0)
+		    if (ASNLib::decodeNull(data,false) < 0)
 			return false;
 		    enc = "null";
 		    break;
@@ -640,7 +652,7 @@ static bool decodeRaw(XmlElement* elem, DataBlock& data, bool singleParam = fals
 		case ASNLib::IA5_STR:
 		case ASNLib::VISIBLE_STR: {
 			int type;
-			if (ASNLib::decodeString(data,&enc,&type,true) < 0)
+			if (ASNLib::decodeString(data,&enc,&type,false) < 0)
 			    return false;
 			value = enc;
 			enc = "str";
@@ -843,7 +855,7 @@ static bool decodeHex(const Parameter* param, MapCamelType* type, AsnTag& tag, D
     XmlElement* child = new XmlElement(param->name);
     parent->addChild(child);
     if (addEnc)
-	child->setAttribute(s_encAttr,"oid");
+	child->setAttribute(s_encAttr,"hex");
 
     int len = ASNLib::decodeLength(data);
     String octets;
@@ -988,6 +1000,8 @@ static bool decodeSeq(const Parameter* param, MapCamelType* type, AsnTag& tag, D
 	    AsnTag::decode(childTag,data);
 	    if (!decodeParam(params,childTag,data,child,addEnc,err)) {
 		if (!params->isOptional) {
+		    if (err != TcapXApplication::DataMissing)
+			printMissing(params->name.c_str(),param->name.c_str(),false);
 		    err = TcapXApplication::DataMissing;
 		    return false;
 		} 
@@ -1015,6 +1029,7 @@ static bool encodeSeq(const Parameter* param, MapCamelType* type, DataBlock& dat
 	    XmlElement* child = elem->findFirstChild(&name);
 	    if (!child) {
 		if (!params->isOptional) {
+		    printMissing(params->name.c_str(),param->name.c_str());
 		    err = TcapXApplication::DataMissing;
 		    return false;
 		} 
@@ -1065,6 +1080,8 @@ static bool decodeSeqOf(const Parameter* param, MapCamelType* type, AsnTag& tag,
 	    AsnTag::decode(childTag,data);
 	    if (!decodeParam(params,childTag,data,child,addEnc,err)) {
 		if (!param->isOptional) {
+		    if (err != TcapXApplication::DataMissing)
+			printMissing(params->name.c_str(),param->name.c_str(),false);
 		    err = TcapXApplication::DataMissing;
 		    return false;
 		} 
@@ -1086,21 +1103,30 @@ static bool encodeSeqOf(const Parameter* param, MapCamelType* type, DataBlock& d
     if (param->content) {
 	const Parameter* params = static_cast<const Parameter*>(param->content);
 	XmlElement* child = elem->pop();
+	bool atLeastOne = false;
 	while (params && !TelEngine::null(params->name) && child) {
 	    if (!(child->getTag() == params->name)) {
-		if (!param->isOptional) {
-		    TelEngine::destruct(child);
-		    err = TcapXApplication::DataMissing;
-		    return false;
-		} 
-		else
-		    continue;
+		Debug(&__plugin,DebugAll,"Skipping over unknown parameter '%s' for parent ''%s'",child->tag(),elem->tag());
+		TelEngine::destruct(child);
+		child = elem->pop();
+		continue;
 	    }
 	    DataBlock db;
 	    if (!encodeParam(params,db,child,err)) {
 		TelEngine::destruct(child);
-		return false;
+		if (err != TcapXApplication::DataMissing) {
+		    printMissing(params->name.c_str(),param->name.c_str());
+		    err = TcapXApplication::DataMissing;
+		}
+		if (!param->isOptional && !(elem->findFirstChild()) && !atLeastOne)
+		    return false;
+		else {
+		    child = elem->pop();
+		    continue;
+		}
 	    }
+	    else
+		atLeastOne = true;
 	    data.append(db);
 	    TelEngine::destruct(child);
 	    child = elem->pop();
@@ -1140,10 +1166,15 @@ static bool decodeChoice(const Parameter* param, MapCamelType* type, AsnTag& tag
 		params++;
 		continue;
 	    }
-	    break;
+	    return true;
+	}
+	if (err != TcapXApplication::DataMissing) {
+	    if (__plugin.showMissing())
+		Debug(&__plugin,DebugNote,"No valid choice in payload for '%s'",child->tag());
+	    err = TcapXApplication::DataMissing;
 	}
     }
-    return true;
+    return false;
 }
 
 static bool encodeChoice(const Parameter* param, MapCamelType* type, DataBlock& data, XmlElement* elem, int& err)
@@ -1173,6 +1204,11 @@ static bool encodeChoice(const Parameter* param, MapCamelType* type, DataBlock& 
 	    params++;
 	}
 	TelEngine::destruct(child);
+    }
+    if (err != TcapXApplication::DataMissing) {
+	if (__plugin.showMissing())
+	    Debug(&__plugin,DebugNote,"No valid choice was given for parent '%s'",elem->tag());
+	err = TcapXApplication::DataMissing;
     }
     return false;
 }
@@ -2049,7 +2085,7 @@ static bool encodeUSI(const Parameter* param,  MapCamelType* type, DataBlock& da
 
 static const Capability s_mapCapab[] = {
     {"LocationManagement",       {"updateLocation", "cancelLocation", "purgeMS", "updateGprsLocation", "anyTimeInterrogation", ""}},
-    {"Authentication",           {"sendAuthenticationInfo", ""}},
+    {"Authentication",           {"sendAuthenticationInfo", "authenticationFailureReport", ""}},
     {"SubscriberData",           {"insertSubscriberData", "deleteSubscriberData", "restoreData", ""}},
     {"Routing",                  {"sendRoutingInfoForGprs", "statusReport", ""}},
     {"VLR-Routing",              {"provideRoamingNumber",  ""}},
@@ -2065,9 +2101,9 @@ static const Capability s_mapCapab[] = {
 
 static const AppCtxt s_mapAppCtxt[]= {
     // Network Loc Up context
-    {"networkLocUpContext-v3", "0.4.0.0.1.0.1.3", "updateLocation,forwardCheckSs,restoreData,insertSubscriberData,activateTraceMode"},
-    {"networkLocUpContext-v2", "0.4.0.0.1.0.1.2", "updateLocation,forwardCheckSs,restoreData,insertSubscriberData,activateTraceMode"},
-    {"networkLocUpContext-v1", "0.4.0.0.1.0.1.1", "updateLocation,forwardCheckSs,sendParameters,insertSubscriberData,activateTraceMode"},
+    {"networkLocUpContext-v3", "0.4.0.0.1.0.1.3", "updateLocation,forwardCheckSS-Indication,restoreData,insertSubscriberData,activateTraceMode"},
+    {"networkLocUpContext-v2", "0.4.0.0.1.0.1.2", "updateLocation,forwardCheckSS-Indication,restoreData,insertSubscriberData,activateTraceMode"},
+    {"networkLocUpContext-v1", "0.4.0.0.1.0.1.1", "updateLocation,forwardCheckSS-Indication,sendParameters,insertSubscriberData,activateTraceMode"},
 
     // Location Cancellation context
     {"locationCancelationContext-v3", "0.4.0.0.1.0.2.3", "cancelLocation"},
@@ -2087,8 +2123,12 @@ static const AppCtxt s_mapAppCtxt[]= {
     // Reporting Context
     {"reportingContext-v3", "0.4.0.0.1.0.7.3", "setReportingState,statusReport,remoteUserFree"},
 
+    // Reset context
+    {"resetContext-v2", "0.4.0.0.1.0.10.2", "reset"},
+    {"resetContext-v1", "0.4.0.0.1.0.10.1", "reset"},
+
     // Info retrieval context
-    {"infoRetrievalPackage-v3", "0.4.0.0.1.0.14.3", "sendAuthenticationInfo"},
+    {"infoRetrievalContext-v3", "0.4.0.0.1.0.14.3", "sendAuthenticationInfo"},
     {"infoRetrievalContext-v2", "0.4.0.0.1.0.14.2", "sendAuthenticationInfo"}, 
     {"infoRetrievalContext-v1", "0.4.0.0.1.0.14.1", "sendParameters"},
 
@@ -2100,7 +2140,7 @@ static const AppCtxt s_mapAppCtxt[]= {
     // Tracing context
     {"tracingContext-v3 ", "0.4.0.0.1.0.17.3", "activateTraceMode,deactivateTraceMode"},
     {"tracingContext-v2 ", "0.4.0.0.1.0.17.2", "activateTraceMode,deactivateTraceMode"},
-    {"tracingContext-v1 ", "0.4.0.0.1.0.17.1", "activateTraceMode,deactivateTraceMode"},
+    {"tracingContext-v1",  "0.4.0.0.1.0.17.1", "activateTraceMode,deactivateTraceMode"},
 
     // Network functional SS context
     {"networkFunctionalSsContext-v2", "0.4.0.0.1.0.18.2", "registerSS,eraseSS,activateSS,deactivateSS,"
@@ -2118,6 +2158,14 @@ static const AppCtxt s_mapAppCtxt[]= {
     {"shortMsgAlertContext-v2", "0.4.0.0.1.0.23.2", "alertServiceCentre"},
     {"shortMsgAlertContext-v1", "0.4.0.0.1.0.23.1", "alertServiceCentre"},
 
+    // readyForSM context
+    {"mwdMngtContext-v3", "0.4.0.0.1.0.24.3", "readyForSM"},
+    {"mwdMngtContext-v2", "0.4.0.0.1.0.24.2", "readyForSM"},
+    {"mwdMngtContext-v1", "0.4.0.0.1.0.24.1", "readyForSM"},
+
+    // sendIMSI Context
+    {"imsiRetrievalContext-v2", "0.4.0.0.1.0.26.2", "sendIMSI"},
+
     // MS Purging Context
     {"msPurgingContext-v3", "0.4.0.0.1.0.27.3", "purgeMS"},
     {"msPurgingContext-v2", "0.4.0.0.1.0.27.2", "purgeMS"},
@@ -2130,6 +2178,12 @@ static const AppCtxt s_mapAppCtxt[]= {
 
     // GPRS Location Info Retrieval Context
     {"gprsLocationInfoRetrievalContext-v3" , "0.4.0.0.1.0.33.3", "sendRoutingInfoForGprs"},
+
+    // Failure Report Context 
+    {"failureReportContext-v3" , "0.4.0.0.1.0.34.3", "failureReport"},
+
+    // Authentication Failure Report Context
+    {"authenticationFailureReportContext-v3" , "0.4.0.0.1.0.39.3", "authenticationFailureReport"},
 
     {"", "", ""},
 };
@@ -3112,6 +3166,29 @@ static const Parameter s_InterrogateSSRes[] = {
     {"",                       s_noTag,            false,    TcapXApplication::None,          0},
 };
 
+static const TokenDict s_failureCauseEnum[] = {
+// TS 129 002 v9.3.0 page 353
+    {"wrongUserResponse",     0x00},
+    {"wrongNetworkSignature", 0x01},
+    {0,                       0x00},
+};
+
+static const TokenDict s_accessTypeEnum[] = {
+// TS 129 002 v9.3.0 page 353
+    {"call",                  0x00},
+    {"emergencyCall",         0x01},
+    {"locationUpdating",      0x02},
+    {"supplementaryService",  0x03},
+    {"shortMessage",          0x04},
+    {"gprsAttach",            0x05},
+    {"routingAreaUpdating",   0x06},
+    {"serviceRequest",        0x07},
+    {"pdpContextActivation",  0x08},
+    {"pdpContextDeactivation",0x09},
+    {"gprsDetach",            0x0a},
+    {0,                       0x00},
+};
+
 static const TokenDict s_guidanceInfo[] = {
     {"enterPW",           0 },
     {"enterNewPW",        1 },
@@ -3449,6 +3526,23 @@ static const Parameter s_interrogateSSRes[] = {
     {"",                         s_noTag,    false,   TcapXApplication::None,      0},
 };
 
+static const Parameter s_authFailureArgs[] = {
+    {"imsi",               s_hexTag,          false,   TcapXApplication::TBCD,            0},
+    {"failureCause",       s_enumTag,         false,   TcapXApplication::Enumerated,      s_failureCauseEnum},
+    {"extensionContainer", s_sequenceTag,     true,    TcapXApplication::HexString,       0},
+    {"re-attempt",         s_boolTag,         true,    TcapXApplication::Bool,            0},
+    {"accessType",         s_enumTag,         true,    TcapXApplication::Enumerated,      s_accessTypeEnum},
+    {"rand",               s_hexTag,          true,    TcapXApplication::HexString,       0},
+    {"vlr-Number",         s_ctxtPrim_0_Tag,  true,    TcapXApplication::AddressString,   0},
+    {"sgsn-Number",        s_ctxtPrim_1_Tag,  true,    TcapXApplication::AddressString,   0},
+    {"",                   s_noTag,           false,   TcapXApplication::None,            0},
+};
+
+static const Parameter s_authFailureRes[] = {
+   {"extensionContainer", s_sequenceTag,     true,    TcapXApplication::HexString,       0},
+   {"",                         s_noTag,     false,   TcapXApplication::None,            0},
+};
+
 static const Parameter s_registerPasswordArgs[] = {
     {"ss-Code",                  s_hexTag, false, TcapXApplication::Enumerated,  s_SSCode},
     {"",                         s_noTag,  false, TcapXApplication::None,        0},
@@ -3576,9 +3670,9 @@ static const TokenDict s_requestingNodeType[] = {
     {0, 0},
 };
 
-static const Parameter s_sendAuthenticationInfoArgs[] = {
-    {"imsi",                                 s_hexTag,          false, TcapXApplication::TBCD,       0},
-    {"numberOfRequestedVectors",             s_intTag,          true,  TcapXApplication::Integer,    0},
+static const Parameter s_sendAuthInfoSeq[] = {
+    {"imsi",                                 s_ctxtPrim_0_Tag,  false, TcapXApplication::TBCD,       0},
+    {"numberOfRequestedVectors",             s_intTag,          false, TcapXApplication::Integer,    0},
     {"segmentationProhibited",               s_nullTag,         true,  TcapXApplication::Null,       0},
     {"immediateResponsePreferred",           s_ctxtPrim_1_Tag,  true,  TcapXApplication::Null,       0},
     {"re-synchronisationInfo",               s_sequenceTag,     true,  TcapXApplication::Sequence,   s_resynchronisationInfo},
@@ -3590,9 +3684,15 @@ static const Parameter s_sendAuthenticationInfoArgs[] = {
     {"",                                     s_noTag,           false, TcapXApplication::None,       0},
 };
 
+static const Parameter s_sendAuthenticationInfoArgs[] = {
+    {"imsi",                                 s_hexTag,          false, TcapXApplication::TBCD,       0},
+    {"sendAuthenticationInfoArgs",           s_sequenceTag,     false, TcapXApplication::Sequence,   s_sendAuthInfoSeq},
+    {"",                                     s_noTag,           false, TcapXApplication::None,       0},
+};
+
 static const Parameter s_sendAuthenticationInfoRes[] = {
-    {"sendAuthenticationInfoRes-v2", s_sequenceTag,     true,  TcapXApplication::SequenceOf, s_authenticationSet},
-    {"sendAuthenticationInfoRes-v3", s_ctxtCstr_3_Tag,  true,  TcapXApplication::Sequence,   s_authenticationRes},
+    {"sendAuthenticationInfoRes-v2", s_sequenceTag,     false, TcapXApplication::SequenceOf, s_authenticationSet},
+    {"sendAuthenticationInfoRes-v3", s_ctxtCstr_3_Tag,  false, TcapXApplication::Sequence,   s_authenticationRes},
     {"",                             s_noTag,           false, TcapXApplication::None,       0},
 };
 
@@ -3745,6 +3845,10 @@ static const Operation s_mapOps[] = {
     {"interrogateSS",                 true,  14,
 	s_sequenceTag, s_ssCodeArgs,
 	s_noTag,       s_InterrogateSSRes
+    },
+    {"authenticationFailureReport",   true,  15,
+	s_sequenceTag, s_authFailureArgs,
+	s_sequenceTag, s_authFailureRes,
     },
     {"registerPassword",              true,  17,
 	s_noTag, s_registerPasswordArgs,
@@ -4278,7 +4382,7 @@ static const Parameter s_AOCBeforeAnswerSeq[] = {
 
 static const Parameter s_sCIBillingChargingCharacteristics[] = {
     {"aOCBeforeAnswer", s_ctxtCstr_0_Tag, false, TcapXApplication::Sequence, s_AOCBeforeAnswerSeq},
-    {"aOCAfterAnswer",  s_ctxtCstr_1_Tag, true,  TcapXApplication::Sequence, s_AOCSubsequentSeq},
+    {"aOCAfterAnswer",  s_ctxtCstr_1_Tag, false, TcapXApplication::Sequence, s_AOCSubsequentSeq},
     {"",                s_noTag,          false, TcapXApplication::None,     0},
 };
 
@@ -4574,7 +4678,7 @@ const TokenDict s_callBarringCause[] = {
 const Parameter s_extensibleCallBarredParam[] = {
     {"callBarringCause",               s_enumTag,       true,    TcapXApplication::Enumerated,    s_callBarringCause},
     {"extensionContainer",             s_sequenceTag,   true,    TcapXApplication::HexString,     0},
-    {"unauthorisedMessageOriginator",  s_nullTag,       true,    TcapXApplication::Null,          0},
+    {"unauthorisedMessageOriginator",  s_ctxtPrim_1_Tag,true,    TcapXApplication::Null,          0},
     {"",                               s_noTag,         false,   TcapXApplication::None,          0},
 };
 
@@ -4598,8 +4702,8 @@ static const Parameter s_roamingNotAllowedErr[] = {
 };
 
 static const Parameter s_callBarredErr[] = {
-    {"callBarringCause",               s_enumTag,       true,    TcapXApplication::Enumerated,    s_callBarringCause},
-    {"extensibleCallBarredParam",      s_sequenceTag,   true,    TcapXApplication::Sequence,      s_extensibleCallBarredParam},
+    {"callBarringCause",               s_enumTag,       false,   TcapXApplication::Enumerated,    s_callBarringCause},
+    {"extensibleCallBarredParam",      s_sequenceTag,   false,   TcapXApplication::Sequence,      s_extensibleCallBarredParam},
     {"",                               s_noTag,         false,   TcapXApplication::None,          0},
 };
 
@@ -4953,7 +5057,7 @@ static const Operation* findError(TcapXUser::UserType type, int opCode, bool opL
 static const Operation* findError(TcapXUser::UserType type, const String& op)
 {
     DDebug(&__plugin,DebugAll,"findError(opCode=%s)",op.c_str());
-    const Operation* ops = (type == TcapXUser::MAP ? s_mapOps : s_camelOps);
+    const Operation* ops = (type == TcapXUser::MAP ? s_mapErrors : s_camelErrors);
     while (!TelEngine::null(ops->name)) {
 	if (op == ops->name)
 	    return ops;
@@ -5070,12 +5174,6 @@ const String& IDMap::findAppID(const char* tcapID)
 	    return ns->name();
     }
     return String::empty();
-}
-
-void IDMap::removeAppID(const char* appID)
-{
-    DDebug(&__plugin,DebugAll,"IDMap::removeAppID(appID=%s)",appID);
-    remove(appID);
 }
 
 /**
@@ -5334,7 +5432,7 @@ const XMLMap TcapToXml::s_xmlMap[] = {
     {Regexp("^ReturnCause$"),                                  "transport.sccp",                        "ReturnCause",               TcapToXml::Element},
     {Regexp("^CallingPartyAddress\\.gt\\.encoding$"),          "transport.sccp.CallingPartyAddress.gt", "encoding",                  TcapToXml::Attribute},
     {Regexp("^CallingPartyAddress\\.gt\\.np$"),                "transport.sccp.CallingPartyAddress.gt", "plan",                      TcapToXml::Attribute},
-    {Regexp("^CallingPartyAddress\\.gt\\.nai$"),               "transport.sccp.CallingPartyAddress.gt", "nature",                    TcapToXml::Attribute},
+    {Regexp("^CallingPartyAddress\\.gt\\.nature$"),            "transport.sccp.CallingPartyAddress.gt", "nature",                    TcapToXml::Attribute},
     {Regexp("^CallingPartyAddress\\.gt\\.tt$"),                "transport.sccp.CallingPartyAddress.gt", "translation",               TcapToXml::Attribute},
     {Regexp("^CallingPartyAddress\\.gt$"),                     "transport.sccp.CallingPartyAddress",    "gt",                        TcapToXml::Element},
     {Regexp("^CallingPartyAddress\\.ssn$"),                    "transport.sccp.CallingPartyAddress",    "ssn",                       TcapToXml::Element},
@@ -5343,7 +5441,7 @@ const XMLMap TcapToXml::s_xmlMap[] = {
     {Regexp("^CallingPartyAddress\\..\\+$"),                   "transport.sccp.CallingPartyAddress",    "",                          TcapToXml::Element},
     {Regexp("^CalledPartyAddress\\.gt\\.encoding$"),           "transport.sccp.CalledPartyAddress.gt",  "encoding",                  TcapToXml::Attribute},
     {Regexp("^CalledPartyAddress\\.gt\\.np$"),                 "transport.sccp.CalledPartyAddress.gt",  "plan",                      TcapToXml::Attribute},
-    {Regexp("^CalledPartyAddress\\.gt\\.nai$"),                "transport.sccp.CalledPartyAddress.gt",  "nature",                    TcapToXml::Attribute},
+    {Regexp("^CalledPartyAddress\\.gt\\.nature$"),             "transport.sccp.CalledPartyAddress.gt",  "nature",                    TcapToXml::Attribute},
     {Regexp("^CalledPartyAddress\\.gt\\.tt$"),                 "transport.sccp.CalledPartyAddress.gt",  "translation",               TcapToXml::Attribute},
     {Regexp("^CalledPartyAddress\\.gt$"),                      "transport.sccp.CalledPartyAddress",     "gt",                        TcapToXml::Element},
     {Regexp("^CalledPartyAddress\\.ssn$"),                     "transport.sccp.CalledPartyAddress",     "ssn",                       TcapToXml::Element},
@@ -5374,7 +5472,7 @@ const XMLMap TcapToXml::s_xmlMap[] = {
     {Regexp("^tcap\\.component\\..\\+\\.errorCode$"),          "component",                             "",                          TcapToXml::Attribute},
     {Regexp("^tcap\\.component\\..\\+\\.errorCodeType$"),      "",                                      "",                          TcapToXml::None},
     {Regexp("^tcap\\.component\\..\\+\\.problemCode$"),        "component",                             "",                          TcapToXml::Attribute},
-    {Regexp("^tcap\\.component\\..\\+\\..\\+"),                "component",                             "",                          TcapToXml::Element},
+    {Regexp("^tcap\\.component\\..\\+\\..\\+"),                "component",                             "",                          TcapToXml::NewElement},
     {Regexp(""),                                               "",                                      "",                          TcapToXml::End},
 };
 
@@ -5489,6 +5587,13 @@ void TcapToXml::addToXml(XmlElement* root, const XMLMap* map, NamedString* val)
 	    tag = map->tag;
 	switch (map->type) {
 	    case Element:
+		child = parent->findFirstChild(&tag);
+		if (child) {
+		    child->addText(*val);
+		    break;
+		}
+		// fall through and create new child if not found
+	    case NewElement:
 		child = new XmlElement(tag);
 		child->addText(*val);
 		parent->addChild(child);
@@ -5640,6 +5745,7 @@ bool TcapToXml::decodeOperation(Operation* op, XmlElement* elem, DataBlock& data
 {
     if (!(op && elem && m_app))
 	return false;
+
     const Parameter* param = (searchArgs ? op->args : op->res);
     AsnTag opTag = (searchArgs ? op->argTag : op->retTag);
     int err = TcapXApplication::NoError;
@@ -5647,8 +5753,15 @@ bool TcapToXml::decodeOperation(Operation* op, XmlElement* elem, DataBlock& data
 	AsnTag tag;
 	AsnTag::decode(tag,data);
 	if (!decodeParam(param,tag,data,elem,m_app->addEncoding(),err)) {
-	    if (!param->isOptional)
-		err = TcapXApplication::DataMissing;
+	    if (!param->isOptional && (err != TcapXApplication::DataMissing)) {
+		if (opTag == s_noTag) {
+		    const Parameter* tmp = param;
+		    if ((++tmp) && TelEngine::null(tmp->name))
+			printMissing(param->name.c_str(),elem->tag(),false);
+		}
+		else
+		    printMissing(param->name.c_str(),elem->tag(),false);
+	    }
 	}
 	else if (opTag == s_noTag) // should be only one child
 		break;
@@ -5668,12 +5781,12 @@ const TCAPMap XmlToTcap::s_tcapMap[] = {
     {"transport.mtp.",                                    true,    ""},
     {"transport.sccp.CallingPartyAddress.gt.encoding",    false,  "CallingPartyAddress.gt.encoding"},
     {"transport.sccp.CallingPartyAddress.gt.plan",        false,  "CallingPartyAddress.gt.np"},
-    {"transport.sccp.CallingPartyAddress.gt.nature",      false,  "CallingPartyAddress.gt.nai"},
+    {"transport.sccp.CallingPartyAddress.gt.nature",      false,  "CallingPartyAddress.gt.nature"},
     {"transport.sccp.CallingPartyAddress.gt.translation", false,  "CallingPartyAddress.gt.tt"},
     {"transport.sccp.CallingPartyAddress.",               true,   "CallingPartyAddress"},
     {"transport.sccp.CalledPartyAddress.gt.encoding",     false,  "CalledPartyAddress.gt.encoding"},
     {"transport.sccp.CalledPartyAddress.gt.plan",         false,  "CalledPartyAddress.gt.np"},
-    {"transport.sccp.CalledPartyAddress.gt.nature",       false,  "CalledPartyAddress.gt.nai"},
+    {"transport.sccp.CalledPartyAddress.gt.nature",       false,  "CalledPartyAddress.gt.nature"},
     {"transport.sccp.CalledPartyAddress.gt.translation",  false,  "CalledPartyAddress.gt.tt"},
     {"transport.sccp.CalledPartyAddress.",                true,   "CalledPartyAddress"},
     {"transport.tcap.request-type",                       false,  "tcap.request.type"},
@@ -5797,9 +5910,17 @@ void XmlToTcap::encodeOperation(Operation* op, XmlElement* elem, DataBlock& payl
     AsnTag opTag = (searchArgs ? op->argTag : op->retTag);
     while (param && !TelEngine::null(param->name)) {
 	DataBlock db;
+	err = TcapXApplication::NoError;
 	if (!encodeParam(param,db,elem,err)) {
-	    if (!param->isOptional)
-		err = TcapXApplication::DataMissing;
+	    if (!param->isOptional && (err != TcapXApplication::DataMissing)) {
+		if (opTag == s_noTag) {
+		    const Parameter* tmp = param;
+		    if ((++tmp) && TelEngine::null(tmp->name))
+			printMissing(param->name.c_str(),elem->tag());
+		}
+		else
+		    printMissing(param->name.c_str(),elem->tag());
+	    }
 	}
 	else {
 	    payload.append(db);
@@ -5831,7 +5952,7 @@ bool XmlToTcap::encodeComponent(DataBlock& payload, XmlElement* elem, bool searc
 	encodeRaw(0,payload,elem,err);
 
     if (elem->getTag() == s_component) {
-	AsnTag tag = ( op ? (searchArgs ? op->argTag : op->retTag) : s_sequenceTag);
+	AsnTag tag = ( op ? (searchArgs ? op->argTag : op->retTag) : s_noTag);
 	if (tag != s_noTag) {
 	    payload.insert(ASNLib::buildLength(payload));
 	    payload.insert(tag.coding());
@@ -6212,7 +6333,7 @@ bool TcapXApplication::handleIndication(NamedList& tcap)
 			reportError("Unknown request ID");
 			return false;
 		    }
-		    m_pending.remove(appID);
+		    m_pending.remove(*rtid);
 	    }
 	    unlock();
 	    break;
@@ -6225,7 +6346,7 @@ bool TcapXApplication::handleIndication(NamedList& tcap)
 	    lock();
 	    appID = m_ids.findAppID(ltid);
 	    if (TelEngine::null(appID)) {
-		    appID = m_pending.findTcapID(ltid);
+		    appID = m_pending.findAppID(ltid);
 		    if (TelEngine::null(appID)) {
 			unlock();
 			reportError("Unknown request ID");
@@ -6247,7 +6368,7 @@ bool TcapXApplication::handleIndication(NamedList& tcap)
     if (saveID)
 	m_pending.appendID(ltid,*rtid);
     if (removeID) {
-	m_ids.removeAppID(appID);
+	m_ids.remove(appID);
 	if (m_state == ShutDown && !trCount())
 	    reportState(Inactive);
     }
@@ -6302,7 +6423,7 @@ bool TcapXApplication::handleTcap(NamedList& tcap)
 			return false;
 		    }
 		    lock();
-		    m_pending.removeAppID(tcapID);
+		    m_pending.remove(rtid);
 		    unlock();
 		    saveID = true;
 		}
@@ -6329,7 +6450,7 @@ bool TcapXApplication::handleTcap(NamedList& tcap)
 			return false;
 		    }
 		    lock();
-		    m_pending.removeAppID(tcapID);
+		    m_pending.remove(rtid);
 		    unlock();
 		}
 		else {
@@ -6364,7 +6485,7 @@ bool TcapXApplication::handleTcap(NamedList& tcap)
 
     Lock l(this);
     if (removeID) {
-	m_ids.removeAppID(ltid);
+	m_ids.remove(ltid);
     	if (m_state == ShutDown && !trCount())
 	    reportState(Inactive);
     }
@@ -6504,6 +6625,15 @@ TcapXUser::~TcapXUser()
 
     while (m_listener)
 	Thread::idle();
+
+    while (true) {
+	Thread::idle();
+	m_appsMtx.lock();
+	ObjList* o = m_apps.skipNull();
+	m_appsMtx.unlock();
+	if (!o)
+	    break;
+    }
 }
 
 bool TcapXUser::initialize(NamedList& sect)
@@ -6561,6 +6691,8 @@ bool TcapXUser::tcapIndication(NamedList& params)
 	case SS7TCAP::TC_Continue:
 	case SS7TCAP::TC_ConversationWithPerm:
 	case SS7TCAP::TC_ConversationWithoutPerm:
+	case SS7TCAP::TC_Notice:
+	case SS7TCAP::TC_Unknown:
 	    if (TelEngine::null(ltid) || TelEngine::null(tcapID))
 		return false;
 	    searchApp = true;
@@ -6569,8 +6701,6 @@ bool TcapXUser::tcapIndication(NamedList& params)
 	case SS7TCAP::TC_Response:
 	case SS7TCAP::TC_U_Abort:
 	case SS7TCAP::TC_P_Abort:
-	case SS7TCAP::TC_Notice:
-	case SS7TCAP::TC_Unknown:
 	    if (TelEngine::null(ltid) || TelEngine::null(tcapID))
 		return false;
 	    searchApp = true;
@@ -6594,10 +6724,10 @@ bool TcapXUser::tcapIndication(NamedList& params)
 	m_trIDs.remove(tcapID);
     }
     la.drop();
-    return sendToApp(params,app);
+    return sendToApp(params,app,false);
 }
 
-bool TcapXUser::sendToApp(NamedList& params, TcapXApplication* app)
+bool TcapXUser::sendToApp(NamedList& params, TcapXApplication* app, bool saveID)
 {
     DDebug(this,DebugAll,"TcapXUser::sendToApp(params=%p,app=%s[%p]) [%p]",&params,(app ? app->toString().c_str() : ""),app,this);
 
@@ -6606,7 +6736,8 @@ bool TcapXUser::sendToApp(NamedList& params, TcapXApplication* app)
 	app = findApplication(params);
     if (!app)
 	return false;
-    m_trIDs.append(new NamedString(params.getValue(s_tcapLocalTID),app->toString()));
+    if (saveID)
+	m_trIDs.append(new NamedString(params.getValue(s_tcapLocalTID),app->toString()));
     return (app && app->handleIndication(params));
 }
 
@@ -6813,7 +6944,9 @@ void TcapXModule::initialize()
     Module::initialize();
 
     Configuration cfg(Engine::configFile(name()));
+    installRelay(Halt);
     cfg.load();
+    m_showMissing = cfg.getBoolValue(YSTRING("general"),YSTRING("show-missing"),true);
     initUsers(cfg);
 }
 
@@ -6822,6 +6955,7 @@ bool TcapXModule::unload()
     if (!lock(500000))
 	return false;
     uninstallRelays();
+    m_users.clear();
     unlock();
     return true;
 }
@@ -6857,6 +6991,8 @@ void TcapXModule::initUsers(Configuration& cfg)
 
 bool TcapXModule::received(Message& msg, int id)
 {
+    if (id == Halt)
+	unload();
     return Module::received(msg,id);
 }
 

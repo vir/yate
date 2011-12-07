@@ -53,6 +53,7 @@ protected:
     String* getNextDest();
     bool forkSlave(String* dest);
     bool callContinue();
+    RefPointer<CallEndpoint> m_discPeer;
     ObjList m_slaves;
     String m_ringing;
     Regexp m_failures;
@@ -163,6 +164,19 @@ ForkMaster::~ForkMaster()
     s_calls.remove(this,false);
     CallEndpoint::commonMutex().unlock();
     clear(false);
+    if (m_discPeer && !m_answered) {
+	RefPointer<CallEndpoint> call = m_discPeer->getPeer();
+	if (call) {
+	    Message* r = new Message("chan.replaced",0,true);
+	    r->addParam("id",id());
+	    r->addParam("newid",call->id());
+	    r->addParam("peerid",m_discPeer->id());
+	    r->userData(this);
+	    Engine::enqueue(r);
+	    call = 0;
+	}
+    }
+    m_discPeer = 0;
     if (m_chanMsgs) {
 	Message* msg = new Message("chan.hangup");
 	msg->addParam("id",id());
@@ -174,7 +188,7 @@ ForkMaster::~ForkMaster()
 void ForkMaster::disconnected(bool final, const char* reason)
 {
     CallEndpoint::disconnected(final,reason);
-    if (m_chanMsgs && !(final || m_answered)) {
+    if (m_chanMsgs && !(final || m_answered || m_discPeer)) {
 	Message* msg = new Message("chan.disconnected");
 	msg->addParam("id",id());
 	if (m_exec)
@@ -214,6 +228,7 @@ bool ForkMaster::forkSlave(String* dest)
 	}
 	Debug(&__plugin,DebugCall,"Call '%s' directly to target '%s'",
 	    peer->id().c_str(),dest->c_str());
+	m_discPeer = peer;
 	msgCopy.userData(peer);
 	msgCopy.setParam("id",peer->id());
 	msgCopy.clearParam("cdrtrack");

@@ -5,7 +5,14 @@
 
 
 ; This file keeps the configuration for the module which translates MAP/CAMEL protocol data to XML and vice versa.
-; Each section configures a separate translator
+; Each one the sections defined below except 'general' configures a separate translator
+
+[general]
+;This section configures global settings of the module
+
+; show-missing: bool: Print debug messages when a mandatory MAP/CAMEL parameter is missing. This option is applicable on reload.
+;show-missing=true
+
 
 ;[tcap map]
 ; This section configures a TCAP User MAP/CAMEL protocol translator

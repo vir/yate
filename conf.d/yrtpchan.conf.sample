@@ -51,8 +51,11 @@
 [timeouts]
 ; This section controls the behaviour when RTP and RTCP data is missing
 
-; timeout: int: Receiver timeout in ms (500-60000), zero disables
+; timeout: int: RTP/RTCP receiver timeout in ms (500-60000), zero disables
 ;timeout=3000
+
+; udptl_timeout: int: UDPTL receiver timeout in ms (500-60000), zero disables
+;udptl_timeout=25000
 
 ; notifymsg: string: Name of the notification message sent on timeout
 ; Usually it should be chan.notify or call.drop, empty disables the message

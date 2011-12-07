@@ -577,6 +577,7 @@ public:
     // Return the status of this component
     virtual void status(String& retVal);
 protected:
+    SS7TCAP* tcapAttach();
     TCAPMsgHandler* m_handler;
     String m_tcapName;
     virtual void destroyed();
@@ -4112,25 +4113,36 @@ SigTCAPUser::~SigTCAPUser()
 bool SigTCAPUser::initialize(NamedList& params)
 {
     DDebug(&plugin,DebugAll,"SigTCAPUser::initialize() [%p]",this);
-    m_tcapName = params.getValue("tcap","");
+    m_tcapName = params.getValue("tcap");
     if (!m_handler) {
 	m_handler = new TCAPMsgHandler(this);
 	Engine::install(m_handler);
     }
+    if (!tcapAttach())
+	Debug(DebugMild,"Please move configuration of [%s] after [%s], cannot attach now",
+	    TCAPUser::toString().c_str(),m_tcapName.c_str());
     return true;
+}
+
+SS7TCAP* SigTCAPUser::tcapAttach()
+{
+    if (!tcap()) {
+	SignallingComponent* tc = plugin.engine()->find(m_tcapName,"SS7TCAP");
+	if (tc)
+	    attach(YOBJECT(SS7TCAP,tc));
+    }
+    return tcap();
 }
 
 bool SigTCAPUser::tcapRequest(NamedList& params)
 {
-    if (!tcap()) {
-	SignallingComponent* tcap = 0;
-	if (!(tcap = plugin.engine()->find(m_tcapName,"SS7TCAP",tcap))) {
-	//TODO createTCAP ?
-	}
-	else
-	    attach(YOBJECT(SS7TCAP,tcap));
-    }
-    if (tcap()) {
+    const String* name = params.getParam(YSTRING("tcap"));
+    if (m_tcapName && !TelEngine::null(name) && (*name != m_tcapName))
+	return false;
+    name = params.getParam(YSTRING("tcap_user"));
+    if (!TelEngine::null(name) && (*name != TCAPUser::toString()))
+	return false;
+    if (tcapAttach()) {
 	SS7TCAPError err = tcap()->userRequest(params);
 	return err.error() != SS7TCAPError::NoError;
     }
@@ -4140,6 +4152,8 @@ bool SigTCAPUser::tcapRequest(NamedList& params)
 bool SigTCAPUser::tcapIndication(NamedList& params)
 {
     Message msg("tcap.indication");
+    msg.addParam("tcap",m_tcapName,false);
+    msg.addParam("tcap_user",TCAPUser::toString(),false);
     msg.copyParams(params);
     return Engine::dispatch(&msg);
 }

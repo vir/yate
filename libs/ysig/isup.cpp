@@ -3012,7 +3012,6 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 		transmitMessage(new SS7MsgISUP(SS7MsgISUP::LPA,id()));
 	    break;
 	case SS7MsgISUP::ACM:
-	case SS7MsgISUP::EXM:
 	    m_state = Accepted;
 	    if (!connectCircuit() && isup() &&
 		(isup()->mediaRequired() >= SignallingCallControl::MediaAlways)) {
@@ -3036,6 +3035,8 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 		m_sgmMsg->params().setParam("earlymedia",String::boolText(m_inbandAvailable));
 		m_lastEvent = new SignallingEvent(SignallingEvent::Accept,m_sgmMsg,this);
 	    }
+	    // intentionally fall through
+	case SS7MsgISUP::EXM:
 	    // Start T9 timer
 	    if (isup()->m_t9Interval) {
 		m_anmTimer.interval(isup()->m_t9Interval);

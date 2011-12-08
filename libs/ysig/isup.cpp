@@ -2378,15 +2378,15 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 		m_iamMsg = new SS7MsgISUP(SS7MsgISUP::IAM,id());
 		copyParamIAM(m_iamMsg,true,event->message());
 		// Update overlap
-		setOverlapped(isCalledIncomplete(m_iamMsg->params()));
-		if (m_overlap) {
-		    // Check for maximum number of digits allowed
-		    String* called = m_iamMsg->params().getParam(YSTRING("CalledPartyNumber"));
-		    if (called && called->length() > isup()->m_maxCalledDigits) {
-			m_samDigits = called->substr(isup()->m_maxCalledDigits);
-			*called = called->substr(0,isup()->m_maxCalledDigits);
-		    }
+		String* called = m_iamMsg->params().getParam(YSTRING("CalledPartyNumber"));
+		if (called && (called->length() > isup()->m_maxCalledDigits)) {
+		    // Longer than maximum digits allowed - send remainder with SAM
+		    m_samDigits = called->substr(isup()->m_maxCalledDigits);
+		    *called = called->substr(0,isup()->m_maxCalledDigits);
+		    setOverlapped(true);
 		}
+		else
+		    setOverlapped(isCalledIncomplete(m_iamMsg->params()));
 		result = transmitIAM();
 	    }
 	    break;

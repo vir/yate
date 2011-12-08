@@ -1704,6 +1704,12 @@ static const MsgParams s_ansi_params[] = {
 	SS7MsgISUP::EndOfParameters
 	}
     },
+    { SS7MsgISUP::EXM, true,
+	{
+	SS7MsgISUP::EndOfParameters,
+	SS7MsgISUP::EndOfParameters
+	}
+    },
     { SS7MsgISUP::CVT, false,
 	{
 	SS7MsgISUP::EndOfParameters,
@@ -2216,6 +2222,7 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 		case SS7MsgISUP::CCR:
 		case SS7MsgISUP::COT:
 		case SS7MsgISUP::ACM:
+		case SS7MsgISUP::EXM:
 		case SS7MsgISUP::CPR:
 		case SS7MsgISUP::ANM:
 		case SS7MsgISUP::CON:
@@ -2697,6 +2704,7 @@ bool SS7ISUPCall::validMsgState(bool send, SS7MsgISUP::Type type, bool hasBkwCal
 		break;
 	    return true;
 	case SS7MsgISUP::ACM:    // Address complete
+	case SS7MsgISUP::EXM:    // Exit Message (ANSI)
 	    if (m_state != Setup || send == outgoing())
 		break;
 	    return true;
@@ -3004,6 +3012,7 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 		transmitMessage(new SS7MsgISUP(SS7MsgISUP::LPA,id()));
 	    break;
 	case SS7MsgISUP::ACM:
+	case SS7MsgISUP::EXM:
 	    m_state = Accepted;
 	    if (!connectCircuit() && isup() &&
 		(isup()->mediaRequired() >= SignallingCallControl::MediaAlways)) {
@@ -4413,6 +4422,7 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
 	case SS7MsgISUP::IAM:
 	case SS7MsgISUP::SAM:
 	case SS7MsgISUP::ACM:
+	case SS7MsgISUP::EXM:
 	case SS7MsgISUP::CPR:
 	case SS7MsgISUP::ANM:
 	case SS7MsgISUP::CON:

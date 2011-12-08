@@ -68,6 +68,20 @@ struct Capability {
     String ops[30];
 };
 
+class MyDomParser : public XmlDomParser
+{
+public:
+    MyDomParser(TcapXApplication* app, const char* name = "MyDomParser", bool fragment = false);
+    virtual ~MyDomParser();
+
+protected:
+    virtual void gotElement(const NamedList& element, bool empty);
+    virtual void endElement(const String& name);
+    void verifyRoot();
+
+private:
+    TcapXApplication* m_app;
+};
 
 class XMLConnection : public Thread
 {
@@ -84,7 +98,7 @@ private:
     Socket* m_socket;
     String m_address;
     TcapXApplication* m_app;
-    XmlDomParser* m_parser;
+    MyDomParser m_parser;
 };
 
 class XMLConnListener : public Thread
@@ -133,8 +147,7 @@ public:
     inline MsgType type()
 	{ return m_type; }
     bool validDeclaration();
-    bool valid();
-    void setXmlFragment(XmlFragment* frag);
+    bool valid(XmlDocument* doc);
     bool checkXmlns();
     bool parse(NamedList& tcapParams);
     bool parse(NamedList& tcapParams, XmlElement* elem, String prefix);
@@ -146,7 +159,6 @@ public:
     void encodeOperation(Operation* op, XmlElement* elem, DataBlock& payload, int& err, bool searchArgs);
 private:
     TcapXApplication* m_app;
-    XmlFragment* m_frag;
     XmlDeclaration* m_decl;
     XmlElement* m_elem;
     MsgType m_type;
@@ -289,7 +301,7 @@ public:
     ~TcapXApplication();
     bool hasCapability(const char* oper);
     bool handleXML();
-    void receivedXML(XmlFragment* frag);
+    void receivedXML(XmlDocument* frag);
     const String& toString() const
 	{ return m_name; }
     void setIO(XMLConnection* io);
@@ -5178,14 +5190,49 @@ const String& IDMap::findAppID(const char* tcapID)
 }
 
 /**
+ * MyDomParser
+ */
+MyDomParser::MyDomParser(TcapXApplication* app, const char* name, bool fragment)
+    : XmlDomParser(name,fragment),
+      m_app(app)
+{
+    Debug(DebugAll,"MyDomParser created [%p]",this);
+}
+MyDomParser::~MyDomParser()
+{
+    Debug(DebugAll,"MyDomParser destroyed [%p]",this);
+}
+
+void MyDomParser::gotElement(const NamedList& element, bool empty)
+{
+    XmlDomParser::gotElement(element,empty);
+    if (empty)
+	verifyRoot();
+}
+
+void MyDomParser::endElement(const String& name)
+{
+    XmlDomParser::endElement(name);
+    verifyRoot();
+}
+
+void MyDomParser::verifyRoot()
+{
+    if (m_app && document() && document()->root() && document()->root()->completed()) {
+	m_app->receivedXML(document());
+	document()->reset();
+    }
+}
+
+/**
  * XMLConnection
  */
 XMLConnection::XMLConnection(Socket* skt, TcapXApplication* app)
     : Thread("XMLConnection"),
-      m_socket(skt), m_app(app)
+      m_socket(skt), m_app(app),
+      m_parser(app,"MyDomParser",false)
 {
     Debug(&__plugin,DebugAll,"XMLConnection created with socket=[%p] for application=%s[%p] [%p]",socket,app->toString().c_str(),app,this);
-    m_parser = new XmlDomParser(app->toString() + "Parser",true);
     m_app->ref();
     start();
 }
@@ -5193,10 +5240,6 @@ XMLConnection::XMLConnection(Socket* skt, TcapXApplication* app)
 XMLConnection::~XMLConnection()
 {
     Debug(&__plugin,DebugAll,"XMLConnection destroyed [%p]",this);
-    if (m_parser) {
-	delete m_parser;
-	m_parser = 0;
-    }
     if (m_socket){
 	delete m_socket;
 	m_socket = 0;
@@ -5213,11 +5256,10 @@ void XMLConnection::start()
 void XMLConnection::run()
 {
     if (!m_socket)
-      return;
+	return;
     char buffer[2048];
-    bool print = false;
     for (;;) {
-	if (!(m_socket && m_socket->valid() && m_parser))
+	if (!(m_socket && m_socket->valid()))
 	    break;
 
 	Thread::check();
@@ -5256,33 +5298,12 @@ void XMLConnection::run()
 	buffer[readSize] = 0;
 	XDebug(&__plugin,DebugAll,"READ %d : %s",readSize,buffer);
 
-	int bufferSize = readSize;
-	while (bufferSize) {
-	    int len = bufferSize;
-	    char* end = strstr(buffer,"</m>");
-	    if (end) {
-		len = end + strlen("</m>") - buffer + 1;
-		if (len > bufferSize)
-		    len = bufferSize;
-	    }
-	    String str(buffer,len);
-	    bufferSize -= len;
-	    if (!m_parser)
+	if (!m_parser.parse(buffer)) {
+	    if (m_parser.error() != XmlSaxParser::Incomplete) {
+		Debug(&__plugin,DebugWarn,"Parser error %s in read data [%p] unparsed type %d, buffer = %s, pushed = %s",
+		    m_parser.getError(),this,m_parser.unparsed(),m_parser.getBuffer().c_str(),buffer);
 		break;
-	    XDebug(&__plugin,DebugAll,"PUSH = %d, REST = %d, TOTAL = %d, push to parser %s",len,bufferSize,readSize,str.c_str());
-	    if(!m_parser->parse(str)) {
- 		if (m_parser->error() != XmlSaxParser::Incomplete) {
- 		    print = true;
- 		    Debug(&__plugin,DebugWarn,"Parser error %s in read data [%p] unparsed type %d, buffer = %s, pushed = %s",
-			m_parser->getError(),this,m_parser->unparsed(),m_parser->getBuffer().c_str(),str.c_str());
-		    }
 	    }
-	    else {
-		XmlFragment* frag = m_parser->fragment();
-		if (frag && frag->findElement(frag->getChildren().skipNull(),&s_msgTag,0,false) && m_app)
-		    m_app->receivedXML(frag);
-	    }
-	    ::memmove(buffer,buffer + len,bufferSize + 1);
 	}
     }
 }
@@ -5806,7 +5827,7 @@ const TCAPMap XmlToTcap::s_tcapMap[] = {
 
 XmlToTcap::XmlToTcap(TcapXApplication* app)
     : Mutex(false,"XmlToTcap"),
-      m_app(app), m_frag(0), m_decl(0), m_elem(0)
+      m_app(app), m_decl(0), m_elem(0)
 {
     DDebug(&__plugin,DebugAll,"XmlToTcap created for application=%s[%p] [%p]",m_app->toString().c_str(),m_app,this);
 }
@@ -5818,9 +5839,8 @@ XmlToTcap::~XmlToTcap()
 
 void XmlToTcap::reset()
 {
-    DDebug(&__plugin,DebugAll,"XmlToTcap::reset() m_elem = %s[%p], m_decl=%p",(m_elem ? m_elem->tag() : ""),m_elem,m_decl);
-    TelEngine::destruct(m_decl);
-    TelEngine::destruct(m_elem);
+    m_elem = 0;
+    m_decl = 0;
     m_type = Unknown;
 }
 
@@ -5868,42 +5888,18 @@ bool XmlToTcap::checkXmlns()
 }
 
 
-bool XmlToTcap::valid()
+bool XmlToTcap::valid(XmlDocument* doc)
 {
     Lock l(this);
-    if (!m_frag)
+    if (!doc)
 	return false;
     DDebug(&__plugin,DebugAll,"XmlToTcap::valid() [%p]",this);
-    while (XmlChild* child = m_frag->pop()) {
-	if (XmlDeclaration* decl = child->xmlDeclaration()) {
-	    if (!m_decl)
-		m_decl = decl;
-	    else
-		return false;
-	}
-	else if (XmlElement* elem = child->xmlElement()) {
-	    if (!m_elem) {
-		if (s_msgTag != elem->tag())  {
-		    Debug(&__plugin,DebugInfo,"XmlToTcap::valid() - missing root tag %s [%p]",s_msgTag.c_str(),this);
-		    return false;
-		}
-		m_elem = elem;
-		break;
-	    }
-	    else
-		return false;
-	}
-	else
-	    TelEngine::destruct(child);
-    }
-    return true;
-}
-
-void XmlToTcap::setXmlFragment(XmlFragment* frag)
-{
-    Lock l(this);
     reset();
-    m_frag = frag;
+    m_decl = doc->declaration();
+    m_elem = doc->root();
+    if (!(m_elem && m_elem->getTag() == s_msgTag))
+	return false;
+    return true;
 }
 
 void XmlToTcap::encodeOperation(Operation* op, XmlElement* elem, DataBlock& payload, int& err, bool searchArgs)
@@ -6500,21 +6496,20 @@ bool TcapXApplication::handleTcap(NamedList& tcap)
     return true;
 }
 
-void TcapXApplication::receivedXML(XmlFragment* frag)
+void TcapXApplication::receivedXML(XmlDocument* doc)
 {
 
-    Debug(&__plugin,DebugAll,"TcapXApplication::receivedXML(frag=%p) - %s[%p]",frag,m_name.c_str(),this);
-    if (!frag)
+    Debug(&__plugin,DebugAll,"TcapXApplication::receivedXML(frag=%p) - %s[%p]",doc,m_name.c_str(),this);
+    if (!doc)
 	return;
 
     if (m_user->printMessages()) {
 	String tmp;
-	frag->toString(tmp,false,"\r\n","  ",false);
+	doc->toString(tmp,false,"\r\n","  ");
 	Debug(&__plugin,DebugInfo,"App=%s[%p] received XML\r\n%s",m_name.c_str(),this,tmp.c_str());
     }
 
-    m_xml2Tcap.setXmlFragment(frag);
-    if (!m_xml2Tcap.valid()) {
+    if (!m_xml2Tcap.valid(doc)) {
 	Debug(&__plugin,DebugInfo,"TcapXApplication=%s - invalid message, closing the connection [%p]",m_name.c_str(),this);
 	closeConnection();
 	return;

@@ -394,6 +394,7 @@ static const String s_tcapUser = "tcap.user";
 static const String s_tcapRequestError = "tcap.request.error";
 static const String s_tcapLocalTID = "tcap.transaction.localTID";
 static const String s_tcapRemoteTID = "tcap.transaction.remoteTID";
+static const String s_tcapEndNow = "tcap.transaction.endNow";
 static const String s_tcapAppCtxt = "tcap.dialogPDU.application-context-name";
 static const String s_tcapReqType = "tcap.request.type";
 static const String s_tcapCompCount = "tcap.component.count";
@@ -6385,6 +6386,7 @@ bool TcapXApplication::handleTcap(NamedList& tcap)
     int dialog = SS7TCAP::lookupTransaction(tcap.getValue(s_tcapReqType));
     String ltid = tcap.getValue(s_tcapLocalTID);
     String rtid = tcap.getValue(s_tcapRemoteTID);
+    bool endNow = tcap.getBoolValue(s_tcapEndNow,false);
 
     bool saveID = false;
     bool removeID = false;
@@ -6486,12 +6488,12 @@ bool TcapXApplication::handleTcap(NamedList& tcap)
     }
 
     Lock l(this);
-    if (removeID) {
+    if (removeID || endNow) {
 	m_ids.remove(ltid);
     	if (m_state == ShutDown && !trCount())
 	    reportState(Inactive);
     }
-    if (saveID)
+    if (saveID && !endNow)
 	m_ids.appendID(tcap.getValue(s_tcapLocalTID),ltid);
     m_sentTcap++;
     return true;

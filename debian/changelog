@@ -1,3 +1,16 @@
+yate (3.3.3.svn4750) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4750: + Automatically turn on overlapped
+    sending if called number is longer than maximum.  + Added handling
+    for ANSI-only EXM (Exit Message) similar to ACM.  + When updating a
+    transaction also update the endNow parameter.  + Don't
+    remember/remove transactions that have endNow set on true.  + Don't
+    display debug message when socket is closed from remote point.  +
+    Replace use of XmlFragment with XmlDocument.  + Do not change call
+    state or generate event on EXM receive, just start T9 timer.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 09 Dec 2011 02:19:19 +0400
+
 yate (3.3.3.svn4743) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4743: + Changed the MTP3 logic to auto-

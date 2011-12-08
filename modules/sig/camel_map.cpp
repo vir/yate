@@ -5226,9 +5226,10 @@ void XMLConnection::run()
 	    continue;
 
 	if (!readOk || error) {
-	     if (error) {
-		Debug(&__plugin,DebugInfo,"XMLConnection[%p] : Reading data error: %s (%d)",this,strerror(m_socket->error()),
-		    m_socket->error());
+	    if (error) {
+		if (m_socket->error())
+		    Debug(&__plugin,DebugInfo,"XMLConnection[%p] : Reading data error: %s (%d)",this,strerror(m_socket->error()),
+			m_socket->error());
 		return;
 	    }
 	    continue;

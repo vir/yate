@@ -3360,6 +3360,7 @@ SS7TCAPError SS7TCAPTransactionITU::update(SS7TCAP::TCAPUserTransActions type, N
 
     populateSCCPAddress(m_localSCCPAddr,m_remoteSCCPAddr,params,updateByUser);
     m_basicEnd = params.getBoolValue(s_tcapBasicTerm,true);
+    m_endNow = params.getBoolValue(s_tcapEndNow,m_endNow);
 
     if (m_timeout.started()) {
 	m_timeout.stop();

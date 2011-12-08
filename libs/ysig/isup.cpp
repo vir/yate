@@ -1704,6 +1704,12 @@ static const MsgParams s_ansi_params[] = {
 	SS7MsgISUP::EndOfParameters
 	}
     },
+    { SS7MsgISUP::EXM, true,
+	{
+	SS7MsgISUP::EndOfParameters,
+	SS7MsgISUP::EndOfParameters
+	}
+    },
     { SS7MsgISUP::CVT, false,
 	{
 	SS7MsgISUP::EndOfParameters,
@@ -2216,6 +2222,7 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 		case SS7MsgISUP::CCR:
 		case SS7MsgISUP::COT:
 		case SS7MsgISUP::ACM:
+		case SS7MsgISUP::EXM:
 		case SS7MsgISUP::CPR:
 		case SS7MsgISUP::ANM:
 		case SS7MsgISUP::CON:
@@ -2378,15 +2385,15 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 		m_iamMsg = new SS7MsgISUP(SS7MsgISUP::IAM,id());
 		copyParamIAM(m_iamMsg,true,event->message());
 		// Update overlap
-		setOverlapped(isCalledIncomplete(m_iamMsg->params()));
-		if (m_overlap) {
-		    // Check for maximum number of digits allowed
-		    String* called = m_iamMsg->params().getParam(YSTRING("CalledPartyNumber"));
-		    if (called && called->length() > isup()->m_maxCalledDigits) {
-			m_samDigits = called->substr(isup()->m_maxCalledDigits);
-			*called = called->substr(0,isup()->m_maxCalledDigits);
-		    }
+		String* called = m_iamMsg->params().getParam(YSTRING("CalledPartyNumber"));
+		if (called && (called->length() > isup()->m_maxCalledDigits)) {
+		    // Longer than maximum digits allowed - send remainder with SAM
+		    m_samDigits = called->substr(isup()->m_maxCalledDigits);
+		    *called = called->substr(0,isup()->m_maxCalledDigits);
+		    setOverlapped(true);
 		}
+		else
+		    setOverlapped(isCalledIncomplete(m_iamMsg->params()));
 		result = transmitIAM();
 	    }
 	    break;
@@ -2697,6 +2704,7 @@ bool SS7ISUPCall::validMsgState(bool send, SS7MsgISUP::Type type, bool hasBkwCal
 		break;
 	    return true;
 	case SS7MsgISUP::ACM:    // Address complete
+	case SS7MsgISUP::EXM:    // Exit Message (ANSI)
 	    if (m_state != Setup || send == outgoing())
 		break;
 	    return true;
@@ -3027,6 +3035,8 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 		m_sgmMsg->params().setParam("earlymedia",String::boolText(m_inbandAvailable));
 		m_lastEvent = new SignallingEvent(SignallingEvent::Accept,m_sgmMsg,this);
 	    }
+	    // intentionally fall through
+	case SS7MsgISUP::EXM:
 	    // Start T9 timer
 	    if (isup()->m_t9Interval) {
 		m_anmTimer.interval(isup()->m_t9Interval);
@@ -4413,6 +4423,7 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
 	case SS7MsgISUP::IAM:
 	case SS7MsgISUP::SAM:
 	case SS7MsgISUP::ACM:
+	case SS7MsgISUP::EXM:
 	case SS7MsgISUP::CPR:
 	case SS7MsgISUP::ANM:
 	case SS7MsgISUP::CON:

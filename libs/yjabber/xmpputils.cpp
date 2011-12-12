@@ -676,9 +676,9 @@ void XMPPFeatureList::updateEntityCaps()
 	    JIDIdentity* crt = static_cast<JIDIdentity*>(oi->get());
 	    #define CMP_IDENT(a,b) { \
 		int res = XMPPUtils::cmpBytes(a,b); \
-		if (res == -1) \
+		if (res < 0) \
 		    break; \
-		if (res == 1) \
+		if (res > 0) \
 		    continue; \
 	    }
 	    CMP_IDENT(id->m_category,crt->m_category)
@@ -702,7 +702,7 @@ void XMPPFeatureList::updateEntityCaps()
 	ObjList* of = f.skipNull();
 	for (; of; of = of->skipNext()) {
 	    String* crt = static_cast<String*>(of->get());
-	    if (XMPPUtils::cmpBytes(*feature,*crt) == -1)
+	    if (XMPPUtils::cmpBytes(*feature,*crt) < 0)
 		break;
 	}
 	if (of)
@@ -1593,7 +1593,7 @@ XmlElement* XMPPUtils::getChatXml(NamedList& list, const char* param,
     return xml;
 }
 
-// Compare 2 Strings. Return -1 if s1<s2, 1 if s1>s2 or 0
+// Compare 2 Strings. Return negative if s1<s2, positive if s1>s2 or 0
 int XMPPUtils::cmpBytes(const String& s1, const String& s2)
 {
     if (s1 && s2) {

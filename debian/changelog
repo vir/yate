@@ -1,3 +1,10 @@
+yate (3.3.3.svn4751) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4751: + Fixed incorrect identities/features
+    ordering when building capabilities hash.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 13 Dec 2011 02:19:24 +0400
+
 yate (3.3.3.svn4750) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4750: + Automatically turn on overlapped

@@ -2967,14 +2967,18 @@ static const Parameter s_naeaPreferredCI[] = {
 };
 
 static const Parameter s_PDPContextSeq[] = {
-    {"pdp-ContextId",       s_intTag,          false, TcapXApplication::Integer,   0},
-    {"pdp-Type",            s_ctxtPrim_16_Tag, false, TcapXApplication::HexString, 0},
-    {"pdp-Address",         s_ctxtPrim_17_Tag, true,  TcapXApplication::HexString, 0},
-    {"qos-Subscribed",      s_ctxtPrim_18_Tag, false, TcapXApplication::HexString, 0},
-    {"vplmnAddressAllowed", s_ctxtPrim_19_Tag, true,  TcapXApplication::Null,      0},
-    {"apn",                 s_ctxtPrim_20_Tag, false, TcapXApplication::HexString, 0},
-    {"extensionContainer",  s_ctxtCstr_21_Tag, true,  TcapXApplication::HexString, 0},
-    {"",                    s_noTag,           false, TcapXApplication::None,      0},
+    {"pdp-ContextId",                s_intTag,            false, TcapXApplication::Integer,      0},
+    {"pdp-Type",                     s_ctxtPrim_16_Tag,   false, TcapXApplication::HexString,    0},
+    {"pdp-Address",                  s_ctxtPrim_17_Tag,   true,  TcapXApplication::HexString,    0},
+    {"qos-Subscribed",               s_ctxtPrim_18_Tag,   false, TcapXApplication::HexString,    0},
+    {"vplmnAddressAllowed",          s_ctxtPrim_19_Tag,   true,  TcapXApplication::Null,         0},
+    {"apn",                          s_ctxtPrim_20_Tag,   false, TcapXApplication::HexString,    0},
+    {"extensionContainer",           s_ctxtCstr_21_Tag,   true,  TcapXApplication::HexString,    0},
+    {"ext-QoS-Subscribed",           s_ctxtCstr_0_Tag,    true,  TcapXApplication::HexString,    0},
+    {"pdp-ChargingCharacteristics",  s_ctxtCstr_1_Tag,    true,  TcapXApplication::HexString,    0},
+    {"ext2-QoS-Subscribed",          s_ctxtCstr_2_Tag,    true,  TcapXApplication::HexString,    0},
+    {"ext3-QoS-Subscribed",          s_ctxtCstr_3_Tag,    true,  TcapXApplication::HexString,    0},
+    {"",                             s_noTag,             false, TcapXApplication::None,         0},
 };
 
 static const Parameter s_PDPContext[] = {

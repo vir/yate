@@ -1044,7 +1044,7 @@ static bool encodeSeq(const Parameter* param, MapCamelType* type, DataBlock& dat
     if (param->content) {
 	const Parameter* params= static_cast<const Parameter*>(param->content);
 	while (params && !TelEngine::null(params->name)) {
-	    const String name = params->name;
+	    const String& name = params->name;
 	    XmlElement* child = elem->findFirstChild(&name);
 	    if (!child) {
 		if (!params->isOptional) {
@@ -1312,7 +1312,7 @@ static bool decodeBitString(const Parameter* param, MapCamelType* type, AsnTag& 
     int value = 0;
     ASNLib::decodeBitString(data,&val,false);
     for (unsigned int i = 0; i < val.length(); i++) {
-	char c = val[1];
+	char c = val[i];
 	if (c == '1') {
 	    int mask = 1 << i;
 	    value |= mask;
@@ -1939,7 +1939,7 @@ static bool encodeRedir(const Parameter* param, MapCamelType* type, DataBlock& d
 {
     if (!(param && elem))
 	return false;
-    XDebug(&__plugin,DebugAll,"encodeCallNumber(param=%s[%p],elem=%s[%p],datalen=%d)",param->name.c_str(),param,
+    XDebug(&__plugin,DebugAll,"encodeRedir(param=%s[%p],elem=%s[%p],datalen=%d)",param->name.c_str(),param,
 	elem->getTag().c_str(),elem,data.length());
 
     unsigned char b0 = lookup(elem->getText(),s_dict_redir_main,0) & 0x07;

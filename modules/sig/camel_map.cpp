@@ -673,7 +673,11 @@ static bool decodeRaw(XmlElement* elem, DataBlock& data, bool singleParam = fals
 		    break;
 		default:
 		    len = ASNLib::decodeLength(data);
-		    value.hexify(data.data(),len,' ');
+		    if (len < 0) {
+			DDebug(&__plugin,DebugWarn,"decodeRaw() - invalid length=%d while decoding, stopping",len);
+			return false;
+		    }
+		    value.hexify(data.data(),(len > (int)data.length() ? data.length() : len),' ');
 		    data.cut(-len);
 		    enc = "hex";
 		    break;
@@ -871,8 +875,10 @@ static bool decodeHex(const Parameter* param, MapCamelType* type, AsnTag& tag, D
 	child->setAttribute(s_encAttr,"hex");
 
     int len = ASNLib::decodeLength(data);
+    if (len < 0)
+	return false;
     String octets;
-    octets.hexify(data.data(),len,' ');
+    octets.hexify(data.data(),(len > (int)data.length() ? data.length() : len),' ');
     data.cut(-len);
     child->addText(octets);
     return true;

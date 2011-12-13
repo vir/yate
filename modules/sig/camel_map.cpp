@@ -2109,6 +2109,7 @@ static const Capability s_mapCapab[] = {
     {"ErrorRecovery",            {"reset", "forwardCheckSS-Indication", "failureReport", ""}},
     {"Charging",                 {""}},
     {"SMSC",                     {"alertServiceCentre", "sendRoutingInfoForSM", ""}},
+    {"None",                     {""}},
     {0, {""}},
 };
 

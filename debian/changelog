@@ -1,3 +1,15 @@
+yate (3.3.3.svn4757) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4757: + Added E.xxx aliases for some
+    numbering plans.  + Added a "None" capability for the XML translator
+    intended for scripts that are just sending requests.  + Fixed
+    finding capabilities, return NULL if no connection matched.  +
+    Verify length when trying to hexify data.  + Fixed decoding of bit
+    strings. Fix debug message.  + Added to PDP Context the QoS
+    extensions and the Charging Characteristics.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 14 Dec 2011 02:19:20 +0400
+
 yate (3.3.3.svn4751) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4751: + Fixed incorrect identities/features

@@ -149,12 +149,18 @@ static const TokenDict s_sccpNotif[] = {
 static const TokenDict s_numberingPlan[] = {
     { "unknown",          0x00 },
     { "isdn",             0x01 },
+    { "e164",             0x01 },
     { "generic",          0x02 },
     { "data",             0x03 },
+    { "x121",             0x03 },
     { "telex",            0x04 },
     { "maritime-mobile",  0x05 },
+    { "e210",             0x05 },
+    { "e211",             0x05 },
     { "land-mobile",      0x06 },
+    { "e212",             0x06 },
     { "isdn-mobile",      0x07 },
+    { "e214",             0x07 },
     { "network-specific", 0x0e },
     { 0, 0 }
 };

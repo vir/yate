@@ -6745,15 +6745,15 @@ bool TcapXUser::sendToApp(NamedList& params, TcapXApplication* app, bool saveID)
 TcapXApplication* TcapXUser::findApplication(NamedList& params)
 {
     DDebug(this,DebugAll,"TcapXUser::findApplication() [%p]",this);
-    TcapXApplication* app = 0;
     for (ObjList* o = m_apps.skipNull(); o; o = o->skipNext()) {
-	app = static_cast<TcapXApplication*>(o->get());
-	if (app->canHandle(params))
-	    break;
+	TcapXApplication* app = static_cast<TcapXApplication*>(o->get());
+	if (app->canHandle(params)) {
+	    // reorder list
+	    reorderApps(app);
+	    return app;
+	}
     }
-    // reorder list
-    reorderApps(app);
-    return app;
+    return 0;
 }
 
 void TcapXUser::reorderApps(TcapXApplication* app)

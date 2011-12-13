@@ -673,7 +673,11 @@ static bool decodeRaw(XmlElement* elem, DataBlock& data, bool singleParam = fals
 		    break;
 		default:
 		    len = ASNLib::decodeLength(data);
-		    value.hexify(data.data(),len,' ');
+		    if (len < 0) {
+			DDebug(&__plugin,DebugWarn,"decodeRaw() - invalid length=%d while decoding, stopping",len);
+			return false;
+		    }
+		    value.hexify(data.data(),(len > (int)data.length() ? data.length() : len),' ');
 		    data.cut(-len);
 		    enc = "hex";
 		    break;
@@ -871,8 +875,10 @@ static bool decodeHex(const Parameter* param, MapCamelType* type, AsnTag& tag, D
 	child->setAttribute(s_encAttr,"hex");
 
     int len = ASNLib::decodeLength(data);
+    if (len < 0)
+	return false;
     String octets;
-    octets.hexify(data.data(),len,' ');
+    octets.hexify(data.data(),(len > (int)data.length() ? data.length() : len),' ');
     data.cut(-len);
     child->addText(octets);
     return true;
@@ -1038,7 +1044,7 @@ static bool encodeSeq(const Parameter* param, MapCamelType* type, DataBlock& dat
     if (param->content) {
 	const Parameter* params= static_cast<const Parameter*>(param->content);
 	while (params && !TelEngine::null(params->name)) {
-	    const String name = params->name;
+	    const String& name = params->name;
 	    XmlElement* child = elem->findFirstChild(&name);
 	    if (!child) {
 		if (!params->isOptional) {
@@ -1306,7 +1312,7 @@ static bool decodeBitString(const Parameter* param, MapCamelType* type, AsnTag& 
     int value = 0;
     ASNLib::decodeBitString(data,&val,false);
     for (unsigned int i = 0; i < val.length(); i++) {
-	char c = val[1];
+	char c = val[i];
 	if (c == '1') {
 	    int mask = 1 << i;
 	    value |= mask;
@@ -1933,7 +1939,7 @@ static bool encodeRedir(const Parameter* param, MapCamelType* type, DataBlock& d
 {
     if (!(param && elem))
 	return false;
-    XDebug(&__plugin,DebugAll,"encodeCallNumber(param=%s[%p],elem=%s[%p],datalen=%d)",param->name.c_str(),param,
+    XDebug(&__plugin,DebugAll,"encodeRedir(param=%s[%p],elem=%s[%p],datalen=%d)",param->name.c_str(),param,
 	elem->getTag().c_str(),elem,data.length());
 
     unsigned char b0 = lookup(elem->getText(),s_dict_redir_main,0) & 0x07;
@@ -2109,6 +2115,7 @@ static const Capability s_mapCapab[] = {
     {"ErrorRecovery",            {"reset", "forwardCheckSS-Indication", "failureReport", ""}},
     {"Charging",                 {""}},
     {"SMSC",                     {"alertServiceCentre", "sendRoutingInfoForSM", ""}},
+    {"None",                     {""}},
     {0, {""}},
 };
 
@@ -2960,14 +2967,18 @@ static const Parameter s_naeaPreferredCI[] = {
 };
 
 static const Parameter s_PDPContextSeq[] = {
-    {"pdp-ContextId",       s_intTag,          false, TcapXApplication::Integer,   0},
-    {"pdp-Type",            s_ctxtPrim_16_Tag, false, TcapXApplication::HexString, 0},
-    {"pdp-Address",         s_ctxtPrim_17_Tag, true,  TcapXApplication::HexString, 0},
-    {"qos-Subscribed",      s_ctxtPrim_18_Tag, false, TcapXApplication::HexString, 0},
-    {"vplmnAddressAllowed", s_ctxtPrim_19_Tag, true,  TcapXApplication::Null,      0},
-    {"apn",                 s_ctxtPrim_20_Tag, false, TcapXApplication::HexString, 0},
-    {"extensionContainer",  s_ctxtCstr_21_Tag, true,  TcapXApplication::HexString, 0},
-    {"",                    s_noTag,           false, TcapXApplication::None,      0},
+    {"pdp-ContextId",                s_intTag,            false, TcapXApplication::Integer,      0},
+    {"pdp-Type",                     s_ctxtPrim_16_Tag,   false, TcapXApplication::HexString,    0},
+    {"pdp-Address",                  s_ctxtPrim_17_Tag,   true,  TcapXApplication::HexString,    0},
+    {"qos-Subscribed",               s_ctxtPrim_18_Tag,   false, TcapXApplication::HexString,    0},
+    {"vplmnAddressAllowed",          s_ctxtPrim_19_Tag,   true,  TcapXApplication::Null,         0},
+    {"apn",                          s_ctxtPrim_20_Tag,   false, TcapXApplication::HexString,    0},
+    {"extensionContainer",           s_ctxtCstr_21_Tag,   true,  TcapXApplication::HexString,    0},
+    {"ext-QoS-Subscribed",           s_ctxtCstr_0_Tag,    true,  TcapXApplication::HexString,    0},
+    {"pdp-ChargingCharacteristics",  s_ctxtCstr_1_Tag,    true,  TcapXApplication::HexString,    0},
+    {"ext2-QoS-Subscribed",          s_ctxtCstr_2_Tag,    true,  TcapXApplication::HexString,    0},
+    {"ext3-QoS-Subscribed",          s_ctxtCstr_3_Tag,    true,  TcapXApplication::HexString,    0},
+    {"",                             s_noTag,             false, TcapXApplication::None,         0},
 };
 
 static const Parameter s_PDPContext[] = {
@@ -6744,15 +6755,15 @@ bool TcapXUser::sendToApp(NamedList& params, TcapXApplication* app, bool saveID)
 TcapXApplication* TcapXUser::findApplication(NamedList& params)
 {
     DDebug(this,DebugAll,"TcapXUser::findApplication() [%p]",this);
-    TcapXApplication* app = 0;
     for (ObjList* o = m_apps.skipNull(); o; o = o->skipNext()) {
-	app = static_cast<TcapXApplication*>(o->get());
-	if (app->canHandle(params))
-	    break;
+	TcapXApplication* app = static_cast<TcapXApplication*>(o->get());
+	if (app->canHandle(params)) {
+	    // reorder list
+	    reorderApps(app);
+	    return app;
+	}
     }
-    // reorder list
-    reorderApps(app);
-    return app;
+    return 0;
 }
 
 void TcapXUser::reorderApps(TcapXApplication* app)

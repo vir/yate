@@ -3,7 +3,7 @@
 # Run script for Gentoo /etc/init.d
 # Package net-voip/yate
 
-opts="${opts} reload"
+extra_started_commands="reload"
 
 description="Starts and stops YATE used as Telephony Server"
 

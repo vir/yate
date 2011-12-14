@@ -2474,7 +2474,7 @@ static const TokenDict s_SSCode[] = {
     {"boicExHC",                   0x94}, //    SS-Code ::= '10010100'B  -- barring of outgoing international calls except those directed to the home PLMN
     {"barringOfIncomingCalls",     0x99}, //    SS-Code ::= '10011001'B  -- barring of incoming calls
     {"baic",                       0x9a}, //    SS-Code ::= '10011010'B  -- barring of all incoming calls
-    {"bicRoam",                    0x24}, //    SS-Code ::= '10011011'B  -- barring of incoming calls when roaming outside home PLMN Country
+    {"bicRoam",                    0x9b}, //    SS-Code ::= '10011011'B  -- barring of incoming calls when roaming outside home PLMN Country
     {"allPLMN-specificSS",         0xf0}, //    SS-Code ::= '11110000'B
     {"plmn-specificSS-1",          0xf1}, //    SS-Code ::= '11110001'B
     {"plmn-specificSS-2",          0xf2}, //    SS-Code ::= '11110010'B
@@ -2638,10 +2638,10 @@ static const SignallingFlags s_forwardOptions[] = {
     { 0x80, 0x80, "notify-called" },
     { 0x40, 0x40, "presentation" },
     { 0x20, 0x20, "notify-caller" },
-    { 0xc0, 0x00, "offline" },
-    { 0xc1, 0xc1, "busy" }, 
-    { 0xc2, 0xc2, "noanswer" },
-    { 0xc3, 0xc3, "always" }, 
+    { 0x0c, 0x00, "offline" },
+    { 0x0c, 0x04, "busy" },
+    { 0x0c, 0x08, "noanswer" },
+    { 0x0c, 0x0c, "always" },
     { 0, 0, 0 },
 };
 
@@ -2691,7 +2691,7 @@ static const Parameter s_extCallBarFeature[] = {
 static const Parameter s_extCallBarInfo[] = {
     {"ss-Code",               s_hexTag,         false,  TcapXApplication::Enumerated,    s_SSCode},
     {"callBarringFeatureList",s_sequenceTag,    false,  TcapXApplication::SequenceOf,    s_extCallBarFeature},
-    {"extensionContainer",    s_ctxtCstr_0_Tag, true,   TcapXApplication::HexString,     0},
+    {"extensionContainer",    s_sequenceTag,    true,   TcapXApplication::HexString,     0},
     {"",                      s_noTag,          false,  TcapXApplication::None,          0},
 };
 
@@ -2715,6 +2715,7 @@ static const Parameter s_CUGSubscriptionSeq[] = {
     {"extensionContainer",    s_ctxtCstr_0_Tag,  true,   TcapXApplication::HexString,     0},
     {"",                      s_noTag,           false,  TcapXApplication::None,          0},
 };
+
 static const Parameter s_CUGSubscription[] = {
     {"cug-Subscription",      s_sequenceTag,   false,    TcapXApplication::Sequence,      s_CUGSubscriptionSeq},
     {"",                      s_noTag,         false,    TcapXApplication::None,          0},
@@ -2823,7 +2824,7 @@ static const TokenDict s_odbGeneralData[] = {
     {"internationalECT-Barred",                                             0x0800},
     {"interzonalECT-Barred",                                                0x1000},
     {"doublyChargeableECT-Barred",                                          0x2000},
-    {"multipleECT-Barred",                                                  0x2000},
+    {"multipleECT-Barred",                                                  0x4000},
     {0,0},
 }; 
 
@@ -2847,16 +2848,26 @@ static const Parameter s_zoneCode[] = {
     {"",                s_noTag,    false,    TcapXApplication::None,         0},
 };
 
-static const Parameter s_voiceBroadcastData[] = {
+static const Parameter s_voiceBroadcastDataSeq[] = {
     {"groupid",                  s_hexTag,         false,   TcapXApplication::TBCD,       0},
     {"broadcastInitEntitlement", s_nullTag,        true,    TcapXApplication::Null,       0},
     {"extensionContainer",       s_sequenceTag,    true,    TcapXApplication::HexString,  0},
     {"",                         s_noTag,          false,   TcapXApplication::None,       0},
 };
 
-static const Parameter s_voiceGroupCallData[] = {
+static const Parameter s_voiceBroadcastData[] = {
+    {"voiceBroadcastData",       s_sequenceTag,    false,   TcapXApplication::Sequence,   s_voiceBroadcastDataSeq},
+    {"",                         s_noTag,          false,   TcapXApplication::None,       0},
+};
+
+static const Parameter s_voiceGroupCallDataSeq[] = {
     {"groupid",                  s_hexTag,         false,   TcapXApplication::TBCD,          0},
     {"extensionContainer",       s_sequenceTag,    true,    TcapXApplication::HexString,     0},
+    {"",                         s_noTag,          false,   TcapXApplication::None,          0},
+};
+
+static const Parameter s_voiceGroupCallData[] = {
+    {"voiceGroupCallData",       s_sequenceTag,    false,   TcapXApplication::Sequence,      s_voiceGroupCallDataSeq},
     {"",                         s_noTag,          false,   TcapXApplication::None,          0},
 };
 
@@ -2871,13 +2882,18 @@ static const TokenDict s_defaultCallHandling[] = {
     {0,0},
 };
 
-static const Parameter s_OBcsmCamelTDPData[] = {
+static const Parameter s_OBcsmCamelTDPDataSeq[] = {
     {"o-BcsmTriggerDetectionPoint",  s_enumTag,        false,  TcapXApplication::Enumerated,    s_OBcsmTriggerDetectionPoint},
     {"serviceKey",                   s_intTag,         false,  TcapXApplication::Integer,       0},
     {"gsmSCF-Address",               s_ctxtPrim_0_Tag, false,  TcapXApplication::AddressString, 0},
     {"defaultCallHandling",          s_ctxtPrim_1_Tag, false,  TcapXApplication::Enumerated,    s_defaultCallHandling},
     {"extensionContainer",           s_ctxtCstr_2_Tag, true,   TcapXApplication::HexString,     0},
     {"",                             s_noTag,          false,  TcapXApplication::None,          0},
+};
+
+static const Parameter s_OBcsmCamelTDPData[] = {
+    {"o-BcsmCamelTDPData",  s_sequenceTag,    false,  TcapXApplication::Sequence,      s_OBcsmCamelTDPDataSeq},
+    {"",                    s_noTag,          false,  TcapXApplication::None,          0},
 };
 
 static const TokenDict s_camelCapabilityHandling[] = {
@@ -2889,7 +2905,7 @@ static const TokenDict s_camelCapabilityHandling[] = {
 static const Parameter s_OCSI[] = {
     {"o-BcsmCamelTDPDataList",   s_sequenceTag,    false,   TcapXApplication::SequenceOf, s_OBcsmCamelTDPData},
     {"extensionContainer",       s_sequenceTag,    true,    TcapXApplication::HexString,  0},
-    {"camelCapabilityHandling",  s_ctxtPrim_0_Tag, true,    TcapXApplication::Integer,    0},
+    {"camelCapabilityHandling",  s_ctxtPrim_0_Tag, true,    TcapXApplication::Enumerated, s_camelCapabilityHandling},
     {"",                         s_noTag,          false,   TcapXApplication::None,       0},
 };
 
@@ -2942,11 +2958,16 @@ static const TokenDict s_callTypeCriteria[] = {
     {0,0xff},
 };
 
-static const Parameter s_OBcsmCamelTDPCriteria[] = {
+static const Parameter s_OBcsmCamelTDPCriteriaSeq[] = {
     {"o-BcsmTriggerDetectionPoint",  s_enumTag,        false,  TcapXApplication::Enumerated,    s_OBcsmTriggerDetectionPoint},
     {"destinationNumberCriteria",    s_ctxtCstr_0_Tag, true,   TcapXApplication::Sequence,      s_destinationNumberCriteria},
     {"basicServiceCriteria",         s_ctxtCstr_1_Tag, true,   TcapXApplication::SequenceOf,    s_basicServiceCodeType},
     {"callTypeCriteria",             s_ctxtPrim_2_Tag, true,   TcapXApplication::Enumerated,    s_callTypeCriteria},
+    {"",                             s_noTag,          false,  TcapXApplication::None,          0},
+};
+
+static const Parameter s_OBcsmCamelTDPCriteria[] = {
+    {"o-BcsmCamelTDP-Criteria",      s_sequenceTag,    false,  TcapXApplication::Sequence,      s_OBcsmCamelTDPCriteriaSeq},
     {"",                             s_noTag,          false,  TcapXApplication::None,          0},
 };
 
@@ -2974,10 +2995,10 @@ static const Parameter s_PDPContextSeq[] = {
     {"vplmnAddressAllowed",          s_ctxtPrim_19_Tag,   true,  TcapXApplication::Null,         0},
     {"apn",                          s_ctxtPrim_20_Tag,   false, TcapXApplication::HexString,    0},
     {"extensionContainer",           s_ctxtCstr_21_Tag,   true,  TcapXApplication::HexString,    0},
-    {"ext-QoS-Subscribed",           s_ctxtCstr_0_Tag,    true,  TcapXApplication::HexString,    0},
-    {"pdp-ChargingCharacteristics",  s_ctxtCstr_1_Tag,    true,  TcapXApplication::HexString,    0},
-    {"ext2-QoS-Subscribed",          s_ctxtCstr_2_Tag,    true,  TcapXApplication::HexString,    0},
-    {"ext3-QoS-Subscribed",          s_ctxtCstr_3_Tag,    true,  TcapXApplication::HexString,    0},
+    {"ext-QoS-Subscribed",           s_ctxtPrim_0_Tag,    true,  TcapXApplication::HexString,    0},
+    {"pdp-ChargingCharacteristics",  s_ctxtPrim_1_Tag,    true,  TcapXApplication::HexString,    0},
+    {"ext2-QoS-Subscribed",          s_ctxtPrim_2_Tag,    true,  TcapXApplication::HexString,    0},
+    {"ext3-QoS-Subscribed",          s_ctxtPrim_3_Tag,    true,  TcapXApplication::HexString,    0},
     {"",                             s_noTag,             false, TcapXApplication::None,         0},
 };
 
@@ -3175,8 +3196,8 @@ static const Parameter s_genericServiceInfo[] = {
 // TS 100 974 v7.15.0 page 319
     {"ss-Status",               s_hexTag,         false,    TcapXApplication::Flags,         s_ssStatus},
     {"cliRestrictionOption",    s_enumTag,        true,     TcapXApplication::Enumerated,    s_cliRestrictionOption},
-    {"maximumentitledPriority", s_intTag,         true,     TcapXApplication::Enumerated,    s_EMLPPPriority},
-    {"defaultPriority",         s_intTag,         true,     TcapXApplication::Enumerated,    s_EMLPPPriority},
+    {"maximumentitledPriority", s_ctxtPrim_0_Tag, true,     TcapXApplication::Enumerated,    s_EMLPPPriority},
+    {"defaultPriority",         s_ctxtPrim_1_Tag, true,     TcapXApplication::Enumerated,    s_EMLPPPriority},
     {"ccbs-FeatureList",        s_ctxtCstr_2_Tag, true,     TcapXApplication::SequenceOf,    s_CCBSFeature},
     {"",                        s_noTag,          false,    TcapXApplication::None,          0},
 };
@@ -3220,6 +3241,12 @@ static const TokenDict s_guidanceInfo[] = {
     {0, 0},
 };
 
+static const Parameter s_SGSN_CapabilitySeq[] = {
+    {"solsaSupportIndicator",                      s_nullTag,         true, TcapXApplication::Null,       0},
+    {"extensionContainer",                         s_ctxtCstr_1_Tag,  true, TcapXApplication::HexString,  0},
+    {"",                                           s_noTag,           false,TcapXApplication::None,       0},
+};
+
 static const Parameter s_hlrId[] = {
     {"HLR-Id",            s_hexTag,   false,   TcapXApplication::TBCD,       0},
     {"",                  s_noTag,    false,   TcapXApplication::None,       0},
@@ -3237,7 +3264,7 @@ static const Parameter s_locationInfoWithLMSI[] = {
     {"lmsi",                s_hexTag,          true,   TcapXApplication::HexString,     0},
     {"extensionContainer",  s_sequenceTag,     true,   TcapXApplication::HexString,     0},
     {"gprsNodeIndicator",   s_ctxtPrim_5_Tag,  true,   TcapXApplication::Null,          0},
-    {"additional-Number",   s_noTag,           true,   TcapXApplication::Choice,        s_additionalNumber},
+    {"additional-Number",   s_ctxtCstr_6_Tag,  true,   TcapXApplication::Choice,        s_additionalNumber},
     {"",                    s_noTag,           false,  TcapXApplication::None,          0},
 };
 
@@ -3562,11 +3589,6 @@ static const Parameter s_authFailureArgs[] = {
     {"",                   s_noTag,           false,   TcapXApplication::None,            0},
 };
 
-static const Parameter s_authFailureRes[] = {
-   {"extensionContainer", s_sequenceTag,     true,    TcapXApplication::HexString,       0},
-   {"",                         s_noTag,     false,   TcapXApplication::None,            0},
-};
-
 static const Parameter s_registerPasswordArgs[] = {
     {"ss-Code",                  s_hexTag, false, TcapXApplication::Enumerated,  s_SSCode},
     {"",                         s_noTag,  false, TcapXApplication::None,        0},
@@ -3592,6 +3614,7 @@ static const Parameter s_updateGprsLocationArgs[] = {
     {"sgsn-Number",       s_hexTag,         false,   TcapXApplication::AddressString,  0},
     {"sgsn-Address",      s_hexTag,         false,   TcapXApplication::HexString,      0},
     {"extensionContainer",s_sequenceTag,    true,    TcapXApplication::HexString,      0},
+    {"sgsn-Capability",   s_ctxtCstr_0_Tag, true,    TcapXApplication::Sequence,       s_SGSN_CapabilitySeq},
     {"",                  s_noTag,          false,   TcapXApplication::None,           0},
 };
 
@@ -3811,8 +3834,8 @@ static const Parameter s_setReportingStateArgs[] = {
 };
 
 static const Parameter s_setReportingStateRes[] = {
-    {"subscriberInfo",        s_sequenceTag,   false,   TcapXApplication::Sequence,      s_subscriberInfo},
-    {"extensionContainer",    s_sequenceTag,   true,    TcapXApplication::HexString,     0},
+    {"ccbs-SubscriberStatus", s_ctxtPrim_0_Tag, true,   TcapXApplication::Enumerated,    s_CCBSSubscriberStatus},
+    {"extensionContainer",    s_ctxtCstr_1_Tag, true,   TcapXApplication::HexString,     0},
     {"",                      s_noTag,         false,   TcapXApplication::None,          0},
 };
 
@@ -3872,7 +3895,7 @@ static const Operation s_mapOps[] = {
     },
     {"authenticationFailureReport",   true,  15,
 	s_sequenceTag, s_authFailureArgs,
-	s_sequenceTag, s_authFailureRes,
+	s_sequenceTag, s_extensionContainerRes,
     },
     {"registerPassword",              true,  17,
 	s_noTag, s_registerPasswordArgs,
@@ -4749,11 +4772,6 @@ static const Parameter s_smDeliveryFailureErr[] = {
     {"diagnosticInfo",                    s_hexTag,         true,    TcapXApplication::HexString,     0},
     {"extensionContainer",                s_sequenceTag,    true,    TcapXApplication::HexString,     0},
     {"",                                  s_noTag,          false,   TcapXApplication::None,          0},
-};
-
-static const Parameter s_systemFailureErr[] = {
-    {"systemFailureParam",             s_noTag,     true,    TcapXApplication::Choice,        s_systemFailure},
-    {"",                               s_noTag,     false,   TcapXApplication::None,          0},
 };
 
 static const Parameter s_pwRegistrationFailureErr[] = {

@@ -2974,10 +2974,10 @@ static const Parameter s_PDPContextSeq[] = {
     {"vplmnAddressAllowed",          s_ctxtPrim_19_Tag,   true,  TcapXApplication::Null,         0},
     {"apn",                          s_ctxtPrim_20_Tag,   false, TcapXApplication::HexString,    0},
     {"extensionContainer",           s_ctxtCstr_21_Tag,   true,  TcapXApplication::HexString,    0},
-    {"ext-QoS-Subscribed",           s_ctxtCstr_0_Tag,    true,  TcapXApplication::HexString,    0},
-    {"pdp-ChargingCharacteristics",  s_ctxtCstr_1_Tag,    true,  TcapXApplication::HexString,    0},
-    {"ext2-QoS-Subscribed",          s_ctxtCstr_2_Tag,    true,  TcapXApplication::HexString,    0},
-    {"ext3-QoS-Subscribed",          s_ctxtCstr_3_Tag,    true,  TcapXApplication::HexString,    0},
+    {"ext-QoS-Subscribed",           s_ctxtPrim_0_Tag,    true,  TcapXApplication::HexString,    0},
+    {"pdp-ChargingCharacteristics",  s_ctxtPrim_1_Tag,    true,  TcapXApplication::HexString,    0},
+    {"ext2-QoS-Subscribed",          s_ctxtPrim_2_Tag,    true,  TcapXApplication::HexString,    0},
+    {"ext3-QoS-Subscribed",          s_ctxtPrim_3_Tag,    true,  TcapXApplication::HexString,    0},
     {"",                             s_noTag,             false, TcapXApplication::None,         0},
 };
 

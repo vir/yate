@@ -1,3 +1,12 @@
+yate (3.3.3.svn4760) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4760: + Fixed ASN.1 encoding for PDP context
+    extensions.  + Blindly applied mailing list patch by Sven.  + Avoid
+    a Gentoo deprecation warning in the init script.  + Fixed various
+    ASN.1 definitions for MAP.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 15 Dec 2011 02:19:24 +0400
+
 yate (3.3.3.svn4757) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4757: + Added E.xxx aliases for some

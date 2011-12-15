@@ -1,3 +1,20 @@
+yate (3.3.3.svn4772) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4772: + Fixed various ASN.1 definitions for
+    CAMEL.  + Set the custom 3xx redirect code in the channel's reason
+    too, not only in SIP message.  + Added ability to override encoding,
+    tag or type of ASN.1 elements.  + If an XML element has no encoding
+    and no text just create an empty ASN.1 element.  + Added helper
+    method to check if an XmlParent has any children.  + Encode a
+    component with no operation code only if it has any children.  +
+    Added the informServiceCentre operation.  + Fixed the Message
+    Waiting Status flags.  + Added the sendRoutingInfoForLCS operation.
+    + Fixed lmsi, it should be an arbitrary octet string.  + Simplified
+    code, added more decuf info for encoding SequenceOf.  + Fixed
+    lcsLocationInfo, it ise a Sequence not a SequenceOf...
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 16 Dec 2011 02:19:23 +0400
+
 yate (3.3.3.svn4760) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4760: + Fixed ASN.1 encoding for PDP context

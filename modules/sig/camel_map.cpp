@@ -534,7 +534,7 @@ static bool encodeRaw(const Parameter* param, DataBlock& payload, XmlElement* el
 	    break;
     }
     AsnTag tag;
-    String* clas = elem->getAttribute(s_typeStr);
+    const String* clas = elem->getAttribute(s_typeStr);
     if (TelEngine::null(clas)) {
 	if (param)
 	    tag.classType(param->tag.classType());
@@ -561,10 +561,16 @@ static bool encodeRaw(const Parameter* param, DataBlock& payload, XmlElement* el
     if (!hasChildren) {
 	clas = elem->getAttribute(s_encAttr);
 	if (TelEngine::null(clas)) {
-	    Debug(DebugMild,"In <%s> missing %s=\"...\" attribute!",elem->getTag().c_str(),s_encAttr.c_str());
-	    return false;
+	    if (text) {
+		Debug(DebugMild,"In <%s> missing %s=\"...\" attribute!",elem->getTag().c_str(),s_encAttr.c_str());
+		return false;
+	    }
+	    payload.clear();
+	    tag.type(param ? param->tag.type() : AsnTag::Primitive);
+	    clas = &String::empty();
 	}
-	tag.type(AsnTag::Primitive);
+	else
+	    tag.type(AsnTag::Primitive);
 	if (*clas == "hex")
 	    payload.unHexify(text.c_str(),text.length(),' ');
 	else if (*clas == "int")
@@ -5994,7 +6000,7 @@ void XmlToTcap::encodeOperation(Operation* op, XmlElement* elem, DataBlock& payl
 
 bool XmlToTcap::encodeComponent(DataBlock& payload, XmlElement* elem, bool searchArgs, int& err, Operation* op)
 {
-    DDebug(&__plugin,DebugAll,"XmlToTcap::encodeComponent(elem=%p) [%p]",elem,this);
+    DDebug(&__plugin,DebugAll,"XmlToTcap::encodeComponent(elem=%p op=%p) [%p]",elem,op,this);
     if (!elem)
 	return false;
 

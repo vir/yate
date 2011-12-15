@@ -3754,7 +3754,7 @@ static const Parameter s_sendRoutingInfoForLCSArgs[] = {
 
 static const Parameter s_sendRoutingInfoForLCSRes[] = {
     {"targetMS",          s_ctxtCstr_0_Tag,    false,   TcapXApplication::Choice,        s_targetMS},
-    {"lcsLocationInfo",   s_ctxtCstr_1_Tag,    false,   TcapXApplication::SequenceOf,    s_lcsLocationInfo},
+    {"lcsLocationInfo",   s_ctxtCstr_1_Tag,    false,   TcapXApplication::Sequence,      s_lcsLocationInfo},
     {"extensionContainer",s_ctxtCstr_2_Tag,    true,    TcapXApplication::HexString,     0},
     {"",                  s_noTag,             false,   TcapXApplication::None,          0},
 };

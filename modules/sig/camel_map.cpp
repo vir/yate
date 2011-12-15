@@ -3739,7 +3739,7 @@ static const Parameter s_targetMS[] = {
 
 static const Parameter s_lcsLocationInfo[] = {
     {"msc-Number",        s_hexTag,           false,   TcapXApplication::AddressString, 0},
-    {"lmsi",              s_ctxtPrim_0_Tag,   true,    TcapXApplication::TBCD,          0},
+    {"lmsi",              s_ctxtPrim_0_Tag,   true,    TcapXApplication::HexString,     0},
     {"extensionContainer",s_ctxtCstr_1_Tag,   true,    TcapXApplication::HexString,     0},
     {"",                  s_noTag,            false,   TcapXApplication::None,          0},
 };

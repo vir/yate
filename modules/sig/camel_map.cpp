@@ -2141,7 +2141,7 @@ static const Capability s_mapCapab[] = {
     {"Miscellaneous",            {"sendIMSI", "readyForSM", "setReportingState", ""}},
     {"ErrorRecovery",            {"reset", "forwardCheckSS-Indication", "failureReport", ""}},
     {"Charging",                 {""}},
-    {"SMSC",                     {"alertServiceCentre", "sendRoutingInfoForSM", ""}},
+    {"SMSC",                     {"informServiceCentre", "alertServiceCentre", "sendRoutingInfoForSM", ""}},
     {"None",                     {""}},
     {0, {""}},
 };
@@ -2202,8 +2202,8 @@ static const AppCtxt s_mapAppCtxt[]= {
     {"shortMsgGatewayContext-v2", "0.4.0.0.1.0.20.2", "sendRoutingInfoForSM"},
     {"shortMsgGatewayContext-v1", "0.4.0.0.1.0.20.1", "sendRoutingInfoForSM"},
 
-    {"shortMsgAlertContext-v2", "0.4.0.0.1.0.23.2", "alertServiceCentre"},
-    {"shortMsgAlertContext-v1", "0.4.0.0.1.0.23.1", "alertServiceCentre"},
+    {"shortMsgAlertContext-v2", "0.4.0.0.1.0.23.2", "informServiceCentre,alertServiceCentre"},
+    {"shortMsgAlertContext-v1", "0.4.0.0.1.0.23.1", "informServiceCentre,alertServiceCentre"},
 
     // readyForSM context
     {"mwdMngtContext-v3", "0.4.0.0.1.0.24.3", "readyForSM"},
@@ -3811,6 +3811,21 @@ static const Parameter s_unstructuredSSRes[] = {
     {"",                      s_noTag,     false,    TcapXApplication::None,             0},
 };
 
+static const TokenDict s_mwStatus[] = {
+    { "sc-AddressNotIncluded",  0 },
+    { "mnrf-Set",               1 },
+    { "mcef-Set",               2 },
+    { "mnrg-Set",               3 },
+    { 0, 0 }
+};
+
+static const Parameter s_informServiceCentreArgs[] = {
+    { "storedMSISDN",          s_hexTag,            true,  TcapXApplication::AddressString,    0 },
+    { "mw-Status",             s_bitsTag,           true,  TcapXApplication::BitString,        s_mwStatus },
+    { "extensionContainer",    s_sequenceTag,       true,  TcapXApplication::HexString,        0 },
+    { "",                      s_noTag,             false, TcapXApplication::None,             0 },
+};
+
 static const Parameter s_alertServiceCentreArgs[] = {
     {"msisdn",                s_hexTag,    false,     TcapXApplication::AddressString,    0},
     {"serviceCentreAddress",  s_hexTag,    false,     TcapXApplication::AddressString,    0},
@@ -3988,6 +4003,10 @@ static const Operation s_mapOps[] = {
     },
     {"unstructuredSS-Notify",         true,  61,
 	s_sequenceTag, s_unstructuredSSArgs,
+	s_noTag, 0
+    },
+    {"informServiceCentre",           true,  63,
+	s_sequenceTag, s_informServiceCentreArgs,
 	s_noTag, 0
     },
     {"alertServiceCentre",            true,  64,

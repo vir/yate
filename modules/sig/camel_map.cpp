@@ -535,19 +535,35 @@ static bool encodeRaw(const Parameter* param, DataBlock& payload, XmlElement* el
     }
     AsnTag tag;
     String* clas = elem->getAttribute(s_typeStr);
-    if (TelEngine::null(clas))
-	return false;
-    tag.classType((AsnTag::Class)lookup(*clas,s_tagTypes,AsnTag::Universal));
+    if (TelEngine::null(clas)) {
+	if (param)
+	    tag.classType(param->tag.classType());
+	else {
+	    Debug(DebugMild,"In <%s> missing %s=\"...\" attribute!",elem->getTag().c_str(),s_typeStr.c_str());
+	    return false;
+	}
+    }
+    else
+	tag.classType((AsnTag::Class)lookup(*clas,s_tagTypes,AsnTag::Universal));
     clas = elem->getAttribute(s_tagAttr);
-    if (TelEngine::null(clas))
-	return false;
-    tag.code(clas->toInteger());
+    if (TelEngine::null(clas)) {
+	if (param)
+	    tag.code(param->tag.code());
+	else {
+	    Debug(DebugMild,"In <%s> missing %s=\"...\" attribute!",elem->getTag().c_str(),s_tagAttr.c_str());
+	    return false;
+	}
+    }
+    else
+	tag.code(clas->toInteger());
 
-    String text = elem->getText();
+    const String& text = elem->getText();
     if (!hasChildren) {
 	clas = elem->getAttribute(s_encAttr);
-	if (TelEngine::null(clas))
+	if (TelEngine::null(clas)) {
+	    Debug(DebugMild,"In <%s> missing %s=\"...\" attribute!",elem->getTag().c_str(),s_encAttr.c_str());
 	    return false;
+	}
 	tag.type(AsnTag::Primitive);
 	if (*clas == "hex")
 	    payload.unHexify(text.c_str(),text.length(),' ');
@@ -579,7 +595,7 @@ static bool encodeParam(const Parameter* param, DataBlock& data, XmlElement* ele
     if (!(param && elem))
 	return false;
     XDebug(&__plugin,DebugAll,"encodeParam(param=%s[%p],elem=%s[%p])",param->name.c_str(),param,elem->getTag().c_str(),elem);
-    MapCamelType* type = (MapCamelType*)findType(param->type);
+    MapCamelType* type = const_cast<MapCamelType*>(findType(param->type));
     bool ok = true;
     if (!type)
 	ok = encodeRaw(param,data,elem,err);
@@ -590,13 +606,18 @@ static bool encodeParam(const Parameter* param, DataBlock& data, XmlElement* ele
 		return false;
 	    return true;
 	}
-	ok = type->encode(param,type,data,child,err);
+	if (child->getAttribute(s_tagAttr) || child->getAttribute(s_encAttr))
+	    ok = encodeRaw(param,data,child,err);
+	else
+	    ok = type->encode(param,type,data,child,err);
 	elem->removeChild(child);
     }
+#ifdef XDEBUG
     String str;
     str.hexify(data.data(),data.length(),' ');
-    XDebug(&__plugin,DebugAll,"encodeParam(param=%s[%p],elem=%s[%p] has %ssucceeded, encodedData=%s)",param->name.c_str(),param,
+    Debug(&__plugin,DebugAll,"encodeParam(param=%s[%p],elem=%s[%p] has %ssucceeded, encodedData=%s)",param->name.c_str(),param,
 		elem->getTag().c_str(),elem,(ok ? "" : "not "),str.c_str());
+#endif
     return ok;
 }
 

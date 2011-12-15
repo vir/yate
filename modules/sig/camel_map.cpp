@@ -1070,7 +1070,7 @@ static bool encodeSeq(const Parameter* param, MapCamelType* type, DataBlock& dat
 
     if (param->content) {
 	const Parameter* params= static_cast<const Parameter*>(param->content);
-	while (params && !TelEngine::null(params->name)) {
+	while (params && params->name) {
 	    const String& name = params->name;
 	    XmlElement* child = elem->findFirstChild(&name);
 	    if (!child) {
@@ -1150,9 +1150,10 @@ static bool encodeSeqOf(const Parameter* param, MapCamelType* type, DataBlock& d
 	const Parameter* params = static_cast<const Parameter*>(param->content);
 	XmlElement* child = elem->pop();
 	bool atLeastOne = false;
-	while (params && !TelEngine::null(params->name) && child) {
+	while (params && params->name && child) {
 	    if (!(child->getTag() == params->name)) {
-		Debug(&__plugin,DebugAll,"Skipping over unknown parameter '%s' for parent ''%s'",child->tag(),elem->tag());
+		Debug(&__plugin,DebugAll,"Skipping over unknown parameter '%s' for parent '%s', expecting '%s'",
+		    child->tag(),elem->tag(),params->name.c_str());
 		TelEngine::destruct(child);
 		child = elem->pop();
 		continue;

@@ -3812,10 +3812,10 @@ static const Parameter s_unstructuredSSRes[] = {
 };
 
 static const TokenDict s_mwStatus[] = {
-    { "sc-AddressNotIncluded",  0 },
-    { "mnrf-Set",               1 },
-    { "mcef-Set",               2 },
-    { "mnrg-Set",               3 },
+    { "sc-AddressNotIncluded",  0x01 },
+    { "mnrf-Set",               0x02 },
+    { "mcef-Set",               0x04 },
+    { "mnrg-Set",               0x08 },
     { 0, 0 }
 };
 

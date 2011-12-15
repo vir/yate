@@ -6330,7 +6330,7 @@ bool YateSIPConnection::callRouted(Message& msg)
 	    m_tr->setResponse(m);
 	    m->deref();
 	    m_byebye = false;
-	    setReason("Redirected",302);
+	    setReason("Redirected",code);
 	    setStatus("redirected");
 	    return false;
 	}

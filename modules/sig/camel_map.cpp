@@ -6006,7 +6006,7 @@ bool XmlToTcap::encodeComponent(DataBlock& payload, XmlElement* elem, bool searc
 
     if (op)
 	encodeOperation(op,elem,payload,err,searchArgs);
-    else
+    else if (elem->hasChildren())
 	encodeRaw(0,payload,elem,err);
 
     if (elem->getTag() == s_component) {

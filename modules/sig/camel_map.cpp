@@ -2133,7 +2133,7 @@ static const Capability s_mapCapab[] = {
     {"LocationManagement",       {"updateLocation", "cancelLocation", "purgeMS", "updateGprsLocation", "anyTimeInterrogation", ""}},
     {"Authentication",           {"sendAuthenticationInfo", "authenticationFailureReport", ""}},
     {"SubscriberData",           {"insertSubscriberData", "deleteSubscriberData", "restoreData", ""}},
-    {"Routing",                  {"sendRoutingInfoForGprs", "statusReport", ""}},
+    {"Routing",                  {"sendRoutingInfoForGprs", "sendRoutingInfoForLCS", "statusReport", ""}},
     {"VLR-Routing",              {"provideRoamingNumber",  ""}},
     {"TraceSubscriber",          {"activateTraceMode", "deactivateTraceMode", ""}},
     {"Services",                 {"registerSS", "eraseSS", "activateSS", "deactivateSS", "interrogateSS", "registerPassword", "getPassword", 
@@ -2228,6 +2228,9 @@ static const AppCtxt s_mapAppCtxt[]= {
 
     // Failure Report Context 
     {"failureReportContext-v3" , "0.4.0.0.1.0.34.3", "failureReport"},
+
+    // Location Services Gateway Context 
+    {"locationSvcGatewayContext-v3", "0.4.0.0.1.0.37.3", "sendRoutingInfoForLCS"},
 
     // Authentication Failure Report Context
     {"authenticationFailureReportContext-v3" , "0.4.0.0.1.0.39.3", "authenticationFailureReport"},
@@ -3728,6 +3731,33 @@ static const Parameter s_deactivateTraceModeArgs[] = {
     {"",                  s_noTag,             false,   TcapXApplication::None,         0},
 };
 
+static const Parameter s_targetMS[] = {
+    {"imsi",              s_ctxtPrim_0_Tag,   false,   TcapXApplication::TBCD,          0},
+    {"msisdn",            s_ctxtPrim_1_Tag,   false,   TcapXApplication::AddressString, 0},
+    {"",                  s_noTag,            false,   TcapXApplication::None,          0},
+};
+
+static const Parameter s_lcsLocationInfo[] = {
+    {"msc-Number",        s_hexTag,           false,   TcapXApplication::AddressString, 0},
+    {"lmsi",              s_ctxtPrim_0_Tag,   true,    TcapXApplication::TBCD,          0},
+    {"extensionContainer",s_ctxtCstr_1_Tag,   true,    TcapXApplication::HexString,     0},
+    {"",                  s_noTag,            false,   TcapXApplication::None,          0},
+};
+
+static const Parameter s_sendRoutingInfoForLCSArgs[] = {
+    {"mlcNumber",         s_ctxtPrim_0_Tag,    false,   TcapXApplication::AddressString, 0},
+    {"targetMS",          s_ctxtCstr_1_Tag,    false,   TcapXApplication::Choice,        s_targetMS},
+    {"extensionContainer",s_ctxtCstr_2_Tag,    true,    TcapXApplication::HexString,     0},
+    {"",                  s_noTag,             false,   TcapXApplication::None,          0},
+};
+
+static const Parameter s_sendRoutingInfoForLCSRes[] = {
+    {"targetMS",          s_ctxtCstr_0_Tag,    false,   TcapXApplication::Choice,        s_targetMS},
+    {"lcsLocationInfo",   s_ctxtCstr_1_Tag,    false,   TcapXApplication::SequenceOf,    s_lcsLocationInfo},
+    {"extensionContainer",s_ctxtCstr_2_Tag,    true,    TcapXApplication::HexString,     0},
+    {"",                  s_noTag,             false,   TcapXApplication::None,          0},
+};
+
 static const Parameter s_resynchronisationInfo[] = {
     {"rand",   s_hexTag,  false,  TcapXApplication::HexString, 0},
     {"auts",   s_hexTag,  false,  TcapXApplication::HexString, 0},
@@ -4032,6 +4062,10 @@ static const Operation s_mapOps[] = {
     {"statusReport",                  true,  74,
 	s_sequenceTag, s_statusReportArgs,
 	s_sequenceTag, s_statusReportRes
+    },
+    {"sendRoutingInfoForLCS",         true,  85,
+	s_sequenceTag, s_sendRoutingInfoForLCSArgs,
+	s_sequenceTag, s_sendRoutingInfoForLCSRes
     },
     {"",                              false,  0,
 	s_noTag,  0,

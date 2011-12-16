@@ -2152,9 +2152,9 @@ static const Capability s_mapCapab[] = {
 
 static const AppCtxt s_mapAppCtxt[]= {
     // Network Loc Up context
-    {"networkLocUpContext-v3", "0.4.0.0.1.0.1.3", "updateLocation,forwardCheckSS-Indication,restoreData,insertSubscriberData,activateTraceMode"},
-    {"networkLocUpContext-v2", "0.4.0.0.1.0.1.2", "updateLocation,forwardCheckSS-Indication,restoreData,insertSubscriberData,activateTraceMode"},
-    {"networkLocUpContext-v1", "0.4.0.0.1.0.1.1", "updateLocation,forwardCheckSS-Indication,sendParameters,insertSubscriberData,activateTraceMode"},
+    {"networkLocUpContext-v3", "0.4.0.0.1.0.1.3", "updateLocation,forwardCheckSS-Indication,restoreData,insertSubscriberData"},
+    {"networkLocUpContext-v2", "0.4.0.0.1.0.1.2", "updateLocation,forwardCheckSS-Indication,restoreData,insertSubscriberData"},
+    {"networkLocUpContext-v1", "0.4.0.0.1.0.1.1", "updateLocation,forwardCheckSS-Indication,sendParameters,insertSubscriberData"},
 
     // Location Cancellation context
     {"locationCancelationContext-v3", "0.4.0.0.1.0.2.3", "cancelLocation"},
@@ -2189,9 +2189,9 @@ static const AppCtxt s_mapAppCtxt[]= {
     {"subscriberDataMngtContext-v1", "0.4.0.0.1.0.16.1", "insertSubscriberData,deleteSubscriberData"},
 
     // Tracing context
-    {"tracingContext-v3 ", "0.4.0.0.1.0.17.3", "activateTraceMode,deactivateTraceMode"},
-    {"tracingContext-v2 ", "0.4.0.0.1.0.17.2", "activateTraceMode,deactivateTraceMode"},
-    {"tracingContext-v1",  "0.4.0.0.1.0.17.1", "activateTraceMode,deactivateTraceMode"},
+    {"tracingContext-v3", "0.4.0.0.1.0.17.3", "activateTraceMode,deactivateTraceMode"},
+    {"tracingContext-v2", "0.4.0.0.1.0.17.2", "activateTraceMode,deactivateTraceMode"},
+    {"tracingContext-v1", "0.4.0.0.1.0.17.1", "activateTraceMode,deactivateTraceMode"},
 
     // Network functional SS context
     {"networkFunctionalSsContext-v2", "0.4.0.0.1.0.18.2", "registerSS,eraseSS,activateSS,deactivateSS,"

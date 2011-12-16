@@ -1,3 +1,12 @@
+yate (3.3.3.svn4775) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4775: + Stop decoding a sequence when
+    announced length of data was consumed.  + Updated all ASN.1 MAP
+    definitions to the TS 129.002 specification.  + Fixed the context
+    for tracing operations.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 17 Dec 2011 02:19:17 +0400
+
 yate (3.3.3.svn4772) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4772: + Fixed various ASN.1 definitions for

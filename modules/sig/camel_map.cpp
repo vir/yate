@@ -1035,13 +1035,16 @@ static bool decodeSeq(const Parameter* param, MapCamelType* type, AsnTag& tag, D
     int len = ASNLib::decodeLength(data);
     if (len < 0)
 	return false;
+    int initLen = data.length();
 
     XmlElement* child = new XmlElement(param->name);
     parent->addChild(child);
 
     if (param->content) {
 	const Parameter* params= static_cast<const Parameter*>(param->content);
-	while (params && !TelEngine::null(params->name)) {
+	while (params && params->name) {
+	    if (initLen - (int)data.length() >= len)
+		break;
 	    AsnTag childTag;
 	    AsnTag::decode(childTag,data);
 	    if (!decodeParam(params,childTag,data,child,addEnc,err)) {

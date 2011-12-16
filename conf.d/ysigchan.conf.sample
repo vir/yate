@@ -860,6 +860,11 @@
 ; A section with the name given here must exist in order to configure the SCCP level
 ;sccp=
 
+; default_hopcounter: HopCounter provided to SCCP if the application does not provide one
+; Values range 1-15, 0 or boolean false disables, boolean true sets to 15
+; A non-zero value will force using XUDT or LUDT instead of UDT messages
+;default_hopcounter=false
+
 ; transact_timeout: Time in seconds to timeout a TCAP transaction after no more activity was registered on it
 ; Defaults to 300 seconds
 ;transact_timeout=300

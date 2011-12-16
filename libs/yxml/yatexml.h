@@ -576,6 +576,13 @@ public:
      */
     virtual void clearChildren()
 	{  }
+
+    /**
+     * Check if at least one child element exists
+     * @return True if this parent has at least one child
+     */
+    inline bool hasChildren() const
+	{ return getChildren().skipNull() != 0; }
 };
 
 /**

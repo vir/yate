@@ -149,12 +149,18 @@ static const TokenDict s_sccpNotif[] = {
 static const TokenDict s_numberingPlan[] = {
     { "unknown",          0x00 },
     { "isdn",             0x01 },
+    { "e164",             0x01 },
     { "generic",          0x02 },
     { "data",             0x03 },
+    { "x121",             0x03 },
     { "telex",            0x04 },
     { "maritime-mobile",  0x05 },
+    { "e210",             0x05 },
+    { "e211",             0x05 },
     { "land-mobile",      0x06 },
+    { "e212",             0x06 },
     { "isdn-mobile",      0x07 },
+    { "e214",             0x07 },
     { "network-specific", 0x0e },
     { 0, 0 }
 };
@@ -219,9 +225,10 @@ static bool compareNamedList(const NamedList& nl1, const NamedList& nl2)
 {
     if (nl1.length() != nl2.length())
 	return false;
-    for (unsigned int i = 0;i < nl1.length();i++) {
-	NamedString* pr = nl1.getParam(i);
-	if (!nl2.getParam(*pr))
+    NamedIterator iter(nl1);
+    while (const NamedString* pr = iter.get()) {
+	const NamedString* pr2 = nl2.getParam(pr->name());
+	if (!pr2 || (*pr2 != *pr))
 	    return false;
     }
     return true;
@@ -1382,9 +1389,7 @@ bool SS7MsgSccpReassemble::canProcess(const SS7MsgSCCP* msg, const SS7Label& lab
 	return false;
     NamedList address("");
     address.copySubParams(msg->params(),YSTRING("CallingPartyAddress."));
-    if (!compareNamedList(address,m_callingPartyAddress))
-	return false;
-    return true;
+    return compareNamedList(address,m_callingPartyAddress);
 }
 
 SS7MsgSccpReassemble::Return SS7MsgSccpReassemble::appendSegment(SS7MsgSCCP* msg, const SS7Label& label)
@@ -3687,20 +3692,18 @@ bool SS7SCCP::routeSCLCMessage(SS7MsgSCCP*& msg, const SS7Label& label)
 			msg = finishead;
 		    }
 		}
+		// intentionally fall through
 	    case SS7MsgSCCP::UDT:
-	    {
 		lock.drop();
-		int ret = pushMessage(*msg->getData(),msg->params(),ssn);
-		if (ret == HandledMSU::Accepted)
-		    return true;
-		if (m_management)
-		    m_management->subsystemFailure(msg,label);
-		if (ret == HandledMSU::Unequipped)
-		    errorCode = UnequippedUser;
-		else
-		    errorCode = SubsystemFailure;
+		{
+		    int ret = pushMessage(*msg->getData(),msg->params(),ssn);
+		    if (ret == HandledMSU::Accepted)
+			return true;
+		    if (m_management)
+			m_management->subsystemFailure(msg,label);
+		    errorCode = (ret == HandledMSU::Unequipped) ? UnequippedUser : SubsystemFailure;
+		}
 		break;
-	    }
 	    case SS7MsgSCCP::XUDTS:
 	    case SS7MsgSCCP::LUDTS:
 		if (msg->params().getParam(YSTRING("Segmentation"))) {

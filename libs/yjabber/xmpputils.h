@@ -1902,7 +1902,8 @@ public:
      * Byte compare 2 strings.
      * @param s1 The first string
      * @param s2 The second string
-     * @return Return -1 if s1 < s2, 1 if s1 > s2 or 0 if the 2 strings are equal
+     * @return Return less then 0 if s1 < s2, greater then 0 if s1 > s2 or
+     *  0 if the 2 strings are equal
      */
     static int cmpBytes(const String& s1, const String& s2);
 

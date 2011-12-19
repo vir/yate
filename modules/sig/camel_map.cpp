@@ -2330,6 +2330,7 @@ static const AsnTag s_ctxtPrim_20_Tag(AsnTag::Context, AsnTag::Primitive, 20);
 static const AsnTag s_ctxtPrim_21_Tag(AsnTag::Context, AsnTag::Primitive, 21);
 static const AsnTag s_ctxtPrim_22_Tag(AsnTag::Context, AsnTag::Primitive, 22);
 static const AsnTag s_ctxtPrim_23_Tag(AsnTag::Context, AsnTag::Primitive, 23);
+static const AsnTag s_ctxtPrim_24_Tag(AsnTag::Context, AsnTag::Primitive, 24);
 static const AsnTag s_ctxtPrim_25_Tag(AsnTag::Context, AsnTag::Primitive, 25);
 static const AsnTag s_ctxtPrim_26_Tag(AsnTag::Context, AsnTag::Primitive, 26);
 static const AsnTag s_ctxtPrim_27_Tag(AsnTag::Context, AsnTag::Primitive, 27);
@@ -4504,7 +4505,7 @@ static const Parameter s_insertSubscriberDataArgs[] = {
     {"naea-PreferredCI",                               s_ctxtCstr_15_Tag, true,   TcapXApplication::Sequence,     s_naeaPreferredCI},
     {"gprsSubscriptionData",                           s_ctxtCstr_16_Tag, true,   TcapXApplication::Sequence,     s_GPRSSubscriptionData},
     {"roamingRestrictedInSgsnDueToUnsupportedFeature", s_ctxtCstr_23_Tag, true,   TcapXApplication::Null,         0},
-    {"networkAccessMode",                              s_ctxtCstr_24_Tag, true,   TcapXApplication::Enumerated,   s_networkAccessMode},
+    {"networkAccessMode",                              s_ctxtPrim_24_Tag, true,   TcapXApplication::Enumerated,   s_networkAccessMode},
     {"lsaInformation",                                 s_ctxtCstr_25_Tag, true,   TcapXApplication::Sequence,     s_LSAInformation},
     {"lmu-Indicator",                                  s_ctxtPrim_21_Tag, true,   TcapXApplication::Null,         0},
     {"lcsInformation",                                 s_ctxtCstr_22_Tag, true,   TcapXApplication::Sequence,     s_LCSInformation},

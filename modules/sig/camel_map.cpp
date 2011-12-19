@@ -1449,6 +1449,8 @@ static void decodeGSM7Bit(DataBlock& data, int& len, String& decoded)
 	}
     }
     data.cut(-len);
+    if ((bits == 0) && decoded.endsWith("\r"))
+	decoded.assign(decoded,decoded.length()-1);
 }
 
 static bool decodeGSMString(const Parameter* param, MapCamelType* type, AsnTag& tag, DataBlock& data, XmlElement* parent, bool addEnc, int& err)

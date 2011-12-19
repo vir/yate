@@ -1404,19 +1404,53 @@ static bool encodeBitString(const Parameter* param, MapCamelType* type, DataBloc
     return true;
 }
 
+// These tables contain embedded UTF-8 characters
+static const char* const s_gsm7base[128] = {
+    "@", "£", "$", "¥", "è", "é", "ù", "ì", "ò", "Ç", "\n", "Ø", "ø", "\r", "Å", "å",
+    "Δ", "_", "Φ", "Γ", "Λ", "Ω", "Π", "Ψ", "Σ", "Θ", "Ξ", "", "Æ", "æ", "ß", "É",
+    " ", "!", "\"", "#", "¤", "%", "&", "'", "(", ")", "*", "+", ",", "-", ".", "/",
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ":", ";", "<", "=", ">", "?",
+    "¡", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O",
+    "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Ä", "Ö", "Ñ", "Ü", "§",
+    "¿", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o",
+    "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "ä", "ö", "ñ", "ü", "à"
+};
+
+static const char* const s_gsm7esc[128] = {
+    "", "", "", "", "", "", "", "", "", "", "\f", "", "", "", "", "",
+    "", "", "", "", "^", "", "", "", "", "", "", "", "", "", "", "",
+    "", "", "", "", "", "", "", "", "{", "}", "", "", "", "", "", "\\",
+    "", "", "", "", "", "", "", "", "", "", "", "", "[", "~", "]", "",
+    "|", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+    "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+    "", "", "", "", "", "€", "", "", "", "", "", "", "", "", "", "",
+    "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""
+};
+
 static void decodeGSM7Bit(DataBlock& data, int& len, String& decoded)
 {
     u_int8_t bits = 0;
+    u_int16_t buf = 0;
+    bool esc = false;
     for (int i = 0; i < len; i++) {
-	if (bits == 8)
-	    bits = 1;
-	char c = (data[i] << bits) & 0x7f;
-	if (i > 0) 
-	    c |= data[i - 1] >> (8 - bits);
-	decoded << c;
-	bits++;
+	buf |= ((u_int16_t)data[i]) << bits;
+	bits += 8;
+	while (bits >= 7) {
+	    if (esc) {
+		decoded << s_gsm7esc[buf & 0x7f];
+		esc = false;
+	    }
+	    else if ((buf & 0x7f) == 0x1b)
+		esc = true;
+	    else
+		decoded << s_gsm7base[buf & 0x7f];
+	    buf >>= 7;
+	    bits -= 7;
+	}
     }
     data.cut(-len);
+    if ((bits == 0) && decoded.endsWith("\r"))
+	decoded.assign(decoded,decoded.length()-1);
 }
 
 static bool decodeGSMString(const Parameter* param, MapCamelType* type, AsnTag& tag, DataBlock& data, XmlElement* parent, bool addEnc, int& err)
@@ -1447,20 +1481,49 @@ static bool decodeGSMString(const Parameter* param, MapCamelType* type, AsnTag& 
 
 static void encodeGSM7Bit(const String& str, DataBlock& db)
 {
-    if (!str.length())
+    if (str.null())
 	return;
     u_int8_t bits = 0;
-    for (unsigned int i = 0; i < str.length(); i++) {
-	if (bits == 7) {
-	    bits = 0;
-	    continue;
+    u_int32_t buf = 0;
+    String tmp = str;
+    while (tmp) {
+	bool notFound = true;
+	for (int i = 0; i < 128; i++) {
+	    if (tmp.startSkip(s_gsm7base[i],false)) {
+		buf |= (i << bits);
+		bits += 7;
+		notFound = false;
+		break;
+	    }
 	}
-	u_int8_t byte = 0x00;
-	byte |= (str[i] & 0x7f) >> bits;
-	if (i < str.length() - 1)
-	    byte |= str[i + 1] << (7 - bits);
+	if (notFound) {
+	    for (int i = 0; i < 128; i++) {
+		if (tmp.startSkip(s_gsm7esc[i],false)) {
+		    buf |= ((i << 7) | 0x1b) << bits;
+		    bits += 14;
+		    notFound = false;
+		    break;
+		}
+	    }
+	    if (notFound) {
+		// TODO: skip one UTF-8 instead of one C char
+		tmp = tmp.c_str() + 1;
+		continue;
+	    }
+	}
+	while (bits >= 8) {
+	    u_int8_t byte = buf & 0xff;
+	    db.append(&byte,sizeof(byte));
+	    buf >>= 8;
+	    bits -= 8;
+	}
+    }
+    if (bits) {
+	u_int8_t byte = buf & 0xff;
+	// if just 1 bit use a shifted \r as filler
+	if (bits == 1)
+	    byte |= 0x1a;
 	db.append(&byte,sizeof(byte));
-	bits++;
     }
 }
 
@@ -2330,6 +2393,7 @@ static const AsnTag s_ctxtPrim_20_Tag(AsnTag::Context, AsnTag::Primitive, 20);
 static const AsnTag s_ctxtPrim_21_Tag(AsnTag::Context, AsnTag::Primitive, 21);
 static const AsnTag s_ctxtPrim_22_Tag(AsnTag::Context, AsnTag::Primitive, 22);
 static const AsnTag s_ctxtPrim_23_Tag(AsnTag::Context, AsnTag::Primitive, 23);
+static const AsnTag s_ctxtPrim_24_Tag(AsnTag::Context, AsnTag::Primitive, 24);
 static const AsnTag s_ctxtPrim_25_Tag(AsnTag::Context, AsnTag::Primitive, 25);
 static const AsnTag s_ctxtPrim_26_Tag(AsnTag::Context, AsnTag::Primitive, 26);
 static const AsnTag s_ctxtPrim_27_Tag(AsnTag::Context, AsnTag::Primitive, 27);
@@ -4504,7 +4568,7 @@ static const Parameter s_insertSubscriberDataArgs[] = {
     {"naea-PreferredCI",                               s_ctxtCstr_15_Tag, true,   TcapXApplication::Sequence,     s_naeaPreferredCI},
     {"gprsSubscriptionData",                           s_ctxtCstr_16_Tag, true,   TcapXApplication::Sequence,     s_GPRSSubscriptionData},
     {"roamingRestrictedInSgsnDueToUnsupportedFeature", s_ctxtCstr_23_Tag, true,   TcapXApplication::Null,         0},
-    {"networkAccessMode",                              s_ctxtCstr_24_Tag, true,   TcapXApplication::Enumerated,   s_networkAccessMode},
+    {"networkAccessMode",                              s_ctxtPrim_24_Tag, true,   TcapXApplication::Enumerated,   s_networkAccessMode},
     {"lsaInformation",                                 s_ctxtCstr_25_Tag, true,   TcapXApplication::Sequence,     s_LSAInformation},
     {"lmu-Indicator",                                  s_ctxtPrim_21_Tag, true,   TcapXApplication::Null,         0},
     {"lcsInformation",                                 s_ctxtCstr_22_Tag, true,   TcapXApplication::Sequence,     s_LCSInformation},

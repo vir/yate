@@ -466,6 +466,7 @@ static const TokenDict s_dict_numPlan[] = {
     { "data",         3 },
     { "telex",        4 },
     { "land-mobile",  6 },
+    { "isdn-mobile",  7 },
     { "national",     8 },
     { "private",      9 },
     { "extension-reserved",      15 },

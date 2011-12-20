@@ -1,3 +1,17 @@
+yate (3.3.3.svn4786) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4786: + Emit a call.progress from leavemail
+    so the caller hears the "voicemail not set up" prompt.  + Added
+    possibility to ask just for the password for voicemail.  + Made the
+    menu a little more informative when recording a greeting.  + Added
+    SMS forwarding operations.  + Added a debug message for cases of
+    mismatching between constructor type and the tags defined for them.
+    + Fixed some definitions mismatches between the defined tags and
+    types of the parameters.  + Added ISDN mobile numbering plan to
+    definitions.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 21 Dec 2011 02:19:22 +0400
+
 yate (3.3.3.svn4779) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4779: + Mark "networkAccessMode" properly as

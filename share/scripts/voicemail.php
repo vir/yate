@@ -343,6 +343,7 @@ while ($state != "") {
 	    switch ($ev->name) {
 		case "call.execute":
 		    $mailbox = $ev->GetValue("user");
+		    $untrusted = Yate::Str2bool($ev->GetValue("untrusted"));
 		    $partycallid = $ev->GetValue("id");
 		    $ev->params["targetid"] = $ourcallid;
 		    $ev->handled = true;
@@ -360,6 +361,10 @@ while ($state != "") {
 		    /* If the user is unknown we need to identify and authenticate */
 		    if ($mailbox == "")
 			setState("user");
+		    else if ($untrusted) {
+			$collect_user = $mailbox;
+			setState("pass");
+		    }
 		    else
 			initUser();
 		    break;

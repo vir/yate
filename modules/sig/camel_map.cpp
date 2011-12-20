@@ -2418,7 +2418,6 @@ static const AsnTag s_ctxtPrim_33_Tag(AsnTag::Context, AsnTag::Primitive, 33);
 static const AsnTag s_ctxtPrim_34_Tag(AsnTag::Context, AsnTag::Primitive, 34);
 static const AsnTag s_ctxtPrim_35_Tag(AsnTag::Context, AsnTag::Primitive, 35);
 static const AsnTag s_ctxtPrim_50_Tag(AsnTag::Context, AsnTag::Primitive, 50);
-static const AsnTag s_ctxtPrim_52_Tag(AsnTag::Context, AsnTag::Primitive, 52);
 static const AsnTag s_ctxtPrim_53_Tag(AsnTag::Context, AsnTag::Primitive, 53);
 static const AsnTag s_ctxtPrim_54_Tag(AsnTag::Context, AsnTag::Primitive, 54);
 static const AsnTag s_ctxtPrim_55_Tag(AsnTag::Context, AsnTag::Primitive, 55);
@@ -2458,6 +2457,7 @@ static const AsnTag s_ctxtCstr_31_Tag(AsnTag::Context, AsnTag::Constructor, 31);
 static const AsnTag s_ctxtCstr_32_Tag(AsnTag::Context, AsnTag::Constructor, 32);
 static const AsnTag s_ctxtCstr_50_Tag(AsnTag::Context, AsnTag::Constructor, 50);
 static const AsnTag s_ctxtCstr_51_Tag(AsnTag::Context, AsnTag::Constructor, 51);
+static const AsnTag s_ctxtCstr_52_Tag(AsnTag::Context, AsnTag::Constructor, 52);
 static const AsnTag s_ctxtCstr_53_Tag(AsnTag::Context, AsnTag::Constructor, 53);
 static const AsnTag s_ctxtCstr_57_Tag(AsnTag::Context, AsnTag::Constructor, 57);
 static const AsnTag s_ctxtCstr_59_Tag(AsnTag::Context, AsnTag::Constructor, 59);
@@ -3299,7 +3299,7 @@ static const Parameter s_TBcsmCamelTDPData[] = {
 static const Parameter s_T_CSI[] = {
     {"t-BcsmCamelTDPDataList",  s_sequenceTag,      false,  TcapXApplication::SequenceOf,   s_TBcsmCamelTDPData},
     {"extensionContainer",      s_sequenceTag,      true,   TcapXApplication::HexString,    0},
-    {"camelCapabilityHandling", s_ctxtPrim_1_Tag,   true,   TcapXApplication::Enumerated,   s_camelCapabilityHandling},
+    {"camelCapabilityHandling", s_ctxtPrim_0_Tag,   true,   TcapXApplication::Enumerated,   s_camelCapabilityHandling},
     {"notificationToCSE",       s_ctxtPrim_1_Tag,   true,   TcapXApplication::Null,         0},
     {"csi-Active",              s_ctxtPrim_2_Tag,   true,   TcapXApplication::Null,         0},
     {"",                        s_noTag,            false,  TcapXApplication::None,         0},
@@ -4581,7 +4581,7 @@ static const Parameter s_insertSubscriberDataArgs[] = {
     {"extensionContainer",                             s_ctxtCstr_14_Tag, true,   TcapXApplication::HexString,     0},
     {"naea-PreferredCI",                               s_ctxtCstr_15_Tag, true,   TcapXApplication::Sequence,     s_naeaPreferredCI},
     {"gprsSubscriptionData",                           s_ctxtCstr_16_Tag, true,   TcapXApplication::Sequence,     s_GPRSSubscriptionData},
-    {"roamingRestrictedInSgsnDueToUnsupportedFeature", s_ctxtCstr_23_Tag, true,   TcapXApplication::Null,         0},
+    {"roamingRestrictedInSgsnDueToUnsupportedFeature", s_ctxtPrim_23_Tag, true,   TcapXApplication::Null,         0},
     {"networkAccessMode",                              s_ctxtPrim_24_Tag, true,   TcapXApplication::Enumerated,   s_networkAccessMode},
     {"lsaInformation",                                 s_ctxtCstr_25_Tag, true,   TcapXApplication::Sequence,     s_LSAInformation},
     {"lmu-Indicator",                                  s_ctxtPrim_21_Tag, true,   TcapXApplication::Null,         0},
@@ -5283,7 +5283,7 @@ static const Parameter s_initialDPArgs[] = {
     {"redirectionInformation",         s_ctxtPrim_30_Tag, true,   TcapXApplication::RedirectionInformation, 0},
     {"imsi",                           s_ctxtPrim_50_Tag, true,   TcapXApplication::TBCD,                   0},
     {"subscriberState",                s_ctxtCstr_51_Tag, true,   TcapXApplication::Choice,                 s_subscriberState},
-    {"locationInformation",            s_ctxtPrim_52_Tag, true,   TcapXApplication::Sequence,               s_locationInformation},
+    {"locationInformation",            s_ctxtCstr_52_Tag, true,   TcapXApplication::Sequence,               s_locationInformation},
     {"ext-basicServiceCode",           s_ctxtCstr_53_Tag, true,   TcapXApplication::Choice,                 s_basicServiceCode},
     {"callReferenceNumber",            s_ctxtPrim_54_Tag, true,   TcapXApplication::HexString,              0},
     {"mscAddress",                     s_ctxtPrim_55_Tag, true,   TcapXApplication::AddressString,          0},

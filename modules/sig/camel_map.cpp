@@ -614,8 +614,14 @@ static bool encodeParam(const Parameter* param, DataBlock& data, XmlElement* ele
 	}
 	if (child->getAttribute(s_tagAttr) || child->getAttribute(s_encAttr))
 	    ok = encodeRaw(param,data,child,err);
-	else
+	else {
+	    if (param->tag.type() == AsnTag::Constructor && 
+		!(param->type == TcapXApplication::HexString || param->type == TcapXApplication::SequenceOf 
+		|| param->type == TcapXApplication::Sequence || param->type == TcapXApplication::Choice))
+		Debug(&__plugin,DebugGoOn,"Encoding definition conflict for param='%s', tag is defined as contructor" 
+		    " while its type is primitive",param->name.c_str());
 	    ok = type->encode(param,type,data,child,err);
+	}
 	elem->removeChild(child);
     }
 #ifdef XDEBUG

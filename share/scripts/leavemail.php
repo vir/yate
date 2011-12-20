@@ -44,6 +44,7 @@ function checkUser($called,$caller)
 function setState($newstate)
 {
     global $ourcallid;
+    global $partycallid;
     global $state;
     global $vm_base;
     global $mailbox;
@@ -64,6 +65,11 @@ function setState($newstate)
 	    $m = new Yate("chan.attach");
 	    $m->params["source"] = "wave/play/$vm_base/novmail.slin";
 	    $m->params["notify"] = $ourcallid;
+	    $m->Dispatch();
+	    $m = new Yate("call.progress");
+	    $m->id = "";
+	    $m->params["id"] = $ourcallid;
+	    $m->params["peerid"] = $partycallid;
 	    $m->Dispatch();
 	    break;
 	case "greeting":

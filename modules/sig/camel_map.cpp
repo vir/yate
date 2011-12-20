@@ -2208,7 +2208,7 @@ static const Capability s_mapCapab[] = {
     {"Miscellaneous",            {"sendIMSI", "readyForSM", "setReportingState", ""}},
     {"ErrorRecovery",            {"reset", "forwardCheckSS-Indication", "failureReport", ""}},
     {"Charging",                 {""}},
-    {"SMSC",                     {"informServiceCentre", "alertServiceCentre", "sendRoutingInfoForSM", ""}},
+    {"SMSC",                     {"informServiceCentre", "alertServiceCentre", "sendRoutingInfoForSM", "mo-forwardSM", "mt-forwardSM", ""}},
     {"None",                     {""}},
     {0, {""}},
 };
@@ -2265,10 +2265,15 @@ static const AppCtxt s_mapAppCtxt[]= {
     {"networkUnstructuredSsContext-v2", "0.4.0.0.1.0.19.2", "processUnstructuredSS-Request,unstructuredSS-Request,unstructuredSS-Notify"},
     {"networkUnstructuredSsContext-v1", "0.4.0.0.1.0.19.1", "processUnstructuredSS-Data"},
 
+    // Short message routing
     {"shortMsgGatewayContext-v3", "0.4.0.0.1.0.20.3", "sendRoutingInfoForSM"},
     {"shortMsgGatewayContext-v2", "0.4.0.0.1.0.20.2", "sendRoutingInfoForSM"},
     {"shortMsgGatewayContext-v1", "0.4.0.0.1.0.20.1", "sendRoutingInfoForSM"},
 
+    // Mobile Originated short messages
+    {"shortMsgMO-RelayContext-v3", "0.4.0.0.1.0.21.3", "mo-forwardSM"},
+
+    // Short message alerts
     {"shortMsgAlertContext-v2", "0.4.0.0.1.0.23.2", "informServiceCentre,alertServiceCentre"},
     {"shortMsgAlertContext-v1", "0.4.0.0.1.0.23.1", "informServiceCentre,alertServiceCentre"},
 
@@ -2276,6 +2281,9 @@ static const AppCtxt s_mapAppCtxt[]= {
     {"mwdMngtContext-v3", "0.4.0.0.1.0.24.3", "readyForSM"},
     {"mwdMngtContext-v2", "0.4.0.0.1.0.24.2", "readyForSM"},
     {"mwdMngtContext-v1", "0.4.0.0.1.0.24.1", "readyForSM"},
+
+    // Mobile Terminated short messages
+    {"shortMsgMT-RelayContext-v3", "0.4.0.0.1.0.25.3", "mt-forwardSM"},
 
     // sendIMSI Context
     {"imsiRetrievalContext-v2", "0.4.0.0.1.0.26.2", "sendIMSI"},
@@ -4772,6 +4780,45 @@ static const Parameter s_sendRoutingInfoForSMRes[] = {
     {"",                       s_noTag,           false,   TcapXApplication::None,           0},
 };
 
+static const Parameter s_smRpDa[] = {
+    {"imsi",                   s_ctxtPrim_0_Tag,  false,   TcapXApplication::TBCD,           0},
+    {"lmsi",                   s_ctxtPrim_1_Tag,  false,   TcapXApplication::HexString,      0},
+    {"serviceCentreAddressDA", s_ctxtPrim_4_Tag,  false,   TcapXApplication::AddressString,  0},
+    {"noSM-RP-DA",             s_ctxtPrim_5_Tag,  false,   TcapXApplication::Null,           0},
+    {"",                       s_noTag,           false,   TcapXApplication::None,           0},
+};
+
+static const Parameter s_smRpOa[] = {
+    {"msisdn",                 s_ctxtPrim_2_Tag,  false,   TcapXApplication::AddressString,  0},
+    {"serviceCentreAddressOA", s_ctxtPrim_4_Tag,  false,   TcapXApplication::AddressString,  0},
+    {"noSM-RP-OA",             s_ctxtPrim_5_Tag,  false,   TcapXApplication::Null,           0},
+    {"",                       s_noTag,           false,   TcapXApplication::None,           0},
+};
+
+static const Parameter s_mtForwardSMArgs[] = {
+    {"sm-RP-DA",               s_noTag,           false,   TcapXApplication::Choice,         s_smRpDa},
+    {"sm-RP-OA",               s_noTag,           false,   TcapXApplication::Choice,         s_smRpOa},
+    {"sm-RP-UI",               s_hexTag,          false,   TcapXApplication::HexString,      0},
+    {"extensionContainer",     s_sequenceTag,     true,    TcapXApplication::HexString,      0},
+    {"",                       s_noTag,           false,   TcapXApplication::None,           0},
+};
+
+static const Parameter s_moForwardSMArgs[] = {
+    {"sm-RP-DA",               s_noTag,           false,   TcapXApplication::Choice,         s_smRpDa},
+    {"sm-RP-OA",               s_noTag,           false,   TcapXApplication::Choice,         s_smRpOa},
+    {"sm-RP-UI",               s_hexTag,          false,   TcapXApplication::HexString,      0},
+    {"moreMessagesToSend",     s_nullTag,         true,    TcapXApplication::Null,           0},
+    {"extensionContainer",     s_sequenceTag,     true,    TcapXApplication::HexString,      0},
+    {"imsi",                   s_hexTag,          true,    TcapXApplication::TBCD,           0},
+    {"",                       s_noTag,           false,   TcapXApplication::None,           0},
+};
+
+static const Parameter s_forwardSMRes[] = {
+    {"sm-RP-UI",               s_hexTag,          true,    TcapXApplication::HexString,      0},
+    {"extensionContainer",     s_sequenceTag,     true,    TcapXApplication::HexString,      0},
+    {"",                       s_noTag,           false,   TcapXApplication::None,           0},
+};
+
 static const Parameter s_activateTraceModeArgs[] = {
     {"imsi",                  s_ctxtPrim_0_Tag,    true,    TcapXApplication::TBCD,          0},
     {"traceReference",        s_ctxtPrim_1_Tag,    false,   TcapXApplication::HexString,     0},
@@ -5078,9 +5125,17 @@ static const Operation s_mapOps[] = {
 	s_noTag, 0,
 	s_noTag, 0
     },
+    {"mt-forwardSM",                  true,  44,
+	s_sequenceTag, s_mtForwardSMArgs,
+	s_sequenceTag, s_forwardSMRes
+    },
     {"sendRoutingInfoForSM",          true,  45,
 	s_sequenceTag, s_sendRoutingInfoForSMArgs,
 	s_sequenceTag, s_sendRoutingInfoForSMRes
+    },
+    {"mo-forwardSM",                  true,  46,
+	s_sequenceTag, s_moForwardSMArgs,
+	s_sequenceTag, s_forwardSMRes
     },
     {"activateTraceMode",             true,  50,
 	s_sequenceTag, s_activateTraceModeArgs,

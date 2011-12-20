@@ -466,6 +466,7 @@ static const TokenDict s_dict_numPlan[] = {
     { "data",         3 },
     { "telex",        4 },
     { "land-mobile",  6 },
+    { "isdn-mobile",  7 },
     { "national",     8 },
     { "private",      9 },
     { "extension-reserved",      15 },
@@ -614,8 +615,14 @@ static bool encodeParam(const Parameter* param, DataBlock& data, XmlElement* ele
 	}
 	if (child->getAttribute(s_tagAttr) || child->getAttribute(s_encAttr))
 	    ok = encodeRaw(param,data,child,err);
-	else
+	else {
+	    if (param->tag.type() == AsnTag::Constructor && 
+		!(param->type == TcapXApplication::HexString || param->type == TcapXApplication::SequenceOf 
+		|| param->type == TcapXApplication::Sequence || param->type == TcapXApplication::Choice))
+		Debug(&__plugin,DebugGoOn,"Encoding definition conflict for param='%s', tag is defined as contructor" 
+		    " while its type is primitive",param->name.c_str());
 	    ok = type->encode(param,type,data,child,err);
+	}
 	elem->removeChild(child);
     }
 #ifdef XDEBUG
@@ -2208,7 +2215,7 @@ static const Capability s_mapCapab[] = {
     {"Miscellaneous",            {"sendIMSI", "readyForSM", "setReportingState", ""}},
     {"ErrorRecovery",            {"reset", "forwardCheckSS-Indication", "failureReport", ""}},
     {"Charging",                 {""}},
-    {"SMSC",                     {"informServiceCentre", "alertServiceCentre", "sendRoutingInfoForSM", ""}},
+    {"SMSC",                     {"informServiceCentre", "alertServiceCentre", "sendRoutingInfoForSM", "mo-forwardSM", "mt-forwardSM", ""}},
     {"None",                     {""}},
     {0, {""}},
 };
@@ -2265,10 +2272,15 @@ static const AppCtxt s_mapAppCtxt[]= {
     {"networkUnstructuredSsContext-v2", "0.4.0.0.1.0.19.2", "processUnstructuredSS-Request,unstructuredSS-Request,unstructuredSS-Notify"},
     {"networkUnstructuredSsContext-v1", "0.4.0.0.1.0.19.1", "processUnstructuredSS-Data"},
 
+    // Short message routing
     {"shortMsgGatewayContext-v3", "0.4.0.0.1.0.20.3", "sendRoutingInfoForSM"},
     {"shortMsgGatewayContext-v2", "0.4.0.0.1.0.20.2", "sendRoutingInfoForSM"},
     {"shortMsgGatewayContext-v1", "0.4.0.0.1.0.20.1", "sendRoutingInfoForSM"},
 
+    // Mobile Originated short messages
+    {"shortMsgMO-RelayContext-v3", "0.4.0.0.1.0.21.3", "mo-forwardSM"},
+
+    // Short message alerts
     {"shortMsgAlertContext-v2", "0.4.0.0.1.0.23.2", "informServiceCentre,alertServiceCentre"},
     {"shortMsgAlertContext-v1", "0.4.0.0.1.0.23.1", "informServiceCentre,alertServiceCentre"},
 
@@ -2276,6 +2288,9 @@ static const AppCtxt s_mapAppCtxt[]= {
     {"mwdMngtContext-v3", "0.4.0.0.1.0.24.3", "readyForSM"},
     {"mwdMngtContext-v2", "0.4.0.0.1.0.24.2", "readyForSM"},
     {"mwdMngtContext-v1", "0.4.0.0.1.0.24.1", "readyForSM"},
+
+    // Mobile Terminated short messages
+    {"shortMsgMT-RelayContext-v3", "0.4.0.0.1.0.25.3", "mt-forwardSM"},
 
     // sendIMSI Context
     {"imsiRetrievalContext-v2", "0.4.0.0.1.0.26.2", "sendIMSI"},
@@ -2404,7 +2419,6 @@ static const AsnTag s_ctxtPrim_33_Tag(AsnTag::Context, AsnTag::Primitive, 33);
 static const AsnTag s_ctxtPrim_34_Tag(AsnTag::Context, AsnTag::Primitive, 34);
 static const AsnTag s_ctxtPrim_35_Tag(AsnTag::Context, AsnTag::Primitive, 35);
 static const AsnTag s_ctxtPrim_50_Tag(AsnTag::Context, AsnTag::Primitive, 50);
-static const AsnTag s_ctxtPrim_52_Tag(AsnTag::Context, AsnTag::Primitive, 52);
 static const AsnTag s_ctxtPrim_53_Tag(AsnTag::Context, AsnTag::Primitive, 53);
 static const AsnTag s_ctxtPrim_54_Tag(AsnTag::Context, AsnTag::Primitive, 54);
 static const AsnTag s_ctxtPrim_55_Tag(AsnTag::Context, AsnTag::Primitive, 55);
@@ -2444,6 +2458,7 @@ static const AsnTag s_ctxtCstr_31_Tag(AsnTag::Context, AsnTag::Constructor, 31);
 static const AsnTag s_ctxtCstr_32_Tag(AsnTag::Context, AsnTag::Constructor, 32);
 static const AsnTag s_ctxtCstr_50_Tag(AsnTag::Context, AsnTag::Constructor, 50);
 static const AsnTag s_ctxtCstr_51_Tag(AsnTag::Context, AsnTag::Constructor, 51);
+static const AsnTag s_ctxtCstr_52_Tag(AsnTag::Context, AsnTag::Constructor, 52);
 static const AsnTag s_ctxtCstr_53_Tag(AsnTag::Context, AsnTag::Constructor, 53);
 static const AsnTag s_ctxtCstr_57_Tag(AsnTag::Context, AsnTag::Constructor, 57);
 static const AsnTag s_ctxtCstr_59_Tag(AsnTag::Context, AsnTag::Constructor, 59);
@@ -3285,7 +3300,7 @@ static const Parameter s_TBcsmCamelTDPData[] = {
 static const Parameter s_T_CSI[] = {
     {"t-BcsmCamelTDPDataList",  s_sequenceTag,      false,  TcapXApplication::SequenceOf,   s_TBcsmCamelTDPData},
     {"extensionContainer",      s_sequenceTag,      true,   TcapXApplication::HexString,    0},
-    {"camelCapabilityHandling", s_ctxtPrim_1_Tag,   true,   TcapXApplication::Enumerated,   s_camelCapabilityHandling},
+    {"camelCapabilityHandling", s_ctxtPrim_0_Tag,   true,   TcapXApplication::Enumerated,   s_camelCapabilityHandling},
     {"notificationToCSE",       s_ctxtPrim_1_Tag,   true,   TcapXApplication::Null,         0},
     {"csi-Active",              s_ctxtPrim_2_Tag,   true,   TcapXApplication::Null,         0},
     {"",                        s_noTag,            false,  TcapXApplication::None,         0},
@@ -4567,7 +4582,7 @@ static const Parameter s_insertSubscriberDataArgs[] = {
     {"extensionContainer",                             s_ctxtCstr_14_Tag, true,   TcapXApplication::HexString,     0},
     {"naea-PreferredCI",                               s_ctxtCstr_15_Tag, true,   TcapXApplication::Sequence,     s_naeaPreferredCI},
     {"gprsSubscriptionData",                           s_ctxtCstr_16_Tag, true,   TcapXApplication::Sequence,     s_GPRSSubscriptionData},
-    {"roamingRestrictedInSgsnDueToUnsupportedFeature", s_ctxtCstr_23_Tag, true,   TcapXApplication::Null,         0},
+    {"roamingRestrictedInSgsnDueToUnsupportedFeature", s_ctxtPrim_23_Tag, true,   TcapXApplication::Null,         0},
     {"networkAccessMode",                              s_ctxtPrim_24_Tag, true,   TcapXApplication::Enumerated,   s_networkAccessMode},
     {"lsaInformation",                                 s_ctxtCstr_25_Tag, true,   TcapXApplication::Sequence,     s_LSAInformation},
     {"lmu-Indicator",                                  s_ctxtPrim_21_Tag, true,   TcapXApplication::Null,         0},
@@ -4769,6 +4784,45 @@ static const Parameter s_sendRoutingInfoForSMRes[] = {
     {"imsi",                   s_hexTag,          false,   TcapXApplication::TBCD,           0},
     {"locationInfoWithLMSI",   s_ctxtCstr_0_Tag,  false,   TcapXApplication::Sequence,       s_locationInfoWithLMSI},
     {"extensionContainer",     s_ctxtCstr_4_Tag,  true,    TcapXApplication::HexString,      0},
+    {"",                       s_noTag,           false,   TcapXApplication::None,           0},
+};
+
+static const Parameter s_smRpDa[] = {
+    {"imsi",                   s_ctxtPrim_0_Tag,  false,   TcapXApplication::TBCD,           0},
+    {"lmsi",                   s_ctxtPrim_1_Tag,  false,   TcapXApplication::HexString,      0},
+    {"serviceCentreAddressDA", s_ctxtPrim_4_Tag,  false,   TcapXApplication::AddressString,  0},
+    {"noSM-RP-DA",             s_ctxtPrim_5_Tag,  false,   TcapXApplication::Null,           0},
+    {"",                       s_noTag,           false,   TcapXApplication::None,           0},
+};
+
+static const Parameter s_smRpOa[] = {
+    {"msisdn",                 s_ctxtPrim_2_Tag,  false,   TcapXApplication::AddressString,  0},
+    {"serviceCentreAddressOA", s_ctxtPrim_4_Tag,  false,   TcapXApplication::AddressString,  0},
+    {"noSM-RP-OA",             s_ctxtPrim_5_Tag,  false,   TcapXApplication::Null,           0},
+    {"",                       s_noTag,           false,   TcapXApplication::None,           0},
+};
+
+static const Parameter s_mtForwardSMArgs[] = {
+    {"sm-RP-DA",               s_noTag,           false,   TcapXApplication::Choice,         s_smRpDa},
+    {"sm-RP-OA",               s_noTag,           false,   TcapXApplication::Choice,         s_smRpOa},
+    {"sm-RP-UI",               s_hexTag,          false,   TcapXApplication::HexString,      0},
+    {"extensionContainer",     s_sequenceTag,     true,    TcapXApplication::HexString,      0},
+    {"",                       s_noTag,           false,   TcapXApplication::None,           0},
+};
+
+static const Parameter s_moForwardSMArgs[] = {
+    {"sm-RP-DA",               s_noTag,           false,   TcapXApplication::Choice,         s_smRpDa},
+    {"sm-RP-OA",               s_noTag,           false,   TcapXApplication::Choice,         s_smRpOa},
+    {"sm-RP-UI",               s_hexTag,          false,   TcapXApplication::HexString,      0},
+    {"moreMessagesToSend",     s_nullTag,         true,    TcapXApplication::Null,           0},
+    {"extensionContainer",     s_sequenceTag,     true,    TcapXApplication::HexString,      0},
+    {"imsi",                   s_hexTag,          true,    TcapXApplication::TBCD,           0},
+    {"",                       s_noTag,           false,   TcapXApplication::None,           0},
+};
+
+static const Parameter s_forwardSMRes[] = {
+    {"sm-RP-UI",               s_hexTag,          true,    TcapXApplication::HexString,      0},
+    {"extensionContainer",     s_sequenceTag,     true,    TcapXApplication::HexString,      0},
     {"",                       s_noTag,           false,   TcapXApplication::None,           0},
 };
 
@@ -5078,9 +5132,17 @@ static const Operation s_mapOps[] = {
 	s_noTag, 0,
 	s_noTag, 0
     },
+    {"mt-forwardSM",                  true,  44,
+	s_sequenceTag, s_mtForwardSMArgs,
+	s_sequenceTag, s_forwardSMRes
+    },
     {"sendRoutingInfoForSM",          true,  45,
 	s_sequenceTag, s_sendRoutingInfoForSMArgs,
 	s_sequenceTag, s_sendRoutingInfoForSMRes
+    },
+    {"mo-forwardSM",                  true,  46,
+	s_sequenceTag, s_moForwardSMArgs,
+	s_sequenceTag, s_forwardSMRes
     },
     {"activateTraceMode",             true,  50,
 	s_sequenceTag, s_activateTraceModeArgs,
@@ -5222,7 +5284,7 @@ static const Parameter s_initialDPArgs[] = {
     {"redirectionInformation",         s_ctxtPrim_30_Tag, true,   TcapXApplication::RedirectionInformation, 0},
     {"imsi",                           s_ctxtPrim_50_Tag, true,   TcapXApplication::TBCD,                   0},
     {"subscriberState",                s_ctxtCstr_51_Tag, true,   TcapXApplication::Choice,                 s_subscriberState},
-    {"locationInformation",            s_ctxtPrim_52_Tag, true,   TcapXApplication::Sequence,               s_locationInformation},
+    {"locationInformation",            s_ctxtCstr_52_Tag, true,   TcapXApplication::Sequence,               s_locationInformation},
     {"ext-basicServiceCode",           s_ctxtCstr_53_Tag, true,   TcapXApplication::Choice,                 s_basicServiceCode},
     {"callReferenceNumber",            s_ctxtPrim_54_Tag, true,   TcapXApplication::HexString,              0},
     {"mscAddress",                     s_ctxtPrim_55_Tag, true,   TcapXApplication::AddressString,          0},

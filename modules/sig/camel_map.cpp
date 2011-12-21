@@ -7531,21 +7531,22 @@ bool XmlToTcap::parse(NamedList& tcapParams)
 	c = tcapParams.getParam(s_tcapReqType);
 	if (c) {
 	    m_type = Tcap;
-	    AppCtxt* appCtxt = 0;
+	    // retrieve application context
 	    NamedString* ctxt = tcapParams.getParam(s_tcapAppCtxt);
 	    if (!TelEngine::null(ctxt)) {
 		const AppCtxt* search = (m_app->type() == TcapXUser::MAP ? s_mapAppCtxt : s_camelAppCtxt);
-		appCtxt = (AppCtxt*)findCtxtFromStr(*ctxt,search);
+		AppCtxt* appCtxt = (AppCtxt*)findCtxtFromStr(*ctxt,search);
+		if (appCtxt)
+		    tcapParams.setParam(s_tcapAppCtxt,appCtxt->oid);
 	    }
-	    if (appCtxt)
-		tcapParams.setParam(s_tcapAppCtxt,appCtxt->oid);
+	    // retrieve MAP dialog context
 	    ctxt = tcapParams.getParam(s_tcapDirectReference);
 	    if (!TelEngine::null(ctxt)) {
 		const AppCtxt* search = (m_app->type() == TcapXUser::MAP ? s_mapDialogCtxt : 0);
-		appCtxt = (AppCtxt*)findCtxtFromStr(*ctxt,search);
+		AppCtxt* appCtxt = (AppCtxt*)findCtxtFromStr(*ctxt,search);
+		if (appCtxt)
+		    tcapParams.setParam(s_tcapDirectReference,appCtxt->oid);
 	    }
-	    if (appCtxt)
-		tcapParams.setParam(s_tcapDirectReference,appCtxt->oid);
 	    // we shoudn't receive P_Abort from application, but make sure anyway
 	    ctxt = tcapParams.getParam(s_tcapAbortCause);
 	    if (!TelEngine::null(ctxt) && (*ctxt) == "pAbort") {

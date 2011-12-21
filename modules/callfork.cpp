@@ -415,6 +415,8 @@ void ForkMaster::lostSlave(ForkSlave* slave, const char* reason)
     m_slaves.remove(slave,false);
     if (m_answered)
 	return;
+    if (reason)
+	m_exec->setParam("fork.reason",reason);
     if (reason && m_failures && (m_failures.matches(reason) != m_failuresRev)) {
 	Debug(&__plugin,DebugCall,"Call '%s' terminating early on reason '%s'",
 	    getPeerId().c_str(),reason);

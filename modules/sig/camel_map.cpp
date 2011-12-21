@@ -60,7 +60,7 @@ struct TCAPMap {
 struct AppCtxt {
     const char* name;
     const char* oid;
-    const char* ops;
+    const String ops;
 };
 
 struct Capability {
@@ -152,6 +152,7 @@ public:
     bool parse(NamedList& tcapParams);
     bool parse(NamedList& tcapParams, XmlElement* elem, String prefix);
     bool handleComponent(NamedList& tcapParams, XmlElement* elem);
+    bool handleMAPDialog(NamedList& tcapParams, XmlElement* elem, String prefix);
     void reset();
     static const TCAPMap s_tcapMap[];
     const TCAPMap* findMap(String& path);
@@ -187,7 +188,9 @@ public:
     bool buildXMLMessage(NamedList& msg, XmlFragment* frag, MsgType type);
     static const XMLMap s_xmlMap[];
     void reset();
-    void addToXml(XmlElement* root, const XMLMap* map, NamedString* val);
+    void handleMAPDialog(XmlElement* root, NamedList& params);
+    bool decodeDialogPDU(XmlElement* el, const AppCtxt* ctxt, DataBlock& data);
+    XmlElement* addToXml(XmlElement* root, const XMLMap* map, NamedString* val);
     void addComponentsToXml(XmlElement* root, NamedList& params, AppCtxt* ctxt);
     const XMLMap* findMap(String& elem);
     void addParametersToXml(XmlElement* elem, String& payloadHex, Operation* op, bool searchArgs = true);
@@ -401,6 +404,9 @@ static const String s_innAttr = "inn";
 static const String s_completeAttr = "complete";
 static const String s_restrictAttr = "restrict";
 static const String s_screenedtAttr = "screened";
+static const String s_userInformation = "userInformation";
+static const String s_encodingContentsTag = "encoding-contents";
+static const String s_directReferenceTag = "direct-reference";
 
 static const String s_tcapUser = "tcap.user";
 static const String s_tcapRequestError = "tcap.request.error";
@@ -408,6 +414,9 @@ static const String s_tcapLocalTID = "tcap.transaction.localTID";
 static const String s_tcapRemoteTID = "tcap.transaction.remoteTID";
 static const String s_tcapEndNow = "tcap.transaction.endNow";
 static const String s_tcapAppCtxt = "tcap.dialogPDU.application-context-name";
+static const String s_tcapDirectReference = "tcap.dialogPDU.userInformation.direct-reference";
+static const String s_tcapEncodingContent = "tcap.dialogPDU.userInformation.encoding-contents";
+static const String s_tcapEncodingType = "tcap.dialogPDU.userInformation.encoding-type";
 static const String s_tcapReqType = "tcap.request.type";
 static const String s_tcapCompCount = "tcap.component.count";
 static const String s_tcapCompPrefix = "tcap.component";
@@ -420,6 +429,8 @@ static const String s_tcapOpCode = "operationCode";
 static const String s_tcapErrCodeType = "errorCodeType";
 static const String s_tcapErrCode = "errorCode";
 static const String s_tcapProblemCode = "problemCode";
+
+static NamedString s_encodingPath(s_tcapEncodingContent,"");
 
 static const TokenDict s_tagTypes[] = {
     {"universal",    AsnTag::Universal},
@@ -607,7 +618,7 @@ static bool encodeParam(const Parameter* param, DataBlock& data, XmlElement* ele
     if (!type)
 	ok = encodeRaw(param,data,elem,err);
     else {
-	XmlElement* child = (elem->getTag() == s_component ? elem->findFirstChild(&param->name) : elem);
+	XmlElement* child = (elem->getTag() == s_component || elem->getTag() == s_encodingContentsTag ? elem->findFirstChild(&param->name) : elem);
 	if (!child) {
 	    if (!param->isOptional)
 		return false;
@@ -6323,6 +6334,85 @@ static const Operation s_camelErrors[] = {
     },
 };
 
+static const AppCtxt s_mapDialogCtxt[] = {
+    {"map-DialogueAS", "0.4.0.0.1.1.1.1", "map-open,map-accept,map-close,map-refuse,map-userAbort,map-providerAbort"},
+    {"", "", ""}
+};
+
+static const Parameter s_mapOpenSeq[] = {
+    {"destinationReference",   s_ctxtPrim_0_Tag, true, TcapXApplication::AddressString, 0},
+    {"originationReference",   s_ctxtPrim_1_Tag, true, TcapXApplication::AddressString, 0},
+    {"extensionContainer",     s_sequenceTag,    true, TcapXApplication::HexString,     0},
+    {"",                       s_noTag,          false,TcapXApplication::None,          0},
+};
+
+static const TokenDict s_mapRefuseReasonEnum[] = {
+    {"noReasonGiven",               0},
+    {"invalidDestinationReference", 1},
+    {"invalidOriginatingReference", 2},
+    {0,0},
+};
+
+static const Parameter s_mapRefuseSeq[] = {
+    {"reason",                        s_enumTag,        false,   TcapXApplication::Enumerated,    s_mapRefuseReasonEnum},
+    {"extensionContainer",            s_sequenceTag,    true,    TcapXApplication::HexString,     0},
+    {"alternativeApplicationContext", s_oidTag,         true,    TcapXApplication::OID,           0},
+    {"",                              s_noTag,          false,   TcapXApplication::None,          0},
+};
+
+static const TokenDict s_rscUnavailableReason[] = {
+    {"shortTermResourceLimitation",   0},
+    {"longTermResourceLimitation",    1},
+    {0,0},
+};
+
+static const TokenDict s_procCancelReason[] = {
+    {"handoverCancellation",       0},
+    {"radioChannelRelease",        1},
+    {"networkPathRelease",         2},
+    {"callRelease",                3},
+    {"associatedProcedureFailure", 4},
+    {"tandemDialogueRelease",      5},
+    {"remoteOperationsFailure",    6},
+    {0,0},
+};
+
+static const Parameter s_mapUserAbortChoice[] = {
+    {"userSpecificReason",                s_ctxtPrim_0_Tag,     false,  TcapXApplication::Null,         0},
+    {"userResourceLimitation",            s_ctxtPrim_1_Tag,     false,  TcapXApplication::Null,         0},
+    {"resourceUnavailable",               s_ctxtPrim_2_Tag,     false,  TcapXApplication::Enumerated,   s_rscUnavailableReason},
+    {"applicationProcedureCancellation",  s_ctxtPrim_3_Tag,     false,  TcapXApplication::Enumerated,   s_procCancelReason},
+    {"",                                  s_noTag,              false,   TcapXApplication::None,        0},
+};
+
+static const Parameter s_mapUserAbortSeq[] = {
+    {"map-UserAbortChoice",           s_noTag,         false,    TcapXApplication::Choice,       s_mapUserAbortChoice},
+    {"extensionContainer",            s_sequenceTag,    true,    TcapXApplication::HexString,     0},
+    {"",                              s_noTag,          false,   TcapXApplication::None,          0},
+};
+
+static const TokenDict s_providerAbortReason[] = {
+    {"abnormalDialogue",   0},
+    {"invalidPDU",         1},
+    {0,0},
+};
+
+static const Parameter s_mapProviderAbortSeq[] = {
+    {"map-ProviderAbortReason",       s_enumTag,        false,   TcapXApplication::Enumerated,    s_providerAbortReason},
+    {"extensionContainer",            s_sequenceTag,    true,    TcapXApplication::HexString,     0},
+    {"",                              s_noTag,          false,   TcapXApplication::None,          0},
+};
+
+static const Parameter s_mapDialogChoice[] = {
+    {"map-open",           s_ctxtCstr_0_Tag, false,  TcapXApplication::Sequence, s_mapOpenSeq},
+    {"map-accept",         s_ctxtCstr_1_Tag, false,  TcapXApplication::Sequence, s_extensionContainerRes},
+    {"map-close",          s_ctxtCstr_2_Tag, false,  TcapXApplication::Sequence, s_extensionContainerRes},    
+    {"map-refuse",         s_ctxtCstr_3_Tag, false,  TcapXApplication::Sequence, s_mapRefuseSeq}, 
+    {"map-userAbort",      s_ctxtCstr_4_Tag, false,  TcapXApplication::Sequence, s_mapUserAbortSeq}, 
+    {"map-providerAbort",  s_ctxtCstr_5_Tag, false,  TcapXApplication::Sequence, s_mapProviderAbortSeq}, 
+    {"",                   s_noTag,          false,  TcapXApplication::None,     0},
+};
+
 static const TokenDict s_appStates[] = {
     {"waiting",     TcapXApplication::Waiting},
     {"active",      TcapXApplication::Active},
@@ -6423,11 +6513,10 @@ static bool findDefCapability(TcapXUser::UserType type, const String& cap)
     return false;
 }
 
-static const AppCtxt* findCtxtFromOid(TcapXUser::UserType type, const String& oid)
+static const AppCtxt* findCtxtFromOid(const String& oid, const AppCtxt* ctxt)
 {
     DDebug(&__plugin,DebugAll,"findCtxtFromOid(oid=%s)",oid.c_str());
-    const AppCtxt* ctxt = (type == TcapXUser::MAP ? s_mapAppCtxt : s_camelAppCtxt);
-    while (ctxt->name) {
+    while (ctxt && ctxt->name) {
 	if (oid == ctxt->oid)
 	    return ctxt;
 	ctxt++;
@@ -6435,11 +6524,10 @@ static const AppCtxt* findCtxtFromOid(TcapXUser::UserType type, const String& oi
     return 0;
 }
 
-static const AppCtxt* findCtxtFromStr(TcapXUser::UserType type, const String& oid)
+static const AppCtxt* findCtxtFromStr(const String& oid, const AppCtxt* ctxt)
 {
     DDebug(&__plugin,DebugAll,"findCtxtFromStr(ctxt=%s)",oid.c_str());
-    const AppCtxt* ctxt = (type == TcapXUser::MAP ? s_mapAppCtxt : s_camelAppCtxt);
-    while (ctxt->name) {
+    while (ctxt && ctxt->name) {
 	if (oid == ctxt->name)
 	    return ctxt;
 	ctxt++;
@@ -6836,8 +6924,10 @@ bool TcapToXml::buildXMLMessage(NamedList& params, XmlFragment* msg, MsgType typ
 
     AppCtxt* appCtxt = 0;
     NamedString* ctxt = params.getParam(s_tcapAppCtxt);
-    if (!TelEngine::null(ctxt))
-	appCtxt = (AppCtxt*)findCtxtFromOid(m_app->type(),*ctxt);
+    if (!TelEngine::null(ctxt)) {
+	const AppCtxt* contexts = (m_app->type() == TcapXUser::MAP ? s_mapAppCtxt : s_camelAppCtxt);
+	appCtxt = (AppCtxt*)findCtxtFromOid(*ctxt,contexts);
+    }
     if (appCtxt)
 	params.setParam(s_tcapAppCtxt,appCtxt->name);
 
@@ -6848,6 +6938,9 @@ bool TcapToXml::buildXMLMessage(NamedList& params, XmlFragment* msg, MsgType typ
 	params.setParam(s_tcapAbortInfo,lookup(code,SS7TCAPError::s_errorTypes,*ctxt));
     }
 
+    if (m_app->type() == TcapXUser::MAP && !TelEngine::null(params.getParam(s_tcapDirectReference)))
+	handleMAPDialog(el,params);
+    
     for (unsigned int i = 0; i < params.count(); i++) {
 	NamedString* ns = params.getParam(i);
 	if (TelEngine::null(ns))
@@ -6860,17 +6953,71 @@ bool TcapToXml::buildXMLMessage(NamedList& params, XmlFragment* msg, MsgType typ
 	addToXml(el,map,ns);
     }
 
-
     addComponentsToXml(el,params,appCtxt);
     return true;
 }
 
-void TcapToXml::addToXml(XmlElement* root, const XMLMap* map, NamedString* val)
+void TcapToXml::handleMAPDialog(XmlElement* root, NamedList& params)
 {
-    if (!(root && map && !TelEngine::null(val)))
+    if (!root)
 	return;
+    XDebug(&__plugin,DebugAll,"TcapToXml::handleMAPDialog(root=%p) [%p]",root,this);
+    NamedString* param = params.getParam(s_tcapDirectReference);
+    if (TelEngine::null(param))
+	return;
+    const AppCtxt* mapCtxt = findCtxtFromOid(*param,s_mapDialogCtxt);
+    // we don't know the context, leave it alone
+    if (!mapCtxt)
+	return;
+    if (mapCtxt)
+	params.setParam(s_tcapDirectReference,mapCtxt->name);
+    param = params.getParam(s_tcapEncodingContent);
+    if (TelEngine::null(param))
+	return;
+    const XMLMap* map = findMap((String&)s_tcapEncodingContent);
+    if (!map)
+	return;
+    XmlElement* parent = addToXml(root,map,&s_encodingPath);
+    if (!parent)
+	return;
+    DataBlock db;
+    db.unHexify(param->c_str(),param->length(),' ');
+    if (decodeDialogPDU(parent,mapCtxt,db)) {
+	params.clearParam(s_tcapEncodingContent);
+    }
+}
+
+bool TcapToXml::decodeDialogPDU(XmlElement* el, const AppCtxt* ctxt, DataBlock& data)
+{
+    if (!(el && ctxt))
+	return false;
+    XDebug(&__plugin,DebugAll,"TcapToXml::decodeDialogPDU(el=%p) [%p]",el,this);
+    const Parameter* param = s_mapDialogChoice;
+    int err = TcapXApplication::NoError;
+    while (param && param->name) {
+	AsnTag tag;
+	AsnTag::decode(tag,data);
+	if (decodeParam(param,tag,data,el,m_app->addEncoding(),err)) {
+	    ObjList* pdus = ctxt->ops.split(',',false);
+	    bool ok = pdus->find(param->name);
+	    TelEngine::destruct(pdus);
+	    if (!ok)
+		el->clearChildren();
+	    return ok;
+	}
+	param++;
+    }
+    if (data.length())
+	decodeRaw(el,data);
+    return true;
+}
+
+XmlElement* TcapToXml::addToXml(XmlElement* root, const XMLMap* map, NamedString* val)
+{
+    if (!(root && map && val))
+	return 0;
     if (map->type == None)
-	return;
+	return 0;
     XDebug(&__plugin,DebugAll,"TcapToXml::addToXml(frag=%p, map=%s[%p], val=%s[%p]) [%p]",root,map->map,map,val->name().c_str(),val,this);
     String mapStr = map->map;
     ObjList* path = mapStr.split('.',false);
@@ -6906,6 +7053,7 @@ void TcapToXml::addToXml(XmlElement* root, const XMLMap* map, NamedString* val)
 		child = parent->findFirstChild(&tag);
 		if (child) {
 		    child->addText(*val);
+		    parent = child;
 		    break;
 		}
 		// fall through and create new child if not found
@@ -6913,6 +7061,7 @@ void TcapToXml::addToXml(XmlElement* root, const XMLMap* map, NamedString* val)
 		child = new XmlElement(tag);
 		child->addText(*val);
 		parent->addChild(child);
+		parent = child;
 		break;
 	    case Value:
 		parent->addText(*val);
@@ -6926,6 +7075,7 @@ void TcapToXml::addToXml(XmlElement* root, const XMLMap* map, NamedString* val)
 	}
     }
     TelEngine::destruct(path);
+    return parent;
 }
 
 void TcapToXml::addComponentsToXml(XmlElement* el, NamedList& params, AppCtxt* ctxt)
@@ -7309,6 +7459,66 @@ bool XmlToTcap::handleComponent(NamedList& tcapParams, XmlElement* elem)
     return true;
 }
 
+bool XmlToTcap::handleMAPDialog(NamedList& tcapParams, XmlElement* elem, String prefix)
+{
+    DDebug(&__plugin,DebugAll,"XMLToTcap::handleMAPDialog(params=%p, elem=%p, prefix=%s) [%p]",&tcapParams,elem,prefix.c_str(),this);
+    if (!elem && elem->getTag() != s_userInformation)
+	return false;
+
+    XmlElement* content = elem->findFirstChild(&s_encodingContentsTag);
+    if (!(content && content->findFirstChild()))
+	return parse(tcapParams,elem,prefix);
+
+    DataBlock payload;
+    const Parameter* param = s_mapDialogChoice;
+    int err = TcapXApplication::NoError;
+    while (param && param->name) {
+	DataBlock db;
+	if (encodeParam(param,db,content,err)) {
+	    payload.append(db);
+	    break;
+	}
+	param++;
+    }
+    XmlElement* child = content->pop();
+    while (child) {
+	DataBlock db;
+	encodeRaw(param,db,child,err);
+	payload.append(db);
+	TelEngine::destruct(child);
+	child = content->pop();
+    }
+    // set encoding contents and encoding contents type
+    String hexString;
+    hexString.hexify(payload.data(),payload.length(),' ');
+    tcapParams.setParam(s_tcapEncodingContent,hexString);
+    tcapParams.setParam(s_tcapEncodingType,YSTRING("single-ASN1-type-contructor"));
+
+    // set direct reference
+    XmlElement* reference = elem->findFirstChild(&s_directReferenceTag);
+    if (reference) {
+	const AppCtxt* appCtxt = findCtxtFromStr(reference->getText(),s_mapDialogCtxt);
+	if (!appCtxt)
+	    tcapParams.setParam(s_tcapDirectReference,reference->getText());
+	else
+	    tcapParams.setParam(s_tcapDirectReference,appCtxt->oid);
+    }
+    else {
+	// find reference for decoded param
+	const AppCtxt* ctxt = s_mapDialogCtxt;
+	while (ctxt && ctxt->name) {
+	    ObjList* pdus = ctxt->ops.split(',',false);
+	    bool ok = (param && param->name && pdus->find(param->name));
+	    TelEngine::destruct(pdus);
+	    if (ok) {
+		tcapParams.setParam(s_tcapDirectReference,ctxt->oid);
+		break;
+	    }
+	}
+    }
+    return true;
+}
+
 bool XmlToTcap::parse(NamedList& tcapParams)
 {
     Lock l(this);
@@ -7323,10 +7533,19 @@ bool XmlToTcap::parse(NamedList& tcapParams)
 	    m_type = Tcap;
 	    AppCtxt* appCtxt = 0;
 	    NamedString* ctxt = tcapParams.getParam(s_tcapAppCtxt);
-	    if (!TelEngine::null(ctxt))
-		appCtxt = (AppCtxt*)findCtxtFromStr(m_app->type(),*ctxt);
+	    if (!TelEngine::null(ctxt)) {
+		const AppCtxt* search = (m_app->type() == TcapXUser::MAP ? s_mapAppCtxt : s_camelAppCtxt);
+		appCtxt = (AppCtxt*)findCtxtFromStr(*ctxt,search);
+	    }
 	    if (appCtxt)
 		tcapParams.setParam(s_tcapAppCtxt,appCtxt->oid);
+	    ctxt = tcapParams.getParam(s_tcapDirectReference);
+	    if (!TelEngine::null(ctxt)) {
+		const AppCtxt* search = (m_app->type() == TcapXUser::MAP ? s_mapDialogCtxt : 0);
+		appCtxt = (AppCtxt*)findCtxtFromStr(*ctxt,search);
+	    }
+	    if (appCtxt)
+		tcapParams.setParam(s_tcapDirectReference,appCtxt->oid);
 	    // we shoudn't receive P_Abort from application, but make sure anyway
 	    ctxt = tcapParams.getParam(s_tcapAbortCause);
 	    if (!TelEngine::null(ctxt) && (*ctxt) == "pAbort") {
@@ -7353,6 +7572,8 @@ bool XmlToTcap::parse(NamedList& tcapParams, XmlElement* elem, String prefix)
 	hasChildren = true;
 	if (child->getTag() == s_component)
 	    status = handleComponent(tcapParams,child);
+	else if (child->getTag() == s_userInformation && m_app->type() == TcapXUser::MAP)
+	    status = handleMAPDialog(tcapParams,child,(!TelEngine::null(prefix) ? prefix + "." + child->getTag() : child->getTag()));
 	else
 	    status = parse(tcapParams,child, (!TelEngine::null(prefix) ? prefix + "." + child->getTag() : child->getTag()));
 	TelEngine::destruct(child);

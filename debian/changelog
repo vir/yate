@@ -1,3 +1,11 @@
+yate (3.3.3.svn4790) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4790: + An empty route causes a "noroute"
+    error.  + Trim any leading or trailing whitespaces from returned
+    route.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 23 Dec 2011 02:19:24 +0400
+
 yate (3.3.3.svn4789) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4789: + Added decoders and encoders for MAP

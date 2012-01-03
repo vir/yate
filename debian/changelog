@@ -1,3 +1,13 @@
+yate (3.3.3.svn4791) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4791: + Trim any leading or trailing
+    whitespaces from returned route.  + Use the call.update message to
+    transport these events as call.ringing and call.progress are blocked
+    for answered calls.  + Properly handle Call Progress messages while
+    the call is answered.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 04 Jan 2012 02:19:23 +0400
+
 yate (3.3.3.svn4790) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4790: + An empty route causes a "noroute"

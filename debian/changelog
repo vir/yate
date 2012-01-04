@@ -1,3 +1,15 @@
+yate (3.3.3.svn4794) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4794: + Properly handle Call Progress
+    messages while the call is answered.  + Clear the ringing slave ID
+    when the slave is disconnected on timer too.  + Fixed bugs. Allow a
+    multipart body to start with dash-boundary (no CR/LF before). Don't
+    process a body part if a boundary is not found after it.  + Refuse
+    new incoming calls if don't accepted by the driver (engine exiting
+    or full) in sig, iax and jingle modules.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 05 Jan 2012 02:19:19 +0400
+
 yate (3.3.3.svn4791) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4791: + Trim any leading or trailing

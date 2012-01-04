@@ -2509,6 +2509,15 @@ void SigDriver::handleEvent(SignallingEvent* event)
     }
     // No channel
     if (event->type() == SignallingEvent::NewCall) {
+	if (!canAccept(true)) {
+	    Debug(this,DebugWarn,"Refusing new sig call, full or exiting");
+	    SignallingMessage* msg = new SignallingMessage;
+	    msg->params().addParam("reason","switch-congestion");
+	    SignallingEvent* ev = new SignallingEvent(SignallingEvent::Release,msg,event->call());
+	    TelEngine::destruct(msg);
+	    ev->sendEvent();
+	    return;
+	}
 	lock();
 	ch = new SigChannel(event);
 	ch->initChan();

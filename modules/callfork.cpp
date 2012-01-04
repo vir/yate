@@ -49,6 +49,7 @@ public:
 	{ return m_slaves; }
     bool msgToSlaves(const Message& msg, const String& match);
 protected:
+    bool clearRinging(const String& id);
     void clear(bool softly);
     String* getNextDest();
     bool forkSlave(String* dest);
@@ -406,12 +407,7 @@ void ForkMaster::checkTimer(const Time& tmr)
 void ForkMaster::lostSlave(ForkSlave* slave, const char* reason)
 {
     Lock lock(CallEndpoint::commonMutex());
-    bool ringing = m_ringing == slave->id();
-    if (ringing) {
-	m_fake = false;
-	m_ringing.clear();
-	clearEndpoint();
-    }
+    bool ringing = clearRinging(slave->id());
     m_slaves.remove(slave,false);
     if (m_answered)
 	return;
@@ -575,6 +571,16 @@ bool ForkMaster::msgToSlaves(const Message& msg, const String& match)
     return ok;
 }
 
+bool ForkMaster::clearRinging(const String& id)
+{
+    if (m_ringing != id)
+	return false;
+    m_fake = false;
+    m_ringing.clear();
+    clearEndpoint();
+    return true;
+}
+
 void ForkMaster::clear(bool softly)
 {
     RefPointer<ForkSlave> slave;
@@ -583,6 +589,7 @@ void ForkMaster::clear(bool softly)
     while (slave = static_cast<ForkSlave*>(iter.get())) {
 	if (softly && (slave->type() == ForkSlave::Persistent))
 	    continue;
+	clearRinging(slave->id());
 	m_slaves.remove(slave,false);
 	slave->clearMaster();
 	CallEndpoint::commonMutex().unlock();

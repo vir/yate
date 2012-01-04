@@ -743,7 +743,8 @@ void YJGEngine::processEvent(JGEvent* event)
     else {
 	if (event->type() == JGEvent::Jingle &&
 	    event->action() == JGSession::ActInitiate) {
-	    if (event->session()->ref()) {
+	    bool ok = plugin.canAccept(true);
+	    if (ok && event->session()->ref()) {
 		conn = new YJGConnection(event);
 		conn->initChan();
 		// Constructor failed ?
@@ -751,6 +752,10 @@ void YJGEngine::processEvent(JGEvent* event)
 		    TelEngine::destruct(conn);
 		else if (!conn->route())
 		    event->session()->userData(0);
+	    }
+	    else if (!ok) {
+		Debug(&plugin,DebugWarn,"Refusing new Jingle call, full or exiting");
+		event->session()->hangup(event->session()->createReason(JGSession::ReasonGeneral));
 	    }
 	    else {
 		Debug(this,DebugWarn,"Session ref failed for new connection");

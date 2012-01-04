@@ -1178,11 +1178,18 @@ void YIAXEngine::processEvent(IAXEvent* event)
 	    else {
 		if (event->type() == IAXEvent::New) {
 		    // Incoming request for a new call
-		    connection = new YIAXConnection(this,event->getTransaction());
-		    connection->initChan();
-		    event->getTransaction()->setUserData(connection);
-		    if (!connection->route())
-			event->getTransaction()->setUserData(0);
+		    if (iplugin.canAccept(true)) {
+			connection = new YIAXConnection(this,event->getTransaction());
+			connection->initChan();
+			event->getTransaction()->setUserData(connection);
+			if (!connection->route())
+			    event->getTransaction()->setUserData(0);
+		    }
+		    else {
+			Debug(&iplugin,DebugWarn,"Refusing new IAX call, full or exiting");
+			// Cause code 42: switch congestion
+			event->getTransaction()->sendReject(0,42);
+		    }
 		}
 	    }
 	    break;

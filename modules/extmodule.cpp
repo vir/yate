@@ -69,6 +69,7 @@ static const char* s_cmds[] = {
     "start",
     "stop",
     "restart",
+    "execute",
     0
 };
 
@@ -362,6 +363,17 @@ static bool runProgram(const char *script, const char *args)
     return true;
 }
 
+static void adjustPath(String& script)
+{
+    if (script.null() || script.startsWith(Engine::pathSeparator()))
+	return;
+    String tmp = Engine::sharedPath();
+    tmp << Engine::pathSeparator() << "scripts";
+    tmp = s_cfg.getValue("general","scripts_dir",tmp);
+    if (!tmp.endsWith(Engine::pathSeparator()))
+	tmp += Engine::pathSeparator();
+    script = tmp + script;
+}
 
 ExtModSource::ExtModSource(Stream* str, ExtModChan* chan)
     : m_str(str), m_brate(16000), m_total(0), m_chan(chan)
@@ -948,14 +960,7 @@ bool ExtModReceiver::create(const char *script, const char *args)
     HANDLE ext2yate[2];
     HANDLE yate2ext[2];
     int x;
-    if (script[0] != '/') {
-	tmp = Engine::sharedPath();
-	tmp << Engine::pathSeparator() << "scripts";
-	tmp = s_cfg.getValue("general","scripts_dir",tmp);
-	if (!tmp.endsWith(Engine::pathSeparator()))
-	    tmp += Engine::pathSeparator();
-	tmp += script;
-    }
+    adjustPath(tmp);
     script = tmp.c_str();
     if (::pipe(ext2yate)) {
 	Debug(DebugWarn, "Unable to create ext->yate pipe: %s",strerror(errno));
@@ -1641,6 +1646,20 @@ bool ExtModCommand::received(Message& msg)
 	    msg.retValue() = "External not running\r\n";
 	if (!restart)
 	    return true;
+    }
+    else if (line.startSkip("execute")) {
+	if (line.null())
+	    return false;
+	blank = line.find(' ');
+	String exe = line.substr(0,blank);
+	adjustPath(exe);
+	if (blank >= 0)
+	    line = line.substr(blank+1);
+	else
+	    line.clear();
+	bool ok = runProgram(exe,line);
+	msg.retValue() = ok ? "External exec attempt\r\n" : "External exec failed\r\n";
+	return true;
     }
     ExtModReceiver *r = ExtModReceiver::build(line.substr(0,blank),
 	(blank >= 0) ? line.substr(blank+1).c_str() : (const char*)0);

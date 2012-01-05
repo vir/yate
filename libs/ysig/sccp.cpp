@@ -2816,9 +2816,9 @@ bool SS7SCCP::initialize(const NamedList* config)
     if (config) {
 	m_printMsg = config->getBoolValue(YSTRING("print-messages"),m_printMsg);
 	m_extendedDebug = config->getBoolValue(YSTRING("extended-debug"),m_extendedDebug);
-	m_ignoreUnkDigits = config->getBoolValue(YSTRING("ignore-unknown-digits"),true);
+	m_ignoreUnkDigits = config->getBoolValue(YSTRING("ignore-unknown-digits"),m_ignoreUnkDigits);
 	m_endpoint = config->getBoolValue(YSTRING("endpoint"),m_endpoint);
-	int hc = config->getIntValue("hopcounter",15);
+	int hc = config->getIntValue("hopcounter",m_hopCounter);
 	if (hc < 1 || hc > 15)
 	    hc = 15;
 	m_hopCounter = hc;

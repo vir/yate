@@ -1,3 +1,13 @@
+yate (3.3.3.svn4796) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4796: + Set default values in
+    SCCP::initialize to the previews configured ones, to avoid value
+    reset if they are missing.  + The behavior is the same as listing in
+    the [execute] section.  + New "execute" command in extmodule allows
+    executing arbitrary programs logged through Yate.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 06 Jan 2012 02:19:23 +0400
+
 yate (3.3.3.svn4794) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4794: + Properly handle Call Progress

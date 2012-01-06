@@ -154,6 +154,14 @@ public:
     bool parse(const char* data);
 
     /**
+     * Process incomplete text if the parser is completed.
+     * This method should be called to complete text after
+     *  all data was pushed into the parser
+     * @return True if all data was successfully parsed
+     */
+    bool completeText();
+
+    /**
      * Get the error code found while parsing
      * @return Error code
      */
@@ -459,6 +467,13 @@ protected:
      * @return True if there is no error
      */
     bool processElement(NamedList& list, bool empty);
+
+    /**
+     * Unescape text, call gotText() and reset parsed on success
+     * @param text The text to process
+     * @return True if there is no error
+     */
+    bool processText(String& text);
 
     /**
      * The offset where the parser was stop

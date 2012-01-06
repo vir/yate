@@ -3173,23 +3173,22 @@ int SS7SCCP::segmentMessage(DataBlock& data, SS7MsgSCCP* origMsg, SS7MsgSCCP::Ty
     // Transmit first segment
     SS7MsgSCCP* msg = new SS7MsgSCCP(type);
     msg->params().copyParams(msgData);
-    DataBlock* temp = new DataBlock();
+    DataBlock temp;
     if (dataLength - MAX_DATA_LEN > 2)
-	temp->assign(data.data(0,MAX_DATA_LEN),MAX_DATA_LEN);
+	temp.assign(data.data(0,MAX_DATA_LEN),MAX_DATA_LEN,false);
     else
-	temp->assign(data.data(0,MAX_DATA_LEN - SGM_PADDING),MAX_DATA_LEN - SGM_PADDING);
+	temp.assign(data.data(0,MAX_DATA_LEN - SGM_PADDING),MAX_DATA_LEN - SGM_PADDING,false);
     msg->params().setParam("Segmentation.RemainingSegments",
 	    String(isSCLCMessage(type) ? --segments : 0));
     msg->params().setParam("Segmentation.FirstSegment","true");
-    msg->setData(temp);
-    dataLength -= temp->length();
-    totalSent += temp->length();
-    DDebug(this,DebugNote,"Sending first segment sl = %d, dl = %d, ts = %d",temp->length(),dataLength,totalSent);
+    msg->setData(&temp);
+    dataLength -= temp.length();
+    totalSent += temp.length();
+    DDebug(this,DebugNote,"Sending first segment sl = %d, dl = %d, ts = %d",temp.length(),dataLength,totalSent);
     unlock();
     sls = transmitMessage(msg);
     msg->removeData();
-    temp->clear(false);
-    TelEngine::destruct(temp);
+    temp.clear(false);
     TelEngine::destruct(msg);
     if (sls < 0) {
 	if (msgReturn && !local)
@@ -3206,23 +3205,21 @@ int SS7SCCP::segmentMessage(DataBlock& data, SS7MsgSCCP* origMsg, SS7MsgSCCP::Ty
     while (dataLength > 0) {
 	msg = new SS7MsgSCCP(type);
 	msg->params().copyParams(msgData);
-	temp = new DataBlock();
 	if (dataLength - MAX_DATA_LEN - SGM_PADDING > 2) // Make shure that the left segment is longer than 2
-	    temp->assign(data.data(totalSent,MAX_DATA_LEN - SGM_PADDING),MAX_DATA_LEN - SGM_PADDING);
+	    temp.assign(data.data(totalSent,MAX_DATA_LEN - SGM_PADDING),MAX_DATA_LEN - SGM_PADDING,false);
 	else if (dataLength - MAX_DATA_LEN - 2 * SGM_PADDING > 2)
-	    temp->assign(data.data(totalSent,MAX_DATA_LEN - 2* SGM_PADDING),MAX_DATA_LEN - 2* SGM_PADDING);
+	    temp.assign(data.data(totalSent,MAX_DATA_LEN - 2* SGM_PADDING),MAX_DATA_LEN - 2* SGM_PADDING,false);
 	else
-	    temp->assign(data.data(totalSent,dataLength),dataLength); // Should be last segment
+	    temp.assign(data.data(totalSent,dataLength),dataLength,false); // Should be last segment
 	msg->params().setParam("Segmentation.RemainingSegments",String(--segments));
-	msg->setData(temp);
-	dataLength -= temp->length();
-	totalSent += temp->length();
-	DDebug(this,DebugNote,"Sending segment: %d sl = %d, dl = %d, ts = %d",segments,temp->length(),dataLength,totalSent);
+	msg->setData(&temp);
+	dataLength -= temp.length();
+	totalSent += temp.length();
+	DDebug(this,DebugNote,"Sending segment: %d sl = %d, dl = %d, ts = %d",segments,temp.length(),dataLength,totalSent);
 	unlock();
 	sls = transmitMessage(msg);
 	msg->removeData();
-	temp->clear(false);
-	TelEngine::destruct(temp);
+	temp.clear(false);
 	TelEngine::destruct(msg);
 	if (sls < 0) {
 	    if (msgReturn && !local)

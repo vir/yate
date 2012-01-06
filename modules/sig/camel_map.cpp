@@ -2328,7 +2328,7 @@ static const AppCtxt s_mapAppCtxt[]= {
     // Authentication Failure Report Context
     {"authenticationFailureReportContext-v3" , "0.4.0.0.1.0.39.3", "authenticationFailureReport"},
 
-    {"", "", ""},
+    {0, 0, ""},
 };
 
 static const AppCtxt s_camelAppCtxt[] = {
@@ -2346,7 +2346,7 @@ static const AppCtxt s_camelAppCtxt[] = {
     {"CAP-v2-gsmSRF-to-gsmSCF-AC", "0.4.0.0.1.0.52.1", "assistRequestInstructions,specializedResourceReport,playAnnouncement,"
 							"promptAndCollectUserInformation,cancel,activityTest"},
 
-    {"", "", ""}
+    {0, 0, ""}
 };
 
 static const MapCamelType s_types[] = {
@@ -6336,7 +6336,7 @@ static const Operation s_camelErrors[] = {
 
 static const AppCtxt s_mapDialogCtxt[] = {
     {"map-DialogueAS", "0.4.0.0.1.1.1.1", "map-open,map-accept,map-close,map-refuse,map-userAbort,map-providerAbort"},
-    {"", "", ""}
+    {0, 0, ""}
 };
 
 static const Parameter s_mapOpenSeq[] = {

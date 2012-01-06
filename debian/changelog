@@ -1,3 +1,17 @@
+yate (3.3.3.svn4800) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4800: + New "execute" command in extmodule
+    allows executing arbitrary programs logged through Yate.  + Moved
+    Add contact/chat room menu items to top of Friends menu.  + Fixed
+    bug: always produce the same xml text regardless the way data is
+    pushed into sax parser (sequentially or full). Added method to
+    finalize incomplete xml text after pushing all data to sax parser.
+    Added debug.  + Fixed table termination of MAP and CAMEL application
+    contexts and MAP dialogs.  + Do not copy data when creating sccp
+    data segments.  + Memory leak fixed.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 07 Jan 2012 02:19:20 +0400
+
 yate (3.3.3.svn4796) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4796: + Set default values in

@@ -1824,7 +1824,7 @@ void YRTPPlugin::initialize()
     s_tos = cfg.getIntValue("general","tos",dict_tos);
     s_localip = cfg.getValue("general","localip");
     s_autoaddr = cfg.getBoolValue("general","autoaddr",true);
-    s_anyssrc = cfg.getBoolValue("general","anyssrc",false);
+    s_anyssrc = cfg.getBoolValue("general","anyssrc",true);
     s_padding = cfg.getIntValue("general","padding",0);
     s_rtcp = cfg.getBoolValue("general","rtcp",true);
     s_interval = cfg.getIntValue("general","rtcp_interval",4500);

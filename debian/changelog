@@ -1,3 +1,11 @@
+yate (3.3.3.svn4801) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4801: + Memory leak fixed.  + Changed
+    default value of "anyssrc", accept any incoming SSRC by default even
+    if changes unsignaled.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 10 Jan 2012 02:19:22 +0400
+
 yate (3.3.3.svn4800) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4800: + New "execute" command in extmodule

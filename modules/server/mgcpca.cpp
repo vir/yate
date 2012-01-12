@@ -239,7 +239,7 @@ protected:
 	}
     void mediaChanged(const SDPMedia& media);
 private:
-    void waitNotChanging();
+    void waitNotChanging(bool clearTrans = false);
     MGCPMessage* message(const char* cmd);
     bool sendAsync(MGCPMessage* mm, bool notify = false);
     RefPointer<MGCPMessage> sendSync(MGCPMessage* mm);
@@ -1527,13 +1527,18 @@ void MGCPCircuit::clearConn(bool force)
 }
 
 // Wait for changing flag to be false
-void MGCPCircuit::waitNotChanging()
+// Clear pending transaction if requested and the circuit is changing
+void MGCPCircuit::waitNotChanging(bool clearTrans)
 {
     while (true) {
 	Lock lock(s_mutex);
 	if (!m_changing) {
 	    m_changing = true;
 	    break;
+	}
+	if (clearTrans && m_tr) {
+	    m_tr->userData(0);
+	    m_tr = 0;
 	}
 	lock.drop();
 	Thread::yield(true);
@@ -1583,8 +1588,10 @@ RefPointer<MGCPMessage> MGCPCircuit::sendSync(MGCPMessage* mm)
     }
     u_int64_t t2 = Time::msecNow();
     MGCPTransaction* tr = s_engine->sendCommand(mm,ep->address);
+    s_mutex.lock();
     tr->userData(static_cast<GenObject*>(this));
     m_tr = tr;
+    s_mutex.unlock();
     while (m_tr == tr)
 	Thread::idle();
     RefPointer<MGCPMessage> tmp = m_msg;
@@ -2061,7 +2068,7 @@ bool MGCPCircuit::processNotify(const String& package, const String& event, cons
 // We were forcibly disconnected by the gateway
 void MGCPCircuit::processDelete(MGCPMessage* mm, const String& error)
 {
-    waitNotChanging();
+    waitNotChanging(true);
     if (m_connId)
 	Debug(&splugin,DebugWarn,"Gateway deleted connection '%s' on circuit %u [%p]",
 	    m_connId.c_str(),code(),this);

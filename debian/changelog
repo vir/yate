@@ -1,3 +1,10 @@
+yate (3.3.3.svn4802) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4802: + Fixed bug: reset circuit pending
+    synchronous transaction when received a DLCX from media gateway.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 13 Jan 2012 02:19:18 +0400
+
 yate (3.3.3.svn4801) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4801: + Memory leak fixed.  + Changed

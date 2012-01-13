@@ -1,3 +1,10 @@
+yate (3.3.3.svn4803) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4803: + If connections fail to be
+    initialized, try again periodically until whole pool is initialized.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 14 Jan 2012 02:19:18 +0400
+
 yate (3.3.3.svn4802) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4802: + Fixed bug: reset circuit pending

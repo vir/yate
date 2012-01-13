@@ -13,6 +13,9 @@
 ; timeout: int: Query timeout in milliseconds - will be rounded to seconds
 ;timeout=10000
 
+; initretry: int: Interval (in seconds) to retry creating failed connections. Setting it to 0 will disable retrying.
+;initretry=10
+
 ; host: string: MySQL server to connect to, defaults to local
 ;host=
 

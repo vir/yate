@@ -290,7 +290,7 @@ const char* ExpEvaluator::getOperator(ExpEvaluator::Opcode oper) const
     return lookup(oper,m_operators);
 }
 
-int ExpEvaluator::getPrecedence(ExpEvaluator::Opcode oper)
+int ExpEvaluator::getPrecedence(ExpEvaluator::Opcode oper) const
 {
     switch (oper) {
 	case OpcMul:

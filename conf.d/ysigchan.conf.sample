@@ -366,10 +366,6 @@
 ; NOTE: The default has changed from Yate 2
 ;sls=last (cic if pointcodetype is ITU)
 
-; maxcalleddigits: integer: Maximum number of digits in an IAM Called Party Number
-; If the called number is longer the extra digits will be sent in a SAM message
-;maxcalleddigits=16
-
 ; numplan: string: Default numbering plan for outgoing calls
 ; Values: unknown, isdn, data, telex, national, private
 ; Defaults to unknown if missing or incorrect

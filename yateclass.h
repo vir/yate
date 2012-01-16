@@ -4118,7 +4118,7 @@ protected:
      * @param oper Operator code
      * @return Precedence of the operator, zero (lowest) if unknown
      */
-    virtual int getPrecedence(Opcode oper);
+    virtual int getPrecedence(Opcode oper) const;
 
     /**
      * Check if we are at an expression separator and optionally skip past it

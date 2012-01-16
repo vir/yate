@@ -1,3 +1,11 @@
+yate (3.3.3.svn4805) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4805: + Removed duplicate parameter
+    documentation.  + Constified ExpEvaluator::getPrecedence() as it
+    should be.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 17 Jan 2012 02:19:19 +0400
+
 yate (3.3.3.svn4803) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4803: + If connections fail to be

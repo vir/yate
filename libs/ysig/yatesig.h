@@ -7007,7 +7007,7 @@ public:
      * Change state to OutOfService and notifys upper layer
      * @param info Debuging purpose, Information about detected error
      */
-    void abortAlignment(const String& info);
+    void abortAlignment(const char* info = 0);
 
     /**
      * Send link status message to inform the peer about ouer curent state

@@ -692,10 +692,14 @@ MimeAuthLine* SIPMessage::buildAuth(const String& username, const String& passwo
 	    if (opaque)
 		auth->setParam(opaque->name(),*opaque);
 	    if (qop) {
-		auth->setParam("qop",MimeHeaderLine::quote(qop));
+		auth->setParam("qop",qop);
 		NamedIterator iter(qop);
-		for (const NamedString* ns = 0; 0 != (ns = iter.get());)
-		    auth->setParam(ns->name(),MimeHeaderLine::quote(*ns));
+		for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+		    if (ns->name() == YSTRING("nc"))
+			auth->setParam(ns->name(),*ns);
+		    else
+			auth->setParam(ns->name(),MimeHeaderLine::quote(*ns));
+		}
 	    }
 	    return auth;
 	}

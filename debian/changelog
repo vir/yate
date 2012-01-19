@@ -1,3 +1,11 @@
+yate (3.3.3.svn4810) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4810: + Bug Fixed! Modified the pointers to
+    mandatory variable and optional parameters from LUDT messages to be
+    on 2 bytes instead of one.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 20 Jan 2012 02:19:23 +0400
+
 yate (3.3.3.svn4809) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4809: + Added iLBC license granted by

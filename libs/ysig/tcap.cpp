@@ -3376,8 +3376,8 @@ SS7TCAPError SS7TCAPTransactionITU::handleDialogPortion(NamedList& params, bool 
     SS7TCAPError error(SS7TCAP::ITUTCAP);
 
     NamedString* diagPDU = params.getParam(s_tcapDialoguePduType);
-    NamedString* protoVers = params.getParam(s_tcapProtoVers);
     NamedString* appCtxt = params.getParam(s_tcapDialogueAppCtxt);
+    int protoVers = params.getIntValue(s_tcapProtoVers,s_ituTCAPProto,0);
 
     Lock l(this);
     switch (m_type) {
@@ -3389,14 +3389,15 @@ SS7TCAPError SS7TCAPTransactionITU::handleDialogPortion(NamedList& params, bool 
 		m_appCtxt = *appCtxt;
 		// build AUDT.
 		params.setParam(s_tcapDialogueID,s_unstructDialogueOID.toString());
-		params.setParam(s_tcapProtoVers,String(s_ituTCAPProto));
+		if (protoVers)
+		    params.setParam(s_tcapProtoVers,String(protoVers));
 		params.setParam(s_tcapDialoguePduType,lookup(AARQDialogTag,s_dialogPDUs));
 	    }
 	    else {
 		// check to be AUDT
-		if (TelEngine::null(diagPDU) || TelEngine::null(protoVers))
+		if (TelEngine::null(diagPDU) || !protoVers)
 		    return error;
-		if (diagPDU->toInteger(s_dialogPDUs) != AARQDialogTag || s_ituTCAPProto != protoVers->toInteger())
+		if (diagPDU->toInteger(s_dialogPDUs) != AARQDialogTag || s_ituTCAPProto != protoVers)
 		    error.setError(SS7TCAPError::Dialog_Abnormal);
 	    }
 	    break;
@@ -3409,11 +3410,12 @@ SS7TCAPError SS7TCAPTransactionITU::handleDialogPortion(NamedList& params, bool 
 		m_appCtxt = *appCtxt;
 		// build AARQ
 		params.setParam(s_tcapDialogueID,s_structDialogueOID);
-		params.setParam(s_tcapProtoVers,String(s_ituTCAPProto));
+		if (protoVers)
+		    params.setParam(s_tcapProtoVers,String(protoVers));
 		params.setParam(s_tcapDialoguePduType,lookup(AARQDialogTag,s_dialogPDUs));
 	    }
 	    else {
-		if (TelEngine::null(diagPDU) || TelEngine::null(protoVers))
+		if (TelEngine::null(diagPDU) || !protoVers)
 		    break;
 		// check to be AARQ and that it has context
 		if (diagPDU->toInteger(s_dialogPDUs) != AARQDialogTag || TelEngine::null(appCtxt)) {
@@ -3421,7 +3423,7 @@ SS7TCAPError SS7TCAPTransactionITU::handleDialogPortion(NamedList& params, bool 
 		    break;
 		}
 		// check proto version, if not 1, build AARE - no common dialogue version, return err to build abort
-		if (s_ituTCAPProto != protoVers->toInteger()) {
+		if (s_ituTCAPProto != protoVers) {
 		    params.clearParam(s_tcapDialogPrefix,'.');
 		    params.setParam(s_tcapDialogueID,s_structDialogueOID);
 		    params.setParam(s_tcapDialoguePduType,lookup(AAREDialogTag,s_dialogPDUs));
@@ -3444,7 +3446,8 @@ SS7TCAPError SS7TCAPTransactionITU::handleDialogPortion(NamedList& params, bool 
 		    params.setParam(s_tcapDialogueAppCtxt,m_appCtxt);
 		// build AARE with result=accepted, result-source-diagnostic=null / dialog-service-user(null)
 		params.setParam(s_tcapDialogueID,s_structDialogueOID);
-		params.setParam(s_tcapProtoVers,String(s_ituTCAPProto));
+		if (protoVers)
+		    params.setParam(s_tcapProtoVers,String(protoVers));
 		params.setParam(s_tcapDialoguePduType,lookup(AAREDialogTag,s_dialogPDUs));
 		params.setParam(s_tcapDialogueResult,lookup(ResultAccepted,s_resultPDUValues));
 		params.setParam(s_tcapDialogueDiag,lookup(DiagnosticProviderNoReason,s_resultPDUValues));
@@ -3485,7 +3488,8 @@ SS7TCAPError SS7TCAPTransactionITU::handleDialogPortion(NamedList& params, bool 
 		// build AARE
 		m_appCtxt = *appCtxt;
 		params.setParam(s_tcapDialogueID,s_structDialogueOID);
-		params.setParam(s_tcapProtoVers,String(s_ituTCAPProto));
+		if (protoVers)
+		    params.setParam(s_tcapProtoVers,String(protoVers));
 		params.setParam(s_tcapDialoguePduType,lookup(AAREDialogTag,s_dialogPDUs));
 		params.setParam(s_tcapDialogueResult,lookup(ResultAccepted,s_resultPDUValues));
 		params.setParam(s_tcapDialogueDiag,lookup(DiagnosticProviderNoReason,s_resultPDUValues));
@@ -3520,7 +3524,8 @@ SS7TCAPError SS7TCAPTransactionITU::handleDialogPortion(NamedList& params, bool 
 		if (m_appCtxt.null())
 		    break;
 		params.setParam(s_tcapDialogueID,s_structDialogueOID);
-		params.setParam(s_tcapProtoVers,String(s_ituTCAPProto));
+		if (protoVers)
+		    params.setParam(s_tcapProtoVers,String(protoVers));
 		if (transactionState() == PackageReceived ) {
 		    NamedString* abrtReason = params.getParam(s_tcapDialogueDiag);
 		    if (!TelEngine::null(abrtReason) && (abrtReason->toInteger(s_resultPDUValues) == DiagnosticUserAppCtxtNotSupported ||
@@ -4009,7 +4014,7 @@ void SS7TCAPTransactionITU::encodeDialogPortion(NamedList& params, DataBlock& da
 		dialogData.insert(db);
 	    }
 	    val = params.getParam(s_tcapProtoVers);
-	    if (!TelEngine::null(val)) {
+	    if (!TelEngine::null(val) && (val->toInteger() > 0)) {
 		DataBlock db = ASNLib::encodeBitString(*val,false);
 		db.insert(ASNLib::buildLength(db));
 		tag = SS7TCAPITU::ProtocolVersionTag;

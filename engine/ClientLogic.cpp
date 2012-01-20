@@ -408,7 +408,7 @@ static const String s_accBoolParams[] = {
 // Account protocol dependent parameters
 static const String s_accProtoParams[] = {
     "server", "domain", "outbound", "options", "resource", "port", "interval",
-    "authname", ""
+    "authname", "authmethods", ""
 };
 // Account protocol dependent parameters set in lists (param=default_value)
 static NamedList s_accProtoParamsSel("");
@@ -473,6 +473,7 @@ static const String s_googleMucDomain = "groupchat.google.com";
 // Miscellaneous
 static const String s_jabber = "jabber";
 static const String s_sip = "sip";
+static const String s_h323 = "h323";
 static const String s_gmailDomain = "gmail.com";
 static const String s_googleDomain = "google.com";
 static const String s_fileOpenSendPrefix = "send_fileopen:";
@@ -643,6 +644,8 @@ static const String& getProtoPage(const String& proto)
 	return s_jabber;
     if (proto == s_sip)
 	return s_sip;
+    if (proto == s_h323)
+	return s_h323;
     if (proto)
 	return s_default;
     return s_none;
@@ -1040,10 +1043,17 @@ static void updateProtocolSpec(NamedList& p, const String& proto, bool edit,
     for (const NamedString* ns = 0; 0 != (ns = iter.get());)
 	p.setParam(prefix + ns->name(),params.getValue(ns->name(),*ns));
     // Set default resource for new accounts if not already set
-    if (!edit && proto == s_jabber) {
-	String rname = prefix + "resource";
-	if (!p.getValue(rname))
-	    p.setParam(rname,Engine::config().getValue("client","resource","Yate"));
+    if (!edit) {
+	if (proto == s_jabber) {
+	    String tmp = prefix + "resource";
+	    if (!p.getValue(tmp))
+		p.setParam(tmp,Engine::config().getValue("client","resource","Yate"));
+	}
+	else if (proto == s_h323) {
+	    String tmp = prefix + "authmethods";
+	    if (!p.getValue(tmp))
+		p.setParam(tmp,Engine::config().getValue("client","authmethods","MD5"));
+	}
     }
     // Options
     prefix << "opt_";

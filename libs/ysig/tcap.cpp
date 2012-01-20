@@ -3450,7 +3450,8 @@ SS7TCAPError SS7TCAPTransactionITU::handleDialogPortion(NamedList& params, bool 
 		    params.setParam(s_tcapProtoVers,String(protoVers));
 		params.setParam(s_tcapDialoguePduType,lookup(AAREDialogTag,s_dialogPDUs));
 		params.setParam(s_tcapDialogueResult,lookup(ResultAccepted,s_resultPDUValues));
-		params.setParam(s_tcapDialogueDiag,lookup(DiagnosticProviderNoReason,s_resultPDUValues));
+		if (!params.getParam(s_tcapDialogueDiag))
+		    params.addParam(s_tcapDialogueDiag,lookup(DiagnosticUserNoReason,s_resultPDUValues));
 	    }
 	    else {
 		// page 51 q.774
@@ -3492,7 +3493,8 @@ SS7TCAPError SS7TCAPTransactionITU::handleDialogPortion(NamedList& params, bool 
 		    params.setParam(s_tcapProtoVers,String(protoVers));
 		params.setParam(s_tcapDialoguePduType,lookup(AAREDialogTag,s_dialogPDUs));
 		params.setParam(s_tcapDialogueResult,lookup(ResultAccepted,s_resultPDUValues));
-		params.setParam(s_tcapDialogueDiag,lookup(DiagnosticProviderNoReason,s_resultPDUValues));
+		if (!params.getParam(s_tcapDialogueDiag))
+		    params.addParam(s_tcapDialogueDiag,lookup(DiagnosticUserNoReason,s_resultPDUValues));
 	    }
 	    else {
 		// dialog info?

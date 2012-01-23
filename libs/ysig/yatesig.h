@@ -6671,11 +6671,18 @@ public:
 	SS7MSU::Services part, unsigned char cause, const SS7Label& label, int sls);
 
     /**
-     * Check if the transfer function is enabled
-     * @return True if acting as a STP
+     * Check if the transfer function and STP management is enabled
+     * @return True if acting as a full STP
      */
     inline bool transfer() const
 	{ return m_transfer; }
+
+    /**
+     * Check if the messages are transferred even if STP management may be disabled
+     * @return True if messages are transferred between networks
+     */
+    inline bool transferring() const
+	{ return m_transfer || m_transferSilent; }
 
     /**
      * Check if the MTP is restarting

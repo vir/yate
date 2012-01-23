@@ -34,13 +34,17 @@ class IsupIntercept : public SS7ISUP
     YCLASS(IsupIntercept,SS7ISUP)
 public:
     enum What {
-	Iam,    // IAM only
-	Cdr,    // IAM,SAM,ACM,CPG,ANM,CON,SUS,RES,REL,RLC
+	None = 0, // No messages, just mangling
+	Iam,      // IAM only
+	Cdr,      // IAM,SAM,ACM,CPG,ANM,CON,SUS,RES,REL,RLC
 	All
     };
     inline IsupIntercept(const NamedList& params)
 	: SignallingComponent(params,&params), SS7ISUP(params),
-	  m_used(true), m_symmetric(false), m_what(Iam)
+	  m_used(true), m_symmetric(false), m_what(Iam),
+	  m_cicMin(1), m_cicMax(16383),
+	  m_setOpc(0), m_setDpc(0), m_setSls(-2), m_setCic(0),
+	  m_resend(true)
 	{ }
     virtual bool initialize(const NamedList* config);
     void dispatched(SS7MsgISUP& isup, const Message& msg, const SS7Label& label, int sls, bool accepted);
@@ -50,10 +54,14 @@ protected:
     virtual bool processMSU(SS7MsgISUP::Type type, unsigned int cic,
         const unsigned char* paramPtr, unsigned int paramLen,
 	const SS7Label& label, SS7Layer3* network, int sls);
+    bool shouldIntercept(SS7MsgISUP::Type type) const;
 private:
     bool m_used;
     bool m_symmetric;
     What m_what;
+    unsigned int m_cicMin, m_cicMax;
+    int m_setOpc, m_setDpc, m_setSls, m_setCic;
+    bool m_resend;
 };
 
 class IsupMessage : public Message
@@ -89,12 +97,25 @@ public:
 };
 
 static const TokenDict s_dict_what[] = {
+    { "nothing", IsupIntercept::None },
+    { "none", IsupIntercept::None },
     { "IAM", IsupIntercept::Iam },
     { "iam", IsupIntercept::Iam },
     { "CDR", IsupIntercept::Cdr },
     { "cdr", IsupIntercept::Cdr },
     { "All", IsupIntercept::All },
     { "all", IsupIntercept::All },
+    { 0, 0 }
+};
+
+static const TokenDict s_dict_pc[] = {
+    { "mirror", -1 },
+    { 0, 0 }
+};
+
+static const TokenDict s_dict_sls[] = {
+    { "cic", -1 },
+    { "circuit", -1 },
     { 0, 0 }
 };
 
@@ -108,43 +129,29 @@ bool IsupIntercept::initialize(const NamedList* config)
     if (!config)
 	return false;
     SS7ISUP::initialize(config);
+    SS7Router* router = YOBJECT(SS7Router,network());
+    m_resend = config->getBoolValue("resend",!(router && router->transferring()));
     m_symmetric = config->getBoolValue("symmetric",m_symmetric);
     m_what = (What)config->getIntValue("intercept",s_dict_what,m_what);
-    Debug(this,DebugAll,"Added %u Point Codes, intercepts %s %s",
+    m_cicMin = config->getIntValue("cic_min",m_cicMin);
+    m_cicMax = config->getIntValue("cic_max",m_cicMax);
+    m_setOpc = config->getIntValue("set:opc",s_dict_pc,m_setOpc);
+    m_setDpc = config->getIntValue("set:dpc",s_dict_pc,m_setDpc);
+    m_setSls = config->getIntValue("set:sls",s_dict_sls,m_setSls);
+    m_setCic = config->getIntValue("set:cic",m_setCic);
+    Debug(this,DebugAll,"Added %u Point Codes, intercepts %s %s, cic=%u-%u",
 	setPointCode(*config),lookup(m_what,s_dict_what,"???"),
-	(m_symmetric) ? "both ways" : "one way");
+	(m_symmetric) ? "both ways" : "one way",
+	m_cicMin,m_cicMax);
     return true;
 }
 
-HandledMSU IsupIntercept::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
+bool IsupIntercept::shouldIntercept(SS7MsgISUP::Type type) const
 {
-    if (msu.getSIF() != sif())
-	return HandledMSU::Rejected;
-    if (!hasPointCode(label.dpc()) || !handlesRemotePC(label.opc())) {
-	if (!m_symmetric || !hasPointCode(label.opc()) || !handlesRemotePC(label.dpc()))
-	    return HandledMSU::Rejected;
-    }
-    // we should have at least 2 bytes CIC and 1 byte message type
-    const unsigned char* s = msu.getData(label.length()+1,3);
-    if (!s) {
-	Debug(this,DebugNote,"Got short MSU");
-	return HandledMSU::Rejected;
-    }
-    unsigned int len = msu.length()-label.length()-1;
-    unsigned int cic = s[0] | (s[1] << 8);
-    SS7MsgISUP::Type type = (SS7MsgISUP::Type)s[2];
-    String name = SS7MsgISUP::lookup(type);
-    if (!name) {
-        String tmp;
-	tmp.hexify((void*)s,len,' ');
-	Debug(this,DebugMild,"Received unknown ISUP type 0x%02x, cic=%u, length %u: %s",
-	    type,cic,len,tmp.c_str());
-	name = (int)type;
-    }
     switch (type) {
-	// always intercept IAM
+	// almost always intercept IAM
 	case SS7MsgISUP::IAM:
-	    break;
+	    return (m_what >= Iam);
 	// other CDR relevant messages
 	case SS7MsgISUP::SAM:
 	case SS7MsgISUP::ACM:
@@ -155,9 +162,7 @@ HandledMSU IsupIntercept::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	case SS7MsgISUP::RES:
 	case SS7MsgISUP::REL:
 	case SS7MsgISUP::RLC:
-	    if (m_what >= Cdr)
-		break;
-	    return HandledMSU::Rejected;
+	    return (m_what >= Cdr);
 	// we shouldn't mess with these messages
 	case SS7MsgISUP::UPT:
 	case SS7MsgISUP::UPA:
@@ -165,16 +170,83 @@ HandledMSU IsupIntercept::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
 	case SS7MsgISUP::PAM:
 	case SS7MsgISUP::CNF:
 	case SS7MsgISUP::USR:
-	    return HandledMSU::Rejected;
+	    return false;
 	// intercepting all messages is risky
 	default:
-	    if (m_what >= All)
-		break;
-	    // let the message pass through
+	    return (m_what >= All);
+    }
+}
+
+HandledMSU IsupIntercept::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
+{
+    if (msu.getSIF() != sif())
+	return HandledMSU::Rejected;
+    if (!hasPointCode(label.dpc()) || !handlesRemotePC(label.opc())) {
+	if (!m_symmetric || !hasPointCode(label.opc()) || !handlesRemotePC(label.dpc()))
 	    return HandledMSU::Rejected;
     }
-    return processMSU(type,cic,s+3,len-3,label,network,sls) ?
-	HandledMSU::Accepted : HandledMSU::Rejected;
+    // horrible - create a pair of writable aliases to alter data in place
+    SS7MSU& rwMsu = const_cast<SS7MSU&>(msu);
+    SS7Label& rwLbl = const_cast<SS7Label&>(label);
+    // we should have at least 2 bytes CIC and 1 byte message type
+    unsigned char* s = rwMsu.getData(label.length()+1,3);
+    if (!s) {
+	Debug(this,DebugNote,"Got short MSU");
+	return HandledMSU::Rejected;
+    }
+    unsigned int len = msu.length()-label.length()-1;
+    unsigned int cic = s[0] | (s[1] << 8);
+    if (cic < m_cicMin || cic > m_cicMax)
+	return HandledMSU::Rejected;
+
+    SS7MsgISUP::Type type = (SS7MsgISUP::Type)s[2];
+    String name = SS7MsgISUP::lookup(type);
+    if (!name) {
+        String tmp;
+	tmp.hexify((void*)s,len,' ');
+	Debug(this,DebugMild,"Received unknown ISUP type 0x%02x, cic=%u, length %u: %s",
+	    type,cic,len,tmp.c_str());
+	name = (int)type;
+    }
+    XDebug(this,DebugAll,"Received ISUP type %s, cic=%u, length %u",name.c_str(),cic,len);
+
+    // intercepted as message or not, apply mangling now
+    if (m_setCic) {
+	cic += m_setCic;
+	s[0] = (cic & 0xff);
+	s[1] = ((cic >> 8) & 0xff);
+    }
+    bool changed = false;
+    if (m_setSls >= -1) {
+	changed = true;
+	rwLbl.setSls(((m_setSls >= 0) ? m_setSls : cic) & 0xff);
+    }
+    if (m_setOpc || m_setDpc) {
+	changed = true;
+	SS7PointCode opc(label.opc());
+	SS7PointCode dpc(label.dpc());
+	if (m_setOpc > 0)
+	    rwLbl.opc().unpack(label.type(),m_setOpc);
+	else if (m_setOpc < 0)
+	    rwLbl.opc() = dpc;
+	if (m_setDpc > 0)
+	    rwLbl.dpc().unpack(label.type(),m_setDpc);
+	else if (m_setDpc < 0)
+	    rwLbl.dpc() = opc;
+    }
+    if (changed)
+	rwLbl.store(rwMsu.getData(1));
+
+    if (shouldIntercept(type) && processMSU(type,cic,s+3,len-3,label,network,sls))
+	return HandledMSU::Accepted;
+    if (!(m_setDpc || m_resend))
+	return HandledMSU::Rejected;
+    // if we altered the DPC or we are no STP we should transmit as new message
+    if (transmitMSU(rwMsu,rwLbl,rwLbl.sls()) >= 0)
+	return HandledMSU::Accepted;
+    Debug(this,DebugWarn,"Failed to forward mangled %s (%u) [%p]",
+	SS7MsgISUP::lookup(type),cic,this);
+    return HandledMSU::Failure;
 }
 
 bool IsupIntercept::processMSU(SS7MsgISUP::Type type, unsigned int cic,

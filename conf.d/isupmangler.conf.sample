@@ -26,18 +26,44 @@
 ; Can be one of ITU,ANSI,ANSI8,China,Japan,Japan5
 ;pointcodetype=
 
-; defaultpointcode: string: DPC of the ISUP messages to intercept
+; defaultpointcode: string: DPC of the ISUP messages to match
 ;defaultpointcode=
 
-; remotepointcode: string: OPC of the ISUP messages to intercept
+; remotepointcode: string: OPC of the ISUP messages to match
 ;remotepointcode=
 
-; symmetric: boolean: Intercept and mangle messages in the opposite direction too
+; symmetric: boolean: Match and mangle messages in the opposite direction too (DPC->OPC)
 ; Symmetric should be enabled if intercepting more than just IAM
 ;symmetric=no
 
+; cic_min: int: Minimum circuit code to match
+;cic_min=1
+
+; cic_max: int: Maximum circuit code to match
+;cic_max=16383
+
 ; intercept: keyword: What class of messages to intercept
+;  none: Intercept no message, just mangle routing label and CIC
 ;  iam: Only intercept IAM
 ;  cdr: Intercept most CDR related messages: IAM,SAM,ACM,CPG,ANM,CON,SUS,RES,REL,RLC
 ;  all: Intercept almost all messages, except UPT,UPA,NRM,PAM,CNF,USR
 ;intercept=iam
+
+
+; The following set: settings apply to all matched messages, not just those intercepted
+; These mangle the routing label and circuit codes before any other handling
+
+; set:opc: int: OPC numeric value to overwrite in message label
+; The special value "mirror" will set the received DPC
+;set:opc=
+
+; set:dpc: int: DPC numeric value to overwrite in message label
+; The special value "mirror" will set the received OPC
+;set:dpc=
+
+; set:sls: int: Signaling Link Selection to overwrite in message label
+; The special value "cic" will use the circuit code after any altering
+;set:sls=
+
+; set:cic: int: Offset to apply to the circuit codes in message body
+;set:cic=0

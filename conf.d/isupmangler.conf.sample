@@ -49,6 +49,11 @@
 ;  all: Intercept almost all messages, except UPT,UPA,NRM,PAM,CNF,USR
 ;intercept=iam
 
+; ignore-unknown-digits: boolean: Ignore signal digits that are not ITU standard (A, D and E)
+; The standard set includes only 0-9, B, C and the stop pulsing "."
+; ISUP does not support sending the * and # signals
+;ignore-unknown-digits=yes
+
 
 ; The following set: settings apply to all matched messages, not just those intercepted
 ; These mangle the routing label and circuit codes before any other handling

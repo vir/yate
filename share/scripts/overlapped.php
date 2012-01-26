@@ -126,12 +126,10 @@ function setState($newstate)
 function routeTo($num)
 {
     global $final;
-    global $ourcallid;
     global $executeParams;
     setState("routing");
     $m = new Yate("call.route");
     $m->params = $executeParams;
-    $m->params["id"] = $ourcallid;
     $m->params["called"] = $num;
     $m->params["overlapped"] = $final ? "no" : "yes";
     $m->Dispatch();

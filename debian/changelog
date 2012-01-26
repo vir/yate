@@ -1,3 +1,12 @@
+yate (3.3.3.svn4821) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4821: + Do not display or TAB complete the
+    module unload and reload commands if unloading is disabled.  + The
+    id of the script itself is available anyway as targetid.  + Do not
+    overwrite the original call leg id while doing overlapped routing.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 27 Jan 2012 02:19:24 +0400
+
 yate (3.3.3.svn4820) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4820: + Allow columns with empty title in

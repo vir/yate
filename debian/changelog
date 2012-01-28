@@ -1,3 +1,9 @@
+yate (3.3.3.vir2012012801) UNRELEASED; urgency=low
+
+  * Merged upstream changes
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Sat, 28 Jan 2012 10:56:43 +0400
+
 yate (3.3.3.vir2011120704) UNRELEASED; urgency=low
 
   * Fixed UU IE duplication

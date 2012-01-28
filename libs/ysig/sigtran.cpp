@@ -1324,9 +1324,10 @@ void SS7M2PA::setHeader(DataBlock& data)
     data.append(head,8);
 }
 
-void SS7M2PA::abortAlignment(const String& info)
+void SS7M2PA::abortAlignment(const char* info)
 {
-    Debug(this,DebugInfo,"Aborting alignment: %s",info.c_str());
+    if (info)
+	Debug(this,DebugNote,"Aborting alignment: %s",info);
     setLocalStatus(OutOfService);
     setRemoteStatus(OutOfService);
     m_needToAck = m_lastAck = m_seqNr = 0xffffff;
@@ -1372,6 +1373,7 @@ bool SS7M2PA::processLinkStatus(DataBlock& data,int streamId)
 	    break;
 	case ProvingNormal:
 	case ProvingEmergency:
+	    m_t2.stop();
 	    if (m_localStatus != ProvingNormal && m_localStatus != ProvingEmergency &&
 		(m_localStatus == Alignment && m_t3.started()))
 		return false;
@@ -1401,6 +1403,7 @@ bool SS7M2PA::processLinkStatus(DataBlock& data,int streamId)
 	    m_lastSeqRx = -1;
 	    SS7Layer2::notify();
 	    m_oosTimer.stop();
+	    m_t2.stop();
 	    m_t3.stop();
 	    m_t4.stop();
 	    m_t1.stop();
@@ -1474,6 +1477,7 @@ bool SS7M2PA::processSLinkStatus(DataBlock& data,int streamId)
 	    break;
 	case ProvingNormal:
 	case ProvingEmergency:
+	    m_t2.stop();
 	    if (m_localStatus == Alignment && m_t3.started()) {
 		m_t3.stop();
 		setLocalStatus(status);
@@ -1504,6 +1508,7 @@ bool SS7M2PA::processSLinkStatus(DataBlock& data,int streamId)
 	    m_lastSeqRx = -1;
 	    SS7Layer2::notify();
 	    m_oosTimer.stop();
+	    m_t2.stop();
 	    m_t3.stop();
 	    m_t4.stop();
 	    m_t1.stop();

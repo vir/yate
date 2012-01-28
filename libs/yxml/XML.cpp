@@ -167,21 +167,15 @@ bool XmlSaxParser::parse(const char* text)
 	    auxData << m_buf.substr(0,len);
 	}
 	if (auxData.c_str()) {  // We have an end of tag or another child is riseing
-	    resetError();
-	    unEscape(auxData);
-	    gotText(auxData);
-	    resetParsed();
-	    if (error())
+	    if (!processText(auxData))
 		return false;
 	    m_buf = m_buf.substr(len);
 	    len = 0;
 	    auxData = "";
 	}
-	skipBlanks();
-	len = 0;
-	if (!m_buf.at(len + 1))
+	char auxCar = m_buf.at(1);
+	if (!auxCar)
 	    return setError(Incomplete);
-	char auxCar = m_buf.at(len + 1);
 	if (auxCar == '?') {
 	    m_buf = m_buf.substr(2);
 	    if (!parseInstruction())
@@ -206,10 +200,14 @@ bool XmlSaxParser::parse(const char* text)
 	if (!parseElement())
 	    return false;
     }
-    if (!completed()) {
-	// We have an element that is not complete
-	auxData << m_buf;
-	m_parsed.assign(auxData);
+    // Incomplete text
+    if ((unparsed() == None || unparsed() == Text) && (auxData || m_buf)) {
+	if (!auxData)
+	    m_parsed.assign(m_buf);
+	else {
+	    auxData << m_buf;
+	    m_parsed.assign(auxData);
+	}
 	m_buf = "";
 	setUnparsed(Text);
 	return setError(Incomplete);
@@ -220,7 +218,17 @@ bool XmlSaxParser::parse(const char* text)
     }
     m_buf = "";
     resetParsed();
+    setUnparsed(None);
     return true;
+}
+
+// Process incomplete text
+bool XmlSaxParser::completeText()
+{
+    if (!completed() || unparsed() != Text || error() != Incomplete)
+	return error() == NoError;
+    String tmp = m_parsed;
+    return processText(tmp);
 }
 
 // Parse an unfinished xml object
@@ -583,6 +591,7 @@ bool XmlSaxParser::parseComment()
 // Parse an element form the main buffer
 bool XmlSaxParser::parseElement()
 {
+    XDebug(this,DebugAll,"XmlSaxParser::parseElement() buf len=%u [%p]",m_buf.length(),this);
     if (!m_buf.c_str()) {
 	setUnparsed(Element);
 	return setError(Incomplete);
@@ -1062,6 +1071,22 @@ bool XmlSaxParser::processElement(NamedList& list, bool empty)
 	return true;
     }
     return false;
+}
+
+// Calls gotText() and reset parsed on success
+bool XmlSaxParser::processText(String& text)
+{
+    resetError();
+    unEscape(text);
+    if (!error())
+	gotText(text);
+    else
+	setUnparsed(Text);
+    if (!error()) {
+	resetParsed();
+	setUnparsed(None);
+    }
+    return error() == NoError;
 }
 
 

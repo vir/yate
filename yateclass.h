@@ -3871,18 +3871,20 @@ public:
      * @param stack Evaluation stack in use, parameters are popped off this stack
      *  and results are pushed back on stack
      * @param oper Function to evaluate
+     * @param context Pointer to arbitrary data passed from evaluation methods
      * @return True if evaluation succeeded
      */
-    virtual bool runFunction(const ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper);
+    virtual bool runFunction(const ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper, void* context);
 
     /**
      * Try to evaluate a single field
      * @param eval Pointer to the caller evaluator object
      * @param stack Evaluation stack in use, field value must be pushed on it
      * @param oper Field to evaluate
+     * @param context Pointer to arbitrary data passed from evaluation methods
      * @return True if evaluation succeeded
      */
-    virtual bool runField(const ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper);
+    virtual bool runField(const ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper, void* context);
 };
 
 /**
@@ -3993,34 +3995,38 @@ public:
     /**
      * Evaluate the expression, optionally return results
      * @param results List to fill with results row
+     * @param context Pointer to arbitrary data to be passed to called methods
      * @return True if expression evaluation succeeded, false on failure
      */
-    bool evaluate(ObjList* results) const;
+    bool evaluate(ObjList* results, void* context = 0) const;
 
     /**
      * Evaluate the expression, return computed results
      * @param results List to fill with results row
+     * @param context Pointer to arbitrary data to be passed to called methods
      * @return True if expression evaluation succeeded, false on failure
      */
-    inline bool evaluate(ObjList& results) const
-	{ return evaluate(&results); }
+    inline bool evaluate(ObjList& results, void* context = 0) const
+	{ return evaluate(&results,context); }
 
     /**
      * Evaluate the expression, return computed results
      * @param results List of parameters to populate with results row
      * @param index Index of result row, zero to not include an index
      * @param prefix Prefix to prepend to parameter names
+     * @param context Pointer to arbitrary data to be passed to called methods
      * @return Number of result columns, -1 on failure
      */
-    int evaluate(NamedList& results, unsigned int index = 0, const char* prefix = 0) const;
+    int evaluate(NamedList& results, unsigned int index = 0, const char* prefix = 0, void* context = 0) const;
 
     /**
      * Evaluate the expression, return computed results
      * @param results Array of result rows to populate
      * @param index Index of result row, zero to just set column headers
+     * @param context Pointer to arbitrary data to be passed to called methods
      * @return Number of result columns, -1 on failure
      */
-    int evaluate(Array& results, unsigned int index) const;
+    int evaluate(Array& results, unsigned int index, void* context = 0) const;
 
     /**
      * Simplify the expression, performs constant folding
@@ -4118,7 +4124,7 @@ protected:
      * @param oper Operator code
      * @return Precedence of the operator, zero (lowest) if unknown
      */
-    virtual int getPrecedence(Opcode oper);
+    virtual int getPrecedence(Opcode oper) const;
 
     /**
      * Check if we are at an expression separator and optionally skip past it
@@ -4198,35 +4204,39 @@ protected:
     /**
      * Try to evaluate the expression
      * @param stack Evaluation stack in use, results are left on stack
+     * @param context Pointer to arbitrary data to be passed to called methods
      * @return True if evaluation succeeded
      */
-    virtual bool runEvaluate(ObjList& stack) const;
+    virtual bool runEvaluate(ObjList& stack, void* context = 0) const;
 
     /**
      * Try to evaluate a single operation
      * @param stack Evaluation stack in use, operands are popped off this stack
      *  and results are pushed back on stack
      * @param oper Operation to execute
+     * @param context Pointer to arbitrary data to be passed to called methods
      * @return True if evaluation succeeded
      */
-    virtual bool runOperation(ObjList& stack, const ExpOperation& oper) const;
+    virtual bool runOperation(ObjList& stack, const ExpOperation& oper, void* context = 0) const;
 
     /**
      * Try to evaluate a single function
      * @param stack Evaluation stack in use, parameters are popped off this stack
      *  and results are pushed back on stack
      * @param oper Function to evaluate
+     * @param context Pointer to arbitrary data to be passed to called methods
      * @return True if evaluation succeeded
      */
-    virtual bool runFunction(ObjList& stack, const ExpOperation& oper) const;
+    virtual bool runFunction(ObjList& stack, const ExpOperation& oper, void* context = 0) const;
 
     /**
      * Try to evaluate a single field
      * @param stack Evaluation stack in use, field value must be pushed on it
      * @param oper Field to evaluate
+     * @param context Pointer to arbitrary data to be passed to called methods
      * @return True if evaluation succeeded
      */
-    virtual bool runField(ObjList& stack, const ExpOperation& oper) const;
+    virtual bool runField(ObjList& stack, const ExpOperation& oper, void* context = 0) const;
 
     /**
      * Internally used operator dictionary
@@ -4351,22 +4361,25 @@ public:
 
     /**
      * Evaluate the WHERE (selector) expression
+     * @param context Pointer to arbitrary data to be passed to called methods
      * @return True if the current row is part of selection
      */
-    virtual bool evalWhere();
+    virtual bool evalWhere(void* context = 0);
 
     /**
      * Evaluate the SELECT (results) expression
      * @param results List to fill with results row
+     * @param context Pointer to arbitrary data to be passed to called methods
      * @return True if evaluation succeeded
      */
-    virtual bool evalSelect(ObjList& results);
+    virtual bool evalSelect(ObjList& results, void* context = 0);
 
     /**
      * Evaluate the LIMIT expression and cache the result
+     * @param context Pointer to arbitrary data to be passed to called methods
      * @return Desired maximum number or result rows
      */
-    virtual unsigned int evalLimit();
+    virtual unsigned int evalLimit(void* context = 0);
 
     /**
      * Set the expression extender to use in all evaluators

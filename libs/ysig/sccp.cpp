@@ -926,7 +926,7 @@ static unsigned char encodeImportance(const SS7SCCP* sccp, SS7MSU& msu,
     return data[0];
 }
 
-static unsigned char encodeData(const SS7SCCP* sccp, SS7MSU& msu, SS7MsgSCCP* msg)
+static unsigned int encodeData(const SS7SCCP* sccp, SS7MSU& msu, SS7MsgSCCP* msg)
 {
     if (!msg) {
 	DDebug(sccp,DebugNote,"Request to encode data for a null message");
@@ -2816,9 +2816,9 @@ bool SS7SCCP::initialize(const NamedList* config)
     if (config) {
 	m_printMsg = config->getBoolValue(YSTRING("print-messages"),m_printMsg);
 	m_extendedDebug = config->getBoolValue(YSTRING("extended-debug"),m_extendedDebug);
-	m_ignoreUnkDigits = config->getBoolValue(YSTRING("ignore-unknown-digits"),true);
+	m_ignoreUnkDigits = config->getBoolValue(YSTRING("ignore-unknown-digits"),m_ignoreUnkDigits);
 	m_endpoint = config->getBoolValue(YSTRING("endpoint"),m_endpoint);
-	int hc = config->getIntValue("hopcounter",15);
+	int hc = config->getIntValue("hopcounter",m_hopCounter);
 	if (hc < 1 || hc > 15)
 	    hc = 15;
 	m_hopCounter = hc;
@@ -3173,23 +3173,22 @@ int SS7SCCP::segmentMessage(DataBlock& data, SS7MsgSCCP* origMsg, SS7MsgSCCP::Ty
     // Transmit first segment
     SS7MsgSCCP* msg = new SS7MsgSCCP(type);
     msg->params().copyParams(msgData);
-    DataBlock* temp = new DataBlock();
+    DataBlock temp;
     if (dataLength - MAX_DATA_LEN > 2)
-	temp->assign(data.data(0,MAX_DATA_LEN),MAX_DATA_LEN);
+	temp.assign(data.data(0,MAX_DATA_LEN),MAX_DATA_LEN,false);
     else
-	temp->assign(data.data(0,MAX_DATA_LEN - SGM_PADDING),MAX_DATA_LEN - SGM_PADDING);
+	temp.assign(data.data(0,MAX_DATA_LEN - SGM_PADDING),MAX_DATA_LEN - SGM_PADDING,false);
     msg->params().setParam("Segmentation.RemainingSegments",
 	    String(isSCLCMessage(type) ? --segments : 0));
     msg->params().setParam("Segmentation.FirstSegment","true");
-    msg->setData(temp);
-    dataLength -= temp->length();
-    totalSent += temp->length();
-    DDebug(this,DebugNote,"Sending first segment sl = %d, dl = %d, ts = %d",temp->length(),dataLength,totalSent);
+    msg->setData(&temp);
+    dataLength -= temp.length();
+    totalSent += temp.length();
+    DDebug(this,DebugNote,"Sending first segment sl = %d, dl = %d, ts = %d",temp.length(),dataLength,totalSent);
     unlock();
     sls = transmitMessage(msg);
     msg->removeData();
-    temp->clear(false);
-    TelEngine::destruct(temp);
+    temp.clear(false);
     TelEngine::destruct(msg);
     if (sls < 0) {
 	if (msgReturn && !local)
@@ -3206,23 +3205,21 @@ int SS7SCCP::segmentMessage(DataBlock& data, SS7MsgSCCP* origMsg, SS7MsgSCCP::Ty
     while (dataLength > 0) {
 	msg = new SS7MsgSCCP(type);
 	msg->params().copyParams(msgData);
-	temp = new DataBlock();
 	if (dataLength - MAX_DATA_LEN - SGM_PADDING > 2) // Make shure that the left segment is longer than 2
-	    temp->assign(data.data(totalSent,MAX_DATA_LEN - SGM_PADDING),MAX_DATA_LEN - SGM_PADDING);
+	    temp.assign(data.data(totalSent,MAX_DATA_LEN - SGM_PADDING),MAX_DATA_LEN - SGM_PADDING,false);
 	else if (dataLength - MAX_DATA_LEN - 2 * SGM_PADDING > 2)
-	    temp->assign(data.data(totalSent,MAX_DATA_LEN - 2* SGM_PADDING),MAX_DATA_LEN - 2* SGM_PADDING);
+	    temp.assign(data.data(totalSent,MAX_DATA_LEN - 2* SGM_PADDING),MAX_DATA_LEN - 2* SGM_PADDING,false);
 	else
-	    temp->assign(data.data(totalSent,dataLength),dataLength); // Should be last segment
+	    temp.assign(data.data(totalSent,dataLength),dataLength,false); // Should be last segment
 	msg->params().setParam("Segmentation.RemainingSegments",String(--segments));
-	msg->setData(temp);
-	dataLength -= temp->length();
-	totalSent += temp->length();
-	DDebug(this,DebugNote,"Sending segment: %d sl = %d, dl = %d, ts = %d",segments,temp->length(),dataLength,totalSent);
+	msg->setData(&temp);
+	dataLength -= temp.length();
+	totalSent += temp.length();
+	DDebug(this,DebugNote,"Sending segment: %d sl = %d, dl = %d, ts = %d",segments,temp.length(),dataLength,totalSent);
 	unlock();
 	sls = transmitMessage(msg);
 	msg->removeData();
-	temp->clear(false);
-	TelEngine::destruct(temp);
+	temp.clear(false);
 	TelEngine::destruct(msg);
 	if (sls < 0) {
 	    if (msgReturn && !local)
@@ -3307,6 +3304,8 @@ SS7MSU* SS7SCCP::buildMSU(SS7MsgSCCP* msg, const SS7Label& label) const
 	}
 	len += param->size;
     }
+    bool ludt = msg->type() == SS7MsgSCCP::LUDT;
+    int pointerLen = ludt ? 2 : 1;
     // initialize the pointer array offset just past the mandatory fixed part
     unsigned int ptr = label.length() + 1 + len;
     // then add one pointer octet to each mandatory variable parameter
@@ -3319,11 +3318,11 @@ SS7MSU* SS7SCCP::buildMSU(SS7MsgSCCP* msg, const SS7Label& label) const
 	}
 	if (param->size)
 	    Debug(this,DebugMild,"Invalid (fixed) description of variable SCCP parameter 0x%02x [%p]",ptype,this);
-	len++;
+	len += pointerLen;
     }
     // finally add a pointer to the optional part only if supported by type
     if (msgParams->optional)
-	len++;
+	len += pointerLen;
     SS7MSU* msu = new SS7MSU(sio(),label,0,len);
     unsigned char* d = msu->getData(label.length()+1,len);
     *d++ = msg->type();
@@ -3346,7 +3345,7 @@ SS7MSU* SS7SCCP::buildMSU(SS7MsgSCCP* msg, const SS7Label& label) const
 	d += param->size;
     }
     // now populate with mandatory variable parameters
-    for (; (ptype = *plist++) != SS7MsgSCCP::EndOfParameters; ptr++) {
+    for (; (ptype = *plist++) != SS7MsgSCCP::EndOfParameters; ptr += pointerLen) {
 	const SCCPParam* param = getParamDesc(ptype);
 	if (!param) {
 	    Debug(this,DebugFail,"Stage 2: no description of variable SCCP parameter 0x%02x [%p]",ptype,this);
@@ -3358,7 +3357,7 @@ SS7MSU* SS7SCCP::buildMSU(SS7MsgSCCP* msg, const SS7Label& label) const
 	}
 	// remember the offset this parameter will actually get stored
 	len = msu->length();
-	unsigned char size = 0;
+	unsigned int size = 0;
 	if (ptype == SS7MsgSCCP::Data || ptype == SS7MsgSCCP::LongData)
 	    size = encodeData(this,*msu,msg);
 	else
@@ -3374,7 +3373,14 @@ SS7MSU* SS7SCCP::buildMSU(SS7MsgSCCP* msg, const SS7Label& label) const
 	    continue;
 	}
 	// store pointer to parameter
-	d[ptr] = len - ptr;
+	unsigned int storedLength = len - ptr;
+	if (!ludt) {
+	    d[ptr] = storedLength;
+	    continue;
+	}
+	storedLength --;
+	d[ptr] = storedLength & 0xff;
+	d[ptr+1] = storedLength >> 8;
     }
     if (msgParams->optional) {
 	// remember the offset past last mandatory == first optional parameter
@@ -3408,7 +3414,13 @@ SS7MSU* SS7SCCP::buildMSU(SS7MsgSCCP* msg, const SS7Label& label) const
 		continue;
 	    if (len) {
 		d = msu->getData(0,len+1);
-		d[ptr] = len - ptr;
+		unsigned int storedLength = len - ptr;
+		if (ludt) {
+		    storedLength --;
+		    d[ptr] = storedLength & 0xff;
+		    d[ptr+1] = storedLength >> 8;
+		} else
+		    d[ptr] = storedLength;
 		len = 0;
 	    }
 	}
@@ -3891,6 +3903,7 @@ bool SS7SCCP::decodeMessage(SS7MsgSCCP* msg, SS7PointCode::Type pcType,
 	paramLen -= param->size;
     } // while ((ptype = *plist++)...
     bool mustWarn = true;
+    bool ludt = msg->type() == SS7MsgSCCP::LUDT;
     // next decode any mandatory variable parameters the message should have
     while ((ptype = *plist++) != SS7MsgSCCP::EndOfParameters) {
 	mustWarn = false;
@@ -3909,6 +3922,11 @@ bool SS7SCCP::decodeMessage(SS7MsgSCCP* msg, SS7PointCode::Type pcType,
 	    return false;
 	}
 	unsigned int offs = paramPtr[0];
+	if (ludt) {
+	    offs |= (paramPtr[1] << 8);
+	    paramPtr++;
+	    paramLen--;
+	}
 	if ((offs < 1) || (offs >= paramLen)) {
 	    Debug(this,DebugWarn,"Invalid offset %u (len=%u) SCCP parameter %s [%p]",
 		offs,paramLen,param->name,this);
@@ -3944,7 +3962,15 @@ bool SS7SCCP::decodeMessage(SS7MsgSCCP* msg, SS7PointCode::Type pcType,
     } // while ((ptype = *plist++)...
     // now decode the optional parameters if the message supports them
     if (params->optional) {
-	unsigned int offs = paramLen ? paramPtr[0] : 0;
+	unsigned int offs = 0;
+	if (paramLen) {
+	    if (ludt && paramLen > 1) {
+		offs = paramPtr[0] | (paramPtr[1] << 8);
+		paramPtr++;
+		paramLen--;
+	    } else if (!ludt)
+		offs = paramPtr[0];
+	}
 	if (offs >= paramLen) {
 	    if (paramLen) {
 		Debug(this,DebugWarn,"Invalid SCCP optional offset %u (len=%u) [%p]",

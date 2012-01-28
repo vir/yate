@@ -119,6 +119,9 @@
        <addaction name="chatcontact_unsubscribe" />
        <addaction name="chatcontact_unsubscribed" />
       </widget>
+      <addaction name="chatcontact_new" />
+      <addaction name="chatroom_new" />
+      <addaction name="separator" />
       <addaction name="chatcontact_chat" />
       <addaction name="chatcontact_call" />
       <addaction name="send_file" />
@@ -128,9 +131,6 @@
       <addaction name="chatcontact_del" />
       <addaction name="separator" />
       <addaction name="menuSubscription" />
-      <addaction name="separator" />
-      <addaction name="chatcontact_new" />
-      <addaction name="chatroom_new" />
       <addaction name="separator" />
       <addaction name="chatcontact_showoffline" />
       <addaction name="chatcontact_flatlist" />

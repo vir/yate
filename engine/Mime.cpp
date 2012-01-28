@@ -670,6 +670,31 @@ void MimeMultipartBody::buildBody() const
     m_body += boundaryLast;
 }
 
+// Skip chars until boundary line ends
+// Check for last boundary
+static void finalizeBoundary(const char*& buf, int& len, bool& last, const char* boundary)
+{
+    last = (len >= 2 && buf[0] == '-' && buf[1] == '-');
+    if (last) {
+	buf += 2;
+	len -= 2;
+	// Ignore the rest, we don't need the epilogue
+	return;
+    }
+    // RFC 2046 states the boundary line should be padded with spaces only
+    // and end with CR/LF. We allow any char until LF
+    for (; len && *buf != '\n'; buf++, len--)
+	;
+    if (len) {
+	buf++;
+	len--;
+    }
+    if (!len) {
+	Debug(DebugNote,"Unexpected multipart end for boundary '%s'",boundary + 4);
+	last = true;
+    }
+}
+
 // Parse a data buffer and append any valid body to this multipart
 // Ignore prolog, epilog and invalid bodies
 void MimeMultipartBody::parse(const char* buf, int len)
@@ -681,9 +706,30 @@ void MimeMultipartBody::parse(const char* buf, int len)
     if (!(buf && len > 0 && getBoundary(boundary)))
 	return;
 
-    bool endBody;
     // Find first boundary: ignore the data before it
-    findBoundary(buf,len,boundary.c_str(),boundary.length(),endBody);
+    bool endBody = false;
+    bool foundFirst = false;
+    // RFC 2046: First boundary may be preceded by a preamble
+    // If there is a preamble, CR/LF MUST be present in boundary
+    // If there is no preamble CR/LF may not be present, the buffer may start with -
+    if (buf[0] == '-') {
+	const char* tmp = boundary.c_str() + 2;
+	int tmpLen = boundary.length() - 2;
+	if (tmpLen <= len) {
+	    int i = 0;
+	    for (; i < tmpLen; i++)
+		if (buf[i] != tmp[i])
+		    break;
+	    if (i == tmpLen) {
+		foundFirst = true;
+		buf += tmpLen;
+		len -= tmpLen;
+		finalizeBoundary(buf,len,endBody,boundary);
+	    }
+	}
+    }
+    if (!foundFirst)
+	findBoundary(buf,len,boundary,boundary.length(),endBody);
 
     // Parse for bodies
     XDebug(DebugInfo,"Start parsing boundary=%s len=%d [%p]",
@@ -772,50 +818,40 @@ int MimeMultipartBody::findBoundary(const char*& buf, int& len,
     }
 
     endBody = false;
-    unsigned int l = len;
     int bodyLen = 0;
+    bool found = false;
 
-    while (l) {
+    while (len) {
 	// Skip until the first char of boundary
-	for (; l >= bLen && *buf != boundary[0]; l--, buf++)
+	for (; len >= (int)bLen && *buf != boundary[0]; len--, buf++)
 	    bodyLen++;
 	// Current char is the first char of the boundary
 	// Check if we have enough data for boundary
-	if (l < bLen) {
-	    bodyLen += l;
-	    buf += l;
-	    l = 0;
+	if (len < (int)bLen) {
+	    bodyLen += len;
+	    buf += len;
+	    len = 0;
 	    break;
 	}
 	// Check boundary
 	unsigned int n = 0;
-	for(; n < bLen && *buf == boundary[n]; n++, buf++, l--)
+	for(; n < bLen && *buf == boundary[n]; n++, buf++, len--)
 	    ;
 	// Not found
 	if (n < bLen) {
 	    bodyLen += n;
 	    continue;
 	}
-	// Check end of data
-	if (l > 2 && buf[0] == '-' && buf[1] == '-') {
-	    buf += 2;
-	    l -= 2;
-	    endBody = true;
-	}
-	// Skip until the end of line or data
-	for (; l; buf++, l--)
-	    if (*buf == '\n') {
-		buf++;
-		l--;
-		break;
-	    }
+	found = true;
+	finalizeBoundary(buf,len,endBody,boundary);
 	break;
     }
 
-    len = l;
+    if (!found)
+	Debug(DebugNote,"Expected multipart boundary '%s' not found",boundary + 4);
     if (!len)
 	endBody = true;
-    return bodyLen;
+    return found ? bodyLen : 0;
 }
 
 // Build a boundary string to be used when parsing or building body

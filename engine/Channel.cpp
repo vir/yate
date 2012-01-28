@@ -1617,7 +1617,7 @@ bool Router::route()
     // chan will keep it referenced even if message user data is changed
     m_msg->userData(chan);
 
-    if (ok) {
+    if (ok && m_msg->retValue().trimSpaces()) {
 	if ((m_msg->retValue() == YSTRING("-")) || (m_msg->retValue() == YSTRING("error")))
 	    chan->callRejected(m_msg->getValue(YSTRING("error"),"unknown"),
 		m_msg->getValue("reason"),m_msg);

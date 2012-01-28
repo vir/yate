@@ -16,6 +16,8 @@ require_once("libvoicemail.php");
 /* Always the first action to do */
 Yate::Init();
 
+/* Uncomment next line to get output in console */
+//Yate::Output(true);
 /* Uncomment next line to get debugging messages */
 //Yate::Debug(true);
 
@@ -106,7 +108,9 @@ function setState($newstate)
     if ($newstate == $state)
 	return;
 
-    switch ($newstate) {
+    $st = strpos($newstate,",");
+    $st = ($st !== false) ? substr($newstate,0,$st) : $newstate;
+    switch ($st) {
 	case "user":
 	    promptUser();
 	    $m = new Yate("chan.attach");
@@ -151,6 +155,14 @@ function setState($newstate)
 	    $m->params["notify"] = $ourcallid;
 	    $m->Dispatch();
 	    break;
+	default:
+	    if (substr($st,0,5) == "play:") {
+		$m = new Yate("chan.attach");
+		$m->params["source"] = "wave/play/$vm_base/" . substr($st,5) . ".slin";
+		$m->params["consumer"] = "wave/record/-";
+		$m->params["notify"] = $ourcallid;
+		$m->Dispatch();
+	    }
     }
     $state = $newstate;
 }
@@ -221,6 +233,11 @@ function gotNotify($reason)
     if ($reason == "replaced")
 	return;
 
+    $st = strpos($state,",");
+    if ($st !== false) {
+	setState(substr($state,$st+1));
+	return;
+    }
     switch ($state) {
 	case "goodbye":
 	    setState("");
@@ -272,7 +289,7 @@ function navigate($text)
 	    listenTo($current+1);
 	    break;
 	case "1":
-	    setState("record");
+	    setState("play:record,play:beep,record");
 	    break;
 	case "2":
 	    setState("play");
@@ -343,6 +360,7 @@ while ($state != "") {
 	    switch ($ev->name) {
 		case "call.execute":
 		    $mailbox = $ev->GetValue("user");
+		    $untrusted = Yate::Str2bool($ev->GetValue("untrusted"));
 		    $partycallid = $ev->GetValue("id");
 		    $ev->params["targetid"] = $ourcallid;
 		    $ev->handled = true;
@@ -360,6 +378,10 @@ while ($state != "") {
 		    /* If the user is unknown we need to identify and authenticate */
 		    if ($mailbox == "")
 			setState("user");
+		    else if ($untrusted) {
+			$collect_user = $mailbox;
+			setState("pass");
+		    }
 		    else
 			initUser();
 		    break;

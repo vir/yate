@@ -1433,26 +1433,30 @@ bool SigChannel::msgUpdate(Message& msg)
 {
     const String& oper = msg["operation"];
     SignallingEvent::Type evt = SignallingEvent::Unknown;
-    if (oper == "transport")
+    if (oper == YSTRING("transport"))
 	evt = SignallingEvent::Generic;
-    else if (oper == "suspend")
+    else if (oper == YSTRING("suspend"))
 	evt = SignallingEvent::Suspend;
-    else if (oper == "resume")
+    else if (oper == YSTRING("resume"))
 	evt = SignallingEvent::Resume;
-    else if (m_callAccdEvent && (oper == "accepted")) {
+    else if (oper == YSTRING("progress"))
+	evt = SignallingEvent::Progress;
+    else if (oper == YSTRING("ringing"))
+	evt = SignallingEvent::Ringing;
+    else if (m_callAccdEvent && (oper == YSTRING("accepted"))) {
 	plugin.copySigMsgParams(m_callAccdEvent,msg,"i");
 	releaseCallAccepted(true);
 	return true;
     }
-    else if (oper == "request" || oper == "reject")
+    else if (oper == YSTRING("request") || oper == YSTRING("reject"))
 	return updateMedia(msg,oper);
-    else if (oper == "initiate") {
+    else if (oper == YSTRING("initiate")) {
 	if (updateMedia(msg,oper))
 	    return true;
 	Debug(this,DebugMild,"No media update: %s",msg.getValue("reason"));
 	return false;
     }
-    else if (oper == "notify")
+    else if (oper == YSTRING("notify"))
 	return notifyMedia(msg);
 
     if (SignallingEvent::Unknown == evt)
@@ -1700,13 +1704,18 @@ void SigChannel::evInfo(SignallingEvent* event)
 
 void SigChannel::evProgress(SignallingEvent* event)
 {
-    setState("progressing");
+    if (!isAnswered())
+	setState("progressing");
     updateCircuitFormat(event,false);
     Message* msg = message("call.progress",false,true);
     if (isupController())
 	msg->setNotify(true);
     plugin.copySigMsgParams(*msg,event,&s_noPrefixParams);
     addRtp(*msg);
+    if (isAnswered()) {
+	*msg = "call.update";
+	msg->setParam("operation","progress");
+    }
     Engine::enqueue(msg);
 }
 
@@ -1756,13 +1765,18 @@ void SigChannel::evAnswer(SignallingEvent* event)
 
 void SigChannel::evRinging(SignallingEvent* event)
 {
-    setState("ringing");
+    if (!isAnswered())
+	setState("ringing");
     updateCircuitFormat(event,false);
     Message* msg = message("call.ringing",false,true);
     if (isupController())
 	msg->setNotify(true);
     plugin.copySigMsgParams(*msg,event,&s_noPrefixParams);
     addRtp(*msg);
+    if (isAnswered()) {
+	*msg = "call.update";
+	msg->setParam("operation","ringing");
+    }
     Engine::enqueue(msg);
 }
 
@@ -2500,6 +2514,15 @@ void SigDriver::handleEvent(SignallingEvent* event)
     }
     // No channel
     if (event->type() == SignallingEvent::NewCall) {
+	if (!canAccept(true)) {
+	    Debug(this,DebugWarn,"Refusing new sig call, full or exiting");
+	    SignallingMessage* msg = new SignallingMessage;
+	    msg->params().addParam("reason","switch-congestion");
+	    SignallingEvent* ev = new SignallingEvent(SignallingEvent::Release,msg,event->call());
+	    TelEngine::destruct(msg);
+	    ev->sendEvent();
+	    return;
+	}
 	lock();
 	ch = new SigChannel(event);
 	ch->initChan();

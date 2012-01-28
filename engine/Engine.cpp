@@ -358,8 +358,9 @@ bool EngineStatusHandler::received(Message &msg)
     return false;
 }
 
-static char s_cmdsOpt[] = "  module {{load|reload} modulefile|unload modulename|list}\r\n";
-static char s_cmdsMsg[] = "Controls the modules loaded in the Telephony Engine\r\n";
+static const char s_cmdsOptNoUnload[] = "  module {load modulefile|list}\r\n";
+static const char s_cmdsOpt[] = "  module {{load|reload} modulefile|unload modulename|list}\r\n";
+static const char s_cmdsMsg[] = "Controls the modules loaded in the Telephony Engine\r\n";
 
 // get the base name of a module file
 static String moduleBase(const String& fname)
@@ -467,8 +468,10 @@ void EngineCommand::doCompletion(Message &msg, const String& partLine, const Str
 	completeOne(msg.retValue(),"engine",partWord);
     else if (partLine == "module") {
 	completeOne(msg.retValue(),"load",partWord);
-	completeOne(msg.retValue(),"unload",partWord);
-	completeOne(msg.retValue(),"reload",partWord);
+	if (!s_nounload) {
+	    completeOne(msg.retValue(),"unload",partWord);
+	    completeOne(msg.retValue(),"reload",partWord);
+	}
 	completeOne(msg.retValue(),"list",partWord);
     }
     else if (partLine == "module load")
@@ -561,14 +564,15 @@ bool EngineCommand::received(Message &msg)
 
 bool EngineHelp::received(Message &msg)
 {
+    const char* opts = (s_nounload ? s_cmdsOptNoUnload : s_cmdsOpt);
     String line = msg.getValue("line");
     if (line.null()) {
-	msg.retValue() << s_cmdsOpt;
+	msg.retValue() << opts;
 	return false;
     }
     if (line != "module")
 	return false;
-    msg.retValue() << s_cmdsOpt << s_cmdsMsg;
+    msg.retValue() << opts << s_cmdsMsg;
     return true;
 }
 

@@ -78,12 +78,12 @@ const TokenDict s_operators_sql[] =
 
 
 
-bool ExpExtender::runFunction(const ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper)
+bool ExpExtender::runFunction(const ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper, void* context)
 {
     return false;
 }
 
-bool ExpExtender::runField(const ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper)
+bool ExpExtender::runField(const ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper, void* context)
 {
     return false;
 }
@@ -290,7 +290,7 @@ const char* ExpEvaluator::getOperator(ExpEvaluator::Opcode oper) const
     return lookup(oper,m_operators);
 }
 
-int ExpEvaluator::getPrecedence(ExpEvaluator::Opcode oper)
+int ExpEvaluator::getPrecedence(ExpEvaluator::Opcode oper) const
 {
     switch (oper) {
 	case OpcMul:
@@ -498,9 +498,9 @@ ExpOperation* ExpEvaluator::popOne(ObjList& stack)
     return static_cast<ExpOperation*>(o);
 }
 
-bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper) const
+bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, void* context) const
 {
-    DDebug(DebugAll,"runOperation(%p,%u) %s",&stack,oper.opcode(),getOperator(oper.opcode()));
+    DDebug(DebugAll,"runOperation(%p,%u,%p) %s",&stack,oper.opcode(),context,getOperator(oper.opcode()));
     switch (oper.opcode()) {
 	case OpcPush:
 	    stack.append(new ExpOperation(oper));
@@ -654,9 +654,9 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper) const
 	    }
 	    break;
 	case OpcFunc:
-	    return runFunction(stack,oper);
+	    return runFunction(stack,oper,context);
 	case OpcField:
-	    return runField(stack,oper);
+	    return runField(stack,oper,context);
 	default:
 	    Debug(DebugStub,"Please implement operation %u",oper.opcode());
 	    return false;
@@ -664,10 +664,10 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper) const
     return true;
 }
 
-bool ExpEvaluator::runFunction(ObjList& stack, const ExpOperation& oper) const
+bool ExpEvaluator::runFunction(ObjList& stack, const ExpOperation& oper, void* context) const
 {
-    DDebug(DebugAll,"runFunction(%p,'%s' %ld) ext=%p",
-	&stack,oper.name().c_str(),oper.number(),(void*)m_extender);
+    DDebug(DebugAll,"runFunction(%p,'%s' %ld, %p) ext=%p",
+	&stack,oper.name().c_str(),oper.number(),context,(void*)m_extender);
     if (oper.name() == YSTRING("chr")) {
 	String res;
 	for (long int i = oper.number(); i; i--) {
@@ -686,22 +686,22 @@ bool ExpEvaluator::runFunction(ObjList& stack, const ExpOperation& oper) const
 	stack.append(new ExpOperation(Time::secNow()));
 	return true;
     }
-    return m_extender && m_extender->runFunction(this,stack,oper);
+    return m_extender && m_extender->runFunction(this,stack,oper,context);
 }
 
-bool ExpEvaluator::runField(ObjList& stack, const ExpOperation& oper) const
+bool ExpEvaluator::runField(ObjList& stack, const ExpOperation& oper, void* context) const
 {
-    DDebug(DebugAll,"runField(%p,'%s') ext=%p",
-	&stack,oper.name().c_str(),(void*)m_extender);
-    return m_extender && m_extender->runField(this,stack,oper);
+    DDebug(DebugAll,"runField(%p,'%s',%p) ext=%p",
+	&stack,oper.name().c_str(),context,(void*)m_extender);
+    return m_extender && m_extender->runField(this,stack,oper,context);
 }
 
-bool ExpEvaluator::runEvaluate(ObjList& stack) const
+bool ExpEvaluator::runEvaluate(ObjList& stack, void* context) const
 {
-    DDebug(DebugInfo,"runEvaluate(%p)",&stack);
+    DDebug(DebugInfo,"runEvaluate(%p,%p)",&stack,context);
     for (ObjList* l = m_opcodes.skipNull(); l; l = l->skipNext()) {
 	const ExpOperation* o = static_cast<const ExpOperation*>(l->get());
-	if (!runOperation(stack,*o))
+	if (!runOperation(stack,*o,context))
 	    return false;
     }
     return true;
@@ -720,20 +720,20 @@ int ExpEvaluator::compile(const char* expr)
     return skipWhites(expr) ? 0 : res;
 }
 
-bool ExpEvaluator::evaluate(ObjList* results) const
+bool ExpEvaluator::evaluate(ObjList* results, void* context) const
 {
     ObjList res;
     if (results)
 	results->clear();
     else
 	results = &res;
-    return runEvaluate(*results);
+    return runEvaluate(*results,context);
 }
 
-int ExpEvaluator::evaluate(NamedList& results, unsigned int index, const char* prefix) const
+int ExpEvaluator::evaluate(NamedList& results, unsigned int index, const char* prefix, void* context) const
 {
     ObjList stack;
-    if (!evaluate(stack))
+    if (!evaluate(stack,context))
 	return -1;
     String idx(prefix);
     if (index)
@@ -750,7 +750,7 @@ int ExpEvaluator::evaluate(NamedList& results, unsigned int index, const char* p
     return column;
 }
 
-int ExpEvaluator::evaluate(Array& results, unsigned int index) const
+int ExpEvaluator::evaluate(Array& results, unsigned int index, void* context) const
 {
     Debug(DebugStub,"Please implement ExpEvaluator::evaluate(Array)");
     return -1;
@@ -817,12 +817,12 @@ void TableEvaluator::extender(ExpExtender* ext)
     m_limit.extender(ext);
 }
 
-bool TableEvaluator::evalWhere()
+bool TableEvaluator::evalWhere(void* context)
 {
     if (m_where.null())
 	return true;
     ObjList res;
-    if (!m_where.evaluate(res))
+    if (!m_where.evaluate(res,context))
 	return false;
     ObjList* first = res.skipNull();
     if (!first)
@@ -831,21 +831,21 @@ bool TableEvaluator::evalWhere()
     return (o->opcode() == ExpEvaluator::OpcPush) && o->number();
 }
 
-bool TableEvaluator::evalSelect(ObjList& results)
+bool TableEvaluator::evalSelect(ObjList& results, void* context)
 {
     if (m_select.null())
 	return false;
-    return m_select.evaluate(results);
+    return m_select.evaluate(results,context);
 }
 
-unsigned int TableEvaluator::evalLimit()
+unsigned int TableEvaluator::evalLimit(void* context)
 {
     if (m_limitVal == (unsigned int)-2) {
 	m_limitVal = (unsigned int)-1;
 	// hack: use a loop so we can break out of it
 	while (!m_limit.null()) {
 	    ObjList res;
-	    if (!m_limit.evaluate(res))
+	    if (!m_limit.evaluate(res,context))
 		break;
 	    ObjList* first = res.skipNull();
 	    if (!first)

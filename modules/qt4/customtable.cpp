@@ -95,13 +95,17 @@ CustomTable::CustomTable(const char *name, const NamedList& params, QWidget* par
     ObjList* check = params["hheader_columns_check"].split(',',false);
     ObjList* size = params["hheader_columns_size"].split(',',true);
     ObjList* resize = params["hheader_columns_resize"].split(',',true);
+    ObjList* emptyTitle = params["hheader_columns_allowemptytitle"].split(',',true);
     int n = cols->count();
     setColumnCount(n);
     for (int i = 0; i < n; i++) {
 	String id = objListItem(cols,i);
 	String text = objListItem(title,i);
-	if (!text)
-	    text = id;
+	if (!text) { 
+	    String tmp = id;
+	    if (!emptyTitle->find(tmp.toLower()))
+		text = id;
+	}
 	QTableWidgetItem* it = new QTableWidgetItem(QtClient::setUtf8(text));
 	id.toLower();
 	it->setData(ColumnId,QVariant(QtClient::setUtf8(id)));
@@ -130,6 +134,7 @@ CustomTable::CustomTable(const char *name, const NamedList& params, QWidget* par
     TelEngine::destruct(check);
     TelEngine::destruct(size);
     TelEngine::destruct(resize);
+    TelEngine::destruct(emptyTitle);
     // Init properties
     m_saveProps << "_yate_col_widths";
     m_saveProps << "_yate_sorting";

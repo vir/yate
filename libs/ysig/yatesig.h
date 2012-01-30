@@ -9046,6 +9046,7 @@ public:
     enum SccpStates {
 	Allowed = SS7Route::Allowed,
 	Prohibited = SS7Route::Prohibited,
+	Unknown = SS7Route::Unknown,
 	WaitForGrant,
 	IgnoreTests
     };
@@ -9232,6 +9233,12 @@ protected:
      * @param less Stop all sst except this
      */
     virtual void stopSst(SccpRemote* remoteSccp, SccpSubsystem* rSubsystem = 0, SccpSubsystem* less = 0);
+
+    /**
+     * Stop all subsystem status tests
+     */
+    inline void stopSSTs()
+	{ Lock lock(this); m_statusTest.clear(); }
 
     /**
      * Start a new subsystem status test

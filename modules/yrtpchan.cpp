@@ -202,7 +202,8 @@ class YRTPSession : public RTPSession
 {
 public:
     inline YRTPSession(YRTPWrapper* wrap)
-	: m_wrap(wrap), m_resync(false), m_anyssrc(false), m_getFax(true)
+	: m_wrap(wrap), m_lastLost(0),
+	  m_resync(false), m_anyssrc(false), m_getFax(true)
 	{ }
     virtual ~YRTPSession();
     virtual bool rtpRecvData(bool marker, unsigned int timestamp,
@@ -221,6 +222,7 @@ protected:
     virtual void timeout(bool initial);
 private:
     YRTPWrapper* m_wrap;
+    u_int32_t m_lastLost;
     bool m_resync;
     bool m_anyssrc;
     bool m_getFax;
@@ -972,10 +974,17 @@ bool YRTPSession::rtpRecvData(bool marker, unsigned int timestamp, const void* d
     s_srcMutex.unlock();
     if (!source)
 	return false;
+    unsigned long flags = (marker ? DataNode::DataMark : 0);
+    u_int32_t lost = ioPacketsLost();
+    if (lost != m_lastLost) {
+	if (lost > m_lastLost)
+	    flags |= DataNode::DataMissed;
+	m_lastLost = lost;
+    }
     // the source will not be destroyed until we reset the busy flag
     DataBlock block;
     block.assign((void*)data, len, false);
-    source->Forward(block,timestamp,(marker ? DataNode::DataMark : 0));
+    source->Forward(block,timestamp,flags);
     block.clear(false);
     source->busy(false);
     return true;

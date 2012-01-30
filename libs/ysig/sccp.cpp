@@ -192,7 +192,8 @@ const TokenDict SCCPManagement::s_states[] = {
     { "allowed",        SCCPManagement::Allowed },
     { "prohibited",     SCCPManagement::Prohibited },
     { "wait-for-grant", SCCPManagement::WaitForGrant },
-    { "ignore-tests",    SCCPManagement::IgnoreTests },
+    { "ignore-tests",   SCCPManagement::IgnoreTests },
+    { "unknown",        SCCPManagement::Unknown },
     { 0 , 0 }
 };
 
@@ -2392,14 +2393,19 @@ void SCCPManagement::mtpEndRestart()
     SccpRemote* sr = 0;
     while ((sr = YOBJECT(SccpRemote,iter.get()))) {
 	SS7Route::State state = sccp()->network()->getRouteState(m_pcType,sr->getPointCode());
-	if (state != SS7Route::Allowed)
+	RefPointer<SccpRemote> ptr = sr;
+	unlock();
+	if (sr->getState() !=  (SccpStates)state)
+	    manageSccpRemoteStatus(sr,state); // Update remote sccp state
+	if (state != SS7Route::Allowed) {
+	    lock();
 	    continue;
+	}
 	NamedList params("");
 	params.setParam("pointcode",String(m_sccp->getPackedPointCode()));
 	params.setParam("RemotePC",String(sr->getPackedPointcode()));
 	params.setParam("smi","0");
 	params.setParam("ssn","1");
-	unlock();
 	sendMessage(SSA,params);
 	lock();
     }
@@ -2444,20 +2450,40 @@ void SCCPManagement::sccpUnavailable(const SS7PointCode& pointcode, unsigned cha
 #ifdef DEBUG
     String dest;
     dest << pointcode;
-    Debug(this,DebugInfo,"Received UPU %s cause : %c",dest.c_str(), cause);
+    Debug(this,DebugInfo,"Received UPU %s cause : %d",dest.c_str(), cause);
 #endif
     Lock lock(this);
     SccpRemote* rsccp = getRemoteSccp(pointcode.pack(m_pcType));
     // Do not process UPU if we do not monitor the remote sccp state
     if (!rsccp)
 	return;
+    rsccp->setState(SCCPManagement::Prohibited);
     // Stop all subsystem status tests
     ListIterator iter(m_statusTest);
     SubsystemStatusTest* test = 0;
+    bool testStarted = false;
     while ((test = YOBJECT(SubsystemStatusTest,iter.get()))) {
 	if (!test || !test->getRemote() || pointcode != test->getRemote()->getPointCode())
 	    continue;
+	// Do not stop test for SSN = 1 if the cause is not Unequipped
+	SccpSubsystem* sub = test->getSubsystem();
+	if (sub->getSSN() == 1 && cause != HandledMSU::Unequipped) {
+	    testStarted = true;
+	    continue;
+	}
 	m_statusTest.remove(test);
+    }
+    if (!testStarted && cause != HandledMSU::Unequipped) {
+	SubsystemStatusTest* sst = new SubsystemStatusTest(m_testTimeout);
+	SccpSubsystem* sub = new SccpSubsystem(1);
+	if (!sst->startTest(rsccp,new SccpSubsystem(1))) {
+	    TelEngine::destruct(sst);
+	    TelEngine::destruct(sub);
+	    return;
+	}
+	TelEngine::destruct(sub);
+	m_statusTest.append(sst);
+	sst->setAllowed(false);
     }
     lock.drop();
     localBroadcast(SCCP::StatusIndication,rsccp->getPackedPointcode(),-1,SccpRemoteInaccessible);
@@ -3819,8 +3845,9 @@ void SS7SCCP::switchAddresses(const NamedList& source, NamedList& dest)
     dest.clearParam(YSTRING("RemotePC"));
     if (source.getParam(YSTRING("LocalPC")))
 	dest.setParam("LocalPC",source.getValue(YSTRING("LocalPC")));
-    if (source.getParam(YSTRING("RemotePC")))
-	dest.setParam("RemotePC",source.getValue(YSTRING("RemotePC")));
+    // Do not set RemotePC because the message can fail after a gt was performed
+    // and than RemotePC represents message destination pc rather then
+    // originating pc. Obtain return address from CallingPartyAddress
     // Copy the params
     for (unsigned int i = 0;i < source.length();i++) {
 	NamedString* param = source.getParam(i);
@@ -4099,9 +4126,9 @@ void SS7SCCP::notify(SS7Layer3* link, int sls)
 {
     if (!(link && network()))
 	return;
+    setNetworkUp(network()->operational());
     if (m_management)
 	m_management->pointcodeStatus(link,network()->operational());
-    setNetworkUp(network()->operational());
 }
 
 void SS7SCCP::setNetworkUp(bool operational)
@@ -4109,9 +4136,13 @@ void SS7SCCP::setNetworkUp(bool operational)
     if (m_layer3Up == operational)
 	return;
     m_layer3Up = operational;
+    if (!m_management)
+	return;
     DDebug(this,DebugInfo,"L3 is %s %p",operational ? "operational" : "down", m_management);
-    if (m_layer3Up && m_management)
+    if (m_layer3Up)
 	m_management->mtpEndRestart();
+    else
+	m_management->stopSSTs();
 	
 }
 
@@ -4122,6 +4153,7 @@ void SS7SCCP::routeStatusChanged(SS7PointCode::Type type, const SS7PointCode& no
     dump << node;
     DDebug(this,DebugAll,"Route status changed %s %s %p",dump.c_str(),SS7Route::stateName(state),m_management);
 #endif
+    state = network()->getRouteState(type,node);
     if (m_management)
 	m_management->routeStatus(type,node,state);
 }
@@ -4334,12 +4366,16 @@ void SS7ItuSccpManagement::manageSccpRemoteStatus(SccpRemote* rsccp, SS7Route::S
 	    // Discontinue all tests for the remote sccp
 	    SccpSubsystem* ss = new SccpSubsystem(1);
 	    stopSst(rsccp,0,ss); // Stop all sst except management
+	    // Do not start SST if the route is down the message will fail to be
+	    // sent. The status will be changed to allowed when the route is up
 	    TelEngine::destruct(ss);
-	    startSst(rsccp,ss); // Start sst for ssn = 1 if not already started
 	    localBroadcast(SCCP::PointCodeStatusIndication,rsccp->getPackedPointcode(),PCInaccessible,-1,0);
 	    localBroadcast(SCCP::PointCodeStatusIndication,rsccp->getPackedPointcode(),-1,SccpRemoteInaccessible,0);
 	    break;
 	}
+	case SS7Route::Unknown:
+	    rsccp->setState(SCCPManagement::Unknown);
+	    break;
 	default:
 	    DDebug(this,DebugNote,"Unhandled remote sccp status '%s'",SS7Route::stateName(newState));
     }
@@ -4596,6 +4632,9 @@ void SS7AnsiSccpManagement::manageSccpRemoteStatus(SccpRemote* rsccp, SS7Route::
 		localBroadcast(SCCP::StatusIndication,-1,-1,-1,-1,ss1->getSSN(),UserOutOfService);
 	    break;
 	}
+	case SS7Route::Unknown:
+	    rsccp->setState(SCCPManagement::Unknown);
+	    break;
 	default:
 	    DDebug(this,DebugNote,"Unhandled remote sccp status '%s'",SS7Route::stateName(newState));
     }

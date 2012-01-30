@@ -31,7 +31,6 @@ Yate::Install("chan.notify");
 $ourcallid = "over/" . uniqid(rand(),1);
 $partycallid = "";
 $state = "call";
-$num = "";
 $collect = "";
 // Queued, not yet used DTMFs
 $queue = "";
@@ -248,7 +247,6 @@ function timerTick()
 function endRoute($callto,$ok,$err,$params)
 {
     global $partycallid;
-    global $num;
     global $collect;
     global $final;
     global $queue;
@@ -262,8 +260,6 @@ function endRoute($callto,$ok,$err,$params)
 	$m->params["message"] = "call.execute";
 	$m->params["id"] = $partycallid;
 	$m->params["callto"] = $callto;
-	$m->params["caller"] = $num;
-	$m->params["called"] = $collect;
 	$m->Dispatch();
 	if (strlen($queue)) {
 	    // Masquerade the remaining digits
@@ -315,7 +311,6 @@ while ($state != "") {
 		case "call.execute":
 		    $partycallid = $ev->GetValue("id");
 		    $ev->params["targetid"] = $ourcallid;
-		    $num = $ev->GetValue("caller");
 		    $routeOnly = !Yate::Str2bool($ev->getValue("accept_call"));
 		    $interdigit = 1 * $ev->GetValue("interdigit",$interdigit);
 		    $autoanswer = false;

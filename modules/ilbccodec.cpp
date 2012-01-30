@@ -170,6 +170,8 @@ unsigned long iLBCCodec::Consume(const DataBlock& data, unsigned long tStamp, un
 		    // ask the codec to perform Packet Loss Concealement
 		    ::iLBC_decode(buffer,0,&m_dec,0);
 		    flags &= ~DataMissed;
+		    if (tStamp)
+			tStamp -= block;
 		}
 		else {
 		    ::iLBC_decode(buffer,s,&m_dec,1);

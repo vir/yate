@@ -157,6 +157,8 @@ unsigned long iLBCCodec::Consume(const DataBlock& data, unsigned long tStamp, un
     else {
 	frames = m_data.length() / no_bytes;
 	consumed = frames * no_bytes;
+	if (flags & DataMissed)
+	    frames++;
 	if (frames) {
 	    m_outdata.resize(frames * 2 * block);
 	    short* d = (short*)m_outdata.data();
@@ -164,8 +166,15 @@ unsigned long iLBCCodec::Consume(const DataBlock& data, unsigned long tStamp, un
 	    for (int i=0; i<frames; i++) {
 		// decode to a float values buffer
 		float buffer[BLOCKL_MAX];
-		::iLBC_decode(buffer,s,&m_dec,1);
-		s += no_bytes;
+		if (flags & DataMissed) {
+		    // ask the codec to perform Packet Loss Concealement
+		    ::iLBC_decode(buffer,0,&m_dec,0);
+		    flags &= ~DataMissed;
+		}
+		else {
+		    ::iLBC_decode(buffer,s,&m_dec,1);
+		    s += no_bytes;
+		}
 		// convert the buffer back to 16 bit integer
 		for (int j=0; j<block; j++)
 		    *d++ = (short)(buffer[j]);

@@ -1,3 +1,20 @@
+yate (3.3.3.svn4826) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4826: + Do not overwrite the original call
+    leg id while doing overlapped routing.  + Process SS7Route Unknown
+    state.  + Update remote SCCP's state when local MTP has finished to
+    restart.  + Do not stop subsystem status test routine if we received
+    UPU with other cause than Unequipped.  + Stop all subsystem status
+    tests if the attached network is not operational.  + Bugs Fixed in
+    SCCP management!  + Allow "caller" and "called" parameters to be
+    altered by the overlapped routing.  + Flag the data following one or
+    more missing packets.  + Made the ioPacketsLost() method available
+    in RTP session.  + Provides reasonable quality for up to 20% non-
+    sequential packet loss.  + Perform Packet Loss Concealement in the
+    iLBC decoder.  + Adjust the timestamp too when performing PLC.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 31 Jan 2012 02:19:19 +0400
+
 yate (3.3.3.svn4821) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4821: + Do not display or TAB complete the

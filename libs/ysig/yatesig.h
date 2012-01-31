@@ -5756,13 +5756,18 @@ public:
     /**
      * Constructor
      * @param packed The packed value of the destination point code
+     * @param type The destination point code type
      * @param priority Optional value of the network priority
      * @param shift SLS right shift to apply for balancing between linksets
+     * @param maxDataLength The maximum data that can be transported on this
+     *        route
      */
-    inline SS7Route(unsigned int packed, unsigned int priority = 0, unsigned int shift = 0)
-	: Mutex(true,"SS7Route"),
-	  m_packed(packed), m_priority(priority), m_shift(shift),
-	  m_state(Unknown), m_buffering(0), m_congCount(0), m_congBytes(0)
+    inline SS7Route(unsigned int packed, SS7PointCode::Type type,
+	    unsigned int priority = 0, unsigned int shift = 0,
+	    unsigned int maxDataLength = 272)
+	: Mutex(true,"SS7Route"), m_packed(packed), m_type(type),
+	m_priority(priority), m_shift(shift),m_maxDataLength(maxDataLength),
+	m_state(Unknown),m_buffering(0), m_congCount(0),m_congBytes(0)
 	{ m_networks.setDelete(false); }
 
     /**
@@ -5770,10 +5775,10 @@ public:
      * @param original The original route
      */
     inline SS7Route(const SS7Route& original)
-	: Mutex(true,"SS7Route"),
-	  m_packed(original.packed()), m_priority(original.priority()),
-	  m_shift(original.shift()), m_state(original.state()),
-	  m_buffering(0), m_congCount(0), m_congBytes(0)
+	: Mutex(true,"SS7Route"), m_packed(original.packed()),
+	  m_type(original.m_type), m_priority(original.priority()),
+	  m_shift(original.shift()), m_maxDataLength(original.getMaxDataLength()),
+	  m_state(original.state()), m_buffering(0), m_congCount(0), m_congBytes(0)
 	{ m_networks.setDelete(false); }
 
     /**
@@ -5816,6 +5821,13 @@ public:
      */
     unsigned int priority() const
 	{ return m_priority; }
+
+    /**
+     * Get the maximum data length that can be transported on this route
+     * @return The maximum data length
+     */
+    unsigned int getMaxDataLength() const
+	{ return m_maxDataLength; }
 
     /**
      * Get the packed Point Code of this route
@@ -5899,8 +5911,10 @@ private:
     void rerouteCheck(u_int64_t when);
     void rerouteFlush();
     unsigned int m_packed;               // Packed destination point code
+    SS7PointCode::Type m_type;           // The point code type
     unsigned int m_priority;             // Network priority for the given destination (used by SS7Layer3)
     unsigned int m_shift;                // SLS right shift when selecting linkset
+    unsigned int m_maxDataLength;        // The maximum data length that can be transported on this route
     ObjList m_networks;                  // List of networks used to route to the given destination (used by SS7Router)
     State m_state;                       // State of the route
     u_int64_t m_buffering;               // Time when controlled rerouting ends
@@ -6001,6 +6015,7 @@ class YSIG_API SS7Layer3 : virtual public SignallingComponent
     YCLASS(SS7Layer3,SignallingComponent)
     friend class SS7L3User;
     friend class SS7Router;              // Access the data members to build the routing table
+    friend class SS7Route;
 public:
     /**
      * Destructor
@@ -6175,6 +6190,15 @@ public:
      * @return False if no route available
      */
     bool buildRoutes(const NamedList& params);
+
+    /**
+     * Get the maximum data length of a route by packed Point Code.
+     * This method is thread safe
+     * @param type Destination point code type
+     * @param packedPC The packed point code
+     * @return The maximum data length that can be transported on the route. Maximum msu size (272) if no route to the given point code
+     */
+    unsigned int getRouteMaxLength(SS7PointCode::Type type, unsigned int packedPC);
 
     /**
      * Get the priority of a route by packed Point Code.
@@ -9436,6 +9460,30 @@ public:
 	{ return m_type; }
 
     /**
+     * Helper method to change the message type
+     * @param type The new message type
+     */
+    inline void updateType(Type type)
+	{ m_type = type; params().assign(lookup(type,"Unknown")); }
+
+    /**
+     * Utility method to verify if this message is a long unit data
+     * @return True if this message is a long unit data
+     */
+    inline bool isLongDataMessage() const
+	{ return m_type == LUDT || m_type == LUDTS; }
+
+    /**
+     * Utility method to verify if this message can be a UDT message
+     * A SCCP message can be an UDT message if it not contains HopCounter parameter
+     * or other optional parameters
+     * @return True if this message can be a UDT message
+     */
+    inline bool canBeUDT() const
+	{ return !(params().getParam(YSTRING("Importance")) ||
+		    params().getParam(YSTRING("HopCounter"))); }
+
+    /**
      * Fill a string with this message's parameters for debug purposes
      * @param dest The destination string
      * @param label The routing label
@@ -10031,6 +10079,41 @@ public:
 };
 
 /**
+ * Helper class to memorize SCCP data segments
+ */
+class SS7SCCPDataSegment : public GenObject
+{
+    YCLASS(SS7SCCPDataSegment,GenObject)
+public:
+    /**
+     * Constructor
+     * @param index The index in the original DataBlock where this segment starts
+     * @param length The length of this segment
+     */
+    inline SS7SCCPDataSegment(unsigned int index, unsigned int length)
+	: m_length(length), m_index(index)
+	{}
+
+    /**
+     * Destructor
+     */
+    virtual ~SS7SCCPDataSegment()
+	{}
+
+    /**
+     * Assignees to a DataBlock this segment's data
+     * @param temp The destination DataBlock segment
+     * @param orig The original DataBlock where this segment is located
+     */
+    inline void fillSegment(DataBlock& temp, const DataBlock& orig)
+	{ temp.assign(orig.data(m_index,m_length),m_length,false); }
+
+private:
+    unsigned int m_length;
+    unsigned int m_index;
+};
+
+/**
  * Implementation of SS7 Signalling Connection Control Part
  * @short SS7 SCCP implementation
  */
@@ -10148,20 +10231,12 @@ public:
 
     /**
      * Message changeover procedure for segmentation purpose
-     * @param data The message data
      * @param origMsg The original message
-     * @param type The destination message type
+     * @param label MTP3 routing label
      * @param local True if the origMsg is local initiated
      * @return Negative value if the message failed to be sent
      */
-    int segmentMessage(DataBlock& data, SS7MsgSCCP* origMsg, SS7MsgSCCP::Type type, bool local = false);
-
-    /**
-     * Check if we can send LUDT messages
-     * @param label The SS7 routing label
-     * @return True if we can send LUDT messages
-     */
-    bool canSendLUDT(const SS7Label& label);
+    int segmentMessage(SS7MsgSCCP* origMsg, const SS7Label& label, bool local);
 
     /**
      * Helper method to know if we use ITU or ANSI
@@ -10282,6 +10357,18 @@ protected:
     virtual bool isEndpoint()
 	{ return m_endpoint; }
 private:
+    // Helper method to calculate sccp address length
+    unsigned int getAddressLength(const NamedList& params, const String& prefix);
+    // Helper method used to ajust HopCounter and Importance parameters
+    void ajustMessageParams(NamedList& params, SS7MsgSCCP::Type type);
+    // Obtain maximum data length for a UDT, XUDT and LUDT message
+    void getMaxDataLen(const SS7MsgSCCP* msg, const SS7Label& label,
+	    unsigned int& udtLength, unsigned int& xudtLength, unsigned int& ludtLength);
+    // Helper method to obtain data segments
+    // NOTE The list must be destroyed
+    ObjList* getDataSegments(unsigned int dataLength, unsigned int maxSegmentSize);
+    // Helper method to print a SCCP message
+    void printMessage(const SS7MSU* msu, const SS7MsgSCCP* msg, const SS7Label& label);
     // Helper method used to extract the pointcode from Calling/Called party address.
     // Also will call GT translate if there is no pointcode in called party address
     bool fillPointCode(SS7PointCode& pointcode, SS7MsgSCCP* msg, const String& prefix, const char* pCode, bool translate);
@@ -10318,7 +10405,7 @@ private:
     void printStatus(bool extended);
     void setNetworkUp(bool operational);
 
-    SS7MSU* buildMSU(SS7MsgSCCP* msg, const SS7Label& label) const;
+    SS7MSU* buildMSU(SS7MsgSCCP* msg, const SS7Label& label, bool checkLength = true) const;
     bool routeSCLCMessage(SS7MsgSCCP*& msg, const SS7Label& label);
     // Member data
     SS7PointCode::Type m_type;           // Point code type of this SCCP
@@ -10330,7 +10417,7 @@ private:
     u_int32_t m_segTimeout;              // Time in milliseconds for segmentation timeout
     bool m_ignoreUnkDigits;              // Check if GT digit parser of should ignore unknown digits encoding
     bool m_layer3Up;                     // Flag used to verify if the network is operational
-    bool m_supportLongData;              // Flag used to check if this sccp can send LUDT messages
+    unsigned int m_maxUdtLength;         // The maximum length of data packet transported in a UDT message
     u_int32_t m_totalSent;               // Counter of the total number of SCCP messages sent
     u_int32_t m_totalReceived;           // The number of incoming sccp messages
     u_int32_t m_errors;                  // Counter of the number of messages that failed to be delivered

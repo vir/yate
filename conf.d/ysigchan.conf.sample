@@ -504,19 +504,37 @@
 ;netindicator=national
 
 ; route: string: Build a destination route for the SS7 network
-; The format of this option is pointcodetype,label,priority
+; The format of this option is pointcodetype,label,priority,shift,size
 ; This parameter can be repeated to build multiple destination routes
 ; The network will notify the router about its destination(s) and priority
+;
 ; If not specified the priority is 100. A zero priority creates an adjacent route
-; Example: route=ITU,2-2-2,100
+;
+; Shift SLS right shift when selecting linkset.
+;  For example for 2 links shift = 1.
+;  A value of 8 or higher disables load balancing.
+;
+; Size represents the maximum data size that can be transported on this route.
+; The default vaue is 272 -> maximum MSU size on TDM.
+; If the route can transport more data, a value up to 3904 should be set to
+;  avoid SCCP message fragmentation.
+;
+; Example: route=ITU,2-2-2,100,1,272
 ;route=
 
 ; adjacent: string: Build an adjacent route for the SS7 network (A, E and F links)
-; The format of this option is pointcodetype,label
+; The format of this option is pointcodetype,label,size
 ; This parameter can be repeated to declare multiple adjacent routers
 ; The network will notify the router about its destination(s) and priority
+;
 ; The priority is always zero so an adjacent route will always match first.
-; Example: adjacent=ANSI,40-50-60
+;
+; Size represents the maximum data size that can be transported on this route.
+; The default vaue is 272 -> maximum MSU size on TDM.
+; If the route can transport more data, a value up to 3904 should be set to
+;  avoid SCCP message fragmentation
+;
+; Example: adjacent=ANSI,40-50-60,272
 ;adjacent=
 
 ; local: string: Declare a local pointcode for the SS7 network

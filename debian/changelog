@@ -1,3 +1,14 @@
+yate (3.3.3.svn4828) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4828: + Reassamble SCCP messages before
+    performing GTT.  + Implemented SCCP message change procedures.  +
+    Improved SCCP segmentation process. The SCCP now detects the maximum
+    amount of data that can fit in a SCCP  message.  + Added posibility
+    to set maximum data size that can be transported on a specific
+    route.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 01 Feb 2012 02:19:18 +0400
+
 yate (3.3.3.svn4826) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4826: + Do not overwrite the original call

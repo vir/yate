@@ -1363,17 +1363,28 @@ void SS7MsgSCCP::toString(String& dest, const SS7Label& label, bool params,
  * SS7MsgSccpReassemble
  */
 
-SS7MsgSccpReassemble::SS7MsgSccpReassemble(SS7MsgSCCP* msg, const SS7Label& label, unsigned int timeToLive)
-    : SS7MsgSCCP(msg->type()), m_label(label), m_callingPartyAddress(""), m_segmentationLocalReference(0),
-    m_timeout(0), m_remainingSegments(0), m_firstSgmDataLen(0)
+SS7MsgSccpReassemble::SS7MsgSccpReassemble(SS7MsgSCCP* msg, const SS7Label& label,
+	    unsigned int timeToLive)
+    : SS7MsgSCCP(msg->type()), m_label(label), m_callingPartyAddress(""),
+    m_segmentationLocalReference(0), m_timeout(0), m_remainingSegments(0),
+    m_firstSgmDataLen(0)
 {
-    m_callingPartyAddress.copySubParams(msg->params(),YSTRING("CallingPartyAddress."));
-    m_segmentationLocalReference = msg->params().getIntValue(YSTRING("Segmentation.SegmentationLocalReference"));
+    m_callingPartyAddress.copySubParams(msg->params(),
+	    YSTRING("CallingPartyAddress."));
+    m_segmentationLocalReference = msg->params().getIntValue(
+	    YSTRING("Segmentation.SegmentationLocalReference"));
     m_timeout = Time::msecNow() + timeToLive;
-    m_remainingSegments = msg->params().getIntValue(YSTRING("Segmentation.RemainingSegments"));
+    m_remainingSegments = msg->params().getIntValue(
+	    YSTRING("Segmentation.RemainingSegments"));
     setData(new DataBlock(*msg->getData()));
     params().copyParams(msg->params());
     m_firstSgmDataLen = getData()->length();
+    // Update protocol class
+    if (msg->params().getIntValue(
+	    YSTRING("Segmentation.ProtocolClass"), -1) > 0)
+	params().setParam("ProtocolClass",msg->params().getValue(
+		YSTRING("Segmentation.ProtocolClass")));
+
 }
 
 SS7MsgSccpReassemble::~SS7MsgSccpReassemble()
@@ -2924,7 +2935,6 @@ int SS7SCCP::transmitMessage(SS7MsgSCCP* sccpMsg, bool local)
     }
     // Build the routing label
     SS7Label outLabel(m_type,dest,orig,sls);
-
     while (!canSendLUDT(outLabel)) {
 	if (sccpMsg->getData()->length() <= MAX_DATA_LEN)
 	    break;
@@ -3288,7 +3298,8 @@ SS7MsgSccpReassemble::Return SS7SCCP::reassembleSegment(SS7MsgSCCP* segment,
 	if (ret == SS7MsgSccpReassemble::Rejected)
 	    continue;
 	if (ret == SS7MsgSccpReassemble::Error) {
-	    m_reassembleList.remove(reass);
+	    m_reassembleList.remove(reass,false);
+	    msg = reass;
 	    return ret;
 	}
 	if (ret == SS7MsgSccpReassemble::Finished) {
@@ -3581,6 +3592,37 @@ bool SS7SCCP::routeSCLCMessage(SS7MsgSCCP*& msg, const SS7Label& label)
 	m_errors++;
 	return false;
     }
+    if (msg->params().getParam(YSTRING("Segmentation"))) {
+	// Verify if we had received Segmentation parameter with only one segment
+	// and let it pass trough
+	// The reassamblation of XUTDS and LUDTS is optional but, for code flow
+	// purpose, we are manageing it.
+	if (msg->params().getIntValue(YSTRING("Segmentation.RemainingSegments"),0) != 0 ||
+		!msg->params().getBoolValue(YSTRING("Segmentation.FirstSegment"),true)) {
+	    // We have segmentation parameter with multiple segments
+	    SS7MsgSCCP* finishead = 0;
+	    int ret = reassembleSegment(msg,label,finishead);
+	    if (ret == SS7MsgSccpReassemble::Accepted ||
+		    ret == SS7MsgSccpReassemble::Rejected)
+		return true;
+	    if (ret == SS7MsgSccpReassemble::Error) {
+		// For XUDTS and LUDTS messages the message return should allways
+		// be false
+		if (finishead && finishead->params().getBoolValue(YSTRING("MessageReturn"),false))
+		    returnMessage(finishead,SegmentationFailure);
+		if (finishead)
+		    TelEngine::destruct(finishead);
+		m_errors++;
+		return true;
+	    }
+	    if (!finishead) {
+		Debug(this,DebugStub,"Sccp Message finishead to reassemble but the message was not returned");
+		return true;
+	    }
+	    TelEngine::destruct(msg);
+	    msg = finishead;
+	}
+    }
     int errorCode = -1;
     NamedString* route = msg->params().getParam(YSTRING("CalledPartyAddress.route"));
     bool msgReturn = msg->params().getBoolValue(YSTRING("MessageReturn"),false);
@@ -3707,30 +3749,6 @@ bool SS7SCCP::routeSCLCMessage(SS7MsgSCCP*& msg, const SS7Label& label)
 	switch (msg->type()) {
 	    case SS7MsgSCCP::XUDT:
 	    case SS7MsgSCCP::LUDT:
-		if (msg->params().getParam(YSTRING("Segmentation"))) {
-		    // Verify if we had received Segmentation parameter with only one segment
-		    // This should not be happening but is not forbidden
-		    if (msg->params().getIntValue(YSTRING("Segmentation.RemainingSegments"),0) != 0 || 
-			    !msg->params().getBoolValue(YSTRING("Segmentation.FirstSegment"),true)) {
-			// We have segmentation parameter with multiple segments
-			SS7MsgSCCP* finishead = 0;
-			int ret = reassembleSegment(msg,label,finishead);
-			if (ret == SS7MsgSccpReassemble::Accepted ||
-				ret == SS7MsgSccpReassemble::Rejected)
-			    return true;
-			if (ret == SS7MsgSccpReassemble::Error) {
-			    errorCode = SegmentationFailure;
-			    break;
-			}
-			if (!finishead) {
-			    Debug(this,DebugStub,"Sccp Message finishead to reassemble but the message was not returned");
-			    return true;
-			}
-			TelEngine::destruct(msg);
-			msg = finishead;
-		    }
-		}
-		// intentionally fall through
 	    case SS7MsgSCCP::UDT:
 		lock.drop();
 		{
@@ -3744,24 +3762,6 @@ bool SS7SCCP::routeSCLCMessage(SS7MsgSCCP*& msg, const SS7Label& label)
 		break;
 	    case SS7MsgSCCP::XUDTS:
 	    case SS7MsgSCCP::LUDTS:
-		if (msg->params().getParam(YSTRING("Segmentation"))) {
-		    if (msg->params().getIntValue(YSTRING("Segmentation.RemainingSegments"),0) != 0 || 
-			    !msg->params().getBoolValue(YSTRING("Segmentation.FirstSegment"),true)) {
-			// We have segmentation parameter with multiple segments
-			SS7MsgSCCP* finishead = 0;
-			int ret = reassembleSegment(msg,label,finishead);
-			if (ret == SS7MsgSccpReassemble::Accepted ||
-				ret == SS7MsgSccpReassemble::Rejected)
-			    return true;
-			if (ret == SS7MsgSccpReassemble::Error || !finishead) {
-			    m_errors++;
-			    return false;
-			}
-			TelEngine::destruct(msg);
-			msg = finishead;
-			return false;
-		    }
-		}
 	    case SS7MsgSCCP::UDTS:
 		if (m_extendedMonitoring)
 		    archiveMessage(msg);

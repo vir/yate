@@ -6520,8 +6520,19 @@ bool DefaultLogic::handleResourceNotify(Message& msg, bool& stopLogic)
 	if (ownContact && inst && inst == a->resource().toString())
 	    return false;
 	online = (oper == YSTRING("online"));
-	if (online || oper == YSTRING("offline")) {
-	    if (online) {
+	bool updateCaps = !online && oper == YSTRING("updatecaps");
+	if (online || updateCaps || oper == YSTRING("offline")) {
+	    if (online || updateCaps) {
+		if (updateCaps) {
+		    ClientResource* res = c->findResource(inst);
+		    if (res) {
+			res->setFileTransfer(msg.getBoolValue(YSTRING("caps.filetransfer")));
+			res->setAudio(msg.getBoolValue(YSTRING("caps.audio")));
+			if (res->m_audio)
+			    instid = inst;
+		    }
+		    break;
+		}
 		c->setOnline(true);
 		if (!inst) {
 		    statusChanged = !oldOnline;

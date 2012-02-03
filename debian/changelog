@@ -1,3 +1,16 @@
+yate (3.3.3.svn4830) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4830: + Improved SCCP segmentation process.
+    The SCCP now detects the maximum amount of data that can fit in a
+    SCCP  message.  + Added posibility to set maximum data size that can
+    be transported on a specific route.  + Moved channel control buttons
+    to channel item in channels list. Conference and transfer are now
+    done from master channel and shown in its item in channels list.
+    Changed user interface colors and shapes.  + Notify and handle
+    resource update capabilities when received a response to disco info.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 04 Feb 2012 02:19:22 +0400
+
 yate (3.3.3.svn4828) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4828: + Reassamble SCCP messages before

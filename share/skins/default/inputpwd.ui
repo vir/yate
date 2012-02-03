@@ -37,15 +37,88 @@
    <iconset>user.png</iconset>
   </property>
   <property name="styleSheet" >
-   <string>QWidget {font-size: 11px; color: black;}&#xd;
-QWidget#inputdialog{background-color: #e0dfe3;}&#xd;
-QLineEdit {&#xd;
-  font-size: 12px;&#xd;
-  background: none;&#xd;
-  border: 1px solid #97acbc;&#xd;
-  border-radius: 2px;&#xd;
-}&#xd;
-QLabel {background: none;}&#xd;
+   <string>QWidget#inputpwd {
+  background:#f7f5fd;
+}
+QLineEdit {
+  color:#333333;
+  border: 1px solid #717fa0;
+  border-radius: 4px;
+}
+QAbstractButton { font-size: 11px; color: #333333; }
+QToolButton {
+  border: 1px solid #717fa0;
+  border-radius: 4px;
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f6e8e8);
+}
+QToolButton:hover { background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f9f3f3); }
+QToolButton:pressed { background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #f6e8e8, stop: 1 #ffffff); }
+QPushButton {
+  border: 1px solid #717fa0;
+  border-radius: 4px;
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f6e8e8);
+}
+QPushButton:hover { background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f9f3f3); }
+QPushButton:pressed { background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #f6e8e8, stop: 1 #ffffff); }
+QComboBox::down-arrow { image: url(cb_arrow.png); }
+QComboBox::down-arrow:on { top: 1px; left: 1px; }
+QComboBox {
+  padding-left: 2px;
+  padding-right: 25px;
+  border: 1px solid #717fa0;
+  border-radius: 4px;
+}
+QComboBox::drop-down {
+  width: 22px;
+  border-left: 1px solid #717fa0;
+}
+QCheckBox::indicator:checked { image: url(checkbox_on.png); }
+QCheckBox::indicator:unchecked { image: url(checkbox_off.png); }
+QRadioButton::indicator:checked { image: url(radio_on.png); }
+QRadioButton::indicator:unchecked { image: url(radio_off.png); }
+QScrollBar { border: 1px solid #717fa0; background: white; }
+QScrollBar::handle {
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f6e8e8);
+  border: 1px solid #717fa0;
+}
+QScrollBar:vertical {
+  width: 14px;
+  margin: 16px 0px 16px 0px;
+  border-top: 0px;
+  border-bottom: 0px;
+  border-right: 0px;
+}
+QScrollBar:horizontal {
+  height: 14px;
+  margin: 0px 16px 0px 16px;
+  border-left: 0px;
+  border-right: 0px;
+  border-bottom: 0px;
+}
+QScrollBar::add-line {
+  height: 13px;
+  width: 13px;
+  border: 1px solid #717fa0;
+  subcontrol-origin: margin;
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f6e8e8);
+}
+QScrollBar::sub-line {
+  height: 13px;
+  width: 13px;
+  border: 1px solid #717fa0;
+  subcontrol-origin: margin;
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f6e8e8);
+}
+QScrollBar::handle:vertical { border-left: 0px; border-right: 0px; }
+QScrollBar::handle:horizontal { border-top: 0px; border-bottom: 0px; }
+QScrollBar::add-line:vertical { subcontrol-position: bottom; image: url(scroll_down.png); height: 14px; }
+QScrollBar::sub-line:vertical { subcontrol-position: top; image: url(scroll_up.png); height: 14px; }
+QScrollBar::add-line:horizontal { subcontrol-position: right; image: url(scroll_right.png); width: 14px; }
+QScrollBar::sub-line:horizontal { subcontrol-position: left; image: url(scroll_left.png); width: 14px; }
+QScrollBar::up-arrow:pressed { border: 1px solid #717fa0; }
+QScrollBar::down-arrow:pressed { border: 1px solid #717fa0; }
+QScrollBar::left-arrow:pressed { border: 1px solid #717fa0; }
+QScrollBar::right-arrow:pressed { border: 1px solid #717fa0; }
 </string>
   </property>
   <property name="_yate_windowflags" stdset="0" >
@@ -168,7 +241,25 @@ QLabel {background: none;}&#xd;
       </spacer>
      </item>
      <item>
-      <widget class="QPushButton" name="ok" >
+      <widget class="QToolButton" name="ok" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>0</width>
+         <height>26</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>16777215</width>
+         <height>26</height>
+        </size>
+       </property>
        <property name="text" >
         <string>Ok</string>
        </property>
@@ -178,18 +269,60 @@ QLabel {background: none;}&#xd;
        <property name="shortcut" >
         <string>Return</string>
        </property>
+       <property name="toolButtonStyle" >
+        <enum>Qt::ToolButtonTextBesideIcon</enum>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>ok.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>ok_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>ok_hover.png</string>
+       </property>
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="button_hide" >
+      <widget class="QToolButton" name="button_hide" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>0</width>
+         <height>26</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>16777215</width>
+         <height>26</height>
+        </size>
+       </property>
        <property name="text" >
         <string>Cancel</string>
        </property>
        <property name="icon" >
-        <iconset>close.png</iconset>
+        <iconset>cancel.png</iconset>
        </property>
        <property name="shortcut" >
         <string>Esc</string>
+       </property>
+       <property name="toolButtonStyle" >
+        <enum>Qt::ToolButtonTextBesideIcon</enum>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>cancel.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>cancel_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>cancel_hover.png</string>
        </property>
       </widget>
      </item>

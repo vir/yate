@@ -12,6 +12,9 @@
   <property name="windowTitle" >
    <string>File transfer</string>
   </property>
+  <property name="windowIcon" >
+   <iconset>file_trans.png</iconset>
+  </property>
   <layout class="QVBoxLayout" >
    <property name="leftMargin" >
     <number>6</number>

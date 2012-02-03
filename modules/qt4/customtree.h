@@ -30,6 +30,7 @@
 using namespace TelEngine;
 namespace { // anonymous
 
+class QtCellGridDraw;                    // Draw cell grid
 class QtTreeItem;                        // A tree widget item
 class QtCustomTree;                      // A custom tree widget
 class ContactList;                       // A contact list tree
@@ -39,6 +40,85 @@ class ContactItemList;                   // Groups and contact items belonging t
 typedef QList<QTreeWidgetItem*> QtTreeItemList;
 typedef QPair<QTreeWidgetItem*,QString> QtTreeItemKey;
 typedef QPair<String,int> QtTokenDict; 
+
+
+/**
+ * Utility used to draw a cell grid (borders)
+ * @short Draw cell grid (borders)
+ */
+class QtCellGridDraw
+{
+public:
+    /**
+     * Position and flags enumeration
+     */
+    enum Position {
+	None = 0,
+	Left = 1,
+	Top = 2,
+	Right = 4,
+	Bottom = 8,
+	DrawStart = 16,
+	DrawEnd = 32,
+	// Masks
+	Pos = Left | Top | Right | Bottom,
+    };
+
+    /**
+     * Constructor
+     * @param flags Optional flags
+     */
+    explicit inline QtCellGridDraw(int flags = 0)
+	: m_flags(flags)
+	{}
+
+    /**
+     * Retrieve specific flags if set
+     * @param val Flags to retrieve
+     * @return Draw flags masked with given value
+     */
+    inline int flag(int val) const
+	{ return (m_flags & val); }
+
+    /**
+     * Set draw pen
+     * @param pos Position to set pen (Left, Right, Top or Bottom)
+     * @param pen Pen to set
+     */
+    void setPen(Position pos, QPen pen);
+
+    /**
+     * Set draw pens from a list of parameters
+     * @param params Parameter list
+     */
+    void setPen(const NamedList& params);
+
+    /**
+     * Set pen from parameters list
+     * @param pos Position to set
+     * @param params Parameter list
+     */
+    void setPen(Position pos, const NamedList& params); 
+
+    /**
+     * Draw the borders
+     * @param p The painter to use
+     * @param rect Cell rectangle
+     * @param isFirstRow True if drawing the first row
+     * @param isFirstColumn True if drawing the first column
+     * @param isLastRow True if drawing the last row
+     * @param isLastColumn True if drawing the last column
+     */
+    void draw(QPainter* p, QRect& rect, bool isFirstRow, bool isFirstColumn,
+	bool isLastRow, bool isLastColumn) const;
+
+protected:
+    int m_flags;
+    QPen m_left;
+    QPen m_top;
+    QPen m_right;
+    QPen m_bottom;
+};
 
 /**
  * This class holds data about a tree widget container item
@@ -65,6 +145,7 @@ public:
     String m_statsWidget;                // Item widget showing statistics while collapsed
     String m_statsTemplate;              // Statistics template (may include ${count} for children count)
     QBrush m_bg;                         // Item background
+    QRect m_margins;                     // Item internal margins
 };
 
 
@@ -140,9 +221,31 @@ public:
 	{ return toString(); }
 
     /**
+     * Check if the item is filtered (filter matched)
+     * @return True if the item is filtered
+     */
+    inline bool filterMatched() const
+	{ return m_filtered; }
+
+    /**
+     * Update item filtered flag. Set it to true if the parameter list pointer is 0
+     * @param filter Filter parameter list
+     * @return Filtered value
+     */
+    bool setFilter(const NamedList* filter);
+
+    /**
      * Save/restore item expanded status
      */
     bool m_storeExp;
+
+    /**
+     * Item height delta from global item size
+     */
+    int m_heightDelta;
+
+protected:
+    bool m_filtered;                     // Item filtered flag
 };
 
 /**
@@ -158,6 +261,7 @@ class QtCustomTree : public QtTree
     Q_PROPERTY(bool autoExpand READ autoExpand WRITE setAutoExpand(bool))
     Q_PROPERTY(int rowHeight READ rowHeight WRITE setRowHeight(int))
     Q_PROPERTY(bool _yate_horizontalheader READ getHHeader WRITE setHHeader(bool))
+    Q_PROPERTY(bool _yate_notifyitemchanged READ getNotifyItemChanged WRITE setNotifyItemChanged(bool))
     Q_PROPERTY(QString _yate_itemui READ itemUi WRITE setItemUi(QString))
     Q_PROPERTY(QString _yate_itemstyle READ itemStyle WRITE setItemStyle(QString))
     Q_PROPERTY(QString _yate_itemselectedstyle READ itemSelectedStyle WRITE setItemSelectedStyle(QString))
@@ -169,6 +273,7 @@ class QtCustomTree : public QtTree
     Q_PROPERTY(QString _yate_itemstatstemplate READ itemStatsTemplate WRITE setItemStatsTemplate(QString))
     Q_PROPERTY(QString _yate_itemheight READ itemHeight WRITE setItemHeight(QString))
     Q_PROPERTY(QString _yate_itembackground READ itemBg WRITE setItemBg(QString))
+    Q_PROPERTY(QString _yate_itemmargins READ itemMargins WRITE setItemMargins(QString))
     Q_PROPERTY(QString _yate_col_widths READ colWidths WRITE setColWidths(QString))
     Q_PROPERTY(QString _yate_sorting READ sorting WRITE setSorting(QString))
     Q_PROPERTY(QString _yate_itemsexpstatus READ itemsExpStatus WRITE setItemsExpStatus(QString))
@@ -190,6 +295,7 @@ public:
 	                                 // Rows: QStringList with data
 	RoleImage,                       // Role containing item image file name
 	RoleBackground,                  // Role containing item background color
+	RoleMargins,                     // Role containing item internal margins
 	RoleCount
     };
 
@@ -207,6 +313,13 @@ public:
      * Destructor
      */
     virtual ~QtCustomTree();
+
+    /**
+     * Method re-implemented from QTreeWidget.
+     * Draw item grid if set
+     */
+    virtual void drawRow(QPainter* p, const QStyleOptionViewItem& opt,
+	const QModelIndex& idx) const;
 
     /**
      * Retrieve item type definition from [type:]value. Create it if not found
@@ -400,7 +513,7 @@ public:
      * @param item Item to set
      * @return Item row height
      */
-    inline int getItemRowHeight(int type) {
+    inline int getItemRowHeight(int type) const {
 	    QtTreeItemProps* p = treeItemProps(type);
 	    return (p && p->m_height > 0) ? p->m_height : m_rowHeight;
 	}
@@ -416,7 +529,7 @@ public:
      * @param type Item type
      * @return QtTreeItemProps poinetr or 0 if not found
      */
-    inline QtTreeItemProps* treeItemProps(int type) {
+    inline QtTreeItemProps* treeItemProps(int type) const {
 	    QtUIWidgetItemProps* pt = QtUIWidget::getItemProps(itemPropsName(type));
 	    return YOBJECT(QtTreeItemProps,pt);
 	}
@@ -524,6 +637,20 @@ public:
 	    if (h)
 		h->setHidden(!on);
 	}
+
+    /**
+     * Check if this table is notifying item changed
+     * @return True if this table is notifying item changed
+     */
+    bool getNotifyItemChanged()
+	{ return m_notifyItemChanged; }
+
+    /**
+     * Set/reset item changed notification flag
+     * @param on True to notify item changes, false to disable the notification
+     */
+    void setNotifyItemChanged(bool on)
+	{ m_notifyItemChanged = on; }
 
     /**
      * Read _yate_itemui property accessor: does nothing
@@ -669,6 +796,20 @@ public:
     void setItemBg(QString value);
 
     /**
+     * Read _yate_itemmargins property accessor: does nothing
+     * This method is here to stop MOC compiler complaining about missing READ accessor function
+     */
+    QString itemMargins()
+	{ return QString(); }
+
+    /**
+     * Set an item props margins
+     * @param value Item props margins. Format [type:]margins where
+     *  margins is a comma separated list of item internal margins left,top,right,bottom
+     */
+    void setItemMargins(QString value);
+
+    /**
      * Retrieve a comma separated list with column widths
      * @return Comma separated list containing column widths
      */
@@ -754,6 +895,12 @@ protected slots:
     void itemCollapsedSlot(QTreeWidgetItem* item)
 	{ onItemExpandedChanged(static_cast<QtTreeItem*>(item)); }
 
+    /**
+     * Catch item changed signal
+     */
+    void itemChangedSlot(QTreeWidgetItem* item, int column)
+	{ onItemChanged(static_cast<QtTreeItem*>(item),column); }
+
 protected:
     /**
      * Retrieve the item props name associated with tree item type
@@ -827,6 +974,11 @@ protected:
     virtual void onItemExpandedChanged(QtTreeItem* item);
 
     /**
+     * Process item changed signal
+     */
+    virtual void onItemChanged(QtTreeItem* item, int column);
+
+    /**
      * Catch a context menu event and show the context menu
      * @param e Context menu event
      */
@@ -861,6 +1013,19 @@ protected:
     virtual void itemVisibleChanged(QtTreeItem& item);
 
     /**
+     * Check item filter
+     * @param item Optional item. Check root if 0
+     * @param recursive True to check recursive (check children's children also)
+     */
+    void checkItemFilter(QtTreeItem* item = 0, bool recursive = true);
+
+    /**
+     * Handle item filter changes
+     * @param item The item
+     */
+    virtual void itemFilterChanged(QtTreeItem& item);
+
+    /**
      * Uncheck all checkable columns in a given item
      * @param item The item
      */
@@ -887,6 +1052,13 @@ protected:
     void applyItemStatistics(QtTreeItem& item);
 
     /**
+     * Update a tree item's margins
+     * @param item Item to update
+     * @param set True to set from item props, false to set an empty rect
+     */
+    virtual void applyItemMargins(QtTreeItem& item, bool set = true);
+
+    /**
      * Store (update) to or remove from item expanded status storage an item
      * @param id Item id
      * @param on Expanded status
@@ -901,12 +1073,17 @@ protected:
      */
     int getStoreExpStatus(const String& id);
 
+    bool m_notifyItemChanged;            // Notify 'listitemchanged' action
     bool m_hasCheckableCols;             // True if we have checkable columns
     QMenu* m_menu;                       // Tree context menu
     bool m_autoExpand;                   // Items are expanded when added
     int m_rowHeight;                     // Tree row height
     NamedList m_itemPropsType;           // Tree item type to item props translation
     QList<QtTokenDict> m_expStatus;      // List of stored item IDs and expanded status
+    QtCellGridDraw m_gridDraw;
+    int m_changing;                      // Content is changing from client (not from user):
+                                         //  avoid notifications
+    NamedList* m_filter;                 // Item filter
 };
 
 /**
@@ -1183,6 +1360,13 @@ protected:
      * @param list The list to fill
      */
     virtual void fillItemStatistics(QtTreeItem& item, NamedList& list);
+
+    /**
+     * Update a tree item's margins
+     * @param item Item to update
+     * @param set True to set from item props, false to set an empty rect
+     */
+    virtual void applyItemMargins(QtTreeItem& item, bool set = true);
 
     /**
      * Retrieve a group item from root or create a new one

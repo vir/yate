@@ -43,10 +43,33 @@
    <string/>
   </property>
   <property name="styleSheet" >
-   <string>QLabel {&#xd;
-  background:none;&#xd;
-  font-size: 11px;&#xd;
-}&#xd;
+   <string>QLabel {
+  background:none;
+  font-size: 11px;
+}
+QTabWidget::pane {      
+  border: 1px solid #717fa0;
+  background:  #ffffff;
+}
+QTabBar { font: 12px; }
+QTabBar::tab {
+  padding: 1px 1px 1px 1px;
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f6e8e8);
+  border: 1px solid #717fa0;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+  min-height: 3ex;
+}
+QTabBar::tab:hover { background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f9f3f3); }
+QTabBar::tab:selected {
+  border-bottom-color: #ffffff;
+  padding-top: 0px;
+  border-top: 4px solid #73a9e1;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #f9efef, stop: 1 #ffffff);
+}
+QTabBar::tab:!selected { margin-top: 4px; }
 </string>
   </property>
   <layout class="QVBoxLayout" >

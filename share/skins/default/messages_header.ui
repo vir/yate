@@ -72,10 +72,19 @@
         <string>Previous message</string>
        </property>
        <property name="icon" >
-        <iconset>prev.png</iconset>
+        <iconset>left.png</iconset>
        </property>
        <property name="_yate_noautoconnect" stdset="0" >
         <bool>true</bool>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>left.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>left_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>left_hover.png</string>
        </property>
       </widget>
      </item>
@@ -128,10 +137,19 @@
         <string>Next message</string>
        </property>
        <property name="icon" >
-        <iconset>next.png</iconset>
+        <iconset>right.png</iconset>
        </property>
        <property name="_yate_noautoconnect" stdset="0" >
         <bool>true</bool>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>right.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>right_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>right_hover.png</string>
        </property>
       </widget>
      </item>
@@ -181,7 +199,16 @@
         <string>Hide notifications</string>
        </property>
        <property name="icon" >
-        <iconset>close.png</iconset>
+        <iconset>cancel.png</iconset>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>cancel.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>cancel_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>cancel_hover.png</string>
        </property>
       </widget>
      </item>

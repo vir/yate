@@ -1681,6 +1681,8 @@ public:
     static String s_debugWidget;
     // The list of cient's toggles
     static String s_toggles[OptCount];
+    // Maximum remote users allowed to enter in conference
+    static int s_maxConfPeers;
     // Engine started flag
     static bool s_engineStarted;
 
@@ -1752,6 +1754,15 @@ public:
     };
 
     /**
+     * Channel slave type
+     */
+    enum SlaveType {
+	SlaveNone = 0,
+	SlaveTransfer,
+	SlaveConference,
+    };
+
+    /**
      * Incoming (from engine) constructor
      * @param msg The call.execute message
      * @param peerid The peer's id
@@ -1762,8 +1773,11 @@ public:
      * Outgoing (to engine) constructor
      * @param target The target to call
      * @param params Call parameters
+     * @param st Optional slave
+     * @param masterChan Master channel id if slave, ignored otherwise
      */
-    ClientChannel(const String& target, const NamedList& params);
+    ClientChannel(const String& target, const NamedList& params, int st = SlaveNone,
+	const String& masterChan = String::empty());
 
     /**
      * Constructor for utility channels used to play notifications
@@ -1796,11 +1810,75 @@ public:
     void callAnswer(bool setActive = true);
 
     /**
+     * Get the slave type of this channel
+     * @return The slave type of this channel
+     */
+    inline int slave() const
+	{ return m_slave; }
+
+    /**
+     * Retrieve channel slaves.
+     * This method is not thread safe
+     * @return Channel slaves list
+     */
+    inline ObjList& slaves()
+	{ return m_slaves; }
+
+    /**
+     * Retrieve channel slaves number. This method is thread safe
+     * @return Channel slaves list
+     */
+    inline unsigned int slavesCount() const {
+	    Lock lock(m_mutex);
+	    return m_slaves.count();
+	}
+
+    /**
+     * Add a slave id. This method is thread safe
+     * @param sid Slave id to add
+     */
+    inline void addSlave(const String& sid) {
+	    Lock lock(m_mutex);
+	    if (!m_slaves.find(sid))
+		m_slaves.append(new String(sid));
+	}
+
+    /**
+     * Remove a slave id. This method is thread safe
+     * @param sid Slave id to remove
+     */
+    inline void removeSlave(const String& sid) {
+	    Lock lock(m_mutex);
+	    m_slaves.remove(sid);
+	}
+
+    /**
+     * Get the master channel id if any
+     * @return The master channel id of this channel
+     */
+    inline const String& master() const
+	{ return m_master; }
+
+    /**
+     * Retrieve channel client parameters
+     * @return Channel client parameters list
+     */
+    inline const NamedList& clientParams() const
+	{ return m_clientParams; }
+
+    /**
      * Get the remote party of this channel
      * @return The remote party of this channel
      */
     inline const String& party() const
 	{ return m_party; }
+
+    /**
+     * Get the remote party name of this channel
+     * @return The remote party name of this channel
+     */
+    inline const String& partyName() const
+	{ return m_partyName ? m_partyName : m_party; }
 
     /**
      * Check if this channel is in conference
@@ -1958,9 +2036,23 @@ public:
 	{ return TelEngine::lookup(notif,s_notification,def); }
 
     /**
+     * Lookup for a slave type
+     * @param notif The slave type name
+     * @param def Default value to return if not found
+     * @return The result
+     */
+    static int lookupSlaveType(const char* notif, int def = SlaveNone)
+	{ return TelEngine::lookup(notif,s_slaveTypes,def); }
+
+    /**
      * Channel notifications dictionary
      */
-    static TokenDict s_notification[];
+    static const TokenDict s_notification[];
+
+    /**
+     * Channel notifications dictionary
+     */
+    static const TokenDict s_slaveTypes[];
 
 protected:
     virtual void destroyed();
@@ -1977,7 +2069,10 @@ protected:
     // Don't set the silence flag is already reset
     void checkSilence();
 
+    int m_slave;                         // Slave type
+    String m_master;                     // Master channel id
     String m_party;                      // Remote party
+    String m_partyName;                  // Remote party name
     String m_peerOutFormat;              // Peer consumer's data format
     String m_peerInFormat;               // Peer source's data format
     String m_reason;                     // Termination reason
@@ -1992,6 +2087,8 @@ protected:
     RefObject* m_clientData;             // Obscure data used by client logics
     bool m_utility;                      // Regular client channel flag
     String m_soundId;                    // The id of the sound to play
+    ObjList m_slaves;                    // Data managed by the default logic
+    NamedList m_clientParams;            // Channel client parameters
 };
 
 /**
@@ -2069,9 +2166,11 @@ public:
      * @param in True to enter the conference room, false to exit from it
      * @param confName Optional id of the conference. Set to 0 to use the default one
      *  Ignored if 'in' is false
+     * @param buildFromChan Build conference name from channel id if true
      * @return True on success
      */
-    static bool setConference(const String& id, bool in, const String* confName = 0);
+    static bool setConference(const String& id, bool in, const String* confName = 0,
+	bool buildFromChan = false);
 
     /**
      * Get a referenced channel found by its id
@@ -2091,8 +2190,15 @@ public:
      * Get the active channel
      * @return Referenced ClientChannel pointer or 0
      */
-    static ClientChannel* findActiveChan()
+    static inline ClientChannel* findActiveChan()
 	{ return self() ? findChan(self()->activeId()) : 0; }
+
+    /**
+     * Drop a channel
+     * @param chan Channel id
+     * @param reason Optional reason
+     */
+    static void dropChan(const String& chan, const char* reason = 0);
 
     /**
      * The name to use when the client is in conference
@@ -3107,8 +3213,10 @@ protected:
      * @param list Destination list
      * @param active True to activate, false to deactivate
      * @param item Optional selected item to check in contacts list if active
+     * @param del True to fill delete active parameter
      */
-    virtual void fillContactEditActive(NamedList& list, bool active, const String* item = 0);
+    virtual void fillContactEditActive(NamedList& list, bool active, const String* item = 0,
+	bool del = true);
 
     /**
      * Fill log contact active parameter
@@ -3139,14 +3247,25 @@ protected:
 	bool confirm);
 
     /**
-     * Handle list/table selection deletion.
+     * Handle list/table checked items deletion.
+     * Handle specific lists like CDR, accounts, contacts
+     * @param list The list
+     * @param wnd Window owning the list/table
+     * @param confirm Request confirmation for known list
+     * @return True on success
+     */
+    virtual bool deleteCheckedItems(const String& list, Window* wnd, bool confirm);
+
+    /**
+     * Handle list/table selection or checked items deletion.
      * Handle specific lists like CDR, accounts, contacts
      * @param action Action to handle. May contain an optional confirmation text to display.
      *  Format: 'list_name[:confirmation_text]'
      * @param wnd Window owning the list/table
+     * @param checked Set it to true to handle checked items deletion
      * @return True on success
      */
-    virtual bool deleteSelectedItem(const String& action, Window* wnd);
+    virtual bool deleteSelectedItem(const String& action, Window* wnd, bool checked = false);
 
     /**
      * Handle text changed notification
@@ -3263,6 +3382,10 @@ private:
     bool storeContact(ClientContact* c);
     // Handle ok from account password/credentials input window
     bool handleAccCredInput(Window* wnd, const String& name, bool inputPwd);
+    // Handle channel show/hide transfer/conference toggles
+    bool handleChanShowExtra(Window* wnd, bool show, const String& chan, bool conf);
+    // Handle conf/transfer start actions in channel item
+    bool handleChanItemConfTransfer(bool conf, const String& name, Window* wnd);
 
     ClientAccountList* m_accounts;       // Accounts list (always valid)
 };

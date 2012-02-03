@@ -21,6 +21,21 @@
   <property name="contextMenuPolicy" >
    <enum>Qt::ActionsContextMenu</enum>
   </property>
+  <property name="styleSheet" >
+   <string>QAbstractButton {
+  border: 1px solid #717fa0;
+  border-radius: 4px;
+  font-size: 11px;
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f6e8e8)
+}
+QAbstractButton:hover {
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f9f3f3)
+}
+QAbstractButton:pressed {
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #f6e8e8, stop: 1 #ffffff)
+}
+</string>
+  </property>
   <property name="_yate_keypress_redirect" stdset="0" >
    <string>message</string>
   </property>
@@ -241,7 +256,7 @@
        <property name="styleSheet" >
         <string>QTextEdit {
   background-color: #ffffff;
-  border: 1px solid #b3b6b0;
+  border: 1px solid #717fa0;
   color: #666666;
   font-family: Arial;
   font-size: 12px;
@@ -315,7 +330,7 @@
          <string>property:autoExpand=true</string>
          <string>property:rootIsDecorated=false</string>
          <string>property:allColumnsShowFocus=false</string>
-         <string>property:styleSheet=QTreeWidget{border-image: none;font-size: 11px;background:white;selection-background-color:#0c7acb;border: 0px solid #97acbc;border-radius:2px;}QTreeView::branch{background:transparent;}</string>
+         <string>property:styleSheet=QTreeWidget{border-image: none;font-size: 11px;background:white;selection-background-color:#0c7acb;border: 1px solid #717fa0;}QTreeView::branch{background:transparent;}</string>
          <string>property:_yate_nogroup_caption=Not set</string>
          <string>property:_yate_comparecase=false</string>
          <string>property:_yate_itemheight=contact:20</string>
@@ -355,13 +370,13 @@
        <height>60</height>
       </size>
      </property>
-     <property name="frameShape" >
-      <enum>QFrame::NoFrame</enum>
-     </property>
      <property name="frameShadow" >
       <enum>QFrame::Plain</enum>
      </property>
      <layout class="QHBoxLayout" >
+      <property name="spacing" >
+       <number>4</number>
+      </property>
       <property name="leftMargin" >
        <number>0</number>
       </property>
@@ -377,22 +392,34 @@
       <item>
        <widget class="QTextEdit" name="message" >
         <property name="sizePolicy" >
-         <sizepolicy vsizetype="MinimumExpanding" hsizetype="Expanding" >
+         <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
           <horstretch>0</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
         </property>
+        <property name="minimumSize" >
+         <size>
+          <width>0</width>
+          <height>54</height>
+         </size>
+        </property>
         <property name="maximumSize" >
          <size>
           <width>16777215</width>
-          <height>100</height>
+          <height>54</height>
          </size>
         </property>
         <property name="focusPolicy" >
          <enum>Qt::StrongFocus</enum>
         </property>
         <property name="styleSheet" >
-         <string>QTextEdit {background-color: #ffffff; border: 1px solid #b3b6b0; color: #666666; font-family: Arial; font-size: 12px;}</string>
+         <string>QTextEdit {
+  background-color: #ffffff;
+  border: 1px solid #717fa0;
+  color: #666666;
+  font-family: Arial;
+  font-size: 12px;
+}</string>
         </property>
         <property name="tabChangesFocus" >
          <bool>true</bool>
@@ -418,61 +445,50 @@
        </widget>
       </item>
       <item>
-       <layout class="QVBoxLayout" >
-        <property name="rightMargin" >
-         <number>0</number>
+       <widget class="QToolButton" name="send_chat_button" >
+        <property name="minimumSize" >
+         <size>
+          <width>60</width>
+          <height>54</height>
+         </size>
         </property>
-        <item>
-         <widget class="QToolButton" name="send_chat_button" >
-          <property name="minimumSize" >
-           <size>
-            <width>60</width>
-            <height>50</height>
-           </size>
-          </property>
-          <property name="maximumSize" >
-           <size>
-            <width>60</width>
-            <height>50</height>
-           </size>
-          </property>
-          <property name="focusPolicy" >
-           <enum>Qt::NoFocus</enum>
-          </property>
-          <property name="toolTip" >
-           <string>Send chat</string>
-          </property>
-          <property name="iconSize" >
-           <size>
-            <width>32</width>
-            <height>32</height>
-           </size>
-          </property>
-          <property name="autoRaise" >
-           <bool>true</bool>
-          </property>
-          <property name="_yate_noautoconnect" stdset="0" >
-           <bool>true</bool>
-          </property>
-          <property name="_yate_setaction" stdset="0" >
-           <string>send_chat</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <spacer>
-          <property name="orientation" >
-           <enum>Qt::Vertical</enum>
-          </property>
-          <property name="sizeHint" >
-           <size>
-            <width>0</width>
-            <height>0</height>
-           </size>
-          </property>
-         </spacer>
-        </item>
-       </layout>
+        <property name="maximumSize" >
+         <size>
+          <width>60</width>
+          <height>54</height>
+         </size>
+        </property>
+        <property name="focusPolicy" >
+         <enum>Qt::NoFocus</enum>
+        </property>
+        <property name="toolTip" >
+         <string>Send chat</string>
+        </property>
+        <property name="iconSize" >
+         <size>
+          <width>32</width>
+          <height>32</height>
+         </size>
+        </property>
+        <property name="autoRaise" >
+         <bool>true</bool>
+        </property>
+        <property name="_yate_noautoconnect" stdset="0" >
+         <bool>true</bool>
+        </property>
+        <property name="_yate_setaction" stdset="0" >
+         <string>send_chat</string>
+        </property>
+        <property name="_yate_normal_icon" stdset="0" >
+         <string>sendchat_32.png</string>
+        </property>
+        <property name="_yate_pressed_icon" stdset="0" >
+         <string>sendchat_32_pressed.png</string>
+        </property>
+        <property name="_yate_hover_icon" stdset="0" >
+         <string>sendchat_32_hover.png</string>
+        </property>
+       </widget>
       </item>
      </layout>
     </widget>

@@ -417,6 +417,20 @@ public:
     static bool setImage(QObject* obj, const QPixmap& img, bool fit = true);
 
     /**
+     * Update a toggable object's image from properties
+     * @param obj The object
+     */
+    static void updateToggleImage(QObject* obj);
+
+    /**
+     * Update an object's image from properties on mouse events
+     * @param obj The object
+     * @param inOut True for mouse enter/leave, false for mouse press/release events
+     * @param on True for mouse enter/press, false for mouse leave/release
+     */
+    static void updateImageFromMouse(QObject* obj, bool inOut, bool on);
+
+    /**
      * Filter key press events. Retrieve an action associated with the key.
      * Check if the object is allowed to process the key
      * @param obj The object
@@ -982,7 +996,7 @@ public:
      * @param type Item type name
      * @return QtUIWidgetItemProps pointer or 0
      */
-    inline QtUIWidgetItemProps* getItemProps(const String& type) {
+    inline QtUIWidgetItemProps* getItemProps(const String& type) const {
 	    ObjList* o = m_itemProps.find(type);
 	    return o ? static_cast<QtUIWidgetItemProps*>(o->get()) : 0;
 	}
@@ -1258,6 +1272,14 @@ protected:
     virtual void onSelect(QObject* sender, const String* item = 0);
 
     /**
+     * Filter wathed events for children.
+     * Handle child image changing on mouse events
+     * @param obj The object
+     * @param event Event to process
+     */
+    virtual void onChildEvent(QObject* watched, QEvent* event);
+
+    /**
      * Load an item's widget. Rename children.
      * Set '_yate_widgetlistitemid' widget property to given name.
      * Set '_yate_widgetlistitem' to item for each child.
@@ -1377,6 +1399,18 @@ public:
     virtual QObject* getQObject()
 	{ return static_cast<QObject*>(this); }
 
+protected:
+    /**
+     * Filter events. Call parent onEventFilter(). Return QWidget's event filter
+     * Handle child image changing on mouse events
+     * @param obj The object
+     * @param event Event to process
+     */
+    virtual bool eventFilter(QObject* watched, QEvent* event) {
+	    onChildEvent(watched,event);
+	    return QWidget::eventFilter(watched,event);
+	}
+
 private:
     QtCustomWidget() {}                  // No default constructor
 };
@@ -1407,6 +1441,18 @@ public:
     virtual QObject* getQObject()
 	{ return static_cast<QObject*>(this); }
 
+protected:
+    /**
+     * Filter events. Call parent onEventFilter(). Return QWidget's event filter
+     * Handle child image changing on mouse events
+     * @param obj The object
+     * @param event Event to process
+     */
+    virtual bool eventFilter(QObject* watched, QEvent* event) {
+	    onChildEvent(watched,event);
+	    return QWidget::eventFilter(watched,event);
+	}
+
 private:
     QtTable() {}                         // No default constructor
 };
@@ -1436,6 +1482,18 @@ public:
      */
     virtual QObject* getQObject()
 	{ return static_cast<QObject*>(this); }
+
+protected:
+    /**
+     * Filter events. Call parent onEventFilter(). Return QWidget's event filter
+     * Handle child image changing on mouse events
+     * @param obj The object
+     * @param event Event to process
+     */
+    virtual bool eventFilter(QObject* watched, QEvent* event) {
+	    onChildEvent(watched,event);
+	    return QWidget::eventFilter(watched,event);
+	}
 
 private:
     QtTree() {}                          // No default constructor

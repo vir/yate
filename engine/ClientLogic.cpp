@@ -480,6 +480,7 @@ static const String s_fileOpenSendPrefix = "send_fileopen:";
 static const String s_fileOpenRecvPrefix = "recv_fileopen:";
 static String s_lastFileDir;             // Last directory used to send/recv file
 static String s_lastFileFilter;          // Last filter used to pick a file to send
+static NamedList s_generic("");          // List for generic strings/data used across module
 
 // Dump a list of parameters to output if XDEBUG is defined
 static inline void dumpList(const NamedList& p, const char* text, Window* w = 0)
@@ -592,6 +593,80 @@ static Message* userLogin(ClientAccount* a, bool login)
     if (login && !a->params().getBoolValue(YSTRING("savepassword")))
 	a->m_params.clearParam(YSTRING("password"));
     return m;
+}
+
+// Update filter param(s)
+static void updateFilter(const String& name, Window* w, const String& text,
+    const char* param1, const char* param2 = 0)
+{
+    NamedList tmp(name);
+    if (text) {
+	NamedList* filter = new NamedList("");
+	if (param1)
+	    filter->addParam(param1,text);
+	if (param2)
+	    filter->addParam(param2,text);
+	tmp.addParam(new NamedPointer("filter",filter));
+    }
+    else
+	tmp.addParam("filter","");
+    Client::self()->setParams(&tmp,w);
+}
+
+// Get items checked in a list
+static ObjList* getEnabledCheckedItems(const String& list, Window* w)
+{
+    if (!Client::self())
+	return 0;
+    ObjList* ret = 0;
+    NamedList tmp("");
+    Client::self()->getOptions(list,&tmp,w);
+    NamedIterator iter(tmp);
+    for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	NamedList p("");
+	Client::self()->getTableRow(list,ns->name(),&p,w);
+	if (p.getBoolValue(YSTRING("check:enabled"))) {
+	    if (!ret)
+		ret = new ObjList;
+	    ret->append(new String(ns->name()));
+	}
+    }
+    return ret;
+}
+
+// Check if a list has enabled checked items
+static bool hasEnabledCheckedItems(const String& list, Window* w)
+{
+    if (!Client::self())
+	return false;
+    NamedList tmp("");
+    Client::self()->getOptions(list,&tmp,w);
+    NamedIterator iter(tmp);
+    for (const NamedString* ns = 0; 0 != (ns = iter.get());) {
+	NamedList p("");
+	Client::self()->getTableRow(list,ns->name(),&p,w);
+	if (p.getBoolValue(YSTRING("check:enabled")))
+	    return true;
+    }
+    return false;
+}
+
+// Check if a contact is a local one
+// Check if selected in an optional list
+static bool isLocalContact(const String* item, ClientAccountList* accounts,
+    const String& checkSelList = String::empty())
+{
+    if (!accounts)
+	return true;
+    ClientContact* c = 0;
+    if (item)
+	c = !item->null() ? accounts->findContactByInstance(*item) : 0;
+    else if (checkSelList) {
+	String sel;
+	Client::self()->getSelect(checkSelList,sel);
+	c = sel ? accounts->findContactByInstance(sel) : 0;
+    }
+    return c && accounts->isLocalContact(c);
 }
 
 // Retrieve a contact or MUC room from name:id.
@@ -803,10 +878,14 @@ static inline int contactStatus(ClientContact& c)
 
 // Set the image parameter of a list
 static inline void setImageParam(NamedList& p, const char* param,
-    const char* image)
+    const char* image, bool suffix = true)
 {
-    static const String suffix = "_image";
-    p.setParam(param + suffix,Client::s_skinPath + image);
+    static const String s_suffix = "_image";
+    static const String s_prefix = "image:";
+    if (suffix)
+	p.setParam(param + s_suffix,Client::s_skinPath + image);
+    else
+	p.setParam(s_prefix + param,Client::s_skinPath + image);
 }
 
 // Set a list parameter and it's image
@@ -904,6 +983,164 @@ static void removeAccNotifications(ClientAccount* acc)
     const String& account = acc->toString();
     removeNotifArea("loginfail",account);
     removeNotifArea("rosterreqfail",account);
+}
+
+// Build and add data used to update a channel item (conference/transfer)
+static void channelItemAddUpdate(bool upd, NamedList& dest, const String& masterChan,
+    bool conf, bool start, const String& slaveId = String::empty(),
+    bool updateExisting = true)
+{
+    String id;
+    if (!start)
+	id = slaveId;
+    else if (conf)
+	id = "conf_add_id";
+    else
+	id = "transfer_start_id";
+    if (!upd) {
+	dest.addParam(id,"");
+	return;
+    }
+    NamedList* item = new NamedList("");
+    if (conf) {
+	if (start) {
+	    item->addParam("item_type","conf_add");
+	    item->addParam("property:target:_yate_identity","conf_add_target:" + masterChan);
+	    item->addParam("property:conf_add:_yate_identity","conf_add:" + masterChan);
+	}
+	else
+	    item->addParam("item_type","conf_item");
+    }
+    else if (start) {
+	item->addParam("item_type","transfer_start");
+	item->addParam("property:target:_yate_identity","transfer_start_target:" + masterChan);
+	item->addParam("property:transfer_start:_yate_identity","transfer_start:" + masterChan);
+    }
+    else
+	item->addParam("item_type","transfer_item");
+    if (start) {
+	item->addParam("cleartable:target","");
+	NamedList* callto = new NamedList("");
+	Client::self()->getOptions("callto",callto);
+	item->addParam(new NamedPointer("addlines:target",callto));
+	item->addParam("target","");
+    }
+    else {
+	ClientChannel* ch = ClientDriver::findChan(slaveId);
+	if (ch)
+	    item->addParam("target",ch->partyName());
+	TelEngine::destruct(ch);
+    }
+    dest.addParam(new NamedPointer(id,item,String::boolText(updateExisting)));
+}
+
+// Build and add data used to update/delete a channel item (conference/transfer)
+// Add update parameter to destination
+static void channelItemBuildUpdate(bool upd, NamedList& dest, const String& masterChan,
+    bool conf, bool start, const String& slaveId = String::empty(),
+    bool updateExisting = true)
+{
+    NamedList* tmp = new NamedList("");
+    channelItemAddUpdate(upd,*tmp,masterChan,conf,start,slaveId,updateExisting);
+    dest.addParam(new NamedPointer("updatetablerows:items",tmp));
+}
+
+// Build and add data used to reset target input (conference/transfer)
+static void channelItemResetTarget(Window* wnd, const String& masterChan, bool conf)
+{
+    NamedList p(s_channelList);
+    channelItemBuildUpdate(true,p,masterChan,conf,true,String::empty(),false);
+    Client::self()->setTableRow(s_channelList,masterChan,&p,wnd);
+}
+
+// Adjust channel item list height, buttons ...
+// show: 1: handle show command, 0: handle hide command, -1: list changed
+// itemAdded: handled if show is negative, true if item was added, false if item was removed
+// Return the number of items
+static int channelItemAdjustUiList(NamedList& dest, int show, bool itemAdded,
+    const String& chanId, bool conf)
+{
+    static int s_channelItemHeight = 30;
+    static int s_channelMaxItems = 3;
+    static const String s_getChkTrans = "getcheck:transfer";
+    static const String s_getChkConf = "getcheck:conference";
+
+    ClientChannel* chan = ClientDriver::findChan(chanId);
+    if (!chan)
+	return 0;
+    bool chanConf = chan->conference();
+    bool chanTrans = !chanConf && !chan->transferId().null();
+    unsigned int slaves = chan->slavesCount();
+    TelEngine::destruct(chan);
+    bool activeShowConf = true;
+    bool activeShowTrans = true;
+    bool showItemsList = true;
+    bool clearItems = false;
+    int items = 0;
+    if (show >= 0) {
+	if (show > 0) {
+	    if (conf) {
+		activeShowTrans = false;
+		items = slaves + 1;
+		if (!chanConf)
+		    clearItems = true;
+	    }
+	    else {
+		activeShowConf = false;
+		items = 1;
+		if (!chanTrans)
+		    clearItems = true;
+	    }
+	}
+	else {
+	    showItemsList = false;
+	    if (chanConf)
+		activeShowTrans = false;
+	    else if (chanTrans)
+		activeShowConf = false;
+	}
+    }
+    else {
+	NamedList p("");
+	p.addParam(s_getChkTrans,"");
+	p.addParam(s_getChkConf,"");
+	Client::self()->getTableRow(s_channelList,chanId,&p);
+	if (conf) {
+	    items = slaves + 1;
+	    showItemsList = p.getBoolValue(s_getChkConf);
+	    if (showItemsList)
+		activeShowTrans = false;
+	}
+	else {
+	    showItemsList = p.getBoolValue(s_getChkTrans);
+	    if (showItemsList) {
+		items = 1;
+		activeShowConf = false;
+	    }
+	}
+    }
+    dest.addParam("show:frame_items",String::boolText(showItemsList));
+    if (clearItems)
+	dest.addParam("cleartable:items","");
+    if (showItemsList) {
+	if (items) {
+	    int h = (items <= s_channelMaxItems) ? items : s_channelMaxItems;
+	    h *= s_channelItemHeight;
+	    dest.addParam("_yate_itemheight_delta",String(h));
+	    dest.addParam("property:frame_items:maximumHeight",String(h));
+	    dest.addParam("property:items:maximumHeight",String(h));
+	}
+    }
+    else {
+	dest.addParam("_yate_itemheight_delta","0");
+    }
+    dest.addParam("active:transfer",String::boolText(activeShowTrans));
+    dest.addParam("active:conference",String::boolText(activeShowConf));
+    // Show transfer with call in transfer: return 0 to prevent showing
+    //  transfer start item
+    if (show > 0 && !conf && slaves)
+	return 0;
+    return items;
 }
 
 // Request to the client to log a chat entry
@@ -1997,7 +2234,7 @@ static void fillChatContact(NamedList& p, ClientContact& c, bool data, bool stat
 		text = res->m_text;
 	}
 	else
-	    p.addParam("name_image",Client::s_skinPath + "muc_16.png");
+	    p.addParam("name_image",Client::s_skinPath + "muc.png");
 	p.addParam("status_text",text ? text.c_str() : ClientResource::statusDisplayText(stat));
 	p.addParam("status",lookup(stat,ClientResource::s_statusName));
     }
@@ -2624,12 +2861,8 @@ static bool dropFileTransferItem(const String& id)
     NamedList p("");
     getFileTransferItem(id,p,w);
     const String& chan = p[YSTRING("channel")];
-    if (chan) {
-	Message* m = Client::buildMessage("call.drop",String::empty());
-	m->addParam("id",chan);
-	m->addParam("reason",p.getBoolValue(YSTRING("send")) ? "cancelled" : "closed");
-	Engine::enqueue(m);
-    }
+    if (chan)
+	ClientDriver::dropChan(chan,p.getBoolValue(YSTRING("send")) ? "cancelled" : "closed");
     bool ok = Client::self()->delTableRow(s_fileProgressList,id,w);
     // Close window if empty
     NamedList items("");
@@ -2699,11 +2932,14 @@ static bool addTrayIcon(const String& type)
     // Add the menu
     NamedList* pMenu = new NamedList("menu_" + type);
     pMenu->addParam("item:quit","Quit");
+    pMenu->addParam("image:quit",Client::s_skinPath + "quit.png");
     pMenu->addParam("item:","");
     pMenu->addParam("item:action_show_mainwindow","Show application");
+    pMenu->addParam("image:action_show_mainwindow",Client::s_skinPath + "null_team-32.png");
     if (prio != Client::TrayIconMain && triggerAction && specific) {
 	pMenu->addParam("item:","");
 	pMenu->addParam("item:" + triggerAction,specific);
+	pMenu->addParam("image:" + triggerAction,iconParams->getValue("icon"));
     }
     iconParams->addParam(new NamedPointer("menu",pMenu));
     return Client::addTrayIcon(YSTRING("mainwindow"),prio,iconParams);
@@ -4399,6 +4635,36 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
 	    Client::self()->callTerminate(name.substr(7));
 	return true;
     }
+    if (name.startsWith("calldrop:")) {
+	int pos = name.find(':',10);
+	if (pos < 0)
+	    ClientDriver::dropChan(name.substr(9));
+	else
+	    ClientDriver::dropChan(name.substr(9,pos - 9),name.substr(pos));
+	return true;
+    }
+    // Hold
+    if (name.startsWith("hold:")) {
+	if (!ClientDriver::self())
+	    return false;
+	String chanId = name.substr(5);
+	if (chanId) {
+	    ClientChannel* chan = ClientDriver::findActiveChan();
+	    if (chan && chan->id() == chanId)
+		ClientDriver::self()->setActive();
+	    else
+		ClientDriver::self()->setActive(chanId);
+	    TelEngine::destruct(chan);
+	}
+	return true;
+    }
+    // Conference
+    if (name.startsWith("conf_add:"))
+	return handleChanItemConfTransfer(true,name.substr(9),wnd);
+    // Transfer
+    if (name.startsWith("transfer_start:"))
+	return handleChanItemConfTransfer(false,name.substr(15),wnd);
+
     // Double click on channel: set the active call
     if (name == s_channelList)
 	return m_selectedChannel && ClientDriver::self() &&
@@ -4430,6 +4696,8 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
     // Delete a selected list/table item
     if (name.startsWith("deleteselecteditem:") && name.at(19))
 	return deleteSelectedItem(name.substr(19),wnd);
+    if (name.startsWith("deletecheckeditems:") && name.at(19))
+	return deleteSelectedItem(name.substr(19),wnd,true);
 
     // 'settext' action
     if (name.startsWith("settext:") && name.at(8)) {
@@ -4561,13 +4829,13 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
 	const String& item = (*params)[YSTRING("item")];
 	if (!item)
 	    return false;
-	if (list == s_accountList) {
-	    NamedList tmp("");
-	    if (!Client::self()->getTableRow(list,item,&tmp,wnd))
-		return false;
-	    String* enabled = tmp.getParam(YSTRING("check:enabled"));
-	    if (enabled) {
-		bool ok = enabled->toBoolean();
+	NamedList tmp("");
+	if (!Client::self()->getTableRow(list,item,&tmp,wnd))
+	    return false;
+	String* enabled = tmp.getParam(YSTRING("check:enabled"));
+	if (enabled) {
+	    bool ok = enabled->toBoolean();
+	    if (list == s_accountList) {
 		ClientAccount* acc = m_accounts->findAccount(item);
 		if (acc && ok != acc->startup()) {
 		    acc->startup(ok);
@@ -4581,6 +4849,21 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
 			else
 			    loginAccount(acc->params(),false);
 		    }
+		}
+	    }
+	    else if (list == s_logList) {
+		bool activeDel = ok || hasEnabledCheckedItems(list,wnd);
+		Client::self()->setActive(YSTRING("log_del"),activeDel,wnd);
+	    }
+	    else if (list == s_contactList) {
+		if (isLocalContact(&item,m_accounts)) {
+		    bool activeDel = ok || hasEnabledCheckedItems(list,wnd);
+		    Client::self()->setActive(YSTRING("abk_del"),activeDel,wnd);
+		}
+		else {
+		    NamedList tmp("");
+		    tmp.addParam("check:enabled",String::boolText(false));
+		    Client::self()->setTableRow(list,item,&tmp,wnd);
 		}
 	    }
 	}
@@ -4706,6 +4989,22 @@ bool DefaultLogic::toggle(Window* wnd, const String& name, bool active)
 	    enableCallActions(m_selectedChannel);
 	return ok;
     }
+    if (name.startsWith("hold:")) {
+	if (!ClientDriver::self())
+	    return false;
+	String chanId = name.substr(5);
+	if (!chanId)
+	    return false;
+	if (active)
+	    ClientDriver::self()->setActive(chanId);
+	else {
+	    ClientChannel* chan = ClientDriver::findActiveChan();
+	    if (chan && chan->id() == chanId)
+		ClientDriver::self()->setActive();
+	    TelEngine::destruct(chan);
+	}
+	return true;
+    }
     // Transfer
     if (name == s_actionTransfer) {
 	// Active: set init flag and wait to select the target
@@ -4716,6 +5015,8 @@ bool DefaultLogic::toggle(Window* wnd, const String& name, bool active)
 	    ClientDriver::setAudioTransfer(m_selectedChannel);
 	return true;
     }
+    if (name.startsWith("transfer_show:"))
+	return handleChanShowExtra(wnd,active,name.substr(14),false);
     // Conference
     if (name == s_actionConf) {
 	bool ok = ClientDriver::setConference(m_selectedChannel,active);
@@ -4723,6 +5024,8 @@ bool DefaultLogic::toggle(Window* wnd, const String& name, bool active)
 	    enableCallActions(m_selectedChannel);
 	return ok;
     }
+    if (name.startsWith("conference_show:"))
+	return handleChanShowExtra(wnd,active,name.substr(16),true);
 
     // Show/hide windows
     if (name.startsWith("showwindow:") && name.at(11)) {
@@ -4766,7 +5069,7 @@ bool DefaultLogic::toggle(Window* wnd, const String& name, bool active)
 	}
 	else if (wnd->id() == s_wndAddrbook) {
 	    p.addParam("active:abk_new",nText);
-	    fillContactEditActive(p,!active);
+	    fillContactEditActive(p,!active,0,false);
 	    fillLogContactActive(p,!active);
 	}
 	else if (s_mucWizard->isWindow(wnd)) {
@@ -4960,7 +5263,7 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
 	    return false;
 	NamedList p("");
 	p.addParam("active:abk_call",String::boolText(!item.null()));
-	fillContactEditActive(p,true,&item);
+	fillContactEditActive(p,true,&item,false);
 	Client::self()->setParams(&p,wnd);
 	return true;
     }
@@ -4990,7 +5293,6 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
 	const char* active = String::boolText(!item.null());
 	NamedList p("");
 	p.addParam("active:log_call",active);
-	p.addParam("active:log_del",active);
 	fillLogContactActive(p,true,&item);
 	Client::self()->setParams(&p,wnd);
 	return true;
@@ -5626,7 +5928,7 @@ bool DefaultLogic::callLogUpdate(const NamedList& params, bool save, bool update
 		Client::self()->formatDateTime(time,(unsigned int)params.getDoubleValue(YSTRING("time")),
 		    "yyyy.MM.dd hh:mm",false);
 		p.addParam("party",party);
-		p.addParam("party_image",Client::s_skinPath + (outgoing ? "up.png" : "down.png"));
+		p.addParam("party_image",Client::s_skinPath + (outgoing ? "outgoing.png" : "incoming.png"));
 		p.addParam("time",time);
 		time.clear();
 		Client::self()->formatDateTime(time,(unsigned int)params.getDoubleValue(YSTRING("duration")),
@@ -6356,6 +6658,32 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	if (!Client::valid())
 	    return false;
 	String id = msg.getValue(YSTRING("id"));
+	int slave = ClientChannel::lookupSlaveType(msg.getValue("channel_slave_type"));
+	if (slave) {
+	    bool conf = (slave == ClientChannel::SlaveConference);
+	    const String& masterId = msg[YSTRING("channel_master")];
+	    if (masterId) {
+		ClientChannel* master = ClientDriver::findChan(masterId);
+		unsigned int slaves = 0;
+		if (master) {
+		    master->removeSlave(id);
+		    slaves = master->slavesCount();
+		    TelEngine::destruct(master);
+		}
+		NamedList p("");
+		int items = channelItemAdjustUiList(p,-1,false,masterId,conf);
+		channelItemBuildUpdate(false,p,masterId,conf,false,id);
+		// Add transfer start
+		if (!conf && !slaves && items)
+		    channelItemBuildUpdate(true,p,masterId,false,true);
+		Client::self()->setTableRow(s_channelList,masterId,&p);
+		if (!slaves) {
+		    if (conf)
+			ClientDriver::setConference(masterId,false);
+		}
+	    }
+	}
+	s_generic.clearParam(id,'_');
 	// Reset init transfer if destroyed
 	if (m_transferInitiated && m_transferInitiated == id)
 	    m_transferInitiated = "";
@@ -6400,19 +6728,46 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
     if (active && !outgoing && !silence)
 	Client::self()->ringer(false,false);
 
+    // Add slaves to master channels
+    int slave = chan ? chan->slave() : ClientChannel::SlaveNone;
+    if (slave) {
+	const String& masterId = chan->master();
+	ClientChannel* master = ClientDriver::findChan(masterId);
+	if (!master) {
+	    ClientDriver::dropChan(chan->id());
+	    return false;
+	}
+	if (notif == ClientChannel::Startup) {
+	    // Update master
+	    bool conf = (slave == ClientChannel::SlaveConference);
+	    if (conf || slave == ClientChannel::SlaveTransfer) {
+		master->addSlave(chan->id());
+		NamedList p("");
+		channelItemAdjustUiList(p,-1,true,masterId,conf);
+		if (!conf)
+		    channelItemBuildUpdate(false,p,masterId,conf,true);
+		channelItemBuildUpdate(true,p,masterId,conf,false,chan->id());
+		Client::self()->setTableRow(s_channelList,masterId,&p);
+	    }
+	}
+	TelEngine::destruct(master);
+    }
+
     // Update UI
     NamedList p("");
-    bool updateFormats = true;
+    bool updateFormats = !slave;
     bool enableActions = false;
-    bool setStatus = notConf;
+    bool setStatus = !slave && notConf && !chan->transferId();
     String status;
     switch (notif) {
 	case ClientChannel::Active:
+    	    buildStatus(status,"Call active",CHANUPD_ADDR,CHANUPD_ID);
+	    if (slave)
+		break;
 	    enableActions = true;
 	    updateFormats = false;
-    	    buildStatus(status,"Call active",CHANUPD_ADDR,CHANUPD_ID);
 	    Client::self()->setSelect(s_channelList,CHANUPD_ID);
-	    setImageParam(p,"party",outgoing ? "down_active.png" : "up_active.png");
+	    setImageParam(p,"status_image","activ.png",false);
 	    if (outgoing) {
 		if (noticed)
 		    Client::self()->ringer(true,false);
@@ -6431,9 +6786,11 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	    }
 	    break;
 	case ClientChannel::OnHold:
-	    enableActions = true;
 	    buildStatus(status,"Call inactive",CHANUPD_ADDR,CHANUPD_ID);
-	    setImageParam(p,"party",outgoing ? "down.png" : "up.png");
+	    if (slave)
+		break;
+	    enableActions = true;
+	    setImageParam(p,"status_image","hold.png",false);
 	    if (outgoing) {
 		if (noticed)
 		    Client::self()->ringer(true,false);
@@ -6445,8 +6802,6 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	    break;
 	case ClientChannel::Ringing:
 	    buildStatus(status,"Call ringing",CHANUPD_ADDR,CHANUPD_ID);
-	    if (notConf)
-		setImageParam(p,"time","chan_ringing.png");
 	    break;
 	case ClientChannel::Noticed:
 	    // Stop incoming ringer
@@ -6455,10 +6810,10 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	    break;
 	case ClientChannel::Progressing:
 	    buildStatus(status,"Call progressing",CHANUPD_ADDR,CHANUPD_ID);
-	    if (notConf)
-		setImageParam(p,"time","chan_progress.png");
 	    break;
 	case ClientChannel::Startup:
+	    if (slave)
+		break;
 	    enableActions = true;
 	    // Create UI entry
 	    if (chan && Client::self()->addTableRow(s_channelList,CHANUPD_ID,&p)) {
@@ -6472,8 +6827,12 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 		addTrayIcon(YSTRING("incomingcall"));
 		Client::self()->setUrgent(s_wndMain,true,Client::self()->getWindow(s_wndMain));
 	    }
-	    setImageParam(p,"party",chan ? chan->party() : "",outgoing ? "down.png" : "up.png");
-	    setImageParam(p,"time","",outgoing ? "chan_ringing.png" : "chan_idle.png");
+	    p.addParam("active:answer",String::boolText(outgoing));
+	    p.addParam("party",chan ? chan->party() : "");
+	    p.addParam("status",outgoing ? "Incoming" : "Outgoing");
+	    setImageParam(p,"direction",outgoing ? "incoming.png" : "outgoing.png",false);
+	    setImageParam(p,"status_image",active ? "active.png" : "hold.png",false);
+	    p.addParam("show:frame_items",String::boolText(false));
 	    // Start incoming ringer if there is no active channel
 	    if (outgoing && notConf) {
 		ClientChannel* ch = ClientDriver::findActiveChan();
@@ -6483,7 +6842,6 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 		    TelEngine::destruct(ch);
 	    }
 	    setStatus = false;
-	    p.setParam("status",outgoing ? "incoming" : "outgoing");
 	    break;
 	case ClientChannel::Accepted:
 	    buildStatus(status,"Calling target",0,0);
@@ -6491,19 +6849,19 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	case ClientChannel::Answered:
 	    if (outgoing)
 		removeTrayIcon(YSTRING("incomingcall"));
-	    enableActions = true;
 	    buildStatus(status,"Call answered",CHANUPD_ADDR,CHANUPD_ID);
-	    setImageParam(p,"time","answer.png");
 	    // Stop incoming ringer
 	    Client::self()->ringer(true,false);
 	    if (active)
 		Client::self()->ringer(false,false);
+	    if (slave)
+		break;
+	    enableActions = true;
+	    p.addParam("active:answer",String::boolText(false));
 	    break;
 	case ClientChannel::Routed:
 	    updateFormats = false;
 	    buildStatus(status,"Calling",chan ? chan->party() : "",0,0);
-	    if (notConf)
-		setImageParam(p,"time","chan_routed.png");
 	    break;
 	case ClientChannel::Rejected:
 	    updateFormats = false;
@@ -6511,27 +6869,17 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	    break;
 	case ClientChannel::Transfer:
 	    updateFormats = false;
-	    enableActions = true;
-	    // Transferred
-	    if (chan && chan->transferId() && notConf) {
-		setStatus = false;
-		ClientChannel* trans = ClientDriver::findChan(chan->transferId());
-		setImageParam(p,"status",trans ? trans->party() : "","transfer.png");
-		TelEngine::destruct(trans);
-	    	buildStatus(status,"Call transferred",CHANUPD_ADDR,CHANUPD_ID);
-	    }
-	    else if (notConf)
-		setImageParam(p,"status","","");
+	    if (slave)
+		break;
+	    if (chan->transferId())
+		p.addParam("status","Transferred");
 	    break;
 	case ClientChannel::Conference:
 	    updateFormats = false;
-	    enableActions = true;
-	    if (notConf)
-		setImageParam(p,"status","","");
-	    else {
-		const char* s = (chan && chan->transferId()) ? chan->transferId().safe() : "";
-		setImageParam(p,"status",s,"conference.png");
-	    }
+	    if (slave)
+		break;
+	    if (!notConf)
+		p.addParam("status","Conference");
 	    break;
 	default:
 	    enableActions = true;
@@ -6551,9 +6899,12 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	fmt << (chan->peerInFormat() ? chan->peerInFormat().c_str() : "-");
 	p.addParam("format",fmt);
     }
-    if (setStatus && chan)
-	p.setParam("status",chan->status());
-    Client::self()->setTableRow(s_channelList,CHANUPD_ID,&p);
+    if (setStatus && chan) {
+	String s = chan->status().substr(0,1).toUpper() + chan->status().substr(1);
+	p.setParam("status",s);
+    }
+    if (!slave)
+	Client::self()->setTableRow(s_channelList,CHANUPD_ID,&p);
     return false;
 
 #undef CHANUPD_ID
@@ -6594,14 +6945,14 @@ bool DefaultLogic::defaultMsgHandler(Message& msg, int id, bool& stopLogic)
 	    return false;
 
 	// Check if we have a channel in conference whose peer is the one who left
-	const char* peer = msg.getValue(YSTRING("lastpeerid"));
+	const String& peer = msg[YSTRING("lastpeerid")];
 	ClientChannel* chan = ClientDriver::findChanByPeer(peer);
 	if (!chan)
 	    return false;
 	if (chan->conference()) {
 	    DDebug(ClientDriver::self(),DebugInfo,
 		"Channel %s left the conference. Terminating %s",
-		peer,chan->id().c_str());
+		peer.c_str(),chan->id().c_str());
 	    // Try to use Client's way first
 	    if (Client::self())
 		Client::self()->callTerminate(chan->id());
@@ -7167,27 +7518,20 @@ void DefaultLogic::channelSelectionChanged(const String& old)
 }
 
 // Fill contact edit/delete active parameters
-void DefaultLogic::fillContactEditActive(NamedList& list, bool active, const String* item)
+void DefaultLogic::fillContactEditActive(NamedList& list, bool active, const String* item,
+    bool del)
 {
     if (active) {
 	if (!Client::self())
 	    return;
-	if (!Client::self()->getVisible(s_wndAddrbook)) {
-	    ClientContact* c = 0;
-	    if (item)
-		c = !item->null() ? m_accounts->findContactByInstance(*item) : 0;
-	    else {
-		String sel;
-		Client::self()->getSelect(s_contactList,sel);
-		c = sel ? m_accounts->findContactByInstance(sel) : 0;
-	    }
-	    active = c && m_accounts->isLocalContact(c);
-	}
+	if (!Client::self()->getVisible(s_wndAddrbook))
+	    active = isLocalContact(item,m_accounts,s_contactList);
 	else
 	    active = false;
     }
     const char* ok = String::boolText(active);
-    list.addParam("active:abk_del",ok);
+    if (del)
+	list.addParam("active:abk_del",ok);
     list.addParam("active:abk_edit",ok);
 }
 
@@ -7292,7 +7636,10 @@ bool DefaultLogic::deleteItem(const String& list, const String& item, Window* wn
 		return false;
 	    return showConfirm(wnd,"Delete contact '" + c->m_name + "'?",context);
 	}
-	return delContact(item,wnd);
+	bool ok = delContact(item,wnd);
+	bool activeDel = hasEnabledCheckedItems(s_contactList,wnd);
+	Client::self()->setActive(YSTRING("abk_del"),activeDel,wnd);
+	return ok;
     }
     if (list == s_accountList) {
 	if (context)
@@ -7302,7 +7649,10 @@ bool DefaultLogic::deleteItem(const String& list, const String& item, Window* wn
     if (list == s_logList) {
 	if (context)
 	    return showConfirm(wnd,"Delete the selected call log?",context);
-	return callLogDelete(item);
+	bool ok = callLogDelete(item);
+	bool activeDel = hasEnabledCheckedItems(s_logList,wnd);
+	Client::self()->setActive(YSTRING("log_del"),activeDel,wnd);
+	return ok;
     }
     if (list == ClientContact::s_dockedChatWidget) {
 	if (wnd && wnd->id() == ClientContact::s_mucsWnd) {
@@ -7349,8 +7699,65 @@ bool DefaultLogic::deleteItem(const String& list, const String& item, Window* wn
     return Client::self()->delTableRow(list,item,wnd);
 }
 
+// Handle list/table checked items deletion
+bool DefaultLogic::deleteCheckedItems(const String& list, Window* wnd, bool confirm)
+{
+    if (!(Client::valid() && list))
+	return false;
+    DDebug(ClientDriver::self(),DebugAll,"DefaultLogic::deleteCheckedItems(%s,%p,%u)",
+	list.c_str(),wnd,confirm);
+    ObjList* checked = getEnabledCheckedItems(list,wnd);
+    if (!checked)
+	return true;
+    String context;
+    if (confirm)
+	context << "deletecheckeditems:" << list;
+    bool ok = true;
+    while (true) {
+	// Handle known lists
+	if (list == s_contactList) {
+	    for (ObjList* o = checked->skipNull(); o;) {
+		if (isLocalContact(static_cast<String*>(o->get()),m_accounts))
+		    o = o->skipNext();
+		else {
+		    o->remove();
+		    o = o->skipNull();
+		}
+	    }
+	    if (!checked->skipNull())
+		break;
+	    if (context) {
+		ok = showConfirm(wnd,"Delete selected contact(s)?",context);
+		break;
+	    }
+	    for (ObjList* o = checked->skipNull(); o; o = o->skipNext())
+		delContact(o->get()->toString(),wnd);
+	    bool activeDel = hasEnabledCheckedItems(s_contactList,wnd);
+	    Client::self()->setActive(YSTRING("abk_del"),activeDel,wnd);
+	    break;
+	}
+	if (list == s_logList) {
+	    if (context) {
+		ok = showConfirm(wnd,"Delete the selected call log item(s)?",context);
+		break;
+	    }
+	    for (ObjList* o = checked->skipNull(); o; o = o->skipNext())
+		callLogDelete(o->get()->toString());
+	    bool activeDel = hasEnabledCheckedItems(s_logList,wnd);
+	    Client::self()->setActive(YSTRING("log_del"),activeDel,wnd);
+	    break;
+	}
+	// Remove table rows
+	for (ObjList* o = checked->skipNull(); o; o = o->skipNext())
+	    Client::self()->delTableRow(list,o->get()->toString(),wnd);
+	break;
+    }
+    TelEngine::destruct(checked);
+    return ok;
+}
+
 // Handle list/table selection deletion
-bool DefaultLogic::deleteSelectedItem(const String& action, Window* wnd)
+bool DefaultLogic::deleteSelectedItem(const String& action, Window* wnd, bool checked)
 {
     if (!Client::valid())
 	return false;
@@ -7365,9 +7772,14 @@ bool DefaultLogic::deleteSelectedItem(const String& action, Window* wnd)
 	list = action;
     if (!list)
 	return false;
-    String item;
-    Client::self()->getSelect(list,item,wnd);
-    return item && deleteItem(list,item,wnd,pos > 0);
+    if (!checked) {
+	String item;
+	Client::self()->getSelect(list,item,wnd);
+	return item && deleteItem(list,item,wnd,pos > 0);
+    }
+    if (hasEnabledCheckedItems(list,wnd))
+	return deleteCheckedItems(list,wnd,pos > 0);
+    return false;
 }
 
 // Handle text changed notification
@@ -7375,7 +7787,7 @@ bool DefaultLogic::handleTextChanged(NamedList* params, Window* wnd)
 {
     if (!(params && wnd))
 	return false;
-    String sender = (*params)[YSTRING("sender")];
+    const String& sender = (*params)[YSTRING("sender")];
     if (!sender)
 	return false;
     // Username changes in contact add/edit
@@ -7415,6 +7827,21 @@ bool DefaultLogic::handleTextChanged(NamedList* params, Window* wnd)
 	    }
 	    ContactChatNotify::update(c,room,m,text->null());
 	}
+    }
+    // Search contact
+    if (sender == "search_contact")
+	updateFilter(s_contactList,wnd,(*params)["text"],"name","number/uri");
+    // Conf/transfer targets
+    bool conf = sender.startsWith("conf_add_target:");
+    if (conf || sender.startsWith("transfer_start_target:")) {
+	int l = conf ? 16 : 22;
+	int pos = sender.find(":",l + 1);
+	if (pos > 0) {
+	    String chan = sender.substr(l,pos - l);
+	    const char* suffix = conf ? "_conf_target" : "trans_target";
+	    s_generic.setParam(chan + suffix,(*params)["text"]);
+	}
+	return 0;
     }
     return false;
 }
@@ -9007,10 +9434,7 @@ bool DefaultLogic::handleNotificationAreaAction(const String& action, Window* wn
 		    remove = !chooseFileTransfer(false,s_fileOpenRecvPrefix + id,wnd,file);
 	    }
 	    else {
-		Message* m = Client::buildMessage("call.drop",String::empty());
-		m->addParam("id",chan);
-		m->addParam("reason","rejected");
-		Engine::enqueue(m);
+		ClientDriver::dropChan(chan,"rejected");
 		remove = true;
 	    }
 	}
@@ -9094,6 +9518,51 @@ bool DefaultLogic::handleAccCredInput(Window* wnd, const String& name, bool inpu
 	return true;
     }
     return ::loginAccount(this,acc->params(),true,false);
+}
+
+// Handle channel show/hide transfer/conference toggles
+bool DefaultLogic::handleChanShowExtra(Window* wnd, bool show, const String& chan,
+    bool conf)
+{
+    if (!(Client::valid() && chan))
+	return false;
+    NamedList p("");
+    if (channelItemAdjustUiList(p,show ? 1 : 0,true,chan,conf))
+	channelItemBuildUpdate(true,p,chan,conf,true);
+    Client::self()->setTableRow(s_channelList,chan,&p,wnd);
+    return true;
+}
+
+// Handle conf/transfer start actions in channel item
+bool DefaultLogic::handleChanItemConfTransfer(bool conf, const String& name, Window* wnd)
+{
+    if (!Client::valid())
+	return false;
+    String chan = name.substr(0,name.find(":"));
+    const char* suffix = conf ? "_conf_target" : "trans_target";
+    NamedString* target = s_generic.getParam(chan + suffix);
+    if (TelEngine::null(target))
+	return true;
+    NamedList params("");
+    params.addParam("target",*target);
+    params.addParam("channel_slave_type",conf ? "conference" : "transfer");
+    params.addParam("channel_master",chan);
+    // Add master data to slave (account, protocol ...) if not a full target
+    static const Regexp r("^[a-z0-9]\\+/");
+    if (!r.matches(target->safe())) {
+	ClientChannel* ch = ClientDriver::findChan(chan);
+	if (ch) {
+	    params.copyParams(ch->clientParams(),"account,line,protocol");
+	    TelEngine::destruct(ch);
+	}
+    }
+    if (callStart(params,wnd,s_actionCall)) {
+	s_generic.clearParam(target);
+	channelItemResetTarget(wnd,chan,conf);
+	if (conf)
+	    ClientDriver::setConference(chan,true,0,true);
+    }
+    return true;
 }
 
 

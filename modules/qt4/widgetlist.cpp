@@ -542,7 +542,7 @@ void WidgetList::closeItem(int index)
 bool WidgetList::eventFilter(QObject* watched, QEvent* event)
 {
     if (!Client::valid())
-	return QWidget::eventFilter(watched,event);
+	return QtCustomWidget::eventFilter(watched,event);
     if (event->type() == QEvent::KeyPress) {
 	if (m_wndEvHooked) {
 	    QtWindow* wnd = qobject_cast<QtWindow*>(watched);
@@ -556,15 +556,15 @@ bool WidgetList::eventFilter(QObject* watched, QEvent* event)
 			wid->setFocus();
 		    return true;
 		}
-		return QWidget::eventFilter(watched,event);
+		return QtCustomWidget::eventFilter(watched,event);
 	    }
 	}
 	bool filter = false;
 	if (!filterKeyEvent(watched,static_cast<QKeyEvent*>(event),filter))
-	    return QWidget::eventFilter(watched,event);
+	    return QtCustomWidget::eventFilter(watched,event);
 	return filter;
     }
-    return QWidget::eventFilter(watched,event);
+    return QtCustomWidget::eventFilter(watched,event);
 }
 
 // Hide the parent window if the container is empty

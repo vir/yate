@@ -68,6 +68,23 @@ private:
     bool m_sorting;
 };
 
+// Inc/dec an integer value
+class SafeInt
+{
+public:
+    inline SafeInt(int* value)
+	: m_value(value) {
+	    if (m_value)
+		(*m_value)++;
+	}
+    inline ~SafeInt() {
+	    if (m_value)
+		(*m_value)--;
+	}
+protected:
+    int* m_value;
+};
+
 // Utility class used to restore selection
 class TreeRestoreSel
 {
@@ -107,11 +124,14 @@ protected:
 	const QRect& rect, const QPixmap& pixmap) const;
     virtual void drawFocus(QPainter* painter, const QStyleOptionViewItem& opt,
 	const QRect& rect) const;
+    // Apply item margins
+    void applyMargins(QRect& dest, const QRect& src, bool inc) const;
 
     bool m_drawFocus;                    // Draw focus
     int m_roleDisplayText;               // Item display role to handle
     int m_roleImage;                     // Item role containing image file name
     int m_roleBackground;                // Item background role to handle
+    int m_roleMargins;                   // Item internal margins role to handle
 };
 
 class QtHtmlItemDelegate : public QtItemDelegate
@@ -133,7 +153,8 @@ QtItemDelegate::QtItemDelegate(QObject* parent, const NamedList& params)
     m_drawFocus(true),
     m_roleDisplayText(Qt::DisplayRole),
     m_roleImage(Qt::UserRole),
-    m_roleBackground(Qt::UserRole)
+    m_roleBackground(Qt::UserRole),
+    m_roleMargins(Qt::UserRole)
 {
     m_drawFocus = params.getBoolValue("drawfocus",true);
     // Handle parameters set from code (not configurable)
@@ -141,6 +162,7 @@ QtItemDelegate::QtItemDelegate(QObject* parent, const NamedList& params)
 	m_roleDisplayText = params.getIntValue(params + ".role_display",Qt::DisplayRole);
 	m_roleImage = params.getIntValue(params + ".role_image",Qt::UserRole);
 	m_roleBackground = params.getIntValue(params + ".role_background",Qt::UserRole);
+	m_roleMargins = params.getIntValue(params + ".role_margins",Qt::UserRole);
     }
 #ifdef XDEBUG
     String dump;
@@ -191,13 +213,28 @@ void QtItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option
     QRect displayRect = opt.rect;
     displayRect.setWidth(INT_MAX/256);
     displayRect = textRectangle(painter,displayRect,opt.font,text);
+    // Retrieve margins and apply them
+    QRect margins;
+    if (m_roleMargins != Qt::UserRole) {
+	pVar = index.data(m_roleMargins);
+	if (pVar.type() == QVariant::Rect) {
+	    margins = pVar.toRect();
+	    applyMargins(opt.rect,margins,true);
+	}
+    }
     // Calculate layout
     doLayout(opt,&checkRect,&decorationRect,&displayRect,false);
     // Draw the item
+    if (m_roleMargins != Qt::UserRole)
+	applyMargins(opt.rect,margins,false);
     drawBackground(painter,opt,index);
+    if (m_roleMargins != Qt::UserRole)
+	applyMargins(opt.rect,margins,true);
     drawCheck(painter,opt,checkRect,checkState);
     drawDecoration(painter,opt,decorationRect,pixmap);
     drawDisplay(painter,opt,displayRect,text);
+    if (m_roleMargins != Qt::UserRole)
+	applyMargins(opt.rect,margins,false);
     drawFocus(painter,opt,displayRect);
     // Restore painter
     painter->restore();
@@ -287,6 +324,23 @@ void QtHtmlItemDelegate::drawDisplay(QPainter* painter, const QStyleOptionViewIt
     painter->translate(rect.x(),y);
     layout->draw(painter,context);
     painter->restore();
+}
+
+// Apply item margins
+void QtItemDelegate::applyMargins(QRect& dest, const QRect& src, bool inc) const
+{
+    if (inc) {
+	dest.setLeft(dest.left() + src.left());
+	dest.setTop(dest.top() + src.top());
+	dest.setRight(dest.right() - src.right());
+	dest.setBottom(dest.bottom() - src.bottom());
+    }
+    else {
+	dest.setLeft(dest.left() - src.left());
+	dest.setTop(dest.top() - src.top());
+	dest.setRight(dest.right() + src.right());
+	dest.setBottom(dest.bottom() + src.bottom());
+    }
 }
 
 
@@ -391,12 +445,93 @@ int replaceHtmlParams(String& str, const NamedList& list, bool spaceEol = false)
 
 
 /*
+ * QtCellGridDraw
+ */
+// Set draw pen
+void QtCellGridDraw::setPen(Position pos, QPen pen)
+{
+#define QtCellGridSetPen(val,p) \
+    if (0 != (pos & val)) { \
+	p = pen; \
+	m_flags |= val; \
+    }
+    QtCellGridSetPen(Left,m_left);
+    QtCellGridSetPen(Top,m_top);
+    QtCellGridSetPen(Right,m_right);
+    QtCellGridSetPen(Bottom,m_bottom);
+}
+
+// Set draw pens from a list of parameters
+void QtCellGridDraw::setPen(const NamedList& params)
+{
+    setPen(Left,params);
+    setPen(Top,params);
+    setPen(Right,params);
+    setPen(Bottom,params);
+}
+
+// Set pen from parameters list
+void QtCellGridDraw::setPen(Position pos, const NamedList& params)
+{
+    String prefix("griddraw_");
+    if (pos == Left)
+	prefix << "left";
+    else if (pos == Top)
+	prefix << "top";
+    else if (pos == Right)
+	prefix << "right";
+    else if (pos == Bottom)
+	prefix << "bottom";
+    else
+	return;
+    QPen pen;
+    bool ok = false;
+    const String& color = params[prefix + "_color"];
+    if (color) {
+	ok = true;
+	if (color[0] == '#')
+	    pen.setColor(QColor(color.substr(1).toInteger(0,16)));
+	else
+	    pen.setColor(QColor(color));
+    }
+    if (ok)
+	setPen(pos,pen);
+}
+
+// Draw the borders
+void QtCellGridDraw::draw(QPainter* p, QRect& rect, bool isFirstRow, bool isFirstColumn,
+    bool isLastRow, bool isLastColumn) const
+{
+    if (!(p && flag(Pos)))
+	return;
+    if (0 != (m_flags & Left) && (!isFirstColumn || flag(DrawStart))) {
+	p->setPen(m_left);
+	p->drawLine(rect.topLeft(),rect.bottomLeft());
+    }
+    if (0 != (m_flags & Top) && (!isFirstRow || flag(DrawStart))) {
+	p->setPen(m_top);
+	p->drawLine(rect.topLeft(),rect.topRight());
+    }
+    if (0 != (m_flags & Right) && (!isLastColumn || flag(DrawEnd))) {
+	p->setPen(m_right);
+	p->drawLine(rect.topRight(),rect.bottomRight());
+    }
+    if (0 != (m_flags & Bottom) && (!isLastRow || flag(DrawEnd))) {
+	p->setPen(m_bottom);
+	p->drawLine(rect.bottomLeft(),rect.bottomRight());
+    }
+}
+
+
+/*
  * QtTreeItem
  */
 QtTreeItem::QtTreeItem(const char* id, int type, const char* text, bool storeExp)
     : QTreeWidgetItem(type),
     NamedList(id),
-    m_storeExp(storeExp)
+    m_storeExp(storeExp),
+    m_heightDelta(0),
+    m_filtered(true)
 {
     if (!TelEngine::null(text))
 	QTreeWidgetItem::setText(0,QtClient::setUtf8(text));
@@ -420,6 +555,30 @@ void QtTreeItem::setImage(int col, const String& cname, const NamedList& list, i
 	setData(col,role,QtClient::setUtf8(*s));
 }
 
+// Update item filtered flag
+bool QtTreeItem::setFilter(const NamedList* filter)
+{
+    if (!filter) {
+	m_filtered = true;
+	return true;
+    }
+    int params = 0;
+    m_filtered = false;
+    NamedIterator iter(*this);
+    for (const NamedString* ns = 0; 0 != (ns = iter.get()); params++) {
+	if (!*ns)
+	    continue;
+	const String& match = (*filter)[ns->name()];
+	if (ns->find(match) >= 0) {
+	    m_filtered = true;
+	    break;
+	}
+    }
+    if (!params)
+	m_filtered = true;
+    return m_filtered;
+}
+
 
 /*
  * QtCustomTree
@@ -427,11 +586,14 @@ void QtTreeItem::setImage(int col, const String& cname, const NamedList& list, i
 QtCustomTree::QtCustomTree(const char* name, const NamedList& params, QWidget* parent,
     bool applyParams)
     : QtTree(name,parent),
+    m_notifyItemChanged(false),
     m_hasCheckableCols(false),
     m_menu(0),
     m_autoExpand(false),
     m_rowHeight(-1),
-    m_itemPropsType("")
+    m_itemPropsType(""),
+    m_changing(0),
+    m_filter(0)
 {
     // Build properties
     QtClient::buildProps(this,params["buildprops"]);
@@ -441,9 +603,15 @@ QtCustomTree::QtCustomTree(const char* name, const NamedList& params, QWidget* p
     unsigned int n = params.length();
     for (unsigned int i = 0; i < n; i++) {
 	NamedString* ns = params.getParam(i);
-	if (ns && ns->name() == "_yate_tree_additemtype" && ns->c_str())
+	if (ns && ns->name() == YSTRING("_yate_tree_additemtype") && ns->c_str())
 	    m_itemPropsType.setParam(String(TypeCount + i),*ns);
     }
+    // Vertical scroll policy
+    const String& vsp = params["vertical_scroll_policy"];
+    if (vsp == "item")
+	QTreeWidget::setVerticalScrollMode(QAbstractItemView::ScrollPerItem);
+    else if (vsp == "pixel")
+	QTreeWidget::setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     setIndentation(0);
     setUniformRowHeights(false);
     QTreeWidget::setFrameShape(QFrame::NoFrame);
@@ -459,12 +627,18 @@ QtCustomTree::QtCustomTree(const char* name, const NamedList& params, QWidget* p
 	    ObjList* width = params["columns.width"].split(',',true);
 	    ObjList* sizeMode = params["columns.resize"].split(',',true);
 	    ObjList* check = params["columns.check"].split(',',false);
+	    ObjList* emptyTitle = params["columns.allowemptytitle"].split(',',false);
 	    setColumnCount(id->count());
 	    int n = 0;
 	    for (ObjList* o = id->skipNull(); o; o = o->skipNext(), n++) {
 		String* name = static_cast<String*>(o->get());
 		String caption = objListItem(title,n);
-		hdr->setText(n,QtClient::setUtf8(caption ? caption : *name));
+		if (!caption) { 
+		    String tmp = *name;
+		    if (!emptyTitle->find(tmp.toLower()))
+			caption = *name;
+		}
+		hdr->setText(n,QtClient::setUtf8(caption));
 		hdr->setData(n,RoleId,QtClient::setUtf8(name->toLower()));
 		int ww = objListItem(width,n).toInteger(-1);
 		if (ww > 0)
@@ -491,6 +665,7 @@ QtCustomTree::QtCustomTree(const char* name, const NamedList& params, QWidget* p
 	    TelEngine::destruct(width);
 	    TelEngine::destruct(sizeMode);
 	    TelEngine::destruct(check);
+	    TelEngine::destruct(emptyTitle);
 	}
 	// Set item delegate(s)
 	String* htmlDlg = params.getParam("htmldelegate");
@@ -511,6 +686,7 @@ QtCustomTree::QtCustomTree(const char* name, const NamedList& params, QWidget* p
 		pp.setParam(prefix + ".role_display",String(RoleHtmlDelegate));
 		pp.setParam(prefix + ".role_image",String(RoleImage));
 		pp.setParam(prefix + ".role_background",String(RoleBackground));
+		pp.setParam(prefix + ".role_margins",String(RoleMargins));
 		QtHtmlItemDelegate* dlg = new QtHtmlItemDelegate(this,pp);
 		XDebug(ClientDriver::self(),DebugNote,
 		    "QtCustomTree(%s) setting html item delegate (%p,%s) for column %d [%p]",
@@ -520,6 +696,8 @@ QtCustomTree::QtCustomTree(const char* name, const NamedList& params, QWidget* p
 	    TelEngine::destruct(l);
 	}
     }
+    // Grid
+    m_gridDraw.setPen(params);
     // Connect signals
     QtClient::connectObjects(this,SIGNAL(currentItemChanged(QTreeWidgetItem*,QTreeWidgetItem*)),
 	this,SLOT(selectionChangedSlot(QTreeWidgetItem*,QTreeWidgetItem*)));
@@ -531,6 +709,8 @@ QtCustomTree::QtCustomTree(const char* name, const NamedList& params, QWidget* p
 	this,SLOT(itemExpandedSlot(QTreeWidgetItem*)));
     QtClient::connectObjects(this,SIGNAL(itemCollapsed(QTreeWidgetItem*)),
 	this,SLOT(itemCollapsedSlot(QTreeWidgetItem*)));
+    QtClient::connectObjects(this,SIGNAL(itemChanged(QTreeWidgetItem*,int)),
+	this,SLOT(itemChangedSlot(QTreeWidgetItem*,int)));
     // Set params
     if (applyParams)
 	setParams(params);
@@ -539,6 +719,28 @@ QtCustomTree::QtCustomTree(const char* name, const NamedList& params, QWidget* p
 // Destructor
 QtCustomTree::~QtCustomTree()
 {
+    TelEngine::destruct(m_filter);
+}
+
+// Method re-implemented from QTreeWidget.
+// Draw item grid if set
+void QtCustomTree::drawRow(QPainter* p, const QStyleOptionViewItem& opt,
+    const QModelIndex& idx) const
+{
+    QTreeWidget::drawRow(p,opt,idx);
+    if (m_gridDraw.flag(QtCellGridDraw::Pos)) {
+	p->save();
+	int row = idx.row();
+	int lastCol = columnCount() - 1;
+	for (int i = 0; i <= lastCol; i++) {
+	    QModelIndex s = idx.sibling(row,i);
+	    if (s.isValid()) {
+		QRect r = visualRect(s);
+		m_gridDraw.draw(p,r,!row,!i,false,i == lastCol);
+	    }
+	}
+	p->restore();
+    }
 }
 
 // Retrieve item type definition from [type:]value. Create if not found
@@ -565,15 +767,25 @@ QtUIWidgetItemProps* QtCustomTree::getItemProps(QString& in, String& value)
 // Set params
 bool QtCustomTree::setParams(const NamedList& params)
 {
+    SafeInt safeChg(&m_changing);
     bool ok = QtUIWidget::setParams(params);
     ok = QtUIWidget::setParams(this,params) && ok;
-    buildMenu(m_menu,params.getParam("menu"));
+    buildMenu(m_menu,params.getParam(YSTRING("menu")));
+    NamedString* filter = params.getParam(YSTRING("filter"));
+    if (filter) {
+	TelEngine::destruct(m_filter);
+	NamedList* p = YOBJECT(NamedList,filter);
+	if (p && p->count())
+	    m_filter = new NamedList(*p);
+	checkItemFilter();
+    }
     return ok;
 }
 
 // Retrieve an item
 bool QtCustomTree::getTableRow(const String& item, NamedList* data)
 {
+    SafeInt safeChg(&m_changing);
     QtTreeItem* it = find(item);
     DDebug(ClientDriver::self(),DebugAll,"QtCustomTree(%s)::getTableRow(%s) found=%p",
 	name().c_str(),item.c_str(),it);
@@ -596,6 +808,9 @@ bool QtCustomTree::getTableRow(const String& item, NamedList* data)
 		data->setParam("check:" + id,String::boolText(checked));
 	    }
 	}
+	QWidget* w = itemWidget(it,0);
+	if (w)
+	    getParams(w,*data);
     }
     return true;
 }
@@ -610,6 +825,7 @@ bool QtCustomTree::setTableRow(const String& item, const NamedList* data)
     if (!data)
 	return true;
     SafeTree tree(this);
+    SafeInt safeChg(&m_changing);
     return updateItem(*it,*data);
 }
 
@@ -623,6 +839,7 @@ bool QtCustomTree::addTableRow(const String& item, const NamedList* data, bool a
     if (find(item))
 	return false;
     SafeTree tree(this);
+    SafeInt safeChg(&m_changing);
     QtTreeItem* parent = 0;
     int type = QTreeWidgetItem::Type;
     if (data) {
@@ -642,7 +859,7 @@ bool QtCustomTree::addTableRow(const String& item, const NamedList* data, bool a
     if (data)
 	it->copyParams(*data);
     if (addChild(it,atStart,parent))
-	return !data || updateItem(*it,*it);
+	return !data || updateItem(*it,*data);
     TelEngine::destruct(it);
     return false;
 }
@@ -652,6 +869,7 @@ bool QtCustomTree::delTableRow(const String& item)
 {
     if (!item)
 	return false;
+    SafeInt safeChg(&m_changing);
     QtTreeItem* it = find(item);
     DDebug(ClientDriver::self(),DebugAll,"QtCustomTree(%s)::delTableRow(%s) found=%p",
 	name().c_str(),item.c_str(),it);
@@ -678,6 +896,7 @@ bool QtCustomTree::updateTableRows(const NamedList* data, bool atStart)
 {
     if (!data)
 	return true;
+    SafeInt safeChg(&m_changing);
     DDebug(ClientDriver::self(),DebugAll,"QtCustomTree(%s)::updateTableRows()",
 	name().c_str());
     SafeTree tree(this);
@@ -733,6 +952,7 @@ bool QtCustomTree::getSelect(String& item)
 bool QtCustomTree::clearTable()
 {
     DDebug(ClientDriver::self(),DebugAll,"QtCustomTree(%s)::clearTable()",name().c_str());
+    SafeInt safeChg(&m_changing);
     QTreeWidget::clear();
     return true;
 }
@@ -771,6 +991,7 @@ QString QtCustomTree::getSorting()
 // Set tree sorting
 void QtCustomTree::updateSorting(const String& key, Qt::SortOrder sort)
 {
+    SafeInt safeChg(&m_changing);
     QHeaderView* h = QTreeView::header();
     if (!h)
 	return;
@@ -938,6 +1159,7 @@ QtTreeItem* QtCustomTree::addChild(QtTreeItem* child, int pos, QtTreeItem* paren
 {
     if (!child)
 	return 0;
+    SafeInt safeChg(&m_changing);
     QTreeWidgetItem* root = parent ? static_cast<QTreeWidgetItem*>(parent) : invisibleRootItem();
     if (!root)
 	return 0;
@@ -957,6 +1179,7 @@ QtTreeItem* QtCustomTree::addChild(QtTreeItem* child, int pos, QtTreeItem* paren
 // Add a list of children to a given item
 void QtCustomTree::addChildren(QList<QTreeWidgetItem*> list, int pos, QtTreeItem* parent)
 {
+    SafeInt safeChg(&m_changing);
     QTreeWidgetItem* root = parent ? static_cast<QTreeWidgetItem*>(parent) : invisibleRootItem();
     if (!root)
 	return;
@@ -980,27 +1203,28 @@ void QtCustomTree::setupItem(QtTreeItem* item)
 {
     if (!item)
 	return;
+    SafeInt safeChg(&m_changing);
     // Set widget
     QWidget* w = itemWidget(item,0);
     if (!w) {
 	w = loadWidgetType(this,item->id(),itemPropsName(item->type()));
 	if (w) {
 	    w->setAutoFillBackground(true);
-	    setItemWidget(item,0,w);
 	    XDebug(ClientDriver::self(),DebugAll,
 		"QtTree(%s) set widget (%p,%s) for child '%s'",
 		name().c_str(),w,YQT_OBJECT_NAME(w),item->id().c_str());
-	    applyStyleSheet(item,item->isSelected());
 	    // Adjust widget to row height if configured,
 	    // or row height to widget otherwise
 	    QSize sz = item->sizeHint(0);
 	    int h = getItemRowHeight(item->type());
 	    if (h > 0)
-		w->resize(w->width(),sz.height());
+		w->setFixedHeight(sz.height() + item->m_heightDelta);
 	    else {
 		sz.setHeight(w->height());
 		item->setSizeHint(0,sz);
 	    }
+	    setItemWidget(item,0,w);
+	    applyStyleSheet(item,item->isSelected());
 	}
     }
     // Set checkable columns
@@ -1016,8 +1240,11 @@ void QtCustomTree::setItemRowHeight(QTreeWidgetItem* item)
     if (h <= 0)
 	return;
     QSize sz = item->sizeHint(0);
-    sz.setHeight(h);
+    sz.setHeight(h + (static_cast<QtTreeItem*>(item))->m_heightDelta);
     item->setSizeHint(0,sz);
+    QWidget* w = itemWidget(item,0);
+    if (w)
+	w->setFixedHeight(sz.height());
 }
 
 // Retrieve a column by it's id
@@ -1041,6 +1268,7 @@ void QtCustomTree::showEmptyChildren(bool show, QtTreeItem* parent)
     if (!root)
 	return;
     SafeTree tree(this);
+    SafeInt safeChg(&m_changing);
     int n = root->childCount();
     for (int i = 0; i < n; i++) {
 	QtTreeItem* item = static_cast<QtTreeItem*>(root->child(i));
@@ -1068,6 +1296,7 @@ void QtCustomTree::setStateImage(QtTreeItem& item)
     QtTreeItemProps* p = treeItemProps(item.type());
     if (!(p && p->m_stateWidget))
 	return;
+    SafeInt safeChg(&m_changing);
     NamedList tmp("");
     const String& img = item.isExpanded() ? p->m_stateExpandedImg : p->m_stateCollapsedImg;
     tmp.addParam("image:" + p->m_stateWidget,img);
@@ -1169,10 +1398,43 @@ void QtCustomTree::setItemBg(QString value)
     QtTreeItemProps* p = YOBJECT(QtTreeItemProps,getItemProps(value,tmp));
     if (!p)
 	return;
-    if (tmp.startSkip("color:",false))
-	p->m_bg = QBrush(QColor(tmp.c_str()));
+    if (tmp) {
+	if (tmp[0] == '#')
+	    p->m_bg = QBrush(QColor(tmp.substr(1).toInteger(0,16)));
+	else if (tmp.startSkip("color:",false))
+	    p->m_bg = QBrush(QColor(tmp.c_str()));
+	else
+	    p->m_bg = QBrush();
+    }
     else
 	p->m_bg = QBrush();
+}
+
+// Set an item props margins
+// Order: left,top,right,bottom
+void QtCustomTree::setItemMargins(QString value)
+{
+    String tmp;
+    QtTreeItemProps* p = YOBJECT(QtTreeItemProps,getItemProps(value,tmp));
+    if (!p)
+	return;
+    p->m_margins = QRect();
+    if (!tmp)
+	return;
+    ObjList* list = tmp.split(',');
+    int i = 0;
+    for (ObjList* o = list; o; o = o->next(), i++) {
+	int val = o->get() ? o->get()->toString().toInteger() : 0;
+	if (i == 0)
+	    p->m_margins.setLeft(val);
+	else if (i == 1)
+	    p->m_margins.setTop(val);
+	else if (i == 2)
+	    p->m_margins.setRight(val);
+	else if (i == 3)
+	    p->m_margins.setBottom(val);
+    }
+    TelEngine::destruct(list);
 }
 
 // Retrieve a comma separated list with column widths
@@ -1197,7 +1459,7 @@ void QtCustomTree::setColWidths(QString widths)
 	if (!list[i].length())
 	    continue;
 	int width = list[i].toInt();
-	if (width >= 0)
+	if (width > 0)
 	    setColumnWidth(i,width);
     }
 }
@@ -1205,6 +1467,7 @@ void QtCustomTree::setColWidths(QString widths)
 // Set sorting (column and order)
 void QtCustomTree::setSorting(QString s)
 {
+    SafeInt safeChg(&m_changing);
     if (!s.length()) {
 	updateSorting(String::empty(),Qt::AscendingOrder);
 	return;
@@ -1306,6 +1569,13 @@ void QtCustomTree::onItemExpandedChanged(QtTreeItem* item)
     applyItemStatistics(*item);
 }
 
+// Process item changed signal
+void QtCustomTree::onItemChanged(QtTreeItem* item, int column)
+{
+    if (!m_changing && m_notifyItemChanged && item)
+	triggerAction(item->id(),"listitemchanged",this);
+}
+
 // Catch a context menu event and show the context menu
 void QtCustomTree::contextMenuEvent(QContextMenuEvent* e)
 {
@@ -1321,6 +1591,8 @@ void QtCustomTree::contextMenuEvent(QContextMenuEvent* e)
 // Update a tree item
 bool QtCustomTree::updateItem(QtTreeItem& item, const NamedList& params)
 {
+    SafeInt safeChg(&m_changing);
+    SafeTree safeTree(this);
     DDebug(ClientDriver::self(),DebugAll,"QtCustomTree(%s)::updateItem(%p,%s)",
 	name().c_str(),&item,item.id().c_str());
     bool all = (&params == &item);
@@ -1331,6 +1603,14 @@ bool QtCustomTree::updateItem(QtTreeItem& item, const NamedList& params)
     QtTreeItemProps* props = treeItemProps(item.type());
     int n = columnCount();
     for (int col = 0; col < n; col++) {
+	if (!col) {
+	    String* hp = params.getParam(YSTRING("_yate_itemheight_delta"));
+	    if (hp) {
+		item.m_heightDelta = hp->toInteger();
+		setItemRowHeight(&item);
+		doItemsLayout();
+	    }
+	}
 	QWidget* w = itemWidget(&item,col);
 	if (w) {
 	    QtUIWidget::setParams(w,p);
@@ -1366,6 +1646,7 @@ bool QtCustomTree::updateItem(QtTreeItem& item, const NamedList& params)
 	item.setImage(col,id,p,imageRole);
     }
     applyItemTooltip(item);
+    checkItemFilter(&item,false);
     return true;
 }
 
@@ -1378,6 +1659,8 @@ QMenu* QtCustomTree::contextMenu(QtTreeItem* item)
 // Item added notification
 void QtCustomTree::itemAdded(QtTreeItem& item, QtTreeItem* parent)
 {
+    SafeInt safeChg(&m_changing);
+    checkItemFilter(&item,false);
     bool on = m_autoExpand;
     if (item.m_storeExp) {
 	int n = getStoreExpStatus(item.id());
@@ -1390,6 +1673,7 @@ void QtCustomTree::itemAdded(QtTreeItem& item, QtTreeItem* parent)
     setStateImage(item);
     applyItemTooltip(item);
     applyItemStatistics(item);
+    applyItemMargins(item);
     if (parent)
 	applyItemStatistics(*parent);
 }
@@ -1398,6 +1682,7 @@ void QtCustomTree::itemAdded(QtTreeItem& item, QtTreeItem* parent)
 // The item will be deleted after returning from this notification
 void QtCustomTree::itemRemoved(QtTreeItem& item, QtTreeItem* parent)
 {
+    SafeInt safeChg(&m_changing);
     if (parent)
 	applyItemStatistics(*parent);
 }
@@ -1405,9 +1690,35 @@ void QtCustomTree::itemRemoved(QtTreeItem& item, QtTreeItem* parent)
 // Handle item visiblity changes
 void QtCustomTree::itemVisibleChanged(QtTreeItem& item)
 {
+    SafeInt safeChg(&m_changing);
     // Uncheck columns for invisible item
     if (item.isHidden())
 	uncheckItem(item);
+}
+
+// Check item filter
+void QtCustomTree::checkItemFilter(QtTreeItem* item, bool recursive)
+{
+    QTreeWidgetItem* root = 0;
+    if (item) {
+	item->setFilter(m_filter);
+	itemFilterChanged(*item);
+	if (recursive)
+	    root = static_cast<QTreeWidgetItem*>(item);
+    }
+    else if (recursive)
+	root = invisibleRootItem();
+    int nc = root ? root->childCount() : 0;
+    for (int i = 0; i < nc; i++) {
+	QtTreeItem* it = static_cast<QtTreeItem*>(root->child(i));
+	checkItemFilter(it,true);
+    }
+}
+
+// Handle item filter changes
+void QtCustomTree::itemFilterChanged(QtTreeItem& item)
+{
+    showItem(item,item.filterMatched());
 }
 
 // Uncheck all checkable columns in a given item
@@ -1415,6 +1726,7 @@ void QtCustomTree::uncheckItem(QtTreeItem& item)
 {
     if (!m_hasCheckableCols)
 	return;
+    SafeInt safeChg(&m_changing);
     QTreeWidgetItem* hdr = headerItem();
     int n = hdr ? columnCount() : 0;
     for (int i = 0; i < n; i++)
@@ -1446,6 +1758,7 @@ void QtCustomTree::fillItemStatistics(QtTreeItem& item, NamedList& list)
 // Update a tree item's statistics
 void QtCustomTree::applyItemStatistics(QtTreeItem& item)
 {
+    SafeInt safeChg(&m_changing);
     QtTreeItemProps* p = treeItemProps(item.type());
     if (!p)
 	return;
@@ -1462,6 +1775,17 @@ void QtCustomTree::applyItemStatistics(QtTreeItem& item)
     else
 	params.addParam("statistics",text);
     updateItem(item,params);
+}
+
+// Update a tree item's margins
+void QtCustomTree::applyItemMargins(QtTreeItem& item, bool set)
+{
+    QtUIWidgetItemProps* pt = QtUIWidget::getItemProps(itemPropsName(item.type()));
+    QtTreeItemProps* p = YOBJECT(QtTreeItemProps,pt);
+    if (!p)
+	return;
+    for (int n = columnCount() - 1; n >= 0; n--)
+	item.setData(n,RoleMargins,set ? p->m_margins : QRect());
 }
 
 // Store (update) to or remove from item expanded status storage an item
@@ -1516,6 +1840,7 @@ ContactList::ContactList(const char* name, const NamedList& params, QWidget* par
 // Set params
 bool ContactList::setParams(const NamedList& params)
 {
+    SafeInt safeChg(&m_changing);
     bool ok = QtCustomTree::setParams(params);
     buildMenu(m_menuContact,params.getParam("contactmenu"));
     buildMenu(m_menuChatRoom,params.getParam("chatroommenu"));
@@ -1525,6 +1850,7 @@ bool ContactList::setParams(const NamedList& params)
 // Update a contact
 bool ContactList::setTableRow(const String& item, const NamedList* data)
 {
+    SafeInt safeChg(&m_changing);
     DDebug(ClientDriver::self(),DebugAll,"ContactList(%s)::setTableRow(%s,%p)",
 	name().c_str(),item.c_str(),data);
     ContactItem* c = findContact(item);
@@ -1547,6 +1873,7 @@ bool ContactList::setTableRow(const String& item, const NamedList* data)
 // Add a new account or contact
 bool ContactList::addTableRow(const String& item, const NamedList* data, bool atStart)
 {
+    SafeInt safeChg(&m_changing);
     DDebug(ClientDriver::self(),DebugAll,"ContactList(%s)::addTableRow(%s,%p,%u)",
 	name().c_str(),item.c_str(),data,atStart);
     if (!data)
@@ -1562,6 +1889,7 @@ bool ContactList::addTableRow(const String& item, const NamedList* data, bool at
 // Remove an item from tree
 bool ContactList::delTableRow(const String& item)
 {
+    SafeInt safeChg(&m_changing);
     DDebug(ClientDriver::self(),DebugAll,"ContactList(%s)::delTableRow(%s)",
 	name().c_str(),item.c_str());
     if (!item)
@@ -1584,6 +1912,7 @@ bool ContactList::updateTableRows(const NamedList* data, bool atStart)
     DDebug(ClientDriver::self(),DebugAll,"ContactList(%s)::updateTableRows()",
 	name().c_str());
     SafeTree tree(this);
+    SafeInt safeChg(&m_changing);
     bool ok = false;
     QList<QTreeWidgetItem*> list;
     QTreeWidgetItem* root = invisibleRootItem();
@@ -1665,6 +1994,7 @@ ContactItem* ContactList::findContact(const String& id, QList<QtTreeItem*>* list
 // Set '_yate_nogroup_caption' property
 void ContactList::setNoGroupCaption(QString value)
 {
+    SafeInt safeChg(&m_changing);
     QtClient::getUtf8(m_noGroupText,value);
 }
 
@@ -1677,6 +2007,7 @@ void ContactList::setFlatList(bool flat)
     if (!root)
 	return;
     SafeTree tree(this);
+    SafeInt safeChg(&m_changing);
     TreeRestoreSel sel(this);
     setCurrentItem(0);
     // Retrieve (take) contacts
@@ -1730,6 +2061,7 @@ void ContactList::setShowOffline(bool value)
     if (!root)
 	return;
     SafeTree tree(this);
+    SafeInt safeChg(&m_changing);
     String sel;
     getSelect(sel);
     setCurrentItem(0);
@@ -1761,6 +2093,7 @@ QString ContactList::getSorting()
 // Set tree sorting
 void ContactList::updateSorting(const String& key, Qt::SortOrder sort)
 {
+    SafeInt safeChg(&m_changing);
     if (!isSortingEnabled()) {
 	m_sortKey = key;
 	m_sortOrder = sort;
@@ -1772,6 +2105,7 @@ void ContactList::updateSorting(const String& key, Qt::SortOrder sort)
 // Optimized add. Set the whole tree
 void ContactList::setContacts(QList<QTreeWidgetItem*>& list)
 {
+    SafeInt safeChg(&m_changing);
     // Add contacts to tree
     if (m_flatList) {
 	sortContacts(list);
@@ -1809,6 +2143,7 @@ bool ContactList::updateContact(const String& id, const NamedList& params)
 	return false;
     DDebug(ClientDriver::self(),DebugAll,"ContactList(%s)::updateContact(%s)",
 	name().c_str(),id.c_str());
+    SafeInt safeChg(&m_changing);
     QList<QtTreeItem*> list;
     ContactItem* c = findContact(id,&list);
     if (!c) {
@@ -1833,6 +2168,7 @@ bool ContactList::removeContact(const String& id)
 {
     DDebug(ClientDriver::self(),DebugAll,"ContactList(%s)::removeContact(%s)",
 	name().c_str(),id.c_str());
+    SafeInt safeChg(&m_changing);
     if (m_flatList) {
 	QtTreeItem* it = find(id,0,false,false);
 	if (it)
@@ -1914,6 +2250,7 @@ QMenu* ContactList::contextMenu(QtTreeItem* item)
 // Item added notification
 void ContactList::itemAdded(QtTreeItem& item, QtTreeItem* parent)
 {
+    SafeInt safeChg(&m_changing);
     QtCustomTree::itemAdded(item,parent);
     DDebug(ClientDriver::self(),DebugAll,"ContactList(%s)::itemAdded(%p,%p) type=%d id=%s",
 	name().c_str(),&item,parent,item.type(),item.id().c_str());
@@ -1953,6 +2290,13 @@ void ContactList::fillItemStatistics(QtTreeItem& item, NamedList& list)
     list.addParam("online",String(online));
 }
 
+// Update a tree item's margins
+void ContactList::applyItemMargins(QtTreeItem& item, bool set)
+{
+    set = !m_flatList && item.type() != TypeGroup;
+    QtCustomTree::applyItemMargins(item,set);
+}
+
 // Retrieve a group item from root or create a new one
 QtTreeItem* ContactList::getGroup(const String& name, bool create)
 {
@@ -1990,6 +2334,7 @@ QtTreeItem* ContactList::getGroup(const String& name, bool create)
 // Add a contact
 void ContactList::addContact(const String& id, const NamedList& params)
 {
+    SafeInt safeChg(&m_changing);
     ContactItem* c = createContact(id,params);
     if (m_flatList) {
 	addContact(c);
@@ -2016,6 +2361,7 @@ void ContactList::addContact(ContactItem* c, QtTreeItem* parent)
 {
     if (!c)
 	return;
+    SafeInt safeChg(&m_changing);
     int pos = -1;
     if (m_sortKey == "name") {
 	bool asc = (m_sortOrder == Qt::AscendingOrder);
@@ -2039,6 +2385,7 @@ void ContactList::replaceContact(ContactItem& c, const NamedList& params)
     if (!c)
 	return;
     TreeRestoreSel sel(this,c.id());
+    SafeInt safeChg(&m_changing);
     String id = c.id();
     NamedList p(c);
     p.copyParams(params);
@@ -2051,6 +2398,7 @@ void ContactList::createContactTree(ContactItem* c, ContactItemList& cil)
 {
     if (!c)
 	return;
+    SafeInt safeChg(&m_changing);
     bool noGrp = true;
     ObjList* grps = c->groups();
     for (ObjList* o = grps->skipNull(); o; o = o->skipNext()) {
@@ -2076,6 +2424,7 @@ void ContactList::sortContacts(QList<QTreeWidgetItem*>& list)
 {
     if (!list.size())
 	return;
+    SafeInt safeChg(&m_changing);
     if (m_sortKey == "name") {
 	QVector<QtTreeItemKey> v(list.size());
 	for (int i = 0; i < list.size(); i++) {

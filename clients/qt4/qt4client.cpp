@@ -1146,10 +1146,12 @@ bool QtWindow::setShow(const String& name, bool visible)
     QtWidget w(wndWidget(),name);
     if (w.invalid())
 	return false;
+    setUpdatesEnabled(false);
     if (w.type() != QtWidget::Action)
 	w->setVisible(visible);
     else
 	w.action()->setVisible(visible);
+    setUpdatesEnabled(true);
     return true;
 }
 
@@ -1700,6 +1702,16 @@ bool QtWindow::updateTableRow(const String& name, const String& item,
 		tbl.updateRow(item,data,atStart);
 		return true;
 	    }
+	case QtWidget::CustomTree:
+	    {
+		QtTree* custom = w.customTree();
+		if (custom) {
+		    if (custom->getTableRow(item))
+			return custom->setTableRow(item,data);
+		    return custom->addTableRow(item,data,atStart);
+		}
+		return false;
+	    }
 	case QtWidget::ComboBox:
 	    return w.findComboItem(item) >= 0 || w.addComboItem(item,atStart);
 	case QtWidget::ListBox:
@@ -2176,6 +2188,7 @@ void QtWindow::toggled(bool on)
 {
     XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) toggled=%s sender=%s [%p]",
 	m_id.c_str(),String::boolText(on),YQT_OBJECT_NAME(sender()),this);
+    QtClient::updateToggleImage(sender());
     if (!QtClient::self() || QtClient::changing())
 	return;
     QtWidget w(sender());
@@ -2466,7 +2479,22 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 	if (handleContextMenuEvent(static_cast<QContextMenuEvent*>(event),obj))
 	    return false;
     }
-
+    if (event->type() == QEvent::Enter) {
+	QtClient::updateImageFromMouse(obj,true,true);
+	return QWidget::eventFilter(obj,event);
+    }
+    if (event->type() == QEvent::Leave) {
+	QtClient::updateImageFromMouse(obj,true,false);
+	return QWidget::eventFilter(obj,event);
+    }
+    if (event->type() == QEvent::MouseButtonPress) {
+	QtClient::updateImageFromMouse(obj,false,true);
+	return QWidget::eventFilter(obj,event);
+    }
+    if (event->type() == QEvent::MouseButtonRelease) {
+	QtClient::updateImageFromMouse(obj,false,false);
+	return QWidget::eventFilter(obj,event);
+    }
     return QWidget::eventFilter(obj,event);
 }
 
@@ -3788,6 +3816,59 @@ bool QtClient::setImage(QObject* obj, const QPixmap& img, bool fit)
     return false;
 }
 
+// Update a toggable object's image from properties
+void QtClient::updateToggleImage(QObject* obj)
+{
+    QtWidget w(obj);
+    QAbstractButton* b = w.abstractButton();
+    if (!(b && b->isCheckable()))
+	return;
+    String icon;
+    bool set = false;
+    if (b->isChecked())
+	set = QtClient::getProperty(w,"_yate_pressed_icon",icon);
+    else
+	set = QtClient::getProperty(w,"_yate_normal_icon",icon);
+    if (set)
+        QtClient::setImage(obj,Client::s_skinPath + icon);
+}
+
+// Update an object's image from properties on mouse events
+void QtClient::updateImageFromMouse(QObject* obj, bool inOut, bool on)
+{
+    QtWidget w(obj);
+    QAbstractButton* b = w.abstractButton();
+    if (!b)
+	return;
+    if (!b->isEnabled())
+	return;
+    String icon;
+    bool set = false;
+    if (inOut) {
+	if (on)
+	    set = QtClient::getProperty(obj,"_yate_hover_icon",icon);
+	else {
+	    if (b->isCheckable() && b->isChecked())
+		set = QtClient::getProperty(obj,"_yate_pressed_icon",icon);
+	    set = set || QtClient::getProperty(obj,"_yate_normal_icon",icon);
+	}
+    }
+    else {
+	if (on) {
+	    if (!b->isCheckable())
+		set = QtClient::getProperty(obj,"_yate_pressed_icon",icon);
+	}
+	else {
+	    set = QtClient::getProperty(obj,"_yate_hover_icon",icon);
+	    if (!set && b->isCheckable() && b->isChecked())
+		set = QtClient::getProperty(obj,"_yate_pressed_icon",icon);
+	    set = set || QtClient::getProperty(obj,"_yate_normal_icon",icon);
+	}
+    }
+    if (set)
+	QtClient::setImage(obj,Client::s_skinPath + icon);
+}
+
 // Process a key press event. Retrieve an action associated with the key
 bool QtClient::filterKeyEvent(QObject* obj, QKeyEvent* event, String& action,
     bool& filter, QObject* parent)
@@ -4160,6 +4241,7 @@ bool QtUIWidget::setParams(QObject* parent, const NamedList& params)
     static const String s_addlines = "addlines";
     static const String s_setrichtext = "setrichtext";
     static const String s_updatetablerows = "updatetablerows";
+    static const String s_cleartable = "cleartable";
     static const String s_rawimage = "rawimage";
     static const String s_setparams = "setparams";
     static const String s_setmenu = "setmenu";
@@ -4236,6 +4318,8 @@ bool QtUIWidget::setParams(QObject* parent, const NamedList& params)
 	    if (p)
 		ok = wnd->updateTableRows(buildChildName(buf,pName,cName),p,ns->toBoolean()) && ok;
 	}
+	else if (n == s_cleartable)
+	    ok = wnd->clearTable(buildChildName(buf,pName,cName)) && ok;
 	else if (n == s_rawimage) {
 	    DataBlock* data = YOBJECT(DataBlock,ns);
 	    if (data) {
@@ -4274,6 +4358,7 @@ bool QtUIWidget::setParams(QObject* parent, const NamedList& params)
 bool QtUIWidget::getParams(QObject* parent, NamedList& params)
 {
     static const String s_property = "property";
+    static const String s_getcheck = "getcheck";
     static const String s_getselect = "getselect";
     static const String s_getrichtext = "getrichtext";
 
@@ -4313,6 +4398,11 @@ bool QtUIWidget::getParams(QObject* parent, NamedList& params)
 	}
 	else if (n == s_getselect)
 	    ok = wnd->getSelect(buildChildName(buf,pName,cName),*ns) && ok;
+	else if (n == s_getcheck) {
+	    bool on = false;
+	    ok = wnd->getCheck(buildChildName(buf,pName,cName),on) && ok;
+	    *ns = String::boolText(on);
+	}
 	else if (n == s_getrichtext)
 	    ok = wnd->getText(buildChildName(buf,pName,cName),*ns,true) && ok;
 	else
@@ -4643,6 +4733,7 @@ void QtUIWidget::onToggle(QObject* sender, bool on)
 {
     if (!Client::self())
 	return;
+    QtClient::updateToggleImage(sender);
     String s;
     getIdentity(sender,s);
     if (!s)
@@ -4671,6 +4762,20 @@ void QtUIWidget::onSelect(QObject* sender, const String* item)
     DDebug(ClientDriver::self(),DebugAll,"QtUIWidget(%s) raising select %s",
 	name().c_str(),s.c_str());
     Client::self()->select(wnd,s,*item);
+}
+
+// Filter wathed events for children.
+// Handle child image changing on mouse events
+void QtUIWidget::onChildEvent(QObject* watched, QEvent* event)
+{
+    if (event->type() == QEvent::Enter)
+	QtClient::updateImageFromMouse(watched,true,true);
+    else if (event->type() == QEvent::Leave)
+	QtClient::updateImageFromMouse(watched,true,false);
+    else if (event->type() == QEvent::MouseButtonPress)
+	QtClient::updateImageFromMouse(watched,false,true);
+    else if (event->type() == QEvent::MouseButtonRelease)
+	QtClient::updateImageFromMouse(watched,false,false);
 }
 
 // Load an item's widget. Rename children. Connect actions

@@ -1,0 +1,678 @@
+<ui version="4.0" >
+ <class>channel_item</class>
+ <widget class="QWidget" name="channel_item" >
+  <property name="geometry" >
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>458</width>
+    <height>134</height>
+   </rect>
+  </property>
+  <property name="styleSheet" >
+   <string/>
+  </property>
+  <layout class="QVBoxLayout" >
+   <property name="spacing" >
+    <number>0</number>
+   </property>
+   <property name="leftMargin" >
+    <number>2</number>
+   </property>
+   <property name="topMargin" >
+    <number>2</number>
+   </property>
+   <property name="rightMargin" >
+    <number>2</number>
+   </property>
+   <property name="bottomMargin" >
+    <number>2</number>
+   </property>
+   <item>
+    <widget class="QFrame" name="frame" >
+     <property name="sizePolicy" >
+      <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <layout class="QVBoxLayout" >
+      <property name="spacing" >
+       <number>1</number>
+      </property>
+      <property name="leftMargin" >
+       <number>6</number>
+      </property>
+      <property name="topMargin" >
+       <number>4</number>
+      </property>
+      <property name="rightMargin" >
+       <number>6</number>
+      </property>
+      <property name="bottomMargin" >
+       <number>4</number>
+      </property>
+      <item>
+       <widget class="QFrame" name="frame_2" >
+        <property name="sizePolicy" >
+         <sizepolicy vsizetype="Fixed" hsizetype="Preferred" >
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize" >
+         <size>
+          <width>0</width>
+          <height>76</height>
+         </size>
+        </property>
+        <property name="maximumSize" >
+         <size>
+          <width>16777215</width>
+          <height>76</height>
+         </size>
+        </property>
+        <layout class="QVBoxLayout" >
+         <property name="spacing" >
+          <number>0</number>
+         </property>
+         <property name="leftMargin" >
+          <number>0</number>
+         </property>
+         <property name="topMargin" >
+          <number>0</number>
+         </property>
+         <property name="rightMargin" >
+          <number>0</number>
+         </property>
+         <property name="bottomMargin" >
+          <number>0</number>
+         </property>
+         <item>
+          <layout class="QHBoxLayout" >
+           <property name="spacing" >
+            <number>12</number>
+           </property>
+           <item>
+            <layout class="QVBoxLayout" >
+             <property name="spacing" >
+              <number>0</number>
+             </property>
+             <item>
+              <layout class="QHBoxLayout" >
+               <item>
+                <widget class="QLabel" name="direction" >
+                 <property name="sizePolicy" >
+                  <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="minimumSize" >
+                  <size>
+                   <width>18</width>
+                   <height>18</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize" >
+                  <size>
+                   <width>18</width>
+                   <height>18</height>
+                  </size>
+                 </property>
+                 <property name="text" >
+                  <string>dir</string>
+                 </property>
+                 <property name="alignment" >
+                  <set>Qt::AlignCenter</set>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="party" >
+                 <property name="sizePolicy" >
+                  <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="minimumSize" >
+                  <size>
+                   <width>0</width>
+                   <height>18</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize" >
+                  <size>
+                   <width>16777215</width>
+                   <height>18</height>
+                  </size>
+                 </property>
+                 <property name="text" >
+                  <string>party</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+             <item>
+              <layout class="QHBoxLayout" >
+               <item>
+                <widget class="QLabel" name="status_image" >
+                 <property name="sizePolicy" >
+                  <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="minimumSize" >
+                  <size>
+                   <width>18</width>
+                   <height>18</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize" >
+                  <size>
+                   <width>18</width>
+                   <height>18</height>
+                  </size>
+                 </property>
+                 <property name="text" >
+                  <string>status_image</string>
+                 </property>
+                 <property name="alignment" >
+                  <set>Qt::AlignCenter</set>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="status" >
+                 <property name="sizePolicy" >
+                  <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="minimumSize" >
+                  <size>
+                   <width>0</width>
+                   <height>18</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize" >
+                  <size>
+                   <width>16777215</width>
+                   <height>18</height>
+                  </size>
+                 </property>
+                 <property name="text" >
+                  <string>status</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="time" >
+                 <property name="sizePolicy" >
+                  <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="minimumSize" >
+                  <size>
+                   <width>40</width>
+                   <height>18</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize" >
+                  <size>
+                   <width>40</width>
+                   <height>18</height>
+                  </size>
+                 </property>
+                 <property name="text" >
+                  <string>00:00</string>
+                 </property>
+                 <property name="alignment" >
+                  <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QVBoxLayout" >
+             <item>
+              <layout class="QHBoxLayout" >
+               <property name="spacing" >
+                <number>2</number>
+               </property>
+               <item>
+                <widget class="QToolButton" name="answer" >
+                 <property name="minimumSize" >
+                  <size>
+                   <width>24</width>
+                   <height>24</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize" >
+                  <size>
+                   <width>24</width>
+                   <height>24</height>
+                  </size>
+                 </property>
+                 <property name="toolTip" >
+                  <string>Answer the call</string>
+                 </property>
+                 <property name="icon" >
+                  <iconset>answer_20.png</iconset>
+                 </property>
+                 <property name="iconSize" >
+                  <size>
+                   <width>20</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                 <property name="_yate_identity" stdset="0" >
+                  <string>answer</string>
+                 </property>
+                 <property name="_yate_normal_icon" stdset="0" >
+                  <string>answer_20.png</string>
+                 </property>
+                 <property name="_yate_pressed_icon" stdset="0" >
+                  <string>answer_20_pressed.png</string>
+                 </property>
+                 <property name="_yate_hover_icon" stdset="0" >
+                  <string>answer_20_hover.png</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QToolButton" name="hangup" >
+                 <property name="minimumSize" >
+                  <size>
+                   <width>24</width>
+                   <height>24</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize" >
+                  <size>
+                   <width>24</width>
+                   <height>24</height>
+                  </size>
+                 </property>
+                 <property name="toolTip" >
+                  <string>Hangup/reject the call</string>
+                 </property>
+                 <property name="icon" >
+                  <iconset>hangup_20.png</iconset>
+                 </property>
+                 <property name="iconSize" >
+                  <size>
+                   <width>20</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                 <property name="_yate_identity" stdset="0" >
+                  <string>hangup</string>
+                 </property>
+                 <property name="_yate_normal_icon" stdset="0" >
+                  <string>hangup_20.png</string>
+                 </property>
+                 <property name="_yate_pressed_icon" stdset="0" >
+                  <string>hangup_20_pressed.png</string>
+                 </property>
+                 <property name="_yate_hover_icon" stdset="0" >
+                  <string>hangup_20_hover.png</string>
+                 </property>
+                 <property name="_yate_filterevents" stdset="0" >
+                  <bool>true</bool>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+             <item>
+              <spacer>
+               <property name="orientation" >
+                <enum>Qt::Vertical</enum>
+               </property>
+               <property name="sizeType" >
+                <enum>QSizePolicy::Preferred</enum>
+               </property>
+               <property name="sizeHint" >
+                <size>
+                 <width>20</width>
+                 <height>40</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+            </layout>
+           </item>
+          </layout>
+         </item>
+         <item>
+          <widget class="QFrame" name="frame_buttons" >
+           <property name="sizePolicy" >
+            <sizepolicy vsizetype="Fixed" hsizetype="Preferred" >
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="minimumSize" >
+            <size>
+             <width>16</width>
+             <height>30</height>
+            </size>
+           </property>
+           <property name="maximumSize" >
+            <size>
+             <width>16777215</width>
+             <height>30</height>
+            </size>
+           </property>
+           <property name="styleSheet" >
+            <string>QFrame {
+ border: 0px;
+ border-top: 1px solid #717fa0;
+}</string>
+           </property>
+           <property name="frameShape" >
+            <enum>QFrame::StyledPanel</enum>
+           </property>
+           <layout class="QHBoxLayout" >
+            <property name="spacing" >
+             <number>4</number>
+            </property>
+            <property name="leftMargin" >
+             <number>0</number>
+            </property>
+            <property name="topMargin" >
+             <number>2</number>
+            </property>
+            <property name="rightMargin" >
+             <number>0</number>
+            </property>
+            <property name="bottomMargin" >
+             <number>2</number>
+            </property>
+            <item>
+             <widget class="QToolButton" name="hold" >
+              <property name="minimumSize" >
+               <size>
+                <width>24</width>
+                <height>24</height>
+               </size>
+              </property>
+              <property name="maximumSize" >
+               <size>
+                <width>24</width>
+                <height>24</height>
+               </size>
+              </property>
+              <property name="toolTip" >
+               <string>Activate/deactivate the call</string>
+              </property>
+              <property name="icon" >
+               <iconset>hold_20.png</iconset>
+              </property>
+              <property name="iconSize" >
+               <size>
+                <width>20</width>
+                <height>20</height>
+               </size>
+              </property>
+              <property name="_yate_identity" stdset="0" >
+               <string>hold</string>
+              </property>
+              <property name="_yate_normal_icon" stdset="0" >
+               <string>hold_20.png</string>
+              </property>
+              <property name="_yate_pressed_icon" stdset="0" >
+               <string>hold_20_pressed.png</string>
+              </property>
+              <property name="_yate_hover_icon" stdset="0" >
+               <string>hold_20_hover.png</string>
+              </property>
+              <property name="_yate_filterevents" stdset="0" >
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QToolButton" name="transfer" >
+              <property name="minimumSize" >
+               <size>
+                <width>24</width>
+                <height>24</height>
+               </size>
+              </property>
+              <property name="maximumSize" >
+               <size>
+                <width>24</width>
+                <height>24</height>
+               </size>
+              </property>
+              <property name="toolTip" >
+               <string>Show/hide call transfer</string>
+              </property>
+              <property name="icon" >
+               <iconset>transfer_20.png</iconset>
+              </property>
+              <property name="iconSize" >
+               <size>
+                <width>20</width>
+                <height>20</height>
+               </size>
+              </property>
+              <property name="checkable" >
+               <bool>true</bool>
+              </property>
+              <property name="_yate_identity" stdset="0" >
+               <string>transfer_show</string>
+              </property>
+              <property name="_yate_normal_icon" stdset="0" >
+               <string>transfer_20.png</string>
+              </property>
+              <property name="_yate_pressed_icon" stdset="0" >
+               <string>transfer_20_pressed.png</string>
+              </property>
+              <property name="_yate_hover_icon" stdset="0" >
+               <string>transfer_20_hover.png</string>
+              </property>
+              <property name="_yate_filterevents" stdset="0" >
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QToolButton" name="conference" >
+              <property name="minimumSize" >
+               <size>
+                <width>24</width>
+                <height>24</height>
+               </size>
+              </property>
+              <property name="maximumSize" >
+               <size>
+                <width>24</width>
+                <height>24</height>
+               </size>
+              </property>
+              <property name="toolTip" >
+               <string>Show/hide conference</string>
+              </property>
+              <property name="icon" >
+               <iconset>conference_20.png</iconset>
+              </property>
+              <property name="iconSize" >
+               <size>
+                <width>20</width>
+                <height>20</height>
+               </size>
+              </property>
+              <property name="checkable" >
+               <bool>true</bool>
+              </property>
+              <property name="_yate_identity" stdset="0" >
+               <string>conference_show</string>
+              </property>
+              <property name="_yate_normal_icon" stdset="0" >
+               <string>conference_20.png</string>
+              </property>
+              <property name="_yate_pressed_icon" stdset="0" >
+               <string>conference_20_pressed.png</string>
+              </property>
+              <property name="_yate_hover_icon" stdset="0" >
+               <string>conference_20_hover.png</string>
+              </property>
+              <property name="_yate_filterevents" stdset="0" >
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer>
+              <property name="orientation" >
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="sizeHint" >
+               <size>
+                <width>40</width>
+                <height>2</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QFrame" name="frame_items" >
+        <property name="sizePolicy" >
+         <sizepolicy vsizetype="Preferred" hsizetype="Expanding" >
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <layout class="QVBoxLayout" >
+         <property name="spacing" >
+          <number>0</number>
+         </property>
+         <property name="leftMargin" >
+          <number>0</number>
+         </property>
+         <property name="topMargin" >
+          <number>4</number>
+         </property>
+         <property name="rightMargin" >
+          <number>0</number>
+         </property>
+         <property name="bottomMargin" >
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QFrame" name="frame_items_list" >
+           <property name="sizePolicy" >
+            <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="styleSheet" >
+            <string>QScrollBar {
+  border: 1px solid #717fa0;
+  background: white;
+}
+QScrollBar::handle {
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f6e8e8);
+  border: 1px solid #717fa0;
+}
+QScrollBar:vertical {
+  width: 14px;
+  margin: 16px 0px 16px 0px;
+  border-top: 0px;
+  border-bottom: 0px;
+}
+QScrollBar:horizontal {
+  height: 14px;
+  margin: 0px 16px 0px 16px;
+  border-left: 0px;
+  border-right: 0px;
+}
+QScrollBar::add-line {
+  height: 14px;
+  width: 14px;
+  border: 1px solid #717fa0;
+  subcontrol-origin: margin;
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f6e8e8);
+}
+QScrollBar::sub-line {
+  height: 14px;
+  width: 14px;
+  border: 1px solid #717fa0;
+  subcontrol-origin: margin;
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f6e8e8);
+}
+QScrollBar::handle:vertical { border-left: 0px; border-right: 0px; }
+QScrollBar::handle:horizontal { border-top: 0px; border-bottom: 0px; }
+QScrollBar::add-line:vertical { subcontrol-position: bottom; image: url(scroll_down.png); height: 14px; }
+QScrollBar::sub-line:vertical { subcontrol-position: top; image: url(scroll_up.png); height: 14px; }
+QScrollBar::add-line:horizontal { subcontrol-position: right; image: url(scroll_right.png); width: 14px; }
+QScrollBar::sub-line:horizontal { subcontrol-position: left; image: url(scroll_left.png); width: 14px; }
+QScrollBar::up-arrow:pressed { border: 1px solid #717fa0; }
+QScrollBar::down-arrow:pressed { border: 1px solid #717fa0; }
+QScrollBar::left-arrow:pressed { border: 1px solid #717fa0; }
+QScrollBar::right-arrow:pressed { border: 1px solid #717fa0; }
+</string>
+           </property>
+           <property name="_yate_uiwidget" stdset="0" >
+            <bool>true</bool>
+           </property>
+           <property name="_yate_uiwidget_name" stdset="0" >
+            <string>items</string>
+           </property>
+           <property name="_yate_uiwidget_class" stdset="0" >
+            <string>QtCustomTree</string>
+           </property>
+           <property name="_yate_uiwidget_params" stdset="0" >
+            <stringlist>
+             <string>vertical_scroll_policy=pixel</string>
+             <string>_yate_tree_additemtype=transfer_start</string>
+             <string>_yate_tree_additemtype=transfer_item</string>
+             <string>_yate_tree_additemtype=conf_add</string>
+             <string>_yate_tree_additemtype=conf_item</string>
+             <string>property:_yate_horizontalheader=false</string>
+             <string>property:itemsExpandable=false</string>
+             <string>property:rootIsDecorated=false</string>
+             <string>property:allColumnsShowFocus=false</string>
+             <string>property:styleSheet=QTreeWidget {background: transparent; selection-background:#ffffff;}</string>
+             <string>property:_yate_itemui=transfer_start:channel_transfer_start.ui</string>
+             <string>property:_yate_itemui=transfer_item:channel_transfer_item.ui</string>
+             <string>property:_yate_itemui=conf_add:channel_conf_add.ui</string>
+             <string>property:_yate_itemui=conf_item:channel_conf_item.ui</string>
+             <string>property:_yate_itemheight=transfer_start:25</string>
+             <string>property:_yate_itemheight=transfer_item:25</string>
+             <string>property:_yate_itemheight=conf_add:25</string>
+             <string>property:_yate_itemheight=conf_item:25</string>
+            </stringlist>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

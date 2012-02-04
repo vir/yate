@@ -1,3 +1,14 @@
+yate (3.3.3.svn4833) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4833: + Avoids unexpected exit by spurious
+    SIGALRM that can happen on some flawed operating systems.  + Ignore
+    by default the SIGALRM signal, sleep() should install its own
+    handler when needed.  + Fixed a debug mode output so the compiler
+    can check the printf expression.  + Removed scripting classes from
+    main library.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sun, 05 Feb 2012 02:19:26 +0400
+
 yate (3.3.3.svn4830) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4830: + Improved SCCP segmentation process.

@@ -763,6 +763,7 @@ static int supervise(void)
     ::signal(SIGABRT,superhandler);
     ::signal(SIGUSR1,superhandler);
     ::signal(SIGUSR2,superhandler);
+    ::signal(SIGALRM,SIG_IGN);
     int retcode = 0;
     while (s_runagain) {
 	int wdogfd[2];
@@ -1029,6 +1030,7 @@ int Engine::run()
     }
 #else
     ::signal(SIGPIPE,SIG_IGN);
+    ::signal(SIGALRM,SIG_IGN);
 #endif
     s_cfg = configFile(s_cfgfile);
     s_cfg.load();

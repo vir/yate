@@ -7816,6 +7816,23 @@ bool DefaultLogic::handleTextChanged(NamedList* params, Window* wnd)
 	    return true;
 	return false;
     }
+    // Search contact
+    if (sender == "search_contact") {
+	updateFilter(s_contactList,wnd,(*params)["text"],"name","number/uri");
+	return true;
+    }
+    // Conf/transfer targets
+    bool conf = sender.startsWith("conf_add_target:");
+    if (conf || sender.startsWith("transfer_start_target:")) {
+	int l = conf ? 16 : 22;
+	int pos = sender.find(":",l + 1);
+	if (pos > 0) {
+	    String chan = sender.substr(l,pos - l);
+	    const char* suffix = conf ? "_conf_target" : "trans_target";
+	    s_generic.setParam(chan + suffix,(*params)["text"]);
+	}
+	return true;
+    }
     // Chat input changes
     if (Client::valid() && Client::self()->getBoolOpt(Client::OptNotifyChatState)) {
 	ClientContact* c = 0;
@@ -7837,22 +7854,8 @@ bool DefaultLogic::handleTextChanged(NamedList* params, Window* wnd)
 		    room->getChatInput(id,tmp);
 	    }
 	    ContactChatNotify::update(c,room,m,text->null());
+	    return true;
 	}
-    }
-    // Search contact
-    if (sender == "search_contact")
-	updateFilter(s_contactList,wnd,(*params)["text"],"name","number/uri");
-    // Conf/transfer targets
-    bool conf = sender.startsWith("conf_add_target:");
-    if (conf || sender.startsWith("transfer_start_target:")) {
-	int l = conf ? 16 : 22;
-	int pos = sender.find(":",l + 1);
-	if (pos > 0) {
-	    String chan = sender.substr(l,pos - l);
-	    const char* suffix = conf ? "_conf_target" : "trans_target";
-	    s_generic.setParam(chan + suffix,(*params)["text"]);
-	}
-	return 0;
     }
     return false;
 }

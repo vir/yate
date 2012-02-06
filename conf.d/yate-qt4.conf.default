@@ -7,5 +7,6 @@ h323chan.yate=yes
 [client]
 ;skin=default
 ;style=
+;stylesheet_file=
 ;device=
 ;greeting=Yate ${version} - ${release}

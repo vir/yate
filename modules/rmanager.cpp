@@ -953,9 +953,9 @@ bool Connection::processLine(const char *line, bool saveLine)
     }
     else if (str.startSkip("help") || str.startSkip("?"))
     {
-	Message m("engine.help");
 	if (str)
 	{
+	    Message m("engine.help");
 	    const CommandInfo* info = s_cmdInfo;
 	    for (; info->name; info++) {
 		if (str == info->name) {
@@ -976,6 +976,7 @@ bool Connection::processLine(const char *line, bool saveLine)
 	}
 	else
 	{
+	    Message m("engine.help",0,true);
 	    m.retValue() = "Available commands:\r\n";
 	    const CommandInfo* info = s_cmdInfo;
 	    for (; info->name; info++) {

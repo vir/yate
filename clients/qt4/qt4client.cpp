@@ -641,6 +641,33 @@ static bool createProperty(QObject* obj, const char* name, QVariant::Type t,
     return true;
 }
 
+// Replace file path in URLs in a character array
+static void addFilePathUrl(QByteArray& a, const String& file)
+{
+    if (!file)
+	return;
+    QString path = QDir::fromNativeSeparators(QtClient::setUtf8(file));
+    // Truncate after last path separator (lastIndexOf() returns -1 if not found)
+    path.truncate(path.lastIndexOf(QString("/")) + 1);
+    if (!path.size())
+	return;
+    int start = 0;
+    int end = -1;
+    while ((start = a.indexOf("url(",end + 1)) > 0) {
+	start += 4;
+	end = a.indexOf(")",start);
+	if (end <= start)
+	    break;
+	// Add
+	int len = end - start;
+	QByteArray tmp = a.mid(start,len);
+	if (tmp.indexOf('/') != -1)
+	    continue;
+	tmp.insert(0,path);
+	a.replace(start,len,tmp);
+    }
+}
+
 
 /**
  * Qt4ClientFactory
@@ -813,28 +840,8 @@ UIBuffer* UIBuffer::build(const String& name)
 	delete qArray;
 	return 0;
     }
-
     // Add URLs path when missing
-    QString path = QDir::fromNativeSeparators(QtClient::setUtf8(name));
-    // Truncate after last path separator (lastIndexOf() returns -1 if not found)
-    path.truncate(path.lastIndexOf(QString("/")) + 1);
-    if (path.size()) {
-	int start = 0;
-	int end = -1;
-	while ((start = qArray->indexOf("url(",end + 1)) > 0) {
-	    start += 4;
-	    end = qArray->indexOf(")",start);
-	    if (end <= start)
-		break;
-	    // Add
-	    int len = end - start;
-	    QByteArray tmp = qArray->mid(start,len);
-	    if (tmp.indexOf('/') != -1)
-	        continue;
-	    tmp.insert(0,path);
-	    qArray->replace(start,len,tmp);
-	}
-    }
+    addFilePathUrl(*qArray,name);
     return new UIBuffer(name,qArray);
 }
 
@@ -3220,6 +3227,7 @@ void QtClient::run()
     char* argv =  0;
     m_app = new QApplication(argc,&argv);
     m_app->setQuitOnLastWindowClosed(false);
+    setAppStyleSheet(Engine::config().getValue("client","stylesheet_file","stylesheet"));
     String imgRead;
     QList<QByteArray> imgs = QImageReader::supportedImageFormats();
     for (int i = 0; i < imgs.size(); i++)
@@ -4075,6 +4083,42 @@ bool QtClient::getPixmapFromCache(QPixmap& pixmap, const QString& file)
 #endif
     QPixmapCache::insert(file,pixmap);
     return true;
+}
+
+// Set application style sheet from file.
+bool QtClient::setAppStyleSheet(const String& file)
+{
+    if (!qApp) {
+	Debug(ClientDriver::self(),DebugNote,"Set application stylesheet called without app");
+	return false;
+    }
+    String shf;
+    QString sh;
+    const char* oper = 0;
+    if (file) {
+	shf = file;
+	if (shf.find('/') < 0 && shf.find('\\') < 0)
+	    shf = Client::s_skinPath + shf;
+	QFile f(setUtf8(shf));
+	if (f.open(QIODevice::ReadOnly)) {
+	    QByteArray a = f.readAll();
+	    if (a.size()) {
+		addFilePathUrl(a,shf);
+		sh = QString::fromUtf8(a.constData());
+	    }
+	    else if (f.error() != QFile::NoError)
+		oper = "read";
+	}
+	else
+	    oper = "open";
+	if (oper)
+	    Debug(ClientDriver::self(),DebugWarn,
+		"Failed to %s stylesheet file '%s': %d '%s'",
+		oper,shf.c_str(),f.error(),f.errorString().toUtf8().constData());
+    }
+    if (!oper)
+	qApp->setStyleSheet(sh);
+    return oper == 0;
 }
 
 

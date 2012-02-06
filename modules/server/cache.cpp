@@ -1708,7 +1708,7 @@ bool CacheModule::commandHelp(String& retVal, const String& line)
 	return true;
     }
     retVal << "  " << s_cmdCacheFormat << "\r\n";
-    return true;
+    return false;
 }
 
 }; // anonymous namespace

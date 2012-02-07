@@ -60,6 +60,9 @@ QToolButton:disabled {
   border: 1px solid #a0a0a0;
   color: #a0a0a0;
 }
+QToolButton::menu-indicator {
+  subcontrol-origin: border;
+}
 
 /* QPushButton */
 

@@ -75,7 +75,7 @@
      <property name="_yate_uiwidget_params" stdset="0" >
       <stringlist>
        <string>type=tabs</string>
-       <string>property:_yate_itemstyle=QWidget#${name}_chat { background:#ffffff;}</string>
+       <string>property:_yate_itemstyle=:QWidget#${name}_chat { background:#ffffff; }</string>
        <string>delete_item_action=deleteitem</string>
        <string>delete_item_type=native</string>
        <string>delete_item_property:styleSheet=QToolButton{qproperty-icon:url(close.png);qproperty-toolTip:"Close chat";qproperty-arrowType:"Qt::NoArrow";background:transparent;}QToolButton:hover{background:lightgrey;}</string>

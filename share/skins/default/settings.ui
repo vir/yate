@@ -37,32 +37,10 @@
    <iconset>configure.png</iconset>
   </property>
   <property name="styleSheet" >
-   <string>QWidget#settings {
-  background:#f7f5fd;
-}
-QLineEdit {
-  color:#333333;
-  border: 1px solid #717fa0;
-  border-radius: 4px;
-}
-QToolButton {
-  border: 1px solid #717fa0;
-  border-radius: 4px;
-  font-size: 11px;
-  color: #333333;
-  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f6e8e8);
-}
-QToolButton:hover {
-  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f9f3f3);
-}
-QToolButton:pressed {
-  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #f6e8e8, stop: 1 #ffffff);
-}
-QCheckBox::indicator:checked { image: url(checkbox_on.png); }
-QCheckBox::indicator:unchecked { image: url(checkbox_off.png); }
-QRadioButton::indicator:checked { image: url(radio_on.png); }
-QRadioButton::indicator:unchecked { image: url(radio_off.png); }
-</string>
+   <string/>
+  </property>
+  <property name="_yate_window" stdset="0" >
+   <bool>true</bool>
   </property>
   <layout class="QVBoxLayout" >
    <property name="spacing" >
@@ -89,33 +67,10 @@ QRadioButton::indicator:unchecked { image: url(radio_off.png); }
       </size>
      </property>
      <property name="styleSheet" >
-      <string>QTabWidget::pane {      
-  border: 1px solid #717fa0;
-  background:  #ffffff;
-}
-QTabBar { font: 12px; }
-QTabBar::tab {
-  padding: 1px 1px 1px 1px;
-  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f6e8e8);
-  border: 1px solid #717fa0;
-  border-top-left-radius: 4px;
-  border-top-right-radius: 4px;
-  min-height: 3ex;
-}
-QTabBar::tab:hover { background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f9f3f3); }
-QTabBar::tab:selected {
-  border-bottom-color: #ffffff;
-  padding-top: 0px;
-  border-top: 4px solid #73a9e1;
-  border-top-left-radius: 4px;
-  border-top-right-radius: 4px;
-  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #f9efef, stop: 1 #ffffff);
-}
-QTabBar::tab:!selected { margin-top: 4px; }
-</string>
+      <string/>
      </property>
      <property name="currentIndex" >
-      <number>3</number>
+      <number>2</number>
      </property>
      <widget class="QWidget" name="settings_general" >
       <attribute name="title" >
@@ -404,13 +359,13 @@ QTabBar::tab:!selected { margin-top: 4px; }
             <property name="minimumSize" >
              <size>
               <width>175</width>
-              <height>0</height>
+              <height>22</height>
              </size>
             </property>
             <property name="maximumSize" >
              <size>
               <width>175</width>
-              <height>16777215</height>
+              <height>22</height>
              </size>
             </property>
             <property name="toolTip" >
@@ -439,13 +394,13 @@ QTabBar::tab:!selected { margin-top: 4px; }
             <property name="minimumSize" >
              <size>
               <width>175</width>
-              <height>0</height>
+              <height>22</height>
              </size>
             </property>
             <property name="maximumSize" >
              <size>
               <width>175</width>
-              <height>16777215</height>
+              <height>22</height>
              </size>
             </property>
             <property name="toolTip" >
@@ -477,13 +432,13 @@ QTabBar::tab:!selected { margin-top: 4px; }
             <property name="minimumSize" >
              <size>
               <width>175</width>
-              <height>0</height>
+              <height>22</height>
              </size>
             </property>
             <property name="maximumSize" >
              <size>
               <width>175</width>
-              <height>16777215</height>
+              <height>22</height>
              </size>
             </property>
             <property name="toolTip" >
@@ -555,6 +510,9 @@ QTabBar::tab:!selected { margin-top: 4px; }
        </item>
        <item>
         <layout class="QHBoxLayout" >
+         <property name="topMargin" >
+          <number>6</number>
+         </property>
          <item>
           <widget class="QToolButton" name="action_show_archive" >
            <property name="sizePolicy" >

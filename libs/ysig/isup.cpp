@@ -702,7 +702,7 @@ static unsigned char setDigits(SS7MSU& msu, const char* val, unsigned char nai, 
 	else if ('D' == c)
 	    n = 13;
 	else if ('E' == c)
-	    n = 13;
+	    n = 14;
 	else
 	    continue;
 	odd = !odd;

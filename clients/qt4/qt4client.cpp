@@ -3227,7 +3227,7 @@ void QtClient::run()
     char* argv =  0;
     m_app = new QApplication(argc,&argv);
     m_app->setQuitOnLastWindowClosed(false);
-    setAppStyleSheet(Engine::config().getValue("client","stylesheet_file","stylesheet"));
+    setAppStyleSheet(Engine::config().getValue("client","stylesheet_file","stylesheet.css"));
     String imgRead;
     QList<QByteArray> imgs = QImageReader::supportedImageFormats();
     for (int i = 0; i < imgs.size(); i++)

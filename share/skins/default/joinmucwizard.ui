@@ -1041,7 +1041,13 @@
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="cancel" >
+      <widget class="QToolButton" name="cancel" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
        <property name="minimumSize" >
         <size>
          <width>0</width>
@@ -1057,11 +1063,17 @@
        <property name="text" >
         <string>Cancel</string>
        </property>
-       <property name="iconSize" >
-        <size>
-         <width>16</width>
-         <height>16</height>
-        </size>
+       <property name="toolButtonStyle" >
+        <enum>Qt::ToolButtonTextBesideIcon</enum>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>cancel.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>cancel_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>cancel_hover.png</string>
        </property>
       </widget>
      </item>

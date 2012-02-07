@@ -61,11 +61,12 @@
       <string>QTextEdit {
   background: transparent;
   font-size: 11px;
+  border: 0px;
 }
 </string>
      </property>
      <property name="frameShape" >
-      <enum>QFrame::NoFrame</enum>
+      <enum>QFrame::StyledPanel</enum>
      </property>
      <property name="tabChangesFocus" >
       <bool>true</bool>

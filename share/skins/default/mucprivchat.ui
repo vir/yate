@@ -18,126 +18,11 @@
   <property name="focusPolicy" >
    <enum>Qt::StrongFocus</enum>
   </property>
-  <property name="styleSheet" >
-   <string>QWidget#mucprivchat {
-  background:#f7f5fd;
-}
-QLabel {background:none; font-size: 11px;}
-QMenu {
-  border: 1px solid #717fa0;
-  background: #ffffff;
-  selection-color: #ffffff;
-  selection-background-color: #48a4d7;
-  color:#333333;
-}
-QMenu::item:disabled { color: #bbbbbb;}
-QMenu::separator { color: #a9c2c2;}
-QLineEdit {
-  color:#333333;
-  border: 1px solid #717fa0;
-  border-radius: 4px;
-}
-QListWidget {
-  color:#333333;
-}
-QAbstractButton {
-  border: 1px solid #717fa0;
-  border-radius: 4px;
-  font-size: 11px;
-  color: #333333;
-  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f6e8e8);
-}
-QAbstractButton:hover {
-  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f9f3f3);
-}
-QAbstractButton:pressed {
-  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #f6e8e8, stop: 1 #ffffff);
-}
-QComboBox::down-arrow { image: url(cb_arrow.png); }
-QComboBox::down-arrow:on { top: 1px; left: 1px; }
-QComboBox:!editable {
-  padding-left: 2px;
-  padding-right: 2px;
-  border: 1px solid #717fa0;
-  border-radius: 4px;
-}
-QComboBox:editable {
-  padding-left: 2px;
-  padding-right: 25px;
-  border: 1px solid #717fa0;
-  border-radius: 4px;
-}
-QComboBox::drop-down {
-  width: 22px;
-  border-left: 1px solid #717fa0;
-}
-QCheckBox::indicator:checked { image: url(checkbox_on.png); }
-QCheckBox::indicator:unchecked { image: url(checkbox_off.png); }
-QRadioButton::indicator:checked { image: url(radio_on.png); }
-QRadioButton::indicator:unchecked { image: url(radio_off.png); }
-QTreeWidget {
-  border: 0px;
-  background:white;
-  selection-background-color: lightblue;
-}
-QTreeView::branch { background:white; }
-QHeaderView::section {
-  padding-left: 4px;
-  border: 0px;
-  border-right: 1px solid #e3e6e9;
-  border-bottom: 1px solid #a9c2c2;
-  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #fbeded);
-}
-QScrollBar {
-  border: 1px solid #717fa0;
-  background: white;
-}
-QScrollBar::handle {
-  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f6e8e8);
-  border: 1px solid #717fa0;
-}
-QScrollBar:vertical {
-  width: 14px;
-  margin: 16px 0px 16px 0px;
-  border-top: 0px;
-  border-bottom: 0px;
-  border-right: 0px;
-}
-QScrollBar:horizontal {
-  height: 14px;
-  margin: 0px 16px 0px 16px;
-  border-left: 0px;
-  border-right: 0px;
-  border-bottom: 0px;
-}
-QScrollBar::add-line {
-  height: 13px;
-  width: 13px;
-  border: 1px solid #717fa0;
-  subcontrol-origin: margin;
-  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f6e8e8);
-}
-QScrollBar::sub-line {
-  height: 13px;
-  width: 13px;
-  border: 1px solid #717fa0;
-  subcontrol-origin: margin;
-  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f6e8e8);
-}
-QScrollBar::handle:vertical { border-left: 0px; border-right: 0px; }
-QScrollBar::handle:horizontal { border-top: 0px; border-bottom: 0px; }
-QScrollBar::add-line:vertical { subcontrol-position: bottom; image: url(scroll_down.png); height: 14px; }
-QScrollBar::sub-line:vertical { subcontrol-position: top; image: url(scroll_up.png); height: 14px; }
-QScrollBar::add-line:horizontal { subcontrol-position: right; image: url(scroll_right.png); width: 14px; }
-QScrollBar::sub-line:horizontal { subcontrol-position: left; image: url(scroll_left.png); width: 14px; }
-QScrollBar::up-arrow:pressed { border: 1px solid #717fa0; }
-QScrollBar::down-arrow:pressed { border: 1px solid #717fa0; }
-QScrollBar::left-arrow:pressed { border: 1px solid #717fa0; }
-QScrollBar::right-arrow:pressed { border: 1px solid #717fa0; }
-</string>
-  </property>
   <property name="_yate_keypress_redirect" stdset="0" >
    <string>message</string>
+  </property>
+  <property name="_yate_window" stdset="0" >
+   <bool>false</bool>
   </property>
   <layout class="QVBoxLayout" >
    <property name="spacing" >
@@ -174,15 +59,6 @@ QScrollBar::right-arrow:pressed { border: 1px solid #717fa0; }
        <width>16777215</width>
        <height>16777215</height>
       </size>
-     </property>
-     <property name="styleSheet" >
-      <string>QTextEdit {
-  background-color: #ffffff;
-  border: 1px solid #b3b6b0;
-  color: #666666;
-  font-family: Arial;
-  font-size: 12px;
-}</string>
      </property>
      <property name="_yate_uiwidget" stdset="0" >
       <bool>true</bool>
@@ -248,22 +124,25 @@ QScrollBar::right-arrow:pressed { border: 1px solid #717fa0; }
       <item>
        <widget class="QTextEdit" name="message" >
         <property name="sizePolicy" >
-         <sizepolicy vsizetype="MinimumExpanding" hsizetype="Expanding" >
+         <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
           <horstretch>0</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
         </property>
+        <property name="minimumSize" >
+         <size>
+          <width>0</width>
+          <height>54</height>
+         </size>
+        </property>
         <property name="maximumSize" >
          <size>
           <width>16777215</width>
-          <height>100</height>
+          <height>54</height>
          </size>
         </property>
         <property name="focusPolicy" >
          <enum>Qt::StrongFocus</enum>
-        </property>
-        <property name="styleSheet" >
-         <string>QTextEdit {background-color: #ffffff; border: 1px solid #b3b6b0; color: #666666; font-family: Arial; font-size: 12px;}</string>
         </property>
         <property name="tabChangesFocus" >
          <bool>true</bool>
@@ -295,61 +174,53 @@ QScrollBar::right-arrow:pressed { border: 1px solid #717fa0; }
        </widget>
       </item>
       <item>
-       <layout class="QVBoxLayout" >
-        <property name="rightMargin" >
-         <number>0</number>
+       <widget class="QToolButton" name="send_chat_button" >
+        <property name="minimumSize" >
+         <size>
+          <width>60</width>
+          <height>54</height>
+         </size>
         </property>
-        <item>
-         <widget class="QToolButton" name="send_chat_button" >
-          <property name="minimumSize" >
-           <size>
-            <width>60</width>
-            <height>50</height>
-           </size>
-          </property>
-          <property name="maximumSize" >
-           <size>
-            <width>60</width>
-            <height>50</height>
-           </size>
-          </property>
-          <property name="focusPolicy" >
-           <enum>Qt::NoFocus</enum>
-          </property>
-          <property name="toolTip" >
-           <string>Send chat</string>
-          </property>
-          <property name="iconSize" >
-           <size>
-            <width>32</width>
-            <height>32</height>
-           </size>
-          </property>
-          <property name="autoRaise" >
-           <bool>true</bool>
-          </property>
-          <property name="_yate_noautoconnect" stdset="0" >
-           <bool>true</bool>
-          </property>
-          <property name="_yate_setaction" stdset="0" >
-           <string>send_chat</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <spacer>
-          <property name="orientation" >
-           <enum>Qt::Vertical</enum>
-          </property>
-          <property name="sizeHint" >
-           <size>
-            <width>0</width>
-            <height>0</height>
-           </size>
-          </property>
-         </spacer>
-        </item>
-       </layout>
+        <property name="maximumSize" >
+         <size>
+          <width>60</width>
+          <height>54</height>
+         </size>
+        </property>
+        <property name="focusPolicy" >
+         <enum>Qt::NoFocus</enum>
+        </property>
+        <property name="toolTip" >
+         <string>Send chat</string>
+        </property>
+        <property name="iconSize" >
+         <size>
+          <width>32</width>
+          <height>32</height>
+         </size>
+        </property>
+        <property name="autoRaise" >
+         <bool>true</bool>
+        </property>
+        <property name="_yate_noautoconnect" stdset="0" >
+         <bool>true</bool>
+        </property>
+        <property name="_yate_setaction" stdset="0" >
+         <string>send_chat</string>
+        </property>
+        <property name="_yate_normal_icon" stdset="0" >
+         <string>sendchat_32.png</string>
+        </property>
+        <property name="_yate_pressed_icon" stdset="0" >
+         <string>sendchat_32_pressed.png</string>
+        </property>
+        <property name="_yate_hover_icon" stdset="0" >
+         <string>sendchat_32_hover.png</string>
+        </property>
+        <property name="_yate_filterevents" stdset="0" >
+         <bool>true</bool>
+        </property>
+       </widget>
       </item>
      </layout>
     </widget>
@@ -522,22 +393,5 @@ QScrollBar::right-arrow:pressed { border: 1px solid #717fa0; }
   <tabstop>message</tabstop>
  </tabstops>
  <resources/>
- <connections>
-  <connection>
-   <sender>send_chat_button</sender>
-   <signal>clicked()</signal>
-   <receiver>message</receiver>
-   <slot>setFocus()</slot>
-   <hints>
-    <hint type="sourcelabel" >
-     <x>531</x>
-     <y>285</y>
-    </hint>
-    <hint type="destinationlabel" >
-     <x>249</x>
-     <y>289</y>
-    </hint>
-   </hints>
-  </connection>
- </connections>
+ <connections/>
 </ui>

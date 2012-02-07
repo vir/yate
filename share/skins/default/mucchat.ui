@@ -21,21 +21,6 @@
   <property name="contextMenuPolicy" >
    <enum>Qt::ActionsContextMenu</enum>
   </property>
-  <property name="styleSheet" >
-   <string>QAbstractButton {
-  border: 1px solid #717fa0;
-  border-radius: 4px;
-  font-size: 11px;
-  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f6e8e8)
-}
-QAbstractButton:hover {
-  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f9f3f3)
-}
-QAbstractButton:pressed {
-  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #f6e8e8, stop: 1 #ffffff)
-}
-</string>
-  </property>
   <property name="_yate_keypress_redirect" stdset="0" >
    <string>message</string>
   </property>
@@ -412,15 +397,6 @@ QAbstractButton:pressed {
         <property name="focusPolicy" >
          <enum>Qt::StrongFocus</enum>
         </property>
-        <property name="styleSheet" >
-         <string>QTextEdit {
-  background-color: #ffffff;
-  border: 1px solid #717fa0;
-  color: #666666;
-  font-family: Arial;
-  font-size: 12px;
-}</string>
-        </property>
         <property name="tabChangesFocus" >
          <bool>true</bool>
         </property>
@@ -487,6 +463,9 @@ QAbstractButton:pressed {
         </property>
         <property name="_yate_hover_icon" stdset="0" >
          <string>sendchat_32_hover.png</string>
+        </property>
+        <property name="_yate_filterevents" stdset="0" >
+         <bool>true</bool>
         </property>
        </widget>
       </item>

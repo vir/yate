@@ -3311,9 +3311,7 @@ void QtClient::loadWindows(const char* file)
 bool QtClient::chooseFile(Window* parent, NamedList& params)
 {
     QtWindow* wnd = static_cast<QtWindow*>(parent);
-    // Don't set the dialog's parent: window's style sheet will be propagated to
-    //  child dialog and we might have incomplete (not full) custom styled controls
-    QFileDialog* dlg = new QFileDialog(0,setUtf8(params.getValue(YSTRING("caption"))),
+    QFileDialog* dlg = new QFileDialog(wnd,setUtf8(params.getValue(YSTRING("caption"))),
 	setUtf8(params.getValue(YSTRING("dir"))));
 
     if (wnd)
@@ -3332,9 +3330,8 @@ bool QtClient::chooseFile(Window* parent, NamedList& params)
     // This dialog should always stay on top
     dlg->setWindowFlags(dlg->windowFlags() | Qt::WindowStaysOnTopHint);
 
-    // Window modality doesn't work without a parent so make it application modal
     if (params.getBoolValue(YSTRING("modal"),true))
-	dlg->setWindowModality(Qt::ApplicationModal);
+	dlg->setWindowModality(Qt::WindowModal);
 
     // Filters
     NamedString* f = params.getParam(YSTRING("filters"));

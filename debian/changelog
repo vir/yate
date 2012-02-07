@@ -1,3 +1,18 @@
+yate (3.3.3.svn4850) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4850: + Added application stylesheet file.
+    Removed global stylesheet from UI files. Increased font size.  +
+    Show grid in muc invite contacts list.  + Set svn eol-style
+    property.  + Use a background image in channel item conference and
+    transfer widget items.  + Changed stylesheet file name.  + Changed
+    tool button menu indicator position.  + Encode and decode the non-
+    standard digit 14 as letter E in ISUP and SCCP.  + Fixed typo
+    (copy/paste).  + Fixed widget borders.  + Made file dialogs window
+    modal.  + Replace push button with tool button.  + Fixed docked chat
+    property.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 08 Feb 2012 02:19:24 +0400
+
 yate (3.3.3.svn4838) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4838: + Return true when text changed notify

@@ -331,7 +331,7 @@ static void getDigits(String& num, bool oddNum, const unsigned char* buf, unsign
     bool ignoreUnk)
 {
     static const char digits1[] = "0123456789\0BC\0\0.";
-    static const char digits2[] = "0123456789ABCD?.";
+    static const char digits2[] = "0123456789ABCDE.";
     const char* digits = ignoreUnk ? digits1 : digits2;
     for (unsigned int i = 0; i < len; i++) {
 	num += digits[buf[i] & 0x0f];
@@ -645,6 +645,8 @@ static DataBlock* setDigits(const char* val)
 	else if ('C' == c)
 	    n = 12;
 	else if ('D' == c)
+	    n = 13;
+	else if ('E' == c)
 	    n = 13;
 	else
 	    continue;

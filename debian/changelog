@@ -1,3 +1,18 @@
+yate (3.3.3.svn4860) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4860: + Fixed SCCP LUDT maximum data length
+    calculation.  + Removed SS7 route MSU size upper boundary.  +
+    Changed stylesheet, border radius and combo drop down background.  +
+    Changed button type from push to tool button.  + Customized
+    QSpinBox.  + Changed menus style sheet and images.  + Added resource
+    list widget frame in contact info.  + Fixed scrollbar stylesheet.  +
+    Added missing image files.  + Changed images.  + This allows
+    returning P-RTP-Stat when the other party initiates the hangup.  +
+    Clear any local SIP media channels before populating the 200 answer
+    to BYE.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 09 Feb 2012 02:19:20 +0400
+
 yate (3.3.3.svn4850) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4850: + Added application stylesheet file.

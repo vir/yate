@@ -514,9 +514,9 @@
 ;  For example for 2 links shift = 1.
 ;  A value of 8 or higher disables load balancing.
 ;
-; Size represents the maximum data size that can be transported on this route.
+; Size represents the maximum MSU size that can be transported on this route.
 ; The default vaue is 272 -> maximum MSU size on TDM.
-; If the route can transport more data, a value up to 3904 should be set to
+; If the route can transport more data, a value up to 4000 should be set to
 ;  avoid SCCP message fragmentation.
 ;
 ; Example: route=ITU,2-2-2,100,1,272
@@ -529,9 +529,9 @@
 ;
 ; The priority is always zero so an adjacent route will always match first.
 ;
-; Size represents the maximum data size that can be transported on this route.
+; Size represents the maximum MSU size that can be transported on this route.
 ; The default vaue is 272 -> maximum MSU size on TDM.
-; If the route can transport more data, a value up to 3904 should be set to
+; If the route can transport more data, a value up to 4000 should be set to
 ;  avoid SCCP message fragmentation
 ;
 ; Example: adjacent=ANSI,40-50-60,272

@@ -2730,7 +2730,7 @@ _QScrollBar:horizontal {
   </action>
   <action name="acc_new" >
    <property name="icon" >
-    <iconset>addaccount.png</iconset>
+    <iconset>addaccount_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Add account</string>
@@ -2738,7 +2738,7 @@ _QScrollBar:horizontal {
   </action>
   <action name="action_show_accountlist" >
    <property name="icon" >
-    <iconset>user.png</iconset>
+    <iconset>user_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Accounts</string>
@@ -2746,7 +2746,7 @@ _QScrollBar:horizontal {
   </action>
   <action name="action_show_settings" >
    <property name="icon" >
-    <iconset>configure.png</iconset>
+    <iconset>configure_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Options</string>
@@ -2757,7 +2757,7 @@ _QScrollBar:horizontal {
   </action>
   <action name="chatcontact_chat" >
    <property name="icon" >
-    <iconset>chat.png</iconset>
+    <iconset>chat_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Chat</string>
@@ -2780,7 +2780,7 @@ _QScrollBar:horizontal {
   </action>
   <action name="chatcontact_call" >
    <property name="icon" >
-    <iconset>phone.png</iconset>
+    <iconset>phone_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Call</string>
@@ -2788,7 +2788,7 @@ _QScrollBar:horizontal {
   </action>
   <action name="chatcontact_new" >
    <property name="icon" >
-    <iconset>addcontact.png</iconset>
+    <iconset>add_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Add</string>
@@ -2796,7 +2796,7 @@ _QScrollBar:horizontal {
   </action>
   <action name="chatcontact_edit" >
    <property name="icon" >
-    <iconset>edit.png</iconset>
+    <iconset>edit_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Edit</string>
@@ -2807,7 +2807,7 @@ _QScrollBar:horizontal {
   </action>
   <action name="chatcontact_del" >
    <property name="icon" >
-    <iconset>delete.png</iconset>
+    <iconset>delete_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Remove</string>
@@ -2891,7 +2891,7 @@ _QScrollBar:horizontal {
   </action>
   <action name="joinmuc_wizard" >
    <property name="icon" >
-    <iconset>muc.png</iconset>
+    <iconset>muc_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Join chat room</string>
@@ -2899,7 +2899,7 @@ _QScrollBar:horizontal {
   </action>
   <action name="acc_new_wizard" >
    <property name="icon" >
-    <iconset>addaccountwiz.png</iconset>
+    <iconset>addaccountwiz_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Add account wizard</string>
@@ -2907,7 +2907,7 @@ _QScrollBar:horizontal {
   </action>
   <action name="messages_show" >
    <property name="icon" >
-    <iconset>notif.png</iconset>
+    <iconset>notif_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Show notifications</string>
@@ -2915,7 +2915,7 @@ _QScrollBar:horizontal {
   </action>
   <action name="chatcontact_info" >
    <property name="icon" >
-    <iconset>info.png</iconset>
+    <iconset>info_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Info</string>
@@ -2926,7 +2926,7 @@ _QScrollBar:horizontal {
     <bool>true</bool>
    </property>
    <property name="icon" >
-    <iconset>events.png</iconset>
+    <iconset>events_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Debug window</string>
@@ -2962,7 +2962,7 @@ _QScrollBar:horizontal {
   </action>
   <action name="send_file" >
    <property name="icon" >
-    <iconset>sendfile.png</iconset>
+    <iconset>sendfile_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Send file</string>
@@ -2970,7 +2970,7 @@ _QScrollBar:horizontal {
   </action>
   <action name="action_show_fileprogress" >
    <property name="icon" >
-    <iconset>file_trans.png</iconset>
+    <iconset>file_trans_menu.png</iconset>
    </property>
    <property name="text" >
     <string>File transfer</string>
@@ -2978,7 +2978,7 @@ _QScrollBar:horizontal {
   </action>
   <action name="action_show_archive" >
    <property name="icon" >
-    <iconset>archive.png</iconset>
+    <iconset>archive_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Archive</string>
@@ -2994,7 +2994,7 @@ _QScrollBar:horizontal {
   </action>
   <action name="chatroom_new" >
    <property name="icon" >
-    <iconset>addchatroom.png</iconset>
+    <iconset>addchatroom_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Add chat room</string>

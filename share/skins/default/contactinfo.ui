@@ -385,6 +385,11 @@ color:blue;</string>
        <verstretch>0</verstretch>
       </sizepolicy>
      </property>
+     <property name="styleSheet" >
+      <string>QFrame#frame_resources {
+  border: 1px solid #717fa0;
+}</string>
+     </property>
      <property name="_yate_uiwidget" stdset="0" >
       <bool>true</bool>
      </property>

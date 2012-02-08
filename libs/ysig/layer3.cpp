@@ -30,7 +30,6 @@
 using namespace TelEngine;
 
 #define MAX_TDM_DATA_SIZE 272
-#define MAX_SIGTRAN_DATA_SIZE 3904 // Maximum ANSI LUDT(SCCP) length
 
 static const TokenDict s_dict_control[] = {
     { "show",    SS7MTP3::Status },
@@ -219,11 +218,6 @@ bool SS7Layer3::buildRoutes(const NamedList& params)
 		Debug(this,DebugNote,"MaxDataLength is too small %d. Setting it to %d",
 			maxLength,MAX_TDM_DATA_SIZE);
 		maxLength = MAX_TDM_DATA_SIZE;
-	    }
-	    if (maxLength > MAX_SIGTRAN_DATA_SIZE) {
-		Debug(this,DebugNote,"MaxDataLength is too big %d. Setting it to %d",
-		      maxLength,MAX_SIGTRAN_DATA_SIZE);
-		maxLength = MAX_SIGTRAN_DATA_SIZE;
 	    }
 	} while (false);
 	TelEngine::destruct(route);

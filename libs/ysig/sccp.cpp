@@ -43,6 +43,9 @@ using namespace TelEngine;
 // Minimum data size in a SCCP message
 #define MIN_DATA_SIZE 2
 
+#define MAX_DATA_ITU 3952
+#define MAX_DATA_ANSI 3904
+
 static const char* s_userMutexName = "SCCPUserTransport";
 static const char* s_sccpMutexName = "SCCPUserList";
 static const char* s_managementMutexName = "SCCPManagement";
@@ -3167,14 +3170,11 @@ void SS7SCCP::getMaxDataLen(const SS7MsgSCCP* msg, const SS7Label& label,
     // Adjust maxLen to represent maximum data in the message.
     unsigned int headerLength = 3; // MsgType + ProtocolClass
     // Memorize pointer start to adjust data size.
-    unsigned int pointerLen = 1;
-    if (msg->type() == msg->isLongDataMessage())
-	pointerLen++;
     unsigned int pointersStart = headerLength;
     maxLen -= headerLength;
     // We have 3 mandatory variable parameters CallingAddress, CalledAddress,
-    // and Data and the pointer to optional parameters
-    headerLength += 4 * pointerLen;
+    // and Data and the pointer to optional parameters + 1 data length
+    headerLength += 5;
     headerLength += getAddressLength(msg->params(), "CalledPartyAddress");
     headerLength += getAddressLength(msg->params(), "CallingPartyAddress");
     ludt = 0;
@@ -3186,13 +3186,15 @@ void SS7SCCP::getMaxDataLen(const SS7MsgSCCP* msg, const SS7Label& label,
     else
 	udt = maxLen - sccpParamsSize;
     // Append optional parameters length
-    headerLength += MAX_OPT_LEN;
+    sccpParamsSize += MAX_OPT_LEN;
+
     if (ludtSupport) {
-	unsigned int maxSupported  = ITU() ? 3952 : 3904;
-	if (maxLen > maxSupported)
-	    ludt = maxSupported - sccpParamsSize;
-	else
+	unsigned int maxSupported  = ITU() ? MAX_DATA_ITU : MAX_DATA_ANSI;
+	if (maxLen < maxSupported) {
 	    ludt = maxLen - sccpParamsSize;
+	    ludt -= 5; // The pointers and data length are on 2 octets
+	} else
+	    ludt = maxSupported;
     }
     // 254 represents the maximum value that can be stored
     if (maxLen < 254)
@@ -3290,15 +3292,22 @@ int SS7SCCP::segmentMessage(SS7MsgSCCP* origMsg, const SS7Label& label, bool loc
     DataBlock* data = origMsg->getData();
     if (!data)
 	return -1;
+    // Verify if we should bother to send the message
+    if (data->length() > (ITU() ? MAX_DATA_ITU : MAX_DATA_ANSI)) {
+	Debug(this,DebugNote,
+	      "Unable to send SCCP message! Data length (%d) is too long",
+	      data->length());
+	return -1;
+    }
 
     SS7MsgSCCP::Type msgType = origMsg->type();
-    if (data->length() < udtLength && origMsg->canBeUDT()) {
+    if (data->length() <= udtLength && origMsg->canBeUDT()) {
 	msgType = isSCLCMessage(msgType) ? SS7MsgSCCP::UDT : SS7MsgSCCP::UDTS;
 	dataLen = udtLength;
-    } else if (data->length() < xudtLength) {
+    } else if (data->length() <= xudtLength) {
 	msgType = isSCLCMessage(msgType) ? SS7MsgSCCP::XUDT : SS7MsgSCCP::XUDTS;
 	dataLen = xudtLength;
-    } else if (data->length() < ludtLength) {
+    } else if (data->length() <= ludtLength) {
 	msgType = isSCLCMessage(msgType) ? SS7MsgSCCP::LUDT : SS7MsgSCCP::LUDTS;
 	dataLen = ludtLength;
     } else { // Segmentation is needed!!!
@@ -3317,7 +3326,7 @@ int SS7SCCP::segmentMessage(SS7MsgSCCP* origMsg, const SS7Label& label, bool loc
     origMsg->updateType(msgType);
     origMsg->params().clearParam(YSTRING("Segmentation"),'.');
     // Send the message if it fits in a single message
-    if (data->length() < dataLen) {
+    if (data->length() <= dataLen) {
 	Lock lock(this);
 	ajustMessageParams(origMsg->params(),origMsg->type());
 	SS7MSU* msu = buildMSU(origMsg,label,false);
@@ -3339,12 +3348,13 @@ int SS7SCCP::segmentMessage(SS7MsgSCCP* origMsg, const SS7Label& label, bool loc
 	return sls;
     }
     // Verify if we should bother to segment the message
-    if (data->length() > 16 * (dataLen - 1)) {
+    if ((data->length() > 16 * (dataLen - 1)) && !isSCLCSMessage(msgType)) {
 	Debug(DebugNote,
 	      "Unable to segment SCCP message! Data length (%d) excedes max data allowed (%d)",
 	      data->length(),(16 * (dataLen - 1)));
 	return -1;
     }
+
     // Start segmentation process
     lock();
     ObjList* listSegments = getDataSegments(data->length(),dataLen);

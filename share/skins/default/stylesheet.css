@@ -337,14 +337,30 @@ QMenuBar::item:selected {
 
 QMenu {
   border: 1px solid #717fa0;
-  background: #ffffff;
-  selection-color: #ffffff;
-  selection-background-color: #48a4d7;
-  color:#333333;
+  background-color: #ffffff;
+  color: #333333;
+}
+QMenu::item {
+  border: 1px solid #ffffff;
+  padding: 2px 4px 2px 22px;
+}
+QMenu::item:selected {
+  color: #ffffff;
+  background-color: #48a4d7;
+  border: 1px solid #48a4d7;
 }
 QMenu::item:disabled {
   color: #bbbbbb;
 }
 QMenu::separator {
   color: #a9c2c2;
+}
+QMenu::icon {
+  left: 2px;
+}
+QMenu::indicator:non-exclusive:checked {
+  image: url(checkmark_menu.png);
+}
+QMenu::indicator:non-exclusive:unchecked {
+  image: none;
 }

@@ -5773,6 +5773,7 @@ void YateSIPConnection::doBye(SIPTransaction* t)
 	    paramMutex().unlock();
 	}
     }
+    setMedia(0);
     SIPMessage* m = new SIPMessage(t->initialMessage(),200);
     paramMutex().lock();
     copySipHeaders(parameters(),*msg);
@@ -5787,7 +5788,6 @@ void YateSIPConnection::doBye(SIPTransaction* t)
 	    m_reason = MimeHeaderLine::unquote(*text);
 	// FIXME: add SIP and Q.850 cause codes
     }
-    setMedia(0);
     t->setResponse(m);
     m->deref();
     m_byebye = false;

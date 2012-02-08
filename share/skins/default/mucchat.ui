@@ -99,6 +99,18 @@
        <property name="_yate_noautoconnect" stdset="0" >
         <bool>true</bool>
        </property>
+       <property name="_yate_filterevents" stdset="0" >
+        <bool>true</bool>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>user.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>user_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>user_hover.png</string>
+       </property>
       </widget>
      </item>
      <item>
@@ -126,6 +138,18 @@
        </property>
        <property name="_yate_noautoconnect" stdset="0" >
         <bool>true</bool>
+       </property>
+       <property name="_yate_filterevents" stdset="0" >
+        <bool>true</bool>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>muc.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>muc_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>muc_hover.png</string>
        </property>
       </widget>
      </item>
@@ -155,6 +179,18 @@
        <property name="_yate_noautoconnect" stdset="0" >
         <bool>true</bool>
        </property>
+       <property name="_yate_filterevents" stdset="0" >
+        <bool>true</bool>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>save.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>save_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>save_hover.png</string>
+       </property>
       </widget>
      </item>
      <item>
@@ -182,6 +218,18 @@
        </property>
        <property name="_yate_noautoconnect" stdset="0" >
         <bool>true</bool>
+       </property>
+       <property name="_yate_filterevents" stdset="0" >
+        <bool>true</bool>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>archive.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>archive_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>archive_hover.png</string>
        </property>
       </widget>
      </item>

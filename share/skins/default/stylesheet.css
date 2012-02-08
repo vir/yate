@@ -27,6 +27,8 @@ QLineEdit {
   border: 1px solid #717fa0;
   border-radius: 2px;
   background-color: #ffffff;
+  font-size: 12px;
+  color:#333333;
 }
 
 /* QTextEdit */
@@ -153,6 +155,55 @@ QComboBox QAbstractItemView {
   font-size: 12px;
   color:#333333;
 }
+
+/* QSpinBox */
+
+QSpinBox {
+  padding: 0px 22px 0px 2px;
+  border: 1px solid #717fa0;
+  border-radius: 2px;
+  background: #ffffff;
+  font-size: 12px;
+  color: #333333;
+}
+QSpinBox::up-button {
+  subcontrol-origin: border;
+  subcontrol-position: top right;
+  border: 1px solid #717fa0;
+  border-top-right-radius: 2px;
+  width: 18px;
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f9efef);
+}
+QSpinBox::down-button {
+  background: #ffffff;
+  color: #333333;
+  font-size: 12px;
+  subcontrol-origin: border;
+  subcontrol-position: bottom right;
+  border: 1px solid #717fa0;
+  border-top: 0px solid #717fa0;
+  border-bottom-right-radius: 2px;
+  width: 18px;
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f9efef);
+}
+QSpinBox::up-button:pressed {
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #f9efef, stop: 1 #ffffff);
+}
+QSpinBox::down-button:pressed {
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #f9efef, stop: 1 #ffffff);
+}
+QSpinBox::up-button:hover {
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f9f3f3);
+}
+QSpinBox::down-button:hover {
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f9f3f3);
+}
+QSpinBox::up-arrow { image: url(up_small.png); }
+QSpinBox::up-arrow:pressed { top: -1px; }
+QSpinBox::up-arrow:disabled, QSpinBox::up-arrow:off { image: url(up_small_off.png); }
+QSpinBox::down-arrow { image: url(down_small.png); }
+QSpinBox::down-arrow:pressed { top: 1px; }
+QSpinBox::down-arrow:disabled, QSpinBox::down-arrow:off { image: url(down_small_off.png); }
 
 /* QTabWidget and QTabBar */
 

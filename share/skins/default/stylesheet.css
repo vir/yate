@@ -5,10 +5,17 @@ QWidget[_yate_window="true"] {
   color:#333333;
 }
 
+/* QAbstractButton */
+
 QAbstractButton {
   font-size: 12px;
   color:#333333;
 }
+QAbstractButton:disabled {
+  color: #a0a0a0;
+}
+
+/* QAbstractItemView */
 
 QAbstractItemView {
   font-size: 12px;
@@ -42,6 +49,7 @@ QTextEdit {
 /* QTextBrowser */
 QTextBrowser {
   font-size: 12px;
+  border: 1px solid #717fa0;
 }
 
 /* QToolButton */
@@ -50,6 +58,9 @@ QToolButton {
   border: 1px solid #717fa0;
   border-radius: 2px;
   background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f6e8e8);
+}
+QToolButton:checked {
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #f6e8e8, stop: 1 #ffffff);
 }
 QToolButton:hover {
   background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f9f3f3);
@@ -60,7 +71,6 @@ QToolButton:pressed {
 QToolButton:disabled {
   background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ebebeb, stop: 1 #ffffff);
   border: 1px solid #a0a0a0;
-  color: #a0a0a0;
 }
 QToolButton::menu-indicator {
   subcontrol-origin: border;
@@ -73,6 +83,9 @@ QPushButton {
   border-radius: 2px;
   background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f6e8e8);
 }
+QPushButton:checked {
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #f6e8e8, stop: 1 #ffffff);
+}
 QPushButton:hover {
   background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f9f3f3);
 }
@@ -82,16 +95,21 @@ QPushButton:pressed {
 QPushButton:disabled {
   background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ebebeb, stop: 1 #ffffff);
   border: 1px solid #a0a0a0;
-  color: #a0a0a0;
 }
 
 /* QCheckBox */
 
+QCheckBox {
+  margin: 2px 0px 2px 0px;
+}
 QCheckBox::indicator:checked { image: url(checkbox_on.png); }
 QCheckBox::indicator:unchecked { image: url(checkbox_off.png); }
 
 /* QRadioButton */
 
+QRadioButton {
+  margin: 2px 0px 2px 0px;
+}
 QRadioButton::indicator:checked { image: url(radio_on.png); }
 QRadioButton::indicator:unchecked { image: url(radio_off.png); }
 

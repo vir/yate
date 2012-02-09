@@ -827,14 +827,14 @@
        <property name="styleSheet" >
         <string>QFrame#acc_proto_advanced {
   border: 1px solid #717fa0;
-  border-radius: 4px;
+  border-radius: 2px;
 }</string>
        </property>
        <property name="frameShape" >
         <enum>QFrame::StyledPanel</enum>
        </property>
        <property name="currentIndex" >
-        <number>3</number>
+        <number>0</number>
        </property>
        <widget class="QWidget" name="acc_proto_advanced_none" >
         <layout class="QVBoxLayout" >
@@ -1072,6 +1072,9 @@
        </widget>
        <widget class="QWidget" name="acc_proto_advanced_jabber" >
         <layout class="QVBoxLayout" >
+         <property name="spacing" >
+          <number>0</number>
+         </property>
          <property name="leftMargin" >
           <number>6</number>
          </property>
@@ -1085,63 +1088,33 @@
           <number>4</number>
          </property>
          <item>
-          <widget class="QGroupBox" name="acc_proto_jabber_opt" >
-           <property name="minimumSize" >
-            <size>
-             <width>180</width>
-             <height>0</height>
-            </size>
+          <widget class="QCheckBox" name="acc_proto_jabber_opt_noautorestart" >
+           <property name="text" >
+            <string>Don't restart connection when down</string>
            </property>
-           <property name="styleSheet" >
-            <string>border: 0px;</string>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="acc_proto_jabber_opt_tlsrequired" >
+           <property name="text" >
+            <string>Require TLS (encrypt connection)</string>
            </property>
-           <layout class="QVBoxLayout" >
-            <property name="spacing" >
-             <number>6</number>
-            </property>
-            <property name="leftMargin" >
-             <number>0</number>
-            </property>
-            <property name="topMargin" >
-             <number>0</number>
-            </property>
-            <property name="rightMargin" >
-             <number>0</number>
-            </property>
-            <property name="bottomMargin" >
-             <number>0</number>
-            </property>
-            <item>
-             <widget class="QCheckBox" name="acc_proto_jabber_opt_tlsrequired" >
-              <property name="text" >
-               <string>Require TLS (encrypt connection)</string>
-              </property>
-              <property name="autoExclusive" >
-               <bool>false</bool>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QCheckBox" name="acc_proto_jabber_opt_allowplainauth" >
-              <property name="text" >
-               <string>Allow plain password authentication</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QCheckBox" name="acc_proto_jabber_opt_noautorestart" >
-              <property name="text" >
-               <string>Don't restart connection when down</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="acc_proto_jabber_opt_allowplainauth" >
+           <property name="text" >
+            <string>Allow plain password authentication</string>
+           </property>
           </widget>
          </item>
          <item>
           <layout class="QVBoxLayout" >
            <property name="spacing" >
             <number>2</number>
+           </property>
+           <property name="topMargin" >
+            <number>4</number>
            </property>
            <item>
             <layout class="QHBoxLayout" >
@@ -1314,12 +1287,6 @@
           <spacer>
            <property name="orientation" >
             <enum>Qt::Vertical</enum>
-           </property>
-           <property name="sizeHint" >
-            <size>
-             <width>20</width>
-             <height>40</height>
-            </size>
            </property>
           </spacer>
          </item>

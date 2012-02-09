@@ -48,6 +48,15 @@
    </property>
    <item>
     <layout class="QHBoxLayout" >
+     <property name="leftMargin" >
+      <number>4</number>
+     </property>
+     <property name="topMargin" >
+      <number>4</number>
+     </property>
+     <property name="rightMargin" >
+      <number>4</number>
+     </property>
      <item>
       <layout class="QVBoxLayout" >
        <item>
@@ -98,6 +107,9 @@
    </item>
    <item>
     <layout class="QHBoxLayout" >
+     <property name="bottomMargin" >
+      <number>4</number>
+     </property>
      <item>
       <spacer>
        <property name="orientation" >

@@ -28,7 +28,7 @@
    <string comment="VoIP Client" >Yate Client</string>
   </property>
   <property name="windowIcon" >
-   <iconset>null_team-16.png</iconset>
+   <iconset>null_team-32.png</iconset>
   </property>
   <property name="toolTip" >
    <string>Yate Client - Telephony Client</string>
@@ -186,7 +186,7 @@
       <enum>QTabWidget::Rounded</enum>
      </property>
      <property name="currentIndex" >
-      <number>0</number>
+      <number>1</number>
      </property>
      <widget class="QWidget" name="tabChat" >
       <attribute name="title" >
@@ -614,7 +614,7 @@ QToolButton:checked {
             <number>0</number>
            </property>
            <property name="bottomMargin" >
-            <number>4</number>
+            <number>0</number>
            </property>
            <item>
             <widget class="QFrame" name="framePageCalls" >
@@ -975,14 +975,14 @@ border-bottom: 1px solid #717fa0;
                     <widget class="QToolButton" name="display_keypad" >
                      <property name="minimumSize" >
                       <size>
-                       <width>25</width>
-                       <height>25</height>
+                       <width>24</width>
+                       <height>24</height>
                       </size>
                      </property>
                      <property name="maximumSize" >
                       <size>
-                       <width>25</width>
-                       <height>25</height>
+                       <width>24</width>
+                       <height>24</height>
                       </size>
                      </property>
                      <property name="toolTip" >
@@ -1012,7 +1012,7 @@ border-bottom: 1px solid #717fa0;
                     </widget>
                    </item>
                    <item>
-                    <widget class="QComboBox" name="callto" >
+                    <widget class="QFrame" name="frame_5" >
                      <property name="sizePolicy" >
                       <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
                        <horstretch>0</horstretch>
@@ -1021,28 +1021,64 @@ border-bottom: 1px solid #717fa0;
                      </property>
                      <property name="minimumSize" >
                       <size>
-                       <width>0</width>
-                       <height>25</height>
+                       <width>16</width>
+                       <height>24</height>
                       </size>
                      </property>
                      <property name="maximumSize" >
                       <size>
                        <width>16777215</width>
-                       <height>25</height>
+                       <height>24</height>
                       </size>
                      </property>
-                     <property name="focusPolicy" >
-                      <enum>Qt::WheelFocus</enum>
-                     </property>
-                     <property name="acceptDrops" >
-                      <bool>true</bool>
-                     </property>
-                     <property name="editable" >
-                      <bool>true</bool>
-                     </property>
-                     <property name="maxCount" >
-                      <number>20</number>
-                     </property>
+                     <layout class="QHBoxLayout" >
+                      <property name="leftMargin" >
+                       <number>0</number>
+                      </property>
+                      <property name="topMargin" >
+                       <number>0</number>
+                      </property>
+                      <property name="rightMargin" >
+                       <number>0</number>
+                      </property>
+                      <property name="bottomMargin" >
+                       <number>0</number>
+                      </property>
+                      <item>
+                       <widget class="QComboBox" name="callto" >
+                        <property name="sizePolicy" >
+                         <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+                          <horstretch>0</horstretch>
+                          <verstretch>0</verstretch>
+                         </sizepolicy>
+                        </property>
+                        <property name="minimumSize" >
+                         <size>
+                          <width>0</width>
+                          <height>24</height>
+                         </size>
+                        </property>
+                        <property name="maximumSize" >
+                         <size>
+                          <width>16777215</width>
+                          <height>24</height>
+                         </size>
+                        </property>
+                        <property name="focusPolicy" >
+                         <enum>Qt::WheelFocus</enum>
+                        </property>
+                        <property name="acceptDrops" >
+                         <bool>true</bool>
+                        </property>
+                        <property name="editable" >
+                         <bool>true</bool>
+                        </property>
+                        <property name="maxCount" >
+                         <number>20</number>
+                        </property>
+                       </widget>
+                      </item>
+                     </layout>
                     </widget>
                    </item>
                    <item>
@@ -1056,13 +1092,13 @@ border-bottom: 1px solid #717fa0;
                      <property name="minimumSize" >
                       <size>
                        <width>0</width>
-                       <height>25</height>
+                       <height>24</height>
                       </size>
                      </property>
                      <property name="maximumSize" >
                       <size>
                        <width>16777215</width>
-                       <height>25</height>
+                       <height>24</height>
                       </size>
                      </property>
                      <property name="toolTip" >
@@ -1464,20 +1500,32 @@ QToolButton:!enabled {image:url(digitpound.png);}
                </widget>
               </item>
               <item>
-               <spacer>
-                <property name="orientation" >
-                 <enum>Qt::Vertical</enum>
+               <widget class="QFrame" name="frame_7" >
+                <property name="sizePolicy" >
+                 <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
                 </property>
-                <property name="sizeType" >
-                 <enum>QSizePolicy::Fixed</enum>
-                </property>
-                <property name="sizeHint" >
+                <property name="minimumSize" >
                  <size>
-                  <width>20</width>
+                  <width>16</width>
                   <height>8</height>
                  </size>
                 </property>
-               </spacer>
+                <property name="maximumSize" >
+                 <size>
+                  <width>16777215</width>
+                  <height>8</height>
+                 </size>
+                </property>
+                <property name="styleSheet" >
+                 <string>QFrame {
+  background:#f7f5fd;
+}
+</string>
+                </property>
+               </widget>
               </item>
               <item>
                <widget class="QFrame" name="frame_channels" >
@@ -1762,6 +1810,12 @@ border-bottom: 1px solid #717fa0;
                  <enum>QFrame::StyledPanel</enum>
                 </property>
                 <layout class="QHBoxLayout" >
+                 <property name="spacing" >
+                  <number>4</number>
+                 </property>
+                 <property name="leftMargin" >
+                  <number>4</number>
+                 </property>
                  <item>
                   <widget class="QToolButton" name="log_call" >
                    <property name="enabled" >
@@ -2208,10 +2262,16 @@ border-bottom: 1px solid #717fa0;
                  </widget>
                 </item>
                 <item>
-                 <widget class="QLineEdit" name="search_contact" >
+                 <widget class="QFrame" name="frame_6" >
+                  <property name="sizePolicy" >
+                   <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
                   <property name="minimumSize" >
                    <size>
-                    <width>0</width>
+                    <width>16</width>
                     <height>25</height>
                    </size>
                   </property>
@@ -2221,18 +2281,51 @@ border-bottom: 1px solid #717fa0;
                     <height>25</height>
                    </size>
                   </property>
-                  <property name="styleSheet" >
-                   <string>QLineEdit {
+                  <layout class="QHBoxLayout" >
+                   <property name="spacing" >
+                    <number>0</number>
+                   </property>
+                   <property name="leftMargin" >
+                    <number>0</number>
+                   </property>
+                   <property name="topMargin" >
+                    <number>0</number>
+                   </property>
+                   <property name="rightMargin" >
+                    <number>0</number>
+                   </property>
+                   <property name="bottomMargin" >
+                    <number>0</number>
+                   </property>
+                   <item>
+                    <widget class="QLineEdit" name="search_contact" >
+                     <property name="minimumSize" >
+                      <size>
+                       <width>0</width>
+                       <height>25</height>
+                      </size>
+                     </property>
+                     <property name="maximumSize" >
+                      <size>
+                       <width>16777215</width>
+                       <height>25</height>
+                      </size>
+                     </property>
+                     <property name="styleSheet" >
+                      <string>QLineEdit {
   background-image: url(search.png);
   background-repeat: no-repeat;
   background-position: left;
   padding-left: 20px;
 }
 </string>
-                  </property>
-                  <property name="_yate_textchangednotify" stdset="0" >
-                   <bool>true</bool>
-                  </property>
+                     </property>
+                     <property name="_yate_textchangednotify" stdset="0" >
+                      <bool>true</bool>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
                  </widget>
                 </item>
                </layout>
@@ -2298,6 +2391,12 @@ border-bottom: 1px solid #717fa0;
                  <enum>QFrame::StyledPanel</enum>
                 </property>
                 <layout class="QHBoxLayout" >
+                 <property name="spacing" >
+                  <number>4</number>
+                 </property>
+                 <property name="leftMargin" >
+                  <number>4</number>
+                 </property>
                  <item>
                   <widget class="QToolButton" name="abk_call" >
                    <property name="enabled" >
@@ -2536,16 +2635,6 @@ QLabel {
 QTextEdit {
   border: 0px;
   font-size: 11px;
-}
-_QScrollBar:vertical {
-  border: 1px solid #717fa0;
-  _border-top: 0px;
-  _border-bottom: 0px;
-}
-_QScrollBar:horizontal {
-  border: 1px solid #717fa0;
-  _border-left: 0px;
-  _border-right: 0px;
 }
 </string>
      </property>

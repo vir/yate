@@ -1012,7 +1012,7 @@ border-bottom: 1px solid #717fa0;
                     </widget>
                    </item>
                    <item>
-                    <widget class="QComboBox" name="callto" >
+                    <widget class="QFrame" name="frame_5" >
                      <property name="sizePolicy" >
                       <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
                        <horstretch>0</horstretch>
@@ -1021,7 +1021,7 @@ border-bottom: 1px solid #717fa0;
                      </property>
                      <property name="minimumSize" >
                       <size>
-                       <width>0</width>
+                       <width>16</width>
                        <height>25</height>
                       </size>
                      </property>
@@ -1031,18 +1031,54 @@ border-bottom: 1px solid #717fa0;
                        <height>25</height>
                       </size>
                      </property>
-                     <property name="focusPolicy" >
-                      <enum>Qt::WheelFocus</enum>
-                     </property>
-                     <property name="acceptDrops" >
-                      <bool>true</bool>
-                     </property>
-                     <property name="editable" >
-                      <bool>true</bool>
-                     </property>
-                     <property name="maxCount" >
-                      <number>20</number>
-                     </property>
+                     <layout class="QHBoxLayout" >
+                      <property name="leftMargin" >
+                       <number>0</number>
+                      </property>
+                      <property name="topMargin" >
+                       <number>0</number>
+                      </property>
+                      <property name="rightMargin" >
+                       <number>0</number>
+                      </property>
+                      <property name="bottomMargin" >
+                       <number>0</number>
+                      </property>
+                      <item>
+                       <widget class="QComboBox" name="callto" >
+                        <property name="sizePolicy" >
+                         <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+                          <horstretch>0</horstretch>
+                          <verstretch>0</verstretch>
+                         </sizepolicy>
+                        </property>
+                        <property name="minimumSize" >
+                         <size>
+                          <width>0</width>
+                          <height>25</height>
+                         </size>
+                        </property>
+                        <property name="maximumSize" >
+                         <size>
+                          <width>16777215</width>
+                          <height>25</height>
+                         </size>
+                        </property>
+                        <property name="focusPolicy" >
+                         <enum>Qt::WheelFocus</enum>
+                        </property>
+                        <property name="acceptDrops" >
+                         <bool>true</bool>
+                        </property>
+                        <property name="editable" >
+                         <bool>true</bool>
+                        </property>
+                        <property name="maxCount" >
+                         <number>20</number>
+                        </property>
+                       </widget>
+                      </item>
+                     </layout>
                     </widget>
                    </item>
                    <item>
@@ -2214,10 +2250,16 @@ border-bottom: 1px solid #717fa0;
                  </widget>
                 </item>
                 <item>
-                 <widget class="QLineEdit" name="search_contact" >
+                 <widget class="QFrame" name="frame_6" >
+                  <property name="sizePolicy" >
+                   <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
                   <property name="minimumSize" >
                    <size>
-                    <width>0</width>
+                    <width>16</width>
                     <height>25</height>
                    </size>
                   </property>
@@ -2227,18 +2269,51 @@ border-bottom: 1px solid #717fa0;
                     <height>25</height>
                    </size>
                   </property>
-                  <property name="styleSheet" >
-                   <string>QLineEdit {
+                  <layout class="QHBoxLayout" >
+                   <property name="spacing" >
+                    <number>0</number>
+                   </property>
+                   <property name="leftMargin" >
+                    <number>0</number>
+                   </property>
+                   <property name="topMargin" >
+                    <number>0</number>
+                   </property>
+                   <property name="rightMargin" >
+                    <number>0</number>
+                   </property>
+                   <property name="bottomMargin" >
+                    <number>0</number>
+                   </property>
+                   <item>
+                    <widget class="QLineEdit" name="search_contact" >
+                     <property name="minimumSize" >
+                      <size>
+                       <width>0</width>
+                       <height>25</height>
+                      </size>
+                     </property>
+                     <property name="maximumSize" >
+                      <size>
+                       <width>16777215</width>
+                       <height>25</height>
+                      </size>
+                     </property>
+                     <property name="styleSheet" >
+                      <string>QLineEdit {
   background-image: url(search.png);
   background-repeat: no-repeat;
   background-position: left;
   padding-left: 20px;
 }
 </string>
-                  </property>
-                  <property name="_yate_textchangednotify" stdset="0" >
-                   <bool>true</bool>
-                  </property>
+                     </property>
+                     <property name="_yate_textchangednotify" stdset="0" >
+                      <bool>true</bool>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
                  </widget>
                 </item>
                </layout>

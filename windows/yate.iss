@@ -182,6 +182,7 @@ Source: "..\conf.d\providers.conf.default"; DestName: "providers.conf"; DestDir:
 Source: "..\share\skins\default\qt4client.rc"; DestDir: "{app}\share\skins\default"; Components: client\qt
 Source: "..\share\skins\default\*.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
 Source: "..\share\skins\default\*.png"; DestDir: "{app}\share\skins\default"; Components: client
+Source: "..\share\skins\default\*.css"; DestDir: "{app}\share\skins\default"; Components: client
 
 Source: "..\conf.d\yate-qt4.conf.default"; DestName: "yate-qt4.conf"; DestDir: "{app}\conf.d"; Components: client\qt; Flags: skipifsourcedoesntexist
 

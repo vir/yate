@@ -82,7 +82,7 @@ QPushButton {
   border-radius: 2px;
   background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f6e8e8);
 }
-QToolButton:checked {
+QPushButton:checked {
   background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #f6e8e8, stop: 1 #ffffff);
 }
 QPushButton:hover {

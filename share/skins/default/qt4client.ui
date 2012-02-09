@@ -186,7 +186,7 @@
       <enum>QTabWidget::Rounded</enum>
      </property>
      <property name="currentIndex" >
-      <number>0</number>
+      <number>1</number>
      </property>
      <widget class="QWidget" name="tabChat" >
       <attribute name="title" >
@@ -614,7 +614,7 @@ QToolButton:checked {
             <number>0</number>
            </property>
            <property name="bottomMargin" >
-            <number>4</number>
+            <number>0</number>
            </property>
            <item>
             <widget class="QFrame" name="framePageCalls" >
@@ -1500,20 +1500,32 @@ QToolButton:!enabled {image:url(digitpound.png);}
                </widget>
               </item>
               <item>
-               <spacer>
-                <property name="orientation" >
-                 <enum>Qt::Vertical</enum>
+               <widget class="QFrame" name="frame_7" >
+                <property name="sizePolicy" >
+                 <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
                 </property>
-                <property name="sizeType" >
-                 <enum>QSizePolicy::Fixed</enum>
-                </property>
-                <property name="sizeHint" >
+                <property name="minimumSize" >
                  <size>
-                  <width>20</width>
+                  <width>16</width>
                   <height>8</height>
                  </size>
                 </property>
-               </spacer>
+                <property name="maximumSize" >
+                 <size>
+                  <width>16777215</width>
+                  <height>8</height>
+                 </size>
+                </property>
+                <property name="styleSheet" >
+                 <string>QFrame {
+  background:#f7f5fd;
+}
+</string>
+                </property>
+               </widget>
               </item>
               <item>
                <widget class="QFrame" name="frame_channels" >

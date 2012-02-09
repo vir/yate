@@ -28,7 +28,7 @@
    <string comment="VoIP Client" >Yate Client</string>
   </property>
   <property name="windowIcon" >
-   <iconset>null_team-16.png</iconset>
+   <iconset>null_team-32.png</iconset>
   </property>
   <property name="toolTip" >
    <string>Yate Client - Telephony Client</string>

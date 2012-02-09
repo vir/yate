@@ -975,14 +975,14 @@ border-bottom: 1px solid #717fa0;
                     <widget class="QToolButton" name="display_keypad" >
                      <property name="minimumSize" >
                       <size>
-                       <width>25</width>
-                       <height>25</height>
+                       <width>24</width>
+                       <height>24</height>
                       </size>
                      </property>
                      <property name="maximumSize" >
                       <size>
-                       <width>25</width>
-                       <height>25</height>
+                       <width>24</width>
+                       <height>24</height>
                       </size>
                      </property>
                      <property name="toolTip" >
@@ -1022,13 +1022,13 @@ border-bottom: 1px solid #717fa0;
                      <property name="minimumSize" >
                       <size>
                        <width>16</width>
-                       <height>25</height>
+                       <height>24</height>
                       </size>
                      </property>
                      <property name="maximumSize" >
                       <size>
                        <width>16777215</width>
-                       <height>25</height>
+                       <height>24</height>
                       </size>
                      </property>
                      <layout class="QHBoxLayout" >
@@ -1055,13 +1055,13 @@ border-bottom: 1px solid #717fa0;
                         <property name="minimumSize" >
                          <size>
                           <width>0</width>
-                          <height>25</height>
+                          <height>24</height>
                          </size>
                         </property>
                         <property name="maximumSize" >
                          <size>
                           <width>16777215</width>
-                          <height>25</height>
+                          <height>24</height>
                          </size>
                         </property>
                         <property name="focusPolicy" >
@@ -1092,13 +1092,13 @@ border-bottom: 1px solid #717fa0;
                      <property name="minimumSize" >
                       <size>
                        <width>0</width>
-                       <height>25</height>
+                       <height>24</height>
                       </size>
                      </property>
                      <property name="maximumSize" >
                       <size>
                        <width>16777215</width>
-                       <height>25</height>
+                       <height>24</height>
                       </size>
                      </property>
                      <property name="toolTip" >

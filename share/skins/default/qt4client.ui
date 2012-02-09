@@ -1762,6 +1762,12 @@ border-bottom: 1px solid #717fa0;
                  <enum>QFrame::StyledPanel</enum>
                 </property>
                 <layout class="QHBoxLayout" >
+                 <property name="spacing" >
+                  <number>4</number>
+                 </property>
+                 <property name="leftMargin" >
+                  <number>4</number>
+                 </property>
                  <item>
                   <widget class="QToolButton" name="log_call" >
                    <property name="enabled" >
@@ -2298,6 +2304,12 @@ border-bottom: 1px solid #717fa0;
                  <enum>QFrame::StyledPanel</enum>
                 </property>
                 <layout class="QHBoxLayout" >
+                 <property name="spacing" >
+                  <number>4</number>
+                 </property>
+                 <property name="leftMargin" >
+                  <number>4</number>
+                 </property>
                  <item>
                   <widget class="QToolButton" name="abk_call" >
                    <property name="enabled" >

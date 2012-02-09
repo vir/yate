@@ -1,3 +1,17 @@
+yate (3.3.3.svn4873) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4873: + Clear any local SIP media channels
+    before populating the 200 answer to BYE.  + Changed buttons layout
+    spacing.  + Added checkbox and radiobutton margins, changed layouts.
+    + Set background for checked state.  + Fixed stylesheet.  + Fixed
+    archive window spacing, images and widget borders.  + Changed
+    images.  + Changed main window icon.  + Changed message and confirm
+    window margins.  + Changed images.  + Fixed widgets alignment.  +
+    Fixed ui.  + Adjusted widget size.  + Added css file to Windows
+    setup script.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 10 Feb 2012 02:19:20 +0400
+
 yate (3.3.3.svn4860) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4860: + Fixed SCCP LUDT maximum data length

@@ -83,6 +83,15 @@
        <property name="_yate_filterevents" stdset="0" >
         <bool>true</bool>
        </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>muc.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>muc_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>muc_hover.png</string>
+       </property>
       </widget>
      </item>
      <item>

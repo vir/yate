@@ -58,6 +58,9 @@ QToolButton {
   border-radius: 2px;
   background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f6e8e8);
 }
+QToolButton:checked {
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #f6e8e8, stop: 1 #ffffff);
+}
 QToolButton:hover {
   background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f9f3f3);
 }
@@ -78,6 +81,9 @@ QPushButton {
   border: 1px solid #717fa0;
   border-radius: 2px;
   background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f6e8e8);
+}
+QToolButton:checked {
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #f6e8e8, stop: 1 #ffffff);
 }
 QPushButton:hover {
   background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f9f3f3);

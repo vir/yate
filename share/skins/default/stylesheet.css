@@ -5,10 +5,17 @@ QWidget[_yate_window="true"] {
   color:#333333;
 }
 
+/* QAbstractButton */
+
 QAbstractButton {
   font-size: 12px;
   color:#333333;
 }
+QAbstractButton:disabled {
+  color: #a0a0a0;
+}
+
+/* QAbstractItemView */
 
 QAbstractItemView {
   font-size: 12px;
@@ -60,7 +67,6 @@ QToolButton:pressed {
 QToolButton:disabled {
   background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ebebeb, stop: 1 #ffffff);
   border: 1px solid #a0a0a0;
-  color: #a0a0a0;
 }
 QToolButton::menu-indicator {
   subcontrol-origin: border;
@@ -82,16 +88,21 @@ QPushButton:pressed {
 QPushButton:disabled {
   background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ebebeb, stop: 1 #ffffff);
   border: 1px solid #a0a0a0;
-  color: #a0a0a0;
 }
 
 /* QCheckBox */
 
+QCheckBox {
+  margin: 2px 0px 2px 0px;
+}
 QCheckBox::indicator:checked { image: url(checkbox_on.png); }
 QCheckBox::indicator:unchecked { image: url(checkbox_off.png); }
 
 /* QRadioButton */
 
+QRadioButton {
+  margin: 2px 0px 2px 0px;
+}
 QRadioButton::indicator:checked { image: url(radio_on.png); }
 QRadioButton::indicator:unchecked { image: url(radio_off.png); }
 

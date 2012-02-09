@@ -2549,16 +2549,6 @@ QTextEdit {
   border: 0px;
   font-size: 11px;
 }
-_QScrollBar:vertical {
-  border: 1px solid #717fa0;
-  _border-top: 0px;
-  _border-bottom: 0px;
-}
-_QScrollBar:horizontal {
-  border: 1px solid #717fa0;
-  _border-left: 0px;
-  _border-right: 0px;
-}
 </string>
      </property>
      <property name="_yate_uiwidget" stdset="0" >

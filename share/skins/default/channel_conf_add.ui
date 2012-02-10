@@ -89,6 +89,7 @@
         </property>
         <property name="styleSheet" >
          <string>QComboBox {
+  background: #ffffff;
   background-image: url(conf_bg.png);
   background-repeat: no-repeat;
   background-position: left;

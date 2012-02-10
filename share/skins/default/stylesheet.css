@@ -140,7 +140,6 @@ QComboBox {
   border-radius: 2px;
   font-size: 12px;
   color:#333333;
-  background: #ffffff;
 }
 QComboBox::down-arrow { image: url(cb_arrow.png); }
 QComboBox::down-arrow:on { top: 1px; left: 1px; }

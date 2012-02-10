@@ -13,7 +13,7 @@
    <string>File transfer</string>
   </property>
   <property name="windowIcon" >
-   <iconset>file_trans.png</iconset>
+   <iconset>fileprogress_title.png</iconset>
   </property>
   <property name="_yate_window" stdset="0" >
    <bool>true</bool>

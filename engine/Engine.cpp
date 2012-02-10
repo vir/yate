@@ -120,6 +120,11 @@ using namespace TelEngine;
 #define CFG_SUFFIX ".conf"
 #endif
 
+// Initialization events capture by default
+#ifndef CAPTURE_EVENTS
+#define CAPTURE_EVENTS true
+#endif
+
 // Maximum number of engine.stop messages we allow
 #ifndef MAX_STOP
 #define MAX_STOP 5
@@ -216,6 +221,11 @@ static bool s_dynplugin = false;
 static Engine::PluginMode s_loadMode = Engine::LoadFail;
 static int s_maxworkers = 10;
 static bool s_debug = true;
+static bool s_capture = CAPTURE_EVENTS;
+static int s_maxevents = 10;
+static Mutex s_eventsMutex(false,"EventsList");
+static ObjList s_events;
+static String s_startMsg;
 
 const TokenDict Engine::s_callAccept[] = {
     {"accept",      Engine::Accept},
@@ -253,6 +263,9 @@ void EngineCheck::setChecker(EngineCheck* ptr)
     s_engineCheck = ptr;
 }
 
+
+namespace { // anonymous
+
 class SLib : public String
 {
 public:
@@ -288,6 +301,41 @@ public:
     EngineHelp() : MessageHandler("engine.help") { }
     virtual bool received(Message &msg);
 };
+
+class EngineEventList : public ObjList
+{
+public:
+    inline EngineEventList(const char* name)
+	: m_name(name)
+	{ }
+
+    virtual const String& toString() const
+	{ return m_name; }
+private:
+    String m_name;
+};
+
+class EngineEventHandler : public MessageHandler
+{
+public:
+    EngineEventHandler() : MessageHandler("module.update",0) { }
+    virtual bool received(Message &msg);
+};
+
+class RefList : public RefObject
+{
+public:
+    inline RefList()
+	{ }
+    virtual void* getObject(const String& name) const
+	{ return (name == YSTRING("ObjList")) ? (void*)&m_list : RefObject::getObject(name); }
+    inline ObjList& list()
+	{ return m_list; }
+private:
+    ObjList m_list;
+};
+
+}; // anonymous namespace
 
 
 // helper function to initialize user application data dir
@@ -358,9 +406,49 @@ bool EngineStatusHandler::received(Message &msg)
     return false;
 }
 
+bool EngineEventHandler::received(Message &msg)
+{
+    const String* type = msg.getParam(YSTRING("from"));
+    if (TelEngine::null(type))
+	return false;
+    bool full = true;
+    const String* text = msg.getParam(YSTRING("fulltext"));
+    if (TelEngine::null(text)) {
+	text = msg.getParam(YSTRING("text"));
+	if (TelEngine::null(text))
+	    return false;
+	full = false;
+    }
+    String* ev = 0;
+    int level = msg.getBoolValue(YSTRING("operational"),true) ? DebugNote : DebugWarn;
+    level = msg.getIntValue(YSTRING("level"),level);
+    if (full)
+	ev = new CapturedEvent(level,*text);
+    else {
+	// build a full text with timestamp and sender
+	char tstamp[24];
+	Debugger::formatTime(tstamp);
+	ev = new CapturedEvent(level,tstamp);
+	*ev << "<" << *type << "> " << *text;
+	msg.setParam("fulltext",*ev);
+    }
+    Lock mylock(s_eventsMutex);
+    ObjList* list = static_cast<EngineEventList*>(s_events[*type]);
+    if (!list) {
+	list = new EngineEventList(*type);
+	s_events.append(list);
+    }
+    while ((s_maxevents > 0) && (int)list->count() >= s_maxevents)
+	list->remove();
+    list->append(ev);
+    return false;
+}
+
 static const char s_cmdsOptNoUnload[] = "  module {load modulefile|list}\r\n";
 static const char s_cmdsOpt[] = "  module {{load|reload} modulefile|unload modulename|list}\r\n";
 static const char s_cmdsMsg[] = "Controls the modules loaded in the Telephony Engine\r\n";
+static const char s_evtsOpt[] = "  events [clear] [type]\r\n";
+static const char s_evtsMsg[] = "Show or clear events or alarms collected since the engine startup\r\n";
 
 // get the base name of a module file
 static String moduleBase(const String& fname)
@@ -462,11 +550,13 @@ void completeModule(String& ret, const String& part, ObjList& mods, bool reload,
 // perform command line completion
 void EngineCommand::doCompletion(Message &msg, const String& partLine, const String& partWord)
 {
-    if (partLine.null() || (partLine == "help"))
+    if (partLine.null() || (partLine == YSTRING("help"))) {
 	completeOne(msg.retValue(),"module",partWord);
-    else if (partLine == "status")
+	completeOne(msg.retValue(),"events",partWord);
+    }
+    else if (partLine == YSTRING("status"))
 	completeOne(msg.retValue(),"engine",partWord);
-    else if (partLine == "module") {
+    else if (partLine == YSTRING("module")) {
 	completeOne(msg.retValue(),"load",partWord);
 	if (!s_nounload) {
 	    completeOne(msg.retValue(),"unload",partWord);
@@ -474,22 +564,31 @@ void EngineCommand::doCompletion(Message &msg, const String& partLine, const Str
 	}
 	completeOne(msg.retValue(),"list",partWord);
     }
-    else if (partLine == "module load")
+    else if (partLine == YSTRING("module load"))
 	completeModule(msg.retValue(),partWord,Engine::self()->m_libs,false);
-    else if (partLine == "module reload")
+    else if (partLine == YSTRING("module reload"))
 	completeModule(msg.retValue(),partWord,Engine::self()->m_libs,true);
-    else if (partLine == "module unload") {
+    else if (partLine == YSTRING("module unload")) {
 	for (ObjList* l = Engine::self()->m_libs.skipNull();l;l = l->skipNext()) {
 	    SLib* s = static_cast<SLib*>(l->get());
 	    if (s->unload(false))
 		completeOne(msg.retValue(),*s,partWord);
 	}
     }
-    else if (partLine == "reload") {
+    else if (partLine == YSTRING("reload")) {
 	for (ObjList* l = plugins.skipNull(); l; l = l->skipNext()) {
 	    const Plugin* p = static_cast<const Plugin*>(l->get());
 	    completeOne(msg.retValue(),p->name(),partWord);
 	}
+    }
+    else if (partLine == YSTRING("events") || partLine == YSTRING("events clear")) {
+	Lock mylock(s_eventsMutex);
+	for (ObjList* l = s_events.skipNull(); l; l = l->skipNext()) {
+	    const EngineEventList* e = static_cast<const EngineEventList*>(l->get());
+	    completeOne(msg.retValue(),e->toString(),partWord);
+	}
+	if (partLine == YSTRING("events"))
+	    completeOne(msg.retValue(),"clear",partWord);
     }
 }
 
@@ -500,8 +599,28 @@ bool EngineCommand::received(Message &msg)
 	doCompletion(msg,msg.getValue("partline"),msg.getValue("partword"));
 	return false;
     }
-    if (!line.startSkip("module"))
+    if (!line.startSkip("module")) {
+	if (line.startSkip("events")) {
+	    if (line.startSkip("clear")) {
+		Engine::clearEvents(line);
+		return true;
+	    }
+	    RefList* list = 0;
+	    int cnt = 0;
+	    for (const ObjList* l = Engine::events(line); l; l = l->skipNext()) {
+		const CapturedEvent* ev = static_cast<const CapturedEvent*>(l->get());
+		if (!list)
+		    list = new RefList();
+		list->list().append(new CapturedEvent(*ev));
+		cnt++;
+	    }
+	    msg.userData(list);
+	    TelEngine::destruct(list);
+	    (msg.retValue() = "Events: ") << cnt << "\r\n";
+	    return true;
+	}
 	return false;
+    }
 
     bool ok = false;
     int sep = line.find(' ');
@@ -568,11 +687,13 @@ bool EngineHelp::received(Message &msg)
     String line = msg.getValue("line");
     if (line.null()) {
 	msg.retValue() << opts;
+	msg.retValue() << s_evtsOpt;
 	return false;
     }
-    if (line != "module")
-	return false;
-    msg.retValue() << opts << s_cmdsMsg;
+    if (line == YSTRING("module"))
+	msg.retValue() << opts << s_cmdsMsg;
+    else if (line == YSTRING("events"))
+	msg.retValue() << s_evtsOpt << s_evtsMsg;
     return true;
 }
 
@@ -615,7 +736,9 @@ static bool logFileOpen()
 static int engineRun()
 {
     time_t t = ::time(0);
-    Output("Yate (%u) is starting %s",::getpid(),::ctime(&t));
+    s_startMsg << "Yate (" << ::getpid() << ") is starting " << ::ctime(&t);
+    s_startMsg.trimSpaces();
+    Output("%s",s_startMsg.c_str());
     int retcode = Engine::self()->run();
     t = ::time(0);
     Output("Yate (%u) is stopping %s",::getpid(),::ctime(&t));
@@ -1013,6 +1136,7 @@ Engine::~Engine()
     assert(this == s_self);
     m_dispatcher.clear();
     m_libs.clear();
+    s_events.clear();
     s_mode = Stopped;
     s_self = 0;
 }
@@ -1032,8 +1156,13 @@ int Engine::run()
     ::signal(SIGPIPE,SIG_IGN);
     ::signal(SIGALRM,SIG_IGN);
 #endif
+    CapturedEvent::capturing(s_capture);
     s_cfg = configFile(s_cfgfile);
     s_cfg.load();
+    s_capture = s_cfg.getBoolValue("general","startevents",s_capture);
+    CapturedEvent::capturing(s_capture);
+    if (s_capture && s_startMsg)
+	CapturedEvent::append(-1,s_startMsg);
 #ifdef _WINDOWS
     int winTimerRes = s_cfg.getIntValue("general","wintimer");
     if ((winTimerRes > 0) && (winTimerRes < 100)) {
@@ -1072,6 +1201,7 @@ int Engine::run()
     if (modPath)
 	s_modpath = modPath;
     s_maxworkers = s_cfg.getIntValue("general","maxworkers",s_maxworkers);
+    s_maxevents = s_cfg.getIntValue("general","maxevents",s_maxevents);
     s_restarts = s_cfg.getIntValue("general","restarts");
     m_dispatcher.warnTime(1000*(u_int64_t)s_cfg.getIntValue("general","warntime"));
     extraPath(clientMode() ? "client" : "server");
@@ -1097,6 +1227,7 @@ int Engine::run()
     s_params.addParam("lastsignal",String(s_childsig));
 #endif
     s_params.addParam("maxworkers",String(s_maxworkers));
+    s_params.addParam("maxevents",String(s_maxevents));
 #ifdef _WINDOWS
     {
 	char buf[PATH_MAX];
@@ -1113,6 +1244,7 @@ int Engine::run()
 #endif
     DDebug(DebugAll,"Engine::run()");
     install(new EngineStatusHandler);
+    install(new EngineEventHandler);
     install(new EngineCommand);
     install(new EngineHelp);
     loadPlugins();
@@ -1142,6 +1274,13 @@ int Engine::run()
     ::signal(SIGUSR1,sighandler);
     ::signal(SIGUSR2,sighandler);
 #endif
+    if (s_startMsg) {
+	Message* m = new Message("module.update");
+	m->addParam("fulltext",s_startMsg);
+	if (nodeName())
+	    m->addParam("nodename",nodeName());
+	enqueue(m);
+    }
     Output("Yate%s engine is initialized and starting up%s%s",
 	clientMode() ? " client" : "",s_node.null() ? "" : " on " ,s_node.safe());
     int stops = MAX_STOP;
@@ -1183,6 +1322,11 @@ int Engine::run()
 		    enqueue(m);
 		}
 	    }
+	}
+	else if (s_capture) {
+	    // end capturing startup messages
+	    s_capture = false;
+	    CapturedEvent::capturing(false);
 	}
 
 	// Create worker thread if we didn't hear about any of them in a while
@@ -1229,6 +1373,7 @@ int Engine::run()
     }
     s_haltcode &= 0xff;
     Output("Yate engine is shutting down with code %d",s_haltcode);
+    CapturedEvent::capturing(false);
     setStatus(SERVICE_STOP_PENDING);
     ::signal(SIGINT,SIG_DFL);
     dispatch("engine.halt",true);
@@ -1584,6 +1729,25 @@ unsigned int Engine::runId()
 {
     return s_runid;
 }
+
+const ObjList* Engine::events(const String& type)
+{
+    if (type.null())
+	return CapturedEvent::events().skipNull();
+    Lock mylock(s_eventsMutex);
+    const ObjList* list = static_cast<const EngineEventList*>(s_events[type]);
+    return list ? list->skipNull() : 0;
+}
+
+void Engine::clearEvents(const String& type)
+{
+    Lock mylock(s_eventsMutex);
+    if (type.null())
+	CapturedEvent::eventsRw().clear();
+    else
+	s_events.remove(type);
+}
+
 
 static void usage(bool client, FILE* f)
 {

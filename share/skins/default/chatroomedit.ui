@@ -28,7 +28,7 @@
    </size>
   </property>
   <property name="windowIcon" >
-   <iconset>muc.png</iconset>
+   <iconset>chatroomedit_title.png</iconset>
   </property>
   <property name="_yate_windowflags" stdset="0" >
    <string>sysmenu,title,minimize,close</string>

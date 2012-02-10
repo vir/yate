@@ -31,7 +31,7 @@
    <string>Add Account Wizard</string>
   </property>
   <property name="windowIcon" >
-   <iconset>user.png</iconset>
+   <iconset>accountwizard_title.png</iconset>
   </property>
   <property name="styleSheet" >
    <string>QLabel[_yate_wizardpage_title="true"] {

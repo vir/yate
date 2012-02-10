@@ -6964,11 +6964,14 @@ bool DefaultLogic::defaultMsgHandler(Message& msg, int id, bool& stopLogic)
 	    DDebug(ClientDriver::self(),DebugInfo,
 		"Channel %s left the conference. Terminating %s",
 		peer.c_str(),chan->id().c_str());
-	    // Try to use Client's way first
-	    if (Client::self())
-		Client::self()->callTerminate(chan->id());
-	    else
-		chan->disconnect("Peer left the conference");
+	    // Don't drop master chan with slaves
+	    if (chan->slave() != ClientChannel::SlaveNone || !chan->slavesCount()) {
+		// Try to use Client's way first
+		if (Client::self())
+		    Client::self()->callTerminate(chan->id());
+		else
+		    chan->disconnect("Peer left the conference");
+	    }
 	}
 	TelEngine::destruct(chan);
 	return false;

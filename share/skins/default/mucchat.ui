@@ -71,6 +71,18 @@
        <property name="_yate_noautoconnect" stdset="0" >
         <bool>true</bool>
        </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>room_subject.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>room_subject_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>room_subject_hover.png</string>
+       </property>
+       <property name="_yate_filterevents" stdset="0" >
+        <bool>true</bool>
+       </property>
       </widget>
      </item>
      <item>
@@ -490,8 +502,8 @@
         </property>
         <property name="iconSize" >
          <size>
-          <width>32</width>
-          <height>32</height>
+          <width>48</width>
+          <height>48</height>
          </size>
         </property>
         <property name="autoRaise" >
@@ -504,13 +516,13 @@
          <string>send_chat</string>
         </property>
         <property name="_yate_normal_icon" stdset="0" >
-         <string>sendchat_32.png</string>
+         <string>sendchat.png</string>
         </property>
         <property name="_yate_pressed_icon" stdset="0" >
-         <string>sendchat_32_pressed.png</string>
+         <string>sendchat_pressed.png</string>
         </property>
         <property name="_yate_hover_icon" stdset="0" >
-         <string>sendchat_32_hover.png</string>
+         <string>sendchat_hover.png</string>
         </property>
         <property name="_yate_filterevents" stdset="0" >
          <bool>true</bool>
@@ -671,7 +683,7 @@
   </layout>
   <action name="send_chat" >
    <property name="icon" >
-    <iconset>sendchat_32.png</iconset>
+    <iconset>sendchat.png</iconset>
    </property>
    <property name="text" >
     <string>Send</string>
@@ -682,7 +694,7 @@
   </action>
   <action name="room_changesubject" >
    <property name="icon" >
-    <iconset>cdr.png</iconset>
+    <iconset>room_subject.png</iconset>
    </property>
    <property name="text" >
     <string>Change Subject</string>

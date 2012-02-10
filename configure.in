@@ -1242,12 +1242,15 @@ if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
 	    QT4_LIB="-L$libqt -lQtUiTools -lQtGui -lQtXml -lQtCore"
 	    QT4_INC_NET="-I$incqt/QtNetwork"
 	    QT4_LIB_NET="-L$libqt -lQtNetwork"
-	    case "$libqt" in
-		*Frameworks)
-		    QT4_INC="-I$incqt  -I$incqt/QtUiTools -I$libqt/QtGui.framework/Headers -I$libqt/QtXml.framework/Headers -I$libqt/QtCore.framework/Headers"
-		    QT4_LIB="-F$libqt -lQtUiTools -framework QtGui -framework QtXml -framework QtCore"
-	    	    QT4_INC_NET="-I$libqt/QtNetwork.framework/Headers"
-	            QT4_LIB_NET="-framework QtNetwork"
+	    case "$uname_os" in
+		*Darwin)
+		    framework=`(ls "$libqt" | grep QtGui.framework) 2>/dev/null`
+		    if [[ "x$framework" != "x" ]]; then
+			QT4_INC="-I$incqt  -I$incqt/QtUiTools -I$libqt/QtGui.framework/Headers -I$libqt/QtXml.framework/Headers -I$libqt/QtCore.framework/Headers"
+			QT4_LIB="-L$libqt -F$libqt -lQtUiTools -framework QtGui -framework QtXml -framework QtCore"
+			QT4_INC_NET="-I$libqt/QtNetwork.framework/Headers"
+			QT4_LIB_NET="-framework QtNetwork"
+		    fi
 		    ;;
 	    esac
 	    QT4_MOC=`(qmake -query QT_INSTALL_BINS) 2>/dev/null`
@@ -1414,6 +1417,7 @@ AC_CONFIG_FILES([packing/rpm/yate.spec
 		 libs/yiax/Makefile
 		 libs/yxml/Makefile
 		 libs/yjabber/Makefile
+		 libs/yscript/Makefile
 		 libs/ymgcp/Makefile
 		 libs/ysig/Makefile
                  libs/ypbx/Makefile

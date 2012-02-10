@@ -31,7 +31,7 @@
    <string>Contact</string>
   </property>
   <property name="windowIcon" >
-   <iconset>book.png</iconset>
+   <iconset>addrbook_title.png</iconset>
   </property>
   <property name="_yate_window" stdset="0" >
    <bool>true</bool>

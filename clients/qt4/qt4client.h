@@ -531,6 +531,14 @@ public:
      */
     static bool setAppStyleSheet(const String& file);
 
+    /**
+     * Set widget attributes from list
+     * @param w The widget
+     * @param attrs Comma separated list of attributes.
+     *  To reset an attribute an item must start with '!'
+     */
+    static void setWidgetAttributes(QWidget* w, const String& attrs);
+
 protected:
     virtual void loadWindows(const char* file = 0);
 private:

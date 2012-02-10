@@ -13,7 +13,7 @@
    <string>Accounts</string>
   </property>
   <property name="windowIcon" >
-   <iconset>user.png</iconset>
+   <iconset>accountlist_title.png</iconset>
   </property>
   <property name="_yate_window" stdset="0" >
    <bool>true</bool>

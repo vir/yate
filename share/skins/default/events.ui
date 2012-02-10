@@ -13,7 +13,7 @@
    <string>Yate Debug Log</string>
   </property>
   <property name="windowIcon" >
-   <iconset>events.png</iconset>
+   <iconset>events_title.png</iconset>
   </property>
   <property name="_yate_window" stdset="0" >
    <bool>true</bool>

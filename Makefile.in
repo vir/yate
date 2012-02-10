@@ -21,6 +21,7 @@ MKDEPS := ./config.status
 PROGS:= yate
 YLIB := libyate.so.@PACKAGE_VERSION@
 SLIBS:= $(YLIB) libyate.so \
+	libyatescript.so.@PACKAGE_VERSION@ libyatescript.so \
 	libyatesig.so.@PACKAGE_VERSION@ libyatesig.so \
 	libyatemgcp.so.@PACKAGE_VERSION@ libyatemgcp.so \
 	libyatejabber.so.@PACKAGE_VERSION@ libyatejabber.so

@@ -34,7 +34,7 @@
    <string>Enter password</string>
   </property>
   <property name="windowIcon" >
-   <iconset>user.png</iconset>
+   <iconset>inputpwd_title.png</iconset>
   </property>
   <property name="_yate_windowflags" stdset="0" >
    <string>title,sysmenu,close</string>

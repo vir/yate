@@ -31,7 +31,7 @@
    <string>Yate Help</string>
   </property>
   <property name="windowIcon" >
-   <iconset>quest.png</iconset>
+   <iconset>help_title.png</iconset>
   </property>
   <property name="_yate_window" stdset="0" >
    <bool>true</bool>

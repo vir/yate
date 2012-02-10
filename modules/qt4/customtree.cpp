@@ -615,6 +615,7 @@ QtCustomTree::QtCustomTree(const char* name, const NamedList& params, QWidget* p
     setIndentation(0);
     setUniformRowHeights(false);
     QTreeWidget::setFrameShape(QFrame::NoFrame);
+    QtClient::setWidgetAttributes(this,params["_yate_widgetattributes"]);
     QTreeWidgetItem* hdr = headerItem();
     if (hdr) {
 	String* columns = params.getParam("columns");

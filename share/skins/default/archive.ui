@@ -25,7 +25,7 @@
    <string>Archive</string>
   </property>
   <property name="windowIcon" >
-   <iconset>archive.png</iconset>
+   <iconset>archive_title.png</iconset>
   </property>
   <property name="styleSheet" >
    <string>QWidget#archive {

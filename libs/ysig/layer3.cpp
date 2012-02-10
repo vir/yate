@@ -1196,13 +1196,14 @@ void SS7MTP3::notify(SS7Layer2* link)
 	}
     }
     countLinks();
+    String text;
+    text << "Linkset has " << m_active << " active, ";
+    text << m_checked << " checked of " << m_total << " links";
 #ifdef DEBUG
     String tmp;
     if (link)
 	tmp << "Link '" << link->toString() << "' is " << (link->operational()?"":"not ") << "operational. ";
-    Debug(this,DebugInfo,"%sLinkset has %u/%u/%u active/checked links [%p]",
-	tmp.null()?"":tmp.c_str(),
-	m_active,m_checked,m_total,this);
+    Debug(this,DebugInfo,"%s%s [%p]",tmp.safe(),text.c_str(),this);
 #endif
     // if operational status of a link changed notify upper layer
     if (act != m_active || chk != m_checked) {
@@ -1252,7 +1253,7 @@ void SS7MTP3::notify(SS7Layer2* link)
 	notif.addParam("total",String(m_total));
 	notif.addParam("link", link ? link->toString() : "");
 	notif.addParam("linkup", link ? String::boolText(link->operational()) : "");
-
+	notif.addParam("text", text);
 	mylock.drop();
 	SS7Layer3::notify(sls);
 	engine()->notify(this,notif);

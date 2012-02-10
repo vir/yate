@@ -368,6 +368,10 @@ server/sipfeatures.yate: ../libs/yxml/libyatexml.a
 server/sipfeatures.yate: LOCALFLAGS = -I@top_srcdir@/libs/yxml
 server/sipfeatures.yate: LOCALLIBS = -L../libs/yxml -lyatexml
 
+javascript.yate: ../libyatescript.so
+javascript.yate: LOCALFLAGS = -I@top_srcdir@/libs/yscript
+javascript.yate: LOCALLIBS = -lyatescript
+
 zlibcompress.yate: LOCALFLAGS = $(ZLIB_INC)
 zlibcompress.yate: LOCALLIBS = $(ZLIB_LIB)
 
@@ -404,6 +408,9 @@ server/ysnmpagent.yate: LOCALLIBS = -L../libs/yasn -lyasn -L../libs/ysnmp -lysnm
 
 ../libyatejabber.so ../libs/yjabber/libyatejabber.a: @top_srcdir@/libs/yjabber/xmpputils.h @top_srcdir@/libs/yjabber/yatejabber.h @top_srcdir@/libs/yjabber/yatejingle.h
 	$(MAKE) -C ../libs/yjabber
+
+../libyatescript.so ../libs/yjabber/libyatescript.a: @top_srcdir@/libs/yscript/yatescript.h
+	$(MAKE) -C ../libs/yscript
 
 ../libs/ypbx/libyatepbx.a: @top_srcdir@/libs/ypbx/yatepbx.h
 	$(MAKE) -C ../libs/ypbx

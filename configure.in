@@ -1417,6 +1417,7 @@ AC_CONFIG_FILES([packing/rpm/yate.spec
 		 libs/yiax/Makefile
 		 libs/yxml/Makefile
 		 libs/yjabber/Makefile
+		 libs/yscript/Makefile
 		 libs/ymgcp/Makefile
 		 libs/ysig/Makefile
                  libs/ypbx/Makefile

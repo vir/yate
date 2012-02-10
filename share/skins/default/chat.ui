@@ -22,7 +22,7 @@
    <string comment="VoIP Client" >Chat</string>
   </property>
   <property name="windowIcon" >
-   <iconset>chat.png</iconset>
+   <iconset>chat_title.png</iconset>
   </property>
   <property name="styleSheet" >
    <string>QWidget#chat {

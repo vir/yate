@@ -37,7 +37,7 @@
    <string comment="VoIP Client" >MUCS</string>
   </property>
   <property name="windowIcon" >
-   <iconset>muc.png</iconset>
+   <iconset>mucs_title.png</iconset>
   </property>
   <property name="toolTip" >
    <string/>

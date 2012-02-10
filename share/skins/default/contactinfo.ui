@@ -28,7 +28,7 @@
    </size>
   </property>
   <property name="windowIcon" >
-   <iconset>info.png</iconset>
+   <iconset>contactinfo_title.png</iconset>
   </property>
   <property name="_yate_destroyonhide" stdset="0" >
    <bool>true</bool>

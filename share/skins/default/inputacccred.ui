@@ -31,7 +31,7 @@
    <string>Enter account credentials</string>
   </property>
   <property name="windowIcon" >
-   <iconset>user.png</iconset>
+   <iconset>inputacccred_title.png</iconset>
   </property>
   <property name="_yate_windowflags" stdset="0" >
    <string>title,sysmenu,close</string>

@@ -37,7 +37,7 @@
    <string comment="VoIP Client" >Chat</string>
   </property>
   <property name="windowIcon" >
-   <iconset>chat.png</iconset>
+   <iconset>dockedchat_title.png</iconset>
   </property>
   <property name="_yate_window" stdset="0" >
    <bool>true</bool>

@@ -34,7 +34,7 @@
    <string comment="VoIP Client" >Options</string>
   </property>
   <property name="windowIcon" >
-   <iconset>configure.png</iconset>
+   <iconset>settings_title.png</iconset>
   </property>
   <property name="styleSheet" >
    <string/>

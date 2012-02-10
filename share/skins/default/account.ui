@@ -31,7 +31,7 @@
    <string>Account</string>
   </property>
   <property name="windowIcon" >
-   <iconset>user.png</iconset>
+   <iconset>account_title.png</iconset>
   </property>
   <property name="styleSheet" >
    <string/>
@@ -1287,6 +1287,12 @@
           <spacer>
            <property name="orientation" >
             <enum>Qt::Vertical</enum>
+           </property>
+           <property name="sizeHint" >
+            <size>
+             <width>20</width>
+             <height>40</height>
+            </size>
            </property>
           </spacer>
          </item>

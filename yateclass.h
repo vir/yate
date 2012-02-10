@@ -1249,6 +1249,150 @@ private:
 };
 
 /**
+ * Simple vector class that holds objects derived from GenObject
+ * @short A vector holding GenObjects
+ */
+class YATE_API ObjVector : public GenObject
+{
+    YNOCOPY(ObjVector); // no automatic copies please
+public:
+    /**
+     * Constructor of a zero capacity vector
+     * @param autodelete True to delete objects on destruct, false otherwise
+     */
+    inline explicit ObjVector(bool autodelete = true)
+	: m_length(0), m_objects(0), m_delete(autodelete)
+	{ }
+
+    /**
+     * Constructor of an empty vector
+     * @param maxLen Maximum number of objects the vector can hold
+     * @param autodelete True to delete objects on destruct, false otherwise
+     */
+    ObjVector(unsigned int maxLen, bool autodelete = true);
+
+    /**
+     * Constructor from an object list
+     * @param list List of objects to store in vector
+     * @param move True to move elements from list, false to just copy the pointer
+     * @param maxLen Maximum number of objects to put in vector, zero to put all
+     * @param autodelete True to delete objects on destruct, false otherwise
+     */
+    ObjVector(ObjList& list, bool move = true, unsigned int maxLen = 0, bool autodelete = true);
+
+    /**
+     * Destroys the vector and the objects if automatic delete is set
+     */
+    virtual ~ObjVector();
+
+    /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
+     * Get the capacity of the vector
+     * @return Number of items the vector can hold
+     */
+    inline unsigned int length() const
+	{ return m_length; }
+
+    /**
+     * Get the number of non-null objects in the vector
+     * @return Count of items
+     */
+    unsigned int count() const;
+
+    /**
+     * Get the object at a specific index in vector
+     * @param index Index of the object to retrieve
+     * @return Pointer to the object or NULL
+     */
+    inline GenObject* at(int index) const
+	{ return (index >= 0 && index < (int)m_length) ? m_objects[index] : 0; }
+
+    /**
+     * Indexing operator with signed parameter
+     * @param index Index of the object to retrieve
+     * @return Pointer to the object or NULL
+     */
+    inline GenObject* operator[](signed int index) const
+	{ return at(index); }
+
+    /**
+     * Indexing operator with unsigned parameter
+     * @param index Index of the object to retrieve
+     * @return Pointer to the object or NULL
+     */
+    inline GenObject* operator[](unsigned int index) const
+	{ return at(index); }
+
+    /**
+     * Clear the vector and assign objects from a list
+     * @param list List of objects to store in vector
+     * @param move True to move elements from list, false to just copy the pointer
+     * @param maxLen Maximum number of objects to put in vector, zero to put all
+     * @return Capacity of the vector
+     */
+    unsigned int assign(ObjList& list, bool move = true, unsigned int maxLen = 0);
+
+    /**
+     * Retrieve and remove an object from the vector
+     * @param index Index of the object to retrieve
+     * @return Pointer to the stored object, NULL for out of bound index
+     */
+    GenObject* take(unsigned int index);
+
+    /**
+     * Store an object in the vector
+     * @param obj Object to store in vector
+     * @param index Index of the object to store
+     * @return True for success, false if index was out of bounds
+     */
+    bool set(GenObject* obj, unsigned int index);
+
+    /**
+     * Get the position in vector of a GenObject by a pointer to it
+     * @param obj Pointer to the object to search for
+     * @return Index of object in vector, -1 if not found
+     */
+    int index(const GenObject* obj) const;
+
+    /**
+     * Get the position in vector of the first GenObject with a given value
+     * @param str String value (toString) of the object to search for
+     * @return Index of object in vector, -1 if not found
+     */
+    int index(const String& str) const;
+
+    /**
+     * Clear the vector and optionally delete all contained objects
+     */
+    void clear();
+
+    /**
+     * Get the automatic delete flag
+     * @return True if will delete objects on destruct, false otherwise
+     */
+    inline bool autoDelete()
+	{ return m_delete; }
+
+    /**
+     * Set the automatic delete flag
+     * @param autodelete True to delete objects on destruct, false otherwise
+     */
+    inline void setDelete(bool autodelete)
+	{ m_delete = autodelete; }
+
+private:
+    unsigned int m_length;
+    GenObject** m_objects;
+    bool m_delete;
+};
+
+/**
  * A simple Array class derivated from RefObject
  * It uses one ObjList to keep the pointers to other ObjList's.
  * Data is organized in columns - the main ObjList holds pointers to one

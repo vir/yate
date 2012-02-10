@@ -39,9 +39,7 @@ ObjList::ObjList()
 
 ObjList::~ObjList()
 {
-#ifdef XDEBUG
-    Debugger debug("ObjList::~ObjList()"," [%p]",this);
-#endif
+    XDebug(DebugAll,"ObjList::~ObjList() [%p]",this);
     clear();
 }
 
@@ -263,6 +261,136 @@ void ObjList::clear()
     ObjList *n = m_next;
     m_next = 0;
     TelEngine::destruct(n);
+}
+
+
+ObjVector::ObjVector(unsigned int maxLen, bool autodelete)
+    : m_length(maxLen), m_objects(0), m_delete(autodelete)
+{
+    XDebug(DebugAll,"ObjVector::ObjVector(%u,%s) [%p]",
+	maxLen,String::boolText(autodelete),this);
+    if (maxLen) {
+	m_objects = new GenObject*[maxLen];
+	for (unsigned int i = 0; i < maxLen; i++)
+	    m_objects[i] = 0;
+    }
+}
+
+ObjVector::ObjVector(ObjList& list, bool move, unsigned int maxLen, bool autodelete)
+    : m_length(0), m_objects(0), m_delete(autodelete)
+{
+    XDebug(DebugAll,"ObjVector::ObjVector(%p,%s,%u,%s) [%p]",
+	&list,String::boolText(move),maxLen,String::boolText(autodelete),this);
+    assign(list,move,maxLen);
+}
+
+ObjVector::~ObjVector()
+{
+    XDebug(DebugAll,"ObjVector::~ObjVector() [%p]",this);
+    clear();
+}
+
+void* ObjVector::getObject(const String& name) const
+{
+    if (name == YSTRING("ObjVector"))
+	return const_cast<ObjVector*>(this);
+    return GenObject::getObject(name);
+}
+
+unsigned int ObjVector::assign(ObjList& list, bool move, unsigned int maxLen)
+{
+    if (!maxLen)
+	maxLen = list.count();
+    clear();
+    if (maxLen) {
+	m_objects = new GenObject*[maxLen];
+	ObjList* l = list.skipNull();
+	for (unsigned int i = 0; i < maxLen; i++) {
+	    if (l) {
+		if (move) {
+		    m_objects[i] = l->remove(false);
+		    l = l->skipNull();
+		}
+		else {
+		    m_objects[i] = l->get();
+		    l = l->skipNext();
+		}
+	    }
+	    else
+		m_objects[i] = 0;
+	}
+	m_length = maxLen;
+    }
+    return maxLen;
+}
+
+unsigned int ObjVector::count() const
+{
+    if (!m_objects)
+	return 0;
+    unsigned int c = 0;
+    for (unsigned int i = 0; i < m_length; i++)
+	if (m_objects[i])
+	    c++;
+    return c;
+}
+
+int ObjVector::index(const GenObject* obj) const
+{
+    if (!m_objects)
+	return -1;
+    for (unsigned int i = 0; i < m_length; i++)
+	if (m_objects[i] == obj)
+	    return i;
+    return -1;
+}
+
+int ObjVector::index(const String& str) const
+{
+    if (!m_objects)
+	return -1;
+    for (unsigned int i = 0; i < m_length; i++)
+	if (m_objects[i] && str.matches(m_objects[i]->toString()))
+	    return i;
+    return -1;
+}
+
+GenObject* ObjVector::take(unsigned int index)
+{
+    if (index >= m_length || !m_objects)
+	return 0;
+    GenObject* ret = m_objects[index];
+    m_objects[index] = 0;
+    return ret;
+}
+
+bool ObjVector::set(GenObject* obj, unsigned int index)
+{
+    if (index >= m_length || !m_objects)
+	return false;
+    GenObject* old = m_objects[index];
+    if (old == obj)
+	return true;
+    m_objects[index] = obj;
+    if (m_delete)
+	TelEngine::destruct(old);
+    return true;
+}
+
+void ObjVector::clear()
+{
+#ifdef XDEBUG
+    Debugger debug("ObjVector::clear()"," [%p]",this);
+#endif
+    GenObject** objs = m_objects;
+    unsigned int len = m_length;
+    m_length = 0;
+    m_objects = 0;
+    if (m_delete && objs) {
+	for (unsigned int i = 0; i < len; i++)
+	    TelEngine::destruct(objs[i]);
+    }
+    delete objs;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

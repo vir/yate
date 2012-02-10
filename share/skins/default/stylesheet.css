@@ -69,7 +69,7 @@ QToolButton:pressed {
   background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #f6e8e8, stop: 1 #ffffff);
 }
 QToolButton:disabled {
-  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ebebeb, stop: 1 #ffffff);
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #ebebeb);
   border: 1px solid #a0a0a0;
 }
 QToolButton::menu-indicator {
@@ -93,7 +93,7 @@ QPushButton:pressed {
   background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #f6e8e8, stop: 1 #ffffff);
 }
 QPushButton:disabled {
-  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ebebeb, stop: 1 #ffffff);
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #ebebeb);
   border: 1px solid #a0a0a0;
 }
 

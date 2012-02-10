@@ -1,3 +1,30 @@
+yate (3.3.3.svn4898) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4898: + Added method used to set/reset
+    widget attributes.  + Apply custom tree widget attributes from
+    parameters.  + Don't show focus rect in channel items
+    conference/transfer list.  + Changed send chat button images.  +
+    Changed scroll up/down images.  + Changed tab item left/right
+    padding.  + Changed calls/history/contacts selector images.  + Added
+    class that creates a vector of objects from a list.  + Added header
+    dependencies for libraries needed by modules.  + Added specific make
+    rules for modules subdirectories to fix building outside source dir
+    with broken make.  + Changed images.  + Do proper detection of Qt4
+    framework paths.  + Changed images.  + Don't drop a master channel
+    with slaves when its peer hangs up.  + Added support for holding in
+    memory and retrieving events from startup or arbitrary sources.  +
+    Changed window icons.  + Changed image.  + Fixed style sheet for
+    comboboxes with background image.  + Fixed disabled buttons
+    background.  + Added partial universal scripting implementation with
+    Javascript support.  + Added missing library and modules to install
+    and package.  + Fixed export directive.  + Fixed cast.  + Added
+    scripting library and javascript module to Windows build.  + Convert
+    to signed when using the unary operator '-' on unsigned variables.
+    Fixed VC warnings. Fixed debug message.  + Added camel_map module to
+    Windows build.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 11 Feb 2012 02:20:19 +0400
+
 yate (3.3.3.svn4873) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4873: + Clear any local SIP media channels

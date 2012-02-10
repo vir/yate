@@ -71,6 +71,18 @@
        <property name="_yate_noautoconnect" stdset="0" >
         <bool>true</bool>
        </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>room_subject.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>room_subject_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>room_subject_hover.png</string>
+       </property>
+       <property name="_yate_filterevents" stdset="0" >
+        <bool>true</bool>
+       </property>
       </widget>
      </item>
      <item>
@@ -682,7 +694,7 @@
   </action>
   <action name="room_changesubject" >
    <property name="icon" >
-    <iconset>cdr.png</iconset>
+    <iconset>room_subject.png</iconset>
    </property>
    <property name="text" >
     <string>Change Subject</string>

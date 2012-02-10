@@ -233,7 +233,7 @@ QTabBar {
   font: 13px;
 }
 QTabBar::tab {
-  padding: 1px 4px 1px 4px;
+  padding: 4px 4px 2px 4px;
   background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f6e8e8);
   border: 1px solid #717fa0;
   min-height: 3ex;

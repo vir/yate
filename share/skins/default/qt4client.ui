@@ -5,8 +5,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>308</width>
-    <height>502</height>
+    <width>340</width>
+    <height>520</height>
    </rect>
   </property>
   <property name="sizePolicy" >
@@ -18,7 +18,7 @@
   <property name="minimumSize" >
    <size>
     <width>300</width>
-    <height>500</height>
+    <height>520</height>
    </size>
   </property>
   <property name="focusPolicy" >
@@ -188,6 +188,12 @@
      <property name="currentIndex" >
       <number>1</number>
      </property>
+     <property name="iconSize" >
+      <size>
+       <width>20</width>
+       <height>20</height>
+      </size>
+     </property>
      <widget class="QWidget" name="tabChat" >
       <attribute name="title" >
        <string>Chat</string>
@@ -315,13 +321,13 @@
          <property name="minimumSize" >
           <size>
            <width>16</width>
-           <height>52</height>
+           <height>50</height>
           </size>
          </property>
          <property name="maximumSize" >
           <size>
            <width>16777215</width>
-           <height>52</height>
+           <height>50</height>
           </size>
          </property>
          <property name="styleSheet" >
@@ -339,13 +345,13 @@
            <number>4</number>
           </property>
           <property name="topMargin" >
-           <number>2</number>
+           <number>4</number>
           </property>
           <property name="rightMargin" >
            <number>4</number>
           </property>
           <property name="bottomMargin" >
-           <number>2</number>
+           <number>0</number>
           </property>
           <item>
            <widget class="QToolButton" name="ctrlCalls" >

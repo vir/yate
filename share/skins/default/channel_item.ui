@@ -644,6 +644,7 @@ QScrollBar::right-arrow:pressed { border: 1px solid #717fa0; }
            <property name="_yate_uiwidget_params" stdset="0" >
             <stringlist>
              <string>vertical_scroll_policy=pixel</string>
+             <string>_yate_widgetattributes=!macshowfocusrect</string>
              <string>_yate_tree_additemtype=transfer_start</string>
              <string>_yate_tree_additemtype=transfer_item</string>
              <string>_yate_tree_additemtype=conf_add</string>

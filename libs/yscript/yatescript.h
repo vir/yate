@@ -54,7 +54,7 @@ class ExpOperation;
  * This class allows extending ExpEvaluator to implement custom fields and functions
  * @short ExpEvaluator extending interface
  */
-class YATE_API ExpExtender : public RefObject
+class YSCRIPT_API ExpExtender : public RefObject
 {
     YCLASS(ExpExtender,RefObject)
 public:
@@ -93,7 +93,7 @@ public:
  * A class used to build stack based (posifix) expression parsers and evaluators
  * @short An expression parser and evaluator
  */
-class YATE_API ExpEvaluator : public DebugEnabler
+class YSCRIPT_API ExpEvaluator : public DebugEnabler
 {
 public:
     /**
@@ -615,7 +615,7 @@ private:
  * This class describes a single operation in an expression evaluator
  * @short A single operation in an expression
  */
-class YATE_API ExpOperation : public NamedString
+class YSCRIPT_API ExpOperation : public NamedString
 {
     friend class ExpEvaluator;
     YCLASS(ExpOperation,NamedString)
@@ -727,7 +727,7 @@ private:
  * An evaluator for multi-row (tables like in SQL) expressions
  * @short An SQL-like table evaluator
  */
-class YATE_API TableEvaluator
+class YSCRIPT_API TableEvaluator
 {
 public:
     /**

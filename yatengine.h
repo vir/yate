@@ -1139,6 +1139,19 @@ public:
      */
     static void pluginMode(PluginMode mode);
 
+    /**
+     * Retrive the list of captured events of a specific type
+     * @param type Type of captured events, an empty name returns engine events
+     * @return List containing captured events of specified type, NULL if not found
+     */
+    static const ObjList* events(const String& type);
+
+    /**
+     * Clear the list of captured events of a specific type
+     * @param type Type of captured events, an empty name clear engine events
+     */
+    static void clearEvents(const String& type);
+
 protected:
     /**
      * Destroys the engine and everything. You must not call it directly,

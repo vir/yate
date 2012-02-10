@@ -2434,6 +2434,83 @@ private:
 };
 
 /**
+ * Holder for an event (output, debug or alarm) message
+ * @short A captured event string with a debug level
+ */
+class YATE_API CapturedEvent : public String
+{
+    friend class Engine;
+    YCLASS(CapturedEvent,String)
+public:
+    /**
+     * Constructor
+     * @param level Debugging level associated with the event
+     * @param text Text description of the event
+     */
+    inline CapturedEvent(int level, const char* text)
+	: String(text), m_level(level)
+	{ }
+
+    /**
+     * Copy constructor
+     * @param original Captured event to copy
+     */
+    inline CapturedEvent(const CapturedEvent& original)
+	: String(original), m_level(original.level())
+	{ }
+
+    /**
+     * Get the debugging level of the event
+     * @return Debugging level associated with the event
+     */
+    inline int level() const
+	{ return m_level; }
+
+
+    /**
+     * Get the capturing state of the output and debug messages
+     * @return True if output and debug messages are being captured
+     */
+    inline static bool capturing()
+	{ return s_capturing; }
+
+    /**
+     * Get the list of captured events
+     * @return List of events captured from output and debugging
+     */
+    inline static const ObjList& events()
+	{ return s_events; }
+
+    /**
+     * Add an event to the captured events list
+     * @param level Debugging level associated with the event
+     * @param text Text description of the event, must not be empty
+     */
+    inline static void append(int level, const char* text)
+	{ if (text && *text) s_events.append(new CapturedEvent(level,text)); }
+
+protected:
+    /**
+     * Get a writable list of captured events
+     * @return List of events captured from output and debugging
+     */
+    inline static ObjList& eventsRw()
+	{ return s_events; }
+
+    /**
+     * Enable or disable capturing of output and debug messages
+     * @param capture True to capture internally the debugging messages
+     */
+    inline static void capturing(bool capture)
+	{ s_capturing = capture; }
+
+private:
+    int m_level;
+    static ObjList s_events;
+    static bool s_capturing;
+};
+
+/**
  * A string class with a hashed string name
  * @short A named string class.
  */

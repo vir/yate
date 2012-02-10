@@ -162,6 +162,9 @@ static Mutex out_mux(false,"DebugOutput");
 static Mutex ind_mux(false,"DebugIndent");
 static Thread* s_thr = 0;
 
+bool CapturedEvent::s_capturing = false;
+ObjList CapturedEvent::s_events;
+
 static bool reentered()
 {
     if (!s_thr)
@@ -178,12 +181,16 @@ static void common_output(int level,char* buf)
     int n = ::strlen(buf);
     if (n && (buf[n-1] == '\n'))
 	    n--;
-    buf[n] = '\n';
-    buf[n+1] = '\0';
     // serialize the output strings
     out_mux.lock();
     // TODO: detect reentrant calls from foreign threads and main thread
     s_thr = Thread::current();
+    if (CapturedEvent::capturing()) {
+	buf[n] = '\0';
+	CapturedEvent::append(level,buf);
+    }
+    buf[n] = '\n';
+    buf[n+1] = '\0';
     if (s_output)
 	s_output(buf,level);
     if (s_intout)

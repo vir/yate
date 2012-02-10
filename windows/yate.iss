@@ -71,6 +71,7 @@ Source: "Release\libyate.dll"; DestDir: "{app}"; Flags: replacesameversion; Comp
 Source: "Release\libyjabber.dll"; DestDir: "{app}"; Flags: replacesameversion; Components: driver\jabber
 Source: "Release\libymgcp.dll"; DestDir: "{app}"; Flags: replacesameversion; Components: server\pstn server\cluster
 Source: "Release\libysig.dll"; DestDir: "{app}"; Flags: replacesameversion; Components: server\pstn server\cluster
+Source: "Release\libyscript.dll"; DestDir: "{app}"; Flags: replacesameversion; Components: client server
 Source: "Release\libyqt4.dll"; DestDir: "{app}"; Flags: replacesameversion; Components: client\qt
 Source: "Release\yate-qt4.exe"; DestDir: "{app}"; Flags: replacesameversion; Components: client\qt
 Source: "Runtimes\qtcore4.dll"; DestDir: "{app}"; Components: client\qt\run
@@ -129,6 +130,7 @@ Source: "Release\qt4\customtable.yate"; DestDir: "{app}\modules\qt4"; Flags: rep
 Source: "Release\qt4\customtree.yate"; DestDir: "{app}\modules\qt4"; Flags: replacesameversion; Components: client\qt
 Source: "Release\qt4\customtext.yate"; DestDir: "{app}\modules\qt4"; Flags: replacesameversion; Components: client\qt
 Source: "Release\qt4\widgetlist.yate"; DestDir: "{app}\modules\qt4"; Flags: replacesameversion; Components: client\qt
+Source: "Release\javascript.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: client server
 
 Source: "Release\server\heartbeat.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\cluster
 Source: "Release\server\clustering.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\cluster

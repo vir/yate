@@ -1046,7 +1046,7 @@ bool ExpEvaluator::runAllFields(ObjList& stack, void* context) const
     DDebug(this,DebugAll,"runAllFields(%p,%p)",&stack,context);
     bool ok = true;
     for (ObjList* l = stack.skipNull(); l; l = l->skipNext()) {
-	ExpOperation* o = static_cast<const ExpOperation*>(l->get());
+	const ExpOperation* o = static_cast<const ExpOperation*>(l->get());
 	if (o->barrier())
 	    break;
 	if (o->opcode() != OpcField)

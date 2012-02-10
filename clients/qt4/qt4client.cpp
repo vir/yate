@@ -413,6 +413,12 @@ static TokenDict s_windowFlags[] = {
     {0,0}
 };
 
+// Widget attribute names
+static const TokenDict s_widgetAttributes[] = {
+    {"macshowfocusrect",   Qt::WA_MacShowFocusRect},
+    {0,0}
+};
+
 String QtWidget::s_types[QtWidget::Unknown] = {
     "QPushButton",
     "QCheckBox",
@@ -4116,6 +4122,23 @@ bool QtClient::setAppStyleSheet(const String& file)
     if (!oper)
 	qApp->setStyleSheet(sh);
     return oper == 0;
+}
+
+// Set widget attributes from list
+void QtClient::setWidgetAttributes(QWidget* w, const String& attrs)
+{
+    if (!(w && attrs))
+	return;
+    ObjList* list = attrs.split(',',false);
+    for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
+	const String& attr = *static_cast<String*>(o->get());
+	bool on = (attr[0] != '!');
+	const char* name = attr.c_str();
+	int val = lookup(on ? name : name + 1,s_widgetAttributes);
+	if (val)
+	    w->setAttribute((Qt::WidgetAttribute)val,on);
+    }
+    TelEngine::destruct(list);
 }
 
 

@@ -1,3 +1,13 @@
+yate (3.3.3.svn4902) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4902: + Added String method that converts to
+    long integer.  + Changed images.  + Reset received rtp ssrc media
+    attribute to avoid sending it back.  + Added extra client method
+    used to set an element's image with fit request. Added extra fit
+    parameter (defaults to false) to window's set image method.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 14 Feb 2012 02:19:24 +0400
+
 yate (3.3.3.svn4898) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4898: + Added method used to set/reset

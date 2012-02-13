@@ -1735,6 +1735,19 @@ public:
     int toInteger(const TokenDict* tokens, int defvalue = 0, int base = 0) const;
 
     /**
+     * Convert the string to an long integer value.
+     * @param defvalue Default to return if the string is not a number
+     * @param base Numeration base, 0 to autodetect
+     * @param minvalue Minimum value allowed
+     * @param maxvalue Maximum value allowed
+     * @param clamp Control the out of bound values: true to adjust to the nearest
+     *  bound, false to return the default value
+     * @return The long integer interpretation or defvalue.
+     */
+    long int toLong(long int defvalue = 0, int base = 0, long int minvalue = LONG_MIN,
+	long int maxvalue = LONG_MAX, bool clamp = true) const;
+
+    /**
      * Convert the string to a floating point value.
      * @param defvalue Default to return if the string is not a number
      * @return The floating-point interpretation or defvalue.

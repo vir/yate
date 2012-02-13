@@ -684,9 +684,10 @@ public:
      * Set an element's image
      * @param name Name of the element
      * @param image Image to set
+     * @param fit Fit image in element (defaults to false)
      * @return True on success
      */
-    virtual bool setImage(const String& name, const String& image);
+    virtual bool setImage(const String& name, const String& image, bool fit = false);
 
     /**
      * Set a property for this window or for a widget owned by it

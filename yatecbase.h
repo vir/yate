@@ -352,9 +352,10 @@ public:
      * Set an element's image
      * @param name Name of the element
      * @param image Image to set
+     * @param fit Fit image in element (defaults to false)
      * @return True on success
      */
-    virtual bool setImage(const String& name, const String& image) = 0;
+    virtual bool setImage(const String& name, const String& image, bool fit = false) = 0;
 
     /**
      * Set a property for this window or for a widget owned by it
@@ -1220,6 +1221,17 @@ public:
      * @return True on success
      */
     virtual bool setImage(const String& name, const String& image,
+	Window* wnd = 0, Window* skip = 0);
+
+    /**
+     * Set an element's image. Request to fit the image in element
+     * @param name Name of the element
+     * @param image Image to set
+     * @param wnd Optional target window
+     * @param skip Optional window to skip if wnd is 0
+     * @return True on success
+     */
+    virtual bool setImageFit(const String& name, const String& image,
 	Window* wnd = 0, Window* skip = 0);
 
     /**

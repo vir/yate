@@ -2177,6 +2177,7 @@ void YJGConnection::addContent(bool local, JGSessionContent* c)
 {
     Lock lock(m_mutex);
     m_audioContents.append(c);
+    c->m_rtpMedia.m_ssrc = "";
     if (local)
 	c->m_rtpRemoteCandidates.m_type = c->m_rtpLocalCandidates.m_type;
     else

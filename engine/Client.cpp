@@ -68,6 +68,7 @@ public:
 	buildMenu,
 	removeMenu,
 	setImage,
+	setImageFit,
 	setProperty,
 	getProperty,
 	openUrl
@@ -832,6 +833,9 @@ void ClientThreadProxy::process()
 	    break;
 	case setImage:
 	    m_rval = client->setImage(m_name,m_text,m_wnd,m_skip);
+	    break;
+	case setImageFit:
+	    m_rval = client->setImageFit(m_name,m_text,m_wnd,m_skip);
 	    break;
 	case setProperty:
 	    m_rval = client->setProperty(m_name,m_item,m_text,m_wnd,m_skip);
@@ -1839,13 +1843,35 @@ bool Client::setImage(const String& name, const String& image, Window* wnd, Wind
 	return proxy.execute();
     }
     if (wnd)
-	return wnd->setImage(name,image);
+	return wnd->setImage(name,image,false);
     ++s_changing;
     bool ok = false;
     for (ObjList* o = m_windows.skipNull(); o; o = o->skipNext()) {
 	wnd = static_cast<Window*>(o->get());
 	if (wnd != skip)
-	    ok = wnd->setImage(name,image) || ok;
+	    ok = wnd->setImage(name,image,false) || ok;
+    }
+    --s_changing;
+    return ok;
+}
+
+// Set an element's image. Request to fit the image
+bool Client::setImageFit(const String& name, const String& image, Window* wnd, Window* skip)
+{
+    if (!valid())
+	return false;
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::setImageFit,name,image,wnd,skip);
+	return proxy.execute();
+    }
+    if (wnd)
+	return wnd->setImage(name,image,true);
+    ++s_changing;
+    bool ok = false;
+    for (ObjList* o = m_windows.skipNull(); o; o = o->skipNext()) {
+	wnd = static_cast<Window*>(o->get());
+	if (wnd != skip)
+	    ok = wnd->setImage(name,image,true) || ok;
     }
     --s_changing;
     return ok;

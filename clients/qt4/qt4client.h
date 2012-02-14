@@ -524,12 +524,9 @@ public:
     static bool getPixmapFromCache(QPixmap& pixmap, const QString& file);
 
     /**
-     * Set application style sheet from file.
-     * Use skin path if there is no path separator in file
-     * @param file File containing application style sheet (UTF8 text)
-     * @return True on success
+     * Update application style sheet from config
      */
-    static bool setAppStyleSheet(const String& file);
+    static void updateAppStyleSheet();
 
     /**
      * Set widget attributes from list

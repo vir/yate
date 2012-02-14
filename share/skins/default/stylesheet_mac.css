@@ -1,0 +1,5 @@
+/* QTabWidget and QTabBar */
+
+QTabWidget::pane {
+  margin-top: -1px;
+}

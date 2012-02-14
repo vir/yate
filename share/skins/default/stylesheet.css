@@ -227,6 +227,7 @@ QSpinBox::down-arrow:disabled, QSpinBox::down-arrow:off { image: url(down_small_
 QTabWidget::pane {
   border: 1px solid #717fa0;
   background:  #ffffff;
+  margin-top: 1px;
 }
 QTabBar {
   font: 13px;

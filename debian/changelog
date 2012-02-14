@@ -1,3 +1,12 @@
+yate (3.3.3.svn4905) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4905: + Added suport to load style and
+    platform depending css files.  + Fixed tab bar margin in stylesheet.
+    Added mac style specific file.  + Fixed combobox style sheet. Added
+    windows platform specific style sheet file.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 15 Feb 2012 02:19:23 +0400
+
 yate (3.3.3.svn4902) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4902: + Added String method that converts to

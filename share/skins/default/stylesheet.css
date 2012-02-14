@@ -140,22 +140,21 @@ QComboBox {
   border-radius: 2px;
   font-size: 12px;
   color:#333333;
+  margin: 0px 0px 0px 0px;
+  padding: 0px 2px 0px 2px;
+  border-top-right-radius: 0px;
+  border-bottom-right-radius: 0px;
 }
 QComboBox::down-arrow { image: url(cb_arrow.png); }
 QComboBox::down-arrow:on { top: 1px; left: 1px; }
-QComboBox:!editable {
-  padding-left: 2px;
-  padding-right: 2px;
-}
-QComboBox:editable {
-  padding-left: 2px;
-  padding-right: 24px;
-}
 QComboBox::drop-down {
-  subcontrol-origin: padding;
+  subcontrol-origin: margin;
   subcontrol-position: top right;
   width: 22px;
-  border-left: 1px solid #717fa0;
+  border: 1px solid #717fa0;
+  border-radius: 2px;
+  border-top-left-radius: 0px;
+  border-bottom-left-radius: 0px;
   background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f9efef);
 }
 QComboBox::drop-down:on {
@@ -227,6 +226,7 @@ QSpinBox::down-arrow:disabled, QSpinBox::down-arrow:off { image: url(down_small_
 QTabWidget::pane {
   border: 1px solid #717fa0;
   background:  #ffffff;
+  margin-top: 1px;
 }
 QTabBar {
   font: 13px;

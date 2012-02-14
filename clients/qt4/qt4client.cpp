@@ -27,12 +27,16 @@
 
 #ifdef _WINDOWS
 #define DEFAULT_DEVICE "dsound/*"
+#define PLATFORM_LOWERCASE_NAME "windows"
 #elif defined(__APPLE__)
 #define DEFAULT_DEVICE "coreaudio/*"
+#define PLATFORM_LOWERCASE_NAME "apple"
 #elif defined(__linux__)
 #define DEFAULT_DEVICE "alsa/default"
+#define PLATFORM_LOWERCASE_NAME "linux"
 #else
 #define DEFAULT_DEVICE "oss//dev/dsp"
+#define PLATFORM_LOWERCASE_NAME "unknown"
 #endif
 
 namespace TelEngine {
@@ -392,6 +396,7 @@ static String s_propWindowFlags = "_yate_windowflags"; // Window flags
 static const String s_propContextMenu = "_yate_context_menu"; // Context menu name
 static String s_propHideInactive = "dynamicHideOnInactive"; // Hide inactive window
 static const String s_yatePropPrefix = "_yate_";      // Yate dynamic properties prefix
+static NamedList s_qtStyles("");                      // Qt styles classname -> internal name 
 //
 static Qt4ClientFactory s_qt4Factory;
 static Configuration s_cfg;
@@ -672,6 +677,51 @@ static void addFilePathUrl(QByteArray& a, const String& file)
 	tmp.insert(0,path);
 	a.replace(start,len,tmp);
     }
+}
+
+// Read data from file and append it to a string buffer
+// Optionally append suffix characters to file name
+static bool appendStyleSheet(QString& buf, const char* file,
+    const char* suffix1 = 0, const char* suffix2 = 0)
+{
+    if (TelEngine::null(file))
+	return false;
+    String shf = file;
+    const char* oper = 0;
+    int pos = shf.rfind('/');
+    if (pos < 0)
+	pos = shf.rfind('\\');
+    if (pos < 0)
+	shf = Client::s_skinPath + shf;
+    int level = DebugNote;
+    if (!(TelEngine::null(suffix1) && TelEngine::null(suffix2))) {
+	level = DebugAll;
+	int dotPos = shf.rfind('.');
+	if (dotPos > pos) {
+	    String tmp = shf.substr(0,dotPos);
+	    tmp.append(suffix1,"_");
+	    tmp.append(suffix2,"_");
+	    shf = tmp + shf.substr(dotPos);
+	}
+    }
+    DDebug(ClientDriver::self(),DebugAll,"Loading stylesheet file '%s'",shf.c_str());
+    QFile f(QtClient::setUtf8(shf));
+    if (f.open(QIODevice::ReadOnly)) {
+	QByteArray a = f.readAll();
+	if (a.size()) {
+	    addFilePathUrl(a,shf);
+	    buf += QString::fromUtf8(a.constData());
+	}
+	else if (f.error() != QFile::NoError)
+	    oper = "read";
+    }
+    else
+	oper = "open";
+    if (!oper)
+	return true;
+    Debug(ClientDriver::self(),level,"Failed to %s stylesheet file '%s': %d '%s'",
+	oper,shf.c_str(),f.error(),f.errorString().toUtf8().constData());
+    return false;
 }
 
 
@@ -3208,6 +3258,19 @@ QtClient::QtClient()
 
     s_save = Engine::configFile("qt4client",true);
     s_save.load();
+    // Fill QT styles
+    s_qtStyles.addParam("IaOraKde","iaorakde");
+    s_qtStyles.addParam("QWindowsStyle","windows");
+    s_qtStyles.addParam("QMacStyle","mac");
+    s_qtStyles.addParam("QMotifStyle","motif");
+    s_qtStyles.addParam("QCDEStyle","cde");
+    s_qtStyles.addParam("QWindowsXPStyle","windowsxp");
+    s_qtStyles.addParam("QCleanlooksStyle","cleanlooks");
+    s_qtStyles.addParam("QPlastiqueStyle","plastique");
+    s_qtStyles.addParam("QGtkStyle","gtk");
+    s_qtStyles.addParam("IaOraQt","iaoraqt");
+    s_qtStyles.addParam("OxygenStyle","oxygen");
+    s_qtStyles.addParam("PhaseStyle","phase");
 }
 
 QtClient::~QtClient()
@@ -3233,7 +3296,7 @@ void QtClient::run()
     char* argv =  0;
     m_app = new QApplication(argc,&argv);
     m_app->setQuitOnLastWindowClosed(false);
-    setAppStyleSheet(Engine::config().getValue("client","stylesheet_file","stylesheet.css"));
+    updateAppStyleSheet();
     String imgRead;
     QList<QByteArray> imgs = QImageReader::supportedImageFormats();
     for (int i = 0; i < imgs.size(); i++)
@@ -4088,40 +4151,40 @@ bool QtClient::getPixmapFromCache(QPixmap& pixmap, const QString& file)
     return true;
 }
 
-// Set application style sheet from file.
-bool QtClient::setAppStyleSheet(const String& file)
+// Update application style sheet from config
+// Build style sheet from files:
+// stylesheet.css
+// stylesheet_stylename.css
+// stylesheet_osname.css
+// stylesheet_osname_stylename.css
+void QtClient::updateAppStyleSheet()
 {
     if (!qApp) {
-	Debug(ClientDriver::self(),DebugNote,"Set application stylesheet called without app");
-	return false;
+	Debug(ClientDriver::self(),DebugWarn,"Update app stylesheet called without app");
+	return;
     }
-    String shf;
+    String shf = Engine::config().getValue("client","stylesheet_file","stylesheet.css");
+    if (!shf)
+	return;
     QString sh;
-    const char* oper = 0;
-    if (file) {
-	shf = file;
-	if (shf.find('/') < 0 && shf.find('\\') < 0)
-	    shf = Client::s_skinPath + shf;
-	QFile f(setUtf8(shf));
-	if (f.open(QIODevice::ReadOnly)) {
-	    QByteArray a = f.readAll();
-	    if (a.size()) {
-		addFilePathUrl(a,shf);
-		sh = QString::fromUtf8(a.constData());
-	    }
-	    else if (f.error() != QFile::NoError)
-		oper = "read";
-	}
-	else
-	    oper = "open";
-	if (oper)
-	    Debug(ClientDriver::self(),DebugWarn,
-		"Failed to %s stylesheet file '%s': %d '%s'",
-		oper,shf.c_str(),f.error(),f.errorString().toUtf8().constData());
+    if (!appendStyleSheet(sh,shf))
+	return;
+    String styleName;
+    QStyle* style = qApp->style();
+    const QMetaObject* meta = style ? style->metaObject() : 0;
+    if (meta) {
+	styleName = s_qtStyles.getValue(meta->className());
+	if (!styleName)
+	    styleName = meta->className();
     }
-    if (!oper)
-	qApp->setStyleSheet(sh);
-    return oper == 0;
+    if (styleName)
+	appendStyleSheet(sh,shf,styleName);
+    String osname;
+    osname << "os" << PLATFORM_LOWERCASE_NAME;
+    appendStyleSheet(sh,shf,osname);
+    if (styleName)
+	appendStyleSheet(sh,shf,osname,styleName);
+    qApp->setStyleSheet(sh);
 }
 
 // Set widget attributes from list

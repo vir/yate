@@ -8,7 +8,7 @@ Homepage: http://yate.null.ro/
 
 Package: yate
 Architecture: any
-Suggests: yate-pgsql, yate-h323, yate-freesentral
+Suggests: yate-telhw, yate-pgsql 
 Depends: libyate (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
 Description: The YATE project aims to be a fully featured software PBX.
  .
@@ -26,7 +26,9 @@ Description: The YATE project aims to be a fully featured software PBX.
 
 Package: libyate
 Section: libs
-Conflicts: yate (<< ${binary:Version}), libyate (<< ${binary:Version})
+Conflicts: yate (<< 3.0.0)
+Replaces: libyate (<< 3.0.0)
+Breaks: libyate (<< 3.0.0)
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: YATE shared library
@@ -34,7 +36,7 @@ Description: YATE shared library
 Package: yate-dev
 Section: libdevel
 Architecture: any
-Suggests: libyate-dbg, yate-dbg, yate-telhw-dbg
+Suggests: libyate-dbg, yate-dbg, yate-telhw-dbg, yate-doc
 Depends:  libyate (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
 Description: YATE library development files
 
@@ -69,7 +71,7 @@ Description: Postgres support for yate
 Package: yate-telhw
 Architecture: any
 Recommends: yate (= ${binary:Version}) | yate-qt4 (= ${binary:Version})
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: libyate (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
 Description: Telephony hardware support for yate server
  Also MGCP CA module.
 

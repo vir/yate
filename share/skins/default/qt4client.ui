@@ -781,6 +781,7 @@ border-bottom: 1px solid #717fa0;
                 <property name="styleSheet" >
                  <string>QFrame#frame {
   border: 1px solid #717fa0;
+  border-top: 0px;
 }</string>
                 </property>
                 <layout class="QVBoxLayout" >
@@ -791,7 +792,7 @@ border-bottom: 1px solid #717fa0;
                   <number>8</number>
                  </property>
                  <property name="topMargin" >
-                  <number>8</number>
+                  <number>4</number>
                  </property>
                  <property name="rightMargin" >
                   <number>8</number>
@@ -1081,6 +1082,21 @@ border-bottom: 1px solid #717fa0;
                         </property>
                         <property name="maxCount" >
                          <number>20</number>
+                        </property>
+                        <property name="dynamicActionEnter" stdset="0" >
+                         <string>call</string>
+                        </property>
+                        <property name="dynamicActionReturn" stdset="0" >
+                         <string>call</string>
+                        </property>
+                        <property name="_yate_filterevents" stdset="0" >
+                         <bool>true</bool>
+                        </property>
+                        <property name="dynamicActionReturnFilter" stdset="0" >
+                         <bool>true</bool>
+                        </property>
+                        <property name="dynamicActionEnterFilter" stdset="0" >
+                         <bool>true</bool>
                         </property>
                        </widget>
                       </item>

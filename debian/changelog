@@ -1,3 +1,12 @@
+yate (3.3.3.svn4907) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4907: + Fixed property name in style sheet.
+    + Send a 'call' action when Enter/Return is pressed in callto.  +
+    Packaging new files (UI and scripting)  + Dependencies corrected a
+    bit
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 16 Feb 2012 02:19:26 +0400
+
 yate (3.3.3.svn4905) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4905: + Added suport to load style and

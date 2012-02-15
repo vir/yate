@@ -29,6 +29,8 @@
 
 using namespace TelEngine;
 
+#define MAX_TDM_DATA_SIZE 272
+
 static const TokenDict s_dict_control[] = {
     { "show",    SS7MTP3::Status },
     { "pause",   SS7MTP3::Pause },
@@ -181,6 +183,7 @@ bool SS7Layer3::buildRoutes(const NamedList& params)
 	    continue;
 	unsigned int prio = 0;
 	unsigned int shift = 0;
+	unsigned int maxLength = MAX_TDM_DATA_SIZE;
 	bool local = false;
 	if (ns->name() == YSTRING("local"))
 	    local = true;
@@ -200,13 +203,21 @@ bool SS7Layer3::buildRoutes(const NamedList& params)
 	    obj = obj->skipNext();
 	    if (!(obj && pc.assign(obj->get()->toString(),type)))
 		break;
-	    if (!(obj = obj->skipNext()))
-		break;
 	    if (prio) {
+		if (!(obj = obj->skipNext()))
+		    break;
 		prio = obj->get()->toString().toInteger(prio);
 		obj = obj->skipNext();
 		if (obj)
 		    shift = obj->get()->toString().toInteger(0);
+	    }
+	    if (!(obj = obj->skipNext()) || local)
+		break;
+	    maxLength = obj->get()->toString().toInteger(maxLength);
+	    if (maxLength < MAX_TDM_DATA_SIZE) {
+		Debug(this,DebugNote,"MaxDataLength is too small %d. Setting it to %d",
+			maxLength,MAX_TDM_DATA_SIZE);
+		maxLength = MAX_TDM_DATA_SIZE;
 	    }
 	} while (false);
 	TelEngine::destruct(route);
@@ -220,10 +231,12 @@ bool SS7Layer3::buildRoutes(const NamedList& params)
 	    m_local[type - 1] = packed;
 	    continue;
 	}
-	if (findRoute(type,packed))
+	if (findRoute(type,packed)) {
+	    Debug(this,DebugWarn,"Duplicate route found %s!!",ns->c_str());
 	    continue;
+	}
 	added = true;
-	m_route[(unsigned int)type - 1].append(new SS7Route(packed,prio,shift));
+	m_route[(unsigned int)type - 1].append(new SS7Route(packed,type,prio,shift,maxLength));
 	DDebug(this,DebugAll,"Added route '%s'",ns->c_str());
     }
     if (!added)
@@ -232,6 +245,19 @@ bool SS7Layer3::buildRoutes(const NamedList& params)
 	printRoutes();
     return added;
 }
+
+// Get the maximum data length that this route can transport
+unsigned int SS7Layer3::getRouteMaxLength(SS7PointCode::Type type, unsigned int packedPC)
+{
+    if (type == SS7PointCode::Other || (unsigned int)type > YSS7_PCTYPE_COUNT || !packedPC)
+	return MAX_TDM_DATA_SIZE;
+    Lock lock(m_routeMutex);
+    SS7Route* route = findRoute(type,packedPC);
+    if (route)
+	return route->m_maxDataLength;
+    return MAX_TDM_DATA_SIZE;
+}
+
 
 // Get the priority of a route.
 unsigned int SS7Layer3::getRoutePriority(SS7PointCode::Type type, unsigned int packedPC)
@@ -1170,13 +1196,14 @@ void SS7MTP3::notify(SS7Layer2* link)
 	}
     }
     countLinks();
+    String text;
+    text << "Linkset has " << m_active << " active, ";
+    text << m_checked << " checked of " << m_total << " links";
 #ifdef DEBUG
     String tmp;
     if (link)
 	tmp << "Link '" << link->toString() << "' is " << (link->operational()?"":"not ") << "operational. ";
-    Debug(this,DebugInfo,"%sLinkset has %u/%u/%u active/checked links [%p]",
-	tmp.null()?"":tmp.c_str(),
-	m_active,m_checked,m_total,this);
+    Debug(this,DebugInfo,"%s%s [%p]",tmp.safe(),text.c_str(),this);
 #endif
     // if operational status of a link changed notify upper layer
     if (act != m_active || chk != m_checked) {
@@ -1226,7 +1253,7 @@ void SS7MTP3::notify(SS7Layer2* link)
 	notif.addParam("total",String(m_total));
 	notif.addParam("link", link ? link->toString() : "");
 	notif.addParam("linkup", link ? String::boolText(link->operational()) : "");
-
+	notif.addParam("text", text);
 	mylock.drop();
 	SS7Layer3::notify(sls);
 	engine()->notify(this,notif);

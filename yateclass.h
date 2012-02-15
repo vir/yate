@@ -1249,6 +1249,150 @@ private:
 };
 
 /**
+ * Simple vector class that holds objects derived from GenObject
+ * @short A vector holding GenObjects
+ */
+class YATE_API ObjVector : public GenObject
+{
+    YNOCOPY(ObjVector); // no automatic copies please
+public:
+    /**
+     * Constructor of a zero capacity vector
+     * @param autodelete True to delete objects on destruct, false otherwise
+     */
+    inline explicit ObjVector(bool autodelete = true)
+	: m_length(0), m_objects(0), m_delete(autodelete)
+	{ }
+
+    /**
+     * Constructor of an empty vector
+     * @param maxLen Maximum number of objects the vector can hold
+     * @param autodelete True to delete objects on destruct, false otherwise
+     */
+    ObjVector(unsigned int maxLen, bool autodelete = true);
+
+    /**
+     * Constructor from an object list
+     * @param list List of objects to store in vector
+     * @param move True to move elements from list, false to just copy the pointer
+     * @param maxLen Maximum number of objects to put in vector, zero to put all
+     * @param autodelete True to delete objects on destruct, false otherwise
+     */
+    ObjVector(ObjList& list, bool move = true, unsigned int maxLen = 0, bool autodelete = true);
+
+    /**
+     * Destroys the vector and the objects if automatic delete is set
+     */
+    virtual ~ObjVector();
+
+    /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
+     * Get the capacity of the vector
+     * @return Number of items the vector can hold
+     */
+    inline unsigned int length() const
+	{ return m_length; }
+
+    /**
+     * Get the number of non-null objects in the vector
+     * @return Count of items
+     */
+    unsigned int count() const;
+
+    /**
+     * Get the object at a specific index in vector
+     * @param index Index of the object to retrieve
+     * @return Pointer to the object or NULL
+     */
+    inline GenObject* at(int index) const
+	{ return (index >= 0 && index < (int)m_length) ? m_objects[index] : 0; }
+
+    /**
+     * Indexing operator with signed parameter
+     * @param index Index of the object to retrieve
+     * @return Pointer to the object or NULL
+     */
+    inline GenObject* operator[](signed int index) const
+	{ return at(index); }
+
+    /**
+     * Indexing operator with unsigned parameter
+     * @param index Index of the object to retrieve
+     * @return Pointer to the object or NULL
+     */
+    inline GenObject* operator[](unsigned int index) const
+	{ return at(index); }
+
+    /**
+     * Clear the vector and assign objects from a list
+     * @param list List of objects to store in vector
+     * @param move True to move elements from list, false to just copy the pointer
+     * @param maxLen Maximum number of objects to put in vector, zero to put all
+     * @return Capacity of the vector
+     */
+    unsigned int assign(ObjList& list, bool move = true, unsigned int maxLen = 0);
+
+    /**
+     * Retrieve and remove an object from the vector
+     * @param index Index of the object to retrieve
+     * @return Pointer to the stored object, NULL for out of bound index
+     */
+    GenObject* take(unsigned int index);
+
+    /**
+     * Store an object in the vector
+     * @param obj Object to store in vector
+     * @param index Index of the object to store
+     * @return True for success, false if index was out of bounds
+     */
+    bool set(GenObject* obj, unsigned int index);
+
+    /**
+     * Get the position in vector of a GenObject by a pointer to it
+     * @param obj Pointer to the object to search for
+     * @return Index of object in vector, -1 if not found
+     */
+    int index(const GenObject* obj) const;
+
+    /**
+     * Get the position in vector of the first GenObject with a given value
+     * @param str String value (toString) of the object to search for
+     * @return Index of object in vector, -1 if not found
+     */
+    int index(const String& str) const;
+
+    /**
+     * Clear the vector and optionally delete all contained objects
+     */
+    void clear();
+
+    /**
+     * Get the automatic delete flag
+     * @return True if will delete objects on destruct, false otherwise
+     */
+    inline bool autoDelete()
+	{ return m_delete; }
+
+    /**
+     * Set the automatic delete flag
+     * @param autodelete True to delete objects on destruct, false otherwise
+     */
+    inline void setDelete(bool autodelete)
+	{ m_delete = autodelete; }
+
+private:
+    unsigned int m_length;
+    GenObject** m_objects;
+    bool m_delete;
+};
+
+/**
  * A simple Array class derivated from RefObject
  * It uses one ObjList to keep the pointers to other ObjList's.
  * Data is organized in columns - the main ObjList holds pointers to one
@@ -1589,6 +1733,19 @@ public:
      * @return The integer interpretation or defvalue.
      */
     int toInteger(const TokenDict* tokens, int defvalue = 0, int base = 0) const;
+
+    /**
+     * Convert the string to an long integer value.
+     * @param defvalue Default to return if the string is not a number
+     * @param base Numeration base, 0 to autodetect
+     * @param minvalue Minimum value allowed
+     * @param maxvalue Maximum value allowed
+     * @param clamp Control the out of bound values: true to adjust to the nearest
+     *  bound, false to return the default value
+     * @return The long integer interpretation or defvalue.
+     */
+    long int toLong(long int defvalue = 0, int base = 0, long int minvalue = LONG_MIN,
+	long int maxvalue = LONG_MAX, bool clamp = true) const;
 
     /**
      * Convert the string to a floating point value.
@@ -2287,6 +2444,83 @@ private:
     bool matches(const char* value, StringMatchPrivate* matchlist) const;
     mutable void* m_regexp;
     int m_flags;
+};
+
+/**
+ * Holder for an event (output, debug or alarm) message
+ * @short A captured event string with a debug level
+ */
+class YATE_API CapturedEvent : public String
+{
+    friend class Engine;
+    YCLASS(CapturedEvent,String)
+public:
+    /**
+     * Constructor
+     * @param level Debugging level associated with the event
+     * @param text Text description of the event
+     */
+    inline CapturedEvent(int level, const char* text)
+	: String(text), m_level(level)
+	{ }
+
+    /**
+     * Copy constructor
+     * @param original Captured event to copy
+     */
+    inline CapturedEvent(const CapturedEvent& original)
+	: String(original), m_level(original.level())
+	{ }
+
+    /**
+     * Get the debugging level of the event
+     * @return Debugging level associated with the event
+     */
+    inline int level() const
+	{ return m_level; }
+
+
+    /**
+     * Get the capturing state of the output and debug messages
+     * @return True if output and debug messages are being captured
+     */
+    inline static bool capturing()
+	{ return s_capturing; }
+
+    /**
+     * Get the list of captured events
+     * @return List of events captured from output and debugging
+     */
+    inline static const ObjList& events()
+	{ return s_events; }
+
+    /**
+     * Add an event to the captured events list
+     * @param level Debugging level associated with the event
+     * @param text Text description of the event, must not be empty
+     */
+    inline static void append(int level, const char* text)
+	{ if (text && *text) s_events.append(new CapturedEvent(level,text)); }
+
+protected:
+    /**
+     * Get a writable list of captured events
+     * @return List of events captured from output and debugging
+     */
+    inline static ObjList& eventsRw()
+	{ return s_events; }
+
+    /**
+     * Enable or disable capturing of output and debug messages
+     * @param capture True to capture internally the debugging messages
+     */
+    inline static void capturing(bool capture)
+	{ s_capturing = capture; }
+
+private:
+    int m_level;
+    static ObjList s_events;
+    static bool s_capturing;
 };
 
 /**
@@ -3852,546 +4086,6 @@ protected:
     mutable String m_host;
     mutable String m_extra;
     mutable int m_port;
-};
-
-class ExpEvaluator;
-class ExpOperation;
-
-/**
- * This class allows extending ExpEvaluator to implement custom fields and functions
- * @short ExpEvaluator extending interface
- */
-class YATE_API ExpExtender : public RefObject
-{
-    YCLASS(ExpExtender,RefObject)
-public:
-    /**
-     * Try to evaluate a single function
-     * @param eval Pointer to the caller evaluator object
-     * @param stack Evaluation stack in use, parameters are popped off this stack
-     *  and results are pushed back on stack
-     * @param oper Function to evaluate
-     * @param context Pointer to arbitrary data passed from evaluation methods
-     * @return True if evaluation succeeded
-     */
-    virtual bool runFunction(const ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper, void* context);
-
-    /**
-     * Try to evaluate a single field
-     * @param eval Pointer to the caller evaluator object
-     * @param stack Evaluation stack in use, field value must be pushed on it
-     * @param oper Field to evaluate
-     * @param context Pointer to arbitrary data passed from evaluation methods
-     * @return True if evaluation succeeded
-     */
-    virtual bool runField(const ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper, void* context);
-};
-
-/**
- * A class used to build stack based (posifix) expression parsers and evaluators
- * @short An expression parser and evaluator
- */
-class YATE_API ExpEvaluator
-{
-public:
-    /**
-     * Parsing styles
-     */
-    enum Parser {
-	C,
-	SQL,
-    };
-
-    /**
-     * Operation codes
-     */
-    enum Opcode {
-	// FORTH style notation of effect on stack, C-syntax expression
-	OpcNone,    // ( --- )
-	OpcNull,    // ( --- A)
-	OpcPush,    // ( --- A)
-	OpcDrop,    // (A --- )
-	OpcDup,     // (A --- A A)
-	OpcSwap,    // (A B --- B A)
-	OpcRot,     // (A B C --- B C A)
-	OpcOver,    // (A B --- A B A)
-	// Arithmetic operators
-	OpcAdd,     // (A B --- A+B)
-	OpcSub,     // (A B --- A-B)
-	OpcMul,     // (A B --- A*B)
-	OpcDiv,     // (A B --- A/B)
-	OpcMod,     // (A B --- A%B)
-	OpcNeg,     // (A --- -A)
-	// Bitwise logic operators
-	OpcAnd,     // (A B --- A&B)
-	OpcOr,      // (A B --- A|B)
-	OpcXor,     // (A B --- A^B)
-	OpcNot,     // (A --- ~A)
-	OpcShl,     // (A B --- A<<B)
-	OpcShr,     // (A B --- A>>B)
-	// Boolean logic operators
-	OpcLAnd,    // (A B --- A&&B)
-	OpcLOr,     // (A B --- A||B)
-	OpcLXor,    // (A B --- A^^B)
-	OpcLNot,    // (A --- !A)
-	// String concatenation
-	OpcCat,     // (A B --- A.B)
-	// String matching
-	OpcReM,     // (A B --- Amatch/B/)
-	OpcReIM,    // (A B --- Amatch_insensitive/B/)
-	OpcReNm,    // (A B --- A!match/B/)
-	OpcReINm,   // (A B --- A!match_insensitive/B/)
-	OpcLike,    // (A B --- AlikeB)
-	OpcILike,   // (A B --- Alike_insensitiveB)
-	OpcNLike,   // (A B --- A!likeB)
-	OpcNIlike,  // (A B --- A!like_insensitiveB)
-	// Comparation operators
-	OpcEq,      // (A B --- A==B)
-	OpcNe,      // (A B --- A!=B)
-	OpcGt,      // (A B --- A>B)
-	OpcLt,      // (A B --- A<B)
-	OpcGe,      // (A B --- A>=B)
-	OpcLe,      // (A B --- A<=B)
-	// Ternary conditional operator
-	OpcCond,    // (A B C --- A?B:C)
-	// Field naming operator
-	OpcAs,      // (A B --- A[name=B])
-	// Field replacement
-	OpcField,   // ( --- A)
-	// Call of function with N parameters
-	OpcFunc,    // (... funcN --- func(...))
-    };
-
-    /**
-     * Constructs an evaluator from an operator dictionary
-     * @param operators Pointer to operator dictionary, longest strings first
-     */
-    explicit ExpEvaluator(const TokenDict* operators = 0);
-
-    /**
-     * Constructs an evaluator from a parser style
-     * @param style Style of parsing to use
-     */
-    explicit ExpEvaluator(Parser style);
-
-    /**
-     * Copy constructor
-     * @param original Evaluator to copy the operation list from
-     */
-    ExpEvaluator(const ExpEvaluator& original);
-
-    /**
-     * Destructor
-     */
-    virtual ~ExpEvaluator();
-
-    /**
-     * Parse and compile an expression
-     * @param expr Pointer to expression to compile
-     * @return Number of expressions compiled, zero on error
-     */
-    int compile(const char* expr);
-
-    /**
-     * Evaluate the expression, optionally return results
-     * @param results List to fill with results row
-     * @param context Pointer to arbitrary data to be passed to called methods
-     * @return True if expression evaluation succeeded, false on failure
-     */
-    bool evaluate(ObjList* results, void* context = 0) const;
-
-    /**
-     * Evaluate the expression, return computed results
-     * @param results List to fill with results row
-     * @param context Pointer to arbitrary data to be passed to called methods
-     * @return True if expression evaluation succeeded, false on failure
-     */
-    inline bool evaluate(ObjList& results, void* context = 0) const
-	{ return evaluate(&results,context); }
-
-    /**
-     * Evaluate the expression, return computed results
-     * @param results List of parameters to populate with results row
-     * @param index Index of result row, zero to not include an index
-     * @param prefix Prefix to prepend to parameter names
-     * @param context Pointer to arbitrary data to be passed to called methods
-     * @return Number of result columns, -1 on failure
-     */
-    int evaluate(NamedList& results, unsigned int index = 0, const char* prefix = 0, void* context = 0) const;
-
-    /**
-     * Evaluate the expression, return computed results
-     * @param results Array of result rows to populate
-     * @param index Index of result row, zero to just set column headers
-     * @param context Pointer to arbitrary data to be passed to called methods
-     * @return Number of result columns, -1 on failure
-     */
-    int evaluate(Array& results, unsigned int index, void* context = 0) const;
-
-    /**
-     * Simplify the expression, performs constant folding
-     * @return True if the expression was simplified
-     */
-    inline bool simplify()
-	{ return trySimplify(); }
-
-    /**
-     * Check if the expression is empty (no operands or operators)
-     * @return True if the expression is completely empty
-     */
-    inline bool null() const
-	{ return m_opcodes.count() == 0; }
-
-    /**
-     * Dump the postfix expression according to current operators dictionary
-     * @return String representation of operations
-     */
-    String dump() const;
-
-    /**
-     * Retrieve the internally used operator dictionary
-     * @return Pointer to operators dictionary in use
-     */
-    inline const TokenDict* operators() const
-	{ return m_operators; }
-
-    /**
-     * Retrieve the internally used expression extender
-     * @return Pointer to the extender in use, NULL if none
-     */
-    inline ExpExtender* extender() const
-	{ return m_extender; }
-
-    /**
-     * Set the expression extender to use in evaluation
-     * @param ext Pointer to the extender to use, NULL to remove current
-     */
-    void extender(ExpExtender* ext);
-
-    /**
-     * Pops an operand off an evaluation stack
-     * @param stack Evaluation stack to remove the operand from
-     * @return Operator removed from stack, NULL if stack underflow
-     */
-    static ExpOperation* popOne(ObjList& stack);
-
-protected:
-    /**
-     * Helper method to skip over whitespaces
-     * @param expr Pointer to expression cursor, gets advanced
-     * @return First character after whitespaces where expr points
-     */
-    char skipWhites(const char*& expr) const;
-
-    /**
-     * Helper method to count characters making a keyword
-     * @param str Pointer to text without whitespaces in front
-     * @return Length of the keyword, 0 if a valid keyword doesn't follow
-     */
-    int getKeyword(const char* str) const;
-
-    /**
-     * Helper method to display debugging errors internally
-     * @param error Text of the error
-     * @param text Optional text that caused the error
-     * @return Always returns false
-     */
-    bool gotError(const char* error = 0, const char* text = 0) const;
-
-    /**
-     * Runs the parser and compiler for one (sub)expression
-     * @param expr Pointer to text to parse, gets advanced
-     * @return True if one expression was compiled and a separator follows
-     */
-    virtual bool runCompile(const char*& expr);
-
-    /**
-     * Returns next operator in the parsed text
-     * @param expr Pointer to text to parse, gets advanced if succeeds
-     * @return Operator code, OpcNone on failure
-     */
-    virtual Opcode getOperator(const char*& expr) const;
-
-    /**
-     * Helper method to get the canonical name of an operator
-     * @param oper Operator code
-     * @return name of the operator, NULL if it doesn't have one
-     */
-    virtual const char* getOperator(Opcode oper) const;
-
-    /**
-     * Get the precedence of an operator
-     * @param oper Operator code
-     * @return Precedence of the operator, zero (lowest) if unknown
-     */
-    virtual int getPrecedence(Opcode oper) const;
-
-    /**
-     * Check if we are at an expression separator and optionally skip past it
-     * @param expr Pointer to text to check, gets advanced if asked to remove separator
-     * @param remove True to skip past the found separator
-     * @return True if a separator was found
-     */
-    virtual bool getSeparator(const char*& expr, bool remove);
-
-    /**
-     * Get an operand, advance parsing pointer past it
-     * @param expr Pointer to text to parse, gets advanced on success
-     * @return True if succeeded, must add the operand internally
-     */
-    virtual bool getOperand(const char*& expr);
-
-    /**
-     * Get a numerical operand, advance parsing pointer past it
-     * @param expr Pointer to text to parse, gets advanced on success
-     * @return True if succeeded, must add the operand internally
-     */
-    virtual bool getNumber(const char*& expr);
-
-    /**
-     * Get a string operand, advance parsing pointer past it
-     * @param expr Pointer to text to parse, gets advanced on success
-     * @return True if succeeded, must add the operand internally
-     */
-    virtual bool getString(const char*& expr);
-
-    /**
-     * Get a function call, advance parsing pointer past it
-     * @param expr Pointer to text to parse, gets advanced on success
-     * @return True if succeeded, must add the operand internally
-     */
-    virtual bool getFunction(const char*& expr);
-
-    /**
-     * Get a field keyword, advance parsing pointer past it
-     * @param expr Pointer to text to parse, gets advanced on success
-     * @return True if succeeded, must add the operand internally
-     */
-    virtual bool getField(const char*& expr);
-
-    /**
-     * Add a simple operator to the expression
-     * @param oper Operator code to add
-     */
-    void addOpcode(Opcode oper);
-
-    /**
-     * Add a string constant to the expression
-     * @param value String value to add, will be pushed on execution
-     */
-    void addOpcode(const String& value);
-
-    /**
-     * Add an integer constant to the expression
-     * @param value Integer value to add, will be pushed on execution
-     */
-    void addOpcode(long int value);
-
-    /**
-     * Add a function or field to the expression
-     * @param oper Operator code to add, must be OpcField or OpcFunc
-     * @param name Name of the field or function, case sensitive
-     * @param value Numerical value used as parameter count to functions
-     */
-    void addOpcode(Opcode oper, const String& name, long int value = 0);
-
-    /**
-     * Try to apply simplification to the expression
-     * @return True if the expression was simplified
-     */
-    virtual bool trySimplify();
-
-    /**
-     * Try to evaluate the expression
-     * @param stack Evaluation stack in use, results are left on stack
-     * @param context Pointer to arbitrary data to be passed to called methods
-     * @return True if evaluation succeeded
-     */
-    virtual bool runEvaluate(ObjList& stack, void* context = 0) const;
-
-    /**
-     * Try to evaluate a single operation
-     * @param stack Evaluation stack in use, operands are popped off this stack
-     *  and results are pushed back on stack
-     * @param oper Operation to execute
-     * @param context Pointer to arbitrary data to be passed to called methods
-     * @return True if evaluation succeeded
-     */
-    virtual bool runOperation(ObjList& stack, const ExpOperation& oper, void* context = 0) const;
-
-    /**
-     * Try to evaluate a single function
-     * @param stack Evaluation stack in use, parameters are popped off this stack
-     *  and results are pushed back on stack
-     * @param oper Function to evaluate
-     * @param context Pointer to arbitrary data to be passed to called methods
-     * @return True if evaluation succeeded
-     */
-    virtual bool runFunction(ObjList& stack, const ExpOperation& oper, void* context = 0) const;
-
-    /**
-     * Try to evaluate a single field
-     * @param stack Evaluation stack in use, field value must be pushed on it
-     * @param oper Field to evaluate
-     * @param context Pointer to arbitrary data to be passed to called methods
-     * @return True if evaluation succeeded
-     */
-    virtual bool runField(ObjList& stack, const ExpOperation& oper, void* context = 0) const;
-
-    /**
-     * Internally used operator dictionary
-     */
-    const TokenDict* m_operators;
-
-    /**
-     * Internally used list of operands and operator codes
-     */
-    ObjList m_opcodes;
-
-private:
-    ExpExtender* m_extender;
-};
-
-/**
- * This class describes a single operation in an expression evaluator
- * @short A single operation in an expression
- */
-class YATE_API ExpOperation : public NamedString
-{
-    friend class ExpEvaluator;
-    YCLASS(ExpOperation,NamedString)
-public:
-    /**
-     * Copy constructor
-     * @param original Operation to copy
-     */
-    inline ExpOperation(const ExpOperation& original)
-	: NamedString(original.name(),original),
-	  m_opcode(original.opcode()), m_number(original.number())
-	{ }
-
-    /**
-     * Copy constructor with renaming, to be used for named results
-     * @param original Operation to copy
-     * @param name Name of the newly created operation
-     */
-    inline ExpOperation(const ExpOperation& original, const char* name)
-	: NamedString(name,original),
-	  m_opcode(original.opcode()), m_number(original.number())
-	{ }
-
-    /**
-     * Push String constructor
-     * @param value String constant to push on stack on execution
-     * @param name Optional of the newly created constant
-     */
-    inline explicit ExpOperation(const String& value, const char* name = 0)
-	: NamedString(name,value),
-	  m_opcode(ExpEvaluator::OpcPush), m_number(0)
-	{ }
-
-    /**
-     * Push Number constructor
-     * @param value Integer constant to push on stack on execution
-     * @param name Optional of the newly created constant
-     */
-    inline explicit ExpOperation(long int value, const char* name = 0)
-	: NamedString(name,""),
-	  m_opcode(ExpEvaluator::OpcPush), m_number(value)
-	{ String::operator=((int)value); }
-
-    /**
-     * Constructor from components
-     * @param oper Operation code
-     * @param name Optional name of the operation or result
-     * @param value Optional integer constant used as function parameter count
-     */
-    inline ExpOperation(ExpEvaluator::Opcode oper, const char* name = 0, long int value = 0)
-	: NamedString(name,""),
-	  m_opcode(oper), m_number(value)
-	{ }
-
-    /**
-     * Retrieve the code of this operation
-     * @return Operation code as declared in the expression evaluator
-     */
-    inline ExpEvaluator::Opcode opcode() const
-	{ return m_opcode; }
-
-    /**
-     * Retrieve the number stored in this operation
-     * @return Stored number
-     */
-    inline long int number() const
-	{ return m_number; }
-private:
-    ExpEvaluator::Opcode m_opcode;
-    long int m_number;
-};
-
-/**
- * An evaluator for multi-row (tables like in SQL) expressions
- * @short An SQL-like table evaluator
- */
-class YATE_API TableEvaluator
-{
-public:
-    /**
-     * Copy constructor, duplicates current state of original
-     * @param original Evaluator to copy
-     */
-    TableEvaluator(const TableEvaluator& original);
-
-    /**
-     * Constructor from a parser synatx style
-     * @param style Style of evaluator to create
-     */
-    TableEvaluator(ExpEvaluator::Parser style);
-
-    /**
-     * Constructor from operator description table
-     * @param operators Pointer to operators synatx table
-     */
-    TableEvaluator(const TokenDict* operators);
-
-    /**
-     * Destructor
-     */
-    virtual ~TableEvaluator();
-
-    /**
-     * Evaluate the WHERE (selector) expression
-     * @param context Pointer to arbitrary data to be passed to called methods
-     * @return True if the current row is part of selection
-     */
-    virtual bool evalWhere(void* context = 0);
-
-    /**
-     * Evaluate the SELECT (results) expression
-     * @param results List to fill with results row
-     * @param context Pointer to arbitrary data to be passed to called methods
-     * @return True if evaluation succeeded
-     */
-    virtual bool evalSelect(ObjList& results, void* context = 0);
-
-    /**
-     * Evaluate the LIMIT expression and cache the result
-     * @param context Pointer to arbitrary data to be passed to called methods
-     * @return Desired maximum number or result rows
-     */
-    virtual unsigned int evalLimit(void* context = 0);
-
-    /**
-     * Set the expression extender to use in all evaluators
-     * @param ext Pointer to the extender to use, NULL to remove current
-     */
-    void extender(ExpExtender* ext);
-
-protected:
-    ExpEvaluator m_select;
-    ExpEvaluator m_where;
-    ExpEvaluator m_limit;
-    unsigned int m_limitVal;
 };
 
 class MutexPrivate;

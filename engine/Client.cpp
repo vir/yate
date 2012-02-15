@@ -68,6 +68,7 @@ public:
 	buildMenu,
 	removeMenu,
 	setImage,
+	setImageFit,
 	setProperty,
 	getProperty,
 	openUrl
@@ -209,6 +210,7 @@ String Client::s_toggles[OptCount] = {
     "dockedchat", "destroychat", "notifychatstate", "showemptychat",
     "sendemptychat"
 };
+int Client::s_maxConfPeers = 50;
 bool Client::s_engineStarted = false;            // Engine started flag
 bool Client::s_idleLogicsTick = false;           // Call logics' timerTick()
 bool Client::s_exiting = false;                  // Client exiting flag
@@ -237,8 +239,15 @@ static const MsgRelay s_relays[] = {
     {0,0,0},
 };
 
+// Channel slave type
+const TokenDict ClientChannel::s_slaveTypes[] = {
+    {"conference",      ClientChannel::SlaveConference},
+    {"transfer",        ClientChannel::SlaveTransfer},
+    {0,0}
+};
+
 // Channel notifications
-TokenDict ClientChannel::s_notification[] = {
+const TokenDict ClientChannel::s_notification[] = {
     {"startup",         ClientChannel::Startup},
     {"destroyed",       ClientChannel::Destroyed},
     {"active",          ClientChannel::Active},
@@ -824,6 +833,9 @@ void ClientThreadProxy::process()
 	    break;
 	case setImage:
 	    m_rval = client->setImage(m_name,m_text,m_wnd,m_skip);
+	    break;
+	case setImageFit:
+	    m_rval = client->setImageFit(m_name,m_text,m_wnd,m_skip);
 	    break;
 	case setProperty:
 	    m_rval = client->setProperty(m_name,m_item,m_text,m_wnd,m_skip);
@@ -1831,13 +1843,35 @@ bool Client::setImage(const String& name, const String& image, Window* wnd, Wind
 	return proxy.execute();
     }
     if (wnd)
-	return wnd->setImage(name,image);
+	return wnd->setImage(name,image,false);
     ++s_changing;
     bool ok = false;
     for (ObjList* o = m_windows.skipNull(); o; o = o->skipNext()) {
 	wnd = static_cast<Window*>(o->get());
 	if (wnd != skip)
-	    ok = wnd->setImage(name,image) || ok;
+	    ok = wnd->setImage(name,image,false) || ok;
+    }
+    --s_changing;
+    return ok;
+}
+
+// Set an element's image. Request to fit the image
+bool Client::setImageFit(const String& name, const String& image, Window* wnd, Window* skip)
+{
+    if (!valid())
+	return false;
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::setImageFit,name,image,wnd,skip);
+	return proxy.execute();
+    }
+    if (wnd)
+	return wnd->setImage(name,image,true);
+    ++s_changing;
+    bool ok = false;
+    for (ObjList* o = m_windows.skipNull(); o; o = o->skipNext()) {
+	wnd = static_cast<Window*>(o->get());
+	if (wnd != skip)
+	    ok = wnd->setImage(name,image,true) || ok;
     }
     --s_changing;
     return ok;
@@ -2404,7 +2438,18 @@ bool Client::buildOutgoingChannel(NamedList& params)
     // Create the channel. Release driver's mutex as soon as possible
     if (!driverLockLoop())
 	return false;
-    ClientChannel* chan = new ClientChannel(*target,params);
+    int st = ClientChannel::SlaveNone;
+    String masterChan;
+    NamedString* slave = params.getParam(YSTRING("channel_slave_type"));
+    if (slave) {
+	st = ClientChannel::lookupSlaveType(*slave);
+	params.clearParam(slave);
+	NamedString* m = params.getParam(YSTRING("channel_master"));
+	if (st && m)
+	    masterChan = *m;
+	params.clearParam(m);
+    }
+    ClientChannel* chan = new ClientChannel(*target,params,st,masterChan);
     chan->initChan();
     if (!(chan->ref() && chan->start(*target,params)))
 	TelEngine::destruct(chan);
@@ -2412,7 +2457,7 @@ bool Client::buildOutgoingChannel(NamedList& params)
     if (!chan)
 	return false;
     params.addParam("channelid",chan->id());
-    if (getBoolOpt(OptActivateLastOutCall) || !ClientDriver::self()->activeId())
+    if (!st && (getBoolOpt(OptActivateLastOutCall) || !ClientDriver::self()->activeId()))
 	ClientDriver::self()->setActive(chan->id());
     TelEngine::destruct(chan);
     return true;
@@ -2976,12 +3021,29 @@ Message* Client::eventMessage(const String& event, Window* wnd, const char* name
 // Incoming (from engine) constructor
 ClientChannel::ClientChannel(const Message& msg, const String& peerid)
     : Channel(ClientDriver::self(),0,true),
+    m_slave(SlaveNone),
     m_party(msg.getValue(YSTRING("caller"))), m_noticed(false),
     m_line(0), m_active(false), m_silence(false), m_conference(false),
-    m_muted(false), m_clientData(0), m_utility(false)
+    m_muted(false), m_clientData(0), m_utility(false), m_clientParams("")
 {
     Debug(this,DebugCall,"Created incoming from=%s peer=%s [%p]",
 	m_party.c_str(),peerid.c_str(),this);
+    const char* acc = msg.getValue(YSTRING("in_line"));
+    if (TelEngine::null(acc))
+	acc = msg.getValue(YSTRING("account"),msg.getValue(YSTRING("line")));
+    if (!TelEngine::null(acc)) {
+	m_clientParams.addParam("account",acc);
+	m_clientParams.addParam("line",acc);
+    }
+    const char* proto = msg.getValue(YSTRING("protocol"));
+    if (TelEngine::null(proto)) {
+	const String& module = msg[YSTRING("module")];
+	if (module == YSTRING("sip") || module == YSTRING("jingle") ||
+	    module == YSTRING("iax") || module == YSTRING("h323"))
+	    proto = module;
+    }
+    m_clientParams.addParam("protocol",proto,false);
+    m_partyName = msg.getValue(YSTRING("callername"));
     m_targetid = peerid;
     m_peerId = peerid;
     Message* s = message("chan.startup");
@@ -2994,22 +3056,28 @@ ClientChannel::ClientChannel(const Message& msg, const String& peerid)
 }
 
 // Outgoing (to engine) constructor
-ClientChannel::ClientChannel(const String& target, const NamedList& params)
+ClientChannel::ClientChannel(const String& target, const NamedList& params,
+    int st, const String& masterChan)
     : Channel(ClientDriver::self(),0,false),
+    m_slave(st),
     m_party(target), m_noticed(true), m_line(0), m_active(false),
     m_silence(true), m_conference(false), m_muted(false), m_clientData(0),
-    m_utility(false)
+    m_utility(false), m_clientParams("")
 {
     Debug(this,DebugCall,"Created outgoing to=%s [%p]",
 	m_party.c_str(),this);
+    m_partyName = params.getValue(YSTRING("calledname"));
+    if (m_slave)
+	m_master = masterChan;
 }
 
 // Constructor for utility channels used to play notifications
 ClientChannel::ClientChannel(const String& soundId)
     : Channel(ClientDriver::self(),0,true),
+    m_slave(SlaveNone),
     m_noticed(true), m_line(0), m_active(false), m_silence(true),
     m_conference(false), m_clientData(0), m_utility(true),
-    m_soundId(soundId)
+    m_soundId(soundId), m_clientParams("")
 {
     Lock lock(ClientSound::s_soundsMutex);
     ClientSound* s = ClientSound::find(m_soundId);
@@ -3052,9 +3120,12 @@ bool ClientChannel::start(const String& target, const NamedList& params)
     String* cs = params.getParam(YSTRING("chanstartup_parameters"));
     if (!null(cs))
 	s->copyParams(params,*cs);
-    String* c = params.getParam(YSTRING("call_parameters"));
-    if (!null(c))
-	m->copyParams(params,*c);
+    String cParams = params.getParam(YSTRING("call_parameters"));
+    if (cParams)
+	m->copyParams(params,cParams);
+    cParams.append("call_parameters,line,protocol,account",",");
+    cParams.append(params.getValue(YSTRING("client_parameters")),",");
+    m_clientParams.copyParams(params,cParams);
     Engine::enqueue(s);
     if (startRouter(m)) {
 	update(Startup);
@@ -3066,6 +3137,9 @@ bool ClientChannel::start(const String& target, const NamedList& params)
 void ClientChannel::destroyed()
 {
     Debug(this,DebugCall,"Destroyed [%p]",this);
+    // Drop all slaves
+    for (ObjList* o = m_slaves.skipNull(); o; o = o->skipNext())
+	ClientDriver::dropChan(o->get()->toString());
     if (m_utility) {
 	Lock lock(ClientSound::s_soundsMutex);
 	ClientSound* s = ClientSound::find(m_soundId);
@@ -3084,12 +3158,8 @@ void ClientChannel::destroyed()
     Lock lock(m_mutex);
     if (m_conference) {
 	// Drop old peer if conference
-	if (ClientDriver::s_dropConfPeer) {
-	    Message* m = new Message("call.drop");
-	    m->addParam("id",m_peerId);
-	    m->addParam("reason","Conference terminated");
-	    Engine::enqueue(m);
-	}
+	if (ClientDriver::s_dropConfPeer)
+	    ClientDriver::dropChan(m_peerId,"Conference terminated");
     }
     else if (m_transferId)
 	ClientDriver::setAudioTransfer(id());
@@ -3318,6 +3388,17 @@ void ClientChannel::callAccept(Message& msg)
     Lock lock(m_mutex);
     getPeerId(m_peerId);
     Debug(this,DebugInfo,"Peer id set to %s",m_peerId.c_str());
+    // Join to master conference
+    if (m_slave == SlaveConference && m_master) {
+	String confName("conf/" + m_master);
+	Message m("call.conference");
+	m.addParam("room",confName);
+	m.addParam("notify",confName);
+	m.addParam("maxusers",String(Client::s_maxConfPeers * 2));
+	m.userData(this);
+	if (Engine::dispatch(m))
+	    setConference(confName);
+    }
     update(Accepted);
 }
 
@@ -3347,6 +3428,8 @@ bool ClientChannel::msgProgress(Message& msg)
 	setMedia(true);
     bool ret = Channel::msgProgress(msg);
     update(Progressing);
+    if (m_slave == SlaveTransfer && m_master && !m_transferId)
+	ClientDriver::setAudioTransfer(m_master,id());
     return ret;
 }
 
@@ -3360,6 +3443,8 @@ bool ClientChannel::msgRinging(Message& msg)
 	setMedia(true);
     bool ret = Channel::msgRinging(msg);
     update(Ringing);
+    if (m_slave == SlaveTransfer && m_master && !m_transferId)
+	ClientDriver::setAudioTransfer(m_master,id());
     return ret;
 }
 
@@ -3370,6 +3455,8 @@ bool ClientChannel::msgAnswered(Message& msg)
     Lock lock(m_mutex);
     Debug(this,DebugCall,"msgAnswered() [%p]",this);
     m_reason.clear();
+    if (m_slave == SlaveTransfer && m_master && !m_transferId)
+	ClientDriver::setAudioTransfer(m_master,id());
     // Active: Open media if the peer has a source
     if (active() && peerHasSource(msg))
 	setMedia(true);
@@ -3461,6 +3548,10 @@ void ClientChannel::update(int notif, bool chan, bool updatePeer,
 	m->addParam("transferid",m_transferId,false);
 	if (m_conference)
  	    m->addParam("conference",String::boolText(m_conference));
+	if (m_slave) {
+	    m->addParam("channel_slave_type",::lookup(m_slave,s_slaveTypes),false);
+	    m->addParam("channel_master",m_master);
+	}
     }
     if (m_silence)
 	m->addParam("silence",String::boolText(true));
@@ -3688,14 +3779,22 @@ bool ClientDriver::setAudioTransfer(const String& id, const String& target)
 }
 
 // Attach/detach a client channel to/from a conference room
-bool ClientDriver::setConference(const String& id, bool in, const String* confName)
+bool ClientDriver::setConference(const String& id, bool in, const String* confName,
+    bool buildFromChan)
 {
     Lock lock(s_driver);
     if (!s_driver)
 	return false;
 
-    if (!confName)
-	confName = &s_confName;
+    String dummy;
+    if (!confName) {
+	if (buildFromChan) {
+	    dummy << "conf/" << id;
+	    confName = &dummy;
+	}
+	else
+	    confName = &s_confName;
+    }
 
     DDebug(s_driver,DebugInfo,"setConference id=%s in=%s conf=%s",
 	id.c_str(),String::boolText(in),confName->c_str());
@@ -3719,6 +3818,7 @@ bool ClientDriver::setConference(const String& id, bool in, const String* confNa
 	Message m("call.conference");
 	m.addParam("room",*confName);
 	m.addParam("notify",*confName);
+	m.addParam("maxusers",String(Client::s_maxConfPeers * 2));
 	m.userData(chan);
 	ok = Engine::dispatch(m);
 	if (ok)
@@ -3771,6 +3871,15 @@ ClientChannel* ClientDriver::findChanByPeer(const String& peer)
 	    return c->ref() ? c : 0;
     }
     return 0;
+}
+
+// Drop a channel
+void ClientDriver::dropChan(const String& chan, const char* reason)
+{
+    Message* m = Client::buildMessage("call.drop",String::empty());
+    m->addParam("id",chan);
+    m->addParam("reason",reason,false);
+    Engine::enqueue(m);
 }
 
 

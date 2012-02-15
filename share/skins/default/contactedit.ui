@@ -28,18 +28,12 @@
    </size>
   </property>
   <property name="windowIcon" >
-   <iconset>edit.png</iconset>
-  </property>
-  <property name="styleSheet" >
-   <string>QWidget {
-  color: black;
-}
-QWidget#contactedit {
-  background-color:#e0dfe3;
-}
-</string>
+   <iconset>contactedit_title.png</iconset>
   </property>
   <property name="_yate_destroyonhide" stdset="0" >
+   <bool>true</bool>
+  </property>
+  <property name="_yate_window" stdset="0" >
    <bool>true</bool>
   </property>
   <layout class="QVBoxLayout" >
@@ -388,6 +382,12 @@ QWidget#contactedit {
          <height>100</height>
         </size>
        </property>
+       <property name="styleSheet" >
+        <string>QTableWidget {
+  border: 1px solid #717fa0;
+}
+</string>
+       </property>
        <property name="_yate_uiwidget" stdset="0" >
         <bool>true</bool>
        </property>
@@ -536,28 +536,82 @@ QWidget#contactedit {
       </spacer>
      </item>
      <item>
-      <widget class="QPushButton" name="contactedit_ok" >
+      <widget class="QToolButton" name="contactedit_ok" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>0</width>
+         <height>26</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>16777215</width>
+         <height>26</height>
+        </size>
+       </property>
        <property name="text" >
         <string>Ok</string>
        </property>
        <property name="icon" >
         <iconset>ok.png</iconset>
        </property>
-       <property name="shortcut" >
-        <string>Return</string>
+       <property name="toolButtonStyle" >
+        <enum>Qt::ToolButtonTextBesideIcon</enum>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>ok.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>ok_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>ok_hover.png</string>
        </property>
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="button_hide" >
+      <widget class="QToolButton" name="button_hide" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>0</width>
+         <height>26</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>16777215</width>
+         <height>26</height>
+        </size>
+       </property>
        <property name="text" >
         <string>Cancel</string>
        </property>
        <property name="icon" >
-        <iconset>close.png</iconset>
+        <iconset>cancel.png</iconset>
        </property>
-       <property name="shortcut" >
-        <string>Esc</string>
+       <property name="toolButtonStyle" >
+        <enum>Qt::ToolButtonTextBesideIcon</enum>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>cancel.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>cancel_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>cancel_hover.png</string>
        </property>
       </widget>
      </item>
@@ -576,8 +630,6 @@ QWidget#contactedit {
   <tabstop>editgroup</tabstop>
   <tabstop>contactedit_addgroup</tabstop>
   <tabstop>request_subscribe</tabstop>
-  <tabstop>contactedit_ok</tabstop>
-  <tabstop>button_hide</tabstop>
  </tabstops>
  <resources/>
  <connections/>

@@ -15,6 +15,9 @@
   <property name="windowIcon" >
    <iconset>muc.png</iconset>
   </property>
+  <property name="_yate_window" stdset="0" >
+   <bool>true</bool>
+  </property>
   <layout class="QVBoxLayout" >
    <property name="spacing" >
     <number>2</number>
@@ -246,12 +249,33 @@
     </widget>
    </item>
    <item>
+    <spacer>
+     <property name="orientation" >
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeType" >
+      <enum>QSizePolicy::Fixed</enum>
+     </property>
+     <property name="sizeHint" >
+      <size>
+       <width>20</width>
+       <height>6</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+   <item>
     <widget class="QFrame" name="frame_contacts" >
      <property name="sizePolicy" >
       <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
        <horstretch>0</horstretch>
        <verstretch>0</verstretch>
       </sizepolicy>
+     </property>
+     <property name="styleSheet" >
+      <string>QFrame#frame_contacts {
+  border: 1px solid #717fa0;
+}</string>
      </property>
      <property name="_yate_uiwidget" stdset="0" >
       <bool>true</bool>
@@ -268,14 +292,17 @@
        <string>columns.check=name</string>
        <string>property:itemsExpandable=true</string>
        <string>property:sortingEnabled=true</string>
+       <string>property:allColumnsShowFocus=true</string>
        <string>property:autoExpand=true</string>
-       <string>property:styleSheet=QTreeWidget {border-image: none;font-size: 11px;background:white;selection-background-color:#0c7acb;selection-color:white;border: 0px solid #97acbc;border-radius:2px;}</string>
        <string>property:_yate_save_props=_yate_showofflinecontacts,_yate_sorting,_yate_col_widths</string>
        <string>property:_yate_flatlist=true</string>
        <string>property:_yate_showofflinecontacts=false</string>
        <string>property:_yate_hideemptygroups=true</string>
        <string>property:_yate_sorting=name,true</string>
        <string>property:_yate_itemtooltip=contact:&lt;html>&lt;head>&lt;meta name="qrichtext" content="1" />&lt;style type="text/css">\np, li { white-space: pre-wrap; }\n&lt;/style>&lt;/head>&lt;body style=" font-family:'Arial'; font-size:10pt; font-weight:400; font-style:normal;">&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">&lt;span style=" font-size:14pt; font-weight:600;">${name}&lt;/span>&lt;/p>&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">${status_text}&lt;/p>&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">${contact}&lt;/p>&lt;/body>&lt;/html></string>
+       <string>property:_yate_itemheight=contact:20</string>
+       <string>griddraw_right_color=#e3e6e9</string>
+       <string>griddraw_bottom_color=#a9c2c2</string>
       </stringlist>
      </property>
     </widget>
@@ -286,18 +313,45 @@
       <number>6</number>
      </property>
      <item>
-      <widget class="QPushButton" name="invite_add" >
+      <widget class="QToolButton" name="invite_add" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>0</width>
+         <height>26</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>16777215</width>
+         <height>26</height>
+        </size>
+       </property>
        <property name="toolTip" >
-        <string>Add a contact to the list</string>
+        <string>Create a new account</string>
        </property>
        <property name="text" >
-        <string>Add</string>
+        <string>New</string>
        </property>
        <property name="icon" >
-        <iconset>addcontact.png</iconset>
+        <iconset>add.png</iconset>
        </property>
-       <property name="shortcut" >
-        <string>Return</string>
+       <property name="toolButtonStyle" >
+        <enum>Qt::ToolButtonTextBesideIcon</enum>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>add.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>add_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>add_hover.png</string>
        </property>
       </widget>
      </item>
@@ -315,7 +369,25 @@
       </spacer>
      </item>
      <item>
-      <widget class="QPushButton" name="ok" >
+      <widget class="QToolButton" name="ok" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>0</width>
+         <height>26</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>16777215</width>
+         <height>26</height>
+        </size>
+       </property>
        <property name="text" >
         <string>Ok</string>
        </property>
@@ -325,18 +397,60 @@
        <property name="shortcut" >
         <string>Return</string>
        </property>
+       <property name="toolButtonStyle" >
+        <enum>Qt::ToolButtonTextBesideIcon</enum>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>ok.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>ok_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>ok_hover.png</string>
+       </property>
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="button_hide" >
+      <widget class="QToolButton" name="button_hide" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>0</width>
+         <height>26</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>16777215</width>
+         <height>26</height>
+        </size>
+       </property>
        <property name="text" >
         <string>Cancel</string>
        </property>
        <property name="icon" >
-        <iconset>close.png</iconset>
+        <iconset>cancel.png</iconset>
        </property>
        <property name="shortcut" >
         <string>Esc</string>
+       </property>
+       <property name="toolButtonStyle" >
+        <enum>Qt::ToolButtonTextBesideIcon</enum>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>cancel.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>cancel_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>cancel_hover.png</string>
        </property>
       </widget>
      </item>

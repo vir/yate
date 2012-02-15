@@ -21,18 +21,35 @@
  */
 
 #include "yateclass.h"
+#include "yatescript.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 using namespace TelEngine;
 
 #define MAKEOP(s,o) { s, ExpEvaluator::Opc ## o }
+#define ASSIGN(s,o) { s "=", ExpEvaluator::Opc ## o | ExpEvaluator::OpcAssign }
 static const TokenDict s_operators_c[] =
 {
+    ASSIGN("<<",Shl),
+    ASSIGN(">>",Shr),
+    ASSIGN("+", Add),
+    ASSIGN("-", Sub),
+    ASSIGN("*", Mul),
+    ASSIGN("/", Div),
+    ASSIGN("%", Mod),
+    ASSIGN("&", And),
+    ASSIGN("|", Or),
+    ASSIGN("^", Xor),
     MAKEOP("<<",Shl),
     MAKEOP(">>",Shr),
     MAKEOP("==",Eq),
     MAKEOP("!=",Ne),
+    MAKEOP("<=",Le),
+    MAKEOP(">=",Ge),
+    MAKEOP("<",Lt),
+    MAKEOP(">",Gt),
     MAKEOP("&&",LAnd),
     MAKEOP("||",LOr),
     MAKEOP("^^",LXor),
@@ -41,13 +58,22 @@ static const TokenDict s_operators_c[] =
     MAKEOP("*", Mul),
     MAKEOP("/", Div),
     MAKEOP("%", Mod),
-    MAKEOP("!", LNot),
     MAKEOP("&", And),
     MAKEOP("|", Or),
     MAKEOP("^", Xor),
-    MAKEOP("~", Not),
     MAKEOP(".", Cat),
     MAKEOP("@", As),
+    MAKEOP("=", Assign),
+    { 0, 0 }
+};
+
+static const TokenDict s_unaryOps_c[] =
+{
+    MAKEOP("++", IncPre),
+    MAKEOP("--", DecPre),
+    MAKEOP("!", LNot),
+    MAKEOP("~", Not),
+    MAKEOP("-", Neg),
     { 0, 0 }
 };
 
@@ -55,11 +81,14 @@ const TokenDict s_operators_sql[] =
 {
     MAKEOP("AND",LAnd),
     MAKEOP("OR",LOr),
-    MAKEOP("NOT", LNot),
     MAKEOP("<<",Shl),
     MAKEOP(">>",Shr),
     MAKEOP("<>",Ne),
     MAKEOP("!=",Ne),
+    MAKEOP("<=",Le),
+    MAKEOP(">=",Ge),
+    MAKEOP("<",Lt),
+    MAKEOP(">",Gt),
     MAKEOP("||",Cat),
     MAKEOP("AS",As),
     MAKEOP("+", Add),
@@ -70,12 +99,20 @@ const TokenDict s_operators_sql[] =
     MAKEOP("&", And),
     MAKEOP("|", Or),
     MAKEOP("^", Xor),
-    MAKEOP("~", Not),
     MAKEOP("=",Eq),
     { 0, 0 }
 };
-#undef MAKEOP
 
+static const TokenDict s_unaryOps_sql[] =
+{
+    MAKEOP("NOT", LNot),
+    MAKEOP("~", Not),
+    MAKEOP("-", Neg),
+    { 0, 0 }
+};
+
+#undef MAKEOP
+#undef ASSIGN
 
 
 bool ExpExtender::runFunction(const ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper, void* context)
@@ -88,27 +125,35 @@ bool ExpExtender::runField(const ExpEvaluator* eval, ObjList& stack, const ExpOp
     return false;
 }
 
+bool ExpExtender::runAssign(const ExpEvaluator* eval, const ExpOperation& oper, void* context)
+{
+    return false;
+}
 
-ExpEvaluator::ExpEvaluator(const TokenDict* operators)
-    : m_operators(operators), m_extender(0)
+
+ExpEvaluator::ExpEvaluator(const TokenDict* operators, const TokenDict* unaryOps)
+    : m_operators(operators), m_unaryOps(unaryOps), m_extender(0)
 {
 }
 
 ExpEvaluator::ExpEvaluator(ExpEvaluator::Parser style)
-    : m_operators(0), m_extender(0)
+    : m_operators(0), m_unaryOps(0), m_extender(0)
 {
     switch (style) {
 	case C:
 	    m_operators = s_operators_c;
+	    m_unaryOps = s_unaryOps_c;
 	    break;
 	case SQL:
 	    m_operators = s_operators_sql;
+	    m_unaryOps = s_unaryOps_sql;
 	    break;
     }
 }
 
 ExpEvaluator::ExpEvaluator(const ExpEvaluator& original)
-    : m_operators(original.m_operators), m_extender(0)
+    : m_operators(original.m_operators), m_unaryOps(original.unaryOps()),
+      m_extender(0)
 {
     extender(original.extender());
     for (ObjList* l = original.m_opcodes.skipNull(); l; l = l->skipNext()) {
@@ -133,7 +178,7 @@ void ExpEvaluator::extender(ExpExtender* ext)
     TelEngine::destruct(tmp);
 }
 
-char ExpEvaluator::skipWhites(const char*& expr) const
+char ExpEvaluator::skipWhites(const char*& expr)
 {
     if (!expr)
 	return 0;
@@ -142,30 +187,70 @@ char ExpEvaluator::skipWhites(const char*& expr) const
     return *expr;
 }
 
+bool ExpEvaluator::keywordChar(char c) const
+{
+    return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') ||
+	('0' <= c && c <= '9') || (c == '_');
+}
+
+ExpEvaluator::Opcode ExpEvaluator::getOperator(const char*& expr, const TokenDict* operators, bool caseInsensitive) const
+{
+    XDebug(this,DebugAll,"getOperator('%s',%p,%s)",expr,operators,String::boolText(caseInsensitive));
+    skipWhites(expr);
+    if (operators) {
+	bool kw = keywordChar(*expr);
+	for (const TokenDict* o = operators; o->token; o++) {
+	    const char* s1 = o->token;
+	    const char* s2 = expr;
+	    do {
+		if (!*s1) {
+		    if (kw && keywordChar(*s2))
+			break;
+		    expr = s2;
+		    return (ExpEvaluator::Opcode)o->value;
+		}
+	    } while (condLower(*s1++,caseInsensitive) == condLower(*s2++,caseInsensitive));
+	}
+    }
+    return OpcNone;
+}
+
 bool ExpEvaluator::gotError(const char* error, const char* text) const
 {
     if (!error)
 	error = "unknown error";
-    Debug(DebugWarn,"Evaluator got error: %s%s%s",error,
+    Debug(this,DebugWarn,"Evaluator got error: %s%s%s",error,
 	(text ? " at: " : ""),
 	c_safe(text));
     return false;
 }
 
+bool ExpEvaluator::getInstruction(const char*& expr)
+{
+    return false;
+}
+
 bool ExpEvaluator::getOperand(const char*& expr)
 {
-    XDebug(DebugAll,"getOperand '%s'",expr);
+    XDebug(this,DebugAll,"getOperand '%s'",expr);
     char c = skipWhites(expr);
     if (!c)
 	// end of string
 	return true;
     if (c == '(') {
 	// parenthesized subexpression
-	if (!runCompile(++expr))
+	if (!runCompile(++expr,')'))
 	    return false;
 	if (skipWhites(expr) != ')')
 	    return gotError("Expecting ')'",expr);
 	expr++;
+	return true;
+    }
+    Opcode op = getUnaryOperator(expr);
+    if (op != OpcNone) {
+	if (!getOperand(expr))
+	    return false;
+	addOpcode(op);
 	return true;
     }
     if (getString(expr) || getNumber(expr) || getFunction(expr) || getField(expr))
@@ -175,20 +260,20 @@ bool ExpEvaluator::getOperand(const char*& expr)
 
 bool ExpEvaluator::getNumber(const char*& expr)
 {
-    XDebug(DebugAll,"getNumber '%s'",expr);
+    XDebug(this,DebugAll,"getNumber '%s'",expr);
     char* endp = 0;
     long int val = ::strtol(expr,&endp,0);
     if (!endp || (endp == expr))
 	return false;
     expr = endp;
-    DDebug(DebugAll,"Found %ld",val);
+    DDebug(this,DebugAll,"Found %ld",val);
     addOpcode(val);
     return true;
 }
 
 bool ExpEvaluator::getString(const char*& expr)
 {
-    XDebug(DebugAll,"getString '%s'",expr);
+    XDebug(this,DebugAll,"getString '%s'",expr);
     char c = skipWhites(expr);
     if (c == '"' || c == '\'') {
 	char sep = c;
@@ -197,7 +282,7 @@ bool ExpEvaluator::getString(const char*& expr)
 	    if (c != sep)
 		continue;
 	    String str(start,expr-start-1);
-	    DDebug(DebugAll,"Found '%s'",str.safe());
+	    DDebug(this,DebugAll,"Found '%s'",str.safe());
 	    addOpcode(str);
 	    return true;
 	}
@@ -211,30 +296,26 @@ int ExpEvaluator::getKeyword(const char* str) const
     int len = 0;
     for (;; len++) {
 	char c = *str++;
-	if (c <= ' ')
+	if (c <= ' ' || !keywordChar(c))
 	    break;
-	if (('0' <= c && c <= '9') ||
-	    ('a' <= c && c <= 'z') ||
-	    ('A' <= c && c <= 'Z') ||
-	    (c == '_'))
-	    continue;
-	break;
     }
     return len;
 }
 
 bool ExpEvaluator::getFunction(const char*& expr)
 {
-    XDebug(DebugAll,"getFunction '%s'",expr);
+    XDebug(this,DebugAll,"getFunction '%s'",expr);
     skipWhites(expr);
     int len = getKeyword(expr);
-    if ((len <= 0) || (expr[len] != '('))
+    const char* s = expr+len;
+    skipWhites(expr);
+    if ((len <= 0) || (skipWhites(s) != '('))
 	return false;
-    const char* s = expr+len+1;
+    s++;
     int argc = 0;
     // parameter list
     do {
-	if (!runCompile(s)) {
+	if (!runCompile(s,')')) {
 	    if (!argc && (skipWhites(s) == ')'))
 		break;
 	    return false;
@@ -245,14 +326,14 @@ bool ExpEvaluator::getFunction(const char*& expr)
 	return gotError("Expecting ')' after function",s);
     String str(expr,len);
     expr = s+1;
-    DDebug(DebugAll,"Found %s()",str.safe());
+    DDebug(this,DebugAll,"Found %s()",str.safe());
     addOpcode(OpcFunc,str,argc);
     return true;
 }
 
 bool ExpEvaluator::getField(const char*& expr)
 {
-    XDebug(DebugAll,"getField '%s'",expr);
+    XDebug(this,DebugAll,"getField '%s'",expr);
     skipWhites(expr);
     int len = getKeyword(expr);
     if (len <= 0)
@@ -261,38 +342,42 @@ bool ExpEvaluator::getField(const char*& expr)
 	return false;
     String str(expr,len);
     expr += len;
-    DDebug(DebugAll,"Found %s",str.safe());
+    DDebug(this,DebugAll,"Found %s",str.safe());
     addOpcode(OpcField,str);
     return true;
 }
 
-ExpEvaluator::Opcode ExpEvaluator::getOperator(const char*& expr) const
+ExpEvaluator::Opcode ExpEvaluator::getOperator(const char*& expr)
 {
-    XDebug(DebugAll,"getOperator '%s'",expr);
-    skipWhites(expr);
-    if (m_operators) {
-	for (const TokenDict* o = m_operators; o->token; o++) {
-	    const char* s1 = o->token;
-	    const char* s2 = expr;
-	    do {
-		if (!*s1) {
-		    expr = s2;
-		    return (ExpEvaluator::Opcode)o->value;
-		}
-	    } while (*s1++ == *s2++);
-	}
-    }
+    return getOperator(expr,m_operators);
+}
+
+ExpEvaluator::Opcode ExpEvaluator::getUnaryOperator(const char*& expr)
+{
+    return getOperator(expr,m_unaryOps);
+}
+
+ExpEvaluator::Opcode ExpEvaluator::getPostfixOperator(const char*& expr)
+{
     return OpcNone;
 }
 
 const char* ExpEvaluator::getOperator(ExpEvaluator::Opcode oper) const
 {
-    return lookup(oper,m_operators);
+    const char* res = lookup(oper,m_operators);
+    return res ? res : lookup(oper,m_unaryOps);
 }
 
 int ExpEvaluator::getPrecedence(ExpEvaluator::Opcode oper) const
 {
     switch (oper) {
+	case OpcIncPre:
+	case OpcDecPre:
+	case OpcIncPost:
+	case OpcDecPost:
+	case OpcNeg:
+	case OpcNot:
+	    return 11;
 	case OpcMul:
 	case OpcDiv:
 	case OpcMod:
@@ -329,6 +414,22 @@ int ExpEvaluator::getPrecedence(ExpEvaluator::Opcode oper) const
     }
 }
 
+bool ExpEvaluator::getRightAssoc(ExpEvaluator::Opcode oper) const
+{
+    if (oper & OpcAssign)
+	return true;
+    switch (oper) {
+	case OpcIncPre:
+	case OpcDecPre:
+	case OpcNeg:
+	case OpcNot:
+	case OpcLNot:
+	    return true;
+	default:
+	    return false;
+    }
+}
+
 bool ExpEvaluator::getSeparator(const char*& expr, bool remove)
 {
     if (skipWhites(expr) != ',')
@@ -338,7 +439,7 @@ bool ExpEvaluator::getSeparator(const char*& expr, bool remove)
     return true;
 }
 
-bool ExpEvaluator::runCompile(const char*& expr)
+bool ExpEvaluator::runCompile(const char*& expr, char stop)
 {
     typedef struct {
 	Opcode code;
@@ -346,7 +447,7 @@ bool ExpEvaluator::runCompile(const char*& expr)
     } StackedOpcode;
     StackedOpcode stack[10];
     unsigned int stackPos = 0;
-    DDebug(DebugInfo,"runCompile '%s'",expr);
+    DDebug(this,DebugInfo,"runCompile '%s'",expr);
     if (skipWhites(expr) == ')')
 	return false;
     if (expr[0] == '*' && !expr[1]) {
@@ -355,19 +456,27 @@ bool ExpEvaluator::runCompile(const char*& expr)
 	return true;
     }
     for (;;) {
+	while (skipWhites(expr) && getInstruction(expr))
+	    ;
 	if (!getOperand(expr))
 	    return false;
+	Opcode oper;
+	while ((oper = getPostfixOperator(expr)) != OpcNone)
+	    addOpcode(oper);
 	char c = skipWhites(expr);
-	if (!c || c == ')' || getSeparator(expr,false)) {
+	if (!c || c == stop || getSeparator(expr,false)) {
 	    while (stackPos)
 		addOpcode(stack[--stackPos].code);
 	    return true;
 	}
-	Opcode oper = getOperator(expr);
+	oper = getOperator(expr);
 	if (oper == OpcNone)
 	    return gotError("Operator expected",expr);
-	int precedence = getPrecedence(oper);
-	while (stackPos && stack[stackPos-1].prec >= precedence)
+	int precedence = 2 * getPrecedence(oper);
+	int precAdj = precedence;
+	if (getRightAssoc(oper))
+	    precAdj++;
+	while (stackPos && stack[stackPos-1].prec >= precAdj)
 	    addOpcode(stack[--stackPos].code);
 	if (stackPos >= (sizeof(stack)/sizeof(StackedOpcode)))
 	    return gotError("Compiler stack overflow");
@@ -379,11 +488,11 @@ bool ExpEvaluator::runCompile(const char*& expr)
 
 bool ExpEvaluator::trySimplify()
 {
-    DDebug(DebugInfo,"trySimplify");
+    DDebug(this,DebugInfo,"trySimplify");
     bool done = false;
     for (unsigned int i = 0; i < m_opcodes.length(); i++) {
 	ExpOperation* o = static_cast<ExpOperation*>(m_opcodes[i]);
-	if (!o)
+	if (!o || o->barrier())
 	    continue;
 	switch (o->opcode()) {
 	    case OpcLAnd:
@@ -435,8 +544,8 @@ bool ExpEvaluator::trySimplify()
 		    }
 		    if ((op1->opcode() == OpcPush) && (op2->opcode() == OpcPush)) {
 			ObjList stack;
-			stack.append(new ExpOperation(*op1));
-			stack.append(new ExpOperation(*op2));
+			pushOne(stack,new ExpOperation(*op1));
+			pushOne(stack,new ExpOperation(*op2));
 			if (runOperation(stack,*o)) {
 			    // replace operators and operation with computed constant
 			    (m_opcodes+i)->set(popOne(stack));
@@ -447,6 +556,34 @@ bool ExpEvaluator::trySimplify()
 			}
 		    }
 		}
+		break;
+	    case OpcNeg:
+	    case OpcNot:
+	    case OpcLNot:
+		if (i >= 1) {
+		    ExpOperation* op = static_cast<ExpOperation*>(m_opcodes[i-1]);
+		    if (!op)
+			continue;
+		    if (op->opcode() == OpcPush) {
+			ObjList stack;
+			pushOne(stack,new ExpOperation(op));
+			if (runOperation(stack,*o)) {
+			    // replace unary operator and operation with computed constant
+			    (m_opcodes+i)->set(popOne(stack));
+			    m_opcodes.remove(op);
+			    i--;
+			    done = true;
+			}
+		    }
+		    else if (op->opcode() == o->opcode() && op->opcode() != OpcLNot) {
+			// minus or bit negation applied twice - remove both operators
+			m_opcodes.remove(o);
+			m_opcodes.remove(op);
+			i--;
+			done = true;
+		    }
+		}
+		break;
 	    default:
 		break;
 	}
@@ -454,9 +591,9 @@ bool ExpEvaluator::trySimplify()
     return done;
 }
 
-void ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper)
+void ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, bool barrier)
 {
-    DDebug(DebugAll,"addOpcode %u",oper);
+    DDebug(this,DebugAll,"addOpcode %u",oper);
     if (oper == OpcAs) {
 	// the second operand is used just for the field name
 	ExpOperation* o = 0;
@@ -467,43 +604,83 @@ void ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper)
 	    o->String::operator=(o->name());
 	}
     }
-    m_opcodes.append(new ExpOperation(oper));
+    m_opcodes.append(new ExpOperation(oper,0,0,barrier));
 }
 
-void ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, const String& name, long int value)
+void ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, const String& name, long int value, bool barrier)
 {
-    DDebug(DebugAll,"addOpcode %u '%s' %ld",oper,name.c_str(),value);
-    m_opcodes.append(new ExpOperation(oper,name,value));
+    DDebug(this,DebugAll,"addOpcode %u '%s' %ld",oper,name.c_str(),value);
+    m_opcodes.append(new ExpOperation(oper,name,value,barrier));
 }
 
 void ExpEvaluator::addOpcode(const String& value)
 {
-    DDebug(DebugAll,"addOpcode ='%s'",value.c_str());
+    DDebug(this,DebugAll,"addOpcode ='%s'",value.c_str());
     m_opcodes.append(new ExpOperation(value));
 }
 
 void ExpEvaluator::addOpcode(long int value)
 {
-    DDebug(DebugAll,"addOpcode =%ld",value);
+    DDebug(this,DebugAll,"addOpcode =%ld",value);
     m_opcodes.append(new ExpOperation(value));
+}
+
+void ExpEvaluator::pushOne(ObjList& stack, ExpOperation* oper)
+{
+    if (oper)
+	stack.insert(oper);
 }
 
 ExpOperation* ExpEvaluator::popOne(ObjList& stack)
 {
-    GenObject* o = 0;
-    for (ObjList* l = stack.skipNull(); l; l=l->skipNext())
-	o = l->get();
+    ExpOperation* o = 0;
+    for (;;) {
+	o = static_cast<ExpOperation*>(stack.get());
+	if (o || !stack.next())
+	    break;
+	// non-terminal NULL - remove the list entry
+	stack.remove();
+    }
+    if (o && o->barrier()) {
+	XDebug(DebugAll,"Not popping barrier %u: '%s'='%s'",o->opcode(),o->name().c_str(),o->c_str());
+	return 0;
+    }
     stack.remove(o,false);
     DDebug(DebugInfo,"Popped: %p",o);
-    return static_cast<ExpOperation*>(o);
+    return o;
+}
+
+ExpOperation* ExpEvaluator::popAny(ObjList& stack)
+{
+    ExpOperation* o = 0;
+    for (;;) {
+	o = static_cast<ExpOperation*>(stack.get());
+	if (o || !stack.next())
+	    break;
+	// non-terminal NULL - remove the list entry
+	stack.remove();
+    }
+    stack.remove(o,false);
+    DDebug(DebugInfo,"Popped: %p",o);
+    return o;
+}
+
+ExpOperation* ExpEvaluator::popValue(ObjList& stack, void* context) const
+{
+    ExpOperation* oper = popOne(stack);
+    if (!oper || (oper->opcode() != OpcField))
+	return oper;
+    bool ok = runField(stack,*oper,context);
+    TelEngine::destruct(oper);
+    return ok ? popOne(stack) : 0;
 }
 
 bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, void* context) const
 {
-    DDebug(DebugAll,"runOperation(%p,%u,%p) %s",&stack,oper.opcode(),context,getOperator(oper.opcode()));
+    DDebug(this,DebugAll,"runOperation(%p,%u,%p) %s",&stack,oper.opcode(),context,getOperator(oper.opcode()));
     switch (oper.opcode()) {
 	case OpcPush:
-	    stack.append(new ExpOperation(oper));
+	    pushOne(stack,new ExpOperation(oper));
 	    break;
 	case OpcAnd:
 	case OpcOr:
@@ -522,8 +699,8 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, void* 
 	case OpcLe:
 	case OpcGe:
 	    {
-		ExpOperation* op2 = popOne(stack);
-		ExpOperation* op1 = popOne(stack);
+		ExpOperation* op2 = popValue(stack,context);
+		ExpOperation* op1 = popValue(stack,context);
 		if (!op1 || !op2) {
 		    TelEngine::destruct(op1);
 		    TelEngine::destruct(op2);
@@ -534,6 +711,18 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, void* 
 		    case OpcMod:
 			if (!op2->number())
 			    return gotError("Division by zero");
+		    case OpcAdd:
+			if (op1->isInteger() && op2->isInteger())
+			    break;
+			// turn addition into concatenation
+			{
+			    String val = *op1 + *op2;
+			    TelEngine::destruct(op1);
+			    TelEngine::destruct(op2);
+			    DDebug(this,DebugAll,"String result: '%s'",val.c_str());
+			    pushOne(stack,new ExpOperation(val));
+			    return true;
+			}
 		    default:
 			break;
 		}
@@ -592,15 +781,15 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, void* 
 		}
 		TelEngine::destruct(op1);
 		TelEngine::destruct(op2);
-		DDebug(DebugAll,"Numeric result: %lu",val);
-		stack.append(new ExpOperation(val));
+		DDebug(this,DebugAll,"Numeric result: %lu",val);
+		pushOne(stack,new ExpOperation(val));
 	    }
 	    break;
 	case OpcLAnd:
 	case OpcLOr:
 	    {
-		ExpOperation* op2 = popOne(stack);
-		ExpOperation* op1 = popOne(stack);
+		ExpOperation* op2 = popValue(stack,context);
+		ExpOperation* op1 = popValue(stack,context);
 		if (!op1 || !op2) {
 		    TelEngine::destruct(op1);
 		    TelEngine::destruct(op2);
@@ -619,14 +808,14 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, void* 
 		}
 		TelEngine::destruct(op1);
 		TelEngine::destruct(op2);
-		DDebug(DebugAll,"Bool result: '%s'",String::boolText(val));
-		stack.append(new ExpOperation(val ? 1 : 0));
+		DDebug(this,DebugAll,"Bool result: '%s'",String::boolText(val));
+		pushOne(stack,new ExpOperation(val ? 1 : 0));
 	    }
 	    break;
 	case OpcCat:
 	    {
-		ExpOperation* op2 = popOne(stack);
-		ExpOperation* op1 = popOne(stack);
+		ExpOperation* op2 = popValue(stack,context);
+		ExpOperation* op1 = popValue(stack,context);
 		if (!op1 || !op2) {
 		    TelEngine::destruct(op1);
 		    TelEngine::destruct(op2);
@@ -635,8 +824,8 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, void* 
 		String val = *op1 + *op2;
 		TelEngine::destruct(op1);
 		TelEngine::destruct(op2);
-		DDebug(DebugAll,"String result: '%s'",val.c_str());
-		stack.append(new ExpOperation(val));
+		DDebug(this,DebugAll,"String result: '%s'",val.c_str());
+		pushOne(stack,new ExpOperation(val));
 	    }
 	    break;
 	case OpcAs:
@@ -648,17 +837,139 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, void* 
 		    TelEngine::destruct(op2);
 		    return gotError("ExpEvaluator stack underflow");
 		}
-		stack.append(new ExpOperation(*op1,*op2));
+		pushOne(stack,new ExpOperation(*op1,*op2));
 		TelEngine::destruct(op1);
 		TelEngine::destruct(op2);
 	    }
 	    break;
+	case OpcNeg:
+	case OpcNot:
+	case OpcLNot:
+	    {
+		ExpOperation* op = popValue(stack,context);
+		if (!op)
+		    return gotError("ExpEvaluator stack underflow");
+		long int val = op->number();
+		TelEngine::destruct(op);
+		switch (oper.opcode()) {
+		    case OpcNeg:
+			val = -val;
+			break;
+		    case OpcNot:
+			val = ~val;
+			break;
+		    case OpcLNot:
+			val = val ? 0 : 1;
+			break;
+		    default:
+			break;
+		}
+		pushOne(stack,new ExpOperation(val));
+	    }
+	    break;
 	case OpcFunc:
-	    return runFunction(stack,oper,context);
+	    return runFunction(stack,oper,context) || gotError("Function call failed");
 	case OpcField:
-	    return runField(stack,oper,context);
+	    pushOne(stack,new ExpOperation(oper));
+	    break;
+	case OpcIncPre:
+	case OpcDecPre:
+	case OpcIncPost:
+	case OpcDecPost:
+	    {
+		ExpOperation* fld = popOne(stack);
+		if (!fld)
+		    return gotError("ExpEvaluator stack underflow");
+		if (fld->opcode() != OpcField) {
+		    TelEngine::destruct(fld);
+		    return gotError("Expecting LValue in operator");
+		}
+		ExpOperation* val = 0;
+		if (!(runField(stack,*fld,context) && (val = popOne(stack)))) {
+		    TelEngine::destruct(fld);
+		    return false;
+		}
+		long int num = val->number();
+		switch (oper.opcode()) {
+		    case OpcIncPre:
+			num++;
+			(*val) = num;
+			break;
+		    case OpcDecPre:
+			num--;
+			(*val) = num;
+			break;
+		    case OpcIncPost:
+			(*val) = num;
+			num++;
+			break;
+		    case OpcDecPost:
+			(*val) = num;
+			num--;
+			break;
+		    default:
+			break;
+		}
+		(*fld) = num;
+		bool ok = runAssign(*fld,context);
+		TelEngine::destruct(fld);
+		if (!ok) {
+		    TelEngine::destruct(val);
+		    return gotError("Assignment failed");
+		}
+		pushOne(stack,val);
+	    }
+	    break;
+	case OpcAssign:
+	    {
+		ExpOperation* val = popValue(stack,context);
+		ExpOperation* fld = popOne(stack);
+		if (!fld || !val) {
+		    TelEngine::destruct(fld);
+		    TelEngine::destruct(val);
+		    return gotError("ExpEvaluator stack underflow");
+		}
+		if (fld->opcode() != OpcField) {
+		    TelEngine::destruct(fld);
+		    TelEngine::destruct(val);
+		    return gotError("Expecting LValue in assignment");
+		}
+		ExpOperation op(*val,fld->name());
+		TelEngine::destruct(fld);
+		if (!runAssign(op,context)) {
+		    TelEngine::destruct(val);
+		    return gotError("Assignment failed");
+		}
+		pushOne(stack,val);
+	    }
+	    break;
 	default:
-	    Debug(DebugStub,"Please implement operation %u",oper.opcode());
+	    if (oper.opcode() & OpcAssign) {
+		// assignment by operation
+		ExpOperation* val = popValue(stack,context);
+		ExpOperation* fld = popOne(stack);
+		if (!fld || !val) {
+		    TelEngine::destruct(fld);
+		    TelEngine::destruct(val);
+		    return gotError("ExpEvaluator stack underflow");
+		}
+		if (fld->opcode() != OpcField) {
+		    TelEngine::destruct(fld);
+		    TelEngine::destruct(val);
+		    return gotError("Expecting LValue in assignment");
+		}
+		pushOne(stack,new ExpOperation(*fld));
+		pushOne(stack,fld);
+		pushOne(stack,val);
+		ExpOperation op((Opcode)(oper.opcode() & ~OpcAssign),
+		    oper.name(),oper.number(),oper.barrier());
+		if (!runOperation(stack,op,context))
+		    return false;
+		static const ExpOperation assign(OpcAssign);
+		return runOperation(stack,assign,context);
+	    }
+	    Debug(this,DebugStub,"Please implement operation %u '%s'",
+		oper.opcode(),getOperator(oper.opcode()));
 	    return false;
     }
     return true;
@@ -666,24 +977,24 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, void* 
 
 bool ExpEvaluator::runFunction(ObjList& stack, const ExpOperation& oper, void* context) const
 {
-    DDebug(DebugAll,"runFunction(%p,'%s' %ld, %p) ext=%p",
+    DDebug(this,DebugAll,"runFunction(%p,'%s' %ld, %p) ext=%p",
 	&stack,oper.name().c_str(),oper.number(),context,(void*)m_extender);
     if (oper.name() == YSTRING("chr")) {
 	String res;
 	for (long int i = oper.number(); i; i--) {
-	    ExpOperation* o = popOne(stack);
+	    ExpOperation* o = popValue(stack,context);
 	    if (!o)
 		return gotError("ExpEvaluator stack underflow");
 	    res = String((char)o->number()) + res;
 	    TelEngine::destruct(o);
 	}
-	stack.append(new ExpOperation(res));
+	pushOne(stack,new ExpOperation(res));
 	return true;
     }
     if (oper.name() == YSTRING("now")) {
 	if (oper.number())
 	    return gotError("Function expects no arguments");
-	stack.append(new ExpOperation(Time::secNow()));
+	pushOne(stack,new ExpOperation(Time::secNow()));
 	return true;
     }
     return m_extender && m_extender->runFunction(this,stack,oper,context);
@@ -691,20 +1002,67 @@ bool ExpEvaluator::runFunction(ObjList& stack, const ExpOperation& oper, void* c
 
 bool ExpEvaluator::runField(ObjList& stack, const ExpOperation& oper, void* context) const
 {
-    DDebug(DebugAll,"runField(%p,'%s',%p) ext=%p",
+    DDebug(this,DebugAll,"runField(%p,'%s',%p) ext=%p",
 	&stack,oper.name().c_str(),context,(void*)m_extender);
     return m_extender && m_extender->runField(this,stack,oper,context);
 }
 
-bool ExpEvaluator::runEvaluate(ObjList& stack, void* context) const
+bool ExpEvaluator::runAssign(const ExpOperation& oper, void* context) const
 {
-    DDebug(DebugInfo,"runEvaluate(%p,%p)",&stack,context);
-    for (ObjList* l = m_opcodes.skipNull(); l; l = l->skipNext()) {
+    DDebug(this,DebugAll,"runAssign('%s'='%s',%p) ext=%p",
+	oper.name().c_str(),oper.c_str(),context,(void*)m_extender);
+    return m_extender && m_extender->runAssign(this,oper,context);
+}
+
+bool ExpEvaluator::runEvaluate(const ObjList& opcodes, ObjList& stack, void* context) const
+{
+    DDebug(this,DebugInfo,"runEvaluate(%p,%p,%p)",&opcodes,&stack,context);
+    for (const ObjList* l = opcodes.skipNull(); l; l = l->skipNext()) {
 	const ExpOperation* o = static_cast<const ExpOperation*>(l->get());
 	if (!runOperation(stack,*o,context))
 	    return false;
     }
     return true;
+}
+
+bool ExpEvaluator::runEvaluate(const ObjVector& opcodes, ObjList& stack, void* context, unsigned int index) const
+{
+    DDebug(this,DebugInfo,"runEvaluate(%p,%p,%p,%u)",&opcodes,&stack,context,index);
+    for (; index < opcodes.length(); index++) {
+	const ExpOperation* o = static_cast<const ExpOperation*>(opcodes[index]);
+	if (o && !runOperation(stack,*o,context))
+	    return false;
+    }
+    return true;
+}
+
+bool ExpEvaluator::runEvaluate(ObjList& stack, void* context) const
+{
+    return runEvaluate(m_opcodes,stack,context);
+}
+
+bool ExpEvaluator::runAllFields(ObjList& stack, void* context) const
+{
+    DDebug(this,DebugAll,"runAllFields(%p,%p)",&stack,context);
+    bool ok = true;
+    for (ObjList* l = stack.skipNull(); l; l = l->skipNext()) {
+	const ExpOperation* o = static_cast<const ExpOperation*>(l->get());
+	if (o->barrier())
+	    break;
+	if (o->opcode() != OpcField)
+	    continue;
+	ObjList tmp;
+	if (runField(tmp,*o,context)) {
+	    ExpOperation* val = popOne(tmp);
+	    if (val)
+		l->set(val);
+	    else
+		ok = false;
+	}
+	else
+	    ok = false;
+    }
+    return ok;
 }
 
 int ExpEvaluator::compile(const char* expr)
@@ -722,12 +1080,13 @@ int ExpEvaluator::compile(const char* expr)
 
 bool ExpEvaluator::evaluate(ObjList* results, void* context) const
 {
-    ObjList res;
-    if (results)
+    if (results) {
 	results->clear();
-    else
-	results = &res;
-    return runEvaluate(*results,context);
+	return runEvaluate(*results,context) &&
+	    (runAllFields(*results,context) || gotError("Could not evaluate all fields"));
+    }
+    ObjList res;
+    return runEvaluate(res,context);
 }
 
 int ExpEvaluator::evaluate(NamedList& results, unsigned int index, const char* prefix, void* context) const
@@ -752,38 +1111,38 @@ int ExpEvaluator::evaluate(NamedList& results, unsigned int index, const char* p
 
 int ExpEvaluator::evaluate(Array& results, unsigned int index, void* context) const
 {
-    Debug(DebugStub,"Please implement ExpEvaluator::evaluate(Array)");
+    Debug(this,DebugStub,"Please implement ExpEvaluator::evaluate(Array)");
     return -1;
 }
 
-String ExpEvaluator::dump() const
+void ExpEvaluator::dump(const ObjList& codes, String& res) const
 {
-    String res;
-    for (ObjList* l = m_opcodes.skipNull(); l; l = l->skipNext()) {
+    for (const ObjList* l = codes.skipNull(); l; l = l->skipNext()) {
+	if (res)
+	    res << " ";
 	const ExpOperation* o = static_cast<const ExpOperation*>(l->get());
 	const char* oper = getOperator(o->opcode());
 	if (oper) {
-	    res << " " << oper;
+	    res << oper;
 	    continue;
 	}
 	switch (o->opcode()) {
 	    case OpcPush:
-		if (o->number())
-		    res << " " << (int)o->number();
+		if (o->isInteger())
+		    res << (int)o->number();
 		else
-		    res << " '" << *o << "'";
+		    res << "'" << *o << "'";
 		break;
 	    case OpcField:
-		res << " " << o->name();
+		res << o->name();
 		break;
 	    case OpcFunc:
-		res << " " << o->name() << "(" << (int)o->number() << ")";
+		res << o->name() << "(" << (int)o->number() << ")";
 		break;
 	    default:
-		res << " [" << o->opcode() << "]";
+		res << "[" << o->opcode() << "]";
 	}
     }
-    return res;
 }
 
 
@@ -800,9 +1159,9 @@ TableEvaluator::TableEvaluator(ExpEvaluator::Parser style)
 {
 }
 
-TableEvaluator::TableEvaluator(const TokenDict* operators)
-    : m_select(operators), m_where(operators),
-      m_limit(operators), m_limitVal((unsigned int)-2)
+TableEvaluator::TableEvaluator(const TokenDict* operators, const TokenDict* unaryOps)
+    : m_select(operators,unaryOps), m_where(operators,unaryOps),
+      m_limit(operators,unaryOps), m_limitVal((unsigned int)-2)
 {
 }
 

@@ -31,7 +31,10 @@
    <string>Contact</string>
   </property>
   <property name="windowIcon" >
-   <iconset>book.png</iconset>
+   <iconset>addrbook_title.png</iconset>
+  </property>
+  <property name="_yate_window" stdset="0" >
+   <bool>true</bool>
   </property>
   <layout class="QVBoxLayout" >
    <property name="spacing" >
@@ -85,6 +88,18 @@
       </item>
       <item>
        <widget class="QLineEdit" name="abk_name" >
+        <property name="minimumSize" >
+         <size>
+          <width>0</width>
+          <height>24</height>
+         </size>
+        </property>
+        <property name="maximumSize" >
+         <size>
+          <width>16777215</width>
+          <height>24</height>
+         </size>
+        </property>
         <property name="toolTip" >
          <string>Name used to identify this contact</string>
         </property>
@@ -102,6 +117,18 @@
       </item>
       <item>
        <widget class="QLineEdit" name="abk_target" >
+        <property name="minimumSize" >
+         <size>
+          <width>0</width>
+          <height>24</height>
+         </size>
+        </property>
+        <property name="maximumSize" >
+         <size>
+          <width>16777215</width>
+          <height>24</height>
+         </size>
+        </property>
         <property name="toolTip" >
          <string>Number or URI used to reach this contact</string>
         </property>
@@ -125,9 +152,24 @@
          <number>0</number>
         </property>
         <item>
-         <widget class="QPushButton" name="abk_accept" >
-          <property name="toolTip" >
-           <string>Update the contact data</string>
+         <widget class="QToolButton" name="abk_accept" >
+          <property name="sizePolicy" >
+           <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="minimumSize" >
+           <size>
+            <width>0</width>
+            <height>26</height>
+           </size>
+          </property>
+          <property name="maximumSize" >
+           <size>
+            <width>16777215</width>
+            <height>26</height>
+           </size>
           </property>
           <property name="text" >
            <string>Ok</string>
@@ -135,18 +177,57 @@
           <property name="icon" >
            <iconset>ok.png</iconset>
           </property>
+          <property name="toolButtonStyle" >
+           <enum>Qt::ToolButtonTextBesideIcon</enum>
+          </property>
+          <property name="_yate_normal_icon" stdset="0" >
+           <string>ok.png</string>
+          </property>
+          <property name="_yate_pressed_icon" stdset="0" >
+           <string>ok_pressed.png</string>
+          </property>
+          <property name="_yate_hover_icon" stdset="0" >
+           <string>ok_hover.png</string>
+          </property>
          </widget>
         </item>
         <item>
-         <widget class="QPushButton" name="button_hide" >
-          <property name="toolTip" >
-           <string>Abandon changes and exit</string>
+         <widget class="QToolButton" name="button_hide" >
+          <property name="sizePolicy" >
+           <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="minimumSize" >
+           <size>
+            <width>0</width>
+            <height>26</height>
+           </size>
+          </property>
+          <property name="maximumSize" >
+           <size>
+            <width>16777215</width>
+            <height>26</height>
+           </size>
           </property>
           <property name="text" >
            <string>Cancel</string>
           </property>
           <property name="icon" >
-           <iconset>close.png</iconset>
+           <iconset>cancel.png</iconset>
+          </property>
+          <property name="toolButtonStyle" >
+           <enum>Qt::ToolButtonTextBesideIcon</enum>
+          </property>
+          <property name="_yate_normal_icon" stdset="0" >
+           <string>cancel.png</string>
+          </property>
+          <property name="_yate_pressed_icon" stdset="0" >
+           <string>cancel_pressed.png</string>
+          </property>
+          <property name="_yate_hover_icon" stdset="0" >
+           <string>cancel_hover.png</string>
           </property>
          </widget>
         </item>
@@ -165,23 +246,26 @@
         </item>
         <item>
          <widget class="QToolButton" name="toggle_show_help" >
+          <property name="sizePolicy" >
+           <sizepolicy vsizetype="Expanding" hsizetype="Fixed" >
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
           <property name="minimumSize" >
            <size>
-            <width>0</width>
+            <width>26</width>
             <height>26</height>
            </size>
           </property>
           <property name="maximumSize" >
            <size>
-            <width>16777215</width>
+            <width>26</width>
             <height>26</height>
            </size>
           </property>
           <property name="toolTip" >
-           <string>Help on this window</string>
-          </property>
-          <property name="text" >
-           <string/>
+           <string>Show or hide the Help window</string>
           </property>
           <property name="icon" >
            <iconset>quest.png</iconset>
@@ -191,6 +275,15 @@
           </property>
           <property name="_yate_identity" stdset="0" >
            <string>showwindow:help:2</string>
+          </property>
+          <property name="_yate_normal_icon" stdset="0" >
+           <string>quest.png</string>
+          </property>
+          <property name="_yate_pressed_icon" stdset="0" >
+           <string>quest_pressed.png</string>
+          </property>
+          <property name="_yate_hover_icon" stdset="0" >
+           <string>quest_hover.png</string>
           </property>
          </widget>
         </item>

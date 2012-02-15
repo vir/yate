@@ -953,9 +953,9 @@ bool Connection::processLine(const char *line, bool saveLine)
     }
     else if (str.startSkip("help") || str.startSkip("?"))
     {
-	Message m("engine.help");
 	if (str)
 	{
+	    Message m("engine.help");
 	    const CommandInfo* info = s_cmdInfo;
 	    for (; info->name; info++) {
 		if (str == info->name) {
@@ -976,6 +976,7 @@ bool Connection::processLine(const char *line, bool saveLine)
 	}
 	else
 	{
+	    Message m("engine.help",0,true);
 	    m.retValue() = "Available commands:\r\n";
 	    const CommandInfo* info = s_cmdInfo;
 	    for (; info->name; info++) {
@@ -1340,8 +1341,20 @@ bool Connection::processLine(const char *line, bool saveLine)
 	}
 	Message m("engine.command");
 	m.addParam("line",str);
-	if (Engine::dispatch(m))
+	if (Engine::dispatch(m)) {
 	    writeStr(m.retValue());
+	    const ObjList* l = YOBJECT(ObjList,m.userData());
+	    if (l)
+		l = l->skipNull();
+	    for (; l; l = l->skipNext()) {
+		const GenObject* o = l->get();
+		const CapturedEvent* ev = YOBJECT(CapturedEvent,o);
+		if (ev)
+		    writeEvent(ev->c_str(),ev->level());
+		else
+		    writeEvent(o->toString(),-1);
+	    }
+	}
 	else
 	    writeStr((m_machine ? "%%=syntax:" : "Cannot understand: ") + str + "\r\n");
     }

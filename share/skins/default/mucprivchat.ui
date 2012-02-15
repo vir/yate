@@ -21,6 +21,9 @@
   <property name="_yate_keypress_redirect" stdset="0" >
    <string>message</string>
   </property>
+  <property name="_yate_window" stdset="0" >
+   <bool>false</bool>
+  </property>
   <layout class="QVBoxLayout" >
    <property name="spacing" >
     <number>4</number>
@@ -56,15 +59,6 @@
        <width>16777215</width>
        <height>16777215</height>
       </size>
-     </property>
-     <property name="styleSheet" >
-      <string>QTextEdit {
-  background-color: #ffffff;
-  border: 1px solid #b3b6b0;
-  color: #666666;
-  font-family: Arial;
-  font-size: 12px;
-}</string>
      </property>
      <property name="_yate_uiwidget" stdset="0" >
       <bool>true</bool>
@@ -130,22 +124,25 @@
       <item>
        <widget class="QTextEdit" name="message" >
         <property name="sizePolicy" >
-         <sizepolicy vsizetype="MinimumExpanding" hsizetype="Expanding" >
+         <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
           <horstretch>0</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
         </property>
+        <property name="minimumSize" >
+         <size>
+          <width>0</width>
+          <height>54</height>
+         </size>
+        </property>
         <property name="maximumSize" >
          <size>
           <width>16777215</width>
-          <height>100</height>
+          <height>54</height>
          </size>
         </property>
         <property name="focusPolicy" >
          <enum>Qt::StrongFocus</enum>
-        </property>
-        <property name="styleSheet" >
-         <string>QTextEdit {background-color: #ffffff; border: 1px solid #b3b6b0; color: #666666; font-family: Arial; font-size: 12px;}</string>
         </property>
         <property name="tabChangesFocus" >
          <bool>true</bool>
@@ -177,61 +174,53 @@
        </widget>
       </item>
       <item>
-       <layout class="QVBoxLayout" >
-        <property name="rightMargin" >
-         <number>0</number>
+       <widget class="QToolButton" name="send_chat_button" >
+        <property name="minimumSize" >
+         <size>
+          <width>60</width>
+          <height>54</height>
+         </size>
         </property>
-        <item>
-         <widget class="QToolButton" name="send_chat_button" >
-          <property name="minimumSize" >
-           <size>
-            <width>60</width>
-            <height>50</height>
-           </size>
-          </property>
-          <property name="maximumSize" >
-           <size>
-            <width>60</width>
-            <height>50</height>
-           </size>
-          </property>
-          <property name="focusPolicy" >
-           <enum>Qt::NoFocus</enum>
-          </property>
-          <property name="toolTip" >
-           <string>Send chat</string>
-          </property>
-          <property name="iconSize" >
-           <size>
-            <width>32</width>
-            <height>32</height>
-           </size>
-          </property>
-          <property name="autoRaise" >
-           <bool>true</bool>
-          </property>
-          <property name="_yate_noautoconnect" stdset="0" >
-           <bool>true</bool>
-          </property>
-          <property name="_yate_setaction" stdset="0" >
-           <string>send_chat</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <spacer>
-          <property name="orientation" >
-           <enum>Qt::Vertical</enum>
-          </property>
-          <property name="sizeHint" >
-           <size>
-            <width>0</width>
-            <height>0</height>
-           </size>
-          </property>
-         </spacer>
-        </item>
-       </layout>
+        <property name="maximumSize" >
+         <size>
+          <width>60</width>
+          <height>54</height>
+         </size>
+        </property>
+        <property name="focusPolicy" >
+         <enum>Qt::NoFocus</enum>
+        </property>
+        <property name="toolTip" >
+         <string>Send chat</string>
+        </property>
+        <property name="iconSize" >
+         <size>
+          <width>48</width>
+          <height>48</height>
+         </size>
+        </property>
+        <property name="autoRaise" >
+         <bool>true</bool>
+        </property>
+        <property name="_yate_noautoconnect" stdset="0" >
+         <bool>true</bool>
+        </property>
+        <property name="_yate_setaction" stdset="0" >
+         <string>send_chat</string>
+        </property>
+        <property name="_yate_normal_icon" stdset="0" >
+         <string>sendchat.png</string>
+        </property>
+        <property name="_yate_pressed_icon" stdset="0" >
+         <string>sendchat_pressed.png</string>
+        </property>
+        <property name="_yate_hover_icon" stdset="0" >
+         <string>sendchat_hover.png</string>
+        </property>
+        <property name="_yate_filterevents" stdset="0" >
+         <bool>true</bool>
+        </property>
+       </widget>
       </item>
      </layout>
     </widget>
@@ -390,7 +379,7 @@
   </layout>
   <action name="send_chat" >
    <property name="icon" >
-    <iconset>sendchat_32.png</iconset>
+    <iconset>sendchat.png</iconset>
    </property>
    <property name="text" >
     <string>Send</string>
@@ -404,22 +393,5 @@
   <tabstop>message</tabstop>
  </tabstops>
  <resources/>
- <connections>
-  <connection>
-   <sender>send_chat_button</sender>
-   <signal>clicked()</signal>
-   <receiver>message</receiver>
-   <slot>setFocus()</slot>
-   <hints>
-    <hint type="sourcelabel" >
-     <x>531</x>
-     <y>285</y>
-    </hint>
-    <hint type="destinationlabel" >
-     <x>249</x>
-     <y>289</y>
-    </hint>
-   </hints>
-  </connection>
- </connections>
+ <connections/>
 </ui>

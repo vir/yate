@@ -34,19 +34,7 @@
    <string>Enter password</string>
   </property>
   <property name="windowIcon" >
-   <iconset>user.png</iconset>
-  </property>
-  <property name="styleSheet" >
-   <string>QWidget {font-size: 11px; color: black;}&#xd;
-QWidget#inputdialog{background-color: #e0dfe3;}&#xd;
-QLineEdit {&#xd;
-  font-size: 12px;&#xd;
-  background: none;&#xd;
-  border: 1px solid #97acbc;&#xd;
-  border-radius: 2px;&#xd;
-}&#xd;
-QLabel {background: none;}&#xd;
-</string>
+   <iconset>inputpwd_title.png</iconset>
   </property>
   <property name="_yate_windowflags" stdset="0" >
    <string>title,sysmenu,close</string>
@@ -55,6 +43,9 @@ QLabel {background: none;}&#xd;
    <bool>true</bool>
   </property>
   <property name="_yate_destroyonhide" stdset="0" >
+   <bool>true</bool>
+  </property>
+  <property name="_yate_window" stdset="0" >
    <bool>true</bool>
   </property>
   <layout class="QVBoxLayout" >
@@ -168,7 +159,25 @@ QLabel {background: none;}&#xd;
       </spacer>
      </item>
      <item>
-      <widget class="QPushButton" name="ok" >
+      <widget class="QToolButton" name="ok" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>0</width>
+         <height>26</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>16777215</width>
+         <height>26</height>
+        </size>
+       </property>
        <property name="text" >
         <string>Ok</string>
        </property>
@@ -178,18 +187,60 @@ QLabel {background: none;}&#xd;
        <property name="shortcut" >
         <string>Return</string>
        </property>
+       <property name="toolButtonStyle" >
+        <enum>Qt::ToolButtonTextBesideIcon</enum>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>ok.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>ok_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>ok_hover.png</string>
+       </property>
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="button_hide" >
+      <widget class="QToolButton" name="button_hide" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>0</width>
+         <height>26</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>16777215</width>
+         <height>26</height>
+        </size>
+       </property>
        <property name="text" >
         <string>Cancel</string>
        </property>
        <property name="icon" >
-        <iconset>close.png</iconset>
+        <iconset>cancel.png</iconset>
        </property>
        <property name="shortcut" >
         <string>Esc</string>
+       </property>
+       <property name="toolButtonStyle" >
+        <enum>Qt::ToolButtonTextBesideIcon</enum>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>cancel.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>cancel_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>cancel_hover.png</string>
        </property>
       </widget>
      </item>

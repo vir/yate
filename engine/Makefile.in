@@ -25,7 +25,7 @@ PINC := $(EINC) @top_srcdir@/yatephone.h
 CLINC:= $(PINC) @top_srcdir@/yatecbase.h
 LIBS :=
 CLSOBJS := TelEngine.o ObjList.o HashList.o Mutex.o Thread.o Socket.o Resolver.o \
-	String.o DataBlock.o NamedList.o Evaluator.o \
+	String.o DataBlock.o NamedList.o \
 	URI.o Mime.o Array.o Iterator.o \
 	YMD5.o YSHA1.o Base64.o Cipher.o Compressor.o
 ENGOBJS := Configuration.o Message.o Engine.o Plugin.o

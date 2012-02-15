@@ -37,17 +37,13 @@
    <string comment="VoIP Client" >MUCS</string>
   </property>
   <property name="windowIcon" >
-   <iconset>muc.png</iconset>
+   <iconset>mucs_title.png</iconset>
   </property>
   <property name="toolTip" >
    <string/>
   </property>
-  <property name="styleSheet" >
-   <string>QLabel {&#xd;
-  background:none;&#xd;
-  font-size: 11px;&#xd;
-}&#xd;
-</string>
+  <property name="_yate_window" stdset="0" >
+   <bool>true</bool>
   </property>
   <layout class="QVBoxLayout" >
    <property name="spacing" >

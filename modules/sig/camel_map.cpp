@@ -141,7 +141,7 @@ public:
     XmlToTcap(TcapXApplication* app);
     ~XmlToTcap();
     inline bool hasDeclaration()
-	{ return m_decl; }
+	{ return m_decl != 0; }
     inline XmlElement* message()
 	{ return m_elem; }
     inline MsgType type()
@@ -654,7 +654,7 @@ static bool decodeRaw(XmlElement* elem, DataBlock& data, bool singleParam = fals
 	AsnTag tag;
 	AsnTag::decode(tag,data);
 
-	data.cut(-tag.coding().length());
+	data.cut(-(int)tag.coding().length());
 
 	XmlElement* child = new XmlElement("u");
 	elem->addChild(child);
@@ -828,7 +828,7 @@ static bool decodeTBCD(const Parameter* param, MapCamelType* type, AsnTag& tag, 
     if (param->tag != tag) 
 	return false;
 
-    data.cut(-tag.coding().length());
+    data.cut(-(int)tag.coding().length());
 
     XmlElement* child = new XmlElement(param->name);
     parent->addChild(child);
@@ -862,7 +862,7 @@ static bool decodeTel(const Parameter* param, MapCamelType* type, AsnTag& tag, D
 	parent,data.length());
     if (param->tag != tag)
 	return false;
-    data.cut(-tag.coding().length());
+    data.cut(-(int)tag.coding().length());
 
     XmlElement* child = new XmlElement(param->name);
     parent->addChild(child);
@@ -912,7 +912,7 @@ static bool decodeHex(const Parameter* param, MapCamelType* type, AsnTag& tag, D
 	parent,data.length());
     if (param->tag != tag)
 	return false;
-    data.cut(-tag.coding().length());
+    data.cut(-(int)tag.coding().length());
 
     XmlElement* child = new XmlElement(param->name);
     parent->addChild(child);
@@ -949,7 +949,7 @@ static bool decodeOID(const Parameter* param, MapCamelType* type, AsnTag& tag, D
 	parent,data.length());
     if (param->tag != tag)
 	return false;
-    data.cut(-tag.coding().length());
+    data.cut(-(int)tag.coding().length());
 
     XmlElement* child = new XmlElement(param->name);
     parent->addChild(child);
@@ -983,7 +983,7 @@ static bool decodeNull(const Parameter* param, MapCamelType* type, AsnTag& tag, 
 	parent,data.length());
     if (param->tag != tag)
 	return false;
-    data.cut(-tag.coding().length());
+    data.cut(-(int)tag.coding().length());
 
     XmlElement* child = new XmlElement(param->name);
     parent->addChild(child);
@@ -1015,7 +1015,7 @@ static bool decodeInt(const Parameter* param, MapCamelType* type, AsnTag& tag, D
 	parent,data.length());
     if (param->tag != tag)
 	return false;
-    data.cut(-tag.coding().length());
+    data.cut(-(int)tag.coding().length());
 
     XmlElement* child = new XmlElement(param->name);
     parent->addChild(child);
@@ -1048,7 +1048,7 @@ static bool decodeSeq(const Parameter* param, MapCamelType* type, AsnTag& tag, D
 		parent->getTag().c_str(),parent,data.length(),data[0]);
     if (param->tag != tag)
 	return false;
-    data.cut(-tag.coding().length());
+    data.cut(-(int)tag.coding().length());
 
     int len = ASNLib::decodeLength(data);
     if (len < 0)
@@ -1130,7 +1130,7 @@ static bool decodeSeqOf(const Parameter* param, MapCamelType* type, AsnTag& tag,
 	    parent,data.length());
     if (param->tag != tag)
 	return false;
-    data.cut(-tag.coding().length());
+    data.cut(-(int)tag.coding().length());
 
     int len = ASNLib::decodeLength(data);
     if (len < 0)
@@ -1217,7 +1217,7 @@ static bool decodeChoice(const Parameter* param, MapCamelType* type, AsnTag& tag
     if (param->tag != s_noTag) {
 	if (param->tag != tag)
 	    return false;
-	data.cut(-tag.coding().length());
+	data.cut(-(int)tag.coding().length());
 	int len = ASNLib::decodeLength(data);
 	if (len < 0)
 	    return false;
@@ -1289,7 +1289,7 @@ static bool decodeEnumerated(const Parameter* param, MapCamelType* type, AsnTag&
 	parent,data.length());
     if (param->tag != tag)
 	return false;
-    data.cut(-tag.coding().length());
+    data.cut(-(int)tag.coding().length());
 
     int len = ASNLib::decodeLength(data);
     if (len < 0)
@@ -1350,7 +1350,7 @@ static bool decodeBitString(const Parameter* param, MapCamelType* type, AsnTag& 
 	parent,data.length());
     if (param->tag != tag)
 	return false;
-    data.cut(-tag.coding().length());
+    data.cut(-(int)tag.coding().length());
 
     XmlElement* child = new XmlElement(param->name);
     parent->addChild(child);
@@ -1480,7 +1480,7 @@ static bool decodeGSMString(const Parameter* param, MapCamelType* type, AsnTag& 
 
     if (param->tag != tag)
 	return false;
-    data.cut(-tag.coding().length());
+    data.cut(-(int)tag.coding().length());
 
     int len = ASNLib::decodeLength(data);
     if (len < 0)
@@ -1573,7 +1573,7 @@ static bool decodeFlags(const Parameter* param, MapCamelType* type, AsnTag& tag,
 	   parent->getTag().c_str(),parent,data.length(),data[0]);
     if (param->tag != tag)
 	return false;
-    data.cut(-tag.coding().length());
+    data.cut(-(int)tag.coding().length());
 
     int len = ASNLib::decodeLength(data);
     if (len <= 0)
@@ -1644,7 +1644,7 @@ static bool decodeString(const Parameter* param, MapCamelType* type, AsnTag& tag
 	parent,data.length(),data[0]);
     if (param->tag != tag)
 	return false;
-    data.cut(-tag.coding().length());
+    data.cut(-(int)tag.coding().length());
 
     String value;
     int t = 0;
@@ -1684,7 +1684,7 @@ static bool decodeBool(const Parameter* param, MapCamelType* type, AsnTag& tag, 
 	parent,data.length(),data[0]);
     if (param->tag != tag)
 	return false;
-    data.cut(-tag.coding().length());
+    data.cut(-(int)tag.coding().length());
 
     bool value = false;
     int len = ASNLib::decodeBoolean(data,&value,false);
@@ -1847,7 +1847,7 @@ static bool decodeCallNumber(const Parameter* param, MapCamelType* type, AsnTag&
 	    parent->getTag().c_str(),parent,data.length());
     if (param->tag != tag)
 	return false;
-    data.cut(-tag.coding().length());
+    data.cut(-(int)tag.coding().length());
 
     XmlElement* child = new XmlElement(param->name);
     parent->addChild(child);
@@ -2015,7 +2015,7 @@ static bool decodeRedir(const Parameter* param, MapCamelType* type, AsnTag& tag,
 	    parent->getTag().c_str(),parent,data.length());
     if (param->tag != tag)
 	return false;
-    data.cut(-tag.coding().length());
+    data.cut(-(int)tag.coding().length());
 
     XmlElement* child = new XmlElement(param->name);
     parent->addChild(child);
@@ -2138,7 +2138,7 @@ static bool decodeUSI(const Parameter* param, MapCamelType* type, AsnTag& tag, D
 	    parent->getTag().c_str(),parent,data.length());
     if (param->tag != tag)
 	return false;
-    data.cut(-tag.coding().length());
+    data.cut(-(int)tag.coding().length());
 
     XmlElement* child = new XmlElement(param->name);
     parent->addChild(child);
@@ -6612,7 +6612,7 @@ XMLConnection::XMLConnection(Socket* skt, TcapXApplication* app)
       m_socket(skt), m_app(app),
       m_parser(app,"MyDomParser",false)
 {
-    Debug(&__plugin,DebugAll,"XMLConnection created with socket=[%p] for application=%s[%p] [%p]",socket,app->toString().c_str(),app,this);
+    Debug(&__plugin,DebugAll,"XMLConnection created with socket=[%p] for application=%s[%p] [%p]",skt,app->toString().c_str(),app,this);
     m_app->ref();
     start();
 }
@@ -7000,7 +7000,7 @@ bool TcapToXml::decodeDialogPDU(XmlElement* el, const AppCtxt* ctxt, DataBlock& 
 	AsnTag::decode(tag,data);
 	if (decodeParam(param,tag,data,el,m_app->addEncoding(),err)) {
 	    ObjList* pdus = ctxt->ops.split(',',false);
-	    bool ok = pdus->find(param->name);
+	    bool ok = (0 != pdus->find(param->name));
 	    TelEngine::destruct(pdus);
 	    if (!ok)
 		el->clearChildren();
@@ -7185,7 +7185,7 @@ void TcapToXml::addParametersToXml(XmlElement* elem, String& payloadHex, Operati
 		op = 0;
 	}
 	if (decTag.type() == AsnTag::Constructor && tag == decTag) { // initial constructor
-	    data.cut(-decTag.coding().length());
+	    data.cut(-(int)decTag.coding().length());
 	    int len = ASNLib::decodeLength(data);
 	    if (len != (int)data.length())
 		return;

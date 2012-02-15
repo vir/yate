@@ -58,6 +58,7 @@ PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 	yiaxchan.yate \
 	yjinglechan.yate jabber/jabberserver.yate jabber/jbfeatures.yate \
 	ysockschan.yate filetransfer.yate \
+	javascript.yate \
 	server/pbxassist.yate server/dbpbx.yate server/lateroute.yate \
 	server/park.yate server/queues.yate server/queuesnotify.yate \
 	server/regfile.yate server/accfile.yate server/register.yate \
@@ -256,10 +257,10 @@ lib%.so: %.o
 	$(LINK) -shared -o $@ $^ $(YATELIBS)
 
 server/%.yate: @srcdir@/server/%.cpp $(MKDEPS) $(INCFILES)
-	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS) $(YATELIBS)
+	mkdir -p server && $(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS) $(YATELIBS)
 
 client/%.yate: @srcdir@/client/%.cpp $(MKDEPS) $(INCFILES)
-	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS) $(YATELIBS)
+	mkdir -p client && $(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS) $(YATELIBS)
 
 qt4/%.yate: @srcdir@/qt4/%.cpp ../libyateqt4.so $(MKDEPS) $(INCFILES)
 	$(MAKE) $(patsubst %.yate,%.moc,$@)
@@ -267,6 +268,12 @@ qt4/%.yate: @srcdir@/qt4/%.cpp ../libyateqt4.so $(MKDEPS) $(INCFILES)
 
 qt4/%.moc: @srcdir@/qt4/%.h $(MKDEPS) $(INCFILES)
 	mkdir -p qt4 && $(MOC) $(DEFS) $(INCLUDES) $(QT4_INC) -I@top_srcdir@/clients/qt4 -I@srcdir@/qt4 -o $@ $<
+
+sig/%.yate: @srcdir@/sig/%.cpp $(MKDEPS) $(INCFILES)
+	mkdir -p sig && $(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS) $(YATELIBS)
+
+sip/%.yate: @srcdir@/sip/%.cpp $(MKDEPS) $(INCFILES)
+	mkdir -p sip && $(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS) $(YATELIBS)
 
 %.yate: @srcdir@/%.cpp $(MKDEPS) $(INCFILES)
 	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS) $(YATELIBS)
@@ -363,6 +370,10 @@ server/sipfeatures.yate: ../libs/yxml/libyatexml.a
 server/sipfeatures.yate: LOCALFLAGS = -I@top_srcdir@/libs/yxml
 server/sipfeatures.yate: LOCALLIBS = -L../libs/yxml -lyatexml
 
+javascript.yate: ../libyatescript.so
+javascript.yate: LOCALFLAGS = -I@top_srcdir@/libs/yscript
+javascript.yate: LOCALLIBS = -lyatescript
+
 zlibcompress.yate: LOCALFLAGS = $(ZLIB_INC)
 zlibcompress.yate: LOCALLIBS = $(ZLIB_LIB)
 
@@ -370,44 +381,47 @@ server/ysnmpagent.yate: ../libs/yasn/libyasn.a ../libs/ysnmp/libysnmp.a
 server/ysnmpagent.yate: LOCALFLAGS = -I@top_srcdir@/libs/yasn -I@top_srcdir@/libs/ysnmp
 server/ysnmpagent.yate: LOCALLIBS = -L../libs/yasn -lyasn -L../libs/ysnmp -lysnmp
 
-../libyatesig.so ../libs/ysig/libyatesig.a:
+../libyatesig.so ../libs/ysig/libyatesig.a: @top_srcdir@/libs/ysig/yatesig.h
 	$(MAKE) -C ../libs/ysig
 
 ../libs/ilbc/libilbc.a:
 	$(MAKE) -C ../libs/ilbc
 
-../libs/ysip/libyatesip.a:
+../libs/ysip/libyatesip.a: @top_srcdir@/libs/ysip/yatesip.h
 	$(MAKE) -C ../libs/ysip
 
-../libs/yrtp/libyatertp.a:
+../libs/yrtp/libyatertp.a: @top_srcdir@/libs/yrtp/yatertp.h
 	$(MAKE) -C ../libs/yrtp
 
-../libs/ysdp/libyatesdp.a:
+../libs/ysdp/libyatesdp.a: @top_srcdir@/libs/ysdp/yatesdp.h
 	$(MAKE) -C ../libs/ysdp
 
-../libs/yiax/libyateiax.a:
+../libs/yiax/libyateiax.a: @top_srcdir@/libs/yiax/yateiax.h
 	$(MAKE) -C ../libs/yiax
 
-../libyatemgcp.so ../libs/ymgcp/libyatemgcp.a:
+../libyatemgcp.so ../libs/ymgcp/libyatemgcp.a: @top_srcdir@/libs/ymgcp/yatemgcp.h
 	$(MAKE) -C ../libs/ymgcp
 
-../libs/ymodem/libyatemodem.a:
+../libs/ymodem/libyatemodem.a: @top_srcdir@/libs/ymodem/yatemodem.h
 	$(MAKE) -C ../libs/ymodem
 
-../libs/yxml/libyatexml.a:
+../libs/yxml/libyatexml.a: @top_srcdir@/libs/yxml/yatexml.h
 	$(MAKE) -C ../libs/yxml
 
-../libyatejabber.so ../libs/yjabber/libyatejabber.a:
+../libyatejabber.so ../libs/yjabber/libyatejabber.a: @top_srcdir@/libs/yjabber/xmpputils.h @top_srcdir@/libs/yjabber/yatejabber.h @top_srcdir@/libs/yjabber/yatejingle.h
 	$(MAKE) -C ../libs/yjabber
 
-../libs/ypbx/libyatepbx.a:
+../libyatescript.so ../libs/yjabber/libyatescript.a: @top_srcdir@/libs/yscript/yatescript.h
+	$(MAKE) -C ../libs/yscript
+
+../libs/ypbx/libyatepbx.a: @top_srcdir@/libs/ypbx/yatepbx.h
 	$(MAKE) -C ../libs/ypbx
 
-../libyateqt4.so:
+../libyateqt4.so: @top_srcdir@/clients/qt4/qt4client.h
 	$(MAKE) -C ../clients/qt4
 
-../libs/yasn/libyasn.a:
+../libs/yasn/libyasn.a: @top_srcdir@/libs/yasn/yateasn.h
 	$(MAKE) -C ../libs/yasn
 
-../libs/ysnmp/libysnmp.a:
+../libs/ysnmp/libysnmp.a: @top_srcdir@/libs/ysnmp/yatesnmp.h
 	$(MAKE) -C ../libs/ysnmp

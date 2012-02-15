@@ -31,7 +31,10 @@
    <string>Yate Help</string>
   </property>
   <property name="windowIcon" >
-   <iconset>quest.png</iconset>
+   <iconset>help_title.png</iconset>
+  </property>
+  <property name="_yate_window" stdset="0" >
+   <bool>true</bool>
   </property>
   <layout class="QVBoxLayout" >
    <property name="spacing" >
@@ -71,7 +74,19 @@
          <number>2</number>
         </property>
         <item>
-         <widget class="QPushButton" name="help_prev" >
+         <widget class="QToolButton" name="help_prev" >
+          <property name="minimumSize" >
+           <size>
+            <width>0</width>
+            <height>26</height>
+           </size>
+          </property>
+          <property name="maximumSize" >
+           <size>
+            <width>16777215</width>
+            <height>26</height>
+           </size>
+          </property>
           <property name="toolTip" >
            <string/>
           </property>
@@ -79,15 +94,39 @@
            <string>Previous</string>
           </property>
           <property name="icon" >
-           <iconset>prev.png</iconset>
+           <iconset>left.png</iconset>
+          </property>
+          <property name="toolButtonStyle" >
+           <enum>Qt::ToolButtonTextBesideIcon</enum>
           </property>
           <property name="_yate_identity" stdset="0" >
            <string>help:prev</string>
           </property>
+          <property name="_yate_normal_icon" stdset="0" >
+           <string>left.png</string>
+          </property>
+          <property name="_yate_pressed_icon" stdset="0" >
+           <string>left_pressed.png</string>
+          </property>
+          <property name="_yate_hover_icon" stdset="0" >
+           <string>left_hover.png</string>
+          </property>
          </widget>
         </item>
         <item>
-         <widget class="QPushButton" name="help_home" >
+         <widget class="QToolButton" name="help_home" >
+          <property name="minimumSize" >
+           <size>
+            <width>0</width>
+            <height>26</height>
+           </size>
+          </property>
+          <property name="maximumSize" >
+           <size>
+            <width>16777215</width>
+            <height>26</height>
+           </size>
+          </property>
           <property name="toolTip" >
            <string>Home</string>
           </property>
@@ -97,21 +136,57 @@
           <property name="icon" >
            <iconset>home.png</iconset>
           </property>
+          <property name="toolButtonStyle" >
+           <enum>Qt::ToolButtonTextBesideIcon</enum>
+          </property>
           <property name="_yate_identity" stdset="0" >
            <string>help:home</string>
+          </property>
+          <property name="_yate_normal_icon" stdset="0" >
+           <string>home.png</string>
+          </property>
+          <property name="_yate_pressed_icon" stdset="0" >
+           <string>home_pressed.png</string>
+          </property>
+          <property name="_yate_hover_icon" stdset="0" >
+           <string>home_hover.png</string>
           </property>
          </widget>
         </item>
         <item>
-         <widget class="QPushButton" name="help_next" >
+         <widget class="QToolButton" name="help_next" >
+          <property name="minimumSize" >
+           <size>
+            <width>0</width>
+            <height>26</height>
+           </size>
+          </property>
+          <property name="maximumSize" >
+           <size>
+            <width>16777215</width>
+            <height>26</height>
+           </size>
+          </property>
           <property name="text" >
            <string>Next</string>
           </property>
           <property name="icon" >
-           <iconset>next.png</iconset>
+           <iconset>right.png</iconset>
+          </property>
+          <property name="toolButtonStyle" >
+           <enum>Qt::ToolButtonTextBesideIcon</enum>
           </property>
           <property name="_yate_identity" stdset="0" >
            <string>help:next</string>
+          </property>
+          <property name="_yate_normal_icon" stdset="0" >
+           <string>right.png</string>
+          </property>
+          <property name="_yate_pressed_icon" stdset="0" >
+           <string>right_pressed.png</string>
+          </property>
+          <property name="_yate_hover_icon" stdset="0" >
+           <string>right_hover.png</string>
           </property>
          </widget>
         </item>
@@ -129,12 +204,36 @@
          </spacer>
         </item>
         <item>
-         <widget class="QPushButton" name="button_hide" >
+         <widget class="QToolButton" name="button_hide" >
+          <property name="minimumSize" >
+           <size>
+            <width>0</width>
+            <height>26</height>
+           </size>
+          </property>
+          <property name="maximumSize" >
+           <size>
+            <width>16777215</width>
+            <height>26</height>
+           </size>
+          </property>
           <property name="text" >
            <string>Close</string>
           </property>
           <property name="icon" >
-           <iconset>close.png</iconset>
+           <iconset>cancel.png</iconset>
+          </property>
+          <property name="toolButtonStyle" >
+           <enum>Qt::ToolButtonTextBesideIcon</enum>
+          </property>
+          <property name="_yate_normal_icon" stdset="0" >
+           <string>cancel.png</string>
+          </property>
+          <property name="_yate_pressed_icon" stdset="0" >
+           <string>cancel_pressed.png</string>
+          </property>
+          <property name="_yate_hover_icon" stdset="0" >
+           <string>cancel_hover.png</string>
           </property>
          </widget>
         </item>

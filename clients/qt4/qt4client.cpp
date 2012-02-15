@@ -27,12 +27,16 @@
 
 #ifdef _WINDOWS
 #define DEFAULT_DEVICE "dsound/*"
+#define PLATFORM_LOWERCASE_NAME "windows"
 #elif defined(__APPLE__)
 #define DEFAULT_DEVICE "coreaudio/*"
+#define PLATFORM_LOWERCASE_NAME "apple"
 #elif defined(__linux__)
 #define DEFAULT_DEVICE "alsa/default"
+#define PLATFORM_LOWERCASE_NAME "linux"
 #else
 #define DEFAULT_DEVICE "oss//dev/dsp"
+#define PLATFORM_LOWERCASE_NAME "unknown"
 #endif
 
 namespace TelEngine {
@@ -392,6 +396,7 @@ static String s_propWindowFlags = "_yate_windowflags"; // Window flags
 static const String s_propContextMenu = "_yate_context_menu"; // Context menu name
 static String s_propHideInactive = "dynamicHideOnInactive"; // Hide inactive window
 static const String s_yatePropPrefix = "_yate_";      // Yate dynamic properties prefix
+static NamedList s_qtStyles("");                      // Qt styles classname -> internal name 
 //
 static Qt4ClientFactory s_qt4Factory;
 static Configuration s_cfg;
@@ -410,6 +415,12 @@ static TokenDict s_windowFlags[] = {
 #if QT_VERSION >= 0x040500
     {"close",              Qt::WindowCloseButtonHint},
 #endif
+    {0,0}
+};
+
+// Widget attribute names
+static const TokenDict s_widgetAttributes[] = {
+    {"macshowfocusrect",   Qt::WA_MacShowFocusRect},
     {0,0}
 };
 
@@ -641,6 +652,78 @@ static bool createProperty(QObject* obj, const char* name, QVariant::Type t,
     return true;
 }
 
+// Replace file path in URLs in a character array
+static void addFilePathUrl(QByteArray& a, const String& file)
+{
+    if (!file)
+	return;
+    QString path = QDir::fromNativeSeparators(QtClient::setUtf8(file));
+    // Truncate after last path separator (lastIndexOf() returns -1 if not found)
+    path.truncate(path.lastIndexOf(QString("/")) + 1);
+    if (!path.size())
+	return;
+    int start = 0;
+    int end = -1;
+    while ((start = a.indexOf("url(",end + 1)) > 0) {
+	start += 4;
+	end = a.indexOf(")",start);
+	if (end <= start)
+	    break;
+	// Add
+	int len = end - start;
+	QByteArray tmp = a.mid(start,len);
+	if (tmp.indexOf('/') != -1)
+	    continue;
+	tmp.insert(0,path);
+	a.replace(start,len,tmp);
+    }
+}
+
+// Read data from file and append it to a string buffer
+// Optionally append suffix characters to file name
+static bool appendStyleSheet(QString& buf, const char* file,
+    const char* suffix1 = 0, const char* suffix2 = 0)
+{
+    if (TelEngine::null(file))
+	return false;
+    String shf = file;
+    const char* oper = 0;
+    int pos = shf.rfind('/');
+    if (pos < 0)
+	pos = shf.rfind('\\');
+    if (pos < 0)
+	shf = Client::s_skinPath + shf;
+    int level = DebugNote;
+    if (!(TelEngine::null(suffix1) && TelEngine::null(suffix2))) {
+	level = DebugAll;
+	int dotPos = shf.rfind('.');
+	if (dotPos > pos) {
+	    String tmp = shf.substr(0,dotPos);
+	    tmp.append(suffix1,"_");
+	    tmp.append(suffix2,"_");
+	    shf = tmp + shf.substr(dotPos);
+	}
+    }
+    DDebug(ClientDriver::self(),DebugAll,"Loading stylesheet file '%s'",shf.c_str());
+    QFile f(QtClient::setUtf8(shf));
+    if (f.open(QIODevice::ReadOnly)) {
+	QByteArray a = f.readAll();
+	if (a.size()) {
+	    addFilePathUrl(a,shf);
+	    buf += QString::fromUtf8(a.constData());
+	}
+	else if (f.error() != QFile::NoError)
+	    oper = "read";
+    }
+    else
+	oper = "open";
+    if (!oper)
+	return true;
+    Debug(ClientDriver::self(),level,"Failed to %s stylesheet file '%s': %d '%s'",
+	oper,shf.c_str(),f.error(),f.errorString().toUtf8().constData());
+    return false;
+}
+
 
 /**
  * Qt4ClientFactory
@@ -813,28 +896,8 @@ UIBuffer* UIBuffer::build(const String& name)
 	delete qArray;
 	return 0;
     }
-
     // Add URLs path when missing
-    QString path = QDir::fromNativeSeparators(QtClient::setUtf8(name));
-    // Truncate after last path separator (lastIndexOf() returns -1 if not found)
-    path.truncate(path.lastIndexOf(QString("/")) + 1);
-    if (path.size()) {
-	int start = 0;
-	int end = -1;
-	while ((start = qArray->indexOf("url(",end + 1)) > 0) {
-	    start += 4;
-	    end = qArray->indexOf(")",start);
-	    if (end <= start)
-		break;
-	    // Add
-	    int len = end - start;
-	    QByteArray tmp = qArray->mid(start,len);
-	    if (tmp.indexOf('/') != -1)
-	        continue;
-	    tmp.insert(0,path);
-	    qArray->replace(start,len,tmp);
-	}
-    }
+    addFilePathUrl(*qArray,name);
     return new UIBuffer(name,qArray);
 }
 
@@ -1146,10 +1209,12 @@ bool QtWindow::setShow(const String& name, bool visible)
     QtWidget w(wndWidget(),name);
     if (w.invalid())
 	return false;
+    setUpdatesEnabled(false);
     if (w.type() != QtWidget::Action)
 	w->setVisible(visible);
     else
 	w.action()->setVisible(visible);
+    setUpdatesEnabled(true);
     return true;
 }
 
@@ -1700,6 +1765,16 @@ bool QtWindow::updateTableRow(const String& name, const String& item,
 		tbl.updateRow(item,data,atStart);
 		return true;
 	    }
+	case QtWidget::CustomTree:
+	    {
+		QtTree* custom = w.customTree();
+		if (custom) {
+		    if (custom->getTableRow(item))
+			return custom->setTableRow(item,data);
+		    return custom->addTableRow(item,data,atStart);
+		}
+		return false;
+	    }
 	case QtWidget::ComboBox:
 	    return w.findComboItem(item) >= 0 || w.addComboItem(item,atStart);
 	case QtWidget::ListBox:
@@ -2036,14 +2111,14 @@ bool QtWindow::removeMenu(const NamedList& params)
 }
 
 // Set an element's image
-bool QtWindow::setImage(const String& name, const String& image)
+bool QtWindow::setImage(const String& name, const String& image, bool fit)
 {
     if (!name)
 	return false;
     if (name == m_id)
 	return QtClient::setImage(this,image);
     QObject* obj = qFindChild<QObject*>(wndWidget(),QtClient::setUtf8(name));
-    return obj && QtClient::setImage(obj,image);
+    return obj && QtClient::setImage(obj,image,fit);
 }
 
 // Set a property for this window or for a widget owned by it
@@ -2176,6 +2251,7 @@ void QtWindow::toggled(bool on)
 {
     XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) toggled=%s sender=%s [%p]",
 	m_id.c_str(),String::boolText(on),YQT_OBJECT_NAME(sender()),this);
+    QtClient::updateToggleImage(sender());
     if (!QtClient::self() || QtClient::changing())
 	return;
     QtWidget w(sender());
@@ -2466,7 +2542,22 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 	if (handleContextMenuEvent(static_cast<QContextMenuEvent*>(event),obj))
 	    return false;
     }
-
+    if (event->type() == QEvent::Enter) {
+	QtClient::updateImageFromMouse(obj,true,true);
+	return QWidget::eventFilter(obj,event);
+    }
+    if (event->type() == QEvent::Leave) {
+	QtClient::updateImageFromMouse(obj,true,false);
+	return QWidget::eventFilter(obj,event);
+    }
+    if (event->type() == QEvent::MouseButtonPress) {
+	QtClient::updateImageFromMouse(obj,false,true);
+	return QWidget::eventFilter(obj,event);
+    }
+    if (event->type() == QEvent::MouseButtonRelease) {
+	QtClient::updateImageFromMouse(obj,false,false);
+	return QWidget::eventFilter(obj,event);
+    }
     return QWidget::eventFilter(obj,event);
 }
 
@@ -3167,6 +3258,19 @@ QtClient::QtClient()
 
     s_save = Engine::configFile("qt4client",true);
     s_save.load();
+    // Fill QT styles
+    s_qtStyles.addParam("IaOraKde","iaorakde");
+    s_qtStyles.addParam("QWindowsStyle","windows");
+    s_qtStyles.addParam("QMacStyle","mac");
+    s_qtStyles.addParam("QMotifStyle","motif");
+    s_qtStyles.addParam("QCDEStyle","cde");
+    s_qtStyles.addParam("QWindowsXPStyle","windowsxp");
+    s_qtStyles.addParam("QCleanlooksStyle","cleanlooks");
+    s_qtStyles.addParam("QPlastiqueStyle","plastique");
+    s_qtStyles.addParam("QGtkStyle","gtk");
+    s_qtStyles.addParam("IaOraQt","iaoraqt");
+    s_qtStyles.addParam("OxygenStyle","oxygen");
+    s_qtStyles.addParam("PhaseStyle","phase");
 }
 
 QtClient::~QtClient()
@@ -3192,6 +3296,7 @@ void QtClient::run()
     char* argv =  0;
     m_app = new QApplication(argc,&argv);
     m_app->setQuitOnLastWindowClosed(false);
+    updateAppStyleSheet();
     String imgRead;
     QList<QByteArray> imgs = QImageReader::supportedImageFormats();
     for (int i = 0; i < imgs.size(); i++)
@@ -3275,9 +3380,7 @@ void QtClient::loadWindows(const char* file)
 bool QtClient::chooseFile(Window* parent, NamedList& params)
 {
     QtWindow* wnd = static_cast<QtWindow*>(parent);
-    // Don't set the dialog's parent: window's style sheet will be propagated to
-    //  child dialog and we might have incomplete (not full) custom styled controls
-    QFileDialog* dlg = new QFileDialog(0,setUtf8(params.getValue(YSTRING("caption"))),
+    QFileDialog* dlg = new QFileDialog(wnd,setUtf8(params.getValue(YSTRING("caption"))),
 	setUtf8(params.getValue(YSTRING("dir"))));
 
     if (wnd)
@@ -3296,9 +3399,8 @@ bool QtClient::chooseFile(Window* parent, NamedList& params)
     // This dialog should always stay on top
     dlg->setWindowFlags(dlg->windowFlags() | Qt::WindowStaysOnTopHint);
 
-    // Window modality doesn't work without a parent so make it application modal
     if (params.getBoolValue(YSTRING("modal"),true))
-	dlg->setWindowModality(Qt::ApplicationModal);
+	dlg->setWindowModality(Qt::WindowModal);
 
     // Filters
     NamedString* f = params.getParam(YSTRING("filters"));
@@ -3788,6 +3890,59 @@ bool QtClient::setImage(QObject* obj, const QPixmap& img, bool fit)
     return false;
 }
 
+// Update a toggable object's image from properties
+void QtClient::updateToggleImage(QObject* obj)
+{
+    QtWidget w(obj);
+    QAbstractButton* b = w.abstractButton();
+    if (!(b && b->isCheckable()))
+	return;
+    String icon;
+    bool set = false;
+    if (b->isChecked())
+	set = QtClient::getProperty(w,"_yate_pressed_icon",icon);
+    else
+	set = QtClient::getProperty(w,"_yate_normal_icon",icon);
+    if (set)
+        QtClient::setImage(obj,Client::s_skinPath + icon);
+}
+
+// Update an object's image from properties on mouse events
+void QtClient::updateImageFromMouse(QObject* obj, bool inOut, bool on)
+{
+    QtWidget w(obj);
+    QAbstractButton* b = w.abstractButton();
+    if (!b)
+	return;
+    if (!b->isEnabled())
+	return;
+    String icon;
+    bool set = false;
+    if (inOut) {
+	if (on)
+	    set = QtClient::getProperty(obj,"_yate_hover_icon",icon);
+	else {
+	    if (b->isCheckable() && b->isChecked())
+		set = QtClient::getProperty(obj,"_yate_pressed_icon",icon);
+	    set = set || QtClient::getProperty(obj,"_yate_normal_icon",icon);
+	}
+    }
+    else {
+	if (on) {
+	    if (!b->isCheckable())
+		set = QtClient::getProperty(obj,"_yate_pressed_icon",icon);
+	}
+	else {
+	    set = QtClient::getProperty(obj,"_yate_hover_icon",icon);
+	    if (!set && b->isCheckable() && b->isChecked())
+		set = QtClient::getProperty(obj,"_yate_pressed_icon",icon);
+	    set = set || QtClient::getProperty(obj,"_yate_normal_icon",icon);
+	}
+    }
+    if (set)
+	QtClient::setImage(obj,Client::s_skinPath + icon);
+}
+
 // Process a key press event. Retrieve an action associated with the key
 bool QtClient::filterKeyEvent(QObject* obj, QKeyEvent* event, String& action,
     bool& filter, QObject* parent)
@@ -3996,6 +4151,59 @@ bool QtClient::getPixmapFromCache(QPixmap& pixmap, const QString& file)
     return true;
 }
 
+// Update application style sheet from config
+// Build style sheet from files:
+// stylesheet.css
+// stylesheet_stylename.css
+// stylesheet_osname.css
+// stylesheet_osname_stylename.css
+void QtClient::updateAppStyleSheet()
+{
+    if (!qApp) {
+	Debug(ClientDriver::self(),DebugWarn,"Update app stylesheet called without app");
+	return;
+    }
+    String shf = Engine::config().getValue("client","stylesheet_file","stylesheet.css");
+    if (!shf)
+	return;
+    QString sh;
+    if (!appendStyleSheet(sh,shf))
+	return;
+    String styleName;
+    QStyle* style = qApp->style();
+    const QMetaObject* meta = style ? style->metaObject() : 0;
+    if (meta) {
+	styleName = s_qtStyles.getValue(meta->className());
+	if (!styleName)
+	    styleName = meta->className();
+    }
+    if (styleName)
+	appendStyleSheet(sh,shf,styleName);
+    String osname;
+    osname << "os" << PLATFORM_LOWERCASE_NAME;
+    appendStyleSheet(sh,shf,osname);
+    if (styleName)
+	appendStyleSheet(sh,shf,osname,styleName);
+    qApp->setStyleSheet(sh);
+}
+
+// Set widget attributes from list
+void QtClient::setWidgetAttributes(QWidget* w, const String& attrs)
+{
+    if (!(w && attrs))
+	return;
+    ObjList* list = attrs.split(',',false);
+    for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
+	const String& attr = *static_cast<String*>(o->get());
+	bool on = (attr[0] != '!');
+	const char* name = attr.c_str();
+	int val = lookup(on ? name : name + 1,s_widgetAttributes);
+	if (val)
+	    w->setAttribute((Qt::WidgetAttribute)val,on);
+    }
+    TelEngine::destruct(list);
+}
+
 
 /**
  * QtDriver
@@ -4160,6 +4368,7 @@ bool QtUIWidget::setParams(QObject* parent, const NamedList& params)
     static const String s_addlines = "addlines";
     static const String s_setrichtext = "setrichtext";
     static const String s_updatetablerows = "updatetablerows";
+    static const String s_cleartable = "cleartable";
     static const String s_rawimage = "rawimage";
     static const String s_setparams = "setparams";
     static const String s_setmenu = "setmenu";
@@ -4236,6 +4445,8 @@ bool QtUIWidget::setParams(QObject* parent, const NamedList& params)
 	    if (p)
 		ok = wnd->updateTableRows(buildChildName(buf,pName,cName),p,ns->toBoolean()) && ok;
 	}
+	else if (n == s_cleartable)
+	    ok = wnd->clearTable(buildChildName(buf,pName,cName)) && ok;
 	else if (n == s_rawimage) {
 	    DataBlock* data = YOBJECT(DataBlock,ns);
 	    if (data) {
@@ -4274,6 +4485,7 @@ bool QtUIWidget::setParams(QObject* parent, const NamedList& params)
 bool QtUIWidget::getParams(QObject* parent, NamedList& params)
 {
     static const String s_property = "property";
+    static const String s_getcheck = "getcheck";
     static const String s_getselect = "getselect";
     static const String s_getrichtext = "getrichtext";
 
@@ -4313,6 +4525,11 @@ bool QtUIWidget::getParams(QObject* parent, NamedList& params)
 	}
 	else if (n == s_getselect)
 	    ok = wnd->getSelect(buildChildName(buf,pName,cName),*ns) && ok;
+	else if (n == s_getcheck) {
+	    bool on = false;
+	    ok = wnd->getCheck(buildChildName(buf,pName,cName),on) && ok;
+	    *ns = String::boolText(on);
+	}
 	else if (n == s_getrichtext)
 	    ok = wnd->getText(buildChildName(buf,pName,cName),*ns,true) && ok;
 	else
@@ -4643,6 +4860,7 @@ void QtUIWidget::onToggle(QObject* sender, bool on)
 {
     if (!Client::self())
 	return;
+    QtClient::updateToggleImage(sender);
     String s;
     getIdentity(sender,s);
     if (!s)
@@ -4671,6 +4889,20 @@ void QtUIWidget::onSelect(QObject* sender, const String* item)
     DDebug(ClientDriver::self(),DebugAll,"QtUIWidget(%s) raising select %s",
 	name().c_str(),s.c_str());
     Client::self()->select(wnd,s,*item);
+}
+
+// Filter wathed events for children.
+// Handle child image changing on mouse events
+void QtUIWidget::onChildEvent(QObject* watched, QEvent* event)
+{
+    if (event->type() == QEvent::Enter)
+	QtClient::updateImageFromMouse(watched,true,true);
+    else if (event->type() == QEvent::Leave)
+	QtClient::updateImageFromMouse(watched,true,false);
+    else if (event->type() == QEvent::MouseButtonPress)
+	QtClient::updateImageFromMouse(watched,false,true);
+    else if (event->type() == QEvent::MouseButtonRelease)
+	QtClient::updateImageFromMouse(watched,false,false);
 }
 
 // Load an item's widget. Rename children. Connect actions

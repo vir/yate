@@ -526,7 +526,7 @@ static bool getWord(String& buf, String& word, bool unescape = false)
 }
 
 #ifdef DEBUG
-static void dumpData(int debugLevel, String message, void* obj, NamedList& params,
+static void dumpData(int debugLevel, const char* message, void* obj, NamedList& params,
 		    DataBlock data = DataBlock::empty())
 {
     if (obj) {
@@ -534,7 +534,7 @@ static void dumpData(int debugLevel, String message, void* obj, NamedList& param
 	params.dump(tmp,"\r\n  ",'\'',true);
 	String str;
 	str.hexify(data.data(),data.length(),' ');
-	Debug(&__plugin,debugLevel,message + " [%p] - \r\nparams='%s',\r\ndata='%s'",obj,tmp.c_str(),str.c_str());
+	Debug(&__plugin,debugLevel,"%s [%p]\r\nparams='%s',\r\ndata='%s'",message,obj,tmp.c_str(),str.c_str());
     }
 }
 #endif

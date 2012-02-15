@@ -719,8 +719,39 @@ void YJBEntityCapsList::setFile(const char* file)
 // Notify changes and save the entity caps file
 void YJBEntityCapsList::capsAdded(JBEntityCaps* caps)
 {
-    if (caps)
-	save();
+    if (!caps)
+	return;
+    // Notify caps update
+    RefPointer<JBStreamSetList> list;
+    s_jabber->getStreamList(list,JBStream::c2s);
+    list->lock();
+    for (ObjList* o = list->sets().skipNull(); o; o = o->skipNext()) {
+	JBStreamSet* set = static_cast<JBStreamSet*>(o->get());
+	for (ObjList* s = set->clients().skipNull(); s; s = s->skipNext()) {
+	    JBClientStream* stream = static_cast<JBClientStream*>(s->get());
+	    Lock lock(stream);
+	    StreamData* data = s_jabber->streamData(stream);
+	    if (!data)
+		continue;
+	    for (ObjList* o = data->m_contacts.skipNull(); o; o = o->skipNext()) {
+		NamedList* c = static_cast<NamedList*>(o->get());
+		NamedIterator iter(*c);
+		for (const NamedString* res = 0; 0 != (res = iter.get());) {
+		    if (*res != caps->toString())
+			continue;
+		    Message* m = __plugin.message("resource.notify",stream);
+		    m->addParam("operation","updatecaps");
+		    m->addParam("contact",*c);
+		    m->addParam("instance",res->name());
+		    addCaps(*m,*res);
+		    Engine::enqueue(m);
+		}
+	    }
+	}
+    }
+    list->unlock();
+    list = 0;
+    save();
 }
 
 // Save the file

@@ -31,13 +31,17 @@
    <string>Add Account Wizard</string>
   </property>
   <property name="windowIcon" >
-   <iconset>user.png</iconset>
+   <iconset>accountwizard_title.png</iconset>
   </property>
   <property name="styleSheet" >
-   <string>QLabel[_yate_wizardpage_title="true"] {&#xd;
-  font-size: 20px;&#xd;
-  border-bottom: 1px solid blue;&#xd;
-}</string>
+   <string>QLabel[_yate_wizardpage_title="true"] {
+  font-size: 20px;
+  border-bottom: 1px solid blue;
+}
+</string>
+  </property>
+  <property name="_yate_window" stdset="0" >
+   <bool>true</bool>
   </property>
   <layout class="QVBoxLayout" >
    <property name="spacing" >
@@ -62,6 +66,9 @@
      </property>
      <widget class="QWidget" name="pageAccType" >
       <layout class="QVBoxLayout" >
+       <property name="spacing" >
+        <number>2</number>
+       </property>
        <property name="leftMargin" >
         <number>0</number>
        </property>
@@ -475,15 +482,30 @@ p, li { white-space: pre-wrap; }
        <item>
         <layout class="QHBoxLayout" >
          <item>
-          <widget class="QPushButton" name="cancel" >
+          <widget class="QToolButton" name="cancel" >
+           <property name="sizePolicy" >
+            <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
            <property name="minimumSize" >
             <size>
              <width>0</width>
-             <height>28</height>
+             <height>26</height>
+            </size>
+           </property>
+           <property name="maximumSize" >
+            <size>
+             <width>16777215</width>
+             <height>26</height>
             </size>
            </property>
            <property name="text" >
             <string>Cancel</string>
+           </property>
+           <property name="toolButtonStyle" >
+            <enum>Qt::ToolButtonTextOnly</enum>
            </property>
           </widget>
          </item>
@@ -598,7 +620,7 @@ p, li { white-space: pre-wrap; }
              <number>0</number>
             </property>
             <property name="topMargin" >
-             <number>10</number>
+             <number>5</number>
             </property>
             <property name="rightMargin" >
              <number>2</number>
@@ -1108,7 +1130,7 @@ p, li { white-space: pre-wrap; }
                <number>0</number>
               </property>
               <property name="bottomMargin" >
-               <number>10</number>
+               <number>4</number>
               </property>
               <item>
                <spacer>
@@ -1167,17 +1189,20 @@ p, li { white-space: pre-wrap; }
            <property name="maximumSize" >
             <size>
              <width>16777215</width>
-             <height>180</height>
+             <height>190</height>
             </size>
            </property>
-           <property name="frameShape" >
-            <enum>QFrame::Panel</enum>
+           <property name="styleSheet" >
+            <string>QFrame#acc_proto_advanced {
+  border: 1px solid #717fa0;
+  border-radius: 2px;
+}</string>
            </property>
-           <property name="frameShadow" >
-            <enum>QFrame::Sunken</enum>
+           <property name="frameShape" >
+            <enum>QFrame::StyledPanel</enum>
            </property>
            <property name="currentIndex" >
-            <number>0</number>
+            <number>2</number>
            </property>
            <widget class="QWidget" name="acc_proto_advanced_none" >
             <layout class="QVBoxLayout" >
@@ -1416,7 +1441,7 @@ p, li { white-space: pre-wrap; }
            <widget class="QWidget" name="acc_proto_advanced_jabber" >
             <layout class="QVBoxLayout" >
              <property name="spacing" >
-              <number>8</number>
+              <number>0</number>
              </property>
              <property name="leftMargin" >
               <number>6</number>
@@ -1431,60 +1456,33 @@ p, li { white-space: pre-wrap; }
               <number>4</number>
              </property>
              <item>
-              <widget class="QGroupBox" name="acc_proto_jabber_opt" >
-               <property name="minimumSize" >
-                <size>
-                 <width>180</width>
-                 <height>0</height>
-                </size>
+              <widget class="QCheckBox" name="acc_proto_jabber_opt_noautorestart" >
+               <property name="text" >
+                <string>Don't restart connection when down</string>
                </property>
-               <property name="styleSheet" >
-                <string>border: 0px;</string>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="acc_proto_jabber_opt_allowplainauth" >
+               <property name="text" >
+                <string>Allow plain password authentication</string>
                </property>
-               <layout class="QVBoxLayout" >
-                <property name="leftMargin" >
-                 <number>0</number>
-                </property>
-                <property name="topMargin" >
-                 <number>0</number>
-                </property>
-                <property name="rightMargin" >
-                 <number>0</number>
-                </property>
-                <property name="bottomMargin" >
-                 <number>0</number>
-                </property>
-                <item>
-                 <widget class="QCheckBox" name="acc_proto_jabber_opt_tlsrequired" >
-                  <property name="text" >
-                   <string>Require TLS (encrypt connection)</string>
-                  </property>
-                  <property name="autoExclusive" >
-                   <bool>false</bool>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QCheckBox" name="acc_proto_jabber_opt_allowplainauth" >
-                  <property name="text" >
-                   <string>Allow plain password authentication</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QCheckBox" name="acc_proto_jabber_opt_noautorestart" >
-                  <property name="text" >
-                   <string>Don't restart connection when down</string>
-                  </property>
-                 </widget>
-                </item>
-               </layout>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="acc_proto_jabber_opt_tlsrequired" >
+               <property name="text" >
+                <string>Require TLS (encrypt connection)</string>
+               </property>
               </widget>
              </item>
              <item>
               <layout class="QVBoxLayout" >
                <property name="spacing" >
                 <number>2</number>
+               </property>
+               <property name="topMargin" >
+                <number>4</number>
                </property>
                <item>
                 <layout class="QHBoxLayout" >
@@ -1917,47 +1915,113 @@ p, li { white-space: pre-wrap; }
       </spacer>
      </item>
      <item>
-      <widget class="QPushButton" name="prev" >
+      <widget class="QToolButton" name="prev" >
        <property name="minimumSize" >
         <size>
          <width>0</width>
-         <height>28</height>
+         <height>26</height>
         </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>16777215</width>
+         <height>26</height>
+        </size>
+       </property>
+       <property name="toolTip" >
+        <string/>
        </property>
        <property name="text" >
         <string>Previous</string>
        </property>
        <property name="icon" >
-        <iconset>prev.png</iconset>
+        <iconset>left.png</iconset>
+       </property>
+       <property name="toolButtonStyle" >
+        <enum>Qt::ToolButtonTextBesideIcon</enum>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>left.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>left_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>left_hover.png</string>
        </property>
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="next" >
+      <widget class="QToolButton" name="next" >
        <property name="minimumSize" >
         <size>
          <width>0</width>
-         <height>28</height>
+         <height>26</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>16777215</width>
+         <height>26</height>
         </size>
        </property>
        <property name="text" >
         <string>Next</string>
        </property>
        <property name="icon" >
-        <iconset>next.png</iconset>
+        <iconset>right.png</iconset>
+       </property>
+       <property name="toolButtonStyle" >
+        <enum>Qt::ToolButtonTextBesideIcon</enum>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>right.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>right_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>right_hover.png</string>
        </property>
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="button_hide" >
+      <widget class="QToolButton" name="button_hide" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
        <property name="minimumSize" >
         <size>
          <width>0</width>
-         <height>28</height>
+         <height>26</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>16777215</width>
+         <height>26</height>
         </size>
        </property>
        <property name="text" >
         <string>Close</string>
+       </property>
+       <property name="icon" >
+        <iconset>cancel.png</iconset>
+       </property>
+       <property name="toolButtonStyle" >
+        <enum>Qt::ToolButtonTextBesideIcon</enum>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>cancel.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>cancel_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>cancel_hover.png</string>
        </property>
       </widget>
      </item>

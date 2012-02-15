@@ -130,6 +130,11 @@ void SS7Route::attach(SS7Layer3* network, SS7PointCode::Type type)
     Lock lock(this);
     // Remove from list if already there
     detach(network);
+    SS7Route* route = network->findRoute(m_type,m_packed);
+    if (route) {
+	if (m_maxDataLength > route->getMaxDataLength() || m_maxDataLength == 0)
+	    m_maxDataLength = route->getMaxDataLength();
+    }
     // Insert
     if (priority == 0) {
 	m_networks.insert(new L3Pointer(network));
@@ -159,6 +164,21 @@ bool SS7Route::detach(SS7Layer3* network)
 	if (*p && *p == network) {
 	    m_networks.remove(p);
 	    break;
+	}
+    }
+    m_maxDataLength = 0;
+    for (o = m_networks.skipNull(); o; o = o->skipNext()) {
+	L3Pointer* p = static_cast<L3Pointer*>(o->get());
+	if (!p)
+	    continue;
+	RefPointer<SS7Layer3> l3 = static_cast<SS7Layer3*>(*p);
+	if (!l3)
+	    continue;
+	SS7Route* route = l3->findRoute(m_type,m_packed);
+	if (route) {
+	    if (m_maxDataLength > route->getMaxDataLength() ||
+		    m_maxDataLength == 0)
+		m_maxDataLength = route->getMaxDataLength();
 	}
     }
     return 0 != m_networks.skipNull();
@@ -665,7 +685,7 @@ void SS7Router::buildView(SS7PointCode::Type type, ObjList& view, SS7Layer3* net
 	    if (!v) {
 		DDebug(this,DebugAll,"Creating route to %u from %s in view of %s",
 		    route->packed(),(*p)->toString().c_str(),network->toString().c_str());
-		view.append(new SS7Route(route->packed()));
+		view.append(new SS7Route(route->packed(),type));
 	    }
 	}
     }

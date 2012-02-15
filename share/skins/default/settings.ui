@@ -34,7 +34,13 @@
    <string comment="VoIP Client" >Options</string>
   </property>
   <property name="windowIcon" >
-   <iconset>configure.png</iconset>
+   <iconset>settings_title.png</iconset>
+  </property>
+  <property name="styleSheet" >
+   <string/>
+  </property>
+  <property name="_yate_window" stdset="0" >
+   <bool>true</bool>
   </property>
   <layout class="QVBoxLayout" >
    <property name="spacing" >
@@ -60,6 +66,9 @@
        <height>200</height>
       </size>
      </property>
+     <property name="styleSheet" >
+      <string/>
+     </property>
      <property name="currentIndex" >
       <number>0</number>
      </property>
@@ -72,13 +81,13 @@
       </attribute>
       <layout class="QVBoxLayout" >
        <property name="spacing" >
-        <number>1</number>
+        <number>0</number>
        </property>
        <property name="leftMargin" >
         <number>4</number>
        </property>
        <property name="topMargin" >
-        <number>4</number>
+        <number>6</number>
        </property>
        <property name="rightMargin" >
         <number>4</number>
@@ -123,13 +132,13 @@
       </attribute>
       <layout class="QVBoxLayout" >
        <property name="spacing" >
-        <number>2</number>
+        <number>0</number>
        </property>
        <property name="leftMargin" >
         <number>4</number>
        </property>
        <property name="topMargin" >
-        <number>4</number>
+        <number>6</number>
        </property>
        <property name="rightMargin" >
         <number>4</number>
@@ -224,13 +233,13 @@
       </attribute>
       <layout class="QVBoxLayout" >
        <property name="spacing" >
-        <number>2</number>
+        <number>0</number>
        </property>
        <property name="leftMargin" >
         <number>4</number>
        </property>
        <property name="topMargin" >
-        <number>4</number>
+        <number>6</number>
        </property>
        <property name="rightMargin" >
         <number>4</number>
@@ -350,13 +359,13 @@
             <property name="minimumSize" >
              <size>
               <width>175</width>
-              <height>0</height>
+              <height>22</height>
              </size>
             </property>
             <property name="maximumSize" >
              <size>
               <width>175</width>
-              <height>16777215</height>
+              <height>22</height>
              </size>
             </property>
             <property name="toolTip" >
@@ -385,13 +394,13 @@
             <property name="minimumSize" >
              <size>
               <width>175</width>
-              <height>0</height>
+              <height>22</height>
              </size>
             </property>
             <property name="maximumSize" >
              <size>
               <width>175</width>
-              <height>16777215</height>
+              <height>22</height>
              </size>
             </property>
             <property name="toolTip" >
@@ -423,13 +432,13 @@
             <property name="minimumSize" >
              <size>
               <width>175</width>
-              <height>0</height>
+              <height>22</height>
              </size>
             </property>
             <property name="maximumSize" >
              <size>
               <width>175</width>
-              <height>16777215</height>
+              <height>22</height>
              </size>
             </property>
             <property name="toolTip" >
@@ -464,13 +473,13 @@
       </attribute>
       <layout class="QVBoxLayout" >
        <property name="spacing" >
-        <number>2</number>
+        <number>0</number>
        </property>
        <property name="leftMargin" >
         <number>4</number>
        </property>
        <property name="topMargin" >
-        <number>4</number>
+        <number>6</number>
        </property>
        <property name="rightMargin" >
         <number>4</number>
@@ -501,6 +510,9 @@
        </item>
        <item>
         <layout class="QHBoxLayout" >
+         <property name="topMargin" >
+          <number>6</number>
+         </property>
          <item>
           <widget class="QToolButton" name="action_show_archive" >
            <property name="sizePolicy" >
@@ -593,12 +605,36 @@
       </spacer>
      </item>
      <item>
-      <widget class="QPushButton" name="button_hide" >
+      <widget class="QToolButton" name="button_hide" >
+       <property name="minimumSize" >
+        <size>
+         <width>0</width>
+         <height>25</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>16777215</width>
+         <height>25</height>
+        </size>
+       </property>
        <property name="text" >
         <string>Close</string>
        </property>
        <property name="icon" >
-        <iconset>close.png</iconset>
+        <iconset>cancel.png</iconset>
+       </property>
+       <property name="toolButtonStyle" >
+        <enum>Qt::ToolButtonTextBesideIcon</enum>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>cancel.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>cancel_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>cancel_hover.png</string>
        </property>
       </widget>
      </item>

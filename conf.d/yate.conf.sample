@@ -22,6 +22,12 @@
 ; maxworkers: int: Maximum number of worker threads the engine can create
 ;maxworkers=10
 
+; maxevents: int: Maximum number of events kept per type
+;maxevents=10
+
+; startevents: boolean: Capture all debug events at startup
+;startevents=yes
+
 ; restarts: int: Time in seconds after startup the engine will try to restart
 ;  to clean up any accumulating problems. Restarts are performed only when
 ;  started in supervised mode

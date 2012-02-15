@@ -25,14 +25,20 @@
    <string>Archive</string>
   </property>
   <property name="windowIcon" >
-   <iconset>archive.png</iconset>
+   <iconset>archive_title.png</iconset>
+  </property>
+  <property name="styleSheet" >
+   <string>QWidget#archive {
+  background:#f7f5fd;
+}
+</string>
   </property>
   <layout class="QVBoxLayout" >
    <property name="spacing" >
     <number>2</number>
    </property>
    <property name="leftMargin" >
-    <number>0</number>
+    <number>4</number>
    </property>
    <property name="topMargin" >
     <number>0</number>
@@ -45,12 +51,9 @@
    </property>
    <item>
     <widget class="QMenuBar" name="menu" >
-     <property name="styleSheet" >
-      <string/>
-     </property>
      <widget class="QMenu" name="menuFile" >
       <property name="title" >
-       <string>File</string>
+       <string>&amp;File</string>
       </property>
       <addaction name="archive_refresh" />
       <addaction name="separator" />
@@ -63,7 +66,7 @@
      </widget>
      <widget class="QMenu" name="menuEdit" >
       <property name="title" >
-       <string>Edit</string>
+       <string>&amp;Edit</string>
       </property>
       <addaction name="archive_search_show" />
       <addaction name="separator" />
@@ -80,11 +83,14 @@
        <verstretch>0</verstretch>
       </sizepolicy>
      </property>
+     <property name="styleSheet" >
+      <string>QSplitter#splitter_vertical {
+  margin: 2px 4px 2px 2px;
+  border: 0px;
+}</string>
+     </property>
      <property name="orientation" >
       <enum>Qt::Horizontal</enum>
-     </property>
-     <property name="childrenCollapsible" >
-      <bool>false</bool>
      </property>
      <property name="_yate_save_props" stdset="0" >
       <stringlist>
@@ -113,6 +119,11 @@
         <height>16777215</height>
        </size>
       </property>
+      <property name="styleSheet" >
+       <string>QFrame#frame_logs_list {
+  border: 1px solid #717fa0;
+}</string>
+      </property>
       <property name="_yate_uiwidget" stdset="0" >
        <bool>true</bool>
       </property>
@@ -129,7 +140,6 @@
         <string>_yate_tree_additemtype=roomprivchat</string>
         <string>property:itemsExpandable=true</string>
         <string>property:autoExpand=false</string>
-        <string>property:styleSheet=QTreeWidget {border-image: none;font-size: 11px;background:white;border: 1px solid #97acbc;}</string>
         <string>property:_yate_itemui=chat:arch_contact_item.ui</string>
         <string>property:_yate_itemui=roomchat:arch_room_item.ui</string>
         <string>property:_yate_itemui=roomprivchat:arch_roompriv_item.ui</string>
@@ -214,6 +224,11 @@
             <height>16777215</height>
            </size>
           </property>
+          <property name="styleSheet" >
+           <string>QFrame#frame_sessions_list {
+  border: 1px solid #717fa0;
+}</string>
+          </property>
           <property name="_yate_uiwidget" stdset="0" >
            <bool>true</bool>
           </property>
@@ -227,7 +242,6 @@
            <stringlist>
             <string>property:itemsExpandable=true</string>
             <string>property:autoExpand=true</string>
-            <string>property:styleSheet=QTreeWidget {border-image: none;font-size: 11px;background:white;border: 1px solid #97acbc;}</string>
             <string>property:_yate_itemui=default:arch_session_item.ui</string>
             <string>property:_yate_itemstyle=default:QWidget#${name}{background:white;}</string>
             <string>property:_yate_itemselectedstyle=default:QWidget#${name}{background:lightblue;}</string>
@@ -235,15 +249,6 @@
           </property>
          </widget>
          <widget class="QFrame" name="frame_session_history" >
-          <property name="styleSheet" >
-           <string>QTextEdit {
-  background-color: #ffffff;
-  border: 1px solid #b3b6b0;
-  color: #666666;
-  font-family: Arial;
-  font-size: 12px;
-}</string>
-          </property>
           <property name="_yate_uiwidget" stdset="0" >
            <bool>true</bool>
           </property>
@@ -282,43 +287,43 @@
      <property name="minimumSize" >
       <size>
        <width>100</width>
-       <height>24</height>
+       <height>28</height>
       </size>
      </property>
      <property name="maximumSize" >
       <size>
        <width>16777215</width>
-       <height>24</height>
+       <height>28</height>
       </size>
      </property>
      <layout class="QHBoxLayout" >
       <property name="spacing" >
-       <number>6</number>
+       <number>4</number>
       </property>
       <property name="leftMargin" >
        <number>2</number>
       </property>
       <property name="topMargin" >
-       <number>2</number>
+       <number>0</number>
       </property>
       <property name="rightMargin" >
-       <number>2</number>
+       <number>4</number>
       </property>
       <property name="bottomMargin" >
-       <number>2</number>
+       <number>4</number>
       </property>
       <item>
        <widget class="QToolButton" name="archive_search_hide_button" >
         <property name="minimumSize" >
          <size>
-          <width>20</width>
-          <height>20</height>
+          <width>24</width>
+          <height>24</height>
          </size>
         </property>
         <property name="maximumSize" >
          <size>
-          <width>20</width>
-          <height>20</height>
+          <width>24</width>
+          <height>24</height>
          </size>
         </property>
         <property name="focusPolicy" >
@@ -338,7 +343,7 @@
       <item>
        <widget class="QLineEdit" name="archive_search_edit" >
         <property name="sizePolicy" >
-         <sizepolicy vsizetype="Expanding" hsizetype="Fixed" >
+         <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
           <horstretch>0</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
@@ -346,22 +351,17 @@
         <property name="minimumSize" >
          <size>
           <width>180</width>
-          <height>16</height>
+          <height>24</height>
          </size>
         </property>
         <property name="maximumSize" >
          <size>
           <width>180</width>
-          <height>16777215</height>
+          <height>24</height>
          </size>
         </property>
         <property name="toolTip" >
          <string>Edit search</string>
-        </property>
-        <property name="styleSheet" >
-         <string>QLineEdit {
-  font-size: 11px;
-}</string>
         </property>
         <property name="dynamicActionEnter" stdset="0" >
          <string>archive_search_start</string>
@@ -387,14 +387,14 @@
        <widget class="QToolButton" name="archive_search_start_button" >
         <property name="minimumSize" >
          <size>
-          <width>20</width>
-          <height>20</height>
+          <width>24</width>
+          <height>24</height>
          </size>
         </property>
         <property name="maximumSize" >
          <size>
-          <width>20</width>
-          <height>20</height>
+          <width>24</width>
+          <height>24</height>
          </size>
         </property>
         <property name="focusPolicy" >
@@ -415,14 +415,14 @@
        <widget class="QToolButton" name="archive_search_prev_button" >
         <property name="minimumSize" >
          <size>
-          <width>20</width>
-          <height>20</height>
+          <width>24</width>
+          <height>24</height>
          </size>
         </property>
         <property name="maximumSize" >
          <size>
-          <width>20</width>
-          <height>20</height>
+          <width>24</width>
+          <height>24</height>
          </size>
         </property>
         <property name="focusPolicy" >
@@ -443,14 +443,14 @@
        <widget class="QToolButton" name="archive_search_next_button" >
         <property name="minimumSize" >
          <size>
-          <width>20</width>
-          <height>20</height>
+          <width>24</width>
+          <height>24</height>
          </size>
         </property>
         <property name="maximumSize" >
          <size>
-          <width>20</width>
-          <height>20</height>
+          <width>24</width>
+          <height>24</height>
          </size>
         </property>
         <property name="focusPolicy" >
@@ -477,7 +477,7 @@
       <item>
        <widget class="QComboBox" name="archive_search_range" >
         <property name="sizePolicy" >
-         <sizepolicy vsizetype="Expanding" hsizetype="Fixed" >
+         <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
           <horstretch>0</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
@@ -485,22 +485,17 @@
         <property name="minimumSize" >
          <size>
           <width>140</width>
-          <height>16</height>
+          <height>24</height>
          </size>
         </property>
         <property name="maximumSize" >
          <size>
           <width>140</width>
-          <height>16777215</height>
+          <height>24</height>
          </size>
         </property>
         <property name="focusPolicy" >
          <enum>Qt::StrongFocus</enum>
-        </property>
-        <property name="styleSheet" >
-         <string>QComboBox {
-  font-size: 11px;
-}</string>
         </property>
        </widget>
       </item>
@@ -524,11 +519,6 @@
         </property>
         <property name="toolTip" >
          <string>Highlight all found items</string>
-        </property>
-        <property name="styleSheet" >
-         <string>QCheckBox {
-  font-size: 11px;
-}</string>
         </property>
         <property name="text" >
          <string>Highlight all</string>

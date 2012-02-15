@@ -1116,6 +1116,13 @@ public:
 	{ Lock lck(this); return m_send && m_send->rtpSendKey(key,duration,volume,timestamp); }
 
     /**
+     * Retrieve the number of lost packets in current received
+     * @return Number of packets in sequence gaps
+     */
+    inline u_int32_t ioPacketsLost() const
+	{ return m_recv ? m_recv->ioPacketsLost() : 0; }
+
+    /**
      * Get the payload padding size
      * @return Chunk size to pad the payload to a multiple of
      */

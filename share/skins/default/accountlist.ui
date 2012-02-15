@@ -13,7 +13,10 @@
    <string>Accounts</string>
   </property>
   <property name="windowIcon" >
-   <iconset>user.png</iconset>
+   <iconset>accountlist_title.png</iconset>
+  </property>
+  <property name="_yate_window" stdset="0" >
+   <bool>true</bool>
   </property>
   <layout class="QVBoxLayout" >
    <property name="spacing" >
@@ -56,6 +59,12 @@
          <verstretch>0</verstretch>
         </sizepolicy>
        </property>
+       <property name="styleSheet" >
+        <string>QFrame#frame_accounts {
+  border: 1px solid #717fa0;
+}
+</string>
+       </property>
        <property name="_yate_uiwidget" stdset="0" >
         <bool>true</bool>
        </property>
@@ -63,20 +72,25 @@
         <string>accounts</string>
        </property>
        <property name="_yate_uiwidget_class" stdset="0" >
-        <string>CustomTable</string>
+        <string>QtCustomTree</string>
        </property>
        <property name="_yate_uiwidget_params" stdset="0" >
         <stringlist>
-         <string>property:styleSheet=QTableWidget{background:white; selection-background-color: lightblue;}</string>
+         <string>property:_yate_save_props=_yate_sorting,_yate_col_widths</string>
          <string>property:tabKeyNavigation=false</string>
+         <string>property:sortingEnabled=false</string>
+         <string>property:allColumnsShowFocus=true</string>
          <string>property:_yate_horizontalheader=true</string>
          <string>property:_yate_notifyonenterpressed=true</string>
          <string>property:_yate_notifyitemchanged=true</string>
-         <string>property:_yate_itemheight=0</string>
-         <string>hheader_columns=Enabled,Account,Status</string>
-         <string>hheader_columns_check=enabled</string>
-         <string>hheader_columns_size=60</string>
-         <string>hheader_columns_resize=contents</string>
+         <string>property:_yate_sorting=time,false</string>
+         <string>property:_yate_itemheight=24</string>
+         <string>columns=Enabled,Account,Status</string>
+         <string>columns.check=enabled</string>
+         <string>columns.width=80</string>
+         <string>columns.resize=contents</string>
+         <string>griddraw_right_color=#e3e6e9</string>
+         <string>griddraw_bottom_color=#a9c2c2</string>
         </stringlist>
        </property>
       </widget>
@@ -100,7 +114,25 @@
         </spacer>
        </item>
        <item>
-        <widget class="QPushButton" name="acc_new" >
+        <widget class="QToolButton" name="acc_new" >
+         <property name="sizePolicy" >
+          <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize" >
+          <size>
+           <width>0</width>
+           <height>26</height>
+          </size>
+         </property>
+         <property name="maximumSize" >
+          <size>
+           <width>16777215</width>
+           <height>26</height>
+          </size>
+         </property>
          <property name="toolTip" >
           <string>Create a new account</string>
          </property>
@@ -108,14 +140,44 @@
           <string>New</string>
          </property>
          <property name="icon" >
-          <iconset>user.png</iconset>
+          <iconset>add.png</iconset>
+         </property>
+         <property name="toolButtonStyle" >
+          <enum>Qt::ToolButtonTextBesideIcon</enum>
+         </property>
+         <property name="_yate_normal_icon" stdset="0" >
+          <string>add.png</string>
+         </property>
+         <property name="_yate_pressed_icon" stdset="0" >
+          <string>add_pressed.png</string>
+         </property>
+         <property name="_yate_hover_icon" stdset="0" >
+          <string>add_hover.png</string>
          </property>
         </widget>
        </item>
        <item>
-        <widget class="QPushButton" name="acc_del" >
+        <widget class="QToolButton" name="acc_del" >
          <property name="enabled" >
           <bool>false</bool>
+         </property>
+         <property name="sizePolicy" >
+          <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize" >
+          <size>
+           <width>0</width>
+           <height>26</height>
+          </size>
+         </property>
+         <property name="maximumSize" >
+          <size>
+           <width>16777215</width>
+           <height>26</height>
+          </size>
          </property>
          <property name="toolTip" >
           <string>Delete the selected account</string>
@@ -124,17 +186,47 @@
           <string>Delete</string>
          </property>
          <property name="icon" >
-          <iconset>close.png</iconset>
+          <iconset>delete.png</iconset>
+         </property>
+         <property name="toolButtonStyle" >
+          <enum>Qt::ToolButtonTextBesideIcon</enum>
          </property>
          <property name="_yate_identity" stdset="0" >
           <string>deleteselecteditem:accounts:</string>
          </property>
+         <property name="_yate_normal_icon" stdset="0" >
+          <string>delete.png</string>
+         </property>
+         <property name="_yate_pressed_icon" stdset="0" >
+          <string>delete_pressed.png</string>
+         </property>
+         <property name="_yate_hover_icon" stdset="0" >
+          <string>delete_hover.png</string>
+         </property>
         </widget>
        </item>
        <item>
-        <widget class="QPushButton" name="acc_edit" >
+        <widget class="QToolButton" name="acc_edit" >
          <property name="enabled" >
           <bool>false</bool>
+         </property>
+         <property name="sizePolicy" >
+          <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize" >
+          <size>
+           <width>0</width>
+           <height>26</height>
+          </size>
+         </property>
+         <property name="maximumSize" >
+          <size>
+           <width>16777215</width>
+           <height>26</height>
+          </size>
          </property>
          <property name="toolTip" >
           <string>Edit the selected account</string>
@@ -144,6 +236,18 @@
          </property>
          <property name="icon" >
           <iconset>edit.png</iconset>
+         </property>
+         <property name="toolButtonStyle" >
+          <enum>Qt::ToolButtonTextBesideIcon</enum>
+         </property>
+         <property name="_yate_normal_icon" stdset="0" >
+          <string>edit.png</string>
+         </property>
+         <property name="_yate_pressed_icon" stdset="0" >
+          <string>edit_pressed.png</string>
+         </property>
+         <property name="_yate_hover_icon" stdset="0" >
+          <string>edit_hover.png</string>
          </property>
         </widget>
        </item>

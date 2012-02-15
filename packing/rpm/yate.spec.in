@@ -83,6 +83,7 @@ for small to large scale projects.
 %doc %{_defaultdocdir}/yate-%{version}/COPYING
 %doc %{_defaultdocdir}/yate-%{version}/ChangeLog
 %{_libdir}/libyate.so.*
+%{_libdir}/libyatescript.so.*
 %{_libdir}/libyatejabber.so.*
 %{_libdir}/libyatesig.so.*
 %{_libdir}/libyatemgcp.so.*
@@ -95,6 +96,7 @@ for small to large scale projects.
 %{_libdir}/yate/cdrbuild.yate
 %{_libdir}/yate/cdrfile.yate
 %{_libdir}/yate/regexroute.yate
+%{_libdir}/yate/javascript.yate
 %{_libdir}/yate/server/regfile.yate
 %{_libdir}/yate/server/accfile.yate
 %{_libdir}/yate/server/register.yate
@@ -148,12 +150,14 @@ for small to large scale projects.
 %{_libdir}/yate/server/ccongestion.yate
 %{_libdir}/yate/server/monitoring.yate
 %{_libdir}/yate/server/ysnmpagent.yate
+%{_libdir}/yate/server/cache.yate
 %{_libdir}/yate/client/osschan.yate
 %{_libdir}/yate/client/jabberclient.yate
 %{_libdir}/yate/jabber/jabberserver.yate
 %{_libdir}/yate/jabber/jbfeatures.yate
 %{_libdir}/yate/sig/isupmangler.yate
 %{_libdir}/yate/sig/ss7_lnp_ansi.yate
+%{_libdir}/yate/sig/camel_map.yate
 %{_libdir}/yate/sip/sip_cnam_lnp.yate
 %dir %{_sysconfdir}/yate
 %config(noreplace) %{_sysconfdir}/yate/accfile.conf
@@ -174,6 +178,7 @@ for small to large scale projects.
 %config(noreplace) %{_sysconfdir}/yate/queuesnotify.conf
 %config(noreplace) %{_sysconfdir}/yate/lateroute.conf
 %config(noreplace) %{_sysconfdir}/yate/regexroute.conf
+%config(noreplace) %{_sysconfdir}/yate/javascript.conf
 %config(noreplace) %{_sysconfdir}/yate/regfile.conf
 %config(noreplace) %{_sysconfdir}/yate/register.conf
 %config(noreplace) %{_sysconfdir}/yate/tonegen.conf
@@ -198,6 +203,7 @@ for small to large scale projects.
 %config(noreplace) %{_sysconfdir}/yate/ccongestion.conf
 %config(noreplace) %{_sysconfdir}/yate/monitoring.conf
 %config(noreplace) %{_sysconfdir}/yate/ysnmpagent.conf
+%config(noreplace) %{_sysconfdir}/yate/cache.conf
 %config(noreplace) %{_sysconfdir}/yate/users.conf
 %config(noreplace) %{_sysconfdir}/yate/presence.conf
 %config(noreplace) %{_sysconfdir}/yate/subscription.conf
@@ -206,6 +212,7 @@ for small to large scale projects.
 %config(noreplace) %{_sysconfdir}/yate/jbfeatures.conf
 %config(noreplace) %{_sysconfdir}/yate/isupmangler.conf
 %config(noreplace) %{_sysconfdir}/yate/ss7_lnp_ansi.conf
+%config(noreplace) %{_sysconfdir}/yate/camel_map.conf
 %config(noreplace) %{_sysconfdir}/yate/sip_cnam_lnp.conf
 
 %config %{_sysconfdir}/logrotate.d/yate
@@ -575,6 +582,10 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Fri Feb 10 2012 Paul Chitescu <paulc@voip.null.ro>
+- Added scripting library and javascript module
+- Added cache and camel_map modules
+
 * Thu Sep 15 2011 Paul Chitescu <paulc@voip.null.ro>
 - Added new modules/sig directory for feature modules
 

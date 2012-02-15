@@ -31,16 +31,20 @@
    <string>Join Chat Room Wizard</string>
   </property>
   <property name="windowIcon" >
-   <iconset>muc.png</iconset>
+   <iconset>joinmucwizard_title.png</iconset>
   </property>
   <property name="styleSheet" >
-   <string>QLabel[_yate_wizardpage_title="true"] {&#xd;
-  font-size: 20px;&#xd;
-  border-bottom: 1px solid blue;&#xd;
-}</string>
+   <string>QLabel[_yate_wizardpage_title="true"] {
+  font-size: 20px;
+  border-bottom: 1px solid blue;
+}
+</string>
   </property>
   <property name="_yate_destroyonhide" stdset="0" >
    <bool>false</bool>
+  </property>
+  <property name="_yate_window" stdset="0" >
+   <bool>true</bool>
   </property>
   <layout class="QVBoxLayout" >
    <property name="leftMargin" >
@@ -325,7 +329,25 @@
            </widget>
           </item>
           <item>
-           <widget class="QPushButton" name="muc_query_servers" >
+           <widget class="QToolButton" name="muc_query_servers" >
+            <property name="sizePolicy" >
+             <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize" >
+             <size>
+              <width>0</width>
+              <height>23</height>
+             </size>
+            </property>
+            <property name="maximumSize" >
+             <size>
+              <width>16777215</width>
+              <height>23</height>
+             </size>
+            </property>
             <property name="text" >
              <string>Query</string>
             </property>
@@ -740,13 +762,13 @@
            <property name="minimumSize" >
             <size>
              <width>0</width>
-             <height>23</height>
+             <height>24</height>
             </size>
            </property>
            <property name="maximumSize" >
             <size>
              <width>16777215</width>
-             <height>23</height>
+             <height>24</height>
             </size>
            </property>
            <property name="suffix" >
@@ -948,60 +970,150 @@
       </spacer>
      </item>
      <item>
-      <widget class="QPushButton" name="prev" >
+      <widget class="QToolButton" name="prev" >
+       <property name="minimumSize" >
+        <size>
+         <width>0</width>
+         <height>26</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>16777215</width>
+         <height>26</height>
+        </size>
+       </property>
+       <property name="toolTip" >
+        <string/>
+       </property>
        <property name="text" >
         <string>Previous</string>
        </property>
        <property name="icon" >
-        <iconset>prev.png</iconset>
+        <iconset>left.png</iconset>
        </property>
-       <property name="iconSize" >
-        <size>
-         <width>16</width>
-         <height>16</height>
-        </size>
+       <property name="toolButtonStyle" >
+        <enum>Qt::ToolButtonTextBesideIcon</enum>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>left.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>left_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>left_hover.png</string>
        </property>
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="next" >
+      <widget class="QToolButton" name="next" >
+       <property name="minimumSize" >
+        <size>
+         <width>0</width>
+         <height>26</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>16777215</width>
+         <height>26</height>
+        </size>
+       </property>
        <property name="text" >
         <string>Next</string>
        </property>
        <property name="icon" >
-        <iconset>next.png</iconset>
+        <iconset>right.png</iconset>
        </property>
-       <property name="iconSize" >
-        <size>
-         <width>16</width>
-         <height>16</height>
-        </size>
+       <property name="toolButtonStyle" >
+        <enum>Qt::ToolButtonTextBesideIcon</enum>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>right.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>right_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>right_hover.png</string>
        </property>
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="cancel" >
+      <widget class="QToolButton" name="cancel" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>0</width>
+         <height>26</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>16777215</width>
+         <height>26</height>
+        </size>
+       </property>
        <property name="text" >
         <string>Cancel</string>
        </property>
-       <property name="iconSize" >
-        <size>
-         <width>16</width>
-         <height>16</height>
-        </size>
+       <property name="toolButtonStyle" >
+        <enum>Qt::ToolButtonTextBesideIcon</enum>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>cancel.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>cancel_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>cancel_hover.png</string>
        </property>
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="button_hide" >
+      <widget class="QToolButton" name="button_hide" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>0</width>
+         <height>26</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>16777215</width>
+         <height>26</height>
+        </size>
+       </property>
        <property name="text" >
         <string>Close</string>
        </property>
-       <property name="iconSize" >
-        <size>
-         <width>16</width>
-         <height>16</height>
-        </size>
+       <property name="icon" >
+        <iconset>cancel.png</iconset>
+       </property>
+       <property name="toolButtonStyle" >
+        <enum>Qt::ToolButtonTextBesideIcon</enum>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>cancel.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>cancel_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>cancel_hover.png</string>
        </property>
       </widget>
      </item>

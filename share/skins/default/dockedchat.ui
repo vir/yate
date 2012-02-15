@@ -37,14 +37,10 @@
    <string comment="VoIP Client" >Chat</string>
   </property>
   <property name="windowIcon" >
-   <iconset>chat.png</iconset>
+   <iconset>dockedchat_title.png</iconset>
   </property>
-  <property name="styleSheet" >
-   <string>QLabel {&#xd;
-  background:none;&#xd;
-  font-size: 11px;&#xd;
-}&#xd;
-</string>
+  <property name="_yate_window" stdset="0" >
+   <bool>true</bool>
   </property>
   <layout class="QVBoxLayout" >
    <property name="spacing" >
@@ -64,6 +60,9 @@
    </property>
    <item>
     <widget class="QFrame" name="frame_dockedchat" >
+     <property name="styleSheet" >
+      <string/>
+     </property>
      <property name="_yate_uiwidget" stdset="0" >
       <bool>true</bool>
      </property>
@@ -76,6 +75,7 @@
      <property name="_yate_uiwidget_params" stdset="0" >
       <stringlist>
        <string>type=tabs</string>
+       <string>property:_yate_itemstyle=:QWidget#${name}_chat { background:#ffffff; }</string>
        <string>delete_item_action=deleteitem</string>
        <string>delete_item_type=native</string>
        <string>delete_item_property:styleSheet=QToolButton{qproperty-icon:url(close.png);qproperty-toolTip:"Close chat";qproperty-arrowType:"Qt::NoArrow";background:transparent;}QToolButton:hover{background:lightgrey;}</string>

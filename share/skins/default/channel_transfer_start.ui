@@ -1,0 +1,161 @@
+<ui version="4.0" >
+ <class>channel_transfer_start</class>
+ <widget class="QWidget" name="channel_transfer_start" >
+  <property name="geometry" >
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>400</width>
+    <height>34</height>
+   </rect>
+  </property>
+  <property name="sizePolicy" >
+   <sizepolicy vsizetype="Fixed" hsizetype="Preferred" >
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
+  <layout class="QHBoxLayout" >
+   <property name="spacing" >
+    <number>4</number>
+   </property>
+   <property name="leftMargin" >
+    <number>0</number>
+   </property>
+   <property name="topMargin" >
+    <number>0</number>
+   </property>
+   <property name="rightMargin" >
+    <number>4</number>
+   </property>
+   <property name="bottomMargin" >
+    <number>0</number>
+   </property>
+   <item>
+    <widget class="QFrame" name="frame" >
+     <property name="sizePolicy" >
+      <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="minimumSize" >
+      <size>
+       <width>16</width>
+       <height>24</height>
+      </size>
+     </property>
+     <property name="maximumSize" >
+      <size>
+       <width>16777215</width>
+       <height>24</height>
+      </size>
+     </property>
+     <layout class="QHBoxLayout" >
+      <property name="spacing" >
+       <number>0</number>
+      </property>
+      <property name="leftMargin" >
+       <number>0</number>
+      </property>
+      <property name="topMargin" >
+       <number>0</number>
+      </property>
+      <property name="rightMargin" >
+       <number>0</number>
+      </property>
+      <property name="bottomMargin" >
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QComboBox" name="target" >
+        <property name="sizePolicy" >
+         <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize" >
+         <size>
+          <width>0</width>
+          <height>24</height>
+         </size>
+        </property>
+        <property name="maximumSize" >
+         <size>
+          <width>16777215</width>
+          <height>24</height>
+         </size>
+        </property>
+        <property name="styleSheet" >
+         <string>QComboBox {
+  background: #ffffff;
+  background-image: url(trans_bg.png);
+  background-repeat: no-repeat;
+  background-position: left;
+  padding-left: 20px;
+}
+</string>
+        </property>
+        <property name="editable" >
+         <bool>true</bool>
+        </property>
+        <property name="_yate_identity" stdset="0" >
+         <string>trans_target</string>
+        </property>
+        <property name="_yate_textchangednotify" stdset="0" >
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QToolButton" name="transfer_start" >
+     <property name="minimumSize" >
+      <size>
+       <width>24</width>
+       <height>24</height>
+      </size>
+     </property>
+     <property name="maximumSize" >
+      <size>
+       <width>24</width>
+       <height>24</height>
+      </size>
+     </property>
+     <property name="toolTip" >
+      <string>Transfer the call</string>
+     </property>
+     <property name="icon" >
+      <iconset>send_transfer_20.png</iconset>
+     </property>
+     <property name="iconSize" >
+      <size>
+       <width>20</width>
+       <height>20</height>
+      </size>
+     </property>
+     <property name="_yate_identity" stdset="0" >
+      <string>transfer_start</string>
+     </property>
+     <property name="_yate_normal_icon" stdset="0" >
+      <string>send_transfer_20.png</string>
+     </property>
+     <property name="_yate_pressed_icon" stdset="0" >
+      <string>send_transfer_20_pressed.png</string>
+     </property>
+     <property name="_yate_hover_icon" stdset="0" >
+      <string>send_transfer_20_hover.png</string>
+     </property>
+     <property name="_yate_filterevents" stdset="0" >
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

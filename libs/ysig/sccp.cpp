@@ -32,11 +32,19 @@
 using namespace TelEngine;
 
 #define MAX_MANDATORY_PARAMS 16
-// NOTE Keep MAX_DATA_LEN smaller than the value defined by protocol.
-// In case that we have to encode optional parameters the pointer to optionalParameters will be wrapped around 255
-#define MAX_DATA_LEN 220 // ITU defines 255 if the calling party address does not include GT, ANSI 252
-#define SGM_PADDING 10   // Segmentation padding
+
+// 227 is maximum data length that can be transported by a UDT message
+// with 2 full gt present both numbers with 16 digits (bcd encoded)
+#define MAX_UDT_LEN 227
+
 #define MAX_INFO_TIMER 1200000 // Maximum interval for sending SST 20 min
+// Maximum length of optional parameters: 6 Segmentation, 3 Importance, 1 EOP
+#define MAX_OPT_LEN 10
+// Minimum data size in a SCCP message
+#define MIN_DATA_SIZE 2
+
+#define MAX_DATA_ITU 3952
+#define MAX_DATA_ANSI 3904
 
 static const char* s_userMutexName = "SCCPUserTransport";
 static const char* s_sccpMutexName = "SCCPUserList";
@@ -192,7 +200,8 @@ const TokenDict SCCPManagement::s_states[] = {
     { "allowed",        SCCPManagement::Allowed },
     { "prohibited",     SCCPManagement::Prohibited },
     { "wait-for-grant", SCCPManagement::WaitForGrant },
-    { "ignore-tests",    SCCPManagement::IgnoreTests },
+    { "ignore-tests",   SCCPManagement::IgnoreTests },
+    { "unknown",        SCCPManagement::Unknown },
     { 0 , 0 }
 };
 
@@ -325,7 +334,7 @@ static void getDigits(String& num, bool oddNum, const unsigned char* buf, unsign
     bool ignoreUnk)
 {
     static const char digits1[] = "0123456789\0BC\0\0.";
-    static const char digits2[] = "0123456789ABCD?.";
+    static const char digits2[] = "0123456789ABCDE.";
     const char* digits = ignoreUnk ? digits1 : digits2;
     for (unsigned int i = 0; i < len; i++) {
 	num += digits[buf[i] & 0x0f];
@@ -640,6 +649,8 @@ static DataBlock* setDigits(const char* val)
 	    n = 12;
 	else if ('D' == c)
 	    n = 13;
+	else if ('E' == c)
+	    n = 14;
 	else
 	    continue;
 	odd = !odd;
@@ -945,9 +956,8 @@ static unsigned int encodeData(const SS7SCCP* sccp, SS7MSU& msu, SS7MsgSCCP* msg
     }
     unsigned int length = data->length();
     unsigned char header[2];
-    bool longData = msg->type() == SS7MsgSCCP::LUDT;
     DataBlock tmp;
-    if (longData) {
+    if (msg->isLongDataMessage()) {
 	header[0] = length & 0xff;
 	header[1] = length >> 8 & 0xff;
 	tmp.assign(header,2,false);
@@ -1362,17 +1372,28 @@ void SS7MsgSCCP::toString(String& dest, const SS7Label& label, bool params,
  * SS7MsgSccpReassemble
  */
 
-SS7MsgSccpReassemble::SS7MsgSccpReassemble(SS7MsgSCCP* msg, const SS7Label& label, unsigned int timeToLive)
-    : SS7MsgSCCP(msg->type()), m_label(label), m_callingPartyAddress(""), m_segmentationLocalReference(0),
-    m_timeout(0), m_remainingSegments(0), m_firstSgmDataLen(0)
+SS7MsgSccpReassemble::SS7MsgSccpReassemble(SS7MsgSCCP* msg, const SS7Label& label,
+	    unsigned int timeToLive)
+    : SS7MsgSCCP(msg->type()), m_label(label), m_callingPartyAddress(""),
+    m_segmentationLocalReference(0), m_timeout(0), m_remainingSegments(0),
+    m_firstSgmDataLen(0)
 {
-    m_callingPartyAddress.copySubParams(msg->params(),YSTRING("CallingPartyAddress."));
-    m_segmentationLocalReference = msg->params().getIntValue(YSTRING("Segmentation.SegmentationLocalReference"));
+    m_callingPartyAddress.copySubParams(msg->params(),
+	    YSTRING("CallingPartyAddress."));
+    m_segmentationLocalReference = msg->params().getIntValue(
+	    YSTRING("Segmentation.SegmentationLocalReference"));
     m_timeout = Time::msecNow() + timeToLive;
-    m_remainingSegments = msg->params().getIntValue(YSTRING("Segmentation.RemainingSegments"));
+    m_remainingSegments = msg->params().getIntValue(
+	    YSTRING("Segmentation.RemainingSegments"));
     setData(new DataBlock(*msg->getData()));
     params().copyParams(msg->params());
     m_firstSgmDataLen = getData()->length();
+    // Update protocol class
+    if (msg->params().getIntValue(
+	    YSTRING("Segmentation.ProtocolClass"), -1) > 0)
+	params().setParam("ProtocolClass",msg->params().getValue(
+		YSTRING("Segmentation.ProtocolClass")));
+
 }
 
 SS7MsgSccpReassemble::~SS7MsgSccpReassemble()
@@ -1942,8 +1963,6 @@ bool SCCPManagement::handleMessage(int msgType, unsigned char ssn, unsigned char
 		    break;
 		}
 		lock.drop();
-		NamedList notif("");
-		notif.setParam("ssn",String("ssn"));
 		if (!managementMessage(SCCP::SubsystemStatus,params))
 		    return true;
 		String* status = params.getParam(YSTRING("subsystem-status"));
@@ -2392,14 +2411,19 @@ void SCCPManagement::mtpEndRestart()
     SccpRemote* sr = 0;
     while ((sr = YOBJECT(SccpRemote,iter.get()))) {
 	SS7Route::State state = sccp()->network()->getRouteState(m_pcType,sr->getPointCode());
-	if (state != SS7Route::Allowed)
+	RefPointer<SccpRemote> ptr = sr;
+	unlock();
+	if (sr->getState() !=  (SccpStates)state)
+	    manageSccpRemoteStatus(sr,state); // Update remote sccp state
+	if (state != SS7Route::Allowed) {
+	    lock();
 	    continue;
+	}
 	NamedList params("");
 	params.setParam("pointcode",String(m_sccp->getPackedPointCode()));
 	params.setParam("RemotePC",String(sr->getPackedPointcode()));
 	params.setParam("smi","0");
 	params.setParam("ssn","1");
-	unlock();
 	sendMessage(SSA,params);
 	lock();
     }
@@ -2444,20 +2468,40 @@ void SCCPManagement::sccpUnavailable(const SS7PointCode& pointcode, unsigned cha
 #ifdef DEBUG
     String dest;
     dest << pointcode;
-    Debug(this,DebugInfo,"Received UPU %s cause : %c",dest.c_str(), cause);
+    Debug(this,DebugInfo,"Received UPU %s cause : %d",dest.c_str(), cause);
 #endif
     Lock lock(this);
     SccpRemote* rsccp = getRemoteSccp(pointcode.pack(m_pcType));
     // Do not process UPU if we do not monitor the remote sccp state
     if (!rsccp)
 	return;
+    rsccp->setState(SCCPManagement::Prohibited);
     // Stop all subsystem status tests
     ListIterator iter(m_statusTest);
     SubsystemStatusTest* test = 0;
+    bool testStarted = false;
     while ((test = YOBJECT(SubsystemStatusTest,iter.get()))) {
 	if (!test || !test->getRemote() || pointcode != test->getRemote()->getPointCode())
 	    continue;
+	// Do not stop test for SSN = 1 if the cause is not Unequipped
+	SccpSubsystem* sub = test->getSubsystem();
+	if (sub->getSSN() == 1 && cause != HandledMSU::Unequipped) {
+	    testStarted = true;
+	    continue;
+	}
 	m_statusTest.remove(test);
+    }
+    if (!testStarted && cause != HandledMSU::Unequipped) {
+	SubsystemStatusTest* sst = new SubsystemStatusTest(m_testTimeout);
+	SccpSubsystem* sub = new SccpSubsystem(1);
+	if (!sst->startTest(rsccp,new SccpSubsystem(1))) {
+	    TelEngine::destruct(sst);
+	    TelEngine::destruct(sub);
+	    return;
+	}
+	TelEngine::destruct(sub);
+	m_statusTest.append(sst);
+	sst->setAllowed(false);
     }
     lock.drop();
     localBroadcast(SCCP::StatusIndication,rsccp->getPackedPointcode(),-1,SccpRemoteInaccessible);
@@ -2611,7 +2655,7 @@ bool SccpRemote::initialize(const String& params)
 	    String* subsystem = static_cast<String*>(ob->get());
 	    unsigned int ssn = subsystem->toInteger(256);
 	    if (ssn > 255) {
-		DDebug(DebugConf,"Skipping ssn %d for pointcode %d Value to big!",
+		DDebug(DebugConf,"Skipping ssn %d for pointcode %d Value too big!",
 		       ssn,m_pointcode.pack(m_pointcodeType));
 		continue;
 	    }
@@ -2729,7 +2773,7 @@ SS7SCCP::SS7SCCP(const NamedList& params)
     : SignallingComponent(params,&params), SS7Layer4(SS7MSU::SCCP|SS7MSU::National,&params), Mutex(true,params),
     m_type(SS7PointCode::Other), m_localPointCode(0), m_management(0), m_hopCounter(15),
     m_msgReturnStatus(""), m_segTimeout(0), m_ignoreUnkDigits(false), m_layer3Up(false),
-    m_supportLongData(false), m_totalSent(0), m_totalReceived(0), m_errors(0),
+    m_maxUdtLength(220), m_totalSent(0), m_totalReceived(0), m_errors(0),
     m_totalGTTranslations(0), m_gttFailed(0), m_extendedMonitoring(false), m_mgmName("sccp-mgm"),
     m_printMsg(false), m_extendedDebug(false), m_endpoint(true)
 {
@@ -2769,7 +2813,7 @@ SS7SCCP::SS7SCCP(const NamedList& params)
     m_printMsg = params.getBoolValue(YSTRING("print-messages"),false);
     m_extendedDebug = params.getBoolValue(YSTRING("extended-debug"),false);
     m_extendedMonitoring = params.getBoolValue(YSTRING("extended-monitoring"),false);
-    m_supportLongData = params.getBoolValue(YSTRING("ludt-support"),false);
+    m_maxUdtLength = params.getIntValue(YSTRING("max-udt-length"),MAX_UDT_LEN);
     m_segTimeout = params.getIntValue(YSTRING("segmentation-timeout"),10000);
     m_mgmName = params.getValue(YSTRING("management"));
     m_endpoint = params.getBoolValue(YSTRING("endpoint"),true);
@@ -2817,6 +2861,7 @@ bool SS7SCCP::initialize(const NamedList* config)
 	m_printMsg = config->getBoolValue(YSTRING("print-messages"),m_printMsg);
 	m_extendedDebug = config->getBoolValue(YSTRING("extended-debug"),m_extendedDebug);
 	m_ignoreUnkDigits = config->getBoolValue(YSTRING("ignore-unknown-digits"),m_ignoreUnkDigits);
+	m_maxUdtLength = config->getIntValue(YSTRING("max-udt-length"),m_maxUdtLength);
 	m_endpoint = config->getBoolValue(YSTRING("endpoint"),m_endpoint);
 	int hc = config->getIntValue("hopcounter",m_hopCounter);
 	if (hc < 1 || hc > 15)
@@ -2842,14 +2887,6 @@ void SS7SCCP::attach(SS7Layer3* network)
     setNetworkUp(network && network->operational());
 }
 
-bool SS7SCCP::canSendLUDT(const SS7Label& label)
-{
-    // TODO Check the maxumum MSU size that can be transmited
-    // and determine if we can send LUDT messages
-    // SEE if we should update the MAX_DATA_SIZE!!
-    return m_supportLongData;
-}
-
 bool SS7SCCP::managementStatus(Type type, NamedList& params)
 {
     if (m_management)
@@ -2869,6 +2906,21 @@ void SS7SCCP::timerTick(const Time& when)
         else
             o = o->skipNext();
    }
+}
+
+void SS7SCCP::ajustMessageParams(NamedList& params, SS7MsgSCCP::Type type)
+{
+    if (type == SS7MsgSCCP::UDT || type == SS7MsgSCCP::UDTS)
+	return;
+    int hopCounter = params.getIntValue(YSTRING("HopCounter"),0);
+    if (hopCounter < 1 || hopCounter > 15)
+	params.setParam("HopCounter",String(m_hopCounter));
+    if (ITU() && params.getParam(YSTRING("Importance"))) {
+	int importance = params.getIntValue(YSTRING("Importance"));
+	int temp = checkImportanceLevel(type, importance);
+	if (importance != temp)
+	    params.setParam(YSTRING("Importance"),String(temp));
+    }
 }
 
 // Called by routing method to send a msu
@@ -2898,24 +2950,10 @@ int SS7SCCP::transmitMessage(SS7MsgSCCP* sccpMsg, bool local)
     }
     // Build the routing label
     SS7Label outLabel(m_type,dest,orig,sls);
-
-    while (!canSendLUDT(outLabel)) {
-	if (sccpMsg->getData()->length() <= MAX_DATA_LEN)
-	    break;
+    if (sccpMsg->getData()->length() > m_maxUdtLength) {
 	lock.drop();
-	if (sccpMsg->type() == SS7MsgSCCP::UDT || sccpMsg->type() == SS7MsgSCCP::UDTS) {
-	    Debug(this,DebugStub,"Request to segment message %s! Implement message change!",
-		  SS7MsgSCCP::lookup(sccpMsg->type()));
-	    return -1;
-	}
-	int sls = segmentMessage(*sccpMsg->getData(),sccpMsg,sccpMsg->type(),local);
-	if (sls < 0) {
-	    Lock lock(this);
-	    m_errors++;
-	}
-	return sls;
+	return segmentMessage(sccpMsg,outLabel,local);
     }
-
     // Check route indicator
     if (!sccpMsg->params().getParam("CalledPartyAddress.route")) {
 	// Set route indicator. If have pointcode and ssn, route on ssn
@@ -2927,32 +2965,9 @@ int SS7SCCP::transmitMessage(SS7MsgSCCP* sccpMsg, bool local)
     }
     // Build the msu
     SS7MSU* msu = buildMSU(sccpMsg,outLabel);
-
-    if (!msu) {
-	Debug(this,DebugWarn,"Failed to build msu from sccpMessage %s",
-	      SS7MsgSCCP::lookup(sccpMsg->type()));
-	return -1;
-    }
-    if (m_printMsg && debugAt(DebugInfo)) {
-	String tmp;
-	void* data = 0;
-	unsigned int len = 0;
-	if (m_extendedDebug && msu) {
-	    unsigned int offs = outLabel.length() + 4;
-	    data = msu->getData(offs);
-	    len = data ? msu->length() - offs : 0;
-	}
-	String tmp1;
-	fillLabelAndReason(tmp1,outLabel,sccpMsg);
-	sccpMsg->toString(tmp,outLabel,debugAt(DebugAll),data,len);
-	Debug(this,DebugInfo,"Sending message (%p) '%s' %s %s",sccpMsg,
-	      SS7MsgSCCP::lookup(sccpMsg->type()),tmp1.c_str(),tmp.c_str());
-    } else if (debugAt(DebugAll)) {
-	String tmp;
-	bool debug = fillLabelAndReason(tmp,outLabel,sccpMsg);
-	Debug(this,debug ? DebugInfo : DebugAll,"Sending message '%s' %s",
-	    sccpMsg->name(),tmp.c_str());
-    }
+    if (!msu)
+	return segmentMessage(sccpMsg,outLabel,local);
+    printMessage(msu,sccpMsg,outLabel);
     lock.drop();
     sls = transmitMSU(*msu,outLabel,sls);
 #ifdef DEBUG
@@ -3064,31 +3079,18 @@ int SS7SCCP::sendMessage(DataBlock& data, const NamedList& params)
     Debug(this,DebugAll,"SS7SCCP::sendMessage() [%p]%s",this,tmp.c_str());
 #endif
     Lock lock1(this);
-    // Verify the presence of optional parameters to detect the message 
-    // type used to send SCLC data
-    bool checkImportance = false;
-    bool checkHopCounter = false;
     SS7MsgSCCP* sccpMsg = 0;
-    if (data.length() > MAX_DATA_LEN) {
-	// TODO verify if we can send LUDT Have a sigtran under?
-	// If not segment the message. send multiple XUDT messages
-	sccpMsg = new SS7MsgSCCP(m_supportLongData ? SS7MsgSCCP::LUDT : SS7MsgSCCP::XUDT);
-	checkHopCounter = true;
-	if(params.getParam(YSTRING("Importance")) && m_type == SS7PointCode::ITU)
-	    checkImportance = true;
-    } else if (params.getParam(YSTRING("Importance")) && m_type == SS7PointCode::ITU) {
+    // Do not check for data length here! If message data is too long the message
+    // change procedure will be initiated in segmentMessage method
+    if (params.getParam(YSTRING("Importance")) && m_type == SS7PointCode::ITU) {
 	// We have Importance optional parameter. Send XUDT. ITU only
 	sccpMsg = new SS7MsgSCCP(SS7MsgSCCP::XUDT);
-	checkHopCounter = true;
-	checkImportance = true;
-    } else if ((params.getParam(YSTRING("ISNI")) || params.getParam(YSTRING("INS"))) && 
+    } else if ((params.getParam(YSTRING("ISNI")) || params.getParam(YSTRING("INS"))) &&
 		 m_type == SS7PointCode::ANSI) {
 	// XUDT message ANSI only
 	sccpMsg = new SS7MsgSCCP(SS7MsgSCCP::XUDT);
-	checkHopCounter = true;
     } else if (params.getParam(YSTRING("HopCounter"))) {
 	sccpMsg = new SS7MsgSCCP(SS7MsgSCCP::XUDT);
-	checkHopCounter = true;
     } else // In rest send Unit Data Messages
 	sccpMsg = new SS7MsgSCCP(SS7MsgSCCP::UDT);
 
@@ -3098,17 +3100,7 @@ int SS7SCCP::sendMessage(DataBlock& data, const NamedList& params)
 	return -1;
     }
     sccpMsg->params().copyParams(params); // Copy the parameters to message
-    if (checkImportance) {
-	int importance = sccpMsg->params().getIntValue(YSTRING("Importance"));
-	int temp = checkImportanceLevel(sccpMsg->type(), importance);
-	if (importance != temp)
-	    sccpMsg->params().setParam(YSTRING("Importance"),String(temp));
-    }
-    if (checkHopCounter) {
-	int hopCounter = params.getIntValue(YSTRING("HopCounter"),0);
-	if (hopCounter < 1 || hopCounter > 15) // HopCounter is an mandatory fixed length parameter in XUDT
-	    sccpMsg->params().setParam(YSTRING("HopCounter"),String(m_hopCounter));
-    }
+    ajustMessageParams(sccpMsg->params(),sccpMsg->type());
     if (params.getBoolValue(YSTRING("CallingPartyAddress.pointcode"),false) && m_localPointCode)
 	sccpMsg->params().setParam("CallingPartyAddress.pointcode",String(getPackedPointCode()));
     // Avoid sending optional parameters that aren't specified by protocol
@@ -3129,109 +3121,351 @@ int SS7SCCP::sendMessage(DataBlock& data, const NamedList& params)
     return ret;
 }
 
-int SS7SCCP::segmentMessage(DataBlock& data, SS7MsgSCCP* origMsg, SS7MsgSCCP::Type type, bool local)
+// This method approximates the length of sccp address
+unsigned int SS7SCCP::getAddressLength(const NamedList& params, const String& prefix)
 {
-    // TODO for the moment we have set the max data length at 220
-    // Verify if data lenght is between 220 and 252 | 255 and the message does not heva optional parameters
-    // send a single messages
-    // TODO calculate dinamically the max data length by pre-encoding the message and determine
-    // the length of the addresses
-    // TODO implement a better way to split the data in smaller segments
+    unsigned int length = 2; // Parameter length + Address information octet
+    if (params.getParam(prefix + ".ssn"))
+	length++; // One octet for ssn
+    if (params.getParam(prefix + ".pointcode"))
+	length += ITU() ? 2 : 3; // Pointcode has 2 octets on ITU and 3 on ANSI
+    const NamedString* gtNr = YOBJECT(NamedString,params.getParam(prefix + ".gt"));
+    if (!gtNr)
+	return length;
+    DataBlock data;
+    if (!data.unHexify(*gtNr,gtNr->length(),' ')) {
+	length += gtNr->length() / 2 + gtNr->length() % 2;
+    } else
+	length += data.length();
+    const NamedString* nature = YOBJECT(NamedString,params.getParam(prefix + ".gt.nature"));
+    const NamedString* translation = YOBJECT(NamedString,params.getParam(prefix + ".gt.tt"));
+    const NamedString* plan = YOBJECT(NamedString,params.getParam(prefix + ".gt.np"));
+    const NamedString* encoding = YOBJECT(NamedString,params.getParam(prefix + ".gt.encoding"));
+    if (nature)
+	length++;
+    if (translation)
+	length++;
+    if (plan && encoding)
+	length++;
+    return length;
+}
+
+void SS7SCCP::getMaxDataLen(const SS7MsgSCCP* msg, const SS7Label& label,
+	unsigned int& udt, unsigned int& xudt, unsigned int& ludt)
+{
+    if (!network()) {
+	Debug(this,DebugGoOn,"No Network Attached!!!");
+	return;
+    }
+
+    unsigned int maxLen = network()->getRouteMaxLength(m_type,label.dpc().pack(m_type));
+    if (maxLen < 272) {
+	DDebug(this,DebugInfo,"Received MSU size (%d) lower than maximum TDM!",
+	       maxLen);
+	maxLen = 272;
+    }
+    bool ludtSupport = maxLen > 272; // 272 maximum msu size
+    maxLen -= (label.length() + 1); // subtract label length and SIO octet
+    // Now max length represents the maximum length of SCCP message
+    // Adjust maxLen to represent maximum data in the message.
+    unsigned int headerLength = 3; // MsgType + ProtocolClass
+    // Memorize pointer start to adjust data size.
+    unsigned int pointersStart = headerLength;
+    maxLen -= headerLength;
+    // We have 3 mandatory variable parameters CallingAddress, CalledAddress,
+    // and Data and the pointer to optional parameters + 1 data length
+    headerLength += 5;
+    headerLength += getAddressLength(msg->params(), "CalledPartyAddress");
+    headerLength += getAddressLength(msg->params(), "CallingPartyAddress");
+    ludt = 0;
+    unsigned int sccpParamsSize = headerLength - pointersStart;
+    // 254 = 255 max data length - 1 hopcounter - 1 optional parameters pointer +
+    //       1 data length indicator
+    if (maxLen > 254 + sccpParamsSize)
+	udt = 255;
+    else
+	udt = maxLen - sccpParamsSize;
+    // Append optional parameters length
+    sccpParamsSize += MAX_OPT_LEN;
+
+    if (ludtSupport) {
+	unsigned int maxSupported  = ITU() ? MAX_DATA_ITU : MAX_DATA_ANSI;
+	if (maxLen < maxSupported) {
+	    ludt = maxLen - sccpParamsSize;
+	    ludt -= 5; // The pointers and data length are on 2 octets
+	} else
+	    ludt = maxSupported;
+    }
+    // 254 represents the maximum value that can be stored
+    if (maxLen < 254)
+	xudt = maxLen - sccpParamsSize;
+    // Adjust data length to make sure that the pointer to optional parameters
+    // is not bigger than max unsigned char value
+    xudt = 254 - sccpParamsSize;
+}
+
+void SS7SCCP::printMessage(const SS7MSU* msu, const SS7MsgSCCP* sccpMsg, const
+	SS7Label& label) {
+
+    if (m_printMsg && debugAt(DebugInfo)) {
+	String tmp;
+	const void* data = 0;
+	unsigned int len = 0;
+	if (m_extendedDebug && msu) {
+	    unsigned int offs = label.length() + 4;
+	    data = msu->getData(offs);
+	    len = data ? msu->length() - offs : 0;
+	}
+	String tmp1;
+	fillLabelAndReason(tmp1,label,sccpMsg);
+	sccpMsg->toString(tmp,label,debugAt(DebugAll),data,len);
+	Debug(this,DebugInfo,"Sending message (%p) '%s' %s %s",sccpMsg,
+		SS7MsgSCCP::lookup(sccpMsg->type()),tmp1.c_str(),tmp.c_str());
+    } else if (debugAt(DebugAll)) {
+	String tmp;
+	bool debug = fillLabelAndReason(tmp,label,sccpMsg);
+	Debug(this,debug ? DebugInfo : DebugAll,"Sending message '%s' %s",
+		sccpMsg->name(),tmp.c_str());
+    }
+}
+
+ObjList* SS7SCCP::getDataSegments(unsigned int dataLength,
+	unsigned int maxSegmentSize)
+{
+    DDebug(DebugAll,"getDataSegments(%u,%u)",dataLength,maxSegmentSize);
+    ObjList* segments = new ObjList();
+    // The first sccp segment must be the largest
+    int segmentSize = maxSegmentSize - 1;
+    int dataLeft = dataLength;
+    unsigned int totalSent = 0;
+    int sgSize = maxSegmentSize;
+    if (dataLength - maxSegmentSize <= MIN_DATA_SIZE)
+	sgSize = maxSegmentSize - MIN_DATA_SIZE;
+    segments->append(new SS7SCCPDataSegment(0,sgSize));
+    dataLeft -= sgSize;
+    totalSent += sgSize;
+    while (dataLeft > 0) {
+	sgSize = 0;
+	if ((dataLeft - segmentSize) > MIN_DATA_SIZE) { // Make sure that the left segment is longer than 2
+	    sgSize = segmentSize;
+	} else if (dataLeft > segmentSize) {
+	    sgSize = segmentSize - MIN_DATA_SIZE;
+	} else {
+	    sgSize = dataLeft;
+	}
+	XDebug(this,DebugAll,"Creating new data segment total send %d, segment size %d",
+	       totalSent,sgSize);
+	segments->append(new SS7SCCPDataSegment(totalSent,sgSize));
+	dataLeft -= sgSize;
+	totalSent += sgSize;
+    }
+    return segments;
+}
+
+SS7SCCPDataSegment* getAndRemoveDataSegment(ObjList* obj)
+{
+    if (!obj)
+	return 0;
+    ObjList* o = obj->skipNull();
+    if (!o)
+	return 0;
+    SS7SCCPDataSegment* sgm = static_cast<SS7SCCPDataSegment*>(o->get());
+    obj->remove(sgm,false);
+    return sgm;
+}
+
+int SS7SCCP::segmentMessage(SS7MsgSCCP* origMsg, const SS7Label& label, bool local)
+{
     if (!origMsg)
 	return -1;
-    if (data.length() > 16 * (MAX_DATA_LEN - SGM_PADDING)) {
-	Debug(this,DebugMild,"Can not segment message, data to long! dataLength = %d, max data length = %d",
-	      data.length(),16 * MAX_DATA_LEN);
+    unsigned int udtLength = 0;
+    unsigned int xudtLength = 0;
+    unsigned int ludtLength = 0;
+    getMaxDataLen(origMsg,label,udtLength,xudtLength,ludtLength);
+    unsigned int dataLen = 0;
+
+    DDebug(this,DebugInfo, "Got max data len : udt (%d) : xudt (%d) ludt (%d)",
+	   udtLength,xudtLength,ludtLength);
+    if (udtLength < 2 && xudtLength < 2 && ludtLength < 2)
+	return -1;
+    int sls = origMsg->params().getIntValue(YSTRING("sls"),-1);
+    DataBlock* data = origMsg->getData();
+    if (!data)
+	return -1;
+    // Verify if we should bother to send the message
+    if (data->length() > (ITU() ? MAX_DATA_ITU : MAX_DATA_ANSI)) {
+	Debug(this,DebugNote,
+	      "Unable to send SCCP message! Data length (%d) is too long",
+	      data->length());
 	return -1;
     }
+
+    SS7MsgSCCP::Type msgType = origMsg->type();
+    if (data->length() <= udtLength && origMsg->canBeUDT()) {
+	msgType = isSCLCMessage(msgType) ? SS7MsgSCCP::UDT : SS7MsgSCCP::UDTS;
+	dataLen = udtLength;
+    } else if (data->length() <= xudtLength) {
+	msgType = isSCLCMessage(msgType) ? SS7MsgSCCP::XUDT : SS7MsgSCCP::XUDTS;
+	dataLen = xudtLength;
+    } else if (data->length() <= ludtLength) {
+	msgType = isSCLCMessage(msgType) ? SS7MsgSCCP::LUDT : SS7MsgSCCP::LUDTS;
+	dataLen = ludtLength;
+    } else { // Segmentation is needed!!!
+	if (ludtLength > 2) { // send ludt
+	    msgType = isSCLCMessage(msgType) ? SS7MsgSCCP::LUDT : SS7MsgSCCP::LUDTS;
+	    dataLen = ludtLength;
+	} else if (xudtLength > 2) { // Send Ludt
+	    msgType = isSCLCMessage(msgType) ? SS7MsgSCCP::XUDT : SS7MsgSCCP::XUDTS;
+	    dataLen = xudtLength;
+	} else {
+	    Debug(this,DebugWarn,
+		  "Unable to segment message!! Invalid data len params! XUDT data len = %d, LUDT data len = %d",
+		  xudtLength,ludtLength);
+	}
+    }
+    origMsg->updateType(msgType);
+    origMsg->params().clearParam(YSTRING("Segmentation"),'.');
+    // Send the message if it fits in a single message
+    if (data->length() <= dataLen) {
+	Lock lock(this);
+	ajustMessageParams(origMsg->params(),origMsg->type());
+	SS7MSU* msu = buildMSU(origMsg,label,false);
+	if (!msu) {
+	    Debug(this,DebugGoOn,"Failed to build msu from sccpMessage %s",
+		SS7MsgSCCP::lookup(origMsg->type()));
+	    return -1;
+	}
+	printMessage(msu,origMsg,label);
+	lock.drop();
+	sls = transmitMSU(*msu,label,sls);
+#ifdef DEBUG
+	if (sls < 0)
+	    Debug(this,DebugNote,"Failed to transmit message %s. %d",
+		  SS7MsgSCCP::lookup(origMsg->type()),sls);
+#endif
+	// CleanUp memory
+	TelEngine::destruct(msu);
+	return sls;
+    }
+    // Verify if we should bother to segment the message
+    if ((data->length() > 16 * (dataLen - 1)) && !isSCLCSMessage(msgType)) {
+	Debug(DebugNote,
+	      "Unable to segment SCCP message! Data length (%d) excedes max data allowed (%d)",
+	      data->length(),(16 * (dataLen - 1)));
+	return -1;
+    }
+
+    // Start segmentation process
     lock();
+    ObjList* listSegments = getDataSegments(data->length(),dataLen);
+
+    // Build message params
     NamedList msgData("");
     msgData.copyParams(origMsg->params());
-    int hopCounter = msgData.getIntValue(YSTRING("HopCounter"),0);
-    if (hopCounter < 1 || hopCounter > 15) // HopCounter is an mandatory fixed length parameter in XUDT
-	msgData.setParam("HopCounter",String(m_hopCounter));
-    if (ITU() && msgData.getParam(YSTRING("Importance"))) {
-	int importance = msgData.getIntValue(YSTRING("Importance"));
-	int temp = checkImportanceLevel(type, importance);
-	if (importance != temp)
-	    msgData.setParam(YSTRING("Importance"),String(temp));
-    }
+    ajustMessageParams(msgData,msgType);
+
     // Set segmentation local reference for this message
     msgData.setParam("Segmentation","");
     if (!msgData.getParam(YSTRING("Segmentation.SegmentationLocalReference")))
 	msgData.setParam("Segmentation.SegmentationLocalReference",String((u_int32_t)Random::random()));
-    int segments = data.length() / (MAX_DATA_LEN - SGM_PADDING);
-    if (data.length() / (MAX_DATA_LEN - SGM_PADDING) != 0)
-	segments++;
+    int segments = listSegments->count();
     msgData.setParam("Segmentation.ProtocolClass",msgData.getValue(YSTRING("ProtocolClass")));
-    if (isSCLCMessage(type))
-	msgData.setParam("ProtocolClass","1"); // Segmentation is useing in sequence delivery option
+    if (isSCLCMessage(msgType))
+	msgData.setParam("ProtocolClass","1"); // Segmentation is using in sequence delivery option
     bool msgReturn = msgData.getBoolValue(YSTRING("MessageReturn"),false);
-    int dataLength = data.length();
-    int totalSent = 0;
-    int sls = msgData.getIntValue(YSTRING("sls"),-1);
+    sls = msgData.getIntValue(YSTRING("sls"),-1);
+
     // Transmit first segment
-    SS7MsgSCCP* msg = new SS7MsgSCCP(type);
+    SS7MsgSCCP* msg = new SS7MsgSCCP(msgType);
     msg->params().copyParams(msgData);
     DataBlock temp;
-    if (dataLength - MAX_DATA_LEN > 2)
-	temp.assign(data.data(0,MAX_DATA_LEN),MAX_DATA_LEN,false);
-    else
-	temp.assign(data.data(0,MAX_DATA_LEN - SGM_PADDING),MAX_DATA_LEN - SGM_PADDING,false);
+    SS7SCCPDataSegment* sg = getAndRemoveDataSegment(listSegments);
+    if (!sg) {
+	Debug(DebugStub,"Unable to extract first data segment!!!");
+	TelEngine::destruct(msg);
+	TelEngine::destruct(listSegments);
+	return -1;
+    }
+    sg->fillSegment(temp,*data);
     msg->params().setParam("Segmentation.RemainingSegments",
-	    String(isSCLCMessage(type) ? --segments : 0));
+	    String(isSCLCMessage(msgType) ? --segments : 0));
     msg->params().setParam("Segmentation.FirstSegment","true");
     msg->setData(&temp);
-    dataLength -= temp.length();
-    totalSent += temp.length();
-    DDebug(this,DebugNote,"Sending first segment sl = %d, dl = %d, ts = %d",temp.length(),dataLength,totalSent);
-    unlock();
-    sls = transmitMessage(msg);
+    SS7MSU* msu = buildMSU(msg,label,false);
     msg->removeData();
     temp.clear(false);
+    if (!msu) {
+	Debug(this,DebugGoOn,"Failed to build msu from sccpMessage %s",
+		SS7MsgSCCP::lookup(msgType));
+	TelEngine::destruct(msg);
+	TelEngine::destruct(listSegments);
+	return -1;
+    }
+    printMessage(msu,msg,label);
+    unlock();
+    sls = transmitMSU(*msu,label,sls);
+#ifdef DEBUG
+    if (sls < 0)
+	Debug(this,DebugNote,"Failed to transmit message %s. %d",
+		SS7MsgSCCP::lookup(msgType),sls);
+#endif
+    TelEngine::destruct(msu);
     TelEngine::destruct(msg);
+    TelEngine::destruct(sg);
     if (sls < 0) {
 	if (msgReturn && !local)
 	    returnMessage(origMsg,MtpFailure);
 	Debug(this,DebugNote,"Failed to transmit first segment of message");
+	TelEngine::destruct(listSegments);
 	return sls;
     }
-    if (isSCLCSMessage(type))
+    if (isSCLCSMessage(msgType)) {
+	TelEngine::destruct(listSegments);
 	return sls;
+    }
     lock();
     msgData.setParam("Segmentation.FirstSegment","false");
     // Set message return option only for the first segment
     msgData.setParam("MessageReturn","false");
-    while (dataLength > 0) {
-	msg = new SS7MsgSCCP(type);
+    while ((sg = getAndRemoveDataSegment(listSegments))) {
+	msg = new SS7MsgSCCP(msgType);
 	msg->params().copyParams(msgData);
-	if (dataLength - MAX_DATA_LEN - SGM_PADDING > 2) // Make shure that the left segment is longer than 2
-	    temp.assign(data.data(totalSent,MAX_DATA_LEN - SGM_PADDING),MAX_DATA_LEN - SGM_PADDING,false);
-	else if (dataLength - MAX_DATA_LEN - 2 * SGM_PADDING > 2)
-	    temp.assign(data.data(totalSent,MAX_DATA_LEN - 2* SGM_PADDING),MAX_DATA_LEN - 2* SGM_PADDING,false);
-	else
-	    temp.assign(data.data(totalSent,dataLength),dataLength,false); // Should be last segment
+	sg->fillSegment(temp,*data);
+	TelEngine::destruct(sg);
 	msg->params().setParam("Segmentation.RemainingSegments",String(--segments));
 	msg->setData(&temp);
-	dataLength -= temp.length();
-	totalSent += temp.length();
-	DDebug(this,DebugNote,"Sending segment: %d sl = %d, dl = %d, ts = %d",segments,temp.length(),dataLength,totalSent);
-	unlock();
-	sls = transmitMessage(msg);
+	SS7MSU* msu = buildMSU(msg,label,false);
 	msg->removeData();
 	temp.clear(false);
+	if (!msu) {
+	    Debug(this,DebugGoOn,"Failed to build msu from sccpMessage %s",
+		    SS7MsgSCCP::lookup(msgType));
+	    TelEngine::destruct(msg);
+	    TelEngine::destruct(listSegments);
+	    return -1;
+	}
+	printMessage(msu,msg,label);
+	unlock();
+	sls = transmitMSU(*msu,label,sls);
+#ifdef DEBUG
+	if (sls < 0)
+	    Debug(this,DebugNote,"Failed to transmit message %s. %d",
+		    SS7MsgSCCP::lookup(msgType),sls);
+#endif
 	TelEngine::destruct(msg);
+	TelEngine::destruct(msu);
 	if (sls < 0) {
 	    if (msgReturn && !local)
 		returnMessage(origMsg,MtpFailure);
 	    Debug(this,DebugNote,"Failed to transmit segment of %s message remaining segments %d",
-		  SS7MsgSCCP::lookup(origMsg->type()),segments);
+		  SS7MsgSCCP::lookup(msgType),segments);
 	    return sls;
 	}
 	lock();
     }
     if (segments != 0)
-	Debug(this,DebugStub,"Bug in segment messsage!! RemainingSegments %d",segments);
+	Debug(this,DebugStub,"Bug in segment message!! RemainingSegments %d",segments);
+    TelEngine::destruct(listSegments);
     unlock();
     return sls;
 }
@@ -3262,7 +3496,8 @@ SS7MsgSccpReassemble::Return SS7SCCP::reassembleSegment(SS7MsgSCCP* segment,
 	if (ret == SS7MsgSccpReassemble::Rejected)
 	    continue;
 	if (ret == SS7MsgSccpReassemble::Error) {
-	    m_reassembleList.remove(reass);
+	    m_reassembleList.remove(reass,false);
+	    msg = reass;
 	    return ret;
 	}
 	if (ret == SS7MsgSccpReassemble::Finished) {
@@ -3274,7 +3509,7 @@ SS7MsgSccpReassemble::Return SS7SCCP::reassembleSegment(SS7MsgSCCP* segment,
     return ret;
 }
 
-SS7MSU* SS7SCCP::buildMSU(SS7MsgSCCP* msg, const SS7Label& label) const
+SS7MSU* SS7SCCP::buildMSU(SS7MsgSCCP* msg, const SS7Label& label, bool checkLength) const
 {
     // see what mandatory parameters we should put in this message
     const MsgParams* msgParams = getSccpParams(msg->type());
@@ -3304,7 +3539,7 @@ SS7MSU* SS7SCCP::buildMSU(SS7MsgSCCP* msg, const SS7Label& label) const
 	}
 	len += param->size;
     }
-    bool ludt = msg->type() == SS7MsgSCCP::LUDT;
+    bool ludt = msg->isLongDataMessage();
     int pointerLen = ludt ? 2 : 1;
     // initialize the pointer array offset just past the mandatory fixed part
     unsigned int ptr = label.length() + 1 + len;
@@ -3358,9 +3593,18 @@ SS7MSU* SS7SCCP::buildMSU(SS7MsgSCCP* msg, const SS7Label& label) const
 	// remember the offset this parameter will actually get stored
 	len = msu->length();
 	unsigned int size = 0;
-	if (ptype == SS7MsgSCCP::Data || ptype == SS7MsgSCCP::LongData)
+	if (ptype == SS7MsgSCCP::Data || ptype == SS7MsgSCCP::LongData) {
 	    size = encodeData(this,*msu,msg);
-	else
+	    if (ptype == SS7MsgSCCP::Data) {
+		// Data parameter is the last of variable mandatory parameters
+		// Check if the pointer to variable part may be bigger than 255
+		// (max unsigned char value)
+		if (checkLength && ((len + size + MAX_OPT_LEN) > 254)) {
+		    TelEngine::destruct(msu);
+		    return 0;
+		}
+	    }
+	} else
 	    size = encodeParam(this,*msu,param,&msg->params(),exclude,prefix);
 	d = msu->getData(0,len+1);
 	if (!(size && d)) {
@@ -3419,8 +3663,19 @@ SS7MSU* SS7SCCP::buildMSU(SS7MsgSCCP* msg, const SS7Label& label) const
 		    storedLength --;
 		    d[ptr] = storedLength & 0xff;
 		    d[ptr+1] = storedLength >> 8;
-		} else
+		} else {
+		    // Do not try to set the pointer to optional parameters
+		    // if is bigger than max unsigned char value because will
+		    // result in a malformed packet! 
+		    if (storedLength > 255) {
+			Debug(this,checkLength ? DebugAll : DebugStub,
+			      "Build MSU the pointer to optional parameters is bigger than 255!!!! %d",
+			      storedLength);
+			TelEngine::destruct(msu);
+			return 0;
+		    }
 		    d[ptr] = storedLength;
+		}
 		len = 0;
 	    }
 	}
@@ -3510,6 +3765,7 @@ bool SS7SCCP::processMSU(SS7MsgSCCP::Type type, const unsigned char* paramPtr,
     m_totalReceived++;
     int protocolClass = msg->params().getIntValue(YSTRING("ProtocolClass"), -1);
     if (isSCOCMsg(msg->type())) {
+	Debug(DebugWarn,"Received Connection oriented message!!");
 	if (msg->type() != SS7MsgSCCP::CR) { // Received Connection Oriented message other than Connect Request
 	    // Drop the message
 	    DDebug(this,DebugNote,"Received message %s without a connection!",SS7MsgSCCP::lookup(msg->type()));
@@ -3554,6 +3810,37 @@ bool SS7SCCP::routeSCLCMessage(SS7MsgSCCP*& msg, const SS7Label& label)
 	Debug(this,DebugWarn,"Request to route null sccp message");
 	m_errors++;
 	return false;
+    }
+    if (msg->params().getParam(YSTRING("Segmentation"))) {
+	// Verify if we had received Segmentation parameter with only one segment
+	// and let it pass trough
+	// The reassamblation of XUTDS and LUDTS is optional but, for code flow
+	// purpose, we are manageing it.
+	if (msg->params().getIntValue(YSTRING("Segmentation.RemainingSegments"),0) != 0 ||
+		!msg->params().getBoolValue(YSTRING("Segmentation.FirstSegment"),true)) {
+	    // We have segmentation parameter with multiple segments
+	    SS7MsgSCCP* finishead = 0;
+	    int ret = reassembleSegment(msg,label,finishead);
+	    if (ret == SS7MsgSccpReassemble::Accepted ||
+		    ret == SS7MsgSccpReassemble::Rejected)
+		return true;
+	    if (ret == SS7MsgSccpReassemble::Error) {
+		// For XUDTS and LUDTS messages the message return should allways
+		// be false
+		if (finishead && finishead->params().getBoolValue(YSTRING("MessageReturn"),false))
+		    returnMessage(finishead,SegmentationFailure);
+		if (finishead)
+		    TelEngine::destruct(finishead);
+		m_errors++;
+		return true;
+	    }
+	    if (!finishead) {
+		Debug(this,DebugStub,"Sccp Message finishead to reassemble but the message was not returned");
+		return true;
+	    }
+	    TelEngine::destruct(msg);
+	    msg = finishead;
+	}
     }
     int errorCode = -1;
     NamedString* route = msg->params().getParam(YSTRING("CalledPartyAddress.route"));
@@ -3681,30 +3968,6 @@ bool SS7SCCP::routeSCLCMessage(SS7MsgSCCP*& msg, const SS7Label& label)
 	switch (msg->type()) {
 	    case SS7MsgSCCP::XUDT:
 	    case SS7MsgSCCP::LUDT:
-		if (msg->params().getParam(YSTRING("Segmentation"))) {
-		    // Verify if we had received Segmentation parameter with only one segment
-		    // This should not be happening but is not forbidden
-		    if (msg->params().getIntValue(YSTRING("Segmentation.RemainingSegments"),0) != 0 || 
-			    !msg->params().getBoolValue(YSTRING("Segmentation.FirstSegment"),true)) {
-			// We have segmentation parameter with multiple segments
-			SS7MsgSCCP* finishead = 0;
-			int ret = reassembleSegment(msg,label,finishead);
-			if (ret == SS7MsgSccpReassemble::Accepted ||
-				ret == SS7MsgSccpReassemble::Rejected)
-			    return true;
-			if (ret == SS7MsgSccpReassemble::Error) {
-			    errorCode = SegmentationFailure;
-			    break;
-			}
-			if (!finishead) {
-			    Debug(this,DebugStub,"Sccp Message finishead to reassemble but the message was not returned");
-			    return true;
-			}
-			TelEngine::destruct(msg);
-			msg = finishead;
-		    }
-		}
-		// intentionally fall through
 	    case SS7MsgSCCP::UDT:
 		lock.drop();
 		{
@@ -3718,24 +3981,6 @@ bool SS7SCCP::routeSCLCMessage(SS7MsgSCCP*& msg, const SS7Label& label)
 		break;
 	    case SS7MsgSCCP::XUDTS:
 	    case SS7MsgSCCP::LUDTS:
-		if (msg->params().getParam(YSTRING("Segmentation"))) {
-		    if (msg->params().getIntValue(YSTRING("Segmentation.RemainingSegments"),0) != 0 || 
-			    !msg->params().getBoolValue(YSTRING("Segmentation.FirstSegment"),true)) {
-			// We have segmentation parameter with multiple segments
-			SS7MsgSCCP* finishead = 0;
-			int ret = reassembleSegment(msg,label,finishead);
-			if (ret == SS7MsgSccpReassemble::Accepted ||
-				ret == SS7MsgSccpReassemble::Rejected)
-			    return true;
-			if (ret == SS7MsgSccpReassemble::Error || !finishead) {
-			    m_errors++;
-			    return false;
-			}
-			TelEngine::destruct(msg);
-			msg = finishead;
-			return false;
-		    }
-		}
 	    case SS7MsgSCCP::UDTS:
 		if (m_extendedMonitoring)
 		    archiveMessage(msg);
@@ -3819,8 +4064,9 @@ void SS7SCCP::switchAddresses(const NamedList& source, NamedList& dest)
     dest.clearParam(YSTRING("RemotePC"));
     if (source.getParam(YSTRING("LocalPC")))
 	dest.setParam("LocalPC",source.getValue(YSTRING("LocalPC")));
-    if (source.getParam(YSTRING("RemotePC")))
-	dest.setParam("RemotePC",source.getValue(YSTRING("RemotePC")));
+    // Do not set RemotePC because the message can fail after a gt was performed
+    // and than RemotePC represents message destination pc rather then
+    // originating pc. Obtain return address from CallingPartyAddress
     // Copy the params
     for (unsigned int i = 0;i < source.length();i++) {
 	NamedString* param = source.getParam(i);
@@ -3903,7 +4149,7 @@ bool SS7SCCP::decodeMessage(SS7MsgSCCP* msg, SS7PointCode::Type pcType,
 	paramLen -= param->size;
     } // while ((ptype = *plist++)...
     bool mustWarn = true;
-    bool ludt = msg->type() == SS7MsgSCCP::LUDT;
+    bool ludt = msg->isLongDataMessage();
     // next decode any mandatory variable parameters the message should have
     while ((ptype = *plist++) != SS7MsgSCCP::EndOfParameters) {
 	mustWarn = false;
@@ -4099,9 +4345,9 @@ void SS7SCCP::notify(SS7Layer3* link, int sls)
 {
     if (!(link && network()))
 	return;
+    setNetworkUp(network()->operational());
     if (m_management)
 	m_management->pointcodeStatus(link,network()->operational());
-    setNetworkUp(network()->operational());
 }
 
 void SS7SCCP::setNetworkUp(bool operational)
@@ -4109,9 +4355,13 @@ void SS7SCCP::setNetworkUp(bool operational)
     if (m_layer3Up == operational)
 	return;
     m_layer3Up = operational;
+    if (!m_management)
+	return;
     DDebug(this,DebugInfo,"L3 is %s %p",operational ? "operational" : "down", m_management);
-    if (m_layer3Up && m_management)
+    if (m_layer3Up)
 	m_management->mtpEndRestart();
+    else
+	m_management->stopSSTs();
 	
 }
 
@@ -4122,6 +4372,7 @@ void SS7SCCP::routeStatusChanged(SS7PointCode::Type type, const SS7PointCode& no
     dump << node;
     DDebug(this,DebugAll,"Route status changed %s %s %p",dump.c_str(),SS7Route::stateName(state),m_management);
 #endif
+    state = network()->getRouteState(type,node);
     if (m_management)
 	m_management->routeStatus(type,node,state);
 }
@@ -4334,12 +4585,16 @@ void SS7ItuSccpManagement::manageSccpRemoteStatus(SccpRemote* rsccp, SS7Route::S
 	    // Discontinue all tests for the remote sccp
 	    SccpSubsystem* ss = new SccpSubsystem(1);
 	    stopSst(rsccp,0,ss); // Stop all sst except management
+	    // Do not start SST if the route is down the message will fail to be
+	    // sent. The status will be changed to allowed when the route is up
 	    TelEngine::destruct(ss);
-	    startSst(rsccp,ss); // Start sst for ssn = 1 if not already started
 	    localBroadcast(SCCP::PointCodeStatusIndication,rsccp->getPackedPointcode(),PCInaccessible,-1,0);
 	    localBroadcast(SCCP::PointCodeStatusIndication,rsccp->getPackedPointcode(),-1,SccpRemoteInaccessible,0);
 	    break;
 	}
+	case SS7Route::Unknown:
+	    rsccp->setState(SCCPManagement::Unknown);
+	    break;
 	default:
 	    DDebug(this,DebugNote,"Unhandled remote sccp status '%s'",SS7Route::stateName(newState));
     }
@@ -4596,6 +4851,9 @@ void SS7AnsiSccpManagement::manageSccpRemoteStatus(SccpRemote* rsccp, SS7Route::
 		localBroadcast(SCCP::StatusIndication,-1,-1,-1,-1,ss1->getSSN(),UserOutOfService);
 	    break;
 	}
+	case SS7Route::Unknown:
+	    rsccp->setState(SCCPManagement::Unknown);
+	    break;
 	default:
 	    DDebug(this,DebugNote,"Unhandled remote sccp status '%s'",SS7Route::stateName(newState));
     }

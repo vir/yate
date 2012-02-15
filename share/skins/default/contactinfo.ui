@@ -28,21 +28,12 @@
    </size>
   </property>
   <property name="windowIcon" >
-   <iconset>info.png</iconset>
-  </property>
-  <property name="styleSheet" >
-   <string>QWidget {&#xd;
-  color: black;&#xd;
-}&#xd;
-QWidget#contactinfo {&#xd;
-  background-color: #e0dfe3;&#xd;
-}&#xd;
-QLabel {&#xd;
-  background: none;&#xd;
-}&#xd;
-</string>
+   <iconset>contactinfo_title.png</iconset>
   </property>
   <property name="_yate_destroyonhide" stdset="0" >
+   <bool>true</bool>
+  </property>
+  <property name="_yate_window" stdset="0" >
    <bool>true</bool>
   </property>
   <layout class="QVBoxLayout" >
@@ -394,6 +385,11 @@ color:blue;</string>
        <verstretch>0</verstretch>
       </sizepolicy>
      </property>
+     <property name="styleSheet" >
+      <string>QFrame#frame_resources {
+  border: 1px solid #717fa0;
+}</string>
+     </property>
      <property name="_yate_uiwidget" stdset="0" >
       <bool>true</bool>
      </property>
@@ -438,12 +434,45 @@ color:blue;</string>
       </spacer>
      </item>
      <item>
-      <widget class="QPushButton" name="chatcontact_edit" >
+      <widget class="QToolButton" name="chatcontact_edit" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>0</width>
+         <height>26</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>16777215</width>
+         <height>26</height>
+        </size>
+       </property>
+       <property name="toolTip" >
+        <string>Edit the selected account</string>
+       </property>
        <property name="text" >
         <string>Edit</string>
        </property>
        <property name="icon" >
         <iconset>edit.png</iconset>
+       </property>
+       <property name="toolButtonStyle" >
+        <enum>Qt::ToolButtonTextBesideIcon</enum>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>edit.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>edit_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>edit_hover.png</string>
        </property>
        <property name="_yate_identity" stdset="0" >
         <string>chatcontact_edit</string>
@@ -451,15 +480,42 @@ color:blue;</string>
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="button_hide" >
+      <widget class="QToolButton" name="button_hide" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>0</width>
+         <height>26</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>16777215</width>
+         <height>26</height>
+        </size>
+       </property>
        <property name="text" >
-        <string>Close</string>
+        <string>Cancel</string>
        </property>
        <property name="icon" >
-        <iconset>close.png</iconset>
+        <iconset>cancel.png</iconset>
        </property>
-       <property name="shortcut" >
-        <string>Esc</string>
+       <property name="toolButtonStyle" >
+        <enum>Qt::ToolButtonTextBesideIcon</enum>
+       </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>cancel.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>cancel_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>cancel_hover.png</string>
        </property>
       </widget>
      </item>

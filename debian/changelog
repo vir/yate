@@ -1,3 +1,9 @@
+yate (3.3.3.vir2012021602) UNRELEASED; urgency=low
+
+  * library filename fix
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Thu, 16 Feb 2012 11:51:15 +0400
+
 yate (3.3.3.vir2012021601) UNRELEASED; urgency=low
 
   * Merged upstream changes. Javascript module name typo fixed.

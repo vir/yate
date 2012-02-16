@@ -2030,6 +2030,33 @@ public:
 	bool minimal = false, bool data = false);
 
     /**
+     * Retrieve peer used to reconnect. This method is thread safe
+     * @param buf Destination buffer
+     */
+    inline void getReconnPeer(String& buf) {
+	    Lock lck(m_mutex);
+	    buf = m_peerId;
+	}
+    /**
+     * Check if the peer used to reconnect is alive
+     * @return True if the peer used to reconnect is alive
+     */
+    inline bool hasReconnPeer()
+	{ return 0 != getReconnPeer(false); }
+
+    /**
+     * Get peer used to reconnect
+     * @param ref True to return a referenced pointer
+     * @return CallEndpoint pointer or 0 if not found
+     */
+    CallEndpoint* getReconnPeer(bool ref = true);
+
+    /**
+     * Drop peer used to reconnect
+     */
+    void dropReconnPeer(const char* reason = 0);
+
+    /**
      * Lookup for a notification id
      * @param notif The notification's name
      * @param def Default value to return if not found
@@ -2209,8 +2236,9 @@ public:
      * Drop a channel
      * @param chan Channel id
      * @param reason Optional reason
+     * @param peer Set it to true to drop a client channel peer used to reconnect
      */
-    static void dropChan(const String& chan, const char* reason = 0);
+    static void dropChan(const String& chan, const char* reason = 0, bool peer = false);
 
     /**
      * The name to use when the client is in conference

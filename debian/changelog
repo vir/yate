@@ -1,3 +1,15 @@
+yate (3.3.3.svn4910) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4910: + Packaging new files (UI and
+    scripting)  + Dependencies corrected a bit  + typo fix  + library
+    filename fix  + Added support to set height for widgets inside
+    custom objects. Added support to set layout margins when building a
+    custom widget in a frame.  + Change channel item when conference is
+    started. Show the initial channel also to allow removing it's peer
+    from conference without closing it.  + Changed images.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 17 Feb 2012 02:19:19 +0400
+
 yate (3.3.3.svn4907) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4907: + Fixed property name in style sheet.

@@ -653,7 +653,7 @@ QScrollBar::right-arrow:pressed { border: 1px solid #717fa0; }
              <string>property:itemsExpandable=false</string>
              <string>property:rootIsDecorated=false</string>
              <string>property:allColumnsShowFocus=false</string>
-             <string>property:styleSheet=QTreeWidget {background: transparent; selection-background:#ffffff;}</string>
+             <string>property:styleSheet=QTreeWidget {background: transparent; selection-background-color:#ffffff;}</string>
              <string>property:_yate_itemui=transfer_start:channel_transfer_start.ui</string>
              <string>property:_yate_itemui=transfer_item:channel_transfer_item.ui</string>
              <string>property:_yate_itemui=conf_add:channel_conf_add.ui</string>

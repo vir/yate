@@ -536,6 +536,14 @@ public:
      */
     static void setWidgetAttributes(QWidget* w, const String& attrs);
 
+    /**
+     * Set a widget's height
+     * @param w The widget
+     * @param height Height value. If boolean, Increase(true)/decrease(false) widget
+     *  height from _yate_height_delta property. Set widget height otherwise
+     */
+    static void setWidgetHeight(QWidget* w, const String& height);
+
 protected:
     virtual void loadWindows(const char* file = 0);
 private:

@@ -1,3 +1,3 @@
-AppVerName=Yate 3.3.3 - alpha1
-AppVersion=3.3.3
-VersionInfoVersion=3.3.3.1
+AppVerName=Yate 4.0.0 - 1
+AppVersion=4.0.0
+VersionInfoVersion=4.0.0.1

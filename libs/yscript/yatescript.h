@@ -58,6 +58,12 @@ class YSCRIPT_API ExpExtender
 {
 public:
     /**
+     * Destructor
+     */
+    virtual ~ExpExtender()
+	{ }
+
+    /**
      * Retrieve the reference counted object owning this interface
      * @return Pointer to object owning the extender, NULL if no ownership
      */

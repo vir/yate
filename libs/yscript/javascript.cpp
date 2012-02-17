@@ -321,7 +321,7 @@ bool JsCode::link()
 	    continue;
 	long int lbl = l->number();
 	for (unsigned int j = 0; j < n; i++) {
-	    ExpOperation* jmp = static_cast<const ExpOperation*>(m_linked[j]);
+	    const ExpOperation* jmp = static_cast<const ExpOperation*>(m_linked[j]);
 	    if (!jmp || jmp->number() != lbl)
 		continue;
 	    Opcode op = OpcNone;
@@ -342,6 +342,7 @@ bool JsCode::link()
 	    m_linked.set(new ExpOperation(op,0,offs,jmp->barrier()),j);
 	}
     }
+    return true;
 }
 
 bool JsCode::keywordChar(char c) const
@@ -932,7 +933,7 @@ bool JsCode::jumpRelative(long int offset, GenObject* context) const
 	return false;
     unsigned int& index = static_cast<JsRunner*>(context)->m_index;
     long int i = index + offset;
-    if (i < 0 || i > m_linked.length())
+    if (i < 0 || i > (long int)m_linked.length())
 	return false;
     index = i;
     return true;

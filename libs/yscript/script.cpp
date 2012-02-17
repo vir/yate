@@ -57,9 +57,9 @@ bool ScriptParser::parseFile(const char* name, bool fragment)
     int64_t len = f.length();
     if (len <= 0 || len > 65535)
 	return false;
-    DataBlock data(0,len+1);
+    DataBlock data(0,(unsigned int)len+1);
     char* text = (char*)data.data();
-    if (f.readData(text,len) != len)
+    if (f.readData(text,(int)len) != len)
 	return false;
     text[len] = '\0';
     return parse(text,fragment);

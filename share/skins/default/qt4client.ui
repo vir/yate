@@ -381,7 +381,7 @@
   border: 0px solid #717fa0;
   border-radius: 0px;
   font-size: 11px;
-  background: white;
+  background: transparent;
 }
 QToolButton:checked {
   padding-top: 0px;
@@ -452,7 +452,7 @@ QToolButton:checked {
   border: 0px solid #717fa0;
   border-radius: 0px;
   font-size: 11px;
-  background: white;
+  background: transparent;
 }
 QToolButton:checked {
   padding-top: 0px;
@@ -523,7 +523,7 @@ QToolButton:checked {
   border: 0px solid #717fa0;
   border-radius: 0px;
   font-size: 11px;
-  background: white;
+  background: transparent;
 }
 QToolButton:checked {
   padding-top: 0px;

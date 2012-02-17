@@ -2960,7 +2960,7 @@ QTextEdit {
   </action>
   <action name="setStatusOnline" >
    <property name="icon" >
-    <iconset>status_online.png</iconset>
+    <iconset>status_online_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Online</string>
@@ -2968,7 +2968,7 @@ QTextEdit {
   </action>
   <action name="setStatusBusy" >
    <property name="icon" >
-    <iconset>status_busy.png</iconset>
+    <iconset>status_busy_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Busy</string>
@@ -2976,7 +2976,7 @@ QTextEdit {
   </action>
   <action name="setStatusAway" >
    <property name="icon" >
-    <iconset>status_away.png</iconset>
+    <iconset>status_away_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Away</string>
@@ -2984,7 +2984,7 @@ QTextEdit {
   </action>
   <action name="setStatusXa" >
    <property name="icon" >
-    <iconset>status_xa.png</iconset>
+    <iconset>status_xa_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Extended away</string>
@@ -2992,7 +2992,7 @@ QTextEdit {
   </action>
   <action name="setStatusDnd" >
    <property name="icon" >
-    <iconset>status_dnd.png</iconset>
+    <iconset>status_dnd_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Do Not Disturb</string>
@@ -3000,7 +3000,7 @@ QTextEdit {
   </action>
   <action name="setStatusOffline" >
    <property name="icon" >
-    <iconset>status_offline.png</iconset>
+    <iconset>status_offline_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Offline</string>

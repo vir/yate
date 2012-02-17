@@ -6,3 +6,13 @@ QComboBox {
 QComboBox::drop-down {
   border-left: 0px;
 }
+
+/* QTabWidget and QTabBar */
+
+QTabWidget::pane {
+  top: 1px;
+}
+
+QTabBar::tab {
+  padding-right: 2px;
+}

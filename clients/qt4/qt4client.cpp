@@ -4519,7 +4519,6 @@ bool QtUIWidget::setParams(QObject* parent, const NamedList& params)
 	    buildWidgetItemMenu(qobject_cast<QWidget*>(parent),YOBJECT(NamedList,ns),cName);
 	else if (n == s_height) {
 	    QString tmp = buildQChildName(pName,cName);
-	    QWidget* p = qobject_cast<QWidget*>(parent);
 	    QWidget* w = qFindChild<QWidget*>(qobject_cast<QWidget*>(parent),tmp);
 	    QtClient::setWidgetHeight(w,*ns);
 	}

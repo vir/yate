@@ -270,28 +270,28 @@
       <item>
        <widget class="QLabel" name="status_image" >
         <property name="sizePolicy" >
-         <sizepolicy vsizetype="Expanding" hsizetype="Fixed" >
+         <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
           <horstretch>0</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
         </property>
         <property name="minimumSize" >
          <size>
-          <width>32</width>
-          <height>0</height>
+          <width>16</width>
+          <height>16</height>
          </size>
         </property>
         <property name="maximumSize" >
          <size>
-          <width>32</width>
-          <height>16777215</height>
+          <width>16</width>
+          <height>16</height>
          </size>
+        </property>
+        <property name="scaledContents" >
+         <bool>true</bool>
         </property>
         <property name="alignment" >
          <set>Qt::AlignCenter</set>
-        </property>
-        <property name="indent" >
-         <number>5</number>
         </property>
        </widget>
       </item>
@@ -306,8 +306,8 @@
         <property name="styleSheet" >
          <string/>
         </property>
-        <property name="text" >
-         <string/>
+        <property name="indent" >
+         <number>4</number>
         </property>
        </widget>
       </item>

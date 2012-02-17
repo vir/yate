@@ -25,9 +25,44 @@
 
 using namespace TelEngine;
 
+namespace { // anonymous
+
+class BasicContext: public ScriptContext, public Mutex
+{
+    YCLASS(BasicContext,ScriptContext)
+public:
+    inline explicit BasicContext()
+	: Mutex(true,"BasicContext")
+	{ }
+    virtual Mutex* mutex()
+	{ return this; }
+};
+
+}; // anonymous namespace
+
+
 ScriptParser::~ScriptParser()
 {
     TelEngine::destruct(m_code);
+}
+
+bool ScriptParser::parseFile(const char* name, bool fragment)
+{
+    if (TelEngine::null(name))
+	return false;
+    XDebug(DebugAll,"Opening script '%s'",name);
+    File f;
+    if (!f.openPath(name))
+	return false;
+    int64_t len = f.length();
+    if (len <= 0 || len > 65535)
+	return false;
+    DataBlock data(0,(unsigned int)len+1);
+    char* text = (char*)data.data();
+    if (f.readData(text,(int)len) != len)
+	return false;
+    text[len] = '\0';
+    return parse(text,fragment);
 }
 
 void ScriptParser::setCode(ScriptCode* code)
@@ -41,25 +76,56 @@ void ScriptParser::setCode(ScriptCode* code)
     TelEngine::destruct(tmp);
 }
 
+ScriptContext* ScriptParser::createContext() const
+{
+    return new BasicContext;
+}
 
-bool ScriptContext::runFunction(const ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper, void* context)
+ScriptRun* ScriptParser::createRunner(ScriptCode* code, ScriptContext* context) const
+{
+    if (!code)
+	return 0;
+    ScriptContext* ctxt = 0;
+    if (!context)
+	context = ctxt = createContext();
+    ScriptRun* runner = new ScriptRun(code,context);
+    TelEngine::destruct(ctxt);
+    return runner;
+}
+
+
+// RTTI Interface access
+void* ScriptContext::getObject(const String& name) const
+{
+    if (name == YSTRING("ExpExtender"))
+	return const_cast<ExpExtender*>(static_cast<const ExpExtender*>(this));
+    return RefObject::getObject(name);
+}
+
+bool ScriptContext::hasField(ObjList& stack, const String& name, GenObject* context) const
+{
+    return m_params.getParam(name) != 0;
+}
+
+NamedString* ScriptContext::getField(ObjList& stack, const String& name, GenObject* context) const
+{
+    return m_params.getParam(name);
+}
+
+bool ScriptContext::runFunction(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
     return false;
 }
 
-bool ScriptContext::runField(const ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper, void* context)
+bool ScriptContext::runField(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    if (!eval)
-	return false;
     XDebug(DebugAll,"ScriptContext::runField '%s'",oper.name().c_str());
-    ExpEvaluator::pushOne(stack,new ExpOperation(m_params[oper.name()],oper.name()));
+    ExpEvaluator::pushOne(stack,new ExpOperation(m_params[oper.name()],oper.name(),true));
     return true;
 }
 
-bool ScriptContext::runAssign(const ExpEvaluator* eval, const ExpOperation& oper, void* context)
+bool ScriptContext::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    if (!eval)
-	return false;
     XDebug(DebugAll,"ScriptContext::runAssign '%s'='%s'",oper.name().c_str(),oper.c_str());
     m_params.setParam(oper.name(),oper);
     return true;
@@ -80,19 +146,21 @@ ScriptRun::ScriptRun(ScriptCode* code, ScriptContext* context)
     : Mutex(true,"ScriptRun"),
       m_state(Invalid)
 {
+    XDebug(DebugAll,"ScriptRun::ScriptRun(%p,%p) [%p]",code,context,this);
     if (code)
 	code->ref();
     m_code = code;
     if (context)
 	context->ref();
     else
-	context = new ScriptContext;
+	context = new BasicContext;
     m_context = context;
     reset();
 }
 
 ScriptRun::~ScriptRun()
 {
+    XDebug(DebugAll,"ScriptRun::~ScriptRun [%p]",this);
     lock();
     m_state = Invalid;
     TelEngine::destruct(m_code);
@@ -121,11 +189,10 @@ ScriptRun::Status ScriptRun::resume()
     if (Running != m_state)
 	return m_state;
     RefPointer<ScriptCode> code = m_code;
-    RefPointer<ScriptContext> ctxt = m_context;
-    if (!(code && ctxt))
+    if (!(code && context()))
 	return Invalid;
     mylock.drop();
-    return code->evaluate(*ctxt,stack()) ? Succeeded : Failed;
+    return code->evaluate(*this,stack()) ? Succeeded : Failed;
 }
 
 // Execute one or more instructions of code from where it was left
@@ -154,6 +221,19 @@ ScriptRun::Status ScriptRun::run()
     while (Incomplete == s)
 	s = execute();
     return s;
+}
+
+// Execute an assignment operation
+bool ScriptRun::runAssign(const ExpOperation& oper, GenObject* context)
+{
+    Lock mylock(this);
+    if (Invalid == m_state || !m_code || !m_context)
+	return false;
+    RefPointer<ScriptContext> ctxt = m_context;
+    mylock.drop();
+    ObjList noStack;
+    Lock ctxLock(ctxt->mutex());
+    return ctxt->runAssign(noStack,oper,context);
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

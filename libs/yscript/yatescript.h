@@ -54,39 +54,60 @@ class ExpOperation;
  * This class allows extending ExpEvaluator to implement custom fields and functions
  * @short ExpEvaluator extending interface
  */
-class YSCRIPT_API ExpExtender : public RefObject
+class YSCRIPT_API ExpExtender
 {
-    YCLASS(ExpExtender,RefObject)
 public:
     /**
+     * Retrieve the reference counted object owning this interface
+     * @return Pointer to object owning the extender, NULL if no ownership
+     */
+    virtual RefObject* refObj();
+
+    /**
+     * Check if a certain field is assigned in extender
+     * @param stack Evaluation stack in use
+     * @param name Name of the field to test
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return True if the field is present
+     */
+    virtual bool hasField(ObjList& stack, const String& name, GenObject* context) const;
+
+    /**
+     * Get a pointer to a field in extender
+     * @param stack Evaluation stack in use
+     * @param name Name of the field to retrieve
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return Pointer to field, NULL if not present
+     */
+    virtual NamedString* getField(ObjList& stack, const String& name, GenObject* context) const;
+
+    /**
      * Try to evaluate a single function
-     * @param eval Pointer to the caller evaluator object
      * @param stack Evaluation stack in use, parameters are popped off this stack
      *  and results are pushed back on stack
      * @param oper Function to evaluate
-     * @param context Pointer to arbitrary data passed from evaluation methods
+     * @param context Pointer to arbitrary object passed from evaluation methods
      * @return True if evaluation succeeded
      */
-    virtual bool runFunction(const ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper, void* context);
+    virtual bool runFunction(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
     /**
      * Try to evaluate a single field
-     * @param eval Pointer to the caller evaluator object
      * @param stack Evaluation stack in use, field value must be pushed on it
      * @param oper Field to evaluate
-     * @param context Pointer to arbitrary data passed from evaluation methods
+     * @param context Pointer to arbitrary object passed from evaluation methods
      * @return True if evaluation succeeded
      */
-    virtual bool runField(const ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper, void* context);
+    virtual bool runField(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
     /**
      * Try to assign a value to a single field
-     * @param eval Pointer to the caller evaluator object
+     * @param stack Evaluation stack in use
      * @param oper Field to assign to, contains the field name and new value
-     * @param context Pointer to arbitrary data passed from evaluation methods
+     * @param context Pointer to arbitrary object passed from evaluation methods
      * @return True if assignment succeeded
      */
-    virtual bool runAssign(const ExpEvaluator* eval, const ExpOperation& oper, void* context);
+    virtual bool runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context);
 };
 
 /**
@@ -166,10 +187,12 @@ public:
 	OpcField,   // (A --- A)
 	// Call of function with N parameters
 	OpcFunc,    // (... funcN --- func(...))
-	// Private extension area for derived classes
-	OpcPrivate = 0x0100,
+	// Label for a jump
+	OpcLabel,   // ( --- )
 	// Field assignment - can be ORed with other binary operators
-	OpcAssign  = 0x1000 // (A B --- B,(&A=B))
+	OpcAssign  = 0x0100, // (A B --- B,(&A=B))
+	// Private extension area for derived classes
+	OpcPrivate = 0x1000
     };
 
     /**
@@ -199,25 +222,26 @@ public:
     /**
      * Parse and compile an expression
      * @param expr Pointer to expression to compile
+     * @param context Pointer to arbitrary object to be passed to called methods
      * @return Number of expressions compiled, zero on error
      */
-    int compile(const char* expr);
+    int compile(const char* expr, GenObject* context = 0);
 
     /**
      * Evaluate the expression, optionally return results
      * @param results List to fill with results row
-     * @param context Pointer to arbitrary data to be passed to called methods
+     * @param context Pointer to arbitrary object to be passed to called methods
      * @return True if expression evaluation succeeded, false on failure
      */
-    bool evaluate(ObjList* results, void* context = 0) const;
+    bool evaluate(ObjList* results, GenObject* context = 0) const;
 
     /**
      * Evaluate the expression, return computed results
      * @param results List to fill with results row
-     * @param context Pointer to arbitrary data to be passed to called methods
+     * @param context Pointer to arbitrary object to be passed to called methods
      * @return True if expression evaluation succeeded, false on failure
      */
-    inline bool evaluate(ObjList& results, void* context = 0) const
+    inline bool evaluate(ObjList& results, GenObject* context = 0) const
 	{ return evaluate(&results,context); }
 
     /**
@@ -225,19 +249,19 @@ public:
      * @param results List of parameters to populate with results row
      * @param index Index of result row, zero to not include an index
      * @param prefix Prefix to prepend to parameter names
-     * @param context Pointer to arbitrary data to be passed to called methods
+     * @param context Pointer to arbitrary object to be passed to called methods
      * @return Number of result columns, -1 on failure
      */
-    int evaluate(NamedList& results, unsigned int index = 0, const char* prefix = 0, void* context = 0) const;
+    int evaluate(NamedList& results, unsigned int index = 0, const char* prefix = 0, GenObject* context = 0) const;
 
     /**
      * Evaluate the expression, return computed results
      * @param results Array of result rows to populate
      * @param index Index of result row, zero to just set column headers
-     * @param context Pointer to arbitrary data to be passed to called methods
+     * @param context Pointer to arbitrary object to be passed to called methods
      * @return Number of result columns, -1 on failure
      */
-    int evaluate(Array& results, unsigned int index, void* context = 0) const;
+    int evaluate(Array& results, unsigned int index, GenObject* context = 0) const;
 
     /**
      * Simplify the expression, performs constant folding
@@ -245,6 +269,13 @@ public:
      */
     inline bool simplify()
 	{ return trySimplify(); }
+
+    /**
+     * Check if a parse or compile error was encountered
+     * @return True if the evaluator encountered an error
+     */
+    inline bool inError() const
+	{ return m_inError; }
 
     /**
      * Check if the expression is empty (no operands or operators)
@@ -330,6 +361,14 @@ public:
      */
     static ExpOperation* popAny(ObjList& stack);
 
+    /**
+     * Pops and evaluate the value of an operand off an evaluation stack, does not pop a barrier
+     * @param stack Evaluation stack to remove the operand from
+     * @param context Pointer to arbitrary object to be passed to called methods
+     * @return Value removed from stack, NULL if stack underflow or field not evaluable
+     */
+    virtual ExpOperation* popValue(ObjList& stack, GenObject* context = 0) const;
+
 protected:
     /**
      * Helper method to skip over whitespaces
@@ -379,12 +418,37 @@ protected:
     bool gotError(const char* error = 0, const char* text = 0) const;
 
     /**
+     * Helper method to set error flag and display debugging errors internally
+     * @param error Text of the error
+     * @param text Optional text that caused the error
+     * @return Always returns false
+     */
+    bool gotError(const char* error = 0, const char* text = 0);
+
+    /**
      * Runs the parser and compiler for one (sub)expression
      * @param expr Pointer to text to parse, gets advanced
      * @param stop Optional character expected after the expression
+     * @param nested The instruction within this expression is nested
      * @return True if one expression was compiled and a separator follows
      */
-    virtual bool runCompile(const char*& expr, char stop = 0);
+    virtual bool runCompile(const char*& expr, char stop = 0, Opcode nested = OpcNone);
+
+    /**
+     * Skip over comments and whitespaces
+     * @param expr Pointer to expression cursor, gets advanced
+     * @param context Pointer to arbitrary object to be passed to called methods
+     * @return First character after comments or whitespaces where expr points
+     */
+    virtual char skipComments(const char*& expr, GenObject* context = 0) const;
+
+    /**
+     * Process top-level preprocessor directives
+     * @param expr Pointer to expression cursor, gets advanced
+     * @param context Pointer to arbitrary object to be passed to called methods
+     * @return Number of expressions compiled, negative if no more directives
+     */
+    virtual int preProcess(const char*& expr, GenObject* context = 0);
 
     /**
      * Returns next operator in the parsed text
@@ -439,16 +503,18 @@ protected:
     /**
      * Get an instruction or block, advance parsing pointer past it
      * @param expr Pointer to text to parse, gets advanced on success
+     * @param nested The instruction within this one is nested
      * @return True if succeeded, must add the operands internally
      */
-    virtual bool getInstruction(const char*& expr);
+    virtual bool getInstruction(const char*& expr, Opcode nested = OpcNone);
 
     /**
      * Get an operand, advance parsing pointer past it
      * @param expr Pointer to text to parse, gets advanced on success
+     * @param endOk Consider reaching the end of string a success
      * @return True if succeeded, must add the operand internally
      */
-    virtual bool getOperand(const char*& expr);
+    virtual bool getOperand(const char*& expr, bool endOk = true);
 
     /**
      * Get a numerical operand, advance parsing pointer past it
@@ -481,21 +547,35 @@ protected:
     /**
      * Add a simple operator to the expression
      * @param oper Operator code to add
-     * @param barrier True to create an exavuator stack barrier
+     * @param barrier True to create an evaluator stack barrier
      */
-    void addOpcode(Opcode oper, bool barrier = false);
+    ExpOperation* addOpcode(Opcode oper, bool barrier = false);
+
+    /**
+     * Add a simple operator to the expression
+     * @param oper Operator code to add
+     * @param value Integer value to add
+     * @param barrier True to create an evaluator stack barrier
+     */
+    ExpOperation* addOpcode(Opcode oper, long int value, bool barrier = false);
 
     /**
      * Add a string constant to the expression
      * @param value String value to add, will be pushed on execution
      */
-    void addOpcode(const String& value);
+    ExpOperation* addOpcode(const String& value);
 
     /**
      * Add an integer constant to the expression
      * @param value Integer value to add, will be pushed on execution
      */
-    void addOpcode(long int value);
+    ExpOperation* addOpcode(long int value);
+
+    /**
+     * Add a boolean constant to the expression
+     * @param value Boolean value to add, will be pushed on execution
+     */
+    ExpOperation* addOpcode(bool value);
 
     /**
      * Add a function or field to the expression
@@ -504,7 +584,7 @@ protected:
      * @param value Numerical value used as parameter count to functions
      * @param barrier True to create an exavuator stack barrier
      */
-    void addOpcode(Opcode oper, const String& name, long int value = 0, bool barrier = false);
+    ExpOperation* addOpcode(Opcode oper, const String& name, long int value = 0, bool barrier = false);
 
     /**
      * Try to apply simplification to the expression
@@ -513,84 +593,77 @@ protected:
     virtual bool trySimplify();
 
     /**
-     * Pops and evaluate the value of an operand off an evaluation stack, does not pop a barrier
-     * @param stack Evaluation stack to remove the operand from
-     * @param context Pointer to arbitrary data to be passed to called methods
-     * @return Value removed from stack, NULL if stack underflow or field not evaluable
-     */
-    virtual ExpOperation* popValue(ObjList& stack, void* context = 0) const;
-
-    /**
      * Try to evaluate a list of operation codes
      * @param opcodes List of operation codes to evaluate
      * @param stack Evaluation stack in use, results are left on stack
-     * @param context Pointer to arbitrary data to be passed to called methods
+     * @param context Pointer to arbitrary object to be passed to called methods
      * @return True if evaluation succeeded
      */
-    virtual bool runEvaluate(const ObjList& opcodes, ObjList& stack, void* context = 0) const;
+    virtual bool runEvaluate(const ObjList& opcodes, ObjList& stack, GenObject* context = 0) const;
 
     /**
      * Try to evaluate a vector of operation codes
      * @param opcodes ObjVector of operation codes to evaluate
      * @param stack Evaluation stack in use, results are left on stack
-     * @param context Pointer to arbitrary data to be passed to called methods
+     * @param context Pointer to arbitrary object to be passed to called methods
      * @param index Index in operation codes to start evaluation from
      * @return True if evaluation succeeded
      */
-    virtual bool runEvaluate(const ObjVector& opcodes, ObjList& stack, void* context = 0, unsigned int index = 0) const;
+    virtual bool runEvaluate(const ObjVector& opcodes, ObjList& stack, GenObject* context = 0, unsigned int index = 0) const;
 
     /**
      * Try to evaluate the expression
      * @param stack Evaluation stack in use, results are left on stack
-     * @param context Pointer to arbitrary data to be passed to called methods
+     * @param context Pointer to arbitrary object to be passed to called methods
      * @return True if evaluation succeeded
      */
-    virtual bool runEvaluate(ObjList& stack, void* context = 0) const;
+    virtual bool runEvaluate(ObjList& stack, GenObject* context = 0) const;
 
     /**
      * Convert all fields on the evaluation stack to their values
      * @param stack Evaluation stack to evaluate fields from
-     * @param context Pointer to arbitrary data to be passed to called methods
+     * @param context Pointer to arbitrary object to be passed to called methods
      * @return True if all fields on the stack were evaluated properly
      */
-    virtual bool runAllFields(ObjList& stack, void* context = 0) const;
+    virtual bool runAllFields(ObjList& stack, GenObject* context = 0) const;
 
     /**
      * Try to evaluate a single operation
      * @param stack Evaluation stack in use, operands are popped off this stack
      *  and results are pushed back on stack
      * @param oper Operation to execute
-     * @param context Pointer to arbitrary data to be passed to called methods
+     * @param context Pointer to arbitrary object to be passed to called methods
      * @return True if evaluation succeeded
      */
-    virtual bool runOperation(ObjList& stack, const ExpOperation& oper, void* context = 0) const;
+    virtual bool runOperation(ObjList& stack, const ExpOperation& oper, GenObject* context = 0) const;
 
     /**
      * Try to evaluate a single function
      * @param stack Evaluation stack in use, parameters are popped off this stack
      *  and results are pushed back on stack
      * @param oper Function to evaluate
-     * @param context Pointer to arbitrary data to be passed to called methods
+     * @param context Pointer to arbitrary object to be passed to called methods
      * @return True if evaluation succeeded
      */
-    virtual bool runFunction(ObjList& stack, const ExpOperation& oper, void* context = 0) const;
+    virtual bool runFunction(ObjList& stack, const ExpOperation& oper, GenObject* context = 0) const;
 
     /**
      * Try to evaluate a single field
      * @param stack Evaluation stack in use, field value must be pushed on it
      * @param oper Field to evaluate
-     * @param context Pointer to arbitrary data to be passed to called methods
+     * @param context Pointer to arbitrary object to be passed to called methods
      * @return True if evaluation succeeded
      */
-    virtual bool runField(ObjList& stack, const ExpOperation& oper, void* context = 0) const;
+    virtual bool runField(ObjList& stack, const ExpOperation& oper, GenObject* context = 0) const;
 
     /**
      * Try to assign a value to a single field
+     * @param stack Evaluation stack in use
      * @param oper Field to assign to, contains the field name and new value
-     * @param context Pointer to arbitrary data to be passed to called methods
+     * @param context Pointer to arbitrary object to be passed to called methods
      * @return True if assignment succeeded
      */
-    virtual bool runAssign(const ExpOperation& oper, void* context = 0) const;
+    virtual bool runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context = 0) const;
 
     /**
      * Internally used operator dictionary
@@ -606,6 +679,11 @@ protected:
      * Internally used list of operands and operator codes
      */
     ObjList m_opcodes;
+
+    /**
+     * Flag that we encountered a parse or compile error
+     */
+    bool m_inError;
 
 private:
     ExpExtender* m_extender;
@@ -652,11 +730,23 @@ public:
      * Push String constructor
      * @param value String constant to push on stack on execution
      * @param name Optional of the newly created constant
+     * @param autoNum Automatically convert to number if possible
      */
-    inline explicit ExpOperation(const String& value, const char* name = 0)
+    inline explicit ExpOperation(const String& value, const char* name = 0, bool autoNum = false)
 	: NamedString(name,value),
-	  m_opcode(ExpEvaluator::OpcPush), m_number(nonInteger()),
+	  m_opcode(ExpEvaluator::OpcPush),
+	  m_number(autoNum ? value.toLong(nonInteger()) : nonInteger()),
 	  m_barrier(false)
+	{ if (autoNum && value.isBoolean()) m_number = value.toBoolean() ? 1 : 0; }
+
+    /**
+     * Push literal string constructor
+     * @param value String constant to push on stack on execution
+     * @param name Optional of the newly created constant
+     */
+    inline explicit ExpOperation(const char* value, const char* name = 0)
+	: NamedString(name,value),
+	  m_opcode(ExpEvaluator::OpcPush), m_number(nonInteger()), m_barrier(false)
 	{ }
 
     /**
@@ -670,6 +760,16 @@ public:
 	{ String::operator=((int)value); }
 
     /**
+     * Push Boolean constructor
+     * @param value Boolean constant to push on stack on execution
+     * @param name Optional of the newly created constant
+     */
+    inline explicit ExpOperation(bool value, const char* name = 0)
+	: NamedString(name,String::boolText(value)),
+	  m_opcode(ExpEvaluator::OpcPush), m_number(value ? 1 : 0), m_barrier(false)
+	{ }
+
+    /**
      * Constructor from components
      * @param oper Operation code
      * @param name Optional name of the operation or result
@@ -679,6 +779,18 @@ public:
     inline ExpOperation(ExpEvaluator::Opcode oper, const char* name = 0, long int value = nonInteger(), bool barrier = false)
 	: NamedString(name,""),
 	  m_opcode(oper), m_number(value), m_barrier(barrier)
+	{ }
+
+    /**
+     * Constructor of non-integer operation from components
+     * @param oper Operation code
+     * @param name Name of the operation or result
+     * @param value String value of operation
+     * @param barrier True if the operation is an expression barrier on the stack
+     */
+    inline ExpOperation(ExpEvaluator::Opcode oper, const char* name, const char* value, bool barrier = false)
+	: NamedString(name,value),
+	  m_opcode(oper), m_number(nonInteger()), m_barrier(barrier)
 	{ }
 
     /**
@@ -717,10 +829,99 @@ public:
     inline long int operator=(long int num)
 	{ m_number = num; String::operator=((int)num); return num; }
 
+    /**
+     * Clone and rename method
+     * @param name Name of the cloned operation
+     * @return New operation instance
+     */
+    virtual ExpOperation* clone(const char* name) const
+	{ return new ExpOperation(*this,name); }
+
+    /**
+     * Clone method
+     * @return New operation instance
+     */
+    inline ExpOperation* clone() const
+	{ return clone(name()); }
+
 private:
     ExpEvaluator::Opcode m_opcode;
     long int m_number;
     bool m_barrier;
+};
+
+/**
+ * Small helper class that simplifies declaring native functions
+ * @short Helper class to declare a native function
+ */
+class YSCRIPT_API ExpFunction : public ExpOperation
+{
+    YCLASS(ExpFunction,ExpOperation)
+public:
+    /**
+     * Constructor
+     * @param name Name of the function
+     * @param argc Number of arguments expected by function
+     */
+    inline ExpFunction(const char* name, long int argc = 0)
+	: ExpOperation(ExpEvaluator::OpcFunc,name,argc)
+	{ if (name) (*this) << "[function " << name << "()]"; }
+
+    /**
+     * Clone and rename method
+     * @param name Name of the cloned operation
+     * @return New operation instance
+     */
+    virtual ExpOperation* clone(const char* name) const;
+};
+
+/**
+ * Helper class that allows wrapping entire objects in an operation
+ * @short Object wrapper for evaluation
+ */
+class YSCRIPT_API ExpWrapper : public ExpOperation
+{
+public:
+    /**
+     * Constructor
+     * @param object Pointer to the object to wrap
+     * @param name Optional name of the wrapper
+     */
+    inline ExpWrapper(GenObject* object, const char* name = 0)
+	: ExpOperation(ExpEvaluator::OpcPush,name,
+	    object ? object->toString().c_str() : (const char*)0),
+	  m_object(object)
+	{ }
+
+    /**
+     * Destuctor, deletes the held object
+     */
+    virtual ~ExpWrapper()
+	{ TelEngine::destruct(m_object); }
+
+    /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
+     * Clone and rename method
+     * @param name Name of the cloned operation
+     * @return New operation instance
+     */
+    virtual ExpOperation* clone(const char* name) const;
+
+    /**
+     * Object access method
+     * @return Pointer to the held object
+     */
+    GenObject* object() const
+	{ return m_object; }
+
+private:
+    GenObject* m_object;
 };
 
 /**
@@ -756,25 +957,25 @@ public:
 
     /**
      * Evaluate the WHERE (selector) expression
-     * @param context Pointer to arbitrary data to be passed to called methods
+     * @param context Pointer to arbitrary object to be passed to called methods
      * @return True if the current row is part of selection
      */
-    virtual bool evalWhere(void* context = 0);
+    virtual bool evalWhere(GenObject* context = 0);
 
     /**
      * Evaluate the SELECT (results) expression
      * @param results List to fill with results row
-     * @param context Pointer to arbitrary data to be passed to called methods
+     * @param context Pointer to arbitrary object to be passed to called methods
      * @return True if evaluation succeeded
      */
-    virtual bool evalSelect(ObjList& results, void* context = 0);
+    virtual bool evalSelect(ObjList& results, GenObject* context = 0);
 
     /**
      * Evaluate the LIMIT expression and cache the result
-     * @param context Pointer to arbitrary data to be passed to called methods
+     * @param context Pointer to arbitrary object to be passed to called methods
      * @return Desired maximum number or result rows
      */
-    virtual unsigned int evalLimit(void* context = 0);
+    virtual unsigned int evalLimit(GenObject* context = 0);
 
     /**
      * Set the expression extender to use in all evaluators
@@ -792,12 +993,58 @@ protected:
 class ScriptRun;
 
 /**
+ * A class used to build stack based (posifix) script parsers and evaluators
+ * @short A script parser and evaluator
+ */
+class YSCRIPT_API ScriptEvaluator : public ExpEvaluator
+{
+    YNOCOPY(ScriptEvaluator);
+public:
+
+    /**
+     * Constructs ascript evaluator from an operator dictionary
+     * @param operators Pointer to operator dictionary, longest strings first
+     * @param unaryOps Pointer to unary operators dictionary, longest strings first
+     */
+    inline explicit ScriptEvaluator(const TokenDict* operators = 0, const TokenDict* unaryOps = 0)
+	: ExpEvaluator(operators,unaryOps)
+	{ }
+
+    /**
+     * Constructs a script evaluator from a parser style
+     * @param style Style of parsing to use
+     */
+    inline explicit ScriptEvaluator(Parser style)
+	: ExpEvaluator(style)
+	{ }
+
+    /**
+     * Try to execute a single operation
+     * @param stack Evaluation stack in use, operands are popped off this stack
+     *  and results are pushed back on stack
+     * @param oper Script operation to execute
+     * @param context Pointer to arbitrary object to be passed to called methods
+     * @return True if evaluation succeeded
+     */
+    inline bool runOperation(ObjList &stack, const ExpOperation &oper, GenObject* context = 0) const
+	{ return ExpEvaluator::runOperation(stack,oper,context); }
+
+    /**
+     * Convert all fields on the evaluation stack to their values
+     * @param stack Evaluation stack to evaluate fields from
+     * @param context Pointer to arbitrary object to be passed to called methods
+     * @return True if all fields on the stack were evaluated properly
+     */
+    inline bool runAllFields(ObjList& stack, GenObject* context = 0) const
+	{ return ExpEvaluator::runAllFields(stack,context); }
+};
+
+/**
  * A script execution context, holds global variables and objects
  * @short Script execution context
  */
-class YSCRIPT_API ScriptContext : public ExpExtender, public Mutex
+class YSCRIPT_API ScriptContext : public RefObject, public ExpExtender
 {
-    YCLASS(ScriptContext,ExpExtender)
 public:
     /**
      * Constructor
@@ -829,33 +1076,69 @@ public:
 	{ return m_params; }
 
     /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
+     * Retrieve the reference counted object owning this interface
+     * @return Pointer to this script context
+     */
+    virtual RefObject* refObj()
+	{ return this; }
+
+    /**
+     * Retrieve the Mutex object used to serialize object access, if any
+     * @return Pointer to the mutex or NULL if none applies
+     */
+    virtual Mutex* mutex() = 0;
+
+    /**
+     * Check if a certain field is assigned in context
+     * @param stack Evaluation stack in use
+     * @param name Name of the field to test
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return True if the field is present
+     */
+    virtual bool hasField(ObjList& stack, const String& name, GenObject* context) const;
+
+    /**
+     * Get a pointer to a field in the context
+     * @param stack Evaluation stack in use
+     * @param name Name of the field to retrieve
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return Pointer to field, NULL if not present
+     */
+    virtual NamedString* getField(ObjList& stack, const String& name, GenObject* context) const;
+
+    /**
      * Try to evaluate a single function in the context
-     * @param eval Pointer to the caller evaluator object
      * @param stack Evaluation stack in use, parameters are popped off this stack and results are pushed back on stack
      * @param oper Function to evaluate
      * @param context Pointer to context data passed from evaluation methods
      * @return True if evaluation succeeded
      */
-    virtual bool runFunction(const ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper, void* context);
+    virtual bool runFunction(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
     /**
      * Try to evaluate a single field in the context
-     * @param eval Pointer to the caller evaluator object
      * @param stack Evaluation stack in use, field value must be pushed on it
      * @param oper Field to evaluate
      * @param context Pointer to context data passed from evaluation methods
      * @return True if evaluation succeeded
      */
-    virtual bool runField(const ExpEvaluator* eval, ObjList& stack, const ExpOperation& oper, void* context);
+    virtual bool runField(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
     /**
      * Try to assign a value to a single field
-     * @param eval Pointer to the caller evaluator object
+     * @param stack Evaluation stack in use
      * @param oper Field to assign to, contains the field name and new value
      * @param context Pointer to context data passed from evaluation methods
      * @return True if assignment succeeded
      */
-    virtual bool runAssign(const ExpEvaluator* eval, const ExpOperation& oper, void* context);
+    virtual bool runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
 private:
     NamedList m_params;
@@ -878,10 +1161,10 @@ public:
 
     /**
      * Evaluation of a single code expression
-     * @param context Reference to the context to use in evaluation
+     * @param runner Reference to the runtime to use in evaluation
      * @param results List to fill with expression results
      */
-    virtual bool evaluate(ScriptContext& context, ObjList& results) const = 0;
+    virtual bool evaluate(ScriptRun& runner, ObjList& results) const = 0;
 };
 
 /**
@@ -917,7 +1200,9 @@ private:
  */
 class YSCRIPT_API ScriptRun : public GenObject, public Mutex
 {
+    friend class ScriptCode;
     YCLASS(ScriptRun,GenObject)
+    YNOCOPY(ScriptRun);
 public:
     /**
      * Runtime states
@@ -991,6 +1276,13 @@ public:
 	{ return m_stack; }
 
     /**
+     * Create a duplicate of the runtime with its own stack and state
+     * @return New clone of the runtime
+     */
+    inline ScriptRun* clone() const
+	{ return new ScriptRun(code(),context()); }
+
+    /**
      * Resets code execution to the beginning, does not clear context
      * @return Status of the runtime after reset
      */
@@ -1007,6 +1299,14 @@ public:
      * @return Final status of the runtime after code execution
      */
     Status run();
+
+    /**
+     * Try to assign a value to a single field in the script context
+     * @param oper Field to assign to, contains the field name and new value
+     * @param context Pointer to arbitrary object to be passed to called methods
+     * @return True if assignment succeeded
+     */
+    bool runAssign(const ExpOperation& oper, GenObject* context = 0);
 
 protected:
     /**
@@ -1038,9 +1338,24 @@ public:
     /**
      * Parse a string as script source code
      * @param text Source code text
+     * @param fragment True if the code is just an included fragment
      * @return True if the text was successfully parsed
      */
-    virtual bool parse(const char* text) = 0;
+    virtual bool parse(const char* text, bool fragment = false) = 0;
+
+    /**
+     * Parse a file as script source code
+     * @param name Source file name
+     * @param fragment True if the code is just an included fragment
+     * @return True if the file was successfully parsed
+     */
+    virtual bool parseFile(const char* name, bool fragment = false);
+
+    /**
+     * Clear any existing parsed code
+     */
+    inline void clear()
+	{ setCode(0); }
 
     /**
      * Retrieve the currently stored parsed code
@@ -1048,6 +1363,28 @@ public:
      */
     inline ScriptCode* code() const
 	{ return m_code; }
+
+    /**
+     * Create a context adequate for the parsed code
+     * @return A new script context
+     */
+    virtual ScriptContext* createContext() const;
+
+    /**
+     * Create a runner adequate for a block of parsed code
+     * @param code Parsed code block
+     * @param context Script context, an empty one will be allocated if NULL
+     * @return A new script runner, NULL if code is NULL
+     */
+    virtual ScriptRun* createRunner(ScriptCode* code, ScriptContext* context = 0) const;
+
+    /**
+     * Create a runner adequate for the parsed code
+     * @param context Script context, an empty one will be allocated if NULL
+     * @return A new script runner, NULL if code is not yet parsed
+     */
+    inline ScriptRun* createRunner(ScriptContext* context = 0) const
+	{ return createRunner(code(),context); }
 
 protected:
     /**
@@ -1071,33 +1408,65 @@ private:
  * Javascript Object class, base for all JS objects
  * @short Javascript Object
  */
-class YSCRIPT_API JsObject : public NamedList
+class YSCRIPT_API JsObject : public ScriptContext
 {
-    YCLASS(JsObject,NamedList)
+    YCLASS(JsObject,ScriptContext)
 public:
     /**
      * Constructor
      * @param name Name of the object
+     * @param mtx Pointer to the mutex that serializes this object
      * @param frozen True if the object is to be frozen from creation
      */
-    inline JsObject(const char* name = "Object", bool frozen = false)
-	: NamedList(String("[Object ") + name + "]"),
-	  m_frozen(frozen)
-	{ }
+    JsObject(const char* name = "Object", Mutex* mtx = 0, bool frozen = false);
 
     /**
-     * Access the list of object attributes and methods
-     * @return The list of attributes and functions
+     * Destructor
      */
-    virtual NamedList& list()
-	{ return *this; }
+    virtual ~JsObject();
 
     /**
-     * Const access to the list of object attributes and methods
-     * @return The list of attributes and functions
+     * Retrieve the Mutex object used to serialize object access
+     * @return Pointer to the mutex of the context this object belongs to
      */
-    virtual const NamedList& list() const
-	{ return *this; }
+    virtual Mutex* mutex()
+	{ return m_mutex; }
+
+    /**
+     * Try to evaluate a single method
+     * @param stack Evaluation stack in use, parameters are popped off this stack
+     *  and results are pushed back on stack
+     * @param oper Function to evaluate
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return True if evaluation succeeded
+     */
+    virtual bool runFunction(ObjList& stack, const ExpOperation& oper, GenObject* context);
+
+    /**
+     * Try to evaluate a single field
+     * @param stack Evaluation stack in use, field value must be pushed on it
+     * @param oper Field to evaluate
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return True if evaluation succeeded
+     */
+    virtual bool runField(ObjList& stack, const ExpOperation& oper, GenObject* context);
+
+    /**
+     * Try to assign a value to a single field if object is not frozen
+     * @param stack Evaluation stack in use
+     * @param oper Field to assign to, contains the field name and new value
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return True if assignment succeeded
+     */
+    virtual bool runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context);
+
+    /**
+     * Pops and evaluate the value of an operand off an evaluation stack, does not pop a barrier
+     * @param stack Evaluation stack to remove the operand from
+     * @param context Pointer to arbitrary object to be passed to called methods
+     * @return Value removed from stack, NULL if stack underflow or field not evaluable
+     */
+    virtual ExpOperation* popValue(ObjList& stack, GenObject* context = 0);
 
     /**
      * Retrieve the object frozen status (cannot modify attributes or methods)
@@ -1116,10 +1485,51 @@ public:
      * Initialize the standard global objects in a context
      * @param context Script context to initialize
      */
-    static void initialize(ScriptContext& context);
+    static void initialize(ScriptContext* context);
+
+protected:
+    /**
+     * Try to evaluate a single native method
+     * @param stack Evaluation stack in use, parameters are popped off this stack
+     *  and results are pushed back on stack
+     * @param oper Function to evaluate
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return True if evaluation succeeded
+     */
+    virtual bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
 private:
     bool m_frozen;
+    Mutex* m_mutex;
+};
+
+/**
+ * Javascript Function class, implements user defined functions
+ * @short Javascript Function
+ */
+class YSCRIPT_API JsFunction : public JsObject
+{
+    YCLASS(JsFunction,JsObject)
+public:
+
+    /**
+     * Constructor
+     * @param mtx Pointer to the mutex that serializes this object
+     */
+    inline JsFunction(Mutex* mtx = 0)
+	: JsObject("Function",mtx,true)
+	{ }
+
+    /**
+     * Try to evaluate a single user defined method
+     * @param stack Evaluation stack in use, parameters are popped off this stack
+     *  and results are pushed back on stack
+     * @param oper Function to evaluate
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return True if evaluation succeeded
+     */
+    virtual bool runDefined(ObjList& stack, const ExpOperation& oper, GenObject* context);
+
 };
 
 /**
@@ -1133,9 +1543,52 @@ public:
     /**
      * Parse a string as Javascript source code
      * @param text Source code text
+     * @param fragment True if the code is just an included fragment
      * @return True if the text was successfully parsed
      */
-    virtual bool parse(const char* text);
+    virtual bool parse(const char* text, bool fragment = false);
+
+    /**
+     * Create a context adequate for Javascript code
+     * @return A new Javascript context
+     */
+    virtual ScriptContext* createContext() const;
+
+    /**
+     * Create a runner adequate for a block of parsed Javascript code
+     * @param code Parsed code block
+     * @param context Javascript context, an empty one will be allocated if NULL
+     * @return A new Javascript runner, NULL if code is NULL
+     */
+    virtual ScriptRun* createRunner(ScriptCode* code, ScriptContext* context = 0) const;
+
+    /**
+     * Create a runner adequate for the parsed Javascript code
+     * @param context Javascript context, an empty one will be allocated if NULL
+     * @return A new Javascript runner, NULL if code is not yet parsed
+     */
+    inline ScriptRun* createRunner(ScriptContext* context = 0) const
+	{ return createRunner(code(),context); }
+
+    /**
+     * Adjust a file script path to include default if needed
+     * @param script File path to adjust
+     */
+    void adjustPath(String& script);
+
+    /**
+     * Retrieve the base script path
+     * @return Base path added to relative script paths
+     */
+    inline const String& basePath() const
+	{ return m_basePath; }
+
+    /**
+     * Set the pase script path
+     * @param path Base path to add to relative script paths
+     */
+    inline void basePath(const char* path)
+	{ m_basePath = path; }
 
     /**
      * Parse and run a piece of Javascript code
@@ -1145,6 +1598,9 @@ public:
      * @return Status of the runtime after code execution
      */
     static ScriptRun::Status eval(const String& text, ExpOperation** result = 0, ScriptContext* context = 0);
+
+private:
+    String m_basePath;
 };
 
 }; // namespace TelEngine

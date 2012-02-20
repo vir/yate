@@ -99,6 +99,18 @@ QToolButton:pressed {
        <property name="_yate_noautoconnect" stdset="0" >
         <bool>true</bool>
        </property>
+       <property name="_yate_normal_icon" stdset="0" >
+        <string>muc.png</string>
+       </property>
+       <property name="_yate_pressed_icon" stdset="0" >
+        <string>muc_pressed.png</string>
+       </property>
+       <property name="_yate_hover_icon" stdset="0" >
+        <string>muc_hover.png</string>
+       </property>
+       <property name="_yate_filterevents" stdset="0" >
+        <bool>true</bool>
+       </property>
       </widget>
      </item>
      <item>
@@ -529,7 +541,7 @@ QToolButton:pressed {
   </action>
   <action name="room_invite_contacts" >
    <property name="icon" >
-    <iconset>chat_muc.png</iconset>
+    <iconset>muc.png</iconset>
    </property>
    <property name="text" >
     <string>Create chat room</string>

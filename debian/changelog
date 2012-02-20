@@ -1,3 +1,19 @@
+yate (4.0.0.svn4937) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4937: + Changed muc invite image and button
+    in chat.  + Fixed allocation of dynamic RTP payloads to avoid
+    conflicts.  + Changed create muc button in chat ui.  + Added proper
+    implementation of RefObject::getObject().  + Added frames to make
+    sure the scroll bar is shown inside widget borders.  + Changed tray
+    icons.  + Changed save images.  + Changed status images.  + Fixed
+    parsing of function declarations.  + Got rid of the useless
+    ScriptEvaluator class, made instead some ExpEvaluator methods
+    public.  + Fixed menu and menu bar background.  + Changed tray
+    notification image.  + Changed muc create button image in chat ui.
+    + Changed status images.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 21 Feb 2012 02:19:19 +0400
+
 yate (4.0.0.svn4924) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4924: + Removed unused variable.  + Fixed

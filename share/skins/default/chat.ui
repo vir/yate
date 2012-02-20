@@ -68,6 +68,25 @@
          <height>30</height>
         </size>
        </property>
+       <property name="styleSheet" >
+        <string>QToolButton {
+  border: 1px solid #00b4ff;
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #aaaaaa);
+}
+QToolButton:hover {
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #aaaaaa, stop: 1 #ffffff);
+}
+QToolButton:pressed {
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #aaaaaa);
+}
+</string>
+       </property>
+       <property name="iconSize" >
+        <size>
+         <width>24</width>
+         <height>24</height>
+        </size>
+       </property>
        <property name="autoRaise" >
         <bool>true</bool>
        </property>
@@ -79,18 +98,6 @@
        </property>
        <property name="_yate_noautoconnect" stdset="0" >
         <bool>true</bool>
-       </property>
-       <property name="_yate_filterevents" stdset="0" >
-        <bool>true</bool>
-       </property>
-       <property name="_yate_normal_icon" stdset="0" >
-        <string>muc.png</string>
-       </property>
-       <property name="_yate_pressed_icon" stdset="0" >
-        <string>muc_pressed.png</string>
-       </property>
-       <property name="_yate_hover_icon" stdset="0" >
-        <string>muc_hover.png</string>
        </property>
       </widget>
      </item>
@@ -489,7 +496,7 @@
   </action>
   <action name="room_invite_contacts" >
    <property name="icon" >
-    <iconset>muc.png</iconset>
+    <iconset>chat_muc.png</iconset>
    </property>
    <property name="text" >
     <string>Create chat room</string>

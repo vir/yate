@@ -183,6 +183,9 @@ QToolButton:pressed {
        <string>set_richtext_item=tempnotify:&lt;font color="grey">${text}&lt;/font></string>
       </stringlist>
      </property>
+     <property name="_yate_frame_custom" stdset="0" >
+      <bool>true</bool>
+     </property>
     </widget>
    </item>
    <item>
@@ -228,7 +231,7 @@ QToolButton:pressed {
        <number>0</number>
       </property>
       <item>
-       <widget class="QTextEdit" name="message" >
+       <widget class="QFrame" name="frame" >
         <property name="sizePolicy" >
          <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
           <horstretch>0</horstretch>
@@ -237,7 +240,7 @@ QToolButton:pressed {
         </property>
         <property name="minimumSize" >
          <size>
-          <width>0</width>
+          <width>16</width>
           <height>54</height>
          </size>
         </property>
@@ -247,39 +250,69 @@ QToolButton:pressed {
           <height>54</height>
          </size>
         </property>
-        <property name="focusPolicy" >
-         <enum>Qt::StrongFocus</enum>
-        </property>
-        <property name="styleSheet" >
-         <string/>
-        </property>
-        <property name="tabChangesFocus" >
+        <property name="_yate_frame_custom" stdset="0" >
          <bool>true</bool>
         </property>
-        <property name="textInteractionFlags" >
-         <set>Qt::LinksAccessibleByKeyboard|Qt::LinksAccessibleByMouse|Qt::NoTextInteraction|Qt::TextBrowserInteraction|Qt::TextEditable|Qt::TextEditorInteraction|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
-        </property>
-        <property name="_yate_filterevents" stdset="0" >
-         <bool>true</bool>
-        </property>
-        <property name="dynamicActionEnter" stdset="0" >
-         <string>send_chat</string>
-        </property>
-        <property name="dynamicActionEnterModifiers" stdset="0" >
-         <string>Ctrl+, Shift+</string>
-        </property>
-        <property name="dynamicActionReturn" stdset="0" >
-         <string>send_chat</string>
-        </property>
-        <property name="dynamicActionReturnFilter" stdset="0" >
-         <bool>true</bool>
-        </property>
-        <property name="_yate_textchangednotify" stdset="0" >
-         <bool>true</bool>
-        </property>
-        <property name="_yate_identity" stdset="0" >
-         <string>message</string>
-        </property>
+        <layout class="QVBoxLayout" >
+         <property name="spacing" >
+          <number>0</number>
+         </property>
+         <property name="leftMargin" >
+          <number>0</number>
+         </property>
+         <property name="topMargin" >
+          <number>0</number>
+         </property>
+         <property name="rightMargin" >
+          <number>0</number>
+         </property>
+         <property name="bottomMargin" >
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QTextEdit" name="message" >
+           <property name="sizePolicy" >
+            <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="focusPolicy" >
+            <enum>Qt::StrongFocus</enum>
+           </property>
+           <property name="styleSheet" >
+            <string/>
+           </property>
+           <property name="tabChangesFocus" >
+            <bool>true</bool>
+           </property>
+           <property name="textInteractionFlags" >
+            <set>Qt::LinksAccessibleByKeyboard|Qt::LinksAccessibleByMouse|Qt::NoTextInteraction|Qt::TextBrowserInteraction|Qt::TextEditable|Qt::TextEditorInteraction|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
+           </property>
+           <property name="_yate_filterevents" stdset="0" >
+            <bool>true</bool>
+           </property>
+           <property name="dynamicActionEnter" stdset="0" >
+            <string>send_chat</string>
+           </property>
+           <property name="dynamicActionEnterModifiers" stdset="0" >
+            <string>Ctrl+, Shift+</string>
+           </property>
+           <property name="dynamicActionReturn" stdset="0" >
+            <string>send_chat</string>
+           </property>
+           <property name="dynamicActionReturnFilter" stdset="0" >
+            <bool>true</bool>
+           </property>
+           <property name="_yate_textchangednotify" stdset="0" >
+            <bool>true</bool>
+           </property>
+           <property name="_yate_identity" stdset="0" >
+            <string>message</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
        </widget>
       </item>
       <item>
@@ -506,26 +539,6 @@ QToolButton:pressed {
    </property>
   </action>
  </widget>
- <tabstops>
-  <tabstop>message</tabstop>
- </tabstops>
  <resources/>
- <connections>
-  <connection>
-   <sender>send_chat_button</sender>
-   <signal>clicked()</signal>
-   <receiver>message</receiver>
-   <slot>setFocus()</slot>
-   <hints>
-    <hint type="sourcelabel" >
-     <x>531</x>
-     <y>287</y>
-    </hint>
-    <hint type="destinationlabel" >
-     <x>249</x>
-     <y>287</y>
-    </hint>
-   </hints>
-  </connection>
- </connections>
+ <connections/>
 </ui>

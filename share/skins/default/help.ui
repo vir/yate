@@ -62,10 +62,34 @@
      </property>
      <layout class="QVBoxLayout" >
       <item>
-       <widget class="QTextBrowser" name="help_text" >
-        <property name="openExternalLinks" >
+       <widget class="QFrame" name="frame_2" >
+        <property name="_yate_frame_custom" stdset="0" >
          <bool>true</bool>
         </property>
+        <layout class="QVBoxLayout" >
+         <property name="spacing" >
+          <number>0</number>
+         </property>
+         <property name="leftMargin" >
+          <number>0</number>
+         </property>
+         <property name="topMargin" >
+          <number>0</number>
+         </property>
+         <property name="rightMargin" >
+          <number>0</number>
+         </property>
+         <property name="bottomMargin" >
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QTextBrowser" name="help_text" >
+           <property name="openExternalLinks" >
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+        </layout>
        </widget>
       </item>
       <item>

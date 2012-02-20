@@ -5,6 +5,10 @@ QWidget[_yate_window="true"] {
   color:#333333;
 }
 
+QFrame[_yate_frame_custom="true"] {
+  border: 1px solid #717fa0;
+}
+
 /* QAbstractButton */
 
 QAbstractButton {
@@ -41,7 +45,7 @@ QLineEdit {
 /* QTextEdit */
 
 QTextEdit {
-  border: 1px solid #717fa0;
+  border: 0px solid #717fa0;
   background-color: #ffffff;
   font-size: 12px;
 }
@@ -49,7 +53,6 @@ QTextEdit {
 /* QTextBrowser */
 QTextBrowser {
   font-size: 12px;
-  border: 1px solid #717fa0;
 }
 
 /* QToolButton */

@@ -60,6 +60,9 @@
        <string>property:readOnly=true</string>
       </stringlist>
      </property>
+     <property name="_yate_frame_custom" stdset="0" >
+      <bool>true</bool>
+     </property>
     </widget>
    </item>
    <item>

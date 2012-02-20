@@ -71,20 +71,20 @@
        <property name="styleSheet" >
         <string>QToolButton {
   border: 1px solid #00b4ff;
-  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #aaaaaa);
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #eeeeee);
 }
 QToolButton:hover {
-  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #aaaaaa, stop: 1 #ffffff);
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #eeeeee, stop: 1 #ffffff);
 }
 QToolButton:pressed {
-  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #aaaaaa);
+  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #eeeeee);
 }
 </string>
        </property>
        <property name="iconSize" >
         <size>
-         <width>24</width>
-         <height>24</height>
+         <width>20</width>
+         <height>20</height>
         </size>
        </property>
        <property name="autoRaise" >

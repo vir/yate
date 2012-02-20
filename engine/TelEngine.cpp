@@ -693,6 +693,12 @@ RefObject::~RefObject()
 	Debug(DebugFail,"RefObject [%p] destroyed with count=%d",this,m_refcount);
 }
 
+void* RefObject::getObject(const String& name) const
+{
+    if (name == YSTRING("RefObject"))
+	return (void*)this;
+    return GenObject::getObject(name);
+}
 bool RefObject::alive() const
 {
     return m_refcount > 0;

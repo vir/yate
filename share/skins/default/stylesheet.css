@@ -346,10 +346,11 @@ QScrollBar::right-arrow:pressed { border: 1px solid #717fa0; }
 
 QMenuBar {
   border: 0px;
-  background-color:transparent;
+  background: transparent;
 }
 QMenuBar::item {
   color:#333333;
+  background: transparent;
 }
 QMenuBar::item:selected {
   background-color: #48a4d7;
@@ -366,6 +367,7 @@ QMenu {
 QMenu::item {
   border: 1px solid #ffffff;
   padding: 2px 4px 2px 22px;
+  background: #ffffff;
 }
 QMenu::item:selected {
   color: #ffffff;

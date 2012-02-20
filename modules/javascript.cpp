@@ -61,6 +61,8 @@ public:
     virtual void msgStartup(Message& msg);
     virtual void msgHangup(Message& msg);
     virtual void msgExecute(Message& msg);
+    virtual void msgRinging(Message& msg);
+    virtual void msgAnswered(Message& msg);
     virtual bool msgPreroute(Message& msg);
     virtual bool msgRoute(Message& msg);
     virtual bool msgDisconnect(Message& msg, const String& reason);
@@ -287,10 +289,13 @@ bool JsAssist::runFunction(const char* name, Message& msg)
     if (!m_runner)
 	return false;
     DDebug(&__plugin,DebugInfo,"Running function %s in '%s'",name,id().c_str());
-    ScriptRun* runner = __plugin.parser().createRunner(m_runner->code(),m_runner->context());
+    JsParser jp;
+    String tmp;
+    tmp << name << "()";
+    jp.parse(tmp);
+    ScriptRun* runner = jp.createRunner(m_runner->context());
     JsMessage* jm = new JsMessage(&msg,m_runner->context()->mutex());
-    ExpWrapper mw(jm,"message");
-    runner->runAssign(mw);
+    ExpEvaluator::pushOne(runner->stack(),new ExpWrapper(jm,"message"));
     ScriptRun::Status rval = runner->run();
     TelEngine::destruct(runner);
     return (ScriptRun::Succeeded == rval);
@@ -309,6 +314,16 @@ void JsAssist::msgHangup(Message& msg)
 void JsAssist::msgExecute(Message& msg)
 {
     runFunction("onExecute",msg);
+}
+
+void JsAssist::msgRinging(Message& msg)
+{
+    runFunction("onRinging",msg);
+}
+
+void JsAssist::msgAnswered(Message& msg)
+{
+    runFunction("onAnswered",msg);
 }
 
 bool JsAssist::msgPreroute(Message& msg)
@@ -346,8 +361,6 @@ bool JsModule::commandExecute(String& retVal, const String& line)
     if (cmd.null())
 	return false;
 
-
-
     JsParser parser;
     parser.basePath(s_basePath);
     if (!parser.parse(cmd)) {
@@ -382,45 +395,68 @@ bool JsModule::commandComplete(Message& msg, const String& partLine, const Strin
 
 bool JsModule::received(Message& msg, int id)
 {
-    String* chanId = msg.getParam("id");
-    if (!TelEngine::null(chanId)) {
-	switch (id) {
-	    case Preroute:
-	    case Route:
-		{
-		    Lock mylock(this);
-		    RefPointer <JsAssist> ca = static_cast<JsAssist*>(find(*chanId));
-		    switch (id) {
-			case Preroute:
-			    if (ca) {
-				mylock.drop();
-				return ca->msgPreroute(msg);
-			    }
-			    ca = static_cast<JsAssist*>(create(msg,*chanId));
-			    if (ca) {
-				calls().append(ca);
-				mylock.drop();
-				ca->msgStartup(msg);
-				return ca->msgPreroute(msg);
-			    }
-			    return false;
-			case Route:
-			    if (ca) {
-				mylock.drop();
-				return ca->msgRoute(msg);
-			    }
-			    ca = static_cast<JsAssist*>(create(msg,*chanId));
-			    if (ca) {
-				calls().append(ca);
-				mylock.drop();
-				ca->msgStartup(msg);
-				return ca->msgRoute(msg);
-			    }
-			    return false;
-		    }
+    switch (id) {
+	case Preroute:
+	case Route:
+	    {
+		const String* chanId = msg.getParam("id");
+		if (TelEngine::null(chanId))
+		    break;
+		Lock mylock(this);
+		RefPointer <JsAssist> ca = static_cast<JsAssist*>(find(*chanId));
+		switch (id) {
+		    case Preroute:
+			if (ca) {
+			    mylock.drop();
+			    return ca->msgPreroute(msg);
+			}
+			ca = static_cast<JsAssist*>(create(msg,*chanId));
+			if (ca) {
+			    calls().append(ca);
+			    mylock.drop();
+			    ca->msgStartup(msg);
+			    return ca->msgPreroute(msg);
+			}
+			return false;
+		    case Route:
+			if (ca) {
+			    mylock.drop();
+			    return ca->msgRoute(msg);
+			}
+			ca = static_cast<JsAssist*>(create(msg,*chanId));
+			if (ca) {
+			    calls().append(ca);
+			    mylock.drop();
+			    ca->msgStartup(msg);
+			    return ca->msgRoute(msg);
+			}
+			return false;
+		} // switch (id)
+	    }
+	    break;
+	case Ringing:
+	case Answered:
+	    {
+		const String* chanId = msg.getParam("peerid");
+		if (TelEngine::null(chanId))
+		    return false;
+		Lock mylock(this);
+		RefPointer <JsAssist> ca = static_cast<JsAssist*>(find(*chanId));
+		if (!ca)
+		    return false;
+		switch (id) {
+		    case Ringing:
+			if (ca)
+			    ca->msgRinging(msg);
+			return false;
+		    case Answered:
+			if (ca)
+			    ca->msgAnswered(msg);
+			return false;
 		}
-	}
-    }
+	    }
+	    break;
+    } // switch (id)
     return ChanAssistList::received(msg,id);
 }
 
@@ -436,7 +472,7 @@ ChanAssist* JsModule::create(Message& msg, const String& id)
     unlock();
     if (!runner)
 	return 0;
-    DDebug(this,DebugAll,"Creating Javascript for '%s'",id.c_str());
+    DDebug(this,DebugInfo,"Creating Javascript for '%s'",id.c_str());
     JsAssist* ca = new JsAssist(this,id,runner);
     if (ca->init())
 	return ca;
@@ -478,6 +514,8 @@ void JsModule::init(int priority)
 {
     ChanAssistList::init(priority);
     installRelay(Route,priority);
+    installRelay(Ringing,priority);
+    installRelay(Answered,priority);
     Engine::install(new MessageRelay("call.preroute",this,Preroute,priority));
 }
 

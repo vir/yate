@@ -45,7 +45,6 @@ private:
 
 class JsCode : public ScriptCode, public ExpEvaluator
 {
-    YCLASS(JsCode,ScriptCode)
 public:
     enum JsOpcode {
 	OpcBegin = OpcPrivate + 1,
@@ -69,6 +68,7 @@ public:
 	OpcCatch,
 	OpcFinally,
 	OpcThrow,
+	OpcFuncDef,
 	OpcReturn,
 	OpcJump,
 	OpcJumpTrue,
@@ -83,6 +83,15 @@ public:
     inline JsCode()
 	: ExpEvaluator(C), m_label(0), m_depth(0)
 	  { debugName("JsCode"); }
+
+    virtual void* getObject(const String& name) const
+    {
+	if (name == YSTRING("JsCode"))
+            return const_cast<JsCode*>(this);
+	if (name == YSTRING("ExpEvaluator"))
+            return const_cast<ExpEvaluator*>((const ExpEvaluator*)this);
+	return ScriptCode::getObject(name);
+    }
     virtual bool initialize(ScriptContext* context) const;
     virtual bool evaluate(ScriptRun& runner, ObjList& results) const;
     bool link();
@@ -152,7 +161,7 @@ static const TokenDict s_postfixOps[] =
 
 static const TokenDict s_instr[] =
 {
-    MAKEOP("function", Func),
+    MAKEOP("function", FuncDef),
     MAKEOP("for", For),
     MAKEOP("while", While),
     MAKEOP("if", If),
@@ -552,6 +561,45 @@ bool JsCode::getInstruction(const char*& expr, Opcode nested)
 			return false;
 		}
 	    }
+	case OpcFuncDef:
+	    {
+		skipComments(expr);
+		int len = getKeyword(expr);
+		String name;
+		if (len > 0) {
+		    name.assign(expr,len);
+		    expr += len;
+		}
+		if (skipComments(expr) != '(')
+		    return gotError("Expecting '('",expr);
+		expr++;
+		ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
+		while (skipComments(expr) != ')') {
+		    if (!getField(expr))
+			return gotError("Expecting formal argument",expr);
+		    if (skipComments(expr) == ',')
+			expr++;
+		}
+		expr++;
+		if (skipComments(expr) != '{')
+		    return gotError("Expecting '{'",expr);
+		expr++;
+		for (;;) {
+		    if (!runCompile(expr,'}'))
+			return false;
+		    bool sep = false;
+		    while (skipComments(expr) && getSeparator(expr,true))
+			sep = true;
+		    if (*expr == '}' || !sep)
+			break;
+		}
+		if (*expr != '}')
+		    return gotError("Expecting '}'",expr);
+		expr++;
+		addOpcode((Opcode)OpcReturn);
+		addOpcode(OpcLabel,jump->number());
+	    }
+	    break;
 	default:
 	    break;
     }

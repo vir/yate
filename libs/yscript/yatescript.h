@@ -375,6 +375,24 @@ public:
      */
     virtual ExpOperation* popValue(ObjList& stack, GenObject* context = 0) const;
 
+    /**
+     * Try to evaluate a single operation
+     * @param stack Evaluation stack in use, operands are popped off this stack
+     *  and results are pushed back on stack
+     * @param oper Operation to execute
+     * @param context Pointer to arbitrary object to be passed to called methods
+     * @return True if evaluation succeeded
+     */
+    virtual bool runOperation(ObjList& stack, const ExpOperation& oper, GenObject* context = 0) const;
+
+    /**
+     * Convert all fields on the evaluation stack to their values
+     * @param stack Evaluation stack to evaluate fields from
+     * @param context Pointer to arbitrary object to be passed to called methods
+     * @return True if all fields on the stack were evaluated properly
+     */
+    virtual bool runAllFields(ObjList& stack, GenObject* context = 0) const;
+
 protected:
     /**
      * Helper method to skip over whitespaces
@@ -624,24 +642,6 @@ protected:
      * @return True if evaluation succeeded
      */
     virtual bool runEvaluate(ObjList& stack, GenObject* context = 0) const;
-
-    /**
-     * Convert all fields on the evaluation stack to their values
-     * @param stack Evaluation stack to evaluate fields from
-     * @param context Pointer to arbitrary object to be passed to called methods
-     * @return True if all fields on the stack were evaluated properly
-     */
-    virtual bool runAllFields(ObjList& stack, GenObject* context = 0) const;
-
-    /**
-     * Try to evaluate a single operation
-     * @param stack Evaluation stack in use, operands are popped off this stack
-     *  and results are pushed back on stack
-     * @param oper Operation to execute
-     * @param context Pointer to arbitrary object to be passed to called methods
-     * @return True if evaluation succeeded
-     */
-    virtual bool runOperation(ObjList& stack, const ExpOperation& oper, GenObject* context = 0) const;
 
     /**
      * Try to evaluate a single function
@@ -997,53 +997,6 @@ protected:
 };
 
 class ScriptRun;
-
-/**
- * A class used to build stack based (posifix) script parsers and evaluators
- * @short A script parser and evaluator
- */
-class YSCRIPT_API ScriptEvaluator : public ExpEvaluator
-{
-    YNOCOPY(ScriptEvaluator);
-public:
-
-    /**
-     * Constructs ascript evaluator from an operator dictionary
-     * @param operators Pointer to operator dictionary, longest strings first
-     * @param unaryOps Pointer to unary operators dictionary, longest strings first
-     */
-    inline explicit ScriptEvaluator(const TokenDict* operators = 0, const TokenDict* unaryOps = 0)
-	: ExpEvaluator(operators,unaryOps)
-	{ }
-
-    /**
-     * Constructs a script evaluator from a parser style
-     * @param style Style of parsing to use
-     */
-    inline explicit ScriptEvaluator(Parser style)
-	: ExpEvaluator(style)
-	{ }
-
-    /**
-     * Try to execute a single operation
-     * @param stack Evaluation stack in use, operands are popped off this stack
-     *  and results are pushed back on stack
-     * @param oper Script operation to execute
-     * @param context Pointer to arbitrary object to be passed to called methods
-     * @return True if evaluation succeeded
-     */
-    inline bool runOperation(ObjList &stack, const ExpOperation &oper, GenObject* context = 0) const
-	{ return ExpEvaluator::runOperation(stack,oper,context); }
-
-    /**
-     * Convert all fields on the evaluation stack to their values
-     * @param stack Evaluation stack to evaluate fields from
-     * @param context Pointer to arbitrary object to be passed to called methods
-     * @return True if all fields on the stack were evaluated properly
-     */
-    inline bool runAllFields(ObjList& stack, GenObject* context = 0) const
-	{ return ExpEvaluator::runAllFields(stack,context); }
-};
 
 /**
  * A script execution context, holds global variables and objects

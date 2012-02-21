@@ -370,9 +370,9 @@ server/sipfeatures.yate: ../libs/yxml/libyatexml.a
 server/sipfeatures.yate: LOCALFLAGS = -I@top_srcdir@/libs/yxml
 server/sipfeatures.yate: LOCALLIBS = -L../libs/yxml -lyatexml
 
-javascript.yate: ../libyatescript.so
-javascript.yate: LOCALFLAGS = -I@top_srcdir@/libs/yscript
-javascript.yate: LOCALLIBS = -lyatescript
+javascript.yate: ../libyatescript.so ../libs/ypbx/libyatepbx.a
+javascript.yate: LOCALFLAGS = -I@top_srcdir@/libs/yscript -I@top_srcdir@/libs/ypbx
+javascript.yate: LOCALLIBS = -lyatescript -L../libs/ypbx -lyatepbx
 
 zlibcompress.yate: LOCALFLAGS = $(ZLIB_INC)
 zlibcompress.yate: LOCALLIBS = $(ZLIB_LIB)

@@ -310,7 +310,7 @@ color:blue;</string>
       </widget>
      </item>
      <item>
-      <widget class="QListWidget" name="groups" >
+      <widget class="QFrame" name="frame" >
        <property name="sizePolicy" >
         <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
          <horstretch>0</horstretch>
@@ -319,7 +319,7 @@ color:blue;</string>
        </property>
        <property name="minimumSize" >
         <size>
-         <width>0</width>
+         <width>16</width>
          <height>80</height>
         </size>
        </property>
@@ -329,12 +329,50 @@ color:blue;</string>
          <height>80</height>
         </size>
        </property>
-       <property name="alternatingRowColors" >
-        <bool>false</bool>
+       <property name="_yate_frame_custom" stdset="0" >
+        <bool>true</bool>
        </property>
-       <property name="selectionMode" >
-        <enum>QAbstractItemView::NoSelection</enum>
-       </property>
+       <layout class="QVBoxLayout" >
+        <property name="spacing" >
+         <number>0</number>
+        </property>
+        <property name="leftMargin" >
+         <number>0</number>
+        </property>
+        <property name="topMargin" >
+         <number>0</number>
+        </property>
+        <property name="rightMargin" >
+         <number>0</number>
+        </property>
+        <property name="bottomMargin" >
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QListWidget" name="groups" >
+          <property name="sizePolicy" >
+           <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="styleSheet" >
+           <string>QListWidget {
+  border: 0px;
+}</string>
+          </property>
+          <property name="frameShape" >
+           <enum>QFrame::StyledPanel</enum>
+          </property>
+          <property name="alternatingRowColors" >
+           <bool>false</bool>
+          </property>
+          <property name="selectionMode" >
+           <enum>QAbstractItemView::NoSelection</enum>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </widget>
      </item>
     </layout>
@@ -385,11 +423,6 @@ color:blue;</string>
        <verstretch>0</verstretch>
       </sizepolicy>
      </property>
-     <property name="styleSheet" >
-      <string>QFrame#frame_resources {
-  border: 1px solid #717fa0;
-}</string>
-     </property>
      <property name="_yate_uiwidget" stdset="0" >
       <bool>true</bool>
      </property>
@@ -412,6 +445,9 @@ color:blue;</string>
        <string>hheader_columns_size=120,50</string>
        <string>hheader_columns_resize=,fixed</string>
       </stringlist>
+     </property>
+     <property name="_yate_frame_custom" stdset="0" >
+      <bool>true</bool>
      </property>
     </widget>
    </item>

@@ -1008,8 +1008,11 @@ static void channelItemAddUpdate(bool upd, NamedList& dest, const String& master
 	    item->addParam("property:target:_yate_identity","conf_add_target:" + masterChan);
 	    item->addParam("property:conf_add:_yate_identity","conf_add:" + masterChan);
 	}
-	else
+	else {
 	    item->addParam("item_type","conf_item");
+	    if (masterChan == slaveId)
+		item->addParam("property:conf_cancel:_yate_identity","calldroppeer:" + masterChan);
+	}
     }
     else if (start) {
 	item->addParam("item_type","transfer_start");
@@ -1060,8 +1063,10 @@ static void channelItemResetTarget(Window* wnd, const String& masterChan, bool c
 static int channelItemAdjustUiList(NamedList& dest, int show, bool itemAdded,
     const String& chanId, bool conf)
 {
-    static int s_channelItemHeight = 30;
-    static int s_channelMaxItems = 3;
+    static const int s_channelItemHeight = 26;
+    static const int s_channelMaxItems = 3;
+    static const int s_channelItemsMargin = 4;
+    static const int s_channelItemDataHeight = 18;
     static const String s_getChkTrans = "getcheck:transfer";
     static const String s_getChkConf = "getcheck:conference";
 
@@ -1070,18 +1075,26 @@ static int channelItemAdjustUiList(NamedList& dest, int show, bool itemAdded,
 	return 0;
     bool chanConf = chan->conference();
     bool chanTrans = !chanConf && !chan->transferId().null();
+    bool hasPeer = chan->hasReconnPeer();
     unsigned int slaves = chan->slavesCount();
     TelEngine::destruct(chan);
     bool activeShowConf = true;
     bool activeShowTrans = true;
     bool showItemsList = true;
     bool clearItems = false;
+    int delta = 0;
     int items = 0;
     if (show >= 0) {
 	if (show > 0) {
 	    if (conf) {
 		activeShowTrans = false;
-		items = slaves + 1;
+		// Add 2 to items: the master and conf add item
+		if (slaves) {
+		    items = slaves + (hasPeer ? 2 : 1);
+		    delta = s_channelItemDataHeight;
+		}
+		else
+		    items = 1;
 		if (!chanConf)
 		    clearItems = true;
 	    }
@@ -1094,8 +1107,10 @@ static int channelItemAdjustUiList(NamedList& dest, int show, bool itemAdded,
 	}
 	else {
 	    showItemsList = false;
-	    if (chanConf)
+	    if (chanConf) {
 		activeShowTrans = false;
+		delta = s_channelItemDataHeight;
+	    }
 	    else if (chanTrans)
 		activeShowConf = false;
 	}
@@ -1106,10 +1121,34 @@ static int channelItemAdjustUiList(NamedList& dest, int show, bool itemAdded,
 	p.addParam(s_getChkConf,"");
 	Client::self()->getTableRow(s_channelList,chanId,&p);
 	if (conf) {
-	    items = slaves + 1;
 	    showItemsList = p.getBoolValue(s_getChkConf);
-	    if (showItemsList)
+	    if (showItemsList) {
 		activeShowTrans = false;
+		// Add 2 to items: the master and conf add item
+		if (slaves) {
+		    items = slaves + (hasPeer ? 2 : 1);
+		    delta = s_channelItemDataHeight;
+		}
+		else
+		    items = 1;
+		bool on = (!itemAdded && !slaves);
+		if (on || (itemAdded && slaves == 1)) {
+		    const char* s = String::boolText(on);
+		    dest.addParam("show:direction",s);
+		    dest.addParam("show:party",s);
+		    dest.addParam("height:frame_call_data",s);
+		}
+	    }
+	    else {
+		if (slaves)
+		    delta = s_channelItemDataHeight;
+		else {
+		    // Item removed and no more slaves: restore normal channel
+		    dest.addParam("show:direction",String::boolText(true));
+		    dest.addParam("show:party",String::boolText(true));
+		    dest.addParam("height:frame_call_data",String::boolText(true));
+		}
+	    }
 	}
 	else {
 	    showItemsList = p.getBoolValue(s_getChkTrans);
@@ -1119,6 +1158,9 @@ static int channelItemAdjustUiList(NamedList& dest, int show, bool itemAdded,
 	    }
 	}
     }
+    XDebug(ClientDriver::self(),DebugAll,
+	"channelItemAdjustUiList(%d,%u,%s,%u) showItemsList=%u items=%d delta=%d",
+	show,itemAdded,chanId.c_str(),conf,showItemsList,items,delta);
     dest.addParam("show:frame_items",String::boolText(showItemsList));
     if (clearItems)
 	dest.addParam("cleartable:items","");
@@ -1126,13 +1168,14 @@ static int channelItemAdjustUiList(NamedList& dest, int show, bool itemAdded,
 	if (items) {
 	    int h = (items <= s_channelMaxItems) ? items : s_channelMaxItems;
 	    h *= s_channelItemHeight;
-	    dest.addParam("_yate_itemheight_delta",String(h));
-	    dest.addParam("property:frame_items:maximumHeight",String(h));
-	    dest.addParam("property:items:maximumHeight",String(h));
+	    int frmH = h + s_channelItemsMargin;
+	    dest.addParam("_yate_itemheight_delta",String(frmH - delta));
+	    dest.addParam("height:frame_items",String(frmH));
+	    dest.addParam("height:items",String(h));
 	}
     }
     else {
-	dest.addParam("_yate_itemheight_delta","0");
+	dest.addParam("_yate_itemheight_delta",String(-delta));
     }
     dest.addParam("active:transfer",String::boolText(activeShowTrans));
     dest.addParam("active:conference",String::boolText(activeShowConf));
@@ -4635,12 +4678,14 @@ bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
 	    Client::self()->callTerminate(name.substr(7));
 	return true;
     }
-    if (name.startsWith("calldrop:")) {
-	int pos = name.find(':',10);
+    bool callDrop = name.startsWith("calldrop:");
+    if (callDrop || name.startsWith("calldroppeer:")) {
+	int ppos = callDrop ? 9 : 13;
+	int pos = name.find(':',ppos + 1);
 	if (pos < 0)
-	    ClientDriver::dropChan(name.substr(9));
+	    ClientDriver::dropChan(name.substr(ppos),0,!callDrop);
 	else
-	    ClientDriver::dropChan(name.substr(9,pos - 9),name.substr(pos));
+	    ClientDriver::dropChan(name.substr(ppos,pos - ppos),name.substr(pos),!callDrop);
 	return true;
     }
     // Hold
@@ -6683,6 +6728,15 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 		}
 		NamedList p("");
 		int items = channelItemAdjustUiList(p,-1,false,masterId,conf);
+		if (conf) {
+		    if (slaves) {
+			String tmp;
+			tmp << "Conference (" << (slaves + 1) << ")";
+			p.addParam("status",tmp);
+		    }
+		    else
+			channelItemBuildUpdate(false,p,masterId,true,false,masterId);
+		}
 		channelItemBuildUpdate(false,p,masterId,conf,false,id);
 		// Add transfer start
 		if (!conf && !slaves && items)
@@ -6752,10 +6806,20 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	    // Update master
 	    bool conf = (slave == ClientChannel::SlaveConference);
 	    if (conf || slave == ClientChannel::SlaveTransfer) {
-		master->addSlave(chan->id());
 		NamedList p("");
+		master->addSlave(chan->id());
 		channelItemAdjustUiList(p,-1,true,masterId,conf);
-		if (!conf)
+		if (conf) {
+		    int n = master->slavesCount();
+		    if (n == 1) {
+			if (master->hasReconnPeer())
+			    channelItemBuildUpdate(true,p,masterId,conf,false,masterId);
+		    }
+		    String tmp;
+		    tmp << "Conference (" << (n + 1) << ")";
+		    p.addParam("status",tmp);
+		}
+		else
 		    channelItemBuildUpdate(false,p,masterId,conf,true);
 		channelItemBuildUpdate(true,p,masterId,conf,false,chan->id());
 		Client::self()->setTableRow(s_channelList,masterId,&p);
@@ -6889,8 +6953,6 @@ bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	    updateFormats = false;
 	    if (slave)
 		break;
-	    if (!notConf)
-		p.addParam("status","Conference");
 	    break;
 	default:
 	    enableActions = true;
@@ -6971,6 +7033,17 @@ bool DefaultLogic::defaultMsgHandler(Message& msg, int id, bool& stopLogic)
 		    Client::self()->callTerminate(chan->id());
 		else
 		    chan->disconnect("Peer left the conference");
+	    }
+	    else if (chan->slave() == ClientChannel::SlaveNone) {
+		// Remove master peer from list in client's thread
+		if (!Client::self()->postpone(msg,id,true)) {
+		    NamedList p("");
+		    channelItemAdjustUiList(p,-1,false,chan->id(),true);
+		    channelItemBuildUpdate(false,p,chan->id(),true,false,chan->id());
+		    Client::self()->setTableRow(s_channelList,chan->id(),&p);
+		}
+		else
+		    stopLogic = true;
 	    }
 	}
 	TelEngine::destruct(chan);

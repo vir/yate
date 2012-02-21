@@ -322,6 +322,12 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
     bool defcodecs = m_parser->m_codecs.getBoolValue("default",true);
     for (ObjList* ml = mediaList->skipNull(); ml; ml = ml->skipNext()) {
 	SDPMedia* m = static_cast<SDPMedia*>(ml->get());
+	int rfc2833 = 0;
+	if ((m_rfc2833 >= 0) && m->isAudio()) {
+	    rfc2833 = m->rfc2833().toInteger(m_rfc2833);
+	    if (rfc2833 < 96 || rfc2833 > 127)
+		rfc2833 = 101;
+	}
 	String mline(m->fmtList());
 	ObjList* l = mline.split(',',false);
 	mline = *m;
@@ -332,7 +338,7 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 	int ptime = 0;
 	ObjList* f = l;
 	for (; f; f = f->next()) {
-	    String* s = static_cast<String*>(f->get());
+	    const String* s = static_cast<const String*>(f->get());
 	    if (s) {
 		int mode = 0;
 		if (*s == "ilbc20")
@@ -345,20 +351,69 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 		int defcode = payload;
 		String tmp = *s;
 		tmp << "=";
+		bool found = false;
 		for (ObjList* pl = map; pl; pl = pl->next()) {
-		    String* mapping = static_cast<String*>(pl->get());
+		    const String* mapping = static_cast<const String*>(pl->get());
 		    if (!mapping)
 			continue;
 		    if (mapping->startsWith(tmp)) {
 			payload = -1;
 			tmp = *mapping;
 			tmp >> "=" >> payload;
+			found = true;
 			XDebug(m_parser,DebugAll,"RTP mapped payload %d for '%s' [%p]",
 			    payload,s->c_str(),this);
 			break;
 		    }
+		    String tmp2 = *mapping;
+		    int pload;
+		    tmp2 >> "=" >> pload;
+		    if (payload == pload) {
+			XDebug(m_parser,DebugAll,"RTP conflict for payload %d, allocating new [%p]",
+			    payload,this);
+			payload = -1;
+			u_int32_t bmap = 0;
+			for (ObjList* sl = map; sl; sl = sl->next()) {
+			    mapping = static_cast<const String*>(sl->get());
+			    if (!mapping)
+				continue;
+			    tmp2 = *mapping;
+			    pload = 0;
+			    tmp2 >> "=" >> pload;
+			    if (pload >= 96 && pload < 127)
+				bmap |= 1 << (pload - 96);
+			}
+			// allocate free and non-standard is possible
+			for (pload = 96; pload < 127; pload++) {
+			    if (pload == rfc2833)
+				continue;
+			    if (lookup(pload,SDPParser::s_rtpmap))
+				continue;
+			    if ((bmap & (1 << (pload - 96))) == 0) {
+				payload = pload;
+				break;
+			    }
+			}
+			if (payload >= 0)
+			    break;
+			// none free, allocate from "standard" ones too
+			for (pload = 96; pload < 127; pload++) {
+			    if (pload == rfc2833)
+				continue;
+			    if ((bmap & (1 << (pload - 96))) == 0) {
+				payload = pload;
+				break;
+			    }
+			}
+			break;
+		    }
 		}
 		if (payload >= 0) {
+		    if (!found) {
+			tmp = *s;
+			tmp << "=" << payload;
+			map->append(new String(tmp));
+		    }
 		    if (defcode < 0)
 			defcode = payload;
 		    const char* map = lookup(defcode,SDPParser::s_rtpmap);
@@ -408,10 +463,7 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 	TelEngine::destruct(l);
 	TelEngine::destruct(map);
 
-	if ((m_rfc2833 >= 0) && frm && m->isAudio()) {
-	    int rfc2833 = m->rfc2833().toInteger(m_rfc2833);
-	    if (rfc2833 < 96 || rfc2833 > 127)
-		rfc2833 = 101;
+	if (rfc2833 && frm) {
 	    // claim to support telephone events
 	    frm << " " << rfc2833;
 	    String* s = new String;

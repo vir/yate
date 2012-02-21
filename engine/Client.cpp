@@ -3558,6 +3558,29 @@ void ClientChannel::update(int notif, bool chan, bool updatePeer,
     Engine::enqueue(m);
 }
 
+// Get channel peer used to reconnect
+CallEndpoint* ClientChannel::getReconnPeer(bool ref)
+{
+    String tmp;
+    getReconnPeer(tmp);
+    if (!tmp)
+	return 0;
+    Message m("chan.locate");
+    m.addParam("id",tmp);
+    Engine::dispatch(m);
+    CallEndpoint* c = static_cast<Channel*>(YOBJECT(CallEndpoint,m.userData()));
+    return (c && (!ref || c->ref())) ? c : 0;
+}
+
+// Drop peer used to reconnect
+void ClientChannel::dropReconnPeer(const char* reason)
+{
+    String tmp;
+    getReconnPeer(tmp);
+    if (tmp)
+	ClientDriver::dropChan(tmp,reason);
+}
+
 
 /**
  * ClientDriver
@@ -3874,12 +3897,19 @@ ClientChannel* ClientDriver::findChanByPeer(const String& peer)
 }
 
 // Drop a channel
-void ClientDriver::dropChan(const String& chan, const char* reason)
+void ClientDriver::dropChan(const String& chan, const char* reason, bool peer)
 {
-    Message* m = Client::buildMessage("call.drop",String::empty());
-    m->addParam("id",chan);
-    m->addParam("reason",reason,false);
-    Engine::enqueue(m);
+    if (!peer) {
+	Message* m = Client::buildMessage("call.drop",String::empty());
+	m->addParam("id",chan);
+	m->addParam("reason",reason,false);
+	Engine::enqueue(m);
+	return;
+    }
+    ClientChannel* cc = ClientDriver::findChan(chan);
+    if (cc)
+	cc->dropReconnPeer(reason);
+    TelEngine::destruct(cc);
 }
 
 

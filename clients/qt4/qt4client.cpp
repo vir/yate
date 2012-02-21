@@ -724,6 +724,30 @@ static bool appendStyleSheet(QString& buf, const char* file,
     return false;
 }
 
+// Split an integer string list
+// Result list length can be set by indicating a length
+static QList<int> buildIntList(const String& buf, int len = 0)
+{
+    QList<int> ret;
+    ObjList* list = buf.split(',');
+    int pos = 0;
+    ObjList* o = list;
+    while (o || pos < len) {
+	int val = 0;
+	if (o) {
+	    if (o->get())
+		val = o->get()->toString().toInteger();
+	    o = o->next();
+	}
+	ret.append(val);
+	pos++;
+	if (pos == len)
+	    break;
+    }
+    TelEngine::destruct(list);
+    return ret;
+}
+
 
 /**
  * Qt4ClientFactory
@@ -3817,7 +3841,14 @@ bool QtClient::setWidget(QWidget* parent, QWidget* child)
 	return false;
     QVBoxLayout* layout = new QVBoxLayout;
     layout->setSpacing(0);
-    layout->setContentsMargins(0,0,0,0);
+    String margins;
+    QtClient::getProperty(parent,"_yate_layout_margins",margins);
+    if (!margins)
+	layout->setContentsMargins(0,0,0,0);
+    else {
+	QList<int> m = buildIntList(margins,4);
+	layout->setContentsMargins(m[0],m[1],m[2],m[3]);
+    }
     layout->addWidget(child);
     QLayout* l = parent->layout();
     if (l)
@@ -4204,6 +4235,34 @@ void QtClient::setWidgetAttributes(QWidget* w, const String& attrs)
     TelEngine::destruct(list);
 }
 
+// Adjust widget height
+void QtClient::setWidgetHeight(QWidget* w, const String& height)
+{
+    if (!w)
+	return;
+    int h = 0;
+    if (height.isBoolean()) {
+	h = QtClient::getIntProperty(w,"_yate_height_delta",-1);
+	if (h > 0) {
+	    if (height.toBoolean())
+		h += w->height();
+	    else if (h < w->height())
+		h = w->height() - h;
+	    else
+		h = 0;
+	}
+    }
+    else
+	h = height.toInteger();
+    if (h < 0)
+	return;
+    QSizePolicy sp = w->sizePolicy();
+    sp.setVerticalPolicy(QSizePolicy::Fixed);
+    w->setSizePolicy(sp);
+    w->setMinimumHeight(h);
+    w->setMaximumHeight(h);
+}
+
 
 /**
  * QtDriver
@@ -4372,6 +4431,7 @@ bool QtUIWidget::setParams(QObject* parent, const NamedList& params)
     static const String s_rawimage = "rawimage";
     static const String s_setparams = "setparams";
     static const String s_setmenu = "setmenu";
+    static const String s_height = "height";
 
     if (!parent)
 	return false;
@@ -4455,11 +4515,14 @@ bool QtUIWidget::setParams(QObject* parent, const NamedList& params)
 		ok = c && QtClient::setImage(c,*data,*ns) && ok;
 	    }
 	}
-	else if (n == s_setmenu) {
+	else if (n == s_setmenu)
 	    buildWidgetItemMenu(qobject_cast<QWidget*>(parent),YOBJECT(NamedList,ns),cName);
-	    continue;
+	else if (n == s_height) {
+	    QString tmp = buildQChildName(pName,cName);
+	    QWidget* w = qFindChild<QWidget*>(qobject_cast<QWidget*>(parent),tmp);
+	    QtClient::setWidgetHeight(w,*ns);
 	}
-	else 
+	else
 	    ok = wnd->setText(buildChildName(buf,pName,ns->name()),*ns,false) && ok;
     }
     // Set item parameters

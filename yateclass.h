@@ -791,6 +791,13 @@ public:
     virtual ~RefObject();
 
     /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
      * Check if the object is still referenced and safe to access.
      * Note that you should not trust this result unless the object is locked
      *  by other means.

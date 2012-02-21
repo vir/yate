@@ -152,20 +152,26 @@
     </widget>
    </item>
    <item>
-    <spacer>
-     <property name="orientation" >
-      <enum>Qt::Vertical</enum>
+    <widget class="QLabel" name="label_7" >
+     <property name="sizePolicy" >
+      <sizepolicy vsizetype="Fixed" hsizetype="Preferred" >
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
      </property>
-     <property name="sizeType" >
-      <enum>QSizePolicy::Fixed</enum>
-     </property>
-     <property name="sizeHint" >
+     <property name="minimumSize" >
       <size>
-       <width>20</width>
+       <width>0</width>
        <height>6</height>
       </size>
      </property>
-    </spacer>
+     <property name="maximumSize" >
+      <size>
+       <width>16777215</width>
+       <height>6</height>
+      </size>
+     </property>
+    </widget>
    </item>
    <item>
     <widget class="QTabWidget" name="mainwindowTabs" >
@@ -375,7 +381,7 @@
   border: 0px solid #717fa0;
   border-radius: 0px;
   font-size: 11px;
-  background: white;
+  background: transparent;
 }
 QToolButton:checked {
   padding-top: 0px;
@@ -446,7 +452,7 @@ QToolButton:checked {
   border: 0px solid #717fa0;
   border-radius: 0px;
   font-size: 11px;
-  background: white;
+  background: transparent;
 }
 QToolButton:checked {
   padding-top: 0px;
@@ -517,7 +523,7 @@ QToolButton:checked {
   border: 0px solid #717fa0;
   border-radius: 0px;
   font-size: 11px;
-  background: white;
+  background: transparent;
 }
 QToolButton:checked {
   padding-top: 0px;
@@ -2954,7 +2960,7 @@ QTextEdit {
   </action>
   <action name="setStatusOnline" >
    <property name="icon" >
-    <iconset>status_online.png</iconset>
+    <iconset>status_online_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Online</string>
@@ -2962,7 +2968,7 @@ QTextEdit {
   </action>
   <action name="setStatusBusy" >
    <property name="icon" >
-    <iconset>status_busy.png</iconset>
+    <iconset>status_busy_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Busy</string>
@@ -2970,7 +2976,7 @@ QTextEdit {
   </action>
   <action name="setStatusAway" >
    <property name="icon" >
-    <iconset>status_away.png</iconset>
+    <iconset>status_away_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Away</string>
@@ -2978,7 +2984,7 @@ QTextEdit {
   </action>
   <action name="setStatusXa" >
    <property name="icon" >
-    <iconset>status_xa.png</iconset>
+    <iconset>status_xa_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Extended away</string>
@@ -2986,7 +2992,7 @@ QTextEdit {
   </action>
   <action name="setStatusDnd" >
    <property name="icon" >
-    <iconset>status_dnd.png</iconset>
+    <iconset>status_dnd_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Do Not Disturb</string>
@@ -2994,7 +3000,7 @@ QTextEdit {
   </action>
   <action name="setStatusOffline" >
    <property name="icon" >
-    <iconset>status_offline.png</iconset>
+    <iconset>status_offline_menu.png</iconset>
    </property>
    <property name="text" >
     <string>Offline</string>

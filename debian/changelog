@@ -1,3 +1,10 @@
+yate (4.0.1.svn4939) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4939: + Bumped version to 4.0.1 alpha 1
+    (devel).  + new images packaging
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 22 Feb 2012 02:19:20 +0400
+
 yate (4.0.0.svn4937) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4937: + Changed muc invite image and button

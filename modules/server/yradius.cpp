@@ -216,7 +216,7 @@ static rad_dict cisco_dict[]= {
     { 210, "Cisco-PPP-VJ-Slot-Comp", a_int },
     { 212, "Cisco-PPP-Async-Map", a_int },
     { 217, "Cisco-IP-Pool-Definition", a_int },
-    { 218, "Cisco-Asing-IP-Pool", a_int },
+    { 218, "Cisco-Assign-IP-Pool", a_int },
     { 228, "Cisco-Route-IP", a_int },
     { 233, "Cisco-Link-Compression", a_int },
     { 234, "Cisco-Target-Util", a_int },
@@ -287,7 +287,7 @@ static TokenDict dict_errors[] = {
     { "rejected", 18 }, // Host-Request
     { 0, 0 },
 };
-									
+
 
 // Class to hold one RADIUS attribute
 class RadAttrib : public GenObject

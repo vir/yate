@@ -1,3 +1,10 @@
+yate (4.0.1.svn4940) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4940: + new images packaging  + Fixed a
+    parameter spelling error.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 23 Feb 2012 02:19:21 +0400
+
 yate (4.0.1.svn4939) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4939: + Bumped version to 4.0.1 alpha 1

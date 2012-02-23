@@ -1,3 +1,12 @@
+yate (4.0.1.svn4944) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4944: + Moved clean up code to cleanup()
+    function.  + Renamed variable to avoid a conflict.  + Added minimum
+    interval for speaker tracking notifications.  + Fixed h323chan
+    status reporting logic, was not reporting in case of broadcasts.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 24 Feb 2012 02:19:22 +0400
+
 yate (4.0.1.svn4940) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4940: + new images packaging  + Fixed a

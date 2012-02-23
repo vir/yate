@@ -2509,11 +2509,10 @@ H323GatekeeperRequest::Response YateGatekeeperCall::OnAdmission(H323GatekeeperAR
 	PString alias = H323GetAliasAddressString(info.arq.m_srcInfo[i]);
 	PString d = H323GetAliasAddressString(info.arq.m_destinationInfo[0]);
         Debug(DebugInfo,"aliasul in m_srcInfo %s si m_destinationInfo %s",(const char *)alias,(const char *)d);
-	
     }
 
     return H323GatekeeperCall::OnAdmission(info);*/
-	
+
 #ifdef TEST_TOKEN
   info.acf.IncludeOptionalField(H225_AdmissionConfirm::e_tokens);
   info.acf.m_tokens.SetSize(1);
@@ -2888,10 +2887,11 @@ H323Driver::~H323Driver()
 bool H323Driver::received(Message &msg, int id)
 {
     if (id == Status) {
-	String target = msg.getValue("module");
-	if (target && target.startsWith(name(),true) && !target.startsWith(prefix()))
+	const String* target = msg.getParam("module");
+	if (target && target->startsWith(name(),true) && !target->startsWith(prefix())) {
 	    msgStatus(msg);
-	return false;
+	    return true;
+	}
     }
     if (id == Stop)
 	return handleEngineStop(msg);

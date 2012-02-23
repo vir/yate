@@ -915,6 +915,23 @@ Client::~Client()
 // Cleanup before halting
 void Client::cleanup()
 {
+    s_exiting = true;
+    // Drop all calls
+    ClientDriver::dropCalls();
+    // Notify termination to logics
+    for (ObjList* o = s_logics.skipNull(); o; o = o->skipNext()) {
+	ClientLogic* logic = static_cast<ClientLogic*>(o->get());
+	Debug(ClientDriver::self(),DebugAll,"Logic(%s) exitingClient() [%p]",
+	      logic->toString().c_str(),logic);
+	logic->exitingClient();
+    }
+    // Make sure we drop all channels whose peers are not client channels
+    Message m("call.drop");
+    m.addParam("reason","shutdown");
+    Engine::dispatch(m);
+    TelEngine::destruct(m_defaultLogic);
+    exitClient();
+    
     for (ObjList* o = m_relays.skipNull(); o; o = o->skipNext())
 	Engine::uninstall(static_cast<MessageRelay*>(o->get()));
     m_relays.clear();
@@ -983,22 +1000,6 @@ void Client::run()
 	Client::updateTrayIcon(o->get()->toString());
     // Run
     main();
-    s_exiting = true;
-    // Drop all calls
-    ClientDriver::dropCalls();
-    // Notify termination to logics
-    for (ObjList* o = s_logics.skipNull(); o; o = o->skipNext()) {
-	ClientLogic* logic = static_cast<ClientLogic*>(o->get());
-	Debug(ClientDriver::self(),DebugAll,"Logic(%s) exitingClient() [%p]",
-	    logic->toString().c_str(),logic);
-	logic->exitingClient();
-    }
-    // Make sure we drop all channels whose peers are not client channels
-    Message m("call.drop");
-    m.addParam("reason","shutdown");
-    Engine::dispatch(m);
-    TelEngine::destruct(m_defaultLogic);
-    exitClient();
 }
 
 // Check if a message is sent by the client

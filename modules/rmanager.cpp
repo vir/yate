@@ -1520,7 +1520,7 @@ void Connection::writeStr(const Message &msg, bool received)
 	clearLine();
     writeStr(s.c_str());
     if (m_echoing && m_buffer)
-	writeStr(m_buffer);
+	writeBuffer();
 }
 
 // write debugging messages to the remote console
@@ -1552,7 +1552,7 @@ void Connection::writeEvent(const char *str, int level)
     if (col)
 	writeStr(col,::strlen(col));
     if (m_echoing && m_buffer)
-	writeStr(m_buffer);
+	writeBuffer();
 }
 
 // write arbitrary string to the remote console

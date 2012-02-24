@@ -39,6 +39,9 @@
 using namespace TelEngine;
 namespace { // anonymous
 
+#define DEF_HISTORY 10
+#define MAX_HISTORY 50
+
 typedef struct {
     const char* name;
     const char* args;
@@ -211,6 +214,8 @@ public:
     bool autoComplete();
     void errorBeep();
     void clearLine();
+    void writeBuffer();
+    void writeBufferTail(bool eraseOne = false);
     void writeStr(const char *str, int len = -1);
     void writeDebug(const char *str, int level);
     void writeEvent(const char *str, int level);
@@ -238,8 +243,10 @@ private:
     u_int64_t m_timeout;
     String m_buffer;
     String m_address;
-    String m_lastcmd;
+    ObjList m_history;
     RefPointer<RManagerListener> m_listener;
+    unsigned int m_cursorPos;
+    unsigned int m_histLen;
 };
 
 class RManager : public Plugin
@@ -408,7 +415,7 @@ Connection::Connection(Socket* sock, const char* addr, RManagerListener* listene
       m_auth(None), m_debug(false), m_output(false), m_colorize(false), m_machine(false),
       m_threshold(DebugAll),
       m_socket(sock), m_lastch(0), m_escmode(0), m_echoing(false), m_beeping(false),
-      m_timeout(0), m_address(addr), m_listener(listener)
+      m_timeout(0), m_address(addr), m_listener(listener), m_cursorPos(0), m_histLen(DEF_HISTORY)
 {
     s_mutex.lock();
     s_connList.append(this);
@@ -452,6 +459,9 @@ void Connection::run()
 	if (Admin == m_auth)
 	    m_debug = cfg().getBoolValue("debug",false);
     }
+    m_histLen = cfg().getIntValue("maxhistory",DEF_HISTORY);
+    if (m_histLen > MAX_HISTORY)
+	m_histLen = MAX_HISTORY;
     String hdr = cfg().getValue("header","YATE ${version}-${release} (http://YATE.null.ro) ready on ${nodename}.");
     Engine::runParams().replaceParams(hdr);
     if (cfg().getBoolValue("telnet",true)) {
@@ -520,6 +530,30 @@ void Connection::errorBeep()
 void Connection::clearLine()
 {
     writeStr("\r\033[K\r");
+}
+
+// write just the tail of the current buffer, get back the cursor
+void Connection::writeBufferTail(bool eraseOne)
+{
+    String tail = m_buffer.substr(m_cursorPos);
+    if (eraseOne)
+	tail += " ";
+    writeStr(tail);
+    // now write enough backspaces to get back
+    tail.assign('\b',tail.length());
+    writeStr(tail);
+}
+
+// write the current buffer, leave the cursor in the right place
+void Connection::writeBuffer()
+{
+    if (m_cursorPos == m_buffer.length()) {
+	writeStr(m_buffer);
+	return;
+    }
+    if (m_cursorPos)
+	writeStr(m_buffer,m_cursorPos);
+    writeBufferTail();
 }
 
 // process incoming telnet characters
@@ -609,6 +643,8 @@ bool Connection::processTelnetChar(unsigned char c)
 // process incoming terminal characters
 bool Connection::processChar(unsigned char c)
 {
+    bool atEol = (m_buffer.length() == m_cursorPos);
+    XDebug(DebugAll,"cur=%u len=%u '%s'",m_cursorPos,m_buffer.length(),m_buffer.safe());
     switch (c) {
 	case '\0':
 	    m_escmode = 0;
@@ -620,6 +656,7 @@ bool Connection::processChar(unsigned char c)
 	    m_escmode = 0;
 	    if (m_buffer.null())
 		return false;
+	// fall through
 	case '\r':
 	    m_escmode = 0;
 	    if (m_echoing)
@@ -627,6 +664,7 @@ bool Connection::processChar(unsigned char c)
 	    if (processLine(m_buffer))
 		return true;
 	    m_buffer.clear();
+	    m_cursorPos = 0;
 	    return false;
 	case 0x03: // ^C, BREAK
 	    m_escmode = 0;
@@ -674,21 +712,22 @@ bool Connection::processChar(unsigned char c)
 	    if (!m_echoing)
 		break;
 	    clearLine();
-	    writeStr(m_buffer);
+	    writeBuffer();
 	    return false;
 	case 0x15: // ^U
 	    if (m_buffer.null())
 		break;
 	    m_escmode = 0;
 	    m_buffer.clear();
+	    m_cursorPos = 0;
 	    if (m_echoing)
 		clearLine();
 	    return false;
 	case 0x17: // ^W
-	    if (m_buffer.null())
+	    if (m_cursorPos <= 0)
 		errorBeep();
 	    else {
-		int i = m_buffer.length()-1;
+		int i = m_cursorPos-1;
 		for (; i > 0; i--)
 		    if (m_buffer[i] != ' ')
 			break;
@@ -698,28 +737,45 @@ bool Connection::processChar(unsigned char c)
 			break;
 		    }
 		m_escmode = 0;
-		m_buffer.assign(m_buffer,i);
+		m_buffer = m_buffer.substr(0,i) + m_buffer.substr(m_cursorPos);
+		m_cursorPos = i;
 		if (m_echoing) {
 		    clearLine();
-		    writeStr(m_buffer);
+		    writeBuffer();
 		}
 	    }
 	    return false;
 	case 0x7F: // DEL
 	case 0x08: // ^H, BACKSPACE
-	    if (m_buffer.null()) {
+	    if (!m_cursorPos) {
 		errorBeep();
 		return false;
 	    }
 	    m_escmode = 0;
-	    m_buffer.assign(m_buffer,m_buffer.length()-1);
-	    if (m_echoing)
-		writeStr("\b \b");
+	    if (atEol) {
+		m_buffer.assign(m_buffer,--m_cursorPos);
+		if (m_echoing)
+		    writeStr("\b \b");
+	    }
+	    else {
+		m_buffer = m_buffer.substr(0,m_cursorPos-1) + m_buffer.substr(m_cursorPos);
+		m_cursorPos--;
+		if (m_echoing) {
+		    writeStr("\b");
+		    writeBufferTail(true);
+		}
+	    }
 	    return false;
 	case 0x09: // ^I, TAB
 	    m_escmode = 0;
 	    if (m_buffer.null())
 		return processLine("help",false);
+	    if (!atEol) {
+		if (m_echoing)
+		    writeStr(m_buffer.c_str()+m_cursorPos,m_buffer.length()-m_cursorPos);
+		m_cursorPos = m_buffer.length();
+		return false;
+	    }
 	    if (!autoComplete())
 		errorBeep();
 	    return false;
@@ -742,27 +798,98 @@ bool Connection::processChar(unsigned char c)
 		m_escmode = c;
 		return false;
 	}
+	char escMode = m_escmode;
+	m_escmode = 0;
 	DDebug("RManager",DebugInfo,"ANSI '%s%c' last '%s%c'",
 	    (c >= ' ') ? "" : "^", (c >= ' ') ? c : c+0x40,
-	    (m_escmode >= ' ') ? "" : "^", (m_escmode >= ' ') ? m_escmode : m_escmode+0x40
+	    (escMode >= ' ') ? "" : "^", (escMode >= ' ') ? escMode : escMode+0x40
 	);
-	m_escmode = 0;
 	switch (c) {
 	    case 'A': // Up arrow
+		{
+		    String* s = static_cast<String*>(m_history.remove(false));
+		    if (m_buffer)
+			m_history.append(new String(m_buffer));
+		    m_buffer = s;
+		    TelEngine::destruct(s);
+		}
+		clearLine();
+		m_cursorPos = m_buffer.length();
+		writeBuffer();
+		return false;
 	    case 'B': // Down arrow
-		if (m_lastcmd.null()) {
+		{
+		    ObjList* l = &m_history;
+		    while (l->skipNext())
+			l = l->skipNext();
+		    String* s = static_cast<String*>(l->get());
+		    m_history.remove(s,false);
+		    if (m_buffer)
+			m_history.insert(new String(m_buffer));
+		    m_buffer = s;
+		    TelEngine::destruct(s);
+		}
+		clearLine();
+		m_cursorPos = m_buffer.length();
+		writeBuffer();
+		return false;
+	    case 'C': // Right arrow
+		if (atEol || m_buffer.null()) {
 		    errorBeep();
 		    return false;
 		}
-		else {
-		    String str = m_lastcmd;
-		    if (m_buffer)
-			m_lastcmd = m_buffer;
-		    m_buffer = str;
-		}
-		clearLine();
-		writeStr(m_buffer);
+		if (m_echoing)
+		    writeStr(m_buffer.c_str()+m_cursorPos,1);
+		m_cursorPos++;
 		return false;
+	    case 'D': // Left arrow
+		if (!m_cursorPos || m_buffer.null()) {
+		    errorBeep();
+		    return false;
+		}
+		if (m_echoing)
+		    writeStr("\b");
+		m_cursorPos--;
+		return false;
+	    case 'H': // Home
+		if (m_echoing)
+		    writeStr("\r");
+		m_cursorPos = 0;
+		return false;
+	    case 'F': // End
+		if (atEol)
+		    return false;
+		if (m_echoing && m_buffer)
+		    writeStr(m_buffer.c_str()+m_cursorPos);
+		m_cursorPos = m_buffer.length();
+		return false;
+	    case '~':
+		switch (escMode) {
+		    case '1': // Home
+			if (m_echoing)
+			    writeStr("\r");
+			m_cursorPos = 0;
+			return false;
+		    case '4': // End
+			if (atEol)
+			    return false;
+			if (m_echoing && m_buffer)
+			    writeStr(m_buffer.c_str()+m_cursorPos);
+			m_cursorPos = m_buffer.length();
+			return false;
+		    case '3': // Delete
+			if (atEol || m_buffer.null()) {
+			    errorBeep();
+			    return false;
+			}
+			m_buffer = m_buffer.substr(0,m_cursorPos) + m_buffer.substr(m_cursorPos+1);
+			writeBufferTail(true);
+			return false;
+		    //case '2': // Insert
+		    //case '5': // Page up
+		    //case '6': // Page down
+		}
+		break;
 	}
 	c = 0;
     }
@@ -771,14 +898,28 @@ bool Connection::processChar(unsigned char c)
 	return false;
     }
     if (m_echoing && (c == ' ')) {
-	if (m_buffer.null() || m_buffer.endsWith(" ")) {
+	if (m_buffer.null() || (atEol && m_buffer.endsWith(" "))) {
 	    errorBeep();
 	    return false;
 	}
     }
-    m_buffer += (char)c;
-    if (m_echoing)
-	writeStr((char*)&c,1);
+    if (atEol) {
+	// append char
+	m_buffer += (char)c;
+	m_cursorPos = m_buffer.length();
+	if (m_echoing)
+	    writeStr((char*)&c,1);
+    }
+    else {
+	// insert char
+	String tmp((char)c);
+	m_buffer = m_buffer.substr(0,m_cursorPos) + tmp + m_buffer.substr(m_cursorPos);
+	m_cursorPos++;
+	if (m_echoing) {
+	    writeStr(tmp);
+	    writeBufferTail(m_cursorPos);
+	}
+    }
     return false;
 }
 
@@ -893,8 +1034,9 @@ bool Connection::autoComplete()
 	return false;
     if (m.retValue().find('\t') < 0) {
 	m_buffer = m_buffer.substr(0,keepLen)+m.retValue()+" ";
+	m_cursorPos = m_buffer.length();
 	clearLine();
-	writeStr(m_buffer);
+	writeBuffer();
 	return true;
     }
     // more options returned - list them and display the prompt again
@@ -919,8 +1061,9 @@ bool Connection::autoComplete()
     }
     TelEngine::destruct(l);
     m_buffer += maxMatch.substr(partWord.length());
+    m_cursorPos = m_buffer.length();
     writeStr("\r\n");
-    writeStr(m_buffer);
+    writeBuffer();
     return true;
 }
 
@@ -933,8 +1076,13 @@ bool Connection::processLine(const char *line, bool saveLine)
     if (str.null())
 	return false;
 
-    if (saveLine)
-	m_lastcmd = str;
+    if (saveLine) {
+	m_history.remove(str);
+	while (GenObject* obj = m_history[m_histLen])
+	    m_history.remove(obj);
+	m_history.insert(new String(str));
+    }
+
     line = 0;
     m_buffer.clear();
 

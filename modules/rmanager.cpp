@@ -706,7 +706,7 @@ bool Connection::processChar(unsigned char c)
 	    if (!m_echoing)
 		break;
 	    writeStr("\033[H\033[2J");
-	    writeStr(m_buffer);
+	    writeBuffer();
 	    return false;
 	case 0x12: // ^R
 	    if (!m_echoing)

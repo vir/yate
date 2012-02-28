@@ -62,6 +62,7 @@ namespace { // anonymous
 
 #define FAX_DATA_CHUNK 320
 #define T38_DATA_CHUNK 160
+#define T38_TIMER_MSEC 20
 
 class FaxWrapper;
 
@@ -541,9 +542,10 @@ T38Terminal::~T38Terminal()
 void T38Terminal::run()
 {
     while ((m_source || m_consumer) && !m_eof) {
+	// the fake number of samples is just to compute timeouts
 	if (t38_terminal_send_timeout(&m_t38,T38_DATA_CHUNK))
 	    break;
-	Thread::idle();
+	Thread::msleep(T38_TIMER_MSEC);
     }
 }
 

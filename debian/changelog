@@ -1,3 +1,11 @@
+yate (4.0.1.svn4949) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4949: + Sleep a time correlated to the fake
+    T.38 number of samples.  + Added a DebugTest level always visible
+    and displayed white on blue background.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 02 Mar 2012 02:19:23 +0400
+
 yate (4.0.1.svn4948) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4948: + This makes T.38 terminal timeouts

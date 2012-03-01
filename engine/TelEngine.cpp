@@ -106,7 +106,7 @@ static Debugger::Formatting s_fmtstamp = Debugger::None;
 
 static const char* const s_colors[11] = {
     "\033[5;41;1;33m\033[K",// DebugFail - blinking yellow on red
-    "\033[41;1;33m\033[K",  // Unnamed   - yellow on red
+    "\033[44;1;37m\033[K",  // DebugTest - white on blue
     "\033[41;1;37m\033[K",  // DebugGoOn - white on red
     "\033[41;37m\033[K",    // DebugConf - gray on red
     "\033[40;31m\033[K",    // DebugStub - red on black
@@ -120,7 +120,7 @@ static const char* const s_colors[11] = {
 
 static const char* const s_levels[11] = {
     "FAIL",
-    "FAIL",
+    "TEST",
     "GOON",
     "CONF",
     "STUB",

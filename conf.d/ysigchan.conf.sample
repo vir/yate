@@ -30,11 +30,17 @@
 ; Can be overridden in each ss7-isup, isdn-pri-... or isdn-bri-... section
 ;floodevents=20
 
+; maxlock: int: How many microseconds to try to take a non-critical lock before giving up
+; Valid values 500 or higher, -1 to wait forever
+; This parameter is applied on reload
+;maxlock=10000 normally, -1 if Yate is started with -Dm
+
 ; datafile: string: File to save/restore trunks data (circuits lock status)
 ; Defaults to ysigdata.conf located in current config directory
 ; If set the file must contain the path (relative or absolute)
 ; This parameter is applied on reload
 ;datafile=
+
 
 ; Each section except [general] can have some common parameters
 

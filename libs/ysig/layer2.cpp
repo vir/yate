@@ -163,7 +163,8 @@ void SS7Layer2::attach(SS7L2User* l2user)
 void SS7Layer2::timerTick(const Time& when)
 {
     SignallingComponent::timerTick(when);
-    m_l2userMutex.lock();
+    if (!m_l2userMutex.lock(SignallingEngine::maxLockWait()))
+	return;
     RefPointer<SS7L2User> tmp = m_notify ? m_l2user : 0;
     m_notify = false;
     m_l2userMutex.unlock();
@@ -469,7 +470,8 @@ bool SS7MTP2::notify(SignallingInterface::Notification event)
 void SS7MTP2::timerTick(const Time& when)
 {
     SS7Layer2::timerTick(when);
-    lock();
+    if (!lock(SignallingEngine::maxLockWait()))
+	return;
     bool tout = m_interval && (when >= m_interval);
     if (tout)
 	m_interval = 0;

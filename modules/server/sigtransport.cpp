@@ -1056,9 +1056,8 @@ bool StreamReader::connectSocket()
 
 bool StreamReader::readData()
 {
-    if (!m_socket)
+    if (!(m_socket && m_sending.lock(SignallingEngine::maxLockWait())))
 	return false;
-    m_sending.lock();
     if (m_reconnect) {
 	connectionDown();
 	m_sending.unlock();
@@ -1299,9 +1298,11 @@ bool MessageReader::sendMSG(const DataBlock& header, const DataBlock& msg, int s
 
 bool MessageReader::readData()
 {
-    Lock reconLock(m_sending);
+    Lock reconLock(m_sending,SignallingEngine::maxLockWait());
     // If m_socket is null We are already reconnecting
     if (m_socket && m_reconnect) {
+	if (!reconLock.locked())
+	    return false;
 	if (m_transport->status() != Transport::Up)
 	    return false; // We are already in reconnecting state
 	m_transport->setStatus(Transport::Initiating);

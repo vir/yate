@@ -1171,7 +1171,8 @@ bool SS7Management::timeout(SignallingMessageTimer& timer, bool final)
 void SS7Management::timerTick(const Time& when)
 {
     for (;;) {
-	lock();
+	if (!lock(SignallingEngine::maxLockWait()))
+	    break;
 	SnmPending* msg = static_cast<SnmPending*>(m_pending.timeout(when));
 	unlock();
 	if (!msg)

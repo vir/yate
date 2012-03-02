@@ -1262,7 +1262,9 @@ void SS7MTP3::notify(SS7Layer2* link)
 
 void SS7MTP3::timerTick(const Time& when)
 {
-    Lock lock(this);
+    Lock mylock(this,SignallingEngine::maxLockWait());
+    if (!mylock.locked())
+	return;
     for (ObjList* o = m_links.skipNull(); o; o = o->skipNext()) {
 	L2Pointer* p = static_cast<L2Pointer*>(o->get());
 	if (!p)

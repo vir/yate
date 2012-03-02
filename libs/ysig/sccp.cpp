@@ -2307,7 +2307,8 @@ void SCCPManagement::routeStatus(String& dest,bool extended)
 
 void SCCPManagement::timerTick(const Time& when)
 {
-    lock();
+    if (!lock(SignallingEngine::maxLockWait()))
+	return;
     ObjList coordt;
     for (ObjList* o = m_localSubsystems.skipNull();o;o = o->skipNext()) {
 	SccpLocalSubsystem* ss = static_cast<SccpLocalSubsystem*>(o->get());
@@ -2896,7 +2897,8 @@ bool SS7SCCP::managementStatus(Type type, NamedList& params)
 
 void SS7SCCP::timerTick(const Time& when)
 {
-    Lock lock(this);
+    if (!lock(SignallingEngine::maxLockWait()))
+	return;
     for (ObjList* o = m_reassembleList.skipNull();o;) {
         SS7MsgSccpReassemble* usr = YOBJECT(SS7MsgSccpReassemble,o->get());
         if (usr->timeout()) {
@@ -2906,6 +2908,7 @@ void SS7SCCP::timerTick(const Time& when)
         else
             o = o->skipNext();
    }
+   unlock();
 }
 
 void SS7SCCP::ajustMessageParams(NamedList& params, SS7MsgSCCP::Type type)

@@ -3097,6 +3097,9 @@ void SigDriver::initialize()
     m_dataFile = s_cfg.getValue("general","datafile",Engine::configFile("ysigdata"));
     Engine::self()->runParams().replaceParams(m_dataFile);
     s_floodEvents = s_cfg.getIntValue("general","floodevents",20);
+    int maxLock = s_cfg.getIntValue("general","maxlock",-2);
+    if (maxLock > -2)
+	SignallingEngine::maxLockWait(maxLock);
     // Startup
     setup();
     if (!m_engine) {

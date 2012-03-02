@@ -1080,7 +1080,9 @@ bool SS7M2PA::decodeSeq(const DataBlock& data,u_int8_t msgType)
 void SS7M2PA::timerTick(const Time& when)
 {
     SS7Layer2::timerTick(when);
-    Lock lock(m_mutex);
+    Lock lock(m_mutex,SignallingEngine::maxLockWait());
+    if (!lock.locked())
+	return;
     if (m_confTimer.timeout(when.msec())) {
 	sendAck(); // Acknowledge last received message before endpoint drops down the link
 	m_confTimer.stop();

@@ -443,7 +443,9 @@ void SS7TCAP::enqueue(SS7TCAPMessage* msg)
 
 SS7TCAPMessage* SS7TCAP::dequeue()
 {
-    Lock lock(m_inQueueMtx);
+    Lock lock(m_inQueueMtx,SignallingEngine::maxLockWait());
+    if (!lock.locked())
+	return 0;
     ObjList* obj = m_inQueue.skipNull();
     if (!obj)
 	return 0;

@@ -27,6 +27,11 @@
 
 #include <string.h>
 
+// Maximum wait for a non-critical mutex acquisition
+#ifndef MAX_LOCK_WAIT
+#define MAX_LOCK_WAIT 10000
+#endif
+
 #define MIN_TICK_SLEEP 500
 #define DEF_TICK_SLEEP 5000
 #define MAX_TICK_SLEEP 50000
@@ -260,7 +265,9 @@ void SignallingNotifier::cleanup()
     DDebug(DebugInfo,"SignallingNotifier::cleanup() [%p] stub",this);
 }
 
+
 static SignallingEngine* s_self = 0;
+long SignallingEngine::s_maxLockWait = MAX_LOCK_WAIT;
 
 SignallingEngine::SignallingEngine(const char* name)
     : Mutex(true,"SignallingEngine"),
@@ -289,8 +296,12 @@ SignallingEngine::~SignallingEngine()
 
 SignallingEngine* SignallingEngine::self(bool create)
 {
-    if (create && !s_self)
+    if (create && !s_self) {
+	// if mutex debugging is in force don't limit the lock time
+	if (Lockable::wait())
+	    s_maxLockWait = -1;
 	s_self = new SignallingEngine;
+    }
     return s_self;
 }
 
@@ -491,6 +502,14 @@ unsigned long SignallingEngine::timerTick(const Time& when)
     return rval;
 }
 
+void SignallingEngine::maxLockWait(long maxWait)
+{
+    if (maxWait < 0)
+	maxWait = -1;
+    else if (maxWait < MIN_TICK_SLEEP)
+	maxWait = MIN_TICK_SLEEP;
+    s_maxLockWait = maxWait;
+}
 
 SignallingThreadPrivate::~SignallingThreadPrivate()
 {

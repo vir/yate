@@ -2188,8 +2188,8 @@ inline static bool timeout(SS7ISUP* isup, SS7ISUPCall* call, SignallingTimer& ti
 // Get an event from this call
 SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 {
-    Lock mylock(this);
-    if (m_lastEvent || m_state == Released)
+    Lock mylock(this,SignallingEngine::maxLockWait());
+    if (m_lastEvent || m_state == Released || !mylock.locked())
 	return 0;
     SS7MsgISUP* msg = 0;
     while (true) {
@@ -3631,8 +3631,8 @@ void SS7ISUP::destroyed()
 
 void SS7ISUP::timerTick(const Time& when)
 {
-    Lock mylock(this);
-    if (!(m_l3LinkUp && circuits()))
+    Lock mylock(this,SignallingEngine::maxLockWait());
+    if (!(mylock.locked() && m_l3LinkUp && circuits()))
 	return;
 
     // Test remote user part

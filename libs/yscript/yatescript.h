@@ -761,9 +761,9 @@ public:
      * @param name Optional of the newly created constant
      */
     inline explicit ExpOperation(long int value, const char* name = 0)
-	: NamedString(name,""),
+	: NamedString(name,"NaN"),
 	  m_opcode(ExpEvaluator::OpcPush), m_number(value), m_barrier(false)
-	{ String::operator=((int)value); }
+	{ if (value != nonInteger()) String::operator=((int)value); }
 
     /**
      * Push Boolean constructor

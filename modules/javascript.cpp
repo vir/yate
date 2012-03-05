@@ -371,7 +371,7 @@ bool JsFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 	if (!op)
 	    return false;
 	unsigned int epoch = 0;
-	long int fTime = File::getFileTime(*op,epoch) ? epoch : -1;
+	long int fTime = File::getFileTime(*op,epoch) ? (signed long int)epoch : -1;
 	ExpEvaluator::pushOne(stack,new ExpOperation(fTime));
 	TelEngine::destruct(op);
     }

@@ -258,12 +258,12 @@ void JsObject::initialize(ScriptContext* context)
 	addObject(p,"Object",new JsObjectObj(mtx));
     if (!p.getParam(YSTRING("Function")))
 	addObject(p,"Function",new JsFunction(mtx));
+    if (!p.getParam(YSTRING("Array")))
+	addObject(p,"Array",new JsArray(mtx));
     if (!p.getParam(YSTRING("Date")))
 	addObject(p,"Date",new JsDate(mtx));
     if (!p.getParam(YSTRING("Math")))
 	addObject(p,"Math",new JsMath(mtx));
-    if (!p.getParam(YSTRING("isNaN")))
-	p.addParam(new ExpFunction("isNaN"));
 }
 
 

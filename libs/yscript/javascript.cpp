@@ -34,7 +34,11 @@ class JsContext : public JsObject, public Mutex
 public:
     inline JsContext()
 	: JsObject("Context",this), Mutex(true,"JsContext")
-	{ }
+	{
+	    params().addParam(new ExpFunction("isNaN"));
+	    params().addParam(new ExpFunction("parseInt"));
+	    params().addParam(new ExpOperation(ExpOperation::nonInteger(),"NaN"));
+	}
     virtual bool runFunction(ObjList& stack, const ExpOperation& oper, GenObject* context);
     virtual bool runField(ObjList& stack, const ExpOperation& oper, GenObject* context);
     virtual bool runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context);
@@ -250,12 +254,30 @@ bool JsContext::runFunction(ObjList& stack, const ExpOperation& oper, GenObject*
 	}
     }
     if (name == YSTRING("isNaN")) {
-	if (oper.number() != 1)
-	    return false;
-	ExpOperation* op = ExpEvaluator::popOne(stack);
-	if (!op)
-	    return false;
-	ExpEvaluator::pushOne(stack,new ExpOperation(!op->isInteger()));
+	bool nan = true;
+	ExpOperation* op = popValue(stack,context);
+	if (op)
+	    nan = !op->isInteger();
+	TelEngine::destruct(op);
+	ExpEvaluator::pushOne(stack,new ExpOperation(nan));
+	return true;
+    }
+    if (name == YSTRING("parseInt")) {
+	long int val = ExpOperation::nonInteger();
+	ExpOperation* op1 = popValue(stack,context);
+	if (op1) {
+	    ExpOperation* op2 = popValue(stack,context);
+	    if (op2) {
+		int base = op1->number();
+		if (base >= 0)
+		    val = op2->trimSpaces().toLong(val,base);
+	    }
+	    else
+		val = op1->trimSpaces().toLong(val);
+	    TelEngine::destruct(op2);
+	}
+	TelEngine::destruct(op1);
+	ExpEvaluator::pushOne(stack,new ExpOperation(val));
 	return true;
     }
     return JsObject::runFunction(stack,oper,context);

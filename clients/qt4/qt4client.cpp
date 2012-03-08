@@ -3925,7 +3925,9 @@ bool QtClient::setImage(QObject* obj, const QPixmap& img, bool fit)
 void QtClient::updateToggleImage(QObject* obj)
 {
     QtWidget w(obj);
-    QAbstractButton* b = w.abstractButton();
+    QAbstractButton* b = 0;
+    if (w.inherits(QtWidget::AbstractButton))
+	b = w.abstractButton();
     if (!(b && b->isCheckable()))
 	return;
     String icon;
@@ -3942,7 +3944,9 @@ void QtClient::updateToggleImage(QObject* obj)
 void QtClient::updateImageFromMouse(QObject* obj, bool inOut, bool on)
 {
     QtWidget w(obj);
-    QAbstractButton* b = w.abstractButton();
+    QAbstractButton* b = 0;
+    if (w.inherits(QtWidget::AbstractButton))
+	b = w.abstractButton();
     if (!b)
 	return;
     if (!b->isEnabled())

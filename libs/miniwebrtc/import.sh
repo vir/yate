@@ -268,18 +268,7 @@ file_wrapper.h
 scoped_ptr.h
 system_wrappers/source/	system_wrappers/
 cpu_features.cc
-cpu.cc
 cpu_features_arm.c
-cpu_info.cc
-cpu_linux.cc
-cpu_linux.h
-cpu_mac.cc
-cpu_mac.h
-cpu_measurement_harness.cc
-cpu_measurement_harness.h
-cpu_no_op.cc
-cpu_win.cc
-cpu_win.h
 critical_section.cc
 critical_section_posix.cc
 critical_section_posix.h

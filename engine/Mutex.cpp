@@ -350,13 +350,13 @@ bool MutexPrivate::unlock()
 		Debug(DebugFail,"MutexPrivate::locks() is %d [%p]",locks,this);
 	    }
 	}
-	if (!s_unsafe)
 #ifdef _WINDOWS
-	    ::ReleaseMutex(m_mutex);
+	ok = s_unsafe || ::ReleaseMutex(m_mutex);
 #else
-	    ::pthread_mutex_unlock(&m_mutex);
+	ok = s_unsafe || !::pthread_mutex_unlock(&m_mutex);
 #endif
-	ok = true;
+	if (!ok)
+	    Debug(DebugFail,"Failed to unlock mutex '%s' [%p]",m_name,this);
     }
     else
 	Debug(DebugFail,"MutexPrivate::unlock called on unlocked '%s' [%p]",m_name,this);

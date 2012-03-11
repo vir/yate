@@ -320,9 +320,9 @@ void ISDNQ921::timerTick(const Time& when)
     // If possible return early without locking
     if (state() == Released)
 	return;
-    Lock lock(l2Mutex());
+    Lock lock(l2Mutex(),SignallingEngine::maxLockWait());
     // Check state again after locking, to be sure it didn't change
-    if (state() == Released)
+    if (!lock.locked() || (state() == Released))
 	return;
     // T200 not started
     if (!m_retransTimer.started()) {
@@ -1589,8 +1589,8 @@ void ISDNQ921Passive::cleanup()
 // Check idle timer. Notify upper layer on timeout
 void ISDNQ921Passive::timerTick(const Time& when)
 {
-    Lock lock(l2Mutex());
-    if (!m_idleTimer.timeout(when.msec()))
+    Lock lock(l2Mutex(),SignallingEngine::maxLockWait());
+    if (!(lock.locked() && m_idleTimer.timeout(when.msec())))
 	return;
     // Timeout. Notify layer 3. Restart timer
     XDebug(this,DebugNote,"Timeout. Channel was idle for " FMT64 " ms",m_idleTimer.interval());

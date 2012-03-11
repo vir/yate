@@ -314,6 +314,35 @@ AC_MSG_RESULT([$want_atomics])
 fi
 AC_SUBST(ATOMIC_OPS)
 
+
+# Check for sse2 operations
+SSE2_OPS=no
+AC_ARG_ENABLE(sse2,AC_HELP_STRING([--enable-sse2],[Enable sse2 operations (default: no)]),want_sse2=$enableval,want_sse2=no)
+AC_MSG_CHECKING([whether to use sse2 operations])
+if [[ "x$want_sse2" != "xno" ]]; then
+AC_LANG_SAVE
+AC_LANG_C
+SAVE_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS -Wall -Werror -msse2"
+AC_TRY_LINK([#include <stdint.h>
+#include <math.h>
+#include<emmintrin.h>
+],[
+float ef[2][2];
+const __m128 k1e_10f = _mm_set1_ps(1e-10f);
+_mm_storeu_ps(&ef[0][0], k1e_10f);
+return (int) ef[0][0];
+],
+SSE2_OPS="yes",
+want_sse2="no (missing -march ?)"
+)
+CFLAGS="$SAVE_CFLAGS"
+AC_LANG_RESTORE
+fi
+AC_MSG_RESULT([$want_sse2])
+AC_SUBST(SSE2_OPS)
+
+
 FDSIZE_HACK=""
 AC_ARG_WITH(fdsize,AC_HELP_STRING([--with-fdsize=NNNN],[set FD_SIZE to NNNN (default 8192)]),[ac_cv_use_fdsize=$withval],[ac_cv_use_fdsize=8192])
 if [[ "x$ac_cv_use_fdsize" != "xno" ]]; then
@@ -788,6 +817,39 @@ fi
 AC_SUBST(HAVE_ILBC)
 AC_SUBST(ILBC_INC)
 
+HAVE_ISAC=no
+ISAC_INC=""
+AC_ARG_ENABLE(isac-float,AC_HELP_STRING([--enable-isac-float],[Enable iSAC float codec (default: yes)]),want_isac=$enableval,want_isac=yes)
+if [[ "x$want_isac" = "xyes" ]]; then
+AC_MSG_CHECKING([for iSAC in libs])
+	basedir=`cd "$srcdir" && pwd`
+	incisac="libs/miniwebrtc/audio/coding_isac/main"
+        if [[ -f "$basedir/$incisac/isac.h" ]]; then
+		HAVE_ISAC=yes
+		basedir=`echo "$basedir" | sed 's/\([[^\]]\)\([[[:space:]\$\"'\'']]\)/\1\\\2/g'`
+		ISAC_INC="-I$basedir/$incisac"
+	fi
+AC_MSG_RESULT([$HAVE_ISAC])
+fi
+
+AC_ARG_ENABLE(isac-fixed,AC_HELP_STRING([--enable-isac-fixed],[Enable iSAC fixed codec (default: no)]),want_isac_fixed=$enableval,want_isac_fixed=no)
+if [[ "x$want_isac_fixed" = "xyes" ]]; then
+	if [[ x$HAVE_ISAC = "xyes" ]]; then
+	    AC_ERROR([iSAC Fixed and iSAC Float can not be enabled both at the same time])
+	else
+AC_MSG_CHECKING([for iSAC fixed in libs])
+		basedir=`cd "$srcdir" && pwd`
+		incisac="libs/miniwebrtc/audio/coding_isac/fix"
+		if [[ -f "$basedir/$incisac/isacfix.h" ]]; then
+			HAVE_ISAC=yes
+			basedir=`echo "$basedir" | sed 's/\([[^\]]\)\([[[:space:]\$\"'\'']]\)/\1\\\2/g'`
+			ISAC_INC="-I$basedir/$incisac -DISAC_FIXED"
+		fi
+	fi
+AC_MSG_RESULT([$HAVE_ISAC])
+fi
+AC_SUBST(HAVE_ISAC)
+AC_SUBST(ISAC_INC)
 
 HAVE_SPEEX=no
 SPEEX_INC=""
@@ -1424,6 +1486,7 @@ AC_CONFIG_FILES([packing/rpm/yate.spec
                  libs/ymodem/Makefile
 		 libs/yasn/Makefile
 	         libs/ysnmp/Makefile
+	         libs/miniwebrtc/Makefile
                  share/Makefile
                  share/scripts/Makefile
                  share/skins/Makefile

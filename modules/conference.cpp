@@ -38,6 +38,9 @@ namespace { // anonymous
 // maximum size we allow the buffer to grow
 #define MAX_BUFFER 960
 
+// minimum notification interval in msec
+#define MIN_INTERVAL 1000
+
 // maximum and default number of speakers we track
 #define MAX_SPEAKERS 8
 #define DEF_SPEAKERS 3
@@ -145,6 +148,8 @@ private:
     unsigned int m_lonelyInterval;
     ConfChan* m_speakers[MAX_SPEAKERS];
     int m_trackSpeakers;
+    int m_trackInterval;
+    u_int64_t m_nextNotify;
     u_int64_t m_nextSpeakers;
 };
 
@@ -329,7 +334,7 @@ ConfRoom* ConfRoom::get(const String& name, const NamedList* params)
 ConfRoom::ConfRoom(const String& name, const NamedList& params)
     : m_name(name), m_lonely(false), m_created(true), m_record(0),
       m_rate(8000), m_users(0), m_maxusers(10), m_maxLock(200),
-      m_expire(0), m_lonelyInterval(0), m_nextSpeakers(0)
+      m_expire(0), m_lonelyInterval(0), m_nextNotify(0), m_nextSpeakers(0)
 {
     DDebug(&__plugin,DebugAll,"ConfRoom::ConfRoom('%s',%p) [%p]",
 	name.c_str(),&params,this);
@@ -344,6 +349,11 @@ ConfRoom::ConfRoom(const String& name, const NamedList& params)
 	m_trackSpeakers = MAX_SPEAKERS;
     else if ((m_trackSpeakers == 0) && params.getBoolValue("speakers"))
 	m_trackSpeakers = DEF_SPEAKERS;
+    m_trackInterval = params.getIntValue("interval",3000);
+    if (m_trackInterval <= 0)
+	m_trackInterval = 0;
+    else if (m_trackInterval < MIN_INTERVAL)
+	m_trackInterval = MIN_INTERVAL;
     setLonelyTimeout(params["lonely"]);
     if (m_rate != 8000)
 	m_format << "/" << m_rate;
@@ -739,8 +749,10 @@ void ConfRoom::mix(ConfConsumer* cons)
     }
     mixbuf.clear();
     Message* m = 0;
-    if (m_trackSpeakers && m_notify) {
+    while (m_trackSpeakers && m_notify) {
 	u_int64_t now = Time::now();
+	if (now < m_nextNotify)
+	    break;
 	bool notify = false;
 	bool changed = false;
 	// check if the list of speakers changed or not, exclude order change
@@ -800,7 +812,11 @@ void ConfRoom::mix(ConfConsumer* cons)
 	    m->addParam("changed",String::boolText(changed));
 	    // repeat notification at least once every 5s if someone speaks
 	    m_nextSpeakers = now + 5000000;
+	    // limit the minimum interval of notification
+	    if (m_trackInterval)
+		m_nextNotify = now + 1000 * (int64_t)m_trackInterval;
 	}
+	break;
     }
     mylock.drop();
     Forward(data);

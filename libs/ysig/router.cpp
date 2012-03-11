@@ -693,7 +693,9 @@ void SS7Router::buildView(SS7PointCode::Type type, ObjList& view, SS7Layer3* net
 
 void SS7Router::timerTick(const Time& when)
 {
-    Lock mylock(this);
+    Lock mylock(this,SignallingEngine::maxLockWait());
+    if (!mylock.locked())
+	return;
     if (m_isolate.timeout(when.msec())) {
 	Debug(this,DebugWarn,"Node is isolated and down! [%p]",this);
 	m_phase2 = false;

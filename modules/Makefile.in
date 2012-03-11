@@ -150,6 +150,10 @@ ifneq (@HAVE_ILBC@,no)
 PROGS := $(PROGS) ilbccodec.yate
 endif
 
+ifneq (@HAVE_ISAC@,no)
+PROGS := $(PROGS) isaccodec.yate
+endif
+
 ifneq (@HAVE_SPEEX@,no)
 PROGS := $(PROGS) speexcodec.yate
 endif
@@ -337,6 +341,10 @@ ilbccodec.yate: ../libs/ilbc/libilbc.a
 ilbccodec.yate: LOCALFLAGS = @ILBC_INC@
 ilbccodec.yate: LOCALLIBS = -L../libs/ilbc -lilbc
 
+isaccodec.yate: ../libs/miniwebrtc/libminiwebrtc.a
+isaccodec.yate: LOCALFLAGS = @ISAC_INC@ -I@top_srcdir@/libs/miniwebrtc/audio/common/processing -I@top_srcdir@/libs/miniwebrtc
+isaccodec.yate: LOCALLIBS = -L../libs/miniwebrtc -lminiwebrtc
+
 gsmcodec.yate: LOCALFLAGS = @GSM_INC@
 gsmcodec.yate: LOCALLIBS = @GSM_LIB@
 
@@ -386,6 +394,9 @@ server/ysnmpagent.yate: LOCALLIBS = -L../libs/yasn -lyasn -L../libs/ysnmp -lysnm
 
 ../libs/ilbc/libilbc.a:
 	$(MAKE) -C ../libs/ilbc
+
+../libs/miniwebrtc/libminiwebrtc.a:
+	$(MAKE) -C ../libs/miniwebrtc
 
 ../libs/ysip/libyatesip.a: @top_srcdir@/libs/ysip/yatesip.h
 	$(MAKE) -C ../libs/ysip

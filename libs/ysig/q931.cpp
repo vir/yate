@@ -2960,7 +2960,9 @@ void ISDNQ931::setInterval(SignallingTimer& timer, int id)
 // Check timeouts for segmented messages, layer 2 down state, restart circuits
 void ISDNQ931::timerTick(const Time& when)
 {
-    Lock lock(l3Mutex());
+    Lock mylock(l3Mutex(),SignallingEngine::maxLockWait());
+    if (!mylock.locked())
+	return;
     // Check segmented message
     if (m_recvSgmTimer.timeout(when.msec()))
 	endReceiveSegment("timeout");

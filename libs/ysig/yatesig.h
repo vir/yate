@@ -916,6 +916,19 @@ public:
 	{ return m_usecSleep; }
 
     /**
+     * Get the maximum time we should spend acquiring a non-critical Mutex
+     * @return Maximum non-critical lock wait in usec, -1 to wait forever
+     */
+    inline static long maxLockWait()
+	{ return s_maxLockWait; }
+
+    /**
+     * Set the maximum time we should spend acquiring a non-critical Mutex
+     * @param maxWait New maximum non-critical lock wait in usec, negative to wait forever
+     */
+    static void maxLockWait(long maxWait);
+
+    /**
      * Helper template used to remove a component descendant from its engine,
      *  destroy it and set the received pointer to 0
      * @param obj Reference to pointer (lvalue) to the object to remove and destroy
@@ -947,6 +960,7 @@ private:
     SignallingNotifier* m_notifier;
     unsigned long m_usecSleep;
     unsigned long m_tickSleep;
+    static long s_maxLockWait;
 };
 
 /**

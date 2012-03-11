@@ -158,6 +158,12 @@ g728=default
 ; g729: bool: ITU G.729 all variations (G729/8000)
 g729=default
 
+; isac/16000: bool: ISAC wide band
+isac/16000=default
+
+; isac/32000: bool: ISAC super wide band
+isac/32000=default
+
 
 [hacks]
 ; This section holds the dirty stuff required to work with some broken

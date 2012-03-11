@@ -3206,16 +3206,16 @@ public:
 
     /**
      * Build an account id from protocol, username, host
-     * @param id Destination string
+     * @param accId Destination string
      * @param proto Account protocol
      * @param user Account username
      * @param host Account host
      * @return Destination string address
      */
-    static inline String& buildAccountId(String& id, const String& proto,
+    static inline String& buildAccountId(String& accId, const String& proto,
 	const String& user, const String& host) {
-	    id = proto + ":" + user + "@" + host;
-	    return id;
+	    accId = proto + ":" + user + "@" + host;
+	    return accId;
 	}
 
 protected:

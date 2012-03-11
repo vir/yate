@@ -243,8 +243,15 @@ void MOHSource::run()
     u_int64_t tpos = Time::now();
     m_time = tpos;
 
+    unsigned int pos = 0;
     while ((r > 0) && looping()) {
-	r = (m_in >= 0) ? ::read(m_in,m_data.data(),m_data.length()) : m_data.length();
+	unsigned int len = m_data.length() - pos;
+	if (m_in >= 0) {
+	    unsigned char* ptr = m_data.data(pos,len);
+	    r = ptr ? ::read(m_in,ptr,len) : 0;
+	}
+	else
+	    r = len;
 
 	if (r < 0) {
 	    if (errno == EINTR) {
@@ -253,8 +260,12 @@ void MOHSource::run()
 	    }
 	    break;
 	}
-	if (r < (int)m_data.length())
-	    m_data.assign(m_data.data(),r);
+	pos += r;
+	if (pos < m_data.length()) {
+	    if (!r)
+		Thread::yield();
+	    continue;
+	}
 	if (m_swap) {
 	    uint16_t* p = (uint16_t*)m_data.data();
 	    for (int i = 0; i < r; i+= 2) {
@@ -268,6 +279,7 @@ void MOHSource::run()
 	    Thread::usleep((unsigned long)dly);
 	}
 	Forward(m_data);
+	pos = 0;
 	tpos += (r*1000000ULL/m_brate);
     }
 }

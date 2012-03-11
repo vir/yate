@@ -3597,6 +3597,8 @@ void YJGDriver::initialize()
 	s_knownCodecs.add("102","speex",   "8000",  "speex");
 	s_knownCodecs.add("103","speex",   "16000", "speex/16000");
 	s_knownCodecs.add("104","speex",   "32000", "speex/32000");
+	s_knownCodecs.add("105","ISAC",    "16000", "isac/16000");
+	s_knownCodecs.add("106","ISAC",    "32000", "isac/32000");
 
 	s_jingle = new YJGEngine;
 	s_jingle->debugChain(this);

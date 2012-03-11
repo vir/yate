@@ -114,8 +114,8 @@ void SS7Testing::notify(SS7Layer3* network, int sls)
 
 void SS7Testing::timerTick(const Time& when)
 {
-    Lock mylock(this);
-    if (!m_timer.timeout(when.msec()))
+    Lock mylock(this,SignallingEngine::maxLockWait());
+    if (!(mylock.locked() && m_timer.timeout(when.msec())))
 	return;
     m_timer.start(when.msec());
     sendTraffic();

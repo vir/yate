@@ -81,6 +81,7 @@ public:
 	: JsObject("Engine",mtx,true)
 	{
 	    MKDEBUG(Fail);
+	    MKDEBUG(Test);
 	    MKDEBUG(GoOn);
 	    MKDEBUG(Conf);
 	    MKDEBUG(Stub);
@@ -104,28 +105,53 @@ class JsMessage : public JsObject
     YCLASS(JsMessage,JsObject)
 public:
     inline JsMessage(Mutex* mtx)
-	: JsObject("Message",mtx,true), m_message(0)
+	: JsObject("Message",mtx,true), m_message(0), m_owned(false)
 	{
 	    XDebug(DebugAll,"JsMessage::JsMessage() [%p]",this);
 	    params().addParam(new ExpFunction("constructor"));
-	    params().addParam(new ExpFunction("enqueue"));
-	    params().addParam(new ExpFunction("dispatch"));
 	}
-    inline JsMessage(Message* message, Mutex* mtx)
-	: JsObject("Message",mtx), m_message(message)
+    inline JsMessage(Message* message, Mutex* mtx, bool owned)
+	: JsObject("Message",mtx), m_message(message), m_owned(owned)
 	{
 	    XDebug(DebugAll,"JsMessage::JsMessage(%p) [%p]",message,this);
+	    params().addParam(new ExpFunction("enqueue"));
+	    params().addParam(new ExpFunction("dispatch"));
 	    params().addParam(new ExpFunction("broadcast"));
-	    params().addParam(new ExpFunction("acknowledge"));
 	}
     virtual ~JsMessage()
 	{
 	    XDebug(DebugAll,"JsMessage::~JsMessage() [%p]",this);
+	    if (m_owned)
+		TelEngine::destruct(m_message);
 	}
+    inline void clearMsg()
+	{ m_message = 0; m_owned = false; }
     static void initialize(ScriptContext* context);
 protected:
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
     Message* m_message;
+    bool m_owned;
+};
+
+class JsFile : public JsObject
+{
+    YCLASS(JsFile,JsObject)
+public:
+    inline JsFile(Mutex* mtx)
+	: JsObject("File",mtx,true)
+	{
+	    XDebug(DebugAll,"JsFile::JsFile() [%p]",this);
+	    params().addParam(new ExpFunction("exists"));
+	    params().addParam(new ExpFunction("remove"));
+	    params().addParam(new ExpFunction("rename"));
+	    params().addParam(new ExpFunction("mkdir"));
+	    params().addParam(new ExpFunction("rmdir"));
+	    params().addParam(new ExpFunction("getFileTime"));
+	    params().addParam(new ExpFunction("setFileTime"));
+	}
+    static void initialize(ScriptContext* context);
+protected:
+    bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
 };
 
 class JsChannel : public JsObject
@@ -136,6 +162,12 @@ public:
 	: JsObject("Channel",mtx,true), m_assist(assist)
 	{
 	    params().addParam(new ExpFunction("id"));
+	    params().addParam(new ExpFunction("status"));
+	    params().addParam(new ExpFunction("answer"));
+	    params().addParam(new ExpFunction("hangup"));
+	    params().addParam(new ExpFunction("callTo"));
+	    params().addParam(new ExpFunction("playFile"));
+	    params().addParam(new ExpFunction("recFile"));
 	}
     static void initialize(ScriptContext* context, JsAssist* assist);
 protected:
@@ -181,9 +213,13 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	String str;
 	for (long int i = oper.number(); i; i--) {
 	    ExpOperation* op = popValue(stack,context);
+	    if (!op)
+		continue;
+Debug(DebugTest,"Popped [%ld] '%s' %ld",i,op->c_str(),op->number());
 	    if ((i == 1) && oper.number() > 1 && op->isInteger())
 		level = op->number();
-	    else {
+	    else if (*op) {
+Debug(DebugTest,"Prepend '%s'",op->c_str());
 		if (str)
 		    str = *op + " " + str;
 		else
@@ -193,7 +229,7 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	if (str) {
 	    if (level > DebugAll)
 		level = DebugAll;
-	    else if (level < DebugGoOn)
+	    else if (level <= DebugFail)
 		level = DebugGoOn;
 	    Debug(&__plugin,level,"%s",str.c_str());
 	}
@@ -218,7 +254,45 @@ void JsEngine::initialize(ScriptContext* context)
 bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
     if (oper.name() == YSTRING("constructor")) {
-	ExpEvaluator::pushOne(stack,new ExpWrapper(new JsMessage(mutex())));
+	if (oper.number() != 1)
+	    return false;
+	ExpOperation* op = popValue(stack,context);
+	if (!op)
+	    return false;
+	Message* m = new Message(*op);
+	ExpEvaluator::pushOne(stack,new ExpWrapper(new JsMessage(m,mutex(),true)));
+	TelEngine::destruct(op);
+    }
+    else if (oper.name() == YSTRING("broadcast")) {
+	if (oper.number() != 0)
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpOperation(m_message && m_message->broadcast()));
+    }
+    else if (oper.name() == YSTRING("enqueue")) {
+	if (oper.number() != 0)
+	    return false;
+	bool ok = false;
+	if (m_owned) {
+	    Message* m = m_message;
+	    clearMsg();
+	    if (m)
+		freeze();
+	    ok = m && Engine::enqueue(m);
+	}
+	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
+    }
+    else if (oper.name() == YSTRING("dispatch")) {
+	if (oper.number() != 0)
+	    return false;
+	bool ok = false;
+	if (m_owned && m_message) {
+	    Message* m = m_message;
+	    clearMsg();
+	    ok = Engine::dispatch(*m);
+	    m_message = m;
+	    m_owned = true;
+	}
+	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
     }
     else
 	return JsObject::runNative(stack,oper,context);
@@ -237,15 +311,141 @@ void JsMessage::initialize(ScriptContext* context)
 }
 
 
+bool JsFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    if (oper.name() == YSTRING("exists")) {
+	if (oper.number() != 1)
+	    return false;
+	ExpOperation* op = popValue(stack,context);
+	if (!op)
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpOperation(File::exists(*op)));
+	TelEngine::destruct(op);
+    }
+    else if (oper.name() == YSTRING("remove")) {
+	if (oper.number() != 1)
+	    return false;
+	ExpOperation* op = popValue(stack,context);
+	if (!op)
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpOperation(File::remove(*op)));
+	TelEngine::destruct(op);
+    }
+    else if (oper.name() == YSTRING("rename")) {
+	if (oper.number() != 2)
+	    return false;
+	ExpOperation* newName = popValue(stack,context);
+	if (!newName)
+	    return false;
+	ExpOperation* oldName = popValue(stack,context);
+	if (!oldName) {
+	    TelEngine::destruct(newName);
+	    return false;
+	}
+	ExpEvaluator::pushOne(stack,new ExpOperation(File::rename(*oldName,*newName)));
+	TelEngine::destruct(oldName);
+	TelEngine::destruct(newName);
+    }
+    else if (oper.name() == YSTRING("mkdir")) {
+	if (oper.number() != 1)
+	    return false;
+	ExpOperation* op = popValue(stack,context);
+	if (!op)
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpOperation(File::mkDir(*op)));
+	TelEngine::destruct(op);
+    }
+    else if (oper.name() == YSTRING("rmdir")) {
+	if (oper.number() != 1)
+	    return false;
+	ExpOperation* op = popValue(stack,context);
+	if (!op)
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpOperation(File::rmDir(*op)));
+	TelEngine::destruct(op);
+    }
+    else if (oper.name() == YSTRING("getFileTime")) {
+	if (oper.number() != 1)
+	    return false;
+	ExpOperation* op = popValue(stack,context);
+	if (!op)
+	    return false;
+	unsigned int epoch = 0;
+	long int fTime = File::getFileTime(*op,epoch) ? (signed long int)epoch : -1;
+	ExpEvaluator::pushOne(stack,new ExpOperation(fTime));
+	TelEngine::destruct(op);
+    }
+    else if (oper.name() == YSTRING("setFileTime")) {
+	if (oper.number() != 2)
+	    return false;
+	ExpOperation* fTime = popValue(stack,context);
+	if (!fTime)
+	    return false;
+	ExpOperation* fName = popValue(stack,context);
+	if (!fName) {
+	    TelEngine::destruct(fTime);
+	    return false;
+	}
+	bool ok = fTime->isInteger() && (fTime->number() >= 0) &&
+	    File::setFileTime(*fName,fTime->number());
+	TelEngine::destruct(fTime);
+	TelEngine::destruct(fName);
+	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
+    }
+    else
+	return JsObject::runNative(stack,oper,context);
+    return true;
+}
+
+void JsFile::initialize(ScriptContext* context)
+{
+    if (!context)
+	return;
+    Mutex* mtx = context->mutex();
+    Lock mylock(mtx);
+    NamedList& params = context->params();
+    if (!params.getParam(YSTRING("File")))
+	addObject(params,"File",new JsFile(mtx));
+}
+
+
 bool JsChannel::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
     if (oper.name() == YSTRING("id")) {
-	for (long int i = oper.number(); i; i--) {
-	    TelEngine::destruct(ExpEvaluator::popOne(stack));
-	}
+	if (oper.number())
+	    return false;
 	RefPointer<JsAssist> ja = m_assist;
 	if (ja)
 	    ExpEvaluator::pushOne(stack,new ExpOperation(ja->id()));
+	else
+	    return false;
+    }
+    else if (oper.name() == YSTRING("status")) {
+	if (oper.number())
+	    return false;
+	RefPointer<JsAssist> ja = m_assist;
+	if (ja) {
+	    RefPointer<CallEndpoint> cp = ja->locate();
+	    Channel* ch = YOBJECT(Channel,cp);
+	    if (ch)
+		ExpEvaluator::pushOne(stack,new ExpOperation(ch->status()));
+	}
+	else
+	    return false;
+    }
+    else if (oper.name() == YSTRING("callTo")) {
+	if (oper.number() != 1)
+	    return false;
+	ExpOperation* op = popValue(stack,context);
+	if (!op)
+	    return false;
+	RefPointer<JsAssist> ja = m_assist;
+	if (ja) {
+	    RefPointer<CallEndpoint> cp = ja->locate();
+	    Channel* ch = YOBJECT(Channel,cp);
+	    if (ch)
+		ExpEvaluator::pushOne(stack,new ExpOperation(ch->status()));
+	}
 	else
 	    return false;
     }
@@ -279,6 +479,7 @@ bool JsAssist::init()
     JsEngine::initialize(m_runner->context());
     JsChannel::initialize(m_runner->context(),this);
     JsMessage::initialize(m_runner->context());
+    JsFile::initialize(m_runner->context());
     ScriptRun::Status rval = m_runner->run();
     m_runner->reset();
     return (ScriptRun::Succeeded == rval);
@@ -294,9 +495,10 @@ bool JsAssist::runFunction(const char* name, Message& msg)
     tmp << name << "()";
     jp.parse(tmp);
     ScriptRun* runner = jp.createRunner(m_runner->context());
-    JsMessage* jm = new JsMessage(&msg,m_runner->context()->mutex());
+    JsMessage* jm = new JsMessage(&msg,m_runner->context()->mutex(),false);
     ExpEvaluator::pushOne(runner->stack(),new ExpWrapper(jm,"message"));
     ScriptRun::Status rval = runner->run();
+    jm->clearMsg();
     TelEngine::destruct(runner);
     return (ScriptRun::Succeeded == rval);
 }
@@ -371,6 +573,7 @@ bool JsModule::commandExecute(String& retVal, const String& line)
     JsObject::initialize(runner->context());
     JsEngine::initialize(runner->context());
     JsMessage::initialize(runner->context());
+    JsFile::initialize(runner->context());
     ScriptRun::Status st = runner->run();
     if (st == ScriptRun::Succeeded) {
 	while (ExpOperation* op = ExpEvaluator::popOne(runner->stack())) {

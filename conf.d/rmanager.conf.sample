@@ -42,6 +42,10 @@
 ;  This is almost never required and needs Yate to run as superuser
 ;interactive=no
 
+; maxhistory: int: Number of distinct lines to preserve in the session history
+;  The Up / Down arrow keys allow cycling through the history
+;maxhistory=10
+
 ; context: string: SSL context to use to secure the connection
 ;  Setting a context enables SSL on the listener and overrides any domain
 ;context=

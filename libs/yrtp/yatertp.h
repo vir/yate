@@ -360,13 +360,19 @@ public:
     /**
      * Process and store one RTP data packet
      * @param marker True if the marker bit is set in data packet
+     * @param payload Payload number
      * @param timestamp Sampling instant of the packet data
      * @param data Pointer to data block to process
      * @param len Length of the data block in bytes
-     * @return True if data was handled
+     * @return True if the data packet was queued
      */
-    virtual bool rtpRecvData(bool marker, unsigned int timestamp,
+    virtual bool rtpRecv(bool marker, int payload, unsigned int timestamp,
 	const void* data, int len);
+
+    /**
+     * Clear the delayed packets queue and all variables
+     */
+    void clear();
 
 protected:
     /**
@@ -378,12 +384,13 @@ protected:
 private:
     ObjList m_packets;
     RTPReceiver* m_receiver;
-    unsigned int m_mindelay;
-    unsigned int m_maxdelay;
+    unsigned int m_minDelay;
+    unsigned int m_maxDelay;
     unsigned int m_headStamp;
     unsigned int m_tailStamp;
     u_int64_t m_headTime;
-    u_int64_t m_tailTime;
+    u_int64_t m_sampRate;
+    unsigned char m_fastRate;
 };
 
 /**
@@ -586,6 +593,7 @@ private:
 class YRTP_API RTPReceiver : public RTPBaseIO
 {
     friend class RTPSession;
+    friend class RTPDejitter;
 public:
     /**
      * Constructor

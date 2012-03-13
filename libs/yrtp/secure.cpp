@@ -244,9 +244,9 @@ bool RTPSecure::deriveKey(Cipher& cipher, DataBlock& key, unsigned int len, unsi
 
 bool RTPSecure::rtpDecipher(unsigned char* data, int len, const void* secData, u_int32_t ssrc, u_int64_t seq)
 {
-    if (!m_rtpEncrypted)
+    if (!(m_rtpEncrypted && data))
 	return true;
-    if (!(len && data && m_rtpCipher))
+    if (!(len && m_rtpCipher))
 	return false;
     DataBlock iv(m_cipherSalt);
     int i;

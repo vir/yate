@@ -164,6 +164,8 @@ void RTPReceiver::rtpData(const void* data, int len)
     }
     if (len < 0)
 	return;
+    if (!len)
+	pc = 0;
 
     // grab some data at the first packet received or resync
     if (m_ssrcInit) {
@@ -173,6 +175,8 @@ void RTPReceiver::rtpData(const void* data, int len)
 	m_seq = seq-1;
 	m_seqCount = 0;
 	m_warn = true;
+	if (m_dejitter)
+	    m_dejitter->clear();
     }
 
     if (ss != m_ssrc) {
@@ -191,19 +195,35 @@ void RTPReceiver::rtpData(const void* data, int len)
 	m_seq = seq;
 	m_ts = ts - m_tsLast;
 	m_seqCount = 0;
+	if (m_dejitter)
+	    m_dejitter->clear();
 	// drop this packet, next packet will come in correctly
 	return;
     }
 
-    // substraction with overflow
+    u_int32_t rollover = m_rollover;
+    // compare unsigned to detect rollovers
+    if (seq < m_seq)
+	rollover++;
+    u_int64_t seq48 = rollover;
+    seq48 = (seq48 << 16) | seq;
+
+    // if some security data is present authenticate the packet now
+    if (secPtr && !rtpCheckIntegrity((const unsigned char*)data,len + padding + 12,secPtr + m_mkiLen,ss,seq48))
+	return;
+
+    // substraction with overflow to compute sequence difference
     int16_t ds = seq - m_seq;
     if (ds != 1)
 	m_seqLost++;
-    // check if we received duplicate or delayed packet
+    if (ds == 0)
+	return;
+
+    // check if we received a packet too much out of sequence
     // be much more tolerant when authenticating as we cannot resync
-    if ((ds <= 0) || ((ds > SEQ_DESYNC_COUNT) && !secPtr)) {
+    if ((ds <= -SEQ_DESYNC_COUNT) || ((ds > SEQ_DESYNC_COUNT) && !secPtr)) {
 	m_ioLostPkt++;
-	if (ds && !secPtr) {
+	if (!secPtr) {
 	    // try to resync sequence unless we need to authenticate
 	    if (m_seqCount++) {
 		if (seq == ++m_seqSync) {
@@ -216,6 +236,8 @@ void RTPReceiver::rtpData(const void* data, int len)
 			m_seqCount = 0;
 			m_warn = true;
 			m_syncLost++;
+			if (m_dejitter)
+			    m_dejitter->clear();
 			// drop this packet, next packet will come in correctly
 			return;
 		    }
@@ -226,38 +248,32 @@ void RTPReceiver::rtpData(const void* data, int len)
 	    else
 		m_seqSync = seq;
 	}
-	if (m_warn && ds) {
+	if (m_warn) {
 	    m_warn = false;
 	    Debug(DebugWarn,"RTP received SEQ %u while current is %u [%p]",seq,m_seq,this);
 	}
 	return;
     }
 
-    if (ds > 1)
-	m_ioLostPkt += (ds - 1);
-
-    u_int32_t rollover = m_rollover;
-    // this time compare unsigned to detect rollovers
-    if (seq < m_seq)
-	rollover++;
-    u_int64_t seq48 = rollover;
-    seq48 = (seq48 << 16) | seq;
-
-    // if some security data is present authenticate the packet now
-    if (secPtr && !rtpCheckIntegrity((const unsigned char*)data,len + padding + 12,secPtr + m_mkiLen,ss,seq48))
+    if (!rtpDecipher(const_cast<unsigned char*>(pc),len + padding,secPtr,ss,seq48))
 	return;
 
-    // keep track of the last valid sequence number and timestamp we have seen
-    m_seq = seq;
-    m_rollover = rollover;
     m_tsLast = ts - m_ts;
     m_seqCount = 0;
     m_ioPackets++;
     m_ioOctets += len;
+    // keep track of the last valid sequence number and timestamp we have seen
+    m_seq = seq;
+    m_rollover = rollover;
 
-    if (!len)
-	pc = 0;
-    if (rtpDecipher(const_cast<unsigned char*>(pc),len + padding,secPtr,ss,seq48))
+    if (m_dejitter) {
+	if (!m_dejitter->rtpRecv(marker,typ,m_tsLast,pc,len))
+	    m_ioLostPkt++;
+	return;
+    }
+    if (ds > 1)
+	m_ioLostPkt += (ds - 1);
+    if (ds >= 1)
 	rtpRecv(marker,typ,m_tsLast,pc,len);
 }
 
@@ -274,15 +290,8 @@ bool RTPReceiver::rtpRecv(bool marker, int payload, unsigned int timestamp, cons
     if (payload == silencePayload())
 	return decodeSilence(marker,timestamp,data,len);
     finishEvent(timestamp);
-    if (payload == dataPayload()) {
-#if 0
-// dejitter is broken - don't use it
-	if (m_dejitter)
-	    return m_dejitter->rtpRecvData(marker,timestamp,data,len);
-	else
-#endif
-	    return rtpRecvData(marker,timestamp,data,len);
-    }
+    if (payload == dataPayload())
+	return rtpRecvData(marker,timestamp,data,len);
     return false;
 }
 

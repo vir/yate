@@ -36,6 +36,14 @@
 ; drillhole: bool: Attempt to drill a hole through a firewall or NAT
 ;drillhole=disable in server mode, enable in client mode
 
+; minjitter: int: Amount to attempt to keep in the dejitter buffer in msec
+; Valid values 5 to maxjitter-30, negative disables dejitter buffer
+;minjitter=50
+
+; maxjitter: int: Maximum dejitter buffer size in msec
+; Valid values 50 to 1000, 0 disables dejitter buffer
+;maxjitter=120 in client mode, 0 in server mode
+
 ; thread: keyword: Default priority of the data service threads
 ; Can be one of: lowest, low, normal, high, highest
 ; It is a bad idea to set a low priority for anything but testing

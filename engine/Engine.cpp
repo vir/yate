@@ -408,6 +408,8 @@ bool EngineStatusHandler::received(Message &msg)
 
 bool EngineEventHandler::received(Message &msg)
 {
+    if (Engine::nodeName() && !msg.getParam(YSTRING("nodename")))
+	msg.addParam("nodename",Engine::nodeName());
     const String* type = msg.getParam(YSTRING("from"));
     if (TelEngine::null(type))
 	return false;
@@ -1859,6 +1861,9 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
     for (i=1;i<argc;i++) {
 	const char *pc = argv[i];
 	if (inopt && (pc[0] == '-') && pc[1]) {
+	    // skip over Mac OS X process serial number
+	    if (!::strncmp(pc,"-psn_",5))
+		continue;
 	    while (pc && *++pc) {
 		switch (*pc) {
 		    case '-':

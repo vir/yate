@@ -408,6 +408,8 @@ bool EngineStatusHandler::received(Message &msg)
 
 bool EngineEventHandler::received(Message &msg)
 {
+    if (Engine::nodeName() && !msg.getParam(YSTRING("nodename")))
+	msg.addParam("nodename",Engine::nodeName());
     const String* type = msg.getParam(YSTRING("from"));
     if (TelEngine::null(type))
 	return false;

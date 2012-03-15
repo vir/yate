@@ -1861,6 +1861,9 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
     for (i=1;i<argc;i++) {
 	const char *pc = argv[i];
 	if (inopt && (pc[0] == '-') && pc[1]) {
+	    // skip over Mac OS X process serial number
+	    if (!::strncmp(pc,"-psn_",5))
+		continue;
 	    while (pc && *++pc) {
 		switch (*pc) {
 		    case '-':

@@ -176,13 +176,28 @@ void SS7Layer2::timerTick(const Time& when)
 
 void SS7Layer2::notify()
 {
-    if (!operational())
+    unsigned int wasUp = 0;
+    bool doNotify = false;
+    if (!operational()) {
+	wasUp = upTime();
 	m_lastUp = 0;
-    else if (!m_lastUp)
+	doNotify = (wasUp != 0);
+    }
+    else if (!m_lastUp) {
 	m_lastUp = Time::secNow();
+	doNotify = true;
+    }
     m_l2userMutex.lock();
     m_notify = true;
     m_l2userMutex.unlock();
+    if (doNotify && engine()) {
+	NamedList params("");
+	params.addParam("from",toString());
+	params.addParam("type","ss7-layer2");
+	params.addParam("operational",String::boolText(operational()));
+	params.addParam("text",statusName());
+	engine()->notify(this,params);
+    }
 }
 
 unsigned int SS7Layer2::status() const

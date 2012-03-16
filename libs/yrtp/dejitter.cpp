@@ -176,7 +176,7 @@ void RTPDejitter::timerTick(const Time& when)
     unsigned int count = 0;
     while ((packet = static_cast<RTPDelayedData*>(m_packets.get()))) {
 	long delayed = when - packet->scheduled();
-	if (delayed <= 0 || delayed <= m_minDelay)
+	if (delayed <= 0 || delayed <= (long)m_minDelay)
 	    break;
 	// we are too delayed - probably rtpRecv() took too long to complete...
 	m_packets.remove(packet,true);

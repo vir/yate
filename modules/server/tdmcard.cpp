@@ -44,7 +44,11 @@
 #include <wanpipe_defines.h>
 #include <wanpipe_cfg.h>
 #include <wanpipe.h>
+#ifdef NEW_WANPIPE_API
+#include <aft_core.h>
+#else
 #include <sdla_aft_te1.h>
+#endif
 #include <wanpipe_tdm_api_iface.h>
 
 

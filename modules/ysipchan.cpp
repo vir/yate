@@ -3573,6 +3573,9 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
 	    URI from(*hl);
 	    m.addParam("domain",from.getHost());
 	}
+	hl = message->getHeader("User-Agent");
+	if (hl)
+	    m.addParam("device",*hl);
     }
 
     if (params) {

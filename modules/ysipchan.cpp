@@ -1577,6 +1577,27 @@ static inline int findURIParamSep(const String& str, int start)
     return -1;
 }
 
+// Set a transaction response from an authentication error
+static void setAuthError(SIPTransaction* trans, const NamedList& params,
+    bool stale, const String& domain = String::empty())
+{
+    const String& error = params[YSTRING("error")];
+    while (error) {
+	int code = error.toInteger(dict_errors,401);
+	if (code < 400 || code > 699)
+	    break;
+	if ((code == 401) && (error != YSTRING("noautoauth")))
+	    break;
+	SIPMessage* m = new SIPMessage(trans->initialMessage(),code,params.getValue(YSTRING("reason")));
+	copySipHeaders(*m,params);
+	trans->setResponse(m);
+	m->deref();
+	return;
+    }
+    Lock lck(s_globalMutex);
+    trans->requestAuth(s_realm,domain,stale);
+}
+
 
 bool YateSIPPartyHolder::change(String& dest, const String& src)
 {
@@ -4233,8 +4254,7 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
     int age = t->authUser(user,false,&msg);
     DDebug(&plugin,DebugAll,"User '%s' age %d",user.c_str(),age);
     if (((age < 0) || (age > 10)) && s_auth_register) {
-	Lock lck(s_globalMutex);
-	t->requestAuth(s_realm,"",age >= 0);
+	setAuthError(t,msg,age >= 0);
 	return;
     }
 
@@ -4395,8 +4415,7 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
 	int age = t->authUser(user,false,&m);
 	DDebug(&plugin,DebugAll,"User '%s' age %d",user.c_str(),age);
 	if ((age < 0) || (age > 10)) {
-	    Lock lck(s_globalMutex);
-	    t->requestAuth(s_realm,"",age >= 0);
+	    setAuthError(t,m,age >= 0);
 	    return true;
 	}
     }
@@ -5755,10 +5774,8 @@ bool YateSIPConnection::checkUser(SIPTransaction* t, bool refuse)
     if ((age >= 0) && (age <= 10))
 	return true;
     DDebug(this,DebugAll,"YateSIPConnection::checkUser(%p) failed, age %d [%p]",t,age,this);
-    if (refuse) {
-	Lock lck(s_globalMutex);
-	t->requestAuth(s_realm,m_domain,age >= 0);
-    }
+    if (refuse)
+	setAuthError(t,params,age >= 0,m_domain);
     return false;
 }
 

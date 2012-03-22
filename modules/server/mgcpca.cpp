@@ -656,7 +656,7 @@ bool MGCPWrapper::rtpMessage(Message& msg)
 	copyRename(mm->params,"x-autoaddr",msg,"autoaddr");
 	copyRename(mm->params,"x-anyssrc",msg,"anyssrc");
     }
-    mm = sendSync(mm,ep->address);
+    mm = sendSync(mm,ep->address());
     if (!mm)
 	return false;
     if (m_connId.null())
@@ -679,7 +679,7 @@ void MGCPWrapper::clearConn()
 	return;
     MGCPMessage* mm = new MGCPMessage(s_engine,"DLCX",ep->toString());
     addParams(mm);
-    s_engine->sendCommand(mm,ep->address);
+    s_engine->sendCommand(mm,ep->address());
 }
 
 // Populate a MGCP message with basic identification parameters
@@ -794,7 +794,7 @@ bool MGCPWrapper::sendDTMF(const String& tones)
 	tmp << "D/" << tones.at(i);
     }
     mm->params.setParam("O",tmp);
-    return s_engine->sendCommand(mm,ep->address) != 0;
+    return s_engine->sendCommand(mm,ep->address()) != 0;
 }
 
 void MGCPWrapper::gotDTMF(char tone)
@@ -833,7 +833,7 @@ bool MGCPWrapper::nativeConnect(DataEndpoint* peer)
     MGCPMessage* mm = new MGCPMessage(s_engine,"MDCX",ep->toString());
     addParams(mm);
     mm->params.setParam("Z2",other->connId());
-    return s_engine->sendCommand(mm,ep->address) != 0;
+    return s_engine->sendCommand(mm,ep->address()) != 0;
 }
 
 
@@ -1061,12 +1061,16 @@ bool MGCPSpan::init(const NamedList& params)
 	Debug(&splugin,DebugNote,"MGCPSpan '%s' first circuit=%s",
 	    id().safe(),first.c_str());
 	m_version = config->getValue(YSTRING("version"));
-	const char* addr = config->getValue(YSTRING("address"));
-	if (addr) {
-	    MGCPEpInfo* ep = s_endpoint->find(epId().id());
+	const String* addr = config->getParam(YSTRING("address"));
+	if (!TelEngine::null(addr) && addr->toBoolean(true)) {
+	    const MGCPEpInfo* ep = s_endpoint->find(epId().id());
 	    if (ep) {
-		SocketAddr a(ep->address);
-		a.host(addr);
+		SocketAddr a(ep->address().family());
+		if (addr->toBoolean(false))
+		    a.host(ep->host());
+		else
+		    a.host(addr);
+		a.port(ep->port());
 		operational(a);
 	    }
 	}
@@ -1099,11 +1103,12 @@ void MGCPSpan::operational(bool active)
 // Set the operational state and copy GW address
 void MGCPSpan::operational(const SocketAddr& address)
 {
-    if (address.valid() && address.host())
-	m_address = address.host();
-    MGCPEpInfo* ep = s_endpoint->find(epId().id());
-    if (ep && !(m_operational && ep->address.valid()))
-	ep->address = address;
+    if (address.host().null() || (address.host() == YSTRING("0.0.0.0")))
+	return;
+    m_address = address.host();
+    const MGCPEpInfo* ep = s_endpoint->find(epId().id());
+    if (ep && !(m_operational && ep->address().valid()))
+	const_cast<MGCPEpInfo*>(ep)->address(address);
     operational(true);
 }
 
@@ -1558,7 +1563,7 @@ bool MGCPCircuit::sendAsync(MGCPMessage* mm, bool notify)
 	return false;
     MGCPEpInfo* ep = s_endpoint->find(mySpan()->epId().id());
     if (ep) {
-	MGCPTransaction* tr = s_engine->sendCommand(mm,ep->address);
+	MGCPTransaction* tr = s_engine->sendCommand(mm,ep->address());
 	if (tr) {
 	    if (notify)
 		tr->userData(static_cast<GenObject*>(this));
@@ -1587,7 +1592,7 @@ RefPointer<MGCPMessage> MGCPCircuit::sendSync(MGCPMessage* mm)
 	Thread::idle();
     }
     u_int64_t t2 = Time::msecNow();
-    MGCPTransaction* tr = s_engine->sendCommand(mm,ep->address);
+    MGCPTransaction* tr = s_engine->sendCommand(mm,ep->address());
     s_mutex.lock();
     tr->userData(static_cast<GenObject*>(this));
     m_tr = tr;

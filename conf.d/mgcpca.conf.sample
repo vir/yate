@@ -142,9 +142,10 @@
 ; A value of -1 uses default 2427 but doesn't add at end of ID
 ;port=2427
 
-; address: ipaddress: IP address of the gateway, if present will override
-;  resolving the host name and will immediately make the span operational
-;  without waiting for a remote RSIP
+; address: ipaddress: IP address of the gateway
+; If present will override resolving the host name and will immediately make
+;  the span operational without waiting for a remote RSIP
+; A boolean true value will resolve the host to an address at startup
 ;address=
 
 ; version: string: Protocol name and version to use initially, if left blank

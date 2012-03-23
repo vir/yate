@@ -29,7 +29,7 @@ int GetCPUInfoNoASM(CPUFeature feature) {
 #if defined(WEBRTC_ARCH_X86_FAMILY)
 #ifndef _MSC_VER
 // Intrinsic for "cpuid".
-#if defined(__pic__) && defined(__i386__)
+#if (defined(__pic__) || defined(__PIC__)) && defined(__i386__)
 static inline void __cpuid(int cpu_info[4], int info_type) {
   __asm__ volatile (
     "mov %%ebx, %%edi\n"

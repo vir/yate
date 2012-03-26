@@ -1847,7 +1847,7 @@ XmlElement* JBEvent::buildIqResult(bool addTags, XmlElement* child)
 // Build and send a stanza 'result' from enclosed 'iq' element
 bool JBEvent::sendIqResult(XmlElement* child)
 {
-    if (!(m_element && m_stream && !XMPPUtils::isUnprefTag(*m_element,XmlTag::Iq))) {
+    if (!(m_element && m_stream && XMPPUtils::isUnprefTag(*m_element,XmlTag::Iq))) {
 	TelEngine::destruct(child);
 	return false;
     }

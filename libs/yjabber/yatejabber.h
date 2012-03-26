@@ -1537,6 +1537,17 @@ public:
 	const NamedList* params = 0);
 
     /**
+     * Constructor. Build an outgoing component stream
+     * @param engine Engine owning this stream
+     * @param local Local party jabber id
+     * @param remote Remote party jabber id
+     * @param name Optional stream name
+     * @param params Optional stream parameters
+     */
+    JBServerStream(JBEngine* engine, const JabberID& local, const JabberID& remote,
+	const String* name = 0, const NamedList* params = 0);
+
+    /**
      * Check if this is an outgoing dialback stream
      * @return True if this stream is an outgoing dialback one
      */
@@ -1612,12 +1623,13 @@ public:
     bool sendDialback();
 
     /**
-     * Start a component stream (reply to received stream start)
-     * @param local Local domain
-     * @param remote Remote domain
+     * Start a component stream (reply to received stream start).
+     * Send handshake if outgoing
+     * @param local Local domain. Ignored if outgoing
+     * @param remote Remote domain. Ignored if outgoing
      * @return True on success
      */
-    bool startComp(const String& local, const String& remote);
+    bool startComp(const String& local = String::empty(), const String& remote = String::empty());
 
 protected:
     /**
@@ -1689,6 +1701,7 @@ protected:
 
 private:
     NamedString* m_dbKey;                // Outgoing: initial dialback key to check
+    String m_password;                   // Outgoing component: password
 };
 
 
@@ -2253,6 +2266,17 @@ public:
      */
     JBServerStream* createServerStream(const String& local, const String& remote,
 	const char* dbId = 0, const char* dbKey = 0, bool dbOnly = false,
+	const NamedList* params = 0);
+
+    /**
+     * Create an outgoing comp stream.
+     * @param name Stream name
+     * @param local Local party domain
+     * @param remote Remote party domain
+     * @param params Optional stream parameters
+     * @return Referenced JBServerStream pointer or 0 if a stream already exists
+     */
+    JBServerStream* createCompStream(const String& name, const String& local, const String& remote,
 	const NamedList* params = 0);
 
     /**

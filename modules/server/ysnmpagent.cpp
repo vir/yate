@@ -1542,13 +1542,14 @@ void SnmpAgent::initialize()
     if (treeConf.null())
 	treeConf << Engine::sharedPath() << Engine::pathSeparator() <<
 	    "data" << Engine::pathSeparator() << "snmp_mib.conf";
-    // in case of reinitialization, first destroy the previously allocated object      
+    // in case of reinitialization, first destroy the previously allocated object
     TelEngine::destruct(m_mibTree);
     m_mibTree = new AsnMibTree(treeConf);
 
     // get information needed for the computation of the agents' engine id (SNMPv3)
     int engineFormat = s_cfg.getIntValue("snmp_v3","engine_format",TEXT);
-    String engineInfo = s_cfg.getValue("snmp_v3","engine_info","");
+    const char* defaultInfo = (TEXT == engineFormat) ? Engine::nodeName().c_str() : 0;
+    String engineInfo = s_cfg.getValue("snmp_v3","engine_info",defaultInfo);
     m_engineId = genEngineId(engineFormat,engineInfo);
 
     // read configuration for traps
@@ -1571,7 +1572,7 @@ void SnmpAgent::initialize()
 	    continue;
 	m_users.append(new SnmpUser(sec));
     }
-    
+
     // load saved data
     s_saveCfg = Engine::configFile("snmp_data");
     s_saveCfg.load();

@@ -627,6 +627,8 @@ void JBStream::start(XMPPFeatureList* features, XmlElement* caps, bool useVer1)
 	}
 	else if (m_type == cluster)
 	    changeState(Features);
+	else if (m_type == comp)
+	    serverStream()->startComp();
 	else
 	    DDebug(this,DebugStub,"JBStream::start() not handled for type=%s",typeName());
 	return;
@@ -878,9 +880,9 @@ bool JBStream::canProcess(u_int64_t time)
 	    // Re-connect
 	    bool conn = (m_connectStatus > JBConnect::Start);
 	    if (!conn && m_restart) {
-		// Don't connect non client or cluster if we are in error and
+		// Don't connect non client/component or cluster if we are in error and
 		//  have nothing to send
-		if (m_type != c2s && m_type != cluster &&
+		if (m_type != c2s && m_type != comp && m_type != cluster &&
 		    flag(InError) && !m_pending.skipNull())
 		    return false;
 		conn = true;
@@ -2973,6 +2975,16 @@ JBServerStream::JBServerStream(JBEngine* engine, const JabberID& local,
 	setFlags(DialbackOnly | NoAutoRestart);
 }
 
+// Constructor. Build an outgoing component stream
+JBServerStream::JBServerStream(JBEngine* engine, const JabberID& local, const JabberID& remote,
+    const String* name, const NamedList* params)
+    : JBStream(engine,comp,local,remote,name ? name->c_str() : 0,params),
+    m_remoteDomains(""), m_dbKey(0)
+{
+    if (params)
+	m_password = params->getValue("password");
+}
+
 // Send a dialback verify response
 bool JBServerStream::sendDbVerify(const char* from, const char* to, const char* id,
     XMPPError::Type rsp)
@@ -3128,6 +3140,8 @@ XmlElement* JBServerStream::buildStreamStart()
     else if (type() == comp) {
 	if (incoming())
 	    start->setAttributeValid("from",m_remote.domain());
+	else
+	    start->setAttributeValid("to",m_local.domain());
     }
     return start;
 }
@@ -3145,13 +3159,13 @@ bool JBServerStream::processStart(const XmlElement* xml, const JabberID& from,
 	return false;
 
     if (type() == comp) {
-	if (incoming()) {
+	String from = xml->attribute("from");
+	if (m_local == from) {
 	    changeState(Starting);
 	    m_events.append(new JBEvent(JBEvent::Start,this,0,to,JabberID::empty()));
-	    return true;
 	}
-	Debug(this,DebugStub,"JBComponentStream::processStart() not implemented for outgoing [%p]",this);
-	terminate(0,true,0,XMPPError::NoError);
+	else
+	    terminate(0,false,0,XMPPError::InvalidFrom);
 	return false;
     }
 
@@ -3177,6 +3191,20 @@ bool JBServerStream::processAuth(XmlElement* xml, const JabberID& from,
 {
     if (incoming())
 	return dropXml(xml,"invalid state for incoming stream");
+    // Component
+    if (type() == comp) {
+	int t,n;
+	if (!XMPPUtils::getTag(*xml,t,n))
+	    return destroyDropXml(xml,XMPPError::Internal,"failed to retrieve element tag");
+	if (t != XmlTag::Handshake || n != m_xmlns)
+	    return dropXml(xml,"expecting handshake in stream's namespace");
+	// Stream authenticated
+	TelEngine::destruct(xml);
+	setFlags(StreamAuthenticated);
+	changeState(Running);
+	Debug(this,DebugAll,"Authenticated [%p]",this);
+	return true;
+    }
     // Waiting for db:result
     if (!isDbResult(*xml))
 	return dropXml(xml,"expecting dialback result");
@@ -3211,11 +3239,19 @@ bool JBServerStream::startComp(const String& local, const String& remote)
     if (state() != Starting || type() != comp)
 	return false;
     Lock lock(this);
-    m_local.set(local);
-    m_remote.set(remote);
+    XmlElement* s = 0;
+    if (incoming()) {
+	m_local.set(local);
+	m_remote.set(remote);
+	s = buildStreamStart();
+    }
+    else {
+	String digest;
+	buildSha1Digest(digest,m_password);
+	s = XMPPUtils::createElement(XmlTag::Handshake,digest);
+    }
     setSecured();
-    XmlElement* s = buildStreamStart();
-    return sendStreamXml(Features,s);
+    return sendStreamXml(incoming() ? Features : Auth,s);
 }
 
 // Process dialback key (db:result) requests

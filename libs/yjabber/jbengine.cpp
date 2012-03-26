@@ -1508,6 +1508,24 @@ JBServerStream* JBServerEngine::createServerStream(const String& local,
     return stream;
 }
 
+// Create an outgoing comp stream
+JBServerStream* JBServerEngine::createCompStream(const String& name, const String& local,
+    const String& remote, const NamedList* params)
+{
+    if (exiting()) {
+	Debug(this,DebugAll,"Can't create comp local=%s remote=%s: engine is exiting",
+	    local.c_str(),remote.c_str());
+	return 0;
+    }
+    JBServerStream* stream = findServerStream(local,remote,true);
+    if (!stream) {
+	stream = new JBServerStream(this,local,remote,&name,params);
+	stream->ref();
+	addStream(stream);
+    }
+    return stream;
+}
+
 // Find a cluster stream by remote domain
 JBClusterStream* JBServerEngine::findClusterStream(const String& remote,
     JBClusterStream* skip)

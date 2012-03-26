@@ -174,3 +174,35 @@
 ; This parameter is ignored if type is not c2s
 ;sslcontext=
 
+
+;[comp name]
+; This section create an outgoing component stream
+; This section may repeat to build more components
+; Section name must start with 'comp' keyword folowed by a space (not TAB) character
+;  E.g. for a stream named 'mycomp' the section name must be 'comp mycomp'
+; Except for 'enable' no other parameters are applied on reload,
+
+; enable: boolean: Enable or disable this component
+; Defaults to false if missing or invalid
+;enable=
+
+; server: string: Server domain
+; This parameter is required
+;server=
+
+; component: string: Component domain/name
+; If component name ends with dot ('.') it will be completed with server
+; E.g. server=example.com, component=yate. component will be yate.example.com
+; This parameter is required
+;component=
+
+; password: string: Component password used to authenticate at server
+;password=
+
+; address: string: IP address to connect to
+; Connect to server domain if missing
+;address=
+
+; port: integer: The port to connect to
+; This parameter is required
+;port=

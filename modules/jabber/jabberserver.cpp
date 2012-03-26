@@ -359,6 +359,8 @@ public:
     // Consume the element
     // This method is thread safe
     bool sendCluster(XmlElement* xml, const String& node = String::empty());
+    // Create/destroy an outgoing component stream
+    bool setupComponent(const String& name, NamedList& params, bool enabled);
     // Program name and version to be advertised on request
     String m_progName;
     String m_progVersion;
@@ -2321,7 +2323,9 @@ void YJBEngine::processStreamEvent(JBEvent* ev)
     }
     else {
 	JabberID local;
+	JabberID remote;
 	ev->stream()->local(local);
+	ev->stream()->remote(remote);
 	// Notify verify failure on dialback streams
 	if (!reg) {
 	    JBServerStream* s2s = ev->serverStream();
@@ -2336,10 +2340,12 @@ void YJBEngine::processStreamEvent(JBEvent* ev)
 	}
 	m = __plugin.message("user.notify");
 	m->addParam("account",s->name());
+	m->addParam("type",ev->stream()->typeName());
 	if (s->type() == JBStream::c2s)
 	    m->addParam("username",local.node());
 	m->addParam("server",local.domain());
 	m->addParam("jid",local);
+	m->addParam("remote_jid",remote);
 	m->addParam("registered",String::boolText(reg));
 	if (!reg && ev->text())
 	    m->addParam("error",ev->text());
@@ -2983,6 +2989,43 @@ bool YJBEngine::sendCluster(Message& msg, ObjList* skipParams)
     const char* name = msg.getValue("cluster.message");
     XmlElement* xml = list2xml(msg,name,skipParams);
     return sendCluster(xml,msg["cluster.node"]);
+}
+
+// Create/destroy an outgoing component stream
+bool YJBEngine::setupComponent(const String& name, NamedList& params, bool enabled)
+{
+    JBStream* s = name ? findStream(name,JBStream::comp) : 0;
+    const String& remote = params["server"];
+    String local = params["component"];
+    if (local.endsWith("."))
+	local = local + remote;
+    if (!enabled) {
+	if (!s && local && remote)
+	    s = findServerStream(local,remote,false,false);
+	if (!s)
+	    return false;
+	s->terminate(-1,true,0,XMPPError::UndefinedCondition,"dropped");
+	TelEngine::destruct(s);
+	return true;
+    }
+    if (!s) {
+        if (!remote) {
+	    Debug(this,DebugNote,"Failed to create comp stream: missing domain");
+	    return false;
+	}
+	if (!local) {
+	    Debug(this,DebugNote,"Failed to create comp stream: missing component");
+	    return false;
+	}
+	if (params.getIntValue("port") < 1) {
+	    Debug(this,DebugNote,"Failed to create comp stream: missing/invalid server port");
+	    return false;
+	}
+	s = createCompStream(name,local,remote,&params);
+    }
+    bool ok = (s != 0);
+    TelEngine::destruct(s);
+    return ok;
 }
 
 // Send an xml element on all cluster streams or on a specified one
@@ -3999,7 +4042,7 @@ void JBModule::initialize()
 	s_jabber->updateDomainsFeatures();
     }
 
-    // Listeners
+    // Listeners/outgoing components
     unsigned int n = cfg.length();
     for (unsigned int i = 0; i < n; i++) {
 	NamedList* p = cfg.getSection(i);
@@ -4007,9 +4050,13 @@ void JBModule::initialize()
 	    continue;
 	String name = *p;
 	name.trimBlanks();
-	if (!(name.startSkip("listener ",false) && name))
+	bool enabled = p->getBoolValue("enable");
+	if (!(name.startSkip("listener ",false) && name)) {
+	    if (name.startSkip("comp ",false) && name)
+		s_jabber->setupComponent(name,*p,enabled);
 	    continue;
-	if (p->getBoolValue("enable"))
+	}
+	if (enabled)
 	    buildListener(name,*p);
 	else
 	    cancelListener(name);

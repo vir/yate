@@ -526,9 +526,9 @@ public:
     // Initialize the engine
     void initialize(NamedList* params);
     virtual bool buildParty(SIPMessage* message);
-    virtual bool checkUser(const String& username, const String& realm, const String& nonce,
+    virtual bool checkUser(String& username, const String& realm, const String& nonce,
 	const String& method, const String& uri, const String& response,
-	const SIPMessage* message, GenObject* userData);
+	const SIPMessage* message, const MimeHeaderLine* authLine, GenObject* userData);
     virtual SIPTransaction* forkInvite(SIPMessage* answer, SIPTransaction* trans);
     // Transport status changed notification
     void transportChangedStatus(YateSIPTransport* trans, int stat, const String& reason);
@@ -551,6 +551,7 @@ private:
     bool m_prack;
     bool m_info;
     bool m_fork;
+    bool m_foreignAuth;
 };
 
 class YateSIPLine : public String, public Mutex, public YateSIPPartyHolder
@@ -3417,7 +3418,7 @@ void YateTCPParty::destroyed()
 
 YateSIPEngine::YateSIPEngine(YateSIPEndPoint* ep)
     : SIPEngine(s_cfg.getValue("general","useragent")),
-      m_ep(ep), m_prack(false), m_info(false)
+      m_ep(ep), m_prack(false), m_info(false), m_foreignAuth(false)
 {
     addAllowed("INVITE");
     addAllowed("BYE");
@@ -3434,9 +3435,6 @@ YateSIPEngine::YateSIPEngine(YateSIPEndPoint* ep)
     m_info = s_cfg.getBoolValue("general","info",true);
     if (m_info)
 	addAllowed("INFO");
-    lazyTrying(s_cfg.getBoolValue("general","lazy100",false));
-    m_fork = s_cfg.getBoolValue("general","fork",true);
-    m_flags = s_cfg.getIntValue("general","flags",m_flags);
     NamedList *l = s_cfg.getSection("methods");
     if (l) {
 	unsigned int len = l->length();
@@ -3458,6 +3456,10 @@ void YateSIPEngine::initialize(NamedList* params)
     NamedList dummy("");
     if (!params)
 	params = &dummy;
+    lazyTrying(params->getBoolValue("lazy100",false));
+    m_fork = params->getBoolValue("fork",true);
+    m_flags = params->getIntValue("flags",m_flags);
+    m_foreignAuth = params->getBoolValue("auth_foreign",false);
     m_reqTransCount = params->getIntValue("sip_req_trans_count",4,2,10,false);
     m_rspTransCount = params->getIntValue("sip_rsp_trans_count",5,2,10,false);
     DDebug(this,DebugAll,"Initialized sip_req_trans_count=%d sip_rsp_trans_count=%d",
@@ -3561,9 +3563,9 @@ bool YateSIPEngine::copyAuthParams(NamedList* dest, const NamedList& src, bool o
     return ok;
 }
 
-bool YateSIPEngine::checkUser(const String& username, const String& realm, const String& nonce,
+bool YateSIPEngine::checkUser(String& username, const String& realm, const String& nonce,
     const String& method, const String& uri, const String& response,
-    const SIPMessage* message, GenObject* userData)
+    const SIPMessage* message, const MimeHeaderLine* authLine, GenObject* userData)
 {
     NamedList* params = YOBJECT(NamedList,userData);
 
@@ -3604,13 +3606,27 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
 	m.copyParam(*params,"called");
 	m.copyParam(*params,"billid");
     }
+    if (authLine && m_foreignAuth) {
+	m.addParam("auth",*authLine);
+	for (const ObjList* l = authLine->params().skipNull(); l; l = l->skipNext()) {
+	    const NamedString* p = static_cast<const NamedString*>(l->get());
+	    m.setParam("auth_" + p->name(),*p);
+	}
+    }
+    else
+	authLine = 0;
 
     if (!Engine::dispatch(m))
 	return copyAuthParams(params,m,false);
 
     // empty password returned means authentication succeeded
-    if (m.retValue().null())
+    if (m.retValue().null()) {
+	if (authLine && username.null()) {
+	    username = authLine->getParam("username");
+	    MimeHeaderLine::delQuotes(username);
+	}
 	return copyAuthParams(params,m);
+    }
     // check for refusals
     if (m.retValue() == "-") {
 	if (params) {
@@ -3650,6 +3666,7 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
     }
     return ok || copyAuthParams(params,m,false);
 }
+
 
 YateSIPEndPoint::YateSIPEndPoint(Thread::Priority prio, unsigned int partyMutexCount)
     : Thread("YSIP EndPoint",prio),

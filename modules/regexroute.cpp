@@ -559,9 +559,11 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 		// special case: do nothing on empty target
 		continue;
 	    }
-	    else if (val == "return") {
-		NDebug("RegexRoute",DebugAll,"Returning false from context '%s'", context.c_str());
-		return false;
+	    else if (val.startSkip("return")) {
+		bool ok = val.toBoolean();
+		NDebug("RegexRoute",DebugAll,"Returning %s from context '%s'",
+		    String::boolText(ok),context.c_str());
+		return ok;
 	    }
 	    else if (val.startSkip("goto") || val.startSkip("jump")) {
 		NDebug("RegexRoute",DebugAll,"Jumping to context '%s' by rule #%u '%s'",

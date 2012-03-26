@@ -2995,7 +2995,7 @@ bool YJBEngine::sendCluster(Message& msg, ObjList* skipParams)
 bool YJBEngine::setupComponent(const String& name, NamedList& params, bool enabled)
 {
     JBStream* s = name ? findStream(name,JBStream::comp) : 0;
-    const String& remote = params["server"];
+    const String& remote = params["domain"];
     String local = params["component"];
     if (local.endsWith("."))
 	local = local + remote;

@@ -186,12 +186,12 @@
 ; Defaults to false if missing or invalid
 ;enable=
 
-; server: string: Server domain
+; domain: string: Server domain
 ; This parameter is required
-;server=
+;domain=
 
 ; component: string: Component domain/name
-; If component name ends with dot ('.') it will be completed with server
+; If component name ends with dot ('.') it will be completed with server domain
 ; E.g. server=example.com, component=yate. component will be yate.example.com
 ; This parameter is required
 ;component=

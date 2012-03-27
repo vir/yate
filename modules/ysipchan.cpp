@@ -3602,6 +3602,7 @@ bool YateSIPEngine::checkUser(String& username, const String& realm, const Strin
     }
 
     if (params) {
+	m.copyParam(*params,"number");
 	m.copyParam(*params,"caller");
 	m.copyParam(*params,"called");
 	m.copyParam(*params,"billid");
@@ -4264,7 +4265,9 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
 	return;
     }
 
+    URI addr(*hl);
     Message msg("user.register");
+    msg.addParam("number",addr.getUser());
     msg.addParam("sip_uri",t->getURI());
     msg.addParam("sip_callid",t->getCallID());
     String user;
@@ -4281,11 +4284,9 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
 	return;
     }
 
-    URI addr(*hl);
     if (user.null())
 	user = addr.getUser();
     msg.setParam("username",user);
-    msg.setParam("number",addr.getUser());
     msg.setParam("driver","sip");
     String data(addr);
     String raddr;

@@ -72,6 +72,7 @@ static TokenDict dict_errors[] = {
     { "nocall", 481 },
     { "busy", 486 },
     { "busy", 600 },
+    { "noanswer", 480 },
     { "noanswer", 487 },
     { "rejected", 406 },
     { "rejected", 606 },

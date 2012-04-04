@@ -54,12 +54,20 @@ __declspec(dllimport) BOOL WINAPI SHGetSpecialFolderPathA(HWND,LPSTR,INT,BOOL);
 typedef void* HMODULE;
 #define PATH_SEP "/"
 #ifndef CFG_DIR
+#ifdef HAVE_MACOSX_SUPPORT
+#define CFG_DIR "Yate"
+#else
 #define CFG_DIR ".yate"
+#endif
 #endif
 
 static int s_childsig = 0;
 
 #endif // _WINDOWS
+
+#ifdef HAVE_MACOSX_SUPPORT
+#include "MacOSXUtils.h"
+#endif
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -349,6 +357,12 @@ static void initUsrPath(String& path, const char* newPath = 0)
 	char szPath[MAX_PATH];
 	if (SHGetSpecialFolderPathA(NULL,szPath,CSIDL_APPDATA,TRUE))
 	    path = szPath;
+#elif defined(HAVE_MACOSX_SUPPORT)
+	MacOSXUtils::applicationSupportPath(path);
+	if (path.null()) {
+	    Debug(DebugMild,"Could not get system user path on MacOS X, setting it to $(HOME)");
+	    path = ::getenv("HOME");
+	}
 #else
 	path = ::getenv("HOME");
 #endif

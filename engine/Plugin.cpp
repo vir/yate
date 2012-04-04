@@ -34,7 +34,7 @@ Plugin::Plugin(const char* name, bool earlyInit)
 
 Plugin::~Plugin()
 {
-    Debugger debug("Plugin::~Plugin()"," [%p]",this);
+    Debugger debug("Plugin::~Plugin()"," \"%s\" [%p]",m_name.c_str(),this);
     Engine::Register(this,false);
     debugName(0);
 }

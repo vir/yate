@@ -968,193 +968,216 @@ border-bottom: 1px solid #717fa0;
                   </layout>
                  </item>
                  <item>
-                  <layout class="QHBoxLayout" >
+                  <layout class="QVBoxLayout" >
                    <property name="spacing" >
-                    <number>2</number>
-                   </property>
-                   <property name="leftMargin" >
-                    <number>0</number>
-                   </property>
-                   <property name="topMargin" >
-                    <number>0</number>
-                   </property>
-                   <property name="rightMargin" >
-                    <number>0</number>
-                   </property>
-                   <property name="bottomMargin" >
                     <number>0</number>
                    </property>
                    <item>
-                    <widget class="QToolButton" name="display_keypad" >
-                     <property name="minimumSize" >
-                      <size>
-                       <width>24</width>
-                       <height>24</height>
-                      </size>
+                    <layout class="QHBoxLayout" >
+                     <property name="spacing" >
+                      <number>2</number>
                      </property>
-                     <property name="maximumSize" >
-                      <size>
-                       <width>24</width>
-                       <height>24</height>
-                      </size>
+                     <property name="leftMargin" >
+                      <number>0</number>
                      </property>
-                     <property name="toolTip" >
-                      <string>Show or hide the keypad</string>
+                     <property name="topMargin" >
+                      <number>0</number>
                      </property>
-                     <property name="icon" >
-                      <iconset>dialpad_20.png</iconset>
+                     <property name="rightMargin" >
+                      <number>0</number>
                      </property>
-                     <property name="iconSize" >
-                      <size>
-                       <width>20</width>
-                       <height>20</height>
-                      </size>
+                     <property name="bottomMargin" >
+                      <number>0</number>
                      </property>
-                     <property name="checkable" >
-                      <bool>true</bool>
-                     </property>
-                     <property name="_yate_normal_icon" stdset="0" >
-                      <string>dialpad_20.png</string>
-                     </property>
-                     <property name="_yate_hover_icon" stdset="0" >
-                      <string>dialpad_20_hover.png</string>
-                     </property>
-                     <property name="_yate_pressed_icon" stdset="0" >
-                      <string>dialpad_20_pressed.png</string>
-                     </property>
-                    </widget>
+                     <item>
+                      <widget class="QToolButton" name="display_keypad" >
+                       <property name="minimumSize" >
+                        <size>
+                         <width>24</width>
+                         <height>24</height>
+                        </size>
+                       </property>
+                       <property name="maximumSize" >
+                        <size>
+                         <width>24</width>
+                         <height>24</height>
+                        </size>
+                       </property>
+                       <property name="toolTip" >
+                        <string>Show or hide the keypad</string>
+                       </property>
+                       <property name="icon" >
+                        <iconset>dialpad_20.png</iconset>
+                       </property>
+                       <property name="iconSize" >
+                        <size>
+                         <width>20</width>
+                         <height>20</height>
+                        </size>
+                       </property>
+                       <property name="checkable" >
+                        <bool>true</bool>
+                       </property>
+                       <property name="_yate_normal_icon" stdset="0" >
+                        <string>dialpad_20.png</string>
+                       </property>
+                       <property name="_yate_hover_icon" stdset="0" >
+                        <string>dialpad_20_hover.png</string>
+                       </property>
+                       <property name="_yate_pressed_icon" stdset="0" >
+                        <string>dialpad_20_pressed.png</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item>
+                      <widget class="QFrame" name="frame_5" >
+                       <property name="sizePolicy" >
+                        <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+                         <horstretch>0</horstretch>
+                         <verstretch>0</verstretch>
+                        </sizepolicy>
+                       </property>
+                       <property name="minimumSize" >
+                        <size>
+                         <width>16</width>
+                         <height>24</height>
+                        </size>
+                       </property>
+                       <property name="maximumSize" >
+                        <size>
+                         <width>16777215</width>
+                         <height>24</height>
+                        </size>
+                       </property>
+                       <layout class="QHBoxLayout" >
+                        <property name="leftMargin" >
+                         <number>0</number>
+                        </property>
+                        <property name="topMargin" >
+                         <number>0</number>
+                        </property>
+                        <property name="rightMargin" >
+                         <number>0</number>
+                        </property>
+                        <property name="bottomMargin" >
+                         <number>0</number>
+                        </property>
+                        <item>
+                         <widget class="QComboBox" name="callto" >
+                          <property name="sizePolicy" >
+                           <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+                            <horstretch>0</horstretch>
+                            <verstretch>0</verstretch>
+                           </sizepolicy>
+                          </property>
+                          <property name="minimumSize" >
+                           <size>
+                            <width>0</width>
+                            <height>24</height>
+                           </size>
+                          </property>
+                          <property name="maximumSize" >
+                           <size>
+                            <width>16777215</width>
+                            <height>24</height>
+                           </size>
+                          </property>
+                          <property name="focusPolicy" >
+                           <enum>Qt::WheelFocus</enum>
+                          </property>
+                          <property name="acceptDrops" >
+                           <bool>true</bool>
+                          </property>
+                          <property name="editable" >
+                           <bool>true</bool>
+                          </property>
+                          <property name="maxCount" >
+                           <number>20</number>
+                          </property>
+                          <property name="dynamicActionEnter" stdset="0" >
+                           <string>call</string>
+                          </property>
+                          <property name="dynamicActionReturn" stdset="0" >
+                           <string>call</string>
+                          </property>
+                          <property name="_yate_filterevents" stdset="0" >
+                           <bool>true</bool>
+                          </property>
+                          <property name="dynamicActionReturnFilter" stdset="0" >
+                           <bool>true</bool>
+                          </property>
+                          <property name="dynamicActionEnterFilter" stdset="0" >
+                           <bool>true</bool>
+                          </property>
+                         </widget>
+                        </item>
+                       </layout>
+                      </widget>
+                     </item>
+                     <item>
+                      <widget class="QToolButton" name="call" >
+                       <property name="sizePolicy" >
+                        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+                         <horstretch>0</horstretch>
+                         <verstretch>0</verstretch>
+                        </sizepolicy>
+                       </property>
+                       <property name="minimumSize" >
+                        <size>
+                         <width>0</width>
+                         <height>24</height>
+                        </size>
+                       </property>
+                       <property name="maximumSize" >
+                        <size>
+                         <width>16777215</width>
+                         <height>24</height>
+                        </size>
+                       </property>
+                       <property name="toolTip" >
+                        <string>Make a new call</string>
+                       </property>
+                       <property name="text" >
+                        <string>Call</string>
+                       </property>
+                       <property name="icon" >
+                        <iconset>call.png</iconset>
+                       </property>
+                       <property name="iconSize" >
+                        <size>
+                         <width>20</width>
+                         <height>20</height>
+                        </size>
+                       </property>
+                       <property name="toolButtonStyle" >
+                        <enum>Qt::ToolButtonTextBesideIcon</enum>
+                       </property>
+                       <property name="_yate_hover_icon" stdset="0" >
+                        <string>call_hover.png</string>
+                       </property>
+                       <property name="_yate_normal_icon" stdset="0" >
+                        <string>call.png</string>
+                       </property>
+                       <property name="_yate_pressed_icon" stdset="0" >
+                        <string>call_pressed.png</string>
+                       </property>
+                      </widget>
+                     </item>
+                    </layout>
                    </item>
                    <item>
-                    <widget class="QFrame" name="frame_5" >
+                    <widget class="QLabel" name="callto_hint" >
                      <property name="sizePolicy" >
                       <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
                        <horstretch>0</horstretch>
                        <verstretch>0</verstretch>
                       </sizepolicy>
                      </property>
-                     <property name="minimumSize" >
-                      <size>
-                       <width>16</width>
-                       <height>24</height>
-                      </size>
-                     </property>
-                     <property name="maximumSize" >
-                      <size>
-                       <width>16777215</width>
-                       <height>24</height>
-                      </size>
-                     </property>
-                     <layout class="QHBoxLayout" >
-                      <property name="leftMargin" >
-                       <number>0</number>
-                      </property>
-                      <property name="topMargin" >
-                       <number>0</number>
-                      </property>
-                      <property name="rightMargin" >
-                       <number>0</number>
-                      </property>
-                      <property name="bottomMargin" >
-                       <number>0</number>
-                      </property>
-                      <item>
-                       <widget class="QComboBox" name="callto" >
-                        <property name="sizePolicy" >
-                         <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
-                          <horstretch>0</horstretch>
-                          <verstretch>0</verstretch>
-                         </sizepolicy>
-                        </property>
-                        <property name="minimumSize" >
-                         <size>
-                          <width>0</width>
-                          <height>24</height>
-                         </size>
-                        </property>
-                        <property name="maximumSize" >
-                         <size>
-                          <width>16777215</width>
-                          <height>24</height>
-                         </size>
-                        </property>
-                        <property name="focusPolicy" >
-                         <enum>Qt::WheelFocus</enum>
-                        </property>
-                        <property name="acceptDrops" >
-                         <bool>true</bool>
-                        </property>
-                        <property name="editable" >
-                         <bool>true</bool>
-                        </property>
-                        <property name="maxCount" >
-                         <number>20</number>
-                        </property>
-                        <property name="dynamicActionEnter" stdset="0" >
-                         <string>call</string>
-                        </property>
-                        <property name="dynamicActionReturn" stdset="0" >
-                         <string>call</string>
-                        </property>
-                        <property name="_yate_filterevents" stdset="0" >
-                         <bool>true</bool>
-                        </property>
-                        <property name="dynamicActionReturnFilter" stdset="0" >
-                         <bool>true</bool>
-                        </property>
-                        <property name="dynamicActionEnterFilter" stdset="0" >
-                         <bool>true</bool>
-                        </property>
-                       </widget>
-                      </item>
-                     </layout>
-                    </widget>
-                   </item>
-                   <item>
-                    <widget class="QToolButton" name="call" >
-                     <property name="sizePolicy" >
-                      <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
-                       <horstretch>0</horstretch>
-                       <verstretch>0</verstretch>
-                      </sizepolicy>
-                     </property>
-                     <property name="minimumSize" >
-                      <size>
-                       <width>0</width>
-                       <height>24</height>
-                      </size>
-                     </property>
-                     <property name="maximumSize" >
-                      <size>
-                       <width>16777215</width>
-                       <height>24</height>
-                      </size>
-                     </property>
-                     <property name="toolTip" >
-                      <string>Make a new call</string>
+                     <property name="styleSheet" >
+                      <string>font-size: 10px;</string>
                      </property>
                      <property name="text" >
-                      <string>Call</string>
-                     </property>
-                     <property name="icon" >
-                      <iconset>call.png</iconset>
-                     </property>
-                     <property name="iconSize" >
-                      <size>
-                       <width>20</width>
-                       <height>20</height>
-                      </size>
-                     </property>
-                     <property name="toolButtonStyle" >
-                      <enum>Qt::ToolButtonTextBesideIcon</enum>
-                     </property>
-                     <property name="_yate_hover_icon" stdset="0" >
-                      <string>call_hover.png</string>
-                     </property>
-                     <property name="_yate_normal_icon" stdset="0" >
-                      <string>call.png</string>
-                     </property>
-                     <property name="_yate_pressed_icon" stdset="0" >
-                      <string>call_pressed.png</string>
+                      <string/>
                      </property>
                     </widget>
                    </item>

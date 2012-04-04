@@ -54,6 +54,7 @@ Name: "codecs\gsm"; Description: "GSM codec"; Types: full client server
 Name: "codecs\ilbc"; Description: "iLBC codec"; Types: full client server
 Name: "codecs\speex"; Description: "SPEEX codec"; Types: full client server
 Name: "codecs\speex\run"; Description: "SPEEX runtime libraries"; Types: full client server
+Name: "codecs\isac"; Description: "ISAC codec"; Types: full client server
 Name: "compress"; Description: "Data compression support"; Types: full client server
 Name: "compress\zlib"; Description: "Zlib compression"; Types: full client server
 Name: "external"; Description: "External interfaces"; Types: full server
@@ -155,6 +156,7 @@ Source: "Release\openssl.yate"; DestDir: "{app}\modules"; Flags: replacesamevers
 Source: "Release\gsmcodec.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: codecs\gsm
 Source: "Release\ilbccodec.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: codecs\ilbc
 Source: "Release\speexcodec.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: codecs\speex
+Source: "Release\isaccodec.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: codecs\isac
 
 Source: "Release\zlibcompress.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: compress\zlib
 

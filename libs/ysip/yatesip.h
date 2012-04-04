@@ -1099,22 +1099,26 @@ public:
      * @param uri URI of the SIP message that is being authenticated
      * @param response Response computed by the authenticated entity
      * @param message Message that is to be authenticated
+     * @param authLine Extra credentials line to validate
      * @param userData Pointer to an optional object passed from @ref authUser
      * @return True if valid user/password, false if verification failed
      */
-    virtual bool checkUser(const String& username, const String& realm, const String& nonce,
+    virtual bool checkUser(String& username, const String& realm, const String& nonce,
 	const String& method, const String& uri, const String& response,
-	const SIPMessage* message, GenObject* userData);
+	const SIPMessage* message, const MimeHeaderLine* authLine, GenObject* userData);
 
     /**
      * Authenticate a message by other means than user credentials. By default
      *  it calls @ref checkUser with empty user credential fields
      * @param noUser No plausible user credentials were detected so far
+     * @param username User account name
      * @param message Message that is to be authenticated
+     * @param authLine Extra credentials line to validate
      * @param userData Pointer to an optional object passed from @ref authUser
      * @return True if message is authenticated, false if verification failed
      */
-    virtual bool checkAuth(bool noUser, const SIPMessage* message, GenObject* userData);
+    virtual bool checkAuth(bool noUser, String& username, const SIPMessage* message,
+	const MimeHeaderLine* authLine, GenObject* userData);
 
     /**
      * Detect the proper credentials for any user in the engine

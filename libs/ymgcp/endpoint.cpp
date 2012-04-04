@@ -115,4 +115,16 @@ void MGCPEndpointId::set(const char* endpoint, const char* host, int port, bool 
 	m_id << ":" << m_port;
 }
 
+
+// Resolve the Ep Info host on first demand
+const SocketAddr& MGCPEpInfo::address()
+{
+    if (m_resolve) {
+	m_resolve = false;
+	DDebug(DebugInfo,"Resolving MGCP host '%s'",host().c_str());
+	m_address.host(host());
+    }
+    return m_address;
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

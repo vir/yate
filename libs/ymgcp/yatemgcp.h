@@ -608,9 +608,9 @@ public:
      * @param addPort Add :port at end of id only if port is not zero
      */
     inline MGCPEpInfo(const char* endpoint, const char* host, int port, bool addPort = true)
-	: MGCPEndpointId(endpoint,host,port,addPort), address(AF_INET) {
-	    address.host(host);
-	    address.port(port);
+	: MGCPEndpointId(endpoint,host,port,addPort),
+	  m_address(AF_INET), m_resolve(true) {
+	    m_address.port(port);
 	}
 
     /**
@@ -621,14 +621,33 @@ public:
 	{ return id(); }
 
     /**
-     * The IP address and port of this endpoint
+     * Retrieve the current address for this endpoint information
+     * @return Address and port of this endpoint info
      */
-    SocketAddr address;
+    inline const SocketAddr& address() const
+	{ return m_address; }
+
+    /**
+     * Retrieve the address for this endpoint information, resolve name if needed
+     * @return Address and port of this endpoint info
+     */
+    const SocketAddr& address();
+
+    /**
+     * Set a new socket address in the endpoint info
+     * @param addr New address and port to set in the endpoint
+     */
+    inline void address(const SocketAddr& addr)
+	{ m_resolve = false; m_address = addr; }
 
     /**
      * An alias name of the remote endpoint, may be empty
      */
     String alias;
+
+private:
+    SocketAddr m_address;
+    bool m_resolve;
 };
 
 /**

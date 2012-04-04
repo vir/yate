@@ -143,6 +143,11 @@
 ; This parameter is applied on reload
 ;query_expire=DELETE FROM lnp WHERE CURRENT_TIMESTAMP >= timeout
 
+; shortest_prefix: integer: Minimum cache element length that can be a prefix match
+; Valid values 1-32, a value of 0 disables cache prefix matching
+; This parameter is applied on reload
+;shortest_prefix=0
+
 
 [cnam]
 ; This section configures the CNAM cache
@@ -207,3 +212,8 @@
 ; query_expire: string: Database query used to expire items
 ; This parameter is applied on reload
 ;query_expire=DELETE FROM cnam WHERE CURRENT_TIMESTAMP >= timeout
+
+; shortest_prefix: integer: Minimum cache element length that can be a prefix match
+; Valid values 1-32, a value of 0 disables cache prefix matching
+; This parameter is applied on reload
+;shortest_prefix=0

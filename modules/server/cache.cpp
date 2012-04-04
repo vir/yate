@@ -137,6 +137,9 @@ public:
     virtual const String& toString() const;
     // Dump the cache to output if XDEBUG is defined
     void dump(const char* oper);
+    // Retrieve the item length bit mask
+    u_int32_t prefixMask() const
+	{ return m_prefixMask; }
     // Set chunk limit and offset to a query
     // Return the number of replaced params
     static int setLimits(String& query, unsigned int chunk, unsigned int offset);
@@ -151,6 +154,8 @@ protected:
     CacheItem* addUnsafe(Array& array, int row, int cols);
     // Find a cache item. This method is not thread safe
     CacheItem* find(const String& id);
+    // Find a cache item or prefix. This method is not thread safe
+    CacheItem* findPrefix(const String& id);
     // Adjust cache length to limit
     void adjustToLimit(CacheItem* skipAdded);
 
@@ -161,6 +166,8 @@ protected:
     unsigned int m_limit;                // Limit the number of cache items
     unsigned int m_limitOverflow;        // Allowed limit overflow
     unsigned int m_loadChunk;            // The number of items to load in each DB load query
+    u_int32_t m_prefixMin;               // Minimum length of a prefix
+    u_int32_t m_prefixMask;              // Bitmask of loaded lengths
     Thread::Priority m_loadPrio;         // Load thread priority
     bool m_loading;                      // Cache is loading from database
     unsigned int m_loadInterval;         // Cache re-load interval (in seconds)
@@ -401,7 +408,8 @@ static void fillList(NamedList& list, String& buf)
 Cache::Cache(const String& name, int size, const NamedList& params)
     : Mutex(false,"Cache"),
     m_name(name), m_list(size), m_cacheTtl(0), m_count(0), m_limit(0),
-    m_limitOverflow(0), m_loadChunk(0), m_loadPrio(Thread::Normal),
+    m_limitOverflow(0), m_loadChunk(0), m_prefixMin(0), m_prefixMask(0),
+    m_loadPrio(Thread::Normal),
     m_loading(false), m_loadInterval(0), m_nextLoad(0),
     m_reload(0), m_reloadItems(0)
 
@@ -487,7 +495,7 @@ void Cache::endLoad(bool triggerReload)
 bool Cache::copyParams(const String& id, NamedList& list, const String* cpParams)
 {
     lock();
-    CacheItem* item = find(id);
+    CacheItem* item = findPrefix(id);
     if (!item && m_account && m_queryLoadItem) {
 	// Load from database
 	String query = m_queryLoadItem;
@@ -721,6 +729,7 @@ unsigned int Cache::clear()
     m_list.clear();
     unsigned int n = m_count;
     m_count = 0;
+    m_prefixMask = 0;
     return n;
 }
 
@@ -873,6 +882,9 @@ void Cache::doUpdate(const NamedList& params, bool first)
     }
     else
 	m_loadInterval = 0;
+    m_prefixMin = params.getIntValue("shortest_prefix",0);
+    if (m_prefixMin > 32)
+	m_prefixMin = 32;
     String all;
 #ifdef DEBUG
     if (m_account) {
@@ -885,6 +897,7 @@ void Cache::doUpdate(const NamedList& params, bool first)
 	all << " query_loaditem_command=" << m_queryLoadItemCmd;
 	all << " query_save=" << m_querySave;
 	all << " query_expire=" << m_queryExpire;
+	all << " shortest_prefix=" << m_prefixMin;
     }
 #endif
     Debug(&__plugin,DebugInfo,
@@ -959,6 +972,9 @@ CacheItem* Cache::addUnsafe(const String& id, const NamedList& params, const Str
 	list->append(item);
     else
 	m_list.append(item);
+    unsigned int len = id.length();
+    if (len > 0 && len <= 32)
+	m_prefixMask |= (1 << (len - 1));
     if (dbSave && m_account && m_querySave) {
 	String query = m_querySave;
 	NamedList p(*item);
@@ -1005,6 +1021,28 @@ CacheItem* Cache::find(const String& id)
 {
     ObjList* o = m_list.find(id);
     return o ? static_cast<CacheItem*>(o->get()) : 0;
+}
+
+// Find a cache item or prefix. This method is not thread safe
+CacheItem* Cache::findPrefix(const String& id)
+{
+    CacheItem* it = find(id);
+    if (it || !m_prefixMin)
+	return it;
+    unsigned int len = id.length();
+    if (len == 0)
+	return 0;
+    len--;
+    if (len > 32)
+	len = 32;
+    for (; len >= m_prefixMin; len--) {
+	if (m_prefixMask & (1 << (len - 1))) {
+	    it = find(id.substr(0,len));
+	    if (it)
+		return it;
+	}
+    }
+    return 0;
 }
 
 // Adjust cache length to limit
@@ -1306,9 +1344,10 @@ void CacheModule::loadCache(const String& name, bool async, ObjList* items)
 	return;
     cache->endLoad(triggerReload);
     cache->dump("CacheModule::loadCache()");
+    u_int32_t mask = cache->prefixMask();
     cache = 0;
-    Debug(this,DebugInfo,"Loaded %u items (failed=%u) in cache '%s'",
-	loaded,failed,name.c_str());
+    Debug(this,DebugInfo,"Loaded %u items (failed=%u) in cache '%s', mask 0x%X",
+	loaded,failed,name.c_str(),mask);
     updateCacheReload();
 }
 

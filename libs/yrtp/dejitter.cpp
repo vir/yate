@@ -25,112 +25,132 @@
 
 using namespace TelEngine;
 
+namespace { // anonymous
+
 class RTPDelayedData : public DataBlock
 {
 public:
-    inline RTPDelayedData(u_int64_t when, bool mark, unsigned int tstamp, const void* data, int len)
-	: DataBlock(const_cast<void*>(data),len), m_scheduled(when), m_marker(mark), m_timestamp(tstamp)
+    inline RTPDelayedData(u_int64_t when, bool mark, int payload,
+	unsigned int tstamp, const void* data, int len)
+	: DataBlock(const_cast<void*>(data),len), m_scheduled(when),
+	  m_marker(mark), m_payload(payload), m_timestamp(tstamp)
 	{ }
     inline u_int64_t scheduled() const
 	{ return m_scheduled; }
     inline bool marker() const
 	{ return m_marker; }
+    int payload() const
+	{ return m_payload; }
     inline unsigned int timestamp() const
 	{ return m_timestamp; }
-    inline void schedule(u_int64_t when)
-	{ m_scheduled = when; }
 private:
     u_int64_t m_scheduled;
     bool m_marker;
+    int m_payload;
     unsigned int m_timestamp;
 };
 
+}; // anonymous namespace
+
 
 RTPDejitter::RTPDejitter(RTPReceiver* receiver, unsigned int mindelay, unsigned int maxdelay)
-    : m_receiver(receiver), m_mindelay(mindelay), m_maxdelay(maxdelay),
-      m_headStamp(0), m_tailStamp(0), m_headTime(0), m_tailTime(0)
+    : m_receiver(receiver), m_minDelay(mindelay), m_maxDelay(maxdelay),
+      m_headStamp(0), m_tailStamp(0), m_headTime(0), m_sampRate(125000), m_fastRate(10)
 {
-    if (m_maxdelay > 2000000)
-	m_maxdelay = 2000000;
-    if (m_maxdelay < 50000)
-	m_maxdelay = 50000;
-    if (m_mindelay < 5000)
-	m_mindelay = 5000;
-    if (m_mindelay > m_maxdelay - 20000)
-	m_mindelay = m_maxdelay - 20000;
+    if (m_maxDelay > 1000000)
+	m_maxDelay = 1000000;
+    if (m_maxDelay < 50000)
+	m_maxDelay = 50000;
+    if (m_minDelay < 5000)
+	m_minDelay = 5000;
+    if (m_minDelay > m_maxDelay - 30000)
+	m_minDelay = m_maxDelay - 30000;
 }
 
 RTPDejitter::~RTPDejitter()
 {
-    DDebug(DebugMild,"Dejitter destroyed with %u packets [%p]",m_packets.count(),this);
+    DDebug(DebugInfo,"Dejitter destroyed with %u packets [%p]",m_packets.count(),this);
 }
 
-bool RTPDejitter::rtpRecvData(bool marker, unsigned int timestamp, const void* data, int len)
+void RTPDejitter::clear()
+{
+    m_packets.clear();
+    m_headStamp = m_tailStamp = 0;
+}
+
+bool RTPDejitter::rtpRecv(bool marker, int payload, unsigned int timestamp, const void* data, int len)
 {
     u_int64_t when = 0;
     bool insert = false;
 
-    if (m_headStamp && (m_tailStamp != m_headStamp)) {
-	// at least one packet got out of the queue and another is waiting
+    if (m_headStamp) {
+	// at least one packet got out of the queue
 	int dTs = timestamp - m_headStamp;
-	if (dTs < 0) {
-	    DDebug(DebugMild,"Dejitter got TS %u while last delivered was %u [%p]",timestamp,m_headStamp,this);
+	if (dTs == 0)
+	    return true;
+	else if (dTs < 0) {
+	    DDebug(DebugNote,"Dejitter dropping TS %u, last delivered was %u [%p]",
+		timestamp,m_headStamp,this);
 	    return false;
 	}
-	u_int64_t bufTime = m_tailTime - m_headTime;
-	int bufStamp = m_tailStamp - m_headStamp;
-	if (bufStamp <= 0)
-	    Debug(DebugWarn,"Oops! %d [%p]",bufStamp,this);
-	// interpolate or extrapolate the delivery time for the packet
-	// rounding down is ok - the buffer will slowly shrink as expected
-	when = dTs * bufTime / bufStamp;
-DDebug(DebugMild,"Dejitter when=" FMT64U " dTs=%d bufTime=" FMT64U " bufSTamp=%d [%p]",
-    when,dTs,bufTime,bufStamp,this);
-	when += m_headTime;
-	if (dTs > bufStamp) {
-	    bufTime = when - m_headTime;
-	    if (bufTime > m_maxdelay) {
-		// buffer has lagged behind so we must drop some old packets
-		// and also reschedule the others
-		DDebug(DebugMild,"Dejitter grew to " FMT64U " [%p]",bufTime,this);
-//		when = m_headTime - 
+	u_int64_t now = Time::now();
+	int64_t rate = 1000 * (now - m_headTime) / dTs;
+	if (rate > 0) {
+	    if (m_sampRate) {
+		if (m_fastRate) {
+		    m_fastRate--;
+		    rate = (7 * m_sampRate + rate) >> 3;
+		}
+		else
+		    rate = (31 * m_sampRate + rate) >> 5;
 	    }
+	    if (rate > 150000)
+		rate = 150000; // 6.67 kHz
+	    else if (rate < 20000)
+		rate = 20000; // 50 kHz
+	    m_sampRate = rate;
+	    XDebug(DebugAll,"Time per sample " FMT64, rate);
 	}
 	else
-	    // timestamp falls inside buffer so we must insert the packet
-	    // between the already scheduled ones
-	    insert = true;
-    }
-    else {
+	    rate = m_sampRate;
+	if (rate > 0)
+	    when = m_headTime + (dTs * rate / 1000) + m_minDelay;
+	else
+	    when = now + m_minDelay;
 	if (m_tailStamp) {
-	    int dTs = timestamp - m_tailStamp;
-	    if (dTs < 0) {
-		// until we get some statistics don't attempt to reorder packets
-		DDebug(DebugMild,"Dejitter got TS %u while last queued was %u [%p]",timestamp,m_tailStamp,this);
+	    if (timestamp == m_tailStamp)
+		return true;
+	    if (((int)(timestamp - m_tailStamp)) < 0)
+		insert = true;
+	    else if (when > now + m_maxDelay) {
+		DDebug(DebugNote,"Packet with TS %u falls after max buffer [%p]",timestamp,this);
 		return false;
 	    }
 	}
+    }
+    else {
+	if (m_tailStamp && ((int)(timestamp - m_tailStamp)) < 0) {
+	    // until we get some statistics don't attempt to reorder packets
+	    DDebug(DebugNote,"Dejitter got TS %u while last queued was %u [%p]",timestamp,m_tailStamp,this);
+	    return false;
+	}
 	// we got no packets out yet so use a fixed interval
-	when = Time::now() + m_mindelay;
+	when = Time::now() + m_minDelay;
     }
 
-    if (when > m_tailTime) {
-	// remember the latest in the queue
-	m_tailStamp = timestamp;
-	m_tailTime = when;
-    }
-    RTPDelayedData* packet = new RTPDelayedData(when,marker,timestamp,data,len);
     if (insert) {
-	for (ObjList* l = m_packets.skipNull();l;l = l->skipNext()) {
+	for (ObjList* l = m_packets.skipNull(); l; l = l->skipNext()) {
 	    RTPDelayedData* pkt = static_cast<RTPDelayedData*>(l->get());
-	    if (pkt->scheduled() > when) {
-		DDebug(DebugMild,"Dejitter inserting packet %p before %p [%p]",packet,pkt,this);
-		l->insert(packet);
+	    if (pkt->timestamp() == timestamp)
+		return true;
+	    if (pkt->timestamp() > timestamp && pkt->scheduled() > when) {
+		l->insert(new RTPDelayedData(when,marker,payload,timestamp,data,len));
 		return true;
 	    }
 	}
     }
-    m_packets.append(packet);
+    m_tailStamp = timestamp;
+    m_packets.append(new RTPDelayedData(when,marker,payload,timestamp,data,len));
     return true;
 }
 
@@ -138,18 +158,33 @@ void RTPDejitter::timerTick(const Time& when)
 {
     RTPDelayedData* packet = static_cast<RTPDelayedData*>(m_packets.get());
     if (!packet) {
-	// queue is empty - reset timestamps
-	m_headStamp = m_tailStamp = 0;
+	m_tailStamp = 0;
+	if (m_headStamp && (m_headTime + m_maxDelay < when))
+	    m_headStamp = 0;
 	return;
     }
-    if (packet->scheduled() <= when) {
-	// remember the last delivered
-	m_headStamp = packet->timestamp();
-	m_headTime = when;
-	if (m_receiver)
-	    m_receiver->rtpRecvData(packet->marker(),packet->timestamp(),packet->data(),packet->length());
-	m_packets.remove(packet);
+    if (packet->scheduled() > when)
+	return;
+    m_packets.remove(packet,false);
+    // remember the last delivered
+    m_headStamp = packet->timestamp();
+    m_headTime = packet->scheduled();
+    if (m_receiver)
+	m_receiver->rtpRecv(packet->marker(),packet->payload(),
+	    packet->timestamp(),packet->data(),packet->length());
+    TelEngine::destruct(packet);
+    unsigned int count = 0;
+    while ((packet = static_cast<RTPDelayedData*>(m_packets.get()))) {
+	long delayed = when - packet->scheduled();
+	if (delayed <= 0 || delayed <= (long)m_minDelay)
+	    break;
+	// we are too delayed - probably rtpRecv() took too long to complete...
+	m_packets.remove(packet,true);
+	count++;
     }
+    if (count)
+	Debug((count > 1) ? DebugMild : DebugNote,
+	    "Dropped %u delayed packet%s from buffer [%p]",count,((count > 1) ? "s" : ""),this);
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

@@ -39,7 +39,12 @@ extern "C" {
 #include <wanpipe_defines.h>
 #include <wanpipe_cfg.h>
 #include <wanpipe.h>
+#ifdef NEW_WANPIPE_API
+#include <aft_core.h>
+#warning "The new Sangoma API support is experimental!"
+#else
 #include <sdla_aft_te1.h>
+#endif
 #else
 #include <linux/if_wanpipe.h>
 #include <linux/if.h>
@@ -54,8 +59,13 @@ extern "C" {
 #include <wanec_iface.h>
 #ifdef HAVE_WANPIPE_HWEC_API
 #include <wanec_iface_api.h>
+#ifdef NEW_WANPIPE_API
+#define WAN_EC_CMD_DTMF_ENABLE WAN_EC_API_CMD_TONE_ENABLE
+#define WAN_EC_CMD_DTMF_DISABLE WAN_EC_API_CMD_TONE_DISABLE
+#else
 #define WAN_EC_CMD_DTMF_ENABLE WAN_EC_API_CMD_DTMF_ENABLE
 #define WAN_EC_CMD_DTMF_DISABLE WAN_EC_API_CMD_DTMF_DISABLE
+#endif
 #ifdef u_buffer_config
 #define HAVE_WANPIPE_HWEC_3310
 #endif
@@ -78,25 +88,28 @@ extern "C" {
 #include <sys/ioctl.h>
 #include <fcntl.h>
 
+#ifdef NEW_WANPIPE_API
+#define WP_HEADER WAN_MAX_HDR_SZ
+#else
 #define WP_HEADER 16
-
-#define WP_RD_ERROR    0
-#define WP_RD_STAMP_LO 1
-#define WP_RD_STAMP_HI 2
-
-#define WP_WR_TYPE     0
-#define WP_WR_FORCE    1
-
-#define WP_ERR_FIFO  0x01
-#define WP_ERR_CRC   0x02
-#define WP_ERR_ABORT 0x04
-// by default ignore ABORT and OVERFLOW conditions unrelated to current packet
-#define WP_ERR_MASK  (0xff & ~(WP_ERR_FIFO|WP_ERR_ABORT))
-
+#define WP_RD_ERROR  0
 #define WP_RPT_REPEAT 0                  // Repeat flag in header
 #define WP_RPT_LEN 1                     // Repeated data length
 #define WP_RPT_DATA 2                    // Repeated data offset in header
+#endif
+
 #define WP_RPT_MAXDATA 8                 // Max repeated data length
+
+#define WP_ERR_FIFO  (1 << WP_FIFO_ERROR_BIT)
+#define WP_ERR_CRC   (1 << WP_CRC_ERROR_BIT)
+#define WP_ERR_ABORT (1 << WP_ABORT_ERROR_BIT)
+#ifdef NEW_WANPIPE_API
+#define WP_ERR_FRAME (1 << WP_FRAME_ERROR_BIT)
+#define WP_ERR_DMA   (1 << WP_DMA_ERROR_BIT)
+#endif
+
+// by default ignore ABORT and OVERFLOW conditions unrelated to current packet
+#define WP_ERR_MASK  (0xff & ~(WP_ERR_FIFO|WP_ERR_ABORT))
 
 #define MAX_PACKET 1200
 
@@ -568,11 +581,16 @@ bool WpSocket::echoCancel(bool enable, unsigned long chanmap)
 	    ecapi.cmd = WAN_EC_CMD_DTMF_ENABLE;
 	    ecapi.verbose = WAN_EC_VERBOSE_EXTRA1;
 	    // event on start of tone, before echo canceller
+#ifdef NEW_WANPIPE_API
+	    ecapi.u_tone_config.type = WAN_EC_TONE_PRESENT;
+	    ecapi.u_tone_config.port_map = WAN_EC_CHANNEL_PORT_SOUT;
+#else
 	    ecapi.u_dtmf_config.type = WAN_EC_TONE_PRESENT;
 #ifdef HAVE_WANPIPE_HWEC_3310
 	    ecapi.u_dtmf_config.port_map = WAN_EC_CHANNEL_PORT_SOUT;
 #else
 	    ecapi.u_dtmf_config.port = WAN_EC_CHANNEL_PORT_SOUT;
+#endif
 #endif
 	}
 	else
@@ -612,7 +630,8 @@ bool WpSocket::dtmfDetect(bool enable)
 {
     bool ok = false;
 
-#ifdef HAVE_WANPIPE_HWEC
+    // TODO: new API has different event handling style, may need total rewrite
+#if defined(HAVE_WANPIPE_HWEC) && !defined(NEW_WANPIPE_API)
     api_tx_hdr_t a;
     ::memset(&a,0,sizeof(api_tx_hdr_t));
     a.wp_api_tx_hdr_event_type = WP_API_EVENT_DTMF;
@@ -908,9 +927,16 @@ bool WpInterface::transmitPacket(const DataBlock& packet, bool repeat, PacketTyp
 	if (m_repeatCapable) {
 	    if (packet.length() <= WP_RPT_MAXDATA) {
 		unsigned char* hdr = (unsigned char*)data.data();
+#ifdef NEW_WANPIPE_API
+		((wp_api_hdr_t*)hdr)->wp_api_tx_hdr_hdlc_rpt_repeat = 1;
+		((wp_api_hdr_t*)hdr)->wp_api_tx_hdr_hdlc_rpt_len = packet.length();
+		::memcpy(((wp_api_hdr_t*)hdr)->wp_api_tx_hdr_hdlc_rpt_data,
+		    packet.data(),packet.length());
+#else
 		hdr[WP_RPT_REPEAT] = 1;
 		hdr[WP_RPT_LEN] = packet.length();
 		::memcpy(hdr+WP_RPT_DATA,packet.data(),packet.length());
+#endif
 	    }
 	    else
 		Debug(this,DebugWarn,"Can't repeat packet (type=%u) with length=%u",
@@ -951,7 +977,11 @@ bool WpInterface::receiveAttempt()
 	XDebug(this,DebugAll,"Received %d bytes packet. Header length is %u [%p]",
 	    r,WP_HEADER + m_overRead,this);
 	r -= (WP_HEADER + m_overRead);
+#ifdef NEW_WANPIPE_API
+	unsigned char err = ((wp_api_hdr_t*)buf)->wp_api_rx_hdr_error_map;
+#else
 	unsigned char err = buf[WP_RD_ERROR];
+#endif
 	if (err != m_lastError) {
 	    m_lastError = err;
 	    if (err) {
@@ -1699,7 +1729,11 @@ bool WpSpan::readEvent()
 // Return -1 on error
 int WpSpan::readData()
 {
+#ifdef NEW_WANPIPE_API
+    ((wp_api_hdr_t*)m_buffer)->wp_api_rx_hdr_error_map = 0;
+#else
     m_buffer[WP_RD_ERROR] = 0;
+#endif
     int r = m_socket.recv(m_buffer,m_bufferLen);
     // Check errors
     if (r == -1)
@@ -1709,11 +1743,16 @@ int WpSpan::readData()
 	    id().safe(),r,this);
 	return -1;
     }
-    if (m_buffer[WP_RD_ERROR]) {
+#ifdef NEW_WANPIPE_API
+    unsigned char err = ((wp_api_hdr_t*)m_buffer)->wp_api_rx_hdr_error_map;
+#else
+    unsigned char err = m_buffer[WP_RD_ERROR];
+#endif
+    if (err) {
 	m_readErrors++;
 	if (m_readErrors == MAX_READ_ERRORS) {
-	    Debug(m_group,DebugGoOn,"WpSpan('%s'). Read error %u [%p]",
-		id().safe(),m_buffer[WP_RD_ERROR],this);
+	    Debug(m_group,DebugGoOn,"WpSpan('%s'). Read error 0x%02X [%p]",
+		id().safe(),err,this);
 	    m_readErrors = 0;
 	}
     }
@@ -1726,7 +1765,8 @@ int WpSpan::readData()
 
 bool WpSpan::decodeEvent()
 {
-#ifdef WAN_EC_TONE_PRESENT
+    // TODO: new API has different event handling style, may need total rewrite
+#if defined(WAN_EC_TONE_PRESENT) && !defined(NEW_WANPIPE_API)
     api_rx_hdr_t* ev = (api_rx_hdr_t*)m_buffer;
     SignallingCircuitEvent* e = 0;
     WpCircuit* circuit = 0;

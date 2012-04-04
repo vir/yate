@@ -10,6 +10,7 @@
 ;thread priority for SNMP message processing. Defaults to normal.
 ;thread=normal
 
+
 [snmp_v2]
 ; SNMPv2 configuration
 
@@ -35,10 +36,13 @@ rc_community=
 ; Defaults to 4 (TEXT)
 ;engine_format=4
 
-; information for generating the snmpEngineID. Must correspond to the format set (i.e. if engine_format=1, engine_info must be a IPv4 address)
+; information for generating the snmpEngineID.
+; Must correspond to the format set (i.e. if engine_format=1, engine_info must be a IPv4 address)
+; If the format is TEXT (4) the default is the node name
 ; NOTE! IPv6 address must not use the IPv6 short format. Mandatory.
 ; NOTE! OCTETS format must be a hexified string
 engine_info=
+
 
 [traps]
 ; SNMP traps configuration
@@ -67,6 +71,7 @@ community=
 ; see the example bellow (section [userV3]) for configuring a SNMPv3 user
 ; the specified user will not allowed to interrogate this SNMP agent, it will only be used to send traps to the configured traps receiver
 ;trap_user=
+
 
 ;[userV3]
 ; Configure a section for a SNMPv3 user. The name of the user is the name of the section.

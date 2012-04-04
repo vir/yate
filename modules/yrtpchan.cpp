@@ -106,8 +106,8 @@ static int s_interval= 0;
 static int s_timeout = 0;
 static int s_udptlTimeout = 0;
 
-static int s_minjitter = 0;
-static int s_maxjitter = 0;
+static int s_minJitter = 0;
+static int s_maxJitter = 0;
 
 class YRTPSource;
 class YRTPConsumer;
@@ -659,8 +659,6 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, Message& msg)
     }
 
     Debug(&splugin,DebugInfo,"RTP starting format '%s' payload %d [%p]",format,payload,this);
-    int minJitter = msg.getIntValue(YSTRING("minjitter"),s_minjitter);
-    int maxJitter = msg.getIntValue(YSTRING("maxjitter"),s_maxjitter);
 
     if (!setRemote(raddr,rport,msg))
 	return false;
@@ -726,8 +724,13 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, Message& msg)
     }
     setTimeout(msg,s_timeout);
     m_rtp->setReports(msg.getIntValue(YSTRING("rtcp_interval"),s_interval));
-//    if (maxJitter > 0)
-//	m_rtp->setDejitter(minJitter*1000,maxJitter*1000);
+    // dejittering is only meaningful for audio
+    if (isAudio()){ 
+	int minJitter = msg.getIntValue(YSTRING("minjitter"),s_minJitter);
+	int maxJitter = msg.getIntValue(YSTRING("maxjitter"),s_maxJitter);
+	if (minJitter >= 0 && maxJitter > 0)
+	    m_rtp->setDejitter(minJitter*1000,maxJitter*1000);
+    }
     m_bufsize = s_bufsize;
     return true;
 }
@@ -1834,8 +1837,8 @@ void YRTPPlugin::initialize()
     s_minport = cfg.getIntValue("general","minport",MIN_PORT);
     s_maxport = cfg.getIntValue("general","maxport",MAX_PORT);
     s_bufsize = cfg.getIntValue("general","buffer",BUF_SIZE);
-    s_minjitter = cfg.getIntValue("general","minjitter");
-    s_maxjitter = cfg.getIntValue("general","maxjitter");
+    s_minJitter = cfg.getIntValue("general","minjitter",50);
+    s_maxJitter = cfg.getIntValue("general","maxjitter",Engine::clientMode() ? 120 : 0);
     s_tos = cfg.getIntValue("general","tos",dict_tos);
     s_localip = cfg.getValue("general","localip");
     s_autoaddr = cfg.getBoolValue("general","autoaddr",true);

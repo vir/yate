@@ -6,6 +6,7 @@ DEBUG :=
 
 CC  := @CC@ -Wall
 CXX := @CXX@ -Wall
+OBJCXX := @CXX@ -Wall
 SED := sed
 DEFS :=
 LIBAUX:= @DLOPEN_LIB@ @LIBS@
@@ -16,6 +17,7 @@ CPPFLAGS := @CFLAGS@ @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= @LDFLAGS@
 SONAME_OPT := @SONAME_OPT@
 LDCONFIG:=true
+OBJCFLAGS := @OBJCFLAGS@
 
 MKDEPS := ../config.status
 YLIB:= libyate.so.@PACKAGE_VERSION@
@@ -36,6 +38,7 @@ LIBOBJS := $(CLSOBJS) $(ENGOBJS) $(TELOBJS) $(CLIOBJS)
 CLEANS = $(LIBOBJS) core
 CCOMPILE = $(CC) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
 COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CPPFLAGS)
+OBJCCOMPILE = $(OBJCXX) $(OBJCFLAGS) $(DEFS) $(DEBUG) $(INCLUDES) $(CPPFLAGS)
 LINK = $(CXX) $(LDFLAGS)
 
 ifeq (@INTERNAL_REGEX@,yes)
@@ -43,6 +46,15 @@ REGEX_INC:= -I@top_srcdir@/engine/regex -UDEBUG
 LIBOBJS := $(LIBOBJS) regex.o
 else
 REGEX_INC:=
+endif
+
+ifeq (@HAVE_MACOSX_SUPPORT@,yes)
+MACOSX_INC:= @MACOSX_INC@ -I@top_srcdir@/engine/macosx
+MACOSX_LIB:= -lobjc -framework Foundation
+LIBOBJS := $(LIBOBJS) MacOSXUtils.o
+else
+MACOSX_INC:=
+MACOSX_LIB:=
 endif
 
 prefix = @prefix@
@@ -77,7 +89,7 @@ strip: all
 	-strip --strip-debug --discard-locals ../$(YLIB)
 
 Engine.o: @srcdir@/Engine.cpp $(MKDEPS) $(EINC) ../yateversn.h ../yatepaths.h
-	$(COMPILE) @FDSIZE_HACK@ @HAVE_PRCTL@ @HAVE_GETCWD@ -c $<
+	$(COMPILE) @FDSIZE_HACK@ @HAVE_PRCTL@ @HAVE_GETCWD@ $(MACOSX_INC) -c $<
 
 Channel.o: @srcdir@/Channel.cpp $(MKDEPS) $(PINC)
 	$(COMPILE) -c $<
@@ -115,6 +127,9 @@ String.o: @srcdir@/String.cpp $(MKDEPS) $(CINC)
 regex.o: @top_srcdir@/engine/regex/regex.c $(MKDEPS)
 	$(CCOMPILE) -DSTDC_HEADERS $(REGEX_INC) -c $<
 
+MacOSXUtils.o: @top_srcdir@/engine/macosx/MacOSXUtils.mm $(MKDEPS)
+	$(OBJCCOMPILE) $(MACOSX_INC) -c $<
+
 %.o: @srcdir@/%.cpp $(MKDEPS) $(EINC)
 	$(COMPILE) -c $<
 
@@ -122,4 +137,4 @@ Makefile: @srcdir@/Makefile.in $(MKDEPS)
 	cd .. && ./config.status
 
 ../$(YLIB): $(LIBOBJS) $(LIBS)
-	$(LINK) -o $@ $(SONAME_OPT)$(YLIB) $^ $(LIBTHR) $(LIBAUX) @RESOLV_LIB@
+	$(LINK) -o $@ $(SONAME_OPT)$(YLIB) $^ $(LIBTHR) $(LIBAUX) $(MACOSX_LIB) @RESOLV_LIB@

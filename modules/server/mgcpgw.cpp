@@ -700,7 +700,7 @@ void MGCPPlugin::initialize()
 			    mm->params.addParam("x-standby",String::boolText(s_standby));
 			    mm->params.addParam("x-started",s_started);
 			}
-			s_engine->sendCommand(mm,ca->address);
+			s_engine->sendCommand(mm,ca->address());
 		    }
 		}
 		else

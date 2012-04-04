@@ -762,10 +762,10 @@ private:
 };
 
 /**
- * Singleton class that holds the User Interface's main thread and methods
- * @short Thread that runs the User Interface
+ * Singleton class that holds the User Interface's main  methods
+ * @short Class that runs the User Interface
  */
-class YATE_API Client : public Thread, public MessageReceiver
+class YATE_API Client : public MessageReceiver
 {
     friend class Window;
     friend class ClientChannel;
@@ -843,7 +843,13 @@ public:
     virtual ~Client();
 
     /**
-     * Run the client's thread
+     * Start up the client thread
+     * @return True if the client thread is started, false otherwise
+     */
+    virtual bool startup();
+
+    /**
+     * Run the client's main loop
      */
     virtual void run();
 
@@ -878,6 +884,13 @@ public:
      */
     inline void unlockOther()
 	{ if (!m_oneThread) unlock(); }
+
+    /**
+     * Set the client's thread
+     * @param th The thread on which the client will run on
+     */
+    inline void setThread(Thread* th)
+	{ m_clientThread = th; }
 
     /**
      * Handle all windows closed event from UI
@@ -1269,7 +1282,7 @@ public:
      * @return True if the client is valid (running) or the method is called from client's thread
      */
     static inline bool valid()
-	{ return self() && (self() == Thread::current() || !(exiting() || Engine::exiting())); }
+	{ return self() && (self()->isUIThread() || !(exiting() || Engine::exiting())); }
 
     /**
      * Check if a message is sent by the client
@@ -1712,8 +1725,10 @@ protected:
     virtual void initClient();
     virtual void exitClient()
 	{}
+    virtual bool isUIThread()
+	{ return Thread::current() == m_clientThread; }
     inline bool needProxy() const
-	{ return m_oneThread && !isCurrent(); }
+	{ return m_oneThread && !(Client::self() && Client::self()->isUIThread()); }
     bool driverLockLoop();
     static bool driverLock(long maxwait = 0);
     static void driverUnlock();
@@ -1731,6 +1746,7 @@ protected:
     static int s_changing;
     static ObjList s_logics;
     static bool s_idleLogicsTick;        // Call logics' timerTick()
+    Thread* m_clientThread;
 };
 
 /**

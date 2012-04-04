@@ -72,6 +72,7 @@ static TokenDict dict_errors[] = {
     { "nocall", 481 },
     { "busy", 486 },
     { "busy", 600 },
+    { "noanswer", 480 },
     { "noanswer", 487 },
     { "rejected", 406 },
     { "rejected", 606 },
@@ -526,9 +527,9 @@ public:
     // Initialize the engine
     void initialize(NamedList* params);
     virtual bool buildParty(SIPMessage* message);
-    virtual bool checkUser(const String& username, const String& realm, const String& nonce,
+    virtual bool checkUser(String& username, const String& realm, const String& nonce,
 	const String& method, const String& uri, const String& response,
-	const SIPMessage* message, GenObject* userData);
+	const SIPMessage* message, const MimeHeaderLine* authLine, GenObject* userData);
     virtual SIPTransaction* forkInvite(SIPMessage* answer, SIPTransaction* trans);
     // Transport status changed notification
     void transportChangedStatus(YateSIPTransport* trans, int stat, const String& reason);
@@ -551,6 +552,7 @@ private:
     bool m_prack;
     bool m_info;
     bool m_fork;
+    bool m_foreignAuth;
 };
 
 class YateSIPLine : public String, public Mutex, public YateSIPPartyHolder
@@ -1575,6 +1577,27 @@ static inline int findURIParamSep(const String& str, int start)
 	if (str[i] == '?' || str[i] == '&')
 	    return i;
     return -1;
+}
+
+// Set a transaction response from an authentication error
+static void setAuthError(SIPTransaction* trans, const NamedList& params,
+    bool stale, const String& domain = String::empty())
+{
+    const String& error = params[YSTRING("error")];
+    while (error) {
+	int code = error.toInteger(dict_errors,401);
+	if (code < 400 || code > 699)
+	    break;
+	if ((code == 401) && (error != YSTRING("noautoauth")))
+	    break;
+	SIPMessage* m = new SIPMessage(trans->initialMessage(),code,params.getValue(YSTRING("reason")));
+	copySipHeaders(*m,params);
+	trans->setResponse(m);
+	m->deref();
+	return;
+    }
+    Lock lck(s_globalMutex);
+    trans->requestAuth(s_realm,domain,stale);
 }
 
 
@@ -3396,7 +3419,7 @@ void YateTCPParty::destroyed()
 
 YateSIPEngine::YateSIPEngine(YateSIPEndPoint* ep)
     : SIPEngine(s_cfg.getValue("general","useragent")),
-      m_ep(ep), m_prack(false), m_info(false)
+      m_ep(ep), m_prack(false), m_info(false), m_foreignAuth(false)
 {
     addAllowed("INVITE");
     addAllowed("BYE");
@@ -3413,9 +3436,6 @@ YateSIPEngine::YateSIPEngine(YateSIPEndPoint* ep)
     m_info = s_cfg.getBoolValue("general","info",true);
     if (m_info)
 	addAllowed("INFO");
-    lazyTrying(s_cfg.getBoolValue("general","lazy100",false));
-    m_fork = s_cfg.getBoolValue("general","fork",true);
-    m_flags = s_cfg.getIntValue("general","flags",m_flags);
     NamedList *l = s_cfg.getSection("methods");
     if (l) {
 	unsigned int len = l->length();
@@ -3437,6 +3457,10 @@ void YateSIPEngine::initialize(NamedList* params)
     NamedList dummy("");
     if (!params)
 	params = &dummy;
+    lazyTrying(params->getBoolValue("lazy100",false));
+    m_fork = params->getBoolValue("fork",true);
+    m_flags = params->getIntValue("flags",m_flags);
+    m_foreignAuth = params->getBoolValue("auth_foreign",false);
     m_reqTransCount = params->getIntValue("sip_req_trans_count",4,2,10,false);
     m_rspTransCount = params->getIntValue("sip_rsp_trans_count",5,2,10,false);
     DDebug(this,DebugAll,"Initialized sip_req_trans_count=%d sip_rsp_trans_count=%d",
@@ -3540,9 +3564,9 @@ bool YateSIPEngine::copyAuthParams(NamedList* dest, const NamedList& src, bool o
     return ok;
 }
 
-bool YateSIPEngine::checkUser(const String& username, const String& realm, const String& nonce,
+bool YateSIPEngine::checkUser(String& username, const String& realm, const String& nonce,
     const String& method, const String& uri, const String& response,
-    const SIPMessage* message, GenObject* userData)
+    const SIPMessage* message, const MimeHeaderLine* authLine, GenObject* userData)
 {
     NamedList* params = YOBJECT(NamedList,userData);
 
@@ -3573,20 +3597,38 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
 	    URI from(*hl);
 	    m.addParam("domain",from.getHost());
 	}
+	hl = message->getHeader("User-Agent");
+	if (hl)
+	    m.addParam("device",*hl);
     }
 
     if (params) {
+	m.copyParam(*params,"number");
 	m.copyParam(*params,"caller");
 	m.copyParam(*params,"called");
 	m.copyParam(*params,"billid");
     }
+    if (authLine && m_foreignAuth) {
+	m.addParam("auth",*authLine);
+	for (const ObjList* l = authLine->params().skipNull(); l; l = l->skipNext()) {
+	    const NamedString* p = static_cast<const NamedString*>(l->get());
+	    m.setParam("auth_" + p->name(),*p);
+	}
+    }
+    else
+	authLine = 0;
 
     if (!Engine::dispatch(m))
 	return copyAuthParams(params,m,false);
 
     // empty password returned means authentication succeeded
-    if (m.retValue().null())
+    if (m.retValue().null()) {
+	if (authLine && username.null()) {
+	    username = authLine->getParam("username");
+	    MimeHeaderLine::delQuotes(username);
+	}
 	return copyAuthParams(params,m);
+    }
     // check for refusals
     if (m.retValue() == "-") {
 	if (params) {
@@ -3626,6 +3668,7 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
     }
     return ok || copyAuthParams(params,m,false);
 }
+
 
 YateSIPEndPoint::YateSIPEndPoint(Thread::Priority prio, unsigned int partyMutexCount)
     : Thread("YSIP EndPoint",prio),
@@ -4223,15 +4266,16 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
 	return;
     }
 
+    URI addr(*hl);
     Message msg("user.register");
+    msg.addParam("number",addr.getUser());
     msg.addParam("sip_uri",t->getURI());
     msg.addParam("sip_callid",t->getCallID());
     String user;
     int age = t->authUser(user,false,&msg);
     DDebug(&plugin,DebugAll,"User '%s' age %d",user.c_str(),age);
     if (((age < 0) || (age > 10)) && s_auth_register) {
-	Lock lck(s_globalMutex);
-	t->requestAuth(s_realm,"",age >= 0);
+	setAuthError(t,msg,age >= 0);
 	return;
     }
 
@@ -4241,11 +4285,9 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
 	return;
     }
 
-    URI addr(*hl);
     if (user.null())
 	user = addr.getUser();
     msg.setParam("username",user);
-    msg.setParam("number",addr.getUser());
     msg.setParam("driver","sip");
     String data(addr);
     String raddr;
@@ -4392,8 +4434,7 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
 	int age = t->authUser(user,false,&m);
 	DDebug(&plugin,DebugAll,"User '%s' age %d",user.c_str(),age);
 	if ((age < 0) || (age > 10)) {
-	    Lock lck(s_globalMutex);
-	    t->requestAuth(s_realm,"",age >= 0);
+	    setAuthError(t,m,age >= 0);
 	    return true;
 	}
     }
@@ -5056,13 +5097,17 @@ void YateSIPConnection::hangup()
     if (m_reason)
 	m->setParam("reason",m_reason);
     Engine::enqueue(m);
+    if (!error)
+	error = m_reason.c_str();
     switch (m_state) {
 	case Cleared:
 	    clearTransaction();
+	    disconnect(error,parameters());
 	    return;
 	case Incoming:
 	    if (m_tr) {
 		clearTransaction();
+		disconnect(error,parameters());
 		return;
 	    }
 	    break;
@@ -5122,8 +5167,6 @@ void YateSIPConnection::hangup()
 	}
     }
     m_byebye = false;
-    if (!error)
-	error = m_reason.c_str();
     disconnect(error,parameters());
 }
 
@@ -5752,10 +5795,8 @@ bool YateSIPConnection::checkUser(SIPTransaction* t, bool refuse)
     if ((age >= 0) && (age <= 10))
 	return true;
     DDebug(this,DebugAll,"YateSIPConnection::checkUser(%p) failed, age %d [%p]",t,age,this);
-    if (refuse) {
-	Lock lck(s_globalMutex);
-	t->requestAuth(s_realm,m_domain,age >= 0);
-    }
+    if (refuse)
+	setAuthError(t,params,age >= 0,m_domain);
     return false;
 }
 

@@ -152,8 +152,7 @@ public:
     virtual void quit() {
 	    if (m_app)
 		m_app->quit();
-	    else
-		Engine::halt(0);
+	    Engine::halt(0);
 	}
 
     /**
@@ -546,6 +545,7 @@ public:
 
 protected:
     virtual void loadWindows(const char* file = 0);
+    virtual bool isUIThread();
 private:
     QApplication* m_app;
     ObjList m_events;                    // Proxy events objects
@@ -554,11 +554,12 @@ private:
 class YQT4_API QtDriver : public ClientDriver
 {
 public:
-    QtDriver();
+    QtDriver(bool buildClientThread = true);
     virtual ~QtDriver();
     virtual void initialize();
 private:
     bool m_init;                         // Already initialized flag
+    bool m_clientThread;                 // does the client need a thread to run on?
 };
 
 class YQT4_API QtWindow : public QWidget, public Window

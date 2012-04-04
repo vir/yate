@@ -113,6 +113,9 @@
 ; refresh_nosdp: bool: Accept session refresh reINVITEs that lack a SDP offer
 ;refresh_nosdp=enable
 
+; auth_foreign: bool: Attempt to authenticate nonces not generated locally
+;auth_foreign=disable
+
 ; flags: int: Miscellaneous SIP engine flags for broken implementations
 ; See SIPMessage::Flags and SIPMessage::complete() in the source for gory details
 ;flags=0

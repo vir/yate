@@ -821,6 +821,7 @@ public:
 	Server = 2,
 	Client = 3,
 	ClientProxy = 4,
+	ClientMainThread = 5,
     };
 
     enum CallAccept {
@@ -1151,6 +1152,12 @@ public:
      * @param type Type of captured events, an empty name clear engine events
      */
     static void clearEvents(const String& type);
+
+    /**
+     * Start running the engine
+     * @return The code with which the engine has stopped
+     */
+    static int engineRun();
 
 protected:
     /**

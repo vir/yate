@@ -3861,9 +3861,19 @@ bool SS7ISUP::control(NamedList& params)
 	    return true;
 	case SS7MsgISUP::UPA:
 	    if (!m_userPartAvail) {
+		const char* oldStat = statusName();
 		m_uptTimer.stop();
 		m_userPartAvail = true;
 		m_lockTimer.start();
+		if (statusName() != oldStat) {
+		    NamedList params("");
+		    params.addParam("from",toString());
+		    params.addParam("type","trunk");
+		    params.addParam("operational",String::boolText(m_l3LinkUp));
+		    params.addParam("available",String::boolText(m_userPartAvail));
+		    params.addParam("text",statusName());
+		    engine()->notify(this,params);
+		}
 	    }
 	    return true;
 	case SS7MsgISUP::CtrlSave:
@@ -3884,6 +3894,7 @@ void SS7ISUP::notify(SS7Layer3* link, int sls)
 	network()->getRouteState(m_type,*m_remotePoint) : SS7Route::Unknown;
     bool linkTmp = m_l3LinkUp;
     bool partAvail = m_userPartAvail;
+    const char* oldStat = statusName();
     // Copy linkset operational state
     m_l3LinkUp = network()->operational();
     // Reset remote user part's availability state if supported
@@ -3901,10 +3912,13 @@ void SS7ISUP::notify(SS7Layer3* link, int sls)
 	(m_userPartAvail ? "" : "un"));
     if (linkTmp != m_l3LinkUp || partAvail != m_userPartAvail) {
 	NamedList params("");
+	params.addParam("from",toString());
 	params.addParam("type","trunk");
 	params.addParam("operational",String::boolText(m_l3LinkUp));
 	params.addParam("available",String::boolText(m_userPartAvail));
-	params.addParam("from",link->toString());
+	params.addParam("link",link->toString());
+	if (statusName() != oldStat)
+	    params.addParam("text",statusName());
 	engine()->notify(this,params);
     }
 }
@@ -4407,9 +4421,19 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
     // Ignore 
     if (!m_userPartAvail && m_uptTimer.started()) {
 	m_uptTimer.stop();
+	const char* oldStat = statusName();
 	m_userPartAvail = true;
 	m_lockTimer.start();
 	Debug(this,DebugInfo,"Remote user part is available");
+	if (statusName() != oldStat) {
+	    NamedList params("");
+	    params.addParam("from",toString());
+	    params.addParam("type","trunk");
+	    params.addParam("operational",String::boolText(m_l3LinkUp));
+	    params.addParam("available",String::boolText(m_userPartAvail));
+	    params.addParam("text",statusName());
+	    engine()->notify(this,params);
+	}
 	if (msg->cic() == m_uptCicCode &&
 	    (msg->type() == SS7MsgISUP::UPA ||
 	     msg->type() == SS7MsgISUP::CVR ||
@@ -4468,9 +4492,19 @@ void SS7ISUP::receivedUPU(SS7PointCode::Type type, const SS7PointCode node,
 	return;
     if (!(m_userPartAvail && m_uptTimer.interval()))
 	return;
+    const char* oldStat = statusName();
     Debug(this,DebugNote,"Remote User Part is unavailable (received UPU)");
     m_userPartAvail = false;
     m_uptTimer.start();
+    if (statusName() != oldStat) {
+	NamedList params("");
+	params.addParam("from",toString());
+	params.addParam("type","trunk");
+	params.addParam("operational",String::boolText(m_l3LinkUp));
+	params.addParam("available",String::boolText(m_userPartAvail));
+	params.addParam("text",statusName());
+	engine()->notify(this,params);
+    }
 }
 
 // Process an event received from a non-reserved circuit

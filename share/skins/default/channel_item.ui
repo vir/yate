@@ -216,7 +216,7 @@
                <item>
                 <widget class="QLabel" name="time" >
                  <property name="sizePolicy" >
-                  <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+                  <sizepolicy vsizetype="Fixed" hsizetype="Preferred" >
                    <horstretch>0</horstretch>
                    <verstretch>0</verstretch>
                   </sizepolicy>
@@ -229,9 +229,12 @@
                  </property>
                  <property name="maximumSize" >
                   <size>
-                   <width>40</width>
+                   <width>80</width>
                    <height>18</height>
                   </size>
+                 </property>
+                 <property name="styleSheet" >
+                  <string>margin-left: 4px;</string>
                  </property>
                  <property name="text" >
                   <string>00:00</string>

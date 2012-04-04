@@ -509,6 +509,31 @@ AC_CHECK_FUNCS([regcomp], , [INTERNAL_REGEX=yes])
 fi
 AC_SUBST(INTERNAL_REGEX)
 
+# check for Mac OS X Support
+MACOSX_INC=""
+HAVE_MACOSX_SUPPORT=no
+OBJCFLAGS=""
+if [[ "x$uname_os" = "xDarwin" ]]; then
+save_CPPFLAGS=$CPPFLAGS
+CPPFLAGS="$CPPFLAGS -x objective-c++"
+AC_MSG_CHECKING([for Mac OS X Objective-C support])
+AC_TRY_COMPILE([#import <Foundation/Foundation.h>],
+[
+[NSFileManager defaultManager]
+],
+[
+HAVE_MACOSX_SUPPORT="yes"
+OBJCFLAGS="-x objective-c++"
+MACOSX_INC="-DHAVE_MACOSX_SUPPORT"],[]
+)
+AC_MSG_RESULT([$HAVE_MACOSX_SUPPORT])
+CPPFLAGS=$save_CPPFLAGS
+fi
+AC_SUBST(MACOSX_INC)
+AC_SUBST(HAVE_MACOSX_SUPPORT)
+AC_SUBST(OBJCFLAGS)
+
+
 HAVE_PGSQL=no
 PGSQL_INC=""
 AC_ARG_WITH(libpq,AC_HELP_STRING([--with-libpq=DIR],[use Postgress SQL from DIR (default /usr)]),[ac_cv_use_libpq=$withval],[ac_cv_use_libpq=/usr])
@@ -639,7 +664,29 @@ HAVE_WANPIPE_API=no
 WANPIPE_FLAGS=""
 AC_ARG_ENABLE(wanpipe,AC_HELP_STRING([--enable-wanpipe],[Enable Wanpipe support (default: yes)]),want_wanpipe=$enableval,want_wanpipe=yes)
 if [[ "x$want_wanpipe" = "xyes" ]]; then
-AC_MSG_CHECKING([for Wanpipe generic headers])
+AC_MSG_CHECKING([for Wanpipe new generic headers])
+SAVE_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS -I/usr/include/wanpipe"
+AC_TRY_COMPILE([
+#define __LINUX__
+#include <sys/types.h>
+#include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <if_wanpipe.h>
+#include <wanpipe_defines.h>
+#include <wanpipe_cfg.h>
+#include <wanpipe.h>
+#include <aft_core.h>
+],[],
+HAVE_WANPIPE="yes"
+)
+CFLAGS="$SAVE_CFLAGS"
+AC_MSG_RESULT([$HAVE_WANPIPE])
+if [[ "x$HAVE_WANPIPE" = "xyes" ]]; then
+WANPIPE_FLAGS="-DNEW_WANPIPE_API"
+else
+AC_MSG_CHECKING([for Wanpipe old generic headers])
 SAVE_CFLAGS="$CFLAGS"
 CFLAGS="$CFLAGS -I/usr/include/wanpipe"
 AC_TRY_COMPILE([
@@ -658,9 +705,10 @@ HAVE_WANPIPE="yes"
 )
 CFLAGS="$SAVE_CFLAGS"
 AC_MSG_RESULT([$HAVE_WANPIPE])
+fi
 if [[ "x$HAVE_WANPIPE" = "xyes" ]]; then
 HAVE_WANPIPE_API="yes"
-WANPIPE_FLAGS="-DHAVE_WANPIPE_API -I/usr/include/wanpipe"
+WANPIPE_FLAGS="-DHAVE_WANPIPE_API -I/usr/include/wanpipe $WANPIPE_FLAGS"
 else
 AC_MSG_CHECKING([for Wanpipe linux headers])
 AC_TRY_COMPILE([

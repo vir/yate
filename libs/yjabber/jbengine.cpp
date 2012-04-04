@@ -1508,6 +1508,24 @@ JBServerStream* JBServerEngine::createServerStream(const String& local,
     return stream;
 }
 
+// Create an outgoing comp stream
+JBServerStream* JBServerEngine::createCompStream(const String& name, const String& local,
+    const String& remote, const NamedList* params)
+{
+    if (exiting()) {
+	Debug(this,DebugAll,"Can't create comp local=%s remote=%s: engine is exiting",
+	    local.c_str(),remote.c_str());
+	return 0;
+    }
+    JBServerStream* stream = findServerStream(local,remote,true);
+    if (!stream) {
+	stream = new JBServerStream(this,local,remote,&name,params);
+	stream->ref();
+	addStream(stream);
+    }
+    return stream;
+}
+
 // Find a cluster stream by remote domain
 JBClusterStream* JBServerEngine::findClusterStream(const String& remote,
     JBClusterStream* skip)
@@ -1847,7 +1865,7 @@ XmlElement* JBEvent::buildIqResult(bool addTags, XmlElement* child)
 // Build and send a stanza 'result' from enclosed 'iq' element
 bool JBEvent::sendIqResult(XmlElement* child)
 {
-    if (!(m_element && m_stream && !XMPPUtils::isUnprefTag(*m_element,XmlTag::Iq))) {
+    if (!(m_element && m_stream && XMPPUtils::isUnprefTag(*m_element,XmlTag::Iq))) {
 	TelEngine::destruct(child);
 	return false;
     }

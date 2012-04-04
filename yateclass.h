@@ -153,7 +153,7 @@ typedef int HANDLE;
 #define O_BINARY 0
 #endif
 
-#if _WORDSIZE == 64
+#if _WORDSIZE == 64 && !defined(__APPLE__)
 #define FMT64 "%ld"
 #define FMT64U "%lu"
 #else

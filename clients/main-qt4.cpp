@@ -25,13 +25,67 @@
 #include <yatephone.h>
 #include "qt4/qt4client.h"
 
+#define WAIT_ENGINE 10000       //wait 10 seconds for engine to halt
+
 using namespace TelEngine;
 
-static QtDriver qtdriver;
+class EngineThread;
+
+static QtDriver qtdriver(false);
+static EngineThread* s_engineThread = 0;
+
+class EngineThread : public Thread
+{
+public:
+    inline EngineThread()
+      : Thread("Engine")
+      { }
+    virtual void run();
+    virtual void cleanup();
+};
+
+void EngineThread::run()
+{
+    Engine::engineRun();
+    Debug(DebugAll,"Engine stopped running");
+}
+
+void EngineThread::cleanup()
+{
+    Debug(DebugAll,"EngineThread::cleanup() [%p]",this);
+    s_engineThread = 0;
+}
+
 
 extern "C" int main(int argc, const char** argv, const char** envp)
 {
     TelEngine::Engine::extraPath("qt4");
-    return TelEngine::Engine::main(argc,argv,envp,TelEngine::Engine::Client);
+    // parse arguments
+    int retcode = TelEngine::Engine::main(argc,argv,envp,TelEngine::Engine::ClientMainThread);
+    if (retcode)
+	return retcode;
+
+    // create engine from this thread
+    Engine::self();
+    s_engineThread = new EngineThread;
+    if (!s_engineThread->startup())
+	return EINVAL;
+
+    // build client if the driver didn't
+    if (!QtClient::self())
+	new QtClient();
+    // run the client
+    QtClient::self()->run();
+    // the client finished running, do cleanup
+    QtClient::self()->cleanup();
+
+    // wait for the engine to halt
+    Engine::halt(0);
+    unsigned long count = WAIT_ENGINE / Thread::idleMsec();
+    while (s_engineThread && count--)
+	Thread::idle();
+    Thread::killall();
+
+    return retcode;
 }
 /* vi: set ts=8 sw=4 sts=4 noet: */

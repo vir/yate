@@ -429,13 +429,19 @@ void ThreadPrivate::killall()
     ThreadPrivate *t;
     bool sledgehammer = false;
     s_tmutex.lock();
+    ThreadPrivate* crt = ThreadPrivate::current();
     int c = s_threads.count();
-    Debug(DebugNote,"Soft cancelling %d running threads",c);
+    if (crt)
+	Debug(DebugNote,"Thread '%s' is soft cancelling other %d running threads",crt->m_name,c-1);
+    else
+	Debug(DebugNote,"Soft cancelling %d running threads",c);
     ObjList* l = &s_threads;
     while (l && (t = static_cast<ThreadPrivate *>(l->get())) != 0)
     {
-	Debug(DebugInfo,"Stopping ThreadPrivate '%s' [%p]",t->m_name,t);
-	t->cancel(false);
+	if (t != crt) {
+	    Debug(DebugInfo,"Stopping ThreadPrivate '%s' [%p]",t->m_name,t);
+	    t->cancel(false);
+	}
 	l = l->next();
     }
     for (int w = 0; w < SOFT_WAITS; w++) {
@@ -443,6 +449,9 @@ void ThreadPrivate::killall()
 	Thread::idle();
 	s_tmutex.lock();
 	c = s_threads.count();
+	// ignore the current thread if we have one
+	if (crt && c)
+	    c--;
 	if (!c) {
 	    s_tmutex.unlock();
 	    return;
@@ -453,6 +462,10 @@ void ThreadPrivate::killall()
     c = 1;
     while (l && (t = static_cast<ThreadPrivate *>(l->get())) != 0)
     {
+	if (t == crt) {
+	    l = l->next();
+	    continue;
+	}
 	Debug(DebugInfo,"Trying to kill ThreadPrivate '%s' [%p], attempt %d",t->m_name,t,c);
 	bool ok = t->cancel(true);
 	if (ok) {
@@ -622,8 +635,7 @@ void Thread::cleanup()
 
 void Thread::killall()
 {
-    if (!ThreadPrivate::current())
-	ThreadPrivate::killall();
+    ThreadPrivate::killall();
 }
 
 void Thread::exit()

@@ -509,6 +509,31 @@ AC_CHECK_FUNCS([regcomp], , [INTERNAL_REGEX=yes])
 fi
 AC_SUBST(INTERNAL_REGEX)
 
+# check for Mac OS X Support
+MACOSX_INC=""
+HAVE_MACOSX_SUPPORT=no
+OBJCFLAGS=""
+if [[ "x$uname_os" = "xDarwin" ]]; then
+save_CPPFLAGS=$CPPFLAGS
+CPPFLAGS="$CPPFLAGS -x objective-c++"
+AC_MSG_CHECKING([for Mac OS X Objective-C support])
+AC_TRY_COMPILE([#import <Foundation/Foundation.h>],
+[
+[NSFileManager defaultManager]
+],
+[
+HAVE_MACOSX_SUPPORT="yes"
+OBJCFLAGS="-x objective-c++"
+MACOSX_INC="-DHAVE_MACOSX_SUPPORT"],[]
+)
+AC_MSG_RESULT([$HAVE_MACOSX_SUPPORT])
+CPPFLAGS=$save_CPPFLAGS
+fi
+AC_SUBST(MACOSX_INC)
+AC_SUBST(HAVE_MACOSX_SUPPORT)
+AC_SUBST(OBJCFLAGS)
+
+
 HAVE_PGSQL=no
 PGSQL_INC=""
 AC_ARG_WITH(libpq,AC_HELP_STRING([--with-libpq=DIR],[use Postgress SQL from DIR (default /usr)]),[ac_cv_use_libpq=$withval],[ac_cv_use_libpq=/usr])

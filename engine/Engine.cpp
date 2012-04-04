@@ -54,12 +54,20 @@ __declspec(dllimport) BOOL WINAPI SHGetSpecialFolderPathA(HWND,LPSTR,INT,BOOL);
 typedef void* HMODULE;
 #define PATH_SEP "/"
 #ifndef CFG_DIR
+#ifdef HAVE_MACOSX_SUPPORT
+#define CFG_DIR "Yate"
+#else
 #define CFG_DIR ".yate"
+#endif
 #endif
 
 static int s_childsig = 0;
 
 #endif // _WINDOWS
+
+#ifdef HAVE_MACOSX_SUPPORT
+#include "MacOSXUtils.h"
+#endif
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -349,6 +357,12 @@ static void initUsrPath(String& path, const char* newPath = 0)
 	char szPath[MAX_PATH];
 	if (SHGetSpecialFolderPathA(NULL,szPath,CSIDL_APPDATA,TRUE))
 	    path = szPath;
+#elif defined(HAVE_MACOSX_SUPPORT)
+	MacOSXUtils::applicationSupportPath(path);
+	if (path.null()) {
+	    Debug(DebugMild,"Could not get system user path on MacOS X, setting it to $(HOME)");
+	    path = ::getenv("HOME");
+	}
 #else
 	path = ::getenv("HOME");
 #endif
@@ -451,6 +465,8 @@ static const char s_cmdsOpt[] = "  module {{load|reload} modulefile|unload modul
 static const char s_cmdsMsg[] = "Controls the modules loaded in the Telephony Engine\r\n";
 static const char s_evtsOpt[] = "  events [clear] [type]\r\n";
 static const char s_evtsMsg[] = "Show or clear events or alarms collected since the engine startup\r\n";
+static const char s_logvOpt[] = "  logview\r\n";
+static const char s_logvMsg[] = "Show log of engine startup and initialization process\r\n";
 
 // get the base name of a module file
 static String moduleBase(const String& fname)
@@ -555,6 +571,7 @@ void EngineCommand::doCompletion(Message &msg, const String& partLine, const Str
     if (partLine.null() || (partLine == YSTRING("help"))) {
 	completeOne(msg.retValue(),"module",partWord);
 	completeOne(msg.retValue(),"events",partWord);
+	completeOne(msg.retValue(),"logview",partWord);
     }
     else if (partLine == YSTRING("status"))
 	completeOne(msg.retValue(),"engine",partWord);
@@ -589,6 +606,7 @@ void EngineCommand::doCompletion(Message &msg, const String& partLine, const Str
 	    const EngineEventList* e = static_cast<const EngineEventList*>(l->get());
 	    completeOne(msg.retValue(),e->toString(),partWord);
 	}
+	completeOne(msg.retValue(),"log",partWord);
 	if (partLine == YSTRING("events"))
 	    completeOne(msg.retValue(),"clear",partWord);
     }
@@ -602,8 +620,10 @@ bool EngineCommand::received(Message &msg)
 	return false;
     }
     if (!line.startSkip("module")) {
-	if (line.startSkip("events")) {
-	    if (line.startSkip("clear")) {
+	if (line.startSkip("events") || (line == "logview" && (line.clear(),true))) {
+	    bool clear = line.startSkip("clear");
+	    line.startSkip("log");
+	    if (clear) {
 		Engine::clearEvents(line);
 		return true;
 	    }
@@ -688,14 +708,15 @@ bool EngineHelp::received(Message &msg)
     const char* opts = (s_nounload ? s_cmdsOptNoUnload : s_cmdsOpt);
     String line = msg.getValue("line");
     if (line.null()) {
-	msg.retValue() << opts;
-	msg.retValue() << s_evtsOpt;
+	msg.retValue() << opts << s_evtsOpt << s_logvOpt;
 	return false;
     }
     if (line == YSTRING("module"))
 	msg.retValue() << opts << s_cmdsMsg;
     else if (line == YSTRING("events"))
 	msg.retValue() << s_evtsOpt << s_evtsMsg;
+    else if (line == YSTRING("logview"))
+	msg.retValue() << s_logvOpt << s_logvMsg;
     return true;
 }
 
@@ -735,7 +756,7 @@ static bool logFileOpen()
     return false;
 }
 
-static int engineRun()
+int Engine::engineRun()
 {
     time_t t = ::time(0);
     s_startMsg << "Yate (" << ::getpid() << ") is starting " << ::ctime(&t);
@@ -811,7 +832,7 @@ static void serviceMain(DWORD argc, LPTSTR* argv)
 	return;
     }
     setStatus(SERVICE_START_PENDING);
-    engineRun();
+    Engine::engineRun();
 }
 
 static SERVICE_TABLE_ENTRY dispatchTable[] =
@@ -1837,6 +1858,9 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
     bool daemonic = false;
     bool supervised = false;
 #endif
+    bool noStart = (mode == ClientMainThread);
+    if (noStart)
+	mode = Client;
     bool client = (mode == Client);
     Debugger::Formatting tstamp = Debugger::None;
     bool colorize = false;
@@ -2287,7 +2311,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
     }
     else
 #endif
-	retcode = engineRun();
+	retcode = noStart ? 0 : engineRun();
 
     return retcode;
 }

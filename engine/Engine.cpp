@@ -735,7 +735,7 @@ static bool logFileOpen()
     return false;
 }
 
-static int engineRun()
+int Engine::engineRun()
 {
     time_t t = ::time(0);
     s_startMsg << "Yate (" << ::getpid() << ") is starting " << ::ctime(&t);
@@ -1837,6 +1837,9 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
     bool daemonic = false;
     bool supervised = false;
 #endif
+    bool noStart = (mode == ClientMainThread);
+    if (noStart)
+	mode = Client;
     bool client = (mode == Client);
     Debugger::Formatting tstamp = Debugger::None;
     bool colorize = false;
@@ -2287,7 +2290,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
     }
     else
 #endif
-	retcode = engineRun();
+	retcode = noStart ? 0 : engineRun();
 
     return retcode;
 }

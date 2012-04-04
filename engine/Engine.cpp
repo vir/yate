@@ -832,7 +832,7 @@ static void serviceMain(DWORD argc, LPTSTR* argv)
 	return;
     }
     setStatus(SERVICE_START_PENDING);
-    engineRun();
+    Engine::engineRun();
 }
 
 static SERVICE_TABLE_ENTRY dispatchTable[] =

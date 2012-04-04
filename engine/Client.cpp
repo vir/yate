@@ -155,6 +155,52 @@ private:
     TrayIconDef() : NamedPointer("") {}  // No default constructor
 };
 
+namespace { // anonymous
+/**
+ * Helper class providing a thread on which the Client to run on
+ * A thread for the client
+ */
+class ClientThread : public Thread
+{
+public:
+    /**
+     * Constructor
+     * @param name Static name of the thread (for debugging purpose only)
+     * @param prio Thread priority
+     */
+    ClientThread(Client* client, Priority prio = Normal)
+    : Thread("Client",prio),
+      m_client(client)
+    { }
+
+    /**
+     * Destructor
+     */
+    inline ~ClientThread()
+    {}
+
+    /**
+     * Run thread, inherited from Thread
+     */
+    virtual void run()
+    {
+	m_client->run();
+    }
+
+    /**
+     * Clean up, inherited from Thread
+     */
+    virtual void cleanup()
+    {
+	m_client->cleanup();
+	m_client->setThread(0);
+    }
+
+private:
+    Client* m_client;
+};
+
+}; // anonymous namespace
 
 /**
  * Static classes/function/data
@@ -869,8 +915,8 @@ bool ClientThreadProxy::execute()
  */
 // Constructor
 Client::Client(const char *name)
-    : Thread(name), m_initialized(false), m_line(0), m_oneThread(true),
-    m_defaultLogic(0)
+    : m_initialized(false), m_line(0), m_oneThread(true),
+    m_defaultLogic(0), m_clientThread(0)
 {
     s_client = this;
 
@@ -910,6 +956,28 @@ Client::~Client()
 {
     // Halt the engine
     Engine::halt(0);
+}
+
+bool Client::startup()
+{
+    DDebug(ClientDriver::self(),DebugAll,"Client::startup() [%p]",this);
+    if (m_clientThread) {
+	Debug(ClientDriver::self(),DebugNote,"Trying to build a client thread when you already have one '%s' [%p]",
+	      m_clientThread->name(),m_clientThread);
+	return true;
+    }
+    else {
+	m_clientThread = new ClientThread(this);
+	if (!m_clientThread->startup()) {
+	    Debug(ClientDriver::self(),DebugWarn,"Failed to startup the client thread '%s' [%p]",m_clientThread->name(),m_clientThread);
+	    delete static_cast<ClientThread*>(m_clientThread);
+	    m_clientThread = 0;
+	    return false;
+	}
+	Debug(ClientDriver::self(),DebugInfo,"Starting up client thread '%s' [%p]",m_clientThread->name(),m_clientThread);
+	return true;
+    }
+    return false;
 }
 
 // Cleanup before halting
@@ -2116,7 +2184,7 @@ bool Client::received(Message& msg, int id)
 // Postpone messages to be redispatched from UI thread
 bool Client::postpone(const Message& msg, int id, bool copyUserData)
 {
-    if (isCurrent())
+    if (isUIThread())
 	return false;
     PostponedMessage* postponed = new PostponedMessage(msg,id,copyUserData);
     s_postponeMutex.lock();
@@ -2323,14 +2391,14 @@ bool Client::driverLock(long maxwait)
 
 bool Client::driverLockLoop()
 {
-    if (!(isCurrent() && ClientDriver::self()))
+    if (!(isUIThread() && ClientDriver::self()))
 	return false;
 
     while (!driverLock()) {
 	if (Engine::exiting() || !ClientDriver::self())
 	    return false;
 	idleActions();
-	yield();
+	Thread::yield();
     }
     return true;
 }

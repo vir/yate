@@ -3398,6 +3398,11 @@ void QtClient::loadWindows(const char* file)
     }
 }
 
+bool QtClient::isUIThread()
+{
+    return (QApplication::instance() && QApplication::instance()->thread() == QThread::currentThread());
+}
+
 // Open a file open dialog window
 // Parameters that can be specified include 'caption',
 //  'dir', 'filter', 'selectedfilter', 'confirmoverwrite', 'choosedir'
@@ -4271,8 +4276,8 @@ void QtClient::setWidgetHeight(QWidget* w, const String& height)
 /**
  * QtDriver
  */
-QtDriver::QtDriver()
-    : m_init(false)
+QtDriver::QtDriver(bool buildClientThread)
+    : m_init(false), m_clientThread(buildClientThread)
 {
     qInstallMsgHandler(qtMsgHandler);
 }
@@ -4289,7 +4294,8 @@ void QtDriver::initialize()
     if (!QtClient::self()) {
 	debugCopy();
 	new QtClient;
-	QtClient::self()->startup();
+	if (m_clientThread)
+	    QtClient::self()->startup();
     }
     if (!m_init) {
 	m_init = true;

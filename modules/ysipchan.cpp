@@ -5097,13 +5097,17 @@ void YateSIPConnection::hangup()
     if (m_reason)
 	m->setParam("reason",m_reason);
     Engine::enqueue(m);
+    if (!error)
+	error = m_reason.c_str();
     switch (m_state) {
 	case Cleared:
 	    clearTransaction();
+	    disconnect(error,parameters());
 	    return;
 	case Incoming:
 	    if (m_tr) {
 		clearTransaction();
+		disconnect(error,parameters());
 		return;
 	    }
 	    break;
@@ -5163,8 +5167,6 @@ void YateSIPConnection::hangup()
 	}
     }
     m_byebye = false;
-    if (!error)
-	error = m_reason.c_str();
     disconnect(error,parameters());
 }
 

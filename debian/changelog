@@ -1,3 +1,47 @@
+yate (4.0.1.svn4994) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4994: + Check object type before cast.  +
+    Removed unused cpu wrapper files.  + Fixed RTP dejitter code, use it
+    automatically in client mode.  + Added miniwebrtc and isac to
+    Windows build.  + Generate events when ISUP status changes.  +
+    Generate events when SS7 Layer2 status changes.  + Add node name if
+    missing from module.update messages.  + Skip over Mac OS X process
+    serial number -psn_X_Y on command line.  + Code is experimental,
+    currently DTMF detection is not supported!  + Detect and compile
+    with the new aft_core wanpipe API.  + Fix a harmless compilation
+    warning.  + Added basic support for MIPS architecture in miniwebrtc.
+    + Added the SIP user agent as "device" parameter of the user.auth
+    message.  + Added possibility to return custom SIP failure from
+    user.auth message.  + Resolve the hostname of a MGCP endpoint only
+    when first needed.  + Fixed channel duration label size policy.  +
+    Fixed compiler error: also check for __PIC__ define for compilers
+    that only use the uppercase version.  + This allows implementing
+    custom authentication schemes.  + Changed the way SIP authentication
+    is performed by UAS.  + Allow returning true but not setting
+    retValue from regexroute.  + Fixed bug: properly check iq stanza
+    when sending result response.  + Allow matching prefixes of
+    configurable minimum length in a cache.  + By default append the
+    node name to the SNMP Engine ID.  + Added support for outgoing
+    jabber component streams.  + Changed component domain configuration
+    parameter name to avoid conflict with optional connect address.  +
+    Added support to offer p2p transport for outgoing jingle sessions.
+    + Allow the "number" parameter to be processed in the user.auth
+    message.  + Code 487 should be used only when a transaction is
+    CANCELed.  + Map received disconnect cause "noanswer" to 480
+    Temporarily Unavailable.  + Report the name of the plugins being
+    unloaded from memory.  + Allow Thread::killall() to work from any
+    thread.  + Client does not inherit Thread anymore. Use separte
+    thread to run the client on.  + Fixed 64-bit formatting for Mac OS X
+    x64.  + Added callto hint label in ui.  + Added support to run the
+    client on the main thread. Run the Qt4 Client on the main thread.  +
+    Detect Mac OS X user path using Mac OS X Foundation API. Modified
+    the build system to build and link Objective-C code.  + Added an
+    alias and a variation to the events command.  + Fixed Engine method
+    call on Windows.  + Fixes BYE without CANCEL not being propagated.
+    + Make sure we disconnect a SIP call on all branches of hangup.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 05 Apr 2012 02:19:17 +0400
+
 yate (4.0.1.svn4949) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4949: + Sleep a time correlated to the fake

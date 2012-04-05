@@ -1,9 +1,9 @@
-#!/bin/sh
+#! /bin/bash
 
 # Use: addcopy [pattern [year(s)]]
 # Examples:
-#  addcopy *.php
-#  addcopy *.cpp 2009-2011
+#  addcopy '*.php'
+#  addcopy '*.cpp' 2009-2012
 
 function copyright()
 {
@@ -37,7 +37,7 @@ EOF
 pat="$1"
 test -n "$pat" || pat="*"
 cpy="$2"
-test -n "$cpy" || cpy="2011"
+test -n "$cpy" || cpy="2012"
 
 grep -L -r '^ \* Copyright (C) .* Null Team$' $pat | (while read fn; do
 
@@ -50,7 +50,7 @@ case "X$bn" in
 		trigger=""
 		;;
 	*.php)
-		trigger="<?"
+		trigger="<?php"
 		;;
 esac
 
@@ -60,7 +60,7 @@ else
     echo "Processing: $fn ..."
 
     cp -p "$fn" "$fn.tmp"
-    (while read; do
+    (while read -r; do
     if [ "X$trigger" = "X" ]; then
 	trigger="$notrigger"
 	copyright

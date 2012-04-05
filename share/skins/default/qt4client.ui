@@ -1109,6 +1109,9 @@ border-bottom: 1px solid #717fa0;
                           <property name="dynamicActionEnterFilter" stdset="0" >
                            <bool>true</bool>
                           </property>
+                          <property name="_yate_textchangednotify" stdset="0">
+                           <bool>true</bool>
+                          </property>
                          </widget>
                         </item>
                        </layout>

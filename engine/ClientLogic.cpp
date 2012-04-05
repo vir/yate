@@ -5374,6 +5374,7 @@ bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
     // when a protocol is chosen, the choice of account must be cleared
     bool acc = (name == YSTRING("account"));
     if (acc || name == YSTRING("protocol")) {
+	Client::self()->setText(YSTRING("callto_hint"),YSTRING(""),false,wnd);
 	if (Client::s_notSelected.matches(item))
 	    return true;
 	if (acc)
@@ -5546,10 +5547,34 @@ bool DefaultLogic::callIncoming(Message& msg, const String& dest)
     return true;
 }
 
+// Validate an outgoing call
+bool DefaultLogic::validateCall(NamedList& params, Window* wnd)
+{
+    const String& ns = params[YSTRING("target")];
+    if (params[YSTRING("account")] || (ns.find('/') > 0))
+	return true;
+    else if (params[YSTRING("protocol")]) {
+	if (ns.find('@') <= 0 && ns.find(':') <= 0) {
+	    // set in client the label
+	    Client::self()->setText(YSTRING("callto_hint"),YSTRING("This is not a valid protocol URI."),false,wnd);
+	    return false;
+	}
+    }
+    else {
+	// set in client the label
+	Client::self()->setText(YSTRING("callto_hint"),YSTRING("You need a VoIP account to make calls."),false,wnd);
+	return false;
+    }
+
+    return true;
+}
+
 // Start an outgoing call
 bool DefaultLogic::callStart(NamedList& params, Window* wnd, const String& cmd)
 {
     if (!(Client::self() && fillCallStart(params,wnd)))
+	return false;    
+    if (!validateCall(params,wnd))
 	return false;
     String target;
     const String& ns = params[YSTRING("target")];
@@ -7895,6 +7920,11 @@ bool DefaultLogic::handleTextChanged(NamedList* params, Window* wnd)
     // Search contact
     if (sender == "search_contact") {
 	updateFilter(s_contactList,wnd,(*params)["text"],"name","number/uri");
+	return true;
+    }
+    // Editing started on the callto input, clear the callto_hing
+    if (sender == s_calltoList) {
+	Client::self()->setText(YSTRING("callto_hint"),YSTRING(""),false,wnd);
 	return true;
     }
     // Conf/transfer targets

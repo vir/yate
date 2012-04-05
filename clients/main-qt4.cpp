@@ -72,10 +72,9 @@ extern "C" int main(int argc, const char** argv, const char** envp)
 	return EINVAL;
 
     // build client if the driver didn't
-    if (!QtClient::self()) {
-	Debug(DebugWarn,"creating new client");
+    if (!QtClient::self())
 	new QtClient();
-    }
+
     // run the client
     QtClient::self()->run();
     // the client finished running, do cleanup

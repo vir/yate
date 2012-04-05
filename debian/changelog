@@ -1,3 +1,15 @@
+yate (4.0.1.svn4998) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 4998: + Make sure we disconnect a SIP call
+    on all branches of hangup.  + Added a method to verify if call
+    parameters look correct. Show a hint message in the interface it not
+    all required parameters are present.  + Updated default copyright
+    yer to 2012.  + Detect PHP by long lead-in.  + Fixed script to
+    properly handle backslash.  + Added copyright and licensing
+    information to PHP scripts.  + Removed leftofter debug message.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 06 Apr 2012 02:19:16 +0400
+
 yate (4.0.1.svn4994) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4994: + Check object type before cast.  +

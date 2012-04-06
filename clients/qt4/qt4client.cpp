@@ -3308,7 +3308,8 @@ void QtClient::cleanup()
     Client::save(s_save);
     QtWindow::clearUICache();
     m_app->quit();
-    delete m_app;
+    if (!m_app->startingUp())
+	delete m_app;
 }
 
 void QtClient::run()
@@ -3333,12 +3334,15 @@ void QtClient::run()
     // Create events proxy
     m_events.append(new QtEventProxy(QtEventProxy::Timer));
     m_events.append(new QtEventProxy(QtEventProxy::AllHidden,m_app));
+    if (Engine::exiting())
+	return;
     Client::run();
 }
 
 void QtClient::main()
 {
-    m_app->exec();
+    if (!Engine::exiting())
+	m_app->exec();
 }
 
 void QtClient::lock()
@@ -4293,7 +4297,7 @@ void QtDriver::initialize()
     s_device = Engine::config().getValue("client","device",DEFAULT_DEVICE);
     if (!QtClient::self()) {
 	debugCopy();
-	new QtClient;
+	QtClient::setSelf(new QtClient);
 	if (m_clientThread)
 	    QtClient::self()->startup();
     }

@@ -46,25 +46,20 @@ public:
 
 void EngineThread::run()
 {
-    Engine::engineRun();
+    Engine::self()->run();
     Debug(DebugAll,"Engine stopped running");
 }
 
 void EngineThread::cleanup()
 {
     Debug(DebugAll,"EngineThread::cleanup() [%p]",this);
+    if (QtClient::self())
+	QtClient::self()->quit();
     s_engineThread = 0;
 }
 
-
-extern "C" int main(int argc, const char** argv, const char** envp)
+static int mainLoop() 
 {
-    TelEngine::Engine::extraPath("qt4");
-    // parse arguments
-    int retcode = TelEngine::Engine::main(argc,argv,envp,TelEngine::Engine::ClientMainThread);
-    if (retcode)
-	return retcode;
-
     // create engine from this thread
     Engine::self();
     s_engineThread = new EngineThread;
@@ -73,20 +68,25 @@ extern "C" int main(int argc, const char** argv, const char** envp)
 
     // build client if the driver didn't
     if (!QtClient::self())
-	new QtClient();
+	QtClient::setSelf(new QtClient());
 
     // run the client
-    QtClient::self()->run();
+    if (!Engine::exiting())
+	QtClient::self()->run();
     // the client finished running, do cleanup
     QtClient::self()->cleanup();
 
-    // wait for the engine to halt
     Engine::halt(0);
     unsigned long count = WAIT_ENGINE / Thread::idleMsec();
     while (s_engineThread && count--)
 	Thread::idle();
-    Thread::killall();
 
-    return retcode;
+    return 0;
+}
+
+extern "C" int main(int argc, const char** argv, const char** envp)
+{
+    TelEngine::Engine::extraPath("qt4");
+    return TelEngine::Engine::main(argc,argv,envp,TelEngine::Engine::Client,&mainLoop);
 }
 /* vi: set ts=8 sw=4 sts=4 noet: */

@@ -801,6 +801,11 @@ public:
 };
 
 /**
+ * Prototype for engine main loop callback
+ */
+typedef int (*EngineLoop)();
+
+/**
  * This class holds global information about the engine.
  * Note: this is a singleton class.
  *
@@ -821,7 +826,6 @@ public:
 	Server = 2,
 	Client = 3,
 	ClientProxy = 4,
-	ClientMainThread = 5,
     };
 
     enum CallAccept {
@@ -849,11 +853,12 @@ public:
      * @param argv Argument array
      * @param env Environment variables
      * @param mode Mode the engine must run as - Console, Client or Server
+     * @param loop Callback function to the main thread's loop
      * @param fail Fail and return after parsing command line arguments
      * @return Program exit code
      */
     static int main(int argc, const char** argv, const char** env,
-	RunMode mode = Console, bool fail = false);
+	RunMode mode = Console, EngineLoop loop = 0, bool fail = false);
 
     /**
      * Display the help information on console
@@ -861,6 +866,18 @@ public:
      * @param errout Display on stderr intead of stdout
      */
     static void help(bool client, bool errout = false);
+
+    /**
+     * Initialize the engine
+     * @return Error code, 0 for success
+     */
+    int engineInit();
+
+    /**
+     * Do engine cleanup
+     * @return Error code, 0 for success
+     */
+    int engineCleanup();
 
     /**
      * Run the engine.
@@ -1152,12 +1169,6 @@ public:
      * @param type Type of captured events, an empty name clear engine events
      */
     static void clearEvents(const String& type);
-
-    /**
-     * Start running the engine
-     * @return The code with which the engine has stopped
-     */
-    static int engineRun();
 
 protected:
     /**

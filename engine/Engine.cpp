@@ -755,14 +755,17 @@ static bool logFileOpen()
     }
     return false;
 }
-
-int Engine::engineRun()
+static int engineRun(EngineLoop loop = 0)
 {
     time_t t = ::time(0);
     s_startMsg << "Yate (" << ::getpid() << ") is starting " << ::ctime(&t);
     s_startMsg.trimSpaces();
     Output("%s",s_startMsg.c_str());
-    int retcode = Engine::self()->run();
+    int retcode = Engine::self()->engineInit();
+    if (!retcode)
+	retcode = (loop ? loop() : Engine::self()->run());
+    if (!retcode)
+	retcode = Engine::self()->engineCleanup();
     t = ::time(0);
     Output("Yate (%u) is stopping %s",::getpid(),::ctime(&t));
     return retcode;
@@ -832,7 +835,7 @@ static void serviceMain(DWORD argc, LPTSTR* argv)
 	return;
     }
     setStatus(SERVICE_START_PENDING);
-    Engine::engineRun();
+    engineRun();
 }
 
 static SERVICE_TABLE_ENTRY dispatchTable[] =
@@ -1164,7 +1167,7 @@ Engine::~Engine()
     s_self = 0;
 }
 
-int Engine::run()
+int Engine::engineInit()
 {
 #ifdef _WINDOWS
     // In Windows we must initialize the socket library very early because even trivial
@@ -1289,7 +1292,6 @@ int Engine::run()
     Debug(DebugAll,"Engine dispatching start message");
     dispatch("engine.start",true);
     setStatus(SERVICE_RUNNING);
-    long corr = 0;
 #ifndef _WINDOWS
     ::signal(SIGHUP,sighandler);
     ::signal(SIGQUIT,sighandler);
@@ -1306,6 +1308,14 @@ int Engine::run()
     }
     Output("Yate%s engine is initialized and starting up%s%s",
 	clientMode() ? " client" : "",s_node.null() ? "" : " on " ,s_node.safe());
+
+    return 0;
+}
+
+int Engine::run()
+{
+    // engine loop
+    long corr = 0;
     int stops = MAX_STOP;
     while (s_haltcode == -1 || ((--stops >= 0) && dispatch("engine.stop",true))) {
 	if (s_cmds) {
@@ -1395,6 +1405,11 @@ int Engine::run()
 	Thread::yield();
     }
     s_haltcode &= 0xff;
+    return 0;
+}
+
+int Engine::engineCleanup()
+{
     Output("Yate engine is shutting down with code %d",s_haltcode);
     CapturedEvent::capturing(false);
     setStatus(SERVICE_STOP_PENDING);
@@ -1850,7 +1865,7 @@ static void version()
     ::fprintf(stdout,"Yate " YATE_VERSION " " YATE_STATUS YATE_RELEASE "\n");
 }
 
-int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bool fail)
+int Engine::main(int argc, const char** argv, const char** env, RunMode mode, EngineLoop loop, bool fail)
 {
 #ifdef _WINDOWS
     int service = 0;
@@ -1858,9 +1873,6 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
     bool daemonic = false;
     bool supervised = false;
 #endif
-    bool noStart = (mode == ClientMainThread);
-    if (noStart)
-	mode = Client;
     bool client = (mode == Client);
     Debugger::Formatting tstamp = Debugger::None;
     bool colorize = false;
@@ -2311,7 +2323,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
     }
     else
 #endif
-	retcode = noStart ? 0 : engineRun();
+	retcode = engineRun(loop);
 
     return retcode;
 }

@@ -1276,6 +1276,8 @@ public:
 	{ return m_initialized; }
     inline static Client* self()
 	{ return s_client; }
+    inline static void setSelf(Client* client)
+	{ s_client = client; }
 
     /**
      * Check if the client object still exists and the client or engine is not exiting

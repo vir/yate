@@ -1,3 +1,12 @@
+yate (4.0.1.svn5001) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5001: + Do load and unload of modules on the
+    main thread. Added the possibility of replacing themain loop of the
+    engine.  + Fixed a harmless type error.  + Force the C locale on AWK
+    while generating G.711 tables.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 07 Apr 2012 02:19:16 +0400
+
 yate (4.0.1.svn4998) UNRELEASED; urgency=low
 
   * Updated to SVN revision 4998: + Make sure we disconnect a SIP call

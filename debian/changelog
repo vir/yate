@@ -1,3 +1,11 @@
+yate (4.0.1.svn5002) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5002: + This file holds embedded UTF-8
+    characters that must be preserved.  + Set the UTF-8 encoding for vi
+    compatible editors.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sun, 08 Apr 2012 02:19:14 +0400
+
 yate (4.0.1.svn5001) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5001: + Do load and unload of modules on the

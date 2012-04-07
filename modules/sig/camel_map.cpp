@@ -8547,4 +8547,4 @@ void TcapXModule::statusDetail(String& str)
 
 }; // anonymous namespace
 
-/* vi: set ts=8 sw=4 sts=4 noet: */
+/* vi: set ts=8 sw=4 sts=4 noet enc=utf-8: */

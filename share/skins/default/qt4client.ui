@@ -121,6 +121,9 @@
       <property name="title" >
        <string>&amp;Friends</string>
       </property>
+      <property name="_yate_menuNoCopy" stdset="0">
+       <bool>true</bool>
+      </property>
       <widget class="QMenu" name="menuSubscription" >
        <property name="title" >
         <string>Subscription</string>
@@ -3054,6 +3057,9 @@ QTextEdit {
    </property>
    <property name="text" >
     <string>Show notifications</string>
+   </property>
+   <property name="_yate_menuNoCopy" stdset="0">
+    <bool>true</bool>
    </property>
   </action>
   <action name="chatcontact_info" >

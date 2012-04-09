@@ -1,3 +1,12 @@
+yate (4.0.1.svn5003) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5003: + Set the UTF-8 encoding for vi
+    compatible editors.  + Create a parentless menu bar by copying it
+    from the main window menu bar to be used as the default application
+    menu on Mac OS X.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 10 Apr 2012 02:19:17 +0400
+
 yate (4.0.1.svn5002) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5002: + This file holds embedded UTF-8

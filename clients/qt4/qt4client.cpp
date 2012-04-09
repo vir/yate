@@ -2870,6 +2870,37 @@ void QtWindow::doInit()
 	    wndWidget()->setMinimumHeight(min - h);
 	else
 	    wndWidget()->setMinimumHeight(0);
+
+#ifdef Q_WS_MAC
+	if (m_mainWindow) {
+	    // Create a parentless menu bar to be set as the default application menu by copying it from the main window menu
+	    DDebug(QtDriver::self(),DebugAll,"Setting as default menu bar the menu bar of window '%s' [%p]",
+	    m_id.c_str(),this);
+	    QMenuBar* mainMenu = menuBars[0];
+	    QMenuBar* defaultMenu = new QMenuBar(0);
+	    QList<QAction*> topActions = mainMenu->actions();
+	    for (int i = 0; i < topActions.count(); i++) {
+		QMenu* menu = topActions[i]->menu();
+		if (menu) {
+		    QMenu* m = new QMenu(menu->title(),defaultMenu);
+		    String tmp;
+		    QtClient::getProperty(menu,YSTRING("_yate_menuNoCopy"),tmp);
+		    if (tmp.toBoolean())
+			continue;
+		    defaultMenu->addMenu(m);
+		    QList<QAction*> actions = menu->actions();
+		    for (int j = 0; j < actions.count(); j++) {
+			QAction* act = actions[j];
+			tmp.clear();
+			QtClient::getProperty(act,YSTRING("_yate_menuNoCopy"),tmp);
+			if (tmp.toBoolean())
+			    continue;
+			m->addAction(act);
+		    }
+		}
+	    }
+	}
+#endif
     }
 
     // Create window's children dynamic properties from config

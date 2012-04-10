@@ -1,3 +1,10 @@
+yate (4.0.1.svn5004) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5004: + Added debug information for when the
+    TCAP user refuses to handle a transaction.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 11 Apr 2012 02:19:17 +0400
+
 yate (4.0.1.svn5003) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5003: + Set the UTF-8 encoding for vi

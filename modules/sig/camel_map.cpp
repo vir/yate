@@ -7685,8 +7685,10 @@ bool TcapXApplication::canHandle(NamedList& params)
 	const Capability* cap = findCapability(m_type,op->name);
 	if (!cap)
 	    continue;
-	if (!hasCapability(cap->name))
+	if (!hasCapability(cap->name)) {
+	    Debug(&__plugin,DebugAll,"TcapXApplication '%s' cannot handle operation='%s' [%p]",m_name.c_str(),op->name.c_str(),this);
 	    return false;
+	}
     }
     return true;
 }
@@ -8186,8 +8188,10 @@ bool TcapXUser::tcapIndication(NamedList& params)
     DDebug(this,DebugAll,"TcapXUser::tcapIndication() [%p]",this);
 
     NamedString* ltid = params.getParam(s_tcapLocalTID);
-    if (TelEngine::null(ltid))
+    if (TelEngine::null(ltid)) {
+	DDebug(this,DebugAll,"Received transaction without local transaction id, rejecting it");
 	return false;
+    }
     int dialog = SS7TCAP::lookupTransaction(params.getValue(s_tcapReqType));
 
     ObjList* o = m_trIDs.find(*ltid);
@@ -8201,35 +8205,44 @@ bool TcapXUser::tcapIndication(NamedList& params)
 	case SS7TCAP::TC_Begin:
 	case SS7TCAP::TC_QueryWithPerm:
 	case SS7TCAP::TC_QueryWithoutPerm:
-	    if (TelEngine::null(ltid) || !TelEngine::null(tcapID))
+	    if (TelEngine::null(ltid) || !TelEngine::null(tcapID)) {
+		DDebug(this,DebugAll,"Received a new transaction with an id that we already have, rejecting it");
 		return false;
+	    }
 	    return sendToApp(params);
 	case SS7TCAP::TC_Continue:
 	case SS7TCAP::TC_ConversationWithPerm:
 	case SS7TCAP::TC_ConversationWithoutPerm:
 	case SS7TCAP::TC_Notice:
 	case SS7TCAP::TC_Unknown:
-	    if (TelEngine::null(ltid) || TelEngine::null(tcapID))
+	    if (TelEngine::null(ltid) || TelEngine::null(tcapID)) {
+		DDebug(this,DebugAll,"Received a dialog continue TCAP message for a dialog that doesn't exist, rejecting it");
 		return false;
+	    }
 	    searchApp = true;
 	    break;
 	case SS7TCAP::TC_End:
 	case SS7TCAP::TC_Response:
 	case SS7TCAP::TC_U_Abort:
 	case SS7TCAP::TC_P_Abort:
-	    if (TelEngine::null(ltid) || TelEngine::null(tcapID))
+	    if (TelEngine::null(ltid) || TelEngine::null(tcapID)) {
+		DDebug(this,DebugAll,"Received a end dialogue TCAP message for a dialog that doesn't exist, rejecting it");
 		return false;
+	    }
 	    searchApp = true;
 	    removeID = true;
 	    break;
 	default:
+	    DDebug(this,DebugAll,"Received a TCAP message without type of dialog message, rejecting it");
 	    return false;
     }
 
     Lock la(m_appsMtx);
     o = m_apps.find(*tcapID);
-    if (!o && searchApp)
+    if (!o && searchApp) {
+	Debug(this,DebugMild,"Cannot find application that was handling transaction with id='%s'",ltid->c_str());
 	return false;
+    }
 
     TcapXApplication* app = static_cast<TcapXApplication*>(o->get());
     if (searchApp && !app)
@@ -8250,8 +8263,17 @@ bool TcapXUser::sendToApp(NamedList& params, TcapXApplication* app, bool saveID)
     Lock l(m_appsMtx);
     if (!app)
 	app = findApplication(params);
-    if (!app)
+    if (!app) {
+	NamedString* opCode = params.getParam(YSTRING("tcap.component.1.operationCode"));
+	NamedString* opType = params.getParam(YSTRING("tcap.component.1.operationCodeType"));
+	if (!(TelEngine::null(opCode) || TelEngine::null(opType))) {
+	    const Operation* op = findOperation(m_type,opCode->toInteger(),(*opType == "local"));
+	    Debug(this,DebugInfo,"TcapXUser::sendToApp() - cannot find application to handle operation='%s' [%p]",(op ? op->name.c_str() : "no operation"),this);
+	}
+	else
+	    Debug(this,DebugInfo,"TcapXUser::sendToApp() - cannot find application to handle transaction with no given operation [%p]",this);
 	return false;
+    }
     if (saveID)
 	m_trIDs.append(new NamedString(params.getValue(s_tcapLocalTID),app->toString()));
     return (app && app->handleIndication(params));

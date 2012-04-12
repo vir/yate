@@ -1,3 +1,12 @@
+yate (4.0.1.svn5006) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5006: + Downgraded branck/non-branch SIP ACK
+    from MILD to NOTE, they are too frequent.  + Cleaned up spurious
+    tabs at end of lines.  + Downgraded a frequent message from NOTE to
+    INFO.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 13 Apr 2012 02:19:13 +0400
+
 yate (4.0.1.svn5004) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5004: + Added debug information for when the

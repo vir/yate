@@ -3,7 +3,7 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * RADIUS Client functionality for YATE
- * 
+ *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
  * Copyright (C) 2004-2006 Null Team
  *
@@ -38,7 +38,7 @@ namespace { // anonymous
 
 #define RADIUS_MAXLEN 4096
 
-enum 
+enum
 {
     RadChanStart,
     RadChanStop,
@@ -47,7 +47,7 @@ enum
     RadCallExecute,
     RadCallRinging,
     RadUserLogin
-};	
+};
 
 enum
 {
@@ -85,7 +85,7 @@ enum {
     a_date,	// rfc2865 time
     a_avpair	// special text formatted as name=value
 };
-	
+
 // Structure for building attribute tables
 typedef struct {
     int code;
@@ -1037,7 +1037,7 @@ int RadiusClient::makeRequest(int port, unsigned char request, unsigned char* re
 	    DDebug(&__plugin,DebugInfo,"Received valid response %u on session %u from %s:%d",
 		recdata[0],sessionId,recvAddr.host().c_str(),recvAddr.port());
 	    return NoError;
-	}	
+	}
     }
     Debug(&__plugin,DebugWarn,"Timeout receiving session %u from server %s:%d",
 	sessionId,sockAddr.host().c_str(),sockAddr.port());
@@ -1060,7 +1060,7 @@ int RadiusClient::doAuthenticate(ObjList* result)
 	Debug(&__plugin,DebugMild,"Server returned %u, assuming Access-Reject",response);
 	return AuthFailed;
     }
-	
+
     Debug(&__plugin,DebugInfo,"Server returned Access-Accept");
     return AuthSuccess;
 }
@@ -1099,7 +1099,7 @@ bool RadiusClient::addAttribute(const char* attrib, const char* val, bool emptyO
 	return true;
     }
     attr->destruct();
-    return false;	
+    return false;
 }
 
 // Add one numeric attribute
@@ -1113,7 +1113,7 @@ bool RadiusClient::addAttribute(const char* attrib, int val)
 	return true;
     }
     attr->destruct();
-    return false;	
+    return false;
 }
 
 // Add one text attribute with subtype
@@ -1129,7 +1129,7 @@ bool RadiusClient::addAttribute(const char* attrib, unsigned char subType, const
 	return true;
     }
     attr->destruct();
-    return false;	
+    return false;
 }
 
 // Copy from parameter list (usually message) to RADIUS attributes
@@ -1279,7 +1279,7 @@ bool RadiusClient::prepareAttributes(NamedList& params, bool forAcct, String* us
     // remember the name of the NAS section
     m_section = *nasSect;
 
-    Debug(&__plugin,DebugNote,"Using sections [%s] and [%s] for %s",
+    Debug(&__plugin,DebugInfo,"Using sections [%s] and [%s] for %s",
 	m_section.c_str(),servName.c_str(),forAcct ? "accounting" : "authentication");
     addAttribute("User-Name",username);
     addAttribute("Calling-Station-Id",caller);

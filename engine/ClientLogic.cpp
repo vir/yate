@@ -357,6 +357,7 @@ static const String s_mucRoomShowLog = "room_showlog";
 static const String s_mucMemberShowLog = "room_member_showlog";
 static const String s_storeContact = "storecontact";
 static const String s_mucInviteAdd = "invite_add";
+static const String s_menuSubscription = "menuSubscription";
 // Not selected string(s)
 static String s_notSelected = "-none-";
 // Maximum number of call log entries
@@ -2324,6 +2325,7 @@ static void enableChatActions(ClientContact* c, bool checkVisible = true)
     p.addParam("active:" + s_chatSub,noRoomOk);
     p.addParam("active:" + s_chatUnsubd,noRoomOk);
     p.addParam("active:" + s_chatUnsub,noRoomOk);
+    p.addParam("active:" + s_menuSubscription,noRoomOk);
     Client::self()->setParams(&p);
 }
 

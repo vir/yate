@@ -32,39 +32,100 @@
     <number>6</number>
    </property>
    <item>
-    <widget class="QFrame" name="frame_file_progress" >
-     <property name="sizePolicy" >
-      <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
+    <widget class="QStackedWidget" name="file_progress_container" >
+     <property name="currentIndex" >
+      <number>0</number>
      </property>
-     <property name="styleSheet" >
-      <string>QFrame#frame_file_progress {
+     <widget class="QWidget" name="page_empty_list" >
+      <layout class="QVBoxLayout" >
+       <property name="spacing" >
+        <number>0</number>
+       </property>
+       <property name="leftMargin" >
+        <number>0</number>
+       </property>
+       <property name="topMargin" >
+        <number>0</number>
+       </property>
+       <property name="rightMargin" >
+        <number>0</number>
+       </property>
+       <property name="bottomMargin" >
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QLabel" name="label_no_file_progress" >
+         <property name="styleSheet" >
+          <string>QLabel {
   border: 1px solid #717fa0;
 }
 </string>
-     </property>
-     <property name="_yate_uiwidget" stdset="0" >
-      <bool>true</bool>
-     </property>
-     <property name="_yate_uiwidget_name" stdset="0" >
-      <string>fileprogresslist</string>
-     </property>
-     <property name="_yate_uiwidget_class" stdset="0" >
-      <string>ContactList</string>
-     </property>
-     <property name="_yate_uiwidget_params" stdset="0" >
-      <stringlist>
-       <string>property:_yate_flatlist=true</string>
-       <string>property:itemsExpandable=false</string>
-       <string>property:autoExpand=false</string>
-       <string>property:styleSheet=QTreeWidget {border-image: none;font-size: 11px;background:white;border: 0px solid #97acbc;border-radius:2px;}</string>
-       <string>property:_yate_itemui=contact:fileprogress_item.ui</string>
-       <string>property:_yate_itemstyle=contact:QWidget#${name}{background:white;}</string>
-       <string>property:_yate_itemselectedstyle=contact:QWidget#${name}{background:lightblue;}</string>
-      </stringlist>
-     </property>
+         </property>
+         <property name="text" >
+          <string>No transfer in progress</string>
+         </property>
+         <property name="alignment" >
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="page_list" >
+      <layout class="QVBoxLayout" >
+       <property name="spacing" >
+        <number>0</number>
+       </property>
+       <property name="leftMargin" >
+        <number>0</number>
+       </property>
+       <property name="topMargin" >
+        <number>0</number>
+       </property>
+       <property name="rightMargin" >
+        <number>0</number>
+       </property>
+       <property name="bottomMargin" >
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QFrame" name="frame_file_progress" >
+         <property name="sizePolicy" >
+          <sizepolicy vsizetype="Expanding" hsizetype="Expanding" >
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="styleSheet" >
+          <string>QFrame#frame_file_progress {
+  border: 1px solid #717fa0;
+}
+</string>
+         </property>
+         <property name="_yate_uiwidget" stdset="0" >
+          <bool>true</bool>
+         </property>
+         <property name="_yate_uiwidget_name" stdset="0" >
+          <string>fileprogresslist</string>
+         </property>
+         <property name="_yate_uiwidget_class" stdset="0" >
+          <string>ContactList</string>
+         </property>
+         <property name="_yate_uiwidget_params" stdset="0" >
+          <stringlist>
+           <string>property:_yate_flatlist=true</string>
+           <string>property:itemsExpandable=false</string>
+           <string>property:autoExpand=false</string>
+           <string>property:styleSheet=QTreeWidget {border-image: none;font-size: 11px;background:white;border: 0px solid #97acbc;border-radius:2px;}</string>
+           <string>property:_yate_itemui=contact:fileprogress_item.ui</string>
+           <string>property:_yate_itemstyle=contact:QWidget#${name}{background:white;}</string>
+           <string>property:_yate_itemselectedstyle=contact:QWidget#${name}{background:lightblue;}</string>
+          </stringlist>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
     </widget>
    </item>
   </layout>

@@ -84,6 +84,7 @@ private:
     bool setSignal(String& req);
     bool rqntParams(const MGCPMessage* mm);
     static void copyRtpParams(NamedList& dest, const NamedList& src);
+    GenObject* m_this;
     MGCPTransaction* m_tr;
     SocketAddr m_addr;
     String m_connEp;
@@ -244,7 +245,7 @@ bool YMGCPEngine::createConn(MGCPTransaction* trans, MGCPMessage* msg)
 MGCPChan::MGCPChan(const char* connId)
     : Channel(splugin),
       SDPSession(&splugin.parser()),
-      m_tr(0), m_standby(s_standby), m_isRtp(false), m_started(false)
+      m_this(0), m_tr(0), m_standby(s_standby), m_isRtp(false), m_started(false)
 {
     DDebug(this,DebugAll,"MGCPChan::MGCPChan('%s') [%p]",connId,this);
     status("created");
@@ -259,17 +260,20 @@ MGCPChan::MGCPChan(const char* connId)
 	long int r = Random::random();
 	m_address.hexify(&r,sizeof(r),0,true);
     }
+    m_this = this;
 }
 
 MGCPChan::~MGCPChan()
 {
     DDebug(this,DebugAll,"MGCPChan::~MGCPChan() [%p]",this);
+    m_this = 0;
     endTransaction();
 }
 
 
 void MGCPChan::destroyed()
 {
+    m_this = 0;
     if (m_rtpMedia) {
 	setMedia(0);
 	clearEndpoint();
@@ -419,7 +423,7 @@ bool MGCPChan::processEvent(MGCPTransaction* tr, MGCPMessage* mm)
     if (!(m_tr || tr->userData())) {
 	Debug(this,DebugInfo,"Acquiring transaction %p [%p]",tr,this);
 	m_tr = tr;
-	tr->userData(static_cast<GenObject*>(this));
+	tr->userData(m_this);
     }
     NamedList params("");
     params.addParam("I",address());
@@ -582,7 +586,7 @@ bool MGCPChan::initialEvent(MGCPTransaction* tr, MGCPMessage* mm, const MGCPEndp
     }
     // TODO: Handle the L: parameters if SDP is not set
     m_tr = tr;
-    tr->userData(static_cast<GenObject*>(this));
+    tr->userData(m_this);
     m->addParam("called",id.id());
     if (startRouter(m)) {
 	tr->sendProvisional();

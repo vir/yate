@@ -1,3 +1,18 @@
+yate (4.0.1.svn5011) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5011: + Downgraded a frequent message from
+    NOTE to INFO.  + When searching for specific child widgets, set the
+    top widget as the starting point for the search.  + Also
+    activate/deactivate the Subscription menu when
+    activating/deactivating its sub-menus.  + Display a message in the
+    file transfer window when there are no current transfers.  + Solves
+    crashes caused by shutdown or unconfigure with MGCP connections
+    active.  + Make sure we don't add to MGCP transactions objects that
+    are to be destroyed.  + Fixed bug introduced by changes in revision
+    5007. When searching for properties, look in the window widget.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 19 Apr 2012 02:19:15 +0400
+
 yate (4.0.1.svn5006) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5006: + Downgraded branck/non-branch SIP ACK

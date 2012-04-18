@@ -316,6 +316,9 @@ static const String s_accProviders = "acc_providers";       // List of providers
 static const String s_accWizProviders = "accwiz_providers"; // List of providers in account wizard
 static const String s_inviteContacts = "invite_contacts";   // List of contacts in muc invite
 static const String s_fileProgressList = "fileprogresslist";  // List of file transfers
+static const String s_pageEmpty = "page_empty_list";          // An empty stacked widget page
+static const String s_pageList = "page_list";                 // A page for list in a stacked widget
+static const String s_fileProgressCont = "file_progress_container"; // File progress window stacked widget
 // Actions
 static const String s_actionShowCallsList = "showCallsList";
 static const String s_actionShowNotification = "showNotification";
@@ -2877,6 +2880,8 @@ static bool updateFileTransferItem(bool addNew, const String& id, NamedList& par
     NamedPointer* np = new NamedPointer(id,&params,String::boolText(addNew));
     p.addParam(np);
     bool ok = Client::self()->updateTableRows(s_fileProgressList,&p,false,w);
+    if (ok)
+	Client::self()->setSelect(s_fileProgressCont,s_pageList,w);
     np->takeData();
     if (setVisible)
 	Client::self()->setVisible(s_wndFileTransfer,true);
@@ -2912,8 +2917,10 @@ static bool dropFileTransferItem(const String& id)
     // Close window if empty
     NamedList items("");
     Client::self()->getOptions(s_fileProgressList,&items,w);
-    if (!items.getParam(0))
+    if (!items.getParam(0)) {
+	Client::self()->setSelect(s_fileProgressCont,s_pageEmpty,w);
 	Client::self()->setVisible(s_wndFileTransfer,false);
+    }
     return ok;
 }
 

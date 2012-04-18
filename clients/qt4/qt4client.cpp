@@ -2149,7 +2149,7 @@ bool QtWindow::setImage(const String& name, const String& image, bool fit)
 bool QtWindow::setProperty(const String& name, const String& item, const String& value)
 {
     if (name == m_id)
-	return QtClient::setProperty(this,item,value);
+	return QtClient::setProperty(wndWidget(),item,value);
     QObject* obj = qFindChild<QObject*>(this,QtClient::setUtf8(name));
     return obj ? QtClient::setProperty(obj,item,value) : false;
 }
@@ -2158,7 +2158,7 @@ bool QtWindow::setProperty(const String& name, const String& item, const String&
 bool QtWindow::getProperty(const String& name, const String& item, String& value)
 {
     if (name == m_id)
-	return QtClient::getProperty(this,item,value);
+	return QtClient::getProperty(wndWidget(),item,value);
     QObject* obj = qFindChild<QObject*>(this,QtClient::setUtf8(name));
     return obj ? QtClient::getProperty(obj,item,value) : false;
 }
@@ -2192,7 +2192,7 @@ bool QtWindow::event(QEvent* ev)
     static const String s_activeChg("window_active_changed");
     if (ev->type() == QEvent::WindowDeactivate) {
 	String hideProp;
-	QtClient::getProperty(this,s_propHideInactive,hideProp);
+	QtClient::getProperty(wndWidget(),s_propHideInactive,hideProp);
 	if (hideProp && hideProp.toBoolean())
 	    setVisible(false);
 	m_active = false;
@@ -2219,11 +2219,11 @@ void QtWindow::closeEvent(QCloseEvent* event)
     // Notify window closed
     String tmp;
     if (Client::self() &&
-	QtClient::getProperty(this,"_yate_windowclosedaction",tmp))
+	QtClient::getProperty(wndWidget(),"_yate_windowclosedaction",tmp))
 	Client::self()->action(this,tmp);
 
     // Hide the window when requested
-    if (QtClient::getBoolProperty(this,"_yate_hideonclose")) {
+    if (QtClient::getBoolProperty(wndWidget(),"_yate_hideonclose")) {
 	event->ignore();
 	hide();
 	return;
@@ -2234,7 +2234,7 @@ void QtWindow::closeEvent(QCloseEvent* event)
 	Client::self()->quit();
 	return;
     }
-    if (QtClient::getBoolProperty(this,"_yate_destroyonclose")) {
+    if (QtClient::getBoolProperty(wndWidget(),"_yate_destroyonclose")) {
 	XDebug(QtDriver::self(),DebugAll,
 	    "Window(%s) closeEvent() set delete later [%p]",m_id.c_str(),this);
 	QObject::deleteLater();
@@ -2610,7 +2610,7 @@ void QtWindow::setVisible(bool visible)
 {
     // Override position for notification windows
     if (visible && isShownNormal() &&
-	QtClient::getBoolProperty(this,"_yate_notificationwindow")) {
+	QtClient::getBoolProperty(wndWidget(),"_yate_notificationwindow")) {
 	// Detect unavailable screen space position and move the window in the apropriate position
 	// bottom/right/none: move it in the right/bottom corner.
 	// top: move it in the right/top corner.
@@ -2646,7 +2646,7 @@ void QtWindow::setVisible(bool visible)
 	    Engine::enqueue(m);
 	}
     }
-    if (!m_visible && QtClient::getBoolProperty(this,"_yate_destroyonhide")) {
+    if (!m_visible && QtClient::getBoolProperty(wndWidget(),"_yate_destroyonhide")) {
 	DDebug(QtDriver::self(),DebugAll,
 	    "Window(%s) setVisible(false) set delete later [%p]",m_id.c_str(),this);
 	QObject::deleteLater();

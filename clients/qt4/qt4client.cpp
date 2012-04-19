@@ -2864,13 +2864,14 @@ void QtWindow::doInit()
     if (menuBars.size() && layout()) {
 	layout()->setMenuBar(menuBars[0]);
 	// Decrease minimum size policy to make sure the layout is made properly
-	int h = menuBars[0]->height();
-	int min = this->minimumHeight();
-	if (min > h)
-	    this->setMinimumHeight(min - h);
-	else
-	    this->setMinimumHeight(0);
-
+	if (wndWidget()) {
+	    int h = menuBars[0]->height();
+	    int min = wndWidget()->minimumHeight();
+	    if (min > h)
+		wndWidget()->setMinimumHeight(min - h);
+	    else
+		wndWidget()->setMinimumHeight(0);
+	}
 #ifdef Q_WS_MAC
 	if (m_mainWindow) {
 	    // Create a parentless menu bar to be set as the default application menu by copying it from the main window menu

@@ -1,3 +1,12 @@
+yate (4.0.1.svn5014) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5014: + Fixed bug: change window's enclosed
+    widget height constraint instead of window's height constraint when
+    moving the menubar.  + Fixed some implicit conversion to boolean
+    spotted by Visual C.  + Suppressed some CRT deprecation warnings.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 20 Apr 2012 02:19:17 +0400
+
 yate (4.0.1.svn5011) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5011: + Downgraded a frequent message from

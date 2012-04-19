@@ -382,7 +382,7 @@ static bool decodeItuAddress(const SS7SCCP* sccp, NamedList& params,const SCCPPa
 	    unsigned char nai = *buffer++;
 	    length--;
 	    getDictValue(params,gtName + ".nature", nai & 0x7f,s_nai);
-	    odd = nai & 0x80;
+	    odd = (nai & 0x80) != 0;
 	} else if (gti == 0x02) { // GT includes Translation Type
 	    if (length < 1)
 		break;

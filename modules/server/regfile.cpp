@@ -493,7 +493,7 @@ void RegfilePlugin::populate(bool first)
 	if (!nl)
 	    continue;
 	// Delete saved accounts logged in on reliable connections on first load
-	bool exist = s_cfg.getSection(*nl);
+	bool exist = s_cfg.getSection(*nl) != 0;
 	if (exist && !(first && nl->getBoolValue("connection_reliable"))) {
 	    DDebug(this,DebugAll,"Loaded saved account '%s'",nl->c_str());
 	    continue;

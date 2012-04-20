@@ -1,0 +1,26 @@
+[general]
+; Global settings for the Google Voice(TM) support module
+
+; call.execute: int: Priority of the call.execute message handler
+;call.execute=20
+
+; call.answered: int: Priority of the call.answered message handler
+;call.answered=50
+
+; chan.hangup: int: Priority of the chan.hangup message handler
+;chan.hangup=50
+
+; dtmf_delay: int: Delay until first DTMF is sent, in seconds
+;dtmf_delay=2
+
+; dtmf_outbound: boolean: Send the DTMF to the outbound instead of inbound
+;dtmf_outbound=no
+
+; dtmf_text: string: Sequence of DTMFs to send, one per second
+;dtmf_text=1
+
+; match_param: string: Parameter to match in call.execute message
+;match_param=calleruri
+
+; match_rule: regexp: Regular expression to match the message parameter
+;match_rule=^jingle:.*@voice.google.com/

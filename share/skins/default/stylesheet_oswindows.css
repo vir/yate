@@ -1,18 +1,18 @@
 /* QComboBox */
 
 QComboBox {
-  margin: 0px 23px 0px 0px;
+  margin: 0px 0px 0px 0px;
 }
 QComboBox::drop-down {
-  border-left: 0px;
 }
 
 /* QTabWidget and QTabBar */
 
 QTabWidget::pane {
-  top: 1px;
+  top: -1px;
 }
 
 QTabBar::tab {
+  padding-left: 6px;
   padding-right: 2px;
 }

@@ -5850,6 +5850,7 @@ void YateSIPConnection::doCancel(SIPTransaction* t)
 	m_byebye = false;
 	clearTransaction();
 	disconnect("Cancelled");
+	hangup();
     }
     else
 	t->setResponse(481);

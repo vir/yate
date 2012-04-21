@@ -62,11 +62,8 @@ public:
     ~GVModule();
     virtual void initialize();
     virtual bool received(Message& msg, int id);
-    // Clear data
-    void stop();
-    // Retrieve an object from send dtmf list
-    // Return a referrenced object
     GVChanData* findChanDtmfData(const String& id);
+    bool unload();
 
 private:
     void onTimer(unsigned int time);
@@ -83,6 +80,13 @@ private:
 
 // Module data
 INIT_PLUGIN(GVModule);
+
+UNLOAD_PLUGIN(unloadNow)
+{
+    if (unloadNow)
+	return __plugin.unload();
+    return true;
+}
 
 static unsigned int s_dtmfDelay = 2;     // Default delay
 static bool s_dtmfOutbound = false;      // Send to outbound call leg
@@ -158,6 +162,15 @@ GVModule::GVModule()
 GVModule::~GVModule()
 {
     Output("Unloading module GVoice");
+}
+
+bool GVModule::unload()
+{
+    Lock mylock(this);
+    if (m_sendDtmf.count())
+	return false;
+    uninstallRelays();
+    return true;
 }
 
 bool GVModule::received(Message& msg, int id)

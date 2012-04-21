@@ -1,3 +1,12 @@
+yate (4.0.1.svn5018) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5018: + This fixes the total duration of a
+    cancelled call in slow routing scenarios.  + Execute a hangup
+    immediately if received a CANCEL message.  + Removed an unused
+    method declaration.  + Made the GVoice module unloadable.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sun, 22 Apr 2012 02:19:14 +0400
+
 yate (4.0.1.svn5016) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5016: + Fixed windows style sheet.  + Added

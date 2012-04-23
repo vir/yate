@@ -123,6 +123,7 @@ for small to large scale projects.
 %{_libdir}/yate/yjinglechan.yate
 %{_libdir}/yate/enumroute.yate
 %{_libdir}/yate/ilbccodec.yate
+%{_libdir}/yate/gvoice.yate
 %{_libdir}/yate/server/dbwave.yate
 %{_libdir}/yate/server/dbpbx.yate
 %{_libdir}/yate/server/pbxassist.yate
@@ -191,6 +192,7 @@ for small to large scale projects.
 %config(noreplace) %{_sysconfdir}/yate/ystunchan.conf
 %config(noreplace) %{_sysconfdir}/yate/ysipchan.conf
 %config(noreplace) %{_sysconfdir}/yate/yjinglechan.conf
+%config(noreplace) %{_sysconfdir}/yate/gvoice.conf
 %config(noreplace) %{_sysconfdir}/yate/heartbeat.conf
 %config(noreplace) %{_sysconfdir}/yate/clustering.conf
 %config(noreplace) %{_sysconfdir}/yate/mgcpca.conf
@@ -582,6 +584,9 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Mon Apr 23 2012 Paul Chitescu <paulc@voip.null.ro>
+- Added new support module gvoice
+
 * Fri Feb 10 2012 Paul Chitescu <paulc@voip.null.ro>
 - Added scripting library and javascript module
 - Added cache and camel_map modules

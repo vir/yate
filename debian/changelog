@@ -1,3 +1,13 @@
+yate (4.1.1~svn5024) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5024: + Made the GVoice module unloadable.
+    + Added new module gvoice to RPM package.  + Added new module gvoice
+    to Windows build and installer.  + Added missing iSAC codec to RPM
+    package.  + Bumped version to 4.1.0 release.  + Bumped version to
+    devel 4.1.1
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 24 Apr 2012 02:19:15 +0400
+
 yate (4.0.1.svn5018) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5018: + This fixes the total duration of a

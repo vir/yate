@@ -2311,7 +2311,7 @@ bool SigDriver::received(Message& msg, int id)
 
 // Utility used in status
 static void countCic(SignallingCircuit* cic, unsigned int& avail, unsigned int& resetting,
-    unsigned int& locked)
+    unsigned int& locked, unsigned int& idle)
 {
     if (!cic->locked(SignallingCircuit::LockLockedBusy))
 	avail++;
@@ -2321,6 +2321,8 @@ static void countCic(SignallingCircuit* cic, unsigned int& avail, unsigned int& 
 	if (cic->locked(SignallingCircuit::LockLocked))
 	    locked++;
     }
+    if (cic->available())
+	idle++;
 }
 
 void SigDriver::status(SigTrunk* trunk, String& retVal, const String& target, bool details)
@@ -2335,6 +2337,7 @@ void SigDriver::status(SigTrunk* trunk, String& retVal, const String& target, bo
     unsigned int availableCics = 0;
     unsigned int resettingCics = 0;
     unsigned int lockedCics = 0;
+    unsigned int idleCics = 0;
     while (true) {
 	SignallingCallControl* ctrl = trunk ? trunk->controller() : 0;
 	if (!ctrl)
@@ -2363,7 +2366,7 @@ void SigDriver::status(SigTrunk* trunk, String& retVal, const String& target, bo
 	    for (; o; o = o->skipNext()) {
 		circuits++;
 		SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
-		countCic(cic,availableCics,resettingCics,lockedCics);
+		countCic(cic,availableCics,resettingCics,lockedCics,idleCics);
 	    }
 	}
 	for (unsigned int i = 0; rptr && i < rptr->count(); i++) {
@@ -2373,7 +2376,7 @@ void SigDriver::status(SigTrunk* trunk, String& retVal, const String& target, bo
 	    count++;
 	    if (!singleCic) {
 		if (!all)
-		    countCic(cic,availableCics,resettingCics,lockedCics);
+		    countCic(cic,availableCics,resettingCics,lockedCics,idleCics);
 		if (!details)
 		    continue;
 		detail.append(String(cic->code()) + "=",",");
@@ -2417,6 +2420,7 @@ void SigDriver::status(SigTrunk* trunk, String& retVal, const String& target, bo
 	retVal << ",available=" << availableCics;
 	retVal << ",resetting=" << resettingCics;
 	retVal << ",locked=" << lockedCics;
+	retVal << ",idle=" << idleCics;
 	if (target)
 	    retVal << ",count=" << count;
     }

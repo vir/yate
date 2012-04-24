@@ -3794,7 +3794,7 @@ bool SS7ISUP::control(NamedList& params)
     if (!(cmp && toString() == cmp))
 	return false;
     Lock mylock(this);
-    if (!m_remotePoint)
+    if (!(m_remotePoint && circuits()))
 	return false;
     ObjList* o = circuits()->circuits().skipNull();
     SignallingCircuit* cic = o ? static_cast<SignallingCircuit*>(o->get()) : 0;

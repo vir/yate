@@ -3794,11 +3794,17 @@ bool SS7ISUP::control(NamedList& params)
     if (!(cmp && toString() == cmp))
 	return false;
     Lock mylock(this);
-    if (!(m_remotePoint && circuits()))
+    if (!m_remotePoint)
 	return false;
-    ObjList* o = circuits()->circuits().skipNull();
-    SignallingCircuit* cic = o ? static_cast<SignallingCircuit*>(o->get()) : 0;
-    unsigned int code1 = cic ? cic->code() : 1;
+    unsigned int code1 = 1;
+    if (circuits()) {
+	ObjList* o = circuits()->circuits().skipNull();
+	if (o) {
+	    SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
+	    if (cic)
+		code1 = cic->code();
+	}
+    }
     switch (cmd) {
 	case SS7MsgISUP::UPT:
 	case SS7MsgISUP::CVT:
@@ -3847,16 +3853,24 @@ bool SS7ISUP::control(NamedList& params)
 	case SS7MsgISUP::RLC:
 	    {
 		int code = params.getIntValue(YSTRING("circuit"));
-		SignallingMessageTimer* pending = 0;
-		if (code > 0)
-		    pending = findPendingMessage(SS7MsgISUP::RSC,code,true);
-		if (!pending)
+		if (code <= 0)
 		    return false;
-		resetCircuit((unsigned int)code,false,false);
-		TelEngine::destruct(pending);
-		SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
-		mylock.drop();
-		transmitRLC(this,code,label,false);
+		SignallingMessageTimer* pending = findPendingMessage(SS7MsgISUP::RSC,code,true);
+		if (pending) {
+		    resetCircuit((unsigned int)code,false,false);
+		    TelEngine::destruct(pending);
+		    SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
+		    mylock.drop();
+		    transmitRLC(this,code,label,false);
+		}
+		else {
+		    RefPointer<SS7ISUPCall> call;
+		    findCall(code,call);
+		    if (!call)
+			return false;
+		    mylock.drop();
+		    call->setTerminate(true,params.getValue(YSTRING("reason"),"normal"));
+		}
 	    }
 	    return true;
 	case SS7MsgISUP::UPA:

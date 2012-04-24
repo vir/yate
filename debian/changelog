@@ -1,3 +1,13 @@
+yate (4.1.1~svn5027) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5027: + The isupmangler was crashing on any
+    command.  + Check if circuits exist when executing a control
+    command.  + Allow the "release" command to drop a normal or
+    continuity check call on a circuit.  + Report the number of idle
+    circuits in trunk status.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 25 Apr 2012 02:19:15 +0400
+
 yate (4.1.1~svn5024) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5024: + Made the GVoice module unloadable.

@@ -21,7 +21,7 @@ yate MODULE-IDENTITY
 		  Email: office@null.ro"
 	DESCRIPTION
 		"The MIB module for Yate."
-	REVISION	"201103281730Z"
+	REVISION	"201204242240Z"
 	DESCRIPTION
 		"Most recent version of this MIB module."
 	REVISION	"201009281300Z"
@@ -420,7 +420,9 @@ TrunkEntry ::= SEQUENCE {
 	trunkType		DisplayString,
 	trunkCircuitCount	Counter32,
 	trunkCurrentCallsCount	Counter32,
-	trunkDownAlarms		Counter32
+	trunkDownAlarms		Counter32,
+	trunkCircuitsLocked	Counter32,
+	trunkCircuitsIdle	Counter32
 }
 
 trunkIndex OBJECT-TYPE
@@ -470,6 +472,22 @@ trunkDownAlarms OBJECT-TYPE
 	DESCRIPTION
 		"Number of times an alarm that signals that a trunk is down alarm has been sent."
 	::= { trunkEntry 6 }
+
+trunkCircuitsLocked OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of locked circuits of the PSTN trunk."
+	::= { trunkEntry 7 }
+
+trunkCircuitsIdle OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of idle circuits of the PSTN trunk."
+	::= { trunkEntry 8 }
 
 -- trunks END
 -- linksets BEGIN

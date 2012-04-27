@@ -1,3 +1,10 @@
+yate (4.1.1~svn5029) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5029: + Bug fix: properly translate dialog
+    PDU information such as result and result-source-diagnostic.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 28 Apr 2012 02:19:17 +0400
+
 yate (4.1.1~svn5028) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5028: + Added the count of locked and idle

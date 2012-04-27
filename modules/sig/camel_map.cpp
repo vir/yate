@@ -53,7 +53,7 @@ struct XMLMap {
 
 struct TCAPMap {
     const char* path;
-    bool isPrefix;
+    bool isPrefix;     // for this path, XML children are expected to exist
     const String name;
 };
 
@@ -7263,7 +7263,7 @@ const TCAPMap XmlToTcap::s_tcapMap[] = {
     {"transport.tcap.dialog.type",                        false,  "tcap.dialogPDU.dialog-pdu-type"},
     {"transport.tcap.dialog.version",                     false,  "tcap.dialogPDU.protocol-version"},
     {"transport.tcap.dialog.userInformation",             true,   "tcap.dialogPDU.userInformation"},
-    {"transport.tcap.dialog.",                            false,  "tcap.dialogPDU"},
+    {"transport.tcap.dialog.",                            true,   "tcap.dialogPDU"},
     {"transport.tcap.",                                   true,   "tcap.transaction"},
     {"application",                                       false,  "tcap.dialogPDU.application-context-name"},
     {0, ""},

@@ -1725,6 +1725,10 @@ void YJBEngine::processIqStanza(JBEvent* ev)
 	    case XMPPNamespace::Roster:
 		processRoster(ev,service,t,type);
 		return;
+	    case XMPPNamespace::Ping:
+		if (type == XMPPUtils::IqGet && ev->sendIqResult())
+		    return;
+		break;
 	}
 	// Check responses without child
 	if (rsp) {

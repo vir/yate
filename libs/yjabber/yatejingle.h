@@ -508,6 +508,7 @@ public:
 	RtpIceUdp = 1,
 	RtpRawUdp,
 	RtpP2P,
+	RtpGoogleRawUdp,
     };
 
     /**
@@ -615,6 +616,7 @@ public:
 	RtpIceUdp           = 1,         // Audio: RTP ICE-UDP transport
 	RtpRawUdp,                       // Audio: RTP RAW-UDP transport
 	RtpP2P,                          // 
+	RtpGoogleRawUdp,                 //
 	FileBSBOffer,                    // File offer: byte stream (SOCKS) transport
 	FileBSBRequest,                  // File request: byte stream (SOCKS) transport
     };

@@ -190,6 +190,7 @@ public:
 	XData,                           // jabber:x:data
 	ChatStates,                      // http://jabber.org/protocol/chatstates
 	YateCluster,                     // http://yate.null.ro/yate/cluster
+	JingleTransportGoogleRawUdp,     // http://www.google.com/transport/raw-udp
 	// This value MUST be the last one: it's used as array bound
 	Count,
     };

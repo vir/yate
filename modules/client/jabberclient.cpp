@@ -1725,6 +1725,10 @@ void YJBEngine::processIqStanza(JBEvent* ev)
 	    case XMPPNamespace::Roster:
 		processRoster(ev,service,t,type);
 		return;
+	    case XMPPNamespace::Ping:
+		if (type == XMPPUtils::IqGet && ev->sendIqResult())
+		    return;
+		break;
 	}
 	// Check responses without child
 	if (rsp) {
@@ -1842,7 +1846,11 @@ void YJBEngine::processIqStanza(JBEvent* ev)
     if (Engine::dispatch(m)) {
 	if (!rsp) {
 	    xmlRsp = XMPPUtils::getXml(m,"response",0);
-	    if (!xmlRsp && m.getBoolValue("respond"))
+	    if (xmlRsp) {
+		if (TelEngine::null(xmlRsp->getAttribute("to")))
+		    xmlRsp->setAttributeValid("to",ev->from());
+	    }
+	    else if (m.getBoolValue("respond"))
 		xmlRsp = ev->buildIqResult(true);
 	}
     }

@@ -1,3 +1,11 @@
+yate (4.1.1~svn5032) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5032: + Respond to ping from server.  +
+    Added google raw udp transport support for jingle version 1.  + Make
+    sure we set the 'to' attribute when responding to iq.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 01 May 2012 02:19:16 +0400
+
 yate (4.1.1~svn5029) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5029: + Bug fix: properly translate dialog

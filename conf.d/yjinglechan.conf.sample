@@ -121,6 +121,17 @@
 ; This parameter can be overridden from routing
 ;dtmfmethod=jingle
 
+; jingle_ring: string: Comma separated list of flags controlling the ringing behaviour of
+;  incoming channels
+; This parameter is applied on reload and can be overridden from routing
+; Flags:
+;   none:               Don't send ringing notification
+;   noearlysession:     Don't use early session content
+;   sessioncontent:     Add session content to jingle ringing stanza.
+;                       This will also set 'noearlysession'
+;   sessioncontentonly: Send ringing notification only if a content can be added to it.
+;                       This flag is ignored if 'sessioncontent' is not set
+;jingle_ring=
 
 [codecs]
 ; This section allows to individually enable or disable the codecs

@@ -1192,9 +1192,10 @@ public:
      * This method is thread safe
      * @param xml The XmlElement carried by the session info element
      * @param stanzaId Optional string to be filled with sent stanza id (used to track the response)
+     * @param extra Optional extra child for jingle element
      * @return False on failure
      */
-    bool sendInfo(XmlElement* xml, String* stanzaId = 0);
+    bool sendInfo(XmlElement* xml, String* stanzaId = 0, XmlElement* extra = 0);
 
     /**
      * Send a dtmf string to remote peer. If the string's length is greater then 1, each

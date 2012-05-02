@@ -50,17 +50,11 @@ class JsArray : public JsObject
 public:
     inline JsArray(Mutex* mtx)
 	: JsObject("Array",mtx)
-	{ }
-};
-
-// Object constructor
-class JsConstructor : public JsFunction
-{
-    YCLASS(JsConstructor,JsFunction)
-public:
-    inline JsConstructor(Mutex* mtx)
-	: JsFunction(mtx)
-	{ }
+	{
+	    params().addParam(new ExpFunction("push"));
+	}
+protected:
+    bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
 };
 
 // Object object
@@ -134,6 +128,7 @@ JsObject::JsObject(const char* name, Mutex* mtx, bool frozen)
     params().addParam(new ExpFunction("freeze"));
     params().addParam(new ExpFunction("isFrozen"));
     params().addParam(new ExpFunction("toString"));
+    params().addParam(new ExpFunction("hasOwnProperty"));
 }
 
 JsObject::~JsObject()
@@ -230,6 +225,17 @@ bool JsObject::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	ExpEvaluator::pushOne(stack,new ExpOperation(frozen()));
     else if (oper.name() == YSTRING("toString"))
 	ExpEvaluator::pushOne(stack,new ExpOperation(params()));
+    else if (oper.name() == YSTRING("hasOwnProperty")) {
+	bool ok = true;
+	for (long int i = oper.number(); i; i--) {
+	    ExpOperation* op = popValue(stack,context);
+	    if (!op)
+		continue;
+	    ok = ok && params().getParam(*op);
+	    TelEngine::destruct(op);
+	}
+	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
+    }
     else
 	return false;
     return true;
@@ -275,6 +281,13 @@ bool JsObjectObj::runNative(ObjList& stack, const ExpOperation& oper, GenObject*
 	return JsObject::runNative(stack,oper,context);
     return true;
 }
+
+
+bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    return JsObject::runNative(stack,oper,context);
+}
+
 
 bool JsMath::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
@@ -327,6 +340,30 @@ bool JsDate::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
     return JsObject::runNative(stack,oper,context);
 }
 
+
+JsFunction::JsFunction(Mutex* mtx)
+    : JsObject("Function",mtx,true)
+{
+    params().addParam(new ExpFunction("apply"));
+    params().addParam(new ExpFunction("call"));
+}
+
+bool JsFunction::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    if (oper.name() == YSTRING("apply")) {
+	// func.apply(new_this,["array","of","params",...])
+	if (oper.number() != 2)
+	    return false;
+    }
+    else if (oper.name() == YSTRING("call")) {
+	// func.call(new_this,param1,param2,...)
+	if (!oper.number())
+	    return false;
+    }
+    else
+	return JsObject::runNative(stack,oper,context);
+    return true;
+}
 
 bool JsFunction::runDefined(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {

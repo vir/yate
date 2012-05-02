@@ -54,8 +54,13 @@ private:
 class JsAssist : public ChanAssist
 {
 public:
+    enum State {
+	NotRouted,
+	Routing,
+	ReRoute,
+    };
     inline JsAssist(ChanAssistList* list, const String& id, ScriptRun* runner)
-	: ChanAssist(list, id), m_runner(runner)
+	: ChanAssist(list, id), m_runner(runner), m_state(NotRouted)
 	{ }
     virtual ~JsAssist();
     virtual void msgStartup(Message& msg);
@@ -70,6 +75,7 @@ public:
 private:
     bool runFunction(const char* name, Message& msg);
     ScriptRun* m_runner;
+    State m_state;
 };
 
 #define MKDEBUG(lvl) params().addParam(new ExpOperation((long int)Debug ## lvl,"Debug" # lvl))
@@ -91,8 +97,8 @@ public:
 	    MKDEBUG(Note);
 	    MKDEBUG(Info);
 	    MKDEBUG(All);
-	    params().addParam(new ExpFunction("Output"));
-	    params().addParam(new ExpFunction("Debug"));
+	    params().addParam(new ExpFunction("output"));
+	    params().addParam(new ExpFunction("debug"));
 	}
     static void initialize(ScriptContext* context);
 protected:
@@ -196,7 +202,7 @@ static inline void addObject(NamedList& params, const char* name, JsObject* obj)
 
 bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    if (oper.name() == YSTRING("Output")) {
+    if (oper.name() == YSTRING("output")) {
 	String str;
 	for (long int i = oper.number(); i; i--) {
 	    ExpOperation* op = popValue(stack,context);
@@ -208,18 +214,16 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 	if (str)
 	    Output("%s",str.c_str());
     }
-    else if (oper.name() == YSTRING("Debug")) {
+    else if (oper.name() == YSTRING("debug")) {
 	int level = DebugNote;
 	String str;
 	for (long int i = oper.number(); i; i--) {
 	    ExpOperation* op = popValue(stack,context);
 	    if (!op)
 		continue;
-Debug(DebugTest,"Popped [%ld] '%s' %ld",i,op->c_str(),op->number());
 	    if ((i == 1) && oper.number() > 1 && op->isInteger())
 		level = op->number();
 	    else if (*op) {
-Debug(DebugTest,"Prepend '%s'",op->c_str());
 		if (str)
 		    str = *op + " " + str;
 		else
@@ -535,6 +539,7 @@ bool JsAssist::msgPreroute(Message& msg)
 
 bool JsAssist::msgRoute(Message& msg)
 {
+    m_state = Routing;
     return false;
 }
 

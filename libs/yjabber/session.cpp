@@ -1119,17 +1119,19 @@ void JGSession::buildSocksDstAddr(String& buf)
 }
 
 // Send a session info element to the remote peer
-bool JGSession::sendInfo(XmlElement* xml, String* stanzaId)
+bool JGSession::sendInfo(XmlElement* xml, String* stanzaId, XmlElement* extra)
 {
-    if (!xml)
+    if (!xml) {
+	TelEngine::destruct(extra);
 	return false;
+    }
     // Make sure we dont't terminate the session if info fails
     String tmp;
     if (!stanzaId) {
 	tmp = "Info" + String(Time::secNow());
 	stanzaId = &tmp;
     }
-    return sendStanza(createJingle(ActInfo,xml),stanzaId);
+    return sendStanza(createJingle(ActInfo,xml,extra),stanzaId);
 }
 
 // Send a dtmf string to remote peer

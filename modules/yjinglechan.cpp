@@ -116,6 +116,18 @@ public:
 	FTHostLocal,
 	FTHostRemote,
     };
+    // Ringing flags
+    enum RingFlags {
+	// Internal
+	RingRinging = 0x01,              // call.ringing was handled
+	RingGotEarlyMedia = 0x02,        // Gor early media from peer
+	RingContentSent = 0x04,          // Ring content sent
+	// Settable
+	RingNone = 0x04,                 // Don't send ringing
+	RingNoEarlySession = 0x10,       // Don't use early session content
+	RingWithContent = 0x20,          // Attach session audio content if possible
+	RingWithContentOnly = 0x40,      // Send ringing only if we have a content to sent
+    };
     // Outgoing constructor
     YJGConnection(Message& msg, const char* caller, const char* called, bool available,
 	const NamedList& caps, const char* file, const char* localip);
@@ -143,6 +155,9 @@ public:
 	    buf = m_session->sid();
 	    return true;
 	}
+    // Check ring flag
+    inline bool ringFlag(int mask) const
+	{ return 0 != (m_ringFlags & mask); }
     // Overloaded methods from Channel
     virtual void callAccept(Message& msg);
     virtual void callRejected(const char* error, const char* reason, const Message* msg);
@@ -196,6 +211,14 @@ public:
     inline bool dataFlags(int mask)
 	{ return 0 != (m_dataFlags & mask); }
 
+    // Ring flags names
+    static const TokenDict s_ringFlgName[];
+    // Retrieve ringing flags from string
+    // defVal: default value if flags list is empty
+    static int getRinging(const String& flags, DebugEnabler* enabler, int defVal = 0);
+    static inline int getRinging(NamedList& params, DebugEnabler* enabler, int defVal = 0)
+	{ return getRinging(params[YSTRING("jingle_ring")],enabler,defVal); }
+
 protected:
     // Process an ActContentAdd event
     void processActionContentAdd(JGEvent* event);
@@ -220,9 +243,10 @@ protected:
     // Reset the current content. Try to use the given content
     // Else, find the first available content and try to use it
     // Send a transport info for the new current content
+    // Send ringing if requested
     // Return false on error
     bool resetCurrentAudioContent(bool session, bool earlyMedia,
-	bool sendTransInfo = true, JGSessionContent* newContent = 0);
+	bool sendTransInfo = true, JGSessionContent* newContent = 0, bool sendRing = true);
     // Start RTP for the current content
     // For raw udp transports, sends a 'trying' session info
     bool startRtp();
@@ -295,6 +319,8 @@ private:
     void resetEp(const String& what, bool releaseContent = true);
     // Hangup and drop the call if failed to setup encryption
     void dropNoCrypto();
+    // Send ringing
+    void sendRinging(NamedList* params = 0);
 
     Mutex m_mutex;                       // Lock transport and session
     State m_state;                       // Connection state
@@ -303,6 +329,7 @@ private:
     bool m_acceptRelay;                  // Accept to replace with a relay candidate
     JGSession::Version m_sessVersion;    // Jingle session version
     int m_sessFlags;                     // Session flags
+    int m_ringFlags;                     // Ring flags
     JabberID m_local;                    // Local user's JID
     JabberID m_remote;                   // Remote user's JID
     ObjList m_audioContents;             // The list of negotiated audio contents
@@ -535,11 +562,21 @@ static int s_priority = 0;                        // Resource priority for prese
 static unsigned int s_redirectCount = 0;          // Redirect counter
 static int s_dtmfMeth;                            // Default DTMF method to use
 static JGSession::Version s_sessVersion = JGSession::VersionUnknown; // Default jingle session version for outgoing calls
+static int s_ringFlags = 0;                       // Default channel ring flags
 static String s_capsNode = "http://yate.null.ro/yate/jingle/caps"; // node for entity capabilities
 static bool s_serverMode = true;                  // Server/client mode
 static YJGEngine* s_jingle = 0;
 static YJGDriver plugin;                          // The driver
 static bool s_ilbcDefault30 = true;               // Default ilbc format when ptime is unknown (30 or 20)
+
+// Channel ring flags
+const TokenDict YJGConnection::s_ringFlgName[] = {
+    {"none",                RingNone},
+    {"noearlysession",      RingNoEarlySession},
+    {"sessioncontent",      RingWithContent},
+    {"sessioncontentonly",  RingWithContentOnly},
+    {0,0}
+};
 
 // Message handlers installed by the module
 static const TokenDict s_msgHandler[] = {
@@ -804,6 +841,7 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
     m_mutex(true,"YJGConnection"),
     m_state(Pending), m_session(0), m_rtpStarted(false), m_acceptRelay(s_acceptRelay),
     m_sessVersion(s_sessVersion), m_sessFlags(s_jingle->sessionFlags()),
+    m_ringFlags(s_ringFlags),
     m_local(caller), m_remote(called), m_audioContent(0),
     m_audioFormats(JGRtpMediaList::Audio),
     m_callerPrompt(msg.getValue("callerprompt")),
@@ -911,6 +949,7 @@ YJGConnection::YJGConnection(JGEvent* event)
     m_mutex(true,"YJGConnection"),
     m_state(Active), m_session(event->session()), m_rtpStarted(false), m_acceptRelay(s_acceptRelay),
     m_sessVersion(event->session()->version()), m_sessFlags(s_jingle->sessionFlags()),
+    m_ringFlags(s_ringFlags),
     m_local(event->session()->local()), m_remote(event->session()->remote()),
     m_audioContent(0),
     m_audioFormats(JGRtpMediaList::Audio),
@@ -1126,6 +1165,8 @@ void YJGConnection::callRejected(const char* error, const char* reason,
 bool YJGConnection::callRouted(Message& msg)
 {
     DDebug(this,DebugCall,"callRouted [%p]",this);
+    // Update ringing
+    m_ringFlags = getRinging(msg,this,m_ringFlags);
     return Channel::callRouted(msg);
 }
 
@@ -1151,10 +1192,8 @@ bool YJGConnection::msgRinging(Message& msg)
     DDebug(this,DebugInfo,"msgRinging [%p]",this);
     if (m_ftStatus != FTNone)
 	return true;
-    m_mutex.lock();
-    if (m_session)
-	m_session->sendInfo(m_session->createRtpInfoXml(JGSession::RtpRinging));
-    m_mutex.unlock();
+    m_ringFlags |= RingRinging;
+    sendRinging(&msg);
     setEarlyMediaOut(msg);
     return true;
 }
@@ -1989,6 +2028,24 @@ void YJGConnection::transferTerminated(bool ok, const char* reason)
     m_transferSid = "";
 }
 
+int YJGConnection::getRinging(const String& flags, DebugEnabler* enabler, int defVal)
+{
+    if (flags)
+	defVal = XMPPUtils::decodeFlags(flags,s_ringFlgName);
+    // Set RingNoEarlySession if RingWithContent 
+    // Reset RingWithContentOnly if RingWithContent is not set
+    if (0 != (defVal & RingWithContent))
+	defVal |= RingNoEarlySession;
+    else
+	defVal &= ~RingWithContentOnly;
+#ifdef DEBUG
+    String tmp;
+    XMPPUtils::buildFlags(tmp,defVal,s_ringFlgName);
+    DDebug(enabler,DebugAll,"Got ring flags 0x%x '%s' from '%s'",defVal,tmp.safe(),flags.safe());
+#endif
+    return defVal;
+}
+
 // Process an ActContentAdd event
 void YJGConnection::processActionContentAdd(JGEvent* event)
 {
@@ -2061,6 +2118,9 @@ void YJGConnection::processActionTransportInfo(JGEvent* event)
 	else
 	    newContent = cc;
     }
+    XDebug(this,DebugAll,
+	"processActionTransportInfo() event=%s' start=%u crtAudiocontent=%p newContent=%p [%p]",
+	event->actionName(),startAudioContent,m_audioContent,newContent,this);
     if (ok) {
 	event->confirmElement();
 	if (newContent) {
@@ -2069,6 +2129,8 @@ void YJGConnection::processActionTransportInfo(JGEvent* event)
 	}
 	else if ((startAudioContent && !startRtp()) || !(m_audioContent || dataFlags(OnHold)))
 	    resetCurrentAudioContent(isAnswered(),!isAnswered());
+	else if (!isAnswered())
+	    sendRinging();
     }
     else
 	event->confirmElement(XMPPError::NotAcceptable);
@@ -2278,7 +2340,7 @@ void YJGConnection::removeCurrentAudioContent(bool removeReq)
 // Send a transport info for the new current content
 // Return false on error
 bool YJGConnection::resetCurrentAudioContent(bool session, bool earlyMedia,
-    bool sendTransInfo, JGSessionContent* newContent)
+    bool sendTransInfo, JGSessionContent* newContent, bool sendRing)
 {
     // Reset the current audio content
     removeCurrentAudioContent();
@@ -2319,6 +2381,10 @@ bool YJGConnection::resetCurrentAudioContent(bool session, bool earlyMedia,
 	JGRtpCandidate* rtp = m_audioContent->m_rtpLocalCandidates.findByComponent(1);
 	if (!(rtp && rtp->m_address))
 	    initLocalCandidates(*m_audioContent,sendTransInfo);
+	// Reset ring content sent flag
+	m_ringFlags &= ~RingContentSent;
+	if (sendRing)
+	    sendRinging();
 	return startRtp();
     }
 
@@ -2840,7 +2906,7 @@ JGSessionContent* YJGConnection::findContent(JGSessionContent& recv,
 // Set early media to remote
 void YJGConnection::setEarlyMediaOut(Message& msg)
 {
-    if (isOutgoing() || isAnswered())
+    if (ringFlag(RingNoEarlySession) || isOutgoing() || isAnswered())
 	return;
 
     // Don't set it if the peer don't have a source
@@ -3437,6 +3503,52 @@ void YJGConnection::dropNoCrypto()
     Engine::enqueue(m);
 }
 
+// Send ringing
+void YJGConnection::sendRinging(NamedList* params)
+{
+    if (ringFlag(RingNone))
+	return;
+    bool sendContent = ringFlag(RingWithContent) && getPeer() && getPeer()->getSource();
+    DDebug(this,DebugNote,"sendRinging flags=0x%x params=%p sendContent=%u [%p]",
+	m_ringFlags,params,sendContent,this);
+    if (params) {
+	if (params->getBoolValue(YSTRING("earlymedia"),true))
+	    m_ringFlags |= RingGotEarlyMedia;
+	sendContent = sendContent && ringFlag(RingGotEarlyMedia);
+    }
+    else {
+	// Added new content or changed one
+	// Return if no ringing or content already sent
+	if (!ringFlag(RingRinging) || ringFlag(RingContentSent))
+	    return;
+	sendContent = sendContent && ringFlag(RingGotEarlyMedia);
+	// No need to send content: return
+	if (!sendContent)
+	    return;
+    }
+    Lock mylock(m_mutex);
+    if (!m_session)
+	return;
+    XmlElement* rInfo = m_session->createRtpInfoXml(JGSession::RtpRinging);
+    if (!rInfo)
+	return;
+    XmlElement* cXml = 0;
+    if (sendContent) {
+	if (!m_audioContent || m_audioContent->isEarlyMedia())
+	    resetCurrentAudioContent(true,false,true,0,false);
+	JGRtpCandidate* rtp = m_audioContent ? m_audioContent->m_rtpLocalCandidates.findByComponent(1) : 0;
+	if (rtp && rtp->m_address) {
+	    cXml = m_audioContent->toXml(false,true,true,true,false);
+	    m_ringFlags |= RingContentSent;
+	}
+	else if (ringFlag(RingWithContentOnly)) {
+	    TelEngine::destruct(rInfo);
+	    return;
+	}
+    }
+    m_session->sendInfo(rInfo,0,cXml);
+}
+
 
 /*
  * Transfer thread (route and execute)
@@ -3718,6 +3830,7 @@ void YJGDriver::initialize()
     s_cryptoMandatory = sect->getBoolValue("secure_required",false);
     s_acceptRelay = sect->getBoolValue("accept_relay",!s_serverMode);
     s_sessVersion = JGSession::lookupVersion(sect->getValue("jingle_version"),JGSession::Version1);
+    s_ringFlags = YJGConnection::getRinging(*sect,this);
     m_anonymousCaller = sect->getValue("anonymous_caller","unk_caller");
     m_localAddress = sect->getValue("localip");
     s_offerRawTransport = sect->getBoolValue("offerrawudp",true);

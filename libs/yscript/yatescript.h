@@ -307,14 +307,14 @@ public:
     /**
      * Dump a list of operations according to current operators dictionary
      * @param codes List of operation codes
-     * @result String representation of operations
+     * @return String representation of operations
      */
     inline String dump(const ObjList& codes) const
 	{ String s; dump(codes,s); return s; }
 
     /**
      * Dump the postfix expression according to current operators dictionary
-     * @result String representation of operations
+     * @return String representation of operations
      */
     inline String dump() const
 	{ String s; dump(s); return s; }
@@ -1475,9 +1475,7 @@ public:
      * Constructor
      * @param mtx Pointer to the mutex that serializes this object
      */
-    inline JsFunction(Mutex* mtx = 0)
-	: JsObject("Function",mtx,true)
-	{ }
+    JsFunction(Mutex* mtx = 0);
 
     /**
      * Try to evaluate a single user defined method
@@ -1488,6 +1486,17 @@ public:
      * @return True if evaluation succeeded
      */
     virtual bool runDefined(ObjList& stack, const ExpOperation& oper, GenObject* context);
+
+protected:
+    /**
+     * Try to evaluate a single native method
+     * @param stack Evaluation stack in use, parameters are popped off this stack
+     *  and results are pushed back on stack
+     * @param oper Function to evaluate
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return True if evaluation succeeded
+     */
+    virtual bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
 };
 
@@ -1557,6 +1566,13 @@ public:
      * @return Status of the runtime after code execution
      */
     static ScriptRun::Status eval(const String& text, ExpOperation** result = 0, ScriptContext* context = 0);
+
+    /**
+     * Parse a complete block of JSON text
+     * @param text JSON text to parse
+     * @return JsObject holding the content of JSON, must be dereferenced after use, NULL if parse error
+     */
+    static JsObject* parseJSON(const char* text);
 
 private:
     String m_basePath;

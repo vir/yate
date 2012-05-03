@@ -60,6 +60,7 @@ DOCGEN := /bin/false
 DOCGEN_K := /bin/false
 DOCGEN_D := /bin/false
 APIDOCS :=
+APIINDEX:= @srcdir@/docs/api/index.html
 ifneq (_@KDOC_BIN@,_)
 DOCGEN_K := @KDOC_BIN@ -C ./docs/doc-filter.sh -d docs/api/ $(DOCGEN_F)
 DOCGEN := $(DOCGEN_K)
@@ -152,9 +153,9 @@ apidocs-build:
 apidocs-everything: check-topdir
 	$(MAKE) apidocs-build DOCGEN_F="$(DOCGEN_F) `echo libs/y*/*.h`"
 
-apidocs: @srcdir@/docs/api/index.html
+apidocs: $(APIINDEX)
 
-@srcdir@/docs/api/index.html: @srcdir@/docs/Doxyfile \
+$(APIINDEX): @srcdir@/docs/Doxyfile \
     @srcdir@/yateclass.h @srcdir@/yatemime.h @srcdir@/yatengine.h \
     @srcdir@/yatephone.h @srcdir@/yatecbase.h
 	$(MAKE) apidocs-build
@@ -238,7 +239,7 @@ install-noconf: all
 install-api: $(APIDOCS)
 	@mkdir -p "$(DESTDIR)$(docdir)/api/" && \
 	install -m 0644 @srcdir@/docs/*.html "$(DESTDIR)$(docdir)/" && \
-	test -z "$(APIDOCS)" || \
+	test -f "$(APIINDEX)" && \
 	install -m 0644 @srcdir@/docs/api/*.* "$(DESTDIR)$(docdir)/api/"
 
 uninstall uninstall-root:

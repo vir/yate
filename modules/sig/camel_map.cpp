@@ -7256,7 +7256,7 @@ const TCAPMap XmlToTcap::s_tcapMap[] = {
     {"transport.sccp.CalledPartyAddress.gt.nature",       false,  "CalledPartyAddress.gt.nature"},
     {"transport.sccp.CalledPartyAddress.gt.translation",  false,  "CalledPartyAddress.gt.tt"},
     {"transport.sccp.CalledPartyAddress.",                true,   "CalledPartyAddress"},
-    {"transport.sccp.HopCounter",                         false,  "HopCounter"},
+    {"transport.sccp.",                                   true,   ""},
     {"transport.tcap.request-type",                       false,  "tcap.request.type"},
     {"transport.tcap.abort-cause",                        false,  "tcap.transaction.abort.cause"},
     {"transport.tcap.abort-information",                  false,  "tcap.transaction.abort.information"},

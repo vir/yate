@@ -1612,6 +1612,11 @@ bool YJGConnection::handleEvent(JGEvent* event)
 
 	bool rspOk = (event->type() == JGEvent::ResultOk);
 
+	// Notify ringing if initiate was confirmed and the remote party doesn't support it
+	if (rspOk && m_ftStatus == FTNone && event->action() == JGSession::ActInitiate &&
+	    !m_session->hasFeature(XMPPNamespace::JingleAppsRtpInfo))
+	    Engine::enqueue(message("call.ringing",false,true));
+	
 	if (m_ftStanzaId && m_ftStanzaId == event->id()) {
 	    m_ftStanzaId = "";
 	    String usedHost;
@@ -1942,9 +1947,6 @@ bool YJGConnection::presenceChanged(bool available, NamedList* params)
 	    m_session->sendStreamHosts(m_streamHosts,&m_ftStanzaId);
 	}
     }
-    // Notify now ringing if the remote party doesn't support it
-    if (m_ftStatus == FTNone && !m_session->hasFeature(XMPPNamespace::JingleAppsRtpInfo))
-	Engine::enqueue(message("call.ringing",false,true));
     return false;
 }
 

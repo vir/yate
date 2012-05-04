@@ -159,6 +159,7 @@ const TokenDict JGSession::s_actions1[] = {
 // Session flag names
 const TokenDict JGSession::s_flagName[] = {
     {"noping",                FlagNoPing},
+    {"ringnsrtp",             FlagRingNsRtp},
     {0,0}
 };
 
@@ -1978,8 +1979,11 @@ bool JGSession1::accept(const ObjList& contents, String* stanzaId)
 XmlElement* JGSession1::createRtpInfoXml(RtpInfo info)
 {
     const char* tag = lookup(info,s_rtpInfo);
-    if (!TelEngine::null(tag))
-	return XMPPUtils::createElement(tag,XMPPNamespace::JingleAppsRtpInfo);
+    if (!TelEngine::null(tag)) {
+	if (info != RtpRinging || !flag(FlagRingNsRtp))
+	    return XMPPUtils::createElement(tag,XMPPNamespace::JingleAppsRtpInfo);
+	return XMPPUtils::createElement(tag,XMPPNamespace::JingleAppsRtp);
+    }
     return 0;
 }
 

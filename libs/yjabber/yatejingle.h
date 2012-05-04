@@ -940,6 +940,7 @@ public:
      */
     enum SessionFlag {
 	FlagNoPing = 0x0001,             // Don't send ping
+	FlagRingNsRtp = 0x0002,          // Send ringing using rtp namespace instead of rtp info namespace
     };
 
     /**

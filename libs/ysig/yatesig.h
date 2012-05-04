@@ -8962,6 +8962,7 @@ private:
     bool m_l3LinkUp;                     // Flag indicating the availability of a Layer3 data link
     u_int64_t m_t1Interval;              // Q.764 T1 timer interval
     u_int64_t m_t5Interval;              // Q.764 T5 timer interval
+    u_int64_t m_t7Interval;              // Q.764 T7 timer interval
     u_int64_t m_t9Interval;              // Q.764 T9 AMM/CON recv timer interval
     u_int64_t m_t12Interval;             // Q.764 T12 BLK timer interval
     u_int64_t m_t13Interval;             // Q.764 T13 BLK global timer interval
@@ -8973,6 +8974,8 @@ private:
     u_int64_t m_t19Interval;             // Q.764 T19 CGB global timer interval
     u_int64_t m_t20Interval;             // Q.764 T20 CGU timer interval
     u_int64_t m_t21Interval;             // Q.764 T21 CGU global timer interval
+    u_int64_t m_t27Interval;             // Q.764 T27 Reset after Cont. Check failure
+    u_int64_t m_t34Interval;             // Q.764 T34 Segmentation receive timout
     SignallingMessageTimerList m_pending;// Pending messages (RSC ...)
     // Remote User Part test
     SignallingTimer m_uptTimer;          // Timer for UPT

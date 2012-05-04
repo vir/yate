@@ -467,6 +467,22 @@
 ; Defaults to yes if pointcodetype is ANSI or ANSI8, no for other types
 ;duplicate-cgb=
 
+; t7: int: Q.764 T7 - Addressing Message Timer, milliseconds
+; Valid range: 20000-30000
+;t7=
+
+; t9: int: Q.764 T9 (Q.118) - Answer / Connect Timer, milliseconds
+; Valid range: 90000-180000, 0 to disable timer
+;t9=0
+
+; t27: int: Q.764 T27 - Continuity Check Reset Timer, milliseconds
+; Valid range: 30000-300000
+;t27=240000
+
+; t34: int: Q.764 T34 - Segmentation Receive Timer, milliseconds
+; Valid range: 2000-4000
+;t34=3000
+
 ; floodevents: int: How many events retrieved in a row trigger a flood warning
 ; Default value is taken from the [general] section
 ;floodevents=20

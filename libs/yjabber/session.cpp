@@ -159,6 +159,8 @@ const TokenDict JGSession::s_actions1[] = {
 // Session flag names
 const TokenDict JGSession::s_flagName[] = {
     {"noping",                FlagNoPing},
+    {"ringnsrtp",             FlagRingNsRtp},
+    {"nookinitiate",          FlagNoOkInitiate},
     {0,0}
 };
 
@@ -1344,10 +1346,23 @@ bool JGSession::sendStanza(XmlElement* stanza, String* stanzaId, bool confirmati
 	m_sid.c_str(),stanza,stanza->tag(),String::boolText(stanzaId != 0),this);
     // Check if the stanza should be added to the list of stanzas requiring confirmation
     if (confirmation && XMPPUtils::isUnprefTag(*stanza,XmlTag::Iq)) {
+	Action act = ActCount;
+	XmlElement* child = stanza->findFirstChild();
+	if (child) {
+	    act = lookupAction(child->attribute("action"),m_version);
+	    if (act == ActInfo) {
+		child = child->findFirstChild();
+		if (child) {
+		    Action over = lookupAction(child->unprefixedTag(),m_version);
+		    if (over != ActCount)
+			act = over;
+		}
+	    }
+	}
 	String id = m_localSid;
 	id << "_" << (unsigned int)m_stanzaId++;
 	JGSentStanza* sent = new JGSentStanza(id,
-	    m_engine->stanzaTimeout() + Time::msecNow(),stanzaId != 0,ping);
+	    m_engine->stanzaTimeout() + Time::msecNow(),stanzaId != 0,ping,act);
 	stanza->setAttribute("id",*sent);
 	if (stanzaId)
 	    *stanzaId = *sent;
@@ -1509,6 +1524,7 @@ JGEvent* JGSession::processJabberIqResponse(bool result, XmlElement*& xml)
     bool terminatePending = false;
     if (state() == Pending && outgoing() && !result)
 	terminatePending = !sent->notify();
+    bool notify = sent->action() == ActInitiate && result && !flag(FlagNoOkInitiate);
     // Generate event
     JGEvent* ev = 0;
     String text;
@@ -1519,11 +1535,14 @@ JGEvent* JGSession::processJabberIqResponse(bool result, XmlElement*& xml)
 	ev = new JGEvent(JGEvent::Destroy,this,xml,reason,text);
     else if (terminatePending)
 	ev = new JGEvent(JGEvent::Terminated,this,xml,reason,text);
-    else if (sent->notify())
+    else if (sent->notify() || notify) {
 	if (result)
 	    ev = new JGEvent(JGEvent::ResultOk,this,xml);
 	else
 	    ev = new JGEvent(JGEvent::ResultError,this,xml,text);
+	ev->setAction(sent->action());
+	ev->setConfirmed();
+    }
     else {
 	// Terminate on ping error
 	if (sent->ping() && !result)
@@ -1978,8 +1997,11 @@ bool JGSession1::accept(const ObjList& contents, String* stanzaId)
 XmlElement* JGSession1::createRtpInfoXml(RtpInfo info)
 {
     const char* tag = lookup(info,s_rtpInfo);
-    if (!TelEngine::null(tag))
-	return XMPPUtils::createElement(tag,XMPPNamespace::JingleAppsRtpInfo);
+    if (!TelEngine::null(tag)) {
+	if (info != RtpRinging || !flag(FlagRingNsRtp))
+	    return XMPPUtils::createElement(tag,XMPPNamespace::JingleAppsRtpInfo);
+	return XMPPUtils::createElement(tag,XMPPNamespace::JingleAppsRtp);
+    }
     return 0;
 }
 

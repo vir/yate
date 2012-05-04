@@ -208,6 +208,9 @@ const TokenDict SCCPManagement::s_states[] = {
 const TokenDict s_messageReturn[] = {
     { "false", 0x00 },
     { "true",  0x08 },
+    { "yes",   0x08 },
+    { "on",    0x08 },
+    { "enable",0x08 },
     { 0, 0 }
 };
 

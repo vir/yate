@@ -940,6 +940,8 @@ public:
      */
     enum SessionFlag {
 	FlagNoPing = 0x0001,             // Don't send ping
+	FlagRingNsRtp = 0x0002,          // Send ringing using rtp namespace instead of rtp info namespace
+	FlagNoOkInitiate = 0x0004,       // Don't raise a ResultOk when initiate stanza is confirmed
     };
 
     /**
@@ -2098,9 +2100,11 @@ public:
      * @param time The sent time
      * @param notif True to notify stanza timeout or response
      * @param ping True if the sent stanza is a ping one
+     * @param action Optional sent stanza action
      */
-    JGSentStanza(const char* id, u_int64_t time, bool notif = false, bool ping = false)
-	: String(id), m_time(time), m_notify(notif), m_ping(ping)
+    JGSentStanza(const char* id, u_int64_t time, bool notif = false, bool ping = false,
+	JGSession::Action action = JGSession::ActCount)
+	: String(id), m_time(time), m_notify(notif), m_ping(ping), m_action(action)
 	{}
 
     /**
@@ -2124,10 +2128,18 @@ public:
     inline bool ping() const
 	{ return m_ping; }
 
+    /**
+     * Get the jingle action as enumeration
+     * @return The jingle action as enumeration
+     */
+    inline JGSession::Action action() const
+	{ return m_action; }
+
 private:
     u_int64_t m_time;                    // Timeout
     bool m_notify;                       // Notify timeout to sender
     bool m_ping;                         // Sent stanza is a ping one
+    JGSession::Action m_action;          // Sent stanza action
 };
 
 };

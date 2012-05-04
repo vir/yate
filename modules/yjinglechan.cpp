@@ -1182,8 +1182,14 @@ void YJGConnection::disconnected(bool final, const char* reason)
 bool YJGConnection::msgProgress(Message& msg)
 {
     DDebug(this,DebugInfo,"msgProgress [%p]",this);
-    if (m_ftStatus == FTNone)
-	setEarlyMediaOut(msg);
+    if (m_ftStatus != FTNone)
+	return true;
+    if (ringFlag(RingWithContent) && msg.getBoolValue("earlymedia",true) &&
+	getPeer() && getPeer()->getSource()) {
+	m_ringFlags |= RingRinging;
+	sendRinging(&msg);
+    }
+    setEarlyMediaOut(msg);
     return true;
 }
 

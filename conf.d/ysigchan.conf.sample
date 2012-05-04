@@ -430,6 +430,10 @@
 ;  or unsupported message is received in an early state
 ;drop_unknown=yes
 
+; max_replaces: int: Maximum number of circuit replaces if the other side blocks on call
+; Valid range 0-31
+;max_replaces=3
+
 ; needmedia: keyword: When is media absolutely required to continue the call
 ; In case of circuit failure the call may continue and retry circuit setup later
 ; Allowed values:

@@ -8495,6 +8495,12 @@ protected:
 	bool timeout = false);
 
     /**
+     * Check if the call's circuit can be replaced at this time
+     * @return True if the circuit can be replaced
+     */
+    bool canReplaceCircuit();
+
+    /**
      * Replace the circuit reserved for this call. Release the already reserved circuit.
      * Retransmit the initial IAM request on success.
      * On failure set the termination flag and release the new circuit if valid.
@@ -8563,6 +8569,7 @@ private:
     bool m_circuitChanged;               // Circuit change flag
     bool m_circuitTesting;               // The circuit is tested for continuity
     bool m_inbandAvailable;              // Inband data is available
+    int m_replaceCounter;                // Circuit replace counter
     String m_format;                     // Data format used by the circuit
     String m_reason;                     // Termination reason
     String m_diagnostic;                 // Termination diagnostic
@@ -8983,6 +8990,7 @@ private:
     SS7MsgISUP::Type m_uptMessage;       // Message used, may not be always UPT
     unsigned int m_uptCicCode;           // The circuit code sent with UPT
     int m_cicWarnLevel;                  // Wrong CIC warn level
+    int m_replaceCounter;                // Circuit replace counter
     // Circuit reset
     SignallingTimer m_rscTimer;          // RSC message or idle timeout
     SignallingCircuit* m_rscCic;         // Circuit currently beeing reset

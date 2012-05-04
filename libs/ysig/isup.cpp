@@ -2120,6 +2120,7 @@ SS7ISUPCall::SS7ISUPCall(SS7ISUP* controller, SignallingCircuit* cic,
     m_circuitChanged(false),
     m_circuitTesting(false),
     m_inbandAvailable(false),
+    m_replaceCounter(3),
     m_iamMsg(0),
     m_sgmMsg(0),
     m_relMsg(0),
@@ -2147,6 +2148,7 @@ SS7ISUPCall::SS7ISUPCall(SS7ISUP* controller, SignallingCircuit* cic,
 	m_contTimer.interval(isup()->m_t27Interval);
     if (isup()->m_t34Interval)
 	m_sgmRecvTimer.interval(isup()->m_t34Interval);
+    m_replaceCounter = isup()->m_replaceCounter;
     if (isup()->debugAt(DebugAll)) {
 	String tmp;
 	tmp << m_label;
@@ -2531,6 +2533,16 @@ void* SS7ISUPCall::getObject(const String& name) const
     if (name == YSTRING("SS7ISUPCall"))
 	return (void*)this;
     return SignallingCall::getObject(name);
+}
+
+// Check if the circuit can be replaced
+// Returns true unless the counter is already zero
+bool SS7ISUPCall::canReplaceCircuit()
+{
+    if (m_replaceCounter <= 0)
+	return false;
+    m_replaceCounter--;
+    return true;
 }
 
 // Replace the circuit reserved for this call. Release the already reserved circuit.
@@ -3175,6 +3187,7 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
       m_uptMessage(SS7MsgISUP::UPT),
       m_uptCicCode(0),
       m_cicWarnLevel(DebugMild),
+      m_replaceCounter(3),
       m_rscTimer(0),
       m_rscCic(0),
       m_rscSpeedup(0),
@@ -3274,6 +3287,7 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
 	case SS7MsgISUP::UPT:
 	    m_uptMessage = (SS7MsgISUP::Type)testMsg;
     }
+    m_replaceCounter = params.getIntValue(YSTRING("max_replaces"),3,0,31);
     m_ignoreUnkDigits = params.getBoolValue(YSTRING("ignore-unknown-digits"),true);
     m_defaultSls = params.getIntValue(YSTRING("sls"),s_dict_callSls,m_defaultSls);
     m_maxCalledDigits = params.getIntValue(YSTRING("maxcalleddigits"),m_maxCalledDigits);
@@ -3354,6 +3368,7 @@ bool SS7ISUP::initialize(const NamedList* config)
 	    case SS7MsgISUP::UPT:
 		m_uptMessage = (SS7MsgISUP::Type)testMsg;
 	}
+	m_replaceCounter = config->getIntValue(YSTRING("max_replaces"),3,0,31);
         m_ignoreUnkDigits = config->getBoolValue(YSTRING("ignore-unknown-digits"),true);
 	m_defaultSls = config->getIntValue(YSTRING("sls"),s_dict_callSls,m_defaultSls);
 	m_mediaRequired = (MediaRequired)config->getIntValue(YSTRING("needmedia"),
@@ -5677,7 +5692,8 @@ void SS7ISUP::replaceCircuit(unsigned int cic, const String& map, bool rel)
 	SS7ISUPCall* call = static_cast<SS7ISUPCall*>(o->get());
 	Debug(this,DebugInfo,"Replacing remotely blocked cic=%u for existing call",call->id());
 	SignallingCircuit* newCircuit = 0;
-	reserveCircuit(newCircuit,call->cicRange(),SignallingCircuit::LockLockedBusy);
+	if (call->canReplaceCircuit())
+	    reserveCircuit(newCircuit,call->cicRange(),SignallingCircuit::LockLockedBusy);
 	if (!newCircuit) {
 	    call->setTerminate(rel,"congestion",0,m_location);
 	    if (!rel) {

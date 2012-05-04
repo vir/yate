@@ -2100,6 +2100,7 @@ public:
      * @param time The sent time
      * @param notif True to notify stanza timeout or response
      * @param ping True if the sent stanza is a ping one
+     * @param action Optional sent stanza action
      */
     JGSentStanza(const char* id, u_int64_t time, bool notif = false, bool ping = false,
 	JGSession::Action action = JGSession::ActCount)

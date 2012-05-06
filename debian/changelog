@@ -1,3 +1,10 @@
+yate (4.1.1~vir2012050701) UNRELEASED; urgency=low
+
+  * Merged upstream changed: gvoice module, bugfixes.
+  * Version scheme change (~virXXXXXXXXXX suffix).
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Mon, 07 May 2012 00:12:08 +0400
+
 yate (4.0.1.vir2012040401) UNRELEASED; urgency=low
 
   * Merged lots of upstream changes: jabber component, rtp dejitter,

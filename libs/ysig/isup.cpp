@@ -31,9 +31,19 @@ using namespace TelEngine;
 // Maximum number of mandatory parameters including two terminators
 #define MAX_MANDATORY_PARAMS 16
 
-// T9 timer
-#define ISUP_T9_MINVAL 90000
-#define ISUP_T9_MAXVAL 180000
+// Timer limits and default values
+#define ISUP_T7_MINVAL  20000
+#define ISUP_T7_DEFVAL  20000
+#define ISUP_T7_MAXVAL  30000
+#define ISUP_T9_MINVAL  90000
+#define ISUP_T9_DEFVAL  0
+#define ISUP_T9_MAXVAL  180000
+#define ISUP_T27_MINVAL 30000
+#define ISUP_T27_DEFVAL 240000
+#define ISUP_T27_MAXVAL 300000
+#define ISUP_T34_MINVAL 2000
+#define ISUP_T34_DEFVAL 3000
+#define ISUP_T34_MAXVAL 4000
 
 // Description of each ISUP parameter
 struct IsupParam {
@@ -2110,16 +2120,17 @@ SS7ISUPCall::SS7ISUPCall(SS7ISUP* controller, SignallingCircuit* cic,
     m_circuitChanged(false),
     m_circuitTesting(false),
     m_inbandAvailable(false),
+    m_replaceCounter(3),
     m_iamMsg(0),
     m_sgmMsg(0),
     m_relMsg(0),
     m_sentSamDigits(0),
     m_relTimer(300000),                  // Q.764: T5  - 5..15 minutes
-    m_iamTimer(20000),                   // Setup, Testing: Q.764: T7  - 20..30 seconds
+    m_iamTimer(ISUP_T7_DEFVAL),          // Setup, Testing: Q.764: T7  - 20..30 seconds
                                          // Releasing: Q.764: T1: 15..60 seconds
-    m_sgmRecvTimer(3000),                // Q.764: T34 - 2..4 seconds
-    m_contTimer(240000),                 // Q.764: T27 - 4 minutes
-    m_anmTimer(0)                        // Q.764 T9 Q.118: 1.5 - 3 minutes
+    m_sgmRecvTimer(ISUP_T34_DEFVAL),     // Q.764: T34 - 2..4 seconds
+    m_contTimer(ISUP_T27_DEFVAL),        // Q.764: T27 - 4 minutes
+    m_anmTimer(0)                        // Q.764 T9 Q.118: 1.5 - 3 minutes, not always used
 {
     if (!(controller && m_circuit)) {
 	Debug(isup(),DebugWarn,
@@ -2129,6 +2140,15 @@ SS7ISUPCall::SS7ISUPCall(SS7ISUP* controller, SignallingCircuit* cic,
 	return;
     }
     isup()->setLabel(m_label,local,remote,sls);
+    if (isup()->m_t7Interval)
+	m_iamTimer.interval(isup()->m_t7Interval);
+    if (isup()->m_t9Interval)
+	m_anmTimer.interval(isup()->m_t9Interval);
+    if (isup()->m_t27Interval)
+	m_contTimer.interval(isup()->m_t27Interval);
+    if (isup()->m_t34Interval)
+	m_sgmRecvTimer.interval(isup()->m_t34Interval);
+    m_replaceCounter = isup()->m_replaceCounter;
     if (isup()->debugAt(DebugAll)) {
 	String tmp;
 	tmp << m_label;
@@ -2513,6 +2533,16 @@ void* SS7ISUPCall::getObject(const String& name) const
     if (name == YSTRING("SS7ISUPCall"))
 	return (void*)this;
     return SignallingCall::getObject(name);
+}
+
+// Check if the circuit can be replaced
+// Returns true unless the counter is already zero
+bool SS7ISUPCall::canReplaceCircuit()
+{
+    if (m_replaceCounter <= 0)
+	return false;
+    m_replaceCounter--;
+    return true;
 }
 
 // Replace the circuit reserved for this call. Release the already reserved circuit.
@@ -3040,10 +3070,8 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 	    // intentionally fall through
 	case SS7MsgISUP::EXM:
 	    // Start T9 timer
-	    if (isup()->m_t9Interval) {
-		m_anmTimer.interval(isup()->m_t9Interval);
+	    if (m_anmTimer.interval() && !m_anmTimer.started())
 		m_anmTimer.start();
-	    }
 	    break;
 	case SS7MsgISUP::CPR:
 	    m_state = Ringing;
@@ -3140,7 +3168,8 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
       m_l3LinkUp(false),
       m_t1Interval(15000),               // Q.764 T1 15..60 seconds
       m_t5Interval(300000),              // Q.764 T5 5..15 minutes
-      m_t9Interval(0),                   // Q.764 T9 Q.118 1.5 - 3 minutes
+      m_t7Interval(ISUP_T7_DEFVAL),      // Q.764 T7 20..30 seconds
+      m_t9Interval(0),                   // Q.764 T9 Q.118 1.5 - 3 minutes, not always used
       m_t12Interval(20000),              // Q.764 T12 (BLK) 15..60 seconds
       m_t13Interval(300000),             // Q.764 T13 (BLK global) 5..15 minutes
       m_t14Interval(20000),              // Q.764 T14 (UBL) 15..60 seconds
@@ -3151,11 +3180,14 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
       m_t19Interval(300000),             // Q.764 T19 (CGB global) 5..15 minutes
       m_t20Interval(20000),              // Q.764 T20 (CGU) 15..60 seconds
       m_t21Interval(300000),             // Q.764 T21 (CGU global) 5..15 minutes
+      m_t27Interval(ISUP_T27_DEFVAL),    // Q.764 T27 4 minutes
+      m_t34Interval(ISUP_T34_DEFVAL),    // Q.764 T34 2..4 seconds
       m_uptTimer(0),
       m_userPartAvail(true),
       m_uptMessage(SS7MsgISUP::UPT),
       m_uptCicCode(0),
       m_cicWarnLevel(DebugMild),
+      m_replaceCounter(3),
       m_rscTimer(0),
       m_rscCic(0),
       m_rscSpeedup(0),
@@ -3231,7 +3263,10 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
 	m_lockTimer.start();
 
     // Timers
-    m_t9Interval = SignallingTimer::getInterval(params,"t9",ISUP_T9_MINVAL,0,ISUP_T9_MAXVAL,true);
+    m_t7Interval = SignallingTimer::getInterval(params,"t7",ISUP_T7_MINVAL,ISUP_T7_DEFVAL,ISUP_T7_MAXVAL,false);
+    m_t9Interval = SignallingTimer::getInterval(params,"t9",ISUP_T9_MINVAL,ISUP_T9_DEFVAL,ISUP_T9_MAXVAL,true);
+    m_t27Interval = SignallingTimer::getInterval(params,"t27",ISUP_T27_MINVAL,ISUP_T27_DEFVAL,ISUP_T27_MAXVAL,false);
+    m_t34Interval = SignallingTimer::getInterval(params,"t34",ISUP_T34_MINVAL,ISUP_T34_DEFVAL,ISUP_T34_MAXVAL,false);
 
     m_continuity = params.getValue(YSTRING("continuity"));
     m_confirmCCR = params.getBoolValue(YSTRING("confirm_ccr"),true);
@@ -3252,6 +3287,7 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
 	case SS7MsgISUP::UPT:
 	    m_uptMessage = (SS7MsgISUP::Type)testMsg;
     }
+    m_replaceCounter = params.getIntValue(YSTRING("max_replaces"),3,0,31);
     m_ignoreUnkDigits = params.getBoolValue(YSTRING("ignore-unknown-digits"),true);
     m_defaultSls = params.getIntValue(YSTRING("sls"),s_dict_callSls,m_defaultSls);
     m_maxCalledDigits = params.getIntValue(YSTRING("maxcalleddigits"),m_maxCalledDigits);
@@ -3332,12 +3368,16 @@ bool SS7ISUP::initialize(const NamedList* config)
 	    case SS7MsgISUP::UPT:
 		m_uptMessage = (SS7MsgISUP::Type)testMsg;
 	}
+	m_replaceCounter = config->getIntValue(YSTRING("max_replaces"),3,0,31);
         m_ignoreUnkDigits = config->getBoolValue(YSTRING("ignore-unknown-digits"),true);
 	m_defaultSls = config->getIntValue(YSTRING("sls"),s_dict_callSls,m_defaultSls);
 	m_mediaRequired = (MediaRequired)config->getIntValue(YSTRING("needmedia"),
 	    s_mediaRequired,m_mediaRequired);
         // Timers
-	m_t9Interval = SignallingTimer::getInterval(*config,"t9",ISUP_T9_MINVAL,0,ISUP_T9_MAXVAL,true);
+	m_t7Interval = SignallingTimer::getInterval(*config,"t7",ISUP_T7_MINVAL,ISUP_T7_DEFVAL,ISUP_T7_MAXVAL,false);
+	m_t9Interval = SignallingTimer::getInterval(*config,"t9",ISUP_T9_MINVAL,ISUP_T9_DEFVAL,ISUP_T9_MAXVAL,true);
+	m_t27Interval = SignallingTimer::getInterval(*config,"t27",ISUP_T27_MINVAL,ISUP_T27_DEFVAL,ISUP_T27_MAXVAL,false);
+	m_t34Interval = SignallingTimer::getInterval(*config,"t34",ISUP_T34_MINVAL,ISUP_T34_DEFVAL,ISUP_T34_MAXVAL,false);
     }
     m_cicWarnLevel = DebugMild;
     return SS7Layer4::initialize(config);
@@ -3796,9 +3836,15 @@ bool SS7ISUP::control(NamedList& params)
     Lock mylock(this);
     if (!m_remotePoint)
 	return false;
-    ObjList* o = circuits()->circuits().skipNull();
-    SignallingCircuit* cic = o ? static_cast<SignallingCircuit*>(o->get()) : 0;
-    unsigned int code1 = cic ? cic->code() : 1;
+    unsigned int code1 = 1;
+    if (circuits()) {
+	ObjList* o = circuits()->circuits().skipNull();
+	if (o) {
+	    SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
+	    if (cic)
+		code1 = cic->code();
+	}
+    }
     switch (cmd) {
 	case SS7MsgISUP::UPT:
 	case SS7MsgISUP::CVT:
@@ -3825,7 +3871,15 @@ bool SS7ISUP::control(NamedList& params)
 	    {
 		unsigned int code = params.getIntValue(YSTRING("circuit"),code1);
 		// TODO: create a test call, not just send CCR
-		SS7MsgISUP* msg = new SS7MsgISUP(SS7MsgISUP::CCR,code);
+		SS7MsgISUP* msg = 0;
+		const String& ok = params[YSTRING("success")];
+		if (ok.isBoolean()) {
+		    msg = new SS7MsgISUP(SS7MsgISUP::COT,code);
+		    msg->params().addParam("ContinuityIndicators",
+			ok.toBoolean() ? "success" : "failed");
+		}
+		else
+		    msg = new SS7MsgISUP(SS7MsgISUP::CCR,code);
 		SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
 		mylock.drop();
 		transmitMessage(msg,label,false);
@@ -3847,16 +3901,24 @@ bool SS7ISUP::control(NamedList& params)
 	case SS7MsgISUP::RLC:
 	    {
 		int code = params.getIntValue(YSTRING("circuit"));
-		SignallingMessageTimer* pending = 0;
-		if (code > 0)
-		    pending = findPendingMessage(SS7MsgISUP::RSC,code,true);
-		if (!pending)
+		if (code <= 0)
 		    return false;
-		resetCircuit((unsigned int)code,false,false);
-		TelEngine::destruct(pending);
-		SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
-		mylock.drop();
-		transmitRLC(this,code,label,false);
+		SignallingMessageTimer* pending = findPendingMessage(SS7MsgISUP::RSC,code,true);
+		if (pending) {
+		    resetCircuit((unsigned int)code,false,false);
+		    TelEngine::destruct(pending);
+		    SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
+		    mylock.drop();
+		    transmitRLC(this,code,label,false);
+		}
+		else {
+		    RefPointer<SS7ISUPCall> call;
+		    findCall(code,call);
+		    if (!call)
+			return false;
+		    mylock.drop();
+		    call->setTerminate(true,params.getValue(YSTRING("reason"),"normal"));
+		}
 	    }
 	    return true;
 	case SS7MsgISUP::UPA:
@@ -5630,7 +5692,8 @@ void SS7ISUP::replaceCircuit(unsigned int cic, const String& map, bool rel)
 	SS7ISUPCall* call = static_cast<SS7ISUPCall*>(o->get());
 	Debug(this,DebugInfo,"Replacing remotely blocked cic=%u for existing call",call->id());
 	SignallingCircuit* newCircuit = 0;
-	reserveCircuit(newCircuit,call->cicRange(),SignallingCircuit::LockLockedBusy);
+	if (call->canReplaceCircuit())
+	    reserveCircuit(newCircuit,call->cicRange(),SignallingCircuit::LockLockedBusy);
 	if (!newCircuit) {
 	    call->setTerminate(rel,"congestion",0,m_location);
 	    if (!rel) {

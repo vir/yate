@@ -37,6 +37,7 @@ const TokenDict JGRtpCandidates::s_type[] = {
     {"ice-udp", RtpIceUdp},
     {"raw-udp", RtpRawUdp},
     {"p2p",     RtpP2P},
+    {"google-raw-udp", RtpGoogleRawUdp},
     {0,0},
 };
 
@@ -158,6 +159,8 @@ const TokenDict JGSession::s_actions1[] = {
 // Session flag names
 const TokenDict JGSession::s_flagName[] = {
     {"noping",                FlagNoPing},
+    {"ringnsrtp",             FlagRingNsRtp},
+    {"nookinitiate",          FlagNoOkInitiate},
     {0,0}
 };
 
@@ -589,9 +592,13 @@ void JGRtpCandidate::fromXml(XmlElement* xml, const JGRtpCandidates& container)
 // Create a 'candidate' element from this object
 XmlElement* JGRtpCandidateP2P::toXml(const JGRtpCandidates& container) const
 {
-    if (container.m_type != JGRtpCandidates::RtpP2P)
+    if (container.m_type != JGRtpCandidates::RtpP2P &&
+	container.m_type != JGRtpCandidates::RtpGoogleRawUdp)
 	return 0;
-    XmlElement* xml = XMPPUtils::createElement(XmlTag::Candidate);
+    int ns = XMPPNamespace::Count;
+    if (container.m_type != JGRtpCandidates::RtpP2P)
+	ns = XMPPNamespace::JingleTransport;
+    XmlElement* xml = XMPPUtils::createElement(XmlTag::Candidate,ns);
     xml->setAttribute("name","rtp");
     xml->setAttributeValid("generation",m_generation);
     xml->setAttributeValid("address",m_address);
@@ -608,7 +615,8 @@ XmlElement* JGRtpCandidateP2P::toXml(const JGRtpCandidates& container) const
 // Fill this object from a candidate element
 void JGRtpCandidateP2P::fromXml(XmlElement* xml, const JGRtpCandidates& container)
 {
-    if (!xml || container.m_type != JGRtpCandidates::RtpP2P)
+    if (!xml || (container.m_type != JGRtpCandidates::RtpP2P &&
+	container.m_type != JGRtpCandidates::RtpGoogleRawUdp))
 	return;
     m_component = "1";
     m_generation = xml->attribute("generation");
@@ -635,6 +643,8 @@ XmlElement* JGRtpCandidates::toXml(bool addCandidates, bool addAuth) const
 	ns = XMPPNamespace::JingleTransportRawUdp;
     else if (m_type == RtpP2P)
 	ns = XMPPNamespace::JingleTransport;
+    else if (m_type == RtpGoogleRawUdp)
+	ns = XMPPNamespace::JingleTransportGoogleRawUdp;
     else
 	return 0;
     XmlElement* trans = XMPPUtils::createElement(XmlTag::Transport,ns);
@@ -659,22 +669,27 @@ void JGRtpCandidates::fromXml(XmlElement* element)
 	return;
     // Set transport data
     int ns = XMPPUtils::xmlns(*element);
+    int candidateNs = ns;
     if (ns == XMPPNamespace::JingleTransportIceUdp)
 	m_type = RtpIceUdp;
     else if (ns == XMPPNamespace::JingleTransportRawUdp)
 	m_type = RtpRawUdp;
     else if (ns == XMPPNamespace::JingleTransport)
 	m_type = RtpP2P;
+    else if (ns == XMPPNamespace::JingleTransportGoogleRawUdp) {
+	m_type = RtpGoogleRawUdp;
+	candidateNs = XMPPNamespace::JingleTransport;
+    }
     else
 	return;
-    if (m_type != RtpP2P) {
+    if (m_type != RtpP2P && m_type != RtpGoogleRawUdp) {
 	m_password = element->getAttribute("pwd");
 	m_ufrag = element->getAttribute("ufrag");
     }
     // Get candidates
-    XmlElement* c = XMPPUtils::findFirstChild(*element,XmlTag::Candidate,ns);
-    for (; c; c = XMPPUtils::findNextChild(*element,c,XmlTag::Candidate,ns))
-	if (m_type != RtpP2P)
+    XmlElement* c = XMPPUtils::findFirstChild(*element,XmlTag::Candidate,candidateNs);
+    for (; c; c = XMPPUtils::findNextChild(*element,c,XmlTag::Candidate,candidateNs))
+	if (candidateNs != XMPPNamespace::JingleTransport)
 	    append(new JGRtpCandidate(c,*this));
 	else
 	    append(new JGRtpCandidateP2P(c,*this));
@@ -745,7 +760,8 @@ XmlElement* JGSessionContent::toXml(bool minimum, bool addDesc,
     // Add description and transport
     XmlElement* desc = 0;
     XmlElement* trans = 0;
-    if (m_type == RtpIceUdp || m_type == RtpRawUdp || m_type == RtpP2P) {
+    if (m_type == RtpIceUdp || m_type == RtpRawUdp || m_type == RtpP2P ||
+	m_type == RtpGoogleRawUdp) {
 	// Audio content
 	if (addDesc)
 	    desc = m_rtpMedia.toXml();
@@ -868,6 +884,8 @@ JGSessionContent* JGSessionContent::fromXml(XmlElement* xml, XMPPError::Type& er
 		    content->m_type = RtpRawUdp;
 		else if (content->m_rtpRemoteCandidates.m_type == JGRtpCandidates::RtpP2P)
 		    content->m_type = RtpP2P;
+		else if (content->m_rtpRemoteCandidates.m_type == JGRtpCandidates::RtpGoogleRawUdp)
+		    content->m_type = RtpGoogleRawUdp;
 	    }
 	    else {
 		if (offer >= 0) {
@@ -1103,17 +1121,19 @@ void JGSession::buildSocksDstAddr(String& buf)
 }
 
 // Send a session info element to the remote peer
-bool JGSession::sendInfo(XmlElement* xml, String* stanzaId)
+bool JGSession::sendInfo(XmlElement* xml, String* stanzaId, XmlElement* extra)
 {
-    if (!xml)
+    if (!xml) {
+	TelEngine::destruct(extra);
 	return false;
+    }
     // Make sure we dont't terminate the session if info fails
     String tmp;
     if (!stanzaId) {
 	tmp = "Info" + String(Time::secNow());
 	stanzaId = &tmp;
     }
-    return sendStanza(createJingle(ActInfo,xml),stanzaId);
+    return sendStanza(createJingle(ActInfo,xml,extra),stanzaId);
 }
 
 // Send a dtmf string to remote peer
@@ -1326,10 +1346,23 @@ bool JGSession::sendStanza(XmlElement* stanza, String* stanzaId, bool confirmati
 	m_sid.c_str(),stanza,stanza->tag(),String::boolText(stanzaId != 0),this);
     // Check if the stanza should be added to the list of stanzas requiring confirmation
     if (confirmation && XMPPUtils::isUnprefTag(*stanza,XmlTag::Iq)) {
+	Action act = ActCount;
+	XmlElement* child = stanza->findFirstChild();
+	if (child) {
+	    act = lookupAction(child->attribute("action"),m_version);
+	    if (act == ActInfo) {
+		child = child->findFirstChild();
+		if (child) {
+		    Action over = lookupAction(child->unprefixedTag(),m_version);
+		    if (over != ActCount)
+			act = over;
+		}
+	    }
+	}
 	String id = m_localSid;
 	id << "_" << (unsigned int)m_stanzaId++;
 	JGSentStanza* sent = new JGSentStanza(id,
-	    m_engine->stanzaTimeout() + Time::msecNow(),stanzaId != 0,ping);
+	    m_engine->stanzaTimeout() + Time::msecNow(),stanzaId != 0,ping,act);
 	stanza->setAttribute("id",*sent);
 	if (stanzaId)
 	    *stanzaId = *sent;
@@ -1491,6 +1524,7 @@ JGEvent* JGSession::processJabberIqResponse(bool result, XmlElement*& xml)
     bool terminatePending = false;
     if (state() == Pending && outgoing() && !result)
 	terminatePending = !sent->notify();
+    bool notify = sent->action() == ActInitiate && result && !flag(FlagNoOkInitiate);
     // Generate event
     JGEvent* ev = 0;
     String text;
@@ -1501,11 +1535,14 @@ JGEvent* JGSession::processJabberIqResponse(bool result, XmlElement*& xml)
 	ev = new JGEvent(JGEvent::Destroy,this,xml,reason,text);
     else if (terminatePending)
 	ev = new JGEvent(JGEvent::Terminated,this,xml,reason,text);
-    else if (sent->notify())
+    else if (sent->notify() || notify) {
 	if (result)
 	    ev = new JGEvent(JGEvent::ResultOk,this,xml);
 	else
 	    ev = new JGEvent(JGEvent::ResultError,this,xml,text);
+	ev->setAction(sent->action());
+	ev->setConfirmed();
+    }
     else {
 	// Terminate on ping error
 	if (sent->ping() && !result)
@@ -1960,8 +1997,11 @@ bool JGSession1::accept(const ObjList& contents, String* stanzaId)
 XmlElement* JGSession1::createRtpInfoXml(RtpInfo info)
 {
     const char* tag = lookup(info,s_rtpInfo);
-    if (!TelEngine::null(tag))
-	return XMPPUtils::createElement(tag,XMPPNamespace::JingleAppsRtpInfo);
+    if (!TelEngine::null(tag)) {
+	if (info != RtpRinging || !flag(FlagRingNsRtp))
+	    return XMPPUtils::createElement(tag,XMPPNamespace::JingleAppsRtpInfo);
+	return XMPPUtils::createElement(tag,XMPPNamespace::JingleAppsRtp);
+    }
     return 0;
 }
 

@@ -409,7 +409,7 @@ void AsyncFFT::compute()
 
 AnalyzerCons::AnalyzerCons(const String& type, const char* window)
     : m_timeStart(0), m_tsStart(0), m_tsGapCount(0), m_tsGapLength(0),
-      m_spectrum(false), m_total(0), m_valid(0), m_analyze(false)
+      m_spectrum(0), m_total(0), m_valid(0), m_analyze(false)
 {
     DDebug(&__plugin,DebugAll,"AnalyzerCons::AnalyzerCons('%s') [%p]",
 	type.c_str(),this);

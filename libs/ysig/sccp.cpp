@@ -208,6 +208,9 @@ const TokenDict SCCPManagement::s_states[] = {
 const TokenDict s_messageReturn[] = {
     { "false", 0x00 },
     { "true",  0x08 },
+    { "yes",   0x08 },
+    { "on",    0x08 },
+    { "enable",0x08 },
     { 0, 0 }
 };
 
@@ -382,7 +385,7 @@ static bool decodeItuAddress(const SS7SCCP* sccp, NamedList& params,const SCCPPa
 	    unsigned char nai = *buffer++;
 	    length--;
 	    getDictValue(params,gtName + ".nature", nai & 0x7f,s_nai);
-	    odd = nai & 0x80;
+	    odd = (nai & 0x80) != 0;
 	} else if (gti == 0x02) { // GT includes Translation Type
 	    if (length < 1)
 		break;
@@ -3889,9 +3892,9 @@ bool SS7SCCP::routeSCLCMessage(SS7MsgSCCP*& msg, const SS7Label& label)
 	    if (val->name() != YSTRING("RemotePC"))
 		msg->params().setParam("CalledPartyAddress." + val->name(),*val);
 	}
-	if (haveRemotePC)
-	    msg->params().setParam("CalledPartyAddress.pointcode",
-		    gtRoute->getValue(YSTRING("RemotePC")));
+	int pointcode = haveRemotePC ? gtRoute->getIntValue(YSTRING("RemotePC")) :
+	    msg->params().getIntValue(YSTRING("CalledPartyAddress.pointcode"));
+
 	TelEngine::destruct(gtRoute);
 	if (msg->params().getIntValue(YSTRING("CalledPartyAddress.ssn"),-1) == 1) {
 	    Debug(this,DebugNote,"GT Routing Warn!! Message %s global title translated for management!",
@@ -3899,8 +3902,6 @@ bool SS7SCCP::routeSCLCMessage(SS7MsgSCCP*& msg, const SS7Label& label)
 	    m_errors++;
 	    return false; // Management message with global title translation
 	}
-	unsigned int pointcode = msg->params().getIntValue(
-		YSTRING("CalledPartyAddress.pointcode"),-1);
 	if (!m_localPointCode)
 	    Debug(this,DebugConf,
 		  "No local PointCode configured!! GT translations with no local PointCode may lead to undesired behavior");
@@ -3914,7 +3915,7 @@ bool SS7SCCP::routeSCLCMessage(SS7MsgSCCP*& msg, const SS7Label& label)
 	    msg->params().setParam("HopCounter",String(hopcounter));
 	}
 	// If from the translated gt resulted a pointcode other then ours forward the message
-	if (pointcode > 0 && m_localPointCode && pointcode != m_localPointCode->pack(m_type)) {
+	if (pointcode > 0 && m_localPointCode && (unsigned int)pointcode != m_localPointCode->pack(m_type)) {
 	    msg->params().setParam("RemotePC",String(pointcode));
 	    lock.drop();
 	    if (transmitMessage(msg) >= 0)

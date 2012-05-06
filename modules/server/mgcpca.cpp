@@ -96,6 +96,7 @@ protected:
     virtual bool nativeConnect(DataEndpoint* peer);
 private:
     void addParams(MGCPMessage* mm);
+    GenObject* m_this;
     MGCPTransaction* m_tr;
     RefPointer<MGCPMessage> m_msg;
     String m_connId;
@@ -271,6 +272,7 @@ private:
     bool m_needClear;
     String m_remoteRawSdp;
     // Synchronous transaction data
+    GenObject* m_this;
     MGCPTransaction* m_tr;
     RefPointer<MGCPMessage> m_msg;
 };
@@ -528,7 +530,7 @@ void YMGCPEngine::timeout(MGCPTransaction* tr)
 
 MGCPWrapper::MGCPWrapper(CallEndpoint* conn, const char* media, Message& msg, const char* epId)
     : DataEndpoint(conn,media),
-      m_tr(0), m_connEp(epId)
+      m_this(0), m_tr(0), m_connEp(epId)
 {
     Debug(&splugin,DebugAll,"MGCPWrapper::MGCPWrapper(%p,'%s','%s') [%p]",
 	conn,media,epId,this);
@@ -539,6 +541,7 @@ MGCPWrapper::MGCPWrapper(CallEndpoint* conn, const char* media, Message& msg, co
     m_master = msg.getValue(YSTRING("id"),(conn ? conn->id().c_str() : (const char*)0));
     m_audio = (name() == YSTRING("audio"));
     s_mutex.lock();
+    m_this = this;
     s_wrappers.append(this);
 //    setupRTP(localip,rtcp);
     s_mutex.unlock();
@@ -549,6 +552,7 @@ MGCPWrapper::~MGCPWrapper()
     Debug(&splugin,DebugAll,"MGCPWrapper::~MGCPWrapper() '%s' [%p]",
 	name().c_str(),this);
     s_mutex.lock();
+    m_this = 0;
     s_wrappers.remove(this,false);
     if (m_tr) {
 	m_tr->userData(0);
@@ -707,7 +711,7 @@ RefPointer<MGCPMessage> MGCPWrapper::sendSync(MGCPMessage* mm, const SocketAddr&
     }
     u_int64_t t2 = Time::msecNow();
     MGCPTransaction* tr = s_engine->sendCommand(mm,address);
-    tr->userData(static_cast<GenObject*>(this));
+    tr->userData(m_this);
     m_tr = tr;
     while (m_tr == tr)
 	Thread::idle();
@@ -1326,7 +1330,7 @@ MGCPCircuit::MGCPCircuit(unsigned int code, MGCPSpan* span, const char* id)
       SDPSession(&splugin.parser()),
       m_epId(id), m_statusReq(Missing),
       m_changing(false), m_pending(false), m_gwFormatChanged(false),
-      m_localRtpChanged(false), m_needClear(false), m_tr(0)
+      m_localRtpChanged(false), m_needClear(false), m_this(0), m_tr(0)
 {
     DDebug(&splugin,DebugAll,"MGCPCircuit::MGCPCircuit(%u,%p,'%s') [%p]",
 	code,span,id,this);
@@ -1337,6 +1341,7 @@ MGCPCircuit::MGCPCircuit(unsigned int code, MGCPSpan* span, const char* id)
     m_notify = span->ntfyId() + m_notify;
     m_gwFormat = span->bearer();
     m_owner << span->id() << "/" << code;
+    m_this = this;
 }
 
 MGCPCircuit::~MGCPCircuit()
@@ -1344,6 +1349,7 @@ MGCPCircuit::~MGCPCircuit()
     DDebug(&splugin,DebugAll,"MGCPCircuit::~MGCPCircuit() %u [%p]",
 	code(),this);
     s_mutex.lock();
+    m_this = 0;
     if (m_tr) {
 	m_tr->userData(0);
 	m_tr = 0;
@@ -1566,7 +1572,7 @@ bool MGCPCircuit::sendAsync(MGCPMessage* mm, bool notify)
 	MGCPTransaction* tr = s_engine->sendCommand(mm,ep->address());
 	if (tr) {
 	    if (notify)
-		tr->userData(static_cast<GenObject*>(this));
+		tr->userData(m_this);
 	    return true;
 	}
     }
@@ -1594,7 +1600,7 @@ RefPointer<MGCPMessage> MGCPCircuit::sendSync(MGCPMessage* mm)
     u_int64_t t2 = Time::msecNow();
     MGCPTransaction* tr = s_engine->sendCommand(mm,ep->address());
     s_mutex.lock();
-    tr->userData(static_cast<GenObject*>(this));
+    tr->userData(m_this);
     m_tr = tr;
     s_mutex.unlock();
     while (m_tr == tr)

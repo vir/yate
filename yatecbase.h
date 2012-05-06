@@ -1276,6 +1276,8 @@ public:
 	{ return m_initialized; }
     inline static Client* self()
 	{ return s_client; }
+    inline static void setSelf(Client* client)
+	{ s_client = client; }
 
     /**
      * Check if the client object still exists and the client or engine is not exiting
@@ -2379,6 +2381,15 @@ public:
 	{ return false; }
 
     /**
+     * Check presence of all necessary data to make a call
+     * @param params List of call parameters
+     * @param wnd Optional window containing the widget that triggered the action
+     * @return True on success
+     */
+    virtual bool validateCall(NamedList& params, Window* wnd = 0)
+	{ return true; }
+
+    /**
      * Called when the user trigger a call start action
      * The default logic fill the parameter list and ask the client to create an outgoing channel
      * @param params List of call parameters
@@ -2929,6 +2940,14 @@ public:
      * @return True if a channel was created and connected
      */
     virtual bool callIncoming(Message& msg, const String& dest);
+
+    /**
+     * Check presence of all necessary data to make a call
+     * @param params List of call parameters
+     * @param wnd Optional window containing the widget that triggered the action
+     * @return True on success
+     */
+    virtual bool validateCall(NamedList& params, Window* wnd = 0);
 
     /**
      * Called when the user trigger a call start action

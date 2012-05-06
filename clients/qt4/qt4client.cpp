@@ -954,7 +954,7 @@ QtWindow::QtWindow(const char* name, const char* description, const char* alias,
 QtWindow::~QtWindow()
 {
     // Update all hidden counter for tray icons owned by this window
-    QList<QSystemTrayIcon*> trayIcons = qFindChildren<QSystemTrayIcon*>(wndWidget());
+    QList<QSystemTrayIcon*> trayIcons = qFindChildren<QSystemTrayIcon*>(this);
     if (trayIcons.size() > 0) {
 	if (s_allHiddenQuit >= (unsigned int)trayIcons.size())
 	    s_allHiddenQuit -= trayIcons.size();
@@ -979,7 +979,7 @@ QtWindow::~QtWindow()
 	}
 	s_save.setValue(m_id,"visible",m_visible);
 	// Set dynamic properties to be saved for native QT objects
-	QList<QTableWidget*> tables = qFindChildren<QTableWidget*>(wndWidget());
+	QList<QTableWidget*> tables = qFindChildren<QTableWidget*>(this);
 	for (int i = 0; i < tables.size(); i++) {
 	    if (qobject_cast<QtTable*>(tables[i]))
 		continue;
@@ -1000,14 +1000,14 @@ QtWindow::~QtWindow()
 	    }
 	    tables[i]->setProperty(s_propSorting,QVariant(QtClient::setUtf8(sorting)));
 	}
-	QList<QSplitter*> spl = qFindChildren<QSplitter*>(wndWidget());
+	QList<QSplitter*> spl = qFindChildren<QSplitter*>(this);
 	for (int i = 0; i < spl.size(); i++) {
 	    String sizes;
 	    QtClient::intList2str(sizes,spl[i]->sizes());
 	    QtClient::setProperty(spl[i],s_propSizes,sizes);
 	}
 	// Save child objects properties
-	QList<QObject*> child = qFindChildren<QObject*>(wndWidget());
+	QList<QObject*> child = qFindChildren<QObject*>(this);
 	for (int i = 0; i < child.size(); i++) {
 	    NamedList props("");
 	    if (!QtClient::getProperty(child[i],s_propsSave,props))
@@ -1053,7 +1053,7 @@ bool QtWindow::setParams(const NamedList& params)
 	    if (!(nl && ns->name()))
 		continue;
 	    // Find the widget and set its params
-	    QtWidget w(wndWidget(),ns->name());
+	    QtWidget w(this,ns->name());
 	    if (w.type() == QtWidget::CustomTable)
 		ok = w.customTable()->setParams(*nl) && ok;
 	    else if (w.type() == QtWidget::CustomWidget)
@@ -1077,7 +1077,7 @@ bool QtWindow::setParams(const NamedList& params)
 	    NamedString* ns = params.getParam(i);
 	    if (!(ns && ns->name()))
 		continue;
-	    QSystemTrayIcon* trayIcon = findSysTrayIcon(wndWidget(),ns->name());
+	    QSystemTrayIcon* trayIcon = findSysTrayIcon(this,ns->name());
 	    // Delete
 	    if (ns->null()) {
 		if (trayIcon) {
@@ -1099,7 +1099,7 @@ bool QtWindow::setParams(const NamedList& params)
 	    if (!trayIcon) {
 		if (!ns->toBoolean())
 		    continue;
-		trayIcon = new QSystemTrayIcon(wndWidget());
+		trayIcon = new QSystemTrayIcon(this);
 		trayIcon->setObjectName(QtClient::setUtf8(ns->name()));
 		QtClient::connectObjects(trayIcon,SIGNAL(activated(QSystemTrayIcon::ActivationReason)),
 		    this,SLOT(sysTrayIconAction(QSystemTrayIcon::ActivationReason)));
@@ -1135,7 +1135,7 @@ bool QtWindow::setParams(const NamedList& params)
     }
     // Parameters for the widget whose name is the list name
     if(params) {
-	QtWidget w(wndWidget(), params);
+	QtWidget w(this, params);
 	// Handle UIWidget descendants
 	UIWidget* uiw = w.uiWidget();
 	if (uiw) {
@@ -1177,7 +1177,7 @@ void QtWindow::setOver(const Window* parent)
 bool QtWindow::hasElement(const String& name)
 {
     XDebug(QtDriver::self(),DebugAll,"QtWindow::hasElement(%s) [%p]",name.c_str(),this);
-    QtWidget w(wndWidget(),name);
+    QtWidget w(this,name);
     return w.valid();
 }
 
@@ -1192,7 +1192,7 @@ bool QtWindow::setActive(const String& name, bool active)
 	QWidget::activateWindow();
 	QWidget::raise();
     }
-    QtWidget w(wndWidget(),name);
+    QtWidget w(this,name);
     if (w.invalid())
 	return ok;
     if (w.type() != QtWidget::Action)
@@ -1206,7 +1206,7 @@ bool QtWindow::setFocus(const String& name, bool select)
 {
     XDebug(QtDriver::self(),DebugAll,"QtWindow::setFocus(%s,%s) [%p]",
 	name.c_str(),String::boolText(select),this);
-    QtWidget w(wndWidget(),name);
+    QtWidget w(this,name);
     if (w.invalid())
 	return false;
     w->setFocus();
@@ -1230,7 +1230,7 @@ bool QtWindow::setShow(const String& name, bool visible)
 	return true;
     }
     // Widgets
-    QtWidget w(wndWidget(),name);
+    QtWidget w(this,name);
     if (w.invalid())
 	return false;
     setUpdatesEnabled(false);
@@ -1248,7 +1248,7 @@ bool QtWindow::setText(const String& name, const String& text,
     XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) setText(%s,%s) [%p]",
 	m_id.c_str(),name.c_str(),text.c_str(),this);
 
-    QtWidget w(wndWidget(),name);
+    QtWidget w(this,name);
     if (w.invalid())
 	return false;
     UIWidget* uiw = w.uiWidget();
@@ -1304,7 +1304,7 @@ bool QtWindow::setCheck(const String& name, bool checked)
 {
     XDebug(QtDriver::self(),DebugAll,"QtWindow::setCheck(%s,%s) [%p]",
 	name.c_str(),String::boolText(checked),this);
-    QtWidget w(wndWidget(),name);
+    QtWidget w(this,name);
     if (w.invalid())
 	return false;
     if (w.inherits(QtWidget::AbstractButton))
@@ -1321,7 +1321,7 @@ bool QtWindow::setSelect(const String& name, const String& item)
     XDebug(QtDriver::self(),DebugAll,"QtWindow::setSelect(%s,%s) [%p]",
 	name.c_str(),item.c_str(),this);
 
-    QtWidget w(wndWidget(),name);
+    QtWidget w(this,name);
     if (w.invalid())
 	return false;
     UIWidget* uiw = w.uiWidget();
@@ -1412,7 +1412,7 @@ bool QtWindow::setUrgent(const String& name, bool urgent)
 	return true;
     }
 
-    QtWidget w(wndWidget(),name);
+    QtWidget w(this,name);
     if (w.invalid())
 	return false;
     w->raise();
@@ -1423,7 +1423,7 @@ bool QtWindow::hasOption(const String& name, const String& item)
 {
     XDebug(QtDriver::self(),DebugAll,"QtWindow::hasOption(%s,%s) [%p]",
 	name.c_str(),item.c_str(),this);
-    QtWidget w(wndWidget(),name);
+    QtWidget w(this,name);
     if (w.invalid())
 	return false;
     switch (w.type()) {
@@ -1444,7 +1444,7 @@ bool QtWindow::addOption(const String& name, const String& item, bool atStart,
 	m_id.c_str(),name.c_str(),item.c_str(),
 	String::boolText(atStart),text.c_str(),this);
 
-    QtWidget w(wndWidget(),name);
+    QtWidget w(this,name);
     switch (w.type()) {
 	case QtWidget::ComboBox:
 	    w.addComboItem(item,atStart);
@@ -1471,7 +1471,7 @@ bool QtWindow::getOptions(const String& name, NamedList* items)
     XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) getOptions(%s,%p) [%p]",
 	m_id.c_str(),name.c_str(),items,this);
 
-    QtWidget w(wndWidget(),name);
+    QtWidget w(this,name);
     if (w.invalid())
 	return false;
     if (!items)
@@ -1513,7 +1513,7 @@ bool QtWindow::addLines(const String& name, const NamedList* lines, unsigned int
     DDebug(ClientDriver::self(),DebugAll,"QtWindow(%s) addLines('%s',%p,%u,%s) [%p]",
 	m_id.c_str(),name.c_str(),lines,max,String::boolText(atStart),this);
 
-    QtWidget w(wndWidget(),name);
+    QtWidget w(this,name);
     if (w.invalid())
 	return false;
     if (!lines)
@@ -1596,7 +1596,7 @@ bool QtWindow::addTableRow(const String& name, const String& item,
     XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) addTableRow(%s,%s,%p,%s) [%p]",
 	m_id.c_str(),name.c_str(),item.c_str(),data,String::boolText(atStart),this);
 
-    QtWidget w(wndWidget(),name);
+    QtWidget w(this,name);
     if (w.invalid())
 	return false;
     UIWidget* uiw = w.uiWidget();
@@ -1621,7 +1621,7 @@ bool QtWindow::setMultipleRows(const String& name, const NamedList& data, const 
     XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) setMultipleRows('%s',%p,'%s') [%p]",
 	m_id.c_str(),name.c_str(),&data,prefix.c_str(),this);
 
-    QtWidget w(wndWidget(),name);
+    QtWidget w(this,name);
     if (w.invalid())
 	return false;
     UIWidget* uiw = w.uiWidget();
@@ -1635,7 +1635,7 @@ bool QtWindow::insertTableRow(const String& name, const String& item,
     XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) insertTableRow(%s,%s,%s,%p) [%p]",
 	m_id.c_str(),name.c_str(),item.c_str(),before.c_str(),data,this);
 
-    QtWidget w(wndWidget(),name);
+    QtWidget w(this,name);
     if (w.invalid())
 	return false;
     UIWidget* uiw = w.uiWidget();
@@ -1659,7 +1659,7 @@ bool QtWindow::delTableRow(const String& name, const String& item)
 {
     XDebug(QtDriver::self(),DebugAll,"QtWindow::delTableRow(%s,%s) [%p]",
 	name.c_str(),item.c_str(),this);
-    QtWidget w(wndWidget(),name);
+    QtWidget w(this,name);
     if (w.invalid())
 	return false;
     int row = -1;
@@ -1718,7 +1718,7 @@ bool QtWindow::setTableRow(const String& name, const String& item, const NamedLi
     XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) setTableRow(%s,%s,%p) [%p]",
 	m_id.c_str(),name.c_str(),item.c_str(),data,this);
 
-    QtWidget w(wndWidget(),name);
+    QtWidget w(this,name);
     if (w.invalid())
 	return false;
     UIWidget* uiw = w.uiWidget();
@@ -1740,7 +1740,7 @@ bool QtWindow::getTableRow(const String& name, const String& item, NamedList* da
     XDebug(QtDriver::self(),DebugAll,"QtWindow::getTableRow(%s,%s,%p) [%p]",
 	name.c_str(),item.c_str(),data,this);
 
-    QtWidget w(wndWidget(),name);
+    QtWidget w(this,name);
     if (w.invalid())
 	return false;
     UIWidget* uiw = w.uiWidget();
@@ -1772,7 +1772,7 @@ bool QtWindow::updateTableRow(const String& name, const String& item,
 {
     XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) updateTableRow('%s','%s',%p,%s) [%p]",
 	m_id.c_str(),name.c_str(),item.c_str(),data,String::boolText(atStart),this);
-    QtWidget w(wndWidget(),name);
+    QtWidget w(this,name);
     if (w.invalid())
 	return false;
     switch (w.type()) {
@@ -1817,7 +1817,7 @@ bool QtWindow::updateTableRows(const String& name, const NamedList* data, bool a
     XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) updateTableRows('%s',%p,%s) [%p]",
 	m_id.c_str(),name.c_str(),data,String::boolText(atStart),this);
 
-    QtWidget w(wndWidget(),name);
+    QtWidget w(this,name);
     if (w.invalid())
 	return false;
     UIWidget* uiw = w.uiWidget();
@@ -1893,7 +1893,7 @@ bool QtWindow::updateTableRows(const String& name, const NamedList* data, bool a
 bool QtWindow::clearTable(const String& name)
 {
     DDebug(QtDriver::self(),DebugAll,"QtWindow::clearTable(%s) [%p]",name.c_str(),this);
-    QtWidget w(wndWidget(),name);
+    QtWidget w(this,name);
     if (w.invalid())
 	return false;
     UIWidget* uiw = w.uiWidget();
@@ -1928,7 +1928,7 @@ bool QtWindow::getText(const String& name, String& text, bool richText)
 {
     XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) getText(%s) [%p]",
 	m_id.c_str(),name.c_str(),this);
-    QtWidget w(wndWidget(),name);
+    QtWidget w(this,name);
     if (w.invalid())
 	return false;
     UIWidget* uiw = w.uiWidget();
@@ -1970,7 +1970,7 @@ bool QtWindow::getCheck(const String& name, bool& checked)
 {
     DDebug(QtDriver::self(),DebugAll,"QtWindow::getCheck(%s) [%p]",name.c_str(),this);
 
-    QtWidget w(wndWidget(),name);
+    QtWidget w(this,name);
     if (w.invalid())
 	return false;
     if (w.inherits(QtWidget::AbstractButton))
@@ -1985,7 +1985,7 @@ bool QtWindow::getCheck(const String& name, bool& checked)
 bool QtWindow::getSelect(const String& name, String& item)
 {
     XDebug(QtDriver::self(),DebugAll,"QtWindow::getSelect(%s) [%p]",name.c_str(),this);
-    QtWidget w(wndWidget(),name);
+    QtWidget w(this,name);
     if (w.invalid())
 	return false;
     UIWidget* uiw = w.uiWidget();
@@ -2040,11 +2040,11 @@ bool QtWindow::getSelect(const String& name, String& item)
 // Build a menu from a list of parameters
 bool QtWindow::buildMenu(const NamedList& params)
 {
-    QWidget* parent = wndWidget();
+    QWidget* parent = this;
     // Retrieve the owner
     const String& owner = params[YSTRING("owner")];
     if (owner && owner != m_id) {
-	parent = qFindChild<QWidget*>(wndWidget(),QtClient::setUtf8(owner));
+	parent = qFindChild<QWidget*>(this,QtClient::setUtf8(owner));
 	if (!parent) {
 	    DDebug(QtDriver::self(),DebugNote,
 		"QtWindow(%s) buildMenu(%s) owner '%s' not found [%p]",
@@ -2055,7 +2055,7 @@ bool QtWindow::buildMenu(const NamedList& params)
     QWidget* target = parent;
     const String& t = params[YSTRING("target")];
     if (t) {
-	target = qFindChild<QWidget*>(wndWidget(),QtClient::setUtf8(t));
+	target = qFindChild<QWidget*>(this,QtClient::setUtf8(t));
 	if (!target) {
 	    DDebug(QtDriver::self(),DebugNote,
 		"QtWindow(%s) buildMenu(%s) target '%s' not found [%p]",
@@ -2119,11 +2119,11 @@ bool QtWindow::buildMenu(const NamedList& params)
 // Remove a menu
 bool QtWindow::removeMenu(const NamedList& params)
 {
-    QWidget* parent = wndWidget();
+    QWidget* parent = this;
     // Retrieve the owner
     const String& owner = params[YSTRING("owner")];
     if (owner && owner != m_id) {
-	parent = qFindChild<QWidget*>(wndWidget(),QtClient::setUtf8(owner));
+	parent = qFindChild<QWidget*>(this,QtClient::setUtf8(owner));
 	if (!parent)
 	    return false;
     }
@@ -2141,7 +2141,7 @@ bool QtWindow::setImage(const String& name, const String& image, bool fit)
 	return false;
     if (name == m_id)
 	return QtClient::setImage(this,image);
-    QObject* obj = qFindChild<QObject*>(wndWidget(),QtClient::setUtf8(name));
+    QObject* obj = qFindChild<QObject*>(this,QtClient::setUtf8(name));
     return obj && QtClient::setImage(obj,image,fit);
 }
 
@@ -2150,7 +2150,7 @@ bool QtWindow::setProperty(const String& name, const String& item, const String&
 {
     if (name == m_id)
 	return QtClient::setProperty(wndWidget(),item,value);
-    QObject* obj = qFindChild<QObject*>(wndWidget(),QtClient::setUtf8(name));
+    QObject* obj = qFindChild<QObject*>(this,QtClient::setUtf8(name));
     return obj ? QtClient::setProperty(obj,item,value) : false;
 }
 
@@ -2159,7 +2159,7 @@ bool QtWindow::getProperty(const String& name, const String& item, String& value
 {
     if (name == m_id)
 	return QtClient::getProperty(wndWidget(),item,value);
-    QObject* obj = qFindChild<QObject*>(wndWidget(),QtClient::setUtf8(name));
+    QObject* obj = qFindChild<QObject*>(this,QtClient::setUtf8(name));
     return obj ? QtClient::getProperty(obj,item,value) : false;
 }
 
@@ -2592,10 +2592,10 @@ void QtWindow::keyPressEvent(QKeyEvent* event)
 	QWidget::keyPressEvent(event);
 	return;
     }
-    QVariant var = wndWidget()->property("_yate_keypress_redirect");
+    QVariant var = this->property("_yate_keypress_redirect");
     QString child = var.toString();
     if (child.size() > 0 && QtClient::sendEvent(*event,this,child)) {
-	QWidget* wid = qFindChild<QWidget*>(wndWidget(),child);
+	QWidget* wid = qFindChild<QWidget*>(this,child);
 	if (wid)
 	    wid->setFocus();
 	return;
@@ -2634,8 +2634,8 @@ void QtWindow::setVisible(bool visible)
     m_visible = visible;
     if (changed && Client::self()) {
 	QVariant var;
-	if (wndWidget())
-	    var = wndWidget()->property("dynamicUiActionVisibleChanged");
+	if (this)
+	    var = this->property("dynamicUiActionVisibleChanged");
 	if (!var.toBool())
 	    Client::self()->toggle(this,YSTRING("window_visible_changed"),m_visible);
 	else {
@@ -2705,7 +2705,7 @@ void QtWindow::menu(int x, int y)
 bool QtWindow::createDialog(const String& name, const String& title, const String& alias,
     const NamedList* params)
 {
-    QtDialog* d = new QtDialog(wndWidget());
+    QtDialog* d = new QtDialog(this);
     if (d->show(name,title,alias,params))
 	return true;
     d->deleteLater();
@@ -2766,7 +2766,7 @@ void QtWindow::doInit()
     Configuration cfg(Engine::configFile(m_oldId),false);
     NamedList* sectGeneral = cfg.getSection("general");
     if (sectGeneral)
-	addDynamicProps(wndWidget(),*sectGeneral);
+	addDynamicProps(this,*sectGeneral);
 
     // Load window data
     m_mainWindow = s_cfg.getBoolValue(m_oldId,"mainwindow");
@@ -2797,9 +2797,9 @@ void QtWindow::doInit()
     }
     m_visible = m_mainWindow || m_visible;
     if (!m_width)
-	m_width = wndWidget()->width();
+	m_width = this->width();
     if (!m_height)
-	m_height = wndWidget()->height();
+	m_height = this->height();
     move(m_x,m_y);
     QWidget::resize(m_width,m_height);
 
@@ -2808,7 +2808,7 @@ void QtWindow::doInit()
 
     // Create custom widgets from
     // _yate_identity=customwidget|[separator=sep|] sep widgetclass sep widgetname [sep param=value]
-    QList<QFrame*> frm = qFindChildren<QFrame*>(wndWidget());
+    QList<QFrame*> frm = qFindChildren<QFrame*>(this);
     for (int i = 0; i < frm.size(); i++) {
 	String create;
 	QtClient::getProperty(frm[i],"_yate_identity",create);
@@ -2860,16 +2860,48 @@ void QtWindow::doInit()
     }
 
     // Add the first menubar to layout
-    QList<QMenuBar*> menuBars = qFindChildren<QMenuBar*>(wndWidget());
+    QList<QMenuBar*> menuBars = qFindChildren<QMenuBar*>(this);
     if (menuBars.size() && layout()) {
 	layout()->setMenuBar(menuBars[0]);
 	// Decrease minimum size policy to make sure the layout is made properly
-	int h = menuBars[0]->height();
-	int min = wndWidget()->minimumHeight();
-	if (min > h)
-	    wndWidget()->setMinimumHeight(min - h);
-	else
-	    wndWidget()->setMinimumHeight(0);
+	if (wndWidget()) {
+	    int h = menuBars[0]->height();
+	    int min = wndWidget()->minimumHeight();
+	    if (min > h)
+		wndWidget()->setMinimumHeight(min - h);
+	    else
+		wndWidget()->setMinimumHeight(0);
+	}
+#ifdef Q_WS_MAC
+	if (m_mainWindow) {
+	    // Create a parentless menu bar to be set as the default application menu by copying it from the main window menu
+	    DDebug(QtDriver::self(),DebugAll,"Setting as default menu bar the menu bar of window '%s' [%p]",
+	    m_id.c_str(),this);
+	    QMenuBar* mainMenu = menuBars[0];
+	    QMenuBar* defaultMenu = new QMenuBar(0);
+	    QList<QAction*> topActions = mainMenu->actions();
+	    for (int i = 0; i < topActions.count(); i++) {
+		QMenu* menu = topActions[i]->menu();
+		if (menu) {
+		    QMenu* m = new QMenu(menu->title(),defaultMenu);
+		    String tmp;
+		    QtClient::getProperty(menu,YSTRING("_yate_menuNoCopy"),tmp);
+		    if (tmp.toBoolean())
+			continue;
+		    defaultMenu->addMenu(m);
+		    QList<QAction*> actions = menu->actions();
+		    for (int j = 0; j < actions.count(); j++) {
+			QAction* act = actions[j];
+			tmp.clear();
+			QtClient::getProperty(act,YSTRING("_yate_menuNoCopy"),tmp);
+			if (tmp.toBoolean())
+			    continue;
+			m->addAction(act);
+		    }
+		}
+	    }
+	}
+#endif
     }
 
     // Create window's children dynamic properties from config
@@ -2884,7 +2916,7 @@ void QtWindow::doInit()
     QtClient::setAction(this);
 
     // Connect actions' signal
-    QList<QAction*> actions = qFindChildren<QAction*>(wndWidget());
+    QList<QAction*> actions = qFindChildren<QAction*>(this);
     for (int i = 0; i < actions.size(); i++) {
 	String addToWidget;
 	QtClient::getProperty(actions[i],"dynamicAddToParent",addToWidget);
@@ -2897,36 +2929,36 @@ void QtWindow::doInit()
     }
 
     // Connect combo boxes signals
-    QList<QComboBox*> combos = qFindChildren<QComboBox*>(wndWidget());
+    QList<QComboBox*> combos = qFindChildren<QComboBox*>(this);
     for (int i = 0; i < combos.size(); i++) {
 	QtClient::connectObjects(combos[i],SIGNAL(activated(int)),this,SLOT(selectionChanged()));
     	connectTextChanged(combos[i]);
     }
 
     // Connect abstract buttons (check boxes and radio/push/tool buttons) signals
-    QList<QAbstractButton*> buttons = qFindChildren<QAbstractButton*>(wndWidget());
+    QList<QAbstractButton*> buttons = qFindChildren<QAbstractButton*>(this);
     for(int i = 0; i < buttons.size(); i++)
 	if (QtClient::autoConnect(buttons[i]))
 	    connectButton(buttons[i]);
 
     // Connect group boxes signals
-    QList<QGroupBox*> grp = qFindChildren<QGroupBox*>(wndWidget());
+    QList<QGroupBox*> grp = qFindChildren<QGroupBox*>(this);
     for(int i = 0; i < grp.size(); i++)
 	if (grp[i]->isCheckable())
 	    QtClient::connectObjects(grp[i],SIGNAL(toggled(bool)),this,SLOT(toggled(bool)));
 
     // Connect sliders signals
-    QList<QSlider*> sliders = qFindChildren<QSlider*>(wndWidget());
+    QList<QSlider*> sliders = qFindChildren<QSlider*>(this);
     for (int i = 0; i < sliders.size(); i++)
 	QtClient::connectObjects(sliders[i],SIGNAL(valueChanged(int)),this,SLOT(selectionChanged()));
 
     // Connect calendar widget signals
-    QList<QCalendarWidget*> cals = qFindChildren<QCalendarWidget*>(wndWidget());
+    QList<QCalendarWidget*> cals = qFindChildren<QCalendarWidget*>(this);
     for (int i = 0; i < cals.size(); i++)
 	QtClient::connectObjects(cals[i],SIGNAL(selectionChanged()),this,SLOT(selectionChanged()));
 
     // Connect list boxes signals
-    QList<QListWidget*> lists = qFindChildren<QListWidget*>(wndWidget());
+    QList<QListWidget*> lists = qFindChildren<QListWidget*>(this);
     for (int i = 0; i < lists.size(); i++) {
 	QtClient::connectObjects(lists[i],SIGNAL(itemDoubleClicked(QListWidgetItem*)),
 	    this,SLOT(doubleClick()));
@@ -2937,29 +2969,29 @@ void QtWindow::doInit()
     }
 
     // Connect tab widget signals
-    QList<QTabWidget*> tabs = qFindChildren<QTabWidget*>(wndWidget());
+    QList<QTabWidget*> tabs = qFindChildren<QTabWidget*>(this);
     for (int i = 0; i < tabs.size(); i++)
 	QtClient::connectObjects(tabs[i],SIGNAL(currentChanged(int)),this,SLOT(selectionChanged()));
 
     // Connect stacked widget signals
-    QList<QStackedWidget*> sw = qFindChildren<QStackedWidget*>(wndWidget());
+    QList<QStackedWidget*> sw = qFindChildren<QStackedWidget*>(this);
     for (int i = 0; i < sw.size(); i++)
 	QtClient::connectObjects(sw[i],SIGNAL(currentChanged(int)),this,SLOT(selectionChanged()));
 
     // Connect line edit signals
-    QList<QLineEdit*> le = qFindChildren<QLineEdit*>(wndWidget());
+    QList<QLineEdit*> le = qFindChildren<QLineEdit*>(this);
     for (int i = 0; i < le.size(); i++)
 	connectTextChanged(le[i]);
 
     // Connect text edit signals
-    QList<QTextEdit*> te = qFindChildren<QTextEdit*>(wndWidget());
+    QList<QTextEdit*> te = qFindChildren<QTextEdit*>(this);
     for (int i = 0; i < te.size(); i++)
 	connectTextChanged(te[i]);
 
     // Process tables:
     // Insert a column and connect signals
     // Hide columns starting with "hidden:"
-    QList<QTableWidget*> tables = qFindChildren<QTableWidget*>(wndWidget());
+    QList<QTableWidget*> tables = qFindChildren<QTableWidget*>(this);
     for (int i = 0; i < tables.size(); i++) {
 	bool nonCustom = (0 == qobject_cast<QtTable*>(tables[i]));
 	// Horizontal header
@@ -3071,8 +3103,8 @@ void QtWindow::doInit()
     }
 
     // Install event filter and apply dynamic properties
-    QList<QObject*> w = qFindChildren<QObject*>(wndWidget());
-    w.append(wndWidget());
+    QList<QObject*> w = qFindChildren<QObject*>(this);
+    w.append(this);
     for (int i = 0; i < w.size(); i++) {
 	QList<QByteArray> props = w[i]->dynamicPropertyNames();
 	// Check for our dynamic properties
@@ -3152,7 +3184,7 @@ bool QtWindow::handleContextMenuEvent(QContextMenuEvent* event, QObject* obj)
     XDebug(ClientDriver::self(),DebugAll,
 	"Window(%s) handleContextMenuEvent() obj=%s menu=%s [%p]",
 	m_id.c_str(),YQT_OBJECT_NAME(obj),mname.c_str(),this);
-    QMenu* m = mname ? qFindChild<QMenu*>(wndWidget(),QtClient::setUtf8(mname)) : 0;
+    QMenu* m = mname ? qFindChild<QMenu*>(this,QtClient::setUtf8(mname)) : 0;
     if (m)
 	m->exec(event->globalPos());
     return m != 0;
@@ -3308,7 +3340,8 @@ void QtClient::cleanup()
     Client::save(s_save);
     QtWindow::clearUICache();
     m_app->quit();
-    delete m_app;
+    if (!m_app->startingUp())
+	delete m_app;
 }
 
 void QtClient::run()
@@ -3333,12 +3366,15 @@ void QtClient::run()
     // Create events proxy
     m_events.append(new QtEventProxy(QtEventProxy::Timer));
     m_events.append(new QtEventProxy(QtEventProxy::AllHidden,m_app));
+    if (Engine::exiting())
+	return;
     Client::run();
 }
 
 void QtClient::main()
 {
-    m_app->exec();
+    if (!Engine::exiting())
+	m_app->exec();
 }
 
 void QtClient::lock()
@@ -4293,7 +4329,7 @@ void QtDriver::initialize()
     s_device = Engine::config().getValue("client","device",DEFAULT_DEVICE);
     if (!QtClient::self()) {
 	debugCopy();
-	new QtClient;
+	QtClient::setSelf(new QtClient);
 	if (m_clientThread)
 	    QtClient::self()->startup();
     }

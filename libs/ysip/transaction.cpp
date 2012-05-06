@@ -426,7 +426,7 @@ SIPTransaction::Processed SIPTransaction::processMessage(SIPMessage* message, co
 #ifdef SIP_STRICT
 		return NoMatch;
 #else
-		Debug(getEngine(),DebugMild,"Received non-branch ACK to non-2xx response! (sender bug)");
+		Debug(getEngine(),DebugNote,"Received non-branch ACK to non-2xx response! (sender bug)");
 #endif
 	    DDebug(getEngine(),DebugAll,"SIPTransaction found non-branch ACK response to our 2xx");
 	}
@@ -437,7 +437,7 @@ SIPTransaction::Processed SIPTransaction::processMessage(SIPMessage* message, co
 #ifdef SIP_STRICT
 		return NoMatch;
 #else
-		Debug(getEngine(),DebugMild,"Received branch ACK to 2xx response! (sender bug)");
+		Debug(getEngine(),DebugNote,"Received branch ACK to 2xx response! (sender bug)");
 #endif
 	}
     }

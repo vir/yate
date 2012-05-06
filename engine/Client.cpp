@@ -918,8 +918,6 @@ Client::Client(const char *name)
     : m_initialized(false), m_line(0), m_oneThread(true),
     m_defaultLogic(0), m_clientThread(0)
 {
-    s_client = this;
-
     // Set default options
     for (unsigned int i = 0; i < OptCount; i++)
 	m_toggles[i] = false;

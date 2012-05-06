@@ -2,9 +2,9 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="8.00"
-	Name="_mgcpca"
-	ProjectGUID="{715276DA-C422-9983-5C31-8DE434B610BC}"
-	RootNamespace="_mgcpca"
+	Name="_gvoice"
+	ProjectGUID="{2BA80F84-2AD3-4730-1AB2-2ABB5C9217A7}"
+	RootNamespace="_gvoice"
 	>
 	<Platforms>
 		<Platform
@@ -16,7 +16,7 @@
 	<Configurations>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory=".\Release\server"
+			OutputDirectory=".\Release"
 			IntermediateDirectory=".\Release\modules"
 			ConfigurationType="2"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
@@ -42,19 +42,19 @@
 				MkTypLibCompatible="true"
 				SuppressStartupBanner="true"
 				TargetEnvironment="1"
-				TypeLibraryName=".\Release/_mgcpca.tlb"
+				TypeLibraryName=".\Release/_gvoice.tlb"
 				HeaderFileName=""
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				InlineFunctionExpansion="1"
-				AdditionalIncludeDirectories=".,..,..\libs\ymgcp,..\libs\ysdp,..\libs\ysig"
-				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;_USRDLL;LIBYSDP_STATIC;_CRT_SECURE_NO_DEPRECATE"
+				AdditionalIncludeDirectories=".,.."
+				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;_USRDLL"
 				StringPooling="true"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
-				PrecompiledHeaderFile=".\Release\modules/_mgcpca.pch"
+				PrecompiledHeaderFile=".\Release\modules/_gvoice.pch"
 				AssemblerListingLocation=".\Release\modules/"
 				ObjectFile=".\Release\modules/"
 				ProgramDataBaseFileName=".\Release\modules/"
@@ -75,12 +75,11 @@
 			<Tool
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
-				AdditionalDependencies="Release/libymgcp.lib"
-				OutputFile="Release/server/mgcpca.yate"
+				OutputFile="Release/gvoice.yate"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
-				ProgramDatabaseFile=".\Release/mgcpca.pdb"
-				ImportLibrary=".\Release/mgcpca.lib"
+				ProgramDatabaseFile=".\Release/gvoice.pdb"
+				ImportLibrary=".\Release/gvoice.lib"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -95,7 +94,7 @@
 			<Tool
 				Name="VCBscMakeTool"
 				SuppressStartupBanner="true"
-				OutputFile=".\Release/_mgcpca.bsc"
+				OutputFile=".\Release/_gvoice.bsc"
 			/>
 			<Tool
 				Name="VCFxCopTool"
@@ -112,7 +111,7 @@
 		</Configuration>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory=".\Debug\server"
+			OutputDirectory=".\Debug"
 			IntermediateDirectory=".\Debug\modules"
 			ConfigurationType="2"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
@@ -138,18 +137,18 @@
 				MkTypLibCompatible="true"
 				SuppressStartupBanner="true"
 				TargetEnvironment="1"
-				TypeLibraryName=".\Debug/_mgcpca.tlb"
+				TypeLibraryName=".\Debug/_gvoice.tlb"
 				HeaderFileName=""
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories=".,..,..\libs\ymgcp,..\libs\ysdp,..\libs\ysig"
-				PreprocessorDefinitions="_DEBUG;WIN32;_WINDOWS;_USRDLL;LIBYSDP_STATIC;_CRT_SECURE_NO_DEPRECATE"
+				AdditionalIncludeDirectories=".,.."
+				PreprocessorDefinitions="_DEBUG;WIN32;_WINDOWS;_USRDLL"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
-				PrecompiledHeaderFile=".\Debug\modules/_mgcpca.pch"
+				PrecompiledHeaderFile=".\Debug\modules/_gvoice.pch"
 				AssemblerListingLocation=".\Debug\modules/"
 				ObjectFile=".\Debug\modules/"
 				ProgramDataBaseFileName=".\Debug\modules/"
@@ -171,13 +170,12 @@
 			<Tool
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
-				AdditionalDependencies="Debug/libymgcp.lib"
-				OutputFile="Debug/server/mgcpca.yate"
+				OutputFile="Debug/gvoice.yate"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				GenerateDebugInformation="true"
-				ProgramDatabaseFile=".\Debug/mgcpca.pdb"
-				ImportLibrary=".\Debug/mgcpca.lib"
+				ProgramDatabaseFile=".\Debug/gvoice.pdb"
+				ImportLibrary=".\Debug/gvoice.lib"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -192,7 +190,7 @@
 			<Tool
 				Name="VCBscMakeTool"
 				SuppressStartupBanner="true"
-				OutputFile=".\Debug/_mgcpca.bsc"
+				OutputFile=".\Debug/_gvoice.bsc"
 			/>
 			<Tool
 				Name="VCFxCopTool"
@@ -216,26 +214,8 @@
 			Filter="cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 			>
 			<File
-				RelativePath="..\modules\server\mgcpca.cpp"
+				RelativePath="..\modules\gvoice.cpp"
 				>
-				<FileConfiguration
-					Name="Release|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						AdditionalIncludeDirectories=""
-						PreprocessorDefinitions=""
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="Debug|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						AdditionalIncludeDirectories=""
-						PreprocessorDefinitions=""
-					/>
-				</FileConfiguration>
 			</File>
 		</Filter>
 		<Filter

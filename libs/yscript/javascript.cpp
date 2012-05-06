@@ -83,6 +83,7 @@ public:
 	OpcTrue,
 	OpcFalse,
 	OpcInclude,
+	OpcRequire,
     };
     inline JsCode()
 	: ExpEvaluator(C), m_label(0), m_depth(0)
@@ -99,6 +100,8 @@ public:
     virtual bool initialize(ScriptContext* context) const;
     virtual bool evaluate(ScriptRun& runner, ObjList& results) const;
     bool link();
+    JsObject* parseArray(const char*& expr, bool constOnly);
+    JsObject* parseObject(const char*& expr, bool constOnly);
 protected:
     virtual bool keywordChar(char c) const;
     virtual int getKeyword(const char* str) const;
@@ -118,7 +121,8 @@ protected:
     virtual bool runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context) const;
 private:
     ObjVector m_linked;
-    bool preProcessInclude(const char*& expr, GenObject* context);
+    ObjList m_included;
+    bool preProcessInclude(const char*& expr, bool once, GenObject* context);
     bool evalList(ObjList& stack, GenObject* context) const;
     bool evalVector(ObjList& stack, GenObject* context) const;
     bool jumpToLabel(long int label, GenObject* context) const;
@@ -196,6 +200,7 @@ static const TokenDict s_bools[] =
 static const TokenDict s_preProc[] =
 {
     MAKEOP("#include", Include),
+    MAKEOP("#require", Require),
     { 0, 0 }
 };
 #undef MAKEOP
@@ -427,7 +432,7 @@ char JsCode::skipComments(const char*& expr, GenObject* context) const
     return c;
 }
 
-bool JsCode::preProcessInclude(const char*& expr, GenObject* context)
+bool JsCode::preProcessInclude(const char*& expr, bool once, GenObject* context)
 {
     if (m_depth > 5)
 	return gotError("Possible recursive include");
@@ -444,9 +449,18 @@ bool JsCode::preProcessInclude(const char*& expr, GenObject* context)
 	    String str(start,expr-start-1);
 	    DDebug(this,DebugAll,"Found include '%s'",str.safe());
 	    parser->adjustPath(str);
-	    m_depth++;
-	    bool ok = parser->parseFile(str,true);
-	    m_depth--;
+	    str.trimSpaces();
+	    bool ok = !str.null();
+	    if (ok) {
+		bool already = m_included.find(str);
+		if (!(once && already)) {
+		    m_depth++;
+		    ok = parser->parseFile(str,true);
+		    m_depth--;
+		    if (ok && !already)
+			m_included.append(new String(str));
+		}
+	    }
 	    return ok || gotError("Failed to include " + str);
 	}
 	expr--;
@@ -459,9 +473,11 @@ int JsCode::preProcess(const char*& expr, GenObject* context)
 {
     int rval = -1;
     for (;;) {
-	switch ((JsOpcode)ExpEvaluator::getOperator(expr,s_preProc)) {
+	JsOpcode opc = (JsOpcode)ExpEvaluator::getOperator(expr,s_preProc);
+	switch (opc) {
 	    case OpcInclude:
-		if (preProcessInclude(expr,context)) {
+	    case OpcRequire:
+		if (preProcessInclude(expr,(OpcRequire == opc),context)) {
 		    if (rval < 0)
 			rval = 1;
 		    else
@@ -729,6 +745,31 @@ bool JsCode::getSeparator(const char*& expr, bool remove)
 	    return true;
     }
     return ExpEvaluator::getSeparator(expr,remove);
+}
+
+// Parse an inline Javascript [ array ]
+JsObject* JsCode::parseArray(const char*& expr, bool constOnly)
+{
+    if (skipComments(expr) != '[')
+	return 0;
+    expr++;
+    JsObject* jso = new JsObject;
+    if (skipComments(expr) != ']')
+	TelEngine::destruct(jso);
+    return jso;
+}
+
+
+// Parse an inline Javascript { object }
+JsObject* JsCode::parseObject(const char*& expr, bool constOnly)
+{
+    if (skipComments(expr) != '{')
+	return 0;
+    expr++;
+    JsObject* jso = new JsObject;
+    if (skipComments(expr) != '}')
+	TelEngine::destruct(jso);
+    return jso;
 }
 
 bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* context) const
@@ -1096,6 +1137,15 @@ ScriptRun::Status JsParser::eval(const String& text, ExpOperation** result, Scri
 	*result = ExpEvaluator::popOne(runner->stack());
     TelEngine::destruct(runner);
     return rval;
+}
+
+// Parse JSON using native methods
+JsObject* JsParser::parseJSON(const char* text)
+{
+    JsCode* code = new JsCode;
+    JsObject* jso = code->parseObject(text,true);
+    TelEngine::destruct(code);
+    return jso;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

@@ -647,9 +647,9 @@ bool FSKModem::demodulate(const DataBlock& data)
 	    if (bit >= 0) {
 #ifdef YMODEM_BUFFER_BITS
 		if (m_bits)
-		    m_bits->accumulate(bit);
+		    m_bits->accumulate(bit != 0);
 #endif
-		m_terminated = !m_uart->recvBit(bit);
+		m_terminated = !m_uart->recvBit(bit != 0);
 	    }
 	}
 	break;

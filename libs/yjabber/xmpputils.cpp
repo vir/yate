@@ -106,6 +106,7 @@ const String XMPPNamespace::s_array[Count] = {
     "jabber:x:data",                                       // XData
     "http://jabber.org/protocol/chatstates",               // ChatStates
     "http://yate.null.ro/yate/cluster",                    // YateCluster
+    "http://www.google.com/transport/raw-udp",             // JingleTransportGoogleRawUdp
 };
 
 const String XMPPError::s_array[Count] = {

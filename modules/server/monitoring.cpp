@@ -356,8 +356,10 @@ protected:
  {
  public:
     enum TrunkExtraInfo {
-    	CIRCUITS	= 7,
-	CALLS		= 8,
+    	CIRCUITS	=  7,
+	CALLS		=  8,
+	LOCKED		=  9,
+	IDLE		= 10,
     };
     // Constructor
     inline TrunkInfo()
@@ -1145,6 +1147,8 @@ static TokenDict s_categories[] = {
     {"trunkCircuitCount",	Monitor::TRUNKS},
     {"trunkCurrentCallsCount",	Monitor::TRUNKS},
     {"trunkDownAlarms",		Monitor::TRUNKS},
+    {"trunkCircuitsLocked",	Monitor::TRUNKS},
+    {"trunkCircuitsIdle",	Monitor::TRUNKS},
     // engine info
     {"plugins",			Monitor::ENGINE},
     {"handlers",		Monitor::ENGINE},
@@ -1292,6 +1296,8 @@ TokenDict TrunkInfo::s_trunkInfo[] = {
     {"trunkCircuitCount",	TrunkInfo::CIRCUITS},
     {"trunkCurrentCallsCount",	TrunkInfo::CALLS},
     {"trunkDownAlarms",		TrunkInfo::ALARMS_COUNT},
+    {"trunkCircuitsLocked",	TrunkInfo::LOCKED},
+    {"trunkCircuitsIdle",	TrunkInfo::IDLE},
     {0,0}
 };
 
@@ -1300,8 +1306,10 @@ TokenDict TrunkInfo::s_trunkStatus[] = {
     {"trunk",       TrunkInfo::ID},
     {"type",	    TrunkInfo::TYPE},
     {"circuits",    TrunkInfo::CIRCUITS},
-    {"calls",	    TrunkInfo::CALLS},
+    {"calls",       TrunkInfo::CALLS},
     {"status",      TrunkInfo::STATUS},
+    {"locked",      TrunkInfo::LOCKED},
+    {"idle",        TrunkInfo::IDLE},
     {0,0}
 };
 
@@ -2046,6 +2054,8 @@ void TrunkInfo::discard()
 	nl->setParam(lookup(TYPE,s_trunkInfo,""),"");
 	nl->setParam(lookup(CIRCUITS,s_trunkInfo,""),"0");
 	nl->setParam(lookup(CALLS,s_trunkInfo,""),"0");
+	nl->setParam(lookup(LOCKED,s_trunkInfo,""),"0");
+	nl->setParam(lookup(IDLE,s_trunkInfo,""),"0");
     }
     m_reload = true;
 }

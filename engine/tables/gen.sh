@@ -1,6 +1,6 @@
 #! /bin/sh
 
-awk -f "$1/gen.awk"
+LANG=C awk -f "$1/gen.awk"
 sc="sox -r 8000 -c 1 -t raw"
 b=-b
 w=-w

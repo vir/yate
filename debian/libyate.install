@@ -68,3 +68,6 @@ debian/tmp/etc/yate/javascript.conf
 debian/tmp/usr/lib/libyatescript.so.*
 debian/tmp/usr/lib/yate/javascript.yate
 
+debian/tmp/etc/yate/gvoice.conf
+debian/tmp/usr/lib/yate/gvoice.yate
+

@@ -7,7 +7,7 @@ my $verbose = @ARGV;
 
 open CL, "< debian/changelog" or die;
 my $firstline = <CL>;
-$firstline =~/^.*?\([\d\.]+vir(\d{10})\)/i or die;
+$firstline =~/^.*?\([\d\.]+~?vir(\d{10})\)/i or die;
 my $lastrev = $1;
 close CL;
 print "Found last seen revision $lastrev\n";
@@ -28,7 +28,7 @@ my $suff = sprintf("%04d%02d%02d%02d", 1900+$year, 1+$mon, $mday, 1);
 
 ++$suff while $suff le $lastrev;
 
-my $newver="$yatever.vir$suff";
+my $newver="$yatever~vir$suff";
 print "New version: $newver\n";
 my $rc = system qw( debchange -b --preserve --distribution UNRELEASED --newversion ), "$newver";
 if($rc == 0) {

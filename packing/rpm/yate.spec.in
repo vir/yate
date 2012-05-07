@@ -153,6 +153,7 @@ for small to large scale projects.
 %{_libdir}/yate/server/monitoring.yate
 %{_libdir}/yate/server/ysnmpagent.yate
 %{_libdir}/yate/server/cache.yate
+%{_libdir}/yate/server/eventlogs.yate
 %{_libdir}/yate/client/osschan.yate
 %{_libdir}/yate/client/jabberclient.yate
 %{_libdir}/yate/jabber/jabberserver.yate
@@ -207,6 +208,7 @@ for small to large scale projects.
 %config(noreplace) %{_sysconfdir}/yate/monitoring.conf
 %config(noreplace) %{_sysconfdir}/yate/ysnmpagent.conf
 %config(noreplace) %{_sysconfdir}/yate/cache.conf
+%config(noreplace) %{_sysconfdir}/yate/eventlogs.conf
 %config(noreplace) %{_sysconfdir}/yate/users.conf
 %config(noreplace) %{_sysconfdir}/yate/presence.conf
 %config(noreplace) %{_sysconfdir}/yate/subscription.conf

@@ -78,6 +78,7 @@ PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 	$(JUSTSIG) \
 	server/analogdetect.yate \
 	server/cache.yate \
+	server/eventlogs.yate \
 	client/jabberclient.yate \
 	callgen.yate analyzer.yate rmanager.yate msgsniff.yate
 

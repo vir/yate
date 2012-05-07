@@ -1,0 +1,21 @@
+[general]
+; This section controls the global behavior of the events log module
+
+; logs_dir: string: Base directory for event log files, must be set to enable the module
+; The last component of the path will be created if missing
+; Example: logs_dir=/var/log/yate-events
+;logs_dir=
+
+; public_read: bool: Make the log files publically readable
+; This setting does not apply to Windows
+;public_read=false
+
+
+[mappings]
+; This section maps event sources to file names
+; Each line holds a regexp and a filename that can include replacements
+; First line that matches writes to file name at right of = and exits
+; You must take care to create valid file names
+
+; If this section is missing or empty a default line is added:
+; ^[A-Za-z0-9_-]\+ = \0.log

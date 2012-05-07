@@ -711,9 +711,9 @@ bool File::openPath(const char* name, bool canWrite, bool canRead,
 	return false;
     }
 #else
-    int flags = 0;
+    int flags = O_LARGEFILE;
     if (canWrite)
-	flags = canRead ? O_RDWR : O_WRONLY;
+	flags |= canRead ? O_RDWR : O_WRONLY;
     else if (canRead)
 	flags = O_RDONLY;
     if (create)

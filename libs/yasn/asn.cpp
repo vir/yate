@@ -43,8 +43,10 @@ int ASNLib::decodeLength(DataBlock& data) {
     if (lengthByte & ASN_LONG_LENGTH) { // the length is represented on more than one byte
 
 	lengthByte &= ~ASN_LONG_LENGTH;	/* turn MSB off */
-	if (lengthByte == 0)
-	    return InvalidLengthOrTag;
+	if (lengthByte == 0) {
+	    data.cut(-1);
+	    return IndefiniteForm;
+	}
 
 	if (lengthByte > sizeof(int))
 	    return InvalidLengthOrTag;
@@ -86,6 +88,54 @@ DataBlock ASNLib::buildLength(DataBlock& data)
 	return lenDb;
     }
    return lenDb;
+}
+
+int ASNLib::matchEOC(DataBlock& data)
+{
+    /**
+     * EoC = 00 00
+     */
+    XDebug(s_libName.c_str(),DebugAll,"::matchEOC() in data='%p'",&data);
+    if (data.length() < 2)
+	return InvalidLengthOrTag;
+    if (data[0] == 0 && data[1] == 0) {
+    	data.cut(-2);
+    	return 2;
+    }
+    return InvalidLengthOrTag;
+}
+
+
+int ASNLib::parseUntilEoC(DataBlock& data, int length)
+{
+    if (length >= (int)data.length() || ASNLib::matchEOC(data) > 0)
+	return length;
+    while (data.length() && ASNLib::matchEOC(data) < 0) {
+	// compute tag portion length
+	AsnTag tag;
+	AsnTag::decode(tag,data);
+	length += tag.coding().length();
+	data.cut(-tag.coding().length());
+	// compute length portion length
+	int initLen = data.length();
+	int len = ASNLib::decodeLength(data);
+	length += initLen - data.length();
+
+	bool checkEoC = (len == ASNLib::IndefiniteForm);
+	if (!checkEoC && len < 0)
+	    return length;
+
+	if (checkEoC) {
+	    length = parseUntilEoC(data,length);
+	    if (ASNLib::matchEOC(data) > 0)
+		length += 2;
+	}
+	else {
+	    length += len;
+	    data.cut(-len);
+	}
+    }
+    return length;
 }
 
 int ASNLib::decodeBoolean(DataBlock& data, bool* val, bool tagCheck)

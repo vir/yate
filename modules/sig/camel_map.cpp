@@ -920,11 +920,21 @@ static bool decodeHex(const Parameter* param, MapCamelType* type, AsnTag& tag, D
 	child->setAttribute(s_encAttr,"hex");
 
     int len = ASNLib::decodeLength(data);
-    if (len < 0)
+    bool checkEoC = (len == ASNLib::IndefiniteForm && tag.type() == AsnTag::Constructor);
+    if (!checkEoC && len < 0)
 	return false;
     String octets;
-    octets.hexify(data.data(),(len > (int)data.length() ? data.length() : len),' ');
-    data.cut(-len);
+    if (checkEoC) {
+	DataBlock d(data.data(),data.length());
+	int l = ASNLib::parseUntilEoC(d);
+	octets.hexify(data.data(),l,' ');
+	data.cut(-l);
+	ASNLib::matchEOC(data);
+    }
+    else {
+	octets.hexify(data.data(),(len > (int)data.length() ? data.length() : len),' ');
+	data.cut(-len); 
+    }
     child->addText(octets);
     return true;
 }
@@ -1051,7 +1061,9 @@ static bool decodeSeq(const Parameter* param, MapCamelType* type, AsnTag& tag, D
     data.cut(-(int)tag.coding().length());
 
     int len = ASNLib::decodeLength(data);
-    if (len < 0)
+    bool checkEoC = (len == ASNLib::IndefiniteForm);
+    len = (checkEoC ? data.length() : len);
+    if (!checkEoC && len < 0)
 	return false;
     int initLen = data.length();
 
@@ -1061,7 +1073,7 @@ static bool decodeSeq(const Parameter* param, MapCamelType* type, AsnTag& tag, D
     if (param->content) {
 	const Parameter* params= static_cast<const Parameter*>(param->content);
 	while (params && params->name) {
-	    if (initLen - (int)data.length() >= len)
+	    if ((initLen - (int)data.length() >= len) || (checkEoC && ASNLib::matchEOC(data) > 0))
 		break;
 	    AsnTag childTag;
 	    AsnTag::decode(childTag,data);
@@ -1133,16 +1145,19 @@ static bool decodeSeqOf(const Parameter* param, MapCamelType* type, AsnTag& tag,
     data.cut(-(int)tag.coding().length());
 
     int len = ASNLib::decodeLength(data);
-    if (len < 0)
+    bool checkEoC = (len == ASNLib::IndefiniteForm);
+    if (!checkEoC && len < 0)
 	return false;
     XmlElement* child = new XmlElement(param->name);
     parent->addChild(child);
 
     int initLength = data.length();
-    int payloadLen = len;
+    int payloadLen = (checkEoC ? data.length() : len);
     if (param->content) {
 	const Parameter* params= static_cast<const Parameter*>(param->content);
 	while (params && !TelEngine::null(params->name) && payloadLen) {
+	    if (checkEoC && ASNLib::matchEOC(data) > 0)
+		break;
 	    AsnTag childTag;
 	    AsnTag::decode(childTag,data);
 	    if (!decodeParam(params,childTag,data,child,addEnc,err)) {
@@ -1214,12 +1229,14 @@ static bool decodeChoice(const Parameter* param, MapCamelType* type, AsnTag& tag
 	return false;
     XDebug(&__plugin,DebugAll,"decodeChoice(param=%s[%p],elem=%s[%p],datalen=%d)",param->name.c_str(),param,parent->getTag().c_str(),
 	parent,data.length());
+    bool checkEoC = false;
     if (param->tag != s_noTag) {
 	if (param->tag != tag)
 	    return false;
 	data.cut(-(int)tag.coding().length());
 	int len = ASNLib::decodeLength(data);
-	if (len < 0)
+	checkEoC = (len == ASNLib::IndefiniteForm);
+	if (!checkEoC && len < 0)
 	    return false;
     }
     XmlElement* child = new XmlElement(param->name);
@@ -1234,6 +1251,8 @@ static bool decodeChoice(const Parameter* param, MapCamelType* type, AsnTag& tag
 		params++;
 		continue;
 	    }
+	    if (checkEoC)
+		ASNLib::matchEOC(data);
 	    return true;
 	}
 	if (err != TcapXApplication::DataMissing) {

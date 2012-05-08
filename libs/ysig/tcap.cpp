@@ -2529,13 +2529,16 @@ SS7TCAPError SS7TCAPTransactionANSI::decodeComponents(NamedList& params, DataBlo
 
     // decode length of component portion
     int len = ASNLib::decodeLength(data);
-    if (len < 0 || len != (int)data.length()) { // the length of the remaining data should be the same as the decoded length()
+    bool checkEoC = (len == ASNLib::IndefiniteForm);
+    if (!checkEoC && (len < 0 || len != (int)data.length())) { // the length of the remaining data should be the same as the decoded length()
 	error.setError(SS7TCAPError::General_BadlyStructuredCompPortion);
 	return error;
     }
 
     unsigned int compCount = 0;
     while (data.length()) {
+	if (checkEoC && ASNLib::matchEOC(data) > 0)
+	    break;
 	compCount++;
 	// decode component type
 	u_int8_t compType = data[0];
@@ -4087,13 +4090,16 @@ SS7TCAPError SS7TCAPTransactionITU::decodeComponents(NamedList& params, DataBloc
 
     // decode length of component portion
     int len = ASNLib::decodeLength(data);
-    if (len < 0 || len != (int)data.length()) { // the length of the remaining data should be the same as the decoded length
+    bool checkEoC = (len == ASNLib::IndefiniteForm);
+    if (!checkEoC && (len < 0 || len != (int)data.length())) { // the length of the remaining data should be the same as the decoded length
 	error.setError(SS7TCAPError::General_BadlyStructuredCompPortion);
 	return error;
     }
 
     unsigned int compCount = 0;
     while (data.length()) {
+	if (checkEoC && ASNLib::matchEOC(data) > 0)
+	    break;
 	compCount++;
 	// decode component type
 	u_int8_t compType = data[0];

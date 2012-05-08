@@ -745,8 +745,9 @@ public:
     enum Error {
 	InvalidLengthOrTag = -1,
 	ConstraintBreakError = -2,
-	ParseError,
-	InvalidContentsError
+	ParseError = -3,
+	InvalidContentsError = -4,
+	IndefiniteForm = -5,
     };
 
     /**
@@ -1084,6 +1085,21 @@ public:
      * @return The length of the data block length encoding
      */
     static int encodeSet(DataBlock& data, bool tagCheck);
+
+    /**
+     * Verify the data for End Of Contents presence
+     * @param  data Input block to verify
+     * @return Length of data consumed from the input data it the decoding was succesful, it should be 2 in case of success, -1 if the data doesn't match EoC
+     */
+    static int matchEOC(DataBlock& data);
+
+    /**
+     * Extract length until a End Of Contents is found. 
+     * @param data Input block for which to determine the length to End Of Contents
+     * @param length Length to which to add determined length
+     * @return Length until End Of Contents
+     */
+    static int parseUntilEoC(DataBlock& data, int length = 0);
 };
 
 }

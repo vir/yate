@@ -115,7 +115,7 @@ int ASNLib::parseUntilEoC(DataBlock& data, int length)
 	AsnTag tag;
 	AsnTag::decode(tag,data);
 	length += tag.coding().length();
-	data.cut(-tag.coding().length());
+	data.cut(-(int)tag.coding().length());
 	// compute length portion length
 	int initLen = data.length();
 	int len = ASNLib::decodeLength(data);

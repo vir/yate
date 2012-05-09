@@ -95,7 +95,7 @@ Channel.o: @srcdir@/Channel.cpp $(MKDEPS) $(PINC)
 	$(COMPILE) -c $<
 
 DataBlock.o: @srcdir@/DataBlock.cpp $(MKDEPS) $(EINC)
-	$(COMPILE) -I@top_srcdir@/engine/tables -c $<
+	$(COMPILE) -I@srcdir@/tables -c $<
 
 DataFormat.o: @srcdir@/DataFormat.cpp $(MKDEPS) $(PINC)
 	$(COMPILE) -c $<

@@ -25,12 +25,58 @@
 #include <string.h>
 #include <stdlib.h>
 
-extern "C" {
-#include "all.h"
-}
-
 using namespace TelEngine;
 
+namespace { // anonymous
+
+extern "C" {
+#include "a2s.h"
+#include "a2u.h"
+#include "u2a.h"
+#include "u2s.h"
+
+static unsigned char s2a[65536];
+static unsigned char s2u[65536];
+}
+
+class InitG711
+{
+public:
+    InitG711()
+    {
+	int i;
+	unsigned char val;
+	// positive side of mu-Law
+	for (i = 0, val = 0xff; i <= 32767; i++) {
+	    if ((val > 0x80) && ((i - 4) >= (int)(unsigned int)u2s[val]))
+		val--;
+	    s2u[i] = val;
+	}
+	// negative side of mu-Law
+	for (i = 32768, val = 0; i <= 65535; i++) {
+	    if ((val < 0x7e) && ((i - 12) >= (int)(unsigned int)u2s[val]))
+		val++;
+	    s2u[i] = val;
+	}
+	unsigned char v;
+	// positive side of A-Law
+	for (i = 0, v = 0, val = 0xd5; i <= 32767; i++) {
+	    if ((v < 0x7f) && ((i - 8) >= (int)(unsigned int)a2s[val]))
+		val = (++v) ^ 0xd5;
+	    s2a[i] = val;
+	}
+	// negative side of A-Law
+	for (i = 32768, v = 0xff, val = 0x2a; i <= 65535; i++) {
+	    if ((v > 0x80) && ((i - 8) >= (int)(unsigned int)a2s[val]))
+		val = (--v) ^ 0xd5;
+	    s2a[i] = val;
+	}
+    }
+};
+
+static InitG711 s_initG711;
+
+}; // anonymous namespace
 
 static const DataBlock s_empty;
 

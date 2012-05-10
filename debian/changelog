@@ -1,3 +1,12 @@
+yate (4.1.1~svn5054) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5054: + Display debug information if
+    call.execute from fork fails.  + Reset the timer and exec flags at
+    start of each fork block.  + Fixed sccp crash, caused by sccp
+    management local-subsystems parameter presence.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 11 May 2012 02:19:13 +0400
+
 yate (4.1.1~svn5052) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5052: + Added flags controlling ringing for

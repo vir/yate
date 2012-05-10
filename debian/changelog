@@ -1,3 +1,35 @@
+yate (4.1.1~svn5052) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5052: + Added flags controlling ringing for
+    incoming channels. Optionally add session content in jingle ringing
+    stanza.  + The value of RemotePC still sets the MTP DPC.  + Set the
+    SCCP CalledPartyAddress Point Code only if "pointcode" is set in
+    GTT.  + Renamed Engine.Debug and Engine.Output to lower case to
+    avoid confusion with constants.  + Moved some Js objects
+    implementation in another file.  + Fixes packaging errors on systems
+    without doxygen or kdoc.  + This allows installing API docs from
+    tarball even if doxygen and kdoc are missing.  + At "make install"
+    check if the API index.html is present.  + Translate from XML to
+    parameter list undefined SCCP parameters.  + Send ringing if ring
+    with content flag is set and call is progressing with ealy media  +
+    Added flag used to override ringing notification namespace.  +
+    Enqueue call.ringing when initiate stanza is confirmed.  + Added
+    several boolean true alternatives for SCCP MessageResult.  + Added
+    the HopCounter and MessageReturn parameters to the sccp.route
+    message.  + Added capability to manually send a COT message.  + Made
+    the ISUP T7, T27 and T34 configurable.  + Documented parameter.  +
+    Added a maximum counter for ISUP circuit replaces on remote block.
+    + Added 'gvoice' module packaging  + Add the O_LARGEFILE flag to
+    handles opened by the File class.  + Added module that can write
+    events to log files.  + Handle ASN.1 specification of length in the
+    indefinite form.  + Fixed doxygen warning.  + Got rid of the sox
+    build time dependency.  + Compute slin to mulaw and alaw tables at
+    startup.  + Added G.711 tables to SVN.  + Fixed warning spotted by
+    the Windows compiler.  + Allow specifying the ban bruteforcers limit
+    in extmodule.conf
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 10 May 2012 11:46:38 +0400
+
 yate (4.1.1~svn5032) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5032: + Respond to ping from server.  +

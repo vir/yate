@@ -221,6 +221,7 @@ bool ForkMaster::forkSlave(String* dest)
     NamedList* params = YOBJECT(NamedList,dest);
     if (params)
 	msgCopy.copyParams(*params);
+    const char* error = "failure";
     if (m_execNext) {
 	RefPointer<CallEndpoint> peer = getPeer();
 	if (!peer) {
@@ -233,8 +234,12 @@ bool ForkMaster::forkSlave(String* dest)
 	msgCopy.userData(peer);
 	msgCopy.setParam("id",peer->id());
 	msgCopy.clearParam("cdrtrack");
-	if (!Engine::dispatch(msgCopy))
+	if (!Engine::dispatch(msgCopy)) {
+	    error = msgCopy.getValue("error",error);
+	    Debug(&__plugin,DebugNote,"Call '%s' failed non-fork to target '%s', error '%s'",
+		getPeerId().c_str(),dest->c_str(),error);
 	    return false;
+	}
 	clear(false);
 	return true;
     }
@@ -243,7 +248,6 @@ bool ForkMaster::forkSlave(String* dest)
     ForkSlave* slave = new ForkSlave(this,tmp);
     msgCopy.setParam("id",tmp);
     msgCopy.userData(slave);
-    const char* error = "failure";
     bool autoring = false;
     if (Engine::dispatch(msgCopy)) {
 	ok = true;
@@ -284,8 +288,11 @@ bool ForkMaster::forkSlave(String* dest)
 	    Engine::enqueue(ring);
 	}
     }
-    else
+    else {
+	Debug(&__plugin,DebugNote,"Call '%s' failed on '%s' target '%s', error '%s'",
+	    getPeerId().c_str(),tmp.c_str(),dest->c_str(),error);
 	slave->lostMaster(error);
+    }
     slave->deref();
     return ok;
 }
@@ -353,6 +360,7 @@ bool ForkMaster::callContinue()
 	if (!dest)
 	    break;
 	if (dest->startSkip("|",false)) {
+	    m_execNext = false;
 	    if (*dest) {
 		String tmp(*dest);
 		int tout = 0;
@@ -378,6 +386,8 @@ bool ForkMaster::callContinue()
 	    dest->destruct();
 	    if (forks)
 		break;
+	    m_timer = 0;
+	    m_timerDrop = false;
 	    continue;
 	}
 	if (forkSlave(dest))

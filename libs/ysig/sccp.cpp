@@ -1838,7 +1838,8 @@ SCCPManagement::SCCPManagement(const NamedList& params, SS7PointCode::Type type)
 	unsigned char ssn = s->toInteger();
 	if (ssn < 2)
 	    continue;
-	m_localSubsystems.append(new SccpSubsystem(ssn));
+	m_localSubsystems.append(new SccpLocalSubsystem(ssn,getCoordTimeout(),
+		    getIgnoreTestsInterval()));
     }
     TelEngine::destruct(list);
 }
@@ -2543,6 +2544,7 @@ SccpLocalSubsystem::~SccpLocalSubsystem()
 
 bool SccpLocalSubsystem::timeout()
 {
+    Lock lock(this);
     if (m_coordTimer.timeout()) {
 	m_coordTimer.stop();
 	m_receivedAll = true;

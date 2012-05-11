@@ -747,26 +747,54 @@ bool JsCode::getSeparator(const char*& expr, bool remove)
     return ExpEvaluator::getSeparator(expr,remove);
 }
 
-// Parse an inline Javascript [ array ]
+// Parse an inline Javascript Array: [ item1, item2, ... ]
 JsObject* JsCode::parseArray(const char*& expr, bool constOnly)
 {
     if (skipComments(expr) != '[')
 	return 0;
     expr++;
     JsObject* jso = new JsObject;
+    do {
+	bool ok = constOnly ? (getNumber(expr) || getString(expr)) : getOperand(expr,false);
+	if (!ok) {
+	    TelEngine::destruct(jso);
+	    break;
+	}
+    } while (jso && (skipComments(expr) == ',') && expr++);
     if (skipComments(expr) != ']')
 	TelEngine::destruct(jso);
     return jso;
 }
 
 
-// Parse an inline Javascript { object }
+// Parse an inline Javascript Object: { prop1: value1, prop2: value2, ... }
 JsObject* JsCode::parseObject(const char*& expr, bool constOnly)
 {
     if (skipComments(expr) != '{')
 	return 0;
     expr++;
     JsObject* jso = new JsObject;
+    do {
+	skipComments(expr);
+	int len = getKeyword(expr);
+	if (len <= 0) {
+	    TelEngine::destruct(jso);
+	    break;
+	}
+	String name;
+	name.assign(expr,len);
+	expr += len;
+	if (skipComments(expr) != ':') {
+	    TelEngine::destruct(jso);
+	    break;
+	}
+	expr++;
+	bool ok = constOnly ? (getNumber(expr) || getString(expr)) : getOperand(expr,false);
+	if (!ok) {
+	    TelEngine::destruct(jso);
+	    break;
+	}
+    } while (jso && (skipComments(expr) == ',') && expr++);
     if (skipComments(expr) != '}')
 	TelEngine::destruct(jso);
     return jso;

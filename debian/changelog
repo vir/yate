@@ -1,3 +1,13 @@
+yate (4.1.1~svn5057) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5057: + This allows user.auth to overwrite
+    rather than duplicate parameters.  + Add SIP call parameters before
+    performing authentication.  + Improved debugging levels and text
+    when sending SS7 messages or failing to.  + Work in progress: added
+    methods of Array class and const Object / Array parser.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 12 May 2012 02:19:12 +0400
+
 yate (4.1.1~svn5054) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5054: + Display debug information if

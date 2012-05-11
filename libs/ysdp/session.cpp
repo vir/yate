@@ -304,6 +304,9 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
     else
 	m_sdpVersion = m_sdpSession = Time::secNow();
 
+    // override the address with the externally advertised if needed
+    if (addr && m_rtpNatAddr)
+	addr = m_rtpNatAddr;
     // no address means on hold or muted
     String origin;
     origin << "yate " << m_sdpSession << " " << m_sdpVersion;

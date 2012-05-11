@@ -4726,31 +4726,6 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 	    m->addParam("caller_card_uri",*hl);
     }
 
-    if (line) {
-	// call comes from line we have registered to - trust it...
-	m_user = line->getUserName();
-	m_externalAddr = line->getLocalAddr();
-	m_line = *line;
-	m_domain = line->domain();
-	m->addParam("username",m_user);
-	m->addParam("domain",m_domain);
-	m->addParam("in_line",m_line);
-    }
-    else {
-	String user;
-	int age = tr->authUser(user,false,m);
-	DDebug(this,DebugAll,"User '%s' age %d",user.c_str(),age);
-	if (age >= 0) {
-	    if (age < 10) {
-		m_user = user;
-		m->addParam("username",m_user);
-	    }
-	    else
-		m->addParam("expired_user",user);
-	    m->addParam("xsip_nonce_age",String(age));
-	}
-	m_domain = m->getValue(YSTRING("domain"));
-    }
     if (s_privacy)
 	copyPrivacy(*m,*ev->getMessage());
 
@@ -4769,6 +4744,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     m->addParam("sip_callid",m_callid);
     m->addParam("device",ev->getMessage()->getHeaderValue("User-Agent"));
     copySipHeaders(*m,*ev->getMessage());
+
     const char* reason = 0;
     hl = m_tr->initialMessage()->getHeader("Referred-By");
     if (hl)
@@ -4800,6 +4776,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 	    }
 	}
     }
+
     if (hl) {
 	URI div(*hl);
 	m->addParam("diverter",div.getUser());
@@ -4807,6 +4784,32 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 	    m->addParam("divertername",div.getDescription());
 	m->addParam("diverteruri",div);
     }
+    if (line) {
+	// call comes from line we have registered to - trust it...
+	m_user = line->getUserName();
+	m_externalAddr = line->getLocalAddr();
+	m_line = *line;
+	m_domain = line->domain();
+	m->addParam("username",m_user);
+	m->addParam("domain",m_domain);
+	m->addParam("in_line",m_line);
+    }
+    else {
+	String user;
+	int age = tr->authUser(user,false,m);
+	DDebug(this,DebugAll,"User '%s' age %d",user.c_str(),age);
+	if (age >= 0) {
+	    if (age < 10) {
+		m_user = user;
+		m->setParam("username",m_user);
+	    }
+	    else
+		m->setParam("expired_user",user);
+	    m->setParam("xsip_nonce_age",String(age));
+	}
+	m_domain = m->getValue(YSTRING("domain"));
+    }
+
     setRtpLocalAddr(m_rtpLocalAddr);
     MimeSdpBody* sdp = getSdpBody(ev->getMessage()->body);
     if (sdp) {

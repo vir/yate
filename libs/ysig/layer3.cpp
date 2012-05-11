@@ -986,7 +986,7 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
     if (!(maint || m_active || (mgmt && m_checked))) {
 	if (m_warnDown) {
 	    m_warnDown = false;
-	    Debug(this,DebugMild,"Could not transmit %s MSU, %s",
+	    Debug(this,m_total ? DebugInfo : DebugMild,"Could not transmit %s MSU, %s",
 		msu.getServiceName(),
 		m_total ? "all links are down" : "no data links attached");
 	}
@@ -1049,7 +1049,7 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 	}
     }
 
-    Debug(this,((sls == -2) ? DebugWarn : DebugMild),
+    Debug(this,((sls == -2) ? DebugWarn : DebugInfo),
 	"Could not find any link to send %s MSU",msu.getServiceName());
     return -1;
 }

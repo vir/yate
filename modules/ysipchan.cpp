@@ -270,6 +270,12 @@ public:
 	    Lock lock(this);
 	    buf = m_rtpLocalAddr;
 	}
+    // Safely retrieve RTP external NAT address, only if set
+    inline void rtpNatAddr(String& buf) {
+	    Lock lock(this);
+	    if (m_rtpNatAddr)
+		buf = m_rtpNatAddr;
+	}
     // Print sent messages to output
     void printSendMsg(const SIPMessage* msg, const SocketAddr* addr = 0);
     // Print received messages to output
@@ -324,6 +330,7 @@ protected:
     SocketAddr m_local;                  // Local ip/port
     SocketAddr m_remote;                 // Remote ip/port
     String m_rtpLocalAddr;               // RTP local address
+    String m_rtpNatAddr;                 // NAT IP to override RTP local address
     YateSIPTransportWorker* m_worker;    // Transport worker
     bool m_initialized;                  // Flag reset when initializing by the module and set in init()
     String m_protoAddr;                  // Proto + addr: used for debug (send/recv msg)
@@ -870,6 +877,8 @@ private:
     MimeBody* buildSIPBody(Message& msg, MimeSdpBody* sdp = 0);
     // Build the body of a hangup SIP message
     MimeBody* buildSIPBody();
+    // Update NAT address from params or transport
+    void updateRtpNatAddress(NamedList* params = 0);
 
     SIPTransaction* m_tr;
     SIPTransaction* m_tr2;
@@ -2028,6 +2037,7 @@ bool YateSIPTransport::init(const NamedList& params, const NamedList& defs,
 	}
     }
     m_rtpLocalAddr = params.getValue(YSTRING("rtp_localip"),m_rtpLocalAddr);
+    m_rtpNatAddr = params.getValue(YSTRING("nat_address"));
     unlock();
     // Done if not first
     if (!first)
@@ -2285,9 +2295,9 @@ bool YateSIPUDPTransport::init(const NamedList& params, const NamedList& defs, b
     if (first)
 	setAddr(params.getValue("addr","0.0.0.0"),params.getIntValue("port",5060));
     Debug(&plugin,DebugAll,
-	"Transport(%s) initialized addr='%s:%d' default=%s maxpkt=%u rtp_localip=%s [%p]",
+	"Transport(%s) initialized addr='%s:%d' default=%s maxpkt=%u rtp_localip=%s nat_address=%s [%p]",
 	m_id.c_str(),m_address.c_str(),m_port,String::boolText(m_default),m_maxpkt,
-	m_rtpLocalAddr.c_str(),this);
+	m_rtpLocalAddr.c_str(),m_rtpNatAddr.c_str(),this);
     return ok;
 }
 
@@ -2445,8 +2455,8 @@ bool YateSIPTCPTransport::init(const NamedList& params, bool first, Thread::Prio
     m_idleInterval = tcpIdleInterval(params.getIntValue(YSTRING("tcp_idle"),s_tcpIdle));
     setIdleTimeout();
     Debug(&plugin,DebugAll,
-	"Transport(%s) initialized maxpkt=%u rtp_localip=%s tcp_idle=%u [%p]",
-	m_id.c_str(),m_maxpkt,m_rtpLocalAddr.c_str(),m_idleInterval,this);
+	"Transport(%s) initialized maxpkt=%u rtp_localip=%s nat_address=%s tcp_idle=%u [%p]",
+	m_id.c_str(),m_maxpkt,m_rtpLocalAddr.c_str(),m_rtpNatAddr.c_str(),m_idleInterval,this);
     return ok;
 }
 
@@ -4706,6 +4716,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     m_tr->setUserData(this);
     // Set channel SIP party
     setParty(m_tr->initialMessage()->getParty());
+    updateRtpNatAddress();
 
     URI uri(m_tr->getURI());
     YateSIPLine* line = plugin.findLine(m_host,m_port,uri.getUser());
@@ -4908,6 +4919,8 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 	setReason(tmp,500);
 	return;
     }
+    setParty(m->getParty());
+    updateRtpNatAddress(&msg);
     int maxf = msg.getIntValue(YSTRING("antiloop"),s_maxForwards);
     m->addHeader("Max-Forwards",String(maxf));
     copySipHeaders(*m,msg);
@@ -6327,6 +6340,7 @@ bool YateSIPConnection::callRouted(Message& msg)
     if (m_rtpForward && !msg.getBoolValue(YSTRING("rtp_forward")))
 	m_rtpForward = false;
     setRfc2833(msg.getParam(YSTRING("rfc2833")));
+    updateRtpNatAddress(&msg);
     Channel::callRouted(msg);
     Lock lock(driver());
     if (m_hungup || !m_tr)
@@ -6611,6 +6625,21 @@ MimeBody* YateSIPConnection::buildSIPBody()
     msg.copyParams(parameters());
     paramMutex().unlock();
     return doBuildSIPBody(this,msg,0);
+}
+
+// Update NAT address from params or transport
+void YateSIPConnection::updateRtpNatAddress(NamedList* params)
+{
+    if (params)
+	m_rtpNatAddr = params->getValue(YSTRING("nat_address"),m_rtpNatAddr);
+    if (!m_rtpNatAddr) {
+	YateSIPTransport* trans = transport(true);
+	if (trans) {
+	    trans->rtpNatAddr(m_rtpNatAddr);
+	    TelEngine::destruct(trans);
+	}
+    }
+    Debug(this,DebugAll,"NAT address is '%s' [%p]",m_rtpNatAddr.c_str(),this);
 }
 
 

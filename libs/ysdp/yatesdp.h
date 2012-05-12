@@ -604,6 +604,7 @@ protected:
     String m_externalAddr;               // Our external IP address, possibly outside of a NAT
     String m_rtpAddr;                    // Remote RTP address
     String m_rtpLocalAddr;               // Local RTP address
+    String m_rtpNatAddr;                 // Advertised local IP in sdp (override any local IP)
     ObjList* m_rtpMedia;                 // List of media descriptors
     int m_sdpSession;                    // Unique SDP session number
     int m_sdpVersion;                    // SDP version number, incremented each time we generate a new SDP

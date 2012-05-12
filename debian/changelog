@@ -1,3 +1,10 @@
+yate (4.1.1~svn5058) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5058: + Allow setting the external address
+    of a NAT in the SDP sent by SIP.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sun, 13 May 2012 02:19:13 +0400
+
 yate (4.1.1~svn5057) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5057: + This allows user.auth to overwrite

@@ -53,7 +53,6 @@ public:
 	{
 	    params().addParam(new ExpFunction("push"));
 	    params().addParam(new ExpFunction("pop"));
-	    params().addParam(new ExpFunction("length"));
 	    params().addParam(new ExpFunction("concat"));
 	    params().addParam(new ExpFunction("join"));
 	    params().addParam(new ExpFunction("reverse"));
@@ -62,13 +61,21 @@ public:
 	    params().addParam(new ExpFunction("slice"));
 	    params().addParam(new ExpFunction("splice"));
 	    params().addParam(new ExpFunction("sort"));
+	    params().addParam("length","0");
 	}
     inline long length() 
 	{ return m_length; }
+    inline void setLength()
+	{ params().setParam("length",String((int)m_length)); }
     inline void setLength(long len)
 	{ m_length = len; params().setParam("length",String((int)len)); }
 
 protected:
+    inline JsArray(Mutex* mtx, const char* name)
+	: JsObject(mtx,name), m_length(0)
+	{ }
+    virtual JsObject* clone(const char* name) const
+	{ return new JsArray(mutex(),name); }
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
 private:
     bool runNativeSlice(ObjList& stack, const ExpOperation& oper, GenObject* context);
@@ -85,7 +92,6 @@ public:
     inline JsObjectObj(Mutex* mtx)
 	: JsObject("Object",mtx,true)
 	{
-	    params().addParam(new ExpFunction("constructor"));
 	}
 protected:
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
@@ -120,6 +126,11 @@ public:
 	    params().addParam(new ExpFunction("getUTCSeconds"));
 	}
 protected:
+    inline JsDate(Mutex* mtx, const char* name)
+	: JsObject(mtx,name)
+	{ }
+    virtual JsObject* clone(const char* name) const
+	{ return new JsDate(mutex(),name); }
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
 };
 
@@ -148,6 +159,14 @@ static inline void addObject(NamedList& params, const char* name, JsObject* obj)
     params.addParam(new NamedPointer(name,obj,obj->toString()));
 }
 
+// Helper function that adds a constructor to a parent
+static inline void addConstructor(NamedList& params, const char* name, JsObject* obj)
+{
+    JsFunction* ctr = new JsFunction(obj->mutex(),name);
+    ctr->params().addParam(new NamedPointer("prototype",obj,obj->toString()));
+    params.addParam(new NamedPointer(name,ctr,ctr->toString()));
+}
+
 // Helper function that pops arguments off a stack to a list in proper order
 static int extractArgs(JsObject* obj, ObjList& stack, const ExpOperation& oper, GenObject* context, ObjList& arguments)
 {
@@ -173,6 +192,14 @@ JsObject::JsObject(const char* name, Mutex* mtx, bool frozen)
     params().addParam(new ExpFunction("hasOwnProperty"));
 }
 
+JsObject::JsObject(Mutex* mtx, const char* name, bool frozen)
+    : ScriptContext(name),
+      m_frozen(frozen), m_mutex(mtx)
+{
+    XDebug(DebugAll,"JsObject::JsObject(%p,'%s',%s) [%p]",
+	mtx,name,String::boolText(frozen),this);
+}
+
 JsObject::~JsObject()
 {
     XDebug(DebugAll,"JsObject::~JsObject '%s' [%p]",toString().c_str(),this);
@@ -191,11 +218,6 @@ bool JsObject::runFunction(ObjList& stack, const ExpOperation& oper, GenObject* 
     JsFunction* jf = YOBJECT(JsFunction,param);
     if (jf)
 	return jf->runDefined(stack,oper,context);
-    JsObject* jso = YOBJECT(JsObject,param);
-    if (jso) {
-	ExpFunction op("constructor",oper.number());
-	return jso->runFunction(stack,op,context);
-    }
     return false;
 }
 
@@ -303,13 +325,13 @@ void JsObject::initialize(ScriptContext* context)
     NamedList& p = context->params();
     static_cast<String&>(p) = "[Object Global]";
     if (!p.getParam(YSTRING("Object")))
-	addObject(p,"Object",new JsObjectObj(mtx));
+	addConstructor(p,"Object",new JsObjectObj(mtx));
     if (!p.getParam(YSTRING("Function")))
-	addObject(p,"Function",new JsFunction(mtx));
+	addConstructor(p,"Function",new JsFunction(mtx));
     if (!p.getParam(YSTRING("Array")))
-	addObject(p,"Array",new JsArray(mtx));
+	addConstructor(p,"Array",new JsArray(mtx));
     if (!p.getParam(YSTRING("Date")))
-	addObject(p,"Date",new JsDate(mtx));
+	addConstructor(p,"Date",new JsDate(mtx));
     if (!p.getParam(YSTRING("Math")))
 	addObject(p,"Math",new JsMath(mtx));
 }
@@ -327,6 +349,8 @@ bool JsObjectObj::runNative(ObjList& stack, const ExpOperation& oper, GenObject*
 
 bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
+    XDebug(DebugAll,"JsArray::runNative() '%s' in '%s' [%p]",
+	oper.name().c_str(),toString().c_str(),this);
     if (oper.name() == YSTRING("push")) {
 	// Adds one or more elements to the end of an array and returns the new length of the array.
 	if (!oper.number())
@@ -344,6 +368,7 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	    TelEngine::destruct(op);
 	}
 	m_length += oper.number();
+	setLength();
 	ExpEvaluator::pushOne(stack,new ExpOperation(length()));
     }
     else if (oper.name() == YSTRING("pop")) {
@@ -368,6 +393,7 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	}
 	// clear last
 	params().clearParam(last);
+	setLength();
     }
     else if (oper.name() == YSTRING("length")) {
 	// Reflects the number of elements in an array.
@@ -624,6 +650,8 @@ bool JsArray::runNativeSort(ObjList& stack, const ExpOperation& oper, GenObject*
 
 bool JsMath::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
+    XDebug(DebugAll,"JsMath::runNative() '%s' in '%s' [%p]",
+	oper.name().c_str(),toString().c_str(),this);
     if (oper.name() == YSTRING("abs")) {
 	if (!oper.number())
 	    return false;
@@ -670,6 +698,8 @@ bool JsMath::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 
 bool JsDate::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
+    XDebug(DebugAll,"JsDate::runNative() '%s' in '%s' [%p]",
+	oper.name().c_str(),toString().c_str(),this);
     if (oper.name() == YSTRING("now")) {
 	// Returns the number of milliseconds elapsed since 1 January 1970 00:00:00 UTC.
 	ExpEvaluator::pushOne(stack,new ExpOperation((long int)Time::msecNow()));  // should check conversion from u_int64_t 
@@ -784,12 +814,25 @@ bool JsDate::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
 JsFunction::JsFunction(Mutex* mtx)
     : JsObject("Function",mtx,true)
 {
+    init();
+}
+
+JsFunction::JsFunction(Mutex* mtx, const char* name)
+    : JsObject(mtx,String("[function ") + name + "()]",true)
+{
+    init();
+}
+
+void JsFunction::init()
+{
     params().addParam(new ExpFunction("apply"));
     params().addParam(new ExpFunction("call"));
 }
 
 bool JsFunction::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
+    XDebug(DebugAll,"JsFunction::runNative() '%s' in '%s' [%p]",
+	oper.name().c_str(),toString().c_str(),this);
     if (oper.name() == YSTRING("apply")) {
 	// func.apply(new_this,["array","of","params",...])
 	if (oper.number() != 2)
@@ -807,7 +850,15 @@ bool JsFunction::runNative(ObjList& stack, const ExpOperation& oper, GenObject* 
 
 bool JsFunction::runDefined(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    return false;
+    XDebug(DebugAll,"JsObject::runDefined() in '%s' [%p]",toString().c_str(),this);
+    JsObject* proto = YOBJECT(JsObject,getField(stack,"prototype",context));
+    if (proto) {
+	// found prototype, build object
+	JsObject* obj = proto->clone();
+	obj->copyFields(stack,*proto,context);
+	ExpEvaluator::pushOne(stack,new ExpWrapper(obj,oper.name()));
+    }
+    return true;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

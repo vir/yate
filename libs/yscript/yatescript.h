@@ -1099,6 +1099,15 @@ public:
      */
     virtual bool runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
+    /**
+     * Copy all fields from another context
+     * @param stack Evaluation stack in use
+     * @param original Script context to copy from
+     * @param context Pointer to context data passed from evaluation methods
+     * @return True if all fields were copied
+     */
+    virtual bool copyFields(ObjList& stack, const ScriptContext& original, GenObject* context);
+
 private:
     NamedList m_params;
 };
@@ -1392,6 +1401,21 @@ public:
 	{ return m_mutex; }
 
     /**
+     * Clone and rename method
+     * @param name Name of the cloned object
+     * @return New object instance
+     */
+    virtual JsObject* clone(const char* name) const
+	{ return new JsObject(m_mutex,name); }
+
+    /**
+     * Clone method
+     * @return New object instance
+     */
+    inline JsObject* clone() const
+	{ return clone(toString()); }
+
+    /**
      * Try to evaluate a single method
      * @param stack Evaluation stack in use, parameters are popped off this stack
      *  and results are pushed back on stack
@@ -1448,6 +1472,14 @@ public:
 
 protected:
     /**
+     * Constructor for an empty object
+     * @param mtx Pointer to the mutex that serializes this object
+     * @param name Full name of the object
+     * @param frozen True if the object is to be frozen from creation
+     */
+    JsObject(Mutex* mtx, const char* name, bool frozen = false);
+
+    /**
      * Try to evaluate a single native method
      * @param stack Evaluation stack in use, parameters are popped off this stack
      *  and results are pushed back on stack
@@ -1456,6 +1488,13 @@ protected:
      * @return True if evaluation succeeded
      */
     virtual bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
+
+    /**
+     * Retrieve the Mutex object used to serialize object access
+     * @return Pointer to the mutex of the context this object belongs to
+     */
+    inline Mutex* mutex() const
+	{ return m_mutex; }
 
 private:
     bool m_frozen;
@@ -1478,6 +1517,13 @@ public:
     JsFunction(Mutex* mtx = 0);
 
     /**
+     * Constructor with function name
+     * @param mtx Pointer to the mutex that serializes this object
+     * @param name Name of the function
+     */
+    JsFunction(Mutex* mtx, const char* name);
+
+    /**
      * Try to evaluate a single user defined method
      * @param stack Evaluation stack in use, parameters are popped off this stack
      *  and results are pushed back on stack
@@ -1498,6 +1544,8 @@ protected:
      */
     virtual bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
+private:
+    void init();
 };
 
 /**

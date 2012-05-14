@@ -131,6 +131,32 @@ bool ScriptContext::runAssign(ObjList& stack, const ExpOperation& oper, GenObjec
     return true;
 }
 
+bool ScriptContext::copyFields(ObjList& stack, const ScriptContext& original, GenObject* context)
+{
+    bool ok = true;
+    unsigned int n = original.params().length();
+    for (unsigned int i = 0; i < n; i++) {
+	const NamedString* p = original.params().getParam(i);
+	if (!p)
+	    continue;
+	NamedString* fld = original.getField(stack, p->name(),context);
+	if (fld) {
+	    ExpOperation* op = YOBJECT(ExpOperation,fld);
+	    XDebug(DebugAll,"Field '%s' is %s",fld->name().c_str(),
+		(op ? (YOBJECT(ExpFunction,op) ? "function" :
+		    (YOBJECT(ExpWrapper,op) ? "object" : "operation")) : "string"));
+	    if (op)
+		ok = runAssign(stack, *op, context) && ok;
+	    else
+		ok = runAssign(stack, ExpOperation(*fld,fld->name()), context) && ok;
+	}
+	else
+	    ok = false;
+    }
+    return ok;
+}
+
+
 #define MAKE_NAME(x) { #x, ScriptRun::x }
 static const TokenDict s_states[] = {
     MAKE_NAME(Invalid),

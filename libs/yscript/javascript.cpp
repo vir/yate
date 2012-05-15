@@ -496,7 +496,7 @@ bool JsCode::getInstruction(const char*& expr, Opcode nested)
 {
     if (inError())
 	return false;
-    XDebug(this,DebugAll,"JsCode::getInstruction '%s' %u",expr,nested);
+    XDebug(this,DebugAll,"JsCode::getInstruction '%.30s' %u",expr,nested);
     if (skipComments(expr) == '{') {
 	expr++;
 	for (;;) {
@@ -669,7 +669,7 @@ ExpEvaluator::Opcode JsCode::getOperator(const char*& expr)
 {
     if (inError())
 	return OpcNone;
-    XDebug(this,DebugAll,"JsCode::getOperator '%s'",expr);
+    XDebug(this,DebugAll,"JsCode::getOperator '%.30s'",expr);
     Opcode op = ExpEvaluator::getOperator(expr,s_operators);
     if (OpcNone != op)
 	return op;
@@ -680,7 +680,7 @@ ExpEvaluator::Opcode JsCode::getUnaryOperator(const char*& expr)
 {
     if (inError())
 	return OpcNone;
-    XDebug(this,DebugAll,"JsCode::getUnaryOperator '%s'",expr);
+    XDebug(this,DebugAll,"JsCode::getUnaryOperator '%.30s'",expr);
     Opcode op = ExpEvaluator::getOperator(expr,s_unaryOps);
     if (OpcNone != op)
 	return op;
@@ -691,7 +691,7 @@ ExpEvaluator::Opcode JsCode::getPostfixOperator(const char*& expr)
 {
     if (inError())
 	return OpcNone;
-    XDebug(this,DebugAll,"JsCode::getPostfixOperator '%s'",expr);
+    XDebug(this,DebugAll,"JsCode::getPostfixOperator '%.30s'",expr);
     if (skipComments(expr) == '[') {
 	if (!runCompile(++expr,']'))
 	    return OpcNone;

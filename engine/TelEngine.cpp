@@ -386,7 +386,7 @@ void DebugEnabler::debugCopy(const DebugEnabler* original)
 }
 
 Debugger::Debugger(const char* name, const char* format, ...)
-    : m_name(name)
+    : m_name(name), m_level(DebugAll)
 {
     if (s_debugging && m_name && (s_debug >= DebugAll) && !reentered()) {
 	char buf[64];
@@ -394,7 +394,7 @@ Debugger::Debugger(const char* name, const char* format, ...)
 	va_list va;
 	va_start(va,format);
 	ind_mux.lock();
-	dbg_output(DebugAll,buf,format,va);
+	dbg_output(m_level,buf,format,va);
 	va_end(va);
 	s_indent++;
 	ind_mux.unlock();
@@ -404,7 +404,7 @@ Debugger::Debugger(const char* name, const char* format, ...)
 }
 
 Debugger::Debugger(int level, const char* name, const char* format, ...)
-    : m_name(name)
+    : m_name(name), m_level(level)
 {
     if (s_debugging && m_name && (s_debug >= level) && !reentered()) {
 	char buf[64];
@@ -412,7 +412,7 @@ Debugger::Debugger(int level, const char* name, const char* format, ...)
 	va_list va;
 	va_start(va,format);
 	ind_mux.lock();
-	dbg_output(DebugAll,buf,format,va);
+	dbg_output(m_level,buf,format,va);
 	va_end(va);
 	s_indent++;
 	ind_mux.unlock();
@@ -421,11 +421,11 @@ Debugger::Debugger(int level, const char* name, const char* format, ...)
 	m_name = 0;
 }
 
-static void dbg_dist_helper(const char* buf, const char* fmt, ...)
+static void dbg_dist_helper(int level, const char* buf, const char* fmt, ...)
 {
     va_list va;
     va_start(va,fmt);
-    dbg_output(DebugAll,buf,fmt,va);
+    dbg_output(level,buf,fmt,va);
     va_end(va);
 }
 
@@ -435,7 +435,7 @@ Debugger::~Debugger()
 	ind_mux.lock();
 	s_indent--;
 	if (s_debugging)
-	    dbg_dist_helper("<<< ","%s",m_name);
+	    dbg_dist_helper(m_level,"<<< ","%s",m_name);
 	ind_mux.unlock();
     }
 }

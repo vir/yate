@@ -130,6 +130,7 @@ public:
 	    if (m_owned)
 		TelEngine::destruct(m_message);
 	}
+    virtual void runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context);
     inline void clearMsg()
 	{ m_message = 0; m_owned = false; }
     static void initialize(ScriptContext* context);
@@ -193,13 +194,6 @@ UNLOAD_PLUGIN(unloadNow)
 }
 
 
-// Helper function that adds an object to a parent
-static inline void addObject(NamedList& params, const char* name, JsObject* obj)
-{
-    params.addParam(new NamedPointer(name,obj,obj->toString()));
-}
-
-
 bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
     if (oper.name() == YSTRING("output")) {
@@ -257,17 +251,7 @@ void JsEngine::initialize(ScriptContext* context)
 
 bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    if (oper.name() == YSTRING("constructor")) {
-	if (oper.number() != 1)
-	    return false;
-	ExpOperation* op = popValue(stack,context);
-	if (!op)
-	    return false;
-	Message* m = new Message(*op);
-	ExpEvaluator::pushOne(stack,new ExpWrapper(new JsMessage(m,mutex(),true)));
-	TelEngine::destruct(op);
-    }
-    else if (oper.name() == YSTRING("broadcast")) {
+    if (oper.name() == YSTRING("broadcast")) {
 	if (oper.number() != 0)
 	    return false;
 	ExpEvaluator::pushOne(stack,new ExpOperation(m_message && m_message->broadcast()));
@@ -301,6 +285,18 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
     else
 	return JsObject::runNative(stack,oper,context);
     return true;
+}
+
+void JsMessage::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    if (oper.number() != 1)
+	return;
+    ExpOperation* op = popValue(stack,context);
+    if (!op)
+	return;
+    Message* m = new Message(*op);
+    ExpEvaluator::pushOne(stack,new ExpWrapper(new JsMessage(m,mutex(),true)));
+    TelEngine::destruct(op);
 }
 
 void JsMessage::initialize(ScriptContext* context)

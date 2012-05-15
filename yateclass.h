@@ -571,6 +571,7 @@ public:
 
 private:
     const char* m_name;
+    int m_level;
 };
 
 /**

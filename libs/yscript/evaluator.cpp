@@ -220,7 +220,7 @@ int ExpEvaluator::preProcess(const char*& expr, GenObject* context)
 
 ExpEvaluator::Opcode ExpEvaluator::getOperator(const char*& expr, const TokenDict* operators, bool caseInsensitive) const
 {
-    XDebug(this,DebugAll,"getOperator('%s',%p,%s)",expr,operators,String::boolText(caseInsensitive));
+    XDebug(this,DebugAll,"getOperator('%.30s',%p,%s)",expr,operators,String::boolText(caseInsensitive));
     skipComments(expr);
     if (operators) {
 	bool kw = keywordChar(*expr);
@@ -247,7 +247,7 @@ bool ExpEvaluator::gotError(const char* error, const char* text) const
 	    return false;
 	error = "unknown error";
     }
-    Debug(this,DebugWarn,"Evaluator error: %s%s%s",error,
+    Debug(this,DebugWarn,"Evaluator error: %s%s%.50s",error,
 	(text ? " at: " : ""),
 	c_safe(text));
     return false;
@@ -268,7 +268,7 @@ bool ExpEvaluator::getOperand(const char*& expr, bool endOk)
 {
     if (inError())
 	return false;
-    XDebug(this,DebugAll,"getOperand '%s'",expr);
+    XDebug(this,DebugAll,"getOperand '%.30s'",expr);
     char c = skipComments(expr);
     if (!c)
 	// end of string
@@ -298,7 +298,7 @@ bool ExpEvaluator::getNumber(const char*& expr)
 {
     if (inError())
 	return false;
-    XDebug(this,DebugAll,"getNumber '%s'",expr);
+    XDebug(this,DebugAll,"getNumber '%.30s'",expr);
     char* endp = 0;
     long int val = ::strtol(expr,&endp,0);
     if (!endp || (endp == expr))
@@ -313,7 +313,7 @@ bool ExpEvaluator::getString(const char*& expr)
 {
     if (inError())
 	return false;
-    XDebug(this,DebugAll,"getString '%s'",expr);
+    XDebug(this,DebugAll,"getString '%.30s'",expr);
     char c = skipComments(expr);
     if (c == '"' || c == '\'') {
 	char sep = c;
@@ -347,7 +347,7 @@ bool ExpEvaluator::getFunction(const char*& expr)
 {
     if (inError())
 	return false;
-    XDebug(this,DebugAll,"getFunction '%s'",expr);
+    XDebug(this,DebugAll,"getFunction '%.30s'",expr);
     skipComments(expr);
     int len = getKeyword(expr);
     const char* s = expr+len;
@@ -378,7 +378,7 @@ bool ExpEvaluator::getField(const char*& expr)
 {
     if (inError())
 	return false;
-    XDebug(this,DebugAll,"getField '%s'",expr);
+    XDebug(this,DebugAll,"getField '%.30s'",expr);
     skipComments(expr);
     int len = getKeyword(expr);
     if (len <= 0)
@@ -492,7 +492,9 @@ bool ExpEvaluator::runCompile(const char*& expr, char stop, Opcode nested)
     } StackedOpcode;
     StackedOpcode stack[10];
     unsigned int stackPos = 0;
-    DDebug(this,DebugInfo,"runCompile '%s' '%1s'",expr,&stop);
+#ifdef DEBUG
+    Debugger debug(DebugInfo,"runCompile()"," '%.30s' '%.1s'",expr,&stop);
+#endif
     if (skipComments(expr) == ')')
 	return false;
     m_inError = false;

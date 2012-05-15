@@ -1416,6 +1416,15 @@ public:
 	{ return clone(toString()); }
 
     /**
+     * Native object constructor
+     * @param stack Evaluation stack in use
+     * @param oper Constructor function to evaluate
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     */
+    virtual void runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
+	{ }
+
+    /**
      * Try to evaluate a single method
      * @param stack Evaluation stack in use, parameters are popped off this stack
      *  and results are pushed back on stack
@@ -1463,6 +1472,44 @@ public:
      */
     inline void freeze()
 	{ m_frozen = true; }
+
+    /**
+     * Helper static method that adds an object to a parent
+     * @param params List of parameters where to add the object
+     * @param name Name of the new parameter
+     * @param obj Pointer to the object to add
+     */
+    static void addObject(NamedList& params, const char* name, JsObject* obj);
+
+    /**
+     * Helper static method that adds a constructor to a parent
+     * @param params List of parameters where to add the constructor
+     * @param name Name of the new parameter
+     * @param obj Pointer to the prototype object to add
+     */
+    static void addConstructor(NamedList& params, const char* name, JsObject* obj);
+
+    /**
+     * Helper static method that pops arguments off a stack to a list in proper order
+     * @param obj Pointer to the object to use when popping each argument
+     * @param stack Evaluation stack in use, parameters are popped off this stack
+     * @param oper Function that is being evaluated
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @param arguments List where the arguments are added in proper order
+     * @return Number of arguments popped off stack
+     */
+    static int extractArgs(JsObject* obj, ObjList& stack, const ExpOperation& oper, GenObject* context, ObjList& arguments);
+
+    /**
+     * Helper method that pops arguments off a stack to a list in proper order
+     * @param stack Evaluation stack in use, parameters are popped off this stack
+     * @param oper Function that is being evaluated
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @param arguments List where the arguments are added in proper order
+     * @return Number of arguments popped off stack
+     */
+    inline int extractArgs(ObjList& stack, const ExpOperation& oper, GenObject* context, ObjList& arguments)
+	{ return extractArgs(this,stack,oper,context,arguments); }
 
     /**
      * Initialize the standard global objects in a context

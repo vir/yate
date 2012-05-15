@@ -153,33 +153,6 @@ protected:
 }; // anonymous namespace
 
 
-// Helper function that adds an object to a parent
-static inline void addObject(NamedList& params, const char* name, JsObject* obj)
-{
-    params.addParam(new NamedPointer(name,obj,obj->toString()));
-}
-
-// Helper function that adds a constructor to a parent
-static inline void addConstructor(NamedList& params, const char* name, JsObject* obj)
-{
-    JsFunction* ctr = new JsFunction(obj->mutex(),name);
-    ctr->params().addParam(new NamedPointer("prototype",obj,obj->toString()));
-    params.addParam(new NamedPointer(name,ctr,ctr->toString()));
-}
-
-// Helper function that pops arguments off a stack to a list in proper order
-static int extractArgs(JsObject* obj, ObjList& stack, const ExpOperation& oper, GenObject* context, ObjList& arguments)
-{
-    if (!obj || !oper.number())
-	return 0;
-    for (long int i = oper.number(); i;  i--) {
-	ExpOperation* op = obj->popValue(stack,context);
-	arguments.insert(op);
-    }
-    return oper.number();
-}
-
-
 JsObject::JsObject(const char* name, Mutex* mtx, bool frozen)
     : ScriptContext(String("[Object ") + name + "]"),
       m_frozen(frozen), m_mutex(mtx)
@@ -313,6 +286,32 @@ ExpOperation* JsObject::popValue(ObjList& stack, GenObject* context)
     bool ok = runField(stack,*oper,context);
     TelEngine::destruct(oper);
     return ok ? ExpEvaluator::popOne(stack) : 0;
+}
+
+// Static method that adds an object to a parent
+void JsObject::addObject(NamedList& params, const char* name, JsObject* obj)
+{
+    params.addParam(new NamedPointer(name,obj,obj->toString()));
+}
+
+// Static method that adds a constructor to a parent
+void JsObject::addConstructor(NamedList& params, const char* name, JsObject* obj)
+{
+    JsFunction* ctr = new JsFunction(obj->mutex(),name);
+    ctr->params().addParam(new NamedPointer("prototype",obj,obj->toString()));
+    params.addParam(new NamedPointer(name,ctr,ctr->toString()));
+}
+
+// Static method that pops arguments off a stack to a list in proper order
+int JsObject::extractArgs(JsObject* obj, ObjList& stack, const ExpOperation& oper, GenObject* context, ObjList& arguments)
+{
+    if (!obj || !oper.number())
+	return 0;
+    for (long int i = oper.number(); i;  i--) {
+	ExpOperation* op = obj->popValue(stack,context);
+	arguments.insert(op);
+    }
+    return oper.number();
 }
 
 // Initialize standard globals in the execution context
@@ -856,6 +855,7 @@ bool JsFunction::runDefined(ObjList& stack, const ExpOperation& oper, GenObject*
 	// found prototype, build object
 	JsObject* obj = proto->clone();
 	obj->copyFields(stack,*proto,context);
+	obj->runConstructor(stack,oper,context);
 	ExpEvaluator::pushOne(stack,new ExpWrapper(obj,oper.name()));
     }
     return true;

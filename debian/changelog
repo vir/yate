@@ -1,3 +1,16 @@
+yate (4.1.1~svn5063) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5063: + Fixed prototypal inheritance and
+    constructors.  + Preserve and use the debug level in the Debugger
+    class.  + Improved debugging of expression parser.  + Fixed parsing
+    of if ... else blocks.  + Fixed the string limit for single char in
+    a few places, it had to be %.1s instead of %1s.  + Limited the
+    length of the debugging output from expression parser.  + Moved
+    helper functions to static methods of JsObject so code can be
+    reused.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 16 May 2012 02:19:13 +0400
+
 yate (4.1.1~svn5059) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5059: + Fixed Array length - it's a property

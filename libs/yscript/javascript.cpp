@@ -538,12 +538,16 @@ bool JsCode::getInstruction(const char*& expr, Opcode nested)
 		ExpOperation* cond = addOpcode((Opcode)OpcJumpFalse,++m_label);
 		if (!runCompile(++expr,';'))
 		    return false;
+		if (skipComments(expr) == ';')
+		    expr++;
 		const char* save = expr;
 		if ((JsOpcode)ExpEvaluator::getOperator(expr,s_instr) == OpcElse) {
 		    ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
 		    addOpcode(OpcLabel,cond->number());
 		    if (!runCompile(++expr))
 			return false;
+		    if (skipComments(expr) == ';')
+			expr++;
 		    addOpcode(OpcLabel,jump->number());
 		}
 		else {

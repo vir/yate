@@ -492,7 +492,9 @@ bool ExpEvaluator::runCompile(const char*& expr, char stop, Opcode nested)
     } StackedOpcode;
     StackedOpcode stack[10];
     unsigned int stackPos = 0;
-    DDebug(this,DebugInfo,"runCompile '%s' '%1s'",expr,&stop);
+#ifdef DEBUG
+    Debugger debug(DebugInfo,"runCompile()"," '%s' '%1s'",expr,&stop);
+#endif
     if (skipComments(expr) == ')')
 	return false;
     m_inError = false;

@@ -1,3 +1,13 @@
+yate (4.1.1~svn5064) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5064: + Should prevent build failures caused
+    by older Yate devel components in system paths.  + This prevents the
+    external dependencies from inserting include and library paths.  +
+    Moved external code dependencies in separate make variables
+    EXTERNFLAGS and EXTERNLIBS.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 18 May 2012 02:19:13 +0400
+
 yate (4.1.1~svn5063) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5063: + Fixed prototypal inheritance and

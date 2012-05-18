@@ -103,6 +103,8 @@ public:
     JsObject* parseArray(const char*& expr, bool constOnly);
     JsObject* parseObject(const char*& expr, bool constOnly);
 protected:
+    virtual bool getString(const char*& expr);
+    virtual bool getEscape(const char*& expr, String& str, char sep);
     virtual bool keywordChar(char c) const;
     virtual int getKeyword(const char* str) const;
     virtual char skipComments(const char*& expr, GenObject* context = 0) const;
@@ -379,6 +381,94 @@ bool JsCode::link()
 	}
     }
     return true;
+}
+
+bool JsCode::getString(const char*& expr)
+{
+    if (inError())
+	return false;
+    char c = skipComments(expr);
+    if (c != '/' && c != '%')
+	return ExpEvaluator::getString(expr);
+    String str;
+    if (!ExpEvaluator::getString(expr,str))
+	return false;
+    if (c == '%') {
+	// dialplan pattern - turn it into a regular expression
+	String tmp = str;
+	tmp.toUpper();
+	str = "^";
+	char last = '\0';
+	int count = 0;
+	bool esc = false;
+	for (unsigned int i = 0; ; i++) {
+	    char c = tmp.at(i);
+	    if (last && c != last) {
+		switch (last) {
+		    case 'X':
+			str << "[0-9]";
+			break;
+		    case 'Z':
+			str << "[1-9]";
+			break;
+		    case 'N':
+			str << "[2-9]";
+			break;
+		    case '.':
+			str << ".+";
+			count = 1;
+			break;
+		}
+		if (count > 1)
+		    str << "{" << count << "}";
+		last = '\0';
+		count = 0;
+	    }
+	    if (!c) {
+		str << "$";
+		break;
+	    }
+	    switch (c) {
+		case '.':
+		    if (esc) {
+			str << c;
+			break;
+		    }
+		    // fall through
+		case 'X':
+		case 'Z':
+		case 'N':
+		    last = c;
+		    count++;
+		    break;
+		case '+':
+		case '*':
+		    str << "\\";
+		    // fall through
+		default:
+		    str << c;
+	    }
+	    esc = (c == '\\');
+	}
+    }
+    addOpcode(str);
+    //m_opcodes.append(new ExpWrapper(obj));
+    return true;
+}
+
+bool JsCode::getEscape(const char*& expr, String& str, char sep)
+{
+    if (sep != '\'' && sep != '"') {
+	// this is not a string but a regexp or dialplan template
+	char c = *expr++;
+	if (!c)
+	    return false;
+	if (c != '\\' && c != sep)
+	    str << '\\';
+	str << c;
+	return true;
+    }
+    return ExpEvaluator::getEscape(expr,str,sep);
 }
 
 bool JsCode::keywordChar(char c) const

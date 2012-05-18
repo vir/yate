@@ -1,3 +1,18 @@
+yate (4.1.1~svn5067) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5067: + This prevents the external
+    dependencies from inserting include and library paths.  + Moved
+    external code dependencies in separate make variables EXTERNFLAGS
+    and EXTERNLIBS.  + This simplifies writing config files where many
+    lines would end with an equal sign.  + Accept config lines without a
+    = just as having one at end (all line is key name).  + This allows
+    for example %+1xxxxxxxxxx% to be same as /^\+1[0-9]{10}$/  + Added
+    parsing of dialplan style %patterns% that are converted internally
+    to a regexp.  + Added methods to acquire another lock to the Lock
+    class.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 19 May 2012 02:19:13 +0400
+
 yate (4.1.1~svn5064) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5064: + Should prevent build failures caused

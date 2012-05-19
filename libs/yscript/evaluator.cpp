@@ -316,65 +316,20 @@ bool ExpEvaluator::getString(const char*& expr)
     XDebug(this,DebugAll,"getString '%.30s'",expr);
     char c = skipComments(expr);
     if (c == '"' || c == '\'') {
-	String str;
-	if (getString(expr,str)) {
+	char sep = c;
+	const char* start = ++expr;
+	while ((c = *expr++)) {
+	    if (c != sep)
+		continue;
+	    String str(start,expr-start-1);
+	    DDebug(this,DebugAll,"Found '%s'",str.safe());
 	    addOpcode(str);
 	    return true;
 	}
+	expr--;
+	return gotError("Expecting string end");
     }
     return false;
-}
-
-bool ExpEvaluator::getString(const char*& expr, String& str)
-{
-    char sep = *expr++;
-    const char* start = expr;
-    while (char c = *expr++) {
-	if (c != '\\' && c != sep)
-	    continue;
-	String tmp(start,expr-start-1);
-	str += tmp;
-	if (c == sep) {
-	    DDebug(this,DebugAll,"Found '%s'",str.safe());
-	    return true;
-	}
-	tmp.clear();
-	if (!getEscape(expr,tmp,sep))
-	    break;
-	str += tmp;
-	start = expr;
-    }
-    expr--;
-    return gotError("Expecting string end");
-}
-
-bool ExpEvaluator::getEscape(const char*& expr, String& str, char sep)
-{
-    char c = *expr++;
-    switch (c) {
-	case '\0':
-	    return false;
-	case 'b':
-	    c = '\b';
-	    break;
-	case 'f':
-	    c = '\f';
-	    break;
-	case 'n':
-	    c = '\n';
-	    break;
-	case 'r':
-	    c = '\r';
-	    break;
-	case 't':
-	    c = '\t';
-	    break;
-	case 'v':
-	    c = '\v';
-	    break;
-    }
-    str = c;
-    return true;
 }
 
 int ExpEvaluator::getKeyword(const char* str) const

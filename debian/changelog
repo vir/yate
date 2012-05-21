@@ -1,3 +1,10 @@
+yate (4.1.1~svn5069) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5069: + Added logical OR operation and
+    message information functions.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 22 May 2012 02:19:13 +0400
+
 yate (4.1.1~svn5068) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5068: + Reverted SVN commit 5066 (dialplan

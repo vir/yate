@@ -53,6 +53,12 @@
 ;  $(nodename) = the node name the Engine runs as, may be empty
 ;  $(threadname) = name of the thread that dispatched the message, may be empty
 ;  $(dispatching) = the reentry depth, 0 if the message is not generated locally
+;  $(message,name) = name of the message handled
+;  $(message,time) = time of the message handled, seconds since UNIX Epoch
+;  $(message,broadcast) = true if the message is a broadcast, false otherwise
+;  $(message,count) = parameter count of the message handled
+;  $(message,parameters) = parameter list of the message handled, comma separated
+;  $(message,parameters,sep) = parameter list of the message handled, explicit separator
 ;  $(transcode,FLAGS,FORMAT1,FORMAT2,...) = list of formats the input can be transcoded into
 ;       e - exclude initial formats form generated list
 ;       r - allow rate conversion (for use with wideband)
@@ -160,6 +166,7 @@
 ;
 ; First word of a matched target has a special meaning:
 ; if - make a new match using the rest of the line up to the = character
+; or - alternative match using the rest of the line up to the = character
 ; return - returns immediately from the context without routing
 ; include - calls another context, returns at the next entry if the other
 ;   context did not return successfully
@@ -171,6 +178,7 @@
 ; dispatch - dispatches a new message in the engine waiting for it to return,
 ;   parameters are taken from the old message but placed in the new one
 ; echo - displays that line after making substitutions
+; { - starts a block that ends on another line with }
 ;
 ; It is possible to set message parameters by appending them as name=value
 ;  while separating them with semicolons (;)

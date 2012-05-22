@@ -562,6 +562,23 @@ protected:
     virtual bool getFunction(const char*& expr);
 
     /**
+     * Helper method - get a string, advance parsing pointer past it
+     * @param expr Pointer to string separator, gets advanced on success
+     * @param str String in which the result is returned
+     * @return True if succeeded
+     */
+    virtual bool getString(const char*& expr, String& str);
+
+    /**
+     * Helper method - get an escaped component of a string
+     * @param expr Pointer past escape character, gets advanced on success
+     * @param str String in which the result is returned
+     * @param sep String separator character
+     * @return True if succeeded
+     */
+    virtual bool getEscape(const char*& expr, String& str, char sep);
+
+    /**
      * Get a field keyword, advance parsing pointer past it
      * @param expr Pointer to text to parse, gets advanced on success
      * @return True if succeeded, must add the operand internally

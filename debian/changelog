@@ -1,3 +1,13 @@
+yate (4.1.1~svn5071) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5071: + Added parsing of dialplan style
+    %pattern% that is converted internally to regexp.  + Proper String
+    and Regexp parsing and escaping.  + Explicitely require /bin/bash as
+    shell, echo -e does not work in sh.  + Deal with systems where
+    modules are preloaded from /etc/modules
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 24 May 2012 02:19:13 +0400
+
 yate (4.1.1~svn5070) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5070: + This allows for example

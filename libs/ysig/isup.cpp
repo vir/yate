@@ -2326,6 +2326,8 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 			    break;
 			}
 		    }
+		    else
+			setReason("timeout",0);
 		    m_lastEvent = release();
 		    break;
 		}
@@ -2666,7 +2668,7 @@ bool SS7ISUPCall::copyParamIAM(SS7MsgISUP* msg, bool outgoing, SignallingMessage
 }
 
 // If already releasing, set termination flag. Otherwise, send REL (Release) message
-// @param event Event with the parameters. 0 if release is started on some timeout
+// @param event Event with the parameters. 0 if release is started on unspecified interworking
 SignallingEvent* SS7ISUPCall::release(SignallingEvent* event, SS7MsgISUP* msg)
 {
     m_iamTimer.stop();

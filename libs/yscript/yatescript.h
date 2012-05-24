@@ -541,6 +541,14 @@ protected:
     virtual bool getOperand(const char*& expr, bool endOk = true);
 
     /**
+     * Get an inline simple type, usually string or number
+     * @param expr Pointer to text to parse, gets advanced on success
+     * @param constOnly Return only inline constants
+     * @return True if succeeded, must add the operand internally
+     */
+    virtual bool getSimple(const char*& expr, bool constOnly = false);
+
+    /**
      * Get a numerical operand, advance parsing pointer past it
      * @param expr Pointer to text to parse, gets advanced on success
      * @return True if succeeded, must add the operand internally
@@ -589,6 +597,7 @@ protected:
      * Add a simple operator to the expression
      * @param oper Operator code to add
      * @param barrier True to create an evaluator stack barrier
+     * @return Newly added operation
      */
     ExpOperation* addOpcode(Opcode oper, bool barrier = false);
 
@@ -597,24 +606,28 @@ protected:
      * @param oper Operator code to add
      * @param value Integer value to add
      * @param barrier True to create an evaluator stack barrier
+     * @return Newly added operation
      */
     ExpOperation* addOpcode(Opcode oper, long int value, bool barrier = false);
 
     /**
      * Add a string constant to the expression
      * @param value String value to add, will be pushed on execution
+     * @return Newly added operation
      */
     ExpOperation* addOpcode(const String& value);
 
     /**
      * Add an integer constant to the expression
      * @param value Integer value to add, will be pushed on execution
+     * @return Newly added operation
      */
     ExpOperation* addOpcode(long int value);
 
     /**
      * Add a boolean constant to the expression
      * @param value Boolean value to add, will be pushed on execution
+     * @return Newly added operation
      */
     ExpOperation* addOpcode(bool value);
 
@@ -624,8 +637,15 @@ protected:
      * @param name Name of the field or function, case sensitive
      * @param value Numerical value used as parameter count to functions
      * @param barrier True to create an exavuator stack barrier
+     * @return Newly added operation
      */
     ExpOperation* addOpcode(Opcode oper, const String& name, long int value = 0, bool barrier = false);
+
+    /**
+     * Remove from the code and return the last operation
+     * @return Operation removed from end of code, NULL if no operations remaining
+     */
+    ExpOperation* popOpcode();
 
     /**
      * Try to apply simplification to the expression
@@ -1612,6 +1632,82 @@ private:
     void init();
 };
 
+/**
+ * Javascript Array class, implements arrays of items
+ * @short Javascript Array
+ */
+class YSCRIPT_API JsArray : public JsObject
+{
+    YCLASS(JsArray,JsObject)
+public:
+
+    /**
+     * Constructor
+     * @param mtx Pointer to the mutex that serializes this object
+     */
+    JsArray(Mutex* mtx = 0);
+
+    /**
+     * Retrieve the length of the array
+     * @return Number of numerically indexed objects in array
+     */
+    inline long length() 
+	{ return m_length; }
+
+    /**
+     * Add an item at the end of the array
+     * @param item Item to add to array
+     */
+    void push(ExpOperation* item);
+
+protected:
+    /*
+     * Constructor for an empty array
+     * @param mtx Pointer to the mutex that serializes this object
+     * @param name Full name of the object
+     * @param frozen True if the object is to be frozen from creation
+     */
+    inline JsArray(Mutex* mtx, const char* name)
+	: JsObject(mtx,name), m_length(0)
+	{ }
+
+    /**
+     * Clone and rename method
+     * @param name Name of the cloned object
+     * @return New object instance
+     */
+    virtual JsObject* clone(const char* name) const
+	{ return new JsArray(mutex(),name); }
+
+    /**
+     * Try to evaluate a single native method
+     * @param stack Evaluation stack in use, parameters are popped off this stack
+     *  and results are pushed back on stack
+     * @param oper Function to evaluate
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return True if evaluation succeeded
+     */
+    bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
+
+    /**
+     * Synchronize the "length" parameter to the internally stored length
+     */
+    inline void setLength()
+	{ params().setParam("length",String((int)m_length)); }
+
+    /**
+     * Set the internal length and the "length" parameter to a specific value
+     * @param len Length of array to set
+     */
+    inline void setLength(long len)
+	{ m_length = len; params().setParam("length",String((int)len)); }
+
+private:
+    bool runNativeSlice(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    bool runNativeSplice(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    bool runNativeSort(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    long m_length;
+};
 /**
  * Javascript parser, takes source code and generates preparsed code
  * @short Javascript parser

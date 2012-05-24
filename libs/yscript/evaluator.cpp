@@ -289,9 +289,14 @@ bool ExpEvaluator::getOperand(const char*& expr, bool endOk)
 	addOpcode(op);
 	return true;
     }
-    if (getString(expr) || getNumber(expr) || getFunction(expr) || getField(expr))
+    if (getSimple(expr) || getFunction(expr) || getField(expr))
 	return true;
     return gotError("Expecting operand",expr);
+}
+
+bool ExpEvaluator::getSimple(const char*& expr, bool constOnly)
+{
+    return getString(expr) || getNumber(expr);
 }
 
 bool ExpEvaluator::getNumber(const char*& expr)
@@ -752,6 +757,16 @@ ExpOperation* ExpEvaluator::addOpcode(bool value)
     ExpOperation* op = new ExpOperation(value);
     m_opcodes.append(op);
     return op;
+}
+
+ExpOperation* ExpEvaluator::popOpcode()
+{
+    ObjList* l = &m_opcodes;
+    for (ObjList* p = l; p; p = p->next()) {
+	if (p->get())
+	    l = p;
+    }
+    return static_cast<ExpOperation*>(l->remove(false));
 }
 
 void ExpEvaluator::pushOne(ObjList& stack, ExpOperation* oper)

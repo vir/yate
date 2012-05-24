@@ -1,3 +1,13 @@
+yate (4.1.1~svn5073) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5073: + Deal with systems where modules are
+    preloaded from /etc/modules  + Release call with correct cause 102
+    "timeout" when IAM timer T7 expires.  + Made JsArray public because
+    it's needed in many places.  + Added separate methods to parse
+    constants.  + Added code to parse inline [ arrays ] and { objects }.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 25 May 2012 02:19:12 +0400
+
 yate (4.1.1~svn5071) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5071: + Added parsing of dialplan style

@@ -43,47 +43,6 @@ private:
     NamedList* m_list;
 };
 
-// Array object
-class JsArray : public JsObject
-{
-    YCLASS(JsArray,JsObject)
-public:
-    inline JsArray(Mutex* mtx)
-	: JsObject("Array",mtx), m_length(0)
-	{
-	    params().addParam(new ExpFunction("push"));
-	    params().addParam(new ExpFunction("pop"));
-	    params().addParam(new ExpFunction("concat"));
-	    params().addParam(new ExpFunction("join"));
-	    params().addParam(new ExpFunction("reverse"));
-	    params().addParam(new ExpFunction("shift"));
-	    params().addParam(new ExpFunction("unshift"));
-	    params().addParam(new ExpFunction("slice"));
-	    params().addParam(new ExpFunction("splice"));
-	    params().addParam(new ExpFunction("sort"));
-	    params().addParam("length","0");
-	}
-    inline long length() 
-	{ return m_length; }
-    inline void setLength()
-	{ params().setParam("length",String((int)m_length)); }
-    inline void setLength(long len)
-	{ m_length = len; params().setParam("length",String((int)len)); }
-
-protected:
-    inline JsArray(Mutex* mtx, const char* name)
-	: JsObject(mtx,name), m_length(0)
-	{ }
-    virtual JsObject* clone(const char* name) const
-	{ return new JsArray(mutex(),name); }
-    bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
-private:
-    bool runNativeSlice(ObjList& stack, const ExpOperation& oper, GenObject* context);
-    bool runNativeSplice(ObjList& stack, const ExpOperation& oper, GenObject* context);
-    bool runNativeSort(ObjList& stack, const ExpOperation& oper, GenObject* context);
-    long m_length;
-};
-
 // Object object
 class JsObjectObj : public JsObject
 {
@@ -345,6 +304,34 @@ bool JsObjectObj::runNative(ObjList& stack, const ExpOperation& oper, GenObject*
     return true;
 }
 
+
+JsArray::JsArray(Mutex* mtx)
+    : JsObject("Array",mtx), m_length(0)
+{
+    params().addParam(new ExpFunction("push"));
+    params().addParam(new ExpFunction("pop"));
+    params().addParam(new ExpFunction("concat"));
+    params().addParam(new ExpFunction("join"));
+    params().addParam(new ExpFunction("reverse"));
+    params().addParam(new ExpFunction("shift"));
+    params().addParam(new ExpFunction("unshift"));
+    params().addParam(new ExpFunction("slice"));
+    params().addParam(new ExpFunction("splice"));
+    params().addParam(new ExpFunction("sort"));
+    params().addParam("length","0");
+}
+
+void JsArray::push(ExpOperation* item)
+{
+    if (!item)
+	return;
+    unsigned int pos = m_length;
+    while (params().getParam(String(pos)))
+	pos++;
+    const_cast<String&>(item->name()) = pos;
+    params().addParam(item);
+    setLength(pos + 1);
+}
 
 bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {

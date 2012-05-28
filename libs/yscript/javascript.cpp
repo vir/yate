@@ -54,6 +54,7 @@ public:
 	OpcBegin = OpcPrivate + 1,
 	OpcEnd,
 	OpcIndex,
+	OpcFieldOf,
 	OpcTypeof,
 	OpcNew,
 	OpcFor,
@@ -103,11 +104,12 @@ public:
     JsObject* parseArray(const char*& expr, bool constOnly);
     JsObject* parseObject(const char*& expr, bool constOnly);
 protected:
+    virtual void formatLineNo(String& buf, unsigned int line) const;
     virtual bool getString(const char*& expr);
     virtual bool getEscape(const char*& expr, String& str, char sep);
     virtual bool keywordChar(char c) const;
     virtual int getKeyword(const char* str) const;
-    virtual char skipComments(const char*& expr, GenObject* context = 0) const;
+    virtual char skipComments(const char*& expr, GenObject* context = 0);
     virtual int preProcess(const char*& expr, GenObject* context = 0);
     virtual bool getInstruction(const char*& expr, Opcode nested);
     virtual bool getSimple(const char*& expr, bool constOnly = false);
@@ -153,6 +155,7 @@ private:
 #define MAKEOP(s,o) { s, JsCode::Opc ## o }
 static const TokenDict s_operators[] =
 {
+    MAKEOP(".",FieldOf),
     { 0, 0 }
 };
 
@@ -384,6 +387,16 @@ bool JsCode::link()
     return true;
 }
 
+void JsCode::formatLineNo(String& buf, unsigned int line) const
+{
+    unsigned int fnum = (line >> 24) & 0xff;
+    if (!fnum)
+	return ExpEvaluator::formatLineNo(buf,line);
+    buf.clear();
+    const GenObject* file = m_included[fnum - 1];
+    buf << (file ? file->toString().c_str() : "???") << ":" << (line & 0xffffff);
+}
+
 bool JsCode::getString(const char*& expr)
 {
     if (inError())
@@ -475,8 +488,8 @@ bool JsCode::getString(const char*& expr)
     }
     XDebug(this,DebugInfo,"Regexp '%s' flags '%s%s'",str.c_str(),
 	(insensitive ? "i" : ""),(extended ? "" : "b"));
-    addOpcode(str);
-    //m_opcodes.append(new ExpWrapper(obj));
+    JsRegExp* obj = new JsRegExp(0,str,str,insensitive,extended);
+    addOpcode(new ExpWrapper(obj));
     return true;
 }
 
@@ -519,7 +532,7 @@ int JsCode::getKeyword(const char* str) const
     return len;
 }
 
-char JsCode::skipComments(const char*& expr, GenObject* context) const
+char JsCode::skipComments(const char*& expr, GenObject* context)
 {
     char c = skipWhites(expr);
     while (c == '/') {
@@ -555,30 +568,32 @@ bool JsCode::preProcessInclude(const char*& expr, bool once, GenObject* context)
 	return false;
     char c = skipComments(expr);
     if (c == '"' || c == '\'') {
-	char sep = c;
-	const char* start = ++expr;
-	while ((c = *expr++)) {
-	    if (c != sep)
-		continue;
-	    String str(start,expr-start-1);
+	String str;
+	if (ExpEvaluator::getString(expr,str)) {
 	    DDebug(this,DebugAll,"Found include '%s'",str.safe());
 	    parser->adjustPath(str);
 	    str.trimSpaces();
 	    bool ok = !str.null();
 	    if (ok) {
-		bool already = m_included.find(str);
-		if (!(once && already)) {
+		int idx = m_included.index(str);
+		if (!(once && (idx >= 0))) {
+		    if (idx < 0) {
+			String* s = new String(str);
+			m_included.append(s);
+			idx = m_included.index(s);
+		    }
+		    // use the upper bits of line # for file index
+		    unsigned int savedLine = m_lineNo;
+		    m_lineNo = ((idx + 1) << 24) | 1;
 		    m_depth++;
 		    ok = parser->parseFile(str,true);
 		    m_depth--;
-		    if (ok && !already)
-			m_included.append(new String(str));
+		    m_lineNo = savedLine;
 		}
 	    }
 	    return ok || gotError("Failed to include " + str);
 	}
-	expr--;
-	return gotError("Expecting string end");
+	return false;
     }
     return gotError("Expecting include file",expr);
 }
@@ -587,6 +602,7 @@ int JsCode::preProcess(const char*& expr, GenObject* context)
 {
     int rval = -1;
     for (;;) {
+	skipComments(expr);
 	JsOpcode opc = (JsOpcode)ExpEvaluator::getOperator(expr,s_preProc);
 	switch (opc) {
 	    case OpcInclude:
@@ -628,6 +644,7 @@ bool JsCode::getInstruction(const char*& expr, Opcode nested)
 	return true;
     }
     const char* saved = expr;
+    skipComments(expr);
     Opcode op = ExpEvaluator::getOperator(expr,s_instr);
     switch ((JsOpcode)op) {
 	case (JsOpcode)OpcNone:
@@ -655,6 +672,7 @@ bool JsCode::getInstruction(const char*& expr, Opcode nested)
 		if (skipComments(expr) == ';')
 		    expr++;
 		const char* save = expr;
+		skipComments(expr);
 		if ((JsOpcode)ExpEvaluator::getOperator(expr,s_instr) == OpcElse) {
 		    ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
 		    addOpcode(OpcLabel,cond->number());
@@ -702,6 +720,7 @@ bool JsCode::getInstruction(const char*& expr, Opcode nested)
 	    if (!runCompile(expr,0,op))
 		return false;
 	    {
+		skipComments(expr);
 		if ((JsOpcode)ExpEvaluator::getOperator(expr,s_instr) == OpcCatch) {
 		    if (skipComments(expr) != '(')
 			return gotError("Expecting '('",expr);
@@ -712,6 +731,7 @@ bool JsCode::getInstruction(const char*& expr, Opcode nested)
 		    if (!runCompile(++expr))
 			return false;
 		}
+		skipComments(expr);
 		if ((JsOpcode)ExpEvaluator::getOperator(expr,s_instr) == OpcFinally) {
 		    if (!runCompile(expr))
 			return false;
@@ -766,6 +786,7 @@ bool JsCode::getNumber(const char*& expr)
 {
     if (inError())
 	return false;
+    skipComments(expr);
     switch ((JsOpcode)ExpEvaluator::getOperator(expr,s_bools)) {
 	case OpcFalse:
 	    addOpcode(false);
@@ -784,6 +805,7 @@ ExpEvaluator::Opcode JsCode::getOperator(const char*& expr)
     if (inError())
 	return OpcNone;
     XDebug(this,DebugAll,"JsCode::getOperator '%.30s'",expr);
+    skipComments(expr);
     Opcode op = ExpEvaluator::getOperator(expr,s_operators);
     if (OpcNone != op)
 	return op;
@@ -795,6 +817,7 @@ ExpEvaluator::Opcode JsCode::getUnaryOperator(const char*& expr)
     if (inError())
 	return OpcNone;
     XDebug(this,DebugAll,"JsCode::getUnaryOperator '%.30s'",expr);
+    skipComments(expr);
     Opcode op = ExpEvaluator::getOperator(expr,s_unaryOps);
     if (OpcNone != op)
 	return op;
@@ -816,6 +839,7 @@ ExpEvaluator::Opcode JsCode::getPostfixOperator(const char*& expr)
 	expr++;
 	return (Opcode)OpcIndex;
     }
+    skipComments(expr);
     Opcode op = ExpEvaluator::getOperator(expr,s_postfixOps);
     if (OpcNone != op)
 	return op;
@@ -846,6 +870,8 @@ int JsCode::getPrecedence(ExpEvaluator::Opcode oper) const
 	case OpcNew:
 	case OpcIndex:
 	    return 12;
+	case OpcFieldOf:
+	    return 13;
 	default:
 	    return ExpEvaluator::getPrecedence(oper);
     }
@@ -874,7 +900,7 @@ bool JsCode::getSimple(const char*& expr, bool constOnly)
 	jso = parseObject(expr,constOnly);
     if (!jso)
 	return false;
-    m_opcodes.append(new ExpWrapper(jso));
+    addOpcode(new ExpWrapper(jso));
     return true;
 }
 
@@ -976,7 +1002,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		}
 		if (!b) {
 		    TelEngine::destruct(op);
-		    return gotError("ExpEvaluator stack underflow");
+		    return gotError("ExpEvaluator stack underflow",oper.lineNumber());
 		}
 		b->clear();
 		pushOne(stack,op);
@@ -989,14 +1015,33 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		if (!op1 || !op2) {
 		    TelEngine::destruct(op1);
 		    TelEngine::destruct(op2);
-		    return gotError("Stack underflow");
+		    return gotError("Stack underflow",oper.lineNumber());
 		}
 		if (op1->opcode() != OpcField) {
 		    TelEngine::destruct(op1);
 		    TelEngine::destruct(op2);
-		    return gotError("Expecting field name");
+		    return gotError("Expecting field name",oper.lineNumber());
 		}
 		pushOne(stack,new ExpOperation(OpcField,op1->name() + "." + *op2));
+		TelEngine::destruct(op1);
+		TelEngine::destruct(op2);
+	    }
+	    break;
+	case OpcFieldOf:
+	    {
+		ExpOperation* op2 = popOne(stack);
+		ExpOperation* op1 = popOne(stack);
+		if (!op1 || !op2) {
+		    TelEngine::destruct(op1);
+		    TelEngine::destruct(op2);
+		    return gotError("Stack underflow",oper.lineNumber());
+		}
+		if (op1->opcode() != OpcField || op2->opcode() != OpcField) {
+		    TelEngine::destruct(op1);
+		    TelEngine::destruct(op2);
+		    return gotError("Expecting field names",oper.lineNumber());
+		}
+		pushOne(stack,new ExpOperation(OpcField,op1->name() + "." + op2->name()));
 		TelEngine::destruct(op1);
 		TelEngine::destruct(op2);
 	    }
@@ -1005,7 +1050,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 	    {
 		ExpOperation* op = popValue(stack,context);
 		if (!op)
-		    return gotError("Stack underflow");
+		    return gotError("Stack underflow",oper.lineNumber());
 		switch (op->opcode()) {
 		    case OpcPush:
 			{
@@ -1031,7 +1076,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 	    {
 		ExpOperation* op = popOne(stack);
 		if (!op)
-		    return gotError("Stack underflow");
+		    return gotError("Stack underflow",oper.lineNumber());
 		switch (op->opcode()) {
 		    case OpcField:
 			break;
@@ -1046,7 +1091,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 			// fall through
 		    default:
 			TelEngine::destruct(op);
-			return gotError("Expecting class name");
+			return gotError("Expecting class name",oper.lineNumber());
 		}
 		ExpFunction ctr(op->name(),op->number());
 		TelEngine::destruct(op);
@@ -1057,7 +1102,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 	    {
 		ExpOperation* op = popOne(stack);
 		if (!op)
-		    return gotError("Stack underflow");
+		    return gotError("Stack underflow",oper.lineNumber());
 		bool ok = false;
 		while (ExpOperation* drop = popAny(stack)) {
 		    JsOpcode c = (JsOpcode)drop->opcode();
@@ -1068,7 +1113,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		    }
 		}
 		if (!ok)
-		    return gotError("Uncaught exception: " + *op);
+		    return gotError("Uncaught exception: " + *op,oper.lineNumber());
 		pushOne(stack,op);
 	    }
 	    break;
@@ -1089,7 +1134,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		}
 		if (!ok) {
 		    TelEngine::destruct(op);
-		    return gotError("Return outside function call");
+		    return gotError("Return outside function call",oper.lineNumber());
 		}
 		pushOne(stack,op);
 	    }
@@ -1101,7 +1146,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 	    {
 		ExpOperation* op = popValue(stack,context);
 		if (!op)
-		    return gotError("Stack underflow");
+		    return gotError("Stack underflow",oper.lineNumber());
 		bool val = op->number() != 0;
 		TelEngine::destruct(op);
 		switch ((JsOpcode)oper.opcode()) {
@@ -1126,11 +1171,11 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		case OpcJump:
 		case OpcJumpTrue:
 		case OpcJumpFalse:
-		    return jumpToLabel(oper.number(),context) || gotError("Label not found");
+		    return jumpToLabel(oper.number(),context) || gotError("Label not found",oper.lineNumber());
 		case OpcJRel:
 		case OpcJRelTrue:
 		case OpcJRelFalse:
-		    return jumpRelative(oper.number(),context) || gotError("Relative jump failed");
+		    return jumpRelative(oper.number(),context) || gotError("Relative jump failed",oper.lineNumber());
 		default:
 		    return false;
 	    }

@@ -284,6 +284,13 @@ public:
 	{ return m_inError; }
 
     /**
+     * Retrieve the number of line currently being parsed
+     * @return Number of current parsed line, 1 is the first line
+     */
+    inline unsigned int lineNumber() const
+	{ return m_lineNo; }
+
+    /**
      * Check if the expression is empty (no operands or operators)
      * @return True if the expression is completely empty
      */
@@ -347,6 +354,15 @@ public:
     void extender(ExpExtender* ext);
 
     /**
+     * Retrieve the line number from one to three operands
+     * @param op1 First operand
+     * @param op2 Optional second operand
+     * @param op3 Optional third operand
+     * @return Line number at compile time, zero if not found
+     */
+    static unsigned int getLineOf(ExpOperation* op1, ExpOperation* op2 = 0, ExpOperation* op3 = 0);
+
+    /**
      * Push an operand on an evaluation stack
      * @param stack Evaluation stack to remove the operand from
      * @param oper Operation to push on stack, NULL will not be pushed
@@ -395,11 +411,11 @@ public:
 
 protected:
     /**
-     * Helper method to skip over whitespaces
+     * Method to skip over whitespaces, count parsed lines too
      * @param expr Pointer to expression cursor, gets advanced
      * @return First character after whitespaces where expr points
      */
-    static char skipWhites(const char*& expr);
+    virtual char skipWhites(const char*& expr);
 
     /**
      * Helper method to conditionally convert to lower case
@@ -437,17 +453,44 @@ protected:
      * Helper method to display debugging errors internally
      * @param error Text of the error
      * @param text Optional text that caused the error
+     * @param line Number of line generating the error, zero for parsing errors
      * @return Always returns false
      */
-    bool gotError(const char* error = 0, const char* text = 0) const;
+    bool gotError(const char* error = 0, const char* text = 0, unsigned int line = 0) const;
 
     /**
      * Helper method to set error flag and display debugging errors internally
      * @param error Text of the error
      * @param text Optional text that caused the error
+     * @param line Number of line generating the error, zero for parsing errors
      * @return Always returns false
      */
-    bool gotError(const char* error = 0, const char* text = 0);
+    bool gotError(const char* error = 0, const char* text = 0, unsigned int line = 0);
+
+    /**
+     * Helper method to display debugging errors internally
+     * @param error Text of the error
+     * @param line Number of line generating the error, zero for parsing errors
+     * @return Always returns false
+     */
+    inline bool gotError(const char* error, unsigned int line) const
+	{ return gotError(error, 0, line); }
+
+    /**
+     * Helper method to set error flag and display debugging errors internally
+     * @param error Text of the error
+     * @param line Number of line generating the error, zero for parsing errors
+     * @return Always returns false
+     */
+    inline bool gotError(const char* error, unsigned int line)
+	{ return gotError(error, 0, line); }
+
+    /**
+     * Formats a line number to display in error messages
+     * @param buf String buffer used to return the value
+     * @param line Line number to format
+     */
+    virtual void formatLineNo(String& buf, unsigned int line) const;
 
     /**
      * Runs the parser and compiler for one (sub)expression
@@ -464,7 +507,7 @@ protected:
      * @param context Pointer to arbitrary object to be passed to called methods
      * @return First character after comments or whitespaces where expr points
      */
-    virtual char skipComments(const char*& expr, GenObject* context = 0) const;
+    virtual char skipComments(const char*& expr, GenObject* context = 0);
 
     /**
      * Process top-level preprocessor directives
@@ -592,6 +635,13 @@ protected:
      * @return True if succeeded, must add the operand internally
      */
     virtual bool getField(const char*& expr);
+
+    /**
+     * Add an aready built operation to the expression and set its line number
+     * @param oper Operation to add
+     * @param line Line number where operation was compiled, zero to used parsing point
+     */
+    void addOpcode(ExpOperation* oper, unsigned int line = 0);
 
     /**
      * Add a simple operator to the expression
@@ -728,6 +778,11 @@ protected:
      */
     bool m_inError;
 
+    /**
+     * Current line index
+     */
+    unsigned int m_lineNo;
+
 private:
     ExpExtender* m_extender;
 };
@@ -755,7 +810,7 @@ public:
     inline ExpOperation(const ExpOperation& original)
 	: NamedString(original.name(),original),
 	  m_opcode(original.opcode()), m_number(original.number()),
-	  m_barrier(original.barrier())
+	  m_lineNo(0), m_barrier(original.barrier())
 	{ }
 
     /**
@@ -766,7 +821,7 @@ public:
     inline ExpOperation(const ExpOperation& original, const char* name)
 	: NamedString(name,original),
 	  m_opcode(original.opcode()), m_number(original.number()),
-	  m_barrier(original.barrier())
+	  m_lineNo(0), m_barrier(original.barrier())
 	{ }
 
     /**
@@ -779,7 +834,7 @@ public:
 	: NamedString(name,value),
 	  m_opcode(ExpEvaluator::OpcPush),
 	  m_number(autoNum ? value.toLong(nonInteger()) : nonInteger()),
-	  m_barrier(false)
+	  m_lineNo(0), m_barrier(false)
 	{ if (autoNum && value.isBoolean()) m_number = value.toBoolean() ? 1 : 0; }
 
     /**
@@ -789,7 +844,7 @@ public:
      */
     inline explicit ExpOperation(const char* value, const char* name = 0)
 	: NamedString(name,value),
-	  m_opcode(ExpEvaluator::OpcPush), m_number(nonInteger()), m_barrier(false)
+	  m_opcode(ExpEvaluator::OpcPush), m_number(nonInteger()), m_lineNo(0), m_barrier(false)
 	{ }
 
     /**
@@ -799,7 +854,8 @@ public:
      */
     inline explicit ExpOperation(long int value, const char* name = 0)
 	: NamedString(name,"NaN"),
-	  m_opcode(ExpEvaluator::OpcPush), m_number(value), m_barrier(false)
+	  m_opcode(ExpEvaluator::OpcPush),
+	  m_number(value), m_lineNo(0), m_barrier(false)
 	{ if (value != nonInteger()) String::operator=((int)value); }
 
     /**
@@ -809,7 +865,8 @@ public:
      */
     inline explicit ExpOperation(bool value, const char* name = 0)
 	: NamedString(name,String::boolText(value)),
-	  m_opcode(ExpEvaluator::OpcPush), m_number(value ? 1 : 0), m_barrier(false)
+	  m_opcode(ExpEvaluator::OpcPush),
+	  m_number(value ? 1 : 0), m_lineNo(0), m_barrier(false)
 	{ }
 
     /**
@@ -821,7 +878,7 @@ public:
      */
     inline ExpOperation(ExpEvaluator::Opcode oper, const char* name = 0, long int value = nonInteger(), bool barrier = false)
 	: NamedString(name,""),
-	  m_opcode(oper), m_number(value), m_barrier(barrier)
+	  m_opcode(oper), m_number(value), m_lineNo(0), m_barrier(barrier)
 	{ }
 
     /**
@@ -833,7 +890,7 @@ public:
      */
     inline ExpOperation(ExpEvaluator::Opcode oper, const char* name, const char* value, bool barrier = false)
 	: NamedString(name,value),
-	  m_opcode(oper), m_number(nonInteger()), m_barrier(barrier)
+	  m_opcode(oper), m_number(nonInteger()), m_lineNo(0), m_barrier(barrier)
 	{ }
 
     /**
@@ -865,6 +922,20 @@ public:
 	{ return m_barrier; }
 
     /**
+     * Retrieve the line number where the operation was compiled from
+     * @return Line number, zero if unknown
+     */
+    inline unsigned int lineNumber() const
+	{ return m_lineNo; }
+
+    /**
+     * Set the line number where the operation was compiled from
+     * @param line Number of the compiled line
+     */
+    inline void lineNumber(unsigned int line)
+	{ m_lineNo = line; }
+
+    /**
      * Number assignment operator
      * @param num Numeric value to assign to the operation
      * @return Assigned number
@@ -877,8 +948,7 @@ public:
      * @param name Name of the cloned operation
      * @return New operation instance
      */
-    virtual ExpOperation* clone(const char* name) const
-	{ return new ExpOperation(*this,name); }
+    virtual ExpOperation* clone(const char* name) const;
 
     /**
      * Clone method
@@ -890,6 +960,7 @@ public:
 private:
     ExpEvaluator::Opcode m_opcode;
     long int m_number;
+    unsigned int m_lineNo;
     bool m_barrier;
 };
 
@@ -1593,7 +1664,6 @@ class YSCRIPT_API JsFunction : public JsObject
 {
     YCLASS(JsFunction,JsObject)
 public:
-
     /**
      * Constructor
      * @param mtx Pointer to the mutex that serializes this object
@@ -1640,7 +1710,6 @@ class YSCRIPT_API JsArray : public JsObject
 {
     YCLASS(JsArray,JsObject)
 public:
-
     /**
      * Constructor
      * @param mtx Pointer to the mutex that serializes this object
@@ -1667,8 +1736,8 @@ protected:
      * @param name Full name of the object
      * @param frozen True if the object is to be frozen from creation
      */
-    inline JsArray(Mutex* mtx, const char* name)
-	: JsObject(mtx,name), m_length(0)
+    inline JsArray(Mutex* mtx, const char* name, bool frozen = false)
+	: JsObject(mtx,name,frozen), m_length(0)
 	{ }
 
     /**
@@ -1708,6 +1777,71 @@ private:
     bool runNativeSort(ObjList& stack, const ExpOperation& oper, GenObject* context);
     long m_length;
 };
+
+/**
+ * Javascript RegExp class, implements regular expression matching
+ * @short Javascript RegExp
+ */
+class YSCRIPT_API JsRegExp : public JsObject
+{
+    YCLASS(JsRegExp,JsObject)
+public:
+    /*
+     * Constructor for a RegExp constructor
+     * @param mtx Pointer to the mutex that serializes this object
+     */
+    JsRegExp(Mutex* mtx = 0);
+
+    /*
+     * Constructor for a RegExp object
+     * @param mtx Pointer to the mutex that serializes this object
+     * @param name Full name of the object
+     * @param rexp Regular expression text
+     * @param insensitive True to not differentiate case
+     * @param extended True to use POSIX Extended Regular Expression syntax
+     * @param frozen True to create an initially frozen object
+     */
+    JsRegExp(Mutex* mtx, const char* name, const char* rexp = 0, bool insensitive = false,
+	bool extended = true, bool frozen = false);
+
+    /**
+     * Access the internal Regexp object that does the matching
+     * @return Const reference to the internal Regexp object
+     */
+    inline const Regexp& regexp() const
+	{ return m_regexp; }
+
+    /**
+     * Access the internal Regexp object that does the matching
+     * @return Reference to the internal Regexp object
+     */
+    inline Regexp& regexp()
+	{ return m_regexp; }
+
+protected:
+    /**
+     * Clone and rename method
+     * @param name Name of the cloned object
+     * @return New object instance
+     */
+    virtual JsObject* clone(const char* name) const
+	{ return new JsRegExp(mutex(),name,m_regexp.c_str(),
+	    m_regexp.isCaseInsensitive(),m_regexp.isExtended()); }
+
+    /**
+     * Try to evaluate a single native method
+     * @param stack Evaluation stack in use, parameters are popped off this stack
+     *  and results are pushed back on stack
+     * @param oper Function to evaluate
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return True if evaluation succeeded
+     */
+    bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
+
+private:
+    Regexp m_regexp;
+};
+
 /**
  * Javascript parser, takes source code and generates preparsed code
  * @short Javascript parser

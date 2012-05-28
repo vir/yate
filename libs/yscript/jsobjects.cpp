@@ -288,6 +288,8 @@ void JsObject::initialize(ScriptContext* context)
 	addConstructor(p,"Function",new JsFunction(mtx));
     if (!p.getParam(YSTRING("Array")))
 	addConstructor(p,"Array",new JsArray(mtx));
+    if (!p.getParam(YSTRING("RegExp")))
+	addConstructor(p,"RegExp",new JsRegExp(mtx));
     if (!p.getParam(YSTRING("Date")))
 	addConstructor(p,"Date",new JsDate(mtx));
     if (!p.getParam(YSTRING("Math")))
@@ -634,6 +636,39 @@ bool JsArray::runNativeSort(ObjList& stack, const ExpOperation& oper, GenObject*
 }
 
 
+JsRegExp::JsRegExp(Mutex* mtx)
+    : JsObject("RegExp",mtx)
+{
+    params().addParam(new ExpFunction("test"));
+}
+
+JsRegExp::JsRegExp(Mutex* mtx, const char* name, const char* rexp, bool extended, bool insensitive, bool frozen)
+    : JsObject(mtx,name,frozen),
+      m_regexp(rexp,extended,insensitive)
+{
+    params().addParam(new ExpFunction("test"));
+    params().addParam("ignoreCase",String::boolText(insensitive));
+    params().addParam("basicPosix",String::boolText(!extended));
+}
+
+bool JsRegExp::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    XDebug(DebugAll,"JsRegExp::runNative() '%s' in '%s' [%p]",
+	oper.name().c_str(),toString().c_str(),this);
+    if (oper.name() == YSTRING("test")) {
+	if (oper.number() != 1)
+	    return false;
+	ExpOperation* op = popValue(stack,context);
+	bool ok = op && regexp().matches(*op);
+	TelEngine::destruct(op);
+	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
+    }
+    else
+	return JsObject::runNative(stack,oper,context);
+    return true;
+}
+
+
 bool JsMath::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
     XDebug(DebugAll,"JsMath::runNative() '%s' in '%s' [%p]",
@@ -836,7 +871,7 @@ bool JsFunction::runNative(ObjList& stack, const ExpOperation& oper, GenObject* 
 
 bool JsFunction::runDefined(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(DebugAll,"JsObject::runDefined() in '%s' [%p]",toString().c_str(),this);
+    XDebug(DebugAll,"JsFunction::runDefined() in '%s' [%p]",toString().c_str(),this);
     JsObject* proto = YOBJECT(JsObject,getField(stack,"prototype",context));
     if (proto) {
 	// found prototype, build object

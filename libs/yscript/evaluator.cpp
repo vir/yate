@@ -61,7 +61,6 @@ static const TokenDict s_operators_c[] =
     MAKEOP("&", And),
     MAKEOP("|", Or),
     MAKEOP("^", Xor),
-    MAKEOP(".", Cat),
     MAKEOP("@", As),
     MAKEOP("=", Assign),
     { 0, 0 }
@@ -146,12 +145,14 @@ bool ExpExtender::runAssign(ObjList& stack, const ExpOperation& oper, GenObject*
 
 
 ExpEvaluator::ExpEvaluator(const TokenDict* operators, const TokenDict* unaryOps)
-    : m_operators(operators), m_unaryOps(unaryOps), m_inError(false), m_extender(0)
+    : m_operators(operators), m_unaryOps(unaryOps),
+      m_inError(false), m_lineNo(1), m_extender(0)
 {
 }
 
 ExpEvaluator::ExpEvaluator(ExpEvaluator::Parser style)
-    : m_operators(0), m_unaryOps(0), m_inError(false), m_extender(0)
+    : m_operators(0), m_unaryOps(0),
+    m_inError(false), m_lineNo(1), m_extender(0)
 {
     switch (style) {
 	case C:
@@ -167,7 +168,7 @@ ExpEvaluator::ExpEvaluator(ExpEvaluator::Parser style)
 
 ExpEvaluator::ExpEvaluator(const ExpEvaluator& original)
     : m_operators(original.m_operators), m_unaryOps(original.unaryOps()),
-      m_inError(false), m_extender(0)
+      m_inError(false), m_lineNo(original.lineNumber()), m_extender(0)
 {
     extender(original.extender());
     for (ObjList* l = original.m_opcodes.skipNull(); l; l = l->skipNext()) {
@@ -197,9 +198,34 @@ char ExpEvaluator::skipWhites(const char*& expr)
 {
     if (!expr)
 	return 0;
-    while (*expr==' ' || *expr=='\t' || *expr=='\r' || *expr=='\n')
-	expr++;
-    return *expr;
+    char skip = '\0';
+    for (;; *expr++) {
+	char c = *expr;
+	switch (*expr) {
+	    case ' ':
+	    case '\t':
+		skip = '\0';
+		continue;
+	    case '\r':
+		if (skip != c) {
+		    m_lineNo++;
+		    skip = '\n';
+		}
+		else
+		    skip = '\0';
+		continue;
+	    case '\n':
+		if (skip != c) {
+		    m_lineNo++;
+		    skip = '\r';
+		}
+		else
+		    skip = '\0';
+		continue;
+	    default:
+		return c;
+	}
+    }
 }
 
 bool ExpEvaluator::keywordChar(char c) const
@@ -208,7 +234,7 @@ bool ExpEvaluator::keywordChar(char c) const
 	('0' <= c && c <= '9') || (c == '_');
 }
 
-char ExpEvaluator::skipComments(const char*& expr, GenObject* context) const
+char ExpEvaluator::skipComments(const char*& expr, GenObject* context)
 {
     return skipWhites(expr);
 }
@@ -221,7 +247,6 @@ int ExpEvaluator::preProcess(const char*& expr, GenObject* context)
 ExpEvaluator::Opcode ExpEvaluator::getOperator(const char*& expr, const TokenDict* operators, bool caseInsensitive) const
 {
     XDebug(this,DebugAll,"getOperator('%.30s',%p,%s)",expr,operators,String::boolText(caseInsensitive));
-    skipComments(expr);
     if (operators) {
 	bool kw = keywordChar(*expr);
 	for (const TokenDict* o = operators; o->token; o++) {
@@ -240,23 +265,32 @@ ExpEvaluator::Opcode ExpEvaluator::getOperator(const char*& expr, const TokenDic
     return OpcNone;
 }
 
-bool ExpEvaluator::gotError(const char* error, const char* text) const
+bool ExpEvaluator::gotError(const char* error, const char* text, unsigned int line) const
 {
     if (!error) {
 	if (!text)
 	    return false;
 	error = "unknown error";
     }
-    Debug(this,DebugWarn,"Evaluator error: %s%s%.50s",error,
-	(text ? " at: " : ""),
-	c_safe(text));
+    if (!line)
+	line = lineNumber();
+    String lineNo;
+    formatLineNo(lineNo,line);
+    Debug(this,DebugWarn,"Evaluator error: %s in %s%s%.50s",error,
+	lineNo.c_str(),(text ? " at: " : ""),c_safe(text));
     return false;
 }
 
-bool ExpEvaluator::gotError(const char* error, const char* text)
+bool ExpEvaluator::gotError(const char* error, const char* text, unsigned int line)
 {
     m_inError = true;
     return const_cast<const ExpEvaluator*>(this)->gotError(error,text);
+}
+
+void ExpEvaluator::formatLineNo(String& buf, unsigned int line) const
+{
+    buf.clear();
+    buf << "line " << line;
 }
 
 bool ExpEvaluator::getInstruction(const char*& expr, Opcode nested)
@@ -444,11 +478,13 @@ bool ExpEvaluator::getField(const char*& expr)
 
 ExpEvaluator::Opcode ExpEvaluator::getOperator(const char*& expr)
 {
+    skipComments(expr);
     return getOperator(expr,m_operators);
 }
 
 ExpEvaluator::Opcode ExpEvaluator::getUnaryOperator(const char*& expr)
 {
+    skipComments(expr);
     return getOperator(expr,m_unaryOps);
 }
 
@@ -575,6 +611,7 @@ bool ExpEvaluator::runCompile(const char*& expr, char stop, Opcode nested)
 	}
 	if (inError())
 	    return false;
+	skipComments(expr);
 	oper = getOperator(expr);
 	if (oper == OpcNone)
 	    return gotError("Operator or separator expected",expr);
@@ -630,10 +667,9 @@ bool ExpEvaluator::trySimplify()
 		    if (o->opcode() == OpcLAnd || o->opcode() == OpcAnd || o->opcode() == OpcMul) {
 			if ((op1->opcode() == OpcPush && !op1->number() && op2->opcode() == OpcField) ||
 			    (op2->opcode() == OpcPush && !op2->number() && op1->opcode() == OpcField)) {
-			    if (o->opcode() == OpcLAnd)
-				(m_opcodes+i)->set(new ExpOperation(false));
-			    else
-				(m_opcodes+i)->set(new ExpOperation((long int)0));
+			    ExpOperation* newOp = (o->opcode() == OpcLAnd) ? new ExpOperation(false) : new ExpOperation((long int)0);
+			    newOp->lineNumber(o->lineNumber());
+			    (m_opcodes+i)->set(newOp);
 			    m_opcodes.remove(op1);
 			    m_opcodes.remove(op2);
 			    i -= 2;
@@ -644,7 +680,9 @@ bool ExpEvaluator::trySimplify()
 		    if (o->opcode() == OpcLOr) {
 			if ((op1->opcode() == OpcPush && op1->number() && op2->opcode() == OpcField) ||
 			    (op2->opcode() == OpcPush && op2->number() && op1->opcode() == OpcField)) {
-			    (m_opcodes+i)->set(new ExpOperation(true));
+			    ExpOperation* newOp = new ExpOperation(true);
+			    newOp->lineNumber(o->lineNumber());
+			    (m_opcodes+i)->set(newOp);
 			    m_opcodes.remove(op1);
 			    m_opcodes.remove(op2);
 			    i -= 2;
@@ -658,7 +696,9 @@ bool ExpEvaluator::trySimplify()
 			pushOne(stack,op2->clone());
 			if (runOperation(stack,*o)) {
 			    // replace operators and operation with computed constant
-			    (m_opcodes+i)->set(popOne(stack));
+			    ExpOperation* newOp = popOne(stack);
+			    newOp->lineNumber(o->lineNumber());
+			    (m_opcodes+i)->set(newOp);
 			    m_opcodes.remove(op1);
 			    m_opcodes.remove(op2);
 			    i -= 2;
@@ -679,7 +719,9 @@ bool ExpEvaluator::trySimplify()
 			pushOne(stack,op->clone());
 			if (runOperation(stack,*o)) {
 			    // replace unary operator and operation with computed constant
-			    (m_opcodes+i)->set(popOne(stack));
+			    ExpOperation* newOp = popOne(stack);
+			    newOp->lineNumber(o->lineNumber());
+			    (m_opcodes+i)->set(newOp);
 			    m_opcodes.remove(op);
 			    i--;
 			    done = true;
@@ -701,6 +743,17 @@ bool ExpEvaluator::trySimplify()
     return done;
 }
 
+void ExpEvaluator::addOpcode(ExpOperation* oper, unsigned int line)
+{
+    if (!oper)
+	return;
+    DDebug(this,DebugAll,"addOpcode %u, %u",oper->opcode(),line);
+    if (!line)
+	line = lineNumber();
+    oper->lineNumber(line);
+    m_opcodes.append(oper);
+}
+
 ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, bool barrier)
 {
     DDebug(this,DebugAll,"addOpcode %u",oper);
@@ -715,6 +768,7 @@ ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, bool barrier)
 	}
     }
     ExpOperation* op = new ExpOperation(oper,0,ExpOperation::nonInteger(),barrier);
+    op->lineNumber(lineNumber());
     m_opcodes.append(op);
     return op;
 }
@@ -723,6 +777,7 @@ ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, long int value,
 {
     DDebug(this,DebugAll,"addOpcode %u %lu",oper,value);
     ExpOperation* op = new ExpOperation(oper,0,value,barrier);
+    op->lineNumber(lineNumber());
     m_opcodes.append(op);
     return op;
 }
@@ -731,6 +786,7 @@ ExpOperation* ExpEvaluator::addOpcode(ExpEvaluator::Opcode oper, const String& n
 {
     DDebug(this,DebugAll,"addOpcode %u '%s' %ld",oper,name.c_str(),value);
     ExpOperation* op = new ExpOperation(oper,name,value,barrier);
+    op->lineNumber(lineNumber());
     m_opcodes.append(op);
     return op;
 }
@@ -739,6 +795,7 @@ ExpOperation* ExpEvaluator::addOpcode(const String& value)
 {
     DDebug(this,DebugAll,"addOpcode ='%s'",value.c_str());
     ExpOperation* op = new ExpOperation(value);
+    op->lineNumber(lineNumber());
     m_opcodes.append(op);
     return op;
 }
@@ -747,6 +804,7 @@ ExpOperation* ExpEvaluator::addOpcode(long int value)
 {
     DDebug(this,DebugAll,"addOpcode =%ld",value);
     ExpOperation* op = new ExpOperation(value);
+    op->lineNumber(lineNumber());
     m_opcodes.append(op);
     return op;
 }
@@ -755,6 +813,7 @@ ExpOperation* ExpEvaluator::addOpcode(bool value)
 {
     DDebug(this,DebugAll,"addOpcode =%s",String::boolText(value));
     ExpOperation* op = new ExpOperation(value);
+    op->lineNumber(lineNumber());
     m_opcodes.append(op);
     return op;
 }
@@ -767,6 +826,17 @@ ExpOperation* ExpEvaluator::popOpcode()
 	    l = p;
     }
     return static_cast<ExpOperation*>(l->remove(false));
+}
+
+unsigned int ExpEvaluator::getLineOf(ExpOperation* op1, ExpOperation* op2, ExpOperation* op3)
+{
+    if (op1 && op1->lineNumber())
+	return op1->lineNumber();
+    if (op2 && op2->lineNumber())
+	return op2->lineNumber();
+    if (op3 && op3->lineNumber())
+	return op3->lineNumber();
+    return 0;
 }
 
 void ExpEvaluator::pushOne(ObjList& stack, ExpOperation* oper)
@@ -858,13 +928,13 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 		if (!op1 || !op2) {
 		    TelEngine::destruct(op1);
 		    TelEngine::destruct(op2);
-		    return gotError("ExpEvaluator stack underflow");
+		    return gotError("ExpEvaluator stack underflow",oper.lineNumber());
 		}
 		switch (oper.opcode()) {
 		    case OpcDiv:
 		    case OpcMod:
 			if (!op2->number())
-			    return gotError("Division by zero");
+			    return gotError("Division by zero",oper.lineNumber());
 		    case OpcAdd:
 			if (op1->isInteger() && op2->isInteger())
 			    break;
@@ -953,7 +1023,7 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 		if (!op1 || !op2) {
 		    TelEngine::destruct(op1);
 		    TelEngine::destruct(op2);
-		    return gotError("ExpEvaluator stack underflow");
+		    return gotError("ExpEvaluator stack underflow",oper.lineNumber());
 		}
 		bool val = false;
 		switch (oper.opcode()) {
@@ -979,7 +1049,7 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 		if (!op1 || !op2) {
 		    TelEngine::destruct(op1);
 		    TelEngine::destruct(op2);
-		    return gotError("ExpEvaluator stack underflow");
+		    return gotError("ExpEvaluator stack underflow",oper.lineNumber());
 		}
 		String val = *op1 + *op2;
 		TelEngine::destruct(op1);
@@ -995,7 +1065,7 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 		if (!op1 || !op2) {
 		    TelEngine::destruct(op1);
 		    TelEngine::destruct(op2);
-		    return gotError("ExpEvaluator stack underflow");
+		    return gotError("ExpEvaluator stack underflow",oper.lineNumber());
 		}
 		pushOne(stack,op1->clone(*op2));
 		TelEngine::destruct(op1);
@@ -1008,7 +1078,7 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 	    {
 		ExpOperation* op = popValue(stack,context);
 		if (!op)
-		    return gotError("ExpEvaluator stack underflow");
+		    return gotError("ExpEvaluator stack underflow",oper.lineNumber());
 		long int val = op->number();
 		TelEngine::destruct(op);
 		switch (oper.opcode()) {
@@ -1028,7 +1098,8 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 	    }
 	    break;
 	case OpcFunc:
-	    return runFunction(stack,oper,context) || gotError("Function call failed");
+	    return runFunction(stack,oper,context) ||
+		gotError("Function '" + oper.name() + "' call failed",oper.lineNumber());
 	case OpcIncPre:
 	case OpcDecPre:
 	case OpcIncPost:
@@ -1036,10 +1107,10 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 	    {
 		ExpOperation* fld = popOne(stack);
 		if (!fld)
-		    return gotError("ExpEvaluator stack underflow");
+		    return gotError("ExpEvaluator stack underflow",oper.lineNumber());
 		if (fld->opcode() != OpcField) {
 		    TelEngine::destruct(fld);
-		    return gotError("Expecting LValue in operator");
+		    return gotError("Expecting LValue in operator",oper.lineNumber());
 		}
 		ExpOperation* val = 0;
 		if (!(runField(stack,*fld,context) && (val = popOne(stack)))) {
@@ -1072,7 +1143,7 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 		TelEngine::destruct(fld);
 		if (!ok) {
 		    TelEngine::destruct(val);
-		    return gotError("Assignment failed");
+		    return gotError("Assignment failed",oper.lineNumber());
 		}
 		pushOne(stack,val);
 	    }
@@ -1084,12 +1155,12 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 		if (!fld || !val) {
 		    TelEngine::destruct(fld);
 		    TelEngine::destruct(val);
-		    return gotError("ExpEvaluator stack underflow");
+		    return gotError("ExpEvaluator stack underflow",oper.lineNumber());
 		}
 		if (fld->opcode() != OpcField) {
 		    TelEngine::destruct(fld);
 		    TelEngine::destruct(val);
-		    return gotError("Expecting LValue in assignment");
+		    return gotError("Expecting LValue in assignment",oper.lineNumber());
 		}
 		ExpOperation* op = val->clone(fld->name());
 		TelEngine::destruct(fld);
@@ -1097,7 +1168,7 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 		TelEngine::destruct(op);
 		if (!ok) {
 		    TelEngine::destruct(val);
-		    return gotError("Assignment failed");
+		    return gotError("Assignment failed",oper.lineNumber());
 		}
 		pushOne(stack,val);
 	    }
@@ -1110,12 +1181,12 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 		if (!fld || !val) {
 		    TelEngine::destruct(fld);
 		    TelEngine::destruct(val);
-		    return gotError("ExpEvaluator stack underflow");
+		    return gotError("ExpEvaluator stack underflow",oper.lineNumber());
 		}
 		if (fld->opcode() != OpcField) {
 		    TelEngine::destruct(fld);
 		    TelEngine::destruct(val);
-		    return gotError("Expecting LValue in assignment");
+		    return gotError("Expecting LValue in assignment",oper.lineNumber());
 		}
 		pushOne(stack,fld->clone());
 		pushOne(stack,fld);
@@ -1143,7 +1214,7 @@ bool ExpEvaluator::runFunction(ObjList& stack, const ExpOperation& oper, GenObje
 	for (long int i = oper.number(); i; i--) {
 	    ExpOperation* o = popValue(stack,context);
 	    if (!o)
-		return gotError("ExpEvaluator stack underflow");
+		return gotError("ExpEvaluator stack underflow",oper.lineNumber());
 	    res = String((char)o->number()) + res;
 	    TelEngine::destruct(o);
 	}
@@ -1152,7 +1223,7 @@ bool ExpEvaluator::runFunction(ObjList& stack, const ExpOperation& oper, GenObje
     }
     if (oper.name() == YSTRING("now")) {
 	if (oper.number())
-	    return gotError("Function expects no arguments");
+	    return gotError("Function expects no arguments",oper.lineNumber());
 	pushOne(stack,new ExpOperation((long int)Time::secNow()));
 	return true;
     }
@@ -1316,10 +1387,20 @@ void ExpEvaluator::dump(const ObjList& codes, String& res) const
 }
 
 
+ExpOperation* ExpOperation::clone(const char* name) const
+{
+    ExpOperation* op = new ExpOperation(*this,name);
+    op->lineNumber(lineNumber());
+    return op;
+}
+
+
 ExpOperation* ExpFunction::clone(const char* name) const
 {
     XDebug(DebugInfo,"ExpFunction::clone('%s') [%p]",name,this);
-    return new ExpFunction(name,number());
+    ExpFunction* op = new ExpFunction(name,number());
+    op->lineNumber(lineNumber());
+    return op;
 }
 
 
@@ -1329,7 +1410,9 @@ ExpOperation* ExpWrapper::clone(const char* name) const
     RefObject* r = YOBJECT(RefObject,object());
     if (r)
 	r->ref();
-    return new ExpWrapper(object(),name);
+    ExpWrapper* op = new ExpWrapper(object(),name);
+    op->lineNumber(lineNumber());
+    return op;
 }
 
 void* ExpWrapper::getObject(const String& name) const

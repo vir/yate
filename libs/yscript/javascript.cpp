@@ -488,8 +488,8 @@ bool JsCode::getString(const char*& expr)
     }
     XDebug(this,DebugInfo,"Regexp '%s' flags '%s%s'",str.c_str(),
 	(insensitive ? "i" : ""),(extended ? "" : "b"));
-    addOpcode(str);
-    //m_opcodes.append(new ExpWrapper(obj));
+    JsRegExp* obj = new JsRegExp(0,str,str,insensitive,extended);
+    addOpcode(new ExpWrapper(obj));
     return true;
 }
 

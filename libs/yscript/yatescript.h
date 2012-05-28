@@ -1664,7 +1664,6 @@ class YSCRIPT_API JsFunction : public JsObject
 {
     YCLASS(JsFunction,JsObject)
 public:
-
     /**
      * Constructor
      * @param mtx Pointer to the mutex that serializes this object
@@ -1711,7 +1710,6 @@ class YSCRIPT_API JsArray : public JsObject
 {
     YCLASS(JsArray,JsObject)
 public:
-
     /**
      * Constructor
      * @param mtx Pointer to the mutex that serializes this object
@@ -1738,8 +1736,8 @@ protected:
      * @param name Full name of the object
      * @param frozen True if the object is to be frozen from creation
      */
-    inline JsArray(Mutex* mtx, const char* name)
-	: JsObject(mtx,name), m_length(0)
+    inline JsArray(Mutex* mtx, const char* name, bool frozen = false)
+	: JsObject(mtx,name,frozen), m_length(0)
 	{ }
 
     /**
@@ -1779,6 +1777,71 @@ private:
     bool runNativeSort(ObjList& stack, const ExpOperation& oper, GenObject* context);
     long m_length;
 };
+
+/**
+ * Javascript RegExp class, implements regular expression matching
+ * @short Javascript RegExp
+ */
+class YSCRIPT_API JsRegExp : public JsObject
+{
+    YCLASS(JsRegExp,JsObject)
+public:
+    /*
+     * Constructor for a RegExp constructor
+     * @param mtx Pointer to the mutex that serializes this object
+     */
+    JsRegExp(Mutex* mtx = 0);
+
+    /*
+     * Constructor for a RegExp object
+     * @param mtx Pointer to the mutex that serializes this object
+     * @param name Full name of the object
+     * @param rexp Regular expression text
+     * @param insensitive True to not differentiate case
+     * @param extended True to use POSIX Extended Regular Expression syntax
+     * @param frozen True to create an initially frozen object
+     */
+    JsRegExp(Mutex* mtx, const char* name, const char* rexp = 0, bool insensitive = false,
+	bool extended = true, bool frozen = false);
+
+    /**
+     * Access the internal Regexp object that does the matching
+     * @return Const reference to the internal Regexp object
+     */
+    inline const Regexp& regexp() const
+	{ return m_regexp; }
+
+    /**
+     * Access the internal Regexp object that does the matching
+     * @return Reference to the internal Regexp object
+     */
+    inline Regexp& regexp()
+	{ return m_regexp; }
+
+protected:
+    /**
+     * Clone and rename method
+     * @param name Name of the cloned object
+     * @return New object instance
+     */
+    virtual JsObject* clone(const char* name) const
+	{ return new JsRegExp(mutex(),name,m_regexp.c_str(),
+	    m_regexp.isCaseInsensitive(),m_regexp.isExtended()); }
+
+    /**
+     * Try to evaluate a single native method
+     * @param stack Evaluation stack in use, parameters are popped off this stack
+     *  and results are pushed back on stack
+     * @param oper Function to evaluate
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return True if evaluation succeeded
+     */
+    bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
+
+private:
+    Regexp m_regexp;
+};
+
 /**
  * Javascript parser, takes source code and generates preparsed code
  * @short Javascript parser

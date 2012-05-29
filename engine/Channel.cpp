@@ -1383,7 +1383,7 @@ bool Driver::received(Message &msg, int id)
 	    msg.userData(chan);
 	    if (chan->msgMasquerade(msg))
 		return true;
-	    chan->complete(msg);
+	    chan->complete(msg,msg.getBoolValue(YSTRING("complete_minimal"),false));
 	    return false;
 	case Locate:
 	    msg.userData(chan);

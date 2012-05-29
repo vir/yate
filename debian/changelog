@@ -1,3 +1,12 @@
+yate (4.1.1~svn5077) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5077: + Allow chan.masquerade to provide
+    only minimal completion of parameters.  + Avoids overwriting
+    parameters changed from routing.  + Request minimal completing in
+    masqueraded call.execute for overlap dialing.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 30 May 2012 02:19:14 +0400
+
 yate (4.1.1~svn5075) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5075: + Added separate methods to parse

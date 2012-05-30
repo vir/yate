@@ -1,3 +1,20 @@
+yate (4.1.1~svn5082) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5082: + Request minimal completing in
+    masqueraded call.execute for overlap dialing.  + Added dump_r and
+    print_r methods of Engine to aid in debugging.  + Fixed object
+    assignment to object fields.  + The automatic decision can be
+    overriden by the "send-inband" parameter.  + Never set
+    OptionalBackwardCallIndicators=inband for an outbound call.  +
+    Implemented identity checking, proper null and undefined values.  +
+    Fixed the name resolution to allow the pseudo properties.  + Added
+    string properties and methods that apply to all non-JS objects.  +
+    Fixed the null object to evaluate to false.  + Added separate
+    methods to retrieve the numeric and boolean values from an
+    operation.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 31 May 2012 02:19:13 +0400
+
 yate (4.1.1~svn5077) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5077: + Allow chan.masquerade to provide

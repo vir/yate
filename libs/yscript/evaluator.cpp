@@ -886,6 +886,8 @@ ExpOperation* ExpEvaluator::popValue(ObjList& stack, GenObject* context) const
     ExpOperation* oper = popOne(stack);
     if (!oper || (oper->opcode() != OpcField))
 	return oper;
+    XDebug(DebugAll,"ExpEvaluator::popValue() field '%s' [%p]",
+	oper->name().c_str(),this);
     bool ok = runField(stack,*oper,context);
     TelEngine::destruct(oper);
     return ok ? popOne(stack) : 0;

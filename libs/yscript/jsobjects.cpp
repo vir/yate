@@ -123,26 +123,33 @@ static void dumpRecursiveObj(const GenObject* obj, String& buf, unsigned int dep
 	buf.append(str,"\r\n");
 	return;
     }
-    seen.append(obj)->setDelete(false);
     const NamedString* nstr = YOBJECT(NamedString,obj);
     const NamedPointer* nptr = YOBJECT(NamedPointer,nstr);
     const char* type = nstr ? (nptr ? "NamedPointer" : "NamedString") : "???";
     const ScriptContext* scr = YOBJECT(ScriptContext,obj);
     const ExpWrapper* wrap = 0;
+    bool objRecursed = false;
     if (scr) {
-	if (YOBJECT(JsObject,scr)) {
+	const JsObject* jso = YOBJECT(JsObject,scr);
+	if (jso) {
+	    objRecursed = (seen.find(jso) != 0);
+	    if ((jso != obj) && !objRecursed)
+		seen.append(jso)->setDelete(false);
 	    if (YOBJECT(JsArray,scr))
 		type = "JsArray";
 	    else if (YOBJECT(JsFunction,scr))
 		type = "JsFunction";
+	    else if (YOBJECT(JsRegExp,scr))
+		type = "JsRegExp";
 	    else
 		type = "JsObject";
 	}
 	else
 	    type = "ScriptContext";
     }
+    seen.append(obj)->setDelete(false);
     const ExpOperation* exp = YOBJECT(ExpOperation,nstr);
-    if (exp) {
+    if (exp && !scr) {
 	if ((wrap = YOBJECT(ExpWrapper,exp)))
 	    type = wrap->object() ? "ExpWrapper" : "Undefined";
 	else if (YOBJECT(ExpFunction,exp))
@@ -155,7 +162,11 @@ static void dumpRecursiveObj(const GenObject* obj, String& buf, unsigned int dep
     else
 	str << "'" << obj->toString() << "'";
     str << " (" << type << ")";
+    if (objRecursed)
+	str << " (already seen)";
     buf.append(str,"\r\n");
+    if (objRecursed)
+	return;
     str.clear();
     if (scr) {
 	NamedIterator iter(scr->params());
@@ -309,7 +320,9 @@ ExpOperation* JsObject::popValue(ObjList& stack, GenObject* context)
     ExpOperation* oper = ExpEvaluator::popOne(stack);
     if (!oper || (oper->opcode() != ExpEvaluator::OpcField))
 	return oper;
-    bool ok = runField(stack,*oper,context);
+    XDebug(DebugAll,"JsObject::popValue() field '%s' in '%s' [%p]",
+	oper->name().c_str(),toString().c_str(),this);
+    bool ok = runMatchingField(stack,*oper,context);
     TelEngine::destruct(oper);
     return ok ? ExpEvaluator::popOne(stack) : 0;
 }

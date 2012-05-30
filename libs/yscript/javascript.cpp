@@ -45,6 +45,8 @@ public:
 private:
     GenObject* resolveTop(ObjList& stack, const String& name, GenObject* context);
     GenObject* resolve(ObjList& stack, String& name, GenObject* context);
+    bool runStringFunction(GenObject* obj, const String& name, ObjList& stack, const ExpOperation& oper, GenObject* context);
+    bool runStringField(GenObject* obj, const String& name, ObjList& stack, const ExpOperation& oper, GenObject* context);
 };
 
 class JsNull : public JsObject
@@ -301,6 +303,8 @@ bool JsContext::runFunction(ObjList& stack, const ExpOperation& oper, GenObject*
 	    ExpOperation op(oper,name);
 	    return ext->runFunction(stack,op,context);
 	}
+	if (runStringFunction(o,name,stack,oper,context))
+	    return true;
     }
     if (name == YSTRING("isNaN")) {
 	bool nan = true;
@@ -343,8 +347,103 @@ bool JsContext::runField(ObjList& stack, const ExpOperation& oper, GenObject* co
 	    ExpOperation op(oper,name);
 	    return ext->runField(stack,op,context);
 	}
+	if (runStringField(o,name,stack,oper,context))
+	    return true;
     }
     return JsObject::runField(stack,oper,context);
+}
+
+bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    const String* str = YOBJECT(String,obj);
+    if (!str)
+	return false;
+    if (name == YSTRING("charAt")) {
+	int idx = 0;
+	ObjList args;
+	if (extractArgs(stack,oper,context,args)) {
+	    ExpOperation* op = static_cast<ExpOperation*>(args[0]);
+	    if (op && op->isInteger())
+		idx = op->number();
+	}
+	ExpEvaluator::pushOne(stack,new ExpOperation(String(str->at(idx))));
+	return true;
+    }
+    if (name == YSTRING("indexOf")) {
+	int idx = -1;
+	ObjList args;
+	if (extractArgs(stack,oper,context,args)) {
+	    const String* what = static_cast<String*>(args[0]);
+	    if (what) {
+		ExpOperation* from = static_cast<ExpOperation*>(args[1]);
+		int offs = (from && from->isInteger()) ? from->number() : 0;
+		if (offs < 0)
+		    offs = 0;
+		idx = str->find(*what,offs);
+	    }
+	}
+	ExpEvaluator::pushOne(stack,new ExpOperation((long int)idx));
+	return true;
+    }
+    if (name == YSTRING("substr")) {
+	ObjList args;
+	int offs = 0;
+	int len = -1;
+	if (extractArgs(stack,oper,context,args)) {
+	    ExpOperation* op = static_cast<ExpOperation*>(args[0]);
+	    if (op && op->isInteger())
+		offs = op->number();
+	    op = static_cast<ExpOperation*>(args[1]);
+	    if (op && op->isInteger()) {
+		len = op->number();
+		if (len < 0)
+		    len = 0;
+	    }
+	}
+	ExpEvaluator::pushOne(stack,new ExpOperation(str->substr(offs,len)));
+	return true;
+    }
+    if (name == YSTRING("match")) {
+	ObjList args;
+	String buf(*str);
+	if (extractArgs(stack,oper,context,args)) {
+	    ExpOperation* op = static_cast<ExpOperation*>(args[0]);
+	    ExpWrapper* wrap = YOBJECT(ExpWrapper,op);
+	    JsRegExp* rexp = YOBJECT(JsRegExp,wrap);
+	    bool ok = false;
+	    if (rexp)
+		ok = buf.matches(rexp->regexp());
+	    else if (!wrap) {
+		Regexp r(*static_cast<String*>(op),true);
+		ok = buf.matches(r);
+	    }
+	    if (ok) {
+		JsArray* jsa = new JsArray(mutex());
+		for (int i = 0; i <= buf.matchCount(); i++)
+		    jsa->push(new ExpOperation(buf.matchString(i)));
+		jsa->params().addParam(new ExpOperation((long int)buf.matchOffset(),"index"));
+		if (rexp)
+		    jsa->params().addParam(wrap->clone("input"));
+		ExpEvaluator::pushOne(stack,new ExpWrapper(jsa));
+		return true;
+	    }
+	}
+	ExpEvaluator::pushOne(stack,s_null.ExpOperation::clone());
+	return true;
+    }
+    return false;
+}
+
+bool JsContext::runStringField(GenObject* obj, const String& name, ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    const String* s = YOBJECT(String,obj);
+    if (!s)
+	return false;
+    if (name == YSTRING("length")) {
+	ExpEvaluator::pushOne(stack,new ExpOperation((long int)s->length()));
+	return true;
+    }
+    return false;
 }
 
 bool JsContext::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context)

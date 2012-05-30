@@ -1216,6 +1216,15 @@ public:
      */
     virtual bool copyFields(ObjList& stack, const ScriptContext& original, GenObject* context);
 
+    /**
+     * Try to evaluate a single field searching for a matching context
+     * @param stack Evaluation stack in use, field value must be pushed on it
+     * @param oper Field to evaluate
+     * @param context Pointer to context data passed from evaluation methods
+     * @return True if evaluation succeeded
+     */
+    bool runMatchingField(ObjList& stack, const ExpOperation& oper, GenObject* context);
+
 private:
     NamedList m_params;
 };

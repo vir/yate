@@ -133,6 +133,26 @@ bool ScriptContext::runAssign(ObjList& stack, const ExpOperation& oper, GenObjec
     return true;
 }
 
+bool ScriptContext::runMatchingField(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    ExpExtender* ext = this;
+    if (!hasField(stack,oper,context)) {
+	ext = 0;
+	for (ObjList* l = stack.skipNull(); l; l = l->skipNext()) {
+	    ext = YOBJECT(ExpExtender,l->get());
+	    if (ext && ext->hasField(stack,oper,context))
+		break;
+	    ext = 0;
+	}
+    }
+    if (!ext) {
+	ScriptRun* run = YOBJECT(ScriptRun,context);
+	if (run)
+	    ext = run->context();
+    }
+    return ext && ext->runField(stack,oper,context);
+}
+
 bool ScriptContext::copyFields(ObjList& stack, const ScriptContext& original, GenObject* context)
 {
     bool ok = true;

@@ -63,6 +63,14 @@ public:
     inline ExpNull()
 	: ExpWrapper(new JsNull,"null")
 	{ }
+    virtual bool valBoolean() const
+	{ return false; }
+    virtual ExpOperation* clone(const char* name) const
+	{ return new ExpNull(static_cast<JsNull*>(object()),name); }
+protected:
+    inline ExpNull(JsNull* obj, const char* name)
+	: ExpWrapper(obj,name)
+	{ obj->ref(); }
 };
 
 class JsCode : public ScriptCode, public ExpEvaluator
@@ -1312,7 +1320,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		ExpOperation* op = popValue(stack,context);
 		if (!op)
 		    return gotError("Stack underflow",oper.lineNumber());
-		bool val = op->number() != 0;
+		bool val = op->valBoolean();
 		TelEngine::destruct(op);
 		switch ((JsOpcode)oper.opcode()) {
 		    case OpcJumpTrue:

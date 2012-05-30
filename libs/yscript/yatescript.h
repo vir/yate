@@ -944,6 +944,18 @@ public:
 	{ m_number = num; String::operator=((int)num); return num; }
 
     /**
+     * Retrive the numeric value of the operation
+     * @return Number contained in operation, zero if not a number
+     */
+    virtual long int valInteger() const;
+
+    /**
+     * Retrive the boolean value of the operation
+     * @return True if the operation is to be interpreted as true value
+     */
+    virtual bool valBoolean() const;
+
+    /**
      * Clone and rename method
      * @param name Name of the cloned operation
      * @return New operation instance
@@ -1008,7 +1020,7 @@ public:
 	{ }
 
     /**
-     * Destuctor, deletes the held object
+     * Destructor, deletes the held object
      */
     virtual ~ExpWrapper()
 	{ TelEngine::destruct(m_object); }

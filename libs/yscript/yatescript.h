@@ -944,6 +944,18 @@ public:
 	{ m_number = num; String::operator=((int)num); return num; }
 
     /**
+     * Retrive the numeric value of the operation
+     * @return Number contained in operation, zero if not a number
+     */
+    virtual long int valInteger() const;
+
+    /**
+     * Retrive the boolean value of the operation
+     * @return True if the operation is to be interpreted as true value
+     */
+    virtual bool valBoolean() const;
+
+    /**
      * Clone and rename method
      * @param name Name of the cloned operation
      * @return New operation instance
@@ -1008,7 +1020,7 @@ public:
 	{ }
 
     /**
-     * Destuctor, deletes the held object
+     * Destructor, deletes the held object
      */
     virtual ~ExpWrapper()
 	{ TelEngine::destruct(m_object); }
@@ -1215,6 +1227,15 @@ public:
      * @return True if all fields were copied
      */
     virtual bool copyFields(ObjList& stack, const ScriptContext& original, GenObject* context);
+
+    /**
+     * Try to evaluate a single field searching for a matching context
+     * @param stack Evaluation stack in use, field value must be pushed on it
+     * @param oper Field to evaluate
+     * @param context Pointer to context data passed from evaluation methods
+     * @return True if evaluation succeeded
+     */
+    bool runMatchingField(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
 private:
     NamedList m_params;
@@ -1624,6 +1645,19 @@ public:
      * @param context Script context to initialize
      */
     static void initialize(ScriptContext* context);
+
+    /**
+     * Helper method to return the hierarchical structure of an object
+     * @param obj Object to dump structure
+     * @param buf String to which the structure is added
+     */
+    static void dumpRecursive(const GenObject* obj, String& buf);
+
+    /**
+     * Helper method to display the hierarchical structure of an object
+     * @param obj Object to display
+     */
+    static void printRecursive(const GenObject* obj);
 
 protected:
     /**

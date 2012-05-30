@@ -45,6 +45,32 @@ public:
 private:
     GenObject* resolveTop(ObjList& stack, const String& name, GenObject* context);
     GenObject* resolve(ObjList& stack, String& name, GenObject* context);
+    bool runStringFunction(GenObject* obj, const String& name, ObjList& stack, const ExpOperation& oper, GenObject* context);
+    bool runStringField(GenObject* obj, const String& name, ObjList& stack, const ExpOperation& oper, GenObject* context);
+};
+
+class JsNull : public JsObject
+{
+public:
+    inline JsNull()
+	: JsObject(0,"null",true)
+	{ }
+};
+
+class ExpNull : public ExpWrapper
+{
+public:
+    inline ExpNull()
+	: ExpWrapper(new JsNull,"null")
+	{ }
+    virtual bool valBoolean() const
+	{ return false; }
+    virtual ExpOperation* clone(const char* name) const
+	{ return new ExpNull(static_cast<JsNull*>(object()),name); }
+protected:
+    inline ExpNull(JsNull* obj, const char* name)
+	: ExpWrapper(obj,name)
+	{ obj->ref(); }
 };
 
 class JsCode : public ScriptCode, public ExpEvaluator
@@ -54,6 +80,8 @@ public:
 	OpcBegin = OpcPrivate + 1,
 	OpcEnd,
 	OpcIndex,
+	OpcEqIdentity,
+	OpcNeIdentity,
 	OpcFieldOf,
 	OpcTypeof,
 	OpcNew,
@@ -83,6 +111,8 @@ public:
 	OpcJRelFalse,
 	OpcTrue,
 	OpcFalse,
+	OpcNull,
+	OpcUndefined,
 	OpcInclude,
 	OpcRequire,
     };
@@ -113,7 +143,6 @@ protected:
     virtual int preProcess(const char*& expr, GenObject* context = 0);
     virtual bool getInstruction(const char*& expr, Opcode nested);
     virtual bool getSimple(const char*& expr, bool constOnly = false);
-    virtual bool getNumber(const char*& expr);
     virtual Opcode getOperator(const char*& expr);
     virtual Opcode getUnaryOperator(const char*& expr);
     virtual Opcode getPostfixOperator(const char*& expr);
@@ -155,7 +184,9 @@ private:
 #define MAKEOP(s,o) { s, JsCode::Opc ## o }
 static const TokenDict s_operators[] =
 {
-    MAKEOP(".",FieldOf),
+    MAKEOP("===", EqIdentity),
+    MAKEOP("!==", NeIdentity),
+    MAKEOP(".", FieldOf),
     { 0, 0 }
 };
 
@@ -196,10 +227,12 @@ static const TokenDict s_instr[] =
     { 0, 0 }
 };
 
-static const TokenDict s_bools[] =
+static const TokenDict s_constants[] =
 {
     MAKEOP("false", False),
     MAKEOP("true", True),
+    MAKEOP("null", Null),
+    MAKEOP("undefined", Undefined),
     { 0, 0 }
 };
 
@@ -210,6 +243,9 @@ static const TokenDict s_preProc[] =
     { 0, 0 }
 };
 #undef MAKEOP
+
+static const ExpNull s_null;
+
 
 GenObject* JsContext::resolveTop(ObjList& stack, const String& name, GenObject* context)
 {
@@ -230,7 +266,7 @@ GenObject* JsContext::resolve(ObjList& stack, String& name, GenObject* context)
     GenObject* obj = 0;
     for (ObjList* l = list->skipNull(); l; ) {
 	const String* s = static_cast<const String*>(l->get());
-	l = l->skipNext();
+	ObjList* l2 = l->skipNext();
 	if (TelEngine::null(s)) {
 	    // consecutive dots - not good
 	    obj = 0;
@@ -238,13 +274,25 @@ GenObject* JsContext::resolve(ObjList& stack, String& name, GenObject* context)
 	}
 	if (!obj)
 	    obj = resolveTop(stack,*s,context);
-	if (!l) {
+	if (!l2) {
 	    name = *s;
 	    break;
 	}
 	ExpExtender* ext = YOBJECT(ExpExtender,obj);
-	if (ext)
-	    obj = ext->getField(stack,*s,context);
+	if (ext) {
+	    GenObject* adv = ext->getField(stack,*s,context);
+	    XDebug(DebugAll,"JsContext::resolve advanced to '%s' of %p for '%s'",
+		(adv ? adv->toString().c_str() : 0),ext,s->c_str());
+	    if (adv)
+		obj = adv;
+	    else {
+		name.clear();
+		for (; l; l = l->skipNext())
+		    name.append(l->get()->toString(),".");
+		break;
+	    }
+	}
+	l = l2;
     }
     TelEngine::destruct(list);
     XDebug(DebugAll,"JsContext::resolve got '%s' %p for '%s'",
@@ -263,6 +311,8 @@ bool JsContext::runFunction(ObjList& stack, const ExpOperation& oper, GenObject*
 	    ExpOperation op(oper,name);
 	    return ext->runFunction(stack,op,context);
 	}
+	if (runStringFunction(o,name,stack,oper,context))
+	    return true;
     }
     if (name == YSTRING("isNaN")) {
 	bool nan = true;
@@ -305,8 +355,103 @@ bool JsContext::runField(ObjList& stack, const ExpOperation& oper, GenObject* co
 	    ExpOperation op(oper,name);
 	    return ext->runField(stack,op,context);
 	}
+	if (runStringField(o,name,stack,oper,context))
+	    return true;
     }
     return JsObject::runField(stack,oper,context);
+}
+
+bool JsContext::runStringFunction(GenObject* obj, const String& name, ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    const String* str = YOBJECT(String,obj);
+    if (!str)
+	return false;
+    if (name == YSTRING("charAt")) {
+	int idx = 0;
+	ObjList args;
+	if (extractArgs(stack,oper,context,args)) {
+	    ExpOperation* op = static_cast<ExpOperation*>(args[0]);
+	    if (op && op->isInteger())
+		idx = op->number();
+	}
+	ExpEvaluator::pushOne(stack,new ExpOperation(String(str->at(idx))));
+	return true;
+    }
+    if (name == YSTRING("indexOf")) {
+	int idx = -1;
+	ObjList args;
+	if (extractArgs(stack,oper,context,args)) {
+	    const String* what = static_cast<String*>(args[0]);
+	    if (what) {
+		ExpOperation* from = static_cast<ExpOperation*>(args[1]);
+		int offs = (from && from->isInteger()) ? from->number() : 0;
+		if (offs < 0)
+		    offs = 0;
+		idx = str->find(*what,offs);
+	    }
+	}
+	ExpEvaluator::pushOne(stack,new ExpOperation((long int)idx));
+	return true;
+    }
+    if (name == YSTRING("substr")) {
+	ObjList args;
+	int offs = 0;
+	int len = -1;
+	if (extractArgs(stack,oper,context,args)) {
+	    ExpOperation* op = static_cast<ExpOperation*>(args[0]);
+	    if (op && op->isInteger())
+		offs = op->number();
+	    op = static_cast<ExpOperation*>(args[1]);
+	    if (op && op->isInteger()) {
+		len = op->number();
+		if (len < 0)
+		    len = 0;
+	    }
+	}
+	ExpEvaluator::pushOne(stack,new ExpOperation(str->substr(offs,len)));
+	return true;
+    }
+    if (name == YSTRING("match")) {
+	ObjList args;
+	String buf(*str);
+	if (extractArgs(stack,oper,context,args)) {
+	    ExpOperation* op = static_cast<ExpOperation*>(args[0]);
+	    ExpWrapper* wrap = YOBJECT(ExpWrapper,op);
+	    JsRegExp* rexp = YOBJECT(JsRegExp,wrap);
+	    bool ok = false;
+	    if (rexp)
+		ok = buf.matches(rexp->regexp());
+	    else if (!wrap) {
+		Regexp r(*static_cast<String*>(op),true);
+		ok = buf.matches(r);
+	    }
+	    if (ok) {
+		JsArray* jsa = new JsArray(mutex());
+		for (int i = 0; i <= buf.matchCount(); i++)
+		    jsa->push(new ExpOperation(buf.matchString(i)));
+		jsa->params().addParam(new ExpOperation((long int)buf.matchOffset(),"index"));
+		if (rexp)
+		    jsa->params().addParam(wrap->clone("input"));
+		ExpEvaluator::pushOne(stack,new ExpWrapper(jsa));
+		return true;
+	    }
+	}
+	ExpEvaluator::pushOne(stack,s_null.ExpOperation::clone());
+	return true;
+    }
+    return false;
+}
+
+bool JsContext::runStringField(GenObject* obj, const String& name, ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    const String* s = YOBJECT(String,obj);
+    if (!s)
+	return false;
+    if (name == YSTRING("length")) {
+	ExpEvaluator::pushOne(stack,new ExpOperation((long int)s->length()));
+	return true;
+    }
+    return false;
 }
 
 bool JsContext::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context)
@@ -317,8 +462,10 @@ bool JsContext::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* c
     if (o && o != this) {
 	ExpExtender* ext = YOBJECT(ExpExtender,o);
 	if (ext) {
-	    ExpOperation op(oper,name);
-	    return ext->runAssign(stack,op,context);
+	    ExpOperation* op = oper.clone(name);
+	    bool ok = ext->runAssign(stack,*op,context);
+	    TelEngine::destruct(op);
+	    return ok;
 	}
     }
     return JsObject::runAssign(stack,oper,context);
@@ -782,24 +929,6 @@ bool JsCode::getInstruction(const char*& expr, Opcode nested)
     return true;
 }
 
-bool JsCode::getNumber(const char*& expr)
-{
-    if (inError())
-	return false;
-    skipComments(expr);
-    switch ((JsOpcode)ExpEvaluator::getOperator(expr,s_bools)) {
-	case OpcFalse:
-	    addOpcode(false);
-	    return true;
-	case OpcTrue:
-	    addOpcode(true);
-	    return true;
-	default:
-	    break;
-    }
-    return ExpEvaluator::getNumber(expr);
-}
-
 ExpEvaluator::Opcode JsCode::getOperator(const char*& expr)
 {
     if (inError())
@@ -867,6 +996,9 @@ const char* JsCode::getOperator(Opcode oper) const
 int JsCode::getPrecedence(ExpEvaluator::Opcode oper) const
 {
     switch (oper) {
+	case OpcEqIdentity:
+	case OpcNeIdentity:
+	    return 4;
 	case OpcNew:
 	case OpcIndex:
 	    return 12;
@@ -893,13 +1025,30 @@ bool JsCode::getSeparator(const char*& expr, bool remove)
 
 bool JsCode::getSimple(const char*& expr, bool constOnly)
 {
-    if (ExpEvaluator::getSimple(expr,constOnly))
-	return true;
+    if (inError())
+	return false;
+    skipComments(expr);
+    switch ((JsOpcode)ExpEvaluator::getOperator(expr,s_constants)) {
+	case OpcFalse:
+	    addOpcode(false);
+	    return true;
+	case OpcTrue:
+	    addOpcode(true);
+	    return true;
+	case OpcNull:
+	    addOpcode(s_null.ExpOperation::clone());
+	    return true;
+	case OpcUndefined:
+	    addOpcode(new ExpWrapper(0,"undefined"));
+	    return true;
+	default:
+	    break;
+    }
     JsObject* jso = parseArray(expr,constOnly);
     if (!jso)
 	jso = parseObject(expr,constOnly);
     if (!jso)
-	return false;
+	return ExpEvaluator::getSimple(expr,constOnly);
     addOpcode(new ExpWrapper(jso));
     return true;
 }
@@ -988,6 +1137,30 @@ JsObject* JsCode::parseObject(const char*& expr, bool constOnly)
 bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* context) const
 {
     switch ((JsOpcode)oper.opcode()) {
+	case OpcEqIdentity:
+	case OpcNeIdentity:
+	    {
+		ExpOperation* op2 = popValue(stack,context);
+		ExpOperation* op1 = popValue(stack,context);
+		if (!op1 || !op2) {
+		    TelEngine::destruct(op1);
+		    TelEngine::destruct(op2);
+		    return gotError("ExpEvaluator stack underflow",oper.lineNumber());
+		}
+		ExpWrapper* w1 = YOBJECT(ExpWrapper,op1);
+		ExpWrapper* w2 = YOBJECT(ExpWrapper,op2);
+		bool eq = (op1->opcode() == op2->opcode());
+		if (eq) {
+		    if (w1 || w2)
+			eq = w1 && w2 && w1->object() == w2->object();
+		    else
+			eq = (op1->number() == op2->number()) && (*op1 == *op2);
+		}
+		if ((JsOpcode)oper.opcode() == OpcNeIdentity)
+		    eq = !eq;
+		pushOne(stack,new ExpOperation(eq));
+	    }
+	    break;
 	case OpcBegin:
 	    pushOne(stack,new ExpOperation((Opcode)OpcBegin));
 	    break;
@@ -1147,7 +1320,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		ExpOperation* op = popValue(stack,context);
 		if (!op)
 		    return gotError("Stack underflow",oper.lineNumber());
-		bool val = op->number() != 0;
+		bool val = op->valBoolean();
 		TelEngine::destruct(op);
 		switch ((JsOpcode)oper.opcode()) {
 		    case OpcJumpTrue:

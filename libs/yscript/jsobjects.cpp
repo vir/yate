@@ -112,8 +112,76 @@ protected:
 }; // anonymous namespace
 
 
+// Helper function that does the actual object printing
+static void dumpRecursiveObj(const GenObject* obj, String& buf, unsigned int depth, ObjList& seen)
+{
+    if (!obj)
+	return;
+    String str(' ',2 * depth);
+    if (seen.find(obj)) {
+	str << "(recursivity encountered)";
+	buf.append(str,"\r\n");
+	return;
+    }
+    const NamedString* nstr = YOBJECT(NamedString,obj);
+    const NamedPointer* nptr = YOBJECT(NamedPointer,nstr);
+    const char* type = nstr ? (nptr ? "NamedPointer" : "NamedString") : "???";
+    const ScriptContext* scr = YOBJECT(ScriptContext,obj);
+    const ExpWrapper* wrap = 0;
+    bool objRecursed = false;
+    if (scr) {
+	const JsObject* jso = YOBJECT(JsObject,scr);
+	if (jso) {
+	    objRecursed = (seen.find(jso) != 0);
+	    if ((jso != obj) && !objRecursed)
+		seen.append(jso)->setDelete(false);
+	    if (YOBJECT(JsArray,scr))
+		type = "JsArray";
+	    else if (YOBJECT(JsFunction,scr))
+		type = "JsFunction";
+	    else if (YOBJECT(JsRegExp,scr))
+		type = "JsRegExp";
+	    else
+		type = "JsObject";
+	}
+	else
+	    type = "ScriptContext";
+    }
+    seen.append(obj)->setDelete(false);
+    const ExpOperation* exp = YOBJECT(ExpOperation,nstr);
+    if (exp && !scr) {
+	if ((wrap = YOBJECT(ExpWrapper,exp)))
+	    type = wrap->object() ? "ExpWrapper" : "Undefined";
+	else if (YOBJECT(ExpFunction,exp))
+	    type = "ExpFunction";
+	else
+	    type = "ExpOperation";
+    }
+    if (nstr)
+	str << "'" << nstr->name() << "' = '" << *nstr << "'";
+    else
+	str << "'" << obj->toString() << "'";
+    str << " (" << type << ")";
+    if (objRecursed)
+	str << " (already seen)";
+    buf.append(str,"\r\n");
+    if (objRecursed)
+	return;
+    str.clear();
+    if (scr) {
+	NamedIterator iter(scr->params());
+	while (const NamedString* p = iter.get())
+	    dumpRecursiveObj(p,buf,depth + 1,seen);
+    }
+    else if (wrap)
+	dumpRecursiveObj(wrap->object(),buf,depth + 1,seen);
+    else if (nptr)
+	dumpRecursiveObj(nptr->userData(),buf,depth + 1,seen);
+}
+
+
 JsObject::JsObject(const char* name, Mutex* mtx, bool frozen)
-    : ScriptContext(String("[Object ") + name + "]"),
+    : ScriptContext(String("[object ") + name + "]"),
       m_frozen(frozen), m_mutex(mtx)
 {
     XDebug(DebugAll,"JsObject::JsObject('%s',%p,%s) [%p]",
@@ -135,6 +203,19 @@ JsObject::JsObject(Mutex* mtx, const char* name, bool frozen)
 JsObject::~JsObject()
 {
     XDebug(DebugAll,"JsObject::~JsObject '%s' [%p]",toString().c_str(),this);
+}
+
+void JsObject::dumpRecursive(const GenObject* obj, String& buf)
+{
+    ObjList seen;
+    dumpRecursiveObj(obj,buf,0,seen);
+}
+
+void JsObject::printRecursive(const GenObject* obj)
+{
+    String buf;
+    dumpRecursive(obj,buf);
+    Output("%s",buf.c_str());
 }
 
 bool JsObject::runFunction(ObjList& stack, const ExpOperation& oper, GenObject* context)
@@ -161,7 +242,7 @@ bool JsObject::runField(ObjList& stack, const ExpOperation& oper, GenObject* con
     if (param) {
 	ExpFunction* ef = YOBJECT(ExpFunction,param);
 	if (ef)
-	    ExpEvaluator::pushOne(stack,new ExpFunction(oper.name(),ef->number()));
+	    ExpEvaluator::pushOne(stack,ef->ExpOperation::clone());
 	else {
 	    JsFunction* jf = YOBJECT(JsFunction,param);
 	    if (jf)
@@ -192,16 +273,13 @@ bool JsObject::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* co
     }
     ExpFunction* ef = YOBJECT(ExpFunction,&oper);
     if (ef)
-	params().setParam(new ExpFunction(oper.name(),oper.number()));
+	params().setParam(ef->ExpOperation::clone());
     else {
 	ExpWrapper* w = YOBJECT(ExpWrapper,&oper);
 	if (w) {
 	    GenObject* o = w->object();
-	    RefObject* r = YOBJECT(RefObject,o);
-	    if (r)
-		r->ref();
 	    if (o)
-		params().setParam(new NamedPointer(oper.name(),o,o->toString()));
+		params().setParam(w->clone(oper.name()));
 	    else
 		params().clearParam(oper.name());
 	}
@@ -242,7 +320,9 @@ ExpOperation* JsObject::popValue(ObjList& stack, GenObject* context)
     ExpOperation* oper = ExpEvaluator::popOne(stack);
     if (!oper || (oper->opcode() != ExpEvaluator::OpcField))
 	return oper;
-    bool ok = runField(stack,*oper,context);
+    XDebug(DebugAll,"JsObject::popValue() field '%s' in '%s' [%p]",
+	oper->name().c_str(),toString().c_str(),this);
+    bool ok = runMatchingField(stack,*oper,context);
     TelEngine::destruct(oper);
     return ok ? ExpEvaluator::popOne(stack) : 0;
 }
@@ -281,7 +361,7 @@ void JsObject::initialize(ScriptContext* context)
     Mutex* mtx = context->mutex();
     Lock mylock(mtx);
     NamedList& p = context->params();
-    static_cast<String&>(p) = "[Object Global]";
+    static_cast<String&>(p) = "[object Global]";
     if (!p.getParam(YSTRING("Object")))
 	addConstructor(p,"Object",new JsObjectObj(mtx));
     if (!p.getParam(YSTRING("Function")))
@@ -642,7 +722,7 @@ JsRegExp::JsRegExp(Mutex* mtx)
     params().addParam(new ExpFunction("test"));
 }
 
-JsRegExp::JsRegExp(Mutex* mtx, const char* name, const char* rexp, bool extended, bool insensitive, bool frozen)
+JsRegExp::JsRegExp(Mutex* mtx, const char* name, const char* rexp, bool insensitive, bool extended, bool frozen)
     : JsObject(mtx,name,frozen),
       m_regexp(rexp,extended,insensitive)
 {

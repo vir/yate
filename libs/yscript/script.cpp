@@ -97,6 +97,8 @@ ScriptRun* ScriptParser::createRunner(ScriptCode* code, ScriptContext* context) 
 // RTTI Interface access
 void* ScriptContext::getObject(const String& name) const
 {
+    if (name == YSTRING("ScriptContext"))
+	return const_cast<ScriptContext*>(this);
     if (name == YSTRING("ExpExtender"))
 	return const_cast<ExpExtender*>(static_cast<const ExpExtender*>(this));
     return RefObject::getObject(name);
@@ -129,6 +131,26 @@ bool ScriptContext::runAssign(ObjList& stack, const ExpOperation& oper, GenObjec
     XDebug(DebugAll,"ScriptContext::runAssign '%s'='%s'",oper.name().c_str(),oper.c_str());
     m_params.setParam(oper.name(),oper);
     return true;
+}
+
+bool ScriptContext::runMatchingField(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    ExpExtender* ext = this;
+    if (!hasField(stack,oper,context)) {
+	ext = 0;
+	for (ObjList* l = stack.skipNull(); l; l = l->skipNext()) {
+	    ext = YOBJECT(ExpExtender,l->get());
+	    if (ext && ext->hasField(stack,oper,context))
+		break;
+	    ext = 0;
+	}
+    }
+    if (!ext) {
+	ScriptRun* run = YOBJECT(ScriptRun,context);
+	if (run)
+	    ext = run->context();
+    }
+    return ext && ext->runField(stack,oper,context);
 }
 
 bool ScriptContext::copyFields(ObjList& stack, const ScriptContext& original, GenObject* context)

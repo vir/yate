@@ -99,6 +99,8 @@ public:
 	    MKDEBUG(All);
 	    params().addParam(new ExpFunction("output"));
 	    params().addParam(new ExpFunction("debug"));
+	    params().addParam(new ExpFunction("dump_r"));
+	    params().addParam(new ExpFunction("print_r"));
 	}
     static void initialize(ScriptContext* context);
 protected:
@@ -204,6 +206,7 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 		str = *op + " " + str;
 	    else
 		str = *op;
+	    TelEngine::destruct(op);
 	}
 	if (str)
 	    Output("%s",str.c_str());
@@ -223,6 +226,7 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 		else
 		    str = *op;
 	    }
+	    TelEngine::destruct(op);
 	}
 	if (str) {
 	    if (level > DebugAll)
@@ -231,6 +235,44 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 		level = DebugGoOn;
 	    Debug(&__plugin,level,"%s",str.c_str());
 	}
+    }
+    else if (oper.name() == YSTRING("dump_r")) {
+	String buf;
+	if (oper.number() == 0) {
+	    ScriptRun* run = YOBJECT(ScriptRun,context);
+	    if (run)
+		dumpRecursive(run->context(),buf);
+	    else
+		dumpRecursive(context,buf);
+	}
+	else if (oper.number() == 1) {
+	    ExpOperation* op = popValue(stack,context);
+	    if (!op)
+		return false;
+	    dumpRecursive(op,buf);
+	    TelEngine::destruct(op);
+	}
+	else
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpOperation(buf));
+    }
+    else if (oper.name() == YSTRING("print_r")) {
+	if (oper.number() == 0) {
+	    ScriptRun* run = YOBJECT(ScriptRun,context);
+	    if (run)
+		printRecursive(run->context());
+	    else
+		printRecursive(context);
+	}
+	else if (oper.number() == 1) {
+	    ExpOperation* op = popValue(stack,context);
+	    if (!op)
+		return false;
+	    printRecursive(op);
+	    TelEngine::destruct(op);
+	}
+	else
+	    return false;
     }
     else
 	return JsObject::runNative(stack,oper,context);

@@ -97,6 +97,8 @@ ScriptRun* ScriptParser::createRunner(ScriptCode* code, ScriptContext* context) 
 // RTTI Interface access
 void* ScriptContext::getObject(const String& name) const
 {
+    if (name == YSTRING("ScriptContext"))
+	return const_cast<ScriptContext*>(this);
     if (name == YSTRING("ExpExtender"))
 	return const_cast<ExpExtender*>(static_cast<const ExpExtender*>(this));
     return RefObject::getObject(name);

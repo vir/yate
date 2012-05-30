@@ -230,7 +230,7 @@ GenObject* JsContext::resolve(ObjList& stack, String& name, GenObject* context)
     GenObject* obj = 0;
     for (ObjList* l = list->skipNull(); l; ) {
 	const String* s = static_cast<const String*>(l->get());
-	l = l->skipNext();
+	ObjList* l2 = l->skipNext();
 	if (TelEngine::null(s)) {
 	    // consecutive dots - not good
 	    obj = 0;
@@ -238,13 +238,25 @@ GenObject* JsContext::resolve(ObjList& stack, String& name, GenObject* context)
 	}
 	if (!obj)
 	    obj = resolveTop(stack,*s,context);
-	if (!l) {
+	if (!l2) {
 	    name = *s;
 	    break;
 	}
 	ExpExtender* ext = YOBJECT(ExpExtender,obj);
-	if (ext)
-	    obj = ext->getField(stack,*s,context);
+	if (ext) {
+	    GenObject* adv = ext->getField(stack,*s,context);
+	    XDebug(DebugAll,"JsContext::resolve advanced to '%s' of %p for '%s'",
+		(adv ? adv->toString().c_str() : 0),ext,s->c_str());
+	    if (adv)
+		obj = adv;
+	    else {
+		name.clear();
+		for (; l; l = l->skipNext())
+		    name.append(l->get()->toString(),".");
+		break;
+	    }
+	}
+	l = l2;
     }
     TelEngine::destruct(list);
     XDebug(DebugAll,"JsContext::resolve got '%s' %p for '%s'",
@@ -317,8 +329,10 @@ bool JsContext::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* c
     if (o && o != this) {
 	ExpExtender* ext = YOBJECT(ExpExtender,o);
 	if (ext) {
-	    ExpOperation op(oper,name);
-	    return ext->runAssign(stack,op,context);
+	    ExpOperation* op = oper.clone(name);
+	    bool ok = ext->runAssign(stack,*op,context);
+	    TelEngine::destruct(op);
+	    return ok;
 	}
     }
     return JsObject::runAssign(stack,oper,context);

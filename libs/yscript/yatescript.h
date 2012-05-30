@@ -1625,6 +1625,19 @@ public:
      */
     static void initialize(ScriptContext* context);
 
+    /**
+     * Helper method to return the hierarchical structure of an object
+     * @param obj Object to dump structure
+     * @param buf String to which the structure is added
+     */
+    static void dumpRecursive(const GenObject* obj, String& buf);
+
+    /**
+     * Helper method to display the hierarchical structure of an object
+     * @param obj Object to display
+     */
+    static void printRecursive(const GenObject* obj);
+
 protected:
     /**
      * Constructor for an empty object

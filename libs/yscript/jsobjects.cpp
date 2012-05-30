@@ -170,7 +170,7 @@ static void dumpRecursiveObj(const GenObject* obj, String& buf, unsigned int dep
 
 
 JsObject::JsObject(const char* name, Mutex* mtx, bool frozen)
-    : ScriptContext(String("[Object ") + name + "]"),
+    : ScriptContext(String("[object ") + name + "]"),
       m_frozen(frozen), m_mutex(mtx)
 {
     XDebug(DebugAll,"JsObject::JsObject('%s',%p,%s) [%p]",
@@ -348,7 +348,7 @@ void JsObject::initialize(ScriptContext* context)
     Mutex* mtx = context->mutex();
     Lock mylock(mtx);
     NamedList& p = context->params();
-    static_cast<String&>(p) = "[Object Global]";
+    static_cast<String&>(p) = "[object Global]";
     if (!p.getParam(YSTRING("Object")))
 	addConstructor(p,"Object",new JsObjectObj(mtx));
     if (!p.getParam(YSTRING("Function")))

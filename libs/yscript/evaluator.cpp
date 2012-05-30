@@ -1406,8 +1406,9 @@ ExpOperation* ExpFunction::clone(const char* name) const
 
 ExpOperation* ExpWrapper::clone(const char* name) const
 {
-    XDebug(DebugInfo,"ExpWrapper::clone('%s') [%p]",name,this);
     RefObject* r = YOBJECT(RefObject,object());
+    XDebug(DebugInfo,"ExpWrapper::clone('%s') %s=%p [%p]",
+	name,(r ? "ref" : "obj"),object(),this);
     if (r)
 	r->ref();
     ExpWrapper* op = new ExpWrapper(object(),name);

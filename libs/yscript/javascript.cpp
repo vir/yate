@@ -47,6 +47,22 @@ private:
     GenObject* resolve(ObjList& stack, String& name, GenObject* context);
 };
 
+class JsNull : public JsObject
+{
+public:
+    inline JsNull()
+	: JsObject(0,"null",true)
+	{ }
+};
+
+class ExpNull : public ExpWrapper
+{
+public:
+    inline ExpNull()
+	: ExpWrapper(new JsNull,"null")
+	{ }
+};
+
 class JsCode : public ScriptCode, public ExpEvaluator
 {
 public:
@@ -54,6 +70,8 @@ public:
 	OpcBegin = OpcPrivate + 1,
 	OpcEnd,
 	OpcIndex,
+	OpcEqIdentity,
+	OpcNeIdentity,
 	OpcFieldOf,
 	OpcTypeof,
 	OpcNew,
@@ -83,6 +101,8 @@ public:
 	OpcJRelFalse,
 	OpcTrue,
 	OpcFalse,
+	OpcNull,
+	OpcUndefined,
 	OpcInclude,
 	OpcRequire,
     };
@@ -113,7 +133,6 @@ protected:
     virtual int preProcess(const char*& expr, GenObject* context = 0);
     virtual bool getInstruction(const char*& expr, Opcode nested);
     virtual bool getSimple(const char*& expr, bool constOnly = false);
-    virtual bool getNumber(const char*& expr);
     virtual Opcode getOperator(const char*& expr);
     virtual Opcode getUnaryOperator(const char*& expr);
     virtual Opcode getPostfixOperator(const char*& expr);
@@ -155,7 +174,9 @@ private:
 #define MAKEOP(s,o) { s, JsCode::Opc ## o }
 static const TokenDict s_operators[] =
 {
-    MAKEOP(".",FieldOf),
+    MAKEOP("===", EqIdentity),
+    MAKEOP("!==", NeIdentity),
+    MAKEOP(".", FieldOf),
     { 0, 0 }
 };
 
@@ -196,10 +217,12 @@ static const TokenDict s_instr[] =
     { 0, 0 }
 };
 
-static const TokenDict s_bools[] =
+static const TokenDict s_constants[] =
 {
     MAKEOP("false", False),
     MAKEOP("true", True),
+    MAKEOP("null", Null),
+    MAKEOP("undefined", Undefined),
     { 0, 0 }
 };
 
@@ -210,6 +233,9 @@ static const TokenDict s_preProc[] =
     { 0, 0 }
 };
 #undef MAKEOP
+
+static const ExpNull s_null;
+
 
 GenObject* JsContext::resolveTop(ObjList& stack, const String& name, GenObject* context)
 {
@@ -796,24 +822,6 @@ bool JsCode::getInstruction(const char*& expr, Opcode nested)
     return true;
 }
 
-bool JsCode::getNumber(const char*& expr)
-{
-    if (inError())
-	return false;
-    skipComments(expr);
-    switch ((JsOpcode)ExpEvaluator::getOperator(expr,s_bools)) {
-	case OpcFalse:
-	    addOpcode(false);
-	    return true;
-	case OpcTrue:
-	    addOpcode(true);
-	    return true;
-	default:
-	    break;
-    }
-    return ExpEvaluator::getNumber(expr);
-}
-
 ExpEvaluator::Opcode JsCode::getOperator(const char*& expr)
 {
     if (inError())
@@ -881,6 +889,9 @@ const char* JsCode::getOperator(Opcode oper) const
 int JsCode::getPrecedence(ExpEvaluator::Opcode oper) const
 {
     switch (oper) {
+	case OpcEqIdentity:
+	case OpcNeIdentity:
+	    return 4;
 	case OpcNew:
 	case OpcIndex:
 	    return 12;
@@ -907,13 +918,30 @@ bool JsCode::getSeparator(const char*& expr, bool remove)
 
 bool JsCode::getSimple(const char*& expr, bool constOnly)
 {
-    if (ExpEvaluator::getSimple(expr,constOnly))
-	return true;
+    if (inError())
+	return false;
+    skipComments(expr);
+    switch ((JsOpcode)ExpEvaluator::getOperator(expr,s_constants)) {
+	case OpcFalse:
+	    addOpcode(false);
+	    return true;
+	case OpcTrue:
+	    addOpcode(true);
+	    return true;
+	case OpcNull:
+	    addOpcode(s_null.ExpOperation::clone());
+	    return true;
+	case OpcUndefined:
+	    addOpcode(new ExpWrapper(0,"undefined"));
+	    return true;
+	default:
+	    break;
+    }
     JsObject* jso = parseArray(expr,constOnly);
     if (!jso)
 	jso = parseObject(expr,constOnly);
     if (!jso)
-	return false;
+	return ExpEvaluator::getSimple(expr,constOnly);
     addOpcode(new ExpWrapper(jso));
     return true;
 }
@@ -1002,6 +1030,30 @@ JsObject* JsCode::parseObject(const char*& expr, bool constOnly)
 bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* context) const
 {
     switch ((JsOpcode)oper.opcode()) {
+	case OpcEqIdentity:
+	case OpcNeIdentity:
+	    {
+		ExpOperation* op2 = popValue(stack,context);
+		ExpOperation* op1 = popValue(stack,context);
+		if (!op1 || !op2) {
+		    TelEngine::destruct(op1);
+		    TelEngine::destruct(op2);
+		    return gotError("ExpEvaluator stack underflow",oper.lineNumber());
+		}
+		ExpWrapper* w1 = YOBJECT(ExpWrapper,op1);
+		ExpWrapper* w2 = YOBJECT(ExpWrapper,op2);
+		bool eq = (op1->opcode() == op2->opcode());
+		if (eq) {
+		    if (w1 || w2)
+			eq = w1 && w2 && w1->object() == w2->object();
+		    else
+			eq = (op1->number() == op2->number()) && (*op1 == *op2);
+		}
+		if ((JsOpcode)oper.opcode() == OpcNeIdentity)
+		    eq = !eq;
+		pushOne(stack,new ExpOperation(eq));
+	    }
+	    break;
 	case OpcBegin:
 	    pushOne(stack,new ExpOperation((Opcode)OpcBegin));
 	    break;

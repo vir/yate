@@ -2427,12 +2427,14 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 		SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::CPR,id());
 		m->params().addParam("EventInformation",
 		    event->type() == SignallingEvent::Ringing ? "ringing": "progress");
+		bool inband = m_inbandAvailable;
 		if (event->message()) {
 		    copyUpper(m->params(),event->message()->params());
 		    m_inbandAvailable = m_inbandAvailable ||
 			event->message()->params().getBoolValue(YSTRING("earlymedia"));
+		    inband = event->message()->params().getBoolValue(YSTRING("send-inband"),m_inbandAvailable);
 		}
-		if (m_inbandAvailable)
+		if (inband && !outgoing())
 		    SignallingUtils::appendFlag(m->params(),"OptionalBackwardCallIndicators","inband");
 		m_state = Ringing;
 		mylock.drop();
@@ -2442,12 +2444,14 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 	case SignallingEvent::Accept:
 	    if (validMsgState(true,SS7MsgISUP::ACM)) {
 		SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::ACM,id());
+		bool inband = m_inbandAvailable;
 		if (event->message()) {
 		    copyUpper(m->params(),event->message()->params());
 		    m_inbandAvailable = m_inbandAvailable ||
 			event->message()->params().getBoolValue(YSTRING("earlymedia"));
+		    inband = event->message()->params().getBoolValue(YSTRING("send-inband"),m_inbandAvailable);
 		}
-		if (m_inbandAvailable)
+		if (inband && !outgoing())
 		    SignallingUtils::appendFlag(m->params(),"OptionalBackwardCallIndicators","inband");
 		m_state = Accepted;
 		mylock.drop();

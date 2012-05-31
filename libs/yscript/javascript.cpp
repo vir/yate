@@ -157,6 +157,12 @@ private:
     ObjVector m_linked;
     ObjList m_included;
     bool preProcessInclude(const char*& expr, bool once, GenObject* context);
+    bool parseIf(const char*& expr, Opcode nested);
+    bool parseSwitch(const char*& expr, Opcode nested);
+    bool parseFor(const char*& expr, Opcode nested);
+    bool parseWhile(const char*& expr, Opcode nested);
+    bool parseTry(const char*& expr, Opcode nested);
+    bool parseFuncDef(const char*& expr, Opcode nested);
     bool evalList(ObjList& stack, GenObject* context) const;
     bool evalVector(ObjList& stack, GenObject* context) const;
     bool jumpToLabel(long int label, GenObject* context) const;
@@ -803,129 +809,222 @@ bool JsCode::getInstruction(const char*& expr, Opcode nested)
 	    break;
 	case OpcReturn:
 	    runCompile(expr);
+	    if (skipComments(expr) == ';')
+		expr++;
 	    addOpcode(op);
 	    break;
 	case OpcIf:
-	    if (skipComments(expr) != '(')
-		return gotError("Expecting '('",expr);
-	    if (!runCompile(++expr,')'))
-		return false;
-	    if (skipComments(expr) != ')')
-		return gotError("Expecting ')'",expr);
-	    {
-		ExpOperation* cond = addOpcode((Opcode)OpcJumpFalse,++m_label);
-		if (!runCompile(++expr,';'))
-		    return false;
-		if (skipComments(expr) == ';')
-		    expr++;
-		const char* save = expr;
-		skipComments(expr);
-		if ((JsOpcode)ExpEvaluator::getOperator(expr,s_instr) == OpcElse) {
-		    ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
-		    addOpcode(OpcLabel,cond->number());
-		    if (!runCompile(++expr))
-			return false;
-		    if (skipComments(expr) == ';')
-			expr++;
-		    addOpcode(OpcLabel,jump->number());
-		}
-		else {
-		    expr = save;
-		    addOpcode(OpcLabel,cond->number());
-		}
-	    }
-	    break;
+	    return parseIf(expr,nested);
 	case OpcElse:
 	    expr = saved;
 	    return false;
+	case OpcSwitch:
+	    return parseSwitch(expr,nested);
+	case OpcFor:
+	    return parseFor(expr,nested);
 	case OpcWhile:
-	    {
-		ExpOperation* lbl = addOpcode(OpcLabel,++m_label);
-		if (skipComments(expr) != '(')
-		    return gotError("Expecting '('",expr);
-		if (!runCompile(++expr,')',op))
-		    return false;
-		if (skipComments(expr) != ')')
-		    return gotError("Expecting ')'",expr);
-		ExpOperation* jump = addOpcode((Opcode)OpcJumpFalse,++m_label);
-		if (!runCompile(++expr))
-		    return false;
-		addOpcode((Opcode)OpcJump,lbl->number());
-		addOpcode(OpcLabel,jump->number());
-	    }
-	    break;
+	    return parseWhile(expr,nested);
 	case OpcCase:
 	    if (OpcSwitch != (JsOpcode)nested)
 		return gotError("Case not in switch",saved);
+	    if (!ExpEvaluator::getSimple(expr,true))
+		return gotError("Expecting case constant",expr);
+	    if (skipComments(expr) != ':')
+		return gotError("Expecting ':'",expr);
+	    expr++;
 	    break;
 	case OpcDefault:
 	    if (OpcSwitch != (JsOpcode)nested)
 		return gotError("Default not in switch",saved);
+	    if (skipComments(expr) != ':')
+		return gotError("Expecting ':'",expr);
+	    expr++;
+	    break;
+	case OpcBreak:
+	    switch ((JsOpcode)nested) {
+		case OpcSwitch:
+		case OpcFor:
+		case OpcWhile:
+		    break;
+		default:
+		    return gotError("Unexpected break instruction",saved);
+	    }
+	    if (skipComments(expr) != ';')
+		return gotError("Expecting ';'",expr);
+	    expr++;
+	    break;
+	case OpcCont:
+	    switch ((JsOpcode)nested) {
+		case OpcFor:
+		case OpcWhile:
+		    break;
+		default:
+		    return gotError("Unexpected continue instruction",saved);
+	    }
+	    if (skipComments(expr) != ';')
+		return gotError("Expecting ';'",expr);
+	    expr++;
 	    break;
 	case OpcTry:
-	    addOpcode(op);
-	    if (!runCompile(expr,0,op))
-		return false;
-	    {
-		skipComments(expr);
-		if ((JsOpcode)ExpEvaluator::getOperator(expr,s_instr) == OpcCatch) {
-		    if (skipComments(expr) != '(')
-			return gotError("Expecting '('",expr);
-		    if (!getField(++expr))
-			return gotError("Expecting formal argument",expr);
-		    if (skipComments(expr) != ')')
-			return gotError("Expecting ')'",expr);
-		    if (!runCompile(++expr))
-			return false;
-		}
-		skipComments(expr);
-		if ((JsOpcode)ExpEvaluator::getOperator(expr,s_instr) == OpcFinally) {
-		    if (!runCompile(expr))
-			return false;
-		}
-	    }
+	    return parseTry(expr,nested);
 	case OpcFuncDef:
-	    {
-		skipComments(expr);
-		int len = getKeyword(expr);
-		String name;
-		if (len > 0) {
-		    name.assign(expr,len);
-		    expr += len;
-		}
-		if (skipComments(expr) != '(')
-		    return gotError("Expecting '('",expr);
-		expr++;
-		ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
-		while (skipComments(expr) != ')') {
-		    if (!getField(expr))
-			return gotError("Expecting formal argument",expr);
-		    if (skipComments(expr) == ',')
-			expr++;
-		}
-		expr++;
-		if (skipComments(expr) != '{')
-		    return gotError("Expecting '{'",expr);
-		expr++;
-		for (;;) {
-		    if (!runCompile(expr,'}'))
-			return false;
-		    bool sep = false;
-		    while (skipComments(expr) && getSeparator(expr,true))
-			sep = true;
-		    if (*expr == '}' || !sep)
-			break;
-		}
-		if (*expr != '}')
-		    return gotError("Expecting '}'",expr);
-		expr++;
-		addOpcode((Opcode)OpcReturn);
-		addOpcode(OpcLabel,jump->number());
-	    }
-	    break;
+	    return parseFuncDef(expr,nested);
 	default:
 	    break;
     }
+    return true;
+}
+
+bool JsCode::parseIf(const char*& expr, Opcode nested)
+{
+    if (skipComments(expr) != '(')
+	return gotError("Expecting '('",expr);
+    if (!runCompile(++expr,')',nested))
+	return false;
+    if (skipComments(expr) != ')')
+	return gotError("Expecting ')'",expr);
+    ExpOperation* cond = addOpcode((Opcode)OpcJumpFalse,++m_label);
+    if (!runCompile(++expr,';'))
+	return false;
+    if (skipComments(expr) == ';')
+	expr++;
+    const char* save = expr;
+    skipComments(expr);
+    if ((JsOpcode)ExpEvaluator::getOperator(expr,s_instr) == OpcElse) {
+	ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
+	addOpcode(OpcLabel,cond->number());
+	if (!runCompile(++expr,0,nested))
+	    return false;
+	if (skipComments(expr) == ';')
+	    expr++;
+	addOpcode(OpcLabel,jump->number());
+    }
+    else {
+	expr = save;
+	addOpcode(OpcLabel,cond->number());
+    }
+    return true;
+}
+
+bool JsCode::parseSwitch(const char*& expr, Opcode nested)
+{
+    if (skipComments(expr) != '(')
+	return gotError("Expecting '('",expr);
+    if (!runCompile(++expr,')'))
+	return false;
+    if (skipComments(expr) != ')')
+	return gotError("Expecting ')'",expr);
+    if (skipComments(++expr) != '{')
+	return gotError("Expecting '{'",expr);
+    expr++;
+    for (;;) {
+	if (!runCompile(expr,'}',(Opcode)OpcSwitch))
+	    return false;
+	bool sep = false;
+	while (skipComments(expr) && getSeparator(expr,true))
+	    sep = true;
+	if (*expr == '}' || !sep)
+	    break;
+    }
+    if (*expr != '}')
+	return gotError("Expecting '}'",expr);
+    expr++;
+    return true;
+}
+
+bool JsCode::parseFor(const char*& expr, Opcode nested)
+{
+    if (skipComments(expr) != '(')
+	return gotError("Expecting '('",expr);
+    if (!runCompile(++expr,')',nested))
+	return false;
+    if (skipComments(expr) != ')')
+	return gotError("Expecting ')'",expr);
+    if (!runCompile(++expr,';'))
+	return false;
+    if (skipComments(expr) == ';')
+	expr++;
+    return true;
+}
+
+bool JsCode::parseWhile(const char*& expr, Opcode nested)
+{
+    ExpOperation* lbl = addOpcode(OpcLabel,++m_label);
+    if (skipComments(expr) != '(')
+	return gotError("Expecting '('",expr);
+    if (!runCompile(++expr,')',(Opcode)OpcWhile))
+	return false;
+    if (skipComments(expr) != ')')
+	return gotError("Expecting ')'",expr);
+    ExpOperation* jump = addOpcode((Opcode)OpcJumpFalse,++m_label);
+    if (!runCompile(++expr,0,(Opcode)OpcWhile))
+	return false;
+    addOpcode((Opcode)OpcJump,lbl->number());
+    addOpcode(OpcLabel,jump->number());
+    return true;
+}
+
+bool JsCode::parseTry(const char*& expr, Opcode nested)
+{
+    addOpcode((Opcode)OpcTry);
+    if (!runCompile(expr,0,(Opcode)OpcTry))
+	return false;
+    skipComments(expr);
+    if ((JsOpcode)ExpEvaluator::getOperator(expr,s_instr) == OpcCatch) {
+	if (skipComments(expr) != '(')
+	    return gotError("Expecting '('",expr);
+	if (!getField(++expr))
+	    return gotError("Expecting formal argument",expr);
+	if (skipComments(expr) != ')')
+	    return gotError("Expecting ')'",expr);
+	if (!runCompile(++expr))
+	    return false;
+    }
+    skipComments(expr);
+    if ((JsOpcode)ExpEvaluator::getOperator(expr,s_instr) == OpcFinally) {
+	if (!runCompile(expr))
+	    return false;
+    }
+    return true;
+}
+
+bool JsCode::parseFuncDef(const char*& expr, Opcode nested)
+{
+    skipComments(expr);
+    int len = getKeyword(expr);
+    String name;
+    if (len > 0) {
+	name.assign(expr,len);
+	expr += len;
+    }
+    if (skipComments(expr) != '(')
+	return gotError("Expecting '('",expr);
+    expr++;
+    ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
+    while (skipComments(expr) != ')') {
+	if (!getField(expr))
+	    return gotError("Expecting formal argument",expr);
+	if (skipComments(expr) == ',')
+	    expr++;
+    }
+    expr++;
+    if (skipComments(expr) != '{')
+	return gotError("Expecting '{'",expr);
+    expr++;
+    for (;;) {
+	if (!runCompile(expr,'}'))
+	    return false;
+	bool sep = false;
+	while (skipComments(expr) && getSeparator(expr,true))
+	    sep = true;
+	if (*expr == '}' || !sep)
+	    break;
+    }
+    if (*expr != '}')
+	return gotError("Expecting '}'",expr);
+    expr++;
+    addOpcode((Opcode)OpcReturn);
+    addOpcode(OpcLabel,jump->number());
     return true;
 }
 

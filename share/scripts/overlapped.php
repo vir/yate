@@ -280,6 +280,7 @@ function endRoute($callto,$ok,$err,$params)
 	$m = new Yate("chan.masquerade");
 	$m->params = $params;
 	$m->params["message"] = "call.execute";
+	$m->params["complete_minimal"] = true;
 	$m->params["id"] = $partycallid;
 	$m->params["callto"] = $callto;
 	$m->Dispatch();

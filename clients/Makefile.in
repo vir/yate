@@ -52,6 +52,8 @@ endif
 
 LOCALFLAGS =
 LOCALLIBS =
+EXTERNFLAGS =
+EXTERNLIBS =
 COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
 LINK = $(CXX) $(LDFLAGS)
 
@@ -159,11 +161,11 @@ Makefile: @srcdir@/Makefile.in $(MKDEPS)
 	cd .. && ./config.status
 
 yate-qt4: $(QT4_CLIENT_DEPS)
-yate-qt4: LOCALFLAGS = $(QT4_INC)
-yate-qt4: LOCALLIBS = $(QT4_CLIENT_LIBS) $(QT4_LIB)
+yate-qt4: EXTERNFLAGS = $(QT4_INC)
+yate-qt4: EXTERNLIBS = $(QT4_CLIENT_LIBS) $(QT4_LIB)
 
 qt4/qt4client.a: @srcdir@/qt4/qt4client.h @srcdir@/qt4/qt4client.cpp
 	$(MAKE) -C qt4 $(notdir $@)
 
 yate-%: @srcdir@/main-%.cpp $(MKDEPS) ../libyate.so $(INCFILES)
-	$(COMPILE) -o $@ $(LOCALFLAGS) $< $(LDFLAGS) $(LIBTHR) $(LOCALLIBS) $(YATELIBS)
+	$(COMPILE) -o $@ $(LOCALFLAGS) $(EXTERNFLAGS) $< $(LDFLAGS) $(LIBTHR) $(LOCALLIBS) $(YATELIBS) $(EXTERNLIBS)

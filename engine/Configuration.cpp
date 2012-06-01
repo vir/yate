@@ -198,8 +198,10 @@ bool Configuration::load(bool warn)
 		continue;
 	    }
 	    int q = s.find('=');
-	    if (q <= 0)
+	    if (q == 0)
 		continue;
+	    if (q < 0)
+		q = s.length();
 	    String key = s.substr(0,q).trimBlanks();
 	    if (key.null())
 		continue;

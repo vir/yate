@@ -9648,6 +9648,7 @@ public:
      * Constructor
      * @param ssn The subsystem number alocated to this subsystem
      * @param state The subsystem initial state
+     * @param smi The subsystem multiplicity indicator
      */
     inline SccpSubsystem(int ssn, SCCPManagement::SccpStates state = SCCPManagement::Allowed, unsigned char smi = 0)
 	: m_ssn(ssn), m_smi(smi), m_state(state)
@@ -9850,14 +9851,20 @@ public:
      * Clear remote backup subsystems
      */
     inline void clearBackups()
-	{ m_backups.clear(); }
+	{
+	    Lock lock(this);
+	    m_backups.clear();
+	}
 
     /**
      * Append new backup subsystem
      * @param backup The backup subsystem to append
      */
     inline void appendBackup(RemoteBackupSubsystem* backup)
-	{ m_backups.append(backup); }
+	{
+	    Lock lock(this);
+	    m_backups.append(backup);
+	}
 private:
     unsigned char m_ssn;
     unsigned char m_smi;

@@ -99,6 +99,8 @@ public:
 	    MKDEBUG(All);
 	    params().addParam(new ExpFunction("output"));
 	    params().addParam(new ExpFunction("debug"));
+	    params().addParam(new ExpFunction("dump_r"));
+	    params().addParam(new ExpFunction("print_r"));
 	}
     static void initialize(ScriptContext* context);
 protected:
@@ -130,6 +132,7 @@ public:
 	    if (m_owned)
 		TelEngine::destruct(m_message);
 	}
+    virtual void runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context);
     inline void clearMsg()
 	{ m_message = 0; m_owned = false; }
     static void initialize(ScriptContext* context);
@@ -193,13 +196,6 @@ UNLOAD_PLUGIN(unloadNow)
 }
 
 
-// Helper function that adds an object to a parent
-static inline void addObject(NamedList& params, const char* name, JsObject* obj)
-{
-    params.addParam(new NamedPointer(name,obj,obj->toString()));
-}
-
-
 bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
     if (oper.name() == YSTRING("output")) {
@@ -210,6 +206,7 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 		str = *op + " " + str;
 	    else
 		str = *op;
+	    TelEngine::destruct(op);
 	}
 	if (str)
 	    Output("%s",str.c_str());
@@ -229,6 +226,7 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 		else
 		    str = *op;
 	    }
+	    TelEngine::destruct(op);
 	}
 	if (str) {
 	    if (level > DebugAll)
@@ -237,6 +235,44 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 		level = DebugGoOn;
 	    Debug(&__plugin,level,"%s",str.c_str());
 	}
+    }
+    else if (oper.name() == YSTRING("dump_r")) {
+	String buf;
+	if (oper.number() == 0) {
+	    ScriptRun* run = YOBJECT(ScriptRun,context);
+	    if (run)
+		dumpRecursive(run->context(),buf);
+	    else
+		dumpRecursive(context,buf);
+	}
+	else if (oper.number() == 1) {
+	    ExpOperation* op = popValue(stack,context);
+	    if (!op)
+		return false;
+	    dumpRecursive(op,buf);
+	    TelEngine::destruct(op);
+	}
+	else
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpOperation(buf));
+    }
+    else if (oper.name() == YSTRING("print_r")) {
+	if (oper.number() == 0) {
+	    ScriptRun* run = YOBJECT(ScriptRun,context);
+	    if (run)
+		printRecursive(run->context());
+	    else
+		printRecursive(context);
+	}
+	else if (oper.number() == 1) {
+	    ExpOperation* op = popValue(stack,context);
+	    if (!op)
+		return false;
+	    printRecursive(op);
+	    TelEngine::destruct(op);
+	}
+	else
+	    return false;
     }
     else
 	return JsObject::runNative(stack,oper,context);
@@ -257,17 +293,7 @@ void JsEngine::initialize(ScriptContext* context)
 
 bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    if (oper.name() == YSTRING("constructor")) {
-	if (oper.number() != 1)
-	    return false;
-	ExpOperation* op = popValue(stack,context);
-	if (!op)
-	    return false;
-	Message* m = new Message(*op);
-	ExpEvaluator::pushOne(stack,new ExpWrapper(new JsMessage(m,mutex(),true)));
-	TelEngine::destruct(op);
-    }
-    else if (oper.name() == YSTRING("broadcast")) {
+    if (oper.name() == YSTRING("broadcast")) {
 	if (oper.number() != 0)
 	    return false;
 	ExpEvaluator::pushOne(stack,new ExpOperation(m_message && m_message->broadcast()));
@@ -301,6 +327,18 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
     else
 	return JsObject::runNative(stack,oper,context);
     return true;
+}
+
+void JsMessage::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    if (oper.number() != 1)
+	return;
+    ExpOperation* op = popValue(stack,context);
+    if (!op)
+	return;
+    Message* m = new Message(*op);
+    ExpEvaluator::pushOne(stack,new ExpWrapper(new JsMessage(m,mutex(),true)));
+    TelEngine::destruct(op);
 }
 
 void JsMessage::initialize(ScriptContext* context)

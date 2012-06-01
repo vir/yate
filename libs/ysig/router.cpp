@@ -260,6 +260,11 @@ int SS7Route::transmitMSU(const SS7Router* router, const SS7MSU& msu,
 int SS7Route::transmitInternal(const SS7Router* router, const SS7MSU& msu,
     const SS7Label& label, int sls, State states, const SS7Layer3* source)
 {
+#ifdef DEBUG
+    bool info = true;
+#else
+    bool info = false;
+#endif
     int offs = 0;
     bool userPart = (msu.getSIF() > SS7MSU::MTNS);
     if (userPart)
@@ -281,16 +286,19 @@ int SS7Route::transmitInternal(const SS7Router* router, const SS7MSU& msu,
 		m_congCount++;
 		m_congBytes += msu.length();
 	    }
-#ifdef DEBUG
-	    String addr;
-	    addr << label;
-	    Debug(router,DebugAll,"MSU %s size %u sent on '%s' SLS %d%s",
-		addr.c_str(),msu.length(),l3->toString().c_str(),res,
-		(cong ? " (congested)" : ""));
-#endif
+	    if (info) {
+		String addr;
+		addr << label;
+		Debug(router,DebugInfo,"MSU %s size %u sent on %s:%d%s",
+		    addr.c_str(),msu.length(),l3->toString().c_str(),res,
+		    (cong ? " (congested)" : ""));
+	    }
 	    return res;
 	}
+	info = true;
     }
+    Debug(router,DebugMild,"Could not send %s MSU size %u on any linkset",
+	msu.getServiceName(),msu.length());
     return -1;
 }
 

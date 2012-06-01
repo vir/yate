@@ -346,21 +346,24 @@ HandledMSU SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, 
     if (debugAt(DebugInfo)) {
 	String tmp;
 	msg->toString(tmp,label,debugAt(DebugAll));
-	Debug(this,DebugInfo,"Received %u bytes message (%p) on %d%s",
-	    len,msg,sls,tmp.c_str());
+	const char* name = network ? network->toString().c_str() : 0;
+	Debug(this,DebugInfo,"Received %u bytes message (%p) on %s:%d%s",
+	    len,msg,name,sls,tmp.c_str());
     }
 
     String addr;
     addr << label;
-    while (m_neighbours && (msg->type() != SS7MsgSNM::UPU)) {
-	if (router) {
-	    if (!router->getRoutePriority(label.type(),label.opc()))
-		break;
+    if (m_neighbours && (msg->type() != SS7MsgSNM::UPU)) {
+	int prio = -1;
+	if (router)
+	    prio = (int)router->getRoutePriority(label.type(),label.opc());
+	else if (network)
+	    prio = (int)network->getRoutePriority(label.type(),label.opc());
+	if (prio) {
+	    Debug(this,DebugMild,"Refusing %s message from %s node %s",
+		msg->name(),(prio > 0 ? "non-neighboor" : "unknown"),addr.c_str());
+	    return false;
 	}
-	else if (!(network && network->getRoutePriority(label.type(),label.opc())))
-	    break;
-	Debug(this,DebugMild,"Refusing %s message from %s",msg->name(),addr.c_str());
-	return false;
     }
 
     SS7Label lbl(label,label.sls(),0);

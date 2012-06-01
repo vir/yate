@@ -89,7 +89,7 @@ xdebug:
 ndebug:
 	$(MAKE) all DEBUG='-g0 -DNDEBUG'
 
-.PHONY: clean distclean cvsclean clean-config-files clean-tables clean-apidocs
+.PHONY: clean distclean cvsclean clean-config-files clean-packing clean-apidocs
 clean:
 	@-$(RM) $(CLEANS) 2>/dev/null
 	$(MAKE) -C ./engine $@
@@ -114,20 +114,19 @@ clean-config-files: check-topdir
 	-rm -rf auto*.cache
 	-rm -f @CONFIGURE_FILES@
 
-clean-tables: check-topdir
-	-rm -f packing/rpm/yate.spec
-	$(MAKE) -C ./engine/tables -f Makefile.tables mrproper
+clean-packing: check-topdir
+	-rm -f packing/rpm/yate.spec packing/portage/yate.ebuild
 
 clean-apidocs: check-topdir
 	-rm docs/api/*.*
 
 distclean: check-topdir clean clean-config-files
 
-cvsclean: check-topdir clean clean-tables clean-apidocs clean-config-files
+cvsclean: check-topdir clean clean-apidocs clean-packing clean-config-files
 	-rm -f configure yate-config.in
 
 .PHONY: engine libs modules clients test apidocs-build apidocs-kdoc apidocs-doxygen apidocs-everything check-topdir check-ldconfig windows
-engine: tables library libyate.so $(PROGS)
+engine: library libyate.so $(PROGS)
 
 apidocs-kdoc: check-topdir
 	@if [ "x$(DOCGEN_K)" != x/bin/false ]; then \
@@ -181,11 +180,6 @@ libs: engine
 	@for i in libs/*; do \
 	    test ! -f "$$i/Makefile" || $(MAKE) -C "$$i" all ; \
 	done
-
-tables: @srcdir@/engine/tables/all.h
-
-@srcdir@/engine/tables/all.h:
-	$(MAKE) -C @srcdir@/engine/tables -f Makefile.tables all
 
 yatepaths.h: $(MKDEPS)
 	@echo '#define CFG_PATH "$(confdir)"' > $@
@@ -268,7 +262,7 @@ uninstall uninstall-root:
 install-root uninstall-root: LDCONFIG:=ldconfig
 
 .PHONY: snapshot tarball rpm srpm revision
-snapshot tarball: check-topdir revision clean tables windows apidocs
+snapshot tarball: check-topdir revision clean windows apidocs
 	@if [ $@ = snapshot ]; then ver="`date '+SVN-%Y%m%d'`"; else ver="@PACKAGE_VERSION@-@PACKAGE_STATUS@@PACKAGE_RELEASE@"; fi ; \
 	wd=`pwd|sed 's,^.*/,,'`; \
 	mkdir -p packing/tarballs; cd ..; \

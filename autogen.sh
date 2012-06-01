@@ -7,15 +7,6 @@ if [ -z `which which 2>/dev/null` ]; then
     exit 1
 fi
 
-if [ -s engine/tables/a2s.h ]; then
-    test "x$1" = "x--silent" || echo "Good! Tables are generated so we don't need sox."
-else
-    if [ -z `which sox 2>/dev/null` ]; then
-	echo "Please install sox to be able to build from CVS version." >&2
-	exit 1
-    fi
-fi
-
 ac=`which autoconf 2>/dev/null`
 test -z "$ac" && ac=/usr/local/gnu-autotools/bin/autoconf
 if [ -x "$ac" ]; then

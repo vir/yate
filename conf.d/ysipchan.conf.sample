@@ -308,6 +308,11 @@
 ; Explicitly set it to empty string to avoid using bound IP address
 ;rtp_localip=
 
+; nat_address: ipaddress: IP address to advertise in SDP, empty to use the local RTP
+; This parameter is applied on reload
+; Set this parameter when you know your RTP is behind a NAT
+;nat_address=
+
 ; thread: keyword: Listener thread priority
 ; Can be one of: lowest, low, normal, high, highest
 ; High priorities need superuser privileges on POSIX operating systems

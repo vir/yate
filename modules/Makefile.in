@@ -78,6 +78,7 @@ PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 	$(JUSTSIG) \
 	server/analogdetect.yate \
 	server/cache.yate \
+	server/eventlogs.yate \
 	client/jabberclient.yate \
 	callgen.yate analyzer.yate rmanager.yate msgsniff.yate
 
@@ -178,6 +179,8 @@ endif
 
 LOCALFLAGS =
 LOCALLIBS =
+EXTERNFLAGS =
+EXTERNLIBS =
 CCOMPILE = $(CC) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
 COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CPPFLAGS)
 LINK = $(CXX) $(LDFLAGS)
@@ -262,26 +265,26 @@ lib%.so: %.o
 	$(LINK) -shared -o $@ $^ $(YATELIBS)
 
 server/%.yate: @srcdir@/server/%.cpp $(MKDEPS) $(INCFILES)
-	mkdir -p server && $(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS) $(YATELIBS)
+	mkdir -p server && $(MODCOMP) -o $@ $(LOCALFLAGS) $(EXTERNFLAGS) $< $(LOCALLIBS) $(YATELIBS) $(EXTERNLIBS)
 
 client/%.yate: @srcdir@/client/%.cpp $(MKDEPS) $(INCFILES)
-	mkdir -p client && $(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS) $(YATELIBS)
+	mkdir -p client && $(MODCOMP) -o $@ $(LOCALFLAGS) $(EXTERNFLAGS) $< $(LOCALLIBS) $(YATELIBS) $(EXTERNLIBS)
 
 qt4/%.yate: @srcdir@/qt4/%.cpp ../libyateqt4.so $(MKDEPS) $(INCFILES)
 	$(MAKE) $(patsubst %.yate,%.moc,$@)
-	$(MODCOMP) -o $@ $(LOCALFLAGS) $(QT4_INC) -I@top_srcdir@/clients/qt4 -Iqt4 $< $(LOCALLIBS) ../libyateqt4.so $(QT4_LIB) $(YATELIBS)
+	$(MODCOMP) -o $@ $(LOCALFLAGS) $(QT4_INC) $(EXTERNFLAGS) -I@top_srcdir@/clients/qt4 -Iqt4 $< $(LOCALLIBS) ../libyateqt4.so $(YATELIBS) $(QT4_LIB) $(EXTERNLIBS)
 
 qt4/%.moc: @srcdir@/qt4/%.h $(MKDEPS) $(INCFILES)
 	mkdir -p qt4 && $(MOC) $(DEFS) $(INCLUDES) $(QT4_INC) -I@top_srcdir@/clients/qt4 -I@srcdir@/qt4 -o $@ $<
 
 sig/%.yate: @srcdir@/sig/%.cpp $(MKDEPS) $(INCFILES)
-	mkdir -p sig && $(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS) $(YATELIBS)
+	mkdir -p sig && $(MODCOMP) -o $@ $(LOCALFLAGS) $(EXTERNFLAGS) $< $(LOCALLIBS) $(YATELIBS) $(EXTERNLIBS)
 
 sip/%.yate: @srcdir@/sip/%.cpp $(MKDEPS) $(INCFILES)
-	mkdir -p sip && $(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS) $(YATELIBS)
+	mkdir -p sip && $(MODCOMP) -o $@ $(LOCALFLAGS) $(EXTERNFLAGS) $< $(LOCALLIBS) $(YATELIBS) $(EXTERNLIBS)
 
 %.yate: @srcdir@/%.cpp $(MKDEPS) $(INCFILES)
-	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS) $(YATELIBS)
+	$(MODCOMP) -o $@ $(LOCALFLAGS) $(EXTERNFLAGS) $< $(LOCALLIBS) $(YATELIBS) $(EXTERNLIBS)
 
 # Take special care of the modules that depend on optional libs
 
@@ -302,18 +305,18 @@ server/analogdetect.yate: ../libs/ymodem/libyatemodem.a
 server/analogdetect.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymodem
 server/analogdetect.yate: LOCALLIBS = -L../libs/ymodem -lyatemodem
 
-h323chan.yate: LOCALFLAGS = @H323_INC@
-h323chan.yate: LOCALLIBS = @H323_LIB@
+h323chan.yate: EXTERNFLAGS = @H323_INC@
+h323chan.yate: EXTERNLIBS = @H323_LIB@
 
-server/pgsqldb.yate: LOCALFLAGS = $(PGSQL_INC)
-server/pgsqldb.yate: LOCALLIBS = $(PGSQL_LIB)
+server/pgsqldb.yate: EXTERNFLAGS = $(PGSQL_INC)
+server/pgsqldb.yate: EXTERNLIBS = $(PGSQL_LIB)
 
-server/mysqldb.yate: LOCALFLAGS = $(MYSQL_INC)
-server/mysqldb.yate: LOCALLIBS = $(MYSQL_LIB)
+server/mysqldb.yate: EXTERNFLAGS = $(MYSQL_INC)
+server/mysqldb.yate: EXTERNLIBS = $(MYSQL_LIB)
 
-client/alsachan.yate: LOCALLIBS = -lasound
+client/alsachan.yate: EXTERNLIBS = -lasound
 
-client/coreaudio.yate: LOCALLIBS = -framework CoreServices  -framework CoreAudio -framework AudioUnit -framework AudioToolBox
+client/coreaudio.yate: EXTERNLIBS = -framework CoreServices -framework CoreAudio -framework AudioUnit -framework AudioToolBox
 
 yiaxchan.yate: ../libs/yiax/libyateiax.a
 yiaxchan.yate: LOCALFLAGS = -I@top_srcdir@/libs/yiax
@@ -335,8 +338,8 @@ server/mgcpgw.yate: ../libyatemgcp.so ../libs/ysdp/libyatesdp.a
 server/mgcpgw.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymgcp -I@top_srcdir@/libs/ysdp
 server/mgcpgw.yate: LOCALLIBS = -lyatemgcp -L../libs/ysdp -lyatesdp
 
-server/lksctp.yate: LOCALFLAGS = @SCTP_FLAGS@
-server/lksctp.yate: LOCALLIBS = -lsctp
+server/lksctp.yate: EXTERNFLAGS = @SCTP_FLAGS@
+server/lksctp.yate: EXTERNLIBS = -lsctp
 
 ilbccodec.yate: ../libs/ilbc/libilbc.a
 ilbccodec.yate: LOCALFLAGS = @ILBC_INC@
@@ -346,17 +349,17 @@ isaccodec.yate: ../libs/miniwebrtc/libminiwebrtc.a
 isaccodec.yate: LOCALFLAGS = @ISAC_INC@ -I@top_srcdir@/libs/miniwebrtc/audio/common/processing -I@top_srcdir@/libs/miniwebrtc
 isaccodec.yate: LOCALLIBS = -L../libs/miniwebrtc -lminiwebrtc
 
-gsmcodec.yate: LOCALFLAGS = @GSM_INC@
-gsmcodec.yate: LOCALLIBS = @GSM_LIB@
+gsmcodec.yate: EXTERNFLAGS = @GSM_INC@
+gsmcodec.yate: EXTERNLIBS = @GSM_LIB@
 
-speexcodec.yate: LOCALFLAGS = @SPEEX_INC@
-speexcodec.yate: LOCALLIBS = @SPEEX_LIB@
+speexcodec.yate: EXTERNFLAGS = @SPEEX_INC@
+speexcodec.yate: EXTERNLIBS = @SPEEX_LIB@
 
-amrnbcodec.yate: LOCALFLAGS = @AMRNB_INC@
-amrnbcodec.yate: LOCALLIBS = @AMRNB_LIB@
+amrnbcodec.yate: EXTERNFLAGS = @AMRNB_INC@
+amrnbcodec.yate: EXTERNLIBS = @AMRNB_LIB@
 
-faxchan.yate: LOCALFLAGS = $(SPANDSP_INC)
-faxchan.yate: LOCALLIBS = $(SPANDSP_LIB)
+faxchan.yate: EXTERNFLAGS = $(SPANDSP_INC)
+faxchan.yate: EXTERNLIBS = $(SPANDSP_LIB)
 
 ysipchan.yate: ../libs/ysip/libyatesip.a ../libs/ysdp/libyatesdp.a
 ysipchan.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysip -I@top_srcdir@/libs/ysdp
@@ -366,14 +369,14 @@ yrtpchan.yate: ../libs/yrtp/libyatertp.a
 yrtpchan.yate: LOCALFLAGS = -I@top_srcdir@/libs/yrtp
 yrtpchan.yate: LOCALLIBS = -L../libs/yrtp -lyatertp
 
-openssl.yate: LOCALFLAGS = $(OPENSSL_INC)
-openssl.yate: LOCALLIBS = $(OPENSSL_LIB)
+openssl.yate: EXTERNFLAGS = $(OPENSSL_INC)
+openssl.yate: EXTERNLIBS = $(OPENSSL_LIB)
 
-rmanager.yate: LOCALFLAGS = $(COREDUMP_INC)
-rmanager.yate: LOCALLIBS = $(COREDUMP_LIB)
+rmanager.yate: EXTERNFLAGS = $(COREDUMP_INC)
+rmanager.yate: EXTERNLIBS = $(COREDUMP_LIB)
 
-qt4/updater.yate: LOCALFLAGS = $(QT4_INC_NET)
-qt4/updater.yate: LOCALLIBS = $(QT4_LIB_NET)
+qt4/updater.yate: EXTERNFLAGS = $(QT4_INC_NET)
+qt4/updater.yate: EXTERNLIBS = $(QT4_LIB_NET)
 
 server/sipfeatures.yate: ../libs/yxml/libyatexml.a
 server/sipfeatures.yate: LOCALFLAGS = -I@top_srcdir@/libs/yxml
@@ -383,8 +386,8 @@ javascript.yate: ../libyatescript.so ../libs/ypbx/libyatepbx.a
 javascript.yate: LOCALFLAGS = -I@top_srcdir@/libs/yscript -I@top_srcdir@/libs/ypbx
 javascript.yate: LOCALLIBS = -lyatescript -L../libs/ypbx -lyatepbx
 
-zlibcompress.yate: LOCALFLAGS = $(ZLIB_INC)
-zlibcompress.yate: LOCALLIBS = $(ZLIB_LIB)
+zlibcompress.yate: EXTERNFLAGS = $(ZLIB_INC)
+zlibcompress.yate: EXTERNLIBS = $(ZLIB_LIB)
 
 server/ysnmpagent.yate: ../libs/yasn/libyasn.a ../libs/ysnmp/libysnmp.a
 server/ysnmpagent.yate: LOCALFLAGS = -I@top_srcdir@/libs/yasn -I@top_srcdir@/libs/ysnmp

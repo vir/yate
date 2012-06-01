@@ -1579,7 +1579,8 @@ void SigChannel::disconnected(bool final, const char* reason)
 
 void SigChannel::endDisconnect(const Message& params, bool handled)
 {
-    const char* prefix = params.getValue("message-oprefix");
+    m_reason = params.getValue(YSTRING("reason"),m_reason);
+    const char* prefix = params.getValue(YSTRING("message-oprefix"));
     if (TelEngine::null(prefix))
 	return;
     paramMutex().lock();
@@ -1591,7 +1592,7 @@ void SigChannel::endDisconnect(const Message& params, bool handled)
 
 void SigChannel::hangup(const char* reason, SignallingEvent* event, const NamedList* extra)
 {
-    static String params = "reason";
+    static const String params = "reason";
     Lock lock(m_mutex);
     releaseCallAccepted();
     if (m_hungup)

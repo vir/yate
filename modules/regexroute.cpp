@@ -31,6 +31,7 @@ using namespace TelEngine;
 namespace { // anonymous
 
 #define DEFAULT_RULE "^\\(false\\|no\\|off\\|disable\\|f\\|0*\\)$^"
+#define BLOCK_STACK 10
 
 static Configuration s_cfg;
 static bool s_extended;
@@ -141,7 +142,7 @@ static void mathOper(String& str, String& par, int sep, int oper)
     }
 }
 
-static void evalFunc(String& str)
+static void evalFunc(String& str, Message& msg)
 {
     if (str.null())
 	str = ";";
@@ -294,6 +295,36 @@ static void evalFunc(String& str)
 	}
 	else if (str == "engine")
 	    str = Engine::runParams().getValue(vars(par));
+	else if (str == "message") {
+	    if (sep >= 0) {
+		str = par.substr(sep+1).trimBlanks();
+		par = par.substr(0,sep).trimBlanks();
+	    }
+	    else
+		str.clear();
+	    if (par.null() || par == "name")
+		str = msg;
+	    else if (par == "time")
+		str = msg.msgTime().sec();
+	    else if (par == "broadcast")
+		str = msg.broadcast();
+	    else if (par == "count")
+		str = msg.count();
+	    else if (par == "parameters") {
+		par = str;
+		if (par.null())
+		    par = ",";
+		str.clear();
+		unsigned int n = msg.length();
+		for (unsigned int i = 0; i < n; i++) {
+		    NamedString* s = msg.getParam(i);
+		    if (s && s->name())
+			str.append(s->name(),par);
+		}
+	    }
+	    else
+		str.clear();
+	}
 	else if (str == "runid") {
 	    str.clear();
 	    str << Engine::runId();
@@ -325,7 +356,7 @@ static void evalFunc(String& str)
 }
 
 // handle $(function) replacements
-static void replaceFuncs(String &str)
+static void replaceFuncs(String &str, Message& msg)
 {
     int p1;
     while ((p1 = str.find("$(")) >= 0) {
@@ -335,7 +366,7 @@ static void replaceFuncs(String &str)
 	    v.trimBlanks();
 	    DDebug("RegexRoute",DebugAll,"Replacing function '%s'",
 		v.c_str());
-	    evalFunc(v);
+	    evalFunc(v,msg);
 	    str = str.substr(0,p1) + v + str.substr(p2+1);
 	}
 	else {
@@ -357,7 +388,7 @@ static void setMessage(const String& match, Message& msg, String& line, Message*
 	if (s) {
 	    *s = match.replaceMatches(*s);
 	    msg.replaceParams(*s);
-	    replaceFuncs(*s);
+	    replaceFuncs(*s,msg);
 	}
 	if (first) {
 	    first = false;
@@ -406,7 +437,7 @@ static void setDefault(Regexp& reg)
 }
 
 // helper function to process one match attempt
-static bool oneMatch(const NamedList& msg, Regexp& reg, String& match, const String& context, unsigned int rule)
+static bool oneMatch(Message& msg, Regexp& reg, String& match, const String& context, unsigned int rule)
 {
     if (reg.startsWith("${")) {
 	// handle special matching by param ${paramname}regexp
@@ -457,7 +488,7 @@ static bool oneMatch(const NamedList& msg, Regexp& reg, String& match, const Str
 	}
 	DDebug("RegexRoute",DebugAll,"Using function '%s'",match.c_str());
 	msg.replaceParams(match);
-	replaceFuncs(match);
+	replaceFuncs(match,msg);
     }
     match.trimBlanks();
 
@@ -470,6 +501,12 @@ static bool oneMatch(const NamedList& msg, Regexp& reg, String& match, const Str
     return (match.matches(reg) == doMatch);
 }
 
+enum BlockState {
+    BlockRun  = 0,
+    BlockSkip = 1,
+    BlockDone = 2
+};
+
 // process one context, can call itself recursively
 static bool oneContext(Message &msg, String &str, const String &context, String &ret, int depth = 0)
 {
@@ -481,22 +518,80 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
     }
     NamedList *l = s_cfg.getSection(context);
     if (l) {
+	unsigned int blockDepth = 0;
+	BlockState blockStack[BLOCK_STACK];
 	unsigned int len = l->length();
 	for (unsigned int i = 0; i < len; i++) {
 	    const NamedString* n = l->getParam(i);
 	    if (!n)
 		continue;
+	    BlockState blockThis = (blockDepth > 0) ? blockStack[blockDepth-1] : BlockRun;
+	    BlockState blockLast = BlockSkip;
 	    Regexp reg(n->name(),s_extended,s_insensitive);
+	    if (reg.startSkip("}")) {
+		if (!blockDepth) {
+		    Debug("RegexRoute",DebugWarn,"Got '}' outside block in line #%u in context '%s'",
+			i+1,context.c_str());
+		    continue;
+		}
+		if (reg.trimBlanks().null())
+		    reg = ".*";
+		blockDepth--;
+		blockLast = blockThis;
+		blockThis = (blockDepth > 0) ? blockStack[blockDepth-1] : BlockRun;
+	    }
+	    static Regexp s_blockStart("\\(=[[:space:]]*\\)\\?{$");
+	    if (s_blockStart.matches(*n)) {
+		// start of a new block
+		if (blockDepth >= BLOCK_STACK) {
+		    Debug("RegexRoute",DebugWarn,"Block stack overflow in line #%u in context '%s'",
+			i+1,context.c_str());
+		    return false;
+		}
+		// assume block is done
+		BlockState blockEnter = BlockDone;
+		if (BlockRun == blockThis) {
+		    // if we returned from a false inner block to a true outer block
+		    if (BlockSkip == blockLast)
+			blockEnter = BlockSkip;
+		    else
+			blockThis = BlockDone;
+		}
+		blockStack[blockDepth++] = blockEnter;
+	    }
+	    XDebug("RegexRoute",DebugAll,"%s:%d(%u:%s) %s=%s",context.c_str(),i+1,
+		blockDepth,String::boolText(BlockRun == blockThis),
+		n->name().c_str(),n->c_str());
+	    if (BlockRun != blockThis)
+		continue;
+
 	    String val(*n);
 	    String match;
-
 	    bool ok;
 	    do {
 		match = str;
 		ok = oneMatch(msg,reg,match,context,i+1);
 		if (ok) {
+		    if (val.startSkip("or")) {
+			do {
+			    int p = val.find('=');
+			    if (p < 0) {
+				Debug("RegexRoute",DebugWarn,"Malformed 'or' rule #%u in context '%s'",
+				    i+1,context.c_str());
+				ok = false;
+				break;
+			    }
+			    val = val.substr(p+1);
+			    val.trimBlanks();
+			} while (ok && (val.startSkip("or") || val.startSkip("if") || val.startSkip("and")));
+			break;
+		    }
 		    if (!(val.startSkip("if") || val.startSkip("and")))
 			break;
+		}
+		else if (val.startSkip("or"))
+		    ok = true;
+		if (ok) {
 		    int p = val.find('=');
 		    if (p >= 1) {
 			reg = val.substr(0,p);
@@ -509,7 +604,7 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 			    continue;
 			}
 		    }
-		    Debug("RegexRoute",DebugWarn,"Missing if rule in rule #%u in context '%s'",
+		    Debug("RegexRoute",DebugWarn,"Missing 'if' in rule #%u in context '%s'",
 			i+1,context.c_str());
 		    ok = false;
 		}
@@ -521,8 +616,17 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 		// special case: display the line but don't set params
 		val = match.replaceMatches(val);
 		msg.replaceParams(val);
-		replaceFuncs(val);
+		replaceFuncs(val,msg);
 		Output("%s",val.safe());
+		continue;
+	    }
+	    else if (val == "{") {
+		// mark block as being processed now
+		if (blockDepth)
+		    blockStack[blockDepth-1] = BlockRun;
+		else
+		    Debug("RegexRoute",DebugWarn,"Got '{' outside block in line #%u in context '%s'",
+			i+1,context.c_str());
 		continue;
 	    }
 	    bool disp = val.startSkip("dispatch");
@@ -599,6 +703,9 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 		return true;
 	    }
 	}
+	if (blockDepth)
+	    Debug("RegexRoute",DebugWarn,"There are %u blocks still open at end of context '%s'",
+		blockDepth,context.c_str());
     }
     DDebug("RegexRoute",DebugAll,"Returning false at end of context '%s'", context.c_str());
     return false;

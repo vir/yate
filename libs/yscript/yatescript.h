@@ -284,6 +284,13 @@ public:
 	{ return m_inError; }
 
     /**
+     * Retrieve the number of line currently being parsed
+     * @return Number of current parsed line, 1 is the first line
+     */
+    inline unsigned int lineNumber() const
+	{ return m_lineNo; }
+
+    /**
      * Check if the expression is empty (no operands or operators)
      * @return True if the expression is completely empty
      */
@@ -347,6 +354,15 @@ public:
     void extender(ExpExtender* ext);
 
     /**
+     * Retrieve the line number from one to three operands
+     * @param op1 First operand
+     * @param op2 Optional second operand
+     * @param op3 Optional third operand
+     * @return Line number at compile time, zero if not found
+     */
+    static unsigned int getLineOf(ExpOperation* op1, ExpOperation* op2 = 0, ExpOperation* op3 = 0);
+
+    /**
      * Push an operand on an evaluation stack
      * @param stack Evaluation stack to remove the operand from
      * @param oper Operation to push on stack, NULL will not be pushed
@@ -395,11 +411,11 @@ public:
 
 protected:
     /**
-     * Helper method to skip over whitespaces
+     * Method to skip over whitespaces, count parsed lines too
      * @param expr Pointer to expression cursor, gets advanced
      * @return First character after whitespaces where expr points
      */
-    static char skipWhites(const char*& expr);
+    virtual char skipWhites(const char*& expr);
 
     /**
      * Helper method to conditionally convert to lower case
@@ -437,17 +453,44 @@ protected:
      * Helper method to display debugging errors internally
      * @param error Text of the error
      * @param text Optional text that caused the error
+     * @param line Number of line generating the error, zero for parsing errors
      * @return Always returns false
      */
-    bool gotError(const char* error = 0, const char* text = 0) const;
+    bool gotError(const char* error = 0, const char* text = 0, unsigned int line = 0) const;
 
     /**
      * Helper method to set error flag and display debugging errors internally
      * @param error Text of the error
      * @param text Optional text that caused the error
+     * @param line Number of line generating the error, zero for parsing errors
      * @return Always returns false
      */
-    bool gotError(const char* error = 0, const char* text = 0);
+    bool gotError(const char* error = 0, const char* text = 0, unsigned int line = 0);
+
+    /**
+     * Helper method to display debugging errors internally
+     * @param error Text of the error
+     * @param line Number of line generating the error, zero for parsing errors
+     * @return Always returns false
+     */
+    inline bool gotError(const char* error, unsigned int line) const
+	{ return gotError(error, 0, line); }
+
+    /**
+     * Helper method to set error flag and display debugging errors internally
+     * @param error Text of the error
+     * @param line Number of line generating the error, zero for parsing errors
+     * @return Always returns false
+     */
+    inline bool gotError(const char* error, unsigned int line)
+	{ return gotError(error, 0, line); }
+
+    /**
+     * Formats a line number to display in error messages
+     * @param buf String buffer used to return the value
+     * @param line Line number to format
+     */
+    virtual void formatLineNo(String& buf, unsigned int line) const;
 
     /**
      * Runs the parser and compiler for one (sub)expression
@@ -464,7 +507,7 @@ protected:
      * @param context Pointer to arbitrary object to be passed to called methods
      * @return First character after comments or whitespaces where expr points
      */
-    virtual char skipComments(const char*& expr, GenObject* context = 0) const;
+    virtual char skipComments(const char*& expr, GenObject* context = 0);
 
     /**
      * Process top-level preprocessor directives
@@ -541,6 +584,14 @@ protected:
     virtual bool getOperand(const char*& expr, bool endOk = true);
 
     /**
+     * Get an inline simple type, usually string or number
+     * @param expr Pointer to text to parse, gets advanced on success
+     * @param constOnly Return only inline constants
+     * @return True if succeeded, must add the operand internally
+     */
+    virtual bool getSimple(const char*& expr, bool constOnly = false);
+
+    /**
      * Get a numerical operand, advance parsing pointer past it
      * @param expr Pointer to text to parse, gets advanced on success
      * @return True if succeeded, must add the operand internally
@@ -562,6 +613,23 @@ protected:
     virtual bool getFunction(const char*& expr);
 
     /**
+     * Helper method - get a string, advance parsing pointer past it
+     * @param expr Pointer to string separator, gets advanced on success
+     * @param str String in which the result is returned
+     * @return True if succeeded
+     */
+    virtual bool getString(const char*& expr, String& str);
+
+    /**
+     * Helper method - get an escaped component of a string
+     * @param expr Pointer past escape character, gets advanced on success
+     * @param str String in which the result is returned
+     * @param sep String separator character
+     * @return True if succeeded
+     */
+    virtual bool getEscape(const char*& expr, String& str, char sep);
+
+    /**
      * Get a field keyword, advance parsing pointer past it
      * @param expr Pointer to text to parse, gets advanced on success
      * @return True if succeeded, must add the operand internally
@@ -569,9 +637,17 @@ protected:
     virtual bool getField(const char*& expr);
 
     /**
+     * Add an aready built operation to the expression and set its line number
+     * @param oper Operation to add
+     * @param line Line number where operation was compiled, zero to used parsing point
+     */
+    void addOpcode(ExpOperation* oper, unsigned int line = 0);
+
+    /**
      * Add a simple operator to the expression
      * @param oper Operator code to add
      * @param barrier True to create an evaluator stack barrier
+     * @return Newly added operation
      */
     ExpOperation* addOpcode(Opcode oper, bool barrier = false);
 
@@ -580,24 +656,28 @@ protected:
      * @param oper Operator code to add
      * @param value Integer value to add
      * @param barrier True to create an evaluator stack barrier
+     * @return Newly added operation
      */
     ExpOperation* addOpcode(Opcode oper, long int value, bool barrier = false);
 
     /**
      * Add a string constant to the expression
      * @param value String value to add, will be pushed on execution
+     * @return Newly added operation
      */
     ExpOperation* addOpcode(const String& value);
 
     /**
      * Add an integer constant to the expression
      * @param value Integer value to add, will be pushed on execution
+     * @return Newly added operation
      */
     ExpOperation* addOpcode(long int value);
 
     /**
      * Add a boolean constant to the expression
      * @param value Boolean value to add, will be pushed on execution
+     * @return Newly added operation
      */
     ExpOperation* addOpcode(bool value);
 
@@ -607,8 +687,15 @@ protected:
      * @param name Name of the field or function, case sensitive
      * @param value Numerical value used as parameter count to functions
      * @param barrier True to create an exavuator stack barrier
+     * @return Newly added operation
      */
     ExpOperation* addOpcode(Opcode oper, const String& name, long int value = 0, bool barrier = false);
+
+    /**
+     * Remove from the code and return the last operation
+     * @return Operation removed from end of code, NULL if no operations remaining
+     */
+    ExpOperation* popOpcode();
 
     /**
      * Try to apply simplification to the expression
@@ -691,6 +778,11 @@ protected:
      */
     bool m_inError;
 
+    /**
+     * Current line index
+     */
+    unsigned int m_lineNo;
+
 private:
     ExpExtender* m_extender;
 };
@@ -718,7 +810,7 @@ public:
     inline ExpOperation(const ExpOperation& original)
 	: NamedString(original.name(),original),
 	  m_opcode(original.opcode()), m_number(original.number()),
-	  m_barrier(original.barrier())
+	  m_lineNo(0), m_barrier(original.barrier())
 	{ }
 
     /**
@@ -729,7 +821,7 @@ public:
     inline ExpOperation(const ExpOperation& original, const char* name)
 	: NamedString(name,original),
 	  m_opcode(original.opcode()), m_number(original.number()),
-	  m_barrier(original.barrier())
+	  m_lineNo(0), m_barrier(original.barrier())
 	{ }
 
     /**
@@ -742,7 +834,7 @@ public:
 	: NamedString(name,value),
 	  m_opcode(ExpEvaluator::OpcPush),
 	  m_number(autoNum ? value.toLong(nonInteger()) : nonInteger()),
-	  m_barrier(false)
+	  m_lineNo(0), m_barrier(false)
 	{ if (autoNum && value.isBoolean()) m_number = value.toBoolean() ? 1 : 0; }
 
     /**
@@ -752,7 +844,7 @@ public:
      */
     inline explicit ExpOperation(const char* value, const char* name = 0)
 	: NamedString(name,value),
-	  m_opcode(ExpEvaluator::OpcPush), m_number(nonInteger()), m_barrier(false)
+	  m_opcode(ExpEvaluator::OpcPush), m_number(nonInteger()), m_lineNo(0), m_barrier(false)
 	{ }
 
     /**
@@ -762,7 +854,8 @@ public:
      */
     inline explicit ExpOperation(long int value, const char* name = 0)
 	: NamedString(name,"NaN"),
-	  m_opcode(ExpEvaluator::OpcPush), m_number(value), m_barrier(false)
+	  m_opcode(ExpEvaluator::OpcPush),
+	  m_number(value), m_lineNo(0), m_barrier(false)
 	{ if (value != nonInteger()) String::operator=((int)value); }
 
     /**
@@ -772,7 +865,8 @@ public:
      */
     inline explicit ExpOperation(bool value, const char* name = 0)
 	: NamedString(name,String::boolText(value)),
-	  m_opcode(ExpEvaluator::OpcPush), m_number(value ? 1 : 0), m_barrier(false)
+	  m_opcode(ExpEvaluator::OpcPush),
+	  m_number(value ? 1 : 0), m_lineNo(0), m_barrier(false)
 	{ }
 
     /**
@@ -784,7 +878,7 @@ public:
      */
     inline ExpOperation(ExpEvaluator::Opcode oper, const char* name = 0, long int value = nonInteger(), bool barrier = false)
 	: NamedString(name,""),
-	  m_opcode(oper), m_number(value), m_barrier(barrier)
+	  m_opcode(oper), m_number(value), m_lineNo(0), m_barrier(barrier)
 	{ }
 
     /**
@@ -796,7 +890,7 @@ public:
      */
     inline ExpOperation(ExpEvaluator::Opcode oper, const char* name, const char* value, bool barrier = false)
 	: NamedString(name,value),
-	  m_opcode(oper), m_number(nonInteger()), m_barrier(barrier)
+	  m_opcode(oper), m_number(nonInteger()), m_lineNo(0), m_barrier(barrier)
 	{ }
 
     /**
@@ -828,6 +922,20 @@ public:
 	{ return m_barrier; }
 
     /**
+     * Retrieve the line number where the operation was compiled from
+     * @return Line number, zero if unknown
+     */
+    inline unsigned int lineNumber() const
+	{ return m_lineNo; }
+
+    /**
+     * Set the line number where the operation was compiled from
+     * @param line Number of the compiled line
+     */
+    inline void lineNumber(unsigned int line)
+	{ m_lineNo = line; }
+
+    /**
      * Number assignment operator
      * @param num Numeric value to assign to the operation
      * @return Assigned number
@@ -836,12 +944,23 @@ public:
 	{ m_number = num; String::operator=((int)num); return num; }
 
     /**
+     * Retrive the numeric value of the operation
+     * @return Number contained in operation, zero if not a number
+     */
+    virtual long int valInteger() const;
+
+    /**
+     * Retrive the boolean value of the operation
+     * @return True if the operation is to be interpreted as true value
+     */
+    virtual bool valBoolean() const;
+
+    /**
      * Clone and rename method
      * @param name Name of the cloned operation
      * @return New operation instance
      */
-    virtual ExpOperation* clone(const char* name) const
-	{ return new ExpOperation(*this,name); }
+    virtual ExpOperation* clone(const char* name) const;
 
     /**
      * Clone method
@@ -853,6 +972,7 @@ public:
 private:
     ExpEvaluator::Opcode m_opcode;
     long int m_number;
+    unsigned int m_lineNo;
     bool m_barrier;
 };
 
@@ -900,7 +1020,7 @@ public:
 	{ }
 
     /**
-     * Destuctor, deletes the held object
+     * Destructor, deletes the held object
      */
     virtual ~ExpWrapper()
 	{ TelEngine::destruct(m_object); }
@@ -1098,6 +1218,24 @@ public:
      * @return True if assignment succeeded
      */
     virtual bool runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context);
+
+    /**
+     * Copy all fields from another context
+     * @param stack Evaluation stack in use
+     * @param original Script context to copy from
+     * @param context Pointer to context data passed from evaluation methods
+     * @return True if all fields were copied
+     */
+    virtual bool copyFields(ObjList& stack, const ScriptContext& original, GenObject* context);
+
+    /**
+     * Try to evaluate a single field searching for a matching context
+     * @param stack Evaluation stack in use, field value must be pushed on it
+     * @param oper Field to evaluate
+     * @param context Pointer to context data passed from evaluation methods
+     * @return True if evaluation succeeded
+     */
+    bool runMatchingField(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
 private:
     NamedList m_params;
@@ -1392,6 +1530,30 @@ public:
 	{ return m_mutex; }
 
     /**
+     * Clone and rename method
+     * @param name Name of the cloned object
+     * @return New object instance
+     */
+    virtual JsObject* clone(const char* name) const
+	{ return new JsObject(m_mutex,name); }
+
+    /**
+     * Clone method
+     * @return New object instance
+     */
+    inline JsObject* clone() const
+	{ return clone(toString()); }
+
+    /**
+     * Native object constructor
+     * @param stack Evaluation stack in use
+     * @param oper Constructor function to evaluate
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     */
+    virtual void runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
+	{ }
+
+    /**
      * Try to evaluate a single method
      * @param stack Evaluation stack in use, parameters are popped off this stack
      *  and results are pushed back on stack
@@ -1441,12 +1603,71 @@ public:
 	{ m_frozen = true; }
 
     /**
+     * Helper static method that adds an object to a parent
+     * @param params List of parameters where to add the object
+     * @param name Name of the new parameter
+     * @param obj Pointer to the object to add
+     */
+    static void addObject(NamedList& params, const char* name, JsObject* obj);
+
+    /**
+     * Helper static method that adds a constructor to a parent
+     * @param params List of parameters where to add the constructor
+     * @param name Name of the new parameter
+     * @param obj Pointer to the prototype object to add
+     */
+    static void addConstructor(NamedList& params, const char* name, JsObject* obj);
+
+    /**
+     * Helper static method that pops arguments off a stack to a list in proper order
+     * @param obj Pointer to the object to use when popping each argument
+     * @param stack Evaluation stack in use, parameters are popped off this stack
+     * @param oper Function that is being evaluated
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @param arguments List where the arguments are added in proper order
+     * @return Number of arguments popped off stack
+     */
+    static int extractArgs(JsObject* obj, ObjList& stack, const ExpOperation& oper, GenObject* context, ObjList& arguments);
+
+    /**
+     * Helper method that pops arguments off a stack to a list in proper order
+     * @param stack Evaluation stack in use, parameters are popped off this stack
+     * @param oper Function that is being evaluated
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @param arguments List where the arguments are added in proper order
+     * @return Number of arguments popped off stack
+     */
+    inline int extractArgs(ObjList& stack, const ExpOperation& oper, GenObject* context, ObjList& arguments)
+	{ return extractArgs(this,stack,oper,context,arguments); }
+
+    /**
      * Initialize the standard global objects in a context
      * @param context Script context to initialize
      */
     static void initialize(ScriptContext* context);
 
+    /**
+     * Helper method to return the hierarchical structure of an object
+     * @param obj Object to dump structure
+     * @param buf String to which the structure is added
+     */
+    static void dumpRecursive(const GenObject* obj, String& buf);
+
+    /**
+     * Helper method to display the hierarchical structure of an object
+     * @param obj Object to display
+     */
+    static void printRecursive(const GenObject* obj);
+
 protected:
+    /**
+     * Constructor for an empty object
+     * @param mtx Pointer to the mutex that serializes this object
+     * @param name Full name of the object
+     * @param frozen True if the object is to be frozen from creation
+     */
+    JsObject(Mutex* mtx, const char* name, bool frozen = false);
+
     /**
      * Try to evaluate a single native method
      * @param stack Evaluation stack in use, parameters are popped off this stack
@@ -1456,6 +1677,13 @@ protected:
      * @return True if evaluation succeeded
      */
     virtual bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
+
+    /**
+     * Retrieve the Mutex object used to serialize object access
+     * @return Pointer to the mutex of the context this object belongs to
+     */
+    inline Mutex* mutex() const
+	{ return m_mutex; }
 
 private:
     bool m_frozen;
@@ -1470,12 +1698,18 @@ class YSCRIPT_API JsFunction : public JsObject
 {
     YCLASS(JsFunction,JsObject)
 public:
-
     /**
      * Constructor
      * @param mtx Pointer to the mutex that serializes this object
      */
     JsFunction(Mutex* mtx = 0);
+
+    /**
+     * Constructor with function name
+     * @param mtx Pointer to the mutex that serializes this object
+     * @param name Name of the function
+     */
+    JsFunction(Mutex* mtx, const char* name);
 
     /**
      * Try to evaluate a single user defined method
@@ -1498,6 +1732,148 @@ protected:
      */
     virtual bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
+private:
+    void init();
+};
+
+/**
+ * Javascript Array class, implements arrays of items
+ * @short Javascript Array
+ */
+class YSCRIPT_API JsArray : public JsObject
+{
+    YCLASS(JsArray,JsObject)
+public:
+    /**
+     * Constructor
+     * @param mtx Pointer to the mutex that serializes this object
+     */
+    JsArray(Mutex* mtx = 0);
+
+    /**
+     * Retrieve the length of the array
+     * @return Number of numerically indexed objects in array
+     */
+    inline long length() 
+	{ return m_length; }
+
+    /**
+     * Add an item at the end of the array
+     * @param item Item to add to array
+     */
+    void push(ExpOperation* item);
+
+protected:
+    /*
+     * Constructor for an empty array
+     * @param mtx Pointer to the mutex that serializes this object
+     * @param name Full name of the object
+     * @param frozen True if the object is to be frozen from creation
+     */
+    inline JsArray(Mutex* mtx, const char* name, bool frozen = false)
+	: JsObject(mtx,name,frozen), m_length(0)
+	{ }
+
+    /**
+     * Clone and rename method
+     * @param name Name of the cloned object
+     * @return New object instance
+     */
+    virtual JsObject* clone(const char* name) const
+	{ return new JsArray(mutex(),name); }
+
+    /**
+     * Try to evaluate a single native method
+     * @param stack Evaluation stack in use, parameters are popped off this stack
+     *  and results are pushed back on stack
+     * @param oper Function to evaluate
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return True if evaluation succeeded
+     */
+    bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
+
+    /**
+     * Synchronize the "length" parameter to the internally stored length
+     */
+    inline void setLength()
+	{ params().setParam("length",String((int)m_length)); }
+
+    /**
+     * Set the internal length and the "length" parameter to a specific value
+     * @param len Length of array to set
+     */
+    inline void setLength(long len)
+	{ m_length = len; params().setParam("length",String((int)len)); }
+
+private:
+    bool runNativeSlice(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    bool runNativeSplice(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    bool runNativeSort(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    long m_length;
+};
+
+/**
+ * Javascript RegExp class, implements regular expression matching
+ * @short Javascript RegExp
+ */
+class YSCRIPT_API JsRegExp : public JsObject
+{
+    YCLASS(JsRegExp,JsObject)
+public:
+    /*
+     * Constructor for a RegExp constructor
+     * @param mtx Pointer to the mutex that serializes this object
+     */
+    JsRegExp(Mutex* mtx = 0);
+
+    /*
+     * Constructor for a RegExp object
+     * @param mtx Pointer to the mutex that serializes this object
+     * @param name Full name of the object
+     * @param rexp Regular expression text
+     * @param insensitive True to not differentiate case
+     * @param extended True to use POSIX Extended Regular Expression syntax
+     * @param frozen True to create an initially frozen object
+     */
+    JsRegExp(Mutex* mtx, const char* name, const char* rexp = 0, bool insensitive = false,
+	bool extended = true, bool frozen = false);
+
+    /**
+     * Access the internal Regexp object that does the matching
+     * @return Const reference to the internal Regexp object
+     */
+    inline const Regexp& regexp() const
+	{ return m_regexp; }
+
+    /**
+     * Access the internal Regexp object that does the matching
+     * @return Reference to the internal Regexp object
+     */
+    inline Regexp& regexp()
+	{ return m_regexp; }
+
+protected:
+    /**
+     * Clone and rename method
+     * @param name Name of the cloned object
+     * @return New object instance
+     */
+    virtual JsObject* clone(const char* name) const
+	{ return new JsRegExp(mutex(),name,m_regexp.c_str(),
+	    m_regexp.isCaseInsensitive(),m_regexp.isExtended()); }
+
+    /**
+     * Try to evaluate a single native method
+     * @param stack Evaluation stack in use, parameters are popped off this stack
+     *  and results are pushed back on stack
+     * @param oper Function to evaluate
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return True if evaluation succeeded
+     */
+    bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
+
+private:
+    Regexp m_regexp;
 };
 
 /**

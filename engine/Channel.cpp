@@ -1383,7 +1383,7 @@ bool Driver::received(Message &msg, int id)
 	    msg.userData(chan);
 	    if (chan->msgMasquerade(msg))
 		return true;
-	    chan->complete(msg);
+	    chan->complete(msg,msg.getBoolValue(YSTRING("complete_minimal"),false));
 	    return false;
 	case Locate:
 	    msg.userData(chan);
@@ -1617,13 +1617,19 @@ bool Router::route()
     // chan will keep it referenced even if message user data is changed
     m_msg->userData(chan);
 
+    static const char s_noroute[] = "noroute";
+    static const char s_looping[] = "looping";
+    static const char s_noconn[] = "noconn";
+
     if (ok && m_msg->retValue().trimSpaces()) {
 	if ((m_msg->retValue() == YSTRING("-")) || (m_msg->retValue() == YSTRING("error")))
 	    chan->callRejected(m_msg->getValue(YSTRING("error"),"unknown"),
 		m_msg->getValue("reason"),m_msg);
-	else if (m_msg->getIntValue(YSTRING("antiloop"),1) <= 0)
-	    chan->callRejected(m_msg->getValue(YSTRING("error"),"looping"),
-		m_msg->getValue(YSTRING("reason"),"Call is looping"),m_msg);
+	else if (m_msg->getIntValue(YSTRING("antiloop"),1) <= 0) {
+	    const char* error = m_msg->getValue(YSTRING("error"),s_looping);
+	    chan->callRejected(error,m_msg->getValue(YSTRING("reason"),
+		((s_looping == error) ? "Call is looping" : (const char*)0)),m_msg);
+	}
 	else if (chan->callRouted(*m_msg)) {
 	    *m_msg = "call.execute";
 	    m_msg->setParam("callto",m_msg->retValue());
@@ -1633,8 +1639,9 @@ bool Router::route()
 	    if (ok)
 		chan->callAccept(*m_msg);
 	    else {
-		const char* error = m_msg->getValue(YSTRING("error"),"noconn");
-		const char* reason = m_msg->getValue(YSTRING("reason"),"Could not connect to target");
+		const char* error = m_msg->getValue(YSTRING("error"),s_noconn);
+		const char* reason = m_msg->getValue(YSTRING("reason"),
+		    ((s_noconn == error) ? "Could not connect to target" : (const char*)0));
 		Message m(s_disconnected);
 		chan->complete(m);
 		m.setParam("error",error);
@@ -1647,9 +1654,11 @@ bool Router::route()
 	    }
 	}
     }
-    else
-	chan->callRejected(m_msg->getValue(YSTRING("error"),"noroute"),
-	    m_msg->getValue(YSTRING("reason"),"No route to call target"),m_msg);
+    else {
+	const char* error = m_msg->getValue(YSTRING("error"),s_noroute);
+	chan->callRejected(error,m_msg->getValue(YSTRING("reason"),
+	    ((s_noroute == error) ? "No route to call target" : (const char*)0)),m_msg);
+    }
 
     // dereference again if the channel is dynamic
     if (m_driver->varchan())

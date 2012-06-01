@@ -571,6 +571,7 @@ public:
 
 private:
     const char* m_name;
+    int m_level;
 };
 
 /**
@@ -4442,6 +4443,25 @@ public:
      */
     inline void drop()
 	{ if (m_lock) m_lock->unlock(); m_lock = 0; }
+
+    /**
+     * Attempt to acquire a new lock on another object
+     * @param lck Pointer to the object to lock
+     * @param maxwait Time in microseconds to wait, -1 wait forever
+     * @return True if locking succeeded or same object was locked
+     */
+    inline bool acquire(Lockable* lck, long maxwait = -1)
+	{ return (lck && (lck == m_lock)) ||
+	    (drop(),(lck && (m_lock = lck->lock(maxwait) ? lck : 0))); }
+
+    /**
+     * Attempt to acquire a new lock on another object
+     * @param lck Reference to the object to lock
+     * @param maxwait Time in microseconds to wait, -1 wait forever
+     * @return True if locking succeeded or same object was locked
+     */
+    inline bool acquire(Lockable& lck, long maxwait = -1)
+	{ return acquire(&lck,maxwait); }
 
 private:
     Lockable* m_lock;

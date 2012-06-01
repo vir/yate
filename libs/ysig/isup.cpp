@@ -2326,6 +2326,8 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 			    break;
 			}
 		    }
+		    else
+			setReason("timeout",0);
 		    m_lastEvent = release();
 		    break;
 		}
@@ -2425,12 +2427,14 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 		SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::CPR,id());
 		m->params().addParam("EventInformation",
 		    event->type() == SignallingEvent::Ringing ? "ringing": "progress");
+		bool inband = m_inbandAvailable;
 		if (event->message()) {
 		    copyUpper(m->params(),event->message()->params());
 		    m_inbandAvailable = m_inbandAvailable ||
 			event->message()->params().getBoolValue(YSTRING("earlymedia"));
+		    inband = event->message()->params().getBoolValue(YSTRING("send-inband"),m_inbandAvailable);
 		}
-		if (m_inbandAvailable)
+		if (inband && !outgoing())
 		    SignallingUtils::appendFlag(m->params(),"OptionalBackwardCallIndicators","inband");
 		m_state = Ringing;
 		mylock.drop();
@@ -2440,12 +2444,14 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 	case SignallingEvent::Accept:
 	    if (validMsgState(true,SS7MsgISUP::ACM)) {
 		SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::ACM,id());
+		bool inband = m_inbandAvailable;
 		if (event->message()) {
 		    copyUpper(m->params(),event->message()->params());
 		    m_inbandAvailable = m_inbandAvailable ||
 			event->message()->params().getBoolValue(YSTRING("earlymedia"));
+		    inband = event->message()->params().getBoolValue(YSTRING("send-inband"),m_inbandAvailable);
 		}
-		if (m_inbandAvailable)
+		if (inband && !outgoing())
 		    SignallingUtils::appendFlag(m->params(),"OptionalBackwardCallIndicators","inband");
 		m_state = Accepted;
 		mylock.drop();
@@ -2666,7 +2672,7 @@ bool SS7ISUPCall::copyParamIAM(SS7MsgISUP* msg, bool outgoing, SignallingMessage
 }
 
 // If already releasing, set termination flag. Otherwise, send REL (Release) message
-// @param event Event with the parameters. 0 if release is started on some timeout
+// @param event Event with the parameters. 0 if release is started on unspecified interworking
 SignallingEvent* SS7ISUPCall::release(SignallingEvent* event, SS7MsgISUP* msg)
 {
     m_iamTimer.stop();

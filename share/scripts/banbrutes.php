@@ -27,6 +27,9 @@
 
   [scripts]
   banbrutes.php=
+    or
+  banbrutes.php=NNN
+    where NNN >= 2 is the number of failures causing a ban
  */
 
 // How many failures in a row cause a ban
@@ -267,6 +270,10 @@ Yate::Init();
 Yate::Output(true);
 // Uncomment the next line to get debugging details
 //Yate::Debug(true);
+
+$n = round(1 * Yate::Arg());
+if ($n >= 2)
+    $ban_failures = $n;
 
 Yate::Watch("user.auth");
 Yate::Install("user.authfail",120);

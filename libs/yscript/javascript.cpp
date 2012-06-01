@@ -879,12 +879,12 @@ bool JsCode::parseIf(const char*& expr, Opcode nested)
 {
     if (skipComments(expr) != '(')
 	return gotError("Expecting '('",expr);
-    if (!runCompile(++expr,')',nested))
+    if (!runCompile(++expr,')'))
 	return false;
     if (skipComments(expr) != ')')
 	return gotError("Expecting ')'",expr);
     ExpOperation* cond = addOpcode((Opcode)OpcJumpFalse,++m_label);
-    if (!runCompile(++expr,';'))
+    if (!runCompile(++expr,';',nested))
 	return false;
     if (skipComments(expr) == ';')
 	expr++;
@@ -936,11 +936,11 @@ bool JsCode::parseFor(const char*& expr, Opcode nested)
 {
     if (skipComments(expr) != '(')
 	return gotError("Expecting '('",expr);
-    if (!runCompile(++expr,')',nested))
+    if (!runCompile(++expr,')'))
 	return false;
     if (skipComments(expr) != ')')
 	return gotError("Expecting ')'",expr);
-    if (!runCompile(++expr,';'))
+    if (!runCompile(++expr,';',(Opcode)OpcFor))
 	return false;
     if (skipComments(expr) == ';')
 	expr++;
@@ -952,7 +952,7 @@ bool JsCode::parseWhile(const char*& expr, Opcode nested)
     ExpOperation* lbl = addOpcode(OpcLabel,++m_label);
     if (skipComments(expr) != '(')
 	return gotError("Expecting '('",expr);
-    if (!runCompile(++expr,')',(Opcode)OpcWhile))
+    if (!runCompile(++expr,')'))
 	return false;
     if (skipComments(expr) != ')')
 	return gotError("Expecting ')'",expr);

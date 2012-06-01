@@ -586,6 +586,10 @@
 ; Example: link=mtp2_to_hq,3
 ;link=
 
+; slcshift: bool: Shift right once SLS to obtain desired SLC
+; This may be desirable for ISUP traffic when controlling only odd or even CICs
+;slcshift=false
+
 ; autostart: bool: Automatically enable the linkset at startup
 ; This should be enabled (default) for normal operation
 ;autostart=yes

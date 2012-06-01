@@ -67,6 +67,7 @@ static Mutex s_callidMutex(false,"CallID");
 // this is to protect against two threads trying to (dis)connect a pair
 //  of call endpoints at the same time
 static Mutex s_mutex(true,"CallEndpoint");
+static const String s_audioType = "audio";
 
 CallEndpoint::CallEndpoint(const char* id)
     : m_peer(0), m_id(id), m_mutex(0)
@@ -223,17 +224,17 @@ String CallEndpoint::getPeerId() const
     return id;
 }
 
-DataEndpoint* CallEndpoint::getEndpoint(const char* type) const
+DataEndpoint* CallEndpoint::getEndpoint(const String& type) const
 {
-    if (null(type))
+    if (type.null())
 	return 0;
     const ObjList* pos = m_data.find(type);
     return pos ? static_cast<DataEndpoint*>(pos->get()) : 0;
 }
 
-DataEndpoint* CallEndpoint::setEndpoint(const char* type)
+DataEndpoint* CallEndpoint::setEndpoint(const String& type)
 {
-    if (null(type))
+    if (type.null())
 	return 0;
     DataEndpoint* dat = getEndpoint(type);
     if (!dat) {
@@ -259,9 +260,9 @@ void CallEndpoint::setEndpoint(DataEndpoint* endPoint)
 	endPoint->connect(m_peer->getEndpoint(endPoint->toString()));
 }
 
-void CallEndpoint::clearEndpoint(const char* type)
+void CallEndpoint::clearEndpoint(const String& type)
 {
-    if (null(type)) {
+    if (type.null()) {
 	ObjList* l = m_data.skipNull();
 	for (; l; l=l->skipNext()) {
 	    DataEndpoint* e = static_cast<DataEndpoint*>(l->get());
@@ -282,39 +283,44 @@ void CallEndpoint::clearEndpoint(const char* type)
     }
 }
 
-void CallEndpoint::setSource(DataSource* source, const char* type)
+void CallEndpoint::setSource(DataSource* source, const String& type)
 {
     DataEndpoint* dat = source ? setEndpoint(type) : getEndpoint(type);
     if (dat)
 	dat->setSource(source);
 }
 
-DataSource* CallEndpoint::getSource(const char* type) const
+DataSource* CallEndpoint::getSource(const String& type) const
 {
     DataEndpoint* dat = getEndpoint(type);
     return dat ? dat->getSource() : 0;
 }
 
-void CallEndpoint::setConsumer(DataConsumer* consumer, const char* type)
+void CallEndpoint::setConsumer(DataConsumer* consumer, const String& type)
 {
     DataEndpoint* dat = consumer ? setEndpoint(type) : getEndpoint(type);
     if (dat)
 	dat->setConsumer(consumer);
 }
 
-DataConsumer* CallEndpoint::getConsumer(const char* type) const
+DataConsumer* CallEndpoint::getConsumer(const String& type) const
 {
     DataEndpoint* dat = getEndpoint(type);
     return dat ? dat->getConsumer() : 0;
 }
 
-bool CallEndpoint::clearData(DataNode* node, const char* type)
+bool CallEndpoint::clearData(DataNode* node, const String& type)
 {
-    if (null(type) || !node)
+    if (type.null() || !node)
 	return false;
     Lock mylock(DataEndpoint::commonMutex());
     RefPointer<DataEndpoint> dat = getEndpoint(type);
     return dat && dat->clearData(node);
+}
+
+const String& CallEndpoint::audioType()
+{
+    return s_audioType;
 }
 
 

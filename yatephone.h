@@ -1210,48 +1210,48 @@ public:
      * @param type Type of data endpoint: "audio", "video", "text"
      * @return A pointer to the DataEndpoint object or NULL if not found
      */
-    DataEndpoint* getEndpoint(const char* type = "audio") const;
+    DataEndpoint* getEndpoint(const String& type = CallEndpoint::audioType()) const;
 
     /**
      * Get a data endpoint of this object, create if required
      * @param type Type of data endpoint: "audio", "video", "text"
      * @return A pointer to the DataEndpoint object or NULL if an error occured
      */
-    DataEndpoint* setEndpoint(const char* type = "audio");
+    DataEndpoint* setEndpoint(const String& type = CallEndpoint::audioType());
 
     /**
      * Clear one or all data endpoints of this object
      * @param type Type of data endpoint: "audio", "video", "text", NULL to clear all
      */
-    void clearEndpoint(const char* type = 0);
+    void clearEndpoint(const String& type = String::empty());
 
     /**
      * Set a data source of this object
      * @param source A pointer to the new source or NULL
      * @param type Type of data node: "audio", "video", "text"
      */
-    void setSource(DataSource* source = 0, const char* type = "audio");
+    void setSource(DataSource* source = 0, const String& type = CallEndpoint::audioType());
 
     /**
      * Get a data source of this object
      * @param type Type of data node: "audio", "video", "text"
      * @return A pointer to the DataSource object or NULL
      */
-    DataSource* getSource(const char* type = "audio") const;
+    DataSource* getSource(const String& type = CallEndpoint::audioType()) const;
 
     /**
      * Set the data consumer of this object
      * @param consumer A pointer to the new consumer or NULL
      * @param type Type of data node: "audio", "video", "text"
      */
-    void setConsumer(DataConsumer* consumer = 0, const char* type = "audio");
+    void setConsumer(DataConsumer* consumer = 0, const String& type = CallEndpoint::audioType());
 
     /**
      * Get the data consumer of this object
      * @param type Type of data node: "audio", "video", "text"
      * @return A pointer to the DataConsumer object or NULL
      */
-    DataConsumer* getConsumer(const char* type = "audio") const;
+    DataConsumer* getConsumer(const String& type = CallEndpoint::audioType()) const;
 
     /**
      * Clear a data node from any slot of a DataEndpoint of this object
@@ -1259,7 +1259,13 @@ public:
      * @param type Type of data node: "audio", "video", "text"
      * @return True if the node was removed from at least one slot
      */
-    bool clearData(DataNode* node, const char* type = "audio");
+    bool clearData(DataNode* node, const String& type = CallEndpoint::audioType());
+    
+    /**
+     * Return the defaul audio type "audio"
+     * @return Return a string naming the "audio" type
+     */
+    static const String& audioType();
 
 protected:
     /**

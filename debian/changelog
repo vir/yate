@@ -1,3 +1,15 @@
+yate (4.1.1~svn5089) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5089: + This is useful to load balance ISUP
+    traffic controlling only odd or even CICs.  + Allow configuring a
+    SLS to SLC right-shift in MTP3.  + Use const String references for
+    specifying type of data inCallEndpoint. Added method to return the
+    default audio type.  + Moved last the code fragment of the debug
+    message of runCompile so it's easy to read.  + Fixed the nesting of
+    some instruction parsers.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 02 Jun 2012 02:19:12 +0400
+
 yate (4.1.1~svn5085) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5085: + Added separate methods to retrieve

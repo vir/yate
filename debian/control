@@ -2,7 +2,7 @@ Source: yate
 Section: comm
 Priority: optional
 Maintainer: Vasily i. Redkin <vir@ctm.ru>
-Build-Depends: build-essential, debhelper (>= 7), libasound2-dev, pkg-config, libqt4-dev, libopenh323-dev, libpt-dev, libpq-dev, libmysqlclient-dev, libssl-dev, zaptel-source|dahdi-source, sox, libgsm1-dev, libspeex-dev
+Build-Depends: build-essential, debhelper (>= 7), libasound2-dev, pkg-config, libqt4-dev, libpt-dev, libpq-dev, libmysqlclient-dev, libssl-dev, zaptel-source|dahdi-source, sox, libgsm1-dev, libspeex-dev
 Standards-Version: 3.7.3
 Homepage: http://yate.null.ro/
 
@@ -12,23 +12,29 @@ Suggests: yate-telhw, yate-pgsql
 Depends: libyate (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
 Description: The YATE project aims to be a fully featured software PBX.
  .
- This is version 3 or YATE.
+ This is version 4 or YATE.
+ .
+ YATE is a next-generation telephony engine; while currently focused on Voice
+ over Internet Protocol (VoIP) and PSTN, its power lies in its ability to be
+ easily extended. Voice, video, data and instant messenging can all be unified
+ under Yate's flexible routing engine, maximizing communications efficiency and
+ minimizing infrastructure costs for businesses. 
  .
  This most recent version from the Yate software has bring several improvements
  over the previous versions:
  .
+    * SCCP, TCAP, MAP and CAMEL, TCP and TLS in SIP
+    * Jabber client and server
     * Support for more hardware interfaces and protocols - added SS7, analogic
-    * support, RBS, better ISDN, passive recording
+      support, RBS, better ISDN, passive recording
     * Clustering, balancing and failover support, Linux-HA integration
-    * Improved client functionality - switched from GTK to Qt
-    * Easier involvement of the Yate community - swtched from CVS to SVN
     * Added MGCP and Jingle support 
 
 Package: libyate
 Section: libs
-Conflicts: yate (<< 3.0.0)
-Replaces: libyate (<< 3.0.0)
-Breaks: libyate (<< 3.0.0)
+Conflicts: yate (<< 4.0.0)
+Replaces: libyate (<< 4.0.0)
+Breaks: libyate (<< 4.0.0)
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: YATE shared library
@@ -44,7 +50,7 @@ Package: yate-qt4
 Architecture: any
 Recommends: yate-alsa
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: Qt4 software VoIP client, based on YATE
+Description: Qt4 software VoIP and Jabber client, based on YATE
 
 Package: yate-alsa
 Architecture: any
@@ -52,19 +58,15 @@ Recommends: yate (= ${binary:Version}) | yate-qt4 (= ${binary:Version})
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: ALSA channel driver for YATE
 
-Package: yate-h323
-Architecture: any
-Recommends: yate (= ${binary:Version}) | yate-qt4 (= ${binary:Version})
-Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: Yate h323 module
-
 Package: yate-mysql
 Architecture: any
+Recommends: yate (= ${binary:Version})
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: MySQL support for yate
 
 Package: yate-pgsql
 Architecture: any
+Recommends: yate (= ${binary:Version})
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Postgres support for yate
 

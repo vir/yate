@@ -1382,8 +1382,8 @@ static void copyPrivacy(Message& msg, const SIPMessage& sip)
 // Copy privacy related information from Yate message to SIP message
 static void copyPrivacy(SIPMessage& sip, const Message& msg)
 {
-    String screened(msg.getValue(YSTRING("screened")));
-    String privacy(msg.getValue(YSTRING("privacy")));
+    const String& screened = msg[YSTRING("screened")];
+    const String& privacy = msg[YSTRING("privacy")];
     if (screened.null() && privacy.null())
 	return;
     bool screen = screened.toBoolean();
@@ -1392,7 +1392,7 @@ static void copyPrivacy(SIPMessage& sip, const Message& msg)
     bool privuri = (privacy.find("uri") >= 0);
     String rfc3323;
     // allow for a simple "privacy=yes" or similar
-    if (privacy.toBoolean(false))
+    if (privacy.toBoolean(false) || (privacy == YSTRING("full")))
 	privname = privuri = true;
     // "privacy=no" is translated to RFC 3323 "none"
     else if (!privacy.toBoolean(true))

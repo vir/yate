@@ -28,6 +28,8 @@ using namespace TelEngine;
 
 namespace { // anonymous
 
+class ParseNested;
+
 class JsContext : public JsObject, public Mutex
 {
     YCLASS(JsContext,JsObject)
@@ -75,6 +77,7 @@ protected:
 
 class JsCode : public ScriptCode, public ExpEvaluator
 {
+    friend class ParseNested;
 public:
     enum JsOpcode {
 	OpcBegin = OpcPrivate + 1,
@@ -141,7 +144,7 @@ protected:
     virtual int getKeyword(const char* str) const;
     virtual char skipComments(const char*& expr, GenObject* context = 0);
     virtual int preProcess(const char*& expr, GenObject* context = 0);
-    virtual bool getInstruction(const char*& expr, Opcode nested);
+    virtual bool getInstruction(const char*& expr, GenObject* nested);
     virtual bool getSimple(const char*& expr, bool constOnly = false);
     virtual Opcode getOperator(const char*& expr);
     virtual Opcode getUnaryOperator(const char*& expr);
@@ -157,12 +160,13 @@ private:
     ObjVector m_linked;
     ObjList m_included;
     bool preProcessInclude(const char*& expr, bool once, GenObject* context);
-    bool parseIf(const char*& expr, Opcode nested);
-    bool parseSwitch(const char*& expr, Opcode nested);
-    bool parseFor(const char*& expr, Opcode nested);
-    bool parseWhile(const char*& expr, Opcode nested);
-    bool parseTry(const char*& expr, Opcode nested);
-    bool parseFuncDef(const char*& expr, Opcode nested);
+    bool parseInner(const char*& expr, JsOpcode opcode, ParseNested* nested);
+    bool parseIf(const char*& expr, GenObject* nested);
+    bool parseSwitch(const char*& expr, GenObject* nested);
+    bool parseFor(const char*& expr, GenObject* nested);
+    bool parseWhile(const char*& expr, GenObject* nested);
+    bool parseTry(const char*& expr, GenObject* nested);
+    bool parseFuncDef(const char*& expr, GenObject* nested);
     bool evalList(ObjList& stack, GenObject* context) const;
     bool evalVector(ObjList& stack, GenObject* context) const;
     bool jumpToLabel(long int label, GenObject* context) const;
@@ -185,6 +189,45 @@ private:
     bool m_paused;
     ObjList* m_opcode;
     unsigned int m_index;
+};
+
+class ParseNested : public GenObject
+{
+    YCLASS(ParseNested,GenObject)
+public:
+    inline explicit ParseNested(JsCode* code, GenObject* nested,
+	JsCode::JsOpcode oper = (JsCode::JsOpcode)ExpEvaluator::OpcNone)
+	: m_code(code), m_nested(static_cast<ParseNested*>(nested)), m_opcode(oper)
+	{ }
+    inline operator GenObject*()
+	{ return this; }
+    inline operator JsCode::JsOpcode() const
+	{ return m_opcode; }
+    inline static JsCode::JsOpcode code(GenObject* nested)
+	{ return nested ? *static_cast<ParseNested*>(nested) :
+	    (JsCode::JsOpcode)ExpEvaluator::OpcNone; }
+    inline static ParseNested* find(GenObject* nested, JsCode::JsOpcode opcode)
+	{ return nested ? static_cast<ParseNested*>(nested)->find(opcode) : 0; }
+    inline static ParseNested* findMatch(GenObject* nested, JsCode::JsOpcode opcode)
+	{ return nested ? static_cast<ParseNested*>(nested)->findMatch(opcode) : 0; }
+    static bool parseInner(GenObject* nested, JsCode::JsOpcode opcode, const char*& expr)
+	{ ParseNested* inner = findMatch(nested,opcode);
+	    return inner && inner->parseInner(expr,opcode); }
+protected:
+    virtual bool isMatch(JsCode::JsOpcode opcode)
+	{ return false; }
+    inline bool parseInner(const char*& expr, JsCode::JsOpcode opcode)
+	{ return m_code->parseInner(expr,opcode,this); }
+    inline ParseNested* find(JsCode::JsOpcode opcode)
+	{ return (opcode == m_opcode) ? this :
+	    (m_nested ? m_nested->find(opcode) : 0); }
+    inline ParseNested* findMatch(JsCode::JsOpcode opcode)
+	{ return isMatch(opcode) ? this :
+	    (m_nested ? m_nested->findMatch(opcode) : 0); }
+private:
+    JsCode* m_code;
+    ParseNested* m_nested;
+    JsCode::JsOpcode m_opcode;
 };
 
 #define MAKEOP(s,o) { s, JsCode::Opc ## o }
@@ -775,11 +818,11 @@ int JsCode::preProcess(const char*& expr, GenObject* context)
     }
 }
 
-bool JsCode::getInstruction(const char*& expr, Opcode nested)
+bool JsCode::getInstruction(const char*& expr, GenObject* nested)
 {
     if (inError())
 	return false;
-    XDebug(this,DebugAll,"JsCode::getInstruction '%.30s' %u",expr,nested);
+    XDebug(this,DebugAll,"JsCode::getInstruction '%.30s' %p",expr,nested);
     if (skipComments(expr) == '{') {
 	expr++;
 	for (;;) {
@@ -825,42 +868,29 @@ bool JsCode::getInstruction(const char*& expr, Opcode nested)
 	case OpcWhile:
 	    return parseWhile(expr,nested);
 	case OpcCase:
-	    if (OpcSwitch != (JsOpcode)nested)
-		return gotError("Case not in switch",saved);
-	    if (!ExpEvaluator::getSimple(expr,true))
-		return gotError("Expecting case constant",expr);
+	    if (!ParseNested::parseInner(nested,OpcCase,expr))
+		return gotError("case not inside switch",saved);
 	    if (skipComments(expr) != ':')
 		return gotError("Expecting ':'",expr);
 	    expr++;
 	    break;
 	case OpcDefault:
-	    if (OpcSwitch != (JsOpcode)nested)
-		return gotError("Default not in switch",saved);
+	    if (!ParseNested::parseInner(nested,OpcDefault,expr))
+		return gotError("Unexpected default instruction",saved);
 	    if (skipComments(expr) != ':')
 		return gotError("Expecting ':'",expr);
 	    expr++;
 	    break;
 	case OpcBreak:
-	    switch ((JsOpcode)nested) {
-		case OpcSwitch:
-		case OpcFor:
-		case OpcWhile:
-		    break;
-		default:
-		    return gotError("Unexpected break instruction",saved);
-	    }
+	    if (!ParseNested::parseInner(nested,OpcBreak,expr))
+		return gotError("Unexpected break instruction",saved);
 	    if (skipComments(expr) != ';')
 		return gotError("Expecting ';'",expr);
 	    expr++;
 	    break;
 	case OpcCont:
-	    switch ((JsOpcode)nested) {
-		case OpcFor:
-		case OpcWhile:
-		    break;
-		default:
-		    return gotError("Unexpected continue instruction",saved);
-	    }
+	    if (!ParseNested::parseInner(nested,OpcCont,expr))
+		return gotError("Unexpected continue instruction",saved);
 	    if (skipComments(expr) != ';')
 		return gotError("Expecting ';'",expr);
 	    expr++;
@@ -875,16 +905,81 @@ bool JsCode::getInstruction(const char*& expr, Opcode nested)
     return true;
 }
 
-bool JsCode::parseIf(const char*& expr, Opcode nested)
+class ParseWhile : public ParseNested
+{
+    friend class JsCode;
+public:
+    inline ParseWhile(JsCode* code, GenObject* nested, long int lblCont, long int lblBreak)
+	: ParseNested(code,nested,JsCode::OpcWhile),
+	  m_lblCont(lblCont), m_lblBreak(lblBreak)
+	{ }
+protected:
+    virtual bool isMatch(JsCode::JsOpcode opcode)
+	{ return JsCode::OpcBreak == opcode || JsCode::OpcCont == opcode; }
+private:
+    long int m_lblCont;
+    long int m_lblBreak;
+};
+
+class ParseSwitch : public ParseNested
+{
+    friend class JsCode;
+public:
+    inline ParseSwitch(JsCode* code, GenObject* nested)
+	: ParseNested(code,nested,JsCode::OpcSwitch)
+	{ }
+protected:
+    virtual bool isMatch(JsCode::JsOpcode opcode)
+	{ return JsCode::OpcCase == opcode || JsCode::OpcDefault == opcode ||
+	    JsCode::OpcBreak == opcode; }
+};
+
+// Parse keywords inner to specific instructions
+bool JsCode::parseInner(const char*& expr, JsOpcode opcode, ParseNested* nested)
+{
+    switch (*nested) {
+	case OpcWhile:
+	    switch (opcode) {
+		case OpcBreak:
+		    addOpcode((Opcode)OpcJump,static_cast<ParseWhile*>(nested)->m_lblBreak);
+		    break;
+		case OpcCont:
+		    addOpcode((Opcode)OpcJump,static_cast<ParseWhile*>(nested)->m_lblCont);
+		    break;
+		default:
+		    return false;
+	    }
+	    break;
+	case OpcSwitch:
+	    switch (opcode) {
+		case OpcCase:
+		    if (!ExpEvaluator::getSimple(expr,true))
+			return gotError("Expecting case constant",expr);
+		    break;
+		case OpcDefault:
+		    break;
+		case OpcBreak:
+		    break;
+		default:
+		    return false;
+	    }
+	    break;
+	default:
+	    return false;
+    }
+    return true;
+}
+
+bool JsCode::parseIf(const char*& expr, GenObject* nested)
 {
     if (skipComments(expr) != '(')
 	return gotError("Expecting '('",expr);
-    if (!runCompile(++expr,')',nested))
+    if (!runCompile(++expr,')'))
 	return false;
     if (skipComments(expr) != ')')
 	return gotError("Expecting ')'",expr);
     ExpOperation* cond = addOpcode((Opcode)OpcJumpFalse,++m_label);
-    if (!runCompile(++expr,';'))
+    if (!runCompile(++expr,';',nested))
 	return false;
     if (skipComments(expr) == ';')
 	expr++;
@@ -906,7 +1001,7 @@ bool JsCode::parseIf(const char*& expr, Opcode nested)
     return true;
 }
 
-bool JsCode::parseSwitch(const char*& expr, Opcode nested)
+bool JsCode::parseSwitch(const char*& expr, GenObject* nested)
 {
     if (skipComments(expr) != '(')
 	return gotError("Expecting '('",expr);
@@ -917,8 +1012,9 @@ bool JsCode::parseSwitch(const char*& expr, Opcode nested)
     if (skipComments(++expr) != '{')
 	return gotError("Expecting '{'",expr);
     expr++;
+    ParseSwitch parseStack(this,nested);
     for (;;) {
-	if (!runCompile(expr,'}',(Opcode)OpcSwitch))
+	if (!runCompile(expr,'}',parseStack))
 	    return false;
 	bool sep = false;
 	while (skipComments(expr) && getSeparator(expr,true))
@@ -932,42 +1028,45 @@ bool JsCode::parseSwitch(const char*& expr, Opcode nested)
     return true;
 }
 
-bool JsCode::parseFor(const char*& expr, Opcode nested)
+bool JsCode::parseFor(const char*& expr, GenObject* nested)
 {
     if (skipComments(expr) != '(')
 	return gotError("Expecting '('",expr);
-    if (!runCompile(++expr,')',nested))
+    if (!runCompile(++expr,')'))
 	return false;
     if (skipComments(expr) != ')')
 	return gotError("Expecting ')'",expr);
-    if (!runCompile(++expr,';'))
+    ParseNested parseStack(this,nested,OpcFor);
+    if (!runCompile(++expr,';',parseStack))
 	return false;
     if (skipComments(expr) == ';')
 	expr++;
     return true;
 }
 
-bool JsCode::parseWhile(const char*& expr, Opcode nested)
+bool JsCode::parseWhile(const char*& expr, GenObject* nested)
 {
     ExpOperation* lbl = addOpcode(OpcLabel,++m_label);
     if (skipComments(expr) != '(')
 	return gotError("Expecting '('",expr);
-    if (!runCompile(++expr,')',(Opcode)OpcWhile))
+    if (!runCompile(++expr,')'))
 	return false;
     if (skipComments(expr) != ')')
 	return gotError("Expecting ')'",expr);
     ExpOperation* jump = addOpcode((Opcode)OpcJumpFalse,++m_label);
-    if (!runCompile(++expr,0,(Opcode)OpcWhile))
+    ParseWhile parseStack(this,nested,lbl->number(),jump->number());
+    if (!runCompile(++expr,0,parseStack))
 	return false;
     addOpcode((Opcode)OpcJump,lbl->number());
     addOpcode(OpcLabel,jump->number());
     return true;
 }
 
-bool JsCode::parseTry(const char*& expr, Opcode nested)
+bool JsCode::parseTry(const char*& expr, GenObject* nested)
 {
     addOpcode((Opcode)OpcTry);
-    if (!runCompile(expr,0,(Opcode)OpcTry))
+    ParseNested parseStack(this,nested,OpcTry);
+    if (!runCompile(expr,0,parseStack))
 	return false;
     skipComments(expr);
     if ((JsOpcode)ExpEvaluator::getOperator(expr,s_instr) == OpcCatch) {
@@ -988,7 +1087,7 @@ bool JsCode::parseTry(const char*& expr, Opcode nested)
     return true;
 }
 
-bool JsCode::parseFuncDef(const char*& expr, Opcode nested)
+bool JsCode::parseFuncDef(const char*& expr, GenObject* nested)
 {
     skipComments(expr);
     int len = getKeyword(expr);

@@ -293,7 +293,7 @@ void ExpEvaluator::formatLineNo(String& buf, unsigned int line) const
     buf << "line " << line;
 }
 
-bool ExpEvaluator::getInstruction(const char*& expr, Opcode nested)
+bool ExpEvaluator::getInstruction(const char*& expr, GenObject* nested)
 {
     return false;
 }
@@ -570,7 +570,7 @@ bool ExpEvaluator::getSeparator(const char*& expr, bool remove)
     return true;
 }
 
-bool ExpEvaluator::runCompile(const char*& expr, char stop, Opcode nested)
+bool ExpEvaluator::runCompile(const char*& expr, char stop, GenObject* nested)
 {
     typedef struct {
 	Opcode code;
@@ -579,7 +579,7 @@ bool ExpEvaluator::runCompile(const char*& expr, char stop, Opcode nested)
     StackedOpcode stack[10];
     unsigned int stackPos = 0;
 #ifdef DEBUG
-    Debugger debug(DebugInfo,"runCompile()"," '%.30s' '%.1s'",expr,&stop);
+    Debugger debug(DebugInfo,"runCompile()"," '%.1s' %p '%.30s'",&stop,nested,expr);
 #endif
     if (skipComments(expr) == ')')
 	return false;

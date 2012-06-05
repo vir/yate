@@ -7754,6 +7754,8 @@ private:
     unsigned int m_checked;
     // currently active links
     unsigned int m_active;
+    // SLS to SLC shift
+    bool m_slcShift;
     // inhibited flag
     bool m_inhibit;
     // warn if all links are down

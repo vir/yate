@@ -510,7 +510,7 @@ SS7MTP3::SS7MTP3(const NamedList& params)
     : SignallingComponent(params.safe("SS7MTP3"),&params),
       SignallingDumpable(SignallingDumper::Mtp3),
       Mutex(true,"SS7MTP3"),
-      m_total(0), m_active(0), m_inhibit(false), m_warnDown(true),
+      m_total(0), m_active(0), m_slcShift(false), m_inhibit(false), m_warnDown(true),
       m_checklinks(true), m_forcealign(true), m_checkT1(0), m_checkT2(0)
 {
 #ifdef DEBUG
@@ -553,6 +553,7 @@ SS7MTP3::SS7MTP3(const NamedList& params)
     }
     Debug(this,level,"Point code types are '%s' [%p]",stype.safe(),this);
 
+    m_slcShift = params.getBoolValue(YSTRING("slcshift"),false);
     m_inhibit = !params.getBoolValue(YSTRING("autostart"),true);
     m_checklinks = params.getBoolValue(YSTRING("checklinks"),m_checklinks);
     m_forcealign = params.getBoolValue(YSTRING("forcealign"),m_forcealign);
@@ -822,6 +823,9 @@ bool SS7MTP3::control(Operation oper, NamedList* params)
 {
     bool ok = operational();
     if (params) {
+	// cannot change SLS to SLC shift while active
+	if (m_active == 0)
+	    m_slcShift = params->getBoolValue(YSTRING("slcshift"),m_slcShift);
 	m_checklinks = params->getBoolValue(YSTRING("checklinks"),m_checklinks);
 	m_forcealign = params->getBoolValue(YSTRING("forcealign"),m_forcealign);
 	const String& inh = (*params)[YSTRING("inhibit")];
@@ -922,6 +926,7 @@ bool SS7MTP3::initialize(const NamedList* config)
     countLinks();
     m_warnDown = true;
     if (config && (0 == m_total)) {
+	m_slcShift = config->getBoolValue(YSTRING("slcshift"),m_slcShift);
 	m_checklinks = config->getBoolValue(YSTRING("checklinks"),m_checklinks);
 	m_forcealign = config->getBoolValue(YSTRING("forcealign"),m_forcealign);
 	unsigned int n = config->length();
@@ -982,6 +987,7 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 {
     bool maint = (msu.getSIF() == SS7MSU::MTN) || (msu.getSIF() == SS7MSU::MTNS);
     bool mgmt = (msu.getSIF() == SS7MSU::SNM);
+    bool regular = !maint && !mgmt;
     Lock lock(this);
     if (!(maint || m_active || (mgmt && m_checked))) {
 	if (m_warnDown) {
@@ -994,8 +1000,11 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
     }
 
     // TODO: support ranges with holes
-    if (!maint && !mgmt)
+    if (regular && sls >= 0) {
+	if (m_slcShift)
+	    sls = sls >> 1;
 	sls = sls % m_total;
+    }
 
     // Try to find a link with the given SLS
     ObjList* l = (sls >= 0) ? &m_links : 0;
@@ -1013,7 +1022,7 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 			(m_inhibit ? " while inhibited" : ""),this);
 		    dump(msu,true,sls);
 		    m_warnDown = true;
-		    return sls;
+		    return (regular && m_slcShift) ? (sls << 1) : sls;
 		}
 		return -1;
 	    }
@@ -1045,7 +1054,7 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 		(m_inhibit ? " while inhibited" : ""),this);
 	    dump(msu,true,sls);
 	    m_warnDown = true;
-	    return sls;
+	    return (regular && m_slcShift) ? (sls << 1) : sls;
 	}
     }
 

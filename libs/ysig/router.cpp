@@ -821,7 +821,7 @@ int SS7Router::routeMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* net
 	m_statsMutex.unlock();
 	if (!route) {
 	    String tmp;
-	    tmp << label;
+	    tmp << label.dpc();
 	    Debug(this,DebugMild,"No route to %s was found for %s MSU size %u",
 		tmp.c_str(),msu.getServiceName(),msu.length());
 	}

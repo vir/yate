@@ -113,7 +113,8 @@ extern "C" {
 #define MAX_PACKET 1200
 
 #define MAX_READ_ERRORS 250              // WpSpan::run(): Display read error message
-#define WPSOCKET_SELECT_TIMEOUT 125      // Value used in WpSocket::select() to timeout
+#define WPSOCKET_SELECT_TIMEOUT 125      // usec/sample used in WpSocket::select() to timeout
+#define WPSOCKET_SELECT_SAMPLES 32       // Maximum signaling samples to wait for
 
 using namespace TelEngine;
 namespace { // anonymous
@@ -959,7 +960,7 @@ bool WpInterface::receiveAttempt()
     if (!m_socket.valid())
 	return false;
 
-    if (!m_socket.select(5,(0 != m_repeatPacket.length())))
+    if (!m_socket.select(WPSOCKET_SELECT_SAMPLES,(0 != m_repeatPacket.length())))
 	return false;
     m_repeatMutex.lock();
     if (m_socket.canWrite() && m_repeatPacket.length())

@@ -355,7 +355,7 @@ SS7Router::SS7Router(const NamedList& params)
       m_trafficOk(0), m_trafficSent(0), m_routeTest(0), m_testRestricted(false),
       m_transferSilent(false), m_checkRoutes(false), m_autoAllowed(false),
       m_sendUnavail(true), m_sendProhibited(true),
-      m_rxMsu(0), m_txMsu(0), m_fwdMsu(0), m_congestions(0),
+      m_rxMsu(0), m_txMsu(0), m_fwdMsu(0), m_failMsu(0), m_congestions(0),
       m_mngmt(0)
 {
 #ifdef DEBUG
@@ -407,8 +407,8 @@ SS7Router::SS7Router(const NamedList& params)
 
 SS7Router::~SS7Router()
 {
-    Debug(this,DebugInfo,"SS7Router destroyed, rx=%lu, tx=%lu, fwd=%lu, cong=%lu",
-	m_rxMsu,m_txMsu,m_fwdMsu,m_congestions);
+    Debug(this,DebugInfo,"SS7Router destroyed, rx=%lu, tx=%lu, fwd=%lu, fail=%lu, cong=%lu",
+	m_rxMsu,m_txMsu,m_fwdMsu,m_failMsu,m_congestions);
 }
 
 bool SS7Router::initialize(const NamedList* config)
@@ -814,6 +814,20 @@ int SS7Router::routeMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* net
 	if (cong)
 	    m_congestions++;
 	m_statsMutex.unlock();
+    }
+    else {
+	m_statsMutex.lock();
+	m_failMsu++;
+	m_statsMutex.unlock();
+	if (!route) {
+	    String tmp;
+	    tmp << label;
+	    Debug(this,DebugMild,"No route to %s was found for %s MSU size %u",
+		tmp.c_str(),msu.getServiceName(),msu.length());
+	}
+	else
+	    Debug(this,DebugAll,"Failed to send %s MSU size %u on %s route %u",
+		msu.getServiceName(),msu.length(),route->stateName(),route->packed());
     }
     return slsTx;
 }
@@ -1863,6 +1877,7 @@ bool SS7Router::control(NamedList& params)
 	    // fall through
 	case SS7Router::Status:
 	    printRoutes();
+	    printStats();
 	    return operational();
 	case SS7Router::Advertise:
 	    if (!(m_transfer && (m_started || m_phase2)))
@@ -1980,6 +1995,17 @@ bool SS7Router::control(NamedList& params)
     if (err)
 	Debug(this,DebugWarn,"Control error: %s [%p]",err.c_str(),this);
     return false;
+}
+
+void SS7Router::printStats()
+{
+    String tmp;
+    m_statsMutex.lock();
+    tmp << "Rx=" << (unsigned int)m_rxMsu << ", Tx=" << (unsigned int)m_txMsu;
+    tmp << ", Fwd=" << (unsigned int)m_fwdMsu << ", Fail=" << (unsigned int)m_failMsu;
+    tmp << ", Cong=" << (unsigned int)m_congestions;
+    m_statsMutex.unlock();
+    Output("Statistics for '%s': %s",debugName(),tmp.c_str());
 }
 
 // Detach management. Call SignallingComponent::detach()

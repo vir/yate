@@ -1,3 +1,20 @@
+yate (4.1.1~svn5102) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5102: + Count the failed MSU transmission
+    attempts.  + Never attempt to send a DTMF twice over signaling.  +
+    Use the new Lock::acuire to reacquire a mutex lock.  + Added
+    hardware DTMF detection for the new Sangoma API.  + This reduces the
+    CPU usage for ISDN and MTP2.  + Wait longer in the wanpipe signaling
+    socket select.  + Only display the DPC in missing route message, not
+    the entire routing label.  + Set SS7TcapTransaction mutex name.  +
+    When a SS7 link goes down report in the event how long it was up.  +
+    Added default type in SignallingComponent constructor.  + Fixed
+    endianess of ISUP multi-octet integer values, must be big endian.  +
+    Don't count the maintenance MSUs in the SS7 router.  + Take into
+    account the CIC length when dumping sent ISUP/BICC message.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 08 Jun 2012 02:19:14 +0400
+
 yate (4.1.1~svn5092) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5092: + Pass objects for parsing nested

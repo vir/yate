@@ -830,7 +830,7 @@ SignallingComponent* WpInterface::create(const String& type, const NamedList& na
 }
 
 WpInterface::WpInterface(const NamedList& params)
-    : SignallingComponent(params),
+    : SignallingComponent(params,&params,"tdm"),
       m_socket(this),
       m_thread(0),
       m_readOnly(false),

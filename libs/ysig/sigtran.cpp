@@ -858,7 +858,7 @@ static const TokenDict s_m2pa_dict_control[] = {
 };
 
 SS7M2PA::SS7M2PA(const NamedList& params)
-    : SignallingComponent(params.safe("SS7M2PA"),&params),
+    : SignallingComponent(params.safe("SS7M2PA"),&params,"ss7-m2pa"),
       SIGTRAN(5,3565),
       m_seqNr(0xffffff), m_needToAck(0xffffff), m_lastAck(0xffffff), m_maxQueueSize(MAX_UNACK),
       m_localStatus(OutOfService), m_state(OutOfService),
@@ -1699,7 +1699,7 @@ bool SS7M2UAClient::processMSG(unsigned char msgVersion, unsigned char msgClass,
 
 
 SS7M2UA::SS7M2UA(const NamedList& params)
-    : SignallingComponent(params.safe("SS7M2UA"),&params),
+    : SignallingComponent(params.safe("SS7M2UA"),&params,"ss7-m2ua"),
       m_retrieve(50),
       m_iid(params.getIntValue(YSTRING("iid"),-1)),
       m_linkState(LinkDown), m_rpo(false),
@@ -2125,7 +2125,7 @@ bool ISDNIUAClient::processMSG(unsigned char msgVersion, unsigned char msgClass,
 
 
 ISDNIUA::ISDNIUA(const NamedList& params, const char *name, u_int8_t tei)
-    : SignallingComponent(params.safe(name ? name : "ISDNIUA"),&params),
+    : SignallingComponent(params.safe(name ? name : "ISDNIUA"),&params,"isdn-iua"),
       ISDNLayer2(params,name,tei),
       m_iid(params.getIntValue(YSTRING("iid"),-1))
 {

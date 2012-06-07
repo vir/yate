@@ -1602,7 +1602,7 @@ const TokenDict SLT::s_protocolError[] = {
 };
 
 SLT::SLT(const String& name, const NamedList& param)
-    : SignallingComponent(param.safe("CiscoSLT")),
+    : SignallingComponent(param.safe("CiscoSLT"),&param,"cisco-slt"),
       SessionUser(1),
       m_status(Unconfigured), m_rStatus(OutOfService), m_reqStatus(OutOfService),
       m_messageId(1), m_channelId(0), m_bearerId(0),
@@ -1615,7 +1615,6 @@ SLT::SLT(const String& name, const NamedList& param)
     Debug(this,DebugInfo,"SLT::SLT('%s',%p) [%p]%s",
 	name.c_str(),&param,this,tmp.c_str());
 #endif
-    setCompType("cisco-slt");
     m_channelId = param.getIntValue("channel",0);
     String sessionName = param.getValue("session","session");
     setName(name);

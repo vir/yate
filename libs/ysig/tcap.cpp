@@ -1735,7 +1735,7 @@ static const SS7TCAPTransactionANSI::ANSITransactionType primitiveToTransactANSI
 }
 
 SS7TCAPANSI::SS7TCAPANSI(const NamedList& params)
-    : SignallingComponent(params.safe("SS7TCAPANSI"),&params),
+    : SignallingComponent(params.safe("SS7TCAPANSI"),&params,"ss7-tcap-ansi"),
       SS7TCAP(params)
 {
     String tmp;
@@ -2983,7 +2983,7 @@ static const PrimitiveMapping* mapTransPrimitivesITU(int primitive, int trans = 
 }
 
 SS7TCAPITU::SS7TCAPITU(const NamedList& params)
-    : SignallingComponent(params.safe("SS7TCAPITU"),&params),
+    : SignallingComponent(params.safe("SS7TCAPITU"),&params,"ss7-tcap-itu"),
       SS7TCAP(params)
 {
     String tmp;

@@ -109,7 +109,7 @@ public:
 
 // Constructor. Set data members. Print them
 ISDNQ921::ISDNQ921(const NamedList& params, const char* name, ISDNQ921Management* mgmt, u_int8_t tei)
-    : SignallingComponent(name,&params),
+    : SignallingComponent(name,&params,"isdn-q921"),
       ISDNLayer2(params,name,tei),
       SignallingReceiver(name),
       SignallingDumpable(SignallingDumper::Q921,network()),
@@ -1025,7 +1025,7 @@ void ISDNQ921::timer(bool start, bool t203, u_int64_t time)
  */
 // Constructor
 ISDNQ921Management::ISDNQ921Management(const NamedList& params, const char* name, bool net)
-    : SignallingComponent(name,&params),
+    : SignallingComponent(name,&params,"isdn-q921-mgm"),
       ISDNLayer2(params,name),
       SignallingReceiver(name),
       SignallingDumpable(SignallingDumper::Q921,network()),
@@ -1487,7 +1487,7 @@ void ISDNQ921Management::processTeiVerify(u_int8_t ai, bool pf)
  */
 // Constructor. Set data members. Print them
 ISDNQ921Passive::ISDNQ921Passive(const NamedList& params, const char* name)
-    : SignallingComponent(name,&params),
+    : SignallingComponent(name,&params,"isdn-q921-passive"),
       ISDNLayer2(params,name),
       SignallingReceiver(name),
       SignallingDumpable(SignallingDumper::Q921,network()),

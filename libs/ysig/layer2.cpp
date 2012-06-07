@@ -289,7 +289,7 @@ bool SS7Layer2::inhibit(int setFlags, int clrFlags)
 
 
 SS7MTP2::SS7MTP2(const NamedList& params, unsigned int status)
-    : SignallingComponent(params.safe("SS7MTP2"),&params),
+    : SignallingComponent(params.safe("SS7MTP2"),&params,"ss7-mtp2"),
       SignallingDumpable(SignallingDumper::Mtp2),
       Mutex(true,"SS7MTP2"),
       m_status(status), m_lStatus(OutOfService), m_rStatus(OutOfAlignment),

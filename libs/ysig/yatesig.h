@@ -712,8 +712,9 @@ protected:
      * Constructor with a default empty component name
      * @param name Name of this component
      * @param params Optional pointer to creation parameters
+     * @param type Default component type string
      */
-    SignallingComponent(const char* name = 0, const NamedList* params = 0);
+    SignallingComponent(const char* name = 0, const NamedList* params = 0, const char* type = "unknown");
 
     /**
      * This method is called to clean up and destroy the object after the
@@ -8318,7 +8319,7 @@ public:
      * Constructor
      */
     inline SS7Testing(const NamedList& params, unsigned char sio = SS7MSU::MTP_T|SS7MSU::National)
-	: SignallingComponent(params.safe("SS7Testing"),&params),
+	: SignallingComponent(params.safe("SS7Testing"),&params,"ss7-test"),
 	  SS7Layer4(sio,&params),
 	  Mutex(true,"SS7Testing"),
 	  m_timer(0), m_exp(0), m_seq(0), m_len(16), m_sharing(false)

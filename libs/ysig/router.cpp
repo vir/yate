@@ -348,7 +348,7 @@ void SS7Route::reroute()
  * SS7Router
  */
 SS7Router::SS7Router(const NamedList& params)
-    : SignallingComponent(params.safe("SS7Router"),&params),
+    : SignallingComponent(params.safe("SS7Router"),&params,"ss7-router"),
       Mutex(true,"SS7Router"),
       m_changes(0), m_transfer(false), m_phase2(false), m_started(false),
       m_restart(0), m_isolate(0), m_statsMutex(false,"SS7RouterStats"),

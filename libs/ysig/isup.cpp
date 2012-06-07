@@ -3152,7 +3152,7 @@ void SS7ISUPCall::setOverlapped(bool on, bool numberComplete)
  * SS7ISUP
  */
 SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
-    : SignallingComponent(params.safe("SS7ISUP"),&params),
+    : SignallingComponent(params.safe("SS7ISUP"),&params,"ss7-isup"),
       SignallingCallControl(params,"isup."),
       SS7Layer4(sio,&params),
       m_cicLen(2),
@@ -5758,7 +5758,7 @@ void SS7ISUP::cicHwBlocked(unsigned int cic, const String& map)
  * SS7BICC
  */
 SS7BICC::SS7BICC(const NamedList& params, unsigned char sio)
-    : SignallingComponent(params.safe("SS7BICC"),&params),
+    : SignallingComponent(params.safe("SS7BICC"),&params,"ss7-bicc"),
       SS7ISUP(params,sio)
 {
     m_cicLen = 4;

@@ -4893,7 +4893,8 @@ bool SCCPHandler::received(Message& msg)
  */
 
 SCCPUserDummy::SCCPUserDummy(const NamedList& params)
-    :SignallingComponent(params,&params), SCCPUser(params), m_ssn(0)
+    : SignallingComponent(params,&params,"ss7-tcap-user"),
+      SCCPUser(params), m_ssn(0)
 {
     Debug(&plugin,DebugAll,"Creating SCCPUserDummy [%p]",this);
     m_ssn = params.getIntValue("ssn",0);

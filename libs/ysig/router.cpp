@@ -872,8 +872,13 @@ HandledMSU SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7L
     }
     if ((msu.getSIF() > SS7MSU::MTNS) && !m_started)
 	return HandledMSU::Failure;
+    bool maint = (msu.getSIF() == SS7MSU::MTN) || (msu.getSIF() == SS7MSU::MTNS);
+    if (!maint) {
+	m_statsMutex.lock();
+	m_rxMsu++;
+	m_statsMutex.unlock();
+    }
     lock();
-    m_rxMsu++;
     ObjList* l;
     HandledMSU ret;
     do {
@@ -918,7 +923,7 @@ HandledMSU SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7L
 	    break;
     }
     // maintenance must stop here, others may be transferred out
-    if ((msu.getSIF() == SS7MSU::MTN) || (msu.getSIF() == SS7MSU::MTNS))
+    if (maint)
 	return HandledMSU::Rejected;
     unsigned int dpc = label.dpc().pack(label.type());
     // if packet was for this node as set in router don't process any further

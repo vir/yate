@@ -1380,6 +1380,7 @@ bool SigChannel::msgTone(Message& msg, const char* tone)
 {
     if (!(tone && *tone))
 	return true;
+    bool trySig = true;
     Lock lock(m_mutex);
     DDebug(this,DebugCall,"Tone. '%s' %s[%p]",tone,(m_call ? "" : ". No call "),this);
     // Outgoing, overlap dialing call: try it first
@@ -1387,9 +1388,9 @@ bool SigChannel::msgTone(Message& msg, const char* tone)
 	lock.drop();
 	if (sendSigTone(msg,tone))
 	    return true;
+	lock.acquire(m_mutex);
+	trySig = false;
     }
-    // Re-aquire lock
-    Lock lock2(m_mutex);
     // Try to send: through the circuit, in band or through the signalling protocol
     SignallingCircuit* cic = getCircuit();
     if (cic) {
@@ -1402,10 +1403,8 @@ bool SigChannel::msgTone(Message& msg, const char* tone)
 	return true;
     if (!m_call)
 	return true;
-    lock2.drop();
     lock.drop();
-    sendSigTone(msg,tone);
-    return true;
+    return trySig && sendSigTone(msg,tone);
 }
 
 bool SigChannel::msgText(Message& msg, const char* text)
@@ -4894,7 +4893,8 @@ bool SCCPHandler::received(Message& msg)
  */
 
 SCCPUserDummy::SCCPUserDummy(const NamedList& params)
-    :SignallingComponent(params,&params), SCCPUser(params), m_ssn(0)
+    : SignallingComponent(params,&params,"ss7-tcap-user"),
+      SCCPUser(params), m_ssn(0)
 {
     Debug(&plugin,DebugAll,"Creating SCCPUserDummy [%p]",this);
     m_ssn = params.getIntValue("ssn",0);

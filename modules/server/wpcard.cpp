@@ -41,7 +41,6 @@ extern "C" {
 #include <wanpipe.h>
 #ifdef NEW_WANPIPE_API
 #include <aft_core.h>
-#warning "The new Sangoma API support is experimental!"
 #else
 #include <sdla_aft_te1.h>
 #endif
@@ -114,7 +113,8 @@ extern "C" {
 #define MAX_PACKET 1200
 
 #define MAX_READ_ERRORS 250              // WpSpan::run(): Display read error message
-#define WPSOCKET_SELECT_TIMEOUT 125      // Value used in WpSocket::select() to timeout
+#define WPSOCKET_SELECT_TIMEOUT 125      // usec/sample used in WpSocket::select() to timeout
+#define WPSOCKET_SELECT_SAMPLES 32       // Maximum signaling samples to wait for
 
 using namespace TelEngine;
 namespace { // anonymous
@@ -830,7 +830,7 @@ SignallingComponent* WpInterface::create(const String& type, const NamedList& na
 }
 
 WpInterface::WpInterface(const NamedList& params)
-    : SignallingComponent(params),
+    : SignallingComponent(params,&params,"tdm"),
       m_socket(this),
       m_thread(0),
       m_readOnly(false),
@@ -960,7 +960,7 @@ bool WpInterface::receiveAttempt()
     if (!m_socket.valid())
 	return false;
 
-    if (!m_socket.select(5,(0 != m_repeatPacket.length())))
+    if (!m_socket.select(WPSOCKET_SELECT_SAMPLES,(0 != m_repeatPacket.length())))
 	return false;
     m_repeatMutex.lock();
     if (m_socket.canWrite() && m_repeatPacket.length())
@@ -1648,6 +1648,44 @@ void WpSpan::run()
 	if (r == -1)
 	    continue;
 	r -= WP_HEADER;
+#ifdef NEW_WANPIPE_API
+	if (r == WAN_MAX_EVENT_SZ) {
+	    // Got an event
+	    wp_api_event_t* ev = (wp_api_event_t*)(m_buffer + WP_HEADER);
+	    SignallingCircuitEvent* e = 0;
+	    WpCircuit* circuit = 0;
+	    switch (ev->wp_api_event_type) {
+		case WP_API_EVENT_DTMF:
+		    if (ev->wp_api_event_dtmf_type == WAN_EC_TONE_PRESENT) {
+			String tone((char)ev->wp_api_event_dtmf_digit);
+			tone.toUpper();
+			int chan = ev->wp_api_event_channel;
+			circuit = find(chan);
+			if (circuit) {
+			    e = new SignallingCircuitEvent(circuit,SignallingCircuitEvent::Dtmf,"DTMF");
+			    e->addParam("tone",tone);
+			}
+			else
+			    Debug(m_group,DebugMild,
+				"WpSpan('%s'). Detected DTMF '%s' for invalid channel %d [%p]",
+				id().safe(),tone.c_str(),chan,this);
+		    }
+		    break;
+#ifdef DEBUG
+		default:
+		    {
+			String tmp;
+			tmp.hexify(m_buffer + WP_HEADER,r,' ');
+			Debug(m_group,DebugAll,"Event %u: %s",ev->wp_api_event_type,tmp.c_str());
+		    }
+		    break;
+#endif
+	    }
+	    if (e)
+		(static_cast<WpCircuit*>(e->circuit()))->enqueueEvent(e);
+	    continue;
+	}
+#endif
 	// Calculate received samples. Check if we received valid data
 	unsigned int samples = 0; 
 	if ((r > 0) && ((r % m_count) == 0))

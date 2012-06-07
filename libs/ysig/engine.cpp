@@ -145,8 +145,8 @@ void* SignallingFactory::buildInternal(const String& type, const NamedList* name
 }
 
 
-SignallingComponent::SignallingComponent(const char* name, const NamedList* params)
-    : m_engine(0), m_compType("unknown")
+SignallingComponent::SignallingComponent(const char* name, const NamedList* params, const char* type)
+    : m_engine(0), m_compType(type)
 {
     if (params) {
 	name = params->getValue(YSTRING("debugname"),name);

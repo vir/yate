@@ -507,7 +507,7 @@ void SS7Layer3::printRoutes()
 
 
 SS7MTP3::SS7MTP3(const NamedList& params)
-    : SignallingComponent(params.safe("SS7MTP3"),&params),
+    : SignallingComponent(params.safe("SS7MTP3"),&params,"ss7-mtp3"),
       SignallingDumpable(SignallingDumper::Mtp3),
       Mutex(true,"SS7MTP3"),
       m_total(0), m_active(0), m_slcShift(false), m_inhibit(false), m_warnDown(true),

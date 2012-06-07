@@ -348,7 +348,7 @@ void SS7Route::reroute()
  * SS7Router
  */
 SS7Router::SS7Router(const NamedList& params)
-    : SignallingComponent(params.safe("SS7Router"),&params),
+    : SignallingComponent(params.safe("SS7Router"),&params,"ss7-router"),
       Mutex(true,"SS7Router"),
       m_changes(0), m_transfer(false), m_phase2(false), m_started(false),
       m_restart(0), m_isolate(0), m_statsMutex(false,"SS7RouterStats"),
@@ -821,7 +821,7 @@ int SS7Router::routeMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* net
 	m_statsMutex.unlock();
 	if (!route) {
 	    String tmp;
-	    tmp << label;
+	    tmp << label.dpc();
 	    Debug(this,DebugMild,"No route to %s was found for %s MSU size %u",
 		tmp.c_str(),msu.getServiceName(),msu.length());
 	}
@@ -872,8 +872,13 @@ HandledMSU SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7L
     }
     if ((msu.getSIF() > SS7MSU::MTNS) && !m_started)
 	return HandledMSU::Failure;
+    bool maint = (msu.getSIF() == SS7MSU::MTN) || (msu.getSIF() == SS7MSU::MTNS);
+    if (!maint) {
+	m_statsMutex.lock();
+	m_rxMsu++;
+	m_statsMutex.unlock();
+    }
     lock();
-    m_rxMsu++;
     ObjList* l;
     HandledMSU ret;
     do {
@@ -918,7 +923,7 @@ HandledMSU SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7L
 	    break;
     }
     // maintenance must stop here, others may be transferred out
-    if ((msu.getSIF() == SS7MSU::MTN) || (msu.getSIF() == SS7MSU::MTNS))
+    if (maint)
 	return HandledMSU::Rejected;
     unsigned int dpc = label.dpc().pack(label.type());
     // if packet was for this node as set in router don't process any further

@@ -1125,7 +1125,7 @@ u_int16_t SS7TCAPError::codeFromError(SS7TCAP::TCAPType tcapType, int err)
  */
 SS7TCAPTransaction::SS7TCAPTransaction(SS7TCAP* tcap, SS7TCAP::TCAPUserTransActions type,
 	const String& transactID, NamedList& params, u_int64_t timeout, bool initLocal)
-    : Mutex(true,transactID),
+    : Mutex(true,"TcapTransaction"),
       m_tcap(tcap), m_tcapType(SS7TCAP::UnknownTCAP), m_userName(""), m_localID(transactID), m_type(type),
       m_localSCCPAddr(""), m_remoteSCCPAddr(""), m_basicEnd(true), m_endNow(false), m_timeout(timeout)
 {
@@ -1735,7 +1735,7 @@ static const SS7TCAPTransactionANSI::ANSITransactionType primitiveToTransactANSI
 }
 
 SS7TCAPANSI::SS7TCAPANSI(const NamedList& params)
-    : SignallingComponent(params.safe("SS7TCAPANSI"),&params),
+    : SignallingComponent(params.safe("SS7TCAPANSI"),&params,"ss7-tcap-ansi"),
       SS7TCAP(params)
 {
     String tmp;
@@ -2983,7 +2983,7 @@ static const PrimitiveMapping* mapTransPrimitivesITU(int primitive, int trans = 
 }
 
 SS7TCAPITU::SS7TCAPITU(const NamedList& params)
-    : SignallingComponent(params.safe("SS7TCAPITU"),&params),
+    : SignallingComponent(params.safe("SS7TCAPITU"),&params,"ss7-tcap-itu"),
       SS7TCAP(params)
 {
     String tmp;

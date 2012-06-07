@@ -191,11 +191,14 @@ void SS7Layer2::notify()
     m_notify = true;
     m_l2userMutex.unlock();
     if (doNotify && engine()) {
+	String text(statusName());
+	if (wasUp)
+	    text << ", was up " << wasUp;
 	NamedList params("");
 	params.addParam("from",toString());
 	params.addParam("type","ss7-layer2");
 	params.addParam("operational",String::boolText(operational()));
-	params.addParam("text",statusName());
+	params.addParam("text",text);
 	engine()->notify(this,params);
     }
 }

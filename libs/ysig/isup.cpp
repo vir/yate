@@ -259,16 +259,13 @@ static bool decodeRawParam(const SS7ISUP* isup, NamedList& list, unsigned char v
     return decodeRaw(isup,list,&p,buf,len,prefix);
 };
 
-// Integer decoder, interprets data as little endian integer
+// Integer decoder, interprets data as big endian integer
 static bool decodeInt(const SS7ISUP* isup, NamedList& list, const IsupParam* param,
     const unsigned char* buf, unsigned int len, const String& prefix)
 {
     unsigned int val = 0;
-    int shift = 0;
-    while (len--) {
-	val |= ((unsigned int)*buf++) << shift;
-	shift += 8;
-    }
+    while (len--)
+	val = (val << 8) | (unsigned int)(*buf++);
     DDebug(isup,DebugAll,"decodeInt decoded %s=%s (%u)",param->name,lookup(val,(const TokenDict*)param->data),val);
     SignallingUtils::addKeyword(list,prefix+param->name,(const TokenDict*)param->data,val);
     return true;
@@ -652,7 +649,7 @@ static unsigned char encodeFlags(const SS7ISUP* isup, SS7MSU& msu, unsigned char
     return param->size;
 }
 
-// Encoder for fixed length little-endian integer values
+// Encoder for fixed length big-endian integer values
 static unsigned char encodeInt(const SS7ISUP* isup, SS7MSU& msu, unsigned char* buf,
     const IsupParam* param, const NamedString* val, const NamedList*, const String&)
 {
@@ -672,8 +669,9 @@ static unsigned char encodeInt(const SS7ISUP* isup, SS7MSU& msu, unsigned char* 
 	buf = (unsigned char*)msu.getData(l,n+1);
 	*buf++ = n & 0xff;
     }
+    buf += n;
     while (n--) {
-	*buf++ = v & 0xff;
+	*(--buf) = v & 0xff;
 	v >>= 8;
     }
     return param->size;

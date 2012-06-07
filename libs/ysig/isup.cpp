@@ -3618,7 +3618,7 @@ int SS7ISUP::transmitMessage(SS7MsgISUP* msg, const SS7Label& label, bool recvLb
 	void* data = 0;
 	unsigned int len = 0;
 	if (m_extendedDebug && msu) {
-	    unsigned int offs = label.length() + 4;
+	    unsigned int offs = 2 + label.length() + m_cicLen;
 	    data = msu->getData(offs);
 	    len = data ? msu->length() - offs : 0;
 	}

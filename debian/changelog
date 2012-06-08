@@ -1,3 +1,10 @@
+yate (4.1.1~svn5103) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5103: + Added example for accepting custom
+    SIP methods.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 09 Jun 2012 02:19:12 +0400
+
 yate (4.1.1~svn5102) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5102: + Count the failed MSU transmission

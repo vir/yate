@@ -878,7 +878,7 @@ SS7M2PA::SS7M2PA(const NamedList& params)
     // Acknowledge timer ~1s
     m_ackTimer.interval(params,"ack_timer",1000,1100,false);
     // Confirmation timer 1/2 t4
-    m_confTimer.interval(params,"conf_timer",50,400,false);
+    m_confTimer.interval(params,"conf_timer",50,150,false);
     // Out of service timer
     m_oosTimer.interval(params,"oos_timer",3000,5000,false);
     m_waitOosTimer.interval(params,"ack_timer",500,1000,false);

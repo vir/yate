@@ -11039,7 +11039,7 @@ private:
  * Implementation of SS7 Transactional Capabilities Application Part Transaction 
  * @short SS7 TCAP transaction implementation
  */
-class YSIG_API SS7TCAPTransaction : public GenObject, public Mutex
+class YSIG_API SS7TCAPTransaction : public RefObject, public Mutex
 {
 public:
     enum TransactionState {

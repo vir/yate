@@ -27,12 +27,34 @@
 using namespace TelEngine;
 namespace { // anonymous
 
+class RegfilePlugin : public Plugin
+{
+public:
+    RegfilePlugin();
+    ~RegfilePlugin();
+    virtual void initialize();
+    void populate(bool first);
+private:
+    bool m_init;
+};
+
+Mutex s_mutex(false,"RegFile");
+static Configuration s_cfg(Engine::configFile("regfile"));
+static Configuration s_accounts;
+static bool s_create = false;
+static const String s_general = "general";
+static ObjList s_expand;
+static int s_count = 0;
+
+INIT_PLUGIN(RegfilePlugin);
+
 
 class AuthHandler : public MessageHandler
 {
 public:
     AuthHandler(const char *name, unsigned prio = 100)
-	: MessageHandler(name,prio) { }
+	: MessageHandler(name,prio,__plugin.name())
+	{ }
     virtual bool received(Message &msg);
 };
 
@@ -40,7 +62,8 @@ class RegistHandler : public MessageHandler
 {
 public:
     RegistHandler(const char *name, unsigned prio = 100)
-	: MessageHandler(name,prio) { }
+	: MessageHandler(name,prio,__plugin.name())
+	{ }
     virtual bool received(Message &msg);
 };
 
@@ -48,7 +71,8 @@ class UnRegistHandler : public MessageHandler
 {
 public:
     UnRegistHandler(const char *name, unsigned prio = 100)
-	: MessageHandler(name,prio) { }
+	: MessageHandler(name,prio,__plugin.name())
+	{ }
     virtual bool received(Message &msg);
 };
 
@@ -66,7 +90,8 @@ class StatusHandler : public MessageHandler
 {
 public:
     StatusHandler(const char *name, unsigned prio = 100)
-	: MessageHandler(name,prio) { }
+	: MessageHandler(name,prio,__plugin.name())
+	{ }
     virtual bool received(Message &msg);
 };
 
@@ -74,7 +99,8 @@ class CommandHandler : public MessageHandler
 {
 public:
     CommandHandler(const char *name, unsigned prio = 100)
-	: MessageHandler(name,prio) { }
+	: MessageHandler(name,prio,__plugin.name())
+	{ }
     virtual bool received(Message &msg);
 };
 
@@ -82,7 +108,8 @@ class ExpireHandler : public MessageHandler
 {
 public:
     ExpireHandler()
-	: MessageHandler("engine.timer",100) { }
+	: MessageHandler("engine.timer",100,__plugin.name())
+	{ }
     virtual bool received(Message &msg);
 };
 
@@ -97,28 +124,6 @@ private:
     String m_username;
 };
 
-class RegfilePlugin : public Plugin
-{
-public:
-    RegfilePlugin();
-    ~RegfilePlugin();
-    virtual void initialize();
-    void populate(bool first);
-private:
-    bool m_init;
-};
-
-
-Mutex s_mutex(false,"RegFile");
-
-static Configuration s_cfg(Engine::configFile("regfile"));
-static Configuration s_accounts;
-static bool s_create = false;
-static const String s_general = "general";
-static ObjList s_expand;
-static int s_count = 0;
-
-INIT_PLUGIN(RegfilePlugin);
 
 static void clearListParams(NamedList& list, const char* name)
 {
@@ -247,7 +252,7 @@ bool UnRegistHandler::received(Message &msg)
 }
 
 RouteHandler::RouteHandler(const char *name, unsigned prio)
-    : MessageHandler(name,prio)
+    : MessageHandler(name,prio,__plugin.name())
 {
     m_skip = String("alternatives,password").split(',');
 }

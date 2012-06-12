@@ -180,9 +180,9 @@ protected:
     virtual bool received(Message& msg, int id);
 private:
     static int getPriority(const String& name);
-    static void addHandler(const char *name, int type);
-    static void addHandler(AAAHandler* handler);
-    static void addHandler(FallBackHandler* handler);
+    void addHandler(const char *name, int type);
+    void addHandler(AAAHandler* handler);
+    void addHandler(FallBackHandler* handler);
     bool m_init;
     AccountsModule *m_accountsmodule;
 };
@@ -956,6 +956,10 @@ int RegistModule::getPriority(const String& name)
 
 void RegistModule::addHandler(AAAHandler* handler)
 {
+    String trackName(name());
+    if (trackName && handler->priority())
+	trackName << ":" << handler->priority();
+    handler->trackName(trackName);
     handler->loadAccount();
     s_handlers.append(handler);
     handler->loadQuery();
@@ -965,6 +969,10 @@ void RegistModule::addHandler(AAAHandler* handler)
 
 void RegistModule::addHandler(FallBackHandler* handler)
 {
+    String trackName(name());
+    if (trackName && handler->priority())
+	trackName << ":" << handler->priority();
+    handler->trackName(trackName);
     s_handlers.append(handler);
     Engine::install(handler);
 }
@@ -1162,8 +1170,8 @@ bool AccountsModule::received(Message &msg, int id)
 void AccountsModule::initialize()
 {
     if (s_cfg.getBoolValue("general","accounts")) {
-	Engine::install(new MessageRelay("user.notify",this,Notify,100));
-	Engine::install(new MessageRelay("engine.timer",this,Timer,100));
+	Engine::install(new MessageRelay("user.notify",this,Notify,100,module.name()));
+	Engine::install(new MessageRelay("engine.timer",this,Timer,100,module.name()));
     }
 }
 

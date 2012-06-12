@@ -33,19 +33,7 @@
 using namespace TelEngine;
 namespace { // anonymous
 
-class EventLogsHandler : public MessageHandler, public Mutex
-{
-public:
-    EventLogsHandler(const char *name)
-	: MessageHandler(name), Mutex(false,"EventLogs"),
-	  m_mappings("")
-	{ }
-    virtual bool received(Message &msg);
-    void init(const NamedList* mappings);
-private:
-    bool writeLog(const char* name, const String& line);
-    NamedList m_mappings;
-};
+class EventLogsHandler;
 
 class EventLogsPlugin : public Plugin
 {
@@ -68,6 +56,22 @@ static String s_baseDir;
 static bool s_pubRead = false;
 
 INIT_PLUGIN(EventLogsPlugin);
+
+
+class EventLogsHandler : public MessageHandler, public Mutex
+{
+public:
+    EventLogsHandler(const char *name)
+	: MessageHandler(name,100,__plugin.name()),
+	  Mutex(false,"EventLogs"),
+	  m_mappings("")
+	{ }
+    virtual bool received(Message &msg);
+    void init(const NamedList* mappings);
+private:
+    bool writeLog(const char* name, const String& line);
+    NamedList m_mappings;
+};
 
 
 bool EventLogsHandler::writeLog(const char* name, const String& line)

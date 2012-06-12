@@ -519,20 +519,6 @@ private:
     Cipher* m_cipher;
 };
 
-/**
-  * TrapHandler - message handler for incoming notifications
-  */
-class TrapHandler : public MessageHandler
-{
-public:
-    inline TrapHandler(unsigned int priority = 100)
-	: MessageHandler("monitor.notify",priority)
-	{ }
-    virtual ~TrapHandler()
-	{ }
-    virtual bool received(Message& msg);
-};
-
 const TokenDict TransportType::s_typeText[] = {
     {"UDP",	UDP},
     {"TCP",	TCP},
@@ -621,13 +607,28 @@ static const DataBlock s_zeroKey(0,12);
 
 INIT_PLUGIN(SnmpAgent);
 
-
 UNLOAD_PLUGIN(unloadNow)
 {
     if (unloadNow && !__plugin.unload())
 	return false;
     return true;
 }
+
+
+/**
+  * TrapHandler - message handler for incoming notifications
+  */
+class TrapHandler : public MessageHandler
+{
+public:
+    inline TrapHandler(unsigned int priority = 100)
+	: MessageHandler("monitor.notify",priority,__plugin.name())
+	{ }
+    virtual ~TrapHandler()
+	{ }
+    virtual bool received(Message& msg);
+};
+
 
 static DataBlock toNetworkOrder(u_int64_t val, unsigned int size)
 {

@@ -3812,8 +3812,8 @@ void UserAuthMessage::authFailed()
  * JBMessageHandler
  */
 JBMessageHandler::JBMessageHandler(int handler)
-    : MessageHandler(lookup(handler,s_msgHandler),handler < 0 ? 100 : handler),
-    m_handler(handler)
+    : MessageHandler(lookup(handler,s_msgHandler),handler < 0 ? 100 : handler,__plugin.name()),
+      m_handler(handler)
 {
 }
 

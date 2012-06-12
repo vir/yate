@@ -43,11 +43,25 @@ enum {
     EngHalt
 };
 
+class CdrBuildPlugin : public Plugin
+{
+public:
+    CdrBuildPlugin();
+    virtual ~CdrBuildPlugin();
+    virtual void initialize();
+private:
+    bool m_first;
+};
+
+INIT_PLUGIN(CdrBuildPlugin);
+
 class CdrHandler : public MessageHandler
 {
 public:
     CdrHandler(const char *name, int type, int prio = 50)
-	: MessageHandler(name,prio), m_type(type) { }
+	: MessageHandler(name,prio,__plugin.name()),
+	  m_type(type)
+	{ }
     virtual bool received(Message &msg);
 private:
     int m_type;
@@ -56,14 +70,18 @@ private:
 class StatusHandler : public MessageHandler
 {
 public:
-    StatusHandler() : MessageHandler("engine.status") { }
+    StatusHandler()
+	: MessageHandler("engine.status",100,__plugin.name())
+	{ }
     virtual bool received(Message &msg);
 };
 
 class CommandHandler : public MessageHandler
 {
 public:
-    CommandHandler() : MessageHandler("engine.command") { }
+    CommandHandler()
+	: MessageHandler("engine.command",100,__plugin.name())
+	{ }
     virtual bool received(Message &msg);
 };
 
@@ -530,16 +548,6 @@ bool CommandHandler::received(Message &msg)
 }
 
 
-class CdrBuildPlugin : public Plugin
-{
-public:
-    CdrBuildPlugin();
-    virtual ~CdrBuildPlugin();
-    virtual void initialize();
-private:
-    bool m_first;
-};
-
 CdrBuildPlugin::CdrBuildPlugin()
     : Plugin("cdrbuild"),
       m_first(true)
@@ -608,8 +616,6 @@ void CdrBuildPlugin::initialize()
 	Engine::install(new CommandHandler);
     }
 }
-
-INIT_PLUGIN(CdrBuildPlugin);
 
 }; // anonymous namespace
 

@@ -222,8 +222,8 @@ void PBXList::init(int priority)
     priority = s_cfg.getIntValue("general","priority",priority);
     ChanAssistList::init(priority);
     installRelay(Tone,priority);
-    Engine::install(new MessageRelay("chan.operation",this,Operation,priority));
-    Engine::install(new MessageRelay("chan.replaced",this,Replaced,priority));
+    Engine::install(new MessageRelay("chan.operation",this,Operation,priority,name()));
+    Engine::install(new MessageRelay("chan.replaced",this,Replaced,priority,name()));
 }
 
 void PBXList::initialize()

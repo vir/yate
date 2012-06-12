@@ -47,34 +47,6 @@ class PresenceModule;
 class ExpirePresence;
 
 /*
- * Class ResNotifyHandler
- * Handles a resource.notify message
- */
-class ResNotifyHandler : public MessageHandler
-{
-public:
-    inline ResNotifyHandler(unsigned int priority = 10)
-	: MessageHandler("resource.notify", priority)
-	{ }
-    virtual ~ResNotifyHandler()
-	{ }
-    virtual bool received(Message& msg);
-};
-
-/*
- * Class EngineStartHandler
- * Handles a engine.start message
- */
-class EngineStartHandler : public MessageHandler
-{
-public:
-    inline EngineStartHandler()
-	: MessageHandler("engine.start",100)
-	{}
-    virtual bool received(Message& msg);
-};
-
-/*
  * class Presence
  * A presence object
  */
@@ -154,6 +126,9 @@ public:
     // Find an item by id and instance
     ObjList* find(const String& contact, const String& instance);
 };
+
+class ResNotifyhandler;
+class EngineStarthandler;
 
 /*
  * Class PresenceModule
@@ -257,8 +232,8 @@ private:
 static String s_msgPrefix = "presence";
 static unsigned int s_presExpire = 0;            // Presence expire interval (relese memory only)
 unsigned int ExpirePresence::s_expireTime = 0;
-INIT_PLUGIN(PresenceModule);
 
+INIT_PLUGIN(PresenceModule);
 
 UNLOAD_PLUGIN(unloadNow)
 {
@@ -266,6 +241,35 @@ UNLOAD_PLUGIN(unloadNow)
 	return false;
     return true;
 }
+
+
+/*
+ * Class ResNotifyHandler
+ * Handles a resource.notify message
+ */
+class ResNotifyHandler : public MessageHandler
+{
+public:
+    inline ResNotifyHandler(unsigned int priority = 10)
+	: MessageHandler("resource.notify",priority,__plugin.name())
+	{ }
+    virtual ~ResNotifyHandler()
+	{ }
+    virtual bool received(Message& msg);
+};
+
+/*
+ * Class EngineStartHandler
+ * Handles a engine.start message
+ */
+class EngineStartHandler : public MessageHandler
+{
+public:
+    inline EngineStartHandler()
+	: MessageHandler("engine.start",100,__plugin.name())
+	{}
+    virtual bool received(Message& msg);
+};
 
 /*
  * ResNotifyHandler

@@ -113,19 +113,7 @@ private:
     bool m_disc;
 };
 
-class AttachHandler : public MessageHandler
-{
-public:
-    AttachHandler() : MessageHandler("chan.attach") { }
-    virtual bool received(Message &msg);
-};
-
-class RecordHandler : public MessageHandler
-{
-public:
-    RecordHandler() : MessageHandler("chan.record") { }
-    virtual bool received(Message &msg);
-};
+class AttachHandler;
 
 class WaveFileDriver : public Driver
 {
@@ -146,6 +134,25 @@ bool s_dataPadding = true;
 bool s_pubReadable = false;
 
 INIT_PLUGIN(WaveFileDriver);
+
+
+class AttachHandler : public MessageHandler
+{
+public:
+    AttachHandler()
+	: MessageHandler("chan.attach",100,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class RecordHandler : public MessageHandler
+{
+public:
+    RecordHandler()
+	: MessageHandler("chan.record",100,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
 
 
 typedef struct {

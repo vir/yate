@@ -636,15 +636,15 @@ void CallGenPlugin::initialize()
 	m_first = false;
 
 	ConnHandler* coh = new ConnHandler;
-	Engine::install(new MessageRelay("call.ringing",coh,ConnHandler::Ringing));
-	Engine::install(new MessageRelay("call.answered",coh,ConnHandler::Answered));
-	Engine::install(new MessageRelay("call.execute",coh,ConnHandler::Execute));
-	Engine::install(new MessageRelay("call.drop",coh,ConnHandler::Drop));
+	Engine::install(new MessageRelay("call.ringing",coh,ConnHandler::Ringing,100,name()));
+	Engine::install(new MessageRelay("call.answered",coh,ConnHandler::Answered,100,name()));
+	Engine::install(new MessageRelay("call.execute",coh,ConnHandler::Execute,100,name()));
+	Engine::install(new MessageRelay("call.drop",coh,ConnHandler::Drop,100,name()));
 
 	CmdHandler* cmh = new CmdHandler;
-	Engine::install(new MessageRelay("engine.status",cmh,CmdHandler::Status));
-	Engine::install(new MessageRelay("engine.command",cmh,CmdHandler::Command));
-	Engine::install(new MessageRelay("engine.help",cmh,CmdHandler::Help));
+	Engine::install(new MessageRelay("engine.status",cmh,CmdHandler::Status,100,name()));
+	Engine::install(new MessageRelay("engine.command",cmh,CmdHandler::Command,100,name()));
+	Engine::install(new MessageRelay("engine.help",cmh,CmdHandler::Help,100,name()));
 
 	CleanThread* cln = new CleanThread;
 	if (!cln->startup()) {

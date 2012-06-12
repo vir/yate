@@ -930,24 +930,6 @@ private:
     int m_code;
 };
 
-class UserHandler : public MessageHandler
-{
-public:
-    UserHandler()
-	: MessageHandler("user.login",150)
-	{ }
-    virtual bool received(Message &msg);
-};
-
-class SipHandler : public MessageHandler
-{
-public:
-    SipHandler()
-	: MessageHandler("xsip.generate",110)
-	{ }
-    virtual bool received(Message &msg);
-};
-
 // Proxy class used to transport a data buffer or a socket
 // The object doesn't own its data
 class RefObjectProxy : public RefObject
@@ -1018,6 +1000,25 @@ private:
 };
 
 static SIPDriver plugin;
+
+class UserHandler : public MessageHandler
+{
+public:
+    UserHandler()
+	: MessageHandler("user.login",150,plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class SipHandler : public MessageHandler
+{
+public:
+    SipHandler()
+	: MessageHandler("xsip.generate",110,plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
 static ObjList s_lines;
 static Configuration s_cfg;
 static Mutex s_globalMutex(true,"SIPGlobal"); // Protect globals (don't use the plugin to avoid deadlocks)

@@ -62,13 +62,6 @@ private:
     sctp_assoc_t m_assocId;
 };
 
-class LKHandler : public MessageHandler
-{
-public:
-    LKHandler() : MessageHandler("socket.sctp") { }
-    virtual bool received(Message &msg);
-};
-
 class LKModule : public Module
 {
 public:
@@ -84,6 +77,17 @@ static LKModule plugin;
 unsigned int s_count = 0;
 const char* s_mutexName = "LKSctpCounter";
 Mutex s_countMutex(true,s_mutexName);
+
+
+class LKHandler : public MessageHandler
+{
+public:
+    LKHandler()
+	: MessageHandler("socket.sctp",100,plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
 
 /**
  * class LKSocket

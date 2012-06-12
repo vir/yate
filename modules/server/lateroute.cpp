@@ -66,7 +66,7 @@ UNLOAD_PLUGIN(unloadNow)
 
 
 LateHandler::LateHandler(const char* name, unsigned priority)
-    : MessageHandler(name,priority)
+    : MessageHandler(name,priority,__plugin.name())
 {
     // build a proper routing message name
     int sep = find('.');

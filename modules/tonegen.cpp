@@ -173,12 +173,7 @@ public:
     bool attachConsumer(const char* consumer);
 };
 
-class AttachHandler : public MessageHandler
-{
-public:
-    AttachHandler() : MessageHandler("chan.attach") { }
-    virtual bool received(Message& msg);
-};
+class AttachHandler;
 
 class ToneGenDriver : public Driver
 {
@@ -195,6 +190,16 @@ private:
 };
 
 INIT_PLUGIN(ToneGenDriver);
+
+class AttachHandler : public MessageHandler
+{
+public:
+    AttachHandler()
+	: MessageHandler("chan.attach",100,__plugin.name())
+	{ }
+    virtual bool received(Message& msg);
+};
+
 static ObjList s_toneDesc;               // List of configured tones
 static ObjList s_defToneDesc;            // List of default tones
 static String s_defLang;                 // Default tone language

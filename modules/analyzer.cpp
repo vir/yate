@@ -150,12 +150,7 @@ protected:
     String m_window;
 };
 
-class AttachHandler : public MessageHandler
-{
-public:
-    AttachHandler() : MessageHandler("chan.attach") { }
-    virtual bool received(Message& msg);
-};
+class AttachHandler;
 
 class AnalyzerDriver : public Driver
 {
@@ -187,6 +182,15 @@ static TokenDict dict_windows[] = {
 static Mutex s_mutex(false,"Analyzer");
 
 static int s_res = 1;
+
+class AttachHandler : public MessageHandler
+{
+public:
+    AttachHandler()
+	: MessageHandler("chan.attach",100,__plugin.name())
+	{ }
+    virtual bool received(Message& msg);
+};
 
 static const char* printTime(char* buf,unsigned long usec)
 {

@@ -277,27 +277,6 @@ private:
     RefPointer<MGCPMessage> m_msg;
 };
 
-class RtpHandler : public MessageHandler
-{
-public:
-    RtpHandler(unsigned int prio) : MessageHandler("chan.rtp",prio) { }
-    virtual bool received(Message &msg);
-};
-
-class SdpHandler : public MessageHandler
-{
-public:
-    SdpHandler(unsigned int prio) : MessageHandler("chan.sdp",prio) { }
-    virtual bool received(Message &msg);
-};
-
-class DTMFHandler : public MessageHandler
-{
-public:
-    DTMFHandler() : MessageHandler("chan.dtmf",150) { }
-    virtual bool received(Message &msg);
-};
-
 class MGCPPlugin : public Module
 {
 public:
@@ -344,6 +323,35 @@ static const TokenDict s_dict_rqnt[] = {
     { "on",   MGCPSpan::RqntOnce },
     { 0,      0                  }
 };
+
+
+class RtpHandler : public MessageHandler
+{
+public:
+    RtpHandler(unsigned int prio)
+	: MessageHandler("chan.rtp",prio,splugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class SdpHandler : public MessageHandler
+{
+public:
+    SdpHandler(unsigned int prio)
+	: MessageHandler("chan.sdp",prio,splugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class DTMFHandler : public MessageHandler
+{
+public:
+    DTMFHandler()
+	: MessageHandler("chan.dtmf",150,splugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
 
 // Copy one parameter (if present) with new name
 static bool copyRename(NamedList& dest, const char* dname, const NamedList& src, const String& sname)

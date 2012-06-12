@@ -612,7 +612,7 @@ class UserHandler : public MessageHandler
 {
 public:
     UserHandler()
-	: MessageHandler("user.login",140)
+	: MessageHandler("user.login",140,hplugin.name())
 	{ }
     virtual bool received(Message &msg);
 };

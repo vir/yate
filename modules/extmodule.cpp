@@ -63,6 +63,7 @@ static int s_waitFlush = WAIT_FLUSH;
 static int s_timeout = MSG_TIMEOUT;
 static bool s_timebomb = false;
 static bool s_pluginSafe = true;
+static const char* s_trackName = 0;
 
 static const char* s_cmds[] = {
     "info",
@@ -280,17 +281,36 @@ private:
     ExtModReceiver* m_receiver;
 };
 
+class ExtModHandler;
+
+class ExtModulePlugin : public Plugin
+{
+public:
+    ExtModulePlugin();
+    ~ExtModulePlugin();
+    virtual void initialize();
+    virtual bool isBusy() const;
+private:
+    ExtModHandler *m_handler;
+};
+
+INIT_PLUGIN(ExtModulePlugin);
+
 class ExtModHandler : public MessageHandler
 {
 public:
-    ExtModHandler(const char *name, unsigned prio) : MessageHandler(name,prio) { }
+    ExtModHandler(const char *name, unsigned prio)
+	: MessageHandler(name,prio,__plugin.name())
+	{ }
     virtual bool received(Message &msg);
 };
 
 class ExtModCommand : public MessageHandler
 {
 public:
-    ExtModCommand(const char *name) : MessageHandler(name) { }
+    ExtModCommand(const char *name)
+	: MessageHandler(name,100,__plugin.name())
+	{ }
     virtual bool received(Message &msg);
 private:
     bool complete(const String& partLine, const String& partWord, String& rval) const;
@@ -309,17 +329,6 @@ protected:
     Socket m_socket;
     String m_name;
     int m_role;
-};
-
-class ExtModulePlugin : public Plugin
-{
-public:
-    ExtModulePlugin();
-    ~ExtModulePlugin();
-    virtual void initialize();
-    virtual bool isBusy() const;
-private:
-    ExtModHandler *m_handler;
 };
 
 
@@ -1287,7 +1296,7 @@ bool ExtModReceiver::processLine(const char* line)
 	lock();
 	bool ok = id && !m_dead && !m_relays.find(id);
 	if (ok) {
-	    MessageRelay *r = new MessageRelay(id,this,0,prio);
+	    MessageRelay *r = new MessageRelay(id,this,0,prio,s_trackName);
 	    if (fname)
 		r->setFilter(fname,fvalue);
 	    m_relays.append(r);
@@ -1826,6 +1835,8 @@ void ExtModulePlugin::initialize()
     s_cfg.load();
     s_timeout = s_cfg.getIntValue("general","timeout",MSG_TIMEOUT);
     s_timebomb = s_cfg.getBoolValue("general","timebomb",false);
+    s_trackName = s_cfg.getBoolValue("general","trackparam",false) ?
+	name().c_str() : (const char*)0;
     int wf = s_cfg.getIntValue("general","waitflush",WAIT_FLUSH);
     if (wf < 1)
 	wf = 1;
@@ -1868,8 +1879,6 @@ void ExtModulePlugin::initialize()
 	}
     }
 }
-
-INIT_PLUGIN(ExtModulePlugin);
 
 }; // anonymous namespace
 

@@ -762,7 +762,7 @@ void JsModule::init(int priority)
     installRelay(Route,priority);
     installRelay(Ringing,priority);
     installRelay(Answered,priority);
-    Engine::install(new MessageRelay("call.preroute",this,Preroute,priority));
+    Engine::install(new MessageRelay("call.preroute",this,Preroute,priority,name()));
 }
 
 }; // anonymous namespace

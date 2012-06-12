@@ -126,7 +126,7 @@ private:
     // input sample rate
     unsigned int m_rate;
 };
-	
+
 class CoreAudioChan : public CallEndpoint
 {
 public:
@@ -146,42 +146,9 @@ private:
     String m_target;
     unsigned int m_rate;
 };
-	
-class CoreAudioHandler : public MessageHandler
-{
-public:
-    CoreAudioHandler(const char *name) : MessageHandler(name) { }
-    virtual bool received(Message &msg);
-};
-	
-class StatusHandler : public MessageHandler
-{
-public:
-    StatusHandler() : MessageHandler("engine.status") { }
-    virtual bool received(Message &msg);
-};
-	
-class DropHandler : public MessageHandler
-{
-public:
-    DropHandler() : MessageHandler("call.drop") { }
-    virtual bool received(Message &msg);
-};
-	
-class MasqHandler : public MessageHandler
-{
-public:
-    MasqHandler(int prio) : MessageHandler("chan.masquerade",prio) { }
-    virtual bool received(Message &msg);
-};
-	
-class AttachHandler : public MessageHandler
-{
-public:
-    AttachHandler() : MessageHandler("chan.attach") { }
-    virtual bool received(Message &msg);
-};
-	
+
+class CoreAudioHandler;
+
 class CoreAudioPlugin : public Plugin
 {
 public:
@@ -191,10 +158,55 @@ public:
 private:
     CoreAudioHandler* m_handler;
 };
-	
+
 static CoreAudioChan* s_audioChan = 0;
 
 INIT_PLUGIN(CoreAudioPlugin);
+
+class CoreAudioHandler : public MessageHandler
+{
+public:
+    CoreAudioHandler(const char *name)
+	: MessageHandler(name,100,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class StatusHandler : public MessageHandler
+{
+public:
+    StatusHandler()
+	: MessageHandler("engine.status",100,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class DropHandler : public MessageHandler
+{
+public:
+    DropHandler()
+	: MessageHandler("call.drop",100,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class MasqHandler : public MessageHandler
+{
+public:
+    MasqHandler(int prio)
+	: MessageHandler("chan.masquerade",prio,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class AttachHandler : public MessageHandler
+{
+public:
+    AttachHandler()
+	: MessageHandler("chan.attach",100,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
 
 // test if a device permits setting the volume
 static bool checkVolumeSettable(AudioDeviceID devId, UInt32 inChannel,Boolean isInput)

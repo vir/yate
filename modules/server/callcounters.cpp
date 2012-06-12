@@ -45,36 +45,6 @@ private:
     int m_count;
 };
 
-class CdrHandler : public MessageHandler
-{
-public:
-    CdrHandler(int prio)
-	: MessageHandler("call.cdr",prio) { }
-    virtual bool received(Message& msg);
-};
-
-class RouteHandler : public MessageHandler
-{
-public:
-    RouteHandler(int prio)
-	: MessageHandler("call.route",prio) { }
-    virtual bool received(Message& msg);
-};
-
-class StatusHandler : public MessageHandler
-{
-public:
-    StatusHandler() : MessageHandler("engine.status") { }
-    virtual bool received(Message& msg);
-};
-
-class CommandHandler : public MessageHandler
-{
-public:
-    CommandHandler() : MessageHandler("engine.command") { }
-    virtual bool received(Message& msg);
-};
-
 class CallCountersPlugin : public Plugin
 {
 public:
@@ -93,6 +63,43 @@ static ObjList s_contexts;
 static Mutex s_mutex(false,"CallCounters");
 
 INIT_PLUGIN(CallCountersPlugin);
+
+
+class CdrHandler : public MessageHandler
+{
+public:
+    CdrHandler(int prio)
+	: MessageHandler("call.cdr",prio,__plugin.name())
+	{ }
+    virtual bool received(Message& msg);
+};
+
+class RouteHandler : public MessageHandler
+{
+public:
+    RouteHandler(int prio)
+	: MessageHandler("call.route",prio,__plugin.name())
+	{ }
+    virtual bool received(Message& msg);
+};
+
+class StatusHandler : public MessageHandler
+{
+public:
+    StatusHandler()
+	: MessageHandler("engine.status",100,__plugin.name())
+	{ }
+    virtual bool received(Message& msg);
+};
+
+class CommandHandler : public MessageHandler
+{
+public:
+    CommandHandler()
+	: MessageHandler("engine.command",100,__plugin.name())
+	{ }
+    virtual bool received(Message& msg);
+};
 
 
 bool Context::remove(const String& id)

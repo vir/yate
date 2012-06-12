@@ -27,57 +27,6 @@
 using namespace TelEngine;
 namespace { // anonymous
 
-static Mutex s_mutex(false,"AccFile");
-static Configuration s_cfg(Engine::configFile("accfile"));
-
-static char s_helpOpt[] = "  accounts [reload|{login|logout|...} [account]]\r\n";
-static char s_helpMsg[] = "Controls client accounts (to other servers) operations\r\n";
-
-class AccHandler : public MessageHandler
-{
-public:
-    AccHandler()
-	: MessageHandler("user.account")
-	{ }
-    virtual bool received(Message &msg);
-};
-
-class CmdHandler : public MessageHandler
-{
-public:
-    CmdHandler()
-	: MessageHandler("engine.command")
-	{ }
-    virtual bool received(Message &msg);
-};
-
-class HelpHandler : public MessageHandler
-{
-public:
-    HelpHandler()
-	: MessageHandler("engine.help")
-	{ }
-    virtual bool received(Message &msg);
-};
-
-class StatusHandler : public MessageHandler
-{
-public:
-    StatusHandler()
-	: MessageHandler("engine.status")
-	{ }
-    virtual bool received(Message &msg);
-};
-
-class StartHandler : public MessageHandler
-{
-public:
-    StartHandler()
-	: MessageHandler("engine.start",150)
-	{ }
-    virtual bool received(Message &msg);
-};
-
 class AccFilePlugin : public Plugin
 {
 public:
@@ -87,6 +36,61 @@ public:
 private:
     bool m_first;
 };
+
+static Mutex s_mutex(false,"AccFile");
+static Configuration s_cfg(Engine::configFile("accfile"));
+
+static char s_helpOpt[] = "  accounts [reload|{login|logout|...} [account]]\r\n";
+static char s_helpMsg[] = "Controls client accounts (to other servers) operations\r\n";
+
+INIT_PLUGIN(AccFilePlugin);
+
+
+class AccHandler : public MessageHandler
+{
+public:
+    AccHandler()
+	: MessageHandler("user.account",100,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class CmdHandler : public MessageHandler
+{
+public:
+    CmdHandler()
+	: MessageHandler("engine.command",100,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class HelpHandler : public MessageHandler
+{
+public:
+    HelpHandler()
+	: MessageHandler("engine.help",100,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class StatusHandler : public MessageHandler
+{
+public:
+    StatusHandler()
+	: MessageHandler("engine.status",100,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class StartHandler : public MessageHandler
+{
+public:
+    StartHandler()
+	: MessageHandler("engine.start",150,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
 
 static void copyParams(NamedList& dest, const NamedList& src)
 {
@@ -268,8 +272,6 @@ void AccFilePlugin::initialize()
 	Engine::install(new HelpHandler);
     }
 }
-
-INIT_PLUGIN(AccFilePlugin);
 
 }; // anonymous namespace
 

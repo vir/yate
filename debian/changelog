@@ -1,3 +1,10 @@
+yate (4.1.1~svn5106) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5106: + Protect the generic methods list
+    with the global mutex.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 13 Jun 2012 02:19:14 +0400
+
 yate (4.1.1~svn5105) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5105: + Fixed race condition in tcap.  +

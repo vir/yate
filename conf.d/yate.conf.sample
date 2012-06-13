@@ -23,7 +23,7 @@
 ;maxworkers=10
 
 ; maxevents: int: Maximum number of events kept per type
-;maxevents=10
+;maxevents=25
 
 ; startevents: boolean: Capture all debug events at startup
 ;startevents=yes

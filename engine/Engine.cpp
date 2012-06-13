@@ -232,7 +232,7 @@ static Engine::PluginMode s_loadMode = Engine::LoadFail;
 static int s_maxworkers = 10;
 static bool s_debug = true;
 static bool s_capture = CAPTURE_EVENTS;
-static int s_maxevents = 10;
+static int s_maxevents = 25;
 static Mutex s_eventsMutex(false,"EventsList");
 static ObjList s_events;
 static String s_startMsg;

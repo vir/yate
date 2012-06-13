@@ -123,40 +123,7 @@ private:
     unsigned int m_rate;
 };
 
-class OssHandler : public MessageHandler
-{
-public:
-    OssHandler(const char *name) : MessageHandler(name) { }
-    virtual bool received(Message &msg);
-};
-
-class StatusHandler : public MessageHandler
-{
-public:
-    StatusHandler() : MessageHandler("engine.status") { }
-    virtual bool received(Message &msg);
-};
-
-class DropHandler : public MessageHandler
-{
-public:
-    DropHandler(const char *name) : MessageHandler(name) { }
-    virtual bool received(Message &msg);
-};
-
-class MasqHandler : public MessageHandler
-{
-public:
-    MasqHandler(const char *name, int prio) : MessageHandler(name,prio) { }
-    virtual bool received(Message &msg);
-};
-
-class AttachHandler : public MessageHandler
-{
-public:
-    AttachHandler() : MessageHandler("chan.attach") { }
-    virtual bool received(Message &msg);
-};
+class OssHandler;
 
 class OssPlugin : public Plugin
 {
@@ -166,6 +133,53 @@ public:
     virtual bool isBusy() const;
 private:
     OssHandler *m_handler;
+};
+
+INIT_PLUGIN(OssPlugin);
+
+class OssHandler : public MessageHandler
+{
+public:
+    OssHandler(const char *name)
+	: MessageHandler(name,100,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class StatusHandler : public MessageHandler
+{
+public:
+    StatusHandler()
+	: MessageHandler("engine.status",100,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class DropHandler : public MessageHandler
+{
+public:
+    DropHandler(const char *name)
+	: MessageHandler(name,100,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class MasqHandler : public MessageHandler
+{
+public:
+    MasqHandler(const char *name, int prio)
+	: MessageHandler(name,prio,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class AttachHandler : public MessageHandler
+{
+public:
+    AttachHandler()
+	: MessageHandler("chan.attach",100,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
 };
 
 OssChan *s_chan = 0;
@@ -689,8 +703,6 @@ bool OssPlugin::isBusy() const
 {
     return (s_chan != 0);
 }
-
-INIT_PLUGIN(OssPlugin);
 
 }; // anonymous namespace
 

@@ -539,10 +539,13 @@ void SS7TCAP::userStatus(NamedList& status)
 SS7TCAPTransaction* SS7TCAP::getTransaction(const String& tid)
 {
     SS7TCAPTransaction* tr = 0;
+    Lock lock(m_transactionsMtx);
     ObjList* o = m_transactions.find(tid);
     if (o)
 	tr = static_cast<SS7TCAPTransaction*>(o->get());
-    return tr;
+    if (tr && tr->ref())
+	return tr;
+    return 0;
 }
 
 void SS7TCAP::removeTransaction(SS7TCAPTransaction* tr)
@@ -564,12 +567,16 @@ void SS7TCAP::timerTick(const Time& when)
     }
 
     // update/handle rest of transactions
+    Lock lock(m_transactionsMtx);
     ListIterator iter(m_transactions);
     for (;;) {
 	SS7TCAPTransaction* tr = static_cast<SS7TCAPTransaction*>(iter.get());
 	// End of iteration?
 	if (!tr)
 	    break;
+	if (!tr->ref())
+	    continue;
+	lock.drop();
 	NamedList params("");
 	DataBlock data;
 	if (tr->transactionState() != SS7TCAPTransaction::Idle)
@@ -588,6 +595,9 @@ void SS7TCAP::timerTick(const Time& when)
 
 	if (tr->transactionState() == SS7TCAPTransaction::Idle)
 	    removeTransaction(tr);
+	TelEngine::destruct(tr);
+	if (!lock.acquire(m_transactionsMtx))
+	    break;
     }
 }
 
@@ -621,7 +631,6 @@ HandledMSU SS7TCAP::processSCCPData(SS7TCAPMessage* msg)
 	incCounter(SS7TCAP::IncomingMsgs);
 
     SS7TCAPTransaction* tr = 0;
-    Lock lock(m_transactionsMtx);
     switch (type) {
 	case SS7TCAP::TC_Unidirectional:
 	case SS7TCAP::TC_Begin:
@@ -632,7 +641,10 @@ HandledMSU SS7TCAP::processSCCPData(SS7TCAPMessage* msg)
 		String newID;
 		allocTransactionID(newID);
 		tr = buildTransaction(type,newID,msgParams,false);
+		tr->ref();
+		m_transactionsMtx.lock();
 		m_transactions.append(tr);
+		m_transactionsMtx.unlock();
 		msgParams.setParam(s_tcapLocalTID,newID);
 	    }
 	    break;
@@ -654,18 +666,23 @@ HandledMSU SS7TCAP::processSCCPData(SS7TCAPMessage* msg)
 		return handleError(transactError,msgParams,msgData);
 	    }
 	    transactError = tr->update((SS7TCAP::TCAPUserTransActions)type,msgParams,false);
-	    if (transactError.error() != SS7TCAPError::NoError)
-		return handleError(transactError,msgParams,msgData,tr);
+	    if (transactError.error() != SS7TCAPError::NoError) {
+		result = handleError(transactError,msgParams,msgData,tr);
+		TelEngine::destruct(tr);
+		return result;
+	    }
 	    break;
 	default:
 	    incCounter(SS7TCAP::DiscardedMsgs);
 	    return result;
     }
-    lock.drop();
     if (tr) {
 	transactError = tr->handleData(msgParams,msgData);
-	if (transactError.error() != SS7TCAPError::NoError)
-	    return handleError(transactError,msgParams,msgData,tr);
+	if (transactError.error() != SS7TCAPError::NoError) {
+	    result = handleError(transactError,msgParams,msgData,tr);
+	    TelEngine::destruct(tr);
+	    return result;
+	}
 
 	tr->addSCCPAddressing(msgParams,true);
 	if (sendToUser(msgParams)) {
@@ -684,6 +701,7 @@ HandledMSU SS7TCAP::processSCCPData(SS7TCAPMessage* msg)
 	}
 	else
 	    tr->setState(SS7TCAPTransaction::Idle);
+	TelEngine::destruct(tr);
     }
     result = HandledMSU::Accepted;
     incCounter(SS7TCAP::NormalMsgs);
@@ -711,7 +729,6 @@ SS7TCAPError SS7TCAP::userRequest(NamedList& params)
     }
 
     SS7TCAPTransaction* tr = 0;
-    Lock lock(m_transactionsMtx);
     if (!TelEngine::null(req)) {
 	int type = req->toInteger(SS7TCAP::s_transPrimitives);
 	switch (type) {
@@ -724,19 +741,26 @@ SS7TCAPError SS7TCAP::userRequest(NamedList& params)
 		    params.setParam(s_tcapLocalTID,allocTransactionID());
 		    otid = params.getParam(s_tcapLocalTID);
 		}
-		// if set, check if we already have it
-		else if (m_transactions.find(*otid)) {
-		    Debug(this,DebugInfo,"SS7TCAP::userRequest()[%p] - received a new transaction request from user=%s with originating ID=%s which is the ID "
-			    "of an already existing transaction, rejecting the request",this,(user ? user->c_str() : ""),otid->c_str());
-		    params.setParam(s_tcapRequestError,"allocated_id");
-		    error.setError(SS7TCAPError::Transact_IncorrectTransactionPortion);
-		    return error;
+		else {
+		    // if set, check if we already have it
+		    tr = getTransaction(*otid);
+		    if (tr) {
+			Debug(this,DebugInfo,"SS7TCAP::userRequest()[%p] - received a new transaction request from user=%s with originating ID=%s which is the ID "
+				"of an already existing transaction, rejecting the request",this,(user ? user->c_str() : ""),otid->c_str());
+			params.setParam(s_tcapRequestError,"allocated_id");
+			error.setError(SS7TCAPError::Transact_IncorrectTransactionPortion);
+			TelEngine::destruct(tr);
+			return error;
+		    }
 		}
 		// create transaction
 		tr = buildTransaction((SS7TCAP::TCAPUserTransActions)type,otid,params,true);
 		if (!TelEngine::null(user))
 		    tr->setUserName(user);
+		tr->ref();
+		m_transactionsMtx.lock();
 		m_transactions.append(tr);
+		m_transactionsMtx.unlock();
 		break;
 	    case SS7TCAP::TC_Continue:
 	    case SS7TCAP::TC_ConversationWithPerm:
@@ -753,8 +777,10 @@ SS7TCAPError SS7TCAP::userRequest(NamedList& params)
 			return error;
 		    }
 		    error = tr->update((SS7TCAP::TCAPUserTransActions)type,params);
-		    if (error.error() != SS7TCAPError::NoError)
+		    if (error.error() != SS7TCAPError::NoError) {
+			TelEngine::destruct(tr);
 			return error;
+		    }
 		}
 		else {
 		    params.setParam(s_tcapRequestError,"need_transaction_id");
@@ -777,20 +803,23 @@ SS7TCAPError SS7TCAP::userRequest(NamedList& params)
     }
     if (tr) {
 	error = tr->handleDialogPortion(params,true);
-	if (error.error() != SS7TCAPError::NoError)
+	if (error.error() != SS7TCAPError::NoError) {
+	    TelEngine::destruct(tr);
 	    return error;
+	}
 	error = tr->handleComponents(params,true);
-	if (error.error() != SS7TCAPError::NoError)
+	if (error.error() != SS7TCAPError::NoError) {
+	    TelEngine::destruct(tr);
 	    return error;
+	}
 	if (tr->transmitState() == SS7TCAPTransaction::PendingTransmit) {
 	    buildSCCPData(params,tr);
 	    tr->setTransmitState(SS7TCAPTransaction::Transmitted);
 	    tr->updateState(true);
 	}
-	else if (tr->transmitState() == SS7TCAPTransaction::NoTransmit) {
-	    lock.drop();
+	else if (tr->transmitState() == SS7TCAPTransaction::NoTransmit)
 	    removeTransaction(tr);
-	}
+	TelEngine::destruct(tr);
     }
     return error;
 }
@@ -1125,7 +1154,7 @@ u_int16_t SS7TCAPError::codeFromError(SS7TCAP::TCAPType tcapType, int err)
  */
 SS7TCAPTransaction::SS7TCAPTransaction(SS7TCAP* tcap, SS7TCAP::TCAPUserTransActions type,
 	const String& transactID, NamedList& params, u_int64_t timeout, bool initLocal)
-    : Mutex(true,transactID),
+    : Mutex(true,"TcapTransaction"),
       m_tcap(tcap), m_tcapType(SS7TCAP::UnknownTCAP), m_userName(""), m_localID(transactID), m_type(type),
       m_localSCCPAddr(""), m_remoteSCCPAddr(""), m_basicEnd(true), m_endNow(false), m_timeout(timeout)
 {
@@ -1735,7 +1764,7 @@ static const SS7TCAPTransactionANSI::ANSITransactionType primitiveToTransactANSI
 }
 
 SS7TCAPANSI::SS7TCAPANSI(const NamedList& params)
-    : SignallingComponent(params.safe("SS7TCAPANSI"),&params),
+    : SignallingComponent(params.safe("SS7TCAPANSI"),&params,"ss7-tcap-ansi"),
       SS7TCAP(params)
 {
     String tmp;
@@ -2983,7 +3012,7 @@ static const PrimitiveMapping* mapTransPrimitivesITU(int primitive, int trans = 
 }
 
 SS7TCAPITU::SS7TCAPITU(const NamedList& params)
-    : SignallingComponent(params.safe("SS7TCAPITU"),&params),
+    : SignallingComponent(params.safe("SS7TCAPITU"),&params,"ss7-tcap-itu"),
       SS7TCAP(params)
 {
     String tmp;

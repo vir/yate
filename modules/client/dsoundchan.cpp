@@ -136,13 +136,7 @@ public:
     virtual ~DSoundChan();
 };
 
-class AttachHandler : public MessageHandler
-{
-public:
-    AttachHandler() : MessageHandler("chan.attach")
-	{ }
-    virtual bool received(Message &msg);
-};
+class AttachHandler;
 
 class SoundDriver : public Driver
 {
@@ -159,6 +153,15 @@ private:
 
 
 INIT_PLUGIN(SoundDriver);
+
+class AttachHandler : public MessageHandler
+{
+public:
+    AttachHandler()
+	: MessageHandler("chan.attach",100,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
 
 
 DSoundPlay::DSoundPlay(DSoundConsumer* owner, DWORD rate, LPGUID device)

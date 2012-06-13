@@ -106,9 +106,9 @@ bool ChanAssistList::received(Message& msg, int id, ChanAssist* assist)
 void ChanAssistList::init(int priority)
 {
     installRelay(Execute,priority);
-    Engine::install(new MessageRelay("chan.startup",this,Startup,priority));
-    Engine::install(new MessageRelay("chan.hangup",this,Hangup,priority));
-    Engine::install(new MessageRelay("chan.disconnected",this,Disconnected,priority));
+    Engine::install(new MessageRelay("chan.startup",this,Startup,priority,name()));
+    Engine::install(new MessageRelay("chan.hangup",this,Hangup,priority,name()));
+    Engine::install(new MessageRelay("chan.disconnected",this,Disconnected,priority,name()));
 }
 
 

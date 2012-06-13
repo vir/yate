@@ -308,7 +308,7 @@ static const TokenDict s_dict_control[] = {
 };
 
 SS7Management::SS7Management(const NamedList& params, unsigned char sio)
-    : SignallingComponent(params.safe("SS7Management"),&params),
+    : SignallingComponent(params.safe("SS7Management"),&params,"ss7-snm"),
       SS7Layer4(sio,&params),
       m_changeMsgs(true), m_changeSets(false), m_neighbours(true)
 {

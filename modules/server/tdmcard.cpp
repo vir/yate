@@ -1796,7 +1796,7 @@ SignallingComponent* TdmInterface::create(const String& type, const NamedList& n
 
 
 TdmInterface::TdmInterface(const NamedList& params)
-    : SignallingComponent(params),
+    : SignallingComponent(params,&params,"tdm"),
       m_device(TdmDevice::DChan,this,0,0),
       m_priority(Thread::Normal),
       m_errorMask(255),

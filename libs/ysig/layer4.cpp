@@ -29,7 +29,7 @@
 using namespace TelEngine;
 
 SS7Layer4::SS7Layer4(unsigned char sio, const NamedList* params)
-    : SignallingComponent("SS7Layer4"),
+    : SignallingComponent("SS7Layer4",params),
       m_sio(sio), m_l3Mutex(true,"SS7Layer4::layer3"), m_layer3(0)
 {
     if (!params)

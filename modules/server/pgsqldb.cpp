@@ -79,15 +79,6 @@ private:
     bool m_hasConn;
 };
 
-class PgHandler : public MessageHandler
-{
-public:
-    PgHandler(unsigned int prio = 100)
-	: MessageHandler("database",prio)
-	{ }
-    virtual bool received(Message& msg);
-};
-
 class PgModule : public Module
 {
 public:
@@ -104,6 +95,17 @@ private:
 };
 
 static PgModule module;
+
+
+class PgHandler : public MessageHandler
+{
+public:
+    PgHandler(unsigned int prio = 100)
+	: MessageHandler("database",prio,module.name())
+	{ }
+    virtual bool received(Message& msg);
+};
+
 
 PgConn::PgConn(const NamedList* sect)
     : Mutex(true,"PgConn"),

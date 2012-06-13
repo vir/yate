@@ -60,27 +60,6 @@ private:
     String m_target;
 };
 
-class AttachHandler : public MessageHandler
-{
-public:
-    AttachHandler() : MessageHandler("chan.attach") { }
-    virtual bool received(Message& msg);
-};
-
-class RecordHandler : public MessageHandler
-{
-public:
-    RecordHandler() : MessageHandler("chan.record") { }
-    virtual bool received(Message& msg);
-};
-
-class MrcpRtpHandler : public MessageHandler
-{
-public:
-    MrcpRtpHandler() : MessageHandler("chan.rtp",150) { }
-    virtual bool received(Message& msg);
-};
-
 class MrcpModule : public Module
 {
 public:
@@ -99,6 +78,35 @@ static int s_count = 0;
 static int s_total = 0;
 
 static MrcpModule plugin;
+
+
+class AttachHandler : public MessageHandler
+{
+public:
+    AttachHandler()
+	: MessageHandler("chan.attach",100,plugin.name())
+	{ }
+    virtual bool received(Message& msg);
+};
+
+class RecordHandler : public MessageHandler
+{
+public:
+    RecordHandler()
+	: MessageHandler("chan.record",100,plugin.name())
+	{ }
+    virtual bool received(Message& msg);
+};
+
+class MrcpRtpHandler : public MessageHandler
+{
+public:
+    MrcpRtpHandler()
+	: MessageHandler("chan.rtp",150,plugin.name())
+	{ }
+    virtual bool received(Message& msg);
+};
+
 
 MrcpConsumer::MrcpConsumer(const String& id, const char* target, const char* format)
     : DataConsumer(format),

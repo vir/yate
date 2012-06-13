@@ -27,27 +27,6 @@
 using namespace TelEngine;
 namespace { // anonymous
 
-class AttachHandler : public MessageHandler
-{
-public:
-    AttachHandler() : MessageHandler("chan.attach",90) { }
-    virtual bool received(Message& msg);
-};
-
-class RecordHandler : public MessageHandler
-{
-public:
-    RecordHandler() : MessageHandler("chan.record",90) { }
-    virtual bool received(Message& msg);
-};
-
-class ExecuteHandler : public MessageHandler
-{
-public:
-    ExecuteHandler() : MessageHandler("call.execute",90) { }
-    virtual bool received(Message& msg);
-};
-
 class DbWriter : public MemoryStream, public GenObject
 {
 public:
@@ -71,6 +50,27 @@ private:
 };
 
 INIT_PLUGIN(DbWave);
+
+class AttachHandler : public MessageHandler
+{
+public:
+    AttachHandler() : MessageHandler("chan.attach",90,__plugin.name()) { }
+    virtual bool received(Message& msg);
+};
+
+class RecordHandler : public MessageHandler
+{
+public:
+    RecordHandler() : MessageHandler("chan.record",90,__plugin.name()) { }
+    virtual bool received(Message& msg);
+};
+
+class ExecuteHandler : public MessageHandler
+{
+public:
+    ExecuteHandler() : MessageHandler("call.execute",90,__plugin.name()) { }
+    virtual bool received(Message& msg);
+};
 
 
 static void alterSource(Message& msg, const String& name)

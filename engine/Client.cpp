@@ -2414,7 +2414,7 @@ void Client::installRelay(const char* name, int id, int prio)
     if (!(name && *name))
 	return;
     Debug(ClientDriver::self(),DebugAll,"installRelay(%s,%d,%d)",name,id,prio);
-    MessageRelay* relay = new MessageRelay(name,this,id,prio);
+    MessageRelay* relay = new MessageRelay(name,this,id,prio,ClientDriver::self()->name(),true);
     if (Engine::install(relay))
 	m_relays.append(relay);
     else

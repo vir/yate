@@ -179,19 +179,6 @@ private:
 };
 
 /**
-  * Class MyHandler
-  * Message handler for "database" message
-  */
-class MyHandler : public MessageHandler
-{
-public:
-    MyHandler(unsigned int prio = 100)
-	: MessageHandler("database",prio)
-	{ }
-    virtual bool received(Message& msg);
-};
-
-/**
   * Class InitThread
   * Running thread for initializing MySQL connections
   */
@@ -267,6 +254,21 @@ private:
 static MyModule module;
 static Mutex s_libMutex(false,"MySQL::lib");
 static int s_libCounter = 0;
+
+
+/**
+  * Class MyHandler
+  * Message handler for "database" message
+  */
+class MyHandler : public MessageHandler
+{
+public:
+    MyHandler(unsigned int prio = 100)
+	: MessageHandler("database",prio,module.name())
+	{ }
+    virtual bool received(Message& msg);
+};
+
 
 /**
   * MyConn

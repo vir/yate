@@ -58,11 +58,20 @@ private:
     bool m_initialized;                  // True if already initialized
 };
 
+static ParkModule s_module;
+static const char* s_prefix = "park/";
+static unsigned int s_id = 1;            // Channel id to use
+static ObjList s_chans;                  // Channel list
+static Mutex s_mutex(true,"Park");       // Global mutex
+
+
 // call.execute handler. Park a call
 class ParkHandler : public MessageHandler
 {
 public:
-    inline ParkHandler(int prio = 100) : MessageHandler("call.execute",prio) {}
+    inline ParkHandler(int prio = 100)
+	: MessageHandler("call.execute",prio,s_module.name())
+	{ }
     virtual bool received(Message& msg);
 };
 
@@ -70,7 +79,9 @@ public:
 class HaltHandler : public MessageHandler
 {
 public:
-    inline HaltHandler(int prio = 100) : MessageHandler("engine.halt",prio) {}
+    inline HaltHandler(int prio = 100)
+	: MessageHandler("engine.halt",prio,s_module.name())
+	{ }
     virtual bool received(Message& msg);
 };
 
@@ -78,16 +89,11 @@ public:
 class LocateHandler : public MessageHandler
 {
 public:
-    inline LocateHandler(int prio = 100) : MessageHandler("chan.locate",prio) {}
+    inline LocateHandler(int prio = 100)
+	: MessageHandler("chan.locate",prio,s_module.name())
+	{ }
     virtual bool received(Message& msg);
 };
-
-
-static ParkModule s_module;
-static const char* s_prefix = "park/";
-static unsigned int s_id = 1;            // Channel id to use
-static ObjList s_chans;                  // Channel list
-static Mutex s_mutex(true,"Park");       // Global mutex
 
 
 // Find a parking by id

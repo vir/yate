@@ -95,6 +95,10 @@
 ; Values are clamped to interval 5-100
 ;maxdepth=5
 
+; trackparam: bool: Add the module to the handler tracking parameter
+;  The default of false lets each section do so
+;trackparam=false
+
 
 [$once]
 ; First-time only global variables initialization.

@@ -28,24 +28,7 @@ using namespace TelEngine;
 
 namespace {
 
-class UsersModule;
 class UserUpdateHandler;
-
-/**
-  * Class UserUpdateHandler
-  * Handles a user.update message
-  */
-class UserUpdateHandler : public MessageHandler
-{
-public:
-    inline UserUpdateHandler(unsigned int priority = 100)
-	: MessageHandler("user.update", priority)
-	{ }
-    virtual ~UserUpdateHandler()
-	{ }
-    virtual bool received(Message& msg);
-};
-
 
 /**
   * Class UsersModule
@@ -130,6 +113,22 @@ UNLOAD_PLUGIN(unloadNow)
 	return false;
     return true;
 }
+
+/**
+  * Class UserUpdateHandler
+  * Handles a user.update message
+  */
+class UserUpdateHandler : public MessageHandler
+{
+public:
+    inline UserUpdateHandler(unsigned int priority = 100)
+	: MessageHandler("user.update",priority,__plugin.name())
+	{ }
+    virtual ~UserUpdateHandler()
+	{ }
+    virtual bool received(Message& msg);
+};
+
 
 // Get a space separated word from a buffer. msgUnescape() it if requested
 // Return false if empty

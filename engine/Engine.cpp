@@ -103,7 +103,9 @@ public:
 class EngineCommand : public MessageHandler
 {
 public:
-    EngineCommand() : MessageHandler("engine.command") { }
+    EngineCommand()
+	: MessageHandler("engine.command",100,"engine")
+	{ }
     virtual bool received(Message &msg);
     static void doCompletion(Message &msg, const String& partLine, const String& partWord);
 };
@@ -230,7 +232,7 @@ static Engine::PluginMode s_loadMode = Engine::LoadFail;
 static int s_maxworkers = 10;
 static bool s_debug = true;
 static bool s_capture = CAPTURE_EVENTS;
-static int s_maxevents = 10;
+static int s_maxevents = 25;
 static Mutex s_eventsMutex(false,"EventsList");
 static ObjList s_events;
 static String s_startMsg;
@@ -290,7 +292,10 @@ private:
 class EngineSuperHandler : public MessageHandler
 {
 public:
-    EngineSuperHandler() : MessageHandler("engine.timer",0), m_seq(0) { }
+    EngineSuperHandler()
+	: MessageHandler("engine.timer",0,"engine"),
+	  m_seq(0)
+	{ }
     virtual bool received(Message &msg)
 	{ ::write(s_super_handle,&m_seq,1); m_seq++; return false; }
     char m_seq;
@@ -299,14 +304,18 @@ public:
 class EngineStatusHandler : public MessageHandler
 {
 public:
-    EngineStatusHandler() : MessageHandler("engine.status",0) { }
+    EngineStatusHandler()
+	: MessageHandler("engine.status",0,"engine")
+	{ }
     virtual bool received(Message &msg);
 };
 
 class EngineHelp : public MessageHandler
 {
 public:
-    EngineHelp() : MessageHandler("engine.help") { }
+    EngineHelp()
+	: MessageHandler("engine.help",100,"engine")
+	{ }
     virtual bool received(Message &msg);
 };
 
@@ -326,7 +335,9 @@ private:
 class EngineEventHandler : public MessageHandler
 {
 public:
-    EngineEventHandler() : MessageHandler("module.update",0) { }
+    EngineEventHandler()
+	: MessageHandler("module.update",0,"engine")
+	{ }
     virtual bool received(Message &msg);
 };
 
@@ -1189,6 +1200,13 @@ int Engine::engineInit()
     CapturedEvent::capturing(s_capture);
     if (s_capture && s_startMsg)
 	CapturedEvent::append(-1,s_startMsg);
+    String track = s_cfg.getValue("general","trackparam");
+    if (track.null() || track.toBoolean(false))
+	track = "handlers";
+    else if (!track.toBoolean(true))
+	track.clear();
+    if (track)
+	m_dispatcher.trackParam(track);
 #ifdef _WINDOWS
     int winTimerRes = s_cfg.getIntValue("general","wintimer");
     if ((winTimerRes > 0) && (winTimerRes < 100)) {
@@ -1254,6 +1272,8 @@ int Engine::engineInit()
 #endif
     s_params.addParam("maxworkers",String(s_maxworkers));
     s_params.addParam("maxevents",String(s_maxevents));
+    if (track)
+	s_params.addParam("trackparam",track);
 #ifdef _WINDOWS
     {
 	char buf[PATH_MAX];

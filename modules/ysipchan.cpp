@@ -930,24 +930,6 @@ private:
     int m_code;
 };
 
-class UserHandler : public MessageHandler
-{
-public:
-    UserHandler()
-	: MessageHandler("user.login",150)
-	{ }
-    virtual bool received(Message &msg);
-};
-
-class SipHandler : public MessageHandler
-{
-public:
-    SipHandler()
-	: MessageHandler("xsip.generate",110)
-	{ }
-    virtual bool received(Message &msg);
-};
-
 // Proxy class used to transport a data buffer or a socket
 // The object doesn't own its data
 class RefObjectProxy : public RefObject
@@ -1018,6 +1000,25 @@ private:
 };
 
 static SIPDriver plugin;
+
+class UserHandler : public MessageHandler
+{
+public:
+    UserHandler()
+	: MessageHandler("user.login",150,plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class SipHandler : public MessageHandler
+{
+public:
+    SipHandler()
+	: MessageHandler("xsip.generate",110,plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
 static ObjList s_lines;
 static Configuration s_cfg;
 static Mutex s_globalMutex(true,"SIPGlobal"); // Protect globals (don't use the plugin to avoid deadlocks)
@@ -4422,9 +4423,12 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
     String meth(t->getMethod());
     meth.toLower();
     String user;
+    Lock mylock(s_globalMutex);
     const String* auth = s_cfg.getKey("methods",meth);
     if (!auth)
 	return false;
+    bool autoAuth = auth->toBoolean(true);
+    mylock.drop();
 
     Message m("sip." + meth);
     const SIPMessage* message = e->getMessage();
@@ -4440,7 +4444,7 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
 	m.addParam("domain",line->domain());
 	m.addParam("in_line",*line);
     }
-    else if (auth->toBoolean(true)) {
+    else if (autoAuth) {
 	int age = t->authUser(user,false,&m);
 	DDebug(&plugin,DebugAll,"User '%s' age %d",user.c_str(),age);
 	if ((age < 0) || (age > 10)) {
@@ -7461,7 +7465,9 @@ void SIPDriver::initialize()
 {
     Output("Initializing module SIP Channel");
     s_cfg = Engine::configFile("ysipchan");
+    s_globalMutex.lock();
     s_cfg.load();
+    s_globalMutex.unlock();
     s_maxForwards = s_cfg.getIntValue("general","maxforwards",20);
     s_floodEvents = s_cfg.getIntValue("general","floodevents",20);
     s_privacy = s_cfg.getBoolValue("general","privacy");

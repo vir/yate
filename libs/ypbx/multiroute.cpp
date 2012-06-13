@@ -90,8 +90,9 @@ CallInfo* CallList::find(const CallEndpoint* call)
 }
 
 
-MultiRouter::MultiRouter()
+MultiRouter::MultiRouter(const char* trackName)
     : Mutex(true,"MultiRouter"),
+      m_trackName(trackName),
       m_relRoute(0), m_relExecute(0),
       m_relHangup(0), m_relDisconnected(0)
 {
@@ -110,13 +111,17 @@ void MultiRouter::setup(int priority)
     if (priority <= 0)
 	priority = 20;
     if (!m_relHangup)
-	Engine::install(m_relHangup = new MessageRelay("chan.hangup",this,Hangup,priority));
+	Engine::install(m_relHangup =
+	    new MessageRelay("chan.hangup",this,Hangup,priority,m_trackName));
     if (!m_relDisconnected)
-	Engine::install(m_relDisconnected = new MessageRelay("chan.disconnected",this,Disconnected,priority));
+	Engine::install(m_relDisconnected =
+	    new MessageRelay("chan.disconnected",this,Disconnected,priority,m_trackName));
     if (!m_relExecute)
-	Engine::install(m_relExecute = new MessageRelay("call.execute",this,Execute,priority));
+	Engine::install(m_relExecute =
+	    new MessageRelay("call.execute",this,Execute,priority,m_trackName));
     if (!m_relRoute)
-	Engine::install(m_relRoute = new MessageRelay("call.route",this,Route,priority));
+	Engine::install(m_relRoute =
+	    new MessageRelay("call.route",this,Route,priority,m_trackName));
 }
 
 bool MultiRouter::received(Message& msg, int id)

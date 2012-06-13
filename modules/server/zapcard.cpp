@@ -1695,7 +1695,7 @@ bool ZapDevice::ioctl(IoctlRequest request, void* param, int level)
  * ZapInterface
  */
 ZapInterface::ZapInterface(const NamedList& params)
-    : SignallingComponent(params),
+    : SignallingComponent(params,&params,"tdm"),
       m_device(ZapDevice::DChan,this,0,0),
       m_priority(Thread::Normal),
       m_errorMask(255),

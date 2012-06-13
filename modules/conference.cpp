@@ -244,30 +244,6 @@ private:
     RefPointer<ConfConsumer> m_cons;
 };
 
-// Handler for call.conference message to join both legs of a call in conference
-class ConfHandler : public MessageHandler
-{
-public:
-    inline ConfHandler(unsigned int priority)
-	: MessageHandler("call.conference",priority)
-	{ }
-    virtual ~ConfHandler()
-	{ }
-    virtual bool received(Message& msg);
-};
-
-// Handler for chan.hangup message
-class HangupHandler : public MessageHandler
-{
-public:
-    inline HangupHandler(unsigned int priority)
-	: MessageHandler("chan.hangup",priority)
-	{ }
-    virtual ~HangupHandler()
-	{ }
-    virtual bool received(Message& msg);
-};
-
 // The driver just holds all the channels (not conferences)
 class ConferenceDriver : public Driver
 {
@@ -298,6 +274,30 @@ UNLOAD_PLUGIN(unloadNow)
 	return __plugin.unload();
     return true;
 }
+
+// Handler for call.conference message to join both legs of a call in conference
+class ConfHandler : public MessageHandler
+{
+public:
+    inline ConfHandler(unsigned int priority)
+	: MessageHandler("call.conference",priority,__plugin.name())
+	{ }
+    virtual ~ConfHandler()
+	{ }
+    virtual bool received(Message& msg);
+};
+
+// Handler for chan.hangup message
+class HangupHandler : public MessageHandler
+{
+public:
+    inline HangupHandler(unsigned int priority)
+	: MessageHandler("chan.hangup",priority,__plugin.name())
+	{ }
+    virtual ~HangupHandler()
+	{ }
+    virtual bool received(Message& msg);
+};
 
 // Count the position of the most significant 1 bit - pretty close to logarithm
 static unsigned int binLog(unsigned int x)

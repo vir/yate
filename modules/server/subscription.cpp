@@ -1545,8 +1545,8 @@ GenericUser* GenericUserList::findUser(const String& user)
  * SubMessageHandler
  */
 SubMessageHandler::SubMessageHandler(int handler, int prio)
-    : MessageHandler(lookup(handler,s_msgHandler),prio),
-    m_handler(handler)
+    : MessageHandler(lookup(handler,s_msgHandler),prio,__plugin.name()),
+      m_handler(handler)
 {
 }
 

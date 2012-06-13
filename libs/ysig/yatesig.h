@@ -712,8 +712,9 @@ protected:
      * Constructor with a default empty component name
      * @param name Name of this component
      * @param params Optional pointer to creation parameters
+     * @param type Default component type string
      */
-    SignallingComponent(const char* name = 0, const NamedList* params = 0);
+    SignallingComponent(const char* name = 0, const NamedList* params = 0, const char* type = "unknown");
 
     /**
      * This method is called to clean up and destroy the object after the
@@ -6918,6 +6919,7 @@ private:
     int routeMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls, SS7Route::State states);
     void buildView(SS7PointCode::Type type, ObjList& view, SS7Layer3* network);
     void buildViews();
+    void printStats();
     Mutex m_statsMutex;
     SignallingTimer m_trafficOk;
     SignallingTimer m_trafficSent;
@@ -6931,6 +6933,7 @@ private:
     unsigned long m_rxMsu;
     unsigned long m_txMsu;
     unsigned long m_fwdMsu;
+    unsigned long m_failMsu;
     unsigned long m_congestions;
     SS7Management* m_mngmt;
 };
@@ -8316,7 +8319,7 @@ public:
      * Constructor
      */
     inline SS7Testing(const NamedList& params, unsigned char sio = SS7MSU::MTP_T|SS7MSU::National)
-	: SignallingComponent(params.safe("SS7Testing"),&params),
+	: SignallingComponent(params.safe("SS7Testing"),&params,"ss7-test"),
 	  SS7Layer4(sio,&params),
 	  Mutex(true,"SS7Testing"),
 	  m_timer(0), m_exp(0), m_seq(0), m_len(16), m_sharing(false)
@@ -11036,7 +11039,7 @@ private:
  * Implementation of SS7 Transactional Capabilities Application Part Transaction 
  * @short SS7 TCAP transaction implementation
  */
-class YSIG_API SS7TCAPTransaction : public GenObject, public Mutex
+class YSIG_API SS7TCAPTransaction : public RefObject, public Mutex
 {
 public:
     enum TransactionState {

@@ -1588,7 +1588,8 @@ bool SCCP::managementStatus(Type type, NamedList& params)
  */
 
 SCCPUser::SCCPUser(const NamedList& config)
-    : SignallingComponent(config,&config), m_sccp(0), m_sccpMutex(true,s_userMutexName), m_sls(-1)
+    : SignallingComponent(config,&config),
+      m_sccp(0), m_sccpMutex(true,s_userMutexName), m_sls(-1)
 {
     String tmp;
     config.dump(tmp,"\r\n  ",'\'',true);
@@ -1719,7 +1720,8 @@ bool SCCPUser::managementNotify(SCCP::Type type, NamedList& params)
  */
 
 GTT::GTT(const NamedList& config)
-    : SignallingComponent(config), m_sccp(0)
+    : SignallingComponent(config,&config,"ss7-gtt"),
+      m_sccp(0)
 {
 }
 
@@ -1786,7 +1788,8 @@ void GTT::destroyed()
  * SCCPManagement
  */
 SCCPManagement::SCCPManagement(const NamedList& params, SS7PointCode::Type type)
-    : SignallingComponent(params,&params), Mutex(true, s_managementMutexName), m_remoteSccp(),
+    : SignallingComponent(params,&params,"ss7-sccp-mgm"),
+      Mutex(true, s_managementMutexName), m_remoteSccp(),
     m_statusTest(), m_localSubsystems(), m_concerned(), m_pcType(type), m_sccp(0), m_unknownSubsystems("ssn"),
     m_subsystemFailure(0), m_routeFailure(0), m_autoAppend(false), m_printMessages(false)
 {

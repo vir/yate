@@ -240,11 +240,15 @@
 
 [methods]
 ; Use this section to allow server processing of various SIP methods by
-;  handling Yate messages.
+;  handling Yate messages with name "sip.methodname".
 ; Each line has to be of the form:
 ;  methodname=boolean
 ; You must use lower case method names. The boolean value defaults to
 ;  true and allows automatically challenging the requests for authentication
+;
+; Example for accepting SECRET with authentication and MESSAGE without:
+;  secret=yes
+;  message=no
 
 
 [hacks]

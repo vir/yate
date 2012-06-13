@@ -2410,7 +2410,7 @@ const TokenDict ISDNQ931::s_swType[] = {
 	};
 
 ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
-    : SignallingComponent(name,&params),
+    : SignallingComponent(name,&params,"isdn-q931"),
       SignallingCallControl(params,"isdn."),
       SignallingDumpable(SignallingDumper::Q931),
       ISDNLayer3(name),
@@ -3514,7 +3514,7 @@ bool ISDNQ931::sendRelease(bool release, u_int8_t callRefLen, u_int32_t callRef,
  * ISDNQ931Monitor
  */
 ISDNQ931Monitor::ISDNQ931Monitor(const NamedList& params, const char* name)
-    : SignallingComponent(name,&params),
+    : SignallingComponent(name,&params,"isdn-q931-mon"),
       SignallingCallControl(params,"isdn."),
       ISDNLayer3(name),
       m_q921Net(0), m_q921Cpe(0), m_cicNet(0), m_cicCpe(0),

@@ -106,7 +106,7 @@ public:
 	Hangup,
 	Disconnected
     };
-    MultiRouter();
+    MultiRouter(const char* trackName = 0);
     virtual ~MultiRouter();
     void setup(int priority = 0);
     virtual bool received(Message& msg, int id);
@@ -119,6 +119,7 @@ public:
 protected:
     CallList m_list;
 private:
+    String m_trackName;
     MessageRelay* m_relRoute;
     MessageRelay* m_relExecute;
     MessageRelay* m_relHangup;

@@ -20,6 +20,10 @@
 ;  and message relays are flushed, valid range 1-100 ms
 ;waitflush=5
 
+; trackparam: bool: Add the external module to the handler tracking parameter
+;  The default of false lets each external script do so
+;trackparam=false
+
 
 ;[listener sample]
 ; For each socket listener there should be a section starting with the

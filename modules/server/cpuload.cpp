@@ -186,18 +186,6 @@ private:
     CpuMonitor m_system;
 };
 
-class QueryHandler : public MessageHandler
-{
-public:
-    inline QueryHandler(unsigned int priority = 100)
-	: MessageHandler("monitor.query",priority)
-	{ }
-    virtual ~QueryHandler()
-	{ }
-    virtual bool received(Message& msg);
-};
-
-
 class CpuModule : public Module
 {
 public:
@@ -217,6 +205,17 @@ static String s_address = "/proc/stat";
 static int s_defaultHysteresis = 2;
 static int s_bufLen = 4096;
 static int s_smooth = 33;
+
+class QueryHandler : public MessageHandler
+{
+public:
+    inline QueryHandler(unsigned int priority = 100)
+	: MessageHandler("monitor.query",priority,s_module.name())
+	{ }
+    virtual ~QueryHandler()
+	{ }
+    virtual bool received(Message& msg);
+};
 
 static TokenDict s_monitors[] = {
     {"userLoad",   CpuUpdater::YateUser},

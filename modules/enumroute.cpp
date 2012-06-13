@@ -32,18 +32,6 @@ namespace { // anonymous
 #define ENUM_DEF_MINLEN  8
 #define ENUM_DEF_MAXCALL 30000
 
-class EnumHandler : public MessageHandler
-{
-public:
-    inline EnumHandler(unsigned int prio = 90)
-	: MessageHandler("call.route",prio)
-	{ }
-    virtual bool received(Message& msg);
-private:
-    static bool resolve(Message& msg,bool canRedirect);
-    static void addRoute(String& dest,const String& src);
-};
-
 class EnumModule : public Module
 {
 public:
@@ -82,6 +70,18 @@ static int s_routed = 0;
 static int s_reroute = 0;
 
 static EnumModule emodule;
+
+class EnumHandler : public MessageHandler
+{
+public:
+    inline EnumHandler(unsigned int prio = 90)
+	: MessageHandler("call.route",prio,emodule.name())
+	{ }
+    virtual bool received(Message& msg);
+private:
+    static bool resolve(Message& msg,bool canRedirect);
+    static void addRoute(String& dest,const String& src);
+};
 
 
 // Routing message handler, performs checks and calls resolve method

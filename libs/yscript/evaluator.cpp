@@ -590,7 +590,7 @@ bool ExpEvaluator::runCompile(const char*& expr, char stop, GenObject* nested)
 	return true;
     }
     for (;;) {
-	while (skipComments(expr) && getInstruction(expr,nested))
+	while (!stackPos && skipComments(expr) && getInstruction(expr,nested))
 	    ;
 	if (inError())
 	    return false;

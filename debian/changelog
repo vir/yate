@@ -1,3 +1,19 @@
+yate (4.1.1~svn5116) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5116: + Added possibility to track message
+    progress through handlers.  + Prevents a deadlock if String is
+    compiled with XDEBUG.  + Turn off debugging while capturing an event
+    from debug output.  + Add to tracking (if enabled) the extra
+    regexroute handlers.  + Raised default maxevents to 25.  + Changed
+    trackparam to be default on in regexroute.  + Add :priority to track
+    name even if priority is zero.  + This reduces confusion for
+    reentrant messages (lateroute).  + Add the handler's name to
+    "handlers" before calling the handler.  + Fixed documentation
+    comments  + Implemented switch instruction that can match RegExp or
+    dialplan pattern.  + Fixed parsing of { object } subexpressions.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 14 Jun 2012 02:19:14 +0400
+
 yate (4.1.1~svn5106) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5106: + Protect the generic methods list

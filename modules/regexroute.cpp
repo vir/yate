@@ -771,7 +771,7 @@ class GenericHandler : public MessageHandler
 {
 public:
     GenericHandler(const char* name, int prio, const char* context, const char* match)
-	: MessageHandler(name,prio),
+	: MessageHandler(name,prio,s_trackName),
 	  m_context(context), m_match(match)
 	{
 	    Debug(DebugAll,"Generic handler for '%s' prio %d to [%s] match '%s%s%s' [%p]",

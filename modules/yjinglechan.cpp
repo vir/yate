@@ -3661,8 +3661,8 @@ void YJGTransfer::run()
  * JBMessageHandler
  */
 YJGMessageHandler::YJGMessageHandler(int handler, int prio)
-    : MessageHandler(lookup(handler,s_msgHandler),prio),
-    m_handler(handler)
+    : MessageHandler(lookup(handler,s_msgHandler),prio,plugin.name()),
+      m_handler(handler)
 {
 }
 

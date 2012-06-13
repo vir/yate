@@ -468,26 +468,6 @@ private:
     String m_groupName;                  // Group's name (saved to be printed in destructor)
 };
 
-// engine.start handler (start detectors on lines expectind data before ring)
-class EngineStartHandler : public MessageHandler
-{
-public:
-    inline EngineStartHandler()
-	: MessageHandler("engine.start",100)
-	{}
-    virtual bool received(Message& msg);
-};
-
-// chan.notify handler (notify lines on detector events)
-class ChanNotifyHandler : public MessageHandler
-{
-public:
-    inline ChanNotifyHandler()
-	: MessageHandler("chan.notify",100)
-	{}
-    virtual bool received(Message& msg);
-};
-
 
 /**
  * Module data and functions
@@ -501,6 +481,27 @@ static const char* s_unk = "unknown";              // Used to set caller
 static const char* s_lineStatusDetail = "format=State|UsedBy";
 static const char* s_groupStatusDetail = "format=Type|Lines";
 static const char* s_recStatusDetail = "format=Status|Address|Peer";
+
+
+// engine.start handler (start detectors on lines expectind data before ring)
+class EngineStartHandler : public MessageHandler
+{
+public:
+    inline EngineStartHandler()
+	: MessageHandler("engine.start",100,plugin.name())
+	{}
+    virtual bool received(Message& msg);
+};
+
+// chan.notify handler (notify lines on detector events)
+class ChanNotifyHandler : public MessageHandler
+{
+public:
+    inline ChanNotifyHandler()
+	: MessageHandler("chan.notify",100,plugin.name())
+	{}
+    virtual bool received(Message& msg);
+};
 
 
 // Decode a line address into group name and circuit code

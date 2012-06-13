@@ -1820,13 +1820,13 @@ class YSCRIPT_API JsRegExp : public JsObject
 {
     YCLASS(JsRegExp,JsObject)
 public:
-    /*
+    /**
      * Constructor for a RegExp constructor
      * @param mtx Pointer to the mutex that serializes this object
      */
     JsRegExp(Mutex* mtx = 0);
 
-    /*
+    /**
      * Constructor for a RegExp object
      * @param mtx Pointer to the mutex that serializes this object
      * @param name Full name of the object

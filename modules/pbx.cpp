@@ -27,46 +27,6 @@
 using namespace TelEngine;
 namespace { // anonymous
 
-// chan.connect handler used to connect two channels
-class ConnHandler : public MessageHandler
-{
-public:
-    ConnHandler(int prio = 90)
-	: MessageHandler("chan.connect",prio)
-	{ }
-    virtual bool received(Message &msg);
-};
-
-// call.execute handler used to 'steal' a channel
-class ChanPickup : public MessageHandler
-{
-public:
-    ChanPickup(int prio = 100)
-	: MessageHandler("call.execute",prio)
-	{ }
-    virtual bool received(Message &msg);
-};
-
-// chan.attach handler used for detaching data nodes by message
-class AttachHandler : public MessageHandler
-{
-public:
-    AttachHandler(int prio = 100)
-	: MessageHandler("chan.attach",prio)
-	{ }
-    virtual bool received(Message &msg);
-};
-
-// chan.record handler used for detaching data nodes by message
-class RecordHandler : public MessageHandler
-{
-public:
-    RecordHandler(int prio = 100)
-	: MessageHandler("chan.record",prio)
-	{ }
-    virtual bool received(Message &msg);
-};
-
 class PbxModule : public Module
 {
 public:
@@ -79,6 +39,47 @@ public:
 
 static PbxModule s_module;
 static const String s_masquerade("chan.masquerade");
+
+
+// chan.connect handler used to connect two channels
+class ConnHandler : public MessageHandler
+{
+public:
+    ConnHandler(int prio = 90)
+	: MessageHandler("chan.connect",prio,s_module.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+// call.execute handler used to 'steal' a channel
+class ChanPickup : public MessageHandler
+{
+public:
+    ChanPickup(int prio = 100)
+	: MessageHandler("call.execute",prio,s_module.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+// chan.attach handler used for detaching data nodes by message
+class AttachHandler : public MessageHandler
+{
+public:
+    AttachHandler(int prio = 100)
+	: MessageHandler("chan.attach",prio,s_module.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+// chan.record handler used for detaching data nodes by message
+class RecordHandler : public MessageHandler
+{
+public:
+    RecordHandler(int prio = 100)
+	: MessageHandler("chan.record",prio,s_module.name())
+	{ }
+    virtual bool received(Message &msg);
+};
 
 
 // Utility function to get a pointer to a call endpoint (or its peer) by id

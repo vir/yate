@@ -118,15 +118,6 @@ private:
     SSL* m_ssl;
 };
 
-class SslHandler : public MessageHandler
-{
-public:
-    inline SslHandler()
-	: MessageHandler("socket.ssl")
-	{ }
-    virtual bool received(Message& msg);
-};
-
 #ifndef OPENSSL_NO_AES
 // AES Counter Mode
 class AesCtrCipher : public Cipher
@@ -189,6 +180,8 @@ public:
     virtual bool received(Message& msg);
 };
 
+class SslHandler;
+
 class OpenSSL : public Module
 {
 public:
@@ -215,6 +208,15 @@ protected:
 static int s_index = -1;
 static SSL_CTX* s_context = 0;
 static OpenSSL __plugin;
+
+class SslHandler : public MessageHandler
+{
+public:
+    inline SslHandler()
+	: MessageHandler("socket.ssl",100,__plugin.name())
+	{ }
+    virtual bool received(Message& msg);
+};
 
 
 // Attempt to add randomness from system time when called

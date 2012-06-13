@@ -86,26 +86,7 @@ private:
     static int s_nextid;
 };
 
-class MOHHandler : public MessageHandler
-{
-public:
-    MOHHandler() : MessageHandler("call.execute") { }
-    virtual bool received(Message &msg);
-};
-
-class AttachHandler : public MessageHandler
-{
-public:
-    AttachHandler() : MessageHandler("chan.attach") { }
-    virtual bool received(Message &msg);
-};
-
-class StatusHandler : public MessageHandler
-{
-public:
-    StatusHandler() : MessageHandler("engine.status") { }
-    virtual bool received(Message &msg);
-};
+class MOHHandler;
 
 class MOHPlugin : public Plugin
 {
@@ -115,6 +96,35 @@ public:
     virtual void initialize();
 private:
     MOHHandler *m_handler;
+};
+
+INIT_PLUGIN(MOHPlugin);
+
+class MOHHandler : public MessageHandler
+{
+public:
+    MOHHandler()
+	: MessageHandler("call.execute",100,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class AttachHandler : public MessageHandler
+{
+public:
+    AttachHandler()
+	: MessageHandler("chan.attach",100,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class StatusHandler : public MessageHandler
+{
+public:
+    StatusHandler()
+	: MessageHandler("engine.status",100,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
 };
 
 
@@ -457,8 +467,6 @@ void MOHPlugin::initialize()
 	Engine::install(new StatusHandler);
     }
 }
-
-INIT_PLUGIN(MOHPlugin);
 
 }; // anonymous namespace
 

@@ -27,14 +27,6 @@
 using namespace TelEngine;
 namespace { // anonymous
 
-class CpuNotify : public MessageHandler
-{
-public:
-    inline CpuNotify()
-	: MessageHandler("monitor.notify") {}
-    virtual bool received(Message& m);
-};
-
 class Monitor : public String
 {
 public:
@@ -74,6 +66,17 @@ private:
 static CongestionModule s_module;
 static const String s_target = "engine";
 static const char* s_mutexName = "CCongestion";
+
+
+class CpuNotify : public MessageHandler
+{
+public:
+    inline CpuNotify()
+	: MessageHandler("monitor.notify",100,s_module.name())
+	{ }
+    virtual bool received(Message& m);
+};
+
 
 /**
  * class CpuNotify

@@ -112,22 +112,23 @@ private:
     String m_prefix;                     // Module's prefix
 };
 
-// chan.attach handler
-class ChanAttachHandler : public MessageHandler
-{
-public:
-    inline ChanAttachHandler()
-	: MessageHandler("chan.attach",100)
-	{}
-    virtual bool received(Message& msg);
-};
-
 /**
  * Module's data
  */
 static ADModule plugin;
 static ObjList s_consumers;              // Consumers list
 static unsigned int s_count = 0;         // The number of active consumers
+
+
+// chan.attach handler
+class ChanAttachHandler : public MessageHandler
+{
+public:
+    inline ChanAttachHandler()
+	: MessageHandler("chan.attach",100,plugin.name())
+	{ }
+    virtual bool received(Message& msg);
+};
 
 
 /**

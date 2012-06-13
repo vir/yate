@@ -95,6 +95,10 @@
 ; Values are clamped to interval 5-100
 ;maxdepth=5
 
+; trackparam: bool: Add the module to the handler tracking parameter
+; Set it to false to disable defaults and do all tracking in user rules
+;trackparam=true
+
 
 [$once]
 ; First-time only global variables initialization.

@@ -39,11 +39,26 @@
 using namespace TelEngine;
 namespace { // anonymous
 
+class CdrFileHandler;
+
+class CdrFilePlugin : public Plugin
+{
+public:
+    CdrFilePlugin();
+    ~CdrFilePlugin();
+    virtual void initialize();
+private:
+    CdrFileHandler *m_handler;
+};
+
+INIT_PLUGIN(CdrFilePlugin);
+
 class CdrFileHandler : public MessageHandler, public Mutex
 {
 public:
     CdrFileHandler(const char *name)
-	: MessageHandler(name), Mutex(false,"CdrFileHandler"),
+	: MessageHandler(name,100,__plugin.name()),
+	  Mutex(false,"CdrFileHandler"),
 	  m_file(-1)
 	{ }
     virtual ~CdrFileHandler();
@@ -103,16 +118,6 @@ bool CdrFileHandler::received(Message &msg)
     return false;
 };
 
-class CdrFilePlugin : public Plugin
-{
-public:
-    CdrFilePlugin();
-    ~CdrFilePlugin();
-    virtual void initialize();
-private:
-    CdrFileHandler *m_handler;
-};
-
 CdrFilePlugin::CdrFilePlugin()
     : Plugin("cdrfile",true),
       m_handler(0)
@@ -138,8 +143,6 @@ void CdrFilePlugin::initialize()
     if (m_handler)
 	m_handler->init(file,cfg.getBoolValue("general","tabs",true),cfg.getValue("general","format"));
 }
-
-INIT_PLUGIN(CdrFilePlugin);
 
 }; // anonymous namespace
 

@@ -119,40 +119,7 @@ private:
     unsigned int m_rate;
 };
 
-class AlsaHandler : public MessageHandler
-{
-public:
-    AlsaHandler(const char *name) : MessageHandler(name) { }
-    virtual bool received(Message &msg);
-};
-
-class StatusHandler : public MessageHandler
-{
-public:
-    StatusHandler() : MessageHandler("engine.status") { }
-    virtual bool received(Message &msg);
-};
-
-class DropHandler : public MessageHandler
-{
-public:
-    DropHandler(const char *name) : MessageHandler(name) { }
-    virtual bool received(Message &msg);
-};
-
-class MasqHandler : public MessageHandler
-{
-public:
-    MasqHandler(const char *name, int prio) : MessageHandler(name,prio) { }
-    virtual bool received(Message &msg);
-};
-
-class AttachHandler : public MessageHandler
-{
-public:
-    AttachHandler() : MessageHandler("chan.attach") { }
-    virtual bool received(Message &msg);
-};
+class AlsaHandler;
 
 class AlsaPlugin : public Plugin
 {
@@ -162,6 +129,53 @@ public:
     virtual bool isBusy() const;
 private:
     AlsaHandler *m_handler;
+};
+
+INIT_PLUGIN(AlsaPlugin);
+
+class AlsaHandler : public MessageHandler
+{
+public:
+    AlsaHandler(const char *name)
+	: MessageHandler(name,100,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class StatusHandler : public MessageHandler
+{
+public:
+    StatusHandler()
+	: MessageHandler("engine.status",100,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class DropHandler : public MessageHandler
+{
+public:
+    DropHandler(const char *name)
+	: MessageHandler(name,100,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class MasqHandler : public MessageHandler
+{
+public:
+    MasqHandler(const char *name, int prio)
+	: MessageHandler(name,prio,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class AttachHandler : public MessageHandler
+{
+public:
+    AttachHandler()
+	: MessageHandler("chan.attach",100,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
 };
 
 AlsaChan *s_chan = 0;
@@ -702,8 +716,6 @@ bool AlsaPlugin::isBusy() const
 {
     return (s_dev != 0);
 }
-
-INIT_PLUGIN(AlsaPlugin);
 
 }; // anonymous namespace
 

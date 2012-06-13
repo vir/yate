@@ -187,7 +187,10 @@ static void common_output(int level,char* buf)
     s_thr = Thread::current();
     if (CapturedEvent::capturing()) {
 	buf[n] = '\0';
+	bool save = s_debugging;
+	s_debugging = false;
 	CapturedEvent::append(level,buf);
+	s_debugging = save;
     }
     buf[n] = '\n';
     buf[n+1] = '\0';

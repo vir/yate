@@ -590,7 +590,7 @@ bool ExpEvaluator::runCompile(const char*& expr, char stop, GenObject* nested)
 	return true;
     }
     for (;;) {
-	while (skipComments(expr) && getInstruction(expr,nested))
+	while (!stackPos && skipComments(expr) && getInstruction(expr,nested))
 	    ;
 	if (inError())
 	    return false;
@@ -905,6 +905,18 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 	    break;
 	case OpcNone:
 	case OpcLabel:
+	    break;
+	case OpcDrop:
+	    TelEngine::destruct(popOne(stack));
+	    break;
+	case OpcDup:
+	    {
+		ExpOperation* op = popValue(stack,context);
+		if (!op)
+		    return gotError("ExpEvaluator stack underflow",oper.lineNumber());
+		pushOne(stack,op->clone());
+		pushOne(stack,op);
+	    }
 	    break;
 	case OpcAnd:
 	case OpcOr:

@@ -131,20 +131,6 @@ private:
     Tone2PoleFilter m_dtmfH[4];
 };
 
-class AttachHandler : public MessageHandler
-{
-public:
-    AttachHandler() : MessageHandler("chan.attach") { }
-    virtual bool received(Message& msg);
-};
-
-class RecordHandler : public MessageHandler
-{
-public:
-    RecordHandler() : MessageHandler("chan.record") { }
-    virtual bool received(Message& msg);
-};
-
 class ToneDetectorModule : public Module
 {
 public:
@@ -160,6 +146,24 @@ static Mutex s_mutex(false,"ToneDetect");
 static int s_count = 0;
 
 static ToneDetectorModule plugin;
+
+class AttachHandler : public MessageHandler
+{
+public:
+    AttachHandler()
+	: MessageHandler("chan.attach",100,plugin.name())
+	{ }
+    virtual bool received(Message& msg);
+};
+
+class RecordHandler : public MessageHandler
+{
+public:
+    RecordHandler()
+	: MessageHandler("chan.record",100,plugin.name())
+	{ }
+    virtual bool received(Message& msg);
+};
 
 // generated CNG detector (1100Hz) - either of the 2 below:
 // mkfilter -Bp -Re 50 -a 0.137500

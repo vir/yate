@@ -215,6 +215,7 @@ private:
 
 class MessageDispatcher;
 class MessageRelay;
+class Engine;
 
 /**
  * This class holds the messages that are moved around in the engine.
@@ -406,8 +407,11 @@ public:
      * Creates a new message handler.
      * @param name Name of the handled message - may be NULL
      * @param priority Priority of the handler, 0 = top
+     * @param trackName Name to be used in handler tracking
+     * @param addPriority True to append :priority to trackName
      */
-    explicit MessageHandler(const char* name, unsigned priority = 100);
+    explicit MessageHandler(const char* name, unsigned priority = 100,
+	const char* trackName = 0, bool addPriority = true);
 
     /**
      * Handler destructor.
@@ -432,6 +436,21 @@ public:
      */
     inline unsigned priority() const
 	{ return m_priority; }
+
+    /**
+     * Retrieve the tracking name of this handler
+     * @return Name that is to be used in tracking operation
+     */
+    inline const String& trackName() const
+	{ return m_trackName; }
+
+    /**
+     * Set a new tracking name for this handler.
+     * Works only if the handler was not yet inserted into a dispatcher
+     * @param name Name that is to be used in tracking operation
+     */
+    inline void trackName(const char* name)
+	{ if (!m_dispatcher) m_trackName = name; }
 
     /**
      * Retrieve the filter (if installed) associated to this handler
@@ -469,6 +488,7 @@ protected:
 private:
     virtual bool receivedInternal(Message& msg);
     void safeNow();
+    String m_trackName;
     unsigned m_priority;
     int m_unsafe;
     MessageDispatcher* m_dispatcher;
@@ -505,9 +525,14 @@ public:
      * @param receiver Receiver of th relayed messages
      * @param id Numeric identifier to pass to receiver
      * @param priority Priority of the handler, 0 = top
+     * @param trackName Name to be used in handler tracking
+     * @param addPriority True to append :priority to trackName
      */
-    MessageRelay(const char* name, MessageReceiver* receiver, int id, int priority = 100)
-	: MessageHandler(name,priority), m_receiver(receiver), m_id(id) { }
+    inline MessageRelay(const char* name, MessageReceiver* receiver, int id,
+	int priority = 100, const char* trackName = 0, bool addPriority = true)
+	: MessageHandler(name,priority,trackName,addPriority),
+	  m_receiver(receiver), m_id(id)
+	{ }
 
     /**
      * This method is not called from MessageHandler through polymorphism
@@ -571,17 +596,25 @@ class YATE_API MessagePostHook : public GenObject, public MessageNotifier
  */
 class YATE_API MessageDispatcher : public GenObject, public Mutex
 {
+    friend class Engine;
     YNOCOPY(MessageDispatcher); // no automatic copies please
 public:
     /**
      * Creates a new message dispatcher.
+     * @param trackParam Name of the parameter used in tracking handlers
      */
-    MessageDispatcher();
+    MessageDispatcher(const char* trackParam = 0);
 
     /**
      * Destroys the dispatcher and the installed handlers.
      */
     ~MessageDispatcher();
+
+    /**
+     * Retrieve the tracker parameter name
+     */
+    inline const String& trackParam() const
+	{ return m_trackParam; }
 
     /**
      * Installs a handler in the dispatcher.
@@ -663,10 +696,19 @@ public:
      */
     void setHook(MessagePostHook* hook, bool remove = false);
 
+protected:
+    /**
+     * Set the tracked parameter name
+     * @param paramName Name of the parameter used in tracking handlers
+     */
+    inline void trackParam(const char* paramName)
+	{ m_trackParam = paramName; }
+
 private:
     ObjList m_handlers;
     ObjList m_messages;
     ObjList m_hooks;
+    String m_trackParam;
     unsigned int m_changes;
     u_int64_t m_warnTime;
 };

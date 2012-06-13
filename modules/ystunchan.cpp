@@ -416,17 +416,6 @@ private:
 };
 
 /**
- * socket.stun message handler
- */
-class StunHandler : public MessageHandler
-{
-public:
-    StunHandler() : MessageHandler("socket.stun") {}
-    // Process message. Create and install filter.
-    virtual bool received(Message &msg);
-};
-
-/**
  * YStunPlugin
  */
 class YStunPlugin : public Module
@@ -475,6 +464,19 @@ TokenDict YStunAttribute::s_tokens[] = {
 	{"UNKNOWN",            Unknown},
 	{0,0}
 	};
+
+/**
+ * socket.stun message handler
+ */
+class StunHandler : public MessageHandler
+{
+public:
+    StunHandler()
+	: MessageHandler("socket.stun",100,iplugin.name())
+	{}
+    // Process message. Create and install filter.
+    virtual bool received(Message &msg);
+};
 
 // YStunAttributeError
 void YStunAttributeError::toString(String& dest)

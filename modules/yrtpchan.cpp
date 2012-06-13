@@ -348,27 +348,6 @@ private:
     Cipher* m_cipher;
 };
 
-class AttachHandler : public MessageHandler
-{
-public:
-    AttachHandler() : MessageHandler("chan.attach") { }
-    virtual bool received(Message &msg);
-};
-
-class RtpHandler : public MessageHandler
-{
-public:
-    RtpHandler() : MessageHandler("chan.rtp") { }
-    virtual bool received(Message &msg);
-};
-
-class DTMFHandler : public MessageHandler
-{
-public:
-    DTMFHandler() : MessageHandler("chan.dtmf",150) { }
-    virtual bool received(Message &msg);
-};
-
 class YRTPPlugin : public Module
 {
 public:
@@ -394,6 +373,28 @@ private:
 };
 
 static YRTPPlugin splugin;
+
+class AttachHandler : public MessageHandler
+{
+public:
+    AttachHandler() : MessageHandler("chan.attach",100,splugin.name()) { }
+    virtual bool received(Message &msg);
+};
+
+class RtpHandler : public MessageHandler
+{
+public:
+    RtpHandler() : MessageHandler("chan.rtp",100,splugin.name()) { }
+    virtual bool received(Message &msg);
+};
+
+class DTMFHandler : public MessageHandler
+{
+public:
+    DTMFHandler() : MessageHandler("chan.dtmf",150,splugin.name()) { }
+    virtual bool received(Message &msg);
+};
+
 static ObjList s_calls;
 static ObjList s_mirrors;
 static Mutex s_mutex(false,"YRTPChan");

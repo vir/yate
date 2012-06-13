@@ -358,18 +358,6 @@ private:
 };
 
 /*
- * YIAXRegDataHandler
- */
-class YIAXRegDataHandler : public MessageHandler
-{
-public:
-    YIAXRegDataHandler()
-	: MessageHandler("user.login",150)
-	{ }
-    virtual bool received(Message &msg);
-};
-
-/*
  * YIAXDriver
  */
 class YIAXDriver : public Driver
@@ -409,6 +397,23 @@ protected:
     YIAXEngine* m_iaxEngine;
     unsigned int m_failedAuths;
     int m_port;
+};
+
+static YIAXLineContainer s_lines;	// Lines
+static Thread::Priority s_priority = Thread::Normal;  // Threads priority
+static bool s_callTokenOut = true;      // Send an empty call token on outgoing calls
+static YIAXDriver iplugin;		// Init the driver
+
+/*
+ * YIAXRegDataHandler
+ */
+class YIAXRegDataHandler : public MessageHandler
+{
+public:
+    YIAXRegDataHandler()
+	: MessageHandler("user.login",150,iplugin.name())
+	{ }
+    virtual bool received(Message &msg);
 };
 
 class YIAXConnection;
@@ -560,11 +565,6 @@ private:
 /*
  * Local data
  */
-static YIAXLineContainer s_lines;	// Lines
-static Thread::Priority s_priority = Thread::Normal;  // Threads priority
-static bool s_callTokenOut = true;      // Send an empty call token on outgoing calls
-static YIAXDriver iplugin;		// Init the driver
-
 static unsigned int s_expires_min = 60;
 static unsigned int s_expires_def = 60;
 static unsigned int s_expires_max = 3600;

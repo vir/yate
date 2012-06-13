@@ -115,17 +115,6 @@ protected:
     bool m_hasRelays;
 };
 
-class ForkRelay : public MessageHandler
-{
-public:
-    inline ForkRelay(const char* name, const char* match, int priority)
-	: MessageHandler(name,priority),
-	  m_match(match)
-	{ }
-    virtual bool received(Message& msg);
-private:
-    String m_match;
-};
 
 static TokenDict s_calltypes[] = {
     { "regular",    ForkSlave::Regular    },
@@ -142,6 +131,20 @@ UNLOAD_PLUGIN(unloadNow)
 	return __plugin.unload();
     return true;
 }
+
+
+class ForkRelay : public MessageHandler
+{
+public:
+    inline ForkRelay(const char* name, const char* match, int priority)
+	: MessageHandler(name,priority,__plugin.name()),
+	  m_match(match)
+	{ }
+    virtual bool received(Message& msg)
+	{ return __plugin.msgToSlaves(msg,m_match); }
+private:
+    String m_match;
+};
 
 
 ForkMaster::ForkMaster(ObjList* targets)
@@ -636,12 +639,6 @@ void ForkSlave::disconnected(bool final, const char* reason)
     CallEndpoint::disconnected(final,reason);
     if (master)
 	master->lostSlave(this,reason);
-}
-
-
-bool ForkRelay::received(Message& msg)
-{
-    return __plugin.msgToSlaves(msg,m_match);
 }
 
 

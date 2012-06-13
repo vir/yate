@@ -211,12 +211,16 @@ int Message::commonDecode(const char* str, int offs)
 }
 
 
-MessageHandler::MessageHandler(const char* name, unsigned priority)
+MessageHandler::MessageHandler(const char* name, unsigned priority,
+	const char* trackName, bool addPriority)
     : String(name),
-      m_priority(priority), m_unsafe(0), m_dispatcher(0), m_filter(0)
+      m_trackName(trackName), m_priority(priority),
+      m_unsafe(0), m_dispatcher(0), m_filter(0)
 {
-    DDebug(DebugAll,"MessageHandler::MessageHandler(\"%s\",%u) [%p]",
-	name,priority,this);
+    DDebug(DebugAll,"MessageHandler::MessageHandler('%s',%u,'%s',%s) [%p]",
+	name,priority,trackName,String::boolText(addPriority),this);
+    if (addPriority && m_trackName)
+	m_trackName << ":" << priority;
 }
 
 MessageHandler::~MessageHandler()
@@ -280,11 +284,11 @@ bool MessageRelay::receivedInternal(Message& msg)
 }
 
 
-MessageDispatcher::MessageDispatcher()
+MessageDispatcher::MessageDispatcher(const char* trackParam)
     : Mutex(false,"MessageDispatcher"),
-      m_changes(0), m_warnTime(0)
+      m_trackParam(trackParam), m_changes(0), m_warnTime(0)
 {
-    XDebug(DebugInfo,"MessageDispatcher::MessageDispatcher() [%p]",this);
+    XDebug(DebugInfo,"MessageDispatcher::MessageDispatcher('%s') [%p]",trackParam,this);
 }
 
 MessageDispatcher::~MessageDispatcher()
@@ -376,6 +380,13 @@ bool MessageDispatcher::dispatch(Message& msg)
 		continue;
 	    unsigned int c = m_changes;
 	    unsigned int p = h->priority();
+	    if (trackParam() && h->trackName()) {
+		NamedString* tracked = msg.getParam(trackParam());
+		if (tracked)
+		    tracked->append(h->trackName(),",");
+		else
+		    msg.addParam(trackParam(),h->trackName());
+	    }
 	    // mark handler as unsafe to destroy / uninstall
 	    h->m_unsafe++;
 	    unlock();

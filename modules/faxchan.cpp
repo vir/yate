@@ -212,13 +212,6 @@ private:
     int m_pages;
 };
 
-class FaxHandler : public MessageHandler
-{
-public:
-    FaxHandler(const char *name) : MessageHandler(name) { }
-    virtual bool received(Message &msg);
-};
-
 // Driver and plugin
 class FaxDriver : public Driver
 {
@@ -239,6 +232,15 @@ static const TokenDict s_types[] = {
     { "analog",      FaxChan::Analog },
     { "digital",     FaxChan::Digital },
     { 0, 0 }
+};
+
+class FaxHandler : public MessageHandler
+{
+public:
+    FaxHandler(const char *name)
+	: MessageHandler(name,100,plugin.name())
+	{ }
+    virtual bool received(Message &msg);
 };
 
 FaxSource::FaxSource(FaxWrapper* wrapper, const char* format)

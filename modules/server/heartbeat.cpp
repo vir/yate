@@ -98,24 +98,6 @@ static u_int32_t crc(const char* buf, unsigned int len)
 using namespace TelEngine;
 namespace { // anonymous
 
-class TimerHandler : public MessageHandler
-{
-public:
-    TimerHandler(unsigned int prio)
-	: MessageHandler("engine.timer",prio)
-	{ }
-    virtual bool received(Message &msg);
-};
-
-class HaltHandler : public MessageHandler
-{
-public:
-    HaltHandler(unsigned int prio)
-	: MessageHandler("engine.halt",prio)
-	{ }
-    virtual bool received(Message &msg);
-};
-
 class HBeatPlugin : public Plugin, public Mutex
 {
 public:
@@ -140,6 +122,25 @@ private:
 };
 
 static HBeatPlugin splugin;
+
+
+class TimerHandler : public MessageHandler
+{
+public:
+    TimerHandler(unsigned int prio)
+	: MessageHandler("engine.timer",prio,splugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class HaltHandler : public MessageHandler
+{
+public:
+    HaltHandler(unsigned int prio)
+	: MessageHandler("engine.halt",prio,splugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
 
 
 void HBeatPlugin::sendHeartbeat(const Time& tStamp, bool goDown)

@@ -63,108 +63,6 @@ typedef struct {
 } SIPInfo;
 
 /**
- * Class MsgUpdateHandler
- * Class for handling a "module.update" message
- */
-class MsgUpdateHandler : public MessageHandler
-{
-public:
-    inline MsgUpdateHandler(unsigned int priority = 100)
-	: MessageHandler("module.update",priority)
-	{ }
-    virtual ~MsgUpdateHandler()
-	{ }
-    virtual bool received(Message& msg);
-};
-
-/**
- * Class SnmpMsgHandler
- * Class for handling a "monitor.query" message, message used for obtaining information from the monitor
- */
-class SnmpMsgHandler : public MessageHandler
-{
-public:
-    inline SnmpMsgHandler(unsigned int priority = 100)
-	: MessageHandler("monitor.query",priority)
-	{ }
-    virtual ~SnmpMsgHandler()
-	{ }
-    virtual bool received(Message& msg);
-};
-
-/**
- * Class HangupHandler
- * Handler for "chan.hangup" message"
- */
-class HangupHandler : public MessageHandler
-{
-public:
-    inline HangupHandler(unsigned int priority = 100)
-	: MessageHandler("chan.hangup",priority)
-	{ }
-    virtual ~HangupHandler()
-	{ }
-    virtual bool received(Message& msg);
-};
-
-/**
- * Class EngineStartHandler
- * Handler for "engine.start" message
- */
-class EngineStartHandler : public MessageHandler
-{
-public:
-    inline EngineStartHandler(unsigned int priority = 100)
-	: MessageHandler("engine.start",priority)
-	{ }
-    virtual ~EngineStartHandler()
-	{ }
-    virtual bool received(Message& msg);
-};
-
-/**
- * Class AuthHandler
- * Handler for a "user.auth" message. It counts the number of authentication requests
- */
-class AuthHandler : public MessageHandler
-{
-public:
-    inline AuthHandler()
-	: MessageHandler("user.auth",0),
-	  m_count(0)
-	{ }
-    virtual ~AuthHandler()
-	{ }
-    virtual bool received(Message& msg);
-    // return the number of authentication requests
-    inline unsigned int getCount()
-	{ return m_count; }
-private:
-    unsigned int m_count;
-};
-
-/**
- * Class RegisterHandler
- * Handler for a "user.register" message. It counts the number of register requests
- */
-class RegisterHandler : public MessageHandler
-{
-public:
-    inline RegisterHandler()
-	: MessageHandler("user.register",0),
-	  m_count(0)
-	{ }
-    virtual ~RegisterHandler()
-	{ }
-    virtual bool received(Message& msg);
-    // return the count
-    inline unsigned int getCount()
-	{ return m_count; }
-private:
-    unsigned int m_count;
-};
-
-/**
  * Class Cache
  * BaseClass for retaining and expiring different type of data
  */
@@ -893,6 +791,11 @@ private:
     Mutex m_cfgMtx;
 };
 
+class SnmpMsgHandler;
+class EngineStartHandler;
+class AuthHandler;
+class RegisterHandler;
+
 /**
  * Class Monitor
  * Monitoring module
@@ -1556,6 +1459,110 @@ UNLOAD_PLUGIN(unloadNow)
 	return false;
     return true;
 }
+
+
+/**
+ * Class MsgUpdateHandler
+ * Class for handling a "module.update" message
+ */
+class MsgUpdateHandler : public MessageHandler
+{
+public:
+    inline MsgUpdateHandler(unsigned int priority = 100)
+	: MessageHandler("module.update",priority,__plugin.name())
+	{ }
+    virtual ~MsgUpdateHandler()
+	{ }
+    virtual bool received(Message& msg);
+};
+
+/**
+ * Class SnmpMsgHandler
+ * Class for handling a "monitor.query" message, message used for obtaining information from the monitor
+ */
+class SnmpMsgHandler : public MessageHandler
+{
+public:
+    inline SnmpMsgHandler(unsigned int priority = 100)
+	: MessageHandler("monitor.query",priority,__plugin.name())
+	{ }
+    virtual ~SnmpMsgHandler()
+	{ }
+    virtual bool received(Message& msg);
+};
+
+/**
+ * Class HangupHandler
+ * Handler for "chan.hangup" message"
+ */
+class HangupHandler : public MessageHandler
+{
+public:
+    inline HangupHandler(unsigned int priority = 100)
+	: MessageHandler("chan.hangup",priority,__plugin.name())
+	{ }
+    virtual ~HangupHandler()
+	{ }
+    virtual bool received(Message& msg);
+};
+
+/**
+ * Class EngineStartHandler
+ * Handler for "engine.start" message
+ */
+class EngineStartHandler : public MessageHandler
+{
+public:
+    inline EngineStartHandler(unsigned int priority = 100)
+	: MessageHandler("engine.start",priority,__plugin.name())
+	{ }
+    virtual ~EngineStartHandler()
+	{ }
+    virtual bool received(Message& msg);
+};
+
+/**
+ * Class AuthHandler
+ * Handler for a "user.auth" message. It counts the number of authentication requests
+ */
+class AuthHandler : public MessageHandler
+{
+public:
+    inline AuthHandler()
+	: MessageHandler("user.auth",0,__plugin.name()),
+	  m_count(0)
+	{ }
+    virtual ~AuthHandler()
+	{ }
+    virtual bool received(Message& msg);
+    // return the number of authentication requests
+    inline unsigned int getCount()
+	{ return m_count; }
+private:
+    unsigned int m_count;
+};
+
+/**
+ * Class RegisterHandler
+ * Handler for a "user.register" message. It counts the number of register requests
+ */
+class RegisterHandler : public MessageHandler
+{
+public:
+    inline RegisterHandler()
+	: MessageHandler("user.register",0,__plugin.name()),
+	  m_count(0)
+	{ }
+    virtual ~RegisterHandler()
+	{ }
+    virtual bool received(Message& msg);
+    // return the count
+    inline unsigned int getCount()
+	{ return m_count; }
+private:
+    unsigned int m_count;
+};
+
 
 // helper function to get rid of new line characters
 static void cutNewLine(String& line) {

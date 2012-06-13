@@ -30,33 +30,6 @@
 using namespace TelEngine;
 namespace { // anonymous
 
-// sip.subscribe handler
-class YSipSubscribeHandler : public MessageHandler
-{
-public:
-    YSipSubscribeHandler(int prio = 100)
-	: MessageHandler("sip.subscribe",prio)
-	{}
-    virtual bool received(Message &msg);
-    // Get the event from a received message. Set the content type 
-    // Set 'code' parameter of the message if false is returned
-    bool getEventData(Message& msg, int& event, String& evName, String& content);
-};
-
-// resource.notify handler
-class YSipNotifyHandler : public MessageHandler
-{
-public:
-    YSipNotifyHandler(int prio = 100)
-	: MessageHandler("resource.notify",prio)
-	{}
-    virtual bool received(Message &msg);
-    // Create the body for 'dialog' event notification
-    void createDialogBody(String& dest, const Message& src, const String& entity);
-    // Create the body for 'message-summary' event notification
-    void createMWIBody(String& dest, const Message& src);
-};
-
 // Features module
 class YSipFeatures : public Module
 {
@@ -113,6 +86,34 @@ static TokenDict s_contents[] = {
 	{"application/simple-message-summary", YSipFeatures::AppSimpleMsgSummary},
 	{0,0}
 	};
+
+
+// sip.subscribe handler
+class YSipSubscribeHandler : public MessageHandler
+{
+public:
+    YSipSubscribeHandler(int prio = 100)
+	: MessageHandler("sip.subscribe",prio,s_module.name())
+	{ }
+    virtual bool received(Message &msg);
+    // Get the event from a received message. Set the content type 
+    // Set 'code' parameter of the message if false is returned
+    bool getEventData(Message& msg, int& event, String& evName, String& content);
+};
+
+// resource.notify handler
+class YSipNotifyHandler : public MessageHandler
+{
+public:
+    YSipNotifyHandler(int prio = 100)
+	: MessageHandler("resource.notify",prio,s_module.name())
+	{ }
+    virtual bool received(Message &msg);
+    // Create the body for 'dialog' event notification
+    void createDialogBody(String& dest, const Message& src, const String& entity);
+    // Create the body for 'message-summary' event notification
+    void createMWIBody(String& dest, const Message& src);
+};
 
 
 // Escape a string to be packed into another

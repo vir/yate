@@ -108,26 +108,6 @@ private:
                                          // if the call was already terminated
 };
 
-// chan.notify handler used to catch queued calls
-class ChanNotifyHandler : public MessageHandler
-{
-public:
-    inline ChanNotifyHandler(int prio = 10)
-	: MessageHandler("chan.notify",prio)
-	{}
-    virtual bool received(Message& msg);
-};
-
-// call.cdr handler used to signal queued calls termination
-class CallCdrHandler : public MessageHandler
-{
-public:
-    inline CallCdrHandler(int prio = 10)
-	: MessageHandler("call.cdr",prio)
-	{}
-    virtual bool received(Message& msg);
-};
-
 // Thread processing a call from queue
 class QueuedCallWorker : public Thread
 {
@@ -136,6 +116,9 @@ public:
     ~QueuedCallWorker();
     virtual void run();
 };
+
+class ChanNotifyHandler;
+class CallCdrHandler;
 
 // The module
 class QueuesNotifyModule : public Module
@@ -205,6 +188,27 @@ UNLOAD_PLUGIN(unloadNow)
 	return false;
     return true;
 }
+
+
+// chan.notify handler used to catch queued calls
+class ChanNotifyHandler : public MessageHandler
+{
+public:
+    inline ChanNotifyHandler(int prio = 10)
+	: MessageHandler("chan.notify",prio,__plugin.name())
+	{}
+    virtual bool received(Message& msg);
+};
+
+// call.cdr handler used to signal queued calls termination
+class CallCdrHandler : public MessageHandler
+{
+public:
+    inline CallCdrHandler(int prio = 10)
+	: MessageHandler("call.cdr",prio,__plugin.name())
+	{}
+    virtual bool received(Message& msg);
+};
 
 
 /**

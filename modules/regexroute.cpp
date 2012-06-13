@@ -34,6 +34,7 @@ namespace { // anonymous
 #define BLOCK_STACK 10
 
 static Configuration s_cfg;
+static const char* s_trackName = 0;
 static bool s_extended;
 static bool s_insensitive;
 static bool s_prerouteall;
@@ -48,7 +49,8 @@ class RouteHandler : public MessageHandler
 {
 public:
     RouteHandler(int prio)
-	: MessageHandler("call.route",prio) { }
+	: MessageHandler("call.route",prio,s_trackName)
+	{ }
     virtual bool received(Message &msg);
 };
 
@@ -735,7 +737,8 @@ class PrerouteHandler : public MessageHandler
 {
 public:
     PrerouteHandler(int prio)
-	: MessageHandler("call.preroute",prio) { }
+	: MessageHandler("call.preroute",prio,s_trackName)
+	{ }
     virtual bool received(Message &msg);
 };
 
@@ -768,7 +771,7 @@ class GenericHandler : public MessageHandler
 {
 public:
     GenericHandler(const char* name, int prio, const char* context, const char* match)
-	: MessageHandler(name,prio),
+	: MessageHandler(name,prio,s_trackName),
 	  m_context(context), m_match(match)
 	{
 	    Debug(DebugAll,"Generic handler for '%s' prio %d to [%s] match '%s%s%s' [%p]",
@@ -842,6 +845,8 @@ void RegexRoutePlugin::initialize()
 	initVars(s_cfg.getSection("$once"));
     }
     initVars(s_cfg.getSection("$init"));
+    s_trackName = s_cfg.getBoolValue("priorities","trackparam",true) ?
+	name().c_str() : (const char*)0;
     s_extended = s_cfg.getBoolValue("priorities","extended",false);
     s_insensitive = s_cfg.getBoolValue("priorities","insensitive",false);
     s_prerouteall = s_cfg.getBoolValue("priorities","prerouteall",false);

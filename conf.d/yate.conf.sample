@@ -23,7 +23,7 @@
 ;maxworkers=10
 
 ; maxevents: int: Maximum number of events kept per type
-;maxevents=10
+;maxevents=25
 
 ; startevents: boolean: Capture all debug events at startup
 ;startevents=yes
@@ -48,6 +48,11 @@
 ;  not work on 9x and ME). The default resolution depends on hardware, Windows
 ;  version and currently running programs
 ;wintimer=0
+
+; trackparam: string: Name of the parameter used to track message through handlers
+;  If empty or boolean true the default "handlers" will be used instead
+;  Set to boolean false to disable tracking only if you are sure what you want
+;trackparam=handlers
 
 ; msgsniff: bool: Activate message sniffer module (if loaded) at engine init time
 ;msgsniff=disable

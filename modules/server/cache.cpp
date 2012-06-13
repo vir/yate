@@ -220,18 +220,6 @@ private:
     ObjList* m_items;
 };
 
-class EngineHandler : public MessageHandler
-{
-public:
-    inline EngineHandler(bool start)
-	: MessageHandler(start ? "engine.start" : "engine.stop"),
-	m_start(start)
-	{}
-    virtual bool received(Message& msg);
-protected:
-    bool m_start;
-};
-
 class CacheModule : public Module
 {
 public:
@@ -327,6 +315,20 @@ static const String s_cmdHelp[CmdCount] = {
     "Load a cache from database. Use 'id' (can be repeated) parameter to load specific item(s) only",
     "Flush (clear) a cache's memory. Use 'id' (can be repeated) parameter to delete specific item(s) only"
 };
+
+
+class EngineHandler : public MessageHandler
+{
+public:
+    inline EngineHandler(bool start)
+	: MessageHandler(start ? "engine.start" : "engine.stop",100,__plugin.name()),
+	  m_start(start)
+	{ }
+    virtual bool received(Message& msg);
+protected:
+    bool m_start;
+};
+
 
 // Check if application or current thread are terminating
 static inline bool exiting()

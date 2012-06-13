@@ -371,24 +371,6 @@ private:
     DataBlock m_authdata;
 };
 
-class AuthHandler : public MessageHandler
-{
-public:
-    inline AuthHandler(int prio)
-	: MessageHandler("user.auth",prio)
-	{ }
-    virtual bool received(Message &msg);
-};
-
-class AcctHandler : public MessageHandler
-{
-public:
-    inline AcctHandler(int prio)
-	: MessageHandler("call.cdr",prio)
-	{ }
-    virtual bool received(Message &msg);
-};
-
 class RadiusModule : public Module
 {
 public:
@@ -400,6 +382,26 @@ protected:
 };
 
 INIT_PLUGIN(RadiusModule);
+
+
+class AuthHandler : public MessageHandler
+{
+public:
+    inline AuthHandler(int prio)
+	: MessageHandler("user.auth",prio,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class AcctHandler : public MessageHandler
+{
+public:
+    inline AcctHandler(int prio)
+	: MessageHandler("call.cdr",prio,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
+
 
 // PortaOne specific routing
 static void portaBillingRoute(NamedList& params, const ObjList* attributes)

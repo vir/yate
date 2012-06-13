@@ -906,6 +906,18 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 	case OpcNone:
 	case OpcLabel:
 	    break;
+	case OpcDrop:
+	    TelEngine::destruct(popOne(stack));
+	    break;
+	case OpcDup:
+	    {
+		ExpOperation* op = popValue(stack,context);
+		if (!op)
+		    return gotError("ExpEvaluator stack underflow",oper.lineNumber());
+		pushOne(stack,op->clone());
+		pushOne(stack,op);
+	    }
+	    break;
 	case OpcAnd:
 	case OpcOr:
 	case OpcXor:

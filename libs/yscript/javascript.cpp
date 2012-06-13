@@ -925,13 +925,26 @@ class ParseSwitch : public ParseNested
 {
     friend class JsCode;
 public:
-    inline ParseSwitch(JsCode* code, GenObject* nested)
-	: ParseNested(code,nested,JsCode::OpcSwitch)
+    enum SwitchState {
+	Before,
+	InCase,
+	InDefault
+    };
+    inline ParseSwitch(JsCode* code, GenObject* nested, long int lblBreak)
+	: ParseNested(code,nested,JsCode::OpcSwitch),
+	  m_lblBreak(lblBreak), m_lblDefault(0), m_state(Before)
 	{ }
+    inline SwitchState state() const
+	{ return m_state; }
 protected:
     virtual bool isMatch(JsCode::JsOpcode opcode)
 	{ return JsCode::OpcCase == opcode || JsCode::OpcDefault == opcode ||
 	    JsCode::OpcBreak == opcode; }
+private:
+    long int m_lblBreak;
+    long int m_lblDefault;
+    SwitchState m_state;
+    ObjList m_cases;
 };
 
 // Parse keywords inner to specific instructions
@@ -939,29 +952,52 @@ bool JsCode::parseInner(const char*& expr, JsOpcode opcode, ParseNested* nested)
 {
     switch (*nested) {
 	case OpcWhile:
-	    switch (opcode) {
-		case OpcBreak:
-		    addOpcode((Opcode)OpcJump,static_cast<ParseWhile*>(nested)->m_lblBreak);
-		    break;
-		case OpcCont:
-		    addOpcode((Opcode)OpcJump,static_cast<ParseWhile*>(nested)->m_lblCont);
-		    break;
-		default:
-		    return false;
+	    {
+		ParseWhile* block = static_cast<ParseWhile*>(nested);
+		switch (opcode) {
+		    case OpcBreak:
+			XDebug(this,DebugAll,"Parsing loop:break '%.30s'",expr);
+			addOpcode((Opcode)OpcJump,block->m_lblBreak);
+			break;
+		    case OpcCont:
+			XDebug(this,DebugAll,"Parsing loop:continue '%.30s'",expr);
+			addOpcode((Opcode)OpcJump,block->m_lblCont);
+			break;
+		    default:
+			return false;
+		}
 	    }
 	    break;
 	case OpcSwitch:
-	    switch (opcode) {
-		case OpcCase:
-		    if (!ExpEvaluator::getSimple(expr,true))
-			return gotError("Expecting case constant",expr);
-		    break;
-		case OpcDefault:
-		    break;
-		case OpcBreak:
-		    break;
-		default:
-		    return false;
+	    {
+		ParseSwitch* block = static_cast<ParseSwitch*>(nested);
+		switch (opcode) {
+		    case OpcCase:
+			if (block->state() == ParseSwitch::InDefault)
+			    return gotError("Encountered case after default",expr);
+			if (!getSimple(expr,true))
+			    return gotError("Expecting case constant",expr);
+			XDebug(this,DebugAll,"Parsing switch:case: '%.30s'",expr);
+			block->m_state = ParseSwitch::InCase;
+			block->m_cases.append(popOpcode());
+			addOpcode(OpcLabel,++m_label);
+			block->m_cases.append(new ExpOperation((Opcode)OpcJumpTrue,0,m_label));
+			break;
+		    case OpcDefault:
+			if (block->state() == ParseSwitch::InDefault)
+			    return gotError("Duplicate default case",expr);
+			XDebug(this,DebugAll,"Parsing switch:default: '%.30s'",expr);
+			block->m_state = ParseSwitch::InDefault;
+			block->m_lblDefault = ++m_label;
+			addOpcode(OpcLabel,block->m_lblDefault);
+			break;
+		    case OpcBreak:
+			XDebug(this,DebugAll,"Parsing switch:break '%.30s'",expr);
+			addOpcode((Opcode)OpcJump,static_cast<ParseSwitch*>(nested)->m_lblBreak);
+			break;
+		    default:
+			return false;
+		}
 	    }
 	    break;
 	default:
@@ -1012,7 +1048,8 @@ bool JsCode::parseSwitch(const char*& expr, GenObject* nested)
     if (skipComments(++expr) != '{')
 	return gotError("Expecting '{'",expr);
     expr++;
-    ParseSwitch parseStack(this,nested);
+    ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
+    ParseSwitch parseStack(this,nested,++m_label);
     for (;;) {
 	if (!runCompile(expr,'}',parseStack))
 	    return false;
@@ -1025,6 +1062,22 @@ bool JsCode::parseSwitch(const char*& expr, GenObject* nested)
     if (*expr != '}')
 	return gotError("Expecting '}'",expr);
     expr++;
+    // implicit break at end
+    addOpcode((Opcode)OpcJump,parseStack.m_lblBreak);
+    addOpcode(OpcLabel,jump->number());
+    while (ExpOperation* c = static_cast<ExpOperation*>(parseStack.m_cases.remove(false))) {
+	ExpOperation* j = static_cast<ExpOperation*>(parseStack.m_cases.remove(false));
+	if (!j)
+	    break;
+	addOpcode(c,c->lineNumber());
+	addOpcode((Opcode)OpcCase);
+	addOpcode(j,c->lineNumber());
+    }
+    // if no case matched drop the expression
+    addOpcode(OpcDrop);
+    if (parseStack.m_lblDefault)
+	addOpcode((Opcode)OpcJump,parseStack.m_lblDefault);
+    addOpcode(OpcLabel,parseStack.m_lblBreak);
     return true;
 }
 
@@ -1225,6 +1278,7 @@ bool JsCode::getSimple(const char*& expr, bool constOnly)
 {
     if (inError())
 	return false;
+    XDebug(this,DebugAll,"JsCode::getSimple(%s) '%.30s'",String::boolText(constOnly),expr);
     skipComments(expr);
     switch ((JsOpcode)ExpEvaluator::getOperator(expr,s_constants)) {
 	case OpcFalse:
@@ -1345,15 +1399,17 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		    TelEngine::destruct(op2);
 		    return gotError("ExpEvaluator stack underflow",oper.lineNumber());
 		}
-		ExpWrapper* w1 = YOBJECT(ExpWrapper,op1);
-		ExpWrapper* w2 = YOBJECT(ExpWrapper,op2);
 		bool eq = (op1->opcode() == op2->opcode());
 		if (eq) {
+		    ExpWrapper* w1 = YOBJECT(ExpWrapper,op1);
+		    ExpWrapper* w2 = YOBJECT(ExpWrapper,op2);
 		    if (w1 || w2)
 			eq = w1 && w2 && w1->object() == w2->object();
 		    else
 			eq = (op1->number() == op2->number()) && (*op1 == *op2);
 		}
+		TelEngine::destruct(op1);
+		TelEngine::destruct(op2);
 		if ((JsOpcode)oper.opcode() == OpcNeIdentity)
 		    eq = !eq;
 		pushOne(stack,new ExpOperation(eq));
@@ -1507,7 +1563,37 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		    TelEngine::destruct(op);
 		    return gotError("Return outside function call",oper.lineNumber());
 		}
-		pushOne(stack,op);
+		pushOne(stack,new ExpOperation(ok));
+	    }
+	    break;
+	case OpcCase:
+	    {
+		ExpOperation* cons = popValue(stack,context);
+		ExpOperation* expr = popValue(stack,context);
+		if (!cons || !expr) {
+		    TelEngine::destruct(cons);
+		    TelEngine::destruct(expr);
+		    return gotError("ExpEvaluator stack underflow",oper.lineNumber());
+		}
+		bool eq = false;
+		JsRegExp* rex = YOBJECT(JsRegExp,cons);
+		if (rex)
+		    eq = rex->regexp().matches(*expr);
+		else if (expr->opcode() == cons->opcode()) {
+		    ExpWrapper* w1 = YOBJECT(ExpWrapper,expr);
+		    ExpWrapper* w2 = YOBJECT(ExpWrapper,cons);
+		    if (w1 || w2)
+			eq = w1 && w2 && w1->object() == w2->object();
+		    else
+			eq = (expr->number() == cons->number()) && (*expr == *cons);
+		}
+		if (!eq) {
+		    // put expression back on stack, we'll need it later
+		    pushOne(stack,expr);
+		    expr = 0;
+		}
+		TelEngine::destruct(cons);
+		pushOne(stack,new ExpOperation(eq));
 	    }
 	    break;
 	case OpcJumpTrue:

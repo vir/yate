@@ -219,7 +219,7 @@ MessageHandler::MessageHandler(const char* name, unsigned priority,
 {
     DDebug(DebugAll,"MessageHandler::MessageHandler('%s',%u,'%s',%s) [%p]",
 	name,priority,trackName,String::boolText(addPriority),this);
-    if (addPriority && priority && m_trackName)
+    if (addPriority && m_trackName)
 	m_trackName << ":" << priority;
 }
 

@@ -408,7 +408,7 @@ public:
      * @param name Name of the handled message - may be NULL
      * @param priority Priority of the handler, 0 = top
      * @param trackName Name to be used in handler tracking
-     * @param addPriority True to append non-zero priority to trackName
+     * @param addPriority True to append :priority to trackName
      */
     explicit MessageHandler(const char* name, unsigned priority = 100,
 	const char* trackName = 0, bool addPriority = true);
@@ -526,7 +526,7 @@ public:
      * @param id Numeric identifier to pass to receiver
      * @param priority Priority of the handler, 0 = top
      * @param trackName Name to be used in handler tracking
-     * @param addPriority True to append non-zero priority to trackName
+     * @param addPriority True to append :priority to trackName
      */
     inline MessageRelay(const char* name, MessageReceiver* receiver, int id,
 	int priority = 100, const char* trackName = 0, bool addPriority = true)

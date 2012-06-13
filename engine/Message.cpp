@@ -380,9 +380,13 @@ bool MessageDispatcher::dispatch(Message& msg)
 		continue;
 	    unsigned int c = m_changes;
 	    unsigned int p = h->priority();
-	    String handlerName;
-	    if (trackParam())
-		handlerName = h->trackName();
+	    if (trackParam() && h->trackName()) {
+		NamedString* tracked = msg.getParam(trackParam());
+		if (tracked)
+		    tracked->append(h->trackName(),",");
+		else
+		    msg.addParam(trackParam(),h->trackName());
+	    }
 	    // mark handler as unsafe to destroy / uninstall
 	    h->m_unsafe++;
 	    unlock();
@@ -396,13 +400,6 @@ bool MessageDispatcher::dispatch(Message& msg)
 		Debug(DebugInfo,"Message '%s' [%p] passed through %p in " FMT64U " usec",
 		    msg.c_str(),&msg,h,tm);
 #endif
-	    if (handlerName) {
-		NamedString* tracked = msg.getParam(trackParam());
-		if (tracked)
-		    tracked->append(handlerName,",");
-		else
-		    msg.addParam(trackParam(),handlerName);
-	    }
 	    if (retv && !msg.broadcast())
 		break;
 	    lock();

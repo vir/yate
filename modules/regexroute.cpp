@@ -845,7 +845,7 @@ void RegexRoutePlugin::initialize()
 	initVars(s_cfg.getSection("$once"));
     }
     initVars(s_cfg.getSection("$init"));
-    s_trackName = s_cfg.getBoolValue("priorities","trackparam",false) ?
+    s_trackName = s_cfg.getBoolValue("priorities","trackparam",true) ?
 	name().c_str() : (const char*)0;
     s_extended = s_cfg.getBoolValue("priorities","extended",false);
     s_insensitive = s_cfg.getBoolValue("priorities","insensitive",false);

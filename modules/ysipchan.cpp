@@ -3556,6 +3556,7 @@ bool YateSIPEngine::copyAuthParams(NamedList* dest, const NamedList& src, bool o
 	{ "ip_port", 1 },
 	{ "address", 1 },
 	{ "billid", 1 },
+	{ "handlers", 1 },
 	{  0,   0 },
     };
     if (!dest)

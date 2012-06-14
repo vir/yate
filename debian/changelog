@@ -1,3 +1,12 @@
+yate (4.1.1~svn5118) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5118: + Improved debugging information.  +
+    Fixed parsing of semicolons.  + Implemented conditional and
+    iterative for instruction.  + Don't copy the "handlers" parameter
+    from user.auth
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 15 Jun 2012 02:19:13 +0400
+
 yate (4.1.1~svn5116) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5116: + Added possibility to track message

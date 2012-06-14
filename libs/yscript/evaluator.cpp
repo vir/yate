@@ -1369,33 +1369,40 @@ int ExpEvaluator::evaluate(Array& results, unsigned int index, GenObject* contex
     return -1;
 }
 
+void ExpEvaluator::dump(const ExpOperation& oper, String& res) const
+{
+    const char* name = getOperator(oper.opcode());
+    if (name) {
+	res << name;
+	return;
+    }
+    switch (oper.opcode()) {
+	case OpcPush:
+	    if (oper.isInteger())
+		res << (int)oper.number();
+	    else
+		res << "'" << oper << "'";
+	    break;
+	case OpcField:
+	    res << oper.name();
+	    break;
+	case OpcFunc:
+	    res << oper.name() << "(" << (int)oper.number() << ")";
+	    break;
+	default:
+	    res << "[" << oper.opcode() << "]";
+	    if (oper.number() && oper.isInteger())
+		res << "(" << (int)oper.number() << ")";
+    }
+}
+
 void ExpEvaluator::dump(const ObjList& codes, String& res) const
 {
     for (const ObjList* l = codes.skipNull(); l; l = l->skipNext()) {
 	if (res)
 	    res << " ";
 	const ExpOperation* o = static_cast<const ExpOperation*>(l->get());
-	const char* oper = getOperator(o->opcode());
-	if (oper) {
-	    res << oper;
-	    continue;
-	}
-	switch (o->opcode()) {
-	    case OpcPush:
-		if (o->isInteger())
-		    res << (int)o->number();
-		else
-		    res << "'" << *o << "'";
-		break;
-	    case OpcField:
-		res << o->name();
-		break;
-	    case OpcFunc:
-		res << o->name() << "(" << (int)o->number() << ")";
-		break;
-	    default:
-		res << "[" << o->opcode() << "]";
-	}
+	dump(*o,res);
     }
 }
 
@@ -1434,6 +1441,7 @@ ExpOperation* ExpWrapper::clone(const char* name) const
     if (r)
 	r->ref();
     ExpWrapper* op = new ExpWrapper(object(),name);
+    static_cast<String&>(*op) = *this;
     op->lineNumber(lineNumber());
     return op;
 }

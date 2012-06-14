@@ -82,6 +82,7 @@ public:
     enum JsOpcode {
 	OpcBegin = OpcPrivate + 1,
 	OpcEnd,
+	OpcFlush,
 	OpcIndex,
 	OpcEqIdentity,
 	OpcNeIdentity,
@@ -98,6 +99,7 @@ public:
 	OpcBreak,
 	OpcCont,
 	OpcIn,
+	OpcNext,
 	OpcVar,
 	OpcWith,
 	OpcTry,
@@ -160,6 +162,7 @@ private:
     ObjVector m_linked;
     ObjList m_included;
     bool preProcessInclude(const char*& expr, bool once, GenObject* context);
+    bool getOneInstruction(const char*& expr, GenObject* nested);
     bool parseInner(const char*& expr, JsOpcode opcode, ParseNested* nested);
     bool parseIf(const char*& expr, GenObject* nested);
     bool parseSwitch(const char*& expr, GenObject* nested);
@@ -173,6 +176,29 @@ private:
     bool jumpRelative(long int offset, GenObject* context) const;
     long int m_label;
     int m_depth;
+};
+
+class JsIterator : public RefObject
+{
+    YCLASS(JsIterator,RefObject);
+public:
+    inline JsIterator(const ExpOperation& field, JsObject* obj)
+	: m_field(field.clone()), m_obj(obj), m_lst(0), m_iter(obj->params())
+	{ }
+    inline JsIterator(const ExpOperation& field, NamedList* lst)
+	: m_field(field.clone()), m_lst(lst), m_iter(*lst)
+	{ }
+    virtual ~JsIterator()
+	{ TelEngine::destruct(m_field); }
+    inline ExpOperation& field() const
+	{ return *m_field; }
+    inline const NamedString* get()
+	{ return m_iter.get(); }
+private:
+    ExpOperation* m_field;
+    RefPointer<JsObject> m_obj;
+    NamedList* m_lst;
+    NamedIterator m_iter;
 };
 
 class JsRunner : public ScriptRun
@@ -236,6 +262,7 @@ static const TokenDict s_operators[] =
     MAKEOP("===", EqIdentity),
     MAKEOP("!==", NeIdentity),
     MAKEOP(".", FieldOf),
+    MAKEOP("in", In),
     { 0, 0 }
 };
 
@@ -265,7 +292,6 @@ static const TokenDict s_instr[] =
     MAKEOP("default", Default),
     MAKEOP("break", Break),
     MAKEOP("continue", Cont),
-    MAKEOP("in", In),
     MAKEOP("var", Var),
     MAKEOP("with", With),
     MAKEOP("try", Try),
@@ -818,11 +844,29 @@ int JsCode::preProcess(const char*& expr, GenObject* context)
     }
 }
 
+bool JsCode::getOneInstruction(const char*& expr, GenObject* nested)
+{
+    if (inError())
+	return false;
+    XDebug(this,DebugAll,"JsCode::getOneInstruction %p '%.30s'",nested,expr);
+    if (skipComments(expr) == '{') {
+	if (!getInstruction(expr,nested))
+	    return false;
+    }
+    else {
+	if (!runCompile(expr,';',nested))
+	    return false;
+	if (skipComments(expr) == ';')
+	    expr++;
+    }
+    return true;
+}
+
 bool JsCode::getInstruction(const char*& expr, GenObject* nested)
 {
     if (inError())
 	return false;
-    XDebug(this,DebugAll,"JsCode::getInstruction '%.30s' %p",expr,nested);
+    XDebug(this,DebugAll,"JsCode::getInstruction %p '%.30s'",nested,expr);
     if (skipComments(expr) == '{') {
 	expr++;
 	for (;;) {
@@ -839,8 +883,11 @@ bool JsCode::getInstruction(const char*& expr, GenObject* nested)
 	expr++;
 	return true;
     }
+    else if (*expr == ';') {
+	expr++;
+	return true;
+    }
     const char* saved = expr;
-    skipComments(expr);
     Opcode op = ExpEvaluator::getOperator(expr,s_instr);
     switch ((JsOpcode)op) {
 	case (JsOpcode)OpcNone:
@@ -905,12 +952,12 @@ bool JsCode::getInstruction(const char*& expr, GenObject* nested)
     return true;
 }
 
-class ParseWhile : public ParseNested
+class ParseLoop : public ParseNested
 {
     friend class JsCode;
 public:
-    inline ParseWhile(JsCode* code, GenObject* nested, long int lblCont, long int lblBreak)
-	: ParseNested(code,nested,JsCode::OpcWhile),
+    inline ParseLoop(JsCode* code, GenObject* nested, JsCode::JsOpcode oper, long int lblCont, long int lblBreak)
+	: ParseNested(code,nested,oper),
 	  m_lblCont(lblCont), m_lblBreak(lblBreak)
 	{ }
 protected:
@@ -951,9 +998,10 @@ private:
 bool JsCode::parseInner(const char*& expr, JsOpcode opcode, ParseNested* nested)
 {
     switch (*nested) {
+	case OpcFor:
 	case OpcWhile:
 	    {
-		ParseWhile* block = static_cast<ParseWhile*>(nested);
+		ParseLoop* block = static_cast<ParseLoop*>(nested);
 		switch (opcode) {
 		    case OpcBreak:
 			XDebug(this,DebugAll,"Parsing loop:break '%.30s'",expr);
@@ -1015,19 +1063,15 @@ bool JsCode::parseIf(const char*& expr, GenObject* nested)
     if (skipComments(expr) != ')')
 	return gotError("Expecting ')'",expr);
     ExpOperation* cond = addOpcode((Opcode)OpcJumpFalse,++m_label);
-    if (!runCompile(++expr,';',nested))
+    if (!getOneInstruction(++expr,nested))
 	return false;
-    if (skipComments(expr) == ';')
-	expr++;
     const char* save = expr;
     skipComments(expr);
     if ((JsOpcode)ExpEvaluator::getOperator(expr,s_instr) == OpcElse) {
 	ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
 	addOpcode(OpcLabel,cond->number());
-	if (!runCompile(++expr,0,nested))
+	if (!getOneInstruction(expr,nested))
 	    return false;
-	if (skipComments(expr) == ';')
-	    expr++;
 	addOpcode(OpcLabel,jump->number());
     }
     else {
@@ -1041,6 +1085,7 @@ bool JsCode::parseSwitch(const char*& expr, GenObject* nested)
 {
     if (skipComments(expr) != '(')
 	return gotError("Expecting '('",expr);
+    addOpcode((Opcode)OpcBegin);
     if (!runCompile(++expr,')'))
 	return false;
     if (skipComments(expr) != ')')
@@ -1078,6 +1123,7 @@ bool JsCode::parseSwitch(const char*& expr, GenObject* nested)
     if (parseStack.m_lblDefault)
 	addOpcode((Opcode)OpcJump,parseStack.m_lblDefault);
     addOpcode(OpcLabel,parseStack.m_lblBreak);
+    addOpcode((Opcode)OpcFlush);
     return true;
 }
 
@@ -1085,33 +1131,78 @@ bool JsCode::parseFor(const char*& expr, GenObject* nested)
 {
     if (skipComments(expr) != '(')
 	return gotError("Expecting '('",expr);
-    if (!runCompile(++expr,')'))
+    addOpcode((Opcode)OpcBegin);
+    if ((skipComments(++expr) != ';') && !runCompile(expr,')'))
 	return false;
+    long int cont = 0;
+    long int jump = ++m_label;
+    long int body = ++m_label;
+    // parse initializer
+    if (skipComments(expr) == ';') {
+	long int check = body;
+	if (skipComments(++expr) != ';') {
+	    check = ++m_label;
+	    addOpcode(OpcLabel,check);
+	    addOpcode((Opcode)OpcBegin);
+	    // parse condition
+	    if (!runCompile(expr))
+		return false;
+	    if (skipComments(expr) != ';')
+		return gotError("Expecting ';'",expr);
+	    addOpcode((Opcode)OpcEnd);
+	    addOpcode((Opcode)OpcJumpFalse,jump);
+	}
+	addOpcode((Opcode)OpcJump,body);
+	if (skipComments(++expr) == ')')
+	    cont = check;
+	else {
+	    cont = ++m_label;
+	    addOpcode(OpcLabel,cont);
+	    addOpcode((Opcode)OpcBegin);
+	    // parse increment
+	    if (!runCompile(expr,')'))
+		return false;
+	    addOpcode((Opcode)OpcFlush);
+	    addOpcode((Opcode)OpcJump,check);
+	}
+    }
+    else {
+	cont = ++m_label;
+	addOpcode(OpcLabel,cont);
+	addOpcode((Opcode)OpcNext);
+	addOpcode((Opcode)OpcJumpFalse,jump);
+    }
     if (skipComments(expr) != ')')
 	return gotError("Expecting ')'",expr);
-    ParseNested parseStack(this,nested,OpcFor);
-    if (!runCompile(++expr,';',parseStack))
+    ParseLoop parseStack(this,nested,OpcFor,cont,jump);
+    addOpcode(OpcLabel,body);
+    if (!getOneInstruction(++expr,parseStack))
 	return false;
-    if (skipComments(expr) == ';')
-	expr++;
+    addOpcode((Opcode)OpcJump,cont);
+    addOpcode(OpcLabel,jump);
+    addOpcode((Opcode)OpcFlush);
     return true;
 }
 
 bool JsCode::parseWhile(const char*& expr, GenObject* nested)
 {
-    ExpOperation* lbl = addOpcode(OpcLabel,++m_label);
     if (skipComments(expr) != '(')
 	return gotError("Expecting '('",expr);
+    addOpcode((Opcode)OpcBegin);
+    long int cont = ++m_label;
+    addOpcode(OpcLabel,cont);
     if (!runCompile(++expr,')'))
 	return false;
     if (skipComments(expr) != ')')
 	return gotError("Expecting ')'",expr);
-    ExpOperation* jump = addOpcode((Opcode)OpcJumpFalse,++m_label);
-    ParseWhile parseStack(this,nested,lbl->number(),jump->number());
-    if (!runCompile(++expr,0,parseStack))
+    long int jump = ++m_label;
+    addOpcode((Opcode)OpcJumpFalse,jump);
+    ParseLoop parseStack(this,nested,OpcWhile,cont,jump);
+    if (!getOneInstruction(++expr,parseStack))
 	return false;
-    addOpcode((Opcode)OpcJump,lbl->number());
-    addOpcode(OpcLabel,jump->number());
+    addOpcode((Opcode)OpcJump,cont);
+    addOpcode(OpcLabel,jump);
+    addOpcode((Opcode)OpcFlush);
     return true;
 }
 
@@ -1419,20 +1510,28 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 	    pushOne(stack,new ExpOperation((Opcode)OpcBegin));
 	    break;
 	case OpcEnd:
+	case OpcFlush:
 	    {
-		ExpOperation* op = popOne(stack);
-		ObjList* b = 0;
-		for (ObjList* l = stack.skipNull(); l; l=l->skipNext()) {
-		    ExpOperation* o = static_cast<ExpOperation*>(l->get());
-		    if (o && (o->opcode() == (Opcode)OpcBegin))
-			b = l;
+		ExpOperation* op = 0;
+		if ((JsOpcode)oper.opcode() == OpcEnd) {
+		    op = popOne(stack);
+		    if (op && (op->opcode() == (Opcode)OpcBegin)) {
+			TelEngine::destruct(op);
+			break;
+		    }
 		}
-		if (!b) {
-		    TelEngine::destruct(op);
+		bool done = false;
+		ExpOperation* o;
+		while ((o = static_cast<ExpOperation*>(stack.remove(false)))) {
+		    done = (o->opcode() == (Opcode)OpcBegin);
+		    TelEngine::destruct(o);
+		    if (done)
+			break;
+		}
+		if (!done)
 		    return gotError("ExpEvaluator stack underflow",oper.lineNumber());
-		}
-		b->clear();
-		pushOne(stack,op);
+		if (op)
+		    pushOne(stack,op);
 	    }
 	    break;
 	case OpcIndex:
@@ -1563,6 +1662,71 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		    TelEngine::destruct(op);
 		    return gotError("Return outside function call",oper.lineNumber());
 		}
+		pushOne(stack,new ExpOperation(ok));
+	    }
+	    break;
+	case OpcIn:
+	    {
+		ExpOperation* obj = popValue(stack,context);
+		ExpOperation* fld = popOne(stack);
+		if (!fld || !obj) {
+		    TelEngine::destruct(fld);
+		    TelEngine::destruct(obj);
+		    return gotError("Stack underflow",oper.lineNumber());
+		}
+		if (fld->opcode() != OpcField) {
+		    TelEngine::destruct(fld);
+		    TelEngine::destruct(obj);
+		    return gotError("Expecting field name",oper.lineNumber());
+		}
+		ExpWrapper* wrap = 0;
+		JsObject* jso = YOBJECT(JsObject,obj);
+		if (jso)
+		    wrap = new ExpWrapper(new JsIterator(*fld,jso));
+		else {
+		    NamedList* lst = YOBJECT(NamedList,obj);
+		    if (lst)
+			wrap = new ExpWrapper(new JsIterator(*fld,lst));
+		}
+#ifdef DEBUG
+		if (wrap) {
+		    *wrap << fld->name() << " in " << obj->name();
+		    Debug(this,DebugInfo,"Created iterator: '%s'",wrap->c_str());
+		}
+#endif
+		TelEngine::destruct(fld);
+		TelEngine::destruct(obj);
+		if (wrap)
+		    pushOne(stack,wrap);
+		else
+		    return gotError("Expecting iterable object",oper.lineNumber());
+	    }
+	    break;
+	case OpcNext:
+	    {
+		ExpOperation* op = popValue(stack,context);
+		if (!op)
+		    return gotError("Stack underflow",oper.lineNumber());
+		JsIterator* iter = YOBJECT(JsIterator,op);
+		if (!iter) {
+		    TelEngine::destruct(op);
+		    return gotError("Expecting runtime iterator",oper.lineNumber());
+		}
+		bool ok = false;
+		const NamedString* n = iter->get();
+		if (n) {
+		    static const ExpOperation s_assign(OpcAssign);
+		    pushOne(stack,iter->field().clone());
+		    pushOne(stack,new ExpOperation(n->name()));
+		    ok = runOperation(stack,s_assign,context);
+		}
+		if (ok) {
+		    // assign pushes the value back on stack
+		    TelEngine::destruct(popOne(stack));
+		    pushOne(stack,op);
+		}
+		else
+		    TelEngine::destruct(op);
 		pushOne(stack,new ExpOperation(ok));
 	    }
 	    break;
@@ -1721,6 +1885,7 @@ bool JsCode::jumpToLabel(long int label, GenObject* context) const
 	const ExpOperation* o = static_cast<const ExpOperation*>(l->get());
 	if (o->opcode() == OpcLabel && o->number() == label) {
 	    runner->m_opcode = l;
+	    XDebug(this,DebugInfo,"Jumped to label %ld",label);
 	    return true;
 	}
     }
@@ -1736,6 +1901,7 @@ bool JsCode::jumpRelative(long int offset, GenObject* context) const
     if (i < 0 || i > (long int)m_linked.length())
 	return false;
     index = i;
+    XDebug(this,DebugInfo,"Jumped relative %+ld to index %ld",offset,i);
     return true;
 }
 

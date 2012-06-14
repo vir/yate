@@ -759,6 +759,13 @@ protected:
     virtual bool runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context = 0) const;
 
     /**
+     * Dump a single operation according to current operators dictionary
+     * @param oper Operation to dump
+     * @param res Result string representation of operations
+     */
+    virtual void dump(const ExpOperation& oper, String& res) const;
+
+    /**
      * Internally used operator dictionary
      */
     const TokenDict* m_operators;

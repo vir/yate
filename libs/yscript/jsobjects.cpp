@@ -284,7 +284,7 @@ bool JsObject::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* co
 		params().clearParam(oper.name());
 	}
 	else
-	    params().setParam(oper.name(),oper);
+	    params().setParam(new NamedString(oper.name(),oper));
     }
     return true;
 }

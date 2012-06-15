@@ -99,6 +99,7 @@ public:
 	OpcBreak,
 	OpcCont,
 	OpcIn,
+	OpcOf,
 	OpcNext,
 	OpcVar,
 	OpcWith,
@@ -194,11 +195,16 @@ public:
 	{ return *m_field; }
     inline const NamedString* get()
 	{ return m_iter.get(); }
+    inline const String& name() const
+	{ return m_name; }
+    inline void name(const char* objName)
+	{ m_name = objName; }
 private:
     ExpOperation* m_field;
     RefPointer<JsObject> m_obj;
     NamedList* m_lst;
     NamedIterator m_iter;
+    String m_name;
 };
 
 class JsRunner : public ScriptRun
@@ -263,6 +269,7 @@ static const TokenDict s_operators[] =
     MAKEOP("!==", NeIdentity),
     MAKEOP(".", FieldOf),
     MAKEOP("in", In),
+    MAKEOP("of", Of),
     { 0, 0 }
 };
 
@@ -335,42 +342,44 @@ GenObject* JsContext::resolveTop(ObjList& stack, const String& name, GenObject* 
 
 GenObject* JsContext::resolve(ObjList& stack, String& name, GenObject* context)
 {
-    if (name.find('.') < 0)
-	return resolveTop(stack,name,context);
-    ObjList* list = name.split('.',true);
     GenObject* obj = 0;
-    for (ObjList* l = list->skipNull(); l; ) {
-	const String* s = static_cast<const String*>(l->get());
-	ObjList* l2 = l->skipNext();
-	if (TelEngine::null(s)) {
-	    // consecutive dots - not good
-	    obj = 0;
-	    break;
-	}
-	if (!obj)
-	    obj = resolveTop(stack,*s,context);
-	if (!l2) {
-	    name = *s;
-	    break;
-	}
-	ExpExtender* ext = YOBJECT(ExpExtender,obj);
-	if (ext) {
-	    GenObject* adv = ext->getField(stack,*s,context);
-	    XDebug(DebugAll,"JsContext::resolve advanced to '%s' of %p for '%s'",
-		(adv ? adv->toString().c_str() : 0),ext,s->c_str());
-	    if (adv)
-		obj = adv;
-	    else {
-		name.clear();
-		for (; l; l = l->skipNext())
-		    name.append(l->get()->toString(),".");
+    if (name.find('.') < 0)
+	obj = resolveTop(stack,name,context);
+    else {
+	ObjList* list = name.split('.',true);
+	for (ObjList* l = list->skipNull(); l; ) {
+	    const String* s = static_cast<const String*>(l->get());
+	    ObjList* l2 = l->skipNext();
+	    if (TelEngine::null(s)) {
+		// consecutive dots - not good
+		obj = 0;
 		break;
 	    }
+	    if (!obj)
+		obj = resolveTop(stack,*s,context);
+	    if (!l2) {
+		name = *s;
+		break;
+	    }
+	    ExpExtender* ext = YOBJECT(ExpExtender,obj);
+	    if (ext) {
+		GenObject* adv = ext->getField(stack,*s,context);
+		XDebug(DebugAll,"JsContext::resolve advanced to '%s' of %p for '%s'",
+		    (adv ? adv->toString().c_str() : 0),ext,s->c_str());
+		if (adv)
+		    obj = adv;
+		else {
+		    name.clear();
+		    for (; l; l = l->skipNext())
+			name.append(l->get()->toString(),".");
+		    break;
+		}
+	    }
+	    l = l2;
 	}
-	l = l2;
+	TelEngine::destruct(list);
     }
-    TelEngine::destruct(list);
-    XDebug(DebugAll,"JsContext::resolve got '%s' %p for '%s'",
+    DDebug(DebugAll,"JsContext::resolve got '%s' %p for '%s'",
 	(obj ? obj->toString().c_str() : 0),obj,name.c_str());
     return obj;
 }
@@ -1666,6 +1675,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 	    }
 	    break;
 	case OpcIn:
+	case OpcOf:
 	    {
 		ExpOperation* obj = popValue(stack,context);
 		ExpOperation* fld = popOne(stack);
@@ -1679,21 +1689,26 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		    TelEngine::destruct(obj);
 		    return gotError("Expecting field name",oper.lineNumber());
 		}
-		ExpWrapper* wrap = 0;
+		bool isOf = ((JsOpcode)oper.opcode() == OpcOf);
+		JsIterator* iter = 0;
 		JsObject* jso = YOBJECT(JsObject,obj);
 		if (jso)
-		    wrap = new ExpWrapper(new JsIterator(*fld,jso));
+		    iter = new JsIterator(*fld,jso);
 		else {
 		    NamedList* lst = YOBJECT(NamedList,obj);
 		    if (lst)
-			wrap = new ExpWrapper(new JsIterator(*fld,lst));
+			iter = new JsIterator(*fld,lst);
 		}
+		ExpWrapper* wrap = 0;
+		if (iter) {
+		    if (isOf)
+			iter->name(obj->name());
+		    wrap = new ExpWrapper(iter);
 #ifdef DEBUG
-		if (wrap) {
-		    *wrap << fld->name() << " in " << obj->name();
+		    *wrap << fld->name() << (isOf ? " of " : " in ") << obj->name();
 		    Debug(this,DebugInfo,"Created iterator: '%s'",wrap->c_str());
-		}
 #endif
+		}
 		TelEngine::destruct(fld);
 		TelEngine::destruct(obj);
 		if (wrap)
@@ -1717,7 +1732,10 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		if (n) {
 		    static const ExpOperation s_assign(OpcAssign);
 		    pushOne(stack,iter->field().clone());
-		    pushOne(stack,new ExpOperation(n->name()));
+		    if (iter->name())
+			pushOne(stack,new ExpOperation(OpcField,iter->name() + "." + n->name()));
+		    else
+			pushOne(stack,new ExpOperation(n->name()));
 		    ok = runOperation(stack,s_assign,context);
 		}
 		if (ok) {

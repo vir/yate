@@ -860,9 +860,15 @@ ExpOperation* ExpEvaluator::popOne(ObjList& stack)
 	return 0;
     }
     stack.remove(o,false);
-    XDebug(DebugAll,"Popped: %p%s%s",o,
+#ifdef DEBUG
+#ifdef XDEBUG
+    Debug(DebugAll,"popOne: %p%s%s",o,
 	(YOBJECT(ExpFunction,o) ? " function" : ""),
 	(YOBJECT(ExpWrapper,o) ? " wrapper" : ""));
+#else
+    Debug(DebugAll,"popOne: %p",o);
+#endif
+#endif
     return o;
 }
 
@@ -877,7 +883,15 @@ ExpOperation* ExpEvaluator::popAny(ObjList& stack)
 	stack.remove();
     }
     stack.remove(o,false);
-    DDebug(DebugInfo,"Popped: %p",o);
+#ifdef DEBUG
+#ifdef XDEBUG
+    Debug(DebugAll,"popAny: %p%s%s",o,
+	(YOBJECT(ExpFunction,o) ? " function" : ""),
+	(YOBJECT(ExpWrapper,o) ? " wrapper" : ""));
+#else
+    Debug(DebugAll,"popAny: %p",o);
+#endif
+#endif
     return o;
 }
 

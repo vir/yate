@@ -1529,7 +1529,7 @@ class AuthHandler : public MessageHandler
 {
 public:
     inline AuthHandler()
-	: MessageHandler("user.auth",0,__plugin.name()),
+	: MessageHandler("user.auth",1,__plugin.name()),
 	  m_count(0)
 	{ }
     virtual ~AuthHandler()
@@ -1550,7 +1550,7 @@ class RegisterHandler : public MessageHandler
 {
 public:
     inline RegisterHandler()
-	: MessageHandler("user.register",0,__plugin.name()),
+	: MessageHandler("user.register",1,__plugin.name()),
 	  m_count(0)
 	{ }
     virtual ~RegisterHandler()
@@ -3495,7 +3495,7 @@ bool Monitor::unload()
 	return false;
 
     Engine::uninstall(m_msgUpdateHandler);
-    Engine::uninstall(m_snmpMsgHandler);    
+    Engine::uninstall(m_snmpMsgHandler);
     Engine::uninstall(m_startHandler);
     Engine::uninstall(m_authHandler);
     Engine::uninstall(m_registerHandler);

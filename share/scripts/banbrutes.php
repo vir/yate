@@ -275,6 +275,7 @@ $n = round(1 * Yate::Arg());
 if ($n >= 2)
     $ban_failures = $n;
 
+Yate::SetLocal("trackparam","banbrutes");
 Yate::Watch("user.auth");
 Yate::Install("user.authfail",120);
 Yate::Install("engine.timer",150);

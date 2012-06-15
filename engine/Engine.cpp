@@ -293,7 +293,7 @@ class EngineSuperHandler : public MessageHandler
 {
 public:
     EngineSuperHandler()
-	: MessageHandler("engine.timer",0,"engine"),
+	: MessageHandler("engine.timer",1,"engine"),
 	  m_seq(0)
 	{ }
     virtual bool received(Message &msg)
@@ -305,7 +305,7 @@ class EngineStatusHandler : public MessageHandler
 {
 public:
     EngineStatusHandler()
-	: MessageHandler("engine.status",0,"engine")
+	: MessageHandler("engine.status",90,"engine")
 	{ }
     virtual bool received(Message &msg);
 };
@@ -336,7 +336,7 @@ class EngineEventHandler : public MessageHandler
 {
 public:
     EngineEventHandler()
-	: MessageHandler("module.update",0,"engine")
+	: MessageHandler("module.update",1,"engine")
 	{ }
     virtual bool received(Message &msg);
 };
@@ -728,6 +728,8 @@ bool EngineHelp::received(Message &msg)
 	msg.retValue() << s_evtsOpt << s_evtsMsg;
     else if (line == YSTRING("logview"))
 	msg.retValue() << s_logvOpt << s_logvMsg;
+    else
+	return false;
     return true;
 }
 

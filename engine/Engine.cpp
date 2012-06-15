@@ -728,6 +728,8 @@ bool EngineHelp::received(Message &msg)
 	msg.retValue() << s_evtsOpt << s_evtsMsg;
     else if (line == YSTRING("logview"))
 	msg.retValue() << s_logvOpt << s_logvMsg;
+    else
+	return false;
     return true;
 }
 

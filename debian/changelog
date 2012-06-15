@@ -1,3 +1,21 @@
+yate (4.1.1~svn5124) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5124: + NamedList::setParam(const
+    char*,const char*) does not replace an existing parameter which may
+    be a subclass of NamedString.  + Fixes the impossibility to replace
+    an object or function with a simple type.  + Always use the full
+    setParam replacement when doing assignment in a script.  + Improved
+    debugging when compiled with DEBUG or XDEBUG.  + Implemented for
+    (variable of object) that iterates over values, not keys.  + Set the
+    call leg "direction" parameter in channel messages.  + Fixed bug in
+    help system, was blocking specific help.  + This must be set before
+    installing the handlers.  + Allow setting the handler tracking name
+    by individual external scripts.  + This allows the message sniffer
+    to display the messages unaltered.  + All handlers except msgsniff
+    should have numeric priority 1 or higher.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 16 Jun 2012 02:19:14 +0400
+
 yate (4.1.1~svn5118) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5118: + Improved debugging information.  +

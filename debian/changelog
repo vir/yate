@@ -1,3 +1,11 @@
+yate (4.1.1~svn5125) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5125: + All handlers except msgsniff should
+    have numeric priority 1 or higher.  + Added separate function for
+    calling a script function.  + Fixed handling of function arguments.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sun, 17 Jun 2012 02:19:13 +0400
+
 yate (4.1.1~svn5124) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5124: + NamedList::setParam(const

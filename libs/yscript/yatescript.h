@@ -1019,10 +1019,11 @@ public:
      * Constructor
      * @param object Pointer to the object to wrap
      * @param name Optional name of the wrapper
+     * @param barrier True if the operation is an expression barrier on the stack
      */
-    inline ExpWrapper(GenObject* object, const char* name = 0)
+    inline ExpWrapper(GenObject* object, const char* name = 0, bool barrier = false)
 	: ExpOperation(ExpEvaluator::OpcPush,name,
-	    object ? object->toString().c_str() : (const char*)0),
+	    object ? object->toString().c_str() : (const char*)0,barrier),
 	  m_object(object)
 	{ }
 
@@ -1390,19 +1391,28 @@ public:
      * Resets code execution to the beginning, does not clear context
      * @return Status of the runtime after reset
      */
-    Status reset();
+    virtual Status reset();
 
     /**
      * Execute script from where it was left, may stop and return Incomplete state
      * @return Status of the runtime after code execution
      */
-    Status execute();
+    virtual Status execute();
 
     /**
      * Execute script from the beginning until it returns a final state
      * @return Final status of the runtime after code execution
      */
-    Status run();
+    virtual Status run();
+
+    /**
+     * Call a script function or method
+     * @param name Name of the function to call
+     * @param args Values to pass as actual function arguments
+     * @param thisObj Object to pass as "this" if applicable
+     * @return Final status of the runtime after function call
+     */
+    virtual Status call(const String& name, ObjList& args, ExpOperation* thisObj = 0);
 
     /**
      * Try to assign a value to a single field in the script context
@@ -1417,7 +1427,7 @@ protected:
      * Resume script from where it was left, may stop and return Incomplete state
      * @return Status of the runtime after code execution
      */
-    Status resume();
+    virtual Status resume();
 
 private:
     ScriptCode* m_code;
@@ -1634,7 +1644,8 @@ public:
      * @param arguments List where the arguments are added in proper order
      * @return Number of arguments popped off stack
      */
-    static int extractArgs(JsObject* obj, ObjList& stack, const ExpOperation& oper, GenObject* context, ObjList& arguments);
+    static int extractArgs(JsObject* obj, ObjList& stack, const ExpOperation& oper,
+	GenObject* context, ObjList& arguments);
 
     /**
      * Helper method that pops arguments off a stack to a list in proper order
@@ -1646,6 +1657,14 @@ public:
      */
     inline int extractArgs(ObjList& stack, const ExpOperation& oper, GenObject* context, ObjList& arguments)
 	{ return extractArgs(this,stack,oper,context,arguments); }
+
+    /**
+     * Create an empty function call context
+     * @param mtx Pointer to the mutex that serializes this object
+     * @param thisObj Optional object that will be set as "this"
+     * @return New empty object usable as call context
+     */
+    static JsObject* buildCallContext(Mutex* mtx, ExpOperation* thisObj = 0);
 
     /**
      * Initialize the standard global objects in a context
@@ -1715,8 +1734,12 @@ public:
      * Constructor with function name
      * @param mtx Pointer to the mutex that serializes this object
      * @param name Name of the function
+     * @param args Optional list of formal parameter names, will be emptied
+     * @param lbl Number of the entry point label
+     * @param code The script code to be used while running the function
      */
-    JsFunction(Mutex* mtx, const char* name);
+    JsFunction(Mutex* mtx, const char* name, ObjList* args = 0, long int lbl = 0,
+	ScriptCode* code = 0);
 
     /**
      * Try to evaluate a single user defined method
@@ -1727,6 +1750,21 @@ public:
      * @return True if evaluation succeeded
      */
     virtual bool runDefined(ObjList& stack, const ExpOperation& oper, GenObject* context);
+
+    /**
+     * Retrieve the name of the N-th formal argument
+     * @param index Index of the formal argument
+     * @return Pointer to formal argument name, NULL if index too large
+     */
+    inline const String* formalName(unsigned int index) const
+	{ return static_cast<const String*>(m_formal[index]); }
+
+    /**
+     * Retrieve the entry label of the code for this function
+     * @return Number of the entry point label, zero if no code defined
+     */
+    inline long int label() const
+	{ return m_label; }
 
 protected:
     /**
@@ -1741,6 +1779,9 @@ protected:
 
 private:
     void init();
+    ObjList m_formal;
+    long int m_label;
+    ScriptCode* m_code;
 };
 
 /**

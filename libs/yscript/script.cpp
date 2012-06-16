@@ -271,6 +271,12 @@ ScriptRun::Status ScriptRun::run()
     return s;
 }
 
+// Execute a function or method call
+ScriptRun::Status ScriptRun::call(const String& name, ObjList& args, ExpOperation* thisObj)
+{
+    return Failed;
+}
+
 // Execute an assignment operation
 bool ScriptRun::runAssign(const ExpOperation& oper, GenObject* context)
 {

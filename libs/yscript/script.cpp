@@ -93,6 +93,11 @@ ScriptRun* ScriptParser::createRunner(ScriptCode* code, ScriptContext* context) 
     return runner;
 }
 
+bool ScriptParser::callable(const String& name)
+{
+    return false;
+}
+
 
 // RTTI Interface access
 void* ScriptContext::getObject(const String& name) const
@@ -274,7 +279,14 @@ ScriptRun::Status ScriptRun::run()
 // Execute a function or method call
 ScriptRun::Status ScriptRun::call(const String& name, ObjList& args, ExpOperation* thisObj)
 {
+    TelEngine::destruct(thisObj);
     return Failed;
+}
+
+// Check if a function or method call exists
+bool ScriptRun::callable(const String& name)
+{
+    return false;
 }
 
 // Execute an assignment operation

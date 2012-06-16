@@ -73,9 +73,33 @@ public:
     virtual bool msgDisconnect(Message& msg, const String& reason);
     bool init();
 private:
-    bool runFunction(const char* name, Message& msg);
+    bool runFunction(const String& name, Message& msg);
     ScriptRun* m_runner;
     State m_state;
+};
+
+class JsGlobal : public NamedString
+{
+public:
+    JsGlobal(const char* scriptName, const char* fileName);
+    virtual ~JsGlobal();
+    bool fileChanged(const char* fileName) const;
+    inline JsParser& parser()
+	{ return m_jsCode; }
+    inline ScriptContext* context()
+	{ return m_context; }
+    bool runMain();
+    static void markUnused();
+    static void freeUnused();
+    static void initScript(const String& scriptName, const String& fileName);
+    inline static void unloadAll()
+	{ s_globals.clear(); }
+private:
+    JsParser m_jsCode;
+    RefPointer<ScriptContext> m_context;
+    unsigned int m_fileTime;
+    bool m_inUse;
+    static ObjList s_globals;
 };
 
 #define MKDEBUG(lvl) params().addParam(new ExpOperation((long int)Debug ## lvl,"Debug" # lvl))
@@ -190,8 +214,10 @@ INIT_PLUGIN(JsModule);
 
 UNLOAD_PLUGIN(unloadNow)
 {
-    if (unloadNow)
+    if (unloadNow) {
+	JsGlobal::unloadAll();
 	return __plugin.unload();
+    }
     return true;
 }
 
@@ -527,20 +553,23 @@ bool JsAssist::init()
     return (ScriptRun::Succeeded == rval);
 }
 
-bool JsAssist::runFunction(const char* name, Message& msg)
+bool JsAssist::runFunction(const String& name, Message& msg)
 {
-    if (!m_runner)
+    if (!(m_runner && m_runner->callable(name)))
 	return false;
-    DDebug(&__plugin,DebugInfo,"Running function %s in '%s'",name,id().c_str());
-    JsParser jp;
-    String tmp;
-    tmp << name << "()";
-    jp.parse(tmp);
-    ScriptRun* runner = jp.createRunner(m_runner->context());
-    JsMessage* jm = new JsMessage(&msg,m_runner->context()->mutex(),false);
-    ExpEvaluator::pushOne(runner->stack(),new ExpWrapper(jm,"message"));
-    ScriptRun::Status rval = runner->run();
+    DDebug(&__plugin,DebugInfo,"Running function %s in '%s'",name.c_str(),id().c_str());
+
+    ScriptRun* runner = __plugin.parser().createRunner(m_runner->context());
+    if (!runner)
+	return false;
+
+    JsMessage* jm = new JsMessage(&msg,runner->context()->mutex(),false);
+    jm->ref();
+    ObjList args;
+    args.append(new ExpWrapper(jm,"message"));
+    ScriptRun::Status rval = runner->call(name,args);
     jm->clearMsg();
+    TelEngine::destruct(jm);
     TelEngine::destruct(runner);
     return (ScriptRun::Succeeded == rval);
 }
@@ -584,6 +613,100 @@ bool JsAssist::msgRoute(Message& msg)
 bool JsAssist::msgDisconnect(Message& msg, const String& reason)
 {
     return false;
+}
+
+
+ObjList JsGlobal::s_globals;
+
+JsGlobal::JsGlobal(const char* scriptName, const char* fileName)
+    : NamedString(scriptName,fileName),
+      m_fileTime(0), m_inUse(true)
+{
+    m_jsCode.basePath(s_basePath);
+    m_jsCode.adjustPath(*this);
+    DDebug(&__plugin,DebugAll,"Loading global Javascript '%s' from '%s'",name().c_str(),c_str());
+    File::getFileTime(c_str(),m_fileTime);
+    if (m_jsCode.parseFile(*this))
+	Debug(&__plugin,DebugInfo,"Parsed '%s' script: %s",name().c_str(),c_str());
+    else if (*this)
+	Debug(&__plugin,DebugWarn,"Failed to parse '%s' script: %s",name().c_str(),c_str());
+}
+
+JsGlobal::~JsGlobal()
+{
+    DDebug(&__plugin,DebugAll,"Unloading global Javascript '%s'",name().c_str());
+    if (m_jsCode.callable("onUnload")) {
+	ScriptRun* runner = m_jsCode.createRunner(m_context);
+	if (runner) {
+	    ObjList args;
+	    runner->call("onUnload",args);
+	    TelEngine::destruct(runner);
+	}
+    }
+}
+
+bool JsGlobal::fileChanged(const char* fileName) const
+{
+    if (m_jsCode.basePath() != s_basePath)
+	return true;
+    String tmp(fileName);
+    m_jsCode.adjustPath(tmp);
+    if (tmp != *this)
+	return true;
+    unsigned int time;
+    File::getFileTime(tmp,time);
+    return (time != m_fileTime);
+}
+
+void JsGlobal::markUnused()
+{
+    ListIterator iter(s_globals);
+    while (JsGlobal* script = static_cast<JsGlobal*>(iter.get()))
+	script->m_inUse = false;
+}
+
+void JsGlobal::freeUnused()
+{
+    ListIterator iter(s_globals);
+    while (JsGlobal* script = static_cast<JsGlobal*>(iter.get()))
+	if (!script->m_inUse)
+	    s_globals.remove(script);
+}
+
+void JsGlobal::initScript(const String& scriptName, const String& fileName)
+{
+    if (fileName.null())
+	return;
+    JsGlobal* script = static_cast<JsGlobal*>(s_globals[scriptName]);
+    if (script) {
+	if (script->fileChanged(fileName)) {
+	    s_globals.remove(script,false);
+	    TelEngine::destruct(script);
+	}
+	else {
+	    script->m_inUse = true;
+	    return;
+	}
+    }
+    script = new JsGlobal(scriptName,fileName);
+    script->runMain();
+    s_globals.append(script);
+}
+
+bool JsGlobal::runMain()
+{
+    ScriptRun* runner = m_jsCode.createRunner(m_context);
+    if (!runner)
+	return false;
+    if (!m_context)
+	m_context = runner->context();
+    JsObject::initialize(runner->context());
+    JsEngine::initialize(runner->context());
+    JsMessage::initialize(runner->context());
+    JsFile::initialize(runner->context());
+    ScriptRun::Status st = runner->run();
+    TelEngine::destruct(runner);
+    return (ScriptRun::Succeeded == st);
 }
 
 
@@ -702,6 +825,9 @@ bool JsModule::received(Message& msg, int id)
 		}
 	    }
 	    break;
+	case Halt:
+	    JsGlobal::unloadAll();
+	    return false;
     } // switch (id)
     return ChanAssistList::received(msg,id);
 }
@@ -747,18 +873,30 @@ void JsModule::initialize()
     lock();
     m_assistCode.clear();
     m_assistCode.basePath(tmp);
-    tmp = cfg.getValue("scripts","routing");
+    tmp = cfg.getValue("general","routing");
     m_assistCode.adjustPath(tmp);
     if (m_assistCode.parseFile(tmp))
 	Debug(this,DebugInfo,"Parsed routing script: %s",tmp.c_str());
     else if (tmp)
 	Debug(this,DebugWarn,"Failed to parse script: %s",tmp.c_str());
     unlock();
+    JsGlobal::markUnused();
+    NamedList* sect = cfg.getSection("scripts");
+    if (sect) {
+	unsigned int len = sect->length();
+	for (unsigned int i=0; i<len; i++) {
+	    NamedString *n = sect->getParam(i);
+	    if (n)
+		JsGlobal::initScript(n->name(),*n);
+	}
+    }
+    JsGlobal::freeUnused();
 }
 
 void JsModule::init(int priority)
 {
     ChanAssistList::init(priority);
+    installRelay(Halt);
     installRelay(Route,priority);
     installRelay(Ringing,priority);
     installRelay(Answered,priority);

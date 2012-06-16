@@ -1415,6 +1415,13 @@ public:
     virtual Status call(const String& name, ObjList& args, ExpOperation* thisObj = 0);
 
     /**
+     * Check if a script has a certain function or method
+     * @param name Name of the function to check
+     * @return True if function exists in code
+     */
+    virtual bool callable(const String& name);
+
+    /**
      * Try to assign a value to a single field in the script context
      * @param oper Field to assign to, contains the field name and new value
      * @param context Pointer to arbitrary object to be passed to called methods
@@ -1499,6 +1506,13 @@ public:
      */
     inline ScriptRun* createRunner(ScriptContext* context = 0) const
 	{ return createRunner(code(),context); }
+
+    /**
+     * Check if a script has a certain function or method
+     * @param name Name of the function to check
+     * @return True if function exists in code
+     */
+    virtual bool callable(const String& name);
 
 protected:
     /**
@@ -1963,10 +1977,17 @@ public:
 	{ return createRunner(code(),context); }
 
     /**
+     * Check if a script has a certain function or method
+     * @param name Name of the function to check
+     * @return True if function exists in code
+     */
+    virtual bool callable(const String& name);
+
+    /**
      * Adjust a file script path to include default if needed
      * @param script File path to adjust
      */
-    void adjustPath(String& script);
+    void adjustPath(String& script) const;
 
     /**
      * Retrieve the base script path

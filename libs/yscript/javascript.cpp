@@ -79,6 +79,7 @@ protected:
 class JsCode : public ScriptCode, public ExpEvaluator
 {
     friend class TelEngine::JsFunction;
+    friend class TelEngine::JsParser;
     friend class ParseNested;
     friend class JsRunner;
 public:
@@ -228,6 +229,7 @@ public:
 	{ }
     virtual Status reset();
     virtual Status call(const String& name, ObjList& args, ExpOperation* thisObj = 0);
+    virtual bool callable(const String& name);
 protected:
     virtual Status resume();
 private:
@@ -2074,14 +2076,20 @@ ScriptRun::Status JsRunner::resume()
 ScriptRun::Status JsRunner::call(const String& name, ObjList& args, ExpOperation* thisObj)
 {
     Lock mylock(this);
-    if (Invalid == state())
+    if (Invalid == state()) {
+	TelEngine::destruct(thisObj);
 	return Invalid;
+    }
     const JsCode* c = static_cast<const JsCode*>(code());
-    if (!(c && context()))
+    if (!(c && context())) {
+	TelEngine::destruct(thisObj);
 	return Invalid;
+    }
     JsFunction* func = c->getGlobalFunction(name);
-    if (!func)
+    if (!func) {
+	TelEngine::destruct(thisObj);
 	return Failed;
+    }
     reset();
     // prepare a function call stack
     ExpOperation oper(ExpEvaluator::OpcFunc,name,args.count());
@@ -2093,6 +2101,15 @@ ScriptRun::Status JsRunner::call(const String& name, ObjList& args, ExpOperation
     while (Incomplete == s)
 	s = execute();
     return s;
+}
+
+bool JsRunner::callable(const String& name)
+{
+    Lock mylock(this);
+    if (Invalid == state())
+	return false;
+    const JsCode* c = static_cast<const JsCode*>(code());
+    return (c && context() && c->getGlobalFunction(name));
 }
 
 }; // anonymous namespace
@@ -2159,7 +2176,7 @@ bool JsFunction::runDefined(ObjList& stack, const ExpOperation& oper, GenObject*
 
 
 // Adjust a script file include path
-void JsParser::adjustPath(String& script)
+void JsParser::adjustPath(String& script) const
 {
     if (script.null() || script.startsWith(Engine::pathSeparator()))
 	return;
@@ -2182,6 +2199,13 @@ ScriptRun* JsParser::createRunner(ScriptCode* code, ScriptContext* context) cons
     ScriptRun* runner = new JsRunner(code,context);
     TelEngine::destruct(ctxt);
     return runner;
+}
+
+// Check if function or method exists
+bool JsParser::callable(const String& name)
+{
+    const JsCode* c = static_cast<const JsCode*>(code());
+    return (c && c->getGlobalFunction(name));
 }
 
 // Parse a piece of Javascript text

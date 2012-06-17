@@ -1,3 +1,12 @@
+yate (4.1.1~svn5127) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5127: + Fixed handling of function
+    arguments.  + Fixed one letter typo.  + Moved the main routing
+    script to the [global] section.  + Added a global Javascript loader.
+    + Changed the way callback JS functions are called.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Mon, 18 Jun 2012 02:19:12 +0400
+
 yate (4.1.1~svn5125) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5125: + All handlers except msgsniff should

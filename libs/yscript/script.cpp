@@ -277,9 +277,11 @@ ScriptRun::Status ScriptRun::run()
 }
 
 // Execute a function or method call
-ScriptRun::Status ScriptRun::call(const String& name, ObjList& args, ExpOperation* thisObj)
+ScriptRun::Status ScriptRun::call(const String& name, ObjList& args,
+    ExpOperation* thisObj, ExpOperation* scopeObj)
 {
     TelEngine::destruct(thisObj);
+    TelEngine::destruct(scopeObj);
     return Failed;
 }
 

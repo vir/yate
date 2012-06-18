@@ -51,6 +51,8 @@ private:
     JsParser m_assistCode;
 };
 
+INIT_PLUGIN(JsModule);
+
 class JsAssist : public ChanAssist
 {
 public:
@@ -139,31 +141,62 @@ public:
     inline JsMessage(Mutex* mtx)
 	: JsObject("Message",mtx,true), m_message(0), m_owned(false)
 	{
-	    XDebug(DebugAll,"JsMessage::JsMessage() [%p]",this);
-	    params().addParam(new ExpFunction("constructor"));
+	    XDebug(&__plugin,DebugAll,"JsMessage::JsMessage() [%p]",this);
 	}
     inline JsMessage(Message* message, Mutex* mtx, bool owned)
 	: JsObject("Message",mtx), m_message(message), m_owned(owned)
 	{
-	    XDebug(DebugAll,"JsMessage::JsMessage(%p) [%p]",message,this);
+	    XDebug(&__plugin,DebugAll,"JsMessage::JsMessage(%p) [%p]",message,this);
 	    params().addParam(new ExpFunction("enqueue"));
 	    params().addParam(new ExpFunction("dispatch"));
 	    params().addParam(new ExpFunction("broadcast"));
 	}
     virtual ~JsMessage()
 	{
-	    XDebug(DebugAll,"JsMessage::~JsMessage() [%p]",this);
+	    XDebug(&__plugin,DebugAll,"JsMessage::~JsMessage() [%p]",this);
 	    if (m_owned)
 		TelEngine::destruct(m_message);
 	}
-    virtual void runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    virtual JsObject* runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    virtual void initConstructor(JsFunction* construct)
+	{
+	    construct->params().addParam(new ExpFunction("install"));
+	}
     inline void clearMsg()
 	{ m_message = 0; m_owned = false; }
     static void initialize(ScriptContext* context);
 protected:
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    ObjList m_handlers;
     Message* m_message;
     bool m_owned;
+};
+
+class JsHandler : public MessageHandler
+{
+    YCLASS(JsHandler,MessageHandler)
+public:
+    inline JsHandler(const char* name, unsigned priority, const ExpFunction& func, GenObject* context)
+	: MessageHandler(name,priority,__plugin.name()),
+	  m_function(func.name(),1)
+	{
+	    XDebug(&__plugin,DebugAll,"JsHandler::JsHandler('%s',%u,'%s') [%p]",
+		name,priority,func.name().c_str(),this);
+	    ScriptRun* runner = YOBJECT(ScriptRun,context);
+	    if (runner) {
+		m_context = runner->context();
+		m_code = runner->code();
+	    }
+	}
+    virtual ~JsHandler()
+	{
+	    XDebug(&__plugin,DebugAll,"JsHandler::~JsHandler() '%s' [%p]",c_str(),this);
+	}
+    virtual bool received(Message& msg);
+private:
+    ExpFunction m_function;
+    RefPointer<ScriptContext> m_context;
+    RefPointer<ScriptCode> m_code;
 };
 
 class JsFile : public JsObject
@@ -209,8 +242,6 @@ protected:
 };
 
 static String s_basePath;
-
-INIT_PLUGIN(JsModule);
 
 UNLOAD_PLUGIN(unloadNow)
 {
@@ -319,6 +350,7 @@ void JsEngine::initialize(ScriptContext* context)
 
 bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
+    XDebug(DebugAll,"JsMessage::runNative '%s'(%ld)",oper.name().c_str(),oper.number());
     if (oper.name() == YSTRING("broadcast")) {
 	if (oper.number() != 0)
 	    return false;
@@ -350,21 +382,54 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	}
 	ExpEvaluator::pushOne(stack,new ExpOperation(ok));
     }
+    else if (oper.name() == YSTRING("install")) {
+	ObjList args;
+	if (extractArgs(stack,oper,context,args) < 2)
+	    return false;
+	ExpFunction* func = YOBJECT(ExpFunction,args[0]);
+	if (!func)
+	    return false;
+	ExpOperation* name = static_cast<ExpOperation*>(args[1]);
+	ExpOperation* prio = static_cast<ExpOperation*>(args[2]);
+	if (!name)
+	    return false;
+	unsigned int priority = 100;
+	if (prio) {
+	    if (prio->isInteger() && (prio->number() >= 0))
+		priority = prio->number();
+	    else
+		return false;
+	}
+	JsHandler* h = new JsHandler(*name,priority,*func,context);
+	m_handlers.append(h);
+	Engine::install(h);
+    }
     else
 	return JsObject::runNative(stack,oper,context);
     return true;
 }
 
-void JsMessage::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
+JsObject* JsMessage::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    if (oper.number() != 1)
-	return;
-    ExpOperation* op = popValue(stack,context);
-    if (!op)
-	return;
-    Message* m = new Message(*op);
-    ExpEvaluator::pushOne(stack,new ExpWrapper(new JsMessage(m,mutex(),true)));
-    TelEngine::destruct(op);
+    XDebug(DebugAll,"JsMessage::runConstructor '%s'(%ld)",oper.name().c_str(),oper.number());
+    ObjList args;
+    switch (extractArgs(stack,oper,context,args)) {
+	case 1:
+	case 2:
+	    break;
+	default:
+	    return 0;
+    }
+    ExpOperation* name = static_cast<ExpOperation*>(args[0]);
+    ExpOperation* broad = static_cast<ExpOperation*>(args[1]);
+    if (!name)
+	return 0;
+    if (!ref())
+	return 0;
+    Message* m = new Message(*name,0,broad && broad->valBoolean());
+    JsMessage* obj = new JsMessage(m,mutex(),true);
+    obj->params().addParam(new ExpWrapper(this,protoName()));
+    return obj;
 }
 
 void JsMessage::initialize(ScriptContext* context)
@@ -375,12 +440,33 @@ void JsMessage::initialize(ScriptContext* context)
     Lock mylock(mtx);
     NamedList& params = context->params();
     if (!params.getParam(YSTRING("Message")))
-	addObject(params,"Message",new JsMessage(mtx));
+	addConstructor(params,"Message",new JsMessage(mtx));
+}
+
+
+bool JsHandler::received(Message& msg)
+{
+    DDebug(&__plugin,DebugAll,"JsHandler::received '%s'",c_str());
+    if (!m_code)
+	return false;
+    ScriptRun* runner = m_code->createRunner(m_context);
+    if (!runner)
+	return false;
+    JsMessage* jm = new JsMessage(&msg,runner->context()->mutex(),false);
+    jm->ref();
+    ObjList args;
+    args.append(new ExpWrapper(jm,"message"));
+    ScriptRun::Status rval = runner->call(m_function.name(),args);
+    jm->clearMsg();
+    TelEngine::destruct(jm);
+    TelEngine::destruct(runner);
+    return (ScriptRun::Succeeded == rval);
 }
 
 
 bool JsFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
+    XDebug(DebugAll,"JsFile::runNative '%s'(%ld)",oper.name().c_str(),oper.number());
     if (oper.name() == YSTRING("exists")) {
 	if (oper.number() != 1)
 	    return false;
@@ -479,6 +565,7 @@ void JsFile::initialize(ScriptContext* context)
 
 bool JsChannel::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
+    XDebug(DebugAll,"JsChannel::runNative '%s'(%ld)",oper.name().c_str(),oper.number());
     if (oper.name() == YSTRING("id")) {
 	if (oper.number())
 	    return false;
@@ -536,7 +623,20 @@ void JsChannel::initialize(ScriptContext* context, JsAssist* assist)
 
 JsAssist::~JsAssist()
 {
-    TelEngine::destruct(m_runner);
+    if (m_runner) {
+	ScriptContext* context = m_runner->context();
+	if (m_runner->callable("onUnload")) {
+	    ScriptRun* runner = m_runner->code()->createRunner(context);
+	    if (runner) {
+		ObjList args;
+		runner->call("onUnload",args);
+		TelEngine::destruct(runner);
+	    }
+	}
+	if (context)
+	    context->params().clearParams();
+	TelEngine::destruct(m_runner);
+    }
 }
 
 bool JsAssist::init()
@@ -643,6 +743,8 @@ JsGlobal::~JsGlobal()
 	    TelEngine::destruct(runner);
 	}
     }
+    if (m_context)
+	m_context->params().clearParams();
 }
 
 bool JsGlobal::fileChanged(const char* fileName) const

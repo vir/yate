@@ -1770,7 +1770,10 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		    return gotError("Expecting runtime iterator",oper.lineNumber());
 		}
 		bool ok = false;
-		const NamedString* n = iter->get();
+		const NamedString* n;
+		do {
+		    n = iter->get();
+		} while (n && n->name().startsWith("__"));
 		if (n) {
 		    static const ExpOperation s_assign(OpcAssign);
 		    pushOne(stack,iter->field().clone());

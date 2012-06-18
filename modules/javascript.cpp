@@ -424,8 +424,12 @@ JsObject* JsMessage::runConstructor(ObjList& stack, const ExpOperation& oper, Ge
     ExpOperation* broad = static_cast<ExpOperation*>(args[1]);
     if (!name)
 	return 0;
+    if (!ref())
+	return 0;
     Message* m = new Message(*name,0,broad && broad->valBoolean());
-    return new JsMessage(m,mutex(),true);
+    JsMessage* obj = new JsMessage(m,mutex(),true);
+    obj->params().addParam(new ExpWrapper(this,protoName()));
+    return obj;
 }
 
 void JsMessage::initialize(ScriptContext* context)

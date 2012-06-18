@@ -1589,6 +1589,24 @@ public:
 	{ return clone(toString()); }
 
     /**
+     * Check if a certain field is assigned in the object or its prototype
+     * @param stack Evaluation stack in use
+     * @param name Name of the field to test
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return True if the field is present
+     */
+    virtual bool hasField(ObjList& stack, const String& name, GenObject* context) const;
+
+    /**
+     * Get a pointer to a field in the object or its prototype
+     * @param stack Evaluation stack in use
+     * @param name Name of the field to retrieve
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return Pointer to field, NULL if not present
+     */
+    virtual NamedString* getField(ObjList& stack, const String& name, GenObject* context) const;
+
+    /**
      * Native constructor initialization, called by addConstructor on the prototype
      * @param construct Function that has this object as prototype
      */
@@ -1707,6 +1725,13 @@ public:
     static void initialize(ScriptContext* context);
 
     /**
+     * Get the name of the internal property used to track prototypes
+     * @return The "__proto__" constant string
+     */
+    inline static const String& protoName()
+	{ return s_protoName; }
+
+    /**
      * Helper method to return the hierarchical structure of an object
      * @param obj Object to dump structure
      * @param buf String to which the structure is added
@@ -1746,6 +1771,7 @@ protected:
 	{ return m_mutex; }
 
 private:
+    static const String s_protoName;
     bool m_frozen;
     Mutex* m_mutex;
 };

@@ -180,6 +180,8 @@ static void dumpRecursiveObj(const GenObject* obj, String& buf, unsigned int dep
 }
 
 
+const String JsObject::s_protoName("__proto__");
+
 JsObject::JsObject(const char* name, Mutex* mtx, bool frozen)
     : ScriptContext(String("[object ") + name + "]"),
       m_frozen(frozen), m_mutex(mtx)
@@ -226,10 +228,29 @@ JsObject* JsObject::buildCallContext(Mutex* mtx, ExpOperation* thisObj)
     return ctxt;
 }
 
+bool JsObject::hasField(ObjList& stack, const String& name, GenObject* context) const
+{
+    if (ScriptContext::hasField(stack,name,context))
+	return true;
+    const ScriptContext* proto = YOBJECT(ScriptContext,params().getParam(protoName()));
+    return proto && proto->hasField(stack,name,context);
+}
+
+NamedString* JsObject::getField(ObjList& stack, const String& name, GenObject* context) const
+{
+    NamedString* fld = ScriptContext::getField(stack,name,context);
+    if (fld)
+	return fld;
+    const ScriptContext* proto = YOBJECT(ScriptContext,params().getParam(protoName()));
+    return proto ? proto->getField(stack,name,context) : 0;
+}
+
 JsObject* JsObject::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
+    if (!ref())
+	return 0;
     JsObject* obj = clone();
-    obj->copyFields(stack,*this,context);
+    obj->params().addParam(new ExpWrapper(this,protoName()));
     return obj;
 }
 
@@ -237,7 +258,7 @@ bool JsObject::runFunction(ObjList& stack, const ExpOperation& oper, GenObject* 
 {
     XDebug(DebugInfo,"JsObject::runFunction() '%s' in '%s' [%p]",
 	oper.name().c_str(),toString().c_str(),this);
-    NamedString* param = params().getParam(oper.name());
+    NamedString* param = getField(stack,oper.name(),context);
     if (!param)
 	return false;
     ExpFunction* ef = YOBJECT(ExpFunction,param);
@@ -253,7 +274,7 @@ bool JsObject::runField(ObjList& stack, const ExpOperation& oper, GenObject* con
 {
     XDebug(DebugAll,"JsObject::runField() '%s' in '%s' [%p]",
 	oper.name().c_str(),toString().c_str(),this);
-    const String* param = params().getParam(oper.name());
+    const String* param = getField(stack,oper.name(),context);
     if (param) {
 	ExpFunction* ef = YOBJECT(ExpFunction,param);
 	if (ef)

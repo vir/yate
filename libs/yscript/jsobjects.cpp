@@ -226,6 +226,13 @@ JsObject* JsObject::buildCallContext(Mutex* mtx, ExpOperation* thisObj)
     return ctxt;
 }
 
+JsObject* JsObject::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    JsObject* obj = clone();
+    obj->copyFields(stack,*this,context);
+    return obj;
+}
+
 bool JsObject::runFunction(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
     XDebug(DebugInfo,"JsObject::runFunction() '%s' in '%s' [%p]",
@@ -344,6 +351,7 @@ void JsObject::addConstructor(NamedList& params, const char* name, JsObject* obj
 {
     JsFunction* ctr = new JsFunction(obj->mutex(),name);
     ctr->params().addParam(new NamedPointer("prototype",obj,obj->toString()));
+    obj->initConstructor(ctr);
     params.addParam(new NamedPointer(name,ctr,ctr->toString()));
 }
 

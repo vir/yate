@@ -1270,6 +1270,14 @@ public:
      * @param results List to fill with expression results
      */
     virtual bool evaluate(ScriptRun& runner, ObjList& results) const = 0;
+
+    /**
+     * Create a runner adequate for this block of parsed code
+     * @param context Script context, must not be NULL
+     * @return A new script runner, NULL if context is NULL or feature is not supported
+     */
+    virtual ScriptRun* createRunner(ScriptContext* context)
+	{ return 0; }
 };
 
 /**
@@ -1410,9 +1418,11 @@ public:
      * @param name Name of the function to call
      * @param args Values to pass as actual function arguments
      * @param thisObj Object to pass as "this" if applicable
+     * @param scopeObj Optional object to be used for scope resolution inside the call
      * @return Final status of the runtime after function call
      */
-    virtual Status call(const String& name, ObjList& args, ExpOperation* thisObj = 0);
+    virtual Status call(const String& name, ObjList& args,
+	ExpOperation* thisObj = 0, ExpOperation* scopeObj = 0);
 
     /**
      * Check if a script has a certain function or method
@@ -1532,12 +1542,15 @@ private:
     ScriptCode* m_code;
 };
 
+class JsFunction;
+
 /**
  * Javascript Object class, base for all JS objects
  * @short Javascript Object
  */
 class YSCRIPT_API JsObject : public ScriptContext
 {
+    friend class JsFunction;
     YCLASS(JsObject,ScriptContext)
 public:
     /**
@@ -1576,13 +1589,20 @@ public:
 	{ return clone(toString()); }
 
     /**
-     * Native object constructor
+     * Native constructor initialization, called by addConstructor on the prototype
+     * @param construct Function that has this object as prototype
+     */
+    virtual void initConstructor(JsFunction* construct)
+	{ }
+
+    /**
+     * Native object constructor, it's run on the prototype
      * @param stack Evaluation stack in use
      * @param oper Constructor function to evaluate
      * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return New created and populated Javascript object
      */
-    virtual void runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
-	{ }
+    virtual JsObject* runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
     /**
      * Try to evaluate a single method

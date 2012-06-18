@@ -140,6 +140,7 @@ public:
     }
     virtual bool initialize(ScriptContext* context) const;
     virtual bool evaluate(ScriptRun& runner, ObjList& results) const;
+    virtual ScriptRun* createRunner(ScriptContext* context);
     bool link();
     JsObject* parseArray(const char*& expr, bool constOnly);
     JsObject* parseObject(const char*& expr, bool constOnly);
@@ -184,7 +185,8 @@ private:
     bool callFunction(ObjList& stack, const ExpOperation& oper, GenObject* context,
 	JsFunction* func, bool constr) const;
     bool callFunction(ObjList& stack, const ExpOperation& oper, GenObject* context,
-	long int retIndex, JsFunction* func, ObjList& args, ExpOperation* thisObj) const;
+	long int retIndex, JsFunction* func, ObjList& args,
+	ExpOperation* thisObj, ExpOperation* scopeObj) const;
     inline JsFunction* getGlobalFunction(const String& name) const
 	{ return YOBJECT(JsFunction,m_globals[name]); }
     long int m_label;
@@ -228,7 +230,7 @@ public:
 	  m_paused(false), m_opcode(0), m_index(0)
 	{ }
     virtual Status reset();
-    virtual Status call(const String& name, ObjList& args, ExpOperation* thisObj = 0);
+    virtual Status call(const String& name, ObjList& args, ExpOperation* thisObj = 0, ExpOperation* scopeObj = 0);
     virtual bool callable(const String& name);
 protected:
     virtual Status resume();
@@ -2026,13 +2028,16 @@ bool JsCode::callFunction(ObjList& stack, const ExpOperation& oper, GenObject* c
     ExpOperation* thisObj = constr ? popOne(stack) : 0;
     ObjList args;
     JsObject::extractArgs(func,stack,oper,context,args);
-    return callFunction(stack,oper,context,index,func,args,thisObj);
+    return callFunction(stack,oper,context,index,func,args,thisObj,0);
 }
 
 bool JsCode::callFunction(ObjList& stack, const ExpOperation& oper, GenObject* context,
-	long int retIndex, JsFunction* func, ObjList& args, ExpOperation* thisObj) const
+	long int retIndex, JsFunction* func, ObjList& args,
+	ExpOperation* thisObj, ExpOperation* scopeObj) const
 {
     pushOne(stack,new ExpOperation(OpcFunc,0,retIndex,true));
+    if (scopeObj)
+	pushOne(stack,new ExpWrapper(scopeObj,scopeObj->name()));
     JsObject* ctxt = JsObject::buildCallContext(func->mutex(),thisObj);
     for (unsigned int idx = 0; ; idx++) {
 	const String* name = func->formalName(idx);
@@ -2048,6 +2053,14 @@ bool JsCode::callFunction(ObjList& stack, const ExpOperation& oper, GenObject* c
     pushOne(stack,new ExpWrapper(ctxt,ctxt->toString(),true));
     return jumpToLabel(func->label(),context);
 }
+
+ScriptRun* JsCode::createRunner(ScriptContext* context)
+{
+    if (!context)
+	return 0;
+    return new JsRunner(this,context);
+}
+
 
 
 ScriptRun::Status JsRunner::reset()
@@ -2073,27 +2086,31 @@ ScriptRun::Status JsRunner::resume()
     return m_paused ? Incomplete : Succeeded;
 }
 
-ScriptRun::Status JsRunner::call(const String& name, ObjList& args, ExpOperation* thisObj)
+ScriptRun::Status JsRunner::call(const String& name, ObjList& args,
+    ExpOperation* thisObj, ExpOperation* scopeObj)
 {
     Lock mylock(this);
     if (Invalid == state()) {
 	TelEngine::destruct(thisObj);
+	TelEngine::destruct(scopeObj);
 	return Invalid;
     }
     const JsCode* c = static_cast<const JsCode*>(code());
     if (!(c && context())) {
 	TelEngine::destruct(thisObj);
+	TelEngine::destruct(scopeObj);
 	return Invalid;
     }
     JsFunction* func = c->getGlobalFunction(name);
     if (!func) {
 	TelEngine::destruct(thisObj);
+	TelEngine::destruct(scopeObj);
 	return Failed;
     }
     reset();
     // prepare a function call stack
     ExpOperation oper(ExpEvaluator::OpcFunc,name,args.count());
-    if (!c->callFunction(stack(),oper,this,-1,func,args,thisObj))
+    if (!c->callFunction(stack(),oper,this,-1,func,args,thisObj,scopeObj))
 	return Failed;
     mylock.drop();
     // continue normal execution like in run()
@@ -2154,8 +2171,10 @@ bool JsFunction::runNative(ObjList& stack, const ExpOperation& oper, GenObject* 
 	if (!oper.number())
 	    return false;
     }
-    else
-	return JsObject::runNative(stack,oper,context);
+    else {
+	JsObject* obj = YOBJECT(JsObject,params().getParam(YSTRING("prototype")));
+	return obj ? obj->runNative(stack,oper,context) : JsObject::runNative(stack,oper,context);
+    }
     return true;
 }
 
@@ -2165,13 +2184,16 @@ bool JsFunction::runDefined(ObjList& stack, const ExpOperation& oper, GenObject*
     JsObject* proto = YOBJECT(JsObject,getField(stack,"prototype",context));
     if (proto) {
 	// found prototype, build object
-	JsObject* obj = proto->clone();
-	obj->copyFields(stack,*proto,context);
-	obj->runConstructor(stack,oper,context);
+	JsObject* obj = proto->runConstructor(stack,oper,context);
+	if (!obj)
+	    return false;
 	ExpEvaluator::pushOne(stack,new ExpWrapper(obj,oper.name()));
     }
     JsCode* code = YOBJECT(JsCode,m_code);
-    return code && code->callFunction(stack,oper,context,this,(proto != 0));
+    XDebug(DebugAll,"JsFunction::runDefined code=%p proto=%p [%p]",code,proto,this);
+    if (code)
+	return code->callFunction(stack,oper,context,this,(proto != 0));
+    return proto || runNative(stack,oper,context);
 }
 
 

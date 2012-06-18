@@ -7180,6 +7180,8 @@ private:
     unsigned int m_state;
     unsigned int m_remoteStatus;
     unsigned int m_transportState;
+    unsigned int m_connFailCounter;
+    unsigned int m_connFailThreshold;
     Mutex m_mutex;
     ObjList m_ackList;
     SignallingTimer m_t1;
@@ -7190,6 +7192,7 @@ private:
     SignallingTimer m_confTimer;
     SignallingTimer m_oosTimer;
     SignallingTimer m_waitOosTimer;
+    SignallingTimer m_connFailTimer;
     bool m_autostart;
     bool m_sequenced;
     bool m_dumpMsg;

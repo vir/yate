@@ -358,7 +358,7 @@ void JsEngine::initialize(ScriptContext* context)
 
 bool JsMessage::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    if (JsObject::hasField(stack,oper.name(),context))
+    if (ScriptContext::hasField(stack,oper.name(),context))
 	return JsObject::runAssign(stack,oper,context);
     if (!m_message)
 	return false;

@@ -149,7 +149,9 @@ public:
 	    XDebug(&__plugin,DebugAll,"JsMessage::JsMessage(%p) [%p]",message,this);
 	    params().addParam(new ExpFunction("enqueue"));
 	    params().addParam(new ExpFunction("dispatch"));
+	    params().addParam(new ExpFunction("name"));
 	    params().addParam(new ExpFunction("broadcast"));
+	    params().addParam(new ExpFunction("retValue"));
 	}
     virtual ~JsMessage()
 	{
@@ -157,10 +159,16 @@ public:
 	    if (m_owned)
 		TelEngine::destruct(m_message);
 	}
+    virtual NamedList* nativeParams() const
+	{ return m_message; }
+    virtual void fillFieldNames(ObjList& names)
+	{ if (m_message) ScriptContext::fillFieldNames(names,*m_message); }
+    virtual bool runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context);
     virtual JsObject* runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context);
     virtual void initConstructor(JsFunction* construct)
 	{
 	    construct->params().addParam(new ExpFunction("install"));
+	    construct->params().addParam(new ExpFunction("uninstall"));
 	}
     inline void clearMsg()
 	{ m_message = 0; m_owned = false; }
@@ -348,6 +356,20 @@ void JsEngine::initialize(ScriptContext* context)
 }
 
 
+bool JsMessage::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    if (JsObject::hasField(stack,oper.name(),context))
+	return JsObject::runAssign(stack,oper,context);
+    if (!m_message)
+	return false;
+    ExpWrapper* w = YOBJECT(ExpWrapper,&oper);
+    if (w && !w->object())
+	m_message->clearParam(oper.name());
+    else
+	m_message->setParam(new NamedString(oper.name(),oper));
+    return true;
+}
+
 bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
     XDebug(DebugAll,"JsMessage::runNative '%s'(%ld)",oper.name().c_str(),oper.number());
@@ -355,6 +377,36 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	if (oper.number() != 0)
 	    return false;
 	ExpEvaluator::pushOne(stack,new ExpOperation(m_message && m_message->broadcast()));
+    }
+    else if (oper.name() == YSTRING("name")) {
+	if (oper.number() != 0)
+	    return false;
+	if (m_message)
+	    ExpEvaluator::pushOne(stack,new ExpOperation(*m_message));
+	else
+	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
+    }
+    else if (oper.name() == YSTRING("retValue")) {
+	switch (oper.number()) {
+	    case 0:
+		if (m_message)
+		    ExpEvaluator::pushOne(stack,new ExpOperation(m_message->retValue()));
+		else
+		    ExpEvaluator::pushOne(stack,JsParser::nullClone());
+		break;
+	    case 1:
+		{
+		    ExpOperation* op = popValue(stack,context);
+		    if (!op)
+			return false;
+		    if (m_message)
+			m_message->retValue() = *op;
+		    TelEngine::destruct(op);
+		}
+		break;
+	    default:
+		return false;
+	}
     }
     else if (oper.name() == YSTRING("enqueue")) {
 	if (oper.number() != 0)
@@ -403,6 +455,22 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	JsHandler* h = new JsHandler(*name,priority,*func,context);
 	m_handlers.append(h);
 	Engine::install(h);
+    }
+    else if (oper.name() == YSTRING("uninstall")) {
+	ObjList args;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 0:
+		m_handlers.clear();
+		return true;
+	    case 1:
+		break;
+	    default:
+		return false;
+	}
+	ExpOperation* name = static_cast<ExpOperation*>(args[0]);
+	if (!name)
+	    return false;
+	m_handlers.remove(*name);
     }
     else
 	return JsObject::runNative(stack,oper,context);
@@ -458,9 +526,17 @@ bool JsHandler::received(Message& msg)
     args.append(new ExpWrapper(jm,"message"));
     ScriptRun::Status rval = runner->call(m_function.name(),args);
     jm->clearMsg();
+    bool ok = false;
+    if (ScriptRun::Succeeded == rval) {
+	ExpOperation* op = ExpEvaluator::popOne(runner->stack());
+	if (op) {
+	    ok = op->valBoolean();
+	    TelEngine::destruct(op);
+	}
+    }
     TelEngine::destruct(jm);
     TelEngine::destruct(runner);
-    return (ScriptRun::Succeeded == rval);
+    return ok;
 }
 
 

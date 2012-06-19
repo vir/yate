@@ -183,6 +183,31 @@ bool ScriptContext::copyFields(ObjList& stack, const ScriptContext& original, Ge
     return ok;
 }
 
+void ScriptContext::fillFieldNames(ObjList& names)
+{
+    fillFieldNames(names,params());
+    const NamedList* native = nativeParams();
+    if (native)
+	fillFieldNames(names,*native);
+}
+
+void ScriptContext::fillFieldNames(ObjList& names, const NamedList& list, const char* skip)
+{
+    unsigned int n = list.length();
+    for (unsigned int i = 0; i < n; i++) {
+	const NamedString* s = list.getParam(i);
+	if (!s)
+	    continue;
+	if (s->name().null())
+	    continue;
+	if (skip && s->name().startsWith(skip))
+	    continue;
+	if (names.find(s->name()))
+	    continue;
+	names.append(new String(s->name()));
+    }
+}
+
 
 #define MAKE_NAME(x) { #x, ScriptRun::x }
 static const TokenDict s_states[] = {

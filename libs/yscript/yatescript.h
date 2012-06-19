@@ -1156,6 +1156,13 @@ public:
 	{ return m_params; }
 
     /**
+     * Access any native NamedList hold by the context
+     * @return Pointer to a native named list
+     */
+    virtual NamedList* nativeParams() const
+	{ return 0; }
+
+    /**
      * Override GenObject's method to return the internal name of the named list
      * @return A reference to the context name
      */
@@ -1199,6 +1206,20 @@ public:
      * @return Pointer to field, NULL if not present
      */
     virtual NamedString* getField(ObjList& stack, const String& name, GenObject* context) const;
+
+    /**
+     * Fill a list with the unique names of all fields
+     * @param names List to which key names must be added
+     */
+    virtual void fillFieldNames(ObjList& names);
+
+    /**
+     * Fill a list with the unique names of all fields
+     * @param names List to which key names must be added
+     * @param list List of parameters whose names to be added
+     * @param skip Parameters starting with this prefix will not be added
+     */
+    static void fillFieldNames(ObjList& names, const NamedList& list, const char* skip = 0);
 
     /**
      * Try to evaluate a single function in the context
@@ -1587,6 +1608,12 @@ public:
      */
     inline JsObject* clone() const
 	{ return clone(toString()); }
+
+    /**
+     * Fill a list with the unique names of all fields
+     * @param names List to which key names must be added
+     */
+    virtual void fillFieldNames(ObjList& names);
 
     /**
      * Check if a certain field is assigned in the object or its prototype
@@ -2064,6 +2091,12 @@ public:
      * @return JsObject holding the content of JSON, must be dereferenced after use, NULL if parse error
      */
     static JsObject* parseJSON(const char* text);
+
+    /**
+     * Get a "null" object wrapper that will identity match another "null"
+     * @return ExpWrapper for the "null" object
+     */
+    static ExpOperation* nullClone();
 
 private:
     String m_basePath;

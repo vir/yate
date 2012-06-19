@@ -198,17 +198,17 @@ class JsIterator : public RefObject
     YCLASS(JsIterator,RefObject);
 public:
     inline JsIterator(const ExpOperation& field, JsObject* obj)
-	: m_field(field.clone()), m_obj(obj), m_lst(0), m_iter(obj->params())
-	{ }
+	: m_field(field.clone()), m_obj(obj)
+	{ obj->fillFieldNames(m_keys); }
     inline JsIterator(const ExpOperation& field, NamedList* lst)
-	: m_field(field.clone()), m_lst(lst), m_iter(*lst)
-	{ }
+	: m_field(field.clone())
+	{ ScriptContext::fillFieldNames(m_keys,*lst); }
     virtual ~JsIterator()
 	{ TelEngine::destruct(m_field); }
     inline ExpOperation& field() const
 	{ return *m_field; }
-    inline const NamedString* get()
-	{ return m_iter.get(); }
+    inline String* get()
+	{ return static_cast<String*>(m_keys.remove(false)); }
     inline const String& name() const
 	{ return m_name; }
     inline void name(const char* objName)
@@ -216,8 +216,7 @@ public:
 private:
     ExpOperation* m_field;
     RefPointer<JsObject> m_obj;
-    NamedList* m_lst;
-    NamedIterator m_iter;
+    ObjList m_keys;
     String m_name;
 };
 
@@ -1770,17 +1769,15 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		    return gotError("Expecting runtime iterator",oper.lineNumber());
 		}
 		bool ok = false;
-		const NamedString* n;
-		do {
-		    n = iter->get();
-		} while (n && n->name().startsWith("__"));
+		String* n = iter->get();
 		if (n) {
 		    static const ExpOperation s_assign(OpcAssign);
 		    pushOne(stack,iter->field().clone());
 		    if (iter->name())
-			pushOne(stack,new ExpOperation(OpcField,iter->name() + "." + n->name()));
+			pushOne(stack,new ExpOperation(OpcField,iter->name() + "." + *n));
 		    else
-			pushOne(stack,new ExpOperation(n->name()));
+			pushOne(stack,new ExpOperation(*n));
+		    TelEngine::destruct(n);
 		    ok = runOperation(stack,s_assign,context);
 		}
 		if (ok) {
@@ -2277,5 +2274,12 @@ JsObject* JsParser::parseJSON(const char* text)
     TelEngine::destruct(code);
     return jso;
 }
+
+// Return a "null" object wrapper
+ExpOperation* JsParser::nullClone()
+{
+    return s_null.ExpOperation::clone();
+}
+
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

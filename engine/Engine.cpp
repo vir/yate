@@ -392,6 +392,13 @@ static void initUsrPath(String& path, const char* newPath = 0)
 	path = path.substr(0,path.length()-1);
 }
 
+// helper function to set up the config file name
+static void initCfgFile(const char* name)
+{
+    s_cfgfile = name;
+    if (s_cfgfile.endsWith(".exe") || s_cfgfile.endsWith(".EXE"))
+	s_cfgfile = s_cfgfile.substr(0,s_cfgfile.length()-4);
+}
 
 bool EngineStatusHandler::received(Message &msg)
 {
@@ -1913,6 +1920,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, En
 
     if (!cfgfile)
 	cfgfile = argv[0][0] ? argv[0] : "yate";
+    initCfgFile(cfgfile);
 
     int i;
     bool inopt = true;
@@ -1923,6 +1931,14 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, En
 	    if (!::strncmp(pc,"-psn_",5))
 		continue;
 	    while (pc && *++pc) {
+		const char* param = 0;
+
+#define GET_PARAM \
+    if ('=' == pc[1]) param = pc + 2; \
+    else if (i+1 < argc) param = argv[++i]; \
+    else { noarg(client,argv[i]); return ENOENT; } \
+    pc = 0
+
 		switch (*pc) {
 		    case '-':
 			if (!*++pc) {
@@ -1987,84 +2003,44 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, En
 			s_logtruncate = true;
 			break;
 		    case 'p':
-			if (i+1 >= argc) {
-			    noarg(client,argv[i]);
-			    return ENOENT;
-			}
-			pc = 0;
-			pidfile=argv[++i];
+			GET_PARAM;
+			pidfile = param;
 			break;
 		    case 'l':
-			if (i+1 >= argc) {
-			    noarg(client,argv[i]);
-			    return ENOENT;
-			}
-			pc = 0;
-			s_logfile=argv[++i];
+			GET_PARAM;
+			s_logfile = param;
 			break;
 		    case 'n':
-			if (i+1 >= argc) {
-			    noarg(client,argv[i]);
-			    return ENOENT;
-			}
-			pc = 0;
-			cfgfile=argv[++i];
+			GET_PARAM;
+			cfgfile = param;
 			break;
 		    case 'e':
-			if (i+1 >= argc) {
-			    noarg(client,argv[i]);
-			    return ENOENT;
-			}
-			pc = 0;
-			s_shrpath=argv[++i];
+			GET_PARAM;
+			s_shrpath = param;
 			break;
 		    case 'c':
-			if (i+1 >= argc) {
-			    noarg(client,argv[i]);
-			    return ENOENT;
-			}
-			pc = 0;
-			s_cfgpath=argv[++i];
+			GET_PARAM;
+			s_cfgpath = param;
 			break;
 		    case 'u':
-			if (i+1 >= argc) {
-			    noarg(client,argv[i]);
-			    return ENOENT;
-			}
-			pc = 0;
-			usrpath=argv[++i];
+			GET_PARAM;
+			usrpath = param;
 			break;
 		    case 'm':
-			if (i+1 >= argc) {
-			    noarg(client,argv[i]);
-			    return ENOENT;
-			}
-			pc = 0;
-			s_modpath=argv[++i];
+			GET_PARAM;
+			s_modpath = param;
 			break;
 		    case 'w':
-			if (i+1 >= argc) {
-			    noarg(client,argv[i]);
-			    return ENOENT;
-			}
-			pc = 0;
-			workdir = argv[++i];
+			GET_PARAM;
+			workdir = param;
 			break;
 		    case 'x':
-			if (i+1 >= argc) {
-			    noarg(client,argv[i]);
-			    return ENOENT;
-			}
-			pc = 0;
-			extraPath(argv[++i]);
+			GET_PARAM;
+			extraPath(param);
 			break;
 		    case 'N':
-			if (i+1 >= argc) {
-			    noarg(client,argv[i]);
-			    return ENOENT;
-			}
-			pc = 0;
-			s_node=argv[++i];
+			GET_PARAM;
+			s_node = param;
 			break;
 #ifdef RLIMIT_CORE
 		    case 'C':
@@ -2152,6 +2128,9 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, En
 			badopt(client,*pc,argv[i]);
 			return EINVAL;
 		}
+
+#undef GET_PARAM
+
 	    }
 	}
 	else {
@@ -2166,10 +2145,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, En
 
     s_mode = mode;
 
-    s_cfgfile = cfgfile;
-    if (s_cfgfile.endsWith(".exe") || s_cfgfile.endsWith(".EXE"))
-	s_cfgfile = s_cfgfile.substr(0,s_cfgfile.length()-4);
-
+    initCfgFile(cfgfile);
     initUsrPath(s_usrpath,usrpath);
 
     if (workdir && ::chdir(workdir)) {

@@ -27,22 +27,6 @@ using namespace TelEngine;
 
 namespace { // anonymous
 
-// Base class for all native objects that hold a NamedList
-class JsNative : public JsObject
-{
-    YCLASS(JsNative,JsObject)
-public:
-    inline JsNative(const char* name, NamedList* list, Mutex* mtx)
-	: JsObject(name,mtx), m_list(list)
-	{ }
-    virtual NamedList& list()
-	{ return *m_list; }
-    virtual const NamedList& list() const
-	{ return *m_list; }
-private:
-    NamedList* m_list;
-};
-
 // Object object
 class JsObjectObj : public JsObject
 {
@@ -172,6 +156,11 @@ static void dumpRecursiveObj(const GenObject* obj, String& buf, unsigned int dep
 	NamedIterator iter(scr->params());
 	while (const NamedString* p = iter.get())
 	    dumpRecursiveObj(p,buf,depth + 1,seen);
+	if (scr->nativeParams()) {
+	    iter = *scr->nativeParams();
+	    while (const NamedString* p = iter.get())
+		dumpRecursiveObj(p,buf,depth + 1,seen);
+	}
     }
     else if (wrap)
 	dumpRecursiveObj(wrap->object(),buf,depth + 1,seen);
@@ -228,12 +217,23 @@ JsObject* JsObject::buildCallContext(Mutex* mtx, ExpOperation* thisObj)
     return ctxt;
 }
 
+void JsObject::fillFieldNames(ObjList& names)
+{
+    ScriptContext::fillFieldNames(names,params(),"__");
+    const NamedList* native = nativeParams();
+    if (native)
+	ScriptContext::fillFieldNames(names,*native);
+}
+
 bool JsObject::hasField(ObjList& stack, const String& name, GenObject* context) const
 {
     if (ScriptContext::hasField(stack,name,context))
 	return true;
     const ScriptContext* proto = YOBJECT(ScriptContext,params().getParam(protoName()));
-    return proto && proto->hasField(stack,name,context);
+    if (proto && proto->hasField(stack,name,context))
+	return true;
+    NamedList* np = nativeParams();
+    return np && np->getParam(name);
 }
 
 NamedString* JsObject::getField(ObjList& stack, const String& name, GenObject* context) const
@@ -242,7 +242,15 @@ NamedString* JsObject::getField(ObjList& stack, const String& name, GenObject* c
     if (fld)
 	return fld;
     const ScriptContext* proto = YOBJECT(ScriptContext,params().getParam(protoName()));
-    return proto ? proto->getField(stack,name,context) : 0;
+    if (proto) {
+	fld = proto->getField(stack,name,context);
+	if (fld)
+	    return fld;
+    }
+    NamedList* np = nativeParams();
+    if (np)
+	return np->getParam(name);
+    return 0;
 }
 
 JsObject* JsObject::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)

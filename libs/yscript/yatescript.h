@@ -1435,6 +1435,12 @@ public:
     virtual Status run();
 
     /**
+     * Pause the script, make it return Incomplete state
+     * @return True if pausing the script succeeded or was already paused
+     */
+    virtual bool pause();
+
+    /**
      * Call a script function or method
      * @param name Name of the function to call
      * @param args Values to pass as actual function arguments

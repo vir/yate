@@ -60,7 +60,6 @@ class JsAssist : public ChanAssist
 public:
     enum State {
 	NotStarted,
-	PreRoute,
 	Routing,
 	ReRoute,
 	Ended,
@@ -74,8 +73,8 @@ public:
     virtual void msgStartup(Message& msg);
     virtual void msgHangup(Message& msg);
     virtual void msgExecute(Message& msg);
-    virtual void msgRinging(Message& msg);
-    virtual void msgAnswered(Message& msg);
+    virtual bool msgRinging(Message& msg);
+    virtual bool msgAnswered(Message& msg);
     virtual bool msgPreroute(Message& msg);
     virtual bool msgRoute(Message& msg);
     virtual bool msgDisconnect(Message& msg, const String& reason);
@@ -534,9 +533,10 @@ void JsMessage::initialize(ScriptContext* context)
 
 bool JsHandler::received(Message& msg)
 {
-    DDebug(&__plugin,DebugAll,"JsHandler::received '%s'",c_str());
     if (!m_code)
 	return false;
+    DDebug(&__plugin,DebugInfo,"Running %s(message) handler for '%s'",
+	m_function.name().c_str(),c_str());
 #ifdef DEBUG
     u_int64_t tm = Time::now();
 #endif
@@ -562,7 +562,7 @@ bool JsHandler::received(Message& msg)
 
 #ifdef DEBUG
     tm = Time::now() - tm;
-    Debug(&__plugin,DebugInfo,"Handler for %s ran for " FMT64U " usec",c_str(),tm);
+    Debug(&__plugin,DebugInfo,"Handler for '%s' ran for " FMT64U " usec",c_str(),tm);
 #endif
     return ok;
 }
@@ -856,6 +856,8 @@ bool JsAssist::runScript(Message* msg, State newState)
 
     if (m_state >= Ended)
 	return false;
+    if (m_state < newState)
+	m_state = newState;
 #ifdef DEBUG
     u_int64_t tm = Time::now();
 #endif
@@ -878,7 +880,7 @@ bool JsAssist::runScript(Message* msg, State newState)
 
 #ifdef DEBUG
     tm = Time::now() - tm;
-    Debug(&__plugin,DebugInfo,"Script for %s ran for " FMT64U " usec",id().c_str(),tm);
+    Debug(&__plugin,DebugInfo,"Script for '%s' ran for " FMT64U " usec",id().c_str(),tm);
 #endif
     return handled;
 }
@@ -887,7 +889,7 @@ bool JsAssist::runFunction(const String& name, Message& msg)
 {
     if (!(m_runner && m_runner->callable(name)))
 	return false;
-    DDebug(&__plugin,DebugInfo,"Running function %s in '%s'",name.c_str(),id().c_str());
+    DDebug(&__plugin,DebugInfo,"Running function %s(message) in '%s'",name.c_str(),id().c_str());
 #ifdef DEBUG
     u_int64_t tm = Time::now();
 #endif
@@ -901,14 +903,22 @@ bool JsAssist::runFunction(const String& name, Message& msg)
     args.append(new ExpWrapper(jm,"message"));
     ScriptRun::Status rval = runner->call(name,args);
     jm->clearMsg();
+    bool ok = false;
+    if (ScriptRun::Succeeded == rval) {
+	ExpOperation* op = ExpEvaluator::popOne(runner->stack());
+	if (op) {
+	    ok = op->valBoolean();
+	    TelEngine::destruct(op);
+	}
+    }
     TelEngine::destruct(jm);
     TelEngine::destruct(runner);
 
 #ifdef DEBUG
     tm = Time::now() - tm;
-    Debug(&__plugin,DebugInfo,"Call to %s ran for " FMT64U " usec",name.c_str(),tm);
+    Debug(&__plugin,DebugInfo,"Call to %s() ran for " FMT64U " usec",name.c_str(),tm);
 #endif
-    return (ScriptRun::Succeeded == rval);
+    return ok;
 }
 
 void JsAssist::msgStartup(Message& msg)
@@ -926,19 +936,19 @@ void JsAssist::msgExecute(Message& msg)
     runFunction("onExecute",msg);
 }
 
-void JsAssist::msgRinging(Message& msg)
+bool JsAssist::msgRinging(Message& msg)
 {
-    runFunction("onRinging",msg);
+    return runFunction("onRinging",msg);
 }
 
-void JsAssist::msgAnswered(Message& msg)
+bool JsAssist::msgAnswered(Message& msg)
 {
-    runFunction("onAnswered",msg);
+    return runFunction("onAnswered",msg);
 }
 
 bool JsAssist::msgPreroute(Message& msg)
 {
-    return runScript(&msg,PreRoute);
+    return runFunction("onPreroute",msg);
 }
 
 bool JsAssist::msgRoute(Message& msg)
@@ -1153,13 +1163,9 @@ bool JsModule::received(Message& msg, int id)
 		    return false;
 		switch (id) {
 		    case Ringing:
-			if (ca)
-			    ca->msgRinging(msg);
-			return false;
+			return ca && ca->msgRinging(msg);
 		    case Answered:
-			if (ca)
-			    ca->msgAnswered(msg);
-			return false;
+			return ca && ca->msgAnswered(msg);
 		}
 	    }
 	    break;

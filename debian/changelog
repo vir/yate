@@ -1,3 +1,15 @@
+yate (4.1.1~svn5141) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5141: + Only install global functions during
+    code initialization if they are not installed.  + Added some run
+    time reporting in DEBUG compile mode.  + Linked the call.preroute,
+    call.route and chan.disconnected to Channel.message.  + Added public
+    method to pause a script.  + Fixed line counting in /* ... */
+    comments.  + Allow call.ringing and call.answered handlers to stop
+    the message.  + Took call.preroute out of the main code flow.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 21 Jun 2012 02:19:14 +0400
+
 yate (4.1.1~svn5136) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5136: + Keep the prototype as an internal

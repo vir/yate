@@ -579,8 +579,11 @@ bool JsCode::initialize(ScriptContext* context) const
     if (!context)
 	return false;
     JsObject::initialize(context);
-    for (ObjList* l = m_globals.skipNull(); l; l = l->skipNext())
-	context->params().setParam(static_cast<ExpOperation*>(l->get())->clone());
+    for (ObjList* l = m_globals.skipNull(); l; l = l->skipNext()) {
+	ExpOperation* op = static_cast<ExpOperation*>(l->get());
+	if (!context->params().getParam(op->name()))
+	    context->params().setParam(static_cast<ExpOperation*>(l->get())->clone());
+    }
     return true;
 }
 

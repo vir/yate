@@ -301,6 +301,12 @@ ScriptRun::Status ScriptRun::run()
     return s;
 }
 
+// Pause the script - not implemented here
+bool ScriptRun::pause()
+{
+    return false;
+}
+
 // Execute a function or method call
 ScriptRun::Status ScriptRun::call(const String& name, ObjList& args,
     ExpOperation* thisObj, ExpOperation* scopeObj)

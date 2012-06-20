@@ -229,6 +229,7 @@ public:
 	  m_paused(false), m_opcode(0), m_index(0)
 	{ }
     virtual Status reset();
+    virtual bool pause();
     virtual Status call(const String& name, ObjList& args, ExpOperation* thisObj = 0, ExpOperation* scopeObj = 0);
     virtual bool callable(const String& name);
 protected:
@@ -1763,13 +1764,15 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 	    break;
 	case OpcNext:
 	    {
-		ExpOperation* op = popValue(stack,context);
-		if (!op)
-		    return gotError("Stack underflow",oper.lineNumber());
-		JsIterator* iter = YOBJECT(JsIterator,op);
-		if (!iter) {
-		    TelEngine::destruct(op);
-		    return gotError("Expecting runtime iterator",oper.lineNumber());
+		JsIterator* iter = 0;
+		ExpOperation* op;
+		while (!iter) {
+		    op = popValue(stack,context);
+		    if (!op)
+			return gotError("Stack underflow",oper.lineNumber());
+		    iter = YOBJECT(JsIterator,op);
+		    if (!iter)
+			TelEngine::destruct(op);
 		}
 		bool ok = false;
 		String* n = iter->get();
@@ -2087,6 +2090,22 @@ ScriptRun::Status JsRunner::resume()
     if (!c->evaluate(*this,stack()))
 	return Failed;
     return m_paused ? Incomplete : Succeeded;
+}
+
+bool JsRunner::pause()
+{
+    Lock mylock(this);
+    if (m_paused)
+	return true;
+    switch (state()) {
+	case Running:
+	case Incomplete:
+	    DDebug(DebugAll,"Pausing Javascript runner [%p]",this);
+	    m_paused = true;
+	    return true;
+	default:
+	    return false;
+    }
 }
 
 ScriptRun::Status JsRunner::call(const String& name, ObjList& args,

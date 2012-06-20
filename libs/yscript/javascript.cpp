@@ -800,7 +800,7 @@ char JsCode::skipComments(const char*& expr, GenObject* context)
 	else if (expr[1] == '*') {
 	    /* comment to close */
 	    expr++;
-	    while ((c = *expr) && (c != '*' || expr[1] != '/'))
+	    while ((c = skipWhites(expr)) && (c != '*' || expr[1] != '/'))
 		expr++;
 	    if (c) {
 		expr+=2;

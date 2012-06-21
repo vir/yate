@@ -1324,6 +1324,46 @@ public:
      */
     inline ScriptRun* runner()
 	{ return m_runner; }
+
+private:
+    ScriptRun* m_runner;
+};
+
+/**
+ * Operation that is to be executed by the script runtime before current operation
+ * @short Asynchronous execution support
+ */
+class YSCRIPT_API ScriptAsync : public GenObject
+{
+    YCLASS(ScriptAsync,GenObject)
+public:
+    /**
+     * Constructor
+     * @param owner The script running instance that will own this operation
+     */
+    ScriptAsync(ScriptRun* owner)
+	: m_runner(owner)
+	{ }
+
+    /**
+     * Destructor
+     */
+    virtual ~ScriptAsync()
+	{ }
+
+    /**
+     * Retrieve the script running instance that owns this stack
+     * @return Pointer to owner script instance
+     */
+    inline ScriptRun* runner()
+	{ return m_runner; }
+
+    /**
+     * Execute the aynchronous operation with context unlocked if the script is paused
+     * @return True if the operation should be removed (was one-shot)
+     */
+    virtual bool run() = 0;
+
 private:
     ScriptRun* m_runner;
 };
@@ -1459,6 +1499,20 @@ public:
     virtual bool callable(const String& name);
 
     /**
+     * Insert an asynchronous operation to be executed
+     * @param oper Operation to be inserted, will be owned by the runtime instance
+     * @return True if the operation was added
+     */
+    virtual bool insertAsync(ScriptAsync* oper);
+
+    /**
+     * Append an asynchronous operation to be executed
+     * @param oper Operation to be appended, will be owned by the runtime instance
+     * @return True if the operation was added
+     */
+    virtual bool appendAsync(ScriptAsync* oper);
+
+    /**
      * Try to assign a value to a single field in the script context
      * @param oper Field to assign to, contains the field name and new value
      * @param context Pointer to arbitrary object to be passed to called methods
@@ -1478,6 +1532,7 @@ private:
     ScriptContext* m_context;
     Status m_state;
     ObjList m_stack;
+    ObjList m_async;
 };
 
 /**

@@ -276,18 +276,26 @@ ScriptRun::Status ScriptRun::resume()
 // Execute one or more instructions of code from where it was left
 ScriptRun::Status ScriptRun::execute()
 {
-    Lock mylock(this);
-    if (Incomplete != m_state)
-	return m_state;
-    m_state = Running;
-    mylock.drop();
-    Status st = resume();
-    if (Running == st)
-	st = Incomplete;
-    lock();
-    if (Running == m_state)
-	m_state = st;
-    unlock();
+    Status st;
+    do {
+	Lock mylock(this);
+	if (Incomplete != m_state)
+	    return m_state;
+	m_state = Running;
+	mylock.drop();
+	st = resume();
+	if (Running == st)
+	    st = Incomplete;
+	lock();
+	if (Running == m_state)
+	    m_state = st;
+	ListIterator iter(m_async);
+	unlock();
+	while (ScriptAsync* op = static_cast<ScriptAsync*>(iter.get())) {
+	    if (op->run())
+		m_async.remove(op);
+	}
+    } while (Running == st);
     return st;
 }
 
@@ -333,6 +341,24 @@ bool ScriptRun::runAssign(const ExpOperation& oper, GenObject* context)
     ObjList noStack;
     Lock ctxLock(ctxt->mutex());
     return ctxt->runAssign(noStack,oper,context);
+}
+
+// Insert an asynchronous operation
+bool ScriptRun::insertAsync(ScriptAsync* oper)
+{
+    if (!oper)
+	return false;
+    m_async.insert(oper);
+    return true;
+}
+
+// Append an asynchronous operation
+bool ScriptRun::appendAsync(ScriptAsync* oper)
+{
+    if (!oper)
+	return false;
+    m_async.append(oper);
+    return true;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

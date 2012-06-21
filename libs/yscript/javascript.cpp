@@ -1914,8 +1914,6 @@ bool JsCode::evalList(ObjList& stack, GenObject* context) const
     XDebug(this,DebugInfo,"JsCode::evalList(%p,%p)",&stack,context);
     JsRunner* runner = static_cast<JsRunner*>(context);
     const ObjList* (& opcode) = runner->m_opcode;
-    if (!opcode)
-	opcode = m_opcodes.skipNull();
     while (opcode) {
 	const ExpOperation* o = static_cast<const ExpOperation*>(opcode->get());
 	opcode = opcode->skipNext();
@@ -2072,7 +2070,7 @@ ScriptRun* JsCode::createRunner(ScriptContext* context)
 ScriptRun::Status JsRunner::reset()
 {
     Status s = ScriptRun::reset();
-    m_opcode = 0;
+    m_opcode = code() ? static_cast<const JsCode*>(code())->m_opcodes.skipNull() : 0;
     m_index = 0;
     return s;
 }
@@ -2302,6 +2300,5 @@ ExpOperation* JsParser::nullClone()
 {
     return s_null.ExpOperation::clone();
 }
-
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

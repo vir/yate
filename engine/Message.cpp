@@ -372,7 +372,7 @@ bool MessageDispatcher::dispatch(Message& msg)
 #endif
     bool retv = false;
     ObjList *l = &m_handlers;
-    lock();
+    Lock mylock(this);
     for (; l; l=l->next()) {
 	MessageHandler *h = static_cast<MessageHandler*>(l->get());
 	if (h && (h->null() || *h == msg)) {
@@ -389,7 +389,7 @@ bool MessageDispatcher::dispatch(Message& msg)
 	    }
 	    // mark handler as unsafe to destroy / uninstall
 	    h->m_unsafe++;
-	    unlock();
+	    mylock.drop();
 #ifdef DEBUG
 	    u_int64_t tm = Time::now();
 #endif
@@ -402,7 +402,7 @@ bool MessageDispatcher::dispatch(Message& msg)
 #endif
 	    if (retv && !msg.broadcast())
 		break;
-	    lock();
+	    mylock.acquire(this);
 	    if (c == m_changes)
 		continue;
 	    // the handler list has changed - find again
@@ -427,10 +427,11 @@ bool MessageDispatcher::dispatch(Message& msg)
 		}
 		l2 = l;
 	    }
+	    if (!l)
+		break;
 	}
     }
-    if (!l)
-	unlock();
+    mylock.drop();
     msg.dispatched(retv);
 #ifndef NDEBUG
     t = Time::now() - t;

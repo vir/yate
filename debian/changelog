@@ -1,3 +1,12 @@
+yate (4.1.1~svn5143) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5143: + Took call.preroute out of the main
+    code flow.  + Fixed a crash caused by removing the last handler from
+    within a message handler.  + Added support for asynchronous
+    execution from the script.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 22 Jun 2012 02:19:12 +0400
+
 yate (4.1.1~svn5141) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5141: + Only install global functions during

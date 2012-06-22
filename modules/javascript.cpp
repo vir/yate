@@ -79,10 +79,18 @@ public:
     virtual bool msgRoute(Message& msg);
     virtual bool msgDisconnect(Message& msg, const String& reason);
     bool init();
+    inline State state() const
+	{ return m_state; }
+    inline const char* stateName() const
+	{ return stateName(m_state); }
+    inline void end()
+	{ if (m_state < Ended) m_state = Ended; }
     inline JsMessage* message()
 	{ return m_message; }
-    void handled()
+    inline void handled()
 	{ m_handled = true; }
+    Message* getMsg(ScriptRun* runner) const;
+    static const char* stateName(State st);
 private:
     bool runFunction(const String& name, Message& msg);
     bool runScript(Message* msg, State newState);
@@ -139,6 +147,10 @@ public:
 	    MKDEBUG(All);
 	    params().addParam(new ExpFunction("output"));
 	    params().addParam(new ExpFunction("debug"));
+	    params().addParam(new ExpFunction("sleep"));
+	    params().addParam(new ExpFunction("usleep"));
+	    params().addParam(new ExpFunction("yield"));
+	    params().addParam(new ExpFunction("idle"));
 	    params().addParam(new ExpFunction("dump_r"));
 	    params().addParam(new ExpFunction("print_r"));
 	}
@@ -255,6 +267,7 @@ public:
 	    params().addParam(new ExpFunction("peerid"));
 	    params().addParam(new ExpFunction("status"));
 	    params().addParam(new ExpFunction("direction"));
+	    params().addParam(new ExpFunction("answered"));
 	    params().addParam(new ExpFunction("answer"));
 	    params().addParam(new ExpFunction("hangup"));
 	    params().addParam(new ExpFunction("callTo"));
@@ -265,7 +278,29 @@ public:
     static void initialize(ScriptContext* context, JsAssist* assist);
 protected:
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    void callToRoute(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    void callToReRoute(ObjList& stack, const ExpOperation& oper, GenObject* context);
     JsAssist* m_assist;
+};
+
+class JsEngAsync : public ScriptAsync
+{
+    YCLASS(JsEngAsync,ScriptAsync)
+public:
+    enum Oper {
+	AsyncSleep,
+	AsyncUsleep,
+	AsyncYield,
+	AsyncIdle
+    };
+    inline JsEngAsync(ScriptRun* runner, Oper op, long int val = 0)
+	: ScriptAsync(runner),
+	  m_oper(op), m_val(val)
+	{ XDebug(DebugAll,"JsEngAsync %d %ld",op,val); }
+    virtual bool run();
+private:
+    Oper m_oper;
+    long int m_val;
 };
 
 static String s_basePath;
@@ -275,6 +310,26 @@ UNLOAD_PLUGIN(unloadNow)
     if (unloadNow) {
 	JsGlobal::unloadAll();
 	return __plugin.unload();
+    }
+    return true;
+}
+
+
+bool JsEngAsync::run()
+{
+    switch (m_oper) {
+	case AsyncSleep:
+	    Thread::sleep(m_val);
+	    break;
+	case AsyncUsleep:
+	    Thread::usleep(m_val);
+	    break;
+	case AsyncYield:
+	    Thread::yield();
+	    break;
+	case AsyncIdle:
+	    Thread::idle();
+	    break;
     }
     return true;
 }
@@ -319,6 +374,56 @@ bool JsEngine::runNative(ObjList& stack, const ExpOperation& oper, GenObject* co
 		level = DebugGoOn;
 	    Debug(&__plugin,level,"%s",str.c_str());
 	}
+    }
+    else if (oper.name() == YSTRING("sleep")) {
+	if (oper.number() != 1)
+	    return false;
+	ExpOperation* op = popValue(stack,context);
+	if (!op)
+	    return false;
+	long int val = op->valInteger();
+	TelEngine::destruct(op);
+	if (val < 0)
+	    val = 0;
+	ScriptRun* runner = YOBJECT(ScriptRun,context);
+	if (!runner)
+	    return false;
+	runner->insertAsync(new JsEngAsync(runner,JsEngAsync::AsyncSleep,val));
+	runner->pause();
+    }
+    else if (oper.name() == YSTRING("usleep")) {
+	if (oper.number() != 1)
+	    return false;
+	ExpOperation* op = popValue(stack,context);
+	if (!op)
+	    return false;
+	long int val = op->valInteger();
+	TelEngine::destruct(op);
+	if (val < 0)
+	    val = 0;
+	ScriptRun* runner = YOBJECT(ScriptRun,context);
+	if (!runner)
+	    return false;
+	runner->insertAsync(new JsEngAsync(runner,JsEngAsync::AsyncUsleep,val));
+	runner->pause();
+    }
+    else if (oper.name() == YSTRING("yield")) {
+	if (oper.number() != 0)
+	    return false;
+	ScriptRun* runner = YOBJECT(ScriptRun,context);
+	if (!runner)
+	    return false;
+	runner->insertAsync(new JsEngAsync(runner,JsEngAsync::AsyncYield));
+	runner->pause();
+    }
+    else if (oper.name() == YSTRING("idle")) {
+	if (oper.number() != 0)
+	    return false;
+	ScriptRun* runner = YOBJECT(ScriptRun,context);
+	if (!runner)
+	    return false;
+	runner->insertAsync(new JsEngAsync(runner,JsEngAsync::AsyncIdle));
+	runner->pause();
     }
     else if (oper.name() == YSTRING("dump_r")) {
 	String buf;
@@ -391,7 +496,7 @@ bool JsMessage::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* c
 
 bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(DebugAll,"JsMessage::runNative '%s'(%ld)",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsMessage::runNative '%s'(%ld)",oper.name().c_str(),oper.number());
     if (oper.name() == YSTRING("broadcast")) {
 	if (oper.number() != 0)
 	    return false;
@@ -498,7 +603,7 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 
 JsObject* JsMessage::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(DebugAll,"JsMessage::runConstructor '%s'(%ld)",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsMessage::runConstructor '%s'(%ld)",oper.name().c_str(),oper.number());
     ObjList args;
     switch (extractArgs(stack,oper,context,args)) {
 	case 1:
@@ -570,7 +675,7 @@ bool JsHandler::received(Message& msg)
 
 bool JsFile::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(DebugAll,"JsFile::runNative '%s'(%ld)",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsFile::runNative '%s'(%ld)",oper.name().c_str(),oper.number());
     if (oper.name() == YSTRING("exists")) {
 	if (oper.number() != 1)
 	    return false;
@@ -669,14 +774,15 @@ void JsFile::initialize(ScriptContext* context)
 
 bool JsChannel::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
-    XDebug(DebugAll,"JsChannel::runNative '%s'(%ld)",oper.name().c_str(),oper.number());
+    XDebug(&__plugin,DebugAll,"JsChannel::runNative '%s'(%ld)",oper.name().c_str(),oper.number());
     if (oper.name() == YSTRING("id")) {
 	if (oper.number())
 	    return false;
 	RefPointer<JsAssist> ja = m_assist;
-	if (!ja)
-	    return false;
-	ExpEvaluator::pushOne(stack,new ExpOperation(ja->id()));
+	if (ja)
+	    ExpEvaluator::pushOne(stack,new ExpOperation(ja->id()));
+	else
+	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
     }
     else if (oper.name() == YSTRING("peerid")) {
 	if (oper.number())
@@ -696,10 +802,10 @@ bool JsChannel::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
     else if (oper.name() == YSTRING("status")) {
 	if (oper.number())
 	    return false;
+	RefPointer<CallEndpoint> cp;
 	RefPointer<JsAssist> ja = m_assist;
-	if (!ja)
-	    return false;
-	RefPointer<CallEndpoint> cp = ja->locate();
+	if (ja)
+	    cp = ja->locate();
 	Channel* ch = YOBJECT(Channel,cp);
 	if (ch)
 	    ExpEvaluator::pushOne(stack,new ExpOperation(ch->status()));
@@ -709,41 +815,140 @@ bool JsChannel::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
     else if (oper.name() == YSTRING("direction")) {
 	if (oper.number())
 	    return false;
+	RefPointer<CallEndpoint> cp;
 	RefPointer<JsAssist> ja = m_assist;
-	if (!ja)
-	    return false;
-	RefPointer<CallEndpoint> cp = ja->locate();
+	if (ja)
+	    cp = ja->locate();
 	Channel* ch = YOBJECT(Channel,cp);
 	if (ch)
 	    ExpEvaluator::pushOne(stack,new ExpOperation(ch->direction()));
 	else
 	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
     }
-    else if (oper.name() == YSTRING("callTo")) {
-	if (oper.number() != 1)
+    else if (oper.name() == YSTRING("answered")) {
+	if (oper.number())
 	    return false;
-	ExpOperation* op = popValue(stack,context);
-	if (!op)
-	    return false;
+	RefPointer<CallEndpoint> cp;
 	RefPointer<JsAssist> ja = m_assist;
-	if (!ja)
-	    return false;
-	RefPointer<CallEndpoint> cp = ja->locate();
+	if (ja)
+	    cp = ja->locate();
+	Channel* ch = YOBJECT(Channel,cp);
+	ExpEvaluator::pushOne(stack,new ExpOperation(ch && ch->isAnswered()));
     }
-    else if (oper.name() == YSTRING("callJust")) {
+    else if (oper.name() == YSTRING("answer")) {
+	if (oper.number())
+	    return false;
+	RefPointer<JsAssist> ja = m_assist;
+	if (ja) {
+	    Message* m = new Message("call.answered");
+	    m->addParam("targetid",ja->id());
+	    Engine::enqueue(m);
+	}
+    }
+    else if (oper.name() == YSTRING("hangup")) {
+	if (oper.number() > 1)
+	    return false;
+	ScriptRun* runner = YOBJECT(ScriptRun,context);
+	ExpOperation* op = popValue(stack,context);
+	RefPointer<JsAssist> ja = m_assist;
+	if (ja) {
+	    Message* m = new Message("call.drop");
+	    m->addParam("id",ja->id());
+	    if (op && !op->null()) {
+		m->addParam("reason",*op);
+		// there may be a race between chan.disconnected and call.drop so set in both
+		Message* msg = ja->getMsg(runner);
+		if (msg)
+		    msg->setParam("reason",*op);
+	    }
+	    ja->end();
+	    Engine::enqueue(m);
+	}
+	TelEngine::destruct(op);
+	if (runner)
+	    runner->pause();
+    }
+    else if (oper.name() == YSTRING("callTo") || oper.name() == YSTRING("callJust")) {
 	if (oper.number() != 1)
 	    return false;
 	ExpOperation* op = popValue(stack,context);
 	if (!op)
 	    return false;
 	RefPointer<JsAssist> ja = m_assist;
-	if (!ja)
+	if (!ja) {
+	    TelEngine::destruct(op);
 	    return false;
-	RefPointer<CallEndpoint> cp = ja->locate();
+	}
+	switch (ja->state()) {
+	    case JsAssist::Routing:
+		callToRoute(stack,*op,context);
+		break;
+	    case JsAssist::ReRoute:
+		callToReRoute(stack,*op,context);
+		break;
+	    default:
+		TelEngine::destruct(op);
+	}
+	if (oper.name() == YSTRING("callJust"))
+	    ja->end();
     }
     else
 	return JsObject::runNative(stack,oper,context);
     return true;
+}
+
+void JsChannel::callToRoute(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    ScriptRun* runner = YOBJECT(ScriptRun,context);
+    if (!runner)
+	return;
+    Message* msg = m_assist->getMsg(YOBJECT(ScriptRun,context));
+    if (!msg) {
+	Debug(&__plugin,DebugWarn,"JsChannel::callToRoute(): No message!");
+	return;
+    }
+    if (oper.null() || JsParser::isNull(oper) || JsParser::isUndefined(oper)) {
+	Debug(&__plugin,DebugWarn,"JsChannel::callToRoute(): Invalid target!");
+	return;
+    }
+    msg->retValue() = oper;
+    m_assist->handled();
+    runner->pause();
+}
+
+void JsChannel::callToReRoute(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    ScriptRun* runner = YOBJECT(ScriptRun,context);
+    if (!runner)
+	return;
+    Message* msg = m_assist->getMsg(YOBJECT(ScriptRun,context));
+    if (!msg) {
+	Debug(&__plugin,DebugWarn,"JsChannel::callToReRoute(): No message!");
+	return;
+    }
+    Channel* chan = YOBJECT(Channel,msg->userData());
+    if (!chan) {
+	Debug(&__plugin,DebugWarn,"JsChannel::callToReRoute(): No channel!");
+	return;
+    }
+    String target = oper;
+    target.trimSpaces();
+    if (target.null() || JsParser::isNull(oper) || JsParser::isUndefined(oper)) {
+	Debug(&__plugin,DebugWarn,"JsChannel::callToRoute(): Invalid target!");
+	return;
+    }
+    Message* m = chan->message("call.execute",false,true);
+    m->setParam("callto",target);
+    // copy params except those already set
+    unsigned int n = msg->length();
+    for (unsigned int i = 0; i < n; i++) {
+	const NamedString* p = msg->getParam(i);
+	if (p && !m->getParam(p->name()))
+	    m->addParam(p->name(),*p);
+    }
+    Engine::enqueue(m);
+    m_assist->handled();
+    runner->pause();
 }
 
 void JsChannel::initialize(ScriptContext* context, JsAssist* assist)
@@ -757,6 +962,16 @@ void JsChannel::initialize(ScriptContext* context, JsAssist* assist)
 	addObject(params,"Channel",new JsChannel(assist,mtx));
 }
 
+
+#define MKSTATE(x) { #x, JsAssist::x }
+static const TokenDict s_states[] = {
+    MKSTATE(NotStarted),
+    MKSTATE(Routing),
+    MKSTATE(ReRoute),
+    MKSTATE(Ended),
+    MKSTATE(Hangup),
+    { 0, 0 }
+};
 
 JsAssist::~JsAssist()
 {
@@ -779,17 +994,34 @@ JsAssist::~JsAssist()
 	m_message = 0;
 }
 
+const char* JsAssist::stateName(State st)
+{
+    return lookup(st,s_states,"???");
+}
+
 bool JsAssist::init()
 {
     if (!m_runner)
 	return false;
-    JsObject::initialize(m_runner->context());
-    JsEngine::initialize(m_runner->context());
-    JsChannel::initialize(m_runner->context(),this);
-    JsMessage::initialize(m_runner->context());
-    JsFile::initialize(m_runner->context());
+    ScriptContext* ctx = m_runner->context();
+    JsObject::initialize(ctx);
+    JsEngine::initialize(ctx);
+    JsChannel::initialize(ctx,this);
+    JsMessage::initialize(ctx);
+    JsFile::initialize(ctx);
     if (ScriptRun::Invalid == m_runner->reset())
 	return false;
+    ScriptContext* chan = YOBJECT(ScriptContext,ctx->getField(m_runner->stack(),YSTRING("Channel"),m_runner));
+    if (chan) {
+	JsMessage* jsm = YOBJECT(JsMessage,chan->getField(m_runner->stack(),YSTRING("message"),m_runner));
+	if (!jsm) {
+	    jsm = new JsMessage(0,ctx->mutex(),false);
+	    ExpWrapper wrap(jsm,"message");
+	    chan->runAssign(m_runner->stack(),wrap,m_runner);
+	}
+	if (jsm && jsm->ref())
+	    ExpEvaluator::pushOne(m_runner->stack(),new ExpWrapper(jsm,"(message)"));
+    }
     if (!m_runner->callable("onLoad"))
 	return true;
     ScriptRun* runner = m_runner->code()->createRunner(m_runner->context());
@@ -800,6 +1032,25 @@ bool JsAssist::init()
 	return true;
     }
     return false;
+}
+
+Message* JsAssist::getMsg(ScriptRun* runner) const
+{
+    if (!runner)
+	runner = m_runner;
+    if (!runner)
+	return 0;
+    ScriptContext* ctx = runner->context();
+    if (!ctx)
+	return 0;
+    ObjList stack;
+    ScriptContext* chan = YOBJECT(ScriptContext,ctx->getField(stack,YSTRING("Channel"),runner));
+    if (!chan)
+	return 0;
+    JsMessage* jsm = YOBJECT(JsMessage,chan->getField(stack,YSTRING("message"),runner));
+    if (!jsm)
+	return 0;
+    return static_cast<Message*>(jsm->nativeParams());
 }
 
 bool JsAssist::setMsg(Message* msg)
@@ -821,12 +1072,8 @@ bool JsAssist::setMsg(Message* msg)
     JsMessage* jsm = YOBJECT(JsMessage,chan->getField(stack,YSTRING("message"),m_runner));
     if (jsm)
 	jsm->setMsg(msg,false);
-    else {
-	jsm = new JsMessage(msg,ctx->mutex(),false);
-	ExpWrapper wrap(jsm,"message");
-	if (!chan->runAssign(stack,wrap,m_runner))
-	    return false;
-    }
+    else
+	return false;
     m_message = jsm;
     m_handled = false;
     return true;
@@ -851,8 +1098,8 @@ void JsAssist::clearMsg()
 
 bool JsAssist::runScript(Message* msg, State newState)
 {
-    XDebug(&__plugin,DebugInfo,"JsAssist::runScript('%s') for '%s'",
-	msg->c_str(),id().c_str());
+    XDebug(&__plugin,DebugInfo,"JsAssist::runScript('%s') for '%s' in state %s",
+	msg->c_str(),id().c_str(),stateName());
 
     if (m_state >= Ended)
 	return false;
@@ -889,7 +1136,8 @@ bool JsAssist::runFunction(const String& name, Message& msg)
 {
     if (!(m_runner && m_runner->callable(name)))
 	return false;
-    DDebug(&__plugin,DebugInfo,"Running function %s(message) in '%s'",name.c_str(),id().c_str());
+    DDebug(&__plugin,DebugInfo,"Running function %s(message) in '%s' state %s",
+	name.c_str(),id().c_str(),stateName());
 #ifdef DEBUG
     u_int64_t tm = Time::now();
 #endif
@@ -958,7 +1206,7 @@ bool JsAssist::msgRoute(Message& msg)
 
 bool JsAssist::msgDisconnect(Message& msg, const String& reason)
 {
-    return runScript(&msg,ReRoute);
+    return runFunction("onDisconnected",msg) || runScript(&msg,ReRoute);
 }
 
 

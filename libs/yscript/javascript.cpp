@@ -152,7 +152,7 @@ protected:
     virtual int getKeyword(const char* str) const;
     virtual char skipComments(const char*& expr, GenObject* context = 0);
     virtual int preProcess(const char*& expr, GenObject* context = 0);
-    virtual bool getInstruction(const char*& expr, GenObject* nested);
+    virtual bool getInstruction(const char*& expr, char stop, GenObject* nested);
     virtual bool getSimple(const char*& expr, bool constOnly = false);
     virtual Opcode getOperator(const char*& expr);
     virtual Opcode getUnaryOperator(const char*& expr);
@@ -175,6 +175,7 @@ private:
     bool parseSwitch(const char*& expr, GenObject* nested);
     bool parseFor(const char*& expr, GenObject* nested);
     bool parseWhile(const char*& expr, GenObject* nested);
+    bool parseVar(const char*& expr);
     bool parseTry(const char*& expr, GenObject* nested);
     bool parseFuncDef(const char*& expr, bool publish);
     bool evalList(ObjList& stack, GenObject* context) const;
@@ -882,7 +883,7 @@ bool JsCode::getOneInstruction(const char*& expr, GenObject* nested)
 	return false;
     XDebug(this,DebugAll,"JsCode::getOneInstruction %p '%.30s'",nested,expr);
     if (skipComments(expr) == '{') {
-	if (!getInstruction(expr,nested))
+	if (!getInstruction(expr,0,nested))
 	    return false;
     }
     else {
@@ -894,12 +895,14 @@ bool JsCode::getOneInstruction(const char*& expr, GenObject* nested)
     return true;
 }
 
-bool JsCode::getInstruction(const char*& expr, GenObject* nested)
+bool JsCode::getInstruction(const char*& expr, char stop, GenObject* nested)
 {
     if (inError())
 	return false;
-    XDebug(this,DebugAll,"JsCode::getInstruction %p '%.30s'",nested,expr);
+    XDebug(this,DebugAll,"JsCode::getInstruction %p '%.1s' '%.30s'",nested,&stop,expr);
     if (skipComments(expr) == '{') {
+	if (stop == ')')
+	    return false;
 	expr++;
 	for (;;) {
 	    if (!runCompile(expr,'}',nested))
@@ -930,13 +933,15 @@ bool JsCode::getInstruction(const char*& expr, GenObject* nested)
 	    addOpcode(op);
 	    break;
 	case OpcReturn:
-	    if (skipComments(expr) == ';')
-		expr++;
-	    else {
-		if (!runCompile(expr,';'))
-		    return false;
-		if (skipComments(expr) == ';')
-		    expr++;
+	    switch (skipComments(expr)) {
+		case ';':
+		case '}':
+		    break;
+		default:
+		    if (!runCompile(expr,';'))
+			return false;
+		    if ((skipComments(expr) != ';') && (*expr != '}'))
+			return gotError("Expecting ';' or '}'",expr);
 	    }
 	    addOpcode(op);
 	    break;
@@ -979,6 +984,8 @@ bool JsCode::getInstruction(const char*& expr, GenObject* nested)
 		return gotError("Expecting ';'",expr);
 	    expr++;
 	    break;
+	case OpcVar:
+	    return parseVar(expr);
 	case OpcTry:
 	    return parseTry(expr,nested);
 	case OpcFuncDef:
@@ -1100,6 +1107,7 @@ bool JsCode::parseIf(const char*& expr, GenObject* nested)
     if (skipComments(expr) != ')')
 	return gotError("Expecting ')'",expr);
     ExpOperation* cond = addOpcode((Opcode)OpcJumpFalse,++m_label);
+    expr++;
     if (!getOneInstruction(++expr,nested))
 	return false;
     const char* save = expr;
@@ -1240,6 +1248,23 @@ bool JsCode::parseWhile(const char*& expr, GenObject* nested)
     addOpcode((Opcode)OpcJump,cont);
     addOpcode(OpcLabel,jump);
     addOpcode((Opcode)OpcFlush);
+    return true;
+}
+
+bool JsCode::parseVar(const char*& expr)
+{
+    if (inError())
+	return false;
+    XDebug(this,DebugAll,"parseVar '%.30s'",expr);
+    skipComments(expr);
+    int len = ExpEvaluator::getKeyword(expr);
+    if (len <= 0 || expr[len] == '(')
+	return gotError("Expecting variable name",expr);
+    String str(expr,len);
+    if (str.toInteger(s_instr,-1) >= 0 || str.toInteger(s_constants,-1) >= 0)
+	return gotError("Not a valid variable name",expr);
+    DDebug(this,DebugAll,"Found variable '%s'",str.safe());
+    addOpcode((Opcode)OpcVar,str);
     return true;
 }
 
@@ -1599,6 +1624,15 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		    return gotError("Stack underflow",oper.lineNumber());
 		}
 		if (op1->opcode() != OpcField) {
+		    ScriptContext* ctx = YOBJECT(ScriptContext,op1);
+		    if (ctx) {
+			ExpOperation fld(OpcField,*op2);
+			if (ctx->runField(stack,fld,context)) {
+			    TelEngine::destruct(op1);
+			    TelEngine::destruct(op2);
+			    break;
+			}
+		    }
 		    TelEngine::destruct(op1);
 		    TelEngine::destruct(op2);
 		    return gotError("Expecting field name",oper.lineNumber());
@@ -1617,7 +1651,18 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		    TelEngine::destruct(op2);
 		    return gotError("Stack underflow",oper.lineNumber());
 		}
-		if (op1->opcode() != OpcField || op2->opcode() != OpcField) {
+		if (op2->opcode() != OpcField) {
+		    TelEngine::destruct(op1);
+		    TelEngine::destruct(op2);
+		    return gotError("Expecting field names",oper.lineNumber());
+		}
+		if (op1->opcode() != OpcField) {
+		    ScriptContext* ctx = YOBJECT(ScriptContext,op1);
+		    if (ctx && ctx->runField(stack,*op2,context)) {
+			TelEngine::destruct(op1);
+			TelEngine::destruct(op2);
+			break;
+		    }
 		    TelEngine::destruct(op1);
 		    TelEngine::destruct(op2);
 		    return gotError("Expecting field names",oper.lineNumber());
@@ -1651,6 +1696,21 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 			pushOne(stack,new ExpOperation("internal"));
 		}
 		TelEngine::destruct(op);
+	    }
+	    break;
+	case OpcVar:
+	    {
+		for (ObjList* l = stack.skipNull(); l; l = l->skipNext()) {
+		    JsObject* jso = YOBJECT(JsObject,l->get());
+		    if (jso && jso->toString() == YSTRING("()")) {
+			if (!jso->hasField(stack,oper.name(),context)) {
+			    XDebug(this,DebugInfo,"Creating variable '%s' in scope",
+				oper.name().c_str());
+			    jso->params().setParam(new ExpWrapper(0,oper.name()));
+			}
+			break;
+		    }
+		}
 	    }
 	    break;
 	case OpcNew:
@@ -1700,7 +1760,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 	    break;
 	case OpcReturn:
 	    {
-		ExpOperation* op = popOne(stack);
+		ExpOperation* op = popValue(stack,context);
 		bool ok = false;
 		while (ExpOperation* drop = popAny(stack)) {
 		    ok = drop->opcode() == OpcFunc;
@@ -2299,6 +2359,20 @@ JsObject* JsParser::parseJSON(const char* text)
 ExpOperation* JsParser::nullClone()
 {
     return s_null.ExpOperation::clone();
+}
+
+// Check if an object is identic to null
+bool JsParser::isNull(const ExpOperation& oper)
+{
+    ExpWrapper* w = YOBJECT(ExpWrapper,&oper);
+    return w && (w->object() == s_null.object());
+}
+
+// Check if an operation is undefined
+bool JsParser::isUndefined(const ExpOperation& oper)
+{
+    ExpWrapper* w = YOBJECT(ExpWrapper,&oper);
+    return w && !w->object();
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

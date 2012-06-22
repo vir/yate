@@ -310,7 +310,7 @@ bool JsObject::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* co
     XDebug(DebugAll,"JsObject::runAssign() '%s'='%s' in '%s' [%p]",
 	oper.name().c_str(),oper.c_str(),toString().c_str(),this);
     if (frozen()) {
-	Debug(DebugNote,"Object '%s' is frozen",toString().c_str());
+	Debug(DebugWarn,"Object '%s' is frozen",toString().c_str());
 	return false;
     }
     ExpFunction* ef = YOBJECT(ExpFunction,&oper);

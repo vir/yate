@@ -570,10 +570,11 @@ protected:
     /**
      * Get an instruction or block, advance parsing pointer past it
      * @param expr Pointer to text to parse, gets advanced on success
+     * @param stop Optional character expected after the instruction
      * @param nested User defined object passed from nested parsing
      * @return True if succeeded, must add the operands internally
      */
-    virtual bool getInstruction(const char*& expr, GenObject* nested = 0);
+    virtual bool getInstruction(const char*& expr, char stop = 0, GenObject* nested = 0);
 
     /**
      * Get an operand, advance parsing pointer past it

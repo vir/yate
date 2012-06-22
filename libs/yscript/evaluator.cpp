@@ -293,7 +293,7 @@ void ExpEvaluator::formatLineNo(String& buf, unsigned int line) const
     buf << "line " << line;
 }
 
-bool ExpEvaluator::getInstruction(const char*& expr, GenObject* nested)
+bool ExpEvaluator::getInstruction(const char*& expr, char stop, GenObject* nested)
 {
     return false;
 }
@@ -590,7 +590,7 @@ bool ExpEvaluator::runCompile(const char*& expr, char stop, GenObject* nested)
 	return true;
     }
     for (;;) {
-	while (!stackPos && skipComments(expr) && getInstruction(expr,nested))
+	while (!stackPos && skipComments(expr) && (*expr != stop) && getInstruction(expr,stop,nested))
 	    ;
 	if (inError())
 	    return false;
@@ -634,9 +634,15 @@ bool ExpEvaluator::trySimplify()
 {
     DDebug(this,DebugInfo,"trySimplify");
     bool done = false;
-    for (unsigned int i = 0; i < m_opcodes.length(); i++) {
+    for (unsigned int i = 0; ; i++) {
 	ExpOperation* o = static_cast<ExpOperation*>(m_opcodes[i]);
-	if (!o || o->barrier())
+	if (!o) {
+	    if (i >= m_opcodes.length())
+		break;
+	    else
+		continue;
+	}
+	if (o->barrier())
 	    continue;
 	switch (o->opcode()) {
 	    case OpcLAnd:

@@ -992,13 +992,25 @@ bool JsAssist::init()
 {
     if (!m_runner)
 	return false;
-    JsObject::initialize(m_runner->context());
-    JsEngine::initialize(m_runner->context());
-    JsChannel::initialize(m_runner->context(),this);
-    JsMessage::initialize(m_runner->context());
-    JsFile::initialize(m_runner->context());
+    ScriptContext* ctx = m_runner->context();
+    JsObject::initialize(ctx);
+    JsEngine::initialize(ctx);
+    JsChannel::initialize(ctx,this);
+    JsMessage::initialize(ctx);
+    JsFile::initialize(ctx);
     if (ScriptRun::Invalid == m_runner->reset())
 	return false;
+    ScriptContext* chan = YOBJECT(ScriptContext,ctx->getField(m_runner->stack(),YSTRING("Channel"),m_runner));
+    if (chan) {
+	JsMessage* jsm = YOBJECT(JsMessage,chan->getField(m_runner->stack(),YSTRING("message"),m_runner));
+	if (!jsm) {
+	    jsm = new JsMessage(0,ctx->mutex(),false);
+	    ExpWrapper wrap(jsm,"message");
+	    chan->runAssign(m_runner->stack(),wrap,m_runner);
+	}
+	if (jsm && jsm->ref())
+	    ExpEvaluator::pushOne(m_runner->stack(),new ExpWrapper(jsm,"(message)"));
+    }
     if (!m_runner->callable("onLoad"))
 	return true;
     ScriptRun* runner = m_runner->code()->createRunner(m_runner->context());
@@ -1049,12 +1061,8 @@ bool JsAssist::setMsg(Message* msg)
     JsMessage* jsm = YOBJECT(JsMessage,chan->getField(stack,YSTRING("message"),m_runner));
     if (jsm)
 	jsm->setMsg(msg,false);
-    else {
-	jsm = new JsMessage(msg,ctx->mutex(),false);
-	ExpWrapper wrap(jsm,"message");
-	if (!chan->runAssign(stack,wrap,m_runner))
-	    return false;
-    }
+    else
+	return false;
     m_message = jsm;
     m_handled = false;
     return true;

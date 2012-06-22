@@ -267,6 +267,7 @@ public:
 	    params().addParam(new ExpFunction("peerid"));
 	    params().addParam(new ExpFunction("status"));
 	    params().addParam(new ExpFunction("direction"));
+	    params().addParam(new ExpFunction("answered"));
 	    params().addParam(new ExpFunction("answer"));
 	    params().addParam(new ExpFunction("hangup"));
 	    params().addParam(new ExpFunction("callTo"));
@@ -824,6 +825,16 @@ bool JsChannel::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	else
 	    ExpEvaluator::pushOne(stack,JsParser::nullClone());
     }
+    else if (oper.name() == YSTRING("answered")) {
+	if (oper.number())
+	    return false;
+	RefPointer<CallEndpoint> cp;
+	RefPointer<JsAssist> ja = m_assist;
+	if (ja)
+	    cp = ja->locate();
+	Channel* ch = YOBJECT(Channel,cp);
+	ExpEvaluator::pushOne(stack,new ExpOperation(ch && ch->isAnswered()));
+    }
     else if (oper.name() == YSTRING("answer")) {
 	if (oper.number())
 	    return false;
@@ -1195,7 +1206,7 @@ bool JsAssist::msgRoute(Message& msg)
 
 bool JsAssist::msgDisconnect(Message& msg, const String& reason)
 {
-    return runScript(&msg,ReRoute);
+    return runFunction("onDisconnected",msg) || runScript(&msg,ReRoute);
 }
 
 

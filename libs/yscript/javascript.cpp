@@ -2301,4 +2301,18 @@ ExpOperation* JsParser::nullClone()
     return s_null.ExpOperation::clone();
 }
 
+// Check if an object is identic to null
+bool JsParser::isNull(const ExpOperation& oper)
+{
+    ExpWrapper* w = YOBJECT(ExpWrapper,&oper);
+    return w && (w->object() == s_null.object());
+}
+
+// Check if an operation is undefined
+bool JsParser::isUndefined(const ExpOperation& oper)
+{
+    ExpWrapper* w = YOBJECT(ExpWrapper,&oper);
+    return w && !w->object();
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

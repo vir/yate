@@ -2159,6 +2159,18 @@ public:
      */
     static ExpOperation* nullClone();
 
+    /**
+     * Check if an operation holds a null value
+     * @return True if the operation holds a null object
+     */
+    static bool isNull(const ExpOperation& oper);
+
+    /**
+     * Check if an operation holds an undefined value
+     * @return True if the operation holds an undefined value
+     */
+    static bool isUndefined(const ExpOperation& oper);
+
 private:
     String m_basePath;
 };

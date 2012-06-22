@@ -1,3 +1,17 @@
+yate (4.1.1~svn5147) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5147: + Added helper methods to check if a
+    value is null or undefined.  + Implemented pseudo-linear execution
+    flow for channel routing.  + Small improvement to speed up the
+    simplification of large code.  + Fixed indexing and fields of
+    expressions.  + Fixed parsing of "var" declarations.  + Fixed
+    parsing of  { objects } as expressions.  + Allow the
+    onDisconnected() function to override the default reroute behavior.
+    + Added method Channel.answered() to check if the call leg was
+    answered.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 23 Jun 2012 02:19:12 +0400
+
 yate (4.1.1~svn5143) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5143: + Took call.preroute out of the main

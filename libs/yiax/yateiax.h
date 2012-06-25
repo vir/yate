@@ -722,6 +722,14 @@ public:
 	{ return lookup(type,s_types); }
 
     /**
+     * Get the text associated with a media type
+     * @param type The media type
+     * @return A string associated with the media type
+    */
+    static inline const String& typeNameStr(int type)
+	{ return s_typesList[type]; }
+
+    /**
      * Keep the texts associated with the formats
     */
     static const TokenDict s_formats[];
@@ -730,6 +738,11 @@ public:
      * Keep the texts associated with type
      */
     static const TokenDict s_types[];
+
+    /**
+     * Keep the texts associated with a type also as String
+     */
+    static const String s_typesList[TypeCount];
 
 protected:
     int m_type;

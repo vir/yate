@@ -500,6 +500,8 @@ public:
     YIAXConsumer* getConsumer(int type);
     // Retrieve the data source from IAXFormat media type
     YIAXSource* getSource(int type);
+    // Retrieve the data source from IAXFormat
+    DataSource* getSourceMedia(int type);
 
 protected:
     // location: 0: from peer, else: from protocol
@@ -524,6 +526,7 @@ private:
     Mutex m_mutexTrans;                 // Safe m_transaction operations
     Mutex m_mutexRefIncreased;          // Safe ref/deref connection
     bool m_refIncreased;                // If true, the reference counter was increased
+    RefPointer<DataSource> m_sources[IAXFormat::TypeCount]; // Keep all types of sources
 };
 
 /*
@@ -572,9 +575,9 @@ static unsigned int s_expires_max = 3600;
 static String s_statusCmd = "status";
 
 // Retrieve data endpoint name from IAXFormat type
-static inline const char* dataEpName(int type)
+static inline const String& dataEpName(int type)
 {
-    return IAXFormat::typeName(type);
+    return IAXFormat::typeNameStr(type);
 }
 
 // Retrieve format name from IAXFormat type
@@ -1003,7 +1006,7 @@ void YIAXEngine::processMedia(IAXTransaction* transaction, DataBlock& data,
     if (transaction) {
 	YIAXConnection* conn = static_cast<YIAXConnection*>(transaction->getUserData());
 	if (conn) {
-	    YIAXSource* src = conn->getSource(type);
+	    DataSource* src = conn->getSourceMedia(type);
 	    if (src) {
 		unsigned long flags = 0;
 		if (mark)
@@ -2038,15 +2041,28 @@ bool YIAXConnection::route(bool authenticated)
 // Retrieve the data consumer from IAXFormat media type
 YIAXConsumer* YIAXConnection::getConsumer(int type)
 {
-    const char* name = dataEpName(type);
-    return name ? YOBJECT(YIAXConsumer,Channel::getConsumer(name)) : 0;
+    const String& name = dataEpName(type);
+    return YOBJECT(YIAXConsumer,Channel::getConsumer(name));
 }
 
 // Retrieve the data source from IAXFormat media type
 YIAXSource* YIAXConnection::getSource(int type)
 {
-    const char* name = dataEpName(type);
-    return name ? YOBJECT(YIAXSource,Channel::getSource(name)) : 0;
+    const String& name = dataEpName(type);
+    return YOBJECT(YIAXSource,Channel::getSource(name));
+}
+
+DataSource* YIAXConnection::getSourceMedia(int type)
+{
+    const String& name = dataEpName(type);
+    DataSource* src = Channel::getSource(name);
+    if (m_sources[type] != src) {
+	m_sources[type] = 0;
+	DataEndpoint::commonMutex().lock();
+	m_sources[type] = Channel::getSource(name);
+	DataEndpoint::commonMutex().unlock();
+    }
+    return m_sources[type];
 }
 
 // Create audio source with the proper format
@@ -2078,12 +2094,12 @@ void YIAXConnection::startMedia(bool in, int type)
 	exists = (cons != 0);
     }
     clearMedia(in,type);
-    const char* epName = dataEpName(type);
+    const String& epName = dataEpName(type);
     const char* formatText = format ? lookupFormat(format,type) : 0;
     const char* dir = in ? "incoming" : "outgoing";
     if (exists || format)
 	Debug(this,DebugAll,"Starting %s media '%s' format '%s' (%u) [%p]",
-	    dir,epName,formatText,format,this);
+	    dir,epName.c_str(),formatText,format,this);
     bool ok = true;
     if (in) {
 	YIAXSource* src = 0;
@@ -2103,14 +2119,14 @@ void YIAXConnection::startMedia(bool in, int type)
     }
     if (!ok)
 	Debug(this,DebugNote,"Failed to start %s media '%s' format '%s' (%u) [%p]",
-	    dir,epName,formatText,format,this);
+	    dir,epName.c_str(),formatText,format,this);
 }
 
 void YIAXConnection::clearMedia(bool in, int type)
 {
-    const char* epName = dataEpName(type);
+    const String& epName = dataEpName(type);
     DDebug(this,DebugAll,"Clearing %s %s media [%p]",
-	in ? "incoming" : "outgoing",epName,this);
+	in ? "incoming" : "outgoing",epName.c_str(),this);
     if (in)
 	setSource(0,epName);
     else

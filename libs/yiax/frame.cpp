@@ -648,6 +648,8 @@ const TokenDict IAXFormat::s_types[] = {
     {0,0}
 };
 
+const String IAXFormat::s_typesList[IAXFormat::TypeCount] = { "audio", "video", "image" };
+
 // Set format
 void IAXFormat::set(u_int32_t* fmt, u_int32_t* fmtIn, u_int32_t* fmtOut)
 {

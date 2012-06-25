@@ -223,6 +223,11 @@ void JsObject::fillFieldNames(ObjList& names)
     const NamedList* native = nativeParams();
     if (native)
 	ScriptContext::fillFieldNames(names,*native);
+#ifdef XDEBUG
+    String tmp;
+    tmp.append(names,",");
+    Debug(DebugInfo,"JsObject::fillFieldNames: %s",tmp.c_str());
+#endif
 }
 
 bool JsObject::hasField(ObjList& stack, const String& name, GenObject* context) const
@@ -465,21 +470,13 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	oper.name().c_str(),toString().c_str(),this);
     if (oper.name() == YSTRING("push")) {
 	// Adds one or more elements to the end of an array and returns the new length of the array.
-	if (!oper.number())
+	ObjList args;
+	if (!extractArgs(this,stack,oper,context,args))
 	    return false;
-	for (long int i = oper.number(); i; i--) {
-	    ExpOperation* op = popValue(stack,context);
-	    ExpWrapper* obj = YOBJECT(ExpWrapper,op);
-	    if (!obj)
-		continue;
-	    JsObject* jo = (JsObject*)obj->getObject(YSTRING("JsObject"));
-	    if (!jo)
-		continue;
-	    jo->ref();
-	    params().addParam(new NamedPointer(String((unsigned int)(m_length + i - 1)),jo));
-	    TelEngine::destruct(op);
+	while (ExpOperation* op = static_cast<ExpOperation*>(args.remove(false))) {
+	    const_cast<String&>(op->name()) = (unsigned int)m_length++;
+	    params().addParam(op);
 	}
-	m_length += oper.number();
 	setLength();
 	ExpEvaluator::pushOne(stack,new ExpOperation(length()));
     }

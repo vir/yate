@@ -1837,6 +1837,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		bool ok = false;
 		String* n = iter->get();
 		if (n) {
+		    XDebug(DebugInfo,"Iterator got item: '%s'",n->c_str());
 		    static const ExpOperation s_assign(OpcAssign);
 		    pushOne(stack,iter->field().clone());
 		    if (iter->name())

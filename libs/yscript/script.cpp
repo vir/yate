@@ -189,6 +189,11 @@ void ScriptContext::fillFieldNames(ObjList& names)
     const NamedList* native = nativeParams();
     if (native)
 	fillFieldNames(names,*native);
+#ifdef XDEBUG
+    String tmp;
+    tmp.append(names,",");
+    Debug(DebugInfo,"ScriptContext::fillFieldNames: %s",tmp.c_str());
+#endif
 }
 
 void ScriptContext::fillFieldNames(ObjList& names, const NamedList& list, const char* skip)

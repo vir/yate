@@ -1,3 +1,13 @@
+yate (4.1.1~svn5149) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5149: + Added method Channel.answered() to
+    check if the call leg was answered.  + Bug fix: set media source in
+    a thread safe way. Use new CallEndpoint API.  + Added some more
+    XDEBUG for iterators.  + Fixed Array.push() method that was not
+    copying objects correctly and not copying non-objects at all.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 26 Jun 2012 02:19:13 +0400
+
 yate (4.1.1~svn5147) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5147: + Added helper methods to check if a

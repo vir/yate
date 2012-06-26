@@ -87,3 +87,5 @@ debian/tmp/usr/lib/yate/sip/sip_cnam_lnp.yate
 debian/tmp/etc/yate/cache.conf
 debian/tmp/usr/lib/yate/server/cache.yate
 
+debian/tmp/etc/yate/eventlogs.conf
+debian/tmp/usr/lib/yate/server/eventlogs.yate

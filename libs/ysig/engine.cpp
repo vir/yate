@@ -710,6 +710,7 @@ static const TokenDict s_dict_formatCCITT[] = {
 	{"alaw",          0x03},         // Recomendation G.711 A-law 
 	{"g721",          0x04},         // Recomendation G.721 32kbit/s ADPCM and I.460
 	{"h221",          0x05},         // Recomendation H.221 and H.242
+	{"h223",          0x06},         // Recomendation H.223 and H.245 videoconference
 	{"non-CCITT",     0x07},         // Non CCITT standardized rate adaption
 	{"v120",          0x08},         // Recomendation V.120
 	{"x31",           0x09},         // Recomendation X.31 HDLC flag stuffing

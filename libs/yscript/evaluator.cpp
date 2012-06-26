@@ -923,6 +923,19 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 	case OpcField:
 	    pushOne(stack,oper.clone());
 	    break;
+	case OpcCopy:
+	    {
+		Mutex* mtx = 0;
+		ScriptRun* runner = YOBJECT(ScriptRun,&oper);
+		if (runner) {
+		    if (runner->context())
+			mtx = runner->context()->mutex();
+		    if (!mtx)
+			mtx = runner;
+		}
+		pushOne(stack,oper.copy(mtx));
+	    }
+	    break;
 	case OpcNone:
 	case OpcLabel:
 	    break;
@@ -1398,6 +1411,7 @@ void ExpEvaluator::dump(const ExpOperation& oper, String& res) const
     }
     switch (oper.opcode()) {
 	case OpcPush:
+	case OpcCopy:
 	    if (oper.isInteger())
 		res << (int)oper.number();
 	    else
@@ -1461,6 +1475,18 @@ ExpOperation* ExpWrapper::clone(const char* name) const
     if (r)
 	r->ref();
     ExpWrapper* op = new ExpWrapper(object(),name);
+    static_cast<String&>(*op) = *this;
+    op->lineNumber(lineNumber());
+    return op;
+}
+
+ExpOperation* ExpWrapper::copy(Mutex* mtx) const
+{
+    JsObject* jso = YOBJECT(JsObject,m_object);
+    if (!jso)
+	return ExpOperation::clone();
+    XDebug(DebugInfo,"ExpWrapper::copy(%p) [%p]",mtx,this);
+    ExpWrapper* op = new ExpWrapper(jso->copy(mtx),name());
     static_cast<String&>(*op) = *this;
     op->lineNumber(lineNumber());
     return op;

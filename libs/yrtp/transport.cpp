@@ -172,8 +172,8 @@ RTPTransport::RTPTransport(RTPTransport::Type type)
 RTPTransport::~RTPTransport()
 {
     DDebug(DebugAll,"RTPTransport::~RTPTransport() [%p]",this);
-    setProcessor();
     group(0);
+    setProcessor();
 }
 
 void RTPTransport::timerTick(const Time& when)

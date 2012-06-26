@@ -1,3 +1,17 @@
+yate (4.1.1~svn5154) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5154: + Fixed Array.push() method that was
+    not copying objects correctly and not copying non-objects at all.  +
+    Added eventlogs module packaging  + Encode and decode L1 bearer
+    capability H.223 + H.245 (video calls).  + Clear the RTP session's
+    processor only after removing the session from the thread.  + Fixed
+    the call context creation, was double wrapping the scope and this
+    objects.  + Bug fix: use ObjList::skipNext() instead of
+    ObjList::next() in order to avoid segmentation fault.  + Deep copy
+    inline objects and arrays when placing them in a context.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 27 Jun 2012 02:19:17 +0400
+
 yate (4.1.1~svn5149) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5149: + Added method Channel.answered() to

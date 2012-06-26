@@ -1,3 +1,9 @@
+yate (4.1.1~vir2012062601) UNRELEASED; urgency=low
+
+  * Merged upstream changes: Javascript improvements, various bugfixes
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Tue, 26 Jun 2012 10:48:39 +0400
+
 yate (4.1.1~vir2012061301) UNRELEASED; urgency=low
 
   * Merged upstream changes: messages tracking, several fixes.

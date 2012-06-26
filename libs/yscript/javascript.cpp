@@ -1472,7 +1472,7 @@ bool JsCode::getSimple(const char*& expr, bool constOnly)
 	jso = parseObject(expr,constOnly);
     if (!jso)
 	return ExpEvaluator::getSimple(expr,constOnly);
-    addOpcode(new ExpWrapper(jso));
+    addOpcode(new ExpWrapper(ExpEvaluator::OpcCopy,jso));
     return true;
 }
 
@@ -1679,6 +1679,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		    return gotError("Stack underflow",oper.lineNumber());
 		switch (op->opcode()) {
 		    case OpcPush:
+		    case OpcCopy:
 			{
 			    const char* txt = "string";
 			    ExpWrapper* w = YOBJECT(ExpWrapper,op);

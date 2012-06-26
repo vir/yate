@@ -887,8 +887,9 @@ bool JsChannel::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 		callToReRoute(stack,*op,context);
 		break;
 	    default:
-		TelEngine::destruct(op);
+		break;
 	}
+	TelEngine::destruct(op);
 	if (oper.name() == YSTRING("callJust"))
 	    ja->end();
     }
@@ -1017,7 +1018,8 @@ bool JsAssist::init()
 	if (!jsm) {
 	    jsm = new JsMessage(0,ctx->mutex(),false);
 	    ExpWrapper wrap(jsm,"message");
-	    chan->runAssign(m_runner->stack(),wrap,m_runner);
+	    if (!chan->runAssign(m_runner->stack(),wrap,m_runner))
+		return false;
 	}
 	if (jsm && jsm->ref()) {
 	    JsObject* cc = JsObject::buildCallContext(ctx->mutex(),jsm);

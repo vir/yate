@@ -168,6 +168,19 @@ static void dumpRecursiveObj(const GenObject* obj, String& buf, unsigned int dep
 	dumpRecursiveObj(nptr->userData(),buf,depth + 1,seen);
 }
 
+// Helper function that deep copies all parameters
+static void deepCopyParams(NamedList& dst, const NamedList& src, Mutex* mtx)
+{
+    NamedIterator iter(src);
+    while (const NamedString* p = iter.get()) {
+	ExpOperation* oper = YOBJECT(ExpOperation,p);
+	if (oper)
+	    dst.addParam(oper->copy(mtx));
+	else
+	    dst.addParam(p->name(),*p);
+    }
+}
+
 
 const String JsObject::s_protoName("__proto__");
 
@@ -196,6 +209,13 @@ JsObject::~JsObject()
     XDebug(DebugAll,"JsObject::~JsObject '%s' [%p]",toString().c_str(),this);
 }
 
+JsObject* JsObject::copy(Mutex* mtx) const
+{
+    JsObject* jso = new JsObject(mtx,toString(),frozen());
+    deepCopyParams(jso->params(),params(),mtx);
+    return jso;
+}
+
 void JsObject::dumpRecursive(const GenObject* obj, String& buf)
 {
     ObjList seen;
@@ -212,7 +232,7 @@ void JsObject::printRecursive(const GenObject* obj)
 JsObject* JsObject::buildCallContext(Mutex* mtx, JsObject* thisObj)
 {
     JsObject* ctxt = new JsObject(mtx,"()");
-    if (thisObj && thisObj->ref())
+    if (thisObj && thisObj->alive())
 	ctxt->params().addParam(new ExpWrapper(thisObj,"this"));
     return ctxt;
 }
@@ -450,6 +470,14 @@ JsArray::JsArray(Mutex* mtx)
     params().addParam(new ExpFunction("splice"));
     params().addParam(new ExpFunction("sort"));
     params().addParam("length","0");
+}
+
+JsObject* JsArray::copy(Mutex* mtx) const
+{
+    JsArray* jsa = new JsArray(mtx,toString(),frozen());
+    deepCopyParams(jsa->params(),params(),mtx);
+    jsa->setLength(length());
+    return jsa;
 }
 
 void JsArray::push(ExpOperation* item)

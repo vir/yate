@@ -1805,7 +1805,7 @@ public:
      * @param thisObj Optional object that will be set as "this"
      * @return New empty object usable as call context
      */
-    static JsObject* buildCallContext(Mutex* mtx, ExpOperation* thisObj = 0);
+    static JsObject* buildCallContext(Mutex* mtx, JsObject* thisObj = 0);
 
     /**
      * Initialize the standard global objects in a context

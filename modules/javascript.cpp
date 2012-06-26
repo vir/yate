@@ -482,12 +482,12 @@ void JsEngine::initialize(ScriptContext* context)
 
 bool JsMessage::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
+    XDebug(&__plugin,DebugAll,"JsMessage::runAssign '%s'='%s'",oper.name().c_str(),oper.c_str());
     if (ScriptContext::hasField(stack,oper.name(),context))
 	return JsObject::runAssign(stack,oper,context);
     if (!m_message)
 	return false;
-    ExpWrapper* w = YOBJECT(ExpWrapper,&oper);
-    if (w && !w->object())
+    if (JsParser::isUndefined(oper))
 	m_message->clearParam(oper.name());
     else
 	m_message->setParam(new NamedString(oper.name(),oper));
@@ -1019,8 +1019,12 @@ bool JsAssist::init()
 	    ExpWrapper wrap(jsm,"message");
 	    chan->runAssign(m_runner->stack(),wrap,m_runner);
 	}
-	if (jsm && jsm->ref())
+	if (jsm && jsm->ref()) {
+	    JsObject* cc = JsObject::buildCallContext(ctx->mutex(),jsm);
+	    ExpEvaluator::pushOne(m_runner->stack(),new ExpWrapper(cc,cc->toString(),true));
+	    jsm->ref();
 	    ExpEvaluator::pushOne(m_runner->stack(),new ExpWrapper(jsm,"(message)"));
+	}
     }
     if (!m_runner->callable("onLoad"))
 	return true;

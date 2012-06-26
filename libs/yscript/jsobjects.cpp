@@ -209,10 +209,10 @@ void JsObject::printRecursive(const GenObject* obj)
     Output("%s",buf.c_str());
 }
 
-JsObject* JsObject::buildCallContext(Mutex* mtx, ExpOperation* thisObj)
+JsObject* JsObject::buildCallContext(Mutex* mtx, JsObject* thisObj)
 {
     JsObject* ctxt = new JsObject(mtx,"()");
-    if (thisObj)
+    if (thisObj && thisObj->ref())
 	ctxt->params().addParam(new ExpWrapper(thisObj,"this"));
     return ctxt;
 }

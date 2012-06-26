@@ -6,9 +6,18 @@
 ; Note that a trailing path separator should be added
 ;scripts_dir=share/scripts/
 
-
-[scripts]
-
 ; routing: string: Name of the file holding the routing instructions
 ; Example: routing=route.js
 ;routing=
+
+
+[scripts]
+; Add one entry in this section for each script that is to be loaded on Yate startup
+; Each line has to be on the form:
+;   name=script_file_name
+; The name must be unique and it will identify the running script instance.
+; The file name should hold either the absolute path and name or the path
+;  and name relative to the scripts_dir in section [general]
+; Examples:
+;  faxes=fax_handler.js
+;  callback=js_lib/callback.js

@@ -27,22 +27,6 @@ using namespace TelEngine;
 
 namespace { // anonymous
 
-// Base class for all native objects that hold a NamedList
-class JsNative : public JsObject
-{
-    YCLASS(JsNative,JsObject)
-public:
-    inline JsNative(const char* name, NamedList* list, Mutex* mtx)
-	: JsObject(name,mtx), m_list(list)
-	{ }
-    virtual NamedList& list()
-	{ return *m_list; }
-    virtual const NamedList& list() const
-	{ return *m_list; }
-private:
-    NamedList* m_list;
-};
-
 // Object object
 class JsObjectObj : public JsObject
 {
@@ -172,6 +156,11 @@ static void dumpRecursiveObj(const GenObject* obj, String& buf, unsigned int dep
 	NamedIterator iter(scr->params());
 	while (const NamedString* p = iter.get())
 	    dumpRecursiveObj(p,buf,depth + 1,seen);
+	if (scr->nativeParams()) {
+	    iter = *scr->nativeParams();
+	    while (const NamedString* p = iter.get())
+		dumpRecursiveObj(p,buf,depth + 1,seen);
+	}
     }
     else if (wrap)
 	dumpRecursiveObj(wrap->object(),buf,depth + 1,seen);
@@ -179,6 +168,8 @@ static void dumpRecursiveObj(const GenObject* obj, String& buf, unsigned int dep
 	dumpRecursiveObj(nptr->userData(),buf,depth + 1,seen);
 }
 
+
+const String JsObject::s_protoName("__proto__");
 
 JsObject::JsObject(const char* name, Mutex* mtx, bool frozen)
     : ScriptContext(String("[object ") + name + "]"),
@@ -218,11 +209,69 @@ void JsObject::printRecursive(const GenObject* obj)
     Output("%s",buf.c_str());
 }
 
+JsObject* JsObject::buildCallContext(Mutex* mtx, ExpOperation* thisObj)
+{
+    JsObject* ctxt = new JsObject(mtx,"()");
+    if (thisObj)
+	ctxt->params().addParam(new ExpWrapper(thisObj,"this"));
+    return ctxt;
+}
+
+void JsObject::fillFieldNames(ObjList& names)
+{
+    ScriptContext::fillFieldNames(names,params(),"__");
+    const NamedList* native = nativeParams();
+    if (native)
+	ScriptContext::fillFieldNames(names,*native);
+#ifdef XDEBUG
+    String tmp;
+    tmp.append(names,",");
+    Debug(DebugInfo,"JsObject::fillFieldNames: %s",tmp.c_str());
+#endif
+}
+
+bool JsObject::hasField(ObjList& stack, const String& name, GenObject* context) const
+{
+    if (ScriptContext::hasField(stack,name,context))
+	return true;
+    const ScriptContext* proto = YOBJECT(ScriptContext,params().getParam(protoName()));
+    if (proto && proto->hasField(stack,name,context))
+	return true;
+    NamedList* np = nativeParams();
+    return np && np->getParam(name);
+}
+
+NamedString* JsObject::getField(ObjList& stack, const String& name, GenObject* context) const
+{
+    NamedString* fld = ScriptContext::getField(stack,name,context);
+    if (fld)
+	return fld;
+    const ScriptContext* proto = YOBJECT(ScriptContext,params().getParam(protoName()));
+    if (proto) {
+	fld = proto->getField(stack,name,context);
+	if (fld)
+	    return fld;
+    }
+    NamedList* np = nativeParams();
+    if (np)
+	return np->getParam(name);
+    return 0;
+}
+
+JsObject* JsObject::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    if (!ref())
+	return 0;
+    JsObject* obj = clone();
+    obj->params().addParam(new ExpWrapper(this,protoName()));
+    return obj;
+}
+
 bool JsObject::runFunction(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
     XDebug(DebugInfo,"JsObject::runFunction() '%s' in '%s' [%p]",
 	oper.name().c_str(),toString().c_str(),this);
-    NamedString* param = params().getParam(oper.name());
+    NamedString* param = getField(stack,oper.name(),context);
     if (!param)
 	return false;
     ExpFunction* ef = YOBJECT(ExpFunction,param);
@@ -238,7 +287,7 @@ bool JsObject::runField(ObjList& stack, const ExpOperation& oper, GenObject* con
 {
     XDebug(DebugAll,"JsObject::runField() '%s' in '%s' [%p]",
 	oper.name().c_str(),toString().c_str(),this);
-    const String* param = params().getParam(oper.name());
+    const String* param = getField(stack,oper.name(),context);
     if (param) {
 	ExpFunction* ef = YOBJECT(ExpFunction,param);
 	if (ef)
@@ -248,11 +297,9 @@ bool JsObject::runField(ObjList& stack, const ExpOperation& oper, GenObject* con
 	    if (jf)
 		ExpEvaluator::pushOne(stack,new ExpFunction(oper.name()));
 	    else {
-		JsObject* jo = YOBJECT(JsObject,param);
-		if (jo) {
-		    jo->ref();
-		    ExpEvaluator::pushOne(stack,new ExpWrapper(jo,oper.name()));
-		}
+		ExpWrapper* w = YOBJECT(ExpWrapper,param);
+		if (w)
+		    ExpEvaluator::pushOne(stack,w->clone(oper.name()));
 		else
 		    ExpEvaluator::pushOne(stack,new ExpOperation(*param,oper.name(),true));
 	    }
@@ -268,7 +315,7 @@ bool JsObject::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* co
     XDebug(DebugAll,"JsObject::runAssign() '%s'='%s' in '%s' [%p]",
 	oper.name().c_str(),oper.c_str(),toString().c_str(),this);
     if (frozen()) {
-	Debug(DebugNote,"Object '%s' is frozen",toString().c_str());
+	Debug(DebugWarn,"Object '%s' is frozen",toString().c_str());
 	return false;
     }
     ExpFunction* ef = YOBJECT(ExpFunction,&oper);
@@ -284,7 +331,7 @@ bool JsObject::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* co
 		params().clearParam(oper.name());
 	}
 	else
-	    params().setParam(oper.name(),oper);
+	    params().setParam(new NamedString(oper.name(),oper));
     }
     return true;
 }
@@ -338,11 +385,13 @@ void JsObject::addConstructor(NamedList& params, const char* name, JsObject* obj
 {
     JsFunction* ctr = new JsFunction(obj->mutex(),name);
     ctr->params().addParam(new NamedPointer("prototype",obj,obj->toString()));
+    obj->initConstructor(ctr);
     params.addParam(new NamedPointer(name,ctr,ctr->toString()));
 }
 
 // Static method that pops arguments off a stack to a list in proper order
-int JsObject::extractArgs(JsObject* obj, ObjList& stack, const ExpOperation& oper, GenObject* context, ObjList& arguments)
+int JsObject::extractArgs(JsObject* obj, ObjList& stack, const ExpOperation& oper,
+    GenObject* context, ObjList& arguments)
 {
     if (!obj || !oper.number())
 	return 0;
@@ -421,21 +470,13 @@ bool JsArray::runNative(ObjList& stack, const ExpOperation& oper, GenObject* con
 	oper.name().c_str(),toString().c_str(),this);
     if (oper.name() == YSTRING("push")) {
 	// Adds one or more elements to the end of an array and returns the new length of the array.
-	if (!oper.number())
+	ObjList args;
+	if (!extractArgs(this,stack,oper,context,args))
 	    return false;
-	for (long int i = oper.number(); i; i--) {
-	    ExpOperation* op = popValue(stack,context);
-	    ExpWrapper* obj = YOBJECT(ExpWrapper,op);
-	    if (!obj)
-		continue;
-	    JsObject* jo = (JsObject*)obj->getObject(YSTRING("JsObject"));
-	    if (!jo)
-		continue;
-	    jo->ref();
-	    params().addParam(new NamedPointer(String((unsigned int)(m_length + i - 1)),jo));
-	    TelEngine::destruct(op);
+	while (ExpOperation* op = static_cast<ExpOperation*>(args.remove(false))) {
+	    const_cast<String&>(op->name()) = (unsigned int)m_length++;
+	    params().addParam(op);
 	}
-	m_length += oper.number();
 	setLength();
 	ExpEvaluator::pushOne(stack,new ExpOperation(length()));
     }
@@ -908,58 +949,6 @@ bool JsDate::runNative(ObjList& stack, const ExpOperation& oper, GenObject* cont
     }
     else
 	return JsObject::runNative(stack,oper,context);
-    return true;
-}
-
-
-JsFunction::JsFunction(Mutex* mtx)
-    : JsObject("Function",mtx,true)
-{
-    init();
-}
-
-JsFunction::JsFunction(Mutex* mtx, const char* name)
-    : JsObject(mtx,String("[function ") + name + "()]",true)
-{
-    init();
-}
-
-void JsFunction::init()
-{
-    params().addParam(new ExpFunction("apply"));
-    params().addParam(new ExpFunction("call"));
-}
-
-bool JsFunction::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
-{
-    XDebug(DebugAll,"JsFunction::runNative() '%s' in '%s' [%p]",
-	oper.name().c_str(),toString().c_str(),this);
-    if (oper.name() == YSTRING("apply")) {
-	// func.apply(new_this,["array","of","params",...])
-	if (oper.number() != 2)
-	    return false;
-    }
-    else if (oper.name() == YSTRING("call")) {
-	// func.call(new_this,param1,param2,...)
-	if (!oper.number())
-	    return false;
-    }
-    else
-	return JsObject::runNative(stack,oper,context);
-    return true;
-}
-
-bool JsFunction::runDefined(ObjList& stack, const ExpOperation& oper, GenObject* context)
-{
-    XDebug(DebugAll,"JsFunction::runDefined() in '%s' [%p]",toString().c_str(),this);
-    JsObject* proto = YOBJECT(JsObject,getField(stack,"prototype",context));
-    if (proto) {
-	// found prototype, build object
-	JsObject* obj = proto->clone();
-	obj->copyFields(stack,*proto,context);
-	obj->runConstructor(stack,oper,context);
-	ExpEvaluator::pushOne(stack,new ExpWrapper(obj,oper.name()));
-    }
     return true;
 }
 

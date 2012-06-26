@@ -47,7 +47,7 @@
 ; Each line has to be on the form:
 ;   scriptname=parameter
 ; The script name should hold either the absolute path and name or the path
-;  and name relative to the sripts_dir in section [general]
+;  and name relative to the scripts_dir in section [general]
 ; The parameter is optional and if present is passed to the script as the first
 ;  (and single) parameter
 

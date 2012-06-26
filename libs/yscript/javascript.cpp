@@ -29,6 +29,7 @@ using namespace TelEngine;
 namespace { // anonymous
 
 class ParseNested;
+class JsRunner;
 
 class JsContext : public JsObject, public Mutex
 {
@@ -77,11 +78,15 @@ protected:
 
 class JsCode : public ScriptCode, public ExpEvaluator
 {
+    friend class TelEngine::JsFunction;
+    friend class TelEngine::JsParser;
     friend class ParseNested;
+    friend class JsRunner;
 public:
     enum JsOpcode {
 	OpcBegin = OpcPrivate + 1,
 	OpcEnd,
+	OpcFlush,
 	OpcIndex,
 	OpcEqIdentity,
 	OpcNeIdentity,
@@ -98,6 +103,8 @@ public:
 	OpcBreak,
 	OpcCont,
 	OpcIn,
+	OpcOf,
+	OpcNext,
 	OpcVar,
 	OpcWith,
 	OpcTry,
@@ -133,6 +140,7 @@ public:
     }
     virtual bool initialize(ScriptContext* context) const;
     virtual bool evaluate(ScriptRun& runner, ObjList& results) const;
+    virtual ScriptRun* createRunner(ScriptContext* context);
     bool link();
     JsObject* parseArray(const char*& expr, bool constOnly);
     JsObject* parseObject(const char*& expr, bool constOnly);
@@ -144,7 +152,7 @@ protected:
     virtual int getKeyword(const char* str) const;
     virtual char skipComments(const char*& expr, GenObject* context = 0);
     virtual int preProcess(const char*& expr, GenObject* context = 0);
-    virtual bool getInstruction(const char*& expr, GenObject* nested);
+    virtual bool getInstruction(const char*& expr, char stop, GenObject* nested);
     virtual bool getSimple(const char*& expr, bool constOnly = false);
     virtual Opcode getOperator(const char*& expr);
     virtual Opcode getUnaryOperator(const char*& expr);
@@ -159,20 +167,58 @@ protected:
 private:
     ObjVector m_linked;
     ObjList m_included;
+    ObjList m_globals;
     bool preProcessInclude(const char*& expr, bool once, GenObject* context);
+    bool getOneInstruction(const char*& expr, GenObject* nested);
     bool parseInner(const char*& expr, JsOpcode opcode, ParseNested* nested);
     bool parseIf(const char*& expr, GenObject* nested);
     bool parseSwitch(const char*& expr, GenObject* nested);
     bool parseFor(const char*& expr, GenObject* nested);
     bool parseWhile(const char*& expr, GenObject* nested);
+    bool parseVar(const char*& expr);
     bool parseTry(const char*& expr, GenObject* nested);
-    bool parseFuncDef(const char*& expr, GenObject* nested);
+    bool parseFuncDef(const char*& expr, bool publish);
     bool evalList(ObjList& stack, GenObject* context) const;
     bool evalVector(ObjList& stack, GenObject* context) const;
     bool jumpToLabel(long int label, GenObject* context) const;
     bool jumpRelative(long int offset, GenObject* context) const;
+    bool jumpAbsolute(long int index, GenObject* context) const;
+    bool callFunction(ObjList& stack, const ExpOperation& oper, GenObject* context,
+	JsFunction* func, bool constr) const;
+    bool callFunction(ObjList& stack, const ExpOperation& oper, GenObject* context,
+	long int retIndex, JsFunction* func, ObjList& args,
+	ExpOperation* thisObj, ExpOperation* scopeObj) const;
+    inline JsFunction* getGlobalFunction(const String& name) const
+	{ return YOBJECT(JsFunction,m_globals[name]); }
     long int m_label;
     int m_depth;
+};
+
+class JsIterator : public RefObject
+{
+    YCLASS(JsIterator,RefObject);
+public:
+    inline JsIterator(const ExpOperation& field, JsObject* obj)
+	: m_field(field.clone()), m_obj(obj)
+	{ obj->fillFieldNames(m_keys); }
+    inline JsIterator(const ExpOperation& field, NamedList* lst)
+	: m_field(field.clone())
+	{ ScriptContext::fillFieldNames(m_keys,*lst); }
+    virtual ~JsIterator()
+	{ TelEngine::destruct(m_field); }
+    inline ExpOperation& field() const
+	{ return *m_field; }
+    inline String* get()
+	{ return static_cast<String*>(m_keys.remove(false)); }
+    inline const String& name() const
+	{ return m_name; }
+    inline void name(const char* objName)
+	{ m_name = objName; }
+private:
+    ExpOperation* m_field;
+    RefPointer<JsObject> m_obj;
+    ObjList m_keys;
+    String m_name;
 };
 
 class JsRunner : public ScriptRun
@@ -184,10 +230,14 @@ public:
 	  m_paused(false), m_opcode(0), m_index(0)
 	{ }
     virtual Status reset();
+    virtual bool pause();
+    virtual Status call(const String& name, ObjList& args, ExpOperation* thisObj = 0, ExpOperation* scopeObj = 0);
+    virtual bool callable(const String& name);
+protected:
     virtual Status resume();
 private:
     bool m_paused;
-    ObjList* m_opcode;
+    const ObjList* m_opcode;
     unsigned int m_index;
 };
 
@@ -236,6 +286,8 @@ static const TokenDict s_operators[] =
     MAKEOP("===", EqIdentity),
     MAKEOP("!==", NeIdentity),
     MAKEOP(".", FieldOf),
+    MAKEOP("in", In),
+    MAKEOP("of", Of),
     { 0, 0 }
 };
 
@@ -265,7 +317,6 @@ static const TokenDict s_instr[] =
     MAKEOP("default", Default),
     MAKEOP("break", Break),
     MAKEOP("continue", Cont),
-    MAKEOP("in", In),
     MAKEOP("var", Var),
     MAKEOP("with", With),
     MAKEOP("try", Try),
@@ -282,6 +333,7 @@ static const TokenDict s_constants[] =
     MAKEOP("true", True),
     MAKEOP("null", Null),
     MAKEOP("undefined", Undefined),
+    MAKEOP("function", FuncDef),
     { 0, 0 }
 };
 
@@ -309,42 +361,44 @@ GenObject* JsContext::resolveTop(ObjList& stack, const String& name, GenObject* 
 
 GenObject* JsContext::resolve(ObjList& stack, String& name, GenObject* context)
 {
-    if (name.find('.') < 0)
-	return resolveTop(stack,name,context);
-    ObjList* list = name.split('.',true);
     GenObject* obj = 0;
-    for (ObjList* l = list->skipNull(); l; ) {
-	const String* s = static_cast<const String*>(l->get());
-	ObjList* l2 = l->skipNext();
-	if (TelEngine::null(s)) {
-	    // consecutive dots - not good
-	    obj = 0;
-	    break;
-	}
-	if (!obj)
-	    obj = resolveTop(stack,*s,context);
-	if (!l2) {
-	    name = *s;
-	    break;
-	}
-	ExpExtender* ext = YOBJECT(ExpExtender,obj);
-	if (ext) {
-	    GenObject* adv = ext->getField(stack,*s,context);
-	    XDebug(DebugAll,"JsContext::resolve advanced to '%s' of %p for '%s'",
-		(adv ? adv->toString().c_str() : 0),ext,s->c_str());
-	    if (adv)
-		obj = adv;
-	    else {
-		name.clear();
-		for (; l; l = l->skipNext())
-		    name.append(l->get()->toString(),".");
+    if (name.find('.') < 0)
+	obj = resolveTop(stack,name,context);
+    else {
+	ObjList* list = name.split('.',true);
+	for (ObjList* l = list->skipNull(); l; ) {
+	    const String* s = static_cast<const String*>(l->get());
+	    ObjList* l2 = l->skipNext();
+	    if (TelEngine::null(s)) {
+		// consecutive dots - not good
+		obj = 0;
 		break;
 	    }
+	    if (!obj)
+		obj = resolveTop(stack,*s,context);
+	    if (!l2) {
+		name = *s;
+		break;
+	    }
+	    ExpExtender* ext = YOBJECT(ExpExtender,obj);
+	    if (ext) {
+		GenObject* adv = ext->getField(stack,*s,context);
+		XDebug(DebugAll,"JsContext::resolve advanced to '%s' of %p for '%s'",
+		    (adv ? adv->toString().c_str() : 0),ext,s->c_str());
+		if (adv)
+		    obj = adv;
+		else {
+		    name.clear();
+		    for (; l; l = l->skipNext())
+			name.append(l->get()->toString(),".");
+		    break;
+		}
+	    }
+	    l = l2;
 	}
-	l = l2;
+	TelEngine::destruct(list);
     }
-    TelEngine::destruct(list);
-    XDebug(DebugAll,"JsContext::resolve got '%s' %p for '%s'",
+    DDebug(DebugAll,"JsContext::resolve got '%s' %p for '%s'",
 	(obj ? obj->toString().c_str() : 0),obj,name.c_str());
     return obj;
 }
@@ -527,6 +581,11 @@ bool JsCode::initialize(ScriptContext* context) const
     if (!context)
 	return false;
     JsObject::initialize(context);
+    for (ObjList* l = m_globals.skipNull(); l; l = l->skipNext()) {
+	ExpOperation* op = static_cast<ExpOperation*>(l->get());
+	if (!context->params().getParam(op->name()))
+	    context->params().setParam(static_cast<ExpOperation*>(l->get())->clone());
+    }
     return true;
 }
 
@@ -742,7 +801,7 @@ char JsCode::skipComments(const char*& expr, GenObject* context)
 	else if (expr[1] == '*') {
 	    /* comment to close */
 	    expr++;
-	    while ((c = *expr) && (c != '*' || expr[1] != '/'))
+	    while ((c = skipWhites(expr)) && (c != '*' || expr[1] != '/'))
 		expr++;
 	    if (c) {
 		expr+=2;
@@ -818,12 +877,32 @@ int JsCode::preProcess(const char*& expr, GenObject* context)
     }
 }
 
-bool JsCode::getInstruction(const char*& expr, GenObject* nested)
+bool JsCode::getOneInstruction(const char*& expr, GenObject* nested)
 {
     if (inError())
 	return false;
-    XDebug(this,DebugAll,"JsCode::getInstruction '%.30s' %p",expr,nested);
+    XDebug(this,DebugAll,"JsCode::getOneInstruction %p '%.30s'",nested,expr);
     if (skipComments(expr) == '{') {
+	if (!getInstruction(expr,0,nested))
+	    return false;
+    }
+    else {
+	if (!runCompile(expr,';',nested))
+	    return false;
+	if (skipComments(expr) == ';')
+	    expr++;
+    }
+    return true;
+}
+
+bool JsCode::getInstruction(const char*& expr, char stop, GenObject* nested)
+{
+    if (inError())
+	return false;
+    XDebug(this,DebugAll,"JsCode::getInstruction %p '%.1s' '%.30s'",nested,&stop,expr);
+    if (skipComments(expr) == '{') {
+	if (stop == ')')
+	    return false;
 	expr++;
 	for (;;) {
 	    if (!runCompile(expr,'}',nested))
@@ -839,8 +918,11 @@ bool JsCode::getInstruction(const char*& expr, GenObject* nested)
 	expr++;
 	return true;
     }
+    else if (*expr == ';') {
+	expr++;
+	return true;
+    }
     const char* saved = expr;
-    skipComments(expr);
     Opcode op = ExpEvaluator::getOperator(expr,s_instr);
     switch ((JsOpcode)op) {
 	case (JsOpcode)OpcNone:
@@ -851,9 +933,16 @@ bool JsCode::getInstruction(const char*& expr, GenObject* nested)
 	    addOpcode(op);
 	    break;
 	case OpcReturn:
-	    runCompile(expr);
-	    if (skipComments(expr) == ';')
-		expr++;
+	    switch (skipComments(expr)) {
+		case ';':
+		case '}':
+		    break;
+		default:
+		    if (!runCompile(expr,';'))
+			return false;
+		    if ((skipComments(expr) != ';') && (*expr != '}'))
+			return gotError("Expecting ';' or '}'",expr);
+	    }
 	    addOpcode(op);
 	    break;
 	case OpcIf:
@@ -895,22 +984,24 @@ bool JsCode::getInstruction(const char*& expr, GenObject* nested)
 		return gotError("Expecting ';'",expr);
 	    expr++;
 	    break;
+	case OpcVar:
+	    return parseVar(expr);
 	case OpcTry:
 	    return parseTry(expr,nested);
 	case OpcFuncDef:
-	    return parseFuncDef(expr,nested);
+	    return parseFuncDef(expr,!nested);
 	default:
 	    break;
     }
     return true;
 }
 
-class ParseWhile : public ParseNested
+class ParseLoop : public ParseNested
 {
     friend class JsCode;
 public:
-    inline ParseWhile(JsCode* code, GenObject* nested, long int lblCont, long int lblBreak)
-	: ParseNested(code,nested,JsCode::OpcWhile),
+    inline ParseLoop(JsCode* code, GenObject* nested, JsCode::JsOpcode oper, long int lblCont, long int lblBreak)
+	: ParseNested(code,nested,oper),
 	  m_lblCont(lblCont), m_lblBreak(lblBreak)
 	{ }
 protected:
@@ -925,43 +1016,80 @@ class ParseSwitch : public ParseNested
 {
     friend class JsCode;
 public:
-    inline ParseSwitch(JsCode* code, GenObject* nested)
-	: ParseNested(code,nested,JsCode::OpcSwitch)
+    enum SwitchState {
+	Before,
+	InCase,
+	InDefault
+    };
+    inline ParseSwitch(JsCode* code, GenObject* nested, long int lblBreak)
+	: ParseNested(code,nested,JsCode::OpcSwitch),
+	  m_lblBreak(lblBreak), m_lblDefault(0), m_state(Before)
 	{ }
+    inline SwitchState state() const
+	{ return m_state; }
 protected:
     virtual bool isMatch(JsCode::JsOpcode opcode)
 	{ return JsCode::OpcCase == opcode || JsCode::OpcDefault == opcode ||
 	    JsCode::OpcBreak == opcode; }
+private:
+    long int m_lblBreak;
+    long int m_lblDefault;
+    SwitchState m_state;
+    ObjList m_cases;
 };
 
 // Parse keywords inner to specific instructions
 bool JsCode::parseInner(const char*& expr, JsOpcode opcode, ParseNested* nested)
 {
     switch (*nested) {
+	case OpcFor:
 	case OpcWhile:
-	    switch (opcode) {
-		case OpcBreak:
-		    addOpcode((Opcode)OpcJump,static_cast<ParseWhile*>(nested)->m_lblBreak);
-		    break;
-		case OpcCont:
-		    addOpcode((Opcode)OpcJump,static_cast<ParseWhile*>(nested)->m_lblCont);
-		    break;
-		default:
-		    return false;
+	    {
+		ParseLoop* block = static_cast<ParseLoop*>(nested);
+		switch (opcode) {
+		    case OpcBreak:
+			XDebug(this,DebugAll,"Parsing loop:break '%.30s'",expr);
+			addOpcode((Opcode)OpcJump,block->m_lblBreak);
+			break;
+		    case OpcCont:
+			XDebug(this,DebugAll,"Parsing loop:continue '%.30s'",expr);
+			addOpcode((Opcode)OpcJump,block->m_lblCont);
+			break;
+		    default:
+			return false;
+		}
 	    }
 	    break;
 	case OpcSwitch:
-	    switch (opcode) {
-		case OpcCase:
-		    if (!ExpEvaluator::getSimple(expr,true))
-			return gotError("Expecting case constant",expr);
-		    break;
-		case OpcDefault:
-		    break;
-		case OpcBreak:
-		    break;
-		default:
-		    return false;
+	    {
+		ParseSwitch* block = static_cast<ParseSwitch*>(nested);
+		switch (opcode) {
+		    case OpcCase:
+			if (block->state() == ParseSwitch::InDefault)
+			    return gotError("Encountered case after default",expr);
+			if (!getSimple(expr,true))
+			    return gotError("Expecting case constant",expr);
+			XDebug(this,DebugAll,"Parsing switch:case: '%.30s'",expr);
+			block->m_state = ParseSwitch::InCase;
+			block->m_cases.append(popOpcode());
+			addOpcode(OpcLabel,++m_label);
+			block->m_cases.append(new ExpOperation((Opcode)OpcJumpTrue,0,m_label));
+			break;
+		    case OpcDefault:
+			if (block->state() == ParseSwitch::InDefault)
+			    return gotError("Duplicate default case",expr);
+			XDebug(this,DebugAll,"Parsing switch:default: '%.30s'",expr);
+			block->m_state = ParseSwitch::InDefault;
+			block->m_lblDefault = ++m_label;
+			addOpcode(OpcLabel,block->m_lblDefault);
+			break;
+		    case OpcBreak:
+			XDebug(this,DebugAll,"Parsing switch:break '%.30s'",expr);
+			addOpcode((Opcode)OpcJump,static_cast<ParseSwitch*>(nested)->m_lblBreak);
+			break;
+		    default:
+			return false;
+		}
 	    }
 	    break;
 	default:
@@ -979,19 +1107,16 @@ bool JsCode::parseIf(const char*& expr, GenObject* nested)
     if (skipComments(expr) != ')')
 	return gotError("Expecting ')'",expr);
     ExpOperation* cond = addOpcode((Opcode)OpcJumpFalse,++m_label);
-    if (!runCompile(++expr,';',nested))
+    expr++;
+    if (!getOneInstruction(++expr,nested))
 	return false;
-    if (skipComments(expr) == ';')
-	expr++;
     const char* save = expr;
     skipComments(expr);
     if ((JsOpcode)ExpEvaluator::getOperator(expr,s_instr) == OpcElse) {
 	ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
 	addOpcode(OpcLabel,cond->number());
-	if (!runCompile(++expr,0,nested))
+	if (!getOneInstruction(expr,nested))
 	    return false;
-	if (skipComments(expr) == ';')
-	    expr++;
 	addOpcode(OpcLabel,jump->number());
     }
     else {
@@ -1005,6 +1130,7 @@ bool JsCode::parseSwitch(const char*& expr, GenObject* nested)
 {
     if (skipComments(expr) != '(')
 	return gotError("Expecting '('",expr);
+    addOpcode((Opcode)OpcBegin);
     if (!runCompile(++expr,')'))
 	return false;
     if (skipComments(expr) != ')')
@@ -1012,7 +1138,8 @@ bool JsCode::parseSwitch(const char*& expr, GenObject* nested)
     if (skipComments(++expr) != '{')
 	return gotError("Expecting '{'",expr);
     expr++;
-    ParseSwitch parseStack(this,nested);
+    ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
+    ParseSwitch parseStack(this,nested,++m_label);
     for (;;) {
 	if (!runCompile(expr,'}',parseStack))
 	    return false;
@@ -1025,6 +1152,23 @@ bool JsCode::parseSwitch(const char*& expr, GenObject* nested)
     if (*expr != '}')
 	return gotError("Expecting '}'",expr);
     expr++;
+    // implicit break at end
+    addOpcode((Opcode)OpcJump,parseStack.m_lblBreak);
+    addOpcode(OpcLabel,jump->number());
+    while (ExpOperation* c = static_cast<ExpOperation*>(parseStack.m_cases.remove(false))) {
+	ExpOperation* j = static_cast<ExpOperation*>(parseStack.m_cases.remove(false));
+	if (!j)
+	    break;
+	addOpcode(c,c->lineNumber());
+	addOpcode((Opcode)OpcCase);
+	addOpcode(j,c->lineNumber());
+    }
+    // if no case matched drop the expression
+    addOpcode(OpcDrop);
+    if (parseStack.m_lblDefault)
+	addOpcode((Opcode)OpcJump,parseStack.m_lblDefault);
+    addOpcode(OpcLabel,parseStack.m_lblBreak);
+    addOpcode((Opcode)OpcFlush);
     return true;
 }
 
@@ -1032,33 +1176,95 @@ bool JsCode::parseFor(const char*& expr, GenObject* nested)
 {
     if (skipComments(expr) != '(')
 	return gotError("Expecting '('",expr);
-    if (!runCompile(++expr,')'))
+    addOpcode((Opcode)OpcBegin);
+    if ((skipComments(++expr) != ';') && !runCompile(expr,')'))
 	return false;
+    long int cont = 0;
+    long int jump = ++m_label;
+    long int body = ++m_label;
+    // parse initializer
+    if (skipComments(expr) == ';') {
+	long int check = body;
+	if (skipComments(++expr) != ';') {
+	    check = ++m_label;
+	    addOpcode(OpcLabel,check);
+	    addOpcode((Opcode)OpcBegin);
+	    // parse condition
+	    if (!runCompile(expr))
+		return false;
+	    if (skipComments(expr) != ';')
+		return gotError("Expecting ';'",expr);
+	    addOpcode((Opcode)OpcEnd);
+	    addOpcode((Opcode)OpcJumpFalse,jump);
+	}
+	addOpcode((Opcode)OpcJump,body);
+	if (skipComments(++expr) == ')')
+	    cont = check;
+	else {
+	    cont = ++m_label;
+	    addOpcode(OpcLabel,cont);
+	    addOpcode((Opcode)OpcBegin);
+	    // parse increment
+	    if (!runCompile(expr,')'))
+		return false;
+	    addOpcode((Opcode)OpcFlush);
+	    addOpcode((Opcode)OpcJump,check);
+	}
+    }
+    else {
+	cont = ++m_label;
+	addOpcode(OpcLabel,cont);
+	addOpcode((Opcode)OpcNext);
+	addOpcode((Opcode)OpcJumpFalse,jump);
+    }
     if (skipComments(expr) != ')')
 	return gotError("Expecting ')'",expr);
-    ParseNested parseStack(this,nested,OpcFor);
-    if (!runCompile(++expr,';',parseStack))
+    ParseLoop parseStack(this,nested,OpcFor,cont,jump);
+    addOpcode(OpcLabel,body);
+    if (!getOneInstruction(++expr,parseStack))
 	return false;
-    if (skipComments(expr) == ';')
-	expr++;
+    addOpcode((Opcode)OpcJump,cont);
+    addOpcode(OpcLabel,jump);
+    addOpcode((Opcode)OpcFlush);
     return true;
 }
 
 bool JsCode::parseWhile(const char*& expr, GenObject* nested)
 {
-    ExpOperation* lbl = addOpcode(OpcLabel,++m_label);
     if (skipComments(expr) != '(')
 	return gotError("Expecting '('",expr);
+    addOpcode((Opcode)OpcBegin);
+    long int cont = ++m_label;
+    addOpcode(OpcLabel,cont);
     if (!runCompile(++expr,')'))
 	return false;
     if (skipComments(expr) != ')')
 	return gotError("Expecting ')'",expr);
-    ExpOperation* jump = addOpcode((Opcode)OpcJumpFalse,++m_label);
-    ParseWhile parseStack(this,nested,lbl->number(),jump->number());
-    if (!runCompile(++expr,0,parseStack))
+    long int jump = ++m_label;
+    addOpcode((Opcode)OpcJumpFalse,jump);
+    ParseLoop parseStack(this,nested,OpcWhile,cont,jump);
+    if (!getOneInstruction(++expr,parseStack))
 	return false;
-    addOpcode((Opcode)OpcJump,lbl->number());
-    addOpcode(OpcLabel,jump->number());
+    addOpcode((Opcode)OpcJump,cont);
+    addOpcode(OpcLabel,jump);
+    addOpcode((Opcode)OpcFlush);
+    return true;
+}
+
+bool JsCode::parseVar(const char*& expr)
+{
+    if (inError())
+	return false;
+    XDebug(this,DebugAll,"parseVar '%.30s'",expr);
+    skipComments(expr);
+    int len = ExpEvaluator::getKeyword(expr);
+    if (len <= 0 || expr[len] == '(')
+	return gotError("Expecting variable name",expr);
+    String str(expr,len);
+    if (str.toInteger(s_instr,-1) >= 0 || str.toInteger(s_constants,-1) >= 0)
+	return gotError("Not a valid variable name",expr);
+    DDebug(this,DebugAll,"Found variable '%s'",str.safe());
+    addOpcode((Opcode)OpcVar,str);
     return true;
 }
 
@@ -1087,8 +1293,9 @@ bool JsCode::parseTry(const char*& expr, GenObject* nested)
     return true;
 }
 
-bool JsCode::parseFuncDef(const char*& expr, GenObject* nested)
+bool JsCode::parseFuncDef(const char*& expr, bool publish)
 {
+    XDebug(this,DebugAll,"JsCode::parseFuncDef '%.30s'",expr);
     skipComments(expr);
     int len = getKeyword(expr);
     String name;
@@ -1099,17 +1306,23 @@ bool JsCode::parseFuncDef(const char*& expr, GenObject* nested)
     if (skipComments(expr) != '(')
 	return gotError("Expecting '('",expr);
     expr++;
-    ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
+    ObjList args;
     while (skipComments(expr) != ')') {
-	if (!getField(expr))
+	len = getKeyword(expr);
+	if (len > 0) {
+	    args.append(new String(expr,len));
+	    expr += len;
+	}
+	else
 	    return gotError("Expecting formal argument",expr);
-	if (skipComments(expr) == ',')
-	    expr++;
+	if ((skipComments(expr) == ',') && (skipComments(++expr) == ')'))
+	    return gotError("Expecting formal argument",expr);
     }
-    expr++;
-    if (skipComments(expr) != '{')
+    if (skipComments(++expr) != '{')
 	return gotError("Expecting '{'",expr);
     expr++;
+    ExpOperation* jump = addOpcode((Opcode)OpcJump,++m_label);
+    ExpOperation* lbl = addOpcode(OpcLabel,++m_label);
     for (;;) {
 	if (!runCompile(expr,'}'))
 	    return false;
@@ -1124,6 +1337,10 @@ bool JsCode::parseFuncDef(const char*& expr, GenObject* nested)
     expr++;
     addOpcode((Opcode)OpcReturn);
     addOpcode(OpcLabel,jump->number());
+    JsFunction* obj = new JsFunction(0,name,&args,lbl->number(),this);
+    addOpcode(new ExpWrapper(obj,name));
+    if (publish && name && obj->ref())
+	m_globals.append(new ExpWrapper(obj,name));
     return true;
 }
 
@@ -1225,7 +1442,9 @@ bool JsCode::getSimple(const char*& expr, bool constOnly)
 {
     if (inError())
 	return false;
+    XDebug(this,DebugAll,"JsCode::getSimple(%s) '%.30s'",String::boolText(constOnly),expr);
     skipComments(expr);
+    const char* save = expr;
     switch ((JsOpcode)ExpEvaluator::getOperator(expr,s_constants)) {
 	case OpcFalse:
 	    addOpcode(false);
@@ -1239,6 +1458,12 @@ bool JsCode::getSimple(const char*& expr, bool constOnly)
 	case OpcUndefined:
 	    addOpcode(new ExpWrapper(0,"undefined"));
 	    return true;
+	case OpcFuncDef:
+	    if (constOnly) {
+		expr = save;
+		return false;
+	    }
+	    return parseFuncDef(expr,false);
 	default:
 	    break;
     }
@@ -1345,15 +1570,17 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		    TelEngine::destruct(op2);
 		    return gotError("ExpEvaluator stack underflow",oper.lineNumber());
 		}
-		ExpWrapper* w1 = YOBJECT(ExpWrapper,op1);
-		ExpWrapper* w2 = YOBJECT(ExpWrapper,op2);
 		bool eq = (op1->opcode() == op2->opcode());
 		if (eq) {
+		    ExpWrapper* w1 = YOBJECT(ExpWrapper,op1);
+		    ExpWrapper* w2 = YOBJECT(ExpWrapper,op2);
 		    if (w1 || w2)
 			eq = w1 && w2 && w1->object() == w2->object();
 		    else
 			eq = (op1->number() == op2->number()) && (*op1 == *op2);
 		}
+		TelEngine::destruct(op1);
+		TelEngine::destruct(op2);
 		if ((JsOpcode)oper.opcode() == OpcNeIdentity)
 		    eq = !eq;
 		pushOne(stack,new ExpOperation(eq));
@@ -1363,20 +1590,28 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 	    pushOne(stack,new ExpOperation((Opcode)OpcBegin));
 	    break;
 	case OpcEnd:
+	case OpcFlush:
 	    {
-		ExpOperation* op = popOne(stack);
-		ObjList* b = 0;
-		for (ObjList* l = stack.skipNull(); l; l=l->skipNext()) {
-		    ExpOperation* o = static_cast<ExpOperation*>(l->get());
-		    if (o && (o->opcode() == (Opcode)OpcBegin))
-			b = l;
+		ExpOperation* op = 0;
+		if ((JsOpcode)oper.opcode() == OpcEnd) {
+		    op = popOne(stack);
+		    if (op && (op->opcode() == (Opcode)OpcBegin)) {
+			TelEngine::destruct(op);
+			break;
+		    }
 		}
-		if (!b) {
-		    TelEngine::destruct(op);
+		bool done = false;
+		ExpOperation* o;
+		while ((o = static_cast<ExpOperation*>(stack.remove(false)))) {
+		    done = (o->opcode() == (Opcode)OpcBegin);
+		    TelEngine::destruct(o);
+		    if (done)
+			break;
+		}
+		if (!done)
 		    return gotError("ExpEvaluator stack underflow",oper.lineNumber());
-		}
-		b->clear();
-		pushOne(stack,op);
+		if (op)
+		    pushOne(stack,op);
 	    }
 	    break;
 	case OpcIndex:
@@ -1389,6 +1624,15 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		    return gotError("Stack underflow",oper.lineNumber());
 		}
 		if (op1->opcode() != OpcField) {
+		    ScriptContext* ctx = YOBJECT(ScriptContext,op1);
+		    if (ctx) {
+			ExpOperation fld(OpcField,*op2);
+			if (ctx->runField(stack,fld,context)) {
+			    TelEngine::destruct(op1);
+			    TelEngine::destruct(op2);
+			    break;
+			}
+		    }
 		    TelEngine::destruct(op1);
 		    TelEngine::destruct(op2);
 		    return gotError("Expecting field name",oper.lineNumber());
@@ -1407,7 +1651,18 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		    TelEngine::destruct(op2);
 		    return gotError("Stack underflow",oper.lineNumber());
 		}
-		if (op1->opcode() != OpcField || op2->opcode() != OpcField) {
+		if (op2->opcode() != OpcField) {
+		    TelEngine::destruct(op1);
+		    TelEngine::destruct(op2);
+		    return gotError("Expecting field names",oper.lineNumber());
+		}
+		if (op1->opcode() != OpcField) {
+		    ScriptContext* ctx = YOBJECT(ScriptContext,op1);
+		    if (ctx && ctx->runField(stack,*op2,context)) {
+			TelEngine::destruct(op1);
+			TelEngine::destruct(op2);
+			break;
+		    }
 		    TelEngine::destruct(op1);
 		    TelEngine::destruct(op2);
 		    return gotError("Expecting field names",oper.lineNumber());
@@ -1441,6 +1696,21 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 			pushOne(stack,new ExpOperation("internal"));
 		}
 		TelEngine::destruct(op);
+	    }
+	    break;
+	case OpcVar:
+	    {
+		for (ObjList* l = stack.skipNull(); l; l = l->skipNext()) {
+		    JsObject* jso = YOBJECT(JsObject,l->get());
+		    if (jso && jso->toString() == YSTRING("()")) {
+			if (!jso->hasField(stack,oper.name(),context)) {
+			    XDebug(this,DebugInfo,"Creating variable '%s' in scope",
+				oper.name().c_str());
+			    jso->params().setParam(new ExpWrapper(0,oper.name()));
+			}
+			break;
+		    }
+		}
 	    }
 	    break;
 	case OpcNew:
@@ -1490,16 +1760,14 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 	    break;
 	case OpcReturn:
 	    {
-		ExpOperation* op = popOne(stack);
+		ExpOperation* op = popValue(stack,context);
 		bool ok = false;
 		while (ExpOperation* drop = popAny(stack)) {
 		    ok = drop->opcode() == OpcFunc;
-		    int n = drop->number();
+		    long int lbl = drop->number();
 		    TelEngine::destruct(drop);
 		    if (ok) {
-			DDebug(this,DebugAll,"return popping %d off stack",n);
-			while (n-- > 0)
-			    TelEngine::destruct(popAny(stack));
+			ok = jumpAbsolute(lbl,context);
 			break;
 		    }
 		}
@@ -1507,7 +1775,116 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		    TelEngine::destruct(op);
 		    return gotError("Return outside function call",oper.lineNumber());
 		}
-		pushOne(stack,op);
+		if (op)
+		    pushOne(stack,op);
+	    }
+	    break;
+	case OpcIn:
+	case OpcOf:
+	    {
+		ExpOperation* obj = popValue(stack,context);
+		ExpOperation* fld = popOne(stack);
+		if (!fld || !obj) {
+		    TelEngine::destruct(fld);
+		    TelEngine::destruct(obj);
+		    return gotError("Stack underflow",oper.lineNumber());
+		}
+		if (fld->opcode() != OpcField) {
+		    TelEngine::destruct(fld);
+		    TelEngine::destruct(obj);
+		    return gotError("Expecting field name",oper.lineNumber());
+		}
+		bool isOf = ((JsOpcode)oper.opcode() == OpcOf);
+		JsIterator* iter = 0;
+		JsObject* jso = YOBJECT(JsObject,obj);
+		if (jso)
+		    iter = new JsIterator(*fld,jso);
+		else {
+		    NamedList* lst = YOBJECT(NamedList,obj);
+		    if (lst)
+			iter = new JsIterator(*fld,lst);
+		}
+		ExpWrapper* wrap = 0;
+		if (iter) {
+		    if (isOf)
+			iter->name(obj->name());
+		    wrap = new ExpWrapper(iter);
+#ifdef DEBUG
+		    *wrap << fld->name() << (isOf ? " of " : " in ") << obj->name();
+		    Debug(this,DebugInfo,"Created iterator: '%s'",wrap->c_str());
+#endif
+		}
+		TelEngine::destruct(fld);
+		TelEngine::destruct(obj);
+		if (wrap)
+		    pushOne(stack,wrap);
+		else
+		    return gotError("Expecting iterable object",oper.lineNumber());
+	    }
+	    break;
+	case OpcNext:
+	    {
+		JsIterator* iter = 0;
+		ExpOperation* op;
+		while (!iter) {
+		    op = popValue(stack,context);
+		    if (!op)
+			return gotError("Stack underflow",oper.lineNumber());
+		    iter = YOBJECT(JsIterator,op);
+		    if (!iter)
+			TelEngine::destruct(op);
+		}
+		bool ok = false;
+		String* n = iter->get();
+		if (n) {
+		    XDebug(DebugInfo,"Iterator got item: '%s'",n->c_str());
+		    static const ExpOperation s_assign(OpcAssign);
+		    pushOne(stack,iter->field().clone());
+		    if (iter->name())
+			pushOne(stack,new ExpOperation(OpcField,iter->name() + "." + *n));
+		    else
+			pushOne(stack,new ExpOperation(*n));
+		    TelEngine::destruct(n);
+		    ok = runOperation(stack,s_assign,context);
+		}
+		if (ok) {
+		    // assign pushes the value back on stack
+		    TelEngine::destruct(popOne(stack));
+		    pushOne(stack,op);
+		}
+		else
+		    TelEngine::destruct(op);
+		pushOne(stack,new ExpOperation(ok));
+	    }
+	    break;
+	case OpcCase:
+	    {
+		ExpOperation* cons = popValue(stack,context);
+		ExpOperation* expr = popValue(stack,context);
+		if (!cons || !expr) {
+		    TelEngine::destruct(cons);
+		    TelEngine::destruct(expr);
+		    return gotError("ExpEvaluator stack underflow",oper.lineNumber());
+		}
+		bool eq = false;
+		JsRegExp* rex = YOBJECT(JsRegExp,cons);
+		if (rex)
+		    eq = rex->regexp().matches(*expr);
+		else if (expr->opcode() == cons->opcode()) {
+		    ExpWrapper* w1 = YOBJECT(ExpWrapper,expr);
+		    ExpWrapper* w2 = YOBJECT(ExpWrapper,cons);
+		    if (w1 || w2)
+			eq = w1 && w2 && w1->object() == w2->object();
+		    else
+			eq = (expr->number() == cons->number()) && (*expr == *cons);
+		}
+		if (!eq) {
+		    // put expression back on stack, we'll need it later
+		    pushOne(stack,expr);
+		    expr = 0;
+		}
+		TelEngine::destruct(cons);
+		pushOne(stack,new ExpOperation(eq));
 	    }
 	    break;
 	case OpcJumpTrue:
@@ -1559,7 +1936,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 
 bool JsCode::runFunction(ObjList& stack, const ExpOperation& oper, GenObject* context) const
 {
-    DDebug(this,DebugAll,"runFunction(%p,'%s' %ld, %p) ext=%p",
+    DDebug(this,DebugAll,"JsCode::runFunction(%p,'%s' %ld, %p) ext=%p",
 	&stack,oper.name().c_str(),oper.number(),context,extender());
     if (context) {
 	ScriptRun* sr = static_cast<ScriptRun*>(context);
@@ -1571,7 +1948,7 @@ bool JsCode::runFunction(ObjList& stack, const ExpOperation& oper, GenObject* co
 
 bool JsCode::runField(ObjList& stack, const ExpOperation& oper, GenObject* context) const
 {
-    DDebug(this,DebugAll,"runField(%p,'%s',%p) ext=%p",
+    DDebug(this,DebugAll,"JsCode::runField(%p,'%s',%p) ext=%p",
 	&stack,oper.name().c_str(),context,extender());
     if (context) {
 	ScriptRun* sr = static_cast<ScriptRun*>(context);
@@ -1583,7 +1960,7 @@ bool JsCode::runField(ObjList& stack, const ExpOperation& oper, GenObject* conte
 
 bool JsCode::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context) const
 {
-    DDebug(this,DebugAll,"runAssign('%s'='%s',%p) ext=%p",
+    DDebug(this,DebugAll,"JsCode::runAssign('%s'='%s',%p) ext=%p",
 	oper.name().c_str(),oper.c_str(),context,extender());
     if (context) {
 	ScriptRun* sr = static_cast<ScriptRun*>(context);
@@ -1595,11 +1972,9 @@ bool JsCode::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* cont
 
 bool JsCode::evalList(ObjList& stack, GenObject* context) const
 {
-    XDebug(this,DebugInfo,"evalList(%p,%p)",&stack,context);
+    XDebug(this,DebugInfo,"JsCode::evalList(%p,%p)",&stack,context);
     JsRunner* runner = static_cast<JsRunner*>(context);
-    ObjList*& opcode = runner->m_opcode;
-    if (!opcode)
-	opcode = m_opcodes.skipNull();
+    const ObjList* (& opcode) = runner->m_opcode;
     while (opcode) {
 	const ExpOperation* o = static_cast<const ExpOperation*>(opcode->get());
 	opcode = opcode->skipNext();
@@ -1613,7 +1988,7 @@ bool JsCode::evalList(ObjList& stack, GenObject* context) const
 
 bool JsCode::evalVector(ObjList& stack, GenObject* context) const
 {
-    XDebug(this,DebugInfo,"evalVector(%p,%p)",&stack,context);
+    XDebug(this,DebugInfo,"JsCode::evalVector(%p,%p)",&stack,context);
     JsRunner* runner = static_cast<JsRunner*>(context);
     unsigned int& index = runner->m_index;
     while (index < m_linked.length()) {
@@ -1635,6 +2010,7 @@ bool JsCode::jumpToLabel(long int label, GenObject* context) const
 	const ExpOperation* o = static_cast<const ExpOperation*>(l->get());
 	if (o->opcode() == OpcLabel && o->number() == label) {
 	    runner->m_opcode = l;
+	    XDebug(this,DebugInfo,"Jumped to label %ld",label);
 	    return true;
 	}
     }
@@ -1650,14 +2026,112 @@ bool JsCode::jumpRelative(long int offset, GenObject* context) const
     if (i < 0 || i > (long int)m_linked.length())
 	return false;
     index = i;
+    XDebug(this,DebugInfo,"Jumped relative %+ld to index %ld",offset,i);
     return true;
 }
+
+bool JsCode::jumpAbsolute(long int index, GenObject* context) const
+{
+    if (!context)
+	return false;
+    JsRunner* runner = static_cast<JsRunner*>(context);
+    if (m_linked.length()) {
+	if (index < 0) {
+	    runner->m_index = m_linked.length();
+	    return true;
+	}
+	if (index > m_linked.length())
+	    return false;
+	runner->m_index = index;
+    }
+    else {
+	if (index < 0) {
+	    runner->m_opcode = 0;
+	    return true;
+	}
+	long int i = 0;
+	for (const ObjList* l = &m_opcodes; ; l = l->next(), i++) {
+	    if (i == index) {
+		runner->m_opcode = l;
+		break;
+	    }
+	    if (!l)
+		break;
+	}
+	if (i != index)
+	    return false;
+    }
+    XDebug(this,DebugInfo,"Jumped absolute to index %ld",index);
+    return true;
+}
+
+bool JsCode::callFunction(ObjList& stack, const ExpOperation& oper, GenObject* context, JsFunction* func, bool constr) const
+{
+    if (!(func && context))
+	return false;
+    XDebug(this,DebugInfo,"JsCode::callFunction(%p,%lu,%p) in %s'%s'",
+	&stack,oper.number(),context,(constr ? "constructor " : ""),func->toString().c_str());
+    JsRunner* runner = static_cast<JsRunner*>(context);
+    long int index = runner->m_index;
+    if (!m_linked.length()) {
+	const ObjList* o = runner->m_opcode;
+	index = -1;
+	long int i = 0;
+	for (const ObjList* l = &m_opcodes; ; l = l->next(), i++) {
+	    if (l == o) {
+		index = i;
+		break;
+	    }
+	    if (!l)
+		break;
+	}
+    }
+    if (index < 0) {
+	Debug(this,DebugWarn,"Oops! Could not find return point!");
+	return false;
+    }
+    ExpOperation* thisObj = constr ? popOne(stack) : 0;
+    ObjList args;
+    JsObject::extractArgs(func,stack,oper,context,args);
+    return callFunction(stack,oper,context,index,func,args,thisObj,0);
+}
+
+bool JsCode::callFunction(ObjList& stack, const ExpOperation& oper, GenObject* context,
+	long int retIndex, JsFunction* func, ObjList& args,
+	ExpOperation* thisObj, ExpOperation* scopeObj) const
+{
+    pushOne(stack,new ExpOperation(OpcFunc,0,retIndex,true));
+    if (scopeObj)
+	pushOne(stack,new ExpWrapper(scopeObj,scopeObj->name()));
+    JsObject* ctxt = JsObject::buildCallContext(func->mutex(),thisObj);
+    for (unsigned int idx = 0; ; idx++) {
+	const String* name = func->formalName(idx);
+	if (!name)
+	    break;
+	ExpOperation* param = static_cast<ExpOperation*>(args.remove(false));
+	if (param)
+	    ctxt->params().setParam(param->clone(*name));
+	else
+	    ctxt->params().setParam(new ExpWrapper(0,*name));
+	TelEngine::destruct(param);
+    }
+    pushOne(stack,new ExpWrapper(ctxt,ctxt->toString(),true));
+    return jumpToLabel(func->label(),context);
+}
+
+ScriptRun* JsCode::createRunner(ScriptContext* context)
+{
+    if (!context)
+	return 0;
+    return new JsRunner(this,context);
+}
+
 
 
 ScriptRun::Status JsRunner::reset()
 {
     Status s = ScriptRun::reset();
-    m_opcode = 0;
+    m_opcode = code() ? static_cast<const JsCode*>(code())->m_opcodes.skipNull() : 0;
     m_index = 0;
     return s;
 }
@@ -1677,11 +2151,135 @@ ScriptRun::Status JsRunner::resume()
     return m_paused ? Incomplete : Succeeded;
 }
 
+bool JsRunner::pause()
+{
+    Lock mylock(this);
+    if (m_paused)
+	return true;
+    switch (state()) {
+	case Running:
+	case Incomplete:
+	    DDebug(DebugAll,"Pausing Javascript runner [%p]",this);
+	    m_paused = true;
+	    return true;
+	default:
+	    return false;
+    }
+}
+
+ScriptRun::Status JsRunner::call(const String& name, ObjList& args,
+    ExpOperation* thisObj, ExpOperation* scopeObj)
+{
+    Lock mylock(this);
+    if (Invalid == state()) {
+	TelEngine::destruct(thisObj);
+	TelEngine::destruct(scopeObj);
+	return Invalid;
+    }
+    const JsCode* c = static_cast<const JsCode*>(code());
+    if (!(c && context())) {
+	TelEngine::destruct(thisObj);
+	TelEngine::destruct(scopeObj);
+	return Invalid;
+    }
+    JsFunction* func = c->getGlobalFunction(name);
+    if (!func) {
+	TelEngine::destruct(thisObj);
+	TelEngine::destruct(scopeObj);
+	return Failed;
+    }
+    reset();
+    // prepare a function call stack
+    ExpOperation oper(ExpEvaluator::OpcFunc,name,args.count());
+    if (!c->callFunction(stack(),oper,this,-1,func,args,thisObj,scopeObj))
+	return Failed;
+    mylock.drop();
+    // continue normal execution like in run()
+    ScriptRun::Status s = state();
+    while (Incomplete == s)
+	s = execute();
+    return s;
+}
+
+bool JsRunner::callable(const String& name)
+{
+    Lock mylock(this);
+    if (Invalid == state())
+	return false;
+    const JsCode* c = static_cast<const JsCode*>(code());
+    return (c && context() && c->getGlobalFunction(name));
+}
+
 }; // anonymous namespace
 
 
+JsFunction::JsFunction(Mutex* mtx)
+    : JsObject("Function",mtx,true),
+      m_label(0), m_code(0)
+{
+    init();
+}
+
+JsFunction::JsFunction(Mutex* mtx, const char* name, ObjList* args, long int lbl, ScriptCode* code)
+    : JsObject(mtx,String("[function ") + name + "()]",true),
+      m_label(lbl), m_code(code)
+{
+    init();
+    if (args) {
+	while (GenObject* arg = args->remove(false))
+	    m_formal.append(arg);
+    }
+    params().addParam("length",String(m_formal.count()));
+}
+
+void JsFunction::init()
+{
+    params().addParam(new ExpFunction("apply"));
+    params().addParam(new ExpFunction("call"));
+}
+
+bool JsFunction::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    XDebug(DebugAll,"JsFunction::runNative() '%s' in '%s' [%p]",
+	oper.name().c_str(),toString().c_str(),this);
+    if (oper.name() == YSTRING("apply")) {
+	// func.apply(new_this,["array","of","params",...])
+	if (oper.number() != 2)
+	    return false;
+    }
+    else if (oper.name() == YSTRING("call")) {
+	// func.call(new_this,param1,param2,...)
+	if (!oper.number())
+	    return false;
+    }
+    else {
+	JsObject* obj = YOBJECT(JsObject,params().getParam(YSTRING("prototype")));
+	return obj ? obj->runNative(stack,oper,context) : JsObject::runNative(stack,oper,context);
+    }
+    return true;
+}
+
+bool JsFunction::runDefined(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    XDebug(DebugAll,"JsFunction::runDefined() in '%s' [%p]",toString().c_str(),this);
+    JsObject* proto = YOBJECT(JsObject,getField(stack,"prototype",context));
+    if (proto) {
+	// found prototype, build object
+	JsObject* obj = proto->runConstructor(stack,oper,context);
+	if (!obj)
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpWrapper(obj,oper.name()));
+    }
+    JsCode* code = YOBJECT(JsCode,m_code);
+    XDebug(DebugAll,"JsFunction::runDefined code=%p proto=%p [%p]",code,proto,this);
+    if (code)
+	return code->callFunction(stack,oper,context,this,(proto != 0));
+    return proto || runNative(stack,oper,context);
+}
+
+
 // Adjust a script file include path
-void JsParser::adjustPath(String& script)
+void JsParser::adjustPath(String& script) const
 {
     if (script.null() || script.startsWith(Engine::pathSeparator()))
 	return;
@@ -1704,6 +2302,13 @@ ScriptRun* JsParser::createRunner(ScriptCode* code, ScriptContext* context) cons
     ScriptRun* runner = new JsRunner(code,context);
     TelEngine::destruct(ctxt);
     return runner;
+}
+
+// Check if function or method exists
+bool JsParser::callable(const String& name)
+{
+    const JsCode* c = static_cast<const JsCode*>(code());
+    return (c && c->getGlobalFunction(name));
 }
 
 // Parse a piece of Javascript text
@@ -1749,6 +2354,26 @@ JsObject* JsParser::parseJSON(const char* text)
     JsObject* jso = code->parseObject(text,true);
     TelEngine::destruct(code);
     return jso;
+}
+
+// Return a "null" object wrapper
+ExpOperation* JsParser::nullClone()
+{
+    return s_null.ExpOperation::clone();
+}
+
+// Check if an object is identic to null
+bool JsParser::isNull(const ExpOperation& oper)
+{
+    ExpWrapper* w = YOBJECT(ExpWrapper,&oper);
+    return w && (w->object() == s_null.object());
+}
+
+// Check if an operation is undefined
+bool JsParser::isUndefined(const ExpOperation& oper)
+{
+    ExpWrapper* w = YOBJECT(ExpWrapper,&oper);
+    return w && !w->object();
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

@@ -96,8 +96,8 @@
 ;maxdepth=5
 
 ; trackparam: bool: Add the module to the handler tracking parameter
-;  The default of false lets each section do so
-;trackparam=false
+; Set it to false to disable defaults and do all tracking in user rules
+;trackparam=true
 
 
 [$once]

@@ -293,7 +293,7 @@ void ExpEvaluator::formatLineNo(String& buf, unsigned int line) const
     buf << "line " << line;
 }
 
-bool ExpEvaluator::getInstruction(const char*& expr, GenObject* nested)
+bool ExpEvaluator::getInstruction(const char*& expr, char stop, GenObject* nested)
 {
     return false;
 }
@@ -590,7 +590,7 @@ bool ExpEvaluator::runCompile(const char*& expr, char stop, GenObject* nested)
 	return true;
     }
     for (;;) {
-	while (skipComments(expr) && getInstruction(expr,nested))
+	while (!stackPos && skipComments(expr) && (*expr != stop) && getInstruction(expr,stop,nested))
 	    ;
 	if (inError())
 	    return false;
@@ -634,9 +634,15 @@ bool ExpEvaluator::trySimplify()
 {
     DDebug(this,DebugInfo,"trySimplify");
     bool done = false;
-    for (unsigned int i = 0; i < m_opcodes.length(); i++) {
+    for (unsigned int i = 0; ; i++) {
 	ExpOperation* o = static_cast<ExpOperation*>(m_opcodes[i]);
-	if (!o || o->barrier())
+	if (!o) {
+	    if (i >= m_opcodes.length())
+		break;
+	    else
+		continue;
+	}
+	if (o->barrier())
 	    continue;
 	switch (o->opcode()) {
 	    case OpcLAnd:
@@ -860,9 +866,15 @@ ExpOperation* ExpEvaluator::popOne(ObjList& stack)
 	return 0;
     }
     stack.remove(o,false);
-    XDebug(DebugAll,"Popped: %p%s%s",o,
+#ifdef DEBUG
+#ifdef XDEBUG
+    Debug(DebugAll,"popOne: %p%s%s",o,
 	(YOBJECT(ExpFunction,o) ? " function" : ""),
 	(YOBJECT(ExpWrapper,o) ? " wrapper" : ""));
+#else
+    Debug(DebugAll,"popOne: %p",o);
+#endif
+#endif
     return o;
 }
 
@@ -877,7 +889,15 @@ ExpOperation* ExpEvaluator::popAny(ObjList& stack)
 	stack.remove();
     }
     stack.remove(o,false);
-    DDebug(DebugInfo,"Popped: %p",o);
+#ifdef DEBUG
+#ifdef XDEBUG
+    Debug(DebugAll,"popAny: %p%s%s",o,
+	(YOBJECT(ExpFunction,o) ? " function" : ""),
+	(YOBJECT(ExpWrapper,o) ? " wrapper" : ""));
+#else
+    Debug(DebugAll,"popAny: %p",o);
+#endif
+#endif
     return o;
 }
 
@@ -905,6 +925,18 @@ bool ExpEvaluator::runOperation(ObjList& stack, const ExpOperation& oper, GenObj
 	    break;
 	case OpcNone:
 	case OpcLabel:
+	    break;
+	case OpcDrop:
+	    TelEngine::destruct(popOne(stack));
+	    break;
+	case OpcDup:
+	    {
+		ExpOperation* op = popValue(stack,context);
+		if (!op)
+		    return gotError("ExpEvaluator stack underflow",oper.lineNumber());
+		pushOne(stack,op->clone());
+		pushOne(stack,op);
+	    }
 	    break;
 	case OpcAnd:
 	case OpcOr:
@@ -1357,33 +1389,40 @@ int ExpEvaluator::evaluate(Array& results, unsigned int index, GenObject* contex
     return -1;
 }
 
+void ExpEvaluator::dump(const ExpOperation& oper, String& res) const
+{
+    const char* name = getOperator(oper.opcode());
+    if (name) {
+	res << name;
+	return;
+    }
+    switch (oper.opcode()) {
+	case OpcPush:
+	    if (oper.isInteger())
+		res << (int)oper.number();
+	    else
+		res << "'" << oper << "'";
+	    break;
+	case OpcField:
+	    res << oper.name();
+	    break;
+	case OpcFunc:
+	    res << oper.name() << "(" << (int)oper.number() << ")";
+	    break;
+	default:
+	    res << "[" << oper.opcode() << "]";
+	    if (oper.number() && oper.isInteger())
+		res << "(" << (int)oper.number() << ")";
+    }
+}
+
 void ExpEvaluator::dump(const ObjList& codes, String& res) const
 {
     for (const ObjList* l = codes.skipNull(); l; l = l->skipNext()) {
 	if (res)
 	    res << " ";
 	const ExpOperation* o = static_cast<const ExpOperation*>(l->get());
-	const char* oper = getOperator(o->opcode());
-	if (oper) {
-	    res << oper;
-	    continue;
-	}
-	switch (o->opcode()) {
-	    case OpcPush:
-		if (o->isInteger())
-		    res << (int)o->number();
-		else
-		    res << "'" << *o << "'";
-		break;
-	    case OpcField:
-		res << o->name();
-		break;
-	    case OpcFunc:
-		res << o->name() << "(" << (int)o->number() << ")";
-		break;
-	    default:
-		res << "[" << o->opcode() << "]";
-	}
+	dump(*o,res);
     }
 }
 
@@ -1422,6 +1461,7 @@ ExpOperation* ExpWrapper::clone(const char* name) const
     if (r)
 	r->ref();
     ExpWrapper* op = new ExpWrapper(object(),name);
+    static_cast<String&>(*op) = *this;
     op->lineNumber(lineNumber());
     return op;
 }

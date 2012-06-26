@@ -862,9 +862,10 @@ SS7M2PA::SS7M2PA(const NamedList& params)
       SIGTRAN(5,3565),
       m_seqNr(0xffffff), m_needToAck(0xffffff), m_lastAck(0xffffff), m_maxQueueSize(MAX_UNACK),
       m_localStatus(OutOfService), m_state(OutOfService),
-      m_remoteStatus(OutOfService), m_transportState(Idle), m_mutex(true,"SS7M2PA"), m_t1(0),
-      m_t2(0), m_t3(0), m_t4(0), m_ackTimer(0), m_confTimer(0), m_oosTimer(0),m_waitOosTimer(0),
-      m_autostart(false), m_sequenced(false), m_dumpMsg(false)
+      m_remoteStatus(OutOfService), m_transportState(Idle), m_connFailCounter(0),
+      m_connFailThreshold(0), m_mutex(true,"SS7M2PA"), m_t1(0), m_t2(0), m_t3(0),
+      m_t4(0), m_ackTimer(0), m_confTimer(0), m_oosTimer(0),m_waitOosTimer(0),
+      m_connFailTimer(0), m_autostart(false), m_sequenced(false), m_dumpMsg(false)
 
 {
     // Alignment ready timer ~45s
@@ -882,6 +883,8 @@ SS7M2PA::SS7M2PA(const NamedList& params)
     // Out of service timer
     m_oosTimer.interval(params,"oos_timer",3000,5000,false);
     m_waitOosTimer.interval(params,"ack_timer",500,1000,false);
+    m_connFailTimer.interval(params,"conn_test",50000,300000,false);
+    m_connFailThreshold = params.getIntValue(YSTRING("conn_threshold"),3);
     m_sequenced = params.getBoolValue(YSTRING("sequenced"),false);
     // Maximum unacknowledged messages, max_unack+1 will force an ACK
     m_maxUnack = params.getIntValue(YSTRING("max_unack"),4);
@@ -1099,6 +1102,15 @@ void SS7M2PA::timerTick(const Time& when)
 	m_waitOosTimer.stop();
 	setLocalStatus(OutOfService);
 	transmitLS();
+    }
+    if (m_connFailTimer.timeout(when.msec())) {
+	m_connFailTimer.stop();
+	if (m_connFailCounter >= m_connFailThreshold) {
+	    Debug(this,DebugMild,
+		  "Connection proving failed but transport was not restarted!");
+	    restart(true);
+	}
+	m_connFailCounter = 0;
     }
     if (m_oosTimer.timeout(when.msec())) {
 	m_oosTimer.stop();
@@ -1328,6 +1340,13 @@ void SS7M2PA::setHeader(DataBlock& data)
 
 void SS7M2PA::abortAlignment(const char* info)
 {
+    m_connFailCounter++;
+    if (!m_connFailTimer.started())
+	m_connFailTimer.start();
+    else if (m_connFailCounter >= m_connFailThreshold) {
+	restart(true);
+	m_connFailTimer.stop();
+    }
     if (info)
 	Debug(this,DebugNote,"Aborting alignment: %s",info);
     setLocalStatus(OutOfService);
@@ -1634,7 +1653,10 @@ void SS7M2PA::notifyLayer(SignallingInterface::Notification event)
     switch (event) {
 	case SignallingInterface::LinkDown:
 	    m_transportState = Idle;
+	    m_connFailCounter = 0;
 	    abortAlignment("LinkDown");
+	    m_connFailTimer.stop();
+	    m_connFailCounter = 0;
 	    SS7Layer2::notify();
 	    break;
 	case SignallingInterface::LinkUp:

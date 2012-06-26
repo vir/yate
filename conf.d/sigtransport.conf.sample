@@ -1,3 +1,10 @@
+;[general]
+; max_down: long: The time in seconds after a sctp socket is in connection
+;  hanging state. After this time expires the connection is re-established.
+; If the connection is not re established the timer will exponential back off
+;  until reaches 60 seconds
+;max_down=10
+
 ; Each section in this file describes a SIGTRAN connection
 ; Connections are referenced from other configurations describing the upper layer
 

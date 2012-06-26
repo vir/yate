@@ -570,10 +570,11 @@ protected:
     /**
      * Get an instruction or block, advance parsing pointer past it
      * @param expr Pointer to text to parse, gets advanced on success
+     * @param stop Optional character expected after the instruction
      * @param nested User defined object passed from nested parsing
      * @return True if succeeded, must add the operands internally
      */
-    virtual bool getInstruction(const char*& expr, GenObject* nested = 0);
+    virtual bool getInstruction(const char*& expr, char stop = 0, GenObject* nested = 0);
 
     /**
      * Get an operand, advance parsing pointer past it
@@ -757,6 +758,13 @@ protected:
      * @return True if assignment succeeded
      */
     virtual bool runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context = 0) const;
+
+    /**
+     * Dump a single operation according to current operators dictionary
+     * @param oper Operation to dump
+     * @param res Result string representation of operations
+     */
+    virtual void dump(const ExpOperation& oper, String& res) const;
 
     /**
      * Internally used operator dictionary
@@ -1012,10 +1020,11 @@ public:
      * Constructor
      * @param object Pointer to the object to wrap
      * @param name Optional name of the wrapper
+     * @param barrier True if the operation is an expression barrier on the stack
      */
-    inline ExpWrapper(GenObject* object, const char* name = 0)
+    inline ExpWrapper(GenObject* object, const char* name = 0, bool barrier = false)
 	: ExpOperation(ExpEvaluator::OpcPush,name,
-	    object ? object->toString().c_str() : (const char*)0),
+	    object ? object->toString().c_str() : (const char*)0,barrier),
 	  m_object(object)
 	{ }
 
@@ -1148,6 +1157,13 @@ public:
 	{ return m_params; }
 
     /**
+     * Access any native NamedList hold by the context
+     * @return Pointer to a native named list
+     */
+    virtual NamedList* nativeParams() const
+	{ return 0; }
+
+    /**
      * Override GenObject's method to return the internal name of the named list
      * @return A reference to the context name
      */
@@ -1191,6 +1207,20 @@ public:
      * @return Pointer to field, NULL if not present
      */
     virtual NamedString* getField(ObjList& stack, const String& name, GenObject* context) const;
+
+    /**
+     * Fill a list with the unique names of all fields
+     * @param names List to which key names must be added
+     */
+    virtual void fillFieldNames(ObjList& names);
+
+    /**
+     * Fill a list with the unique names of all fields
+     * @param names List to which key names must be added
+     * @param list List of parameters whose names to be added
+     * @param skip Parameters starting with this prefix will not be added
+     */
+    static void fillFieldNames(ObjList& names, const NamedList& list, const char* skip = 0);
 
     /**
      * Try to evaluate a single function in the context
@@ -1262,6 +1292,14 @@ public:
      * @param results List to fill with expression results
      */
     virtual bool evaluate(ScriptRun& runner, ObjList& results) const = 0;
+
+    /**
+     * Create a runner adequate for this block of parsed code
+     * @param context Script context, must not be NULL
+     * @return A new script runner, NULL if context is NULL or feature is not supported
+     */
+    virtual ScriptRun* createRunner(ScriptContext* context)
+	{ return 0; }
 };
 
 /**
@@ -1287,6 +1325,46 @@ public:
      */
     inline ScriptRun* runner()
 	{ return m_runner; }
+
+private:
+    ScriptRun* m_runner;
+};
+
+/**
+ * Operation that is to be executed by the script runtime before current operation
+ * @short Asynchronous execution support
+ */
+class YSCRIPT_API ScriptAsync : public GenObject
+{
+    YCLASS(ScriptAsync,GenObject)
+public:
+    /**
+     * Constructor
+     * @param owner The script running instance that will own this operation
+     */
+    ScriptAsync(ScriptRun* owner)
+	: m_runner(owner)
+	{ }
+
+    /**
+     * Destructor
+     */
+    virtual ~ScriptAsync()
+	{ }
+
+    /**
+     * Retrieve the script running instance that owns this stack
+     * @return Pointer to owner script instance
+     */
+    inline ScriptRun* runner()
+	{ return m_runner; }
+
+    /**
+     * Execute the aynchronous operation with context unlocked if the script is paused
+     * @return True if the operation should be removed (was one-shot)
+     */
+    virtual bool run() = 0;
+
 private:
     ScriptRun* m_runner;
 };
@@ -1383,19 +1461,57 @@ public:
      * Resets code execution to the beginning, does not clear context
      * @return Status of the runtime after reset
      */
-    Status reset();
+    virtual Status reset();
 
     /**
      * Execute script from where it was left, may stop and return Incomplete state
      * @return Status of the runtime after code execution
      */
-    Status execute();
+    virtual Status execute();
 
     /**
      * Execute script from the beginning until it returns a final state
      * @return Final status of the runtime after code execution
      */
-    Status run();
+    virtual Status run();
+
+    /**
+     * Pause the script, make it return Incomplete state
+     * @return True if pausing the script succeeded or was already paused
+     */
+    virtual bool pause();
+
+    /**
+     * Call a script function or method
+     * @param name Name of the function to call
+     * @param args Values to pass as actual function arguments
+     * @param thisObj Object to pass as "this" if applicable
+     * @param scopeObj Optional object to be used for scope resolution inside the call
+     * @return Final status of the runtime after function call
+     */
+    virtual Status call(const String& name, ObjList& args,
+	ExpOperation* thisObj = 0, ExpOperation* scopeObj = 0);
+
+    /**
+     * Check if a script has a certain function or method
+     * @param name Name of the function to check
+     * @return True if function exists in code
+     */
+    virtual bool callable(const String& name);
+
+    /**
+     * Insert an asynchronous operation to be executed
+     * @param oper Operation to be inserted, will be owned by the runtime instance
+     * @return True if the operation was added
+     */
+    virtual bool insertAsync(ScriptAsync* oper);
+
+    /**
+     * Append an asynchronous operation to be executed
+     * @param oper Operation to be appended, will be owned by the runtime instance
+     * @return True if the operation was added
+     */
+    virtual bool appendAsync(ScriptAsync* oper);
 
     /**
      * Try to assign a value to a single field in the script context
@@ -1410,13 +1526,14 @@ protected:
      * Resume script from where it was left, may stop and return Incomplete state
      * @return Status of the runtime after code execution
      */
-    Status resume();
+    virtual Status resume();
 
 private:
     ScriptCode* m_code;
     ScriptContext* m_context;
     Status m_state;
     ObjList m_stack;
+    ObjList m_async;
 };
 
 /**
@@ -1483,6 +1600,13 @@ public:
     inline ScriptRun* createRunner(ScriptContext* context = 0) const
 	{ return createRunner(code(),context); }
 
+    /**
+     * Check if a script has a certain function or method
+     * @param name Name of the function to check
+     * @return True if function exists in code
+     */
+    virtual bool callable(const String& name);
+
 protected:
     /**
      * Default constructor for derived classes
@@ -1501,12 +1625,15 @@ private:
     ScriptCode* m_code;
 };
 
+class JsFunction;
+
 /**
  * Javascript Object class, base for all JS objects
  * @short Javascript Object
  */
 class YSCRIPT_API JsObject : public ScriptContext
 {
+    friend class JsFunction;
     YCLASS(JsObject,ScriptContext)
 public:
     /**
@@ -1545,13 +1672,44 @@ public:
 	{ return clone(toString()); }
 
     /**
-     * Native object constructor
+     * Fill a list with the unique names of all fields
+     * @param names List to which key names must be added
+     */
+    virtual void fillFieldNames(ObjList& names);
+
+    /**
+     * Check if a certain field is assigned in the object or its prototype
+     * @param stack Evaluation stack in use
+     * @param name Name of the field to test
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return True if the field is present
+     */
+    virtual bool hasField(ObjList& stack, const String& name, GenObject* context) const;
+
+    /**
+     * Get a pointer to a field in the object or its prototype
+     * @param stack Evaluation stack in use
+     * @param name Name of the field to retrieve
+     * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return Pointer to field, NULL if not present
+     */
+    virtual NamedString* getField(ObjList& stack, const String& name, GenObject* context) const;
+
+    /**
+     * Native constructor initialization, called by addConstructor on the prototype
+     * @param construct Function that has this object as prototype
+     */
+    virtual void initConstructor(JsFunction* construct)
+	{ }
+
+    /**
+     * Native object constructor, it's run on the prototype
      * @param stack Evaluation stack in use
      * @param oper Constructor function to evaluate
      * @param context Pointer to arbitrary object passed from evaluation methods
+     * @return New created and populated Javascript object
      */
-    virtual void runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
-	{ }
+    virtual JsObject* runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context);
 
     /**
      * Try to evaluate a single method
@@ -1627,7 +1785,8 @@ public:
      * @param arguments List where the arguments are added in proper order
      * @return Number of arguments popped off stack
      */
-    static int extractArgs(JsObject* obj, ObjList& stack, const ExpOperation& oper, GenObject* context, ObjList& arguments);
+    static int extractArgs(JsObject* obj, ObjList& stack, const ExpOperation& oper,
+	GenObject* context, ObjList& arguments);
 
     /**
      * Helper method that pops arguments off a stack to a list in proper order
@@ -1641,10 +1800,25 @@ public:
 	{ return extractArgs(this,stack,oper,context,arguments); }
 
     /**
+     * Create an empty function call context
+     * @param mtx Pointer to the mutex that serializes this object
+     * @param thisObj Optional object that will be set as "this"
+     * @return New empty object usable as call context
+     */
+    static JsObject* buildCallContext(Mutex* mtx, ExpOperation* thisObj = 0);
+
+    /**
      * Initialize the standard global objects in a context
      * @param context Script context to initialize
      */
     static void initialize(ScriptContext* context);
+
+    /**
+     * Get the name of the internal property used to track prototypes
+     * @return The "__proto__" constant string
+     */
+    inline static const String& protoName()
+	{ return s_protoName; }
 
     /**
      * Helper method to return the hierarchical structure of an object
@@ -1686,6 +1860,7 @@ protected:
 	{ return m_mutex; }
 
 private:
+    static const String s_protoName;
     bool m_frozen;
     Mutex* m_mutex;
 };
@@ -1708,8 +1883,12 @@ public:
      * Constructor with function name
      * @param mtx Pointer to the mutex that serializes this object
      * @param name Name of the function
+     * @param args Optional list of formal parameter names, will be emptied
+     * @param lbl Number of the entry point label
+     * @param code The script code to be used while running the function
      */
-    JsFunction(Mutex* mtx, const char* name);
+    JsFunction(Mutex* mtx, const char* name, ObjList* args = 0, long int lbl = 0,
+	ScriptCode* code = 0);
 
     /**
      * Try to evaluate a single user defined method
@@ -1720,6 +1899,21 @@ public:
      * @return True if evaluation succeeded
      */
     virtual bool runDefined(ObjList& stack, const ExpOperation& oper, GenObject* context);
+
+    /**
+     * Retrieve the name of the N-th formal argument
+     * @param index Index of the formal argument
+     * @return Pointer to formal argument name, NULL if index too large
+     */
+    inline const String* formalName(unsigned int index) const
+	{ return static_cast<const String*>(m_formal[index]); }
+
+    /**
+     * Retrieve the entry label of the code for this function
+     * @return Number of the entry point label, zero if no code defined
+     */
+    inline long int label() const
+	{ return m_label; }
 
 protected:
     /**
@@ -1734,6 +1928,9 @@ protected:
 
 private:
     void init();
+    ObjList m_formal;
+    long int m_label;
+    ScriptCode* m_code;
 };
 
 /**
@@ -1820,13 +2017,13 @@ class YSCRIPT_API JsRegExp : public JsObject
 {
     YCLASS(JsRegExp,JsObject)
 public:
-    /*
+    /**
      * Constructor for a RegExp constructor
      * @param mtx Pointer to the mutex that serializes this object
      */
     JsRegExp(Mutex* mtx = 0);
 
-    /*
+    /**
      * Constructor for a RegExp object
      * @param mtx Pointer to the mutex that serializes this object
      * @param name Full name of the object
@@ -1915,10 +2112,17 @@ public:
 	{ return createRunner(code(),context); }
 
     /**
+     * Check if a script has a certain function or method
+     * @param name Name of the function to check
+     * @return True if function exists in code
+     */
+    virtual bool callable(const String& name);
+
+    /**
      * Adjust a file script path to include default if needed
      * @param script File path to adjust
      */
-    void adjustPath(String& script);
+    void adjustPath(String& script) const;
 
     /**
      * Retrieve the base script path
@@ -1949,6 +2153,24 @@ public:
      * @return JsObject holding the content of JSON, must be dereferenced after use, NULL if parse error
      */
     static JsObject* parseJSON(const char* text);
+
+    /**
+     * Get a "null" object wrapper that will identity match another "null"
+     * @return ExpWrapper for the "null" object
+     */
+    static ExpOperation* nullClone();
+
+    /**
+     * Check if an operation holds a null value
+     * @return True if the operation holds a null object
+     */
+    static bool isNull(const ExpOperation& oper);
+
+    /**
+     * Check if an operation holds an undefined value
+     * @return True if the operation holds an undefined value
+     */
+    static bool isUndefined(const ExpOperation& oper);
 
 private:
     String m_basePath;

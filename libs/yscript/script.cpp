@@ -93,6 +93,11 @@ ScriptRun* ScriptParser::createRunner(ScriptCode* code, ScriptContext* context) 
     return runner;
 }
 
+bool ScriptParser::callable(const String& name)
+{
+    return false;
+}
+
 
 // RTTI Interface access
 void* ScriptContext::getObject(const String& name) const
@@ -178,6 +183,36 @@ bool ScriptContext::copyFields(ObjList& stack, const ScriptContext& original, Ge
     return ok;
 }
 
+void ScriptContext::fillFieldNames(ObjList& names)
+{
+    fillFieldNames(names,params());
+    const NamedList* native = nativeParams();
+    if (native)
+	fillFieldNames(names,*native);
+#ifdef XDEBUG
+    String tmp;
+    tmp.append(names,",");
+    Debug(DebugInfo,"ScriptContext::fillFieldNames: %s",tmp.c_str());
+#endif
+}
+
+void ScriptContext::fillFieldNames(ObjList& names, const NamedList& list, const char* skip)
+{
+    unsigned int n = list.length();
+    for (unsigned int i = 0; i < n; i++) {
+	const NamedString* s = list.getParam(i);
+	if (!s)
+	    continue;
+	if (s->name().null())
+	    continue;
+	if (skip && s->name().startsWith(skip))
+	    continue;
+	if (names.find(s->name()))
+	    continue;
+	names.append(new String(s->name()));
+    }
+}
+
 
 #define MAKE_NAME(x) { #x, ScriptRun::x }
 static const TokenDict s_states[] = {
@@ -246,18 +281,26 @@ ScriptRun::Status ScriptRun::resume()
 // Execute one or more instructions of code from where it was left
 ScriptRun::Status ScriptRun::execute()
 {
-    Lock mylock(this);
-    if (Incomplete != m_state)
-	return m_state;
-    m_state = Running;
-    mylock.drop();
-    Status st = resume();
-    if (Running == st)
-	st = Incomplete;
-    lock();
-    if (Running == m_state)
-	m_state = st;
-    unlock();
+    Status st;
+    do {
+	Lock mylock(this);
+	if (Incomplete != m_state)
+	    return m_state;
+	m_state = Running;
+	mylock.drop();
+	st = resume();
+	if (Running == st)
+	    st = Incomplete;
+	lock();
+	if (Running == m_state)
+	    m_state = st;
+	ListIterator iter(m_async);
+	unlock();
+	while (ScriptAsync* op = static_cast<ScriptAsync*>(iter.get())) {
+	    if (op->run())
+		m_async.remove(op);
+	}
+    } while (Running == st);
     return st;
 }
 
@@ -271,6 +314,27 @@ ScriptRun::Status ScriptRun::run()
     return s;
 }
 
+// Pause the script - not implemented here
+bool ScriptRun::pause()
+{
+    return false;
+}
+
+// Execute a function or method call
+ScriptRun::Status ScriptRun::call(const String& name, ObjList& args,
+    ExpOperation* thisObj, ExpOperation* scopeObj)
+{
+    TelEngine::destruct(thisObj);
+    TelEngine::destruct(scopeObj);
+    return Failed;
+}
+
+// Check if a function or method call exists
+bool ScriptRun::callable(const String& name)
+{
+    return false;
+}
+
 // Execute an assignment operation
 bool ScriptRun::runAssign(const ExpOperation& oper, GenObject* context)
 {
@@ -282,6 +346,24 @@ bool ScriptRun::runAssign(const ExpOperation& oper, GenObject* context)
     ObjList noStack;
     Lock ctxLock(ctxt->mutex());
     return ctxt->runAssign(noStack,oper,context);
+}
+
+// Insert an asynchronous operation
+bool ScriptRun::insertAsync(ScriptAsync* oper)
+{
+    if (!oper)
+	return false;
+    m_async.insert(oper);
+    return true;
+}
+
+// Append an asynchronous operation
+bool ScriptRun::appendAsync(ScriptAsync* oper)
+{
+    if (!oper)
+	return false;
+    m_async.append(oper);
+    return true;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

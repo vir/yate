@@ -1855,6 +1855,14 @@ public:
 	{ return s_protoName; }
 
     /**
+     * Static helper method that deep copies all parameters
+     * @param dst Destination parameters
+     * @param src Source parameters
+     * @param mtx Mutex to be used to synchronize all new objects
+     */
+    static void deepCopyParams(NamedList& dst, const NamedList& src, Mutex* mtx);
+
+    /**
      * Helper method to return the hierarchical structure of an object
      * @param obj Object to dump structure
      * @param buf String to which the structure is added
@@ -1948,6 +1956,13 @@ public:
      */
     inline long int label() const
 	{ return m_label; }
+
+    /**
+     * Deep copy method
+     * @param mtx Pointer to the mutex that serializes the copied array
+     * @return New object instance, does not keep references to old array
+     */
+    virtual JsObject* copy(Mutex* mtx) const;
 
 protected:
     /**

@@ -8108,6 +8108,9 @@ public:
 	ForwardGVNS                    = 0x4c,
 	BackwardGVNS                   = 0x4d,
 	RedirectCapability             = 0x4e, // National use
+	CalledINNumber                 = 0x6f,
+	UID_ActionIndicators           = 0x74,
+	UID_CapabilityIndicators       = 0x75,
 	RedirectCounter                = 0x77, // National use
 	ApplicationTransport           = 0x78,
 	CCNRpossibleIndicator          = 0x7a,

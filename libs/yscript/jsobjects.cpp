@@ -168,19 +168,6 @@ static void dumpRecursiveObj(const GenObject* obj, String& buf, unsigned int dep
 	dumpRecursiveObj(nptr->userData(),buf,depth + 1,seen);
 }
 
-// Helper function that deep copies all parameters
-static void deepCopyParams(NamedList& dst, const NamedList& src, Mutex* mtx)
-{
-    NamedIterator iter(src);
-    while (const NamedString* p = iter.get()) {
-	ExpOperation* oper = YOBJECT(ExpOperation,p);
-	if (oper)
-	    dst.addParam(oper->copy(mtx));
-	else
-	    dst.addParam(p->name(),*p);
-    }
-}
-
 
 const String JsObject::s_protoName("__proto__");
 
@@ -420,6 +407,19 @@ int JsObject::extractArgs(JsObject* obj, ObjList& stack, const ExpOperation& ope
 	arguments.insert(op);
     }
     return oper.number();
+}
+
+// Static helper method that deep copies all parameters
+void JsObject::deepCopyParams(NamedList& dst, const NamedList& src, Mutex* mtx)
+{
+    NamedIterator iter(src);
+    while (const NamedString* p = iter.get()) {
+	ExpOperation* oper = YOBJECT(ExpOperation,p);
+	if (oper)
+	    dst.addParam(oper->copy(mtx));
+	else
+	    dst.addParam(p->name(),*p);
+    }
 }
 
 // Initialize standard globals in the execution context

@@ -126,6 +126,24 @@ private:
     static ObjList s_globals;
 };
 
+class JsShared : public JsObject
+{
+    YCLASS(JsShared,JsObject)
+public:
+    inline JsShared(Mutex* mtx)
+	: JsObject("Shared",mtx,true)
+	{
+	    params().addParam(new ExpFunction("inc"));
+	    params().addParam(new ExpFunction("dec"));
+	    params().addParam(new ExpFunction("get"));
+	    params().addParam(new ExpFunction("set"));
+	    params().addParam(new ExpFunction("clear"));
+	    params().addParam(new ExpFunction("exists"));
+	}
+protected:
+    bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
+};
+
 #define MKDEBUG(lvl) params().addParam(new ExpOperation((long int)Debug ## lvl,"Debug" # lvl))
 class JsEngine : public JsObject
 {
@@ -153,6 +171,7 @@ public:
 	    params().addParam(new ExpFunction("idle"));
 	    params().addParam(new ExpFunction("dump_r"));
 	    params().addParam(new ExpFunction("print_r"));
+	    params().addParam(new ExpWrapper(new JsShared(mtx),"shared"));
 	}
     static void initialize(ScriptContext* context);
 protected:
@@ -164,6 +183,7 @@ class JsMessage : public JsObject
 {
     YCLASS(JsMessage,JsObject)
 public:
+
     inline JsMessage(Mutex* mtx)
 	: JsObject("Message",mtx,true), m_message(0), m_owned(false)
 	{
@@ -477,6 +497,99 @@ void JsEngine::initialize(ScriptContext* context)
     NamedList& params = context->params();
     if (!params.getParam(YSTRING("Engine")))
 	addObject(params,"Engine",new JsEngine(mtx));
+}
+
+
+bool JsShared::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    XDebug(&__plugin,DebugAll,"JsShared::runNative '%s'(%ld)",oper.name().c_str(),oper.number());
+    if (oper.name() == YSTRING("inc")) {
+	ObjList args;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 1:
+	    case 2:
+		break;
+	    default:
+		return false;
+	}
+	ExpOperation* param = static_cast<ExpOperation*>(args[0]);
+	ExpOperation* modulo = static_cast<ExpOperation*>(args[1]);
+	int mod = 0;
+	if (modulo && modulo->isInteger())
+	    mod = modulo->number();
+	if (mod > 1)
+	    mod--;
+	else
+	    mod = 0;
+	ExpEvaluator::pushOne(stack,new ExpOperation((long)Engine::sharedVars().inc(*param,mod)));
+    }
+    else if (oper.name() == YSTRING("dec")) {
+	ObjList args;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 1:
+	    case 2:
+		break;
+	    default:
+		return false;
+	}
+	ExpOperation* param = static_cast<ExpOperation*>(args[0]);
+	ExpOperation* modulo = static_cast<ExpOperation*>(args[1]);
+	int mod = 0;
+	if (modulo && modulo->isInteger())
+	    mod = modulo->number();
+	if (mod > 1)
+	    mod--;
+	else
+	    mod = 0;
+	ExpEvaluator::pushOne(stack,new ExpOperation((long)Engine::sharedVars().dec(*param,mod)));
+    }
+    else if (oper.name() == YSTRING("get")) {
+	if (oper.number() != 1)
+	    return false;
+	ExpOperation* param = popValue(stack,context);
+	if (!param)
+	    return false;
+	String buf;
+	Engine::sharedVars().get(*param,buf);
+	TelEngine::destruct(param);
+	ExpEvaluator::pushOne(stack,new ExpOperation(buf));
+    }
+    else if (oper.name() == YSTRING("set")) {
+	if (oper.number() != 2)
+	    return false;
+	ExpOperation* val = popValue(stack,context);
+	if (!val)
+	    return false;
+	ExpOperation* param = popValue(stack,context);
+	if (!param) {
+	    TelEngine::destruct(val);
+	    return false;
+	}
+	Engine::sharedVars().set(*param,*val);
+	TelEngine::destruct(param);
+	TelEngine::destruct(val);
+    }
+    else if (oper.name() == YSTRING("clear")) {
+	if (oper.number() != 1)
+	    return false;
+	ExpOperation* param = popValue(stack,context);
+	if (!param)
+	    return false;
+	Engine::sharedVars().clear(*param);
+	TelEngine::destruct(param);
+    }
+    else if (oper.name() == YSTRING("exists")) {
+	if (oper.number() != 1)
+	    return false;
+	ExpOperation* param = popValue(stack,context);
+	if (!param)
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpOperation(Engine::sharedVars().exists(*param)));
+	TelEngine::destruct(param);
+    }
+    else
+	return JsObject::runNative(stack,oper,context);
+    return true;
 }
 
 
@@ -1023,9 +1136,9 @@ bool JsAssist::init()
 	}
 	if (jsm && jsm->ref()) {
 	    JsObject* cc = JsObject::buildCallContext(ctx->mutex(),jsm);
-	    ExpEvaluator::pushOne(m_runner->stack(),new ExpWrapper(cc,cc->toString(),true));
 	    jsm->ref();
-	    ExpEvaluator::pushOne(m_runner->stack(),new ExpWrapper(jsm,"(message)"));
+	    cc->params().setParam(new ExpWrapper(jsm,"message"));
+	    ExpEvaluator::pushOne(m_runner->stack(),new ExpWrapper(cc,cc->toString(),true));
 	}
     }
     if (!m_runner->callable("onLoad"))

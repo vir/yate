@@ -1885,6 +1885,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		    expr = 0;
 		}
 		TelEngine::destruct(cons);
+		TelEngine::destruct(expr);
 		pushOne(stack,new ExpOperation(eq));
 	    }
 	    break;
@@ -2243,6 +2244,14 @@ JsFunction::JsFunction(Mutex* mtx, const char* name, ObjList* args, long int lbl
 	    m_formal.append(arg);
     }
     params().addParam("length",String(m_formal.count()));
+}
+
+JsObject* JsFunction::copy(Mutex* mtx) const
+{
+    ObjList args;
+    for (ObjList* l = m_formal.skipNull(); l; l = l->skipNext())
+	args.append(new String(l->get()->toString()));
+    return new JsFunction(mtx,0,&args,label(),m_code);
 }
 
 void JsFunction::init()

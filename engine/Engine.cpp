@@ -236,6 +236,7 @@ static int s_maxevents = 25;
 static Mutex s_eventsMutex(false,"EventsList");
 static ObjList s_events;
 static String s_startMsg;
+static SharedVars s_vars;
 
 const TokenDict Engine::s_callAccept[] = {
     {"accept",      Engine::Accept},
@@ -1167,6 +1168,68 @@ bool SLib::unload(bool unloadNow)
 }
 
 
+void SharedVars::get(const String& name, String& rval)
+{
+    lock();
+    rval = m_vars.getValue(name,rval);
+    unlock();
+}
+
+void SharedVars::set(const String& name, const char* val)
+{
+    lock();
+    m_vars.setParam(name,val);
+    unlock();
+}
+
+bool SharedVars::create(const String& name, const char* val)
+{
+    Lock mylock(this);
+    if (m_vars.getParam(name))
+	return false;
+    m_vars.addParam(name,val);
+    return true;
+}
+
+void SharedVars::clear(const String& name)
+{
+    lock();
+    m_vars.clearParam(name);
+    unlock();
+}
+
+bool SharedVars::exists(const String& name)
+{
+    Lock mylock(this);
+    return m_vars.getParam(name) != 0;
+}
+
+unsigned int SharedVars::inc(const String& name, unsigned int wrap)
+{
+    Lock mylock(this);
+    unsigned int val = m_vars.getIntValue(name);
+    if (wrap)
+	val = val % (wrap + 1);
+    unsigned int nval = val + 1;
+    if (wrap)
+	nval = nval % (wrap + 1);
+    m_vars.setParam(name,String(nval));
+    return val;
+}
+
+unsigned int SharedVars::dec(const String& name, unsigned int wrap)
+{
+    Lock mylock(this);
+    unsigned int val = m_vars.getIntValue(name);
+    if (wrap)
+	val = val ? ((val - 1) % (wrap + 1)) : wrap;
+    else
+	val = val ? (val - 1) : 0;
+    m_vars.setParam(name,String(val));
+    return val;
+}
+
+
 Engine::Engine()
 {
     DDebug(DebugAll,"Engine::Engine() [%p]",this);
@@ -1297,6 +1360,15 @@ int Engine::engineInit()
 	    s_params.addParam("workpath",buf);
     }
 #endif
+    NamedList* vars = s_cfg.getSection("variables");
+    if (vars) {
+	unsigned int n = vars->length();
+	for (unsigned int i = 0; i < n; i++) {
+	    NamedString* v = vars->getParam(i);
+	    if (v)
+		s_vars.set(v->name(),*v);
+	}
+    }
     DDebug(DebugAll,"Engine::run()");
     install(new EngineStatusHandler);
     install(new EngineEventHandler);
@@ -1813,6 +1885,11 @@ void Engine::clearEvents(const String& type)
 	CapturedEvent::eventsRw().clear();
     else
 	s_events.remove(type);
+}
+
+SharedVars& Engine::sharedVars()
+{
+    return s_vars;
 }
 
 

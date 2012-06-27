@@ -1,3 +1,18 @@
+yate (4.1.1~svn5160) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5160: + Added just parameter names for UID
+    indicators.  + Added encoding and decoding for (Original) Called IN
+    Number.  + Removed current message parameters from routing scope
+    context.  + Added "message" variable in routing scope context.  +
+    Fixed deep copying member functions of inline objects.  + Fixed a
+    memory leak in switch/case matching.  + A static set of such
+    variables is kept in Engine and can be initialized by yate.conf  +
+    Added a lockable class implementing variables shared between
+    modules.  + Added an Engine.shared singleton object that exposes in
+    JS the engine shared variables.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 28 Jun 2012 02:19:14 +0400
+
 yate (4.1.1~svn5154) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5154: + Fixed Array.push() method that was

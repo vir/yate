@@ -1885,6 +1885,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		    expr = 0;
 		}
 		TelEngine::destruct(cons);
+		TelEngine::destruct(expr);
 		pushOne(stack,new ExpOperation(eq));
 	    }
 	    break;

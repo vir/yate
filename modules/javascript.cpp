@@ -1023,9 +1023,9 @@ bool JsAssist::init()
 	}
 	if (jsm && jsm->ref()) {
 	    JsObject* cc = JsObject::buildCallContext(ctx->mutex(),jsm);
-	    ExpEvaluator::pushOne(m_runner->stack(),new ExpWrapper(cc,cc->toString(),true));
 	    jsm->ref();
-	    ExpEvaluator::pushOne(m_runner->stack(),new ExpWrapper(jsm,"(message)"));
+	    cc->params().setParam(new ExpWrapper(jsm,"message"));
+	    ExpEvaluator::pushOne(m_runner->stack(),new ExpWrapper(cc,cc->toString(),true));
 	}
     }
     if (!m_runner->callable("onLoad"))

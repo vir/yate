@@ -1,3 +1,12 @@
+yate (4.1.1~svn5162) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5162: + Added possibility to rename the null
+    wrapper.  + This allows retrieving database query results.  + Added
+    methods to JS Message for accessing an Yate Array attached to an
+    Yate Message.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 29 Jun 2012 02:19:12 +0400
+
 yate (4.1.1~svn5160) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5160: + Added just parameter names for UID

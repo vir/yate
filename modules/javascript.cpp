@@ -198,6 +198,9 @@ public:
 	    params().addParam(new ExpFunction("name"));
 	    params().addParam(new ExpFunction("broadcast"));
 	    params().addParam(new ExpFunction("retValue"));
+	    params().addParam(new ExpFunction("getColumn"));
+	    params().addParam(new ExpFunction("getRow"));
+	    params().addParam(new ExpFunction("getResult"));
 	}
     virtual ~JsMessage()
 	{
@@ -223,6 +226,9 @@ public:
     static void initialize(ScriptContext* context);
 protected:
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    void getColumn(ObjList& stack, const ExpOperation* col, GenObject* context);
+    void getRow(ObjList& stack, const ExpOperation* row, GenObject* context);
+    void getResult(ObjList& stack, const ExpOperation& row, const ExpOperation& col, GenObject* context);
     ObjList m_handlers;
     Message* m_message;
     bool m_owned;
@@ -645,6 +651,37 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 		return false;
 	}
     }
+    else if (oper.name() == YSTRING("getColumn")) {
+	ObjList args;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 0:
+	    case 1:
+		break;
+	    default:
+		return false;
+	}
+	getColumn(stack,static_cast<ExpOperation*>(args[0]),context);
+    }
+    else if (oper.name() == YSTRING("getRow")) {
+	ObjList args;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 0:
+	    case 1:
+		break;
+	    default:
+		return false;
+	}
+	getRow(stack,static_cast<ExpOperation*>(args[0]),context);
+    }
+    else if (oper.name() == YSTRING("getResult")) {
+	ObjList args;
+	if (extractArgs(stack,oper,context,args) != 2)
+	    return false;
+	if (!(args[0] && args[1]))
+	    return false;
+	getResult(stack,*static_cast<ExpOperation*>(args[0]),
+	    *static_cast<ExpOperation*>(args[1]),context);
+    }
     else if (oper.name() == YSTRING("enqueue")) {
 	if (oper.number() != 0)
 	    return false;
@@ -712,6 +749,146 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
     else
 	return JsObject::runNative(stack,oper,context);
     return true;
+}
+
+void JsMessage::getColumn(ObjList& stack, const ExpOperation* col, GenObject* context)
+{
+    Array* arr = m_message ? YOBJECT(Array,m_message->userData()) : 0;
+    if (arr && arr->getRows()) {
+	int rows = arr->getRows() - 1;
+	int cols = arr->getColumns();
+	if (col) {
+	    // [ val1, val2, val3 ]
+	    int idx = -1;
+	    if (col->isInteger())
+		idx = col->number();
+	    else {
+		for (int i = 0; i < cols; i++) {
+		    GenObject* o = arr->get(i,0);
+		    if (o && (o->toString() == *col)) {
+			idx = i;
+			break;
+		    }
+		}
+	    }
+	    if (idx >= 0 && idx < cols) {
+		JsArray* jsa = new JsArray(mutex());
+		for (int r = 1; r <= rows; r++) {
+		    GenObject* o = arr->get(idx,r);
+		    if (o)
+			jsa->push(new ExpOperation(o->toString()));
+		    else
+			jsa->push(JsParser::nullClone());
+		}
+		ExpEvaluator::pushOne(stack,new ExpWrapper(jsa,"column"));
+		return;
+	    }
+	}
+	else {
+	    // { col1: [ val11, val12, val13], col2: [ val21, val22, val23 ] }
+	    JsObject* jso = new JsObject("Object",mutex());
+	    for (int c = 0; c < cols; c++) {
+		const String* name = YOBJECT(String,arr->get(c,0));
+		if (TelEngine::null(name))
+		    continue;
+		JsArray* jsa = new JsArray(mutex());
+		for (int r = 1; r <= rows; r++) {
+		    GenObject* o = arr->get(c,r);
+		    if (o)
+			jsa->push(new ExpOperation(o->toString()));
+		    else
+			jsa->push(JsParser::nullClone());
+		}
+		jso->params().setParam(new ExpWrapper(jsa,*name));
+	    }
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(jso,"columns"));
+	    return;
+	}
+    }
+    ExpEvaluator::pushOne(stack,JsParser::nullClone());
+}
+
+void JsMessage::getRow(ObjList& stack, const ExpOperation* row, GenObject* context)
+{
+    Array* arr = m_message ? YOBJECT(Array,m_message->userData()) : 0;
+    if (arr && arr->getRows()) {
+	int rows = arr->getRows() - 1;
+	int cols = arr->getColumns();
+	if (row) {
+	    // { col1: val1, col2: val2 }
+	    if (row->isInteger()) {
+		int idx = row->number() + 1;
+		if (idx > 0 && idx <= rows) {
+		    JsObject* jso = new JsObject("Object",mutex());
+		    for (int c = 0; c < cols; c++) {
+			const String* name = YOBJECT(String,arr->get(c,0));
+			if (TelEngine::null(name))
+			    continue;
+			GenObject* o = arr->get(c,idx);
+			if (o)
+			    jso->params().setParam(new ExpOperation(o->toString(),*name));
+			else
+			    jso->params().setParam((JsParser::nullClone(*name)));
+		    }
+		    ExpEvaluator::pushOne(stack,new ExpWrapper(jso,"row"));
+		    return;
+		}
+	    }
+	}
+	else {
+	    // [ { col1: val11, col2: val12 }, { col1: val21, col2: val22 } ]
+	    JsArray* jsa = new JsArray(mutex());
+	    for (int r = 1; r <= rows; r++) {
+		JsObject* jso = new JsObject("Object",mutex());
+		for (int c = 0; c < cols; c++) {
+		    const String* name = YOBJECT(String,arr->get(c,0));
+		    if (TelEngine::null(name))
+			continue;
+		    GenObject* o = arr->get(c,r);
+		    if (o)
+			jso->params().setParam(new ExpOperation(o->toString(),*name));
+		    else
+			jso->params().setParam((JsParser::nullClone(*name)));
+		}
+		jsa->push(new ExpWrapper(jso));
+	    }
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(jsa,"rows"));
+	    return;
+	}
+    }
+    ExpEvaluator::pushOne(stack,JsParser::nullClone());
+}
+
+void JsMessage::getResult(ObjList& stack, const ExpOperation& row, const ExpOperation& col, GenObject* context)
+{
+    Array* arr = m_message ? YOBJECT(Array,m_message->userData()) : 0;
+    if (arr && arr->getRows() && row.isInteger()) {
+	int rows = arr->getRows() - 1;
+	int cols = arr->getColumns();
+	int r = row.number();
+	if (r >= 0 && r < rows) {
+	    int c = -1;
+	    if (col.isInteger())
+		c = col.number();
+	    else {
+		for (int i = 0; i < cols; i++) {
+		    GenObject* o = arr->get(i,0);
+		    if (o && (o->toString() == col)) {
+			c = i;
+			break;
+		    }
+		}
+	    }
+	    if (c >= 0 && c < cols) {
+		GenObject* o = arr->get(c,r + 1);
+		if (o) {
+		    ExpEvaluator::pushOne(stack,new ExpOperation(o->toString()));
+		    return;
+		}
+	    }
+	}
+    }
+    ExpEvaluator::pushOne(stack,JsParser::nullClone());
 }
 
 JsObject* JsMessage::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)

@@ -2212,9 +2212,10 @@ public:
 
     /**
      * Get a "null" object wrapper that will identity match another "null"
+     * @param name Name of the new wrapper, "null" if empty
      * @return ExpWrapper for the "null" object
      */
-    static ExpOperation* nullClone();
+    static ExpOperation* nullClone(const char* name = 0);
 
     /**
      * Check if an operation holds a null value

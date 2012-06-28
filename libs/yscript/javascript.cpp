@@ -2379,9 +2379,9 @@ JsObject* JsParser::parseJSON(const char* text)
 }
 
 // Return a "null" object wrapper
-ExpOperation* JsParser::nullClone()
+ExpOperation* JsParser::nullClone(const char* name)
 {
-    return s_null.ExpOperation::clone();
+    return TelEngine::null(name) ? s_null.ExpOperation::clone() : s_null.clone(name);
 }
 
 // Check if an object is identic to null

@@ -128,6 +128,7 @@ public:
     virtual void listen(int maxConn) = 0;
     virtual bool sendMSG(const DataBlock& header, const DataBlock& msg, int streamId = 0) = 0;
     virtual void setSocket(Socket* s) = 0;
+    virtual bool getSocketParams(const String& params, NamedList& result) = 0;
     virtual void reset() = 0;
     void reconnect()
 	{ m_reconnect = true; }
@@ -194,6 +195,7 @@ public:
     bool bindSocket();
     static SignallingComponent* create(const String& type,const NamedList& params);
     virtual bool transmitMSG(const DataBlock& header, const DataBlock& msg, int streamId = 0);
+    virtual bool getSocketParams(const String& params, NamedList& result);
 private:
     TReader* m_reader;
     Mutex m_readerMutex;
@@ -220,6 +222,7 @@ public:
     virtual void listen(int maxConn)
 	{ }
     virtual bool sendBuffer(int streamId = 0);
+    virtual bool getSocketParams(const String& params, NamedList& result);
     virtual void reset()
 	{ m_transport->resetReader(this); }
     void connectionDown(bool stop = true);
@@ -246,6 +249,7 @@ public:
     virtual bool needConnect()
 	{ return m_transport && m_transport->status() == Transport::Down && !m_transport->listen(); }
     virtual bool sendMSG(const DataBlock& header, const DataBlock& msg, int streamId = 0);
+    virtual bool getSocketParams(const String& params, NamedList& result);
     virtual void setSocket(Socket* s);
     virtual void listen(int maxConn)
 	{ m_socket->listen(maxConn); }
@@ -609,6 +613,13 @@ void Transport::reconnect(bool force)
     }
     Debug(this,DebugInfo,"Transport reconnect requested");
     m_reader->reconnect();
+}
+
+bool Transport::getSocketParams(const String& params, NamedList& result)
+{
+    if (m_reader)
+	return m_reader->getSocketParams(params,result);
+    return false;
 }
 
 bool Transport::initialize(const NamedList* params)
@@ -1274,6 +1285,15 @@ void StreamReader::connectionDown(bool stopTh) {
     }
 }
 
+bool StreamReader::getSocketParams(const String& params, NamedList& result)
+{
+    Lock reconLock(m_sending,SignallingEngine::maxLockWait());
+    if (!(reconLock.locked() && m_socket))
+	return false;
+    m_socket->getParams(params,result);
+    return true;
+}
+
 void StreamReader::stopThread()
 {
     m_transport->setStatus(Transport::Down);
@@ -1493,6 +1513,15 @@ bool MessageReader::readData()
     packet.cut(-8);
     m_transport->processMSG(m_transport->getVersion((unsigned char*)buffer),
 	m_transport->getClass((unsigned char*)buffer), m_transport->getType((unsigned char*)buffer),packet,stream);
+    return true;
+}
+
+bool MessageReader::getSocketParams(const String& params, NamedList& result)
+{
+    Lock reconLock(m_sending,SignallingEngine::maxLockWait());
+    if (!(reconLock.locked() && m_socket))
+	return false;
+    m_socket->getParams(params,result);
     return true;
 }
 

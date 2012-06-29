@@ -1,0 +1,44 @@
+; SCTP sockets default parameters
+; This parameters are applied for all sctp sockets created by lksctp module!
+; This values can be overridden from sigtransport.conf for each socket.
+; Note! On some platforms this parameters may not be supported
+
+;[general]
+
+; Set initial retransmission interval in milliseconds
+; Ex: rto_initial = 400
+;rto_initial=
+
+; Set maximum retransmission interval in milliseconds
+; Ex: rto_max = 400
+;rto_max=
+
+; Set minimum retransmission interval in milliseconds
+; Ex: rto_min = 200
+;rto_min=
+
+; Set heartbeat interval in milliseconds
+; Ex: hb_interval = 5000
+;hb_interval=
+
+; Set maximum number of retransmissions before the SCTP connection is considered down
+; Ex: max_retrans = 5
+;max_retrans=
+
+; Enable / disable SCTP heartbeat. Default is enabled
+; Ex: hb_enabled = true
+;hb_enabled=
+
+; Set sctp delayed ack parameters
+; Note! Both sack_delay and sack_freq must be present and have values different than 0 to be successfully applied
+
+; Set ack time interval for sccp to cumulative acknowledge the received packets
+; Max value 500 in milliseconds
+; Ex: sack_delay = 50
+;sack_delay=
+
+; Set the maximum number of unacknowledged packets
+; Ex: sack_freq = 2
+; Note! If you set this to 1 you will disable the sctp acknowledge algorithm
+;sack_freq=
+

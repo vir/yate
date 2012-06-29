@@ -2042,7 +2042,7 @@ bool JsCode::jumpAbsolute(long int index, GenObject* context) const
 	    runner->m_index = m_linked.length();
 	    return true;
 	}
-	if (index > m_linked.length())
+	if (index > (long int)m_linked.length())
 	    return false;
 	runner->m_index = index;
     }

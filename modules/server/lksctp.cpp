@@ -5,7 +5,7 @@
  * SCTP sockets provider based on Linux Kernel SCTP
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2009-2010 Null Team
+ * Copyright (C) 2009-2012 Null Team
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -51,10 +51,15 @@ public:
 	{ m_payload = payload; return true; }
     virtual int sendTo(void* buf, int buflen, int stream, SocketAddr& addr, int flags);
     virtual bool setParams(const NamedList& params);
+    virtual bool getParams(const String& params, NamedList& result);
     virtual bool valid() const;
     bool sctpDown(void* buf);
     bool sctpUp(void* buf);
     bool alive() const;
+    bool fillRTO(bool min, bool max, bool initial, NamedList& result);
+    bool fillAddrParams(bool hbEnabled, bool hbInterval, bool maxRetrans,
+	    NamedList& result);
+    bool fillSackParams(bool sackDelay, bool sackFreq, NamedList& result);
 private:
     int m_inbound;
     int m_outbound;
@@ -69,8 +74,34 @@ public:
     ~LKModule();
     virtual void initialize();
     virtual void statusParams(String& str);
+    inline int getRTOMax()
+	{ return m_rtoMax; }
+    inline int getRTOMin()
+	{ return m_rtoMin; }
+    inline int getRTOInitial()
+	{ return m_rtoInitial; }
+    inline int getHBInterval()
+	{ return m_hbInterval; }
+    inline bool isHBEnabled()
+	{ return m_hbEnabled; }
+    inline int getSACKDelay()
+	{ return m_sackDelay; }
+    inline int getSACKFreq()
+	{ return m_sackFreq; }
+    inline int getMaxRetrans()
+	{ return m_maxRetrans; }
+
 private:
     bool m_init;
+    NamedList m_cfg;
+    unsigned int m_rtoMax;
+    unsigned int m_rtoMin;
+    unsigned int m_rtoInitial;
+    unsigned int m_hbInterval;
+    bool m_hbEnabled;
+    unsigned int m_sackDelay;
+    unsigned int m_sackFreq;
+    unsigned int m_maxRetrans;
 };
 
 static LKModule plugin;
@@ -224,25 +255,26 @@ bool LKSocket::setParams(const NamedList& params)
 {
     bool ret = false;
     bool aux = false;
-    if (params.getParam(YSTRING("rto_initial")) || params.getParam(YSTRING("rto_max")) ||
-	    params.getParam(YSTRING("rto_min"))) {
-	struct sctp_rtoinfo rto;
-	bzero(&rto, sizeof(rto));
-	rto.srto_initial = params.getIntValue("rto_initial",0);
-	rto.srto_max = params.getIntValue("rto_max",0);
-	rto.srto_min = params.getIntValue("rto_min",0);
-	aux = setOption(IPPROTO_SCTP,SCTP_RTOINFO, &rto, sizeof(rto));
-	if (!aux)
-	    Debug(&plugin,DebugNote,"Failed to set SCTP RTO params! Reason: %s",strerror(errno));
-	ret |= aux;
-    }
+    struct sctp_rtoinfo rto;
+    bzero(&rto, sizeof(rto));
+
+    rto.srto_initial = params.getIntValue("rto_initial",plugin.getRTOInitial());
+    rto.srto_max = params.getIntValue("rto_max",plugin.getRTOMax());
+    rto.srto_min = params.getIntValue("rto_min",plugin.getRTOMin());
+
+    aux = setOption(IPPROTO_SCTP,SCTP_RTOINFO, &rto, sizeof(rto));
+    if (!aux)
+	Debug(&plugin,DebugNote,"Failed to set SCTP RTO params! Reason: %s",strerror(errno));
+    ret |= aux;
     struct sctp_paddrparams paddr_params;
     bzero(&paddr_params, sizeof(paddr_params));
-    if (params.getParam(YSTRING("hb_interval")))
-	paddr_params.spp_hbinterval = params.getIntValue(YSTRING("hb_interval"),0);
-    if (params.getParam(YSTRING("max_retrans")))
-	paddr_params.spp_pathmaxrxt = params.getIntValue(YSTRING("max_retrans"),0);
-    bool hbEnabled = params.getBoolValue(YSTRING("hb_enabled"),true);
+
+    paddr_params.spp_hbinterval = params.getIntValue(YSTRING("hb_interval"),
+	    plugin.getHBInterval());
+    paddr_params.spp_pathmaxrxt = params.getIntValue(YSTRING("max_retrans"),
+	    plugin.getMaxRetrans());
+    bool hbEnabled = params.getBoolValue(YSTRING("hb_enabled"),
+	    plugin.isHBEnabled());
     paddr_params.spp_flags |= hbEnabled ? SPP_HB_ENABLE : SPP_HB_DISABLE;
     if (params.getParam(YSTRING("hb_0")))
 #ifdef SPP_HB_TIME_IS_ZERO
@@ -256,6 +288,7 @@ bool LKSocket::setParams(const NamedList& params)
 #else
 	Debug(&plugin,DebugNote,"HeartBeat demand is not available");
 #endif
+
     aux = setOption(IPPROTO_SCTP,SCTP_PEER_ADDR_PARAMS, &paddr_params, sizeof(paddr_params));
     ret |= aux;
     if (!aux)
@@ -264,13 +297,14 @@ bool LKSocket::setParams(const NamedList& params)
 #ifdef HAVE_SACK_INFO_STRUCT
     struct sctp_sack_info sack_info;
     bzero(&sack_info, sizeof(sack_info));
-    if (params.getParam(YSTRING("sack_delay"))) {
-	sack_info.sack_delay = params.getIntValue(YSTRING("sack_delay"));
-	if (sack_info.sack_delay > 500)
-	    sack_info.sack_delay = 500;
-    }
-    if (params.getParam(YSTRING("sack_freq")))
-	sack_info.sack_freq = params.getIntValue(YSTRING("sack_freq"));
+
+    sack_info.sack_delay = params.getIntValue(YSTRING("sack_delay"),
+	    plugin.getSACKDelay());
+    if (sack_info.sack_delay > 500)
+	sack_info.sack_delay = 500;
+    sack_info.sack_freq = params.getIntValue(YSTRING("sack_freq"),
+	plugin.getSACKFreq());
+
     aux = setOption(IPPROTO_SCTP,SCTP_DELAYED_ACK_TIME, &sack_info, sizeof(sack_info));
     ret |= aux;
     if (!aux)
@@ -278,13 +312,14 @@ bool LKSocket::setParams(const NamedList& params)
 #elif HAVE_ASSOC_VALUE_STRUCT
     struct sctp_assoc_value sassoc_value;
     bzero(&sassoc_value, sizeof(sassoc_value));
-    if (params.getParam(YSTRING("sack_delay"))) {
-	sassoc_value.assoc_value = params.getIntValue(YSTRING("sack_delay"));
-	if (sassoc_value.assoc_value > 500)
-	    sassoc_value.assoc_value = 500;
-    }
+
+    sassoc_value.assoc_value = params.getIntValue(YSTRING("sack_delay"),
+	    plugin.getSACKDelay());
+    if (sassoc_value.assoc_value > 500)
+	sassoc_value.assoc_value = 500;
     if (params.getParam(YSTRING("sack_freq")))
 	Debug(&plugin,DebugConf,"Unable to set sack_freq param! sack_info struct is missing!");
+
     aux = setOption(IPPROTO_SCTP,SCTP_DELAYED_ACK_TIME, &sassoc_value, sizeof(sassoc_value));
     ret |= aux;
     if (!aux)
@@ -297,6 +332,127 @@ bool LKSocket::setParams(const NamedList& params)
 #endif
     aux = Socket::setParams(params);
     return ret || aux;
+}
+
+bool LKSocket::getParams(const String& params, NamedList& result)
+{
+    ObjList* list = params.split(',',false);
+
+    bool ret = fillRTO(list->find(YSTRING("rto_min")) !=0 , list->find(YSTRING("rto_max")) != 0,
+	    list->find(YSTRING("rto_initial")) != 0, result);
+
+    ret = fillAddrParams(list->find(YSTRING("hb_enabled")),
+	    list->find(YSTRING("max_retrans")),list->find(YSTRING("hb_interval")),
+	    result) || ret;
+
+    ret = fillSackParams(list->find(YSTRING("sack_delay")),
+	    list->find(YSTRING("sack_freq")), result) || ret;
+
+    TelEngine::destruct(list);
+    return Socket::getParams(params,result) || ret;
+}
+
+bool LKSocket::fillRTO(bool min, bool max, bool initial, NamedList& result)
+{
+    if (!(min || max || initial))
+	return false;
+    struct sctp_rtoinfo rto;
+    bzero(&rto, sizeof(rto));
+    socklen_t length = sizeof(rto);
+
+    if (!getOption(IPPROTO_SCTP,SCTP_RTOINFO, &rto, &length)) {
+	Debug(&plugin,DebugNote,"Failed to get SCTP RTO params! Reason: %s",strerror(errno));
+	return false;
+    }
+
+    if (min) {
+	result.addParam("rto_min", String(rto.srto_min));
+    }
+    if (max) {
+	result.addParam("rto_max",String(rto.srto_max));
+    }
+    if (initial) {
+	result.addParam("rto_initial",String(rto.srto_initial));
+    }
+    return true;
+}
+
+bool LKSocket::fillAddrParams(bool hbEnabled, bool hbInterval, bool maxRetrans,
+	NamedList& result)
+{
+    if (!(hbEnabled || hbInterval || maxRetrans))
+	return false;
+    struct sctp_paddrparams paddr_params;
+    bzero(&paddr_params, sizeof(paddr_params));
+    socklen_t length = sizeof(paddr_params);
+    if (!getOption(IPPROTO_SCTP,SCTP_PEER_ADDR_PARAMS, &paddr_params, &length)) {
+	Debug(&plugin,DebugNote,"Failed to get SCTP paddr params! Reason: %s",
+	      strerror(errno));
+	return false;
+    }
+
+    if (hbInterval)
+	result.addParam("hb_interval",String(paddr_params.spp_hbinterval));
+
+    if (maxRetrans)
+	result.addParam("max_retrans",String(paddr_params.spp_pathmaxrxt));
+
+    if (!hbEnabled)
+	return true;
+    if (paddr_params.spp_flags && SPP_HB_ENABLE)
+	result.addParam("hb_enabled","true");
+    else
+	result.addParam("hb_enabled","false");
+    return true;
+}
+
+bool LKSocket::fillSackParams(bool sackDelay, bool sackFreq, NamedList& result)
+{
+    if (!(sackDelay || sackFreq))
+	return false;
+
+    socklen_t length = 0;
+#ifdef SCTP_DELAYED_ACK_TIME
+#ifdef HAVE_SACK_INFO_STRUCT
+    struct sctp_sack_info sack_info;
+    bzero(&sack_info, sizeof(sack_info));
+    length = sizeof(sack_info);
+
+    if(!getOption(IPPROTO_SCTP,SCTP_DELAYED_ACK_TIME, &sack_info, &length)) {
+	Debug(&plugin,DebugNote,"Failed to get SCTP sack params! Reason: %s",
+	      strerror(errno));
+	return false;
+    }
+
+    if (sackDelay)
+	result.addParam("sack_delay",String(sack_info.sack_delay));
+
+    if (sackFreq)
+	result.addParam("sack_freq",String(sack_info.sack_freq));
+
+#elif HAVE_ASSOC_VALUE_STRUCT
+    struct sctp_assoc_value sassoc_value;
+    bzero(&sassoc_value, sizeof(sassoc_value));
+    length = sizeof(sassoc_value);
+
+    if (!getOption(IPPROTO_SCTP,SCTP_DELAYED_ACK_TIME, &sassoc_value, length)) {
+	Debug(&plugin,DebugNote,"Failed to get SCTP sack params! Reason: %s",
+	      strerror(errno));
+	return false;
+    }
+
+    if (sackDelay)
+	result.addParam("sack_delay",String(sassoc_value.assoc_value));
+
+    if (sackFreq)
+	Debug(&plugin,DebugConf,"Unable to set sack_freq param! sack_info struct is missing!");
+#else // HAVE_SACK_INFO_STRUCT
+    Debug(&plugin,DebugConf,"SCTP delayed ack time is unavailable no struct present!!");
+#endif
+#else // SCTP_DELAYED_ACK_TIME
+    Debug(&plugin,DebugConf,"SCTP delayed ack time is unavailable");
+#endif
+    return true;
 }
 
 bool LKSocket::valid() const
@@ -422,7 +578,9 @@ bool LKHandler::received(Message &msg)
 
 LKModule::LKModule()
     : Module("lksctp","misc",true),
-      m_init(false)
+      m_init(false), m_cfg("lksctp"), m_rtoMax(400),
+      m_rtoMin(200), m_rtoInitial(400), m_hbInterval(0),m_hbEnabled(true),
+      m_sackDelay(50), m_sackFreq(0), m_maxRetrans(0)
 {
     Output("Loading module LKSCTP");
 }
@@ -434,12 +592,26 @@ LKModule::~LKModule()
 
 void LKModule::initialize()
 {
+    Output("Initialize module LKSCTP");
     if (!m_init) {
-	Output("Initialize module LKSCTP");
 	m_init = true;
 	Engine::install(new LKHandler());
+	setup();
     }
-    setup();
+
+    Configuration cfg(Engine::configFile(name()));
+    cfg.load();
+    NamedList* sect = cfg.getSection(YSTRING("general"));
+    if (!sect)
+	return;
+    m_rtoMax = sect->getIntValue(YSTRING("rto_max"),400);
+    m_rtoMin = sect->getIntValue(YSTRING("rto_min"),200);
+    m_rtoInitial = sect->getIntValue(YSTRING("rto_initial"),400);
+    m_hbInterval = sect->getIntValue(YSTRING("hb_interval"),0);
+    m_hbEnabled = sect->getBoolValue(YSTRING("hb_enabled"),true);
+    m_sackDelay = sect->getIntValue(YSTRING("sack_delay"),50);
+    m_sackFreq = sect->getIntValue(YSTRING("sack_freq"),0);
+    m_maxRetrans = sect->getIntValue(YSTRING("max_retrans"),0);
 }
 
 void LKModule::statusParams(String& str)

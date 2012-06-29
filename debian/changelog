@@ -1,3 +1,18 @@
+yate (4.1.1~svn5166) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5166: + Added methods to JS Message for
+    accessing an Yate Array attached to an Yate Message.  + Fixed a
+    harmless signed / unsigned comparation.  + Show debug message if the
+    sctp parameters values are not reliable for m2pa.  + Added
+    configuration file to set default values for sctp parameters.  +
+    Added option of matching capabilities according to application
+    context. Decode operation according to application context. Keep
+    application context stored for the whole transaction duration.  +
+    Show a warning and drop the encoding of a component when a mandatory
+    parameter is misssing.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 30 Jun 2012 02:19:14 +0400
+
 yate (4.1.1~svn5162) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5162: + Added possibility to rename the null

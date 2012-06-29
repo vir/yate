@@ -4328,6 +4328,11 @@ void SS7TCAPTransactionITU::encodeComponents(NamedList& params, DataBlock& data)
 		    db.insert(DataBlock(&problemTag,1));
 		    codedComp.insert(db);
 		}
+		else {
+		    Debug(tcap(),DebugWarn,"Missing mandatory 'problemCode' information for component with index='%d' from transaction "
+			    "with localID=%s [%p]",index,m_localID.c_str(),this);
+		    continue;
+		}
 	    }
 	    else {
 		NamedString* payloadHex = params.getParam(compParam);
@@ -4358,6 +4363,11 @@ void SS7TCAPTransactionITU::encodeComponents(NamedList& params, DataBlock& data)
 		    db.insert(DataBlock(&tag,1));
 		    codedComp.insert(db);
 		}
+		else {
+		    Debug(tcap(),DebugWarn,"Missing mandatory 'errorCodeType' information for component with index='%d' from transaction "
+			    "with localID=%s [%p]",index,m_localID.c_str(),this);
+		    continue;
+		}
 	    }
 
 	    // encode Operation Code only if Invoke
@@ -4384,6 +4394,11 @@ void SS7TCAPTransactionITU::encodeComponents(NamedList& params, DataBlock& data)
 			codedComp.insert(DataBlock(&tag,1));
 		    }
 		}
+		else {
+		    Debug(tcap(),DebugWarn,"Missing mandatory 'operationCodeType' information for component with index='%d' from transaction "
+			    "with localID=%s [%p]",index,m_localID.c_str(),this);
+		    continue;
+		}
 	    }
 
 	    NamedString* invID = params.getParam(compParam + "." + s_tcapLocalCID);
@@ -4408,6 +4423,11 @@ void SS7TCAPTransactionITU::encodeComponents(NamedList& params, DataBlock& data)
 			val = SS7TCAPITU::LocalTag;
 			db.insert(DataBlock(&val,1));
 		    }
+		    else {
+			Debug(tcap(),DebugWarn,"Missing mandatory 'localCID' information for component with index='%d' from transaction "
+			    "with localID=%s [%p]",index,m_localID.c_str(),this);
+			continue;
+		    }
 		    break;
 		case ReturnResultLast:
 		case ReturnError:
@@ -4418,6 +4438,11 @@ void SS7TCAPTransactionITU::encodeComponents(NamedList& params, DataBlock& data)
 			db.insert(ASNLib::buildLength(db));
 			val = SS7TCAPITU::LocalTag;
 			db.insert(DataBlock(&val,1));
+		    }
+		    else {
+			Debug(tcap(),DebugWarn,"Missing mandatory 'remoteCID' information for component with index='%d' from transaction "
+			    "with localID=%s [%p]",index,m_localID.c_str(),this);
+			continue;
 		    }
 		    break;
 		case Reject:

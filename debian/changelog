@@ -1,3 +1,12 @@
+yate (4.1.1~svn5167) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5167: + This allows setting custom
+    parameters in CDR from routing or disconnect.  + Copy the parameters
+    in "copyparams" to chan.hangup if the call failed to craete an
+    outbound call leg.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Mon, 02 Jul 2012 02:19:12 +0400
+
 yate (4.1.1~svn5166) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5166: + Added methods to JS Message for

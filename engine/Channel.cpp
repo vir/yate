@@ -828,6 +828,14 @@ void Channel::callConnect(Message& msg)
 void Channel::callRejected(const char* error, const char* reason, const Message* msg)
 {
     Debug(this,DebugMild,"Call rejected error='%s' reason='%s' [%p]",error,reason,this);
+    if (msg) {
+	const String* cp = msg->getParam(YSTRING("copyparams"));
+	if (!TelEngine::null(cp)) {
+	    s_paramMutex.lock();
+	    parameters().copyParams(*msg,*cp);
+	    s_paramMutex.unlock();
+	}
+    }
     status("rejected");
 }
 
@@ -1650,6 +1658,9 @@ bool Router::route()
 		const char* reason = m_msg->getValue(YSTRING("reason"),
 		    ((s_noconn == error) ? "Could not connect to target" : (const char*)0));
 		Message m(s_disconnected);
+		const String* cp = m_msg->getParam(YSTRING("copyparams"));
+		if (!TelEngine::null(cp))
+		    m.copyParams(*m_msg,*cp);
 		chan->complete(m);
 		m.setParam("error",error);
 		m.setParam("reason",reason);

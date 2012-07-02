@@ -148,7 +148,7 @@ bool copyRename(NamedList& dest, const char* dname, const NamedList& src, const 
     const NamedString* value = src.getParam(sname);
     if (!value)
 	return false;
-    dest.addParam(dname,*value);
+    dest.setParam(dname,*value);
     return true;
 }
 

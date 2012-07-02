@@ -45,6 +45,7 @@ public:
     inline JsParser& parser()
 	{ return m_assistCode; }
 protected:
+    virtual void statusParams(String& str);
     virtual bool commandExecute(String& retVal, const String& line);
     virtual bool commandComplete(Message& msg, const String& partLine, const String& partWord);
 private:
@@ -116,6 +117,8 @@ public:
     static void markUnused();
     static void freeUnused();
     static void initScript(const String& scriptName, const String& fileName);
+    inline static ObjList& globals()
+	{ return s_globals; }
     inline static void unloadAll()
 	{ s_globals.clear(); }
 private:
@@ -1602,6 +1605,15 @@ bool JsGlobal::runMain()
 }
 
 
+static const char* s_cmds[] = {
+    "info",
+    "eval",
+    0
+};
+
+static const char* s_cmdsLine = "  javascript {info|eval instructions...}";
+
+
 JsModule::JsModule()
     : ChanAssistList("javascript",true)
 {
@@ -1613,12 +1625,34 @@ JsModule::~JsModule()
     Output("Unloading module Javascript");
 }
 
+void JsModule::statusParams(String& str)
+{
+    lock();
+    str << "globals=" << JsGlobal::globals().count() << ",routing=" << calls().count();
+    unlock();
+}
+
 bool JsModule::commandExecute(String& retVal, const String& line)
 {
-    if (!line.startsWith("js "))
+    String cmd = line;
+    if (!cmd.startSkip(name()))
 	return false;
-    String cmd = line.substr(3).trimSpaces();
-    if (cmd.null())
+    cmd.trimSpaces();
+
+    if (cmd.null() || cmd == YSTRING("info")) {
+	retVal.clear();
+	lock();
+	ListIterator iter(JsGlobal::globals());
+	while (JsGlobal* script = static_cast<JsGlobal*>(iter.get()))
+	    retVal << script->name() << " = " << *script << "\r\n";
+	iter.assign(calls());
+	while (JsAssist* assist = static_cast<JsAssist*>(iter.get()))
+	    retVal << assist->id() << ": " << assist->stateName() << "\r\n";
+	unlock();
+	return true;
+    }
+
+    if (!(cmd.startSkip("eval") && cmd.trimSpaces()))
 	return false;
 
     JsParser parser;
@@ -1650,13 +1684,31 @@ bool JsModule::commandComplete(Message& msg, const String& partLine, const Strin
     if (partLine.null() && partWord.null())
 	return false;
     if (partLine.null() || (partLine == "help"))
-	itemComplete(msg.retValue(),"js",partWord);
+	itemComplete(msg.retValue(),name(),partWord);
+    else if (partLine == name()) {
+	for (const char** list = s_cmds; *list; list++)
+	    itemComplete(msg.retValue(),*list,partWord);
+	return true;
+    }
     return Module::commandComplete(msg,partLine,partWord);
 }
 
 bool JsModule::received(Message& msg, int id)
 {
     switch (id) {
+	case Help:
+	    {
+		const String* line = msg.getParam("line");
+		if (TelEngine::null(line)) {
+		    msg.retValue() << s_cmdsLine << "\r\n";
+		    return false;
+		}
+		if (name() != *line)
+		    return false;
+	    }
+	    msg.retValue() << s_cmdsLine << "\r\n";
+	    msg.retValue() << "Controls and executes Javascript commands\r\n";
+	    return true;
 	case Preroute:
 	case Route:
 	    {
@@ -1751,6 +1803,7 @@ void JsModule::initialize()
     Output("Initializing module Javascript");
     ChanAssistList::initialize();
     setup();
+    installRelay(Help);
     Configuration cfg(Engine::configFile("javascript"));
     String tmp = Engine::sharedPath();
     tmp << Engine::pathSeparator() << "scripts";

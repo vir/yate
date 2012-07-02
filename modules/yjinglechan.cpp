@@ -2426,7 +2426,7 @@ bool YJGConnection::startRtp()
     Message m("chan.rtp");
     m.userData(this);
     complete(m);
-    m.addParam("direction",rtpDir(*m_audioContent));
+    m.setParam("direction",rtpDir(*m_audioContent));
     m.addParam("media","audio");
     m.addParam("getsession","true");
     ObjList* obj = m_audioContent->m_rtpMedia.skipNull();
@@ -2797,7 +2797,7 @@ bool YJGConnection::initLocalCandidates(JGSessionContent& content, bool sendTran
     Message m("chan.rtp");
     m.userData(static_cast<CallEndpoint*>(this));
     complete(m);
-    m.addParam("direction",rtpDir(content));
+    m.setParam("direction",rtpDir(content));
     m.addParam("media","audio");
     m.addParam("getsession","true");
     m.addParam("anyssrc","true");

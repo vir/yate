@@ -435,7 +435,7 @@ bool LKSocket::fillSackParams(bool sackDelay, bool sackFreq, NamedList& result)
     bzero(&sassoc_value, sizeof(sassoc_value));
     length = sizeof(sassoc_value);
 
-    if (!getOption(IPPROTO_SCTP,SCTP_DELAYED_ACK_TIME, &sassoc_value, length)) {
+    if (!getOption(IPPROTO_SCTP,SCTP_DELAYED_ACK_TIME, &sassoc_value, &length)) {
 	Debug(&plugin,DebugNote,"Failed to get SCTP sack params! Reason: %s",
 	      strerror(errno));
 	return false;
@@ -445,12 +445,12 @@ bool LKSocket::fillSackParams(bool sackDelay, bool sackFreq, NamedList& result)
 	result.addParam("sack_delay",String(sassoc_value.assoc_value));
 
     if (sackFreq)
-	Debug(&plugin,DebugConf,"Unable to set sack_freq param! sack_info struct is missing!");
+	Debug(&plugin,DebugMild,"Unable to get sack_freq param! sack_info struct is missing!");
 #else // HAVE_SACK_INFO_STRUCT
-    Debug(&plugin,DebugConf,"SCTP delayed ack time is unavailable no struct present!!");
+    Debug(&plugin,DebugMild,"SCTP delayed ack time is unavailable no struct present!!");
 #endif
 #else // SCTP_DELAYED_ACK_TIME
-    Debug(&plugin,DebugConf,"SCTP delayed ack time is unavailable");
+    Debug(&plugin,DebugMild,"SCTP delayed ack time is unavailable");
 #endif
     return true;
 }

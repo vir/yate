@@ -3033,7 +3033,9 @@ bool SS7SCCP::fillPointCode(SS7PointCode& pointcode, SS7MsgSCCP* msg, const Stri
 	}
 	for (unsigned int i = 0;i < route->length();i++) {
 	    NamedString* val = route->getParam(i);
-	    msg->params().setParam(prefix + "." + val->name(),*val);
+    	    if (val && (val->name().startsWith("gt") || val->name() == YSTRING("pointcode") ||
+		    val->name() == YSTRING("ssn") || val->name() == YSTRING("route")))
+		msg->params().setParam(prefix + "." + val->name(),*val);
 	}
 	if (!havePC)
 	    msg->params().setParam(pCode,*trpc);
@@ -3894,7 +3896,8 @@ bool SS7SCCP::routeSCLCMessage(SS7MsgSCCP*& msg, const SS7Label& label)
 	msg->params().clearParam(YSTRING("CalledPartyAddress"),'.');
 	for (unsigned int i = 0;i < gtRoute->length();i++) {
 	    NamedString* val = gtRoute->getParam(i);
-	    if (val->name() != YSTRING("RemotePC"))
+    	    if (val && (val->name().startsWith("gt") || val->name() == YSTRING("pointcode") ||
+		    val->name() == YSTRING("ssn") || val->name() == YSTRING("route")))
 		msg->params().setParam("CalledPartyAddress." + val->name(),*val);
 	}
 	int pointcode = haveRemotePC ? gtRoute->getIntValue(YSTRING("RemotePC")) :

@@ -1,3 +1,24 @@
+yate (4.1.1~svn5175) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5175: + Copy the parameters in "copyparams"
+    to chan.hangup if the call failed to craete an outbound call leg.  +
+    Overwrite the "direction" parameter added in Rev. 5121 in "chan.rtp"
+    messages.  + Filter sccp address parameters returned by gt.route
+    message.  + Implemented line completion, info and status.  + Changed
+    name of Javascript rmanager command from "js" to "javascript".  +
+    Fixed the help lines of filetransfer to match all other modules.  +
+    Reduced debug level from CONF to MILD when SACK parameters cannot be
+    retrieved.  + Fixed compilation on systems where struct
+    sctp_sack_info is not available.  + Remember that we received early
+    media for MGCP even when using rtp_forward.  + This allows setting
+    parameters in chan.hangup and CDR for calls cancelled during
+    routing.  + Copy parameters to the disconnect list after prerouting.
+    + This allows properly rejecting calls from preroute stage.  + Do
+    not set context "-" or "error" from [contexts] in regexroute, return
+    message value instead.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 03 Jul 2012 02:19:13 +0400
+
 yate (4.1.1~svn5167) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5167: + This allows setting custom

@@ -4317,6 +4317,7 @@ void SS7TCAPTransactionITU::encodeComponents(NamedList& params, DataBlock& data)
 	    int compType = map->mappedTo;
 
 	    NamedString* value = 0;
+	    bool hasPayload = false;
 	    if (compType == Reject) {
 		value = params.getParam(compParam + "." + s_tcapProblemCode);
 		if (!TelEngine::null(value)) {
@@ -4340,6 +4341,7 @@ void SS7TCAPTransactionITU::encodeComponents(NamedList& params, DataBlock& data)
 		    DataBlock payload;
 		    payload.unHexify(payloadHex->c_str(),payloadHex->length(),' ');
 		    codedComp.insert(payload);
+		    hasPayload = true;
 		}
 	    }
 	    // encode  Error Code only if ReturnError
@@ -4395,9 +4397,11 @@ void SS7TCAPTransactionITU::encodeComponents(NamedList& params, DataBlock& data)
 		    }
 		}
 		else {
-		    Debug(tcap(),DebugWarn,"Missing mandatory 'operationCodeType' information for component with index='%d' from transaction "
+		    if (compType == Invoke || hasPayload) {
+			Debug(tcap(),DebugWarn,"Missing mandatory 'operationCodeType' information for component with index='%d' from transaction "
 			    "with localID=%s [%p]",index,m_localID.c_str(),this);
-		    continue;
+			continue;
+		    }
 		}
 	    }
 

@@ -22,4 +22,4 @@ if [ x`id -u` != x0 ]; then
 fi
 
 grep -q sctp "$modfile" || echo -e '\n# SCTP must be loaded early for sysctl\nsctp' >> "$modfile"
-grep -q 'SCTP tweaking' /etc/sysctl.conf || echo -e '\n# SCTP tweaking for SIGTRAN\nnet.sctp.rto_min=200\nnet.sctp.rto_initial=400\nnet.sctp.rto_max=800\nnet.sctp.hb_interval=5000' >> /etc/sysctl.conf
+grep -q 'SCTP tweaking' /etc/sysctl.conf || echo -e '\n# SCTP tweaking for SIGTRAN\nnet.sctp.rto_min=200\nnet.sctp.rto_initial=400\nnet.sctp.rto_max=400\nnet.sctp.hb_interval=5000' >> /etc/sysctl.conf

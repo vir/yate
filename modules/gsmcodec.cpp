@@ -92,6 +92,8 @@ unsigned long GsmCodec::Consume(const DataBlock& data, unsigned long tStamp, uns
     if (data.null() && (flags & DataSilent))
 	return getTransSource()->Forward(data,tStamp,flags);
     ref();
+    if (m_encoding && tStamp && !m_data.null())
+	tStamp -= (m_data.length() / 2);
     m_data += data;
     int frames,consumed;
     if (m_encoding) {

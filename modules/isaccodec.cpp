@@ -237,6 +237,8 @@ unsigned long iSACCodec::Consume(const DataBlock& data, unsigned long tStamp,
 	// Avoid copying data if our buffer is empty
 	const DataBlock* inDataBlock = &data;
 	if (m_buffer.length()) {
+	    if (tStamp)
+		tStamp -= (m_buffer.length() / 2);
 	    m_buffer += data;
 	    inDataBlock = &m_buffer;
 	}

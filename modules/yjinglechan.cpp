@@ -1170,9 +1170,11 @@ bool YJGConnection::callRouted(Message& msg)
     // Update formats
     const String& formats = msg[YSTRING("formats")];
     if (formats) {
+	m_mutex.lock();
 	m_audioFormats.filterMedia(formats);
 	for (ObjList* o = m_audioContents.skipNull(); o; o = o->skipNext())
 	    static_cast<JGSessionContent*>(o->get())->m_rtpMedia.filterMedia(formats);
+	m_mutex.unlock();
     }
     return Channel::callRouted(msg);
 }

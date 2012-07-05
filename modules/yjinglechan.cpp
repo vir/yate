@@ -1167,6 +1167,13 @@ bool YJGConnection::callRouted(Message& msg)
     DDebug(this,DebugCall,"callRouted [%p]",this);
     // Update ringing
     m_ringFlags = getRinging(msg,this,m_ringFlags);
+    // Update formats
+    const String& formats = msg[YSTRING("formats")];
+    if (formats) {
+	m_audioFormats.filterMedia(formats);
+	for (ObjList* o = m_audioContents.skipNull(); o; o = o->skipNext())
+	    static_cast<JGSessionContent*>(o->get())->m_rtpMedia.filterMedia(formats);
+    }
     return Channel::callRouted(msg);
 }
 

@@ -1129,8 +1129,18 @@ bool YJGConnection::route()
 	}
     }
     else {
+	JGRtpMediaList* mList = 0;
+	if (m_audioContent)
+	    mList = &m_audioContent->m_rtpMedia;
+	else {
+	    ObjList* o = m_audioContents.skipNull();
+	    if (o)
+		mList = &static_cast<JGSessionContent*>(o->get())->m_rtpMedia;
+	}
+	if (!mList)
+	    mList = &m_audioFormats;
 	String formats;
-	m_audioFormats.createList(formats,true);
+	mList->createList(formats,true);
 	m->addParam("formats",formats,false);
     }
     m_mutex.unlock();

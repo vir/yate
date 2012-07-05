@@ -111,6 +111,75 @@ OBJS :=  audio/common/resampler/resampler.o \
 	audio/coding_isac/main/pitch_lag_tables.o  \
 	audio/coding_isac/main/spectrum_ar_model_tables.o  \
 	audio/coding_isac/main/transform.o  \
+	audio/coding_ilbc/abs_quant.o \
+	audio/coding_ilbc/abs_quant_loop.o \
+	audio/coding_ilbc/augmented_cb_corr.o \
+	audio/coding_ilbc/bw_expand.o \
+	audio/coding_ilbc/cb_construct.o \
+	audio/coding_ilbc/cb_mem_energy_augmentation.o \
+	audio/coding_ilbc/cb_mem_energy.o \
+	audio/coding_ilbc/cb_mem_energy_calc.o \
+	audio/coding_ilbc/cb_search.o \
+	audio/coding_ilbc/cb_search_core.o \
+	audio/coding_ilbc/cb_update_best_index.o \
+	audio/coding_ilbc/chebyshev.o \
+	audio/coding_ilbc/comp_corr.o \
+	audio/coding_ilbc/constants.o \
+	audio/coding_ilbc/create_augmented_vec.o \
+	audio/coding_ilbc/decode.o \
+	audio/coding_ilbc/decode_residual.o \
+	audio/coding_ilbc/decoder_interpolate_lsf.o \
+	audio/coding_ilbc/do_plc.o \
+	audio/coding_ilbc/encode.o \
+	audio/coding_ilbc/energy_inverse.o \
+	audio/coding_ilbc/enhancer.o \
+	audio/coding_ilbc/enhancer_interface.o \
+	audio/coding_ilbc/enh_upsample.o \
+	audio/coding_ilbc/filtered_cb_vecs.o \
+	audio/coding_ilbc/frame_classify.o \
+	audio/coding_ilbc/gain_dequant.o \
+	audio/coding_ilbc/gain_quant.o \
+	audio/coding_ilbc/get_cd_vec.o \
+	audio/coding_ilbc/get_lsp_poly.o \
+	audio/coding_ilbc/get_sync_seq.o \
+	audio/coding_ilbc/hp_input.o \
+	audio/coding_ilbc/hp_output.o \
+	audio/coding_ilbc/ilbc.o \
+	audio/coding_ilbc/index_conv_dec.o \
+	audio/coding_ilbc/index_conv_enc.o \
+	audio/coding_ilbc/init_decode.o \
+	audio/coding_ilbc/init_encode.o \
+	audio/coding_ilbc/interpolate.o \
+	audio/coding_ilbc/interpolate_samples.o \
+	audio/coding_ilbc/lpc_encode.o \
+	audio/coding_ilbc/lsf_check.o \
+	audio/coding_ilbc/lsf_interpolate_to_poly_dec.o \
+	audio/coding_ilbc/lsf_interpolate_to_poly_enc.o \
+	audio/coding_ilbc/lsf_to_lsp.o \
+	audio/coding_ilbc/lsf_to_poly.o \
+	audio/coding_ilbc/lsp_to_lsf.o \
+	audio/coding_ilbc/my_corr.o \
+	audio/coding_ilbc/nearest_neighbor.o \
+	audio/coding_ilbc/pack_bits.o \
+	audio/coding_ilbc/poly_to_lsf.o \
+	audio/coding_ilbc/poly_to_lsp.o \
+	audio/coding_ilbc/refiner.o \
+	audio/coding_ilbc/simple_interpolate_lsf.o \
+	audio/coding_ilbc/simple_lpc_analysis.o \
+	audio/coding_ilbc/simple_lsf_dequant.o \
+	audio/coding_ilbc/simple_lsf_quant.o \
+	audio/coding_ilbc/smooth.o \
+	audio/coding_ilbc/smooth_out_data.o \
+	audio/coding_ilbc/sort_sq.o \
+	audio/coding_ilbc/split_vq.o \
+	audio/coding_ilbc/state_construct.o \
+	audio/coding_ilbc/state_search.o \
+	audio/coding_ilbc/swap_bytes.o \
+	audio/coding_ilbc/unpack_bits.o \
+	audio/coding_ilbc/vq3.o \
+	audio/coding_ilbc/vq4.o \
+	audio/coding_ilbc/window32_w32.o \
+	audio/coding_ilbc/xcorr_coef.o \
 	audio/processing/audio_buffer.o  \
 	audio/processing/audio_processing_impl.o  \
 	audio/processing/echo_cancellation_impl.o  \

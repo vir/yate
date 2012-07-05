@@ -151,6 +151,10 @@ ifneq (@HAVE_ILBC@,no)
 PROGS := $(PROGS) ilbccodec.yate
 endif
 
+ifneq (@HAVE_ILBCWR@,no)
+PROGS := $(PROGS) ilbcwebrtc.yate
+endif
+
 ifneq (@HAVE_ISAC@,no)
 PROGS := $(PROGS) isaccodec.yate
 endif
@@ -343,6 +347,10 @@ server/lksctp.yate: EXTERNLIBS = -lsctp
 ilbccodec.yate: ../libs/ilbc/libilbc.a
 ilbccodec.yate: LOCALFLAGS = @ILBC_INC@
 ilbccodec.yate: LOCALLIBS = -L../libs/ilbc -lilbc
+
+ilbcwebrtc.yate: ../libs/miniwebrtc/libminiwebrtc.a
+ilbcwebrtc.yate: LOCALFLAGS = @ILBCWR_INC@ -I@top_srcdir@/libs/miniwebrtc/audio/common/processing -I@top_srcdir@/libs/miniwebrtc
+ilbcwebrtc.yate: LOCALLIBS = -L../libs/miniwebrtc -lminiwebrtc
 
 isaccodec.yate: ../libs/miniwebrtc/libminiwebrtc.a
 isaccodec.yate: LOCALFLAGS = @ISAC_INC@ -I@top_srcdir@/libs/miniwebrtc/audio/common/processing -I@top_srcdir@/libs/miniwebrtc

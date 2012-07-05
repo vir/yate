@@ -203,7 +203,7 @@ iLBCPlugin::iLBCPlugin()
     : Plugin("ilbccodec"),
       m_ilbc20(0), m_ilbc30(0)
 {
-    Output("Loaded module iLBC - based on iLBC library");
+    Output("Loaded module iLBC - based on iLBC reference library");
     const FormatInfo* f = FormatRepository::addFormat("ilbc20",NO_OF_BYTES_20MS,20000);
     s_caps20[0].src = s_caps20[1].dest = f;
     s_caps20[0].dest = s_caps20[1].src = FormatRepository::getFormat("slin");

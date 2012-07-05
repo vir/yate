@@ -428,6 +428,21 @@ void JGRtpMediaList::setMedia(const JGRtpMediaList& src, const String& only)
     TelEngine::destruct(f);
 }
 
+// Filter media list, remove unwanted types
+void JGRtpMediaList::filterMedia(const String& only)
+{
+    if (only.null())
+	return;
+    ObjList* f = only.split(',',false);
+    ListIterator iter(*this);
+    while (JGRtpMedia* media = static_cast<JGRtpMedia*>(iter.get())) {
+	const String& name = media->m_synonym.null() ? media->m_name : media->m_synonym;
+	if (!(f->find(name)))
+	    remove(media);
+    }
+    TelEngine::destruct(f);
+}
+
 // Find a data payload by its id
 JGRtpMedia* JGRtpMediaList::findMedia(const String& id)
 {

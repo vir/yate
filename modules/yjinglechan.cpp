@@ -1129,8 +1129,18 @@ bool YJGConnection::route()
 	}
     }
     else {
+	JGRtpMediaList* mList = 0;
+	if (m_audioContent)
+	    mList = &m_audioContent->m_rtpMedia;
+	else {
+	    ObjList* o = m_audioContents.skipNull();
+	    if (o)
+		mList = &static_cast<JGSessionContent*>(o->get())->m_rtpMedia;
+	}
+	if (!mList)
+	    mList = &m_audioFormats;
 	String formats;
-	m_audioFormats.createList(formats,true);
+	mList->createList(formats,true);
 	m->addParam("formats",formats,false);
     }
     m_mutex.unlock();
@@ -1167,6 +1177,15 @@ bool YJGConnection::callRouted(Message& msg)
     DDebug(this,DebugCall,"callRouted [%p]",this);
     // Update ringing
     m_ringFlags = getRinging(msg,this,m_ringFlags);
+    // Update formats
+    const String& formats = msg[YSTRING("formats")];
+    if (formats) {
+	m_mutex.lock();
+	m_audioFormats.filterMedia(formats);
+	for (ObjList* o = m_audioContents.skipNull(); o; o = o->skipNext())
+	    static_cast<JGSessionContent*>(o->get())->m_rtpMedia.filterMedia(formats);
+	m_mutex.unlock();
+    }
     return Channel::callRouted(msg);
 }
 

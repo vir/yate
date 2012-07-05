@@ -308,6 +308,12 @@ public:
     void setMedia(const JGRtpMediaList& src, const String& only = String::empty());
 
     /**
+     * Filter media list preserving only some formats
+     * @param only List of synonyms to preserve, do not filter media if this parameter is empty
+     */
+    void filterMedia(const String& only);
+
+    /**
      * Find a data payload by its id
      * @param id Identifier of media to find
      * @return JGRtpMedia pointer or 0 if not found

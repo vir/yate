@@ -852,7 +852,7 @@ HAVE_ILBC=no
 ILBC_INC=""
 AC_ARG_ENABLE(ilbc,AC_HELP_STRING([--enable-ilbc],[Enable iLBC codec (default: yes)]),want_ilbc=$enableval,want_ilbc=yes)
 if [[ "x$want_ilbc" = "xyes" ]]; then
-AC_MSG_CHECKING([for iLBC in libs])
+AC_MSG_CHECKING([for iLBC reference in libs])
 	basedir=`cd "$srcdir" && pwd`
 	incilbc="libs/ilbc"
         if [[ -f "$basedir/$incilbc/iLBC_encode.h" ]]; then
@@ -865,11 +865,28 @@ fi
 AC_SUBST(HAVE_ILBC)
 AC_SUBST(ILBC_INC)
 
+HAVE_IILBCWR=no
+ILBCWR_INC=""
+AC_ARG_ENABLE(ilbc-webrtc,AC_HELP_STRING([--enable-ilbc-webrtc],[Enable iLBC webrtc codec (default: yes)]),want_ilbc_webrtc=$enableval,want_ilbc_webrtc=yes)
+if [[ "x$want_ilbc_webrtc" = "xyes" ]]; then
+AC_MSG_CHECKING([for iLBC miniwebrtc in libs])
+	basedir=`cd "$srcdir" && pwd`
+	incilbc="libs/miniwebrtc/audio/coding_ilbc"
+        if [[ -f "$basedir/$incilbc/ilbc.h" ]]; then
+		HAVE_ILBCWR=yes
+		basedir=`echo "$basedir" | sed 's/\([[^\]]\)\([[[:space:]\$\"'\'']]\)/\1\\\2/g'`
+		ILBCWR_INC="-I$basedir/$incilbc"
+	fi
+AC_MSG_RESULT([$HAVE_ILBCWR])
+fi
+AC_SUBST(HAVE_ILBCWR)
+AC_SUBST(ILBCWR_INC)
+
 HAVE_ISAC=no
 ISAC_INC=""
 AC_ARG_ENABLE(isac-float,AC_HELP_STRING([--enable-isac-float],[Enable iSAC float codec (default: yes)]),want_isac=$enableval,want_isac=yes)
 if [[ "x$want_isac" = "xyes" ]]; then
-AC_MSG_CHECKING([for iSAC in libs])
+AC_MSG_CHECKING([for iSAC float in libs])
 	basedir=`cd "$srcdir" && pwd`
 	incisac="libs/miniwebrtc/audio/coding_isac/main"
         if [[ -f "$basedir/$incisac/isac.h" ]]; then

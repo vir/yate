@@ -1,3 +1,14 @@
+yate (4.1.1~svn5187) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5187: + Bug fix: moved the verifying of a
+    pointer that was causing the dropping of L_CANCEL component
+    messages.  + Fixed iSAC encoding timestamps.  + Fixed the timestamp
+    adjusting condition.  + Fixed timestamps when playing files with
+    rate not 8kHz.  + Linear interpolate audio data when upsampling to
+    reduce artifacts.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 07 Jul 2012 02:19:13 +0400
+
 yate (4.1.1~svn5182) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5182: + Added iLBC codec based on the WebRTC

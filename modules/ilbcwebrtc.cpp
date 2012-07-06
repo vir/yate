@@ -189,7 +189,7 @@ unsigned long iLBCwrCodec::Consume(const DataBlock& data, unsigned long tStamp, 
 	block = BLOCKL_30MS;
 	no_bytes = NO_OF_BYTES_30MS;
     }
-    if (m_encoding && tStamp && !m_data.null())
+    if (m_encoding && (tStamp != invalidStamp()) && !m_data.null())
 	tStamp -= (m_data.length() / 2);
     m_data += data;
     // WebRTC will modify in-place the input data block!!!

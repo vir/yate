@@ -1,3 +1,10 @@
+yate (4.1.1~vir2012070601) UNRELEASED; urgency=low
+
+  * Merged upstream changes: bugfixes, webrtc-based iLBC codec.
+  * Trying to fix building on unstable (without libopenh323)
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Fri, 06 Jul 2012 14:57:01 +0400
+
 yate (4.1.1~vir2012062601) UNRELEASED; urgency=low
 
   * Merged upstream changes: Javascript improvements, various bugfixes

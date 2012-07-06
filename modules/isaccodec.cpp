@@ -234,16 +234,19 @@ unsigned long iSACCodec::Consume(const DataBlock& data, unsigned long tStamp,
 	// More than one iSAC payload block MUST NOT be included in an RTP packet by a sender
 	// Forward data when encoded, don't accumulate the encoder output
 
+	if (tStamp == invalidStamp())
+	    tStamp = 0;
+	tStamp -= m_tStamp;
 	// Avoid copying data if our buffer is empty
 	const DataBlock* inDataBlock = &data;
 	if (m_buffer.length()) {
-	    if (tStamp)
-		tStamp -= (m_buffer.length() / 2);
+	    tStamp -= (m_buffer.length() / 2);
 	    m_buffer += data;
 	    inDataBlock = &m_buffer;
 	}
 	const unsigned char* ptr = (const unsigned char*)inDataBlock->data();
 	unsigned int remaining = inDataBlock->length();
+	unsigned int tsChunk = m_encodeChunk / 2;
 	while (remaining >= m_encodeChunk) {
 	    // Encode returns the number of bytes set in output buffer
 #ifdef ISAC_FIXED
@@ -251,24 +254,14 @@ unsigned long iSACCodec::Consume(const DataBlock& data, unsigned long tStamp,
 #else
 	    res = WebRtcIsac_Encode(m_isac,(const WebRtc_Word16*)ptr,out);
 #endif
-	    if (res > 0) {
-		if (m_tStamp) {
-		    WebRtc_Word16 frameLengthSamples = 0;
-		    WebRtc_Word16 r = 0;
-#ifdef ISAC_FIXED
-		    r = WebRtcIsacfix_ReadFrameLen(out,&frameLengthSamples);
-#else
-		    r = WebRtcIsac_ReadFrameLen(m_isac,out,&frameLengthSamples);
-#endif
-		    if (r == 0)
-			m_tStamp += frameLengthSamples;
-		}
-		else
-		    m_tStamp = tStamp;
-	    }
 	    remaining -= m_encodeChunk;
 	    ptr += m_encodeChunk;
-	    unsigned long l = processCodecResult(res,m_encodeChunk,m_tStamp,flags);
+	    m_tStamp += tsChunk;
+	    unsigned long l = processCodecResult(res,m_encodeChunk,tStamp,flags);
+	    if (res > 0) {
+		tStamp += m_tStamp;
+		m_tStamp = 0;
+	    }
 	    if (!len)
 		len = l;
 	    else if (len != invalidStamp() && l != invalidStamp())

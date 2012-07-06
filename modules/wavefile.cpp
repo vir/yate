@@ -51,6 +51,7 @@ private:
     Stream* m_stream;
     DataBlock m_data;
     bool m_swap;
+    unsigned m_rate;
     unsigned m_brate;
     long m_repeatPos;
     unsigned m_total;
@@ -196,6 +197,7 @@ void WaveSource::init(const String& file, bool autorepeat)
     if (!m_stream) {
 	if (file == "-") {
 	    m_nodata = true;
+	    m_rate = 8000;
 	    m_brate = 8000;
 	    start("Wave Source");
 	    return;
@@ -249,7 +251,7 @@ void WaveSource::init(const String& file, bool autorepeat)
 }
 
 WaveSource::WaveSource(const char* file, CallEndpoint* chan, bool autoclose)
-    : m_chan(chan), m_stream(0), m_swap(false), m_brate(0), m_repeatPos(-1),
+    : m_chan(chan), m_stream(0), m_swap(false), m_rate(8000), m_brate(0), m_repeatPos(-1),
       m_total(0), m_time(0), m_autoclose(autoclose),
       m_nodata(false)
 {
@@ -289,6 +291,7 @@ void WaveSource::detectAuFormat()
     m_stream->seek(ntohl(header.offs));
     int samp = ntohl(header.freq);
     int chan = ntohl(header.chan);
+    m_rate = samp;
     m_brate = samp;
     switch (ntohl(header.form)) {
 	case 1:
@@ -341,6 +344,7 @@ bool WaveSource::computeDataRate()
     const FormatInfo* info = m_format.getInfo();
     if (!info)
 	return false;
+    m_rate = info->sampleRate;
     m_brate = info->dataRate();
     return (m_brate != 0);
 }
@@ -419,7 +423,7 @@ void WaveSource::run()
 	if (!looping(noChan))
 	    break;
 	Forward(m_data,ts);
-	ts += m_data.length()*8000/m_brate;
+	ts += m_data.length()*m_rate/m_brate;
 	m_total += r;
 	tpos += (r*(u_int64_t)1000000/m_brate);
     }

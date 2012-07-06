@@ -179,7 +179,7 @@ unsigned long SpeexCodec::Consume(const DataBlock& data, unsigned long tStamp, u
     if (!ref())
 	return 0;
 
-    if (m_encoding && tStamp && !m_data.null())
+    if (m_encoding && (tStamp != invalidStamp()) && !m_data.null())
 	tStamp -= (m_data.length() / 2);
     m_data += data;
     DataBlock outdata;

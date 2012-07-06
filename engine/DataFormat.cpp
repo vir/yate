@@ -189,10 +189,11 @@ class ResampTranslator : public DataTranslator
 {
 private:
     int m_sRate, m_dRate;
+    short m_last;
 public:
     ResampTranslator(const DataFormat& sFormat, const DataFormat& dFormat)
 	: DataTranslator(sFormat,dFormat),
-	m_sRate(sFormat.sampleRate()), m_dRate(dFormat.sampleRate())
+	m_sRate(sFormat.sampleRate()), m_dRate(dFormat.sampleRate()), m_last(0)
 	{ }
     virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 	{
@@ -208,15 +209,15 @@ public:
 		DataBlock oblock;
 		if (m_dRate > m_sRate) {
 		    int mul = m_dRate / m_sRate;
-		    // repeat the sample an integer number of times
+		    // linear interpolation between existing samples
 		    delta *= mul;
 		    oblock.assign(0,2*n*mul);
 		    short* d = (short*) oblock.data();
 		    while (n--) {
-			// TODO: smooth the data a little
 			short v = *s++;
-			for (int i = 0; i < mul; i++)
-			    *d++ = v;
+			for (int i = 1; i <= mul; i++)
+			    *d++ = ((m_last * (mul - i)) + (v * i)) / mul;
+			m_last = v;
 		    }
 		}
 		else {
@@ -227,7 +228,6 @@ public:
 		    oblock.assign(0,2*n);
 		    short* d = (short*) oblock.data();
 		    while (n--) {
-			// TODO: interpolate
 			int v = 0;
 			for (int i = 0; i < div; i++)
 			    v += *s++;

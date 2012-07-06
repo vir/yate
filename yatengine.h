@@ -213,6 +213,75 @@ private:
     ObjList m_sections;
 };
 
+/**
+ * Class that implements atomic / locked access and operations to its shared variables
+ * @short Atomic access and operations to shared variables
+ */
+class YATE_API SharedVars : public Mutex
+{
+public:
+    /**
+     * Constructor
+     */
+    inline SharedVars()
+	: Mutex(false,"SharedVars"), m_vars("")
+	{ }
+
+    /**
+     * Get the string value of a variable
+     * @param name Name of the variable
+     * @param rval String to return the value into
+     */
+    void get(const String& name, String& rval);
+
+    /**
+     * Set the string value of a variable
+     * @param name Name of the variable to set
+     * @param val New value to assign to a variable
+     */
+    void set(const String& name, const char* val);
+
+    /**
+     * Create and set a variable only if the variable is not already set
+     * @param name Name of the variable to set
+     * @param val New value to assign to a variable
+     * @return True if a new variable was created
+     */
+    bool create(const String& name, const char* val = 0);
+
+    /**
+     * Clear a variable
+     * @param name Name of the variable to clear
+     */
+    void clear(const String& name);
+
+    /**
+     * Check if a variable exists
+     * @param name Name of the variable
+     * @return True if the variable exists
+     */
+    bool exists(const String& name);
+
+    /**
+     * Atomically increment a variable as unsigned integer
+     * @param name Name of the variable
+     * @param wrap Value to wrap around at, zero disables
+     * @return Value of the variable before increment, zero if it was not defined or not numeric
+     */
+    unsigned int inc(const String& name, unsigned int wrap = 0);
+
+    /**
+     * Atomically decrement a variable as unsigned integer
+     * @param name Name of the variable
+     * @param wrap Value to wrap around at, zero disables (stucks at zero)
+     * @return Value of the variable after decrement, zero if it was not defined or not numeric
+     */
+    unsigned int dec(const String& name, unsigned int wrap = 0);
+
+private:
+    NamedList m_vars;
+};
+
 class MessageDispatcher;
 class MessageRelay;
 class Engine;
@@ -1211,6 +1280,12 @@ public:
      * @param type Type of captured events, an empty name clear engine events
      */
     static void clearEvents(const String& type);
+
+    /**
+     * Access the engine's shared variables
+     * @return Reference to the static variables shared between modules
+     */
+    static SharedVars& sharedVars();
 
 protected:
     /**

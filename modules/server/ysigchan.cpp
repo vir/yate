@@ -1301,7 +1301,10 @@ bool SigChannel::msgProgress(Message& msg)
     setState("progressing");
     if (!m_call)
 	return true;
-    bool media = msg.getBoolValue("earlymedia",getPeer() && getPeer()->getSource());
+    bool media = getPeer() && getPeer()->getSource();
+    media = media || (m_rtpForward && msg.getBoolValue("rtp_forward",true)
+	&& msg.getBoolValue("media"));
+    media = msg.getBoolValue("earlymedia",media);
     const char* format = msg.getValue("format");
     SignallingMessage* sm = new SignallingMessage;
     if (media && updateConsumer(format,false) && format)
@@ -1326,7 +1329,10 @@ bool SigChannel::msgRinging(Message& msg)
     setState("ringing");
     if (!m_call)
 	return true;
-    bool media = msg.getBoolValue("earlymedia",getPeer() && getPeer()->getSource());
+    bool media = getPeer() && getPeer()->getSource();
+    media = media || (m_rtpForward && msg.getBoolValue("rtp_forward",true)
+	&& msg.getBoolValue("media"));
+    media = msg.getBoolValue("earlymedia",media);
     const char* format = msg.getValue("format");
     SignallingMessage* sm = new SignallingMessage;
     if (media && updateConsumer(format,false) && format)

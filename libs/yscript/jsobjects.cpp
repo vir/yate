@@ -196,6 +196,13 @@ JsObject::~JsObject()
     XDebug(DebugAll,"JsObject::~JsObject '%s' [%p]",toString().c_str(),this);
 }
 
+JsObject* JsObject::copy(Mutex* mtx) const
+{
+    JsObject* jso = new JsObject(mtx,toString(),frozen());
+    deepCopyParams(jso->params(),params(),mtx);
+    return jso;
+}
+
 void JsObject::dumpRecursive(const GenObject* obj, String& buf)
 {
     ObjList seen;
@@ -209,10 +216,10 @@ void JsObject::printRecursive(const GenObject* obj)
     Output("%s",buf.c_str());
 }
 
-JsObject* JsObject::buildCallContext(Mutex* mtx, ExpOperation* thisObj)
+JsObject* JsObject::buildCallContext(Mutex* mtx, JsObject* thisObj)
 {
     JsObject* ctxt = new JsObject(mtx,"()");
-    if (thisObj)
+    if (thisObj && thisObj->alive())
 	ctxt->params().addParam(new ExpWrapper(thisObj,"this"));
     return ctxt;
 }
@@ -402,6 +409,19 @@ int JsObject::extractArgs(JsObject* obj, ObjList& stack, const ExpOperation& ope
     return oper.number();
 }
 
+// Static helper method that deep copies all parameters
+void JsObject::deepCopyParams(NamedList& dst, const NamedList& src, Mutex* mtx)
+{
+    NamedIterator iter(src);
+    while (const NamedString* p = iter.get()) {
+	ExpOperation* oper = YOBJECT(ExpOperation,p);
+	if (oper)
+	    dst.addParam(oper->copy(mtx));
+	else
+	    dst.addParam(p->name(),*p);
+    }
+}
+
 // Initialize standard globals in the execution context
 void JsObject::initialize(ScriptContext* context)
 {
@@ -450,6 +470,14 @@ JsArray::JsArray(Mutex* mtx)
     params().addParam(new ExpFunction("splice"));
     params().addParam(new ExpFunction("sort"));
     params().addParam("length","0");
+}
+
+JsObject* JsArray::copy(Mutex* mtx) const
+{
+    JsArray* jsa = new JsArray(mtx,toString(),frozen());
+    deepCopyParams(jsa->params(),params(),mtx);
+    jsa->setLength(length());
+    return jsa;
 }
 
 void JsArray::push(ExpOperation* item)

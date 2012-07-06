@@ -414,7 +414,7 @@ bool IAXEngine::processTrunkFrames(u_int32_t time)
 {
     Lock lock(&m_mutexTrunk);
     bool sent = false;
-    for (ObjList* l = m_trunkList.skipNull(); l; l = l->next()) {
+    for (ObjList* l = m_trunkList.skipNull(); l; l = l->skipNext()) {
 	IAXMetaTrunkFrame* frame = static_cast<IAXMetaTrunkFrame*>(l->get());
 	// Frame has mini frame(s) ?
 	if (!frame->timestamp())

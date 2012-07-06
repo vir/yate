@@ -134,6 +134,8 @@ unsigned long iLBCCodec::Consume(const DataBlock& data, unsigned long tStamp, un
 	block = BLOCKL_30MS;
 	no_bytes=NO_OF_BYTES_30MS;
     }
+    if (m_encoding && tStamp && !m_data.null())
+	tStamp -= (m_data.length() / 2);
     m_data += data;
     int frames,consumed;
     if (m_encoding) {
@@ -201,7 +203,7 @@ iLBCPlugin::iLBCPlugin()
     : Plugin("ilbccodec"),
       m_ilbc20(0), m_ilbc30(0)
 {
-    Output("Loaded module iLBC - based on iLBC library");
+    Output("Loaded module iLBC - based on iLBC reference library");
     const FormatInfo* f = FormatRepository::addFormat("ilbc20",NO_OF_BYTES_20MS,20000);
     s_caps20[0].src = s_caps20[1].dest = f;
     s_caps20[0].dest = s_caps20[1].src = FormatRepository::getFormat("slin");

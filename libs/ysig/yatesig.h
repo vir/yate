@@ -4336,6 +4336,15 @@ public:
     virtual void reconnect(bool force = false)
 	{ }
 
+    /**
+     * Get sctp socket parameters.
+     * @param params List of parameters to obtain
+     * @param result List of parameters to fill
+     * @return True if operation was successful, false if an error occurred
+     */
+    virtual bool getSocketParams(const String& params, NamedList& result)
+	{ return false; }
+
 protected:
     /**
      * Constructor
@@ -4572,6 +4581,13 @@ public:
      */
     bool restart(bool force);
 
+    /**
+     * Get sctp socket parameters.
+     * @param params List of parameters to obtain
+     * @param result List of parameters to fill
+     * @return True if operation was successful, false if an error occurred
+     */
+    bool getSocketParams(const String& params, NamedList& result);
 protected:
     /**
      * Process a complete message
@@ -8108,6 +8124,9 @@ public:
 	ForwardGVNS                    = 0x4c,
 	BackwardGVNS                   = 0x4d,
 	RedirectCapability             = 0x4e, // National use
+	CalledINNumber                 = 0x6f,
+	UID_ActionIndicators           = 0x74,
+	UID_CapabilityIndicators       = 0x75,
 	RedirectCounter                = 0x77, // National use
 	ApplicationTransport           = 0x78,
 	CCNRpossibleIndicator          = 0x7a,

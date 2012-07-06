@@ -286,7 +286,7 @@ static const char* s_cmds[] = {
     0
 };
 // Command line
-static const char* s_cmdsLine = "filetransfer {{send|receive} filename [callto:]target [[paramname=value]...]}";
+static const char* s_cmdsLine = "  filetransfer {{send|receive} filename [callto:]target [[paramname=value]...]}";
 
 
 UNLOAD_PLUGIN(unloadNow)
@@ -1041,13 +1041,13 @@ bool FileDriver::received(Message& msg, int id)
     if (id == Help) {
 	String line = msg.getValue("line");
 	if (line.null()) {
-	    msg.retValue() << "  " << s_cmdsLine << "\r\n";
+	    msg.retValue() << s_cmdsLine << "\r\n";
 	    return false;
 	}
 	if (line != name())
 	    return false;
-	msg.retValue() << "Commands used to control the File Transfer module\r\n";
 	msg.retValue() << s_cmdsLine << "\r\n";
+	msg.retValue() << "Commands used to control the File Transfer module\r\n";
 	return true;
     }
     if (id == Status) {

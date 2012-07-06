@@ -195,6 +195,8 @@ public:
 	OpcFunc,    // (... funcN --- func(...))
 	// Label for a jump
 	OpcLabel,   // ( --- )
+	// Push with deep copy
+	OpcCopy,    // ( --- CopiedA)
 	// Field assignment - can be ORed with other binary operators
 	OpcAssign  = 0x0100, // (A B --- B,(&A=B))
 	// Private extension area for derived classes
@@ -972,10 +974,18 @@ public:
 
     /**
      * Clone method
-     * @return New operation instance
+     * @return New operation instance, may keep a reference to the old instance
      */
     inline ExpOperation* clone() const
 	{ return clone(name()); }
+
+    /**
+     * Deep copy method
+     * @param mtx Pointer to the mutex that serializes the copied object
+     * @return New operation instance
+     */
+    virtual ExpOperation* copy(Mutex* mtx) const
+	{ return clone(); }
 
 private:
     ExpEvaluator::Opcode m_opcode;
@@ -1029,6 +1039,16 @@ public:
 	{ }
 
     /**
+     * Constructor with special operation
+     * @param opcode Operation code of the wrapper
+     * @param object Pointer to the object to wrap
+     */
+    inline ExpWrapper(ExpEvaluator::Opcode opcode, GenObject* object)
+	: ExpOperation(opcode,0,object ? object->toString().c_str() : (const char*)0,false),
+	  m_object(object)
+	{ }
+
+    /**
      * Destructor, deletes the held object
      */
     virtual ~ExpWrapper()
@@ -1047,6 +1067,13 @@ public:
      * @return New operation instance
      */
     virtual ExpOperation* clone(const char* name) const;
+
+    /**
+     * Deep copy method
+     * @param mtx Pointer to the mutex that serializes the copied object
+     * @return New operation instance
+     */
+    virtual ExpOperation* copy(Mutex* mtx) const;
 
     /**
      * Object access method
@@ -1672,6 +1699,13 @@ public:
 	{ return clone(toString()); }
 
     /**
+     * Deep copy method
+     * @param mtx Pointer to the mutex that serializes the copied object
+     * @return New object instance, does not keep references to old object
+     */
+    virtual JsObject* copy(Mutex* mtx) const;
+
+    /**
      * Fill a list with the unique names of all fields
      * @param names List to which key names must be added
      */
@@ -1805,7 +1839,7 @@ public:
      * @param thisObj Optional object that will be set as "this"
      * @return New empty object usable as call context
      */
-    static JsObject* buildCallContext(Mutex* mtx, ExpOperation* thisObj = 0);
+    static JsObject* buildCallContext(Mutex* mtx, JsObject* thisObj = 0);
 
     /**
      * Initialize the standard global objects in a context
@@ -1819,6 +1853,14 @@ public:
      */
     inline static const String& protoName()
 	{ return s_protoName; }
+
+    /**
+     * Static helper method that deep copies all parameters
+     * @param dst Destination parameters
+     * @param src Source parameters
+     * @param mtx Mutex to be used to synchronize all new objects
+     */
+    static void deepCopyParams(NamedList& dst, const NamedList& src, Mutex* mtx);
 
     /**
      * Helper method to return the hierarchical structure of an object
@@ -1915,6 +1957,13 @@ public:
     inline long int label() const
 	{ return m_label; }
 
+    /**
+     * Deep copy method
+     * @param mtx Pointer to the mutex that serializes the copied array
+     * @return New object instance, does not keep references to old array
+     */
+    virtual JsObject* copy(Mutex* mtx) const;
+
 protected:
     /**
      * Try to evaluate a single native method
@@ -1951,7 +2000,7 @@ public:
      * Retrieve the length of the array
      * @return Number of numerically indexed objects in array
      */
-    inline long length() 
+    inline long length() const
 	{ return m_length; }
 
     /**
@@ -1959,6 +2008,13 @@ public:
      * @param item Item to add to array
      */
     void push(ExpOperation* item);
+
+    /**
+     * Deep copy method
+     * @param mtx Pointer to the mutex that serializes the copied array
+     * @return New object instance, does not keep references to old array
+     */
+    virtual JsObject* copy(Mutex* mtx) const;
 
 protected:
     /*
@@ -2156,9 +2212,10 @@ public:
 
     /**
      * Get a "null" object wrapper that will identity match another "null"
+     * @param name Name of the new wrapper, "null" if empty
      * @return ExpWrapper for the "null" object
      */
-    static ExpOperation* nullClone();
+    static ExpOperation* nullClone(const char* name = 0);
 
     /**
      * Check if an operation holds a null value

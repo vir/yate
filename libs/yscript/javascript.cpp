@@ -187,7 +187,7 @@ private:
 	JsFunction* func, bool constr) const;
     bool callFunction(ObjList& stack, const ExpOperation& oper, GenObject* context,
 	long int retIndex, JsFunction* func, ObjList& args,
-	ExpOperation* thisObj, ExpOperation* scopeObj) const;
+	JsObject* thisObj, JsObject* scopeObj) const;
     inline JsFunction* getGlobalFunction(const String& name) const
 	{ return YOBJECT(JsFunction,m_globals[name]); }
     long int m_label;
@@ -1472,7 +1472,7 @@ bool JsCode::getSimple(const char*& expr, bool constOnly)
 	jso = parseObject(expr,constOnly);
     if (!jso)
 	return ExpEvaluator::getSimple(expr,constOnly);
-    addOpcode(new ExpWrapper(jso));
+    addOpcode(new ExpWrapper(ExpEvaluator::OpcCopy,jso));
     return true;
 }
 
@@ -1679,6 +1679,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		    return gotError("Stack underflow",oper.lineNumber());
 		switch (op->opcode()) {
 		    case OpcPush:
+		    case OpcCopy:
 			{
 			    const char* txt = "string";
 			    ExpWrapper* w = YOBJECT(ExpWrapper,op);
@@ -1884,6 +1885,7 @@ bool JsCode::runOperation(ObjList& stack, const ExpOperation& oper, GenObject* c
 		    expr = 0;
 		}
 		TelEngine::destruct(cons);
+		TelEngine::destruct(expr);
 		pushOne(stack,new ExpOperation(eq));
 	    }
 	    break;
@@ -2040,7 +2042,7 @@ bool JsCode::jumpAbsolute(long int index, GenObject* context) const
 	    runner->m_index = m_linked.length();
 	    return true;
 	}
-	if (index > m_linked.length())
+	if (index > (long int)m_linked.length())
 	    return false;
 	runner->m_index = index;
     }
@@ -2090,7 +2092,11 @@ bool JsCode::callFunction(ObjList& stack, const ExpOperation& oper, GenObject* c
 	Debug(this,DebugWarn,"Oops! Could not find return point!");
 	return false;
     }
-    ExpOperation* thisObj = constr ? popOne(stack) : 0;
+    ExpOperation* op = constr ? popOne(stack) : 0;
+    JsObject* thisObj = YOBJECT(JsObject,op);
+    if (thisObj && !thisObj->ref())
+	thisObj = 0;
+    TelEngine::destruct(op);
     ObjList args;
     JsObject::extractArgs(func,stack,oper,context,args);
     return callFunction(stack,oper,context,index,func,args,thisObj,0);
@@ -2098,11 +2104,11 @@ bool JsCode::callFunction(ObjList& stack, const ExpOperation& oper, GenObject* c
 
 bool JsCode::callFunction(ObjList& stack, const ExpOperation& oper, GenObject* context,
 	long int retIndex, JsFunction* func, ObjList& args,
-	ExpOperation* thisObj, ExpOperation* scopeObj) const
+	JsObject* thisObj, JsObject* scopeObj) const
 {
     pushOne(stack,new ExpOperation(OpcFunc,0,retIndex,true));
     if (scopeObj)
-	pushOne(stack,new ExpWrapper(scopeObj,scopeObj->name()));
+	pushOne(stack,new ExpWrapper(scopeObj,"()"));
     JsObject* ctxt = JsObject::buildCallContext(func->mutex(),thisObj);
     for (unsigned int idx = 0; ; idx++) {
 	const String* name = func->formalName(idx);
@@ -2188,10 +2194,18 @@ ScriptRun::Status JsRunner::call(const String& name, ObjList& args,
 	TelEngine::destruct(scopeObj);
 	return Failed;
     }
+    JsObject* jsThis = YOBJECT(JsObject,thisObj);
+    if (jsThis && !jsThis->ref())
+	jsThis = 0;
+    JsObject* jsScope = YOBJECT(JsObject,scopeObj);
+    if (jsScope && !jsScope->ref())
+	jsScope = 0;
+    TelEngine::destruct(thisObj);
+    TelEngine::destruct(scopeObj);
     reset();
     // prepare a function call stack
     ExpOperation oper(ExpEvaluator::OpcFunc,name,args.count());
-    if (!c->callFunction(stack(),oper,this,-1,func,args,thisObj,scopeObj))
+    if (!c->callFunction(stack(),oper,this,-1,func,args,jsThis,jsScope))
 	return Failed;
     mylock.drop();
     // continue normal execution like in run()
@@ -2230,6 +2244,14 @@ JsFunction::JsFunction(Mutex* mtx, const char* name, ObjList* args, long int lbl
 	    m_formal.append(arg);
     }
     params().addParam("length",String(m_formal.count()));
+}
+
+JsObject* JsFunction::copy(Mutex* mtx) const
+{
+    ObjList args;
+    for (ObjList* l = m_formal.skipNull(); l; l = l->skipNext())
+	args.append(new String(l->get()->toString()));
+    return new JsFunction(mtx,0,&args,label(),m_code);
 }
 
 void JsFunction::init()
@@ -2357,9 +2379,9 @@ JsObject* JsParser::parseJSON(const char* text)
 }
 
 // Return a "null" object wrapper
-ExpOperation* JsParser::nullClone()
+ExpOperation* JsParser::nullClone(const char* name)
 {
-    return s_null.ExpOperation::clone();
+    return TelEngine::null(name) ? s_null.ExpOperation::clone() : s_null.clone(name);
 }
 
 // Check if an object is identic to null

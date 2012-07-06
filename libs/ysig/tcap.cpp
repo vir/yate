@@ -4317,6 +4317,7 @@ void SS7TCAPTransactionITU::encodeComponents(NamedList& params, DataBlock& data)
 	    int compType = map->mappedTo;
 
 	    NamedString* value = 0;
+	    bool hasPayload = false;
 	    if (compType == Reject) {
 		value = params.getParam(compParam + "." + s_tcapProblemCode);
 		if (!TelEngine::null(value)) {
@@ -4328,6 +4329,11 @@ void SS7TCAPTransactionITU::encodeComponents(NamedList& params, DataBlock& data)
 		    db.insert(DataBlock(&problemTag,1));
 		    codedComp.insert(db);
 		}
+		else {
+		    Debug(tcap(),DebugWarn,"Missing mandatory 'problemCode' information for component with index='%d' from transaction "
+			    "with localID=%s [%p]",index,m_localID.c_str(),this);
+		    continue;
+		}
 	    }
 	    else {
 		NamedString* payloadHex = params.getParam(compParam);
@@ -4335,6 +4341,7 @@ void SS7TCAPTransactionITU::encodeComponents(NamedList& params, DataBlock& data)
 		    DataBlock payload;
 		    payload.unHexify(payloadHex->c_str(),payloadHex->length(),' ');
 		    codedComp.insert(payload);
+		    hasPayload = true;
 		}
 	    }
 	    // encode  Error Code only if ReturnError
@@ -4357,6 +4364,11 @@ void SS7TCAPTransactionITU::encodeComponents(NamedList& params, DataBlock& data)
 		    }
 		    db.insert(DataBlock(&tag,1));
 		    codedComp.insert(db);
+		}
+		else {
+		    Debug(tcap(),DebugWarn,"Missing mandatory 'errorCodeType' information for component with index='%d' from transaction "
+			    "with localID=%s [%p]",index,m_localID.c_str(),this);
+		    continue;
 		}
 	    }
 
@@ -4384,6 +4396,13 @@ void SS7TCAPTransactionITU::encodeComponents(NamedList& params, DataBlock& data)
 			codedComp.insert(DataBlock(&tag,1));
 		    }
 		}
+		else {
+		    if (compType == Invoke || hasPayload) {
+			Debug(tcap(),DebugWarn,"Missing mandatory 'operationCodeType' information for component with index='%d' from transaction "
+			    "with localID=%s [%p]",index,m_localID.c_str(),this);
+			continue;
+		    }
+		}
 	    }
 
 	    NamedString* invID = params.getParam(compParam + "." + s_tcapLocalCID);
@@ -4408,6 +4427,11 @@ void SS7TCAPTransactionITU::encodeComponents(NamedList& params, DataBlock& data)
 			val = SS7TCAPITU::LocalTag;
 			db.insert(DataBlock(&val,1));
 		    }
+		    else {
+			Debug(tcap(),DebugWarn,"Missing mandatory 'localCID' information for component with index='%d' from transaction "
+			    "with localID=%s [%p]",index,m_localID.c_str(),this);
+			continue;
+		    }
 		    break;
 		case ReturnResultLast:
 		case ReturnError:
@@ -4418,6 +4442,11 @@ void SS7TCAPTransactionITU::encodeComponents(NamedList& params, DataBlock& data)
 			db.insert(ASNLib::buildLength(db));
 			val = SS7TCAPITU::LocalTag;
 			db.insert(DataBlock(&val,1));
+		    }
+		    else {
+			Debug(tcap(),DebugWarn,"Missing mandatory 'remoteCID' information for component with index='%d' from transaction "
+			    "with localID=%s [%p]",index,m_localID.c_str(),this);
+			continue;
 		    }
 		    break;
 		case Reject:

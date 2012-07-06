@@ -118,6 +118,23 @@ protected:
     int m_port;
 };
 
+class Transaction : public NamedString
+{
+public:
+    inline Transaction(const char* tcapID, const char* appID, const AppCtxt* ctxt = 0)
+	: NamedString(tcapID,appID), m_ctxt(ctxt)
+	{}
+    inline ~Transaction()
+	{}
+    inline const AppCtxt* context()
+	{ return m_ctxt; }
+    inline void setContext(AppCtxt* ctxt)
+	{ m_ctxt = ctxt; }
+
+private:
+    const AppCtxt* m_ctxt;
+};
+
 class IDMap : public ObjList
 {
 public:
@@ -125,9 +142,11 @@ public:
 	{}
     inline ~IDMap()
 	{}
-    void appendID(const char* tcapID, const char* appID);
+    void appendID(const char* tcapID, const char* appID, const AppCtxt* ctxt = 0);
     const String& findTcapID(const char* appID);
     const String& findAppID(const char* tcapID);
+    Transaction*  findByAppID(const char* appID);
+    Transaction*  findByTcapID(const char* tcapID);
 };
 
 class XmlToTcap : public GenObject, public Mutex
@@ -150,8 +169,8 @@ public:
     bool valid(XmlDocument* doc);
     bool checkXmlns();
     bool parse(NamedList& tcapParams);
-    bool parse(NamedList& tcapParams, XmlElement* elem, String prefix);
-    bool handleComponent(NamedList& tcapParams, XmlElement* elem);
+    bool parse(NamedList& tcapParams, XmlElement* elem, String prefix, const AppCtxt* ctxt);
+    bool handleComponent(NamedList& tcapParams, XmlElement* elem, const AppCtxt* ctxt);
     bool handleMAPDialog(NamedList& tcapParams, XmlElement* elem, String prefix);
     void reset();
     static const TCAPMap s_tcapMap[];
@@ -185,13 +204,13 @@ public:
     ~TcapToXml();
     inline MsgType type()
 	{ return m_type; }
-    bool buildXMLMessage(NamedList& msg, XmlFragment* frag, MsgType type);
+    bool buildXMLMessage(NamedList& msg, XmlFragment* frag, MsgType type, const AppCtxt* ctxt = 0);
     static const XMLMap s_xmlMap[];
     void reset();
     void handleMAPDialog(XmlElement* root, NamedList& params);
     bool decodeDialogPDU(XmlElement* el, const AppCtxt* ctxt, DataBlock& data);
     XmlElement* addToXml(XmlElement* root, const XMLMap* map, NamedString* val);
-    void addComponentsToXml(XmlElement* root, NamedList& params, AppCtxt* ctxt);
+    void addComponentsToXml(XmlElement* root, NamedList& params, const AppCtxt* ctxt);
     const XMLMap* findMap(String& elem);
     void addParametersToXml(XmlElement* elem, String& payloadHex, Operation* op, bool searchArgs = true);
     void decodeTcapToXml(TelEngine::XmlElement*, TelEngine::DataBlock&, Operation* op, unsigned int index = 0, bool seachArgs = true);
@@ -316,9 +335,10 @@ public:
     bool handleTcap(NamedList& params);
     bool handleIndication(NamedList& params);
     void reportError(const char* err);
-    bool sendTcapMsg(NamedList& params);
+    bool sendTcapMsg(NamedList& params, const AppCtxt* ctxt = 0);
     bool canHandle(NamedList& params);
     void status(NamedList& status);
+    const AppCtxt* findCtxt(const String& appID, const String& remoteID);
     inline State state()
 	{ return m_state; }
     inline unsigned int trCount()
@@ -327,6 +347,7 @@ public:
 	{ return m_type; }
     inline bool addEncoding()
 	{ return (m_user ? m_user->addEncoding() : false); }
+
 private:
     IDMap m_ids;
     IDMap m_pending;
@@ -407,6 +428,9 @@ static const String s_screenedtAttr = "screened";
 static const String s_userInformation = "userInformation";
 static const String s_encodingContentsTag = "encoding-contents";
 static const String s_directReferenceTag = "direct-reference";
+static const String s_appContext = "application";
+static const String s_localTID = "localTID";
+static const String s_remoteTID = "remoteTID";
 
 static const String s_tcapUser = "tcap.user";
 static const String s_tcapRequestError = "tcap.request.error";
@@ -2245,16 +2269,20 @@ static const Capability s_mapCapab[] = {
     {"Miscellaneous",            {"sendIMSI", "readyForSM", "setReportingState", ""}},
     {"ErrorRecovery",            {"reset", "forwardCheckSS-Indication", "failureReport", ""}},
     {"Charging",                 {""}},
-    {"SMSC",                     {"informServiceCentre", "alertServiceCentre", "sendRoutingInfoForSM", "mo-forwardSM", "mt-forwardSM", ""}},
+    {"SMSC",                     {"informServiceCentre", "alertServiceCentre", "sendRoutingInfoForSM", "mo-forwardSM", "mt-forwardSM",
+				    "forwardSM", ""}},
     {"None",                     {""}},
     {0, {""}},
 };
 
 static const AppCtxt s_mapAppCtxt[]= {
     // Network Loc Up context
-    {"networkLocUpContext-v3", "0.4.0.0.1.0.1.3", "updateLocation,forwardCheckSS-Indication,restoreData,insertSubscriberData"},
-    {"networkLocUpContext-v2", "0.4.0.0.1.0.1.2", "updateLocation,forwardCheckSS-Indication,restoreData,insertSubscriberData"},
-    {"networkLocUpContext-v1", "0.4.0.0.1.0.1.1", "updateLocation,forwardCheckSS-Indication,sendParameters,insertSubscriberData"},
+    {"networkLocUpContext-v3", "0.4.0.0.1.0.1.3", "updateLocation,forwardCheckSS-Indication,restoreData,insertSubscriberData,"
+							"activateTraceMode"},
+    {"networkLocUpContext-v2", "0.4.0.0.1.0.1.2", "updateLocation,forwardCheckSS-Indication,restoreData,insertSubscriberData,"
+							"activateTraceMode"},
+    {"networkLocUpContext-v1", "0.4.0.0.1.0.1.1", "updateLocation,forwardCheckSS-Indication,sendParameters,insertSubscriberData,"
+							"activateTraceMode"},
 
     // Location Cancellation context
     {"locationCancelationContext-v3", "0.4.0.0.1.0.2.3", "cancelLocation"},
@@ -2303,16 +2331,18 @@ static const AppCtxt s_mapAppCtxt[]= {
     {"networkUnstructuredSsContext-v1", "0.4.0.0.1.0.19.1", "processUnstructuredSS-Data"},
 
     // Short message routing
-    {"shortMsgGatewayContext-v3", "0.4.0.0.1.0.20.3", "sendRoutingInfoForSM"},
-    {"shortMsgGatewayContext-v2", "0.4.0.0.1.0.20.2", "sendRoutingInfoForSM"},
-    {"shortMsgGatewayContext-v1", "0.4.0.0.1.0.20.1", "sendRoutingInfoForSM"},
+    {"shortMsgGatewayContext-v3", "0.4.0.0.1.0.20.3", "sendRoutingInfoForSM,informServiceCentre"},
+    {"shortMsgGatewayContext-v2", "0.4.0.0.1.0.20.2", "sendRoutingInfoForSM,informServiceCentre"},
+    {"shortMsgGatewayContext-v1", "0.4.0.0.1.0.20.1", "sendRoutingInfoForSM,informServiceCentre"},
 
     // Mobile Originated short messages
     {"shortMsgMO-RelayContext-v3", "0.4.0.0.1.0.21.3", "mo-forwardSM"},
+    {"shortMsgMO-RelayContext-v2", "0.4.0.0.1.0.21.2", "forwardSM"},
+    {"shortMsgMO-RelayContext-v1", "0.4.0.0.1.0.21.1", "forwardSM"},
 
     // Short message alerts
-    {"shortMsgAlertContext-v2", "0.4.0.0.1.0.23.2", "informServiceCentre,alertServiceCentre"},
-    {"shortMsgAlertContext-v1", "0.4.0.0.1.0.23.1", "informServiceCentre,alertServiceCentre"},
+    {"shortMsgAlertContext-v2", "0.4.0.0.1.0.23.2", "alertServiceCentre"},
+    {"shortMsgAlertContext-v1", "0.4.0.0.1.0.23.1", "alertServiceCentre"},
 
     // readyForSM context
     {"mwdMngtContext-v3", "0.4.0.0.1.0.24.3", "readyForSM"},
@@ -2321,6 +2351,7 @@ static const AppCtxt s_mapAppCtxt[]= {
 
     // Mobile Terminated short messages
     {"shortMsgMT-RelayContext-v3", "0.4.0.0.1.0.25.3", "mt-forwardSM"},
+    {"shortMsgMT-RelayContext-v2", "0.4.0.0.1.0.25.2", "forwardSM"},
 
     // sendIMSI Context
     {"imsiRetrievalContext-v2", "0.4.0.0.1.0.26.2", "sendIMSI"},
@@ -2367,6 +2398,20 @@ static const AppCtxt s_camelAppCtxt[] = {
 
     {0, 0, ""}
 };
+
+
+static const Capability s_mapCapabOID[] = {
+    {"SMSC",                     {"shortMsgMO-RelayContext-v3", "shortMsgMO-RelayContext-v2", "shortMsgMO-RelayContext-v1",
+					"shortMsgMT-RelayContext-v3", "shortMsgMT-RelayContext-v2", ""}},
+    {"None",                     {""}},
+    {0, {""}},
+};
+
+static const Capability s_camelCapabOID[] = {
+    {"None",                     {""}},
+    {0, {""}},
+};
+
 
 static const MapCamelType s_types[] = {
     {TcapXApplication::Null,                   TcapXApplication::NullEnc,       decodeNull,        encodeNull},
@@ -4856,6 +4901,14 @@ static const Parameter s_forwardSMRes[] = {
     {"",                       s_noTag,           false,   TcapXApplication::None,           0},
 };
 
+static const Parameter s_forwardSMArgs[] = {
+    {"sm-RP-DA",               s_noTag,           false,   TcapXApplication::Choice,         s_smRpDa},
+    {"sm-RP-OA",               s_noTag,           false,   TcapXApplication::Choice,         s_smRpOa},
+    {"sm-RP-UI",               s_hexTag,          false,   TcapXApplication::HexString,      0},
+    {"moreMessagesToSend",     s_nullTag,         true,    TcapXApplication::Null,           0},
+    {"",                       s_noTag,           false,   TcapXApplication::None,           0},
+};
+
 static const Parameter s_activateTraceModeArgs[] = {
     {"imsi",                  s_ctxtPrim_0_Tag,    true,    TcapXApplication::TBCD,          0},
     {"traceReference",        s_ctxtPrim_1_Tag,    false,   TcapXApplication::HexString,     0},
@@ -5173,6 +5226,10 @@ static const Operation s_mapOps[] = {
     {"mo-forwardSM",                  true,  46,
 	s_sequenceTag, s_moForwardSMArgs,
 	s_sequenceTag, s_forwardSMRes
+    },
+    {"forwardSM",                     true,  46,
+	s_sequenceTag, s_forwardSMArgs,
+	s_noTag, 0
     },
     {"activateTraceMode",             true,  50,
 	s_sequenceTag, s_activateTraceModeArgs,
@@ -6480,24 +6537,37 @@ static const Operation* findError(TcapXUser::UserType type, const String& op)
     return 0;
 }
 
-static const Operation* findOperation(TcapXUser::UserType type, int opCode, bool opLocal = true)
+static bool isAppCtxtOperation(const AppCtxt* ctxt, const Operation* op)
+{
+    DDebug(&__plugin,DebugAll,"isAppCtxtOperation(ctxt=%s[%p],op=%s[%p]]",(ctxt ? ctxt->name : ""),ctxt,(op ? op->name.c_str() : ""),op);
+    if (!ctxt)
+	return true;
+    ObjList* ops = ctxt->ops.split(',',false);
+    bool ok = (0 != ops->find(op->name));
+    TelEngine::destruct(ops);
+    return ok;
+}
+
+static const Operation* findOperation(TcapXUser::UserType type, int opCode, bool opLocal = true, const AppCtxt* ctxt = 0)
 {
     DDebug(&__plugin,DebugAll,"findOperation(type=%s,opCode=%d, local=%s)",lookup(type,s_userTypes),opCode,String::boolText(opLocal));
     const Operation* ops = (type == TcapXUser::MAP ? s_mapOps : s_camelOps);
     while (!TelEngine::null(ops->name)) {
-	if (ops->code == opCode && ops->local == opLocal)
-	    return ops;
+	if (ops->code == opCode && ops->local == opLocal) {
+	    if (isAppCtxtOperation(ctxt,ops))
+		return ops;
+	}
 	ops++;
     }
     return 0;
 }
 
-static const Operation* findOperation(TcapXUser::UserType type, const String& op)
+static const Operation* findOperation(TcapXUser::UserType type, const String& op, const AppCtxt* ctxt = 0)
 {
     DDebug(&__plugin,DebugAll,"findOperation(opCode=%s)",op.c_str());
     const Operation* ops = (type == TcapXUser::MAP ? s_mapOps : s_camelOps);
     while (!TelEngine::null(ops->name)) {
-	if (op == ops->name)
+	if (op == ops->name && isAppCtxtOperation(ctxt,ops))
 	    return ops;
 	ops++;
     }
@@ -6512,6 +6582,24 @@ static const Capability* findCapability(TcapXUser::UserType type, const String& 
 	int index = 0;
 	while (!TelEngine::null(cap->ops[index])) {
 	    if (opName == cap->ops[index])
+		return cap;
+	    index++;
+	}
+	cap++;
+    }
+    return 0;
+}
+
+static const Capability* findCapabilityOID(TcapXUser::UserType type, const char* oid)
+{
+    if (!oid)
+	return 0;
+    DDebug(&__plugin,DebugAll,"findCapabilityOID(oid=%s)",oid);
+    const Capability* cap = (type == TcapXUser::MAP ? s_mapCapabOID : s_camelCapabOID);
+    while (cap->name) {
+	int index = 0;
+	while (!TelEngine::null(cap->ops[index])) {
+	    if (cap->ops[index] == oid)
 		return cap;
 	    index++;
 	}
@@ -6558,11 +6646,11 @@ static const AppCtxt* findCtxtFromStr(const String& oid, const AppCtxt* ctxt)
 /**
  * IDMap
  */
-void IDMap::appendID(const char* tcapID, const char* appID)
+void IDMap::appendID(const char* tcapID, const char* appID, const AppCtxt* ctxt)
 {
     DDebug(&__plugin,DebugAll,"IDMap::appendID(tcapID=%s,appID=%s)",tcapID,appID);
     if (tcapID && appID)
-	append(new NamedString(appID,tcapID));
+	append(new Transaction(appID,tcapID,ctxt));
 }
 
 const String& IDMap::findTcapID(const char* appID)
@@ -6586,6 +6674,28 @@ const String& IDMap::findAppID(const char* tcapID)
 	    return ns->name();
     }
     return String::empty();
+}
+
+Transaction* IDMap::findByAppID(const char* appID)
+{
+    DDebug(&__plugin,DebugAll,"IDMap::findByAppID(appID=%s)",appID);
+    ObjList* obj = find(appID);
+    if (obj) {
+	Transaction* ns = static_cast<Transaction*>(obj->get());
+	return ns;
+    }
+    return 0;
+}
+
+Transaction* IDMap::findByTcapID(const char* tcapID)
+{
+    DDebug(&__plugin,DebugAll,"IDMap::findByTcapID(tcapID=%s)",tcapID);
+    for (ObjList* o = skipNull(); o; o = o->skipNext()) {
+	Transaction* ns = static_cast<Transaction*>(o->get());
+	if (!TelEngine::null(ns) && (*ns) == tcapID)
+	    return ns;
+    }
+    return 0;
 }
 
 /**
@@ -6931,7 +7041,7 @@ const XMLMap* TcapToXml::findMap(String& what)
     return 0;
 }
 
-bool TcapToXml::buildXMLMessage(NamedList& params, XmlFragment* msg, MsgType type)
+bool TcapToXml::buildXMLMessage(NamedList& params, XmlFragment* msg, MsgType type, const AppCtxt* ctxt)
 {
     DDebug(&__plugin,DebugAll,"TcapToXML::buildXMLMessage() [%p]",this);
     if (!msg)
@@ -6943,19 +7053,19 @@ bool TcapToXml::buildXMLMessage(NamedList& params, XmlFragment* msg, MsgType typ
     msg->addChild(el);
 
     AppCtxt* appCtxt = 0;
-    NamedString* ctxt = params.getParam(s_tcapAppCtxt);
-    if (!TelEngine::null(ctxt)) {
+    NamedString* ctxtStr = params.getParam(s_tcapAppCtxt);
+    if (!TelEngine::null(ctxtStr)) {
 	const AppCtxt* contexts = (m_app->type() == TcapXUser::MAP ? s_mapAppCtxt : s_camelAppCtxt);
-	appCtxt = (AppCtxt*)findCtxtFromOid(*ctxt,contexts);
+	appCtxt = (AppCtxt*)findCtxtFromOid(*ctxtStr,contexts);
     }
     if (appCtxt)
 	params.setParam(s_tcapAppCtxt,appCtxt->name);
 
     // translate P-Abort causes
-    ctxt = params.getParam(s_tcapAbortCause);
-    if (!TelEngine::null(ctxt) && (*ctxt) == "pAbort") {
+    NamedString* param = params.getParam(s_tcapAbortCause);
+    if (!TelEngine::null(param) && (*param) == "pAbort") {
 	int code = params.getIntValue(s_tcapAbortInfo);
-	params.setParam(s_tcapAbortInfo,lookup(code,SS7TCAPError::s_errorTypes,*ctxt));
+	params.setParam(s_tcapAbortInfo,lookup(code,SS7TCAPError::s_errorTypes,*param));
     }
 
     if (m_app->type() == TcapXUser::MAP && !TelEngine::null(params.getParam(s_tcapDirectReference)))
@@ -6973,7 +7083,7 @@ bool TcapToXml::buildXMLMessage(NamedList& params, XmlFragment* msg, MsgType typ
 	addToXml(el,map,ns);
     }
 
-    addComponentsToXml(el,params,appCtxt);
+    addComponentsToXml(el,params,ctxt);
     return true;
 }
 
@@ -7098,7 +7208,7 @@ XmlElement* TcapToXml::addToXml(XmlElement* root, const XMLMap* map, NamedString
     return parent;
 }
 
-void TcapToXml::addComponentsToXml(XmlElement* el, NamedList& params, AppCtxt* ctxt)
+void TcapToXml::addComponentsToXml(XmlElement* el, NamedList& params, const AppCtxt* ctxt)
 {
     if (!el)
 	return;
@@ -7117,7 +7227,7 @@ void TcapToXml::addComponentsToXml(XmlElement* el, NamedList& params, AppCtxt* c
 	NamedString* opType = params.getParam(root + "." + s_tcapOpCodeType);
 	Operation* op = 0;
 	if (!TelEngine::null(opCode) && !TelEngine::null(opType))
-	    op = (Operation*)findOperation(m_app->type(),opCode->toInteger(),(*opType == "local" ? true : false));
+	    op = (Operation*)findOperation(m_app->type(),opCode->toInteger(),(*opType == "local"),ctxt);
 	if (op)
 	    compParams.setParam(root + "." + s_tcapOpCode,op->name);
 
@@ -7134,7 +7244,7 @@ void TcapToXml::addComponentsToXml(XmlElement* el, NamedList& params, AppCtxt* c
 		opCode = params.getParam(root + "." + s_tcapErrCode);
 		opType = params.getParam(root + "." + s_tcapErrCodeType);
 		if (!TelEngine::null(opCode) && !TelEngine::null(opType))
-		    op = (Operation*)findError(m_app->type(),opCode->toInteger(),(*opType == "local" ? true : false));
+		    op = (Operation*)findError(m_app->type(),opCode->toInteger(),(*opType == "local"));
 		if (op)
 		    compParams.setParam(root + "." + s_tcapErrCode,op->name);
 		break;
@@ -7424,7 +7534,7 @@ bool XmlToTcap::encodeComponent(DataBlock& payload, XmlElement* elem, bool searc
     return true;
 }
 
-bool XmlToTcap::handleComponent(NamedList& tcapParams, XmlElement* elem)
+bool XmlToTcap::handleComponent(NamedList& tcapParams, XmlElement* elem, const AppCtxt* appCtxt)
 {
     DDebug(&__plugin,DebugAll,"XMLToTcap::handleComponent(params=%p, elem=%p) [%p]",&tcapParams,elem,this);
     if (!elem && elem->getTag() == s_component)
@@ -7446,7 +7556,7 @@ bool XmlToTcap::handleComponent(NamedList& tcapParams, XmlElement* elem)
 	    type = SS7TCAP::lookupComponent(*ns);
 	}
 	else if (ns->name() == s_tcapOpCode) {
-	    op = (Operation*)findOperation(m_app->type(),*ns);
+	    op = (Operation*)findOperation(m_app->type(),*ns,appCtxt);
 	    if (!op)
 		continue;
 	    tcapParams.setParam(prefix + "." + s_tcapOpCode,String(op->code));
@@ -7488,7 +7598,7 @@ bool XmlToTcap::handleMAPDialog(NamedList& tcapParams, XmlElement* elem, String 
 
     XmlElement* content = elem->findFirstChild(&s_encodingContentsTag);
     if (!(content && content->findFirstChild()))
-	return parse(tcapParams,elem,prefix);
+	return parse(tcapParams,elem,prefix,0);
 
     DataBlock payload;
     const Parameter* param = s_mapDialogChoice;
@@ -7545,7 +7655,21 @@ bool XmlToTcap::parse(NamedList& tcapParams)
     Lock l(this);
     XDebug(&__plugin,DebugAll,"XmlToTcap::parse()");
     tcapParams.setParam(s_tcapCompCount,String(0));
-    bool ok = parse(tcapParams,m_elem,"");
+
+    XmlElement* ctxtElem = (m_elem ? m_elem->findFirstChild(&s_appContext) : 0);
+    XmlElement* ltidElem = (m_elem ? m_elem->findFirstChild(&s_localTID) : 0);
+    XmlElement* rtidElem = (m_elem ? m_elem->findFirstChild(&s_remoteTID) : 0);
+
+    const AppCtxt* appCtxt = 0;
+    // try to find the associated context for the given ids
+    if (ltidElem || rtidElem) {
+	appCtxt = m_app->findCtxt((ltidElem ? ltidElem->getText() : String::empty()),(rtidElem ? rtidElem->getText() : String::empty()));
+    }
+    //if we didn't find a saved context for the current transaction, search context in the XML info
+    if (!appCtxt && ctxtElem)
+	appCtxt = (AppCtxt*)findCtxtFromStr(ctxtElem->getText(),(m_app->type() == TcapXUser::MAP ? s_mapAppCtxt : s_camelAppCtxt)); 
+
+    bool ok = parse(tcapParams,m_elem,"",appCtxt);
     NamedString* c = tcapParams.getParam(s_capabTag);
 
     if (!c) {
@@ -7582,7 +7706,7 @@ bool XmlToTcap::parse(NamedList& tcapParams)
     return ok;
 }
 
-bool XmlToTcap::parse(NamedList& tcapParams, XmlElement* elem, String prefix)
+bool XmlToTcap::parse(NamedList& tcapParams, XmlElement* elem, String prefix, const AppCtxt* appCtxt)
 {
     XDebug(&__plugin,DebugAll,"XmlToTcap::parse(elem=%p, prefix=%s) [%p]",elem,prefix.c_str(),this);
     if (!elem)
@@ -7593,11 +7717,11 @@ bool XmlToTcap::parse(NamedList& tcapParams, XmlElement* elem, String prefix)
     while (XmlElement* child = elem->pop()) {
 	hasChildren = true;
 	if (child->getTag() == s_component)
-	    status = handleComponent(tcapParams,child);
+	    status = handleComponent(tcapParams,child,appCtxt);
 	else if (child->getTag() == s_userInformation && m_app->type() == TcapXUser::MAP)
 	    status = handleMAPDialog(tcapParams,child,(!TelEngine::null(prefix) ? prefix + "." + child->getTag() : child->getTag()));
 	else
-	    status = parse(tcapParams,child, (!TelEngine::null(prefix) ? prefix + "." + child->getTag() : child->getTag()));
+	    status = parse(tcapParams,child, (!TelEngine::null(prefix) ? prefix + "." + child->getTag() : child->getTag()),appCtxt);
 	TelEngine::destruct(child);
 	if (!status)
 	    break;
@@ -7692,13 +7816,37 @@ bool TcapXApplication::canHandle(NamedList& params)
 	return false;
     int compCount = params.getIntValue(s_tcapCompCount,0);
 
+    // try matching on application context
+    const AppCtxt* appCtxt = 0;
+    while (true) {
+	NamedString* appOID = params.getParam(s_tcapAppCtxt);
+	if (TelEngine::null(appOID))
+	    break;
+	appCtxt = findCtxtFromOid(*appOID,(m_type== TcapXUser::MAP ? s_mapAppCtxt : s_camelAppCtxt));
+	if (!appCtxt)
+	    break;
+	const Capability* cap = findCapabilityOID(m_type,appCtxt->name);
+	if (!cap) {
+	    if (!compCount)
+		return false;
+	    break;
+	}
+	if (!hasCapability(cap->name) && !compCount) {
+	    Debug(&__plugin,DebugAll,"TcapXApplication '%s' cannot handle oid='%s' [%p]",m_name.c_str(),appCtxt->name,this);
+	    return false;
+	}
+	break;
+    }
+    if (!compCount && !appCtxt)
+	return false;
+
     for (int i = 1; i <= compCount; i++) {
 
 	NamedString* opCode = params.getParam(s_tcapCompPrefixSep + String(i) + "." + s_tcapOpCode);
 	NamedString* opType = params.getParam(s_tcapCompPrefixSep + String(i) + "." + s_tcapOpCodeType);
 	if (TelEngine::null(opCode) || TelEngine::null(opType))
 	    continue;
-	const Operation* op = findOperation(m_type,opCode->toInteger(),(*opType == "local" ? true : false));
+	const Operation* op = findOperation(m_type,opCode->toInteger(),(*opType == "local"),appCtxt);
 	if (!op)
 	    continue;
 	const Capability* cap = findCapability(m_type,op->name);
@@ -7772,11 +7920,11 @@ bool TcapXApplication::handleXML()
     return true;
 }
 
-bool TcapXApplication::sendTcapMsg(NamedList& params)
+bool TcapXApplication::sendTcapMsg(NamedList& params, const AppCtxt* ctxt)
 {
     DDebug(&__plugin,DebugAll,"TcapXApplication::sentTcapMsg(params=%p) [%p]",&params,this);
     XmlFragment* msg = new XmlFragment();
-    bool ok = m_tcap2Xml.buildXMLMessage(params,msg,TcapToXml::Tcap);
+    bool ok = m_tcap2Xml.buildXMLMessage(params,msg,TcapToXml::Tcap,ctxt);
 
     if (m_user->printMessages()) {
 	String tmp;
@@ -7859,7 +8007,7 @@ bool TcapXApplication::handleIndication(NamedList& tcap)
 	case SS7TCAP::TC_ConversationWithoutPerm:
 	case SS7TCAP::TC_Notice:
 	case SS7TCAP::TC_Unknown:
-	    if (TelEngine::null(ltid))
+	    if (TelEngine::null(ltid) || TelEngine::null(rtid))
 		return false;
 	    lock();
 	    appID = m_ids.findAppID(ltid);
@@ -7899,11 +8047,21 @@ bool TcapXApplication::handleIndication(NamedList& tcap)
     }
 
     tcap.setParam(s_tcapLocalTID,appID);
-    bool ok = sendTcapMsg(tcap);
+
+    const AppCtxt* ctxt = 0;
+    if (saveID) {
+        NamedString* oid = tcap.getParam(s_tcapAppCtxt);
+	if (!TelEngine::null(oid))
+	    ctxt = findCtxtFromOid(*oid, m_type == TcapXUser::MAP ? s_mapAppCtxt : s_camelAppCtxt);
+    }
+    else
+	ctxt = findCtxt(appID,(TelEngine::null(rtid) ? String::empty() : *rtid));
+
+    bool ok = sendTcapMsg(tcap,ctxt);
 
     Lock l(this);
     if (saveID)
-	m_pending.appendID(ltid,*rtid);
+	m_pending.appendID(ltid,*rtid,ctxt);
     if (removeID) {
 	m_ids.remove(appID);
 	if (m_state == ShutDown && !trCount())
@@ -7927,6 +8085,7 @@ bool TcapXApplication::handleTcap(NamedList& tcap)
     lock();
     String tcapID = m_ids.findTcapID(ltid);
     unlock();
+
     switch (dialog) {
 	case SS7TCAP::TC_Unknown:
 	case SS7TCAP::TC_Unidirectional:
@@ -8008,6 +8167,13 @@ bool TcapXApplication::handleTcap(NamedList& tcap)
 	return false;
     tcap.setParam(s_tcapLocalTID,tcapID);
 
+    const AppCtxt* ctxt = 0;
+    if (saveID && !endNow) {
+	NamedString* ctxtStr = tcap.getParam(s_tcapAppCtxt);
+	if (!TelEngine::null(ctxtStr))
+	    ctxt = findCtxtFromOid(*ctxtStr,(m_type == TcapXUser::MAP ? s_mapAppCtxt : s_camelAppCtxt));
+    }
+
     if (m_user->printMessages()) {
 	String tmp;
 	tcap.dump(tmp,"\r\n  ",'\'',true);
@@ -8028,7 +8194,7 @@ bool TcapXApplication::handleTcap(NamedList& tcap)
 	    reportState(Inactive);
     }
     if (saveID && !endNow)
-	m_ids.appendID(tcap.getValue(s_tcapLocalTID),ltid);
+	m_ids.appendID(tcap.getValue(s_tcapLocalTID),ltid,ctxt);
     m_sentTcap++;
     return true;
 }
@@ -8127,6 +8293,22 @@ void TcapXApplication::status(NamedList& status)
     status.setParam("sentXML",String(m_sentXml));
     status.setParam("receivedTcap",String(m_receivedTcap));
     status.setParam("sentTcap",String(m_sentTcap));
+}
+
+const AppCtxt* TcapXApplication::findCtxt(const String& appID, const String& remoteID)
+{
+    DDebug(DebugAll,"TcapXApplication::findCtxt('%s','%s') [%p]",appID.c_str(),remoteID.c_str(),this);
+    if (!appID.null()) {
+	Transaction* t = m_ids.findByAppID(appID);
+	if (t)
+	    return t->context();
+    }
+    if (!remoteID.null()) {
+	Transaction* t = m_pending.findByAppID(remoteID);
+	if (t)
+	    return t->context();
+    }
+    return 0;
 }
 
 /**
@@ -8285,12 +8467,17 @@ bool TcapXUser::sendToApp(NamedList& params, TcapXApplication* app, bool saveID)
     if (!app) {
 	NamedString* opCode = params.getParam(YSTRING("tcap.component.1.operationCode"));
 	NamedString* opType = params.getParam(YSTRING("tcap.component.1.operationCodeType"));
+	NamedString* appCtxt = params.getParam(s_tcapAppCtxt);
 	if (!(TelEngine::null(opCode) || TelEngine::null(opType))) {
-	    const Operation* op = findOperation(m_type,opCode->toInteger(),(*opType == "local"));
+	    const Operation* op = findOperation(m_type,opCode->toInteger(),(*opType == "local"),0);
 	    Debug(this,DebugInfo,"TcapXUser::sendToApp() - cannot find application to handle operation='%s' [%p]",(op ? op->name.c_str() : "no operation"),this);
 	}
-	else
-	    Debug(this,DebugInfo,"TcapXUser::sendToApp() - cannot find application to handle transaction with no given operation [%p]",this);
+	else {
+	    if (!TelEngine::null(appCtxt))
+		Debug(this,DebugInfo,"TcapXUser::sendToApp() - cannot find application to handle application OID='%s' [%p]",appCtxt->c_str(),this);
+	    else
+		Debug(this,DebugInfo,"TcapXUser::sendToApp() - cannot find application to handle transaction with no given operation or app OID [%p]",this);
+	}
 	return false;
     }
     if (saveID)

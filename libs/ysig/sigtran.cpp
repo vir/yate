@@ -26,6 +26,7 @@
 #include <yatephone.h>
 
 #define MAX_UNACK 256
+#define AVG_DELAY 100
 
 using namespace TelEngine;
 
@@ -204,6 +205,17 @@ bool SIGTRAN::restart(bool force)
     if (!trans)
 	return false;
     trans->reconnect(force);
+    return true;
+}
+
+bool SIGTRAN::getSocketParams(const String& params, NamedList& result)
+{
+    m_transMutex.lock();
+    RefPointer<SIGTransport> trans = m_trans;
+    m_transMutex.unlock();
+    if (!trans)
+	return false;
+    trans->getSocketParams(params,result);
     return true;
 }
 
@@ -1660,12 +1672,28 @@ void SS7M2PA::notifyLayer(SignallingInterface::Notification event)
 	    SS7Layer2::notify();
 	    break;
 	case SignallingInterface::LinkUp:
+	{
 	    m_transportState = Established;
 	    Debug(this,DebugInfo,"Interface is up [%p]",this);
+	    String params = "rto_max";
+	    NamedList result("sctp_params");
+	    if (getSocketParams(params,result)) {
+		int rtoMax = result.getIntValue(YSTRING("rto_max"));
+		unsigned int maxRetrans = rtoMax + (int)m_confTimer.interval() + AVG_DELAY;
+		if (maxRetrans > m_ackTimer.interval()) {
+		    Debug(this,DebugConf,
+			  "%s (%d) is greater than ack timer (%d)! Max RTO: %d, conf timer %d, avg delay: %d",
+			  "The maximum time interval to retransmit a packet",
+			  maxRetrans,(int)m_ackTimer.interval(),
+			  rtoMax,(int)m_confTimer.interval(),AVG_DELAY);
+		}
+	    } else
+		Debug(this,DebugNote,"Failed to obtain socket params");
 	    if (m_autostart)
 		startAlignment();
 	    SS7Layer2::notify();
 	    break;
+	}
 	case SignallingInterface::HardwareError:
 	    abortAlignment("HardwareError");
 	    if (m_autostart && (m_transportState == Established))

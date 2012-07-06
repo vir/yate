@@ -45,6 +45,7 @@ public:
     inline JsParser& parser()
 	{ return m_assistCode; }
 protected:
+    virtual void statusParams(String& str);
     virtual bool commandExecute(String& retVal, const String& line);
     virtual bool commandComplete(Message& msg, const String& partLine, const String& partWord);
 private:
@@ -116,6 +117,8 @@ public:
     static void markUnused();
     static void freeUnused();
     static void initScript(const String& scriptName, const String& fileName);
+    inline static ObjList& globals()
+	{ return s_globals; }
     inline static void unloadAll()
 	{ s_globals.clear(); }
 private:
@@ -124,6 +127,24 @@ private:
     unsigned int m_fileTime;
     bool m_inUse;
     static ObjList s_globals;
+};
+
+class JsShared : public JsObject
+{
+    YCLASS(JsShared,JsObject)
+public:
+    inline JsShared(Mutex* mtx)
+	: JsObject("Shared",mtx,true)
+	{
+	    params().addParam(new ExpFunction("inc"));
+	    params().addParam(new ExpFunction("dec"));
+	    params().addParam(new ExpFunction("get"));
+	    params().addParam(new ExpFunction("set"));
+	    params().addParam(new ExpFunction("clear"));
+	    params().addParam(new ExpFunction("exists"));
+	}
+protected:
+    bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
 };
 
 #define MKDEBUG(lvl) params().addParam(new ExpOperation((long int)Debug ## lvl,"Debug" # lvl))
@@ -153,6 +174,7 @@ public:
 	    params().addParam(new ExpFunction("idle"));
 	    params().addParam(new ExpFunction("dump_r"));
 	    params().addParam(new ExpFunction("print_r"));
+	    params().addParam(new ExpWrapper(new JsShared(mtx),"shared"));
 	}
     static void initialize(ScriptContext* context);
 protected:
@@ -164,6 +186,7 @@ class JsMessage : public JsObject
 {
     YCLASS(JsMessage,JsObject)
 public:
+
     inline JsMessage(Mutex* mtx)
 	: JsObject("Message",mtx,true), m_message(0), m_owned(false)
 	{
@@ -178,6 +201,9 @@ public:
 	    params().addParam(new ExpFunction("name"));
 	    params().addParam(new ExpFunction("broadcast"));
 	    params().addParam(new ExpFunction("retValue"));
+	    params().addParam(new ExpFunction("getColumn"));
+	    params().addParam(new ExpFunction("getRow"));
+	    params().addParam(new ExpFunction("getResult"));
 	}
     virtual ~JsMessage()
 	{
@@ -203,6 +229,9 @@ public:
     static void initialize(ScriptContext* context);
 protected:
     bool runNative(ObjList& stack, const ExpOperation& oper, GenObject* context);
+    void getColumn(ObjList& stack, const ExpOperation* col, GenObject* context);
+    void getRow(ObjList& stack, const ExpOperation* row, GenObject* context);
+    void getResult(ObjList& stack, const ExpOperation& row, const ExpOperation& col, GenObject* context);
     ObjList m_handlers;
     Message* m_message;
     bool m_owned;
@@ -480,14 +509,107 @@ void JsEngine::initialize(ScriptContext* context)
 }
 
 
+bool JsShared::runNative(ObjList& stack, const ExpOperation& oper, GenObject* context)
+{
+    XDebug(&__plugin,DebugAll,"JsShared::runNative '%s'(%ld)",oper.name().c_str(),oper.number());
+    if (oper.name() == YSTRING("inc")) {
+	ObjList args;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 1:
+	    case 2:
+		break;
+	    default:
+		return false;
+	}
+	ExpOperation* param = static_cast<ExpOperation*>(args[0]);
+	ExpOperation* modulo = static_cast<ExpOperation*>(args[1]);
+	int mod = 0;
+	if (modulo && modulo->isInteger())
+	    mod = modulo->number();
+	if (mod > 1)
+	    mod--;
+	else
+	    mod = 0;
+	ExpEvaluator::pushOne(stack,new ExpOperation((long)Engine::sharedVars().inc(*param,mod)));
+    }
+    else if (oper.name() == YSTRING("dec")) {
+	ObjList args;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 1:
+	    case 2:
+		break;
+	    default:
+		return false;
+	}
+	ExpOperation* param = static_cast<ExpOperation*>(args[0]);
+	ExpOperation* modulo = static_cast<ExpOperation*>(args[1]);
+	int mod = 0;
+	if (modulo && modulo->isInteger())
+	    mod = modulo->number();
+	if (mod > 1)
+	    mod--;
+	else
+	    mod = 0;
+	ExpEvaluator::pushOne(stack,new ExpOperation((long)Engine::sharedVars().dec(*param,mod)));
+    }
+    else if (oper.name() == YSTRING("get")) {
+	if (oper.number() != 1)
+	    return false;
+	ExpOperation* param = popValue(stack,context);
+	if (!param)
+	    return false;
+	String buf;
+	Engine::sharedVars().get(*param,buf);
+	TelEngine::destruct(param);
+	ExpEvaluator::pushOne(stack,new ExpOperation(buf));
+    }
+    else if (oper.name() == YSTRING("set")) {
+	if (oper.number() != 2)
+	    return false;
+	ExpOperation* val = popValue(stack,context);
+	if (!val)
+	    return false;
+	ExpOperation* param = popValue(stack,context);
+	if (!param) {
+	    TelEngine::destruct(val);
+	    return false;
+	}
+	Engine::sharedVars().set(*param,*val);
+	TelEngine::destruct(param);
+	TelEngine::destruct(val);
+    }
+    else if (oper.name() == YSTRING("clear")) {
+	if (oper.number() != 1)
+	    return false;
+	ExpOperation* param = popValue(stack,context);
+	if (!param)
+	    return false;
+	Engine::sharedVars().clear(*param);
+	TelEngine::destruct(param);
+    }
+    else if (oper.name() == YSTRING("exists")) {
+	if (oper.number() != 1)
+	    return false;
+	ExpOperation* param = popValue(stack,context);
+	if (!param)
+	    return false;
+	ExpEvaluator::pushOne(stack,new ExpOperation(Engine::sharedVars().exists(*param)));
+	TelEngine::destruct(param);
+    }
+    else
+	return JsObject::runNative(stack,oper,context);
+    return true;
+}
+
+
 bool JsMessage::runAssign(ObjList& stack, const ExpOperation& oper, GenObject* context)
 {
+    XDebug(&__plugin,DebugAll,"JsMessage::runAssign '%s'='%s'",oper.name().c_str(),oper.c_str());
     if (ScriptContext::hasField(stack,oper.name(),context))
 	return JsObject::runAssign(stack,oper,context);
     if (!m_message)
 	return false;
-    ExpWrapper* w = YOBJECT(ExpWrapper,&oper);
-    if (w && !w->object())
+    if (JsParser::isUndefined(oper))
 	m_message->clearParam(oper.name());
     else
 	m_message->setParam(new NamedString(oper.name(),oper));
@@ -531,6 +653,37 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 	    default:
 		return false;
 	}
+    }
+    else if (oper.name() == YSTRING("getColumn")) {
+	ObjList args;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 0:
+	    case 1:
+		break;
+	    default:
+		return false;
+	}
+	getColumn(stack,static_cast<ExpOperation*>(args[0]),context);
+    }
+    else if (oper.name() == YSTRING("getRow")) {
+	ObjList args;
+	switch (extractArgs(stack,oper,context,args)) {
+	    case 0:
+	    case 1:
+		break;
+	    default:
+		return false;
+	}
+	getRow(stack,static_cast<ExpOperation*>(args[0]),context);
+    }
+    else if (oper.name() == YSTRING("getResult")) {
+	ObjList args;
+	if (extractArgs(stack,oper,context,args) != 2)
+	    return false;
+	if (!(args[0] && args[1]))
+	    return false;
+	getResult(stack,*static_cast<ExpOperation*>(args[0]),
+	    *static_cast<ExpOperation*>(args[1]),context);
     }
     else if (oper.name() == YSTRING("enqueue")) {
 	if (oper.number() != 0)
@@ -599,6 +752,146 @@ bool JsMessage::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
     else
 	return JsObject::runNative(stack,oper,context);
     return true;
+}
+
+void JsMessage::getColumn(ObjList& stack, const ExpOperation* col, GenObject* context)
+{
+    Array* arr = m_message ? YOBJECT(Array,m_message->userData()) : 0;
+    if (arr && arr->getRows()) {
+	int rows = arr->getRows() - 1;
+	int cols = arr->getColumns();
+	if (col) {
+	    // [ val1, val2, val3 ]
+	    int idx = -1;
+	    if (col->isInteger())
+		idx = col->number();
+	    else {
+		for (int i = 0; i < cols; i++) {
+		    GenObject* o = arr->get(i,0);
+		    if (o && (o->toString() == *col)) {
+			idx = i;
+			break;
+		    }
+		}
+	    }
+	    if (idx >= 0 && idx < cols) {
+		JsArray* jsa = new JsArray(mutex());
+		for (int r = 1; r <= rows; r++) {
+		    GenObject* o = arr->get(idx,r);
+		    if (o)
+			jsa->push(new ExpOperation(o->toString()));
+		    else
+			jsa->push(JsParser::nullClone());
+		}
+		ExpEvaluator::pushOne(stack,new ExpWrapper(jsa,"column"));
+		return;
+	    }
+	}
+	else {
+	    // { col1: [ val11, val12, val13], col2: [ val21, val22, val23 ] }
+	    JsObject* jso = new JsObject("Object",mutex());
+	    for (int c = 0; c < cols; c++) {
+		const String* name = YOBJECT(String,arr->get(c,0));
+		if (TelEngine::null(name))
+		    continue;
+		JsArray* jsa = new JsArray(mutex());
+		for (int r = 1; r <= rows; r++) {
+		    GenObject* o = arr->get(c,r);
+		    if (o)
+			jsa->push(new ExpOperation(o->toString()));
+		    else
+			jsa->push(JsParser::nullClone());
+		}
+		jso->params().setParam(new ExpWrapper(jsa,*name));
+	    }
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(jso,"columns"));
+	    return;
+	}
+    }
+    ExpEvaluator::pushOne(stack,JsParser::nullClone());
+}
+
+void JsMessage::getRow(ObjList& stack, const ExpOperation* row, GenObject* context)
+{
+    Array* arr = m_message ? YOBJECT(Array,m_message->userData()) : 0;
+    if (arr && arr->getRows()) {
+	int rows = arr->getRows() - 1;
+	int cols = arr->getColumns();
+	if (row) {
+	    // { col1: val1, col2: val2 }
+	    if (row->isInteger()) {
+		int idx = row->number() + 1;
+		if (idx > 0 && idx <= rows) {
+		    JsObject* jso = new JsObject("Object",mutex());
+		    for (int c = 0; c < cols; c++) {
+			const String* name = YOBJECT(String,arr->get(c,0));
+			if (TelEngine::null(name))
+			    continue;
+			GenObject* o = arr->get(c,idx);
+			if (o)
+			    jso->params().setParam(new ExpOperation(o->toString(),*name));
+			else
+			    jso->params().setParam((JsParser::nullClone(*name)));
+		    }
+		    ExpEvaluator::pushOne(stack,new ExpWrapper(jso,"row"));
+		    return;
+		}
+	    }
+	}
+	else {
+	    // [ { col1: val11, col2: val12 }, { col1: val21, col2: val22 } ]
+	    JsArray* jsa = new JsArray(mutex());
+	    for (int r = 1; r <= rows; r++) {
+		JsObject* jso = new JsObject("Object",mutex());
+		for (int c = 0; c < cols; c++) {
+		    const String* name = YOBJECT(String,arr->get(c,0));
+		    if (TelEngine::null(name))
+			continue;
+		    GenObject* o = arr->get(c,r);
+		    if (o)
+			jso->params().setParam(new ExpOperation(o->toString(),*name));
+		    else
+			jso->params().setParam((JsParser::nullClone(*name)));
+		}
+		jsa->push(new ExpWrapper(jso));
+	    }
+	    ExpEvaluator::pushOne(stack,new ExpWrapper(jsa,"rows"));
+	    return;
+	}
+    }
+    ExpEvaluator::pushOne(stack,JsParser::nullClone());
+}
+
+void JsMessage::getResult(ObjList& stack, const ExpOperation& row, const ExpOperation& col, GenObject* context)
+{
+    Array* arr = m_message ? YOBJECT(Array,m_message->userData()) : 0;
+    if (arr && arr->getRows() && row.isInteger()) {
+	int rows = arr->getRows() - 1;
+	int cols = arr->getColumns();
+	int r = row.number();
+	if (r >= 0 && r < rows) {
+	    int c = -1;
+	    if (col.isInteger())
+		c = col.number();
+	    else {
+		for (int i = 0; i < cols; i++) {
+		    GenObject* o = arr->get(i,0);
+		    if (o && (o->toString() == col)) {
+			c = i;
+			break;
+		    }
+		}
+	    }
+	    if (c >= 0 && c < cols) {
+		GenObject* o = arr->get(c,r + 1);
+		if (o) {
+		    ExpEvaluator::pushOne(stack,new ExpOperation(o->toString()));
+		    return;
+		}
+	    }
+	}
+    }
+    ExpEvaluator::pushOne(stack,JsParser::nullClone());
 }
 
 JsObject* JsMessage::runConstructor(ObjList& stack, const ExpOperation& oper, GenObject* context)
@@ -887,8 +1180,9 @@ bool JsChannel::runNative(ObjList& stack, const ExpOperation& oper, GenObject* c
 		callToReRoute(stack,*op,context);
 		break;
 	    default:
-		TelEngine::destruct(op);
+		break;
 	}
+	TelEngine::destruct(op);
 	if (oper.name() == YSTRING("callJust"))
 	    ja->end();
     }
@@ -1017,10 +1311,15 @@ bool JsAssist::init()
 	if (!jsm) {
 	    jsm = new JsMessage(0,ctx->mutex(),false);
 	    ExpWrapper wrap(jsm,"message");
-	    chan->runAssign(m_runner->stack(),wrap,m_runner);
+	    if (!chan->runAssign(m_runner->stack(),wrap,m_runner))
+		return false;
 	}
-	if (jsm && jsm->ref())
-	    ExpEvaluator::pushOne(m_runner->stack(),new ExpWrapper(jsm,"(message)"));
+	if (jsm && jsm->ref()) {
+	    JsObject* cc = JsObject::buildCallContext(ctx->mutex(),jsm);
+	    jsm->ref();
+	    cc->params().setParam(new ExpWrapper(jsm,"message"));
+	    ExpEvaluator::pushOne(m_runner->stack(),new ExpWrapper(cc,cc->toString(),true));
+	}
     }
     if (!m_runner->callable("onLoad"))
 	return true;
@@ -1306,6 +1605,15 @@ bool JsGlobal::runMain()
 }
 
 
+static const char* s_cmds[] = {
+    "info",
+    "eval",
+    0
+};
+
+static const char* s_cmdsLine = "  javascript {info|eval instructions...}";
+
+
 JsModule::JsModule()
     : ChanAssistList("javascript",true)
 {
@@ -1317,12 +1625,34 @@ JsModule::~JsModule()
     Output("Unloading module Javascript");
 }
 
+void JsModule::statusParams(String& str)
+{
+    lock();
+    str << "globals=" << JsGlobal::globals().count() << ",routing=" << calls().count();
+    unlock();
+}
+
 bool JsModule::commandExecute(String& retVal, const String& line)
 {
-    if (!line.startsWith("js "))
+    String cmd = line;
+    if (!cmd.startSkip(name()))
 	return false;
-    String cmd = line.substr(3).trimSpaces();
-    if (cmd.null())
+    cmd.trimSpaces();
+
+    if (cmd.null() || cmd == YSTRING("info")) {
+	retVal.clear();
+	lock();
+	ListIterator iter(JsGlobal::globals());
+	while (JsGlobal* script = static_cast<JsGlobal*>(iter.get()))
+	    retVal << script->name() << " = " << *script << "\r\n";
+	iter.assign(calls());
+	while (JsAssist* assist = static_cast<JsAssist*>(iter.get()))
+	    retVal << assist->id() << ": " << assist->stateName() << "\r\n";
+	unlock();
+	return true;
+    }
+
+    if (!(cmd.startSkip("eval") && cmd.trimSpaces()))
 	return false;
 
     JsParser parser;
@@ -1354,13 +1684,31 @@ bool JsModule::commandComplete(Message& msg, const String& partLine, const Strin
     if (partLine.null() && partWord.null())
 	return false;
     if (partLine.null() || (partLine == "help"))
-	itemComplete(msg.retValue(),"js",partWord);
+	itemComplete(msg.retValue(),name(),partWord);
+    else if (partLine == name()) {
+	for (const char** list = s_cmds; *list; list++)
+	    itemComplete(msg.retValue(),*list,partWord);
+	return true;
+    }
     return Module::commandComplete(msg,partLine,partWord);
 }
 
 bool JsModule::received(Message& msg, int id)
 {
     switch (id) {
+	case Help:
+	    {
+		const String* line = msg.getParam("line");
+		if (TelEngine::null(line)) {
+		    msg.retValue() << s_cmdsLine << "\r\n";
+		    return false;
+		}
+		if (name() != *line)
+		    return false;
+	    }
+	    msg.retValue() << s_cmdsLine << "\r\n";
+	    msg.retValue() << "Controls and executes Javascript commands\r\n";
+	    return true;
 	case Preroute:
 	case Route:
 	    {
@@ -1455,6 +1803,7 @@ void JsModule::initialize()
     Output("Initializing module Javascript");
     ChanAssistList::initialize();
     setup();
+    installRelay(Help);
     Configuration cfg(Engine::configFile("javascript"));
     String tmp = Engine::sharedPath();
     tmp << Engine::pathSeparator() << "scripts";

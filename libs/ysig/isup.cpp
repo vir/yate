@@ -404,6 +404,8 @@ static bool decodeDigits(const SS7ISUP* isup, NamedList& list, const IsupParam* 
 	case SS7MsgISUP::GenericNumber:
 	case SS7MsgISUP::LastDivertingLineIdentity:
 	case SS7MsgISUP::PresentationNumber:
+	case SS7MsgISUP::CalledINNumber:
+	case SS7MsgISUP::OriginalCalledINNumber:
 	    SignallingUtils::addKeyword(list,preName+".restrict",s_dict_presentation,pres);
 	default:
 	    break;
@@ -781,6 +783,8 @@ static unsigned char encodeDigits(const SS7ISUP* isup, SS7MSU& msu,
 	case SS7MsgISUP::GenericNumber:
 	case SS7MsgISUP::LastDivertingLineIdentity:
 	case SS7MsgISUP::PresentationNumber:
+	case SS7MsgISUP::CalledINNumber:
+	case SS7MsgISUP::OriginalCalledINNumber:
 	    if (val && extra)
 		b2 |= (extra->getIntValue(preName+".restrict",s_dict_presentation) & 3) << 2;
 	default:
@@ -1342,6 +1346,9 @@ static const IsupParam s_paramDefs[] = {
     MAKE_PARAM(CCSScallIndication,             1,0,             0,             0),                    // 3.63
     MAKE_PARAM(ForwardGVNS,                    0,0,             0,             0),                    // 3.66
     MAKE_PARAM(BackwardGVNS,                   0,0,             0,             0),                    // 3.62
+    MAKE_PARAM(CalledINNumber,                 0,decodeDigits,  encodeDigits,  0),                    // 3.73
+    MAKE_PARAM(UID_ActionIndicators,           0,0,             0,             0),                    // 3.78
+    MAKE_PARAM(UID_CapabilityIndicators,       0,0,             0,             0),                    // 3.79
     MAKE_PARAM(RedirectCapability,             0,0,             0,             0),                    // 3.96
     MAKE_PARAM(RedirectCounter,                0,0,             0,             0),                    // 3.97
     MAKE_PARAM(CCNRpossibleIndicator,          0,0,             0,             0),                    // 3.83

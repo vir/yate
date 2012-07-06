@@ -123,6 +123,14 @@ h323chan.yate=yes
 ;  sip=filter 127.0.0.1
 
 
+[variables]
+; Each line in this section initializes a variable in the Engine's shared list
+; These variables can be accessed and modified from each module
+; Examples:
+;  index1=5
+;  custom=EXAMPLE
+
+
 [telephony]
 ; Default settings for telephony drivers
 

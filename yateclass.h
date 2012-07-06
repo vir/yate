@@ -5668,6 +5668,15 @@ public:
 	{ return false; }
 
     /**
+     * Get specific socket parameters.
+     * @param params Coma separated list of parameters to obtain
+     * @param result List of parameters to fill
+     * @return True if operation was successful, false if an error occurred
+     */
+    virtual bool getParams(const String& params, NamedList& result)
+	{ return false; }
+
+    /**
      * Set the Type of Service on the IP level of this socket
      * @param tos New TOS bits to set
      * @return True if operation was successfull, false if an error occured

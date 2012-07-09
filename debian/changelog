@@ -1,3 +1,9 @@
+yate (4.1.1~vir2012070902) UNRELEASED; urgency=low
+
+  * yate-h323 package restored
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Mon, 09 Jul 2012 12:40:34 +0400
+
 yate (4.1.1~vir2012070901) UNRELEASED; urgency=low
 
   * Merged upstream fixes, webrtc-based iLBC codec really added.

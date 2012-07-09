@@ -2,7 +2,10 @@ Source: yate
 Section: comm
 Priority: optional
 Maintainer: Vasily i. Redkin <vir@ctm.ru>
-Build-Depends: build-essential, debhelper (>= 7), libasound2-dev, pkg-config, libqt4-dev, libopenh323-dev|libh323plus-dev, libpt-dev, libpq-dev, libmysqlclient-dev, libssl-dev, zaptel-source|dahdi-source, sox, libgsm1-dev, libspeex-dev, doxygen
+Build-Depends: build-essential, debhelper (>= 7), pkg-config,
+ libasound2-dev, libqt4-dev, libh323plus-dev|libopenh323-dev, libpt-dev,
+ libpq-dev, libmysqlclient-dev, libssl-dev, zaptel-source|dahdi-source,
+ libgsm1-dev, libspeex-dev, doxygen
 Standards-Version: 3.7.3
 Homepage: http://yate.null.ro/
 
@@ -57,6 +60,12 @@ Architecture: any
 Recommends: yate (= ${binary:Version}) | yate-qt4 (= ${binary:Version})
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: ALSA channel driver for YATE
+
+Package: yate-h323
+Architecture: any
+Recommends: yate (= ${binary:Version}) | yate-qt4 (= ${binary:Version})
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Yate h323 module
 
 Package: yate-mysql
 Architecture: any

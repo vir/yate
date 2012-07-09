@@ -1,3 +1,13 @@
+yate (4.1.1~svn5189) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5189: + trying to fix build h323 module  +
+    Also return a "status" parameter.  + Return last "localip" and
+    "localport" in the chan.rtp message on termination.  + Use
+    setMedia(0) instead of clearEndpoint() so chan.rtp with
+    terminate=true is emitted when changing media in SIP.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 10 Jul 2012 02:19:17 +0400
+
 yate (4.1.1~svn5187) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5187: + Bug fix: moved the verifying of a

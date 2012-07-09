@@ -45,6 +45,7 @@ debian/tmp/usr/lib/yate/rmanager.yate
 debian/tmp/usr/lib/yate/msgsniff.yate
 debian/tmp/usr/lib/yate/enumroute.yate
 debian/tmp/usr/lib/yate/openssl.yate
+debian/tmp/usr/lib/yate/ilbcwebrtc.yate
 
 debian/tmp/etc/yate/ysockschan.conf
 debian/tmp/usr/lib/yate/ysockschan.yate

@@ -5761,14 +5761,14 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	// TODO: check if we should accept the new media
 	// many implementation don't handle well failure so we should drop
 
+	bool audioChg = (getMedia(YSTRING("audio")) != 0);
 	if (m_rtpAddr != addr) {
 	    m_rtpAddr = addr;
 	    Debug(this,DebugAll,"New RTP addr '%s'",m_rtpAddr.c_str());
 	    // clear all data endpoints - createRtpSDP will build new ones
 	    if (!s_rtp_preserve)
-		clearEndpoint();
+		setMedia(0);
 	}
-	bool audioChg = (getMedia(YSTRING("audio")) != 0);
 	setMedia(lst);
 	audioChg ^= (getMedia(YSTRING("audio")) != 0);
 

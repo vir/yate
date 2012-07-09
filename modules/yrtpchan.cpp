@@ -1427,7 +1427,12 @@ bool RtpHandler::received(Message &msg)
 	w->deref();
     if (terminate) {
 	if (w) {
+	    if (w->host())
+		msg.setParam("localip",w->host());
+	    if (w->port())
+		msg.setParam("localport",String(w->port()));
 	    w->terminate(msg);
+	    msg.setParam("status","terminated");
 	    return true;
 	}
 	return false;
@@ -1438,6 +1443,7 @@ bool RtpHandler::received(Message &msg)
     }
 
     String rip(msg.getValue(YSTRING("remoteip")));
+    const char* status = "updated";
 
     if (!w) {
 	// it would be pointless to create an unreferenced wrapper
@@ -1451,6 +1457,7 @@ bool RtpHandler::received(Message &msg)
 	    return false;
 	}
 
+	status = "created";
 	w = new YRTPWrapper(lip,ch,media,direction,msg,udptl);
 	w->setMaster(msg.getValue(YSTRING("id")));
 
@@ -1495,6 +1502,7 @@ bool RtpHandler::received(Message &msg)
     msg.setParam("localip",w->host());
     msg.setParam("localport",String(w->port()));
     msg.setParam("rtpid",w->id());
+    msg.setParam("status",status);
 
     if (msg.getBoolValue(YSTRING("getsession"),!msg.userData()))
 	msg.userData(w);

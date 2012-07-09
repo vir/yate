@@ -8007,11 +8007,16 @@ bool TcapXApplication::handleIndication(NamedList& tcap)
 	case SS7TCAP::TC_ConversationWithoutPerm:
 	case SS7TCAP::TC_Notice:
 	case SS7TCAP::TC_Unknown:
-	    if (TelEngine::null(ltid) || TelEngine::null(rtid))
+	    if (TelEngine::null(ltid))
 		return false;
 	    lock();
 	    appID = m_ids.findAppID(ltid);
 	    if (TelEngine::null(appID)) {
+		    if (TelEngine::null(rtid)){
+			unlock();
+			reportError("Unknown request ID");
+			return false;
+		    }
 		    appID = m_pending.findTcapID(*rtid);
 		    if (TelEngine::null(appID)) {
 			unlock();

@@ -134,7 +134,7 @@ unsigned long iLBCCodec::Consume(const DataBlock& data, unsigned long tStamp, un
 	block = BLOCKL_30MS;
 	no_bytes=NO_OF_BYTES_30MS;
     }
-    if (m_encoding && tStamp && !m_data.null())
+    if (m_encoding && (tStamp != invalidStamp()) && !m_data.null())
 	tStamp -= (m_data.length() / 2);
     m_data += data;
     int frames,consumed;

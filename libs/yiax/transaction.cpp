@@ -1399,6 +1399,7 @@ bool IAXTransaction::findInFrameTimestamp(const IAXFullFrame* frameOut, IAXFrame
 	    if (match)
 		break;
 	}
+	frame = 0;
     }
     if (frame) {
 	m_inFrames.remove(frame,true);

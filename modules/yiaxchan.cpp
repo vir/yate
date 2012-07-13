@@ -1375,7 +1375,7 @@ void YIAXDriver::initialize()
     Engine::install(new YIAXRegDataHandler);
     // Init IAX engine
     u_int16_t transListCount = 64;
-    u_int16_t retransCount = 5;
+    u_int16_t retransCount = 4;
     u_int16_t retransInterval = 500;
     u_int16_t authTimeout = 30;
     u_int16_t transTimeout = 10;

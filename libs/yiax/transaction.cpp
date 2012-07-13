@@ -248,7 +248,8 @@ IAXTransaction* IAXTransaction::processFrame(IAXFrame* frame)
     if (state() == Terminating) {
 	// Local terminate: Accept only Ack. Remote terminate: Accept none.
 	if (m_localReqEnd && frame->fullFrame()) {
-	    if (!(frame->type() == IAXFrame::IAX && frame->fullFrame()->subclass() == IAXControl::Ack))
+	     if (!(frame->type() == IAXFrame::IAX && (frame->fullFrame()->subclass() == IAXControl::Ack || 
+		frame->fullFrame()->subclass() == IAXControl::Inval || frame->fullFrame()->subclass() == IAXControl::VNAK)))
 		return 0;
 	}
 	else
@@ -480,7 +481,7 @@ unsigned int IAXTransaction::sendMedia(const DataBlock& data, u_int32_t format,
     else
 	Debug(m_engine,DebugStub,
 	    "IAXTransaction::sendMedia() not implemented for type '%s'",fmt->typeName());
-    DDebug(m_engine,sent == data.length() ? DebugAll : DebugNote,
+    XDebug(m_engine,sent == data.length() ? DebugAll : DebugNote,
 	"Transaction(%u,%u) sent %u/%u media=%s mark=%u ts=%u [%p]",
 	localCallNo(),remoteCallNo(),sent,data.length(),
 	fmt->typeName(),mark,ts,this);
@@ -536,7 +537,7 @@ IAXEvent* IAXTransaction::getEvent(u_int64_t time)
 	if (state() == NewRemoteInvite_AuthSent && frame->ack())
 	    frame->adjustAuthTimeout(time + m_engine->authTimeout() * 1000);
 	// No response. Timeout ?
-	if (frame->timeout()) {
+	if (frame->timeout() && frame->timeForRetrans(time)) {
 	    if (m_state == Terminating)
 		// Client already notified: Terminate transaction
 		ev = terminate(IAXEvent::Timeout,true);
@@ -1083,7 +1084,7 @@ IAXEvent* IAXTransaction::getEventResponse(IAXFrameOut* frame, bool& delFrame)
     if (findInFrameAck(frame)) {
 	frame->setAck();
 	// Terminating frame sent
-	if (m_state == Terminating)
+	if (m_state == Terminating && frame->type() == IAXFrame::IAX && frame->subclass() == IAXControl::Hangup)
 	    return terminate(IAXEvent::Terminated,true);
 	// Frame only need ACK
 	if (frame->ackOnly())
@@ -1399,6 +1400,7 @@ bool IAXTransaction::findInFrameTimestamp(const IAXFullFrame* frameOut, IAXFrame
 	    if (match)
 		break;
 	}
+	frame = 0;
     }
     if (frame) {
 	m_inFrames.remove(frame,true);
@@ -1409,10 +1411,12 @@ bool IAXTransaction::findInFrameTimestamp(const IAXFullFrame* frameOut, IAXFrame
 
 bool IAXTransaction::findInFrameAck(const IAXFullFrame* frameOut)
 {
+    if (frameOut && (frameOut->type() == IAXFrame::IAX && frameOut->subclass() == IAXControl::Ping))
+	return false;
     IAXFullFrame* frame = 0;
-    for (ObjList* l = m_inFrames.skipNull(); l; l = l->next()) {
+    for (ObjList* l = m_inFrames.skipNull(); l; l = l->skipNext()) {
 	frame = static_cast<IAXFullFrame*>(l->get());
-	if (frame && frame->type() == IAXFrame::IAX && frame->subclass() == IAXControl::Ack &&
+	if (frame->type() == IAXFrame::IAX && frame->subclass() == IAXControl::Ack &&
 	    frame->timeStamp() == frameOut->timeStamp() && frame->oSeqNo() == frameOut->iSeqNo())
 	    break;
 	frame = 0;
@@ -1429,7 +1433,8 @@ void IAXTransaction::ackInFrames()
     IAXFullFrame* ack = 0;
     for (ObjList* l = m_inFrames.skipNull(); l; l = l->next()) {
 	IAXFullFrame* frame = static_cast<IAXFullFrame*>(l->get());
-	if (frame && frame->type() == IAXFrame::IAX && frame->subclass() != IAXControl::Ack)
+	if (frame && ((frame->type() == IAXFrame::IAX && frame->subclass() != IAXControl::Ack && frame->subclass() != IAXControl::Inval) || 
+	    (frame->type() == IAXFrame::Control && frame->subclass() == IAXFullFrame::Answer)))
 	    ack = frame;
     }
     if (ack) {
@@ -1731,9 +1736,8 @@ void IAXTransaction::eventTerminated(IAXEvent* event)
 
 void IAXTransaction::adjustTStamp(u_int32_t& tStamp)
 {
-    if (tStamp)
-	return;
-    tStamp = (u_int32_t)timeStamp();
+    if (!tStamp)
+	tStamp = (u_int32_t)timeStamp();
     if (m_lastFullFrameOut) {
 	// adjust timestamp to be different from the last sent
 	int32_t delta = tStamp - m_lastFullFrameOut;

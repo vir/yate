@@ -1,3 +1,21 @@
+yate (4.1.1~svn5198) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5198: + Added support for mapping repeated
+    ISUP parameters to Yate messages.  + ilbcwebrtc module added  + Bug
+    fix: after the last retransmission of a frame, wait for a while for
+    an answer before destroying the transaction. Changed debug level for
+    message regarding media transmission.  + Bug fix: don't remove a
+    frame unless it matches with a received ACK.  + Send an INVAL frame
+    when receiving a frame for an unknown transaction.  + Bug fix: don't
+    refuse INVAL/VNAK frames even if a HANGUP has been sent for a
+    transaction.  + Bug fix: don't terminate a transaction until an ACK
+    is received which matches the sent HANGUP frame.  + Bug fix: don't
+    search an ACK for a sent PING.  + Bug fix: Send ACK when receiving
+    ANSWER, don't send ACK when receiving INVAL.  + Always try to adjust
+    timestamps when sending frames.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 14 Jul 2012 02:19:14 +0400
+
 yate (4.1.1~svn5190) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5190: + The names are ParamName,

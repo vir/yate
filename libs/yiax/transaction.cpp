@@ -1411,10 +1411,12 @@ bool IAXTransaction::findInFrameTimestamp(const IAXFullFrame* frameOut, IAXFrame
 
 bool IAXTransaction::findInFrameAck(const IAXFullFrame* frameOut)
 {
+    if (frameOut && (frameOut->type() == IAXFrame::IAX && frameOut->subclass() == IAXControl::Ping))
+	return false;
     IAXFullFrame* frame = 0;
-    for (ObjList* l = m_inFrames.skipNull(); l; l = l->next()) {
+    for (ObjList* l = m_inFrames.skipNull(); l; l = l->skipNext()) {
 	frame = static_cast<IAXFullFrame*>(l->get());
-	if (frame && frame->type() == IAXFrame::IAX && frame->subclass() == IAXControl::Ack &&
+	if (frame->type() == IAXFrame::IAX && frame->subclass() == IAXControl::Ack &&
 	    frame->timeStamp() == frameOut->timeStamp() && frame->oSeqNo() == frameOut->iSeqNo())
 	    break;
 	frame = 0;

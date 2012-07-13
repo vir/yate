@@ -1084,7 +1084,7 @@ IAXEvent* IAXTransaction::getEventResponse(IAXFrameOut* frame, bool& delFrame)
     if (findInFrameAck(frame)) {
 	frame->setAck();
 	// Terminating frame sent
-	if (m_state == Terminating)
+	if (m_state == Terminating && frame->type() == IAXFrame::IAX && frame->subclass() == IAXControl::Hangup)
 	    return terminate(IAXEvent::Terminated,true);
 	// Frame only need ACK
 	if (frame->ackOnly())

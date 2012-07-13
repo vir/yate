@@ -1736,9 +1736,8 @@ void IAXTransaction::eventTerminated(IAXEvent* event)
 
 void IAXTransaction::adjustTStamp(u_int32_t& tStamp)
 {
-    if (tStamp)
-	return;
-    tStamp = (u_int32_t)timeStamp();
+    if (!tStamp)
+	tStamp = (u_int32_t)timeStamp();
     if (m_lastFullFrameOut) {
 	// adjust timestamp to be different from the last sent
 	int32_t delta = tStamp - m_lastFullFrameOut;

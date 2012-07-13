@@ -219,22 +219,22 @@ IAXTransaction* IAXEngine::addFrame(const SocketAddr& addr, IAXFrame* frame)
 	case IAXControl::Poke:
 	    break;
 	case IAXControl::Inval:
+	case IAXControl::FwDownl:
+	case IAXControl::TxCnt:
+	case IAXControl::TxAcc:
 	    // These are often used as keepalives
 	    return 0;
-	case IAXControl::FwDownl:
 	default:
-#ifdef DEBUG
 	    if (fullFrame) {
 	        if (fullFrame->destCallNo() == 0)
 		    Debug(this,DebugAll,"Unsupported incoming transaction Frame(%u,%u). Source call no: %u",
 			frame->type(),fullFrame->subclass(),fullFrame->sourceCallNo());
-#ifdef XDEBUG
 		else
 		    Debug(this,DebugAll,"Unmatched Frame(%u,%u) for (%u,%u)",
 			frame->type(),fullFrame->subclass(),fullFrame->destCallNo(),fullFrame->sourceCallNo());
-#endif
+
+		sendInval(fullFrame,addr);
 	    }
-#endif
 	    return 0;
     }
     // Generate local number
@@ -266,6 +266,18 @@ IAXTransaction* IAXEngine::addFrame(const SocketAddr& addr, const unsigned char*
     if (!tr)
 	frame->deref();
     return tr;
+}
+
+void IAXEngine::sendInval(IAXFullFrame* frame, const SocketAddr& addr)
+{
+    if (!frame)
+	return;
+    DDebug(this,DebugInfo,"Sending INVAL for unmatched frame(%u,%u) with OSeq=%u ISeq=%u",frame->type(),frame->subclass(),
+	frame->oSeqNo(),frame->iSeqNo());
+    IAXFullFrame* f = new IAXFullFrame(IAXFrame::IAX,IAXControl::Inval,frame->destCallNo(),
+	frame->sourceCallNo(),frame->iSeqNo(),frame->oSeqNo(),frame->timeStamp());
+    writeSocket(f->data().data(),f->data().length(),addr,f);
+    f->deref();
 }
 
 bool IAXEngine::process()

@@ -2616,6 +2616,13 @@ public:
     void removeTrunkFrame(IAXMetaTrunkFrame* metaFrame);
 
     /**
+     * Send an INVAL frame
+     * @param frame Frame for which to send an INVAL frame
+     * @param addr The address from where the call request was received
+     */
+    void sendInval(IAXFullFrame* frame, const SocketAddr& addr);
+
+    /**
      * Send a trunk frame
      * @param metaFrame The trunk meta frame to sent
      */

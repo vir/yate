@@ -248,7 +248,8 @@ IAXTransaction* IAXTransaction::processFrame(IAXFrame* frame)
     if (state() == Terminating) {
 	// Local terminate: Accept only Ack. Remote terminate: Accept none.
 	if (m_localReqEnd && frame->fullFrame()) {
-	    if (!(frame->type() == IAXFrame::IAX && frame->fullFrame()->subclass() == IAXControl::Ack))
+	     if (!(frame->type() == IAXFrame::IAX && (frame->fullFrame()->subclass() == IAXControl::Ack || 
+		frame->fullFrame()->subclass() == IAXControl::Inval || frame->fullFrame()->subclass() == IAXControl::VNAK)))
 		return 0;
 	}
 	else

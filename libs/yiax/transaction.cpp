@@ -480,7 +480,7 @@ unsigned int IAXTransaction::sendMedia(const DataBlock& data, u_int32_t format,
     else
 	Debug(m_engine,DebugStub,
 	    "IAXTransaction::sendMedia() not implemented for type '%s'",fmt->typeName());
-    DDebug(m_engine,sent == data.length() ? DebugAll : DebugNote,
+    XDebug(m_engine,sent == data.length() ? DebugAll : DebugNote,
 	"Transaction(%u,%u) sent %u/%u media=%s mark=%u ts=%u [%p]",
 	localCallNo(),remoteCallNo(),sent,data.length(),
 	fmt->typeName(),mark,ts,this);
@@ -536,7 +536,7 @@ IAXEvent* IAXTransaction::getEvent(u_int64_t time)
 	if (state() == NewRemoteInvite_AuthSent && frame->ack())
 	    frame->adjustAuthTimeout(time + m_engine->authTimeout() * 1000);
 	// No response. Timeout ?
-	if (frame->timeout()) {
+	if (frame->timeout() && frame->timeForRetrans(time)) {
 	    if (m_state == Terminating)
 		// Client already notified: Terminate transaction
 		ev = terminate(IAXEvent::Timeout,true);

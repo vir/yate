@@ -1468,7 +1468,7 @@ void LNPQuery::extractAddress(NamedList& params)
 BlockedCode::BlockedCode(const char* code, u_int64_t duration, u_int64_t gap, LNPClient::ACGCause cause)
     : m_code(code)
 {
-    Debug(&__plugin,DebugAll,"BlockedCode created [%p] - code '%s' blocked for "FMT64" seconds with gap="FMT64" seconds, cause=%s",
+    Debug(&__plugin,DebugAll,"BlockedCode created [%p] - code '%s' blocked for "FMT64U" seconds with gap="FMT64U" seconds, cause=%s",
 	  this,m_code.c_str(),duration,gap,lookup(cause,s_acgCauses,""));
     update(duration,gap,cause);
 }

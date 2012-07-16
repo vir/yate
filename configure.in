@@ -865,7 +865,7 @@ fi
 AC_SUBST(HAVE_ILBC)
 AC_SUBST(ILBC_INC)
 
-HAVE_IILBCWR=no
+HAVE_ILBCWR=no
 ILBCWR_INC=""
 AC_ARG_ENABLE(ilbc-webrtc,AC_HELP_STRING([--enable-ilbc-webrtc],[Enable iLBC webrtc codec (default: yes)]),want_ilbc_webrtc=$enableval,want_ilbc_webrtc=yes)
 if [[ "x$want_ilbc_webrtc" = "xyes" ]]; then

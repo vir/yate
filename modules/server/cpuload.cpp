@@ -372,7 +372,7 @@ void Cpu::updateYateLoad()
     bool updateLoad = true;
     if (user < m_yateUser || ker < m_yateSystem || time < m_lastYateCheck) {
 	Debug(&s_module,DebugInfo,"Negative values for yate CPU update "
-	    "cu = "FMT64" lu="FMT64" ck="FMT64" lk="FMT64" ct="FMT64" lt="FMT64" ",
+	    "cu = "FMT64U" lu="FMT64U" ck="FMT64U" lk="FMT64U" ct="FMT64U" lt="FMT64U" ",
 	      user,m_yateUser,ker,m_yateSystem,time,m_lastYateCheck);
 	updateLoad = false;
     }

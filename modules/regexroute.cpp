@@ -723,11 +723,11 @@ bool RouteHandler::received(Message &msg)
     const char *context = msg.getValue(YSTRING("context"),"default");
     Lock lock(s_mutex);
     if (oneContext(msg,called,context,msg.retValue())) {
-	Debug(DebugInfo,"Routing call to '%s' in context '%s' via '%s' in " FMT64 " usec",
+	Debug(DebugInfo,"Routing call to '%s' in context '%s' via '%s' in " FMT64U " usec",
 	    called.c_str(),context,msg.retValue().c_str(),Time::now()-tmr);
 	return true;
     }
-    Debug(DebugInfo,"Could not route call to '%s' in context '%s', wasted " FMT64 " usec",
+    Debug(DebugInfo,"Could not route call to '%s' in context '%s', wasted " FMT64U " usec",
 	called.c_str(),context,Time::now()-tmr);
     return false;
 };

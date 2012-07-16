@@ -2761,7 +2761,7 @@ void RTPTable::reconfigure(const NamedList* cfg)
     if (!m_monitor)
 	m_rtpEntries.clear();
     String directions = cfg->getValue("rtp_directions","");
-    Debug(&__plugin,DebugAll,"RTPTable [%p] configured with directions='%s',resetTime=" FMT64,this,directions.c_str(),m_resetInterval);
+    Debug(&__plugin,DebugAll,"RTPTable [%p] configured with directions='%s',resetTime=" FMT64U,this,directions.c_str(),m_resetInterval);
     if (m_monitor) {
 	ObjList* l = directions.split(',');
 	for (ObjList* o = l->skipNull(); o; o = o->skipNext()) {

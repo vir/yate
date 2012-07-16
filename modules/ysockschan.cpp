@@ -2184,7 +2184,7 @@ void SOCKSConn::setSocksTimeout(u_int64_t now, bool auth)
     }
     m_socksTimeoutMs = now;
     Debug(m_engine,DebugInfo,
-	"SOCKSConn(%s) starting timer now=" FMT64 " interval=" FMT64 " [%p]",
+	"SOCKSConn(%s) starting timer now=" FMT64U " interval=" FMT64U " [%p]",
 	m_id.c_str(),m_socksTimeoutMs,interval,this);
     m_socksTimeoutMs += interval;
 }

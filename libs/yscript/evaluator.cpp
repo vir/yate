@@ -199,9 +199,9 @@ char ExpEvaluator::skipWhites(const char*& expr)
     if (!expr)
 	return 0;
     char skip = '\0';
-    for (;; *expr++) {
+    for (; ; expr++) {
 	char c = *expr;
-	switch (*expr) {
+	switch (c) {
 	    case ' ':
 	    case '\t':
 		skip = '\0';

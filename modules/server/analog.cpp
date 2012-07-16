@@ -1906,7 +1906,7 @@ void AnalogChannel::evAlarm(bool alarm, const char* alarms)
     // Wait if answered
     if (!m_alarmTimer.started()) {
 	Debug(this,DebugNote,
-	    "Line is out of order alarms=%s. Starting timer for " FMT64 " ms [%p]",
+	    "Line is out of order alarms=%s. Starting timer for " FMT64U " ms [%p]",
 	    alarms,m_alarmTimer.interval(),this);
 	m_alarmTimer.start();
     }

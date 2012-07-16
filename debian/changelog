@@ -1,3 +1,12 @@
+yate (4.1.1~svn5202) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5202: + Fixed typo in variable default
+    initialization.  + Fixed "unused returned value" compiler warning.
+    + Fixed several signed/unsigned formatting mismatches.  + Fixed word
+    size on 64 bit MIPS.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 17 Jul 2012 02:19:15 +0400
+
 yate (4.1.1~svn5198) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5198: + Added support for mapping repeated

@@ -418,14 +418,26 @@ void JGRtpMediaList::setMedia(const JGRtpMediaList& src, const String& only)
     clear();
     m_media = src.m_media;
     m_telEvent = src.m_telEvent;
-    ObjList* f = only ? only.split(',',false) : 0;
-    for (ObjList* o = src.skipNull(); o; o = o->skipNext()) {
-	JGRtpMedia* media = static_cast<JGRtpMedia*>(o->get());
-	if (find(media->toString()) || (f && !f->find(media->m_synonym)))
-	    continue;
-	append(new JGRtpMedia(*media));
+    if (only) {
+	// Copy media types in synonym order
+	ObjList* f = only.split(',',false);
+	for (ObjList* o = f->skipNull(); o; o = o->skipNext()) {
+	    JGRtpMedia* media = src.findSynonym(o->get()->toString());
+	    if (!media || find(media->toString()))
+		continue;
+	    append(new JGRtpMedia(*media));
+	}
+	TelEngine::destruct(f);
     }
-    TelEngine::destruct(f);
+    else {
+	// Copy media in source order
+	for (ObjList* o = src.skipNull(); o; o = o->skipNext()) {
+	    JGRtpMedia* media = static_cast<JGRtpMedia*>(o->get());
+	    if (find(media->toString()))
+		continue;
+	    append(new JGRtpMedia(*media));
+	}
+    }
 }
 
 // Filter media list, remove unwanted types

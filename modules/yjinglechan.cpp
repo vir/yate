@@ -3762,8 +3762,8 @@ void YJGDriver::initialize()
 	s_knownCodecs.add("32", "MPV",     "90000", "mpv");
 	s_knownCodecs.add("34", "H263",    "90000", "h263");
 	s_knownCodecs.add("98", "iLBC",    "8000",  "ilbc");
-	s_knownCodecs.add("98", "iLBC",    "8000",  "ilbc20", 0, "20");
-	s_knownCodecs.add("98", "iLBC",    "8000",  "ilbc30", 0, "30");
+	s_knownCodecs.add("98", "iLBC",    "8000",  "ilbc20", 0, "20", 0, "15200");
+	s_knownCodecs.add("98", "iLBC",    "8000",  "ilbc30", 0, "30", 0, "13300");
 	s_knownCodecs.add("102","speex",   "8000",  "speex");
 	s_knownCodecs.add("103","speex",   "16000", "speex/16000");
 	s_knownCodecs.add("104","speex",   "32000", "speex/32000");

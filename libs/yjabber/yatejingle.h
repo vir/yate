@@ -288,11 +288,12 @@ public:
      * @param channels Optional 'channels' attribute (the number of channels)
      * @param pTime Optional "ptime" attribute (packet time)
      * @param maxPTime Optional "maxptime" attribute (maximum packet time)
+     * @param bitRate Optional "bitrate" attribute
      */
     inline void add(const char* id, const char* name, const char* clockrate,
 	const char* synonym = 0, const char* channels = 0,
-	const char* pTime = 0, const char* maxPTime = 0)
-	{ append(new JGRtpMedia(id,name,clockrate,synonym,channels,pTime,maxPTime)); }
+	const char* pTime = 0, const char* maxPTime = 0, const char* bitRate = 0)
+	{ append(new JGRtpMedia(id,name,clockrate,synonym,channels,pTime,maxPTime,bitRate)); }
 
     /**
      * Reset the list and data

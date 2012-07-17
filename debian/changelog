@@ -1,3 +1,15 @@
+yate (4.1.1~svn5204) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5204: + This allows controlling the order in
+    outbound Jingle calls and early media.  + Use the formats (synonyms)
+    order if possible when populating a list of media.  + Add the
+    bitrate to the iLBC formats as some clients use it a a type hint
+    instead of ptime.  + On inbound contents read the bitrate from
+    generic parameter in preference to attribute.  + Add the "bitrate"
+    as a generic payload parameter in addition to the attribute.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 18 Jul 2012 02:19:14 +0400
+
 yate (4.1.1~svn5202) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5202: + Fixed typo in variable default

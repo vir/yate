@@ -47,6 +47,8 @@ INIT_PLUGIN(QuerySipDriver);
 static Configuration s_cfg;
 static ObjList s_waiting;
 static int s_notify = 0;
+static const String s_cnam = "cnam";
+static const String s_lnp = "lnp";
 
 
 class QuerySipChannel :  public Channel
@@ -102,10 +104,10 @@ void QuerySipChannel::disconnected(bool final, const char *reason)
 
 void QuerySipChannel::endCnam(const NamedList& params)
 {
-    if (!params.getBoolValue("redirect"))
+    if (!params.getBoolValue(YSTRING("redirect")))
 	return;
     // Caller Name is in the description of the P-Asserted-Identity URI
-    URI ident(params.getValue("sip_p-asserted-identity"));
+    URI ident(params.getValue(YSTRING("sip_p-asserted-identity")));
     if (ident.null())
 	return;
     m_msg->setParam("querycnam",String::boolText(false));
@@ -118,10 +120,10 @@ void QuerySipChannel::endCnam(const NamedList& params)
 
 void QuerySipChannel::endLnp(const NamedList& params)
 {
-    if (!params.getBoolValue("redirect"))
+    if (!params.getBoolValue(YSTRING("redirect")))
 	return;
     // Routing Number and NPDI are in the Contact header - already parsed
-    String called = params.getValue("called");
+    String called = params.getValue(YSTRING("called"));
     called.toLower();
     if (called.null())
 	return;
@@ -138,14 +140,14 @@ void QuerySipChannel::endLnp(const NamedList& params)
 	    continue;
 	int pos = s->find('=');
 	if (pos < 0) {
-	    npdi = npdi || (*s == "npdi");
+	    npdi = npdi || (*s == YSTRING("npdi"));
 	}
 	else if (pos > 0) {
 	    String key = s->substr(0,pos);
 	    key.trimSpaces();
-	    if (key == "rn")
+	    if (key == YSTRING("rn"))
 		rn = s->substr(pos+1).trimSpaces();
-	    else if (key == "npdi")
+	    else if (key == YSTRING("npdi"))
 		npdi = s->substr(pos+1).toBoolean(true);
 	}
     }
@@ -159,24 +161,26 @@ void QuerySipChannel::endLnp(const NamedList& params)
 
 bool QuerySipDriver::msgPreroute(Message& msg)
 {
-    bool handle = msg.getBoolValue("querycnam_sip",true);
+    bool handle = msg.getBoolValue(YSTRING("querycnam_sip"),true);
     DDebug(this,DebugAll,"QuerySipDriver::msgPreroute(%s)",String::boolText(handle));
     if (!handle)
 	return false;
     Lock mylock(this);
-    String callto = s_cfg.getValue("cnam","callto");
+    String callto = s_cfg.getValue(s_cnam,YSTRING("callto"));
     if (callto.null())
 	return false;
-    String caller = s_cfg.getValue("cnam","caller","${caller}");
+    String caller = s_cfg.getValue(s_cnam,YSTRING("caller"),"${caller}");
     msg.replaceParams(caller);
-    if (!msg.getBoolValue("querycnam",TelEngine::isE164(caller) && !msg.getParam("callername")))
+    if (!msg.getBoolValue(YSTRING("querycnam"),TelEngine::isE164(caller) && !msg.getParam(YSTRING("callername"))))
 	return false;
-    String called = s_cfg.getValue("cnam","called","${called}");
-    int timeout = s_cfg.getIntValue("cnam","timeout",5000);
-    int flags = s_cfg.getIntValue("cnam","flags",-1);
+    String called = s_cfg.getValue(s_cnam,YSTRING("called"),"${called}");
+    String domain = s_cfg.getValue(s_cnam,YSTRING("domain"));
+    int timeout = s_cfg.getIntValue(s_cnam,YSTRING("timeout"),5000);
+    int flags = s_cfg.getIntValue(s_cnam,YSTRING("flags"),-1);
     mylock.drop();
     msg.replaceParams(callto);
     msg.replaceParams(called);
+    msg.replaceParams(domain);
     if (timeout < 1000)
 	timeout = 1000;
     else if (timeout > 30000)
@@ -189,6 +193,7 @@ bool QuerySipDriver::msgPreroute(Message& msg)
     m->addParam("callto",callto);
     m->addParam("caller",caller);
     m->addParam("called",called);
+    m->addParam("domain",domain,false);
     m->addParam("timeout",String(timeout));
     if (-1 != flags)
 	m->addParam("xsip_flags",String(flags));
@@ -208,24 +213,26 @@ bool QuerySipDriver::msgPreroute(Message& msg)
 
 bool QuerySipDriver::msgRoute(Message& msg)
 {
-    bool handle = msg.getBoolValue("querylnp_sip",true);
+    bool handle = msg.getBoolValue(YSTRING("querylnp_sip"),true);
     DDebug(this,DebugAll,"QuerySipDriver::msgRoute(%s)",String::boolText(handle));
     if (!handle)
 	return false;
     Lock mylock(this);
-    String callto = s_cfg.getValue("lnp","callto");
+    String callto = s_cfg.getValue(s_lnp,YSTRING("callto"));
     if (callto.null())
 	return false;
-    String called = s_cfg.getValue("lnp","called","${called}");
+    String called = s_cfg.getValue(s_lnp,YSTRING("called"),"${called}");
     msg.replaceParams(called);
-    if (!msg.getBoolValue("querylnp",TelEngine::isE164(called) && !msg.getBoolValue("npdi")))
+    if (!msg.getBoolValue(YSTRING("querylnp"),TelEngine::isE164(called) && !msg.getBoolValue(YSTRING("npdi"))))
 	return false;
-    String caller = s_cfg.getValue("lnp","caller","${caller}");
-    int timeout = s_cfg.getIntValue("lnp","timeout",5000);
-    int flags = s_cfg.getIntValue("lnp","flags",-1);
+    String caller = s_cfg.getValue(s_lnp,YSTRING("caller"),"${caller}");
+    String domain = s_cfg.getValue(s_lnp,YSTRING("domain"));
+    int timeout = s_cfg.getIntValue(s_lnp,YSTRING("timeout"),5000);
+    int flags = s_cfg.getIntValue(s_lnp,YSTRING("flags"),-1);
     mylock.drop();
     msg.replaceParams(callto);
     msg.replaceParams(caller);
+    msg.replaceParams(domain);
     if (timeout < 1000)
 	timeout = 1000;
     else if (timeout > 30000)
@@ -238,6 +245,7 @@ bool QuerySipDriver::msgRoute(Message& msg)
     m->addParam("callto",callto);
     m->addParam("caller",caller);
     m->addParam("called",called);
+    m->addParam("domain",domain,false);
     m->addParam("timeout",String(timeout));
     if (-1 != flags)
 	m->addParam("xsip_flags",String(flags));

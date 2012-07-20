@@ -1,3 +1,14 @@
+yate (4.1.1~svn5206) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5206: + On inbound contents read the bitrate
+    from generic parameter in preference to attribute.  + Add the
+    "bitrate" as a generic payload parameter in addition to the
+    attribute.  + Added possibility to set the From "domain" parameter
+    in SIP LNP and CNAM queries.  + Use static strings in the SIP CNAM
+    and LNP lookup module.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 21 Jul 2012 02:19:13 +0400
+
 yate (4.1.1~svn5204) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5204: + This allows controlling the order in

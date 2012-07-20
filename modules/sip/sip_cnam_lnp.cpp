@@ -172,11 +172,13 @@ bool QuerySipDriver::msgPreroute(Message& msg)
     if (!msg.getBoolValue("querycnam",TelEngine::isE164(caller) && !msg.getParam("callername")))
 	return false;
     String called = s_cfg.getValue("cnam","called","${called}");
+    String domain = s_cfg.getValue("cnam","domain");
     int timeout = s_cfg.getIntValue("cnam","timeout",5000);
     int flags = s_cfg.getIntValue("cnam","flags",-1);
     mylock.drop();
     msg.replaceParams(callto);
     msg.replaceParams(called);
+    msg.replaceParams(domain);
     if (timeout < 1000)
 	timeout = 1000;
     else if (timeout > 30000)
@@ -189,6 +191,7 @@ bool QuerySipDriver::msgPreroute(Message& msg)
     m->addParam("callto",callto);
     m->addParam("caller",caller);
     m->addParam("called",called);
+    m->addParam("domain",domain,false);
     m->addParam("timeout",String(timeout));
     if (-1 != flags)
 	m->addParam("xsip_flags",String(flags));
@@ -221,11 +224,13 @@ bool QuerySipDriver::msgRoute(Message& msg)
     if (!msg.getBoolValue("querylnp",TelEngine::isE164(called) && !msg.getBoolValue("npdi")))
 	return false;
     String caller = s_cfg.getValue("lnp","caller","${caller}");
+    String domain = s_cfg.getValue("lnp","domain");
     int timeout = s_cfg.getIntValue("lnp","timeout",5000);
     int flags = s_cfg.getIntValue("lnp","flags",-1);
     mylock.drop();
     msg.replaceParams(callto);
     msg.replaceParams(caller);
+    msg.replaceParams(domain);
     if (timeout < 1000)
 	timeout = 1000;
     else if (timeout > 30000)
@@ -238,6 +243,7 @@ bool QuerySipDriver::msgRoute(Message& msg)
     m->addParam("callto",callto);
     m->addParam("caller",caller);
     m->addParam("called",called);
+    m->addParam("domain",domain,false);
     m->addParam("timeout",String(timeout));
     if (-1 != flags)
 	m->addParam("xsip_flags",String(flags));

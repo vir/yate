@@ -278,10 +278,10 @@ IAXTransaction* IAXTransaction::processFrame(IAXFrame* frame)
 	m_inDroppedFrames++;
 	return 0;
     }
-    bool fAck = frame->type() == IAXFrame::IAX && frame->fullFrame()->subclass() == IAXControl::Ack;
+    bool fAck = frame->type() == IAXFrame::IAX && 
+	(frame->fullFrame()->subclass() == IAXControl::Ack || frame->fullFrame()->subclass() == IAXControl::Inval);
     if (!fAck && !isFrameAcceptable(frame->fullFrame()))
 	return 0;
-    incrementSeqNo(frame->fullFrame(),true);
     // Video/Voice full frame: process data & format
     if (type() == New && (frame->type() == IAXFrame::Voice ||
 	frame->type() == IAXFrame::Video)) {
@@ -602,7 +602,7 @@ IAXEvent* IAXTransaction::getEvent(u_int64_t time)
     }
     // No pending outgoing frames. No valid requests. Clear incoming frames queue.
     //m_inDroppedFrames += m_inFrames.count();
-    m_inFrames.clear();
+    //m_inFrames.clear();
     return 0;
 }
 
@@ -941,8 +941,10 @@ bool IAXTransaction::incrementSeqNo(const IAXFullFrame* frame, bool inbound)
 bool IAXTransaction::isFrameAcceptable(const IAXFullFrame* frame)
 {
     int64_t delta = frame->oSeqNo() - m_iSeqNo;
-    if (!delta)
+    if (!delta) {
+	incrementSeqNo(frame,true);
 	return true;
+    }
     if (delta > 0) {
 	// We missed some frames before this one: Send VNAK
 	Debug(m_engine,DebugInfo,"Transaction(%u,%u). Received Frame(%u,%u) out of order! oseq=%u expecting %u. Send VNAK",
@@ -953,6 +955,8 @@ bool IAXTransaction::isFrameAcceptable(const IAXFullFrame* frame)
     }
     DDebug(m_engine,DebugInfo,"Transaction(%u,%u). Received late Frame(%u,%u) with oseq=%u expecting %u [%p]",
 	localCallNo(),remoteCallNo(),frame->type(),frame->subclass(),frame->oSeqNo(),m_iSeqNo,this);
+    if (frame->subclass() == IAXControl::Ping || frame->subclass() == IAXControl::Pong)
+	return true;
     sendAck(frame);	
     return false;
 }
@@ -1470,7 +1474,7 @@ void IAXTransaction::sendAck(const IAXFullFrame* frame)
 void IAXTransaction::sendInval()
 {
     IAXFullFrame* f = new IAXFullFrame(IAXFrame::IAX,IAXControl::Inval,localCallNo(),
-	remoteCallNo(),m_oSeqNo++,m_iSeqNo,(u_int32_t)timeStamp());
+	remoteCallNo(),m_oSeqNo,m_iSeqNo,(u_int32_t)timeStamp());
     m_engine->writeSocket(f->data().data(),f->data().length(),remoteAddr(),f);
     f->deref();
 }
@@ -1519,6 +1523,10 @@ IAXEvent* IAXTransaction::processInternalIncomingRequest(const IAXFullFrame* fra
 	return 0;
     if (frame->subclass() == IAXControl::LagRq) {
 	postFrame(IAXFrame::IAX,IAXControl::LagRp,0,0,frame->timeStamp(),true);
+	delFrame = true;
+    }
+    if (frame->subclass() == IAXControl::Pong) {
+	sendAck(frame);
 	delFrame = true;
     }
     return 0;

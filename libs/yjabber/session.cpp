@@ -1956,8 +1956,11 @@ XmlElement* JGSession0::createJingle(Action action, XmlElement* element1,
     XmlElement* iq = XMPPUtils::createIq(XMPPUtils::IqSet,m_local,m_remote,0);
     XmlElement* jingle = XMPPUtils::createElement(XmlTag::Session,
 	XMPPNamespace::JingleSession);
-    if (action < ActCount)
-	jingle->setAttribute("type",lookupAction(action,version()));
+    if (action < ActCount) {
+	const char* s = lookupAction(action,version());
+	jingle->setAttribute("type",s);
+	jingle->setAttribute("action",s);
+    }
     jingle->setAttribute("initiator",outgoing() ? m_local : m_remote);
     jingle->setAttribute("responder",outgoing() ? m_remote : m_local);
     jingle->setAttribute("id",m_sid);

@@ -278,7 +278,8 @@ IAXTransaction* IAXTransaction::processFrame(IAXFrame* frame)
 	m_inDroppedFrames++;
 	return 0;
     }
-    bool fAck = frame->type() == IAXFrame::IAX && frame->fullFrame()->subclass() == IAXControl::Ack;
+    bool fAck = frame->type() == IAXFrame::IAX && 
+	(frame->fullFrame()->subclass() == IAXControl::Ack || frame->fullFrame()->subclass() == IAXControl::Inval);
     if (!fAck && !isFrameAcceptable(frame->fullFrame()))
 	return 0;
     incrementSeqNo(frame->fullFrame(),true);

@@ -1470,7 +1470,7 @@ void IAXTransaction::sendAck(const IAXFullFrame* frame)
 void IAXTransaction::sendInval()
 {
     IAXFullFrame* f = new IAXFullFrame(IAXFrame::IAX,IAXControl::Inval,localCallNo(),
-	remoteCallNo(),m_oSeqNo++,m_iSeqNo,(u_int32_t)timeStamp());
+	remoteCallNo(),m_oSeqNo,m_iSeqNo,(u_int32_t)timeStamp());
     m_engine->writeSocket(f->data().data(),f->data().length(),remoteAddr(),f);
     f->deref();
 }

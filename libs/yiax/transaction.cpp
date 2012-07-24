@@ -282,7 +282,6 @@ IAXTransaction* IAXTransaction::processFrame(IAXFrame* frame)
 	(frame->fullFrame()->subclass() == IAXControl::Ack || frame->fullFrame()->subclass() == IAXControl::Inval);
     if (!fAck && !isFrameAcceptable(frame->fullFrame()))
 	return 0;
-    incrementSeqNo(frame->fullFrame(),true);
     // Video/Voice full frame: process data & format
     if (type() == New && (frame->type() == IAXFrame::Voice ||
 	frame->type() == IAXFrame::Video)) {
@@ -942,8 +941,10 @@ bool IAXTransaction::incrementSeqNo(const IAXFullFrame* frame, bool inbound)
 bool IAXTransaction::isFrameAcceptable(const IAXFullFrame* frame)
 {
     int64_t delta = frame->oSeqNo() - m_iSeqNo;
-    if (!delta)
+    if (!delta) {
+	incrementSeqNo(frame,true);
 	return true;
+    }
     if (delta > 0) {
 	// We missed some frames before this one: Send VNAK
 	Debug(m_engine,DebugInfo,"Transaction(%u,%u). Received Frame(%u,%u) out of order! oseq=%u expecting %u. Send VNAK",
@@ -954,6 +955,8 @@ bool IAXTransaction::isFrameAcceptable(const IAXFullFrame* frame)
     }
     DDebug(m_engine,DebugInfo,"Transaction(%u,%u). Received late Frame(%u,%u) with oseq=%u expecting %u [%p]",
 	localCallNo(),remoteCallNo(),frame->type(),frame->subclass(),frame->oSeqNo(),m_iSeqNo,this);
+    if (frame->subclass() == IAXControl::Ping || frame->subclass() == IAXControl::Pong)
+	return true;
     sendAck(frame);	
     return false;
 }
@@ -1520,6 +1523,10 @@ IAXEvent* IAXTransaction::processInternalIncomingRequest(const IAXFullFrame* fra
 	return 0;
     if (frame->subclass() == IAXControl::LagRq) {
 	postFrame(IAXFrame::IAX,IAXControl::LagRp,0,0,frame->timeStamp(),true);
+	delFrame = true;
+    }
+    if (frame->subclass() == IAXControl::Pong) {
+	sendAck(frame);
 	delFrame = true;
     }
     return 0;

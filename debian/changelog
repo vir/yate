@@ -1,3 +1,17 @@
+yate (4.1.1~svn5212) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5212: + Clear the "message" member of
+    Channel only when script ended, else just mark it invalid.  + Don't
+    increment output sequence number when sending an INVAL.  + Never
+    reject processing an INVAL frame.  + Don't clear incoming frames
+    queue, avoids losing received ACKs.  + Added special handling for
+    late PING/PONG frames.  + Add 'action' attribute in jingle stanza
+    for old version to generate an event when session initiate stanza is
+    confirmed. This will fix call.ringing dispatch by the jingle
+    channel.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 25 Jul 2012 02:19:15 +0400
+
 yate (4.1.1~svn5206) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5206: + On inbound contents read the bitrate

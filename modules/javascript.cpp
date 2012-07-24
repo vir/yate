@@ -96,7 +96,7 @@ private:
     bool runFunction(const String& name, Message& msg);
     bool runScript(Message* msg, State newState);
     bool setMsg(Message* msg);
-    void clearMsg();
+    void clearMsg(bool fromChannel);
     ScriptRun* m_runner;
     State m_state;
     bool m_handled;
@@ -1378,14 +1378,14 @@ bool JsAssist::setMsg(Message* msg)
     return true;
 }
 
-void JsAssist::clearMsg()
+void JsAssist::clearMsg(bool fromChannel)
 {
     Lock mylock((m_runner && m_runner->context()) ? m_runner->context()->mutex() : 0);
     if (!m_message)
 	return;
     m_message->clearMsg();
     m_message = 0;
-    if (mylock.locked()) {
+    if (fromChannel && mylock.locked()) {
 	ObjList stack;
 	ScriptContext* chan = YOBJECT(ScriptContext,m_runner->context()->getField(stack,YSTRING("Channel"),m_runner));
 	if (chan) {
@@ -1422,7 +1422,7 @@ bool JsAssist::runScript(Message* msg, State newState)
 	    break;
     }
     bool handled = m_handled;
-    clearMsg();
+    clearMsg(m_state >= Ended);
 
 #ifdef DEBUG
     tm = Time::now() - tm;

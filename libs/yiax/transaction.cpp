@@ -603,7 +603,7 @@ IAXEvent* IAXTransaction::getEvent(u_int64_t time)
     }
     // No pending outgoing frames. No valid requests. Clear incoming frames queue.
     //m_inDroppedFrames += m_inFrames.count();
-    m_inFrames.clear();
+    //m_inFrames.clear();
     return 0;
 }
 

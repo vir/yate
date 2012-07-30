@@ -123,6 +123,7 @@ for small to large scale projects.
 %{_libdir}/yate/yjinglechan.yate
 %{_libdir}/yate/enumroute.yate
 %{_libdir}/yate/ilbccodec.yate
+%{_libdir}/yate/ilbcwebrtc.yate
 %{_libdir}/yate/isaccodec.yate
 %{_libdir}/yate/gvoice.yate
 %{_libdir}/yate/server/dbwave.yate

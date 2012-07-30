@@ -104,7 +104,8 @@ void QuerySipChannel::disconnected(bool final, const char *reason)
 
 void QuerySipChannel::endCnam(const NamedList& params)
 {
-    if (!params.getBoolValue(YSTRING("redirect")))
+    int code = params.getIntValue(YSTRING("cause_sip"));
+    if (!params.getBoolValue(YSTRING("redirect"),((code / 100) == 3)))
 	return;
     // Caller Name is in the description of the P-Asserted-Identity URI
     URI ident(params.getValue(YSTRING("sip_p-asserted-identity")));

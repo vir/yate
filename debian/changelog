@@ -1,3 +1,12 @@
+yate (4.1.1~svn5214) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5214: + Package the WebRTC based iLBC codec.
+    + Works around broken providers that lack a Contact header in their
+    CNAM answer.  + Assume a SIP 3xx response is a redirect unless the
+    "redirect" parameter is explicitely false.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 31 Jul 2012 02:19:18 +0400
+
 yate (4.1.1~svn5212) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5212: + Clear the "message" member of

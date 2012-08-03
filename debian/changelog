@@ -1,3 +1,13 @@
+yate (4.1.1~svn5215) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5215: + Assume a SIP 3xx response is a
+    redirect unless the "redirect" parameter is explicitely false.  +
+    Previously only the authentication could be disabled.  + Allow the
+    registration and routing to be disabled by message parameters in
+    regfile and register.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 04 Aug 2012 02:19:15 +0400
+
 yate (4.1.1~svn5214) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5214: + Package the WebRTC based iLBC codec.

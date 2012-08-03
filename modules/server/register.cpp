@@ -427,6 +427,8 @@ bool AAAHandler::received(Message& msg)
     {
 	case Regist:
 	{
+	    if (!msg.getBoolValue(YSTRING("register_register"),true))
+		return false;
 	    if (s_critical)
 		return failure(&msg);
 	    Message m("database");
@@ -439,7 +441,7 @@ bool AAAHandler::received(Message& msg)
 	break;
 	case Auth:
 	{
-	    if (!msg.getBoolValue("auth_register",true))
+	    if (!msg.getBoolValue(YSTRING("auth_register"),true))
 		return false;
 	    Message m("database");
 	    prepareQuery(m,account,query,true);
@@ -459,6 +461,8 @@ bool AAAHandler::received(Message& msg)
 	break;
 	case PreRoute:
 	{
+	    if (!msg.getBoolValue(YSTRING("preroute_register"),true))
+		return false;
 	    if (s_critical)
 		return failure(&msg);
 	    Message m("database");
@@ -474,6 +478,8 @@ bool AAAHandler::received(Message& msg)
 	break;
 	case Route:
 	{
+	    if (!msg.getBoolValue(YSTRING("route_register"),true))
+		return false;
 	    if (s_critical)
 		return failure(&msg);
 	    Message m("database");
@@ -500,6 +506,8 @@ bool AAAHandler::received(Message& msg)
 	break;
 	case UnRegist:
 	{
+	    if (!msg.getBoolValue(YSTRING("register_register"),true))
+		return false;
 	    // no error check needed on unregister - we return false
 	    Message m("database");
 	    prepareQuery(m,account,query,true);

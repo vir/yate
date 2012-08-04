@@ -861,6 +861,7 @@ private:
     void startPendingUpdate();
     bool processTransaction2(SIPEvent* ev, const SIPMessage* msg, int code);
     SIPMessage* createDlgMsg(const char* method, const char* uri = 0);
+    void updateTarget(const SIPMessage* msg);
     void emitUpdate();
     bool emitPRACK(const SIPMessage* msg);
     bool startClientReInvite(Message& msg, bool rtpForward);
@@ -1042,6 +1043,7 @@ static bool s_auth_register = true;
 static bool s_reg_async = true;
 static bool s_multi_ringing = false;
 static bool s_refresh_nosdp = true;
+static bool s_update_target = false;
 static bool s_ignoreVia = true;          // Ignore Via headers and send answer back to the source
 static bool s_sipt_isup = false;         // Control the application/isup body processing
 static bool s_printMsg = true;           // Print sent/received SIP messages to output
@@ -5227,6 +5229,27 @@ SIPMessage* YateSIPConnection::createDlgMsg(const char* method, const char* uri)
     return m;
 }
 
+// Update the dialog from received target refresh message
+void YateSIPConnection::updateTarget(const SIPMessage* msg)
+{
+    if (!s_update_target)
+	return;
+    if (!msg)
+	return;
+    const MimeHeaderLine* co = msg->getHeader("Contact");
+    if (!co)
+	return;
+    // (re)INVITE had a Contact: header - change remote URI
+    m_uri = *co;
+    m_uri.parse();
+    m_dialog.remoteURI = m_uri;
+    SIPParty* party = msg->getParty();
+    if (party) {
+	party->getAddr(m_host,m_port,false);
+	setParty(party);
+    }
+}
+
 // Emit a call.update to notify cdrbuild of callid dialog tags change
 void YateSIPConnection::emitUpdate()
 {
@@ -5741,6 +5764,7 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 		t->ref();
 		t->setUserData(this);
 		m_tr2 = t;
+		updateTarget(t->initialMessage());
 	    }
 	    return;
 	}
@@ -5775,6 +5799,7 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	m_mediaStatus = MediaMissing;
 	// let RTP guess again the local interface or use the enforced address
 	setRtpLocalAddr(m_rtpLocalAddr);
+	updateTarget(t->initialMessage());
 
 	SIPMessage* m = new SIPMessage(t->initialMessage(), 200);
 	MimeSdpBody* sdpNew = createRtpSDP(true);
@@ -5794,6 +5819,7 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
     m_reInviting = invite;
     if (s_refresh_nosdp && !sdp) {
 	// be permissive, accept session refresh with no SDP
+	updateTarget(t->initialMessage());
 	SIPMessage* m = new SIPMessage(t->initialMessage(),200);
 	// if required provide our own media offer
 	if (!m_rtpForward)
@@ -7479,6 +7505,7 @@ void SIPDriver::initialize()
     s_start_rtp = s_cfg.getBoolValue("general","rtp_start",false);
     s_multi_ringing = s_cfg.getBoolValue("general","multi_ringing",false);
     s_refresh_nosdp = s_cfg.getBoolValue("general","refresh_nosdp",true);
+    s_update_target = s_cfg.getBoolValue("general","update_target",false);
     s_ignoreVia = s_cfg.getBoolValue("general","ignorevia",true);
     s_printMsg = s_cfg.getBoolValue("general","printmsg",true);
     s_tcpMaxpkt = getMaxpkt(s_cfg.getIntValue("general","tcp_maxpkt",4096),4096);

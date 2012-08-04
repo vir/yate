@@ -1,3 +1,11 @@
+yate (4.1.1~svn5216) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5216: + Allow the registration and routing
+    to be disabled by message parameters in regfile and register.  +
+    Added support for updating remote dialog and party on reINVITE.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sun, 05 Aug 2012 02:19:14 +0400
+
 yate (4.1.1~svn5215) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5215: + Assume a SIP 3xx response is a

@@ -226,7 +226,7 @@ static bool checkVolumeSettable(AudioDeviceID devId, UInt32 inChannel,Boolean is
     OSStatus err = AudioObjectIsPropertySettable(devId,&volumeAddress,&isWritable);
     if (err != noErr) {
 	DDebug(DebugAll, "CoreAudio - %s AudioUnit Failed to get if volume property is settable on channel=%u, err=%4.4s, %ld",(isInput ? "Input" : "Output"),
-               (unsigned int)inChannel,(char*)&err,err);
+               (unsigned int)inChannel,(char*)&err,(long int)err);
 	return false;
     }
     return isWritable;
@@ -315,7 +315,7 @@ bool CoreAudioSource::init()
 
     if(err != noErr) {
         fAudioUnit = NULL;
-        Debug(DebugInfo,"CoreAudioSource::init() [%p] - failed to open component error==%4.4s, %ld",this,(char*)&err,err);
+        Debug(DebugInfo,"CoreAudioSource::init() [%p] - failed to open component error==%4.4s, %ld",this,(char*)&err,(long int)err);
         return false;
     }
 
@@ -328,7 +328,7 @@ bool CoreAudioSource::init()
 	err = AudioUnitSetProperty(fAudioUnit,kAudioOutputUnitProperty_EnableIO,kAudioUnitScope_Output,0,&param,sizeof(UInt32));
     }
     else {
-	Debug(DebugInfo,"CoreAudioSource::init() [%p] - failed to configure AudioUnit for input error==%4.4s, %ld",this,(char*)&err,err);
+	Debug(DebugInfo,"CoreAudioSource::init() [%p] - failed to configure AudioUnit for input error==%4.4s, %ld",this,(char*)&err,(long int)err);
 	return false;
     }
 	
@@ -338,14 +338,14 @@ bool CoreAudioSource::init()
     AudioObjectPropertyAddress devAddress = {kAudioHardwarePropertyDefaultInputDevice,kAudioObjectPropertyScopeGlobal,kAudioObjectPropertyElementMaster};
     err = AudioObjectGetPropertyData(kAudioObjectSystemObject,&devAddress,0,NULL,&param,&fInputDevID);
     if(err != noErr) {
-	Debug(DebugInfo,"CoreAudioSource::init() [%p] - failed to get input device error==%4.4s, %ld",this,(char*)&err,err);
+	Debug(DebugInfo,"CoreAudioSource::init() [%p] - failed to get input device error==%4.4s, %ld",this,(char*)&err,(long int)err);
 	return false;
     }
 
     // set the current device to the AudioUnit
     err = AudioUnitSetProperty(fAudioUnit,kAudioOutputUnitProperty_CurrentDevice,kAudioUnitScope_Global,0,&fInputDevID,sizeof(AudioDeviceID));
     if (err != noErr) {
-	Debug(DebugInfo,"CoreAudioSource::init() [%p] - failed to set AU input device=%4.4s, %ld",this,(char*)&err,err);
+	Debug(DebugInfo,"CoreAudioSource::init() [%p] - failed to set AU input device=%4.4s, %ld",this,(char*)&err,(long int)err);
 	return false;
     }
 	
@@ -355,7 +355,7 @@ bool CoreAudioSource::init()
     callback.inputProcRefCon = this;
     err = AudioUnitSetProperty(fAudioUnit,kAudioOutputUnitProperty_SetInputCallback,kAudioUnitScope_Global,0,&callback,sizeof(AURenderCallbackStruct));
     if (err != noErr) {
-	Debug(DebugInfo,"CoreAudioSource::init() [%p] - could not set callback error==%4.4s, %ld",this,(char*)&err,err);
+	Debug(DebugInfo,"CoreAudioSource::init() [%p] - could not set callback error==%4.4s, %ld",this,(char*)&err,(long int)err);
 	return false;
     }
 	
@@ -364,7 +364,7 @@ bool CoreAudioSource::init()
     AudioStreamBasicDescription devFormat;
     err = AudioUnitGetProperty(fAudioUnit,kAudioUnitProperty_StreamFormat,kAudioUnitScope_Input,1,&devFormat,&param);
     if(err != noErr) {
-	Debug(DebugInfo,"CoreAudioSource::init() [%p] - failed to get input device AudioStreamBasicDescription error==%4.4s, %ld",this,(char*)&err,err);
+	Debug(DebugInfo,"CoreAudioSource::init() [%p] - failed to get input device AudioStreamBasicDescription error==%4.4s, %ld",this,(char*)&err,(long int)err);
 	return false;
     }
 
@@ -393,7 +393,7 @@ bool CoreAudioSource::init()
     // set the AudioUnit output data format
     err = AudioUnitSetProperty(fAudioUnit,kAudioUnitProperty_StreamFormat,kAudioUnitScope_Output,1,&m_outDevFormat,sizeof(AudioStreamBasicDescription));
     if(err != noErr) {
-	Debug(DebugInfo, "CoreAudioSource::init() [%p] - failed to set output data format error==%4.4s, %ld",this,(char*)&err,err);
+	Debug(DebugInfo, "CoreAudioSource::init() [%p] - failed to set output data format error==%4.4s, %ld",this,(char*)&err,(long int)err);
 	return false;
     }
 
@@ -406,7 +406,7 @@ bool CoreAudioSource::init()
     // obtain a sample rate converter
     err = buildConverter(m_outDevFormat,&m_audioConvert);
     if (err != noErr) {
-	Debug(DebugInfo,"CoreAudioSource::init() [%p] - failed to get sample rate converter error==%4.4s, %ld",this,(char*)&err,err);
+	Debug(DebugInfo,"CoreAudioSource::init() [%p] - failed to get sample rate converter error==%4.4s, %ld",this,(char*)&err,(long int)err);
 	return false;
     }
 
@@ -415,14 +415,14 @@ bool CoreAudioSource::init()
     param = sizeof(UInt32);
     err = AudioUnitGetProperty(fAudioUnit,kAudioDevicePropertyBufferFrameSize,kAudioUnitScope_Global,0,&audioSamples,&param);
     if(err != noErr) {
-	Debug(DebugInfo,"CoreAudioSource::init() [%p] - failed to get audio sample size error==%4.4s, %ld",this,(char*)&err,err);
+	Debug(DebugInfo,"CoreAudioSource::init() [%p] - failed to get audio sample size error==%4.4s, %ld",this,(char*)&err,(long int)err);
 	return false;
     }
 
     // Initialize the AU
     err = AudioUnitInitialize(fAudioUnit);
     if(err != noErr) {
-	Debug(DebugInfo,"CoreAudioSource::init() [%p] - Failed to initialize AU error==%4.4s, %ld",this,(char*)&err,err);
+	Debug(DebugInfo,"CoreAudioSource::init() [%p] - Failed to initialize AU error==%4.4s, %ld",this,(char*)&err,(long int)err);
 	return false;
     }
     
@@ -436,7 +436,7 @@ bool CoreAudioSource::init()
     // Start pulling for audio data
     err = AudioOutputUnitStart(fAudioUnit);
     if(err != noErr) {
-	Debug(DebugInfo,"CoreAudioSource::init() [%p] - Failed to start the AudioUnit error==%4.4s, %ld",this,(char*)&err,err);
+	Debug(DebugInfo,"CoreAudioSource::init() [%p] - Failed to start the AudioUnit error==%4.4s, %ld",this,(char*)&err,(long int)err);
 	return false;
     }
     else
@@ -475,7 +475,7 @@ OSStatus CoreAudioSource::buildConverter(AudioStreamBasicDescription inputFormat
     OSStatus err = noErr;
     err = AudioConverterNew(&inputFormat,&m_convertToFormat,ac);
     if (err != noErr) {
-	Debug(DebugInfo,"CoreAudioSource::buildConverter() [%p] failed to get converter error==%4.4s, %ld",this,(char*)&err, err);
+	Debug(DebugInfo,"CoreAudioSource::buildConverter() [%p] failed to get converter error==%4.4s, %ld",this,(char*)&err,(long int)err);
 	return err;
     }
 	    
@@ -487,7 +487,7 @@ OSStatus CoreAudioSource::buildConverter(AudioStreamBasicDescription inputFormat
     UInt32 prop = kAudioConverterSampleRateConverterComplexity_Mastering;
     err = AudioConverterSetProperty(*ac,kAudioConverterSampleRateConverterComplexity,size,&prop);
     if (err != noErr)
-	Debug(DebugInfo,"CoreAudioSource::buildConverter() [%p] failed to set converter complexity error==%4.4s, %ld",this,(char*)&err,err);
+	Debug(DebugInfo,"CoreAudioSource::buildConverter() [%p] failed to set converter complexity error==%4.4s, %ld",this,(char*)&err,(long int)err);
     return noErr;
 }
 	
@@ -557,7 +557,7 @@ OSStatus CoreAudioSource::inputCallback(void* inRefCon, AudioUnitRenderActionFla
     // Render into audio buffer
     err = AudioUnitRender(source->fAudioUnit,ioActionFlags,inTimeStamp,inBusNumber,inNumberFrames,source->m_inAudioBuffer);
     if(err)
-	Debug(DebugInfo,"CoreAudioSource::inputCallback() [%p] AudioUnitRender() failed with error=%4.4s, %ld",source,(char*)&err,err);
+	Debug(DebugInfo,"CoreAudioSource::inputCallback() [%p] AudioUnitRender() failed with error=%4.4s, %ld",source,(char*)&err,(long int)err);
 	
     source->sendData(source->m_inAudioBuffer);	
     return err;
@@ -581,7 +581,7 @@ void CoreAudioSource::run()
 	    fillBufList.mBuffers[0].mDataByteSize = FRAME_SIZE;
 	    OSStatus err = AudioConverterFillComplexBuffer(m_audioConvert,convertCallback,this,&outBuffSize,&fillBufList,NULL/*pktDesc*/);
 	    if (err != noErr && err != 1)
-		Debug(DebugInfo,"CoreAudioSource::run() - AudioConvertFillComplexBuffer() failed with error=%4.4s, %ld", (char*)&err, err);
+		Debug(DebugInfo,"CoreAudioSource::run() - AudioConvertFillComplexBuffer() failed with error=%4.4s, %ld", (char*)&err, (long int)err);
 	    if (outBuffSize == 0) {
 		Thread::idle();
 		continue;
@@ -629,7 +629,7 @@ bool CoreAudioSource::control(NamedList& params)
         AudioObjectPropertyAddress volumeAddress = {kAudioDevicePropertyVolumeScalar,kAudioDevicePropertyScopeInput,i};
         OSStatus err = AudioObjectSetPropertyData(fInputDevID,&volumeAddress,0,NULL,sizeof(Float32),&volValue);
         if (err != noErr)
-            DDebug(DebugAll,"CoreAudioSource::control() [%p] - set volume failed with error=%4.4s, %ld on channel %u",this,(char*)&err,err,i);
+            DDebug(DebugAll,"CoreAudioSource::control() [%p] - set volume failed with error=%4.4s, %ld on channel %u",this,(char*)&err,(long int)err,i);
         setVolStatus = (err == noErr) || setVolStatus;
 
         // get the actual set volume value
@@ -637,7 +637,7 @@ bool CoreAudioSource::control(NamedList& params)
         UInt32 size = sizeof(setVolumePerChannel);
         err = AudioObjectGetPropertyData(fInputDevID,&volumeAddress,0,NULL,&size,&setVolumePerChannel);
         if (err != noErr)
-            DDebug(DebugAll,"CoreAudioSource::control() [%p] - get volume failed with error=%4.4s, %ld on channel %u",this,(char*)&err,err,i);
+            DDebug(DebugAll,"CoreAudioSource::control() [%p] - get volume failed with error=%4.4s, %ld on channel %u",this,(char*)&err,(long int)err,i);
         else {
             if (setVolValue / 100.0 < setVolumePerChannel)
                 setVolValue = setVolumePerChannel * 100;
@@ -669,10 +669,10 @@ CoreAudioConsumer::~CoreAudioConsumer()
     Debug(DebugAll,"CoreAudioConsumer::~CoreAudioConsumer() [%p] total=%u",this,m_total);
     OSStatus err = AudioOutputUnitStop(fAudioUnit);
     if(err != noErr)
-	Debug(DebugInfo,"CoreAudioConsumer::~CoreAudioConsumer() [%p] - Failed to stop output AudioUnit error=%4.4s, %ld",this,(char*)&err,err);
+	Debug(DebugInfo,"CoreAudioConsumer::~CoreAudioConsumer() [%p] - Failed to stop output AudioUnit error=%4.4s, %ld",this,(char*)&err,(long int)err);
     err = AudioUnitUninitialize(fAudioUnit);
     if(err != noErr)
-    	Debug(DebugInfo,"CoreAudioConsumer::~CoreAudioConsumer() [%p] - Failed to uninitialize the AudioUnit error=%4.4s, %ld",this,(char*)&err,err);
+    	Debug(DebugInfo,"CoreAudioConsumer::~CoreAudioConsumer() [%p] - Failed to uninitialize the AudioUnit error=%4.4s, %ld",this,(char*)&err,(long int)err);
 }
 	
 bool CoreAudioConsumer::init()
@@ -703,7 +703,7 @@ bool CoreAudioConsumer::init()
 #endif
 
     if(err != noErr) {
-        Debug(DebugInfo,"CoreAudioConsumer::init() [%p] - failed to open component error==%4.4s, %ld",this,(char*)&err,err);
+        Debug(DebugInfo,"CoreAudioConsumer::init() [%p] - failed to open component error==%4.4s, %ld",this,(char*)&err,(long int)err);
         fAudioUnit = NULL;
         return false;
     }
@@ -714,7 +714,7 @@ bool CoreAudioConsumer::init()
     callback.inputProcRefCon = this;
     err = AudioUnitSetProperty (fAudioUnit,kAudioUnitProperty_SetRenderCallback,kAudioUnitScope_Input,0,&callback,sizeof(callback));
     if (err != noErr)
-	Debug(DebugInfo,"CoreAudioConsumer::init() [%p]- callback could not be set error=%4.4s, %ld",this,(char*)&err,err);
+	Debug(DebugInfo,"CoreAudioConsumer::init() [%p]- callback could not be set error=%4.4s, %ld",this,(char*)&err,(long int)err);
 
     // provide the input format of the date we're supplying
     AudioStreamBasicDescription inputFormat;
@@ -730,7 +730,7 @@ bool CoreAudioConsumer::init()
 
     err = AudioUnitSetProperty(fAudioUnit,kAudioUnitProperty_StreamFormat,kAudioUnitScope_Input,0,&inputFormat,sizeof(AudioStreamBasicDescription));
     if (err != noErr) {
-	Debug(DebugInfo,"CoreAudioConsumer::init() [%p] - set input format failed error==%4.4s, %ld",this,(char*)&err,err);
+	Debug(DebugInfo,"CoreAudioConsumer::init() [%p] - set input format failed error==%4.4s, %ld",this,(char*)&err,(long int)err);
 	return false;
     }
     DDebug(DebugInfo,"CoreAudioConsumer::init() [%p] - intput format is : channels/frame=%u, sampleRate=%f, bits/channel=%u, "
@@ -742,14 +742,14 @@ bool CoreAudioConsumer::init()
     // initialize the AudioUnit
     err = AudioUnitInitialize(fAudioUnit);
     if (err != noErr) {
-	Debug(DebugInfo,"CoreAudioConsumer::init() [%p] - AudioUnitInitialize failed error=%4.4s, %ld",this,(char*)&err,err);
+	Debug(DebugInfo,"CoreAudioConsumer::init() [%p] - AudioUnitInitialize failed error=%4.4s, %ld",this,(char*)&err,(long int)err);
 	return false;
     }
 
     // start the AudioUnit
     err = AudioOutputUnitStart(fAudioUnit);
     if (err != noErr) {
-	Debug(DebugInfo,"CoreAudioConsumer::init() [%p] - AudioUnitStart failed error=%4.4s, %ld",this,(char*)&err,err);
+	Debug(DebugInfo,"CoreAudioConsumer::init() [%p] - AudioUnitStart failed error=%4.4s, %ld",this,(char*)&err,(long int)err);
 	return false;
     }
 
@@ -759,14 +759,14 @@ bool CoreAudioConsumer::init()
     AudioObjectPropertyAddress devAddress = {kAudioHardwarePropertyDefaultOutputDevice,kAudioObjectPropertyScopeGlobal,kAudioObjectPropertyElementMaster};
     err = AudioObjectGetPropertyData(kAudioObjectSystemObject,&devAddress,0,NULL,&param,&fOutputDevID);
     if(err != noErr)
-	Debug(DebugMild,"CoreAudioConsumer::init() [%p] - Failed to get the device id of the output device error==%4.4s, %ld",this,(char*)&err,err);
+	Debug(DebugMild,"CoreAudioConsumer::init() [%p] - Failed to get the device id of the output device error==%4.4s, %ld",this,(char*)&err,(long int)err);
 
     // get hardware device format
     param = sizeof(AudioStreamBasicDescription);
     AudioStreamBasicDescription devFormat;
     err = AudioUnitGetProperty(fAudioUnit,kAudioUnitProperty_StreamFormat,kAudioUnitScope_Output,0,&devFormat,&param);
     if(err != noErr) {
-	Debug(DebugInfo,"CoreAudioConsumer::init() [%p] - failed to get input device AudioStreamBasicDescription error==%4.4s, %ld",this,(char*)&err,err);
+	Debug(DebugInfo,"CoreAudioConsumer::init() [%p] - failed to get input device AudioStreamBasicDescription error==%4.4s, %ld",this,(char*)&err,(long int)err);
 	// we didn't get the hardware format, but it's a safe bet that we have at least 1 channel
         m_channels = 1;
     }
@@ -852,7 +852,7 @@ bool CoreAudioConsumer::control(NamedList& params)
         AudioObjectPropertyAddress volumeAddress = {kAudioDevicePropertyVolumeScalar,kAudioDevicePropertyScopeOutput,i};
         OSStatus err = AudioObjectSetPropertyData(fOutputDevID,&volumeAddress,0,NULL,sizeof(Float32),&volValue);
         if (err != noErr)
-            DDebug(DebugAll,"CoreAudioConsumer::control() [%p] - set volume failed with error=%4.4s, %ld on channel %u",this,(char*)&err,err,i);
+            DDebug(DebugAll,"CoreAudioConsumer::control() [%p] - set volume failed with error=%4.4s, %ld on channel %u",this,(char*)&err,(long int)err,i);
         setVolStatus = (err == noErr) || setVolStatus;
 
         // get the actual set volume value
@@ -860,7 +860,7 @@ bool CoreAudioConsumer::control(NamedList& params)
         UInt32 size = sizeof(setVolumePerChannel);
         err = AudioObjectGetPropertyData(fOutputDevID,&volumeAddress,0,NULL,&size,&setVolumePerChannel);
         if (err != noErr)
-            DDebug(DebugAll,"CoreAudioComsumer::control() [%p] - get volume failed with error=%4.4s, %ld on channel %u",this,(char*)&err,err,i);
+            DDebug(DebugAll,"CoreAudioComsumer::control() [%p] - get volume failed with error=%4.4s, %ld on channel %u",this,(char*)&err,(long int)err,i);
         else {
             if (setVolValue / 100.0 < setVolumePerChannel)
                 setVolValue = setVolumePerChannel * 100;

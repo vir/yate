@@ -38,7 +38,7 @@
 #ifndef _WORDSIZE
 #if defined(__arch64__) || defined(__x86_64__) \
     || defined(__amd64__) || defined(__ia64__) \
-    || defined(__alpha__) || defined(__sparcv9)
+    || defined(__alpha__) || defined(__sparcv9) || defined(__mips64)
 #define _WORDSIZE 64
 #else
 #define _WORDSIZE 32

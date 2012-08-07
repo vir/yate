@@ -314,7 +314,10 @@ XmlElement* JGRtpMedia::toXml() const
     p->setAttributeValid("channels",m_channels);
     p->setAttributeValid("ptime",m_pTime);
     p->setAttributeValid("maxptime",m_maxPTime);
-    p->setAttributeValid("bitrate",m_bitRate);
+    if (m_bitRate) {
+	p->setAttributeValid("bitrate",m_bitRate);
+	p->addChild(XMPPUtils::createParameter("bitrate",m_bitRate));
+    }
     unsigned int n = m_params.length();
     for (unsigned int i = 0; i < n; i++) {
 	NamedString* s = m_params.getParam(i);
@@ -335,8 +338,15 @@ void JGRtpMedia::fromXml(XmlElement* xml)
 	xml->attribute("ptime"),xml->attribute("maxptime"),
 	xml->attribute("bitrate"));
     XmlElement* param = XMPPUtils::findFirstChild(*xml,XmlTag::Parameter);
-    for (; param; param = XMPPUtils::findNextChild(*xml,param,XmlTag::Parameter))
-	m_params.addParam(param->attribute("name"),param->attribute("value"));
+    for (; param; param = XMPPUtils::findNextChild(*xml,param,XmlTag::Parameter)) {
+	const String* name = param->getAttribute(YSTRING("name"));
+	if (!name)
+	    continue;
+	if (*name == YSTRING("bitrate"))
+	    m_bitRate = param->attribute(YSTRING("value"));
+	else
+	    m_params.addParam(*name,param->attribute(YSTRING("value")));
+    }
 }
 
 
@@ -418,14 +428,26 @@ void JGRtpMediaList::setMedia(const JGRtpMediaList& src, const String& only)
     clear();
     m_media = src.m_media;
     m_telEvent = src.m_telEvent;
-    ObjList* f = only ? only.split(',',false) : 0;
-    for (ObjList* o = src.skipNull(); o; o = o->skipNext()) {
-	JGRtpMedia* media = static_cast<JGRtpMedia*>(o->get());
-	if (find(media->toString()) || (f && !f->find(media->m_synonym)))
-	    continue;
-	append(new JGRtpMedia(*media));
+    if (only) {
+	// Copy media types in synonym order
+	ObjList* f = only.split(',',false);
+	for (ObjList* o = f->skipNull(); o; o = o->skipNext()) {
+	    JGRtpMedia* media = src.findSynonym(o->get()->toString());
+	    if (!media || find(media->toString()))
+		continue;
+	    append(new JGRtpMedia(*media));
+	}
+	TelEngine::destruct(f);
     }
-    TelEngine::destruct(f);
+    else {
+	// Copy media in source order
+	for (ObjList* o = src.skipNull(); o; o = o->skipNext()) {
+	    JGRtpMedia* media = static_cast<JGRtpMedia*>(o->get());
+	    if (find(media->toString()))
+		continue;
+	    append(new JGRtpMedia(*media));
+	}
+    }
 }
 
 // Filter media list, remove unwanted types
@@ -1934,8 +1956,11 @@ XmlElement* JGSession0::createJingle(Action action, XmlElement* element1,
     XmlElement* iq = XMPPUtils::createIq(XMPPUtils::IqSet,m_local,m_remote,0);
     XmlElement* jingle = XMPPUtils::createElement(XmlTag::Session,
 	XMPPNamespace::JingleSession);
-    if (action < ActCount)
-	jingle->setAttribute("type",lookupAction(action,version()));
+    if (action < ActCount) {
+	const char* s = lookupAction(action,version());
+	jingle->setAttribute("type",s);
+	jingle->setAttribute("action",s);
+    }
     jingle->setAttribute("initiator",outgoing() ? m_local : m_remote);
     jingle->setAttribute("responder",outgoing() ? m_remote : m_local);
     jingle->setAttribute("id",m_sid);

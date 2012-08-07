@@ -113,6 +113,9 @@
 ; refresh_nosdp: bool: Accept session refresh reINVITEs that lack a SDP offer
 ;refresh_nosdp=enable
 
+; update_target: bool: Update dialog target from Contact in reINVITE
+;update_target=disable
+
 ; auth_foreign: bool: Attempt to authenticate nonces not generated locally
 ;auth_foreign=disable
 

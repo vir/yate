@@ -158,7 +158,7 @@ static inline void regfileCopyParams(NamedList& dest, NamedList& src, const Stri
 
 bool AuthHandler::received(Message &msg)
 {
-    if (!msg.getBoolValue("auth_regfile",true))
+    if (!msg.getBoolValue(YSTRING("auth_regfile"),true))
 	return false;
     String username(msg.getValue("username"));
     if (username.null() || username == s_general)
@@ -178,6 +178,8 @@ bool AuthHandler::received(Message &msg)
 
 bool RegistHandler::received(Message &msg)
 {
+    if (!msg.getBoolValue(YSTRING("register_regfile"),true))
+	return false;
     String username(msg.getValue("username"));
     if (username.null() || username == s_general)
 	return false;
@@ -220,6 +222,8 @@ bool RegistHandler::received(Message &msg)
 
 bool UnRegistHandler::received(Message &msg)
 {
+    if (!msg.getBoolValue(YSTRING("register_regfile"),true))
+	return false;
     const String& username = msg["username"];
     if (username) {
 	if (username == s_general)
@@ -264,6 +268,8 @@ RouteHandler::~RouteHandler()
 
 bool RouteHandler::received(Message &msg)
 {
+    if (!msg.getBoolValue(YSTRING("route_regfile"),true))
+	return false;
     String user = msg.getValue("caller");
     Lock lock(s_mutex);
     NamedList* params = 0;

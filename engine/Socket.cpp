@@ -170,6 +170,10 @@ void SocketAddr::assign(const struct sockaddr* addr, socklen_t len)
 {
     if (addr == m_address)
 	return;
+#ifdef HAVE_SOCKADDR_LEN
+    if (addr && !len)
+	len = addr->sa_len;
+#endif
     if (addr && !len) {
 	switch (addr->sa_family) {
 	    case AF_INET:

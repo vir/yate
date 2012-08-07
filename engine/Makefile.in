@@ -101,7 +101,7 @@ DataFormat.o: @srcdir@/DataFormat.cpp $(MKDEPS) $(PINC)
 	$(COMPILE) -c $<
 
 Socket.o: @srcdir@/Socket.cpp $(MKDEPS) $(CINC)
-	$(COMPILE) @FDSIZE_HACK@ @NETDB_FLAGS@ -c $<
+	$(COMPILE) @FDSIZE_HACK@ @NETDB_FLAGS@ @HAVE_SOCKADDR_LEN@ -c $<
 
 Resolver.o: @srcdir@/Resolver.cpp $(MKDEPS) $(CINC)
 	$(COMPILE) @RESOLV_INC@ -c $<

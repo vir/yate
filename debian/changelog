@@ -1,3 +1,9 @@
+yate (4.1.1~vir2012080701) UNRELEASED; urgency=low
+
+  * Merged upstream fixes
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Tue, 07 Aug 2012 09:17:45 +0400
+
 yate (4.1.1~vir2012071201) UNRELEASED; urgency=low
 
   * Merged upstream fixes

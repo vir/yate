@@ -1,3 +1,14 @@
+yate (4.1.1~svn5219) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5219: + Fixed compiler warnings which
+    appeared on Mac OS X 10.6.  + Detect the presence of the sa_len
+    field of struct sockaddr and set it if that is the case. Fixes the
+    comparison of SocketAddr objects on Mac OS X and BSD-based systems.
+    + Try to get socket address length from sa_len field when it is
+    present.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 08 Aug 2012 02:19:14 +0400
+
 yate (4.1.1~svn5216) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5216: + Allow the registration and routing

@@ -156,6 +156,7 @@ Source: "Release\openssl.yate"; DestDir: "{app}\modules"; Flags: replacesamevers
 
 Source: "Release\gsmcodec.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: codecs\gsm
 Source: "Release\ilbccodec.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: codecs\ilbc
+Source: "Release\ilbcwebrtc.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: codecs\ilbc
 Source: "Release\speexcodec.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: codecs\speex
 Source: "Release\isaccodec.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: codecs\isac
 

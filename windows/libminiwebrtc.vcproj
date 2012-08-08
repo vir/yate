@@ -175,6 +175,14 @@
 			Filter="cpp;c;cxx;cc;rc;def;r;odl;idl;hpj;bat"
 			>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\abs_quant.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\abs_quant_loop.c"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\processing\aec\aec_core.c"
 				>
 			</File>
@@ -203,10 +211,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\arith_routines.c"
-				>
-			</File>
-			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\arith_routines.c"
 				>
 				<FileConfiguration
@@ -229,7 +233,7 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\arith_routines_hist.c"
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\arith_routines.c"
 				>
 			</File>
 			<File
@@ -253,6 +257,10 @@
 						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
 					/>
 				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\arith_routines_hist.c"
+				>
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\arith_routines_logist.c"
@@ -289,11 +297,19 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\augmented_cb_corr.c"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\common\processing\auto_corr_to_refl_coef.c"
 				>
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\common\processing\auto_correlation.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\bandwidth_estimator.c"
 				>
 			</File>
 			<File
@@ -319,7 +335,43 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\bandwidth_estimator.c"
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\bw_expand.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\cb_construct.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\cb_mem_energy.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\cb_mem_energy_augmentation.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\cb_mem_energy_calc.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\cb_search.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\cb_search_core.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\cb_update_best_index.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\chebyshev.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\comp_corr.c"
 				>
 			</File>
 			<File
@@ -328,6 +380,10 @@
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\common\processing\complex_fft.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\constants.c"
 				>
 			</File>
 			<File
@@ -343,6 +399,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\create_augmented_vec.c"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\system_wrappers\critical_section.cc"
 				>
 			</File>
@@ -355,15 +415,19 @@
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\decode.c"
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\decode.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\decode.c"
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
 					>
 					<Tool
 						Name="VCCLCompilerTool"
-						ObjectFile="$(IntDir)\$(InputName)1.obj"
-						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+						ObjectFile="$(IntDir)\$(InputName)2.obj"
+						XMLDocumentationFileName="$(IntDir)\$(InputName)2.xdc"
 					/>
 				</FileConfiguration>
 				<FileConfiguration
@@ -371,17 +435,13 @@
 					>
 					<Tool
 						Name="VCCLCompilerTool"
-						ObjectFile="$(IntDir)\$(InputName)1.obj"
-						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+						ObjectFile="$(IntDir)\$(InputName)2.obj"
+						XMLDocumentationFileName="$(IntDir)\$(InputName)2.xdc"
 					/>
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\decode.c"
-				>
-			</File>
-			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\decode_bwe.c"
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\decode.c"
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
@@ -407,7 +467,37 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\decode_bwe.c"
+				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						ObjectFile="$(IntDir)\$(InputName)1.obj"
+						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						ObjectFile="$(IntDir)\$(InputName)1.obj"
+						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+					/>
+				</FileConfiguration>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\decode_plc.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\decode_residual.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\decoder_interpolate_lsf.c"
 				>
 			</File>
 			<File
@@ -424,6 +514,10 @@
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\common\processing\division_operations.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\do_plc.c"
 				>
 			</File>
 			<File
@@ -477,11 +571,49 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\encode.c"
+				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						ObjectFile="$(IntDir)\$(InputName)2.obj"
+						XMLDocumentationFileName="$(IntDir)\$(InputName)2.xdc"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						ObjectFile="$(IntDir)\$(InputName)2.obj"
+						XMLDocumentationFileName="$(IntDir)\$(InputName)2.xdc"
+					/>
+				</FileConfiguration>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\encode_lpc_swb.c"
 				>
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\common\processing\energy.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\energy_inverse.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\enh_upsample.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\enhancer.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\enhancer_interface.c"
 				>
 			</File>
 			<File
@@ -511,6 +643,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\fft.c"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\fft.c"
 				>
 				<FileConfiguration
@@ -531,10 +667,6 @@
 						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
 					/>
 				</FileConfiguration>
-			</File>
-			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\fft.c"
-				>
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\processing\utility\fft4g.c"
@@ -587,10 +719,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\filterbanks.c"
-				>
-			</File>
-			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\filterbanks.c"
 				>
 				<FileConfiguration
@@ -613,7 +741,19 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\filterbanks.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\filtered_cb_vecs.c"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\filters.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\frame_classify.c"
 				>
 			</File>
 			<File
@@ -621,7 +761,23 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\gain_dequant.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\gain_quant.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\get_cd_vec.c"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\common\processing\get_hanning_window.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\get_lsp_poly.c"
 				>
 			</File>
 			<File
@@ -629,7 +785,23 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\get_sync_seq.c"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\processing\high_pass_filter_impl.cc"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\hp_input.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\hp_output.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\ilbc.c"
 				>
 			</File>
 			<File
@@ -637,7 +809,31 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\index_conv_dec.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\index_conv_enc.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\init_decode.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\init_encode.c"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\initialize.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\interpolate.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\interpolate_samples.c"
 				>
 			</File>
 			<File
@@ -695,6 +891,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\lpc_encode.c"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\lpc_gain_swb_tables.c"
 				>
 			</File>
@@ -741,7 +941,39 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\lsf_check.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\lsf_interpolate_to_poly_dec.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\lsf_interpolate_to_poly_enc.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\lsf_to_lsp.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\lsf_to_poly.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\lsp_to_lsf.c"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\common\processing\min_max_operations.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\my_corr.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\nearest_neighbor.c"
 				>
 			</File>
 			<File
@@ -754,6 +986,10 @@
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\processing\ns\ns_core.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\pack_bits.c"
 				>
 			</File>
 			<File
@@ -835,6 +1071,10 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\pitch_lag_tables.c"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\pitch_lag_tables.c"
 				>
 				<FileConfiguration
@@ -857,7 +1097,11 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\pitch_lag_tables.c"
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\poly_to_lsf.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\poly_to_lsp.c"
 				>
 			</File>
 			<File
@@ -866,6 +1110,10 @@
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\common\processing\randomization_functions.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\refiner.c"
 				>
 			</File>
 			<File
@@ -898,6 +1146,34 @@
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\processing\utility\ring_buffer.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\simple_interpolate_lsf.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\simple_lpc_analysis.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\simple_lsf_dequant.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\simple_lsf_quant.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\smooth.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\smooth_out_data.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\sort_sq.c"
 				>
 			</File>
 			<File
@@ -939,6 +1215,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\split_vq.c"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\common\processing\splitting_filter.c"
 				>
 			</File>
@@ -969,6 +1249,22 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\state_construct.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\state_search.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\swap_bytes.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\transform.c"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\transform.c"
 				>
 				<FileConfiguration
@@ -991,7 +1287,7 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\transform.c"
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\unpack_bits.c"
 				>
 			</File>
 			<File
@@ -1019,6 +1315,14 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\vq3.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\vq4.c"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\common\processing\webrtc_fft_t_1024_8.c"
 				>
 			</File>
@@ -1030,11 +1334,27 @@
 				RelativePath="..\libs\miniwebrtc\audio\common\vad\webrtc_vad.c"
 				>
 			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\window32_w32.c"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\xcorr_coef.c"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
 			Filter="h;hpp;hxx;hm;inl"
 			>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\abs_quant.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\abs_quant_loop.h"
+				>
+			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\processing\aec\aec_core.h"
 				>
@@ -1076,11 +1396,51 @@
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\bandwidth_estimator.h"
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\augmented_cb_corr.h"
 				>
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\bandwidth_estimator.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\bandwidth_estimator.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\bw_expand.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\cb_construct.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\cb_mem_energy.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\cb_mem_energy_augmentation.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\cb_mem_energy_calc.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\cb_search.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\cb_search_core.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\cb_update_best_index.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\chebyshev.h"
 				>
 			</File>
 			<File
@@ -1096,11 +1456,23 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\comp_corr.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\constants.h"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\system_wrappers\cpu_features_wrapper.h"
 				>
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\crc.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\create_augmented_vec.h"
 				>
 			</File>
 			<File
@@ -1112,7 +1484,23 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\decode.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\decode_residual.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\decoder_interpolate_lsf.h"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\processing\ns\defines.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\defines.h"
 				>
 			</File>
 			<File
@@ -1125,6 +1513,10 @@
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\processing\agc\digital_agc.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\do_plc.h"
 				>
 			</File>
 			<File
@@ -1144,7 +1536,27 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\encode.h"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\encode_lpc_swb.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\energy_inverse.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\enh_upsample.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\enhancer.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\enhancer_interface.h"
 				>
 			</File>
 			<File
@@ -1156,11 +1568,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\fft.h"
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\fft.h"
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\fft.h"
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\fft.h"
 				>
 			</File>
 			<File
@@ -1176,11 +1588,19 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\filterbank_tables.h"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\filterbank_tables.h"
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\filterbank_tables.h"
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\filtered_cb_vecs.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\frame_classify.h"
 				>
 			</File>
 			<File
@@ -1192,7 +1612,63 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\gain_dequant.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\gain_quant.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\get_cd_vec.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\get_lsp_poly.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\get_sync_seq.h"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\processing\high_pass_filter_impl.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\hp_input.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\hp_output.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\ilbc.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\index_conv_dec.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\index_conv_enc.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\init_decode.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\init_encode.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\interpolate.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\interpolate_samples.h"
 				>
 			</File>
 			<File
@@ -1212,6 +1688,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\lpc_encode.h"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\lpc_gain_swb_tables.h"
 				>
 			</File>
@@ -1228,11 +1708,35 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\lpc_tables.h"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\lpc_tables.h"
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\lpc_tables.h"
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\lsf_check.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\lsf_interpolate_to_poly_dec.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\lsf_interpolate_to_poly_enc.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\lsf_to_lsp.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\lsf_to_poly.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\lsp_to_lsf.h"
 				>
 			</File>
 			<File
@@ -1241,6 +1745,14 @@
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\module_common_types.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\my_corr.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\nearest_neighbor.h"
 				>
 			</File>
 			<File
@@ -1260,11 +1772,15 @@
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\pitch_estimator.h"
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\pack_bits.h"
 				>
 			</File>
 			<File
 				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\pitch_estimator.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\pitch_estimator.h"
 				>
 			</File>
 			<File
@@ -1284,7 +1800,19 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\poly_to_lsf.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\poly_to_lsp.h"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\processing\processing_component.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\refiner.h"
 				>
 			</File>
 			<File
@@ -1304,11 +1832,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\settings.h"
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\settings.h"
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\settings.h"
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\settings.h"
 				>
 			</File>
 			<File
@@ -1316,7 +1844,31 @@
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\spectrum_ar_model_tables.h"
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\simple_interpolate_lsf.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\simple_lpc_analysis.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\simple_lsf_dequant.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\simple_lsf_quant.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\smooth.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\smooth_out_data.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\sort_sq.h"
 				>
 			</File>
 			<File
@@ -1324,7 +1876,15 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\main\spectrum_ar_model_tables.h"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\common\processing\spl_inl.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\split_vq.h"
 				>
 			</File>
 			<File
@@ -1332,7 +1892,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\structs.h"
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\state_construct.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\state_search.h"
 				>
 			</File>
 			<File
@@ -1340,7 +1904,19 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_isac\fix\structs.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\swap_bytes.h"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\typedefs.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\unpack_bits.h"
 				>
 			</File>
 			<File
@@ -1368,11 +1944,27 @@
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\vq3.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\vq4.h"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\common\vad\webrtc_vad.h"
 				>
 			</File>
 			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\window32_w32.h"
+				>
+			</File>
+			<File
 				RelativePath="..\libs\miniwebrtc\audio\processing\ns\windows_private.h"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\miniwebrtc\audio\coding_ilbc\xcorr_coef.h"
 				>
 			</File>
 		</Filter>

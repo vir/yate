@@ -30,6 +30,8 @@
     or
   banbrutes.php=NNN
     where NNN >= 2 is the number of failures causing a ban
+
+  This script requires Yate to run as root or have permissions to run iptables
  */
 
 // How many failures in a row cause a ban

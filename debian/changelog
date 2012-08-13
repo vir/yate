@@ -1,3 +1,11 @@
+yate (4.1.1~svn5221) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5221: + Added note that Yate needs to run as
+    root for banbrutes.php to work.  + Added the banbrutes PHP script to
+    the default install.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 14 Aug 2012 02:19:14 +0400
+
 yate (4.1.1~svn5220) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5220: + Added the WebRTC based iLBC codec to

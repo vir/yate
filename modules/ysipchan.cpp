@@ -4229,12 +4229,6 @@ bool YateSIPEndPoint::incoming(SIPEvent* e, SIPTransaction* t)
 
 void YateSIPEndPoint::invite(SIPEvent* e, SIPTransaction* t)
 {
-    if (!plugin.canAccept()) {
-	Debug(&plugin,DebugWarn,"Refusing new SIP call, full or exiting");
-	t->setResponse(480);
-	return;
-    }
-
     if (e->getMessage()->getParam("To","tag")) {
 	SIPDialog dlg(*e->getMessage());
 	YateSIPConnection* conn = plugin.findDialog(dlg,true);
@@ -4246,6 +4240,12 @@ void YateSIPEndPoint::invite(SIPEvent* e, SIPTransaction* t)
 	    Debug(&plugin,DebugWarn,"Got re-INVITE for missing dialog");
 	    t->setResponse(481);
 	}
+	return;
+    }
+
+    if (!plugin.canAccept()) {
+	Debug(&plugin,DebugWarn,"Refusing new SIP call, full or exiting");
+	t->setResponse(480);
 	return;
     }
 

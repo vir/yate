@@ -426,6 +426,7 @@ void Channel::initChan()
     }
 #endif
     m_driver->m_total++;
+    m_driver->m_chanCount++;
     m_driver->channels().append(this);
     m_driver->changed();
 }
@@ -437,8 +438,11 @@ void Channel::dropChan()
     m_driver->lock();
     if (!m_driver)
 	Debug(DebugFail,"Driver lost in dropChan! [%p]",this);
-    if (m_driver->channels().remove(this,false))
+    if (m_driver->channels().remove(this,false)) {
+	if (m_driver->m_chanCount > 0)
+	    m_driver->m_chanCount--;
 	m_driver->changed();
+    }
     m_driver->unlock();
 }
 
@@ -1239,7 +1243,7 @@ Driver::Driver(const char* name, const char* type)
       m_init(false), m_varchan(true),
       m_routing(0), m_routed(0), m_total(0),
       m_nextid(0), m_timeout(0),
-      m_maxroute(0), m_maxchans(0), m_dtmfDups(false)
+      m_maxroute(0), m_maxchans(0), m_chanCount(0), m_dtmfDups(false)
 {
     m_prefix << name << "/";
 }
@@ -1283,7 +1287,7 @@ void Driver::setup(const char* prefix, bool minimal)
 
 bool Driver::isBusy() const
 {
-    return (m_routing || m_chans.count());
+    return (m_routing || m_chanCount);
 }
 
 Channel* Driver::find(const String& id) const
@@ -1435,10 +1439,8 @@ bool Driver::canAccept(bool routers)
 	return false;
     if (routers && !canRoute())
 	return false;
-    if (m_maxchans) {
-	Lock mylock(this);
-	return ((signed)m_chans.count() < m_maxchans);
-    }
+    if (m_maxchans)
+	return (m_chanCount < m_maxchans);
     return true;
 }
 
@@ -1478,7 +1480,7 @@ void Driver::genUpdate(Message& msg)
     msg.addParam("routed",String(m_routed));
     msg.addParam("routing",String(m_routing));
     msg.addParam("total",String(m_total));
-    msg.addParam("chans",String(m_chans.count()));
+    msg.addParam("chans",String(m_chanCount));
 }
 
 void Driver::statusModule(String& str)
@@ -1493,7 +1495,7 @@ void Driver::statusParams(String& str)
     str.append("routed=",",") << m_routed;
     str << ",routing=" << m_routing;
     str << ",total=" << m_total;
-    str << ",chans=" << m_chans.count();
+    str << ",chans=" << m_chanCount;
 }
 
 void Driver::statusDetail(String& str)

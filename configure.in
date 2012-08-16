@@ -140,6 +140,24 @@ HAVE_PRCTL="-DHAVE_PRCTL"
 fi
 AC_SUBST(HAVE_PRCTL)
 
+HAVE_SOCKADDR_LEN=""
+AC_MSG_CHECKING([for sockaddr.sa_len presence])
+AC_TRY_COMPILE([
+#include <sys/socket.h>
+],[
+struct sockaddr saddr;
+saddr.sa_len = sizeof(struct sockaddr);
+],
+have_sockaddr_len="yes",
+have_sockaddr_len="no"
+)
+if [[ "$have_sockaddr_len" = "yes" ]]; then
+HAVE_SOCKADDR_LEN="-DHAVE_SOCKADDR_LEN"
+fi
+AC_SUBST(HAVE_SOCKADDR_LEN)
+AC_MSG_RESULT([$have_sockaddr_len])
+
+
 HAVE_POLL=no
 AC_ARG_ENABLE(poll,AC_HELP_STRING([--enable-poll],[Use poll() on sockets (default: yes)]),want_poll=$enableval,want_poll=yes)
 if [[ "x$want_poll" = "xyes" ]]; then

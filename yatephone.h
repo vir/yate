@@ -2133,6 +2133,7 @@ private:
     int m_timeout;
     int m_maxroute;
     int m_maxchans;
+    int m_chanCount;
     bool m_dtmfDups;
 
 public:
@@ -2236,6 +2237,20 @@ public:
      */
     inline int total() const
 	{ return m_total; }
+
+    /**
+     * Get the number of running channels
+     * @return Number of channels running at this time
+     */
+    inline int chanCount() const
+	{ return m_chanCount; }
+
+    /**
+     * Get the maximum number of running channels for this driver
+     * @return Maximum number of calls to run simultaneously, zero to accept all
+     */
+    inline int maxChans() const
+	{ return m_maxchans; }
 
 protected:
     /**

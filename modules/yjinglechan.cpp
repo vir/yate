@@ -1227,13 +1227,8 @@ bool YJGConnection::msgAnswered(Message& msg)
 {
     Debug(this,DebugCall,"msgAnswered [%p]",this);
     if (m_ftStatus == FTNone) {
-	if (m_sessVersion != JGSession::Version0) {
-	    clearEndpoint();
-	    Lock lock(m_mutex);
-	    m_rtpId.clear();
-	}
 	m_mutex.lock();
-	if (m_sessVersion != JGSession::Version0 || !m_rtpStarted)
+	if ((m_sessVersion != JGSession::Version0) && m_audioContent && m_audioContent->isEarlyMedia())
 	    resetCurrentAudioContent(true,false,true);
 	ObjList tmp;
 	if (m_audioContent)
@@ -3645,7 +3640,7 @@ void YJGTransfer::run()
 	    m_transferredDrv->lock();
 	    RefPointer<Channel> chan = m_transferredDrv->find(m_transferredID);
 	    m_transferredDrv->unlock();
-    	    if (!chan)
+	    if (!chan)
 		SET_ERROR("Connection vanished while routing");
 	    if (!ok || (m_msg.retValue() == "-") || (m_msg.retValue() == "error"))
 		SET_ERROR("call.route failed error=" << m_msg.getValue("error"));
@@ -3774,7 +3769,7 @@ void YJGDriver::initialize()
 	s_jingle->debugChain(this);
 	// Driver setup
 	setup();
-  	installRelay(Halt);
+	installRelay(Halt);
 	installRelay(Route);
 	installRelay(Update);
 	installRelay(Transfer);

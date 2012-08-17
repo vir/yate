@@ -151,7 +151,7 @@ alias = yate
 ident = yate
 
 ; maxconns: int: Maximum number of simultaneous connections (0 = no limit).
-;maxconns = 0
+;maxconns=
 
 ; faststart: bool: Enable Fast Start mode (offer media channels early)
 ; This setting is required when doing direct RTP forwarding between endpoints

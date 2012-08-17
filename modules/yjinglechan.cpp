@@ -3867,6 +3867,8 @@ void YJGDriver::initialize()
     int redir = sect->getIntValue("redirectcount");
     s_redirectCount = (redir >= 0) ? redir : 0;
     s_dtmfMeth = sect->getIntValue("dtmfmethod",s_dictDtmfMeth,DtmfJingle);
+    // set max chans
+    maxChans(sect->getIntValue("maxchans",maxChans()));
 
     int prio = sect->getIntValue("resource_priority");
     if (prio < -128)

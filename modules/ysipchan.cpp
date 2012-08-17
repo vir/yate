@@ -7719,6 +7719,8 @@ void SIPDriver::initialize()
     s_sslCertFile = s_cfg.getValue("general","ssl_certificate_file");
     s_sslKeyFile = s_cfg.getValue("general","ssl_key_file");
     s_globalMutex.unlock();
+    // set max chans
+    maxChans(s_cfg.getIntValue("general","maxchans",maxChans()));
     // Adjust here the TCP idle interval: it uses the SIP engine
     s_tcpIdle = tcpIdleInterval(s_cfg.getIntValue("general","tcp_idle",TCP_IDLE_DEF));
     // Mark listeners

@@ -204,7 +204,7 @@ class YRTPSession : public RTPSession
 {
 public:
     inline YRTPSession(YRTPWrapper* wrap)
-	: m_wrap(wrap), m_lastLost(0),
+	: m_wrap(wrap), m_lastLost(0), m_newPayload(-1),
 	  m_resync(false), m_anyssrc(false), m_getFax(true)
 	{ }
     virtual ~YRTPSession();
@@ -225,6 +225,7 @@ protected:
 private:
     YRTPWrapper* m_wrap;
     u_int32_t m_lastLost;
+    int m_newPayload;
     bool m_resync;
     bool m_anyssrc;
     bool m_getFax;
@@ -1021,6 +1022,10 @@ void YRTPSession::rtpNewPayload(int payload, unsigned int timestamp)
     if (payload == 13) {
 	Debug(&splugin,DebugInfo,"Activating RTP silence payload %d in wrapper %p",payload,m_wrap);
 	silencePayload(payload);
+    }
+    else if (payload != m_newPayload) {
+	m_newPayload = payload;
+	Debug(&splugin,DebugMild,"Unexpected payload %d in wrapper %p",payload,m_wrap);
     }
 }
 

@@ -1228,7 +1228,7 @@ bool YJGConnection::msgAnswered(Message& msg)
     Debug(this,DebugCall,"msgAnswered [%p]",this);
     if (m_ftStatus == FTNone) {
 	m_mutex.lock();
-	if ((m_sessVersion != JGSession::Version0) && m_audioContent && m_audioContent->isEarlyMedia())
+	if (!m_audioContent || ((m_sessVersion != JGSession::Version0) && m_audioContent->isEarlyMedia()))
 	    resetCurrentAudioContent(true,false,true);
 	ObjList tmp;
 	if (m_audioContent)

@@ -830,7 +830,7 @@ bool YStunUtils::sendMessage(Socket* socket, const YStunMessage* msg,
 {
     if (!(socket && msg))
 	return false;
-    XDebug(&iplugin,DebugAll,"Send message ('%s') to '%s:%d'. [%p]",
+    DDebug(&iplugin,DebugAll,"Send message ('%s') to '%s:%d'. [%p]",
 	msg->text(),addr.host().c_str(),addr.port(),sender);
     DataBlock buffer;
     msg->toBuffer(buffer);
@@ -960,8 +960,14 @@ bool YStunSocketFilter::received(void* buffer, int length, int flags,
 {
     bool isStun = false;
     YStunMessage* msg = YStunUtils::decode(buffer,length,isStun);
-    if (!isStun)
+    if (!isStun) {
+#ifdef XDEBUG
+	SocketAddr tmp(addr,addrlen);
+	Debug(&iplugin,DebugAll,"Non-STUN from '%s:%d' length %d [%p]",
+	    tmp.host().c_str(),tmp.port(),length,this);
+#endif
 	return false;
+    }
     if (msg) {
 	SocketAddr tmp(addr,addrlen);
 	if (m_remoteAddr != tmp) {

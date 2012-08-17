@@ -183,6 +183,8 @@ void RTPTransport::timerTick(const Time& when)
 	char buf[BUF_SIZE];
 	int len;
 	while ((len = m_rtpSock.recvFrom(buf,sizeof(buf),m_rxAddrRTP)) > 0) {
+	    XDebug(DebugAll,"RTP/UDPTL from '%s:%d' length %d [%p]",
+		m_rxAddrRTP.host().c_str(),m_rxAddrRTP.port(),len,this);
 	    switch (m_type) {
 		case RTP:
 		    if (len < 12)
@@ -227,6 +229,8 @@ void RTPTransport::timerTick(const Time& when)
 	char buf[BUF_SIZE];
 	int len;
 	while (((len = m_rtcpSock.recvFrom(buf,sizeof(buf),m_rxAddrRTCP)) >= 8) && (m_rxAddrRTCP == m_remoteRTCP)) {
+	    XDebug(DebugAll,"RTCP from '%s:%d' length %d [%p]",
+		m_rxAddrRTCP.host().c_str(),m_rxAddrRTCP.port(),len,this);
 	    if (m_processor)
 		m_processor->rtcpData(buf,len);
 	    if (m_monitor)

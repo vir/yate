@@ -1,3 +1,20 @@
+yate (4.1.1~svn5229) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5229: + Added address and length of RTP,
+    UDPTL and STUN packets on XDEBUG.  + Display a warning when
+    receiving an unknown RTP payload.  + Note: the meaning of the
+    floodevents setting from ysipchan.conf has changed: now it sets the
+    threshold for dropping messages.  + Other messages, as well as
+    reINVITEs are still allowed.  + Added mechanism to drop
+    INVITE/REGISTER/SUBSCRIBE/OPTIONS messages when detecting a flood.
+    + Set allowed number of simultaneous calls from configuration files.
+    If not set, default to the maxchans setting in yate.conf.  + Reset
+    Jingle audio content on answer only if it was an early media one.  +
+    Fixed Jingle audio content creation in a scenario with immediate
+    answer.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 18 Aug 2012 02:19:15 +0400
+
 yate (4.1.1~svn5223) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5223: + Added the banbrutes PHP script to

@@ -1064,6 +1064,8 @@ static int s_expires_max = EXPIRES_MAX;
 
 static String s_statusCmd = "status";
 
+static u_int64_t s_printFloodTime = 0;
+
 int YateSIPEndPoint::s_evCount = 0;
 
 // Lower case proto name
@@ -1192,6 +1194,164 @@ static inline void getMsgLine(String& buf, const SIPMessage* msg)
 	buf << "code " << msg->code;
     else
 	buf << "'" << msg->method << " " << msg->uri << "'";
+}
+
+enum {
+    START,
+    CHECK_TO,
+    HAS_TO,
+    CHECK_TAG,
+    HAS_TAG,
+};
+
+static bool msgIsAllowed(const char* buf, int len)
+{
+    if (!(buf && len))
+	return false;
+
+    
+    int pos = 0;
+    // check REGISTER
+    while (pos < len) {
+	if (buf[pos] == ' ' || buf[pos] == '\n' || buf[pos] == '\r' || buf[pos] == '\t') {
+	    pos++;
+	    continue;
+	}
+	if ((pos <= len - 8) && (buf[pos] == 'O' || buf[pos] == 'o') &&
+	    (buf[pos + 1] == 'P' || buf[pos + 1] == 'p') && (buf[pos + 2] == 'T' || buf[pos + 2] == 't') &&
+	    (buf[pos + 3] == 'I' || buf[pos + 3] == 'i') && (buf[pos + 4] == 'O' || buf[pos + 4] == 'o') &&
+	    (buf[pos + 5] == 'N' || buf[pos + 5] == 'n') && (buf[pos + 6] == 'S' || buf[pos + 6] == 's') &&
+	    (buf[pos + 7] == ' ' || buf[pos + 7] == '\t'))
+	    return false;
+	if ((pos <= len - 9) && (buf[pos] == 'R' || buf[pos] == 'r') &&
+	    (buf[pos + 1] == 'E' || buf[pos + 1] == 'e') && (buf[pos + 2] == 'G' || buf[pos + 2] == 'g') &&
+	    (buf[pos + 3] == 'I' || buf[pos + 3] == 'i') && (buf[pos + 4] == 'S' || buf[pos + 4] == 's') &&
+	    (buf[pos + 5] == 'T' || buf[pos + 5] == 't') && (buf[pos + 6] == 'E' || buf[pos + 6] == 'e') &&
+	    (buf[pos + 7] == 'R' || buf[pos + 7] == 'r') && (buf[pos + 8] == ' ' || buf[pos + 8] == '\t'))
+	    return false;
+	else if ((pos <= len - 10) && (buf[pos] == 'S' || buf[pos] == 's') &&
+	    (buf[pos + 1] == 'U' || buf[pos + 1] == 'u') && (buf[pos + 2] == 'B' || buf[pos + 2] == 'b') &&
+	    (buf[pos + 3] == 'S' || buf[pos + 3] == 's') && (buf[pos + 4] == 'C' || buf[pos + 4] == 'c') &&
+	    (buf[pos + 5] == 'R' || buf[pos + 5] == 'r') && (buf[pos + 6] == 'I' || buf[pos + 6] == 'i') &&
+	    (buf[pos + 7] == 'B' || buf[pos + 7] == 'b') && (buf[pos + 8] == 'E' || buf[pos + 8] == 'e') &&
+	    (buf[pos + 9] == ' ' || buf[pos + 9] == '\t'))
+	    return false;
+	else if ((pos <= len - 7) && ((buf[pos] == 'I' || buf[pos] == 'i') && ++pos) &&
+	    ((buf[pos] == 'N' || buf[pos] == 'n') && pos++) && ((buf[pos] == 'V' || buf[pos] == 'v') && pos++) &&
+	    ((buf[pos] == 'I' || buf[pos] == 'i') && pos++) && ((buf[pos] == 'T' || buf[pos] == 't') && pos++) &&
+	    ((buf[pos] == 'E' || buf[pos] == 'e') && pos++) && ((buf[pos] == ' ' || buf[pos] == '\t') && pos++))
+	    break;
+	else
+	    return true;
+    }
+
+    /**
+     * START = begin of line
+     * CHECK_TO = T/t[o/O] has been found
+     * HAS_TO = T/t[o/O]: has been found
+     * CHECK_TAG = T/t[o/O]:...; has been found
+     * HAS_TAG = T/t[o/O]:...;tag has been found - expecting =
+     */
+    while (pos < len - 1) {
+	// go to new line
+	while (pos < len && buf[pos] != '\r' && buf[pos] != '\n') pos++;
+	int status = START;
+	bool breakLoop = false;
+	while (pos < len) {
+	    
+	    switch (buf[pos]) {
+		case ' ':
+		case '\t':
+		    if (status == START)
+			breakLoop = true;
+		    break;
+		case '\n':
+		case '\r':
+		    if (status != START) {
+			// new line found before finding a tag, return false
+			if (status == HAS_TO)
+			    return false;
+			// try the next line
+			breakLoop = true;
+		    }
+		    break;
+		case 'T':
+		case 't':
+		    if (status == START) {
+			if (pos < len - 1)
+			    if (buf[pos + 1] == 'o' || buf[pos + 1] == 'O') pos++;
+			status = CHECK_TO;
+		    }
+		    else if (status == CHECK_TO)
+			// something like Tot is at the start of the line, try next line
+			breakLoop = true;
+		    // 	 if status is HAS_TO, skip over
+		    else if (status == CHECK_TAG) {
+			if (pos < len - 2) {
+			    if ((buf[pos + 1] == 'a' || buf[pos + 1] == 'A') && (buf[pos + 2] == 'g' || buf[pos + 2] == 'G')) {
+				pos += 2;
+				status = HAS_TAG;
+			    }
+			    else
+				// might be another tag, return to HAS_TO
+				status = HAS_TO;
+			}
+			else
+			    // we're at the end of the string and we don't have enough chars to check for tag
+			    breakLoop = true;
+		    }
+		    else if (status == HAS_TAG)
+			// might be another tag, return to HAS_TO
+			status = HAS_TO;
+		    break;
+		case ':':
+		    if (status == CHECK_TO)
+			status = HAS_TO;
+		    else if (status == START)
+			// : at start of line, unnacceptable, try next line
+			breakLoop = true;
+		    // if status is HAS_TO, skip over
+		    else if (status == CHECK_TAG || status == HAS_TAG)
+			// skip over : while looking for 'tag', return to HAS_TO
+			status = HAS_TO;
+		    break;
+		case ';':
+		    if (status == HAS_TO)
+			status = CHECK_TAG;
+		    else if (status == START || status == CHECK_TO)
+			// ; at start of line or after 'to' unnacceptable, try next line
+			breakLoop = true;
+		    // if status is HAS_TO/CHECK_TAG, skip over
+		    else if (status == HAS_TAG)
+			// skip over : while looking for 'tag', return to HAS_TO
+			status = HAS_TO;
+		    break;
+		case '=':
+		    if (status == HAS_TAG)
+			// found ';tag=', is reINVITE
+			return true;
+		    else if (status == START || status == CHECK_TO)
+			// ; at start of line or after 'to' unnacceptable, try next line
+			breakLoop = true;
+		    // if status is HAS_TO, skip over
+		    else if (status == CHECK_TAG)
+			// ignore, return to HAS_TO
+			status = HAS_TO;
+		    break;
+		default:
+		    if (status == CHECK_TAG || status == HAS_TAG)
+			status = HAS_TO;
+		    else if (status == START || status == CHECK_TO)
+			breakLoop = true;
+		    // if status is HAS_TO, skip over
+		    break;
+	    }
+	    if (breakLoop)
+		break;
+	    pos++;
+	}
+    }
+    return false;
 }
 
 // Reset transport timeout from expires
@@ -2396,6 +2556,14 @@ int YateSIPUDPTransport::process()
     b[res] = 0;
     if (s_printMsg)
 	printRecvMsg(b,res);
+    if (s_floodEvents && plugin.ep() && plugin.ep()->s_evCount >= s_floodEvents && !msgIsAllowed(b,res)) {
+	if (Time::now() >= s_printFloodTime) {
+	    Debug(&plugin,DebugWarn,"Flood detected, dropping INVITE/REGISTER/SUBSCRIBE/OPTIONS messages, allowing reINVITES");
+	    s_printFloodTime = Time::now() + 10000000;
+	}
+	return 0;
+    }
+
     SIPMessage* msg = SIPMessage::fromParsing(0,b,res);
     receiveMsg(msg);
     return 0;
@@ -4097,10 +4265,8 @@ void YateSIPEndPoint::run()
     for (;;)
     {
 	if (!canRead()) {
-	    if (s_evCount == s_floodEvents)
-	        Debug(&plugin,DebugMild,"Flood detected: %d handled events",s_evCount);
-	    else if ((s_evCount % s_floodEvents) == 0)
-	        Debug(&plugin,DebugWarn,"Severe flood detected: %d events",s_evCount);
+	    if ((s_evCount % s_floodEvents) == 0)
+	        Debug(&plugin,DebugMild,"Severe flood detected: %d events",s_evCount);
 	}
 	SIPEvent* e = m_engine->getEvent();
 	if (e)
@@ -7496,7 +7662,7 @@ void SIPDriver::initialize()
     s_cfg.load();
     s_globalMutex.unlock();
     s_maxForwards = s_cfg.getIntValue("general","maxforwards",20);
-    s_floodEvents = s_cfg.getIntValue("general","floodevents",20);
+    s_floodEvents = s_cfg.getIntValue("general","floodevents",100);
     s_privacy = s_cfg.getBoolValue("general","privacy");
     s_auto_nat = s_cfg.getBoolValue("general","nat",true);
     s_progress = s_cfg.getBoolValue("general","progress",false);

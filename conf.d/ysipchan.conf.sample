@@ -156,6 +156,11 @@
 ; Defaults to 5 if missing, invalid or out of bounds
 ;sip_rsp_trans_count=5
 
+; maxchans: int: Maximum number of channels running at once
+; A value of 0 specifies that there is no limit enforced.
+; Defaults to the value set by the maxchans setting from yate.conf
+;maxchans=
+
 ; printmsg: boolean: Print SIP messages to output
 ; This parameter is applied on reload
 ; Defaults to yes

@@ -37,6 +37,11 @@
 ;  outgoing calls or "jingle_flags" for incoming calls
 ;jingle_flags=
 
+; maxchans: int: Maximum number of channels running at once
+; A value of 0 specifies that there is no limit enforced.
+; Defaults to the value set by the maxchans setting from yate.conf
+;maxchans=
+
 ; accept_relay: bool: Accept a "relay" transport type even if we had another type before
 ; This works only with Jingle version 0 (Google Talk, libjingle)
 ;accept_relay=disable in server mode, enable in client mode

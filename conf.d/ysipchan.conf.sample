@@ -38,8 +38,11 @@
 ; Low priorities are not recommended except for debugging
 ;thread=normal
 
-; floodevents: int: How many SIP events retrieved in a row trigger flood warning
-;floodevents=20
+; floodevents: int: How many SIP events retrieved in a row trigger the drop mechanism
+; for INVITE/REGISTER/SUBSCRIBE/OPTIONS messages. Other messages, as well as reINVITEs,
+; will be allowed
+; NOTE! This mechanism is activated by default, to disable it configure this parameter to 0.
+;floodevents=100
 
 ; maxforwards: int: Default Max-Forwards header, used to avoid looping calls
 ;maxforwards=20
@@ -152,6 +155,11 @@
 ; Minimum allowed value is 2, maximum allowed value is 10
 ; Defaults to 5 if missing, invalid or out of bounds
 ;sip_rsp_trans_count=5
+
+; maxchans: int: Maximum number of channels running at once
+; A value of 0 specifies that there is no limit enforced.
+; Defaults to the value set by the maxchans setting from yate.conf
+;maxchans=
 
 ; printmsg: boolean: Print SIP messages to output
 ; This parameter is applied on reload

@@ -3028,7 +3028,7 @@ void H323Driver::initialize()
     s_maxCleaning = s_cfg.getIntValue("general","maxcleaning",100);
     s_pwlibThread = s_cfg.getBoolValue("general","pwlibthread");
     maxRoute(s_cfg.getIntValue("incoming","maxqueue",5));
-    maxChans(s_cfg.getIntValue("ep","maxconns",0));
+    maxChans(s_cfg.getIntValue("ep","maxconns",maxChans()));
     if (!s_process) {
 	setup();
 	installRelay(Halt);

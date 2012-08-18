@@ -1,3 +1,10 @@
+yate (4.1.1~svn5230) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5230: + Always use the RTP started flag, no
+    matter in which version.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sun, 19 Aug 2012 02:19:13 +0400
+
 yate (4.1.1~svn5229) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5229: + Added address and length of RTP,

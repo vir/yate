@@ -38,11 +38,17 @@
 ; Low priorities are not recommended except for debugging
 ;thread=normal
 
-; floodevents: int: How many SIP events retrieved in a row trigger the drop mechanism
-; for INVITE/REGISTER/SUBSCRIBE/OPTIONS messages. Other messages, as well as reINVITEs,
-; will be allowed
-; NOTE! This mechanism is activated by default, to disable it configure this parameter to 0.
+; floodevents: int: How many SIP events retrieved in a row trigger a flood warning and the drop mechanism
+;  for INVITE/REGISTER/SUBSCRIBE/OPTIONS messages if the flood protection is on.
+; NOTE! The drop mechanism is separately activated by the floodprotection setting which is on by default. Also,
+;  setting this parameter to 0 will disable the flood warning and protection.
 ;floodevents=100
+
+; floodprotection: bool: Activate the drop mechanism for INVITE/REGISTER/SUBSCRIBE/OPTIONS messages when
+;  the number of SIP events retrieved in a row exceeds the number set for floodevents setting.
+; Other messages, as well as reINVITEs, will be allowed. 
+; NOTE! This mechanism is activated by default, to disable it configure this parameter to false.
+;floodprotection=on
 
 ; maxforwards: int: Default Max-Forwards header, used to avoid looping calls
 ;maxforwards=20

@@ -1,3 +1,13 @@
+yate (4.2.1~svn5237) UNRELEASED; urgency=low
+
+  * Updated to SVN revision 5237: + Changed package version to 4.2  +
+    Changed version to release.  + Added new lksctp.conf to packaging.
+    + Added separate setting for activating the SIP flood protection
+    mechanism.  + Changed release code to 2 for the SIP changes.  +
+    Bumped version to 4.2.1 development.
+
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 21 Aug 2012 02:19:15 +0400
+
 yate (4.1.1~svn5230) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5230: + Always use the RTP started flag, no

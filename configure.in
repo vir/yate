@@ -8,7 +8,7 @@ if echo "$srcdir" | grep -q '[[[:space:]\$\"'\'']]'; then
 fi
 
 PACKAGE_RELEASE="1"
-PACKAGE_STATUS="alpha"
+PACKAGE_STATUS=""
 PACKAGE_REVISION=`cat packing/revision.txt 2>/dev/null`
 
 PACKAGE_VERSION_MAJOR="${PACKAGE_VERSION%%.*}"

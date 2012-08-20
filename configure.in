@@ -7,7 +7,7 @@ if echo "$srcdir" | grep -q '[[[:space:]\$\"'\'']]'; then
     AC_ERROR([Unsupported character(s) in source directory name])
 fi
 
-PACKAGE_RELEASE="1"
+PACKAGE_RELEASE="2"
 PACKAGE_STATUS=""
 PACKAGE_REVISION=`cat packing/revision.txt 2>/dev/null`
 

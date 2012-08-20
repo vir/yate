@@ -338,6 +338,7 @@ implementation. These are needed for standard SIGTRAN interfaces.
 
 %files lksctp
 %{_libdir}/yate/server/lksctp.yate
+%config(noreplace) %{_sysconfdir}/yate/lksctp.conf
 
 %define conf_sctp --enable-sctp
 %else

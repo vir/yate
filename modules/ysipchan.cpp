@@ -1027,7 +1027,8 @@ static unsigned int s_engineStop = 0;    // engine.stop message counter
 static bool s_engineHalt = false;        // engine.halt received
 static unsigned int s_bindRetryMs = 500; // Listeners bind retry interval
 static String s_realm = "Yate";
-static int s_floodEvents = 20;
+static int s_floodEvents = 100;
+static bool s_floodProtection = true;
 static int s_maxForwards = 20;
 static int s_nat_refresh = 25;
 static bool s_privacy = false;
@@ -2556,7 +2557,7 @@ int YateSIPUDPTransport::process()
     b[res] = 0;
     if (s_printMsg)
 	printRecvMsg(b,res);
-    if (s_floodEvents && plugin.ep() && plugin.ep()->s_evCount >= s_floodEvents && !msgIsAllowed(b,res)) {
+    if (s_floodProtection && s_floodEvents && plugin.ep() && plugin.ep()->s_evCount >= s_floodEvents && !msgIsAllowed(b,res)) {
 	if (Time::now() >= s_printFloodTime) {
 	    Debug(&plugin,DebugWarn,"Flood detected, dropping INVITE/REGISTER/SUBSCRIBE/OPTIONS messages, allowing reINVITES");
 	    s_printFloodTime = Time::now() + 10000000;
@@ -4265,8 +4266,10 @@ void YateSIPEndPoint::run()
     for (;;)
     {
 	if (!canRead()) {
-	    if ((s_evCount % s_floodEvents) == 0)
-	        Debug(&plugin,DebugMild,"Severe flood detected: %d events",s_evCount);
+	    if (s_evCount == s_floodEvents)
+	        Debug(&plugin,DebugMild,"Flood detected: %d handled events",s_evCount);
+	    else if ((s_evCount % s_floodEvents) == 0)
+	        Debug(&plugin,DebugWarn,"Severe flood detected: %d events",s_evCount);
 	}
 	SIPEvent* e = m_engine->getEvent();
 	if (e)
@@ -7663,6 +7666,7 @@ void SIPDriver::initialize()
     s_globalMutex.unlock();
     s_maxForwards = s_cfg.getIntValue("general","maxforwards",20);
     s_floodEvents = s_cfg.getIntValue("general","floodevents",100);
+    s_floodProtection = s_cfg.getBoolValue("general","floodprotection",true);
     s_privacy = s_cfg.getBoolValue("general","privacy");
     s_auto_nat = s_cfg.getBoolValue("general","nat",true);
     s_progress = s_cfg.getBoolValue("general","progress",false);

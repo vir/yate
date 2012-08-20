@@ -12,18 +12,18 @@
 /* Version numbers */
 #define YATE_MAJOR 4
 #define YATE_MINOR 2
-#define YATE_BUILD 0
+#define YATE_BUILD 1
 
 /* Version strings */
 #define YATE_MAJOR_S "4"
 #define YATE_MINOR_S "2"
-#define YATE_BUILD_S "0"
-#define YATE_VERSION "4.2.0"
-#define YATE_RELEASE "2"
-#define YATE_STATUS  ""
+#define YATE_BUILD_S "1"
+#define YATE_VERSION "4.2.1"
+#define YATE_RELEASE "1"
+#define YATE_STATUS  "alpha"
 
 /* Windows version resource - file and string style */
-#define YATE_WINVER_F 4,2,0,2
-#define YATE_WINVER_S "4, 2, 0, 2\0"
+#define YATE_WINVER_F 4,2,1,1
+#define YATE_WINVER_S "4, 2, 1, 1\0"
 
 #endif /* __YATEVERSN_H */

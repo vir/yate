@@ -360,6 +360,22 @@ bool RTPTransport::remoteAddr(SocketAddr& addr, bool sniff)
     return false;
 }
 
+bool RTPTransport::setBuffer(int bufLen)
+{
+#ifdef SO_RCVBUF
+    if (bufLen < 1024)
+	bufLen = 1024;
+    else if (bufLen > 65536)
+	bufLen = 65536;
+    bool ok = m_rtpSock.valid() && m_rtpSock.setOption(SOL_SOCKET,SO_RCVBUF,&bufLen,sizeof(bufLen));
+    if (ok && m_rtcpSock.valid())
+	ok = m_rtcpSock.setOption(SOL_SOCKET,SO_RCVBUF,&bufLen,sizeof(bufLen));
+    return ok;
+#else
+    return false;
+#endif
+}
+
 bool RTPTransport::drillHole()
 {
     if (m_rtpSock.valid() && m_remoteAddr.valid()) {

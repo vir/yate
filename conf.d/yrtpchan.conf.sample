@@ -14,6 +14,10 @@
 ; numeric TOS value or: lowdelay, throughput, reliability, mincost
 ;tos=0
 
+; udpbuf: int: Requested size of UDP socket's receive buffer
+; Valid values are 1024 to 65536, 0 to use kernel default
+;udpbuf=0
+
 ; buffer: int: Maximum buffer size - used to fragment octet (G.711) audio streams
 ;buffer=240
 

@@ -476,8 +476,14 @@ bool CmdHandler::doCommand(String& line, String& rval)
 	    << s_ringing << " ring, "
 	    << s_answers << " answered, "
 	    << s_current << " running";
-	if (s_runs)
+	if (s_runs) {
+	    int maxcalls = s_cfg.getIntValue(s_parameters,YSTRING("maxcalls"),5);
+	    if (maxcalls < 0)
+		maxcalls = 0;
+	    if (maxcalls)
+		rval << " out of " << maxcalls;
 	    rval << ", " << s_numcalls << " to go";
+	}
 	s_mutex.unlock();
     }
     else if (line == "start") {

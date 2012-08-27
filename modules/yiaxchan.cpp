@@ -891,8 +891,10 @@ bool YIAXLineContainer::fillList(String& name, NamedList& dest, SocketAddr& addr
     line->lock();
     dest.setParam("username",line->username());
     dest.setParam("password",line->password());
-    dest.setParam("caller",line->callingNo());
-    dest.setParam("callername",line->callingName());
+    if (line->callingNo())
+	dest.setParam("caller",line->callingNo());
+    if (line->callingName())
+	dest.setParam("callername",line->callingName());
     String a = line->remoteAddr();
     int p = line->remotePort();
     registered = line->registered();

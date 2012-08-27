@@ -1,4 +1,4 @@
-yate (4.2.1~svn5239) UNRELEASED; urgency=low
+yate (4.2.1~svn5243) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -9,8 +9,16 @@ yate (4.2.1~svn5239) UNRELEASED; urgency=low
     file handle limit.  + This limits how much delayed (so useless
     anyway) packets are processed under high load.  + Added an optional
     kernel buffer setting for RTP sockets.
+  * Updated to SVN revision 5243: + Added an optional kernel buffer
+    setting for RTP sockets.  + Fixes a very infrequent random crash.  +
+    Make sure we clear the processor of a RTP transport only after the
+    group was cleared.  + Display maxcalls besides running cals count in
+    "callgen info" command.  + Overwrite the calling number and name on
+    IAX calls only if they are set by the line.  + Allow setting the
+    preferred caller and callername in account.  + Override the IAX
+    caller and callername only if presenty in REGACK.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 25 Aug 2012 02:19:14 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 28 Aug 2012 02:19:15 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

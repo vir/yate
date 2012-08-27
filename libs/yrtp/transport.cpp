@@ -172,8 +172,20 @@ RTPTransport::RTPTransport(RTPTransport::Type type)
 RTPTransport::~RTPTransport()
 {
     DDebug(DebugAll,"RTPTransport::~RTPTransport() [%p]",this);
+    RTPGroup* g = group();
+    if (g)
+	Debug(DebugGoOn,"RTPTransport destroyed while in RTPGroup %p [%p]",g,this);
     group(0);
     setProcessor();
+    setMonitor();
+}
+
+void RTPTransport::destruct()
+{
+    group(0);
+    setProcessor();
+    setMonitor();
+    RTPProcessor::destruct();
 }
 
 void RTPTransport::timerTick(const Time& when)
@@ -220,7 +232,7 @@ void RTPTransport::timerTick(const Time& when)
 		if (m_monitor)
 		    m_monitor->rtpData(buf,len);
 	    }
-	    else
+	    else if (m_processor)
 		m_processor->incWrongSrc();
 	}
 	m_rtpSock.timerTick(when);

@@ -230,6 +230,11 @@ public:
     virtual ~RTPTransport();
 
     /**
+     * Destroys the object, disposes the memory. Do not call delete directly.
+     */
+    virtual void destruct();
+
+    /**
      * Set the RTP/RTCP processor of data received by this transport
      * @param processor A pointer to the RTPProcessor for this transport
      */

@@ -701,6 +701,8 @@ bool YIAXLineContainer::updateLine(Message& msg)
 	changed = changeLine(line,line->m_remoteAddr,addr) || changed;
 	changed = changeLine(line,line->m_username,msg.getValue("username")) || changed;
 	changed = changeLine(line,line->m_password,msg.getValue("password")) || changed;
+	changed = changeLine(line,line->m_callingNo,msg.getValue("caller")) || changed;
+	changed = changeLine(line,line->m_callingName,msg.getValue("callername")) || changed;
 	int interval = msg.getIntValue("interval");
 	if (interval < 60)
 	    interval = 60;
@@ -762,8 +764,10 @@ void YIAXLineContainer::regTerminate(IAXEvent* event)
 		}
 		// re-register at 75% of the expire time
 		line->m_nextReg = Time::secNow() + (line->expire() * 3 / 4);
-		line->m_callingNo = trans->callingNo();
-		line->m_callingName = trans->callingName();
+		if (trans->callingNo())
+		    line->m_callingNo = trans->callingNo();
+		if (trans->callingName())
+		    line->m_callingName = trans->callingName();
 	    }
 	    ok = line->m_register;
 	    break;
@@ -1040,8 +1044,6 @@ IAXTransaction* YIAXEngine::reg(YIAXLine* line, bool regreq)
     IAXIEList ieList;
     ieList.appendString(IAXInfoElement::USERNAME,line->username());
     ieList.appendString(IAXInfoElement::PASSWORD,line->password());
-    ieList.appendString(IAXInfoElement::CALLING_NUMBER,line->callingNo());
-    ieList.appendString(IAXInfoElement::CALLING_NAME,line->callingName());
     ieList.appendNumeric(IAXInfoElement::REFRESH,line->expire(),2);
     // Make it !
     IAXTransaction* tr = startLocalTransaction(regreq ? IAXTransaction::RegReq : IAXTransaction::RegRel,addr,ieList);

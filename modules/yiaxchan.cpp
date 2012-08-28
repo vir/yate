@@ -457,7 +457,7 @@ class YIAXSource : public DataSource, public YIAXData
 public:
     YIAXSource(YIAXConnection* conn, u_int32_t format, const char* formatText, int type);
     ~YIAXSource();
-    void Forward(const DataBlock &data, unsigned long tStamp = 0, unsigned long flags = 0);
+    unsigned long Forward(const DataBlock &data, unsigned long tStamp, unsigned long flags);
 };
 
 /*
@@ -1014,10 +1014,13 @@ void YIAXEngine::processMedia(IAXTransaction* transaction, DataBlock& data,
 	if (conn) {
 	    DataSource* src = conn->getSourceMedia(type);
 	    if (src) {
+		unsigned long ts = tStamp;
+		if (IAXFormat::Audio == type)
+		    ts *= 8; // assume 8kHz sampling
 		unsigned long flags = 0;
 		if (mark)
 		    flags = DataNode::DataMark;
-		src->Forward(data,tStamp,flags);
+		src->Forward(data,ts,flags);
 	    }
 	    else
 		DDebug(this,DebugAll,"processMedia. No media source");
@@ -1680,12 +1683,12 @@ YIAXSource::~YIAXSource()
 	IAXFormat::typeName(m_type),m_total,this);
 }
 
-void YIAXSource::Forward(const DataBlock& data, unsigned long tStamp, unsigned long flags)
+unsigned long YIAXSource::Forward(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 {
     if (m_connection && m_connection->mutedIn())
-	return;
+	return invalidStamp();
     m_total += data.length();
-    DataSource::Forward(data,tStamp,flags);
+    return DataSource::Forward(data,tStamp,flags);
 }
 
 /**

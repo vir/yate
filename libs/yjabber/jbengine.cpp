@@ -112,6 +112,11 @@ static const String s_googleMailNode = "http://mail.google.com/xmpp/client/caps"
 #define JB_IDLE_INTERVAL         3600000 // 1h
 #define JB_IDLE_INTERVAL_MIN      600000 // 10min
 #define JB_IDLE_INTERVAL_MAX    21600000 // 6h
+// Redirect
+#define JB_REDIRECT_COUNT              0
+#define JB_REDIRECT_COUNT_CLIENT       2
+#define JB_REDIRECT_MIN	               0
+#define JB_REDIRECT_MAX	              10
 
 
 /*
@@ -566,7 +571,20 @@ JBConnect::JBConnect(const JBStream& stream)
     m_engine(stream.engine()), m_stream(stream.toString()),
     m_streamType((JBStream::Type)stream.type())
 {
-    stream.connectAddr(m_address,m_port,m_localIp,m_status,m_srvs);
+    bool redir = false;
+    stream.connectAddr(m_address,m_port,m_localIp,m_status,m_srvs,&redir);
+    if (redir && m_address) {
+	char c = m_address[0];
+	if ((c < '0' || c > '9') && c != '[' && m_address[m_address.length() - 1] != ']') {
+	    // Redirect to domain: replace stream domain, clear address
+	    m_domain = m_address;
+	    m_address.clear();
+	}
+	else {
+	    // Redirect to IP address: clear stream domain
+	    m_domain.clear();
+	}
+    }
     if (m_engine)
 	m_engine->connectStatus(this,true);
 }
@@ -622,7 +640,7 @@ void JBConnect::connect()
 	}
 	advanceStatus();
     }
-    if (m_status == Srv) {
+    if (m_status == Srv && m_domain) {
 	if (!m_srvs.skipNull()) {
 	    // Get SRV records from remote party
 	    String query;
@@ -665,9 +683,11 @@ void JBConnect::connect()
 	}
 	advanceStatus();
     }
+    else if (m_status == Srv)
+	advanceStatus();
     if (m_status == Domain) {
 	// Try to resolve the domain
-	if (port)
+	if (port && m_domain)
 	    sock = connect(m_domain,port,stop);
 	advanceStatus();
     }
@@ -904,6 +924,7 @@ JBEngine::JBEngine(const char* name)
     m_pingInterval(JB_PING_INTERVAL), m_pingTimeout(JB_PING_TIMEOUT),
     m_idleTimeout(0), m_pptTimeoutC2s(0), m_pptTimeout(0),
     m_streamReadBuffer(JB_STREAMBUF), m_maxIncompleteXml(XMPP_MAX_INCOMPLETEXML),
+    m_redirectMax(JB_REDIRECT_COUNT),
     m_hasClientTls(true), m_printXml(0), m_initialized(false)
 {
     debugName(name);
@@ -956,6 +977,11 @@ void JBEngine::initialize(const NamedList& params)
 	JB_PING_TIMEOUT,JB_PING_TIMEOUT_MIN,JB_PING_TIMEOUT_MAX);
     m_idleTimeout = fixValue(params,"stream_idletimeout",
 	JB_IDLE_INTERVAL,JB_IDLE_INTERVAL_MIN,JB_IDLE_INTERVAL_MAX);
+    int defVal = JB_REDIRECT_COUNT;
+    if (client)
+	defVal = JB_REDIRECT_COUNT_CLIENT;
+    m_redirectMax = params.getIntValue("stream_redirectcount",
+	defVal,JB_REDIRECT_MIN,JB_REDIRECT_MAX);
     m_pptTimeoutC2s = params.getIntValue("stream_ppttimeout_c2s",10000,0,120000);
     m_pptTimeout = params.getIntValue("stream_ppttimeout",60000,0,180000);
     m_initialized = true;

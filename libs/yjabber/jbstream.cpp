@@ -155,7 +155,8 @@ JBStream::JBStream(JBEngine* engine, Socket* socket, Type t, bool ssl)
     m_engine(engine), m_type(t),
     m_incoming(true), m_terminateEvent(0), m_ppTerminate(0), m_ppTerminateTimeout(0),
     m_xmlDom(0), m_socket(0), m_socketFlags(0), m_socketMutex(true,"JBStream::Socket"),
-    m_connectPort(0), m_compress(0), m_connectStatus(JBConnect::Start)
+    m_connectPort(0), m_compress(0), m_connectStatus(JBConnect::Start),
+    m_redirectMax(0), m_redirectCount(0), m_redirectPort(0)
 {
     if (ssl)
 	setFlags(StreamSecured | StreamTls);
@@ -186,7 +187,8 @@ JBStream::JBStream(JBEngine* engine, Type t, const JabberID& local, const Jabber
     m_incoming(false), m_name(name),
     m_terminateEvent(0), m_ppTerminate(0), m_ppTerminateTimeout(0),
     m_xmlDom(0), m_socket(0), m_socketFlags(0), m_socketMutex(true,"JBStream::Socket"),
-    m_connectPort(0), m_compress(0), m_connectStatus(JBConnect::Start)
+    m_connectPort(0), m_compress(0), m_connectStatus(JBConnect::Start),
+    m_redirectMax(engine->redirectMax()), m_redirectCount(0), m_redirectPort(0)
 {
     if (!m_name)
 	m_engine->buildStreamName(m_name,this);
@@ -232,6 +234,8 @@ void JBStream::connectTerminated(Socket*& sock)
 	else {
 	    DDebug(this,DebugNote,"Connect failed [%p]",this);
 	    resetConnectStatus();
+	    setRedirect();
+	    m_redirectCount = 0;
 	    terminate(0,false,0,XMPPError::NoRemote);
 	}
 	return;
@@ -304,10 +308,18 @@ bool JBStream::haveData()
 
 // Retrieve connection address(es), port and status
 void JBStream::connectAddr(String& addr, int& port, String& localip, int& stat,
-    ObjList& srvs) const
+    ObjList& srvs, bool* isRedirect) const
 {
-    addr = m_connectAddr;
-    port = m_connectPort;
+    if (m_redirectAddr) {
+	addr = m_redirectAddr;
+	port = m_redirectPort;
+    }
+    else {
+	addr = m_connectAddr;
+	port = m_connectPort;
+    }
+    if (isRedirect)
+	*isRedirect = !m_redirectAddr.null();
     localip = m_localIp;
     stat = m_connectStatus;
     SrvRecord::copy(srvs,m_connectSrvs);
@@ -763,7 +775,7 @@ bool JBStream::authenticated(bool ok, const String& rsp, XMPPError::Type error,
 // Terminate the stream. Send stream end tag or error.
 // Reset the stream. Deref stream if destroying.
 void JBStream::terminate(int location, bool destroy, XmlElement* xml, int error,
-    const char* reason, bool final)
+    const char* reason, bool final, bool genEvent)
 {
     XDebug(this,DebugAll,"terminate(%d,%u,%p,%u,%s,%u) state=%s [%p]",
 	location,destroy,xml,error,reason,final,stateName(),this);
@@ -832,7 +844,7 @@ void JBStream::terminate(int location, bool destroy, XmlElement* xml, int error,
     m_outStreamXmlCompress.clear();
 
     // Always set termination event, except when called from destructor
-    if (!(final || m_terminateEvent)) {
+    if (genEvent && !(final || m_terminateEvent)) {
 	// TODO: Cancel all outgoing elements without id
 	m_terminateEvent = new JBEvent(destroy ? JBEvent::Destroy : JBEvent::Terminated,
 	    this,xml);
@@ -1432,7 +1444,32 @@ bool JBStream::streamError(XmlElement* xml)
     int err = XMPPUtils::s_error[error];
     if (err >= XMPPError::Count)
 	err = XMPPError::NoError;
-    terminate(1,false,xml,err,text);
+    String rAddr;
+    int rPort = 0;
+    if (err == XMPPError::SeeOther && text) {
+	if (m_redirectCount < m_redirectMax) {
+	    int pos = text.rfind(':');
+	    if (pos >= 0) {
+		rAddr = text.substr(0,pos);
+		if (rAddr) {
+		    rPort = text.substr(pos + 1).toInteger(0);
+		    if (rPort < 0)
+			rPort = 0;
+		}
+	    }
+	    else
+		rAddr = text;
+	}
+    }
+    terminate(1,false,xml,err,text,false,rAddr.null());
+    setRedirect(rAddr,rPort);
+    if (rAddr) {
+	resetFlags(InError);
+	resetConnectStatus();
+	changeState(Connecting);
+	m_engine->connectStream(this);
+	setRedirect();
+    }
     return true;
 }
 
@@ -1610,6 +1647,8 @@ void JBStream::changeState(State newState, u_int64_t time)
 	    break;
 	case Running:
 	    resetConnectStatus();
+	    setRedirect();
+	    m_redirectCount = 0;
 	    setFlags(StreamSecured | StreamAuthenticated);
 	    resetFlags(InError);
 	    m_setupTimeout = 0;
@@ -2477,6 +2516,28 @@ bool JBStream::postponedTerminate()
 	stateName(),this);
     terminate(location,destroy,0,error,reason);
     return true;
+}
+
+// Reset redirect data
+void JBStream::setRedirect(const String& addr, int port)
+{
+    if (!addr) {
+	if (m_redirectAddr)
+	    Debug(this,DebugInfo,"Cleared redirect data [%p]",this);
+	m_redirectAddr = "";
+	m_redirectPort = 0;
+	return;
+    }
+    if (m_redirectCount >= m_redirectMax) {
+	setRedirect();
+	return;
+    }
+    resetConnectStatus();
+    m_redirectAddr = addr;
+    m_redirectPort = port;
+    m_redirectCount++;
+    Debug(this,DebugInfo,"Set redirect to '%s:%d' in state %s (counter=%u max=%u) [%p]",
+	m_redirectAddr.c_str(),m_redirectPort,stateName(),m_redirectCount,m_redirectMax,this);
 }
 
 

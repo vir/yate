@@ -1,4 +1,4 @@
-yate (4.2.1~svn5243) UNRELEASED; urgency=low
+yate (4.2.1~svn5246) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -17,8 +17,13 @@ yate (4.2.1~svn5243) UNRELEASED; urgency=low
     IAX calls only if they are set by the line.  + Allow setting the
     preferred caller and callername in account.  + Override the IAX
     caller and callername only if presenty in REGACK.
+  * Updated to SVN revision 5246: + Override the IAX caller and
+    callername only if presenty in REGACK.  + Fixed millisecond to
+    timestamp conversion in IAX audio.  + Added support for redirect
+    (see-other-host) stream error.  + Handle calling phone numbers for
+    tigase.im jabber accounts. Use voip.tigase.im as target domain.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 28 Aug 2012 02:19:15 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 29 Aug 2012 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

@@ -858,10 +858,11 @@ public:
      * @param reason Optional text to be added to the error stanza
      * @param final True if called from destructor
      * @param genEvent True to generate terminated event
+     * @param content Optional sent error condition element text
      */
     void terminate(int location, bool destroy, XmlElement* xml,
 	int error = XMPPError::NoError, const char* reason = "",
-	bool final = false, bool genEvent = true);
+	bool final = false, bool genEvent = true, const char* content = 0);
 
     /**
      * Outgoing stream connect terminated notification.

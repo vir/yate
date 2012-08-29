@@ -1291,9 +1291,10 @@ public:
      * Create a 'stream:error' element
      * @param error The XMPP defined condition
      * @param text Optional text to add to the error
+     * @param content Optional error condition element text
      * @return A valid XmlElement pointer
      */
-    static XmlElement* createStreamError(int error, const char* text = 0);
+    static XmlElement* createStreamError(int error, const char* text = 0, const char* content = 0);
 
     /**
      * Build a register query element
@@ -1521,9 +1522,10 @@ public:
      *  namespace if the element is a stream error or to stanza error namespace otherwise
      * @param error Optional string to be filled with error tag
      * @param text Optional string to be filled with error text
+     * @param content Optional string to be filled with error condition element text
      */
     static void decodeError(XmlElement* xml, int ns = XMPPNamespace::Count,
-	String* error = 0, String* text = 0);
+	String* error = 0, String* text = 0, String* content = 0);
 
     /**
      * Decode a stream error or stanza error

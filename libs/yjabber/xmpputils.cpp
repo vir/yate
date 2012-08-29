@@ -846,11 +846,11 @@ XmlElement* XMPPUtils::createError(XmlElement* xml, int type, int error,
 }
 
 // Build a stream error element
-XmlElement* XMPPUtils::createStreamError(int error, const char* text)
+XmlElement* XMPPUtils::createStreamError(int error, const char* text, const char* content)
 {
     XmlElement* xml = createElement(XmlTag::Error);
     setStreamXmlns(*xml,false);
-    XmlElement* err = createElement(s_error[error],XMPPNamespace::StreamError);
+    XmlElement* err = createElement(s_error[error],XMPPNamespace::StreamError,content);
     xml->addChild(err);
     if (!TelEngine::null(text))
 	xml->addChild(createElement(XmlTag::Text,XMPPNamespace::StreamError,text));
@@ -930,7 +930,7 @@ XmlElement* XMPPUtils::findNextChild(const XmlElement& xml, XmlElement* start,
 }
 
 // Find an error child of a given element and return the associated code
-void XMPPUtils::decodeError(XmlElement* xml, int ns, String* error, String* text)
+void XMPPUtils::decodeError(XmlElement* xml, int ns, String* error, String* text, String* content)
 {
     if (!(xml && (error || text)))
 	return;
@@ -959,7 +959,9 @@ void XMPPUtils::decodeError(XmlElement* xml, int ns, String* error, String* text
 	    if (ch->unprefixedTag() == XMPPUtils::s_tag[XmlTag::Text])
 		continue;
 	    *error = ch->unprefixedTag();
-	    if (text) {
+	    if (content)
+		*content = ch->getText();
+	    else if (text) {
 		*text = ch->getText();
 		if (!TelEngine::null(text))
 		    return;

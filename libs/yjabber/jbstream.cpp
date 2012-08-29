@@ -775,7 +775,7 @@ bool JBStream::authenticated(bool ok, const String& rsp, XMPPError::Type error,
 // Terminate the stream. Send stream end tag or error.
 // Reset the stream. Deref stream if destroying.
 void JBStream::terminate(int location, bool destroy, XmlElement* xml, int error,
-    const char* reason, bool final, bool genEvent)
+    const char* reason, bool final, bool genEvent, const char* content)
 {
     XDebug(this,DebugAll,"terminate(%d,%u,%p,%u,%s,%u) state=%s [%p]",
 	location,destroy,xml,error,reason,final,stateName(),this);
@@ -826,7 +826,7 @@ void JBStream::terminate(int location, bool destroy, XmlElement* xml, int error,
 	    start = buildStreamStart();
 	XmlElement* end = new XmlElement(String("/stream:stream"),false);
 	if (error != XMPPError::NoError && location < 1) {
-	    XmlElement* e = XMPPUtils::createStreamError(error,reason);
+	    XmlElement* e = XMPPUtils::createStreamError(error,reason,content);
 	    if (!start)
 		sendStreamXml(m_state,e,end);
 	    else
@@ -1438,27 +1438,41 @@ bool JBStream::streamError(XmlElement* xml)
 	return false;
     String text;
     String error;
-    XMPPUtils::decodeError(xml,XMPPNamespace::StreamError,&error,&text);
-    Debug(this,DebugAll,"Received stream error '%s' text='%s' in state %s [%p]",
-	error.c_str(),text.c_str(),stateName(),this);
+    String content;
+    XMPPUtils::decodeError(xml,XMPPNamespace::StreamError,&error,&text,&content);
+    Debug(this,DebugAll,"Received stream error '%s' content='%s' text='%s' in state %s [%p]",
+	error.c_str(),content.c_str(),text.c_str(),stateName(),this);
     int err = XMPPUtils::s_error[error];
     if (err >= XMPPError::Count)
 	err = XMPPError::NoError;
     String rAddr;
     int rPort = 0;
-    if (err == XMPPError::SeeOther && text) {
+    if (err == XMPPError::SeeOther && content) {
 	if (m_redirectCount < m_redirectMax) {
-	    int pos = text.rfind(':');
+	    int pos = content.rfind(':');
 	    if (pos >= 0) {
-		rAddr = text.substr(0,pos);
+		rAddr = content.substr(0,pos);
 		if (rAddr) {
-		    rPort = text.substr(pos + 1).toInteger(0);
+		    rPort = content.substr(pos + 1).toInteger(0);
 		    if (rPort < 0)
 			rPort = 0;
 		}
 	    }
 	    else
-		rAddr = text;
+		rAddr = content;
+	    if (rAddr) {
+		// Check if the connect destination is different
+		SocketAddr remoteIp;
+		remoteAddr(remoteIp);
+		bool sameDest = (rAddr == serverHost()) || (rAddr == m_connectAddr) || (rAddr == remoteIp.host());
+		if (sameDest) {
+		    sameDest = ((rPort > 0 ? rPort : XMPP_C2S_PORT) == remoteIp.port());
+		    if (sameDest) {
+			Debug(this,DebugNote,"Ignoring redirect to same destination [%p]",this);
+			rAddr = "";
+		    }
+		}
+	    }
 	}
     }
     terminate(1,false,xml,err,text,false,rAddr.null());

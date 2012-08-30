@@ -1,4 +1,4 @@
-yate (4.2.1~svn5248) UNRELEASED; urgency=low
+yate (4.2.1~svn5249) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -25,8 +25,10 @@ yate (4.2.1~svn5248) UNRELEASED; urgency=low
   * Updated to SVN revision 5248: + Ignore stream redirect to the same
     destination. Allow adding error element text in sent stream errors.
     + Documented stream redirect max parameter.
+  * Updated to SVN revision 5249: + Fixed crash. Release m_sending mutex
+    when the socket is null.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 30 Aug 2012 02:19:17 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 31 Aug 2012 02:19:15 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

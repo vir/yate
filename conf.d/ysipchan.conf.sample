@@ -132,6 +132,14 @@
 ; See SIPMessage::Flags and SIPMessage::complete() in the source for gory details
 ;flags=0
 
+; autochangeparty: bool: Automatically change remote ip/port when a channel receives
+;  a response or a new transaction from a different address
+; E.g. if an INVITE sent to 1.2.3.4:5060 receives OK from 1.2.3.4:5080 the ACK
+;  (and subsequent transactions) will be sent to 1.2.3.4:5080
+; Defaults to disable
+; This parameter is applied on reload
+;autochangeparty=disable
+
 ; ssl_certificate_file: string: File containing client SSL certificate to present
 ; This parameter is used for outgoing encrypted connections if a certificate
 ;  is requested by the server during SSL negotiation

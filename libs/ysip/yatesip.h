@@ -1253,6 +1253,13 @@ public:
 	{ return m_flags; }
 
     /**
+     * Check if message party should be changed from latest dialog party
+     * @return Value of auto change party option
+     */
+    inline bool autoChangeParty() const
+	{ return m_autoChangeParty; }
+
+    /**
      * Get an authentication nonce
      * @param nonce String reference to fill with the current nonce
      */
@@ -1358,6 +1365,7 @@ protected:
     String m_nonce_secret;
     u_int32_t m_nonce_time;
     Mutex m_nonce_mutex;
+    bool m_autoChangeParty;
 };
 
 }

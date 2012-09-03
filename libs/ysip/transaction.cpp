@@ -559,7 +559,10 @@ void SIPTransaction::processClientMessage(SIPMessage* message, int state)
 		setTimeout();
 		if (isInvite()) {
 		    // build the ACK
-		    setLatestMessage(new SIPMessage(m_firstMessage,message));
+		    SIPMessage* m = new SIPMessage(m_firstMessage,message);
+		    if (m_engine->autoChangeParty() && message->getParty())
+			m->setParty(message->getParty());
+		    setLatestMessage(m);
 		    m_lastMessage->deref();
 		    setTransmit();
 		    if (changeState(Finish))

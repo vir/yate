@@ -1,8 +1,12 @@
-yate (4.1.1~vir2012080701) UNRELEASED; urgency=low
+yate (4.2.1~vir2012090501) UNRELEASED; urgency=low
 
-  * Merged upstream fixes
+  * Merged upstream fixes, including the following:
+  * reINVITE fix
+  * SIP flood prevention and 'floodevents' new meaning (dropping packaets)
+  * maxchans setting sip/iax/jingle/h323 chans
+  * a number of jingle and IAX fixes
 
- -- Vasily i. Redkin <vir@vir.otvt.ru>  Tue, 07 Aug 2012 09:17:45 +0400
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Wed, 05 Sep 2012 13:37:18 +0400
 
 yate (4.1.1~vir2012071201) UNRELEASED; urgency=low
 

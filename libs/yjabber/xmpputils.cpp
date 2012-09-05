@@ -775,6 +775,14 @@ XmlElement* XMPPUtils::createIqError(const char* from, const char* to, XmlElemen
     return iq;
 }
 
+// Create an 'iq' element with a ping child
+XmlElement* XMPPUtils::createPing(const char* id, const char* from, const char* to)
+{
+    XmlElement* iq = XMPPUtils::createIq(XMPPUtils::IqGet,from,to,id);
+    iq->addChild(XMPPUtils::createElement(XmlTag::Ping,XMPPNamespace::Ping));
+    return iq;
+}
+
 // Create an 'iq' element of type 'get' with a 'vcard' child
 XmlElement* XMPPUtils::createVCard(bool get, const char* from, const char* to, const char* id)
 {

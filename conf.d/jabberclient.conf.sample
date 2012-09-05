@@ -55,6 +55,22 @@
 ; A value outside min/max interval will be adjusted to nearest interval margin
 ;stream_redirectcount=2
 
+; stream_pinginterval: integer: The interval in milliseconds to ping the server
+; Ping is always re-scheduled when receiving data from the server
+; This parameter is applied on reload
+; Minimum allowed value is 60000, maximum allowed value is 3600000
+; Defaults to 600000
+; Set it to 0 to disable ping
+;stream_pinginterval=600000
+
+; stream_pingtimeout: integer: Sent ping timeout in milliseconds
+; When a ping times out the stream is terminated
+; This parameter is applied on reload
+; Minimum allowed value is 10000, maximum allowed value is 60000
+; Defaults to 30000
+; Set it to 0 to disable ping
+;stream_pingtimeout=30000
+
 ; entitycaps: boolean: Enable entity capabilities cache.
 ; If enabled entity capabilities will be requested and cached each time a presence
 ;  stanza is received

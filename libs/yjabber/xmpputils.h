@@ -1220,6 +1220,16 @@ public:
 	int type, int error, const char* text = 0);
 
     /**
+     * Create an 'iq' element with a ping child
+     * @param id The 'id' attribute
+     * @param from The 'from' attribute
+     * @param to The 'to' attribute
+     * @return A valid XmlElement pointer
+     */
+    static XmlElement* createPing(const char* id = 0, const char* from = 0,
+	const char* to = 0);
+
+    /**
      * Create an 'iq' element with a 'vcard' child
      * @param get True to set the iq's type to 'get', false to set it to 'set'
      * @param from The 'from' attribute

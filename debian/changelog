@@ -1,4 +1,4 @@
-yate (4.2.1~svn5250) UNRELEASED; urgency=low
+yate (4.2.1~svn5253) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -30,8 +30,12 @@ yate (4.2.1~svn5250) UNRELEASED; urgency=low
   * Updated to SVN revision 5250: + Added configurable option (defaults
     to disable) used to change remote party's ip/port when a channel
     receives a response or a new transaction from a different address.
+  * Updated to SVN revision 5253: + Fixed bug: don't change party when
+    processing inactive events to avoid overriding it with a wrong one.
+    Moved party changed debug message to DebugInfo level.  + Implemented
+    ping on client to server streams.  + Fixed debug message.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 04 Sep 2012 02:19:15 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 06 Sep 2012 02:19:15 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

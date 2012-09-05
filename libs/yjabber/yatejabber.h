@@ -726,10 +726,11 @@ public:
      * @param port The remote port
      * @param localip Local ip to bind
      * @param stat Current connect status
+     * @param isRedirect Optional pointer to be set to true if returned address is a redirect one
      * @param srvs List to copy stream SRV records
      */
     void connectAddr(String& addr, int& port, String& localip, int& stat,
-	ObjList& srvs) const;
+	ObjList& srvs, bool* isRedirect = 0) const;
 
     /**
      * Retrieve server host when connecting.
@@ -856,10 +857,12 @@ public:
      * @param error Termination reason. Set it to NoError to send stream end tag
      * @param reason Optional text to be added to the error stanza
      * @param final True if called from destructor
+     * @param genEvent True to generate terminated event
+     * @param content Optional sent error condition element text
      */
     void terminate(int location, bool destroy, XmlElement* xml,
 	int error = XMPPError::NoError, const char* reason = "",
-	bool final = false);
+	bool final = false, bool genEvent = true, const char* content = 0);
 
     /**
      * Outgoing stream connect terminated notification.
@@ -1268,6 +1271,8 @@ private:
     // Handle postponed termination. Return true if found
     // This method is not thread safe
     bool postponedTerminate();
+    // Reset redirect data
+    void setRedirect(const String& addr = String::empty(), int port = 0);
     // Reset postponed terminate data
     inline void resetPostponedTerminate() {
 	    m_ppTerminateTimeout = 0;
@@ -1344,6 +1349,10 @@ private:
     Compressor* m_compress;
     int m_connectStatus;                 // Current connect stream status
     ObjList m_connectSrvs;               // Current connect stream SRV records
+    unsigned int m_redirectMax;
+    unsigned int m_redirectCount;
+    String m_redirectAddr;
+    int m_redirectPort;
 };
 
 
@@ -1932,6 +1941,13 @@ public:
 	}
 
     /**
+     * Retrieve maximum redirect counter for outgoing streams
+     * @return Maximum redirect counter for outgoing streams
+     */
+    inline unsigned int redirectMax() const
+	{ return m_redirectMax; }
+
+    /**
      * Check if TLS is available for outgoing streams
      * @return True if TLS is available for outgoing streams
      */
@@ -2193,6 +2209,7 @@ protected:
     unsigned int m_pptTimeout;           // Non client streams postpone stream termination intervals
     unsigned int m_streamReadBuffer;     // Stream read buffer length
     unsigned int m_maxIncompleteXml;     // Maximum length of an incomplete xml
+    unsigned int m_redirectMax;          // Max redirect counter for outgoing streams
     bool m_hasClientTls;                 // True if TLS is available for outgoing streams
     int m_printXml;                      // Print XML data to output
     bool m_initialized;                  // True if already initialized

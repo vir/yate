@@ -325,7 +325,7 @@ private:
     Mutex m_mutex;                       // Lock transport and session
     State m_state;                       // Connection state
     JGSession* m_session;                // Jingle session attached to this connection
-    bool m_rtpStarted;                   // RTP started flag used by version 0 of the jingle session
+    bool m_rtpStarted;                   // RTP started flag
     bool m_acceptRelay;                  // Accept to replace with a relay candidate
     JGSession::Version m_sessVersion;    // Jingle session version
     int m_sessFlags;                     // Session flags
@@ -1227,13 +1227,8 @@ bool YJGConnection::msgAnswered(Message& msg)
 {
     Debug(this,DebugCall,"msgAnswered [%p]",this);
     if (m_ftStatus == FTNone) {
-	if (m_sessVersion != JGSession::Version0) {
-	    clearEndpoint();
-	    Lock lock(m_mutex);
-	    m_rtpId.clear();
-	}
 	m_mutex.lock();
-	if (m_sessVersion != JGSession::Version0 || !m_rtpStarted)
+	if (!m_audioContent || ((m_sessVersion != JGSession::Version0) && m_audioContent->isEarlyMedia()))
 	    resetCurrentAudioContent(true,false,true);
 	ObjList tmp;
 	if (m_audioContent)
@@ -1404,11 +1399,11 @@ bool YJGConnection::msgTone(Message& msg, const char* tone)
     Lock lock(m_mutex);
     // Inband and RFC 2833 require an active local RTP stream
     if (meth == YJGDriver::DtmfInband) {
-	if (m_rtpId && dtmfInband(tone))
+	if (m_rtpStarted && dtmfInband(tone))
 	    return true;
     }
     else if (meth == YJGDriver::DtmfRfc2833) {
-	if (m_rtpId) {
+	if (m_rtpStarted) {
 	    msg.setParam("targetid",m_rtpId);
 	    return false;
 	}
@@ -2151,7 +2146,7 @@ void YJGConnection::processActionTransportInfo(JGEvent* event)
     if (ok) {
 	event->confirmElement();
 	if (newContent) {
-	    if (!dataFlags(OnHold))
+	    if ((m_rtpStarted || m_audioContent || m_rtpId.null()) && !dataFlags(OnHold))
 		resetCurrentAudioContent(isAnswered(),!isAnswered(),true,newContent);
 	}
 	else if ((startAudioContent && !startRtp()) || !(m_audioContent || dataFlags(OnHold)))
@@ -2321,14 +2316,15 @@ void YJGConnection::removeContent(JGSessionContent* c)
 //  add a new identical content and remove the old old one from the session
 void YJGConnection::removeCurrentAudioContent(bool removeReq)
 {
-    if (!dataFlags(OnHold)) {
+    if (m_rtpStarted || m_audioContent || dataFlags(OnHold)) {
 	clearEndpoint();
 	m_rtpId.clear();
+	m_rtpStarted = false;
     }
     if (!m_audioContent)
 	return;
 
-    Debug(this,DebugAll,"Resetting current audio content (%p,'%s') [%p]",
+    Debug(this,DebugAll,"Removing current audio content (%p,'%s') [%p]",
 	m_audioContent,m_audioContent->toString().c_str(),this);
 
     // Remove from list if not re-usable
@@ -2369,7 +2365,11 @@ void YJGConnection::removeCurrentAudioContent(bool removeReq)
 bool YJGConnection::resetCurrentAudioContent(bool session, bool earlyMedia,
     bool sendTransInfo, JGSessionContent* newContent, bool sendRing)
 {
-    // Reset the current audio content
+    DDebug(this,DebugAll,"Resetting current audio content (%s,%s,%s,%p,%s) [%p]",
+	String::boolText(session),String::boolText(earlyMedia),
+	String::boolText(sendTransInfo),newContent,String::boolText(sendRing),this);
+
+    // Remove the current audio content
     removeCurrentAudioContent();
 
     // Set nothing if on hold
@@ -2535,6 +2535,7 @@ bool YJGConnection::startRtp()
 	Engine::enqueue(msg);
     }
     else if (m_audioContent->m_rtpLocalCandidates.m_type == JGRtpCandidates::RtpRawUdp) {
+	m_rtpStarted = true;
 	// Send trying
 	if (m_session) {
 	    XmlElement* trying = XMPPUtils::createElement(XmlTag::Trying,
@@ -2860,6 +2861,7 @@ bool YJGConnection::initLocalCandidates(JGSessionContent& content, bool sendTran
 	}
     }
 
+    m_rtpId = m.getValue("rtpid");
     plugin.setLocalIp(rtp->m_address,m);
     rtp->m_port = m.getValue("localport","-1");
 
@@ -3269,6 +3271,7 @@ void YJGConnection::handleAudioInfoEvent(JGEvent* event)
 		if (hold) {
 		    clearEndpoint();
 		    m_rtpId.clear();
+		    m_rtpStarted = false;
 		}
 		Engine::dispatch(*m);
 		TelEngine::destruct(m);
@@ -3645,7 +3648,7 @@ void YJGTransfer::run()
 	    m_transferredDrv->lock();
 	    RefPointer<Channel> chan = m_transferredDrv->find(m_transferredID);
 	    m_transferredDrv->unlock();
-    	    if (!chan)
+	    if (!chan)
 		SET_ERROR("Connection vanished while routing");
 	    if (!ok || (m_msg.retValue() == "-") || (m_msg.retValue() == "error"))
 		SET_ERROR("call.route failed error=" << m_msg.getValue("error"));
@@ -3774,7 +3777,7 @@ void YJGDriver::initialize()
 	s_jingle->debugChain(this);
 	// Driver setup
 	setup();
-  	installRelay(Halt);
+	installRelay(Halt);
 	installRelay(Route);
 	installRelay(Update);
 	installRelay(Transfer);
@@ -3867,6 +3870,8 @@ void YJGDriver::initialize()
     int redir = sect->getIntValue("redirectcount");
     s_redirectCount = (redir >= 0) ? redir : 0;
     s_dtmfMeth = sect->getIntValue("dtmfmethod",s_dictDtmfMeth,DtmfJingle);
+    // set max chans
+    maxChans(sect->getIntValue("maxchans",maxChans()));
 
     int prio = sect->getIntValue("resource_priority");
     if (prio < -128)

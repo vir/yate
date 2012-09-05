@@ -708,6 +708,13 @@ static inline bool isGmailAccount(ClientAccount* acc)
 	(acc->contact()->uri().getHost() &= s_googleDomain);
 }
 
+// Check if a given account is tigase.im
+static inline bool isTigaseImAccount(ClientAccount* acc)
+{
+    static String s_tigaseIm = "tigase.im";
+    return acc && acc->contact() && (acc->contact()->uri().getHost() &= s_tigaseIm);
+}
+
 // Check if a given domain is a Google MUC server
 static inline bool isGoogleMucDomain(const String& domain)
 {
@@ -3104,7 +3111,7 @@ static void updateTelAccList(bool ok, ClientAccount* acc)
     if (!acc)
 	return;
     DDebug(ClientDriver::self(),DebugAll,"updateTelAccList(%d,%p)",ok,acc);
-    if (ok && (isTelProto(acc->protocol()) || isGmailAccount(acc)))
+    if (ok && (isTelProto(acc->protocol()) || isGmailAccount(acc) || isTigaseImAccount(acc)))
 	Client::self()->updateTableRow(s_account,acc->toString());
     else
 	Client::self()->delTableRow(s_account,acc->toString());
@@ -5607,6 +5614,30 @@ bool DefaultLogic::callStart(NamedList& params, Window* wnd, const String& cmd)
 		params.addParam("dtmfmethod","rfc2833");
 		String callParams = params[YSTRING("call_parameters")];
 		callParams.append("redirectcount,checkcalled,dtmfmethod,ojingle_version,ojingle_flags",",");
+		params.setParam("call_parameters",callParams);
+	    }
+	    else if (!valid) {
+		showError(wnd,"Incorrect number");
+		Debug(ClientDriver::self(),DebugNote,
+		    "Failed to call: invalid gmail number '%s'",params.getValue("target"));
+		return false;
+	    }
+	}
+	else if (account && isTigaseImAccount(m_accounts->findAccount(account))) {
+	    // Allow calling user@domain
+	    int pos = ns.find('@');
+	    bool valid = (pos > 0) && (ns.find('.',pos + 2) >= pos);
+	    if (!valid) {
+		target = ns;
+		Client::fixPhoneNumber(target,"().- ");
+	    }
+	    if (target) {
+		target = target + "@voip.tigase.im/yate";
+//		params.addParam("ojingle_version","0");
+		params.addParam("dtmfmethod","rfc2833");
+		params.addParam("offericeudp",String::boolText(false));
+		String callParams = params[YSTRING("call_parameters")];
+		callParams.append("dtmfmethod,ojingle_version,ojingle_flags,offericeudp",",");
 		params.setParam("call_parameters",callParams);
 	    }
 	    else if (!valid) {

@@ -467,7 +467,7 @@ class YIAXSource : public DataSource, public YIAXData
 public:
     YIAXSource(YIAXConnection* conn, u_int32_t format, const char* formatText, int type);
     ~YIAXSource();
-    void Forward(const DataBlock &data, unsigned long tStamp = 0, unsigned long flags = 0);
+    unsigned long Forward(const DataBlock &data, unsigned long tStamp, unsigned long flags);
 };
 
 /*
@@ -711,6 +711,8 @@ bool YIAXLineContainer::updateLine(Message& msg)
 	changed = changeLine(line,line->m_remoteAddr,addr) || changed;
 	changed = changeLine(line,line->m_username,msg.getValue("username")) || changed;
 	changed = changeLine(line,line->m_password,msg.getValue("password")) || changed;
+	changed = changeLine(line,line->m_callingNo,msg.getValue("caller")) || changed;
+	changed = changeLine(line,line->m_callingName,msg.getValue("callername")) || changed;
 	int interval = msg.getIntValue("interval");
 	if (interval < 60)
 	    interval = 60;
@@ -772,8 +774,10 @@ void YIAXLineContainer::regTerminate(IAXEvent* event)
 		}
 		// re-register at 75% of the expire time
 		line->m_nextReg = Time::secNow() + (line->expire() * 3 / 4);
-		line->m_callingNo = trans->callingNo();
-		line->m_callingName = trans->callingName();
+		if (trans->callingNo())
+		    line->m_callingNo = trans->callingNo();
+		if (trans->callingName())
+		    line->m_callingName = trans->callingName();
 	    }
 	    ok = line->m_register;
 	    break;
@@ -901,8 +905,10 @@ bool YIAXLineContainer::fillList(String& name, NamedList& dest, SocketAddr& addr
     line->lock();
     dest.setParam("username",line->username());
     dest.setParam("password",line->password());
-    dest.setParam("caller",line->callingNo());
-    dest.setParam("callername",line->callingName());
+    if (line->callingNo())
+	dest.setParam("caller",line->callingNo());
+    if (line->callingName())
+	dest.setParam("callername",line->callingName());
     String a = line->remoteAddr();
     int p = line->remotePort();
     registered = line->registered();
@@ -1018,10 +1024,13 @@ void YIAXEngine::processMedia(IAXTransaction* transaction, DataBlock& data,
 	if (conn) {
 	    DataSource* src = conn->getSourceMedia(type);
 	    if (src) {
+		unsigned long ts = tStamp;
+		if (IAXFormat::Audio == type)
+		    ts *= 8; // assume 8kHz sampling
 		unsigned long flags = 0;
 		if (mark)
 		    flags = DataNode::DataMark;
-		src->Forward(data,tStamp,flags);
+		src->Forward(data,ts,flags);
 	    }
 	    else
 		DDebug(this,DebugAll,"processMedia. No media source");
@@ -1048,8 +1057,6 @@ IAXTransaction* YIAXEngine::reg(YIAXLine* line, bool regreq)
     IAXIEList ieList;
     ieList.appendString(IAXInfoElement::USERNAME,line->username());
     ieList.appendString(IAXInfoElement::PASSWORD,line->password());
-    ieList.appendString(IAXInfoElement::CALLING_NUMBER,line->callingNo());
-    ieList.appendString(IAXInfoElement::CALLING_NAME,line->callingName());
     ieList.appendNumeric(IAXInfoElement::REFRESH,line->expire(),2);
     // Make it !
     IAXTransaction* tr = startLocalTransaction(regreq ? IAXTransaction::RegReq : IAXTransaction::RegRel,addr,ieList);
@@ -1375,6 +1382,7 @@ void YIAXDriver::initialize()
     if (m_iaxEngine) {
 	m_iaxEngine->initialize(*gen);
 	m_iaxEngine->initFormats(cfg.getSection("formats"));
+	maxChans(gen->getIntValue("maxchans",maxChans()));
 	return;
     }
     setup();
@@ -1393,6 +1401,8 @@ void YIAXDriver::initialize()
     u_int32_t trunkSendInterval = 10;
     m_port = gen->getIntValue("port",4569);
     String iface = gen->getValue("addr","0.0.0.0");
+    // set max chans
+    maxChans(gen->getIntValue("maxchans",maxChans()));
     bool authReq = cfg.getBoolValue("registrar","auth_required",true);
     m_iaxEngine = new YIAXEngine(iface,m_port,transListCount,retransCount,retransInterval,authTimeout,
 	transTimeout,maxFullFrameDataLen,trunkSendInterval,authReq,gen);
@@ -1683,12 +1693,12 @@ YIAXSource::~YIAXSource()
 	IAXFormat::typeName(m_type),m_total,this);
 }
 
-void YIAXSource::Forward(const DataBlock& data, unsigned long tStamp, unsigned long flags)
+unsigned long YIAXSource::Forward(const DataBlock& data, unsigned long tStamp, unsigned long flags)
 {
     if (m_connection && m_connection->mutedIn())
-	return;
+	return invalidStamp();
     m_total += data.length();
-    DataSource::Forward(data,tStamp,flags);
+    return DataSource::Forward(data,tStamp,flags);
 }
 
 /**

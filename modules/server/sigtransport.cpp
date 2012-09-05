@@ -1147,18 +1147,19 @@ bool StreamReader::connectSocket()
 
 bool StreamReader::readData()
 {
-    if (!(m_sending.lock(SignallingEngine::maxLockWait()) && m_socket))
+    Lock myLock(m_sending,SignallingEngine::maxLockWait());
+    if (!(myLock.locked() && m_socket))
 	return false;
     if (m_reconnect) {
 	connectionDown(false);
-	m_sending.unlock();
+	myLock.drop();
 	stopThread();
 	return false;
     }
     sendBuffer();
     if (!m_socket)
 	return false;
-    m_sending.unlock();
+    myLock.drop();
     int stream = 0, len = 0;
     SocketAddr addr;
     unsigned char buf[MAX_BUF_SIZE];

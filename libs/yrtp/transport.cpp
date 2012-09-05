@@ -172,8 +172,20 @@ RTPTransport::RTPTransport(RTPTransport::Type type)
 RTPTransport::~RTPTransport()
 {
     DDebug(DebugAll,"RTPTransport::~RTPTransport() [%p]",this);
+    RTPGroup* g = group();
+    if (g)
+	Debug(DebugGoOn,"RTPTransport destroyed while in RTPGroup %p [%p]",g,this);
     group(0);
     setProcessor();
+    setMonitor();
+}
+
+void RTPTransport::destruct()
+{
+    group(0);
+    setProcessor();
+    setMonitor();
+    RTPProcessor::destruct();
 }
 
 void RTPTransport::timerTick(const Time& when)
@@ -183,6 +195,8 @@ void RTPTransport::timerTick(const Time& when)
 	char buf[BUF_SIZE];
 	int len;
 	while ((len = m_rtpSock.recvFrom(buf,sizeof(buf),m_rxAddrRTP)) > 0) {
+	    XDebug(DebugAll,"RTP/UDPTL from '%s:%d' length %d [%p]",
+		m_rxAddrRTP.host().c_str(),m_rxAddrRTP.port(),len,this);
 	    switch (m_type) {
 		case RTP:
 		    if (len < 12)
@@ -218,7 +232,7 @@ void RTPTransport::timerTick(const Time& when)
 		if (m_monitor)
 		    m_monitor->rtpData(buf,len);
 	    }
-	    else
+	    else if (m_processor)
 		m_processor->incWrongSrc();
 	}
 	m_rtpSock.timerTick(when);
@@ -227,6 +241,8 @@ void RTPTransport::timerTick(const Time& when)
 	char buf[BUF_SIZE];
 	int len;
 	while (((len = m_rtcpSock.recvFrom(buf,sizeof(buf),m_rxAddrRTCP)) >= 8) && (m_rxAddrRTCP == m_remoteRTCP)) {
+	    XDebug(DebugAll,"RTCP from '%s:%d' length %d [%p]",
+		m_rxAddrRTCP.host().c_str(),m_rxAddrRTCP.port(),len,this);
 	    if (m_processor)
 		m_processor->rtcpData(buf,len);
 	    if (m_monitor)
@@ -354,6 +370,22 @@ bool RTPTransport::remoteAddr(SocketAddr& addr, bool sniff)
 	return true;
     }
     return false;
+}
+
+bool RTPTransport::setBuffer(int bufLen)
+{
+#ifdef SO_RCVBUF
+    if (bufLen < 1024)
+	bufLen = 1024;
+    else if (bufLen > 65536)
+	bufLen = 65536;
+    bool ok = m_rtpSock.valid() && m_rtpSock.setOption(SOL_SOCKET,SO_RCVBUF,&bufLen,sizeof(bufLen));
+    if (ok && m_rtcpSock.valid())
+	ok = m_rtcpSock.setOption(SOL_SOCKET,SO_RCVBUF,&bufLen,sizeof(bufLen));
+    return ok;
+#else
+    return false;
+#endif
 }
 
 bool RTPTransport::drillHole()

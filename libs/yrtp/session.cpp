@@ -602,12 +602,7 @@ void UDPSession::transport(RTPTransport* trans)
     DDebug(DebugInfo,"UDPSession::transport(%p) old=%p [%p]",trans,m_transport,this);
     if (trans == m_transport)
 	return;
-    RTPTransport* tmp = m_transport;
-    m_transport = 0;
-    if (tmp) {
-	tmp->setProcessor(0);
-	tmp->destruct();
-    }
+    TelEngine::destruct(m_transport);
     m_transport = trans;
     if (m_transport)
 	m_transport->setProcessor(this);

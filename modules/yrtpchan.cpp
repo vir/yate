@@ -101,6 +101,7 @@ static bool s_drill = false;
 
 static Thread::Priority s_priority = Thread::Normal;
 static int s_tos     = 0;
+static int s_udpbuf  = 0;
 static int s_sleep   = 5;
 static int s_interval= 0;
 static int s_timeout = 0;
@@ -204,7 +205,7 @@ class YRTPSession : public RTPSession
 {
 public:
     inline YRTPSession(YRTPWrapper* wrap)
-	: m_wrap(wrap), m_lastLost(0),
+	: m_wrap(wrap), m_lastLost(0), m_newPayload(-1),
 	  m_resync(false), m_anyssrc(false), m_getFax(true)
 	{ }
     virtual ~YRTPSession();
@@ -225,6 +226,7 @@ protected:
 private:
     YRTPWrapper* m_wrap;
     u_int32_t m_lastLost;
+    int m_newPayload;
     bool m_resync;
     bool m_anyssrc;
     bool m_getFax;
@@ -635,6 +637,7 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, Message& msg)
     int evpayload = msg.getIntValue(YSTRING("evpayload"),101);
     const char* format = msg.getValue(YSTRING("format"));
     int tos = msg.getIntValue(YSTRING("tos"),dict_tos,s_tos);
+    int buflen = msg.getIntValue(YSTRING("buffer"),s_udpbuf);
     int msec = msg.getIntValue(YSTRING("msleep"),s_sleep);
 
     if (!format)
@@ -716,6 +719,8 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, Message& msg)
     m_rtp->dataPayload(payload);
     m_rtp->eventPayload(evpayload);
     m_rtp->setTOS(tos);
+    if (buflen > 0)
+	m_rtp->setBuffer(buflen);
     m_rtp->padding(msg.getIntValue(YSTRING("padding"),s_padding));
     if (msg.getBoolValue(YSTRING("drillhole"),s_drill)) {
 	bool ok = m_rtp->drillHole();
@@ -1021,6 +1026,10 @@ void YRTPSession::rtpNewPayload(int payload, unsigned int timestamp)
     if (payload == 13) {
 	Debug(&splugin,DebugInfo,"Activating RTP silence payload %d in wrapper %p",payload,m_wrap);
 	silencePayload(payload);
+    }
+    else if (payload != m_newPayload) {
+	m_newPayload = payload;
+	Debug(&splugin,DebugMild,"Unexpected payload %d in wrapper %p",payload,m_wrap);
     }
 }
 
@@ -1849,6 +1858,7 @@ void YRTPPlugin::initialize()
     s_minJitter = cfg.getIntValue("general","minjitter",50);
     s_maxJitter = cfg.getIntValue("general","maxjitter",Engine::clientMode() ? 120 : 0);
     s_tos = cfg.getIntValue("general","tos",dict_tos);
+    s_udpbuf = cfg.getIntValue("general","udpbuf",0);
     s_localip = cfg.getValue("general","localip");
     s_autoaddr = cfg.getBoolValue("general","autoaddr",true);
     s_anyssrc = cfg.getBoolValue("general","anyssrc",true);

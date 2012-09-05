@@ -48,6 +48,11 @@
 ; It is a bad idea to set a low priority for anything but testing
 ;thread=normal
 
+; maxchans: int: Maximum number of channels running at once
+; A value of 0 specifies that there is no limit enforced.
+; Defaults to the value set by the maxchans setting from yate.conf
+;maxchans=
+
 ; printmsg: boolean: Print sent/received frames to output if the module's debug
 ;  level is at least 9
 ; This parameter is applied on reload

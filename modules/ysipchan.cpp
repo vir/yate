@@ -166,6 +166,9 @@ public:
 	{ return trans == transport(); }
     // Set the held party. Referrence it before
     void setParty(SIPParty* party = 0);
+    // Set the held party if remote address changed
+    // Return true if holder party was set to given party
+    bool setPartyChanged(SIPParty* party, DebugEnabler* enabler);
     // Set the party of a non answer message. Return true on success
     bool setSipParty(SIPMessage* message, const YateSIPLine* line = 0,
 	bool useEp = false, const char* host = 0, int port = 0) const;
@@ -1027,7 +1030,8 @@ static unsigned int s_engineStop = 0;    // engine.stop message counter
 static bool s_engineHalt = false;        // engine.halt received
 static unsigned int s_bindRetryMs = 500; // Listeners bind retry interval
 static String s_realm = "Yate";
-static int s_floodEvents = 20;
+static int s_floodEvents = 100;
+static bool s_floodProtection = true;
 static int s_maxForwards = 20;
 static int s_nat_refresh = 25;
 static bool s_privacy = false;
@@ -1063,6 +1067,8 @@ static int s_expires_def = EXPIRES_DEF;
 static int s_expires_max = EXPIRES_MAX;
 
 static String s_statusCmd = "status";
+
+static u_int64_t s_printFloodTime = 0;
 
 int YateSIPEndPoint::s_evCount = 0;
 
@@ -1192,6 +1198,164 @@ static inline void getMsgLine(String& buf, const SIPMessage* msg)
 	buf << "code " << msg->code;
     else
 	buf << "'" << msg->method << " " << msg->uri << "'";
+}
+
+enum {
+    START,
+    CHECK_TO,
+    HAS_TO,
+    CHECK_TAG,
+    HAS_TAG,
+};
+
+static bool msgIsAllowed(const char* buf, int len)
+{
+    if (!(buf && len))
+	return false;
+
+    
+    int pos = 0;
+    // check REGISTER
+    while (pos < len) {
+	if (buf[pos] == ' ' || buf[pos] == '\n' || buf[pos] == '\r' || buf[pos] == '\t') {
+	    pos++;
+	    continue;
+	}
+	if ((pos <= len - 8) && (buf[pos] == 'O' || buf[pos] == 'o') &&
+	    (buf[pos + 1] == 'P' || buf[pos + 1] == 'p') && (buf[pos + 2] == 'T' || buf[pos + 2] == 't') &&
+	    (buf[pos + 3] == 'I' || buf[pos + 3] == 'i') && (buf[pos + 4] == 'O' || buf[pos + 4] == 'o') &&
+	    (buf[pos + 5] == 'N' || buf[pos + 5] == 'n') && (buf[pos + 6] == 'S' || buf[pos + 6] == 's') &&
+	    (buf[pos + 7] == ' ' || buf[pos + 7] == '\t'))
+	    return false;
+	if ((pos <= len - 9) && (buf[pos] == 'R' || buf[pos] == 'r') &&
+	    (buf[pos + 1] == 'E' || buf[pos + 1] == 'e') && (buf[pos + 2] == 'G' || buf[pos + 2] == 'g') &&
+	    (buf[pos + 3] == 'I' || buf[pos + 3] == 'i') && (buf[pos + 4] == 'S' || buf[pos + 4] == 's') &&
+	    (buf[pos + 5] == 'T' || buf[pos + 5] == 't') && (buf[pos + 6] == 'E' || buf[pos + 6] == 'e') &&
+	    (buf[pos + 7] == 'R' || buf[pos + 7] == 'r') && (buf[pos + 8] == ' ' || buf[pos + 8] == '\t'))
+	    return false;
+	else if ((pos <= len - 10) && (buf[pos] == 'S' || buf[pos] == 's') &&
+	    (buf[pos + 1] == 'U' || buf[pos + 1] == 'u') && (buf[pos + 2] == 'B' || buf[pos + 2] == 'b') &&
+	    (buf[pos + 3] == 'S' || buf[pos + 3] == 's') && (buf[pos + 4] == 'C' || buf[pos + 4] == 'c') &&
+	    (buf[pos + 5] == 'R' || buf[pos + 5] == 'r') && (buf[pos + 6] == 'I' || buf[pos + 6] == 'i') &&
+	    (buf[pos + 7] == 'B' || buf[pos + 7] == 'b') && (buf[pos + 8] == 'E' || buf[pos + 8] == 'e') &&
+	    (buf[pos + 9] == ' ' || buf[pos + 9] == '\t'))
+	    return false;
+	else if ((pos <= len - 7) && ((buf[pos] == 'I' || buf[pos] == 'i') && ++pos) &&
+	    ((buf[pos] == 'N' || buf[pos] == 'n') && pos++) && ((buf[pos] == 'V' || buf[pos] == 'v') && pos++) &&
+	    ((buf[pos] == 'I' || buf[pos] == 'i') && pos++) && ((buf[pos] == 'T' || buf[pos] == 't') && pos++) &&
+	    ((buf[pos] == 'E' || buf[pos] == 'e') && pos++) && ((buf[pos] == ' ' || buf[pos] == '\t') && pos++))
+	    break;
+	else
+	    return true;
+    }
+
+    /**
+     * START = begin of line
+     * CHECK_TO = T/t[o/O] has been found
+     * HAS_TO = T/t[o/O]: has been found
+     * CHECK_TAG = T/t[o/O]:...; has been found
+     * HAS_TAG = T/t[o/O]:...;tag has been found - expecting =
+     */
+    while (pos < len - 1) {
+	// go to new line
+	while (pos < len && buf[pos] != '\r' && buf[pos] != '\n') pos++;
+	int status = START;
+	bool breakLoop = false;
+	while (pos < len) {
+	    
+	    switch (buf[pos]) {
+		case ' ':
+		case '\t':
+		    if (status == START)
+			breakLoop = true;
+		    break;
+		case '\n':
+		case '\r':
+		    if (status != START) {
+			// new line found before finding a tag, return false
+			if (status == HAS_TO)
+			    return false;
+			// try the next line
+			breakLoop = true;
+		    }
+		    break;
+		case 'T':
+		case 't':
+		    if (status == START) {
+			if (pos < len - 1)
+			    if (buf[pos + 1] == 'o' || buf[pos + 1] == 'O') pos++;
+			status = CHECK_TO;
+		    }
+		    else if (status == CHECK_TO)
+			// something like Tot is at the start of the line, try next line
+			breakLoop = true;
+		    // 	 if status is HAS_TO, skip over
+		    else if (status == CHECK_TAG) {
+			if (pos < len - 2) {
+			    if ((buf[pos + 1] == 'a' || buf[pos + 1] == 'A') && (buf[pos + 2] == 'g' || buf[pos + 2] == 'G')) {
+				pos += 2;
+				status = HAS_TAG;
+			    }
+			    else
+				// might be another tag, return to HAS_TO
+				status = HAS_TO;
+			}
+			else
+			    // we're at the end of the string and we don't have enough chars to check for tag
+			    breakLoop = true;
+		    }
+		    else if (status == HAS_TAG)
+			// might be another tag, return to HAS_TO
+			status = HAS_TO;
+		    break;
+		case ':':
+		    if (status == CHECK_TO)
+			status = HAS_TO;
+		    else if (status == START)
+			// : at start of line, unnacceptable, try next line
+			breakLoop = true;
+		    // if status is HAS_TO, skip over
+		    else if (status == CHECK_TAG || status == HAS_TAG)
+			// skip over : while looking for 'tag', return to HAS_TO
+			status = HAS_TO;
+		    break;
+		case ';':
+		    if (status == HAS_TO)
+			status = CHECK_TAG;
+		    else if (status == START || status == CHECK_TO)
+			// ; at start of line or after 'to' unnacceptable, try next line
+			breakLoop = true;
+		    // if status is HAS_TO/CHECK_TAG, skip over
+		    else if (status == HAS_TAG)
+			// skip over : while looking for 'tag', return to HAS_TO
+			status = HAS_TO;
+		    break;
+		case '=':
+		    if (status == HAS_TAG)
+			// found ';tag=', is reINVITE
+			return true;
+		    else if (status == START || status == CHECK_TO)
+			// ; at start of line or after 'to' unnacceptable, try next line
+			breakLoop = true;
+		    // if status is HAS_TO, skip over
+		    else if (status == CHECK_TAG)
+			// ignore, return to HAS_TO
+			status = HAS_TO;
+		    break;
+		default:
+		    if (status == CHECK_TAG || status == HAS_TAG)
+			status = HAS_TO;
+		    else if (status == START || status == CHECK_TO)
+			breakLoop = true;
+		    // if status is HAS_TO, skip over
+		    break;
+	    }
+	    if (breakLoop)
+		break;
+	    pos++;
+	}
+    }
+    return false;
 }
 
 // Reset transport timeout from expires
@@ -1659,6 +1823,36 @@ void YateSIPPartyHolder::setParty(SIPParty* party)
     m_party = party;
     lck.drop();
     TelEngine::destruct(tmp);
+}
+
+// Set the held party if remote address changed
+bool YateSIPPartyHolder::setPartyChanged(SIPParty* party, DebugEnabler* enabler)
+{
+    if (!(party && m_party))
+	return false;
+    if (party == m_party)
+	return true;
+    Lock lck(m_partyMutex);
+    if (!m_party)
+	return false;
+    if (party == m_party)
+	return true;
+    RefPointer<SIPParty> crt = m_party;
+    if (!crt)
+	return false;
+    lck.drop();
+    String partyAddr, crtAddr;
+    int partyPort, crtPort;
+    party->getAddr(partyAddr,partyPort,false);
+    crt->getAddr(crtAddr,crtPort,false);
+    crt = 0;
+    bool changed = partyPort != crtPort || partyAddr != crtAddr;
+    if (changed) {
+	Debug(enabler,DebugAll,"YateSIPPartyHolder party addr changed '%s:%d' -> '%s:%d' [%p]",
+	    crtAddr.c_str(),crtPort,partyAddr.c_str(),partyPort,this);
+	setParty(party);
+    }
+    return changed;
 }
 
 // Set the party of a non answer message
@@ -2200,7 +2394,12 @@ void YateSIPTransport::receiveMsg(SIPMessage*& msg)
 {
     if (!msg)
 	return;
-    if (!msg->isAnswer()) {
+    YateSIPEngine* engine = plugin.ep() ? plugin.ep()->engine() : 0;
+    if (!engine) {
+	TelEngine::destruct(msg);
+	return;
+    }
+    if (!msg->isAnswer() || engine->autoChangeParty()) {
 	SIPParty* party = 0;
 	YateSIPUDPTransport* udp = udpTransport();
 	YateSIPTCPTransport* tcp = tcpTransport();
@@ -2233,8 +2432,7 @@ void YateSIPTransport::receiveMsg(SIPMessage*& msg)
 	    TelEngine::destruct(party);
 	}
     }
-    if (plugin.ep() && plugin.ep()->engine())
-	plugin.ep()->engine()->addMessage(msg);
+    engine->addMessage(msg);
     TelEngine::destruct(msg);
 }
 
@@ -2396,6 +2594,14 @@ int YateSIPUDPTransport::process()
     b[res] = 0;
     if (s_printMsg)
 	printRecvMsg(b,res);
+    if (s_floodProtection && s_floodEvents && plugin.ep() && plugin.ep()->s_evCount >= s_floodEvents && !msgIsAllowed(b,res)) {
+	if (Time::now() >= s_printFloodTime) {
+	    Debug(&plugin,DebugWarn,"Flood detected, dropping INVITE/REGISTER/SUBSCRIBE/OPTIONS messages, allowing reINVITES");
+	    s_printFloodTime = Time::now() + 10000000;
+	}
+	return 0;
+    }
+
     SIPMessage* msg = SIPMessage::fromParsing(0,b,res);
     receiveMsg(msg);
     return 0;
@@ -3476,6 +3682,7 @@ void YateSIPEngine::initialize(NamedList* params)
     m_foreignAuth = params->getBoolValue("auth_foreign",false);
     m_reqTransCount = params->getIntValue("sip_req_trans_count",4,2,10,false);
     m_rspTransCount = params->getIntValue("sip_rsp_trans_count",5,2,10,false);
+    m_autoChangeParty = params->getBoolValue("autochangeparty");
     DDebug(this,DebugAll,"Initialized sip_req_trans_count=%d sip_rsp_trans_count=%d",
 	m_reqTransCount,m_rspTransCount);
 }
@@ -5375,6 +5582,10 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    msg->code,msg->body);
 #endif
 
+    // Change party
+    if (ev->getTransaction()->getEngine()->autoChangeParty() && msg && !msg->isOutgoing())
+	setPartyChanged(msg->getParty(),this);
+
     Lock mylock(driver());
     if (ev->getTransaction() == m_tr2) {
 	mylock.drop();
@@ -5701,6 +5912,9 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
     if (!checkUser(t))
 	return;
     DDebug(this,DebugAll,"YateSIPConnection::reInvite(%p) [%p]",t,this);
+    // Change party
+    if (t->getEngine()->autoChangeParty() && t->initialMessage() && !t->initialMessage()->isOutgoing())
+	setPartyChanged(t->initialMessage()->getParty(),this);
     Lock mylock(driver());
     int invite = m_reInviting;
     if (m_tr || m_tr2 || (invite == ReinviteRequest) || (invite == ReinviteReceived)) {
@@ -5853,6 +6067,9 @@ void YateSIPConnection::doBye(SIPTransaction* t)
 	return;
     DDebug(this,DebugAll,"YateSIPConnection::doBye(%p) [%p]",t,this);
     const SIPMessage* msg = t->initialMessage();
+    // Change party
+    if (t->getEngine()->autoChangeParty() && t->initialMessage() && !t->initialMessage()->isOutgoing())
+	setPartyChanged(t->initialMessage()->getParty(),this);
     if (msg->body) {
 	Message tmp("isup.decode");
 	if (decodeIsupBody(tmp,msg->body)) {
@@ -5892,6 +6109,9 @@ void YateSIPConnection::doCancel(SIPTransaction* t)
 	    m_user.c_str(),this);
 #endif
     DDebug(this,DebugAll,"YateSIPConnection::doCancel(%p) [%p]",t,this);
+    // Change party
+    if (t->getEngine()->autoChangeParty() && t->initialMessage() && !t->initialMessage()->isOutgoing())
+	setPartyChanged(t->initialMessage()->getParty(),this);
     if (m_tr) {
 	t->setResponse(200);
 	m_byebye = false;
@@ -5908,6 +6128,9 @@ bool YateSIPConnection::doInfo(SIPTransaction* t)
     if (m_authBye && !checkUser(t))
 	return true;
     DDebug(this,DebugAll,"YateSIPConnection::doInfo(%p) [%p]",t,this);
+    // Change party
+    if (t->getEngine()->autoChangeParty() && t->initialMessage() && !t->initialMessage()->isOutgoing())
+	setPartyChanged(t->initialMessage()->getParty(),this);
     if (m_hungup) {
 	t->setResponse(481);
 	return true;
@@ -5952,6 +6175,9 @@ void YateSIPConnection::doRefer(SIPTransaction* t)
     if (m_authBye && !checkUser(t))
 	return;
     DDebug(this,DebugAll,"doRefer(%p) [%p]",t,this);
+    // Change party
+    if (t->getEngine()->autoChangeParty() && t->initialMessage() && !t->initialMessage()->isOutgoing())
+	setPartyChanged(t->initialMessage()->getParty(),this);
     if (m_hungup) {
 	t->setResponse(481);
 	return;
@@ -7496,7 +7722,8 @@ void SIPDriver::initialize()
     s_cfg.load();
     s_globalMutex.unlock();
     s_maxForwards = s_cfg.getIntValue("general","maxforwards",20);
-    s_floodEvents = s_cfg.getIntValue("general","floodevents",20);
+    s_floodEvents = s_cfg.getIntValue("general","floodevents",100);
+    s_floodProtection = s_cfg.getBoolValue("general","floodprotection",true);
     s_privacy = s_cfg.getBoolValue("general","privacy");
     s_auto_nat = s_cfg.getBoolValue("general","nat",true);
     s_progress = s_cfg.getBoolValue("general","progress",false);
@@ -7553,6 +7780,8 @@ void SIPDriver::initialize()
     s_sslCertFile = s_cfg.getValue("general","ssl_certificate_file");
     s_sslKeyFile = s_cfg.getValue("general","ssl_key_file");
     s_globalMutex.unlock();
+    // set max chans
+    maxChans(s_cfg.getIntValue("general","maxchans",maxChans()));
     // Adjust here the TCP idle interval: it uses the SIP engine
     s_tcpIdle = tcpIdleInterval(s_cfg.getIntValue("general","tcp_idle",TCP_IDLE_DEF));
     // Mark listeners

@@ -173,7 +173,8 @@ SIPEngine::SIPEngine(const char* userAgent)
       m_maxForwards(70),
       m_cseq(0), m_flags(0), m_lazyTrying(false),
       m_userAgent(userAgent), m_nc(0), m_nonce_time(0),
-      m_nonce_mutex(false,"SIPEngine::nonce")
+      m_nonce_mutex(false,"SIPEngine::nonce"),
+      m_autoChangeParty(false)
 {
     debugName("sipengine");
     DDebug(this,DebugInfo,"SIPEngine::SIPEngine() [%p]",this);

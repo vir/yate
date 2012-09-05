@@ -230,6 +230,11 @@ public:
     virtual ~RTPTransport();
 
     /**
+     * Destroys the object, disposes the memory. Do not call delete directly.
+     */
+    virtual void destruct();
+
+    /**
      * Set the RTP/RTCP processor of data received by this transport
      * @param processor A pointer to the RTPProcessor for this transport
      */
@@ -270,6 +275,13 @@ public:
      * @return True if address set, false if a failure occured
      */
     bool remoteAddr(SocketAddr& addr, bool sniff = false);
+
+    /**
+     * Set the size of the operating system's buffers for the RTP and RTCP sockets
+     * @param bufLen Requested length of the buffer
+     * @return True if the buffer length was set
+     */
+    bool setBuffer(int bufLen = 4096);
 
     /**
      * Set the Type Of Service for the RTP socket
@@ -899,6 +911,14 @@ public:
      */
     inline bool remoteAddr(SocketAddr& addr, bool sniff = false)
 	{ return m_transport && m_transport->remoteAddr(addr,sniff); }
+
+    /**
+     * Set the size of the operating system's buffers for the RTP and RTCP transport sockets
+     * @param bufLen Requested length of the buffer
+     * @return True if the buffer length was set
+     */
+    inline bool setBuffer(int bufLen = 4096)
+	{ return m_transport && m_transport->setBuffer(bufLen); }
 
     /**
      * Set the Type Of Service for the RTP transport socket

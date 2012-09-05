@@ -1848,7 +1848,7 @@ bool YateSIPPartyHolder::setPartyChanged(SIPParty* party, DebugEnabler* enabler)
     crt = 0;
     bool changed = partyPort != crtPort || partyAddr != crtAddr;
     if (changed) {
-	Debug(enabler,DebugAll,"YateSIPPartyHolder party addr changed '%s:%d' -> '%s:%d' [%p]",
+	Debug(enabler,DebugInfo,"YateSIPPartyHolder party addr changed '%s:%d' -> '%s:%d' [%p]",
 	    crtAddr.c_str(),crtPort,partyAddr.c_str(),partyPort,this);
 	setParty(party);
     }
@@ -5583,7 +5583,8 @@ bool YateSIPConnection::process(SIPEvent* ev)
 #endif
 
     // Change party
-    if (ev->getTransaction()->getEngine()->autoChangeParty() && msg && !msg->isOutgoing())
+    if (ev->getTransaction()->getEngine()->autoChangeParty() && ev->isActive() &&
+	msg && !msg->isOutgoing())
 	setPartyChanged(msg->getParty(),this);
 
     Lock mylock(driver());

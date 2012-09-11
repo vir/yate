@@ -1,4 +1,4 @@
-yate (4.2.1~svn5253) UNRELEASED; urgency=low
+yate (4.2.1~svn5256) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -34,8 +34,14 @@ yate (4.2.1~svn5253) UNRELEASED; urgency=low
     processing inactive events to avoid overriding it with a wrong one.
     Moved party changed debug message to DebugInfo level.  + Implemented
     ping on client to server streams.  + Fixed debug message.
+  * Updated to SVN revision 5256: + Avoids making too many calls to
+    gettimeofday() when there are many SIP transactions.  + Retrieve and
+    reuse Time::now() at most twice per SIPEngine::getEvent()  + Avoid
+    making copies of message parameters in the RTP module.  + Allow
+    postponing the embedded R: command when creating continuity check
+    connection.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 06 Sep 2012 02:19:15 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 12 Sep 2012 02:19:16 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

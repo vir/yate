@@ -245,7 +245,7 @@ void SIPTransaction::setTimeout(u_int64_t delay, unsigned int count)
 #endif
 }
 
-SIPEvent* SIPTransaction::getEvent(bool pendingOnly)
+SIPEvent* SIPTransaction::getEvent(bool pendingOnly, u_int64_t time)
 {
     SIPEvent *e = 0;
 
@@ -264,11 +264,15 @@ SIPEvent* SIPTransaction::getEvent(bool pendingOnly)
 	return 0;
 
     int timeout = -1;
-    if (m_timeout && (Time::now() >= m_timeout)) {
-	timeout = --m_timeouts;
-	m_delay *= 2; // exponential back-off
-	m_timeout = (m_timeouts) ? Time::now() + m_delay : 0;
-	DDebug(getEngine(),DebugAll,"SIPTransaction fired timer #%d [%p]",timeout,this);
+    if (m_timeout) {
+	if (!time)
+	    time = Time::now();
+	if (time >= m_timeout) {
+	    timeout = --m_timeouts;
+	    m_delay *= 2; // exponential back-off
+	    m_timeout = (m_timeouts) ? time + m_delay : 0;
+	    DDebug(getEngine(),DebugAll,"SIPTransaction fired timer #%d [%p]",timeout,this);
+	}
     }
 
     e = isOutgoing() ? getClientEvent(m_state,timeout) : getServerEvent(m_state,timeout);

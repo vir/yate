@@ -783,7 +783,7 @@ bool YRTPWrapper::setupSRTP(Message& msg, bool buildMaster)
 	if (srtp)
 	    srtp = new RTPSecure(*srtp);
 	else
-	    srtp = new RTPSecure(msg.getValue(YSTRING("crypto_suite")));
+	    srtp = new RTPSecure(msg[YSTRING("crypto_suite")]);
     }
     else
 	buildMaster = false;
@@ -1342,7 +1342,7 @@ bool AttachHandler::received(Message &msg)
 	return false;
 
     const char* media = msg.getValue(YSTRING("media"),"audio");
-    String rip(msg.getValue(YSTRING("remoteip")));
+    const String& rip = msg[YSTRING("remoteip")];
     CallEndpoint* ch = YOBJECT(CallEndpoint,msg.userData());
     if (!ch) {
 	if (!src.null())
@@ -1354,7 +1354,7 @@ bool AttachHandler::received(Message &msg)
 
     RefPointer<YRTPWrapper> w = YRTPWrapper::find(ch,media);
     if (!w)
-	w = YRTPWrapper::find(msg.getValue(YSTRING("rtpid")));
+	w = YRTPWrapper::find(msg[YSTRING("rtpid")]);
     if (!w) {
 	String lip(msg.getValue(YSTRING("localip")));
 	if (lip.null())
@@ -1393,7 +1393,7 @@ bool AttachHandler::received(Message &msg)
 bool RtpHandler::received(Message &msg)
 {
     bool udptl = false;
-    String trans = msg.getValue(YSTRING("transport"));
+    const String& trans = msg[YSTRING("transport")];
     if (trans && !trans.startsWith("RTP/")) {
 	if (trans &= "udptl")
 	    udptl = true;
@@ -1402,7 +1402,7 @@ bool RtpHandler::received(Message &msg)
     }
     Debug(&splugin,DebugAll,"%s message received",(trans ? trans.c_str() : "No-transport"));
     bool terminate = msg.getBoolValue(YSTRING("terminate"),false);
-    String dir(msg.getValue(YSTRING("direction")));
+    const String& dir = msg[YSTRING("direction")];
     RTPSession::Direction direction = terminate ? RTPSession::FullStop : RTPSession::SendRecv;
     bool d_recv = false;
     bool d_send = false;
@@ -1427,10 +1427,10 @@ bool RtpHandler::received(Message &msg)
     if (w)
 	Debug(&splugin,DebugAll,"Wrapper %p found by CallEndpoint %p",(YRTPWrapper*)w,ch);
     else {
-	const char* rid = msg.getValue(YSTRING("rtpid"));
+	const String& rid = msg[YSTRING("rtpid")];
 	w = YRTPWrapper::find(rid);
 	if (w)
-	    Debug(&splugin,DebugAll,"Wrapper %p found by ID '%s'",(YRTPWrapper*)w,rid);
+	    Debug(&splugin,DebugAll,"Wrapper %p found by ID '%s'",(YRTPWrapper*)w,rid.c_str());
     }
     if (w)
 	w->deref();
@@ -1451,7 +1451,7 @@ bool RtpHandler::received(Message &msg)
 	return false;
     }
 
-    String rip(msg.getValue(YSTRING("remoteip")));
+    const String& rip = msg[YSTRING("remoteip")];
     const char* status = "updated";
 
     if (!w) {
@@ -1521,10 +1521,10 @@ bool RtpHandler::received(Message &msg)
 
 bool DTMFHandler::received(Message &msg)
 {
-    String targetid(msg.getValue(YSTRING("targetid")));
+    const String& targetid = msg[YSTRING("targetid")];
     if (targetid.null())
 	return false;
-    String text(msg.getValue(YSTRING("text")));
+    const String& text = msg[YSTRING("text")];
     if (text.null())
 	return false;
     RefPointer<YRTPWrapper> wrap = YRTPWrapper::find(targetid);

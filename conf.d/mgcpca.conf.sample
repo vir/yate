@@ -233,6 +233,10 @@
 ; This setting applies only to digital gateways, not FXS or FXO
 ;req_embed=yes
 
+; req_check: boolean: Allow the Request Notify when the circuit is in continuity check mode
+; This setting applies only to digital gateways, not FXS or FXO
+;req_check=yes
+
 ; forward_rtp: bool: Support to forward RTP directly to protocols that support it
 ; The actual direct RTP forwarding is still negotiated in routing
 ; The special value "always" (only for digital gateways) inhibits initial local RTP

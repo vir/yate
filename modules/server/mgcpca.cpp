@@ -149,6 +149,8 @@ public:
 	{ return m_rqntType; }
     inline const char* rqntStr() const
 	{ return m_rqntStr; }
+    inline bool rqntCheck() const
+	{ return m_rqntCheck; }
     bool ownsId(const String& rqId, const String& epId) const;
     static SignallingComponent* create(const String& type, const NamedList& name);
     static MGCPSpan* findNotify(const String& id, const String& epId);
@@ -175,6 +177,7 @@ private:
     bool m_fxs;
     bool m_ntfyMatch;
     bool m_rqntEmbed;
+    bool m_rqntCheck;
     RqntType m_rqntType;
     String m_rqntStr;
     String m_notify;
@@ -257,6 +260,7 @@ private:
     String m_owner;
     bool m_changing;
     bool m_pending;
+    bool m_delayed;
     // Gateway endpoint bearer information
     String m_gwFormat;
     bool m_gwFormatChanged;
@@ -891,7 +895,7 @@ MGCPSpan::MGCPSpan(const NamedList& params, const char* name, const MGCPEpInfo& 
 	static_cast<SignallingCircuitGroup*>(params.getObject("SignallingCircuitGroup"))),
       m_circuits(0), m_count(0), m_epId(ep), m_operational(false),
       m_rtpForward(false), m_sdpForward(false), m_rtpForcedFwd(false), m_fxo(false), m_fxs(false),
-      m_ntfyMatch(true), m_rqntEmbed(true), m_rqntType(RqntOnce)
+      m_ntfyMatch(true), m_rqntEmbed(true), m_rqntCheck(true), m_rqntType(RqntOnce)
 {
     Debug(&splugin,DebugAll,"MGCPSpan::MGCPSpan(%p,'%s') [%p]",
 	&params,name,this);
@@ -998,6 +1002,7 @@ bool MGCPSpan::init(const NamedList& params)
     m_bearer = lookup(config->getIntValue(YSTRING("bearer"),SDPParser::s_payloads,-1),s_dict_gwbearerinfo);
     m_ntfyMatch = config->getBoolValue(YSTRING("match_ntfy"),m_ntfyMatch);
     m_rqntEmbed = config->getBoolValue(YSTRING("req_embed"),true);
+    m_rqntCheck = config->getBoolValue(YSTRING("req_check"),true);
     m_rqntType = (RqntType)config->getIntValue(YSTRING("req_dtmf"),s_dict_rqnt,RqntOnce);
     bool fax = config->getBoolValue(YSTRING("req_fax"),true);
     bool t38 = config->getBoolValue(YSTRING("req_t38"),fax);
@@ -1337,8 +1342,9 @@ MGCPCircuit::MGCPCircuit(unsigned int code, MGCPSpan* span, const char* id)
     : SignallingCircuit(RTP,code,Missing,span->group(),span),
       SDPSession(&splugin.parser()),
       m_epId(id), m_statusReq(Missing),
-      m_changing(false), m_pending(false), m_gwFormatChanged(false),
-      m_localRtpChanged(false), m_needClear(false), m_this(0), m_tr(0)
+      m_changing(false), m_pending(false), m_delayed(false),
+      m_gwFormatChanged(false), m_localRtpChanged(false), m_needClear(false),
+      m_this(0), m_tr(0)
 {
     DDebug(&splugin,DebugAll,"MGCPCircuit::MGCPCircuit(%u,%p,'%s') [%p]",
 	code,span,id,this);
@@ -1438,12 +1444,21 @@ bool MGCPCircuit::setupConn(const char* mode)
     bool create = m_connId.null();
     RefPointer<MGCPMessage> mm = message(create ? "CRCX" : "MDCX");
     mm->params.addParam("C",m_callId);
-    if (m_connId)
+    if (m_connId) {
 	mm->params.addParam("I",m_connId);
+	if (m_delayed) {
+	    m_delayed = false;
+	    mm->params.addParam("X",m_notify);
+	    mm->params.addParam("R",mySpan()->rqntStr());
+	}
+    }
     else if (mySpan()->rqntEmbed() && mySpan()->rqntStr() &&
 	(mySpan()->rqntType() != MGCPSpan::RqntNone) && !(fxs() || fxo())) {
 	mm->params.addParam("X",m_notify);
-	mm->params.addParam("R",mySpan()->rqntStr());
+	if (mode && !mySpan()->rqntCheck())
+	    m_delayed = true;
+	else
+	    mm->params.addParam("R",mySpan()->rqntStr());
     }
     if (m_gwFormatChanged && m_gwFormat)
 	mm->params.addParam("B",m_gwFormat);
@@ -1457,6 +1472,7 @@ bool MGCPCircuit::setupConn(const char* mode)
 	mm->params.addParam("M","sendrecv");
 	mm->params.addParam("L",faxOpt);
 	m_specialMode.clear();
+	mode = 0;
 	rtpChange = true;
     }
     else if (mode)
@@ -1541,6 +1557,7 @@ void MGCPCircuit::clearConn(bool force)
     m_rtpForward = mySpan()->rtpForcedFwd();
     m_remoteRawSdp.clear();
     m_localRtpChanged = false;
+    m_delayed = false;
     sendAsync(mm,true);
     sendPending();
 }
@@ -1650,8 +1667,10 @@ bool MGCPCircuit::sendRequest(const char* sigReq, const char* reqEvt, const char
 	mm->params.addParam("S",sigReq);
     else
 	m_pending = false;
-    if (reqEvt)
+    if (reqEvt) {
 	mm->params.addParam("R",reqEvt);
+	m_delayed = false;
+    }
     if (digitMap)
 	mm->params.addParam("D",digitMap);
     return sendAsync(mm);

@@ -894,7 +894,7 @@ SS7M2PA::SS7M2PA(const NamedList& params)
     m_confTimer.interval(params,"conf_timer",50,150,false);
     // Out of service timer
     m_oosTimer.interval(params,"oos_timer",3000,5000,false);
-    m_waitOosTimer.interval(params,"ack_timer",500,1000,false);
+    m_waitOosTimer.interval(params,"wait_oos",500,1000,false);
     m_connFailTimer.interval(params,"conn_test",50000,300000,false);
     m_connFailThreshold = params.getIntValue(YSTRING("conn_threshold"),3);
     m_sequenced = params.getBoolValue(YSTRING("sequenced"),false);

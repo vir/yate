@@ -1434,6 +1434,7 @@ public:
 	Resume,
 	Release,
 	Info,
+	Charge,
 	// Non-call related
 	Message,
 	Facility,
@@ -8661,6 +8662,13 @@ public:
 	SlsDefault = -4
     };
 
+    enum ChargeProcess {
+	Confusion,
+	Ignore,
+	Raw,
+	Parsed
+    };
+
     /**
      * Constructor
      * @param params Call controller's parameters
@@ -8848,6 +8856,13 @@ public:
      */
     bool processParamCompat(const NamedList& list, unsigned int cic, bool* callReleased = 0);
 
+    /**
+     * Obtain the way that charge message should be processed
+     * @return The way that charge message should be processed
+     */
+    inline ChargeProcess getChargeProcessType() const
+	{ return m_chargeProcessType; }
+
 protected:
     /**
      * Remove all links with other layers. Disposes the memory
@@ -8968,6 +8983,9 @@ private:
 	    Lock mylock(this);
 	    call = findCall(cic);
 	}
+    // Encode a raw message
+    SS7MSU* encodeRawMessage(SS7MsgISUP::Type type, unsigned char sio,
+	const SS7Label& label, unsigned int cic, const String& param) const;
     // Send blocking/unblocking messages.
     // Restart the re-check timer if there is any (un)lockable, not sent cic
     // Return false if no request was sent
@@ -9021,6 +9039,7 @@ private:
     bool m_duplicateCGB;                 // Send duplicate CGB messages (ANSI)
     bool m_ignoreUnkDigits;              // Check if the message parser should ignore unknown digits encoding
     bool m_l3LinkUp;                     // Flag indicating the availability of a Layer3 data link
+    ChargeProcess m_chargeProcessType;   // Indicates the way that charge message should be processed
     u_int64_t m_t1Interval;              // Q.764 T1 timer interval
     u_int64_t m_t5Interval;              // Q.764 T5 timer interval
     u_int64_t m_t7Interval;              // Q.764 T7 timer interval

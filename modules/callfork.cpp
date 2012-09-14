@@ -84,6 +84,7 @@ public:
     };
     ForkSlave(ForkMaster* master, const char* id);
     virtual ~ForkSlave();
+    virtual void destroyed();
     virtual void disconnected(bool final, const char* reason);
     inline void clearMaster()
 	{ m_master = 0; }
@@ -631,10 +632,22 @@ ForkSlave::~ForkSlave()
     DDebug(&__plugin,DebugAll,"ForkSlave::~ForkSlave() '%s'",id().c_str());
 }
 
+void ForkSlave::destroyed()
+{
+    CallEndpoint::commonMutex().lock();
+    RefPointer<ForkMaster> master = m_master;
+    m_master = 0;
+    CallEndpoint::commonMutex().unlock();
+    if (master)
+	master->lostSlave(this,0);
+    CallEndpoint::destroyed();
+}
+
 void ForkSlave::disconnected(bool final, const char* reason)
 {
     CallEndpoint::commonMutex().lock();
     RefPointer<ForkMaster> master = m_master;
+    m_master = 0;
     CallEndpoint::commonMutex().unlock();
     CallEndpoint::disconnected(final,reason);
     if (master)

@@ -1,4 +1,4 @@
-yate (4.2.1~svn5259) UNRELEASED; urgency=low
+yate (4.2.1~svn5263) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -43,8 +43,19 @@ yate (4.2.1~svn5259) UNRELEASED; urgency=low
   * Updated to SVN revision 5259: + Properly initialize wait_oos timer.
     + Improved SCCPUser methods documentation.  + Made the new SCCPUser
     documentation work with both doxygen and kdoc.
+  * Updated to SVN revision 5263: + Added possibility to specify how to
+    handle it from configuration.  + Handle charging isup message.  +
+    This fixes a dangling pointer crash caused by some
+    misconfigurations.  + Properly clean up a fork slave whose
+    call.execute succeeded but connect() failed.  + Added the option to
+    format call time.  + Added the option to send call cdr status.  +
+    Added the option to disable call cdr updates.  + Added the option to
+    send radius messages from outside radius module.  + Add duplicate
+    radius parameters in yate message.  + Added Quintum radius
+    attrinutes.  + Send accounting interim updates on call cdr status
+    message.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 14 Sep 2012 02:19:13 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 15 Sep 2012 02:19:15 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

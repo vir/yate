@@ -1282,6 +1282,7 @@ void SigChannel::handleEvent(SignallingEvent* event)
 	case SignallingEvent::Generic:   evGeneric(event,"transport"); break;
 	case SignallingEvent::Suspend:   evGeneric(event,"suspend");   break;
 	case SignallingEvent::Resume:    evGeneric(event,"resume");    break;
+	case SignallingEvent::Charge:    evGeneric(event,"charge");    break;
 	default:
 	    DDebug(this,DebugStub,"No handler for event '%s' [%p]",
 		event->name(),this);
@@ -1446,6 +1447,8 @@ bool SigChannel::msgUpdate(Message& msg)
 	evt = SignallingEvent::Progress;
     else if (oper == YSTRING("ringing"))
 	evt = SignallingEvent::Ringing;
+    else if (oper == YSTRING("charge"))
+	evt = SignallingEvent::Charge;
     else if (m_callAccdEvent && (oper == YSTRING("accepted"))) {
 	plugin.copySigMsgParams(m_callAccdEvent,msg,"i");
 	releaseCallAccepted(true);

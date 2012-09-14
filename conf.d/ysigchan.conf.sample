@@ -491,6 +491,15 @@
 ; Default value is taken from the [general] section
 ;floodevents=20
 
+; charge-process: keyword: Indicate the way that charge message should be processed
+; Allowed values:
+;    confusion   Send confusion back when charge message is received
+;    ignore      Ignore the charge message
+;    raw         Decode the charge message in raw format
+;    parsed      Try to decode message parameters as all optional
+; Default value is to confusion
+;charge-process=confusion
+
 ; print-messages: boolean: Print decoded protocol data units to output
 ; This option is applied on reload
 ; Defaults to no

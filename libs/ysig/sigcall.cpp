@@ -379,6 +379,7 @@ const TokenDict SignallingEvent::s_types[] = {
 	{"Resume",   Resume},
 	{"Release",  Release},
 	{"Info",     Info},
+	{"Charge",   Charge},
 	{"Message",  Message},
 	{"Facility", Facility},
 	{"Circuit",  Circuit},

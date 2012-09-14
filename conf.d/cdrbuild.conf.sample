@@ -6,6 +6,19 @@
 ; guardtime: int: Time in ms to remember hungup channels to avoid race conditions
 ;guardtime=5000
 
+; updates: bool: Emit call cdr message when call status has changed
+;updates=true
+
+; status: bool: Emit call cdr status messages for the call duration
+;status=false
+
+; status_interval: int: The time interval in seconds to emit call cdr status messages
+; Note: If status is set to false this interval will be ignored
+; Default 60s
+; Min 60s
+; Max 600s
+;status_interval=60
+
 
 [parameters]
 ; Each line consists of name=bool where name is the name of the parameter being
@@ -26,3 +39,48 @@
 ; The following parameters are handled internally and cannot be changed:
 ;  time, chan, operation, cdrwrite, cdrtrack, cdrcreate, cdrid, runid,
 ;  direction, status, duration, billtime, ringtime
+
+
+; Special section for time formatting
+; Formatting rules
+; YYYY | %Y -> Year (2012)
+; YY | %y   -> Year, last two digits (00-99)
+; MM | %m   -> Month as a decimal number (01-12)
+; DD | %d   -> Day of the month (01-31)
+; HH | %H   -> Hour in 24h format (00-23)
+; mm | %M   -> Hour in 24h format (00-23)
+; SS | %S   -> Second (00-60)
+;              Note the value is rounded
+; UTC       -> If present the time will represent the UTC time. If is missing
+;              the time will represent local time zone
+; N*u       -> Milliseconds and Microseconds.
+;              Note! The value is rounded
+;              EG: time: 1.123456
+;                  s.u -> 1.1
+;                  s.uu -> 1.12
+;                  s.uuu -> 1.123
+;                  s.uuuu -> 1.1234
+;                  s.uuuuu -> 1.12346 
+;                  s.uuuuuu -> 1.123456
+; Other formats may me used but they must correspond with C strftime method formats
+; Important! If duplicate formats are ignored!
+; Eg: date : 09 14 2012
+;            YYYY YY DD DD mm DD-> 2012 YY 14 DD 09 DD
+
+;[formatted-timers]
+; Append the call start time in call cdr message with the given format
+; Eg: call_start_time=YY/MM/DD HH:mm:SS.uuuuuu UTC
+;call_start_time=
+
+; Append the call answer time in call cdr message with the given format
+; Eg: call_answer_time=YY/MM/DD HH:mm:SS.uuuuuu UTC
+;call_answer_time=
+
+; Append the call hangup time in call cdr message with the given format
+; Eg: call_hangup_time=YY/MM/DD HH:mm:SS.uuuuuu UTC
+;call_hangup_time=
+
+; Append the call duration in call cdr message with the given format
+; Allowed formats: HH mm SS N*u
+; Eg: HH:mm:SS.uuu
+;duration_call=

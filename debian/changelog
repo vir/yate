@@ -1,4 +1,4 @@
-yate (4.2.1~svn5263) UNRELEASED; urgency=low
+yate (4.2.1~svn5268) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -54,8 +54,21 @@ yate (4.2.1~svn5263) UNRELEASED; urgency=low
     radius parameters in yate message.  + Added Quintum radius
     attrinutes.  + Send accounting interim updates on call cdr status
     message.
+  * Updated to SVN revision 5268: + Add duplicate radius parameters in
+    yate message.  + Added Quintum radius attrinutes.  + Send accounting
+    interim updates on call cdr status message.  + Allow send dtmf
+    method(s) to be configurable. Detect remote party INFO support from
+    'Allow' header.  + Allow dtmf send method(s) to be configured.
+    Detect RFC2833 support when receiving remote capabilities.  +
+    Changed info allowed debug message level. Show it when compiled with
+    xdebug.  + This commit fixes a memory leak and system slowdown.  +
+    Emit a delayed module.update if the number of RTP sessions or
+    reflectors change.  + These monitoring messages are now disabled by
+    default.  + Enqueue the module.update immediately when the RTP
+    wrapper is destroyed.  + Added parameter lists used to encode/decode
+    MAP sendParameters request and response.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 15 Sep 2012 02:19:15 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 19 Sep 2012 02:19:18 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

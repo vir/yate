@@ -96,6 +96,7 @@ static bool s_autoaddr  = true;
 static bool s_anyssrc   = false;
 static bool s_warnFirst = false;
 static bool s_warnLater = false;
+static bool s_monitor   = false;
 static bool s_rtcp  = true;
 static bool s_drill = false;
 
@@ -359,9 +360,7 @@ public:
     virtual bool received(Message& msg, int id);
     virtual void statusParams(String& str);
     virtual void statusDetail(String& str);
-
-    void addStats(const NamedList& stats);
-    void genUpdate(Message& msg);
+    virtual void genUpdate(Message& msg);
 
 private:
     bool reflectSetup(Message& msg, const char* id, RTPTransport& rtp, const char* rHost, const char* leg);
@@ -371,7 +370,6 @@ private:
     void reflectAnswer(Message& msg, bool ignore);
     void reflectHangup(Message& msg);
     bool m_first;
-    ObjList m_updates;
 };
 
 static YRTPPlugin splugin;
@@ -436,6 +434,7 @@ YRTPWrapper::YRTPWrapper(const char* localip, CallEndpoint* conn, const char* me
     }
     else
 	setupRTP(localip,msg.getBoolValue(YSTRING("rtcp"),s_rtcp));
+    splugin.changed();
     s_mutex.unlock();
 }
 
@@ -447,6 +446,14 @@ YRTPWrapper::~YRTPWrapper()
     s_calls.remove(this,false);
     if (m_rtp) {
 	Debug(DebugAll,"Cleaning up RTP %p [%p]",m_rtp,this);
+	if (s_monitor) {
+	    Message* m = new Message("module.update");
+	    m->addParam("module",splugin.name());
+	    m_rtp->getStats(*m);
+	    m->setParam("noaudio",String(m_noAudio));
+	    m->setParam("lostaudio",String(m_lostAudio));
+	    Engine::enqueue(m);
+	}
 	TelEngine::destruct(m_rtp);
     }
     if (m_udptl) {
@@ -461,6 +468,7 @@ YRTPWrapper::~YRTPWrapper()
 	Debug(&splugin,DebugGoOn,"There is still a RTP consumer %p [%p]",m_consumer,this);
 	TelEngine::destruct(m_consumer);
     }
+    splugin.changed();
     s_mutex.unlock();
 }
 
@@ -930,15 +938,8 @@ void YRTPWrapper::terminate(Message& msg)
 {
     Debug(&splugin,DebugInfo,"YRTPWrapper::terminate() [%p]",this);
     String stats;
-    if (m_rtp) {
-	NamedList nl("");
-	m_rtp->getStats(nl);
-	nl.setParam("noaudio",String(m_noAudio));
-	nl.setParam("lostaudio",String(m_lostAudio));
-    	splugin.addStats(nl);
-    	splugin.changed();
+    if (m_rtp)
 	m_rtp->getStats(stats);
-    }
     if (m_udptl)
 	m_udptl->getStats(stats);
     if (stats)
@@ -1313,6 +1314,9 @@ YRTPReflector::~YRTPReflector()
     TelEngine::destruct(m_rtpB);
     TelEngine::destruct(m_monA);
     TelEngine::destruct(m_monB);
+    s_mutex.lock();
+    splugin.changed();
+    s_mutex.unlock();
 }
 
 
@@ -1555,23 +1559,14 @@ YRTPPlugin::~YRTPPlugin()
     s_mirrors.clear();
 }
 
-void YRTPPlugin::addStats(const NamedList& stats)
-{
-    DDebug(this,DebugAll,"Add updates");
-    s_mutex.lock();
-    m_updates.append(new NamedList(stats));
-    s_mutex.unlock();
-}
-
 void YRTPPlugin::genUpdate(Message& msg)
 {
-    DDebug(this,DebugAll,"::genUpdate() [%p] updates=%d",this,m_updates.count());
-    Lock l(s_mutex);
-    if (m_updates.count() == 0)
-	return;
-    NamedList* updateParams = static_cast<NamedList*>(m_updates.remove(false));
-    msg.copyParams(*updateParams);
-    TelEngine::destruct(updateParams);
+    s_mutex.lock();
+    msg.setParam("chans",String(s_calls.count()));
+    s_mutex.unlock();
+    s_refMutex.lock();
+    msg.setParam("mirrors",String(s_mirrors.count()));
+    s_refMutex.unlock();
 }
 
 void YRTPPlugin::statusParams(String& str)
@@ -1720,6 +1715,9 @@ void YRTPPlugin::reflectExecute(Message& msg)
     s_refMutex.lock();
     s_mirrors.append(r);
     s_refMutex.unlock();
+    s_mutex.lock();
+    changed();
+    s_mutex.unlock();
 }
 
 void YRTPPlugin::reflectAnswer(Message& msg, bool ignore)
@@ -1862,6 +1860,7 @@ void YRTPPlugin::initialize()
     s_rtcp = cfg.getBoolValue("general","rtcp",true);
     s_interval = cfg.getIntValue("general","rtcp_interval",4500);
     s_drill = cfg.getBoolValue("general","drillhole",Engine::clientMode());
+    s_monitor = cfg.getBoolValue("general","monitoring",false);
     s_sleep = cfg.getIntValue("general","defsleep",5);
     RTPGroup::setMinSleep(cfg.getIntValue("general","minsleep"));
     s_priority = Thread::priority(cfg.getValue("general","thread"));

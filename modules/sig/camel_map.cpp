@@ -4721,6 +4721,56 @@ static const Parameter s_deleteSubscriberDataRes[] = {
     {"",                             s_noTag,           false,TcapXApplication::None,         0},
 };
 
+// GSM 09.02 v5.3.0 page 721
+static const Parameter s_subscriberId[] = {
+    {"imsi",     s_ctxtPrim_0_Tag,    false,   TcapXApplication::TBCD,       0},
+    {"tmsi",     s_ctxtPrim_1_Tag,    false,   TcapXApplication::HexString,  0},
+    {"",         s_noTag,             false,   TcapXApplication::None,       0},
+};
+
+// GSM 09.02 v5.3.0 page 721
+static const TokenDict s_requestParamEnum[] = {
+    {"requestIMSI",               0},
+    {"requestAuthenticationSet",  1},
+    {"requestSubscriberData",     2},
+    {"requestKi",                 4},
+    {0,0}
+};
+
+// GSM 09.02 v5.3.0 page 721
+static const Parameter s_requestParameter[] = {
+    {"requestParameter",  s_enumTag,  true, TcapXApplication::Enumerated, s_requestParamEnum},
+    {"",                  s_noTag,   false, TcapXApplication::None,       0},
+};
+
+// GSM 09.02 v5.3.0 pp 721-723
+static const Parameter s_sentParameterChoice[] = {
+    {"imsi",               s_ctxtPrim_0_Tag,  true,  TcapXApplication::TBCD,       0},
+    {"authenticationSet",  s_ctxtCstr_1_Tag,  true,  TcapXApplication::Sequence,   s_authenticationSetSeq},
+    {"subscriberData",     s_ctxtCstr_2_Tag,  true,  TcapXApplication::Sequence,   s_insertSubscriberDataArgs},
+    {"ki",                 s_ctxtPrim_3_Tag,  true,  TcapXApplication::HexString,  0},
+    {"",                   s_noTag,          false,  TcapXApplication::None,       0},
+};
+
+// GSM 09.02 v5.3.0 pp 721-723
+static const Parameter s_sentParameterList[] = {
+    {"sentParameter",  s_noTag,  false,  TcapXApplication::Choice,  s_sentParameterChoice},
+    {"",               s_noTag,  false,  TcapXApplication::None,    0},
+};
+
+// GSM 09.02 v5.3.0 page 721
+static const Parameter s_sendParametersDataArgs[] = {
+    {"subscriberId",         s_noTag,        false,  TcapXApplication::Choice,      s_subscriberId},
+    {"requestParameterList", s_sequenceTag,  false,  TcapXApplication::SequenceOf,  s_requestParameter},
+    {"",                     s_noTag,        false,  TcapXApplication::None,        0},
+};
+
+// GSM 09.02 v5.3.0 pp. 721
+static const Parameter s_sendParametersDataRes[] = {
+    {"sentParameterList",  s_sequenceTag,  false,  TcapXApplication::SequenceOf,  s_sentParameterList},
+    {"",                   s_noTag,        false,  TcapXApplication::None,        0},
+};
+
 static const Parameter s_registerSSArgs[] = {
     {"ss-Code",                  s_hexTag,           false,  TcapXApplication::Enumerated,           s_SSCode},
     {"basicService",             s_noTag,            true,   TcapXApplication::Choice,               s_basicServiceCode},
@@ -5162,6 +5212,10 @@ static const Operation s_mapOps[] = {
     {"deleteSubscriberData",          true,   8,
 	s_sequenceTag, s_deleteSubscriberDataArgs,
 	s_sequenceTag, s_deleteSubscriberDataRes
+    },
+    {"sendParameters",                true,   9,
+	s_sequenceTag, s_sendParametersDataArgs,
+	s_noTag, s_sendParametersDataRes
     },
     {"registerSS",                    true,  10,
 	s_sequenceTag, s_registerSSArgs,

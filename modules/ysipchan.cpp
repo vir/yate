@@ -7122,7 +7122,7 @@ bool YateSIPConnection::infoAllowed(const SIPMessage* msg)
     }
     else
 	ok = m_missingAllowInfoDefVal;
-    Debug(this,DebugNote,"infoAllowed: info=%u [%p]",ok,this);
+    XDebug(this,DebugAll,"infoAllowed: info=%u [%p]",ok,this);
     return ok;
 }
 

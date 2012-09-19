@@ -761,7 +761,8 @@ void CustomTimer::extractUsec(const String& param)
 
 void CustomTimer::getTime(String& ret, u_int64_t time)
 {
-    char buf[length() + 100];
+    DataBlock data(0,length() + 100);
+    char* buf = (char*)data.data();
     time_t rawtime = time / 1000000;
     String tmp = c_str();
     if (m_usecIndex >= 0) {

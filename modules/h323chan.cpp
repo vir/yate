@@ -289,7 +289,10 @@ public:
     // Replace all methods from comma separated list
     // If no method is set use other or setDefEmpty (reset to default)
     // Return false if methods contain unknown methods
-    bool set(const String& methods, const DtmfMethods* other, bool setDefEmpty = true);
+    bool set(const String& methods, const DtmfMethods* other, bool setDefEmpty = true,
+	bool intersectOther = false);
+    // Intersect with other methods
+    void intersect(const DtmfMethods& other);
     // Retrieve a method from deperecated parameters
     // Reset the method if the parameter is false
     // Display a message anyway if warn is not false
@@ -299,6 +302,7 @@ public:
     void reset(int method);
     // Build a string list from methods
     void buildMethods(String& buf, const char* sep = ",");
+    bool hasMethod(int method) const;
     inline void printMethods(DebugEnabler* enabler, int level, const String& str) {
 	    String tmp;
 	    buildMethods(tmp);
@@ -768,7 +772,8 @@ const TokenDict DtmfMethods::s_methodName[] = {
 
 // Replace all methods from comma separated list
 // If no method is set use other or setDefEmpty (reset to default)
-bool DtmfMethods::set(const String& methods, const DtmfMethods* other, bool setDefEmpty)
+bool DtmfMethods::set(const String& methods, const DtmfMethods* other, bool setDefEmpty,
+    bool intersectOther)
 {
     set();
     bool found = false;
@@ -787,12 +792,24 @@ bool DtmfMethods::set(const String& methods, const DtmfMethods* other, bool setD
     }
     TelEngine::destruct(m);
     if (!found) {
-	if (other)
+	if (other) {
 	    *this = *other;
+	    intersectOther = false;
+	}
 	else if (setDefEmpty)
 	    setDefault();
     }
+    if (intersectOther && other)
+	intersect(*other);
     return ok;
+}
+
+// Intersect with other methods
+void DtmfMethods::intersect(const DtmfMethods& other)
+{
+    for (int i = 0; i < MethodCount; i++)
+	if (m_methods[i] != MethodCount && !other.hasMethod(m_methods[i]))
+	    m_methods[i] = MethodCount;
 }
 
 // Retrieve a method from deperecated parameters
@@ -828,6 +845,14 @@ void DtmfMethods::buildMethods(String& buf, const char* sep)
 {
     for (int i = 0; i < MethodCount; i++)
 	buf.append(lookup(m_methods[i],s_methodName),sep);
+}
+
+bool DtmfMethods::hasMethod(int method) const
+{
+    for (int i = 0; i < MethodCount; i++)
+	if (m_methods[i] == method)
+	    return true;
+    return false;
 }
 
 
@@ -1995,6 +2020,8 @@ void YateH323Connection::OnEstablished()
 	}
     }
     Engine::enqueue(m);
+    if (!capabilityExchangeProcedure->HasReceivedCapabilities())
+	capabilityExchangeProcedure->Start(TRUE);
 }
 
 // Called by the cleaner thread between CleanUpOnCallEnd() and the destructor
@@ -3023,8 +3050,10 @@ bool YateH323Chan::msgTone(Message& msg, const char* tone)
 	return false;
     DtmfMethods methods = m_dtmfMethods;
     const String* param = msg.getParam(YSTRING("methods"));
-    if (param)
-	methods.set(*param,&m_dtmfMethods);
+    if (param) {
+	bool intersect = !msg.getBoolValue(YSTRING("methods_override"));
+	methods.set(*param,&m_dtmfMethods,true,intersect);
+    }
     bool retVal = false;
     bool ok = false;
     for (int i = 0; !ok && i < DtmfMethods::MethodCount; i++) {

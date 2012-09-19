@@ -21,7 +21,7 @@ PATH=/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/bin
 DESC="YATE"
 NAME=yate
 DAEMON=/usr/bin/$NAME
-DAEMON_ARGS="-F -s -r -l /var/log/yate -vvv"
+DAEMON_ARGS="-F -s -r -l /var/log/yate -vvv -Df"
 PIDFILE=/var/run/$NAME.pid
 SCRIPTNAME=/etc/init.d/$NAME
 

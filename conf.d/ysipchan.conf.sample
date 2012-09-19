@@ -123,7 +123,10 @@
 ; This parameter can be overridden from routing by 'odtmfmethods' for outgoing call leg
 ;  and 'idtmfmethods' for incoming call leg
 ; Also, this parameter can be overridden in chan.dtmf messages by a 'methods' parameter
-; NOTE: When overridden from chan.dtmf an empty or invalid 'methods' parameter will be ignored
+; NOTE:
+;   When overridden from chan.dtmf an empty or invalid 'methods' parameter will be ignored
+;   Methods indicated in chan.dtmf message will be intersected with channel capabilities
+;    unless an explicit boolean true 'methods_override' parameter is present
 ; This parameter is applied on reload for new calls only
 ;dtmfmethods=rfc2833,info,inband
 

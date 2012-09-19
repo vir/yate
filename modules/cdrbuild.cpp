@@ -761,13 +761,14 @@ void CustomTimer::extractUsec(const String& param)
 
 void CustomTimer::getTime(String& ret, u_int64_t time)
 {
-    char buf[length() + 100];
+    DataBlock data(0,length() + 100);
+    char* buf = (char*)data.data();
     time_t rawtime = time / 1000000;
-    String tmp = c_str();
+    String tmp = *this;
     if (m_usecIndex >= 0) {
-	char buf[10];
-	printTime(buf,time,m_usecCount);
-	String usec(buf);
+	char buf1[10];
+	printTime(buf1,time,m_usecCount);
+	String usec(buf1);
 	tmp = tmp.substr(0,m_usecIndex) + usec + tmp.substr(m_usecIndex);
     } else if (time % 1000000 > 500000){
 	rawtime ++;
@@ -782,7 +783,7 @@ void CustomTimer::getTime(String& ret, u_int64_t time)
 	timeinfo = localtime(&rawtime);
     else
 	timeinfo = gmtime(&rawtime);
-    int len = strftime (buf, length() + 100, tmp.c_str(), timeinfo);
+    int len = strftime (buf, length() + 100, tmp, timeinfo);
     ret.assign(buf,len);
 }
 

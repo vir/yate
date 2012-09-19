@@ -337,6 +337,7 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 	mline << " " << (m->localPort() ? m->localPort().c_str() : "0") << " " << m->transport();
 	ObjList* map = m->mappings().split(',',false);
 	ObjList rtpmap;
+	ObjList* dest = &rtpmap;
 	String frm;
 	int ptime = 0;
 	ObjList* f = l;
@@ -424,27 +425,27 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 			frm << " " << payload;
 			String* temp = new String("rtpmap:");
 			*temp << payload << " " << map;
-			rtpmap.append(temp);
+			dest = dest->append(temp);
 			if (mode) {
 			    temp = new String("fmtp:");
 			    *temp << payload << " mode=" << mode;
-			    rtpmap.append(temp);
+			    dest = dest->append(temp);
 			}
 			if (*s == "g729") {
 			    temp = new String("fmtp:");
 			    *temp << payload << " annexb=" <<
 				((0 != l->find("g729b")) ? "yes" : "no");
-			    rtpmap.append(temp);
+			    dest = dest->append(temp);
 			}
 			else if (*s == "amr") {
 			    temp = new String("fmtp:");
 			    *temp << payload << " octet-align=0";
-			    rtpmap.append(temp);
+			    dest = dest->append(temp);
 			}
 			else if (*s == "amr-o") {
 			    temp = new String("fmtp:");
 			    *temp << payload << " octet-align=1";
-			    rtpmap.append(temp);
+			    dest = dest->append(temp);
 			}
 		    }
 		}
@@ -458,7 +459,7 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 	    frm << " " << rfc2833;
 	    String* s = new String;
 	    *s << "rtpmap:" << rfc2833 << " telephone-event/8000";
-	    rtpmap.append(s);
+	    dest = dest->append(s);
 	}
 
 	if (frm.null()) {
@@ -480,7 +481,7 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 	if (ptime) {
 	    String* temp = new String("ptime:");
 	    *temp << ptime;
-	    rtpmap.append(temp);
+	    dest = dest->append(temp);
 	}
 
 	sdp->addLine("m",mline + frm);

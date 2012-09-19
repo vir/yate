@@ -149,6 +149,7 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 	String mappings;
 	String crypto;
 	ObjList params;
+	ObjList* dest = &params;
 	bool first = true;
 	int ptime = 0;
 	int rfc2833 = -1;
@@ -232,9 +233,9 @@ ObjList* SDPParser::parse(const MimeSdpBody& sdp, String& addr, ObjList* oldMedi
 		    else {
 			int pos = line.find(':');
 			if (pos >= 0)
-			    params.append(new NamedString(line.substr(0,pos),line.substr(pos+1)));
+			    dest = dest->append(new NamedString(line.substr(0,pos),line.substr(pos+1)));
 			else
-			    params.append(new NamedString(line));
+			    dest = dest->append(new NamedString(line));
 		    }
 		}
 	    }

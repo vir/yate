@@ -39,9 +39,10 @@ NamedList::NamedList(const char* name)
 NamedList::NamedList(const NamedList& original)
     : String(original)
 {
+    ObjList* dest = &m_params;
     for (const ObjList* l = original.m_params.skipNull(); l; l = l->skipNext()) {
 	const NamedString* p = static_cast<const NamedString*>(l->get());
-	m_params.append(new NamedString(p->name(),*p));
+	dest = dest->append(new NamedString(p->name(),*p));
     }
 }
 
@@ -149,10 +150,11 @@ NamedList& NamedList::copyParam(const NamedList& original, const String& name, c
     clearParam(name,childSep);
     String tmp;
     tmp << name << childSep;
+    ObjList* dest = &m_params;
     for (const ObjList* l = original.m_params.skipNull(); l; l = l->skipNext()) {
 	const NamedString* s = static_cast<const NamedString*>(l->get());
         if ((s->name() == name) || s->name().startsWith(tmp))
-	    addParam(s->name(),*s);
+	    dest = dest->append(new NamedString(s->name(),*s));
     }
     return *this;
 }
@@ -201,12 +203,13 @@ NamedList& NamedList::copySubParams(const NamedList& original, const String& pre
 	&original,prefix.c_str(),String::boolText(skipPrefix),this);
     if (prefix) {
 	unsigned int offs = skipPrefix ? prefix.length() : 0;
+	ObjList* dest = &m_params;
 	for (const ObjList* l = original.m_params.skipNull(); l; l = l->skipNext()) {
 	    const NamedString* s = static_cast<const NamedString*>(l->get());
 	    if (s->name().startsWith(prefix)) {
 		const char* name = s->name().c_str() + offs;
 		if (*name)
-		    addParam(name,*s);
+		    dest = dest->append(new NamedString(name,*s));
 	    }
 	}
     }

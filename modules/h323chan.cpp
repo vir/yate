@@ -1995,6 +1995,8 @@ void YateH323Connection::OnEstablished()
 	}
     }
     Engine::enqueue(m);
+    if (!capabilityExchangeProcedure->HasReceivedCapabilities())
+	capabilityExchangeProcedure->Start(TRUE);
 }
 
 // Called by the cleaner thread between CleanUpOnCallEnd() and the destructor

@@ -327,9 +327,16 @@ MimeSdpBody* SDPSession::createSDP(const char* addr, ObjList* mediaList)
 	SDPMedia* m = static_cast<SDPMedia*>(ml->get());
 	int rfc2833 = 0;
 	if ((m_rfc2833 >= 0) && m->isAudio()) {
-	    rfc2833 = m->rfc2833().toInteger(m_rfc2833);
-	    if (rfc2833 < 96 || rfc2833 > 127)
-		rfc2833 = 101;
+	    if (!m_rtpForward) {
+		rfc2833 = m->rfc2833().toInteger(m_rfc2833);
+		if (rfc2833 < 96 || rfc2833 > 127)
+		    rfc2833 = 101;
+	    }
+	    else if (m->rfc2833().toBoolean(true)) {
+		rfc2833 = m->rfc2833().toInteger();
+		if (rfc2833 < 96 || rfc2833 > 127)
+		    rfc2833 = 0;
+	    }
 	}
 	String mline(m->fmtList());
 	ObjList* l = mline.split(',',false);

@@ -1,4 +1,4 @@
-yate (4.2.1~svn5268) UNRELEASED; urgency=low
+yate (4.2.1~svn5276) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -67,8 +67,20 @@ yate (4.2.1~svn5268) UNRELEASED; urgency=low
     default.  + Enqueue the module.update immediately when the RTP
     wrapper is destroyed.  + Added parameter lists used to encode/decode
     MAP sendParameters request and response.
+  * Updated to SVN revision 5276: + Fixed Visual C compile error.  +
+    Overall these changes reduce contention in the script.  + Watch the
+    "engine.timer" instead of installing a handler for it.  + Install
+    filtered handlers for overlapped script messages.  + Reduce
+    complexity of appending multiple objects to a list.  + Avoid
+    declaring variables with the same name.  + Add GMT formatted
+    timestamps by default to the Yate service.  + Start capability
+    exchange procedure when connection is established and didn't
+    received remote capabilities.  + Fixed bug: don't advertise RFC2833
+    telephone event support when missing and rtp is forwarded.  +
+    Override channel dtmf methods in chan.dtmf only if explicitly
+    requested.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 19 Sep 2012 02:19:18 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 20 Sep 2012 02:19:15 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

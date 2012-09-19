@@ -12,7 +12,7 @@ depend() {
 	use mysql postgresql wanpipe zaptel
 }
 
-OPTS=${OPTS:- -F -s -r -l /var/log/yate -vvv}
+OPTS=${OPTS:- -F -s -r -l /var/log/yate -vvv -Df}
 PIDFILE=${PIDFILE:-/var/run/${SVCNAME}.pid}
 BINARY=${BINARY:-/usr/bin/yate}
 

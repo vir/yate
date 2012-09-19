@@ -4,7 +4,7 @@
 NO_START=1
 
 # arguments passed to yate
-DAEMON_ARGS="-F -s -r -l /var/log/yate -vvv"
+DAEMON_ARGS="-F -s -r -l /var/log/yate -vvv -Df"
 
 # yate user and group
 YATE_USER="root"

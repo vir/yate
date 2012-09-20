@@ -940,6 +940,8 @@ private:
     void updateRtpNatAddress(NamedList* params = 0);
     // Process allow list. Get INFO support
     bool infoAllowed(const SIPMessage* msg);
+    // Send tone(s) using method
+    bool sendTone(Message& msg, const char* tone, int meth, bool& retVal);
 
     SIPTransaction* m_tr;
     SIPTransaction* m_tr2;
@@ -967,6 +969,7 @@ private:
     bool m_checkAllowInfo;               // Check Allow in INVITE and OK for INFO support
     bool m_missingAllowInfoDefVal;       // Default INFO support if Allow header is missing
     DtmfMethods m_dtmfMethods;
+    bool m_honorDtmfDetect;
     // REFER already running
     bool m_referring;
     // reINVITE requested or in progress
@@ -1132,6 +1135,7 @@ int YateSIPEndPoint::s_evCount = 0;
 static bool s_checkAllowInfo = true;         // Check Allow in INVITE and OK for INFO support
 static bool s_missingAllowInfoDefVal = true; // Default INFO support if Allow header is missing
 static DtmfMethods s_dtmfMethods;
+static bool s_honorDtmfDetect = true;
 // Deprecated dtmf params warn
 static bool s_warnDtmfInfoCfg = true;
 static bool s_warnDtmfInbandCfg = true;
@@ -1143,6 +1147,7 @@ const TokenDict DtmfMethods::s_methodName[] = {
     { "info",     Info},
     { "rfc2833",  Rfc2833},
     { "inband",   Inband},
+    { "sip-info", Info},
     { 0, 0 },
 };
 
@@ -5075,6 +5080,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
       m_state(Incoming), m_port(0), m_route(0), m_routes(0),
       m_authBye(true),
       m_checkAllowInfo(s_checkAllowInfo), m_missingAllowInfoDefVal(s_missingAllowInfoDefVal),
+      m_honorDtmfDetect(s_honorDtmfDetect),
       m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0)
 {
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,%p) [%p]",ev,tr,this);
@@ -5247,6 +5253,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
       m_state(Outgoing), m_port(0), m_route(0), m_routes(0),
       m_authBye(false),
       m_checkAllowInfo(s_checkAllowInfo), m_missingAllowInfoDefVal(s_missingAllowInfoDefVal),
+      m_honorDtmfDetect(s_honorDtmfDetect),
       m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0)
 {
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,'%s') [%p]",
@@ -5265,6 +5272,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 	m_dtmfMethods.getDeprecatedDtmfMethod(msg,"dtmfinband",DtmfMethods::Inband,&s_warnDtmfInbandCallExecute);
     }
     s_globalMutex.unlock();
+    m_honorDtmfDetect = msg.getBoolValue(YSTRING("ohonor_dtmf_detect"),m_honorDtmfDetect);
     m_secure = msg.getBoolValue(YSTRING("secure"),plugin.parser().secure());
     setRfc2833(msg.getParam(YSTRING("rfc2833")));
     m_rtpForward = msg.getBoolValue(YSTRING("rtp_forward"));
@@ -6581,60 +6589,25 @@ bool YateSIPConnection::msgTone(Message& msg, const char* tone)
 		s_warnDtmfMethodChanDtmf = false;
 		Debug(this,DebugConf,"Deprecated 'method' parameter in '%s'. Use 'methods' instead!",msg.c_str());
 	    }
-	    if ((*method == YSTRING("info")) || (*method == YSTRING("sip-info")))
-		methods.set(DtmfMethods::Info);
-	    else if (*method == YSTRING("rfc2833"))
-		methods.set(DtmfMethods::Rfc2833);
-	    else if (*method == YSTRING("inband"))
-		methods.set(DtmfMethods::Inband);
+	    int meth = lookup(*method,DtmfMethods::s_methodName,DtmfMethods::MethodCount);
+	    if (meth != DtmfMethods::MethodCount)
+		methods.set(meth);
 	}
     }
     bool retVal = false;
     bool ok = false;
+    if (msg.getBoolValue(YSTRING("honor_dtmf_detect"),m_honorDtmfDetect)) {
+	const String& detected = msg[YSTRING("detected")];
+	int meth = lookup(detected,DtmfMethods::s_methodName,DtmfMethods::MethodCount);
+	if (meth != DtmfMethods::MethodCount && methods.hasMethod(meth)) {
+	    ok = sendTone(msg,tone,meth,retVal);
+	    methods.reset(meth);
+	}
+    }
     for (int i = 0; !ok && i < DtmfMethods::MethodCount; i++) {
 	int meth = methods[i];
-	if (meth == DtmfMethods::Info) {
-	    // Send INFO only if initial transaction finished
-	    if (m_tr)
-		continue;
-	    for (; tone && *tone; tone++) {
-		char c = *tone;
-		for (int j = 0; j <= 16; j++) {
-		    if (s_dtmfs[j] != c)
-			continue;
-		    SIPMessage* m = createDlgMsg("INFO");
-		    if (!m)
-			break;
-		    copySipHeaders(*m,msg);
-		    String tmp;
-		    tmp << "Signal=" << j << "\r\n";
-		    m->setBody(new MimeStringBody("application/dtmf-relay",tmp));
-		    plugin.ep()->engine()->addMessage(m);
-		    m->deref();
-		    break;
-		}
-	    }
-	    ok = true;
-	    retVal = true;
-	}
-	else if (meth == DtmfMethods::Rfc2833 || meth == DtmfMethods::Inband) {
-	    // RFC2833 and inband require media to be started
-	    if (!(m_rtpMedia && (m_mediaStatus == MediaStarted)))
-		continue;
-	    ObjList* l = m_rtpMedia->find("audio");
-	    const SDPMedia* m = static_cast<const SDPMedia*>(l ? l->get() : 0);
-	    if (!m)
-		continue;
-	    if (meth == DtmfMethods::Rfc2833) {
-		ok = m->rfc2833().toBoolean(true);
-		if (ok)
-		    msg.setParam("targetid",m->id());
-	    }
-	    else {
-		ok = dtmfInband(tone);
-		retVal = ok;
-	    }
-	}
+	if (meth != DtmfMethods::MethodCount)
+	    ok = sendTone(msg,tone,meth,retVal);
     }
     if (!ok && debugAt(DebugNote)) {
 	String tmp;
@@ -6877,6 +6850,7 @@ void YateSIPConnection::callAccept(Message& msg)
     // Update dtmf methods from message
     m_checkAllowInfo = msg.getBoolValue(YSTRING("icheck_allow_info"),m_checkAllowInfo);
     m_missingAllowInfoDefVal = msg.getBoolValue(YSTRING("imissing_allow_info"),m_missingAllowInfoDefVal);
+    m_honorDtmfDetect = msg.getBoolValue(YSTRING("ihonor_dtmf_detect"),m_honorDtmfDetect);
     String* meths = msg.getParam(YSTRING("idtmfmethods"));
     if (meths) {
 	DtmfMethods old = m_dtmfMethods;
@@ -7141,6 +7115,56 @@ bool YateSIPConnection::infoAllowed(const SIPMessage* msg)
     else
 	ok = m_missingAllowInfoDefVal;
     XDebug(this,DebugAll,"infoAllowed: info=%u [%p]",ok,this);
+    return ok;
+}
+
+// Send tone(s) using method
+bool YateSIPConnection::sendTone(Message& msg, const char* tone, int meth, bool& retVal)
+{
+    bool ok = false;
+    if (meth == DtmfMethods::Info) {
+	// Send INFO only if initial transaction finished
+	if (!m_tr) {
+	    const char* t = tone;
+	    for (; t && *t; t++) {
+		char c = *t;
+		for (int j = 0; j <= 16; j++) {
+		    if (s_dtmfs[j] != c)
+			continue;
+		    SIPMessage* m = createDlgMsg("INFO");
+		    if (!m)
+			break;
+		    copySipHeaders(*m,msg);
+		    String tmp;
+		    tmp << "Signal=" << j << "\r\n";
+		    m->setBody(new MimeStringBody("application/dtmf-relay",tmp));
+		    plugin.ep()->engine()->addMessage(m);
+		    m->deref();
+		    break;
+		}
+	    }
+	    retVal = true;
+	    ok = true;
+	}
+    }
+    else if (meth == DtmfMethods::Rfc2833 || meth == DtmfMethods::Inband) {
+	// RFC2833 and inband require media to be started
+	if (m_rtpMedia && (m_mediaStatus == MediaStarted)) {
+	    ObjList* l = m_rtpMedia->find("audio");
+	    const SDPMedia* m = static_cast<const SDPMedia*>(l ? l->get() : 0);
+	    if (meth == DtmfMethods::Rfc2833) {
+		ok = m && m->rfc2833().toBoolean(true);
+		if (ok)
+		    msg.setParam("targetid",m->id());
+	    }
+	    else if (m) {
+		ok = dtmfInband(tone);
+		retVal = ok;
+	    }
+	}
+    }
+    XDebug(this,ok ? DebugAll : DebugNote,"sendTone(%s) meth=%s (%d) ok=%u [%p]",
+	tone,lookup(meth,DtmfMethods::s_methodName),meth,ok,this);
     return ok;
 }
 
@@ -7983,6 +8007,7 @@ void SIPDriver::initialize()
     s_globalMutex.unlock();
     s_checkAllowInfo = s_cfg.getBoolValue("general","check_allow_info",true);
     s_missingAllowInfoDefVal = s_cfg.getBoolValue("general","missing_allow_info",true);
+    s_honorDtmfDetect = s_cfg.getBoolValue("general","honor_dtmf_detect",true);
     s_maxForwards = s_cfg.getIntValue("general","maxforwards",20);
     s_floodEvents = s_cfg.getIntValue("general","floodevents",100);
     s_floodProtection = s_cfg.getBoolValue("general","floodprotection",true);

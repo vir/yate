@@ -49,6 +49,15 @@
 ; This parameter is applied on reload for new calls only
 ;dtmfmethods=rfc2833,h323,inband
 
+; honor_dtmf_detect: bool: Honor DTMF detected method when sending DTMFs
+; If enabled the channel will try to send a DTMF using the same method as received
+; If the detected method is not enabled it won't be used
+; This parameter can be overridden from routing by 'ohonor_dtmf_detect' for outgoing call leg
+;  and 'ihonor_dtmf_detect' for incoming call leg
+; This parameter is applied on reload for new calls only
+; Defaults to enable
+;honor_dtmf_detect=enable
+
 ; Use an external RTP module instead of the native OpenH323 RTP stack, which is
 ;  very cpu intensive. If no external RTP can be found it will fallback to the
 ;  native stack. The only external RTP now is yrtp (see the yrtpchan module).

@@ -56,12 +56,19 @@ namespace { // anonymous
 // Maximum number of frames we are willing to decode in a packet
 #define MAX_PKT_FRAMES  4
 
+// Discontinuous Transmission (DTX)
+static bool s_discontinuous = false;
+
+// Default mode
+static Mode s_mode = MR122;
+
+
 class AmrPlugin : public Plugin, public TranslatorFactory
 {
 public:
     AmrPlugin();
     ~AmrPlugin();
-    virtual void initialize() {}
+    virtual void initialize();
     virtual bool isBusy() const;
     virtual DataTranslator* create(const DataFormat& sFormat, const DataFormat& dFormat);
     virtual const TranslatorCaps* getCapabilities() const;
@@ -70,7 +77,7 @@ public:
 class AmrTrans : public DataTranslator
 {
 public:
-    AmrTrans(const char* sFormat, const char* dFormat, void* amrState, bool octetAlign = false);
+    AmrTrans(const char* sFormat, const char* dFormat, void* amrState, bool octetAlign, bool encoding);
     virtual ~AmrTrans();
     virtual unsigned long Consume(const DataBlock& data, unsigned long tStamp, unsigned long flags);
     inline bool valid() const
@@ -82,6 +89,7 @@ protected:
     virtual bool pushData(unsigned long& tStamp) = 0;
     void* m_amrState;
     DataBlock m_data;
+    bool m_encoding;
     bool m_showError;
     bool m_octetAlign;
     Mode m_cmr;
@@ -92,10 +100,11 @@ class AmrEncoder : public AmrTrans
 {
 public:
     inline AmrEncoder(const char* sFormat, const char* dFormat, bool octetAlign, bool discont = false)
-	: AmrTrans(sFormat,dFormat,::Encoder_Interface_init(discont ? 1 : 0),octetAlign),
-	 m_mode(MR122)
+	: AmrTrans(sFormat,dFormat,::Encoder_Interface_init(discont ? 1 : 0),octetAlign,true),
+	 m_mode(s_mode)
 	{ }
     virtual ~AmrEncoder();
+    virtual bool control(NamedList& params);
 protected:
     virtual bool pushData(unsigned long& tStamp);
     Mode m_mode;
@@ -106,7 +115,7 @@ class AmrDecoder : public AmrTrans
 {
 public:
     inline AmrDecoder(const char* sFormat, const char* dFormat, bool octetAlign)
-	: AmrTrans(sFormat,dFormat,::Decoder_Interface_init(),octetAlign)
+	: AmrTrans(sFormat,dFormat,::Decoder_Interface_init(),octetAlign,false)
 	{ }
     virtual ~AmrDecoder();
 protected:
@@ -130,8 +139,18 @@ static int modeBits[16] = {
     -1, -1, -1, -1, -1, -1, 0
 };
 
-// Discontinuous Transmission (DTX)
-bool s_discontinuous = false;
+// Table for bitrate to mode conversion
+static const TokenDict s_modes[] = {
+    { "4.75", MR475 },
+    { "5.15", MR515 },
+    { "5.90", MR59  },
+    { "6.70", MR67  },
+    { "7.40", MR74  },
+    { "7.95", MR795 },
+    { "10.2", MR102 },
+    { "12.2", MR122 },
+    { 0, 0 }
+};
 
 // Helper function, gets a number of bits and advances pointer, return -1 for error
 static int getBits(unsigned const char*& ptr, int& len, int& bpos, unsigned char bits)
@@ -159,13 +178,13 @@ static int getBits(unsigned const char*& ptr, int& len, int& bpos, unsigned char
 
 
 // Arbitrary type transcoder constructor
-AmrTrans::AmrTrans(const char* sFormat, const char* dFormat, void* amrState, bool octetAlign)
+AmrTrans::AmrTrans(const char* sFormat, const char* dFormat, void* amrState, bool octetAlign, bool encoding)
     : DataTranslator(sFormat,dFormat),
-      m_amrState(amrState), m_showError(true),
-      m_octetAlign(octetAlign), m_cmr(MR122)
+      m_amrState(amrState), m_encoding(encoding), m_showError(true),
+      m_octetAlign(octetAlign), m_cmr(s_mode)
 {
-    Debug(MODNAME,DebugAll,"AmrTrans::AmrTrans('%s','%s',%p,%s) [%p]",
-	sFormat,dFormat,amrState,String::boolText(octetAlign),this);
+    Debug(MODNAME,DebugAll,"AmrTrans::AmrTrans('%s','%s',%p,%s,%s) [%p]",
+	sFormat,dFormat,amrState,String::boolText(octetAlign),String::boolText(encoding),this);
     count++;
 }
 
@@ -185,9 +204,9 @@ unsigned long AmrTrans::Consume(const DataBlock& data, unsigned long tStamp, uns
     if (data.null() && (flags & DataSilent))
 	return getTransSource()->Forward(data,tStamp,flags);
     ref();
+    if (m_encoding && (tStamp != invalidStamp()) && !m_data.null())
+	tStamp -= (m_data.length() / 2);
     m_data += data;
-    if (!tStamp)
-	tStamp = timeStamp() + SAMPLES_FRAME;
     while (pushData(tStamp))
 	;
     deref();
@@ -259,6 +278,23 @@ bool AmrEncoder::pushData(unsigned long& tStamp)
     outData.clear(false);
     tStamp += SAMPLES_FRAME;
     return (0 != m_data.length());
+}
+
+// Execute control operations
+bool AmrEncoder::control(NamedList& params)
+{
+    bool ok = false;
+    int mode = params[YSTRING("mode")].toInteger(s_modes,-1);
+    if (mode >= MR475 && mode <= MR122) {
+	m_mode = (Mode)mode;
+	ok = true;
+    }
+    mode = params[YSTRING("cmr")].toInteger(s_modes,-1);
+    if (mode >= MR475 && mode <= MR122) {
+	m_cmr = (Mode)mode;
+	ok = true;
+    }
+    return AmrTrans::control(params) || ok;
 }
 
 
@@ -403,6 +439,16 @@ DataTranslator* AmrPlugin::create(const DataFormat& sFormat, const DataFormat& d
 const TranslatorCaps* AmrPlugin::getCapabilities() const
 {
     return caps;
+}
+
+void AmrPlugin::initialize()
+{
+    Output("Initializing module AMR-NB");
+    Configuration cfg(Engine::configFile("amrnbcodec"));
+    int mode = cfg.getIntValue("general","mode",s_modes,MR122);
+    if (mode >= MR475 && mode <= MR122)
+	s_mode = (Mode)mode;
+    s_discontinuous = cfg.getBoolValue("general","discontinuous",false);
 }
 
 

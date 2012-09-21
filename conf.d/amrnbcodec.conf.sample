@@ -1,0 +1,10 @@
+[general]
+; Initial settings for each created codec
+
+; mode: int: AMR mode to use by default
+;  Allowed values are 0-7 or the following keywords (not real numbers!)
+;  4.75, 5.15, 5.90, 6.70, 7.40, 7.95, 10.2, 12.2
+;mode=12.2
+
+; discontinuous: bool: Use DTX (Discontinuous Transmission) frames
+;discontinuous=no

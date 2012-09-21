@@ -1,4 +1,4 @@
-yate (4.2.1~svn5277) UNRELEASED; urgency=low
+yate (4.2.1~svn5278) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -81,8 +81,11 @@ yate (4.2.1~svn5277) UNRELEASED; urgency=low
     requested.
   * Updated to SVN revision 5277: + Honor detected method when sending
     DTMFs.
+  * Updated to SVN revision 5278: + Added setting for initial AMR mode.
+    + Fixed timestamps in AMR when transcoding from non-20ms
+    packetization.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 21 Sep 2012 02:19:25 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 22 Sep 2012 02:19:15 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

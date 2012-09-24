@@ -1,4 +1,4 @@
-yate (4.2.1~svn5278) UNRELEASED; urgency=low
+yate (4.2.1~svn5281) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -84,8 +84,16 @@ yate (4.2.1~svn5278) UNRELEASED; urgency=low
   * Updated to SVN revision 5278: + Added setting for initial AMR mode.
     + Fixed timestamps in AMR when transcoding from non-20ms
     packetization.
+  * Updated to SVN revision 5281: + Fixed timestamps in AMR when
+    transcoding from non-20ms packetization.  + This fixes a race
+    condition causing some logs to not be rotated promptly.  + Send a
+    SIGHUP to Yate only once, after all logs were rotated.  + Added
+    support for the reportSM-DeliveryState MAP operation.  + Skip over
+    the "no data" frames the AMR encoder generates in DTX mode.  +
+    Always set the Mark bit when resuming after silence when using DTX.
+    + Propagate media packet flags through the AMR transcoder.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 22 Sep 2012 02:19:15 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 25 Sep 2012 02:19:14 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

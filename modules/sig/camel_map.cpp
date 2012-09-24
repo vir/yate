@@ -2270,7 +2270,7 @@ static const Capability s_mapCapab[] = {
     {"ErrorRecovery",            {"reset", "forwardCheckSS-Indication", "failureReport", ""}},
     {"Charging",                 {""}},
     {"SMSC",                     {"informServiceCentre", "alertServiceCentre", "sendRoutingInfoForSM", "mo-forwardSM", "mt-forwardSM",
-				    "forwardSM", ""}},
+				    "forwardSM", "reportSM-DeliveryStatus", ""}},
     {"None",                     {""}},
     {0, {""}},
 };
@@ -2331,9 +2331,9 @@ static const AppCtxt s_mapAppCtxt[]= {
     {"networkUnstructuredSsContext-v1", "0.4.0.0.1.0.19.1", "processUnstructuredSS-Data"},
 
     // Short message routing
-    {"shortMsgGatewayContext-v3", "0.4.0.0.1.0.20.3", "sendRoutingInfoForSM,informServiceCentre"},
-    {"shortMsgGatewayContext-v2", "0.4.0.0.1.0.20.2", "sendRoutingInfoForSM,informServiceCentre"},
-    {"shortMsgGatewayContext-v1", "0.4.0.0.1.0.20.1", "sendRoutingInfoForSM,informServiceCentre"},
+    {"shortMsgGatewayContext-v3", "0.4.0.0.1.0.20.3", "sendRoutingInfoForSM,informServiceCentre,reportSM-DeliveryStatus"},
+    {"shortMsgGatewayContext-v2", "0.4.0.0.1.0.20.2", "sendRoutingInfoForSM,informServiceCentre,reportSM-DeliveryStatus"},
+    {"shortMsgGatewayContext-v1", "0.4.0.0.1.0.20.1", "sendRoutingInfoForSM,informServiceCentre,reportSM-DeliveryStatus"},
 
     // Mobile Originated short messages
     {"shortMsgMO-RelayContext-v3", "0.4.0.0.1.0.21.3", "mo-forwardSM"},
@@ -4959,6 +4959,35 @@ static const Parameter s_forwardSMArgs[] = {
     {"",                       s_noTag,           false,   TcapXApplication::None,           0},
 };
 
+static const TokenDict s_SMDeliveryOutcomeEnum[] = {
+    {"memoryCapacityExceeded", 0},
+    {"absentSubscriber",       1},
+    {"successfulTransfer",     2}, 
+    {0,0}
+};
+
+static const Parameter s_reportSMDeliveryArgs[] = {
+    {"msisdn",                                  s_hexTag,         false, TcapXApplication::AddressString, 0},
+    {"serviceCentreAddress",                    s_hexTag,         false, TcapXApplication::AddressString, 0},
+    {"sm-DeliveryOutcome",                      s_enumTag,        false, TcapXApplication::Enumerated,    s_SMDeliveryOutcomeEnum},
+    {"absentSubscriberDiagnosticSM",            s_ctxtPrim_0_Tag, true,  TcapXApplication::Integer,       0},
+    {"extensionContainer",                      s_ctxtCstr_1_Tag, true,  TcapXApplication::HexString,     0},
+    {"gprsSupportIndicator",                    s_ctxtPrim_2_Tag, true,  TcapXApplication::Null,          0},
+    {"deliveryOutcomeIndicator",                s_ctxtPrim_3_Tag, true,  TcapXApplication::Null,          0},
+    {"additionalSM-DeliveryOutcome",            s_ctxtPrim_4_Tag, true,  TcapXApplication::Enumerated,    s_SMDeliveryOutcomeEnum},
+    {"additionalAbsentSubscriberDiagnosticSM",  s_ctxtPrim_5_Tag, true,  TcapXApplication::Integer,       0},
+    {"ip-sm-gw-Indicator",                      s_ctxtPrim_6_Tag, true,  TcapXApplication::Null,          0},
+    {"ip-sm-gw-sm-deliveryOutcome",             s_ctxtPrim_7_Tag, true,  TcapXApplication::Enumerated,    s_SMDeliveryOutcomeEnum},
+    {"ip-sm-gw-absentSubscriberDiagnosticSM",   s_ctxtPrim_8_Tag, true,  TcapXApplication::Integer,       0},
+    {"",                                        s_noTag,          false, TcapXApplication::None,          0},
+};
+
+static const Parameter s_reportSMDeliveryRes[] = {
+    { "storedMSISDN",       s_hexTag,      true,  TcapXApplication::AddressString, 0},
+    { "extensionContainer", s_sequenceTag, true,  TcapXApplication::HexString,     0},
+    {"",                    s_noTag,       false, TcapXApplication::None,          0},
+};
+
 static const Parameter s_activateTraceModeArgs[] = {
     {"imsi",                  s_ctxtPrim_0_Tag,    true,    TcapXApplication::TBCD,          0},
     {"traceReference",        s_ctxtPrim_1_Tag,    false,   TcapXApplication::HexString,     0},
@@ -5284,6 +5313,11 @@ static const Operation s_mapOps[] = {
     {"forwardSM",                     true,  46,
 	s_sequenceTag, s_forwardSMArgs,
 	s_noTag, 0
+    },
+    {"reportSM-DeliveryStatus",       true,  47,
+	s_sequenceTag, s_reportSMDeliveryArgs,
+	s_sequenceTag, s_reportSMDeliveryRes,
+	
     },
     {"activateTraceMode",             true,  50,
 	s_sequenceTag, s_activateTraceModeArgs,

@@ -4,6 +4,7 @@
     size=100M
     rotate 5
     missingok
+    sharedscripts
     notifempty
     postrotate
 	/bin/kill -HUP `/bin/cat /var/run/yate.pid`

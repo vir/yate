@@ -86,7 +86,7 @@ public:
 	{ return align ? "octet aligned" : "bandwidth efficient"; }
 protected:
     bool dataError(const char* text = 0);
-    virtual bool pushData(unsigned long& tStamp) = 0;
+    virtual bool pushData(unsigned long& tStamp, unsigned long& flags) = 0;
     void* m_amrState;
     DataBlock m_data;
     bool m_encoding;
@@ -101,13 +101,14 @@ class AmrEncoder : public AmrTrans
 public:
     inline AmrEncoder(const char* sFormat, const char* dFormat, bool octetAlign, bool discont = false)
 	: AmrTrans(sFormat,dFormat,::Encoder_Interface_init(discont ? 1 : 0),octetAlign,true),
-	 m_mode(s_mode)
+	 m_mode(s_mode), m_silent(false)
 	{ }
     virtual ~AmrEncoder();
     virtual bool control(NamedList& params);
 protected:
-    virtual bool pushData(unsigned long& tStamp);
+    virtual bool pushData(unsigned long& tStamp, unsigned long& flags);
     Mode m_mode;
+    bool m_silent;
 };
 
 // Decoding specific class
@@ -119,7 +120,7 @@ public:
 	{ }
     virtual ~AmrDecoder();
 protected:
-    virtual bool pushData(unsigned long& tStamp);
+    virtual bool pushData(unsigned long& tStamp, unsigned long& flags);
 };
 
 // Module data
@@ -207,7 +208,7 @@ unsigned long AmrTrans::Consume(const DataBlock& data, unsigned long tStamp, uns
     if (m_encoding && (tStamp != invalidStamp()) && !m_data.null())
 	tStamp -= (m_data.length() / 2);
     m_data += data;
-    while (pushData(tStamp))
+    while (pushData(tStamp,flags))
 	;
     deref();
     return invalidStamp();
@@ -237,7 +238,7 @@ AmrEncoder::~AmrEncoder()
 }
 
 // Encode accumulated slin data and push it to the consumer
-bool AmrEncoder::pushData(unsigned long& tStamp)
+bool AmrEncoder::pushData(unsigned long& tStamp, unsigned long& flags)
 {
     if (m_data.length() < BUFFER_SIZE)
 	return false;
@@ -246,6 +247,17 @@ bool AmrEncoder::pushData(unsigned long& tStamp)
     int len = ::Encoder_Interface_Encode(m_amrState,m_mode,(short*)m_data.data(),unpacked,0);
     if ((len <= 0) || (len >= MAX_AMRNB_SIZE))
 	return dataError("encoder");
+    Mode mode = (Mode)((unpacked[0] >> 3) & 0x0f);
+    if (mode > MRDTX) {
+	// invalid mode returned in frame - don't send the the data at all
+	m_data.cut(-BUFFER_SIZE);
+	tStamp += SAMPLES_FRAME;
+	return (0 != m_data.length());
+    }
+    bool silent = (mode == MRDTX);
+    if (m_silent && !silent)
+	flags |= DataMark;
+    m_silent = silent;
     unpacked[len] = 0;
     XDebug(MODNAME,DebugAll,"Encoded mode %d frame to %d bytes first %02x [%p]",
 	m_mode,len,unpacked[0],this);
@@ -274,9 +286,10 @@ bool AmrEncoder::pushData(unsigned long& tStamp)
     }
     m_data.cut(-BUFFER_SIZE);
     DataBlock outData(buffer,len,false);
-    getTransSource()->Forward(outData,tStamp);
+    getTransSource()->Forward(outData,tStamp,flags);
     outData.clear(false);
     tStamp += SAMPLES_FRAME;
+    flags &= ~DataMark;
     return (0 != m_data.length());
 }
 
@@ -307,7 +320,7 @@ AmrDecoder::~AmrDecoder()
 }
 
 // Decode AMR data and push it to the consumer
-bool AmrDecoder::pushData(unsigned long& tStamp)
+bool AmrDecoder::pushData(unsigned long& tStamp, unsigned long& flags)
 {
     if (m_data.length() < 2)
 	return false;
@@ -376,9 +389,10 @@ bool AmrDecoder::pushData(unsigned long& tStamp)
 	    (good ? RxTypes::RX_SPEECH_GOOD : RxTypes::RX_SPEECH_DEGRADED);
 	::Decoder_Interface_Decode(m_amrState,unpacked,buffer,type);
 	DataBlock outData(buffer,BUFFER_SIZE,false);
-	getTransSource()->Forward(outData,tStamp);
+	getTransSource()->Forward(outData,tStamp,flags);
 	outData.clear(false);
 	tStamp += SAMPLES_FRAME;
+	flags &= ~DataMark;
     }
     if (bpos)
 	len--;

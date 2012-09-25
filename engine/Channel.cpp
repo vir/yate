@@ -334,8 +334,8 @@ static Mutex s_paramMutex(true,"ChannelParams");
 Channel::Channel(Driver* driver, const char* id, bool outgoing)
     : CallEndpoint(id),
       m_parameters(""), m_driver(driver), m_outgoing(outgoing),
-      m_timeout(0), m_maxcall(0),
-      m_dtmfTime(0), m_dtmfSeq(0), m_answered(false)
+      m_timeout(0), m_maxcall(0), m_dtmfTime(0),
+      m_toutAns(0), m_dtmfSeq(0), m_answered(false)
 {
     init();
 }
@@ -343,8 +343,8 @@ Channel::Channel(Driver* driver, const char* id, bool outgoing)
 Channel::Channel(Driver& driver, const char* id, bool outgoing)
     : CallEndpoint(id),
       m_parameters(""), m_driver(&driver), m_outgoing(outgoing),
-      m_timeout(0), m_maxcall(0),
-      m_dtmfTime(0), m_dtmfSeq(0), m_answered(false)
+      m_timeout(0), m_maxcall(0), m_dtmfTime(0),
+      m_toutAns(0), m_dtmfSeq(0), m_answered(false)
 {
     init();
 }
@@ -529,8 +529,11 @@ void Channel::status(const char* newstat)
     Lock lock(mutex());
     m_status = newstat;
     if (!m_answered && (m_status == YSTRING("answered"))) {
-	m_maxcall = 0;
 	m_answered = true;
+	// stop pre-answer timeout, restart answered timeout
+	m_maxcall = 0;
+	if (m_toutAns)
+	    timeout(Time::now() + m_toutAns*(u_int64_t)1000);
     }
 }
 
@@ -539,19 +542,27 @@ const char* Channel::direction() const
     return m_outgoing ? "outgoing" : "incoming";
 }
 
-void Channel::setMaxcall(const Message* msg)
+void Channel::setMaxcall(const Message* msg, int defTout)
 {
-    int tout = msg ? msg->getIntValue(YSTRING("maxcall")) : 0;
-    if (tout > 0)
-	maxcall(Time::now() + tout*(u_int64_t)1000);
-    else
+    int tout = msg ? msg->getIntValue(YSTRING("timeout"),defTout) : defTout;
+    if (tout > 0) {
+	m_toutAns = tout;
+	timeout(Time::now() + tout*(u_int64_t)1000);
+    }
+    else if (tout == 0) {
+	m_toutAns = 0;
+	timeout(0);
+    }
+    if (m_answered)
 	maxcall(0);
-    if (msg) {
-	tout = msg->getIntValue(YSTRING("timeout"),-1);
-	if (tout > 0)
-	    timeout(Time::now() + tout*(u_int64_t)1000);
-	else if (tout == 0)
+    else if (msg) {
+	tout = msg->getIntValue(YSTRING("maxcall"),-1);
+	if (tout > 0) {
 	    timeout(0);
+	    maxcall(Time::now() + tout*(u_int64_t)1000);
+	}
+	else if (tout == 0)
+	    maxcall(0);
     }
 }
 
@@ -647,8 +658,10 @@ bool Channel::msgRinging(Message& msg)
 bool Channel::msgAnswered(Message& msg)
 {
     m_maxcall = 0;
-    m_answered = true;
+    int tout = msg.getIntValue(YSTRING("timeout"),m_toutAns);
+    m_toutAns = (tout > 0) ? tout : 0;
     status("answered");
+    m_answered = true;
     if (m_billid.null())
 	m_billid = msg.getValue(YSTRING("billid"));
     return true;
@@ -752,14 +765,14 @@ void Channel::statusParams(String& str)
 	if (m_timeout) {
 	    str << ",timeout=";
 	    if (m_timeout > t)
-		str << (unsigned int)((m_timeout - t) / 1000);
+		str << (unsigned int)((m_timeout - t + 500) / 1000);
 	    else
 		str << "expired";
 	}
 	if (m_maxcall) {
 	    str << ",maxcall=";
 	    if (m_maxcall > t)
-		str << (unsigned int)((m_maxcall - t) / 1000);
+		str << (unsigned int)((m_maxcall - t + 500) / 1000);
 	    else
 		str << "expired";
 	}
@@ -795,9 +808,7 @@ bool Channel::callRouted(Message& msg)
 void Channel::callAccept(Message& msg)
 {
     status("accepted");
-    int tout = msg.getIntValue("timeout", m_driver ? m_driver->timeout() : 0);
-    if (tout > 0)
-	timeout(Time::now() + tout*(u_int64_t)1000);
+    setMaxcall(msg,m_driver ? m_driver->timeout() : 0);
     if (m_billid.null())
 	m_billid = msg.getValue(YSTRING("billid"));
     m_targetid = msg.getValue(YSTRING("targetid"));

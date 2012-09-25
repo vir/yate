@@ -3059,6 +3059,7 @@ bool YateH323Chan::msgRinging(Message& msg)
 
 bool YateH323Chan::msgAnswered(Message& msg)
 {
+    Channel::msgAnswered(msg);
     if (!m_conn)
 	return false;
     m_conn->rtpForward(msg);

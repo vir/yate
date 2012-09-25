@@ -85,10 +85,12 @@ public:
     static inline const char* alignName(bool align)
 	{ return align ? "octet aligned" : "bandwidth efficient"; }
 protected:
+    void filterBias(short* buf, unsigned int len);
     bool dataError(const char* text = 0);
     virtual bool pushData(unsigned long& tStamp, unsigned long& flags) = 0;
     void* m_amrState;
     DataBlock m_data;
+    int m_bias;
     bool m_encoding;
     bool m_showError;
     bool m_octetAlign;
@@ -181,7 +183,7 @@ static int getBits(unsigned const char*& ptr, int& len, int& bpos, unsigned char
 // Arbitrary type transcoder constructor
 AmrTrans::AmrTrans(const char* sFormat, const char* dFormat, void* amrState, bool octetAlign, bool encoding)
     : DataTranslator(sFormat,dFormat),
-      m_amrState(amrState), m_encoding(encoding), m_showError(true),
+      m_amrState(amrState), m_bias(0), m_encoding(encoding), m_showError(true),
       m_octetAlign(octetAlign), m_cmr(s_mode)
 {
     Debug(MODNAME,DebugAll,"AmrTrans::AmrTrans('%s','%s',%p,%s,%s) [%p]",
@@ -208,10 +210,35 @@ unsigned long AmrTrans::Consume(const DataBlock& data, unsigned long tStamp, uns
     if (m_encoding && (tStamp != invalidStamp()) && !m_data.null())
 	tStamp -= (m_data.length() / 2);
     m_data += data;
+    if (m_encoding) {
+	// the AMR encoder errors on biased silence so suppress it
+	unsigned int len = data.length();
+	if (len)
+	    filterBias((short*)m_data.data(m_data.length() - len),len / 2);
+    }
     while (pushData(tStamp,flags))
 	;
     deref();
     return invalidStamp();
+}
+
+// High pass filter to get rid of the bias - for example when transcoding through A-Law
+void AmrTrans::filterBias(short* buf, unsigned int len)
+{
+    if (!buf)
+	return;
+    while (len--) {
+	int val = *buf;
+	// work on integers using sample * 16
+	m_bias = (m_bias * 63 + val * 16) / 64;
+	// substract the averaged bias and saturate
+	val -= m_bias / 16;
+	if (val > 32767)
+	    val = 32676;
+	else if (val < -32767)
+	    val = -32767;
+	*buf++ = val;
+    }
 }
 
 // Data error, report error 1st time and clear buffer

@@ -1631,6 +1631,7 @@ private:
     u_int64_t m_timeout;
     u_int64_t m_maxcall;
     u_int64_t m_dtmfTime;
+    unsigned int m_toutAns;
     unsigned int m_dtmfSeq;
     String m_dtmfText;
     String m_dtmfDetected;
@@ -1910,15 +1911,17 @@ public:
     /**
      * Set the time this channel will time out on outgoing calls
      * @param msg Reference of message possibly holding "maxcall" parameter
+     * @param defTout Default timeout to apply, negative to not alter
      */
-    inline void setMaxcall(const Message& msg)
-	{ setMaxcall(&msg); }
+    inline void setMaxcall(const Message& msg, int defTout = -1)
+	{ setMaxcall(&msg,defTout); }
 
     /**
      * Set the time this channel will time out on outgoing calls
      * @param msg Pointer to message possibly holding "maxcall" parameter
+     * @param defTout Default timeout to apply, negative to not alter
      */
-    void setMaxcall(const Message* msg);
+    void setMaxcall(const Message* msg, int defTout = -1);
 
     /**
      * Get the connected channel identifier.

@@ -353,7 +353,7 @@ private:
     bool m_hangup;                       // Hang up flag: True - already hung up
     String m_reason;                     // Hangup reason
     // Timeouts
-    u_int64_t m_timeout;                 // Timeout for not answered outgoing connections
+    int64_t m_presTimeout;               // Maxcall after waiting for presence
     // Transfer
     bool m_transferring;                 // The call is already involved in a transfer
     String m_transferStanzaId;           // Sent transfer stanza id used to track the result
@@ -850,7 +850,7 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
     m_offerP2PTransport(false), m_offerGRawTransport(false),
     m_redirectCount(s_redirectCount), m_dtmfMeth(s_dtmfMeth),
     m_secure(s_useCrypto), m_secureRequired(s_cryptoMandatory),
-    m_hangup(false), m_timeout(0), m_transferring(false), m_recvTransferStanza(0),
+    m_hangup(false), m_presTimeout(-1), m_transferring(false), m_recvTransferStanza(0),
     m_dataFlags(0), m_ftStatus(FTNone), m_ftHostDirection(FTHostNone),
     m_connSocksServer(msg.getBoolValue("socksserver",true))
 {
@@ -907,28 +907,13 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
 	m_transferFrom ? ". Transferred from=": "",
 	m_transferFrom.safe(),this);
     // Set timeout and maxcall
-    int tout = msg.getIntValue("timeout",-1);
-    if (tout > 0)
-	timeout(Time::now() + tout*(u_int64_t)1000);
-    else if (tout == 0)
-	timeout(0);
-    m_timeout = msg.getIntValue("maxcall",0) * (u_int64_t)1000;
-    u_int64_t pendingTimeout = s_pendingTimeout * (u_int64_t)1000;
-    u_int64_t timenow = Time::now();
-    if (m_timeout && pendingTimeout >= m_timeout) {
-	maxcall(timenow + m_timeout);
-	m_timeout = 1;
-    }
-    else {
-	maxcall(timenow + pendingTimeout);
-	if (m_timeout) {
-	    // Set a greater timeout for file transfer due to
-	    // TCP connect
-	    if (m_ftStatus == FTNone)
-		m_timeout += timenow - pendingTimeout;
-	    else
-		m_timeout += timenow;
-	}
+    setMaxcall(msg);
+    if (!available) {
+	u_int64_t timeNow = Time::now();
+	// Save maxcall for later, set presence retrieval timeout instead
+	m_presTimeout = maxcall() ? maxcall() - timeNow : 0;
+	if (s_pendingTimeout)
+	    maxcall(s_pendingTimeout * (u_int64_t)1000 + timeNow);
     }
     XDebug(this,DebugInfo,"Time: " FMT64 ". Maxcall set to " FMT64 " us. [%p]",
 	Time::now(),maxcall(),this);
@@ -957,7 +942,7 @@ YJGConnection::YJGConnection(JGEvent* event)
     m_offerP2PTransport(false), m_offerGRawTransport(false),
     m_redirectCount(0), m_dtmfMeth(s_dtmfMeth),
     m_secure(s_useCrypto), m_secureRequired(s_cryptoMandatory),
-    m_hangup(false), m_timeout(0), m_transferring(false), m_recvTransferStanza(0),
+    m_hangup(false), m_presTimeout(-1), m_transferring(false), m_recvTransferStanza(0),
     m_dataFlags(0), m_ftStatus(FTNone), m_ftHostDirection(FTHostNone),
     m_connSocksServer(false)
 {
@@ -1201,6 +1186,7 @@ void YJGConnection::disconnected(bool final, const char* reason)
 bool YJGConnection::msgProgress(Message& msg)
 {
     DDebug(this,DebugInfo,"msgProgress [%p]",this);
+    Channel::msgProgress(msg);
     if (m_ftStatus != FTNone)
 	return true;
     if (ringFlag(RingWithContent) && msg.getBoolValue("earlymedia",true) &&
@@ -1215,6 +1201,7 @@ bool YJGConnection::msgProgress(Message& msg)
 bool YJGConnection::msgRinging(Message& msg)
 {
     DDebug(this,DebugInfo,"msgRinging [%p]",this);
+    Channel::msgRinging(msg);
     if (m_ftStatus != FTNone)
 	return true;
     m_ringFlags |= RingRinging;
@@ -1226,6 +1213,7 @@ bool YJGConnection::msgRinging(Message& msg)
 bool YJGConnection::msgAnswered(Message& msg)
 {
     Debug(this,DebugCall,"msgAnswered [%p]",this);
+    m_presTimeout = -1;
     if (m_ftStatus == FTNone) {
 	m_mutex.lock();
 	if (!m_audioContent || ((m_sessVersion != JGSession::Version0) && m_audioContent->isEarlyMedia()))
@@ -1892,7 +1880,11 @@ bool YJGConnection::presenceChanged(bool available, NamedList* params)
     Lock lock(m_mutex);
     if (m_state == Terminated)
 	return false;
-    maxcall(m_timeout);
+    if (m_presTimeout > 0)
+	maxcall(m_presTimeout + Time::now());
+    else if (m_presTimeout)
+	maxcall(0);
+    m_presTimeout = -1;
     // Check if unavailable in any other states
     if (!available) {
 	if (!m_hangup) {
@@ -2164,6 +2156,7 @@ void YJGConnection::processActionAccept(JGEvent* event)
 {
     // Update media
     Debug(this,DebugCall,"Remote peer answered the call [%p]",this);
+    m_presTimeout = -1;
     m_state = Active;
     status("answered");
     for (ObjList* o = event->m_contents.skipNull(); o; o = o->skipNext()) {

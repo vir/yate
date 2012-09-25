@@ -1293,6 +1293,7 @@ void SigChannel::handleEvent(SignallingEvent* event)
 
 bool SigChannel::msgProgress(Message& msg)
 {
+    Channel::msgProgress(msg);
     Lock lock(m_mutex);
     setState("progressing");
     if (!m_call)
@@ -1321,6 +1322,7 @@ bool SigChannel::msgProgress(Message& msg)
 
 bool SigChannel::msgRinging(Message& msg)
 {
+    Channel::msgRinging(msg);
     Lock lock(m_mutex);
     setState("ringing");
     if (!m_call)
@@ -1358,6 +1360,7 @@ bool SigChannel::msgRinging(Message& msg)
 
 bool SigChannel::msgAnswered(Message& msg)
 {
+    Channel::msgAnswered(msg);
     Lock lock(m_mutex);
     setState("answered");
     if (!m_call)
@@ -1672,16 +1675,17 @@ void SigChannel::setState(const char* state, bool updateStatus, bool showReason)
 	    m_call,this);
 	return;
     }
+#ifndef DEBUG
+    if (!updateStatus)
+	return;
+#endif
     String show;
     show << "Call " << state;
     if (showReason)
 	show << ". Reason: '" << m_reason << "'";
     if (!m_call)
         show << ". No signalling call ";
-    if (updateStatus)
-	Debug(this,DebugCall,"%s [%p]",show.c_str(),this);
-    else
-	DDebug(this,DebugCall,"%s [%p]",show.c_str(),this);
+    Debug(this,DebugCall,"%s [%p]",show.c_str(),this);
 }
 
 void SigChannel::evInfo(SignallingEvent* event)

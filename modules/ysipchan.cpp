@@ -6529,6 +6529,7 @@ bool YateSIPConnection::msgRinging(Message& msg)
 
 bool YateSIPConnection::msgAnswered(Message& msg)
 {
+    Channel::msgAnswered(msg);
     Lock lock(driver());
     if (m_hungup)
 	return false;

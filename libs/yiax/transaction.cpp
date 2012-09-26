@@ -1437,8 +1437,8 @@ void IAXTransaction::ackInFrames()
     IAXFullFrame* ack = 0;
     for (ObjList* l = m_inFrames.skipNull(); l; l = l->next()) {
 	IAXFullFrame* frame = static_cast<IAXFullFrame*>(l->get());
-	if (frame && ((frame->type() == IAXFrame::IAX && frame->subclass() != IAXControl::Ack && frame->subclass() != IAXControl::Inval) || 
-	    (frame->type() == IAXFrame::Control && frame->subclass() == IAXFullFrame::Answer)))
+	if (frame && !(frame->type() == IAXFrame::IAX && (frame->subclass() == IAXControl::Ack ||  frame->subclass() == IAXControl::Inval
+		|| frame->subclass() == IAXControl::LagRq || frame->subclass() ==  IAXControl::Ping)))
 	    ack = frame;
     }
     if (ack) {

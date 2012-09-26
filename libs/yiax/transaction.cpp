@@ -955,7 +955,7 @@ bool IAXTransaction::isFrameAcceptable(const IAXFullFrame* frame)
     }
     DDebug(m_engine,DebugInfo,"Transaction(%u,%u). Received late Frame(%u,%u) with oseq=%u expecting %u [%p]",
 	localCallNo(),remoteCallNo(),frame->type(),frame->subclass(),frame->oSeqNo(),m_iSeqNo,this);
-    if (frame->subclass() == IAXControl::Ping || frame->subclass() == IAXControl::Pong)
+    if (frame->type() == IAXFrame::IAX && (frame->subclass() == IAXControl::Ping || frame->subclass() == IAXControl::Pong))
 	return true;
     sendAck(frame);	
     return false;

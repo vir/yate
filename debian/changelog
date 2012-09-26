@@ -1,4 +1,4 @@
-yate (4.2.1~svn5283) UNRELEASED; urgency=low
+yate (4.2.1~svn5285) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -101,8 +101,14 @@ yate (4.2.1~svn5283) UNRELEASED; urgency=low
     terrible noises on biased silence like the one caused by A-Law
     transcoding.  + Added a high pass filter to remove any bias from the
     AMR encoder input.
+  * Updated to SVN revision 5285: + Added a high pass filter to remove
+    any bias from the AMR encoder input.  + Avoids matching on a RINGING
+    frame and not acknowledging it.  + Fix for bug introduced in
+    rev.5211: also check for frame type when looking for late
+    PINGs/PONGs.  + Bug fix: acknowledge CONTROL frame types, don't rely
+    on acknowledging the retransmission.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 26 Sep 2012 02:19:15 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Thu, 27 Sep 2012 02:19:15 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

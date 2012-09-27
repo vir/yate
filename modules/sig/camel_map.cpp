@@ -1264,8 +1264,8 @@ static bool decodeChoice(const Parameter* param, MapCamelType* type, AsnTag& tag
 	    return false;
     }
     XmlElement* child = new XmlElement(param->name);
-    parent->addChild(child);
 
+    bool showDebug = !(param->tag == s_noTag && param->isOptional);
     if (param->content) {
 	const Parameter* params= static_cast<const Parameter*>(param->content);
 	while (params && !TelEngine::null(params->name)) {
@@ -1277,14 +1277,16 @@ static bool decodeChoice(const Parameter* param, MapCamelType* type, AsnTag& tag
 	    }
 	    if (checkEoC)
 		ASNLib::matchEOC(data);
+	    parent->addChild(child);
 	    return true;
 	}
-	if (err != TcapXApplication::DataMissing) {
+	if (err != TcapXApplication::DataMissing && showDebug) {
 	    if (__plugin.showMissing())
 		Debug(&__plugin,DebugNote,"No valid choice in payload for '%s'",child->tag());
 	    err = TcapXApplication::DataMissing;
 	}
     }
+    TelEngine::destruct(child);
     return false;
 }
 

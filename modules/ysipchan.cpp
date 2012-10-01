@@ -7957,7 +7957,7 @@ bool SIPDriver::msgExecute(Message& msg, String& dest)
     YateSIPConnection* conn = new YateSIPConnection(msg,dest,msg.getValue(YSTRING("id")));
     conn->initChan();
     if (conn->getTransaction()) {
-	CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
+	CallEndpoint* ch = YOBJECT(CallEndpoint,msg.userData());
 	if (ch && conn->connect(ch,msg.getValue(YSTRING("reason")))) {
 	    conn->callConnect(msg);
 	    msg.setParam("peerid",conn->id());

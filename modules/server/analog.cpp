@@ -2696,7 +2696,7 @@ void AnalogDriver::initialize()
 
 bool AnalogDriver::msgExecute(Message& msg, String& dest)
 {
-    Channel* peer = static_cast<Channel*>(msg.userData());
+    CallEndpoint* peer = YOBJECT(CallEndpoint,msg.userData());
     ModuleLine* line = 0;
     String cause;
     const char* error = "failure";

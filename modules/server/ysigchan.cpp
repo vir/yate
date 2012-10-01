@@ -2145,7 +2145,7 @@ SigDriver::~SigDriver()
 
 bool SigDriver::msgExecute(Message& msg, String& dest)
 {
-    Channel* peer = static_cast<Channel*>(msg.userData());
+    CallEndpoint* peer = YOBJECT(CallEndpoint,msg.userData());
     if (!peer) {
 	Debug(this,DebugNote,"Signalling call failed. No data channel");
 	msg.setParam("error","failure");

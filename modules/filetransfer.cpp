@@ -793,7 +793,7 @@ bool FileDriver::msgExecute(Message& msg, String& dest)
     const char* format = msg.getValue("format","data");
 
     // Call execute request from a call endpoint
-    CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
+    CallEndpoint* ch = YOBJECT(CallEndpoint,msg.userData());
     if (ch) {
 	Debug(this,DebugInfo,"%s file '%s'",(outgoing ? "Sending" : "Receiving"),
 	    dest.matchString(2).c_str());

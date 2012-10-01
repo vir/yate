@@ -338,7 +338,7 @@ bool MOHHandler::received(Message &msg)
     if (!dest.matches(r))
 	return false;
     String name = dest.matchString(1);
-    CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
+    CallEndpoint* ch = YOBJECT(CallEndpoint,msg.userData());
     if (ch) {
 	MOHChan* mc = new MOHChan(name,msg);
 	if (ch->connect(mc,msg.getValue("reason"))) {

@@ -1477,7 +1477,7 @@ bool YIAXDriver::msgExecute(Message& msg, String& dest)
     YIAXConnection* conn = new YIAXConnection(m_iaxEngine,tr,&msg,&params);
     conn->initChan();
     tr->setUserData(conn);
-    Channel* ch = static_cast<Channel*>(msg.userData());
+    CallEndpoint* ch = YOBJECT(CallEndpoint,msg.userData());
     if (ch && conn->connect(ch,msg.getValue("reason"))) {
 	conn->callConnect(msg);
 	msg.setParam("peerid",conn->id());

@@ -1,4 +1,4 @@
-yate (4.2.1~svn5286) UNRELEASED; urgency=low
+yate (4.2.1~svn5287) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -109,8 +109,10 @@ yate (4.2.1~svn5286) UNRELEASED; urgency=low
     on acknowledging the retransmission.
   * Updated to SVN revision 5286: + Don't add a choice parameter to the
     XML if it's optional and it doesn't have a tag.
+  * Updated to SVN revision 5287: + Make sure the user data pointer
+    carried by handled message is a CallEndpoint one.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 28 Sep 2012 02:19:16 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 02 Oct 2012 02:19:16 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

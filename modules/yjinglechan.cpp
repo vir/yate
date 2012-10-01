@@ -4156,7 +4156,7 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
     bool ok = conn->state() != YJGConnection::Terminated;
     lock.drop();
     if (ok) {
-	Channel* ch = static_cast<Channel*>(msg.userData());
+	CallEndpoint* ch = YOBJECT(CallEndpoint,msg.userData());
 	if (ch && conn->connect(ch,msg.getValue("reason"))) {
 	    conn->callConnect(msg);
 	    msg.setParam("peerid",conn->id());

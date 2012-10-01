@@ -1558,7 +1558,7 @@ bool ExtModHandler::received(Message& msg)
     static const Regexp r("^external/\\([^/]*\\)/\\([^ ]*\\)\\(.*\\)$");
     if (!dest.matches(r))
 	return false;
-    CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
+    CallEndpoint* ch = YOBJECT(CallEndpoint,msg.userData());
     String t = dest.matchString(1);
     int typ = 0;
     if (t == "nochan")

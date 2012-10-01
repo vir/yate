@@ -739,7 +739,7 @@ void ForkModule::statusParams(String& str)
 
 bool ForkModule::msgExecute(Message& msg)
 {
-    CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
+    CallEndpoint* ch = YOBJECT(CallEndpoint,msg.userData());
     if (!ch)
 	return false;
     String dest(msg.getParam("callto"));

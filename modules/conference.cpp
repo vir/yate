@@ -1377,7 +1377,7 @@ bool ConferenceDriver::msgExecute(Message& msg, String& dest)
     bool counted = msg.getBoolValue("counted",!utility);
     if (!checkRoom(dest,msg.getBoolValue("existing"),counted))
 	return false;
-    CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
+    CallEndpoint* ch = YOBJECT(CallEndpoint,msg.userData());
     if (ch) {
 	ConfChan *c = new ConfChan(dest,msg,counted,utility);
 	c->initChan();

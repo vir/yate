@@ -1071,7 +1071,7 @@ bool WaveFileDriver::msgExecute(Message& msg, String& dest)
     }
 
     unsigned int maxlen = msg.getIntValue("maxlen");
-    CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
+    CallEndpoint* ch = YOBJECT(CallEndpoint,msg.userData());
     if (ch) {
 	Debug(this,DebugInfo,"%s wave file '%s'", (meth ? "Record to" : "Play from"),
 	    dest.matchString(2).c_str());

@@ -723,8 +723,10 @@ RefPointer<MGCPMessage> MGCPWrapper::sendSync(MGCPMessage* mm, const SocketAddr&
     }
     u_int64_t t2 = Time::msecNow();
     MGCPTransaction* tr = s_engine->sendCommand(mm,address);
+    s_mutex.lock();
     tr->userData(m_this);
     m_tr = tr;
+    s_mutex.unlock();
     while (m_tr == tr)
 	Thread::idle();
     RefPointer<MGCPMessage> tmp = m_msg;
@@ -1596,8 +1598,11 @@ bool MGCPCircuit::sendAsync(MGCPMessage* mm, bool notify)
     if (ep) {
 	MGCPTransaction* tr = s_engine->sendCommand(mm,ep->address());
 	if (tr) {
-	    if (notify)
+	    if (notify) {
+		s_mutex.lock();
 		tr->userData(m_this);
+		s_mutex.unlock();
+	    }
 	    return true;
 	}
     }

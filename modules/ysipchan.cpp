@@ -4742,17 +4742,18 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
 	if (trans)
 	    trans->fillMessage(msg,true);
     }
+    SIPMessage* r = 0;
     // Always OK deregistration attempts
     if (Engine::dispatch(msg) || dereg) {
 	if (dereg) {
-	    t->setResponse(200);
+	    r = new SIPMessage(t->initialMessage(),200);
 	    Debug(&plugin,DebugNote,"Unregistered user '%s'",user.c_str());
 	}
 	else {
 	    tmp = msg.getValue(YSTRING("expires"),tmp);
 	    if (tmp.null())
 		tmp = expires;
-	    SIPMessage* r = new SIPMessage(t->initialMessage(),200);
+	    r = new SIPMessage(t->initialMessage(),200);
 	    r->addHeader("Expires",tmp);
 	    MimeHeaderLine* contact = new MimeHeaderLine("Contact","<" + addr + ">");
 	    contact->setParam("expires",tmp);
@@ -4771,14 +4772,19 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
 	    }
 	    // Reset transport timeout
 	    resetTransportIdle(r,tmp.toInteger());
-	    t->setResponse(r);
-	    r->deref();
 	    Debug(&plugin,DebugNote,"Registered user '%s' expires in %s s%s",
 		user.c_str(),tmp.c_str(),natChanged ? " (NAT)" : "");
 	}
     }
-    else
-	t->setResponse(404);
+    else {
+	int code = msg.getIntValue(YSTRING("code"),msg.getIntValue(YSTRING("reason"),dict_errors,404));
+	if (code < 300 || code > 699)
+	    code = 404;
+	r = new SIPMessage(t->initialMessage(),code);
+    }
+    copySipHeaders(*r,msg);
+    t->setResponse(r);
+    TelEngine::destruct(r);
 }
 
 void YateSIPEndPoint::options(SIPEvent* e, SIPTransaction* t)

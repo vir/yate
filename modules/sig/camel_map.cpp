@@ -233,6 +233,7 @@ public:
     virtual bool managementNotify(SCCP::Type type, NamedList& params);
     bool findTCAP(const char* name);
     int managementState();
+    void notifyManagementState(bool forced = false);
     bool initialize(NamedList& sect);
     bool createApplication(Socket* skt, String& addr);
     void setListener(XMLConnListener* list);
@@ -261,6 +262,7 @@ protected:
     UserType m_type;
     bool m_printMsg;
     bool m_addEnc;
+    SCCPManagement::LocalBroadcast m_mngtStatus;
 };
 
 class TcapXApplication : public RefObject, public Mutex
@@ -8335,6 +8337,7 @@ void TcapXApplication::reportState(State state, const char* error)
 	    break;
 	case Active:
 	    sendStateResponse();
+	    m_user->notifyManagementState();
 	    break;
 	case ShutDown:
 	    Debug(&__plugin,DebugInfo,"Requested shutdown, %d transactions pending [%p]",trCount(),this);
@@ -8414,7 +8417,8 @@ TcapXUser::TcapXUser(const char* name)
       Mutex(true,name),
       m_appsMtx(true,"TCAPXApps"),
       m_listener(0), m_type(MAP),
-      m_printMsg(false), m_addEnc(false)
+      m_printMsg(false), m_addEnc(false),
+      m_mngtStatus(SCCPManagement::UserOutOfService)
 {
     Debug(&__plugin,DebugAll,"TcapXUser '%s' created [%p]",toString().c_str(),this);
 }
@@ -8469,6 +8473,7 @@ bool TcapXUser::initialize(NamedList& sect)
     m_addEnc = sect.getBoolValue("add-encoding",false);
     if (!tcap() && !findTCAP(sect.getValue("tcap",0)))
 	return false;
+    notifyManagementState(true);
     return true;
 }
 
@@ -8477,6 +8482,8 @@ void TcapXUser::removeApp(TcapXApplication* app)
     Debug(this,DebugAll,"Removing application=%s[%p] [%p]",(app ? app->toString().c_str() : ""),app,this);
     Lock l(m_appsMtx);
     m_apps.remove(app);
+    l.drop();
+    notifyManagementState();
 }
 
 bool TcapXUser::tcapIndication(NamedList& params)
@@ -8692,6 +8699,23 @@ int TcapXUser::managementState()
 	    return SCCPManagement::UserInService;
     }
     return SCCPManagement::UserOutOfService;
+}
+
+void TcapXUser::notifyManagementState(bool forced)
+{
+    DDebug(this,DebugAll,"TcapXUser::notifyManagementState(forced=%s) [%p]",String::boolText(forced),this);
+    SCCPManagement::LocalBroadcast state = (SCCPManagement::LocalBroadcast)managementState();
+    Lock l(this);
+    if (forced || state != m_mngtStatus) {
+	Debug(this,DebugInfo,"Changing management state from '%s' to '%s' [%p]",
+	      lookup(m_mngtStatus,SCCPManagement::broadcastType(),""),lookup(state,SCCPManagement::broadcastType(),""),this);
+	m_mngtStatus = state;
+	l.drop();
+	if (tcap()) {
+	    NamedList p("");
+	    tcap()->updateUserStatus(this,state,p);
+	}
+    }
 }
 
 void TcapXUser::setListener(XMLConnListener* list)

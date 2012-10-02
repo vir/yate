@@ -10863,6 +10863,14 @@ public:
     virtual HandledMSU handleError(SS7TCAPError& error, NamedList& params, DataBlock& data, SS7TCAPTransaction* tr = 0);
 
     /**
+     * Update the SCCP Management state for this SSN when requested by a user
+     * @param user The TCAP user which changed its state
+     * @param status The state of the TCAP user
+     * @param params Additional parameters to be transmitted to the SCPP
+     */
+    virtual void updateUserStatus(TCAPUser* user, SCCPManagement::LocalBroadcast status, NamedList& params);
+
+    /**
      * Increment one of the status counters
      * @param counterType The type of the counter to increment
      */
@@ -10948,6 +10956,7 @@ public:
 protected:
     virtual SS7TCAPError decodeTransactionPart(NamedList& params, DataBlock& data) = 0;
     virtual void encodeTransactionPart(NamedList& params, DataBlock& data) = 0;
+    bool sendSCCPNotify(NamedList& params);
     // list of TCAP users attached to this TCAP instance
     ObjList m_users;
     Mutex m_usersMtx;
@@ -10978,6 +10987,9 @@ protected:
     unsigned int m_discardMsgs;
     unsigned int m_normalMsgs;
     unsigned int m_abnormalMsgs;
+    
+    // Subsystem Status
+    SCCPManagement::LocalBroadcast m_ssnStatus;
 };
 
 class YSIG_API SS7TCAPError

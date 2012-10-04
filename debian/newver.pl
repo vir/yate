@@ -30,7 +30,7 @@ my $suff = sprintf("%04d%02d%02d%02d", 1900+$year, 1+$mon, $mday, 1);
 
 my $newver="$yatever~vir$suff";
 print "New version: $newver\n";
-my $rc = system qw( debchange -b --preserve --distribution UNRELEASED --newversion ), "$newver";
+my $rc = system qw( debchange -b --preserve --distribution UNRELEASED --release-heuristic log --newversion ), "$newver";
 if($rc == 0) {
 	exec "git commit -m 'New debian package $newver' debian/changelog";
 }

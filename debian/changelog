@@ -1,3 +1,10 @@
+yate (4.2.1~vir2012100401) UNRELEASED; urgency=low
+
+  * Merge upstream fixes, including new DTMF sending method selection
+  * Fix building on debian testing and unstable
+
+ -- Vasily i. Redkin <vir@vir.otvt.ru>  Thu, 04 Oct 2012 16:21:36 +0400
+
 yate (4.2.1~vir2012090501) UNRELEASED; urgency=low
 
   * Merged upstream fixes, including the following:

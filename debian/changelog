@@ -1,4 +1,4 @@
-yate (4.2.1~svn5290) UNRELEASED; urgency=low
+yate (4.2.1~svn5291) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -115,8 +115,12 @@ yate (4.2.1~svn5290) UNRELEASED; urgency=low
     (de)registration answers.  + Added mutex locks around some likely
     harmless assignments.  + Notify SCCP about subsystemmanagement
     status changes for TCAP.
+  * Updated to SVN revision 5291: + Hand-merged changes from revs 5273
+    and 5238  + Hand-merged rev. 5279 change into logrotate script  +
+    Thanks to Vasily Redkin for finding it on Debian.  + Try to search
+    for ptlib-config in yet another place where it may be lurking.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Wed, 03 Oct 2012 02:19:16 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Fri, 05 Oct 2012 02:19:23 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

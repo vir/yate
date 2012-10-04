@@ -1127,6 +1127,7 @@ AC_MSG_CHECKING([for Pwlib in $ac_cv_use_pwlib])
 local_lib="$ARCHLIB"
 ptconfig="$ac_cv_use_pwlib/bin/ptlib-config"
 test -x "$ptconfig" || ptconfig="$ac_cv_use_pwlib/make/ptlib-config"
+test -x "$ptconfig" || ptconfig="$ac_cv_use_pwlib/share/ptlib/make/ptlib-config"
 verpw=`$ptconfig --version 2>/dev/null`
 prtti=`$ptconfig --ccflags 2>/dev/null | sed -n 's/^.*\(-f[[^ ]]*rtti\).*$/\1/p'`
 # try first installed directory

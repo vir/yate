@@ -5,6 +5,7 @@
     rotate 7
     missingok
     notifempty
+    sharedscripts
     compress
     create 640 yate yate
     postrotate

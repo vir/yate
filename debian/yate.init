@@ -26,7 +26,7 @@ PIDFILE=/var/run/yate/yate.pid
 LOG=/var/log/yate
 
 # Extra Yate command line options
-OPTS="-rs -vvv -l $LOG"
+OPTS="-F -Df -rs -vvv -l $LOG"
 
 # Include yate defaults if available
 if [ -f /etc/default/yate ] ; then

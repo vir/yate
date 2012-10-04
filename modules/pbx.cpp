@@ -125,7 +125,7 @@ bool ChanPickup::received(Message& msg)
 	return false;
 
     // It's ours. Get the channels
-    RefPointer<CallEndpoint> caller(static_cast<CallEndpoint*>(msg.userData()));
+    RefPointer<CallEndpoint> caller(YOBJECT(CallEndpoint,msg.userData()));
     RefPointer<CallEndpoint> called(locateChan(callto,msg.getBoolValue("pickup_peer",true)));
 
     if (!caller) {

@@ -10,7 +10,7 @@
 #
 
 # Extra Yate command line options
-OPTS="-F -s -r -l /var/log/yate -vvv"
+OPTS="-F -s -r -l /var/log/yate -vvv -Df"
 
 # Source function library.
 . /etc/rc.d/init.d/functions
@@ -19,7 +19,6 @@ RETVAL=0
 
 start() {
     echo -n $"Starting YATE: "
-    unset DISPLAY
     daemon yate -d -p /var/run/yate.pid $OPTS
     RETVAL=$?
     echo

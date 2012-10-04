@@ -94,11 +94,50 @@
 ;  transactions unless a retransmission arrives before having a final answer
 ;lazy100=no
 
-; dtmfinband: bool: Generate DTMF inband by default
-;dtmfinband=no
+; check_allow_info: bool: Check 'Allow' header in INVITE and OK for INFO support
+; If enabled and INFO is not supported the 'info' dtmf method will be disabled
+; This parameter can be overridden from routing by 'ocheck_allow_info' for outgoing call leg
+;  and 'icheck_allow_info' for incoming call leg
+; This parameter is ignored if info method is not enabled
+; This parameter is applied on reload for new calls only
+;check_allow_info=yes
 
-; dtmfinfo: bool: Generate INFO messages to send keypad tones
-;dtmfinfo=no
+; missing_allow_info: bool: The default value for dtmf info support if
+;  'check_allow_info' is enabled and the 'Allow' header is missing
+; This parameter can be overridden from routing by 'omissing_allow_info' for outgoing call leg
+;  and 'imissing_allow_info' for incoming call leg
+; This parameter is applied on reload for new calls only
+;missing_allow_info=enable
+
+; dtmfmethods: string: Comma separated list of methods used to send DTMFs
+; Allowed values in list:
+;  info: Use SIP INFO if initial transaction finished
+;  rfc2833: Use RFC 2833 signals if remote party advertised support
+;  inband: Send tones in audio stream
+; The methods will be used in the listed order
+; Defaults to 'rfc2833,info,inband' if missing or empty
+; Invalid values are ignored
+; E.g.
+;   'info,foo' leads to 'info'
+;   'foo,foo1' leads to 'rfc2833,info,inband'
+; This parameter can be overridden from routing by 'odtmfmethods' for outgoing call leg
+;  and 'idtmfmethods' for incoming call leg
+; Also, this parameter can be overridden in chan.dtmf messages by a 'methods' parameter
+; NOTE:
+;   When overridden from chan.dtmf an empty or invalid 'methods' parameter will be ignored
+;   Methods indicated in chan.dtmf message will be intersected with channel capabilities
+;    unless an explicit boolean true 'methods_override' parameter is present
+; This parameter is applied on reload for new calls only
+;dtmfmethods=rfc2833,info,inband
+
+; honor_dtmf_detect: bool: Honor DTMF detected method when sending DTMFs
+; If enabled the channel will try to send a DTMF using the same method as received
+; If the detected method is not enabled it won't be used
+; This parameter can be overridden from routing by 'ohonor_dtmf_detect' for outgoing call leg
+;  and 'ihonor_dtmf_detect' for incoming call leg
+; This parameter is applied on reload for new calls only
+; Defaults to enable
+;honor_dtmf_detect=enable
 
 ; rfc2833: bool: Offer RFC2833 telephone-event by default
 ; A numeric payload >= 96 can be provided

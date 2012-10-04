@@ -5643,7 +5643,7 @@ bool DefaultLogic::callStart(NamedList& params, Window* wnd, const String& cmd)
 	    else if (!valid) {
 		showError(wnd,"Incorrect number");
 		Debug(ClientDriver::self(),DebugNote,
-		    "Failed to call: invalid gmail number '%s'",params.getValue("target"));
+		    "Failed to call: invalid number '%s'",params.getValue("target"));
 		return false;
 	    }
 	}

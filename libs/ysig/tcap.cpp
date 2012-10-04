@@ -53,6 +53,10 @@ void TCAPUser::destroyed()
     Debug(this,DebugAll,"TCAPUser::destroyed() [%p]",this);
     Lock lock(m_tcapMtx);
     if (m_tcap) {
+	// notify SCCP OutOfService
+	NamedList p("");
+	m_tcap->updateUserStatus(this,SCCPManagement::UserOutOfService,p);
+
 	m_tcap->detach(this);
 	Debug(this,DebugAll,"TCAPUser::~TCAPUser() [%p] - Detached from TCAP (%p,%s)",this,m_tcap,m_tcap->toString().safe());
 	m_tcap->deref();
@@ -269,6 +273,7 @@ SS7TCAP::SS7TCAP(const NamedList& params)
 {
     Debug(this,DebugAll,"SS7TCAP::SS7TCAP() [%p] created",this);
     m_recvMsgs = m_sentMsgs = m_discardMsgs = m_normalMsgs = m_abnormalMsgs = 0;
+    m_ssnStatus = SCCPManagement::UserOutOfService;
 }
 
 SS7TCAP::~SS7TCAP()
@@ -322,7 +327,13 @@ bool SS7TCAP::initialize(const NamedList* config)
 	s_printMsgs = config->getBoolValue(YSTRING("print-messages"),false);
 	s_extendedDbg = config->getBoolValue(YSTRING("extended-debug"),false);
     }
-    return SCCPUser::initialize(config);
+    bool ok = SCCPUser::initialize(config);
+    if (ok) {
+	NamedList p("");
+	sendSCCPNotify(p);
+	Debug(this,DebugInfo,"SSN=%d has status='%s'[%p]",m_SSN,lookup(m_ssnStatus,SCCPManagement::broadcastType(),""),this);
+    }
+    return ok;
 }
 
 bool SS7TCAP::sendData(DataBlock& data, NamedList& params)
@@ -406,6 +417,56 @@ bool SS7TCAP::managementNotify(SCCP::Type type, NamedList& params)
     if (type == SCCP::SubsystemStatus)
 	params.setParam("subsystem-status",(inService ? "UserInService" : "UserOutOfService"));
     return ok;
+}
+
+void SS7TCAP::updateUserStatus(TCAPUser* user, SCCPManagement::LocalBroadcast status, NamedList& params)
+{
+    if (!user)
+	return;
+    DDebug(this,DebugAll,"SS7TCAP::updateUserStatus(user=%s[%p],status=%d) [%p]",user->toString().c_str(),user,status,this);
+    bool notify = false;
+    Lock l(m_usersMtx);
+    SCCPManagement::LocalBroadcast tmp = m_ssnStatus;
+    switch (m_ssnStatus) {
+	case SCCPManagement::UserOutOfService:
+	    if (status == SCCPManagement::UserInService) {
+		m_ssnStatus = SCCPManagement::UserInService;
+		notify = true;
+	    }
+	    break;
+	case SCCPManagement::UserInService:
+	    if (status == SCCPManagement::UserOutOfService) {
+		ListIterator it(m_users);
+		for (;;) {
+		    TCAPUser* usr = static_cast<TCAPUser*>(it.get());
+		    // End of iteration?
+		    if (!usr) {
+			m_ssnStatus = SCCPManagement::UserOutOfService;
+			notify = true;
+			break;
+		    }
+		    if (usr->managementState() == (int) SCCPManagement::UserInService)
+			break;
+		}
+	    }
+	default:
+	    break;
+    }
+    
+    if (notify) {
+	sendSCCPNotify(params); // it always returns false, so no point in checking result
+	Debug(this,DebugInfo,"SSN=%d changed status from '%s' to '%s' [%p]",m_SSN,
+		  lookup(tmp,SCCPManagement::broadcastType(),""),lookup(m_ssnStatus,SCCPManagement::broadcastType(),""),this);
+    }
+}
+
+bool SS7TCAP::sendSCCPNotify(NamedList& params)
+{
+    params.setParam(YSTRING("subsystem-status"),lookup(m_ssnStatus,SCCPManagement::broadcastType(),""));
+    params.setParam(YSTRING("ssn"),String(m_SSN));
+    if (!params.getParam(YSTRING("smi")))
+	    params.setParam("smi","0");
+    return sccpNotify(SCCP::StatusRequest,params);
 }
 
 void SS7TCAP::attach(TCAPUser* user)

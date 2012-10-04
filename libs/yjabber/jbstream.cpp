@@ -76,6 +76,26 @@ static bool decodeBase64(String& buf, const String& str, JBStream* stream)
     return false;
 }
 
+#ifdef DEBUG
+static bool checkPing(JBStream* stream, const XmlElement* xml, const String& pingId)
+{
+    if (!(stream && xml && pingId))
+	return false;
+    if (pingId != xml->getAttribute(YSTRING("id")))
+	return false;
+    const char* it = xml->attribute(YSTRING("type"));
+    XMPPUtils::IqType iqType = XMPPUtils::iqType(it);
+    bool ok = (iqType == XMPPUtils::IqResult || iqType == XMPPUtils::IqError);
+    if (ok)
+	Debug(stream,DebugAll,"Ping with id=%s confirmed by '%s' [%p]",pingId.c_str(),it,stream);
+    return ok;
+}
+#else
+static inline bool checkPing(JBStream* stream, const XmlElement* xml, const String& pingId)
+{
+    return false;
+}
+#endif
 
 static const TokenDict s_location[] = {
     {"internal",     0},
@@ -149,7 +169,7 @@ JBStream::JBStream(JBEngine* engine, Socket* socket, Type t, bool ssl)
     m_sasl(0),
     m_state(Idle), m_flags(0), m_xmlns(XMPPNamespace::Count), m_lastEvent(0),
     m_setupTimeout(0), m_startTimeout(0),
-    m_pingTimeout(0), m_nextPing(0),
+    m_pingTimeout(0), m_pingInterval(0), m_nextPing(0),
     m_idleTimeout(0), m_connectTimeout(0),
     m_restart(0), m_timeToFillRestart(0),
     m_engine(engine), m_type(t),
@@ -178,7 +198,7 @@ JBStream::JBStream(JBEngine* engine, Type t, const JabberID& local, const Jabber
     : Mutex(true,"JBStream"),
     m_sasl(0),
     m_state(Idle), m_local(local), m_remote(remote), m_serverHost(serverHost),
-    m_flags(0), m_xmlns(XMPPNamespace::Count), m_lastEvent(0),
+    m_flags(0), m_xmlns(XMPPNamespace::Count), m_lastEvent(0), m_stanzaIndex(0),
     m_setupTimeout(0), m_startTimeout(0),
     m_pingTimeout(0), m_nextPing(0),
     m_idleTimeout(0), m_connectTimeout(0),
@@ -1030,6 +1050,9 @@ void JBStream::process(u_int64_t time)
 	switch (m_state) {
 	    case Running:
 		processRunning(xml,from,to);
+		// Reset ping
+		setNextPing(true);
+		m_pingId = "";
 		break;
 	    case Features:
 		if (m_incoming)
@@ -1087,6 +1110,7 @@ bool JBStream::processRunning(XmlElement* xml, const JabberID& from, const Jabbe
 	case XmlTag::Iq:
 	    if (ns != m_xmlns)
 		break;
+	    checkPing(this,xml,m_pingId);
 	    m_events.append(new JBEvent(JBEvent::Iq,this,xml,from,to,xml->findFirstChild()));
 	    return true;
 	default:
@@ -1112,17 +1136,29 @@ void JBStream::checkTimeouts(u_int64_t time)
     }
     // Running: check ping and idle timers
     if (m_state == Running) {
+	const char* reason = 0;
 	if (m_pingTimeout) {
-	    if (m_pingTimeout < time)
-		terminate(0,false,0,XMPPError::ConnTimeout,"Ping timeout");
+	    if (m_pingTimeout < time) {
+		Debug(this,DebugNote,"Ping stanza with id '%s' timed out [%p]",m_pingId.c_str(),this);
+		reason = "Ping timeout";
+	    }
 	}
 	else if (m_nextPing && time >= m_nextPing) {
-	    m_pingId = (unsigned int)time;
-	    // TODO: Send it
-	    Debug(this,DebugStub,"JBStream::checkTimeouts() sendPing() not implemented");
+	    XmlElement* ping = setNextPing(false);
+	    if (ping) {
+		DDebug(this,DebugAll,"Sending ping with id=%s [%p]",m_pingId.c_str(),this);
+		if (!sendStanza(ping))
+		    m_pingId = "";
+	    }
+	    else {
+		resetPing();
+		m_pingId = "";
+	    }
 	}
-	else if (m_idleTimeout && m_idleTimeout < time)
-	    terminate(0,true,0,XMPPError::ConnTimeout,"Stream idle");
+	if (m_idleTimeout && m_idleTimeout < time && !reason)
+	    reason = "Stream idle";
+	if (reason)
+	    terminate(0,m_incoming,0,XMPPError::ConnTimeout,reason);
 	return;
     }
     // Stream setup timer
@@ -1207,6 +1243,12 @@ void JBStream::resetConnection(Socket* sock)
 	socketSetCanRead(true);
 	socketSetCanWrite(true);
     }
+}
+
+// Build a ping iq stanza
+XmlElement* JBStream::buildPing(const String& stanzaId)
+{
+    return 0;
 }
 
 // Build a stream start XML element
@@ -1611,6 +1653,10 @@ void JBStream::changeState(State newState, u_int64_t time)
 	stateName(),lookup(newState,s_stateName),this);
     // Set/reset state depending data
     switch (m_state) {
+	case Running:
+	    resetPing();
+	    m_pingId = "";
+	    break;
 	case WaitStart:
 	    // Reset connect status if not timeout
 	    if (m_startTimeout && m_startTimeout > time)
@@ -1663,6 +1709,8 @@ void JBStream::changeState(State newState, u_int64_t time)
 	    resetConnectStatus();
 	    setRedirect();
 	    m_redirectCount = 0;
+	    m_pingInterval = m_engine->m_pingInterval;
+	    setNextPing(true);
 	    setFlags(StreamSecured | StreamAuthenticated);
 	    resetFlags(InError);
 	    m_setupTimeout = 0;
@@ -1975,6 +2023,57 @@ void JBStream::setIdleTimer(u_int64_t msecNow)
 	return;
     m_idleTimeout = msecNow + m_engine->m_idleTimeout;
     XDebug(this,DebugAll,"Idle timeout set to " FMT64 "ms [%p]",m_idleTimeout,this);
+}
+
+// Reset ping data
+void JBStream::resetPing()
+{
+    if (!(m_pingTimeout || m_nextPing))
+	return;
+    XDebug(this,DebugAll,"Reset ping data [%p]",this);
+    m_nextPing = 0;
+    m_pingTimeout = 0;
+}
+
+// Set the time of the next ping if there is any timeout and we don't have a ping in progress
+// @return XmlElement containing the ping to send, 0 if no ping is going to be sent or 'force' is true
+XmlElement* JBStream::setNextPing(bool force)
+{
+    if (!m_pingInterval) {
+	resetPing();
+	return 0;
+    }
+    if (m_type != c2s && m_type != comp)
+	return 0;
+    if (force) {
+	m_nextPing = Time::msecNow() + m_pingInterval;
+	m_pingTimeout = 0;
+	XDebug(this,DebugAll,"Next ping " FMT64U " [%p]",m_nextPing,this);
+	return 0;
+    }
+    XmlElement* ping = 0;
+    if (m_nextPing) {
+	// Ping still active in engine ?
+	Time time;
+	if (m_nextPing > time.msec())
+	    return 0;
+	if (m_engine->m_pingTimeout) {
+	    generateIdIndex(m_pingId,"_ping_");
+	    ping = buildPing(m_pingId);
+	    if (ping)
+		m_pingTimeout = time.msec() + m_engine->m_pingTimeout;
+	    else
+		m_pingTimeout = 0;
+	}
+	else
+	    resetPing();
+    }
+    if (m_pingInterval)
+	m_nextPing = Time::msecNow() + m_pingInterval;
+    else
+	m_nextPing = 0;
+    XDebug(this,DebugAll,"Next ping " FMT64U " ping=%p [%p]",m_nextPing,ping,this);
+    return ping;
 }
 
 // Process incoming elements in Challenge state
@@ -2571,6 +2670,12 @@ JBClientStream::JBClientStream(JBEngine* engine, const JabberID& jid, const Stri
     m_account(account), m_userData(0), m_registerReq(0)
 {
     m_password = params.getValue("password");
+}
+
+// Build a ping iq stanza
+XmlElement* JBClientStream::buildPing(const String& stanzaId)
+{
+    return XMPPUtils::createPing(stanzaId);
 }
 
 // Bind a resource to an incoming stream
@@ -3457,6 +3562,7 @@ bool JBClusterStream::processRunning(XmlElement* xml, const JabberID& from, cons
     XmlElement* child = 0;
     switch (t) {
 	case XmlTag::Iq:
+	    checkPing(this,xml,m_pingId);
 	    evType = JBEvent::Iq;
 	    child = xml->findFirstChild();
 	    break;

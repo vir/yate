@@ -48,6 +48,10 @@
 ; Valid values 50 to 1000, 0 disables dejitter buffer
 ;maxjitter=120 in client mode, 0 in server mode
 
+; monitoring: bool: Emit the messages required for SNMP monitoring
+; You will also need to set monitor=yes in section [rtp] of monitoring.conf
+;monitoring=no
+
 ; thread: keyword: Default priority of the data service threads
 ; Can be one of: lowest, low, normal, high, highest
 ; It is a bad idea to set a low priority for anything but testing

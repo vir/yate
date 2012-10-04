@@ -37,19 +37,6 @@
 */
 require_once("libyate.php");
 
-/* Always the first action to do */
-Yate::Init();
-
-/* Comment next line to send output straight to log (no rmanager) */
-Yate::Output(true);
-
-/* Uncomment next line to get debugging messages */
-// Yate::Debug(true);
-
-/* Install handlers for the DTMF and wave EOF messages */
-Yate::Install("chan.dtmf");
-Yate::Install("chan.notify");
-
 $ourcallid = "over/" . uniqid(rand(),1);
 $partycallid = "";
 $state = "call";
@@ -319,6 +306,20 @@ function endRoute($callto,$ok,$err,$params)
     }
 }
 
+
+/* Always the first action to do */
+Yate::Init();
+
+/* Comment next line to send output straight to log (no rmanager) */
+Yate::Output(true);
+
+/* Uncomment next line to get debugging messages */
+// Yate::Debug(true);
+
+/* Install filtered handlers for the DTMF and wave EOF messages */
+Yate::Install("chan.dtmf",95,"targetid",$ourcallid);
+Yate::Install("chan.notify",95,"targetid",$ourcallid);
+
 /* The main loop. We pick events and handle them */
 while ($state != "") {
     $ev=Yate::GetEvent();
@@ -353,7 +354,7 @@ while ($state != "") {
 		    // we already ACKed this message
 		    $ev = false;
 		    if ($interdigit > 0)
-			Yate::Install("engine.timer");
+			Yate::Watch("engine.timer");
 		    if ($autoanswer) {
 			$m = new Yate("call.answered");
 			$m->params["id"] = $ourcallid;
@@ -369,22 +370,13 @@ while ($state != "") {
 		    break;
 
 		case "chan.notify":
-		    if ($ev->GetValue("targetid") == $ourcallid) {
-			gotNotify();
-			$ev->handled = true;
-		    }
+		    gotNotify();
+		    $ev->handled = true;
 		    break;
 
 		case "chan.dtmf":
-		    if ($ev->GetValue("targetid") == $ourcallid ) {
-			gotDTMF($ev->GetValue("text"));
-			$ev->handled = true;
-		    }
-		    break;
-		case "engine.timer":
-		    $ev->Acknowledge();
-		    $ev = false;
-		    timerTick();
+		    gotDTMF($ev->GetValue("text"));
+		    $ev->handled = true;
 		    break;
 	    }
 	    /* This is extremely important.
@@ -393,8 +385,15 @@ while ($state != "") {
 		$ev->Acknowledge();
 	    break;
 	case "answer":
-	    if ($ev->name == "call.route")
-		endRoute($ev->retval,$ev->handled,$ev->GetValue("error","noroute"),$ev->params);
+	    switch ($ev->name) {
+		case "call.route":
+		    endRoute($ev->retval,$ev->handled,$ev->GetValue("error","noroute"),$ev->params);
+		    break;
+
+		case "engine.timer":
+		    timerTick();
+		    break;
+	    }
 	    break;
     }
 }

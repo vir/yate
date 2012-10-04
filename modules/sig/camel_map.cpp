@@ -233,6 +233,7 @@ public:
     virtual bool managementNotify(SCCP::Type type, NamedList& params);
     bool findTCAP(const char* name);
     int managementState();
+    void notifyManagementState(bool forced = false);
     bool initialize(NamedList& sect);
     bool createApplication(Socket* skt, String& addr);
     void setListener(XMLConnListener* list);
@@ -261,6 +262,7 @@ protected:
     UserType m_type;
     bool m_printMsg;
     bool m_addEnc;
+    SCCPManagement::LocalBroadcast m_mngtStatus;
 };
 
 class TcapXApplication : public RefObject, public Mutex
@@ -1264,8 +1266,8 @@ static bool decodeChoice(const Parameter* param, MapCamelType* type, AsnTag& tag
 	    return false;
     }
     XmlElement* child = new XmlElement(param->name);
-    parent->addChild(child);
 
+    bool showDebug = !(param->tag == s_noTag && param->isOptional);
     if (param->content) {
 	const Parameter* params= static_cast<const Parameter*>(param->content);
 	while (params && !TelEngine::null(params->name)) {
@@ -1277,14 +1279,16 @@ static bool decodeChoice(const Parameter* param, MapCamelType* type, AsnTag& tag
 	    }
 	    if (checkEoC)
 		ASNLib::matchEOC(data);
+	    parent->addChild(child);
 	    return true;
 	}
-	if (err != TcapXApplication::DataMissing) {
+	if (err != TcapXApplication::DataMissing && showDebug) {
 	    if (__plugin.showMissing())
 		Debug(&__plugin,DebugNote,"No valid choice in payload for '%s'",child->tag());
 	    err = TcapXApplication::DataMissing;
 	}
     }
+    TelEngine::destruct(child);
     return false;
 }
 
@@ -2270,7 +2274,7 @@ static const Capability s_mapCapab[] = {
     {"ErrorRecovery",            {"reset", "forwardCheckSS-Indication", "failureReport", ""}},
     {"Charging",                 {""}},
     {"SMSC",                     {"informServiceCentre", "alertServiceCentre", "sendRoutingInfoForSM", "mo-forwardSM", "mt-forwardSM",
-				    "forwardSM", ""}},
+				    "forwardSM", "reportSM-DeliveryStatus", ""}},
     {"None",                     {""}},
     {0, {""}},
 };
@@ -2331,9 +2335,9 @@ static const AppCtxt s_mapAppCtxt[]= {
     {"networkUnstructuredSsContext-v1", "0.4.0.0.1.0.19.1", "processUnstructuredSS-Data"},
 
     // Short message routing
-    {"shortMsgGatewayContext-v3", "0.4.0.0.1.0.20.3", "sendRoutingInfoForSM,informServiceCentre"},
-    {"shortMsgGatewayContext-v2", "0.4.0.0.1.0.20.2", "sendRoutingInfoForSM,informServiceCentre"},
-    {"shortMsgGatewayContext-v1", "0.4.0.0.1.0.20.1", "sendRoutingInfoForSM,informServiceCentre"},
+    {"shortMsgGatewayContext-v3", "0.4.0.0.1.0.20.3", "sendRoutingInfoForSM,informServiceCentre,reportSM-DeliveryStatus"},
+    {"shortMsgGatewayContext-v2", "0.4.0.0.1.0.20.2", "sendRoutingInfoForSM,informServiceCentre,reportSM-DeliveryStatus"},
+    {"shortMsgGatewayContext-v1", "0.4.0.0.1.0.20.1", "sendRoutingInfoForSM,informServiceCentre,reportSM-DeliveryStatus"},
 
     // Mobile Originated short messages
     {"shortMsgMO-RelayContext-v3", "0.4.0.0.1.0.21.3", "mo-forwardSM"},
@@ -4721,6 +4725,56 @@ static const Parameter s_deleteSubscriberDataRes[] = {
     {"",                             s_noTag,           false,TcapXApplication::None,         0},
 };
 
+// GSM 09.02 v5.3.0 page 721
+static const Parameter s_subscriberId[] = {
+    {"imsi",     s_ctxtPrim_0_Tag,    false,   TcapXApplication::TBCD,       0},
+    {"tmsi",     s_ctxtPrim_1_Tag,    false,   TcapXApplication::HexString,  0},
+    {"",         s_noTag,             false,   TcapXApplication::None,       0},
+};
+
+// GSM 09.02 v5.3.0 page 721
+static const TokenDict s_requestParamEnum[] = {
+    {"requestIMSI",               0},
+    {"requestAuthenticationSet",  1},
+    {"requestSubscriberData",     2},
+    {"requestKi",                 4},
+    {0,0}
+};
+
+// GSM 09.02 v5.3.0 page 721
+static const Parameter s_requestParameter[] = {
+    {"requestParameter",  s_enumTag,  true, TcapXApplication::Enumerated, s_requestParamEnum},
+    {"",                  s_noTag,   false, TcapXApplication::None,       0},
+};
+
+// GSM 09.02 v5.3.0 pp 721-723
+static const Parameter s_sentParameterChoice[] = {
+    {"imsi",               s_ctxtPrim_0_Tag,  true,  TcapXApplication::TBCD,       0},
+    {"authenticationSet",  s_ctxtCstr_1_Tag,  true,  TcapXApplication::Sequence,   s_authenticationSetSeq},
+    {"subscriberData",     s_ctxtCstr_2_Tag,  true,  TcapXApplication::Sequence,   s_insertSubscriberDataArgs},
+    {"ki",                 s_ctxtPrim_3_Tag,  true,  TcapXApplication::HexString,  0},
+    {"",                   s_noTag,          false,  TcapXApplication::None,       0},
+};
+
+// GSM 09.02 v5.3.0 pp 721-723
+static const Parameter s_sentParameterList[] = {
+    {"sentParameter",  s_noTag,  false,  TcapXApplication::Choice,  s_sentParameterChoice},
+    {"",               s_noTag,  false,  TcapXApplication::None,    0},
+};
+
+// GSM 09.02 v5.3.0 page 721
+static const Parameter s_sendParametersDataArgs[] = {
+    {"subscriberId",         s_noTag,        false,  TcapXApplication::Choice,      s_subscriberId},
+    {"requestParameterList", s_sequenceTag,  false,  TcapXApplication::SequenceOf,  s_requestParameter},
+    {"",                     s_noTag,        false,  TcapXApplication::None,        0},
+};
+
+// GSM 09.02 v5.3.0 pp. 721
+static const Parameter s_sendParametersDataRes[] = {
+    {"sentParameterList",  s_sequenceTag,  false,  TcapXApplication::SequenceOf,  s_sentParameterList},
+    {"",                   s_noTag,        false,  TcapXApplication::None,        0},
+};
+
 static const Parameter s_registerSSArgs[] = {
     {"ss-Code",                  s_hexTag,           false,  TcapXApplication::Enumerated,           s_SSCode},
     {"basicService",             s_noTag,            true,   TcapXApplication::Choice,               s_basicServiceCode},
@@ -4907,6 +4961,35 @@ static const Parameter s_forwardSMArgs[] = {
     {"sm-RP-UI",               s_hexTag,          false,   TcapXApplication::HexString,      0},
     {"moreMessagesToSend",     s_nullTag,         true,    TcapXApplication::Null,           0},
     {"",                       s_noTag,           false,   TcapXApplication::None,           0},
+};
+
+static const TokenDict s_SMDeliveryOutcomeEnum[] = {
+    {"memoryCapacityExceeded", 0},
+    {"absentSubscriber",       1},
+    {"successfulTransfer",     2}, 
+    {0,0}
+};
+
+static const Parameter s_reportSMDeliveryArgs[] = {
+    {"msisdn",                                  s_hexTag,         false, TcapXApplication::AddressString, 0},
+    {"serviceCentreAddress",                    s_hexTag,         false, TcapXApplication::AddressString, 0},
+    {"sm-DeliveryOutcome",                      s_enumTag,        false, TcapXApplication::Enumerated,    s_SMDeliveryOutcomeEnum},
+    {"absentSubscriberDiagnosticSM",            s_ctxtPrim_0_Tag, true,  TcapXApplication::Integer,       0},
+    {"extensionContainer",                      s_ctxtCstr_1_Tag, true,  TcapXApplication::HexString,     0},
+    {"gprsSupportIndicator",                    s_ctxtPrim_2_Tag, true,  TcapXApplication::Null,          0},
+    {"deliveryOutcomeIndicator",                s_ctxtPrim_3_Tag, true,  TcapXApplication::Null,          0},
+    {"additionalSM-DeliveryOutcome",            s_ctxtPrim_4_Tag, true,  TcapXApplication::Enumerated,    s_SMDeliveryOutcomeEnum},
+    {"additionalAbsentSubscriberDiagnosticSM",  s_ctxtPrim_5_Tag, true,  TcapXApplication::Integer,       0},
+    {"ip-sm-gw-Indicator",                      s_ctxtPrim_6_Tag, true,  TcapXApplication::Null,          0},
+    {"ip-sm-gw-sm-deliveryOutcome",             s_ctxtPrim_7_Tag, true,  TcapXApplication::Enumerated,    s_SMDeliveryOutcomeEnum},
+    {"ip-sm-gw-absentSubscriberDiagnosticSM",   s_ctxtPrim_8_Tag, true,  TcapXApplication::Integer,       0},
+    {"",                                        s_noTag,          false, TcapXApplication::None,          0},
+};
+
+static const Parameter s_reportSMDeliveryRes[] = {
+    { "storedMSISDN",       s_hexTag,      true,  TcapXApplication::AddressString, 0},
+    { "extensionContainer", s_sequenceTag, true,  TcapXApplication::HexString,     0},
+    {"",                    s_noTag,       false, TcapXApplication::None,          0},
 };
 
 static const Parameter s_activateTraceModeArgs[] = {
@@ -5163,6 +5246,10 @@ static const Operation s_mapOps[] = {
 	s_sequenceTag, s_deleteSubscriberDataArgs,
 	s_sequenceTag, s_deleteSubscriberDataRes
     },
+    {"sendParameters",                true,   9,
+	s_sequenceTag, s_sendParametersDataArgs,
+	s_noTag, s_sendParametersDataRes
+    },
     {"registerSS",                    true,  10,
 	s_sequenceTag, s_registerSSArgs,
 	s_noTag,       s_extSSInfoChoice
@@ -5230,6 +5317,11 @@ static const Operation s_mapOps[] = {
     {"forwardSM",                     true,  46,
 	s_sequenceTag, s_forwardSMArgs,
 	s_noTag, 0
+    },
+    {"reportSM-DeliveryStatus",       true,  47,
+	s_sequenceTag, s_reportSMDeliveryArgs,
+	s_sequenceTag, s_reportSMDeliveryRes,
+	
     },
     {"activateTraceMode",             true,  50,
 	s_sequenceTag, s_activateTraceModeArgs,
@@ -8245,6 +8337,7 @@ void TcapXApplication::reportState(State state, const char* error)
 	    break;
 	case Active:
 	    sendStateResponse();
+	    m_user->notifyManagementState();
 	    break;
 	case ShutDown:
 	    Debug(&__plugin,DebugInfo,"Requested shutdown, %d transactions pending [%p]",trCount(),this);
@@ -8324,7 +8417,8 @@ TcapXUser::TcapXUser(const char* name)
       Mutex(true,name),
       m_appsMtx(true,"TCAPXApps"),
       m_listener(0), m_type(MAP),
-      m_printMsg(false), m_addEnc(false)
+      m_printMsg(false), m_addEnc(false),
+      m_mngtStatus(SCCPManagement::UserOutOfService)
 {
     Debug(&__plugin,DebugAll,"TcapXUser '%s' created [%p]",toString().c_str(),this);
 }
@@ -8379,6 +8473,7 @@ bool TcapXUser::initialize(NamedList& sect)
     m_addEnc = sect.getBoolValue("add-encoding",false);
     if (!tcap() && !findTCAP(sect.getValue("tcap",0)))
 	return false;
+    notifyManagementState(true);
     return true;
 }
 
@@ -8387,6 +8482,8 @@ void TcapXUser::removeApp(TcapXApplication* app)
     Debug(this,DebugAll,"Removing application=%s[%p] [%p]",(app ? app->toString().c_str() : ""),app,this);
     Lock l(m_appsMtx);
     m_apps.remove(app);
+    l.drop();
+    notifyManagementState();
 }
 
 bool TcapXUser::tcapIndication(NamedList& params)
@@ -8602,6 +8699,23 @@ int TcapXUser::managementState()
 	    return SCCPManagement::UserInService;
     }
     return SCCPManagement::UserOutOfService;
+}
+
+void TcapXUser::notifyManagementState(bool forced)
+{
+    DDebug(this,DebugAll,"TcapXUser::notifyManagementState(forced=%s) [%p]",String::boolText(forced),this);
+    SCCPManagement::LocalBroadcast state = (SCCPManagement::LocalBroadcast)managementState();
+    Lock l(this);
+    if (forced || state != m_mngtStatus) {
+	Debug(this,DebugInfo,"Changing management state from '%s' to '%s' [%p]",
+	      lookup(m_mngtStatus,SCCPManagement::broadcastType(),""),lookup(state,SCCPManagement::broadcastType(),""),this);
+	m_mngtStatus = state;
+	l.drop();
+	if (tcap()) {
+	    NamedList p("");
+	    tcap()->updateUserStatus(this,state,p);
+	}
+    }
 }
 
 void TcapXUser::setListener(XMLConnListener* list)

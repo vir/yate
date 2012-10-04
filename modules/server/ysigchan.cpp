@@ -1287,6 +1287,7 @@ void SigChannel::handleEvent(SignallingEvent* event)
 	case SignallingEvent::Generic:   evGeneric(event,"transport"); break;
 	case SignallingEvent::Suspend:   evGeneric(event,"suspend");   break;
 	case SignallingEvent::Resume:    evGeneric(event,"resume");    break;
+	case SignallingEvent::Charge:    evGeneric(event,"charge");    break;
 	default:
 	    DDebug(this,DebugStub,"No handler for event '%s' [%p]",
 		event->name(),this);
@@ -1297,6 +1298,7 @@ void SigChannel::handleEvent(SignallingEvent* event)
 
 bool SigChannel::msgProgress(Message& msg)
 {
+    Channel::msgProgress(msg);
     Lock lock(m_mutex);
     setState("progressing");
     if (!m_call)
@@ -1325,6 +1327,7 @@ bool SigChannel::msgProgress(Message& msg)
 
 bool SigChannel::msgRinging(Message& msg)
 {
+    Channel::msgRinging(msg);
     Lock lock(m_mutex);
     setState("ringing");
     if (!m_call)
@@ -1362,6 +1365,7 @@ bool SigChannel::msgRinging(Message& msg)
 
 bool SigChannel::msgAnswered(Message& msg)
 {
+    Channel::msgAnswered(msg);
     Lock lock(m_mutex);
     setState("answered");
     if (!m_call)
@@ -1451,6 +1455,8 @@ bool SigChannel::msgUpdate(Message& msg)
 	evt = SignallingEvent::Progress;
     else if (oper == YSTRING("ringing"))
 	evt = SignallingEvent::Ringing;
+    else if (oper == YSTRING("charge"))
+	evt = SignallingEvent::Charge;
     else if (m_callAccdEvent && (oper == YSTRING("accepted"))) {
 	plugin.copySigMsgParams(m_callAccdEvent,msg,"i");
 	releaseCallAccepted(true);
@@ -1674,16 +1680,17 @@ void SigChannel::setState(const char* state, bool updateStatus, bool showReason)
 	    m_call,this);
 	return;
     }
+#ifndef DEBUG
+    if (!updateStatus)
+	return;
+#endif
     String show;
     show << "Call " << state;
     if (showReason)
 	show << ". Reason: '" << m_reason << "'";
     if (!m_call)
         show << ". No signalling call ";
-    if (updateStatus)
-	Debug(this,DebugCall,"%s [%p]",show.c_str(),this);
-    else
-	DDebug(this,DebugCall,"%s [%p]",show.c_str(),this);
+    Debug(this,DebugCall,"%s [%p]",show.c_str(),this);
 }
 
 void SigChannel::evInfo(SignallingEvent* event)
@@ -2143,7 +2150,7 @@ SigDriver::~SigDriver()
 
 bool SigDriver::msgExecute(Message& msg, String& dest)
 {
-    Channel* peer = static_cast<Channel*>(msg.userData());
+    CallEndpoint* peer = YOBJECT(CallEndpoint,msg.userData());
     if (!peer) {
 	Debug(this,DebugNote,"Signalling call failed. No data channel");
 	msg.setParam("error","failure");

@@ -1013,16 +1013,17 @@ void String::clearMatches()
 
 ObjList* String::split(char separator, bool emptyOK) const
 {
-    ObjList *list = new ObjList;
+    ObjList* list = new ObjList;
+    ObjList* dest = list;
     int p = 0;
     int s;
     while ((s = find(separator,p)) >= 0) {
 	if (emptyOK || (s > p))
-	    list->append(new String(m_string+p,s-p));
+	    dest = dest->append(new String(m_string+p,s-p));
 	p = s + 1;
     }
     if (emptyOK || (m_string && m_string[p]))
-	list->append(new String(m_string+p));
+	dest->append(new String(m_string+p));
     return list;
 }
 

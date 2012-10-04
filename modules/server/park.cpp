@@ -143,7 +143,7 @@ void ParkEndpoint::disconnected(bool final, const char *reason)
 // Connect to peer. Create data source. Notify state changes
 bool ParkEndpoint::callExecute(Message& msg)
 {
-    CallEndpoint* peer = static_cast<CallEndpoint*>(msg.userData());
+    CallEndpoint* peer = YOBJECT(CallEndpoint,msg.userData());
     if (!peer) {
 	Debug(&s_module,DebugNote,"No channel to park on '%s'",id().c_str());
 	msg.setParam("error","failure");

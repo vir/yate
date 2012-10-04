@@ -1108,7 +1108,7 @@ bool AttachHandler::received(Message& msg)
 
 bool ToneGenDriver::msgExecute(Message& msg, String& dest)
 {
-    CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
+    CallEndpoint* ch = YOBJECT(CallEndpoint,msg.userData());
     if (ch) {
 	ToneChan *tc = new ToneChan(dest,msg["lang"]);
 	tc->initChan();

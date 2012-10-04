@@ -72,6 +72,8 @@ static bool s_printAttr = false;
 static bool s_pb_enabled = false;
 static bool s_pb_parallel = false;
 static bool s_pb_simplify = false;
+static bool s_cisco = true;
+static bool s_quintum = false;
 static String s_pb_stoperror;
 static String s_pb_maxcall;
 
@@ -90,6 +92,7 @@ enum {
 typedef struct {
     int code;
     const char* name;
+    const char* confName;
     int type;
 } rad_dict;
 
@@ -141,128 +144,155 @@ enum {
 
 // Standard RADIUS attributes
 static rad_dict radius_dict[] = {
-    {   1, "User-Name", a_string },
-    {   2, "User-Password", a_binary },
-    {   3, "CHAP-Password", a_binary },
-    {   4, "NAS-IP-Address", a_ipaddr },
-    {   5, "NAS-Port", a_int },
-    {   6, "Service-Type", a_int },
-    {  18, "Reply-Message", a_string },
-    {  26, "Vendor-Specific", a_binary },
-    {  27, "Session-Timeout", a_int },
-    {  30, "Called-Station-Id", a_string },
-    {  31, "Calling-Station-Id", a_string },
-    {  32, "NAS-Identifier", a_string },
-    {  40, "Acct-Status-Type", a_int },
-    {  41, "Acct-Delay-Time", a_int },
-    {  42, "Acct-Input-Octets", a_int },
-    {  43, "Acct-Output-Octets", a_int },
-    {  44, "Acct-Session-Id", a_string },
-    {  45, "Acct-Authentic", a_int },
-    {  46, "Acct-Session-Time", a_int },
-    {  47, "Acct-Input-Packets", a_int },
-    {  48, "Acct-Output-Packets", a_int },
-    {  49, "Acct-Terminate-Cause", a_int },
-    {  50, "Acct-Multi-Session-Id", a_string },
-    {  51, "Acct-Link-Count", a_int },
-    {  60, "CHAP-Challenge", a_binary },
-    {  61, "NAS-Port-Type", a_int },
-    {  62, "Port-Limit", a_int },
-    {  63, "Login-LAT-Port", a_string },
-    {  68, "Configuration-Token", a_binary },
-    { 206, "Digest-Response", a_string },
-    { 207, "Digest-Attributes", a_binary },
-    {   0, 0, a_void }
+    {   1, "User-Name",             "User-Name",             a_string },
+    {   2, "User-Password",         "User-Password",         a_binary },
+    {   3, "CHAP-Password",         "CHAP-Password",         a_binary },
+    {   4, "NAS-IP-Address",        "NAS-IP-Address",        a_ipaddr },
+    {   5, "NAS-Port",              "NAS-Port",              a_int },
+    {   6, "Service-Type",          "Service-Type",          a_int },
+    {  18, "Reply-Message",         "Reply-Message",         a_string },
+    {  26, "Vendor-Specific",       "Vendor-Specific",       a_binary },
+    {  27, "Session-Timeout",       "Session-Timeout",       a_int },
+    {  30, "Called-Station-Id",     "Called-Station-Id",     a_string },
+    {  31, "Calling-Station-Id",    "Calling-Station-Id",    a_string },
+    {  32, "NAS-Identifier",        "NAS-Identifier",        a_string },
+    {  40, "Acct-Status-Type",      "Acct-Status-Type",      a_int },
+    {  41, "Acct-Delay-Time",       "Acct-Delay-Time",       a_int },
+    {  42, "Acct-Input-Octets",     "Acct-Input-Octets",     a_int },
+    {  43, "Acct-Output-Octets",    "Acct-Output-Octets",    a_int },
+    {  44, "Acct-Session-Id",       "Acct-Session-Id",       a_string },
+    {  45, "Acct-Authentic",        "Acct-Authentic",        a_int },
+    {  46, "Acct-Session-Time",     "Acct-Session-Time",     a_int },
+    {  47, "Acct-Input-Packets",    "Acct-Input-Packets",    a_int },
+    {  48, "Acct-Output-Packets",   "Acct-Output-Packets",   a_int },
+    {  49, "Acct-Terminate-Cause",  "Acct-Terminate-Cause",  a_int },
+    {  50, "Acct-Multi-Session-Id", "Acct-Multi-Session-Id", a_string },
+    {  51, "Acct-Link-Count",       "Acct-Link-Count",       a_int },
+    {  60, "CHAP-Challenge",        "CHAP-Challenge",        a_binary },
+    {  61, "NAS-Port-Type",         "NAS-Port-Type",         a_int },
+    {  62, "Port-Limit",            "Port-Limit",            a_int },
+    {  63, "Login-LAT-Port",        "Login-LAT-Port",        a_string },
+    {  68, "Configuration-Token",   "Configuration-Token",   a_binary },
+    { 206, "Digest-Response",       "Digest-Response",       a_string },
+    { 207, "Digest-Attributes",     "Digest-Attributes",     a_binary },
+    {   0, 0, 0, a_void }
 };
 
 // Cisco vendor attributes
 static rad_dict cisco_dict[]= {
-    {   1, "Cisco-AVPair", a_string },
-    {   2, "Cisco-NAS-Port", a_string },
-    {   2, "NAS-Port-Name", a_string }, // alternate name
-    {  23, "h323-remote-address", a_avpair },
-    {  24, "h323-conf-id", a_avpair },
-    {  25, "h323-setup-time", a_avpair },
-    {  26, "h323-call-origin", a_avpair },
-    {  27, "h323-call-type", a_avpair },
-    {  28, "h323-connect-time", a_avpair },
-    {  29, "h323-disconnect-time", a_avpair },
-    {  30, "h323-disconnect-cause", a_avpair },
-    {  31, "h323-voice-quality", a_avpair },
-    {  33, "h323-gw-id", a_avpair },
-    {  34, "h323-call-treatment", a_string },
-    { 101, "h323-credit-amount", a_avpair },
-    { 102, "h323-credit-time", a_avpair },
-    { 103, "h323-return-code", a_avpair },
-    { 104, "h323-prompt-id", a_avpair },
-    { 105, "h323-time-and-day", a_avpair },
-    { 106, "h323-redirect-number", a_avpair },
-    { 107, "h323-preferred-lang", a_avpair },
-    { 108, "h323-redirect-ip-address", a_avpair },
-    { 109, "h323-billing-model", a_avpair },
-    { 110, "h323-currency", a_avpair },
-    { 187, "Cisco-Multilink-ID", a_int },
-    { 188, "Cisco-Num-In-Multilink", a_int },
-    { 190, "Cisco-Pre-Input-Octets", a_int },
-    { 191, "Cisco-Pre-Output-Octets", a_int },
-    { 192, "Cisco-Pre-Input-Packets", a_int },
-    { 193, "Cisco-Pre-Output-Packets", a_int },
-    { 194, "Cisco-Maximum-Time", a_int },
-    { 195, "Cisco-Disconnect-Cause", a_int },
-    { 197, "Cisco-Data-Rate", a_int },
-    { 198, "Cisco-PreSession-Time", a_int },
-    { 208, "Cisco-PW-Lifetime", a_int },
-    { 209, "Cisco-IP-Direct", a_int },
-    { 210, "Cisco-PPP-VJ-Slot-Comp", a_int },
-    { 212, "Cisco-PPP-Async-Map", a_int },
-    { 217, "Cisco-IP-Pool-Definition", a_int },
-    { 218, "Cisco-Assign-IP-Pool", a_int },
-    { 228, "Cisco-Route-IP", a_int },
-    { 233, "Cisco-Link-Compression", a_int },
-    { 234, "Cisco-Target-Util", a_int },
-    { 235, "Cisco-Maximum-Channels", a_int },
-    { 242, "Cisco-Data-Filter", a_int },
-    { 243, "Cisco-Call-Filter", a_int },
-    { 244, "Cisco-Idle-Limit", a_int },
-    { 255, "Cisco-Xmit-Rate", a_int },
-    {   0, 0, a_void }
+    {   1, "Cisco-AVPair",             "Cisco-AVPair",             a_string },
+    {   2, "Cisco-NAS-Port",           "Cisco-NAS-Port",           a_string },
+    {   2, "NAS-Port-Name",            "NAS-Port-Name",            a_string }, // alternate name
+    {  23, "h323-remote-address",      "h323-remote-address",      a_avpair },
+    {  24, "h323-conf-id",             "h323-conf-id",             a_avpair },
+    {  25, "h323-setup-time",          "h323-setup-time",          a_avpair },
+    {  26, "h323-call-origin",         "h323-call-origin",         a_avpair },
+    {  27, "h323-call-type",           "h323-call-type",           a_avpair },
+    {  28, "h323-connect-time",        "h323-connect-time",        a_avpair },
+    {  29, "h323-disconnect-time",     "h323-disconnect-time",     a_avpair },
+    {  30, "h323-disconnect-cause",    "h323-disconnect-cause",    a_avpair },
+    {  31, "h323-voice-quality",       "h323-voice-quality",       a_avpair },
+    {  33, "h323-gw-id",               "h323-gw-id",               a_avpair },
+    {  34, "h323-call-treatment",      "h323-call-treatment",      a_string },
+    { 101, "h323-credit-amount",       "h323-credit-amount",       a_avpair },
+    { 102, "h323-credit-time",         "h323-credit-time",         a_avpair },
+    { 103, "h323-return-code",         "h323-return-code",         a_avpair },
+    { 104, "h323-prompt-id",           "h323-prompt-id",           a_avpair },
+    { 105, "h323-time-and-day",        "h323-time-and-day",        a_avpair },
+    { 106, "h323-redirect-number",     "h323-redirect-number",     a_avpair },
+    { 107, "h323-preferred-lang",      "h323-preferred-lang",      a_avpair },
+    { 108, "h323-redirect-ip-address", "h323-redirect-ip-address", a_avpair },
+    { 109, "h323-billing-model",       "h323-billing-model",       a_avpair },
+    { 110, "h323-currency",            "h323-currency",            a_avpair },
+    { 187, "Cisco-Multilink-ID",       "Cisco-Multilink-ID",       a_int },
+    { 188, "Cisco-Num-In-Multilink",   "Cisco-Num-In-Multilink",   a_int },
+    { 190, "Cisco-Pre-Input-Octets",   "Cisco-Pre-Input-Octets",   a_int },
+    { 191, "Cisco-Pre-Output-Octets",  "Cisco-Pre-Output-Octets",  a_int },
+    { 192, "Cisco-Pre-Input-Packets",  "Cisco-Pre-Input-Packets",  a_int },
+    { 193, "Cisco-Pre-Output-Packets", "Cisco-Pre-Output-Packets", a_int },
+    { 194, "Cisco-Maximum-Time",       "Cisco-Maximum-Time",       a_int },
+    { 195, "Cisco-Disconnect-Cause",   "Cisco-Disconnect-Cause",   a_int },
+    { 197, "Cisco-Data-Rate",          "Cisco-Data-Rate",          a_int },
+    { 198, "Cisco-PreSession-Time",    "Cisco-PreSession-Time",    a_int },
+    { 208, "Cisco-PW-Lifetime",        "Cisco-PW-Lifetime",        a_int },
+    { 209, "Cisco-IP-Direct",          "Cisco-IP-Direct",          a_int },
+    { 210, "Cisco-PPP-VJ-Slot-Comp",   "Cisco-PPP-VJ-Slot-Comp",   a_int },
+    { 212, "Cisco-PPP-Async-Map",      "Cisco-PPP-Async-Map",      a_int },
+    { 217, "Cisco-IP-Pool-Definition", "Cisco-IP-Pool-Definition", a_int },
+    { 218, "Cisco-Assign-IP-Pool",     "Cisco-Assign-IP-Pool",     a_int },
+    { 228, "Cisco-Route-IP",           "Cisco-Route-IP",           a_int },
+    { 233, "Cisco-Link-Compression",   "Cisco-Link-Compression",   a_int },
+    { 234, "Cisco-Target-Util",        "Cisco-Target-Util",        a_int },
+    { 235, "Cisco-Maximum-Channels",   "Cisco-Maximum-Channels",   a_int },
+    { 242, "Cisco-Data-Filter",        "Cisco-Data-Filter",        a_int },
+    { 243, "Cisco-Call-Filter",        "Cisco-Call-Filter",        a_int },
+    { 244, "Cisco-Idle-Limit",         "Cisco-Idle-Limit",         a_int },
+    { 255, "Cisco-Xmit-Rate",          "Cisco-Xmit-Rate",          a_int },
+    {   0, 0, 0, a_void }
+};
+
+static rad_dict quintum_dict[]= {
+    {   1, "Quintum-AVPair",        "Quintum-AVPair",                a_string },
+    {   2, "Tenor-NAS-Port",        "Tenor-NAS-Port",                a_string },
+    {  23, "h323-remote-address",   "Quintum-h323-remote-address",   a_avpair },
+    {  24, "h323-conf-id",          "Quintum-h323-conf-id",          a_avpair },
+    {  25, "h323-setup-time",       "Quintum-h323-setup-time",       a_avpair },
+    {  26, "h323-call-origin",      "Quintum-h323-call-origin",      a_avpair },
+    {  27, "h323-call-type",        "Quintum-h323-call-type",        a_avpair },
+    {  28, "h323-connect-time",     "Quintum-h323-connect-time",     a_avpair },
+    {  29, "h323-disconnect-time",  "Quintum-h323-disconnect-time",  a_avpair },
+    {  30, "h323-disconnect-cause", "Quintum-h323-disconnect-cause", a_avpair },
+    {  31, "h323-voice-quality",    "Quintum-h323-voice-quality",    a_avpair },
+    {  33, "h323-gw-id",            "Quintum-h323-gw-id",            a_avpair },
+    { 101, "h323-credit-amount",    "Quintum-h323-credit-amount",    a_avpair },
+    { 102, "h323-credit-time",      "Quintum-h323-credit-time",      a_avpair },
+    { 103, "h323-return-code",      "Quintum-h323-return-code",      a_avpair },
+    { 104, "h323-prompt-id",        "Quintum-h323-prompt-id",        a_avpair },
+    { 106, "h323-redirect-number",  "Quintum-h323-redirect-number",  a_avpair },
+    { 107, "h323-preferred-lang",   "Quintum-h323-preferred-lang",   a_avpair },
+    { 109, "h323-billing-model",    "Quintum-h323-billing-model",    a_avpair },
+    { 110, "h323-currency",         "Quintum-h323-currency",         a_avpair },
+    { 230, "Trunkid-In",            "Quintum-Trunkid-In",            a_string },
+    { 231, "Trunkid-Out",           "Quintum-Trunkid-Out",           a_string },
+    {   0, 0, 0, a_void }
 };
 
 // Microsoft vendor attributes
 static rad_dict ms_dict[]= {
-    {   1, "MS-CHAP-Response", a_binary },
-    {   2, "MS-CHAP-Error", a_binary },
-    {   3, "MS-CHAP-CPW-1", a_binary },
-    {   4, "MS-CHAP-CPW-2", a_binary },
-    {   5, "MS-CHAP-LM-Enc-PW", a_binary },
-    {   6, "MS-CHAP-NT-Enc-PW", a_binary },
-    {   7, "MS-MPPE-Encryption-Policy", a_binary },
-    {   8, "MS-MPPE-Encryption-Types", a_binary },
-    {   9, "MS-RAS-Vendor", a_int },
-    {  10, "MS-CHAP-Domain", a_binary },
-    {  11, "MS-CHAP-Challenge", a_binary },
-    {  12, "MS-CHAP-MPPE-Keys", a_binary },
-    {  13, "MS-BAP-Usage", a_int },
-    {  14, "MS-Link-Utilization-Threshold", a_int },
-    {  15, "MS-Link-Drop-Time-Limit", a_int },
-    {  16, "MS-MPPE-Send-Key", a_binary },
-    {  17, "MS-MPPE-Recv-Key", a_binary },
-    {  18, "MS-RAS-Version", a_binary },
-    {  22, "MS-Filter", a_binary },
-    {  23, "MS-Acct-Auth-Type", a_int },
-    {  24, "MS-Acct-EAP-Type", a_int },
-    {  25, "MS-CHAP2-Response", a_binary },
-    {  26, "MS-CHAP2-Success", a_binary },
-    {  27, "MS-CHAP2-PW", a_binary },
-    {  30, "MS-Primary-NBNS-Server", a_ipaddr },
-    {  31, "MS-Secondary-NBNS-Server", a_ipaddr },
-    {   0, 0, a_void }
+    {   1, "MS-CHAP-Response",              "MS-CHAP-Response",              a_binary },
+    {   2, "MS-CHAP-Error",                 "MS-CHAP-Error",                 a_binary },
+    {   3, "MS-CHAP-CPW-1",                 "MS-CHAP-CPW-1",                 a_binary },
+    {   4, "MS-CHAP-CPW-2",                 "MS-CHAP-CPW-2",                 a_binary },
+    {   5, "MS-CHAP-LM-Enc-PW",             "MS-CHAP-LM-Enc-PW",             a_binary },
+    {   6, "MS-CHAP-NT-Enc-PW",             "MS-CHAP-NT-Enc-PW",             a_binary },
+    {   7, "MS-MPPE-Encryption-Policy",     "MS-MPPE-Encryption-Policy",     a_binary },
+    {   8, "MS-MPPE-Encryption-Types",      "MS-MPPE-Encryption-Types",      a_binary },
+    {   9, "MS-RAS-Vendor",                 "MS-RAS-Vendor",                 a_int },
+    {  10, "MS-CHAP-Domain",                "MS-CHAP-Domain",                a_binary },
+    {  11, "MS-CHAP-Challenge",             "MS-CHAP-Challenge",             a_binary },
+    {  12, "MS-CHAP-MPPE-Keys",             "MS-CHAP-MPPE-Keys",             a_binary },
+    {  13, "MS-BAP-Usage",                  "MS-BAP-Usage",                  a_int },
+    {  14, "MS-Link-Utilization-Threshold", "MS-Link-Utilization-Threshold", a_int },
+    {  15, "MS-Link-Drop-Time-Limit",       "MS-Link-Drop-Time-Limit",       a_int },
+    {  16, "MS-MPPE-Send-Key",              "MS-MPPE-Send-Key",              a_binary },
+    {  17, "MS-MPPE-Recv-Key",              "MS-MPPE-Recv-Key",              a_binary },
+    {  18, "MS-RAS-Version",                "MS-RAS-Version",                a_binary },
+    {  22, "MS-Filter",                     "MS-Filter",                     a_binary },
+    {  23, "MS-Acct-Auth-Type",             "MS-Acct-Auth-Type",             a_int },
+    {  24, "MS-Acct-EAP-Type",              "MS-Acct-EAP-Type",              a_int },
+    {  25, "MS-CHAP2-Response",             "MS-CHAP2-Response",             a_binary },
+    {  26, "MS-CHAP2-Success",              "MS-CHAP2-Success",              a_binary },
+    {  27, "MS-CHAP2-PW",                   "MS-CHAP2-PW",                   a_binary },
+    {  30, "MS-Primary-NBNS-Server",        "MS-Primary-NBNS-Server",        a_ipaddr },
+    {  31, "MS-Secondary-NBNS-Server",      "MS-Secondary-NBNS-Server",      a_ipaddr },
+    {   0, 0, 0, a_void }
 };
 
 static rad_vendor vendors_dict[] = {
-    {   0, 0, radius_dict },
-    {   9, "cisco", cisco_dict },
-    { 311, "microsoft", ms_dict },
+    {    0, 0,           radius_dict },
+    {    9, "cisco",     cisco_dict },
+    {  311, "microsoft", ms_dict },
+    { 6618, "quintum",   quintum_dict },
     {   0, 0, 0 }
 };
 
@@ -402,6 +432,14 @@ public:
     virtual bool received(Message &msg);
 };
 
+class RadiusHandler : public MessageHandler
+{
+public:
+    inline RadiusHandler(int prio)
+	: MessageHandler("radius.generate",prio,__plugin.name())
+	{ }
+    virtual bool received(Message &msg);
+};
 
 // PortaOne specific routing
 static void portaBillingRoute(NamedList& params, const ObjList* attributes)
@@ -473,7 +511,7 @@ const rad_dict* RadAttrib::find(const char* name, int* vendor, const char** vend
 {
     for (rad_vendor* v = vendors_dict; v->dict; v++) {
 	for (const rad_dict* dict = v->dict; dict->name; dict++) {
-	    if (!strcasecmp(name,dict->name)) {
+	    if (!strcasecmp(name,dict->confName)) {
 		if (vendor)
 		    *vendor = v->vendor;
 		if (vendName)
@@ -1316,8 +1354,18 @@ bool RadiusClient::returnAttributes(NamedList& params, const ObjList* attributes
 	String* par = sect->getParam(tmp);
 	if (par && *par) {
 	    attr->getString(tmp);
-	    DDebug(&__plugin,DebugInfo,"Setting '%s' = '%s'",par->c_str(),tmp.c_str());
-	    params.setParam(*par,tmp);
+	    if (!params.getParam(*par)) {
+		params.addParam(*par,tmp);
+		continue;
+	    }
+	    // Handle duplicate params
+	    int count = 0;
+	    while (++count) {
+		if (params.getParam(*par + "." + String(count)))
+		    continue;
+		params.addParam(*par + "." + String(count),tmp);
+		break;
+	    }
 	}
     }
     if (attrDump)
@@ -1367,7 +1415,10 @@ bool AuthHandler::received(Message& msg)
     int sep = address.find(':');
     if (sep >= 0)
 	address = address.substr(0,sep);
-    radclient.addAttribute("h323-remote-address",address);
+    if (s_cisco)
+	radclient.addAttribute("h323-remote-address",address);
+    if (s_quintum)
+	radclient.addAttribute("Quintum-h323-remote-address",address);
     String billid = msg.getValue("billid");
     if (billid) {
 	// create a Cisco-compatible conference ID
@@ -1378,7 +1429,10 @@ bool AuthHandler::received(Message& msg)
 	confid << cid.hexDigest().substr(16,8) << " ";
 	confid << cid.hexDigest().substr(24,8);
 	confid.toUpper();
-	radclient.addAttribute("h323-conf-id",confid);
+	if (s_cisco)
+	    radclient.addAttribute("h323-conf-id",confid);
+	if (s_quintum)
+	    radclient.addAttribute("Quintum-h323-conf-id",confid);
     }
 
     ObjList result;
@@ -1436,6 +1490,8 @@ bool AcctHandler::received(Message& msg)
 	acctStat = Acct_Start;
     else if (op == "finalize")
 	acctStat = Acct_Stop;
+    else if (op == "status")
+	acctStat = Acct_Alive;
     else
 	return false;
 
@@ -1475,27 +1531,42 @@ bool AcctHandler::received(Message& msg)
 
     radclient.addAttribute("Acct-Session-Id",sid.hexDigest());
     radclient.addAttribute("Acct-Status-Type",acctStat);
-    radclient.addAttribute("h323-call-origin",dir);
-    radclient.addAttribute("h323-conf-id",confid);
-    radclient.addAttribute("h323-remote-address",address);
+    if (s_cisco) {
+	radclient.addAttribute("h323-call-origin",dir);
+	radclient.addAttribute("h323-conf-id",confid);
+	radclient.addAttribute("h323-remote-address",address);
+    }
+    if (s_quintum) {
+	radclient.addAttribute("Quintum-h323-call-origin",dir);
+	radclient.addAttribute("Quintum-h323-conf-id",confid);
+	radclient.addAttribute("Quintum-h323-remote-address",address);
+    }
 
     String tmp("call-id=");
     if (address.null())
 	address = s_localAddr.host();
     tmp << billid << "@" << address;
-    radclient.addAttribute("Cisco-AVPair",tmp);
+    if (s_cisco)
+	radclient.addAttribute("Cisco-AVPair",tmp);
+    if (s_quintum)
+	radclient.addAttribute("Quintum-AVPair",tmp);
 
     double t = msg.getDoubleValue("time");
     ciscoTime(t,tmp);
-    radclient.addAttribute("h323-setup-time",tmp);
-
+    if (s_cisco)
+	radclient.addAttribute("h323-setup-time",tmp);
+    if (s_quintum)
+	radclient.addAttribute("Quintum-h323-setup-time",tmp);
     if (acctStat != Acct_Start) {
 	double d = msg.getDoubleValue("duration",-1);
 	if (d >= 0.0) {
 	    double d1 = msg.getDoubleValue("billtime");
 	    if (d1 > 0.0) {
 		ciscoTime(t+d-d1,tmp);
-		radclient.addAttribute("h323-connect-time",tmp);
+		if (s_cisco)
+		    radclient.addAttribute("h323-connect-time",tmp);
+		if (s_quintum)
+		    radclient.addAttribute("Quintum-h323-connect-time",tmp);
 	    }
 	}
     }
@@ -1504,7 +1575,10 @@ bool AcctHandler::received(Message& msg)
 	double d = msg.getDoubleValue("duration",-1);
 	if (d >= 0.0) {
 	    ciscoTime(t+d,tmp);
-	    radclient.addAttribute("h323-disconnect-time",tmp);
+	    if (s_cisco)
+		radclient.addAttribute("h323-disconnect-time",tmp);
+	    if (s_quintum)
+		radclient.addAttribute("Quintum-h323-disconnect-time",tmp);
 	}
 
 	radclient.addAttribute("Acct-Session-Time",(int)msg.getDoubleValue("billtime"));
@@ -1514,13 +1588,51 @@ bool AcctHandler::received(Message& msg)
 	String tmp = msg.getValue("reason");
 	if (tmp) {
 	    tmp = "disconnect-text=" + tmp;
-	    radclient.addAttribute("Cisco-AVPair",tmp);
+	    if (s_cisco)
+		radclient.addAttribute("Cisco-AVPair",tmp);
+	    if (s_quintum)
+		radclient.addAttribute("Quintum-AVPair",tmp);
 	}
     }
     radclient.doAccounting();
     return false;
 }
 
+bool RadiusHandler::received(Message& msg)
+{
+    bool auth = msg.getBoolValue(YSTRING("auth"),true);
+    int acctStat = 0;
+    if (!auth) {
+	String op = msg.getValue("operation");
+	if (op == "initialize")
+	    acctStat = Acct_Start;
+	else if (op == "finalize")
+	    acctStat = Acct_Stop;
+	else if (op == "status") {
+	    acctStat = Acct_Alive;
+	} else
+	    return false;
+    }
+    RadiusClient radclient;
+    if (!radclient.prepareAttributes(msg))
+	return false;
+
+    if (!auth) {
+	radclient.addAttribute("Acct-Status-Type",acctStat);
+    }
+
+    ObjList result;
+    if (auth && radclient.doAuthenticate(&result) != AuthSuccess) {
+	radclient.returnAttributes(msg,&result,false);
+	return false;
+    } else if (!auth && radclient.doAccounting(&result) != AuthSuccess) {
+	radclient.returnAttributes(msg,&result,false);
+	return false;
+    }
+
+    radclient.returnAttributes(msg,&result,true);
+    return true;
+}
 
 RadiusModule::RadiusModule()
     : Module("yradius","misc"), m_init(false)
@@ -1546,6 +1658,8 @@ void RadiusModule::initialize()
     s_pb_enabled = s_cfg.getBoolValue("portabill","enabled",false);
     s_pb_parallel = s_cfg.getBoolValue("portabill","parallel",false);
     s_pb_simplify = s_cfg.getBoolValue("portabill","simplify",false);
+    s_cisco = s_cfg.getBoolValue("general","cisco_format",true);
+    s_quintum = s_cfg.getBoolValue("general","quintum_format",true);
     s_pb_stoperror = s_cfg.getValue("portabill","stoperror","busy");
     s_pb_maxcall = s_cfg.getValue("portabill","maxcall");
     s_cfgMutex.unlock();
@@ -1583,6 +1697,7 @@ void RadiusModule::initialize()
 
     Engine::install(new AuthHandler(s_cfg.getIntValue("general","auth_priority",70)));
     Engine::install(new AcctHandler(s_cfg.getIntValue("general","acct_priority",70)));
+    Engine::install(new RadiusHandler(100));
 }
 
 }; // anonymous namespace

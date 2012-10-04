@@ -67,7 +67,7 @@ DumbChannel::~DumbChannel()
 
 bool DumbDriver::msgExecute(Message& msg, String& dest)
 {
-    CallEndpoint *dd = static_cast<CallEndpoint *>(msg.userData());
+    CallEndpoint *dd = YOBJECT(CallEndpoint,msg.userData());
     if (dd) {
 	DumbChannel *c = new DumbChannel(dest,msg,true);
 	c->initChan();

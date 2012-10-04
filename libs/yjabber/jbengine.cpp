@@ -31,7 +31,7 @@ using namespace TelEngine;
 static unsigned int fixValue(const NamedList& p, const char* param,
     unsigned int defVal, unsigned int min, unsigned int max, bool zero = false)
 {
-    unsigned int val = p.getIntValue(param);
+    unsigned int val = p.getIntValue(param,defVal);
     if (!val) {
 	if (!zero)
 	    val = defVal;
@@ -102,9 +102,9 @@ static const String s_googleMailNode = "http://mail.google.com/xmpp/client/caps"
 #define JB_SRV_INTERVAL_MIN        10000
 #define JB_SRV_INTERVAL_MAX       120000
 // Ping
-#define JB_PING_INTERVAL          120000
+#define JB_PING_INTERVAL          600000
 #define JB_PING_INTERVAL_MIN       60000
-#define JB_PING_INTERVAL_MAX      600000
+#define JB_PING_INTERVAL_MAX     3600000
 #define JB_PING_TIMEOUT            30000
 #define JB_PING_TIMEOUT_MIN        10000
 #define JB_PING_TIMEOUT_MAX        JB_PING_INTERVAL_MIN
@@ -972,9 +972,11 @@ void JBEngine::initialize(const NamedList& params)
     m_srvTimeout = fixValue(params,"stream_srvtimeout",
 	JB_SRV_INTERVAL,JB_SRV_INTERVAL_MIN,JB_SRV_INTERVAL_MAX);
     m_pingInterval = fixValue(params,"stream_pinginterval",
-	JB_PING_INTERVAL,JB_PING_INTERVAL_MIN,JB_PING_INTERVAL_MAX);
+	client ? JB_PING_INTERVAL : 0,JB_PING_INTERVAL_MIN,JB_PING_INTERVAL_MAX,true);
     m_pingTimeout = fixValue(params,"stream_pingtimeout",
-	JB_PING_TIMEOUT,JB_PING_TIMEOUT_MIN,JB_PING_TIMEOUT_MAX);
+	client ? JB_PING_TIMEOUT : 0,JB_PING_TIMEOUT_MIN,JB_PING_TIMEOUT_MAX,true);
+    if (!(m_pingInterval && m_pingTimeout))
+	m_pingInterval = m_pingTimeout = 0;
     m_idleTimeout = fixValue(params,"stream_idletimeout",
 	JB_IDLE_INTERVAL,JB_IDLE_INTERVAL_MIN,JB_IDLE_INTERVAL_MAX);
     int defVal = JB_REDIRECT_COUNT;

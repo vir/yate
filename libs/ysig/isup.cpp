@@ -230,6 +230,14 @@ static const TokenDict s_dict_control[] = {
     { 0, 0 }
 };
 
+static const TokenDict s_dict_CRG_process[] = {
+    { "confusion", SS7ISUP::Confusion },
+    { "ignore",    SS7ISUP::Ignore },
+    { "raw",       SS7ISUP::Raw },
+    { "parsed",    SS7ISUP::Parsed },
+    { 0, 0 }
+};
+
 // Build next available parameter name
 static void buildName(const NamedList& list, const IsupParam* param, const String& prefix, String& name)
 {
@@ -2314,6 +2322,7 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 		case SS7MsgISUP::CPR:
 		case SS7MsgISUP::ANM:
 		case SS7MsgISUP::CON:
+		case SS7MsgISUP::CRG:
 		    m_sgmMsg = msg;
 		    {
 			const char* sgmParam = "OptionalBackwardCallIndicators";
@@ -2543,6 +2552,15 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 	case SignallingEvent::Generic:
 	    if (event->message()) {
 		const String& oper = event->message()->params()[YSTRING("operation")];
+		if (oper == "charge") {
+		    if (!validMsgState(true,SS7MsgISUP::CRG))
+			break;
+		    SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::CRG,id());
+		    copyUpper(m->params(),event->message()->params());
+		    mylock.drop();
+		    result = transmitMessage(m);
+		    break;
+		}
 		if (oper != "transport")
 		    break;
 		if (!validMsgState(true,SS7MsgISUP::APM))
@@ -2582,6 +2600,16 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 	    }
 	//case SignallingEvent::Message:
 	//case SignallingEvent::Transfer:
+	case SignallingEvent::Charge:
+	    if (event->message()) {
+		if (!validMsgState(true,SS7MsgISUP::CRG))
+		    break;
+		SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::CRG,id());
+		copyUpper(m->params(),event->message()->params());
+		mylock.drop();
+		result = transmitMessage(m);
+	    }
+	    break;
 	default:
 	    DDebug(isup(),DebugStub,
 		"Call(%u). sendEvent not implemented for '%s' [%p]",
@@ -2833,6 +2861,7 @@ bool SS7ISUPCall::validMsgState(bool send, SS7MsgISUP::Type type, bool hasBkwCal
 		break;
 	    // fall through
 	case SS7MsgISUP::RLC:    // Release complete
+	case SS7MsgISUP::CRG:    // Charging
 	    if (m_state == Null || m_state == Released)
 		break;
 	    return true;
@@ -3172,6 +3201,9 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 	    }
 	    m_lastEvent = new SignallingEvent(SignallingEvent::Answer,m_sgmMsg,this);
 	    break;
+	case SS7MsgISUP::CRG:
+	    m_lastEvent = new SignallingEvent(SignallingEvent::Charge,m_sgmMsg,this);
+	    break;
 	default:
 	    Debug(isup(),DebugStub,"Call(%u). Segment waiting message is '%s' [%p]",
 		id(),m_sgmMsg->name(),this);
@@ -3238,6 +3270,7 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
       m_duplicateCGB(false),
       m_ignoreUnkDigits(true),
       m_l3LinkUp(false),
+      m_chargeProcessType(Confusion),
       m_t1Interval(15000),               // Q.764 T1 15..60 seconds
       m_t5Interval(300000),              // Q.764 T5 5..15 minutes
       m_t7Interval(ISUP_T7_DEFVAL),      // Q.764 T7 20..30 seconds
@@ -3348,6 +3381,7 @@ SS7ISUP::SS7ISUP(const NamedList& params, unsigned char sio)
     m_ignoreCGUSingle = params.getBoolValue(YSTRING("ignore-cgu-single"));
     m_duplicateCGB = params.getBoolValue(YSTRING("duplicate-cgb"),
 	(SS7PointCode::ANSI == m_type || SS7PointCode::ANSI8 == m_type));
+    m_chargeProcessType = (ChargeProcess)params.getIntValue(YSTRING("charge-process"),s_dict_CRG_process,m_chargeProcessType);
     int testMsg = params.getIntValue(YSTRING("parttestmsg"),s_names,SS7MsgISUP::UPT);
     switch (testMsg) {
 	case SS7MsgISUP::CVT:
@@ -3443,6 +3477,7 @@ bool SS7ISUP::initialize(const NamedList* config)
 	m_replaceCounter = config->getIntValue(YSTRING("max_replaces"),3,0,31);
         m_ignoreUnkDigits = config->getBoolValue(YSTRING("ignore-unknown-digits"),true);
 	m_defaultSls = config->getIntValue(YSTRING("sls"),s_dict_callSls,m_defaultSls);
+	m_chargeProcessType = (ChargeProcess)config->getIntValue(YSTRING("charge-process"),s_dict_CRG_process,m_chargeProcessType);
 	m_mediaRequired = (MediaRequired)config->getIntValue(YSTRING("needmedia"),
 	    s_mediaRequired,m_mediaRequired);
         // Timers
@@ -4060,15 +4095,25 @@ void SS7ISUP::notify(SS7Layer3* link, int sls)
 SS7MSU* SS7ISUP::buildMSU(SS7MsgISUP::Type type, unsigned char sio,
     const SS7Label& label, unsigned int cic, const NamedList* params) const
 {
+    // Special treatment for charge message
+    // Check if it is in raw format
+    if (type == SS7MsgISUP::CRG && params && params->getParam(YSTRING("Charge")))
+	return encodeRawMessage(type,sio,label,cic,(*params)[YSTRING("Charge")]);
+
+    if (type == SS7MsgISUP::PAM && params)
+	return encodeRawMessage(type,sio,label,cic,(*params)[YSTRING("PassAlong")]);
     // see what mandatory parameters we should put in this message
     const MsgParams* msgParams = getIsupParams(label.type(),type);
     if (!msgParams) {
-	const char* name = SS7MsgISUP::lookup(type);
-	if (name)
-	    Debug(this,DebugWarn,"No parameter table for ISUP MSU type %s [%p]",name,this);
-	else
-	    Debug(this,DebugWarn,"Cannot create ISUP MSU type 0x%02x [%p]",type,this);
-	return 0;
+	if (!hasOptionalOnly(type)) {
+	    const char* name = SS7MsgISUP::lookup(type);
+	    if (name)
+		Debug(this,DebugWarn,"No parameter table for ISUP MSU type %s [%p]",name,this);
+	    else
+		Debug(this,DebugWarn,"Cannot create ISUP MSU type 0x%02x [%p]",type,this);
+	    return 0;
+	}
+	msgParams = &s_compatibility;
     }
     unsigned int len = m_cicLen + 1;
 
@@ -4218,6 +4263,33 @@ SS7MSU* SS7ISUP::buildMSU(SS7MsgISUP::Type type, unsigned char sio,
     return msu;
 }
 
+SS7MSU* SS7ISUP::encodeRawMessage(SS7MsgISUP::Type type, unsigned char sio,
+    const SS7Label& label, unsigned int cic, const String& param) const
+{
+    DataBlock raw;
+    if (!raw.unHexify(param.c_str(),param.length(),' ')) {
+	DDebug(this,DebugMild,"Encode raw charge failed: invalid string");
+	return 0;
+    }
+    if (raw.length() > 254) {
+	DDebug(this,DebugMild,"Encode raw charge failed: data length=%u",
+		raw.length());
+	return 0;
+    }
+    SS7MSU* msu = new SS7MSU(sio,label,0,m_cicLen + 1);
+    unsigned char* d = msu->getData(label.length()+1,m_cicLen + 1);
+    unsigned int i = m_cicLen;
+    while (i--) {
+	*d++ = cic & 0xff;
+	cic >>= 8;
+    }
+    *d++ = type;
+    *msu += raw;
+    return msu;
+}
+
+
+
 // Decode a buffer to a list of parameters
 bool SS7ISUP::decodeMessage(NamedList& msg,
     SS7MsgISUP::Type msgType, SS7PointCode::Type pcType,
@@ -4274,6 +4346,14 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
         String raw;
 	raw.hexify((void*)paramPtr,paramLen,' ');
         msg.addParam(prefix + "PassAlong",raw);
+	return true;
+    }
+
+    // Decode raw CRG if specified
+    if (msgType == SS7MsgISUP::CRG && getChargeProcessType() != Parsed) {
+	String raw;
+	raw.hexify((void*)paramPtr,paramLen,' ');
+	msg.addParam(prefix + "Charge",raw);
 	return true;
     }
 
@@ -4602,6 +4682,16 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
 	case SS7MsgISUP::SUS:
 	case SS7MsgISUP::RES:
 	    processCallMsg(msg,label,sls);
+	    break;
+	case SS7MsgISUP::CRG:
+	    switch (getChargeProcessType()) {
+		case Confusion:
+		    processControllerMsg(msg,label,sls);
+		case Ignore:
+		    break;
+		default:
+		    processCallMsg(msg,label,sls);
+	    }
 	    break;
 	case SS7MsgISUP::RLC:
 	    if (m_rscCic && m_rscCic->code() == msg->cic())
@@ -5205,7 +5295,7 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    if (call)
 		call->ref();
 	    unlock();
-	    if (m_dropOnUnknown && call && call->earlyState()) {
+	    if (m_dropOnUnknown && call && call->earlyState() && msg->type() != SS7MsgISUP::CRG) {
 		Debug(this,DebugNote,
 		    "Received unexpected message for call %u (%p) in initial state",
 		    msg->cic(),call);

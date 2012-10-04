@@ -955,7 +955,7 @@ bool IAXTransaction::isFrameAcceptable(const IAXFullFrame* frame)
     }
     DDebug(m_engine,DebugInfo,"Transaction(%u,%u). Received late Frame(%u,%u) with oseq=%u expecting %u [%p]",
 	localCallNo(),remoteCallNo(),frame->type(),frame->subclass(),frame->oSeqNo(),m_iSeqNo,this);
-    if (frame->subclass() == IAXControl::Ping || frame->subclass() == IAXControl::Pong)
+    if (frame->type() == IAXFrame::IAX && (frame->subclass() == IAXControl::Ping || frame->subclass() == IAXControl::Pong))
 	return true;
     sendAck(frame);	
     return false;
@@ -1437,8 +1437,8 @@ void IAXTransaction::ackInFrames()
     IAXFullFrame* ack = 0;
     for (ObjList* l = m_inFrames.skipNull(); l; l = l->next()) {
 	IAXFullFrame* frame = static_cast<IAXFullFrame*>(l->get());
-	if (frame && ((frame->type() == IAXFrame::IAX && frame->subclass() != IAXControl::Ack && frame->subclass() != IAXControl::Inval) || 
-	    (frame->type() == IAXFrame::Control && frame->subclass() == IAXFullFrame::Answer)))
+	if (frame && !(frame->type() == IAXFrame::IAX && (frame->subclass() == IAXControl::Ack ||  frame->subclass() == IAXControl::Inval
+		|| frame->subclass() == IAXControl::LagRq || frame->subclass() ==  IAXControl::Ping)))
 	    ack = frame;
     }
     if (ack) {

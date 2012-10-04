@@ -90,7 +90,6 @@ typedef PBoolean BOOL;
 using namespace TelEngine;
 namespace { // anonymous
 
-static bool s_inband;
 static bool s_externalRtp;
 static bool s_fallbackRtp;
 static bool s_needMedia = true;
@@ -268,6 +267,61 @@ class YateGkRegThread;
 class YateGatekeeperServer;
 class YateH323EndPoint;
 class YateH323Chan;
+
+class DtmfMethods
+{
+public:
+    enum Method {
+	H323,
+	Rfc2833,
+	Inband,
+	MethodCount
+    };
+    inline DtmfMethods()
+	{ setDefault(); }
+    inline void set(int _0 = MethodCount, int _1 = MethodCount, int _2 = MethodCount) {
+	    m_methods[0] = _0;
+	    m_methods[1] = _1;
+	    m_methods[2] = _2;
+	}
+    inline void setDefault()
+	{ set(Rfc2833,H323,Inband); }
+    // Replace all methods from comma separated list
+    // If no method is set use other or setDefEmpty (reset to default)
+    // Return false if methods contain unknown methods
+    bool set(const String& methods, const DtmfMethods* other, bool setDefEmpty = true,
+	bool intersectOther = false);
+    // Intersect with other methods
+    void intersect(const DtmfMethods& other);
+    // Retrieve a method from deperecated parameters
+    // Reset the method if the parameter is false
+    // Display a message anyway if warn is not false
+    // Return true if the parameter was found
+    bool getDeprecatedDtmfMethod(const NamedList& list, const char* param, int method, bool* warn);
+    // Reset a method
+    void reset(int method);
+    // Build a string list from methods
+    void buildMethods(String& buf, const char* sep = ",");
+    bool hasMethod(int method) const;
+    inline void printMethods(DebugEnabler* enabler, int level, const String& str) {
+	    String tmp;
+	    buildMethods(tmp);
+	    Debug(enabler,level,"Built DTMF methods '%s' from '%s'",tmp.safe(),str.safe());
+	}
+    inline int operator[](unsigned int index) {
+	    if (index < MethodCount)
+		return m_methods[index];
+	    return MethodCount;
+	}
+    inline DtmfMethods& operator=(const DtmfMethods& other) {
+	    for (int i = 0; i < MethodCount; i++)
+		m_methods[i] = other.m_methods[i];
+	    return *this;
+	}
+    static const TokenDict s_methodName[];
+protected:
+    int m_methods[MethodCount];
+};
 
 class H323Driver : public Driver
 {
@@ -451,6 +505,8 @@ public:
     virtual void OnCleared();
     virtual BOOL OnAlerting(const H323SignalPDU& alertingPDU, const PString& user);
     virtual BOOL OnReceivedProgress(const H323SignalPDU& pdu);
+    virtual BOOL OnReceivedCapabilitySet(const H323Capabilities& remoteCaps,
+	const H245_MultiplexCapability* muxCap, H245_TerminalCapabilitySetReject& reject);
     virtual void OnUserInputTone(char tone, unsigned duration, unsigned logicalChannel, unsigned rtpTimestamp);
     virtual void OnUserInputString(const PString& value);
     virtual BOOL OpenAudioChannel(BOOL isEncoding, unsigned bufferSize,
@@ -469,7 +525,6 @@ public:
     void stoppedExternal(H323Channel::Directions dir);
     void setRemoteAddress(const char* remoteIP, WORD remotePort);
     void cleanups(bool closeChans = true, bool dropChan = true);
-    bool sendTone(Message& msg, const char* tone);
     void setCallerID(const char* number, const char* name);
     void rtpExecuted(Message& msg);
     void rtpForward(Message& msg, bool init = false);
@@ -483,8 +538,16 @@ public:
 	{ return m_nativeRtp; }
     inline void rtpLocal()
 	{ m_passtrough = false; }
+    inline bool rtpStarted() const
+	{ return m_rtpStarted; }
+    inline const String& rtpId() const
+	{ return m_rtpid; }
+    inline int dtmfPayload() const
+	{ return m_dtmfPayload; }
 private:
     void setEpConn(bool created);
+    // Retrieve RTP DTMF payload from local/remote caps. Return negative if not found
+    int rtpDtmfPayload(bool local);
     String m_chanId;
     YateH323Chan* m_chan;
     Mutex* m_mutex;
@@ -500,6 +563,8 @@ private:
     String m_remoteAddr;
     int m_remotePort;
     bool m_needMedia;
+    bool m_rtpStarted;
+    int m_dtmfPayload;
 };
 
 // this part has been inspired (more or less) from chan_h323 of project asterisk, credits to Jeremy McNamara for chan_h323 and to Mark Spencer for asterisk.
@@ -556,10 +621,14 @@ public:
 protected:
     virtual void endDisconnect(const Message& msg, bool handled);
 private:
+    // Send tone(s) using method
+    bool sendTone(Message& msg, const char* tone, int meth, bool& retVal);
+
     YateH323Connection* m_conn;
     H323Connection::CallEndReason m_reason;
     bool m_hungup;
-    bool m_inband;
+    DtmfMethods m_dtmfMethods;
+    bool m_honorDtmfDetect;
 };
 
 class YateGkRegThread : public PThread
@@ -692,6 +761,103 @@ protected:
 
 unsigned int YateGkRegThread::s_count = 0;
 Mutex YateGkRegThread::s_mutexCount(false,"H323GkThreads");
+static DtmfMethods s_dtmfMethods;
+static bool s_honorDtmfDetect = true;
+// Deprecated dtmf params warn
+static bool s_warnDtmfInbandCfg = true;
+static bool s_warnDtmfInbandCallExecute = true;
+
+const TokenDict DtmfMethods::s_methodName[] = {
+    { "h323",     H323},
+    { "rfc2833",  Rfc2833},
+    { "inband",   Inband},
+    { 0, 0 },
+};
+
+// Replace all methods from comma separated list
+// If no method is set use other or setDefEmpty (reset to default)
+bool DtmfMethods::set(const String& methods, const DtmfMethods* other, bool setDefEmpty,
+    bool intersectOther)
+{
+    set();
+    bool found = false;
+    bool ok = true;
+    ObjList* m = methods.split(',');
+    int i = 0;
+    for (ObjList* o = m->skipNull(); o && i < MethodCount; o = o->skipNext()) {
+	String* s = static_cast<String*>(o->get());
+	int meth = lookup(s->trimBlanks(),s_methodName,MethodCount);
+	if (meth != MethodCount) {
+	    m_methods[i++] = meth;
+	    found = true;
+	}
+	else if (*s)
+	    ok = false;
+    }
+    TelEngine::destruct(m);
+    if (!found) {
+	if (other) {
+	    *this = *other;
+	    intersectOther = false;
+	}
+	else if (setDefEmpty)
+	    setDefault();
+    }
+    if (intersectOther && other)
+	intersect(*other);
+    return ok;
+}
+
+// Intersect with other methods
+void DtmfMethods::intersect(const DtmfMethods& other)
+{
+    for (int i = 0; i < MethodCount; i++)
+	if (m_methods[i] != MethodCount && !other.hasMethod(m_methods[i]))
+	    m_methods[i] = MethodCount;
+}
+
+// Retrieve a method from deperecated parameters
+// Reset the method if the parameter is false
+// Display a message anyway if warn is not false
+bool DtmfMethods::getDeprecatedDtmfMethod(const NamedList& list, const char* param,
+    int method, bool* warn)
+{
+    String* p = list.getParam(param);
+    if (!p)
+	return false;
+    if (!p->toBoolean())
+	reset(method);
+    if (warn && *warn) {
+	*warn = false;
+	Debug(&hplugin,DebugConf,"Deprecated '%s' in '%s'. Use 'dtmfmethods' instead!",param,list.c_str());
+    }
+    return true;
+}
+
+// Reset a method
+void DtmfMethods::reset(int method)
+{
+    for (int i = 0; i < MethodCount; i++)
+	if (m_methods[i] == method) {
+	    m_methods[i] = MethodCount;
+	    break;
+	}
+}
+
+// Build a string list from methods
+void DtmfMethods::buildMethods(String& buf, const char* sep)
+{
+    for (int i = 0; i < MethodCount; i++)
+	buf.append(lookup(m_methods[i],s_methodName),sep);
+}
+
+bool DtmfMethods::hasMethod(int method) const
+{
+    for (int i = 0; i < MethodCount; i++)
+	if (m_methods[i] == method)
+	    return true;
+    return false;
+}
 
 
 // Get a number of thread idle intervals from a time period
@@ -940,7 +1106,7 @@ bool YateH323EndPoint::initInternal(bool reg, const NamedList* params)
     Lock lck(m_mutex);
     DDebug(&hplugin,DebugAll,"Endpoint(%s)::initInternal(%u,%p) [%p]",
 	safe(),reg,params,this);
-    DisableDetectInBandDTMF(!(params && params->getBoolValue("dtmfinband",s_inband)));
+    DisableDetectInBandDTMF(!(params && params->getBoolValue("dtmfinband")));
     DisableFastStart(params && !params->getBoolValue("faststart",true));
     DisableH245Tunneling(params && !params->getBoolValue("h245tunneling",true));
     DisableH245inSetup(!(params && params->getBoolValue("h245insetup")));
@@ -1532,7 +1698,8 @@ YateH323Connection::YateH323Connection(YateH323EndPoint& endpoint,
     : H323Connection(endpoint,callReference), m_chan(0), m_mutex(0),
       m_externalRtp(s_externalRtp), m_nativeRtp(false),
       m_passtrough(false), m_lockFormats(false),
-      m_rtpPort(0), m_remotePort(0), m_needMedia(true)
+      m_rtpPort(0), m_remotePort(0), m_needMedia(true),
+      m_rtpStarted(false), m_dtmfPayload(-1)
 {
     Debug(&hplugin,DebugAll,"YateH323Connection::YateH323Connection(%p,%u,%p) [%p]",
 	&endpoint,callReference,userdata,this);
@@ -1857,6 +2024,8 @@ void YateH323Connection::OnEstablished()
 	}
     }
     Engine::enqueue(m);
+    if (!capabilityExchangeProcedure->HasReceivedCapabilities())
+	capabilityExchangeProcedure->Start(TRUE);
 }
 
 // Called by the cleaner thread between CleanUpOnCallEnd() and the destructor
@@ -1921,6 +2090,25 @@ BOOL YateH323Connection::OnReceivedProgress(const H323SignalPDU& pdu)
     }
     Engine::enqueue(m);
     return TRUE;
+}
+
+BOOL YateH323Connection::OnReceivedCapabilitySet(const H323Capabilities& remoteCaps,
+    const H245_MultiplexCapability* muxCap, H245_TerminalCapabilitySetReject& reject)
+{
+    DDebug(this,DebugInfo,"YateH323Connection::OnReceivedCapabilitySet [%p]",this);
+    bool ok = H323Connection::OnReceivedCapabilitySet(remoteCaps,muxCap,reject);
+    int payload = rtpDtmfPayload(false);
+    if (m_dtmfPayload != payload) {
+	if (m_rtpStarted) {
+	    // TODO: Update external rtp event payload when implemented
+	    if (payload > 0)
+		Debug(this,DebugInfo,"Unable to change event payload, disabling RFC 2833 [%p]",this);
+	    m_dtmfPayload = -3;
+	}
+	else
+	    m_dtmfPayload = payload;
+    }
+    return ok;
 }
 
 void YateH323Connection::OnUserInputTone(char tone, unsigned duration, unsigned logicalChannel, unsigned rtpTimestamp)
@@ -2147,6 +2335,8 @@ BOOL YateH323Connection::startExternalRTP(const char* remoteIP, WORD remotePort,
     }
     if (!m_externalRtp)
 	return FALSE;
+    if (m_dtmfPayload < 0)
+	m_dtmfPayload = rtpDtmfPayload(true);
     Message m("chan.rtp");
     if (m_rtpid)
 	m.setParam("rtpid",m_rtpid);
@@ -2158,6 +2348,8 @@ BOOL YateH323Connection::startExternalRTP(const char* remoteIP, WORD remotePort,
 	m.addParam("format",format);
     if ((payload >= 0) && (payload < 127))
 	m.addParam("payload",String(payload));
+    if (m_dtmfPayload > 0)
+	m.addParam("evpayload",String(m_dtmfPayload));
 
     TelEngine::Lock lock(m_mutex);
     if (!(m_chan && m_chan->alive() && m_chan->driver()))
@@ -2166,6 +2358,7 @@ BOOL YateH323Connection::startExternalRTP(const char* remoteIP, WORD remotePort,
     lock.drop();
     if (Engine::dispatch(m)) {
 	m_rtpid = m.getValue("rtpid");
+	m_rtpStarted = true;
 	return TRUE;
     }
     return FALSE;
@@ -2193,17 +2386,6 @@ void YateH323Connection::stoppedExternal(H323Channel::Directions dir)
     }
 }
 
-bool YateH323Connection::sendTone(Message& msg, const char* tone)
-{
-    if (m_rtpid) {
-        msg.setParam("targetid",m_rtpid);
-	return false;
-    }
-    while (*tone)
-	SendUserInputTone(*tone++);
-    return true;
-}
-
 void YateH323Connection::setEpConn(bool created)
 {
     YateH323EndPoint* ep = static_cast<YateH323EndPoint*>(&endpoint);
@@ -2214,6 +2396,22 @@ void YateH323Connection::setEpConn(bool created)
 	ep->m_connCount--;
 }
 
+// Retrieve RTP DTMF payload from local/remote caps
+int YateH323Connection::rtpDtmfPayload(bool local)
+{
+    int payload = -1;
+    const H323Capabilities& caps = local ? GetLocalCapabilities() : GetRemoteCapabilities();
+    // NOTE: RFC2833 capability subtype is not set to H323_UserInputCapability::SignalToneRFC2833 in the library
+    //       It is set to 10000
+    H323Capability* cap = caps.FindCapability(H323Capability::e_UserInput,10000);
+    if (cap) {
+	payload = cap->GetPayloadType();
+	if (payload < 96 || payload > 127)
+	    payload = -2;
+    }
+    XDebug(this,DebugNote,"rtpDtmfPayload(%u) %d [%p]",local,payload,this);
+    return payload;
+}
 
 YateH323_ExternalRTPChannel::YateH323_ExternalRTPChannel( 
     YateH323Connection& connection,
@@ -2579,7 +2777,8 @@ void YateH323Connection::setCallerID(const char* number, const char* name)
 YateH323Chan::YateH323Chan(YateH323Connection* conn,Message* msg,const char* addr)
     : Channel(hplugin,0,(msg != 0)),
       m_conn(conn), m_reason(H323Connection::EndedByLocalUser),
-      m_hungup(false), m_inband(s_inband)
+      m_hungup(false),
+      m_honorDtmfDetect(s_honorDtmfDetect)
 {
     s_mutex.lock();
     s_chanCount++;
@@ -2589,9 +2788,19 @@ YateH323Chan::YateH323Chan(YateH323Connection* conn,Message* msg,const char* add
 	conn,addr,direction(),this);
     setMaxcall(msg);
     Message* s = message("chan.startup",msg);
+    s_cfgMutex.lock();
+    m_dtmfMethods = s_dtmfMethods;
+    s_cfgMutex.unlock();
     if (msg) {
-	m_inband = msg->getBoolValue("dtmfinband",s_inband);
+	String* meths = msg->getParam("odtmfmethods");
+	if (meths) {
+	    DtmfMethods old = m_dtmfMethods;
+	    m_dtmfMethods.set(*meths,&old);
+	}
+	else
+	    m_dtmfMethods.getDeprecatedDtmfMethod(*msg,"dtmfinband",DtmfMethods::Inband,&s_warnDtmfInbandCallExecute);
 	s->copyParams(*msg,"caller,callername,called,billid,callto,username");
+	m_honorDtmfDetect = msg->getBoolValue(YSTRING("ohonor_dtmf_detect"),m_honorDtmfDetect);
     }
     Engine::enqueue(s);
 }
@@ -2701,6 +2910,33 @@ void YateH323Chan::endDisconnect(const Message& msg, bool handled)
 #endif
 }
 
+// Send tone(s) using method
+bool YateH323Chan::sendTone(Message& msg, const char* tone, int meth, bool& retVal)
+{
+    if (!(m_conn && tone))
+	return false;
+    bool ok = false;
+    if (meth == DtmfMethods::H323) {
+	const char* t = tone;
+	while (*t)
+	    m_conn->SendUserInputTone(*t++);
+	retVal = true;
+	ok = true;
+    }
+    else if (meth == DtmfMethods::Rfc2833) {
+	ok = m_conn->rtpStarted() && m_conn->rtpId() && m_conn->dtmfPayload() > 0;
+	if (ok)
+	    msg.setParam("targetid",m_conn->rtpId());
+    }
+    else if (meth == DtmfMethods::Inband) {
+	ok = dtmfInband(tone);
+	retVal = ok;
+    }
+    XDebug(this,ok ? DebugAll : DebugNote,"sendTone(%s) meth=%s (%d) ok=%u [%p]",
+	tone,lookup(meth,DtmfMethods::s_methodName),meth,ok,this);
+    return ok;
+}
+
 // Set the signalling address
 void YateH323Chan::setAddress(const char* addr)
 {
@@ -2775,6 +3011,12 @@ bool YateH323Chan::callRouted(Message& msg)
 
 void YateH323Chan::callAccept(Message& msg)
 {
+    String* meths = msg.getParam(YSTRING("idtmfmethods"));
+    if (meths) {
+	DtmfMethods old = m_dtmfMethods;
+	m_dtmfMethods.set(*meths,&old);
+    }
+    m_honorDtmfDetect = msg.getBoolValue(YSTRING("ihonor_dtmf_detect"),m_honorDtmfDetect);
     Channel::callAccept(msg);
     if (m_conn) {
 	m_conn->rtpExecuted(msg);
@@ -2817,6 +3059,7 @@ bool YateH323Chan::msgRinging(Message& msg)
 
 bool YateH323Chan::msgAnswered(Message& msg)
 {
+    Channel::msgAnswered(msg);
     if (!m_conn)
 	return false;
     m_conn->rtpForward(msg);
@@ -2829,9 +3072,33 @@ bool YateH323Chan::msgTone(Message& msg, const char* tone)
 {
     if (!(tone && m_conn))
 	return false;
-    if (m_inband && dtmfInband(tone))
-	return true;
-    return m_conn->sendTone(msg,tone);
+    DtmfMethods methods = m_dtmfMethods;
+    const String* param = msg.getParam(YSTRING("methods"));
+    if (param) {
+	bool intersect = !msg.getBoolValue(YSTRING("methods_override"));
+	methods.set(*param,&m_dtmfMethods,true,intersect);
+    }
+    bool retVal = false;
+    bool ok = false;
+    if (msg.getBoolValue(YSTRING("honor_dtmf_detect"),m_honorDtmfDetect)) {
+	const String& detected = msg[YSTRING("detected")];
+	int meth = lookup(detected,DtmfMethods::s_methodName,DtmfMethods::MethodCount);
+	if (meth != DtmfMethods::MethodCount && methods.hasMethod(meth)) {
+	    ok = sendTone(msg,tone,meth,retVal);
+	    methods.reset(meth);
+	}
+    }
+    for (int i = 0; !ok && i < DtmfMethods::MethodCount; i++) {
+	int meth = methods[i];
+	if (meth != DtmfMethods::MethodCount)
+	    ok = sendTone(msg,tone,meth,retVal);
+    }
+    if (!ok && debugAt(DebugNote)) {
+	String tmp;
+	methods.buildMethods(tmp);
+	Debug(this,DebugNote,"Failed to send tones '%s' methods=%s [%p]",tone,tmp.c_str(),this);
+    }
+    return retVal;
 }
 
 bool YateH323Chan::msgText(Message& msg, const char* text)
@@ -3017,8 +3284,22 @@ void H323Driver::initialize()
     s_cfgMutex.lock();
     s_cfg = Engine::configFile("h323chan");
     s_cfg.load();
+    NamedList* general = s_cfg.getSection("general");
+    if (general) {
+	String* dtmfMethods = general->getParam("dtmfmethods");
+	if (dtmfMethods) {
+	    if (!s_dtmfMethods.set(*dtmfMethods,0))
+		s_dtmfMethods.printMethods(this,DebugConf,*dtmfMethods);
+	}
+	else {
+	    s_dtmfMethods.setDefault();
+	    s_dtmfMethods.getDeprecatedDtmfMethod(*general,"dtmfinband",DtmfMethods::Inband,&s_warnDtmfInbandCfg);
+	}
+    }
+    else
+	s_dtmfMethods.setDefault();
     s_cfgMutex.unlock();
-    s_inband = s_cfg.getBoolValue("general","dtmfinband",false);
+    s_honorDtmfDetect = s_cfg.getBoolValue("general","honor_dtmf_detect",true);
     s_externalRtp = s_cfg.getBoolValue("general","external_rtp",true);
     s_passtrough = s_cfg.getBoolValue("general","forward_rtp",false);
     s_fallbackRtp = s_cfg.getBoolValue("general","fallback_rtp",true);

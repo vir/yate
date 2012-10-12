@@ -2270,7 +2270,7 @@ static const Capability s_mapCapab[] = {
     {"TraceSubscriber",          {"activateTraceMode", "deactivateTraceMode", ""}},
     {"Services",                 {"registerSS", "eraseSS", "activateSS", "deactivateSS", "interrogateSS", "registerPassword", "getPassword", 
 				    "processUnstructuredSS-Request", "unstructuredSS-Request", "unstructuredSS-Notify", ""}},
-    {"Miscellaneous",            {"sendIMSI", "readyForSM", "setReportingState", ""}},
+    {"Miscellaneous",            {"sendIMSI", "readyForSM", "setReportingState", "sendParameters", ""}},
     {"ErrorRecovery",            {"reset", "forwardCheckSS-Indication", "failureReport", ""}},
     {"Charging",                 {""}},
     {"SMSC",                     {"informServiceCentre", "alertServiceCentre", "sendRoutingInfoForSM", "mo-forwardSM", "mt-forwardSM",

@@ -74,6 +74,8 @@ static const String s_entityCapsItem = "item";
 // Node values used by entity caps
 static const String s_googleTalkNode = "http://www.google.com/xmpp/client/caps";
 static const String s_googleMailNode = "http://mail.google.com/xmpp/client/caps";
+static const String s_googleAndroidNode = "http://www.android.com/gtalk/client/caps";
+static const String s_googleAndroidNode2 = "http://www.android.com/gtalk/client/caps2";
 
 // Stream read buffer
 #define JB_STREAMBUF                8192
@@ -2536,7 +2538,8 @@ bool JBEntityCapsList::processCaps(String& capsId, XmlElement* xml, JBStream* st
 	return true;
     // Hack for google (doesn't support disco info, supports only disco info with node)
     if (version == JBEntityCaps::Ver1_3 &&
-	(*node == s_googleTalkNode || *node == s_googleMailNode)) {
+	(*node == s_googleTalkNode || *node == s_googleMailNode ||
+	*node == s_googleAndroidNode || *node == s_googleAndroidNode2)) {
 	caps = new JBEntityCaps(capsId,version,*node,*ver);
 	if (ext) {
 	    ObjList* list = ext->split(' ',false);

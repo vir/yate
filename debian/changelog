@@ -1,4 +1,4 @@
-yate (4.2.1~svn5292) UNRELEASED; urgency=low
+yate (4.2.1~svn5295) UNRELEASED; urgency=low
 
   * Updated to SVN revision 5238: + Unified optional daemon command line
     across package types.  + Moved the -d and -p options out of Debian's
@@ -122,8 +122,13 @@ yate (4.2.1~svn5292) UNRELEASED; urgency=low
   * Updated to SVN revision 5292: + Try to search for ptlib-config in
     yet another place where it may be lurking.  + Added MAP operation
     "sendParameters" to capability "Miscellaneous".
+  * Updated to SVN revision 5295: + Check android node when detecting
+    google caps.  + Added the possibility of setting the Channel
+    Exclusive flag from configuration or routing.  + Honor the requested
+    ISDN circuit code if possible before trying other circuits.  +
+    Constified a method.
 
- -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Sat, 13 Oct 2012 02:19:15 +0400
+ -- Vasily i. Redkin <yatedeb@vir.otvt.ru>  Tue, 16 Oct 2012 02:19:15 +0400
 
 yate (4.2.1~svn5237) UNRELEASED; urgency=low
 

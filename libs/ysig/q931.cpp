@@ -1675,7 +1675,8 @@ bool ISDNQ931Call::sendSetup(SignallingMessage* sigMsg)
 		break;
 	    }
 	    m_circuit->updateFormat(m_data.m_format,0);
-	    m_data.m_channelMandatory = false;
+	    m_data.m_channelMandatory = sigMsg->params().getBoolValue(YSTRING("channel-exclusive"),
+		q931()->parserData().flag(ISDNQ931::ChannelExclusive));
 	    m_data.m_channelByNumber = true;
 	    m_data.m_channelType = "B";
 	    if (m_data.m_bri) {
@@ -1812,7 +1813,7 @@ bool ISDNQ931Call::reserveCircuit()
     m_circuitChange = false;
     bool anyCircuit = false;
     while (true) {
-	// For incoming PRI calls we reserve the circuit only one time (at SETUP)
+	// For incoming BRI calls we reserve the circuit only one time (at SETUP)
 	if (!(outgoing() || q931()->primaryRate())) {
 	    // Check if we are a BRI NET and we should assign any channel
 	    int briChan = lookup(m_data.m_channelSelect,Q931Parser::s_dict_channelIDSelect_BRI,3);
@@ -1827,15 +1828,15 @@ bool ISDNQ931Call::reserveCircuit()
 	    m_data.m_reason = "service-not-implemented";
 	    return false;
 	}
+	int reqCircuit = m_data.m_channels.toInteger(-1);
 	// Check if we don't have a circuit reserved
 	if (!m_circuit) {
-	    anyCircuit = (outgoing() || !m_data.m_channelMandatory) &&
+	    anyCircuit = (outgoing() || (reqCircuit < 0 && !m_data.m_channelMandatory)) &&
 		(m_net || q931()->primaryRate());
 	    break;
 	}
 	// Check the received circuit if any
-	if (!m_data.m_channels.null() &&
-	    m_data.m_channels.toInteger() == (int)m_circuit->code())
+	if ((int)m_circuit->code() == reqCircuit)
 	    return true;
 	// We already have a circuit and received a different one: force mandatory
 	m_data.m_channelMandatory = true;
@@ -2338,6 +2339,7 @@ const TokenDict ISDNQ931::s_flags[] = {
 	{"forcesendcomplete",    ForceSendComplete},
 	{"noactiveonconnect",    NoActiveOnConnect},
 	{"checknotifyind",       CheckNotifyInd},
+	{"channelexclusive",     ChannelExclusive},
 	{0,0},
 	};
 

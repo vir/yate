@@ -14181,6 +14181,8 @@ public:
 	NoActiveOnConnect = 0x00000400,
 	// Check the validity of the notification indicator when sending a NOTIFY message
 	CheckNotifyInd = 0x00000800,
+	// Request an outbound PRI channel to be exclusive
+	ChannelExclusive = 0x00001000,
     };
 
     /**

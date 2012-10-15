@@ -14119,7 +14119,7 @@ public:
      * @param mask The flag to check
      * @return True if the given flag is set
      */
-    inline bool flag(int mask)
+    inline bool flag(int mask) const
 	{ return (0 != (m_flags & mask)); }
 
     DebugEnabler* m_dbg;                 // The debug enabler used for output
